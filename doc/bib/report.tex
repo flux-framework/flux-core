@@ -1,0 +1,72 @@
+\documentclass{article}
+
+\usepackage{verbatim}
+\usepackage{calc}
+\usepackage{epsfig}
+\usepackage{url}
+\usepackage{draftcopy}
+\input{pstricks}
+
+\setlength{\textwidth}{6in}
+\setlength{\textheight}{9in}
+\setlength{\oddsidemargin}{(\paperwidth-\textwidth)/2 - 1in}
+\setlength{\topmargin}{(\paperheight-\textheight -\headheight-\headsep-\footskip)/2 - 1in + .5in }
+
+\newcommand{\ngrm}{NGRM}
+\newcommand{\ngrmfull}{Next Generation Resource Manager}
+
+%\includeonly{monitor}
+
+\begin{document}
+
+\title{Citations For \ngrmfull}
+\maketitle
+
+\section{Resource Management}
+
+SlurmDesign\cite{SlurmDesign},
+RMStudy\cite{RMStudy},
+SchedDialog\cite{SchedDialog},
+ALPS\cite{ALPS},
+BGQRes\cite{BGQRes},
+Mesos\cite{Mesos},
+SlurmScale\cite{SlurmScale},
+ManyTask\cite{ManyTask},
+Cobalt\cite{Cobalt},
+
+\section{Workload Runtime}
+
+PMI\cite{PMI},
+BeyondDVFS\cite{BeyondDVFS},
+PowerOpt\cite{PowerOpt},
+LaunchMON\cite{LaunchMON},
+GroupFile\cite{GroupFile},
+FINAL\cite{FINAL},
+MPIR\cite{MPIR},
+AUKS\cite{AUKS},
+
+\section{Monitoring and Provenance}
+
+CIFTS\cite{CIFTS},
+LogLDRD\cite{LogLDRD},
+CondorProv\cite{CondorProv},
+ProvSurvey\cite{ProvSurvey},
+BlueGeneFail\cite{BlueGeneFail},
+Chukwa\cite{Chukwa},
+LogFramework\cite{LogFramework},
+
+\section{Framework}
+
+MrNet\cite{MrNet},
+MrNetFail\cite{MrNetFail},
+SCTP\cite{SCTP},
+SCTPvMPI\cite{SCTPvMPI},
+SCTPstd\cite{SCTPstd},
+CCI\cite{CCI},
+ZMQGuide\cite{ZMQGuide},
+ZMQRef\cite{ZMQRef},
+
+\bibliographystyle{abbrv}
+\bibliography{../bib/project}
+
+\end{document}
