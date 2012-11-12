@@ -1,3 +1,5 @@
+DEPBIB = project.bib rfc.bib
+
 all: report.pdf
 
 view: all
@@ -8,7 +10,7 @@ report.pdf: report.tex
 clean:
 	rm -f *.aux *.log *.dvi *.pdf *.blg *.bbl
 
-report.dvi: report.tex project.bib
+report.dvi: report.tex $(DEPBIB)
 	rm -f *.log *.aux *.blg *.bbl
 	latex report
 	bibtex report
