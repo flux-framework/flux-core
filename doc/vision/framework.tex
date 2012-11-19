@@ -7,14 +7,14 @@ development practices.
 
 The \ngrm\ architecture is hierarchical and recursive
 (\ref{ReqsHiLevFun}, req. 4.1).
-A bootstrap instance (instance 0) of \ngrm\ contains all the
-idle resources.  Resources allocated to jobs leave instance 0
-and join the job's instance, then return when they are freed.
-Instances of \ngrm\ can recursively spawn new instances of \ngrm.
+A root instance of \ngrm\ contains all the
+idle resources.  Resources allocated to jobs
+join the job's \ngrm\ instance, then return to the parent instance
+when they are freed.  Instances can recursively spawn new instances.
 
 The communications framework supports this architecture by
-establishing a {\em comms session} within which each \ngrm\ instance
-operates.  The framework enables secure, scalable communication
+establishing a {\em comms session} to contain each \ngrm\ instance.
+The framework enables secure, scalable communication
 within a comms session, limits communication between sessions,
 and allows new comms sessions to be created, resized, destroyed,
 and monitored by existing ones in a parent-child relationship.
@@ -72,6 +72,26 @@ private multicast groups within dynamically created comms sessions.
 These requirements can be addressed by existing technology such as
 DHCP\cite{rfc2131} and MADCAP\cite{rfc2730}.
 
+A private DNS\cite{rfc1034}\cite{rfc1035} is used by the comms framework to
+map a hierarchical namespace to the comms session hierarchy.
+The root comms session has the root domain name, e.g. ``{\tt \ngrm.}'',
+and the root server contains address records for all hosts in the domain, e.g.
+``{\tt n1.\ngrm}'', ``{\tt n2.\ngrm}'',..., ``{\tt n99999.\ngrm}''.
+Comms sessions spawned by the root session get their own sub-domain, e.g.
+``{\tt s1.\ngrm}'', ``{\tt s2.\ngrm}'', ``{\tt s3.\ngrm}'',
+and contain address records for the nodes assigned to them, e.g.
+``{\tt n1.s1.\ngrm}'', ``{\tt n2.s1.\ngrm}'', ``{\tt n3.s1.\ngrm}''.
+Sub-domains are created recursively for each level of comms session
+recursion.  Each session runs a set of DNS servers for its domain.
+When a node joins a new session, its DNS resolver is reconfigured to use
+the session DNS servers and to default unqualified names to the session's
+DNS domain, thus each level of session overlays a new set of names over
+the root session's that provides job-centric naming uniformity.
+Well understood techniques for DNS fault tolerance,
+caching, and dynamic reconfiguration are leveraged to scale perforamnce
+in large sessions such as the root session.
+
+
 \subsubsection{Comms Toolkit}
 
 The framework provides a toolkit for sending and receiving
@@ -115,7 +135,7 @@ Depending on the application either may be useful.
 
 Messages can be secured with a session-wide security context.
 Each comms session is allocated a {\em session key} by its parent\footnote{
-Comms session 0 generates its own key.}
+The root comms session obtains its session key out of band.}
 which is used for establishing a shared security context
 for messages exchanged within the comms session.
 The shared security context allows communicating entities to have integrity
@@ -220,10 +240,10 @@ node, do not communicate directly with the parent CMB.
 
 When the CMB first starts up on a node, it obtains information about its
 comms session out of band.
-A real node would join session 0, while a dynamically created
+A real node would join the root session, while a dynamically created
 container instance would join the comms session of the host node.
 When a node that is a member of a comms session != 0 crashes and
-reboots, it reports to session 0 and is re-added from child to
+reboots, it reports to the root session and is re-added from child to
 child until it reaches its current owner.  The CMB of the owner session
 can choose to evict a node returning in this manner or accept it
 according to its policy.
