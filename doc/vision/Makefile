@@ -7,10 +7,10 @@ DEPSEC = \
 	reqs.tex
 
 DEPFIG = \
-	comms.eps \
-	commstk.eps \
-	cmb.eps \
-	zmqtbon.eps
+	../fig/comms.eps \
+	../fig/commstk.eps \
+	../fig/cmb.eps \
+	../fig/zmqtbon.eps
 
 DEPBIB = \
 	../bib/project.bib \
@@ -37,6 +37,3 @@ report.dvi: report.tex $(DEPSEC) $(DEPFIG) $(DEPBIB)
 	dvips -P pdf -G0 -o $@ $<
 %.pdf: %.ps
 	ps2pdf $<
-
-%.eps: %.dia
-	dia --nosplash --export=$@ --filter=eps-builtin $<
