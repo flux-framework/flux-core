@@ -95,24 +95,23 @@ in large sessions such as the root session.
 \subsubsection{Comms Toolkit}
 
 The framework provides a toolkit for sending and receiving
-messages privately and securely within a session using
-various patterns such as PUB-SUB, RPC, and streams
-(\ref{ReqsHiLevFun}, req. 4.2).  Toolkit components can be mixed and
-matched according to application needs.
-The idea is to provide a robust foundation that enables other
-\ngrm\ components to be developed more quickly, and to promote
-code reuse and interoperability.
+protocol messages privately and securely within a session,
+with the goals of providing a robust foundation for \ngrm\ components
+and promoting rapid development, code reuse, and interoperability
+among them.  The toolkit includes a messaging library,
+protocol encoding/decoding libraries, and a security framework.
+Toolkit pieces can be mixed and matched according to application requirements.
 
 0MQ\cite{ZMQGuide} is a messaging library that
 provides the ability to manipulate opaque, multipart messages, and
 carry them across various transports, including TCP and PGM\cite{rfc3208}
-(reliable multicast), using a socket-like API.  Messaging patterns
-including REQ-REP (RPC), PUB-SUB, and PUSH-PULL (message stream)
-are directly supported.
-0MQ can be used to build applications or custom message brokers,
-allowing more complex message routing topologies such as tree-based
-overlay networks, as depicted in Figure~\ref{FigZmqTBON}, to be built
-from simple components.  0MQ has a large number of language bindings.
+(reliable multicast), using a socket-like API.  0MQ sockets can
+exchange messages using various {\em patterns},
+including REQ-REP (RPC), PUB-SUB, and PUSH-PULL (message stream).
+0MQ can be used to build applications or custom message brokers.
+Complex message routing topologies such as tree-based overlay networks
+(Figure~\ref{FigZmqTBON}) can be built from simple components.
+0MQ has a large number of language bindings.
 
 \begin{figure}
 \centering
@@ -121,8 +120,7 @@ from simple components.  0MQ has a large number of language bindings.
 \label{FigZmqTBON}
 \end{figure}
 
-Two commonly used methods for serializing and de-serializing data
-encapsulated in messages are
+Two widely used methods of encoding data in messages are
 JSON\cite{rfc4627} 
 and Protocol Buffers\cite{Protobuf}.
 JSON is a self-describing format
@@ -226,27 +224,27 @@ by request, and can subscribe for notification when the nodeset changes
 or when the liveness state of any nodes change.
 The parent has access to this same interface via the CMB control node.
 
-The CMB maintains the current nodeset and can add or delete nodes
-from it on request.  The CMB does not offer a mechanism for sessions
-to request nodes from their parent, but it does allow the parent
-to add nodes to the child session, leaving the handling of resource
-requests to a higher software layer.  Nodes retain a stack of comms
+The CMB maintains the current nodeset and mirrors it in the session DNS
+domain.  The CMB can add or delete nodes from the nodeset on request
+from the local session or from the parent.  The CMB does not offer a
+mechanism a sessions to {\em request} nodes from the parent; this
+is left to a higher software layer.  Nodes retain a stack of comms
 session contexts, so that a node added to a child session pushes the current
 session context, and, when relinquished by the child, can pop the parent
 context and reconnect.
 While nodes are allocated to the child, they remain in the parent nodeset
-but are tagged as allocated and unless they are the distinguished control
-node, do not communicate directly with the parent CMB.
+and DNS domain but the CMB tags them as allocated.  Unless they are the
+distinguished control node, allocated nodes do not communicate directly with
+the parent CMB or listen to the parent's trigger signal.
 
 When the CMB first starts up on a node, it obtains information about its
 comms session out of band.
 A real node would join the root session, while a dynamically created
 container instance would join the comms session of the host node.
-When a node that is a member of a comms session != 0 crashes and
-reboots, it reports to the root session and is re-added from child to
-child until it reaches its current owner.  The CMB of the owner session
-can choose to evict a node returning in this manner or accept it
-according to its policy.
+When a node crashes and reboots, it tries to join the root session and if
+it had been allocated to a child session, is re-added from child to
+child until it reaches its current owner.  A node re-added in this manner
+can be accepted or evicted according to the session's policy.
 
 \begin{figure}
 \centering
