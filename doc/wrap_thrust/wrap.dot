@@ -1,6 +1,6 @@
 digraph G {
 
-universe [label="Unverse"]
+universe [label="Universe"]
 
 subgraph cluster0{
 fontsize=18
@@ -54,7 +54,7 @@ universe->job1;
 #label="#Associated Resource Hierarchy";
 #fontcolor=navyblue;
 
-res [label="resource universe"];
+res [label="Resource universe"];
 res1 [label="resource(j)"];
 res2 [label="resource1(j)"];
 res3 [label="resource2(j)"];
