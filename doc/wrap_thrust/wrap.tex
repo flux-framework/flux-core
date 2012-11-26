@@ -557,8 +557,25 @@ e.g., $j_k$::$j_{k+1}$::resource $\rightarrow$ $<$ size(128), power\_bound(12.5k
 
 
 \section{Component-Wise Work Breakdown}
+In this section, we will summarize the requirements and work items for 
+the major components of the proposed system. 
 
 \subsection{Overlay Network and Infrastructure Requirement}
+The heart of WRAP lies scalable and flexible overlay network support. The overlay network's attributes include:  
+
+\begin{itemize}
+
+\item{an ability to scalably support our elasticity model through expanding and shrinking compute resources and job function processes;}
+
+\item{an ability for an arbitrary head daemon to broadcast or multicast data to a set of other daemons through a binomial or binary tree with $O(log(number\_of\_daemons))$;}
+
+\item{an ability for an arbitrary head daemon to aggregate data from a set of other daemons through the binomial or binary tree with $O(log(number\_of\_daemons))$;}
+
+\item{an ability to allow both preset and custome reduction opertators to reduce the aggregated data along the tree;}
+
+\item{an ability to scalably route a key-value pair by hashing its key to find its home DKVS database for get/put and global memory synchronization operations.}
+
+\end{itemize}
 
 \subsection{Process management}
 
