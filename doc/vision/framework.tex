@@ -3,14 +3,15 @@
 Describe comms framework, plugin framework, and software
 development practices.
 
-\subsection{Communications Framework}
+\subsection{Communications Framework}\label{SecComms}
 
 The \ngrm\ architecture is hierarchical and recursive
 (\ref{ReqsHiLevFun}, req. 4.1).
 A root instance of \ngrm\ contains all the
-idle resources.  Resources allocated to jobs
-join the job's \ngrm\ instance, then return to the parent instance
-when they are freed.  Instances can recursively spawn new instances.
+idle resources.  A job spawned by the root instance contains
+its own \ngrm\ instance, which may in turn spawn jobs, ad infinitum.
+When a job terminates, the job's instance terminates and resources
+return to the parent instance.
 
 The communications framework supports this architecture by
 establishing a {\em comms session} to contain each \ngrm\ instance.
@@ -72,7 +73,7 @@ private multicast groups within dynamically created comms sessions.
 These requirements can be addressed by existing technology such as
 DHCP\cite{rfc2131} and MADCAP\cite{rfc2730}.
 
-A private DNS\cite{rfc1034}\cite{rfc1035} is used by the comms framework to
+A private DNS\cite{rfc1034} is used by the comms framework to
 map a hierarchical namespace to the comms session hierarchy.
 The root comms session has the root domain name, e.g. ``{\tt \ngrm.}'',
 and the root server contains address records for all hosts in the domain, e.g.
@@ -81,14 +82,16 @@ Comms sessions spawned by the root session get their own sub-domain, e.g.
 ``{\tt s1.\ngrm}'', ``{\tt s2.\ngrm}'', ``{\tt s3.\ngrm}'',
 and contain address records for the nodes assigned to them, e.g.
 ``{\tt n1.s1.\ngrm}'', ``{\tt n2.s1.\ngrm}'', ``{\tt n3.s1.\ngrm}''.
-Sub-domains are created recursively for each level of comms session
-recursion.  Each session runs a set of DNS servers for its domain.
+Sub-domains are created for each level of comms session recursion.
+Each session runs a set of DNS servers for its domain.
 When a node joins a new session, its DNS resolver is reconfigured to use
 the session DNS servers and to default unqualified names to the session's
 DNS domain, thus each level of session overlays a new set of names over
 the root session's that provides job-centric naming uniformity.
+DNS SRV records\cite{rfc2782} provide a rudimentary service location
+brokerage within the session.
 Well understood techniques for DNS fault tolerance,
-caching, and dynamic reconfiguration are leveraged to scale perforamnce
+caching, and dynamic reconfiguration are leveraged to scale performance
 in large sessions such as the root session.
 
 
@@ -97,8 +100,8 @@ in large sessions such as the root session.
 The framework provides a toolkit for sending and receiving
 protocol messages privately and securely within a session,
 with the goals of providing a robust foundation for \ngrm\ components
-and promoting rapid development, code reuse, and interoperability
-among them.  The toolkit includes a messaging library,
+and promoting rapid development, code reuse, and interoperability.
+The toolkit includes a messaging library,
 protocol encoding/decoding libraries, and a security framework.
 Toolkit pieces can be mixed and matched according to application requirements.
 
@@ -129,7 +132,7 @@ many language bindings but it is also space-inefficient and slow.
 Protocol Buffers is a compiled format that supports
 only limited protocol evolution without recompilation.  It has relatively
 fewer language bindings than JSON but is space-efficient and fast.
-Depending on the application either may be useful.
+Depending on the application either may be appropriate.
 
 Messages can be secured with a session-wide security context.
 Each comms session is allocated a {\em session key} by its parent\footnote{
@@ -137,9 +140,10 @@ The root comms session obtains its session key out of band.}
 which is used for establishing a shared security context
 for messages exchanged within the comms session.
 The shared security context allows communicating entities to have integrity
-and privacy (from sibling and child sessions) assured without the overhead
-of a key exchange for each pair of communicating endpoints,
-especially useful for non point-to-point comms patterns such as PUB-SUB.
+and privacy (from children, siblings, and their children)
+without the overhead
+of a key exchange for each pair of communicating endpoints.
+This is especially useful for non point-to-point comms patterns such as PUB-SUB.
 The parent retains state about its offspring including their session keys.
 Children lose access to their parent's key;  thus as comms sessions recurse,
 parents get privacy from children but not the reverse.
@@ -147,16 +151,17 @@ An application acting as a gateway between parent and child would use
 the child's session key as it is known by both parent and child.
 
 Alternatively, messages can be enclosed as payload in a MUNGE\cite{MUNGE}
-credential when authentication of the sending user is required.
-This also provides intergrity and privacy for the message, at the cost
-of some latency.
-\ngrm's comms framework operates in
-a single administrative domain, where user and group identities are
-consistent throughout.  One MUNGE security realm spans the entire
-domain.\footnote{MUNGE must acquire the ability to update its shared
-secret without introducing downtime. FIXME: ref bug\#}
+credential when authentication of the sending user is required,
+at the cost of an exchange with the MUNGE daemon on both ends.
+This also provides intergrity and privacy for the message that
+is robust to threats from within the comms session.
+In order for this to work, \ngrm's comms framework must operate within a
+single MUNGE security realm,\footnote{MUNGE must acquire the ability
+to update its shared secret without introducing downtime. FIXME: ref bug\#}
+which implies a single single administrative domain with consistent
+user and group identities.
 
-\subsubsection{Comms Message Bus}
+\subsubsection{Comms Message Bus}\label{SecCommsCMB}
 
 Within a comms session, a distributed comms message bus\footnote{
 Although we refer to it as a message bus because its function
@@ -207,7 +212,7 @@ in Table~\ref{TabCMBFun}.
 
 The CMB provides a session-wide periodic, multicast {\em trigger signal}
 which enables events, including CMB's internal functions, to be cooperatively
-scheduled across the session to minimize disruption to latency-sensitive
+scheduled across the session to minimize disruption to bulk-synchronous
 workloads.  The trigger period is tunable for individual sessions.
 Higher level software running anywhere in the session has access to
 this trigger signal.
@@ -220,9 +225,13 @@ If the CMB has not heard from a node for some number
 of trigger signal periods, it is marked {\em down}, and eventually may
 be evicted from the session.  Higher level software running anywhere in
 the session can obtain the current {\em nodeset} and liveness state
-by request, and can subscribe for notification when the nodeset changes
+by request, and can subscribe to notification when the nodeset changes
 or when the liveness state of any nodes change.
-The parent has access to this same interface via the CMB control node.
+The parent continues to track liveness of nodes allocated to a child by
+subscribing to liveness updates via the child's control node.  A trivial
+utility that asks the CMB for a list of down nodes in the current session
+can be written that works equally well at any level of recursion,
+even at the level of the root session.
 
 The CMB maintains the current nodeset and mirrors it in the session DNS
 domain.  The CMB can add or delete nodes from the nodeset on request
@@ -259,6 +268,9 @@ A new session is created with a CMB request that
 includes the new nodeset and identifies the control node.  The CMB
 generates the session context and topology and passes it to the nodes
 in the nodeset, which wire up a new CMB instance for the session.
+Creation of a session also involves the update of DNS information
+in the parent and the establishment of DNS servers and resolver updates
+in the child. 
 A session is destroyed with a CMB request to the session,
 which can originate from the parent or the within the session itself.
 In the event that the control node for the session to be destroyed has become
