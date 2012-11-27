@@ -17,6 +17,7 @@
 %\usepackage{vmargin}
 \usepackage{xspace}
 \usepackage{authblk}
+\usepackage{multirow}
 \pagestyle{plain}
 
 \newcommand{\ngrm}[0]{NGRM}
@@ -366,7 +367,7 @@ to $j_k$'s processes.
 The following explains key process management services 
 and distributed key-value store mechanisms in detail. 
 
-\subsubsection{Process Management Services}
+\subsubsection{Process Management (ProcMan) Services}
 \label{sect:procman}
 
 \begin{itemize}
@@ -415,7 +416,7 @@ to the users concise information about the termination.}
 
 \end{itemize}
 
-\subsubsection{Distributed Key-Value Store (DKVS) as Scalable Global Info Sharing}
+\subsubsection{Distributed Key-Value Store (DKVS) for Scalable Global Information Sharing}
 \label{sect:dkvs}
 DKVS provides a scalable mechanism by which the processes of $j_k$ can
 share arbitrary information in a key-value pair among them. 
@@ -557,37 +558,216 @@ e.g., $j_k$::$j_{k+1}$::resource $\rightarrow$ $<$ size(128), power\_bound(12.5k
 
 
 \section{Component-Wise Work Breakdown}
-In this section, we will summarize the requirements and work items for 
+In this section, we summarize the requirements and work items for 
 the major components of the proposed system. 
 
-\subsection{Overlay Network and Infrastructure Requirement}
-The heart of WRAP lies scalable and flexible overlay network support. The overlay network's attributes include:  
+\subsection{Overlay Network and Infrastructure Requirements}
+The heart of WRAP lies scalable and flexible overlay network support. 
+The overlay network's attributes that WRAP requires include:  
 
 \begin{itemize}
 
-\item{an ability to scalably support our elasticity model through expanding and shrinking compute resources and job function processes;}
+\item{an ability to support our elasticity model 
+efficiently and scalably through expanding and shrinking 
+compute nodes and job function processes launched on them;}
 
-\item{an ability for an arbitrary head daemon to broadcast or multicast data to a set of other daemons through a binomial or binary tree with $O(log(number\_of\_daemons))$;}
+\item{an ability for an arbitrary head daemon to broadcast 
+or multicast data to a set of other daemons through a binomial 
+or binary tree with $O(log(number\_of\_daemons))$;}
 
-\item{an ability for an arbitrary head daemon to aggregate data from a set of other daemons through the binomial or binary tree with $O(log(number\_of\_daemons))$;}
+\item{an ability for an arbitrary head daemon to aggregate data 
+sent from a set of other daemons through the binomial 
+or binary tree with $O(log(number\_of\_daemons))$;}
 
-\item{an ability to allow both preset and custome reduction opertators to reduce the aggregated data along the tree;}
+\item{an ability to allow both preset and custom-made reduction 
+opertators to reduce the aggregated data along the tree;}
 
-\item{an ability to scalably route a key-value pair by hashing its key to find its home DKVS database for get/put and global memory synchronization operations.}
+\item{an ability to control data aggregation and reduction synchronously 
+with a mechanism to set an arbitrary time-out threshold: 0 time-out means pass-through; 
+infinity time-out means global synchronization; and
+in-between means partial synchronization with varying degrees;}
+
+\item{an ability to route a key-value pair efficiently and
+scalably by automatically hashing its key to find its home DKVS server
+in support of get/put and global memory synchronization operations.}
 
 \end{itemize}
 
 \subsection{Process management}
+To support scalable process management service described in Section~\ref{sect:procman},
+the following components need to be investigated, designed and implemented: 
+\begin{itemize}
+\item{an extensible communication protocol that allows 
+our process manager to conduct command and control 
+for all of its services;}
+\item{a common data aggregation and reduction framework, techniques and API;} 
+\item{process management service components that 
+make use of the communication protocol and aggregation and reduction framework/API
+and expose the services through high-level APIs;}
+\item{executable commands such as a job function launcher that combines the 
+service components to implement certain types of process management 
+services for users;} 
+\item{topology-awared process binding and mapping components as well as
+communication mapping APIs that client software can use for efficient 
+mappings between its communication patterns and the topology.}
+\end{itemize}
 
 \subsection{DKVS}
+DKVS requires the following components:  
+\begin{itemize}
+\item{name scoping specification and API;}
+\item{direct get/put methods on a readily-available key-value server;}
+\item{remote get/put methods on distributed key-value servers by 
+integrating servers to the communication infrastructure;} 
+\item{synchronization mechanisms and APIs that guarantee memory consistency 
+acorss the distributed servers.} 
+\end{itemize}
 
-\subsection{Boostrap Interfaces}
+\subsection{Bootstrap Interfaces}
+The following components should be implemented and demonstrated
+using DKVS support:
+\begin{itemize}
+\item{PMI2 and port a version of MPICH as a reference implementation;}
+\item{PMGR Collective and/or COBO and port a version of MVAPICH as a reference implementation;}
+\item{LIBI and port a version of LIBI-enabled MRNet as a reference implementation.}
+\end{itemize}
 
-\subsection{Sync}
+\subsection{Job Function Synchronization}
+\begin{itemize}
+\item{{\tt MPIR\_proctable} gatherer that gathers {\tt MPIR\_proctable} spread throughout the
+DKVS into a centeral location including the address space of the job function launcher;}
+\item{MPIR debug interface~\cite{MPIRInterface} that makes use of DKVS and process
+management services to support parallel debuggers;}
+\item{co-locator that co-locates an additional job function's processes with
+the target processes;}
+\item{LaunchMON Back-end API that makes use of DKVS to allow another job function processes 
+to discover the locations of target processes scalably.}
+\end{itemize}
 
 \subsection{Power Bound and Scheduling}
+\begin{itemize}
+\item{{\em split()} that allows an MPI job function to create smaller job functions, each with independent power bound control;}
+\item{Dynamic power bound controller that manages expanding and shrinking of power bounds across these job functions.}
+\end{itemize}
 
 \section{Phase-Based Work Breakdown}
+To bring up the proposed WRAP system progressively and expediently, we use a phased approach. 
+WRAP requires four phases: the outcome of earlier phases becomes the fundamental 
+building blocks for the later phases. 
+ 
+\subsection{Phase 1: Basic Building Blocks (BBB) design} 
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|l|l|}
+\hline
+Work Item & Description & Dependency & Deliverable \\
+\hline
+\multirow{2}{*}{Protocol design} & design/prototype process management & \multirow{2}{*}{comm. co-design} & \multirow{2}{*}{paper and review} \\
+& command/control comm. protocol & & \\ \hline
+\multirow{2}{*}{Aggregation/reduction design} & design/prototype aggregation &  \multirow{2}{*}{comm. co-design} & \multirow{2}{*}{paper and review} \\
+& reduction framework and APIs & & \\ \hline
+\multirow{2}{*}{DKVS name scoping design} & design/prototype name scoping & \multirow{2}{*}{comm. co-design} & \multirow{2}{*}{paper and review} \\
+& specification and APIs & & \\ \hline
+\multirow{3}{*}{Key-value store investigation}& evaluate key-value store servers & \multirow{3}{*}{none} & \multirow{3}{*}{finding summary} \\
+& via direct put/get methods with bootstrap & & \\
+& and MPIR tuple emulation& & \\ \hline 
+\multirow{2}{*}{Power controller investigation} & investigate Intel RAPL &  \multirow{2}{*}{RM design} & \multirow{2}{*}{paper and review} \\
+& and ways to control power bound & & \\ \hline
+\end{tabular}
+\caption{Phase 1 BBB design milestones and deliverables}
+\label{tab:phase1}
+\end{table}
+
+During this phase, we will design and prototype the basic building blocks required 
+by WRAP. This layer represents the lowest building blocks for the WRAP thrust and has fundamental
+dependecies on the overlay network infrastructure design as shown in Table~\ref{tab:phase1}.
+Thus, they must be co-designed.
+
+\subsection{Phase 2: Service Building Blocks (SBB) design and BBB implementation} 
+\begin{table}
+\centering
+\begin{tabular}{|l|l|l|l|}
+\hline
+Work Item & Description & Dependency & Deliverable \\
+\hline
+\multirow{2}{*}{ProcMan design} & design/prototype process manager & \multirow{2}{*}{comm. infra} & \multirow{2}{*}{paper and review} \\
+& package and APIs & & \\ \hline
+\multirow{2}{*}{Topo-aware binding design} & design/prototype topo-aware binding & \multirow{2}{*}{RM design} & \multirow{2}{*}{paper and review} \\
+& and mapping mechanisms and APIs & & \\ \hline
+\multirow{3}{*}{Remote DKVS} & investigate DKVS through & \multirow{3}{*}{comm. infra} & \multirow{3}{*}{finding summary} \\
+& remote put/get/sync with bootstrap & & \\
+& and MPIR emulation tuples & & \\ \hline 
+\multirow{5}{*}{BBB Implementation} & implement ProcMan comm. protocol & \multirow{5}{*}{BBB proto} & \multirow{5}{*}{software drop} \\
+& aggregation/reduction framework and API & & \\ 
+& DKVS name scoping API & & \\ 
+& direct key-value store & & \\ 
+& power controller & & \\ \hline
+\end{tabular}
+\caption{Phase 2 SBB design milestones and deliverables}
+\label{tab:phase2}
+\end{table}
+
+During this phase, we will use the design and prototypes of basic building blocks 
+to design and prototype higher-level service layer called service building blocks (SBB) 
+packages. In addition, that effort will further validate the BBB design and prototypes
+and hence we will lock in the BBB design and produce production-quality BBB implementations
+during this phase. 
+As shown in Table~\ref{tab:phase2}, this phase is designed to provide core WRAP functionality
+engine except for the actual user interfaces to expose.
+
+\subsection{Phase 3: User Service Interfaces (USI) design and SBB implementation} 
+\begin{table}
+\centering
+\begin{tabular}{|l|l|l|l|}
+\hline
+Work Item & Description & Dependency & Deliverable \\
+\hline
+\multirow{2}{*}{Job function utility design} & design/prototype job function utilities such & \multirow{2}{*}{SBB proto} & \multirow{2}{*}{paper and review} \\
+& as job function launcher & & \\ \hline
+\multirow{2}{*}{Job function sync design} & design/prototype job function & \multirow{2}{*}{SBB proto} & \multirow{2}{*}{paper and review} \\
+& synchronizers & & \\ \hline
+\multirow{2}{*}{PMI2, PMGR, LIBI design} & design/prototype boostrapers: & \multirow{2}{*}{SBB proto} & \multirow{2}{*}{finding summary} \\
+& PMI2, PMGR/COBO and LIBI & & \\ \hline
+\multirow{3}{*}{SBB implementation} & implement ProcMan package & \multirow{3}{*}{SBB proto} & \multirow{3}{*}{software drop} \\
+& Topology-aware binding & & \\ 
+& Remote DKVS & & \\ \hline
+\end{tabular}
+\caption{Phase 3 USI design milestones and deliverables}
+\label{tab:phase3}
+\end{table}
+
+During this phase, we will use the design and prototype of service building blocks
+to design and prototype the user-visible service layer called user service interfaces (USI). 
+In addition, once SBB prototypes are demonstrated that they are well-suited for the designed USI,
+we will lock in the SBB design and produce production-quality SBB implementations. 
+As shown in Table~\ref{tab:phase3},
+this phase will lay out the design of WRAP's external interfaces. 
+
+
+\subsection{Phase 4: USI implementation} 
+\begin{table}
+\centering
+\begin{tabular}{|l|l|l|l|}
+\hline
+Work Item & Description & Dependency & Deliverable \\
+\hline
+\multirow{2}{*}{Job function utility implementation} & implement job function& \multirow{2}{*}{NGRM framework} & \multirow{2}{*}{software drop} \\
+& utilities such as launcher & & \\ \hline
+\multirow{2}{*}{Job function sync implementation} & implement job function& \multirow{2}{*}{NGRM framework} & \multirow{2}{*}{software drop} \\
+& job function synchronization & & \\ \hline
+\multirow{2}{*}{PMI2, PMGR, LIBI design} & implement & \multirow{2}{*}{NGRM framework} & \multirow{2}{*}{software drop} \\
+& PMI2, PMGR/COBO and LIBI & & \\ \hline
+\end{tabular}
+\caption{Phase 4 USI implementation}
+\label{tab:phase4}
+\end{table}
+
+Once we demonstrate that USI prototypes sufficiently support both users and 
+other runtimes via reference implemenations, we lock in the SUI design and
+produce production-quality USI implementations. Table~\ref{tab:phase4} shows
+deliverables. The software drops will include the demonstration on client
+software such as MPI, MRNet and other runtime tools.  
 
 \bibliography{wrap}
 \bibliographystyle{plain}
