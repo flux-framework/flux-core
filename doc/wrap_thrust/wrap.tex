@@ -562,7 +562,7 @@ In this section, we summarize the requirements and work items for
 the major components of the proposed system. 
 
 \subsection{Overlay Network and Infrastructure Requirements}
-The heart of WRAP lies scalable and flexible overlay network support. 
+The heart of WRAP lies in scalable and flexible overlay network support. 
 The overlay network's attributes that WRAP requires include:  
 
 \begin{itemize}
@@ -583,7 +583,7 @@ or binary tree with $O(log(number\_of\_daemons))$;}
 opertators to reduce the aggregated data along the tree;}
 
 \item{an ability to control data aggregation and reduction synchronously 
-with a mechanism to set an arbitrary time-out threshold: 0 time-out means pass-through; 
+with a mechanism to set an arbitrary time-out threshold: zero time-out means pass-through; 
 infinity time-out means global synchronization; and
 in-between means partial synchronization with varying degrees;}
 
@@ -663,15 +663,15 @@ building blocks for the later phases.
 \hline
 Work Item & Description & Dependency & Deliverable \\
 \hline
-\multirow{2}{*}{Protocol design} & design/prototype process management & \multirow{2}{*}{comm. co-design} & \multirow{2}{*}{paper and review} \\
+\multirow{2}{*}{Protocol design} & design/prototype procMan & \multirow{2}{*}{comm. co-design} & \multirow{2}{*}{paper and review} \\
 & command/control comm. protocol & & \\ \hline
 \multirow{2}{*}{Aggregation/reduction design} & design/prototype aggregation &  \multirow{2}{*}{comm. co-design} & \multirow{2}{*}{paper and review} \\
 & reduction framework and APIs & & \\ \hline
 \multirow{2}{*}{DKVS name scoping design} & design/prototype name scoping & \multirow{2}{*}{comm. co-design} & \multirow{2}{*}{paper and review} \\
 & specification and APIs & & \\ \hline
 \multirow{3}{*}{Key-value store investigation}& evaluate key-value store servers & \multirow{3}{*}{none} & \multirow{3}{*}{finding summary} \\
-& via direct put/get methods with bootstrap & & \\
-& and MPIR tuple emulation& & \\ \hline 
+& via direct put/get methods using & & \\
+& bootstrap and MPIR emulation& & \\ \hline 
 \multirow{2}{*}{Power controller investigation} & investigate Intel RAPL &  \multirow{2}{*}{RM design} & \multirow{2}{*}{paper and review} \\
 & and ways to control power bound & & \\ \hline
 \end{tabular}
@@ -695,9 +695,9 @@ Work Item & Description & Dependency & Deliverable \\
 & package and APIs & & \\ \hline
 \multirow{2}{*}{Topo-aware binding design} & design/prototype topo-aware binding & \multirow{2}{*}{RM design} & \multirow{2}{*}{paper and review} \\
 & and mapping mechanisms and APIs & & \\ \hline
-\multirow{3}{*}{Remote DKVS} & investigate DKVS through & \multirow{3}{*}{comm. infra} & \multirow{3}{*}{finding summary} \\
-& remote put/get/sync with bootstrap & & \\
-& and MPIR emulation tuples & & \\ \hline 
+\multirow{3}{*}{Remote DKVS} & investigate DKVS via & \multirow{3}{*}{comm. infra} & \multirow{3}{*}{finding summary} \\
+& remote put/get/sync using bootstrap & & \\
+& and MPIR emulation & & \\ \hline 
 \multirow{5}{*}{BBB Implementation} & implement ProcMan comm. protocol & \multirow{5}{*}{BBB proto} & \multirow{5}{*}{software drop} \\
 & aggregation/reduction framework and API & & \\ 
 & DKVS name scoping API & & \\ 
