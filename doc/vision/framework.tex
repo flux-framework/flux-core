@@ -27,7 +27,7 @@ to be built that can operate at any level of recursion, thus improving
 testability and facilitating research.
 
 The communications framework consists of three main layers:
-the IP transport, comms toolkit, and comms message bus, shown
+the IP transport, comms toolkit, and comms message broker, shown
 in Figure~\ref{FigCommsLayers}.  Layering is not rigid;
 that is, higher level \ngrm\ components can use any of the
 layers directly as appropriate.
@@ -167,19 +167,19 @@ to update its shared secret without introducing downtime. FIXME: ref bug\#}
 which implies a single single administrative domain with consistent
 user and group identities.
 
-\subsubsection{Comms Message Bus}\label{SecCommsCMB}
+\subsubsection{Comms Message Broker}\label{SecCommsCMB}
 
-Within a comms session, a distributed comms message bus (CMB)
+Within a comms session, a distributed comms message broker (CMB)
 is established to provide basic session services.
 The CMB is responsible for launching new sessions,
 managing session membership,
-detecting and adapting to session node failures, and
-providing a basic event messaging system.
+detecting and adapting to session node failures,
+providing a basic event messaging system,
+and starting other \ngrm\ components.
 
 \paragraph{Architecture}
-Although we refer to it as a message bus because its function
-is analagous to that of system-dbus on Linux, the CMB is a distributed
-service with nodes interconnected in a topology that is to be determined.
+The CMB is a distributed service with nodes interconnected in a topology
+that is to be determined.
 A distinguished {\em control node} serves as the heart of the CMB.
 The control node is distinguished because it alone communicates with
 the parent session, and it holds the master copy of the session state.
@@ -190,17 +190,18 @@ that is, the parent initiates connections and makes requests or subscribes
 to events, and the child control node responds or publishes events.
 
 \paragraph{Session State}
-The CMB implements a simple key-value store to manage a small amount of
-internal state as shown in Table~\ref{TabCMBState}.
-The session state is small enough, say $< 0.5\%$ RAM,
-to be fully replicated on every node in the session.
+The CMB implements a simple key-value store to manage the
+internal state enumerated in Table~\ref{TabCMBState}.
+The session state for the largest session is small enough to easily
+fit in memory.
 The master state lives on the control node.
-Slave copies on other nodes are loosely consistent with the master copy:
-reads are local, writes are through to the control node.
-Each write on the control node increments a generation number and
-triggers a state update event.
-Nodes joining (or rejoining) the session pull down a fresh copy of the
-state, then process update events to stay synchronized.
+Slave caches on other nodes are loosely consistent with the master copy:
+reads may utilize a local or peer cache;
+writes are through to the control node.
+Each write on the control node updates the key's generation number,
+its value, and triggers a state update event which
+can be used to update caches and synchronize other software using the
+state.
 
 \begin{table}
   \centering
@@ -209,28 +210,40 @@ state, then process update events to stay synchronized.
   \hline
   cmb.cred = $key$ &
         My session key.\\
+  cmb.fqdn = $name$ &
+        Fully qualified domain name for the session.\\
   cmb.nodeset = $nodelist$ &
         List of my nodes.\\
   cmb.addrs.$node$ = $addrs$ &
-        List of addresses for node, for forming DNS address records.\\
+        List of addresses for $node$, for forming DNS address records.\\
   cmb.topology.up.$node$ = $nodelist$ & 
-        Upward peers for CMB topology, TBD.\\
+        Upward peers for $node$ in CMB topology.\\
   cmb.topology.dn.$node$ = $nodelist$ &
-        Downward peers for CMB topology, TBD.\\
-  cmb.alive.$node$ = $down|up$ &
-        Liveness for each node.\\
-  cmb.alloc.$node$ = $session|nil$ &
-        Child session node is allocated to or nil if not allocated.\\
+        Downward peers for $node$ in CMB topology.\\
+  cmb.alive.$node$ = $yes|no$ &
+        Liveness for $node$.\\
+  cmb.alloc.$node$ = $yes|no$ &
+        Allocation status for $node$.\\
+  cmb.attrs.$node$ = $attrlist$ &
+	Role attributes assigned to $node$, e.g. ``dns'' and ``control''.\\
+  cmb.subscribe.$key$ = $nodelist$ &
+        List of nodes subscribed to $key$.\\
+  cmb.exec = $cmdline$ &
+        Executable to bootstrap on each node.\\
+  \hline
+  cmb.child.sessions = $sessions$ &
+        List of active child sessions.\\
   cmb.child.$session$.cred = $key$ &
         Child sesion key.\\
   cmb.child.$session$.control = $nodelist$ &
-        Control node(s) for child session.\\
+        Control node(s) for $session$.\\
+  cmb.child.$session$.dns = $nodelist$ &
+        DNS server nodes for $session$, for forming DNS NS records.\\
   \hline
   \end{tabular}
-  \caption{Comms Message Bus State}
+  \caption{Comms Message Broker State}
   \label{TabCMBState}
 \end{table}
-
 
 \paragraph{Event Messaging}
 The CMB implements a session-wide event messaging service.
@@ -260,8 +273,7 @@ While nodes are allocated to a session, they remain in the parent nodeset,
 tagged as {\em allocated}.  They forget the parent's session state and key.
 When nodes are freed back to the parent, the parent CMB, having subscribed
 to the child's nodeset update events, contacts the freed node (using the
-child session key) and brings it back online, de-allocated, in the parent
-sesssion.  
+child session key) and brings it back online in the parent sesssion.  
 
 \paragraph{Liveness Monitoring}
 The CMB maintains the {\em liveness} of its nodes as part
@@ -269,7 +281,7 @@ of the session state.
 Liveness is assessed by forcing member nodes to communicate with the CMB
 at minimum intervals, synchronized by the aforementioned trigger event.
 If the CMB has not heard from a node for some number
-of trigger periods, it is marked {\em down}.
+of trigger periods, it is marked down.
 If it finally is heard from, it is marked {\em up}.
 In some cases the CMB control node may adjust its internal topology
 to account for such changes.
@@ -283,7 +295,7 @@ can be written that works equally well at any level of recursion,
 even at the level of the root session.
 
 \paragraph{Node Bootstrap}
-A cold started node (or restarted cmb daemon) joins the root session,
+A cold started node (or restarted CMB daemon) joins the root session,
 obtaining the root session key and the identity of a peer to copy the
 session state from out of band in a secure manner.
 If the CMB is cold starting after crashing while assigned to
@@ -291,16 +303,25 @@ a session other than the root, the CMB of the root and subsequent owning
 sessions re-add the node from child to child until there are no children
 left or it is evicted according to the policy of an owning session.
 
-\begin{figure}
-\centering
+\paragraph{Executable Bootstrap}
+In order to bootstrap other \ngrm\ components, the CMB daemon, upon
+joining a new session, launches a single process on each node,
+determined by the {\tt cmb.exec} state variable.
+This process is terminated when the node alters its session membership
+to join a child session or return to a parent session.
+If the process terminates early, an event is generated.
+
+%\begin{figure}
+%\centering
 %\includegraphics[scale=0.50]{../fig/cmb.eps}
-\caption{Comms Message Bus Spawning a New Comms Session}
-\label{FigCMBSpawn}
-\end{figure}
+%\caption{Comms Message Broker Spawning a New Comms Session}
+%\label{FigCMBSpawn}
+%\end{figure}
 
 \paragraph{Session Creation}
 The CMB is responsible for the creation of
-child comms sessions as shown in Figure~\ref{FigCMBSpawn}.
+child comms sessions.
+%as shown in Figure~\ref{FigCMBSpawn}.
 A child session is created by building the child session state,
 updating the current (parent) session state, then sending the
 child control node(s) the full session state, and the rest of the nodes
@@ -321,3 +342,5 @@ and actively reclaim nodes as above, as though they had already left the
 child nodeset.
 The DNS is updated in the parent to remove references to the session's
 subdomain.
+
+\subsubsection{Component-Wise Work Breakdown}
