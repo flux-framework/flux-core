@@ -108,20 +108,34 @@ The framework provides a toolkit for sending and receiving
 protocol messages privately and securely within a session,
 with the goals of providing a robust foundation for \ngrm\ components
 and promoting rapid development, code reuse, and interoperability.
-The toolkit includes a messaging library,
-protocol encoding/decoding libraries, and a security framework.
-Toolkit pieces can be mixed and matched according to application requirements.
+The toolkit includes messaging libraries,
+protocol encoding/decoding libraries, and security options.
+Toolkit pieces can be mixed and matched according to application
+requirements.  We may cull the comms toolkit as we learn more
+about the pieces while prototyping other \ngrm\ comopnents.
 
-0MQ\cite{ZMQGuide} is a messaging library that
-provides the ability to manipulate opaque, multipart messages, and
-carry them across various transports, including TCP and PGM\cite{rfc3208}
-(reliable multicast), using a socket-like API.  0MQ sockets can
-exchange messages using various {\em patterns},
-including REQ-REP (RPC), PUB-SUB, and PUSH-PULL (message stream).
+Two messaging approaches of interest are 0MQ\cite{ZMQGuide} and
+SCTP\cite{SCTP}.
+0MQ provides the ability to manipulate opaque, multipart messages,
+and carry them across various transports, including TCP and
+PGM\cite{rfc3208} (reliable multicast), using a socket-like API.
+0MQ sockets can exchange messages using patterns including
+REQ-REP (RPC), PUB-SUB, and PUSH-PULL (message stream).
 0MQ can be used to build applications or custom message brokers.
 Complex message routing topologies such as tree-based overlay networks
 (Figure~\ref{FigZmqTBON}) can be built from simple components.
 0MQ has a large number of language bindings.
+
+SCTP is an IETF-standardized, message-oriented transport developed
+in the telephony world with an implementation in the Linux kernel.
+It offers multi-streaming, the bundling of {\em streams} in one
+{\em association} (connection).  Individual streams can be configured for
+different ordering and reliability semantics.  SCTP supports
+multi-homing for reliability and congestion avoidance, and
+can transparently generate and check an HMAC for messages using a
+pre-shared key to implement message integrity.  Unlike 0MQ, SCTP is
+connection-based and does not implement a standardized reliable multicast
+mode.
 
 \begin{figure}
 \centering
@@ -342,5 +356,3 @@ and actively reclaim nodes as above, as though they had already left the
 child nodeset.
 The DNS is updated in the parent to remove references to the session's
 subdomain.
-
-\subsubsection{Component-Wise Work Breakdown}
