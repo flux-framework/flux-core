@@ -1,1 +1,75 @@
-\section{Resource Management Thrust}
+\section{Resource Management}
+
+FIXME: pulled in an email, fix style
+
+I propose that the core component of the "resource management"
+part of NGRM be a persistent, global database that I've been
+calling the "Resource Inventory". The Resource Inventory contains
+a superset of resources managed by the system, at at the highest
+level acts as the configuration repository for the NGRM system.
+The resource inventory allows for arbitrary tags on resources,
+and is not associated with any "instance" of the resource
+manager.
+
+I propose the following initial features of the resource inventory:
+
+\begin{itemize}
+\item{Arbitrary "tagging" of resource objects. Tags can be used later
+   to define searches for objects. E.g. give me all the resources
+   with the tag 'compute' and 'node' and 'idle', etc.}
+
+\item{A subscribe interface with filtering so apps using the DB can
+   subscribe to interesting changes and updates in the DB.}
+
+\item{An API upon which sysadmin and other tools could be developed.}
+\end{itemize}
+
+Resource manager instances/jobs do not interact directly with
+the Resource Inventory. I propose that each RM instance has associated
+with it a rw "cache" of its subset of the resource inventory DB,
+which we will call simply the resource DB. The resource DB
+'listens' for changes of interest from its parent DB using
+the subscribe interface, and additionally publishes its own
+changes such that a parent/child or other application can
+be notified of data changes to the cache (e.g. node is allocated
+to sub-job, node is marked down, user pushes some tags of
+interest into the cache).
+
+At the end of a job, a configurable set of data in the
+resource DB would be pushed back up to the parent. This
+allows accumulated data and job/user specific tags from
+each job to percolate back up the system, possibly all
+the way to the persistent Resource Inventory.
+
+\newpage
+\subsection{Resource Management WBS}
+
+\begin{longtable}{|p{1cm}|p{10.2cm}|p{1cm}|p{1cm}|p{1.8cm}|}\hline
+  \textbf{Item} & \textbf{Description}
+                & \textbf{Deliv}\footnote{SD = software drop,
+                        DR = design review, V = viewgraphs, D = document}
+                & \textbf{Weeks} & \textbf{Dep} \\
+  \hline
+  2.1.  & "Functional", high-level model for how the system above
+          would work in \ngrm, including models for Resource Inventory,
+          Job Data, Queues, Scheduling.
+        & V
+        & 
+        & \\
+  \hline
+  2.2.  & Resource and Job DB APIs (design and prototype).
+        & DR, V
+        & 
+        & 2.1\\
+  \hline
+  2.3.  & Resource Inventory (design and prototype)
+        & DR, V
+        & 
+        & 2.1\\
+  \hline
+  2.4.  & Job Database (design and prototype)
+        & DR, V
+        & 
+        & 2.1\\
+  \hline
+\end{longtable}

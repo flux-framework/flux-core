@@ -1,1 +1,109 @@
-\section{Workload Runtime Thrust}
+\section{Workload Runtime}
+
+FIXME: pull in description from Dong's WRAP document.
+
+\newpage
+\subsection{Workload Runtime WBS}
+
+\begin{longtable}{|p{1cm}|p{10.2cm}|p{1cm}|p{1cm}|p{1.8cm}|}\hline
+  \textbf{Item} & \textbf{Description}
+                & \textbf{Deliv}\footnote{SD = software drop,
+                        DR = design review, V = viewgraphs, D = document}
+                & \textbf{Weeks} & \textbf{Dep} \\
+  \hline
+  \hline
+  \multicolumn{5}{|l|}{4.1. \textbf{Runtime Basic Building Blocks}} \\
+  \hline
+  4.1.1.& Process manager command/control communication protocol design.
+          (comms co-design)
+        & DR, D
+        & 
+        & \\
+  \hline
+  \multicolumn{2}{|l|}{\em Note to Dong: agg/reduct framework moved to comms
+              framework WBS}
+        &
+        &
+        & \\
+  \hline
+  4.1.3.& Distributed key-value store name scoping specification and API.
+          (comms co-design)
+        & DR, D
+        & 
+        & \\
+  \hline
+  4.1.4.& Distributed key-value store investigation.  Evaluate servers
+          via direct put/get methods using bootstrap and MPIR emulation.
+        & V
+        & 
+        & \\
+  \hline
+  4.1.5.& Power control: Investigate  RAPL and ways to control power bound.
+        & DR, D
+        & 
+        & RM \\
+  \hline
+  4.1.6.& Implement ProcMan communication protocol, DKVS name scoping API,
+          direct key-value store, power controller.
+        & SD
+        & 
+        & 4.1.1, 4.1.2, 4.1.3, 4.1.4, 4.1.5 \\
+  \hline
+  \multicolumn{5}{|l|}{4.2. \textbf{Runtime Service Building Blocks}} \\
+  \hline
+  4.2.1.& Process manager: design/prototype ProcMan and API.
+        & DR, D
+        & 
+        & comms, 4.1.1\\
+  \hline
+  4.2.2.& Topo-aware binding: design/prototype binding and mapping
+          mechanism and APIs.
+        & DR, D
+        & 
+        & RM, 4.1.*\\
+  \hline
+  4.2.3.& Remote DKVS: investigate DKVS via remote put/get/sync using
+	  bootstrap and MPIR emulation.
+        & V
+        & 
+        & comms, 4.1.3(?), 4.1.4\\
+  \hline
+  4.2.4.& Implement ProcMan, topology-aware binding, remote DKVS.
+        & SD 
+        & 
+        & 4.2.1, 4.2.2, 4.2.3 \\
+  \hline
+  \multicolumn{5}{|l|}{4.3. \textbf{Runtime User Service Interfaces}} \\
+  \hline
+  4.3.1.& Design/prototype job function utilities such as job function
+          launcher.
+        & DR, D
+        & 
+        & 4.2.1, 4.2.2, 4.2.3 \\
+  \hline
+  4.3.2.& Design/prototype job function synchronizers
+        & DR, D
+        & 
+        & 4.2.1, 4.2.2, 4.2.3 \\
+  \hline
+  4.3.3.& Design/prototype bootstrappers: PMI2, PMGR/COBO, LIBI
+        & V
+        & 
+        & 4.2.1, 4.2.2, 4.2.3 \\
+  \hline
+  4.3.4.& Implement job function utility.
+        & SD
+        & 
+        & comms, 4.3.1 \\
+  \hline
+  4.3.5.& Implement job function sync.
+        & SD
+        & 
+        & comms, 4.3.2 \\
+  \hline
+  4.3.6.& Implement PMI2, PMGR/COBO, LIBI
+        & SD
+        & 
+        & comms, 4.3.3 \\
+  \hline
+\end{longtable}

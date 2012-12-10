@@ -1,1 +1,195 @@
-\section{Monitoring/Provenance Thrust}
+\section{Monitoring/Provenance}
+
+FIXME: pull from 2 presentations
+
+\newpage
+\subsection{Monitoring/Provenance WBS}
+
+\begin{longtable}{|p{1cm}|p{10.2cm}|p{1cm}|p{1cm}|p{1.8cm}|}\hline
+  \textbf{Item} & \textbf{Description}
+                & \textbf{Deliv}\footnote{SD = software drop,
+                        DR = design review, V = viewgraphs, D = document}
+                & \textbf{Weeks} & \textbf{Dep} \\
+  \hline
+  \hline
+  \multicolumn{5}{|l|}{3.1. \textbf{Root File System via Network Block Device}} \\
+  \hline
+  3.1.1.& Complete 9nbd network block device development, including
+          backport upstream 9P transport fixes, refine/test 9nbd resiliency
+          code, submit for LKML integration.
+        & SD
+        & 
+        & \\
+  \hline
+  3.1.2.& Add MUNGE key bootstrap and 9nbd root support to nfsroot
+	  dracut module.
+        & SD
+        & 
+        & \\
+  \hline
+  3.1.3.& Backport zram TRIM support so space can be reclaimed in
+          zram-based root file systems.
+        & SD
+        & 
+        & \\
+  \hline
+  3.1.4.& Investigate container formats, e.g. local file system type/options,
+          and methods of attaching metadata to containers, e.g. extended
+          attributes.
+        & D
+        & 
+        & \\
+  \hline
+  3.1.5.& Root file system provisioning support via diod, 9nbd for TOSS 2.1
+          and LC production.
+        & SD
+        & 
+        & 3.1.1, 3.1.2, 3.1.3, 3.1.4\\
+  \hline
+  3.1.6.& Report result of production deployment.
+	  Study scalability impact including reboot times, /opt based pynamic.
+	  To what extent does using NFS at the back end inhibit scaling?
+	  What other issues have come up with this method?
+        & V, D?
+        & 
+        & 3.1.5\\
+  \hline
+  \multicolumn{5}{|l|}{3.2. \textbf{Decoupled Application Root/Read-only Datasets}} \\
+  \hline
+  3.2.1.& Develop prototype SPANK plugin that allows users
+          to select among available root images.  Manage private file system
+          namespace for user, perfrom post-mount configuration, perform uid
+          mapping.  Develop strategy for handling mounts such as home
+          directories that would be overmounted by a new root.
+        & DR
+        & 
+        & 3.1.5 \\
+  \hline
+  3.2.2.& Design/prototype tools to enable code teams and/or development
+          environment group to create application-specific roots.
+          Lorenz interface?  Streamline upgrading app root when kernel/driver
+          ABI changes.  Portability versus incorporated config files.
+        & DR
+        & 
+        & \\
+  \hline
+  3.2.3.& Design/prototype data store for application-specific roots.
+          What is the data model?  Need content addressability so the RM
+          can hold a provenance ref.  How to manage dataset pile up, archive
+          relationship, purge policy, thin copies, dedup?
+          Support tool workflow.  Lorenz interface?   Performance?
+        & DR
+        & 
+        & \\
+  \hline
+  3.2.4.& Implement tools for application-specific root creation.
+        & SD
+        & 
+        & 3.2.2 \\
+  \hline
+  3.2.5.& Implement data store for application-specific root creation.
+        & SD
+        & 
+        & 3.2.3 \\
+  \hline
+  3.2.6.& Design/prototype \ngrm\ integration including RM launch of private
+          diod daemons, possible comms framework transport integration,
+          RM management of dataset references.  Support snapshotting of
+          r/w directories into r/o store at job submission?
+        & DR
+        & 
+        & 3.2.3 \\
+  \hline
+  3.2.7.& Implement \ngrm\ integration.
+        & SD
+        & 
+        & comms, runtime, 3.2.6 \\
+  \hline
+  \multicolumn{5}{|l|}{3.3. \textbf{Monitoring Database}} \\
+  \hline
+  3.3.1.& Study available NoSQL database for 100K node scalability
+          and appropriate query interface.
+          Use offline log data to investigate system diagnostic capability.
+          (Gamblin/Mohror HPC Data Analytics FY12 LDRD)
+        & V
+        & 
+        & LDRD \\
+  \hline
+  3.3.2.& Implement prototype database tied to live log sources.
+          Study scalability and develop queries.
+          (Gamblin/Mohror HPC Data Analytics FY12 LDRD)
+          (See also: Faaland SPLUNK deployment).
+        & V
+        & 
+        & 3.3.1 \\
+  \hline
+  3.3.3.& Design/prototype access-role based security.
+        & DR
+        & 
+        & 3.3.2 \\
+  \hline
+  3.3.4.& Design/prototype schemas and queries for reporting
+          RAS metrics of interest to center management.
+        & DR
+        & 
+        & 3.3.2 \\
+  \hline
+  3.3.5.& Design/prototype procedure for sanitizing and releasing data
+	  for research study and citation.
+        & DR
+        & 
+        & 3.3.2 \\
+  \hline
+  3.3.6.& Design/prototype schema for job logs and queries for
+          associating job data, system log data, etc..
+        & 
+        & 
+        & RM, 3.3.2 \\
+  \hline
+  3.3.7.& Implement production monitoring kit.
+          Document procedures and practices for extending and using the system.
+          (opportunity for multiple publications here) 
+        & SD, D
+        & 
+        & 3.3.2 3.3.3, 3.3.4, 3.3.5, 3.3.6 \\
+  \hline
+  \multicolumn{5}{|l|}{3.4. \textbf{Monitoring Framework}} \\
+  \hline
+  3.4.1.& Design/prototype log aggregation and routing to log database
+	  based on \ngrm\ comms.
+        &
+        & DR
+        & comms \\
+  \hline
+  3.4.2.& Design/prototype event-based monitoring framework based on
+	  \ngrm\ comms.  (Coordinate with Meier monitoring improvement project)
+        &
+        & DR
+        & comms \\
+  \hline
+  3.4.3.& Design/prototype plugin interface that allows
+          users to customize event based monitoring within a job.
+        &
+        & DR
+        & 3.4.2 \\
+  \hline
+  3.4.4.& Design/prototype plugin interface that allows
+          users to customize log generation and aggregation within a job.
+        &
+        & DR
+        & 3.4.1 \\
+  \hline
+  3.4.5.& Design/prototype a plugin interface for instrumenting jobs
+          to gather "implicit provenance" such as file accesses.
+        & DR
+        & 
+        & 3.3.2 \\
+  \hline
+  3.4.6.& Implement monitoring framework.
+          Document procedures for writing plugins and extending the system.
+        &
+        & SD, D
+        & 3.4.1, 3.4.2, 3.4.3, 3.4.4, 3.4.5. \\
+  \hline
+\end{longtable}
+
