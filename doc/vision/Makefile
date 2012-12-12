@@ -10,7 +10,8 @@ DEPFIG = \
 	../fig/comms.eps \
 	../fig/commstk.eps \
 	../fig/cmb.eps \
-	../fig/zmqtbon.eps
+	../fig/zmqtbon.eps \
+	../fig/pathwalk.eps
 
 DEPBIB = \
 	../bib/project.bib \

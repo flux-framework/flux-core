@@ -55,12 +55,23 @@ A study of parallel path search\cite{BlkDevPathSearch}
 using ext4, the {\em loopback} block device, one level of diod I/O forwarding
 with a fanout of 82 to 1, and a single NFS server,
 showed flat scaling to 82 nodes, the largest scale attempted,
-while NFS began to slow exponentially at eight nodes.
-This result indicates that the distributed block device based on 9P has
+while NFS began to slow at eight nodes.
+This result, depicted in Figure~\ref{FigPathWalk},
+indicates that the distributed block device based on 9P has
 great promise to improve job launch times over NFS, and the flexible
 hierarchical architecture should easily scale to 100K nodes, although
 testing with more than one level of diod forwarding may identify some
 additional work required to get there.
+\begin{figure}
+\centering
+\includegraphics[scale=0.60]{../fig/pathwalk.eps}
+\caption{\small
+Path walk performance for distributed block device based on 9P and diod
+scales the same as the null slurm job up to 82 nodes, while NFS begins
+to slow at 8 nodes.
+}
+\label{FigPathWalk}
+\end{figure}
 
 \paragraph{System Noise Outlook}
 The distributed block device requires no cache management as the
