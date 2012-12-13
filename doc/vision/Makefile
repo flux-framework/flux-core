@@ -11,7 +11,8 @@ DEPFIG = \
 	../fig/commstk.eps \
 	../fig/cmb.eps \
 	../fig/zmqtbon.eps \
-	../fig/pathwalk.eps
+	../fig/pathwalk.eps \
+	../fig/dnbd.eps
 
 DEPBIB = \
 	../bib/project.bib \

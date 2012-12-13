@@ -3,7 +3,8 @@ DEPFIG = \
 	commstk.eps \
 	cmb.eps \
 	zmqtbon.eps \
-	pathwalk.eps
+	dnbd.eps \
+	pathwalk.eps \
 
 all: $(DEPFIG)
 

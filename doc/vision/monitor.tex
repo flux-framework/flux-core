@@ -17,7 +17,7 @@ In the proposed system, a dataset is stored in a container,
 actually itself a file formatted as a local file system such as ext4 or
 squashfs.  The container, which is stored in a special dataset repository,
 is exported as a read-only network block device,
-then mounted as a read-only, local file system on compute nodes,
+then mounted like a regular local file system on compute nodes,
 where the files that comprise the dataset are individually accessible.
 The system can be used to provision the root file system,
 or any other file system provided its content can be stored immutably
@@ -43,6 +43,17 @@ A hierarcically distributed, shared network block device can be built
 using 9nbd and any number of levels of chained 9P diod\cite{diod}
 I/O forwarding servers, fanned out in a hierarchy as depicted in
 Figure~\ref{Fig9nbd}.
+\begin{figure}
+\centering
+\fbox{\includegraphics[scale=0.30]{../fig/dnbd.eps}}
+\caption{
+Immutable, read-only datasets residing in repository are forwarded by diod
+I/O forwarding server to compute nodes running 9nbd where they appear
+as block devices.  Block devices are mounted on compute nodes with
+the semantics of a local file system.
+}
+\label{Fig9nbd}
+\end{figure}
 
 \paragraph{Performance Outlook}
 A diod I/O forwarding server will read the working set of the container
@@ -64,8 +75,8 @@ testing with more than one level of diod forwarding may identify some
 additional work required to get there.
 \begin{figure}
 \centering
-\includegraphics[scale=0.60]{../fig/pathwalk.eps}
-\caption{\small
+\includegraphics[scale=1]{../fig/pathwalk.eps}
+\caption{
 Path walk performance for distributed block device based on 9P and diod
 scales the same as the null slurm job up to 82 nodes, while NFS begins
 to slow at 8 nodes.
@@ -151,8 +162,8 @@ The resource manager will take references on containers when they are used
 and when they are referenced by a job's provenance record.
 Thus the dataset repository is more than a file system that has
 content addressability and copy-on-write.
-It must enforce provsioning system policy over container additions and
-removals and ensure that it contains only valid containers.
+It must enforce provisioning system policy over container additions and
+removals and ensure that all its containers have a valid format.
 
 \subsubsection{Tools for Creating and Managing Datasets}
 
@@ -169,15 +180,13 @@ The provisioning system is intended to be used in conjunction with
 the \ngrm\ runtime's capability of configuring the file system
 namespace (e.g. set of mount points) on a custom basis for each job. 
 
-FIXME: launching a custom I/O forwarding topology within the job.
+FIXME: launching a custom I/O forwarding topology within the job
+vs fixed topology.
 
 FIXME: taking a reference on a container while it is mounted and
 from job log for provenance.
 
-\subsection{Monitoring}
-
-\newpage
-\subsection{Monitoring/Provenance WBS}
+\subsubsection{File System Provisioning WBS}
 
 \begin{longtable}{|p{1cm}|p{10.2cm}|p{1cm}|p{1cm}|p{1.8cm}|}\hline
   \textbf{Item} & \textbf{Description}
@@ -298,6 +307,39 @@ from job log for provenance.
         & 
         & 3.2.6 \\
   \hline
+\end{longtable}
+\newpage
+
+\subsection{Monitoring}
+
+System monitoring is comprised of a monitoring database and
+monitoring framework.
+
+\subsubsection{Monitoring Database}
+
+\subsubsection{Monitoring Framework}
+
+\paragraph{Event Notification}
+Routine monitoring for system faults, state transitions, and the like
+utilizes the comms CMB event notification facility.  CMB events respect
+session boundaries and are delivered based on subscription.
+
+\paragraph{Logging}
+Logging utilizes the comms aggregation/reduction overlay to
+move logs, performance counter samples, and other streaming data
+from compute nodes to the monitoring database.
+
+\newpage
+
+\subsubsection{Monitoring WBS}
+
+\begin{longtable}{|p{1cm}|p{10.2cm}|p{1cm}|p{1cm}|p{1.8cm}|}\hline
+  \textbf{Item} & \textbf{Description}
+                & \textbf{Deliv}\footnote{SD = software drop,
+                        DR = design review, V = viewgraphs, D = document}
+                & \textbf{Weeks} & \textbf{Depend} \\
+  \hline
+  \hline
   \multicolumn{5}{|l|}{3.3. \textbf{Monitoring Database}} \\
   \hline
   3.3.1.& Study available NoSQL databases for 100K node scalability
@@ -351,26 +393,26 @@ from job log for provenance.
   \hline
   3.4.1.& Design/prototype log aggregation and routing to log database
 	  based on \ngrm\ comms.
-        &
         & DR
+        &
         & comms \\
   \hline
   3.4.2.& Design/prototype event-based monitoring framework based on
 	  \ngrm\ comms.  (Coordinate with Meier monitoring improvement project)
-        &
         & DR
+        &
         & comms \\
   \hline
   3.4.3.& Design/prototype plugin interface that allows
           users to customize event based monitoring within a job.
-        &
         & DR
+        &
         & 3.4.2 \\
   \hline
   3.4.4.& Design/prototype plugin interface that allows
           users to customize log generation and aggregation within a job.
-        &
         & DR
+        & 
         & 3.4.1 \\
   \hline
   3.4.5.& Design/prototype a plugin interface for instrumenting jobs
@@ -381,9 +423,10 @@ from job log for provenance.
   \hline
   3.4.6.& Implement monitoring framework.
           Document procedures for writing plugins and extending the system.
-        &
         & SD, D
+        &
         & 3.4.1, 3.4.2, 3.4.3, 3.4.4, 3.4.5. \\
   \hline
 \end{longtable}
+
 
