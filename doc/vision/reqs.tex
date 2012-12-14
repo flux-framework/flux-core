@@ -437,4 +437,10 @@
 	other job resources that aren't involved in moving files (Kathryn
 	Mohror)\\
   \hline
+  UC23 & \textbf{Give me a fat node for rank 0 and top it up with thin or fat ones}\newline
+	In sbatch to ask for a fat node (more memory) and then a couple of
+	other nodes (fat or thin), and then have the batch script start on
+	the fat node, so that rank 0 is placed there by default by the MPI.
+	(Kent Engstrom request to slurm-dev)\\
+  \hline
 \end{longtable}
