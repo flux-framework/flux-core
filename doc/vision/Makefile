@@ -1,10 +1,11 @@
 DEPSEC = \
-	resmgmt.tex \
 	framework.tex \
-	runtime.tex \
 	monitor.tex \
 	project.tex \
-	reqs.tex
+	reqs.tex \
+	resmgmt.tex \
+	runtime.tex \
+	scheduler.tex
 
 DEPFIG = \
 	../fig/comms.eps \
