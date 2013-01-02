@@ -1,6 +1,6 @@
 \section{File System Provisioning and System Monitoring}
 
-This section describes the system provisioning and system monitoring
+This section describes the file system provisioning and system monitoring
 subsystems of \ngrm.  By coupling these systems to the resource manager,
 we achieve our goals of mitigating system noise, improving job launch time,
 and promoting reproduceability and data provenance.
@@ -12,7 +12,7 @@ and other read-only data are provided to compute nodes.
 A provisioning system based on immutable datasets is proposed.
 Immutable datasets are collections of files that can be aggressively cached
 without revalidation,
-and accurately referenced in a job record for data provenance.
+and reliably referenced in a job record for data provenance.
 In the proposed system, a dataset is stored in a container,
 actually itself a file formatted as a local file system such as ext4 or
 squashfs.  The container, which is stored in a special dataset repository,
@@ -131,9 +131,10 @@ Dataset containers can initially be stored in NFS, Lustre, or a local file
 system and managed by system administrators using simple scripts.
 However, there are a few practical problems with this.
 One is that a large number of nearly identical containers may proliferate
-and use too much space.  Another is that there is no mechanism to take a
-reference on a dataset such that the reference is guaranteed to refer to
-the same content forever.
+and use too much space.  Another is that there is no mechanism to enforce
+the immutability of a dataset under a given file name, and no way
+to incorporate job record references (e.g. a use count) into a repository
+purge policy.
 Finally, the intent is to allow users to manage the content of their datasets,
 but user access must be controlled such that containers are always
 valid file system images and container metadata is properly filled in.
@@ -310,26 +311,93 @@ from job log for provenance.
 \end{longtable}
 \newpage
 
-\subsection{Monitoring}
+\subsection{System Monitoring}
 
-System monitoring is comprised of a monitoring database and
-monitoring framework.
+\ngrm\ system monitoring consists of three main components:
+a plugin system which allows user and system defined code to execute
+periodically to check for anomolous situations or take data samples,
+a monitoring console which aggregates the state of resources within a
+comms sesssion and presents it in the form of a web page for users and
+support staff, and a NoSQL monitoring database used to store data for
+offline analysis and data provenance.
+These subsystems are layered upon the comms framework event messaging and
+aggregation/reduction services.  The general approach is to allow monitoring
+to be customized within a session, with the parent session delegating
+the responsibility for monitoring to its children.
 
-\subsubsection{Monitoring Database}
+\subsubsection{Monitoring Plugin System}
 
-\subsubsection{Monitoring Framework}
+The monitoring plugin system provides a facility for arbitrary code to be
+periodically executed across a session.  To minimize disruption to
+bulk-synchronous workloads, this execution is synchronized by the 
+session scheduling trigger event.  The set of active plugins is
+under the control of the session owner, with some reasonable
+defaults provided that can be overridden.
 
-\paragraph{Event Notification}
-Routine monitoring for system faults, state transitions, and the like
-utilizes the comms CMB event notification facility.  CMB events respect
-session boundaries and are delivered based on subscription.
+The details of the plugin structure is a design activity, however,
+an example of a possible solution is for plugins to take the form of
+Lua scripts loaded into the CMB state database
+(thus shared across the session) and executed in the context of
+a monitoring daemon with an embedded Lua interpreter.
 
-\paragraph{Logging}
-Logging utilizes the comms aggregation/reduction overlay to
-move logs, performance counter samples, and other streaming data
-from compute nodes to the monitoring database.
+Plugins have three main functions: data source, data reduction,
+and data sink.  The data source function is driven by the scheduling
+trigger and may directly publish events, for example if a monitored
+value exceeds a threshold, or produce structured data for the
+aggregation/reduction network.
+The data reduction function aggregates structured data from instances
+of the plugin's source function.
+For example, a plugin that monitors the total amount of memory used
+by the session might register a reduction function that takes the sum of
+arriving samples.
+Finally, plugins can register a function to sink data at the monitoring
+console, rendering it for display, or at points in the session that interface
+with the NoSQL monitoring database for persistent storage.
 
-\newpage
+\subsubsection{Monitoring Console}
+
+The monitoring console runs on the session control node and provides
+a centralized point for monitoring each session.
+An HTTP interface is provided which includes links to the control nodes
+of child sessions, thus the entire hierarchy of sessions can be navigated
+from the root session with a web browser.
+The console displays information about the session that comes directly
+from the comms CMB, including its time of inception, node membership,
+node liveness, users, and scheduling trigger period.
+
+The set of active plugins and the views created by them are represented.
+Events generated by plugins are displayed in a scrollable region.
+
+All the information that is available via the monitoring console web page
+is also available via command line tools to a shell user on the session
+control node.
+
+\subsubsection{NoSQL Monitoring Database}
+
+The NoSQL monitoring database is a large, centralized, persistent database
+that stores structured log data for analysis and data provenance.
+Log data is generated by monitoring plugins, but may come from other sources
+such as syslog, the \ngrm\ runtime, resource manager, or scheduler.
+
+One reason this database is centralized is to allow queries
+to be constructed that correlate failures or performance anomalies
+across domains; for example, jobs running slow or producing incorrect
+results because of file system problems.  The database will directly
+benefit system administrators and suport staff who currently perform
+these tasks manually.
+
+By preserving contextual information surrounding the execution of a job,
+we enable questions to be asked later on when the same job produces
+different results.  This is a central goal of provenance.
+
+The database will need some schema design in order to enable queries
+that are operationally useful.  For example, RAS metrics may be obtained
+on hardware component failures if we are careful to log enough information
+to identify the component (e.g. a double bit memory error at address \#xxxx
+versus a failure of dimm with model and serial number).
+
+This effort will leverage the work of an in-progress LDRD
+feasbility study\cite{LogLDRD}.
 
 \subsubsection{Monitoring WBS}
 
@@ -340,9 +408,52 @@ from compute nodes to the monitoring database.
                 & \textbf{Weeks} & \textbf{Depend} \\
   \hline
   \hline
-  \multicolumn{5}{|l|}{3.3. \textbf{Monitoring Database}} \\
+  \multicolumn{5}{|l|}{3.3. \textbf{Monitoring Plugin System}} \\
   \hline
-  3.3.1.& Study available NoSQL databases for 100K node scalability
+  3.3.1.& Design/prototype plugin system.
+	& DR
+	&
+	& \\
+  \hline
+  3.3.2.& Implement plugin system.
+        & SD
+        &
+        & 3.3.1 \\
+  \hline
+  3.3.3.& Document process for creating monitoring plugins.
+        & D
+        &
+        & 3.3.1 \\
+  \hline
+  3.3.4.& Design/prototype a set of default plugins including plugins
+          for instrumenting jobs to gather "implicit provenance" such as
+          file accesses.
+        & DR
+        & 
+        & 3.3.1 \\
+  \hline
+  3.3.5 & Implement set of default plugins.
+        & SD
+        &
+        & 3.3.4 \\
+
+  \hline
+  \multicolumn{5}{|l|}{3.4. \textbf{Monitoring Console}} \\
+  \hline
+
+  3.4.1.& Design/prototype monitoring console.
+	& DR
+	&
+	& \\
+  \hline
+  3.4.2.& Implement monitoring console.
+	& SD
+	&
+	& 3.3.1, 3.4.1 \\
+  \hline
+  \multicolumn{5}{|l|}{3.5. \textbf{NoSQL Monitoring Database}} \\
+  \hline
+  3.5.1.& Study available NoSQL databases for 100K node scalability
           and appropriate query interface.
           Use offline log data to investigate system diagnostic capability
           and prototype queries.
@@ -351,81 +462,36 @@ from compute nodes to the monitoring database.
         & 
         & LDRD \\
   \hline
-  3.3.2.& Implement prototype database tied to live log sources.
+  3.5.2.& Implement prototype database tied to live log sources.
           Study scalability and develop queries.
           (Gamblin/Mohror HPC Data Analytics FY12 LDRD)
           (See also: Faaland SPLUNK deployment).
         & V
         & 
-        & 3.3.1 \\
+        & 3.5.1 \\
   \hline
-  3.3.3.& Design/prototype access-role based security.
+  3.5.3.& Design/prototype access-role based security.
         & DR
         & 
-        & 3.3.2 \\
+        & 3.5.2 \\
   \hline
-  3.3.4.& Design/prototype schemas and queries for reporting
+  3.5.4.& Design/prototype schemas and queries for reporting
           RAS metrics of interest to center management.
         & DR
         & 
-        & 3.3.2 \\
+        & 3.5.2 \\
   \hline
-  3.3.5.& Design/prototype procedure for sanitizing and releasing data
+  3.5.5.& Design/prototype procedure for sanitizing and releasing data
 	  for research study and citation.
         & DR
         & 
-        & 3.3.2 \\
+        & 3.5.2 \\
   \hline
-  3.3.6.& Design/prototype schema for job logs and queries for
+  3.5.6.& Design/prototype schema for job logs and queries for
           associating job data, system log data, etc..
         & 
         & 
-        & RM, 3.3.2 \\
-  \hline
-  3.3.7.& Implement production monitoring kit.
-          Document procedures and practices for extending and using the system.
-          (opportunity for multiple publications here) 
-        & SD, D
-        & 
-        & 3.3.2 3.3.3, 3.3.4, 3.3.5, 3.3.6 \\
-  \hline
-  \multicolumn{5}{|l|}{3.4. \textbf{Monitoring Framework}} \\
-  \hline
-  3.4.1.& Design/prototype log aggregation and routing to log database
-	  based on \ngrm\ comms.
-        & DR
-        &
-        & comms \\
-  \hline
-  3.4.2.& Design/prototype event-based monitoring framework based on
-	  \ngrm\ comms.  (Coordinate with Meier monitoring improvement project)
-        & DR
-        &
-        & comms \\
-  \hline
-  3.4.3.& Design/prototype plugin interface that allows
-          users to customize event based monitoring within a job.
-        & DR
-        &
-        & 3.4.2 \\
-  \hline
-  3.4.4.& Design/prototype plugin interface that allows
-          users to customize log generation and aggregation within a job.
-        & DR
-        & 
-        & 3.4.1 \\
-  \hline
-  3.4.5.& Design/prototype a plugin interface for instrumenting jobs
-          to gather "implicit provenance" such as file accesses.
-        & DR
-        & 
-        & 3.3.2 \\
-  \hline
-  3.4.6.& Implement monitoring framework.
-          Document procedures for writing plugins and extending the system.
-        & SD, D
-        &
-        & 3.4.1, 3.4.2, 3.4.3, 3.4.4, 3.4.5. \\
+        & RM, 3.5.2 \\
   \hline
 \end{longtable}
 

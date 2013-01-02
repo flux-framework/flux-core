@@ -362,7 +362,9 @@ subdomain.
 
 The \ngrm\ runtime and monitoring components will require an
 aggregation/reduction framework similar to MRNet\cite{MRNet} that
-can perform data reduction towards a root and multicast towards the leaves.  
+can aggregate or reduce data produced across the session before it is
+consumed at the control node.
+
 This overlay network should utilize CMB services to respond to support changes
 in comms session membership (elasticity).
 
