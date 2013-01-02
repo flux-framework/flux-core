@@ -1,17 +1,15 @@
 \section{Resource Management}
 
-FIXME: pulled in an email, fix style
+\subsection{Resource Inventory}
 
-I propose that the core component of the "resource management"
-part of NGRM be a persistent, global database that I've been
-calling the "Resource Inventory". The Resource Inventory contains
-a superset of resources managed by the system, at at the highest
-level acts as the configuration repository for the NGRM system.
-The resource inventory allows for arbitrary tags on resources,
-and is not associated with any "instance" of the resource
-manager.
+The core component of the resource management system is
+a persistent, global database called the {\em resource inventory}.
+The resource inventory contains a superset of resources managed
+by the system, and at the highest level acts as the configuration
+repository for the NGRM system.
 
-I propose the following initial features of the resource inventory:
+The resource inventory, which is not associated with any instance
+of the resource manager, will have the following initial features:
 
 \begin{itemize}
 \item{Arbitrary "tagging" of resource objects. Tags can be used later
@@ -25,10 +23,10 @@ I propose the following initial features of the resource inventory:
 \end{itemize}
 
 Resource manager instances/jobs do not interact directly with
-the Resource Inventory. I propose that each RM instance has associated
+the resource inventory.  Instead, each RM instance has associated
 with it a rw "cache" of its subset of the resource inventory DB,
-which we will call simply the resource DB. The resource DB
-'listens' for changes of interest from its parent DB using
+which we will call simply the resource DB.  The resource DB
+listens for changes of interest from its parent DB using
 the subscribe interface, and additionally publishes its own
 changes such that a parent/child or other application can
 be notified of data changes to the cache (e.g. node is allocated
@@ -39,7 +37,36 @@ At the end of a job, a configurable set of data in the
 resource DB would be pushed back up to the parent. This
 allows accumulated data and job/user specific tags from
 each job to percolate back up the system, possibly all
-the way to the persistent Resource Inventory.
+the way to the persistent resource inventory.
+
+\subsection{Resource Description Language}
+
+The resource description language is used to describe resources
+in the resource inventory and in resource requests.
+The resource description language should be generic but at the same
+time useful.  Several projects have explored this area including
+Condor's ClassAd language\cite{ClassAd},
+OAR's resource description language\cite{Oar},
+and Legion's\cite{LegionGrid}\cite{LegionRM} object-oriented approach.
+
+The \ngrm\ resource description language should be developed with
+input from stakeholders and should represent resources in our system as
+well as define requests for those resources, and additionally be
+\begin{itemize}
+\item{\textbf{Human readable:} a sysadmin should be able to 'program up'
+a collection of resources like a cluster with minimal
+effort and the result should be understandable.}
+\item{\textbf{Extensible:} allow development of functions that can be used
+to simplify the complex definition of resources and requests.}
+\item{\textbf{Fast:} parsing should not require lots of CPU or memory since
+our system will be parsing this stuff on a very regular basis.}
+\end{itemize}
+
+A possible solution is to implement the
+resource description language in Lua\cite{Lua} because this
+little language is small, fast, and embarassingly easy to embed and
+extend.  Lua's table data structure also lends itself very nicely to
+expressing heirarchical data.
 
 \newpage
 \subsection{Resource Management WBS}
