@@ -27,18 +27,28 @@ The \ngjs\ will provide new functionality not available in any
 commercial or open source project.  The \ngjs\ will schedule jobs
 across resources in a computing center without regard to traditional
 cluster boundaries.  A job will be able to request resources
-containing a common feature (like connectivity to a specific high
-speed switch) or fitting within a limited power envelope.
+containing a common feature (like connectivity to the same high speed
+switch) or fitting within a limited power envelope.
 
 In addition, the \ngjs\ will be designed to be recursive.  It will
 have the capability to launch another instance of itself within the
-context of a job.  In so doing, the \ngjs's scheduling capabilities
-will range from scheduling all resources in the center to scheduling
-jobs on dedicated resources (DATs) to scheduling individual job steps
-within a job.
+context of a job.  The \ngjs\ will support job priority plugin modules
+allowing each recursive instance of the scheduler the ability to run a
+different priority plugin.  In so doing, the \ngjs's scheduling
+capabilities will range from scheduling all resources in the center to
+scheduling jobs on dedicated resources (DATs) to scheduling what were
+formerly known as job steps.
 
-Besides providing this new functionality, the \ngjs\ must do everything
-that Moab/SLURM currently do but do it
+Most importantly, the traditional boundaries between a job scheduler
+and the resource manager will be redefined under \ngrm.  Instead of a
+resource manager that manages every resource of a cluster, the
+\ngrmfull\ will be instantiated on the fly by the \ngjs\ and manage
+only the resources the scheduler allocates to the job (or recursive
+job).
+
+In order to continue to meet the needs of LC users, the \ngjs\ must
+continue to provide all the services that Moab currently provides,
+but...
 \begin{itemize}
   \item More quickly and efficiently
   \item More accurately
@@ -82,11 +92,11 @@ user requests and provide versatile administration capabilities.
 
 \begin{itemize}
   \item Respond to requests to hold, modify or cancel jobs
-  \item Schedule jobs across multiple clusters
+  \item Schedule jobs across the center
   \item Support complex job dependencies
   \item Restrict some operations based on roles
   \item Accept job reservations
-  \item Communicate with each resource manager
+  \item Originate and manage resource manager instances
   \item Maintain some job statistics (e.g., resource usage per user
     per account per cluster)
   \item Process live configuration updates
