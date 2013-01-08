@@ -115,17 +115,17 @@ Toolkit pieces can be mixed and matched according to application
 requirements.  We may cull the comms toolkit as we learn more
 about the pieces while prototyping other \ngrm\ components.
 
-Two messaging approaches of interest are 0MQ\cite{ZMQGuide} and
+Two messaging approaches of interest are \zMQ\cite{ZMQGuide} and
 SCTP\cite{SCTP}.
-0MQ provides the ability to manipulate opaque, multipart messages,
+\zMQ\ provides the ability to manipulate opaque, multipart messages,
 and carry them across various transports, including TCP and
 PGM\cite{rfc3208} (reliable multicast), using a socket-like API.
-0MQ sockets can exchange messages using patterns including
+\zMQ\ sockets can exchange messages using patterns including
 REQ-REP (RPC), PUB-SUB, and PUSH-PULL (message stream).
-0MQ can be used to build applications or custom message brokers.
+\zMQ\ can be used to build applications or custom message brokers.
 Complex message routing topologies such as tree-based overlay networks
 (Figure~\ref{FigZmqTBON}) can be built from simple components.
-0MQ has a large number of language bindings.
+\zMQ\ has a large number of language bindings.
 
 SCTP is an IETF-standardized, message-oriented transport developed
 in the telephony world with an implementation in the Linux kernel.
@@ -134,14 +134,14 @@ It offers multi-streaming, the bundling of {\em streams} in one
 different ordering and reliability semantics.  SCTP supports
 multi-homing for reliability and congestion avoidance, and
 can transparently generate and check an HMAC for messages using a
-pre-shared key to implement message integrity.  Unlike 0MQ, SCTP is
+pre-shared key to implement message integrity.  Unlike \zMQ, SCTP is
 connection-based and does not implement a standardized reliable multicast
 mode.
 
 \begin{figure}
 \centering
 \includegraphics[scale=0.35]{../fig/zmqtbon.eps}
-\caption{Tree Based Overlay Network Over 0MQ}
+\caption{Tree Based Overlay Network Over \zMQ}
 \label{FigZmqTBON}
 \end{figure}
 
@@ -392,8 +392,8 @@ TBD
   \hline
   \multicolumn{5}{|l|}{1.1. \textbf{Communications Framework}} \\
   \hline
-  1.1.1.  & 0MQ evaluation.
-          Consider CMB and aggregation/reduction design based on 0MQ.
+  1.1.1.  & \zMQ\ evaluation.
+          Consider CMB and aggregation/reduction design based on \zMQ.
           How does PGM implement reliable message delivery?
           Is the connectionless model a serious problem? 
           Is the implementation robust?
@@ -404,7 +404,7 @@ TBD
   \hline
   1.1.2.  & SCTP evaluation.
           Consider CMB and aggregation/reduction framework design based on SCTP.
-          Compare performance with 0MQ.
+          Compare performance with \zMQ.
           Is the Linux SCTP implementation robust?
           How would security model be integrated?
 	& V
