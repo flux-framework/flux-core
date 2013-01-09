@@ -16,6 +16,8 @@
 \newcommand{\ngrm}{NGRM}
 \newcommand{\ngrmfull}{Next Generation Resource Manager}
 \newcommand{\ngjs}{NGRM Job Scheduler}
+%\newcommand{\zMQ}{${\varnothing}$MQ}
+\newcommand{\zMQ}{\O{}MQ}
 
 %\includeonly{monitor}
 
@@ -40,7 +42,7 @@ while providing an HPC center with the main means to manage efficient use
 of computing resources as a whole.  However, several growing trends make
 even the best-in-breed RM software largely ineffective.  As numbers and
 types of compute cores of an HPC machine continue to grow, key RM challenges
-associated with today only with {\em capability} systems are quickly
+associated only with {\em capability} systems today are quickly
 becoming pervasive for {\em all} computing resources, even commodity
 Linux clusters.  These challenges include extreme scalability, power
 consumption and noise control, fault tolerance, and heterogeneity management.
@@ -70,7 +72,7 @@ Livermore Computing (LC) at Lawrence Livermore National Laboratory (LLNL)
 designed and led the implementation in 2002 and ever since it has become
 widely used beyond LC systems. Currently, most HPC centers including LC
 run an instance of SLURM on each cluster and often tie these instances
-together with grid management software such as MOAB.  However, after a
+together with grid management software such as MOAB\cite{MOAB:online}.  However, after a
 decade of such use of SLURM and of accruing violations of many fundamental
 technical assumptions, it has become no longer cost effective, if not
 impossible, to meet newly emerging challenges without sacrificing its
@@ -174,11 +176,12 @@ depending on the debug/monitoring needs versus their application’s noise
 sensitivity.  Cron (periodic housekeeping) jobs and rsh (remote command
 executions) can be performed through the system to minimize their impact,
 such as running them between jobs or synchronized across jobs, and to
-take into consideration the user’s noise sensitivity.
+take into consideration the user's noise sensitivity.
 
-A dedicated {\em noise core} where all non-application activity is
-scheduled is a configuration that could be provided by \ngrm\ to
-applications that are noise sensitive and/or can spare a core.
+\ngrm\ will also be flexible enough to allow implementation of other
+strategies for reducing the impact of noise, such as scheduling all
+non-application activity to a configurable {\em noise core} when a
+single core can be spared.
 
 \subsubsection{Data Provenance/Reproducibility}
 
