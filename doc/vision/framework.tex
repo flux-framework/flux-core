@@ -372,9 +372,16 @@ FIXME: Pull in Dong's requirements/description.
 Why not use MRNet?
 Can this be part of CMB?
 
-\subsection{Plugin Framework}
+\subsection{Plugin Architecture}
 
-TBD
+Several software subsystems in \ngrm\ will be extensible via plugins.
+Although each subsystem will likely have unique API's for plugins
+that match their specific funcionality, a common plugin architecure
+should be implemented to make extending \ngrm\ consistent across
+subsystems.  The plugin architecture should provide isolation between
+plugin code and the internals of the subsystem.  For example,
+ideally it should not be possible to cause the main code to segfault or
+deadlock by loading a malfunctioning plugin.
 
 \subsection{Software Development Practices}
 
@@ -472,12 +479,20 @@ TBD
 	&
 	& 1.1.10\\
   \hline
-  \multicolumn{5}{|l|}{1.2. \textbf{Plugin Framework}} \\
+  \multicolumn{5}{|l|}{1.2. \textbf{Plugin Architecture}} \\
   \hline
-  1.2.1   & Design/prototype plugin framework
-	& V, D
+  1.2.1 & Survey plugin architectures such as SPANK, PAM, eclipse,
+	  and chrome.  Identify essential elements that make them
+          succesful.
+	& V
 	& 
 	& \\
+  \hline
+  1.2.2 & Design/prototype common plugin architecture with examples.
+          Document project plugin guidelines.
+	& DR, D
+	& 
+	& 1.2.1\\
   \hline
   \multicolumn{5}{|l|}{1.3. \textbf{Software Development Practices}} \\
   \hline
