@@ -13,7 +13,12 @@ DEPFIG = \
 	../fig/cmb.eps \
 	../fig/zmqtbon.eps \
 	../fig/pathwalk.eps \
-	../fig/dnbd.eps
+	../fig/dnbd.eps \
+	../fig/wrap_graph.ps \
+	../fig/WRAP_Architecture.ps \
+	../fig/WRAP_Base.ps \
+	../fig/WRAP_grow.ps \
+	../fig/WRAP_newJobFunction.ps
 
 DEPBIB = \
 	../bib/project.bib \
