@@ -114,3 +114,67 @@ its computing resources.  As part of this duty, the scheduler must
   \item Honor limits imposed on users, groups, projects (banks), etc
   \item Honor service level agreements and service quality requests
 \end{itemize}
+
+\subsubsection{Organization Components}
+
+The \ngjs\ functionality is broken down into the following components.
+However it is designed, it must include the following facilities.
+
+\textbf{Job Submission.} This the facility that receives a user's
+request for a job allocation and adds a record of this request to
+persistent storage.  Each job submitted must be immediately rejected
+if it cannot or is not allowed to run given the job specifications,
+the resources available, and any restrictions in place.  Job
+submission must be extremely fast and return a job ID in well under a
+second of time.  The system shall support hundreds of job submissions
+per second.
+
+\textbf{Job Prioritization.}  This the facility for prioritizing jobs
+based on potentially multiple factors.  The system shall offer a job
+priority plugin framework to allow custom algorithms for determining
+job priority.  The priority of each queued job must be continually
+recalculated as the queue of jobs and constituent factors are
+constantly changing.
+
+\textbf{Job Scheduling.} For each job removed from the prioritized
+queue, computing resources must be reserved and eventually allocated.
+The collection of resources to schedule must be available from the
+\ngrm\ system with the state and status of each resource updated in
+real-time.  The scheduler must honor multiple resource requests
+simultaneously as it seeks to allocate cores, GPUs, nodes, switches,
+bandwidth, power, etc.
+
+Here too, the system shall offer a plugin framework to support custom
+algorithms for scheduling jobs to compute resources.  An essential
+scheduling algorithm which must be included is backfill scheduling
+(lower priority jobs are scheduled to run if they do not delay the
+start of higher priority jobs).  In addition, qualities of service must
+be implemented in the scheduler such that running jobs can be
+preempted if needed to free up resources for more important jobs.
+This involves not only selecting the best resources for a job, but
+also identifying the set of jobs to preempt when such a policy is
+enforced.
+
+The output of a the job scheduling process is a schedule of which jobs
+are mapped to which resources over a future, rolling period of time.
+A by-product of this schedule is a projected start time for every
+queued job that is included in the schedule.
+
+\textbf{Job Dispatching.} As time passes, the allocations described in
+the schedule must be created.  Running jobs that exceed their wall
+clock limit much be terminated and new jobs must be launched.
+Provisions must be made to launch multiple jobs simultaneously (or
+nearly simultaneously).
+
+\textbf{Job Status Reporting.} This is the facility for showing the
+user the status of their jobs and the job queue.  Job info must be
+available immediately after job submission, as it is pending, while it
+is running, and afterwards for a period to be determined.  The system
+should support multiple status requests at a time and reply with a
+second or two.  The system is designed to withstand denial of service
+attacks - whether deliberate or accidental.
+
+\textbf{Job and System Management.} This is the facility for manual
+intervention: boosting job priorities, modifying job characteristics,
+cancelling jobs, etc.  Modifying resource states does not have to be
+part of this facility.
