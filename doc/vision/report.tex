@@ -36,7 +36,7 @@ Don Lipari, lipari@llnl.gov}
 \maketitle
 
 \section{Overview}
-
+\label{sect:overview}
 Resource Management (RM) software is critical for High Performance Computing
 (HPC). It is the centerpiece of efficient execution of HPC applications
 while providing an HPC center with the main means to manage efficient use
@@ -70,7 +70,7 @@ and efficient use of next generation computing resources.
 SLURM\cite{SlurmDesign} (Simple Linux Utilities for Resource Management) is arguably the
 best-in-breed, open-sourced RM designed for commodity Linux clusters.
 Livermore Computing (LC) at Lawrence Livermore National Laboratory (LLNL)
-designed and led the implementation in 2002 and ever since it has become
+designed and led the implementation in 2002. And ever since, it has become
 widely used beyond LC systems. Currently, most HPC centers including LC
 run an instance of SLURM on each cluster and often tie these instances
 together with grid management software such as MOAB\cite{MOAB:online}.  However, after a
@@ -82,17 +82,53 @@ stability and robustness.
 % points From the Gap analysis?] Time for a software rewrite has come.
 
 Our response to this critical need is the \ngrmfull\ (\ngrm ), a RM software
-{\em framework} designed to enable key emerging challenges to be addressed
+{\em framework} that can address key emerging challenges 
 in a simple, extensible, distributed and autonomous fashion.
-
-\subsection{Vision}
-\ngrm\ integrates system monitoring, system administration, lightweight
-virtualization, and distributed tool communication capabilities that are
-currently provided by disjoint and often overlapping software.
+It aims at managing the whole center as one common pool of {\em diverse} 
+resources. Hence, scheduling decisions 
+will be much more efficient and also flexible to be able to 
+accommodate emerging constraints such as limited power budgets. 
+Further, \ngrm\ integrates
+system monitoring, system administration, lightweight
+virtualization, and distributed tool communication capabilities
+that are currently provided by disjoint and often overlapping software.
 Integration of these facilities within a framework that is designed from
 the ground up for scalability, security, and fault tolerance will result
 in a more efficient and capable system.
 
+We realize that \ngrm's problem domain is huge and that a wide range of challenges 
+must be addressed in relatively short order with limited resources. Thus, we 
+organize the project plan around four research and development thrust areas 
+and systematically advance them.
+Those four areas, {\bf{\em Resource Management}}, {\bf{\em Provenance and Monitoring}},
+{\bf{\em Workload Runtime And Placement}}, and {\bf{\em Framework}}, are
+relatively independent and that build on the strength of one
+another through well-known interfaces and common design and development
+principles. Reaching all major milestones of these thrust areas represent
+the completion of the first round of \ngrm\ development. 
+
+Overall, \ngrm\ will significantly improve operational efficiency for
+scientific application development and execution, and further computing
+resources of the HPC entire center.  It will also provide
+a foundation that can be extended and customized, allowing agile responses
+to site-specific scheduling issues. Perhaps more importantly, \ngrm\
+positions HPC centers to cope with a blend of interrelated, diverse
+extreme-scale computing resources, the landscape of high-end HPC centers
+in just a few years down the road
+
+The rest of the paper is organized as the following.
+Section~\ref{sect:vision} describes \ngrm's vision and 
+its new capabilities in more detail. Section~\ref{sect:projorg}  
+presents the high-level goals of the four thrust areas and
+explain relations among them. Next sections then 
+go over and detail each of these thrust areas including 
+its work breakdown structure (WBS) and work items.
+Finally, Section~\ref{sect:delivery} defines
+our schedules for milestones and deliverables.
+
+
+\section{Challenges, Vision and New Capabilities}
+\label{sect:vision}
 With higher integration comes the risk of hardwiring assumptions that
 later prove to be confining, forcing changes down the road that are
 inconsistent with the initial design.  Therefore, the project will focus
@@ -281,12 +317,14 @@ to site-specific scheduling issues. Perhaps more importantly, \ngrm\
 positions HPC centers to cope with a blend of interrelated, diverse
 extreme-scale computing resources, the landscape of high-end HPC centers
 in just a few years down the road.
-\subsection{Project Organization}
 
+
+\section{Project Organization and Thrust Areas}
+\label{sect:projorg}
 We realize that \ngrm 's problem domain is huge and that we must address
 the challenges in relatively short order with limited resources, despite
 the magnitude of the problem.  Therefore we define four thrust areas
-that are relatively independent and that build on the strength of one
+that are relatively independent and build on the strength of one
 another through well-known interfaces and common design and development
 principles.  
 
