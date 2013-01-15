@@ -68,7 +68,185 @@ little language is small, fast, and embarassingly easy to embed and
 extend.  Lua's table data structure also lends itself very nicely to
 expressing heirarchical data.
 
-\newpage
+\subsection{Job Scheduler}
+
+The \ngjs\ is responsible for scheduling computing resources to users'
+jobs.  Users submit to the scheduler requests for resources to run
+their job.  The scheduler implements management's policy to decide
+when and where to allocate the resources for each job.
+
+This section presents the requirements for the \ngjs, a rough design
+which meets those requirements, and a work breakdown structure for
+developing the scheduler component.
+
+\subsubsection{Motivation}
+
+Scheduling batch jobs across a collection of networked computing
+resources started in the 1990's with Livermore Computing's DPCS (later
+known as LCRM).  It received users' job requests, selected a cluster
+for each job, then dispatched the job to that cluster's resource
+manager.  The Moab Workload Manager which replaced LCRM essentially
+provided the same functionality.  And while SLURM provides some grid
+functionality, it never matured enough to allow it to replace Moab for
+production use.
+
+The \ngjs\ will provide new functionality not available in any
+commercial or open source project.  The \ngjs\ will schedule jobs
+across resources in a computing center without regard to traditional
+cluster boundaries.  A job will be able to request resources
+containing a common feature (like connectivity to the same high speed
+switch) or fitting within a limited power envelope.
+
+In addition, the \ngjs\ will be designed to be recursive.  It will
+have the capability to launch another instance of itself within the
+context of a job.  The \ngjs\ will support job priority plugin modules
+allowing each recursive instance of the scheduler the ability to run a
+different priority plugin.  In so doing, the \ngjs's scheduling
+capabilities will range from scheduling all resources in the center to
+scheduling jobs on dedicated resources (DATs) to scheduling what were
+formerly known as job steps.
+
+Most importantly, the traditional boundaries between a job scheduler
+and the resource manager will be redefined under \ngrm.  Instead of a
+resource manager that manages every resource of a cluster, the
+\ngrmfull\ will be instantiated on the fly by the \ngjs\ and manage
+only the resources the scheduler allocates to the job (or recursive
+job).
+
+In order to continue to meet the needs of LC users, the \ngjs\ must
+continue to provide all the services that Moab currently provides,
+but...
+\begin{itemize}
+  \item More quickly and efficiently
+  \item More accurately
+  \item More reliably
+  \item More easily
+  \item More intuitively
+  \item More flexibly
+  \item More securely
+  \item More transparently
+  \item And require minimal intervention and oversight
+\end{itemize}
+
+\subsubsection{Requirements}
+
+While a more detailed list of requirements is presented here
+<ToBeDone>, the following provides an overview of the functionality
+that the \ngjs\ will be expected to deliver.
+
+\paragraph{Fundamental Requirements}
+
+The following is the most definitive list of scheduling requirements.
+A scheduler is not a scheduler unless it can do these:
+
+\begin{itemize}
+  \item Maintain current resource inventory including state, health
+    and availability of all resources to be scheduled
+  \item Receive job allocation requests
+  \item Prioritize each job
+  \item Schedule each job based on multiple resource requirements
+  \item Backfill lower priority jobs whenever possible
+  \item Allow for dynamic job growth and reduction
+  \item Preempt running jobs to free up resources needed by higher priority jobs
+  \item Provide status of all jobs with estimates of when each job will run
+  \item Allow for recursive scheduling
+\end{itemize}
+
+\paragraph{Further Scheduler Requirements}
+
+As part of its scheduling duties, the scheduler must also accommodate
+user requests and provide versatile administration capabilities.
+
+\begin{itemize}
+  \item Respond to requests to hold, modify or cancel jobs
+  \item Schedule jobs across the center
+  \item Support complex job dependencies
+  \item Restrict some operations based on roles
+  \item Accept job reservations
+  \item Originate and manage resource manager instances
+  \item Maintain some job statistics (e.g., resource usage per user
+    per account per cluster)
+  \item Process live configuration updates
+  \item Save complete state and recover fully from a restart
+\end{itemize}
+
+\paragraph{Policy Enforcement}
+
+The scheduler implements the center's policies for providing access to
+its computing resources.  As part of this duty, the scheduler must
+
+\begin{itemize}
+  \item Reject job submissions for jobs which cannot or will never run
+  \item Remove jobs that exceed time limits
+  \item Honor limits imposed on users, groups, projects (banks), etc
+  \item Honor service level agreements and service quality requests
+\end{itemize}
+
+\paragraph{Organization Components}
+
+The \ngjs\ functionality is broken down into the following components.
+However it is designed, it must include the following facilities.
+
+\textbf{Job Submission.} This the facility that receives a user's
+request for a job allocation and adds a record of this request to
+persistent storage.  Each job submitted must be immediately rejected
+if it cannot or is not allowed to run given the job specifications,
+the resources available, and any restrictions in place.  Job
+submission must be extremely fast and return a job ID in well under a
+second of time.  The system shall support hundreds of job submissions
+per second.
+
+\textbf{Job Prioritization.}  This the facility for prioritizing jobs
+based on potentially multiple factors.  The system shall offer a job
+priority plugin framework to allow custom algorithms for determining
+job priority.  The priority of each queued job must be continually
+recalculated as the queue of jobs and constituent factors are
+constantly changing.
+
+\textbf{Job Scheduling.} For each job removed from the prioritized
+queue, computing resources must be reserved and eventually allocated.
+The collection of resources to schedule must be available from the
+\ngrm\ system with the state and status of each resource updated in
+real-time.  The scheduler must honor multiple resource requests
+simultaneously as it seeks to allocate cores, GPUs, nodes, switches,
+bandwidth, power, etc.
+
+Here too, the system shall offer a plugin framework to support custom
+algorithms for scheduling jobs to compute resources.  An essential
+scheduling algorithm which must be included is backfill scheduling
+(lower priority jobs are scheduled to run if they do not delay the
+start of higher priority jobs).  In addition, qualities of service must
+be implemented in the scheduler such that running jobs can be
+preempted if needed to free up resources for more important jobs.
+This involves not only selecting the best resources for a job, but
+also identifying the set of jobs to preempt when such a policy is
+enforced.
+
+The output of a the job scheduling process is a schedule of which jobs
+are mapped to which resources over a future, rolling period of time.
+A by-product of this schedule is a projected start time for every
+queued job that is included in the schedule.
+
+\textbf{Job Dispatching.} As time passes, the allocations described in
+the schedule must be created.  Running jobs that exceed their wall
+clock limit much be terminated and new jobs must be launched.
+Provisions must be made to launch multiple jobs simultaneously (or
+nearly simultaneously).
+
+\textbf{Job Status Reporting.} This is the facility for showing the
+user the status of their jobs and the job queue.  Job info must be
+available immediately after job submission, as it is pending, while it
+is running, and afterwards for a period to be determined.  The system
+should support multiple status requests at a time and reply with a
+second or two.  The system is designed to withstand denial of service
+attacks - whether deliberate or accidental.
+
+\textbf{Job and System Management.} This is the facility for manual
+intervention: boosting job priorities, modifying job characteristics,
+cancelling jobs, etc.  Modifying resource states does not have to be
+part of this facility.
+
+%\newpage
 \subsection{Resource Management WBS}
 
 \begin{longtable}{|p{1cm}|p{10.2cm}|p{1cm}|p{1cm}|p{1.8cm}|}\hline
@@ -77,39 +255,39 @@ expressing heirarchical data.
                         DR = design review, V = viewgraphs, D = document}
                 & \textbf{Weeks} & \textbf{Depend} \\
   \hline
-  2.1.  & "Functional", high-level model for how the system above
-          would work in \ngrm, including models for Resource Inventory,
+  \hline
+  \multicolumn{5}{|l|}{2.1. \textbf{General Resource Management}} \\
+  \hline
+  2.1.1.& "Functional", high-level model for how the system above
+         would work in \ngrm, including models for Resource Inventory,
           Job Data, Queues, Scheduling.
         & V
         & 
         & \\
   \hline
-  2.2.  & Resource and Job DB APIs (design and prototype).
+  \multicolumn{5}{|l|}{2.2. \textbf{Resource Database}} \\
+  \hline
+  2.2.1.& Resource and Job DB APIs (design and prototype).
         & DR
         & 
-        & 2.1\\
+        & 2.1.1\\
   \hline
-  2.3.  & Resource Inventory (design and prototype)
+  2.2.2.& Resource Inventory (design and prototype)
         & DR
         & 
-        & 2.1\\
+        & 2.1.1\\
   \hline
-  2.4.  & Job Database (design and prototype)
+  2.2.3.& Job Database (design and prototype)
         & DR
         & 
-        & 2.1\\
+        & 2.1.1\\
   \hline
-  2.5.  & Scheduler (design and prototype)
+  2.2.4.& Comms integration
         & DR
         & 
-        & 2.1\\
+        & 2.1.1.\\
   \hline
-  2.6.  & Comms integration
-        & DR
-        & 
-        & 2.1\\
-  \hline
-  2.7.  & Research existing work in resource description languages,
+  2.2.5& Research existing work in resource description languages,
 	  such as Condor's ClassAd language,
 	  OAR's resource description language,
           Legion's object-oriented resource approach.
@@ -117,9 +295,17 @@ expressing heirarchical data.
         & 
         & \\
   \hline
-  2.8.  & Design/Prototype resource description language.
+  2.2.6.& Design/Prototype resource description language.
         & DR
         & 
         & \\
+  \hline
+  \multicolumn{5}{|l|}{2.3. \textbf{Job Scheduler}} \\
+  \hline
+  2.3.1.& Scheduler (design and prototype)
+        & DR
+        & 
+        & 2.1.1\\
+
   \hline
 \end{longtable}

@@ -334,8 +334,30 @@ and deployment, which involve many experts from different expert domains.
 The software architecture must bolster rapid progress in all of our thrust
 areas and facilitate mechanisms by which to leverage external innovation.
 
-The four thrust areas are Resource Management, Provenance/Monitoring,
-Workload Runtime, and Framework.
+The four thrust areas are
+Framework,
+Resource Management,
+Provenance/Monitoring,
+and Workload Runtime.
+
+\subsection{Framework}
+\ngrm\ will devise a secure and fault-tolerant backbone communication
+infrastructure that can provide requisite scalability and flexible
+capabilities for all \ngrm\ operations as well as the entire HPC
+software ecosystem it embraces.
+
+\ngrm\ will investigate and devise clean plugin interfaces that
+provide \ngrm\ framework services and sanitized data to other HPC
+stakeholders so that they can further extend and customize the benefits
+of our system. \ngrm\ will identify, leverage, and support key complementary
+projects and activities that seek solutions in the same problem domain
+through innovations in other layers of HPC software stack, including but
+not being limiting to middleware and programming models like MPI,
+power-aware runtime, fault-tolerant components like checkpoint and
+restart, OS services, development tools  and their infrastructure.
+The plugins will be the main mean of extending \ngrm’s capability
+without having to lose the stability and robustness of its core
+functionality.
 
 \subsection{Resource Management}
 
@@ -386,25 +408,6 @@ guarantee that all software components our thrust areas produce
 abide by a common set of desired attributes, including low noise,
 high security, and fault containment with no single point of failure.
 
-\subsection{Framework}
-\ngrm\ will devise a secure and fault-tolerant backbone communication
-infrastructure that can provide requisite scalability and flexible
-capabilities for all \ngrm\ operations as well as the entire HPC
-software ecosystem it embraces.
-
-\ngrm\ will investigate and devise clean plugin interfaces that
-provide \ngrm\ framework services and sanitized data to other HPC
-stakeholders so that they can further extend and customize the benefits
-of our system. \ngrm\ will identify, leverage, and support key complementary
-projects and activities that seek solutions in the same problem domain
-through innovations in other layers of HPC software stack, including but
-not being limiting to middleware and programming models like MPI,
-power-aware runtime, fault-tolerant components like checkpoint and
-restart, OS services, development tools  and their infrastructure.
-The plugins will be the main mean of extending \ngrm’s capability
-without having to lose the stability and robustness of its core
-functionality.
-
 \include{framework}
 
 \include{resmgmt}
@@ -412,8 +415,6 @@ functionality.
 \include{monitor}
 
 \include{runtime}
-
-\include{scheduler}
 
 \include{project}
 

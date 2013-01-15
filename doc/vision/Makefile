@@ -4,8 +4,7 @@ DEPSEC = \
 	project.tex \
 	reqs.tex \
 	resmgmt.tex \
-	runtime.tex \
-	scheduler.tex
+	runtime.tex
 
 DEPFIG = \
 	../fig/comms.eps \
