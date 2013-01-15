@@ -141,7 +141,7 @@ through the lessons learned from a decade of designing, maintaining,
 and running SLURM.  In addition, some new capabilities are planned which
 are described below.
 
-\subsubsection{Center as a Cluster}
+\subsection{Center as a Cluster}
 
 Unlike the traditional approach of running a RM instance on each separately
 managed cluster, and tying clusters together with grid software almost as
@@ -176,7 +176,7 @@ Dedicated interactive nodes will be unnecessary in the new system, as it
 will be possible to allocate interactive environments on demand from the
 global pool of resources.
 
-\subsubsection{Zero Downtime}
+\subsection{Zero Downtime}
 
 The impact of downtime becomes greater with a higher degree of integration
 of systems and services, therefore \ngrm\ will be designed to be tolerant
@@ -199,7 +199,7 @@ update policy and in fact could allow users or code development teams to
 control the software levels affecting their application, independent of
 other applications.
 
-\subsubsection{Low Noise}
+\subsection{Low Noise}
 
 Bulk-synchronous applications are affected to varying degrees by OS
 scheduling jitter, depending on their communication patterns.  Minimizing
@@ -220,7 +220,7 @@ strategies for reducing the impact of noise, such as scheduling all
 non-application activity to a configurable {\em noise core} when a
 single core can be spared.
 
-\subsubsection{Data Provenance/Reproducibility}
+\subsection{Data Provenance/Reproducibility}
 
 As simulation plays an increasingly central role in scientific
 investigation, reproducibility of results is more important than ever
@@ -236,7 +236,7 @@ namespaces, as described above, enable applications to lock down their
 environment including dependent shared libraries so that the effects from
 system updates on the application are minimized.
 
-\subsubsection{Heterogeneous Resources}
+\subsection{Heterogeneous Resources}
 
 Traditional RM's in HPC systems have focused on node and/or CPU centric
 scheduling. With the advent of hybrid compute systems utilizing specialized,
@@ -256,7 +256,7 @@ to which resource requests may refer. This system will attempt to
 implement a generic resource request language to allow flexible
 specification of resource requirements from users for their applications.
 
-\subsubsection{Extensibility}
+\subsection{Extensibility}
 
 Plugins, when designed properly, minimize the knowledge of internals
 needed to extend and modify a system.  They provide a mechanism for
@@ -272,7 +272,7 @@ system without requiring dedicated access to a cluster.
 In combination, these features lower the barrier of entry into the
 community of developers supporting and extending the system.
 
-\subsubsection{Security}
+\subsection{Security}
 
 Distributed components of \ngrm\ will support privacy and integrity on
 the network to limit vulnerability to attacks involving physical access
@@ -292,7 +292,7 @@ the user id of the job so privilege escalation within the job such as
 escaping a container or obtaining root within the container would not
 change the user’s identity when accessing the file system.
 
-\subsubsection{Research/Tool Friendly}
+\subsection{Research/Tool Friendly}
 
 Components of \ngrm\ will be designed with the ability to capture and
 publish sanitized system data at all levels to facilitate the use of
@@ -337,7 +337,7 @@ areas and facilitate mechanisms by which to leverage external innovation.
 The four thrust areas are Resource Management, Provenance/Monitoring,
 Workload Runtime, and Framework.
 
-\subsubsection{Resource Management}
+\subsection{Resource Management}
 
 %This paragraph needs work to reflect revised thrust areas
 \ngrm\ will investigate the notion of generalized resources so that
@@ -349,7 +349,7 @@ computing elements, to consumable resources like power.
 The highest-level of abstraction will allow the management of an
 entire HPC center as one pool of resources.
 
-\subsubsection{Provenance/Monitoring}
+\subsection{Provenance/Monitoring}
 
 \ngrm\ will investigate methods of transparently generating provenance
 information for each job, and enabling this information to be combined
@@ -379,14 +379,14 @@ faults which can trigger log dumps or a recovery response.
 %user control over file systems portion of the runtime environment
 %for better reproducibility of simulation results.
 
-\subsubsection{Workload Runtime}
+\subsection{Workload Runtime}
 
 \ngrm\ will develop and use a software design methodology to
 guarantee that all software components our thrust areas produce
 abide by a common set of desired attributes, including low noise,
 high security, and fault containment with no single point of failure.
 
-\subsubsection{Framework}
+\subsection{Framework}
 \ngrm\ will devise a secure and fault-tolerant backbone communication
 infrastructure that can provide requisite scalability and flexible
 capabilities for all \ngrm\ operations as well as the entire HPC
