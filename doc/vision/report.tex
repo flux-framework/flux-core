@@ -102,10 +102,11 @@ of challenges in relatively short order with limited resources. Thus, we
 organize our project plan around four research and development thrust areas 
 and seek to advance them systematically.
 These areas are called: {\bf{\em Resource Management}}, {\bf{\em Provenance and Monitoring}},
-{\bf{\em Workload Runtime And Placement}}, and {\bf{\em Framework}}.
+{\bf{\em Workload Runtime And Placement}}, and {\bf{\em Communications Framework}}.
 They are relatively independent but can significantly build on the strength of one
 another through well-known interfaces and common design and development
-principles. Thus, reaching all major milestones of these thrust areas 
+principles.
+Thus, reaching all major milestones of these thrust areas 
 will represent the completion of the first round of \ngrm\ development. 
 
 Overall, \ngrm\ will significantly improve operational efficiency for
@@ -130,6 +131,8 @@ our schedules for milestones and deliverables.
 
 \section{Challenges, Vision and New Capabilities}
 \label{sect:vision}
+\ngrm\ achieves greater efficiencies through a tighter
+coupling between subsystems that are independent today.
 With higher integration comes the risk of hardwiring assumptions that
 later prove to be confining, forcing changes down the road that are
 inconsistent with the initial design.  Therefore, the project will focus
@@ -322,43 +325,29 @@ in just a few years down the road.
 
 \section{Project Organization and Thrust Areas}
 \label{sect:projorg}
-We realize that \ngrm 's problem domain is huge and that we must address
-the challenges in relatively short order with limited resources, despite
-the magnitude of the problem.  Therefore we define four thrust areas
-that are relatively independent and build on the strength of one
-another through well-known interfaces and common design and development
-principles.  
+To hasten the design, development, and delivery of the initial version
+of \ngrm\, we define four thrust areas that are relatively independent
+and build on the strength of one another through well-known interfaces
+and common design and development principles (see Appendix~\cite{SWProcess}).
 
-Creating \ngrm\ will undoubtedly
-require substantial collaborative efforts for research, design, development
-and deployment, which involve many experts from different expert domains.
+Creating \ngrm\ will require substantial collaborative efforts with
+experts from several domains.
 The software architecture must bolster rapid progress in all of our thrust
 areas and facilitate mechanisms by which to leverage external innovation.
 
+FIXME: describe functional architecture, leading into thrust areas
+
 The four thrust areas are
-Framework,
+Communication Framework,
 Resource Management,
 Provenance/Monitoring,
 and Workload Runtime.
 
-\subsection{Framework}
+\subsection{Communication Framework}
 \ngrm\ will devise a secure and fault-tolerant backbone communication
 infrastructure that can provide requisite scalability and flexible
 capabilities for all \ngrm\ operations as well as the entire HPC
 software ecosystem it embraces.
-
-\ngrm\ will investigate and devise clean plugin interfaces that
-provide \ngrm\ framework services and sanitized data to other HPC
-stakeholders so that they can further extend and customize the benefits
-of our system. \ngrm\ will identify, leverage, and support key complementary
-projects and activities that seek solutions in the same problem domain
-through innovations in other layers of HPC software stack, including but
-not being limiting to middleware and programming models like MPI,
-power-aware runtime, fault-tolerant components like checkpoint and
-restart, OS services, development tools  and their infrastructure.
-The plugins will be the main mean of extending \ngrm’s capability
-without having to lose the stability and robustness of its core
-functionality.
 
 \subsection{Resource Management}
 
@@ -420,7 +409,10 @@ high security, and fault containment with no single point of failure.
 \include{project}
 
 \appendix
+
 \include{reqs}
+
+\include{process}
 
 \bibliographystyle{abbrv}
 \bibliography{../bib/project,../bib/rfc}
