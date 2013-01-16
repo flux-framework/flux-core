@@ -26,7 +26,7 @@
 
 \title{Vision and Plan for a \ngrmfull}
 \author{\
-Dong Ahn, dahn@llnl.gov\\
+Dong H. Ahn, ahn1@llnl.gov\\
 Jim Garlick, garlick@llnl.gov\\
 Mark Grondona, mgrondona@llnl.gov\\
 Don Lipari, lipari@llnl.gov}
@@ -38,91 +38,92 @@ Don Lipari, lipari@llnl.gov}
 \section{Overview}
 \label{sect:overview}
 Resource Management (RM) software is critical for High Performance Computing
-(HPC). It is the centerpiece of efficient execution of HPC applications
-while providing an HPC center with the main means to manage efficient use
-of computing resources as a whole.  However, several growing trends make
-even the best-in-breed RM software largely ineffective.  As numbers and
-types of compute cores of an HPC machine continue to grow, key RM challenges
-associated only with {\em capability} systems today are quickly
-becoming pervasive for {\em all} computing resources, even commodity
-Linux clusters.  These challenges include extreme scalability, power
-consumption and noise control, fault tolerance, and heterogeneity management.
+(HPC). It is the centerpiece that allows efficient executions of HPC applications
+while providing an HPC center with the main means to maximize 
+the utilization of its computing resources. However, several growing trends make
+even the best-in-breed RM software largely ineffective. As numbers and
+types of compute cores of HPC systems continue to grow, key RM challenges
+associated only with today's {\em capability-class} machines are 
+becoming increasingly pervasive for {\em all} computing resources including 
+commodity Linux clusters. The challenges include having to provide 
+extreme scalability, low noise, fault tolerance, and heterogeneity management
+while under a strict power budget.
 
-Greater difficulties in code development on larger scale systems have
-also begun to impose far more complex requirements on the RM.  For example,
+In addition, greater difficulties in code development on larger systems have
+begun to impose far more complex requirements on the RM. For example,
 without adequate RM support, debugging, tuning, testing and verification
-of applications are becoming increasingly time-consuming for end-users.
-The next generation code development environments require the RM to provide
-effective mechanisms to reproduce the results of program execution, to
+of the applications have become too difficult and time-consuming for end-users.
+The next-generation code development environments require the RM to provide
+effective mechanisms to support the reproducible results of program execution, to
 provide accurate correlations between user-level errors and system-level
 events, and to integrate and accelerate a rich set of scalable tools.
 
 Further, a greater interplay among various classes of clusters across
-the entire site makes the current practice of single-cluster scheduling
-far less efficient.  An application running on a compute cluster heavily
+the entire center makes the current practice of single-cluster scheduling
+far less appealing.  An application running on a compute cluster heavily
 utilizes site-wide shared resources such as I/O and visualization clusters.
-Thus, avoiding any significant site-wide bottleneck now requires the RM
+Thus, avoiding any significant site-wide bottleneck requires the RM
 to schedule the job to all dependent resources together. In short, without
-the RM that effectively meets all of these challenges, it has become apparent
-that the HPC center will suffer a significant loss in both user productivity
-and efficient use of next generation computing resources.
+the RM that can effectively address all of these challenges, it has become apparent
+that HPC centers will suffer a significant loss in both user productivity
+and efficient uses of next-generation computing resources.
 
-SLURM\cite{SlurmDesign} (Simple Linux Utilities for Resource Management) is arguably the
+SLURM~\cite{SlurmDesign} (Simple Linux Utilities for Resource Management) is arguably the
 best-in-breed, open-sourced RM designed for commodity Linux clusters.
 Livermore Computing (LC) at Lawrence Livermore National Laboratory (LLNL)
 designed and led the implementation in 2002. And ever since, it has become
 widely used beyond LC systems. Currently, most HPC centers including LC
 run an instance of SLURM on each cluster and often tie these instances
-together with grid management software such as MOAB\cite{MOAB:online}.  However, after a
-decade of such use of SLURM and of accruing violations of many fundamental
-technical assumptions, it has become no longer cost effective, if not
-impossible, to meet newly emerging challenges without sacrificing its
+together with grid management software such as MOAB~\cite{MOAB:online}.  
+After a decade of such use of SLURM and of accruing violations of many fundamental
+technical assumptions, however, it has become no longer cost effective, if not
+impossible, to address newly emerging challenges without sacrificing its
 stability and robustness.
 % A couple of key things that support this SLURM argument? One or two
 % points From the Gap analysis?] Time for a software rewrite has come.
 
-Our response to this critical need is the \ngrmfull\ (\ngrm ), a RM software
-{\em framework} that can address key emerging challenges 
+Our response to this critical need is the \ngrmfull\ (\ngrm ), an RM software
+{\em framework} that can solve the key emerging challenges 
 in a simple, extensible, distributed and autonomous fashion.
 It aims at managing the whole center as one common pool of {\em diverse} 
-resources. Hence, scheduling decisions 
-will be much more efficient and also flexible to be able to 
-accommodate emerging constraints such as limited power budgets. 
+resources. Hence, scheduling decisions will be 
+far more efficient as well as flexible to accommodate 
+emerging constraints such as a strict power bound. 
 Further, \ngrm\ integrates
 system monitoring, system administration, lightweight
 virtualization, and distributed tool communication capabilities
 that are currently provided by disjoint and often overlapping software.
-Integration of these facilities within a framework that is designed from
+Integrations of these facilities within the common framework designed from
 the ground up for scalability, security, and fault tolerance will result
 in a more efficient and capable system.
 
-We realize that \ngrm's problem domain is huge and that a wide range of challenges 
-must be addressed in relatively short order with limited resources. Thus, we 
-organize the project plan around four research and development thrust areas 
-and systematically advance them.
-Those four areas, {\bf{\em Resource Management}}, {\bf{\em Provenance and Monitoring}},
-{\bf{\em Workload Runtime And Placement}}, and {\bf{\em Framework}}, are
-relatively independent and that build on the strength of one
+We realize that \ngrm's problem space is huge and yet we must address a wide range 
+of challenges in relatively short order with limited resources. Thus, we 
+organize our project plan around four research and development thrust areas 
+and seek to advance them systematically.
+These areas are called: {\bf{\em Resource Management}}, {\bf{\em Provenance and Monitoring}},
+{\bf{\em Workload Runtime And Placement}}, and {\bf{\em Framework}}.
+They are relatively independent but can significantly build on the strength of one
 another through well-known interfaces and common design and development
-principles. Reaching all major milestones of these thrust areas represent
-the completion of the first round of \ngrm\ development. 
+principles. Thus, reaching all major milestones of these thrust areas 
+will represent the completion of the first round of \ngrm\ development. 
 
 Overall, \ngrm\ will significantly improve operational efficiency for
-scientific application development and execution, and further computing
-resources of the HPC entire center.  It will also provide
-a foundation that can be extended and customized, allowing agile responses
+scientific application development and execution, and further for computing
+resources of the entire HPC center.  It will also provide
+a foundation for further extension and customization, allowing agile responses
 to site-specific scheduling issues. Perhaps more importantly, \ngrm\
-positions HPC centers to cope with a blend of interrelated, diverse
+positions us to cope with a blend of interrelated, diverse
 extreme-scale computing resources, the landscape of high-end HPC centers
 in just a few years down the road
 
 The rest of the paper is organized as the following.
-Section~\ref{sect:vision} describes \ngrm's vision and 
+Section~\ref{sect:vision} presents \ngrm's vision and 
 its new capabilities in more detail. Section~\ref{sect:projorg}  
-presents the high-level goals of the four thrust areas and
-explain relations among them. Next sections then 
-go over and detail each of these thrust areas including 
-its work breakdown structure (WBS) and work items.
+describes the high-level goals of the four thrust areas and
+explains relations among the areas. Next sections then 
+go over and detail each of these areas including 
+its work breakdown structure (WBS) and associated work items.
 Finally, Section~\ref{sect:delivery} defines
 our schedules for milestones and deliverables.
 
