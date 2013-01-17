@@ -19,6 +19,8 @@
 \newcommand{\ngjs}{NGRM Job Scheduler}
 %\newcommand{\zMQ}{${\varnothing}$MQ}
 \newcommand{\zMQ}{\O{}MQ}
+\newcommand{\slurm}{Slurm}
+\newcommand{\moab}{Moab}
 
 %\includeonly{monitor}
 
@@ -38,7 +40,7 @@ Don Lipari, lipari@llnl.gov}
 \section{Overview}
 \label{sect:overview}
 Resource Management (RM) software is critical for High Performance Computing
-(HPC). It is the centerpiece that allows efficient executions of HPC applications
+(HPC). It is the centerpiece that allows efficient execution of HPC applications
 while providing an HPC center with the main means to maximize 
 the utilization of its computing resources. However, several growing trends make
 even the best-in-breed RM software largely ineffective. As numbers and
@@ -68,19 +70,22 @@ the RM that can effectively address all of these challenges, it has become appar
 that HPC centers will suffer a significant loss in both user productivity
 and efficient uses of next-generation computing resources.
 
-SLURM~\cite{SlurmDesign} (Simple Linux Utilities for Resource Management) is arguably the
+\slurm\cite{SlurmDesign} is arguably the
 best-in-breed, open-sourced RM designed for commodity Linux clusters.
 Livermore Computing (LC) at Lawrence Livermore National Laboratory (LLNL)
-designed and led the implementation in 2002. And ever since, it has become
-widely used beyond LC systems. Currently, most HPC centers including LC
-run an instance of SLURM on each cluster and often tie these instances
-together with grid management software such as MOAB~\cite{MOAB:online}.  
-After a decade of such use of SLURM and of accruing violations of many fundamental
-technical assumptions, however, it has become no longer cost effective, if not
-impossible, to address newly emerging challenges without sacrificing its
-stability and robustness.
-% A couple of key things that support this SLURM argument? One or two
-% points From the Gap analysis?] Time for a software rewrite has come.
+designed and led its implementation in 2002 and since then has facilitated
+its wide adoption outside of LLNL.
+\slurm's original design was for a 1-2K node Linux cluster with a single
+interconnect domain and bulk-synchronous workload based on MPICH.
+In the last decade, \slurm\ has been adapted
+to act as a scheduling and job submission layer on top of proprietary
+RM software on IBM Blue Gene and Cray systems,
+to support other runtimes quite different from MPICH, and
+to be tied into a \moab\cite{MOAB:online} grid.
+These adaptations have accrued without fundamentally changing the
+core \slurm\ design, and as a result we find ourselves increasingly
+unable to adapt effectively to emerging requirements without compromising
+stability.
 
 Our response to this critical need is the \ngrmfull\ (\ngrm ), an RM software
 {\em framework} that can solve the key emerging challenges 
@@ -139,7 +144,7 @@ significantly improves user productivity and operational efficiency
 for capacity-class workloads on compute resources that are increasingly 
 diverse, dynamic, and large.
 The lessons learned from a decade of designing, developing
-and administrating SLURM must guide us in realizing this vision. 
+and administrating \slurm must guide us in realizing this vision. 
 Thus, \ngrm\ will manage the entire center as one common pool 
 of diverse resources. Further, they will be annotated with much richer information 
 including physical topology and communication costs among resources.
