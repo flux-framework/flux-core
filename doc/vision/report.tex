@@ -60,7 +60,7 @@ events, and to integrate and accelerate a rich set of scalable tools.
 
 Further, a greater interplay among various classes of clusters across
 the entire center makes the current practice of single-cluster scheduling
-far less appealing.  An application running on a compute cluster heavily
+far less appealing. An application running on a compute cluster heavily
 utilizes site-wide shared resources such as I/O and visualization clusters.
 Thus, avoiding any significant site-wide bottleneck requires the RM
 to schedule the job to all dependent resources together. In short, without
@@ -128,73 +128,97 @@ Finally, Section~\ref{sect:delivery} defines
 our schedules for milestones and deliverables.
 
 
-\section{Challenges, Vision and New Capabilities}
+\section{Challenges, Vision, and New Capabilities}
 \label{sect:vision}
-With higher integration comes the risk of hardwiring assumptions that
-later prove to be confining, forcing changes down the road that are
-inconsistent with the initial design.  Therefore, the project will focus
-on building a generalized framework that is highly customizable and
-extensible.  It will be architected so that a great deal of its
-functionality can be replaced without affecting the internal design.
+The vision of \ngrm\ is to create a new RM software that 
+significantly improves user productivity and operational efficiency 
+for capacity-class workloads on compute resources that are increasingly 
+diverse, dynamic, and large.
+The lessons learned from a decade of designing, developing
+and administrating SLURM must guide us in realizing this vision. 
+Thus, \ngrm\ will manage the entire center as one common pool 
+of diverse resources. Further, they will be annotated with much richer information 
+including physical topology and communication costs among resources---e.g., 
+on a compute node, core 0 is closer to 7 than 8, as 0 and 7 are on 
+a same socket; node A is farther to B than C as a packet sent from A has 
+to route through the additional top-level switch in a fat-tree network to reach C.
+Using a richer resource model,  
+the scheduling decisions and execution environments will 
+be made more efficient and flexible. 
 
-\ngrm\ will improve productivity for bulk-synchronous, capacity workloads
-through the lessons learned from a decade of designing, maintaining,
-and running SLURM.  In addition, some new capabilities are planned which
-are described below.
+\ngrm\ must also seamlessly integrate system monitoring
+and administration, lightweight virtualization, and scalable tool 
+communication, the capabilities that are currently provided through 
+disjoint and often overlapping software. The integration must 
+faciliate a higher level of leverage among these essential elements.
+But with higher integration comes the risk of hardwiring assumptions 
+that later prove to be confining. That can force changes down the road 
+that are inconsistent with the initial design. Thus, we must extensively
+investigate ways to build a generalized framework that is highly 
+customizable and extensible. The framework architecture will allow
+a great deal of \ngrm\ functionality to be replaced without 
+affecting its internal design and stability.
+In the following, we further detail the key ideas and new capabilities 
+of \ngrm.
 
 \subsection{Center as a Cluster}
 
-Unlike the traditional approach of running a RM instance on each separately
-managed cluster, and tying clusters together with grid software almost as
-an afterthought, \ngrm\ will be designed from the beginning to manage the
-center as one pool of resources.  There will be a single system image
-from the perspective of users, as well as system administrators.
+Unlike the traditional approach of running an RM instance on each separately
+managed cluster, and tying clusters together with grid software almost was
+an afterthought. Instead, \ngrm\ will be designed from the beginning to manage the
+center as one pool of resources. There will be a single site-wide 
+system image from the perspective of users as well as system administrators.
+With this approach, filesystem servers such as Lustre clusters, 
+and visualization and serial batch systems can be aggregated
+with compute clusters into one management domain. Hence,
+our RM can make better global scheduling decisions. 
+In addtion, dedicated interactive nodes will be unnecessary in the new system, as it
+will be possible to allocate interactive environments on demand from the
+global pool of resources.
 
-File system servers such as Lustre clusters, visualization systems, and
-serial batch systems can be aggregated with compute clusters into one
-management domain, such that the system can make better global scheduling
-decisions.  With integrated, center-wide monitoring, it becomes easier
-for the system to associate center RAS events such as a global file system
-failure with a job that is affected and to make that information part of
-the job’s data provenance record.  When the system has a global view of
+With integrated, center-wide monitoring, it becomes easier
+for our system to associate center Reliability, Availability and Serviceability~(RAS) 
+events such as a global filesystem
+failure with an affected job and to make that information part of
+the job's data {\em provenance} record. When the RM obtains a global view of
 resources including shared persistent storage, it becomes possible to
-consider the scheduling of I/O along with computation.  In combination with
-I/O forwarding software, the system could set up unique I/O forwarding
+consider the scheduling of I/O along with computation. In combination with
+I/O forwarding software, our RM could easily set up unique I/O forwarding
 topologies for each job.
 
 System management overhead that currently scales with the number of clusters
-could be streamlined by aggregating per-cluster services into center wide
-services.  For example, at LLNL, each cluster has a pair of management
+could be streamlined by aggregating per-cluster services into center-wide
+services. For example, at LLNL, each cluster has a pair of management
 nodes that are bootstrapped from scratch with an OS installation from DVD,
 and when system software is updated on that cluster, a downtime is
-scheduled during which the workload is idled and the responsible system
-administrator performs a sequence of steps.  In the new system, the
+scheduled during which the workload sits idle and the responsible system
+administrator performs a sequence of steps. Under the new RM, the
 number of systems that have to be brought up from scratch will be
 greatly reduced, and administrator-orchestrated downtimes for software
-updates could be eliminated (see below).
+updates could be eliminated. 
 
-Dedicated interactive nodes will be unnecessary in the new system, as it
-will be possible to allocate interactive environments on demand from the
-global pool of resources.
 
 \subsection{Zero Downtime}
 
 The impact of downtime becomes greater with a higher degree of integration
-of systems and services, therefore \ngrm\ will be designed to be tolerant
-of failing hardware and software, with no single point of failure, and
-with version interoperability such that software can be upgraded {\em live}
-in a rolling update across the center without impacting overall center
-availability or running workloads.
+of systems and services. Thus, \ngrm\ must be tolerant
+of hardware and software faults and failures.
+It will be designed to have no single point of failure and support 
+version interoperability that allows {\em live} software upgrades.
+The technique will faciliate a rolling update across the center 
+without impacting overall center availability and/or running workloads.
 
-Using lightweight containers and private file system namespaces for jobs,
-a degree of isolation between system software and user-visible software
-can be obtained.  For example, the resource management software and the
-kernel might see one version of the root file system, while an application
-might see another.  This makes it possible for the software levels in
-the system’s root file system to be updated without affecting any of the
-libraries that might be demand-loaded by an application, and vice-versa.
-The system OS image could be updated at idle points between jobs, while
-user-level software remains unchanged, or vice versa.  The separation of
+\ngrm\ will support the notion of lightweight containers 
+and private filesystem namespaces for jobs, achieving 
+a higher degree of isolation between system software and user-visible 
+software. For example, the RM and the Operating System (OS)
+kernel might see one version of the root filesystem, while an application
+might see another. The decoupling and isolation will be the key to the 
+much desired ability to upgrade the software levels in the machine's
+root filesystem without affecting any of the
+libraries that an application might be using, and vice-versa. 
+Similarly, one can upgrade the system OS image at idle points between jobs,
+with user-level software remaining unchanged, or vice versa. The separation of
 concerns gives more flexibility to the organization in determining software
 update policy and in fact could allow users or code development teams to
 control the software levels affecting their application, independent of
@@ -202,56 +226,54 @@ other applications.
 
 \subsection{Low Noise}
 
-Bulk-synchronous applications are affected to varying degrees by OS
-scheduling jitter, depending on their communication patterns.  Minimizing
-the user space system software contribution to OS jitter will be a primary
-design goal of \ngrm.
-
-\ngrm\ will supplant the independent monitoring, remote shell, and cron
-services that contribute to noise today.  The integrated services will
+As the number of processes in a parallel application increases, 
+their execution is affected to varying degrees by OS
+scheduling jitter, depending on their communication patterns. Minimizing
+the user-space system software contribution to OS jitter will be one 
+of our primary design goal.  \ngrm\ will supplant the independent monitoring, 
+remote shell, and cron
+services that contribute to noise today. The integrated services will
 allow users to dial up or down the verbosity and frequency of monitoring,
-depending on the debug/monitoring needs versus their application’s noise
-sensitivity.  Cron (periodic housekeeping) jobs and rsh (remote command
-executions) can be performed through the system to minimize their impact,
+depending on the debug/monitoring needs versus their application's noise
+sensitivity. Cron (periodic housekeeping) jobs and rsh (remote command
+executions) can be performed through the RM to minimize their impact,
 such as running them between jobs or synchronized across jobs, and to
 take into consideration the user's noise sensitivity.
-
 \ngrm\ will also be flexible enough to allow implementation of other
 strategies for reducing the impact of noise, such as scheduling all
 non-application activity to a configurable {\em noise core} when a
 single core can be spared.
 
-\subsection{Data Provenance/Reproducibility}
+\subsection{Data Provenance and Reproducibility}
 
 As simulation plays an increasingly central role in scientific
 investigation, reproducibility of results is more important than ever
-before.  A result should be accompanied by a data provenance record that
+before. A result should be accompanied by a data provenance record that
 can be used by others to recreate the inputs and conditions that led to
-that result.  It should also record clues such as RAS events that might
+that result. It should also record clues such as RAS events that might
 help in a post-mortem analysis when expected results are not obtained.
-The new system will produce such a record for every job.
-
+The new RM will produce such a record for every job.
 Long running parameter studies or uncertainty quantification runs
-require stability for long periods of time.  Private file system
+require stability for long periods of time. Private filesystem
 namespaces, as described above, enable applications to lock down their
 environment including dependent shared libraries so that the effects from
 system updates on the application are minimized.
 
 \subsection{Heterogeneous Resources}
 
-Traditional RM's in HPC systems have focused on node and/or CPU centric
+Traditional RM's in HPC systems have focused on node- and/or CPU-centric
 scheduling. With the advent of hybrid compute systems utilizing specialized,
-heterogeneous resources, this model has become cumbersome. Rather than
+heterogeneous resources, this model has become less effective. Rather than
 perpetuating a node-centric resource model with support for generic
 resources as an add-on, \ngrm\ will strive to support for heterogeneity
 from the start.
 
-In this new system, the idea of a resource will be kept as generic as
+In our new RM, the idea of a resource will be kept as generic as
 possible, not only allowing for simpler handling of generic resources,
 but also enabling future expansion to resource types that have yet to
-be conceived. New resource types will be coded in configuration and/or
-extensions, inheriting their attributes from base types to maximize reuse
-and foment collaboration.  Resource topology will be encoded via
+be conceived. New resource types will provided through configuration changes
+and/or simple extensions that inherit their attributes from base types 
+to maximize reuse and foment collaboration.  Resource topology will be encoded via
 configuration, and resources will also be allowed to have tags or labels
 to which resource requests may refer. This system will attempt to
 implement a generic resource request language to allow flexible
@@ -260,65 +282,55 @@ specification of resource requirements from users for their applications.
 \subsection{Extensibility}
 
 Plugins, when designed properly, minimize the knowledge of internals
-needed to extend and modify a system.  They provide a mechanism for
-sites to customize the system for their particular needs.  To the extent
+needed to extend and modify a system. They provide a mechanism for
+sites to customize the system for their particular needs. To the extent
 possible, \ngrm\ will be modularized so various subsystems can be replaced
 or extended with plugins.
-
-In addition, \ngrm\ will be designed to be self-hosting; that is, it will
-be capable of launching a standalone copy of itself as a job.  This makes
+In addition, \ngrm\ will be designed to be self-hosting: it will
+be capable of launching a standalone copy of itself as a job. This makes
 it possible for developers or a QA team to test new versions of the
-system without requiring dedicated access to a cluster.
-
+RM without requiring dedicated access to a cluster.
 In combination, these features lower the barrier of entry into the
-community of developers supporting and extending the system.
+community of developers supporting and extending the RM.
 
 \subsection{Security}
 
 Distributed components of \ngrm\ will support privacy and integrity on
 the network to limit vulnerability to attacks involving physical access
 to a system or its networks.
-
-Lightweight containers enable the system to control the access that
-applications have to system resources.  For example, it is possible to
+Lightweight containers will tightly control the access that
+applications have to system resources. For example, it is possible to
 run the job in its own network namespace such that direct access to the
 system management network is unavailable, or limited by node firewall
-rules.  \ngrm\ could also use the private network namespace to isolate
+rules. ngrm\ could also use the private network namespace to isolate
 jobs from each other on virtual private networks.
 
-Containers with private file system namespaces can limit visibility of
-file systems to jobs based on site policy.  In combination with I/O
+Containers with private filesystem namespaces can limit visibility of
+filesystems to jobs based on the site policy. 
+%
+%Dong: I don't undestand the following sentence. 
+In combination with I/O
 forwarding software, \ngrm\ could squash all access to filesystems to
 the user id of the job so privilege escalation within the job such as
 escaping a container or obtaining root within the container would not
-change the user’s identity when accessing the file system.
+change the user's identity when accessing the filesystem.
 
-\subsection{Research/Tool Friendly}
+\subsection{Research and Tool Friendly}
 
 Components of \ngrm\ will be designed with the ability to capture and
 publish sanitized system data at all levels to facilitate the use of
 this data in current and future research.  The plugin and self-hosting
-features of the system will serve to encourage experimentation and
+features of the system will encourage experimentation and
 facilitate research activities by allowing new and experimental
 versions of the software to be run within a production instance.
-
-During the design phase of \ngrm , detailed requirements for parallel
-tools functionality will be gathered and incorporated into the final
-software design. A major goal of this project is facilitate the
-development and use of parallel tools on jobs running on next
-generation HPC systems. This will not only serve to lower the
-barrier to create and deploy useful tools, but will also reduce the
+%During the design phase of \ngrm , detailed requirements for parallel
+%tools functionality will be gathered and incorporated into the final
+%software design. 
+One of our design goals is also to facilitate the
+development and use of parallel scalable development tools 
+on jobs on next-generation computing systems. This will not only serve 
+to lower the barrier to create and deploy useful tools, but will also reduce the
 profusion of one-off software systems in use on production systems.
-
-Overall, \ngrm\ will significantly improve operational efficiency for
-scientific application development and execution, and further computing
-resources of the HPC center as a whole.  In addition, it will provide
-a foundation that can be extended and customized, allowing agile responses
-to site-specific scheduling issues. Perhaps more importantly, \ngrm\ 
-positions HPC centers to cope with a blend of interrelated, diverse
-extreme-scale computing resources, the landscape of high-end HPC centers
-in just a few years down the road.
-
 
 \section{Project Organization and Thrust Areas}
 \label{sect:projorg}
