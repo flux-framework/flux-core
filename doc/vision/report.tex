@@ -80,12 +80,13 @@ interconnect domain and bulk-synchronous workload based on MPICH.
 In the last decade, \slurm\ has been adapted
 to act as a scheduling and job submission layer on top of proprietary
 RM software on IBM Blue Gene and Cray systems,
-to support other runtimes quite different from MPICH, and
-to be tied into a \moab\cite{MOAB:online} grid.
+to support other runtimes quite different from MPICH,
+to run (natively) on Linux clusters pushing beyond the designed node count,
+and to be tied into a \moab\cite{MOAB:online} grid.
 These adaptations have accrued without fundamentally changing the
-core \slurm\ design, and as a result we find ourselves increasingly
-unable to adapt effectively to emerging requirements without compromising
-stability.
+core \slurm\ design, and as a result \slurm\ is increasingly
+unable to adapt to emerging requirements without compromising
+stability and code maintainability.
 
 Our response to this critical need is the \ngrmfull\ (\ngrm ), an RM software
 {\em framework} that can solve the key emerging challenges 
@@ -144,7 +145,7 @@ significantly improves user productivity and operational efficiency
 for capacity-class workloads on compute resources that are increasingly 
 diverse, dynamic, and large.
 The lessons learned from a decade of designing, developing
-and administrating \slurm must guide us in realizing this vision. 
+and administrating \slurm\ must guide us in realizing this vision. 
 Thus, \ngrm\ will manage the entire center as one common pool 
 of diverse resources. Further, they will be annotated with much richer information 
 including physical topology and communication costs among resources.
