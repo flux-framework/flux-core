@@ -1,9 +1,4 @@
-\section{Framework}
-
-Describe comms framework, plugin framework, and software
-development practices.
-
-\subsection{Communications Framework}\label{SecComms}
+\section{Communication Framework}\label{SecComms}
 
 The \ngrm\ architecture is hierarchical and recursive
 (\ref{ReqsHiLevFun}, req. 4.1).
@@ -13,7 +8,7 @@ its own \ngrm\ instance, which may in turn spawn jobs, ad infinitum.
 When a job terminates, the job's instance terminates and resources
 return to the parent instance.
 
-The communications framework supports this architecture by
+The communication framework supports this architecture by
 establishing a {\em comms session} to contain each \ngrm\ instance.
 The framework enables secure, scalable communication
 within a comms session, limits communication between sessions,
@@ -26,7 +21,7 @@ the parent.  This abstraction should encourage higher level software
 to be built that can operate at any level of recursion, thus improving
 testability and facilitating research.
 
-The communications framework consists of four main layers:
+The communication framework consists of four main layers:
 the IP transport, comms toolkit, comms message broker, and
 aggregation/reduction framework, shown
 in Figure~\ref{FigCommsLayers}.  Layering is not rigid;
@@ -37,7 +32,7 @@ layers directly as appropriate.
 \begin{minipage}[b]{0.45\linewidth}
 \centering
 \includegraphics[scale=0.30]{../fig/comms.eps}
-\caption{Comms Framework Layers}
+\caption{Communication Framework Layers}
 \label{FigCommsLayers}
 \end{minipage}
 \hspace{0.5cm}
@@ -49,7 +44,7 @@ layers directly as appropriate.
 \end{minipage}
 \end{figure}
 
-\subsubsection{Internet Protocol Transport}
+\subsection{Internet Protocol Transport}
 
 The \ngrm\ comms framework is layered upon IP, and presumes
 complete IP level unicast and multicast connectivity, so that any
@@ -103,7 +98,7 @@ is limited to within the comms session.  IPsec\cite{rfc2401} with
 a pre-shared session key could be used to provide session integrity and
 privacy at the IP layer if desired.
 
-\subsubsection{Comms Toolkit}
+\subsection{Comms Toolkit}
 
 The framework provides a toolkit for sending and receiving
 protocol messages privately and securely within a session,
@@ -182,7 +177,7 @@ single MUNGE security realm,
 which implies a single single administrative domain with consistent
 user and group identities.
 
-\subsubsection{Comms Message Broker}\label{SecCommsCMB}
+\subsection{Comms Message Broker}\label{SecCommsCMB}
 
 Within a comms session, a distributed comms message broker (CMB)
 is established to provide basic session services.
@@ -358,7 +353,7 @@ child nodeset.
 The DNS is updated in the parent to remove references to the session's
 subdomain.
 
-\subsubsection{Aggregation/Reduction Network}
+\subsection{Aggregation/Reduction Network Overlay}
 
 The \ngrm\ runtime and monitoring components will require an
 aggregation/reduction framework similar to MRNet\cite{MRNet} that
@@ -372,23 +367,8 @@ FIXME: Pull in Dong's requirements/description.
 Why not use MRNet?
 Can this be part of CMB?
 
-\subsection{Plugin Architecture}
-
-Several software subsystems in \ngrm\ will be extensible via plugins.
-Although each subsystem will likely have unique API's for plugins
-that match their specific funcionality, a common plugin architecure
-should be implemented to make extending \ngrm\ consistent across
-subsystems.  The plugin architecture should provide isolation between
-plugin code and the internals of the subsystem.  For example,
-ideally it should not be possible to cause the main code to segfault or
-deadlock by loading a malfunctioning plugin.
-
-\subsection{Software Development Practices}
-
-TBD
-
 \newpage
-\subsection{Framework WBS}\label{FrameworkWBS}
+\subsection{Communication Framework WBS}\label{CommsFrameworkWBS}
 
 \begin{longtable}{|p{1cm}|p{10.2cm}|p{1cm}|p{1cm}|p{1.8cm}|}\hline
   \textbf{Item} & \textbf{Description}
@@ -397,7 +377,7 @@ TBD
 		& \textbf{Weeks} & \textbf{Depend} \\
   \hline
   \hline
-  \multicolumn{5}{|l|}{1.1. \textbf{Communications Framework}} \\
+  \multicolumn{5}{|l|}{1.1. \textbf{Comms Toolkit}} \\
   \hline
   1.1.1.  & \zMQ\ evaluation.
           Consider CMB and aggregation/reduction design based on \zMQ.
@@ -419,7 +399,8 @@ TBD
 	& \\
   \hline
   1.1.3.  & MUNGE key change capability to make large MUNGE realm manageable.
-	  Add support for multiple keys with lifetimes per bug \#XXXX.
+	  Add support for transitioning to a new key\footnote{
+	  \url{https://code.google.com/p/munge/issues/detail?id=19}}.
 	& SD
 	& 
 	& \\
@@ -441,7 +422,9 @@ TBD
 	&
 	& \\
   \hline
-  1.1.6.  & CMB I design/prototype.  Develop CMB API's and a protoype
+  \multicolumn{5}{|l|}{1.2. \textbf{Comms Message Broker}} \\
+  \hline
+  1.2.1.  & CMB I design/prototype.  Develop CMB API's and a protoype
           implementation with a centralized architecture that scales
           to approx 256 nodes.   Stablize API's and allow dependent
 	  development to proceed.  Replace "whatsup" Cerebro tool on hype.
@@ -449,56 +432,35 @@ TBD
 	&  
 	& 1.1.1, 1.1.2, 1.1.5 \\
   \hline
-  1.1.7.  & Document CMB API's and comms toolkit usage for \ngrm\ components.
+  1.2.2.  & Document CMB API's and comms toolkit usage for \ngrm\ components.
           Develop toy application(s) demonstrating usage.
 	& V, D
 	&  
-	& 1.1.1, 1.1.2, 1.1.5, 1.1.6 \\
+	& 1.1.1, 1.1.2, 1.1.5, 1.2.1 \\
   \hline
-  1.1.8.  & CMB II design/prototype.  Design/prototype CMB II 
+  1.2.3.  & CMB II design/prototype.  Design/prototype CMB II 
           implementation with a distributed architecture that scales
-          to 100K nodes.   No fault tolerance.  Replace "skummee"
-          in-band data collection on hype and whatsup in LC production.
+          to 100K nodes.   No fault tolerance.
 	& DR, SD, V
 	&  
-	& 1.1.6, 1.1.3, 1.1.4, 1.1.7 \\
+	& 1.1.3, 1.1.4, 1.2.2 \\
   \hline
-  1.1.9.  & CMB III design/develop.  Final implementation with full
+  1.2.4.  & CMB III design/develop.  Final implementation with full
 	  scalability and fault tolerance.
 	& DR, SD, V
 	&  
-	& 1.1.8 \\
+	& 1.2.3 \\
   \hline
-  1.1.10. & aggregation/reduction framework design/prototype.
+  \multicolumn{5}{|l|}{1.3. \textbf{Aggregation/Reduction Network Overlay}} \\
+  \hline
+  1.3.1.& aggregation/reduction framework design/prototype.
 	& DR
 	&
-	& 1.1.7\\
+	& 1.2.2\\
   \hline
-  1.1.11. & Implement aggregation/reduction framework.
+  1.3.2.& Implement aggregation/reduction framework.
 	& SD
 	&
-	& 1.1.10\\
-  \hline
-  \multicolumn{5}{|l|}{1.2. \textbf{Plugin Architecture}} \\
-  \hline
-  1.2.1 & Survey plugin architectures such as SPANK, PAM, eclipse,
-	  and chrome.  Identify essential elements that make them
-          succesful.
-	& V
-	& 
-	& \\
-  \hline
-  1.2.2 & Design/prototype common plugin architecture with examples.
-          Document project plugin guidelines.
-	& DR, D
-	& 
-	& 1.2.1\\
-  \hline
-  \multicolumn{5}{|l|}{1.3. \textbf{Software Development Practices}} \\
-  \hline
-  1.3.1   & Codify project software development practices.
-	& V, D
-	& 
-	& \\
+	& 1.3.1\\
   \hline
 \end{longtable}

@@ -101,11 +101,15 @@ We realize that \ngrm's problem space is huge and yet we must address a wide ran
 of challenges in relatively short order with limited resources. Thus, we 
 organize our project plan around four research and development thrust areas 
 and seek to advance them systematically.
-These areas are called: {\bf{\em Resource Management}}, {\bf{\em Provenance and Monitoring}},
-{\bf{\em Workload Runtime And Placement}}, and {\bf{\em Framework}}.
-They are relatively independent but can significantly build on the strength of one
-another through well-known interfaces and common design and development
-principles. Thus, reaching all major milestones of these thrust areas 
+These areas are called:
+{\bf{\em Resource Management}},
+{\bf{\em Monitoring and Data Management}},
+{\bf{\em Workload Runtime And Placement}}, and
+{\bf{\em Communications Framework}}.
+They are relatively independent but can significantly build on the
+strength of one another through well-known interfaces and common design
+and development principles.
+Thus, reaching all major milestones of these thrust areas 
 will represent the completion of the first round of \ngrm\ development. 
 
 Overall, \ngrm\ will significantly improve operational efficiency for
@@ -138,11 +142,12 @@ The lessons learned from a decade of designing, developing
 and administrating SLURM must guide us in realizing this vision. 
 Thus, \ngrm\ will manage the entire center as one common pool 
 of diverse resources. Further, they will be annotated with much richer information 
-including physical topology and communication costs among resources---e.g., 
-on a compute node, core 0 is closer to 7 than 8, as 0 and 7 are on 
-a same socket; node A is farther to B than C as a packet sent from A has 
-to route through the additional top-level switch in a fat-tree network to reach C.
-Using a richer resource model,  
+including physical topology and communication costs among resources.
+%---e.g., 
+%on a compute node, core 0 is closer to 7 than 8, as 0 and 7 are on 
+%a same socket; node A is farther to B than C as a packet sent from A has 
+%to route through the additional top-level switch in a fat-tree network to reach C.
+Using a richer and more diverse resource model,  
 the scheduling decisions and execution environments will 
 be made more efficient and flexible. 
 
@@ -227,22 +232,25 @@ other applications.
 \subsection{Low Noise}
 
 As the number of processes in a parallel application increases, 
-their execution is affected to varying degrees by OS
+their executions are affected to varying degrees by OS
 scheduling jitter, depending on their communication patterns. Minimizing
 the user-space system software contribution to OS jitter will be one 
-of our primary design goal.  \ngrm\ will supplant the independent monitoring, 
+of our primary design goals.  \ngrm\ will supplant the independent monitoring, 
 remote shell, and cron
 services that contribute to noise today. The integrated services will
 allow users to dial up or down the verbosity and frequency of monitoring,
-depending on the debug/monitoring needs versus their application's noise
+depending on their debug/monitoring needs versus their application's noise
 sensitivity. Cron (periodic housekeeping) jobs and rsh (remote command
 executions) can be performed through the RM to minimize their impact,
-such as running them between jobs or synchronized across jobs, and to
-take into consideration the user's noise sensitivity.
+such as running them between jobs or synchronized across jobs. 
+%, and to
+%take into consideration the user's noise sensitivity.
 \ngrm\ will also be flexible enough to allow implementation of other
 strategies for reducing the impact of noise, such as scheduling all
-non-application activity to a configurable {\em noise core} when a
-single core can be spared.
+non-application activity to a configurable {\em noise core}.
+
+%when a
+%single core can be spared.
 
 \subsection{Data Provenance and Reproducibility}
 
@@ -250,8 +258,9 @@ As simulation plays an increasingly central role in scientific
 investigation, reproducibility of results is more important than ever
 before. A result should be accompanied by a data provenance record that
 can be used by others to recreate the inputs and conditions that led to
-that result. It should also record clues such as RAS events that might
-help in a post-mortem analysis when expected results are not obtained.
+that result. It should also record unusual system activities 
+such as RAS events that might help in a post-mortem analysis 
+when expected results are not obtained.
 The new RM will produce such a record for every job.
 Long running parameter studies or uncertainty quantification runs
 require stability for long periods of time. Private filesystem
@@ -267,17 +276,16 @@ heterogeneous resources, this model has become less effective. Rather than
 perpetuating a node-centric resource model with support for generic
 resources as an add-on, \ngrm\ will strive to support for heterogeneity
 from the start.
-
-In our new RM, the idea of a resource will be kept as generic as
-possible, not only allowing for simpler handling of generic resources,
-but also enabling future expansion to resource types that have yet to
+Thus, the idea of a resource will be kept as generic as
+possible. That will not only faciliate simpler handling of generic resources,
+but also enable future expansion to resource types that have yet to
 be conceived. New resource types will provided through configuration changes
 and/or simple extensions that inherit their attributes from base types 
 to maximize reuse and foment collaboration.  Resource topology will be encoded via
 configuration, and resources will also be allowed to have tags or labels
-to which resource requests may refer. This system will attempt to
-implement a generic resource request language to allow flexible
-specification of resource requirements from users for their applications.
+to which resource requests may refer. 
+A generic resource query language will be developed to allow flexible
+specification of resource requirements.
 
 \subsection{Extensibility}
 
@@ -302,9 +310,8 @@ Lightweight containers will tightly control the access that
 applications have to system resources. For example, it is possible to
 run the job in its own network namespace such that direct access to the
 system management network is unavailable, or limited by node firewall
-rules. ngrm\ could also use the private network namespace to isolate
-jobs from each other on virtual private networks.
-
+rules. \ngrm\ could also use the private network namespace to isolate
+jobs from each other on virtual private networks.  
 Containers with private filesystem namespaces can limit visibility of
 filesystems to jobs based on the site policy. 
 %
@@ -327,50 +334,36 @@ versions of the software to be run within a production instance.
 %tools functionality will be gathered and incorporated into the final
 %software design. 
 One of our design goals is also to facilitate the
-development and use of parallel scalable development tools 
+development and use of scalable runtime code development tools 
 on jobs on next-generation computing systems. This will not only serve 
 to lower the barrier to create and deploy useful tools, but will also reduce the
 profusion of one-off software systems in use on production systems.
 
 \section{Project Organization and Thrust Areas}
 \label{sect:projorg}
-We realize that \ngrm 's problem domain is huge and that we must address
-the challenges in relatively short order with limited resources, despite
-the magnitude of the problem.  Therefore we define four thrust areas
-that are relatively independent and build on the strength of one
-another through well-known interfaces and common design and development
-principles.  
+To hasten the design, development, and delivery of the initial version
+of \ngrm\, we define four thrust areas that are relatively independent
+and build on the strength of one another through well-known interfaces
+and common design and development principles (see Appendix~\cite{SWProcess}).
 
-Creating \ngrm\ will undoubtedly
-require substantial collaborative efforts for research, design, development
-and deployment, which involve many experts from different expert domains.
+Creating \ngrm\ will require substantial collaborative efforts with
+experts from several domains.
 The software architecture must bolster rapid progress in all of our thrust
 areas and facilitate mechanisms by which to leverage external innovation.
 
-The four thrust areas are
-Framework,
-Resource Management,
-Provenance/Monitoring,
-and Workload Runtime.
+FIXME: describe functional architecture, leading into thrust areas
 
-\subsection{Framework}
+The four thrust areas are
+Communication Framework,
+Resource Management,
+Monitoring and Data Management,
+and Workload Runtime and Placement.
+
+\subsection{Communication Framework}
 \ngrm\ will devise a secure and fault-tolerant backbone communication
 infrastructure that can provide requisite scalability and flexible
 capabilities for all \ngrm\ operations as well as the entire HPC
 software ecosystem it embraces.
-
-\ngrm\ will investigate and devise clean plugin interfaces that
-provide \ngrm\ framework services and sanitized data to other HPC
-stakeholders so that they can further extend and customize the benefits
-of our system. \ngrm\ will identify, leverage, and support key complementary
-projects and activities that seek solutions in the same problem domain
-through innovations in other layers of HPC software stack, including but
-not being limiting to middleware and programming models like MPI,
-power-aware runtime, fault-tolerant components like checkpoint and
-restart, OS services, development tools  and their infrastructure.
-The plugins will be the main mean of extending \ngrm’s capability
-without having to lose the stability and robustness of its core
-functionality.
 
 \subsection{Resource Management}
 
@@ -384,7 +377,7 @@ computing elements, to consumable resources like power.
 The highest-level of abstraction will allow the management of an
 entire HPC center as one pool of resources.
 
-\subsection{Provenance/Monitoring}
+\subsection{Monitoring and Data Management}
 
 \ngrm\ will investigate methods of transparently generating provenance
 information for each job, and enabling this information to be combined
@@ -432,7 +425,10 @@ high security, and fault containment with no single point of failure.
 \include{project}
 
 \appendix
+
 \include{reqs}
+
+\include{process}
 
 \bibliographystyle{abbrv}
 \bibliography{../bib/project,../bib/rfc}

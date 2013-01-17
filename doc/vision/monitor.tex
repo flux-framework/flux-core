@@ -1,15 +1,18 @@
-\section{File System Provisioning and System Monitoring}
+\section{Monitoring and Data Management}
 
-This section describes the file system provisioning and system monitoring
-subsystems of \ngrm.  By coupling these systems to the resource manager,
-we achieve our goals of mitigating system noise, improving job launch time,
-and promoting reproduceability and data provenance.
+This section describes the input data management and system monitoring
+components of \ngrm.
+By coupling these systems to the resource manager, we achieve our goals
+of mitigating system noise, improving job launch time, and promoting
+reproduceability and data provenance.
 
-\subsection{File System Provisioning}
+\subsection{Input Data Management}
 
-We use the term "file system provisioning" to describe how executables
-and other read-only data are provided to compute nodes.
-A provisioning system based on immutable datasets is proposed.
+We use the term "input data management" to describe how executables
+and other read-only data associated with a job are contained,
+staged to to compute nodes during job launch, and associated with a job's
+historical record in a reproduceable manner.
+A system based on {\em immutable datasets} is proposed.
 Immutable datasets are collections of files that can be aggressively cached
 without revalidation,
 and reliably referenced in a job record for data provenance.
@@ -20,17 +23,16 @@ is exported as a read-only network block device,
 then mounted like a regular local file system on compute nodes,
 where the files that comprise the dataset are individually accessible.
 The system can be used to provision the root file system,
-or any other file system provided its content can be stored immutably
+or any group of files provided its content can be stored immutably
 in a dataset container and managed in the dataset repository.
 
-The provisioning system consists of the
+The input data management system consists of the
 distributed network block device,
 dataset repository,
 tools for creating and managing datasets,
 and the resource manager interfaces for assigning datasets to jobs
 such that they become part of a job's runtime environment and
 are referenced in the job's historical record.
-
 
 \subsubsection{Distributed Network Block Device}
 
@@ -163,7 +165,7 @@ The resource manager will take references on containers when they are used
 and when they are referenced by a job's provenance record.
 Thus the dataset repository is more than a file system that has
 content addressability and copy-on-write.
-It must enforce provisioning system policy over container additions and
+It must enforce system policy over container additions and
 removals and ensure that all its containers have a valid format.
 
 \subsubsection{Tools for Creating and Managing Datasets}
@@ -177,7 +179,7 @@ their workflow and tool needs.
 
 \subsubsection{Resource Manager Interface}
 
-The provisioning system is intended to be used in conjunction with
+The input data management system is intended to be used in conjunction with
 the \ngrm\ runtime's capability of configuring the file system
 namespace (e.g. set of mount points) on a custom basis for each job. 
 
@@ -187,7 +189,7 @@ vs fixed topology.
 FIXME: taking a reference on a container while it is mounted and
 from job log for provenance.
 
-\subsubsection{File System Provisioning WBS}
+\subsubsection{Input Data Management WBS}
 
 \begin{longtable}{|p{1cm}|p{10.2cm}|p{1cm}|p{1cm}|p{1.8cm}|}\hline
   \textbf{Item} & \textbf{Description}
@@ -311,9 +313,9 @@ from job log for provenance.
 \end{longtable}
 \newpage
 
-\subsection{System Monitoring}
+\subsection{Monitoring}
 
-\ngrm\ system monitoring consists of three main components:
+\ngrm\ monitoring consists of three main components:
 a plugin system which allows user and system defined code to execute
 periodically to check for anomolous situations or take data samples,
 a monitoring console which aggregates the state of resources within a
