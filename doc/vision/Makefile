@@ -12,6 +12,10 @@ DEPFIG = \
 	../fig/commstk.eps \
 	../fig/cmb.eps \
 	../fig/zmqtbon.eps \
+	../fig/comms_ex1a.eps \
+	../fig/comms_ex1b.eps \
+	../fig/comms_ex1c.eps \
+	../fig/comms_ex1d.eps \
 	../fig/pathwalk.eps \
 	../fig/dnbd.eps \
 	../fig/wrap_graph.ps \

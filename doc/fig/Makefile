@@ -9,7 +9,11 @@ DEPFIG = \
 	WRAP_Architecture.ps \
 	WRAP_Base.ps \
 	WRAP_grow.ps \
-	WRAP_newJobFunction.ps
+	WRAP_newJobFunction.ps \
+	comms_ex1a.eps \
+	comms_ex1b.eps \
+	comms_ex1c.eps \
+	comms_ex1d.eps
 
 all: $(DEPFIG)
 

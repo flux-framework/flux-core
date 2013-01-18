@@ -187,6 +187,27 @@ detecting and adapting to session node failures,
 providing a basic event messaging system,
 and starting other \ngrm\ components.
 
+\begin{figure}
+\begin{minipage}[b]{0.2\linewidth}
+\fbox{\includegraphics[scale=0.05]{../fig/comms_ex1a.eps}}
+\end{minipage}
+\hspace{0.5cm}
+\begin{minipage}[b]{0.2\linewidth}
+\fbox{\includegraphics[scale=0.05]{../fig/comms_ex1b.eps}}
+\end{minipage}
+\hspace{0.5cm}
+\begin{minipage}[b]{0.2\linewidth}
+\fbox{\includegraphics[scale=0.05]{../fig/comms_ex1c.eps}}
+\end{minipage}
+\hspace{0.5cm}
+\begin{minipage}[b]{0.2\linewidth}
+\fbox{\includegraphics[scale=0.05]{../fig/comms_ex1d.eps}}
+\end{minipage}
+\caption{CMB Architecture:  comms sessions are formed hierarchically.
+Session control nodes (red) are the interface between a session and its parent.}
+\label{FigCommsEx1}
+\end{figure}
+
 \paragraph{Architecture}
 The CMB is a distributed service with nodes interconnected in a topology
 that is to be determined.
@@ -198,6 +219,7 @@ each session, with the parent CMB initiating any takeover.
 Interfaces exposed by the control node to the parent are always passive;
 that is, the parent initiates connections and makes requests or subscribes
 to events, and the child control node responds or publishes events.
+The CMB architecture is depicted in Figure~\ref{FigCommsEx1}.
 
 \paragraph{Session State}
 The CMB implements a simple key-value store to manage the
