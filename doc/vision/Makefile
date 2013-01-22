@@ -16,6 +16,8 @@ DEPFIG = \
 	../fig/comms_ex1b.eps \
 	../fig/comms_ex1c.eps \
 	../fig/comms_ex1d.eps \
+	../fig/mon_ex1a.eps \
+	../fig/mon_ex1b.eps \
 	../fig/pathwalk.eps \
 	../fig/dnbd.eps \
 	../fig/wrap_graph.ps \

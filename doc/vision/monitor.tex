@@ -12,6 +12,21 @@ aggregation/reduction services.  The general approach is to allow monitoring
 to be customized within a session, with the parent session delegating
 the responsibility for monitoring to its children.
 
+\begin{figure}
+\begin{minipage}[b]{0.4\linewidth}
+\fbox{\includegraphics[scale=0.1]{../fig/mon_ex1a.eps}}
+\end{minipage}
+\hspace{1cm}
+\begin{minipage}[b]{0.4\linewidth}
+\fbox{\includegraphics[scale=0.1]{../fig/mon_ex1b.eps}}
+\end{minipage}
+\caption{Monitoring follows the session/job hierarchy.
+Session control nodes (red) export a web-based monitoring console for each job.
+The monitoring plugin stack (jigsaw pieces) is customizable for each job.
+Plugin execution is coordinated by the job's scheduling trigger event.}
+\label{FigMonEx1}
+\end{figure}
+
 \subsection{Monitoring Plugin System}
 
 The monitoring plugin system provides a facility for arbitrary code to be
