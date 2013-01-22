@@ -153,8 +153,7 @@ Depending on the application either may be appropriate.
 
 Message integrity and privacy can be obtained using either a session
 security context or via MUNGE\cite{MUNGE}.
-Each comms session is allocated a {\em session key} by its parent\footnote{
-The root comms session obtains its session key out of band.}
+Each comms session is allocated a {\em session key} by its parent
 which is used for establishing a shared security context
 for messages exchanged within the comms session.
 The shared security context allows communicating entities to have integrity
@@ -219,7 +218,8 @@ each session, with the parent CMB initiating any takeover.
 Interfaces exposed by the control node to the parent are always passive;
 that is, the parent initiates connections and makes requests or subscribes
 to events, and the child control node responds or publishes events.
-The CMB architecture is depicted in Figure~\ref{FigCommsEx1}.
+The hierarchical relationship between comms sessions with the control
+node acting as gateway is depicted in Figure~\ref{FigCommsEx1}.
 
 \paragraph{Session State}
 The CMB implements a simple key-value store to manage the
@@ -228,7 +228,8 @@ The session state for the largest session is small enough to easily
 fit in memory.
 The master state lives on the control node.
 Slave caches on other nodes are loosely consistent with the master copy:
-reads may utilize a local or peer cache;
+reads may utilize a local or peer cache, which may be slightly out of date
+relative to the master copy (thus loose consistency);
 writes are through to the control node.
 Each write on the control node updates the key's generation number,
 its value, and triggers a state update event which
@@ -333,7 +334,8 @@ session state from out of band in a secure manner.
 If the CMB is cold starting after crashing while assigned to
 a session other than the root, the CMB of the root and subsequent owning
 sessions re-add the node from child to child until there are no children
-left or it is evicted according to the policy of an owning session.
+left or it is evicted according to the policy of an owning session
+at any level of hierarchy.
 
 \paragraph{Executable Bootstrap}
 In order to bootstrap other \ngrm\ components, the CMB daemon, upon
