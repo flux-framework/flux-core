@@ -21,7 +21,7 @@ the responsibility for monitoring to its children.
 \fbox{\includegraphics[scale=0.1]{../fig/mon_ex1b.eps}}
 \end{minipage}
 \caption{Monitoring follows the session/job hierarchy.
-Session control nodes (red) export a web-based monitoring console for each job.
+Control nodes (red) export a web-based monitoring console for each job.
 The monitoring plugin stack (jigsaw pieces) is customizable for each job.
 Plugin execution is coordinated by the job's scheduling trigger event.}
 \label{FigMonEx1}
@@ -36,11 +36,11 @@ session scheduling trigger event.  The set of active plugins is
 under the control of the session owner, with some reasonable
 defaults provided that can be overridden.
 
-The details of the plugin structure is a design activity, however,
-an example of a possible solution is for plugins to take the form of
-Lua scripts loaded into the CMB state database
-(thus shared across the session) and executed in the context of
-a monitoring daemon with an embedded Lua interpreter.
+%The details of the plugin structure is a design activity, however,
+%an example of a possible solution is for plugins to take the form of
+%Lua scripts loaded into the CMB state database
+%(thus shared across the session) and executed in the context of
+%a monitoring daemon with an embedded Lua interpreter.
 
 Plugins have three main functions: data source, data reduction,
 and data sink.  The data source function is driven by the scheduling

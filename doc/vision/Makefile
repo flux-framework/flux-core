@@ -1,10 +1,11 @@
 DEPSEC = \
-	framework.tex \
-	monitor.tex \
 	project.tex \
-	reqs.tex \
+	framework.tex \
 	resmgmt.tex \
+	monitor.tex \
+	io.tex \
 	runtime.tex \
+	reqs.tex \
 	process.tex
 
 DEPFIG = \
@@ -18,8 +19,6 @@ DEPFIG = \
 	../fig/comms_ex1d.eps \
 	../fig/mon_ex1a.eps \
 	../fig/mon_ex1b.eps \
-	../fig/pathwalk.eps \
-	../fig/dnbd.eps \
 	../fig/wrap_graph.ps \
 	../fig/WRAP_Architecture.ps \
 	../fig/WRAP_Base.ps \
