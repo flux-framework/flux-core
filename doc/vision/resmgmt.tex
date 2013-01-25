@@ -39,6 +39,10 @@ allows accumulated data and job/user specific tags from
 each job to percolate back up the system, possibly all
 the way to the persistent resource inventory.
 
+The resource inventory will also capture the dynamic activity of
+resources going in and out of service and contain an interface to the
+monitoring component to help provide this information.
+
 \subsection{Resource Description Language}
 
 The resource description language is used to describe resources
@@ -67,6 +71,39 @@ resource description language in Lua\cite{Lua} because this
 little language is small, fast, and embarassingly easy to embed and
 extend.  Lua's table data structure also lends itself very nicely to
 expressing heirarchical data.
+
+\subsection{Job Repository and Job Description}
+
+User requests for computing resource allocations are saved as job
+records to the job repository.  Like the resource description language
+above, the form of the job record needs to capture the most generic
+specifications yet be flexible enough to include machine-specific
+attributes as well as complex conditions, dependencies, and even the
+associated batch script.
+
+Particular attention is needed to specify jobs within jobs.  There may
+be a need for a distributed job repository such that higher level jobs
+do not necessarily need to contain information on child jobs.
+
+The persistence of the job repository starts when the job is first
+submitted.  Job records are updated as jobs are prioritized into a
+queue and move from a queued state, through a running state, to a
+completed state and perhaps to an archived state.
+
+Usage statistics will be derived from the job repository.  Data from
+the job repository and the resource inventory will provide a complete
+picture of what jobs were running on what resources under what
+conditions at every point in time.
+
+\subsection{User Repository}
+
+The user repository contains an ACL of users permitted to submit jobs
+to the \ngrm.  This is where bank accounts and qualities of service
+are defined along with the users associated with each.  Limits,
+constraints, target shares, and policy rules are stored in this
+repository.  The contents of this repository ultimately determine
+which users can run on which resources under what conditions and
+subject to what limitations and constraints.
 
 \subsection{Job Scheduler}
 
