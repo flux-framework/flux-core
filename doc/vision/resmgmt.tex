@@ -90,7 +90,7 @@ submitted.  Job records are updated as jobs are prioritized into a
 queue and move from a queued state, through a running state, to a
 completed state and perhaps to an archived state.
 
-Usage statistics will be derived from the job repository.  Data from
+Usage statistics will be available from the job repository.  Data from
 the job repository and the resource inventory will provide a complete
 picture of what jobs were running on what resources under what
 conditions at every point in time.
@@ -104,6 +104,68 @@ constraints, target shares, and policy rules are stored in this
 repository.  The contents of this repository ultimately determine
 which users can run on which resources under what conditions and
 subject to what limitations and constraints.
+
+\subsection{Repository Design}
+
+The job and user repositories only exist at the same level as the
+resource inventory. That is, since they are persistent, they cannot be
+tied to any one "job". Instead, these are all global databases with
+one a common API.  They are accessible from any job and/or user
+workstation via globally routable server name and port for example.
+
+Within any job, there is a "simpler" implementation of each of these
+databases that we just call the (job-local) resource, user, and job
+databases (as indicated in figure xxx).  In this case, these databases
+are instantiated on an as needed basis, and they may be implemented as
+rw cache of the same databases in the parent. In this case, "instance
+0" has a parent of the global, persistent databases -- the resource
+inventory, and job and user repo.
+
+All of these components provide a pub/sub interface such that children
+watch for interesting changes in their parent, and parents watch for
+interesting changes in the child. "Interesting" changes in this case
+might be important data about resources in the child (this resource is
+dead), or information about the child job itself (I'm dead).
+
+We will adopt the model from UNIX process management and have the
+parent instance "reap" its children. It is here that the job db from
+the child can be "pulled" up from the child into the parent job db.
+When instance 0 reaps jobs, this job data can be pushed up to its
+parent, i.e. the persistent job repo.
+
+(TBD -- how to store child job information in the parent such that the
+historical lineage of the jobs and sub-jobs within the child are
+preserved.  Maybe the reaping should be abstracted down in the comms
+layer with callbacks to allow the higher level subsystems to reap
+their analogs in children.)
+
+In this model, historical job data makes its way up to the top-level
+job repository as child jobs complete. Each "running" job instance has
+information about its historical job lineage in its local job db, so
+this information can also be queried directly from within the context
+of a job. (e.g. in a DAT, if you want to only query information about
+jobs from the DAT, you can query the DAT job instance. In fact,
+information about jobs from the DAT are not populated to the top-level
+job repository until the DAT "ends")
+
+We will define how jobs indicate that they are "done" and need to be
+reaped. A DAT "job" may need to be killed and reaped at the end of its
+time limit. Normal batch jobs are complete when the batch script
+running on the control node exits. A direct allocate/launch with WRAP
+would be reaped when the processes being launched exit. (Any other
+cases?)
+
+(TBD -- What happens to an active job hierarchy when the top-level job
+is killed?  What happens to pending job requests when a job is
+terminated?  Killing a job might result in something like:
+
+\begin{enumerate}
+\item Freeze local job db (i.e. disallow new job submissions)
+\item Terminate and reap children jobs
+\item Kill local tasks
+\end{enumerate}
+
+Perhaps 2,3 could be swapped or done in parallel.)
 
 \subsection{Job Scheduler}
 
@@ -136,9 +198,10 @@ switch) or fitting within a limited power envelope.
 
 In addition, the \ngjs\ will be designed to be recursive.  It will
 have the capability to launch another instance of itself within the
-context of a job.  The \ngjs\ will support job priority plugin modules
-allowing each recursive instance of the scheduler the ability to run a
-different priority plugin.  In so doing, the \ngjs's scheduling
+context of a job.  The \ngjs\ will support plugin modules that provide
+unique scheduling behavior and job prioritization.  Each recursive
+instance of the scheduler will have the option to independently load
+its own schdeuling plugin.  In so doing, the \ngjs's scheduling
 capabilities will range from scheduling all resources in the center to
 scheduling jobs on dedicated resources (DATs) to scheduling what were
 formerly known as job steps.
@@ -243,7 +306,7 @@ constantly changing.
 \textbf{Job Scheduling.} For each job removed from the prioritized
 queue, computing resources must be reserved and eventually allocated.
 The collection of resources to schedule must be available from the
-\ngrm\ system with the state and status of each resource updated in
+resource inventory with the state and status of each resource updated in
 real-time.  The scheduler must honor multiple resource requests
 simultaneously as it seeks to allocate cores, GPUs, nodes, switches,
 bandwidth, power, etc.
@@ -314,17 +377,22 @@ part of this facility.
         & 
         & 2.1.1\\
   \hline
-  2.2.3.& Job Database (design and prototype)
+  2.2.3.& Job Repository (design and prototype)
         & DR
         & 
         & 2.1.1\\
   \hline
-  2.2.4.& Comms integration
+  2.2.4.& User Repository (design and prototype)
+        & DR
+        &
+        & 2.1.1\\
+  \hline
+  2.2.5.& Comms integration
         & DR
         & 
         & 2.1.1.\\
   \hline
-  2.2.5& Research existing work in resource description languages,
+  2.2.6& Research existing work in resource description languages,
 	  such as Condor's ClassAd language,
 	  OAR's resource description language,
           Legion's object-oriented resource approach.
@@ -332,7 +400,7 @@ part of this facility.
         & 
         & \\
   \hline
-  2.2.6.& Design/Prototype resource description language.
+  2.2.7.& Design/Prototype resource description language.
         & DR
         & 
         & \\
