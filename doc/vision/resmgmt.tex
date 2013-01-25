@@ -1,5 +1,77 @@
 \section{Resource Management}
 
+\subsection{Overview}
+
+Resource Management in the HPC space has historically taken
+numerous and varied forms. From early batch schedulers to
+recent thrusts into Grid computing, the resource management
+sphere has a dizzying breadth of work and research. Due to this
+volume of research and data the term {\em resource management} is
+unfortunately not well defined, so we take the opportunity here
+to explicitly define resource management in the \ngrm\ system.
+
+In this document, we define resource management as the management
+of the state, topology information, access and utilitization
+of all resources configured in \ngrm. The Resource Manager (RM)
+component of \ngrm\ acts as the arbiter of efficient utilization
+of these resources by accepting user requests for resources and
+creating a schedule for these resource requests based on site
+policy. The \ngrm\ RM is the user's portal to the resources
+management by the system.
+
+One of the main goals of \ngrm\ is to create a RM system
+that is {\em extensible}, {\em scalable}, and {\em
+generalized}(\ref{ReqsHiLevFun}). To meet these goals, we
+build our resource manager on a set of components that are
+themselves extensible and generalized. It is intended that
+these components form a framework upon which a useful RM
+subsystem is implemented. The core components of this system,
+which are described in detail below, include a set of global,
+persistent databases called the {\em Resource Inventory} and
+{\em Job} and {\em User Repositories}, which contain the global
+configuration of resources, users, and historical job data. Within
+an \ngrm\ job, these databases are not persistent, and are instead
+implemented as lightweight versions called simply the {\em resource
+database} (RDB), {\em job database} (JDB), and {\em user database}
+(UDB). Running within a job, we call a functioning collection of
+these databases, and the interface to them a \ngrm\ {\em instance}.
+(See Figure~\ref{RMInstance}).
+
+
+\begin{figure}
+\centering
+\includegraphics[scale=0.30]{../fig/RM-instance.eps}
+\caption{Components of a Resource Manager Instance}
+\label{RMInstance}
+\end{figure}
+
+A high level view of these components is presented in Figure~\ref{RMComponents}.
+
+\begin{figure}
+\centering
+\includegraphics[scale=0.20]{../fig/RM-full.eps}
+\caption{Resource Manager High Level View}
+\label{RMComponents}
+\end{figure}
+
+In \ngrm\ users requesting resources, administrators configuring
+or operating on resources, or subsystems utlizing resources
+must have a flexible and extensible method for describing those
+resources.  To meet this goal we introduce the idea of a {\em
+resource description language} (RDL) in the sections below. We
+also discuss a similar {\em job description language} (JDL) which
+is used to encode generic job information in \ngrm. In \ngrm\
+we consider that the Resource DB and Inventory {\em speak} RDL
+and the Job DB and Repository {\em speak} JDL.
+
+Finally, with these components in place, we discuss how we will
+build a {\em Scheduler} in \ngrm. The Scheduler is a core component
+of an \ngrm\ instance as it is responsible for building the schedule
+that maps resource requests to time slots and resources, and thus
+implements the core useful functionality of the system -- that is the
+efficient use of limited resources across a diverse user base while
+implementing site policy.
+
 \subsection{Resource Inventory}
 
 The core component of the resource management system is
