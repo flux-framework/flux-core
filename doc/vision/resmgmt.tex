@@ -418,6 +418,79 @@ intervention: boosting job priorities, modifying job characteristics,
 cancelling jobs, etc.  Modifying resource states does not have to be
 part of this facility.
 
+\subsection{Resource Management API}
+
+\paragraph{User Services}
+This is the API for user or administrator interaction with the \ngrm.
+
+\begin{itemize}
+\item{$job\_submit()$: Submit a job allocation request and return a
+  job ID}
+\item{$job\_modify(JobID)$: Modify a job allocation request}
+\item{$job\_status(JobID)$: Return complete information about a job}
+\item{$job\_cancel(JobID)$: Cancel a job allocation request}
+\item{$queue\_show()$: Return the current queue of jobs}
+\item{$schedule\_show()$: Return the complete schedule as last
+  calculated}
+\end{itemize}
+
+In addition, the following API provides users and administrators the
+ability to query and modify the resource inventory, subject to roles
+and permissions.
+
+\begin{itemize}
+\item{$resource\_add(Resource)$: Add a resource to the resource inventory}
+\item{$resource\_modify(Resource)$: Modify the status/state of resource}
+\item{$resource\_status(Resource)$: Return the status/state of resource}
+\item{$resource\_remove(Resource)$: Remove a resource from the resource inventory}
+\item{$resource\_group\_add(Resource)$: Add a resource group (e.g., node partition) to the resource inventory}
+\item{$resource\_group\_status(Resource\_group)$: Return the status of a resource group}
+\item{$resource\_group\_modify(Resource\_group)$: Modify the status/state of a resource group}
+\item{$resource\_group\_remove(Resource)$: Remove a resource group from the resource inventory}
+\end{itemize}
+
+Similarly, the following API provides users and administrators the
+ability to query and modify records in the user repository, subject to
+roles and permissions.
+
+\begin{itemize}
+\item{$user\_add(User)$: Add a user with ACL to the user repository}
+\item{$user\_modify(User)$: Modify the status or ACL of user}
+\item{$user\_status(User)$: Return complete information about a user}
+\item{$user\_remove(User)$: Remove a user from the user repository}
+\end{itemize}
+
+\paragraph{Scheduler Requests and Subscriptions}
+This is the API the scheduler calls to request or subscribe to records
+from the resource inventory, and job and user repositories.
+
+\begin{itemize}
+\item{$resource\_request()$: Request all schedulable resources from
+  the resource inventory}
+\item{$resource\_subscribe()$: Subscribe to changes to all schedulable
+  resources from the resource inventory}
+\item{$job\_request()$: Request all jobs from the job repository}
+\item{$job\_subscribe()$: Subscribe to changes to all jobs from the
+  job repository}
+\item{$user\_request()$: Request all users from the user repository}
+\item{$user\_subscribe()$: Subscribe to changes to all users from the
+  user repository}
+\end{itemize}
+
+\paragraph{Scheduler Directives}
+These are the WRAP service primitives the scheduler calls to initiate,
+modify, and terminate WRAP instances. (Described in
+Section~\ref{sect:prim} below)
+
+\begin{itemize}
+\item{$alloc()$}
+\item{$realloc()$}
+\item{$release()$}
+\item{$launch()$}
+\item{$destroy()$}
+\end{itemize}
+
+
 %\newpage
 \subsection{Resource Management WBS}
 
