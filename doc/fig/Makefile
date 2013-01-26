@@ -15,7 +15,8 @@ DEPFIG = \
 	comms_ex1c.eps \
 	comms_ex1d.eps \
 	mon_ex1a.eps \
-	mon_ex1b.eps
+	mon_ex1b.eps \
+	mon_iface.eps
 
 all: $(DEPFIG)
 

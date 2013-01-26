@@ -19,11 +19,14 @@ DEPFIG = \
 	../fig/comms_ex1d.eps \
 	../fig/mon_ex1a.eps \
 	../fig/mon_ex1b.eps \
+	../fig/mon_iface.eps \
 	../fig/wrap_graph.ps \
 	../fig/WRAP_Architecture.ps \
 	../fig/WRAP_Base.ps \
 	../fig/WRAP_grow.ps \
-	../fig/WRAP_newJobFunction.ps
+	../fig/WRAP_newJobFunction.ps \
+	../fig/RM-full.eps \
+	../fig/RM-instance.eps
 
 DEPBIB = \
 	../bib/project.bib \

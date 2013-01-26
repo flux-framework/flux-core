@@ -226,11 +226,11 @@ The CMB implements a simple key-value store to manage the
 internal state enumerated in Table~\ref{TabCMBState}.
 The session state for the largest session is small enough to easily
 fit in memory.
-The master state lives on the control node.
-Slave caches on other nodes are loosely consistent with the master copy:
-reads may utilize a local or peer cache, which may be slightly out of date
-relative to the master copy (thus loose consistency);
-writes are through to the control node.
+The master state for a session lives on the session control node.
+Slave caches on other nodes in the session are loosely consistent with
+the master copy, that is, reads may utilize a local or peer cache,
+which may be slightly out of date relative to the master copy,
+while writes are through to the control node.
 Each write on the control node updates the key's generation number,
 its value, and triggers a state update event which
 can be used to update caches and synchronize other software using the
