@@ -68,7 +68,7 @@ Finally, with these components in place, we discuss how we will
 build a {\em Scheduler} in \ngrm. The Scheduler is a core component
 of an \ngrm\ instance as it is responsible for building the schedule
 that maps resource requests to time slots and resources, and thus
-implements the core useful functionality of the system -- that is the
+implements the essential functionality of the system -- that is the
 efficient use of limited resources across a diverse user base while
 implementing site policy.
 
@@ -189,11 +189,11 @@ workstation via globally routable server name and port for example.
 
 Within any job, there is a "simpler" implementation of each of these
 databases that we just call the (job-local) resource, user, and job
-databases (as indicated in figure xxx).  In this case, these databases
-are instantiated on an as needed basis, and they may be implemented as
-rw cache of the same databases in the parent. In this case, "instance
-0" has a parent of the global, persistent databases -- the resource
-inventory, and job and user repo.
+databases (as indicated in Figure~\ref{RMComponents}).  In this case,
+these databases are instantiated on an as needed basis, and they may
+be implemented as rw cache of the same databases in the parent. In
+this case, "instance 0" has a parent of the global, persistent
+databases -- the resource inventory, and job and user repo.
 
 All of these components provide a pub/sub interface such that children
 watch for interesting changes in their parent, and parents watch for
@@ -337,10 +337,8 @@ user requests and provide versatile administration capabilities.
   \item Support complex job dependencies
   \item Restrict some operations based on roles
   \item Accept job reservations
-  \item Originate and manage resource manager instances
-  \item Maintain some job statistics (e.g., resource usage per user
-    per account per cluster)
-  \item Process live configuration updates
+  \item Originate and manage WRAP instances
+  \item Dynamically adapt to configuration updates
   \item Save complete state and recover fully from a restart
 \end{itemize}
 
@@ -352,7 +350,7 @@ its computing resources.  As part of this duty, the scheduler must
 \begin{itemize}
   \item Reject job submissions for jobs which cannot or will never run
   \item Remove jobs that exceed time limits
-  \item Honor limits imposed on users, groups, projects (banks), etc
+  \item Enforce established limits on users, groups, projects (banks), etc
   \item Honor service level agreements and service quality requests
 \end{itemize}
 
@@ -363,7 +361,7 @@ However it is designed, it must include the following facilities.
 
 \textbf{Job Submission.} This the facility that receives a user's
 request for a job allocation and adds a record of this request to
-persistent storage.  Each job submitted must be immediately rejected
+the job repository.  Each job submitted must be immediately rejected
 if it cannot or is not allowed to run given the job specifications,
 the resources available, and any restrictions in place.  Job
 submission must be extremely fast and return a job ID in well under a
