@@ -7,6 +7,12 @@ services for an \ngrm\ {\bf instance}.
 A comms session is identified by its private DNS name, e.g. s1.\ngrm.
 or s1.s1.\ngrm.
 
+\paragraph{confinement}
+The enforcement of resource allocations such that an {\bf instance} cannot
+consume more than was allocated.  Confinement of an instance to assigned
+resources is the responsiblility of the parent and, in the case of inherited
+confinment, grandparent instance(s).
+
 \paragraph{control node}
 A distinguished node within a {\bf comms session} which holds the master
 {\em comms state}, is the root of the session's aggregation/reduction tree,
@@ -14,27 +20,22 @@ and which performs gateway functions with the parent session.
 
 \paragraph{instance}
 An independent set of resource manager services configured to manage
-a {\bf resource allocation}.
+a set of resources.
 Instances are created dynamically and recursively.
 We refer to the bootstrap {\em root instance} which contains all resources,
 and speak of {\em parent}, {\em child}, and {\em sibling} relations between
 instances.
-An instance is identified by its {\bf comms session} name, e.g. s1.\ngrm.
-or s1.s1.\ngrm.
+An instance is identified by its {\bf comms session} name,
+e.g. s1.\ngrm.  or s1.s1.\ngrm.
 
 \paragraph{job}
-A unit of work submitted to an {\bf instance}, which will obtain a
-{\bf resource allocation}, and be launched in a child instance.
-The job request defines a set of {\bf job functions} that will be launched.
+A time-bounded allocation of resources.  A job is submitted to a
+particular {\bf instance}.  When it executes, a child instance is
+created to contain the job.  As a special case the {\em root job} 
+runs perpetually without a time bound.
+An job is identified by its {\bf instance} name,
+e.g. s1.\ngrm.  or s1.s1.\ngrm.
 
-\paragraph{job function}
-A distributed invocation of application or tool components within an
-{\bf instance}.  For example, a running MVAPICH program is one job
-function, and an instance of TotalView\textsuperscript{\textregistered}
-attached to it is another.
-Each type of job function is supported by a {\em job function plugin}.
-
-\paragraph{resource allocation}
-A set of resources selected by the scheduler of a target {\bf instance}
-to fulfill a resource request.
-A child instance is created to manage the resource allocation.
+\paragraph{lightweight job} (LWJ) 
+A {\bf job} submitted and recorded in the current {\bf instance}
+which does not result in a new instance.
