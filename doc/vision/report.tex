@@ -345,6 +345,105 @@ on jobs on next-generation computing systems. This will not only serve
 to lower the barrier to create and deploy useful tools, but will also reduce the
 profusion of one-off software systems in use on production systems.
 
+\section{Terminology}
+
+\section{High Level Design}
+
+Given the multitude of challenges and our ambitious vision for
+\ngrm\ (Section~\ref{sect:vision}, we have developed a novel
+high level design for \ngrm\ that is based loosely upon the
+divide and conquer algorithm through {\em job recursion}. That
+is, in \ngrm\ every job itself is actually a full implementation
+of the \ngrm\ system, and therefore new jobs can be submitted to a
+local job in order to access the full power of \ngrm\ for managing
+resources assigned to the job. In theory, this mechanism can be
+used indefinitely such that the resources of an entire center
+are {\em divided} naturally through normal workloads.  %TODO:
+Recursive job model concept figure
+
+When \ngrm\ initializes, there exists a single {\em root} or {\em
+bootstrap} job which contains all the resources that are managed
+by \ngrm\. The root job is the only job which does not have direct
+parent job, i.e. it serves as the root of the heirarchical tree of
+jobs (an analogy in the UNIX idiom would be that the root instance
+is the {\tt init} process.) Instead of having a parent, the root
+job instead gets data about resources, users, and configuration
+from a global, peristent database, which serves as a configuration
+repository in \ngrm. We could say that the configuration repository
+is the parent of the root job.
+
+The root job and its progeny all have the following features:
+
+\begin{itemize}
+\item{A job {\em owner}, and access lists of users able to run
+      within the  current job and/or submit new jobs}
+\item{A resource manager component configured with the list of
+      resources allocated to the job, their topology and other information}
+\item{A scheduler for accepting and scheduling new jobs}
+\item{A job database for recording new, running, and completed child jobs}
+\item{An ``isolated'' communications framework with {\em gateway} functionality
+      for relaying messages to the parent}
+\item{A distributed and featureful runtime environment capable of launching
+      or assisting the launch of parallel applications and tools}
+\item{An ``interactive'' node on which batch scripts and or user logins
+       are contained}
+\item{A resolvable domain name based on a unique job id}
+\item{A local monitoring domain}
+\end{itemize}
+
+Since many of these components will be implemented via plugins or
+have plugin capabilities, it is expected that several features will
+be user-selectable during job submission. For example, the root
+job may have a complex, distributed scheduler, whereas users may
+want to choose between FIFO, backfill, or other simpler schedulers
+depending on the in-job workload.
+
+By default, only the owner of a job may submit new jobs or access
+the runtime services of a running job.  While this ownership of a
+should not be changed, it will be possible for users to add other
+users to the access list within their job, thus ``inviting'' the
+submission of new jobs by others. The requirement for this feature
+is clear when considering the root job, from which all other jobs
+are spawned. This job will be owned by a privileged user such as
+root, yet the system administrators will obviously want to open
+up this root job for access to all users who should be able to
+run jobs in the center.
+
+When a job terminates, either due to a timelimit or the work
+submitted for the job has completed, the job releases most resources
+back to the parent job. The control functions of the job remain and
+wait for an asynchronous {\em reap} operation from the parent. When
+the job is reaped the parent job reads in all data from the child\'s
+local job and resource database and instantiates that data in
+its own databases. In this way, global information about jobs
+percolates back up through the job heirarchy, eventually back to
+the root job.  The root job then periodically updates the global,
+persistent databases.
+
+In the recursive job model, the so-called {\em base case} is a
+single job in which a single parallel application is invoked. For
+this case, a fully functional child job is not needed, and indeed
+would be a waste of resources. For this purpose we introduce the
+concept of a {\em lightweight job}(LWJ) which is submitted and
+runs on the resources of the local job, but does not result in
+a new invocation of all the features of a full job. Where \ngrm\
+jobs are like processes in a UNIX process tree, lightweight jobs
+are like threads running within a process.
+
+Lightweight jobs have access to a feature rich, distributed,
+runtime environment with a shared key-value store, advanced
+placement services, and a plugin interface that allows extension
+of these services for unique requirements. This environment will
+enable the quick deployment of advanced runtime features such as
+fast parallel launch of MPI applications and easy tool integration.
+Since LWJs use the same interface to job management as full
+jobs, their existence, assigned resources, duration, etc.
+will be recorded in the local job database for posterity.
+In order to run a LWJ a user must be the owner of the current
+job or on the runtime access list for the local job.
+% or a parent? I can't remember what we decided here...
+
+
 \section{Project Organization and Thrust Areas}
 \label{sect:projorg}
 To hasten the design, development, and delivery of the initial version
