@@ -6,8 +6,7 @@ DEPSEC = \
 	io.tex \
 	runtime.tex \
 	reqs.tex \
-	process.tex \
-	terms.tex
+	process.tex
 
 DEPFIG = \
 	../fig/comms.eps \
