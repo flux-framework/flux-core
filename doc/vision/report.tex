@@ -390,7 +390,7 @@ which does not result in a new instance.
 \section{High Level Design}
 
 Given the multitude of challenges and our ambitious vision for
-\ngrm\ (Section~\ref{sect:vision}, we have developed a novel
+\ngrm\ (Section~\ref{sect:vision}), we have developed a novel
 high level design for \ngrm\ that is based loosely upon the
 divide and conquer algorithm through {\em job recursion}. That
 is, in \ngrm\ every job itself is actually a full implementation
@@ -398,12 +398,12 @@ of the \ngrm\ system, and therefore new jobs can be submitted to a
 local job in order to access the full power of \ngrm\ for managing
 resources assigned to the job. In theory, this mechanism can be
 used indefinitely such that the resources of an entire center
-are {\em divided} naturally through normal workloads.  %TODO:
-Recursive job model concept figure
+are {\em divided} naturally through normal workloads.  
+%TODO: Recursive job model concept figure
 
 When \ngrm\ initializes, there exists a single {\em root} or {\em
 bootstrap} job which contains all the resources that are managed
-by \ngrm\. The root job is the only job which does not have direct
+by \ngrm. The root job is the only job which does not have a
 parent job, i.e. it serves as the root of the heirarchical tree of
 jobs (an analogy in the UNIX idiom would be that the root instance
 is the {\tt init} process.) Instead of having a parent, the root
@@ -439,7 +439,7 @@ want to choose between FIFO, backfill, or other simpler schedulers
 depending on the in-job workload.
 
 By default, only the owner of a job may submit new jobs or access
-the runtime services of a running job.  While this ownership of a
+the runtime services of a running job.  While the ownership of a job
 should not be changed, it will be possible for users to add other
 users to the access list within their job, thus ``inviting'' the
 submission of new jobs by others. The requirement for this feature
@@ -466,8 +466,8 @@ this case, a fully functional child job is not needed, and indeed
 would be a waste of resources. For this purpose we introduce the
 concept of a {\em lightweight job}(LWJ) which is submitted and
 runs on the resources of the local job, but does not result in
-a new invocation of all the features of a full job. Where \ngrm\
-jobs are like processes in a UNIX process tree, lightweight jobs
+a new invocation of all the features of a full job. Where
+\ngrm\ jobs are like processes in a UNIX process tree, lightweight jobs
 are like threads running within a process.
 
 Lightweight jobs have access to a feature rich, distributed,
@@ -489,7 +489,7 @@ job or on the runtime access list for the local job.
 To hasten the design, development, and delivery of the initial version
 of \ngrm\, we define four thrust areas that are relatively independent
 and build on the strength of one another through well-known interfaces
-and common design and development principles (see Appendix~\cite{SWProcess}).
+and common design and development principles (see Appendix~\ref{sect:process}).
 
 Creating \ngrm\ will require substantial collaborative efforts with
 experts from several domains.
