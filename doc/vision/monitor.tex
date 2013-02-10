@@ -45,35 +45,38 @@ protocols are chosen to reduce the effort required to integrate with \ngrm.
 
 Monitoring state for a job is stored in the {\em resource database}, and
 fault events are recorded in the {\em job database}.
-These databases provide extensibility and persistency features described
+These databases provide extensibility and persistence features described
 in Section~\ref{sect:resdb} and \ref{sect:jobdb}.
 Monitoring follows the \ngrm\ job recursion pattern, and is layered upon
-the comms framework.  Recall from the Section~\ref{sect:commsIP} that
-each job has a unique domain name within the \ngrm\ private
-DNS namespace.  Live monitoring data can be obtained by using the resource
+the comms framework, which assigns each job a unique domain name within
+the \ngrm\ private DNS namespace.
+Live monitoring data can be obtained by using the resource
 manager API to query the resource and job databases on the job's control
-node, using its domain name.
+node, using the job's domain name.
 
-Within a job, some applications and runtimes will require notification
-when system faults occur.
-For example, when a node that is part of a job crashes, some applications
-may be able to request a replacement node and continue.
-To facilitate fault notification within a job, \ngrm\ will
-implement the CIFTS Fault Tolerance Backplane API\cite{FTBAPI} (FTB-API),
-an emerging standard for fault notification available in some MPI
-implementations and other software.
-Using FTB-API, applications and runtimes can produce and consume fault
-events within the job using its publish/subscribe interface, which we layer on
-top of our comms event messaging service.  Furthermore, a gateway is provided
-on the job control node which allows software within the job to subscribe
-to faults generated externally (such as by a file system used by the job),
-and to publish certain faults that may be of interest to others.
+Some applications and runtimes will require notification when system faults
+occur.  For example, when a node that is part of a job crashes, or is about to
+crash, some applications may be able to request a replacement node and recover.
+To facilitate sharing of fault information, \ngrm\ will implement a
+{\em fault notification service} layered upon the comms pub/sub event
+messaging system.
+The CIFTS Fault Tolerance Backplane API\cite{FTBAPI} (FTB-API), an emerging
+standard for fault notification available in some MPI implementations and
+other software, will be the programming interface to this service.
+Applications and runtimes use the fault notification service to produce
+and consume fault events within the job.  Furthermore, a gateway on the
+job control node allows software within the job to subscribe to faults
+generated externally (such as by a file system used by the job), and to
+publish certain faults that may be of interest to others.
+The {\em fault stream} produced by a job, which includes internal faults
+as well as external faults it has subscribed to, is logged in the job database
+like {\em stderr}, and can be considered part of the job's provenance record.
 
 \ngrm\ Monitoring thus consists of
 the plugin framework, 
 log database interface,
 enterprise monitoring interface,
-and FTB-API interface.
+and fault notification system.
 Each of these parts is discussed below.
 
 \subsection{Plugin Framework}
@@ -97,8 +100,9 @@ Plugin execution is coordinated by the job's scheduling trigger event.}
 The monitoring plugin system provides a mechanism for arbitrary code 
 contained in a user- or admin-provided plugin to be periodically
 executed across a job.
-The primary function of a plugin is to use the reduction network to update
-resource health information in the resource database at the control node.
+The primary function of a plugin is to 
+update resource health information in the resource database at the control node,
+using the reduction network.
 Plugins may also publish fault events and send data to the log database.
 A default plugin stack is inherited by a job from its parent.
 The set of active plugins as well as the trigger event period
@@ -128,7 +132,20 @@ incoming data and timers, not by the scheduling trigger.
 
 The data sink function accepts reduced data from the same plugin on
 the reduction network.
-Its purpose is to update resource state in the resource database.
+Its main purpose is to update resource state in the resource database,
+although it could dispose of the plugin's data in other ways such as by
+interfacing directly with a tool, or updating a database supplied by the
+job owner.
+
+Special care must be taken in the design of the plugin execution
+environment to minimize disruptive impact on compute nodes.
+For example, some monitoring systems like Chukwa\cite{Chukwa} require
+data source functionality to execute in a Java VM, which would have an
+unacceptably high memory and scheduling impact on some workloads.
+Others like Nagios\cite{Nagios} rely on shell scripts that may have a
+similarly high or unpredictable impact.
+\ngrm\ monitoring plugins should leverage a lightweight execution environment
+such as an embedded Lua\cite{LuaBook} interpreter.
 
 \subsection{Log Database Interface}
 
@@ -165,8 +182,8 @@ RFC 5424 STRUCTURED-DATA except as an opaque component of a textual
 log message.  If one cannot be located, likely we will want to write
 one to make management of structured data easier on users.},
 to inject data directly into an orthogonal syslog transport.
-Syslog implementations already have avanced filtering, forwarding,
-and security capability so there is no need to reimplement this.
+Syslog implementations already have standardized filtering, forwarding,
+and security capability so there is no need to reimplement this within \ngrm.
 
 To improve scalability in some situations, the reduction network can be used
 to add a degree of reduction to log data, without forcing control node
@@ -177,8 +194,8 @@ that logs from reduction function rather than its source or sink functions.
 While it is well and good to design a capability for scalable, persistent
 logging that is available both to system software and user applications,
 growth of the log database should not be completely unbounded and unmanaged.
-Two features could ease this problem: a circular debug log buffer, and
-a log insertion quota.
+Two features could ease this problem: a {\em circular debug log buffer}, and
+a {\em log insertion quota}.
 
 Syslog verbosity is tunable by selecting the {\em level} of each
 {\em facility} that is to be logged, from LOG\_EMERG (system is unusable)
@@ -220,7 +237,7 @@ Note about MIB's for different subsystems (one for the comms for example).
 
 Note about enterprise monitoring via the log database.
 
-\subsection{FTB-API Interface}
+\subsection{Fault Notification System}
 
 The job database receives a "fault stream" analagous to the job's stderr.
 This becomes part of the job's permanent record.
