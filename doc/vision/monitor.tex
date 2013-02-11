@@ -243,36 +243,56 @@ like {\em stderr}, and can be considered part of the job's provenance record.
 
 \subsection{Enterprise Monitoring Interface}
 
-Our model is to maintain the health state of resources in the resource
-database, which for each job can be queried at the job's control node.
-Monitoring tools can be developed which display the state of resources
-of interest within a job.
-Resource state is initialized from the parent resource database at job
-inception and is transferred back to the parent at job teardown.
-Therefore, the \ngrm\ system as a whole is represented in the root job's
-resource database, although the state may be out of date if a node is
-being used by a job.
-To interface with a site's enterprise monitoring system, we build gateway
-software that exports key information via SNMP on the root job's control node.  
+Site operations centers and system administrators use
+monitoring to track problems that may require someone's intervention, and
+to gain insight into how the systems they are responsible for are being used.
+The systems that are monitored may include clusters as well as facilities
+and networking equipment.
+\ngrm\ monitoring gathers resource health information that is an important
+component of that view, and indeed aims to replace other compute node
+resident monitoring frameworks in an effort to synchronize monitoring
+interruptions across jobs.
+Although \ngrm\ will provide tools for viewing its internal operation
+including resource health, it must also export resource health information
+to external enterprise monitoring software to allow \ngrm\ to be integrated
+into a site-wide monintoring strategy, perhaps already deployed.
+We accomplish this using our hierarchical job model to ensure that
+{\em actionable} fault information is available in the root job resource
+database, and develop a gateway to export this information
+to external enterprise monitoring software.
 
-For example, say we develop a plugin to monitor corrected memory errors
-and want to replace a DIMM when its lifetime count reaches a threshold.
-The lifetime count is stored in the root job's resource database.
-Each time the node is assigned to a job, the current count is
-transferred to the new job's resource database where any new errors are
-added to it.  When the child job terminates, the root count is updated.
-From the point of view of the root job, a count is always available
-although it may be out of date.  The current job "owning" the node always
-has the current count and can decide to evict the node if it should no
-longer be used.  When the node reaches the root job and the root count
-is updated, external monitoring can trigger a service action to replace
-the DIMM.
+The health state of resources is maintained in the resource database of
+each job.
+This state is initialized from the parent resource database at job inception
+and is transferred back to the parent at job teardown.
+In addition, some fault events within a child job are published
+to the parent and thus may alter resource state in both the parent and
+the child (perhaps driven by the need for enterprise monitoring to see them).
+Therefore, although each job is given a delegation to monitor the resources
+allocated to it, resource health state does, with varying degrees of latency,
+eventually recurse to the root job's resource database, thus it is
+appropriate to interface enterprise monitoring there.
 
-XXX Fault events can update state in resource database "live" across instances.
+SNMP\cite{StallingsSNMP} is the de-facto standard protocol for enterprise
+monitoring.  An SNMP gateway that speaks both the resource database API
+and SNMP will run on the root job's control node.
+State can be {\em pulled} out of \ngrm\ via SNMP GET and GETBULK requests.
+After an initial state transfer, state changes can be {\em pushed}
+by \ngrm\ via SNMP TRAP requests.  This model supports multiple external
+management entities.
+Theoretically the SNMP gateway could run on any job, if desired.
+For example, long running service entities like Lustre server clusters
+could be ''peeled off'' of the root instance, assigned to a child job,
+and monitored separately.
+Practically speaking, jobs configured for external monitoring should be
+long lived.
 
-Note about MIB's for different subsystems (one for the comms for example).
-
-Note about enterprise monitoring via the log database.
+A base set of \ngrm\ management data will be defined in an \ngrm\ 
+enterprise-specific management information base (MIB) module.
+The set of data exported by the SNMP gatway can be extended by adding
+new MIBs that map new SNMP objects to resource database objects.
+%FIXME: can we use the Resource Description Language (RDL) to simplify
+%the creation of custom MIBs?
 
 \ifwbs
 \subsection{Monitoring WBS}
