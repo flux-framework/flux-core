@@ -29,11 +29,11 @@ The log database is intended to be a comprehensive, schemaless, site-wide
 store that will support a high insertion rate, large storage capacity,
 and scalable queries.
 As a record of all events in the data center, it will facilitate
-post-mortem analysis, enabling the correlation of job data
-with occurrences that were not actively tracked by the job during its
-execution, thus not part of the canonical job record.
+postmortem analysis, enabling the correlation of job data with other
+interesting occurrences that might not have been recorded in the job
+database, or anticipated as something the job would normally ''care'' about.
 Users will be permitted to inject application-level information into this
-store and perform analysis as well
+store and perform analysis with the system-level context there as well
 (\ref{ReqsHiLevFun} req. 3.6).
 
 The enterprise monitoring system is the mechanism used by operations center
@@ -135,7 +135,14 @@ the reduction network.
 Its main purpose is to update resource state in the resource database,
 although it could dispose of the plugin's data in other ways such as by
 interfacing directly with a tool, or updating a database supplied by the
-job owner.
+job owner.  Each job's resource database stores the live state of the resources
+assigned to the job.  This state is initialized from the parent resource
+database at job inception and is transferred back to the parent at
+job teardown.  It is also possible to pass live data from the gateway
+to the :q
+`
+pass monitoring data from the gateway to the 
+to update some state in the parent or the root, so some resource state
 
 Special care must be taken in the design of the plugin execution
 environment to minimize disruptive impact on compute nodes.
@@ -153,7 +160,7 @@ Monitoring interfaces with an external log database intended to
 be a comprehensive, schemaless, site-wide store that will support a
 high insertion rate, large storage capacity, and scalable queries.
 As a record of all events in the data center, it will facilitate
-post-mortem analysis, enabling the correlation of job data
+postmortem analysis, enabling the correlation of job data
 with occurrences that were not actively tracked by the job during its
 execution, thus not part of the canonical job record.
 
@@ -239,8 +246,25 @@ Note about enterprise monitoring via the log database.
 
 \subsection{Fault Notification System}
 
-The job database receives a "fault stream" analagous to the job's stderr.
-This becomes part of the job's permanent record.
+FIXME: rewrite and expand
+
+Some applications and runtimes will require notification when system faults
+occur.  For example, when a node that is part of a job crashes, or is about to
+crash, some applications may be able to request a replacement node and recover.
+To facilitate sharing of fault information, \ngrm\ will implement a
+{\em fault notification service} layered upon the comms pub/sub event
+messaging system.
+The CIFTS Fault Tolerance Backplane API\cite{FTBAPI} (FTB-API), an emerging
+standard for fault notification available in some MPI implementations and
+other software, will be the programming interface to this service.
+Applications and runtimes use the fault notification service to produce
+and consume fault events within the job.  Furthermore, a gateway on the
+job control node allows software within the job to subscribe to faults
+generated externally (such as by a file system used by the job), and to
+publish certain faults that may be of interest to others.
+The {\em fault stream} produced by a job, which includes internal faults
+as well as external faults it has subscribed to, is logged in the job database
+like {\em stderr}, and can be considered part of the job's provenance record.
 
 \subsection{Monitoring WBS}
 
