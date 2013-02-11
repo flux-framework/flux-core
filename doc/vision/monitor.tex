@@ -75,8 +75,8 @@ like {\em stderr}, and can be considered part of the job's provenance record.
 \ngrm\ Monitoring thus consists of
 the plugin framework, 
 log database interface,
-enterprise monitoring interface,
-and fault notification system.
+fault notification system.
+enterprise monitoring interface.
 Each of these parts is discussed below.
 
 \subsection{Plugin Framework}
@@ -135,14 +135,7 @@ the reduction network.
 Its main purpose is to update resource state in the resource database,
 although it could dispose of the plugin's data in other ways such as by
 interfacing directly with a tool, or updating a database supplied by the
-job owner.  Each job's resource database stores the live state of the resources
-assigned to the job.  This state is initialized from the parent resource
-database at job inception and is transferred back to the parent at
-job teardown.  It is also possible to pass live data from the gateway
-to the :q
-`
-pass monitoring data from the gateway to the 
-to update some state in the parent or the root, so some resource state
+job owner.
 
 Special care must be taken in the design of the plugin execution
 environment to minimize disruptive impact on compute nodes.
@@ -187,15 +180,16 @@ plugin functions, or applications through the standard syslog
 API\footnote{It is not clear that any available syslog API's handle
 RFC 5424 STRUCTURED-DATA except as an opaque component of a textual
 log message.  If one cannot be located, likely we will want to write
-one to make management of structured data easier on users.},
+one to make management of structured data easier on users and ourselves.},
 to inject data directly into an orthogonal syslog transport.
 Syslog implementations already have standardized filtering, forwarding,
 and security capability so there is no need to reimplement this within \ngrm.
 
-To improve scalability in some situations, the reduction network can be used
-to add a degree of reduction to log data, without forcing control node
-funneling.  This is accomplished by implementing a monitoring plugin
-that logs from reduction function rather than its source or sink functions.
+To improve scalability in some situations, the reduction network can be
+employed without necessarily resorting to control node funneling.
+A monitoring plugin can log from the function (source, reduction, or sink)
+that gives the right amount of reduction/funneling for the data managed
+by that particular plugin.
 
 \paragraph{Limiting unchecked log growth}
 While it is well and good to design a capability for scalable, persistent
@@ -225,25 +219,6 @@ that the ingest rate of the log database remains under control, while
 giving users a new capability and a motivation to implement in-situ data
 reduction.
 
-\subsection{Enterprise Monitoring Interface}
-
-Our model is to maintain the health state of resources in the resource
-database, which for each job can be queried at the job's control node.
-Monitoring tools can be developed which display the state of resources
-of interest within a job.  When the job is {\em reaped} on termination,
-this state is updated in the parent, and eventually will be updated
-at the root job.  Additionally, for some important states like {\em node
-liveness}, state change are sent in real time to the parent.
-
-Thus it is possible to monitor the \ngrm\ system as a whole by quering
-the root job's resource database.  To interface with a site's enterprise
-monitoring system, we build gateway software that exports key information
-via SNMP on the root (or other) job's control node.
-
-Note about MIB's for different subsystems (one for the comms for example).
-
-Note about enterprise monitoring via the log database.
-
 \subsection{Fault Notification System}
 
 FIXME: rewrite and expand
@@ -265,6 +240,40 @@ publish certain faults that may be of interest to others.
 The {\em fault stream} produced by a job, which includes internal faults
 as well as external faults it has subscribed to, is logged in the job database
 like {\em stderr}, and can be considered part of the job's provenance record.
+
+\subsection{Enterprise Monitoring Interface}
+
+Our model is to maintain the health state of resources in the resource
+database, which for each job can be queried at the job's control node.
+Monitoring tools can be developed which display the state of resources
+of interest within a job.
+Resource state is initialized from the parent resource database at job
+inception and is transferred back to the parent at job teardown.
+Therefore, the \ngrm\ system as a whole is represented in the root job's
+resource database, although the state may be out of date if a node is
+being used by a job.
+To interface with a site's enterprise monitoring system, we build gateway
+software that exports key information via SNMP on the root job's control node.  
+
+For example, say we develop a plugin to monitor corrected memory errors
+and want to replace a DIMM when its lifetime count reaches a threshold.
+The lifetime count is stored in the root job's resource database.
+Each time the node is assigned to a job, the current count is
+transferred to the new job's resource database where any new errors are
+added to it.  When the child job terminates, the root count is updated.
+From the point of view of the root job, a count is always available
+although it may be out of date.  The current job "owning" the node always
+has the current count and can decide to evict the node if it should no
+longer be used.  When the node reaches the root job and the root count
+is updated, external monitoring can trigger a service action to replace
+the DIMM.
+
+XXX Fault events can update state in resource database "live" across instances.
+
+Note about MIB's for different subsystems (one for the comms for example).
+
+Note about enterprise monitoring via the log database.
+
 
 \subsection{Monitoring WBS}
 
