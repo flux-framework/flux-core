@@ -58,25 +58,20 @@ Some applications and runtimes will require notification when system faults
 occur.  For example, when a node that is part of a job crashes, or is about to
 crash, some applications may be able to request a replacement node and recover.
 To facilitate sharing of fault information, \ngrm\ will implement a
-{\em fault notification service} layered upon the comms pub/sub event
-messaging system.
-The CIFTS Fault Tolerance Backplane API\cite{FTBAPI} (FTB-API), an emerging
-standard for fault notification available in some MPI implementations and
-other software, will be the programming interface to this service.
+{\em fault notification service}.
 Applications and runtimes use the fault notification service to produce
-and consume fault events within the job.  Furthermore, a gateway on the
+and consume fault events within the job.  In addition, a gateway on the
 job control node allows software within the job to subscribe to faults
 generated externally (such as by a file system used by the job), and to
 publish certain faults that may be of interest to others.
 Faults can change resource health state maintained in the resource database.
-The {\em fault stream} produced by a job, which includes internal faults
-as well as external faults it has subscribed to, is logged in the job database
-like {\em stderr}, and can be considered part of the job's provenance record.
+The {\em fault stream} produced by a job is logged in the job database
+and can be considered part of the job's provenance record.
 
 \ngrm\ Monitoring thus consists of
 the plugin framework, 
 log database interface,
-fault notification system.
+fault notification system, and
 enterprise monitoring interface.
 Each of these parts is discussed below.
 
@@ -230,27 +225,47 @@ to a program controlling a suite of application runs, but traditionally,
 file system failures are not reported in the application domain except
 through system call failures.
 \ngrm\ addresses this need with a fault notification system based on
-the comms layer's PUB-SUB event notification service.  Fault notifications
-are published (by monitoring plugins, applications, etc), by default
-to subscribers within the job.  A {\em fault gateway} can elevate the
-scope of certain events to a global level, and subscribe to faults
-published globally.
+the comms layer's reduction network and PUB-SUB event notification service.
+Fault notifications are published (by monitoring plugins, applications, etc)
+to subscribers within the job.
+A {\em fault gateway} allows configured local faults to be published externally,
+and configured external faults to be published locally.
 
-We have adopted the CIFTS FTB-API as the programming interface for the
-fault system, and CIFTS fault naming conventions as well.  This allows
-us to maximize compatibility with MPI runtimes and other software that have
-already been ported to FTB-API.
+We have adopted the 
+CIFTS Fault Tolerance Backplane API\cite{FTBAPI} (FTB-API)
+an emerging standard for fault notification available in some MPI
+implementations and other software as the programming interface for the
+fault system.  We will use CIFTS event namespace conventions as well.
+This choice reduces the overhead of porting fault-tolerant runtimes and
+other software between systems, and allows FTB-API based implementations
+to be immediately functional on \ngrm.
 
-The fault gateway, running on the job's control node, performs four functions.
-First, it re-publishes configured local faults to the parent, which in turn
-forwards them to its parent and any children that have subscribed to it,
-and so on.
-Second, it subscribes to configured external faults and re-publishes them
-locally.
-Third, it subscribes to configured local faults and updates the resource
-database with any resource health state changes.
-And fourth, it logs all faults, including local and subscribed external, to
-a {\em fault stream} analagous to UNIX standard error in the job database.
+While the CIFTS reference implementation defines a {\em backplane}
+architecture for fault notification, our fault notification system
+leverages both the hierarchical relationship between jobs (local vs global
+fault scope), and the reduction network within a job (reducing duplicate
+or same-root-cause faults) to achieve greater scalability and more intelligent
+fault processing.
+Faults can be directly published across the job via the comms event
+notification service, but when data reduction is desirable, monitoring 
+plugins can be employed to route faults through a reduction sieve to
+the control node where they are published in processed form.
+Monitoring plugins are also employed when the occurence of a fault needs
+to affect resource health state in the resource database.
+
+The fault gateway, running on the job's control node, 
+integrates the job's fault notification domain with the system's.
+It re-publishes a configurable set of local faults to the parent job, 
+which forwards them to its parent, and so on, reaching subscribers anywhere
+in the system.
+Conversely, the fault gateway subscribes to a configurable set of global
+faults in the parent job and re-publishes them locally.
+In this way, external faults "of interest" to any job become part of the
+job's local fault domain.
+
+The job's {\em fault stream} thus becomes an important record of anomolous
+conditions occuring within the job and those of interest occuring outside
+the job.  It is stored in the job database.
 
 \subsection{Enterprise Monitoring Interface}
 
