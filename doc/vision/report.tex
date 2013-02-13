@@ -141,39 +141,51 @@ Finally, Section~\ref{sect:delivery} defines
 our schedules for milestones and deliverables.
 
 
-\section{Challenges, Vision, and New Capabilities}
+\section{Vision and New Capabilities}
 \label{sect:vision}
-The vision of \ngrm\ is to create a new RM software that 
-significantly improves user productivity and operational efficiency 
-for capacity-class workloads on compute resources that are increasingly 
-diverse, dynamic, and large.
-The lessons learned from a decade of designing, developing
-and administrating \slurm\ must guide us in realizing this vision. 
-Thus, \ngrm\ will manage the entire center as one common pool 
-of diverse resources. Further, they will be annotated with much richer information 
-including physical topology and communication costs among resources.
-%---e.g., 
-%on a compute node, core 0 is closer to 7 than 8, as 0 and 7 are on 
-%a same socket; node A is farther to B than C as a packet sent from A has 
-%to route through the additional top-level switch in a fat-tree network to reach C.
-Using a richer and more diverse resource model,  
-the scheduling decisions and execution environments will 
-be made more efficient and flexible. 
 
-\ngrm\ must also seamlessly integrate system monitoring
-and administration, lightweight virtualization, and scalable tool 
-communication, the capabilities that are currently provided through 
-disjoint and often overlapping software. The integration must 
-faciliate a higher level of leverage among these essential elements.
-But with higher integration comes the risk of hardwiring assumptions 
-that later prove to be confining. That can force changes down the road 
-that are inconsistent with the initial design. Thus, we must extensively
-investigate ways to build a generalized framework that is highly 
-customizable and extensible. The framework architecture will allow
-a great deal of \ngrm\ functionality to be replaced without 
-affecting its internal design and stability.
-In the following, we further detail the key ideas and new capabilities 
-of \ngrm.
+The vision of \ngrm\ is to create a scalable RM software system that 
+drastically improves operational efficiency and user productivity 
+for workloads on {\em capacity-class} compute systems.
+With a trend towards ever-growing numbers and types of compute cores, however,
+this system class has been subject to the challenges that
+today's {\em capability-class} machines face. 
+These challenges include having to provide extreme scalability, low noise, 
+fault tolerance, and heterogeneity management while under a strict power budget.
+Worse, the workloads themselves are also becoming increasingly diverse, 
+dynamic and large. Thus, fully realizing our vision through these challenges requires
+a {\em paradigm shift} in how the RM should manage and model its resources.
+
+In the new paradigm, the RM must be capable of imposing highly complex resource bounds
+to guarantee the highest operational efficiency at any level
+across the computing facility, while at the same time enabling most efficient execution
+and scheduling of the workloads within these bounds.
+Thus, the RM must manage the entire facility as one
+common pool of resources. The ability to see a broader spectrum of resources 
+and their various constraints can then lead to most efficient scheduling strategies
+and execution environments. The new paradigm also demands that the RM model
+various types of resources and their relationships beyond the traditional resource model:
+i.e., a simple collection of compute nodes.
+The rich resource model will allow the RM to allocate computing resources
+tailored to the disparate limiting factors of our applications: e.g.,
+an application may be compute-bound while others are I/O-bound or power-bound.
+Under the new paradigm, the resource allocations must also be elastic. 
+An application may have different phases with disparate performance-limiting factors;
+it must be able to grow and shrink its resource allocation dynamically. 
+The global resource view, rich resource model and elasticity represent
+the fundamental characteristics of the RM under the new paradigm.
+
+Further, we envision that the RM must provide the central framework to integrate
+other relevant software including system monitoring and administration, 
+lightweight virtualization, and scalable tool communication. 
+The integration will facilitate a higher level of leverage 
+among these essential computing elements, and this will lead to significantly higher
+productivity for both end users and system adminstrators.  
+In addition, as these capabilities are currently provided through disjoint
+and often overlapping software, the integration will substantially reduce
+the costs needed for developing and maintaining individual software.  
+In the following, we further detail the key ideas and new capabilities of \ngrm.
+
 
 \subsection{Center as a Cluster}
 
@@ -252,14 +264,10 @@ depending on their debug/monitoring needs versus their application's noise
 sensitivity. Cron (periodic housekeeping) jobs and rsh (remote command
 executions) can be performed through the RM to minimize their impact,
 such as running them between jobs or synchronized across jobs. 
-%, and to
-%take into consideration the user's noise sensitivity.
 \ngrm\ will also be flexible enough to allow implementation of other
 strategies for reducing the impact of noise, such as scheduling all
 non-application activity to a configurable {\em noise core}.
 
-%when a
-%single core can be spared.
 
 \subsection{Data Provenance and Reproducibility}
 
@@ -277,7 +285,7 @@ namespaces, as described above, enable applications to lock down their
 environment including dependent shared libraries so that the effects from
 system updates on the application are minimized.
 
-\subsection{Heterogeneous Resources}
+\subsection{Rich Resource Model}
 
 Traditional RM's in HPC systems have focused on node- and/or CPU-centric
 scheduling. With the advent of hybrid compute systems utilizing specialized,
@@ -323,8 +331,6 @@ rules. \ngrm\ could also use the private network namespace to isolate
 jobs from each other on virtual private networks.  
 Containers with private filesystem namespaces can limit visibility of
 filesystems to jobs based on the site policy. 
-%
-%Dong: I don't undestand the following sentence. 
 In combination with I/O
 forwarding software, \ngrm\ could squash all access to filesystems to
 the user id of the job so privilege escalation within the job such as
@@ -339,16 +345,45 @@ this data in current and future research.  The plugin and self-hosting
 features of the system will encourage experimentation and
 facilitate research activities by allowing new and experimental
 versions of the software to be run within a production instance.
-%During the design phase of \ngrm , detailed requirements for parallel
-%tools functionality will be gathered and incorporated into the final
-%software design. 
 One of our design goals is also to facilitate the
 development and use of scalable runtime code development tools 
 on jobs on next-generation computing systems. This will not only serve 
 to lower the barrier to create and deploy useful tools, but will also reduce the
 profusion of one-off software systems in use on production systems.
 
-\section{Terminology}
+
+\section{Major Factors in Our Design Space}
+
+TO BE DRAFTED. WE WANT TO NAME CHALLENGES AND FACTORS IN THIS SECTION SO THAT WE CAN MAP THEM TO OUR RM MODELS AND DESIGN SOMEWHERE DOWN THE ROAD. 
+
+\begin{itemize}
+\item{Scalability in concurrency} 
+\item{Scalability in number of jobs} 
+\item{Workload Diversity}
+\item{Dynamic workload}
+\item{Emerging resource types}  
+\item{Scheduleabilty}  
+\item{Reproducibility}
+\item{Data provenance}
+\item{Noise control}
+\item{Productivity tools}  
+\item{Integration risk}
+\item{Expensive downtime}
+\item{Security}
+\end{itemize}
+
+
+%Multi-dimensional scalability problem: When one wants to design a resource management software system that can manages the resources that are across the entire computing facility, extreme care must be taken for scalability. Being able to run programs at larger scales is one dimension; and avoiding some central location with large number of jobs is another dimention to the scalabilty problem. 
+%
+%
+ 
+
+
+
+
+
+\section{Approach}
+\subsection{Terminology}
 
 \paragraph{comms session}
 An established communication association among a set of nodes that
@@ -390,7 +425,8 @@ e.g. s1.\ngrm.  or s1.s1.\ngrm.
 A {\bf job} submitted and recorded in the current {\bf instance}
 which does not result in a new instance.
 
-\section{High Level Design}
+%\subsection{Hierachical Job Model}
+\subsection{High Level Design}
 
 Given the multitude of challenges and our ambitious vision for
 \ngrm\ (Section~\ref{sect:vision}), we have developed a novel
