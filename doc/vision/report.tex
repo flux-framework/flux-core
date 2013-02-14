@@ -500,7 +500,6 @@ DRAFT HIGH LEVEL MODELS HERE?? or "HIGH LEVEL DESIGN" BELOW CAN COVER ALL THAT.
 
 \end{itemize}
 
-
 \section{Next Generation Resource Manager}
 \subsection{Terminology}
 
@@ -702,80 +701,82 @@ job or on the runtime access list for the local job.
 % or a parent? I can't remember what we decided here...
 
 
-\section{Project Organization and Thrust Areas}
+\subsection{Project Organization and Thrust Areas}
 \label{sect:projorg}
 To hasten the design, development, and delivery of the initial version
-of \ngrm\, we define four thrust areas that are relatively independent
-and build on the strength of one another through well-known interfaces
-and common design and development principles (see Appendix~\ref{sect:process}).
+of \ngrm\, we define five relatively independent thrust areas.
+Each thrust area will carry out the vision and high level design articulated
+above with a focus on a particular subsystem or group of subsystems that
+have a natural coupling.  The overall design of \ngrm\ will evolve and
+require the whole team to weigh in on important changes, and the design
+of interfaces between subsystems will require collaboration between
+thrusts, but the work in each thrust can in large part progress
+independently, building on the strength of the other thrusts.
 
-Creating \ngrm\ will require substantial collaborative efforts with
-experts from several domains.
-The software architecture must bolster rapid progress in all of our thrust
-areas and facilitate mechanisms by which to leverage external innovation.
+Deliverables in each of the thrusts will be structured 
+to leverage the framework approach to get the system up and running
+early with simple plugins that are enhanced later.
+Early prototypes will be used to accelerate the design of subsystem
+interfaces and to obtain feedback from stakeholders and domain experts
+as soon as possible.
+Off-the-shelf components, external collaborations, and novel ideas from
+the research and development communities will be leveraged where possible.
+Thrust areas will adhere to a common set of project development practices
+and standards (see Appendix~\ref{sect:process}).
 
-FIXME: describe functional architecture, leading into thrust areas
+Each of the thrust areas is briefly introduced below, then described in
+more detail in the sections that follow.
 
-The four thrust areas are
-Communication Framework,
-Resource Management,
-Monitoring and Data Management,
-and Workload Runtime and Placement.
+\paragraph{Communication Framework}
+\ngrm\ will devise a communication framework based on Internet Protocol
+that supports our hierarchical job model, providing rich, scalable services
+within a job and more limited communication bewteen jobs using
+the job's {\em control node} as gateway.
+The {\em comms toolkit} provides a security model, tools for
+encoding and decoding messages, and tools for transporting messages between
+nodes using various messaging patterns including PUB-SUB (with multicast),
+RPC, and streaming.
+A {\em comms message broker} tracks node liveness, provides services for
+building fault-tolerant communication structures within the job,
+and provides a multicast {\em scheduling trigger} used to synchronize
+system overhead within the job to reduce noise.
+A persistent {\em reduction network}
+provides a reduction sieve capability for the job rooted at the control node.
 
-\subsection{Communication Framework}
-\ngrm\ will devise a secure and fault-tolerant backbone communication
-infrastructure that can provide requisite scalability and flexible
-capabilities for all \ngrm\ operations as well as the entire HPC
-software ecosystem it embraces.
+\paragraph{Resource Management}
+This thrust incorporates resource management and scheduling at the heart of 
+the system.  A {\em resource description language} will be developed to
+express resource requests and to describe resources in the resource inventory.
+The {\em resource inventory} is a persistent database of resources managed
+by the system, while the {\em resource database} is a per-job, read-write
+cache of a portion of the resource inventory.
+Similarly, a {\em job repository} and {\em job database} within each job
+tracks information about jobs as they move through their life cycle,
+and records a {\em provenance record} for each job, capturing pertinent
+information about the job's runtime environment.
+ The {\em scheduler} computes a schedule that matches available
+resources to job requests.  
 
-\subsection{Resource Management}
+\paragraph{Monitoring}
+Resource managers must monitor resource health to avoid scheduling
+work on broken hardware.  \ngrm\ provides a comprehensive monitoring
+environment including a {\em plugin framework} with data reduction
+capability, synchronization of monitoring overhead across the job,
+and the ability to tune the monitoring period and change the plugin
+stack on a per-job basis.
+A {\em fault notification system} enables system software, runtimes, and
+applications to share fault information as a basis for building fault-tolerant
+workloads and for recording interesting events with the job record.
+\ngrm\ monitoring interfaces with an {\em external log database} intended
+to support post-mortem analysis, and to
+an {\em external enterprise monitoring system} such as might be used in
+a site operations center.
 
-%This paragraph needs work to reflect revised thrust areas
-\ngrm\ will investigate the notion of generalized resources so that
-it can efficiently schedule a job to the resources that are beyond the
-traditional definition of computing resources. An abstraction for
-generalized resources will effectively handle a wide variety of computing
-resources, from traditional compute cores and memory, to heterogeneous
-computing elements, to consumable resources like power.
-The highest-level of abstraction will allow the management of an
-entire HPC center as one pool of resources.
+\paragraph{Workload Runtime and Placement}
+FIXME
 
-\subsection{Monitoring and Data Management}
-
-\ngrm\ will investigate methods of transparently generating provenance
-information for each job, and enabling this information to be combined
-with application-level provenance and user annotations to form
-comprehensive documentation for simulation results.
-
-\ngrm\ will research tools and mechanisms for encapsulating application
-code and its software dependencies in immutable containers such that
-this software can be held constant from run to run, aggressively
-cached during job launch, and easily ported to other sites.
-
-\ngrm\ will research scalable and extensible logging and monitoring
-frameworks that have a tunable impact on system scheduling jitter and
-can deliver high-volume, user-driven debug information to filters within
-the job and/or stable storage for post-mortem analysis.
-
-\ngrm\ will research scalable database technology to store
-logs, fault information, and provenance data, which can be used
-to correlate information from disparate sources for post-mortem debugging,
-documenting provenance, and developing RAS metrics.
-
-Finally, \ngrm\ will investigate fault notification mechanisms
-to allow applications and system software to publish
-faults which can trigger log dumps or a recovery response.
-
-%\ngrm\ will create and advance provisioning systems that allow
-%user control over file systems portion of the runtime environment
-%for better reproducibility of simulation results.
-
-\subsection{Workload Runtime}
-
-\ngrm\ will develop and use a software design methodology to
-guarantee that all software components our thrust areas produce
-abide by a common set of desired attributes, including low noise,
-high security, and fault containment with no single point of failure.
+\paragraph{I/O Management}
+FIXME
 
 \include{framework}
 
