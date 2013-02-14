@@ -521,7 +521,7 @@ resposibility of a parent job and delegation/empowerment of a child job:
      the resource allocation of all of its children.
 \item{\sl Child empowerment rule:} within the bound set by the parent,
      the child job is delegated the ownership of the allocation
-     and becomes solely responsible for most efficient uses of resources.
+     and becomes solely responsible for most efficient uses of the resources.
 \item{\sl Ask parent rule:} the child job must ask its parent job
      when it wants to grow or shrink the resource allocation, 
      and it is up to the parent to grant the request.                   
@@ -542,7 +542,7 @@ However, this simplified worldview is not well-suited for the new paradigm.
 Today's applications are diverse with disparate limiting perfomance 
 factors beyond the floating point computation. Further, the computing facility
 is also increasingly subject to other resource types such as power
-and shared persistent storage. The generalized resouce model is our concept
+and shared persistent storage. The generalized resource model is our concept
 to represent various resource types and their relationships 
 that can impact how well applications perform and the computing
 facility operates. Our generalized resource model also includes a
@@ -553,7 +553,8 @@ Our generalized resource model addresses not only the {\sl diverse workload}
 and {\sl power chellenges}, but also the {\sl scheduling challenge}. More specifically, 
 the unified language approach allows users to express their resource requirements
 more flexibly---e.g., ranges for certain resource type and/or OR operators
-to choose from several equivalent resource types. 
+to choose from several equivalent resource types. This then makes the
+schedule granularity of jobs more malleable and finer. 
 
 
 \paragraph{Resource Allocation Elasticity Model:}
@@ -561,12 +562,12 @@ As our applications and their programming models are becoming increasingly dynam
 the new paradigm must support an elasticity model where an existing resource 
 allocation can expand and/or shrink depending on the current needs of applications
 or the computing facility. We support a grow/shrink-based elasticity
-model within our job hierarchy model above: a child job sends a grow
-shrink request to its parent, which can go up the job hierarchy
+model within our job hierarchy model above: a child job sends a grow/shrink 
+request to its parent, which can go up the job hierarchy
 until all requite constraints are known for this request.  
 Also, combining this with the generalized resource model, the
 elasticity can reprensent any resource including power consumption. 
-The elasticity model address not only the {\sl dynamic workload} and {power challenges}
+The elasticity model addresses not only the {\sl dynamic workload} and {power challenges}
 but also {\sl scheduling challenge}. When a signficant stall is created
 in the schedule with no small jobs to back-fill, some of the currently
 running jobs can grow into these stalled resources and possibly complete sooner.  
@@ -582,14 +583,14 @@ running jobs can grow into these stalled resources and possibly complete sooner.
 The lightweight virtualization model is our response to {\sl higher downtime costs}, 
 {\sl separation-of-concerns} and {\sl security challenges}. 
 Full-fledged virtualization techniques like Java virual machines have many advantages
-for these design challenges, but that approach has proven to be ineffective due in large
+for these design challenges, but that approach has proven to be ineffective for HPC due in large
 part its high overhead. Instead, our virtualization strategy is through lightweight
 mechanisms that modern Operating Systems (OS) like Linux offer. 
 Thus, this model will exploit the notion of lightweight containers
-and private filesystem namespaces for jobs, achieving
+and private file system namespaces for jobs, achieving
 a higher degree of isolation between system software and user-visible
 software. For example, the RM and the OS
-kernel might see one version of the root filesystem, while an application
+kernel might see one version of the root file system, while an application
 might see another. The decoupling and isolation will be the key to the
 much desired ability to upgrade the software levels in the machine's
 root filesystem without affecting any of the
