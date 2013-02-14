@@ -669,66 +669,6 @@ e.g. s1.\ngrm.  or s1.s1.\ngrm.
 A {\bf job} submitted and recorded in the current {\bf instance}
 which does not result in a new instance.
 
-\subsubsection{Comparisons with Traditional Terminology}
-
-While the above terminology serves to define the constructs of the
-NGRM system, table ~\ref{tab:tradterms} serves as a bridge to concepts
-used in traditional batch schedulers and resource managers.
-
-\begin{table}
-\caption{Terminology Comparison}
-\centering
-\begin{tabular}{|l|l|}
-\hline
-Traditional & NGRM \\
-\hline
-job & job \\
-job step & lightweight job (LWJ) \\
-MPI job & lightweight job (LWJ) \\
-reservation & job \\
-\hline
-\end{tabular}
-\label{tab:tradterms}
-\end{table}
-
-In traditional terms, a user submits a request to a batch scheduler
-for an allocation of computing resources.  This request is added to a
-queue of other such requests.  When the scheduler grants a request, a
-job is begun and set of resources are allocated to the job.  At that
-point, one to many tasks are launched to do the work of the job.
-
-Depending on the system, tasks are launched by a remote launcher such
-as {\em mpirun} or {\em srun}.  Each set of tasks so launched are
-known as a job step.  There can be one to many job steps active within
-a job throughout the life of a job.  These can run sequentially or in
-parallel, and can either run on dedicated or shared resources.  The
-history of the job includes a detailed accounting of each job step
-including the resources used and the duration of the job step.
-
-By first approximation, the traditional job maps to an NGRM job.  The
-job step maps to a lightweight job (LWJ).  Job scripts that invoke a
-series of job steps will translate to a series of LWJ's in an NGRM
-job.
-
-Some job scripts launch multiple job steps in parallel (backgrounded)
-and a resource manager will schedule the associated task launches in a
-FIFO basis, based on the available resources and whether dedicated or
-shared resources were requested.  As described above, NGRM's job
-construct will include the scheduler service.  This provides the user
-even more flexibility to schedule the order of the LWJ instantiations
-and task placement on resources.
-
-Traditional job and job step accounting statistics are commonly saved
-to a database.  In NGRM, the LWJ's statistics will be reaped by the
-parent job as described below.
-
-Historically, batch schedulers provide a means to reserve a set of
-resources for exclusive use by a user or group of users.  These
-reservations are typically created in advance and are offered as
-Dedidcated Application Times (DATs) for users' exclusive use.  In
-NGRM, job reservations will take the form of a parent job (with a
-future start time) under which user jobs will run.
-
 %\subsection{Hierachical Job Model}
 \subsection{High Level Design}
 
@@ -826,8 +766,66 @@ In order to run a LWJ a user must be the owner of the current
 job or on the runtime access list for the local job.
 % or a parent? I can't remember what we decided here...
 
+\subsection{Comparison with Traditional Job Schedulers / Resource Managers}
 
-\section{Project Organization and Thrust Areas}
+While the above section serves to define the constructs of the NGRM
+system, Table~\ref{tab:tradterms} serves as a bridge to concepts used
+in existing batch systems.
+
+\begin{table}
+\caption{Terminology Equivalents}
+\centering
+\begin{tabular}{|l|l|l|}
+\hline
+NGRM & SLURM & MPI \\
+\hline
+job & job & N/A\\
+lightweight job (LWJ) & {\em srun} job step & {\em mpirun} MPI job\\
+job & reservation & N/A \\
+\hline
+\end{tabular}
+\label{tab:tradterms}
+\end{table}
+
+In traditional terms, a user submits a request to a batch scheduler
+for an allocation of computing resources.  This request is added to a
+queue of other such requests.  When the scheduler grants a request, a
+job is begun and set of resources are allocated to the job.  At that
+point, one to many tasks are launched to do the work of the job.
+
+Depending on the system, tasks are launched by a remote launcher such
+as {\em mpirun} or {\em srun}.  Each set of tasks so launched are
+known as a job step.  There can be one to many job steps active within
+a job throughout the life of a job.  These can run sequentially or in
+parallel, and can either run on dedicated or shared resources.  The
+history of the job includes a detailed accounting of each job step
+including the resources used and the duration of the job step.
+
+By first approximation, the traditional job maps to an NGRM job.  The
+job step maps to a lightweight job (LWJ).  Job scripts that invoke a
+series of job steps will translate to a series of LWJ's in an NGRM
+job.
+
+Some job scripts launch multiple job steps in parallel (backgrounded)
+and a resource manager will schedule the associated task launches in a
+FIFO basis, based on the available resources and whether dedicated or
+shared resources were requested.  As described above, NGRM's job
+construct will include the scheduler service.  This provides the user
+even more flexibility to schedule the order of the LWJ instantiations
+and task placement on resources.
+
+Traditional job and job step accounting statistics are commonly saved
+to a database.  In NGRM, the LWJ's statistics will be reaped by the
+parent job as described above.
+
+Historically, batch schedulers provide a means to reserve a set of
+resources for exclusive use by a user or group of users.  These
+reservations are typically created in advance and are offered as
+Dedidcated Application Times (DATs) for users' exclusive use.  In
+NGRM, job reservations will take the form of a parent job (with a
+future start time) under which user jobs will run.
+
+\subsection{Project Organization and Thrust Areas}
 \label{sect:projorg}
 To hasten the design, development, and delivery of the initial version
 of \ngrm\, we define four thrust areas that are relatively independent
@@ -847,13 +845,13 @@ Resource Management,
 Monitoring and Data Management,
 and Workload Runtime and Placement.
 
-\subsection{Communication Framework}
+\subsubsection{Communication Framework}
 \ngrm\ will devise a secure and fault-tolerant backbone communication
 infrastructure that can provide requisite scalability and flexible
 capabilities for all \ngrm\ operations as well as the entire HPC
 software ecosystem it embraces.
 
-\subsection{Resource Management}
+\subsubsection{Resource Management}
 
 %This paragraph needs work to reflect revised thrust areas
 \ngrm\ will investigate the notion of generalized resources so that
@@ -865,7 +863,7 @@ computing elements, to consumable resources like power.
 The highest-level of abstraction will allow the management of an
 entire HPC center as one pool of resources.
 
-\subsection{Monitoring and Data Management}
+\subsubsection{Monitoring and Data Management}
 
 \ngrm\ will investigate methods of transparently generating provenance
 information for each job, and enabling this information to be combined
@@ -895,7 +893,7 @@ faults which can trigger log dumps or a recovery response.
 %user control over file systems portion of the runtime environment
 %for better reproducibility of simulation results.
 
-\subsection{Workload Runtime}
+\subsubsection{Workload Runtime}
 
 \ngrm\ will develop and use a software design methodology to
 guarantee that all software components our thrust areas produce
