@@ -391,13 +391,16 @@ it possible for developers or a QA team to test new RM versions.
 %profusion of one-off software systems in use on production systems.
 %
 
-\section{Design Space and New Models}
+\section{Design Space}
 
 Before going into the design and implementation details of \ngrm, we discuss 
 some of the key design challenges that the new RM paradigm presents. 
 They represent the main factors that \ngrm's new concepts and software design
 must effectively address in realizing the vision and new capabilities described in 
-Section~\ref{sect:vision}: 
+Section~\ref{sect:vision}. 
+
+\subsection{Design Challenges}
+
 \begin{itemize}
 \item{\sl Multi-dimensional scale challenge:} The new paradigm demands that 
       the RM must manage the entire computing facility as one common pool of 
@@ -478,27 +481,150 @@ Section~\ref{sect:vision}:
      the importance of security across and within the components becomes greater.
 
 \item{\sl Productivity challenges:} The new paradigm must improve end-user 
-     productivity in part through first-class support for development
+     productivity in part through tightly integrated support for development
      and support for scalable code development run-time tools and research.
 
 \end{itemize}
 
-DRAFT HIGH LEVEL MODELS HERE?? or "HIGH LEVEL DESIGN" BELOW CAN COVER ALL THAT. 
 
+\subsection{New Conceptual Models}
+In this section, we describe new conceptual models that will embody 
+the new paradigm while addressing the multitude of design challenges. 
+The models form the basis for the software design of \ngrm.
+
+\paragraph{Unified Job Model:}
+Traditionally, a job is simply defined to be a resource allocation, 
+a concept too weak to support the new paradigm. 
+Rather, we unify the traditional job notion 
+with the notion of a resource manager instance---an independent set of resource manager service.
+The RM instance must be delegated the main responsibility of managing the resource allocated to the job.
+Then, the unified job model becomes our logical basic block
+on which to build a hierachical resource management 
+delegation structure to address the {\sl multi-dimensional scale challenge}.
+In addition, an RM instance can expose the traditional paradigm over the
+allocation delegated to it, providing a straightforward path to address
+the {\sl backward compatibility challenge}. 
+
+
+\paragraph{Job Hierarchy Model:}
+To scale the new paradigm in the scaling limit of the entire computing facility,
+the new paradigm requires a multi-level delegation structure for a hierachical 
+resource management scheme. We use a tree-based job hierarchy model
+that has proven advantages for scalability. 
+In this model, a job is only required to manage its children jobs,
+which would be only a small fraction of the total number of jobs that are run
+across the entire computing facility. Further, several guiding principles
+throughout the job hierarchy strike a balance between the management
+resposibility of a parent job and delegation/empowerment of a child job:
 \begin{itemize}
-\item{Hierarchical job model:} Describe brefly what an NGRM job is; what the hierarchy among them means. This is the umberalla model that addresses the bulk of {\sl Multi-dimensional scale challenge}.  
-
-\item{Generalized resource model:} Describe resource description and specification language as well. This is the model that addresses {\sl Diverse workload challenge}, {\sl Dynamic workload challenge}, {\sl Power challenge}, {\sl Scheduling challenge}   
-
-\item{Elasticity model:} Describe our grow/shrink model. This is the model that addresses {\sl Dynamic workload challenge}, {\sl Power challenge}, {\sl Scheduling challenge}
-
-\item{Common scalable infrastructure model:} Including per-job Comms session. This is the model that addresses scale challenge in concurrency along with other new capabilities noise control. {\sl Integration challenge} {\sl Productivity tools challenge}
-
-\item{Self-hosting model:} Describe a job can custimize itself with the self-hosting capabilty and its own plug-ins. Explain how that can address {\sl Integration risk} and {\sl Productivity challenge} . 
-
-\item{Rich, scalable run-time model:} Perhaps describe some essence of WRAP. {\sl scale challenge} and {\sl Productivity challenge}.  Also explain that through LWJ, it also address other key challenges like dynamic, power challenges...  
-
+\item{\sl Parent bounding rule:} the parent job grants and confines
+     the resource allocation of all of its children.
+\item{\sl Child empowerment rule:} within the bound set by the parent,
+     the child job is delegated the ownership of the allocation
+     and becomes solely responsible for most efficient uses of resources.
+\item{\sl Ask parent rule:} the child job must ask its parent job
+     when it wants to grow or shrink the resource allocation, 
+     and it is up to the parent to grant the request.                   
 \end{itemize}
+In general, these rules help enforce the first principle of the new paradigm: 
+imposing highly complex resource bounds to guarantee the highest operational efficiency
+at any level across the computing facility, while enabling most efficient execution
+and scheduling of the workloads within these bounds.
+At the same time, this model is the most fundamental design concept,
+which forms the basis to address many of the design challenges including 
+the {\sl multi-dimensional scale}, {\sl dynamic workload}, {\sl power} and
+{\sl scheduling challenges}. 
+
+
+\paragraph{Generalized Resource Model:}
+Traditionally, a compute resource is modeled as a simple collection of compute nodes. 
+However, this simplified worldview is not well-suited for the new paradigm. 
+Today's applications are diverse with disparate limiting perfomance 
+factors beyond the floating point computation. Further, the computing facility
+is also increasingly subject to other resource types such as power
+and shared persistent storage. The generalized resouce model is our concept
+to represent various resource types and their relationships 
+that can impact how well applications perform and the computing
+facility operates. Our generalized resource model also includes a
+unifed resource specification and description language. Speaking the
+same resource description language for resource requirement specification 
+provide transparency and fine-grained expressibility.
+Our generalized resource model addresses not only the {\sl diverse workload}
+and {\sl power chellenges}, but also the {\sl scheduling challenge}. More specifically, 
+the unified language approach allows users to express their resource requirements
+more flexibly---e.g., ranges for certain resource type and/or OR operators
+to choose from several equivalent resource types. 
+
+
+\paragraph{Resource Allocation Elasticity Model:}
+As our applications and their programming models are becoming increasingly dynamic,
+the new paradigm must support an elasticity model where an existing resource 
+allocation can expand and/or shrink depending on the current needs of applications
+or the computing facility. We support a grow/shrink-based elasticity
+model within our job hierarchy model above: a child job sends a grow
+shrink request to its parent, which can go up the job hierarchy
+until all requite constraints are known for this request.  
+Also, combining this with the generalized resource model, the
+elasticity can reprensent any resource including power consumption. 
+The elasticity model address not only the {\sl dynamic workload} and {power challenges}
+but also {\sl scheduling challenge}. When a signficant stall is created
+in the schedule with no small jobs to back-fill, some of the currently
+running jobs can grow into these stalled resources and possibly complete sooner.  
+
+
+\paragraph{Self-Hosting Model:}
+
+
+\paragraph{Common Scalable Infastructure Model:}
+
+
+\paragraph{Lightweight Virtualization Model:}
+The lightweight virtualization model is our response to {\sl higher downtime costs}, 
+{\sl separation-of-concerns} and {\sl security challenges}. 
+Full-fledged virtualization techniques like Java virual machines have many advantages
+for these design challenges, but that approach has proven to be ineffective due in large
+part its high overhead. Instead, our virtualization strategy is through lightweight
+mechanisms that modern Operating Systems (OS) like Linux offer. 
+Thus, this model will exploit the notion of lightweight containers
+and private filesystem namespaces for jobs, achieving
+a higher degree of isolation between system software and user-visible
+software. For example, the RM and the OS
+kernel might see one version of the root filesystem, while an application
+might see another. The decoupling and isolation will be the key to the
+much desired ability to upgrade the software levels in the machine's
+root filesystem without affecting any of the
+libraries that an application might be using, and vice-versa.
+Similarly, one can upgrade the system OS image at idle points between jobs,
+with user-level software remaining unchanged, or vice versa. The separation of
+concerns gives more flexibility to the organization in determining software
+update policy and in fact could allow users or code development teams to
+control the software levels affecting their application, independent of
+other applications.
+
+
+The lightweight container approach will also tightly control the access that
+applications have to system resources. For example, it is possible to
+run the job in its own network namespace such that direct access to the
+system management network is unavailable, or limited by node firewall
+rules. This model will  also use the private network namespace to isolate
+jobs from each other on virtual private networks.
+Containers with private filesystem namespaces can limit visibility of
+file systems to jobs based on the site policy, significantly addressing
+{\sl security challenge}.
+
+
+\paragraph{Productivity Tool Support Model:}
+
+%
+%\item{Elasticity model:} Describe our grow/shrink model. This is the model that addresses {\sl Dynamic workload challenge}, {\sl Power challenge}, {\sl Scheduling challenge}
+%
+%\item{Common scalable infrastructure model:} Including per-job Comms session. This is the model that addresses scale challenge in concurrency along with other new capabilities noise control. {\sl Integration challenge} {\sl Productivity tools challenge}
+%
+%\item{Self-hosting model:} Describe a job can custimize itself with the self-hosting capabilty and its own plug-ins. Explain how that can address {\sl Integration risk} and {\sl Productivity challenge} . 
+%
+%\item{Rich, scalable run-time model:} Perhaps describe some essence of WRAP. {\sl scale challenge} and {\sl Productivity challenge}.  Also explain that through LWJ, it also address other key challenges like dynamic, power challenges...  
+%
+%
 
 \section{Next Generation Resource Manager}
 \subsection{Terminology}
@@ -542,66 +668,6 @@ e.g. s1.\ngrm.  or s1.s1.\ngrm.
 \paragraph{lightweight job} (LWJ) 
 A {\bf job} submitted and recorded in the current {\bf instance}
 which does not result in a new instance.
-
-\subsubsection{Comparisons with Traditional Terminology}
-
-While the above terminology serves to define the constructs of the
-NGRM system, table ~\ref{tab:tradterms} serves as a bridge to concepts
-used in traditional batch schedulers and resource managers.
-
-\begin{table}
-\caption{Terminology Comparison}
-\centering
-\begin{tabular}{|l|l|}
-\hline
-Traditional & NGRM \\
-\hline
-job & job \\
-job step & lightweight job (LWJ) \\
-MPI job & lightweight job (LWJ) \\
-reservation & job \\
-\hline
-\end{tabular}
-\label{tab:tradterms}
-\end{table}
-
-In traditional terms, a user submits a request to a batch scheduler
-for an allocation of computing resources.  This request is added to a
-queue of other such requests.  When the scheduler grants a request, a
-job is begun and set of resources are allocated to the job.  At that
-point, one to many tasks are launched to do the work of the job.
-
-Depending on the system, tasks are launched by a remote launcher such
-as {\em mpirun} or {\em srun}.  Each set of tasks so launched are
-known as a job step.  There can be one to many job steps active within
-a job throughout the life of a job.  These can run sequentially or in
-parallel, and can either run on dedicated or shared resources.  The
-history of the job includes a detailed accounting of each job step
-including the resources used and the duration of the job step.
-
-By first approximation, the traditional job maps to an NGRM job.  The
-job step maps to a lightweight job (LWJ).  Job scripts that invoke a
-series of job steps will translate to a series of LWJ's in an NGRM
-job.
-
-Some job scripts launch multiple job steps in parallel (backgrounded)
-and a resource manager will schedule the associated task launches in a
-FIFO basis, based on the available resources and whether dedicated or
-shared resources were requested.  As described above, NGRM's job
-construct will include the scheduler service.  This provides the user
-even more flexibility to schedule the order of the LWJ instantiations
-and task placement on resources.
-
-Traditional job and job step accounting statistics are commonly saved
-to a database.  In NGRM, the LWJ's statistics will be reaped by the
-parent job as described below.
-
-Historically, batch schedulers provide a means to reserve a set of
-resources for exclusive use by a user or group of users.  These
-reservations are typically created in advance and are offered as
-Dedidcated Application Times (DATs) for users' exclusive use.  In
-NGRM, job reservations will take the form of a parent job (with a
-future start time) under which user jobs will run.
 
 %\subsection{Hierachical Job Model}
 \subsection{High Level Design}
@@ -700,6 +766,64 @@ In order to run a LWJ a user must be the owner of the current
 job or on the runtime access list for the local job.
 % or a parent? I can't remember what we decided here...
 
+\subsection{Comparison with Traditional Job Schedulers / Resource Managers}
+
+While the above section serves to define the constructs of the NGRM
+system, Table~\ref{tab:tradterms} serves as a bridge to concepts used
+in existing batch systems.
+
+\begin{table}
+\caption{Terminology Equivalents}
+\centering
+\begin{tabular}{|l|l|l|}
+\hline
+NGRM & SLURM & MPI \\
+\hline
+job & job & N/A\\
+lightweight job (LWJ) & {\em srun} job step & {\em mpirun} MPI job\\
+job & reservation & N/A \\
+\hline
+\end{tabular}
+\label{tab:tradterms}
+\end{table}
+
+In traditional terms, a user submits a request to a batch scheduler
+for an allocation of computing resources.  This request is added to a
+queue of other such requests.  When the scheduler grants a request, a
+job is begun and set of resources are allocated to the job.  At that
+point, one to many tasks are launched to do the work of the job.
+
+Depending on the system, tasks are launched by a remote launcher such
+as {\em mpirun} or {\em srun}.  Each set of tasks so launched are
+known as a job step.  There can be one to many job steps active within
+a job throughout the life of a job.  These can run sequentially or in
+parallel, and can either run on dedicated or shared resources.  The
+history of the job includes a detailed accounting of each job step
+including the resources used and the duration of the job step.
+
+By first approximation, the traditional job maps to an NGRM job.  The
+job step maps to a lightweight job (LWJ).  Job scripts that invoke a
+series of job steps will translate to a series of LWJ's in an NGRM
+job.
+
+Some job scripts launch multiple job steps in parallel (backgrounded)
+and a resource manager will schedule the associated task launches in a
+FIFO basis, based on the available resources and whether dedicated or
+shared resources were requested.  As described above, NGRM's job
+construct will include the scheduler service.  This provides the user
+even more flexibility to schedule the order of the LWJ instantiations
+and task placement on resources.
+
+Traditional job and job step accounting statistics are commonly saved
+to a database.  In NGRM, the LWJ's statistics will be reaped by the
+parent job as described above.
+
+Historically, batch schedulers provide a means to reserve a set of
+resources for exclusive use by a user or group of users.  These
+reservations are typically created in advance and are offered as
+Dedidcated Application Times (DATs) for users' exclusive use.  In
+NGRM, job reservations will take the form of a parent job (with a
+future start time) under which user jobs will run.
 
 \subsection{Project Organization and Thrust Areas}
 \label{sect:projorg}
