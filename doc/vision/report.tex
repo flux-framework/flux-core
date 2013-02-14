@@ -391,13 +391,16 @@ it possible for developers or a QA team to test new RM versions.
 %profusion of one-off software systems in use on production systems.
 %
 
-\section{Design Space and New Models}
+\section{Design Space}
 
 Before going into the design and implementation details of \ngrm, we discuss 
 some of the key design challenges that the new RM paradigm presents. 
 They represent the main factors that \ngrm's new concepts and software design
 must effectively address in realizing the vision and new capabilities described in 
-Section~\ref{sect:vision}: 
+Section~\ref{sect:vision}. 
+
+\subsection{Design Challenges}
+
 \begin{itemize}
 \item{\sl Multi-dimensional scale challenge:} The new paradigm demands that 
       the RM must manage the entire computing facility as one common pool of 
@@ -478,28 +481,82 @@ Section~\ref{sect:vision}:
      the importance of security across and within the components becomes greater.
 
 \item{\sl Productivity challenges:} The new paradigm must improve end-user 
-     productivity in part through first-class support for development
+     productivity in part through tightly integrated support for development
      and support for scalable code development run-time tools and research.
 
 \end{itemize}
 
-DRAFT HIGH LEVEL MODELS HERE?? or "HIGH LEVEL DESIGN" BELOW CAN COVER ALL THAT. 
 
+\subsection{New Conceptual Models}
+In this section, we describe new conceptual models that will embody 
+the new paradigm while addressing the multitude of design challenges. 
+The models form the basis for the software design of \ngrm.
+
+\paragraph{Unified Job Model:}
+Traditionally, a job is simply defined to be a resource allocation, 
+a concept too weak to support the new paradigm. 
+Rather, we unify the traditional job notion 
+with the notion of a resource manager instance---an independent set of resource manager service.
+The RM instance must be delegated the main responsibility of managing the resource allocated to the job.
+Then, the unified job model becomes our logical basic block
+on which to build a hierachical resource management 
+delegation structure to address the {\sl multi-dimensional scale challenge}.
+In addition, an RM instance can expose the traditional paradigm over the
+allocation delegated to it, providing a straightforward path to address
+the {\sl backward compatibility challenge}. 
+
+\paragraph{Job Hierarchy Model:}
+To scale the new paradigm in the scaling limit of the entire computing facility,
+the new paradigm requires a multi-level delegation structure for a hierachical 
+resource management scheme. We use a tree-based job hierarchy model
+that has proven advantages for scalability. 
+In this model, a job is only required to manage its children jobs,
+which would be only a small fraction of the total number of jobs that are run
+across the entire computing facility. Further, several guiding principles
+throughout the job hierarchy strike a balance between the management
+resposibility of a parent job and delegation/empowerment of a child job:
 \begin{itemize}
-\item{Hierarchical job model:} Describe brefly what an NGRM job is; what the hierarchy among them means. This is the umberalla model that addresses the bulk of {\sl Multi-dimensional scale challenge}.  
-
-\item{Generalized resource model:} Describe resource description and specification language as well. This is the model that addresses {\sl Diverse workload challenge}, {\sl Dynamic workload challenge}, {\sl Power challenge}, {\sl Scheduling challenge}   
-
-\item{Elasticity model:} Describe our grow/shrink model. This is the model that addresses {\sl Dynamic workload challenge}, {\sl Power challenge}, {\sl Scheduling challenge}
-
-\item{Common scalable infrastructure model:} Including per-job Comms session. This is the model that addresses scale challenge in concurrency along with other new capabilities noise control. {\sl Integration challenge} {\sl Productivity tools challenge}
-
-\item{Self-hosting model:} Describe a job can custimize itself with the self-hosting capabilty and its own plug-ins. Explain how that can address {\sl Integration risk} and {\sl Productivity challenge} . 
-
-\item{Rich, scalable run-time model:} Perhaps describe some essence of WRAP. {\sl scale challenge} and {\sl Productivity challenge}.  Also explain that through LWJ, it also address other key challenges like dynamic, power challenges...  
-
+\item{\sl Parent bounding rule: } The parent job grants and confines
+     the resource allocation of all of its children.
+\item{\sl Child empowerment rule: } Within the bound set by the parent,
+     the child job is delegated the ownership of the allocation
+     and becomes solely responsible for most efficient uses of resources.
+\item{\sl Ask parent rule:} The child job must ask its parent job
+     when it wants to grow or shrink the resource allocation, 
+     and it is up to the parent to grant the request.                   
 \end{itemize}
+In general, these rules help enforce the first principle of the new paradigm: 
+imposing highly complex resource bounds to guarantee the highest operational efficiency
+at any level across the computing facility, while enabling most efficient execution
+and scheduling of the workloads within these bounds.
+At the same time, this model is the most fundamental design concept,
+which forms the basis to address many of the design challenges including 
+{\sl multi-dimensional scale}, {\sl dynamic workload}, {\sl power} and
+{\sl scheduling} challenges. 
 
+
+\paragraph{Generalized Resource Model:}
+
+\paragraph{Resource Allocation Elasticity Model:}
+
+\paragraph{Common Scalable Infastructure Model:}
+
+\paragraph{Self-Hosting Model:}
+
+\paragraph{Lightweight Virtualization Model:}
+
+\paragraph{Productivity Tool Support Model:}
+
+%
+%\item{Elasticity model:} Describe our grow/shrink model. This is the model that addresses {\sl Dynamic workload challenge}, {\sl Power challenge}, {\sl Scheduling challenge}
+%
+%\item{Common scalable infrastructure model:} Including per-job Comms session. This is the model that addresses scale challenge in concurrency along with other new capabilities noise control. {\sl Integration challenge} {\sl Productivity tools challenge}
+%
+%\item{Self-hosting model:} Describe a job can custimize itself with the self-hosting capabilty and its own plug-ins. Explain how that can address {\sl Integration risk} and {\sl Productivity challenge} . 
+%
+%\item{Rich, scalable run-time model:} Perhaps describe some essence of WRAP. {\sl scale challenge} and {\sl Productivity challenge}.  Also explain that through LWJ, it also address other key challenges like dynamic, power challenges...  
+%
+%
 
 \section{Next Generation Resource Manager}
 \subsection{Terminology}
