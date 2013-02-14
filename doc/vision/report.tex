@@ -154,7 +154,8 @@ These challenges include having to provide extreme scalability, low noise,
 fault tolerance, and heterogeneity management while under a strict power budget.
 Worse, the workloads themselves are also becoming increasingly diverse, 
 dynamic and large. Thus, fully realizing our vision through these challenges requires
-a {\em paradigm shift} in how the RM should manage and model its resources.
+a {\em paradigm shift} in how the RM should manage, model, schedule 
+and allocate its resources.
 
 In the new paradigm, the RM must be capable of imposing highly complex resource bounds
 to guarantee the highest operational efficiency at any level
@@ -195,21 +196,23 @@ under the new paradigm.
 \subsection{Center as a Cluster}
 
 Unlike the traditional approach of running an RM instance on each separately
-managed cluster, and tying clusters together with grid software almost was
-an afterthought. Instead, \ngrm\ will be designed from the beginning to manage the
-center as one pool of resources. There will be a single site-wide 
+managed cluster, 
+%and tying clusters together with grid software almost was
+%an afterthought. 
+the new paradigm must manage the
+entire computing facility as one pool of resources. There must be a single site-wide 
 system image from the perspective of users as well as system administrators.
-With this approach, filesystem servers such as Lustre clusters, 
+With this approach, file system servers such as Lustre clusters, 
 and visualization and serial batch systems can be aggregated
 with compute clusters into one management domain. Hence,
 our RM can make better global scheduling decisions. 
-In addtion, dedicated interactive nodes will be unnecessary in the new system, as it
+Further, dedicated interactive nodes will be unnecessary in the new system, as it
 will be possible to allocate interactive environments on demand from the
 global pool of resources.
 
 With integrated, center-wide monitoring, it becomes easier
-for our system to associate center Reliability, Availability and Serviceability~(RAS) 
-events such as a global filesystem
+for the new paradigm to associate site-wide Reliability, Availability and Serviceability~(RAS) 
+events such as a global file system
 failure with an affected job and to make that information part of
 the job's data {\em provenance} record. When the RM obtains a global view of
 resources including shared persistent storage, it becomes possible to
@@ -217,61 +220,17 @@ consider the scheduling of I/O along with computation. In combination with
 I/O forwarding software, our RM could easily set up unique I/O forwarding
 topologies for each job.
 
-System management overhead that currently scales with the number of clusters
+This paradigm also has many advantages for system administration.
+The system management overhead that currently scales with the number of clusters
 could be streamlined by aggregating per-cluster services into center-wide
 services. For example, at LLNL, each cluster has a pair of management
 nodes that are bootstrapped from scratch with an OS installation from DVD,
 and when system software is updated on that cluster, a downtime is
 scheduled during which the workload sits idle and the responsible system
-administrator performs a sequence of steps. Under the new RM, the
+administrator performs a sequence of steps. Under the new paradigm, the
 number of systems that have to be brought up from scratch will be
 greatly reduced, and administrator-orchestrated downtimes for software
 updates could be eliminated. 
-
-
-\subsection{Zero Downtime}
-
-The impact of downtime becomes greater with a higher degree of integration
-of systems and services. Thus, \ngrm\ must be tolerant
-of hardware and software faults and failures.
-It will be designed to have no single point of failure and support 
-version interoperability that allows {\em live} software upgrades.
-The technique will faciliate a rolling update across the center 
-without impacting overall center availability and/or running workloads.
-
-\ngrm\ will support the notion of lightweight containers 
-and private filesystem namespaces for jobs, achieving 
-a higher degree of isolation between system software and user-visible 
-software. For example, the RM and the Operating System (OS)
-kernel might see one version of the root filesystem, while an application
-might see another. The decoupling and isolation will be the key to the 
-much desired ability to upgrade the software levels in the machine's
-root filesystem without affecting any of the
-libraries that an application might be using, and vice-versa. 
-Similarly, one can upgrade the system OS image at idle points between jobs,
-with user-level software remaining unchanged, or vice versa. The separation of
-concerns gives more flexibility to the organization in determining software
-update policy and in fact could allow users or code development teams to
-control the software levels affecting their application, independent of
-other applications.
-
-\subsection{Low Noise}
-
-As the number of processes in a parallel application increases, 
-their executions are affected to varying degrees by OS
-scheduling jitter, depending on their communication patterns. Minimizing
-the user-space system software contribution to OS jitter will be one 
-of our primary design goals.  \ngrm\ will supplant the independent monitoring, 
-remote shell, and cron
-services that contribute to noise today. The integrated services will
-allow users to dial up or down the verbosity and frequency of monitoring,
-depending on their debug/monitoring needs versus their application's noise
-sensitivity. Cron (periodic housekeeping) jobs and rsh (remote command
-executions) can be performed through the RM to minimize their impact,
-such as running them between jobs or synchronized across jobs. 
-\ngrm\ will also be flexible enough to allow implementation of other
-strategies for reducing the impact of noise, such as scheduling all
-non-application activity to a configurable {\em noise core}.
 
 
 \subsection{Data Provenance and Reproducibility}
@@ -283,86 +242,154 @@ can be used by others to recreate the inputs and conditions that led to
 that result. It should also record unusual system activities 
 such as RAS events that might help in a post-mortem analysis 
 when expected results are not obtained.
-The new RM will produce such a record for every job.
+The new paradigm must produce such a record for every job.
 Long running parameter studies or uncertainty quantification runs
-require stability for long periods of time. Private filesystem
-namespaces, as described above, enable applications to lock down their
-environment including dependent shared libraries so that the effects from
-system updates on the application are minimized.
+require stability for long periods of time. 
+% DONG: This can move to our model or design
+%Private filesystem
+%namespaces, as described above, enable applications to lock down their
+%environment including dependent shared libraries so that the effects from
+%system updates on the application are minimized.
+%
 
-\subsection{Rich Resource Model}
 
-Traditional RM's in HPC systems have focused on node- and/or CPU-centric
+%DONG: This can go to the design space discussion and desing/model
+%\subsection{Zero Downtime}
+%The impact of downtime becomes greater with a higher degree of integration
+%of systems and services. Thus, \ngrm\ must be tolerant
+%of hardware and software faults and failures.
+%It will be designed to have no single point of failure and support
+%version interoperability that allows {\em live} software upgrades.
+%The technique will faciliate a rolling update across the center
+%without impacting overall center availability and/or running workloads.
+%
+%\ngrm\ will support the notion of lightweight containers 
+%and private filesystem namespaces for jobs, achieving 
+%a higher degree of isolation between system software and user-visible 
+%software. For example, the RM and the Operating System (OS)
+%kernel might see one version of the root filesystem, while an application
+%might see another. The decoupling and isolation will be the key to the 
+%much desired ability to upgrade the software levels in the machine's
+%root filesystem without affecting any of the
+%libraries that an application might be using, and vice-versa. 
+%Similarly, one can upgrade the system OS image at idle points between jobs,
+%with user-level software remaining unchanged, or vice versa. The separation of
+%concerns gives more flexibility to the organization in determining software
+%update policy and in fact could allow users or code development teams to
+%control the software levels affecting their application, independent of
+%other applications.
+%
+
+\subsection{Low Noise}
+
+As the number of processes in a parallel application increases, 
+their executions are affected to varying degrees by OS
+scheduling jitter, depending on their communication patterns. Minimizing
+the user-space system software contribution to OS jitter must one 
+of the primary goals of the new paradigm.  Thus, the new RM must supplant
+the independent monitoring, remote shell, and cron
+services that contribute to noise today. The integrated services will
+allow users to dial up or down the verbosity and frequency of monitoring,
+depending on their debug/monitoring needs versus their application's noise
+sensitivity. Cron (periodic housekeeping) jobs and rsh (remote command
+executions) can be performed through the RM to minimize their impact,
+such as running them between jobs or synchronized across jobs. 
+The new RM must also be flexible enough to allow implementation of other
+strategies for reducing the impact of noise, such as scheduling all
+non-application activity to a configurable {\em noise core}.
+
+
+\subsection{Diverse Compute Resources }
+
+The traditional paradigm has solely focused on node- and/or CPU-centric
 scheduling. With the advent of hybrid compute systems utilizing specialized,
-heterogeneous resources, this model has become less effective. Rather than
+heterogeneous resources and other bounding resources like power, 
+this simple model has become less effective. Rather than
 perpetuating a node-centric resource model with support for generic
-resources as an add-on, \ngrm\ will strive to support for heterogeneity
-from the start.
-Thus, the idea of a resource will be kept as generic as
-possible. That will not only faciliate simpler handling of generic resources,
+resources as an add-on, the new paradigm must fully support for diverse resources. 
+Thus, the idea of a resource must be kept as generic as
+possible. This will not only faciliate simpler handling of generic resources,
 but also enable future expansion to resource types that have yet to
-be conceived. New resource types will provided through configuration changes
+be conceived. New resource types can be provided through configuration changes
 and/or simple extensions that inherit their attributes from base types 
-to maximize reuse and foment collaboration.  Resource topology will be encoded via
-configuration, and resources will also be allowed to have tags or labels
+to maximize reuse and foment collaboration.  Various resource topologies
+can be encoded via configuration, and resources can also be allowed to have tags or labels
 to which resource requests may refer. 
-A generic resource query language will be developed to allow flexible
+The new paradigm must provide a generic resource query language to allow flexible
 specification of resource requirements.
 
 \subsection{Extensibility}
 
-Plugins, when designed properly, minimize the knowledge of internals
-needed to extend and modify a system. They provide a mechanism for
-sites to customize the system for their particular needs. To the extent
-possible, \ngrm\ will be modularized so various subsystems can be replaced
-or extended with plugins.
-In addition, \ngrm\ will be designed to be self-hosting: it will
-be capable of launching a standalone copy of itself as a job. This makes
-it possible for developers or a QA team to test new versions of the
-RM without requiring dedicated access to a cluster.
-In combination, these features lower the barrier of entry into the
+By all means, the paradigm shift is an ambitious goal, and thus
+the new RM that embodies this paradigm must be extensible and customizable. 
+It must provide features that lower the barrier of entry into the
 community of developers supporting and extending the RM.
+Plugins, when designed properly, can signicantly help realize this vision,
+without having to sacrifice the stability of the core RM software. 
+With plugins, various RM subsystems can be replaced and extended.  
+That can be the mechanisms for
+sites to customize their RM for their particular needs. 
+In addition, the new RM must be designed to be self-hosting: it must  
+be capable of launching a standalone copy of itself as a job. This makes
+it possible for developers or a QA team to test new RM versions. 
+
 
 \subsection{Security}
 
-Distributed components of \ngrm\ will support privacy and integrity on
+The new paradigm must continue to support and strengthen privacy 
+and integrity on
 the network to limit vulnerability to attacks involving physical access
 to a system or its networks.
-Lightweight containers will tightly control the access that
-applications have to system resources. For example, it is possible to
-run the job in its own network namespace such that direct access to the
-system management network is unavailable, or limited by node firewall
-rules. \ngrm\ could also use the private network namespace to isolate
-jobs from each other on virtual private networks.  
-Containers with private filesystem namespaces can limit visibility of
-filesystems to jobs based on the site policy. 
-In combination with I/O
-forwarding software, \ngrm\ could squash all access to filesystems to
-the user id of the job so privilege escalation within the job such as
-escaping a container or obtaining root within the container would not
-change the user's identity when accessing the filesystem.
+
+%DONG: This can go to the design/concept
+%Lightweight containers will tightly control the access that
+%applications have to system resources. For example, it is possible to
+%run the job in its own network namespace such that direct access to the
+%system management network is unavailable, or limited by node firewall
+%rules. \ngrm\ could also use the private network namespace to isolate
+%jobs from each other on virtual private networks.  
+%Containers with private filesystem namespaces can limit visibility of
+%filesystems to jobs based on the site policy. 
+%In combination with I/O
+%forwarding software, \ngrm\ could squash all access to filesystems to
+%the user id of the job so privilege escalation within the job such as
+%escaping a container or obtaining root within the container would not
+%change the user's identity when accessing the filesystem.
+%
 
 \subsection{Research and Tool Friendly}
 
-Components of \ngrm\ will be designed with the ability to capture and
+The new paradigm must facilitate development and use of 
+scalable run-time code development tools. These tools can significantly 
+improve end-user productivity, who must develop, debug, optimzie, 
+test and verify their code on the next generation systems. 
+Similarly, it must
+also facilitate research with the same goal in mind.
+Specifically, the new paradigm must support highly scalable infrastructure
+on which tools can build. Futher, it must have 
+the ability to capture and
 publish sanitized system data at all levels to facilitate the use of
-this data in current and future research.  The plugin and self-hosting
-features of the system will encourage experimentation and
-facilitate research activities by allowing new and experimental
-versions of the software to be run within a production instance.
-One of our design goals is also to facilitate the
-development and use of scalable runtime code development tools 
-on jobs on next-generation computing systems. This will not only serve 
-to lower the barrier to create and deploy useful tools, but will also reduce the
-profusion of one-off software systems in use on production systems.
+this data in current and future research. 
 
+%Components of \ngrm\ will be designed with the ability to capture and
+%publish sanitized system data at all levels to facilitate the use of
+%this data in current and future research.  The plugin and self-hosting
+%features of the system will encourage experimentation and
+%facilitate research activities by allowing new and experimental
+%versions of the software to be run within a production instance.
+%One of our design goals is also to facilitate the
+%development and use of scalable runtime code development tools 
+%on jobs on next-generation computing systems. This will not only serve 
+%to lower the barrier to create and deploy useful tools, but will also reduce the
+%profusion of one-off software systems in use on production systems.
+%
 
 \section{Major Challenges in Our Design Space}
 
 Before going into the design and implementation details of \ngrm, we discuss 
-some of the key challenges that the new RM paradigm presents to the design space. 
+some of the key challenges that the new RM paradigm presents to our design space. 
 They represent the main factors that \ngrm's new concepts and software design
-must effective address in delivering the new capabilities described in 
+must effectively address in realizing the vision and new capabilities described in 
 Section~\ref{sect:vision}: 
 \begin{itemize}
 \item{\sl Multi-dimensional scale challenge:} The new paradigm demands that 
@@ -395,8 +422,8 @@ Section~\ref{sect:vision}:
       dynamic with different resource requirements from different
       phases.
 
-\item{\sl Power challenge:} As a one specific example of emerging resource types,
-      power as a resource is becoming increaingly important. When the computing
+\item{\sl Power challenge:} As one specific example of emerging resource types,
+      power is becoming increaingly important. When the computing
       facility becomes power-bound instead of compute-node bound, the new
       RM paradigm must be able to help it to schedule based upon the 
       maximum power limit at any level at the facility. Thus, 
@@ -418,34 +445,52 @@ Section~\ref{sect:vision}:
       paradigm such as \slurm.
 
 \item{\sl Integration risk:} In the new paradigm, the RM must 
-     integrate other software that are essential computing elements. 
+     integrate other software essential to the next generation computation. 
      But with higher integration comes the risk of hardwiring assumptions
      that later prove to be confining. That can force changes down the road
      that are inconsistent with the initial design. This motivates
      extendible framework design. 
      
-\item{\sl Downtime cost:} In the new paradigm, the RM must 
+\item{\sl Downtime cost challenge:} The impact of downtime under the 
+     new paradigm becomes much greater: if not designed right, 
+     a downtime can have negatively affect the availability of
+     the computing facility and/or running workloads across it.
+     Thus, the new paradigm must be tolerant of hardware and software faults 
+     and failures with no single point of failure and must support version 
+     interoierability that allows {\em live} software upgrades.
+
+\item{\sl Reproducibility challenge:} %challenge that motivates private namespace and lightweight virtualization model
+
+
+\item{\sl Security challenge:} As the new paradigm is likely to be 
+     embodied through more distributed and hierachical software design, 
+     the importance of security across and within the components becomes greater.
+
+\item{\sl Productivity challenges:} The new paradigm must improve end-user 
+     productivity in part through first-class support for development
+     and support for scalable code development run-time tools and research.
 
 \end{itemize}
 
 DRAFT HIGH LEVEL MODELS HERE?? or "HIGH LEVEL DESIGN" BELOW CAN COVER ALL THAT. 
 
 \begin{itemize}
-\item{Hierarchical job model} describe brefly what an NGRM job is; what the hierarchy among them means. This is the umberalla model that addresses the bulk of {\sl Multi-dimensional scale challenge}.  
+\item{Hierarchical job model:} Describe brefly what an NGRM job is; what the hierarchy among them means. This is the umberalla model that addresses the bulk of {\sl Multi-dimensional scale challenge}.  
 
-\item{Generalized resource model} describe resource description and specification language as well. This is the model that addresses {\sl Diverse workload challenge}, {\sl Dynamic workload challenge}, {\sl Power challenge}, {\sl Scheduling challenge}   
+\item{Generalized resource model:} Describe resource description and specification language as well. This is the model that addresses {\sl Diverse workload challenge}, {\sl Dynamic workload challenge}, {\sl Power challenge}, {\sl Scheduling challenge}   
 
-\item{Elasticity model} describe our grow/shrink model. This is the model that addresses {\sl Dynamic workload challenge}, {\sl Power challenge}, {\sl Scheduling challenge}
+\item{Elasticity model:} Describe our grow/shrink model. This is the model that addresses {\sl Dynamic workload challenge}, {\sl Power challenge}, {\sl Scheduling challenge}
 
-\item{Common scalable infrastructure model} Including per-job Comms session. This is the model that addresses scale challenge in concurrency along with other new capabilities noise control. {\sl Integration challenge} 
+\item{Common scalable infrastructure model:} Including per-job Comms session. This is the model that addresses scale challenge in concurrency along with other new capabilities noise control. {\sl Integration challenge} {\sl Productivity tools challenge}
 
-\item{Customizable job instantiation model} Describe a job can custimize itself with its own plug-ins. {\sl Integration challenge} along with other capabilities. 
+\item{Self-hosting model:} Describe a job can custimize itself with the self-hosting capabilty and its own plug-ins. Explain how that can address {\sl Integration risk} and {\sl Productivity challenge} . 
 
-\item{WRAP model} 
+\item{Rich, scalable run-time model:} Perhaps describe some essence of WRAP. {\sl scale challenge} and {\sl Productivity challenge}.  Also explain that through LWJ, it also address other key challenges like dynamic, power challenges...  
+
 \end{itemize}
 
 
-\section{Next Generation Resource Management}
+\section{Next Generation Resource Manager}
 \subsection{Terminology}
 
 \paragraph{comms session}
