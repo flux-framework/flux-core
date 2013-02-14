@@ -384,10 +384,10 @@ this data in current and future research.
 %profusion of one-off software systems in use on production systems.
 %
 
-\section{Major Challenges in Our Design Space}
+\section{Design Space and New Models}
 
 Before going into the design and implementation details of \ngrm, we discuss 
-some of the key challenges that the new RM paradigm presents to our design space. 
+some of the key design challenges that the new RM paradigm presents. 
 They represent the main factors that \ngrm's new concepts and software design
 must effectively address in realizing the vision and new capabilities described in 
 Section~\ref{sect:vision}: 
@@ -397,8 +397,8 @@ Section~\ref{sect:vision}:
       resources. Compared to the traditional paradigm, this presents 
       fundamentally more difficult scale challenges to the RM design,
       not only in the concurrency of a sinlge workload but along
-      several other dimensions. As concurrency increases, every RM runtime
-      service must scale and the noise must be put at bay.  
+      several other dimensions. As concurrency increases, every RM run-time
+      service must scale and noise must be put at bay.  
       The number of jobs and resources 
       that the RM must manage will drastically increase; the amount 
       of runtime information that the RM must monitor, trace and store 
@@ -416,10 +416,10 @@ Section~\ref{sect:vision}:
       are compute-bound.
        
 \item{\sl Dynamic workload challenge:} Not only must the paradigm support 
-      disparate performance limiters across different application, but
+      disparate performance limiters across different applications, but
       also must it suit well varying performance limiters within 
-      an single application. Our applications have grown to be more
-      dynamic with different resource requirements from different
+      a single application. Our applications have grown to be more
+      dynamic with different resource requirements at different
       phases.
 
 \item{\sl Power challenge:} As one specific example of emerging resource types,
@@ -449,21 +449,21 @@ Section~\ref{sect:vision}:
      But with higher integration comes the risk of hardwiring assumptions
      that later prove to be confining. That can force changes down the road
      that are inconsistent with the initial design. This motivates
-     extendible framework design. 
+     an extendible framework design. 
      
-\item{\sl Downtime cost challenge:} The impact of downtime under the 
-     new paradigm becomes much greater: if not designed right, 
-     a downtime can have negatively affect the availability of
-     the computing facility and/or running workloads across it.
+\item{\sl Higher downtime costs:} The impact of downtime under the 
+     new paradigm becomes much greater: if not designed adequately, 
+     a downtime can negatively affect the availability of
+     a large portion of the facility and/or running workloads across it.
      Thus, the new paradigm must be tolerant of hardware and software faults 
      and failures with no single point of failure and must support version 
-     interoierability that allows {\em live} software upgrades.
+     interoperability that allows {\em live} software upgrades.
 
 \item{\sl Reproducibility challenge:} %challenge that motivates private namespace and lightweight virtualization model
 
 
-\item{\sl Security challenge:} As the new paradigm is likely to be 
-     embodied through more distributed and hierachical software design, 
+\item{\sl Security challenge:} As the new paradigm increasingly motivates
+     a more distributed and hierachical software design, 
      the importance of security across and within the components becomes greater.
 
 \item{\sl Productivity challenges:} The new paradigm must improve end-user 
