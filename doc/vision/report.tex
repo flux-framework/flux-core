@@ -443,7 +443,7 @@ Section~\ref{sect:vision}.
 \item{\sl Scheduling challenge:} As more diverse attributes of resources
       are factored into scheduling, more stalls can occur in the schedule.
       For instance, $N$ compute nodes may sit idling simply because they do not meet
-      the network proximity requirement for an workload that requires 
+      the network proximity requirement for a workload that requires 
       $N$ nodes connected at a same lower-level switch. Thus, our design 
       must provide alternative ways to fill the stalls to meet this 
       challenge.
@@ -668,6 +668,66 @@ e.g. s1.\ngrm.  or s1.s1.\ngrm.
 \paragraph{lightweight job} (LWJ) 
 A {\bf job} submitted and recorded in the current {\bf instance}
 which does not result in a new instance.
+
+\subsubsection{Comparisons with Traditional Terminology}
+
+While the above terminology serves to define the constructs of the
+NGRM system, table ~\ref{tab:tradterms} serves as a bridge to concepts
+used in traditional batch schedulers and resource managers.
+
+\begin{table}
+\caption{Terminology Comparison}
+\centering
+\begin{tabular}{|l|l|}
+\hline
+Traditional & NGRM \\
+\hline
+job & job \\
+job step & lightweight job (LWJ) \\
+MPI job & lightweight job (LWJ) \\
+reservation & job \\
+\hline
+\end{tabular}
+\label{tab:tradterms}
+\end{table}
+
+In traditional terms, a user submits a request to a batch scheduler
+for an allocation of computing resources.  This request is added to a
+queue of other such requests.  When the scheduler grants a request, a
+job is begun and set of resources are allocated to the job.  At that
+point, one to many tasks are launched to do the work of the job.
+
+Depending on the system, tasks are launched by a remote launcher such
+as {\em mpirun} or {\em srun}.  Each set of tasks so launched are
+known as a job step.  There can be one to many job steps active within
+a job throughout the life of a job.  These can run sequentially or in
+parallel, and can either run on dedicated or shared resources.  The
+history of the job includes a detailed accounting of each job step
+including the resources used and the duration of the job step.
+
+By first approximation, the traditional job maps to an NGRM job.  The
+job step maps to a lightweight job (LWJ).  Job scripts that invoke a
+series of job steps will translate to a series of LWJ's in an NGRM
+job.
+
+Some job scripts launch multiple job steps in parallel (backgrounded)
+and a resource manager will schedule the associated task launches in a
+FIFO basis, based on the available resources and whether dedicated or
+shared resources were requested.  As described above, NGRM's job
+construct will include the scheduler service.  This provides the user
+even more flexibility to schedule the order of the LWJ instantiations
+and task placement on resources.
+
+Traditional job and job step accounting statistics are commonly saved
+to a database.  In NGRM, the LWJ's statistics will be reaped by the
+parent job as described below.
+
+Historically, batch schedulers provide a means to reserve a set of
+resources for exclusive use by a user or group of users.  These
+reservations are typically created in advance and are offered as
+Dedidcated Application Times (DATs) for users' exclusive use.  In
+NGRM, job reservations will take the form of a parent job (with a
+future start time) under which user jobs will run.
 
 %\subsection{Hierachical Job Model}
 \subsection{High Level Design}
