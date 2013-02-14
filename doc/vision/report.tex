@@ -179,7 +179,7 @@ it must be able to grow and shrink its resource allocation dynamically.
 The global resource view, rich resource model and elasticity represent
 the fundamental characteristics of the RM under the new paradigm.
 
-Further, in the new paradigm, the RM must provide the central framework to integrate
+Further, the new paradigm must provide a central framework to integrate
 other relevant software. The software components should include   
 system monitoring and administration, lightweight virtualization, 
 and scalable tool communication. We envision that the integration will 
@@ -193,8 +193,7 @@ In the following, we further detail the key ideas and new capabilities
 under the new paradigm.
 
 
-\subsection{Center as a Cluster}
-
+\paragraph{Center as a Cluster:}
 Unlike the traditional approach of running an RM instance on each separately
 managed cluster, 
 %and tying clusters together with grid software almost was
@@ -233,8 +232,26 @@ greatly reduced, and administrator-orchestrated downtimes for software
 updates could be eliminated. 
 
 
-\subsection{Data Provenance and Reproducibility}
+\paragraph{Diverse Compute Resources:}
+The traditional paradigm has solely focused on node- and/or CPU-centric
+scheduling. With the advent of hybrid compute systems utilizing specialized,
+heterogeneous resources and other bounding resources like power, 
+this simple model has become less effective. Rather than
+perpetuating a node-centric resource model with support for other
+resources as an add-on, the new paradigm must fully support diverse resources. 
+Thus, the idea of a resource must be kept as generic as
+possible. This will not only faciliate simpler handling of generic resources,
+but also enable future expansion to resource types that have yet to
+be conceived. New resource types can be provided through configuration changes
+and/or simple extensions that inherit their attributes from base types 
+to maximize reuse and foment collaboration.  Various resource topologies
+can be encoded via configuration, and resources can also be allowed to have tags or labels
+to which resource requests may refer. 
+The new paradigm must provide a generic resource query language to allow flexible
+specification o?f resource requirements.
 
+
+\paragraph{Data Provenance and Reproducibility:}
 As simulation plays an increasingly central role in scientific
 investigation, reproducibility of results is more important than ever
 before. A result should be accompanied by a data provenance record that
@@ -280,8 +297,7 @@ require stability for long periods of time.
 %other applications.
 %
 
-\subsection{Low Noise}
-
+\paragraph{Low Noise:}
 As the number of processes in a parallel application increases, 
 their executions are affected to varying degrees by OS
 scheduling jitter, depending on their communication patterns. Minimizing
@@ -299,43 +315,18 @@ strategies for reducing the impact of noise, such as scheduling all
 non-application activity to a configurable {\em noise core}.
 
 
-\subsection{Diverse Compute Resources }
-
-The traditional paradigm has solely focused on node- and/or CPU-centric
-scheduling. With the advent of hybrid compute systems utilizing specialized,
-heterogeneous resources and other bounding resources like power, 
-this simple model has become less effective. Rather than
-perpetuating a node-centric resource model with support for generic
-resources as an add-on, the new paradigm must fully support for diverse resources. 
-Thus, the idea of a resource must be kept as generic as
-possible. This will not only faciliate simpler handling of generic resources,
-but also enable future expansion to resource types that have yet to
-be conceived. New resource types can be provided through configuration changes
-and/or simple extensions that inherit their attributes from base types 
-to maximize reuse and foment collaboration.  Various resource topologies
-can be encoded via configuration, and resources can also be allowed to have tags or labels
-to which resource requests may refer. 
-The new paradigm must provide a generic resource query language to allow flexible
-specification of resource requirements.
-
-\subsection{Extensibility}
-
-By all means, the paradigm shift is an ambitious goal, and thus
-the new RM that embodies this paradigm must be extensible and customizable. 
-It must provide features that lower the barrier of entry into the
-community of developers supporting and extending the RM.
-Plugins, when designed properly, can signicantly help realize this vision,
-without having to sacrifice the stability of the core RM software. 
-With plugins, various RM subsystems can be replaced and extended.  
-That can be the mechanisms for
-sites to customize their RM for their particular needs. 
-In addition, the new RM must be designed to be self-hosting: it must  
-be capable of launching a standalone copy of itself as a job. This makes
-it possible for developers or a QA team to test new RM versions. 
+\paragraph{Fault Torelance:}
+As the new paradigm manages the entire compute facility,
+the RM's torelance to haredware and software faults and failures
+must become one of the primary attributes.
+Thus, the RM must have no single point of failure and support
+version interoperability that allows {\em live} software upgrades.
+The paradigm must faciliate a rolling update across the center
+without negatively impacting overall availability of 
+the facility and/or running workloads.
 
 
-\subsection{Security}
-
+\paragraph{Security:}
 The new paradigm must continue to support and strengthen privacy 
 and integrity on
 the network to limit vulnerability to attacks involving physical access
@@ -357,19 +348,35 @@ to a system or its networks.
 %change the user's identity when accessing the filesystem.
 %
 
-\subsection{Research and Tool Friendly}
 
+\paragraph{Research and Tool Friendly:}
 The new paradigm must facilitate development and use of 
 scalable run-time code development tools. These tools can significantly 
-improve end-user productivity, who must develop, debug, optimzie, 
-test and verify their code on the next generation systems. 
+improve end-user productivity, who must develop, debug, optimize, 
+test and verify their code on the next-generation systems. 
 Similarly, it must
 also facilitate research with the same goal in mind.
 Specifically, the new paradigm must support highly scalable infrastructure
+and rich run-time interfaces
 on which tools can build. Futher, it must have 
 the ability to capture and
 publish sanitized system data at all levels to facilitate the use of
 this data in current and future research. 
+
+
+\paragraph{Extensibility:}
+By all means, such a paradigm shift is an ambitious goal, and thus
+the new RM must be extensible and customizable to help achieve this goal.
+It must provide features that lower the barrier of entry into the
+community of developers supporting and extending the RM.
+Plugins, when designed properly, can signicantly help realize this vision,
+without having to sacrifice the stability of the core RM software. 
+With plugins, various RM subsystems can be replaced and extended.  
+That can be the mechanisms for
+sites to customize their RM for their particular needs. 
+In addition, the new RM must be designed to be self-hosting: it must  
+be capable of launching a standalone copy of itself as a job. This makes
+it possible for developers or a QA team to test new RM versions. 
 
 %Components of \ngrm\ will be designed with the ability to capture and
 %publish sanitized system data at all levels to facilitate the use of
@@ -412,20 +419,20 @@ Section~\ref{sect:vision}:
       model the compute resources. The traditional approach of modeling 
       resources as a collection of compute nodes will only work well when the
       application is compute-bound. Modern workloads have grown in their
-      complexity, and even today only a small fraction of modern applications
+      complexity, and even today, only a small fraction of modern applications
       are compute-bound.
        
 \item{\sl Dynamic workload challenge:} Not only must the paradigm support 
       disparate performance limiters across different applications, but
-      also must it suit well varying performance limiters within 
+      also must it be well-suited for varying performance limiters within 
       a single application. Our applications have grown to be more
       dynamic with different resource requirements at different
       phases.
 
 \item{\sl Power challenge:} As one specific example of emerging resource types,
       power is becoming increaingly important. When the computing
-      facility becomes power-bound instead of compute-node bound, the new
-      RM paradigm must be able to help it to schedule based upon the 
+      facility becomes power-bound instead of compute-node-bound, the new
+      paradigm must be able to help it to schedule based upon the 
       maximum power limit at any level at the facility. Thus, 
       the resource representation of the new RM must be generalized
       enough to model consumable resources like power.  
@@ -434,7 +441,7 @@ Section~\ref{sect:vision}:
       are factored into scheduling, more stalls can occur in the schedule.
       For instance, $N$ compute nodes may sit idling simply because they do not meet
       the network proximity requirement for an workload that requires 
-      $N$ nodes connected at a same low-level switch. Thus, our design 
+      $N$ nodes connected at a same lower-level switch. Thus, our design 
       must provide alternative ways to fill the stalls to meet this 
       challenge.
 
@@ -445,7 +452,7 @@ Section~\ref{sect:vision}:
       paradigm such as \slurm.
 
 \item{\sl Integration risk:} In the new paradigm, the RM must 
-     integrate other software essential to the next generation computation. 
+     integrate other software essential to the next-generation computation. 
      But with higher integration comes the risk of hardwiring assumptions
      that later prove to be confining. That can force changes down the road
      that are inconsistent with the initial design. This motivates
@@ -459,9 +466,13 @@ Section~\ref{sect:vision}:
      and failures with no single point of failure and must support version 
      interoperability that allows {\em live} software upgrades.
 
-\item{\sl Reproducibility challenge:} %challenge that motivates private namespace and lightweight virtualization model
-
-
+\item{\sl Separation-of-concerns challenge:} Many attributes of the new
+     paradigm motivate a much higher degree of separation between
+     the software level visible to applications and system-level 
+     software. For example, the paradigm must be able to reconstruct the user-visible
+     software level to provide better reproducibility of simulations while not
+     locking the system software level. 
+   
 \item{\sl Security challenge:} As the new paradigm increasingly motivates
      a more distributed and hierachical software design, 
      the importance of security across and within the components becomes greater.
