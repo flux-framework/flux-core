@@ -149,7 +149,7 @@ drastically improves operational efficiency and user productivity
 for workloads on {\em capacity-class} compute systems.
 With a trend towards ever-growing numbers and types of compute cores, however,
 this system class has been subject to the challenges that
-today's {\em capability-class} machines have faced. 
+today's {\em capability-class} machines have been facing. 
 These challenges include having to provide extreme scalability, low noise, 
 fault tolerance, and heterogeneity management while under a strict power budget.
 Worse, the workloads themselves are also becoming increasingly diverse, 
@@ -163,7 +163,10 @@ and scheduling of the workloads within these bounds.
 Thus, the RM must manage the entire facility as one
 common pool of resources. The ability to see a broader spectrum of resources 
 and their various constraints can then lead to most efficient scheduling strategies
-and execution environments. The new paradigm also demands that the RM model
+and execution environments. Further, the same ability will ease 
+efforts to diagnose errors for both end users and support staff
+by associating jobs with other facility-wide events. 
+The new paradigm also demands that the RM model
 various types of resources and their relationships beyond the traditional resource model:
 i.e., a simple collection of compute nodes.
 The rich resource model will allow the RM to allocate computing resources
@@ -185,7 +188,8 @@ for both end users and system adminstrators.
 In addition, as these capabilities are currently provided through disjoint
 and often overlapping software, the integration will substantially reduce
 the costs needed for developing and maintaining individual software.  
-In the following, we further detail the key ideas and new capabilities of \ngrm.
+In the following, we further detail the key ideas and new capabilities 
+under the new paradigm.
 
 
 \subsection{Center as a Cluster}
@@ -353,38 +357,95 @@ to lower the barrier to create and deploy useful tools, but will also reduce the
 profusion of one-off software systems in use on production systems.
 
 
-\section{Major Factors in Our Design Space}
+\section{Major Challenges in Our Design Space}
 
-TO BE DRAFTED. WE WANT TO NAME CHALLENGES AND FACTORS IN THIS SECTION SO THAT WE CAN MAP THEM TO OUR RM MODELS AND DESIGN SOMEWHERE DOWN THE ROAD. 
+Before going into the design and implementation details of \ngrm, we discuss 
+some of the key challenges that the new RM paradigm presents to the design space. 
+They represent the main factors that \ngrm's new concepts and software design
+must effective address in delivering the new capabilities described in 
+Section~\ref{sect:vision}: 
+\begin{itemize}
+\item{\sl Multi-dimensional scale challenge:} The new paradigm demands that 
+      the RM must manage the entire computing facility as one common pool of 
+      resources. Compared to the traditional paradigm, this presents 
+      fundamentally more difficult scale challenges to the RM design,
+      not only in the concurrency of a sinlge workload but along
+      several other dimensions. As concurrency increases, every RM runtime
+      service must scale and the noise must be put at bay.  
+      The number of jobs and resources 
+      that the RM must manage will drastically increase; the amount 
+      of runtime information that the RM must monitor, trace and store 
+      will grow in the scaling limit of the facility.
+      Thus, this challenge precludes any centralized design in an attempt to 
+      gain a wider view over the resources at the facility. 
+
+\item{\sl Diverse workload challenge:} The new paradigm must recognize that
+      different applications have different performance-limiting factors,
+      and this imposes more complex requirements to how the RM should
+      model the compute resources. The traditional approach of modeling 
+      resources as a collection of compute nodes will only work well when the
+      application is compute-bound. Modern workloads have grown in their
+      complexity, and even today only a small fraction of modern applications
+      are compute-bound.
+       
+\item{\sl Dynamic workload challenge:} Not only must the paradigm support 
+      disparate performance limiters across different application, but
+      also must it suit well varying performance limiters within 
+      an single application. Our applications have grown to be more
+      dynamic with different resource requirements from different
+      phases.
+
+\item{\sl Power challenge:} As a one specific example of emerging resource types,
+      power as a resource is becoming increaingly important. When the computing
+      facility becomes power-bound instead of compute-node bound, the new
+      RM paradigm must be able to help it to schedule based upon the 
+      maximum power limit at any level at the facility. Thus, 
+      the resource representation of the new RM must be generalized
+      enough to model consumable resources like power.  
+      
+\item{\sl Scheduling challenge:} As more diverse attributes of resources
+      are factored into scheduling, more stalls can occur in the schedule.
+      For instance, $N$ compute nodes may sit idling simply because they do not meet
+      the network proximity requirement for an workload that requires 
+      $N$ nodes connected at a same low-level switch. Thus, our design 
+      must provide alternative ways to fill the stalls to meet this 
+      challenge.
+
+\item{\sl Backward compatibility challenge:} The new paradigm must also be
+      able to model the traditional paradigm, as its small subset. This
+      then provides our design with a straightfoward path to 
+      backward compatibility with legacy scripts from a traditional 
+      paradigm such as \slurm.
+
+\item{\sl Integration risk:} In the new paradigm, the RM must 
+     integrate other software that are essential computing elements. 
+     But with higher integration comes the risk of hardwiring assumptions
+     that later prove to be confining. That can force changes down the road
+     that are inconsistent with the initial design. This motivates
+     extendible framework design. 
+     
+\item{\sl Downtime cost:} In the new paradigm, the RM must 
+
+\end{itemize}
+
+DRAFT HIGH LEVEL MODELS HERE?? or "HIGH LEVEL DESIGN" BELOW CAN COVER ALL THAT. 
 
 \begin{itemize}
-\item{Scalability in concurrency} 
-\item{Scalability in number of jobs} 
-\item{Backward compatibility} 
-\item{Workload Diversity}
-\item{Dynamic workload}
-\item{Emerging resource types}  
-\item{Scheduleabilty}  
-\item{Reproducibility}
-\item{Data provenance}
-\item{Noise control}
-\item{Productivity tools}  
-\item{Integration risk}
-\item{Expensive downtime}
-\item{Security}
+\item{Hierarchical job model} describe brefly what an NGRM job is; what the hierarchy among them means. This is the umberalla model that addresses the bulk of {\sl Multi-dimensional scale challenge}.  
+
+\item{Generalized resource model} describe resource description and specification language as well. This is the model that addresses {\sl Diverse workload challenge}, {\sl Dynamic workload challenge}, {\sl Power challenge}, {\sl Scheduling challenge}   
+
+\item{Elasticity model} describe our grow/shrink model. This is the model that addresses {\sl Dynamic workload challenge}, {\sl Power challenge}, {\sl Scheduling challenge}
+
+\item{Common scalable infrastructure model} Including per-job Comms session. This is the model that addresses scale challenge in concurrency along with other new capabilities noise control. {\sl Integration challenge} 
+
+\item{Customizable job instantiation model} Describe a job can custimize itself with its own plug-ins. {\sl Integration challenge} along with other capabilities. 
+
+\item{WRAP model} 
 \end{itemize}
 
 
-%Multi-dimensional scalability problem: When one wants to design a resource management software system that can manages the resources that are across the entire computing facility, extreme care must be taken for scalability. Being able to run programs at larger scales is one dimension; and avoiding some central location with large number of jobs is another dimention to the scalabilty problem. 
-%
-%
- 
-
-
-
-
-
-\section{Approach}
+\section{Next Generation Resource Management}
 \subsection{Terminology}
 
 \paragraph{comms session}
