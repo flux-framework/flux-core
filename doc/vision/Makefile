@@ -47,4 +47,4 @@ report.pdf: report.tex $(DEPSEC) $(DEPFIG) $(DEPBIB)
 	pdflatex -shell-escape report
 	bibtex report
 	pdflatex -shell-escape report
-
+	pdflatex -shell-escape report
