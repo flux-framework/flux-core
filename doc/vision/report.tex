@@ -64,8 +64,8 @@ provide accurate correlations between user-level errors and system-level
 events, and to integrate and accelerate a rich set of scalable tools.
 
 Further, a greater interplay among various classes of clusters across
-the entire center makes the current practice of single-cluster scheduling
-far less appealing. An application running on a compute cluster heavily
+the entire computing facility makes the current paradigm of single-cluster scheduling
+largely ineffective. An application running on a compute cluster heavily
 utilizes site-wide shared resources such as I/O and visualization clusters.
 Thus, avoiding any significant site-wide bottleneck requires the RM
 to schedule the job to all dependent resources together. In short, without
@@ -78,16 +78,18 @@ best-in-breed, open-sourced RM designed for commodity Linux clusters.
 Livermore Computing (LC) at Lawrence Livermore National Laboratory (LLNL)
 designed and led its implementation in 2002 and since then has facilitated
 its wide adoption outside of LLNL.
-\slurm's original design was for a 1-2K node Linux cluster with a single
-interconnect domain and bulk-synchronous workload based on MPICH.
-In the last decade, \slurm\ has been adapted
-to act as a scheduling and job submission layer on top of proprietary
-RM software on IBM Blue Gene and Cray systems,
-to support other runtimes quite different from MPICH,
-to run (natively) on Linux clusters pushing beyond the designed node count,
+\slurm's original design was for a moderate-size Linux cluster with up to 2,000 
+compute nodes connected in a single interconnect domain and MPICH-based, 
+bulk-synchronous applications.
+In the last decade, however, \slurm\ has been adapted to the various
+environments that stray outside its core design.
+It has adapted to act as a scheduling and job submission layer
+on top of proprietary RM software on IBM Blue Gene and Cray systems,
+to support other run-times quite different from MPICH,
+to run on Linux clusters pushing far beyond the designed node count,
 and to be tied into a \moab~\cite{MOAB:online} grid.
 These adaptations have accrued without fundamentally changing the
-core \slurm\ design, and as a result \slurm\ is increasingly
+core paradigm and design of \slurm. As a result, \slurm\ is increasingly
 unable to adapt to emerging requirements without compromising
 stability and code maintainability.
 
@@ -106,15 +108,17 @@ Integrations of these facilities within the common framework designed from
 the ground up for scalability, security, and fault tolerance will result
 in a more efficient and capable system.
 
-We realize that \ngrm's problem space is huge and yet we must address a wide range 
-of challenges in relatively short order with limited resources. Thus, we 
-organize our project plan around four research and development thrust areas 
+We realize that \ngrm represents a paradigm shift for HPC resource management, 
+and yet we must address a wide range of challenges in relatively short order
+with limited resources. Thus, we 
+organize our project plan around five research and development thrust areas 
 and seek to advance them systematically.
 These areas are called:
-{\bf{\em Resource Management}},
-{\bf{\em Monitoring and Data Management}},
-{\bf{\em Workload Runtime And Placement}}, and
-{\bf{\em Communications Framework}}.
+{\tt Resource Management},
+{\tt Monitoring},
+{\tt Workload Runtime And Placement}, 
+{\tt Communications Framework}, and
+{\tt I/O Management}.
 They are relatively independent but can significantly build on the
 strength of one another through well-known interfaces and common design
 and development principles.
@@ -137,7 +141,7 @@ In Section~\ref{sect:designspace}, we discuss
 the key software design challenges and the conceptual models
 that embody the new paradigm while addressing these design challenges. 
 Section~\ref{sect:ngrm} then describes our software design
-and also highlights the four research and development thrust areas
+and also highlights the five research and development thrust areas
 and their relations. 
 The following sections then go over and detail each of these areas including 
 its work breakdown structure (WBS) and associated work items.
