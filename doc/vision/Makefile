@@ -20,11 +20,11 @@ DEPFIG = \
 	../fig/mon_ex1a.eps \
 	../fig/mon_ex1b.eps \
 	../fig/mon_iface.eps \
-	../fig/wrap_graph.ps \
-	../fig/WRAP_Architecture.ps \
-	../fig/WRAP_Base.ps \
-	../fig/WRAP_grow.ps \
-	../fig/WRAP_newJobFunction.ps \
+	../fig/wrap_graph.pdf \
+	../fig/WRAP_Architecture.pdf \
+	../fig/WRAP_Base.pdf \
+	../fig/WRAP_grow.pdf \
+	../fig/WRAP_newJobFunction.pdf \
 	../fig/RM-full.eps \
 	../fig/RM-instance.eps
 
