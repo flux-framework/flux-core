@@ -73,7 +73,7 @@ the RM that can effectively address all of these challenges, it has become appar
 that HPC centers will suffer a significant loss in both user productivity
 and efficient uses of next-generation computing resources.
 
-\slurm\cite{SlurmDesign} is arguably the
+\slurm~\cite{SlurmDesign} is arguably the
 best-in-breed, open-sourced RM designed for commodity Linux clusters.
 Livermore Computing (LC) at Lawrence Livermore National Laboratory (LLNL)
 designed and led its implementation in 2002 and since then has facilitated
@@ -85,7 +85,7 @@ to act as a scheduling and job submission layer on top of proprietary
 RM software on IBM Blue Gene and Cray systems,
 to support other runtimes quite different from MPICH,
 to run (natively) on Linux clusters pushing beyond the designed node count,
-and to be tied into a \moab\cite{MOAB:online} grid.
+and to be tied into a \moab~\cite{MOAB:online} grid.
 These adaptations have accrued without fundamentally changing the
 core \slurm\ design, and as a result \slurm\ is increasingly
 unable to adapt to emerging requirements without compromising
@@ -128,14 +128,18 @@ a foundation for further extension and customization, allowing agile responses
 to site-specific scheduling issues. Perhaps more importantly, \ngrm\
 positions us to cope with a blend of interrelated, diverse
 extreme-scale computing resources, the landscape of high-end HPC centers
-in just a few years down the road
+in just a few years down the road.
 
 The rest of the paper is organized as the following.
 Section~\ref{sect:vision} presents \ngrm's vision and 
-its new capabilities in more detail. Section~\ref{sect:projorg}  
-describes the high-level goals of the four thrust areas and
-explains relations among the areas. Next sections then 
-go over and detail each of these areas including 
+its new capabilities in more detail. 
+In Section~\ref{sect:designspace}, we discuss 
+the key software design challenges and the conceptual models
+that embody the new paradigm while addressing these design challenges. 
+Section~\ref{sect:ngrm} then describes our software design
+and also highlights the four research and development thrust areas
+and their relations. 
+The following sections then go over and detail each of these areas including 
 its work breakdown structure (WBS) and associated work items.
 Finally, Section~\ref{sect:delivery} defines
 our schedules for milestones and deliverables.
@@ -185,7 +189,7 @@ system monitoring and administration, lightweight virtualization,
 and scalable tool communication. We envision that the integration will 
 facilitate a higher level of leverage among these essential computing elements, 
 and this will lead to significantly higher productivity 
-for both end users and system adminstrators.  
+for both end users and system administrators.  
 In addition, as these capabilities are currently provided through disjoint
 and often overlapping software, the integration will substantially reduce
 the costs needed for developing and maintaining individual software.  
@@ -240,7 +244,7 @@ this simple model has become less effective. Rather than
 perpetuating a node-centric resource model with support for other
 resources as an add-on, the new paradigm must fully support diverse resources. 
 Thus, the idea of a resource must be kept as generic as
-possible. This will not only faciliate simpler handling of generic resources,
+possible. This will not only facilitate simpler handling of generic resources,
 but also enable future expansion to resource types that have yet to
 be conceived. New resource types can be provided through configuration changes
 and/or simple extensions that inherit their attributes from base types 
@@ -248,7 +252,7 @@ to maximize reuse and foment collaboration.  Various resource topologies
 can be encoded via configuration, and resources can also be allowed to have tags or labels
 to which resource requests may refer. 
 The new paradigm must provide a generic resource query language to allow flexible
-specification o?f resource requirements.
+specification of resource requirements.
 
 
 \paragraph{Data Provenance and Reproducibility:}
@@ -315,13 +319,13 @@ strategies for reducing the impact of noise, such as scheduling all
 non-application activity to a configurable {\em noise core}.
 
 
-\paragraph{Fault Torelance:}
+\paragraph{Fault Tolerance:}
 As the new paradigm manages the entire compute facility,
-the RM's torelance to haredware and software faults and failures
+the RM's Tolerance to hardware and software faults and failures
 must become one of the primary attributes.
 Thus, the RM must have no single point of failure and support
 version interoperability that allows {\em live} software upgrades.
-The paradigm must faciliate a rolling update across the center
+The paradigm must facilitate a rolling update across the center
 without negatively impacting overall availability of 
 the facility and/or running workloads.
 
@@ -358,7 +362,7 @@ Similarly, it must
 also facilitate research with the same goal in mind.
 Specifically, the new paradigm must support highly scalable infrastructure
 and rich run-time interfaces
-on which tools can build. Futher, it must have 
+on which tools can build. Further, it must have 
 the ability to capture and
 publish sanitized system data at all levels to facilitate the use of
 this data in current and future research. 
@@ -369,7 +373,7 @@ By all means, such a paradigm shift is an ambitious goal, and thus
 the new RM must be extensible and customizable to help achieve this goal.
 It must provide features that lower the barrier of entry into the
 community of developers supporting and extending the RM.
-Plugins, when designed properly, can signicantly help realize this vision,
+Plugins, when designed properly, can significantly help realize this vision,
 without having to sacrifice the stability of the core RM software. 
 With plugins, various RM subsystems can be replaced and extended.  
 That can be the mechanisms for
@@ -392,6 +396,7 @@ it possible for developers or a QA team to test new RM versions.
 %
 
 \section{Design Space}
+\label{sect:designspace}
 
 Before going into the design and implementation details of \ngrm, we discuss 
 some of the key design challenges that the new RM paradigm presents. 
@@ -402,16 +407,16 @@ Section~\ref{sect:vision}.
 \subsection{Design Challenges}
 
 \begin{itemize}
-\item{\sl Multi-dimensional scale challenge:} The new paradigm demands that 
+\item{\sl Multidimensional scale challenge:} The new paradigm demands that 
       the RM must manage the entire computing facility as one common pool of 
       resources. Compared to the traditional paradigm, this presents 
       fundamentally more difficult scale challenges to the RM design,
-      not only in the concurrency of a sinlge workload but along
+      not only in the concurrency of a single workload but along
       several other dimensions. As concurrency increases, every RM run-time
       service must scale and noise must be put at bay.  
       The number of jobs and resources 
       that the RM must manage will drastically increase; the amount 
-      of runtime information that the RM must monitor, trace and store 
+      of run-time information that the RM must monitor, trace and store 
       will grow in the scaling limit of the facility.
       Thus, this challenge precludes any centralized design in an attempt to 
       gain a wider view over the resources at the facility. 
@@ -433,7 +438,7 @@ Section~\ref{sect:vision}.
       phases.
 
 \item{\sl Power challenge:} As one specific example of emerging resource types,
-      power is becoming increaingly important. When the computing
+      power is becoming increasingly important. When the computing
       facility becomes power-bound instead of compute-node-bound, the new
       paradigm must be able to help it to schedule based upon the 
       maximum power limit at any level at the facility. Thus, 
@@ -450,16 +455,16 @@ Section~\ref{sect:vision}.
 
 \item{\sl Backward compatibility challenge:} The new paradigm must also be
       able to model the traditional paradigm, as its small subset. This
-      then provides our design with a straightfoward path to 
+      then provides our design with a straightforward path to 
       backward compatibility with legacy scripts from a traditional 
       paradigm such as \slurm.
 
 \item{\sl Integration risk:} In the new paradigm, the RM must 
      integrate other software essential to the next-generation computation. 
-     But with higher integration comes the risk of hardwiring assumptions
+     But with higher integration comes the risk of hard-wiring assumptions
      that later prove to be confining. That can force changes down the road
      that are inconsistent with the initial design. This motivates
-     an extendible framework design. 
+     an extensible framework design. 
      
 \item{\sl Higher downtime costs:} The impact of downtime under the 
      new paradigm becomes much greater: if not designed adequately, 
@@ -477,7 +482,7 @@ Section~\ref{sect:vision}.
      locking the system software level. 
    
 \item{\sl Security challenge:} As the new paradigm increasingly motivates
-     a more distributed and hierachical software design, 
+     a more distributed and hierarchical software design, 
      the importance of security across and within the components becomes greater.
 
 \item{\sl Productivity challenges:} The new paradigm must improve end-user 
@@ -488,8 +493,8 @@ Section~\ref{sect:vision}.
 
 
 \subsection{New Conceptual Models}
-In this section, we describe new conceptual models that will embody 
-the new paradigm while addressing the multitude of design challenges. 
+In this section, we describe some of the primary conceptual models that will embody 
+this new paradigm while addressing the multitude of design challenges. 
 The models form the basis for the software design of \ngrm.
 
 \paragraph{Unified Job Model:}
@@ -499,23 +504,23 @@ Rather, we unify the traditional job notion
 with the notion of a resource manager instance---an independent set of resource manager service.
 The RM instance must be delegated the main responsibility of managing the resource allocated to the job.
 Then, the unified job model becomes our logical basic block
-on which to build a hierachical resource management 
-delegation structure to address the {\sl multi-dimensional scale challenge}.
-In addition, an RM instance can expose the traditional paradigm over the
-allocation delegated to it, providing a straightforward path to address
+on which to build a hierarchical resource management 
+delegation structure to address the {\sl multidimensional scale challenge}.
+In addition, an RM instance can implement compatibility mode with a particular 
+traditional paradigm only over its own allocation, providing a straightforward path to address
 the {\sl backward compatibility challenge}. 
 
 
 \paragraph{Job Hierarchy Model:}
 To scale the new paradigm in the scaling limit of the entire computing facility,
-the new paradigm requires a multi-level delegation structure for a hierachical 
+the new paradigm requires a multi-level delegation structure for a hierarchical 
 resource management scheme. We use a tree-based job hierarchy model
-that has proven advantages for scalability. 
+that has many proven advantages for scalability. 
 In this model, a job is only required to manage its children jobs,
 which would be only a small fraction of the total number of jobs that are run
 across the entire computing facility. Further, several guiding principles
 throughout the job hierarchy strike a balance between the management
-resposibility of a parent job and delegation/empowerment of a child job:
+responsibility of a parent job and delegation/empowerment of a child job:
 \begin{itemize}
 \item{\sl Parent bounding rule:} the parent job grants and confines
      the resource allocation of all of its children.
@@ -532,102 +537,114 @@ at any level across the computing facility, while enabling most efficient execut
 and scheduling of the workloads within these bounds.
 At the same time, this model is the most fundamental design concept,
 which forms the basis to address many of the design challenges including 
-the {\sl multi-dimensional scale}, {\sl dynamic workload}, {\sl power} and
+the {\sl multidimensional scale}, {\sl dynamic workload}, {\sl power} and
 {\sl scheduling challenges}. 
 
 
 \paragraph{Generalized Resource Model:}
-Traditionally, a compute resource is modeled as a simple collection of compute nodes. 
+In the traditional paradigm, compute resources are modeled as a simple collection of compute nodes. 
 However, this simplified worldview is not well-suited for the new paradigm. 
-Today's applications are diverse with disparate limiting perfomance 
+Today's applications are diverse with disparate limiting performance 
 factors beyond the floating point computation. Further, the computing facility
 is also increasingly subject to other resource types such as power
 and shared persistent storage. The generalized resource model is our concept
 to represent various resource types and their relationships 
 that can impact how well applications perform and the computing
 facility operates. Our generalized resource model also includes a
-unifed resource specification and description language. Speaking the
+unified resource specification and description language. Speaking the
 same resource description language for resource requirement specification 
 provide transparency and fine-grained expressibility.
 Our generalized resource model addresses not only the {\sl diverse workload}
-and {\sl power chellenges}, but also the {\sl scheduling challenge}. More specifically, 
+and {\sl power challenges}, but also the {\sl scheduling challenge}. More specifically, 
 the unified language approach allows users to express their resource requirements
-more flexibly---e.g., ranges for certain resource type and/or OR operators
-to choose from several equivalent resource types. This then makes the
+more flexibly---e.g., a range (instead of a hard amount) for certain resource type and/or OR operators
+that allow choosing a resource from several equivalent resource types. This then makes the
 schedule granularity of jobs more malleable and finer. 
 
 
 \paragraph{Resource Allocation Elasticity Model:}
-As our applications and their programming models are becoming increasingly dynamic,
-the new paradigm must support an elasticity model where an existing resource 
-allocation can expand and/or shrink depending on the current needs of applications
-or the computing facility. We support a grow/shrink-based elasticity
-model within our job hierarchy model above: a child job sends a grow/shrink 
-request to its parent, which can go up the job hierarchy
-until all requite constraints are known for this request.  
-Also, combining this with the generalized resource model, the
-elasticity can reprensent any resource including power consumption. 
-The elasticity model addresses not only the {\sl dynamic workload} and {power challenges}
-but also {\sl scheduling challenge}. When a signficant stall is created
-in the schedule with no small jobs to back-fill, some of the currently
-running jobs can grow into these stalled resources and possibly complete sooner.  
+As our applications and their programming models are becoming increasingly
+dynamic, the new paradigm must support an elasticity model where an existing
+resource allocation can expand and/or shrink depending on the current needs
+of applications or the computing facility. We support a grow/shrink-based
+elasticity model within our job hierarchy model above: a child job sends
+a grow/shrink request to its parent, which can go up the job hierarchy
+until all requite constraints are known for this request. Also, combining
+this with the generalized resource model, the elasticity can represent
+any resource including power consumption. The elasticity model addresses
+not only the {\sl dynamic workload} and {\sl power challenges} but also
+{\sl scheduling challenge}. When a significant stall is created in the
+schedule with no small jobs to back-fill, some of the currently running
+jobs can grow into these stalled resources and possibly complete sooner.  
+
+
+\paragraph{Common Scalable Communication Infrastructure Model:}
+Our scalability strategy with respect to a large number of compute nodes 
+is to provide a common scalable communication framework within each
+job. When a job is created, a secure, scalable overlay network with common
+communication service is established across its allocated nodes.
+Except for the root-level job, the existing communication session of the
+parent job assists the child job with rapid creation of its own session.
+A communication session is only aware of its parent and child and passes
+the limited set of control information through this communication channel.
+Thus, this model enables highly scalable communication within a job, 
+while limits communications between other jobs, addressing both the 
+{\sl multidimensional scale} and {\sl security challenges.} 
+Further, this backbone per-job communication network supports 
+many well-known bootstrap interfaces for distributed programs including
+many MPI implementations as well as run-time tools, and thus in part
+addresses the {productivity challenge}. 
 
 
 \paragraph{Self-Hosting Model:}
-
-
-\paragraph{Common Scalable Infastructure Model:}
+We use a self-hosting model to instantiate a new RM instance: the parent
+is capable of launching a standalone copy of itself as a child job, but possibly
+with different plugins. 
+This makes it easier for developers or a quality assurance team to test new RM versions,
+helping addressing the {\sl higher downtime costs}. 
+Further, self-hosting with new and experimental plugins 
+encourages experimentation and facilitates research activities 
+within a production instance, addressing the {\sl productivity challenge}
+as well.
 
 
 \paragraph{Lightweight Virtualization Model:}
-The lightweight virtualization model is our response to {\sl higher downtime costs}, 
-{\sl separation-of-concerns} and {\sl security challenges}. 
-Full-fledged virtualization techniques like Java virual machines have many advantages
-for these design challenges, but that approach has proven to be ineffective for HPC due in large
-part its high overhead. Instead, our virtualization strategy is through lightweight
-mechanisms that modern Operating Systems (OS) like Linux offer. 
-Thus, this model will exploit the notion of lightweight containers
-and private file system namespaces for jobs, achieving
-a higher degree of isolation between system software and user-visible
-software. For example, the RM and the OS
-kernel might see one version of the root file system, while an application
-might see another. The decoupling and isolation will be the key to the
-much desired ability to upgrade the software levels in the machine's
-root filesystem without affecting any of the
-libraries that an application might be using, and vice-versa.
-Similarly, one can upgrade the system OS image at idle points between jobs,
-with user-level software remaining unchanged, or vice versa. The separation of
-concerns gives more flexibility to the organization in determining software
-update policy and in fact could allow users or code development teams to
-control the software levels affecting their application, independent of
-other applications.
+The lightweight virtualization model is our response to 
+the {\sl higher downtime costs}, {\sl separation-of-concerns} and
+{\sl security challenges}. Full-fledged virtualization techniques like Java
+virtual machines have many advantages for these design challenges, but
+that approach has proven to be ineffective for HPC due in large part
+its high overhead. Instead, our virtualization strategy is through lightweight
+mechanisms that modern Operating Systems (OS) like Linux offer.  Thus,
+this model will exploit the notion of lightweight containers and private
+file system namespaces for jobs, achieving a higher degree of isolation
+between system software and user-visible software. For example, the RM
+and the OS kernel might see one version of the root file system, while
+an application might see another. The decoupling and isolation will be
+the key to the much desired ability to upgrade the software levels in the
+machine's root file system without affecting any of the libraries that
+an application might be using, and vice-versa. Similarly, one can upgrade
+the system OS image at idle points between jobs, with user-level software
+remaining unchanged, or vice versa. The separation of concerns gives more
+flexibility to the organization in determining software update policy
+and in fact could allow users or code development teams to control the
+software levels affecting their application, independent of other
+applications.
 
 
-The lightweight container approach will also tightly control the access that
-applications have to system resources. For example, it is possible to
+The lightweight container approach will also tightly control the access
+that applications have to system resources. For example, it is possible to
 run the job in its own network namespace such that direct access to the
 system management network is unavailable, or limited by node firewall
 rules. This model will  also use the private network namespace to isolate
 jobs from each other on virtual private networks.
-Containers with private filesystem namespaces can limit visibility of
+Containers with private file system namespaces can limit visibility of
 file systems to jobs based on the site policy, significantly addressing
-{\sl security challenge}.
+the {\sl security challenge}.
 
-
-\paragraph{Productivity Tool Support Model:}
-
-%
-%\item{Elasticity model:} Describe our grow/shrink model. This is the model that addresses {\sl Dynamic workload challenge}, {\sl Power challenge}, {\sl Scheduling challenge}
-%
-%\item{Common scalable infrastructure model:} Including per-job Comms session. This is the model that addresses scale challenge in concurrency along with other new capabilities noise control. {\sl Integration challenge} {\sl Productivity tools challenge}
-%
-%\item{Self-hosting model:} Describe a job can custimize itself with the self-hosting capabilty and its own plug-ins. Explain how that can address {\sl Integration risk} and {\sl Productivity challenge} . 
-%
-%\item{Rich, scalable run-time model:} Perhaps describe some essence of WRAP. {\sl scale challenge} and {\sl Productivity challenge}.  Also explain that through LWJ, it also address other key challenges like dynamic, power challenges...  
-%
-%
 
 \section{Next Generation Resource Manager}
+\label{sect:ngrm}
 \subsection{Terminology}
 
 \paragraph{comms session}
