@@ -943,21 +943,23 @@ Each of the thrust areas is briefly introduced below, then described in
 more detail in the sections that follow.
 
 \paragraph{Communication Framework}
-\ngrm\ will devise a communication framework based on Internet Protocol
-that supports our hierarchical job model, providing rich, scalable
-communications services
-within a job and more limited communication bewteen jobs using
+The Communications Framework thrust will
+realize our {\em common scalable communication infrastructure model}.
+Building upon mature and portable Internet protocols and services,
+the comms framework enables rich, scalable communications services
+within a job and more limited communication between jobs using
 the job's {\em control node} as gateway.
-The {\em comms toolkit} provides a security model, tools for
+A {\em comms toolkit} provides a security model, tools for
 encoding and decoding messages, and tools for transporting messages between
 nodes using various messaging patterns including PUB-SUB (with multicast),
 RPC, and streaming.
-A {\em comms message broker} tracks node liveness, provides services for
-building fault-tolerant communication structures within the job,
+A {\em comms message broker} tracks node liveness, provides support for
+building fault-tolerant services within the job,
 and provides a multicast {\em scheduling trigger} used to synchronize
 system overhead within the job to reduce noise.
 A persistent {\em reduction network}
-provides a reduction sieve capability for the job rooted at the control node.
+provides the structure needed to build tools and services that have
+in-situ reduction capability, rooted at the control node.
 
 \paragraph{Resource Management}
 
@@ -978,7 +980,7 @@ will act as s top-level configuration database for resources. A
 read-write copy of this repository will be available within each
 job instance (at this level termed the {\em resource database}),
 such that any job may modify resource attributes as if it were a
-full instance of \ngrm\. The global {\em job repository} will be
+full instance of \ngrm. The global {\em job repository} will be
 responsible for storing historical job information, including,
 but not limited to, resources assigned to the job and all its
 children jobs, job provenance records such as software levels
@@ -1002,7 +1004,7 @@ introduction of a {\em job description language} which is flexible
 enough to describe complex job resource and time requirements. The
 scheduler interface to \ngrm\ will be via a powerful plugin
 subsystem, which will allow alternate job schedulers to be swapped
-in, possibly on-demand, as jobs are launched in \ngrm\. (For
+in, possibly on-demand, as jobs are launched in \ngrm. (For
 instance, the root job may use an advanced fairshare scheduler,
 while a job launched by a researcher for a parameter study may
 incorporate a simpler scheduler tuned for high throughput). The
