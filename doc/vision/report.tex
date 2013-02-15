@@ -161,8 +161,8 @@ today's {\em capability-class} machines have been facing.
 These challenges include having to provide extreme scalability, low noise, 
 fault tolerance, and heterogeneity management while under a strict power budget.
 Worse, the workloads themselves are also becoming increasingly diverse, 
-dynamic and large. Thus, fully realizing our vision through these challenges requires
-a {\em paradigm shift} in how the RM should manage, model, schedule 
+dynamic, and large. Thus, fully realizing our vision through these challenges requires
+a {\em paradigm shift} in how the RM should manage, model, schedule,
 and allocate its resources.
 
 In the new paradigm, the RM must be capable of imposing highly complex resource bounds
@@ -176,7 +176,7 @@ and execution environments. Further, the same ability will ease
 efforts to diagnose errors for both end users and support staff
 by associating jobs with other facility-wide events. 
 The new paradigm also demands that the RM model
-various types of resources and their relationships beyond the traditional resource model:
+various types of resources and their relationships beyond the traditional resource representation:
 i.e., a simple collection of compute nodes.
 The rich resource model will allow the RM to allocate computing resources
 tailored to the disparate limiting factors of our applications: e.g.,
@@ -184,13 +184,13 @@ an application may be compute-bound while others are I/O-bound or power-bound.
 Under the new paradigm, the resource allocations must also be elastic. 
 An application may have different phases with disparate performance-limiting factors;
 it must be able to grow and shrink its resource allocation dynamically. 
-The global resource view, rich resource model and elasticity represent
-the fundamental characteristics of the RM under the new paradigm.
+The global resource view, rich resource model, and elasticity represent
+the fundamental characteristics of the new resource management paradigm.
 
 Further, the new paradigm must provide a central framework to integrate
 other relevant software. The software components should include   
 system monitoring and administration, lightweight virtualization, 
-and scalable tool communication. We envision that the integration will 
+and scalable tool communication. The integration will 
 facilitate a higher level of leverage among these essential computing elements, 
 and this will lead to significantly higher productivity 
 for both end users and system administrators.  
@@ -202,7 +202,7 @@ under the new paradigm.
 
 
 \paragraph{Center as a Cluster:}
-Unlike the traditional approach of running an RM instance on each separately
+Unlike the traditional paradigm of running an RM instance on each separately
 managed cluster, 
 %and tying clusters together with grid software almost was
 %an afterthought. 
@@ -217,8 +217,8 @@ Further, dedicated interactive nodes will be unnecessary in the new system, as i
 will be possible to allocate interactive environments on demand from the
 global pool of resources.
 
-With integrated, center-wide monitoring, it becomes easier
-for the new paradigm to associate site-wide Reliability, Availability and Serviceability~(RAS) 
+With integrated, site-wide monitoring, it becomes easier
+for the new paradigm to associate global Reliability, Availability and Serviceability~(RAS) 
 events such as a global file system
 failure with an affected job and to make that information part of
 the job's data {\em provenance} record. When the RM obtains a global view of
@@ -228,34 +228,35 @@ I/O forwarding software, our RM could easily set up unique I/O forwarding
 topologies for each job.
 
 This paradigm also has many advantages for system administration.
-The system management overhead that currently scales with the number of clusters
-could be streamlined by aggregating per-cluster services into center-wide
-services. For example, at LLNL, each cluster has a pair of management
+The system management overhead currently scales with the number of clusters.
+But in this paradigm, per-cluster services can be aggregated into
+site-wide services to reduce the overhead.
+For example, each cluster at LLNL has a pair of management
 nodes that are bootstrapped from scratch with an OS installation from DVD,
 and when system software is updated on that cluster, a downtime is
 scheduled during which the workload sits idle and the responsible system
 administrator performs a sequence of steps. Under the new paradigm, the
 number of systems that have to be brought up from scratch will be
 greatly reduced, and administrator-orchestrated downtimes for software
-updates could be eliminated. 
+updates will be eliminated. 
 
 
 \paragraph{Diverse Compute Resources:}
 The traditional paradigm has solely focused on node- and/or CPU-centric
 scheduling. With the advent of hybrid compute systems utilizing specialized,
-heterogeneous resources and other bounding resources like power, 
-this simple model has become less effective. Rather than
+heterogeneous resources and also of other bounding resources like power, 
+this simple resource model has become largely ineffective. 
+Rather than
 perpetuating a node-centric resource model with support for other
-resources as an add-on, the new paradigm must fully support diverse resources. 
-Thus, the idea of a resource must be kept as generic as
-possible. This will not only facilitate simpler handling of generic resources,
-but also enable future expansion to resource types that have yet to
+resources as an add-on, the new paradigm must embrace the concept of generalized resources: 
+the idea of a resource is kept as generic as possible. This will not only facilitate 
+simpler handling of diverse resources, but also enable future expansion to resource types that have yet to
 be conceived. New resource types can be provided through configuration changes
 and/or simple extensions that inherit their attributes from base types 
-to maximize reuse and foment collaboration.  Various resource topologies
+to maximize reuse and foment collaboration. Various resource topologies
 can be encoded via configuration, and resources can also be allowed to have tags or labels
 to which resource requests may refer. 
-The new paradigm must provide a generic resource query language to allow flexible
+The new paradigm must also provide a generic resource query language to allow flexible
 specification of resource requirements.
 
 
@@ -263,7 +264,7 @@ specification of resource requirements.
 As simulation plays an increasingly central role in scientific
 investigation, reproducibility of results is more important than ever
 before. A result should be accompanied by a data provenance record that
-can be used by others to recreate the inputs and conditions that led to
+can be used by others to reconstruct the inputs and conditions that led to
 that result. It should also record unusual system activities 
 such as RAS events that might help in a post-mortem analysis 
 when expected results are not obtained.
@@ -307,10 +308,10 @@ require stability for long periods of time.
 
 \paragraph{Low Noise:}
 As the number of processes in a parallel application increases, 
-their executions are affected to varying degrees by OS
-scheduling jitter, depending on their communication patterns. Minimizing
-the user-space system software contribution to OS jitter must one 
-of the primary goals of the new paradigm.  Thus, the new RM must supplant
+OS scheduling jitter affects their executions to a larger degree.
+Minimizing
+the user-space system software contribution to the OS jitter must be one 
+of the primary goals of the new paradigm.  Thus, the new paradigm must supplant
 the independent monitoring, remote shell, and cron
 services that contribute to noise today. The integrated services will
 allow users to dial up or down the verbosity and frequency of monitoring,
@@ -324,12 +325,12 @@ non-application activity to a configurable {\em noise core}.
 
 
 \paragraph{Fault Tolerance:}
-As the new paradigm manages the entire compute facility,
-the RM's Tolerance to hardware and software faults and failures
-must become one of the primary attributes.
-Thus, the RM must have no single point of failure and support
-version interoperability that allows {\em live} software upgrades.
-The paradigm must facilitate a rolling update across the center
+As the new paradigm manages the entire computing facility,
+the RM's tolerance to hardware and software faults and failures
+is no longer optional.
+Thus, the new RM must have no single point of failure. Further, it must support
+version interoperability that allows {\em live} software upgrades
+and facilitate a rolling update across the center
 without negatively impacting overall availability of 
 the facility and/or running workloads.
 
@@ -358,33 +359,32 @@ to a system or its networks.
 
 
 \paragraph{Research and Tool Friendly:}
-The new paradigm must facilitate development and use of 
-scalable run-time code development tools. These tools can significantly 
-improve end-user productivity, who must develop, debug, optimize, 
+The new paradigm need to facilitate development and use of 
+scalable run-time code development tools to improve end-user productivity
+significantly, who must develop, debug, optimize, 
 test and verify their code on the next-generation systems. 
 Similarly, it must
 also facilitate research with the same goal in mind.
-Specifically, the new paradigm must support highly scalable infrastructure
+Specifically, the new paradigm must provide highly scalable infrastructure
 and rich run-time interfaces
 on which tools can build. Further, it must have 
-the ability to capture and
-publish sanitized system data at all levels to facilitate the use of
-this data in current and future research. 
+an ability to capture and publish sanitized system data at all levels to facilitate the use of
+this data in HPC research. 
 
 
 \paragraph{Extensibility:}
-By all means, such a paradigm shift is an ambitious goal, and thus
-the new RM must be extensible and customizable to help achieve this goal.
-It must provide features that lower the barrier of entry into the
+By all means, such a paradigm shift is an ambitious goal. Thus, 
+the new RM must be extensible and customizable to accelerate the shift
+and provide features that lower the barrier of entry into the
 community of developers supporting and extending the RM.
 Plugins, when designed properly, can significantly help realize this vision,
 without having to sacrifice the stability of the core RM software. 
 With plugins, various RM subsystems can be replaced and extended.  
-That can be the mechanisms for
+This can be the mechanism for individual
 sites to customize their RM for their particular needs. 
 In addition, the new RM must be designed to be self-hosting: it must  
 be capable of launching a standalone copy of itself as a job. This makes
-it possible for developers or a QA team to test new RM versions. 
+it possible for developers or a quality assurance team to test new RM versions. 
 
 %Components of \ngrm\ will be designed with the ability to capture and
 %publish sanitized system data at all levels to facilitate the use of
