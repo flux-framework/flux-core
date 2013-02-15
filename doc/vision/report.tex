@@ -853,7 +853,8 @@ more detail in the sections that follow.
 
 \paragraph{Communication Framework}
 \ngrm\ will devise a communication framework based on Internet Protocol
-that supports our hierarchical job model, providing rich, scalable services
+that supports our hierarchical job model, providing rich, scalable
+communications services
 within a job and more limited communication bewteen jobs using
 the job's {\em control node} as gateway.
 The {\em comms toolkit} provides a security model, tools for
@@ -897,7 +898,20 @@ an {\em external enterprise monitoring system} such as might be used in
 a site operations center.
 
 \paragraph{Workload Runtime and Placement}
-FIXME
+The \ngrm\ runtime launches the user workload such that it is confined
+to allocated resources using a set of {\em confinement plugins}
+and is provided a set of services intended to support application
+runtimes and tools operating at extreme scale.
+These services include a {\em distributed key value store} which facilitates
+disseminating bootstrap information to distributed tools,
+a {\em unified software bootstrap interface} which provides common
+interfaces to a variety of tools and runtimes, and
+a {\em job function synchronization} service which assists with the placement
+of tool processes co-located with application processes.
+The effort required to build a distributed tool on top of these services
+and the comms layer will be greatly reduced from today, enabling
+proof-of-concept research tools or even one-off tools to solve a particular
+problem to be created in a short amount of time.
 
 \paragraph{I/O Management}
 FIXME
