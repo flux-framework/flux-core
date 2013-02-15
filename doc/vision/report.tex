@@ -937,8 +937,10 @@ Similarly, a {\em job repository} and {\em job database} within each job
 tracks information about jobs as they move through their life cycle,
 and records a {\em provenance record} for each job, capturing pertinent
 information about the job's runtime environment.
- The {\em scheduler} computes a schedule that matches available
-resources to job requests.  
+The {\em scheduler} computes an execution schedule and resource mapping
+that matches available resources to job requests.  The scheduler can
+also be interrogated as to when hypothetical resource requests would
+run so that requests can be adapted to resource availability if necessary.
 
 \paragraph{Monitoring}
 Resource managers must monitor resource health to avoid scheduling
@@ -972,7 +974,20 @@ proof-of-concept research tools or even one-off tools to solve a particular
 problem to be created in a short amount of time.
 
 \paragraph{I/O Management}
-FIXME
+\ngrm\ allows a job to customize its I/O configuration through the use
+of {\em private namespaces}, and is capable of managing and configuring
+I/O resources such as disks, file systems, file caches, and network channels
+through plugins.
+File {\em stage-in} and {\em stage-out}, e.g. for executables and
+checkpoint files, is managed by a job-specific plugin.
+An {\em io-analysis} plugin allows application file accesses and
+I/O activity to be automatically analyzed in situ, monitored, and recorded.
+Still another {\em io-qos} plugin permits custom I/O forwarding topologies
+and file system quality-of-service to be established for the job's
+particular I/O demands.  Finally, a  {\em local storage} plugin allows
+jobs to manage raw storage hardware (disks, SSD's, and RAM) allocated
+to them, creating and destroying file systems on the fly for exclusive
+use of the job which can be the targets of stage-in/stage-out.
 
 \include{framework}
 
