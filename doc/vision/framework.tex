@@ -70,9 +70,9 @@ virtual network interfaces).  Similarly,
 dynamic multicast address allocation must be available to support
 private multicast groups within dynamically created comms sessions.
 These requirements can be addressed by existing technology such as
-DHCP\cite{rfc2131} and MADCAP\cite{rfc2730}.
+DHCP~\cite{rfc2131} and MADCAP~\cite{rfc2730}.
 
-A private DNS\cite{rfc1034} is used by the comms framework to
+A private DNS~\cite{rfc1034} is used by the comms framework to
 map a hierarchical namespace to the comms session hierarchy.
 The root comms session has the root domain name, e.g. ``{\tt \ngrm.}'',
 and the root server contains address records for all hosts in the domain, e.g.
@@ -87,7 +87,7 @@ When a node joins a new session, its DNS resolver is reconfigured to use
 the session DNS servers and to search the session's DNS domain first,
 thus each level of session overlays a new set of names over
 the root session's that provides job-centric naming uniformity.
-DNS SRV records\cite{rfc2782} provide a rudimentary service location
+DNS SRV records~\cite{rfc2782} provide a rudimentary service location
 brokerage within the session.
 Well understood techniques for DNS fault tolerance,
 caching, and dynamic reconfiguration are leveraged to scale performance
@@ -95,7 +95,7 @@ in large sessions such as the root session.
 
 A comms session could optionally be spawned inside a virtual private
 network (\ref{ReqsUseCases}, UC21) such that IP communication
-is limited to within the comms session.  IPsec\cite{rfc2401} with
+is limited to within the comms session.  IPsec~\cite{rfc2401} with
 a pre-shared session key could be used to provide session integrity and
 privacy at the IP layer if desired.
 
@@ -111,11 +111,11 @@ Toolkit pieces can be mixed and matched according to application
 requirements.  We may cull the comms toolkit as we learn more
 about the pieces while prototyping other \ngrm\ components.
 
-Two messaging approaches of interest are \zMQ\cite{ZMQGuide} and
-SCTP\cite{SCTP}.
+Two messaging approaches of interest are \zMQ~\cite{ZMQGuide} and
+SCTP~\cite{SCTP}.
 \zMQ\ provides the ability to manipulate opaque, multipart messages,
 and carry them across various transports, including TCP and
-PGM\cite{rfc3208} (reliable multicast), using a socket-like API.
+PGM~\cite{rfc3208} (reliable multicast), using a socket-like API.
 \zMQ\ sockets can exchange messages using patterns including
 REQ-REP (RPC), PUB-SUB, and PUSH-PULL (message stream).
 \zMQ\ can be used to build applications or custom message brokers.
@@ -142,8 +142,8 @@ mode.
 \end{figure}
 
 Two widely used methods of encoding data in messages are
-JSON\cite{rfc4627} 
-and Protocol Buffers\cite{Protobuf}.
+JSON~\cite{rfc4627} 
+and Protocol Buffers~\cite{Protobuf}.
 JSON is a self-describing format
 that supports protocol evolution without recompiling endpoints.  It has
 many language bindings but it is also space-inefficient and slow.
@@ -153,7 +153,7 @@ fewer language bindings than JSON but is space-efficient and fast.
 Depending on the application either may be appropriate.
 
 Message integrity and privacy can be obtained using either a session
-security context or via MUNGE\cite{MUNGE}.
+security context or via MUNGE~\cite{MUNGE}.
 Each comms session is allocated a {\em session key} by its parent
 which is used for establishing a shared security context
 for messages exchanged within the comms session.
@@ -170,7 +170,7 @@ the child's session key as it is known by both parent and child.
 
 If the sender of a message needs to be authenticated, or if messages must
 be kept private from other users within the session or its anscestors,
-messages can be enclosed as payload in a MUNGE\cite{MUNGE}
+messages can be enclosed as payload in a MUNGE~\cite{MUNGE}
 credential.
 In order for this to work, \ngrm's comms framework must operate within a
 single MUNGE security realm,
@@ -381,7 +381,7 @@ subdomain.
 \subsection{Aggregation/Reduction Network Overlay}
 
 The \ngrm\ runtime and monitoring components will require an
-aggregation/reduction framework similar to MRNet\cite{MRNet} that
+aggregation/reduction framework similar to MRNet~\cite{MRNet} that
 can aggregate or reduce data produced across the session before it is
 consumed at the control node.
 

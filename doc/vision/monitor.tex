@@ -135,13 +135,13 @@ job owner.
 
 Special care must be taken in the design of the plugin execution
 environment to minimize disruptive impact on compute nodes.
-For example, some monitoring systems like Chukwa\cite{Chukwa} require
+For example, some monitoring systems like Chukwa~\cite{Chukwa} require
 data source functionality to execute in a Java VM, which would have an
 unacceptably high memory and scheduling impact on some workloads.
-Others like Nagios\cite{Nagios} rely on shell scripts that may have a
+Others like Nagios~\cite{Nagios} rely on shell scripts that may have a
 similarly high or unpredictable impact.
 \ngrm\ monitoring plugins should leverage a lightweight execution environment
-such as an embedded Lua\cite{LuaBook} interpreter.
+such as an embedded Lua~\cite{LuaBook} interpreter.
 
 \subsection{Log Database Interface}
 
@@ -159,13 +159,13 @@ a generic interface so that sites can choose the technology
 to use to build such a system.  Some sites may prefer proprietary
 systems such as Splunk\textsuperscript{\textregistered}, while others may
 wish to build one from the many horizontally-scalable NoSQL databases
-such as CouchDB\cite{CouchDB} or mongoDB\cite{MongoDB}.
+such as CouchDB~\cite{CouchDB} or mongoDB~\cite{MongoDB}.
 Still others, operating at modest scale, may employ a traditional flat
 file or relational database.  At LLNL, an in-progress Laboratory
 Directed Research and Development feasibility study on HPC log
-analytics\cite{LogLDRD} may spawn a separate project for the log database.
+analytics~\cite{LogLDRD} may spawn a separate project for the log database.
 
-The syslog protocol, modernized in RFC 5424\cite{rfc5424},
+The syslog protocol, modernized in RFC 5424~\cite{rfc5424},
 includes a provision for STRUCTURED-DATA content,
 an easily parsed format that is user-extensible.
 Since log data may be voluminous at times, and scalability may require
@@ -217,7 +217,7 @@ reduction.
 
 \subsection{Fault Notification System}
 
-The CIFTS group has argued\cite{CIFTS} that a wholistic, full-system approach
+The CIFTS group has argued~\cite{CIFTS} that a wholistic, full-system approach
 to fault notification is required in order to enable fault-tolerant
 applications and runtimes to make good decisions when things go wrong.
 For example, faults occuring on Lustre file system servers may be of interest
@@ -232,7 +232,7 @@ A {\em fault gateway} allows configured local faults to be published externally,
 and configured external faults to be published locally.
 
 We have adopted the 
-CIFTS Fault Tolerance Backplane API\cite{FTBAPI} (FTB-API)
+CIFTS Fault Tolerance Backplane API~\cite{FTBAPI} (FTB-API)
 an emerging standard for fault notification available in some MPI
 implementations and other software as the programming interface for the
 fault system.  We will use CIFTS event namespace conventions as well.
@@ -299,7 +299,7 @@ allocated to it, resource health state does, with varying degrees of latency,
 eventually recurse to the root job's resource database, thus it is
 appropriate to interface enterprise monitoring there.
 
-SNMP\cite{StallingsSNMP} is the de-facto standard protocol for enterprise
+SNMP~\cite{StallingsSNMP} is the de-facto standard protocol for enterprise
 monitoring.  An SNMP gateway that speaks both the resource database API
 and SNMP will run on the root job's control node.
 State can be {\em pulled} out of \ngrm\ via SNMP GET and GETBULK requests.

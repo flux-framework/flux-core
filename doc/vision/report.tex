@@ -713,7 +713,6 @@ local job in order to access the full power of \ngrm\ for managing
 resources assigned to the job. In theory, this mechanism can be
 used indefinitely such that the resources of an entire center
 are {\em divided} naturally through normal workloads.  
-%TODO: Recursive job model concept figure
 
 In order to better understand the hierarchical job model, it may help
 to first visualize a computation center as a hierarchy
@@ -732,7 +731,7 @@ and see that our hierarchy continues in an expected way.
 
 \begin{figure}
 \centering
-\includegraphics[scale=0.5]{../fig/resource_hierarchy.eps}
+\includegraphics[scale=0.75]{../fig/resource_hierarchy.eps}
 \caption{Hierarchical View of Resources in a Computations Center}
 \label{fig:ResHierarchy}
 \end{figure}
@@ -740,7 +739,7 @@ and see that our hierarchy continues in an expected way.
 When \ngrm\ initializes, there exists a single {\em root} or {\em
 bootstrap} job which contains all the resources that are managed by
 \ngrm. This concept is shown overlayed on our hierarchical resource
-tree in Figure~\ref{fig:RootJob}. The root job is the only job
+tree in Figure~\ref{fig:JobHierarchy}a. The root job is the only job
 which does not have a parent job, i.e. it serves as the root of
 the heirarchical tree of jobs (an analogy in the UNIX idiom would
 be that the root instance is the {\tt init} process.) Instead of
@@ -749,13 +748,51 @@ users, and configuration from a global, peristent database, which
 serves as a configuration repository in \ngrm. We could say that
 the configuration repository is the parent of the root job.
 
-\begin{figure}
-\centering
-\includegraphics[scale=0.5]{../fig/root_job.eps}
-\caption{Root Job (Job 0) encompasses all configured resources.}
-\label{fig:RootJob}
-\end{figure}
+All new job requests are submitted to the root job and scheduled
+by the root jobs loaded scheduler. However, each child of the
+root job is itself a full instance of the RM software system
+so job requests may now be directed at a child job.
+Figure~ref{fig:JobHierarchy} attempts to demonstrate this for
+an example job heiarchy. In this figure we have a single child
+job managing an entire cluster resource, a child job running
+on a subset of that cluster's resources, and finally an example
+of two {\em lightweight jobs} dividing the resources of a
+single node.
 
+\begin{figure}
+\begin{minipage}{0.5\linewidth}
+  \begin{center}
+  \includegraphics[scale=0.45]{../fig/job-hierarchy-job0.eps}
+  {\em (a)}
+  \end{center}
+\end{minipage}
+\begin{minipage}{0.5\linewidth}
+  \begin{center}
+  \includegraphics[scale=0.45]{../fig/job-hierarchy-job0.x.eps}
+  {\em (b)}
+  \end{center}
+\end{minipage}
+
+\begin{minipage}{0.5\linewidth}
+  \begin{center}
+  \includegraphics[scale=0.45]{../fig/job-hierarchy-job0.x.y.eps}
+  {\em (c)}
+  \end{center}
+\end{minipage}
+\begin{minipage}{0.5\linewidth}
+  \begin{center}
+  \includegraphics[scale=0.45]{../fig/job-hierarchy-lwj.eps}
+  {\em (d)}
+  \end{center}
+\end{minipage}
+\label{fig:JobHierarchy}
+\caption[Job Hierarchy Example]{{\small An example job hierarcy shown on top
+of a resource hierarchy.
+{\em (a)} Job 0 spans all resources,
+{\em (b)} job 0.x runs across all of {\sc Cluster 2},
+{\em (c)} job 0.x.y runs across nodes N1--5, and finally
+{\em (d)} two lightweight jobs are instantiated on N5.}}
+\end{figure}
 
 The root job and its progeny all have the following features:
 
