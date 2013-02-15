@@ -432,19 +432,19 @@ Section~\ref{sect:vision}.
       resources as a collection of compute nodes will only work well when the
       application is compute-bound. Modern workloads have grown in their
       complexity, and even today, only a small fraction of modern applications
-      are compute-bound.
+      is compute-bound.
        
 \item{\sl Dynamic workload challenge:} Not only must the paradigm support 
       disparate performance limiters across different applications, but
-      also must it be well-suited for varying performance limiters within 
-      a single application. Our applications have grown to be more
-      dynamic with different resource requirements at different
-      phases.
+      also must it suit varying performance limiters within 
+      a single application. Our applications and their programming paradigm
+      are becoming increasingly dynamic with different resource requirements
+      at different phases.
 
 \item{\sl Power challenge:} As one specific example of emerging resource types,
-      power is becoming increasingly important. When the computing
+      power is becoming critical. When the computing
       facility becomes power-bound instead of compute-node-bound, the new
-      paradigm must be able to help it to schedule based upon the 
+      paradigm must help it to schedule workloads based upon the 
       maximum power limit at any level at the facility. Thus, 
       the resource representation of the new RM must be generalized
       enough to model consumable resources like power.  
@@ -452,8 +452,8 @@ Section~\ref{sect:vision}.
 \item{\sl Scheduling challenge:} As more diverse attributes of resources
       are factored into scheduling, more stalls can occur in the schedule.
       For instance, $N$ compute nodes may sit idling simply because they do not meet
-      the network proximity requirement for a workload that requires 
-      $N$ nodes connected at a same lower-level switch. Thus, our design 
+      the network proximity requirement for a job that requested 
+      $N$ nodes all connected at a same lower-level switch. Thus, our design 
       must provide alternative ways to fill the stalls to meet this 
       challenge.
 
@@ -475,8 +475,8 @@ Section~\ref{sect:vision}.
      a downtime can negatively affect the availability of
      a large portion of the facility and/or running workloads across it.
      Thus, the new paradigm must be tolerant of hardware and software faults 
-     and failures with no single point of failure and must support version 
-     interoperability that allows {\em live} software upgrades.
+     and failures with no single point of failure and must also support 
+     live software upgrades.
 
 \item{\sl Separation-of-concerns challenge:} Many attributes of the new
      paradigm motivate a much higher degree of separation between
@@ -486,12 +486,12 @@ Section~\ref{sect:vision}.
      locking the system software level. 
    
 \item{\sl Security challenge:} As the new paradigm increasingly motivates
-     a more distributed and hierarchical software design, 
+     a highly distributed, hierarchical software design, 
      the importance of security across and within the components becomes greater.
 
 \item{\sl Productivity challenges:} The new paradigm must improve end-user 
-     productivity in part through tightly integrated support for development
-     and support for scalable code development run-time tools and research.
+     productivity in part through tightly-integrated support for development
+     and use of scalable code development run-time tools and research.
 
 \end{itemize}
 
@@ -507,9 +507,9 @@ a concept too weak to support the new paradigm.
 Rather, we unify the traditional job notion 
 with the notion of a resource manager instance---an independent set of resource manager service.
 The RM instance must be delegated the main responsibility of managing the resource allocated to the job.
-Then, the unified job model becomes our logical basic block
-on which to build a hierarchical resource management 
-delegation structure to address the {\sl multidimensional scale challenge}.
+Then, the unified job model becomes our logical basic-block
+on which to build a hierarchical, resource-management 
+scheme to address the {\sl multidimensional scale challenge}.
 In addition, an RM instance can implement compatibility mode with a particular 
 traditional paradigm only over its own allocation, providing a straightforward path to address
 the {\sl backward compatibility challenge}. 
@@ -517,9 +517,10 @@ the {\sl backward compatibility challenge}.
 
 \paragraph{Job Hierarchy Model:}
 To scale the new paradigm in the scaling limit of the entire computing facility,
-the new paradigm requires a multi-level delegation structure for a hierarchical 
-resource management scheme. We use a tree-based job hierarchy model
-that has many proven advantages for scalability. 
+we must avoid a centralized approach: the new paradigm requires a hierarchical management scheme 
+with a well-balanced, multi-level delegation structure. 
+For this purpose, we use a tree-based job hierarchy model that has many proven advantages
+for extreme scalability. 
 In this model, a job is only required to manage its children jobs,
 which would be only a small fraction of the total number of jobs that are run
 across the entire computing facility. Further, several guiding principles
@@ -535,19 +536,19 @@ responsibility of a parent job and delegation/empowerment of a child job:
      when it wants to grow or shrink the resource allocation, 
      and it is up to the parent to grant the request.                   
 \end{itemize}
-In general, these rules help enforce the first principle of the new paradigm: 
+In general, these rules enforce the first principle of the new paradigm: 
 imposing highly complex resource bounds to guarantee the highest operational efficiency
 at any level across the computing facility, while enabling most efficient execution
 and scheduling of the workloads within these bounds.
 At the same time, this model is the most fundamental design concept,
 which forms the basis to address many of the design challenges including 
-the {\sl multidimensional scale}, {\sl dynamic workload}, {\sl power} and
+the {\sl multidimensional scale}, {\sl dynamic workload}, {\sl power}, and
 {\sl scheduling challenges}. 
 
 
 \paragraph{Generalized Resource Model:}
-In the traditional paradigm, compute resources are modeled as a simple collection of compute nodes. 
-However, this simplified worldview is not well-suited for the new paradigm. 
+In the traditional paradigm, compute resources are modeled as a simple collection of compute nodes,
+a simplified worldview ill-suited for the new paradigm. 
 Today's applications are diverse with disparate limiting performance 
 factors beyond the floating point computation. Further, the computing facility
 is also increasingly subject to other resource types such as power
@@ -556,29 +557,29 @@ to represent various resource types and their relationships
 that can impact how well applications perform and the computing
 facility operates. Our generalized resource model also includes a
 unified resource specification and description language. Speaking the
-same resource description language for resource requirement specification 
-provide transparency and fine-grained expressibility.
+same resource description language for requirement specification 
+provides transparency and fine-grained expressibility.
 Our generalized resource model addresses not only the {\sl diverse workload}
-and {\sl power challenges}, but also the {\sl scheduling challenge}. More specifically, 
+and {\sl power challenges}, but the {\sl scheduling challenge}. More specifically, 
 the unified language approach allows users to express their resource requirements
-more flexibly---e.g., a range (instead of a hard amount) for certain resource type and/or OR operators
+more flexibly:e.g., a range (instead of a hard amount) for certain resource type and/or OR operators
 that allow choosing a resource from several equivalent resource types. This then makes the
-schedule granularity of jobs more malleable and finer. 
+schedule granule of jobs more malleable and finer. 
 
 
 \paragraph{Resource Allocation Elasticity Model:}
 As our applications and their programming models are becoming increasingly
 dynamic, the new paradigm must support an elasticity model where an existing
-resource allocation can expand and/or shrink depending on the current needs
-of applications or the computing facility. We support a grow/shrink-based
-elasticity model within our job hierarchy model above: a child job sends
-a grow/shrink request to its parent, which can go up the job hierarchy
+resource allocation can grow and shrink, depending on the current needs
+of applications and/or the computing facility. We support the 
+elasticity model within our job hierarchy framework above: a child job sends
+a grow or shrink request to its parent, which can go up the job hierarchy
 until all requite constraints are known for this request. Also, combining
-this with the generalized resource model, the elasticity can represent
-any resource including power consumption. The elasticity model addresses
-not only the {\sl dynamic workload} and {\sl power challenges} but also
-{\sl scheduling challenge}. When a significant stall is created in the
-schedule with no small jobs to back-fill, some of the currently running
+this with the generalized resource model, the elasticity can be expressed for
+any resource including power consumption. Our elasticity model addresses
+not only the {\sl dynamic workload} and {\sl power challenges}, but also
+{\sl scheduling challenge}. When a significant schedule stall is created 
+with no small jobs to back-fill, some of the currently running
 jobs can grow into these stalled resources and possibly complete sooner.  
 
 
@@ -597,7 +598,7 @@ while limits communications between other jobs, addressing both the
 Further, this backbone per-job communication network supports 
 many well-known bootstrap interfaces for distributed programs including
 many MPI implementations as well as run-time tools, and thus in part
-addresses the {productivity challenge}. 
+addresses the {\sl productivity challenges}. 
 
 
 \paragraph{Self-Hosting Model:}
@@ -608,8 +609,7 @@ This makes it easier for developers or a quality assurance team to test new RM v
 helping addressing the {\sl higher downtime costs}. 
 Further, self-hosting with new and experimental plugins 
 encourages experimentation and facilitates research activities 
-within a production instance, addressing the {\sl productivity challenge}
-as well.
+within a production instance, addressing the {\sl productivity challenges}, too.
 
 
 \paragraph{Lightweight Virtualization Model:}
@@ -619,7 +619,7 @@ the {\sl higher downtime costs}, {\sl separation-of-concerns} and
 virtual machines have many advantages for these design challenges, but
 that approach has proven to be ineffective for HPC due in large part
 its high overhead. Instead, our virtualization strategy is through lightweight
-mechanisms that modern Operating Systems (OS) like Linux offer.  Thus,
+mechanisms that modern operating systems like Linux offer.  Thus,
 this model will exploit the notion of lightweight containers and private
 file system namespaces for jobs, achieving a higher degree of isolation
 between system software and user-visible software. For example, the RM
