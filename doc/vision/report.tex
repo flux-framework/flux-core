@@ -660,44 +660,36 @@ of our high level design.
 \subsection{Terminology}
 
 \paragraph{comms session}
-An established communication association among a set of nodes that
-enables secure, scalable, elastic, and fault-resilient communication
-services for an \ngrm\ {\bf instance}.
-A comms session is identified by its private DNS name, e.g. s1.\ngrm.
-or s1.s1.\ngrm.
+An association among a set of nodes that enables secure, scalable,
+elastic, and fault-resilient communication services.
+Communication outside the session must pass through the session
+{\em control node}.  New sessions are spawned hierarchically.
 
 \paragraph{confinement}
-The enforcement of resource allocations such that an {\bf instance} cannot
-consume more than was allocated.  Confinement of an instance to assigned
-resources is the responsiblility of the parent and, in the case of inherited
-confinment, grandparent instance(s).
-
-\paragraph{control node}
-A distinguished node within a {\bf comms session} which holds the master
-{\em comms state}, is the root of the session's aggregation/reduction tree,
-and which performs gateway functions with the parent session.
+The enforcement of resource allocations such that a {\bf job} cannot
+consume more than was allocated.  Confinement of a job to its assigned
+resources is the responsiblility of the parent job.
 
 \paragraph{instance}
-An independent set of resource manager services configured to manage
-a set of resources.
-Instances are created dynamically and recursively.
-We refer to the bootstrap {\em root instance} which contains all resources,
-and speak of {\em parent}, {\em child}, and {\em sibling} relations between
-instances.
-An instance is identified by its {\bf comms session} name,
-e.g. s1.\ngrm.  or s1.s1.\ngrm.
+An independent set of RM services configured for a resource subset.
+Each instance runs within its own {\bf comms session}.
 
 \paragraph{job}
-A time-bounded allocation of resources.  A job is submitted to a
-particular {\bf instance}.  When it executes, a child instance is
-created to contain the job.  As a special case the {\em root job} 
+A time-bounded allocation of resources.
+A job request is submitted to a running job.
+When the scheduler determines that it is time for a job to run,
+a new {\bf instance} is created for it.  Jobs are thus organized
+herarchically.
+As a special case the {\em root job} (job 0) owns all resources and
 runs perpetually without a time bound.
-An job is identified by its {\bf instance} name,
-e.g. s1.\ngrm.  or s1.s1.\ngrm.
+Jobs are uniquely identified by a hierarchical {\em jobid},
+with the root job on the left, e.g. {\tt 0.4234.6}.
 
 \paragraph{lightweight job} (LWJ) 
 A {\bf job} submitted and recorded in the current {\bf instance}
 which does not result in a new instance.
+LWJ's are uniquely identified by their parent's jobid followed
+by a colon, followed by the their {\em lwjobid}, e.g. {\tt 0.4234.6:8}.
 
 %\subsection{Hierachical Job Model}
 \subsection{High Level Design}
