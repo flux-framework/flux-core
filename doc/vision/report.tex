@@ -8,6 +8,10 @@
 \usepackage{longtable}
 \input{pstricks}
 \usepackage{multirow}
+\usepackage{epstopdf}
+\usepackage{graphicx}
+
+\graphicspath{ {../fig/} }
 
 \setlength{\textwidth}{6in}
 \setlength{\textheight}{9in}
@@ -723,7 +727,7 @@ and see that our hierarchy continues in an expected way.
 
 \begin{figure}
 \centering
-\includegraphics[scale=0.75]{../fig/resource_hierarchy.eps}
+\includegraphics[scale=0.75]{resource-hierarchy}
 \caption{Hierarchical View of Resources in a Computations Center}
 \label{fig:ResHierarchy}
 \end{figure}
@@ -754,26 +758,26 @@ single node.
 \begin{figure}
 \begin{minipage}{0.5\linewidth}
   \begin{center}
-  \includegraphics[scale=0.45]{../fig/job-hierarchy-job0.eps}
+  \includegraphics[scale=0.45]{job-hierarchy-job0}
   {\em (a)}
   \end{center}
 \end{minipage}
 \begin{minipage}{0.5\linewidth}
   \begin{center}
-  \includegraphics[scale=0.45]{../fig/job-hierarchy-job0.x.eps}
+  \includegraphics[scale=0.45]{job-hierarchy-job0-x}
   {\em (b)}
   \end{center}
 \end{minipage}
 
 \begin{minipage}{0.5\linewidth}
   \begin{center}
-  \includegraphics[scale=0.45]{../fig/job-hierarchy-job0.x.y.eps}
+  \includegraphics[scale=0.45]{job-hierarchy-job0-x-y}
   {\em (c)}
   \end{center}
 \end{minipage}
 \begin{minipage}{0.5\linewidth}
   \begin{center}
-  \includegraphics[scale=0.45]{../fig/job-hierarchy-lwj.eps}
+  \includegraphics[scale=0.45]{job-hierarchy-lwj}
   {\em (d)}
   \end{center}
 \end{minipage}

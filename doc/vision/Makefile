@@ -42,14 +42,9 @@ report.pdf: report.tex
 clean:
 	rm -f *.aux *.log *.dvi *.pdf *.blg *.bbl
 
-report.dvi: report.tex $(DEPSEC) $(DEPFIG) $(DEPBIB)
+report.pdf: report.tex $(DEPSEC) $(DEPFIG) $(DEPBIB)
 	rm -f *.log *.aux *.blg *.bbl
-	latex report
+	pdflatex -shell-escape report
 	bibtex report
-	latex report
-	latex report
+	pdflatex -shell-escape report
 
-%.ps: %.dvi
-	dvips -P pdf -G0 -o $@ $<
-%.pdf: %.ps
-	ps2pdf $<
