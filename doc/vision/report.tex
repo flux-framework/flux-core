@@ -645,6 +645,14 @@ the {\sl security challenge}.
 
 \section{Next Generation Resource Manager}
 \label{sect:ngrm}
+
+In this section we begin to describe in detail design attributes
+of our RM software system that address the challenges discussed in
+Section~\ref{sect:challenges} using the models put forward in
+Section~\ref{sect:models}. We begin by describing some common terms
+used in our design and its description, then move on to a discussion
+of our high level design.
+
 \subsection{Terminology}
 
 \paragraph{comms session}
@@ -693,7 +701,8 @@ which does not result in a new instance.
 Given the multitude of challenges and our ambitious vision for
 \ngrm\ (Section~\ref{sect:vision}), we have developed a novel
 high level design for \ngrm\ that is based loosely upon the
-divide and conquer algorithm through {\em job recursion}. That
+divide and conquer algorithm through {\em hierarchical job model}
+or {\em job recursion}. That
 is, in \ngrm\ every job itself is actually a full implementation
 of the \ngrm\ system, and therefore new jobs can be submitted to a
 local job in order to access the full power of \ngrm\ for managing
@@ -702,16 +711,47 @@ used indefinitely such that the resources of an entire center
 are {\em divided} naturally through normal workloads.  
 %TODO: Recursive job model concept figure
 
+In order to better understand the hierarchical job model, it may help
+to first visualize a computation center as a hierarchy
+of generic resources, as in Figure~\ref{fig:ResHierarchy}. At
+the root of the hierarchy tree we have a \textsc{Center} resource,
+to which all the centerwide resources are attached.
+In this case we have some number of \textsc{Cluster} resources,
+a set of global \textsc{Licenses} (presumably served by some global
+license server), and a centerwide \textsc{Power} budget. In our figure,
+we expand on \textsc{Cluster 2} and see some cluster-local
+\textsc{Storage} and a \textsc{Core Switch}.  The \textsc{Core SW}
+resource has some number of \textsc{Rack} resources associated
+with it, and an arbitrary \textsc{Rack} has some number of nodes,
+and a \textsc{Power} budget. We can further examine a single node
+and see that our hierarchy continues in an expected way.
+
+\begin{figure}
+\centering
+\includegraphics[scale=0.5]{../fig/resource_hierarchy.eps}
+\caption{Hierarchical View of Resources in a Computations Center}
+\label{fig:ResHierarchy}
+\end{figure}
+
 When \ngrm\ initializes, there exists a single {\em root} or {\em
-bootstrap} job which contains all the resources that are managed
-by \ngrm. The root job is the only job which does not have a
-parent job, i.e. it serves as the root of the heirarchical tree of
-jobs (an analogy in the UNIX idiom would be that the root instance
-is the {\tt init} process.) Instead of having a parent, the root
-job instead gets data about resources, users, and configuration
-from a global, peristent database, which serves as a configuration
-repository in \ngrm. We could say that the configuration repository
-is the parent of the root job.
+bootstrap} job which contains all the resources that are managed by
+\ngrm. This concept is shown overlayed on our hierarchical resource
+tree in Figure~\ref{fig:RootJob}. The root job is the only job
+which does not have a parent job, i.e. it serves as the root of
+the heirarchical tree of jobs (an analogy in the UNIX idiom would
+be that the root instance is the {\tt init} process.) Instead of
+having a parent, the root job instead gets data about resources,
+users, and configuration from a global, peristent database, which
+serves as a configuration repository in \ngrm. We could say that
+the configuration repository is the parent of the root job.
+
+\begin{figure}
+\centering
+\includegraphics[scale=0.5]{../fig/root_job.eps}
+\caption{Root Job (Job 0) encompasses all configured resources.}
+\label{fig:RootJob}
+\end{figure}
+
 
 The root job and its progeny all have the following features:
 
@@ -871,7 +911,8 @@ more detail in the sections that follow.
 
 \paragraph{Communication Framework}
 \ngrm\ will devise a communication framework based on Internet Protocol
-that supports our hierarchical job model, providing rich, scalable services
+that supports our hierarchical job model, providing rich, scalable
+communications services
 within a job and more limited communication bewteen jobs using
 the job's {\em control node} as gateway.
 The {\em comms toolkit} provides a security model, tools for
@@ -915,7 +956,20 @@ an {\em external enterprise monitoring system} such as might be used in
 a site operations center.
 
 \paragraph{Workload Runtime and Placement}
-FIXME
+The \ngrm\ runtime launches the user workload such that it is confined
+to allocated resources using a set of {\em confinement plugins}
+and is provided a set of services intended to support application
+runtimes and tools operating at extreme scale.
+These services include a {\em distributed key value store} which facilitates
+disseminating bootstrap information to distributed tools,
+a {\em unified software bootstrap interface} which provides common
+interfaces to a variety of tools and runtimes, and
+a {\em job function synchronization} service which assists with the placement
+of tool processes co-located with application processes.
+The effort required to build a distributed tool on top of these services
+and the comms layer will be greatly reduced from today, enabling
+proof-of-concept research tools or even one-off tools to solve a particular
+problem to be created in a short amount of time.
 
 \paragraph{I/O Management}
 FIXME
