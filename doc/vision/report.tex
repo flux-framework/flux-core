@@ -104,7 +104,7 @@ Further, \ngrm\ integrates
 system monitoring, system administration, lightweight
 virtualization, and distributed tool communication capabilities
 that are currently provided by disjoint and often overlapping software.
-Integrations of these facilities within the common framework designed from
+Integration of these facilities within the common framework designed from
 the ground up for scalability, security, and fault tolerance will result
 in a more efficient and capable system.
 
@@ -134,7 +134,7 @@ positions us to cope with a blend of interrelated, diverse
 extreme-scale computing resources, the landscape of high-end HPC centers
 in just a few years down the road.
 
-The rest of the paper is organized as the following.
+The rest of the paper is organized as follows.
 Section~\ref{sect:vision} presents \ngrm's vision and 
 its new capabilities in more detail. 
 In Section~\ref{sect:designspace}, we discuss 
@@ -254,7 +254,7 @@ simpler handling of diverse resources, but also enable future expansion to resou
 be conceived. New resource types can be provided through configuration changes
 and/or simple extensions that inherit their attributes from base types 
 to maximize reuse and foment collaboration. Various resource topologies
-can be encoded via configuration, and resources can also be allowed to have tags or labels
+can be encoded via configuration, and resources can also be given tags or labels
 to which resource requests may refer. 
 The new paradigm must also provide a generic resource query language to allow flexible
 specification of resource requirements.
@@ -532,7 +532,7 @@ responsibility of a parent job and delegation/empowerment of a child job:
 \item{\sl Child empowerment rule:} within the bound set by the parent,
      the child job is delegated the ownership of the allocation
      and becomes solely responsible for most efficient uses of the resources.
-\item{\sl Ask parent rule:} the child job must ask its parent job
+\item{\sl Parentel consent rule:} the child job must ask its parent job
      when it wants to grow or shrink the resource allocation, 
      and it is up to the parent to grant the request.                   
 \end{itemize}
@@ -615,8 +615,8 @@ within a production instance, addressing the {\sl productivity challenges}, too.
 \paragraph{Lightweight Virtualization Model:}
 The lightweight virtualization model is our response to 
 the {\sl higher downtime costs}, {\sl separation-of-concerns} and
-{\sl security challenges}. Full-fledged virtualization techniques like Java
-virtual machines have many advantages for these design challenges, but
+{\sl security challenges}. Full-fledged virtualization techniques like Xen and
+Kernel-based Virtual Machine (KVM) have many advantages for these design challenges, but
 that approach has proven to be ineffective for HPC due in large part
 its high overhead. Instead, our virtualization strategy is through lightweight
 mechanisms that modern operating systems like Linux offer.  Thus,
