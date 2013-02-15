@@ -968,20 +968,59 @@ A persistent {\em reduction network}
 provides a reduction sieve capability for the job rooted at the control node.
 
 \paragraph{Resource Management}
-This thrust incorporates resource management and scheduling at the heart of 
-the system.  A {\em resource description language} will be developed to
-express resource requests and to describe resources in the resource inventory.
-The {\em resource inventory} is a persistent database of resources managed
-by the system, while the {\em resource database} is a per-job, read-write
-cache of a portion of the resource inventory.
-Similarly, a {\em job repository} and {\em job database} within each job
-tracks information about jobs as they move through their life cycle,
-and records a {\em provenance record} for each job, capturing pertinent
-information about the job's runtime environment.
-The {\em scheduler} computes an execution schedule and resource mapping
-that matches available resources to job requests.  The scheduler can
-also be interrogated as to when hypothetical resource requests would
-run so that requests can be adapted to resource availability if necessary.
+
+The Resource Management thrust encompasses the configuration,
+scheduling, and tracking of resources, jobs, and users in the \ngrm\
+system. To meet our new paradigm, this thrust must focus on making
+the RM subsystem generalized, flexible, and extensible. To that
+end, the \ngrm\ RM system will develop a domain-specific {\em
+resource description language} which will be used to describe
+the configuration, current state, and topological organization of
+resources, while also being capable of describing {\em requests} for
+those resources.  The RM thrust will also develop a set of scalable,
+generalized databases or repositories to store information about
+resources, jobs, and users -- one set as a global, persistent
+datastore, and another short-lived set of databases at each job
+level. At the global, persistent level a {\em resource repository}
+will act as s top-level configuration database for resources. A
+read-write copy of this repository will be available within each
+job instance (at this level termed the {\em resource database}),
+such that any job may modify resource attributes as if it were a
+full instance of \ngrm\. The global {\em job repository} will be
+responsible for storing historical job information, including,
+but not limited to, resources assigned to the job and all its
+children jobs, job provenance records such as software levels
+and job environment, and any RAS events or other monitoring data
+associated with the job run. Within each job, a {\em job database}
+temporarily serves as the job repository until job destruction,
+and is also the interface to job submission, termination, and
+alteration activities.  Finally, the global {\em user repository}
+is used as a source for user-specific information such as UID, and
+also possibly user preferences, roles, and so on. Within each job,
+the local {\em user database} can be used to control permissions
+for submission of new job requests, launching of lightweight jobs,
+and other access control activities.
+
+The scheduler is also a critical component of the RM thrust area,
+as it is responsible for computing a job execution schedule based
+on available resources, constraints posed by users in their job
+request, and policy enforced by resource owners. The concept of
+the resource description language will be extended to jobs with the
+introduction of a {\em job description language} which is flexible
+enough to describe complex job resource and time requirements. The
+scheduler interface to \ngrm\ will be via a powerful plugin
+subsystem, which will allow alternate job schedulers to be swapped
+in, possibly on-demand, as jobs are launched in \ngrm\. (For
+instance, the root job may use an advanced fairshare scheduler,
+while a job launched by a researcher for a parameter study may
+incorporate a simpler scheduler tuned for high throughput). The
+plugin interface for the scheduler should ease the development of
+scheduler algorithms for third parties, and shall not require that
+the scheduler software be built with access to \ngrm\ source code.
+The scheduler interface will offer services that allow users
+to query when their job might run, for example by exporting
+the currently computed schedule as a diagram, or by estimating
+a start time for a given job or set of jobs.
 
 \paragraph{Monitoring}
 Resource managers must monitor resource health to avoid scheduling
