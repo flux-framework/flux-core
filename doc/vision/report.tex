@@ -4,12 +4,28 @@
 \usepackage{calc}
 \usepackage{epsfig}
 \usepackage{url}
-\usepackage{draftcopy}
 \usepackage{longtable}
 \input{pstricks}
 \usepackage{multirow}
 \usepackage{epstopdf}
 \usepackage{graphicx}
+\usepackage{type1cm}
+\usepackage{eso-pic}
+\usepackage{color}
+
+% draft watermark begin
+\makeatletter
+\AddToShipoutPicture{
+	\setlength{\@tempdimb}{.5\paperwidth}
+	\setlength{\@tempdimc}{.5\paperheight}
+	\setlength{\unitlength}{1pt}
+	\put(\strip@pt\@tempdimb,\strip@pt\@tempdimc){
+		\makebox(0,0){\rotatebox{55}{\textcolor[gray]{0.85}
+			{\fontsize{5cm}{5cm}\selectfont{DRAFT}}}}
+	}
+}
+\makeatother
+% draft watermark end
 
 \graphicspath{ {../fig/} }
 
