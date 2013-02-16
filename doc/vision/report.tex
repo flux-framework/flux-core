@@ -1,4 +1,4 @@
-\documentclass{article}
+\documentclass[10pt]{article}
 
 \usepackage{verbatim}
 \usepackage{calc}
@@ -527,9 +527,9 @@ The models form the basis for the software design of \ngrm.
 Traditionally, a job is simply defined to be a resource allocation, 
 a concept too weak to support the new paradigm. 
 Rather, we unify the traditional job notion 
-with the notion of a resource manager instance---an independent set of resource manager service.
+with the notion of a resource manager instance---an independent set of resource manager services.
 The RM instance must be delegated the main responsibility of managing the resource allocated to the job.
-Then, the unified job model becomes our logical basic-block
+Then, the unified job model becomes the foundation
 on which to build a hierarchical, resource-management 
 scheme to address the {\sl multidimensional scale challenge}.
 In addition, an RM instance can implement compatibility mode with a particular 
@@ -569,25 +569,23 @@ the {\sl multidimensional scale}, {\sl dynamic workload}, {\sl power}, and
 
 
 \paragraph{Generalized Resource Model:}
-In the traditional paradigm, compute resources are modeled as a simple collection of compute nodes,
-a simplified worldview ill-suited for the new paradigm. 
+In the traditional paradigm, compute resources are modeled primarily as a collection of compute nodes,
+a simplistic perspective ill-suited for the new paradigm. 
 Today's applications are diverse with disparate limiting performance 
-factors beyond the floating point computation. Further, the computing facility
-is also increasingly subject to other resource types such as power
+factors beyond floating point computation. Further, computing centers
+are increasingly concerned about managing new resource types such as power
 and shared persistent storage. The generalized resource model is our concept
 to represent various resource types and their relationships 
 that can impact how well applications perform and the computing
 facility operates. Our generalized resource model also includes a
 unified resource specification and description language. Speaking the
-same resource description language for requirement specification 
+same resource description language for request specification 
 provides transparency and fine-grained expressibility.
 Our generalized resource model addresses not only the {\sl diverse workload}
 and {\sl power challenges}, but the {\sl scheduling challenge}. More specifically, 
-the unified language approach allows users to express their resource requirements
-more flexibly:e.g., a range (instead of a hard amount) for certain resource type and/or OR operators
-that allow choosing a resource from several equivalent resource types. This then makes the
-schedule granule of jobs more malleable and finer. 
-
+the unified language approach allows users to express their resource requests
+more flexibly, e.g., using ranges or boolean expressions instead of hard amounts to allow requests to be fulfilled from several equivalent resource types.
+This makes the scheduling granularity of jobs finer and more malleable.
 
 \paragraph{Resource Allocation Elasticity Model:}
 As our applications and their programming models are becoming increasingly
@@ -737,9 +735,7 @@ to occur indefinitely so that the resources in the entire
 HPC center are {\em divided} and {\em conquered} up to any level 
 suited well for the specific needs of the center and/or workloads. 
 To simplify and generalize this scheme, we must first represent
-a wide range of compute resources in a tree-based hierarchy with
-as little exception as possible.
-
+a wide range of compute resources in a tree-based hierarchy.
 
 Figure~\ref{fig:ResHierarchy} illustrates our representation for
 a modern HPC center. As shown in this figure,
