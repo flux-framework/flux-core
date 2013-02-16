@@ -585,7 +585,7 @@ this with the generalized resource model, the elasticity can be expressed for
 any resource including power consumption. Our elasticity model addresses
 not only the {\sl dynamic workload} and {\sl power challenges}, but also
 {\sl scheduling challenge}. When a significant schedule stall is created 
-with no small jobs to back-fill, some of the currently running
+with no small jobs to backfill, some of the currently running
 jobs can grow into these stalled resources and possibly complete sooner.  
 
 
@@ -656,130 +656,154 @@ the {\sl security challenge}.
 \section{Next Generation Resource Manager}
 \label{sect:ngrm}
 
-In this section we begin to describe in detail design attributes
-of our RM software system that address the challenges discussed in
-Section~\ref{sect:challenges} using the models put forward in
-Section~\ref{sect:models}. We begin by describing some common terms
-used in our design and its description, then move on to a discussion
-of our high level design.
 
-\subsection{Terminology}
 
-\paragraph{comms session}
-An association among a set of nodes that enables secure, scalable,
-elastic, and fault-resilient communication services.
-Communication outside the session must pass through the session
-{\em control node}.  New sessions are spawned hierarchically.
+%DONG: we probaly better off putting this into a table.
 
-\paragraph{confinement}
-The enforcement of resource allocations such that a {\bf job} cannot
-consume more than was allocated.  Confinement of a job to its assigned
-resources is the responsiblility of the parent job.
+%In this section we begin to describe in detail design attributes
+%of our RM software system that address the challenges discussed in
+%Section~\ref{sect:challenges} using the models put forward in
+%Section~\ref{sect:models}. We begin by describing some common terms
+%used in our design and its description, then move on to a discussion
+%of our high level design.
+%
+%\subsection{Terminology}
+%
+%\paragraph{comms session}
+%An association among a set of nodes that enables secure, scalable,
+%elastic, and fault-resilient communication services.
+%Communication outside the session must pass through the session
+%{\em control node}.  New sessions are spawned hierarchically.
+%
+%\paragraph{confinement}
+%The enforcement of resource allocations such that a {\bf job} cannot
+%consume more than was allocated.  Confinement of a job to its assigned
+%resources is the responsiblility of the parent job.
+%
+%\paragraph{instance}
+%An independent set of RM services configured for a resource subset.
+%Each instance runs within its own {\bf comms session}.
+%
+%\paragraph{job}
+%A time-bounded allocation of resources.
+%A job request is submitted to a running job.
+%When the scheduler determines that it is time for a job to run,
+%a new {\bf instance} is created for it.  Jobs are thus organized
+%herarchically.
+%As a special case the {\em root job} (job 0) owns all resources and
+%runs perpetually without a time bound.
+%Jobs are uniquely identified by a hierarchical {\em jobid},
+%with the root job on the left, e.g. {\tt 0.4234.6}.
+%
+%\paragraph{lightweight job} (LWJ)
+%A {\bf job} submitted and recorded in the current {\bf instance}
+%which does not result in a new instance.
+%LWJ's are uniquely identified by their parent's jobid followed
+%by a colon, followed by the their {\em lwjobid}, e.g. {\tt 0.4234.6:8}.
+%
+%%\subsection{Hierachical Job Model}
+%\subsection{High Level Design}
+%
 
-\paragraph{instance}
-An independent set of RM services configured for a resource subset.
-Each instance runs within its own {\bf comms session}.
+%In this section, we present the high-level design of \ngrm that realizes
+%the key conceptual models described in Section~\ref{sect:vision}.
+%
 
-\paragraph{job}
-A time-bounded allocation of resources.
-A job request is submitted to a running job.
-When the scheduler determines that it is time for a job to run,
-a new {\bf instance} is created for it.  Jobs are thus organized
-herarchically.
-As a special case the {\em root job} (job 0) owns all resources and
-runs perpetually without a time bound.
-Jobs are uniquely identified by a hierarchical {\em jobid},
-with the root job on the left, e.g. {\tt 0.4234.6}.
-
-\paragraph{lightweight job} (LWJ) 
-A {\bf job} submitted and recorded in the current {\bf instance}
-which does not result in a new instance.
-LWJ's are uniquely identified by their parent's jobid followed
-by a colon, followed by the their {\em lwjobid}, e.g. {\tt 0.4234.6:8}.
-
-%\subsection{Hierachical Job Model}
-\subsection{High Level Design}
-
-Given the multitude of challenges and our ambitious vision for
-\ngrm\ (Section~\ref{sect:vision}), we have developed a novel
-high level design for \ngrm\ that is based loosely upon the
-divide and conquer algorithm through {\em hierarchical job model}
-or {\em job recursion}. That
-is, in \ngrm\ every job itself is actually a full implementation
+To realize our conceptual models, \ngrm\ uses a divide-and-conquer
+algorithm based on {\em job recursion}. As our {\em unified job model}
+dictates, we design \ngrm\ so that every job is actually a full implementation
 of the \ngrm\ system, and therefore new jobs can be submitted to a
-local job in order to access the full power of \ngrm\ for managing
-resources assigned to the job. In theory, this mechanism can be
-used indefinitely such that the resources of an entire center
-are {\em divided} naturally through normal workloads.  
+local job to access the full power of \ngrm\ for managing
+resources assigned to the job. In principle, our design enables this recursion
+to occur indefinitely so that the resources in the entire
+HPC center are {\em divided} and {\em conquered}
+up to any level suited well for the specific needs of the center
+or workloads. To simplify and generalize this scheme, we must first represent
+various compute resources in a tree-based hierarchy with
+as little exception as possible.
 
-In order to better understand the hierarchical job model, it may help
-to first visualize a computation center as a hierarchy
-of generic resources, as in Figure~\ref{fig:ResHierarchy}. At
-the root of the hierarchy tree we have a \textsc{Center} resource,
-to which all the centerwide resources are attached.
-In this case we have some number of \textsc{Cluster} resources,
-a set of global \textsc{Licenses} (presumably served by some global
-license server), and a centerwide \textsc{Power} budget. In our figure,
-we expand on \textsc{Cluster 2} and see some cluster-local
-\textsc{Storage} and a \textsc{Core Switch}.  The \textsc{Core SW}
-resource has some number of \textsc{Rack} resources associated
-with it, and an arbitrary \textsc{Rack} has some number of nodes,
-and a \textsc{Power} budget. We can further examine a single node
-and see that our hierarchy continues in an expected way.
+
+Figure~\ref{fig:ResHierarchy} illustrates our representation for
+a modern HPC center. As shown in this figure,
+the root of the tree (\textsc{Center}) represents 
+the entire center-wide resources. 
+At the next level, these resources can be
+refined to be some number of clusters (\textsc{Cluster}),
+the maximum power budget (\textsc{Power}),
+software licenses (\textsc{Licenses}), etc. \textsc{Power}
+and \textsc{Licenses} illustrates that
+our scheme can easily represent a wide range of 
+resource types as well as their relationships---i.e.,
+our generalized resource model.
+Cracking open any of the second-level nodes, one can further refine
+its resource distribution. In this case, expanding on
+\textsc{Cluster 2} refines its resources into some cluster-local
+file system (\textsc{Storage}) and an interconnect (\textsc{Core Switch}).
+Next, the \textsc{Core SW} resource has some number of \textsc{Rack}
+resources associated
+with it, and an arbitrary \textsc{Rack} has some number of compute nodes
+and a \textsc{Power} budget, and so on.
+
 
 \begin{figure}
 \centering
-\includegraphics[scale=0.75]{resource-hierarchy}
-\caption{Hierarchical View of Resources in a Computations Center}
+\includegraphics[scale=0.75]{../fig/resource-hierarchy}
+\caption{Hierarchical View of Resources in an HPC Center}
 \label{fig:ResHierarchy}
 \end{figure}
 
+We now walk through mapping \ngrm's job recursion to this hierarchical
+resource representation.
 When \ngrm\ initializes, there exists a single {\em root} or {\em
 bootstrap} job which contains all the resources that are managed by
-\ngrm. This concept is shown overlayed on our hierarchical resource
+\ngrm. This concept is shown overlaid on our hierarchical resource
 tree in Figure~\ref{fig:JobHierarchy}a. The root job is the only job
-which does not have a parent job, i.e. it serves as the root of
+that does not have a parent job, i.e. it serves as the root of
 the heirarchical tree of jobs (an analogy in the UNIX idiom would
 be that the root instance is the {\tt init} process.) Instead of
 having a parent, the root job instead gets data about resources,
-users, and configuration from a global, peristent database, which
-serves as a configuration repository in \ngrm. We could say that
-the configuration repository is the parent of the root job.
+users, and configuration from a global, peristent database that 
+serves as a configuration repository in \ngrm.
+
+%This can be confusing
+%In a sense,
+%the configuration repository serves as the parent of the root job.
 
 All new job requests are submitted to the root job and scheduled
-by the root jobs loaded scheduler. However, each child of the
-root job is itself a full instance of the RM software system
+by its scheduler. However, each child of the
+root job is itself a full \ngrm\ instance
 so job requests may now be directed at a child job.
-Figure~ref{fig:JobHierarchy} attempts to demonstrate this for
-an example job heiarchy. In this figure we have a single child
-job managing an entire cluster resource, a child job running
-on a subset of that cluster's resources, and finally an example
-of two {\em lightweight jobs} dividing the resources of a
-single node.
+As demonstrated in Figure~\ref{fig:JobHierarchy},
+we have a single child job managing an entire cluster resource, a child job running
+on a subset of that cluster's resources.
+
+% LWJ hasn't been defined. , and finally an example
+%of two {\em lightweight jobs} dividing the resources of a
+%single node.
 
 \begin{figure}
 \begin{minipage}{0.5\linewidth}
   \begin{center}
-  \includegraphics[scale=0.45]{job-hierarchy-job0}
+  \includegraphics[scale=0.45]{../fig/job-hierarchy-job0}
   {\em (a)}
   \end{center}
 \end{minipage}
 \begin{minipage}{0.5\linewidth}
   \begin{center}
-  \includegraphics[scale=0.45]{job-hierarchy-job0-x}
+  \includegraphics[scale=0.45]{../fig/job-hierarchy-job0-x}
   {\em (b)}
   \end{center}
 \end{minipage}
 
 \begin{minipage}{0.5\linewidth}
   \begin{center}
-  \includegraphics[scale=0.45]{job-hierarchy-job0-x-y}
+  \includegraphics[scale=0.45]{../fig/job-hierarchy-job0-x-y}
   {\em (c)}
   \end{center}
 \end{minipage}
 \begin{minipage}{0.5\linewidth}
   \begin{center}
-  \includegraphics[scale=0.45]{job-hierarchy-lwj}
+  \includegraphics[scale=0.45]{../fig/job-hierarchy-lwj}
   {\em (d)}
   \end{center}
 \end{minipage}
@@ -796,30 +820,30 @@ The root job and its progeny all have the following features:
 
 \begin{itemize}
 \item{A job {\em owner}, and access lists of users able to run
-      within the  current job and/or submit new jobs}
+      within the current job and/or submit new jobs.}
 \item{A resource manager component configured with the list of
-      resources allocated to the job, their topology and other information}
-\item{A scheduler for accepting and scheduling new jobs}
-\item{A job database for recording new, running, and completed child jobs}
+      resources allocated to the job, their topology and other information.}
+\item{A scheduler for accepting and scheduling new jobs.}
+\item{A job database for recording new, running, and completed child jobs.}
 \item{An ``isolated'' communications framework with {\em gateway} functionality
-      for relaying messages to the parent}
+      for relaying messages to the parent.}
 \item{A distributed and featureful runtime environment capable of launching
-      or assisting the launch of parallel applications and tools}
+      or assisting the launch of parallel applications and tools.}
 \item{An ``interactive'' node on which batch scripts and or user logins
-       are contained}
-\item{A resolvable domain name based on a unique job id}
-\item{A local monitoring domain}
+       are contained.}
+\item{A resolvable domain name based on a unique job id.}
+\item{A local monitoring domain.}
 \end{itemize}
 
-Since many of these components will be implemented via plugins or
-have plugin capabilities, it is expected that several features will
+To embody our {\em self-hosting model}, we design many of these components
+via plugins or have plugin capabilities. We expect that several features will
 be user-selectable during job submission. For example, the root
 job may have a complex, distributed scheduler, whereas users may
 want to choose between FIFO, backfill, or other simpler schedulers
 depending on the in-job workload.
 
 By default, only the owner of a job may submit new jobs or access
-the runtime services of a running job.  While the ownership of a job
+the run-time services of a running job.  While the ownership of a job
 should not be changed, it will be possible for users to add other
 users to the access list within their job, thus ``inviting'' the
 submission of new jobs by others. The requirement for this feature
@@ -829,14 +853,14 @@ root, yet the system administrators will obviously want to open
 up this root job for access to all users who should be able to
 run jobs in the center.
 
-When a job terminates, either due to a timelimit or the work
+When a job terminates, either due to a time limit or the work
 submitted for the job has completed, the job releases most resources
 back to the parent job. The control functions of the job remain and
 wait for an asynchronous {\em reap} operation from the parent. When
-the job is reaped the parent job reads in all data from the child\'s
+the job is reaped the parent job reads in all data from the child's
 local job and resource database and instantiates that data in
 its own databases. In this way, global information about jobs
-percolates back up through the job heirarchy, eventually back to
+percolates back up through the job hierarchy, eventually back to
 the root job.  The root job then periodically updates the global,
 persistent databases.
 
@@ -844,28 +868,32 @@ In the recursive job model, the so-called {\em base case} is a
 single job in which a single parallel application is invoked. For
 this case, a fully functional child job is not needed, and indeed
 would be a waste of resources. For this purpose we introduce the
-concept of a {\em lightweight job}(LWJ) which is submitted and
+concept of a {\em lightweight job} (LWJ) which is submitted and
 runs on the resources of the local job, but does not result in
 a new invocation of all the features of a full job. Where
 \ngrm\ jobs are like processes in a UNIX process tree, lightweight jobs
 are like threads running within a process.
+The final cas in Figure~\ref{fig:JobHierarchy} is an example
+of two {\em lightweight jobs} dividing the resources of a
+single node.
+
 
 Lightweight jobs have access to a feature rich, distributed,
-runtime environment with a shared key-value store, advanced
+run-time environment with a shared key-value store, advanced
 placement services, and a plugin interface that allows extension
 of these services for unique requirements. This environment will
-enable the quick deployment of advanced runtime features such as
+enable the quick deployment of advanced run-time features such as
 fast parallel launch of MPI applications and easy tool integration.
 Since LWJs use the same interface to job management as full
 jobs, their existence, assigned resources, duration, etc.
 will be recorded in the local job database for posterity.
-In order to run a LWJ a user must be the owner of the current
-job or on the runtime access list for the local job.
+To run an LWJ a user must be the owner of the current
+job or on the runi-time access list for the local job.
 % or a parent? I can't remember what we decided here...
 
 \subsection{Comparison with Traditional Job Schedulers / Resource Managers}
 
-While the above section serves to define the constructs of the NGRM
+While the above section serves to define the constructs of the \ngrm
 system, Table~\ref{tab:tradterms} serves as a bridge to concepts used
 in existing batch systems.
 
