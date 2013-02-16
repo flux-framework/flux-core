@@ -912,57 +912,59 @@ job or on the runi-time access list for the local job.
 
 In this section, we draw comparisons between \ngrm's constructs and traditional terms
 to show that the traditional paradigm can easily be reduced to our new paradigm. 
-In traditional terms, a user submits a request to a batch scheduler
+\paragraph{job} In traditional terms, a user submits a request to a batch scheduler running on a particular cluster
 for an allocation of computing resources.  This request is added to a
 queue of other such requests.  When the scheduler grants a request, a
 job is begun and set of resources are allocated to the job.  At that
 point, one or more processes are launched to do the work of the job.
+The traditional job will be recognized as the base case of the \ngrm\ job,
+although without the unifed RM instance and hierarchy. 
+In \ngrm, the request is submitted not to a batch scheduler managing one
+cluster, but to another job (perhaps the root job) which manages a subset
+of resources.
+A scheduler running in that job allocates resources, and launches work as
+another job.
+
+\paragraph{job step}
 Depending on the system, tasks are launched by a remote launcher such
-as {\em mpirun} or {\em srun}.  Each set of tasks so launched are
+as {\em mpirun} or {\em srun}.  In \slurm\ terms, each set of tasks so launched are
 known as a job step.  There can be one or more job steps active within
 a job throughout the life of a job.  These can run sequentially or in
-parallel, and can either run on dedicated or shared resources.  The
-history of the job includes a detailed accounting of each job step
-including the resources used and the duration of the job step.
-
-By first approximation, the traditional job maps to an \ngrm\ job---i.e.,  without 
-the unifed RM instance and hierarchy. The job step maps to the LWJ. 
+parallel, and can either run on dedicated or shared resources.
+In \slurm, they are processed within the job by a dedicated FIFO-based
+job step scheduler.
+By first approximation, the job step maps to the \ngrm\ LWJ. 
 Job scripts that invoke a series of job steps will translate
-to a series of LWJs in an \ngrm\ job.
-Some job scripts launch multiple job steps in parallel (backgrounded)
-and a resource manager will schedule the associated task launches in a
-FIFO basis, based on the available resources and whether dedicated or
-shared resources were requested.  As described above, NGRM's job
-construct will include the scheduler service.  This provides the user
-even more flexibility to schedule the order of the LWJ instantiations
-and task placement on resources.
-Traditional job and job step accounting statistics are commonly saved
-to a database.  In \ngrm, the LWJ's statistics will be reaped by the
-parent job as described above.
+to a series of LWJs in an \ngrm\ job, processed by the regular \ngrm\ scheduler
+and the same in-job resource management machinery that would be used to
+launch regular jobs.  Because each job is endowed with the capabilities
+of the full system, there is immense flexibility in how a job structures
+its work internally.  It can select a scheduler plugin appropriate to the
+task (or provide its own), express complex resource requirements and job
+interdependencies, and run work as LWJ's or full isolated jobs.
 
-\begin{table}
-\caption{Terminology Equivalents}
-\centering
-\begin{tabular}{|l|l|l|}
-\hline
-NGRM & SLURM & MPI \\
-\hline
-job & job & N/A\\
-lightweight job (LWJ) & {\em srun} job step & {\em mpirun} MPI job\\
-job & reservation & N/A \\
-\hline
-\end{tabular}
-\label{tab:tradterms}
-\end{table}
-
+\paragraph{reservations}
 Historically, batch schedulers provide a means to reserve a set of
 resources for exclusive use by a user or group of users.  These
 reservations are typically created in advance and are offered as
-Dedidcated Application Times (DATs) for users' exclusive use.  In
-\ngrm, job reservations will take the form of a parent job (with a
-future start time) under which user jobs will run.
-Table~\ref{tab:tradterms} summaries these comparisons. 
+Dedidcated Application Times (DATs) for users' exclusive use.
+Often there is some manual setup and special announcements involved.
+In \ngrm, job reservations will take the form of regular job (with a
+future start time) under which user jobs will run.  As with all \ngrm\ jobs,
+the owner of the DAT job (the DAT coordinator) is empowered to manage
+user access to the DAT, instigate custom monitoring, custom scheduling, 
+arrange for access to dedicated file systems, etc..
+Thus in the new paradigm, the DAT is just another job that should not require
+special handling.
 
+\paragraph{job accounting}
+In \slurm, the history of a job includes a detailed accounting of each job step
+including the resources used and the duration of the job step.
+Job and job step accounting statistics are commonly saved to a database.
+In \ngrm, the LWJ accounting information and other data is saved to the
+in-job job database.  Upon termination, the job's data is reaped by its
+parent as described above, ultimately landing in the persistent copy
+at the root job level.
 
 \subsection{Project Organization and Thrust Areas}
 \label{sect:projorg}
