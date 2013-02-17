@@ -833,7 +833,7 @@ our {\em unified job model}, thus users of a child job can further submit new jo
 to the child job. The child may have different, customized scheduler and environment 
 in accordance with our {\em self-hosting model}.
 As shown in Figure~\ref{fig:JobHierarchy}(b) and (c),
-we have a single job ({\tt job 0.x}) managing the entire cluster resources, 
+we have a single job ({\tt job 0.x}) managing the entire resources in a single cluster, 
 and its child job ({\tt job 0.x.y}) running on a subset of that cluster's resources.
 The root job and its progeny all have the following features:
 \begin{itemize}
@@ -844,7 +844,7 @@ The root job and its progeny all have the following features:
 \item{A scheduler that accepts and schedules new jobs;}
 \item{A job database that records new, running, and completed child jobs;}
 \item{An ``isolated'' communications framework with {\em gateway} functionality
-      for relaying messages to the parent---i.e., our {\em common scalable communication infrastructure model};}
+      for relaying messages to the parent---i.e., following our {\em common scalable communication infrastructure model};}
 \item{A distributed and featureful run-time environment capable of launching
       or assisting the launch of parallel applications and distributed tools;}
 \item{An ``interactive'' node on which batch scripts and/or user logins
@@ -853,7 +853,7 @@ The root job and its progeny all have the following features:
 \item{A local monitoring domain;}
 \end{itemize}
 
-To embody our {\em self-hosting model}, we design many of these components
+Following our {\em self-hosting model}, we design many of these components
 via plugins or have plugin capabilities. We expect that several features will
 be user-selectable during job submission. For example, the root
 job may have a complex, distributed scheduler, whereas users may
@@ -875,24 +875,24 @@ When a job terminates, either due to a time limit or the work
 submitted for the job has completed, the job releases most resources
 back to the parent job. The control functions of the job remain and
 wait for an asynchronous {\em reap} operation from the parent. When
-the job is reaped the parent job reads in all data from the child's
-local job and resource database and instantiates that data in
+the job is reaped, the parent job reads in all data from the child's
+local job including its resource database. The parent then instantiates that data in
 its own databases. In this way, global information about jobs
 percolates back up through the job hierarchy, eventually back to
-the root job.  The root job then periodically updates the global,
+the root job.  The root job periodically updates the global,
 persistent databases.
 
-In our job recursion , the so-called {\em base case} is a
-single job in which a single parallel application is invoked. For
-this case, a fully functional child job is not needed. For
-efficient reource use, we introduce the
-concept of a {\em lightweight job} (LWJ) for this case. LWJs are
+In our job recursion, the so-called {\em base case} is a
+single job in which a single parallel application is invoked. In 
+this case, a fully functional child job is actually not needed,
+and we introduce the concept of a {\em lightweight job} (LWJ) for efficient
+resource use. An LWJ is 
 submitted and runs on the resources of the local job, but does not result in
 a new invocation of all the features of a full job. Where
 \ngrm\ jobs are like processes in a UNIX process tree, LWJs 
 are like threads running within a process.
 The final case in Figure~\ref{fig:JobHierarchy} is an example
-of two LWJs that divides the resources of a single node.
+of two LWJs that divide the resources of a single node.
 
 
 LWJs have access to a feature rich, distributed,
@@ -915,7 +915,7 @@ to show that the traditional paradigm can easily be reduced to our new paradigm.
 \paragraph{job} In traditional terms, a user submits a request to a batch scheduler running on a particular cluster
 for an allocation of computing resources.  This request is added to a
 queue of other such requests.  When the scheduler grants a request, a
-job is begun and set of resources are allocated to the job.  At that
+job is begun and a set of resources are allocated to the job.  At that
 point, one or more processes are launched to do the work of the job.
 The traditional job will be recognized as the base case of the \ngrm\ job,
 although without the unifed RM instance and hierarchy. 
@@ -926,7 +926,7 @@ A scheduler running in that job allocates resources, and launches work as
 another job.
 
 \paragraph{job step}
-Depending on the system, tasks are launched by a remote launcher such
+Depending on the system, processes are launched by a remote launcher such
 as {\em mpirun} or {\em srun}.  In \slurm\ terms, each set of tasks so launched are
 known as a job step.  There can be one or more job steps active within
 a job throughout the life of a job.  These can run sequentially or in
