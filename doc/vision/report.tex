@@ -128,7 +128,7 @@ Integration of these facilities within the common framework designed from
 the ground up for scalability, security, and fault tolerance will result
 in a more efficient and capable system.
 
-We realize that \ngrm represents a paradigm shift for HPC resource management, 
+We realize that \ngrm\ represents a paradigm shift for HPC resource management, 
 and yet we must address a wide range of challenges in relatively short order
 with limited resources. Thus, we 
 organize our project plan around five research and development thrust areas 
@@ -379,10 +379,10 @@ to a system or its networks.
 
 
 \paragraph{Research and Tool Friendly:}
-The new paradigm need to facilitate development and use of 
-scalable run-time code development tools to improve end-user productivity
-significantly, who must develop, debug, optimize, 
-test and verify their code on the next-generation systems. 
+The new paradigm needs to facilitate development and use of 
+scalable run-time code development tools to improve the productivity
+of users who must develop, debug, optimize, test and verify their code
+on the next-generation systems. 
 Similarly, it must
 also facilitate research with the same goal in mind.
 Specifically, the new paradigm must provide highly scalable infrastructure
@@ -613,7 +613,7 @@ parent job assists the child job with rapid creation of its own session.
 A communication session is only aware of its parent and child and passes
 the limited set of control information through this communication channel.
 Thus, this model enables highly scalable communication within a job, 
-while limits communications between other jobs, addressing both the 
+while limiting communications between jobs, addressing both the 
 {\sl multidimensional scale} and {\sl security challenges.} 
 Further, this backbone per-job communication network supports 
 many well-known bootstrap interfaces for distributed programs including
@@ -770,8 +770,8 @@ and relationships hold true at the node level as well.
 We now walk through mapping our job recursion algorithm to this hierarchical
 resource representation.
 When \ngrm\ initializes, only a single {\em root} or {\em
-bootstrap} job exists. Analogous to the root instance is the 
-{\tt init} UNIX process, the root job is the only job
+bootstrap} job exists. Analogous to the
+UNIX {\tt init} process, the root job is the only job
 that does not have a parent job---i.e. it solely serves as the root of
 the tree-based job heirarchy. 
 %, and contains all the resources that
@@ -780,7 +780,7 @@ Instead,  the root job gets {\em global} information about entire compute resour
 users, and configuration from a scalable, peristent database that 
 serves as our configuration repository.
 To show this concept, Figure~\ref{fig:JobHierarchy}(a) overlays the root job ({\tt job 0})
-to the entire resource tree. 
+on the entire resource tree. 
 
 %This can be confusing
 %In a sense,
@@ -854,7 +854,7 @@ The root job and its progeny all have the following features:
 \end{itemize}
 
 Following our {\em self-hosting model}, we design many of these components
-via plugins or have plugin capabilities. We expect that several features will
+via plugins or with plugin capabilities. We expect that several features will
 be user-selectable during job submission. For example, the root
 job may have a complex, distributed scheduler, whereas users may
 want to choose between FIFO, backfill, or other simpler schedulers
@@ -905,7 +905,7 @@ Since LWJs use the same interface to job management as full
 jobs, their existence, assigned resources, duration, etc.
 will be recorded in the local job database for posterity.
 To run an LWJ, a user must be the owner of the current
-job or on the runi-time access list for the local job.
+job or on the run-time access list for the local job.
 % or a parent? I can't remember what we decided here...
 
 \subsection{Comparison with Traditional Job Schedulers / Resource Managers}
@@ -1075,7 +1075,7 @@ and the ability to tune the monitoring period and change the plugin
 stack on a per-job basis.
 A {\em fault notification system} enables system software, runtimes, and
 applications to share fault information as a basis for building fault-tolerant
-workloads and for recording interesting events with the job record.
+workloads and for recording interesting events within the job record.
 \ngrm\ monitoring interfaces with an {\em external log database} intended
 to support post-mortem analysis, and to
 an {\em external enterprise monitoring system} such as might be used in
