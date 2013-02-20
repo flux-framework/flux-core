@@ -74,6 +74,10 @@ commodity Linux clusters. The challenges include having to provide
 extreme scalability, low noise, fault tolerance, and heterogeneity management
 while under a strict power budget.
 
+\marginpar{\tiny {\bf ned-review:} Citation needed.
+The shortcomings identified in this section form the core justification for
+why NGRM is needed, so you should be prepared to back them up with references.}
+
 In addition, greater difficulties in code development on larger systems have
 begun to impose far more complex requirements on the RM. For example,
 without adequate RM support, debugging, tuning, testing and verification
@@ -92,6 +96,10 @@ to schedule the job to all dependent resources together. In short, without
 the RM that can effectively address all of these challenges, it has become apparent
 that HPC centers will suffer a significant loss in both user productivity
 and efficient uses of next-generation computing resources.
+
+\marginpar{\tiny {\bf ned-review:} Citation needed.
+As above, we need more than anecdotal evidence that Slurm can't meet future
+requirements.}
 
 \slurm~\cite{SlurmDesign} is arguably the
 best-in-breed, open-sourced RM designed for commodity Linux clusters.
@@ -127,6 +135,11 @@ that are currently provided by disjoint and often overlapping software.
 Integration of these facilities within the common framework designed from
 the ground up for scalability, security, and fault tolerance will result
 in a more efficient and capable system.
+
+\marginpar{\tiny {\bf ned-review:}
+What about the security model--should it be its own thrust area?  It seems to me
+a  robust security model will need to be incorporated from the ground up, so it
+should be one of the first things we work on.}
 
 We realize that \ngrm\ represents a paradigm shift for HPC resource management, 
 and yet we must address a wide range of challenges in relatively short order
@@ -341,7 +354,7 @@ executions) can be performed through the RM to minimize their impact,
 such as running them between jobs or synchronized across jobs. 
 The new RM must also be flexible enough to allow implementation of other
 strategies for reducing the impact of noise, such as scheduling all
-non-application activity to a configurable {\em noise core}.
+system activity to a CPU core that is not shared with the application.
 
 
 \paragraph{Fault Tolerance:}
@@ -402,9 +415,12 @@ without having to sacrifice the stability of the core RM software.
 With plugins, various RM subsystems can be replaced and extended.  
 This can be the mechanism for individual
 sites to customize their RM for their particular needs. 
-In addition, the new RM must be designed to be self-hosting: it must  
-be capable of launching a standalone copy of itself as a job. This makes
-it possible for developers or a quality assurance team to test new RM versions. 
+In addition, the new RM must be designed for testability.
+Ideally it should be possible to test new plugins or even a complete
+new version of the RM system within the confines of a job created by
+a production version.  This self-hosting capability would enable regular
+RM regression and stress testing to be automated without dedicated test
+resources or special production system arrangements.
 
 %Components of \ngrm\ will be designed with the ability to capture and
 %publish sanitized system data at all levels to facilitate the use of
@@ -499,6 +515,10 @@ Section~\ref{sect:vision}.
      and failures with no single point of failure and must also support 
      live software upgrades.
 
+\marginpar{\tiny {\bf ned-review:}
+How to reconcile conflict with security requirements?  For example, an attacker
+might request a known-vulnerable kernel version.}
+
 \item{\sl Separation-of-concerns challenge:} Many attributes of the new
      paradigm motivate a much higher degree of separation between
      the software level visible to applications and system-level 
@@ -523,12 +543,17 @@ In this section, we describe some of the primary conceptual models that will emb
 this new paradigm while addressing the multitude of design challenges. 
 The models form the basis for the software design of \ngrm.
 
+\marginpar{\tiny {\bf ned-review:}
+The discussion here doesn't really make much sense until you read section 4. I
+would provide a forward reference to assure your readers that the concept will
+be explained in more detail later on.}
+
 \paragraph{Unified Job Model:}
 Traditionally, a job is simply defined to be a resource allocation, 
 a concept too weak to support the new paradigm. 
 Rather, we unify the traditional job notion 
 with the notion of a resource manager instance---an independent set of resource manager services.
-The RM instance must be delegated the main responsibility of managing the resource allocated to the job.
+The RM instance must be delegated the main responsibility of managing the resources allocated to the job.
 Then, the unified job model becomes the foundation
 on which to build a hierarchical, resource-management 
 scheme to address the {\sl multidimensional scale challenge}.
@@ -594,7 +619,7 @@ resource allocation can grow and shrink, depending on the current needs
 of applications and/or the computing facility. We support the 
 elasticity model within our job hierarchy framework above: a child job sends
 a grow or shrink request to its parent, which can go up the job hierarchy
-until all requite constraints are known for this request. Also, combining
+until all requisite constraints are known for this request. Also, combining
 this with the generalized resource model, the elasticity can be expressed for
 any resource including power consumption. Our elasticity model addresses
 not only the {\sl dynamic workload} and {\sl power challenges}, but also
@@ -626,7 +651,7 @@ We use a self-hosting model to instantiate a new RM instance: the parent
 is capable of launching a standalone copy of itself as a child job, but possibly
 with different plugins. 
 This makes it easier for developers or a quality assurance team to test new RM versions,
-helping addressing the {\sl higher downtime costs}. 
+helping addressing the {\sl higher downtime costs} challenge. 
 Further, self-hosting with new and experimental plugins 
 encourages experimentation and facilitates research activities 
 within a production instance, addressing the {\sl productivity challenges}, too.
@@ -723,6 +748,11 @@ the {\sl security challenge}.
 %the key conceptual models described in Section~\ref{sect:vision}.
 %
 
+\marginpar{\tiny {\bf ned-review:}
+With this sentence it becomes clear that the self-hosting model is a core
+concept in the design of NGRM, and not just a nifty tool for NGRM developers.
+The earlier sections on self-hosting should emphasize this aspect.}
+
 To realize our conceptual models, \ngrm\ uses a divide-and-conquer
 algorithm based on {\em job recursion}. As our {\em unified job model}
 dictates, we design \ngrm\ so that every job is actually a full implementation
@@ -817,13 +847,13 @@ on the entire resource tree.
   {\em (d)}
   \end{center}
 \end{minipage}
-\label{fig:JobHierarchy}
 \caption[Job Hierarchy Example]{{\small An example job hierarcy shown on top
 of a resource hierarchy.
 {\em (a)} Job 0 spans all resources,
 {\em (b)} job 0.x runs across all of {\sc Cluster 2},
 {\em (c)} job 0.x.y runs across nodes N1--5, and finally
 {\em (d)} two lightweight jobs are instantiated on N5.}}
+\label{fig:JobHierarchy}
 \end{figure}
 
 Users of the root job then submit all new job requests to it, which are scheduled
@@ -870,6 +900,10 @@ are spawned. This job will be owned by a privileged user such as
 root, yet the system administrators will obviously want to open
 up this root job for access to all users who should be able to
 run jobs in the center.
+
+\marginpar{\tiny {\bf ned-review:}
+If a parent dies is the child "reparented" so it's data can still be reaped
+(i.e. becomes an orphan in the UNIX process model)}
 
 When a job terminates, either due to a time limit or the work
 submitted for the job has completed, the job releases most resources
