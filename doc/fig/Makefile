@@ -4,7 +4,6 @@ DEPFIG = \
 	cmb.eps \
 	zmqtbon.eps \
 	dnbd.eps \
-	pathwalk.eps \
 	wrap_graph.ps \
 	WRAP_Architecture.ps \
 	WRAP_Base.ps \
