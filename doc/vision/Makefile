@@ -1,6 +1,6 @@
 DEPSEC = \
 	project.tex \
-	framework.tex \
+	comms.tex \
 	resmgmt.tex \
 	monitor.tex \
 	runtime.tex \
