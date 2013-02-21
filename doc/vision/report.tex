@@ -34,8 +34,15 @@
 \setlength{\oddsidemargin}{(\paperwidth-\textwidth)/2 - 1in}
 \setlength{\topmargin}{(\paperheight-\textheight -\headheight-\headsep-\footskip)/2 - 1.2in }
 
+% enable/disable WBS tables
 \newif\ifwbs
 \wbsfalse
+%\wbstrue
+
+% enable/disable margin comments
+\newif\ifcomments
+%\commentsfalse
+\commentstrue
 
 \newcommand{\ngrm}{NGRM}
 \newcommand{\ngrmfull}{Next Generation Resource Manager}
@@ -74,10 +81,11 @@ commodity Linux clusters. The challenges include having to provide
 extreme scalability, low noise, fault tolerance, and heterogeneity management
 while under a strict power budget.
 
+\ifcomments
 \marginpar{\tiny {\bf ned-review:} Citation needed.
 The shortcomings identified in this section form the core justification for
 why NGRM is needed, so you should be prepared to back them up with references.}
-
+\fi
 In addition, greater difficulties in code development on larger systems have
 begun to impose far more complex requirements on the RM. For example,
 without adequate RM support, debugging, tuning, testing and verification
@@ -97,10 +105,11 @@ the RM that can effectively address all of these challenges, it has become appar
 that HPC centers will suffer a significant loss in both user productivity
 and efficient uses of next-generation computing resources.
 
+\ifcomments
 \marginpar{\tiny {\bf ned-review:} Citation needed.
 As above, we need more than anecdotal evidence that Slurm can't meet future
 requirements.}
-
+\fi
 \slurm~\cite{SlurmDesign} is arguably the
 best-in-breed, open-sourced RM designed for commodity Linux clusters.
 Livermore Computing (LC) at Lawrence Livermore National Laboratory (LLNL)
@@ -136,22 +145,22 @@ Integration of these facilities within the common framework designed from
 the ground up for scalability, security, and fault tolerance will result
 in a more efficient and capable system.
 
+\ifcomments
 \marginpar{\tiny {\bf ned-review:}
 What about the security model--should it be its own thrust area?  It seems to me
 a  robust security model will need to be incorporated from the ground up, so it
 should be one of the first things we work on.}
-
+\fi
 We realize that \ngrm\ represents a paradigm shift for HPC resource management, 
 and yet we must address a wide range of challenges in relatively short order
 with limited resources. Thus, we 
-organize our project plan around five research and development thrust areas 
+organize our project plan around four research and development thrust areas 
 and seek to advance them systematically.
 These areas are called:
-{\tt Resource Management},
-{\tt Monitoring},
-{\tt Workload Runtime And Placement}, 
-{\tt Communications Framework}, and
-{\tt I/O Management}.
+{\em Communications Framework},
+{\em Resource Management},
+{\em Monitoring}, and
+{\em Workload Runtime And Placement}.
 They are relatively independent but can significantly build on the
 strength of one another through well-known interfaces and common design
 and development principles.
@@ -174,7 +183,7 @@ In Section~\ref{sect:designspace}, we discuss
 the key software design challenges and the conceptual models
 that embody the new paradigm while addressing these design challenges. 
 Section~\ref{sect:ngrm} then describes our software design
-and also highlights the five research and development thrust areas
+and also highlights the four research and development thrust areas
 and their relations. 
 The following sections then go over and detail each of these areas including 
 its work breakdown structure (WBS) and associated work items.
@@ -515,10 +524,11 @@ Section~\ref{sect:vision}.
      and failures with no single point of failure and must also support 
      live software upgrades.
 
+\ifcomments
 \marginpar{\tiny {\bf ned-review:}
 How to reconcile conflict with security requirements?  For example, an attacker
 might request a known-vulnerable kernel version.}
-
+\fi
 \item{\sl Separation-of-concerns challenge:} Many attributes of the new
      paradigm motivate a much higher degree of separation between
      the software level visible to applications and system-level 
@@ -543,11 +553,12 @@ In this section, we describe some of the primary conceptual models that will emb
 this new paradigm while addressing the multitude of design challenges. 
 The models form the basis for the software design of \ngrm.
 
+\ifcomments
 \marginpar{\tiny {\bf ned-review:}
 The discussion here doesn't really make much sense until you read section 4. I
 would provide a forward reference to assure your readers that the concept will
 be explained in more detail later on.}
-
+\fi
 \paragraph{Unified Job Model:}
 Traditionally, a job is simply defined to be a resource allocation, 
 a concept too weak to support the new paradigm. 
@@ -748,11 +759,12 @@ the {\sl security challenge}.
 %the key conceptual models described in Section~\ref{sect:vision}.
 %
 
+\ifcomments
 \marginpar{\tiny {\bf ned-review:}
 With this sentence it becomes clear that the self-hosting model is a core
 concept in the design of NGRM, and not just a nifty tool for NGRM developers.
 The earlier sections on self-hosting should emphasize this aspect.}
-
+\fi
 To realize our conceptual models, \ngrm\ uses a divide-and-conquer
 algorithm based on {\em job recursion}. As our {\em unified job model}
 dictates, we design \ngrm\ so that every job is actually a full implementation
@@ -1003,7 +1015,7 @@ at the root job level.
 \subsection{Project Organization and Thrust Areas}
 \label{sect:projorg}
 To hasten the design, development, and delivery of the initial version
-of \ngrm\, we define five relatively independent thrust areas.
+of \ngrm\, we define four relatively independent thrust areas.
 Each thrust area will carry out the vision and high level design articulated
 above with a focus on a particular subsystem or group of subsystems that
 have a natural coupling.  The overall design of \ngrm\ will evolve and
@@ -1131,39 +1143,21 @@ and the comms layer will be greatly reduced from today, enabling
 proof-of-concept research tools or even one-off tools to solve a particular
 problem to be created in a short amount of time.
 
-\paragraph{I/O Management}
-\ngrm\ allows a job to customize its I/O configuration through the use
-of {\em private namespaces}, and is capable of managing and configuring
-I/O resources such as disks, file systems, file caches, and network channels
-through plugins.
-File {\em stage-in} and {\em stage-out}, e.g. for executables and
-checkpoint files, is managed by a job-specific plugin.
-An {\em io-analysis} plugin allows application file accesses and
-I/O activity to be automatically analyzed in situ, monitored, and recorded.
-Still another {\em io-qos} plugin permits custom I/O forwarding topologies
-and file system quality-of-service to be established for the job's
-particular I/O demands.  Finally, a  {\em local storage} plugin allows
-jobs to manage raw storage hardware (disks, SSD's, and RAM) allocated
-to them, creating and destroying file systems on the fly for exclusive
-use of the job which can be the targets of stage-in/stage-out.
-
 \include{framework}
 
 \include{resmgmt}
 
 \include{monitor}
 
-\include{io}
-
 \include{runtime}
 
-\include{project}
+%\include{project}
 
 \appendix
 
 \include{reqs}
 
-\include{process}
+%\include{process}
 
 \bibliographystyle{abbrv}
 \bibliography{../bib/project,../bib/rfc}

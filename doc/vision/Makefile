@@ -3,7 +3,6 @@ DEPSEC = \
 	framework.tex \
 	resmgmt.tex \
 	monitor.tex \
-	io.tex \
 	runtime.tex \
 	reqs.tex \
 	process.tex
