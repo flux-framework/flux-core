@@ -149,7 +149,8 @@ in a more efficient and capable system.
 \marginpar{\tiny {\bf ned-review:}
 What about the security model--should it be its own thrust area?  It seems to me
 a  robust security model will need to be incorporated from the ground up, so it
-should be one of the first things we work on.}
+should be one of the first things we work on.
+{\bf jg:} Security model is developed in comms thrust.}
 \fi
 We realize that \ngrm\ represents a paradigm shift for HPC resource management, 
 and yet we must address a wide range of challenges in relatively short order
@@ -527,7 +528,8 @@ Section~\ref{sect:vision}.
 \ifcomments
 \marginpar{\tiny {\bf ned-review:}
 How to reconcile conflict with security requirements?  For example, an attacker
-might request a known-vulnerable kernel version.}
+might request a known-vulnerable kernel version.
+{\bf jg:} Restrictions on this are explained in {\em Lighweight Virtualiation Model} paragraph.}
 \fi
 \item{\sl Separation-of-concerns challenge:} Many attributes of the new
      paradigm motivate a much higher degree of separation between
@@ -674,13 +676,18 @@ the {\sl higher downtime costs}, {\sl separation-of-concerns} and
 {\sl security challenges}. Full-fledged virtualization techniques like Xen and
 Kernel-based Virtual Machine (KVM) have many advantages for these design challenges, but
 that approach has proven to be ineffective for HPC due in large part
-its high overhead. Instead, our virtualization strategy is through lightweight
-mechanisms that modern operating systems like Linux offer.  Thus,
-this model will exploit the notion of lightweight containers and private
-file system namespaces for jobs, achieving a higher degree of isolation
-between system software and user-visible software. For example, the RM
-and the OS kernel might see one version of the root file system, while
-an application might see another. The decoupling and isolation will be
+its high overhead~\cite{VirtHPC}.
+Instead, our virtualization strategy exploits Linux kernel-enforced
+resource management and isolation mecahnisms to launch applications in
+containers with virtually no impact on performance~\cite{ContainerVirt}.
+Within a container, private file system namespaces allow the system and
+applications to have divergent file system views, and to access file
+systems with different constraints. 
+For example, the RM and other system software might be launched from
+one version of the root file system with no access restrictions,
+while an application might be launched from another with {\em setuid}
+capability disabled.
+The decoupling and isolation will be
 the key to the much desired ability to upgrade the software levels in the
 machine's root file system without affecting any of the libraries that
 an application might be using, and vice-versa. Similarly, one can upgrade
@@ -692,16 +699,15 @@ software levels affecting their application, independent of other
 applications.
 
 
-The lightweight container approach will also tightly control the access
+The lightweight container approach will be used to tightly control the access
 that applications have to system resources. For example, it is possible to
 run the job in its own network namespace such that direct access to the
-system management network is unavailable, or limited by node firewall
-rules. This model will  also use the private network namespace to isolate
-jobs from each other on virtual private networks.
+system management network is unavailable, or limited by container-specific
+firewall rules.  A job could be further isolated on its own virtual private
+network.
 Containers with private file system namespaces can limit visibility of
-file systems to jobs based on the site policy, significantly addressing
-the {\sl security challenge}.
-
+file systems and other system resources to jobs based on the site policy,
+significantly addressing the {\sl security challenge}.
 
 \section{Next Generation Resource Manager}
 \label{sect:ngrm}
