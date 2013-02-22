@@ -22,8 +22,8 @@ to be built that can operate at any level of recursion, thus improving
 testability and facilitating research.
 
 The communication framework consists of four main layers:
-the IP transport, comms toolkit, comms message broker, and
-aggregation/reduction framework, shown
+IP protocols and services, comms toolkit, comms message broker, and
+reduction network, shown
 in Figure~\ref{FigCommsLayers}.  Layering is not rigid;
 that is, higher level \ngrm\ components can use any of the
 layers directly as appropriate.
@@ -44,10 +44,10 @@ layers directly as appropriate.
 \end{minipage}
 \end{figure}
 
-\subsection{Internet Protocol Transport}
+\subsection{Internet Protocols and Services}
 \label{sect:commsIP}
 
-The \ngrm\ comms framework is layered upon IP, and presumes
+The \ngrm\ comms framework is layered upon Internet Protocol (IP), and presumes
 complete IP level unicast and multicast connectivity, so that any
 collection of nodes can be wired up in a comms session without
 the need to re-implement the equivalent of IP routing within
@@ -229,7 +229,7 @@ The session state for the largest session is small enough to easily
 fit in memory.
 The master state for a session lives on the session control node.
 Slave caches on other nodes in the session are loosely consistent with
-the master copy, that is, reads may utilize a local or peer cache,
+the master copy; that is, reads may utilize a local or peer cache,
 which may be slightly out of date relative to the master copy,
 while writes are through to the control node.
 Each write on the control node updates the key's generation number,
@@ -275,7 +275,9 @@ state.
         DNS server nodes for $session$, for forming DNS NS records.\\
   \hline
   \end{tabular}
-  \caption{Comms Message Broker State}
+  \caption{A small amount of data comprises the comms session state,
+	   which is stored in a simple key-value store replicated across
+	   the session.}
   \label{TabCMBState}
 \end{table}
 
@@ -325,7 +327,7 @@ subscribe to state change events.
 The parent continues to track liveness of nodes allocated to a child by
 subscribing to liveness updates via the child's control node.  A trivial
 utility that asks the CMB for a list of down nodes in the current session
-can be written that works equally well at any level of recursion,
+and all of its progeny can be written that works equally well at any level of recursion,
 even at the level of the root session.
 
 \paragraph{Node Bootstrap}
@@ -378,10 +380,10 @@ child nodeset.
 The DNS is updated in the parent to remove references to the session's
 subdomain.
 
-\subsection{Aggregation/Reduction Network Overlay}
+\subsection{Reduction Network}
 
-The \ngrm\ runtime and monitoring components will require an
-aggregation/reduction framework similar to MRNet~\cite{MRNet} that
+The \ngrm\ runtime and monitoring components will require a
+reduction network similar to MRNet~\cite{MRNet} that
 can aggregate or reduce data produced across the session before it is
 consumed at the control node.
 

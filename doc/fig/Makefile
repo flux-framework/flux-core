@@ -3,7 +3,6 @@ DEPFIG = \
 	commstk.eps \
 	cmb.eps \
 	zmqtbon.eps \
-	dnbd.eps \
 	wrap_graph.ps \
 	WRAP_Architecture.ps \
 	WRAP_Base.ps \
