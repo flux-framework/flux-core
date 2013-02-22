@@ -31,14 +31,14 @@ layers directly as appropriate.
 \begin{figure}
 \begin{minipage}[b]{0.45\linewidth}
 \centering
-\includegraphics[scale=0.30]{../fig/comms.eps}
+\includegraphics[scale=0.30]{comms}
 \caption{Communication Framework Layers}
 \label{FigCommsLayers}
 \end{minipage}
 \hspace{0.5cm}
 \begin{minipage}[b]{0.45\linewidth}
 \centering
-\includegraphics[scale=0.30]{../fig/commstk.eps}
+\includegraphics[scale=0.30]{commstk}
 \caption{Comms Toolkit Layers}
 \label{FigCommsTK}
 \end{minipage}
@@ -134,12 +134,32 @@ pre-shared key to implement message integrity.  Unlike \zMQ, SCTP is
 connection-based and does not implement a standardized reliable multicast
 mode.
 
+%\begin{figure}
+%\centering
+%\includegraphics[scale=0.35]{zmqtbon}
+%\caption{Tree Based Overlay Network Over \zMQ}
+%\label{FigZmqTBON}
+%\end{figure}
+
 \begin{figure}
-\centering
-\includegraphics[scale=0.35]{../fig/zmqtbon.eps}
-\caption{Tree Based Overlay Network Over \zMQ}
-\label{FigZmqTBON}
+\begin{minipage}[b]{0.15\linewidth}
+\includegraphics[scale=0.3]{comms_zmq_reqrep}
+\end{minipage}
+\hspace{0.5cm}
+\begin{minipage}[b]{0.4\linewidth}
+\includegraphics[scale=0.3]{comms_zmq_pubsub}
+\end{minipage}
+\hspace{0.5cm}
+\begin{minipage}[b]{0.4\linewidth}
+\includegraphics[scale=0.3]{comms_zmq_pushpull}
+\end{minipage}
+\caption{\zMQ\ provides a socket-like API that supports several
+messaging patterns including REQ-REP, PUB-SUB, and PUSH-PULL.
+These basic patterns are complemented by features for implementing
+distributed message brokers.}
+\label{FigCommsZmq}
 \end{figure}
+
 
 Two widely used methods of encoding data in messages are
 JSON~\cite{rfc4627} 
@@ -189,19 +209,19 @@ and starting other \ngrm\ components.
 
 \begin{figure}
 \begin{minipage}[b]{0.2\linewidth}
-\fbox{\includegraphics[scale=0.05]{../fig/comms_ex1a.eps}}
+\fbox{\includegraphics[scale=0.05]{comms_ex1a}}
 \end{minipage}
 \hspace{0.5cm}
 \begin{minipage}[b]{0.2\linewidth}
-\fbox{\includegraphics[scale=0.05]{../fig/comms_ex1b.eps}}
+\fbox{\includegraphics[scale=0.05]{comms_ex1b}}
 \end{minipage}
 \hspace{0.5cm}
 \begin{minipage}[b]{0.2\linewidth}
-\fbox{\includegraphics[scale=0.05]{../fig/comms_ex1c.eps}}
+\fbox{\includegraphics[scale=0.05]{comms_ex1c}}
 \end{minipage}
 \hspace{0.5cm}
 \begin{minipage}[b]{0.2\linewidth}
-\fbox{\includegraphics[scale=0.05]{../fig/comms_ex1d.eps}}
+\fbox{\includegraphics[scale=0.05]{comms_ex1d}}
 \end{minipage}
 \caption{CMB Architecture:  comms sessions are formed hierarchically.
 Session control nodes (red) are the interface between a session and its parent.}
@@ -350,7 +370,7 @@ If the process terminates early, an event is generated.
 
 %\begin{figure}
 %\centering
-%\includegraphics[scale=0.50]{../fig/cmb.eps}
+%\includegraphics[scale=0.50]{cmb}
 %\caption{Comms Message Broker Spawning a New Comms Session}
 %\label{FigCMBSpawn}
 %\end{figure}
