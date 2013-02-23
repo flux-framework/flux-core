@@ -118,32 +118,169 @@ monitoring component to help provide this information.
 
 \subsection{Resource Description Language}
 
-The resource description language is used to describe resources
-in the resource inventory and in resource requests.
-The resource description language should be generic but at the same
-time useful.  Several projects have explored this area including
-Condor's ClassAd language\cite{ClassAd},
-OAR's resource description language\cite{Oar},
-and Legion's\cite{LegionGrid}\cite{LegionRM} object-oriented approach.
+The resource description language (RDL) of \ngrm\ is a Domain
+Specific Language (DSL) that will be structured, extensible,
+human-readable, and hierarchical, while being capable of
+representing resources and their relationships in a generic and
+flexible fashion. It is expected that this language will serve not
+only as the base \emph{configuration language} of \ngrm, but that
+this language will be the de-facto communication substrate for
+gathering resource information such as topology, current resource
+state, categorization, as well as constraint specification in
+resource requests.
 
-The \ngrm\ resource description language should be developed with
-input from stakeholders and should represent resources in our system as
-well as define requests for those resources, and additionally be
-\begin{itemize}
-\item{\textbf{Human readable:} a sysadmin should be able to 'program up'
-a collection of resources like a cluster with minimal
-effort and the result should be understandable.}
-\item{\textbf{Extensible:} allow development of functions that can be used
-to simplify the complex definition of resources and requests.}
-\item{\textbf{Fast:} parsing should not require lots of CPU or memory since
-our system will be parsing this stuff on a very regular basis.}
-\end{itemize}
+\subsubsection{Related Work}
 
-A possible solution is to implement the
-resource description language in Lua\cite{LuaBook} because this
-little language is small, fast, and embarassingly easy to embed and
-extend.  Lua's table data structure also lends itself very nicely to
-expressing heirarchical data.
+Fortunately, there exists a large body of literature in this
+field on which we can draw when designing the RDL for \ngrm.
+While our pragmatic design may not focus on ontological formalism,
+there has been work in this area for describing distributed resources
+in a Grid~\cite{Castano:2004, Pernas:2005, Koning:2011:UOR:1998662.1998819}
+which show promise for semantic matching algorithms on generic resources.
+Van Der Ham et al.\ and others have extended the Resource Data Framework (RDF)
+specification from the semantic web to describe networked resources
+\cite{vanderHam:2006:URD:1160256.1160260, VanDerHam:2008:DTI:2285568.2285672, vanderHam:2006:SHN:1188455.1188643},
+and Koslovski et al.\ have developed the Virtual Resources and
+Interconnection Networks Description Language (VXDL)~\cite{Koslovski_Primet_2009} for use in
+describing the end resources description and virtual network
+topology in on-demand virtual infrastructures.
+
+Several other resource management projects have also explored this
+area. Possibly most importantly, the Condor project implements
+\emph{Classified Advertisements} (ClassAds) which is a language
+for expressing not only resources and their attributes, but
+requests for these resources~\cite{ClassAd}. The suitability
+of resources for resource requests (jobs) are matched using an
+array of multi-dimensional gangmatching approaches. The ClassAd
+language is available as a standalone library. Additionally, the
+OAR resource manager defines resources in a MySQL database with
+a static schema, but it does organize resources hierarchically,
+allows generic resource definition, and allows users to request
+resources using a resource description language~\cite{Oar}, and
+the Legion~\cite{LegionGrid,LegionRM} Resource Manager uses an
+object-oriented approach for defining resources as ``objects''
+that are extensible.
+
+As part of the design of the RDL, it is expected that we will do a
+more complete survey of existing work in this area such that we can
+apply common practice and lessons learned to our own implementation
+of a resource description and configuration language.
+
+\subsubsection{Resource Description Language Design}
+
+As mentioned above, as part of \ngrm\ development we hope to
+create a domain-specific language that is
+easily extended and embedded, is human readable, and has the
+power to express our hierarchical resource data, topologies,
+and advanced resource constraints. The RDL should additionally
+have to ability to contain the topology of resources
+(which may be different than the heirarchy of the resources).
+
+While a suitable existing encoding may be discovered during
+a full literature search, it is our feeling that a solution
+based on a static data description or markup language like
+RDF or XML is not going to have the ultimate flexibility and
+features that we require in the \ngrm.  For this reason, we
+currently propose that the Lua~\cite{LuaBook}
+language would be a good fit for our requirements.
+
+Lua is a language that was designed to be embedded in other
+languages, so it would be easy to embed parsers for the RDL
+in various tools. It is also embarassingly easy to extend the
+language using modules or directly in native Lua. Finally,
+the core datatype in Lua (in fact the only datatype), is
+the Lua \emph{table} (an associative array), which lends
+itself nicely to the expression of hierarchical data as
+we have noted will be necessary for the RDL in \ngrm. There
+are many extant examples of the use of Lua as a Data Description
+and Domain Specific Language. See the Programming in Lua (PiL)
+Book~\cite{LuaBook} for examples.
+
+\lstset{ basicstyle=\footnotesize\tt }
+
+\begin{lstlisting}[float=*htp, frame=single, numbers=left,
+ caption={A na\"{\i}ve example of a Lua table describing an excessively simple resource hierarchy},
+ label={lst:luaex1}]
+ComputeNode = {
+  type = 'host',
+  attributes = { hostname = '', ipaddr = '', memory = ''},
+  children = {
+     { type = 'NUMANode',
+       id = '0',
+       children = {
+          { Type = 'Memory', id = '0', value = 16384 },
+          { Type = 'Socket', id = '0',
+	    children = {
+	      { Type = 'CPU', id = '0',
+	        children = {}},
+	      { Type = 'CPU', id = '1',
+	        children = {}}}},
+       },
+     },
+     { type = 'NUMANode',
+       id = '1',
+       children = {
+          { Type = 'Memory', id = '1', value = 16384 },
+          { Type = 'Socket', id = '1',
+	    children = {
+	      { Type = 'CPU', id = '2',
+	        children = {}},
+	      { Type = 'CPU', id = '3',
+	        children = {}}}},
+       },
+     },
+     { type = 'GPU', id = '0' },
+  }
+}
+\end{lstlisting}
+
+
+Listing~\ref{lst:luaex1} shows a very simple example of
+a Lua table used to describe a hierarchy of resources within
+a compute node. Note that the attributes of the node resource
+are currently left empty, to possibly be filled in as the
+table is copied and appended to the {\tt children} table
+of another resource, such as a cluster. Used in this fashion --
+as a data store -- a Lua table is very similar to JSON, another
+popular data interchange format.
+
+It is not expected that the RDL in \ngrm\ will use the na\"{\i}ve
+approach as in Figure~\ref{fig:luaexample1}. Because Lua is a full
+language instead of just a data interchange format, there will be
+many optimizations and syntactic abbreviations we can make to ease
+working with and using the \ngrm\ RDL.
+
+For example, we expect to use the \emph{object inheritance} support
+in Lua to allow resources definied within the RDL to inherit from
+other resources. This should support collaboration and research
+by allowing sharing of resource definitions as RDL ``libraries''
+or resource definition sets. For example, a base type might be
+a {\tt Node} class which implements a set of interfaces that are
+common to all types of nodes (such as \emph{has a} hostname, ip
+address and so on). Specific types of nodes can inherit from the
+base node object and add features (such as specialized devices,
+default tags etc).
+
+Additionally, with the power of a full language at their disposal,
+system managers and users can develop a range of scripts and
+extensions that ease working with data in the RM system. For
+example, a sysadmin could write a script to create the definition
+of an entire cluster by reading a comma-separated value text file,
+or other formatted data.
+
+The risks of using a full language like Lua as the RDL for \ngrm\
+are also numerous. Since the RDL will be used for resource
+requests and definitions, priviliged code within our RM system
+may be compiling and running untrusted code. While Lua has very
+good native support for sandboxing~\cite{LuaSandbox}, this is
+a notoriously difficult practice to get right, and code using
+the RDL may need to be hardened extremely well for any use in a
+production environment. Evaluation of user-supplied code should
+be done within unprivileged processes as much as possible. Also,
+when using a dynamically typed, runtime-compiled language like Lua,
+there is an increased risk of runtime exceptions, so extra care
+must be taken to handle errors correctly, and it is likely that
+a specialized "RDL validation" function must be written.
 
 \subsection{Job Repository and Job Description}
 \label{sect:jobdb}
