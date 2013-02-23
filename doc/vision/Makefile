@@ -11,7 +11,11 @@ DEPFIG = \
 	../fig/comms.eps \
 	../fig/commstk.eps \
 	../fig/cmb.eps \
-	../fig/zmqtbon.eps \
+	../fig/comms_zmq_pubsub.eps \
+	../fig/comms_zmq_reqrep.eps \
+	../fig/comms_zmq_pushpull.eps \
+	../fig/comms_zmq_reduct.eps \
+	../fig/comms_sctp.eps \
 	../fig/comms_ex1a.eps \
 	../fig/comms_ex1b.eps \
 	../fig/comms_ex1c.eps \

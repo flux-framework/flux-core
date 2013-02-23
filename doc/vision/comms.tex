@@ -111,6 +111,38 @@ Toolkit pieces can be mixed and matched according to application
 requirements.  We may cull the comms toolkit as we learn more
 about the pieces while prototyping other \ngrm\ components.
 
+\begin{figure}
+\centering
+\includegraphics[scale=0.3]{comms_sctp}
+\caption{SCTP supports transparent multi-homing of one socket over multiple
+network planes, for example using both Infiniband and Ethernet in a cluster.
+If one network drops a packet, it is retransmitted the other.
+In combination with socket-level support for tuning retransmission timers,
+an application can improve both availability and responsiveness with SCTP.}
+\label{FigCommsSCTP}
+\end{figure}
+
+\begin{figure}
+\begin{minipage}[b]{0.15\linewidth}
+\includegraphics[scale=0.3]{comms_zmq_reqrep}
+\end{minipage}
+\hspace{0.5cm}
+\begin{minipage}[b]{0.4\linewidth}
+\includegraphics[scale=0.3]{comms_zmq_pubsub}
+\end{minipage}
+\hspace{0.5cm}
+\begin{minipage}[b]{0.4\linewidth}
+\includegraphics[scale=0.3]{comms_zmq_pushpull}
+\end{minipage}
+\caption{\zMQ\ provides a sockets-like API that supports several
+messaging patterns including REQ-REP, PUB-SUB, and PUSH-PULL.
+These basic patterns are complemented by other patterns used when
+building distributed message brokers.  For example, XPUB-XSUB handles
+subscription forwarding to optimize multi-level broker based
+publish-subscribe networks.}
+\label{FigCommsZmq}
+\end{figure}
+
 Two messaging approaches of interest are \zMQ~\cite{ZMQGuide} and
 SCTP~\cite{SCTP}.
 \zMQ\ provides the ability to manipulate opaque, multipart messages,
@@ -128,38 +160,12 @@ in the telephony world with an implementation in the Linux kernel.
 It offers multi-streaming, the bundling of {\em streams} in one
 {\em association} (connection).  Individual streams can be configured for
 different ordering and reliability semantics.  SCTP supports
-multi-homing for reliability and congestion avoidance, and
+multi-homing for reliability and congestion avoidance as shown in
+Figure~\ref{FigCommsSCTP}, and
 can transparently generate and check an HMAC for messages using a
 pre-shared key to implement message integrity.  Unlike \zMQ, SCTP is
 connection-based and does not implement a standardized reliable multicast
 mode.
-
-%\begin{figure}
-%\centering
-%\includegraphics[scale=0.35]{zmqtbon}
-%\caption{Tree Based Overlay Network Over \zMQ}
-%\label{FigZmqTBON}
-%\end{figure}
-
-\begin{figure}
-\begin{minipage}[b]{0.15\linewidth}
-\includegraphics[scale=0.3]{comms_zmq_reqrep}
-\end{minipage}
-\hspace{0.5cm}
-\begin{minipage}[b]{0.4\linewidth}
-\includegraphics[scale=0.3]{comms_zmq_pubsub}
-\end{minipage}
-\hspace{0.5cm}
-\begin{minipage}[b]{0.4\linewidth}
-\includegraphics[scale=0.3]{comms_zmq_pushpull}
-\end{minipage}
-\caption{\zMQ\ provides a socket-like API that supports several
-messaging patterns including REQ-REP, PUB-SUB, and PUSH-PULL.
-These basic patterns are complemented by features for implementing
-distributed message brokers.}
-\label{FigCommsZmq}
-\end{figure}
-
 
 Two widely used methods of encoding data in messages are
 JSON~\cite{rfc4627} 
@@ -409,6 +415,20 @@ consumed at the control node.
 
 This overlay network should utilize CMB services to respond to support changes
 in comms session membership (elasticity).
+
+\begin{figure}
+\centering
+\includegraphics[scale=0.35]{comms_zmq_reduct}
+\caption{Reduction network speculatively implemented as a \zMQ\ tree-based
+overlay network.  The session multicast scheduling trigger synchronizes
+data collection/transmission by {\em source} nodes.  {\em Reduction} nodes
+receive source data and perform some aggregation/reduction function
+then transmit the result.  Finally, a {\em sink} node at the root
+disposes of the reduced data.
+There may be muliple reduction levels in the tree.}
+\label{FigZmqTBON}
+\end{figure}
+
 
 FIXME: Pull in Dong's requirements/description.
 Why not use MRNet?

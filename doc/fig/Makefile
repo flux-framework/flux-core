@@ -2,16 +2,20 @@ DEPFIG = \
 	comms.eps \
 	commstk.eps \
 	cmb.eps \
-	zmqtbon.eps \
+	comms_ex1a.eps \
+	comms_ex1b.eps \
+	comms_ex1c.eps \
+	comms_ex1d.eps \
+	comms_zmq_reqrep.eps \
+	comms_zmq_pubsub.eps \
+	comms_zmq_pushpull.eps \
+	comms_zmq_reduct.eps \
+	comms_sctp.eps \
 	wrap_graph.ps \
 	WRAP_Architecture.ps \
 	WRAP_Base.ps \
 	WRAP_grow.ps \
 	WRAP_newJobFunction.ps \
-	comms_ex1a.eps \
-	comms_ex1b.eps \
-	comms_ex1c.eps \
-	comms_ex1d.eps \
 	mon_ex1a.eps \
 	mon_ex1b.eps \
 	mon_iface.eps
