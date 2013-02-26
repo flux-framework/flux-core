@@ -451,13 +451,10 @@ developing the scheduler component.
 \subsubsection{Motivation}
 
 Scheduling batch jobs across a collection of networked computing
-resources started in the 1990's with Livermore Computing's DPCS (later
-known as LCRM).  It received users' job requests, selected a cluster
-for each job, then dispatched the job to that cluster's resource
-manager.  The Moab Workload Manager which replaced LCRM essentially
-provided the same functionality.  And while SLURM provides some grid
-functionality, it never matured enough to allow it to replace Moab for
-production use.
+resources connected in a grid has been a common paradigm for at least
+two decades.  A batch scheduler receives users' job requests, selects
+a cluster for each job, then dispatches the job to that cluster's
+resource manager to be executed.
 
 The \ngjs\ represents a departure from traditional monolithic ``grid
 masters''.  The scheduler functionality will be a service provided by
