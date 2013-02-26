@@ -408,23 +408,6 @@ subdomain.
 
 \subsection{Reduction Network}
 
-The Tree-Based Overlay Network (TBON), exemplified by MRNet~\cite{MRNet},
-has been established as a useful communications substrate for scaling
-distributed debuggers and similar tools.
-The \ngrm\ reduction network offers a similar capability to \ngrm\ components
-operating within a comms session.
-While MRNet is focused on portable tools that instantiate their own TBON
-with a custom topology for exclusive use of the tool and tear it down when
-the tool exits,
-the \ngrm\ reduction network topology tracks that of the CMB,
-is persistent for the life of the comms session,
-and can be shared among components.
-It shares the elasticity and fault-tolerance properties of the CMB.
-Data passed over the reduction network ``counts'' towards CMB liveness
-tracking.
-The reduction network will obtain privacy and integrity using comms
-session security context.
-
 \begin{figure}
 \centering
 \includegraphics[scale=0.35]{comms_zmq_reduct}
@@ -436,11 +419,30 @@ reduction on messages, and on to the front-end.}
 \label{FigZmqTBON}
 \end{figure}
 
+The Tree-Based Overlay Network (TB\={O}N), exemplified by MRNet~\cite{MRNet},
+is regarded as a useful communications substrate for scaling
+distributed debuggers and similar tools.
+The \ngrm\ reduction network offers a similar capability
+within a comms session.
+While MRNet is focused on portable tools that instantiate their own TBON
+with a custom topology for exclusive use of the tool and tear it down when
+the tool exits,
+the \ngrm\ reduction network topology tracks that of the CMB,
+is persistent for the life of the comms session,
+and can be shared among components.
+It shares the elasticity and fault-tolerance properties of the CMB.
+Data passed over the reduction network ``counts'' towards CMB liveness
+tracking.
+The reduction network will obtain privacy and integrity using the comms
+session security context.
+Message manipulation and routing could be accomplished with
+\zMQ\ (Figure~\ref{FigZmqTBON}) or by a combination of \zMQ\ and SCTP.
+
 \paragraph{Topology}
 The reduction network topology tracks the CMB topology.
 Its front-end is rooted at the control node.
 Its back-ends span every node in the comms session, including those
-running internal processes and the control node.
+running internal and front-end processes.
 The location of internal processes will be dependent on the design of
 the CMB.
 Although the topology of the reduction network must have the elasticity
@@ -448,8 +450,6 @@ and fault tolerance properties of the comms session,
 we anticipate that for a session in stasis, the topology will be fixed.
 For example, branching factor and depth will not dynamically adjust for
 performance.
-Message manipulation and routing could be accomplished with
-\zMQ\ (Figure~\ref{FigZmqTBON}) or by a combination of \zMQ\ and SCTP.
 
 \ifcomments
 \marginpar{\tiny {\bf jg:}
@@ -493,8 +493,7 @@ locations.
 
 \paragraph{Fault tolerance}
 The CMB provides notification messages when nodes cease to respond
-so that other services can manage failures, and the CMB itself adapts
-to failures, altering its topology as needed.
+so that other services can manage failures.
 The reduction network will use this facility and track the CMB topology
 to remain functional when faults occur.
 However, although we are encouraged that fault tolerance
