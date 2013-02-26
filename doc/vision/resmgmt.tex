@@ -128,16 +128,14 @@ are many extant examples of the use of Lua as a Data Description
 and Domain Specific Language. See the Programming in Lua (PiL)
 Book~\cite{LuaBook} for examples.
 
-\lstset{ basicstyle=\footnotesize\tt }
-
 \begin{lstlisting}[
  float=*htp,
  frame=shadowbox,
- rulesepcolor=\color{lightgray},
+ %rulesepcolor=\color{gray},
  numbers=left,
  numbersep=5pt,
- numberstyle=\tiny\sffamily\color{gray},
- basicstyle=\footnotesize\tt,
+ numberstyle=\tiny\sffamily,
+ basicstyle=\scriptsize\tt,
  caption={A na\"{\i}ve example of a Lua table describing an excessively simple resource hierarchy},
  captionpos=b,
  label={lst:luaex1}]
@@ -151,10 +149,10 @@ ComputeNode = {
           { Type = 'Memory', id = '0', value = 16384 },
           { Type = 'Socket', id = '0',
 	    children = {
-	      { Type = 'CPU', id = '0',
-	        children = {}},
-	      { Type = 'CPU', id = '1',
-	        children = {}}}},
+	      { Type = 'CPU', id = '0', children = {}},
+	      { Type = 'CPU', id = '1', children = {}}
+	    }
+	  },
        },
      },
      { type = 'NUMANode',
@@ -163,10 +161,10 @@ ComputeNode = {
           { Type = 'Memory', id = '1', value = 16384 },
           { Type = 'Socket', id = '1',
 	    children = {
-	      { Type = 'CPU', id = '2',
-	        children = {}},
-	      { Type = 'CPU', id = '3',
-	        children = {}}}},
+	      { Type = 'CPU', id = '2', children = {}},
+	      { Type = 'CPU', id = '3', children = {}}
+	    }
+	  },
        },
      },
      { type = 'GPU', id = '0' },
