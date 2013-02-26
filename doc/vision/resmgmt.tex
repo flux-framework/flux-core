@@ -128,16 +128,14 @@ are many extant examples of the use of Lua as a Data Description
 and Domain Specific Language. See the Programming in Lua (PiL)
 Book~\cite{LuaBook} for examples.
 
-\lstset{ basicstyle=\footnotesize\tt }
-
 \begin{lstlisting}[
  float=*htp,
  frame=shadowbox,
- rulesepcolor=\color{lightgray},
+ %rulesepcolor=\color{gray},
  numbers=left,
  numbersep=5pt,
- numberstyle=\tiny\sffamily\color{gray},
- basicstyle=\footnotesize\tt,
+ numberstyle=\tiny\sffamily,
+ basicstyle=\scriptsize\tt,
  caption={A na\"{\i}ve example of a Lua table describing an excessively simple resource hierarchy},
  captionpos=b,
  label={lst:luaex1}]
@@ -151,10 +149,10 @@ ComputeNode = {
           { Type = 'Memory', id = '0', value = 16384 },
           { Type = 'Socket', id = '0',
 	    children = {
-	      { Type = 'CPU', id = '0',
-	        children = {}},
-	      { Type = 'CPU', id = '1',
-	        children = {}}}},
+	      { Type = 'CPU', id = '0', children = {}},
+	      { Type = 'CPU', id = '1', children = {}}
+	    }
+	  },
        },
      },
      { type = 'NUMANode',
@@ -163,10 +161,10 @@ ComputeNode = {
           { Type = 'Memory', id = '1', value = 16384 },
           { Type = 'Socket', id = '1',
 	    children = {
-	      { Type = 'CPU', id = '2',
-	        children = {}},
-	      { Type = 'CPU', id = '3',
-	        children = {}}}},
+	      { Type = 'CPU', id = '2', children = {}},
+	      { Type = 'CPU', id = '3', children = {}}
+	    }
+	  },
        },
      },
      { type = 'GPU', id = '0' },
@@ -222,6 +220,104 @@ there is an increased risk of runtime exceptions, so extra care
 must be taken to handle errors correctly, and it is likely that
 a specialized "RDL validation" function must be written.
 
+\subsection{Global, Persistent Data in \ngrm}
+
+In the \emph{Unified Job Model} of \ngrm\ we combine the concept
+of a traditional job with the idea of a resource management
+\emph{instance} which provides the traditional features of a
+resource manager and batch scheduler. However, the top-level
+\emph{root job} in such a system will need to be initialized from
+somewhere. Additionally, in order to be useful, the RM system will
+need some sort of persistent record of jobs that ran on the system,
+for how long, and on which resources.
+
+To satisfy these requirements, we introduce the global, persistent
+\emph{Resource Inventory} and \emph{Job and User Repositores}. These
+facilities operate outside of the \emph{hierarchical job model} in
+\ngrm\ and act as a source of ultimate configuration and historical
+data about the RM system. Each of these facilities is described
+in more detail in the sections below.
+
+\subsubsection{Resource Inventory}
+
+As noted above, the Resource Inventory is a global, persistent
+database which acts as the top-level configuration for all
+jobs within the \ngrm\ system. The resource inventory itself
+will support being initialized, modified, and queried using
+the RDL, and thus will be optimized for the storage of hierarchical
+resources and their topology.
+\ifcomments
+\marginpar{\tiny
+{\bf how} to store hierarchical data and topology information
+together is a subject for further research.}
+\fi
+
+To satisfy our generalized resource model we must strive to build
+a resource inventory that is itself generalized and flexible.
+To this end, we propose that the resource inventory implementation
+support arbitrary \emph{tagging} of resources. Resource tagging
+is a more general approach than the practice of giving nodes
+features or properties as in traditional resource managers. We also
+propose that the tagging approach is powerful enough to support RM
+features such as marking resources \emph{down} or \emph{drained},
+an even \emph{allocated}. Furthermore, it is common practice for
+tagging databases to allow users to supply their own tags to data
+in the system. Use of this kind of \emph{collaborative tagging}
+or folksonomy~\cite{wiki:folksonomy}, could be very useful in
+creating a socialized system of resource management.
+
+In order to enable the development tools around the resource
+inventory, and to support notification of resource changes and
+reconfiguration to jobs in the \ngrm\ system, we propose that
+the resource inventory export a \emph{subscribe} interface in
+addition to a more traditional API. The subscribe interface will
+support filtering so that tools (and jobs) can get notifications
+of specific changes (perhaps to a subset of resources, or changes
+to a particular tag). For instance, the root job in \ngrm\ will
+subscribe to the resource inventory to get updates to resources,
+such as resources that are drained or modified.
+
+\subsubsection{User Repository}
+
+Since \ngrm\ is a software system that will be used to provide
+\emph{users} with access to compute resources, it will require
+some place to store information about those users. For this
+purpose, we will require a database of user information alongside
+the resource inventory. We call this global, persisten user
+data store the \emph{user repository}.
+
+At the very least, the user repository will store minimal
+data about users of the current deployment of \ngrm. However,
+the implemntation should be flexible enough to allow the storage
+of other user-specific information, such as defaults, limits,
+roles, accounts, qualities of service, and so on.
+
+\subsubsection{Job Repository}
+
+The \emph{job repository} is the final global and persistent
+data store in the \ngrm\ system. This top-level database is a
+historical record of all jobs that have completed in the
+\ngrm\ system. Along with the obvious data about a job --
+the start and end times, the resources assigned to the job,
+and the owning users -- the \ngrm\ job repository will also
+store a complete provenance record for the job. The provenance
+record will (configuration permitting) contain data such as the
+job environment, namespace or list of installed packages, fault
+stream and other job-specific monitoring data. It may also be
+beneficial to store other job information such as input files
+and stdin/stdout streams, so the job repository will not be
+designed with a rigid schema.
+
+Another challenge in designing a job repository for \ngrm\ is
+storing job data from the \emph{hierarchical job model}. Similar
+to the resource inventory, the job repository will need to be
+optimize to store hierarchical data. The intent of the job
+repository is to store \emph{all} job data, down to even the
+lightweight job invocations in the leaf jobs of the system,
+so there will be a mass of hierarchical data here. Developing
+a system that not only efficiently represents that hierarcy,
+but allows advance and intuitive queries for the data should
+be a top priority.
 
 \subsection{Definition of Resource Management}
 
@@ -278,91 +374,14 @@ implements the essential functionality of the system -- that is the
 efficient use of limited resources across a diverse user base while
 implementing site policy.
 
-\subsection{Resource Inventory}
-\label{sect:resdb}
-
-The core component of the resource management system is
-a persistent, global database called the {\em resource inventory}.
-The resource inventory contains a superset of resources managed
-by the system, and at the highest level acts as the configuration
-repository for the NGRM system.
-
-The resource inventory, which is not associated with any instance
-of the resource manager, will have the following initial features:
-
-\begin{itemize}
-\item{Arbitrary "tagging" of resource objects. Tags can be used later
-   to define searches for objects. E.g. give me all the resources
-   with the tag 'compute' and 'node' and 'idle', etc.}
-
-\item{A subscribe interface with filtering so apps using the DB can
-   subscribe to interesting changes and updates in the DB.}
-
-\item{An API upon which sysadmin and other tools could be developed.}
-\end{itemize}
-
-Resource manager instances/jobs do not interact directly with
-the resource inventory.  Instead, each RM instance has associated
-with it a rw "cache" of its subset of the resource inventory DB,
-which we will call simply the resource DB.  The resource DB
-listens for changes of interest from its parent DB using
-the subscribe interface, and additionally publishes its own
-changes such that a parent/child or other application can
-be notified of data changes to the cache (e.g. node is allocated
-to sub-job, node is marked down, user pushes some tags of
-interest into the cache).
-
-At the end of a job, a configurable set of data in the
-resource DB would be pushed back up to the parent. This
-allows accumulated data and job/user specific tags from
-each job to percolate back up the system, possibly all
-the way to the persistent resource inventory.
-
-The resource inventory will also capture the dynamic activity of
-resources going in and out of service and contain an interface to the
-monitoring component to help provide this information.
-
-\subsection{Job Repository and Job Description}
-\label{sect:jobdb}
-
-User requests for computing resource allocations are saved as job
-records to the job repository.  Like the resource description language
-above, the form of the job record needs to capture the most generic
-specifications yet be flexible enough to include machine-specific
-attributes as well as complex conditions, dependencies, and even the
-associated batch script.
-
-Particular attention is needed to specify jobs within jobs.  There may
-be a need for a distributed job repository such that higher level jobs
-do not necessarily need to contain information on child jobs.
-
-The persistence of the job repository starts when the job is first
-submitted.  Job records are updated as jobs are prioritized into a
-queue and move from a queued state, through a running state, to a
-completed state and perhaps to an archived state.
-
-Usage statistics will be available from the job repository.  Data from
-the job repository and the resource inventory will provide a complete
-picture of what jobs were running on what resources under what
-conditions at every point in time.
-
-\subsection{User Repository}
-
-The user repository contains an ACL of users permitted to submit jobs
-to the \ngrm.  This is where bank accounts and qualities of service
-are defined along with the users associated with each.  Limits,
-constraints, target shares, and policy rules are stored in this
-repository.  The contents of this repository ultimately determine
-which users can run on which resources under what conditions and
-subject to what limitations and constraints.
-
 \subsection{Repository Design}
 
-The job and user repositories only exist at the same level as the
-resource inventory. That is, since they are persistent, they cannot be
-tied to any one "job". Instead, these are all global databases with
-one a common API.  They are accessible from any job and/or user
-workstation via globally routable server name and port for example.
+The job and user repositories and resource inventory Only exist
+at the same level as the resource inventory. That is, since they
+are persistent, they cannot be tied to any one "job". Instead,
+these are all global databases with one a common API.  They are
+accessible from any job and/or user workstation via globally
+routable server name and port for example.
 
 Within any job, there is a "simpler" implementation of each of these
 databases that we just call the (job-local) resource, user, and job
@@ -425,7 +444,7 @@ jobs.  Users submit to the scheduler requests for resources to run
 their job.  The scheduler implements management's policy to decide
 when and where to allocate the resources for each job.
 
-This section presents the requirements for the \ngjs, a rough design
+This section summarizes the requirements for the \ngjs, a rough design
 which meets those requirements, and a work breakdown structure for
 developing the scheduler component.
 
@@ -440,89 +459,74 @@ provided the same functionality.  And while SLURM provides some grid
 functionality, it never matured enough to allow it to replace Moab for
 production use.
 
-The \ngjs\ will provide new functionality not available in any
-commercial or open source project.  The \ngjs\ will schedule jobs
-across resources in a computing center without regard to traditional
-cluster boundaries.  A job will be able to request resources
-containing a common feature (like connectivity to the same high speed
-switch) or fitting within a limited power envelope.
+The \ngjs\ represents a departure from traditional monolithic ``grid
+masters''.  The scheduler functionality will be a service provided by
+the \ngrm's job model.  As such, the scheduling activities will be
+distributed across the center's resources and provide functionality
+not available in any commercial or open source project.
 
-In addition, the \ngjs\ will be designed to be recursive.  It will
-have the capability to launch another instance of itself within the
-context of a job.  The \ngjs\ will support plugin modules that provide
-unique scheduling behavior and job prioritization.  Each recursive
-instance of the scheduler will have the option to independently load
-its own schdeuling plugin.  In so doing, the \ngjs's scheduling
-capabilities will range from scheduling all resources in the center to
-scheduling jobs on dedicated resources (DATs) to scheduling what were
-formerly known as job steps.
+\ngjs's scheduling services will schedule jobs across resources in a
+computing center without regard to current cluster boundaries.  A job
+will be able to request resources containing a common feature (like
+connectivity to the same high speed switch) or fitting within a
+limited power envelope.
+
+The \ngjs\ will support plugin modules that provide unique scheduling
+behavior and job prioritization.  Each job will have the option to
+independently load its own scheduling plugin.  In so doing, the
+\ngjs's scheduling capabilities will range from scheduling all
+resources in the center to scheduling jobs on dedicated resources
+(DATs) to scheduling LWJ's (job steps).
 
 Most importantly, the traditional boundaries between a job scheduler
 and the resource manager will be redefined under \ngrm.  Instead of a
 resource manager that manages every resource of a cluster, the
-\ngrmfull\ will be instantiated on the fly by the \ngjs\ and manage
-only the resources the scheduler allocates to the job (or recursive
-job).
+resource management services will be instantiated as part of the job
+and be restricted to only the resources allocated to the job.
 
 In order to continue to meet the needs of LC users, the \ngjs\ must
-continue to provide all the services that Moab currently provides,
-but...
-\begin{itemize}
-  \item More quickly and efficiently
-  \item More accurately
-  \item More reliably
-  \item More easily
-  \item More intuitively
-  \item More flexibly
-  \item More securely
-  \item More transparently
-  \item And require minimal intervention and oversight
-\end{itemize}
+continue to provide all the services that our current schedulers
+provide.  Our goal is to surpass our existing schedulers in the
+following areas: performance, accuracy, reliability, resiliency, ease
+of use, flexibility, security, diagnostics, and need for manual
+intervention.
 
 \subsubsection{Requirements}
 
-While a more detailed list of requirements is presented here
-<ToBeDone>, the following provides an overview of the functionality
-that the \ngjs\ will be expected to deliver.
+While a more detailed list of requirements is presented in
+\ref{ReqsHiLevFun}, the following provides an overview of the
+functionality that the \ngjs\ will be expected to deliver.
 
 \paragraph{Fundamental Requirements}
 
-The following is the most definitive list of scheduling requirements.
-A scheduler is not a scheduler unless it can do these:
+The following is the most definitive list of basic scheduling
+requirements.  The job and resource repositories as well as the job
+submission facility are external to the \ngjs.
 
 \begin{itemize}
-  \item Maintain current resource inventory including state, health
-    and availability of all resources to be scheduled
-  \item Receive job allocation requests
   \item Prioritize each job
-  \item Schedule each job based on multiple resource requirements
-  \item Backfill lower priority jobs whenever possible
-  \item Allow for dynamic job growth and reduction
-  \item Preempt running jobs to free up resources needed by higher priority jobs
-  \item Provide status of all jobs with estimates of when each job will run
-  \item Allow for recursive scheduling
+  \item Schedule each job based on its resource requirements
 \end{itemize}
 
 \paragraph{Further Scheduler Requirements}
 
-As part of its scheduling duties, the scheduler must also accommodate
-user requests and provide versatile administration capabilities.
+In addition, more elaborate scheduling plugins will be provided to do
+the following:
 
 \begin{itemize}
-  \item Respond to requests to hold, modify or cancel jobs
-  \item Schedule jobs across the center
   \item Support complex job dependencies
-  \item Restrict some operations based on roles
-  \item Accept job reservations
-  \item Originate and manage WRAP instances
-  \item Dynamically adapt to configuration updates
-  \item Save complete state and recover fully from a restart
+  \item Backfill lower priority jobs whenever possible
+  \item Facilitate dynamic job growth and reduction
+  \item Preempt running jobs to free up resources needed by higher priority jobs
+  \item Calculate estimates of when each job will begin
 \end{itemize}
 
 \paragraph{Policy Enforcement}
 
-The scheduler implements the center's policies for providing access to
-its computing resources.  As part of this duty, the scheduler must
+\ngrm\ implements the center's policies for providing access to its
+computing resources.  The following are responsibilities,
+traditionally associated with a batch scheduler, that will be borne by
+the larger \ngrm\ system:
 
 \begin{itemize}
   \item Reject job submissions for jobs which cannot or will never run
@@ -534,29 +538,18 @@ its computing resources.  As part of this duty, the scheduler must
 \paragraph{Organization Components}
 
 The \ngjs\ functionality is broken down into the following components.
-However it is designed, it must include the following facilities.
-
-\textbf{Job Submission.} This the facility that receives a user's
-request for a job allocation and adds a record of this request to
-the job repository.  Each job submitted must be immediately rejected
-if it cannot or is not allowed to run given the job specifications,
-the resources available, and any restrictions in place.  Job
-submission must be extremely fast and return a job ID in well under a
-second of time.  The system shall support hundreds of job submissions
-per second.
 
 \textbf{Job Prioritization.}  This the facility for prioritizing jobs
 based on potentially multiple factors.  The system shall offer a job
 priority plugin framework to allow custom algorithms for determining
 job priority.  The priority of each queued job must be continually
-recalculated as the queue of jobs and constituent factors are
-constantly changing.
+recalculated as the queue of jobs and workload factors change.
 
 \textbf{Job Scheduling.} For each job removed from the prioritized
 queue, computing resources must be reserved and eventually allocated.
 The collection of resources to schedule must be available from the
-resource inventory with the state and status of each resource updated in
-real-time.  The scheduler must honor multiple resource requests
+resource inventory with the state and status of each resource updated
+in real-time.  The scheduler must honor multiple resource requests
 simultaneously as it seeks to allocate cores, GPUs, nodes, switches,
 bandwidth, power, etc.
 
@@ -576,24 +569,27 @@ are mapped to which resources over a future, rolling period of time.
 A by-product of this schedule is a projected start time for every
 queued job that is included in the schedule.
 
-\textbf{Job Dispatching.} As time passes, the allocations described in
-the schedule must be created.  Running jobs that exceed their wall
-clock limit much be terminated and new jobs must be launched.
-Provisions must be made to launch multiple jobs simultaneously (or
-nearly simultaneously).
+% Don: The following three sections are not necessarily associated
+% with the scheduler service and need to be moved to other parts of
+% this doc.
+%\textbf{Job Dispatching.} As time passes, the allocations described in
+%the schedule must be created.  Running jobs that exceed their wall
+%clock limit much be terminated and new jobs must be launched.
+%Provisions must be made to launch multiple jobs simultaneously (or
+%nearly simultaneously).
 
-\textbf{Job Status Reporting.} This is the facility for showing the
-user the status of their jobs and the job queue.  Job info must be
-available immediately after job submission, as it is pending, while it
-is running, and afterwards for a period to be determined.  The system
-should support multiple status requests at a time and reply with a
-second or two.  The system is designed to withstand denial of service
-attacks - whether deliberate or accidental.
+%\textbf{Job Status Reporting.} This is the facility for showing the
+%user the status of their jobs and the job queue.  Job info must be
+%available immediately after job submission, as it is pending, while it
+%is running, and afterwards for a period to be determined.  The system
+%should support multiple status requests at a time and reply with a
+%second or two.  The system is designed to withstand denial of service
+%attacks - whether deliberate or accidental.
 
-\textbf{Job and System Management.} This is the facility for manual
-intervention: boosting job priorities, modifying job characteristics,
-cancelling jobs, etc.  Modifying resource states does not have to be
-part of this facility.
+%\textbf{Job and System Management.} This is the facility for manual
+%intervention: boosting job priorities, modifying job characteristics,
+%cancelling jobs, etc.  Modifying resource states does not have to be
+%part of this facility.
 
 \subsection{Resource Management API}
 
