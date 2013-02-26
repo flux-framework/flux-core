@@ -116,8 +116,9 @@ about the pieces while prototyping other \ngrm\ components.
 \includegraphics[scale=0.3]{comms_sctp}
 \caption{SCTP supports transparent multi-homing of one socket over multiple
 network planes, for example using both Infiniband and Ethernet in a cluster.
-If one network drops a packet, it is retransmitted the other, improving
-both availability and responsiveness.}
+If one network drops a packet, it is retransmitted on the other, which with
+proper tuning, improves both availability and responsiveness compared with
+TCP single-homed sockets.}
 \label{FigCommsSCTP}
 \end{figure}
 
@@ -308,8 +309,8 @@ state.
 
 \paragraph{Event Messaging}
 The CMB implements a session-wide event messaging service.
-Clients of the CMB on any node can publish a $(key, message)$ event tuple.
-Other clients can subscribe to events by key.  The CMB ensures that
+Clients of the CMB on any node can publish a $(tag, message)$ event tuple.
+Other clients can subscribe to events by tag.  The CMB ensures that
 event messages are routed internally from publishers to subscribers.
 The event service is reliable, and for events originating on the same node,
 sequenced for in-order delivery.
@@ -407,31 +408,107 @@ subdomain.
 
 \subsection{Reduction Network}
 
-The \ngrm\ runtime and monitoring components will require a
-reduction network similar to MRNet~\cite{MRNet} that
-can aggregate or reduce data produced across the session before it is
-consumed at the control node.
-
-This overlay network should utilize CMB services to respond to support changes
-in comms session membership (elasticity).
+The Tree-Based Overlay Network (TBON), exemplified by MRNet~\cite{MRNet},
+has been established as a useful communications substrate for scaling
+distributed debuggers and similar tools.
+The \ngrm\ reduction network offers a similar capability to \ngrm\ components
+operating within a comms session.
+While MRNet is focused on portable tools that instantiate their own TBON
+with a custom topology for exclusive use of the tool and tear it down when
+the tool exits,
+the \ngrm\ reduction network topology tracks that of the CMB,
+is persistent for the life of the comms session,
+and can be shared among components.
+It shares the elasticity and fault-tolerance properties of the CMB.
+Data passed over the reduction network ``counts'' towards CMB liveness
+tracking.
+The reduction network will obtain privacy and integrity using comms
+session security context.
 
 \begin{figure}
 \centering
 \includegraphics[scale=0.35]{comms_zmq_reduct}
-\caption{Reduction network speculatively implemented as a \zMQ\ tree-based
-overlay network.  The session multicast scheduling trigger synchronizes
-data collection/transmission by {\em source} nodes.  {\em Reduction} nodes
-receive source data and perform some aggregation/reduction function
-then transmit the result.  Finally, a {\em sink} node at the root
-disposes of the reduced data.
-There may be muliple reduction levels in the tree.}
+\caption{Reduction network speculatively implemented with \zMQ.
+A front-end node communicates with back-end nodes using PGM multicast
+in the {\em downstream} direction.  {\em Upstream} traffic makes its
+way from back-end nodes, through internal nodes that perform data 
+reduction on messages, and on to the front-end.}
 \label{FigZmqTBON}
 \end{figure}
 
+\paragraph{Topology}
+The reduction network topology tracks the CMB topology.
+Its front-end is rooted at the control node.
+Its back-ends span every node in the comms session, including those
+running internal processes and the control node.
+The location of internal processes will be dependent on the design of
+the CMB.
+Although the topology of the reduction network must have the elasticity
+and fault tolerance properties of the comms session,
+we anticipate that for a session in stasis, the topology will be fixed.
+For example, branching factor and depth will not dynamically adjust for
+performance.
+Message manipulation and routing could be accomplished with
+\zMQ\ (Figure~\ref{FigZmqTBON}) or by a combination of \zMQ\ and SCTP.
 
-FIXME: Pull in Dong's requirements/description.
-Why not use MRNet?
-Can this be part of CMB?
+\ifcomments
+\marginpar{\tiny {\bf jg:}
+Is there a case for unicast store-and-forward like is used in MRNet?
+Why did they choose to do it that way?  Maybe to avoid entanglements
+getting IP multicast to work in some environments?}
+\fi
+\paragraph{Downstream communiciation}
+The reduction network utilizes IP level multicast (e.g. PGM) to send
+data from the front-end to the back-ends.
+As with event messages, downstream messages are a
+$(tag, message)$ tuple with the tag used to distinguish different
+services sharing the reduction network and to implement application-specific
+addressing, for example to address a subset of back-end processes.
+
+\paragraph{Upstream communication}
+Communication from the back-ends to the front-end is the main function
+of the reduction network.  It is unicast-based.  Scalability is obtained
+by reductions that are performed by internal processes, for example
+aggregating duplicate messages, forwarding a weighted average of discrete
+samples, or simply concatenating messages.
+There may be any number of levels of internal
+processes, with each internal process operating on raw data or data
+that has already been reduced by a previous level.
+As with downstream communication, upstream messages are a
+$(tag, message)$ tuple with the tag used to distinguish different
+services sharing the reduction network.
+
+\paragraph{Programming interface}
+The programming interface for the reduction network is a design
+activity that can be informed by the MRNet API~\cite{MRNetAPI}, however
+because the reduction network is persisent and shared, it has somewhat
+different requirements in that it must interface to components running
+as distinct UNIX processes and be resilient to component failure.
+One approach is for applications that use the reduction
+network to provide a plugin that claims a message $tag$ space and implements
+a {\em socket activation} scheme similar to systemd~\cite{Systemd}
+or D-Bus~\cite{Dbus} that associates the tag space with named UNIX
+domain sockets and/or executables at the front-end, back-end, and internal
+locations.
+
+\paragraph{Fault tolerance}
+The CMB provides notification messages when nodes cease to respond
+so that other services can manage failures, and the CMB itself adapts
+to failures, altering its topology as needed.
+The reduction network will use this facility and track the CMB topology
+to remain functional when faults occur.
+However, although we are encouraged that fault tolerance
+has been achieved for certain use cases in MRNet as described by
+Arnold and Miller~\cite{MrNetFail},
+we recognize that it will be a challenge to design our reduction network
+to be generally reliable and fault-tolerant.
+Therefore we leave the possibility open that the design will provide
+these attributes for some use cases but not others.
+\ifcomments
+\marginpar{\tiny {\bf jg:}
+Yikes.  Fault tolerance story needs work, or at least needs to be recognized
+as a significant R and D activity in the WBS.}
+\fi
 
 \ifwbs
 \newpage
