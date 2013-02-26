@@ -1,0 +1,249 @@
+%!PS-Adobe-2.0 EPSF-2.0
+%%Title: /home/fred/TeX/STYLES/Prosper/img/yellow-bullet-on-white.ps
+%%Creator: XV Version 3.10a+FLmask  Rev: 12/29/94  -  by John Bradley
+%%BoundingBox: 276 376 336 416
+%%Pages: 1
+%%DocumentFonts:
+%%EndComments
+%%EndProlog
+
+%%Page: 1 1
+
+% remember original state
+/origstate save def
+
+% build a temporary dictionary
+20 dict begin
+
+% define space for color conversions
+/grays 60 string def  % space for gray scale line
+/npixls 0 def
+/rgbindx 0 def
+
+% lower left corner
+276 376 translate
+
+% size of image (on paper, in 1/72inch coords)
+59.97600 40.03200 scale
+
+% define 'colorimage' if it isn't defined
+%   ('colortogray' and 'mergeprocs' come from xwd2ps
+%     via xgrab)
+/colorimage where   % do we know about 'colorimage'?
+  { pop }           % yes: pop off the 'dict' returned
+  {                 % no:  define one
+    /colortogray {  % define an RGB->I function
+      /rgbdata exch store    % call input 'rgbdata'
+      rgbdata length 3 idiv
+      /npixls exch store
+      /rgbindx 0 store
+      0 1 npixls 1 sub {
+        grays exch
+        rgbdata rgbindx       get 20 mul    % Red
+        rgbdata rgbindx 1 add get 32 mul    % Green
+        rgbdata rgbindx 2 add get 12 mul    % Blue
+        add add 64 idiv      % I = .5G + .31R + .18B
+        put
+        /rgbindx rgbindx 3 add store
+      } for
+      grays 0 npixls getinterval
+    } bind def
+
+    % Utility procedure for colorimage operator.
+    % This procedure takes two procedures off the
+    % stack and merges them into a single procedure.
+
+    /mergeprocs { % def
+      dup length
+      3 -1 roll
+      dup
+      length
+      dup
+      5 1 roll
+      3 -1 roll
+      add
+      array cvx
+      dup
+      3 -1 roll
+      0 exch
+      putinterval
+      dup
+      4 2 roll
+      putinterval
+    } bind def
+
+    /colorimage { % def
+      pop pop     % remove 'false 3' operands
+      {colortogray} mergeprocs
+      image
+    } bind def
+  } ifelse          % end of 'false' case
+
+
+
+% define the colormap
+/cmap 741 string def
+
+
+% load up the colormap
+currentfile cmap readhexstring
+14180c 8c8e0a c4cb07 44521c 949c78 6c7208 c4caa4 acb006 2c3614 f4f2a8 
+74784c e4e604 64620b 444209 acae3c e4e6e2 a4a108 b4be04 7c8204 acae78 
+f4f9d7 ccca64 242809 949254 d4db04 505628 747329 3c4311 444234 242725 
+9c9c08 bcb906 5c5f0b 646a09 c4ca2c c4cabc 343632 84886c a4a26c f4f7f2 
+54540a 444b0f f4edf9 c4c107 acaeb0 7c7a0a 646364 a4a62c acb608 e4e664 
+94920b 2c300a d4d106 f4f208 a4a608 848428 c0c2a8 747475 5b5a0a 3c3c10 
+f4f69c 5c5c5c 646424 dcdecc fcfefb c4c609 ecf0e0 8c890b 746d10 b4aa0c 
+9c9d9f 747a06 afb217 64660d 2c3028 a7aa1f ccd306 343e14 545a44 45460b 
+747c28 949e34 a4a4a3 fcf9f2 544e11 949634 7c7c7f 34381e f4ee06 848a0c 
+242816 e4da04 bcb917 6c6e24 545415 969608 bcbebd 1c210a 747218 b4af07 
+545457 bcbe3c fcfede d4da54 444a3c 9ca21c 6c6d0b 3c3e38 f4f2e8 7c7e09 
+2c3016 aca808 fcf9c1 acaaad 848e24 ecee09 bcbf24 949a14 d4d4d5 848686 
+4c4c11 c4bf18 b4b6b3 b4b620 fcfa1c ccc6cc d4d694 9c9c40 e4e6cc bcbe74 
+8c928c 5c602c ccc65c 6c6d6c dcdc78 747468 acae5c dcdaac 847e24 4c4d4f 
+ccd224 e4e2e4 c4c64c d4d6b4 eceff6 dce204 d5d606 e4e294 c4c6c6 848316 
+545a3c cccccd a4a644 f4f214 fcf6b4 bcbe54 bcc604 8c8a8c eceec8 b4b654 
+5b5a1a 444615 949618 f5f2f7 fcfec7 8c8f18 444116 5c5f15 dcdddd 4c5315 
+6c6212 fcfada d4ce5c dcdc06 7c7624 3c393c b4b2b6 8c8634 343231 847e84 
+dcda64 bcbabc 949395 746e74 e4e206 e4e67c 747a1c 545a5c ccc60a 6c6608 
+847e0e 8c8e34 dcd6a4 1c1a0f cccd05 74740a 34380f 545349 ece708 eceae4 
+bcbf07 84840b b4b27c 2c2a2a c4ba04 ccce24 5c5604 acaa34 b4b707 fcf60c 
+645e64 a49ea4 7c7a24 9c9a2c 2c2a1c c4ba14 5c5614 c4c2c1 343214 9c9e17 
+eceaed ccce38 fcf617 f4eeb4 7c7a4c 646114 948e64 747234 444444 34363c 
+84867c a4a67c f4f6fc 7c7814 948e14 d4d214 848234 747684 fcfa9c eceeec 
+ccd214 a4a4ac fcfafc 7c7e8c 1c2214 c4c23c d4d664 
+pop pop   % lose return values from readhexstring
+
+
+% rlecmapimage expects to have 'w h bits matrix' on stack
+/rlecmapimage {
+  /buffer 1 string def
+  /rgbval 3 string def
+  /block  384 string def
+
+  % proc to read a block from file, and return RGB data
+  { currentfile buffer readhexstring pop
+    /bcount exch 0 get store
+    bcount 128 ge
+    {  % it's a non-run block
+      0 1 bcount 128 sub
+      { currentfile buffer readhexstring pop pop
+
+        % look up value in color map
+        /rgbval cmap buffer 0 get 3 mul 3 getinterval store
+
+        % and put it in position i*3 in block
+        block exch 3 mul rgbval putinterval
+      } for
+      block  0  bcount 127 sub 3 mul  getinterval
+    }
+
+    { % else it's a run block
+      currentfile buffer readhexstring pop pop
+
+      % look up value in colormap
+      /rgbval cmap buffer 0 get 3 mul 3 getinterval store
+
+      0 1 bcount { block exch 3 mul rgbval putinterval } for
+
+      block 0 bcount 1 add 3 mul getinterval
+    } ifelse
+  } % end of proc
+  false 3 colorimage
+} bind def
+
+
+60 40 8			% dimensions of data
+[60 0 0 -40 0 40]		% mapping matrix
+rlecmapimage
+
+1340815340014082f240f202f2014002f203408166401240
+10400153014084665340f2408240f2408140f282f22af284f2405327401440
+0f40812a4081405381534082406c4081405382534066016682406653815340014081f240
+1240
+104081f240014082664066056681a4708270a46601661640
+104084f2a3f2406601668eab89ca17b1bf7f989f15939aa466401440
+0f4081a340024095668926e31ad437eaa2db104b2fcf9b869aa46640f2401040
+104001f28b40dfe7e01aae8a95a5321e3684364b7b5c488648f5b9a46640f281f2400e40
+
+0f408ef240668fe283a062aebeea32106f6383635cd7410241842284a466400340816640
+0a40
+0c4082f227408840663883a05d6abac985c9321e106f1f8e1fbc79f0c24c92f022ac9366
+4053400d40
+0e4094536606e083a7496ae9beea5f1e6f451f2bbcc2341887189118eb8cb40966816640
+0d40
+0e408953abe00da74921e9474389435f1045631f2bc234ad81ad0b010b881892cd67eea4
+66f2400b40
+0b4001f201408c04a94fa74905c96d43321e106387632bbc349291c6738b73c60bad4ccd
+31a466a3f2400a40
+0c4086e8403fa678a92094206a476d4332106f631f2bc292ad0b5899de357391879102dd
+3c6640f2400a40
+074081f24003408627e6c47828206a016a91c901321e3607d02bc2ad91c699de7cd1730b
+870b4c7486a440f2400a40
+074083f240f2400140a1a81ca678283a6a05c359435f1e6f071f41021891c67399de3558
+b8adc27484df66400b40
+094081f240a34027d9d6a64f783a0c6a2dc959321e3607d041c234adb8c6733558c6b892
+4c74659366400b40
+0c4099668757a64f5e3a0c6a476d43011e1007d0c82b4c18ad0bc60bb889b8ad34c24107
+f66653400a40
+0b409a66404eda3ba65428206ac36dc932a2106f631fc8c23492ad91b85b885bebc2029c
+308e66400b40
+0c4093666b333ba678a02049c32dc943321e3607d01f418241c29201928934eb79bcc811
+300e66400b40
+084081f2409840664016b23b0d78283a496ac312c9325f103663d01fc82bc201c201bc88
+792b1f3048d566f2400a40
+084081f240024095166ec4a6a1283a0c6ac36dc9435f1e103607d01fc82b8b2bbc2bccd7
+5c63074b5566400b40
+0b4095664057d6da3ba1782820216a476dc901321e103607638263d01f841fcc7b630785
+0736697f66400b40
+0d408ac561dac4a678a93a0c6ac381c3c983c9015f1e851e1036076f6381634582456f10
+85101e728866400b40
+0d409385d66eda3b29782820496ac32dc943015f1edb1083106f366f816f1081101e851e
+757281ab400b40
+0b4089536c38005adac43ba928892821496ac32d6dc901328232a21e021e895f1ea232db
+12377e14400b40
+0940885340534076cbf46ec482c44fa987a93a200c6ac32dc984c943a5013281325f8a5f
+32ea435f6d5150a466400b40
+044002f28ba3f2a327a340c787c1f4d6c48cc44fa9783a20e16a44c32dbec982c9594303
+4385c943c3ba13668166400b40
+014002f28227efdc81dc8d828d90a886a80fb51dc15ac48ac43b29785e28a0e1bd44c384
+c3ba6d12c981c9be01be87c92dba3e702766400b40
+86f2272adc0f8da88da87697d997d9b597943d5ac16ec48bc40d297854d820e1496a44c3
+01c3012d87e9c362be6a621340824053400b40
+8df2ef0fa87697d9b52cb0524652f181f1b685b6e4006133c48bc43b4f29545ece3a0ce1
+bd6a846ac344bd4489446a2817ab40f240e8400a40
+8cef8d76607a7146b6e69d5639568856398577bbcbc116338533c43b0d4f548154ce83ce
+20a70c830c49bdaa01aa880cecc066f22a4090400a40
+89a897b552b6b387852e3d813d6488648be4d28b646b5a618561163bc43b0d830d4f7828
+82285e3a823a0ca002a084e1c06640f281f2400c40
+8e76b546773985648be41cafe524e5b286b2e5af244a5a61836116dac482c43b1b811b29
+8229a929892920a9a1960a9eab66408240f2400c40
+8b977ab6562ec5e4afe5b24acb03cb821dcb4a814ad682d6166186611633084d3b1b811b
+29892903191ba104ab536640014081f2400c40
+87977ab6873d64e42482244a1d051d01cb87b224b2da6e5a163301338c08c44dc44dc41b
+2580664066401140
+8a76604677392e648be46baf85afe5b2afe5af86af24e51ce48bc501c58a686b576ec457
+962538144083406653401240
+8ba897b552b6b339852ed2bb6481648b018b04648e2e855682b6527a233f422766532740
+1740
+8bc78d76d97a5246829d77b339033982b7edf38ef3b377b64671b0237680dc2753e84001
+408153408240f240054081f2400a40
+8b27dc0fa8769760b5b02c7152015283d346d3f182f171b081b0b58ab5d99776c790a3e8
+f240a381a3408140f281f2401340
+86f2272aef0f8da882a876978197948294d9940194857d947d9776a881a8dc85dc2a902a
+f2408340f240f201f2014081f240024081f2400d40
+
+%
+% Compression made this file 24.57% of the uncompressed size.
+%
+
+
+showpage
+
+% stop using temporary dictionary
+end
+
+% restore original state
+origstate restore
+
+%%Trailer
