@@ -220,6 +220,104 @@ there is an increased risk of runtime exceptions, so extra care
 must be taken to handle errors correctly, and it is likely that
 a specialized "RDL validation" function must be written.
 
+\subsection{Global, Persistent Data in \ngrm}
+
+In the \emph{Unified Job Model} of \ngrm\ we combine the concept
+of a traditional job with the idea of a resource management
+\emph{instance} which provides the traditional features of a
+resource manager and batch scheduler. However, the top-level
+\emph{root job} in such a system will need to be initialized from
+somewhere. Additionally, in order to be useful, the RM system will
+need some sort of persistent record of jobs that ran on the system,
+for how long, and on which resources.
+
+To satisfy these requirements, we introduce the global, persistent
+\emph{Resource Inventory} and \emph{Job and User Repositores}. These
+facilities operate outside of the \emph{hierarchical job model} in
+\ngrm\ and act as a source of ultimate configuration and historical
+data about the RM system. Each of these facilities is described
+in more detail in the sections below.
+
+\subsubsection{Resource Inventory}
+
+As noted above, the Resource Inventory is a global, persistent
+database which acts as the top-level configuration for all
+jobs within the \ngrm\ system. The resource inventory itself
+will support being initialized, modified, and queried using
+the RDL, and thus will be optimized for the storage of hierarchical
+resources and their topology.
+\ifcomments
+\marginpar{\tiny
+{\bf how} to store hierarchical data and topology information
+together is a subject for further research.}
+\fi
+
+To satisfy our generalized resource model we must strive to build
+a resource inventory that is itself generalized and flexible.
+To this end, we propose that the resource inventory implementation
+support arbitrary \emph{tagging} of resources. Resource tagging
+is a more general approach than the practice of giving nodes
+features or properties as in traditional resource managers. We also
+propose that the tagging approach is powerful enough to support RM
+features such as marking resources \emph{down} or \emph{drained},
+an even \emph{allocated}. Furthermore, it is common practice for
+tagging databases to allow users to supply their own tags to data
+in the system. Use of this kind of \emph{collaborative tagging}
+or folksonomy~\cite{wiki:folksonomy}, could be very useful in
+creating a socialized system of resource management.
+
+In order to enable the development tools around the resource
+inventory, and to support notification of resource changes and
+reconfiguration to jobs in the \ngrm\ system, we propose that
+the resource inventory export a \emph{subscribe} interface in
+addition to a more traditional API. The subscribe interface will
+support filtering so that tools (and jobs) can get notifications
+of specific changes (perhaps to a subset of resources, or changes
+to a particular tag). For instance, the root job in \ngrm\ will
+subscribe to the resource inventory to get updates to resources,
+such as resources that are drained or modified.
+
+\subsubsection{User Repository}
+
+Since \ngrm\ is a software system that will be used to provide
+\emph{users} with access to compute resources, it will require
+some place to store information about those users. For this
+purpose, we will require a database of user information alongside
+the resource inventory. We call this global, persisten user
+data store the \emph{user repository}.
+
+At the very least, the user repository will store minimal
+data about users of the current deployment of \ngrm. However,
+the implemntation should be flexible enough to allow the storage
+of other user-specific information, such as defaults, limits,
+roles, accounts, qualities of service, and so on.
+
+\subsubsection{Job Repository}
+
+The \emph{job repository} is the final global and persistent
+data store in the \ngrm\ system. This top-level database is a
+historical record of all jobs that have completed in the
+\ngrm\ system. Along with the obvious data about a job --
+the start and end times, the resources assigned to the job,
+and the owning users -- the \ngrm\ job repository will also
+store a complete provenance record for the job. The provenance
+record will (configuration permitting) contain data such as the
+job environment, namespace or list of installed packages, fault
+stream and other job-specific monitoring data. It may also be
+beneficial to store other job information such as input files
+and stdin/stdout streams, so the job repository will not be
+designed with a rigid schema.
+
+Another challenge in designing a job repository for \ngrm\ is
+storing job data from the \emph{hierarchical job model}. Similar
+to the resource inventory, the job repository will need to be
+optimize to store hierarchical data. The intent of the job
+repository is to store \emph{all} job data, down to even the
+lightweight job invocations in the leaf jobs of the system,
+so there will be a mass of hierarchical data here. Developing
+a system that not only efficiently represents that hierarcy,
+but allows advance and intuitive queries for the data should
+be a top priority.
 
 \subsection{Definition of Resource Management}
 
@@ -276,91 +374,14 @@ implements the essential functionality of the system -- that is the
 efficient use of limited resources across a diverse user base while
 implementing site policy.
 
-\subsection{Resource Inventory}
-\label{sect:resdb}
-
-The core component of the resource management system is
-a persistent, global database called the {\em resource inventory}.
-The resource inventory contains a superset of resources managed
-by the system, and at the highest level acts as the configuration
-repository for the NGRM system.
-
-The resource inventory, which is not associated with any instance
-of the resource manager, will have the following initial features:
-
-\begin{itemize}
-\item{Arbitrary "tagging" of resource objects. Tags can be used later
-   to define searches for objects. E.g. give me all the resources
-   with the tag 'compute' and 'node' and 'idle', etc.}
-
-\item{A subscribe interface with filtering so apps using the DB can
-   subscribe to interesting changes and updates in the DB.}
-
-\item{An API upon which sysadmin and other tools could be developed.}
-\end{itemize}
-
-Resource manager instances/jobs do not interact directly with
-the resource inventory.  Instead, each RM instance has associated
-with it a rw "cache" of its subset of the resource inventory DB,
-which we will call simply the resource DB.  The resource DB
-listens for changes of interest from its parent DB using
-the subscribe interface, and additionally publishes its own
-changes such that a parent/child or other application can
-be notified of data changes to the cache (e.g. node is allocated
-to sub-job, node is marked down, user pushes some tags of
-interest into the cache).
-
-At the end of a job, a configurable set of data in the
-resource DB would be pushed back up to the parent. This
-allows accumulated data and job/user specific tags from
-each job to percolate back up the system, possibly all
-the way to the persistent resource inventory.
-
-The resource inventory will also capture the dynamic activity of
-resources going in and out of service and contain an interface to the
-monitoring component to help provide this information.
-
-\subsection{Job Repository and Job Description}
-\label{sect:jobdb}
-
-User requests for computing resource allocations are saved as job
-records to the job repository.  Like the resource description language
-above, the form of the job record needs to capture the most generic
-specifications yet be flexible enough to include machine-specific
-attributes as well as complex conditions, dependencies, and even the
-associated batch script.
-
-Particular attention is needed to specify jobs within jobs.  There may
-be a need for a distributed job repository such that higher level jobs
-do not necessarily need to contain information on child jobs.
-
-The persistence of the job repository starts when the job is first
-submitted.  Job records are updated as jobs are prioritized into a
-queue and move from a queued state, through a running state, to a
-completed state and perhaps to an archived state.
-
-Usage statistics will be available from the job repository.  Data from
-the job repository and the resource inventory will provide a complete
-picture of what jobs were running on what resources under what
-conditions at every point in time.
-
-\subsection{User Repository}
-
-The user repository contains an ACL of users permitted to submit jobs
-to the \ngrm.  This is where bank accounts and qualities of service
-are defined along with the users associated with each.  Limits,
-constraints, target shares, and policy rules are stored in this
-repository.  The contents of this repository ultimately determine
-which users can run on which resources under what conditions and
-subject to what limitations and constraints.
-
 \subsection{Repository Design}
 
-The job and user repositories only exist at the same level as the
-resource inventory. That is, since they are persistent, they cannot be
-tied to any one "job". Instead, these are all global databases with
-one a common API.  They are accessible from any job and/or user
-workstation via globally routable server name and port for example.
+The job and user repositories and resource inventory Only exist
+at the same level as the resource inventory. That is, since they
+are persistent, they cannot be tied to any one "job". Instead,
+these are all global databases with one a common API.  They are
+accessible from any job and/or user workstation via globally
+routable server name and port for example.
 
 Within any job, there is a "simpler" implementation of each of these
 databases that we just call the (job-local) resource, user, and job
