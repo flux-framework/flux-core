@@ -1,50 +1,46 @@
 \section{Workload Run-time and Placement} 
+\label{sect:WRAP}
 
 The Workload Run-time And Placement (WRAP) thrust area concerns all aspects of
 executing transactions within a single job. 
 While the scheduler sets the overall bound for both resources and time that a job 
-can use, it does not dictate how to execute the various transactions of the job
-within this bound. Thus, it is WRAP's responsibility to ensure that
-these transactions get executed most efficiently within this scheduler-set bound.
+can use, it does not dictate how to execute the various transactions of the job.
+Thus, it is WRAP's responsibility to ensure that these transactions get executed 
+most efficiently within this scheduler-set bound.
 To embody \ngrm's new resource management paradigm, however, WRAP must provide the run-time
 services beyond what the traditional paradigm requires. 
 In addition to the traditional services such as bulk process launch and 
-management, WRAP must provide advanced run-time services to 
-implement conceptual models such as job hierarchy and resource elasticity 
-models described in Section~\ref{sect:models}.
+management, WRAP must provide advanced services to 
+support conceptual models such as job hierarchy and resource elasticity 
+described in Section~\ref{sect:models}.
 
-\subsection{Lightweigth Jobs and Their Hierarchy}
-%\begin{figure}
-%  \centering
-%    \includegraphics[width=5.0in]{wrap_graph}
-%  \caption{WRAP model on NGRM's $R \rightarrow $J problem}
-%  \label{fig:jobrm}
-%\end{figure}
-%
+\subsection{Lightweigth Jobs and their Hierarchy}
+
 As explained in Section~\ref{sect:comparison}, the traditional
-paradigm models transactions that a job executes simply as a set of
+approach models various transactions that a job executes simply as a set of
 compute steps---e.g., {\tt job steps}.
-As with other limitations, this simple traditional model
-is ill-suited for designing our run-time services after. 
-Rather, WRAP requires a more powerful and flexible mechanism
+As with other limitations of the traditional paradigm, this simple model
+is ill-suited for designing our run-time services after it. 
+Instead, WRAP requires a more powerful and flexible mechanism
 to organize and group the processes that a job executes 
-in accordance with their distinct functions. For example, all of the
-parallel processes of an MPI application may form a single 
+in accordance with their distinct functions or purposes. 
+For example, all of the parallel processes of an MPI application may form a single 
 compute function; all of the distributed processes of a parallel
-debugger program may form a separate tool function, acting on 
-the compute function; further, the processes in the compute function
-may refine itself into several sub-groups, and each serves
-an independent power capping function to its member processes.  
+debugger program may form a tool function that should be logically separate from 
+the compute function; further, the compute function
+may refine itself into several sub-functions to serve
+independent power capping functions~\cite{RountreeRAPL} to different subsets of its processes.  
 
-We use the notion of the lightweight
-job (LWJ) to realize this model. An LWJ is a group of processes with a distinct function 
-that has its own resource confinement, a subset of resources assigned to the job.
-A signficant difference with the full job is that an LWJ
-can share the resources with other LWJs of the same job. 
-Further, because the processes grouped by an LWJ can be refined into smaller LWJs,
-LWJs also form a hierarchy, bringing  
-our general {\em job hierachy model} into the 
-within-job scope and following the same ``parent-child'' rules stated
+We use the notion of the lightweight job (LWJ) to realize the new model. 
+An LWJ is a group of processes with a distinct function 
+that has its own resource confinement that is a subset of 
+the overall resources assigned to the job.
+The most significant difference between the LWJ and the full job is that an LWJ
+can share the compute resources with other LWJs of the same job. 
+Further, the processes grouped by an LWJ can be refined into smaller LWJs,
+and thus LWJs also form a hierarchy. Effectively, this bridges 
+our general {\em job hierachy model} into the fine-grained 
+scope of ``within-job,'' following the same ``parent-child'' rules stated
 in Section~\ref{sect:models}.
 
 LWJs are the main means to provide group identifiers to WRAP services
@@ -52,35 +48,12 @@ so that WRAP can manage any meaningful set of processes as one coherent object.
 An LWJ may use a WRAP service to relate itself 
 to another LWJ simply by passing the target LWJ's identifier.
 This would be a common operation for tool LWJs as they often want to 
-locate, synchronize with, and attach to MPI processes grouped through an compute LWJ.
-Similarly, WRAP may move a portion of the resources (e.g., maximum power use) that one LWJ has been using to 
-another LWJ. That forms the basis for our elasticity model at the within-job scope.
+locate, synchronize with, and attach to MPI processes grouped through a compute LWJ.
+Similarly, WRAP may move a portion of the compute resources (e.g., maximum power use) 
+that one LWJ has been using to another LWJ. That forms our basis to enable 
+our elasticity model at the within-job scope.
 
 
-%Using the concept of LWJs, the main goal of WRAP design can 
-%be stated as providing effective and scalable run-time services 
-%to map a {\em LWJ hierarchy} to a resource allocation
-%that also forms a hierarchy as shown in Figure~\ref{fig:jobrm}.
-%Our problem of $R \rightarrow J$ then becomes more than a traditional
-%resource allocation to a job. It is the problem associated with
-%resource distribution across the entire job function hierarchy.
-%Stated differently, the resource allocated to the root of the hierarchy
-%becomes the overall resource bound to the job functions at
-%the next level. This resource distribution relation is well defined
-%recursively for any job function at any position in the job hierarchy.
-%
-%When we combine this hierarchical job model with our generic
-%compute resource model that can capture a wide range
-%of compute resources from fixed resources such as compute nodes
-%and software licenses, to consumable resources like power,
-%we realize that we can express a vastly rich set
-%of scheduling and runtime idioms.
-%The following builds basic definitions and formalisms
-%to reason about our hierarchical job model with some mathematical rigor.
-%They are our tool to compose more complex concepts
-%and to test the concepts on the requirements and use cases
-%of the next generation resource management.
-%
 \begin{table}
 \centering
 \begin{tabular}{|l|l|}
@@ -107,9 +80,9 @@ $e_x$ & a runtime environment where $e_x \in E = \{e0, e1, ..., e_{m-1}\}$ \\
 \label{sect:prim}
 
 Table~\ref{tab:def} defines the basic elements relevant to WRAP run-time services.
-For example, $j$ represents an LWJ in the hierarchy within its job and 
+For example, $j$ represents an LWJ in the hierarchy within the job, and 
 $r_j$ denotes the compute resources to that this LWJ is confined.
-Using those as the foundational parameters, WRAP defines
+Using these as our foundational parameters, WRAP now defines
 the following service primitives to enable the new paradigm.
 
 \begin{itemize}
@@ -128,20 +101,21 @@ the following service primitives to enable the new paradigm.
 
 \item{$bootstrap(j)$: bootstraps processes of $j$ across $r_j$ including dissemination of connection information. If this is a partial bootstrap--e.g., additional processes have been spawned or some processes have been killed, it only adjusts $j$ for the change}
 
-\item{$split(j, marker)$: creates a new LWJ that includes all of the calling processes of $j$ with the same marker.}
+\item{$split(j, marker)$: creates new child LWJs that includes all of the calling processes of $j$ with the same marker.}
 
-\item{$record(j, d_j)$: records $j$'s attributes such as its $c_j$, fingerprint for $e_x$, and arbitrary information ($d_j$).}
+\item{$record(j, d_j)$: records $j$'s attributes such as its $c_j$, fingerprint for $e_x$, and arbitrary information ($d_j$) about $j$.}
 
 \item{$query(j)$: queries about $j$.}
 
-\item{$sync(j_k, j_l)$: putting a job function $j_k$ into a known state and providing another job function $j_l$ with $j_k$'s identify info.}
+\item{$sync(j_k, j_l)$: putting an LWJ, $j_k$, into a known state and providing another LWJ, $j_l$, with $j_k$'s identify info.}
 
 \end{itemize}
 
-\subsubsection{Higher Level Services}
+\subsubsection{Higher-Level Services}
 \label{sect:hiop}
-We now build some of common high-level services
-by composing primitives in Section~\ref{sect:prim}.
+Composing these primitives allow us to further build high-level services
+such as the following. The primitives and high-level operations are our 
+conceptual tools to test WRAP services to a myriad of requirements and use cases of \ngrm.
 
 \begin{itemize}
 
@@ -149,9 +123,11 @@ by composing primitives in Section~\ref{sect:prim}.
 
 \item{$cont\_init(j, c_j, e_x)$ = $< alloc(j, c_j), contain(j, e_x), launch(j), bootstrap(j) >$}
 
-\item{$grow(j, cnew_j)$ = $<realloc(j, cnew_j), [launch(j), bootstrap(j)]>$,  where $launch$ and $bootstrap$ are only needed when $grow$ needs to launch additional processes. For instance, if $cnew_j$ is a power bound increase request, these operations are unnecessary.}
+\item{$grow(j, cnew_j)$ = $<realloc(j, cnew_j), [launch(j), bootstrap(j)]>$,  
+where $launch$ and $bootstrap$ are optional because they are only needed when $grow$ needs to launch additional processes. For instance, if $cnew_j$ is a power bound increase request, these operations are unnecessary.}
 
-\item{$shrink(j,subset(r_j)$ = $<release(j, subset(r_j)), [destroy(j), bootstrap(j)]>$, where $destroy$ and $bootstrap$ are only needed when $shrink$ needs to kill some processes of $j$.}
+\item{$shrink(j,subset(r_j)$ = $<release(j, subset(r_j)), [destroy(j), bootstrap(j)]>$, 
+where $destroy$ and $bootstrap$ are optional because they are only needed when $shrink$ needs to kill some processes of $j$.}
 
 \item{$monitor(j, j_{mon}, c_j)$ = $<init(j, c_j), init(j_{mon}, c_j), sync(j, j_{mon})>$, where the first $init$ should be passed a special flag to cooperate with the subsequent $sync$ operation.}
 
@@ -240,22 +216,26 @@ by composing primitives in Section~\ref{sect:prim}.
 %
 %\end{itemize}
 
-\subsubsection{Advanced Power-Aware Run-time Support}
-The hierarchy of LWJs allows varying grain of control for both the size of
-an LWJ in terms of its process count and resource distribution
-across the LWJs.
-This has many interesting properties. For example, an MPI
-LWJ can be further refined into smaller LWJs
-representing groups of MPI processes. 
-As smaller LWJs allocate, grow or shrink within the resource
-bound set by their parent MPI LWJ, consumable resources
+\subsubsection{Elasticity Support}
+The hierarchy of LWJs allows varying grain sizes of control 
+for process counts in sibling LWJs and 
+resource distribution across these LWJs. This has many interesting
+properties. For example, a compute LWJ can further refine itself 
+into smaller LWJs representing subsets of processes with independent
+resource confinement domains. 
+As these smaller LWJs allocate, grow or shrink within the resource
+limit of the parent LWJ, diverse set of resources including consumable ones
 like power can be unevenly or evenly distributed across
-those smaller LWJs.
-This mechanism can support emerging power-aware computing research
-that may want to cap power use differently across groups
-of processes based on their execution patterns.
+these LWJs. In the case of power management, LWJs that are not in the critical path
+in the parallel execution can reduce their power bound and return
+the leftover power resources to its parent. The parent LWJ can then use the returned
+resources in granting the {\em grow} requests that comes from 
+other LWJs that are in the critical path.    
+This mechanism can support emerging power-aware computing 
+that may want to cap power use differently and dynamically 
+across different groups of MPI processes based on their execution patterns.  
 
-\subsection{WRAP Software Architecture and Mechanisms}
+\subsection{WRAP Software Architecture}
 \label{sect:arch}
 \begin{figure}
   \centering
@@ -263,41 +243,93 @@ of processes based on their execution patterns.
   \caption{Base WRAP architecture for $alloc(j_k, c_{j_k})$}
   \label{fig:base}
 \end{figure}
-In this section, we propose our WRAP software architecture and mechanisms
-that can support scheduling generic compute resources to our hierarchical job
-model. We will first describe the base architecture designed to support
-compute nodes as the resource type. Next, we will extend that architecture
-to embody more advanced concepts such as synchronizing job functions,
-growing compute nodes allocated to an existing job function and further
-handling other types of resources such as power.
+In this section, we will walk through our WRAP software architecture 
+and mechanisms that are needed to implement the proposed WRAP services.
+We will first describe the base architecture that demonstrates
+the basic WRAP capabilities of executing an LWJ on a set of compute
+nodes, as our base resource type. 
+Next, we will describe how we can extend this architecture
+to enable other advanced services such abilities to synchronize 
+two independent LWJs, to grow compute node resources allocated to an existing 
+LWJ, and to handle other types of resources such as power.
 
-\subsubsection{Base WRAP Architecture to Schedule a Single Job Function}
+\subsubsection{Base Architecture to Execute an LWJ}
 Figure~\ref{fig:base} shows our base software architecture
-that can provide a single job function ($j_k$) with service primitives:
+that can provide a single LWJ ($j_k$) with WRAP service primitives:
 $alloc()$,
 $launch()$,
 $bootstrap()$,
 $contain()$,
 $record()$, and
 $query()$.
-It assumes that the overlay network of $parent(j_k)$
-already exists and that it can instantiate a highly scalable,
-resource-efficient overlay network for $j_k$ upon
-granting the $alloc(j_k)$ request. In fact, our architeture
-requires that any overlay network instance recursively
-supports communications of a child job function either
+It assumes that the overlay network for $parent(j_k)$
+already exists and that this existing network can support highly scalable,
+resource-efficient communications for $j_k$ upon granting the $alloc(j_k)$ request. 
+Our architeture requires that any overlay network instance recursively
+supports communications of a child LWJ either
 through an explicit instantiation of a separate overlay network
-or through the existing overlay network. The latter model,
-however, requires to support a growth and/or reconfiguration
-of the existing network to be flexible.
-WRAP then uses the overlay network of $j_k$ as well as
-a key-value store to serve process management scalably
+or through the existing overlay network. However, the latter model
+requires to support a growth and/or reconfiguration
+of the existing network to be elastic.\marginpar{\tiny Note that during the detailed 
+design phase, WRAP and Comms Framework thrusts will co-design 
+the actual communication mechanisms.}
+WRAP then uses the overlay network for $j_k$ as well as
+a key-value store to serve scalable process management
 to $j_k$'s processes.
-The following explains key process management services
-and distributed key-value store mechanisms in detail.
+The following explains distributed key-value store mechanisms 
+and key process management services in more detail.
 
-\paragraph{Process Management (ProcMan) Services}
+\paragraph{Distributed Key-Value Store (DKVS)}
+\label{sect:dkvs}
+provides a scalable mechanism 
+by which the processes of $j_k$ can
+share arbitrary information in a key-value pair amongst them.
+Conceptually, DKVS represents a global key-value tuple space
+and any process of $j_k$ can store its data by associating them
+with a unique key. To be memory-efficient,
+however, DKVS must store the data in a distributed
+manner. Thus, the overlay network of $j_k$ must be capable of hashing the key
+to route its tuple to the home key-value store location. Global synchonization
+mechanisms such as collective fense will be provided to force
+memory consistency of DKVS across all processes.
+
+Because our overlay network will have built-in routing
+schemes to support requisite distribution schemes,
+each home database itself can be a simple in-memory KVS.
+It is for this reason that we we will first consider a readily available, simple
+database implementation such as {\tt Redis}. 
+Depending on our overlay network topology,
+KVS can be fully distributed across all of the overlay network daemons.
+An example topology to support the full distribution is a ``forest''
+with $log(N)$ connections wherein any daemon can be
+the root of a binomial tree.
+
+Our DKVS will support a hierarchical tuple space for tighter
+data encapsulation per LWJ, which can futher lead to a higher level of 
+protection.
+More specifically, when an LWJ is
+allocated, a new name scope for that LWJ will be
+created and information on the resource allocated
+to that LWJ will be stored as part of the default $record$ service: e.g.,
+$j_k$::resource $\rightarrow$ $<$ core\_count(1024), power\_bound(100kw), ... $>$.
+This information is accessible by $j_k$ as well as
+its immediate child LWJ $j_{k+1}$.
+Similarly, when a daemon creates an MPI rank process, it will add the
+personality of that process under this LWJ name scope
+such as $j_k$::rank(128) $\rightarrow$ $<$ host IP, pid, executable path, ... $>$.
+Finally, DKVS will allow any process of the LWJ to store arbitrary information
+as part of $record(j_k, d_{j_k})$. All information stored
+with $record$ will be pushed to $parent(j_k)$ when $j_k$
+is destroyed. Thus, the information will ultimately find its place
+in a persistent resource manager repository through the job hierarchy. In addition,
+DKVS will further support $query$, providing the calling process
+with underlying resource allocation infomation.
+
+\paragraph{Scalable Process Management (ProcMan) Services}
 \label{sect:procman}
+can be implemented using the overlay network and DKVS as their 
+basic scalable mechanisms. The scalable process management 
+run-time services includes, but are not limited to, the following:
 
 \begin{itemize}
 \item{{\bf Bulk Process Creation and Stop}: The head daemon of the overlay network
@@ -306,9 +338,9 @@ through $launch(j_k, c_{j_k})$ and propagates that command to the rest of the da
 in $O(log(N))$. Upon receiving the request, each daemon forks and execs
 local processes. If the request contains an optional {\tt sync\_assist} flag, the daemons
 stop the processes immediately after the creation to support a subsequent $sync()$ issued
-by another job function. In either case, the daemons store
+by another LWJ. In either case, the daemons store
 information on the created target processes such as their process id, executable path
-and hostname, into a distributed key-value store that will be explained later.}
+and hostname, into the DKVS.}
 
 \item{{\bf Scalable Propagation of Environments}: The head daemon receives the environment
 variables list and propagates that to the rest of the deamons
@@ -318,8 +350,8 @@ processes. If the head daemon receives an optional $contain$ request, that
 request is also being propagated. The specified containing-environment is used to contain
 the target processes.}
 
-\item{{\bf Process Mapping and Binding}: The daemons provide the newly created processes
-with topology information to support their mapping and binding to the underlying 
+\item{{\bf Process Mapping, Binding and Confinement}: The daemons provide the newly created processes
+with topology information to support their mapping, binding and confinement to the underlying 
 resources. The daemons retrieve the topology information from the key-value store.}
 
 \item{{\bf Scalable {\tt stderr/stdout} Handling}: The daemons receive
@@ -336,58 +368,15 @@ through a tree in the overlay network in $O(log(N))$. Upon receiving the signal 
 each daemon routes it to their corresponding processes.}
 
 \item{{\bf Scalable Process Termination Detection and Analysis}: When one or more processes
-in the job function are normally or abnormally terminated, their home daemons detect the event and notify
+in the LWJ are normally or abnormally terminated, their home daemons detect the event and notify
 the head daemon through a tree in the overlay network. A time-out filter can be used at every step of
 the tree network to merge the return codes and, if abnormal, the stack traces of 
 the terminated processes. Upon receiving the aggregated
-event, the head daemon will clean up the entire job function and also present
+event, the head daemon will clean up the entire LWJ and also present
 to the users concise information about the termination.}
 
 \end{itemize}
 
-\paragraph{Distributed Key-Value Store (DKVS) for Scalable Global Information Sharing}
-\label{sect:dkvs}
-
-DKVS provides a scalable mechanism by which the processes of $j_k$ can
-share arbitrary information in a key-value pair among them.
-Conceptually, DKVS represents a global key-value tuple space
-and any process of $j_k$ can store its data by associating them
-with a unique key. To be memory-efficient,
-however, DKVS must store the data in a distributed
-manner. Thus, the overlay network of $j_k$ is capable of hashing the key
-to route its tuple to the home key-value store location. Global synchonization
-mechanisms such as collective fense will be provided to force
-memory consistency of DKVS across all processes.
-
-Because our overlay network will have built-in routing
-schemes, the actual database we will use can be simple.
-Thus, we will first consider a readily available, simple
-database such as {\tt Redis} with no internal distribution support.
-Depending on our overlay network topology,
-KVS can be fully distributed across all of the overlay network daemons.
-An example topology is a forest
-with $log(N)$ connections wherein any daemon can be
-the root of a binomial tree.
-
-Our DKVS will support a hierarchical tuple space for better
-data encapsulation per job function, leading to a higher level of security and protection.
-More specifically, when a job function is
-allocated, a new name scope for that job function will be
-created and information on the resource allocated
-to that job function will be stored as part of the default $record$ service: e.g.,
-$j_k$::resource $\rightarrow$ $<$ core\_count(1024), power\_bound(100kw), ... $>$.
-This information is accessible by $j_k$ as well as
-its immediate child job function $j_{k+1}$.
-Similarly, when a daemon creates an MPI rank process, it will add the
-personality of that process under this job function name scope
-such as $j_k$::rank(128) $\rightarrow$ $<$ host IP, pid, executable path, ... $>$.
-Finally, DKVS will allow any process of the job function to store arbitrary data
-as part of $record(j_k, d_{j_k})$. All information stored
-as part of $record$ will be pushed to $parent(j_k)$ when $j_k$
-is destroyed. Thus, the information will ultimately find its place
-in a persistent resource manager database. In addition,
-DKVS will further support $query$, providing the calling process
-with underlying resource allocation infomation.
 
 \paragraph{Unified Mechanism to Support Various Distributed Software Bootstrap Interfaces}
 \label{sect:bootstrap}
@@ -395,7 +384,7 @@ with underlying resource allocation infomation.
 DKVS will be designed to support a wide range of bootstrap interfaces
 for distributed software including PMI 1 and 2~\cite{PMI2}, PMGR Collective and COBO,
 LaunchMON~\cite{launchmon} and LIBI~\cite{libi}. With support for these interfaces
-WRAP will be able to bootstrap a wide range of job functions including a myriad of
+WRAP will be able to bootstrap a wide range of LWJs including a myriad of
 MPI implementations, tools communication infrastructure such as MRNet
 and also end-user tools such as STAT, TotalView and OpenSpeedShop.
 Specifically, the PMI layers will be a very thin layer on top
