@@ -283,7 +283,7 @@ Since \ngrm\ is a software system that will be used to provide
 \emph{users} with access to compute resources, it will require
 some place to store information about those users. For this
 purpose, we will require a database of user information alongside
-the resource inventory. We call this global, persisten user
+the resource inventory. We call this global, persistent user
 data store the \emph{user repository}.
 
 At the very least, the user repository will store minimal
@@ -316,14 +316,14 @@ repository is to store \emph{all} job data, down to even the
 lightweight job invocations in the leaf jobs of the system,
 so there will be a mass of hierarchical data here. Developing
 a system that not only efficiently represents that hierarcy,
-but allows advance and intuitive queries for the data should
+but allows advanced and intuitive queries for the data should
 be a top priority.
 
 \subsection{Job Anatomy}
 
 The resource inventory and job and user repositories are
 not tied to any one job -- they exist at the global, persistent
-level in \ngrm and export a common API.  To fulfil the unified
+level in \ngrm\ and export a common API.  To fulfil the unified
 job model, however, each \ngrm\ job must contain all the
 same features implemented by these global databases, but local
 to the job. For this purpose, we introduce the concept of

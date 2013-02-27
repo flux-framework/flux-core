@@ -33,7 +33,7 @@ their testability and making development of replacement components easier.
 It should be noted that although \ngrm\ obtains scalability from the job
 hierarchy, the {\em idle} root comms session must contain all the systems and
 resources managed by \ngrm\ and therefore must handle the full 100,000 node
-scalability target.
+scalability target (\ref{ReqsHiLev}).
 
 The communication framework consists of four main layers:
 IP protocols and services, comms toolkit, comms message broker, and
@@ -69,15 +69,15 @@ as the other components are designed.}.
 The \ngrm\ comms framework is layered upon Internet Protocol (IP)\footnote{
 The low-latency and low-overhead bulk transfer properties of RDMA
 communications such as provided by Common Communication
-Interface (CCI)~\cite{CCI} were considered and rejected as unnecessary
-for \ngrm.}
-and presumes
-complete IP level unicast and multicast connectivity across participating
-systems, so that any
+Interface (CCI) were considered and rejected as unnecessary for \ngrm.}
+and presumes complete IP level unicast and multicast connectivity across
+participating systems, so that any
 collection of nodes can be wired up in a comms session without
 the need to re-implement the equivalent of IP routing within
 the framework.\footnote{Building a reliable 100K node IP internetwork
-is a solved problem.} 
+is a solved problem.  Building a hardened overlay network with similar
+properties is difficult and would limit our ability to leverage
+other software built on IP.}
 The addressing, routing, and subnetting of this IP network is beyond of
 scope of \ngrm, except that its design should introduce no single
 points of failure (\ref{ReqsHiLevFun}, req. 1.2)
@@ -100,6 +100,14 @@ private multicast groups within dynamically created comms sessions.
 These requirements can be addressed by existing technology such as
 DHCP~\cite{rfc2131} and MADCAP~\cite{rfc2730}.
 
+\ifcomments
+\marginpar{\tiny {\bf ned-review:}
+Would we point resolvers ouside \ngrm\ at the NGRM internal DNS?
+{\bf jg:} I envision NGRM operating in a private network.
+In that case, resolving private addresses from outside doesn't seem useful.
+However, we may want to consider whether we need some way to map external
+addresses with names to internal ones.}
+\fi
 A private DNS~\cite{rfc1034} is used by the comms framework to
 map a hierarchical namespace to the comms session hierarchy.
 The root comms session has the root domain name, e.g. ``{\tt \ngrm.}'',
@@ -120,14 +128,6 @@ brokerage within the session.
 Well understood techniques for DNS fault tolerance,
 caching, and dynamic reconfiguration are leveraged to scale performance
 in large sessions such as the root session.
-\ifcomments
-\marginpar{\tiny {\bf ned-review:}
-Would we point resolvers ouside \ngrm\ at the NGRM internal DNS?
-{\bf jg:} I envision NGRM operating in a private network.
-In that case, resolving private addresses from outside doesn't seem useful.
-However, we may want to consider whether we need some way to map external
-addresses with names to internal ones.}
-\fi
 
 A comms session could optionally be spawned inside a virtual private
 network (\ref{ReqsUseCases}, UC21) such that IP communication
@@ -283,9 +283,11 @@ A distinguished {\em control node} serves as the heart of the CMB
 and the root of the tree.
 The control node is distinguished because it alone communicates with
 the parent session, and it holds the master copy of the session state.
-Interfaces exposed by the control node to the parent are always passive;
-that is, the parent initiates connections and makes requests or subscribes
-to events, and the child control node responds or publishes events.
+% XXX: see sec 6.4 - children may need to subscribe to parent changes
+% such as draining of a resource
+%Interfaces exposed by the control node to the parent are always passive;
+%that is, the parent initiates connections and makes requests or subscribes
+%to events, and the child control node responds or publishes events.
 The hierarchical relationship between comms sessions with the control
 node acting as gateway is depicted in Figure~\ref{FigCommsEx1}.
 The details of any internal tree-based interconnections
@@ -355,6 +357,13 @@ to establish a new one with restored state from slave caches.}
 \end{table}
 
 \paragraph{Event Messaging}
+\ifcomments
+\marginpar{\tiny {\bf FIXME:}
+The per-job scheduling trigger probably has insufficient emphasis here.
+It is an important benefit that reduces our noise footprint and
+could be generally useful to other system/tools software written
+to run within a job.}
+\fi
 The CMB implements a session-wide event messaging service.
 Clients of the CMB on any node can publish a $(tag, message)$ event tuple.
 Other clients can subscribe to events by tag.  The CMB ensures that
@@ -501,13 +510,13 @@ performance.
 However, it may be possible to set tunable parameters for the job that
 would affect the CMB toplogy and thus that of the reduction network.
 
+\paragraph{Downstream communiciation}
 \ifcomments
 \marginpar{\tiny {\bf jg:}
 Is there a case for unicast store-and-forward like is used in MRNet?
-Why did they choose to do it that way?  Maybe to avoid entanglements
-getting IP multicast to work in some environments?}
+Why did they choose to do it that way?  Reliable multicast (PGM) seems better
+as long as the volume of data remains low.}
 \fi
-\paragraph{Downstream communiciation}
 The reduction network utilizes IP level multicast (e.g. PGM) to send
 data from the front-end to the back-ends.
 As with event messages, downstream messages are a
@@ -542,6 +551,12 @@ domain sockets and/or executables at the front-end, back-end, and internal
 locations.
 
 \paragraph{Fault tolerance}
+\ifcomments
+\marginpar{\tiny {\bf FIXME:}
+The fault tolerance strategy both for the CMB and the reduction network
+is rather poorly developed in the description thus far.
+At minimum it needs to be called out in the WBS as a significant R\&D activity.}
+\fi
 The CMB provides notification messages when nodes cease to respond
 so that other services can manage failures.
 The reduction network will use this facility and track the CMB topology
@@ -553,11 +568,6 @@ we recognize that it will be a challenge to design our reduction network
 to be generally reliable and fault-tolerant.
 Therefore we leave the possibility open that the design will provide
 these attributes only for selected use cases and failure modes.
-\ifcomments
-\marginpar{\tiny {\bf jg:}
-The overall fault tolerance strategy in the comms layer needs some work.
-It also needs to be called out in the WBS as a significant R\&D activity.}
-\fi
 
 \ifwbs
 \newpage
