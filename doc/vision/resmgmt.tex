@@ -319,83 +319,203 @@ a system that not only efficiently represents that hierarcy,
 but allows advance and intuitive queries for the data should
 be a top priority.
 
-\subsection{Definition of Resource Management}
+\subsection{Job Anatomy}
 
-One of the main goals of \ngrm\ is to create a RM system
-that is {\em extensible}, {\em scalable}, and {\em
-generalized}(\ref{ReqsHiLevFun}). To meet these goals, we
-build our resource manager on a set of components that are
-themselves extensible and generalized. It is intended that
-these components form a framework upon which a useful RM
-subsystem is implemented. The core components of this system,
-which are described in detail below, include a set of global,
-persistent databases called the {\em Resource Inventory} and
-{\em Job} and {\em User Repositories}, which contain the global
-configuration of resources, users, and historical job data. Within
-an \ngrm\ job, these databases are not persistent, and are instead
-implemented as lightweight versions called simply the {\em resource
-database} (RDB), {\em job database} (JDB), and {\em user database}
-(UDB). Running within a job, we call a functioning collection of
-these databases, and the interface to them a \ngrm\ {\em instance}.
-(See Figure~\ref{RMInstance}).
+The resource inventory and job and user repositories are
+not tied to any one job -- they exist at the global, persistent
+level in \ngrm and export a common API.  To fulfil the unified
+job model, however, each \ngrm\ job must contain all the
+same features implemented by these global databases, but local
+to the job. For this purpose, we introduce the concept of
+an \ngrm\ \emph{instance}, which is the embodiment of all
+resource management features at the job level.
 
+The components of an \ngrm\ instance are outlined in
+Figure~\ref{fig:rminstance}.  These components largely match the
+global, persistent data store described in sections above, but since
+jobs in our RM system may be ephemeral, these implemenations are
+lightweight and may be started on-demand instead of being always
+instantiated. This practice of minimizing the functionalitly
+instantiated per instance will not only serve to reduce the cost
+of starting and stopping the software for every job, but optimizes
+for the \emph{base case} job in \ngrm\ -- a single job running a
+single parallel application.
 
 \begin{figure}
 \centering
 \includegraphics[scale=0.30]{../fig/RM-instance.eps}
 \caption{Components of a Resource Manager Instance}
-\label{RMInstance}
+\label{fig:rminstance}
 \end{figure}
 
-A high level view of these components is presented in Figure~\ref{RMComponents}.
+Within an instance, we give these temporary counterparts to the
+global, persistent databases a new name to differentiate them. They
+become simply the resource, job, and user databases. Each of
+these job-local databases contain only the subset of information
+which applies to the current job. For example, the resource DB
+will have information only about resources assigned to the job, the
+user DB will have only the users allowed to run within the job and
+the job owner, and the job database will contain information only
+for jobs that have run in the current job or a completed child.
 
-\begin{figure}
-\centering
-\includegraphics[scale=0.20]{../fig/RM-full.eps}
-\caption{Resource Manager High Level View}
-\label{RMComponents}
-\end{figure}
+As a whole, the RM instance exports similar API and publish interfaces
+as the top level persistent databases. For instance, most interaction
+with the instance functionality of a job will be through the well
+defined API. However, other functionality may be more adapted to
+a PUB/SUB interface, for example a parent job will subscribe
+to its children for events of interest, and child jobs may subscribe
+to parents for information trickling down from higher levels in the
+hierarchy. Interesting changes in this context may include data
+about resources in the child (this resource is dead), information about
+the child itself (I'm dead), or information about resources from
+the parent (this resource is being drained in 20 minutes).
+\ifcomments
+\marginpar{\tiny
+Instance API and pub/sub interface is a topic of future research. }
+\fi
 
-In \ngrm\ users requesting resources, administrators configuring
-or operating on resources, or subsystems utlizing resources
-must have a flexible and extensible method for describing those
-resources.  To meet this goal we introduce the idea of a {\em
-resource description language} (RDL) in the sections below. We
-also discuss a similar {\em job description language} (JDL) which
-is used to encode generic job information in \ngrm. In \ngrm\
-we consider that the Resource DB and Inventory {\em speak} RDL
-and the Job DB and Repository {\em speak} JDL.
+Below, we discuss in slightly more detail the resource, user, and
+job databases. Detailed descriptions of these components in the
+context of the job lifecycles are described in later sections.
+We also take this opportunity to touch upon the
+scheduler interface within the RM instance. However, a detailed
+scheduler discussion is saved for a later section.
 
-Finally, with these components in place, we discuss how we will
-build a {\em Scheduler} in \ngrm. The Scheduler is a core component
-of an \ngrm\ instance as it is responsible for building the schedule
-that maps resource requests to time slots and resources, and thus
-implements the essential functionality of the system -- that is the
-efficient use of limited resources across a diverse user base while
-implementing site policy.
+\subsubsection{Resource Database}
 
-\subsection{Repository Design}
+The resource database within a job is expected to be implemented as
+a read-write \emph{cache} of the job's subset of the parental resources.
+The resource data for a job must be writable in order to satisfy
+the \emph{self-hosting} requirement of \ngrm. An owner of a job
+should be able to update tags and configuration of resources within
+their job, however, non-privileged user tags and configuration will
+be marked as such, and so shall not affect upstream or ancestoral
+job or resource configuration.
 
-The job and user repositories and resource inventory Only exist
-at the same level as the resource inventory. That is, since they
-are persistent, they cannot be tied to any one "job". Instead,
-these are all global databases with one a common API.  They are
-accessible from any job and/or user workstation via globally
-routable server name and port for example.
+\subsubsection{User Database}
 
-Within any job, there is a "simpler" implementation of each of these
-databases that we just call the (job-local) resource, user, and job
-databases (as indicated in Figure~\ref{RMComponents}).  In this case,
-these databases are instantiated on an as needed basis, and they may
-be implemented as rw cache of the same databases in the parent. In
-this case, "instance 0" has a parent of the global, persistent
-databases -- the resource inventory, and job and user repo.
+The user database within a job contains, at a minimum, the job
+owner along with an optional list of users that are allowed to
+access the job. As described above, the user database may be
+as simple as a list of user names, but it is extensible enough
+to be used for an array of other user-specific data -- preferences,
+roles, limits, and qualities of service are just some examples.
 
-All of these components provide a pub/sub interface such that children
-watch for interesting changes in their parent, and parents watch for
-interesting changes in the child. "Interesting" changes in this case
-might be important data about resources in the child (this resource is
-dead), or information about the child job itself (I'm dead).
+In \ngrm\ we would like to grant users the ability to \emph{invite}
+other users to submit jobs to a job for which they are the owner.
+A simple example of this functionality would be the root job,
+which is owned by user \emph{root} and to which \emph{all} users
+are invited. However, other use cases for this functionality
+include dedicated application tests (DAT) in which a coordinater
+may invite a group of users, or a debug session on a large running
+running job where debugging experts may be ``invited'' to run some
+diagnostics. To support this functionality, we propose that the job
+\emph{owner} should be able to add users to the user database, and
+that those users would then be able to submit new job requests to
+the instance. Users with \emph{submit} access shall not have access
+to runtime functionality of the job, nor the ability to initiate
+lightweight jobs. However, it other circumstances it may be useful
+to have the ability to expand the list of users that \emph{do}
+have such access.  Therefore the user database must support both
+\emph{submit} and \emph{runtime} access lists for jobs, though it
+may be wise to make these lists optional based on configuration.
+
+
+\subsubsection{Job Database}
+\label{sec:jobdatabase}
+
+The job database serves the same purpose as the global job repository
+within an instance, but additionally acts as the data store for pending
+and running jobs within the instance. Jobs are submitted to a local
+instance via the API. The syntax and validity of job requests are checked
+and the job request is passed through a set of plugins that may modify
+or reject the job based on site-specific requirements. Valid job
+requests are inserted into the job database, at which point a
+``job created'' event is generated. Scheduler and other plugins may
+then act upon this event.
+
+The job database will also support generating ``job start'' and ``job end''
+events.
+\ifcomments
+\marginpar{\tiny
+The exact list of events generated by the job (and other) database
+is a topic of future study. It may be useful to research a method
+to allow \emph{arbitrary} events from all these datbases. However,
+the ``job state change'' events are key, so they are called out
+explicitly here.} \fi
+
+\subsubsection{Scheduler Plugin}
+
+Another major component of the RM instance is the job scheduler.
+The scheduler is discussed in more detail below, however here we
+note that the scheduler implementation is provided by a plugin,
+and that the loaded scheduler is configured at the time of job
+instantiation. Thus, while it is expected that the root job will
+likely have an advanced, complex scheduler plugin loaded, most jobs
+running in the RM system will have a default, simplistic scheduler
+implementation, or perhaps no scheduling code loaded at all, if
+it is unnecessary. It is also important to note a scheduler plugin
+(or any other RM instance plugin) is running within the context of a
+\ngrm\ job. Therefore, these plugins have access to the full power
+of the the distributed job environment for use in parallelizing
+work and distributing state for fault tolerance and scalability.
+
+\subsection{Job Physiology}
+
+\subsubsection{Job 0}
+
+In our hierarchical job model, every job in \ngrm\ has a parent
+and zero or more children jobs. It is obvious, however, that
+the root job (or \emph{job 0}), does not have a direct parent.
+In this special case, the resource inventory acts as the
+indirect parent of job 0. When the root instance is bootstrapped
+by the CMB, the root job connects to the global, persistent
+\ngrm\ databases and recieves just enough resource, user, and other
+configuration data to initialize. The root instance then
+\emph{subscribes} to the resource inventory so that it is
+notified of important changes.
+\ifcomments
+\marginpar{\tiny
+Again, the list of ``important'' changes is a subject of further
+study. However, an administrator could tag a resource `down' in the
+resource inventory and job 0 would then be notified immediately through
+its subscription. This would trickle down to the appropriate progeny
+via the pub/sub channels in each instance}
+\fi
+
+\subsubsection{Job X}
+
+A new job is submitted to an existing \ngrm\ job, job 0 for example,
+via the instance API. This job request is passed through a set of
+configurable plugins which check the validity of, and make any
+modifications to, the new job request. If the request is valid,
+and the requesting user has submit access to this job, then
+the job request is inserted into the job database as described
+in section~\ref{sec:jobdatabase} above.
+
+After the scheduler has determined the job should run and
+resources have been selected for the job, a new comms session
+is spawned, and the CMB intiates the new instance for \emph{job X}
+using a snippet of resource description language describing
+the set of resources assigned to the job. This new instance
+then subscribes to the parent, the parent subscribes to the
+child, and finally any script or interactive session is spawned
+within the job, with configuration such that RM utilities and
+APIs will utilise the URIs specific to this job instance.
+
+\ifcomments
+\marginpar{\tiny
+TODO: Flesh out the details here. Need to describe batch vs interactive
+vs ``pure allocation'' jobs.
+}
+
+
+%\begin{figure}
+%\centering
+%\includegraphics[scale=0.20]{../fig/RM-full.eps}
+%\caption{Resource Manager High Level View}
+%\label{RMComponents}
+%\end{figure}
 
 We will adopt the model from UNIX process management and have the
 parent instance "reap" its children. It is here that the job db from
@@ -403,11 +523,15 @@ the child can be "pulled" up from the child into the parent job db.
 When instance 0 reaps jobs, this job data can be pushed up to its
 parent, i.e. the persistent job repo.
 
-(TBD -- how to store child job information in the parent such that the
+\ifcomments
+\marginpar{\tiny
+TBD -- how to store child job information in the parent such that the
 historical lineage of the jobs and sub-jobs within the child are
 preserved.  Maybe the reaping should be abstracted down in the comms
 layer with callbacks to allow the higher level subsystems to reap
-their analogs in children.)
+their analogs in children.
+}
+\fi
 
 In this model, historical job data makes its way up to the top-level
 job repository as child jobs complete. Each "running" job instance has
@@ -590,77 +714,77 @@ queued job that is included in the schedule.
 %cancelling jobs, etc.  Modifying resource states does not have to be
 %part of this facility.
 
-\subsection{Resource Management API}
-
-\paragraph{User Services}
-This is the API for user or administrator interaction with the \ngrm.
-
-\begin{itemize}
-\item{$job\_submit()$: Submit a job allocation request and return a
-  job ID}
-\item{$job\_modify(JobID)$: Modify a job allocation request}
-\item{$job\_status(JobID)$: Return complete information about a job}
-\item{$job\_cancel(JobID)$: Cancel a job allocation request}
-\item{$queue\_show()$: Return the current queue of jobs}
-\item{$schedule\_show()$: Return the complete schedule as last
-  calculated}
-\end{itemize}
-
-In addition, the following API provides users and administrators the
-ability to query and modify the resource inventory, subject to roles
-and permissions.
-
-\begin{itemize}
-\item{$resource\_add(Resource)$: Add a resource to the resource inventory}
-\item{$resource\_modify(Resource)$: Modify the status/state of resource}
-\item{$resource\_status(Resource)$: Return the status/state of resource}
-\item{$resource\_remove(Resource)$: Remove a resource from the resource inventory}
-\item{$resource\_group\_add(Resource)$: Add a resource group (e.g., node partition) to the resource inventory}
-\item{$resource\_group\_status(Resource\_group)$: Return the status of a resource group}
-\item{$resource\_group\_modify(Resource\_group)$: Modify the status/state of a resource group}
-\item{$resource\_group\_remove(Resource)$: Remove a resource group from the resource inventory}
-\end{itemize}
-
-Similarly, the following API provides users and administrators the
-ability to query and modify records in the user repository, subject to
-roles and permissions.
-
-\begin{itemize}
-\item{$user\_add(User)$: Add a user with ACL to the user repository}
-\item{$user\_modify(User)$: Modify the status or ACL of user}
-\item{$user\_status(User)$: Return complete information about a user}
-\item{$user\_remove(User)$: Remove a user from the user repository}
-\end{itemize}
-
-\paragraph{Scheduler Requests and Subscriptions}
-This is the API the scheduler calls to request or subscribe to records
-from the resource inventory, and job and user repositories.
-
-\begin{itemize}
-\item{$resource\_request()$: Request all schedulable resources from
-  the resource inventory}
-\item{$resource\_subscribe()$: Subscribe to changes to all schedulable
-  resources from the resource inventory}
-\item{$job\_request()$: Request all jobs from the job repository}
-\item{$job\_subscribe()$: Subscribe to changes to all jobs from the
-  job repository}
-\item{$user\_request()$: Request all users from the user repository}
-\item{$user\_subscribe()$: Subscribe to changes to all users from the
-  user repository}
-\end{itemize}
-
-\paragraph{Scheduler Directives}
-These are the WRAP service primitives the scheduler calls to initiate,
-modify, and terminate WRAP instances. (Described in
-Section~\ref{sect:prim} below)
-
-\begin{itemize}
-\item{$alloc()$}
-\item{$realloc()$}
-\item{$release()$}
-\item{$launch()$}
-\item{$destroy()$}
-\end{itemize}
+%\subsection{Resource Management API}
+%
+%\paragraph{User Services}
+%This is the API for user or administrator interaction with the \ngrm.
+%
+%\begin{itemize}
+%\item{$job\_submit()$: Submit a job allocation request and return a
+%  job ID}
+%\item{$job\_modify(JobID)$: Modify a job allocation request}
+%\item{$job\_status(JobID)$: Return complete information about a job}
+%\item{$job\_cancel(JobID)$: Cancel a job allocation request}
+%\item{$queue\_show()$: Return the current queue of jobs}
+%\item{$schedule\_show()$: Return the complete schedule as last
+%  calculated}
+%\end{itemize}
+%
+%In addition, the following API provides users and administrators the
+%ability to query and modify the resource inventory, subject to roles
+%and permissions.
+%
+%\begin{itemize}
+%\item{$resource\_add(Resource)$: Add a resource to the resource inventory}
+%\item{$resource\_modify(Resource)$: Modify the status/state of resource}
+%\item{$resource\_status(Resource)$: Return the status/state of resource}
+%\item{$resource\_remove(Resource)$: Remove a resource from the resource inventory}
+%\item{$resource\_group\_add(Resource)$: Add a resource group (e.g., node partition) to the resource inventory}
+%\item{$resource\_group\_status(Resource\_group)$: Return the status of a resource group}
+%\item{$resource\_group\_modify(Resource\_group)$: Modify the status/state of a resource group}
+%\item{$resource\_group\_remove(Resource)$: Remove a resource group from the resource inventory}
+%\end{itemize}
+%
+%Similarly, the following API provides users and administrators the
+%ability to query and modify records in the user repository, subject to
+%roles and permissions.
+%
+%\begin{itemize}
+%\item{$user\_add(User)$: Add a user with ACL to the user repository}
+%\item{$user\_modify(User)$: Modify the status or ACL of user}
+%\item{$user\_status(User)$: Return complete information about a user}
+%\item{$user\_remove(User)$: Remove a user from the user repository}
+%\end{itemize}
+%
+%\paragraph{Scheduler Requests and Subscriptions}
+%This is the API the scheduler calls to request or subscribe to records
+%from the resource inventory, and job and user repositories.
+%
+%\begin{itemize}
+%\item{$resource\_request()$: Request all schedulable resources from
+%  the resource inventory}
+%\item{$resource\_subscribe()$: Subscribe to changes to all schedulable
+%  resources from the resource inventory}
+%\item{$job\_request()$: Request all jobs from the job repository}
+%\item{$job\_subscribe()$: Subscribe to changes to all jobs from the
+%  job repository}
+%\item{$user\_request()$: Request all users from the user repository}
+%\item{$user\_subscribe()$: Subscribe to changes to all users from the
+%  user repository}
+%\end{itemize}
+%
+%\paragraph{Scheduler Directives}
+%These are the WRAP service primitives the scheduler calls to initiate,
+%modify, and terminate WRAP instances. (Described in
+%Section~\ref{sect:prim} below)
+%
+%\begin{itemize}
+%\item{$alloc()$}
+%\item{$realloc()$}
+%\item{$release()$}
+%\item{$launch()$}
+%\item{$destroy()$}
+%\end{itemize}
 
 \ifwbs
 %\newpage
