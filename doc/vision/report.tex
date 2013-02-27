@@ -54,6 +54,8 @@
 \newcommand{\slurm}{Slurm}
 \newcommand{\moab}{Moab}
 
+\DeclareRobustCommand{\orderof}{\ensuremath{\mathcal{O}}}
+
 %\includeonly{monitor}
 
 \begin{document}
@@ -116,21 +118,28 @@ requirements.}
 best-in-breed, open-sourced RM designed for commodity Linux clusters.
 Livermore Computing (LC) at Lawrence Livermore National Laboratory (LLNL)
 designed and led its implementation in 2002 and since then has facilitated
-its wide adoption outside of LLNL.
-\slurm's original design was for a moderate-size Linux cluster with up to 2,000 
+broad adoption outside of LLNL.
+\slurm's original design was for a moderate-size Linux cluster with
+$\orderof\left(2K\right)$
 compute nodes connected in a single interconnect domain and MPICH-based, 
 bulk-synchronous applications.
-In the last decade, however, \slurm\ has been adapted to the various
-environments that stray outside its core design.
-It has adapted to act as a scheduling and job submission layer
+In the last decade, beginning with multi-core support added by
+Hewlett-Packard\cite{DBLP:conf/jsspp/BalleP07},
+\slurm\ has been modified to meet emerging challenges
+that stray outside its core design.
+For example, recently
+it has been adapted to act as a scheduling and job submission layer
 on top of proprietary RM software on IBM Blue Gene and Cray systems,
-to support other run-times quite different from MPICH,
-to run on Linux clusters pushing far beyond the designed node count,
+to support new run-times such as OpenMPI and MapReduce\cite{SlurmMR},
+to implement hierarchical communication to increase scalability,
 and to be tied into a \moab~\cite{MOAB:online} grid.
 These adaptations have accrued without fundamentally changing the
-core paradigm and design of \slurm. As a result, \slurm\ is increasingly
-unable to adapt to emerging requirements without compromising
-stability and code maintainability.
+core paradigm and design of \slurm, which is that of a monolithic, centralized
+controller with compute nodes as the main resource type.
+As a result the \slurm\ implementation of these add-ons is less functional
+and effective than it could be with a redesign,
+and the \slurm\ code base grows increasingly unmaintainable, burdened
+as it is with such after-thoughts.
 
 Our response to this critical need is the \ngrmfull\ (\ngrm ), an RM software
 {\em framework} that can solve the key emerging challenges 
