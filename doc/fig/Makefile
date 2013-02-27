@@ -18,7 +18,10 @@ DEPFIG = \
 	WRAP_newJobFunction.ps \
 	mon_ex1a.eps \
 	mon_ex1b.eps \
-	mon_iface.eps
+	mon_iface.eps \
+	job-hierarchy-job0.ps \
+	job-hierarchy-job0-x.ps \
+	job-hierarchy-job0-x-y.ps
 
 all: $(DEPFIG)
 
@@ -37,4 +40,7 @@ WRAP_Base.ps: ../wrap_thrust/fig/WRAP_Base.pdf
 WRAP_grow.ps: ../wrap_thrust/fig/WRAP_grow.pdf
 	pdf2ps $< $@
 WRAP_newJobFunction.ps: ../wrap_thrust/fig/WRAP_newJobFunction.pdf
+	pdf2ps $< $@
+
+%.ps: %.pdf
 	pdf2ps $< $@

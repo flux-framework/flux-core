@@ -30,6 +30,10 @@ slides.dvi: slides.tex $(DEP) $(DEP_KEEP)
 	latex $<
 	latex $<
 
+#%.pdf: %.tex
+#	pdflatex $<
+#	pdflatex $<
+
 %.eps: %.dia
 	dia --nosplash --export=$@ --filter=eps-builtin $<
 

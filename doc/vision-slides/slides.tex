@@ -1,8 +1,11 @@
 \documentclass[default,pdf,colorBG,slideColor]{prosper}
 \usepackage{epsfig}
 \usepackage{pstricks}
+\usepackage{graphicx}
 
-\title{Next Generation Resource Manager}
+\graphicspath{ {../fig/} }
+
+\title{Next Generatpstricksion Resource Manager}
 \subtitle{{\small high level technical review}}
 \author{Dong Ahn, Jim Garlick, Mark Grondona, Don Lipari}
 \email{{\rm \{ahn1,garlick,mgrondona,lipari\}@llnl.gov}}
@@ -10,14 +13,11 @@
              Lawrence Livermore National Laboratory}
 
 \slideCaption{NGRM High Level Review, Mar. 4, 2013}
+
 \Logo(-1,-1){\epsfig{file=graphic/iccd_logotrans.ps,scale=0.15}}
 
-\newif\iflong
-\longfalse
-%\longtrue
+%\Logo{\includegraphics[scale=0.15]{iccd_logotrans.ps}}
 
-\newif\ifextra
-\extrafalse
 
 \begin{document}
 
@@ -95,6 +95,24 @@ that we would like to carry fwd.
 \begin{slide}{Next Generation Resource Manager}{\small
 insert {\em vision} figure 2 job hierarchy (several slides showing
 progression.
+}\end{slide}
+% ==========================================================================
+\begin{slide}{job 0}{\small
+\begin{center}
+  \includegraphics[scale=0.50]{job-hierarchy-job0}
+\end{center}
+}\end{slide}
+% ==========================================================================
+\begin{slide}{job 0.x}{\small
+\begin{center}
+  \includegraphics[scale=0.50]{job-hierarchy-job0-x}
+\end{center}
+}\end{slide}
+% ==========================================================================
+\begin{slide}{job 0.x.y}{\small
+\begin{center}
+  \includegraphics[scale=0.50]{job-hierarchy-job0-x-y}
+\end{center}
 }\end{slide}
 % ==========================================================================
 \begin{slide}{comparision with slurm}{\small
