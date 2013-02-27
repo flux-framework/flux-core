@@ -9,7 +9,9 @@ When a job terminates, the job's instance terminates and resources
 return to the parent instance.
 
 The communication framework supports this architecture by
-establishing a {\em comms session} to contain each \ngrm\ instance.
+establishing a {\em comms session} to contain each \ngrm\ instance
+and provide a foundation for the distributed components of \ngrm\ to
+be built upon.
 The framework enables secure, scalable communication
 within a comms session, limits communication between sessions,
 and allows new comms sessions to be created, resized, destroyed,
@@ -17,16 +19,21 @@ and monitored by existing ones in a parent-child relationship.
 
 A comms session is only ``aware'' of its parent and immediate offspring.
 Any communication between siblings would have to be orchestrated by
-the parent.  This abstraction should encourage higher level software
-to be built that can operate at any level of recursion, thus improving
-testability and facilitating research.
+the parent.  This sandboxing arrangement should encourage the higher level
+components of \ngrm\ 
+to be built so they can operate at any level of recursion, thus improving
+their testability and making development of replacement components easier.
 
 The communication framework consists of four main layers:
 IP protocols and services, comms toolkit, comms message broker, and
 reduction network, shown
 in Figure~\ref{FigCommsLayers}.  Layering is not rigid;
 that is, higher level \ngrm\ components can use any of the
-layers directly as appropriate.
+layers directly as appropriate\footnote{At this stage in the design of \ngrm,
+we do not wish to overly constrain the solution space for the other
+components that will use the comms framework.  For the same reason,
+distributed object oriented frameworks, such as those derived from
+CORBA, were rejected as too confining.}.
 
 \begin{figure}
 \begin{minipage}[b]{0.45\linewidth}
@@ -47,16 +54,22 @@ layers directly as appropriate.
 \subsection{Internet Protocols and Services}
 \label{sect:commsIP}
 
-The \ngrm\ comms framework is layered upon Internet Protocol (IP), and presumes
-complete IP level unicast and multicast connectivity, so that any
+The \ngrm\ comms framework is layered upon Internet Protocol (IP)\footnote{
+The low-latency and low-overhead bulk transfer properties of RDMA
+communications such as provided by Common Communication
+Interface (CCI)~\cite{CCI} were considered and rejected as unnecessary
+for \ngrm.}
+and presumes
+complete IP level unicast and multicast connectivity across participating
+systems, so that any
 collection of nodes can be wired up in a comms session without
 the need to re-implement the equivalent of IP routing within
 the framework.\footnote{Building a reliable 100K node IP internetwork
 is a solved problem.} 
 The addressing, routing, and subnetting of this IP network is beyond of
 scope of \ngrm, except that its design should introduce no single
-points of failure (\ref{ReqsHiLevFun}, req. 1.2), should be protected
-from external intrusion, and should avoid performance bottlenecks which
+points of failure (\ref{ReqsHiLevFun}, req. 1.2)
+and should avoid performance bottlenecks which
 would unnecessarily constrain the resource manager's node selection options.
 
 The comms framework should support communication over multiple
@@ -66,7 +79,10 @@ requirements of the particular application.
 
 Dynamic unicast IP address allocation must be available to support
 dynamically created virtual nodes (Linux containers launched with
-virtual network interfaces).  Similarly,
+virtual network interfaces).  In fact, it is worth noting here that
+we expect to make heavy use of virtual nodes in \ngrm\ for our internal
+services that should not be co-located with computation.
+Similarly,
 dynamic multicast address allocation must be available to support
 private multicast groups within dynamically created comms sessions.
 These requirements can be addressed by existing technology such as
@@ -92,6 +108,14 @@ brokerage within the session.
 Well understood techniques for DNS fault tolerance,
 caching, and dynamic reconfiguration are leveraged to scale performance
 in large sessions such as the root session.
+\ifcomments
+\marginpar{\tiny {\bf ned-review:}
+Would we point resolvers ouside \ngrm\ at the NGRM internal DNS?
+{\bf jg:} I envision NGRM operating in a private network.
+In that case, resolving private addresses from outside doesn't seem useful.
+However, we may want to consider whether we need some way to map external
+addresses with names to internal ones.}
+\fi
 
 A comms session could optionally be spawned inside a virtual private
 network (\ref{ReqsUseCases}, UC21) such that IP communication
@@ -160,7 +184,7 @@ in the telephony world with an implementation in the Linux kernel.
 It offers multi-streaming, the bundling of {\em streams} in one
 {\em association} (connection).  Individual streams can be configured for
 different ordering and reliability semantics.  SCTP supports
-multi-homing for reliability and congestion avoidance as shown in
+multi-homing for reliability and congestion avoidance, as shown in
 Figure~\ref{FigCommsSCTP}, and
 can transparently generate and check an HMAC for messages using a
 pre-shared key to implement message integrity.  Unlike \zMQ, SCTP is
@@ -202,7 +226,7 @@ In order for this to work, \ngrm's comms framework must operate within a
 single MUNGE security realm,
 which implies a single single administrative domain with consistent
 user and group identities.
-
+\newpage
 \subsection{Comms Message Broker}\label{SecCommsCMB}
 
 Within a comms session, a distributed comms message broker (CMB)
@@ -240,8 +264,6 @@ that is to be determined.
 A distinguished {\em control node} serves as the heart of the CMB.
 The control node is distinguished because it alone communicates with
 the parent session, and it holds the master copy of the session state.
-For fault tolerance, there is a primary and backup control node for each
-each session, with the parent CMB initiating any takeover.
 Interfaces exposed by the control node to the parent are always passive;
 that is, the parent initiates connections and makes requests or subscribes
 to events, and the child control node responds or publishes events.
@@ -261,7 +283,11 @@ while writes are through to the control node.
 Each write on the control node updates the key's generation number,
 its value, and triggers a state update event which
 can be used to update caches and synchronize other software using the
-state.
+state.  If the control node crashes, state can be recovered from
+one of the slave caches.\footnote{The fault tolerance strategy here is to
+be designed.  The parent can determine if a control has stop functioning
+(see {\em Liveness Monitoring} below) and intervene to establish a new one
+with the restored state from a slave.}
 
 \begin{table}
   \centering
@@ -424,7 +450,7 @@ is regarded as a useful communications substrate for scaling
 distributed debuggers and similar tools.
 The \ngrm\ reduction network offers a similar capability
 within a comms session.
-While MRNet is focused on portable tools that instantiate their own TBON
+While MRNet is focused on portable tools that instantiate their own TB\={O}N
 with a custom topology for exclusive use of the tool and tear it down when
 the tool exits,
 the \ngrm\ reduction network topology tracks that of the CMB,
@@ -435,7 +461,7 @@ Data passed over the reduction network ``counts'' towards CMB liveness
 tracking.
 The reduction network will obtain privacy and integrity using the comms
 session security context.
-Message manipulation and routing could be accomplished with
+Message handling could be accomplished with
 \zMQ\ (Figure~\ref{FigZmqTBON}) or by a combination of \zMQ\ and SCTP.
 
 \paragraph{Topology}
@@ -502,11 +528,11 @@ Arnold and Miller~\cite{MrNetFail},
 we recognize that it will be a challenge to design our reduction network
 to be generally reliable and fault-tolerant.
 Therefore we leave the possibility open that the design will provide
-these attributes for some use cases but not others.
+these attributes only for selected use cases and failure modes.
 \ifcomments
 \marginpar{\tiny {\bf jg:}
-Yikes.  Fault tolerance story needs work, or at least needs to be recognized
-as a significant R and D activity in the WBS.}
+The overall fault tolerance strategy in the comms layer needs some work.
+It also needs to be called out in the WBS as a significant R\&D activity.}
 \fi
 
 \ifwbs
