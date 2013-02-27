@@ -84,16 +84,16 @@ language is available as a standalone library. Additionally, the
 OAR resource manager defines resources in a MySQL database with
 a static schema, but it does organize resources hierarchically,
 allows generic resource definition, and allows users to request
-resources using a resource description language~\cite{Oar}, and
-the Legion~\cite{LegionGrid,LegionRM} Resource Manager uses an
-object-oriented approach for defining resources as ``objects''
+resources using a resource description language~\cite{Oar}. In
+the Legion~\cite{LegionGrid,LegionRM} Resource Manager an
+inheritance based model is used for defining resources as ``objects''
 that are extensible. Another example is CCS~\cite{Keller98ccsresource},
 which implemented the Resource and Service Description (RSD)
 language and its predecessor the resource description language (RDL).
-The RDL in CCS exports not only a language interface for resources
+The RSD in CCS exports not only a language interface for resources
 description, but a graphical user interface and API as well.
 
-As part of the design our RDL, it is expected that we will do a
+As part of the design of our RDL, it is expected that we will do a
 more complete survey of existing work in this area such that we can
 apply common practice and lessons learned to our own implementation
 of a resource description and configuration language.
@@ -183,7 +183,7 @@ as a data store -- a Lua table is very similar to JSON, another
 popular data interchange format.
 
 It is not expected that the RDL in \ngrm\ will use the na\"{\i}ve
-approach as in Figure~\ref{fig:luaexample1}. Because Lua is a full
+approach as in Listing~\ref{lst:luaex1}. Because Lua is a full
 language instead of just a data interchange format, there will be
 many optimizations and syntactic abbreviations we can make to ease
 working with and using the \ngrm\ RDL.
@@ -462,7 +462,13 @@ work and distributing state for fault tolerance and scalability.
 
 \subsection{Job Physiology}
 
-\subsubsection{Job 0}
+We have briefly described the RM components in the \ngrm\ above.
+In the sections below we expand on this discussions and begin
+to describe how processes within a job interact with the containing
+job, and how the RM instances within jobs in the \emph{hierarchical model}
+interact with eachother.
+
+\subsubsection{The Root Job: \emph{Job 0}}
 
 In our hierarchical job model, every job in \ngrm\ has a parent
 and zero or more children jobs. It is obvious, however, that
@@ -483,41 +489,160 @@ its subscription. This would trickle down to the appropriate progeny
 via the pub/sub channels in each instance}
 \fi
 
-\subsubsection{Job X}
+Once the root job is initialized, it may become the de facto interface
+for users to the system, i.e. the instance within job 0 may
+provide the interface for all users of \ngrm\ at a site for
+job submission, queries, and other RM-related work. In this
+case, jobs are submitted to the root job's API and are
+inserted into the job database as described in Section~\ref{sec:jobdatabase},
+and the job 0 scheduler will prioritize and schedule these
+requests.
 
-A new job is submitted to an existing \ngrm\ job, job 0 for example,
-via the instance API. This job request is passed through a set of
-configurable plugins which check the validity of, and make any
-modifications to, the new job request. If the request is valid,
-and the requesting user has submit access to this job, then
-the job request is inserted into the job database as described
-in section~\ref{sec:jobdatabase} above.
+In our system, however, this is not the only scenario. The
+flexibility of the unified job model allows a site to invoke
+sub-jobs of job 0 and reference those jobs as respective interfaces
+to subsets of resources within a datacenter.  For instance, to run
+in a more traditional mode, a centerwide root job could spawn one
+sub-job for each cluster within a datacenter. These cluster-specific
+jobs would then act as separate ``resource managers'' for these
+clusters, and could therefore have different scheduler plugins
+loaded, a different set of users, or other separate policies.
+However, even in this case, it is important to note that job 0 still
+spans all the resources in the center, so job data is eventually
+collected in the top-level job repository, all resources in the
+center are configured in a singular resource inventory, and a
+centerwide runtime and monitoring environment exists for use by
+administrative tools.
+
+\subsubsection{The \ngrm\ Job: \emph{Job $n$}}
+
+As explained in the sections above, a job requests in \ngrm\ are
+always submitted to an existing \ngrm\ job via the instance API.
+This job request is passed through a set of configurable plugins
+which check the validity of, and make any modifications to, the
+new job request. If the request is valid, and the requesting user
+has submit access to this job, then the job request is inserted
+into the job database as described in section~\ref{sec:jobdatabase}
+above.
 
 After the scheduler has determined the job should run and
 resources have been selected for the job, a new comms session
-is spawned, and the CMB intiates the new instance for \emph{job X}
-using a snippet of resource description language describing
-the set of resources assigned to the job. This new instance
-then subscribes to the parent, the parent subscribes to the
-child, and finally any script or interactive session is spawned
+is spawned, and the CMB intiates the new instance for this
+job, which we call job $n$. The instance is initialized using
+the universal resource description language  of \ngrm\, which
+will describe the set of resources assigned to the job. Once the
+new instance is initialized, it will subscribes to its parent
+instance (for notification of upstream resource changes, and
+other items ``of interest''), and the parent subscribes to the
+child instance. Finally any script or interactive session is spawned
 within the job, with configuration such that RM utilities and
-APIs will utilise the URIs specific to this job instance.
-
+APIs will utilise the URIs specific to the job $n$ instance.
 \ifcomments
 \marginpar{\tiny
 TODO: Flesh out the details here. Need to describe batch vs interactive
 vs ``pure allocation'' jobs.
 }
+\fi
+
+Upon initialization, ownership of job $n$ is set to the submitting
+user, and that user would typically be the only user allowed
+access to the runtime environment of the job. However, the list
+of users with submit access and runtime access is configurable
+and may be set after job invocation or during the job request
+itself.
+
+It is also not necessarily the case that the instance invoked by
+the job --  that is, the set of daemons and code that provide the
+RM instance features in \ngrm\ -- are of the same versions as the
+parent job. In fact, part of the design of the self-hosting, unified
+job model of \ngrm\ is to allow not only \emph{rolling updates}
+of software, but to allow future and experimental versions of the
+software to be deployed as an \ngrm\ job. This means that
+the version of the software system used within a job may be
+user-selectable, or for privileged users a version of the
+tool could be loaded directly from a build directory.
+\ifcomments
+\marginpar{\tiny
+A study of the security implications of these features is outstanding.
+However, it is expected that \emph{certain} pieces of software would
+be deemed safe to allow blanket per-job user replacement rules. (e.g.
+the scheduler)
+}
+\fi
+
+Once job $n$ is running and fully initialized, user processes
+have access to a rich and powerful private resource management system
+for use in directing  their computational work. Information
+about resources can be gathered and stored in the local
+resource database, which in turn can direct and optimize
+behavior of the in-job scheduler. Chained jobs and workflows
+can be inserted into the local job database and child jobs can
+be created which in turn use the power of their local RM system
+to manage related work. Every sub-job and parallel invocation
+is captured in the local job database, along with monitoring
+data streams and other job data which can be used in postmortem
+analysis and job efficiency studies.
+
+A graphical representation of a typical set of jobs showing
+jobs running within jobs and their respective instances is
+shown in Figure~\ref{fig:RMComponents}.
+
+\begin{figure}
+\centering
+\includegraphics[scale=0.20]{../fig/RM-full.eps}
+\caption{Resource Manager High Level View}
+\label{fig:RMComponents}
+\end{figure}
 
 
-%\begin{figure}
-%\centering
-%\includegraphics[scale=0.20]{../fig/RM-full.eps}
-%\caption{Resource Manager High Level View}
-%\label{RMComponents}
-%\end{figure}
+\subsubsection{Lightweight Jobs}
 
-We will adopt the model from UNIX process management and have the
+As described earlier, lightweight jobs (LWJ) are similar to normal
+jobs in the \ngrm\ system, but they do not result in a new
+instance. Thus, these jobs run within the current instance and
+utilize the same scheduler, resources, and other instance specific
+data. It is expected that lightweight jobs will be the vessel by
+which parallel applications are launched and managed, and this
+topic will be explored further in the workload and runtime section.
+
+For the RM instance within the job, all the same steps are taken
+when handling a lightweight job vs.\ a normal job.  There may only
+be a flag or tag that indicates this job will be \emph{lightweight}
+instead of requesting the instantiation of a full job. This approach
+is beneficial because it reduces code duplication in handling the
+distribution and management of processes local to the runtime of
+the current job. Another benefit of treating lightweight jobs
+as a special case of regular jobs is that the lightweight job
+information will be captured in the job database and preserved,
+just as any other full job.
+
+One final note about lightweight jobs is that it will likely be
+necessary to allow lightweight jobs instantiated on the system
+to overlap. For example, one LWJ might be a parallel MPI application
+running across all nodes of a job, and second, overlapping
+LWJ would be a parallel debugger session used to attach to one
+or more of the processes in the original job. Again, both of
+these jobs would be captured in the job database.
+\ifcomments
+\marginpar{\tiny
+TODO: What happens when a LWJ request comes from within a LWJ.
+I think it is Dong's assumption that LWJ's have their \emph{own}
+hierarchy -- so the current level in the hierarchy would need
+to be communicated to the RM instance, and the instance would
+need to manage that hierarchy.
+}
+
+It is assumed that the lifecycle management of LWJs will be
+handled at the level of the runtime environment. It may not
+be possible in all cases to determine exactly when a LWJ
+is ``complete'', and it may be up to the user code creating
+the LWJ, or the runtime subsystem doing so on behalf of
+the user, to explicitly notify the RM instance when
+a LWJ has completed.
+
+\subsubsection{Job End-of-Life Care}
+
+We will adopt a model from UNIX process management and have the
 parent instance "reap" its children. It is here that the job db from
 the child can be "pulled" up from the child into the parent job db.
 When instance 0 reaps jobs, this job data can be pushed up to its
@@ -546,10 +671,13 @@ We will define how jobs indicate that they are "done" and need to be
 reaped. A DAT "job" may need to be killed and reaped at the end of its
 time limit. Normal batch jobs are complete when the batch script
 running on the control node exits. A direct allocate/launch with WRAP
-would be reaped when the processes being launched exit. (Any other
-cases?)
+would be reaped when the processes being launched exit. A job may
+be forcibly killed by the user or an administrator, at which point
+a depth-first recursive termination is issued.
 
-(TBD -- What happens to an active job hierarchy when the top-level job
+\ifcomments
+\marginpar{\tiny
+TBD -- What happens to an active job hierarchy when the top-level job
 is killed?  What happens to pending job requests when a job is
 terminated?  Killing a job might result in something like:
 
@@ -558,8 +686,45 @@ terminated?  Killing a job might result in something like:
 \item Terminate and reap children jobs
 \item Kill local tasks
 \end{enumerate}
+Perhaps 2,3 could be swapped or done in parallel.
+}
+\fi
 
-Perhaps 2,3 could be swapped or done in parallel.)
+
+\subsubsection{Job Fault Tolerance}
+
+While discussing job interactions, it rapidly becomes apparent that
+an important feature of the \ngrm\ job will be its tolerance of
+faults in the RM instance. If there is data loss within the instance,
+then this may affect the data of all completed child jobs, since
+hierarchical data such as the job database are generally collected
+in the parent after a \emph{reap} operation. While fault tolerant
+design is a goal of \ngrm\ design and a topic of further study,
+we mention here some initial ideas for job recovery after RM
+instance failure.
+
+One possibility is to build the resource, job, and user databases
+on top of a distributed data store with replication. The runtime
+environment of job will already contain a distribute key-value store,
+so it may be possible to build a fault tolerant data store on
+top of that. With replication enabled, the failure of a node
+on which the RM instance is running would not be fatal because
+the data could be reconstructed from replicas.
+
+Another proposal is to replicate data to other instances running
+in the system. For example, a job could replicate data to its
+children and parent, and a lost instance could then be reconstructed
+by the parent by querying missing data from the children. This
+method would require a systematic method for determining location
+of child jobs without help from the parent, but it is expected
+that this challenge is not insurmountable.
+
+Because the impact of losing job instances while running may be
+large, in fact larger than in some other RM software systems,
+our development should focus on testing this case, and ensuring
+that there is no undesired data loss when an RM instance crashes
+or its host goes down should be part of a routine test plan.
+
 
 \subsection{Job Scheduler}
 
