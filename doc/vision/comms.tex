@@ -1,4 +1,5 @@
-\section{Communication Framework}\label{SecComms}
+\section{Communication Framework}
+\label{sect:comms}
 
 The \ngrm\ architecture is hierarchical and recursive
 (\ref{ReqsHiLevFun}, req. 4.1).
@@ -16,6 +17,11 @@ The framework enables secure, scalable communication
 within a comms session, limits communication between sessions,
 and allows new comms sessions to be created, resized, destroyed,
 and monitored by existing ones in a parent-child relationship.
+\ifcomments
+\marginpar{\tiny {\bf ned-review:}
+A worked example would be useful here.
+{\bf jg:} for now, section~\ref{sect:monitor} might be helpful.}
+\fi
 
 A comms session is only ``aware'' of its parent and immediate offspring.
 Any communication between siblings would have to be orchestrated by
@@ -23,6 +29,11 @@ the parent.  This sandboxing arrangement should encourage the higher level
 components of \ngrm\ 
 to be built so they can operate at any level of recursion, thus improving
 their testability and making development of replacement components easier.
+
+It should be noted that although \ngrm\ obtains scalability from the job
+hierarchy, the {\em idle} root comms session must contain all the systems and
+resources managed by \ngrm\ and therefore must handle the full 100,000 node
+scalability target.
 
 The communication framework consists of four main layers:
 IP protocols and services, comms toolkit, comms message broker, and
@@ -33,7 +44,8 @@ layers directly as appropriate\footnote{At this stage in the design of \ngrm,
 we do not wish to overly constrain the solution space for the other
 components that will use the comms framework.  For the same reason,
 distributed object oriented frameworks, such as those derived from
-CORBA, were rejected as too confining.}.
+CORBA, were rejected as too confining.  This stance can be re-evaluated
+as the other components are designed.}.
 
 \begin{figure}
 \begin{minipage}[b]{0.45\linewidth}
@@ -227,7 +239,8 @@ single MUNGE security realm,
 which implies a single single administrative domain with consistent
 user and group identities.
 \newpage
-\subsection{Comms Message Broker}\label{SecCommsCMB}
+\subsection{Comms Message Broker}
+\label{sect:cmb}
 
 Within a comms session, a distributed comms message broker (CMB)
 is established to provide basic session services.
@@ -254,14 +267,20 @@ and starting other \ngrm\ components.
 \fbox{\includegraphics[scale=0.05]{comms_ex1d}}
 \end{minipage}
 \caption{CMB Architecture:  comms sessions are formed hierarchically.
-Session control nodes (red) are the interface between a session and its parent.}
+Session control nodes (red) are the interface between a session and its parent.
+An idle root session is shown on the left; one and two sessions running 
+work (blue) under the root are shown in the middle, and one of those has
+spawned a child on the right.  Note that although control nodes are depicted
+as being allocated from real nodes, depending on the session size, they may
+be created on demand as virtual nodes.}
 \label{FigCommsEx1}
 \end{figure}
 
 \paragraph{Architecture}
-The CMB is a distributed service with nodes interconnected in a topology
-that is to be determined.
-A distinguished {\em control node} serves as the heart of the CMB.
+The CMB is a distributed service with nodes interconnected in a tree-based
+topology.
+A distinguished {\em control node} serves as the heart of the CMB
+and the root of the tree.
 The control node is distinguished because it alone communicates with
 the parent session, and it holds the master copy of the session state.
 Interfaces exposed by the control node to the parent are always passive;
@@ -269,6 +288,8 @@ that is, the parent initiates connections and makes requests or subscribes
 to events, and the child control node responds or publishes events.
 The hierarchical relationship between comms sessions with the control
 node acting as gateway is depicted in Figure~\ref{FigCommsEx1}.
+The details of any internal tree-based interconnections
+are not depicted in the figure, and are a future design activity.
 
 \paragraph{Session State}
 The CMB implements a simple key-value store to manage the
@@ -285,9 +306,9 @@ its value, and triggers a state update event which
 can be used to update caches and synchronize other software using the
 state.  If the control node crashes, state can be recovered from
 one of the slave caches.\footnote{The fault tolerance strategy here is to
-be designed.  The parent can determine if a control has stop functioning
-(see {\em Liveness Monitoring} below) and intervene to establish a new one
-with the restored state from a slave.}
+be designed.  One approach is that the parent can determine if a control
+has stop functioning (see {\em Liveness Monitoring} below) and intervene
+to establish a new one with restored state from slave caches.}
 
 \begin{table}
   \centering
@@ -449,7 +470,8 @@ The Tree-Based Overlay Network (TB\={O}N), exemplified by MRNet~\cite{MRNet},
 is regarded as a useful communications substrate for scaling
 distributed debuggers and similar tools.
 The \ngrm\ reduction network offers a similar capability
-within a comms session.
+within a comms session for general use by distributed \ngrm\ components,
+for example monitoring and stdout/stderr capture.
 While MRNet is focused on portable tools that instantiate their own TB\={O}N
 with a custom topology for exclusive use of the tool and tear it down when
 the tool exits,
@@ -476,6 +498,8 @@ and fault tolerance properties of the comms session,
 we anticipate that for a session in stasis, the topology will be fixed.
 For example, branching factor and depth will not dynamically adjust for
 performance.
+However, it may be possible to set tunable parameters for the job that
+would affect the CMB toplogy and thus that of the reduction network.
 
 \ifcomments
 \marginpar{\tiny {\bf jg:}
