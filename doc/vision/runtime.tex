@@ -1,142 +1,116 @@
-\section{Workload Runtime and Placement (WRAP)}
+\section{Workload Run-time and Placement} 
 
-\subsection{Overview}
+The Workload Run-time And Placement (WRAP) thrust area concerns all aspects of
+executing transactions within a single job. 
+While the scheduler sets the overall bound for both resources and time that a job 
+can use, it does not dictate how to execute the various transactions of the job
+within this bound. Thus, it is WRAP's responsibility to ensure that
+these transactions get executed most efficiently within this scheduler-set bound.
+To embody \ngrm's new resource management paradigm, however, WRAP must provide the run-time
+services beyond what the traditional paradigm requires. 
+In addition to the traditional services such as bulk process launch and 
+management, WRAP must provide advanced run-time services to 
+implement conceptual models such as job hierarchy and resource elasticity 
+models described in Section~\ref{sect:models}.
 
-WRAP concerns all aspects
-of an \ngrm\ job, as it is allocated to and executed on compute resources
-that are increasingly diverse, dynamic, distributed and large.
-Stated very simply, the main problem domain of this thrust
-area is $R \rightarrow J$: scheduling computing resources
-with these properites ($R$) to a job ($J$) and providing services
-to the job's processes for efficient execution. As we zoom in on
-this high-level problem statement, however,
-we find ourself facing a highly complex set of requirements
-and use cases.
+\subsection{Lightweigth Jobs and Their Hierarchy}
+%\begin{figure}
+%  \centering
+%    \includegraphics[width=5.0in]{wrap_graph}
+%  \caption{WRAP model on NGRM's $R \rightarrow $J problem}
+%  \label{fig:jobrm}
+%\end{figure}
+%
+As explained in Section~\ref{sect:comparison}, the traditional
+paradigm models transactions that a job executes simply as a set of
+compute steps---e.g., {\tt job steps}.
+As with other limitations, this simple traditional model
+is ill-suited for designing our run-time services after. 
+Rather, WRAP requires a more powerful and flexible mechanism
+to organize and group the processes that a job executes 
+in accordance with their distinct functions. For example, all of the
+parallel processes of an MPI application may form a single 
+compute function; all of the distributed processes of a parallel
+debugger program may form a separate tool function, acting on 
+the compute function; further, the processes in the compute function
+may refine itself into several sub-groups, and each serves
+an independent power capping function to its member processes.  
 
-Untangling these complexities into solvable forms requires
-rigorious conceptualization of our domain and
-sound mechanisms that well embody the new concepts.
-Given the magnitude of the problem domain, however, devising
-solutions would need multiple iterations during
-which we progressively tighten up the link between
-the concepts and their mechanisms. New concepts that result from
-the conceptualization efforts
-should guide WRAP in proposing and developing
-prototypes of certain mechanisms. Certain
-mechanical reality learned from these mechanisms should then be
-used to recalibrate their supporting concepts.
-%Ultimately, how well our concepts address the overall 
-%requirements and use cases and ease of mechanical realization 
-%should determine the soundness of our solutions. 
+We use the notion of the lightweight
+job (LWJ) to realize this model. An LWJ is a group of processes with a distinct function 
+that has its own resource confinement, a subset of resources assigned to the job.
+A signficant difference with the full job is that an LWJ
+can share the resources with other LWJs of the same job. 
+Further, because the processes grouped by an LWJ can be refined into smaller LWJs,
+LWJs also form a hierarchy, bringing  
+our general {\em job hierachy model} into the 
+within-job scope and following the same ``parent-child'' rules stated
+in Section~\ref{sect:models}.
 
-As a first step towards this iterative process,
-we propose a simple job model in the following that represents
-our expanded notion of an job and its relations
-to our generic compute resource model.
-More specifically, our job model forms our basis to identify
-resource management and runtime service primitives
-from which to compose higher-level operations.
-The primitives and high-level operations then
-become our building blocks to relate a job
-to its resources. We note that, however, our job model
-assumes some properties on the generic
-compute resource model at this point, as the resource management thrust is
-currently conceiving the latter.
-Finally, we will propose several WRAP mechanisms
-and software architectures that can support the proposed job model.
+LWJs are the main means to provide group identifiers to WRAP services
+so that WRAP can manage any meaningful set of processes as one coherent object. 
+An LWJ may use a WRAP service to relate itself 
+to another LWJ simply by passing the target LWJ's identifier.
+This would be a common operation for tool LWJs as they often want to 
+locate, synchronize with, and attach to MPI processes grouped through an compute LWJ.
+Similarly, WRAP may move a portion of the resources (e.g., maximum power use) that one LWJ has been using to 
+another LWJ. That forms the basis for our elasticity model at the within-job scope.
 
-\subsection{Hierarchical Job Model}
 
-\begin{figure}
-  \centering
-    \includegraphics[width=5.0in]{wrap_graph}
-  \caption{WRAP model on NGRM's $R \rightarrow $J problem}
-  \label{fig:jobrm}
-\end{figure}
-
-Broadly speaking, today's resource management systems define a job as a set
-of compute steps that are run on a fixed set of compute nodes with exclusive access for
-a duration of time~\cite{Jette02slurm}.
-This simple job model, however, is not flexible enough for our resource manager to
-be able to express scheduling and runtime idioms required for the next generation computing systems.
-Evidently, the job model already significantly limits
-our resource manager's ability to address emerging
-computing requirements and use cases.
-
-Eliminating the limitations requires a more flexible notion that enables
-our resource manager to organize and group the processes of a job
-in accordance with their functions. For this purpose,
-we introduce the notion of job functions. For example,
-a job may need to create two disjoint sets of processes,
-one for executing an MPI program and
-the other for executing a parallel debugger program
-that acts on the MPI program.
-In this case, our system would want to group and manage the processes
-that belong to each set separately. The notion of job functions
-provide ways to organize those processes in two separate process management
-domains. Simliarly, we may often need to organize
-the set of processes within a same job function
-into several smaller job functions. With the introduction of job functions,
-a job becomes a set of job functions forming a hierarchy,
-a hierarchical job model.
-
-Using the new concept, our solution for the main
-$R \rightarrow J$ problem can then be expressed as
-providing effective services to schedule
-a {\em job function hierarchy} to a resource allocation
-that also forms a hierarchy as shown in
-Figure~\ref{fig:jobrm}.
-Our problem of $R \rightarrow J$ then becomes more than a traditional
-resource allocation to a job. It is the problem associated with
-resource distribution across the entire job function hierarchy.
-Stated differently, the resource allocated to the root of the hierarchy
-becomes the overall resource bound to the job functions at
-the next level. This resource distribution relation is well defined
-recursively for any job function at any position in the job hierarchy.
-
-When we combine this hierarchical job model with our generic
-compute resource model that can capture a wide range
-of compute resources from fixed resources such as compute nodes
-and software licenses, to consumable resources like power,
-we realize that we can express a vastly rich set
-of scheduling and runtime idioms.
-The following builds basic definitions and formalisms
-to reason about our hierarchical job model with some mathematical rigor.
-They are our tool to compose more complex concepts
-and to test the concepts on the requirements and use cases
-of the next generation resource management.
-
+%Using the concept of LWJs, the main goal of WRAP design can 
+%be stated as providing effective and scalable run-time services 
+%to map a {\em LWJ hierarchy} to a resource allocation
+%that also forms a hierarchy as shown in Figure~\ref{fig:jobrm}.
+%Our problem of $R \rightarrow J$ then becomes more than a traditional
+%resource allocation to a job. It is the problem associated with
+%resource distribution across the entire job function hierarchy.
+%Stated differently, the resource allocated to the root of the hierarchy
+%becomes the overall resource bound to the job functions at
+%the next level. This resource distribution relation is well defined
+%recursively for any job function at any position in the job hierarchy.
+%
+%When we combine this hierarchical job model with our generic
+%compute resource model that can capture a wide range
+%of compute resources from fixed resources such as compute nodes
+%and software licenses, to consumable resources like power,
+%we realize that we can express a vastly rich set
+%of scheduling and runtime idioms.
+%The following builds basic definitions and formalisms
+%to reason about our hierarchical job model with some mathematical rigor.
+%They are our tool to compose more complex concepts
+%and to test the concepts on the requirements and use cases
+%of the next generation resource management.
+%
 \begin{table}
 \centering
 \begin{tabular}{|l|l|}
 \hline
 Term & Description \\
 \hline
-$u$ & universe  \\
-$r_u$ & a set of resources allocated to $u$ \\
-$j$ & a job or job function in a specific job hierarchy \\
-$parent(j)$ & $j$'s parent in its job hierarchy ($parent(root)$ = $u$) \\
+$u$ & the containing job (universe) \\
+$r_u$ & the overall resource bound the scheduler set for $u$ \\
+$j$ & an LWJ in $u$ \\
+$parent(j)$ & $j$'s parent in the LWJ hierarchy (parent of top-level LWJs is $u$) \\
 $c_j$ & resource criteria for $j$ \\
-$d_j$ & some data to record by $j$ \\
-$r_j$ & a set of compute resources allocated to $j$ where $r_j \subseteq r_{parent(j)}$ \\
+$d_j$ & some data to be recorded by $j$ \\
+$r_j$ & compute resources allocated to $j$ where $r_j \subseteq r_{parent(j)}$ \\
 $cnew_j$ & criteria for additional resources for $j$ \\
-$rnew_j$ & a set of additional resources where $rnew_j \not\subseteq r_j$ and $rnew_j \subseteq r_{parent(j)}$ \\
+$rnew_j$ & additional resources where $rnew_j \not\subseteq r_j$ and $rnew_j \subseteq r_{parent(j)}$ \\
 $e_x$ & a runtime environment where $e_x \in E = \{e0, e1, ..., e_{m-1}\}$ \\
 \hline
 \end{tabular}
-\caption{Basic definitions for our job model}
+\caption{Definitions for Basic WRAP Service Parameters}
 \label{tab:def}
 \end{table}
 
 \subsubsection{WRAP Service Primitives}
 \label{sect:prim}
 
-Table~\ref{tab:def} describes the basic elements of our job model, representing
-the nodes in Figure~\ref{fig:jobrm}. For example, $j$ represents any node
-in the job hierarchy graph and similarly $r$ represents any node in the resource hierarchy graph.
-Using those as the foundational concepts, we propose
-the following WRAP service primitives as the conceptual means
-needed for $r_j \rightarrow j$:
+Table~\ref{tab:def} defines the basic elements relevant to WRAP run-time services.
+For example, $j$ represents an LWJ in the hierarchy within its job and 
+$r_j$ denotes the compute resources to that this LWJ is confined.
+Using those as the foundational parameters, WRAP defines
+the following service primitives to enable the new paradigm.
 
 \begin{itemize}
 
@@ -154,7 +128,7 @@ needed for $r_j \rightarrow j$:
 
 \item{$bootstrap(j)$: bootstraps processes of $j$ across $r_j$ including dissemination of connection information. If this is a partial bootstrap--e.g., additional processes have been spawned or some processes have been killed, it only adjusts $j$ for the change}
 
-\item{$split(j, marker)$: creates a new job function that includes all of the calling processes of $j$ with the same marker.}
+\item{$split(j, marker)$: creates a new LWJ that includes all of the calling processes of $j$ with the same marker.}
 
 \item{$record(j, d_j)$: records $j$'s attributes such as its $c_j$, fingerprint for $e_x$, and arbitrary information ($d_j$).}
 
@@ -164,10 +138,10 @@ needed for $r_j \rightarrow j$:
 
 \end{itemize}
 
-\subsubsection{Higher Level Operations}
+\subsubsection{Higher Level Services}
 \label{sect:hiop}
 We now build some of common high-level services
-by composing service primitives in Section~\ref{sect:prim}.
+by composing primitives in Section~\ref{sect:prim}.
 
 \begin{itemize}
 
@@ -185,100 +159,101 @@ by composing service primitives in Section~\ref{sect:prim}.
 
 \end{itemize}
 
-\subsection{Composed Use Cases}
-We now show the expressibility of the service primitives and
-high-level operations by mapping them to some of the
-use cases of the next generation resource management.
+%\subsection{Composed Use Cases}
+%We now show the expressibility of the service primitives and
+%high-level operations by mapping them to some of the
+%use cases of the next generation resource management.
+%
+%\begin{itemize}
+%
+%\item{UC1: Use NGRM recursive execution to manage dedicated application test time.
+%
+%$<alloc(j, c_j), alloc(j_{t0}, c_{j_{t0}}), alloc(j_{t1}, c_{j_{t1}}), ...>$, where each $r_{j_i}$ represents distinct set of resources in $r_{j}$ and each $j_{ti}$ can further run a specific test under a different environment using services like $cont\_init$.}
+%
+%\item{UC3-UC5: Power utilization as a resource etc.
+%
+%We must combine our job model to the generic resource model to express these use cases.}
+%
+%\item{UC6: Live user feedback for job progress.
+%
+%$monitor(j, j_{progress\_monitor})$.}
+%
+%\item{UC7: Allow users to inject application specific data into data stream for jobs.
+%
+%$<initialize(j, c_j), record(j, d_j)>$.}
+%
+%\item{UC8: dsh|dshbak.
+%
+%I.e., $<init(j, c_j), init(j_{dsh}, c_j)>$}.
+%
+%\item{UC9: User control over system software levels.
+%
+%I.e., $<cont\_init(j, c_j, e_{prev.lvl}), record(j, d_j)>$.}
+%
+%\item{UC10: Testing system software releases.
+%
+%I.e., $<cont\_init(j, c_j,e_{toss.v}), record(j, d_j)>$.}
+%
+%\item{UC11: Integrated tool support.
+%
+%I.e., $<init(j, c_j), init(j_{STAT}, c_j), sync(j, j_{STAT})>$.}
+%
+%\item{UC12: Allocate spare resources from a common pool.
+%
+%I.e., $<init(j, c_j), grow(j_{scr}, cnew_j), sync(j, j_{scr})>$.}
+%
+%\item{UC12.1: Allocate additional power for some critial code region.
+%
+%I.e., $<init(j, c_j), grow(j, cnew_j), shrink(j)>$.}
+%
+%\item{UC13: Checkpoint/restart,
+%
+%I.e., $<init(j, c_j), init(j_{scr}, c_j), sync(j, j_{scr})>$.}
+%
+%\item{UC14: Ephemeral file system instances.
+%
+%We must combine our job model to the generic resource model to express these use cases.}
+%
+%\item{UC15: Integrated I/O forwarding support.
+%
+%$<alloc(j, c_j), init(j_{mpi}, c_{j_{mpi}}), init(j_{iof}, c_{iof}), sync(j_{mpi}, j_{iof})>$.}
+%
+%\item{UC16: Hadoop framework.
+%
+%$<init(j_{hadoop}, c_{j_{hadoop}})>$.}
+%
+%\item{UC17: User database instances.
+%
+%I.e., $<init(j_{mysql}, c_{j_{mysql}}), init(j_{atool}, c_{j_{atool}}), sync(j_{mysql}, c_{j_{atool}})>$.}
+%
+%\item{UC20: Provide "pre-job" resource information.
+%
+%$<alloc(j, c_j), query(j), init(j_{mpi}, c_{j_{mpi}})>$.}
+%
+%\item{UC19: Record HW configuration.
+%
+%$<init(j, c_j), record(j, d_j)>$.}
+%
+%\item{UC21: Virtual private networks for jobs.
+%
+%$<cont\_init(j, c_j, e_{vpn})>$.}
+%
+%\end{itemize}
 
-\begin{itemize}
-
-\item{UC1: Use NGRM recursive execution to manage dedicated application test time.
-
-$<alloc(j, c_j), alloc(j_{t0}, c_{j_{t0}}), alloc(j_{t1}, c_{j_{t1}}), ...>$, where each $r_{j_i}$ represents distinct set of resources in $r_{j}$ and each $j_{ti}$ can further run a specific test under a different environment using services like $cont\_init$.}
-
-\item{UC3-UC5: Power utilization as a resource etc.
-
-We must combine our job model to the generic resource model to express these use cases.}
-
-\item{UC6: Live user feedback for job progress.
-
-$monitor(j, j_{progress\_monitor})$.}
-
-\item{UC7: Allow users to inject application specific data into data stream for jobs.
-
-$<initialize(j, c_j), record(j, d_j)>$.}
-
-\item{UC8: dsh|dshbak.
-
-I.e., $<init(j, c_j), init(j_{dsh}, c_j)>$}.
-
-\item{UC9: User control over system software levels.
-
-I.e., $<cont\_init(j, c_j, e_{prev.lvl}), record(j, d_j)>$.}
-
-\item{UC10: Testing system software releases.
-
-I.e., $<cont\_init(j, c_j,e_{toss.v}), record(j, d_j)>$.}
-
-\item{UC11: Integrated tool support.
-
-I.e., $<init(j, c_j), init(j_{STAT}, c_j), sync(j, j_{STAT})>$.}
-
-\item{UC12: Allocate spare resources from a common pool.
-
-I.e., $<init(j, c_j), grow(j_{scr}, cnew_j), sync(j, j_{scr})>$.}
-
-\item{UC12.1: Allocate additional power for some critial code region.
-
-I.e., $<init(j, c_j), grow(j, cnew_j), shrink(j)>$.}
-
-\item{UC13: Checkpoint/restart,
-
-I.e., $<init(j, c_j), init(j_{scr}, c_j), sync(j, j_{scr})>$.}
-
-\item{UC14: Ephemeral file system instances.
-
-We must combine our job model to the generic resource model to express these use cases.}
-
-\item{UC15: Integrated I/O forwarding support.
-
-$<alloc(j, c_j), init(j_{mpi}, c_{j_{mpi}}), init(j_{iof}, c_{iof}), sync(j_{mpi}, j_{iof})>$.}
-
-\item{UC16: Hadoop framework.
-
-$<init(j_{hadoop}, c_{j_{hadoop}})>$.}
-
-\item{UC17: User database instances.
-
-I.e., $<init(j_{mysql}, c_{j_{mysql}}), init(j_{atool}, c_{j_{atool}}), sync(j_{mysql}, c_{j_{atool}})>$.}
-
-\item{UC20: Provide "pre-job" resource information.
-
-$<alloc(j, c_j), query(j), init(j_{mpi}, c_{j_{mpi}})>$.}
-
-\item{UC19: Record HW configuration.
-
-$<init(j, c_j), record(j, d_j)>$.}
-
-\item{UC21: Virtual private networks for jobs.
-
-$<cont\_init(j, c_j, e_{vpn})>$.}
-
-\end{itemize}
-
-\subsubsection{Advanced Power-Aware scheduling Support}
-Our hierarchical job model allows varying grain of control for both the size of
-a job function (in terms of its process count) and resource distribution
-across the job functions.
-That has many interesting properties. For example, an MPI
-job function can further break itself down into smaller job functions
-representing groups of MPI processes or even smallest functions:
-individual MPI processes as job functions.
-As smaller functions allocate, grow or shrink within the resource
-bound allocated to their parent MPI job function, consumable resources
+\subsubsection{Advanced Power-Aware Run-time Support}
+The hierarchy of LWJs allows varying grain of control for both the size of
+an LWJ in terms of its process count and resource distribution
+across the LWJs.
+This has many interesting properties. For example, an MPI
+LWJ can be further refined into smaller LWJs
+representing groups of MPI processes. 
+As smaller LWJs allocate, grow or shrink within the resource
+bound set by their parent MPI LWJ, consumable resources
 like power can be unevenly or evenly distributed across
-those smaller functions.
-This concept can well support LLNL's power-aware scheduling research.
+those smaller LWJs.
+This mechanism can support emerging power-aware computing research
+that may want to cap power use differently across groups
+of processes based on their execution patterns.
 
 \subsection{WRAP Software Architecture and Mechanisms}
 \label{sect:arch}

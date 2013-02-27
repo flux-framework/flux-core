@@ -963,6 +963,7 @@ job or on the run-time access list for the local job.
 % or a parent? I can't remember what we decided here...
 
 \subsection{Comparison with Traditional Job Schedulers / Resource Managers}
+\label{sect:comparison}
 
 In this section, we draw comparisons between \ngrm's constructs and traditional terms
 to show that the traditional paradigm can easily be reduced to our new paradigm. 
@@ -1002,12 +1003,12 @@ Historically, batch schedulers provide a means to reserve a set of
 resources for exclusive use by a user or group of users.  These
 reservations are typically created in advance and are offered as
 Dedidcated Application Times (DATs) for users' exclusive use.
-Often there is some manual setup and special announcements involved.
+Often this process involves some manual setup and special announcements.
 In \ngrm, job reservations will take the form of regular job (with a
 future start time) under which user jobs will run.  As with all \ngrm\ jobs,
 the owner of the DAT job (the DAT coordinator) is empowered to manage
 user access to the DAT, instigate custom monitoring, custom scheduling, 
-arrange for access to dedicated file systems, etc..
+arrange for access to dedicated file systems, etc.
 Thus in the new paradigm, the DAT is just another job that should not require
 special handling.
 
@@ -1024,7 +1025,7 @@ at the root job level.
 \label{sect:projorg}
 To hasten the design, development, and delivery of the initial version
 of \ngrm\, we define four relatively independent thrust areas.
-Each thrust area will carry out the vision and high level design articulated
+Each thrust area will carry out the vision and high-level design articulated
 above with a focus on a particular subsystem or group of subsystems that
 have a natural coupling.  The overall design of \ngrm\ will evolve and
 require the whole team to weigh in on important changes, and the design
