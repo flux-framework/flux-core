@@ -218,7 +218,7 @@ where $destroy$ and $bootstrap$ are optional because they are only needed when $
 
 \subsubsection{Elasticity Support}
 The hierarchy of LWJs allows varying grain sizes of control 
-for process counts in sibling LWJs and 
+for both process counts in sibling LWJs and 
 resource distribution across these LWJs. This has many interesting
 properties. For example, a compute LWJ can further refine itself 
 into smaller LWJs representing subsets of processes with independent
@@ -229,7 +229,7 @@ like power can be unevenly or evenly distributed across
 these LWJs. In the case of power management, LWJs that are not in the critical path
 in the parallel execution can reduce their power bound and return
 the leftover power resources to its parent. The parent LWJ can then use the returned
-resources in granting the {\em grow} requests that comes from 
+resources in granting the {\em grow} requests that come from 
 other LWJs that are in the critical path.    
 This mechanism can support emerging power-aware computing 
 that may want to cap power use differently and dynamically 
@@ -240,10 +240,10 @@ across different groups of MPI processes based on their execution patterns.
 \begin{figure}
   \centering
     \includegraphics[width=3.0in]{WRAP_Base}
-  \caption{Base WRAP architecture for $alloc(j_k, c_{j_k})$}
+  \caption{Base WRAP Architecture}
   \label{fig:base}
 \end{figure}
-In this section, we will walk through our WRAP software architecture 
+In this section, we will detail our WRAP software architecture 
 and mechanisms that are needed to implement the proposed WRAP services.
 We will first describe the base architecture that demonstrates
 the basic WRAP capabilities of executing an LWJ on a set of compute
@@ -309,7 +309,7 @@ data encapsulation per LWJ, which can futher lead to a higher level of
 protection.
 More specifically, when an LWJ is
 allocated, a new name scope for that LWJ will be
-created and information on the resource allocated
+created in the DKVS, and information on the resource allocated
 to that LWJ will be stored as part of the default $record$ service: e.g.,
 $j_k$::resource $\rightarrow$ $<$ core\_count(1024), power\_bound(100kw), ... $>$.
 This information is accessible by $j_k$ as well as
@@ -321,7 +321,7 @@ Finally, DKVS will allow any process of the LWJ to store arbitrary information
 as part of $record(j_k, d_{j_k})$. All information stored
 with $record$ will be pushed to $parent(j_k)$ when $j_k$
 is destroyed. Thus, the information will ultimately find its place
-in a persistent resource manager repository through the job hierarchy. In addition,
+in a persistent repository through the job hierarchy. In addition,
 DKVS will further support $query$, providing the calling process
 with underlying resource allocation infomation.
 
@@ -334,7 +334,7 @@ run-time services includes, but are not limited to, the following:
 \begin{itemize}
 \item{{\bf Bulk Process Creation and Stop}: The head daemon of the overlay network
 receives a process creation request
-through $launch(j_k, c_{j_k})$ and propagates that command to the rest of the daemons
+through $launch(j_k)$ and propagates that command to the rest of the daemons
 in $O(log(N))$. Upon receiving the request, each daemon forks and execs
 local processes. If the request contains an optional {\tt sync\_assist} flag, the daemons
 stop the processes immediately after the creation to support a subsequent $sync()$ issued
@@ -378,13 +378,13 @@ to the users concise information about the termination.}
 \end{itemize}
 
 
-\paragraph{Unified Mechanism to Support Various Distributed Software Bootstrap Interfaces}
+\paragraph{A Unified Bootstrapping Mechanism }
 \label{sect:bootstrap}
-
-DKVS will be designed to support a wide range of bootstrap interfaces
+will be used to ease integration of various types of LWJs.
+DKVS will be designed to support a wide range of existing bootstrap interfaces
 for distributed software including PMI 1 and 2~\cite{PMI2}, PMGR Collective and COBO,
-LaunchMON~\cite{launchmon} and LIBI~\cite{libi}. With support for these interfaces
-WRAP will be able to bootstrap a wide range of LWJs including a myriad of
+LaunchMON~\cite{launchmon} and LIBI~\cite{libi}. With support for these interfaces,
+WRAP will be able to bootstrap various types of LWJs including a myriad of
 MPI implementations, tools communication infrastructure such as MRNet
 and also end-user tools such as STAT, TotalView and OpenSpeedShop.
 Specifically, the PMI layers will be a very thin layer on top
@@ -395,21 +395,20 @@ Then, each process in the binomial tree in these bootstrappers
 will simply find the connection information of its parent as well as
 its children using their ranks as the keys.
 
-\subsubsection{Architectural Support for Job Function Synchronizations}
+\subsubsection{Architectural Support for Synchronizing LWJs}
 \label{sect:sync}
-Our hierarchical job model has an ability to relate a job function
-to another through $sync$.
-For example, a tool may need to be co-located with an MPI job
+WRAP services must have an ability to relate an LWJ to another LWJ through $sync$.
+For example, a tool may need to be co-located with an MPI program
 and attached to its processes.
-Thus, we must extend our base architecture to support that concept.
+Thus, we must extend the base architecture to support this concept.
 \begin{figure}
   \centering
     \includegraphics[width=3.0in]{WRAP_newJobFunction}
-  \caption{WRAP architecture support for ${sync(j_k, j_l)}$}
+  \caption{Architectural support for ${sync(j_k, j_l)}$}
   \label{syncext}
 \end{figure}
 As shown in Figure~\ref{syncext}, when $alloc(j_l)$
-is granted for an additional new job function $j_l$,
+is granted for a new additional LWJ ($j_l$),
 the parent overlay network instantiates
 another overlay nework for $j_l$ and helps manage
 the processes of $j_l$ in the same manner as the base case.
@@ -423,21 +422,20 @@ the mapping of the global MPI rank of a process of $j_k$
 to its host name, pid, executable path~\cite{MPIRInterface},
 information necessary for $j_l$ to locate all of $j_k$'s processes.
 Alternatively, if the existing overlay network of $j_k$ is
-capable of allocating and managing a new sibling job function
+capable of allocating and managing a new sibling LWJ
 within itself, the need for a connection between two overlay
 network and DKVS is eliminated.
 
-\subsubsection{Architectural Support for Reallocation of Compute Nodes}
-Our hierachical job model includes an ability to grow a job function $j_k$
-by reallocating a new set of resources from the resources allocated
+\subsubsection{Architectural Support for Growing Compute Node Resources}
+WRAP services must have an ability to grow the compute node resources that an LWJ ($j_k$)
+uses by reallocating an additional set of compute nodes from the resources allocated
 to $parent(j_k)$ and launching and bootstraping additional processes
 across them.
-Figure~\ref{fig:ext2} shows architectural support for that
-job model.
+Figure~\ref{fig:ext2} shows the architectural support for this elasticity. 
 \begin{figure}
   \centering
     \includegraphics[width=3.0in]{WRAP_grow}
-  \caption{WRAP architecture support for ${grow(j, cnew_j)}$}
+  \caption{Architectural support for ${grow(j, cnew_j)}$}
   \label{fig:ext2}
 \end{figure}
 The scheme is essentially the same as that of $sync$.
@@ -453,31 +451,32 @@ Alternatively, if the existing overlay network of $j_k$ is
 capable of allocating and managing these additional processes
 within itself, the need for a connection between two overlay
 network and DKVS is eliminated. However, the existing overlay network
-of $j_k$ is required to be capable of growing and
-reconfiguring itself to cover the additional compute nodes.
+of $j_k$ must be capable of growing and
+reconfiguring itself to join the additional compute nodes.
 
 \subsubsection{Architectural Support for Power as a Resource Type}
-As $j$ will get the power bound allocated as a resource type,
-a power control mechanism like RAPL~\cite{RountreeRAPL} can be used
+As our {\em generalized resource model} will use the power bound as
+a resource type, WRAP services must have an ability to allocate, grow
+or shrink a power bound on an LWJ as well. 
+As $j$ will get the power bound allocated to it, 
+a power capping mechanism like RAPL~\cite{RountreeRAPL} can be used
 to set the power bound of the allocated compute nodes.
+
 The basic scheme computes the per-node power-bound average
-and sets that averaged bound on each compute node.
-For more advanced power-aware scheduling, groups of processes will
-be assigned to new "power-domain" job functions using $split()$.
-The new power-domain job functions will use $grow()$ and $shrink()$
-operations described in Section~\ref{sect:hiop}
-on the power bound as the resource type.
-Although the distribution of power bound across compute
-nodes will vary, our scheme will guarantee the aggregate power use
-across all of these "power-domain" job functions bounded to the overall power bound
-allocated to their parent.
-These new job functions will create new name scopes
+and sets that average bound on each compute node.
+For more advanced power-aware computing, subsets of processes will
+be assigned to new ``power capping domain'' LWJs using $split()$.
+The new power capping LWJs will independently issue $grow()$ and $shrink()$
+operations on the power bound as the resource type.
+This will allow the distribution of power bounds across the compute
+nodes to vary while still providing the overall power bound guarantee.
+These new LWJs will create new name scopes
 in the DKVS under their parent name scope:
 e.g., $j_k$::$j_{k+1}$::resource $\rightarrow$ $<$ size(128), power\_bound(12.5kW) $>$.
 
 \subsection{Component-Wise Work Breakdown}
 In this section, we summarize the requirements and work items for
-the major components of the proposed system.
+the major components of the proposed WRAP system.
 
 \subsubsection{Overlay Network and Infrastructure Requirements}
 The heart of WRAP lies in scalable and flexible overlay network support.
@@ -487,7 +486,7 @@ The overlay network's attributes that WRAP requires include:
 
 \item{an ability to support our elasticity model
 efficiently and scalably through expanding and shrinking
-compute nodes and job function processes launched on them;}
+compute nodes and LWJ processes launched on them;}
 
 \item{an ability for an arbitrary head daemon to broadcast
 or multicast data to a set of other daemons through a binomial
@@ -522,9 +521,9 @@ for all of its services;}
 \item{process management service components that
 make use of the communication protocol and aggregation and reduction framework/API
 and expose the services through high-level APIs;}
-\item{executable commands such as a job function launcher that combines the
+\item{executable commands such as an LWJ launcher that combines the
 service components to implement certain types of process management
-services for users;}
+services for end users;}
 \item{topology-awared process binding and mapping components as well as
 communication mapping APIs that client software can use for efficient
 mappings between its communication patterns and the topology.}
@@ -553,19 +552,19 @@ using DKVS support:
 \subsubsection{Job Function Synchronization}
 \begin{itemize}
 \item{{\tt MPIR\_proctable} gatherer that gathers {\tt MPIR\_proctable} spread throughout the
-DKVS into a centeral location including the address space of the job function launcher;}
+DKVS into a centeral location including the address space of the LWJ launcher;}
 \item{MPIR debug interface~\cite{MPIRInterface} that makes use of DKVS and process
 management services to support parallel debuggers;}
-\item{co-locator that co-locates an additional job function's processes with
+\item{co-locator that co-locates an additional LWJ's processes with
 the target processes;}
-\item{LaunchMON Back-end API that makes use of DKVS to allow another job function processes
+\item{LaunchMON Back-end API that makes use of DKVS to allow another LWJ processes
 to discover the locations of target processes scalably.}
 \end{itemize}
 
-\subsubsection{Power Bound and Scheduling}
+\subsubsection{Power-Aware Computing}
 \begin{itemize}
-\item{{\em split()} that allows an MPI job function to create smaller job functions, each with independent power bound control;}
-\item{Dynamic power bound controller that manages expanding and shrinking of power bounds across these job functions.}
+\item{{\em split()} that allows a compute LWJ to create smaller LWJs, and each serves as an independent power capping domain;}
+\item{Dynamic power bound controller that manages expanding and shrinking of power bounds across these LWJs.}
 \end{itemize}
 
 \subsection{Phase-Based Work Breakdown}
@@ -641,9 +640,9 @@ engine except for the actual user interfaces to expose.
 \hline
 Work Item & Description & Dependency & Deliverable \\
 \hline
-\multirow{2}{*}{Job function utility design} & design/prototype job function utilities such & \multirow{2}{*}{SBB proto} & \multirow{2}{*}{paper and review} \\
-& as job function launcher & & \\ \hline
-\multirow{2}{*}{Job function sync design} & design/prototype job function & \multirow{2}{*}{SBB proto} & \multirow{2}{*}{paper and review} \\
+\multirow{2}{*}{LWJ utility design} & design/prototype LWJ utilities such & \multirow{2}{*}{SBB proto} & \multirow{2}{*}{paper and review} \\
+& as LWJ launcher & & \\ \hline
+\multirow{2}{*}{LWJ sync design} & design/prototype LWJ & \multirow{2}{*}{SBB proto} & \multirow{2}{*}{paper and review} \\
 & synchronizers & & \\ \hline
 \multirow{2}{*}{PMI2, PMGR, LIBI design} & design/prototype boostrapers: & \multirow{2}{*}{SBB proto} & \multirow{2}{*}{finding summary} \\
 & PMI2, PMGR/COBO and LIBI & & \\ \hline
@@ -669,10 +668,10 @@ this phase will lay out the design of WRAP's external interfaces.
 \hline
 Work Item & Description & Dependency & Deliverable \\
 \hline
-\multirow{2}{*}{Job function utility implementation} & implement job function& \multirow{2}{*}{NGRM framework} & \multirow{2}{*}{software drop} \\
+\multirow{2}{*}{LWJ utility implementation} & implement LWJ& \multirow{2}{*}{NGRM framework} & \multirow{2}{*}{software drop} \\
 & utilities such as launcher & & \\ \hline
-\multirow{2}{*}{Job function sync implementation} & implement job function& \multirow{2}{*}{NGRM framework} & \multirow{2}{*}{software drop} \\
-& job function synchronization & & \\ \hline
+\multirow{2}{*}{LWJ sync implementation} & implement LWJ& \multirow{2}{*}{NGRM framework} & \multirow{2}{*}{software drop} \\
+& LWJ synchronization & & \\ \hline
 \multirow{2}{*}{PMI2, PMGR, LIBI design} & implement & \multirow{2}{*}{NGRM framework} & \multirow{2}{*}{software drop} \\
 & PMI2, PMGR/COBO and LIBI & & \\ \hline
 \end{tabular}
