@@ -476,11 +476,15 @@ e.g., $j_k$::$j_{k+1}$::resource $\rightarrow$ $<$ size(128), power\_bound(12.5k
 
 \subsection{Component-Wise Work Breakdown}
 In this section, we summarize the requirements and work items for
-the major components of the proposed WRAP system.
+the major components of the proposed WRAP system.\marginpar{\tiny Note that 
+this sub-section is optional for reviewers to read, as it describes some
+work breakdowns. But I'm leaving this sub-section so that 
+reviewers may gain further insight into what need to be implemented 
+to support the proposed WRAP architecture.}
 
 \subsubsection{Overlay Network and Infrastructure Requirements}
 The heart of WRAP lies in scalable and flexible overlay network support.
-The overlay network's attributes that WRAP requires include:
+The overlay network's attributes that WRAP requires include:\marginpar{\tiny Note that the network requirements still need to be reconciled with section 5.4.} 
 
 \begin{itemize}
 
@@ -570,7 +574,8 @@ to discover the locations of target processes scalably.}
 \subsection{Phase-Based Work Breakdown}
 To bring up the proposed WRAP system progressively and expediently, we use a phased approach.
 WRAP requires four phases: the outcome of earlier phases becomes the fundamental 
-building blocks for the later phases.
+building blocks for the later phases.\marginpar{\tiny Similarly to the previous sub-section, I'm leaving this sub-section to get some early feedback about our bring-up approach for WRAP.}
+
 
 \subsubsection{Phase 1: Basic Building Blocks (BBB) design}
 
