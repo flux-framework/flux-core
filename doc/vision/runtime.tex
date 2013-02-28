@@ -14,7 +14,7 @@ management, WRAP must provide advanced services to
 support conceptual models such as job hierarchy and resource elasticity 
 described in Section~\ref{sect:models}.
 
-\subsection{Lightweigth Jobs and their Hierarchy}
+\subsection{Lightweight Jobs and their Hierarchy}
 
 As explained in Section~\ref{sect:comparison}, the traditional
 approach models various transactions that a job executes simply as a set of
@@ -39,7 +39,7 @@ The most significant difference between the LWJ and the full job is that an LWJ
 can share the compute resources with other LWJs of the same job. 
 Further, the processes grouped by an LWJ can be refined into smaller LWJs,
 and thus LWJs also form a hierarchy. Effectively, this bridges 
-our general {\em job hierachy model} into the fine-grained 
+our general {\em job hierarchy model} into the fine-grained 
 scope of ``within-job,'' following the same ``parent-child'' rules stated
 in Section~\ref{sect:models}.
 
@@ -69,7 +69,7 @@ $d_j$ & some data to be recorded by $j$ \\
 $r_j$ & compute resources allocated to $j$ where $r_j \subseteq r_{parent(j)}$ \\
 $cnew_j$ & criteria for additional resources for $j$ \\
 $rnew_j$ & additional resources where $rnew_j \not\subseteq r_j$ and $rnew_j \subseteq r_{parent(j)}$ \\
-$e_x$ & a runtime environment where $e_x \in E = \{e0, e1, ..., e_{m-1}\}$ \\
+$e_x$ & a run-time environment where $e_x \in E = \{e0, e1, ..., e_{m-1}\}$ \\
 \hline
 \end{tabular}
 \caption{Definitions for Basic WRAP Service Parameters}
@@ -97,7 +97,7 @@ the following service primitives to enable the new paradigm.
 
 \item{$launch(j)$: spawns, maps and binds processes of $j$ on $r_j$ according to $c_j$. If this is an incremental launch, this spawns and binds only additional processes.}
 
-\item{$destroy(j)$: kill processes of $j$ running on $r_j$. If this is a partial destory, this kills only a subset of processes.}
+\item{$destroy(j)$: kill processes of $j$ running on $r_j$. If this is a partial destroy, this kills only a subset of processes.}
 
 \item{$bootstrap(j)$: bootstraps processes of $j$ across $r_j$ including dissemination of connection information. If this is a partial bootstrap--e.g., additional processes have been spawned or some processes have been killed, it only adjusts $j$ for the change}
 
@@ -265,7 +265,7 @@ $query()$.
 It assumes that the overlay network for $parent(j_k)$
 already exists and that this existing network can support highly scalable,
 resource-efficient communications for $j_k$ upon granting the $alloc(j_k)$ request. 
-Our architeture requires that any overlay network instance recursively
+Our architecture requires that any overlay network instance recursively
 supports communications of a child LWJ either
 through an explicit instantiation of a separate overlay network
 or through the existing overlay network. However, the latter model
@@ -289,8 +289,8 @@ and any process of $j_k$ can store its data by associating them
 with a unique key. To be memory-efficient,
 however, DKVS must store the data in a distributed
 manner. Thus, the overlay network of $j_k$ must be capable of hashing the key
-to route its tuple to the home key-value store location. Global synchonization
-mechanisms such as collective fense will be provided to force
+to route its tuple to the home key-value store location. Global synchronization
+mechanisms such as collective fence will be provided to force
 memory consistency of DKVS across all processes.
 
 Because our overlay network will have built-in routing
@@ -305,7 +305,7 @@ with $log(N)$ connections wherein any daemon can be
 the root of a binomial tree.
 
 Our DKVS will support a hierarchical tuple space for tighter
-data encapsulation per LWJ, which can futher lead to a higher level of 
+data encapsulation per LWJ, which can further lead to a higher level of 
 protection.
 More specifically, when an LWJ is
 allocated, a new name scope for that LWJ will be
@@ -323,7 +323,7 @@ with $record$ will be pushed to $parent(j_k)$ when $j_k$
 is destroyed. Thus, the information will ultimately find its place
 in a persistent repository through the job hierarchy. In addition,
 DKVS will further support $query$, providing the calling process
-with underlying resource allocation infomation.
+with underlying resource allocation information.
 
 \paragraph{Scalable Process Management (ProcMan) Services}
 \label{sect:procman}
@@ -343,7 +343,7 @@ information on the created target processes such as their process id, executable
 and hostname, into the DKVS.}
 
 \item{{\bf Scalable Propagation of Environments}: The head daemon receives the environment
-variables list and propagates that to the rest of the deamons
+variables list and propagates that to the rest of the daemons
 in $O(log(N))$. The daemons then concatenate this master environment variables
 list to their local environment variables and export them to their
 processes. If the head daemon receives an optional $contain$ request, that
@@ -410,10 +410,10 @@ Thus, we must extend the base architecture to support this concept.
 As shown in Figure~\ref{syncext}, when $alloc(j_l)$
 is granted for a new additional LWJ ($j_l$),
 the parent overlay network instantiates
-another overlay nework for $j_l$ and helps manage
+another overlay network for $j_l$ and helps manage
 the processes of $j_l$ in the same manner as the base case.
 To support ${sync(j_k, j_l)}$,
-however, a connection needs to be made beween $j_l$'s
+however, a connection needs to be made between $j_l$'s
 overlay and $j_k$'s overlay network.
 For this purpose, we introduce the concept
 of bridge. The bridge allows processes
@@ -429,7 +429,7 @@ network and DKVS is eliminated.
 \subsubsection{Architectural Support for Growing Compute Node Resources}
 WRAP services must have an ability to grow the compute node resources that an LWJ ($j_k$)
 uses by reallocating an additional set of compute nodes from the resources allocated
-to $parent(j_k)$ and launching and bootstraping additional processes
+to $parent(j_k)$ and launching and bootstrapping additional processes
 across them.
 Figure~\ref{fig:ext2} shows the architectural support for this elasticity. 
 \begin{figure}
@@ -497,7 +497,7 @@ sent from a set of other daemons through the binomial
 or binary tree with $O(log(number\_of\_daemons))$;}
 
 \item{an ability to allow both preset and custom-made reduction
-opertators to reduce the aggregated data along the tree;}
+operators to reduce the aggregated data along the tree;}
 
 \item{an ability to control data aggregation and reduction synchronously
 with a mechanism to set an arbitrary time-out threshold: zero time-out means pass-through;
@@ -524,7 +524,7 @@ and expose the services through high-level APIs;}
 \item{executable commands such as an LWJ launcher that combines the
 service components to implement certain types of process management
 services for end users;}
-\item{topology-awared process binding and mapping components as well as
+\item{topology-aware process binding and mapping components as well as
 communication mapping APIs that client software can use for efficient
 mappings between its communication patterns and the topology.}
 \end{itemize}
@@ -537,7 +537,7 @@ DKVS requires the following components:
 \item{remote get/put methods on distributed key-value servers by
 integrating servers to the communication infrastructure;}
 \item{synchronization mechanisms and APIs that guarantee memory consistency
-acorss the distributed servers.}
+across the distributed servers.}
 \end{itemize}
 
 \subsubsection{Bootstrap Interfaces}
@@ -552,7 +552,7 @@ using DKVS support:
 \subsubsection{Job Function Synchronization}
 \begin{itemize}
 \item{{\tt MPIR\_proctable} gatherer that gathers {\tt MPIR\_proctable} spread throughout the
-DKVS into a centeral location including the address space of the LWJ launcher;}
+DKVS into a central location including the address space of the LWJ launcher;}
 \item{MPIR debug interface~\cite{MPIRInterface} that makes use of DKVS and process
 management services to support parallel debuggers;}
 \item{co-locator that co-locates an additional LWJ's processes with
@@ -598,7 +598,7 @@ Work Item & Description & Dependency & Deliverable \\
 
 During this phase, we will design and prototype the basic building blocks required
 by WRAP. This layer represents the lowest building blocks for the WRAP thrust and has fundamental
-dependecies on the overlay network infrastructure design as shown in Table~\ref{tab:phase1}.
+dependencies on the overlay network infrastructure design as shown in Table~\ref{tab:phase1}.
 Thus, they must be co-designed.
 
 \subsubsection{Phase 2: Service Building Blocks (SBB) design and BBB implementation}
@@ -644,7 +644,7 @@ Work Item & Description & Dependency & Deliverable \\
 & as LWJ launcher & & \\ \hline
 \multirow{2}{*}{LWJ sync design} & design/prototype LWJ & \multirow{2}{*}{SBB proto} & \multirow{2}{*}{paper and review} \\
 & synchronizers & & \\ \hline
-\multirow{2}{*}{PMI2, PMGR, LIBI design} & design/prototype boostrapers: & \multirow{2}{*}{SBB proto} & \multirow{2}{*}{finding summary} \\
+\multirow{2}{*}{PMI2, PMGR, LIBI design} & design/prototype bootstrappers: & \multirow{2}{*}{SBB proto} & \multirow{2}{*}{finding summary} \\
 & PMI2, PMGR/COBO and LIBI & & \\ \hline
 \multirow{3}{*}{SBB implementation} & implement ProcMan package & \multirow{3}{*}{SBB proto} & \multirow{3}{*}{software drop} \\
 & Topology-aware binding & & \\
@@ -680,14 +680,14 @@ Work Item & Description & Dependency & Deliverable \\
 \end{table}
 
 Once we demonstrate that USI prototypes sufficiently support both users and
-other runtimes via reference implemenations, we lock in the SUI design and
+other run-times via reference implementations, we lock in the SUI design and
 produce production-quality USI implementations. Table~\ref{tab:phase4} shows
 deliverables. The software drops will include the demonstration on client
-software such as MPI, MRNet and other runtime tools.
+software such as MPI, MRNet and other run-time tools.
 
 \ifwbs
 \newpage
-\subsection{Workload Runtime WBS}
+\subsection{Workload Run-time WBS}
 
 \begin{longtable}{|p{1cm}|p{10.2cm}|p{1cm}|p{1cm}|p{1.8cm}|}\hline
   \textbf{Item} & \textbf{Description}
