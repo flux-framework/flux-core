@@ -12,11 +12,17 @@
 \institution{Livermore Computing \\
              Lawrence Livermore National Laboratory}
 
-\slideCaption{NGRM High Level Review, Mar. 4, 2013}
+\newcommand{\ngrm}{NGRM}
+\newcommand{\zMQ}{\O{}MQ}
+
+\slideCaption{\ngrm\ High Level Review, Mar. 4, 2013}
 
 \Logo(-1,-1){\epsfig{file=graphic/iccd_logotrans.ps,scale=0.15}}
 
 %\Logo{\includegraphics[scale=0.15]{iccd_logotrans.ps}}
+
+\newif\ifbigpic
+\bigpictrue
 
 
 \begin{document}
@@ -98,21 +104,27 @@ progression.
 }\end{slide}
 % ==========================================================================
 \begin{slide}{job 0}{\small
+\ifbigpic
 \begin{center}
   \includegraphics[scale=0.50]{job-hierarchy-job0}
 \end{center}
+\fi
 }\end{slide}
 % ==========================================================================
 \begin{slide}{job 0.x}{\small
+\ifbigpic
 \begin{center}
   \includegraphics[scale=0.50]{job-hierarchy-job0-x}
 \end{center}
+\fi
 }\end{slide}
 % ==========================================================================
 \begin{slide}{job 0.x.y}{\small
+\ifbigpic
 \begin{center}
   \includegraphics[scale=0.50]{job-hierarchy-job0-x-y}
 \end{center}
+\fi
 }\end{slide}
 % ==========================================================================
 \begin{slide}{comparision with slurm}{\small
@@ -135,6 +147,156 @@ Add sub-lists to break each down a bit
 }\end{slide}
 % ==========================================================================
 \part{comms framework}
+% ==========================================================================
+\begin{slide}{Comms Framework Goals}{\small
+\begin{itemize}
+  \item{Build a foundation for \ngrm\ distributed components.}
+  \item{A {\em comms session} contains each \ngrm\ job, and \\
+	job hierarchy $\sim$ comms session hierarchy}
+  \item{Rich comms within a session,\\
+	No direct comms between sibling sessions,\\
+        Limited comms between parent-child (through gateway)}
+  \item{Parent session can create, resize, destory child sessions}
+  \item{Comms consists of four layers...}
+\end{itemize}
+}\end{slide}
+% ==========================================================================
+\begin{slide}{Comms Framework Layers}{\small
+\begin{center}
+  \includegraphics[scale=0.20]{comms}
+\end{center}
+\begin{itemize}
+  \item{Layering is not rigid\\
+        \ngrm\ components not overly constrained}
+  \item{Bottom two layers are mostly off-the-shelf}
+  \item{Generality reflects early phase of project in which it was conceived}
+\end{itemize}
+}\end{slide}
+% ==========================================================================
+\begin{slide}{Internet Protocols and Services}{\small
+\begin{itemize}
+  \item{Fully routed IP networks, e.g. route cluster management
+	ethernets and IP-over-IB together}
+  \item{Dynamic IP assignment, including multicast}
+  \item{Private DNS, each session has a name, e.g. {\tt s2.s400.\ngrm.}}
+  \item{Possibility for VPN isolation between jobs}
+\end{itemize}
+}\end{slide}
+% ==========================================================================
+\begin{slide}{Comms Toolkit}{\small
+\begin{center}
+  \includegraphics[scale=0.20]{commstk}
+\end{center}
+\begin{itemize}
+  \item{Message handling (2 options)}
+  \item{Security (2 options)}
+  \item{Message encoding (2 options)}
+\end{itemize}
+}\end{slide}
+% ==========================================================================
+\begin{slide}{Message Handling}{\small
+  \hfill
+  \begin{minipage}{0.5\textwidth}
+  {\bf \zMQ}
+  \begin{itemize}
+    \item{req-rep, pub-sub, push-pull}
+    \item{PGM (reliable multicast)}
+    \item{multipart message handling}
+    \item{support for broker construction}
+    \item{user space library}
+  \end{itemize}
+  \begin{center}
+    \begin{minipage}[b]{0.15\linewidth}
+    \includegraphics[scale=0.08]{comms_zmq_reqrep}
+    \end{minipage}
+    \hspace{0.2cm}
+    \begin{minipage}[b]{0.3\linewidth}
+    \includegraphics[scale=0.08]{comms_zmq_pubsub}
+    \end{minipage}
+    \hspace{0.2cm}
+    \begin{minipage}[b]{0.3\linewidth}
+    \includegraphics[scale=0.08]{comms_zmq_pushpull}
+    \end{minipage}
+  \end{center}
+  \end{minipage}
+  \hfill
+  \begin{minipage}{0.45\textwidth}
+  {\bf SCTP}
+  \begin{itemize}
+    \item{message oriented}
+    \item{transparent multi-homing}
+    \item{multi-streaming}
+    \item{N-to-1 associations}
+    \item{HMAC check option}
+    \item{IETF, in Linux kernel}
+  \end{itemize}
+  \begin{center}
+  \includegraphics[scale=0.10]{comms_sctp}
+  \end{center}
+  \end{minipage}
+  \hfill
+}\end{slide}
+% ==========================================================================
+\begin{slide}{Security}{\small
+  \hfill
+  \begin{minipage}{0.5\textwidth}
+  {\bf session security context}
+  \begin{itemize}
+    \item{key assigned by parent}
+    \item{integrity, privacy for all}
+    \item{parent knows child's key}
+    \item{child forgets parent's key}
+    \item{useful for pub-sub}
+    \item{assumes trust within session}
+  \end{itemize}
+  \end{minipage}
+  \hfill
+  \begin{minipage}{0.45\textwidth}
+  {\bf MUNGE}
+  \begin{itemize}
+    \item{key assigned out of band (don't ask)}
+    \item{privileged munge daemon signs messages}
+    \item{authenticates sender}
+    \item{integrity, privacy of payload possible}
+  \end{itemize}
+  \end{minipage}
+  \hfill
+}\end{slide}
+% ==========================================================================
+\begin{slide}{Message Encoding}{\small
+  \hfill
+  \begin{minipage}{0.5\textwidth}
+  {\bf JSON}
+  \begin{itemize}
+    \item{generated on the fly}
+    \item{many language bindings}
+    \item{human readable}
+    \item{easily extended}
+    \item{space-inefficient}
+    \item{slow}
+  \end{itemize}
+  \end{minipage}
+  \hfill
+  \begin{minipage}{0.45\textwidth}
+  {\bf Protocol Buffers}
+  \begin{itemize}
+    \item{compiled from IDL}
+    \item{fewer supported languages}
+    \item{machine readable}
+    \item{must design for revision}
+    \item{space-efficient}
+    \item{fast}
+  \end{itemize}
+  \end{minipage}
+  \hfill
+}\end{slide}
+% ==========================================================================
+\begin{slide}{Comms Message Broker (CMB)}{\small
+}\end{slide}
+% ==========================================================================
+\begin{slide}{Reduction Network}{\small
+}\end{slide}
+% ==========================================================================
 \part{resource management}
 \part{scheduler}
 \part{monitoring}
