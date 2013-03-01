@@ -21,7 +21,8 @@ DEPFIG = \
 	mon_iface.eps \
 	job-hierarchy-job0.ps \
 	job-hierarchy-job0-x.ps \
-	job-hierarchy-job0-x-y.ps
+	job-hierarchy-job0-x-y.ps \
+	job-hierarchy-lwj.ps \
 
 all: $(DEPFIG)
 

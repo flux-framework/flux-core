@@ -45,13 +45,31 @@ We expect to address your questions and comments as we go.
 % ==========================================================================
 \part{overview}
 % ==========================================================================
-\begin{slide}{RM today}{\small
-Here describe slurm emphasising its design space, scalability
-limitations, node-centric resource model, etc..  What is good about slurm
-that we would like to carry fwd.
+\begin{slide}{Emerging Challenges for RM}{\small
+\begin{itemize}
+  \item{extreme scalability}
+  \item{low noise}
+  \item{fault tolerance}
+  \item{heterogeneity (GPUs, FPGA, special nodes)}
+  \item{new resource types (power, I/O)}
+  \item{code devel/debug complexity}
+  \item{new workloads (high job throughput, UQ, exascale)}
+\end{itemize}
+Failure to adapt will harm user productivity.
 }\end{slide}
 % ==========================================================================
-\begin{slide}{vision and new capabilities}{\small
+\begin{slide}{Could Slurm be Adapted?}{\small
+We think not.
+\begin{itemize}
+  \item{older paradigm: monolithic controller, node-scheduled}
+  \item{minimal runtime support (env vars, libslurm, libpmi, MPIR)}
+  \item{scalability limitations}
+  \item{comprehensive redesign overdue}
+  \item{need center-wide RM to manage simulation ensembles, I/O, viz, etc}
+\end{itemize}
+}\end{slide}
+% ==========================================================================
+\begin{slide}{Vision and New Capabilities}{\small
 \begin{itemize}
   \item{center as a cluster}
   \item{diverse compute resources}
@@ -64,46 +82,74 @@ that we would like to carry fwd.
 \end{itemize}
 }\end{slide}
 % ==========================================================================
-\begin{slide}{design challenges}{\small
-\begin{minipage}{0.45\textwidth}
+\begin{slide}{Design Challenges}{\small
+\begin{minipage}{0.47\textwidth}
 \begin{itemize}
-  \item{multidimensional scale challenge}
-  \item{diverse workload challenge}
-  \item{dynamic workload challenge}
-  \item{power challenge}
-  \item{scheduling challenge}
+  \item{multidimensional scale}
+  \item{diverse workload}
+  \item{dynamic workload}
+  \item{power}
+  \item{scheduling}
 \end{itemize}
 \end{minipage}
-\begin{minipage}{0.45\textwidth}
+\begin{minipage}{0.47\textwidth}
 \begin{itemize}
-  \item{backwards compatibility challenge}
+  \item{backwards compatibility}
   \item{integration risk}
   \item{higher downtime costs}
-  \item{separation-of-concerns challenge}
-  \item{security challenge}
-  \item{productivity challenges}
+  \item{separation-of-concerns}
+  \item{security}
+  \item{productivity}
 \end{itemize}
 \end{minipage}
 }\end{slide}
 % ==========================================================================
-\begin{slide}{new conceptual models}{\small
+\begin{slide}{New Conceptual Models}{\small
 \begin{itemize}
-  \item{unified job model}
-  \item{job hierarchy model}
-  \item{generalized resource model}
-  \item{resource allocation elasticity model}
-  \item{common scalable infrastructure model}
-  \item{self-hosting model}
-  \item{lightweight virtualization model}
+  \item{unified job}
+  \item{job hierarchy}
+  \item{generalized resource}
+  \item{resource allocation elasticity}
+  \item{common scalable infrastructure}
+  \item{self-hosting}
+  \item{lightweight virtualization}
 \end{itemize}
 }\end{slide}
 % ==========================================================================
-\begin{slide}{Next Generation Resource Manager}{\small
-insert {\em vision} figure 2 job hierarchy (several slides showing
-progression.
+\begin{slide}{\ngrm\ Job Attributes (1/2)}{\small
+\begin{itemize}
+  \item{job owner and users allowed to run and/or submit jobs;\\
+	owners can "invite" debug help or coordinate DAT}
+  \item{RM instance with resource subset, topology, etc}
+  \item{scheduler to accept and schedule new jobs,\\
+	scheduler plugin selectable by owner}
+  \item{job DB recording new, running, completed child jobs;\\
+	job\&res DBs "reaped" like UNIX processes at job exit}
+\end{itemize}
 }\end{slide}
 % ==========================================================================
-\begin{slide}{job 0}{\small
+\begin{slide}{\ngrm\ Job Attributes (2/2)}{\small
+\begin{itemize}
+  \item{isolated communications framework with parent gateway}
+  \item{runtime environment for launching parallel apps \& tools}
+  \item{interactive node for batch scripts/user logins}
+  \item{resolvable domain name based on unique jobid,\\
+	ssh to job, point web browser at job}
+  \item{local monitoring domain, user configurable}
+\end{itemize}
+}\end{slide}
+% ==========================================================================
+\begin{slide}{Lightweight Jobs (LWJ)}{\small
+\begin{itemize}
+  \item{LWJ is a job sharing parent RM instance,
+	communications framework, etc}
+  \item{optimizes base case of allocate \& launch MPI job}
+  \item{covers co-located work like tool processes}
+  \item{regular jobs $\sim$ UNIX processes; LWJ $\sim$ UNIX threads}
+\end{itemize}
+}\end{slide}
+% ==========================================================================
+\begin{slide}{job 0 spans all resources}{\small
 \ifbigpic
 \begin{center}
   \includegraphics[scale=0.50]{job-hierarchy-job0}
@@ -111,7 +157,7 @@ progression.
 \fi
 }\end{slide}
 % ==========================================================================
-\begin{slide}{job 0.x}{\small
+\begin{slide}{job 0.x on cluster 2}{\small
 \ifbigpic
 \begin{center}
   \includegraphics[scale=0.50]{job-hierarchy-job0-x}
@@ -119,7 +165,7 @@ progression.
 \fi
 }\end{slide}
 % ==========================================================================
-\begin{slide}{job 0.x.y}{\small
+\begin{slide}{job 0.x.y on nodes n1-5}{\small
 \ifbigpic
 \begin{center}
   \includegraphics[scale=0.50]{job-hierarchy-job0-x-y}
@@ -127,23 +173,26 @@ progression.
 \fi
 }\end{slide}
 % ==========================================================================
-\begin{slide}{comparision with slurm}{\small
-\begin{itemize}
-  \item{job}
-  \item{job step}
-  \item{reservations}
-  \item{job accounting}
-\end{itemize}
+\begin{slide}{2 LWJs on node n5}{\small
+\ifbigpic
+\begin{center}
+  \includegraphics[scale=0.50]{job-hierarchy-lwj}
+\end{center}
+\fi
 }\end{slide}
 % ==========================================================================
-\begin{slide}{project organization and thrust areas}{\small
-\begin{itemize}
-  \item{comms framework}
-  \item{resource management}
-  \item{monitoring}
-  \item{runtime}
-\end{itemize}
-Add sub-lists to break each down a bit
+\begin{slide}{Project Thrust Areas}{\small
+\textbf{Comms Framework:}
+    common scalable infrastrucure model for \ngrm\ components\\
+\vspace{0.5cm}
+\textbf{Resource Management:}
+    config, scheduling, tracking of resources, jobs and users\\
+\vspace{0.5cm}
+\textbf{Monitoring:}
+    scalable resource health monitoring, fault notification, logging\\
+\vspace{0.5cm}
+\textbf{Runtime:}
+    support for application runtime, tools, process management, etc.
 }\end{slide}
 % ==========================================================================
 \part{comms framework}
@@ -292,9 +341,11 @@ Add sub-lists to break each down a bit
 }\end{slide}
 % ==========================================================================
 \begin{slide}{Comms Message Broker (CMB)}{\small
+FIXME!
 }\end{slide}
 % ==========================================================================
 \begin{slide}{Reduction Network}{\small
+FIXME!
 }\end{slide}
 % ==========================================================================
 \part{resource management}
