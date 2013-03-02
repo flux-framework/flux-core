@@ -22,7 +22,7 @@
 %\Logo{\includegraphics[scale=0.15]{iccd_logotrans.ps}}
 
 \newif\ifbigpic
-\bigpicfalse
+\bigpictrue
 
 
 \begin{document}
@@ -106,8 +106,13 @@ We think not.
 % ==========================================================================
 \begin{slide}{New Conceptual Models}{\small
 \begin{itemize}
-  \item{unified job}
+  \item{unified job $=$ resource allocation $+$ RM instance}
   \item{job hierarchy}
+  \begin{itemize}
+    \item{parent bounding rule}
+    \item{child empowerment rule}
+    \item{parental consent rule}
+  \end{itemize}
   \item{generalized resource}
   \item{resource allocation elasticity}
   \item{common scalable infrastructure}
@@ -116,9 +121,17 @@ We think not.
 \end{itemize}
 }\end{slide}
 % ==========================================================================
+\begin{slide}{Resource Hierarchy}{\small
+\ifbigpic
+\begin{center}
+  \includegraphics[scale=0.50]{resource-hierarchy}
+\end{center}
+\fi
+}\end{slide}
+% ==========================================================================
 \begin{slide}{\ngrm\ Job Attributes (1/2)}{\small
 \begin{itemize}
-  \item{job owner and users allowed to run and/or submit jobs;\\
+  \item{job owner and ACL users can run and/or submit jobs;\\
 	owners can "invite" debug help or coordinate DAT}
   \item{RM instance with resource subset, topology, etc}
   \item{scheduler to accept and schedule new jobs,\\
@@ -369,14 +382,14 @@ We think not.
 \begin{slide}{CMB - more detail}{\small
 \begin{itemize}
   \item{distinguished control node (root of tree, gateway)}
-  \item{Session state K-V store w/ loosely consistent slave caches
+  \item{session state K-V store w/ loosely consistent slave caches
 	(session key, nodeset, topo, liveness, etc.)}
-  \item{Pub-sub event messaging $(tag, message)$;\\
+  \item{pub-sub event messaging $(tag, message)$;\\
 	periodic {\tt event.sched.trigger} heartbeat event;\\
 	events on state update for slave cache sync}
-  \item{Liveness monitoring based on forced periodic communication;
+  \item{liveness monitoring based on forced periodic communication;
 	parent can subscribe}
-  \item{Parent handles session creation/resize/destruction}
+  \item{parent handles session creation/resize/destruction}
   \item{DNS subdomain management}
 \end{itemize}
 }\end{slide}
@@ -384,10 +397,10 @@ We think not.
 \begin{slide}{Reduction Network}{\small
 \begin{minipage}{0.50\textwidth}
 \begin{itemize}
-  \item{Tracks CMB topology (including elasticity, fault tolerance)}
+  \item{tracks CMB topology (including elasticity, fault tolerance)}
   %\item{back-ends on all nodes, internal TBD, front-end" on control node}
-  \item{Downstream: PGM; upstream: unicast; messages: $(tag, message)$}
-  \item{Contribs to CMB liveness}
+  \item{downstream: PGM; upstream: unicast; messages: $(tag, message)$}
+  \item{contribs to CMB liveness}
 \end{itemize}
 \vspace{0.10mm}
 \end{minipage}
@@ -397,27 +410,38 @@ We think not.
 \end{center}
 \end{minipage}
 \begin{itemize}
-  \item{Shared by multiple \ngrm\ components}
-  \item{Plugins with service activation, UNIX domain sockets}
-  \item{Co-design with Runtime thrust, could be other TB\={O}Ns}
+  \item{shared by multiple \ngrm\ components}
+  \item{plugins with service activation, UNIX domain sockets}
+  \item{co-design with runtime thrust, could be other TB\={O}Ns}
 \end{itemize}
 }\end{slide}
 % ==========================================================================
 \begin{slide}{Fault Tolerance}{\small
 \begin{itemize}
   \item{{\em FT is a significant design activity!}}
-  \item{High stakes: losing the root job is bad}
-  \item{Rebooting nodes know how to rejoin root session}
+  \item{high stakes: losing the root job is bad}
+  \item{rebooting nodes know how to rejoin root session}
   \item{CMB events notify when session state changes\\
 	(nodeset, liveness, topo)}
   \item{CMB state is replicated in slave caches}
-  \item{Parent monitors control node and orchestrates recovery}
+  \item{parent monitors control node and orchestrates recovery}
 \end{itemize}
 }\end{slide}
 % ==========================================================================
-\part{resource management}
+\begin{slide}{Session Overview}{\small
+\begin{itemize}
+  \item[\S1-4]{{\gray {\em overview} (Jim)}}
+  \item[\S5]{{\gray {\em comms framework} (Jim)}}
+  \item[\S6.1-6]{{\em resource management} (Mark)}
+  \item[\S6.7]{{\em scheduler} (Don)}
+  \item[\S7]{{\em monitoring} (Jim)}
+  \item[\S8]{{\em runtime} (Dong)}
+\end{itemize}
+}\end{slide}
 % ==========================================================================
-\part{scheduler}
+%\part{resource management}
+% ==========================================================================
+%\part{scheduler}
 % ==========================================================================
 \part{monitoring}
 % ==========================================================================
@@ -427,18 +451,18 @@ Overview:
 \begin{itemize}
   \item{job-customizable monitoring domain}
   \item{health $\Longrightarrow$ res DB}
-  \item{Faults $\Longrightarrow$ job DB}
-  \item{Raw data $\Longrightarrow$ log DB}
+  \item{faults $\Longrightarrow$ job DB}
+  \item{raw data $\Longrightarrow$ log DB}
 \end{itemize}
 \end{minipage}
 \hfill
 \begin{minipage}{0.50\textwidth}
 Components:
 \begin{itemize}
-  \item{Plugin framework}
-  \item{Log database (external)}
-  \item{Fault notification system}
-  \item{Enterprise mon (external)}
+  \item{plugin framework}
+  \item{log database (external)}
+  \item{fault notification system}
+  \item{enterprise mon (external)}
 \end{itemize}
 \end{minipage}
 \vspace{0.5cm}
@@ -458,17 +482,22 @@ Components:
 \end{minipage}
 \end{center}
 \begin{itemize}
-  \item{Plugin stack uses comms reduction network}
+  \item{plugin stack uses comms reduction network}
   \item{source(): get raw data, sync sched event ($T=$ tunable)}
   \item{reduction(): combine raw data}
   \item{sink(): update res DB}
-  \item{Functions can generate faults, log entries}
+  \item{functions can generate faults, log entries}
 \end{itemize}
 }\end{slide}
 % ==========================================================================
 \begin{slide}{Log database (external)}{\small
 \begin{itemize}
-  \item{Foof!}
+  \item{comprehensive, schemaless, site-wide store}
+  \item{high insertion rate}
+  \item{large storage capacity}
+  \item{scalable queries}
+  \item{facilitates post-mortem analysis, beyond job record}
+  \item{RFC 5424 syslog STRUCTURED-DATA enhancement}
 \end{itemize}
 }\end{slide}
 % ==========================================================================
@@ -484,6 +513,17 @@ Components:
 \end{itemize}
 }\end{slide}
 % ==========================================================================
-\part{runtime}
+\begin{slide}{Session Overview}{\small
+\begin{itemize}
+  \item[\S1-4]{{\gray {\em overview} (Jim)}}
+  \item[\S5]{{\gray {\em comms framework} (Jim)}}
+  \item[\S6.1-6]{{\gray {\em resource management} (Mark)}}
+  \item[\S6.7]{{\gray {\em scheduler} (Don)}}
+  \item[\S7]{{\gray {\em monitoring} (Jim)}}
+  \item[\S8]{{\em runtime} (Dong)}
+\end{itemize}
+}\end{slide}
+% ==========================================================================
+%\part{runtime}
 % ==========================================================================
 \end{document}
