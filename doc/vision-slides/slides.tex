@@ -22,7 +22,7 @@
 %\Logo{\includegraphics[scale=0.15]{iccd_logotrans.ps}}
 
 \newif\ifbigpic
-\bigpictrue
+\bigpicfalse
 
 
 \begin{document}
@@ -205,7 +205,7 @@ We think not.
   \item{Rich comms within a session,\\
 	No direct comms between sibling sessions,\\
         Limited comms between parent-child (through gateway)}
-  \item{Parent session can create, resize, destory child sessions}
+  \item{Parent session can create, resize, destroy child sessions}
   \item{Comms consists of four layers...}
 \end{itemize}
 }\end{slide}
@@ -341,16 +341,149 @@ We think not.
 }\end{slide}
 % ==========================================================================
 \begin{slide}{Comms Message Broker (CMB)}{\small
-FIXME!
+\begin{itemize}
+  \item{a distributed service within a comms session}
+  \item{launches new sessions}
+  \item{manages session membership}
+  \item{detect session node failures, and adapt}
+  \item{basic event messaging system}
+  \item{bootstrap other components}
+\end{itemize}
+\begin{minipage}[b]{0.18\linewidth}
+\fbox{\includegraphics[scale=0.04]{comms_ex1a}}
+\end{minipage}
+\hspace{0.5cm}
+\begin{minipage}[b]{0.18\linewidth}
+\fbox{\includegraphics[scale=0.04]{comms_ex1b}}
+\end{minipage}
+\hspace{0.5cm}
+\begin{minipage}[b]{0.18\linewidth}
+\fbox{\includegraphics[scale=0.04]{comms_ex1c}}
+\end{minipage}
+\hspace{0.5cm}
+\begin{minipage}[b]{0.18\linewidth}
+\fbox{\includegraphics[scale=0.04]{comms_ex1d}}
+\end{minipage}
+}\end{slide}
+% ==========================================================================
+\begin{slide}{CMB - more detail}{\small
+\begin{itemize}
+  \item{distinguished control node (root of tree, gateway)}
+  \item{Session state K-V store w/ loosely consistent slave caches
+	(session key, nodeset, topo, liveness, etc.)}
+  \item{Pub-sub event messaging $(tag, message)$;\\
+	periodic {\tt event.sched.trigger} heartbeat event;\\
+	events on state update for slave cache sync}
+  \item{Liveness monitoring based on forced periodic communication;
+	parent can subscribe}
+  \item{Parent handles session creation/resize/destruction}
+  \item{DNS subdomain management}
+\end{itemize}
 }\end{slide}
 % ==========================================================================
 \begin{slide}{Reduction Network}{\small
-FIXME!
+\begin{minipage}{0.50\textwidth}
+\begin{itemize}
+  \item{Tracks CMB topology (including elasticity, fault tolerance)}
+  %\item{back-ends on all nodes, internal TBD, front-end" on control node}
+  \item{Downstream: PGM; upstream: unicast; messages: $(tag, message)$}
+  \item{Contribs to CMB liveness}
+\end{itemize}
+\vspace{0.10mm}
+\end{minipage}
+\begin{minipage}{0.40\textwidth}
+\begin{center}
+\includegraphics[scale=0.20]{comms_zmq_reduct}
+\end{center}
+\end{minipage}
+\begin{itemize}
+  \item{Shared by multiple \ngrm\ components}
+  \item{Plugins with service activation, UNIX domain sockets}
+  \item{Co-design with Runtime thrust, could be other TB\={O}Ns}
+\end{itemize}
+}\end{slide}
+% ==========================================================================
+\begin{slide}{Fault Tolerance}{\small
+\begin{itemize}
+  \item{{\em FT is a significant design activity!}}
+  \item{High stakes: losing the root job is bad}
+  \item{Rebooting nodes know how to rejoin root session}
+  \item{CMB events notify when session state changes\\
+	(nodeset, liveness, topo)}
+  \item{CMB state is replicated in slave caches}
+  \item{Parent monitors control node and orchestrates recovery}
+\end{itemize}
 }\end{slide}
 % ==========================================================================
 \part{resource management}
+% ==========================================================================
 \part{scheduler}
+% ==========================================================================
 \part{monitoring}
+% ==========================================================================
+\begin{slide}{Monitoring}{\small
+\begin{minipage}{0.40\textwidth}
+Overview:
+\begin{itemize}
+  \item{job-customizable monitoring domain}
+  \item{health $\Longrightarrow$ res DB}
+  \item{Faults $\Longrightarrow$ job DB}
+  \item{Raw data $\Longrightarrow$ log DB}
+\end{itemize}
+\end{minipage}
+\hfill
+\begin{minipage}{0.50\textwidth}
+Components:
+\begin{itemize}
+  \item{Plugin framework}
+  \item{Log database (external)}
+  \item{Fault notification system}
+  \item{Enterprise mon (external)}
+\end{itemize}
+\end{minipage}
+\vspace{0.5cm}
+\begin{center}
+\fbox{\includegraphics[scale=0.07]{mon_iface}}
+\end{center}
+}\end{slide}
+% ==========================================================================
+\begin{slide}{Plugin Framework}{\small
+\begin{center}
+\begin{minipage}[b]{0.4\linewidth}
+\fbox{\includegraphics[scale=0.07]{mon_ex1a}}
+\end{minipage}
+\hspace{0.5cm}
+\begin{minipage}[b]{0.4\linewidth}
+\fbox{\includegraphics[scale=0.07]{mon_ex1b}}
+\end{minipage}
+\end{center}
+\begin{itemize}
+  \item{Plugin stack uses comms reduction network}
+  \item{source(): get raw data, sync sched event ($T=$ tunable)}
+  \item{reduction(): combine raw data}
+  \item{sink(): update res DB}
+  \item{Functions can generate faults, log entries}
+\end{itemize}
+}\end{slide}
+% ==========================================================================
+\begin{slide}{Log database (external)}{\small
+\begin{itemize}
+  \item{Foof!}
+\end{itemize}
+}\end{slide}
+% ==========================================================================
+\begin{slide}{Fault notification system}{\small
+\begin{itemize}
+  \item{Foof!}
+\end{itemize}
+}\end{slide}
+% ==========================================================================
+\begin{slide}{Enterprise monitoring system (external)}{\small
+\begin{itemize}
+  \item{Foof!}
+\end{itemize}
+}\end{slide}
+% ==========================================================================
 \part{runtime}
 % ==========================================================================
 \end{document}
