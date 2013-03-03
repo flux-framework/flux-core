@@ -19,6 +19,8 @@ DEPFIG = \
 	mon_ex1a.eps \
 	mon_ex1b.eps \
 	mon_iface.eps \
+	mon_iface_log.eps \
+	mon_iface_snmp.eps \
 	job-hierarchy-job0.ps \
 	job-hierarchy-job0-x.ps \
 	job-hierarchy-job0-x-y.ps \

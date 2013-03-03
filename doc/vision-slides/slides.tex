@@ -30,7 +30,7 @@
 % ==========================================================================
 \maketitle
 % ==========================================================================
-\begin{slide}{Session Overview}{\small
+\begin{slide}{Session Agenda}{\small
 We will roughly follow the outline of the {\em Vision} document.\\
 \begin{itemize}
   \item[\S1-4]{{\em overview} (Jim)}
@@ -147,7 +147,7 @@ We think not.
   \item{runtime environment for launching parallel apps \& tools}
   \item{interactive node for batch scripts/user logins}
   \item{resolvable domain name based on unique jobid,\\
-	ssh to job, point web browser at job}
+	e.g. ssh, ping, or browse-to job by DNS name}
   \item{local monitoring domain, user configurable}
 \end{itemize}
 }\end{slide}
@@ -206,6 +206,17 @@ We think not.
 \vspace{0.5cm}
 \textbf{Runtime:}
     support for application runtime, tools, process management, etc.
+}\end{slide}
+% ==========================================================================
+\begin{slide}{Session Agenda}{\small
+\begin{itemize}
+  \item[\S1-4]{{\gray {\em overview} (Jim)}}
+  \item[\S5]{{\em comms framework} (Jim)}
+  \item[\S6.1-6]{{\em resource management} (Mark)}
+  \item[\S6.7]{{\em scheduler} (Don)}
+  \item[\S7]{{\em monitoring} (Jim)}
+  \item[\S8]{{\em runtime} (Dong)}
+\end{itemize}
 }\end{slide}
 % ==========================================================================
 \part{comms framework}
@@ -428,7 +439,7 @@ We think not.
 \end{itemize}
 }\end{slide}
 % ==========================================================================
-\begin{slide}{Session Overview}{\small
+\begin{slide}{Session Agenda}{\small
 \begin{itemize}
   \item[\S1-4]{{\gray {\em overview} (Jim)}}
   \item[\S5]{{\gray {\em comms framework} (Jim)}}
@@ -442,6 +453,17 @@ We think not.
 %\part{resource management}
 % ==========================================================================
 %\part{scheduler}
+% ==========================================================================
+\begin{slide}{Session Agenda}{\small
+\begin{itemize}
+  \item[\S1-4]{{\gray {\em overview} (Jim)}}
+  \item[\S5]{{\gray {\em comms framework} (Jim)}}
+  \item[\S6.1-6]{{\gray {\em resource management} (Mark)}}
+  \item[\S6.7]{{\gray {\em scheduler} (Don)}}
+  \item[\S7]{{\em monitoring} (Jim)}
+  \item[\S8]{{\em runtime} (Dong)}
+\end{itemize}
+}\end{slide}
 % ==========================================================================
 \part{monitoring}
 % ==========================================================================
@@ -465,10 +487,6 @@ Components:
   \item{enterprise mon (external)}
 \end{itemize}
 \end{minipage}
-\vspace{0.5cm}
-\begin{center}
-\fbox{\includegraphics[scale=0.07]{mon_iface}}
-\end{center}
 }\end{slide}
 % ==========================================================================
 \begin{slide}{Plugin Framework}{\small
@@ -491,29 +509,68 @@ Components:
 }\end{slide}
 % ==========================================================================
 \begin{slide}{Log database (external)}{\small
+\begin{minipage}[b]{0.55\linewidth}
 \begin{itemize}
   \item{comprehensive, schemaless, site-wide store}
   \item{high insertion rate}
+\end{itemize}
+\end{minipage}
+\hfill
+\begin{minipage}[b]{0.40\linewidth}
+\begin{center}
+\fbox{\includegraphics[scale=0.05]{mon_iface_log}}
+\end{center}
+\end{minipage}
+\hfill
+\begin{itemize}
   \item{large storage capacity}
   \item{scalable queries}
   \item{facilitates post-mortem analysis, beyond job record}
-  \item{RFC 5424 syslog STRUCTURED-DATA enhancement}
+  \item{users allowed to log application-level data}
+  \item{RFC 5424 syslog transport with STRUCTURED-DATA}
+  \item{can use plugin reduction capability}
+  \item{management: circular debug buffer, log quotas}
 \end{itemize}
 }\end{slide}
 % ==========================================================================
 \begin{slide}{Fault notification system}{\small
 \begin{itemize}
-  \item{Foof!}
+  \item{goal: share useful fault events across center, to record events
+       "of interest" in job DB, and enable FT runtimes}
+  \item{CIFTS FTB-API layered upon comms event PUB-SUB}
+  \item{fault gateway to publish fault events eternally, and\\
+	subscribe to select external fault events.}
+  \item{leverage FTB-API support in major MPIs, etc.}
+  \item{fault events can be issued directly,\\
+	or reduced via plugins, then issued}
+  \item{internal $+$ subscribed external faults logged to job DB}
+  \item{faults can affect resource health in res DB via plugins}
 \end{itemize}
 }\end{slide}
 % ==========================================================================
 \begin{slide}{Enterprise monitoring system (external)}{\small
+\begin{minipage}[b]{0.55\linewidth}
 \begin{itemize}
-  \item{Foof!}
+  \item{\ngrm\ replaces other compute node data collection}
+  \item{thus must interface with existing enterprise monitoring}
+\end{itemize}
+\end{minipage}
+\begin{minipage}[b]{0.40\linewidth}
+\begin{center}
+\fbox{\includegraphics[scale=0.05]{mon_iface_snmp}}
+\end{center}
+\end{minipage}
+\hfill
+\begin{itemize}
+  \item{SNMP gateway access to res DB}
+  \item{actionable health problems land in res DB eventually}
+  \item{some could be published live, if necessary}
+  \item{avoid excessive polling: GETBULK, then TRAP}
+  \item{\ngrm\ base MIB and extension MIB's}
 \end{itemize}
 }\end{slide}
 % ==========================================================================
-\begin{slide}{Session Overview}{\small
+\begin{slide}{Session Agenda}{\small
 \begin{itemize}
   \item[\S1-4]{{\gray {\em overview} (Jim)}}
   \item[\S5]{{\gray {\em comms framework} (Jim)}}
