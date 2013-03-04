@@ -50,10 +50,10 @@ We expect to address your questions and comments as we go.
   \item{extreme scalability}
   \item{low noise}
   \item{fault tolerance}
-  \item{heterogeneity (GPUs, FPGA, special nodes)}
-  \item{new resource types (power, I/O)}
-  \item{code devel/debug complexity}
+  \item{heterogeneity (GPUs, FPGA, flash, special nodes)}
+  \item{new resource types (power, I/O bandwidth)}
   \item{new workloads (high job throughput, UQ, exascale)}
+  \item{code devel/debug complexity}
 \end{itemize}
 Failure to adapt will harm user productivity.
 }\end{slide}
@@ -63,9 +63,9 @@ We think not.
 \begin{itemize}
   \item{older paradigm: monolithic controller, node-scheduled}
   \item{minimal runtime support (env vars, libslurm, libpmi, MPIR)}
+  \item{need center-wide RM to manage simulation ensembles, I/O, viz, etc}
   \item{scalability limitations}
   \item{comprehensive redesign overdue}
-  \item{need center-wide RM to manage simulation ensembles, I/O, viz, etc}
 \end{itemize}
 }\end{slide}
 % ==========================================================================
@@ -113,8 +113,8 @@ We think not.
     \item{child empowerment rule}
     \item{parental consent rule}
   \end{itemize}
-  \item{generalized resource}
   \item{resource allocation elasticity}
+  \item{generalized resource}
   \item{common scalable infrastructure}
   \item{self-hosting}
   \item{lightweight virtualization}
@@ -540,7 +540,6 @@ Components:
   \item{CIFTS FTB-API layered upon comms event PUB-SUB}
   \item{fault gateway to publish fault events eternally, and\\
 	subscribe to select external fault events.}
-  \item{leverage FTB-API support in major MPIs, etc.}
   \item{fault events can be issued directly,\\
 	or reduced via plugins, then issued}
   \item{internal $+$ subscribed external faults logged to job DB}
