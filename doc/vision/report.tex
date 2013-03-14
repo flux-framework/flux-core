@@ -267,9 +267,6 @@ With this approach, file system servers such as Lustre clusters,
 and visualization and serial batch systems can be aggregated
 with compute clusters into one management domain. Hence,
 our RM can make better global scheduling decisions. 
-Further, dedicated interactive nodes will be unnecessary in the new system, as it
-will be possible to allocate interactive environments on demand from the
-global pool of resources.
 
 With integrated, site-wide monitoring, it becomes easier
 for the new paradigm to associate global Reliability, Availability and Serviceability~(RAS) 
@@ -289,10 +286,14 @@ and instead can be viewed as an arbitrary collection of resources, part of
 a larger system, that happens to be attached to a single interconect domain
 or that have other similar characteristics.
 A cluster downtime, formerly viewed as a period of unavailability,
-thus can be viewed in the new paradigm as a period of degraded performance.
+can be viewed in the new paradigm as a period of degraded performance.
 Through lightweight virtualization, users obtain a degree of independence
 from system software updates, which in some cases can quietly roll out
 across the center between jobs with minimal impact.
+As the new paradigm embraces heterogeneity within the larger system,
+new resources can be purchased and added on, as dictated by demand,
+without the need to build a standalone cluster entity, separately named
+and managed, for every new type of hardware introduced.
 In short, system administration activities can take place in a more
 centralized, less visible manner such that they are no longer perceived
 by users as at odds with their productivity.

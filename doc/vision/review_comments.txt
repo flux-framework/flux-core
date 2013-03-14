@@ -47,25 +47,33 @@ Comments collected from reviewers:
   though.  As discussed in the meeting there are still system administration
   benefits.  I tried to capture them in the following replacement paragraph:
 
-    This paradigm also has many possible advantages for system
-    administration.  The resource inventory for the center is managed
-    from a central point and contains details that can drive center-wide
-    configuration management.  A "cluster" is diminished as a primary,
-    user-facing data center entity and instead can be viewed as an arbitrary
-    collection of resources, part of a larger system, that happens to be
-    attached to a single interconect domain or that have other similar
-    characteristics.  A cluster downtime, formerly viewed as a period of
-    unavailability, thus can be viewed in the new paradigm as a period
-    of degraded performance.  Through lightweight virtualization, users
-    obtain a degree of independence from system software updates, which
-    in some cases can quietly roll out across the center between jobs with
-    minimal impact.  In short, system administration activities can take
-    place in a more centralized, less visible manner such that they are
-    no longer perceived by users as at odds with their productivity.
+  This paradigm also has many possible advantages for system administration.
+  The resource inventory for the center is managed from a central point
+  and contains details that can drive center-wide configuration management.
+  A "cluster" is diminished as a primary, user-facing data center entity
+  and instead can be viewed as an arbitrary collection of resources, part of
+  a larger system, that happens to be attached to a single interconect domain
+  or that have other similar characteristics.
+  A cluster downtime, formerly viewed as a period of unavailability,
+  can be viewed in the new paradigm as a period of degraded performance.
+  Through lightweight virtualization, users obtain a degree of independence
+  from system software updates, which in some cases can quietly roll out
+  across the center between jobs with minimal impact.
+  As the new paradigm embraces heterogeneity within the larger system,
+  new resources can be purchased and added on, as dictated by demand,
+   without the need to build a standalone cluster entity, separately named
+  and managed, for every new type of hardware introduced.
+  In short, system administration activities can take place in a more
+  centralized, less visible manner such that they are no longer perceived
+  by users as at odds with their productivity.
 
 * Chris: Do you really want to say that dedicated interactive nodes
   will be unnecessary (under center as a cluster) since users will have
   to login to NGRM to request (custom) interactive access somehow.
+
+  (Jim) Right, I've dropped that sentence, and I hope I captured in
+  the above sys admin paragraph that every new "cluster", big or small,
+  added to the center need not carry with it a set of login nodes.
 
 * Chris: Due to the resource/job/user db persistence model (reaped at end
   of job) does a job that crashes loose too much data?  Should there be
