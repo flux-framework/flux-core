@@ -18,7 +18,7 @@ Slides were presented:
 
 Comments collected from reviewers:
 
-* WRAP section uses different terminology than other sections
+* Kim: WRAP section uses different terminology than other sections
   and is hard to get through.
 
   (Jim) added margin note to remind us to address this as time permits.
@@ -38,6 +38,30 @@ Comments collected from reviewers:
 
 * Kim/others: The system administration paragraph at the end of Center
   as a Cluster is not well supported by the rest of the document.
+
+  (Jim) Yes this paragraph was left over from an earlier plan that
+  included a hierarchical network block device for managing root file
+  systems and other read-only data center-wide.  That would have achieved
+  provenance and launch scalablility goals; however, we needed to reign
+  in NGRM's scope so it was removed.  System administration benefits remain
+  though.  As discussed in the meeting there are still system administration
+  benefits.  I tried to capture them in the following replacement paragraph:
+
+    This paradigm also has many possible advantages for system
+    administration.  The resource inventory for the center is managed
+    from a central point and contains details that can drive center-wide
+    configuration management.  A "cluster" is diminished as a primary,
+    user-facing data center entity and instead can be viewed as an arbitrary
+    collection of resources, part of a larger system, that happens to be
+    attached to a single interconect domain or that have other similar
+    characteristics.  A cluster downtime, formerly viewed as a period of
+    unavailability, thus can be viewed in the new paradigm as a period
+    of degraded performance.  Through lightweight virtualization, users
+    obtain a degree of independence from system software updates, which
+    in some cases can quietly roll out across the center between jobs with
+    minimal impact.  In short, system administration activities can take
+    place in a more centralized, less visible manner such that they are
+    no longer perceived by users as at odds with their productivity.
 
 * Chris: Do you really want to say that dedicated interactive nodes
   will be unnecessary (under center as a cluster) since users will have

@@ -281,19 +281,21 @@ consider the scheduling of I/O along with computation. In combination with
 I/O forwarding software, our RM could easily set up unique I/O forwarding
 topologies for each job.
 
-This paradigm also has many advantages for system administration.
-The system management overhead currently scales with the number of clusters.
-But in this paradigm, per-cluster services can be aggregated into
-site-wide services to reduce the overhead.
-For example, each cluster at LLNL has a pair of management
-nodes that are bootstrapped from scratch with an OS installation from DVD,
-and when system software is updated on that cluster, a downtime is
-scheduled during which the workload sits idle and the responsible system
-administrator performs a sequence of steps. Under the new paradigm, the
-number of systems that have to be brought up from scratch will be
-greatly reduced, and administrator-orchestrated downtimes for software
-updates will be eliminated. 
-
+This paradigm also has many possible advantages for system administration.
+The resource inventory for the center is managed from a central point
+and contains details that can drive center-wide configuration management.
+A {\em cluster} is diminished as a primary, user-facing data center entity
+and instead can be viewed as an arbitrary collection of resources, part of
+a larger system, that happens to be attached to a single interconect domain
+or that have other similar characteristics.
+A cluster downtime, formerly viewed as a period of unavailability,
+thus can be viewed in the new paradigm as a period of degraded performance.
+Through lightweight virtualization, users obtain a degree of independence
+from system software updates, which in some cases can quietly roll out
+across the center between jobs with minimal impact.
+In short, system administration activities can take place in a more
+centralized, less visible manner such that they are no longer perceived
+by users as at odds with their productivity.
 
 \paragraph{Diverse Compute Resources:}
 The traditional paradigm has solely focused on node- and/or CPU-centric
