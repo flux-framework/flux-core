@@ -101,6 +101,9 @@ Comments collected from reviewers:
 
 * Chris: Expand PGM acronym (in 0MQ discussion) and define.
 
+  (Jim) Expanded to "Pragmatic General Multicast (PGM) [RFC citation],
+  a reliable multicast transport protocol,..."
+
 * Chris: In shared TBON (comms), be careful that user contributed traffic
   e.g. stdio doesn't starve out system control messages.  Also avoid situation
   encountered with srun where putting srun to sleep causes hierarchical
