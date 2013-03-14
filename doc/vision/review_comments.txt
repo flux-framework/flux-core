@@ -83,6 +83,15 @@ Comments collected from reviewers:
   Linux-specific, i.e. would requiring it as part of the design
   inhibit portability to non-Linux systems e.g. exascale?
 
+  (Jim) Added your question as a margin comment, with the following
+  response appended:
+
+  Portability to non-Linux systems was not a goal of the project,
+  however OS-level virtualization is available in FreeBSD jails, Solaris
+  zones, and AIX WPARS.  It will likely be implemented through NGRM plugins
+  allowing for some portability or replacement with other container methods
+  such as full virtualization, chroot jails, etc.
+
 * Chris: Is the root of the tree in the CMB design a single point of
   failure?
 
