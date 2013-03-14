@@ -10,7 +10,9 @@ When a job terminates, the job's instance terminates and resources
 return to the parent instance.
 
 The communication framework supports this architecture by
-establishing a {\em comms session} to contain each \ngrm\ instance
+establishing a {\em comms session}\footnote{{\em Comms} is a shorthand
+for \ngrm\ Communications Framework and is not related to MPI communicators.}
+to contain each \ngrm\ instance
 and provide a foundation for the distributed components of \ngrm\ to
 be built upon.
 The framework enables secure, scalable communication
@@ -556,6 +558,9 @@ locations.
 The fault tolerance strategy both for the CMB and the reduction network
 is rather poorly developed in the description thus far.
 At minimum it needs to be called out in the WBS as a significant R\&D activity.}
+\marginpar{\tiny {\bf kim-review:}
+Fault tolerance should be more fully designed in the comms
+layer before moving forward.}
 \fi
 The CMB provides notification messages when nodes cease to respond
 so that other services can manage failures.
