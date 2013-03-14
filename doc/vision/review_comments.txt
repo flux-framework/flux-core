@@ -129,8 +129,8 @@ Comments collected from reviewers:
 * Chris: There should be multiple levels of preemptability.
   Example: ?
 
-* Chris: Why do we need a hierarchy of LWP's?  Are we reinventing
-  the same stuff we already built for jobs?  Can't we just do LWP stuff
+* Chris: Why do we need a hierarchy of LWJ's?  Are we reinventing
+  the same stuff we already built for jobs?  Can't we just do LWJ stuff
   with jobs?
 
 * Jeff: (data provenance) To do this 'right', each job would have to have
@@ -155,6 +155,10 @@ Comments collected from reviewers:
   Just wanted to make sure that was intended, or that I'm experiencing pilot
   error.
 
+  (Jim) We moved everything to github and removed the confluence space
+  since our intent is to make this a multi-lab project.  Everything that
+  we had in confluence was incorporated into the vision document.
+
 * Jeff: (notification) MyLC and the new HM will both be providing
   notifications for various events, so we need to develop a centralized
   mechanism that can support this and make sure NGRM can be plugged-in as
@@ -166,6 +170,15 @@ Comments collected from reviewers:
   attending discussions you guys have, and someone from your team attending
   Tim's meetings. Certainly the requirements should be shared between the two
   efforts. This leverage could be a nice win.
+
+  (Jim) There has already been some cross contact between the two projects.
+  The NGRM monitoring is designed to interface to an external Splunk-like
+  log database, and a more traditional SNMP enterprise monitoring system. 
+  Hoepfully between the two we have the interface to CAVE covered.
+  NGRM wants to replace all compute node resident monitoring in order to
+  control the noise, so we need to be sure that if CAVE requires enhancements
+  to current compute node data collection, we work on that together to
+  minimize code that will be thrown out when NGRM is deployed.
 
 * Jeff: (repositories) Resource Inventory - We as a center need one go-to
   place to find resource inventory information. We have multiple web pages,
