@@ -109,11 +109,14 @@ Comments collected from reviewers:
   encountered with srun where putting srun to sleep causes hierarchical
   communication to get backlogged.
 
-* Chris: Both powerful and user friendly?  Pick one (gratuitous snarky
-  comment from RM overview section)
+* Chris: Both powerful and user friendly?
 
-* Does DAT stand for "Dedicated Application Time" or "Dedicated Application
-  Test"?
+  (Jim) Duly noted.
+
+* Does DAT stand for "Dedicated Application Time" or "Test"?
+
+  (Jim) https://computing.llnl.gov/tutorials/lc_resources/ uses
+  DAT = Dedicated Application Time.  I updated the document to use "Time".
 
 * Chris: Why are "job prioritization" and "job scheduling" independent
   activities?  Shouldn't prioritization just be one aspect of scheduling?
