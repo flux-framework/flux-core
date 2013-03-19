@@ -79,6 +79,9 @@ Comments collected from reviewers:
   of job) does a job that crashes loose too much data?  Should there be
   updates pushed toward the persistent store while a job is running?
 
+  (Jim) See "6.5.5 Job Fault Tolerance".  Design is TBD but some
+  possibilities for resilience of the databases are briefly discussed.
+
 * Chris: Is the "lightweight virtualization" / "virtual node" too
   Linux-specific, i.e. would requiring it as part of the design
   inhibit portability to non-Linux systems e.g. exascale?
@@ -95,9 +98,19 @@ Comments collected from reviewers:
 * Chris: Is the root of the tree in the CMB design a single point of
   failure?
 
+  (Jim) Added your question as a margin comment in the Fault Tolerance
+  under CMB architecture.  This is one of the issues that will have to
+  be addressed in our fault tolerance design for the CMB, a future work item.
+
 * Chris: Why should comms session forget parent's key?   Is a new
   session formed for each level of recursion or is there a single thing?
   Document seems to imply the latter.
+
+  (Jim) The high level concept is that the portion of the CMB running
+  on each node is associated with one session at a time.  It forgets the
+  parent context when it joins a child session.  However the parent retains
+  the context of its children so it can interact directly with a child node
+  if necessary, for example to reclaim resources from a hung session.
 
 * Chris: Expand PGM acronym (in 0MQ discussion) and define.
 
@@ -109,9 +122,7 @@ Comments collected from reviewers:
   encountered with srun where putting srun to sleep causes hierarchical
   communication to get backlogged.
 
-* Chris: Both powerful and user friendly?
-
-  (Jim) Duly noted.
+  (Jim) Added as a comment in section 5.4 Reduction Network.
 
 * Does DAT stand for "Dedicated Application Time" or "Test"?
 
@@ -139,17 +150,28 @@ Comments collected from reviewers:
   that is just an auto-incrementing id, plus the 16-byte uuid that truly
   is unique?
 
+  (Jim) Added your comment as a margin comment in sec 6.3.3.
+
 * Jeff: (data provenance) There have been efforts in the past to maintain
   provenance for simulations, but the ones that didn't fail were cumbersome.
   Having some of these features built into the RM is pretty cool and could be
   one of the nice value-added features in your selling points slide.
 
+  (Jim) Added your comment as a margin comment in sec 2 under Data Provenance
+  and Reproduceability.
+
 * Jeff: (data provenance) If users can add their own data to the provenance
   database, how is long-term storage managed, especially if users decide
   they want to store a movie or data file as part of the permanent record?
 
+  (Jim) Added your question as a margin comment in sec 6.3.3.
+
 * Jeff: (project questions) Will the different thrust areas be developed
   in parallel by different people?
+
+  (Jim) That could be done with some co-design between thrust areas,
+  and a project-wide review process, however the actual plan (including
+  staffing) is up in the air right now.
 
 * Jeff: (project questions) I can no longer see/find your confluence space.
   Just wanted to make sure that was intended, or that I'm experiencing pilot
@@ -165,20 +187,29 @@ Comments collected from reviewers:
   an event source. (Sounds like the pub-sub model Mark described would work
   nicely.)
 
+  (Jim) Added your comment as a margin comment in the doc, with the following
+  responses appended:
+  - FIXME: This section describes how NGRM can act as an SNMP event source
+    (trap) and provide SNMP state transfer (getbulk) to external monitoring.
+    Missing is the ability to go the other way, e.g. get events and state
+    on externally monitored objects.
+  - FIXME: Other external protocols could be supported by other gateway
+    implementations.  The gateway is just a thin layer between resource
+    db and external protocol engine.
+
 * Jeff: (monitoring) How do we make sure that the new HM (called "CAVE")
   will tie in nicely with NGRM's monitoring needs? Maybe start with Tim
   attending discussions you guys have, and someone from your team attending
   Tim's meetings. Certainly the requirements should be shared between the two
   efforts. This leverage could be a nice win.
 
-  (Jim) There has already been some cross contact between the two projects.
-  The NGRM monitoring is designed to interface to an external Splunk-like
-  log database, and a more traditional SNMP enterprise monitoring system. 
-  Hoepfully between the two we have the interface to CAVE covered.
-  NGRM wants to replace all compute node resident monitoring in order to
-  control the noise, so we need to be sure that if CAVE requires enhancements
-  to current compute node data collection, we work on that together to
-  minimize code that will be thrown out when NGRM is deployed.
+  (Jim) Agreed.  NGRM wants to replace all compute node resident data
+  capture in order to control the noise, so we need to work with the
+  CAVE project to plan for a transition from current data capture (skummee,
+  cerebro) to NGRM.  If CAVE needs to drive new data capture before NGRM
+  is ready, then we ought to work together on interim methods that minimize
+  code waste.  Tim and I have communicated about this and he has a copy
+  of our document's monitoring section so I believe we are synced.
 
 * Jeff: (repositories) Resource Inventory - We as a center need one go-to
   place to find resource inventory information. We have multiple web pages,

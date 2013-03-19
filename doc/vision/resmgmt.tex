@@ -294,6 +294,18 @@ roles, accounts, qualities of service, and so on.
 
 \subsubsection{Job Repository}
 
+\ifcomments
+\marginpar{\tiny {\bf jeff-review:}
+If users can add their own data to the provenance database,
+how is long-term storage managed, especially if users decide
+they want to store a movie or data file as part of the permanent record?
+{\bf jeff-review:}
+To do (data provenance) "right", each job would have to have
+a true UUID, which is an ugly thing to work with for humans. So maybe
+there'd be a regular job id that's local to the domain (cz, rz, etc.)
+that is just an auto-incrementing id, plus the 16-byte uuid that truly
+is unique?}
+\fi
 The \emph{job repository} is the final global and persistent
 data store in the \ngrm\ system. This top-level database is a
 historical record of all jobs that have completed in the

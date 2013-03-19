@@ -270,6 +270,23 @@ the job.  It is stored in the job database.
 
 \subsection{Enterprise Monitoring Interface}
 
+\ifcomments
+\marginpar{\tiny {\bf jeff-review:}
+MyLC and the new HM will both be providing
+notifications for various events, so we need to develop a centralized
+mechanism that can support this and make sure \ngrm\ can be plugged-in as
+an event source. (Sounds like the pub-sub model Mark described would work
+nicely.
+{\bf jg:}
+FIXME: This section describes how \ngrm\ can act as an SNMP event source
+(trap) and provide SNMP state transfer (getbulk) to external monitoring.
+Missing is the ability to go the other way, e.g. get events and state
+on externally monitored objects.
+{\bf jg:}
+FIXME: Other external protocols could be supported by other gateway
+implementations.  The gateway is just a thin layer between resource db
+and external protocol engine.}
+\fi
 Site operations centers and system administrators use
 monitoring to track problems that may require someone's intervention, and
 to gain insight into how the systems they are responsible for are being used.

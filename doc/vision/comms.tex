@@ -280,6 +280,13 @@ be created on demand as virtual nodes.}
 \end{figure}
 
 \paragraph{Architecture}
+\ifcomments
+\marginpar{\tiny {\bf chris-review:}
+Is the root of the tree in the CMB design a single point of failure?
+{\bf jg:} This is one of the issues that will need to be addressed
+in the fault tolerance design for the CMB, a future work item.}
+\fi
+The per-job scheduling trigger probably has insufficient emphasis here.
 The CMB is a distributed service with nodes interconnected in a tree-based
 topology.
 A distinguished {\em control node} serves as the heart of the CMB
@@ -528,6 +535,13 @@ services sharing the reduction network and to implement application-specific
 addressing, for example to address a subset of back-end processes.
 
 \paragraph{Upstream communication}
+\ifcomments
+\marginpar{\tiny {\bf chris-review:}
+Be careful that user contributed traffic e.g. stdio doesn't starve out
+system control messages.  Also avoid situation encountered with srun
+where putting srun to sleep causes hierarchical communication to get
+backlogged.}
+\fi
 Communication from the back-ends to the front-end is the main function
 of the reduction network.  It is unicast-based.  Scalability is obtained
 by reductions that are performed by internal processes, for example
