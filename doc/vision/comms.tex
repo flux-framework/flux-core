@@ -217,6 +217,19 @@ only limited protocol evolution without recompilation.  It has relatively
 fewer language bindings than JSON but is space-efficient and fast.
 Depending on the application either may be appropriate.
 
+\ifcomments
+\marginpar{\tiny {\bf chris-review:}
+Why should comms session forget parent's key?   Is a new
+session formed for each level of recursion or is there a single thing?
+Document seems to imply the latter.
+{\bf jg:}
+The high level concept is that the portion of the CMB running
+on each node is associated with one session at a time.  It forgets the
+parent context when it joins a child session.  However the parent retains
+the context of its children so it can interact directly with a child node
+if necessary, for example to reclaim resources from a hung session.}
+\fi
+
 Message integrity and privacy can be obtained using either a session
 security context or via MUNGE~\cite{MUNGE}.
 Each comms session is allocated a {\em session key} by its parent

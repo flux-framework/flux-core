@@ -240,6 +240,17 @@ in more detail in the sections below.
 
 \subsubsection{Resource Inventory}
 
+\ifcomments
+\marginpar{\tiny {\bf jeff-review:}
+We as a center need one go-to
+place to find resource inventory information. We have multiple web pages,
+spreadsheets, and files that are being maintained separately right
+now. It'd be nice if your resource inventory DB was the central place
+for this info -- what are the resources in the center, what are their
+properties, etc. I love the idea of being able to subscribe to this
+repo to be alerted of changes -- much better than the current model
+where someone has to notice or remember a change was made.}
+
 As noted above, the Resource Inventory is a global, persistent
 database which acts as the top-level configuration for all
 jobs within the \ngrm\ system. The resource inventory itself
@@ -278,6 +289,9 @@ subscribe to the resource inventory to get updates to resources,
 such as resources that are drained or modified.
 
 \subsubsection{User Repository}
+\ifcomments
+\marginpar{\tiny {\bf jeff-review:}
+Any advantage/possibility in leveraging LC's LDAP for this?}
 
 Since \ngrm\ is a software system that will be used to provide
 \emph{users} with access to compute resources, it will require
@@ -304,8 +318,13 @@ To do (data provenance) "right", each job would have to have
 a true UUID, which is an ugly thing to work with for humans. So maybe
 there'd be a regular job id that's local to the domain (cz, rz, etc.)
 that is just an auto-incrementing id, plus the 16-byte uuid that truly
-is unique?}
+is unique?
+{\bf jeff-review:}
+Currently SLURM bogs down if a person does an
+extensive long-running query (sreport) against the job database; how
+would your design avoid this?}
 \fi
+
 The \emph{job repository} is the final global and persistent
 data store in the \ngrm\ system. This top-level database is a
 historical record of all jobs that have completed in the
@@ -741,6 +760,14 @@ or its host goes down should be part of a routine test plan.
 
 \subsection{Job Scheduler}
 
+\ifcomments
+\marginpar{\tiny {\bf chris-review:}
+Plugins described in scheduling section seem like they are
+each pigeon-holed for a particular function, compared to SPANK where
+one plugin is called in different contexts to provide a suite of
+related functions.}
+\fi
+
 The \ngjs\ is responsible for scheduling computing resources to users'
 jobs.  Users submit to the scheduler requests for resources to run
 their job.  The scheduler implements management's policy to decide
@@ -802,6 +829,11 @@ The following is the most definitive list of basic scheduling
 requirements.  The job and resource repositories as well as the job
 submission facility are external to the \ngjs.
 
+\ifcomments
+\marginpar{\tiny {\bf chris-review:}
+Why are "job prioritization" and "job scheduling" independent
+activities?  Shouldn't prioritization just be one aspect of scheduling?}
+
 \begin{itemize}
   \item Prioritize each job
   \item Schedule each job based on its resource requirements
@@ -854,6 +886,11 @@ in real-time.  The scheduler must honor multiple resource requests
 simultaneously as it seeks to allocate cores, GPUs, nodes, switches,
 bandwidth, power, etc.
 
+\ifcomments
+\marginpar{\tiny {\bf chris-review:}
+There should be multiple levels of preemptability.}
+\fi
+If users can add their own data to the provenance database,
 Here too, the system shall offer a plugin framework to support custom
 algorithms for scheduling jobs to compute resources.  An essential
 scheduling algorithm which must be included is backfill scheduling

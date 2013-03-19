@@ -21,31 +21,22 @@ Comments collected from reviewers:
 * Kim: WRAP section uses different terminology than other sections
   and is hard to get through.
 
-  (Jim) added margin note to remind us to address this as time permits.
+  - margin comment added to sec 8
 
 * Martin: The term "comms" will be confusing to the MPI community.
 
-  (Jim) retained terminology but added footnote to disambiguate.
-  I don't think we'll be exposing this layer directly to users or even
-  MPI runtime implementors.  Dong's WRAP layer will do that.
+  - retained terminology but added footnote to disambiguate.
+    This layer won't be exposed to MPI runtimes or users (see WRAP).
 
 * Kim: Fault tolerance should be more fully designed in the comms layer
   before moving forward.
 
-  (Jim) Agreed.  This will be a non-trivial work item called out in our
-  project plan.  Added to the margin note already there at the end of the
-  comms section to emphasize this.
+  - margin comment added to sec 5.4
 
 * Kim/others: The system administration paragraph at the end of Center
   as a Cluster is not well supported by the rest of the document.
 
-  (Jim) Yes this paragraph was left over from an earlier plan that
-  included a hierarchical network block device for managing root file
-  systems and other read-only data center-wide.  That would have achieved
-  provenance and launch scalablility goals; however, we needed to reign
-  in NGRM's scope so it was removed.  System administration benefits remain
-  though.  As discussed in the meeting there are still system administration
-  benefits.  I tried to capture them in the following replacement paragraph:
+  - paragraph replaced with:
 
   This paradigm also has many possible advantages for system administration.
   The resource inventory for the center is managed from a central point
@@ -71,78 +62,82 @@ Comments collected from reviewers:
   will be unnecessary (under center as a cluster) since users will have
   to login to NGRM to request (custom) interactive access somehow.
 
-  (Jim) Right, I've dropped that sentence, and I hope I captured in
-  the above sys admin paragraph that every new "cluster", big or small,
-  added to the center need not carry with it a set of login nodes.
+  - dropped sentence.
 
 * Chris: Due to the resource/job/user db persistence model (reaped at end
   of job) does a job that crashes loose too much data?  Should there be
   updates pushed toward the persistent store while a job is running?
 
-  (Jim) See "6.5.5 Job Fault Tolerance".  Design is TBD but some
-  possibilities for resilience of the databases are briefly discussed.
+  - See "6.5.5 Job Fault Tolerance".  Design is TBD but some possibilities
+    for resilience of the databases are briefly discussed.
 
 * Chris: Is the "lightweight virtualization" / "virtual node" too
   Linux-specific, i.e. would requiring it as part of the design
   inhibit portability to non-Linux systems e.g. exascale?
 
-  (Jim) Added your question as a margin comment, with the following
-  response appended:
-
-  Portability to non-Linux systems was not a goal of the project,
-  however OS-level virtualization is available in FreeBSD jails, Solaris
-  zones, and AIX WPARS.  It will likely be implemented through NGRM plugins
-  allowing for some portability or replacement with other container methods
-  such as full virtualization, chroot jails, etc.
+  - margin comment added to sec 3.2, also:
+  - Portability to non-Linux systems was not a goal of the project,
+    however OS-level virtualization is available in FreeBSD jails, Solaris
+    zones, and AIX WPARS.  It will likely be implemented through NGRM plugins
+    allowing for some portability or replacement with other container methods
+    such as full virtualization, chroot jails, etc.
 
 * Chris: Is the root of the tree in the CMB design a single point of
   failure?
 
-  (Jim) Added your question as a margin comment in the Fault Tolerance
-  under CMB architecture.  This is one of the issues that will have to
-  be addressed in our fault tolerance design for the CMB, a future work item.
+  - margin comment added to sec 5.3, also:
+  - This is one of the issues that will have to be addressed in
+    our fault tolerance design for the CMB, a future work item.
 
 * Chris: Why should comms session forget parent's key?   Is a new
   session formed for each level of recursion or is there a single thing?
   Document seems to imply the latter.
 
-  (Jim) The high level concept is that the portion of the CMB running
-  on each node is associated with one session at a time.  It forgets the
-  parent context when it joins a child session.  However the parent retains
-  the context of its children so it can interact directly with a child node
-  if necessary, for example to reclaim resources from a hung session.
+  - margin comment added to sec 5.2, also:
+  - The high level concept is that the portion of the CMB running
+    on each node is associated with one session at a time.  It forgets the
+    parent context when it joins a child session.  However the parent retains
+    the context of its children so it can interact directly with a child node
+    if necessary, for example to reclaim resources from a hung session.
 
 * Chris: Expand PGM acronym (in 0MQ discussion) and define.
 
-  (Jim) Expanded to "Pragmatic General Multicast (PGM) [RFC citation],
-  a reliable multicast transport protocol,..."
+  - Expanded to "Pragmatic General Multicast (PGM) [RFC citation],
+    a reliable multicast transport protocol,..."
 
 * Chris: In shared TBON (comms), be careful that user contributed traffic
   e.g. stdio doesn't starve out system control messages.  Also avoid situation
   encountered with srun where putting srun to sleep causes hierarchical
   communication to get backlogged.
 
-  (Jim) Added as a comment in section 5.4 Reduction Network.
+  - margin comment added to sec 5.4
 
 * Does DAT stand for "Dedicated Application Time" or "Test"?
 
-  (Jim) https://computing.llnl.gov/tutorials/lc_resources/ uses
-  DAT = Dedicated Application Time.  I updated the document to use "Time".
+  - updated two occurrences to use "Time" per
+    https://computing.llnl.gov/tutorials/lc_resources/
 
 * Chris: Why are "job prioritization" and "job scheduling" independent
   activities?  Shouldn't prioritization just be one aspect of scheduling?
+
+  - margin comment added to sec 6.6.2
 
 * Chris: Plugins described in scheduling section seem like they are
   each pigeon-holed for a particular function, compared to SPANK where
   one plugin is called in different contexts to provide a suite of
   related functions.
 
+  - margin comment added to sec 6.6
+
 * Chris: There should be multiple levels of preemptability.
-  Example: ?
+
+  - margin comment added to sec 6.6.2
 
 * Chris: Why do we need a hierarchy of LWJ's?  Are we reinventing
   the same stuff we already built for jobs?  Can't we just do LWJ stuff
   with jobs?
+
+  - margin comment added to sec 8.1
 
 * Jeff: (data provenance) To do this 'right', each job would have to have
   a true UUID, which is an ugly thing to work with for humans. So maybe
@@ -150,36 +145,35 @@ Comments collected from reviewers:
   that is just an auto-incrementing id, plus the 16-byte uuid that truly
   is unique?
 
-  (Jim) Added your comment as a margin comment in sec 6.3.3.
+  - margin comment added to sec 6.3.3
 
 * Jeff: (data provenance) There have been efforts in the past to maintain
   provenance for simulations, but the ones that didn't fail were cumbersome.
   Having some of these features built into the RM is pretty cool and could be
   one of the nice value-added features in your selling points slide.
 
-  (Jim) Added your comment as a margin comment in sec 2 under Data Provenance
-  and Reproduceability.
+  - margin comment added to sec 2
 
 * Jeff: (data provenance) If users can add their own data to the provenance
   database, how is long-term storage managed, especially if users decide
   they want to store a movie or data file as part of the permanent record?
 
-  (Jim) Added your question as a margin comment in sec 6.3.3.
+  - margin comment added to sec 6.3.3
 
 * Jeff: (project questions) Will the different thrust areas be developed
   in parallel by different people?
 
-  (Jim) That could be done with some co-design between thrust areas,
-  and a project-wide review process, however the actual plan (including
-  staffing) is up in the air right now.
+  - could be done with some co-design between thrust areas, and a
+    project-wide review process, however the actual plan (including
+    staffing) is up in the air right now.
 
 * Jeff: (project questions) I can no longer see/find your confluence space.
   Just wanted to make sure that was intended, or that I'm experiencing pilot
   error.
 
-  (Jim) We moved everything to github and removed the confluence space
-  since our intent is to make this a multi-lab project.  Everything that
-  we had in confluence was incorporated into the vision document.
+  - We moved everything to github and removed the confluence space
+    since our intent is to make this a multi-lab project.  Everything that
+    we had in confluence was incorporated into the vision document.
 
 * Jeff: (notification) MyLC and the new HM will both be providing
   notifications for various events, so we need to develop a centralized
@@ -187,8 +181,7 @@ Comments collected from reviewers:
   an event source. (Sounds like the pub-sub model Mark described would work
   nicely.)
 
-  (Jim) Added your comment as a margin comment in the doc, with the following
-  responses appended:
+  - margin comment added to sec 7.4.  Also added:
   - FIXME: This section describes how NGRM can act as an SNMP event source
     (trap) and provide SNMP state transfer (getbulk) to external monitoring.
     Missing is the ability to go the other way, e.g. get events and state
@@ -203,13 +196,13 @@ Comments collected from reviewers:
   Tim's meetings. Certainly the requirements should be shared between the two
   efforts. This leverage could be a nice win.
 
-  (Jim) Agreed.  NGRM wants to replace all compute node resident data
-  capture in order to control the noise, so we need to work with the
-  CAVE project to plan for a transition from current data capture (skummee,
-  cerebro) to NGRM.  If CAVE needs to drive new data capture before NGRM
-  is ready, then we ought to work together on interim methods that minimize
-  code waste.  Tim and I have communicated about this and he has a copy
-  of our document's monitoring section so I believe we are synced.
+  - Agreed.  NGRM wants to replace all compute node resident data
+    capture in order to control the noise, so we need to work with the
+    CAVE project to plan for a transition from current data capture (skummee,
+    cerebro) to NGRM.  If CAVE needs to drive new data capture before NGRM
+    is ready, then we ought to work together on interim methods that minimize
+    code waste.  Tim and I have communicated about this and he has a copy
+    of our document's monitoring section so I believe we are synced.
 
 * Jeff: (repositories) Resource Inventory - We as a center need one go-to
   place to find resource inventory information. We have multiple web pages,
@@ -220,9 +213,15 @@ Comments collected from reviewers:
   repo to be alerted of changes -- much better than the current model
   where someone has to notice or remember a change was made.
 
+  - margin comment added to sec 6.3.1
+
 * Jeff: (user repository) Any advantage/possibility in leveraging LC's LDAP
   for this?
+
+  - margin comment added to sec 6.3.2
 
 * Jeff: (job repository) Currently SLURM bogs down if a person does an
   extensive long-running query (sreport) against the job database; how
   would your design avoid this?
+
+  - margin comment added to sec 6.3.3
