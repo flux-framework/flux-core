@@ -35,6 +35,10 @@ int main (int argc, char **argv)
     int rc;
     int spawned = -1;
     int initialized = -1;
+    int length = 0;
+    char *kvsname;
+
+    /* initialize */
 
     rc = PMI_Initialized (&initialized);
     if (rc != PMI_SUCCESS)
@@ -49,6 +53,25 @@ int main (int argc, char **argv)
     if (rc != PMI_SUCCESS)
         errx ("PMI_Initialized", rc);
     assert (initialized == PMI_TRUE);
+
+    /* get kvsname */
+
+    rc = PMI_KVS_Get_name_length_max (&length);
+    if (rc != PMI_SUCCESS)
+        errx ("PMI_KVS_Get_name_length_max", rc);
+    kvsname = malloc (length);
+    if (kvsname == NULL) {
+        fprintf (stderr, "out of memory\n");
+        exit (1);
+    }
+
+    rc = PMI_KVS_Get_my_name (kvsname, length);
+    if (rc != PMI_SUCCESS)
+        errx ("PMI_KVS_Get_my_name", rc);
+    printf ("kvsname = %s\n", kvsname);
+    free (kvsname);
+
+    /* finalize */
 
     rc = PMI_Finalize ();
     if (rc != PMI_SUCCESS)

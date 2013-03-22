@@ -16,6 +16,8 @@
 #define PMI_TRUE 1
 #endif
 
+#define KVSNAME_MAXLEN  16
+
 typedef struct {
     int magic;
     int spawned;
@@ -24,9 +26,11 @@ typedef struct {
     int universe_size;
     int appnum;
 
-    redisContext *rctx;
     char *rhostname;
     int rport;
+    redisContext *rctx;
+
+    char kvsname[KVSNAME_MAXLEN];
 } pmi_ctx_t;
 #define PMI_CTX_MAGIC 0xcafefaad
 
@@ -54,12 +58,15 @@ int PMI_Init( int *spawned )
     ctx = malloc (sizeof (pmi_ctx_t));
     if (ctx == NULL)
         goto nomem;
+    memset (ctx, 0, sizeof (pmi_ctx_t));
     ctx->magic = PMI_CTX_MAGIC;
     ctx->spawned = PMI_FALSE;
     ctx->size = _env_getint ("SLURM_NTASKS", 0);
     ctx->rank = _env_getint ("SLURM_PROCID", 1);
     ctx->universe_size = _env_getint ("SLURM_NTASKS", 1);
     ctx->appnum = 0;
+    snprintf (ctx->kvsname, sizeof (ctx->kvsname), "job%d",
+                _env_getint ("SLURM_JOB_ID", 0));
     ctx->rhostname = _env_getstr ("SLURM_LAUNCH_NODE_IPADDR", "127.0.0.1");
     if (ctx->rhostname == NULL)
         goto nomem;
@@ -185,12 +192,22 @@ int PMI_Abort(int exit_code, const char error_msg[])
 
 int PMI_KVS_Get_my_name( char kvsname[], int length )
 {
-    return PMI_FAIL;
+    if (ctx == NULL)
+        return PMI_ERR_INIT;
+    assert (ctx->magic == PMI_CTX_MAGIC);
+    if (kvsname == NULL || length < strlen (ctx->kvsname) + 1)
+        return PMI_ERR_INVALID_ARG;
+    
+    strcpy (kvsname, ctx->kvsname);
+    return PMI_SUCCESS;
 }
 
 int PMI_KVS_Get_name_length_max( int *length )
 {
-    return PMI_FAIL;
+    if (length == NULL)
+        return PMI_ERR_INVALID_ARG;
+    *length = KVSNAME_MAXLEN;
+    return PMI_SUCCESS;
 }
 
 int PMI_KVS_Get_key_length_max( int *length )
