@@ -70,7 +70,6 @@ int main (int argc, char **argv)
     if (rc != PMI_SUCCESS)
         errx ("PMI_KVS_Get_my_name", rc);
     printf ("kvsname = %s\n", kvsname);
-    free (kvsname);
 
     /* put a key-val */
 
