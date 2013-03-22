@@ -37,6 +37,7 @@ int main (int argc, char **argv)
     int initialized = -1;
     int length = 0;
     char *kvsname;
+    char val[16];
 
     /* initialize */
 
@@ -70,6 +71,27 @@ int main (int argc, char **argv)
         errx ("PMI_KVS_Get_my_name", rc);
     printf ("kvsname = %s\n", kvsname);
     free (kvsname);
+
+    /* put a key-val */
+
+    rc = PMI_KVS_Put (kvsname, "answer", "rhubarb pie");
+    if (rc != PMI_SUCCESS)
+        errx ("PMI_KVS_Put", rc);
+    printf ("stored answer=rhubarb pie\n");
+
+    /* get it back */
+
+    rc = PMI_KVS_Get (kvsname, "answer", val, sizeof (val));
+    if (rc != PMI_SUCCESS)
+        errx ("PMI_KVS_Get", rc);
+    printf ("retrieved answer=%s\n", val);
+
+    /* try to get an unknown key */
+
+    rc = PMI_KVS_Get (kvsname, "foo", val, sizeof (val));
+    if (rc != PMI_SUCCESS && rc != PMI_FAIL)
+        errx ("PMI_KVS_Get", rc);
+    printf ("retrieved foo=%s\n", rc == PMI_SUCCESS ? val : "<undefined>");
 
     /* finalize */
 

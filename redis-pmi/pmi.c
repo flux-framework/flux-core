@@ -17,6 +17,8 @@
 #endif
 
 #define KVSNAME_MAXLEN  16
+#define KEY_MAXLEN      64
+#define VAL_MAXLEN      64
 
 typedef struct {
     int magic;
@@ -212,17 +214,56 @@ int PMI_KVS_Get_name_length_max( int *length )
 
 int PMI_KVS_Get_key_length_max( int *length )
 {
-    return PMI_FAIL;
+    if (length == NULL)
+        return PMI_ERR_INVALID_ARG;
+    *length = KEY_MAXLEN;
+    return PMI_SUCCESS;
 }
 
 int PMI_KVS_Get_value_length_max( int *length )
 {
-    return PMI_FAIL;
+    if (length == NULL)
+        return PMI_ERR_INVALID_ARG;
+    *length = VAL_MAXLEN;
+    return PMI_SUCCESS;
 }
 
+/* FIXME: ignoring max lengths of strings for now */
 int PMI_KVS_Put( const char kvsname[], const char key[], const char value[])
 {
-    return PMI_FAIL;
+    redisReply *rep;
+    int ret = PMI_FAIL;
+
+    if (ctx == NULL)
+        return PMI_ERR_INIT;
+    assert (ctx->magic == PMI_CTX_MAGIC);
+    if (kvsname == NULL || key == NULL || value == NULL)
+        return PMI_ERR_INVALID_ARG;
+    
+    rep = redisCommand (ctx->rctx, "SET %s:%s %s", ctx->kvsname, key, value);
+    if (rep == NULL) {
+        fprintf (stderr, "redisCommand: %s\n", ctx->rctx->errstr); /* FIXME */
+        /* FIXME: context cannot be reused */
+        return PMI_FAIL;
+    }
+    switch (rep->type) {
+        case REDIS_REPLY_STATUS:
+            //fprintf (stderr, "redisCommand: status reply: %s\n", rep->str);
+            ret = PMI_SUCCESS;
+            break;
+        case REDIS_REPLY_ERROR: /* FIXME */
+            fprintf (stderr, "redisCommand: error reply: %s\n", rep->str);
+            break;
+        case REDIS_REPLY_INTEGER:
+        case REDIS_REPLY_NIL:
+        case REDIS_REPLY_STRING:
+        case REDIS_REPLY_ARRAY:
+            fprintf (stderr, "redisCommand: unexpected reply type\n");
+            break;
+    }
+    freeReplyObject (rep);
+        
+    return ret;
 }
 
 int PMI_KVS_Commit( const char kvsname[] )
@@ -232,7 +273,48 @@ int PMI_KVS_Commit( const char kvsname[] )
 
 int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int length)
 {
-    return PMI_FAIL;
+    redisReply *rep;
+    int ret = PMI_FAIL;
+    char *p;
+
+    if (ctx == NULL)
+        return PMI_ERR_INIT;
+    assert (ctx->magic == PMI_CTX_MAGIC);
+    if (kvsname == NULL || key == NULL || value == NULL)
+        return PMI_ERR_INVALID_ARG;
+    
+    rep = redisCommand (ctx->rctx, "GET %s:%s", ctx->kvsname, key);
+    if (rep == NULL) {
+        fprintf (stderr, "redisCommand: %s\n", ctx->rctx->errstr); /* FIXME */
+        /* FIXME: context cannot be reused */
+        return PMI_FAIL;
+    }
+    switch (rep->type) {
+        case REDIS_REPLY_STATUS:
+            assert (rep->str != NULL);
+            fprintf (stderr, "redisCommand: status reply: %s\n", rep->str);
+            break;
+        case REDIS_REPLY_ERROR:
+            assert (rep->str != NULL);
+            fprintf (stderr, "redisCommand: error reply: %s\n", rep->str);
+            break;
+        case REDIS_REPLY_NIL: /* if key is unknown */
+            //fprintf (stderr, "redisCommand: nil reply\n");
+            break;
+        case REDIS_REPLY_STRING:
+            assert (rep->str != NULL);
+            p = strchr (rep->str, ':');
+            snprintf (value, length, p ? p + 1 : rep->str);
+            ret = PMI_SUCCESS;
+            break;
+        case REDIS_REPLY_INTEGER:
+        case REDIS_REPLY_ARRAY:
+            fprintf (stderr, "redisCommand: unexpected reply type\n");
+            break;
+    }
+    freeReplyObject (rep);
+        
+    return ret;
 }
 
 int PMI_Spawn_multiple(int count,
