@@ -88,7 +88,7 @@ int main (int argc, char **argv)
     /* try to get an unknown key */
 
     rc = PMI_KVS_Get (kvsname, "foo", val, sizeof (val));
-    if (rc != PMI_SUCCESS && rc != PMI_FAIL)
+    if (rc != PMI_SUCCESS && rc != PMI_ERR_INVALID_KEY)
         errx ("PMI_KVS_Get", rc);
     printf ("retrieved foo=%s\n", rc == PMI_SUCCESS ? val : "<undefined>");
 

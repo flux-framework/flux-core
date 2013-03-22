@@ -185,6 +185,10 @@ int PMI_Lookup_name( const char service_name[], char port[] )
 
 int PMI_Barrier( void )
 {
+    if (ctx == NULL)
+        return PMI_ERR_INIT;
+    assert (ctx->magic == PMI_CTX_MAGIC);
+
     return _publish ("PMI", "PMI_Barrier");
 }
 
@@ -299,8 +303,13 @@ static int _publish (char *channel, char *msg)
 
 int PMI_KVS_Commit( const char kvsname[] )
 {
-    char msg[128];
+    char msg[KVSNAME_MAXLEN + 16];
 
+    if (ctx == NULL)
+        return PMI_ERR_INIT;
+    assert (ctx->magic == PMI_CTX_MAGIC);
+    if (kvsname == NULL)
+        return PMI_ERR_INVALID_ARG;
     snprintf (msg, sizeof (msg), "PMI_KVS_Commit %s", kvsname);
 
     return _publish ("PMI", msg);
@@ -322,15 +331,15 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
     if (rep == NULL) {
         fprintf (stderr, "redisCommand: %s\n", ctx->rctx->errstr); /* FIXME */
         /* FIXME: context cannot be reused */
-        return PMI_FAIL;
+        goto done;
     }
     switch (rep->type) {
         case REDIS_REPLY_ERROR:
             assert (rep->str != NULL);
             fprintf (stderr, "redisCommand: error reply: %s\n", rep->str);
             break;
-        case REDIS_REPLY_NIL: /* if key is unknown */
-            //fprintf (stderr, "redisCommand: nil reply\n");
+        case REDIS_REPLY_NIL:
+            ret = PMI_ERR_INVALID_KEY;
             break;
         case REDIS_REPLY_STRING:
             assert (rep->str != NULL);
@@ -344,8 +353,9 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
             fprintf (stderr, "redisCommand: unexpected reply type\n");
             break;
     }
-    freeReplyObject (rep);
-        
+done:
+    if (rep)
+        freeReplyObject (rep);
     return ret;
 }
 
