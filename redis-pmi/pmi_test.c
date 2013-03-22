@@ -93,6 +93,13 @@ int main (int argc, char **argv)
         errx ("PMI_KVS_Get", rc);
     printf ("retrieved foo=%s\n", rc == PMI_SUCCESS ? val : "<undefined>");
 
+    /* commit kvs space */
+    /*   (hacked to publish a message to redis but not really do anything) */
+
+    rc = PMI_KVS_Commit (kvsname);
+    if (rc != PMI_SUCCESS && rc != PMI_FAIL)
+        errx ("PMI_KVS_Commit", rc);
+    
     /* finalize */
 
     rc = PMI_Finalize ();

@@ -36,8 +36,9 @@ typedef struct {
 } pmi_ctx_t;
 #define PMI_CTX_MAGIC 0xcafefaad
 
-static pmi_ctx_t *ctx = NULL;
+static int _publish (char *channel, char *msg);
 
+static pmi_ctx_t *ctx = NULL;
 
 static int _env_getint (char *name, int dflt)
 {
@@ -184,7 +185,7 @@ int PMI_Lookup_name( const char service_name[], char port[] )
 
 int PMI_Barrier( void )
 {
-    return PMI_FAIL;
+    return _publish ("PMI", "PMI_Barrier");
 }
 
 int PMI_Abort(int exit_code, const char error_msg[])
@@ -266,9 +267,43 @@ int PMI_KVS_Put( const char kvsname[], const char key[], const char value[])
     return ret;
 }
 
+static int _publish (char *channel, char *msg)
+{
+    redisReply *rep;
+    int ret = PMI_FAIL;
+
+    rep = redisCommand (ctx->rctx, "PUBLISH %s %d:%s", channel, ctx->rank, msg);
+    if (rep == NULL) {
+        fprintf (stderr, "redisCommand: %s\n", ctx->rctx->errstr); /* FIXME */
+        /* FIXME: context cannot be reused */
+        return PMI_FAIL;
+    }
+    switch (rep->type) {
+        case REDIS_REPLY_ERROR: /* FIXME */
+            fprintf (stderr, "redisCommand: error reply: %s\n", rep->str);
+            break;
+        case REDIS_REPLY_INTEGER: /* number of clients receiving message */
+            ret = PMI_SUCCESS;
+            break;
+        case REDIS_REPLY_STATUS:
+        case REDIS_REPLY_NIL:
+        case REDIS_REPLY_STRING:
+        case REDIS_REPLY_ARRAY:
+            fprintf (stderr, "redisCommand: unexpected reply type\n");
+            break;
+    }
+    freeReplyObject (rep);
+        
+    return ret;
+}
+
 int PMI_KVS_Commit( const char kvsname[] )
 {
-    return PMI_FAIL;
+    char msg[128];
+
+    snprintf (msg, sizeof (msg), "PMI_KVS_Commit %s", kvsname);
+
+    return _publish ("PMI", msg);
 }
 
 int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int length)
@@ -290,10 +325,6 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
         return PMI_FAIL;
     }
     switch (rep->type) {
-        case REDIS_REPLY_STATUS:
-            assert (rep->str != NULL);
-            fprintf (stderr, "redisCommand: status reply: %s\n", rep->str);
-            break;
         case REDIS_REPLY_ERROR:
             assert (rep->str != NULL);
             fprintf (stderr, "redisCommand: error reply: %s\n", rep->str);
@@ -307,6 +338,7 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
             snprintf (value, length, p ? p + 1 : rep->str);
             ret = PMI_SUCCESS;
             break;
+        case REDIS_REPLY_STATUS:
         case REDIS_REPLY_INTEGER:
         case REDIS_REPLY_ARRAY:
             fprintf (stderr, "redisCommand: unexpected reply type\n");
