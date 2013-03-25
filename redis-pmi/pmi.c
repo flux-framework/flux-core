@@ -27,16 +27,19 @@ typedef struct {
     int rank;
     int universe_size;
     int appnum;
+    int barrier_num;
 
     char *rhostname;
     int rport;
     redisContext *rctx;
+    redisContext *bctx;
 
     char kvsname[KVSNAME_MAXLEN];
 } pmi_ctx_t;
 #define PMI_CTX_MAGIC 0xcafefaad
 
 static int _publish (char *channel, char *msg);
+static int _barrier_subscribe (void);
 
 static pmi_ctx_t *ctx = NULL;
 
@@ -68,6 +71,7 @@ int PMI_Init( int *spawned )
     ctx->rank = _env_getint ("SLURM_PROCID", 1);
     ctx->universe_size = _env_getint ("SLURM_NTASKS", 1);
     ctx->appnum = 0;
+    ctx->barrier_num = 0;
     snprintf (ctx->kvsname, sizeof (ctx->kvsname), "job%d",
                 _env_getint ("SLURM_JOB_ID", 0));
     ctx->rhostname = _env_getstr ("SLURM_LAUNCH_NODE_IPADDR", "127.0.0.1");
@@ -82,6 +86,16 @@ int PMI_Init( int *spawned )
         fprintf (stderr, "redisConnect: %s\n", ctx->rctx->errstr); /* FIXME */
         goto fail;
     }
+
+    ctx->bctx = redisConnect (ctx->rhostname, ctx->rport);
+    if (ctx->bctx == NULL)
+        goto fail;
+    if (ctx->bctx->err) {
+        fprintf (stderr, "redisConnect: %s\n", ctx->bctx->errstr); /* FIXME */
+        goto fail;
+    }
+    if (_barrier_subscribe () == PMI_FAIL)
+        goto fail;
 
     *spawned = ctx->spawned;
     return PMI_SUCCESS;
@@ -111,6 +125,8 @@ int PMI_Finalize( void )
     assert (ctx->magic == PMI_CTX_MAGIC);
     if (ctx->rhostname)
         free (ctx->rhostname);
+    if (ctx->bctx)
+        redisFree (ctx->bctx);
     if (ctx->rctx)
         redisFree (ctx->rctx);
     memset (ctx, 0, sizeof (pmi_ctx_t));
@@ -183,15 +199,118 @@ int PMI_Lookup_name( const char service_name[], char port[] )
     return PMI_FAIL;
 }
 
+static int _barrier_subscribe (void)
+{
+    redisReply *rep;
+    int ret = PMI_FAIL;
+
+    rep = redisCommand (ctx->bctx, "SUBSCRIBE %s:barrier", ctx->kvsname);
+    if (rep == NULL) {
+        fprintf (stderr, "barrier_subscribe: %s\n", ctx->bctx->errstr);
+        return PMI_FAIL;
+    }
+    switch (rep->type) {
+        case REDIS_REPLY_ARRAY:
+            ret = PMI_SUCCESS;
+            break;
+        case REDIS_REPLY_ERROR:
+            fprintf (stderr, "barrier_subscribe: error: %s\n", rep->str); /* FIXME */
+            break;
+        case REDIS_REPLY_NIL:
+        case REDIS_REPLY_STRING:
+        case REDIS_REPLY_STATUS:
+        case REDIS_REPLY_INTEGER:
+            fprintf (stderr, "barrier_subscribe: unexpected reply type\n");
+            break;
+    }
+
+    freeReplyObject (rep);
+    return ret;
+}
+
+static int _barrier_enter (void)
+{
+    redisReply *rep;
+    int ret = PMI_FAIL;
+
+    rep = redisCommand (ctx->rctx, "EVAL %s 2 %s:barrier%d %s:barrier %d",
+                        "if redis.call('incr', KEYS[1]) == tonumber(ARGV[1])"
+                        "  then redis.call('publish', KEYS[2], KEYS[1]) end",
+                        ctx->kvsname, ctx->barrier_num,
+                        ctx->kvsname, ctx->universe_size);
+    if (rep == NULL) {
+        fprintf (stderr, "barrier_enter: %s\n", ctx->rctx->errstr); /* FIXME */
+        return PMI_FAIL;
+    }
+    switch (rep->type) {
+        case REDIS_REPLY_NIL:
+            ret = PMI_SUCCESS;
+            break;
+        case REDIS_REPLY_ERROR:
+            fprintf (stderr, "barrier_enter: error: %s\n", rep->str);/* FIXME */
+            break;
+        case REDIS_REPLY_STRING:
+        case REDIS_REPLY_STATUS:
+        case REDIS_REPLY_INTEGER:
+        case REDIS_REPLY_ARRAY:
+            fprintf (stderr, "barrier_enter: unexpected reply type\n");
+            break;
+    }
+
+    freeReplyObject (rep);
+    return ret;
+}
+
+static int _barrier_exit (void)
+{
+    redisReply *rep;
+    int ret = PMI_FAIL;
+
+    if (redisGetReply (ctx->bctx, (void **)&rep) != REDIS_OK) {
+        fprintf (stderr, "barrier_exit: error: %s\n", ctx->bctx->errstr);
+        return PMI_FAIL;
+    }
+    switch (rep->type) {
+        case REDIS_REPLY_ARRAY:
+            // 'message' 'kvsname:barrier' 'kvsname:barriern'
+            ret = PMI_SUCCESS;
+            break;
+        case REDIS_REPLY_ERROR:
+            fprintf (stderr, "barrier_exit: error: %s\n", rep->str);/* FIXME */
+            break;
+        case REDIS_REPLY_NIL:
+        case REDIS_REPLY_STRING:
+        case REDIS_REPLY_STATUS:
+        case REDIS_REPLY_INTEGER:
+            fprintf (stderr, "barrier_exit: unexpected reply type\n");
+            break;
+    }
+
+    freeReplyObject (rep);
+    return ret;
+}
+
 int PMI_Barrier( void )
 {
+    redisReply *rep;
+    int ret;
+
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
 
-    return _publish ("PMI", "PMI_Barrier");
-}
+    ret = _barrier_enter ();
+    if (ret != PMI_SUCCESS)
+        return ret;
 
+    ret = _barrier_exit ();
+    if (ret != PMI_SUCCESS)
+        return ret;
+
+    ctx->barrier_num++;
+    return PMI_SUCCESS;
+}
+  
 int PMI_Abort(int exit_code, const char error_msg[])
 {
     return PMI_FAIL;
@@ -279,7 +398,6 @@ static int _publish (char *channel, char *msg)
     rep = redisCommand (ctx->rctx, "PUBLISH %s %d:%s", channel, ctx->rank, msg);
     if (rep == NULL) {
         fprintf (stderr, "redisCommand: %s\n", ctx->rctx->errstr); /* FIXME */
-        /* FIXME: context cannot be reused */
         return PMI_FAIL;
     }
     switch (rep->type) {

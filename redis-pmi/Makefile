@@ -23,7 +23,7 @@ run_mpi_hello: mpi_hello
 	(source /etc/profile.d/modules.sh;\
 		module load mvapich2-gnu-shmem;\
 		export LD_LIBRARY_PATH=$(TOP):$$LD_LIBRARY_PATH;\
-		srun -n2 ./mpi_hello)
+		srun -n4 ./mpi_hello)
 	
 clean:
 	rm -f *.o pmi_test mpi_hello libpmi.so.0

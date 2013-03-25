@@ -98,6 +98,12 @@ int main (int argc, char **argv)
     rc = PMI_KVS_Commit (kvsname);
     if (rc != PMI_SUCCESS && rc != PMI_FAIL)
         errx ("PMI_KVS_Commit", rc);
+
+
+    /* execute a barrier */
+    rc = PMI_Barrier ();
+    if (rc != PMI_SUCCESS)
+        errx ("PMI_Barrier", rc);
     
     /* finalize */
 
