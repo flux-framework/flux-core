@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include "pmi.h"
 
 #ifndef PMI_FALSE
@@ -38,6 +39,10 @@ typedef struct {
 } pmi_ctx_t;
 #define PMI_CTX_MAGIC 0xcafefaad
 
+#define RECONNECT_DELAY_START   1
+#define RECONNECT_DELAY_MAX     10
+#define RECONNECT_DELAY_INCR(x) (x++)
+
 static int _publish (char *channel, char *msg);
 static int _barrier_subscribe (void);
 
@@ -57,6 +62,8 @@ static char *_env_getstr (char *name, char *dflt)
 
 int PMI_Init( int *spawned )
 {
+    int secs = RECONNECT_DELAY_START;
+
     if (spawned == NULL)
         return PMI_ERR_INVALID_ARG;
     if (ctx)
@@ -79,9 +86,18 @@ int PMI_Init( int *spawned )
         goto nomem;
     ctx->rport = 6379;
 
+again:
     ctx->rctx = redisConnect (ctx->rhostname, ctx->rport);
     if (ctx->rctx == NULL)
         goto fail;
+    if (secs <= RECONNECT_DELAY_MAX && ctx->rctx->err == REDIS_ERR_IO
+                                    && errno == ECONNREFUSED) {
+        redisFree (ctx->rctx);
+        sleep (secs);
+        RECONNECT_DELAY_INCR(secs);
+        goto again;
+    }
+        
     if (ctx->rctx->err) {
         fprintf (stderr, "redisConnect: %s\n", ctx->rctx->errstr); /* FIXME */
         goto fail;

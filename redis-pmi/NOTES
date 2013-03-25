@@ -135,3 +135,36 @@ $
 1364235387.339548 [0 lua] "incr" "job22:barrier2"
 1364235387.339554 [0 lua] "publish" "job22:barrier" "job22:barrier2"
 
+To summarize:
+
+2 process mvapich2 job:
+
+proc 0                proc 1
+set hostname[0]       set hostname[1]
+commit                commit 
+barrier---------------barrier
+get hostname[1]       get hostname[0]
+set sharedFilename[0]
+commit 
+barrier---------------barrier
+                      get sharedFilename[0]
+set P0-businesscard   set P1-businesscard
+commit                commit 
+barrier---------------barrier
+
+4 process mvapich2 job:
+
+proc 0                proc 1                proc 2                proc 3
+set hostname[0]       set hostname[1]       set hostname[2]       set hostname[3]
+commit                commit                commit                commit
+barrier---------------barrier---------------barrier---------------barrier
+get hostname[1]       get hostname[0]       get hostname[0]       get hostname[0]
+get hostname[2]       get hostname[2]       get hostname[1]       get hostname[1]
+get hostname[3]       get hostname[3]       get hostname[3]       get hostname[2]
+set sharedFilename[0]
+commit 
+barrier---------------barrier---------------barrier---------------barrier
+                      get sharedFilename[0] get sharedFilename[0] get sharedFilename[0]
+set P0-businesscard   set P1-businesscard   set P2-businesscard   set P3-businesscard
+commit                commit                commit                commit
+barrier---------------barrier---------------barrier---------------barrier
