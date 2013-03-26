@@ -29,9 +29,22 @@ local redis = {
      -- Argument is optional: --redis implies --redis=-1
      has_arg = 2,
      val     = 1,
+     cb      = "opt_handler",
     },
 }
 
+function opt_handler (v, optarg, remote)
+    if not optarg then
+        redis.nodeid = -1
+    elseif tonumber(optarg) then
+        redis.nodeid = tonumber(optarg)
+    else
+        SPANK.log_error ("--redis: argument '%s' invalid.", optarg)
+        return SPANK.FAILURE
+    end
+    redis.enabled = true;
+    return SPANK.SUCCESS
+end
 
 ---
 --  Initialize spank plugin: register the --redis option in srun
@@ -51,20 +64,7 @@ end
 ---
 function slurm_spank_local_user_init (spank)
 
-    local optarg = spank:getopt (redis.opt)
-
-    if optarg then
-        if type(optarg) == "boolean" then
-            redis.nodeid = -1
-        elseif tonumber(optarg) then
-            redis.nodeid = tonumber(optarg)
-        else
-            SPANK.log_error ("--redis: argument '%s' invalid.", optarg)
-            return SPANK.FAILURE
-        end
-        redis.enabled = true;
-    else
-        -- Nothing to do:
+    if not redis.enabled then
         return SPANK.SUCCESS
     end
 
@@ -121,6 +121,7 @@ end
 function slurm_spank_exit (spank)
     if spank.context == "local" and redis.enabled then
         local cmd = redis.cli .. " shutdown"
+        SPANK.log_info ("Going to invoke %s", cmd)
         local rc = os.execute (cmd)
         if rc ~= 0 then
             SPANK.log_error ("%s: rc=%d", cmd, rc)
