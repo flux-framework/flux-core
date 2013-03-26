@@ -11,9 +11,14 @@
 --
 local redis = {
     -- Path to redis-server
-    server = "/usr/bin/redis-server",
+    server = "redis-server",
+
     -- Path to redis-client (used to terminate redis-server)
-    cli    = "/usr/bin/redis-cli",
+    cli    = "redis-cli",
+
+    -- Plugin is enabled:
+    enabled = false,
+
     nodeid = -2,
     opt =
     {
@@ -49,7 +54,7 @@ function slurm_spank_local_user_init (spank)
     local optarg = spank:getopt (redis.opt)
 
     if optarg then
-        if type(optarg) == "boolean"  then
+        if type(optarg) == "boolean" then
             redis.nodeid = -1
         elseif tonumber(optarg) then
             redis.nodeid = tonumber(optarg)
@@ -57,6 +62,10 @@ function slurm_spank_local_user_init (spank)
             SPANK.log_error ("--redis: argument '%s' invalid.", optarg)
             return SPANK.FAILURE
         end
+        redis.enabled = true;
+    else
+        -- Nothing to do:
+        return SPANK.SUCCESS
     end
 
     local nnodes = spank:get_item ('S_JOB_NNODES')
@@ -83,11 +92,14 @@ function spawn_redis_daemon ()
         cmd = "srun --output=/tmp/redis-%J.log -N1 -n1 -r " .. redis.nodeid .. " "
               .. redis.server .. " -"
         daemonize = false
-    else
+    elseif redis.nodeid == -1 then
         cmd  = redis.server .. " -"
+    else
+        SPANK.log_error ("redis: invalid nodeid %d", redis.nodeid)
+        return SPANK.FAILURE
     end
 
-    SPANK.log_info ("Going to run %s", cmd)
+    SPANK.log_info ("Going to invoke %s", cmd)
     local f, err = io.popen (cmd, "w")
     if not f then
         SPANK.log_error ("redis: Failed to execute '%s': %s", cmd, err)
@@ -107,8 +119,12 @@ end
 --  XXX: Only works for running on the same host as srun for now
 ---
 function slurm_spank_exit (spank)
-    if spank.context == "local" then
-        os.execute (redis.cli .. " shutdown")
+    if spank.context == "local" and redis.enabled then
+        local cmd = redis.cli .. " shutdown"
+        local rc = os.execute (cmd)
+        if rc ~= 0 then
+            SPANK.log_error ("%s: rc=%d", cmd, rc)
+        end
     end
 end
 
