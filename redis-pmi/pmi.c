@@ -17,9 +17,10 @@
 #define PMI_TRUE 1
 #endif
 
-#define KVSNAME_MAXLEN  16
-#define KEY_MAXLEN      64
-#define VAL_MAXLEN      64
+#define PMI_MAX_KEYLEN 64
+#define PMI_MAX_VALLEN 1024
+#define PMI_MAX_KVSNAMELEN 64
+
 
 typedef struct {
     int magic;
@@ -35,7 +36,7 @@ typedef struct {
     redisContext *rctx;
     redisContext *bctx;
 
-    char kvsname[KVSNAME_MAXLEN];
+    char kvsname[PMI_MAX_KVSNAMELEN];
 } pmi_ctx_t;
 #define PMI_CTX_MAGIC 0xcafefaad
 
@@ -383,7 +384,7 @@ int PMI_KVS_Get_name_length_max( int *length )
 {
     if (length == NULL)
         return PMI_ERR_INVALID_ARG;
-    *length = KVSNAME_MAXLEN;
+    *length = PMI_MAX_KVSNAMELEN;
     return PMI_SUCCESS;
 }
 
@@ -391,7 +392,7 @@ int PMI_KVS_Get_key_length_max( int *length )
 {
     if (length == NULL)
         return PMI_ERR_INVALID_ARG;
-    *length = KEY_MAXLEN;
+    *length = PMI_MAX_KEYLEN;
     return PMI_SUCCESS;
 }
 
@@ -399,7 +400,7 @@ int PMI_KVS_Get_value_length_max( int *length )
 {
     if (length == NULL)
         return PMI_ERR_INVALID_ARG;
-    *length = VAL_MAXLEN;
+    *length = PMI_MAX_VALLEN;
     return PMI_SUCCESS;
 }
 
@@ -472,7 +473,7 @@ static int _publish (char *channel, char *msg)
 
 int PMI_KVS_Commit( const char kvsname[] )
 {
-    char msg[KVSNAME_MAXLEN + 16];
+    char msg[PMI_MAX_KVSNAMELEN + 16];
 
     if (ctx == NULL)
         return PMI_ERR_INIT;
