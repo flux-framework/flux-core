@@ -202,17 +202,44 @@ int PMI_Get_appnum( int *appnum )
 
 int PMI_Publish_name( const char service_name[], const char port[] )
 {
-    return PMI_FAIL;
+    char msg[64];
+
+    if (ctx == NULL)
+        return PMI_ERR_INIT;
+    assert (ctx->magic == PMI_CTX_MAGIC);
+    if (service_name == NULL || port == NULL)
+        return PMI_ERR_INVALID_ARG;
+    snprintf (msg, sizeof (msg), "PMI_Publish_name %s:%s", service_name, port);
+
+    return _publish ("PMI", msg);
 }
 
 int PMI_Unpublish_name( const char service_name[] )
 {
-    return PMI_FAIL;
+    char msg[64];
+
+    if (ctx == NULL)
+        return PMI_ERR_INIT;
+    assert (ctx->magic == PMI_CTX_MAGIC);
+    if (service_name == NULL)
+        return PMI_ERR_INVALID_ARG;
+    snprintf (msg, sizeof (msg), "PMI_Unpublish_name %s", service_name);
+
+    return _publish ("PMI", msg);
 }
 
 int PMI_Lookup_name( const char service_name[], char port[] )
 {
-    return PMI_FAIL;
+    char msg[64];
+
+    if (ctx == NULL)
+        return PMI_ERR_INIT;
+    assert (ctx->magic == PMI_CTX_MAGIC);
+    if (service_name == NULL || port == NULL)
+        return PMI_ERR_INVALID_ARG;
+    snprintf (msg, sizeof (msg), "PMI_Lookup_name %s:%s", service_name, port);
+
+    return _publish ("PMI", msg);
 }
 
 static int _barrier_subscribe (void)
@@ -329,7 +356,15 @@ int PMI_Barrier( void )
   
 int PMI_Abort(int exit_code, const char error_msg[])
 {
-    return PMI_FAIL;
+    char msg[64];
+
+    if (ctx == NULL)
+        return PMI_ERR_INIT;
+    assert (ctx->magic == PMI_CTX_MAGIC);
+    snprintf (msg, sizeof (msg), "PMI_Abort %d:%s", exit_code,
+                error_msg ? error_msg : "<null>");
+
+    return _publish ("PMI", msg);
 }
 
 int PMI_KVS_Get_my_name( char kvsname[], int length )
@@ -503,7 +538,14 @@ int PMI_Spawn_multiple(int count,
                        const PMI_keyval_t preput_keyval_vector[],
                        int errors[])
 {
-    return PMI_FAIL;
+    char msg[64];
+
+    if (ctx == NULL)
+        return PMI_ERR_INIT;
+    assert (ctx->magic == PMI_CTX_MAGIC);
+    snprintf (msg, sizeof (msg), "PMI_Spawn_multiple");
+
+    return _publish ("PMI", msg);
 }
 
 /*
