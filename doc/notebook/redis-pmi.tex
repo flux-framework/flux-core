@@ -51,7 +51,7 @@ per node.
 \openmpi\ 1.6, as built for production does not use PMI;
 however when configured {\tt --with-pmi --with-slurm} uses the 
 PMI canoncal and extended interfaces indicated in Table~\ref{tab:pmiv1}.
-Table~\ref{tab:openmpi} shows how it uses hte KVS to launch a smple MPI
+Table~\ref{tab:openmpi} shows how it uses the KVS to launch a smple MPI
 hello world program on shared memory.
 \openmpi\ can be configured {\tt --with-cray-pmi-ext} which
 activates a mixed use of PMIv2 and PMIv1; however this mode was not analyzed.
@@ -358,7 +358,7 @@ Abbreviations used: MPI\_THREAD\_LEVEL $=$ THD\_LEV; LOCALRANK $=$ LOCRANK.
 \hline
 {\tt  PMI\_KVS\_Get\_name\_length\_max} & $2n$ & $2n$ & $n$\\
 \hline
-{\tt  PMI\_KVS\_Get\_key\_length\_max} & $3n$ & $3n$ & $n$\\
+{\tt  PMI\_KVS\_Get\_key\_length\_max} & $3n$ & $5n$ & $n$\\
 \hline
 {\tt  PMI\_KVS\_Get\_value\_length\_max} & $3n$ & $3n$ & $n$\\
 \hline
@@ -404,7 +404,7 @@ Abbreviations used: MPI\_THREAD\_LEVEL $=$ THD\_LEV; LOCALRANK $=$ LOCRANK.
 \caption{PMI functions implemented by \slurm.
 Their usage in support of launching a simple MPI hello world program
 is shown for \mpich2 (shmem and psm) and \openmpi.
-The column entries list the total number of calls, where $n$ is the
-number of MPI ranks.}
+The column entries list the total number of calls,
+expressed in terms of $n$, the number of MPI ranks.}
 \label{tab:pmiv1}
 \end{table}
