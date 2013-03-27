@@ -492,3 +492,243 @@ XXX 2:PMI_Finalize
 XXX 3:PMI_Finalize
 srun: Going to invoke /home/garlick/work/redis/redis-2.6.11/src/redis-cli shutdown
 
+2 procs mvapich2 psm
+
+srun: Going to invoke /g/g0/garlick/pmi/redis-2.6.11/src/redis-server -
+XXX 1:PMI_Init
+XXX 1:PMI_Get_rank
+XXX 1:PMI_Get_size
+XXX 1:PMI_Get_appnum
+XXX 1:PMI_KVS_Get_name_length_max
+XXX 1:PMI_KVS_Get_my_name
+XXX 1:PMI_KVS_Get_name_length_max
+XXX 1:PMI_KVS_Get_my_name
+XXX 1:PMI_KVS_Get_key_length_max
+XXX 1:PMI_KVS_Get_value_length_max
+XXX 0:PMI_Init
+XXX 0:PMI_Get_rank
+XXX 0:PMI_Get_size
+XXX 0:PMI_Get_appnum
+XXX 0:PMI_KVS_Get_name_length_max
+XXX 0:PMI_KVS_Get_my_name
+XXX 0:PMI_KVS_Get_name_length_max
+XXX 0:PMI_KVS_Get_my_name
+XXX 0:PMI_KVS_Get_key_length_max
+XXX 0:PMI_KVS_Get_value_length_max
+XXX 1:PMI_KVS_Get_key_length_max
+XXX 1:PMI_KVS_Put job1099867:hostname[1] -1463773831
+XXX 1:PMI_KVS_Commit job1099867
+XXX 1:PMI_Barrier
+XXX 0:PMI_KVS_Get_key_length_max
+XXX 0:PMI_KVS_Put job1099867:hostname[0] -1463774087
+XXX 0:PMI_KVS_Commit job1099867
+XXX 0:PMI_Barrier
+XXX 1:PMI_KVS_Get_key_length_max
+XXX 1:PMI_KVS_Get_value_length_max
+XXX 1:PMI_KVS_Get job1099867:hostname[0]
+XXX 0:PMI_KVS_Get_key_length_max
+XXX 0:PMI_KVS_Get_value_length_max
+XXX 0:PMI_KVS_Get job1099867:hostname[1]
+XXX 1:PMI_Get_rank
+XXX 0:PMI_Get_rank
+XXX 1:PMI_Barrier
+XXX 0:PMI_Barrier
+XXX 1:PMI_KVS_Get_key_length_max
+XXX 1:PMI_KVS_Get_value_length_max
+XXX 1:PMI_KVS_Put job1099867:uuid_1_job1099867 dummy-entry
+XXX 0:PMI_KVS_Get_key_length_max
+XXX 0:PMI_KVS_Get_value_length_max
+XXX 0:PMI_KVS_Put job1099867:uuid_0_job1099867 0BM1L2otRGmdv64kaQ0CXQ==
+XXX 1:PMI_KVS_Commit job1099867
+XXX 1:PMI_Barrier
+XXX 0:PMI_KVS_Commit job1099867
+XXX 0:PMI_Barrier
+XXX 1:PMI_KVS_Get job1099867:uuid_0_job1099867
+XXX 0:PMI_Barrier
+XXX 1:PMI_Barrier
+XXX 1:PMI_Barrier
+XXX 0:PMI_Barrier
+XXX 1:PMI_Barrier
+XXX 0:PMI_Barrier
+XXX 1:PMI_KVS_Get_key_length_max
+XXX 1:PMI_KVS_Put job1099867:pmi_epidkey_1 7012867
+XXX 0:PMI_KVS_Get_key_length_max
+XXX 0:PMI_KVS_Put job1099867:pmi_epidkey_0 7143939
+XXX 1:PMI_KVS_Commit job1099867
+XXX 1:PMI_Barrier
+XXX 0:PMI_KVS_Commit job1099867
+XXX 0:PMI_Barrier
+XXX 1:PMI_KVS_Get job1099867:pmi_epidkey_0
+XXX 0:PMI_KVS_Get job1099867:pmi_epidkey_1
+XXX 0:PMI_Barrier
+XXX 1:PMI_Barrier
+0: completed MPI_Init.  There are 2 tasks
+0: completed first barrier
+XXX 0:PMI_Finalize
+0: completed MPI_Finalize
+XXX 1:PMI_Finalize
+srun: Going to invoke /g/g0/garlick/pmi/redis-2.6.11/src/redis-cli shutdown
+
+4 procs mvapich2 psm
+
+srun: Going to invoke /g/g0/garlick/pmi/redis-2.6.11/src/redis-server -
+XXX 1:PMI_Init
+XXX 1:PMI_Get_rank
+XXX 1:PMI_Get_size
+XXX 1:PMI_Get_appnum
+XXX 1:PMI_KVS_Get_name_length_max
+XXX 1:PMI_KVS_Get_my_name
+XXX 1:PMI_KVS_Get_name_length_max
+XXX 1:PMI_KVS_Get_my_name
+XXX 1:PMI_KVS_Get_key_length_max
+XXX 1:PMI_KVS_Get_value_length_max
+XXX 2:PMI_Init
+XXX 2:PMI_Get_rank
+XXX 2:PMI_Get_size
+XXX 2:PMI_Get_appnum
+XXX 2:PMI_KVS_Get_name_length_max
+XXX 2:PMI_KVS_Get_my_name
+XXX 2:PMI_KVS_Get_name_length_max
+XXX 2:PMI_KVS_Get_my_name
+XXX 2:PMI_KVS_Get_key_length_max
+XXX 2:PMI_KVS_Get_value_length_max
+XXX 1:PMI_KVS_Get_key_length_max
+XXX 1:PMI_KVS_Put job1099867:hostname[1] -1463774087
+XXX 1:PMI_KVS_Commit job1099867
+XXX 1:PMI_Barrier
+XXX 2:PMI_KVS_Get_key_length_max
+XXX 2:PMI_KVS_Put job1099867:hostname[2] -1463773831
+XXX 2:PMI_KVS_Commit job1099867
+XXX 2:PMI_Barrier
+XXX 0:PMI_Init
+XXX 0:PMI_Get_rank
+XXX 0:PMI_Get_size
+XXX 0:PMI_Get_appnum
+XXX 0:PMI_KVS_Get_name_length_max
+XXX 0:PMI_KVS_Get_my_name
+XXX 0:PMI_KVS_Get_name_length_max
+XXX 0:PMI_KVS_Get_my_name
+XXX 0:PMI_KVS_Get_key_length_max
+XXX 0:PMI_KVS_Get_value_length_max
+XXX 0:PMI_KVS_Get_key_length_max
+XXX 0:PMI_KVS_Put job1099867:hostname[0] -1463774343
+XXX 0:PMI_KVS_Commit job1099867
+XXX 0:PMI_Barrier
+XXX 3:PMI_Init
+XXX 3:PMI_Get_rank
+XXX 3:PMI_Get_size
+XXX 3:PMI_Get_appnum
+XXX 3:PMI_KVS_Get_name_length_max
+XXX 3:PMI_KVS_Get_my_name
+XXX 3:PMI_KVS_Get_name_length_max
+XXX 3:PMI_KVS_Get_my_name
+XXX 3:PMI_KVS_Get_key_length_max
+XXX 3:PMI_KVS_Get_value_length_max
+XXX 3:PMI_KVS_Get_key_length_max
+XXX 3:PMI_KVS_Put job1099867:hostname[3] -1463773319
+XXX 3:PMI_KVS_Commit job1099867
+XXX 3:PMI_Barrier
+XXX 0:PMI_KVS_Get_key_length_max
+XXX 0:PMI_KVS_Get_value_length_max
+XXX 0:PMI_KVS_Get job1099867:hostname[1]
+XXX 3:PMI_KVS_Get_key_length_max
+XXX 3:PMI_KVS_Get_value_length_max
+XXX 3:PMI_KVS_Get job1099867:hostname[0]
+XXX 1:PMI_KVS_Get_key_length_max
+XXX 1:PMI_KVS_Get_value_length_max
+XXX 1:PMI_KVS_Get job1099867:hostname[0]
+XXX 2:PMI_KVS_Get_key_length_max
+XXX 2:PMI_KVS_Get_value_length_max
+XXX 2:PMI_KVS_Get job1099867:hostname[0]
+XXX 0:PMI_KVS_Get job1099867:hostname[2]
+XXX 3:PMI_KVS_Get job1099867:hostname[1]
+XXX 2:PMI_KVS_Get job1099867:hostname[1]
+XXX 1:PMI_KVS_Get job1099867:hostname[2]
+XXX 3:PMI_KVS_Get job1099867:hostname[2]
+XXX 1:PMI_KVS_Get job1099867:hostname[3]
+XXX 0:PMI_KVS_Get job1099867:hostname[3]
+XXX 2:PMI_KVS_Get job1099867:hostname[3]
+XXX 0:PMI_Get_rank
+XXX 3:PMI_Get_rank
+XXX 1:PMI_Get_rank
+XXX 2:PMI_Get_rank
+XXX 1:PMI_Barrier
+XXX 3:PMI_Barrier
+XXX 2:PMI_Barrier
+XXX 0:PMI_Barrier
+XXX 2:PMI_KVS_Get_key_length_max
+XXX 2:PMI_KVS_Get_value_length_max
+XXX 2:PMI_KVS_Put job1099867:uuid_2_job1099867 dummy-entry
+XXX 3:PMI_KVS_Get_key_length_max
+XXX 3:PMI_KVS_Get_value_length_max
+XXX 1:PMI_KVS_Get_key_length_max
+XXX 1:PMI_KVS_Get_value_length_max
+XXX 1:PMI_KVS_Put job1099867:uuid_1_job1099867 dummy-entry
+XXX 3:PMI_KVS_Put job1099867:uuid_3_job1099867 dummy-entry
+XXX 0:PMI_KVS_Get_key_length_max
+XXX 0:PMI_KVS_Get_value_length_max
+XXX 0:PMI_KVS_Put job1099867:uuid_0_job1099867 E1zGuCZgSd6DGMJQ/81D6Q==
+XXX 0:PMI_KVS_Commit job1099867
+XXX 0:PMI_Barrier
+XXX 3:PMI_KVS_Commit job1099867
+XXX 3:PMI_Barrier
+XXX 1:PMI_KVS_Commit job1099867
+XXX 1:PMI_Barrier
+XXX 2:PMI_KVS_Commit job1099867
+XXX 2:PMI_Barrier
+XXX 0:PMI_Barrier
+XXX 1:PMI_KVS_Get job1099867:uuid_0_job1099867
+XXX 2:PMI_KVS_Get job1099867:uuid_0_job1099867
+XXX 3:PMI_KVS_Get job1099867:uuid_0_job1099867
+XXX 3:PMI_Barrier
+XXX 2:PMI_Barrier
+XXX 1:PMI_Barrier
+XXX 0:PMI_Barrier
+XXX 2:PMI_Barrier
+XXX 1:PMI_Barrier
+XXX 3:PMI_Barrier
+XXX 0:PMI_Barrier
+XXX 3:PMI_Barrier
+XXX 1:PMI_Barrier
+XXX 2:PMI_Barrier
+XXX 1:PMI_KVS_Get_key_length_max
+XXX 1:PMI_KVS_Put job1099867:pmi_epidkey_1 7143939
+XXX 2:PMI_KVS_Get_key_length_max
+XXX 2:PMI_KVS_Put job1099867:pmi_epidkey_2 7012867
+XXX 1:PMI_KVS_Commit job1099867
+XXX 1:PMI_Barrier
+XXX 2:PMI_KVS_Commit job1099867
+XXX 2:PMI_Barrier
+XXX 3:PMI_KVS_Get_key_length_max
+XXX 3:PMI_KVS_Put job1099867:pmi_epidkey_3 6816259
+XXX 0:PMI_KVS_Get_key_length_max
+XXX 0:PMI_KVS_Put job1099867:pmi_epidkey_0 7078403
+XXX 0:PMI_KVS_Commit job1099867
+XXX 0:PMI_Barrier
+XXX 3:PMI_KVS_Commit job1099867
+XXX 3:PMI_Barrier
+XXX 0:PMI_KVS_Get job1099867:pmi_epidkey_1
+XXX 1:PMI_KVS_Get job1099867:pmi_epidkey_0
+XXX 2:PMI_KVS_Get job1099867:pmi_epidkey_0
+XXX 0:PMI_KVS_Get job1099867:pmi_epidkey_2
+XXX 3:PMI_KVS_Get job1099867:pmi_epidkey_0
+XXX 1:PMI_KVS_Get job1099867:pmi_epidkey_2
+XXX 3:PMI_KVS_Get job1099867:pmi_epidkey_1
+XXX 0:PMI_KVS_Get job1099867:pmi_epidkey_3
+XXX 2:PMI_KVS_Get job1099867:pmi_epidkey_1
+XXX 0:PMI_Barrier
+XXX 1:PMI_KVS_Get job1099867:pmi_epidkey_3
+XXX 1:PMI_Barrier
+XXX 3:PMI_KVS_Get job1099867:pmi_epidkey_2
+XXX 2:PMI_KVS_Get job1099867:pmi_epidkey_3
+XXX 3:PMI_Barrier
+XXX 2:PMI_Barrier
+0: completed MPI_Init.  There are 4 tasks
+0: completed first barrier
+XXX 2:PMI_Finalize
+XXX 1:PMI_Finalize
+XXX 0:PMI_Finalize
+0: completed MPI_Finalize
+XXX 3:PMI_Finalize
+srun: Going to invoke /g/g0/garlick/pmi/redis-2.6.11/src/redis-cli shutdown
+

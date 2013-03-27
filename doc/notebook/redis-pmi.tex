@@ -45,6 +45,8 @@ with the MPICH source code.
 PMIv1 interfaces indicated in the table.
 Table~\ref{tab:mvapich} shows how it uses the KVS to launch a simple MPI
 hello world program on shared memory.
+Table~\ref{tab:mvapichpsm} shows the same on QLogic Infiniband, one task
+per node.
 
 \openmpi\ 1.6, as built for production does not use PMI;
 however when configured {\tt --with-pmi --with-slurm} uses the 
@@ -84,6 +86,62 @@ is set up by rank 0 and communicated to the other tasks in {\tt sharedFilename}.
 ``{\tt description\#jimbo.chaos\$port\#39666\$ifname\#192.168.1.136\$}''}
 \label{tab:mvapich}
 \end{table}
+
+\begin{table}
+\centering
+\begin{tabular}{|p{4cm}|p{4cm}|p{4cm}|p{4cm}|}\hline
+\textbf{proc 0} &       \textbf{proc 1} &   \textbf{proc 2} &    \textbf{proc 3}\\
+\hline
+put hostname[0] &     put hostname[1] &     put hostname[2] &     put hostname[3]\\
+commit &              commit &              commit  &             commit\\
+barrier &             barrier &             barrier &             barrier\\
+\hline
+get hostname[1] &     get hostname[0] &     get hostname[0] &     get hostname[0]\\
+get hostname[2] &     get hostname[2] &     get hostname[1] &     get hostname[1]\\
+get hostname[3] &     get hostname[3] &     get hostname[3] &     get hostname[2]\\
+barrier& barrier & barrier & barrier\\
+\hline
+put uuid\_0\_job1099867
+  & put uuid\_1\_job1099867
+  & put uuid\_2\_job1099867
+  & put uuid\_3\_job1099867 \\
+commit &              commit &              commit &              commit\\
+barrier &             barrier &             barrier &             barrier\\
+\hline
+  & get uuid\_0\_job1099867
+  & get uuid\_0\_job1099867
+  & get uuid\_0\_job1099867 \\
+barrier &             barrier &             barrier &             barrier\\
+barrier &             barrier &             barrier &             barrier\\
+barrier &             barrier &             barrier &             barrier\\
+\hline
+put pmi\_epidkey\_0
+  & put pmi\_epidkey\_1
+  & put pmi\_epidkey\_2
+  & put pmi\_epidkey\_3\\
+commit &              commit &              commit &              commit\\
+barrier &             barrier &             barrier &             barrier\\
+\hline
+get pmi\_epidkey\_1
+  & get pmi\_epidkey\_0
+  & get pmi\_epidkey\_0
+  & get pmi\_epidkey\_0\\
+get pmi\_epidkey\_2
+  & get pmi\_epidkey\_2
+  & get pmi\_epidkey\_1
+  & get pmi\_epidkey\_1\\
+get pmi\_epidkey\_3
+  & get pmi\_epidkey\_3
+  & get pmi\_epidkey\_3
+  & get pmi\_epidkey\_2\\
+barrier &             barrier &             barrier &             barrier\\
+\hline
+\end{tabular}
+\caption{\mvapich2 PMI key-value store usage when launching a simple 
+MPI hello world application on four procs on infiniband (one proc per node).}
+\label{tab:mvapichpsm}
+\end{table}
+
 
 \begin{table}
 \centering
@@ -265,85 +323,87 @@ Abbreviations used: MPI\_THREAD\_LEVEL $=$ THD\_LEV; LOCALRANK $=$ LOCRANK.
 
 \begin{table}
 \centering
-\begin{tabular}{|p{8cm}|p{3.5cm}|p{3cm}|}\hline
-\textbf{Function} & \textbf{\mvapich2-1.7 shmem} & \textbf{\openmpi-1.6 shmem}\\
+\begin{tabular}{|p{5cm}|p{3.5cm}|p{3cm}|p{3cm}|}\hline
+\textbf{Function} & \textbf{\mvapich2-1.7 shmem}
+		  & \textbf{\mvapich2-1.7 psm}
+		  & \textbf{\openmpi-1.6 shmem}\\
 \hline
-\multicolumn{3}{|c|}{\textbf{Canonical PMI-1 Functions}}\\
+\multicolumn{4}{|c|}{\textbf{Canonical PMI-1 Functions}}\\
 \hline
-{\tt  PMI\_Init} & $n$ & $n$\\
+{\tt  PMI\_Init} & $n$ & $n$ & $n$\\
 \hline
-{\tt  PMI\_Initialized} & $-$ & $n$\\
+{\tt  PMI\_Initialized} & $-$ & $-$ & $n$\\
 \hline
-{\tt  PMI\_Finalize} & $n$ & $-$\\
+{\tt  PMI\_Finalize} & $n$ & $n$ & $-$\\
 \hline
-{\tt  PMI\_Get\_size} & $n$ & $-$\\
+{\tt  PMI\_Get\_size} & $n$ & $n$ & $-$\\
 \hline
-{\tt  PMI\_Get\_rank} & $n$ & $n$\\
+{\tt  PMI\_Get\_rank} & $n$ & $n$ & $n$\\
 \hline
-{\tt  PMI\_Get\_universe\_size} & $-$ & $n$\\
+{\tt  PMI\_Get\_universe\_size} & $-$ & $-$ & $n$\\
 \hline
-{\tt  PMI\_Get\_appnum} & $n$ & $n$\\
+{\tt  PMI\_Get\_appnum} & $n$ & $n$ & $n$\\
 \hline
-{\tt  PMI\_Publish\_name} & $-$ & $-$\\
+{\tt  PMI\_Publish\_name} & $-$ & $-$ & $-$\\
 \hline
-{\tt  PMI\_Unpublish\_name} & $-$ & $-$\\
+{\tt  PMI\_Unpublish\_name} & $-$ & $-$ & $-$\\
 \hline
-{\tt  PMI\_Lookup\_name} & $-$ & $-$\\
+{\tt  PMI\_Lookup\_name} & $-$ & $-$ & $-$\\
 \hline
-{\tt  PMI\_Barrier} & $3n$ & $3n$ \\
+{\tt  PMI\_Barrier} & $3n$ & $7n$ & $3n$ \\
 \hline
-{\tt  PMI\_Abort} & $-$ & $-$\\
+{\tt  PMI\_Abort} & $-$ & $-$ & $-$\\
 \hline
-{\tt  PMI\_KVS\_Get\_my\_name} & $2n$ & $n$\\
+{\tt  PMI\_KVS\_Get\_my\_name} & $2n$ & $2n$ & $n$\\
 \hline
-{\tt  PMI\_KVS\_Get\_name\_length\_max} & $2n$ & $n$\\
+{\tt  PMI\_KVS\_Get\_name\_length\_max} & $2n$ & $2n$ & $n$\\
 \hline
-{\tt  PMI\_KVS\_Get\_key\_length\_max} & $3n$ & $n$\\
+{\tt  PMI\_KVS\_Get\_key\_length\_max} & $3n$ & $3n$ & $n$\\
 \hline
-{\tt  PMI\_KVS\_Get\_value\_length\_max} & $3n$ & $n$\\
+{\tt  PMI\_KVS\_Get\_value\_length\_max} & $3n$ & $3n$ & $n$\\
 \hline
-{\tt  PMI\_KVS\_Put} & $2n + 1$ & $8n$\\
+{\tt  PMI\_KVS\_Put} & $2n + 1$ & $3n$ & $8n$\\
 \hline
-{\tt  PMI\_KVS\_Commit} & $2n + 1$ & $n$\\
+{\tt  PMI\_KVS\_Commit} & $2n + 1$ & $3n$ & $n$\\
 \hline
-{\tt  PMI\_KVS\_Get} & $n(n -1) + n$ & $3n^2 + 6n(n - 1)$ \\
+{\tt  PMI\_KVS\_Get} & $n(n -1) + n$ & $(2n + 1)(n -1)$ & $3n^2 + 6n(n - 1)$ \\
 \hline
-{\tt  PMI\_Spawn\_multiple} & $-$ & $-$ \\
+{\tt  PMI\_Spawn\_multiple} & $-$ & $-$ & $-$ \\
 \hline
-\multicolumn{3}{|c|}{\textbf{Extended PMI-1 Functions}}\\
+\multicolumn{4}{|c|}{\textbf{Extended PMI-1 Functions}}\\
 \hline
-{\tt  PMI\_Get\_id} & $-$ & $-$ \\
+{\tt  PMI\_Get\_id} & $-$ & $-$ & $-$ \\
 \hline
-{\tt  PMI\_Get\_kvs\_domain\_id} & $-$ & $n$ \\
+{\tt  PMI\_Get\_kvs\_domain\_id} & $-$ & $-$ & $n$ \\
 \hline
-{\tt  PMI\_Get\_id\_length\_max} & $-$ & $n$ \\
+{\tt  PMI\_Get\_id\_length\_max} & $-$ & $-$ & $n$ \\
 \hline
-{\tt  PMI\_Get\_clique\_size} & $-$ & $n$ \\
+{\tt  PMI\_Get\_clique\_size} & $-$ & $-$ & $n$ \\
 \hline
-{\tt  PMI\_Get\_clique\_ranks} & $-$ & $n$ \\
+{\tt  PMI\_Get\_clique\_ranks} & $-$ & $-$ & $n$ \\
 \hline
-{\tt  PMI\_KVS\_Create} & $-$ & $-$ \\
+{\tt  PMI\_KVS\_Create} & $-$ & $-$ & $-$ \\
 \hline
-{\tt  PMI\_KVS\_Create} & $-$ & $-$ \\
+{\tt  PMI\_KVS\_Create} & $-$ & $-$ & $-$ \\
 \hline
-{\tt  PMI\_KVS\_Destroy} & $-$ & $-$ \\
+{\tt  PMI\_KVS\_Destroy} & $-$ & $-$ & $-$ \\
 \hline
-{\tt  PMI\_KVS\_Iter\_first} & $-$ & $-$ \\
+{\tt  PMI\_KVS\_Iter\_first} & $-$ & $-$ & $-$ \\
 \hline
-{\tt  PMI\_KVS\_Iter\_next} & $-$ & $-$ \\
+{\tt  PMI\_KVS\_Iter\_next} & $-$ & $-$ & $-$ \\
 \hline
-{\tt  PMI\_Parse\_option} & $-$ & $-$ \\
+{\tt  PMI\_Parse\_option} & $-$ & $-$ & $-$ \\
 \hline
-{\tt  PMI\_Args\_to\_keyval} & $-$ & $-$ \\
+{\tt  PMI\_Args\_to\_keyval} & $-$ & $-$ & $-$ \\
 \hline
-{\tt  PMI\_Free\_keyvals} & $-$ & $-$ \\
+{\tt  PMI\_Free\_keyvals} & $-$ & $-$ & $-$ \\
 \hline
-{\tt  PMI\_Get\_options} & $-$ & $-$ \\
+{\tt  PMI\_Get\_options} & $-$ & $-$ & $-$\\
 \hline
 \end{tabular}
 \caption{PMI functions implemented by \slurm.
 Their usage in support of launching a simple MPI hello world program
-on shared memory is shown for \mpich2 and \openmpi.
+is shown for \mpich2 (shmem and psm) and \openmpi.
 The column entries list the total number of calls, where $n$ is the
 number of MPI ranks.}
 \label{tab:pmiv1}
