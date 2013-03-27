@@ -306,7 +306,7 @@ Abbreviations used: MPI\_THREAD\_LEVEL $=$ THD\_LEV; LOCALRANK $=$ LOCRANK.
 \hline
 {\tt  PMI\_KVS\_Commit} & $2n + 1$ & $n$\\
 \hline
-{\tt  PMI\_KVS\_Get} & $n^2 + (n - 1)$ & $3n^2 + 6n(n - 1)$ \\
+{\tt  PMI\_KVS\_Get} & $n(n -1) + n$ & $3n^2 + 6n(n - 1)$ \\
 \hline
 {\tt  PMI\_Spawn\_multiple} & $-$ & $-$ \\
 \hline
@@ -343,6 +343,8 @@ Abbreviations used: MPI\_THREAD\_LEVEL $=$ THD\_LEV; LOCALRANK $=$ LOCRANK.
 \end{tabular}
 \caption{PMI functions implemented by \slurm.
 Their usage in support of launching a simple MPI hello world program
-on shared memory is shown for \mpich2 and \openmpi.}
+on shared memory is shown for \mpich2 and \openmpi.
+The column entries list the total number of calls, where $n$ is the
+number of MPI ranks.}
 \label{tab:pmiv1}
 \end{table}
