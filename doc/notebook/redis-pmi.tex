@@ -15,8 +15,16 @@ A replacement libpmi.so was developed.  All PMI calls are implemented
 as direct calls to redis through the {\em hiredis} (native C) binding.
 The MPI ranks find the redis server IP address by reading the
 {\tt SLURM\_LAUNCH\_NODE\_IPADDR} environment variable which is set
-by \slurm\ in the job environment.
+by \slurm\ in the job environment.  This architecture is depeicted in
+Figure~\ref{fig:redispmi}.
 All redis calls are synchronous and not pipeliend.
+
+\begin{figure}
+\centering
+\includegraphics[scale=0.40]{redis-pmi.eps}
+\caption{redis-pmi prototype architecture}
+\label{fig:redispmi}
+\end{figure}
 
 Barriers are implemented as an atomic counter in redis using an embedded
 Lua script.

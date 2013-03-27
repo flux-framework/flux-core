@@ -25,7 +25,8 @@ DEPFIG = \
 	job-hierarchy-job0-x.ps \
 	job-hierarchy-job0-x-y.ps \
 	job-hierarchy-lwj.ps \
-	resource-hierarchy.ps
+	resource-hierarchy.ps \
+	redis-pmi.eps
 
 all: $(DEPFIG)
 

@@ -1,7 +1,9 @@
 DEPSEC = \
 	redis-pmi.tex \
 
-DEPFIG = 
+DEPFIG = \
+	../fig/redis-pmi.eps
+
 DEPBIB = 
 
 all: report.pdf
