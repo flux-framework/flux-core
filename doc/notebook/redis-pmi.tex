@@ -24,9 +24,14 @@ Once all the MPI ranks have incremented the counter and blocked waiting
 for a subscribed-to redis message, redis publishes a message indicating
 that the barrier is complete.
 
-The ``clique'' and ``id'' functions are stubbed out for now.
+Each MPI rank establishes two connections with redis, one for receiving
+messages published by the barrier Lua function, and one for everything else.
+Better scalability could be obtained by inserting a proxy layer (such as
+{\em twemproxy}) between ranks and the redis server to reduce connection
+overhead, by sharding to multiple servers, and by reimplementing barriers
+using a reduction tree.
 
-\subsection{Analysis of PMI API Usage by MVAPICH2 and OpenMPI}
+\subsection{Analysis of PMI API Usage by \mvapich2 and \openmpi}
 
 Although a canonical PMIv1 header file is supplied by MPICH,
 \slurm\ implements a superset of the canonical functions shown in
@@ -36,17 +41,17 @@ SMPD process manager used on Windows, and some are documented in
 the informal paper {\em Process Management in MPICH} distributed
 with the MPICH source code.
 
-MVAPICH2 1.7, as built for TOSS 1.0 production, uses the (exclusively
-canonical) PMIv1 interfaces indicated in the table.
+\mvapich2\ 1.7, as built for TOSS 2.0 production, uses the canonical
+PMIv1 interfaces indicated in the table.
 Table~\ref{tab:mvapich} shows how it uses the KVS to launch a simple MPI
 hello world program on shared memory.
 
-OpenMPI 1.6, as built for production does not use PMI;
+\openmpi\ 1.6, as built for production does not use PMI;
 however when configured {\tt --with-pmi --with-slurm} uses the 
-PMI interfaces indicated in Table~\ref{tab:pmiv1}.
+PMI canoncal and extended interfaces indicated in Table~\ref{tab:pmiv1}.
 Table~\ref{tab:openmpi} shows how it uses hte KVS to launch a smple MPI
 hello world program on shared memory.
-OpenMPI can be configured {\tt --with-cray-pmi-ext} which
+\openmpi\ can be configured {\tt --with-cray-pmi-ext} which
 activates a mixed use of PMIv2 and PMIv1; however this mode was not analyzed.
 
 \begin{table}
@@ -71,7 +76,7 @@ commit &              commit &              commit &              commit\\
 barrier &             barrier &             barrier &             barrier\\
 \hline
 \end{tabular}
-\caption{mvapich2 PMI key-value store usage when launching a simple 
+\caption{\mvapich2 PMI key-value store usage when launching a simple 
 MPI hello world application on four procs using shared memory.
 The shared memory file
 is set up by rank 0 and communicated to the other tasks in {\tt sharedFilename}.
@@ -261,7 +266,7 @@ Abbreviations used: MPI\_THREAD\_LEVEL $=$ THD\_LEV; LOCALRANK $=$ LOCRANK.
 \begin{table}
 \centering
 \begin{tabular}{|p{8cm}|p{3.5cm}|p{3cm}|}\hline
-\textbf{Function} & \textbf{mvapich2-1.7 shmem} & \textbf{openMPI-1.6 shmem}\\
+\textbf{Function} & \textbf{\mvapich2-1.7 shmem} & \textbf{\openmpi-1.6 shmem}\\
 \hline
 \multicolumn{3}{|c|}{\textbf{Canonical PMI-1 Functions}}\\
 \hline
@@ -338,6 +343,6 @@ Abbreviations used: MPI\_THREAD\_LEVEL $=$ THD\_LEV; LOCALRANK $=$ LOCRANK.
 \end{tabular}
 \caption{PMI functions implemented by \slurm.
 Their usage in support of launching a simple MPI hello world program
-on shared memory is shown for MPICH2 and OpenMPI.}
+on shared memory is shown for \mpich2 and \openmpi.}
 \label{tab:pmiv1}
 \end{table}
