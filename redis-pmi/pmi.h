@@ -466,6 +466,26 @@ int PMI_Spawn_multiple(int count,
                        const PMI_keyval_t preput_keyval_vector[],
                        int errors[]);
 
+/* added from slurm */
+int PMI_Get_id( char id_str[], int length );
+int PMI_Get_kvs_domain_id( char id_str[], int length );
+int PMI_Get_id_length_max( int *length );
+int PMI_Get_clique_size( int *size );
+int PMI_Get_clique_ranks( int ranks[], int length);
+int PMI_KVS_Create( char kvsname[], int length );
+int PMI_KVS_Destroy( const char kvsname[] );
+int PMI_KVS_Iter_first(const char kvsname[], char key[], int key_len,
+                        char val[], int val_len);
+int PMI_KVS_Iter_next(const char kvsname[], char key[], int key_len,
+                        char val[], int val_len);
+int PMI_Parse_option(int num_args, char *args[], int *num_parsed,
+                        PMI_keyval_t **keyvalp, int *size);
+int PMI_Args_to_keyval(int *argcp, char *((*argvp)[]),
+                        PMI_keyval_t **keyvalp, int *size);
+int PMI_Free_keyvals(PMI_keyval_t keyvalp[], int size);
+int PMI_Get_options(char *str, int *length);
+
+
 #if defined(__cplusplus)
 }
 #endif

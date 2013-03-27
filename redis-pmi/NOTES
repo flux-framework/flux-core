@@ -168,3 +168,9 @@ barrier---------------barrier---------------barrier---------------barrier
 set P0-businesscard   set P1-businesscard   set P2-businesscard   set P3-businesscard
 commit                commit                commit                commit
 barrier---------------barrier---------------barrier---------------barrier
+
+Building openmpi-1.6 with PMI support
+
+configure --with-pmi=/usr/ --with-slurm=/usr/ --without-psm --prefix=...
+
+
