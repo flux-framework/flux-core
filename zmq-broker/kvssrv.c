@@ -117,7 +117,7 @@ static void _redis_set (const char *key, const char *val)
     }
     switch (rep->type) {
         case REDIS_REPLY_STATUS:
-            fprintf (stderr, "redisCommand: status reply: %s\n", rep->str);
+            //fprintf (stderr, "redisCommand: status reply: %s\n", rep->str);
             /* success */
             break;
         case REDIS_REPLY_ERROR: /* FIXME */

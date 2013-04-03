@@ -15,7 +15,7 @@ int cmb_recvs (cmb_t c, char **tagp, char **bodyp);
 int cmb_subscribe (cmb_t c, char *s);
 int cmb_unsubscribe (cmb_t c);
 
-int cmb_ping (cmb_t c, int seq);
+int cmb_ping (cmb_t c, int seq, int padding);
 int cmb_snoop (cmb_t c, char *subscription);
 int cmb_barrier (cmb_t c, char *name, int count, int nprocs, int procs_per_node);
 int cmb_sync (cmb_t c);

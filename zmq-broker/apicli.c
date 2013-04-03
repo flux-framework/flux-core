@@ -171,21 +171,34 @@ error:
     return -1;
 }
 
-int cmb_ping (cmb_t c, int seq)
+int cmb_ping (cmb_t c, int seq, int padding)
 {
     char *tag = NULL;
     char *body = NULL;
     json_object *no, *o = NULL;
 
-    if (cmb_sendf (c, "subscribe ping") < 0)
+    if (cmb_sendf (c, "subscribe ping.%s", c->uuid) < 0)
         goto error;
     if (!(o = json_object_new_object ()))
         goto nomem;
     if (!(no = json_object_new_int (seq)))
         goto nomem;
     json_object_object_add (o, "seq", no);
-
-    if (cmb_sendf (c, "ping %s", json_object_to_json_string (o)) < 0)
+    if (padding > 0) {
+        char *pad = malloc (padding + 1);
+        if (!pad) {
+            fprintf (stderr, "out of memory\n");
+            exit (1);
+        }
+        memset (pad, 'z', padding);
+        pad[padding] = '\0';
+        if (!(no = json_object_new_string (pad)))
+            goto nomem;
+        json_object_object_add (o, "padding", no);
+        free (pad);
+    }
+    if (cmb_sendf (c, "ping.%s %s", c->uuid,
+                   json_object_to_json_string (o)) < 0)
         goto error;
     if (cmb_recvs (c, &tag, &body))
         goto error;
@@ -196,7 +209,10 @@ int cmb_ping (cmb_t c, int seq)
         goto error;
     if (!(no = json_object_object_get (o, "seq")))
         goto error;
-    printf ("ping: %s: %d\n", tag, json_object_get_int (no));
+    if (seq != json_object_get_int (no)) {
+        fprintf (stderr, "cmb_ping: seq not the one I sent\n");
+        goto error;
+    }
     free (tag);
     free (body);
     json_object_put (o);
