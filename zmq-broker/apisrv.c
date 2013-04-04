@@ -186,7 +186,7 @@ again:
 static void _readmsg (bool *shutdownp)
 {
     zmq_2part_t msg;
-    client_t *c;
+    client_t *c, *deleteme;
     int len, n;
 
     _zmq_2part_init (&msg);
@@ -209,15 +209,16 @@ static void _readmsg (bool *shutdownp)
             len - zmq_msg_size (&msg.tag) - 1);
 
     /* send it to all API clients whose subscription matches */
-    for (c = ctx->clients; c != NULL; c = c->next) {
+    for (c = ctx->clients; c != NULL; ) {
+        deleteme = NULL;
         if (c->subscription && _zmq_2part_match (&msg, c->subscription)) {
             n = send (c->fd, ctx->buf, len, 0);
-            if (n < len) {
-                fprintf (stderr, "apisrv: API write: %s\n", strerror (errno));
-                c = c->prev;
-                _client_destroy (c);
-            }
+            if (n < len)
+                deleteme = c; 
         }
+        c = c->next;
+        if (deleteme)
+            _client_destroy (deleteme);
     }
 done:
     _zmq_2part_close (&msg);
