@@ -1,5 +1,11 @@
 \section{zmq-broker}
 
+A message broker prototype was developed to get a feel for how \ngrm\ 
+comms services can be built as plugins communicating with messages.
+This experiment builds on lessons learned from the previous PMI
+investigation, implementing scalable barriers, a key-value service,
+and a public interface suitable for linking with applications.
+
 \begin{figure}
 \centering
 \includegraphics[scale=0.30]{zmq-broker.eps}
@@ -13,12 +19,17 @@ communicates with the apisrv plugin via a UNIX domain socket.}
 \label{fig:cmbint}
 \end{figure}
 
-\begin{figure}
-\centering
-\includegraphics[scale=0.15]{zmq-broker-tree.eps}
-\caption{Broker external architecture.}
-\label{fig:cmbext}
-\end{figure}
+\subsection{The Prototype}
+
+\paragraph {Internal Design}
+The internal architecture is shown in Figure~\ref{fig:cmbint}.
+The cmbd acts as a message router, passing two-part \zMQ\ messages
+(Figure~\ref{fig:cmbproto}) between sockets as defined in
+Table~\ref{tab:cmbrouting}.
+Plugins are implemented as cmbd threads that access well known \zMQ\ sockets.
+Public interfaces are exposed by a library which access the CMB through
+a UNIX domain socked exposed by the {\em apisrv} plugin.
+The public API is depicted in Table~\ref{tab:cmbapi}.
 
 \begin{table}
 \centering
@@ -36,8 +47,31 @@ in (SUB)	& pl\_out (PUB)	& {\em BUS}     & \\
 \hline
 \end{tabular}
 \caption{The cmbd internal routing table.}
-\label{fig:cmbrouting}
+\label{tab:cmbrouting}
 \end{table}
+
+\begin{figure}
+\centering
+\includegraphics[scale=0.4]{zmq-broker-proto.eps}
+\caption{Message protocol.  Messages consist of two \zMQ\ message parts.
+The first part is a {\em tag} formatted as a zmQ string suitable for
+use as a subscription tag on PUB-SUB sockets, and which is used to identify
+the recipient(s).
+The second part is JSON formatted as a \zMQ\ string.}
+\label{fig:cmbproto}
+\end{figure}
+
+\paragraph {External Design}
+The cmbd implements the reduction network and event service described
+in the \ngrm\ comms design.
+
+\begin{figure}
+\centering
+\includegraphics[scale=0.15]{zmq-broker-tree.eps}
+\caption{Broker external architecture.}
+\label{fig:cmbext}
+\end{figure}
+
 
 \begin{table}
 \centering
@@ -95,8 +129,11 @@ in (SUB)	& pl\_out (PUB)	& {\em BUS}     & \\
 \hline
 \end{tabular}
 \caption{Public interfaces exported by the broker.  Users would
-{\tt \#include "cmb.h"} and link {\tt -lcmb}.}
-\label{fig:cmbapi}
+{\tt \#include "cmb.h"} and link {\tt -lcmb}.  {\em libcmb} utilizes
+a UNIX domain socket exported by the {\em apisrv} plugin to implement
+a very lightweight interface suitable for linking with applications such
+as MPI runtimes (\zMQ\ is too heavyweight to be used directly by applications.)}
+\label{tab:cmbapi}
 \end{table}
 
 

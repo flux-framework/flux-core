@@ -153,7 +153,10 @@ int main (int argc, char *argv[])
     conf->nnodes   = _env_getint ("SLURM_NNODES", 1);
     conf->rootnode = _env_getstr ("SLURM_LAUNCH_NODE_IPADDR", "127.0.0.1");
 
-    local_eth0_address = "192.168.1.115";
+    /* FIXME - some zmq libraries assert on failure here, others just don't
+     * pass messages, silently.
+     */
+    local_eth0_address = "eth0";
 
     snprintf (conf->eventout_uri, sizeof (conf->eventout_uri), EVENTOUT_URI,
 	      local_eth0_address);
