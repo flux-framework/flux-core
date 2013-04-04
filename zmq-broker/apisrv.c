@@ -74,7 +74,7 @@ static char *_strdup (char *s)
     return cpy;
 }
 
-static client_t *_client_create (int fd)
+static void _client_create (int fd)
 {
     client_t *c;
 
@@ -85,7 +85,6 @@ static client_t *_client_create (int fd)
     if (c->next)
         c->next->prev = c;
     ctx->clients = c;
-    return c;
 }
 
 static void _client_destroy (client_t *c)
@@ -117,7 +116,6 @@ static int _client_count (void)
 
 static void _accept ()
 {
-    client_t *c;
     int fd;
 
     fd = accept (ctx->listen_fd, NULL, NULL); 
@@ -125,7 +123,7 @@ static void _accept ()
         fprintf (stderr, "apisrv: accept: %s\n", strerror (errno));
         exit (1);
     }
-    c = _client_create (fd);
+     _client_create (fd);
 }
 
 static int _client_read (client_t *c)
@@ -149,11 +147,12 @@ again:
         return -1;
 
     for (taglen = 0; taglen < totlen; taglen++) {
-        if (ctx->buf[taglen] == '\0') {
-            tag = _strdup (ctx->buf);
+        if (ctx->buf[taglen] == '\0')
             break;
-        }
     }
+    if (taglen == totlen)
+	return -1;
+    tag = _strdup (ctx->buf);
     body = &ctx->buf[taglen + 1]; /* not null terminated */
     bodylen = totlen - taglen - 1;
 

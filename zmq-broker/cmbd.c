@@ -44,8 +44,8 @@ static const struct option longopts[] = {
     {0, 0, 0, 0},
 };
 
-#define EVENTOUT_URI        "epgm://eth0;239.192.1.1:5555"
-#define EVENTIN_URI         "epgm://eth0;239.192.1.1:5555"
+#define EVENTOUT_URI        "epgm://%s;239.192.1.1:5555"
+#define EVENTIN_URI         "epgm://%s;239.192.1.1:5555"
 
 #define TREEIN_URI          "tcp://*:5556"
 #define TREEOUT_URI         "tcp://%s:5556"
@@ -125,6 +125,7 @@ int main (int argc, char *argv[])
     int c;
     conf_t *conf;
     server_t *srv;
+    char *local_eth0_address;
 
     conf = _zmalloc (sizeof (conf_t));
     conf->prog = basename (argv[0]);
@@ -152,8 +153,12 @@ int main (int argc, char *argv[])
     conf->nnodes   = _env_getint ("SLURM_NNODES", 1);
     conf->rootnode = _env_getstr ("SLURM_LAUNCH_NODE_IPADDR", "127.0.0.1");
 
-    snprintf (conf->eventout_uri, sizeof (conf->eventout_uri), EVENTOUT_URI);
-    snprintf (conf->eventin_uri, sizeof (conf->eventin_uri), EVENTIN_URI);
+    local_eth0_address = "192.168.1.115";
+
+    snprintf (conf->eventout_uri, sizeof (conf->eventout_uri), EVENTOUT_URI,
+	      local_eth0_address);
+    snprintf (conf->eventin_uri, sizeof (conf->eventin_uri), EVENTIN_URI,
+	      local_eth0_address);
     snprintf (conf->treeout_uri, sizeof (conf->treeout_uri), TREEOUT_URI,
               conf->rootnode);
     snprintf (conf->treein_uri, sizeof (conf->treein_uri),TREEIN_URI); 
@@ -199,8 +204,8 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
     _zmq_bind (srv->zs_eventout, conf->eventout_uri);
 
     srv->zs_eventin = _zmq_socket (srv->zctx, ZMQ_SUB);
-    _zmq_connect (srv->zs_eventin, conf->eventin_uri);
-    _zmq_subscribe_all (srv->zs_eventin);
+    //_zmq_connect (srv->zs_eventin, conf->eventin_uri);
+    //_zmq_subscribe_all (srv->zs_eventin);
 
     srv->zs_treeout = _zmq_socket (srv->zctx, ZMQ_PUSH);
     if (!conf->root_server)
