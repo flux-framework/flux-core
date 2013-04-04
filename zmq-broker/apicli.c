@@ -256,6 +256,7 @@ error:
     return -1;
 }
 
+/* no return except on error */
 int cmb_snoop (cmb_t c, char *sub)
 {
     char *tag;
@@ -271,9 +272,6 @@ int cmb_snoop (cmb_t c, char *sub)
         if (o)
             json_object_put (o);
     }
-    if (cmb_send_json (c, NULL, "api.unsubscribe") < 0)
-        goto error;
-    return 0;
 error:
     return -1;
 }
