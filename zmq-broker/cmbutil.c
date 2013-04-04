@@ -1,3 +1,5 @@
+/* cmbutil.c - exercise public interfaces */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <getopt.h>
@@ -30,7 +32,7 @@ static void usage (void)
     fprintf (stderr, "Usage: cmbutil OPTIONS\n"
 "  -p,--ping            loop back a sequenced message through the cmb\n"
 "  -P,--ping-padding N  pad ping packets with N bytes (adds a JSON string)\n"
-"  -P,--ping-delay N    set delay between ping packets (in msec)\n"
+"  -d,--ping-delay N    set delay between ping packets (in msec)\n"
 "  -s,--snoop SUB       watch traffic on the cmb (SUB=\"\" for all)\n"
 "  -b,--barrier name    execute barrier across slurm job\n"
 "  -k,--kvs-put key=val set a key\n"

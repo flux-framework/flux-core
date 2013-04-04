@@ -66,6 +66,14 @@ static void *_zmalloc (size_t size)
     return new;
 }
 
+static char *_strdup (char *s)
+{
+    char *cpy = strdup (s);
+    if (!cpy)
+        _oom ();
+    return cpy;
+}
+
 static client_t *_client_create (int fd)
 {
     client_t *c;
@@ -120,63 +128,61 @@ static void _accept ()
     c = _client_create (fd);
 }
 
-/* route API socket to broker (in: tag\0body, out: zmq) */
 static int _client_read (client_t *c)
 {
-    int n, i;
+    const char *api_subscribe = "api.subscribe.";
+    const char *api_setuuid = "api.setuuid.";
     zmq_2part_t msg;
-    int bodylen;
+    int bodylen, taglen, totlen;
     char *tag, *body;
 
 again:
-    n = recv (c->fd, ctx->buf, sizeof (ctx->buf), MSG_DONTWAIT);
-    if (n < 0 && errno == EWOULDBLOCK)
+    totlen = recv (c->fd, ctx->buf, sizeof (ctx->buf), MSG_DONTWAIT);
+    if (totlen < 0 && errno == EWOULDBLOCK)
         return 0;
-    if (n < 0) {
+    if (totlen < 0) {
         if (errno != ECONNRESET)
             fprintf (stderr, "apisrv: API read: %s\n", strerror (errno));
         return -1;
     }
-    if (n == 0) /* EOF */
+    if (totlen == 0) /* EOF */
         return -1;
-    for (i = 0; i < n; i++) {
-        if (ctx->buf[i] == '\0')
-            break;
-    }
-    bodylen = n - i - 1;
-    if (bodylen < 0) {
-        fprintf (stderr, "apisrv: API read: malformed message\n");
-        return -1;
-    }
-    body = &ctx->buf[i + 1];
-    tag = &ctx->buf[0];
 
-    if (!strcmp (tag, "subscribe")) { /* bodylen == 0 subscribes to "" (all) */
-        if (c->subscription)
-            free (c->subscription);
-        c->subscription = _zmalloc (bodylen + 1);
-        memcpy (c->subscription, body, bodylen);
-    } else if (!strcmp (tag, "unsubscribe")) {
+    for (taglen = 0; taglen < totlen; taglen++) {
+        if (ctx->buf[taglen] == '\0') {
+            tag = _strdup (ctx->buf);
+            break;
+        }
+    }
+    body = &ctx->buf[taglen + 1]; /* not null terminated */
+    bodylen = totlen - taglen - 1;
+
+    if (!strcmp (tag, "api.unsubscribe")) {
         if (c->subscription) {
             free (c->subscription);
             c->subscription = NULL;
         }
-    } else if (!strcmp (tag, "setuuid")) {
-        if (sizeof (c->uuid) >= bodylen + 1) {
-            memcpy (c->uuid, body, bodylen); 
-            _zmq_2part_init_empty (&msg, "event.%s.connect", c->uuid);
-            _zmq_2part_send (ctx->zs_out, &msg, 0);
-        } else
-            return -1;
+    } else if (!strncmp (tag, api_subscribe, strlen (api_subscribe))) {
+        char *p = tag + strlen (api_subscribe);
+        if (c->subscription)
+            free (c->subscription);
+        c->subscription = _strdup (p);
+    } else if (!strncmp (tag, api_setuuid, strlen (api_setuuid))) {
+        char *p = tag + strlen (api_setuuid);
+        snprintf (c->uuid, sizeof (c->uuid), "%s", p);
+        _zmq_2part_init_empty (&msg, "event.%s.connect", c->uuid);
+        _zmq_2part_send (ctx->zs_out, &msg, 0);
     } else {
         _zmq_2part_init_buf (&msg, body, bodylen, "%s", tag);
         _zmq_2part_send (ctx->zs_out, &msg, 0);
     }
-    goto again;
+    free (tag);
+
+    goto again; /* another message might have arrived */
+
     return 0;
 }
 
-/* route broker message to API socket (in: zmq, out: tag\0body) */
 static void _readmsg (bool *shutdownp)
 {
     zmq_2part_t msg;
