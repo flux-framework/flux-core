@@ -98,7 +98,7 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'b': { /* --barrier NAME */
-                if (cmb_barrier (c, optarg, 1, nprocs, tasks_per_node) < 0) {
+                if (cmb_barrier (c, optarg, nprocs, tasks_per_node) < 0) {
                     fprintf (stderr, "cmb_barrier: %s\n", strerror(errno));
                     exit (1);
                 }

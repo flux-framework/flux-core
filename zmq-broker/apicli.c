@@ -278,9 +278,10 @@ error:
     return -1;
 }
 
-int cmb_barrier (cmb_t c, char *name, int count, int nprocs, int tasks_per_node)
+int cmb_barrier (cmb_t c, char *name, int nprocs, int tasks_per_node)
 {
     json_object *o = NULL;
+    int count = 1;
 
     if (cmb_send_json (c, NULL, "api.subscribe.event.barrier.exit.%s",name) < 0)
         goto error;

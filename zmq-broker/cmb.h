@@ -8,7 +8,7 @@ void cmb_fini (cmb_t c);
 
 int cmb_ping (cmb_t c, int seq, int padding);
 int cmb_snoop (cmb_t c, char *subscription);
-int cmb_barrier (cmb_t c, char *name, int count, int nprocs, int procs_per_node);
+int cmb_barrier (cmb_t c, char *name, int nprocs, int procs_per_node);
 int cmb_sync (cmb_t c);
 
 int cmb_kvs_put (cmb_t c, char *key, char *val);

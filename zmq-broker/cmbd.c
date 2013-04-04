@@ -173,7 +173,7 @@ int main (int argc, char *argv[])
         conf->root_server = true;
 
     if (conf->root_server && conf->syncperiod_msec == 0)
-        conf->syncperiod_msec = 30*1000;
+        conf->syncperiod_msec = 10*1000;
 
     if (conf->verbose) {
         if (conf->root_server)
