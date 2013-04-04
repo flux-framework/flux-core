@@ -81,8 +81,6 @@ static barrier_t *_barrier_create (char *name, int maxcount)
 
 static void _barrier_destroy (barrier_t *b)
 {
-    zmq_2part_t msg;
-
     if (b->prev)
         b->prev->next = b->next;
     else
@@ -90,8 +88,8 @@ static void _barrier_destroy (barrier_t *b)
     if (b->next)
         b->next->prev = b->prev;
     if (ctx->conf->root_server) {
-        _zmq_2part_init_empty (&msg, "event.barrier.exit.%s", b->name);
-        _zmq_2part_send (ctx->zs_out_event, &msg, 0);
+        _zmq_2part_send_json (ctx->zs_out_event, NULL,
+                              "event.barrier.exit.%s", b->name);
     } else {
         json_object *no, *o = NULL;
        
@@ -100,8 +98,7 @@ static void _barrier_destroy (barrier_t *b)
         if (!(no = json_object_new_int (b->maxcount)))
             _oom ();
         json_object_object_add (o, "count", no);
-        _zmq_2part_init_json (&msg, o, "barrier.enter.%s", b->name);
-        _zmq_2part_send (ctx->zs_out_tree, &msg, 0);
+        _zmq_2part_send_json (ctx->zs_out_tree, o, "barrier.enter.%s", b->name);
     }
     free (b);
     return;

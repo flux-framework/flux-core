@@ -71,10 +71,8 @@ static bool _poll (void)
         if (_zmq_2part_match (&msg, "event.cmb.shutdown"))
             shutdown = true;
         _zmq_2part_close (&msg);
-    } else { /* timeout */
-        _zmq_2part_init_empty (&msg, "event.sched.trigger");
-        _zmq_2part_send (ctx->zs_out_event, &msg, 0);
-    }
+    } else /* timeout */
+        _zmq_2part_send_json (ctx->zs_out_event, NULL, "event.sched.trigger");
     return !shutdown;
 }
 

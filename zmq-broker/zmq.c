@@ -162,76 +162,6 @@ void _zmq_getsockopt (void *socket, int option_name, void *option_value,
     }
 }
 
-void _zmq_2part_init_buf (zmq_2part_t *msg, char *buf, int len,
-                          const char *fmt, ...)
-{
-    va_list ap;
-    int n;
-    char *tag;
-
-    va_start (ap, fmt);
-    n = vasprintf (&tag, fmt, ap);
-    va_end (ap);
-    if (n < 0) {
-        fprintf (stderr, "vasprintf: %s\n", strerror (errno));
-        exit (1);
-    }
-    _zmq_msg_init_size (&msg->tag, strlen (tag));
-    memcpy (zmq_msg_data (&msg->tag), tag, strlen (tag));
-    _zmq_msg_init_size (&msg->body, len);
-    memcpy (zmq_msg_data (&msg->body), buf, len);;
-    free (tag);
-}
-
-
-void _zmq_2part_init_empty (zmq_2part_t *msg, const char *fmt, ...)
-{
-    va_list ap;
-    int n;
-    char *tag;
-
-    va_start (ap, fmt);
-    n = vasprintf (&tag, fmt, ap);
-    va_end (ap);
-    if (n < 0) {
-        fprintf (stderr, "vasprintf: %s\n", strerror (errno));
-        exit (1);
-    }
-    _zmq_msg_init_size (&msg->tag, strlen (tag));
-    memcpy (zmq_msg_data (&msg->tag), tag, strlen (tag));
-    _zmq_msg_init_size (&msg->body, 0);
-    free (tag);
-}
-
-void _zmq_2part_init_json (zmq_2part_t *msg, json_object *o,
-                           const char *fmt, ...)
-{
-    va_list ap;
-    int n;
-    char *tag;
-    const char *body;
-    int taglen, bodylen;
-
-    va_start (ap, fmt);
-    n = vasprintf (&tag, fmt, ap);
-    va_end (ap);
-    if (n < 0) {
-        fprintf (stderr, "vasprintf: %s\n", strerror (errno));
-        exit (1);
-    }
-    taglen = strlen (tag);
-    _zmq_msg_init_size (&msg->tag, taglen);
-    memcpy (zmq_msg_data (&msg->tag), tag, taglen);
-
-    body = json_object_to_json_string (o);
-    bodylen = strlen (body);
-    _zmq_msg_init_size (&msg->body, bodylen);
-    memcpy (zmq_msg_data (&msg->body), body, bodylen);
-
-    free (tag);    
-    json_object_put (o);
-}
-
 void _zmq_2part_init (zmq_2part_t *msg)
 {
     _zmq_msg_init (&msg->tag);
@@ -289,14 +219,17 @@ int _zmq_2part_recv_json (void *socket, char **tagp, json_object **op)
     _zmq_2part_init (&msg);
     _zmq_2part_recv (socket, &msg, 0);
     tag = _msg2str (&msg.tag);
-    if (zmq_msg_size (&msg.body) > 0) {
-        body = _msg2str (&msg.body);
-        o = json_tokener_parse (body);
-        if (!o)
-            goto error;
+    if (op) {
+        if (zmq_msg_size (&msg.body) > 0) {
+            body = _msg2str (&msg.body);
+            o = json_tokener_parse (body);
+            if (!o)
+                goto error;
+        }
     }
+    if (op)
+         *op = o;
     *tagp = tag;
-    *op = o;
     if (body)
         free (body);
     _zmq_2part_close (&msg);
@@ -310,6 +243,60 @@ error:
     if (tag)
         free (tag);
     return -1;
+}
+
+void _zmq_2part_send_json (void *sock, json_object *o, const char *fmt, ...)
+{
+    va_list ap;
+    char *tag = NULL;
+    const char *body;
+    int n, taglen, bodylen;
+    zmq_2part_t msg;
+
+    va_start (ap, fmt);
+    n = vasprintf (&tag, fmt, ap);
+    va_end (ap);
+    if (n < 0) {
+        fprintf (stderr, "vasprintf: %s\n", strerror (errno));
+        exit (1);
+    }
+    taglen = strlen (tag);
+    body = o ? json_object_to_json_string (o) : NULL;
+    bodylen = o ? strlen (body) : 0;
+
+    _zmq_msg_init_size (&msg.tag, taglen);
+    memcpy (zmq_msg_data (&msg.tag), tag, taglen);
+    _zmq_msg_init_size (&msg.body, bodylen);
+    memcpy (zmq_msg_data (&msg.body), body, bodylen);
+
+    _zmq_2part_send (sock, &msg, 0);
+    free (tag);
+    json_object_put (o);
+}
+
+void _zmq_2part_send_buf (void *sock, char *buf, int len, const char *fmt, ...)
+{
+    va_list ap;
+    char *tag = NULL;
+    int n, taglen;
+    zmq_2part_t msg;
+
+    va_start (ap, fmt);
+    n = vasprintf (&tag, fmt, ap);
+    va_end (ap);
+    if (n < 0) {
+        fprintf (stderr, "vasprintf: %s\n", strerror (errno));
+        exit (1);
+    }
+    taglen = strlen (tag);
+
+    _zmq_msg_init_size (&msg.tag, taglen);
+    memcpy (zmq_msg_data (&msg.tag), tag, taglen);
+    _zmq_msg_init_size (&msg.body, len);
+    memcpy (zmq_msg_data (&msg.body), buf, len);
+
+    _zmq_2part_send (sock, &msg, 0);
+    free (tag);
 }
 
 void _zmq_2part_send (void *socket, zmq_2part_t *msg, int flags)

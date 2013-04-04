@@ -170,7 +170,6 @@ static char *_redis_get (const char *key)
 
 static void _reply_to_get (const char *sender, const char *val)
 {
-    zmq_2part_t msg;
     json_object *o, *no;
 
     if (!(o = json_object_new_object ()))
@@ -178,17 +177,7 @@ static void _reply_to_get (const char *sender, const char *val)
     if (!(no = json_object_new_string (val)))
         _oom ();
     json_object_object_add (o, "val", no);
-    _zmq_2part_init_json (&msg, o, "%s", sender);
-    _zmq_2part_send (ctx->zs_out, &msg, 0);
-}
-
-static void _reply_to_commit (const char *sender)
-{
-    zmq_2part_t msg;
-
-    _zmq_2part_init_empty (&msg, "%s", sender);
-    _zmq_2part_send (ctx->zs_out, &msg, 0);
-    
+    _zmq_2part_send_json (ctx->zs_out, o, "%s", sender);
 }
 
 static void *_thread (void *arg)
@@ -249,7 +238,7 @@ again:
                 fprintf (stderr, "%s: parse error\n", tag);
                 goto next;
             }
-            _reply_to_commit (sender);
+            _zmq_2part_send_json (ctx->zs_out, NULL, "%s", sender);
         }
 next:
         free (tag);

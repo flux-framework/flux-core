@@ -55,7 +55,6 @@ static const struct option longopts[] = {
 #define PLIN_EVENT_URI      "inproc://plin_event"
 #define PLIN_TREE_URI       "inproc://plin_tree"
 
-static void _pl_shutdown (conf_t *conf, server_t *srv);
 static void _cmb_init (conf_t *conf, server_t **srvp);
 static void _cmb_fini (conf_t *conf, server_t *srv);
 static void _cmb_poll (conf_t *conf, server_t *srv);
@@ -241,7 +240,7 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
 
 static void _cmb_fini (conf_t *conf, server_t *srv)
 {
-    _pl_shutdown (conf, srv);
+    _zmq_2part_send_json (srv->zs_plout, NULL, "event.cmb.shutdown");
    
     kvssrv_fini ();
     if (conf->root_server)
@@ -261,14 +260,6 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
     _zmq_term (srv->zctx);
 
     free (srv);
-}
-
-static void _pl_shutdown (conf_t *conf, server_t *srv)
-{
-    zmq_2part_t msg;
-
-    _zmq_2part_init_empty (&msg, "event.cmb.shutdown");
-    _zmq_2part_send (srv->zs_plout, &msg, 0);
 }
 
 static void _dumpmsg (char *s, zmq_2part_t msg)

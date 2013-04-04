@@ -96,11 +96,8 @@ static void _client_destroy (client_t *c)
         ctx->clients = c->next;
     if (c->next)
         c->next->prev = c->prev;
-    if (strlen (c->uuid) > 0) {
-        zmq_2part_t msg;
-        _zmq_2part_init_empty (&msg, "event.%s.disconnect", c->uuid);
-        _zmq_2part_send (ctx->zs_out, &msg, 0);
-    }
+    if (strlen (c->uuid) > 0)
+        _zmq_2part_send_json (ctx->zs_out, NULL, "event.%s.disconnect",c->uuid);
     free (c);
 }
 
@@ -130,16 +127,12 @@ static int _client_read (client_t *c)
 {
     const char *api_subscribe = "api.subscribe.";
     const char *api_setuuid = "api.setuuid.";
-    zmq_2part_t msg;
     int bodylen, taglen, totlen;
     char *tag, *body;
 
-again:
     totlen = recv (c->fd, ctx->buf, sizeof (ctx->buf), MSG_DONTWAIT);
-    if (totlen < 0 && errno == EWOULDBLOCK)
-        return 0;
     if (totlen < 0) {
-        if (errno != ECONNRESET)
+        if (errno != ECONNRESET && errno != EWOULDBLOCK)
             fprintf (stderr, "apisrv: API read: %s\n", strerror (errno));
         return -1;
     }
@@ -169,15 +162,10 @@ again:
     } else if (!strncmp (tag, api_setuuid, strlen (api_setuuid))) {
         char *p = tag + strlen (api_setuuid);
         snprintf (c->uuid, sizeof (c->uuid), "%s", p);
-        _zmq_2part_init_empty (&msg, "event.%s.connect", c->uuid);
-        _zmq_2part_send (ctx->zs_out, &msg, 0);
-    } else {
-        _zmq_2part_init_buf (&msg, body, bodylen, "%s", tag);
-        _zmq_2part_send (ctx->zs_out, &msg, 0);
-    }
+        _zmq_2part_send_json (ctx->zs_out, NULL, "event.%s.connect", c->uuid);
+    } else
+        _zmq_2part_send_buf (ctx->zs_out, body, bodylen, "%s", tag);
     free (tag);
-
-    goto again; /* another message might have arrived */
 
     return 0;
 }
@@ -252,7 +240,9 @@ static bool _poll (void)
         assert (c->fd == zpa[i].fd);
         deleteme = NULL;
         if (zpa[i].revents & ZMQ_POLLIN) {
-            if (_client_read (c) < 0)
+            while (_client_read (c) != -1)
+                ; /* there may be multiple messages queued */
+            if (errno != EWOULDBLOCK)
                 deleteme = c;
         }
         if (zpa[i].revents & ZMQ_POLLERR)
