@@ -3,7 +3,8 @@ DEPSEC = \
 	zmq-broker.tex \
 
 DEPFIG = \
-	../fig/redis-pmi.eps
+	../fig/redis-pmi.eps \
+	../fig/zmq-broker.eps \
 
 DEPBIB = 
 
