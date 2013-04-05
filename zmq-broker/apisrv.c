@@ -97,7 +97,8 @@ static void _client_destroy (client_t *c)
     if (c->next)
         c->next->prev = c->prev;
     if (strlen (c->uuid) > 0)
-        _zmq_2part_send_json (ctx->zs_out, NULL, "event.%s.disconnect",c->uuid);
+        cmb_msg_send (ctx->zs_out, NULL, NULL, 0,
+                      "event.%s.disconnect",c->uuid);
     free (c);
 }
 
@@ -127,78 +128,77 @@ static int _client_read (client_t *c)
 {
     const char *api_subscribe = "api.subscribe.";
     const char *api_setuuid = "api.setuuid.";
-    int bodylen, taglen, totlen;
-    char *tag, *body;
+    int taglen, totlen;
 
     totlen = recv (c->fd, ctx->buf, sizeof (ctx->buf), MSG_DONTWAIT);
-    if (totlen < 0) {
-        if (errno != ECONNRESET && errno != EWOULDBLOCK)
+    if (totlen <= 0) {
+        if (errno != ECONNRESET && errno != EWOULDBLOCK && totlen != 0)
             fprintf (stderr, "apisrv: API read: %s\n", strerror (errno));
         return -1;
     }
-    if (totlen == 0) /* EOF */
-        return -1;
-
-    for (taglen = 0; taglen < totlen; taglen++) {
-        if (ctx->buf[taglen] == '\0')
-            break;
+    taglen = strnlen (ctx->buf, totlen);
+    if (taglen == totlen) {
+        fprintf (stderr, "apisrv: received corrupted API buffer\n");
+	    return -1;
     }
-    if (taglen == totlen)
-	return -1;
-    tag = _strdup (ctx->buf);
-    body = &ctx->buf[taglen + 1]; /* not null terminated */
-    bodylen = totlen - taglen - 1;
 
-    if (!strcmp (tag, "api.unsubscribe")) {
+    /* internal: api.unsubscribe */
+    if (!strcmp (ctx->buf, "api.unsubscribe")) {
         if (c->subscription) {
             free (c->subscription);
             c->subscription = NULL;
         }
-    } else if (!strncmp (tag, api_subscribe, strlen (api_subscribe))) {
-        char *p = tag + strlen (api_subscribe);
+
+    /* internal: api.subscribe */
+    } else if (!strncmp (ctx->buf, api_subscribe, strlen (api_subscribe))) {
+        char *p = ctx->buf + strlen (api_subscribe);
         if (c->subscription)
             free (c->subscription);
         c->subscription = _strdup (p);
-    } else if (!strncmp (tag, api_setuuid, strlen (api_setuuid))) {
-        char *p = tag + strlen (api_setuuid);
+
+    /* internal: api.setuuid */
+    } else if (!strncmp (ctx->buf, api_setuuid, strlen (api_setuuid))) {
+        char *p = ctx->buf + strlen (api_setuuid);
         snprintf (c->uuid, sizeof (c->uuid), "%s", p);
-        _zmq_2part_send_json (ctx->zs_out, NULL, "event.%s.connect", c->uuid);
-    } else
-        _zmq_2part_send_buf (ctx->zs_out, body, bodylen, "%s", tag);
-    free (tag);
+        cmb_msg_send (ctx->zs_out, NULL, NULL, 0, "event.%s.connect", c->uuid);
+
+    /* route other */
+    } else {
+        zmq_mpart_t msg;
+        _zmq_mpart_init (&msg);
+        cmb_msg_frombuf (&msg, ctx->buf, totlen);
+        _zmq_mpart_send (ctx->zs_out, &msg, 0);
+    }
 
     return 0;
 }
 
 static void _readmsg (bool *shutdownp)
 {
-    zmq_2part_t msg;
-    client_t *c, *deleteme;
-    int len, n;
+    zmq_mpart_t msg;
+    client_t *c;
+    int len;
 
-    _zmq_2part_init (&msg);
-    _zmq_2part_recv (ctx->zs_in, &msg, 0);
+    _zmq_mpart_init (&msg);
+    _zmq_mpart_recv (ctx->zs_in, &msg, 0);
 
-    if (_zmq_2part_match (&msg, "event.cmb.shutdown")) {
+    if (cmb_msg_match (&msg, "event.cmb.shutdown")) {
         *shutdownp = true;
         goto done;
     }
 
-    len = zmq_msg_size (&msg.tag) + zmq_msg_size (&msg.body) + 1;
-    if (len > sizeof (ctx->buf)) {
-        fprintf (stderr, "apisrv: dropping giant message\n");
+    len = cmb_msg_tobuf (&msg, ctx->buf, sizeof (ctx->buf));
+    if (len < 0) {
+        fprintf (stderr, "_readmsg: dropping bogus message\n");
         goto done;
     }
 
-    memcpy (ctx->buf, zmq_msg_data (&msg.tag), zmq_msg_size (&msg.tag));
-    ctx->buf[zmq_msg_size (&msg.tag)] = '\0';
-    memcpy (ctx->buf + zmq_msg_size (&msg.tag) + 1, zmq_msg_data (&msg.body),
-            len - zmq_msg_size (&msg.tag) - 1);
-
     /* send it to all API clients whose subscription matches */
     for (c = ctx->clients; c != NULL; ) {
-        deleteme = NULL;
-        if (c->subscription && _zmq_2part_match (&msg, c->subscription)) {
+        client_t *deleteme = NULL;
+        int n;
+
+        if (c->subscription && cmb_msg_match (&msg, c->subscription)) {
             n = send (c->fd, ctx->buf, len, 0);
             if (n < len)
                 deleteme = c; 
@@ -208,7 +208,7 @@ static void _readmsg (bool *shutdownp)
             _client_destroy (deleteme);
     }
 done:
-    _zmq_2part_close (&msg);
+    _zmq_mpart_close (&msg);
 }
 
 static bool _poll (void)

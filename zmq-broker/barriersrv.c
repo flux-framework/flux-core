@@ -88,8 +88,8 @@ static void _barrier_destroy (barrier_t *b)
     if (b->next)
         b->next->prev = b->prev;
     if (ctx->conf->root_server) {
-        _zmq_2part_send_json (ctx->zs_out_event, NULL,
-                              "event.barrier.exit.%s", b->name);
+        cmb_msg_send (ctx->zs_out_event, NULL, NULL, 0,
+                      "event.barrier.exit.%s", b->name);
     } else {
         json_object *no, *o = NULL;
        
@@ -98,7 +98,9 @@ static void _barrier_destroy (barrier_t *b)
         if (!(no = json_object_new_int (b->maxcount)))
             _oom ();
         json_object_object_add (o, "count", no);
-        _zmq_2part_send_json (ctx->zs_out_tree, o, "barrier.enter.%s", b->name);
+        cmb_msg_send (ctx->zs_out_tree, o, NULL, 0, "barrier.enter.%s",
+                      b->name);
+        json_object_put (o);
     }
     free (b);
     return;
@@ -145,8 +147,8 @@ static void *_thread (void *arg)
     json_object *o;
 
     while (!shutdown) {
-        if (_zmq_2part_recv_json (ctx->zs_in, &tag, &o) < 0) {
-            fprintf (stderr, "_zmq_2part_recv_json: %s\n", strerror (errno));
+        if (cmb_msg_recv (ctx->zs_in, &tag, &o, NULL, 0) < 0) {
+            fprintf (stderr, "cmb_msg_recv: %s\n", strerror (errno));
             continue;
         }
         if (!strcmp (tag, "event.cmb.shutdown")) {

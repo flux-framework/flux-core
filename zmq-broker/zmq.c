@@ -10,6 +10,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <json/json.h>
+#include <assert.h>
 
 #include "zmq.h"
 
@@ -29,6 +30,10 @@ static void *_zmalloc (size_t size)
     memset (new, 0, size);
     return new;
 }
+
+/**
+ ** zmq wrappers
+ **/
 
 void _zmq_close (void *socket)
 {
@@ -162,18 +167,6 @@ void _zmq_getsockopt (void *socket, int option_name, void *option_value,
     }
 }
 
-void _zmq_2part_init (zmq_2part_t *msg)
-{
-    _zmq_msg_init (&msg->tag);
-    _zmq_msg_init (&msg->body);
-}
-
-void _zmq_2part_close (zmq_2part_t *msg)
-{
-    _zmq_msg_close (&msg->tag);
-    _zmq_msg_close (&msg->body);
-}
-
 bool _zmq_rcvmore (void *socket)
 {
     int64_t more;
@@ -184,18 +177,10 @@ bool _zmq_rcvmore (void *socket)
     return (bool)more;
 }
 
-void _zmq_2part_recv (void *socket, zmq_2part_t *msg, int flags)
+void _zmq_msg_dup (zmq_msg_t *dest, zmq_msg_t *src)
 {
-    _zmq_recv (socket, &msg->tag, flags);
-    if (!_zmq_rcvmore (socket)) {
-        fprintf (stderr, "_zmq_2part_recv: only one part recieved\n");
-        exit (1);
-    }
-    _zmq_recv (socket, &msg->body, flags);
-    if (_zmq_rcvmore (socket)) {
-        fprintf (stderr, "_zmq_2part_recv: more than two parts received\n");
-        exit (1);
-    }
+    _zmq_msg_init_size (dest, zmq_msg_size (src));
+    memcpy (zmq_msg_data (dest), zmq_msg_data (src), zmq_msg_size (dest));
 }
 
 static char *_msg2str (zmq_msg_t *msg)
@@ -209,120 +194,255 @@ static char *_msg2str (zmq_msg_t *msg)
     return s;
 }
 
-int _zmq_2part_recv_json (void *socket, char **tagp, json_object **op)
-{
-    zmq_2part_t msg;
-    json_object *o = NULL;
-    char *tag = NULL;
-    char *body = NULL;
+/**
+ ** mpart messages
+ **/
 
-    _zmq_2part_init (&msg);
-    _zmq_2part_recv (socket, &msg, 0);
-    tag = _msg2str (&msg.tag);
-    if (op) {
-        if (zmq_msg_size (&msg.body) > 0) {
-            body = _msg2str (&msg.body);
-            o = json_tokener_parse (body);
-            if (!o)
-                goto error;
+void _zmq_mpart_init (zmq_mpart_t *msg)
+{
+    int i;
+
+    for (i = 0; i < ZMQ_MPART_MAX; i++)
+        _zmq_msg_init (&msg->part[i]);
+}
+
+void _zmq_mpart_close (zmq_mpart_t *msg)
+{
+    int i;
+    
+    for (i = 0; i < ZMQ_MPART_MAX; i++)
+        _zmq_msg_close (&msg->part[i]);
+}
+
+void _zmq_mpart_recv (void *socket, zmq_mpart_t *msg, int flags)
+{
+    int i = 0;
+
+    for (i = 0; i < ZMQ_MPART_MAX; i++) {
+        if (i > 0 && !_zmq_rcvmore (socket)) {
+            fprintf (stderr, "_zmq_mpart_recv: only got %d message parts\n", i);
+            exit (1);
         }
+        _zmq_recv (socket, &msg->part[i], flags);
     }
+    if (_zmq_rcvmore (socket)) {
+        fprintf (stderr, "_zmq_mpart_recv: too many message parts\n");
+        exit (1);
+    }
+}
+
+void _zmq_mpart_send (void *socket, zmq_mpart_t *msg, int flags)
+{
+    int i;
+
+    for (i = 0; i < ZMQ_MPART_MAX; i++)
+        if (i < ZMQ_MPART_MAX - 1)
+            _zmq_send (socket, &msg->part[i], flags | ZMQ_SNDMORE);
+        else
+            _zmq_send (socket, &msg->part[i], flags);
+}
+
+void _zmq_mpart_dup (zmq_mpart_t *dest, zmq_mpart_t *src)
+{
+    int i;
+
+    for (i = 0; i < ZMQ_MPART_MAX; i++)
+        _zmq_msg_dup (&dest->part[i], &src->part[i]);
+}
+
+size_t _zmq_mpart_size (zmq_mpart_t *msg)
+{
+    int i;
+    size_t size = 0;
+
+    for (i = 0; i < ZMQ_MPART_MAX; i++)
+        size += zmq_msg_size (&msg->part[i]);
+    return size;
+}
+
+/**
+ ** cmb messages
+ **/
+
+int cmb_msg_recv (void *socket, char **tagp, json_object **op,
+                    void **datap, int *lenp)
+{
+    zmq_mpart_t msg;
+    char *tag = NULL;
+    json_object *o = NULL;
+    void *data = NULL;
+    int len = 0;
+
+    _zmq_mpart_init (&msg);
+    _zmq_mpart_recv (socket, &msg, 0);
+
+    /* tag */
+    if (tagp) {
+        tag = _msg2str (&msg.part[0]);
+    } 
+
+    /* json */
+    if (op && zmq_msg_size (&msg.part[1]) > 0) {
+        char *json = _msg2str (&msg.part[1]);
+
+        o = json_tokener_parse (json);
+        free (json);
+        if (!o)
+            goto eproto;
+    }
+
+    /* data */
+    if (datap && lenp && zmq_msg_size (&msg.part[2]) > 0) {
+        len = zmq_msg_size (&msg.part[2]);
+        data = _zmalloc (len);
+    }
+
+    _zmq_mpart_close (&msg);
+
+    if (tagp)
+        *tagp = tag;
     if (op)
-         *op = o;
-    *tagp = tag;
-    if (body)
-        free (body);
-    _zmq_2part_close (&msg);
+        *op = o;
+    if (datap && lenp) {
+        *datap = data;
+        *lenp = len;
+    }
     return 0;
-error:
-    _zmq_2part_close (&msg);
-    if (o)
-        json_object_put (o);
-    if (body)
-        free (body);
+eproto:
+    errno = EPROTO;
+    _zmq_mpart_close (&msg);
     if (tag)
         free (tag);
+    if (o)
+        json_object_put (o);
+    if (data)
+        free (data);
     return -1;
 }
 
-void _zmq_2part_send_json (void *sock, json_object *o, const char *fmt, ...)
+void cmb_msg_send (void *sock, json_object *o, void *data, int len,
+                     const char *fmt, ...)
 {
     va_list ap;
-    char *tag = NULL;
-    const char *body;
-    int n, taglen, bodylen;
-    zmq_2part_t msg;
+    zmq_mpart_t msg;
 
-    va_start (ap, fmt);
-    n = vasprintf (&tag, fmt, ap);
-    va_end (ap);
-    if (n < 0) {
-        fprintf (stderr, "vasprintf: %s\n", strerror (errno));
-        exit (1);
+    _zmq_mpart_init (&msg);
+
+    /* tag */
+    if (true) {
+        char *tag;
+        int n;
+
+        va_start (ap, fmt);
+        n = vasprintf (&tag, fmt, ap);
+        va_end (ap);
+        if (n < 0) {
+            fprintf (stderr, "vasprintf: %s\n", strerror (errno));
+            exit (1);
+        }
+        _zmq_msg_init_size (&msg.part[0], strlen (tag));
+        memcpy (zmq_msg_data (&msg.part[0]), tag, strlen (tag));
+        free (tag);
     }
-    taglen = strlen (tag);
-    body = o ? json_object_to_json_string (o) : NULL;
-    bodylen = o ? strlen (body) : 0;
 
-    _zmq_msg_init_size (&msg.tag, taglen);
-    memcpy (zmq_msg_data (&msg.tag), tag, taglen);
-    _zmq_msg_init_size (&msg.body, bodylen);
-    memcpy (zmq_msg_data (&msg.body), body, bodylen);
+    /* json */
+    if (o) {
+        const char *json = json_object_to_json_string (o);
+        int jlen = strlen (json);
 
-    _zmq_2part_send (sock, &msg, 0);
-    free (tag);
-    json_object_put (o);
-}
-
-void _zmq_2part_send_buf (void *sock, char *buf, int len, const char *fmt, ...)
-{
-    va_list ap;
-    char *tag = NULL;
-    int n, taglen;
-    zmq_2part_t msg;
-
-    va_start (ap, fmt);
-    n = vasprintf (&tag, fmt, ap);
-    va_end (ap);
-    if (n < 0) {
-        fprintf (stderr, "vasprintf: %s\n", strerror (errno));
-        exit (1);
+        _zmq_msg_init_size (&msg.part[1], jlen);
+        memcpy (zmq_msg_data (&msg.part[1]), json, jlen);
     }
-    taglen = strlen (tag);
 
-    _zmq_msg_init_size (&msg.tag, taglen);
-    memcpy (zmq_msg_data (&msg.tag), tag, taglen);
-    _zmq_msg_init_size (&msg.body, len);
-    memcpy (zmq_msg_data (&msg.body), buf, len);
+    /* data */
+    if (data && len > 0) {
+        _zmq_msg_init_size (&msg.part[2], len);
+        memcpy (zmq_msg_data (&msg.part[2]), data, len);
+    }
 
-    _zmq_2part_send (sock, &msg, 0);
-    free (tag);
+    _zmq_mpart_send (sock, &msg, 0);
 }
 
-void _zmq_2part_send (void *socket, zmq_2part_t *msg, int flags)
+void cmb_msg_dump (char *s, zmq_mpart_t *msg)
 {
-    _zmq_send (socket, &msg->tag, flags | ZMQ_SNDMORE);
-    _zmq_send (socket, &msg->body, flags);
+    if (zmq_msg_size (&msg->part[0]) > 0)
+        fprintf (stderr, "%s: %.*s\n", s, (int)zmq_msg_size (&msg->part[0]),
+                                       (char *)zmq_msg_data (&msg->part[0]));
+    if (zmq_msg_size (&msg->part[1]) > 0)
+        fprintf (stderr, "    %.*s\n",    (int)zmq_msg_size (&msg->part[1]),
+                                       (char *)zmq_msg_data (&msg->part[1]));
+    if (zmq_msg_size (&msg->part[2]) > 0)
+        fprintf (stderr, "    data[%d]\n",(int)zmq_msg_size (&msg->part[2]));
 }
 
-void _zmq_msg_dup (zmq_msg_t *dest, zmq_msg_t *src)
+bool cmb_msg_match (zmq_mpart_t *msg, char *tag)
 {
-    _zmq_msg_init_size (dest, zmq_msg_size (src));
-    memcpy (zmq_msg_data (dest), zmq_msg_data (src), zmq_msg_size (dest));
+    bool match = false;
+
+    if (zmq_msg_size (&msg->part[0]) > 0) {
+        int n = zmq_msg_size (&msg->part[0]);
+        int t = strlen (tag);
+
+        match = (t <= n && !memcmp (zmq_msg_data (&msg->part[0]), tag, t));
+    }
+    return match;
 }
 
-void _zmq_2part_dup (zmq_2part_t *dest, zmq_2part_t *src)
+/* convert to tag\0json\0data format for socket xfer */
+int cmb_msg_tobuf (zmq_mpart_t *msg, char *buf, int len)
 {
-    _zmq_msg_dup (&dest->tag, &src->tag);
-    _zmq_msg_dup (&dest->body, &src->body);
+    char *p = &buf[0];
+
+    if (_zmq_mpart_size (msg) + 2 > len) {
+        errno = EPROTO;
+        return -1;
+    }
+
+    /* tag */
+    memcpy (p, zmq_msg_data (&msg->part[0]), zmq_msg_size (&msg->part[0]));
+    p += zmq_msg_size (&msg->part[0]);
+    *p++ = '\0';
+
+    /* json */
+    memcpy (p, zmq_msg_data (&msg->part[1]), zmq_msg_size (&msg->part[1]));
+    p += zmq_msg_size (&msg->part[1]);
+    *p++ = '\0';
+
+    /* data */
+    memcpy (p, zmq_msg_data (&msg->part[2]), zmq_msg_size (&msg->part[2]));
+    p += zmq_msg_size (&msg->part[2]);
+
+    return p - buf;
 }
 
-bool _zmq_2part_match (zmq_2part_t *msg, char *tag)
+/* convert to tag\0json\0data format for socket xfer */
+void cmb_msg_frombuf (zmq_mpart_t *msg, char *buf, int len)
 {
-    int n = zmq_msg_size (&msg->tag);
-    int t = strlen (tag);
+    char *p, *q;
 
-    return (t <= n && !memcmp (zmq_msg_data (&msg->tag), tag, t));
+    /* tag */
+    for (p = q = buf; q - buf < len; q++)
+        if (*q == '\0')
+            break;
+    assert (p <= q);
+    _zmq_msg_init_size (&msg->part[0], q - p);
+    memcpy (zmq_msg_data (&msg->part[0]), p, q - p);
+
+    /* json */
+    for (p = q = q + 1; q - buf < len; q++)
+        if (*q == '\0')
+            break;
+    assert (p <= q);
+    _zmq_msg_init_size (&msg->part[1], q - p);
+    memcpy (zmq_msg_data (&msg->part[1]), p, q - p);
+
+    /* data */
+    p = q + 1;
+    q = buf + len;
+    if (p < q) {
+        _zmq_msg_init_size (&msg->part[2], q - p);
+        memcpy (zmq_msg_data (&msg->part[2]), p, q - p);
+    }
 }
 
 /*

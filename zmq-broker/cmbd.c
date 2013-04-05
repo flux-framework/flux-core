@@ -84,17 +84,6 @@ static char *_strdup (char *s)
     return cpy;
 }
 
-static char *_msg2str (zmq_msg_t *msg)
-{
-    int len = zmq_msg_size (msg);
-    char *s = _zmalloc (len + 1);
-
-    memcpy (s, zmq_msg_data (msg), len);
-    s[len] = '\0';
-
-    return s;
-}
-
 static int _env_getint (char *name, int dflt)
 {
     char *ev = getenv (name);
@@ -240,7 +229,7 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
 
 static void _cmb_fini (conf_t *conf, server_t *srv)
 {
-    _zmq_2part_send_json (srv->zs_plout, NULL, "event.cmb.shutdown");
+    cmb_msg_send (srv->zs_plout, NULL, NULL, 0, "event.cmb.shutdown");
    
     kvssrv_fini ();
     if (conf->root_server)
@@ -262,42 +251,28 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
     free (srv);
 }
 
-static void _dumpmsg (char *s, zmq_2part_t msg)
-{
-    int bodylen = (int)zmq_msg_size (&msg.body);
-    char *tag = _msg2str (&msg.tag);
-
-    fprintf (stderr, "%s: %s %d bytes\n", s, tag, bodylen);
-    free (tag);
-    if (bodylen > 0) {
-        char *body = _msg2str (&msg.body);
-        fprintf (stderr, "  %s\n", body);
-        free (body);
-    }
-}
-
 static void _route_two (conf_t *conf, void *src, void *d1, void *d2, char *s)
 {
-    zmq_2part_t msg, cpy;
+    zmq_mpart_t msg, cpy;
 
-    _zmq_2part_init (&msg);
-    _zmq_2part_recv (src, &msg, 0);
+    _zmq_mpart_init (&msg);
+    _zmq_mpart_recv (src, &msg, 0);
     if (conf->verbose)
-        _dumpmsg (s, msg);
-    _zmq_2part_dup (&cpy, &msg);
-    _zmq_2part_send (d2, &cpy, 0);
-    _zmq_2part_send (d1, &msg, 0);
+        cmb_msg_dump (s, &msg);
+    _zmq_mpart_dup (&cpy, &msg);
+    _zmq_mpart_send (d2, &cpy, 0);
+    _zmq_mpart_send (d1, &msg, 0);
 }
 
 static void _route_one (conf_t *conf, void *src, void *dest, char *s)
 {
-    zmq_2part_t msg;
+    zmq_mpart_t msg;
 
-    _zmq_2part_init (&msg);
-    _zmq_2part_recv (src, &msg, 0);
+    _zmq_mpart_init (&msg);
+    _zmq_mpart_recv (src, &msg, 0);
     if (conf->verbose)
-        _dumpmsg (s, msg);
-    _zmq_2part_send (dest, &msg, 0);
+        cmb_msg_dump (s, &msg);
+    _zmq_mpart_send (dest, &msg, 0);
 }
 
 static void _cmb_poll (conf_t *conf, server_t *srv)

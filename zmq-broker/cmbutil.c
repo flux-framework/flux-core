@@ -141,12 +141,13 @@ int main (int argc, char *argv[])
             }
             case 'K': { /* --kvs-get key */
                 char *val = cmb_kvs_get (c, optarg);
-                if (!val) {
+                if (!val && errno != 0) {
                     fprintf (stderr, "cmb_kvs_get: %s\n", strerror(errno));
                     exit (1);
                 }
-                printf ("%s=%s\n", optarg, val);
-                free (val);
+                printf ("%s=%s\n", optarg, val ? val : "<nil>");
+                if (val)
+                    free (val);
                 break;
             }
             case 'C': { /* --kvs-commit */

@@ -59,6 +59,8 @@ static int _parse_kvs_put (json_object *o, const char **kp, const char **vp,
 {
     json_object *key, *val, *sender;
 
+    if (!o)
+        goto error;
     key = json_object_object_get (o, "key"); 
     if (!key)
         goto error;
@@ -80,6 +82,8 @@ static int _parse_kvs_get (json_object *o, const char **kp, const char **sp)
 {
     json_object *key, *sender;
 
+    if (!o)
+        goto error;
     key = json_object_object_get (o, "key"); 
     if (!key)
         goto error;
@@ -97,6 +101,8 @@ static int _parse_kvs_commit (json_object *o, const char **sp)
 {
     json_object *sender;
 
+    if (!o)
+        goto error;
     sender = json_object_object_get (o, "sender");
     if (!sender)
         goto error;
@@ -174,10 +180,13 @@ static void _reply_to_get (const char *sender, const char *val)
 
     if (!(o = json_object_new_object ()))
         _oom ();
-    if (!(no = json_object_new_string (val)))
-        _oom ();
-    json_object_object_add (o, "val", no);
-    _zmq_2part_send_json (ctx->zs_out, o, "%s", sender);
+    if (val) { /* if val is null, key was not found - omit 'val' in response */
+        if (!(no = json_object_new_string (val)))
+            _oom ();
+        json_object_object_add (o, "val", no);
+    }
+    cmb_msg_send (ctx->zs_out, o, NULL, 0, "%s", sender);
+    json_object_put (o);
 }
 
 static void *_thread (void *arg)
@@ -204,8 +213,8 @@ again:
     }
 
     while (!shutdown) {
-        if (_zmq_2part_recv_json (ctx->zs_in, &tag, &o) < 0) {
-            fprintf (stderr, "_zmq_2part_recv_json: %s\n", strerror (errno));
+        if (cmb_msg_recv (ctx->zs_in, &tag, &o, NULL, 0) < 0) {
+            fprintf (stderr, "cmb_msg_recv: %s\n", strerror (errno));
             continue;
         }
         if (!strcmp (tag, "event.cmb.shutdown")) {
@@ -238,7 +247,7 @@ again:
                 fprintf (stderr, "%s: parse error\n", tag);
                 goto next;
             }
-            _zmq_2part_send_json (ctx->zs_out, NULL, "%s", sender);
+            cmb_msg_send (ctx->zs_out, NULL, NULL, 0, "%s", sender);
         }
 next:
         free (tag);

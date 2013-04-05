@@ -55,7 +55,7 @@ static void *_zmalloc (size_t size)
 static bool _poll (void)
 {
     bool shutdown = false;
-    zmq_2part_t msg;
+    zmq_mpart_t msg;
     zmq_pollitem_t zpa[] = {
        { .socket = ctx->zs_in, .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
     };
@@ -66,13 +66,14 @@ static bool _poll (void)
         exit (1);
     }
     if (zpa[0].revents & ZMQ_POLLIN) {
-        _zmq_2part_init (&msg);
-        _zmq_2part_recv (ctx->zs_in, &msg, 0);
-        if (_zmq_2part_match (&msg, "event.cmb.shutdown"))
+        _zmq_mpart_init (&msg);
+        _zmq_mpart_recv (ctx->zs_in, &msg, 0);
+        if (cmb_msg_match (&msg, "event.cmb.shutdown"))
             shutdown = true;
-        _zmq_2part_close (&msg);
-    } else /* timeout */
-        _zmq_2part_send_json (ctx->zs_out_event, NULL, "event.sched.trigger");
+        _zmq_mpart_close (&msg);
+    } else { /* timeout */
+        cmb_msg_send (ctx->zs_out_event, NULL, NULL, 0, "event.sched.trigger");
+    }
     return !shutdown;
 }
 
