@@ -13,23 +13,7 @@
 #include <assert.h>
 
 #include "zmq.h"
-
-static void _oom (void)
-{
-    fprintf (stderr, "out of memory\n");
-    exit (1);
-}
-
-static void *_zmalloc (size_t size)
-{
-    void *new;
-
-    new = malloc (size);
-    if (!new)
-        _oom ();
-    memset (new, 0, size);
-    return new;
-}
+#include "util.h"
 
 /**
  ** zmq wrappers
@@ -186,7 +170,7 @@ void _zmq_msg_dup (zmq_msg_t *dest, zmq_msg_t *src)
 static char *_msg2str (zmq_msg_t *msg)
 {
     int len = zmq_msg_size (msg);
-    char *s = _zmalloc (len + 1);
+    char *s = xzmalloc (len + 1);
 
     memcpy (s, zmq_msg_data (msg), len);
     s[len] = '\0';
@@ -294,7 +278,7 @@ int cmb_msg_recv (void *socket, char **tagp, json_object **op,
     /* data */
     if (datap && lenp && zmq_msg_size (&msg.part[2]) > 0) {
         len = zmq_msg_size (&msg.part[2]);
-        data = _zmalloc (len);
+        data = xzmalloc (len);
     }
 
     _zmq_mpart_close (&msg);

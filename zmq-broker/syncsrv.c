@@ -21,6 +21,7 @@
 #include "cmb.h"
 #include "cmbd.h"
 #include "barriersrv.h"
+#include "util.h"
 
 typedef struct ctx_struct *ctx_t;
 
@@ -34,23 +35,6 @@ struct ctx_struct {
 };
 
 static ctx_t ctx = NULL;
-
-static void _oom (void)
-{
-    fprintf (stderr, "out of memory\n");
-    exit (1);
-}
-
-static void *_zmalloc (size_t size)
-{
-    void *new;
-
-    new = malloc (size);
-    if (!new)
-        _oom ();
-    memset (new, 0, size);
-    return new;
-}
 
 static bool _poll (void)
 {
@@ -88,7 +72,7 @@ void syncsrv_init (conf_t *conf, void *zctx)
 {
     int err;
 
-    ctx = _zmalloc (sizeof (struct ctx_struct));
+    ctx = xzmalloc (sizeof (struct ctx_struct));
     ctx->conf = conf;
 
     ctx->zs_out_event = _zmq_socket (zctx, ZMQ_PUSH);

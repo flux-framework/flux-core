@@ -22,6 +22,7 @@
 #include "barriersrv.h"
 #include "syncsrv.h"
 #include "kvssrv.h"
+#include "util.h"
 
 typedef struct {
     void *zctx;
@@ -59,31 +60,6 @@ static void _cmb_init (conf_t *conf, server_t **srvp);
 static void _cmb_fini (conf_t *conf, server_t *srv);
 static void _cmb_poll (conf_t *conf, server_t *srv);
 
-static void _oom (void)
-{
-    fprintf (stderr, "out of memory\n");
-    exit (1);
-}
-
-static void *_zmalloc (size_t size)
-{
-    void *new;
-
-    new = malloc (size);
-    if (!new)
-        _oom ();
-    memset (new, 0, size);
-    return new;
-}
-
-static char *_strdup (char *s)
-{
-    char *cpy = strdup (s);
-    if (!cpy)
-        _oom ();
-    return cpy;
-}
-
 static int _env_getint (char *name, int dflt)
 {
     char *ev = getenv (name);
@@ -93,7 +69,7 @@ static int _env_getint (char *name, int dflt)
 static char *_env_getstr (char *name, char *dflt)
 {
     char *ev = getenv (name);
-    return ev ? _strdup (ev) : _strdup (dflt);
+    return ev ? xstrdup (ev) : xstrdup (dflt);
 }
 
 static void usage (conf_t *conf)
@@ -115,7 +91,7 @@ int main (int argc, char *argv[])
     server_t *srv;
     char *local_eth0_address;
 
-    conf = _zmalloc (sizeof (conf_t));
+    conf = xzmalloc (sizeof (conf_t));
     conf->prog = basename (argv[0]);
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
@@ -187,7 +163,7 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
 {
     server_t *srv;
 
-    srv = _zmalloc (sizeof (server_t));
+    srv = xzmalloc (sizeof (server_t));
 
     srv->zctx = _zmq_init (1);
 

@@ -1,8 +1,8 @@
-CFLAGS = -Werror -Wall -O -g
+CFLAGS = -Werror -Wall -g
 LDADD = -ljson -lzmq -pthread -luuid -lhiredis
 LDADD_C = -ljson -luuid
 
-CMBD_OBJS = cmbd.o zmq.o apisrv.o barriersrv.o syncsrv.o kvssrv.o
+CMBD_OBJS = cmbd.o zmq.o apisrv.o barriersrv.o syncsrv.o kvssrv.o util.o
 CMBUTIL_OBJS = cmbutil.o apicli.o
 
 all: cmbd cmbutil

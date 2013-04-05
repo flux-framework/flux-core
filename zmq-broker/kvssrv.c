@@ -22,6 +22,7 @@
 #include "cmb.h"
 #include "cmbd.h"
 #include "kvssrv.h"
+#include "util.h"
 
 typedef struct ctx_struct *ctx_t;
 
@@ -36,23 +37,6 @@ struct ctx_struct {
 };
 
 static ctx_t ctx = NULL;
-
-static void _oom (void)
-{
-    fprintf (stderr, "out of memory\n");
-    exit (1);
-}
-
-static void *_zmalloc (size_t size)
-{
-    void *new;
-
-    new = malloc (size);
-    if (!new)
-        _oom ();
-    memset (new, 0, size);
-    return new;
-}
 
 static int _parse_kvs_put (json_object *o, const char **kp, const char **vp,
                                            const char **sp)
@@ -159,9 +143,7 @@ static char *_redis_get (const char *key)
             break;
         case REDIS_REPLY_STRING:
             /* success */
-            val = strdup (rep->str);
-            if (!val)
-                _oom ();
+            val = xstrdup (rep->str);
             break;
         case REDIS_REPLY_STATUS:
         case REDIS_REPLY_INTEGER:
@@ -179,10 +161,10 @@ static void _reply_to_get (const char *sender, const char *val)
     json_object *o, *no;
 
     if (!(o = json_object_new_object ()))
-        _oom ();
+        oom ();
     if (val) { /* if val is null, key was not found - omit 'val' in response */
         if (!(no = json_object_new_string (val)))
-            _oom ();
+            oom ();
         json_object_object_add (o, "val", no);
     }
     cmb_msg_send (ctx->zs_out, o, NULL, 0, "%s", sender);
@@ -266,7 +248,7 @@ void kvssrv_init (conf_t *conf, void *zctx)
 {
     int err;
 
-    ctx = _zmalloc (sizeof (struct ctx_struct));
+    ctx = xzmalloc (sizeof (struct ctx_struct));
     ctx->conf = conf;
 
     ctx->zs_in = _zmq_socket (zctx, ZMQ_SUB);

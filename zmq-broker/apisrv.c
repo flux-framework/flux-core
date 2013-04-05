@@ -24,6 +24,7 @@
 #include "cmb.h"
 #include "cmbd.h"
 #include "apisrv.h"
+#include "util.h"
 
 #define LISTEN_BACKLOG      5
 
@@ -49,36 +50,11 @@ struct ctx_struct {
 
 static ctx_t ctx = NULL;
 
-static void _oom (void)
-{
-    fprintf (stderr, "out of memory\n");
-    exit (1);
-}
-
-static void *_zmalloc (size_t size)
-{
-    void *new;
-
-    new = malloc (size);
-    if (!new)
-        _oom ();
-    memset (new, 0, size);
-    return new;
-}
-
-static char *_strdup (char *s)
-{
-    char *cpy = strdup (s);
-    if (!cpy)
-        _oom ();
-    return cpy;
-}
-
 static void _client_create (int fd)
 {
     client_t *c;
 
-    c = _zmalloc (sizeof (client_t));
+    c = xzmalloc (sizeof (client_t));
     c->fd = fd;
     c->prev = NULL;
     c->next = ctx->clients;
@@ -154,7 +130,7 @@ static int _client_read (client_t *c)
         char *p = ctx->buf + strlen (api_subscribe);
         if (c->subscription)
             free (c->subscription);
-        c->subscription = _strdup (p);
+        c->subscription = xstrdup (p);
 
     /* internal: api.setuuid */
     } else if (!strncmp (ctx->buf, api_setuuid, strlen (api_setuuid))) {
@@ -216,7 +192,7 @@ static bool _poll (void)
     client_t *c, *deleteme;
     bool shutdown = false;
     int zpa_len = _client_count () + 2;
-    zmq_pollitem_t *zpa = _zmalloc (sizeof (zmq_pollitem_t) * zpa_len);
+    zmq_pollitem_t *zpa = xzmalloc (sizeof (zmq_pollitem_t) * zpa_len);
     int i;
 
     zpa[0].socket = ctx->zs_in;
@@ -320,7 +296,7 @@ void apisrv_init (conf_t *conf, void *zctx, char *sockname)
 {
     int err;
 
-    ctx = _zmalloc (sizeof (struct ctx_struct));
+    ctx = xzmalloc (sizeof (struct ctx_struct));
 
     ctx->zs_out = _zmq_socket (zctx, ZMQ_PUSH);
     _zmq_connect (ctx->zs_out, conf->plin_uri);
