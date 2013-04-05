@@ -22,7 +22,7 @@ void *xzmalloc (size_t size)
     return new;
 }
 
-char *xstrdup (char *s)
+char *xstrdup (const char *s)
 {
     char *cpy = strdup (s);
     if (!cpy)

@@ -1,5 +1,8 @@
 /* kvssrv.c - key-value service */ 
 
+/* FIXME: transaction rate could be increased by pipelining requests to redis */
+
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -24,6 +27,15 @@
 #include "kvssrv.h"
 #include "util.h"
 
+typedef struct _client_struct {
+    struct _client_struct *next;
+    struct _client_struct *prev;
+    char *identity;
+    int putcount;
+    int errcount;
+    char *subscription;
+} client_t;
+
 typedef struct ctx_struct *ctx_t;
 
 struct ctx_struct {
@@ -34,9 +46,67 @@ struct ctx_struct {
     pthread_t t;
     conf_t *conf;
     redisContext *rctx;
+    client_t *clients;
 };
 
 static ctx_t ctx = NULL;
+
+static client_t *_client_create (const char *identity)
+{
+    client_t *c;
+
+    c = xzmalloc (sizeof (client_t));
+    c->identity = xstrdup (identity);
+    if (asprintf (&c->subscription, "event.%s.disconnect", identity) < 0)
+        oom ();
+    c->prev = NULL;
+    c->next = ctx->clients;
+    if (c->next)
+        c->next->prev = c;
+    ctx->clients = c;
+
+    _zmq_subscribe (ctx->zs_in, c->subscription);
+
+    return c;
+}
+
+static void _client_destroy (client_t *c)
+{   
+    _zmq_unsubscribe (ctx->zs_in, c->subscription);
+
+    free (c->identity);
+    free (c->subscription);
+
+    if (c->prev)
+        c->prev->next = c->next;
+    else
+        ctx->clients = c->next;
+    if (c->next)
+        c->next->prev = c->prev;
+    free (c);
+}   
+
+static client_t *_client_find_byidentity (const char *identity)
+{
+    client_t *c;
+ 
+    for (c = ctx->clients; c != NULL; c = c->next) {
+        if (!strcmp (c->identity, identity))
+            return c;
+    }
+    return NULL;
+}
+
+static client_t *_client_find_bysubscription (const char *subscription)
+{
+    client_t *c;
+ 
+    for (c = ctx->clients; c != NULL; c = c->next) {
+        if (!strcmp (c->subscription, subscription))
+            return c;
+    }
+    return NULL;
+}
 
 static int _parse_kvs_put (json_object *o, const char **kp, const char **vp,
                                            const char **sp)
@@ -96,31 +166,35 @@ error:
     return -1;
 }
 
-static void _redis_set (const char *key, const char *val)
+static int _redis_set (const char *key, const char *val)
 {
     redisReply *rep;
+    int rc = -1;
 
     rep = redisCommand (ctx->rctx, "SET %s %s", key, val);
     if (rep == NULL) {
         fprintf (stderr, "redisCommand: %s\n", ctx->rctx->errstr);
-        return; /* XXX rctx cannot be reused? */
+        return -1; /* XXX rctx cannot be reused? */
     }
     switch (rep->type) {
         case REDIS_REPLY_STATUS:
             //fprintf (stderr, "redisCommand: status reply: %s\n", rep->str);
-            /* success */
+            rc = 0;
             break;
-        case REDIS_REPLY_ERROR: /* FIXME */
+        case REDIS_REPLY_ERROR:
             fprintf (stderr, "redisCommand: error reply: %s\n", rep->str);
+            rc = -1;
             break;
         case REDIS_REPLY_INTEGER:
         case REDIS_REPLY_NIL:
         case REDIS_REPLY_STRING:
         case REDIS_REPLY_ARRAY:
             fprintf (stderr, "redisCommand: unexpected reply type\n");
+            rc = -1;
             break;
     }
     freeReplyObject (rep);
+    return rc;
 }
 
 static char *_redis_get (const char *key)
@@ -130,8 +204,8 @@ static char *_redis_get (const char *key)
 
     rep = redisCommand (ctx->rctx, "GET %s", key);
     if (rep == NULL) {
-        fprintf (stderr, "redisCommand: %s\n", ctx->rctx->errstr); /* FIXME */
-        return NULL; /* FIXME: context cannot be reused */
+        fprintf (stderr, "redisCommand: %s\n", ctx->rctx->errstr);
+        return NULL; /* FIXME: rctx cannot be reused */
     }
     switch (rep->type) {
         case REDIS_REPLY_ERROR:
@@ -171,6 +245,24 @@ static void _reply_to_get (const char *sender, const char *val)
     json_object_put (o);
 }
 
+static void _reply_to_commit (const char *sender, int errcount, int putcount)
+{
+    json_object *o, *no;
+
+    if (!(o = json_object_new_object ()))
+        oom ();
+    if (!(no = json_object_new_int (errcount)))
+        oom ();
+    json_object_object_add (o, "errcount", no);
+    if (!(no = json_object_new_int (putcount)))
+        oom ();
+    json_object_object_add (o, "putcount", no);
+
+    cmb_msg_send (ctx->zs_out, o, NULL, 0, "%s", sender);
+
+    json_object_put (o);
+}
+
 static void *_thread (void *arg)
 {
     bool shutdown = false;
@@ -199,17 +291,31 @@ again:
             fprintf (stderr, "cmb_msg_recv: %s\n", strerror (errno));
             continue;
         }
+
         if (!strcmp (tag, "event.cmb.shutdown")) {
             shutdown = true;
             goto next;
+
+        } else if (!strncmp (tag, "event.api.", strlen ("event.api."))) {
+            client_t *c = _client_find_bysubscription (tag);
+            if (c)
+                _client_destroy (c);
+
         } else if (!strcmp (tag, "kvs.put")) {
             const char *key, *val, *sender;
+            client_t *c;
 
             if (_parse_kvs_put (o, &key, &val, &sender) < 0){
                 fprintf (stderr, "%s: parse error\n", tag);
                 goto next;
             }
-            _redis_set (key, val);
+            c = _client_find_byidentity (sender);
+            if (!c)
+                c = _client_create (sender);
+            c->putcount++;
+            if (_redis_set (key, val) < 0)
+                c->errcount++;
+
         } else if (!strcmp (tag, "kvs.get")) {
             const char *key, *sender;
             char *val;
@@ -224,12 +330,19 @@ again:
                 free (val);
         } else if (!strcmp (tag, "kvs.commit")) {
             const char *sender;
+            client_t *c;
 
             if (_parse_kvs_commit (o, &sender) < 0) {
                 fprintf (stderr, "%s: parse error\n", tag);
                 goto next;
             }
-            cmb_msg_send (ctx->zs_out, NULL, NULL, 0, "%s", sender);
+            c = _client_find_byidentity (sender);
+            if (c) {
+                _reply_to_commit (sender, c->errcount, c->putcount);
+                c->putcount = 0;
+                c->errcount = 0;
+            } else
+                _reply_to_commit (sender, 0, 0);
         }
 next:
         free (tag);
@@ -289,6 +402,9 @@ void kvssrv_fini (void)
     _zmq_close (ctx->zs_out);
     _zmq_close (ctx->zs_out_event);
     _zmq_close (ctx->zs_out_tree);
+
+    while (ctx->clients != NULL)
+        _client_destroy (ctx->clients);
 
     free (ctx);
     ctx = NULL;

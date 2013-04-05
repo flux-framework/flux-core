@@ -91,6 +91,15 @@ void _zmq_subscribe (void *sock, char *tag)
     }
 }
 
+void _zmq_unsubscribe (void *sock, char *tag)
+{
+    if (zmq_setsockopt (sock, ZMQ_UNSUBSCRIBE, tag, strlen (tag)) < 0) {
+        fprintf (stderr, "zmq_setsockopt ZMQ_UNSUBSCRIBE: %s\n",
+                 zmq_strerror (errno));
+        exit (1);
+    }
+}
+
 void _zmq_mcast_loop (void *sock, bool enable)
 {
     uint64_t val = enable ? 1 : 0;

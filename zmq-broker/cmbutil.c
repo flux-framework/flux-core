@@ -151,16 +151,20 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'C': { /* --kvs-commit */
-                if (cmb_kvs_commit (c) < 0) {
+                int errcount, putcount;
+
+                if (cmb_kvs_commit (c, &errcount, &putcount) < 0) {
                     fprintf (stderr, "cmb_kvs_commit: %s\n", strerror(errno));
                     exit (1);
                 }
+                printf ("errcount=%d putcount=%d\n", errcount, putcount);
                 break;
             }
             case 't': { /* --kvs-torture N */
                 int i, n = strtoul (optarg, NULL, 10);
                 char key[16], val[16];
                 struct timeval t1, t2, t;
+                int errcount, putcount;
 
                 gettimeofday (&t1, NULL);
                 for (i = 0; i < n; i++) {
@@ -175,14 +179,15 @@ int main (int argc, char *argv[])
                 timersub(&t2, &t1, &t);
                 fprintf (stderr, "kvs_put:    time=%0.3f ms\n",
                         (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
-                if (cmb_kvs_commit (c) < 0) {
+                if (cmb_kvs_commit (c, &errcount, &putcount) < 0) {
                     fprintf (stderr, "cmb_kvs_commit: %s\n", strerror(errno));
                     exit (1);
                 }
                 gettimeofday (&t2, NULL);
                 timersub (&t2, &t1, &t);
-                fprintf (stderr, "kvs_commit: time=%0.3f ms\n",
-                        (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
+                fprintf (stderr, "kvs_commit: time=%0.3f ms errcount=%d putcount=%d\n",
+                        (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000,
+                        errcount, putcount);
                 break;
             }
             default:

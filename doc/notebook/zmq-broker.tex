@@ -86,14 +86,13 @@ in the \ngrm\ comms design.
 \hline
 {\tt int} & {\tt cmb\_ping (cmb\_t c, int seq, int padding)}
   & Send a ping message to the broker's internal bus and wait for it
-    to be echoed back.  {\em padding} adds a json string of the specified
-    length to the message.
+    to be echoed back.  {\em padding} bytes of payload will be added to
+    the message.
     On success, returns $0$; on failure, returns $-1$ with errno set.\\
 \hline
 {\tt int} & {\tt cmb\_snoop (cmb\_t c, char {*sub})}
   & Print all messages on the broker's internal bus whose tags match the
     subscription string {\em sub}.  The empty string matches all messages.
-    Returns $-1$ is returned with errno set.
     On success, does not return; on failure, returns $-1$ with errno set.\\
 \hline
 {\tt int}
@@ -115,6 +114,8 @@ in the \ngrm\ comms design.
   & {\tt cmb\_kvs\_put (cmb\_t c, char {*key}, char {*val})}
   & Set {\em key} to {\em val} in the job-wide key-value store.
     If the key already has a value, it is overwritten.
+    Errors resulting from the actual KVS transaction are not reported
+    until the next {\em cmb\_kvs\_commit} call.
     On success, returns $0$; on failure, returns $-1$ with errno set.\\
 {\tt {char*}}
   & {\tt cmb\_kvs\_get (cmb\_t c, char {*key})}
@@ -122,9 +123,11 @@ in the \ngrm\ comms design.
     On success, returns a copy of value which the caller must free;
     on failure, returns NULL with errno set.\\
 {\tt int}
-  & {\tt cmb\_kvs\_commit (cmb\_t c)}
+  & {\tt cmb\_kvs\_commit (cmb\_t c, int *errcount, int *putcount)}
   & Block until the job-wide key-value store has completed all transactions
-    originating on the local node.
+    originating on the local node.  {\em putcount} will contain the number
+    of {\em cmb\_kvs\_put} calls executed by this context since the last commit.
+    {\em errcount} will contian the number of failed puts since the last commit.
     On success, returns $0$; on failure, returns $-1$ with errno set.\\
 \hline
 \end{tabular}

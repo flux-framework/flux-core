@@ -13,7 +13,7 @@ int cmb_sync (cmb_t c);
 
 int cmb_kvs_put (cmb_t c, char *key, char *val);
 char *cmb_kvs_get (cmb_t c, char *key);
-int cmb_kvs_commit (cmb_t c);
+int cmb_kvs_commit (cmb_t c, int *errcountp, int *putcountp);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

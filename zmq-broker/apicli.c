@@ -461,9 +461,10 @@ error:
     return NULL;
 }
 
-int cmb_kvs_commit (cmb_t c)
+int cmb_kvs_commit (cmb_t c, int *ep, int *pp)
 {
     json_object *o = NULL;
+    int errcount, putcount;
 
     if (cmb_send (c, NULL, NULL, 0, "api.subscribe.%s", c->uuid) < 0)
         goto error;
@@ -479,9 +480,18 @@ int cmb_kvs_commit (cmb_t c)
     o = NULL;
 
     /* receive response */
-    /* FIXME: parse response */
-    if (cmb_recv (c, NULL, NULL, NULL, NULL) < 0)
+    if (cmb_recv (c, NULL, &o, NULL, NULL) < 0)
         goto error;
+    if (_json_object_get_int (o, "errcount", &errcount) < 0)
+        goto error;
+    if (_json_object_get_int (o, "putcount", &putcount) < 0)
+        goto error;
+    json_object_put (o);
+    o = NULL;
+    if (*ep)
+        *ep = errcount;
+    if (*pp)
+        *pp = putcount;
     return 0;
 nomem:
     errno = ENOMEM;

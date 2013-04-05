@@ -11,6 +11,7 @@ void _zmq_bind (void *sock, const char *endpoint);
 void _zmq_connect (void *sock, const char *endpoint);
 void _zmq_subscribe (void *sock, char *tag);
 void _zmq_subscribe_all (void *sock);
+void _zmq_unsubscribe (void *sock, char *tag);
 void _zmq_msg_init_size (zmq_msg_t *msg, size_t size);
 void _zmq_msg_init (zmq_msg_t *msg);
 void _zmq_msg_close (zmq_msg_t *msg);
