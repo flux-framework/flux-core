@@ -90,6 +90,42 @@ static int _json_object_get_string (json_object *o, char *name, const char **sp)
     return 0;
 }
 
+static int _recvfd (int fd, int *fdp, char *name, int len)
+{
+    int fd_xfer, n;
+    char buf[CMSG_SPACE (sizeof (fd_xfer)) ];
+    struct msghdr msg;
+    struct iovec iov;
+    struct cmsghdr *cmsg;
+
+    memset (&msg, 0, sizeof (msg));
+    iov.iov_base = name;
+    iov.iov_len = len - 1;
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1;
+    msg.msg_control = buf;
+    msg.msg_controllen = sizeof (buf);
+
+    if ((n = recvmsg (fd, &msg, 0)) < 0)
+        return -1;
+    
+    name [n] = '\0';
+
+    cmsg = CMSG_FIRSTHDR (&msg);
+    if (cmsg == NULL) {
+        fprintf (stderr, "_recvfd: no control message received\n");
+        return -1;
+    }
+    if (cmsg->cmsg_level != SOL_SOCKET || cmsg->cmsg_type != SCM_RIGHTS) {
+        fprintf (stderr, "_recvfd: message level/rights have wrong values\n");
+        return -1;
+    }
+    fd_xfer = *(int *) CMSG_DATA (cmsg);
+
+    *fdp = fd_xfer;
+
+    return 0;
+}
 
 static int cmb_sendraw (cmb_t c, char *buf, int len)
 {
@@ -108,7 +144,7 @@ static int cmb_recvraw (cmb_t c, char *buf, int len, int *lenp)
 {
     int n;
 
-    n = read (c->fd, buf, len);
+    n = recv (c->fd, buf, len, 0);
     if (n < 0)
         goto error;
     if (n == 0) {
@@ -247,11 +283,34 @@ error:
     return -1;
 }
 
+/* FIXME: support write flag */
+int cmb_fd_open (cmb_t c, char **np)
+{
+    int newfd;
+    char *name;
+
+    if (cmb_send (c, NULL, NULL, 0, "api.fdopen.read") < 0)
+        goto error;
+    if (_recvfd (c->fd, &newfd, c->buf, sizeof (c->buf)) < 0)
+        goto error;
+    if (np) {
+        name = strdup (c->buf);
+        if (!name) {
+            errno = ENOMEM;
+            goto error;
+        }
+        *np = name;
+    }
+    return newfd;
+error:
+    return -1;
+}
+
 int cmb_ping (cmb_t c, int seq, int padlen)
 {
     json_object *o = NULL;
     int rseq;
-    void *rpad, *pad = NULL;
+    void *rpad = NULL, *pad = NULL;
     int rpadlen;
 
     if (cmb_send (c, NULL, NULL, 0, "api.subscribe.ping.%s", c->uuid) < 0)

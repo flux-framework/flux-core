@@ -2,6 +2,7 @@
 
 /* FIXME: consider adding SO_PEERCRED info for connected clients? */
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -28,12 +29,23 @@
 
 #define LISTEN_BACKLOG      5
 
+typedef struct _cfd_struct {
+    int fd;
+    struct _cfd_struct *next;
+    struct _cfd_struct *prev;
+    char *name; /* api.<uuid>.fd.<cfd_id> */
+    char *wname; /* user-provided, indicates API will write */
+    char buf[CMB_API_BUFSIZE - 1024];
+} cfd_t;
+
 typedef struct _client_struct {
     int fd;
     struct _client_struct *next;
     struct _client_struct *prev;
     char *subscription;
-    char uuid[64];
+    char uuid[64]; /* "api.<uuid>" */
+    cfd_t *cfds;
+    int cfd_id;
 } client_t;
 
 typedef struct ctx_struct *ctx_t;
@@ -50,12 +62,117 @@ struct ctx_struct {
 
 static ctx_t ctx = NULL;
 
+static int _sendfd (int fd, int fd_xfer, char *name)
+{
+    struct msghdr msg;
+    struct iovec iov;
+    struct cmsghdr *cmsg;
+    char buf[ CMSG_SPACE (sizeof (fd_xfer)) ];
+    int *fdptr;
+
+    memset (&msg, 0, sizeof (msg));
+
+    iov.iov_base = name;
+    iov.iov_len = strlen (name);
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1;
+    msg.msg_control = buf;
+    msg.msg_controllen = sizeof (buf);
+
+    cmsg = CMSG_FIRSTHDR (&msg);
+    cmsg->cmsg_level = SOL_SOCKET;
+    cmsg->cmsg_type = SCM_RIGHTS;
+    cmsg->cmsg_len = CMSG_LEN (sizeof (int));
+    fdptr = (int *) CMSG_DATA (cmsg);
+    memcpy (fdptr, &fd_xfer, sizeof (int));
+    msg.msg_controllen = cmsg->cmsg_len;
+
+    return sendmsg (fd, &msg, 0);
+}
+
+static cfd_t *_cfd_create (client_t *c, char *wname)
+{
+    cfd_t *cfd;
+    int sv[2];
+
+    cfd = xzmalloc (sizeof (cfd_t));
+    cfd->fd = -1;
+    if (socketpair (AF_LOCAL, SOCK_STREAM, 0, sv) < 0) {
+        fprintf (stderr, "socketpair: %s\n", strerror (errno));
+        exit (1);
+    }
+    cfd->fd = sv[0];
+    if (asprintf (&cfd->name, "%s.fd.%d", c->uuid, c->cfd_id++) < 0)
+        oom ();
+    if (wname)
+        cfd->wname = xstrdup (wname);
+    if (_sendfd (c->fd, sv[1], cfd->name) < 0) {
+        fprintf (stderr, "sendfd: %s\n", strerror (errno));
+        exit (1);
+    }
+    if (close (sv[1]) < 0) {
+        fprintf (stderr, "close: %s\n", strerror (errno));
+        exit (1);
+    }
+    cmb_msg_send (ctx->zs_out, NULL, NULL, 0, "event.%s.open", cfd->name);
+
+    cfd->prev = NULL;
+    cfd->next = c->cfds;
+    if (cfd->next)
+        cfd->next->prev = cfd;
+    c->cfds = cfd;
+
+    return cfd;
+}
+
+static void _cfd_destroy (client_t *c, cfd_t *cfd)
+{
+    if (cfd->fd != -1)
+        close (cfd->fd);
+
+    if (cfd->prev)
+        cfd->prev->next = cfd->next;
+    else
+        c->cfds = cfd->next;
+    if (cfd->next)
+        cfd->next->prev = cfd->prev;
+
+    cmb_msg_send (ctx->zs_out, NULL, NULL, 0, "event.%s.close", cfd->name);
+    free (cfd->name);
+    free (cfd);
+}
+
+static int _cfd_count (void)
+{
+    client_t *c;
+    cfd_t *cfd;
+    int count = 0;
+
+    for (c = ctx->clients; c != NULL; c = c->next)
+        for (cfd = c->cfds; cfd != NULL; cfd = cfd->next)
+            count++;
+    return count;
+}
+
+/* read from cfd->fd, send message to cfd->wname */
+static int _cfd_read (cfd_t *cfd)
+{
+    return -1;
+}
+
+/* message received for cfd->name, write to cfd->fd */
+static int _cfd_write (cfd_t *cfd, zmq_mpart_t msg)
+{
+    return -1;
+}
+
 static void _client_create (int fd)
 {
     client_t *c;
 
     c = xzmalloc (sizeof (client_t));
     c->fd = fd;
+    c->cfds = NULL;
     c->prev = NULL;
     c->next = ctx->clients;
     if (c->next)
@@ -65,7 +182,11 @@ static void _client_create (int fd)
 
 static void _client_destroy (client_t *c)
 {
+    while ((c->cfds) != NULL)
+        _cfd_destroy (c, c->cfds);
+
     close (c->fd);
+
     if (c->prev)
         c->prev->next = c->next;
     else
@@ -104,6 +225,7 @@ static int _client_read (client_t *c)
 {
     const char *api_subscribe = "api.subscribe.";
     const char *api_setuuid = "api.setuuid.";
+    const char *api_fdopen_write = "api.fdopen.write.";
     int taglen, totlen;
 
     totlen = recv (c->fd, ctx->buf, sizeof (ctx->buf), MSG_DONTWAIT);
@@ -138,6 +260,16 @@ static int _client_read (client_t *c)
         snprintf (c->uuid, sizeof (c->uuid), "%s", p);
         cmb_msg_send (ctx->zs_out, NULL, NULL, 0, "event.%s.connect", c->uuid);
 
+    /* internal: api.fdopen.read */
+    } else if (!strcmp (ctx->buf, "api.fdopen.read")) {
+        _cfd_create (c, NULL);
+
+    /* internal: api.fdopen.write */
+    } else if (!strncmp (ctx->buf, api_fdopen_write,
+                                                strlen (api_fdopen_write))) {
+        char *p = ctx->buf + strlen (api_fdopen_write);
+        _cfd_create (c, p);
+            
     /* route other */
     } else {
         zmq_mpart_t msg;
@@ -153,6 +285,7 @@ static void _readmsg (bool *shutdownp)
 {
     zmq_mpart_t msg;
     client_t *c;
+    cfd_t *cfd;
     int len;
 
     _zmq_mpart_init (&msg);
@@ -183,6 +316,15 @@ static void _readmsg (bool *shutdownp)
         if (deleteme)
             _client_destroy (deleteme);
     }
+    /* also look for matches on any open client fds */
+    for (c = ctx->clients; c != NULL; c = c->next) {
+        for (cfd = c->cfds; cfd != NULL; cfd = cfd->next) {
+            if (cmb_msg_match (&msg, cfd->name)) {
+                _cfd_write (cfd, msg);
+                /* FIXME: handle write errors */
+            }
+        }
+    }
 done:
     _zmq_mpart_close (&msg);
 }
@@ -190,18 +332,29 @@ done:
 static bool _poll (void)
 {
     client_t *c, *deleteme;
+    cfd_t *cfd, *cfd_deleteme;
     bool shutdown = false;
-    int zpa_len = _client_count () + 2;
+    int zpa_len = _client_count () + _cfd_count () + 2;
     zmq_pollitem_t *zpa = xzmalloc (sizeof (zmq_pollitem_t) * zpa_len);
     int i;
 
+    /* zmq sockets */
     zpa[0].socket = ctx->zs_in;
     zpa[0].events = ZMQ_POLLIN;
     zpa[0].fd = -1;
     zpa[1].events = ZMQ_POLLIN | ZMQ_POLLERR;
     zpa[1].fd = ctx->listen_fd;
- 
-    for (i = 2, c = ctx->clients; c != NULL; c = c->next, i++) {
+    /* client fds */ 
+    for (i = 2, c = ctx->clients; c != NULL; c = c->next) {
+        for (cfd = c->cfds; cfd != NULL; cfd = cfd->next, i++) {
+            zpa[i].events = ZMQ_POLLERR;
+            zpa[i].fd = cfd->fd;
+            if (cfd->wname)
+                zpa[i].events |= ZMQ_POLLIN;
+        }
+    }
+    /* clients */
+    for (c = ctx->clients; c != NULL; c = c->next, i++) {
         zpa[i].events = ZMQ_POLLIN | ZMQ_POLLERR;
         zpa[i].fd = c->fd;
     }
@@ -212,12 +365,31 @@ static bool _poll (void)
         exit (1);
     }
 
-    for (i = 2, c = ctx->clients; c != NULL; i++) {
+    /* client fds */
+    for (i = 2, c = ctx->clients; c != NULL; c = c->next) {
+        for (cfd = c->cfds; cfd != NULL; i++) {
+            assert (cfd->fd == zpa[i].fd);
+            cfd_deleteme = NULL;
+            if (zpa[i].revents & ZMQ_POLLIN) {
+                while (_cfd_read (cfd) != -1)
+                    ;
+                if (errno != EWOULDBLOCK)
+                    cfd_deleteme = cfd;
+            }
+            if (zpa[i].revents & ZMQ_POLLERR)
+                cfd_deleteme = cfd;
+            cfd = cfd->next;
+            if (cfd_deleteme)
+                _cfd_destroy (c, cfd_deleteme);
+        }
+    }
+    /* clients - can modify client fds list (so do after client fds) */
+    for (c = ctx->clients; c != NULL; i++) {
         assert (c->fd == zpa[i].fd);
         deleteme = NULL;
         if (zpa[i].revents & ZMQ_POLLIN) {
             while (_client_read (c) != -1)
-                ; /* there may be multiple messages queued */
+                ;
             if (errno != EWOULDBLOCK)
                 deleteme = c;
         }
@@ -228,6 +400,7 @@ static bool _poll (void)
             _client_destroy (deleteme);
     }
 
+    /* zmq sockets - can modify client list (so do after clients) */
     if (zpa[1].revents & ZMQ_POLLIN)
         _accept (ctx);
     if (zpa[1].revents & ZMQ_POLLERR) {

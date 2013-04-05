@@ -11,14 +11,14 @@
 
 #include "cmb.h"
 
-#define OPTIONS "psb:f:k:SK:Ct:P:d:"
+#define OPTIONS "psb:k:SK:Ct:P:d:f"
 static const struct option longopts[] = {
     {"ping",       no_argument,        0, 'p'},
     {"ping-padding", required_argument,0, 'P'},
     {"ping-delay", required_argument,  0, 'd'},
+    {"fdopen",     no_argument,        0, 'f'},
     {"snoop",      no_argument,        0, 's'},
     {"barrier",    required_argument,  0, 'b'},
-    {"flood",      required_argument,  0, 'f'},
     {"kvs-put",    required_argument,  0, 'k'},
     {"kvs-get",    required_argument,  0, 'K'},
     {"kvs-commit", no_argument,        0, 'C'},
@@ -33,7 +33,7 @@ static void usage (void)
 "  -p,--ping            loop back a sequenced message through the cmb\n"
 "  -P,--ping-padding N  pad ping packets with N bytes (adds a JSON string)\n"
 "  -d,--ping-delay N    set delay between ping packets (in msec)\n"
-"  -s,--snoop SUB       watch traffic on the cmb (SUB=\"\" for all)\n"
+"  -f,--fdopen          open remote file descriptor\n"
 "  -b,--barrier name    execute barrier across slurm job\n"
 "  -k,--kvs-put key=val set a key\n"
 "  -K,--kvs-get key     get a key\n"
@@ -97,6 +97,34 @@ int main (int argc, char *argv[])
                 }
                 break;
             }
+            case 'f': { /* --fdopen */
+                int newfd[16], i;
+                char *name[16];
+
+                for (i = 0; i < 16; i++) {    
+                    if ((newfd[i] = cmb_fd_open (c, &name[i])) < 0) {
+                        fprintf (stderr, "cmb_fdopen: %s\n", strerror (errno));
+                        exit (1);
+                    }
+                    printf ("newfd[%d] fd=%d name=%s\n", i, newfd[i], name[i]);
+                }
+
+                printf ("sleep 2\n");
+                sleep (2);
+
+                printf ("closing 16 file descriptors\n");
+                for (i = 0; i < 16; i++) {
+                    if (close (newfd[i]) < 0) {
+                        fprintf (stderr, "close: %s\n", strerror (errno));
+                        exit (1);
+                    }
+                    free (name[i]);
+                }
+
+                printf ("sleep 2\n");
+                sleep (2);
+                break;
+            }
             case 'b': { /* --barrier NAME */
                 if (cmb_barrier (c, optarg, nprocs, tasks_per_node) < 0) {
                     fprintf (stderr, "cmb_barrier: %s\n", strerror(errno));
@@ -118,15 +146,6 @@ int main (int argc, char *argv[])
                 }
                 break;
             }
-#if 0
-            case 'f': { /* --flood packetsize */
-                if (cmb_flood (c, strtoul (optarg, NULL, 10)) < 0) {
-                    fprintf (stderr, "cmb_flood: %s\n", strerror(errno));
-                    exit (1);
-                }
-                break;
-            }
-#endif
             case 'k': { /* --kvs-put key=val */
                 char *key = optarg;
                 char *val = strchr (optarg, '=');
