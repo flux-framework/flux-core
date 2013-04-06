@@ -283,14 +283,18 @@ error:
     return -1;
 }
 
-/* FIXME: support write flag */
-int cmb_fd_open (cmb_t c, char **np)
+int cmb_fd_open (cmb_t c, char *wname, char **np)
 {
-    int newfd;
-    char *name;
+    int newfd = -1;
+    char *name = NULL;
 
-    if (cmb_send (c, NULL, NULL, 0, "api.fdopen.read") < 0)
-        goto error;
+    if (wname) {
+        if (cmb_send (c, NULL, NULL, 0, "api.fdopen.write.%s", wname) < 0)
+            goto error;
+    } else {
+        if (cmb_send (c, NULL, NULL, 0, "api.fdopen.read") < 0)
+            goto error;
+    }
     if (_recvfd (c->fd, &newfd, c->buf, sizeof (c->buf)) < 0)
         goto error;
     if (np) {
@@ -303,6 +307,10 @@ int cmb_fd_open (cmb_t c, char **np)
     }
     return newfd;
 error:
+    if (name)
+        free (name);
+    if (newfd != -1)
+        close (newfd);
     return -1;
 }
 

@@ -2,6 +2,8 @@
 
 /* FIXME: consider adding SO_PEERCRED info for connected clients? */
 
+/* FIXME: writes to fds can block and we have no buffering  */
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <assert.h>
@@ -17,6 +19,7 @@
 #include <sys/un.h>
 #include <sys/socket.h>
 #include <ctype.h>
+#include <fcntl.h>
 #include <zmq.h>
 #include <uuid/uuid.h>
 #include <json/json.h>
@@ -34,8 +37,8 @@ typedef struct _cfd_struct {
     struct _cfd_struct *next;
     struct _cfd_struct *prev;
     char *name; /* api.<uuid>.fd.<cfd_id> */
-    char *wname; /* user-provided, indicates API will write */
-    char buf[CMB_API_BUFSIZE - 1024];
+    char *wname; /* user-provided, indicates API will read */
+    char buf[CMB_API_FD_BUFSIZE];
 } cfd_t;
 
 typedef struct _client_struct {
@@ -61,6 +64,18 @@ struct ctx_struct {
 };
 
 static ctx_t ctx = NULL;
+
+static int _fd_setmode (int fd, int mode)
+{
+    int flags;
+
+    flags = fcntl (fd, F_GETFL, 0);
+    if (flags < 0)
+        return -1;
+    flags &= ~O_ACCMODE;
+    flags |= mode;
+    return fcntl (fd, F_SETFL, flags);
+}
 
 static int _sendfd (int fd, int fd_xfer, char *name)
 {
@@ -97,8 +112,16 @@ static cfd_t *_cfd_create (client_t *c, char *wname)
 
     cfd = xzmalloc (sizeof (cfd_t));
     cfd->fd = -1;
-    if (socketpair (AF_LOCAL, SOCK_STREAM, 0, sv) < 0) {
+    if (socketpair (AF_LOCAL, SOCK_SEQPACKET, 0, sv) < 0) {
         fprintf (stderr, "socketpair: %s\n", strerror (errno));
+        exit (1);
+    }
+    if (_fd_setmode (sv[1], wname ? O_RDONLY : O_WRONLY) < 0) {
+        fprintf (stderr, "fcntl: %s\n", strerror (errno));
+        exit (1);
+    }
+    if (_fd_setmode (sv[0], wname ? O_WRONLY : (O_RDONLY | O_NONBLOCK)) < 0) {
+        fprintf (stderr, "fcntl: %s\n", strerror (errno));
         exit (1);
     }
     cfd->fd = sv[0];
@@ -157,13 +180,44 @@ static int _cfd_count (void)
 /* read from cfd->fd, send message to cfd->wname */
 static int _cfd_read (cfd_t *cfd)
 {
+    int n;
+    json_object *o, *no;
+
+    assert (cfd->wname != NULL);
+    n = read (cfd->fd, cfd->buf, sizeof (cfd->buf));
+    if (n <= 0) {
+        if (errno != ECONNRESET && errno != EWOULDBLOCK && n != 0)
+            fprintf (stderr, "apisrv: cfd read: %s\n", strerror (errno));
+        return -1;
+    }
+    if (!(o = json_object_new_object ()))
+        oom ();
+    if (!(no = json_object_new_string (cfd->name)))
+        oom ();
+    json_object_object_add (o, "sender", no);
+    cmb_msg_send (ctx->zs_out, o, cfd->buf, n, "%s", cfd->wname);
+    json_object_put (o);
     return -1;
 }
 
 /* message received for cfd->name, write to cfd->fd */
-static int _cfd_write (cfd_t *cfd, zmq_mpart_t msg)
+static int _cfd_write (cfd_t *cfd, zmq_mpart_t *msg)
 {
-    return -1;
+    int len, n;
+
+    if (cfd->wname != NULL) {
+        fprintf (stderr, "_cfd_write: discarding message for O_WRONLY fd\n");
+        return 0;
+    }
+    len = cmb_msg_datacpy (msg, cfd->buf, sizeof (cfd->buf));
+    n = write (cfd->fd, cfd->buf, len);
+    if (n < 0)
+        return -1;
+    if (n < len) {
+        fprintf (stderr, "_cfd_write: short write\n");
+        return 0;
+    }
+    return 0;
 }
 
 static void _client_create (int fd)
@@ -318,11 +372,15 @@ static void _readmsg (bool *shutdownp)
     }
     /* also look for matches on any open client fds */
     for (c = ctx->clients; c != NULL; c = c->next) {
-        for (cfd = c->cfds; cfd != NULL; cfd = cfd->next) {
+        for (cfd = c->cfds; cfd != NULL; ) {
+            cfd_t *deleteme = NULL;
             if (cmb_msg_match (&msg, cfd->name)) {
-                _cfd_write (cfd, msg);
-                /* FIXME: handle write errors */
+                if (_cfd_write (cfd, &msg) < 0)
+                    deleteme = cfd;
             }
+            cfd = cfd->next;
+            if (deleteme)
+                _cfd_destroy (c, deleteme);
         }
     }
 done:
@@ -331,8 +389,8 @@ done:
 
 static bool _poll (void)
 {
-    client_t *c, *deleteme;
-    cfd_t *cfd, *cfd_deleteme;
+    client_t *c;
+    cfd_t *cfd;
     bool shutdown = false;
     int zpa_len = _client_count () + _cfd_count () + 2;
     zmq_pollitem_t *zpa = xzmalloc (sizeof (zmq_pollitem_t) * zpa_len);
@@ -368,25 +426,25 @@ static bool _poll (void)
     /* client fds */
     for (i = 2, c = ctx->clients; c != NULL; c = c->next) {
         for (cfd = c->cfds; cfd != NULL; i++) {
+            cfd_t *deleteme = NULL;
             assert (cfd->fd == zpa[i].fd);
-            cfd_deleteme = NULL;
             if (zpa[i].revents & ZMQ_POLLIN) {
                 while (_cfd_read (cfd) != -1)
                     ;
                 if (errno != EWOULDBLOCK)
-                    cfd_deleteme = cfd;
+                    deleteme = cfd;
             }
             if (zpa[i].revents & ZMQ_POLLERR)
-                cfd_deleteme = cfd;
+                deleteme = cfd;
             cfd = cfd->next;
-            if (cfd_deleteme)
-                _cfd_destroy (c, cfd_deleteme);
+            if (deleteme)
+                _cfd_destroy (c, deleteme);
         }
     }
     /* clients - can modify client fds list (so do after client fds) */
     for (c = ctx->clients; c != NULL; i++) {
+        client_t *deleteme = NULL;
         assert (c->fd == zpa[i].fd);
-        deleteme = NULL;
         if (zpa[i].revents & ZMQ_POLLIN) {
             while (_client_read (c) != -1)
                 ;

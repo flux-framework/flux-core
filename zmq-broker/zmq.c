@@ -438,6 +438,18 @@ void cmb_msg_frombuf (zmq_mpart_t *msg, char *buf, int len)
     }
 }
 
+int cmb_msg_datacpy (zmq_mpart_t *msg, char *buf, int len)
+{
+    int n = zmq_msg_size (&msg->part[2]);
+
+    if (n > len) {
+        fprintf (stderr, "cmb_msg_getdata: received message is too big\n");
+        return -1;
+    }
+    memcpy (buf, zmq_msg_data (&msg->part[2]), n);
+    return n;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

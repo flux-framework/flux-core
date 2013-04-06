@@ -11,12 +11,13 @@
 
 #include "cmb.h"
 
-#define OPTIONS "psb:k:SK:Ct:P:d:f"
+#define OPTIONS "psb:k:SK:Ct:P:d:fF:"
 static const struct option longopts[] = {
     {"ping",       no_argument,        0, 'p'},
     {"ping-padding", required_argument,0, 'P'},
     {"ping-delay", required_argument,  0, 'd'},
-    {"fdopen",     no_argument,        0, 'f'},
+    {"fdopen-read",no_argument,        0, 'f'},
+    {"fdopen-write",required_argument, 0, 'F'},
     {"snoop",      no_argument,        0, 's'},
     {"barrier",    required_argument,  0, 'b'},
     {"kvs-put",    required_argument,  0, 'k'},
@@ -30,16 +31,17 @@ static const struct option longopts[] = {
 static void usage (void)
 {
     fprintf (stderr, "Usage: cmbutil OPTIONS\n"
-"  -p,--ping            loop back a sequenced message through the cmb\n"
-"  -P,--ping-padding N  pad ping packets with N bytes (adds a JSON string)\n"
-"  -d,--ping-delay N    set delay between ping packets (in msec)\n"
-"  -f,--fdopen          open remote file descriptor\n"
-"  -b,--barrier name    execute barrier across slurm job\n"
-"  -k,--kvs-put key=val set a key\n"
-"  -K,--kvs-get key     get a key\n"
-"  -C,--kvs-commit      commit pending kvs puts\n"
-"  -t,--kvs-torture N   set N keys, then commit\n"
-"  -S,--sync            block until event.sched.triger\n");
+"  -p,--ping              loop back a sequenced message through the cmb\n"
+"  -P,--ping-padding N    pad ping packets with N bytes (adds a JSON string)\n"
+"  -d,--ping-delay N      set delay between ping packets (in msec)\n"
+"  -f,--fdopen-read       open r/o fd, print name, and read until EOF\n"
+"  -F,--fdopen-write DEST open w/o fd, routing data to DEST, write until EOF\n"
+"  -b,--barrier name      execute barrier across slurm job\n"
+"  -k,--kvs-put key=val   set a key\n"
+"  -K,--kvs-get key       get a key\n"
+"  -C,--kvs-commit        commit pending kvs puts\n"
+"  -t,--kvs-torture N     set N keys, then commit\n"
+"  -S,--sync              block until event.sched.triger\n");
     exit (1);
 }
 
@@ -97,32 +99,65 @@ int main (int argc, char *argv[])
                 }
                 break;
             }
-            case 'f': { /* --fdopen */
-                int newfd[16], i;
-                char *name[16];
+            case 'f': { /* --fdopen-read */
+                int fd, n;
+                char *name;
+                char buf[CMB_API_FD_BUFSIZE];
 
-                for (i = 0; i < 16; i++) {    
-                    if ((newfd[i] = cmb_fd_open (c, &name[i])) < 0) {
-                        fprintf (stderr, "cmb_fdopen: %s\n", strerror (errno));
+                if ((fd = cmb_fd_open (c, NULL, &name)) < 0) {
+                    fprintf (stderr, "cmb_fd_open: %s\n", strerror (errno));
+                    exit (1);
+                }
+                printf ("fdopen-read: %s\n", name);
+                while ((n = read (fd, buf, sizeof (buf))) > 0) {
+                    int done, m;
+                    for (done = 0; done < n; done += m) {
+                        m = write (1, buf + done, n - done);
+                        if (m < 0) {
+                            fprintf (stderr, "write stdout: %s\n",
+                                     strerror (errno));
+                            exit (1);
+                        }
+                    }
+                }
+                if (n < 0) {
+                    fprintf (stderr, "fdopen-read: %s\n", strerror (errno));
+                    exit (1);
+                }
+                if (n == 0)
+                    fprintf (stderr, "fdopen-read: EOF\n");
+                if (close (fd) < 0) {
+                    fprintf (stderr, "close: %s\n", strerror (errno));
+                    exit (1);
+                }
+                break;
+            }
+            case 'F': { /* --fdopen-write DEST */
+                int fd, n;
+                char buf[CMB_API_FD_BUFSIZE];
+
+                if ((fd = cmb_fd_open (c, optarg, NULL)) < 0) {
+                    fprintf (stderr, "cmb_fd_open: %s\n", strerror (errno));
+                    exit (1);
+                }
+                while ((n = read (0, buf, sizeof (buf))) > 0) {
+                    int m;
+                    if ((m = write (fd, buf, n)) < 0) {
+                        fprintf (stderr, "fdopen-write: %s\n",
+                                 strerror (errno));
                         exit (1);
                     }
-                    printf ("newfd[%d] fd=%d name=%s\n", i, newfd[i], name[i]);
-                }
-
-                printf ("sleep 2\n");
-                sleep (2);
-
-                printf ("closing 16 file descriptors\n");
-                for (i = 0; i < 16; i++) {
-                    if (close (newfd[i]) < 0) {
-                        fprintf (stderr, "close: %s\n", strerror (errno));
+                    if (m < n) {
+                        fprintf (stderr, "fdopen-write: short write\n");
                         exit (1);
                     }
-                    free (name[i]);
                 }
-
-                printf ("sleep 2\n");
-                sleep (2);
+                if (n < 0) {
+                    fprintf (stderr, "read stdin: %s\n", strerror (errno));
+                    exit (1);
+                }
+                if (close (fd) < 0)
+                    fprintf (stderr, "close: %s\n", strerror (errno));
                 break;
             }
             case 'b': { /* --barrier NAME */

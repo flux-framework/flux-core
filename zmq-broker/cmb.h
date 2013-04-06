@@ -1,5 +1,6 @@
-#define CMB_API_PATH	"/tmp/cmb_socket"
-#define CMB_API_BUFSIZE	32768
+#define CMB_API_PATH            "/tmp/cmb_socket"
+#define CMB_API_BUFSIZE         32768
+#define CMB_API_FD_BUFSIZE      (CMB_API_BUFSIZE - 1024)
 
 typedef struct cmb_struct *cmb_t;
 
@@ -15,7 +16,7 @@ int cmb_kvs_put (cmb_t c, char *key, char *val);
 char *cmb_kvs_get (cmb_t c, char *key);
 int cmb_kvs_commit (cmb_t c, int *errcountp, int *putcountp);
 
-int cmb_fd_open (cmb_t c, char **np);
+int cmb_fd_open (cmb_t c, char *wname, char **np);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

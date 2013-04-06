@@ -40,3 +40,4 @@ bool cmb_msg_match (zmq_mpart_t *msg, char *tag);
 
 int cmb_msg_tobuf (zmq_mpart_t *msg, char *buf, int len);
 void cmb_msg_frombuf (zmq_mpart_t *msg, char *buf, int len);
+int cmb_msg_datacpy (zmq_mpart_t *msg, char *buf, int len);
