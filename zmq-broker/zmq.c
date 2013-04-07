@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
+#include <sys/time.h>
 #include <json/json.h>
 #include <assert.h>
 

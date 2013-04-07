@@ -11,6 +11,7 @@
 #include <sys/param.h>
 #include <stdbool.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 
 #include <json/json.h>
 #include <zmq.h>
@@ -168,7 +169,7 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
     srv->zctx = _zmq_init (1);
 
     srv->zs_eventout = _zmq_socket (srv->zctx, ZMQ_PUB);
-    _zmq_bind (srv->zs_eventout, conf->eventout_uri);
+    //_zmq_bind (srv->zs_eventout, conf->eventout_uri);
 
     srv->zs_eventin = _zmq_socket (srv->zctx, ZMQ_SUB);
     //_zmq_connect (srv->zs_eventin, conf->eventin_uri);

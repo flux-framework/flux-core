@@ -412,7 +412,7 @@ error:
     return -1;
 }
 
-int cmb_barrier (cmb_t c, char *name, int nprocs, int tasks_per_node)
+int cmb_barrier (cmb_t c, char *name, int nprocs)
 {
     json_object *o = NULL;
     int count = 1;
@@ -427,8 +427,6 @@ int cmb_barrier (cmb_t c, char *name, int nprocs, int tasks_per_node)
     if (_json_object_add_int (o, "count", count) < 0)
         goto error;
     if (_json_object_add_int (o, "nprocs", nprocs) < 0)
-        goto error;
-    if (_json_object_add_int (o, "tasks_per_node", tasks_per_node) < 0)
         goto error;
     if (cmb_send (c, o, NULL, 0, "barrier.enter.%s", name) < 0)
         goto error;

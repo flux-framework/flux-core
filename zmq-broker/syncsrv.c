@@ -13,6 +13,7 @@
 #include <stdbool.h>
 #include <sys/un.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <ctype.h>
 #include <zmq.h>
 #include <json/json.h>

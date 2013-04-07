@@ -10,8 +10,9 @@
 #include <sys/time.h>
 
 #include "cmb.h"
+#include "util.h"
 
-#define OPTIONS "psb:k:SK:Ct:P:d:fF:"
+#define OPTIONS "psb:k:SK:Ct:P:d:fF:n:"
 static const struct option longopts[] = {
     {"ping",       no_argument,        0, 'p'},
     {"ping-padding", required_argument,0, 'P'},
@@ -20,6 +21,7 @@ static const struct option longopts[] = {
     {"fdopen-write",required_argument, 0, 'F'},
     {"snoop",      no_argument,        0, 's'},
     {"barrier",    required_argument,  0, 'b'},
+    {"nprocs",     required_argument,  0, 'n'},
     {"kvs-put",    required_argument,  0, 'k'},
     {"kvs-get",    required_argument,  0, 'K'},
     {"kvs-commit", no_argument,        0, 'C'},
@@ -37,6 +39,7 @@ static void usage (void)
 "  -f,--fdopen-read       open r/o fd, print name, and read until EOF\n"
 "  -F,--fdopen-write DEST open w/o fd, routing data to DEST, write until EOF\n"
 "  -b,--barrier name      execute barrier across slurm job\n"
+"  -n,--nprocs N          override nprocs (default $SLURM_NPROCS or 1)\n"
 "  -k,--kvs-put key=val   set a key\n"
 "  -K,--kvs-get key       get a key\n"
 "  -C,--kvs-commit        commit pending kvs puts\n"
@@ -57,12 +60,10 @@ int main (int argc, char *argv[])
     int ch;
     cmb_t c;
     int nprocs;
-    int tasks_per_node;
     int padding = 0;
     int pingdelay_ms = 1000;
 
     nprocs = _env_getint ("SLURM_NPROCS", 1);
-    tasks_per_node = _env_getint ("SLURM_TASKS_PER_NODE", 1);
 
     if (!(c = cmb_init ())) {
         fprintf (stderr, "cmb_init: %s\n", strerror (errno));
@@ -76,6 +77,9 @@ int main (int argc, char *argv[])
             case 'd': /* --ping-delay N */
                 pingdelay_ms = strtoul (optarg, NULL, 10);
                 break;
+            case 'n': /* --nprocs N */
+                nprocs = strtoul (optarg, NULL, 10);
+                break;
         }
     }
     optind = 0;
@@ -85,12 +89,12 @@ int main (int argc, char *argv[])
                 int i;
                 struct timeval t, t1, t2;
                 for (i = 0; ; i++) {
-                    gettimeofday (&t1, NULL);
+                    xgettimeofday (&t1, NULL);
                     if (cmb_ping (c, i, padding) < 0) {
                         fprintf (stderr, "cmb_ping: %s\n", strerror(errno));
                         exit (1);
                     }
-                    gettimeofday (&t2, NULL);
+                    xgettimeofday (&t2, NULL);
                     timersub (&t2, &t1, &t);
                     fprintf (stderr,
                       "loopback ping pad=%d seq=%d time=%0.3f ms\n", padding, i,
@@ -161,10 +165,16 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'b': { /* --barrier NAME */
-                if (cmb_barrier (c, optarg, nprocs, tasks_per_node) < 0) {
+                struct timeval t, t1, t2;
+                xgettimeofday (&t1, NULL);
+                if (cmb_barrier (c, optarg, nprocs) < 0) {
                     fprintf (stderr, "cmb_barrier: %s\n", strerror(errno));
                     exit (1);
                 }
+                xgettimeofday (&t2, NULL);
+                timersub (&t2, &t1, &t);
+                fprintf (stderr, "barrier time=%0.3f ms\n",
+                         (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
                 break;
             }
             case 's': { /* --snoop */
@@ -220,7 +230,7 @@ int main (int argc, char *argv[])
                 struct timeval t1, t2, t;
                 int errcount, putcount;
 
-                gettimeofday (&t1, NULL);
+                xgettimeofday (&t1, NULL);
                 for (i = 0; i < n; i++) {
                     snprintf (key, sizeof (key), "key%d", i);
                     snprintf (val, sizeof (key), "val%d", i);
@@ -229,7 +239,7 @@ int main (int argc, char *argv[])
                         exit (1);
                     }
                 }
-                gettimeofday (&t2, NULL);
+                xgettimeofday (&t2, NULL);
                 timersub(&t2, &t1, &t);
                 fprintf (stderr, "kvs_put:    time=%0.3f ms\n",
                         (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
@@ -237,13 +247,17 @@ int main (int argc, char *argv[])
                     fprintf (stderr, "cmb_kvs_commit: %s\n", strerror(errno));
                     exit (1);
                 }
-                gettimeofday (&t2, NULL);
+                xgettimeofday (&t2, NULL);
                 timersub (&t2, &t1, &t);
                 fprintf (stderr, "kvs_commit: time=%0.3f ms errcount=%d putcount=%d\n",
                         (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000,
                         errcount, putcount);
                 break;
             }
+            case 'P':
+            case 'd':
+            case 'n':
+                break; /* handled in first getopt */
             default:
                 usage ();
         }
