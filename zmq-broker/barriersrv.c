@@ -1,8 +1,12 @@
 /* barriersrv.c - implement barriers */ 
 
-/* FIXME: handle disconnecting clients (send event.barrier.fail) */
-
-/* FIXME: don't retire barrier names, keep them around to detect reuse */
+/* FIXME: event.barrier.exit.<name> should be able to return error in JSON.
+ * Send this if barrier entry specifies a known name with different nprocs.
+ * Also: track local client uuid's who have entered barrier, and subscribe
+ * to their disconnect messages.  Send an error on premature disconnect.
+ * Idea: send this to out_tree instead of out_event and have the root
+ * barriersrv relay it (once) to out_event to avoid storm on mass-disconnect.
+ */
 
 #define _GNU_SOURCE
 #include <stdio.h>

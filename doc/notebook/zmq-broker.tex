@@ -21,15 +21,120 @@ communicates with the apisrv plugin via a UNIX domain socket.}
 
 \subsection{The Prototype}
 
-\paragraph {Internal Design}
+The prototype consists of the cmbd message broker and plugins for various
+functions.  One cmbd and a set of plugins runs on each node.
+There is an internal (on-node) architecture within the process space of
+the cmbd, and an external (distributed) architecture, in which the cmbds
+on a collection of nodes are interconnected.  A set of communicating cmbds
+roughly corresponds to a comms session as described in the \ngrm\ project
+document.  Launched in concert with a \slurm\ job, the message broker
+provides a scalable PMI service, and the basis to implement other services.
+
+\subsubsection {Internal Architecture}
 The internal architecture is shown in Figure~\ref{fig:cmbint}.
-The cmbd acts as a message router, passing two-part \zMQ\ messages
-(Figure~\ref{fig:cmbproto}) between sockets as defined in
-Table~\ref{tab:cmbrouting}.
+The cmbd acts only as a message router, passing multipart \zMQ\ messages
+(Table~\ref{tab:cmbproto}) between sockets as directed by the hardwired
+routes in Table~\ref{tab:cmbrouting}.
 Plugins are implemented as cmbd threads that access well known \zMQ\ sockets.
-Public interfaces are exposed by a library which access the CMB through
-a UNIX domain socked exposed by the {\em apisrv} plugin.
-The public API is depicted in Table~\ref{tab:cmbapi}.
+Plugins generally read requests or obtain event notifications from the
+{\em in} \zMQ\ socket, handle them, and write to one of the other sockets:
+{\em out}, {\em out\_tree}, or {\em out\_event}.  {\em in} and {\em out}
+are wired to an internal bus.  All messages routed to the bus are received
+by all plugins.  {\em out\_tree} and {\em out\_event} are routed off-node.
+Messages originating off-node are routed to the bus.  The following
+plugins were implemented
+
+\paragraph{apisrv}
+Public interfaces, e.g. those used by PMI, are exposed by a library which
+accesses the cmb through a UNIX domain socket exposed by the {\em apisrv}
+plugin.   This plugin listens for connects/disconnects on the UNIX domain
+socket.  When the API connects, a session is created (in the socket
+{\em accept} sense), is assigned a UUID,
+and a {\em event.api.uuid.connect} event is generated on the bus.
+When the session disconnects by closing its socket or crashing, a
+{\em event.api.uuid.disconnect} event is generated on the bus, thus
+state carried by plugins for API sessions can be managed even when
+sessions terminate unexpectedly.
+
+Protocol messages are sent over the socket using a simplistic wire protocol
+that enables the \zMQ\ mutipart messages used by the broker and plugins to
+be encapsulated.  Some messages are interpreted by {\em apisrv} as they
+arrive, for example {\em api.subscribe.tag}, {\em api.unsubscribe},
+and {\em api.setuuid.uuid}.  Others are passed through to the internal
+bus.  Messages arriving on the bus from other sources are sent through to
+{\em apisrv} and in turn to API sessions according to the session's
+subscription.  The subscription is implemented as a substring match
+on the multipart message tag, identical to the way \zMQ\ implements
+subscription matching on its PUB-SUB sockets.
+
+An API sesssion messages another plugin by sending a message with a
+tag accepted (subscribed to) by that plugin.
+A message requiring a response includes a tag accepted by the sender
+in the JSON message part.  In the API case the sender is identified as
+{\em api.uuid}.  If the sender goes away between request and response,
+there will be no subscriber at the sender's plugin and the response
+will be discarded.
+
+The public API functions are depicted in Table~\ref{tab:cmbapi}.
+
+\paragraph{kvssrv}
+A key-value service is implemented by the {\em kvssrv} plugin.
+This plugin interfaces with the redis key-value store using the
+{\em hiredis} C API.  It handles three request types: {\em kvs.get},
+{\em kvs.put}, and {\em kvs.commit}.  Requests are translated into
+redis transactions.  The {\em kvs.get} request is synchronous,
+with the key value or error immediately returned in a reply message.
+The {\em kvs.put} request is not replied to, thus an API client can
+pipeline multiple {\em kvs.put} requests.
+The {\em kvs.commit} request is synchronous.  Its reply includes
+any errors encountered handling {\em kvs.put} transactions since the
+last commit.
+
+This plugin leverages \zMQ's built-in message queues.  The plugin thread
+simply loops, reading one request, handling the associated redis trasaction,
+and sending a reply, if any.  Pipelined requests accumulate in the \zMQ\ 
+{\em in} socket queue and are handled in the order received, thus a
+{\em kvs.commit} enqueued behind a set of {\em kvs.put} requests need
+not do anything complicated to ensure the {\em kvs.put}'s have completed 
+when it is finally handled by the {\em kvssrv} thread.
+
+In order to track {\em kvs.put} errors for each API session so that a
+{\em kvs.commit} can return them, {\em kvssrv} must maintain state per
+API session.  When this state is created, {\em kvssrv} subscribes to
+the session's {\em api.uuid.disconnect} message so that it can free
+the state when the session terminates.
+
+In order to implement the PMI shared key-value space {\em kvssrv}
+is set up to connect to a single instance of redis for the job.
+Since there will be one redis connection per node, scalability is improved
+over the {\em pmi-redis} prototype which had two redis connections per
+MPI task.  However, scalability will still be limited by the number
+of simultaneous hiredis connections that a single redis server can handle.
+
+\paragraph{barriersrv}
+The {\em barriersrv} plugin implements barriers using the reduction
+tree described below.   The {\tt cmb\_barrier ()} API function requires
+all participants to provide identical {\em name} and {\em nprocs} arguments.
+This is translated into a {\em barrier.enter.name} message to the local
+{\em barriersrv} plugin, which creates a local context for the barrier
+if one does not already exist.  The API then blocks waiting for a
+{\em event.barrier.exit.name} message.
+
+Each message received for the barrier by {\em barriersrv} increments
+an internal count in the context.  If the count reaches nprocs,
+a {\em event.barrier.exit.name} message is generated.  This is published
+session-wide and causes all the API barrier calls for the named barrier
+to return.  Alternatively, if nprocs is not reached before a 2ms timer
+expires, {\em barriersrv} pushes a {\em barrier.enter.name} message upstream
+containing the current count, which it then clears.  Eventually, the upstream
+count reaches nprocs and the barrier is terminated.  Upon receipt of the
+exit message, {\em barriersrv} removes its context for the barrier.
+
+TODO: implement {\em event.barrier.fail.name} in case a call is made with
+the wrong nprocs value, or a local API client exits before the barrier is
+complete.
+\paragraph{syncsrv}
+generates the multicast scheduling trigger
 
 \begin{table}
 \centering
@@ -50,18 +155,29 @@ in (SUB)	& pl\_out (PUB)	& {\em BUS}     & \\
 \label{tab:cmbrouting}
 \end{table}
 
-\begin{figure}
+\begin{table}
 \centering
-\includegraphics[scale=0.4]{zmq-broker-proto.eps}
-\caption{Message protocol.  Messages consist of two \zMQ\ message parts.
-The first part is a {\em tag} formatted as a zmQ string suitable for
+\begin{tabular}{|l|p{11cm}|}\hline
+\textbf{message part} & \textbf{example} \\
+\hline
+{\em tag} & {\tt barrier.enter.job22-1} \\
+\hline
+{\em json} & {\tt \{ "count" : 1, "nprocs" : 16, "tasks\_per\_node" : 16 \} }\\
+\hline
+{\em data} & nil\\
+\hline
+\end{tabular}
+\caption{Message protocol.  Messages consist of three \zMQ\ message parts.
+The first part is a {\em tag} formatted as a \zMQ\ string suitable for
 use as a subscription tag on PUB-SUB sockets, and which is used to identify
 the recipient(s).
-The second part is JSON formatted as a \zMQ\ string.}
-\label{fig:cmbproto}
-\end{figure}
+The second part (optional) is JSON formatted as a \zMQ\ string.
+The third part (optional) is raw data, needed since JSON has no opaque
+data type.}
+\label{tab:cmbproto}
+\end{table}
 
-\paragraph {External Design}
+\subsubsection {External Architecture}
 The cmbd implements the reduction network and event service described
 in the \ngrm\ comms design.
 
