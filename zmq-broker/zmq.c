@@ -243,21 +243,29 @@ void _zmq_mpart_close (zmq_mpart_t *msg)
         _zmq_msg_close (&msg->part[i]);
 }
 
-void _zmq_mpart_recv (zmq_mpart_t *msg, void *socket, int flags)
+/* return 0 on success, -1 on non-fatal error */
+int _zmq_mpart_recv (zmq_mpart_t *msg, void *socket, int flags)
 {
     int i = 0;
 
     for (i = 0; i < ZMQ_MPART_MAX; i++) {
         if (i > 0 && !_zmq_rcvmore (socket)) {
+            /* N.B. seen on epgm socket when sender restarted */
             fprintf (stderr, "_zmq_mpart_recv: only got %d message parts\n", i);
-            exit (1);
+            goto error;
         }
         _zmq_msg_recv (&msg->part[i], socket, flags);
     }
     if (_zmq_rcvmore (socket)) {
         fprintf (stderr, "_zmq_mpart_recv: too many message parts\n");
-        exit (1);
+        goto error;
     }
+    return 0;
+error:
+    while (--i >= 0)
+        zmq_msg_close (&msg->part[i]);
+    errno = EPROTO;
+    return -1;
 }
 
 void _zmq_mpart_send (zmq_mpart_t *msg, void *socket, int flags)
@@ -303,7 +311,8 @@ int cmb_msg_recv (void *socket, char **tagp, json_object **op,
     int len = 0;
 
     _zmq_mpart_init (&msg);
-    _zmq_mpart_recv (&msg, socket, 0);
+    if (_zmq_mpart_recv (&msg, socket, 0) < 0)
+        goto eproto;
 
     /* tag */
     if (tagp) {

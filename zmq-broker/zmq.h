@@ -26,7 +26,7 @@ int  _zmq_poll (zmq_pollitem_t *items, int nitems, long timeout);
 
 void _zmq_mpart_init (zmq_mpart_t *msg);
 void _zmq_mpart_close (zmq_mpart_t *msg);
-void _zmq_mpart_recv (zmq_mpart_t *msg, void *socket, int flags);
+int  _zmq_mpart_recv (zmq_mpart_t *msg, void *socket, int flags);
 void _zmq_mpart_send (zmq_mpart_t *msg, void *socket, int flags);
 void _zmq_mpart_dup (zmq_mpart_t *dest, zmq_mpart_t *src);
 
