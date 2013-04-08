@@ -77,15 +77,7 @@ void syncsrv_init (conf_t *conf, void *zctx)
     ctx->conf = conf;
 
     ctx->zs_out_event = _zmq_socket (zctx, ZMQ_PUSH);
-    if (conf->root_server)
-        _zmq_connect (ctx->zs_out_event, conf->plin_event_uri);
-
-    ctx->zs_out_tree = _zmq_socket (zctx, ZMQ_PUSH);
-    if (!conf->root_server)
-        _zmq_connect (ctx->zs_out_tree, conf->plin_tree_uri);
-
-    ctx->zs_out = _zmq_socket (zctx, ZMQ_PUSH);
-    _zmq_connect (ctx->zs_out, conf->plin_uri);
+    _zmq_connect (ctx->zs_out_event, conf->plin_event_uri);
 
     ctx->zs_in = _zmq_socket (zctx, ZMQ_SUB);
     _zmq_connect (ctx->zs_in, conf->plout_uri);
@@ -108,9 +100,7 @@ void syncsrv_fini (conf_t *conf)
         exit (1);
     }
     _zmq_close (ctx->zs_in);
-    _zmq_close (ctx->zs_out);
     _zmq_close (ctx->zs_out_event);
-    _zmq_close (ctx->zs_out_tree);
 
     free (ctx);
     ctx = NULL;

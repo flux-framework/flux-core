@@ -41,8 +41,6 @@ typedef struct ctx_struct *ctx_t;
 struct ctx_struct {
     void *zs_in;
     void *zs_out;
-    void *zs_out_event;
-    void *zs_out_tree;
     pthread_t t;
     conf_t *conf;
     redisContext *rctx;
@@ -270,7 +268,7 @@ static void *_thread (void *arg)
     json_object *o;
 
 again:
-    ctx->rctx = redisConnect (ctx->conf->rootnode, 6379);
+    ctx->rctx = redisConnect (ctx->conf->redis_server, 6379);
     if (ctx->rctx == NULL) {
         fprintf (stderr, "redisConnect returned NULL - abort\n");
         shutdown = true;
@@ -369,14 +367,6 @@ void kvssrv_init (conf_t *conf, void *zctx)
     _zmq_subscribe (ctx->zs_in, "kvs.");
     _zmq_subscribe (ctx->zs_in, "event.cmb.shutdown");
 
-    ctx->zs_out_event = _zmq_socket (zctx, ZMQ_PUSH);
-    if (conf->root_server)
-        _zmq_connect (ctx->zs_out_event, conf->plin_event_uri);
-
-    ctx->zs_out_tree = _zmq_socket (zctx, ZMQ_PUSH);
-    if (!conf->root_server)
-        _zmq_connect (ctx->zs_out_tree, conf->plin_tree_uri);
-
     ctx->zs_out = _zmq_socket (zctx, ZMQ_PUSH);
     _zmq_connect (ctx->zs_out, conf->plin_uri);
 
@@ -400,8 +390,6 @@ void kvssrv_fini (void)
     }
     _zmq_close (ctx->zs_in);
     _zmq_close (ctx->zs_out);
-    _zmq_close (ctx->zs_out_event);
-    _zmq_close (ctx->zs_out_tree);
 
     while (ctx->clients != NULL)
         _client_destroy (ctx->clients);

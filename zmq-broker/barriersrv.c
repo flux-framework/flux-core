@@ -245,7 +245,7 @@ void barriersrv_init (conf_t *conf, void *zctx)
     ctx->zs_out_event = _zmq_socket (zctx, ZMQ_PUSH);
     _zmq_connect (ctx->zs_out_event, conf->plin_event_uri);
 
-    if (!conf->root_server) {
+    if (conf->treeout_uri) { /* non-root */
         ctx->zs_out_tree = _zmq_socket (zctx, ZMQ_PUSH);
         _zmq_connect (ctx->zs_out_tree, conf->plin_tree_uri);
     }

@@ -48,13 +48,6 @@ static void usage (void)
     exit (1);
 }
 
-static int _env_getint (char *name, int dflt)
-{
-    char *ev = getenv (name);
-    return ev ? strtoul (ev, NULL, 10) : dflt;
-}
-
-
 int main (int argc, char *argv[])
 {
     int ch;
@@ -63,7 +56,7 @@ int main (int argc, char *argv[])
     int padding = 0;
     int pingdelay_ms = 1000;
 
-    nprocs = _env_getint ("SLURM_NPROCS", 1);
+    nprocs = env_getint ("SLURM_NPROCS", 1);
 
     if (!(c = cmb_init ())) {
         fprintf (stderr, "cmb_init: %s\n", strerror (errno));

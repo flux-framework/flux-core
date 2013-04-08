@@ -37,20 +37,16 @@ typedef struct {
     void *zs_plin_tree;
 } server_t;
 
-#define OPTIONS "rlvs:"
+#define OPTIONS "t:T:e:vs:r:"
 static const struct option longopts[] = {
-    {"root-server",       no_argument,  0, 'r'},
-    {"leaf-server",       no_argument,  0, 'l'},
+    {"event-uri",   required_argument,  0, 'e'},
+    {"tree-in-uri", required_argument,  0, 't'},
+    {"tree-out-uri",required_argument,  0, 'T'},
+    {"redis-server",required_argument,  0, 'r'},
     {"verbose",           no_argument,  0, 'v'},
     {"syncperiod",  required_argument,  0, 's'},
     {0, 0, 0, 0},
 };
-
-#define EVENTOUT_URI        "epgm://%s;239.192.1.1:5555"
-#define EVENTIN_URI         "epgm://%s;239.192.1.1:5555"
-
-#define TREEIN_URI          "tcp://*:5556"
-#define TREEOUT_URI         "tcp://%s:5556"
 
 #define PLOUT_URI           "inproc://plout"
 #define PLIN_URI            "inproc://plin"
@@ -61,26 +57,16 @@ static void _cmb_init (conf_t *conf, server_t **srvp);
 static void _cmb_fini (conf_t *conf, server_t *srv);
 static void _cmb_poll (conf_t *conf, server_t *srv);
 
-static int _env_getint (char *name, int dflt)
-{
-    char *ev = getenv (name);
-    return ev ? strtoul (ev, NULL, 10) : dflt;
-}
-
-static char *_env_getstr (char *name, char *dflt)
-{
-    char *ev = getenv (name);
-    return ev ? xstrdup (ev) : xstrdup (dflt);
-}
-
 static void usage (conf_t *conf)
 {
     fprintf (stderr, 
 "Usage: %s OPTIONS\n"
-" -r,--root-server    I am the root node\n"
-" -l,--leaf-server    I am a leaf node\n"
-" -v,--verbose        Show bus traffic\n"
-" -s,--syncperiod N   Set sync period in seconds\n"
+" -e,--event-uri URI     Set event URI (in/out epgm)\n"
+" -t,--tree-in-uri URI   Set tree-in URI\n"
+" -T,--tree-out-uri URI  Set tree-out URI\n"
+" -r,--redis-server HOST Set redis server hostname\n"
+" -v,--verbose           Show bus traffic\n"
+" -s,--syncperiod N      Set sync period in seconds\n"
             ,conf->prog);
     exit (1);
 }
@@ -90,17 +76,24 @@ int main (int argc, char *argv[])
     int c;
     conf_t *conf;
     server_t *srv;
-    char *local_eth0_address;
 
     conf = xzmalloc (sizeof (conf_t));
     conf->prog = basename (argv[0]);
+    conf->plout_uri = PLOUT_URI;
+    conf->plin_uri = PLIN_URI;
+    conf->plin_event_uri = PLIN_EVENT_URI;
+    conf->plin_tree_uri = PLIN_TREE_URI;
+    conf->syncperiod_msec = 10*1000;
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
-            case 'r':   /* --root-server */
-                conf->root_server = true;
+            case 'e':   /* --event-uri URI */
+                conf->event_uri = optarg;
                 break;
-            case 'l':   /* --leaf-server */
-                conf->leaf_server = true;
+            case 't':   /* --tree-in-uri URI */
+                conf->treein_uri = optarg;
+                break;
+            case 'T':   /* --tree-out-uri URI */
+                conf->treeout_uri = optarg;
                 break;
             case 'v':   /* --verbose */
                 conf->verbose = true;
@@ -108,47 +101,15 @@ int main (int argc, char *argv[])
             case 's':   /* --syncperiod sec */
                 conf->syncperiod_msec = strtoul (optarg, NULL, 10) * 1000;
                 break;
+            case 'r':   /* --redis-server hostname */
+                conf->redis_server = optarg;
+                break;
             default:
                 usage (conf);
         }
     }
     if (optind < argc)
         usage (conf);
-
-    conf->nnodes   = _env_getint ("SLURM_NNODES", 1);
-    conf->rootnode = _env_getstr ("SLURM_LAUNCH_NODE_IPADDR", "127.0.0.1");
-
-    /* FIXME - some zmq libraries assert on failure here, others just don't
-     * pass messages, silently.
-     */
-    local_eth0_address = "eth0";
-
-    snprintf (conf->eventout_uri, sizeof (conf->eventout_uri), EVENTOUT_URI,
-	      local_eth0_address);
-    snprintf (conf->eventin_uri, sizeof (conf->eventin_uri), EVENTIN_URI,
-	      local_eth0_address);
-    snprintf (conf->treeout_uri, sizeof (conf->treeout_uri), TREEOUT_URI,
-              conf->rootnode);
-    snprintf (conf->treein_uri, sizeof (conf->treein_uri),TREEIN_URI); 
-    snprintf (conf->plout_uri, sizeof (conf->plout_uri), PLOUT_URI); 
-    snprintf (conf->plin_uri, sizeof (conf->plin_uri), PLIN_URI); 
-    snprintf (conf->plin_event_uri, sizeof (conf->plin_event_uri),
-              PLIN_EVENT_URI); 
-    snprintf (conf->plin_tree_uri, sizeof (conf->plin_tree_uri),
-              PLIN_TREE_URI);
-
-    if (!conf->leaf_server && conf->nnodes == 1)
-        conf->root_server = true;
-
-    if (conf->root_server && conf->syncperiod_msec == 0)
-        conf->syncperiod_msec = 10*1000;
-
-    if (conf->verbose) {
-        if (conf->root_server)
-            fprintf (stderr, "cmbd: root (%d nodes)\n", conf->nnodes);
-        else
-            fprintf (stderr, "cmbd: leaf (%d nodes)\n", conf->nnodes);
-    }
 
     _cmb_init (conf, &srv);
     for (;;)
@@ -168,38 +129,36 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
 
     srv->zctx = _zmq_init (1);
 
-    srv->zs_eventout = _zmq_socket (srv->zctx, ZMQ_PUB);
-    //_zmq_bind (srv->zs_eventout, conf->eventout_uri);
-
-    srv->zs_eventin = _zmq_socket (srv->zctx, ZMQ_SUB);
-    //_zmq_connect (srv->zs_eventin, conf->eventin_uri);
-    //_zmq_subscribe_all (srv->zs_eventin);
-
-    srv->zs_treeout = _zmq_socket (srv->zctx, ZMQ_PUSH);
-    if (!conf->root_server)
+    if (conf->event_uri) {
+        srv->zs_eventout = _zmq_socket (srv->zctx, ZMQ_PUB);
+        _zmq_bind (srv->zs_eventout, conf->event_uri);
+        srv->zs_eventin = _zmq_socket (srv->zctx, ZMQ_SUB);
+        _zmq_connect (srv->zs_eventin, conf->event_uri);
+        _zmq_subscribe_all (srv->zs_eventin);
+    }
+    if (conf->treeout_uri) {
+        srv->zs_treeout = _zmq_socket (srv->zctx, ZMQ_PUSH);
         _zmq_connect (srv->zs_treeout, conf->treeout_uri);
-
-    srv->zs_treein = _zmq_socket (srv->zctx, ZMQ_PULL);
-    if (conf->root_server)
+    }
+    if (conf->treein_uri) {
+        srv->zs_treein = _zmq_socket (srv->zctx, ZMQ_PULL);
         _zmq_bind (srv->zs_treein, conf->treein_uri);
-
+    }
     srv->zs_plout = _zmq_socket (srv->zctx, ZMQ_PUB);
     _zmq_bind (srv->zs_plout, conf->plout_uri);
-
     srv->zs_plin = _zmq_socket (srv->zctx, ZMQ_PULL);
     _zmq_bind (srv->zs_plin, conf->plin_uri);
-
     srv->zs_plin_tree = _zmq_socket (srv->zctx, ZMQ_PULL);
     _zmq_bind (srv->zs_plin_tree, conf->plin_tree_uri);
-
     srv->zs_plin_event = _zmq_socket (srv->zctx, ZMQ_PULL);
     _zmq_bind (srv->zs_plin_event, conf->plin_event_uri);
 
     apisrv_init (conf, srv->zctx, CMB_API_PATH);
     barriersrv_init (conf, srv->zctx);
-    if (conf->root_server)
+    if (!conf->treeout_uri) /* root (send on local bus even if no eventout) */
         syncsrv_init (conf, srv->zctx);
-    kvssrv_init (conf, srv->zctx);
+    if (conf->redis_server)
+        kvssrv_init (conf, srv->zctx);
 
     *srvp = srv;
 }
@@ -208,8 +167,9 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
 {
     cmb_msg_send (srv->zs_plout, NULL, NULL, 0, "event.cmb.shutdown");
    
-    kvssrv_fini ();
-    if (conf->root_server)
+    if (conf->redis_server)
+        kvssrv_fini ();
+    if (!conf->treeout_uri) /* root */
         syncsrv_fini (); 
     barriersrv_fini ();
     apisrv_fini ();
@@ -218,10 +178,14 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
     _zmq_close (srv->zs_plin_tree);
     _zmq_close (srv->zs_plin);
     _zmq_close (srv->zs_plout);
-    _zmq_close (srv->zs_treein);
-    _zmq_close (srv->zs_treeout);
-    _zmq_close (srv->zs_eventin);
-    _zmq_close (srv->zs_eventout);
+    if (srv->zs_treein)
+        _zmq_close (srv->zs_treein);
+    if (srv->zs_treeout)
+        _zmq_close (srv->zs_treeout);
+    if (srv->zs_eventin)
+        _zmq_close (srv->zs_eventin);
+    if (srv->zs_eventout)
+        _zmq_close (srv->zs_eventout);
 
     _zmq_term (srv->zctx);
 
@@ -237,8 +201,14 @@ static void _route_two (conf_t *conf, void *src, void *d1, void *d2, char *s)
     if (conf->verbose)
         cmb_msg_dump (s, &msg);
     _zmq_mpart_dup (&cpy, &msg);
-    _zmq_mpart_send (d2, &cpy, 0);
-    _zmq_mpart_send (d1, &msg, 0);
+    if (d2)
+        _zmq_mpart_send (d2, &cpy, 0);
+    else
+        _zmq_mpart_close (&cpy);
+    if (d1)
+        _zmq_mpart_send (d1, &msg, 0);
+    else
+        _zmq_mpart_close (&msg);
 }
 
 static void _route_one (conf_t *conf, void *src, void *dest, char *s)
@@ -249,7 +219,10 @@ static void _route_one (conf_t *conf, void *src, void *dest, char *s)
     _zmq_mpart_recv (src, &msg, 0);
     if (conf->verbose)
         cmb_msg_dump (s, &msg);
-    _zmq_mpart_send (dest, &msg, 0);
+    if (dest)
+        _zmq_mpart_send (dest, &msg, 0);
+    else
+        _zmq_mpart_close (&msg);
 }
 
 static void _cmb_poll (conf_t *conf, server_t *srv)

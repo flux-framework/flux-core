@@ -39,6 +39,18 @@ void xgettimeofday (struct timeval *tv, struct timezone *tz)
     }
 }
 
+int env_getint (char *name, int dflt)
+{
+    char *ev = getenv (name);
+    return ev ? strtoul (ev, NULL, 10) : dflt;
+}
+
+char *env_getstr (char *name, char *dflt)
+{
+    char *ev = getenv (name);
+    return ev ? xstrdup (ev) : xstrdup (dflt);
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
