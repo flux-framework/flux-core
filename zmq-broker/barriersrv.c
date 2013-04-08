@@ -196,7 +196,7 @@ static long _timeout (void)
 {
     barrier_t *b;
     struct timeval now, t;
-    long usec, tmout = -1;
+    long msec, tmout = -1;
 
     xgettimeofday (&now, NULL);
     for (b = ctx->barriers; b != NULL; b = b->next) {
@@ -207,9 +207,9 @@ static long _timeout (void)
             b->ctime = now;
             timersub (&now, &b->ctime, &t);
         }
-        usec = t.tv_sec*1000000L + t.tv_usec;
-        if (tmout == -1 || usec < tmout)
-            tmout = usec;
+        msec = t.tv_sec*1000L + t.tv_usec / 1000L;
+        if (tmout == -1 || msec < tmout)
+            tmout = msec;
     }
     return tmout;
 }
@@ -222,10 +222,7 @@ static void *_thread (void *arg)
     long tmout = -1;
 
     for (;;) {
-        if ((zmq_poll(zpa, 1, tmout)) < 0) {
-            fprintf (stderr, "zmq_poll: %s\n", strerror (errno));
-            exit (1);
-        }
+        _zmq_poll(zpa, 1, tmout);
         if (zpa[0].revents & ZMQ_POLLIN)
             if (!_readmsg ())
                 break;

@@ -61,9 +61,9 @@ static void usage (conf_t *conf)
 {
     fprintf (stderr, 
 "Usage: %s OPTIONS\n"
-" -e,--event-uri URI     Set event URI (in/out epgm)\n"
-" -t,--tree-in-uri URI   Set tree-in URI\n"
-" -T,--tree-out-uri URI  Set tree-out URI\n"
+" -e,--event-uri URI     Set event URI e.g. epgm://eth0;239.192.1.1:5555\n"
+" -t,--tree-in-uri URI   Set tree-in URI, e.g. tcp://*:5556\n"
+" -T,--tree-out-uri URI  Set tree-out URI, e.g. tcp://hostname:5556\n"
 " -r,--redis-server HOST Set redis server hostname\n"
 " -v,--verbose           Show bus traffic\n"
 " -s,--syncperiod N      Set sync period in seconds\n"
@@ -187,7 +187,7 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
     if (srv->zs_eventout)
         _zmq_close (srv->zs_eventout);
 
-    _zmq_term (srv->zctx);
+    _zmq_ctx_destroy (srv->zctx);
 
     free (srv);
 }
@@ -197,16 +197,15 @@ static void _route_two (conf_t *conf, void *src, void *d1, void *d2, char *s)
     zmq_mpart_t msg, cpy;
 
     _zmq_mpart_init (&msg);
-    _zmq_mpart_recv (src, &msg, 0);
+    _zmq_mpart_recv (&msg, src, 0);
     if (conf->verbose)
         cmb_msg_dump (s, &msg);
-    _zmq_mpart_dup (&cpy, &msg);
-    if (d2)
-        _zmq_mpart_send (d2, &cpy, 0);
-    else
-        _zmq_mpart_close (&cpy);
+    if (d2) {
+        _zmq_mpart_dup (&cpy, &msg);
+        _zmq_mpart_send (&cpy, d2, 0);
+    }
     if (d1)
-        _zmq_mpart_send (d1, &msg, 0);
+        _zmq_mpart_send (&msg, d2, 0);
     else
         _zmq_mpart_close (&msg);
 }
@@ -216,11 +215,11 @@ static void _route_one (conf_t *conf, void *src, void *dest, char *s)
     zmq_mpart_t msg;
 
     _zmq_mpart_init (&msg);
-    _zmq_mpart_recv (src, &msg, 0);
+    _zmq_mpart_recv (&msg, src, 0);
     if (conf->verbose)
         cmb_msg_dump (s, &msg);
     if (dest)
-        _zmq_mpart_send (dest, &msg, 0);
+        _zmq_mpart_send (&msg, dest, 0);
     else
         _zmq_mpart_close (&msg);
 }
@@ -235,10 +234,8 @@ static void _cmb_poll (conf_t *conf, server_t *srv)
 { .socket = srv->zs_plin_tree,  .events = ZMQ_POLLIN, .revents = 0, .fd = -1 }
     };
 
-    if ((zmq_poll(zpa, 5, -1)) < 0) {
-        fprintf (stderr, "zmq_poll: %s\n", strerror (errno));
-        exit (1);
-    }
+    _zmq_poll(zpa, 5, -1);
+
     if (zpa[0].revents & ZMQ_POLLIN)
         _route_one (conf, srv->zs_treein, srv->zs_plout, "treein->plout");
     if (zpa[1].revents & ZMQ_POLLIN)

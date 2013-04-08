@@ -30,7 +30,6 @@ struct ctx_struct {
     void *zs_in;
     void *zs_out;
     void *zs_out_event;
-    void *zs_out_tree;
     pthread_t t;
     conf_t *conf;
 };
@@ -44,15 +43,13 @@ static bool _poll (void)
     zmq_pollitem_t zpa[] = {
        { .socket = ctx->zs_in, .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
     };
-    long tmout = ctx->conf->syncperiod_msec * 1000; 
+    long tmout = ctx->conf->syncperiod_msec;
 
-    if ((zmq_poll(zpa, 1, tmout)) < 0) {
-        fprintf (stderr, "zmq_poll: %s\n", strerror (errno));
-        exit (1);
-    }
+    _zmq_poll(zpa, 1, tmout);
+
     if (zpa[0].revents & ZMQ_POLLIN) {
         _zmq_mpart_init (&msg);
-        _zmq_mpart_recv (ctx->zs_in, &msg, 0);
+        _zmq_mpart_recv (&msg, ctx->zs_in, 0);
         if (cmb_msg_match (&msg, "event.cmb.shutdown"))
             shutdown = true;
         _zmq_mpart_close (&msg);

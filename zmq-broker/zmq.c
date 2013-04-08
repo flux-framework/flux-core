@@ -13,6 +13,26 @@
 #include <json/json.h>
 #include <assert.h>
 
+#ifndef ZMQ_DONTWAIT
+#   define ZMQ_DONTWAIT   ZMQ_NOBLOCK
+#endif
+#ifndef ZMQ_RCVHWM
+#   define ZMQ_RCVHWM     ZMQ_HWM
+#endif
+#ifndef ZMQ_SNDHWM
+#   define ZMQ_SNDHWM     ZMQ_HWM
+#endif
+#if ZMQ_VERSION_MAJOR == 2
+#   define more_t int64_t
+#   define zmq_ctx_destroy(context) zmq_term(context)
+#   define zmq_msg_send(msg,sock,opt) zmq_send (sock, msg, opt)
+#   define zmq_msg_recv(msg,sock,opt) zmq_recv (sock, msg, opt)
+#   define ZMQ_POLL_MSEC    1000        //  zmq_poll is usec
+#elif ZMQ_VERSION_MAJOR == 3
+#   define more_t int
+#   define ZMQ_POLL_MSEC    1           //  zmq_poll is msec
+#endif
+
 #include "zmq.h"
 #include "util.h"
 
@@ -28,9 +48,9 @@ void _zmq_close (void *socket)
     }
 }
 
-void _zmq_term (void *ctx)
+void _zmq_ctx_destroy (void *ctx)
 {
-    if (zmq_term (ctx) < 0) {
+    if (zmq_ctx_destroy (ctx) < 0) {
         fprintf (stderr, "zmq_term: %s\n", zmq_strerror (errno));
         exit (1);
     }
@@ -103,6 +123,7 @@ void _zmq_unsubscribe (void *sock, char *tag)
 
 void _zmq_mcast_loop (void *sock, bool enable)
 {
+#ifdef ZMQ_MCAST_LOOP
     uint64_t val = enable ? 1 : 0;
 
     if (zmq_setsockopt (sock, ZMQ_MCAST_LOOP, &val, sizeof (val)) < 0) {
@@ -110,6 +131,9 @@ void _zmq_mcast_loop (void *sock, bool enable)
                 zmq_strerror (errno));
         exit (1);
     }
+#else
+    fprintf (stderr, "_zmq_mcast_loop: warning: function not implemented\n");
+#endif
 }
 
 void _zmq_msg_init_size (zmq_msg_t *msg, size_t size)
@@ -136,18 +160,18 @@ void _zmq_msg_close (zmq_msg_t *msg)
     }
 }
 
-void _zmq_send (void *socket, zmq_msg_t *msg, int flags)
+void _zmq_msg_send (zmq_msg_t *msg, void *socket, int flags)
 {
-    if (zmq_send (socket, msg, flags) < 0) {
-        fprintf (stderr, "zmq_send: %s\n", zmq_strerror (errno));
+    if (zmq_msg_send (msg, socket, flags) < 0) {
+        fprintf (stderr, "zmq_msg_send: %s\n", zmq_strerror (errno));
         exit (1);
     }
 }
 
-void _zmq_recv (void *socket, zmq_msg_t *msg, int flags)
+void _zmq_msg_recv (zmq_msg_t *msg, void *socket, int flags)
 {
-    if (zmq_recv (socket, msg, flags) < 0) {
-        fprintf (stderr, "zmq_recv: %s\n", zmq_strerror (errno));
+    if (zmq_msg_recv (msg, socket, flags) < 0) {
+        fprintf (stderr, "zmq_msg_recv: %s\n", zmq_strerror (errno));
         exit (1);
     }
 }
@@ -161,9 +185,20 @@ void _zmq_getsockopt (void *socket, int option_name, void *option_value,
     }
 }
 
+int _zmq_poll (zmq_pollitem_t *items, int nitems, long timeout)
+{
+    int rc;
+
+    if ((rc = zmq_poll (items, nitems, timeout * ZMQ_POLL_MSEC)) < 0) {
+        fprintf (stderr, "zmq_poll: %s\n", zmq_strerror (errno));
+        exit (1);
+    }
+    return rc;
+}
+
 bool _zmq_rcvmore (void *socket)
 {
-    int64_t more;
+    more_t more;
     size_t more_size = sizeof (more);
 
     _zmq_getsockopt (socket, ZMQ_RCVMORE, &more, &more_size);
@@ -208,7 +243,7 @@ void _zmq_mpart_close (zmq_mpart_t *msg)
         _zmq_msg_close (&msg->part[i]);
 }
 
-void _zmq_mpart_recv (void *socket, zmq_mpart_t *msg, int flags)
+void _zmq_mpart_recv (zmq_mpart_t *msg, void *socket, int flags)
 {
     int i = 0;
 
@@ -217,7 +252,7 @@ void _zmq_mpart_recv (void *socket, zmq_mpart_t *msg, int flags)
             fprintf (stderr, "_zmq_mpart_recv: only got %d message parts\n", i);
             exit (1);
         }
-        _zmq_recv (socket, &msg->part[i], flags);
+        _zmq_msg_recv (&msg->part[i], socket, flags);
     }
     if (_zmq_rcvmore (socket)) {
         fprintf (stderr, "_zmq_mpart_recv: too many message parts\n");
@@ -225,15 +260,15 @@ void _zmq_mpart_recv (void *socket, zmq_mpart_t *msg, int flags)
     }
 }
 
-void _zmq_mpart_send (void *socket, zmq_mpart_t *msg, int flags)
+void _zmq_mpart_send (zmq_mpart_t *msg, void *socket, int flags)
 {
     int i;
 
     for (i = 0; i < ZMQ_MPART_MAX; i++)
         if (i < ZMQ_MPART_MAX - 1)
-            _zmq_send (socket, &msg->part[i], flags | ZMQ_SNDMORE);
+            _zmq_msg_send (&msg->part[i], socket, flags | ZMQ_SNDMORE);
         else
-            _zmq_send (socket, &msg->part[i], flags);
+            _zmq_msg_send (&msg->part[i], socket, flags);
 }
 
 void _zmq_mpart_dup (zmq_mpart_t *dest, zmq_mpart_t *src)
@@ -268,7 +303,7 @@ int cmb_msg_recv (void *socket, char **tagp, json_object **op,
     int len = 0;
 
     _zmq_mpart_init (&msg);
-    _zmq_mpart_recv (socket, &msg, 0);
+    _zmq_mpart_recv (&msg, socket, 0);
 
     /* tag */
     if (tagp) {
@@ -354,7 +389,7 @@ void cmb_msg_send (void *sock, json_object *o, void *data, int len,
         memcpy (zmq_msg_data (&msg.part[2]), data, len);
     }
 
-    _zmq_mpart_send (sock, &msg, 0);
+    _zmq_mpart_send (&msg, sock, 0);
 }
 
 void cmb_msg_dump (char *s, zmq_mpart_t *msg)

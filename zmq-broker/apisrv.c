@@ -329,7 +329,7 @@ static int _client_read (client_t *c)
         zmq_mpart_t msg;
         _zmq_mpart_init (&msg);
         cmb_msg_frombuf (&msg, ctx->buf, totlen);
-        _zmq_mpart_send (ctx->zs_out, &msg, 0);
+        _zmq_mpart_send (&msg, ctx->zs_out, 0);
     }
 
     return 0;
@@ -343,7 +343,7 @@ static void _readmsg (bool *shutdownp)
     int len;
 
     _zmq_mpart_init (&msg);
-    _zmq_mpart_recv (ctx->zs_in, &msg, 0);
+    _zmq_mpart_recv (&msg, ctx->zs_in, 0);
 
     if (cmb_msg_match (&msg, "event.cmb.shutdown")) {
         *shutdownp = true;
@@ -418,10 +418,7 @@ static bool _poll (void)
     }
     assert (i == zpa_len);
 
-    if (zmq_poll (zpa, zpa_len, -1) < 0) {
-        fprintf (stderr, "apisrv: zmq_poll: %s\n", strerror (errno));
-        exit (1);
-    }
+    _zmq_poll (zpa, zpa_len, -1);
 
     /* client fds */
     for (i = 2, c = ctx->clients; c != NULL; c = c->next) {

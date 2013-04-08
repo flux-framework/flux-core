@@ -44,6 +44,7 @@ static void usage (void)
 "  -K,--kvs-get key       get a key\n"
 "  -C,--kvs-commit        commit pending kvs puts\n"
 "  -t,--kvs-torture N     set N keys, then commit\n"
+"  -s,--snoop substr      watch bus traffic matching subscription\n"
 "  -S,--sync              block until event.sched.triger\n");
     exit (1);
 }
