@@ -1,0 +1,25 @@
+#!/bin/bash
+
+pepe=../pepe/pepe-launcher
+conf=./pepe.lua
+nnodes=
+cmd=/bin/bash
+
+usage ()
+{
+    echo "launch [-n nnodes]" >&2
+    exit 1
+}
+
+while getopts "?hn:" opt; do
+    case ${opt} in
+        h|\?) usage ;;
+        n) nnodes=${OPTARG} ;;
+    esac
+done
+test -n "$nnodes" || usage
+
+
+salloc -N$nnodes srun -N$nnodes -n$nnodes --pty $pepe -c $conf $cmd
+
+# vi:tabstop=4 shiftwidth=4 expandtab
