@@ -226,7 +226,7 @@ int main (int argc, char *argv[])
             }
             case 't': { /* --kvs-torture N */
                 int i, n = strtoul (optarg, NULL, 10);
-                char key[16], val[16];
+                char key[16], val[16], *rval;
                 struct timeval t1, t2, t;
                 int errcount, putcount;
 
@@ -243,6 +243,8 @@ int main (int argc, char *argv[])
                 timersub(&t2, &t1, &t);
                 fprintf (stderr, "kvs_put:    time=%0.3f ms\n",
                         (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
+
+                xgettimeofday (&t1, NULL);
                 if (cmb_kvs_commit (c, &errcount, &putcount) < 0) {
                     fprintf (stderr, "cmb_kvs_commit: %s\n", strerror(errno));
                     exit (1);
@@ -252,6 +254,26 @@ int main (int argc, char *argv[])
                 fprintf (stderr, "kvs_commit: time=%0.3f ms errcount=%d putcount=%d\n",
                         (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000,
                         errcount, putcount);
+
+                xgettimeofday (&t1, NULL);
+                for (i = 0; i < n; i++) {
+                    snprintf (key, sizeof (key), "key%d", i);
+                    snprintf (val, sizeof (key), "val%d", i);
+                    if (!(rval = cmb_kvs_get (c, key))) {
+                        fprintf (stderr, "cmb_kvs_get: %s\n", strerror(errno));
+                        exit (1);
+                    }
+                    if (strcmp (rval, val) != 0) {
+                        fprintf (stderr, "cmb_kvs_get: incorrect val\n");
+                        exit (1);
+                    }
+                    free (rval);
+                }
+                xgettimeofday (&t2, NULL);
+                timersub(&t2, &t1, &t);
+                fprintf (stderr, "kvs_get:    time=%0.3f ms\n",
+                        (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
+
                 break;
             }
             case 'P':
