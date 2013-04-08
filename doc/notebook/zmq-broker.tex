@@ -133,8 +133,14 @@ exit message, {\em barriersrv} removes its context for the barrier.
 TODO: implement {\em event.barrier.fail.name} in case a call is made with
 the wrong nprocs value, or a local API client exits before the barrier is
 complete.
+
 \paragraph{syncsrv}
-generates the multicast scheduling trigger
+This plugin is only run on the node at the root of the reduction tree.
+It generates a periodic multicast message, {\em event.sched.trigger},
+that is received job wide.  The API call {\tt cmb\_sync} simply blocks waiting
+for the next occurrence of this message.  This provides a mechanism to execute
+"overhead" tasks simultaneously across the job to minimize their impact on
+noise sensitive MPI jobs.
 
 \begin{table}
 \centering
@@ -157,12 +163,12 @@ in (SUB)	& pl\_out (PUB)	& {\em BUS}     & \\
 
 \begin{table}
 \centering
-\begin{tabular}{|l|p{11cm}|}\hline
+\begin{tabular}{|l|p{6cm}|}\hline
 \textbf{message part} & \textbf{example} \\
 \hline
 {\em tag} & {\tt barrier.enter.job22-1} \\
 \hline
-{\em json} & {\tt \{ "count" : 1, "nprocs" : 16, "tasks\_per\_node" : 16 \} }\\
+{\em json} & {\tt \{ "count" : 1, "nprocs" : 16 \} }\\
 \hline
 {\em data} & nil\\
 \hline
