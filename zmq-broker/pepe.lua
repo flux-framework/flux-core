@@ -22,9 +22,13 @@ if pepe.rank == 0 then
    pepe.run ("echo daemonize no | /usr/sbin/redis-server -")
    pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
 		.. " --tree-in-uri='" .. treeinuri .. "'"
-		.. " --redis-server='" .. redisserver .. "'")
+		.. " --redis-server='" .. redisserver .. "'"
+		.. " --rank=" .. pepe.rank
+		.. " --size=" .. #h)
 else
    pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
 		.. " --tree-out-uri='" .. treeouturi .. "'"
-		.. " --redis-server='" .. redisserver .. "'")
+		.. " --redis-server='" .. redisserver .. "'"
+		.. " --rank=" .. pepe.rank
+		.. " --size=" .. #h)
 end

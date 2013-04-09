@@ -10,4 +10,6 @@ typedef struct {
     bool verbose;
     int syncperiod_msec;
     char *redis_server;
+    int rank;
+    int size;
 } conf_t;

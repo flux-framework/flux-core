@@ -23,6 +23,7 @@
 #include "barriersrv.h"
 #include "syncsrv.h"
 #include "kvssrv.h"
+#include "livesrv.h"
 #include "util.h"
 
 typedef struct {
@@ -37,7 +38,7 @@ typedef struct {
     void *zs_plin_tree;
 } server_t;
 
-#define OPTIONS "t:T:e:vs:r:"
+#define OPTIONS "t:T:e:vs:r:R:S:"
 static const struct option longopts[] = {
     {"event-uri",   required_argument,  0, 'e'},
     {"tree-in-uri", required_argument,  0, 't'},
@@ -45,6 +46,8 @@ static const struct option longopts[] = {
     {"redis-server",required_argument,  0, 'r'},
     {"verbose",           no_argument,  0, 'v'},
     {"syncperiod",  required_argument,  0, 's'},
+    {"rank",        required_argument,  0, 'R'},
+    {"size",        required_argument,  0, 'S'},
     {0, 0, 0, 0},
 };
 
@@ -67,6 +70,8 @@ static void usage (conf_t *conf)
 " -r,--redis-server HOST Set redis server hostname\n"
 " -v,--verbose           Show bus traffic\n"
 " -s,--syncperiod N      Set sync period in seconds\n"
+" -R,--rank N            Set cmbd address\n"
+" -S,--size N            Set number of ranks in session\n"
             ,conf->prog);
     exit (1);
 }
@@ -84,6 +89,7 @@ int main (int argc, char *argv[])
     conf->plin_event_uri = PLIN_EVENT_URI;
     conf->plin_tree_uri = PLIN_TREE_URI;
     conf->syncperiod_msec = 10*1000;
+    conf->size = 1;
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
             case 'e':   /* --event-uri URI */
@@ -103,6 +109,12 @@ int main (int argc, char *argv[])
                 break;
             case 'r':   /* --redis-server hostname */
                 conf->redis_server = optarg;
+                break;
+            case 'R':   /* --rank N */
+                conf->rank = strtoul (optarg, NULL, 10);
+                break;
+            case 'S':   /* --size N */
+                conf->size = strtoul (optarg, NULL, 10);
                 break;
             default:
                 usage (conf);
@@ -159,6 +171,7 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
         syncsrv_init (conf, srv->zctx);
     if (conf->redis_server)
         kvssrv_init (conf, srv->zctx);
+    livesrv_init (conf, srv->zctx);
 
     *srvp = srv;
 }
@@ -166,7 +179,8 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
 static void _cmb_fini (conf_t *conf, server_t *srv)
 {
     cmb_msg_send (srv->zs_plout, NULL, NULL, 0, "event.cmb.shutdown");
-   
+
+    livesrv_fini ();   
     if (conf->redis_server)
         kvssrv_fini ();
     if (!conf->treeout_uri) /* root */
