@@ -312,7 +312,7 @@ int cmb_msg_recv (void *socket, char **tagp, json_object **op,
 
     _zmq_mpart_init (&msg);
     if (_zmq_mpart_recv (&msg, socket, 0) < 0)
-        goto eproto;
+        return -1;
 
     /* tag */
     if (tagp) {
