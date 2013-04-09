@@ -205,7 +205,7 @@ static void _route_two (conf_t *conf, void *src, void *d1, void *d2, char *s)
         _zmq_mpart_send (&cpy, d2, 0);
     }
     if (d1)
-        _zmq_mpart_send (&msg, d2, 0);
+        _zmq_mpart_send (&msg, d1, 0);
     else
         _zmq_mpart_close (&msg);
 }
