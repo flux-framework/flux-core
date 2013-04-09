@@ -113,7 +113,7 @@ of simultaneous hiredis connections that a single redis server can handle.
 
 \paragraph{barriersrv}
 The {\em barriersrv} plugin implements barriers using the reduction
-tree described below.   The {\tt cmb\_barrier ()} API function requires
+tree described below.   The {\tt cmb\_barrier()} API function requires
 all participants to provide identical {\em name} and {\em nprocs} arguments.
 This is translated into a {\em barrier.enter.name} message to the local
 {\em barriersrv} plugin, which creates a local context for the barrier
@@ -218,11 +218,11 @@ in the \ngrm\ comms design.
     On success, does not return; on failure, returns $-1$ with errno set.\\
 \hline
 {\tt int}
-  & {\tt cmb\_barrier (cmb\_t c, char {*name}, int nprocs,
-                       int procs\_per\_node)}
+  & {\tt cmb\_barrier (cmb\_t c, char {*name}, int nprocs)}
   & Execute barrier {\em name}.  The call blocks until {\em nprocs}
-    processes have entered the barrier.  If $procs\_per\_node < nprocs$
-    then the tree network is used to resolve the barrier.
+    processes have entered the barrier.  
+    All processes entering a given barrier must call this function with
+    identical arguments.
     On success, returns $0$; on failure, returns $-1$ with errno set.\\
 \hline
 {\tt int}
@@ -261,4 +261,32 @@ as MPI runtimes (\zMQ\ is too heavyweight to be used directly by applications.)}
 \label{tab:cmbapi}
 \end{table}
 
+\subsection{Conclusions}
 
+\paragraph{\zMQ\ pub-sub limitations} \zMQ\ pub-sub sockets drop messages when
+their internal queues reach a high water mark.\footnote{The {\tt ZMQ\_SNDHWM}
+defaults to 1000 messages in \zMQ\ 3.2 but can be changed via
+{\tt zmq\_setsockopt()}, called before {\tt zmq\_bind()} or
+{\tt zmq\_connect()}}.
+They cannot be configured to block the sender.  This makes pub-sub
+the inappropriate socket type for {\em pl\_out} in the prototype as
+important messages (e.g. kvs put or commit) can be dropped if the
+plumbing backs up.
+It is likely appropriate for event distribution but one must be careful
+to limit the volume of events loosed in the system.
+
+\paragraph{\zMQ\ PGM transport}  The PGM/EPGM transport is rate limited by
+default to $100 Kbytes/sec$, although this is tunable by a socket option.
+Some versions of \zMQ\ seem to have better OpenPGM integration than others.
+Although PGM is reliable, pub-sub can lose messages as described above.
+
+\paragraph{Flow control}  The prototype implements no flow control.
+The broker's single thread can block if the internal queues for push-pull
+sockets fill up, since we only make blocking {\tt zmq\_msg\_send} calls.
+Some sort of flow control in combination with non-blocking sends needs to
+be implemented.
+
+\paragraph{JSON limitations}  JSON has no reasonable way to represent
+a byte array.  In general JSON is not compact, but byte arrays are truly
+ridiculous as a way of representing opaque data.  One could use base64
+encoding within JSON strings.  We used an opaque \zMQ\ message part.
