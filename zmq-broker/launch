@@ -1,25 +1,28 @@
 #!/bin/bash
 
 pepe=../pepe/pepe-launcher
-conf=./pepe.lua
+conf=flat
 nnodes=
 cmd=/bin/bash
 
 usage ()
 {
-    echo "launch [-n nnodes]" >&2
+    echo "launch [-n nnodes] [-c config]" >&2
     exit 1
 }
 
-while getopts "?hn:" opt; do
+while getopts "?hn:c:" opt; do
     case ${opt} in
         h|\?) usage ;;
         n) nnodes=${OPTARG} ;;
+        c) conf=${OPTARG} ;;
     esac
 done
+confpath="./pepe_${conf}.lua"
 test -n "$nnodes" || usage
+test -f "$confpath" || usage
 
 
-salloc -N$nnodes srun -N$nnodes -n$nnodes --pty $pepe -c $conf $cmd
+salloc -N$nnodes srun -N$nnodes -n$nnodes --pty $pepe -c $confpath $cmd
 
 # vi:tabstop=4 shiftwidth=4 expandtab
