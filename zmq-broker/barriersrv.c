@@ -55,9 +55,6 @@ struct ctx_struct {
     conf_t *conf;
 };
 
-/* after this long, report barrier count upstream (if not root) */
-const struct timeval reduce_timeout = { .tv_sec = 0, .tv_usec = 2*1000 };
-
 static ctx_t ctx = NULL;
 
 static barrier_t *_barrier_create (char *name, int nprocs)
@@ -143,7 +140,7 @@ error:
     return -1;
 }
 
-static bool _readmsg (void)
+static int _readmsg (bool *sp)
 {
     char *barrier_enter = "barrier.enter.";
     char *barrier_exit = "event.barrier.exit.";
@@ -151,9 +148,10 @@ static bool _readmsg (void)
     char *tag = NULL;
     json_object *o;
 
-    if (cmb_msg_recv (ctx->zs_in, &tag, &o, NULL, 0, 0) < 0) {
-        fprintf (stderr, "cmb_msg_recv: %s\n", strerror (errno));
-        goto done;
+    if (cmb_msg_recv (ctx->zs_in, &tag, &o, NULL, NULL, ZMQ_DONTWAIT) < 0) {
+        if (errno != EAGAIN)
+            fprintf (stderr, "cmb_msg_recv: %s\n", strerror (errno));
+        return -1;
     }
     if (!strcmp (tag, "event.cmb.shutdown")) {
         shutdown = true;
@@ -188,30 +186,8 @@ done:
         free (tag);
     if (o)
         json_object_put (o);
-
-    return ! shutdown;
-}
-
-static long _timeout (void)
-{
-    barrier_t *b;
-    struct timeval now, t;
-    long msec, tmout = -1;
-
-    xgettimeofday (&now, NULL);
-    for (b = ctx->barriers; b != NULL; b = b->next) {
-        timersub (&now, &b->ctime, &t);
-        if (b->count > 0 && timercmp (&t, &reduce_timeout, >)) {
-            _send_barrier_enter (b);
-            b->count = 0;
-            b->ctime = now;
-            timersub (&now, &b->ctime, &t);
-        }
-        msec = t.tv_sec*1000L + t.tv_usec / 1000L;
-        if (tmout == -1 || msec < tmout)
-            tmout = msec;
-    }
-    return tmout;
+    *sp = shutdown;
+    return 0;
 }
 
 static void *_thread (void *arg)
@@ -219,15 +195,27 @@ static void *_thread (void *arg)
     zmq_pollitem_t zpa[] = {
        { .socket = ctx->zs_in, .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
     };
-    long tmout = -1;
+    bool shutdown = false;
 
-    for (;;) {
-        _zmq_poll(zpa, 1, tmout);
-        if (zpa[0].revents & ZMQ_POLLIN)
-            if (!_readmsg ())
-                break;
-        if (ctx->zs_out_tree)
-            tmout = _timeout ();
+    while (!shutdown) {
+        _zmq_poll(zpa, 1, -1);
+
+        if (zpa[0].revents & ZMQ_POLLIN) {
+            while (_readmsg (&shutdown) != -1)
+                ;
+            /* As many entry messages as can be read in one go (above)
+             * will be aggregated into a message sent upstream.
+             */
+            if (ctx->zs_out_tree) {
+                barrier_t *b;
+                for (b = ctx->barriers; b != NULL; b = b->next) {
+                    if (b->count > 0) {
+                        _send_barrier_enter (b);
+                        b->count = 0;
+                    }
+                }
+            }
+        }
     }
     return NULL;
 }
