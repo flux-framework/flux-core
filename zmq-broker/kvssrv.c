@@ -27,6 +27,12 @@
 #include "kvssrv.h"
 #include "util.h"
 
+typedef struct _kv_struct {
+    char *key;
+    char *val;
+    struct _kv_struct *next;
+} kv_t;
+
 typedef struct _client_struct {
     struct _client_struct *next;
     struct _client_struct *prev;
@@ -34,6 +40,8 @@ typedef struct _client_struct {
     int putcount;
     int errcount;
     char *subscription;
+    kv_t *set_backlog;
+    kv_t *set_backlog_last;
 } client_t;
 
 typedef struct ctx_struct *ctx_t;
@@ -48,6 +56,63 @@ struct ctx_struct {
 };
 
 static ctx_t ctx = NULL;
+
+static void _add_set_backlog (client_t *c, const char *key, const char *val)
+{
+    kv_t *kv = xzmalloc (sizeof (kv_t));
+
+    kv->key = xstrdup (key);
+    kv->val = xstrdup (val);
+
+    if (c->set_backlog_last)
+        c->set_backlog_last->next = kv;
+    else
+        c->set_backlog = kv;
+    c->set_backlog_last = kv;
+}
+
+static void _flush_set_backlog (client_t *c)
+{
+    kv_t *kp, *deleteme;
+    redisReply *rep;
+
+    for (kp = c->set_backlog; kp != NULL; kp = kp->next) {
+        redisAppendCommand (ctx->rctx, "SET %s %s", kp->key, kp->val);
+        c->putcount++;
+    }
+    for (kp = c->set_backlog; kp != NULL; ) {
+        if (redisGetReply (ctx->rctx, (void **)&rep) == REDIS_ERR) {
+            c->errcount++;
+            goto next;
+        }
+        switch (rep->type) {
+            case REDIS_REPLY_STATUS:
+                /* success */
+                //fprintf (stderr, "redis put: %s\n", rep->str);
+                break;
+            case REDIS_REPLY_ERROR:
+                c->errcount++;
+                //fprintf (stderr, "redis put: %s\n", rep->str);
+                break;
+            case REDIS_REPLY_INTEGER:
+            case REDIS_REPLY_NIL:
+            case REDIS_REPLY_STRING:
+            case REDIS_REPLY_ARRAY:
+                fprintf (stderr, "redisCommand: unexpected reply type\n");
+                c->errcount++;
+                break;
+        }
+        freeReplyObject (rep);
+next:
+        deleteme = kp;
+        kp = kp->next; 
+        free (deleteme->key);
+        free (deleteme->val);
+        free (deleteme);
+    }
+    c->set_backlog = NULL;
+    c->set_backlog_last = NULL;
+}
 
 static client_t *_client_create (const char *identity)
 {
@@ -162,37 +227,6 @@ static int _parse_kvs_commit (json_object *o, const char **sp)
     return 0;
 error:
     return -1;
-}
-
-static int _redis_set (const char *key, const char *val)
-{
-    redisReply *rep;
-    int rc = -1;
-
-    rep = redisCommand (ctx->rctx, "SET %s %s", key, val);
-    if (rep == NULL) {
-        fprintf (stderr, "redisCommand: %s\n", ctx->rctx->errstr);
-        return -1; /* XXX rctx cannot be reused? */
-    }
-    switch (rep->type) {
-        case REDIS_REPLY_STATUS:
-            //fprintf (stderr, "redisCommand: status reply: %s\n", rep->str);
-            rc = 0;
-            break;
-        case REDIS_REPLY_ERROR:
-            fprintf (stderr, "redisCommand: error reply: %s\n", rep->str);
-            rc = -1;
-            break;
-        case REDIS_REPLY_INTEGER:
-        case REDIS_REPLY_NIL:
-        case REDIS_REPLY_STRING:
-        case REDIS_REPLY_ARRAY:
-            fprintf (stderr, "redisCommand: unexpected reply type\n");
-            rc = -1;
-            break;
-    }
-    freeReplyObject (rep);
-    return rc;
 }
 
 static char *_redis_get (const char *key)
@@ -310,9 +344,7 @@ again:
             c = _client_find_byidentity (sender);
             if (!c)
                 c = _client_create (sender);
-            c->putcount++;
-            if (_redis_set (key, val) < 0)
-                c->errcount++;
+            _add_set_backlog (c, key, val);
 
         } else if (!strcmp (tag, "kvs.get")) {
             const char *key, *sender;
@@ -336,6 +368,7 @@ again:
             }
             c = _client_find_byidentity (sender);
             if (c) {
+                _flush_set_backlog (c);
                 _reply_to_commit (sender, c->errcount, c->putcount);
                 c->putcount = 0;
                 c->errcount = 0;
