@@ -1,5 +1,6 @@
 TOP = $(shell pwd)
 MPIMOD = mvapich2-gnu-shmem
+#MPIMOD = mvapich2-gnu-psm
 
 CFLAGS = -Werror -Wall -g -fPIC
 LDADD = -ljson -lzmq -pthread -luuid -lhiredis

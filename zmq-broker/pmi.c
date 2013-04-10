@@ -60,7 +60,7 @@ int PMI_Init( int *spawned )
     ctx->spawned = PMI_FALSE;
     ctx->size = _env_getint ("SLURM_NTASKS", 1);
     ctx->rank = _env_getint ("SLURM_PROCID", 0);
-    fprintf (stderr, "XXX %d:%s\n", ctx->rank, __FUNCTION__);
+    //fprintf (stderr, "XXX %d:%s\n", ctx->rank, __FUNCTION__);
     ctx->universe_size = _env_getint ("SLURM_NTASKS", 1);
     ctx->appnum = 0;
     ctx->barrier_num = 0;
@@ -189,7 +189,6 @@ int PMI_Barrier( void )
     asprintf (&name, "%s:%d", ctx->kvsname, ctx->barrier_num); 
     if (!name)
         goto nomem;
-    fprintf (stderr, "XXX calling cmb_barrier (%s, %d)\n", name, ctx->universe_size);
     if (cmb_barrier (ctx->cctx, name, ctx->universe_size) < 0)
         goto error;
     ctx->barrier_num++;
@@ -260,7 +259,7 @@ int PMI_KVS_Put( const char kvsname[], const char key[], const char value[])
     if (kvsname == NULL || key == NULL || value == NULL)
         return PMI_ERR_INVALID_ARG;
 
-    asprintf (&xkey, "%s:%s", kvsname, key);
+    asprintf (&xkey, "%s:%s", ctx->kvsname, key);
     if (!xkey)
         goto nomem;
 
@@ -307,7 +306,7 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
     if (kvsname == NULL || key == NULL || value == NULL)
         return PMI_ERR_INVALID_ARG;
 
-    asprintf (&xkey, "%s:%s", kvsname, key);
+    asprintf (&xkey, "%s:%s", ctx->kvsname, key);
     if (!xkey)
         goto nomem;
     val = cmb_kvs_get (ctx->cctx, xkey);
@@ -315,10 +314,10 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
         goto nokey;
     if (!val && errno != 0)
         goto error;
-    free (val); 
-    free (xkey); 
     strncpy (value, val, length);
     value[length - 1] = '\0';
+    free (val); 
+    free (xkey); 
     return PMI_SUCCESS;
 nomem:
     errno = ENOMEM;
