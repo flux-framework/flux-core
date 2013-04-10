@@ -49,9 +49,10 @@ static bool _poll (void)
 
     if (zpa[0].revents & ZMQ_POLLIN) {
         _zmq_mpart_init (&msg);
-        _zmq_mpart_recv (&msg, ctx->zs_in, 0);
-        if (cmb_msg_match (&msg, "event.cmb.shutdown"))
-            shutdown = true;
+        if (_zmq_mpart_recv (&msg, ctx->zs_in, 0) >= 0) {
+            if (cmb_msg_match (&msg, "event.cmb.shutdown"))
+                shutdown = true;
+        }
         _zmq_mpart_close (&msg);
     } else { /* timeout */
         cmb_msg_send (ctx->zs_out_event, NULL, NULL, 0, "event.sched.trigger");

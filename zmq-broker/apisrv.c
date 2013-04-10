@@ -343,7 +343,8 @@ static void _readmsg (bool *shutdownp)
     int len;
 
     _zmq_mpart_init (&msg);
-    _zmq_mpart_recv (&msg, ctx->zs_in, 0);
+    if (_zmq_mpart_recv (&msg, ctx->zs_in, 0) < 0)
+        goto done;
 
     if (cmb_msg_match (&msg, "event.cmb.shutdown")) {
         *shutdownp = true;

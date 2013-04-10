@@ -211,7 +211,10 @@ static void _route_two (conf_t *conf, void *src, void *d1, void *d2, char *s)
     zmq_mpart_t msg, cpy;
 
     _zmq_mpart_init (&msg);
-    _zmq_mpart_recv (&msg, src, 0);
+    if (_zmq_mpart_recv (&msg, src, 0) < 0) {
+        _zmq_mpart_close (&msg);
+        return;
+    }
     if (conf->verbose)
         cmb_msg_dump (s, &msg);
     if (d2) {
@@ -229,7 +232,10 @@ static void _route_one (conf_t *conf, void *src, void *dest, char *s)
     zmq_mpart_t msg;
 
     _zmq_mpart_init (&msg);
-    _zmq_mpart_recv (&msg, src, 0);
+    if (_zmq_mpart_recv (&msg, src, 0) < 0) {
+        _zmq_mpart_close (&msg);
+        return;
+    }
     if (conf->verbose)
         cmb_msg_dump (s, &msg);
     if (dest)

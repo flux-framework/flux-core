@@ -12,7 +12,7 @@
 #include "cmb.h"
 #include "util.h"
 
-#define OPTIONS "psb:k:SK:Ct:P:d:fF:n:"
+#define OPTIONS "psb:k:SK:Ct:P:d:fF:n:l"
 static const struct option longopts[] = {
     {"ping",       no_argument,        0, 'p'},
     {"ping-padding", required_argument,0, 'P'},
@@ -27,6 +27,7 @@ static const struct option longopts[] = {
     {"kvs-commit", no_argument,        0, 'C'},
     {"kvs-torture",required_argument,  0, 't'},
     {"sync",       no_argument,        0, 'S'},
+    {"live-query", no_argument,        0, 'l'},
     {0, 0, 0, 0},
 };
 
@@ -45,7 +46,8 @@ static void usage (void)
 "  -C,--kvs-commit        commit pending kvs puts\n"
 "  -t,--kvs-torture N     set N keys, then commit\n"
 "  -s,--snoop substr      watch bus traffic matching subscription\n"
-"  -S,--sync              block until event.sched.triger\n");
+"  -S,--sync              block until event.sched.triger\n"
+"  -l,--live-query        get list of up nodes\n");
     exit (1);
 }
 
@@ -183,6 +185,25 @@ int main (int argc, char *argv[])
                     fprintf (stderr, "cmb_sync: %s\n", strerror(errno));
                     exit (1);
                 }
+                break;
+            }
+            case 'l': { /* --live-query */
+                int i, *up = NULL, up_len, *dn = NULL, dn_len, nnodes;
+                if (cmb_live_query (c, &up, &up_len, &dn, &dn_len, &nnodes) < 0) {
+                    fprintf (stderr, "cmb_live_query: %s\n", strerror(errno));
+                    exit (1);
+                }
+                printf ("up:   ");
+                for (i = 0; i < up_len; i++)
+                    printf ("%d%s", up[i], i == up_len - 1 ? "" : ",");
+                printf ("\ndown: ");
+                for (i = 0; i < dn_len; i++)
+                    printf ("%d%s", dn[i], i == dn_len - 1 ? "" : ",");
+                printf ("\n");
+                if (up)
+                    free (up); 
+                if (dn)
+                    free (dn); 
                 break;
             }
             case 'k': { /* --kvs-put key=val */

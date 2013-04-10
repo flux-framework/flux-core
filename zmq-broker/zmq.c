@@ -262,8 +262,6 @@ int _zmq_mpart_recv (zmq_mpart_t *msg, void *socket, int flags)
     }
     return 0;
 error:
-    while (--i >= 0)
-        zmq_msg_close (&msg->part[i]);
     errno = EPROTO;
     return -1;
 }
@@ -312,7 +310,7 @@ int cmb_msg_recv (void *socket, char **tagp, json_object **op,
 
     _zmq_mpart_init (&msg);
     if (_zmq_mpart_recv (&msg, socket, 0) < 0)
-        return -1;
+        goto eproto;
 
     /* tag */
     if (tagp) {

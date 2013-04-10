@@ -90,6 +90,39 @@ static int _json_object_get_string (json_object *o, char *name, const char **sp)
     return 0;
 }
 
+static int _json_object_get_int_array (json_object *o, char *name,
+                                       int **ap, int *lp)
+{
+    json_object *no = json_object_object_get (o, name);
+    json_object *vo;
+    int i, len, *arr = NULL;
+
+    if (!no)
+        goto eproto;
+    len = json_object_array_length (no);
+    arr = malloc (sizeof (int) * len);
+    if (!arr) {
+        errno = ENOMEM;
+        goto error;
+    }
+    for (i = 0; i < len; i++) {
+        vo = json_object_array_get_idx (no, i); 
+        if (!vo)
+            goto eproto;
+        arr[i] = json_object_get_int (vo);
+    }
+    *ap = arr;
+    *lp = len;
+    return 0; 
+eproto:
+    errno = EPROTO;
+error:
+    if (arr)
+        free (arr);
+    return -1;
+}
+                                       
+
 static int _recvfd (int fd, int *fdp, char *name, int len)
 {
     int fd_xfer, n;
@@ -524,6 +557,54 @@ error:
     if (o)
         json_object_put (o);
     return NULL;
+}
+
+int cmb_live_query (cmb_t c, int **upp, int *ulp, int **dp, int *dlp, int *nnp)
+{
+    json_object *o = NULL;
+    int nnodes;
+    int *up, up_len;
+    int *down, down_len;
+
+    if (cmb_send (c, NULL, NULL, 0, "api.subscribe.%s", c->uuid) < 0)
+        goto error;
+
+    /* send request */
+    if (!(o = json_object_new_object ()))
+        goto nomem;
+    if (_json_object_add_string (o, "sender", c->uuid) < 0)
+        goto error;
+    if (cmb_send (c, o, NULL, 0, "live.query") < 0)
+        goto error;
+    json_object_put (o);
+    o = NULL;
+
+    /* receive response */
+    if (cmb_recv (c, NULL, &o, NULL, NULL) < 0)
+        goto error;
+    if (_json_object_get_int (o, "nnodes", &nnodes) < 0)
+        goto error;
+    if (_json_object_get_int_array (o, "up", &up, &up_len) < 0)
+        goto error;
+    if (_json_object_get_int_array (o, "down", &down, &down_len) < 0)
+        goto error;
+    json_object_put (o);
+
+    *upp = up;
+    *ulp = up_len;
+
+    *dp = down;
+    *dlp = down_len;
+
+    *nnp = nnodes;
+    
+    return 0; 
+nomem:
+    errno = ENOMEM;
+error:
+    if (o)
+        json_object_put (o);
+    return -1; 
 }
 
 int cmb_kvs_commit (cmb_t c, int *ep, int *pp)

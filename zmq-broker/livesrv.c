@@ -40,14 +40,63 @@ struct ctx_struct {
 
 static ctx_t ctx = NULL;
 
+static int _parse_live_query (json_object *o, const char **sp)
+{
+    json_object *sender;
+
+    if (!o)
+        goto error;
+    sender = json_object_object_get (o, "sender");
+    if (!sender)
+        goto error;
+    *sp = json_object_get_string (sender);
+    return 0;
+error:
+    return -1;
+}
+
+static void _reply_to_query (const char *sender)
+{
+    json_object *o, *no, *upo, *dno;
+    int i;
+
+    if (!(o = json_object_new_object ()))
+        oom ();
+    if (!(upo = json_object_new_array ()))
+        oom ();
+    if (!(dno = json_object_new_array ()))
+        oom ();
+    for (i = 0; i < ctx->conf->size; i++) {
+        if (!(no = json_object_new_int (i)))
+            oom ();
+        if (ctx->live[i] == -1)
+            json_object_array_add (dno, no);
+        else
+            json_object_array_add (upo, no);
+    }
+    json_object_object_add (o, "up", upo);
+    json_object_object_add (o, "down", dno);
+
+    if (!(no = json_object_new_int (ctx->conf->size)))
+        oom ();
+    json_object_object_add (o, "nnodes", no);
+
+    cmb_msg_send (ctx->zs_out, o, NULL, 0, "%s", sender);
+    json_object_put (o);
+}
+
 static bool _readmsg (void)
 {
     const char *live_up = "live.up.";
+    const char *live_query= "live.query";
+    const char *event_live_up = "event.live.up.";
+    const char *event_live_down = "event.live.down.";
     bool shutdown = false;
     char *tag = NULL;
-    int i;
+    int i, myrank = ctx->conf->rank;
+    json_object *o = NULL;
 
-    if (cmb_msg_recv (ctx->zs_in, &tag, NULL, NULL, 0) < 0) {
+    if (cmb_msg_recv (ctx->zs_in, &tag, &o, NULL, 0) < 0) {
         fprintf (stderr, "cmb_msg_recv: %s\n", strerror (errno));
         goto done;
     }
@@ -55,8 +104,8 @@ static bool _readmsg (void)
         shutdown = true;
 
     } else if (!strcmp (tag, "event.sched.trigger")) {
-        if (ctx->conf->rank == 0) {
-            for (i = 0; i < ctx->conf->rank; i++) {
+        if (myrank == 0) {
+            for (i = 0; i < ctx->conf->size; i++) {
                 if (ctx->live[i] != -1)
                     ctx->live[i]++;
                 if (ctx->live[i] > MISSED_TRIGGER_ALLOW) {
@@ -65,20 +114,19 @@ static bool _readmsg (void)
                     ctx->live[i] = -1;
                 } 
             }
-            if (ctx->live[ctx->conf->rank] == -1) {
+            if (ctx->live[myrank] == -1)
                 cmb_msg_send (ctx->zs_out_event, NULL, NULL, 0,
-                              "event.live.up.%d", ctx->conf->rank);
-                ctx->live[ctx->conf->rank] = 0;
-            }
+                              "event.live.up.%d", myrank);
+            ctx->live[myrank] = 0;
         } else {
             cmb_msg_send (ctx->zs_out_tree, NULL, NULL, 0,
-                          "live.up.%d", ctx->conf->rank);
+                          "live.up.%d", myrank);
         }
     } else if (!strncmp (tag, live_up, strlen (live_up))) {
         int rank = strtoul (tag + strlen (live_up), NULL, 10);
         if (rank < 0 || rank >= ctx->conf->size)
             goto done;
-        if (ctx->conf->rank == 0) {
+        if (myrank == 0) {
             if (ctx->live[rank] == -1)
                 cmb_msg_send (ctx->zs_out_event, NULL, NULL, 0,
                               "event.live.up.%d", rank);
@@ -86,10 +134,31 @@ static bool _readmsg (void)
         } else {
             cmb_msg_send (ctx->zs_out_tree, NULL, NULL, 0, "live.up.%d", rank);
         }
+    } else if (!strncmp (tag, live_query, strlen (live_query))) {
+        const char *sender;
+        if (_parse_live_query (o, &sender) < 0) {
+            fprintf (stderr, "live.query: parse error\n");
+            goto done;
+        }
+        _reply_to_query (sender);
+    } else if (!strncmp (tag, event_live_up, strlen (event_live_up))) {
+        int rank = strtoul (tag + strlen (event_live_up), NULL, 10);
+        if (rank < 0 || rank >= ctx->conf->size)
+            goto done;
+        if (myrank != 0)
+            ctx->live[rank] = 0;
+    } else if (!strncmp (tag, event_live_down, strlen (event_live_down))) {
+        int rank = strtoul (tag + strlen (event_live_down), NULL, 10);
+        if (rank < 0 || rank >= ctx->conf->size)
+            goto done;
+        if (myrank != 0)
+            ctx->live[rank] = -1;
     }
 done:
     if (tag)
         free (tag);
+    if (o)
+        json_object_put (o);
     return !shutdown;
 }
 
@@ -119,11 +188,9 @@ void livesrv_init (conf_t *conf, void *zctx)
 
     ctx = xzmalloc (sizeof (struct ctx_struct));
 
-    if (conf->rank == 0) {
-        ctx->live = xzmalloc (conf->size * sizeof (int));
-        for (i = 0; i < conf->size; i++)
-            ctx->live[i] = -1;
-    }
+    ctx->live = xzmalloc (conf->size * sizeof (int));
+    for (i = 0; i < conf->size; i++)
+        ctx->live[i] = -1;
     ctx->conf = conf;
 
     ctx->zs_out_tree = _zmq_socket (zctx, ZMQ_PUSH);
@@ -139,7 +206,8 @@ void livesrv_init (conf_t *conf, void *zctx)
     _zmq_connect (ctx->zs_in, conf->plout_uri);
     _zmq_subscribe (ctx->zs_in, "event.cmb.shutdown");
     _zmq_subscribe (ctx->zs_in, "event.sched.trigger");
-    _zmq_subscribe (ctx->zs_in, "live.up.");
+    _zmq_subscribe (ctx->zs_in, "event.live.");
+    _zmq_subscribe (ctx->zs_in, "live.");
 
     err = pthread_create (&ctx->t, NULL, _thread, NULL);
     if (err) {
@@ -162,8 +230,7 @@ void livesrv_fini (conf_t *conf)
     _zmq_close (ctx->zs_out_event);
     _zmq_close (ctx->zs_out_tree);
 
-    if (ctx->live)
-        free (ctx->live);
+    free (ctx->live);
     free (ctx);
     ctx = NULL;
 }

@@ -16,6 +16,8 @@ int cmb_kvs_put (cmb_t c, char *key, char *val);
 char *cmb_kvs_get (cmb_t c, char *key);
 int cmb_kvs_commit (cmb_t c, int *errcountp, int *putcountp);
 
+int cmb_live_query (cmb_t c, int **up, int *ulp, int **dp, int *dlp, int *nnp);
+
 int cmb_fd_open (cmb_t c, char *wname, char **np);
 
 /*
