@@ -178,7 +178,7 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
 
 static void _cmb_fini (conf_t *conf, server_t *srv)
 {
-    cmb_msg_send (srv->zs_plout, NULL, NULL, 0, "event.cmb.shutdown");
+    cmb_msg_send (srv->zs_plout, NULL, NULL, 0, 0, "event.cmb.shutdown");
 
     livesrv_fini ();   
     if (conf->redis_server)

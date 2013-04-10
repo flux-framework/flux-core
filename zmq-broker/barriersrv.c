@@ -122,7 +122,7 @@ static void _send_barrier_enter (barrier_t *b)
     if (!(no = json_object_new_int (b->nprocs)))
         oom ();
     json_object_object_add (o, "nprocs", no);
-    cmb_msg_send (ctx->zs_out_tree, o, NULL, 0, "barrier.enter.%s", b->name);
+    cmb_msg_send (ctx->zs_out_tree, o, NULL, 0, 0, "barrier.enter.%s", b->name);
     json_object_put (o);
 }
 
@@ -151,7 +151,7 @@ static bool _readmsg (void)
     char *tag = NULL;
     json_object *o;
 
-    if (cmb_msg_recv (ctx->zs_in, &tag, &o, NULL, 0) < 0) {
+    if (cmb_msg_recv (ctx->zs_in, &tag, &o, NULL, 0, 0) < 0) {
         fprintf (stderr, "cmb_msg_recv: %s\n", strerror (errno));
         goto done;
     }
@@ -181,7 +181,7 @@ static bool _readmsg (void)
             b = _barrier_create (name, nprocs);
         b->count += count;
         if (b->count == b->nprocs) /* destroy when we receive our own msg */
-            cmb_msg_send (ctx->zs_out_event, NULL, NULL, 0, b->exit_tag);
+            cmb_msg_send (ctx->zs_out_event, NULL, NULL, 0, 0, b->exit_tag);
     }
 done:
     if (tag)

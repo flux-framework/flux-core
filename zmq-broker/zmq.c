@@ -13,26 +13,6 @@
 #include <json/json.h>
 #include <assert.h>
 
-#ifndef ZMQ_DONTWAIT
-#   define ZMQ_DONTWAIT   ZMQ_NOBLOCK
-#endif
-#ifndef ZMQ_RCVHWM
-#   define ZMQ_RCVHWM     ZMQ_HWM
-#endif
-#ifndef ZMQ_SNDHWM
-#   define ZMQ_SNDHWM     ZMQ_HWM
-#endif
-#if ZMQ_VERSION_MAJOR == 2
-#   define more_t int64_t
-#   define zmq_ctx_destroy(context) zmq_term(context)
-#   define zmq_msg_send(msg,sock,opt) zmq_send (sock, msg, opt)
-#   define zmq_msg_recv(msg,sock,opt) zmq_recv (sock, msg, opt)
-#   define ZMQ_POLL_MSEC    1000        //  zmq_poll is usec
-#elif ZMQ_VERSION_MAJOR == 3
-#   define more_t int
-#   define ZMQ_POLL_MSEC    1           //  zmq_poll is msec
-#endif
-
 #include "zmq.h"
 #include "util.h"
 
@@ -168,12 +148,16 @@ void _zmq_msg_send (zmq_msg_t *msg, void *socket, int flags)
     }
 }
 
-void _zmq_msg_recv (zmq_msg_t *msg, void *socket, int flags)
+int _zmq_msg_recv (zmq_msg_t *msg, void *socket, int flags)
 {
-    if (zmq_msg_recv (msg, socket, flags) < 0) {
+    int rc;
+
+    rc = zmq_msg_recv (msg, socket, flags);
+    if (rc < 0 && errno != EAGAIN) {
         fprintf (stderr, "zmq_msg_recv: %s\n", zmq_strerror (errno));
         exit (1);
     }
+    return rc;
 }
 
 void _zmq_getsockopt (void *socket, int option_name, void *option_value,
@@ -252,23 +236,27 @@ int _zmq_mpart_recv (zmq_mpart_t *msg, void *socket, int flags)
         if (i > 0 && !_zmq_rcvmore (socket)) {
             /* N.B. seen on epgm socket when sender restarted */
             fprintf (stderr, "_zmq_mpart_recv: only got %d message parts\n", i);
-            goto error;
+            goto eproto;
         }
-        _zmq_msg_recv (&msg->part[i], socket, flags);
+        if (_zmq_msg_recv (&msg->part[i], socket, flags) < 0)
+            goto error; 
     }
     if (_zmq_rcvmore (socket)) {
         fprintf (stderr, "_zmq_mpart_recv: too many message parts\n");
-        goto error;
+        goto eproto;
     }
     return 0;
-error:
+eproto:
     errno = EPROTO;
+error:
     return -1;
 }
 
 void _zmq_mpart_send (zmq_mpart_t *msg, void *socket, int flags)
 {
     int i;
+
+    assert (!(flags & ZMQ_DONTWAIT)); /* FIXME: EAGAIN should not be fatal */
 
     for (i = 0; i < ZMQ_MPART_MAX; i++)
         if (i < ZMQ_MPART_MAX - 1)
@@ -300,7 +288,7 @@ size_t _zmq_mpart_size (zmq_mpart_t *msg)
  **/
 
 int cmb_msg_recv (void *socket, char **tagp, json_object **op,
-                    void **datap, int *lenp)
+                    void **datap, int *lenp, int flags)
 {
     zmq_mpart_t msg;
     char *tag = NULL;
@@ -309,8 +297,8 @@ int cmb_msg_recv (void *socket, char **tagp, json_object **op,
     int len = 0;
 
     _zmq_mpart_init (&msg);
-    if (_zmq_mpart_recv (&msg, socket, 0) < 0)
-        goto eproto;
+    if (_zmq_mpart_recv (&msg, socket, flags) < 0)
+        goto error;
 
     /* tag */
     if (tagp) {
@@ -346,6 +334,7 @@ int cmb_msg_recv (void *socket, char **tagp, json_object **op,
     return 0;
 eproto:
     errno = EPROTO;
+error:
     _zmq_mpart_close (&msg);
     if (tag)
         free (tag);
@@ -357,7 +346,7 @@ eproto:
 }
 
 void cmb_msg_send (void *sock, json_object *o, void *data, int len,
-                     const char *fmt, ...)
+                   int flags, const char *fmt, ...)
 {
     va_list ap;
     zmq_mpart_t msg;
@@ -396,7 +385,7 @@ void cmb_msg_send (void *sock, json_object *o, void *data, int len,
         memcpy (zmq_msg_data (&msg.part[2]), data, len);
     }
 
-    _zmq_mpart_send (&msg, sock, 0);
+    _zmq_mpart_send (&msg, sock, flags);
 }
 
 void cmb_msg_dump (char *s, zmq_mpart_t *msg)

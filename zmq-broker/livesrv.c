@@ -81,7 +81,7 @@ static void _reply_to_query (const char *sender)
         oom ();
     json_object_object_add (o, "nnodes", no);
 
-    cmb_msg_send (ctx->zs_out, o, NULL, 0, "%s", sender);
+    cmb_msg_send (ctx->zs_out, o, NULL, 0, 0, "%s", sender);
     json_object_put (o);
 }
 
@@ -96,7 +96,7 @@ static bool _readmsg (void)
     int i, myrank = ctx->conf->rank;
     json_object *o = NULL;
 
-    if (cmb_msg_recv (ctx->zs_in, &tag, &o, NULL, 0) < 0) {
+    if (cmb_msg_recv (ctx->zs_in, &tag, &o, NULL, NULL, 0) < 0) {
         fprintf (stderr, "cmb_msg_recv: %s\n", strerror (errno));
         goto done;
     }
@@ -109,17 +109,17 @@ static bool _readmsg (void)
                 if (ctx->live[i] != -1)
                     ctx->live[i]++;
                 if (ctx->live[i] > MISSED_TRIGGER_ALLOW) {
-                    cmb_msg_send (ctx->zs_out_event, NULL, NULL, 0,
+                    cmb_msg_send (ctx->zs_out_event, NULL, NULL, 0, 0,
                                   "event.live.down.%d", i);
                     ctx->live[i] = -1;
                 } 
             }
             if (ctx->live[myrank] == -1)
-                cmb_msg_send (ctx->zs_out_event, NULL, NULL, 0,
+                cmb_msg_send (ctx->zs_out_event, NULL, NULL, 0, 0,
                               "event.live.up.%d", myrank);
             ctx->live[myrank] = 0;
         } else {
-            cmb_msg_send (ctx->zs_out_tree, NULL, NULL, 0,
+            cmb_msg_send (ctx->zs_out_tree, NULL, NULL, 0, 0,
                           "live.up.%d", myrank);
         }
     } else if (!strncmp (tag, live_up, strlen (live_up))) {
@@ -128,11 +128,12 @@ static bool _readmsg (void)
             goto done;
         if (myrank == 0) {
             if (ctx->live[rank] == -1)
-                cmb_msg_send (ctx->zs_out_event, NULL, NULL, 0,
+                cmb_msg_send (ctx->zs_out_event, NULL, NULL, 0, 0,
                               "event.live.up.%d", rank);
             ctx->live[rank] = 0;
         } else {
-            cmb_msg_send (ctx->zs_out_tree, NULL, NULL, 0, "live.up.%d", rank);
+            cmb_msg_send (ctx->zs_out_tree, NULL, NULL, 0, 0,
+                          "live.up.%d", rank);
         }
     } else if (!strncmp (tag, live_query, strlen (live_query))) {
         const char *sender;

@@ -55,7 +55,8 @@ static bool _poll (void)
         }
         _zmq_mpart_close (&msg);
     } else { /* timeout */
-        cmb_msg_send (ctx->zs_out_event, NULL, NULL, 0, "event.sched.trigger");
+        cmb_msg_send (ctx->zs_out_event, NULL, NULL, 0, 0,
+                      "event.sched.trigger");
     }
     return !shutdown;
 }

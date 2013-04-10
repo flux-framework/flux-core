@@ -280,7 +280,7 @@ static void _reply_to_get (const char *sender, const char *val)
             oom ();
         json_object_object_add (o, "val", no);
     }
-    cmb_msg_send (ctx->zs_out, o, NULL, 0, "%s", sender);
+    cmb_msg_send (ctx->zs_out, o, NULL, 0, 0, "%s", sender);
     json_object_put (o);
 }
 
@@ -297,7 +297,7 @@ static void _reply_to_commit (const char *sender, int errcount, int putcount)
         oom ();
     json_object_object_add (o, "putcount", no);
 
-    cmb_msg_send (ctx->zs_out, o, NULL, 0, "%s", sender);
+    cmb_msg_send (ctx->zs_out, o, NULL, 0, 0, "%s", sender);
 
     json_object_put (o);
 }
@@ -326,7 +326,7 @@ again:
     }
 
     while (!shutdown) {
-        if (cmb_msg_recv (ctx->zs_in, &tag, &o, NULL, 0) < 0) {
+        if (cmb_msg_recv (ctx->zs_in, &tag, &o, NULL, NULL, 0) < 0) {
             fprintf (stderr, "cmb_msg_recv: %s\n", strerror (errno));
             continue;
         }

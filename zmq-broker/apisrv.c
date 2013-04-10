@@ -137,7 +137,7 @@ static cfd_t *_cfd_create (client_t *c, char *wname)
         fprintf (stderr, "close: %s\n", strerror (errno));
         exit (1);
     }
-    cmb_msg_send (ctx->zs_out, NULL, NULL, 0, "event.%s.open", cfd->name);
+    cmb_msg_send (ctx->zs_out, NULL, NULL, 0, 0, "event.%s.open", cfd->name);
 
     cfd->prev = NULL;
     cfd->next = c->cfds;
@@ -160,7 +160,7 @@ static void _cfd_destroy (client_t *c, cfd_t *cfd)
     if (cfd->next)
         cfd->next->prev = cfd->prev;
 
-    cmb_msg_send (ctx->zs_out, NULL, NULL, 0, "event.%s.close", cfd->name);
+    cmb_msg_send (ctx->zs_out, NULL, NULL, 0, 0, "event.%s.close", cfd->name);
     free (cfd->name);
     free (cfd);
 }
@@ -195,7 +195,7 @@ static int _cfd_read (cfd_t *cfd)
     if (!(no = json_object_new_string (cfd->name)))
         oom ();
     json_object_object_add (o, "sender", no);
-    cmb_msg_send (ctx->zs_out, o, cfd->buf, n, "%s", cfd->wname);
+    cmb_msg_send (ctx->zs_out, o, cfd->buf, n, 0, "%s", cfd->wname);
     json_object_put (o);
     return -1;
 }
@@ -248,7 +248,7 @@ static void _client_destroy (client_t *c)
     if (c->next)
         c->next->prev = c->prev;
     if (strlen (c->uuid) > 0)
-        cmb_msg_send (ctx->zs_out, NULL, NULL, 0,
+        cmb_msg_send (ctx->zs_out, NULL, NULL, 0, 0,
                       "event.%s.disconnect",c->uuid);
     free (c);
 }
@@ -312,7 +312,8 @@ static int _client_read (client_t *c)
     } else if (!strncmp (ctx->buf, api_setuuid, strlen (api_setuuid))) {
         char *p = ctx->buf + strlen (api_setuuid);
         snprintf (c->uuid, sizeof (c->uuid), "%s", p);
-        cmb_msg_send (ctx->zs_out, NULL, NULL, 0, "event.%s.connect", c->uuid);
+        cmb_msg_send (ctx->zs_out, NULL, NULL, 0, 0,
+                      "event.%s.connect", c->uuid);
 
     /* internal: api.fdopen.read */
     } else if (!strcmp (ctx->buf, "api.fdopen.read")) {
