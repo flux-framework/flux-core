@@ -61,10 +61,6 @@ int main (int argc, char *argv[])
 
     nprocs = env_getint ("SLURM_NPROCS", 1);
 
-    if (!(c = cmb_init ())) {
-        fprintf (stderr, "cmb_init: %s\n", strerror (errno));
-        exit (1);
-    }
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
             case 'P': /* --ping-padding N */
@@ -77,6 +73,10 @@ int main (int argc, char *argv[])
                 nprocs = strtoul (optarg, NULL, 10);
                 break;
         }
+    }
+    if (!(c = cmb_init ())) {
+        fprintf (stderr, "cmb_init: %s\n", strerror (errno));
+        exit (1);
     }
     optind = 0;
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
