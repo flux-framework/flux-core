@@ -56,7 +56,7 @@ static int _json_object_add_int (json_object *o, char *name, int i)
     return 0;
 }
 
-static int _json_object_add_string (json_object *o, char *name, char *s)
+static int _json_object_add_string (json_object *o, char *name, const char *s)
 {
     json_object *no;
 
@@ -492,7 +492,7 @@ int cmb_sync (cmb_t c)
     return 0;
 }
 
-int cmb_kvs_put (cmb_t c, char *key, char *val)
+int cmb_kvs_put (cmb_t c, const char *key, const char *val)
 {
     json_object *o;
 
@@ -517,7 +517,7 @@ error:
     return -1;
 }
 
-char *cmb_kvs_get (cmb_t c, char *key)
+char *cmb_kvs_get (cmb_t c, const char *key)
 {
     json_object *o = NULL;
     const char *val;

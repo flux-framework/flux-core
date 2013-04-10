@@ -12,8 +12,8 @@ int cmb_snoop (cmb_t c, char *subscription);
 int cmb_barrier (cmb_t c, char *name, int nprocs);
 int cmb_sync (cmb_t c);
 
-int cmb_kvs_put (cmb_t c, char *key, char *val);
-char *cmb_kvs_get (cmb_t c, char *key);
+int cmb_kvs_put (cmb_t c, const char *key, const char *val);
+char *cmb_kvs_get (cmb_t c, const char *key);
 int cmb_kvs_commit (cmb_t c, int *errcountp, int *putcountp);
 
 int cmb_live_query (cmb_t c, int **up, int *ulp, int **dp, int *dlp, int *nnp);
