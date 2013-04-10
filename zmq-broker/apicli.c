@@ -565,6 +565,7 @@ int cmb_live_query (cmb_t c, int **upp, int *ulp, int **dp, int *dlp, int *nnp)
     int nnodes;
     int *up, up_len;
     int *down, down_len;
+    char *tag = NULL;
 
     if (cmb_send (c, NULL, NULL, 0, "api.subscribe.%s", c->uuid) < 0)
         goto error;
@@ -580,8 +581,19 @@ int cmb_live_query (cmb_t c, int **upp, int *ulp, int **dp, int *dlp, int *nnp)
     o = NULL;
 
     /* receive response */
-    if (cmb_recv (c, NULL, &o, NULL, NULL) < 0)
+again:
+    if (cmb_recv (c, &tag, &o, NULL, NULL) < 0)
         goto error;
+    if (strcmp (tag, c->uuid) != 0) {   /* filter out api.<uuid>.connect */
+        free (tag);
+        if (o)
+            json_object_put (o);
+        goto again;
+    }
+    if (!o) {
+        errno = EPROTO;
+        goto error;
+    }
     if (_json_object_get_int (o, "nnodes", &nnodes) < 0)
         goto error;
     if (_json_object_get_int_array (o, "up", &up, &up_len) < 0)
@@ -589,6 +601,7 @@ int cmb_live_query (cmb_t c, int **upp, int *ulp, int **dp, int *dlp, int *nnp)
     if (_json_object_get_int_array (o, "down", &down, &down_len) < 0)
         goto error;
     json_object_put (o);
+    free (tag);
 
     *upp = up;
     *ulp = up_len;
@@ -604,6 +617,8 @@ nomem:
 error:
     if (o)
         json_object_put (o);
+    if (tag)
+        free (tag);
     return -1; 
 }
 

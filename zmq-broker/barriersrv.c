@@ -47,6 +47,7 @@ typedef struct _barrier_struct {
 
 struct ctx_struct {
     void *zs_in;
+    void *zs_in_event;
     void *zs_out;
     void *zs_out_event;
     void *zs_out_tree;
@@ -140,24 +141,21 @@ error:
     return -1;
 }
 
-static int _readmsg (bool *sp)
+static int _readmsg (void *socket)
 {
     char *barrier_enter = "barrier.enter.";
     char *barrier_exit = "event.barrier.exit.";
-    bool shutdown = false;
     char *tag = NULL;
     json_object *o;
 
-    if (cmb_msg_recv (ctx->zs_in, &tag, &o, NULL, NULL, ZMQ_DONTWAIT) < 0) {
+    if (cmb_msg_recv (socket, &tag, &o, NULL, NULL, ZMQ_DONTWAIT) < 0) {
         if (errno != EAGAIN)
             fprintf (stderr, "cmb_msg_recv: %s\n", strerror (errno));
         return -1;
     }
-    if (!strcmp (tag, "event.cmb.shutdown")) {
-        shutdown = true;
 
     /* event.barrier.exit.<name> */
-    } else if (!strncmp (tag, barrier_exit, strlen (barrier_exit))) {
+    if (!strncmp (tag, barrier_exit, strlen (barrier_exit))) {
         char *name = tag + strlen (barrier_exit);
         barrier_t *b = _barrier_lookup (name);
 
@@ -170,7 +168,7 @@ static int _readmsg (bool *sp)
         barrier_t *b;
         int count, nprocs;
 
-        if (_parse_barrier_enter (o, &count, &nprocs) < 0){
+        if (_parse_barrier_enter (o, &count, &nprocs) < 0) {
             fprintf (stderr, "%s: parse error\n", tag);
             goto done;
         }
@@ -186,22 +184,21 @@ done:
         free (tag);
     if (o)
         json_object_put (o);
-    *sp = shutdown;
     return 0;
 }
 
 static void *_thread (void *arg)
 {
     zmq_pollitem_t zpa[] = {
-       { .socket = ctx->zs_in, .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
+{ .socket = ctx->zs_in,       .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
+{ .socket = ctx->zs_in_event, .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
     };
-    bool shutdown = false;
 
-    while (!shutdown) {
-        _zmq_poll(zpa, 1, -1);
+    for (;;) {
+        _zmq_poll(zpa, 2, -1);
 
         if (zpa[0].revents & ZMQ_POLLIN) {
-            while (_readmsg (&shutdown) != -1)
+            while (_readmsg (ctx->zs_in) != -1)
                 ;
             /* As many entry messages as can be read in one go (above)
              * will be aggregated into a message sent upstream.
@@ -215,6 +212,10 @@ static void *_thread (void *arg)
                     }
                 }
             }
+        }
+        if (zpa[1].revents & ZMQ_POLLIN) {
+            while (_readmsg (ctx->zs_in_event) != -1)
+                ;
         }
     }
     return NULL;
@@ -240,8 +241,11 @@ void barriersrv_init (conf_t *conf, void *zctx)
 
     ctx->zs_in = _zmq_socket (zctx, ZMQ_SUB);
     _zmq_connect (ctx->zs_in, conf->plout_uri);
-    _zmq_subscribe (ctx->zs_in, "barrier.");
-    _zmq_subscribe (ctx->zs_in, "event.cmb.shutdown");
+    _zmq_subscribe (ctx->zs_in, "barrier.enter.");
+
+    ctx->zs_in_event = _zmq_socket (zctx, ZMQ_SUB);
+    _zmq_connect (ctx->zs_in_event, conf->plout_event_uri);
+    _zmq_subscribe (ctx->zs_in_event, "event.barrier.exit.");
 
     err = pthread_create (&ctx->t, NULL, _thread, NULL);
     if (err) {
@@ -260,6 +264,7 @@ void barriersrv_fini (void)
         exit (1);
     }
     _zmq_close (ctx->zs_in);
+    _zmq_close (ctx->zs_in_event);
     _zmq_close (ctx->zs_out);
     _zmq_close (ctx->zs_out_event);
     if (ctx->zs_out_tree)

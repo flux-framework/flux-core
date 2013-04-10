@@ -30,6 +30,7 @@ typedef struct ctx_struct *ctx_t;
 
 struct ctx_struct {
     void *zs_in;
+    void *zs_in_event;
     void *zs_out;
     void *zs_out_event;
     void *zs_out_tree;
@@ -85,25 +86,21 @@ static void _reply_to_query (const char *sender)
     json_object_put (o);
 }
 
-static bool _readmsg (void)
+static void _readmsg (void *socket)
 {
     const char *live_up = "live.up.";
     const char *live_query= "live.query";
     const char *event_live_up = "event.live.up.";
     const char *event_live_down = "event.live.down.";
-    bool shutdown = false;
     char *tag = NULL;
     int i, myrank = ctx->conf->rank;
     json_object *o = NULL;
 
-    if (cmb_msg_recv (ctx->zs_in, &tag, &o, NULL, NULL, 0) < 0) {
+    if (cmb_msg_recv (socket, &tag, &o, NULL, NULL, 0) < 0) {
         fprintf (stderr, "cmb_msg_recv: %s\n", strerror (errno));
         goto done;
     }
-    if (!strcmp (tag, "event.cmb.shutdown")) {
-        shutdown = true;
-
-    } else if (!strcmp (tag, "event.sched.trigger")) {
+    if (!strcmp (tag, "event.sched.trigger")) {
         if (myrank == 0) {
             for (i = 0; i < ctx->conf->size; i++) {
                 if (ctx->live[i] != -1)
@@ -160,23 +157,23 @@ done:
         free (tag);
     if (o)
         json_object_put (o);
-    return !shutdown;
 }
 
 static void *_thread (void *arg)
 {
     zmq_pollitem_t zpa[] = {
-       { .socket = ctx->zs_in, .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
+{ .socket = ctx->zs_in,       .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
+{ .socket = ctx->zs_in_event, .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
     };
     long tmout = -1;
 
     for (;;) {
-        _zmq_poll(zpa, 1, tmout);
+        _zmq_poll(zpa, 2, tmout);
 
-        if (zpa[0].revents & ZMQ_POLLIN) {
-            if (!_readmsg ())
-                break;
-        }
+        if (zpa[0].revents & ZMQ_POLLIN)
+            _readmsg (ctx->zs_in);
+        if (zpa[1].revents & ZMQ_POLLIN)
+            _readmsg (ctx->zs_in_event);
     }
     return NULL;
 }
@@ -205,10 +202,12 @@ void livesrv_init (conf_t *conf, void *zctx)
 
     ctx->zs_in = _zmq_socket (zctx, ZMQ_SUB);
     _zmq_connect (ctx->zs_in, conf->plout_uri);
-    _zmq_subscribe (ctx->zs_in, "event.cmb.shutdown");
-    _zmq_subscribe (ctx->zs_in, "event.sched.trigger");
-    _zmq_subscribe (ctx->zs_in, "event.live.");
     _zmq_subscribe (ctx->zs_in, "live.");
+
+    ctx->zs_in_event = _zmq_socket (zctx, ZMQ_SUB);
+    _zmq_connect (ctx->zs_in_event, conf->plout_event_uri);
+    _zmq_subscribe (ctx->zs_in_event, "event.sched.trigger");
+    _zmq_subscribe (ctx->zs_in_event, "event.live.");
 
     err = pthread_create (&ctx->t, NULL, _thread, NULL);
     if (err) {
@@ -227,6 +226,7 @@ void livesrv_fini (conf_t *conf)
         exit (1);
     }
     _zmq_close (ctx->zs_in);
+    _zmq_close (ctx->zs_in_event);
     _zmq_close (ctx->zs_out);
     _zmq_close (ctx->zs_out_event);
     _zmq_close (ctx->zs_out_tree);

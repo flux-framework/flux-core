@@ -4,6 +4,7 @@ typedef struct {
     char *treeout_uri;
     char *event_uri;
     char *plout_uri;
+    char *plout_event_uri;
     char *plin_uri;
     char *plin_event_uri;
     char *plin_tree_uri;

@@ -56,6 +56,7 @@ typedef struct ctx_struct *ctx_t;
 struct ctx_struct {
     char sockname[MAXPATHLEN];
     void *zs_in;
+    void *zs_in_event;
     void *zs_out;
     pthread_t t;
     int listen_fd;
@@ -137,7 +138,7 @@ static cfd_t *_cfd_create (client_t *c, char *wname)
         fprintf (stderr, "close: %s\n", strerror (errno));
         exit (1);
     }
-    cmb_msg_send (ctx->zs_out, NULL, NULL, 0, 0, "event.%s.open", cfd->name);
+    cmb_msg_send (ctx->zs_out, NULL, NULL, 0, 0, "%s.open", cfd->name);
 
     cfd->prev = NULL;
     cfd->next = c->cfds;
@@ -160,7 +161,7 @@ static void _cfd_destroy (client_t *c, cfd_t *cfd)
     if (cfd->next)
         cfd->next->prev = cfd->prev;
 
-    cmb_msg_send (ctx->zs_out, NULL, NULL, 0, 0, "event.%s.close", cfd->name);
+    cmb_msg_send (ctx->zs_out, NULL, NULL, 0, 0, "%s.close", cfd->name);
     free (cfd->name);
     free (cfd);
 }
@@ -248,8 +249,7 @@ static void _client_destroy (client_t *c)
     if (c->next)
         c->next->prev = c->prev;
     if (strlen (c->uuid) > 0)
-        cmb_msg_send (ctx->zs_out, NULL, NULL, 0, 0,
-                      "event.%s.disconnect",c->uuid);
+        cmb_msg_send (ctx->zs_out, NULL, NULL, 0, 0, "%s.disconnect", c->uuid);
     free (c);
 }
 
@@ -312,8 +312,7 @@ static int _client_read (client_t *c)
     } else if (!strncmp (ctx->buf, api_setuuid, strlen (api_setuuid))) {
         char *p = ctx->buf + strlen (api_setuuid);
         snprintf (c->uuid, sizeof (c->uuid), "%s", p);
-        cmb_msg_send (ctx->zs_out, NULL, NULL, 0, 0,
-                      "event.%s.connect", c->uuid);
+        cmb_msg_send (ctx->zs_out, NULL, NULL, 0, 0, "%s.connect", c->uuid);
 
     /* internal: api.fdopen.read */
     } else if (!strcmp (ctx->buf, "api.fdopen.read")) {
@@ -336,7 +335,7 @@ static int _client_read (client_t *c)
     return 0;
 }
 
-static void _readmsg (bool *shutdownp)
+static void _readmsg (void *socket)
 {
     zmq_mpart_t msg;
     client_t *c;
@@ -344,13 +343,8 @@ static void _readmsg (bool *shutdownp)
     int len;
 
     _zmq_mpart_init (&msg);
-    if (_zmq_mpart_recv (&msg, ctx->zs_in, 0) < 0)
+    if (_zmq_mpart_recv (&msg, socket, 0) < 0)
         goto done;
-
-    if (cmb_msg_match (&msg, "event.cmb.shutdown")) {
-        *shutdownp = true;
-        goto done;
-    }
 
     len = cmb_msg_tobuf (&msg, ctx->buf, sizeof (ctx->buf));
     if (len < 0) {
@@ -389,12 +383,11 @@ done:
     _zmq_mpart_close (&msg);
 }
 
-static bool _poll (void)
+static void _poll (void)
 {
     client_t *c;
     cfd_t *cfd;
-    bool shutdown = false;
-    int zpa_len = _client_count () + _cfd_count () + 2;
+    int zpa_len = _client_count () + _cfd_count () + 3;
     zmq_pollitem_t *zpa = xzmalloc (sizeof (zmq_pollitem_t) * zpa_len);
     int i;
 
@@ -402,10 +395,13 @@ static bool _poll (void)
     zpa[0].socket = ctx->zs_in;
     zpa[0].events = ZMQ_POLLIN;
     zpa[0].fd = -1;
-    zpa[1].events = ZMQ_POLLIN | ZMQ_POLLERR;
-    zpa[1].fd = ctx->listen_fd;
+    zpa[1].socket = ctx->zs_in_event;
+    zpa[1].events = ZMQ_POLLIN;
+    zpa[1].fd = -1;
+    zpa[2].events = ZMQ_POLLIN | ZMQ_POLLERR;
+    zpa[2].fd = ctx->listen_fd;
     /* client fds */ 
-    for (i = 2, c = ctx->clients; c != NULL; c = c->next) {
+    for (i = 3, c = ctx->clients; c != NULL; c = c->next) {
         for (cfd = c->cfds; cfd != NULL; cfd = cfd->next, i++) {
             zpa[i].events = ZMQ_POLLERR;
             zpa[i].fd = cfd->fd;
@@ -423,7 +419,7 @@ static bool _poll (void)
     _zmq_poll (zpa, zpa_len, -1);
 
     /* client fds */
-    for (i = 2, c = ctx->clients; c != NULL; c = c->next) {
+    for (i = 3, c = ctx->clients; c != NULL; c = c->next) {
         for (cfd = c->cfds; cfd != NULL; i++) {
             cfd_t *deleteme = NULL;
             assert (cfd->fd == zpa[i].fd);
@@ -458,18 +454,18 @@ static bool _poll (void)
     }
 
     /* zmq sockets - can modify client list (so do after clients) */
-    if (zpa[1].revents & ZMQ_POLLIN)
+    if (zpa[2].revents & ZMQ_POLLIN)
         _accept (ctx);
-    if (zpa[1].revents & ZMQ_POLLERR) {
+    if (zpa[2].revents & ZMQ_POLLERR) {
         fprintf (stderr, "apisrv: poll error on listen fd\n");
         exit (1);
     }
     if (zpa[0].revents & ZMQ_POLLIN)
-        _readmsg (&shutdown);
+        _readmsg (ctx->zs_in);
+    if (zpa[1].revents & ZMQ_POLLIN)
+        _readmsg (ctx->zs_in_event);
 
     free (zpa);
-
-    return ! shutdown;
 }
 
 static void _listener_init (void)
@@ -516,8 +512,8 @@ static void _listener_fini (void)
 static void *_thread (void *arg)
 {
     _listener_init ();
-    while (_poll ())
-        ;
+    for (;;)
+        _poll ();
     _listener_fini ();
     return NULL;
 }
@@ -534,6 +530,10 @@ void apisrv_init (conf_t *conf, void *zctx, char *sockname)
     ctx->zs_in = _zmq_socket (zctx, ZMQ_SUB);
     _zmq_connect (ctx->zs_in, conf->plout_uri);
     _zmq_subscribe_all (ctx->zs_in);
+
+    ctx->zs_in_event = _zmq_socket (zctx, ZMQ_SUB);
+    _zmq_connect (ctx->zs_in_event, conf->plout_event_uri);
+    _zmq_subscribe_all (ctx->zs_in_event);
 
     ctx->clients = NULL;
     snprintf (ctx->sockname, sizeof (ctx->sockname), "%s", sockname);
@@ -554,6 +554,7 @@ void apisrv_fini (void)
         fprintf (stderr, "apisrv_fini: pthread_join: %s\n", strerror (err));
         exit (1);
     }
+    _zmq_close (ctx->zs_in_event);
     _zmq_close (ctx->zs_in);
     _zmq_close (ctx->zs_out);
     while (ctx->clients != NULL)

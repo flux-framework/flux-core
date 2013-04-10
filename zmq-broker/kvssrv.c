@@ -118,7 +118,7 @@ static client_t *_client_create (const char *identity)
 
     c = xzmalloc (sizeof (client_t));
     c->identity = xstrdup (identity);
-    if (asprintf (&c->subscription, "event.%s.disconnect", identity) < 0)
+    if (asprintf (&c->subscription, "%s.disconnect", identity) < 0)
         oom ();
     c->prev = NULL;
     c->next = ctx->clients;
@@ -331,11 +331,8 @@ again:
             continue;
         }
 
-        if (!strcmp (tag, "event.cmb.shutdown")) {
-            shutdown = true;
-            goto next;
-
-        } else if (!strncmp (tag, "event.api.", strlen ("event.api."))) {
+        /* api.<uuid>.disconnect */
+        if (!strncmp (tag, "api.", strlen ("api."))) {
             client_t *c = _client_find_bysubscription (tag);
             if (c)
                 _client_destroy (c);
@@ -405,7 +402,6 @@ void kvssrv_init (conf_t *conf, void *zctx)
     ctx->zs_in = _zmq_socket (zctx, ZMQ_SUB);
     _zmq_connect (ctx->zs_in, conf->plout_uri);
     _zmq_subscribe (ctx->zs_in, "kvs.");
-    _zmq_subscribe (ctx->zs_in, "event.cmb.shutdown");
 
     ctx->zs_out = _zmq_socket (zctx, ZMQ_PUSH);
     _zmq_connect (ctx->zs_out, conf->plin_uri);
