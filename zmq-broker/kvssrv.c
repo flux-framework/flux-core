@@ -1,7 +1,5 @@
 /* kvssrv.c - key-value service */ 
 
-/* FIXME: transaction rate could be increased by pipelining requests to redis */
-
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <assert.h>
@@ -135,10 +133,19 @@ static client_t *_client_create (const char *identity)
 
 static void _client_destroy (client_t *c)
 {   
+    kv_t *kp, *deleteme;
+
     _zmq_unsubscribe (ctx->zs_in, c->subscription);
 
     free (c->identity);
     free (c->subscription);
+    for (kp = c->set_backlog; kp != NULL; ) {
+        deleteme = kp;
+        kp = kp->next; 
+        free (deleteme->key);
+        free (deleteme->val);
+        free (deleteme);
+    }
 
     if (c->prev)
         c->prev->next = c->next;
