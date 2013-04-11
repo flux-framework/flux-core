@@ -186,16 +186,13 @@ int PMI_Barrier( void )
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
 
-    asprintf (&name, "%s:%d", ctx->kvsname, ctx->barrier_num); 
-    if (!name)
-        goto nomem;
+    if (asprintf (&name, "%s:%d", ctx->kvsname, ctx->barrier_num) < 0)
+        return PMI_ERR_NOMEM;
     if (cmb_barrier (ctx->cctx, name, ctx->universe_size) < 0)
         goto error;
     ctx->barrier_num++;
     free (name);
     return PMI_SUCCESS;
-nomem:
-    errno = ENOMEM;
 error:
     if (name)
         free (name);
@@ -259,16 +256,13 @@ int PMI_KVS_Put( const char kvsname[], const char key[], const char value[])
     if (kvsname == NULL || key == NULL || value == NULL)
         return PMI_ERR_INVALID_ARG;
 
-    asprintf (&xkey, "%s:%s", ctx->kvsname, key);
-    if (!xkey)
-        goto nomem;
+    if (asprintf (&xkey, "%s:%s", ctx->kvsname, key) < 0)
+        return PMI_ERR_NOMEM;
 
     if (cmb_kvs_put (ctx->cctx, xkey, value) < 0)
         goto error;
     free (xkey);
     return PMI_SUCCESS;
-nomem:
-    errno = ENOMEM;
 error:
     if (xkey)
         free (xkey);
@@ -299,37 +293,32 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
     char *xkey = NULL;
     char *val = NULL;
 
-    // fprintf (stderr, "XXX %d:%s %s:%s\n", ctx ? ctx->rank : -1, __FUNCTION__, kvsname, key);
+    //fprintf (stderr, "XXX %d:%s %s:%s\n", ctx ? ctx->rank : -1, __FUNCTION__, kvsname, key);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
     if (kvsname == NULL || key == NULL || value == NULL)
         return PMI_ERR_INVALID_ARG;
 
-    asprintf (&xkey, "%s:%s", ctx->kvsname, key);
-    if (!xkey)
-        goto nomem;
+    if (asprintf (&xkey, "%s:%s", ctx->kvsname, key) < 0)
+        return PMI_ERR_NOMEM;
     val = cmb_kvs_get (ctx->cctx, xkey);
-    if (!val && errno == 0)
-        goto nokey;
+    if (!val && errno == 0) {
+        free (xkey);
+        return PMI_ERR_INVALID_KEY;
+    }
     if (!val && errno != 0)
         goto error;
-    strncpy (value, val, length);
-    value[length - 1] = '\0';
+    snprintf (value, length, "%s", val);
     free (val); 
     free (xkey); 
     return PMI_SUCCESS;
-nomem:
-    errno = ENOMEM;
 error:
     if (xkey)
         free (xkey);
     if (val)
         free (val);
     return PMI_FAIL;
-nokey:
-    free (xkey);
-    return PMI_ERR_INVALID_KEY;
 }
 
 int PMI_Spawn_multiple(int count,

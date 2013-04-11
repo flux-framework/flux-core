@@ -57,7 +57,7 @@ void cmb_msg_send (void *sock, json_object *o, void *data, int len,
 int cmb_msg_recv (void *socket, char **tagp, json_object **op,
                   void **datap, int *lenp, int flags);
 void cmb_msg_dump (char *s, zmq_mpart_t *msg);
-bool cmb_msg_match (zmq_mpart_t *msg, char *tag);
+bool cmb_msg_match (zmq_mpart_t *msg, char *tag, bool exact);
 
 int cmb_msg_tobuf (zmq_mpart_t *msg, char *buf, int len);
 void cmb_msg_frombuf (zmq_mpart_t *msg, char *buf, int len);

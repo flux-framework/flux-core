@@ -400,7 +400,7 @@ void cmb_msg_dump (char *s, zmq_mpart_t *msg)
         fprintf (stderr, "    data[%d]\n",(int)zmq_msg_size (&msg->part[2]));
 }
 
-bool cmb_msg_match (zmq_mpart_t *msg, char *tag)
+bool cmb_msg_match (zmq_mpart_t *msg, char *tag, bool exact)
 {
     bool match = false;
 
@@ -408,7 +408,10 @@ bool cmb_msg_match (zmq_mpart_t *msg, char *tag)
         int n = zmq_msg_size (&msg->part[0]);
         int t = strlen (tag);
 
-        match = (t <= n && !memcmp (zmq_msg_data (&msg->part[0]), tag, t));
+        if (exact)
+            match = (t == n && !memcmp (zmq_msg_data (&msg->part[0]), tag, t));
+        else
+            match = (t <= n && !memcmp (zmq_msg_data (&msg->part[0]), tag, t));
     }
     return match;
 }

@@ -523,7 +523,7 @@ char *cmb_kvs_get (cmb_t c, const char *key)
     const char *val;
     char *ret;
 
-    if (cmb_send (c, NULL, NULL, 0, "api.subscribe.%s", c->uuid) < 0)
+    if (cmb_send (c, NULL, NULL, 0, "api.xsubscribe.%s", c->uuid) < 0)
         goto error;
 
     /* send request */
@@ -565,9 +565,8 @@ int cmb_live_query (cmb_t c, int **upp, int *ulp, int **dp, int *dlp, int *nnp)
     int nnodes;
     int *up, up_len;
     int *down, down_len;
-    char *tag = NULL;
 
-    if (cmb_send (c, NULL, NULL, 0, "api.subscribe.%s", c->uuid) < 0)
+    if (cmb_send (c, NULL, NULL, 0, "api.xsubscribe.%s", c->uuid) < 0)
         goto error;
 
     /* send request */
@@ -581,15 +580,8 @@ int cmb_live_query (cmb_t c, int **upp, int *ulp, int **dp, int *dlp, int *nnp)
     o = NULL;
 
     /* receive response */
-again:
-    if (cmb_recv (c, &tag, &o, NULL, NULL) < 0)
+    if (cmb_recv (c, NULL, &o, NULL, NULL) < 0)
         goto error;
-    if (strcmp (tag, c->uuid) != 0) {   /* filter out api.<uuid>.connect */
-        free (tag);
-        if (o)
-            json_object_put (o);
-        goto again;
-    }
     if (!o) {
         errno = EPROTO;
         goto error;
@@ -601,7 +593,6 @@ again:
     if (_json_object_get_int_array (o, "down", &down, &down_len) < 0)
         goto error;
     json_object_put (o);
-    free (tag);
 
     *upp = up;
     *ulp = up_len;
@@ -617,8 +608,6 @@ nomem:
 error:
     if (o)
         json_object_put (o);
-    if (tag)
-        free (tag);
     return -1; 
 }
 
@@ -627,7 +616,7 @@ int cmb_kvs_commit (cmb_t c, int *ep, int *pp)
     json_object *o = NULL;
     int errcount, putcount;
 
-    if (cmb_send (c, NULL, NULL, 0, "api.subscribe.%s", c->uuid) < 0)
+    if (cmb_send (c, NULL, NULL, 0, "api.xsubscribe.%s", c->uuid) < 0)
         goto error;
 
     /* send request */

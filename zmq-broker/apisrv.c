@@ -46,6 +46,7 @@ typedef struct _client_struct {
     struct _client_struct *next;
     struct _client_struct *prev;
     char *subscription;
+    bool subscription_exact;
     char uuid[64]; /* "api.<uuid>" */
     cfd_t *cfds;
     int cfd_id;
@@ -278,6 +279,7 @@ static void _accept ()
 static int _client_read (client_t *c)
 {
     const char *api_subscribe = "api.subscribe.";
+    const char *api_xsubscribe = "api.xsubscribe.";
     const char *api_setuuid = "api.setuuid.";
     const char *api_fdopen_write = "api.fdopen.write.";
     int taglen, totlen;
@@ -307,6 +309,15 @@ static int _client_read (client_t *c)
         if (c->subscription)
             free (c->subscription);
         c->subscription = xstrdup (p);
+        c->subscription_exact = false;
+
+    /* internal: api.xsubscribe */
+    } else if (!strncmp (ctx->buf, api_xsubscribe, strlen (api_xsubscribe))) {
+        char *p = ctx->buf + strlen (api_xsubscribe);
+        if (c->subscription)
+            free (c->subscription);
+        c->subscription = xstrdup (p);
+        c->subscription_exact = true;
 
     /* internal: api.setuuid */
     } else if (!strncmp (ctx->buf, api_setuuid, strlen (api_setuuid))) {
@@ -357,7 +368,8 @@ static void _readmsg (void *socket)
         client_t *deleteme = NULL;
         int n;
 
-        if (c->subscription && cmb_msg_match (&msg, c->subscription)) {
+        if (c->subscription && cmb_msg_match (&msg, c->subscription,
+                                                    c->subscription_exact)) {
             n = send (c->fd, ctx->buf, len, 0);
             if (n < len)
                 deleteme = c; 
@@ -370,7 +382,7 @@ static void _readmsg (void *socket)
     for (c = ctx->clients; c != NULL; c = c->next) {
         for (cfd = c->cfds; cfd != NULL; ) {
             cfd_t *deleteme = NULL;
-            if (cmb_msg_match (&msg, cfd->name)) {
+            if (cmb_msg_match (&msg, cfd->name, true)) {
                 if (_cfd_write (cfd, &msg) < 0)
                     deleteme = cfd;
             }
