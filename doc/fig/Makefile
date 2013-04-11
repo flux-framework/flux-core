@@ -29,6 +29,7 @@ DEPFIG = \
 	redis-pmi.eps \
 	zmq-broker.eps \
 	zmq-broker-tree.eps \
+	zmq-broker-pmi.eps
 
 all: $(DEPFIG)
 

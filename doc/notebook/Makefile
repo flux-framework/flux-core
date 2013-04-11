@@ -5,6 +5,7 @@ DEPSEC = \
 DEPFIG = \
 	../fig/redis-pmi.eps \
 	../fig/zmq-broker.eps \
+	../fig/zmq-broker-pmi.eps \
 
 DEPBIB = 
 
