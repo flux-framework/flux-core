@@ -29,6 +29,7 @@ typedef struct _kv_struct {
     char *key;
     char *val;
     struct _kv_struct *next;
+    struct _kv_struct *prev;
 } kv_t;
 
 typedef struct _client_struct {
@@ -39,7 +40,6 @@ typedef struct _client_struct {
     int errcount;
     char *subscription;
     kv_t *set_backlog;
-    kv_t *set_backlog_last;
 } client_t;
 
 typedef struct ctx_struct *ctx_t;
@@ -62,54 +62,60 @@ static void _add_set_backlog (client_t *c, const char *key, const char *val)
     kv->key = xstrdup (key);
     kv->val = xstrdup (val);
 
-    if (c->set_backlog_last)
-        c->set_backlog_last->next = kv;
-    else
-        c->set_backlog = kv;
-    c->set_backlog_last = kv;
+    kv->next = c->set_backlog;
+    if (kv->next)
+        kv->next->prev = kv;
+    c->set_backlog = kv;
 }
 
 static void _flush_set_backlog (client_t *c)
 {
-    kv_t *kp, *deleteme;
+    kv_t *kp;
     redisReply *rep;
+    int replycount = 0;
 
-    for (kp = c->set_backlog; kp != NULL; kp = kp->next) {
-        redisAppendCommand (ctx->rctx, "SET %s %s", kp->key, kp->val);
+    for (kp = c->set_backlog; kp != NULL; kp = kp->next)
+        if (kp->next == NULL)
+            break;
+    while (kp) {
+        if (redisAppendCommand (ctx->rctx, "SET %s %s",
+                                            kp->key, kp->val) == REDIS_ERR) {
+            c->errcount++; /* FIXME: report error from ctx->rctx? */
+        } else {
+            replycount++;
+        }
         c->putcount++;
+        kp = kp->prev;
     }
-    for (kp = c->set_backlog; kp != NULL; ) {
+    while (replycount-- > 0) {
         if (redisGetReply (ctx->rctx, (void **)&rep) == REDIS_ERR) {
             c->errcount++;
-            goto next;
+        } else {
+            switch (rep->type) {
+                case REDIS_REPLY_STATUS:
+                    /* success */
+                    break;
+                case REDIS_REPLY_ERROR:
+                    c->errcount++;
+                    break;
+                case REDIS_REPLY_INTEGER:
+                case REDIS_REPLY_NIL:
+                case REDIS_REPLY_STRING:
+                case REDIS_REPLY_ARRAY:
+                    fprintf (stderr, "redisCommand: unexpected reply type\n");
+                    c->errcount++;
+                    break;
+            }
+            freeReplyObject (rep);
         }
-        switch (rep->type) {
-            case REDIS_REPLY_STATUS:
-                /* success */
-                //fprintf (stderr, "redis put: %s\n", rep->str);
-                break;
-            case REDIS_REPLY_ERROR:
-                c->errcount++;
-                //fprintf (stderr, "redis put: %s\n", rep->str);
-                break;
-            case REDIS_REPLY_INTEGER:
-            case REDIS_REPLY_NIL:
-            case REDIS_REPLY_STRING:
-            case REDIS_REPLY_ARRAY:
-                fprintf (stderr, "redisCommand: unexpected reply type\n");
-                c->errcount++;
-                break;
-        }
-        freeReplyObject (rep);
-next:
-        deleteme = kp;
-        kp = kp->next; 
-        free (deleteme->key);
-        free (deleteme->val);
-        free (deleteme);
     }
-    c->set_backlog = NULL;
-    c->set_backlog_last = NULL;
+    while (c->set_backlog) {
+        kp = c->set_backlog;
+        c->set_backlog = kp->next;
+        free (kp->key);
+        free (kp->val);
+        free (kp);
+    }
 }
 
 static client_t *_client_create (const char *identity)
