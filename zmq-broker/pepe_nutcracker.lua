@@ -25,7 +25,7 @@ function make_nutcracker_yml (hl)
 		 "  hash_tag: \"{}\"\n" ..
 		 "  distribution: ketama\n" ..
 		 "  auto_eject_hosts: false\n" ..
-		 "  timeout: 400\n" ..
+		 "  backlog: 128\n" ..
 		 "  redis: true\n" ..
 		 "  preconnect: true\n" ..
 		 "  servers:\n"
