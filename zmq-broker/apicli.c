@@ -638,9 +638,9 @@ int cmb_kvs_commit (cmb_t c, int *ep, int *pp)
         goto error;
     json_object_put (o);
     o = NULL;
-    if (*ep)
+    if (ep)
         *ep = errcount;
-    if (*pp)
+    if (pp)
         *pp = putcount;
     return 0;
 nomem:
