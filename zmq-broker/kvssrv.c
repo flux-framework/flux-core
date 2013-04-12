@@ -406,6 +406,7 @@ void kvssrv_init (conf_t *conf, void *zctx)
     ctx->conf = conf;
 
     ctx->zs_in = _zmq_socket (zctx, ZMQ_SUB);
+    _zmq_sethwm (ctx->zs_in, 10000); /* default is 1000 */
     _zmq_connect (ctx->zs_in, conf->plout_uri);
     _zmq_subscribe (ctx->zs_in, "kvs.");
 

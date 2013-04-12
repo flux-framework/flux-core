@@ -101,6 +101,20 @@ void _zmq_unsubscribe (void *sock, char *tag)
     }
 }
 
+void _zmq_sethwm (void *sock, int hwm)
+{
+    if (zmq_setsockopt (sock, ZMQ_RCVHWM, &hwm, sizeof(hwm)) < 0) {
+        fprintf (stderr, "zmq_setsockopt ZMQ_RCVHWM: %s\n",
+                 zmq_strerror (errno));
+        exit (1);
+    }
+    if (zmq_setsockopt (sock, ZMQ_SNDHWM, &hwm, sizeof(hwm)) < 0) {
+        fprintf (stderr, "zmq_setsockopt ZMQ_SNDHWM: %s\n",
+                 zmq_strerror (errno));
+        exit (1);
+    }
+}
+
 void _zmq_mcast_loop (void *sock, bool enable)
 {
 #ifdef ZMQ_MCAST_LOOP

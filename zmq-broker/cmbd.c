@@ -160,6 +160,7 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
         _zmq_bind (srv->zs_treein, conf->treein_uri);
     }
     srv->zs_plout = _zmq_socket (srv->zctx, ZMQ_PUB);
+    _zmq_sethwm (srv->zs_plout, 10000); /* default is 1000 */
     _zmq_bind (srv->zs_plout, conf->plout_uri);
     srv->zs_plout_event = _zmq_socket (srv->zctx, ZMQ_PUB);
     _zmq_bind (srv->zs_plout_event, conf->plout_event_uri);
