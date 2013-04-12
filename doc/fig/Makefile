@@ -52,3 +52,8 @@ WRAP_newJobFunction.ps: ../wrap_thrust/fig/WRAP_newJobFunction.pdf
 
 %.ps: %.pdf
 	pdf2ps $< $@
+
+ketama: zmq-broker-keys.dat
+	R -q -e "x <- read.csv('$<', header = F, comment.char = \"#\"); summary(x); sd(x[ , 1])"
+modula: zmq-broker-modula.dat
+	R -q -e "x <- read.csv('$<', header = F, comment.char = \"#\"); summary(x); sd(x[ , 1])"

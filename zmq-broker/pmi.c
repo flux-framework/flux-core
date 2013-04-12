@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <errno.h>
 
 #include "cmb.h"
@@ -22,6 +23,8 @@
 #define PMI_MAX_KEYLEN 64
 #define PMI_MAX_VALLEN 1024
 #define PMI_MAX_KVSNAMELEN 64
+
+#define FORCE_HASH 0
 
 
 typedef struct {
@@ -45,6 +48,32 @@ static int _env_getint (char *name, int dflt)
     char *ev = getenv (name);
     return ev ? strtoul (ev, NULL, 10) : dflt;
 }
+
+#if FORCE_HASH
+static int _key_tostore (const char *key, char **kp)
+{
+    const char *p;
+    int n;
+
+    p = key;
+    while (*p && !isdigit (*p))
+        p++;
+    if (p) {
+        n = strtoul (p, NULL, 10);
+        if (asprintf (kp, "%s:{%d}%s", ctx->kvsname, n, key) < 0)
+            return -1;
+    } else {
+        if (asprintf (kp, "%s:%s", ctx->kvsname, key) < 0)
+            return -1;
+    }
+    return 0;
+}
+#else
+static int _key_tostore (const char *key, char **kp)
+{
+    return asprintf (kp, "%s:%s", ctx->kvsname, key);
+}
+#endif
 
 int PMI_Init( int *spawned )
 {
@@ -256,7 +285,7 @@ int PMI_KVS_Put( const char kvsname[], const char key[], const char value[])
     if (kvsname == NULL || key == NULL || value == NULL)
         return PMI_ERR_INVALID_ARG;
 
-    if (asprintf (&xkey, "%s:%s", ctx->kvsname, key) < 0)
+    if (_key_tostore (key, &xkey) < 0)
         return PMI_ERR_NOMEM;
 
     if (cmb_kvs_put (ctx->cctx, xkey, value) < 0)
@@ -300,8 +329,9 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
     if (kvsname == NULL || key == NULL || value == NULL)
         return PMI_ERR_INVALID_ARG;
 
-    if (asprintf (&xkey, "%s:%s", ctx->kvsname, key) < 0)
+    if (_key_tostore (key, &xkey) < 0)
         return PMI_ERR_NOMEM;
+
     val = cmb_kvs_get (ctx->cctx, xkey);
     if (!val && errno == 0) {
         free (xkey);
