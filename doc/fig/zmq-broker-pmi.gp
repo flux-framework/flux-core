@@ -11,7 +11,7 @@ set ylabel "run time - seconds"
 set y2label "M ops"
 set y2tics 
 plot \
- "zmq-broker-pmi.dat" using 1:2 title 'zmq-broker barrier' with linespoints lw 3, \
- "zmq-broker-pmi.dat" using 1:3 title 'slurm PMI' with linespoints lw 3, \
- "zmq-broker-pmi.dat" using 1:4 title 'zmq-broker PMI' with linespoints lw 3, \
+ "zmq-broker-pmi.dat" using 1:2 title 'slurm PMI' with linespoints lw 3, \
+ "zmq-broker-pmi.dat" using 1:3 title 'zmq-broker PMI, single redis' with linespoints lw 3, \
+ "zmq-broker-pmi.dat" using 1:4 title 'zmq-broker PMI, twemproxy' with linespoints lw 3, \
  "zmq-broker-pmi.dat" using 1:($5/1000000) title 'KVS ops' with linespoints lw 3 axes x1y2

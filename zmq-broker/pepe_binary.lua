@@ -17,7 +17,7 @@ local eventuri = "epgm://eth0;239.192.1.1:5555"
 local treeinuri = "tcp://*:5556"
 local redisserver = h[1]
 
-function k_nomial_parent (n, k)
+function k_ary_parent (n, k)
     local p = (n - 1)/k
     return (p - p%1)
 end
@@ -30,7 +30,7 @@ if pepe.rank == 0 then
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h)
 else
-   local parent_rank = k_nomial_parent (pepe.rank, 3)
+   local parent_rank = k_ary_parent (pepe.rank, 2)
    local treeouturi = "tcp://" ..  h[parent_rank + 1] .. ":5556"
    pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
 		.. " --tree-in-uri='" .. treeinuri .. "'"
