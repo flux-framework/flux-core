@@ -3,6 +3,7 @@
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <zmq.h>
+#include <czmq.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -15,173 +16,32 @@
 
 #include "zmq.h"
 #include "util.h"
+#include "log.h"
+#include "cmb.h"
+
+#ifndef ZMQ_DONTWAIT
+#   define ZMQ_DONTWAIT   ZMQ_NOBLOCK
+#endif
+#ifndef ZMQ_RCVHWM
+#   define ZMQ_RCVHWM     ZMQ_HWM
+#endif
+#ifndef ZMQ_SNDHWM
+#   define ZMQ_SNDHWM     ZMQ_HWM
+#endif
+#if ZMQ_VERSION_MAJOR == 2
+#   define more_t int64_t
+#   define zmq_ctx_destroy(context) zmq_term(context)
+#   define zmq_msg_send(msg,sock,opt) zmq_send (sock, msg, opt)
+#   define zmq_msg_recv(msg,sock,opt) zmq_recv (sock, msg, opt)
+#   define ZMQ_POLL_MSEC    1000        //  zmq_poll is usec
+#elif ZMQ_VERSION_MAJOR == 3
+#   define more_t int
+#   define ZMQ_POLL_MSEC    1           //  zmq_poll is msec
+#endif
 
 /**
  ** zmq wrappers
  **/
-
-void _zmq_close (void *socket)
-{
-    if (zmq_close (socket) < 0) {
-        fprintf (stderr, "zmq_close: %s\n", zmq_strerror (errno));
-        exit (1);
-    }
-}
-
-void _zmq_ctx_destroy (void *ctx)
-{
-    if (zmq_ctx_destroy (ctx) < 0) {
-        fprintf (stderr, "zmq_term: %s\n", zmq_strerror (errno));
-        exit (1);
-    }
-}
-
-void *_zmq_init (int nthreads)
-{
-    void *ctx;
-
-    if (!(ctx = zmq_init (nthreads))) {
-        fprintf (stderr, "zmq_init: %s\n", zmq_strerror (errno));
-        exit (1);
-    }
-    return ctx;
-}
-
-void *_zmq_socket (void *ctx, int type)
-{
-    void *sock;
-
-    if (!(sock = zmq_socket (ctx, type))) {
-        fprintf (stderr, "zmq_socket(%d): %s\n", type, zmq_strerror (errno));
-        exit (1);
-    }
-    return sock;
-}
-
-void _zmq_bind (void *sock, const char *endpoint)
-{
-    if (zmq_bind (sock, endpoint) < 0) {
-        fprintf (stderr, "zmq_bind %s: %s\n", endpoint, zmq_strerror (errno));
-        exit (1);
-    }
-}
-
-void _zmq_connect (void *sock, const char *endpoint)
-{
-    if (zmq_connect (sock, endpoint) < 0) {
-        fprintf (stderr, "zmq_connect %s: %s\n", endpoint, zmq_strerror(errno));
-        exit (1);
-    }
-}
-
-void _zmq_subscribe_all (void *sock)
-{
-    if (zmq_setsockopt (sock, ZMQ_SUBSCRIBE, NULL, 0) < 0) {
-        fprintf (stderr, "zmq_setsockopt ZMQ_SUBSCRIBE: %s\n",
-                 zmq_strerror (errno));
-        exit (1);
-    }
-}
-
-void _zmq_subscribe (void *sock, char *tag)
-{
-    if (zmq_setsockopt (sock, ZMQ_SUBSCRIBE, tag, tag ? strlen (tag) : 0) < 0) {
-        fprintf (stderr, "zmq_setsockopt ZMQ_SUBSCRIBE: %s\n",
-                 zmq_strerror (errno));
-        exit (1);
-    }
-}
-
-void _zmq_unsubscribe (void *sock, char *tag)
-{
-    if (zmq_setsockopt (sock, ZMQ_UNSUBSCRIBE, tag, strlen (tag)) < 0) {
-        fprintf (stderr, "zmq_setsockopt ZMQ_UNSUBSCRIBE: %s\n",
-                 zmq_strerror (errno));
-        exit (1);
-    }
-}
-
-void _zmq_sethwm (void *sock, int hwm)
-{
-    if (zmq_setsockopt (sock, ZMQ_RCVHWM, &hwm, sizeof(hwm)) < 0) {
-        fprintf (stderr, "zmq_setsockopt ZMQ_RCVHWM: %s\n",
-                 zmq_strerror (errno));
-        exit (1);
-    }
-    if (zmq_setsockopt (sock, ZMQ_SNDHWM, &hwm, sizeof(hwm)) < 0) {
-        fprintf (stderr, "zmq_setsockopt ZMQ_SNDHWM: %s\n",
-                 zmq_strerror (errno));
-        exit (1);
-    }
-}
-
-void _zmq_mcast_loop (void *sock, bool enable)
-{
-#ifdef ZMQ_MCAST_LOOP
-    uint64_t val = enable ? 1 : 0;
-
-    if (zmq_setsockopt (sock, ZMQ_MCAST_LOOP, &val, sizeof (val)) < 0) {
-        fprintf (stderr, "zmq_setsockopt ZMQ_MCAST_LOOP: %s\n",
-                zmq_strerror (errno));
-        exit (1);
-    }
-#else
-    fprintf (stderr, "_zmq_mcast_loop: warning: function not implemented\n");
-#endif
-}
-
-void _zmq_msg_init_size (zmq_msg_t *msg, size_t size)
-{
-    if (zmq_msg_init_size (msg, size) < 0) {
-        fprintf (stderr, "zmq_msg_init_size: %s\n", zmq_strerror (errno));
-        exit (1);
-    }
-}
-
-void _zmq_msg_init (zmq_msg_t *msg)
-{
-    if (zmq_msg_init (msg) < 0) {
-        fprintf (stderr, "zmq_msg_init: %s\n", zmq_strerror (errno));
-        exit (1);
-    }
-}
-
-void _zmq_msg_close (zmq_msg_t *msg)
-{
-    if (zmq_msg_close (msg) < 0) {
-        fprintf (stderr, "zmq_msg_close: %s\n", zmq_strerror (errno));
-        exit (1);
-    }
-}
-
-void _zmq_msg_send (zmq_msg_t *msg, void *socket, int flags)
-{
-    if (zmq_msg_send (msg, socket, flags) < 0) {
-        fprintf (stderr, "zmq_msg_send: %s\n", zmq_strerror (errno));
-        exit (1);
-    }
-}
-
-int _zmq_msg_recv (zmq_msg_t *msg, void *socket, int flags)
-{
-    int rc;
-
-    rc = zmq_msg_recv (msg, socket, flags);
-    if (rc < 0 && errno != EAGAIN) {
-        fprintf (stderr, "zmq_msg_recv: %s\n", zmq_strerror (errno));
-        exit (1);
-    }
-    return rc;
-}
-
-void _zmq_getsockopt (void *socket, int option_name, void *option_value,
-                      size_t *option_len)
-{
-    if (zmq_getsockopt (socket, option_name, option_value, option_len) < 0) {
-        fprintf (stderr, "zmq_getsockopt: %s\n", zmq_strerror (errno));
-        exit (1);
-    }
-}
 
 int _zmq_poll (zmq_pollitem_t *items, int nitems, long timeout)
 {
@@ -194,309 +54,278 @@ int _zmq_poll (zmq_pollitem_t *items, int nitems, long timeout)
     return rc;
 }
 
-bool _zmq_rcvmore (void *socket)
+zmsg_t *zmsg_recv_fd (int fd, int flags)
 {
-    more_t more;
-    size_t more_size = sizeof (more);
+    char *buf;
+    int n;
+    zmsg_t *msg;
 
-    _zmq_getsockopt (socket, ZMQ_RCVMORE, &more, &more_size);
-
-    return (bool)more;
-}
-
-void _zmq_msg_dup (zmq_msg_t *dest, zmq_msg_t *src)
-{
-    _zmq_msg_init_size (dest, zmq_msg_size (src));
-    memcpy (zmq_msg_data (dest), zmq_msg_data (src), zmq_msg_size (dest));
-}
-
-static char *_msg2str (zmq_msg_t *msg)
-{
-    int len = zmq_msg_size (msg);
-    char *s = xzmalloc (len + 1);
-
-    memcpy (s, zmq_msg_data (msg), len);
-    s[len] = '\0';
-
-    return s;
-}
-
-/**
- ** mpart messages
- **/
-
-void _zmq_mpart_init (zmq_mpart_t *msg)
-{
-    int i;
-
-    for (i = 0; i < ZMQ_MPART_MAX; i++)
-        _zmq_msg_init (&msg->part[i]);
-}
-
-void _zmq_mpart_close (zmq_mpart_t *msg)
-{
-    int i;
-    
-    for (i = 0; i < ZMQ_MPART_MAX; i++)
-        _zmq_msg_close (&msg->part[i]);
-}
-
-/* return 0 on success, -1 on non-fatal error */
-int _zmq_mpart_recv (zmq_mpart_t *msg, void *socket, int flags)
-{
-    int i = 0;
-
-    for (i = 0; i < ZMQ_MPART_MAX; i++) {
-        if (i > 0 && !_zmq_rcvmore (socket)) {
-            /* N.B. seen on epgm socket when sender restarted */
-            fprintf (stderr, "_zmq_mpart_recv: only got %d message parts\n", i);
-            goto eproto;
-        }
-        if (_zmq_msg_recv (&msg->part[i], socket, flags) < 0)
-            goto error; 
+    buf = xzmalloc (CMB_API_BUFSIZE);
+    n = recv (fd, buf, CMB_API_BUFSIZE, flags);
+    if (n < 0)
+        goto error;
+    if (n == 0) {
+        errno = EPROTO;
+        goto error;
     }
-    if (_zmq_rcvmore (socket)) {
-        fprintf (stderr, "_zmq_mpart_recv: too many message parts\n");
-        goto eproto;
-    }
-    return 0;
-eproto:
-    errno = EPROTO;
+    msg = zmsg_decode ((byte *)buf, n);
+    free (buf);
+    return msg;
 error:
+    free (buf);
+    return NULL;
+}
+
+int zmsg_send_fd (int fd, zmsg_t **msg)
+{
+    char *buf = NULL;
+    int len;
+
+    len = zmsg_encode (*msg, (byte **)&buf);
+    if (len < 0) {
+        errno = EPROTO;
+        goto error;
+    }
+    if (send (fd, buf, len, 0) < len)
+        goto error;
+    free (buf);
+    zmsg_destroy (msg);
+    return 0;
+error:
+    if (buf)
+        free (buf);
     return -1;
 }
 
-void _zmq_mpart_send (zmq_mpart_t *msg, void *socket, int flags)
-{
-    int i;
-
-    assert (!(flags & ZMQ_DONTWAIT)); /* FIXME: EAGAIN should not be fatal */
-
-    for (i = 0; i < ZMQ_MPART_MAX; i++)
-        if (i < ZMQ_MPART_MAX - 1)
-            _zmq_msg_send (&msg->part[i], socket, flags | ZMQ_SNDMORE);
-        else
-            _zmq_msg_send (&msg->part[i], socket, flags);
-}
-
-void _zmq_mpart_dup (zmq_mpart_t *dest, zmq_mpart_t *src)
-{
-    int i;
-
-    for (i = 0; i < ZMQ_MPART_MAX; i++)
-        _zmq_msg_dup (&dest->part[i], &src->part[i]);
-}
-
-size_t _zmq_mpart_size (zmq_mpart_t *msg)
-{
-    int i;
-    size_t size = 0;
-
-    for (i = 0; i < ZMQ_MPART_MAX; i++)
-        size += zmq_msg_size (&msg->part[i]);
-    return size;
-}
 
 /**
  ** cmb messages
  **/
 
-int cmb_msg_recv (void *socket, char **tagp, json_object **op,
-                    void **datap, int *lenp, int flags)
+
+static int _msg_decode (zmsg_t *msg, char **tagp, json_object **op,
+                    void **datap, int *lenp)
 {
-    zmq_mpart_t msg;
-    char *tag = NULL;
-    json_object *o = NULL;
-    void *data = NULL;
-    int len = 0;
+    zframe_t *tag = zmsg_first (msg);
+    zframe_t *json = zmsg_next (msg);
+    zframe_t *data = zmsg_next (msg);
 
-    _zmq_mpart_init (&msg);
-    if (_zmq_mpart_recv (&msg, socket, flags) < 0)
-        goto error;
-
-    /* tag */
-    if (tagp) {
-        tag = _msg2str (&msg.part[0]);
-    } 
-
-    /* json */
-    if (op && zmq_msg_size (&msg.part[1]) > 0) {
-        char *json = _msg2str (&msg.part[1]);
-
-        o = json_tokener_parse (json);
-        free (json);
-        if (!o)
-            goto eproto;
-    }
-
-    /* data */
-    if (datap && lenp && zmq_msg_size (&msg.part[2]) > 0) {
-        len = zmq_msg_size (&msg.part[2]);
-        data = xzmalloc (len);
-    }
-
-    _zmq_mpart_close (&msg);
-
+    if (!tag)
+        goto eproto;
     if (tagp)
-        *tagp = tag;
-    if (op)
-        *op = o;
+        *tagp = zframe_strdup (tag);
+    if (op) {
+        char *tmp = json ? zframe_strdup (json) : NULL;
+
+        if (tmp) {
+            *op = json_tokener_parse (tmp);
+            free (tmp);
+        } else
+            *op = NULL;
+    }
     if (datap && lenp) {
-        *datap = data;
-        *lenp = len;
+        if (data) {
+            *lenp = zframe_size (data);
+            *datap = xzmalloc (zframe_size (data));
+            memcpy (*datap, zframe_data (data), zframe_size (data));
+        } else {
+            *lenp = 0;
+            *datap = NULL;
+        }
     }
     return 0;
 eproto:
     errno = EPROTO;
-error:
-    _zmq_mpart_close (&msg);
-    if (tag)
-        free (tag);
-    if (o)
-        json_object_put (o);
-    if (data)
-        free (data);
     return -1;
 }
 
-void cmb_msg_send (void *sock, json_object *o, void *data, int len,
-                   int flags, const char *fmt, ...)
+int cmb_msg_recv (void *socket, char **tagp, json_object **op,
+                    void **datap, int *lenp, int flags)
+{
+    zmsg_t *msg = NULL;
+
+    /* FIXME: check flags for ZMQ_DONTWAIT first */
+    if (!zsocket_poll (socket, -1)) {
+        errno = EAGAIN; 
+        goto error;
+    }
+    if (!(msg = zmsg_recv (socket)))
+        goto error;
+    if (_msg_decode (msg, tagp, op, datap, lenp) < 0)
+        goto error;
+    zmsg_destroy (&msg);
+    return 0;
+error:
+    if (msg)
+        zmsg_destroy (&msg);
+    return -1;
+}
+
+int cmb_msg_recv_fd (int fd, char **tagp, json_object **op,
+                     void **datap, int *lenp, int flags)
+{
+    zmsg_t *msg;
+
+    msg = zmsg_recv_fd (fd, flags);
+    if (!msg)
+        goto error;
+    if (_msg_decode (msg, tagp, op, datap, lenp) < 0)
+        goto error;
+    zmsg_destroy (&msg);
+    return 0;
+
+error:
+    if (msg)
+        zmsg_destroy (&msg);
+    return -1;
+}
+
+static zmsg_t *_msg_encode (char *tag, json_object *o, void *data, int len)
+{
+    zmsg_t *msg = NULL;
+
+    if (!(msg = zmsg_new ()))
+        err_exit ("zmsg_new");
+    if (zmsg_addstr (msg, "%s", tag) < 0)
+        err_exit ("zmsg_addstr");
+    if (o) {
+        if (zmsg_addstr (msg, "%s", json_object_to_json_string (o)) < 0)
+            err_exit ("zmsg_addstr");
+    }
+    if (len > 0 && data != NULL) {
+        assert (o != NULL);
+        if (zmsg_addmem (msg, data, len) < 0)
+            err_exit ("zmsg_addmem");
+    }
+    return msg;
+}
+
+void cmb_msg_send_long (void *sock, json_object *o, void *data, int len,
+                        const char *fmt, ...)
 {
     va_list ap;
-    zmq_mpart_t msg;
+    zmsg_t *msg;
+    char *tag;
+    int n;
 
-    _zmq_mpart_init (&msg);
+    va_start (ap, fmt);
+    n = vasprintf (&tag, fmt, ap);
+    va_end (ap);
+    if (n < 0)
+        err_exit ("vasprintf");
+   
+    msg = _msg_encode (tag, o, data, len);
+    free (tag);
+    if (zmsg_send (&msg, sock) < 0)
+        err_exit ("zmsg_send");
+}
 
-    /* tag */
-    if (true) {
-        char *tag;
-        int n;
+void cmb_msg_send (void *sock, const char *fmt, ...)
+{
+    va_list ap;
+    zmsg_t *msg;
+    char *tag;
+    int n;
 
-        va_start (ap, fmt);
-        n = vasprintf (&tag, fmt, ap);
-        va_end (ap);
-        if (n < 0) {
-            fprintf (stderr, "vasprintf: %s\n", strerror (errno));
-            exit (1);
-        }
-        _zmq_msg_init_size (&msg.part[0], strlen (tag));
-        memcpy (zmq_msg_data (&msg.part[0]), tag, strlen (tag));
+    va_start (ap, fmt);
+    n = vasprintf (&tag, fmt, ap);
+    va_end (ap);
+    if (n < 0)
+        err_exit ("vasprintf");
+   
+    msg = _msg_encode (tag, NULL, NULL, 0);
+    free (tag);
+    if (zmsg_send (&msg, sock) < 0)
+        err_exit ("zmsg_send");
+}
+
+int cmb_msg_send_long_fd (int fd, json_object *o, void *data, int len,
+                          const char *fmt, ...)
+{
+    va_list ap;
+    zmsg_t *msg = NULL;
+    char *tag = NULL;
+    int n;
+
+    va_start (ap, fmt);
+    n = vasprintf (&tag, fmt, ap);
+    va_end (ap);
+    if (n < 0)
+        err_exit ("vasprintf");
+
+    msg = _msg_encode (tag, o, data, len);
+    if (zmsg_send_fd (fd, &msg) < 0) /* destroys msg on succes */
+        goto error;
+    free (tag);
+    return 0;
+error:
+    if (msg)
+        zmsg_destroy (&msg);
+    if (tag)
         free (tag);
-    }
-
-    /* json */
-    if (o) {
-        const char *json = json_object_to_json_string (o);
-        int jlen = strlen (json);
-
-        _zmq_msg_init_size (&msg.part[1], jlen);
-        memcpy (zmq_msg_data (&msg.part[1]), json, jlen);
-    }
-
-    /* data */
-    if (data && len > 0) {
-        _zmq_msg_init_size (&msg.part[2], len);
-        memcpy (zmq_msg_data (&msg.part[2]), data, len);
-    }
-
-    _zmq_mpart_send (&msg, sock, flags);
+    return -1; 
 }
 
-void cmb_msg_dump (char *s, zmq_mpart_t *msg)
+int cmb_msg_send_fd (int fd, const char *fmt, ...)
 {
-    if (zmq_msg_size (&msg->part[0]) > 0)
-        fprintf (stderr, "%s: %.*s\n", s, (int)zmq_msg_size (&msg->part[0]),
-                                       (char *)zmq_msg_data (&msg->part[0]));
-    if (zmq_msg_size (&msg->part[1]) > 0)
-        fprintf (stderr, "    %.*s\n",    (int)zmq_msg_size (&msg->part[1]),
-                                       (char *)zmq_msg_data (&msg->part[1]));
-    if (zmq_msg_size (&msg->part[2]) > 0)
-        fprintf (stderr, "    data[%d]\n",(int)zmq_msg_size (&msg->part[2]));
+    va_list ap;
+    zmsg_t *msg = NULL;
+    char *tag = NULL;
+    int n;
+
+    va_start (ap, fmt);
+    n = vasprintf (&tag, fmt, ap);
+    va_end (ap);
+    if (n < 0)
+        err_exit ("vasprintf");
+   
+    msg = _msg_encode (tag, NULL, NULL, 0);
+    if (zmsg_send_fd (fd, &msg) < 0) /* destroys msg on succes */
+        goto error;
+    free (tag);
+    return 0;
+error:
+    if (msg)
+        zmsg_destroy (&msg);
+    if (tag)
+        free (tag);
+    return -1;
 }
 
-bool cmb_msg_match (zmq_mpart_t *msg, char *tag, bool exact)
+
+bool cmb_msg_match (zmsg_t *msg, const char *tag, bool exact)
 {
-    bool match = false;
+    bool match;
+    zframe_t *frame = zmsg_first (msg);
+    char *s;
 
-    if (zmq_msg_size (&msg->part[0]) > 0) {
-        int n = zmq_msg_size (&msg->part[0]);
-        int t = strlen (tag);
-
-        if (exact)
-            match = (t == n && !memcmp (zmq_msg_data (&msg->part[0]), tag, t));
-        else
-            match = (t <= n && !memcmp (zmq_msg_data (&msg->part[0]), tag, t));
-    }
+    if (!frame)
+        msg_exit ("cmb_msg_match: nonexistent message part");
+    if (!(s = zframe_strdup (frame)))
+        oom ();
+    if (exact)
+        match = (strcmp (tag, s) == 0);
+    else
+        match = (strncmp (tag, s, strlen (tag)) == 0);
+    free (s);
     return match;
 }
 
-/* convert to tag\0json\0data format for socket xfer */
-int cmb_msg_tobuf (zmq_mpart_t *msg, char *buf, int len)
+int cmb_msg_datacpy (zmsg_t *msg, char *buf, int len)
 {
-    char *p = &buf[0];
+    zframe_t *data;
 
-    if (_zmq_mpart_size (msg) + 2 > len) {
-        errno = EPROTO;
+    if (zmsg_size (msg) != 3)
         return -1;
-    }
-
-    /* tag */
-    memcpy (p, zmq_msg_data (&msg->part[0]), zmq_msg_size (&msg->part[0]));
-    p += zmq_msg_size (&msg->part[0]);
-    *p++ = '\0';
-
-    /* json */
-    memcpy (p, zmq_msg_data (&msg->part[1]), zmq_msg_size (&msg->part[1]));
-    p += zmq_msg_size (&msg->part[1]);
-    *p++ = '\0';
-
-    /* data */
-    memcpy (p, zmq_msg_data (&msg->part[2]), zmq_msg_size (&msg->part[2]));
-    p += zmq_msg_size (&msg->part[2]);
-
-    return p - buf;
-}
-
-/* convert to tag\0json\0data format for socket xfer */
-void cmb_msg_frombuf (zmq_mpart_t *msg, char *buf, int len)
-{
-    char *p, *q;
-
-    /* tag */
-    for (p = q = buf; q - buf < len; q++)
-        if (*q == '\0')
-            break;
-    assert (p <= q);
-    _zmq_msg_init_size (&msg->part[0], q - p);
-    memcpy (zmq_msg_data (&msg->part[0]), p, q - p);
-
-    /* json */
-    for (p = q = q + 1; q - buf < len; q++)
-        if (*q == '\0')
-            break;
-    assert (p <= q);
-    _zmq_msg_init_size (&msg->part[1], q - p);
-    memcpy (zmq_msg_data (&msg->part[1]), p, q - p);
-
-    /* data */
-    p = q + 1;
-    q = buf + len;
-    if (p < q) {
-        _zmq_msg_init_size (&msg->part[2], q - p);
-        memcpy (zmq_msg_data (&msg->part[2]), p, q - p);
-    }
-}
-
-int cmb_msg_datacpy (zmq_mpart_t *msg, char *buf, int len)
-{
-    int n = zmq_msg_size (&msg->part[2]);
-
-    if (n > len) {
+    data = zmsg_last (msg);
+    if (!data)
+        return -1;
+    if (zframe_size (data) > len) {
         fprintf (stderr, "cmb_msg_getdata: received message is too big\n");
         return -1;
     }
-    memcpy (buf, zmq_msg_data (&msg->part[2]), n);
-    return n;
+    memcpy (buf, zframe_data (data), zframe_size (data));
+    return zframe_size (data);
 }
 
 /*
