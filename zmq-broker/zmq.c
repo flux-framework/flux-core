@@ -144,10 +144,9 @@ int cmb_msg_recv (void *socket, char **tagp, json_object **op,
 {
     zmsg_t *msg = NULL;
 
-    /* FIXME: check flags for ZMQ_DONTWAIT first */
-    if (!zsocket_poll (socket, -1)) {
+    if ((flags & ZMQ_DONTWAIT) && !zsocket_poll (socket, 0)) {
         errno = EAGAIN; 
-        goto error;
+        return -1;
     }
     if (!(msg = zmsg_recv (socket)))
         goto error;

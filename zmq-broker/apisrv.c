@@ -100,7 +100,7 @@ static int _sendfd (int fd, int fd_xfer, char *name)
     return sendmsg (fd, &msg, 0);
 }
 
-static cfd_t *_cfd_create (plugin_t *p, client_t *c, char *wname)
+static cfd_t *_cfd_create (plugin_ctx_t *p, client_t *c, char *wname)
 {
     cfd_t *cfd;
     int sv[2];
@@ -143,7 +143,7 @@ static cfd_t *_cfd_create (plugin_t *p, client_t *c, char *wname)
     return cfd;
 }
 
-static void _cfd_destroy (plugin_t *p, client_t *c, cfd_t *cfd)
+static void _cfd_destroy (plugin_ctx_t *p, client_t *c, cfd_t *cfd)
 {
     if (cfd->fd != -1)
         close (cfd->fd);
@@ -160,7 +160,7 @@ static void _cfd_destroy (plugin_t *p, client_t *c, cfd_t *cfd)
     free (cfd);
 }
 
-static int _cfd_count (plugin_t *p)
+static int _cfd_count (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
     client_t *c;
@@ -174,7 +174,7 @@ static int _cfd_count (plugin_t *p)
 }
 
 /* read from cfd->fd, send message to cfd->wname */
-static int _cfd_read (plugin_t *p, cfd_t *cfd)
+static int _cfd_read (plugin_ctx_t *p, cfd_t *cfd)
 {
     int n;
     json_object *o, *no;
@@ -216,7 +216,7 @@ static int _cfd_write (cfd_t *cfd, zmsg_t *msg)
     return 0;
 }
 
-static void _client_create (plugin_t *p, int fd)
+static void _client_create (plugin_ctx_t *p, int fd)
 {
     ctx_t *ctx = p->ctx;
     client_t *c;
@@ -231,7 +231,7 @@ static void _client_create (plugin_t *p, int fd)
     ctx->clients = c;
 }
 
-static void _client_destroy (plugin_t *p, client_t *c)
+static void _client_destroy (plugin_ctx_t *p, client_t *c)
 {
     ctx_t *ctx = p->ctx;
 
@@ -251,7 +251,7 @@ static void _client_destroy (plugin_t *p, client_t *c)
     free (c);
 }
 
-static int _client_count (plugin_t *p)
+static int _client_count (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
     client_t *c;
@@ -262,7 +262,7 @@ static int _client_count (plugin_t *p)
     return count;
 }
 
-static void _accept (plugin_t *p)
+static void _accept (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
     int fd;
@@ -275,7 +275,7 @@ static void _accept (plugin_t *p)
      _client_create (p, fd);
 }
 
-static int _client_read (plugin_t *p, client_t *c)
+static int _client_read (plugin_ctx_t *p, client_t *c)
 {
     const char *api_subscribe = "api.subscribe.";
     const char *api_xsubscribe = "api.xsubscribe.";
@@ -353,7 +353,7 @@ static int _client_read (plugin_t *p, client_t *c)
     return 0;
 }
 
-static void _readmsg (plugin_t *p, void *socket)
+static void _readmsg (plugin_ctx_t *p, void *socket)
 {
     ctx_t *ctx = p->ctx;
     zmsg_t *msg = NULL;
@@ -403,7 +403,7 @@ done:
         zmsg_destroy (&msg);
 }
 
-static void _poll (plugin_t *p)
+static void _poll_once (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
     client_t *c;
@@ -492,7 +492,7 @@ static void _poll (plugin_t *p)
     free (zpa);
 }
 
-static void _listener_init (plugin_t *p)
+static void _listener_init (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
     struct sockaddr_un addr;
@@ -527,7 +527,7 @@ static void _listener_init (plugin_t *p)
     ctx->listen_fd = fd;
 }
 
-static void _listener_fini (plugin_t *p)
+static void _listener_fini (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
 
@@ -537,9 +537,8 @@ static void _listener_fini (plugin_t *p)
     }
 }
 
-void *apisrv_poll (void *arg)
+static void _init (plugin_ctx_t *p)
 {
-    plugin_t *p = (plugin_t *)arg;
     ctx_t *ctx;
 
     p->ctx = ctx = xzmalloc (sizeof (ctx_t));
@@ -549,17 +548,29 @@ void *apisrv_poll (void *arg)
     zsocket_set_subscribe (p->zs_in_event, "");
 
     _listener_init (p);
-    for (;;)
-        _poll (p);
+}
+
+static void _fini (plugin_ctx_t *p)
+{
+    ctx_t *ctx = p->ctx;
+
     _listener_fini (p);
-
-
     while (ctx->clients != NULL)
         _client_destroy (p, ctx->clients);
     free (ctx);
-    
-    return NULL;
 }
+
+static void _poll (plugin_ctx_t *p)
+{
+    for (;;)
+        _poll_once (p);
+}
+
+struct plugin_struct apisrv = {
+    .initFn = _init,
+    .finiFn = _fini,
+    .pollFn = _poll,
+};
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

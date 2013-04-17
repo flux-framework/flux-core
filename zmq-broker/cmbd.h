@@ -2,11 +2,6 @@ typedef struct {
     char *treein_uri;
     char *treeout_uri;
     char *event_uri;
-    char *plout_uri;
-    char *plout_event_uri;
-    char *plin_uri;
-    char *plin_event_uri;
-    char *plin_tree_uri;
     bool verbose;
     int syncperiod_msec;
     char *redis_server;
@@ -15,16 +10,22 @@ typedef struct {
     int size;
 } conf_t;
 
-typedef void * (*plugin_poll_t)(void *arg);
+typedef struct plugin_struct *plugin_t;
 
-typedef struct plugin_struct {
+typedef struct {
     conf_t *conf;
     void *zs_in;
     void *zs_in_event;
     void *zs_out;
     void *zs_out_event;
     void *zs_out_tree;
-    pthread_t poll_thd;
-    plugin_poll_t poll_fun;
+    pthread_t t;
+    plugin_t plugin;
     void *ctx;
-} plugin_t;
+} plugin_ctx_t;
+
+struct plugin_struct {
+    void (*pollFn)(plugin_ctx_t *p);
+    void (*initFn)(plugin_ctx_t *p);
+    void (*finiFn)(plugin_ctx_t *p);
+};
