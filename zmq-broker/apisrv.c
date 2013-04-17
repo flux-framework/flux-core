@@ -28,9 +28,11 @@
 #include "zmq.h"
 #include "cmb.h"
 #include "cmbd.h"
-#include "apisrv.h"
+#include "plugin.h"
 #include "util.h"
 #include "log.h"
+
+#include "apisrv.h"
 
 #define LISTEN_BACKLOG      5
 
@@ -437,7 +439,7 @@ static void _poll_once (plugin_ctx_t *p)
     }
     assert (i == zpa_len);
 
-    _zmq_poll (zpa, zpa_len, -1);
+    zpoll (zpa, zpa_len, -1);
 
     /* client fds */
     for (i = 3, c = ctx->clients; c != NULL; c = c->next) {

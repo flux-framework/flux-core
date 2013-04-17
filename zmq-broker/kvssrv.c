@@ -16,14 +16,18 @@
 #include <sys/socket.h>
 #include <ctype.h>
 #include <zmq.h>
+#include <czmq.h>
 #include <json/json.h>
 #include <hiredis/hiredis.h>
 
 #include "zmq.h"
 #include "cmb.h"
 #include "cmbd.h"
-#include "kvssrv.h"
 #include "util.h"
+#include "log.h"
+#include "plugin.h"
+
+#include "kvssrv.h"
 
 typedef struct _kv_struct {
     char *key;
@@ -42,18 +46,10 @@ typedef struct _client_struct {
     kv_t *set_backlog;
 } client_t;
 
-typedef struct ctx_struct *ctx_t;
-
-struct ctx_struct {
-    void *zs_in;
-    void *zs_out;
-    pthread_t t;
-    conf_t *conf;
+typedef struct {
     redisContext *rctx;
     client_t *clients;
-};
-
-static ctx_t ctx = NULL;
+} ctx_t;
 
 static void _add_set_backlog (client_t *c, const char *key, const char *val)
 {
@@ -68,8 +64,9 @@ static void _add_set_backlog (client_t *c, const char *key, const char *val)
     c->set_backlog = kv;
 }
 
-static void _flush_set_backlog (client_t *c)
+static void _flush_set_backlog (plugin_ctx_t *p, client_t *c)
 {
+    ctx_t *ctx = p->ctx;
     kv_t *kp;
     redisReply *rep;
     int replycount = 0;
@@ -118,8 +115,9 @@ static void _flush_set_backlog (client_t *c)
     }
 }
 
-static client_t *_client_create (const char *identity)
+static client_t *_client_create (plugin_ctx_t *p, const char *identity)
 {
+    ctx_t *ctx = p->ctx;
     client_t *c;
 
     c = xzmalloc (sizeof (client_t));
@@ -132,16 +130,17 @@ static client_t *_client_create (const char *identity)
         c->next->prev = c;
     ctx->clients = c;
 
-    _zmq_subscribe (ctx->zs_in, c->subscription);
+    zsocket_set_subscribe (p->zs_in, c->subscription);
 
     return c;
 }
 
-static void _client_destroy (client_t *c)
+static void _client_destroy (plugin_ctx_t *p, client_t *c)
 {   
+    ctx_t *ctx = p->ctx;
     kv_t *kp, *deleteme;
 
-    _zmq_unsubscribe (ctx->zs_in, c->subscription);
+    zsocket_set_unsubscribe (p->zs_in, c->subscription);
 
     free (c->identity);
     free (c->subscription);
@@ -162,8 +161,9 @@ static void _client_destroy (client_t *c)
     free (c);
 }   
 
-static client_t *_client_find_byidentity (const char *identity)
+static client_t *_client_find_byidentity (plugin_ctx_t *p, const char *identity)
 {
+    ctx_t *ctx = p->ctx;
     client_t *c;
  
     for (c = ctx->clients; c != NULL; c = c->next) {
@@ -173,8 +173,9 @@ static client_t *_client_find_byidentity (const char *identity)
     return NULL;
 }
 
-static client_t *_client_find_bysubscription (const char *subscription)
+static client_t *_client_find_bysubscription (plugin_ctx_t *p, const char *subscription)
 {
+    ctx_t *ctx = p->ctx;
     client_t *c;
  
     for (c = ctx->clients; c != NULL; c = c->next) {
@@ -242,8 +243,9 @@ error:
     return -1;
 }
 
-static char *_redis_get (const char *key)
+static char *_redis_get (plugin_ctx_t *p, const char *key)
 {
+    ctx_t *ctx = p->ctx;
     redisReply *rep;
     char *val = NULL;
 
@@ -275,7 +277,7 @@ static char *_redis_get (const char *key)
     return val;
 }
 
-static void _reply_to_get (const char *sender, const char *val)
+static void _reply_to_get (plugin_ctx_t *p, const char *sender, const char *val)
 {
     json_object *o, *no;
 
@@ -286,11 +288,12 @@ static void _reply_to_get (const char *sender, const char *val)
             oom ();
         json_object_object_add (o, "val", no);
     }
-    cmb_msg_send (ctx->zs_out, o, NULL, 0, 0, "%s", sender);
+    cmb_msg_send_long (p->zs_out, o, NULL, 0, "%s", sender);
     json_object_put (o);
 }
 
-static void _reply_to_commit (const char *sender, int errcount, int putcount)
+static void _reply_to_commit (plugin_ctx_t *p, const char *sender,
+                              int errcount, int putcount)
 {
     json_object *o, *no;
 
@@ -303,143 +306,122 @@ static void _reply_to_commit (const char *sender, int errcount, int putcount)
         oom ();
     json_object_object_add (o, "putcount", no);
 
-    cmb_msg_send (ctx->zs_out, o, NULL, 0, 0, "%s", sender);
+    cmb_msg_send_long (p->zs_out, o, NULL, 0, "%s", sender);
 
     json_object_put (o);
 }
 
-static void *_thread (void *arg)
+static void _recv (plugin_ctx_t *p, zmsg_t *zmsg)
 {
-    bool shutdown = false;
-    char *tag;
-    json_object *o;
+    char *tag = NULL;
+    json_object *o = NULL;
 
-again:
-    ctx->rctx = redisConnect (ctx->conf->redis_server, 6379);
+    if (cmb_msg_decode (zmsg, &tag, &o, NULL, NULL) < 0) {
+        err ("kvssrv: recv");
+        goto done;
+    }
+
+    /* api.<uuid>.disconnect */
+    if (!strncmp (tag, "api.", strlen ("api."))) {
+        client_t *c = _client_find_bysubscription (p, tag);
+        if (c)
+            _client_destroy (p, c);
+
+    } else if (!strcmp (tag, "kvs.put")) {
+        const char *key, *val, *sender;
+        client_t *c;
+
+        if (_parse_kvs_put (o, &key, &val, &sender) < 0){
+            fprintf (stderr, "%s: parse error\n", tag);
+            goto done;
+        }
+        c = _client_find_byidentity (p, sender);
+        if (!c)
+            c = _client_create (p, sender);
+        _add_set_backlog (c, key, val);
+
+    } else if (!strcmp (tag, "kvs.get")) {
+        const char *key, *sender;
+        char *val;
+
+        if (_parse_kvs_get (o, &key, &sender) < 0){
+            fprintf (stderr, "%s: parse error\n", tag);
+            goto done;
+        }
+        val = _redis_get (p, key);
+        _reply_to_get (p, sender, val);
+        if (val)
+            free (val);
+    } else if (!strcmp (tag, "kvs.commit")) {
+        const char *sender;
+        client_t *c;
+
+        if (_parse_kvs_commit (o, &sender) < 0) {
+            fprintf (stderr, "%s: parse error\n", tag);
+            goto done;
+        }
+        c = _client_find_byidentity (p, sender);
+        if (c) {
+            _flush_set_backlog (p, c);
+            _reply_to_commit (p, sender, c->errcount, c->putcount);
+            c->putcount = 0;
+            c->errcount = 0;
+        } else
+            _reply_to_commit (p, sender, 0, 0);
+    }
+done:
+    free (tag);
+    if (o)
+        json_object_put (o);
+    if (zmsg)
+        zmsg_destroy (&zmsg);
+}
+
+
+static void _init (plugin_ctx_t *p)
+{
+    ctx_t *ctx = xzmalloc (sizeof (*ctx));
+
+    p->ctx = ctx;
+retryconnect:
+    ctx->rctx = redisConnect (p->conf->redis_server, 6379);
     if (ctx->rctx == NULL) {
-        fprintf (stderr, "redisConnect returned NULL - abort\n");
-        shutdown = true;
-    } else if (ctx->rctx->err == REDIS_ERR_IO && errno == ECONNREFUSED) {
-            redisFree (ctx->rctx);
-            sleep (2);
-            fprintf (stderr, "redisConnect: retrying connect");
-            goto again;
-    } else if (ctx->rctx->err) {
-        fprintf (stderr, "redisConnect: %s\n", ctx->rctx->errstr);
-        shutdown = true;
+        err ("redisConnect returned NULL - abort");
+        return;
+    }
+    if (ctx->rctx->err == REDIS_ERR_IO && errno == ECONNREFUSED) {
+        redisFree (ctx->rctx);
+        sleep (2);
+        err ("redisConnect: retrying connect");
+        goto retryconnect;
+    }
+    if (ctx->rctx->err) {
+        err ("redisConnect: %s", ctx->rctx->errstr);
         redisFree (ctx->rctx);
         ctx->rctx = NULL;
+        return;
     }
 
-    while (!shutdown) {
-        if (cmb_msg_recv (ctx->zs_in, &tag, &o, NULL, NULL, 0) < 0) {
-            fprintf (stderr, "cmb_msg_recv: %s\n", strerror (errno));
-            continue;
-        }
+    zsocket_set_subscribe (p->zs_in, "kvs.");
+}
 
-        /* api.<uuid>.disconnect */
-        if (!strncmp (tag, "api.", strlen ("api."))) {
-            client_t *c = _client_find_bysubscription (tag);
-            if (c)
-                _client_destroy (c);
-
-        } else if (!strcmp (tag, "kvs.put")) {
-            const char *key, *val, *sender;
-            client_t *c;
-
-            if (_parse_kvs_put (o, &key, &val, &sender) < 0){
-                fprintf (stderr, "%s: parse error\n", tag);
-                goto next;
-            }
-            c = _client_find_byidentity (sender);
-            if (!c)
-                c = _client_create (sender);
-            _add_set_backlog (c, key, val);
-
-        } else if (!strcmp (tag, "kvs.get")) {
-            const char *key, *sender;
-            char *val;
-
-            if (_parse_kvs_get (o, &key, &sender) < 0){
-                fprintf (stderr, "%s: parse error\n", tag);
-                goto next;
-            }
-            val = _redis_get (key);
-            _reply_to_get (sender, val);
-            if (val)
-                free (val);
-        } else if (!strcmp (tag, "kvs.commit")) {
-            const char *sender;
-            client_t *c;
-
-            if (_parse_kvs_commit (o, &sender) < 0) {
-                fprintf (stderr, "%s: parse error\n", tag);
-                goto next;
-            }
-            c = _client_find_byidentity (sender);
-            if (c) {
-                _flush_set_backlog (c);
-                _reply_to_commit (sender, c->errcount, c->putcount);
-                c->putcount = 0;
-                c->errcount = 0;
-            } else
-                _reply_to_commit (sender, 0, 0);
-        }
-next:
-        free (tag);
-        if (o)
-            json_object_put (o);
-    }
+static void _fini (plugin_ctx_t *p)
+{
+    ctx_t *ctx = p->ctx;
 
     if (ctx->rctx)
         redisFree (ctx->rctx);
-
-    return NULL;
-}
-
-
-void kvssrv_init (conf_t *conf, void *zctx)
-{
-    int err;
-
-    ctx = xzmalloc (sizeof (struct ctx_struct));
-    ctx->conf = conf;
-
-    ctx->zs_in = _zmq_socket (zctx, ZMQ_SUB);
-    _zmq_sethwm (ctx->zs_in, 10000); /* default is 1000 */
-    _zmq_connect (ctx->zs_in, conf->plout_uri);
-    _zmq_subscribe (ctx->zs_in, "kvs.");
-
-    ctx->zs_out = _zmq_socket (zctx, ZMQ_PUSH);
-    _zmq_connect (ctx->zs_out, conf->plin_uri);
-
-    err = pthread_create (&ctx->t, NULL, _thread, NULL);
-    if (err) {
-        fprintf (stderr, "%s: pthread_create: %s\n", __FUNCTION__,
-                 strerror (err));
-        exit (1);
-    }
-}
-
-void kvssrv_fini (void)
-{
-    int err;
-
-    err = pthread_join (ctx->t, NULL);
-    if (err) {
-        fprintf (stderr, "%s: pthread_join: %s\n", __FUNCTION__,
-                 strerror (err));
-        exit (1);
-    }
-    _zmq_close (ctx->zs_in);
-    _zmq_close (ctx->zs_out);
-
     while (ctx->clients != NULL)
-        _client_destroy (ctx->clients);
-
+        _client_destroy (p, ctx->clients);
     free (ctx);
-    ctx = NULL;
 }
+
+struct plugin_struct kvssrv = {
+    .initFn    = _init,
+    .recvFn    = _recv,
+    .finiFn    = _fini,
+};
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

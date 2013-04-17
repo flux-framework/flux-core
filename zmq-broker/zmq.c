@@ -43,15 +43,29 @@
  ** zmq wrappers
  **/
 
-int _zmq_poll (zmq_pollitem_t *items, int nitems, long timeout)
+int zpoll (zmq_pollitem_t *items, int nitems, long timeout)
 {
     int rc;
 
-    if ((rc = zmq_poll (items, nitems, timeout * ZMQ_POLL_MSEC)) < 0) {
-        fprintf (stderr, "zmq_poll: %s\n", zmq_strerror (errno));
-        exit (1);
-    }
+    if ((rc = zmq_poll (items, nitems, timeout * ZMQ_POLL_MSEC)) < 0)
+        err_exit ("zmq_poll");
     return rc;
+}
+
+void zconnect (zctx_t *zctx, void **sp, int type, char *uri, int hwm)
+{
+    *sp = zsocket_new (zctx, type);
+    zsocket_set_hwm (*sp, hwm);
+    if (zsocket_connect (*sp, "%s", uri) < 0)
+        err_exit ("zsocket_connect: %s", uri);
+}
+
+void zbind (zctx_t *zctx, void **sp, int type, char *uri, int hwm)
+{
+    *sp = zsocket_new (zctx, type);
+    zsocket_set_hwm (*sp, hwm);
+    if (zsocket_bind (*sp, "%s", uri) < 0)
+        err_exit ("zsocket_bind: %s", uri);
 }
 
 zmsg_t *zmsg_recv_fd (int fd, int flags)
@@ -103,7 +117,7 @@ error:
  **/
 
 
-static int _msg_decode (zmsg_t *msg, char **tagp, json_object **op,
+int cmb_msg_decode (zmsg_t *msg, char **tagp, json_object **op,
                     void **datap, int *lenp)
 {
     zframe_t *tag = zmsg_first (msg);
@@ -150,7 +164,7 @@ int cmb_msg_recv (void *socket, char **tagp, json_object **op,
     }
     if (!(msg = zmsg_recv (socket)))
         goto error;
-    if (_msg_decode (msg, tagp, op, datap, lenp) < 0)
+    if (cmb_msg_decode (msg, tagp, op, datap, lenp) < 0)
         goto error;
     zmsg_destroy (&msg);
     return 0;
@@ -168,7 +182,7 @@ int cmb_msg_recv_fd (int fd, char **tagp, json_object **op,
     msg = zmsg_recv_fd (fd, flags);
     if (!msg)
         goto error;
-    if (_msg_decode (msg, tagp, op, datap, lenp) < 0)
+    if (cmb_msg_decode (msg, tagp, op, datap, lenp) < 0)
         goto error;
     zmsg_destroy (&msg);
     return 0;
@@ -179,7 +193,7 @@ error:
     return -1;
 }
 
-static zmsg_t *_msg_encode (char *tag, json_object *o, void *data, int len)
+zmsg_t *cmb_msg_encode (char *tag, json_object *o, void *data, int len)
 {
     zmsg_t *msg = NULL;
 
@@ -213,7 +227,7 @@ void cmb_msg_send_long (void *sock, json_object *o, void *data, int len,
     if (n < 0)
         err_exit ("vasprintf");
    
-    msg = _msg_encode (tag, o, data, len);
+    msg = cmb_msg_encode (tag, o, data, len);
     free (tag);
     if (zmsg_send (&msg, sock) < 0)
         err_exit ("zmsg_send");
@@ -232,7 +246,7 @@ void cmb_msg_send (void *sock, const char *fmt, ...)
     if (n < 0)
         err_exit ("vasprintf");
    
-    msg = _msg_encode (tag, NULL, NULL, 0);
+    msg = cmb_msg_encode (tag, NULL, NULL, 0);
     free (tag);
     if (zmsg_send (&msg, sock) < 0)
         err_exit ("zmsg_send");
@@ -252,7 +266,7 @@ int cmb_msg_send_long_fd (int fd, json_object *o, void *data, int len,
     if (n < 0)
         err_exit ("vasprintf");
 
-    msg = _msg_encode (tag, o, data, len);
+    msg = cmb_msg_encode (tag, o, data, len);
     if (zmsg_send_fd (fd, &msg) < 0) /* destroys msg on succes */
         goto error;
     free (tag);
@@ -278,7 +292,7 @@ int cmb_msg_send_fd (int fd, const char *fmt, ...)
     if (n < 0)
         err_exit ("vasprintf");
    
-    msg = _msg_encode (tag, NULL, NULL, 0);
+    msg = cmb_msg_encode (tag, NULL, NULL, 0);
     if (zmsg_send_fd (fd, &msg) < 0) /* destroys msg on succes */
         goto error;
     free (tag);

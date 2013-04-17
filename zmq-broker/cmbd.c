@@ -20,26 +20,8 @@
 #include "zmq.h"
 #include "cmbd.h"
 #include "cmb.h"
-#include "apisrv.h"
-#include "barriersrv.h"
-#include "syncsrv.h"
-#include "kvssrv.h"
-#include "livesrv.h"
 #include "util.h"
-
-typedef struct {
-    zctx_t *zctx;
-    void *zs_eventout;
-    void *zs_eventin;
-    void *zs_treeout;
-    void *zs_treein;
-    void *zs_plout;
-    void *zs_plout_event;
-    void *zs_plin;
-    void *zs_plin_event;
-    void *zs_plin_tree;
-    zlist_t *plugins;
-} server_t;
+#include "plugin.h"
 
 #define OPTIONS "t:T:e:vs:r:R:S:"
 static const struct option longopts[] = {
@@ -53,12 +35,6 @@ static const struct option longopts[] = {
     {"size",        required_argument,  0, 'S'},
     {0, 0, 0, 0},
 };
-
-#define PLOUT_URI           "inproc://plout"
-#define PLOUT_EVENT_URI     "inproc://plout_event"
-#define PLIN_URI            "inproc://plin"
-#define PLIN_EVENT_URI      "inproc://plin_event"
-#define PLIN_TREE_URI       "inproc://plin_tree"
 
 static void _cmb_init (conf_t *conf, server_t **srvp);
 static void _cmb_fini (conf_t *conf, server_t *srv);
@@ -135,82 +111,6 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-static void *_plugin_thread (void *arg)
-{
-    plugin_ctx_t *p = arg;
-
-    if (p->plugin->pollFn)
-        p->plugin->pollFn (p);
-
-    return NULL;
-}    
-
-static void _zconnect (zctx_t *zctx, void **sp, int type, char *uri, int hwm)
-{
-    *sp = zsocket_new (zctx, type);
-    zsocket_set_hwm (*sp, hwm);
-    if (zsocket_connect (*sp, "%s", uri) < 0)
-        err_exit ("zsocket_connect: %s", uri);
-}
-
-static void _zbind (zctx_t *zctx, void **sp, int type, char *uri, int hwm)
-{
-    *sp = zsocket_new (zctx, type);
-    zsocket_set_hwm (*sp, hwm);
-    if (zsocket_bind (*sp, "%s", uri) < 0)
-        err_exit ("zsocket_bind: %s", uri);
-}
-
-
-static void _plugin_create (server_t *srv, conf_t *conf, plugin_t plugin)
-{
-    zctx_t *zctx = srv->zctx;
-    plugin_ctx_t *p;
-    int errnum;
-
-    p = xzmalloc (sizeof (plugin_ctx_t));
-    p->conf = conf;
-    p->plugin = plugin;
-
-    _zconnect (zctx, &p->zs_in,        ZMQ_SUB,  PLOUT_URI,       10000);
-    _zconnect (zctx, &p->zs_in_event,  ZMQ_SUB,  PLOUT_EVENT_URI, 1000);
-    _zconnect (zctx, &p->zs_out,       ZMQ_PUSH, PLIN_URI,        1000);
-    _zconnect (zctx, &p->zs_out_event, ZMQ_PUSH, PLIN_EVENT_URI,  1000);
-    if (conf->treeout_uri)
-        _zconnect (zctx, &p->zs_out_tree, ZMQ_PUSH, PLIN_TREE_URI, 1000);
-
-    if (p->plugin->initFn)
-        p->plugin->initFn (p);
-    errnum = pthread_create (&p->t, NULL, _plugin_thread, p);
-    if (errnum)
-        errn_exit (errnum, "pthread_create\n");
-
-    zlist_append (srv->plugins, p);
-}
-
-static void _plugin_destroy (server_t *srv, plugin_ctx_t *p)
-{
-    int errnum;
-
-    /* FIXME: no mechanism to tell thread to exit yet */
-    errnum = pthread_join (p->t, NULL);
-    if (errnum)
-        errn_exit (errnum, "pthread_join\n");
-    if (p->plugin->finiFn)
-        p->plugin->finiFn (p);
-
-    zsocket_destroy (srv->zctx, p->zs_out_tree);
-    zsocket_destroy (srv->zctx, p->zs_out_event);
-    zsocket_destroy (srv->zctx, p->zs_in_event);
-    zsocket_destroy (srv->zctx, p->zs_in);
-    zsocket_destroy (srv->zctx, p->zs_out);
-
-    zlist_remove (srv->plugins, p);
-
-    free (p);
-}
-
-
 static void _cmb_init (conf_t *conf, server_t **srvp)
 {
     server_t *srv;
@@ -224,53 +124,31 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
 
     /* external sockets */
     if (conf->event_uri) {
-        _zbind (zctx, &srv->zs_eventout, ZMQ_PUB, conf->event_uri, 1000);
-        _zbind (zctx, &srv->zs_eventin,  ZMQ_SUB, conf->event_uri, 1000);
+        zbind (zctx, &srv->zs_eventout, ZMQ_PUB, conf->event_uri, 1000);
+        zbind (zctx, &srv->zs_eventin,  ZMQ_SUB, conf->event_uri, 1000);
         zsocket_set_subscribe (srv->zs_eventin, "");
     }
     if (conf->treeout_uri)
-        _zconnect (zctx, &srv->zs_treeout, ZMQ_PUSH, conf->treeout_uri, 1000);
+        zconnect (zctx, &srv->zs_treeout, ZMQ_PUSH, conf->treeout_uri, 1000);
     if (conf->treein_uri)
-        _zbind (zctx, &srv->zs_treein, ZMQ_PULL, conf->treein_uri, 1000);
+        zbind (zctx, &srv->zs_treein, ZMQ_PULL, conf->treein_uri, 1000);
 
     /* plugin sockets */
-    _zbind (zctx, &srv->zs_plout,       ZMQ_PUB,  PLOUT_URI,       10000);
-    _zbind (zctx, &srv->zs_plout_event, ZMQ_PUB,  PLOUT_EVENT_URI, 1000);
-    _zbind (zctx, &srv->zs_plin,        ZMQ_PULL, PLIN_URI,        1000);
+    zbind (zctx, &srv->zs_plout,       ZMQ_PUB,  PLOUT_URI,       10000);
+    zbind (zctx, &srv->zs_plout_event, ZMQ_PUB,  PLOUT_EVENT_URI, 1000);
+    zbind (zctx, &srv->zs_plin,        ZMQ_PULL, PLIN_URI,        1000);
     if (conf->treein_uri)
-        _zbind (zctx, &srv->zs_plin_tree, ZMQ_PULL, PLIN_TREE_URI, 1000);
-    _zbind (zctx, &srv->zs_plin_event,  ZMQ_PULL, PLIN_EVENT_URI,  1000);
+        zbind (zctx, &srv->zs_plin_tree, ZMQ_PULL, PLIN_TREE_URI, 1000);
+    zbind (zctx, &srv->zs_plin_event,  ZMQ_PULL, PLIN_EVENT_URI,  1000);
 
-    /* Initialize plugins
-     */
-    srv->plugins = zlist_new ();
-    _plugin_create (srv, conf, &apisrv);
-    _plugin_create (srv, conf, &barriersrv);
-    if (!conf->treeout_uri) /* root (send on local bus even if no eventout) */
-        _plugin_create (srv, conf, &syncsrv);
+    plugin_init (conf, srv);
 
-#if 0
-    if (conf->redis_server)
-        kvssrv_init (conf, srv->zctx);
-    livesrv_init (conf, srv->zctx);
-#endif
     *srvp = srv;
 }
 
 static void _cmb_fini (conf_t *conf, server_t *srv)
 {
-    plugin_ctx_t *p;
-#if 0
-    livesrv_fini ();   
-    if (conf->redis_server)
-        kvssrv_fini ();
-    if (!conf->treeout_uri) /* root */
-        syncsrv_fini (); 
-    barriersrv_fini ();
-#endif
-    while ((p = zlist_head (srv->plugins)))
-        _plugin_destroy (srv, p);
-    zlist_destroy (&srv->plugins); 
+    plugin_fini (conf, srv);
 
     zsocket_destroy (srv->zctx, srv->zs_plin_event);
     zsocket_destroy (srv->zctx, srv->zs_plin_tree);
@@ -328,7 +206,7 @@ static void _cmb_poll (conf_t *conf, server_t *srv)
 { .socket = srv->zs_plin_tree,  .events = ZMQ_POLLIN, .revents = 0, .fd = -1 }
     };
 
-    _zmq_poll(zpa, 5, -1);
+    zpoll (zpa, 5, -1);
 
     if (zpa[0].revents & ZMQ_POLLIN)
         _route (conf, srv->zs_treein, srv->zs_plout, NULL, "treein->plout");

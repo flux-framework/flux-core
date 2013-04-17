@@ -21,18 +21,23 @@
 
 #include "zmq.h"
 #include "cmbd.h"
+#include "plugin.h"
+
 #include "syncsrv.h"
 
-static void _poll (plugin_ctx_t *p)
+static void _timeout (plugin_ctx_t *p)
 {
-    for (;;) {
-        usleep (p->conf->syncperiod_msec * 1000);
-        cmb_msg_send (p->zs_out_event, "event.sched.trigger");
-    }
+    cmb_msg_send (p->zs_out_event, "event.sched.trigger");
+}
+
+static void _init (plugin_ctx_t *p)
+{
+    p->timeout = p->conf->syncperiod_msec;
 }
 
 struct plugin_struct syncsrv = {
-    .pollFn = _poll,
+    .initFn    = _init,
+    .timeoutFn = _timeout,
 };
 
 /*

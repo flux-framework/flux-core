@@ -31,9 +31,11 @@
 #include "zmq.h"
 #include "cmb.h"
 #include "cmbd.h"
-#include "barriersrv.h"
+#include "plugin.h"
 #include "util.h"
 #include "log.h"
+
+#include "barriersrv.h"
 
 typedef struct _barrier_struct {
     char *name;
@@ -122,7 +124,7 @@ error:
     return -1;
 }
 
-static int _readmsg (plugin_ctx_t *p, void *socket)
+static void _recv (plugin_ctx_t *p, zmsg_t *zmsg)
 {
     ctx_t *ctx = p->ctx;
     char *barrier_enter = "barrier.enter.";
@@ -130,10 +132,9 @@ static int _readmsg (plugin_ctx_t *p, void *socket)
     char *tag = NULL;
     json_object *o;
 
-    if (cmb_msg_recv (socket, &tag, &o, NULL, NULL, ZMQ_DONTWAIT) < 0) {
-        if (errno != EAGAIN)
-            err ("cmb_msg_recv");
-        return -1;
+    if (cmb_msg_decode (zmsg, &tag, &o, NULL, NULL) < 0) {
+        err ("barriersrv: recv");
+        goto done;
     }
 
     /* event.barrier.exit.<name> */
@@ -156,40 +157,25 @@ static int _readmsg (plugin_ctx_t *p, void *socket)
         b->count += count;
         if (b->count == b->nprocs) /* destroy when we receive our own msg */
             cmb_msg_send (p->zs_out_event, "%s", b->exit_tag);
+        else if (p->zs_out_tree && p->timeout == -1)
+            p->timeout = 1; /* 1 ms - then send count upstream */
     }
 done:
     if (tag)
         free (tag);
     if (o)
         json_object_put (o);
-    return 0;
+    if (zmsg)
+        zmsg_destroy (&zmsg);
 }
 
-static void _poll (plugin_ctx_t *p)
+static void _timeout (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
-    zmq_pollitem_t zpa[] = {
-{ .socket = p->zs_in,       .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-{ .socket = p->zs_in_event, .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-    };
 
-    for (;;) {
-        _zmq_poll(zpa, 2, -1);
-
-        if (zpa[0].revents & ZMQ_POLLIN) {
-            while (_readmsg (p, p->zs_in) != -1)
-                ;
-            /* As many entry messages as can be read in one go (above)
-             * will be aggregated into a message sent upstream.
-             */
-            if (p->zs_out_tree)
-                zhash_foreach (ctx->barriers, _send_barrier_enter, p);
-        }
-        if (zpa[1].revents & ZMQ_POLLIN) {
-            while (_readmsg (p, p->zs_in_event) != -1)
-                ;
-        }
-    }
+    if (p->zs_out_tree)
+        zhash_foreach (ctx->barriers, _send_barrier_enter, p);
+    p->timeout = -1; /* disable timeout */
 }
 
 static void _init (plugin_ctx_t *p)
@@ -200,6 +186,7 @@ static void _init (plugin_ctx_t *p)
     zsocket_set_subscribe (p->zs_in, "barrier.enter.");
     zsocket_set_subscribe (p->zs_in_event, "event.barrier.exit.");
     ctx->barriers = zhash_new ();
+    p->timeout = -1; /* no timeout initially */
 }
 
 static void _fini (plugin_ctx_t *p)
@@ -212,7 +199,8 @@ static void _fini (plugin_ctx_t *p)
 struct plugin_struct barriersrv = {
     .initFn = _init,
     .finiFn = _fini,
-    .pollFn = _poll,
+    .recvFn = _recv,
+    .timeoutFn = _timeout,
 };
 
 /*

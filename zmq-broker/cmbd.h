@@ -10,22 +10,22 @@ typedef struct {
     int size;
 } conf_t;
 
-typedef struct plugin_struct *plugin_t;
-
 typedef struct {
-    conf_t *conf;
-    void *zs_in;
-    void *zs_in_event;
-    void *zs_out;
-    void *zs_out_event;
-    void *zs_out_tree;
-    pthread_t t;
-    plugin_t plugin;
-    void *ctx;
-} plugin_ctx_t;
+    zctx_t *zctx;
+    void *zs_eventout;
+    void *zs_eventin;
+    void *zs_treeout;
+    void *zs_treein;
+    void *zs_plout;
+    void *zs_plout_event;
+    void *zs_plin;
+    void *zs_plin_event;
+    void *zs_plin_tree;
+    zlist_t *plugins;
+} server_t;
 
-struct plugin_struct {
-    void (*pollFn)(plugin_ctx_t *p);
-    void (*initFn)(plugin_ctx_t *p);
-    void (*finiFn)(plugin_ctx_t *p);
-};
+#define PLOUT_URI           "inproc://plout"
+#define PLOUT_EVENT_URI     "inproc://plout_event"
+#define PLIN_URI            "inproc://plin"
+#define PLIN_EVENT_URI      "inproc://plin_event"
+#define PLIN_TREE_URI       "inproc://plin_tree"
