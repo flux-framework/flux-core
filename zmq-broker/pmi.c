@@ -11,6 +11,8 @@
 #include <errno.h>
 
 #include "cmb.h"
+#include "log.h"
+
 #include "pmi.h"
 
 #ifndef PMI_FALSE
@@ -77,6 +79,7 @@ static int _key_tostore (const char *key, char **kp)
 
 int PMI_Init( int *spawned )
 {
+    log_init ("cmb-pmi");
     if (spawned == NULL)
         return PMI_ERR_INVALID_ARG;
     if (ctx)
@@ -89,14 +92,14 @@ int PMI_Init( int *spawned )
     ctx->spawned = PMI_FALSE;
     ctx->size = _env_getint ("SLURM_NTASKS", 1);
     ctx->rank = _env_getint ("SLURM_PROCID", 0);
-    //fprintf (stderr, "XXX %d:%s\n", ctx->rank, __FUNCTION__);
+    //msg ("XXX %d:%s", ctx->rank, __FUNCTION__);
     ctx->universe_size = _env_getint ("SLURM_NTASKS", 1);
     ctx->appnum = 0;
     ctx->barrier_num = 0;
     snprintf (ctx->kvsname, sizeof (ctx->kvsname), "job%d",
                 _env_getint ("SLURM_STEP_ID", 0));
     if (!(ctx->cctx = cmb_init ())) {
-        fprintf (stderr, "cmb_init: %s\n", strerror (errno));
+        err ("cmb_init");
         goto fail;
     }
     *spawned = ctx->spawned;
@@ -113,7 +116,7 @@ fail:
 
 int PMI_Initialized( int *initialized )
 {
-    //fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    //msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     if (initialized == NULL)
         return PMI_ERR_INVALID_ARG;
 
@@ -123,7 +126,7 @@ int PMI_Initialized( int *initialized )
 
 int PMI_Finalize( void )
 {
-    //fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    //msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -138,7 +141,7 @@ int PMI_Finalize( void )
 
 int PMI_Get_size( int *size )
 {
-    //fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    //msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     if (size == NULL)
@@ -151,7 +154,7 @@ int PMI_Get_size( int *size )
 
 int PMI_Get_rank( int *rank )
 {
-    //fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    //msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     if (rank == NULL)
@@ -164,7 +167,7 @@ int PMI_Get_rank( int *rank )
 
 int PMI_Get_universe_size( int *size )
 {
-    //fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    //msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     if (size == NULL)
@@ -177,7 +180,7 @@ int PMI_Get_universe_size( int *size )
 
 int PMI_Get_appnum( int *appnum )
 {
-    //fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    //msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     if (appnum == NULL)
@@ -190,19 +193,19 @@ int PMI_Get_appnum( int *appnum )
 
 int PMI_Publish_name( const char service_name[], const char port[] )
 {
-    fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     return PMI_FAIL;
 }
 
 int PMI_Unpublish_name( const char service_name[] )
 {
-    fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     return PMI_FAIL;
 }
 
 int PMI_Lookup_name( const char service_name[], char port[] )
 {
-    fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     return PMI_FAIL;
 }
 
@@ -210,7 +213,7 @@ int PMI_Barrier( void )
 {
     char *name = NULL;
 
-    //fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    //msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -230,13 +233,13 @@ error:
   
 int PMI_Abort(int exit_code, const char error_msg[])
 {
-    fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     return PMI_FAIL;
 }
 
 int PMI_KVS_Get_my_name( char kvsname[], int length )
 {
-    //fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    //msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -249,7 +252,7 @@ int PMI_KVS_Get_my_name( char kvsname[], int length )
 
 int PMI_KVS_Get_name_length_max( int *length )
 {
-    //fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    //msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     if (length == NULL)
         return PMI_ERR_INVALID_ARG;
     *length = PMI_MAX_KVSNAMELEN;
@@ -258,7 +261,7 @@ int PMI_KVS_Get_name_length_max( int *length )
 
 int PMI_KVS_Get_key_length_max( int *length )
 {
-    //fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    //msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     if (length == NULL)
         return PMI_ERR_INVALID_ARG;
     *length = PMI_MAX_KEYLEN;
@@ -267,7 +270,7 @@ int PMI_KVS_Get_key_length_max( int *length )
 
 int PMI_KVS_Get_value_length_max( int *length )
 {
-    //fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    //msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     if (length == NULL)
         return PMI_ERR_INVALID_ARG;
     *length = PMI_MAX_VALLEN;
@@ -278,7 +281,7 @@ int PMI_KVS_Put( const char kvsname[], const char key[], const char value[])
 {
     char *xkey = NULL;
 
-    //fprintf (stderr, "XXX %d:%s %s:%s %s\n", ctx ? ctx->rank : -1, __FUNCTION__, kvsname, key, value);
+    //msg ("XXX %d:%s %s:%s %s", ctx ? ctx->rank : -1, __FUNCTION__, kvsname, key, value);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -301,7 +304,7 @@ error:
 int PMI_KVS_Commit( const char kvsname[] )
 {
     int errcount, putcount;
-    //fprintf (stderr, "XXX %d:%s %s\n", ctx ? ctx->rank : -1, __FUNCTION__, kvsname);
+    //msg ("XXX %d:%s %s", ctx ? ctx->rank : -1, __FUNCTION__, kvsname);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -322,7 +325,7 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
     char *xkey = NULL;
     char *val = NULL;
 
-    //fprintf (stderr, "XXX %d:%s %s:%s\n", ctx ? ctx->rank : -1, __FUNCTION__, kvsname, key);
+    //msg ("XXX %d:%s %s:%s", ctx ? ctx->rank : -1, __FUNCTION__, kvsname, key);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -361,20 +364,20 @@ int PMI_Spawn_multiple(int count,
                        const PMI_keyval_t preput_keyval_vector[],
                        int errors[])
 {
-    fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     return PMI_FAIL;
 }
 
 int PMI_Get_id( char id_str[], int length )
 {
-    fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     return PMI_FAIL;
 }
 
 /* openmpi */
 int PMI_Get_kvs_domain_id( char id_str[], int length )
 {
-    fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -389,7 +392,7 @@ int PMI_Get_kvs_domain_id( char id_str[], int length )
 /* openmpi */
 int PMI_Get_id_length_max( int *length )
 {
-    fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -404,7 +407,7 @@ int PMI_Get_id_length_max( int *length )
 /* openmpi */
 int PMI_Get_clique_size( int *size )
 {
-    fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -417,7 +420,7 @@ int PMI_Get_clique_ranks( int ranks[], int length)
 {
     int i;
 
-    fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -430,53 +433,53 @@ int PMI_Get_clique_ranks( int ranks[], int length)
 
 int PMI_KVS_Create( char kvsname[], int length )
 {
-    fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     return PMI_FAIL;
 }
 
 int PMI_KVS_Destroy( const char kvsname[] )
 {
-    fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     return PMI_FAIL;
 }
 
 int PMI_KVS_Iter_first(const char kvsname[], char key[], int key_len,
                         char val[], int val_len)
 {
-    fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     return PMI_FAIL;
 }
 
 int PMI_KVS_Iter_next(const char kvsname[], char key[], int key_len,
                         char val[], int val_len)
 {
-    fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     return PMI_FAIL;
 }
 
 int PMI_Parse_option(int num_args, char *args[], int *num_parsed,
                         PMI_keyval_t **keyvalp, int *size)
 {
-    fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     return PMI_FAIL;
 }
 
 int PMI_Args_to_keyval(int *argcp, char *((*argvp)[]),
                         PMI_keyval_t **keyvalp, int *size)
 {
-    fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     return PMI_FAIL;
 }
 
 int PMI_Free_keyvals(PMI_keyval_t keyvalp[], int size)
 {
-    fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     return PMI_FAIL;
 }
 
 int PMI_Get_options(char *str, int *length)
 {
-    fprintf (stderr, "XXX %d:%s\n", ctx ? ctx->rank : -1, __FUNCTION__);
+    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     return PMI_FAIL;
 }
 

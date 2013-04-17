@@ -42,7 +42,7 @@
 
 #include "log.h"
 
-static char *prog = NULL;
+static char *prog = "log";
 
 typedef struct {
     char *s;

@@ -27,7 +27,7 @@
 
 static void _timeout (plugin_ctx_t *p)
 {
-    cmb_msg_send (p->zs_out_event, "event.sched.trigger");
+    cmb_msg_send (p->zs_out_event, NULL, "event.sched.trigger");
 }
 
 static void _init (plugin_ctx_t *p)

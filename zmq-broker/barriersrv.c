@@ -99,8 +99,7 @@ static int _send_barrier_enter (const char *key, void *item, void *arg)
         if (!(no = json_object_new_int (b->nprocs)))
             oom ();
         json_object_object_add (o, "nprocs", no);
-        cmb_msg_send_long (p->zs_out_tree, o, NULL, 0, 0, "barrier.enter.%s",
-                           b->name);
+        cmb_msg_send (p->zs_out_tree, o, "barrier.enter.%s", b->name);
         json_object_put (o);
         b->count = 0;
     }
@@ -156,7 +155,7 @@ static void _recv (plugin_ctx_t *p, zmsg_t *zmsg)
             b = _barrier_create (p, name, nprocs);
         b->count += count;
         if (b->count == b->nprocs) /* destroy when we receive our own msg */
-            cmb_msg_send (p->zs_out_event, "%s", b->exit_tag);
+            cmb_msg_send (p->zs_out_event, NULL, "%s", b->exit_tag);
         else if (p->zs_out_tree && p->timeout == -1)
             p->timeout = 1; /* 1 ms - then send count upstream */
     }

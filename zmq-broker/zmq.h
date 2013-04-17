@@ -16,15 +16,22 @@ int cmb_msg_decode (zmsg_t *msg, char **tagp, json_object **op,
 zmsg_t *cmb_msg_encode (char *tag, json_object *o, void *data, int len);
 
 void cmb_msg_send_long (void *sock, json_object *o, void *data, int len,
-                        const char *fmt, ...);
-void cmb_msg_send (void *sock, const char *fmt, ...);
+                        const char *fmt, ...)
+        		__attribute__ ((format (printf, 5, 6)));
+
+void cmb_msg_send (void *sock, json_object *o, const char *fmt, ...)
+        	   __attribute__ ((format (printf, 3, 4)));
+
 int cmb_msg_recv (void *socket, char **tagp, json_object **op,
                   void **datap, int *lenp, int flags);
 
 int cmb_msg_send_long_fd (int fd, json_object *o, void *data, int len,
-                           const char *fmt, ...);
+                          const char *fmt, ...)
+        	          __attribute__ ((format (printf, 5, 6)));
 
-int cmb_msg_send_fd (int fd, const char *fmt, ...);
+int cmb_msg_send_fd (int fd, json_object *o, const char *fmt, ...)
+        	     __attribute__ ((format (printf, 3, 4)));
+
 int cmb_msg_recv_fd (int fd, char **tagp, json_object **op,
                      void **datap, int *lenp, int flags);
 

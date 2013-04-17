@@ -22,9 +22,11 @@
 #include <json/json.h>
 #include <czmq.h>
 
-#include "cmb.h"
 #include "cmbd.h"
+#include "log.h"
 #include "zmq.h"
+#include "util.h"
+#include "cmb.h"
 
 struct cmb_struct {
     int fd;
@@ -126,30 +128,30 @@ static int _recvfd (int fd, int *fdp, char *name, int len)
 {
     int fd_xfer, n;
     char buf[CMSG_SPACE (sizeof (fd_xfer)) ];
-    struct msghdr msg;
+    struct msghdr msghdr;
     struct iovec iov;
     struct cmsghdr *cmsg;
 
-    memset (&msg, 0, sizeof (msg));
+    memset (&msghdr, 0, sizeof (msghdr));
     iov.iov_base = name;
     iov.iov_len = len - 1;
-    msg.msg_iov = &iov;
-    msg.msg_iovlen = 1;
-    msg.msg_control = buf;
-    msg.msg_controllen = sizeof (buf);
+    msghdr.msg_iov = &iov;
+    msghdr.msg_iovlen = 1;
+    msghdr.msg_control = buf;
+    msghdr.msg_controllen = sizeof (buf);
 
-    if ((n = recvmsg (fd, &msg, 0)) < 0)
+    if ((n = recvmsg (fd, &msghdr, 0)) < 0)
         return -1;
     
     name [n] = '\0';
 
-    cmsg = CMSG_FIRSTHDR (&msg);
+    cmsg = CMSG_FIRSTHDR (&msghdr);
     if (cmsg == NULL) {
-        fprintf (stderr, "_recvfd: no control message received\n");
+        msg ("_recvfd: no control message received");
         return -1;
     }
     if (cmsg->cmsg_level != SOL_SOCKET || cmsg->cmsg_type != SCM_RIGHTS) {
-        fprintf (stderr, "_recvfd: message level/rights have wrong values\n");
+        msg ("_recvfd: message level/rights have wrong values");
         return -1;
     }
     fd_xfer = *(int *) CMSG_DATA (cmsg);
@@ -166,10 +168,10 @@ int cmb_fd_open (cmb_t c, char *wname, char **np)
     char buf[1024];
 
     if (wname) {
-        if (cmb_msg_send_fd (c->fd, "api.fdopen.write.%s", wname) < 0)
+        if (cmb_msg_send_fd (c->fd, NULL, "api.fdopen.write.%s", wname) < 0)
             goto error;
     } else {
-        if (cmb_msg_send_fd (c->fd, "api.fdopen.read") < 0)
+        if (cmb_msg_send_fd (c->fd, NULL, "api.fdopen.read") < 0)
             goto error;
     }
     if (_recvfd (c->fd, &newfd, buf, sizeof (buf)) < 0)
@@ -198,7 +200,7 @@ int cmb_ping (cmb_t c, int seq, int padlen)
     void *rpad = NULL, *pad = NULL;
     int rpadlen;
 
-    if (cmb_msg_send_fd (c->fd, "api.subscribe.ping.%s", c->uuid) < 0)
+    if (cmb_msg_send_fd (c->fd, NULL, "api.subscribe.ping.%s", c->uuid) < 0)
         goto error;
 
     /* send request */
@@ -208,10 +210,8 @@ int cmb_ping (cmb_t c, int seq, int padlen)
         goto error;
     if (padlen > 0) {
         pad = malloc (padlen);
-        if (!pad) {
-            fprintf (stderr, "out of memory\n");
-            exit (1);
-        }
+        if (!pad)
+            oom ();
         memset (pad, 'z', padlen);
     }
     if (cmb_msg_send_long_fd (c->fd, o, pad, padlen, "ping.%s", c->uuid) < 0)
@@ -225,25 +225,25 @@ int cmb_ping (cmb_t c, int seq, int padlen)
     if (_json_object_get_int (o, "seq", &rseq) < 0)
         goto error;
     if (seq != rseq) {
-        fprintf (stderr, "cmb_ping: seq not the one I sent\n");
+        msg ("cmb_ping: seq not the one I sent");
         errno = EPROTO;
         goto error;
     }
     if (padlen != rpadlen) {
-        fprintf (stderr, "cmb_ping: payload not the size I sent (%d != %d)\n",
-                 padlen, rpadlen);
+        msg ("cmb_ping: payload not the size I sent (%d != %d)",
+             padlen, rpadlen);
         errno = EPROTO;
         goto error;
     }
     if (padlen > 0) {
         if (memcmp (pad, rpad, padlen) != 0) {
-            fprintf (stderr, "cmb_ping: received corrupted payload\n");
+            msg ("cmb_ping: received corrupted payload");
             errno = EPROTO;
             goto error;
         }
     }
 
-    if (cmb_msg_send_fd (c->fd, "api.unsubscribe") < 0)
+    if (cmb_msg_send_fd (c->fd, NULL, "api.unsubscribe") < 0)
         goto error;
 
     if (o)
@@ -270,7 +270,7 @@ int cmb_snoop (cmb_t c, char *sub)
 {
     zmsg_t *msg;
 
-    if (cmb_msg_send_fd (c->fd, "api.subscribe.%s", sub) < 0)
+    if (cmb_msg_send_fd (c->fd, NULL, "api.subscribe.%s", sub) < 0)
         goto error;
     while ((msg = zmsg_recv_fd (c->fd, 0))) {
         zmsg_dump (msg);
@@ -285,7 +285,7 @@ int cmb_barrier (cmb_t c, char *name, int nprocs)
     json_object *o = NULL;
     int count = 1;
 
-    if (cmb_msg_send_fd (c->fd, "api.subscribe.event.barrier.exit.%s",
+    if (cmb_msg_send_fd (c->fd, NULL, "api.subscribe.event.barrier.exit.%s",
                   name) < 0)
         goto error;
 
@@ -296,7 +296,7 @@ int cmb_barrier (cmb_t c, char *name, int nprocs)
         goto error;
     if (_json_object_add_int (o, "nprocs", nprocs) < 0)
         goto error;
-    if (cmb_msg_send_long_fd (c->fd, o, NULL, 0, "barrier.enter.%s", name) < 0)
+    if (cmb_msg_send_fd (c->fd, o, "barrier.enter.%s", name) < 0)
         goto error;
     json_object_put (o);
     o = NULL;
@@ -305,7 +305,7 @@ int cmb_barrier (cmb_t c, char *name, int nprocs)
     if (cmb_msg_recv_fd (c->fd, NULL, NULL, NULL, NULL, 0) < 0)
         goto error;
 
-    if (cmb_msg_send_fd (c->fd, "api.unsubscribe") < 0)
+    if (cmb_msg_send_fd (c->fd, NULL, "api.unsubscribe") < 0)
         goto error;
 
     return 0;
@@ -320,7 +320,7 @@ error:
 /* FIXME: add timeout */
 int cmb_sync (cmb_t c)
 {
-    if (cmb_msg_send_fd (c->fd, "api.subscribe.event.sched.trigger") < 0)
+    if (cmb_msg_send_fd (c->fd, NULL, "api.subscribe.event.sched.trigger") < 0)
         return -1;
     if (cmb_msg_recv_fd (c->fd, NULL, NULL, NULL, NULL, 0) < 0)
         return -1;
@@ -339,7 +339,7 @@ int cmb_kvs_put (cmb_t c, const char *key, const char *val)
         goto error;
     if (_json_object_add_string (o, "sender", c->uuid) < 0)
         goto error;
-    if (cmb_msg_send_long_fd (c->fd, o, NULL, 0, "kvs.put") < 0)
+    if (cmb_msg_send_fd (c->fd, o, "kvs.put") < 0)
         goto error;
     json_object_put (o);
     o = NULL;
@@ -358,7 +358,7 @@ char *cmb_kvs_get (cmb_t c, const char *key)
     const char *val;
     char *ret;
 
-    if (cmb_msg_send_fd (c->fd, "api.xsubscribe.%s", c->uuid) < 0)
+    if (cmb_msg_send_fd (c->fd, NULL, "api.xsubscribe.%s", c->uuid) < 0)
         goto error;
 
     /* send request */
@@ -368,7 +368,7 @@ char *cmb_kvs_get (cmb_t c, const char *key)
         goto error;
     if (_json_object_add_string (o, "sender", c->uuid) < 0)
         goto error;
-    if (cmb_msg_send_long_fd (c->fd, o, NULL, 0, "kvs.get") < 0)
+    if (cmb_msg_send_fd (c->fd, o, "kvs.get") < 0)
         goto error;
     json_object_put (o);
     o = NULL;
@@ -401,7 +401,7 @@ int cmb_live_query (cmb_t c, int **upp, int *ulp, int **dp, int *dlp, int *nnp)
     int *up, up_len;
     int *down, down_len;
 
-    if (cmb_msg_send_fd (c->fd, "api.xsubscribe.%s", c->uuid) < 0)
+    if (cmb_msg_send_fd (c->fd, NULL, "api.xsubscribe.%s", c->uuid) < 0)
         goto error;
 
     /* send request */
@@ -409,7 +409,7 @@ int cmb_live_query (cmb_t c, int **upp, int *ulp, int **dp, int *dlp, int *nnp)
         goto nomem;
     if (_json_object_add_string (o, "sender", c->uuid) < 0)
         goto error;
-    if (cmb_msg_send_long_fd (c->fd, o, NULL, 0, "live.query") < 0)
+    if (cmb_msg_send_fd (c->fd, o, "live.query") < 0)
         goto error;
     json_object_put (o);
     o = NULL;
@@ -451,7 +451,7 @@ int cmb_kvs_commit (cmb_t c, int *ep, int *pp)
     json_object *o = NULL;
     int errcount, putcount;
 
-    if (cmb_msg_send_fd (c->fd, "api.xsubscribe.%s", c->uuid) < 0)
+    if (cmb_msg_send_fd (c->fd, NULL, "api.xsubscribe.%s", c->uuid) < 0)
         goto error;
 
     /* send request */
@@ -459,7 +459,7 @@ int cmb_kvs_commit (cmb_t c, int *ep, int *pp)
         goto nomem;
     if (_json_object_add_string (o, "sender", c->uuid) < 0)
         goto error;
-    if (cmb_msg_send_long_fd (c->fd, o, NULL, 0, "kvs.commit") < 0)
+    if (cmb_msg_send_fd (c->fd, o, "kvs.commit") < 0)
         goto error;
     json_object_put (o);
     o = NULL;
@@ -507,7 +507,7 @@ cmb_t cmb_init (void)
                          sizeof (struct sockaddr_un)) < 0)
         goto error;
     _uuid_generate_str (c);
-    if (cmb_msg_send_fd (c->fd, "api.setuuid.%s", c->uuid) < 0)
+    if (cmb_msg_send_fd (c->fd, NULL, "api.setuuid.%s", c->uuid) < 0)
         goto error;
     return c;
 error:

@@ -109,32 +109,22 @@ static cfd_t *_cfd_create (plugin_ctx_t *p, client_t *c, char *wname)
 
     cfd = xzmalloc (sizeof (cfd_t));
     cfd->fd = -1;
-    if (socketpair (AF_LOCAL, SOCK_SEQPACKET, 0, sv) < 0) {
-        fprintf (stderr, "socketpair: %s\n", strerror (errno));
-        exit (1);
-    }
-    if (_fd_setmode (sv[1], wname ? O_RDONLY : O_WRONLY) < 0) {
-        fprintf (stderr, "fcntl: %s\n", strerror (errno));
-        exit (1);
-    }
-    if (_fd_setmode (sv[0], wname ? O_WRONLY : (O_RDONLY | O_NONBLOCK)) < 0) {
-        fprintf (stderr, "fcntl: %s\n", strerror (errno));
-        exit (1);
-    }
+    if (socketpair (AF_LOCAL, SOCK_SEQPACKET, 0, sv) < 0)
+        err_exit ("socketpair");
+    if (_fd_setmode (sv[1], wname ? O_RDONLY : O_WRONLY) < 0)
+        err_exit ("fcntl");
+    if (_fd_setmode (sv[0], wname ? O_WRONLY : (O_RDONLY | O_NONBLOCK)) < 0)
+        err_exit ("fcntl");
     cfd->fd = sv[0];
     if (asprintf (&cfd->name, "%s.fd.%d", c->uuid, c->cfd_id++) < 0)
         oom ();
     if (wname)
         cfd->wname = xstrdup (wname);
-    if (_sendfd (c->fd, sv[1], cfd->name) < 0) {
-        fprintf (stderr, "sendfd: %s\n", strerror (errno));
-        exit (1);
-    }
-    if (close (sv[1]) < 0) {
-        fprintf (stderr, "close: %s\n", strerror (errno));
-        exit (1);
-    }
-    cmb_msg_send (p->zs_out, "%s.open", cfd->name);
+    if (_sendfd (c->fd, sv[1], cfd->name) < 0)
+        err_exit ("sendfd");
+    if (close (sv[1]) < 0)
+        err_exit ("close");
+    cmb_msg_send (p->zs_out, NULL, "%s.open", cfd->name);
 
     cfd->prev = NULL;
     cfd->next = c->cfds;
@@ -157,7 +147,7 @@ static void _cfd_destroy (plugin_ctx_t *p, client_t *c, cfd_t *cfd)
     if (cfd->next)
         cfd->next->prev = cfd->prev;
 
-    cmb_msg_send (p->zs_out, "%s.close", cfd->name);
+    cmb_msg_send (p->zs_out, NULL, "%s.close", cfd->name);
     free (cfd->name);
     free (cfd);
 }
@@ -185,7 +175,7 @@ static int _cfd_read (plugin_ctx_t *p, cfd_t *cfd)
     n = read (cfd->fd, cfd->buf, sizeof (cfd->buf));
     if (n <= 0) {
         if (errno != ECONNRESET && errno != EWOULDBLOCK && n != 0)
-            fprintf (stderr, "apisrv: cfd read: %s\n", strerror (errno));
+            err ("apisrv: cfd read");
         return -1;
     }
     if (!(o = json_object_new_object ()))
@@ -199,20 +189,20 @@ static int _cfd_read (plugin_ctx_t *p, cfd_t *cfd)
 }
 
 /* message received for cfd->name, write to cfd->fd */
-static int _cfd_write (cfd_t *cfd, zmsg_t *msg)
+static int _cfd_write (cfd_t *cfd, zmsg_t *zmsg)
 {
     int len, n;
 
     if (cfd->wname != NULL) {
-        fprintf (stderr, "_cfd_write: discarding message for O_WRONLY fd\n");
+        msg ("_cfd_write: discarding message for O_WRONLY fd");
         return 0;
     }
-    len = cmb_msg_datacpy (msg, cfd->buf, sizeof (cfd->buf));
+    len = cmb_msg_datacpy (zmsg, cfd->buf, sizeof (cfd->buf));
     n = write (cfd->fd, cfd->buf, len);
     if (n < 0)
         return -1;
     if (n < len) {
-        fprintf (stderr, "_cfd_write: short write\n");
+        msg ("_cfd_write: short write");
         return 0;
     }
     return 0;
@@ -249,7 +239,7 @@ static void _client_destroy (plugin_ctx_t *p, client_t *c)
     if (c->next)
         c->next->prev = c->prev;
     if (strlen (c->uuid) > 0)
-        cmb_msg_send (p->zs_out, "%s.disconnect", c->uuid);
+        cmb_msg_send (p->zs_out, NULL, "%s.disconnect", c->uuid);
     free (c);
 }
 
@@ -270,10 +260,8 @@ static void _accept (plugin_ctx_t *p)
     int fd;
 
     fd = accept (ctx->listen_fd, NULL, NULL); 
-    if (fd < 0) {
-        fprintf (stderr, "apisrv: accept: %s\n", strerror (errno));
-        exit (1);
-    }
+    if (fd < 0)
+        err_exit ("accept");
      _client_create (p, fd);
 }
 
@@ -283,26 +271,19 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
     const char *api_xsubscribe = "api.xsubscribe.";
     const char *api_setuuid = "api.setuuid.";
     const char *api_fdopen_write = "api.fdopen.write.";
-    zframe_t *tag_frame;
-    zmsg_t *msg;
-    char *tag;
+    zmsg_t *zmsg = NULL;
+    char *tag = NULL;
 
-    msg = zmsg_recv_fd (c->fd, MSG_DONTWAIT);
-    if (!msg) {
+    zmsg = zmsg_recv_fd (c->fd, MSG_DONTWAIT);
+    if (!zmsg) {
         if (errno != ECONNRESET && errno != EWOULDBLOCK && errno != EPROTO)
-            fprintf (stderr, "apisrv: API read: %s\n", strerror (errno));
+            err ("API read");
         return -1;
     }
-    tag_frame = zmsg_first (msg);
-    if (!tag_frame) {
-        fprintf (stderr, "apisrv: bad API msg (parts=%lu)\n", zmsg_size (msg));
-        zmsg_destroy (&msg);
-        errno = EPROTO;
-	    return -1;
+    if (cmb_msg_decode (zmsg, &tag, NULL, NULL, NULL) < 0) {
+        err ("API decode");
+        goto done;
     }
-    tag = zframe_strdup (tag_frame);
-    if (!tag)
-        oom ();
         
     /* internal: api.unsubscribe */
     if (!strcmp (tag, "api.unsubscribe")) {
@@ -331,7 +312,7 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
     } else if (!strncmp (tag, api_setuuid, strlen (api_setuuid))) {
         char *q = tag + strlen (api_setuuid);
         snprintf (c->uuid, sizeof (c->uuid), "%s", q);
-        cmb_msg_send (p->zs_out, "%s.connect", c->uuid);
+        cmb_msg_send (p->zs_out, NULL, "%s.connect", c->uuid);
 
     /* internal: api.fdopen.read */
     } else if (!strcmp (tag, "api.fdopen.read")) {
@@ -344,12 +325,12 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
             
     /* route other */
     } else {
-        if (zmsg_send (&msg, p->zs_out) < 0)
+        if (zmsg_send (&zmsg, p->zs_out) < 0)
             err_exit ("zmsg_send");
     }
-
-    if (msg)
-        zmsg_destroy (&msg);
+done:
+    if (zmsg)
+        zmsg_destroy (&zmsg);
     if (tag)
         free (tag);
     return 0;
@@ -477,19 +458,14 @@ static void _poll_once (plugin_ctx_t *p)
     }
 
     /* zmq sockets - can modify client list (so do after clients) */
-    if (zpa[2].revents & ZMQ_POLLIN) {
+    if (zpa[2].revents & ZMQ_POLLIN)
         _accept (p);
-    }
-    if (zpa[2].revents & ZMQ_POLLERR) {
-        fprintf (stderr, "apisrv: poll error on listen fd\n");
-        exit (1);
-    }
-    if (zpa[0].revents & ZMQ_POLLIN) {
+    if (zpa[2].revents & ZMQ_POLLERR)
+        err_exit ("apisrv: poll on listen fd");
+    if (zpa[0].revents & ZMQ_POLLIN)
         _readmsg (p, p->zs_in);
-    }
-    if (zpa[1].revents & ZMQ_POLLIN) {
+    if (zpa[1].revents & ZMQ_POLLIN)
         _readmsg (p, p->zs_in_event);
-    }
 
     free (zpa);
 }
@@ -502,29 +478,18 @@ static void _listener_init (plugin_ctx_t *p)
     char *path = p->conf->apisockpath;
 
     fd = socket (AF_UNIX, SOCK_SEQPACKET, 0);
-    if (fd < 0) {
-        fprintf (stderr, "socket: %s\n", strerror (errno));
-        exit (1);
-    }
-
-    if (remove (path) < 0 && errno != ENOENT) {
-        fprintf (stderr, "remove %s: %s\n", path, strerror (errno));
-        exit (1);
-    } 
-
+    if (fd < 0)
+        err_exit ("socket");
+    if (remove (path) < 0 && errno != ENOENT)
+        err_exit ("remove %s", path);
     memset (&addr, 0, sizeof (struct sockaddr_un));
     addr.sun_family = AF_UNIX;
     strncpy (addr.sun_path, path, sizeof (addr.sun_path) - 1);
 
-    if (bind (fd, (struct sockaddr *)&addr, sizeof (struct sockaddr_un)) < 0) {
-        fprintf (stderr, "bind: %s\n", strerror (errno));
-        exit (1);
-    }
-
-    if (listen (fd, LISTEN_BACKLOG) < 0) {
-        fprintf (stderr, "listen: %s\n", strerror (errno));
-        exit (1);
-    }
+    if (bind (fd, (struct sockaddr *)&addr, sizeof (struct sockaddr_un)) < 0)
+        err_exit ("bind");
+    if (listen (fd, LISTEN_BACKLOG) < 0)
+        err_exit ("listen");
 
     ctx->listen_fd = fd;
 }
@@ -533,10 +498,8 @@ static void _listener_fini (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
 
-    if (close (ctx->listen_fd) < 0) {
-        fprintf (stderr, "listen: %s\n", strerror (errno));
-        exit (1);
-    }
+    if (close (ctx->listen_fd) < 0)
+        err_exit ("listen");
 }
 
 static void _init (plugin_ctx_t *p)

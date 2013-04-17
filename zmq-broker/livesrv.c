@@ -76,7 +76,7 @@ static void _reply_to_query (plugin_ctx_t *p, const char *sender)
         oom ();
     json_object_object_add (o, "nnodes", no);
 
-    cmb_msg_send_long (p->zs_out, o, NULL, 0, "%s", sender);
+    cmb_msg_send (p->zs_out, o, "%s", sender);
     json_object_put (o);
 }
 
@@ -102,15 +102,15 @@ static void _recv (plugin_ctx_t *p, zmsg_t *zmsg)
                 if (ctx->live[i] != -1)
                     ctx->live[i]++;
                 if (ctx->live[i] > MISSED_TRIGGER_ALLOW) {
-                    cmb_msg_send (p->zs_out_event, "event.live.down.%d", i);
+                    cmb_msg_send (p->zs_out_event, NULL, "event.live.down.%d", i);
                     ctx->live[i] = -1;
                 } 
             }
             if (ctx->live[myrank] == -1)
-                cmb_msg_send (p->zs_out_event, "event.live.up.%d", myrank);
+                cmb_msg_send (p->zs_out_event, NULL, "event.live.up.%d", myrank);
             ctx->live[myrank] = 0;
         } else {
-            cmb_msg_send (p->zs_out_tree, "live.up.%d", myrank);
+            cmb_msg_send (p->zs_out_tree, NULL, "live.up.%d", myrank);
         }
     } else if (!strncmp (tag, live_up, strlen (live_up))) {
         int rank = strtoul (tag + strlen (live_up), NULL, 10);
@@ -118,10 +118,10 @@ static void _recv (plugin_ctx_t *p, zmsg_t *zmsg)
             goto done;
         if (myrank == 0) {
             if (ctx->live[rank] == -1)
-                cmb_msg_send (p->zs_out_event, "event.live.up.%d", rank);
+                cmb_msg_send (p->zs_out_event, NULL, "event.live.up.%d", rank);
             ctx->live[rank] = 0;
         } else {
-            cmb_msg_send (p->zs_out_tree, "live.up.%d", rank);
+            cmb_msg_send (p->zs_out_tree, NULL, "live.up.%d", rank);
         }
     } else if (!strncmp (tag, live_query, strlen (live_query))) {
         const char *sender;

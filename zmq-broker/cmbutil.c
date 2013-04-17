@@ -8,8 +8,10 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sys/time.h>
+#include <libgen.h>
 
 #include "cmb.h"
+#include "log.h"
 #include "util.h"
 
 #define OPTIONS "psb:k:SK:Ct:P:d:fF:n:l"
@@ -59,6 +61,8 @@ int main (int argc, char *argv[])
     int padding = 0;
     int pingdelay_ms = 1000;
 
+    log_init (basename (argv[0]));
+
     nprocs = env_getint ("SLURM_NPROCS", 1);
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
@@ -74,10 +78,8 @@ int main (int argc, char *argv[])
                 break;
         }
     }
-    if (!(c = cmb_init ())) {
-        fprintf (stderr, "cmb_init: %s\n", strerror (errno));
-        exit (1);
-    }
+    if (!(c = cmb_init ()))
+        err_exit ("cmb_init");
     optind = 0;
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
@@ -86,14 +88,11 @@ int main (int argc, char *argv[])
                 struct timeval t, t1, t2;
                 for (i = 0; ; i++) {
                     xgettimeofday (&t1, NULL);
-                    if (cmb_ping (c, i, padding) < 0) {
-                        fprintf (stderr, "cmb_ping: %s\n", strerror(errno));
-                        exit (1);
-                    }
+                    if (cmb_ping (c, i, padding) < 0)
+                        err_exit ("cmb_ping");
                     xgettimeofday (&t2, NULL);
                     timersub (&t2, &t1, &t);
-                    fprintf (stderr,
-                      "loopback ping pad=%d seq=%d time=%0.3f ms\n", padding, i,
+                    msg ("loopback ping pad=%d seq=%d time=%0.3f ms", padding,i,
                       (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
                     usleep (pingdelay_ms * 1000);
                 }
@@ -104,95 +103,69 @@ int main (int argc, char *argv[])
                 char *name;
                 char buf[CMB_API_FD_BUFSIZE];
 
-                if ((fd = cmb_fd_open (c, NULL, &name)) < 0) {
-                    fprintf (stderr, "cmb_fd_open: %s\n", strerror (errno));
-                    exit (1);
-                }
-                printf ("fdopen-read: %s\n", name);
+                if ((fd = cmb_fd_open (c, NULL, &name)) < 0)
+                    err_exit ("cmb_fd_open");
+                msg ("fdopen-read: %s", name);
                 while ((n = read (fd, buf, sizeof (buf))) > 0) {
                     int done, m;
                     for (done = 0; done < n; done += m) {
                         m = write (1, buf + done, n - done);
-                        if (m < 0) {
-                            fprintf (stderr, "write stdout: %s\n",
-                                     strerror (errno));
-                            exit (1);
-                        }
+                        if (m < 0)
+                            err_exit ("write stdout");
                     }
                 }
-                if (n < 0) {
-                    fprintf (stderr, "fdopen-read: %s\n", strerror (errno));
-                    exit (1);
-                }
+                if (n < 0)
+                    err_exit ("fdopen-read");
                 if (n == 0)
-                    fprintf (stderr, "fdopen-read: EOF\n");
-                if (close (fd) < 0) {
-                    fprintf (stderr, "close: %s\n", strerror (errno));
-                    exit (1);
-                }
+                    msg ("fdopen-read: EOF");
+                if (close (fd) < 0)
+                    err_exit ("close");
                 break;
             }
             case 'F': { /* --fdopen-write DEST */
                 int fd, n;
                 char buf[CMB_API_FD_BUFSIZE];
 
-                if ((fd = cmb_fd_open (c, optarg, NULL)) < 0) {
-                    fprintf (stderr, "cmb_fd_open: %s\n", strerror (errno));
-                    exit (1);
-                }
+                if ((fd = cmb_fd_open (c, optarg, NULL)) < 0)
+                    err_exit ("cmb_fd_open");
                 while ((n = read (0, buf, sizeof (buf))) > 0) {
                     int m;
-                    if ((m = write (fd, buf, n)) < 0) {
-                        fprintf (stderr, "fdopen-write: %s\n",
-                                 strerror (errno));
-                        exit (1);
-                    }
-                    if (m < n) {
-                        fprintf (stderr, "fdopen-write: short write\n");
-                        exit (1);
-                    }
+                    if ((m = write (fd, buf, n)) < 0)
+                        err_exit ("fdopen-write");
+                    if (m < n)
+                        msg_exit ("fdopen-write: short write");
                 }
-                if (n < 0) {
-                    fprintf (stderr, "read stdin: %s\n", strerror (errno));
-                    exit (1);
-                }
+                if (n < 0)
+                    err_exit ("read stdin");
                 if (close (fd) < 0)
-                    fprintf (stderr, "close: %s\n", strerror (errno));
+                    err ("close");
                 break;
             }
             case 'b': { /* --barrier NAME */
                 struct timeval t, t1, t2;
                 xgettimeofday (&t1, NULL);
-                if (cmb_barrier (c, optarg, nprocs) < 0) {
-                    fprintf (stderr, "cmb_barrier: %s\n", strerror(errno));
-                    exit (1);
-                }
+                if (cmb_barrier (c, optarg, nprocs) < 0)
+                    err_exit ("cmb_barrier");
                 xgettimeofday (&t2, NULL);
                 timersub (&t2, &t1, &t);
-                fprintf (stderr, "barrier time=%0.3f ms\n",
-                         (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
+                msg ("barrier time=%0.3f ms",
+                     (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
                 break;
             }
             case 's': { /* --snoop */
-                if (cmb_snoop (c, "") < 0) {
-                    fprintf (stderr, "cmb_snoop: %s\n", strerror(errno));
-                    exit (1);
-                }
+                if (cmb_snoop (c, "") < 0)
+                    err_exit ("cmb_snoop");
                 break;
             }
             case 'S': { /* --sync */
-                if (cmb_sync (c) < 0) {
-                    fprintf (stderr, "cmb_sync: %s\n", strerror(errno));
-                    exit (1);
-                }
+                if (cmb_sync (c) < 0)
+                    err_exit ("cmb_sync");
                 break;
             }
             case 'l': { /* --live-query */
                 int i, *up = NULL, up_len, *dn = NULL, dn_len, nnodes;
-                if (cmb_live_query (c, &up, &up_len, &dn, &dn_len, &nnodes) < 0) {
-                    fprintf (stderr, "cmb_live_query: %s\n", strerror(errno));
-                    exit (1);
-                }
+                if (cmb_live_query (c, &up, &up_len, &dn, &dn_len, &nnodes) < 0)
+                    err_exit ("cmb_live_query");
                 printf ("up:   ");
                 for (i = 0; i < up_len; i++)
                     printf ("%d%s", up[i], i == up_len - 1 ? "" : ",");
@@ -212,18 +185,14 @@ int main (int argc, char *argv[])
                 if (val == NULL)
                     usage ();
                 *val++ = '\0';
-                if (cmb_kvs_put (c, key, val) < 0) {
-                    fprintf (stderr, "cmb_kvs_put: %s\n", strerror(errno));
-                    exit (1);
-                }
+                if (cmb_kvs_put (c, key, val) < 0)
+                    err_exit ("cmb_kvs_put");
                 break;
             }
             case 'K': { /* --kvs-get key */
                 char *val = cmb_kvs_get (c, optarg);
-                if (!val && errno != 0) {
-                    fprintf (stderr, "cmb_kvs_get: %s\n", strerror(errno));
-                    exit (1);
-                }
+                if (!val && errno != 0)
+                    err_exit ("cmb_kvs_get");
                 printf ("%s=%s\n", optarg, val ? val : "<nil>");
                 if (val)
                     free (val);
@@ -232,10 +201,8 @@ int main (int argc, char *argv[])
             case 'C': { /* --kvs-commit */
                 int errcount, putcount;
 
-                if (cmb_kvs_commit (c, &errcount, &putcount) < 0) {
-                    fprintf (stderr, "cmb_kvs_commit: %s\n", strerror(errno));
-                    exit (1);
-                }
+                if (cmb_kvs_commit (c, &errcount, &putcount) < 0)
+                    err_exit ("cmb_kvs_commit");
                 printf ("errcount=%d putcount=%d\n", errcount, putcount);
                 break;
             }
@@ -249,45 +216,37 @@ int main (int argc, char *argv[])
                 for (i = 0; i < n; i++) {
                     snprintf (key, sizeof (key), "key%d", i);
                     snprintf (val, sizeof (key), "val%d", i);
-                    if (cmb_kvs_put (c, key, val) < 0) {
-                        fprintf (stderr, "cmb_kvs_put: %s\n", strerror(errno));
-                        exit (1);
-                    }
+                    if (cmb_kvs_put (c, key, val) < 0)
+                        err_exit ("cmb_kvs_put");
                 }
                 xgettimeofday (&t2, NULL);
                 timersub(&t2, &t1, &t);
-                fprintf (stderr, "kvs_put:    time=%0.3f ms\n",
-                        (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
+                msg ("kvs_put:    time=%0.3f ms",
+                     (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
 
                 xgettimeofday (&t1, NULL);
-                if (cmb_kvs_commit (c, &errcount, &putcount) < 0) {
-                    fprintf (stderr, "cmb_kvs_commit: %s\n", strerror(errno));
-                    exit (1);
-                }
+                if (cmb_kvs_commit (c, &errcount, &putcount) < 0)
+                    err_exit ("cmb_kvs_commit");
                 xgettimeofday (&t2, NULL);
                 timersub (&t2, &t1, &t);
-                fprintf (stderr, "kvs_commit: time=%0.3f ms errcount=%d putcount=%d\n",
-                        (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000,
-                        errcount, putcount);
+                msg ("kvs_commit: time=%0.3f ms errcount=%d putcount=%d",
+                     (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000,
+                     errcount, putcount);
 
                 xgettimeofday (&t1, NULL);
                 for (i = 0; i < n; i++) {
                     snprintf (key, sizeof (key), "key%d", i);
                     snprintf (val, sizeof (key), "val%d", i);
-                    if (!(rval = cmb_kvs_get (c, key))) {
-                        fprintf (stderr, "cmb_kvs_get: %s\n", strerror(errno));
-                        exit (1);
-                    }
-                    if (strcmp (rval, val) != 0) {
-                        fprintf (stderr, "cmb_kvs_get: incorrect val\n");
-                        exit (1);
-                    }
+                    if (!(rval = cmb_kvs_get (c, key)))
+                        err_exit ("cmb_kvs_get");
+                    if (strcmp (rval, val) != 0)
+                        msg_exit ("cmb_kvs_get: incorrect val");
                     free (rval);
                 }
                 xgettimeofday (&t2, NULL);
                 timersub(&t2, &t1, &t);
-                fprintf (stderr, "kvs_get:    time=%0.3f ms\n",
-                        (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
+                msg ("kvs_get:    time=%0.3f ms",
+                     (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
 
                 break;
             }

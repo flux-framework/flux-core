@@ -233,7 +233,7 @@ void cmb_msg_send_long (void *sock, json_object *o, void *data, int len,
         err_exit ("zmsg_send");
 }
 
-void cmb_msg_send (void *sock, const char *fmt, ...)
+void cmb_msg_send (void *sock, json_object *o, const char *fmt, ...)
 {
     va_list ap;
     zmsg_t *msg;
@@ -246,7 +246,7 @@ void cmb_msg_send (void *sock, const char *fmt, ...)
     if (n < 0)
         err_exit ("vasprintf");
    
-    msg = cmb_msg_encode (tag, NULL, NULL, 0);
+    msg = cmb_msg_encode (tag, o, NULL, 0);
     free (tag);
     if (zmsg_send (&msg, sock) < 0)
         err_exit ("zmsg_send");
@@ -279,7 +279,7 @@ error:
     return -1; 
 }
 
-int cmb_msg_send_fd (int fd, const char *fmt, ...)
+int cmb_msg_send_fd (int fd, json_object *o, const char *fmt, ...)
 {
     va_list ap;
     zmsg_t *msg = NULL;
@@ -292,7 +292,7 @@ int cmb_msg_send_fd (int fd, const char *fmt, ...)
     if (n < 0)
         err_exit ("vasprintf");
    
-    msg = cmb_msg_encode (tag, NULL, NULL, 0);
+    msg = cmb_msg_encode (tag, o, NULL, 0);
     if (zmsg_send_fd (fd, &msg) < 0) /* destroys msg on succes */
         goto error;
     free (tag);

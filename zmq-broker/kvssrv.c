@@ -99,7 +99,7 @@ static void _flush_set_backlog (plugin_ctx_t *p, client_t *c)
                 case REDIS_REPLY_NIL:
                 case REDIS_REPLY_STRING:
                 case REDIS_REPLY_ARRAY:
-                    fprintf (stderr, "redisCommand: unexpected reply type\n");
+                    msg ("redisCommand: unexpected reply type");
                     c->errcount++;
                     break;
             }
@@ -251,13 +251,13 @@ static char *_redis_get (plugin_ctx_t *p, const char *key)
 
     rep = redisCommand (ctx->rctx, "GET %s", key);
     if (rep == NULL) {
-        fprintf (stderr, "redisCommand: %s\n", ctx->rctx->errstr);
+        msg ("redisCommand: %s", ctx->rctx->errstr);
         return NULL; /* FIXME: rctx cannot be reused */
     }
     switch (rep->type) {
         case REDIS_REPLY_ERROR:
             assert (rep->str != NULL);
-            fprintf (stderr, "redisCommand: error reply: %s\n", rep->str);
+            msg ("redisCommand: error reply: %s", rep->str);
             break;
         case REDIS_REPLY_NIL:
             /* invalid key */ 
@@ -269,7 +269,7 @@ static char *_redis_get (plugin_ctx_t *p, const char *key)
         case REDIS_REPLY_STATUS:
         case REDIS_REPLY_INTEGER:
         case REDIS_REPLY_ARRAY:
-            fprintf (stderr, "redisCommand: unexpected reply type\n");
+            msg ("redisCommand: unexpected reply type (%d)", rep->type);
             break;
     }
     if (rep)
@@ -288,7 +288,7 @@ static void _reply_to_get (plugin_ctx_t *p, const char *sender, const char *val)
             oom ();
         json_object_object_add (o, "val", no);
     }
-    cmb_msg_send_long (p->zs_out, o, NULL, 0, "%s", sender);
+    cmb_msg_send (p->zs_out, o, "%s", sender);
     json_object_put (o);
 }
 
@@ -306,7 +306,7 @@ static void _reply_to_commit (plugin_ctx_t *p, const char *sender,
         oom ();
     json_object_object_add (o, "putcount", no);
 
-    cmb_msg_send_long (p->zs_out, o, NULL, 0, "%s", sender);
+    cmb_msg_send (p->zs_out, o, "%s", sender);
 
     json_object_put (o);
 }
@@ -332,7 +332,7 @@ static void _recv (plugin_ctx_t *p, zmsg_t *zmsg)
         client_t *c;
 
         if (_parse_kvs_put (o, &key, &val, &sender) < 0){
-            fprintf (stderr, "%s: parse error\n", tag);
+            msg ("%s: parse error", tag);
             goto done;
         }
         c = _client_find_byidentity (p, sender);
@@ -345,7 +345,7 @@ static void _recv (plugin_ctx_t *p, zmsg_t *zmsg)
         char *val;
 
         if (_parse_kvs_get (o, &key, &sender) < 0){
-            fprintf (stderr, "%s: parse error\n", tag);
+            msg ("%s: parse error", tag);
             goto done;
         }
         val = _redis_get (p, key);
@@ -357,7 +357,7 @@ static void _recv (plugin_ctx_t *p, zmsg_t *zmsg)
         client_t *c;
 
         if (_parse_kvs_commit (o, &sender) < 0) {
-            fprintf (stderr, "%s: parse error\n", tag);
+            msg ("%s: parse error", tag);
             goto done;
         }
         c = _client_find_byidentity (p, sender);
