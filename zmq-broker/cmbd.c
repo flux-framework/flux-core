@@ -38,6 +38,7 @@ typedef struct {
     void *zs_plin;
     void *zs_plin_event;
     void *zs_plin_tree;
+    zlist_t *plugins;
 } server_t;
 
 #define OPTIONS "t:T:e:vs:r:R:S:"
@@ -63,10 +64,10 @@ static void _cmb_init (conf_t *conf, server_t **srvp);
 static void _cmb_fini (conf_t *conf, server_t *srv);
 static void _cmb_poll (conf_t *conf, server_t *srv);
 
-static void usage (conf_t *conf)
+static void usage (void)
 {
     fprintf (stderr, 
-"Usage: %s OPTIONS\n"
+"Usage: cmbd OPTIONS\n"
 " -e,--event-uri URI     Set event URI e.g. epgm://eth0;239.192.1.1:5555\n"
 " -t,--tree-in-uri URI   Set tree-in URI, e.g. tcp://*:5556\n"
 " -T,--tree-out-uri URI  Set tree-out URI, e.g. tcp://hostname:5556\n"
@@ -75,7 +76,7 @@ static void usage (conf_t *conf)
 " -s,--syncperiod N      Set sync period in seconds\n"
 " -R,--rank N            Set cmbd address\n"
 " -S,--size N            Set number of ranks in session\n"
-            ,conf->prog);
+            );
     exit (1);
 }
 
@@ -85,8 +86,9 @@ int main (int argc, char *argv[])
     conf_t *conf;
     server_t *srv;
 
+    log_init (basename (argv[0]));
+
     conf = xzmalloc (sizeof (conf_t));
-    conf->prog = basename (argv[0]);
     conf->plout_uri = PLOUT_URI;
     conf->plout_event_uri = PLOUT_EVENT_URI;
     conf->plin_uri = PLIN_URI;
@@ -94,6 +96,7 @@ int main (int argc, char *argv[])
     conf->plin_tree_uri = PLIN_TREE_URI;
     conf->syncperiod_msec = 10*1000;
     conf->size = 1;
+    conf->apisockpath = CMB_API_PATH;
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
             case 'e':   /* --event-uri URI */
@@ -121,11 +124,11 @@ int main (int argc, char *argv[])
                 conf->size = strtoul (optarg, NULL, 10);
                 break;
             default:
-                usage (conf);
+                usage ();
         }
     }
     if (optind < argc)
-        usage (conf);
+        usage ();
 
     _cmb_init (conf, &srv);
     for (;;)
@@ -136,6 +139,53 @@ int main (int argc, char *argv[])
 
     return 0;
 }
+
+static void _plugin_create (server_t *srv, conf_t *conf, plugin_poll_t pf)
+{
+    plugin_t *p;
+    int errnum;
+
+    p = xzmalloc (sizeof (plugin_t));
+    p->conf = conf;
+
+    p->zs_out = zsocket_new (srv->zctx, ZMQ_PUSH);
+    if (zsocket_connect (p->zs_out, "%s", conf->plin_uri) < 0)
+        err_exit ("zsocket_connect: %s", conf->plin_uri);
+
+    p->zs_in = zsocket_new (srv->zctx, ZMQ_SUB);
+    zsocket_set_hwm (p->zs_in, 10000); /* default is 1000 */
+    if (zsocket_connect (p->zs_in, "%s", conf->plout_uri) < 0)
+        err_exit ("zsocket_connect: %s", conf->plout_uri);
+
+    p->zs_in_event = zsocket_new (srv->zctx, ZMQ_SUB);
+    if (zsocket_connect (p->zs_in_event, "%s", conf->plout_event_uri) < 0)
+        err_exit ("zsocket_connect: %s", conf->plout_event_uri);
+        
+    p->poll_fun = pf;
+    errnum = pthread_create (&p->poll_thd, NULL, p->poll_fun, p);
+    if (errnum)
+        errn_exit (errnum, "pthread_create\n");
+
+    zlist_append (srv->plugins, p);
+}
+
+static void _plugin_destroy (server_t *srv, plugin_t *p)
+{
+    int errnum;
+
+    errnum = pthread_join (p->poll_thd, NULL);
+    if (errnum)
+        errn_exit (errnum, "pthread_join\n");
+
+    zsocket_destroy (srv->zctx, p->zs_in_event);
+    zsocket_destroy (srv->zctx, p->zs_in);
+    zsocket_destroy (srv->zctx, p->zs_out);
+
+    zlist_remove (srv->plugins, p);
+
+    free (p);
+}
+
 
 static void _cmb_init (conf_t *conf, server_t **srvp)
 {
@@ -188,8 +238,13 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
     if (zsocket_bind (srv->zs_plin_event, "%s", conf->plin_event_uri) < 0)
         err_exit ("zsocket_bind: %s", conf->plin_event_uri);
 
-    apisrv_init (conf, srv->zctx, CMB_API_PATH);
+    /* Initialize plugins
+     */
+    srv->plugins = zlist_new ();
+    _plugin_create (srv, conf, apisrv_poll);
+
 #if 0
+    apisrv_init (conf, srv->zctx);
     barriersrv_init (conf, srv->zctx);
     if (!conf->treeout_uri) /* root (send on local bus even if no eventout) */
         syncsrv_init (conf, srv->zctx);
@@ -202,7 +257,9 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
 
 static void _cmb_fini (conf_t *conf, server_t *srv)
 {
+    plugin_t *p;
 #if 0
+    apisrv_fini ();
     livesrv_fini ();   
     if (conf->redis_server)
         kvssrv_fini ();
@@ -210,7 +267,9 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
         syncsrv_fini (); 
     barriersrv_fini ();
 #endif
-    apisrv_fini ();
+    while ((p = zlist_head (srv->plugins)))
+        _plugin_destroy (srv, p);
+    zlist_destroy (&srv->plugins); 
 
     zsocket_destroy (srv->zctx, srv->zs_plin_event);
     zsocket_destroy (srv->zctx, srv->zs_plin_tree);
