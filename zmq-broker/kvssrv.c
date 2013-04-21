@@ -43,7 +43,7 @@ typedef struct _client_struct {
     int putcount;
     int errcount;
     char *subscription;
-    kv_t *set_backlog;
+    kv_t *set_queue;
 } client_t;
 
 typedef struct {
@@ -51,27 +51,27 @@ typedef struct {
     client_t *clients;
 } ctx_t;
 
-static void _add_set_backlog (client_t *c, const char *key, const char *val)
+static void _add_set_queue (client_t *c, const char *key, const char *val)
 {
     kv_t *kv = xzmalloc (sizeof (kv_t));
 
     kv->key = xstrdup (key);
     kv->val = xstrdup (val);
 
-    kv->next = c->set_backlog;
+    kv->next = c->set_queue;
     if (kv->next)
         kv->next->prev = kv;
-    c->set_backlog = kv;
+    c->set_queue = kv;
 }
 
-static void _flush_set_backlog (plugin_ctx_t *p, client_t *c)
+static void _flush_set_queue (plugin_ctx_t *p, client_t *c)
 {
     ctx_t *ctx = p->ctx;
     kv_t *kp;
     redisReply *rep;
     int replycount = 0;
 
-    for (kp = c->set_backlog; kp != NULL; kp = kp->next)
+    for (kp = c->set_queue; kp != NULL; kp = kp->next)
         if (kp->next == NULL)
             break;
     while (kp) {
@@ -106,9 +106,9 @@ static void _flush_set_backlog (plugin_ctx_t *p, client_t *c)
             freeReplyObject (rep);
         }
     }
-    while (c->set_backlog) {
-        kp = c->set_backlog;
-        c->set_backlog = kp->next;
+    while (c->set_queue) {
+        kp = c->set_queue;
+        c->set_queue= kp->next;
         free (kp->key);
         free (kp->val);
         free (kp);
@@ -130,7 +130,7 @@ static client_t *_client_create (plugin_ctx_t *p, const char *identity)
         c->next->prev = c;
     ctx->clients = c;
 
-    zsocket_set_subscribe (p->zs_in, c->subscription);
+    //zsocket_set_subscribe (p->zs_in, c->subscription);
 
     return c;
 }
@@ -140,11 +140,11 @@ static void _client_destroy (plugin_ctx_t *p, client_t *c)
     ctx_t *ctx = p->ctx;
     kv_t *kp, *deleteme;
 
-    zsocket_set_unsubscribe (p->zs_in, c->subscription);
+    //zsocket_set_unsubscribe (p->zs_in, c->subscription);
 
     free (c->identity);
     free (c->subscription);
-    for (kp = c->set_backlog; kp != NULL; ) {
+    for (kp = c->set_queue; kp != NULL; ) {
         deleteme = kp;
         kp = kp->next; 
         free (deleteme->key);
@@ -171,76 +171,6 @@ static client_t *_client_find_byidentity (plugin_ctx_t *p, const char *identity)
             return c;
     }
     return NULL;
-}
-
-static client_t *_client_find_bysubscription (plugin_ctx_t *p, const char *subscription)
-{
-    ctx_t *ctx = p->ctx;
-    client_t *c;
- 
-    for (c = ctx->clients; c != NULL; c = c->next) {
-        if (!strcmp (c->subscription, subscription))
-            return c;
-    }
-    return NULL;
-}
-
-static int _parse_kvs_put (json_object *o, const char **kp, const char **vp,
-                                           const char **sp)
-{
-    json_object *key, *val, *sender;
-
-    if (!o)
-        goto error;
-    key = json_object_object_get (o, "key"); 
-    if (!key)
-        goto error;
-    val = json_object_object_get (o, "val"); 
-    if (!val)
-        goto error;
-    sender = json_object_object_get (o, "sender");
-    if (!sender)
-        goto error;
-    *kp = json_object_get_string (key);
-    *vp = json_object_get_string (val);
-    *sp = json_object_get_string (sender);
-    return 0;
-error:
-    return -1;
-}
-
-static int _parse_kvs_get (json_object *o, const char **kp, const char **sp)
-{
-    json_object *key, *sender;
-
-    if (!o)
-        goto error;
-    key = json_object_object_get (o, "key"); 
-    if (!key)
-        goto error;
-    sender = json_object_object_get (o, "sender");
-    if (!sender)
-        goto error;
-    *kp = json_object_get_string (key);
-    *sp = json_object_get_string (sender);
-    return 0;
-error:
-    return -1;
-}
-
-static int _parse_kvs_commit (json_object *o, const char **sp)
-{
-    json_object *sender;
-
-    if (!o)
-        goto error;
-    sender = json_object_object_get (o, "sender");
-    if (!sender)
-        goto error;
-    *sp = json_object_get_string (sender);
-    return 0;
-error:
-    return -1;
 }
 
 static char *_redis_get (plugin_ctx_t *p, const char *key)
@@ -277,104 +207,128 @@ static char *_redis_get (plugin_ctx_t *p, const char *key)
     return val;
 }
 
-static void _reply_to_get (plugin_ctx_t *p, const char *sender, const char *val)
+/* kvs.put just queues up key-val pairs.  There is no reply.
+ */
+static void _kvs_put (plugin_ctx_t *p, zmsg_t **zmsg)
 {
-    json_object *o, *no;
+    json_object *o = NULL, *key, *val;
+    char *sender = NULL;
+    client_t *c;
 
-    if (!(o = json_object_new_object ()))
-        oom ();
-    if (val) { /* if val is null, key was not found - omit 'val' in response */
-        if (!(no = json_object_new_string (val)))
-            oom ();
-        json_object_object_add (o, "val", no);
+    if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) < 0) {
+        err ("%s: error decoding message", __FUNCTION__);
+        goto done;
     }
-    cmb_msg_send (p->zs_out, o, "%s", sender);
-    json_object_put (o);
+    if (!(sender = cmb_msg_sender (*zmsg))
+                            || !(key = json_object_object_get (o, "key"))
+                            || !(val = json_object_object_get (o, "val"))) {
+        err ("%s: protocol error", __FUNCTION__);
+        goto done;
+    }
+    if (!(c = _client_find_byidentity (p, sender)))
+        c = _client_create (p, sender);
+    _add_set_queue (c, json_object_get_string (key),
+                       json_object_get_string (val));
+done:
+    zmsg_destroy (zmsg);
+    if (o)
+        json_object_put (o);
+    if (sender)
+        free (sender);
 }
 
-static void _reply_to_commit (plugin_ctx_t *p, const char *sender,
-                              int errcount, int putcount)
+static void _kvs_get (plugin_ctx_t *p, zmsg_t **zmsg)
 {
-    json_object *o, *no;
+    json_object *o = NULL, *key, *val;
+    char *valstr;
 
-    if (!(o = json_object_new_object ()))
-        oom ();
+    if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) < 0) {
+        err ("%s: error decoding message", __FUNCTION__);
+        goto done;
+    }
+    if (!(key = json_object_object_get (o, "key"))) {
+        err ("%s: protocol error", __FUNCTION__);
+        goto done;
+    }
+    valstr = _redis_get (p, json_object_get_string (key));
+    if (valstr) { /* omit val in response on error */
+        if (!(val = json_object_new_string (valstr)))
+            oom ();
+        json_object_object_add (o, "val", val);
+    }
+    if (cmb_msg_rep_json (*zmsg, o) < 0)
+        goto done;
+    if (zmsg_send (zmsg, p->zs_out) < 0)
+        err ("zmsg_send"); 
+done:
+    if (o)
+        json_object_put (o);
+    if (valstr)
+        free (valstr);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+}
+
+static void _kvs_commit (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    json_object *o = NULL, *no;
+    char *sender = NULL;
+    int errcount = 0, putcount = 0;
+    client_t *c;
+
+    if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) < 0) {
+        err ("%s: error decoding message", __FUNCTION__);
+        goto done;
+    }
+    if (!(sender = cmb_msg_sender (*zmsg))) {
+        err ("%s: protocol error", __FUNCTION__);
+        goto done;
+    }
+    if ((c = _client_find_byidentity (p, sender))) {
+        _flush_set_queue (p, c);
+        errcount = c->errcount;
+        putcount = c->putcount;
+        c->errcount = c->putcount = 0;
+    }
     if (!(no = json_object_new_int (errcount)))
         oom ();
     json_object_object_add (o, "errcount", no);
     if (!(no = json_object_new_int (putcount)))
         oom ();
     json_object_object_add (o, "putcount", no);
-
-    cmb_msg_send (p->zs_out, o, "%s", sender);
-
-    json_object_put (o);
+    if (cmb_msg_rep_json (*zmsg, o) < 0)
+        goto done;
+    if (zmsg_send (zmsg, p->zs_out) < 0)
+        err ("zmsg_send"); 
+done:
+    if (o)
+        json_object_put (o);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
 }
 
-static void _recv (plugin_ctx_t *p, zmsg_t *zmsg)
+static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, msg_type_t type)
 {
-    char *tag = NULL;
-    json_object *o = NULL;
-
-    if (cmb_msg_decode (zmsg, &tag, &o, NULL, NULL) < 0) {
-        err ("kvssrv: recv");
-        goto done;
-    }
-
+#if 0 
     /* api.<uuid>.disconnect */
     if (!strncmp (tag, "api.", strlen ("api."))) {
         client_t *c = _client_find_bysubscription (p, tag);
         if (c)
             _client_destroy (p, c);
+#endif
 
-    } else if (!strcmp (tag, "kvs.put")) {
-        const char *key, *val, *sender;
-        client_t *c;
-
-        if (_parse_kvs_put (o, &key, &val, &sender) < 0){
-            msg ("%s: parse error", tag);
-            goto done;
-        }
-        c = _client_find_byidentity (p, sender);
-        if (!c)
-            c = _client_create (p, sender);
-        _add_set_backlog (c, key, val);
-
-    } else if (!strcmp (tag, "kvs.get")) {
-        const char *key, *sender;
-        char *val;
-
-        if (_parse_kvs_get (o, &key, &sender) < 0){
-            msg ("%s: parse error", tag);
-            goto done;
-        }
-        val = _redis_get (p, key);
-        _reply_to_get (p, sender, val);
-        if (val)
-            free (val);
-    } else if (!strcmp (tag, "kvs.commit")) {
-        const char *sender;
-        client_t *c;
-
-        if (_parse_kvs_commit (o, &sender) < 0) {
-            msg ("%s: parse error", tag);
-            goto done;
-        }
-        c = _client_find_byidentity (p, sender);
-        if (c) {
-            _flush_set_backlog (p, c);
-            _reply_to_commit (p, sender, c->errcount, c->putcount);
-            c->putcount = 0;
-            c->errcount = 0;
-        } else
-            _reply_to_commit (p, sender, 0, 0);
+    if (cmb_msg_match (*zmsg, "kvs.put"))
+        _kvs_put (p, zmsg);
+    else if (cmb_msg_match (*zmsg, "kvs.get"))
+        _kvs_get (p, zmsg);
+    else if (cmb_msg_match (*zmsg, "kvs.commit"))
+        _kvs_commit (p, zmsg);
+    else {
+        if (cmb_msg_rep_nak (*zmsg) >= 0)
+            zmsg_send (zmsg, p->zs_out);
     }
-done:
-    free (tag);
-    if (o)
-        json_object_put (o);
-    if (zmsg)
-        zmsg_destroy (&zmsg);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
 }
 
 
@@ -402,7 +356,7 @@ retryconnect:
         return;
     }
 
-    zsocket_set_subscribe (p->zs_in, "kvs.");
+    //zsocket_set_subscribe (p->zs_in, "kvs.");
 }
 
 static void _fini (plugin_ctx_t *p)
@@ -417,6 +371,7 @@ static void _fini (plugin_ctx_t *p)
 }
 
 struct plugin_struct kvssrv = {
+    .name      = "kvs",
     .initFn    = _init,
     .recvFn    = _recv,
     .finiFn    = _fini,

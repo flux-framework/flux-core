@@ -80,7 +80,7 @@ static void _reply_to_query (plugin_ctx_t *p, const char *sender)
     json_object_put (o);
 }
 
-static void _recv (plugin_ctx_t *p, zmsg_t *zmsg)
+static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, msg_type_t type)
 {
     ctx_t *ctx = p->ctx;
     const char *live_up = "live.up.";
@@ -91,7 +91,7 @@ static void _recv (plugin_ctx_t *p, zmsg_t *zmsg)
     int i, myrank = p->conf->rank;
     json_object *o = NULL;
 
-    if (cmb_msg_decode (zmsg, &tag, &o, NULL, NULL) < 0) {
+    if (cmb_msg_decode (*zmsg, &tag, &o, NULL, NULL) < 0) {
         err ("livesrv: recv");
         goto done; 
     }
@@ -148,8 +148,8 @@ done:
         free (tag);
     if (o)
         json_object_put (o);
-    if (zmsg)
-        zmsg_destroy (&zmsg);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
 }
 
 static void _init (plugin_ctx_t *p)
@@ -163,7 +163,7 @@ static void _init (plugin_ctx_t *p)
     for (i = 0; i < p->conf->size; i++)
         ctx->live[i] = -1;
 
-    zsocket_set_subscribe (p->zs_in, "live.");
+    //zsocket_set_subscribe (p->zs_in, "live.");
     zsocket_set_subscribe (p->zs_in_event, "event.sched.trigger");
     zsocket_set_subscribe (p->zs_in_event, "event.live.");
 }
@@ -177,6 +177,7 @@ static void _fini (plugin_ctx_t *p)
 }
 
 struct plugin_struct livesrv = {
+    .name      = "live",
     .initFn    = _init,
     .recvFn    = _recv,
     .finiFn    = _fini,

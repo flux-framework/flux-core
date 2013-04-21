@@ -14,9 +14,9 @@
 #include "log.h"
 #include "util.h"
 
-#define OPTIONS "psb:k:SK:Ct:P:d:fF:n:l"
+#define OPTIONS "p:sb:k:SK:Ct:P:d:fF:n:l"
 static const struct option longopts[] = {
-    {"ping",       no_argument,        0, 'p'},
+    {"ping",       required_argument,  0, 'p'},
     {"ping-padding", required_argument,0, 'P'},
     {"ping-delay", required_argument,  0, 'd'},
     {"fdopen-read",no_argument,        0, 'f'},
@@ -36,7 +36,7 @@ static const struct option longopts[] = {
 static void usage (void)
 {
     fprintf (stderr, "Usage: cmbutil OPTIONS\n"
-"  -p,--ping              loop back a sequenced message through the cmb\n"
+"  -p,--ping name         route a message through a plugin\n"
 "  -P,--ping-padding N    pad ping packets with N bytes (adds a JSON string)\n"
 "  -d,--ping-delay N      set delay between ping packets (in msec)\n"
 "  -f,--fdopen-read       open r/o fd, print name, and read until EOF\n"
@@ -83,18 +83,21 @@ int main (int argc, char *argv[])
     optind = 0;
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
-            case 'p': { /* --ping */
+            case 'p': { /* --ping name */
                 int i;
                 struct timeval t, t1, t2;
+                char *tag;
                 for (i = 0; ; i++) {
                     xgettimeofday (&t1, NULL);
-                    if (cmb_ping (c, i, padding) < 0)
+                    if (cmb_ping (c, optarg, i, padding, &tag) < 0)
                         err_exit ("cmb_ping");
                     xgettimeofday (&t2, NULL);
                     timersub (&t2, &t1, &t);
-                    msg ("loopback ping pad=%d seq=%d time=%0.3f ms", padding,i,
-                      (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
+                    msg ("%s pad=%d seq=%d time=%0.3f ms", tag,
+                         padding,i,
+                         (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
                     usleep (pingdelay_ms * 1000);
+                    free (tag);
                 }
                 break;
             }

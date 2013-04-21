@@ -193,15 +193,13 @@ error:
     return -1;
 }
 
-int cmb_ping (cmb_t c, int seq, int padlen)
+int cmb_ping (cmb_t c, char *name, int seq, int padlen, char **tagp)
 {
     json_object *o = NULL;
     int rseq;
     void *rpad = NULL, *pad = NULL;
+    char *tag = NULL;
     int rpadlen;
-
-    if (cmb_msg_send_fd (c->fd, NULL, "api.subscribe.ping.%s", c->uuid) < 0)
-        goto error;
 
     /* send request */
     if (!(o = json_object_new_object ()))
@@ -214,13 +212,13 @@ int cmb_ping (cmb_t c, int seq, int padlen)
             oom ();
         memset (pad, 'z', padlen);
     }
-    if (cmb_msg_send_long_fd (c->fd, o, pad, padlen, "ping.%s", c->uuid) < 0)
+    if (cmb_msg_send_long_fd (c->fd, o, pad, padlen, "%s.ping", name) < 0)
         goto error;
     json_object_put (o);
     o = NULL;
 
     /* receive a copy back */
-    if (cmb_msg_recv_fd (c->fd, NULL, &o, &rpad, &rpadlen, 0) < 0)
+    if (cmb_msg_recv_fd (c->fd, &tag, &o, &rpad, &rpadlen, 0) < 0)
         goto error;
     if (_json_object_get_int (o, "seq", &rseq) < 0)
         goto error;
@@ -242,9 +240,10 @@ int cmb_ping (cmb_t c, int seq, int padlen)
             goto error;
         }
     }
-
-    if (cmb_msg_send_fd (c->fd, NULL, "api.unsubscribe") < 0)
-        goto error;
+    if (tagp)
+        *tagp = tag;
+    else
+        free (tag);
 
     if (o)
         json_object_put (o);
@@ -262,6 +261,8 @@ error:
         free (pad);
     if (rpad)
         free (rpad);
+    if (tag)
+        free (tag);
     return -1;
 }
 
@@ -337,8 +338,6 @@ int cmb_kvs_put (cmb_t c, const char *key, const char *val)
         goto error;
     if (_json_object_add_string (o, "val", val) < 0)
         goto error;
-    if (_json_object_add_string (o, "sender", c->uuid) < 0)
-        goto error;
     if (cmb_msg_send_fd (c->fd, o, "kvs.put") < 0)
         goto error;
     json_object_put (o);
@@ -365,8 +364,6 @@ char *cmb_kvs_get (cmb_t c, const char *key)
     if (!(o = json_object_new_object ()))
         goto nomem;
     if (_json_object_add_string (o, "key", key) < 0)
-        goto error;
-    if (_json_object_add_string (o, "sender", c->uuid) < 0)
         goto error;
     if (cmb_msg_send_fd (c->fd, o, "kvs.get") < 0)
         goto error;
@@ -451,14 +448,9 @@ int cmb_kvs_commit (cmb_t c, int *ep, int *pp)
     json_object *o = NULL;
     int errcount, putcount;
 
-    if (cmb_msg_send_fd (c->fd, NULL, "api.xsubscribe.%s", c->uuid) < 0)
-        goto error;
-
     /* send request */
     if (!(o = json_object_new_object ()))
         goto nomem;
-    if (_json_object_add_string (o, "sender", c->uuid) < 0)
-        goto error;
     if (cmb_msg_send_fd (c->fd, o, "kvs.commit") < 0)
         goto error;
     json_object_put (o);

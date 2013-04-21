@@ -21,6 +21,7 @@
 
 #include "zmq.h"
 #include "cmbd.h"
+#include "log.h"
 #include "plugin.h"
 
 #include "syncsrv.h"
@@ -36,6 +37,7 @@ static void _init (plugin_ctx_t *p)
 }
 
 struct plugin_struct syncsrv = {
+    .name      = "sync",
     .initFn    = _init,
     .timeoutFn = _timeout,
 };

@@ -123,7 +123,7 @@ error:
     return -1;
 }
 
-static void _recv (plugin_ctx_t *p, zmsg_t *zmsg)
+static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, msg_type_t type)
 {
     ctx_t *ctx = p->ctx;
     char *barrier_enter = "barrier.enter.";
@@ -131,7 +131,7 @@ static void _recv (plugin_ctx_t *p, zmsg_t *zmsg)
     char *tag = NULL;
     json_object *o;
 
-    if (cmb_msg_decode (zmsg, &tag, &o, NULL, NULL) < 0) {
+    if (cmb_msg_decode (*zmsg, &tag, &o, NULL, NULL) < 0) {
         err ("barriersrv: recv");
         goto done;
     }
@@ -164,8 +164,8 @@ done:
         free (tag);
     if (o)
         json_object_put (o);
-    if (zmsg)
-        zmsg_destroy (&zmsg);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
 }
 
 static void _timeout (plugin_ctx_t *p)
@@ -182,7 +182,7 @@ static void _init (plugin_ctx_t *p)
     ctx_t *ctx;
 
     ctx = p->ctx = xzmalloc (sizeof (ctx_t));
-    zsocket_set_subscribe (p->zs_in, "barrier.enter.");
+    //zsocket_set_subscribe (p->zs_in, "barrier.enter.");
     zsocket_set_subscribe (p->zs_in_event, "event.barrier.exit.");
     ctx->barriers = zhash_new ();
     p->timeout = -1; /* no timeout initially */
@@ -196,9 +196,10 @@ static void _fini (plugin_ctx_t *p)
 }
 
 struct plugin_struct barriersrv = {
-    .initFn = _init,
-    .finiFn = _fini,
-    .recvFn = _recv,
+    .name      = "barrier",
+    .initFn    = _init,
+    .finiFn    = _fini,
+    .recvFn    = _recv,
     .timeoutFn = _timeout,
 };
 

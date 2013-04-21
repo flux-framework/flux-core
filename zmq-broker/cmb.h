@@ -7,7 +7,7 @@ typedef struct cmb_struct *cmb_t;
 cmb_t cmb_init (void);
 void cmb_fini (cmb_t c);
 
-int cmb_ping (cmb_t c, int seq, int padding);
+int cmb_ping (cmb_t c, char *tag, int seq, int padding, char **tagp);
 int cmb_snoop (cmb_t c, char *subscription);
 int cmb_barrier (cmb_t c, char *name, int nprocs);
 int cmb_sync (cmb_t c);

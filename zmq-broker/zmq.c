@@ -116,13 +116,52 @@ error:
  ** cmb messages
  **/
 
+static zframe_t *_tag_frame (zmsg_t *zmsg)
+{
+    zframe_t *zf;
 
-int cmb_msg_decode (zmsg_t *msg, char **tagp, json_object **op,
+    zf = zmsg_first (zmsg);
+    while (zf && zframe_size (zf) != 0)
+        zf = zmsg_next (zmsg); /* skip non-empty */
+    if (zf)
+        zf = zmsg_next (zmsg); /* skip empty */
+    if (!zf)
+        zf = zmsg_first (zmsg); /* rewind - there was no envelope */
+    return zf;
+}
+
+static zframe_t *_json_frame (zmsg_t *zmsg)
+{
+    zframe_t *zf = _tag_frame (zmsg);
+
+    return (zf ? zmsg_next (zmsg) : NULL);
+}
+
+static zframe_t *_data_frame (zmsg_t *zmsg)
+{
+    zframe_t *zf = _json_frame (zmsg);
+
+    return (zf ? zmsg_next (zmsg) : NULL);
+}
+
+static zframe_t *_sender_frame (zmsg_t *zmsg)
+{
+    zframe_t *zf, *prev;
+
+    zf = zmsg_first (zmsg);
+    while (zf && zframe_size (zf) != 0) {
+        prev = zf;
+        zf = zmsg_next (zmsg);
+    }
+    return (zf ? prev : NULL);
+}
+
+int cmb_msg_decode (zmsg_t *zmsg, char **tagp, json_object **op,
                     void **datap, int *lenp)
 {
-    zframe_t *tag = zmsg_first (msg);
-    zframe_t *json = zmsg_next (msg);
-    zframe_t *data = zmsg_next (msg);
+    zframe_t *tag = _tag_frame (zmsg);
+    zframe_t *json = zmsg_next (zmsg);
+    zframe_t *data = zmsg_next (zmsg);
 
     if (!tag)
         goto eproto;
@@ -305,40 +344,111 @@ error:
     return -1;
 }
 
-
-bool cmb_msg_match (zmsg_t *msg, const char *tag, bool exact)
+bool cmb_msg_match (zmsg_t *zmsg, const char *tag)
 {
-    bool match;
-    zframe_t *frame = zmsg_first (msg);
-    char *s;
+    zframe_t *zf = _tag_frame (zmsg);
 
-    if (!frame)
-        msg_exit ("cmb_msg_match: nonexistent message part");
-    if (!(s = zframe_strdup (frame)))
-        oom ();
-    if (exact)
-        match = (strcmp (tag, s) == 0);
-    else
-        match = (strncmp (tag, s, strlen (tag)) == 0);
-    free (s);
-    return match;
+    if (!zf)
+        msg_exit ("cmb_msg_match: no tag in message");
+    return zframe_streq (zf, tag);
 }
 
-int cmb_msg_datacpy (zmsg_t *msg, char *buf, int len)
+bool cmb_msg_match_substr (zmsg_t *zmsg, const char *tag, char **restp)
 {
-    zframe_t *data;
+    int taglen = strlen (tag);
+    zframe_t *zf = _tag_frame (zmsg);
+    char *ztag;
+    int ztaglen;
 
-    if (zmsg_size (msg) != 3)
-        return -1;
-    data = zmsg_last (msg);
-    if (!data)
-        return -1;
-    if (zframe_size (data) > len) {
-        fprintf (stderr, "cmb_msg_getdata: received message is too big\n");
+    if (!zf)
+        msg_exit ("cmb_msg_match: no tag in message");
+    if (!(ztag = zframe_strdup (zf)))
+        oom ();
+    ztaglen = strlen (ztag); 
+    if (ztaglen >= taglen && strncmp (tag, ztag, taglen) == 0) {
+        if (restp) {
+            memmove (ztag, ztag + taglen, ztaglen - taglen);
+            *restp = ztag;
+        } else
+            free (ztag);
+        return true;
+    }
+    free (ztag);
+    return false;
+}
+
+/* extract the first address in the envelope (sender uuid) */
+char *cmb_msg_sender (zmsg_t *zmsg)
+{
+    zframe_t *zf = _sender_frame (zmsg);
+    if (!zf) {
+        msg ("cmb_msg_sender: empty envelope");
+        return NULL;
+    }
+    return zframe_strdup (zf); /* caller must free */
+}
+
+/* Append .NAK to the tag portion of message.
+ * But otherwise leave the message and the envelope unchanged.
+ * This indicates that the addressed plugin is not loaded.
+ */
+int cmb_msg_rep_nak (zmsg_t *zmsg)
+{
+    zframe_t *zf = _tag_frame (zmsg);
+    char *tag = NULL, *newtag = NULL;
+
+    if (!zf) {
+        msg ("cmb_msg_makenak: no message tag");
         return -1;
     }
-    memcpy (buf, zframe_data (data), zframe_size (data));
-    return zframe_size (data);
+    tag = zframe_strdup (zf);
+    if (!tag)
+        goto error;
+    if (asprintf (&newtag, "%s.NAK", tag) < 0)
+        goto error;
+    /* N.B. calls zmq_msg_init_size internally with unchecked return value */
+    zframe_reset (zf, newtag, strlen (newtag));
+    free (newtag);
+    free (tag); 
+    return 0;
+error:
+    if (tag)
+        free (tag);
+    if (newtag)
+        free (newtag); 
+    return -1;
+}
+
+/* Replace JSON portion of message.
+ */
+int cmb_msg_rep_json (zmsg_t *zmsg, json_object *o)
+{
+    const char *json = json_object_to_json_string (o);
+    zframe_t *zf = _json_frame (zmsg);
+
+    if (!zf) {
+        msg ("cmb_msg_makenak: no json frame");
+        return -1;
+    }
+    /* N.B. calls zmq_msg_init_size internally with unchecked return value */
+    zframe_reset (zf, json, strlen (json));
+    return 0;
+}
+
+int cmb_msg_datacpy (zmsg_t *zmsg, char *buf, int len)
+{
+    zframe_t *zf = _data_frame (zmsg);
+
+    if (!zf) {
+        msg ("cmb_msg_makenak: no data frame");
+        return -1;
+    }
+    if (zframe_size (zf) > len) {
+        msg ("%s: buffer too small", __FUNCTION__);
+        return -1;
+    }
+    memcpy (buf, zframe_data (zf), zframe_size (zf));
+    return zframe_size (zf);
 }
 
 /*

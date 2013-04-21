@@ -35,7 +35,13 @@ int cmb_msg_send_fd (int fd, json_object *o, const char *fmt, ...)
 int cmb_msg_recv_fd (int fd, char **tagp, json_object **op,
                      void **datap, int *lenp, int flags);
 
-bool cmb_msg_match (zmsg_t *msg, const char *tag, bool exact);
+bool cmb_msg_match (zmsg_t *msg, const char *tag);
+bool cmb_msg_match_substr (zmsg_t *msg, const char *tag, char **restp);
+
+char *cmb_msg_sender (zmsg_t *zmsg);
+
+int cmb_msg_rep_nak (zmsg_t *zmsg);
+int cmb_msg_rep_json (zmsg_t *zmsg, json_object *o);
 
 int cmb_msg_datacpy (zmsg_t *msg, char *buf, int len);
 
