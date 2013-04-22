@@ -430,7 +430,7 @@ static void _readmsg_req (plugin_ctx_t *p, void *socket)
     }
 done:
     if (zmsg) {
-        msg ("apisrv: discarding message for: %s (not found)", uuid);
+        //msg ("apisrv: discarding message for: %s (not found)", uuid);
         zmsg_destroy (&zmsg);
     }
     if (zf)

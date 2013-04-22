@@ -191,16 +191,16 @@ static void _plugin_create (server_t *srv, conf_t *conf, plugin_t plugin)
         err_exit ("asprintf");
 
     /* server side */
-    zbind (zctx, &p->zs_plout,        ZMQ_PUSH, plout_uri,        1000);
+    zbind (zctx, &p->zs_plout,        ZMQ_PUSH, plout_uri,        -1);
 
     /* plugin side */
-    zconnect (zctx, &p->zs_in,        ZMQ_PULL, plout_uri,        1000);
-    zconnect (zctx, &p->zs_in_event,  ZMQ_SUB,  PLOUT_EVENT_URI,  1000);
-    zconnect (zctx, &p->zs_req,       ZMQ_DEALER, PLIO_ROUTER_URI,1000);
-    zconnect (zctx, &p->zs_out,       ZMQ_PUSH, PLIN_URI,         1000);
-    zconnect (zctx, &p->zs_out_event, ZMQ_PUSH, PLIN_EVENT_URI,   1000);
+    zconnect (zctx, &p->zs_in,        ZMQ_PULL, plout_uri,        -1, NULL);
+    zconnect (zctx, &p->zs_in_event,  ZMQ_SUB,  PLOUT_EVENT_URI,  -1, NULL);
+    zconnect (zctx, &p->zs_req,ZMQ_DEALER, PLIO_ROUTER_URI, -1, (char *)plugin->name);
+    zconnect (zctx, &p->zs_out,       ZMQ_PUSH, PLIN_URI,         -1, NULL);
+    zconnect (zctx, &p->zs_out_event, ZMQ_PUSH, PLIN_EVENT_URI,   -1, NULL);
     if (conf->treeout_uri)
-        zconnect (zctx, &p->zs_out_tree, ZMQ_PUSH, PLIN_TREE_URI, 1000);
+        zconnect (zctx, &p->zs_out_tree, ZMQ_PUSH, PLIN_TREE_URI, -1, NULL);
 
     errnum = pthread_create (&p->t, NULL, _plugin_thread, p);
     if (errnum)
@@ -244,7 +244,6 @@ void plugin_send (server_t *srv, conf_t *conf, zmsg_t **zmsg)
         if (*zmsg) {
             if (conf->verbose) {
                 zmsg_dump (*zmsg);
-                msg ("responding with NAK");
             }
             /* send a NAK response indicating plugin is not recognized */
             _nak_respond (zmsg, srv->zs_plio_router, conf->verbose);

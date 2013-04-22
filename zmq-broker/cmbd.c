@@ -124,22 +124,22 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
 
     /* external sockets */
     if (conf->event_uri) {
-        zbind (zctx, &srv->zs_eventout, ZMQ_PUB, conf->event_uri, 1000);
-        zbind (zctx, &srv->zs_eventin,  ZMQ_SUB, conf->event_uri, 1000);
+        zbind (zctx, &srv->zs_eventout, ZMQ_PUB, conf->event_uri, -1);
+        zbind (zctx, &srv->zs_eventin,  ZMQ_SUB, conf->event_uri, -1);
         zsocket_set_subscribe (srv->zs_eventin, "");
     }
     if (conf->treeout_uri)
-        zconnect (zctx, &srv->zs_treeout, ZMQ_PUSH, conf->treeout_uri, 1000);
+        zconnect (zctx, &srv->zs_treeout, ZMQ_PUSH, conf->treeout_uri, -1,NULL);
     if (conf->treein_uri)
-        zbind (zctx, &srv->zs_treein, ZMQ_PULL, conf->treein_uri, 1000);
+        zbind (zctx, &srv->zs_treein, ZMQ_PULL, conf->treein_uri, -1);
 
     /* plugin sockets */
-    zbind (zctx, &srv->zs_plout_event, ZMQ_PUB,  PLOUT_EVENT_URI, 1000);
-    zbind (zctx, &srv->zs_plio_router, ZMQ_ROUTER,  PLIO_ROUTER_URI, 1000);
-    zbind (zctx, &srv->zs_plin,        ZMQ_PULL, PLIN_URI,        1000);
+    zbind (zctx, &srv->zs_plout_event, ZMQ_PUB,  PLOUT_EVENT_URI, -1);
+    zbind (zctx, &srv->zs_plio_router, ZMQ_ROUTER,  PLIO_ROUTER_URI, -1);
+    zbind (zctx, &srv->zs_plin,        ZMQ_PULL, PLIN_URI,        -1);
     if (conf->treein_uri)
-        zbind (zctx, &srv->zs_plin_tree, ZMQ_PULL, PLIN_TREE_URI, 1000);
-    zbind (zctx, &srv->zs_plin_event,  ZMQ_PULL, PLIN_EVENT_URI,  1000);
+        zbind (zctx, &srv->zs_plin_tree, ZMQ_PULL, PLIN_TREE_URI, -1);
+    zbind (zctx, &srv->zs_plin_event,  ZMQ_PULL, PLIN_EVENT_URI,  -1);
 
     plugin_init (conf, srv);
 

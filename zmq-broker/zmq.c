@@ -52,10 +52,13 @@ int zpoll (zmq_pollitem_t *items, int nitems, long timeout)
     return rc;
 }
 
-void zconnect (zctx_t *zctx, void **sp, int type, char *uri, int hwm)
+void zconnect (zctx_t *zctx, void **sp, int type, char *uri, int hwm, char *id)
 {
     *sp = zsocket_new (zctx, type);
-    zsocket_set_hwm (*sp, hwm);
+    if (hwm != -1)
+        zsocket_set_hwm (*sp, hwm);
+    if (id != NULL)
+        zsocket_set_identity (*sp, id);
     if (zsocket_connect (*sp, "%s", uri) < 0)
         err_exit ("zsocket_connect: %s", uri);
 }
@@ -63,7 +66,8 @@ void zconnect (zctx_t *zctx, void **sp, int type, char *uri, int hwm)
 void zbind (zctx_t *zctx, void **sp, int type, char *uri, int hwm)
 {
     *sp = zsocket_new (zctx, type);
-    zsocket_set_hwm (*sp, hwm);
+    if (hwm != -1)
+        zsocket_set_hwm (*sp, hwm);
     if (zsocket_bind (*sp, "%s", uri) < 0)
         err_exit ("zsocket_bind: %s", uri);
 }

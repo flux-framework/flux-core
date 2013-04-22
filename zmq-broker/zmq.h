@@ -1,5 +1,5 @@
 int  zpoll (zmq_pollitem_t *items, int nitems, long timeout);
-void zconnect (zctx_t *zctx, void **sp, int type, char *uri, int hwm);
+void zconnect (zctx_t *zctx, void **sp, int type, char *uri, int hwm, char *id);
 void zbind (zctx_t *zctx, void **sp, int type, char *uri, int hwm);
 
 /* Like zmsg_recv/zmsg_send but for a SOCK_SEQPACKET socket */
