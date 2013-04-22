@@ -212,7 +212,7 @@ static void _kvs_put (plugin_ctx_t *p, zmsg_t **zmsg)
         err ("%s: error decoding message", __FUNCTION__);
         goto done;
     }
-    if (!(sender = cmb_msg_sender (*zmsg))
+    if (o == NULL || !(sender = cmb_msg_sender (*zmsg))
                             || !(key = json_object_object_get (o, "key"))
                             || !(val = json_object_object_get (o, "val"))) {
         err ("%s: protocol error", __FUNCTION__);
@@ -239,7 +239,7 @@ static void _kvs_get (plugin_ctx_t *p, zmsg_t **zmsg)
         err ("%s: error decoding message", __FUNCTION__);
         goto done;
     }
-    if (!(key = json_object_object_get (o, "key"))) {
+    if (o == NULL || !(key = json_object_object_get (o, "key"))) {
         err ("%s: protocol error", __FUNCTION__);
         goto done;
     }
@@ -273,7 +273,7 @@ static void _kvs_commit (plugin_ctx_t *p, zmsg_t **zmsg)
         err ("%s: error decoding message", __FUNCTION__);
         goto done;
     }
-    if (!(sender = cmb_msg_sender (*zmsg))) {
+    if (o == NULL || !(sender = cmb_msg_sender (*zmsg))) {
         err ("%s: protocol error", __FUNCTION__);
         goto done;
     }
@@ -330,12 +330,6 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, msg_type_t type)
         _kvs_commit (p, zmsg);
     else if (cmb_msg_match (*zmsg, "kvs.disconnect"))
         _kvs_disconnect (p, zmsg);
-    else {
-        if (cmb_msg_rep_nak (*zmsg) >= 0)
-            zmsg_send (zmsg, p->zs_out);
-    }
-    if (*zmsg)
-        zmsg_destroy (zmsg);
 }
 
 static void _init (plugin_ctx_t *p)

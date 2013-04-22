@@ -53,6 +53,11 @@ done:
         zmsg_destroy (zmsg);
 }
 
+/* This is the poll loop for a plugin instance.
+ * The request flow is:
+ * - we receive requests on 'in' and respond on 'out';
+ * - we make requests and receive resonses on 'req'.
+ */
 static void _plugin_poll (plugin_ctx_t *p)
 {
     zmq_pollitem_t zpa[] = {
@@ -112,16 +117,20 @@ static void _plugin_poll (plugin_ctx_t *p)
         } else
             zmsg = NULL;
 
-        /* dispatch message to plugin */
-        if (zmsg) {
-            if (type == MSG_REQUEST && cmb_msg_match (zmsg, pingtag)) {
-                _ping_respond (p, &zmsg);
-            } else if (p->plugin->recvFn)
-                p->plugin->recvFn (p, &zmsg, type);
-            else
-                zmsg_destroy (&zmsg);
-            assert (zmsg == NULL);
-        }
+        /* intercept and respond to ping requests for this plugin */
+        if (zmsg && type == MSG_REQUEST && cmb_msg_match (zmsg, pingtag))
+            _ping_respond (p, &zmsg);
+
+        /* dispatch message to plugin's recvFn() */
+        /*     recvFn () shouldn't free zmsg if it doesn't recognize the tag */
+        if (zmsg && p->plugin->recvFn)
+            p->plugin->recvFn (p, &zmsg, type);
+
+        /* send a NAK response indicating plugin did not recognize tag */
+        if (zmsg)
+            _nak_respond (&zmsg, p->zs_out, p->conf->verbose);
+
+        assert (zmsg == NULL);
     }
 
     free (pingtag);
@@ -237,6 +246,7 @@ void plugin_send (server_t *srv, conf_t *conf, zmsg_t **zmsg)
                 zmsg_dump (*zmsg);
                 msg ("responding with NAK");
             }
+            /* send a NAK response indicating plugin is not recognized */
             _nak_respond (zmsg, srv->zs_plio_router, conf->verbose);
         }
 }
