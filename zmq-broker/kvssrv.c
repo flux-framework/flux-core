@@ -42,8 +42,7 @@ typedef struct _client_struct {
     char *identity;
     int putcount;
     int errcount;
-    char *subscription;
-    kv_t *set_queue;
+    kv_t *put_queue;
 } client_t;
 
 typedef struct {
@@ -51,27 +50,27 @@ typedef struct {
     client_t *clients;
 } ctx_t;
 
-static void _add_set_queue (client_t *c, const char *key, const char *val)
+static void _add_put_queue (client_t *c, const char *key, const char *val)
 {
     kv_t *kv = xzmalloc (sizeof (kv_t));
 
     kv->key = xstrdup (key);
     kv->val = xstrdup (val);
 
-    kv->next = c->set_queue;
+    kv->next = c->put_queue;
     if (kv->next)
         kv->next->prev = kv;
-    c->set_queue = kv;
+    c->put_queue = kv;
 }
 
-static void _flush_set_queue (plugin_ctx_t *p, client_t *c)
+static void _flush_put_queue (plugin_ctx_t *p, client_t *c)
 {
     ctx_t *ctx = p->ctx;
     kv_t *kp;
     redisReply *rep;
     int replycount = 0;
 
-    for (kp = c->set_queue; kp != NULL; kp = kp->next)
+    for (kp = c->put_queue; kp != NULL; kp = kp->next)
         if (kp->next == NULL)
             break;
     while (kp) {
@@ -106,9 +105,9 @@ static void _flush_set_queue (plugin_ctx_t *p, client_t *c)
             freeReplyObject (rep);
         }
     }
-    while (c->set_queue) {
-        kp = c->set_queue;
-        c->set_queue= kp->next;
+    while (c->put_queue) {
+        kp = c->put_queue;
+        c->put_queue= kp->next;
         free (kp->key);
         free (kp->val);
         free (kp);
@@ -122,15 +121,11 @@ static client_t *_client_create (plugin_ctx_t *p, const char *identity)
 
     c = xzmalloc (sizeof (client_t));
     c->identity = xstrdup (identity);
-    if (asprintf (&c->subscription, "%s.disconnect", identity) < 0)
-        oom ();
     c->prev = NULL;
     c->next = ctx->clients;
     if (c->next)
         c->next->prev = c;
     ctx->clients = c;
-
-    //zsocket_set_subscribe (p->zs_in, c->subscription);
 
     return c;
 }
@@ -140,11 +135,8 @@ static void _client_destroy (plugin_ctx_t *p, client_t *c)
     ctx_t *ctx = p->ctx;
     kv_t *kp, *deleteme;
 
-    //zsocket_set_unsubscribe (p->zs_in, c->subscription);
-
     free (c->identity);
-    free (c->subscription);
-    for (kp = c->set_queue; kp != NULL; ) {
+    for (kp = c->put_queue; kp != NULL; ) {
         deleteme = kp;
         kp = kp->next; 
         free (deleteme->key);
@@ -161,7 +153,7 @@ static void _client_destroy (plugin_ctx_t *p, client_t *c)
     free (c);
 }   
 
-static client_t *_client_find_byidentity (plugin_ctx_t *p, const char *identity)
+static client_t *_client_find (plugin_ctx_t *p, const char *identity)
 {
     ctx_t *ctx = p->ctx;
     client_t *c;
@@ -208,6 +200,7 @@ static char *_redis_get (plugin_ctx_t *p, const char *key)
 }
 
 /* kvs.put just queues up key-val pairs.  There is no reply.
+ * FIXME: auto-flush after some threshold to avoid DoS.
  */
 static void _kvs_put (plugin_ctx_t *p, zmsg_t **zmsg)
 {
@@ -225,9 +218,9 @@ static void _kvs_put (plugin_ctx_t *p, zmsg_t **zmsg)
         err ("%s: protocol error", __FUNCTION__);
         goto done;
     }
-    if (!(c = _client_find_byidentity (p, sender)))
+    if (!(c = _client_find (p, sender)))
         c = _client_create (p, sender);
-    _add_set_queue (c, json_object_get_string (key),
+    _add_put_queue (c, json_object_get_string (key),
                        json_object_get_string (val));
 done:
     zmsg_destroy (zmsg);
@@ -284,8 +277,8 @@ static void _kvs_commit (plugin_ctx_t *p, zmsg_t **zmsg)
         err ("%s: protocol error", __FUNCTION__);
         goto done;
     }
-    if ((c = _client_find_byidentity (p, sender))) {
-        _flush_set_queue (p, c);
+    if ((c = _client_find (p, sender))) {
+        _flush_put_queue (p, c);
         errcount = c->errcount;
         putcount = c->putcount;
         c->errcount = c->putcount = 0;
@@ -305,24 +298,38 @@ done:
         json_object_put (o);
     if (*zmsg)
         zmsg_destroy (zmsg);
+    if (sender)
+        free (sender);
+}
+
+static void _kvs_disconnect (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    char *sender = NULL;
+    client_t *c;
+
+    if (!(sender = cmb_msg_sender (*zmsg))) {
+        err ("%s: protocol error", __FUNCTION__);
+        goto done;
+    }
+    if ((c = _client_find (p, sender)))
+        _client_destroy (p, c);
+done:
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+    if (sender)
+        free (sender);
 }
 
 static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, msg_type_t type)
 {
-#if 0 
-    /* api.<uuid>.disconnect */
-    if (!strncmp (tag, "api.", strlen ("api."))) {
-        client_t *c = _client_find_bysubscription (p, tag);
-        if (c)
-            _client_destroy (p, c);
-#endif
-
     if (cmb_msg_match (*zmsg, "kvs.put"))
         _kvs_put (p, zmsg);
     else if (cmb_msg_match (*zmsg, "kvs.get"))
         _kvs_get (p, zmsg);
     else if (cmb_msg_match (*zmsg, "kvs.commit"))
         _kvs_commit (p, zmsg);
+    else if (cmb_msg_match (*zmsg, "kvs.disconnect"))
+        _kvs_disconnect (p, zmsg);
     else {
         if (cmb_msg_rep_nak (*zmsg) >= 0)
             zmsg_send (zmsg, p->zs_out);
@@ -330,7 +337,6 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, msg_type_t type)
     if (*zmsg)
         zmsg_destroy (zmsg);
 }
-
 
 static void _init (plugin_ctx_t *p)
 {
@@ -355,8 +361,6 @@ retryconnect:
         ctx->rctx = NULL;
         return;
     }
-
-    //zsocket_set_subscribe (p->zs_in, "kvs.");
 }
 
 static void _fini (plugin_ctx_t *p)

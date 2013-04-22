@@ -40,7 +40,7 @@ typedef struct _cfd_struct {
     int fd;
     struct _cfd_struct *next;
     struct _cfd_struct *prev;
-    char *name; /* api.<uuid>.fd.<cfd_id> */
+    char *name; /* <uuid>.fd.<cfd_id> */
     char *wname; /* user-provided, indicates API will read */
     char buf[CMB_API_BUFSIZE / 2];
 } cfd_t;
@@ -49,9 +49,11 @@ typedef struct _client_struct {
     int fd;
     struct _client_struct *next;
     struct _client_struct *prev;
+    plugin_ctx_t *p;
+    zhash_t *disconnect_notify;
     char *subscription;
     bool subscription_exact;
-    char uuid[64]; /* "api.<uuid>" */
+    char *uuid;
     cfd_t *cfds;
     int cfd_id;
 } client_t;
@@ -61,6 +63,18 @@ typedef struct {
     int listen_fd;
     client_t *clients;
 } ctx_t;
+
+static char *_uuid_generate (void)
+{
+    char s[sizeof (uuid_t) * 2 + 1];
+    uuid_t uuid;
+    int i;
+
+    uuid_generate (uuid);
+    for (i = 0; i < sizeof (uuid_t); i++)
+        snprintf (s + i*2, sizeof (s) - i*2, "%-.2x", uuid[i]);
+    return xstrdup (s);
+}
 
 static int _fd_setmode (int fd, int mode)
 {
@@ -216,6 +230,11 @@ static void _client_create (plugin_ctx_t *p, int fd)
     c = xzmalloc (sizeof (client_t));
     c->fd = fd;
     c->cfds = NULL;
+    c->uuid = _uuid_generate ();
+    c->p = p;
+    if (!(c->disconnect_notify = zhash_new ()))
+        oom ();
+    zhash_autofree (c->disconnect_notify);
     c->prev = NULL;
     c->next = ctx->clients;
     if (c->next)
@@ -223,13 +242,36 @@ static void _client_create (plugin_ctx_t *p, int fd)
     ctx->clients = c;
 }
 
+static int _notify_srv (const char *key, void *item, void *arg)
+{
+    client_t *c = arg;
+    zmsg_t *zmsg; 
+
+    if (!(zmsg = zmsg_new ()))
+        err_exit ("zmsg_new");
+    if (zmsg_pushstr (zmsg, "%s.disconnect", key) < 0)
+        err_exit ("zmsg_pushstr");
+
+    if (zmsg_pushmem (zmsg, NULL, 0) < 0)
+        err_exit ("zmsg_pushmem");
+    if (zmsg_pushstr (zmsg, "%s", c->uuid) < 0)
+        err_exit ("zmsg_pushmem");
+    if (zmsg_send (&zmsg, c->p->zs_req) < 0)
+        err_exit ("zmsg_send");
+
+    return 0;
+}
+
 static void _client_destroy (plugin_ctx_t *p, client_t *c)
 {
     ctx_t *ctx = p->ctx;
 
+    zhash_foreach (c->disconnect_notify, _notify_srv, c);
+    zhash_destroy (&c->disconnect_notify);
+
     while ((c->cfds) != NULL)
         _cfd_destroy (p, c, c->cfds);
-
+    free (c->uuid);
     close (c->fd);
 
     if (c->prev)
@@ -238,8 +280,6 @@ static void _client_destroy (plugin_ctx_t *p, client_t *c)
         ctx->clients = c->next;
     if (c->next)
         c->next->prev = c->prev;
-    if (strlen (c->uuid) > 0)
-        cmb_msg_send (p->zs_out_event, NULL, "event.%s.disconnect", c->uuid);
     free (c);
 }
 
@@ -269,7 +309,6 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
 {
     const char *api_subscribe = "api.subscribe.";
     const char *api_xsubscribe = "api.xsubscribe.";
-    const char *api_setuuid = "api.setuuid.";
     const char *api_fdopen_write = "api.fdopen.write.";
     zmsg_t *zmsg = NULL;
     char *tag = NULL;
@@ -308,12 +347,6 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
         c->subscription = xstrdup (q);
         c->subscription_exact = true;
 
-    /* internal: api.setuuid */
-    } else if (!strncmp (tag, api_setuuid, strlen (api_setuuid))) {
-        char *q = tag + strlen (api_setuuid);
-        snprintf (c->uuid, sizeof (c->uuid), "%s", q);
-        cmb_msg_send (p->zs_out_event, NULL, "event.%s.connect", c->uuid);
-
     /* internal: api.fdopen.read */
     } else if (!strcmp (tag, "api.fdopen.read")) {
         _cfd_create (p, c, NULL);
@@ -325,12 +358,23 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
             
     /* route other */
     } else {
+        char *dot, *short_tag = xstrdup (tag);
         if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* env delimiter */
             err_exit ("zmsg_pushmem");
-        if (zmsg_pushstr (zmsg, c->uuid) < 0)
+        if (zmsg_pushstr (zmsg, "%s", c->uuid) < 0)
             err_exit ("zmsg_pushmem");
         if (zmsg_send (&zmsg, p->zs_req) < 0)
             err_exit ("zmsg_send");
+
+        /* set up disconnect notification */
+        if ((dot = strchr (short_tag, '.')))
+            *dot = '\0';
+        if (zhash_lookup (c->disconnect_notify, short_tag) == NULL) {
+            if (zhash_insert (c->disconnect_notify, short_tag, short_tag) < 0)
+                err_exit ("zhash_insert");
+            zhash_freefn (c->disconnect_notify, short_tag, free);
+        } else
+            free (short_tag);
     }
 done:
     if (zmsg)
@@ -340,6 +384,8 @@ done:
     return 0;
 }
 
+/* Handle response
+ */
 static void _readmsg_req (plugin_ctx_t *p, void *socket)
 {
     ctx_t *ctx = p->ctx;

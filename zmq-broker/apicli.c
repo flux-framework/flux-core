@@ -266,18 +266,15 @@ error:
     return -1;
 }
 
-/* no return except on error */
+/* FIXME */
 int cmb_snoop (cmb_t c, char *sub)
 {
     zmsg_t *msg;
 
-    if (cmb_msg_send_fd (c->fd, NULL, "api.subscribe.%s", sub) < 0)
-        goto error;
     while ((msg = zmsg_recv_fd (c->fd, 0))) {
         zmsg_dump (msg);
         zmsg_destroy (&msg);
     }
-error:
     return -1;
 }
 
@@ -285,10 +282,6 @@ int cmb_barrier (cmb_t c, char *name, int nprocs)
 {
     json_object *o = NULL;
     int count = 1;
-
-    if (cmb_msg_send_fd (c->fd, NULL, "api.subscribe.event.barrier.exit.%s",
-                  name) < 0)
-        goto error;
 
     /* send request */
     if (!(o = json_object_new_object ()))
@@ -304,9 +297,6 @@ int cmb_barrier (cmb_t c, char *name, int nprocs)
 
     /* receive response */
     if (cmb_msg_recv_fd (c->fd, NULL, NULL, NULL, NULL, 0) < 0)
-        goto error;
-
-    if (cmb_msg_send_fd (c->fd, NULL, "api.unsubscribe") < 0)
         goto error;
 
     return 0;
@@ -357,9 +347,6 @@ char *cmb_kvs_get (cmb_t c, const char *key)
     const char *val;
     char *ret;
 
-    if (cmb_msg_send_fd (c->fd, NULL, "api.xsubscribe.%s", c->uuid) < 0)
-        goto error;
-
     /* send request */
     if (!(o = json_object_new_object ()))
         goto nomem;
@@ -398,14 +385,9 @@ int cmb_live_query (cmb_t c, int **upp, int *ulp, int **dp, int *dlp, int *nnp)
     int *up, up_len;
     int *down, down_len;
 
-    if (cmb_msg_send_fd (c->fd, NULL, "api.xsubscribe.%s", c->uuid) < 0)
-        goto error;
-
     /* send request */
     if (!(o = json_object_new_object ()))
         goto nomem;
-    if (_json_object_add_string (o, "sender", c->uuid) < 0)
-        goto error;
     if (cmb_msg_send_fd (c->fd, o, "live.query") < 0)
         goto error;
     json_object_put (o);
@@ -499,8 +481,6 @@ cmb_t cmb_init (void)
                          sizeof (struct sockaddr_un)) < 0)
         goto error;
     _uuid_generate_str (c);
-    if (cmb_msg_send_fd (c->fd, NULL, "api.setuuid.%s", c->uuid) < 0)
-        goto error;
     return c;
 error:
     if (c)
