@@ -30,11 +30,46 @@
 #include "plugin.h"
 
 
-static void _ping_respond (plugin_ctx_t *p, zmsg_t **zmsg)
+/* pluginname.ping - return message to sender without change */
+static void _plugin_ping(plugin_ctx_t *p, zmsg_t **zmsg)
 {
     if (zmsg_send (zmsg, p->zs_out) < 0)
         err ("%s: zmsg_send", __FUNCTION__);
 }
+
+/* pluginname.stats - return generic plugin statistics */
+static void _plugin_stats (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    json_object *no, *o = NULL;
+
+    if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) < 0) {
+        err ("%s: error decoding message", __FUNCTION__);
+        goto done;
+    }
+    if (!(no = json_object_new_int (p->stats.req_count)))
+        oom ();
+    json_object_object_add (o, "req_count", no);
+    if (!(no = json_object_new_int (p->stats.rep_count)))
+        oom ();
+    json_object_object_add (o, "rep_count", no);
+    if (!(no = json_object_new_int (p->stats.event_count)))
+        oom ();
+    json_object_object_add (o, "event_count", no);
+    if (cmb_msg_rep_json (*zmsg, o) < 0) {
+        err ("%s: cmb_msg_rep_json", __FUNCTION__);
+        goto done;
+    }
+    if (zmsg_send (zmsg, p->zs_out) < 0) {
+        err ("%s: zmsg_send", __FUNCTION__);
+        goto done;
+    }
+done:
+    if (o)
+        json_object_put (o);
+    if (*zmsg)
+        zmsg_destroy (zmsg);    
+}
+
 
 static void _plugin_poll (plugin_ctx_t *p)
 {
@@ -46,10 +81,12 @@ static void _plugin_poll (plugin_ctx_t *p)
     zmsg_t *zmsg;
     struct timeval t1, t2, t;
     long elapsed, msec = -1;
-    char *pingtag;
-    msg_type_t type;
+    char *pingtag, *statstag;
+    zmsg_type_t type;
 
     if (asprintf (&pingtag, "%s.ping", p->plugin->name) < 0)
+        err_exit ("asprintf");
+    if (asprintf (&statstag, "%s.stats", p->plugin->name) < 0)
         err_exit ("asprintf");
 
     for (;;) {
@@ -79,25 +116,32 @@ static void _plugin_poll (plugin_ctx_t *p)
         }
 
         /* receive a message */
-        if (zpa[0].revents & ZMQ_POLLIN) {
+        if (zpa[0].revents & ZMQ_POLLIN) {          /* request on 'in' */
             zmsg = zmsg_recv (p->zs_in);
             if (!zmsg)
                 err ("zmsg_recv");
-            type = MSG_REQUEST;
-        } else if (zpa[1].revents & ZMQ_POLLIN) {
+            type = ZMSG_REQUEST;
+            p->stats.req_count++;
+        } else if (zpa[1].revents & ZMQ_POLLIN) {   /* event on 'in_event' */
             zmsg = zmsg_recv (p->zs_in_event);
             if (!zmsg)
                 err ("zmsg_recv");
-            type = MSG_EVENT;
-        } else if (zpa[2].revents & ZMQ_POLLIN) {
+            type = ZMSG_EVENT;
+            p->stats.event_count++;
+        } else if (zpa[2].revents & ZMQ_POLLIN) {   /* response on 'req' */
             zmsg = zmsg_recv (p->zs_req);
-            type = MSG_RESPONSE;
+            type = ZMSG_RESPONSE;
+            p->stats.rep_count++;
         } else
             zmsg = NULL;
 
         /* intercept and respond to ping requests for this plugin */
-        if (zmsg && type == MSG_REQUEST && cmb_msg_match (zmsg, pingtag))
-            _ping_respond (p, &zmsg);
+        if (zmsg && type == ZMSG_REQUEST && cmb_msg_match (zmsg, pingtag))
+            _plugin_ping (p, &zmsg);
+
+        /* intercept and respond to stats request for this plugin */
+        if (zmsg && type == ZMSG_REQUEST && cmb_msg_match (zmsg, statstag))
+            _plugin_stats (p, &zmsg);
 
         /* dispatch message to plugin's recvFn() */
         /*     recvFn () shouldn't free zmsg if it doesn't recognize the tag */
@@ -105,9 +149,15 @@ static void _plugin_poll (plugin_ctx_t *p)
             p->plugin->recvFn (p, &zmsg, type);
 
         /* send a NAK response indicating plugin did not recognize tag */
-        if (zmsg)
+        if (zmsg && type == ZMSG_REQUEST)
             cmb_msg_sendnak (&zmsg, p->zs_out);
 
+        if (zmsg)
+            zmsg_destroy (&zmsg);
+
+
+        if (zmsg)
+            zmsg_destroy (&zmsg);
         assert (zmsg == NULL);
     }
 
@@ -204,8 +254,8 @@ static int _send_match (const char *key, void *item, void *arg)
     if (!cmb_msg_match_substr (*zmsg, ptag, NULL))
         goto done;
     if (cmb_msg_match_sender (*zmsg, p->plugin->name)
-                                            && cmb_hopcount (*zmsg) == 1)
-        goto done;
+                                            && cmb_msg_hopcount (*zmsg) == 1)
+        goto done; /* msg originating from this plugin, this broker */
     if (p->conf->verbose) {
         zmsg_dump (*zmsg);
         msg ("router->plout[%s]", p->plugin->name);
@@ -234,7 +284,7 @@ void plugin_init (conf_t *conf, server_t *srv)
     if (conf->redis_server)
         _plugin_create (srv, conf, &kvssrv);
     _plugin_create (srv, conf, &barriersrv);
-    //_plugin_create (srv, conf, &livesrv);
+    _plugin_create (srv, conf, &livesrv);
 }
 
 void plugin_fini (conf_t *conf, server_t *srv)

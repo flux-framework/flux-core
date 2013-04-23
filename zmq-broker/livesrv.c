@@ -34,22 +34,76 @@ typedef struct {
     int *live;
 } ctx_t;
 
-static int _parse_live_query (json_object *o, const char **sp)
+static void _event_sched_trigger (plugin_ctx_t *p, zmsg_t **zmsg)
 {
-    json_object *sender;
+    ctx_t *ctx = p->ctx;
+    int i, myrank = p->conf->rank;
 
-    if (!o)
-        goto error;
-    sender = json_object_object_get (o, "sender");
-    if (!sender)
-        goto error;
-    *sp = json_object_get_string (sender);
-    return 0;
-error:
-    return -1;
+    if (myrank == 0) {
+        for (i = 0; i < p->conf->size; i++) {
+            if (ctx->live[i] != -1)
+                ctx->live[i]++;
+            if (ctx->live[i] > MISSED_TRIGGER_ALLOW) {
+                cmb_msg_send (p->zs_out_event, NULL, "event.live.down.%d", i);
+                ctx->live[i] = -1;
+            } 
+        }
+        if (ctx->live[myrank] == -1)
+            cmb_msg_send (p->zs_out_event, NULL, "event.live.up.%d", myrank);
+        ctx->live[myrank] = 0;
+    } else {
+        cmb_msg_send_rt (p->zs_req, NULL, "live.up.%d", myrank);
+    }
+    zmsg_destroy (zmsg);
 }
 
-static void _reply_to_query (plugin_ctx_t *p, const char *sender)
+static void _event_live_up (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
+{
+    ctx_t *ctx = p->ctx;
+    int rank = strtoul (name, NULL, 10);
+    int myrank = p->conf->rank;
+
+    if (rank < 0 || rank >= p->conf->size)
+        goto done;
+    if (myrank != 0)
+        ctx->live[rank] = 0;
+done:
+    zmsg_destroy (zmsg);
+}
+
+static void _event_live_down (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
+{
+    ctx_t *ctx = p->ctx;
+    int rank = strtoul (name, NULL, 10);
+    int myrank = p->conf->rank;
+
+    if (rank < 0 || rank >= p->conf->size)
+        goto done;
+    if (myrank != 0)
+        ctx->live[rank] = -1;
+done:
+    zmsg_destroy (zmsg);
+}
+
+static void _live_up (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
+{
+    ctx_t *ctx = p->ctx;
+    int rank = strtoul (name, NULL, 10);
+    int myrank = p->conf->rank;
+
+    if (rank < 0 || rank >= p->conf->size)
+        goto done;
+    if (myrank == 0) {
+        if (ctx->live[rank] == -1)
+            cmb_msg_send (p->zs_out_event, NULL, "event.live.up.%d", rank);
+        ctx->live[rank] = 0;
+    } else
+        cmb_msg_send_rt (p->zs_req, NULL, "live.up.%d", rank);
+done:
+    zmsg_destroy (zmsg);
+}
+
+static void _live_query (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     json_object *o, *no, *upo, *dno;
@@ -75,81 +129,31 @@ static void _reply_to_query (plugin_ctx_t *p, const char *sender)
     if (!(no = json_object_new_int (p->conf->size)))
         oom ();
     json_object_object_add (o, "nnodes", no);
-
-    cmb_msg_send (p->zs_out, o, "%s", sender);
-    json_object_put (o);
-}
-
-static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, msg_type_t type)
-{
-    ctx_t *ctx = p->ctx;
-    const char *live_up = "live.up.";
-    const char *live_query= "live.query";
-    const char *event_live_up = "event.live.up.";
-    const char *event_live_down = "event.live.down.";
-    char *tag = NULL;
-    int i, myrank = p->conf->rank;
-    json_object *o = NULL;
-
-    if (cmb_msg_decode (*zmsg, &tag, &o, NULL, NULL) < 0) {
-        err ("livesrv: recv");
-        goto done; 
-    }
-
-    if (!strcmp (tag, "event.sched.trigger")) {
-        if (myrank == 0) {
-            for (i = 0; i < p->conf->size; i++) {
-                if (ctx->live[i] != -1)
-                    ctx->live[i]++;
-                if (ctx->live[i] > MISSED_TRIGGER_ALLOW) {
-                    cmb_msg_send (p->zs_out_event, NULL, "event.live.down.%d", i);
-                    ctx->live[i] = -1;
-                } 
-            }
-            if (ctx->live[myrank] == -1)
-                cmb_msg_send (p->zs_out_event, NULL, "event.live.up.%d", myrank);
-            ctx->live[myrank] = 0;
-        } else {
-            cmb_msg_send (p->zs_out_tree, NULL, "live.up.%d", myrank);
-        }
-    } else if (!strncmp (tag, live_up, strlen (live_up))) {
-        int rank = strtoul (tag + strlen (live_up), NULL, 10);
-        if (rank < 0 || rank >= p->conf->size)
-            goto done;
-        if (myrank == 0) {
-            if (ctx->live[rank] == -1)
-                cmb_msg_send (p->zs_out_event, NULL, "event.live.up.%d", rank);
-            ctx->live[rank] = 0;
-        } else {
-            cmb_msg_send (p->zs_out_tree, NULL, "live.up.%d", rank);
-        }
-    } else if (!strncmp (tag, live_query, strlen (live_query))) {
-        const char *sender;
-        if (_parse_live_query (o, &sender) < 0) {
-            fprintf (stderr, "live.query: parse error\n");
-            goto done;
-        }
-        _reply_to_query (p, sender);
-    } else if (!strncmp (tag, event_live_up, strlen (event_live_up))) {
-        int rank = strtoul (tag + strlen (event_live_up), NULL, 10);
-        if (rank < 0 || rank >= p->conf->size)
-            goto done;
-        if (myrank != 0)
-            ctx->live[rank] = 0;
-    } else if (!strncmp (tag, event_live_down, strlen (event_live_down))) {
-        int rank = strtoul (tag + strlen (event_live_down), NULL, 10);
-        if (rank < 0 || rank >= p->conf->size)
-            goto done;
-        if (myrank != 0)
-            ctx->live[rank] = -1;
-    }
+    if (cmb_msg_rep_json (*zmsg, o) < 0)
+        goto done;
+    if (zmsg_send (zmsg, p->zs_out) < 0)
+        err ("zmsg_send");
 done:
-    if (tag)
-        free (tag);
     if (o)
         json_object_put (o);
     if (*zmsg)
         zmsg_destroy (zmsg);
+}
+
+static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
+{
+    char *name = NULL;
+
+    if (cmb_msg_match (*zmsg, "event.sched.trigger"))
+        _event_sched_trigger (p, zmsg);
+    else if (cmb_msg_match (*zmsg, "live.query"))
+        _live_query (p, zmsg);
+    else if (cmb_msg_match_substr (*zmsg, "live.up.", &name))
+        _live_up (p, name, zmsg);
+    else if (cmb_msg_match_substr (*zmsg, "event.live.up.", &name))
+        _event_live_up (p, name, zmsg);
+    else if (cmb_msg_match_substr (*zmsg, "event.live.down.", &name))
+        _event_live_down (p, name, zmsg);
 }
 
 static void _init (plugin_ctx_t *p)
@@ -163,9 +167,11 @@ static void _init (plugin_ctx_t *p)
     for (i = 0; i < p->conf->size; i++)
         ctx->live[i] = -1;
 
-    //zsocket_set_subscribe (p->zs_in, "live.");
     zsocket_set_subscribe (p->zs_in_event, "event.sched.trigger");
     zsocket_set_subscribe (p->zs_in_event, "event.live.");
+
+    if (p->conf->rank != 0)
+        cmb_msg_send_rt (p->zs_req, NULL, "live.up.%d", p->conf->rank);
 }
 
 static void _fini (plugin_ctx_t *p)

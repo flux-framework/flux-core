@@ -21,6 +21,8 @@ void cmb_msg_send_long (void *sock, json_object *o, void *data, int len,
 
 void cmb_msg_send (void *sock, json_object *o, const char *fmt, ...)
         	   __attribute__ ((format (printf, 3, 4)));
+void cmb_msg_send_rt (void *sock, json_object *o, const char *fmt, ...)
+        	     __attribute__ ((format (printf, 3, 4)));
 
 int cmb_msg_recv (void *socket, char **tagp, json_object **op,
                   void **datap, int *lenp, int flags);
@@ -40,7 +42,8 @@ bool cmb_msg_match_substr (zmsg_t *msg, const char *tag, char **restp);
 bool cmb_msg_match_sender (zmsg_t *zmsg, const char *sender);
 
 char *cmb_msg_sender (zmsg_t *zmsg);
-int cmb_hopcount (zmsg_t *zmsg);
+char *cmb_msg_tag (zmsg_t *zmsg, bool shorten);
+int cmb_msg_hopcount (zmsg_t *zmsg);
 
 int cmb_msg_rep_nak (zmsg_t *zmsg);
 int cmb_msg_rep_json (zmsg_t *zmsg, json_object *o);

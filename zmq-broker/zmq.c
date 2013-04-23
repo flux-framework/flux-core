@@ -120,7 +120,7 @@ error:
  ** cmb messages
  **/
 
-int cmb_hopcount (zmsg_t *zmsg)
+int cmb_msg_hopcount (zmsg_t *zmsg)
 {
     int count = 0;
     zframe_t *zf;
@@ -310,6 +310,28 @@ void cmb_msg_send (void *sock, json_object *o, const char *fmt, ...)
         err_exit ("zmsg_send");
 }
 
+/* routed verison of above */
+void cmb_msg_send_rt (void *sock, json_object *o, const char *fmt, ...)
+{
+    va_list ap;
+    zmsg_t *zmsg;
+    char *tag;
+    int n;
+
+    va_start (ap, fmt);
+    n = vasprintf (&tag, fmt, ap);
+    va_end (ap);
+    if (n < 0)
+        err_exit ("vasprintf");
+   
+    zmsg = cmb_msg_encode (tag, o, NULL, 0);
+    free (tag);
+    if (zmsg_pushmem (zmsg, NULL, 0) < 0)
+        oom ();
+    if (zmsg_send (&zmsg, sock) < 0)
+        err_exit ("zmsg_send");
+}
+
 int cmb_msg_send_long_fd (int fd, json_object *o, void *data, int len,
                           const char *fmt, ...)
 {
@@ -414,6 +436,23 @@ char *cmb_msg_sender (zmsg_t *zmsg)
         return NULL;
     }
     return zframe_strdup (zf); /* caller must free */
+}
+
+char *cmb_msg_tag (zmsg_t *zmsg, bool shorten)
+{
+    zframe_t *zf = _tag_frame (zmsg);
+    char *tag;
+    if (!zf) {
+        msg ("cmb_msg_tag: no tag frame");
+        return NULL;
+    }
+    tag = zframe_strdup (zf); /* caller must free */
+    if (tag && shorten) {
+        char *p = strchr (tag, '.');
+        if (p)
+            *p = '\0';
+    }
+    return tag;
 }
 
 /* Append .NAK to the tag portion of message.

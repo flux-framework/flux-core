@@ -37,6 +37,7 @@ typedef struct _barrier_struct {
     char *exit_event;
     int nprocs;
     int count;
+    zhash_t *clients;
     plugin_ctx_t *p;
 } barrier_t;
 
@@ -83,7 +84,6 @@ static int _barrier_enter_request (const char *key, void *item, void *arg)
     barrier_t *b = item;
     plugin_ctx_t *p = arg;
     json_object *no, *o = NULL;
-    zmsg_t *zmsg = NULL;
 
     if (b->count == 0)
         return 0;
@@ -95,24 +95,11 @@ static int _barrier_enter_request (const char *key, void *item, void *arg)
     if (!(no = json_object_new_int (b->nprocs)))
         oom ();
     json_object_object_add (o, "nprocs", no);
-    if (!(zmsg = zmsg_new ()))
-        oom ();
-    if (zmsg_pushstr (zmsg, "%s", json_object_to_json_string (o)) < 0)
-        oom ();
-    if (zmsg_pushstr (zmsg, "barrier.enter.%s", b->name) < 0)
-        oom ();
-    if (zmsg_pushmem (zmsg, NULL, 0) < 0)
-        oom ();
-    if (zmsg_send (&zmsg, p->zs_req) < 0) { /* will route to parent's */
-        err ("zmsg_send");                  /*   barrier plugin */
-        goto done;
-    }
+    /* will route to parent's barrier plugin */
+    cmb_msg_send_rt (p->zs_req, o, "barrier.enter.%s", b->name);
     b->count = 0;
-done:
     if (o)
         json_object_put (o);
-    if (zmsg)
-        zmsg_destroy (&zmsg);
     return 0;
 }
 
@@ -160,7 +147,7 @@ static void _barrier_exit (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
     zmsg_destroy (zmsg);
 }
 
-static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, msg_type_t type)
+static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
 {
     char *name = NULL;
 

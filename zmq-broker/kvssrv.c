@@ -320,7 +320,7 @@ done:
         free (sender);
 }
 
-static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, msg_type_t type)
+static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
 {
     if (cmb_msg_match (*zmsg, "kvs.put"))
         _kvs_put (p, zmsg);

@@ -266,22 +266,72 @@ error:
     return -1;
 }
 
-/* FIXME */
-int cmb_snoop (cmb_t c, char *sub)
+int cmb_stats (cmb_t c, char *name, int *req, int *rep, int *event)
 {
-    zmsg_t *msg;
+    json_object *o = NULL;
 
-    while ((msg = zmsg_recv_fd (c->fd, 0))) {
-        zmsg_dump (msg);
-        zmsg_destroy (&msg);
-    }
+    /* send request */
+    if (!(o = json_object_new_object ()))
+        goto nomem;
+    if (cmb_msg_send_fd (c->fd, o, "%s.stats", name) < 0)
+        goto error;
+    json_object_put (o);
+    o = NULL;
+
+    /* receive response */
+    if (cmb_msg_recv_fd (c->fd, NULL, &o, NULL, NULL, 0) < 0)
+        goto error;
+    if (_json_object_get_int (o, "req_count", req) < 0)
+        goto error;
+    if (_json_object_get_int (o, "rep_count", rep) < 0)
+        goto error;
+    if (_json_object_get_int (o, "event_count", event) < 0)
+        goto error;
+    if (o)
+        json_object_put (o);
+    return 0;
+nomem:
+    errno = ENOMEM;
+error:    
+    if (o)
+        json_object_put (o);
     return -1;
+}
+
+int cmb_event_subscribe (cmb_t c, char *sub)
+{
+    return cmb_msg_send_fd (c->fd, NULL, "api.event.subscribe.%s",
+                            sub ? sub : "");
+}
+
+int cmb_event_unsubscribe (cmb_t c, char *sub)
+{
+    return cmb_msg_send_fd (c->fd, NULL, "api.event.unsubscribe.%s",
+                            sub ? sub : "");
+}
+
+char *cmb_event_recv (cmb_t c)
+{
+    char *tag = NULL;
+
+    (void)cmb_msg_recv_fd (c->fd, &tag, NULL, NULL, NULL, 0);
+
+    return tag;
+}
+
+int cmb_event_send (cmb_t c, char *event)
+{
+    return cmb_msg_send_fd (c->fd, NULL, "api.event.send.%s", event);
 }
 
 int cmb_barrier (cmb_t c, char *name, int nprocs)
 {
     json_object *o = NULL;
     int count = 1;
+
+    if (cmb_msg_send_fd (c->fd, NULL,
+                         "api.subscribe.event.barrier.exit.%s", name) < 0)
+        return -1;
 
     /* send request */
     if (!(o = json_object_new_object ()))
@@ -295,10 +345,12 @@ int cmb_barrier (cmb_t c, char *name, int nprocs)
     json_object_put (o);
     o = NULL;
 
-    /* receive response */
+    /* wait for event */
     if (cmb_msg_recv_fd (c->fd, NULL, NULL, NULL, NULL, 0) < 0)
         goto error;
 
+    cmb_msg_send_fd (c->fd, NULL,
+                     "api.unsubscribe.event.barrier.exit.%s", name);
     return 0;
 nomem:
     errno = ENOMEM;
@@ -314,6 +366,8 @@ int cmb_sync (cmb_t c)
     if (cmb_msg_send_fd (c->fd, NULL, "api.subscribe.event.sched.trigger") < 0)
         return -1;
     if (cmb_msg_recv_fd (c->fd, NULL, NULL, NULL, NULL, 0) < 0)
+        return -1;
+    if (cmb_msg_send_fd (c->fd, NULL,"api.unsubscribe.event.sched.trigger") < 0)
         return -1;
     return 0;
 }

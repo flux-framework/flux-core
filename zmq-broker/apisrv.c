@@ -51,8 +51,7 @@ typedef struct _client_struct {
     struct _client_struct *prev;
     plugin_ctx_t *p;
     zhash_t *disconnect_notify;
-    char *subscription;
-    bool subscription_exact;
+    zhash_t *subscriptions;
     char *uuid;
     cfd_t *cfds;
     int cfd_id;
@@ -234,12 +233,22 @@ static void _client_create (plugin_ctx_t *p, int fd)
     c->p = p;
     if (!(c->disconnect_notify = zhash_new ()))
         oom ();
-    zhash_autofree (c->disconnect_notify);
+    if (!(c->subscriptions = zhash_new ()))
+        oom ();
     c->prev = NULL;
     c->next = ctx->clients;
     if (c->next)
         c->next->prev = c;
     ctx->clients = c;
+}
+
+static int _unsubscribe (const char *key, void *item, void *arg)
+{
+    client_t *c = arg;
+
+    /* FIXME: this assumes zmq subscriptions have use counts (verify this) */
+    zsocket_set_unsubscribe (c->p->zs_in_event, (char *)key);
+    return 0;
 }
 
 static int _notify_srv (const char *key, void *item, void *arg)
@@ -268,6 +277,9 @@ static void _client_destroy (plugin_ctx_t *p, client_t *c)
 
     zhash_foreach (c->disconnect_notify, _notify_srv, c);
     zhash_destroy (&c->disconnect_notify);
+
+    zhash_foreach (c->subscriptions, _unsubscribe, c);
+    zhash_destroy (&c->subscriptions);
 
     while ((c->cfds) != NULL)
         _cfd_destroy (p, c, c->cfds);
@@ -307,11 +319,8 @@ static void _accept (plugin_ctx_t *p)
 
 static int _client_read (plugin_ctx_t *p, client_t *c)
 {
-    const char *api_subscribe = "api.subscribe.";
-    const char *api_xsubscribe = "api.xsubscribe.";
-    const char *api_fdopen_write = "api.fdopen.write.";
     zmsg_t *zmsg = NULL;
-    char *tag = NULL;
+    char *name = NULL;
 
     zmsg = zmsg_recv_fd (c->fd, MSG_DONTWAIT);
     if (!zmsg) {
@@ -319,108 +328,74 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
             err ("API read");
         return -1;
     }
-    if (cmb_msg_decode (zmsg, &tag, NULL, NULL, NULL) < 0) {
-        err ("API decode");
-        goto done;
-    }
         
-    /* internal: api.unsubscribe */
-    if (!strcmp (tag, "api.unsubscribe")) {
-        if (c->subscription) {
-            free (c->subscription);
-            c->subscription = NULL;
-        }
-
-    /* internal: api.subscribe */
-    } else if (!strncmp (tag, api_subscribe, strlen (api_subscribe))) {
-        char *q = tag + strlen (api_subscribe);
-        if (c->subscription)
-            free (c->subscription);
-        c->subscription = xstrdup (q);
-        c->subscription_exact = false;
-
-    /* internal: api.xsubscribe */
-    } else if (!strncmp (tag, api_xsubscribe, strlen (api_xsubscribe))) {
-        char *q = tag + strlen (api_xsubscribe);
-        if (c->subscription)
-            free (c->subscription);
-        c->subscription = xstrdup (q);
-        c->subscription_exact = true;
-
-    /* internal: api.fdopen.read */
-    } else if (!strcmp (tag, "api.fdopen.read")) {
+    if (cmb_msg_match (zmsg, "api.fdopen.read")) {
         _cfd_create (p, c, NULL);
-
-    /* internal: api.fdopen.write */
-    } else if (!strncmp (tag, api_fdopen_write, strlen (api_fdopen_write))) {
-        char *q = tag + strlen (api_fdopen_write);
-        _cfd_create (p, c, q);
-            
-    /* route other */
+    } else if (cmb_msg_match_substr (zmsg, "api.fdopen.write.", &name)) {
+        _cfd_create (p, c, name);
+        name = NULL;    
+    } else if (cmb_msg_match_substr (zmsg, "api.event.subscribe.", &name)) {
+        zhash_insert (c->subscriptions, name, name);
+        zhash_freefn (c->subscriptions, name, free);
+        zsocket_set_subscribe (p->zs_in_event, name);
+        name = NULL;
+    } else if (cmb_msg_match_substr (zmsg, "api.event.unsubscribe.", &name)) {
+        if (zhash_lookup (c->subscriptions, name)) {
+            zhash_delete (c->subscriptions, name);
+            zsocket_set_unsubscribe (p->zs_in_event, name);
+        }
+    } else if (cmb_msg_match_substr (zmsg, "api.event.send.", &name)) {
+        cmb_msg_send (p->zs_out_event, NULL, "%s", name);
     } else {
-        char *dot, *short_tag = xstrdup (tag);
+        if (c->disconnect_notify) {
+            char *tag = cmb_msg_tag (zmsg, true); /* first component only */
+            if (!tag)
+                goto done;
+            if (zhash_lookup (c->disconnect_notify, tag) == NULL) {
+                if (zhash_insert (c->disconnect_notify, tag, tag) < 0)
+                    err_exit ("zhash_insert");
+                zhash_freefn (c->disconnect_notify, tag, free);
+            } else
+                free (tag);
+        }
         if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* env delimiter */
             err_exit ("zmsg_pushmem");
         if (zmsg_pushstr (zmsg, "%s", c->uuid) < 0)
             err_exit ("zmsg_pushmem");
         if (zmsg_send (&zmsg, p->zs_req) < 0)
             err_exit ("zmsg_send");
-
-        /* set up disconnect notification */
-        if ((dot = strchr (short_tag, '.')))
-            *dot = '\0';
-        if (zhash_lookup (c->disconnect_notify, short_tag) == NULL) {
-            if (zhash_insert (c->disconnect_notify, short_tag, short_tag) < 0)
-                err_exit ("zhash_insert");
-            zhash_freefn (c->disconnect_notify, short_tag, free);
-        } else
-            free (short_tag);
     }
 done:
     if (zmsg)
         zmsg_destroy (&zmsg);
-    if (tag)
-        free (tag);
+    if (name)
+        free (name);
     return 0;
 }
 
-/* Handle response
- */
-static void _readmsg_req (plugin_ctx_t *p, void *socket)
+static void _recv_response (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
-    zmsg_t *zmsg = NULL;
     char *uuid = NULL;
     zframe_t *zf = NULL;
     client_t *c;
 
-    zmsg = zmsg_recv (socket);
-    if (!zmsg) {
-        err ("zmsg_recv");
-        goto done;
+    if (cmb_msg_hopcount (*zmsg) != 1) {
+        msg ("apisrv: ignoring response with bad envelope");
+        return;
     }
-    /* Strip off request header.  In the response direction, each hop
-     * strips off their address.  This is the final hop where the address
-     * is the uuid of the AF_UNIX connection who made the request.
-     * Strip the (empty) message  delimiter and return only the response
-     * to the client.
-     */
-    uuid = zmsg_popstr (zmsg);
-    if (!uuid) {
-        msg ("apisrv: bad request envelope: no last address part");
-        goto done;
-    }
-    zf = zmsg_pop (zmsg);
-    if (!zf || zframe_size (zf) != 0)
-        msg ("apisrv: bad request envelope: no delimiter");
+    uuid = zmsg_popstr (*zmsg);
+    assert (uuid != NULL);
+    zf = zmsg_pop (*zmsg);
+    assert (zf != NULL);
+    assert (zframe_size (zf) == 0);
 
-    /* Locate the client with the specified uuid */
-    for (c = ctx->clients; c != NULL && zmsg != NULL; ) {
+    for (c = ctx->clients; c != NULL && *zmsg != NULL; ) {
         client_t *deleteme = NULL;
 
         if (!strcmp (uuid, c->uuid)) {
-            if (zmsg_send_fd (c->fd, &zmsg) < 0) {
-                zmsg_destroy (&zmsg);
+            if (zmsg_send_fd (c->fd, zmsg) < 0) {
+                zmsg_destroy (zmsg);
                 deleteme = c; 
             }
         }
@@ -428,10 +403,9 @@ static void _readmsg_req (plugin_ctx_t *p, void *socket)
         if (deleteme)
             _client_destroy (p, deleteme);
     }
-done:
-    if (zmsg) {
-        //msg ("apisrv: discarding message for: %s (not found)", uuid);
-        zmsg_destroy (&zmsg);
+    if (*zmsg) {
+        //msg ("apisrv: discarding response for unknown uuid %s", uuid);
+        zmsg_destroy (zmsg);
     }
     if (zf)
         zframe_destroy (&zf);
@@ -439,56 +413,72 @@ done:
         free (uuid);
 }
 
-static void _readmsg (plugin_ctx_t *p, void *socket)
+static int _match_subscription (const char *key, void *item, void *arg)
+{
+    return cmb_msg_match_substr ((zmsg_t *)arg, key, NULL) ? 1 : 0;
+}
+
+static void _recv_event (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
-    zmsg_t *zmsg = NULL;
     client_t *c;
-    cfd_t *cfd;
 
-    zmsg = zmsg_recv (socket);
-    if (!zmsg) {
-        err ("zmsg_recv");
-        goto done;
-    }
-
-    /* send it to all API clients whose subscription matches */
     for (c = ctx->clients; c != NULL; ) {
         zmsg_t *cpy;
         client_t *deleteme = NULL;
 
-        if (c->subscription) {
-            if (c->subscription_exact ? cmb_msg_match (zmsg, c->subscription)
-                         : cmb_msg_match_substr (zmsg, c->subscription, NULL)) {
-                if (!(cpy = zmsg_dup (zmsg)))
-                    oom ();
-                if (zmsg_send_fd (c->fd, &cpy) < 0) {
-                    zmsg_destroy (&cpy);
-                    deleteme = c; 
-                }
+        if (zhash_foreach (c->subscriptions, _match_subscription, *zmsg)) {
+            if (!(cpy = zmsg_dup (*zmsg)))
+                oom ();
+            if (zmsg_send_fd (c->fd, &cpy) < 0) {
+                zmsg_destroy (&cpy);
+                deleteme = c; 
             }
         }
         c = c->next;
         if (deleteme)
             _client_destroy (p, deleteme);
     }
-    /* also look for matches on any open client fds */
+}
+
+static void _recv_request (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    ctx_t *ctx = p->ctx;
+    client_t *c;
+    cfd_t *cfd;
+    bool match = false;
+
     for (c = ctx->clients; c != NULL; c = c->next) {
         for (cfd = c->cfds; cfd != NULL; ) {
             cfd_t *deleteme = NULL;
 
-            if (cmb_msg_match (zmsg, cfd->name)) {
-                if (_cfd_write (cfd, zmsg) < 0)
+            if (cmb_msg_match (*zmsg, cfd->name)) {
+                if (_cfd_write (cfd, *zmsg) < 0)
                     deleteme = cfd;
+                match = true;
             }
             cfd = cfd->next;
             if (deleteme)
                 _cfd_destroy (p, c, deleteme);
         }
     }
-done:
-    if (zmsg)
-        zmsg_destroy (&zmsg);
+    if (*zmsg && match)
+        zmsg_destroy (zmsg);
+}
+
+static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
+{
+    switch (type) {
+        case ZMSG_REQUEST:
+            _recv_request (p, zmsg);
+            break;
+        case ZMSG_EVENT:
+            _recv_event (p, zmsg);
+            break;
+        case ZMSG_RESPONSE:
+            _recv_response (p, zmsg);
+            break;
+    }
 }
 
 static void _poll_once (plugin_ctx_t *p)
@@ -499,6 +489,8 @@ static void _poll_once (plugin_ctx_t *p)
     int zpa_len = _client_count (p) + _cfd_count (p) + 4;
     zmq_pollitem_t *zpa = xzmalloc (sizeof (zmq_pollitem_t) * zpa_len);
     int i;
+    zmsg_t *zmsg;
+    zmsg_type_t type;
 
     /* zmq sockets */
     zpa[0].socket = p->zs_in;
@@ -565,17 +557,41 @@ static void _poll_once (plugin_ctx_t *p)
             _client_destroy (p, deleteme);
     }
 
-    /* zmq sockets - can modify client list (so do after clients) */
-    if (zpa[3].revents & ZMQ_POLLIN)
+    /* accept new client connection */
+    if (zpa[3].revents & ZMQ_POLLIN)        /* listenfd */
         _accept (p);
-    if (zpa[3].revents & ZMQ_POLLERR)
+    if (zpa[3].revents & ZMQ_POLLERR)       /* listenfd - error */
         err_exit ("apisrv: poll on listen fd");
-    if (zpa[0].revents & ZMQ_POLLIN)
-        _readmsg (p, p->zs_in);
-    if (zpa[1].revents & ZMQ_POLLIN)
-        _readmsg (p, p->zs_in_event);
-    if (zpa[2].revents & ZMQ_POLLIN)
-        _readmsg_req (p, p->zs_req);
+
+    /* zmq sockets - can modify client list (so do after clients) */
+    if (zpa[0].revents & ZMQ_POLLIN) {      /* request on 'in' */
+        zmsg = zmsg_recv (p->zs_in);
+        if (!zmsg)
+            err ("zmsg_recv");
+        type = ZMSG_REQUEST;
+        p->stats.req_count++;
+    } else if (zpa[1].revents & ZMQ_POLLIN) {/* event on 'in_event' */
+        zmsg = zmsg_recv (p->zs_in_event);
+        if (!zmsg)
+            err ("zmsg_recv");
+        type = ZMSG_EVENT;
+        p->stats.event_count++;
+    } else if (zpa[2].revents & ZMQ_POLLIN) {/* response on 'req' */
+        zmsg = zmsg_recv (p->zs_req);
+        if (!zmsg)
+            err ("zmsg_recv");
+        type = ZMSG_RESPONSE;
+        p->stats.rep_count++;
+    } else
+        zmsg = NULL;
+
+    /* FIXME: intercept and respond to api.ping */
+    /* FIXME: intercept and respond to api.stats */
+
+    if (zmsg)
+        _recv (p, &zmsg, type);
+    if (zmsg && type == ZMSG_REQUEST)
+        cmb_msg_sendnak (&zmsg, p->zs_out);
 
     free (zpa);
 }
@@ -618,9 +634,6 @@ static void _init (plugin_ctx_t *p)
 
     p->ctx = ctx = xzmalloc (sizeof (ctx_t));
     ctx->clients = NULL;
-
-    //zsocket_set_subscribe (p->zs_in, "");
-    zsocket_set_subscribe (p->zs_in_event, "");
 
     _listener_init (p);
 }

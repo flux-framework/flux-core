@@ -14,14 +14,16 @@
 #include "log.h"
 #include "util.h"
 
-#define OPTIONS "p:sb:k:SK:Ct:P:d:fF:n:l"
+#define OPTIONS "p:s:b:k:SK:Ct:P:d:fF:n:lx:e:"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
+    {"stats",      required_argument,  0, 'x'},
     {"ping-padding", required_argument,0, 'P'},
     {"ping-delay", required_argument,  0, 'd'},
     {"fdopen-read",no_argument,        0, 'f'},
     {"fdopen-write",required_argument, 0, 'F'},
-    {"snoop",      no_argument,        0, 's'},
+    {"subscribe",  required_argument,  0, 's'},
+    {"event",      required_argument,  0, 'e'},
     {"barrier",    required_argument,  0, 'b'},
     {"nprocs",     required_argument,  0, 'n'},
     {"kvs-put",    required_argument,  0, 'k'},
@@ -39,6 +41,7 @@ static void usage (void)
 "  -p,--ping name         route a message through a plugin\n"
 "  -P,--ping-padding N    pad ping packets with N bytes (adds a JSON string)\n"
 "  -d,--ping-delay N      set delay between ping packets (in msec)\n"
+"  -x,--stats name        get plugin statistics\n"
 "  -f,--fdopen-read       open r/o fd, print name, and read until EOF\n"
 "  -F,--fdopen-write DEST open w/o fd, routing data to DEST, write until EOF\n"
 "  -b,--barrier name      execute barrier across slurm job\n"
@@ -47,7 +50,8 @@ static void usage (void)
 "  -K,--kvs-get key       get a key\n"
 "  -C,--kvs-commit        commit pending kvs puts\n"
 "  -t,--kvs-torture N     set N keys, then commit\n"
-"  -s,--snoop substr      watch bus traffic matching subscription\n"
+"  -s,--subscribe sub     subscribe to events matching substring\n"
+"  -e,--event name        publish event\n"
 "  -S,--sync              block until event.sched.triger\n"
 "  -l,--live-query        get list of up nodes\n");
     exit (1);
@@ -99,6 +103,14 @@ int main (int argc, char *argv[])
                     usleep (pingdelay_ms * 1000);
                     free (tag);
                 }
+                break;
+            }
+            case 'x': { /* --stats name */
+                int req, rep, event;
+                if (cmb_stats (c, optarg, &req, &rep, &event) < 0)
+                    err_exit ("cmb_stats");
+                msg ("%s requests=%d replies=%d events=%d", optarg,
+                    req, rep, event);
                 break;
             }
             case 'f': { /* --fdopen-read */
@@ -155,16 +167,31 @@ int main (int argc, char *argv[])
                      (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
                 break;
             }
-            case 's': { /* --snoop */
-                if (cmb_snoop (c, "") < 0)
-                    err_exit ("cmb_snoop");
+            case 's': { /* --subscribe substr */
+                char *event;
+                if (cmb_event_subscribe (c, optarg) < 0)
+                    err_exit ("cmb_event_subscribe");
+                while ((event = cmb_event_recv (c))) {
+                    msg ("%s", event);
+                    free (event);
+                }
                 break;
             }
             case 'S': { /* --sync */
-                if (cmb_sync (c) < 0)
-                    err_exit ("cmb_sync");
+                char *event;
+                if (cmb_event_subscribe (c, "event.sched.trigger") < 0)
+                    err_exit ("cmb_event_subscribe");
+                if (!(event = cmb_event_recv (c)))
+                    err_exit ("cmb_event_recv");
+                free (event);
                 break;
             }
+            case 'e': { /* --event name */
+                if (cmb_event_send (c, optarg) < 0)
+                    err_exit ("cmb_event_send");
+                break;
+            }
+
             case 'l': { /* --live-query */
                 int i, *up = NULL, up_len, *dn = NULL, dn_len, nnodes;
                 if (cmb_live_query (c, &up, &up_len, &dn, &dn_len, &nnodes) < 0)
