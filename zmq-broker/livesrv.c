@@ -170,6 +170,7 @@ static void _init (plugin_ctx_t *p)
     zsocket_set_subscribe (p->zs_in_event, "event.sched.trigger");
     zsocket_set_subscribe (p->zs_in_event, "event.live.");
 
+    ctx->live[p->conf->rank] = 0;
     if (p->conf->rank != 0)
         cmb_msg_send_rt (p->zs_req, NULL, "live.up.%d", p->conf->rank);
 }
