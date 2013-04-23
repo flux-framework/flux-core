@@ -455,38 +455,7 @@ char *cmb_msg_tag (zmsg_t *zmsg, bool shorten)
     return tag;
 }
 
-/* Append .NAK to the tag portion of message.
- * But otherwise leave the message and the envelope unchanged.
- * This indicates that the addressed plugin is not loaded.
- */
-int cmb_msg_rep_nak (zmsg_t *zmsg)
-{
-    zframe_t *zf = _tag_frame (zmsg);
-    char *tag = NULL, *newtag = NULL;
-
-    if (!zf) {
-        msg ("cmb_msg_makenak: no message tag");
-        return -1;
-    }
-    tag = zframe_strdup (zf);
-    if (!tag)
-        goto error;
-    if (asprintf (&newtag, "%s.NAK", tag) < 0)
-        goto error;
-    /* N.B. calls zmq_msg_init_size internally with unchecked return value */
-    zframe_reset (zf, newtag, strlen (newtag));
-    free (newtag);
-    free (tag); 
-    return 0;
-error:
-    if (tag)
-        free (tag);
-    if (newtag)
-        free (newtag); 
-    return -1;
-}
-
-/* Replace JSON portion of message.
+/* Replace request JSON with reply JSON.
  */
 int cmb_msg_rep_json (zmsg_t *zmsg, json_object *o)
 {
@@ -494,12 +463,44 @@ int cmb_msg_rep_json (zmsg_t *zmsg, json_object *o)
     zframe_t *zf = _json_frame (zmsg);
 
     if (!zf) {
-        msg ("cmb_msg_makenak: no json frame");
+        msg ("%s: no JSON frame", __FUNCTION__);
+        errno = EPROTO;
         return -1;
     }
     /* N.B. calls zmq_msg_init_size internally with unchecked return value */
     zframe_reset (zf, json, strlen (json));
     return 0;
+}
+
+/* Replace request JSON with error JSON.
+ */
+int cmb_msg_rep_errnum (zmsg_t *zmsg, int errnum)
+{
+    json_object *no, *o = NULL;
+    zframe_t *zf = _json_frame (zmsg);
+    const char *json;
+
+    if (!zf) {
+        msg ("%s: no JSON frame", __FUNCTION__);
+        errno = EPROTO;
+        goto error;
+    }
+    if (!(o = json_object_new_object ()))
+        goto nomem;
+    if (!(no = json_object_new_int (errnum)))
+        goto nomem;
+    json_object_object_add (o, "errnum", no);
+    json = json_object_to_json_string (o);
+    /* N.B. calls zmq_msg_init_size internally with unchecked return value */
+    zframe_reset (zf, json, strlen (json));
+    json_object_put (o);
+    return 0;
+nomem:
+    errno = ENOMEM;
+error:
+    if (o)
+        json_object_put (o);
+    return -1;
 }
 
 int cmb_msg_datacpy (zmsg_t *zmsg, char *buf, int len)
@@ -518,12 +519,10 @@ int cmb_msg_datacpy (zmsg_t *zmsg, char *buf, int len)
     return zframe_size (zf);
 }
 
-void cmb_msg_sendnak (zmsg_t **zmsg, void *socket)
+void cmb_msg_send_errnum (zmsg_t **zmsg, void *socket, int errnum)
 {
-    if (cmb_msg_rep_nak (*zmsg) < 0) {
-        err ("%s: cmb_msg_rep_nak", __FUNCTION__);
+    if (cmb_msg_rep_errnum (*zmsg, errnum) < 0)
         goto done;
-    }
     if (zmsg_send (zmsg, socket) < 0) {
         err ("%s: zmsg_send", __FUNCTION__);
         goto done;

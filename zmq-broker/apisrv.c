@@ -255,9 +255,15 @@ static int _notify_srv (const char *key, void *item, void *arg)
 {
     client_t *c = arg;
     zmsg_t *zmsg; 
+    json_object *o;
 
     if (!(zmsg = zmsg_new ()))
         err_exit ("zmsg_new");
+    if (!(o = json_object_new_object ()))
+        oom ();
+    if (zmsg_pushstr (zmsg, "%s", json_object_to_json_string (o)) < 0)
+        err_exit ("zmsg_pushstr");
+    json_object_put (o);
     if (zmsg_pushstr (zmsg, "%s.disconnect", key) < 0)
         err_exit ("zmsg_pushstr");
 
@@ -591,7 +597,7 @@ static void _poll_once (plugin_ctx_t *p)
     if (zmsg)
         _recv (p, &zmsg, type);
     if (zmsg && type == ZMSG_REQUEST)
-        cmb_msg_sendnak (&zmsg, p->zs_out);
+        cmb_msg_send_errnum (&zmsg, p->zs_out, ENOSYS);
 
     free (zpa);
 }

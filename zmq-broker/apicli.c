@@ -72,10 +72,8 @@ static int _json_object_add_string (json_object *o, char *name, const char *s)
 static int _json_object_get_int (json_object *o, char *name, int *ip)
 {
     json_object *no = json_object_object_get (o, name);
-    if (!no) {
-        errno = EPROTO;
+    if (!no)
         return -1;
-    } 
     *ip = json_object_get_int (no);
     return 0;
 }
@@ -83,10 +81,8 @@ static int _json_object_get_int (json_object *o, char *name, int *ip)
 static int _json_object_get_string (json_object *o, char *name, const char **sp)
 {
     json_object *no = json_object_object_get (o, name);
-    if (!no) {
-        errno = EPROTO;
+    if (!no)
         return -1;
-    } 
     *sp = json_object_get_string (no);
     return 0;
 }
@@ -200,14 +196,12 @@ int cmb_ping (cmb_t c, char *name, int seq, int padlen, char **tagp)
     void *rpad = NULL, *pad = NULL;
     char *tag = NULL;
     int rpadlen;
-    char *ping_tag = NULL;
-
-    if (asprintf (&ping_tag, "%s.ping", name) < 0)
-        goto nomem;
 
     /* send request */
-    if (!(o = json_object_new_object ()))
-        goto nomem;
+    if (!(o = json_object_new_object ())) {
+        errno = ENOMEM;
+        goto error;
+    }
     if (_json_object_add_int (o, "seq", seq) < 0)
         goto error;
     if (padlen > 0) {
@@ -216,7 +210,7 @@ int cmb_ping (cmb_t c, char *name, int seq, int padlen, char **tagp)
             oom ();
         memset (pad, 'z', padlen);
     }
-    if (cmb_msg_send_long_fd (c->fd, o, pad, padlen, "%s", ping_tag) < 0)
+    if (cmb_msg_send_long_fd (c->fd, o, pad, padlen, "%s.ping", name) < 0)
         goto error;
     json_object_put (o);
     o = NULL;
@@ -224,28 +218,25 @@ int cmb_ping (cmb_t c, char *name, int seq, int padlen, char **tagp)
     /* receive a copy back */
     if (cmb_msg_recv_fd (c->fd, &tag, &o, &rpad, &rpadlen, 0) < 0)
         goto error;
-    if (strcmp (tag, ping_tag) != 0) {
-        errno = ENOSYS;
+    if (!o)
+        goto eproto;
+    if (_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
-    }
     if (_json_object_get_int (o, "seq", &rseq) < 0)
-        goto error;
+        goto eproto;
     if (seq != rseq) {
         msg ("cmb_ping: seq not the one I sent");
-        errno = EPROTO;
-        goto error;
+        goto eproto;
     }
     if (padlen != rpadlen) {
         msg ("cmb_ping: payload not the size I sent (%d != %d)",
              padlen, rpadlen);
-        errno = EPROTO;
-        goto error;
+        goto eproto;
     }
     if (padlen > 0) {
         if (memcmp (pad, rpad, padlen) != 0) {
             msg ("cmb_ping: received corrupted payload");
-            errno = EPROTO;
-            goto error;
+            goto eproto;
         }
     }
     if (tagp)
@@ -253,17 +244,14 @@ int cmb_ping (cmb_t c, char *name, int seq, int padlen, char **tagp)
     else
         free (tag);
 
-    if (o)
-        json_object_put (o);
+    json_object_put (o);
     if (pad)
         free (pad);
     if (rpad)
         free (rpad);
-    if (ping_tag)
-        free (ping_tag);
     return 0;
-nomem:
-    errno = ENOMEM;
+eproto:
+    errno = EPROTO;
 error:    
     if (o)
         json_object_put (o);
@@ -273,55 +261,42 @@ error:
         free (rpad);
     if (tag)
         free (tag);
-    if (ping_tag)
-        free (ping_tag);
     return -1;
 }
 
 int cmb_stats (cmb_t c, char *name, int *req, int *rep, int *event)
 {
     json_object *o = NULL;
-    char *tag = NULL;
-    char *stats_tag = NULL;
 
-    if (asprintf (&stats_tag, "%s.stats", name) < 0)
-        goto nomem;
-    
     /* send request */
-    if (!(o = json_object_new_object ()))
-        goto nomem;
-    if (cmb_msg_send_fd (c->fd, o, "%s", stats_tag) < 0)
+    if (!(o = json_object_new_object ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (cmb_msg_send_fd (c->fd, o, "%s.stats", name) < 0)
         goto error;
     json_object_put (o);
     o = NULL;
 
     /* receive response */
-    if (cmb_msg_recv_fd (c->fd, &tag, &o, NULL, NULL, 0) < 0)
+    if (cmb_msg_recv_fd (c->fd, NULL, &o, NULL, NULL, 0) < 0)
         goto error;
-    if (strcmp (tag, stats_tag) != 0) {
-        errno = ENOSYS;
+    if (!o)
+        goto eproto;
+    if (_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
-    }
-    if (_json_object_get_int (o, "req_count", req) < 0)
-        goto error;
-    if (_json_object_get_int (o, "rep_count", rep) < 0)
-        goto error;
-    if (_json_object_get_int (o, "event_count", event) < 0)
-        goto error;
+    if (_json_object_get_int (o, "req_count", req) < 0
+                    || _json_object_get_int (o, "rep_count", rep) < 0
+                    || _json_object_get_int (o, "event_count", event) < 0)
+        goto eproto;
     if (o)
         json_object_put (o);
-    free (tag);
-    free (stats_tag);
     return 0;
-nomem:
-    errno = ENOMEM;
+eproto:
+    errno = EPROTO;
 error:    
     if (o)
         json_object_put (o);
-    if (tag)
-        free (tag);
-    if (stats_tag)
-        free (stats_tag);
     return -1;
 }
 
@@ -357,7 +332,7 @@ int cmb_barrier (cmb_t c, char *name, int nprocs)
     int count = 1;
 
     if (cmb_msg_send_fd (c->fd, NULL,
-                         "api.subscribe.event.barrier.exit.%s", name) < 0)
+                         "api.event.subscribe.event.barrier.exit.%s", name) < 0)
         return -1;
 
     /* send request */
@@ -377,7 +352,7 @@ int cmb_barrier (cmb_t c, char *name, int nprocs)
         goto error;
 
     cmb_msg_send_fd (c->fd, NULL,
-                     "api.unsubscribe.event.barrier.exit.%s", name);
+                     "api.event.unsubscribe.event.barrier.exit.%s", name);
     return 0;
 nomem:
     errno = ENOMEM;
@@ -415,7 +390,6 @@ char *cmb_kvs_get (cmb_t c, const char *key)
     json_object *o = NULL;
     const char *val;
     char *ret;
-    char *tag = NULL;
 
     /* send request */
     if (!(o = json_object_new_object ()))
@@ -428,14 +402,12 @@ char *cmb_kvs_get (cmb_t c, const char *key)
     o = NULL;
 
     /* receive response */
-    if (cmb_msg_recv_fd (c->fd, &tag, &o, NULL, NULL, 0) < 0)
+    if (cmb_msg_recv_fd (c->fd, NULL, &o, NULL, NULL, 0) < 0)
         goto error;
-    if (strcmp (tag, "kvs.get") != 0) {
-        errno = ENOSYS;
+    if (_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
-    }
     if (_json_object_get_string (o, "val", &val) < 0) {
-        errno = 0;
+        errno = 0; /* key was not set */
         ret = NULL;
     } else {
         ret = strdup (val);
@@ -443,15 +415,12 @@ char *cmb_kvs_get (cmb_t c, const char *key)
             goto nomem;
     }
     json_object_put (o);
-    free (tag);
     return ret;
 nomem:
     errno = ENOMEM;
 error:
     if (o)
         json_object_put (o);
-    if (tag)
-        free (tag);
     return NULL;
 }
 
@@ -461,35 +430,31 @@ int cmb_live_query (cmb_t c, int **upp, int *ulp, int **dp, int *dlp, int *nnp)
     int nnodes;
     int *up, up_len;
     int *down, down_len;
-    char *tag = NULL;
 
     /* send request */
-    if (!(o = json_object_new_object ()))
-        goto nomem;
+    if (!(o = json_object_new_object ())) {
+        errno = ENOMEM;
+        goto error;
+    }
     if (cmb_msg_send_fd (c->fd, o, "live.query") < 0)
         goto error;
     json_object_put (o);
     o = NULL;
 
     /* receive response */
-    if (cmb_msg_recv_fd (c->fd, &tag, &o, NULL, NULL, 0) < 0)
+    if (cmb_msg_recv_fd (c->fd, NULL, &o, NULL, NULL, 0) < 0)
         goto error;
-    if (strcmp (tag, "live.query") != 0) {
-        errno = ENOSYS;
+    if (!o)
+        goto eproto;
+    if (_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
-    }
-    if (!o) {
-        errno = EPROTO;
-        goto error;
-    }
     if (_json_object_get_int (o, "nnodes", &nnodes) < 0)
-        goto error;
+        goto eproto;
     if (_json_object_get_int_array (o, "up", &up, &up_len) < 0)
-        goto error;
+        goto eproto;
     if (_json_object_get_int_array (o, "down", &down, &down_len) < 0)
-        goto error;
+        goto eproto;
     json_object_put (o);
-    free (tag); 
 
     *upp = up;
     *ulp = up_len;
@@ -499,13 +464,11 @@ int cmb_live_query (cmb_t c, int **upp, int *ulp, int **dp, int *dlp, int *nnp)
 
     *nnp = nnodes;
     return 0; 
-nomem:
-    errno = ENOMEM;
+eproto:
+    errno = EPROTO;
 error:
     if (o)
         json_object_put (o);
-    if (tag)
-        free (tag);
     return -1; 
 }
 
@@ -513,41 +476,39 @@ int cmb_kvs_commit (cmb_t c, int *ep, int *pp)
 {
     json_object *o = NULL;
     int errcount, putcount;
-    char *tag = NULL;
 
     /* send request */
-    if (!(o = json_object_new_object ()))
-        goto nomem;
+    if (!(o = json_object_new_object ())) {
+        errno = ENOMEM;
+        goto error;
+    }
     if (cmb_msg_send_fd (c->fd, o, "kvs.commit") < 0)
         goto error;
     json_object_put (o);
     o = NULL;
 
     /* receive response */
-    if (cmb_msg_recv_fd (c->fd, &tag, &o, NULL, NULL, 0) < 0)
+    if (cmb_msg_recv_fd (c->fd, NULL, &o, NULL, NULL, 0) < 0)
         goto error;
-    if (strcmp (tag, "kvs.commit") != 0) {
-        errno = ENOSYS;
+    if (!o)
+        goto eproto;
+    if (_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
-    }
     if (_json_object_get_int (o, "errcount", &errcount) < 0)
-        goto error;
+        goto eproto;
     if (_json_object_get_int (o, "putcount", &putcount) < 0)
-        goto error;
+        goto eproto;
     json_object_put (o);
-    free (tag);
     if (ep)
         *ep = errcount;
     if (pp)
         *pp = putcount;
     return 0;
-nomem:
-    errno = ENOMEM;
+eproto:
+    errno = EPROTO;
 error:
     if (o)
         json_object_put (o);
-    if (tag)
-        free (tag);
     return -1;
 }
 

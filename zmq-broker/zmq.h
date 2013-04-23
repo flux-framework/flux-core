@@ -45,9 +45,9 @@ char *cmb_msg_sender (zmsg_t *zmsg);
 char *cmb_msg_tag (zmsg_t *zmsg, bool shorten);
 int cmb_msg_hopcount (zmsg_t *zmsg);
 
-int cmb_msg_rep_nak (zmsg_t *zmsg);
 int cmb_msg_rep_json (zmsg_t *zmsg, json_object *o);
-void cmb_msg_sendnak (zmsg_t **zmsg, void *socket);
+int cmb_msg_rep_errnum (zmsg_t *zmsg, int errnum);
+void cmb_msg_send_errnum (zmsg_t **zmsg, void *socket, int errnum);
 
 int cmb_msg_datacpy (zmsg_t *msg, char *buf, int len);
 

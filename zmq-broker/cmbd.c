@@ -211,11 +211,10 @@ static void _route_request (conf_t *conf, server_t *srv)
     if (zmsg) {
         if (conf->verbose) {
             zmsg_dump (zmsg);
-            msg ("router->router (NAK)");
+            msg ("router->router (ENOSYS)");
         }
-        cmb_msg_sendnak (&zmsg, srv->zs_router);
+        cmb_msg_send_errnum (&zmsg, srv->zs_router, ENOSYS);
     }
-
     assert (zmsg == NULL);
 }
 

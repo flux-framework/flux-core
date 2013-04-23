@@ -148,9 +148,9 @@ static void _plugin_poll (plugin_ctx_t *p)
         if (zmsg && p->plugin->recvFn)
             p->plugin->recvFn (p, &zmsg, type);
 
-        /* send a NAK response indicating plugin did not recognize tag */
+        /* send ENOSYS response indicating plugin did not recognize tag */
         if (zmsg && type == ZMSG_REQUEST)
-            cmb_msg_sendnak (&zmsg, p->zs_out);
+            cmb_msg_send_errnum (&zmsg, p->zs_out, ENOSYS);
 
         if (zmsg)
             zmsg_destroy (&zmsg);
