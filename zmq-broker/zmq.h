@@ -37,11 +37,14 @@ int cmb_msg_recv_fd (int fd, char **tagp, json_object **op,
 
 bool cmb_msg_match (zmsg_t *msg, const char *tag);
 bool cmb_msg_match_substr (zmsg_t *msg, const char *tag, char **restp);
+bool cmb_msg_match_sender (zmsg_t *zmsg, const char *sender);
 
 char *cmb_msg_sender (zmsg_t *zmsg);
+int cmb_hopcount (zmsg_t *zmsg);
 
 int cmb_msg_rep_nak (zmsg_t *zmsg);
 int cmb_msg_rep_json (zmsg_t *zmsg, json_object *o);
+void cmb_msg_sendnak (zmsg_t **zmsg, void *socket);
 
 int cmb_msg_datacpy (zmsg_t *msg, char *buf, int len);
 

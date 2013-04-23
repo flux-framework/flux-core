@@ -36,28 +36,6 @@ static void _ping_respond (plugin_ctx_t *p, zmsg_t **zmsg)
         err ("%s: zmsg_send", __FUNCTION__);
 }
 
-static void _nak_respond (zmsg_t **zmsg, void *socket, bool verbose)
-{
-    if (cmb_msg_rep_nak (*zmsg) < 0) {
-        err ("%s: cmb_msg_rep_nak", __FUNCTION__);
-        goto done;
-    }
-    if (verbose)
-        zmsg_dump (*zmsg);
-    if (zmsg_send (zmsg, socket) < 0) {
-        err ("%s: zmsg_send", __FUNCTION__);
-        goto done;
-    }
-done:
-    if (zmsg)
-        zmsg_destroy (zmsg);
-}
-
-/* This is the poll loop for a plugin instance.
- * The request flow is:
- * - we receive requests on 'in' and respond on 'out';
- * - we make requests and receive resonses on 'req'.
- */
 static void _plugin_poll (plugin_ctx_t *p)
 {
     zmq_pollitem_t zpa[] = {
@@ -84,7 +62,7 @@ static void _plugin_poll (plugin_ctx_t *p)
         } else
             msec = -1;
 
-        zpoll(zpa, 3, msec);
+        zpoll(zpa, sizeof (zpa) / sizeof (zpa[0]), msec);
 
         /* process timeout */
         if (p->timeout > 0) {
@@ -128,7 +106,7 @@ static void _plugin_poll (plugin_ctx_t *p)
 
         /* send a NAK response indicating plugin did not recognize tag */
         if (zmsg)
-            _nak_respond (&zmsg, p->zs_out, p->conf->verbose);
+            cmb_msg_sendnak (&zmsg, p->zs_out);
 
         assert (zmsg == NULL);
     }
@@ -162,13 +140,14 @@ static void _plugin_destroy (void *arg)
     if (errnum)
         errn_exit (errnum, "pthread_join\n");
 
-    zsocket_destroy (p->srv->zctx, p->zs_out_tree);
+    /* plugin side */
     zsocket_destroy (p->srv->zctx, p->zs_out_event);
     zsocket_destroy (p->srv->zctx, p->zs_in_event);
+    zsocket_destroy (p->srv->zctx, p->zs_out);
     zsocket_destroy (p->srv->zctx, p->zs_in);
     zsocket_destroy (p->srv->zctx, p->zs_req);
-    zsocket_destroy (p->srv->zctx, p->zs_out);
 
+    /* server side */
     zsocket_destroy (p->srv->zctx, p->zs_plout);
 
     free (p);
@@ -194,13 +173,12 @@ static void _plugin_create (server_t *srv, conf_t *conf, plugin_t plugin)
     zbind (zctx, &p->zs_plout,        ZMQ_PUSH, plout_uri,        -1);
 
     /* plugin side */
+    zconnect (zctx, &p->zs_req,       ZMQ_DEALER, ROUTER_URI, -1,
+              (char *)plugin->name);
     zconnect (zctx, &p->zs_in,        ZMQ_PULL, plout_uri,        -1, NULL);
-    zconnect (zctx, &p->zs_in_event,  ZMQ_SUB,  PLOUT_EVENT_URI,  -1, NULL);
-    zconnect (zctx, &p->zs_req,ZMQ_DEALER, PLIO_ROUTER_URI, -1, (char *)plugin->name);
     zconnect (zctx, &p->zs_out,       ZMQ_PUSH, PLIN_URI,         -1, NULL);
+    zconnect (zctx, &p->zs_in_event,  ZMQ_SUB,  PLOUT_EVENT_URI,  -1, NULL);
     zconnect (zctx, &p->zs_out_event, ZMQ_PUSH, PLIN_EVENT_URI,   -1, NULL);
-    if (conf->treeout_uri)
-        zconnect (zctx, &p->zs_out_tree, ZMQ_PUSH, PLIN_TREE_URI, -1, NULL);
 
     errnum = pthread_create (&p->t, NULL, _plugin_thread, p);
     if (errnum)
@@ -220,18 +198,21 @@ static int _send_match (const char *key, void *item, void *arg)
     int rc = 0;
 
     if (!*zmsg)
-        return 0;
-
+        goto done;
     if (asprintf (&ptag, "%s.", p->plugin->name) < 0)
         err_exit ("asprintf");
-    if (cmb_msg_match_substr (*zmsg, ptag, NULL)) {
-        if (p->conf->verbose) {
-            zmsg_dump (*zmsg);
-            msg ("plio_router->%s-plout", p->plugin->name);
-        }
-        if (zmsg_send (zmsg, p->zs_plout) >= 0)
-            rc = 1; /* makes zhash_foreach stop iterating and return 1 */
+    if (!cmb_msg_match_substr (*zmsg, ptag, NULL))
+        goto done;
+    if (cmb_msg_match_sender (*zmsg, p->plugin->name)
+                                            && cmb_hopcount (*zmsg) == 1)
+        goto done;
+    if (p->conf->verbose) {
+        zmsg_dump (*zmsg);
+        msg ("router->plout[%s]", p->plugin->name);
     }
+    if (zmsg_send (zmsg, p->zs_plout) >= 0)
+        rc = 1; /* makes zhash_foreach stop iterating and return 1 */
+done:
     if (ptag)
         free (ptag);
     return rc;
@@ -240,14 +221,7 @@ static int _send_match (const char *key, void *item, void *arg)
 /* Send messsage to first matching plugin */
 void plugin_send (server_t *srv, conf_t *conf, zmsg_t **zmsg)
 {
-    if (zhash_foreach (srv->plugins, _send_match, zmsg) == 0)
-        if (*zmsg) {
-            if (conf->verbose) {
-                zmsg_dump (*zmsg);
-            }
-            /* send a NAK response indicating plugin is not recognized */
-            _nak_respond (zmsg, srv->zs_plio_router, conf->verbose);
-        }
+    zhash_foreach (srv->plugins, _send_match, zmsg);
 }
 
 void plugin_init (conf_t *conf, server_t *srv)
@@ -255,12 +229,12 @@ void plugin_init (conf_t *conf, server_t *srv)
     srv->plugins = zhash_new ();
 
     _plugin_create (srv, conf, &apisrv);
-    _plugin_create (srv, conf, &barriersrv);
     if (!conf->treeout_uri) /* root (send on local bus even if no eventout) */
         _plugin_create (srv, conf, &syncsrv);
     if (conf->redis_server)
         _plugin_create (srv, conf, &kvssrv);
-    _plugin_create (srv, conf, &livesrv);
+    _plugin_create (srv, conf, &barriersrv);
+    //_plugin_create (srv, conf, &livesrv);
 }
 
 void plugin_fini (conf_t *conf, server_t *srv)

@@ -14,19 +14,17 @@ typedef struct {
     zctx_t *zctx;
     void *zs_eventout;
     void *zs_eventin;
-    void *zs_treeout;
-    void *zs_treein;
+    void *zs_upreq;
     void *zs_plout_event;
     void *zs_plin;
-    void *zs_plio_router;
+    void *zs_router;
     void *zs_plin_event;
     void *zs_plin_tree;
     zhash_t *plugins;
 } server_t;
 
 #define PLOUT_URI_TMPL      "inproc://plout_%s"
-#define PLOUT_EVENT_URI     "inproc://plout_event"
 #define PLIN_URI            "inproc://plin"
+#define ROUTER_URI          "inproc://router"
+#define PLOUT_EVENT_URI     "inproc://plout_event"
 #define PLIN_EVENT_URI      "inproc://plin_event"
-#define PLIN_TREE_URI       "inproc://plin_tree"
-#define PLIO_ROUTER_URI     "inproc://plio_plrouter"

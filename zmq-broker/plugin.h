@@ -3,11 +3,10 @@ typedef struct plugin_struct *plugin_t;
 typedef struct {
     conf_t *conf;
     void *zs_in;
-    void *zs_in_event;
-    void *zs_req;
     void *zs_out;
+    void *zs_req;
+    void *zs_in_event;
     void *zs_out_event;
-    void *zs_out_tree;
     long timeout;
     void *zs_plout; /* server side socket, but private to this plugin */
     pthread_t t;

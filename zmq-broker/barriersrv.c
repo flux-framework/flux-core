@@ -1,11 +1,6 @@
 /* barriersrv.c - implement barriers */ 
 
-/* FIXME: event.barrier.exit.<name> should be able to return error in JSON.
- * Send this if barrier entry specifies a known name with different nprocs.
- * Also: track local client uuid's who have entered barrier, and subscribe
- * to their disconnect messages.  Send an error on premature disconnect.
- * Idea: send this to out_tree instead of out_event and have the root
- * barriersrv relay it (once) to out_event to avoid storm on mass-disconnect.
+/* FIXME: track clients and abort barrier on premature disconnect
  */
 
 #define _GNU_SOURCE
@@ -39,10 +34,9 @@
 
 typedef struct _barrier_struct {
     char *name;
-    char *exit_tag;
+    char *exit_event;
     int nprocs;
     int count;
-    struct timeval ctime;
     plugin_ctx_t *p;
 } barrier_t;
 
@@ -57,9 +51,9 @@ static void _barrier_destroy (void *arg)
 
     if (b->name)
         free (b->name);
-    if (b->exit_tag) {
-        zsocket_set_unsubscribe (p->zs_in_event, b->exit_tag);
-        free (b->exit_tag);
+    if (b->exit_event) {
+        zsocket_set_unsubscribe (p->zs_in_event, b->exit_event);
+        free (b->exit_event);
     }
     free (b);
     return;
@@ -73,107 +67,119 @@ static barrier_t *_barrier_create (plugin_ctx_t *p, char *name, int nprocs)
     b = xzmalloc (sizeof (barrier_t));
     b->name = xstrdup (name);
     b->nprocs = nprocs;
-    if (asprintf (&b->exit_tag, "event.barrier.exit.%s", name) < 0)
-        oom ();
-    xgettimeofday (&b->ctime, NULL);
     b->p = p;
-    zsocket_set_subscribe (p->zs_in_event, b->exit_tag);
+
+    if (asprintf (&b->exit_event, "event.barrier.exit.%s", name) < 0)
+        oom ();
+    zsocket_set_subscribe (p->zs_in_event, b->exit_event);
+
     zhash_insert (ctx->barriers, b->name, b);
     zhash_freefn (ctx->barriers, b->name, _barrier_destroy);
     return b;
 }
 
-static int _send_barrier_enter (const char *key, void *item, void *arg)
+static int _barrier_enter_request (const char *key, void *item, void *arg)
 {
     barrier_t *b = item;
     plugin_ctx_t *p = arg;
     json_object *no, *o = NULL;
+    zmsg_t *zmsg = NULL;
 
-    if (b->count > 0) {
-        assert (p->zs_out_tree != NULL);   
-        if (!(o = json_object_new_object ()))
-            oom ();
-        if (!(no = json_object_new_int (b->count)))
-            oom ();
-        json_object_object_add (o, "count", no);
-        if (!(no = json_object_new_int (b->nprocs)))
-            oom ();
-        json_object_object_add (o, "nprocs", no);
-        cmb_msg_send (p->zs_out_tree, o, "barrier.enter.%s", b->name);
-        json_object_put (o);
-        b->count = 0;
+    if (b->count == 0)
+        return 0;
+    if (!(o = json_object_new_object ()))
+        oom ();
+    if (!(no = json_object_new_int (b->count)))
+        oom ();
+    json_object_object_add (o, "count", no);
+    if (!(no = json_object_new_int (b->nprocs)))
+        oom ();
+    json_object_object_add (o, "nprocs", no);
+    if (!(zmsg = zmsg_new ()))
+        oom ();
+    if (zmsg_pushstr (zmsg, "%s", json_object_to_json_string (o)) < 0)
+        oom ();
+    if (zmsg_pushstr (zmsg, "barrier.enter.%s", b->name) < 0)
+        oom ();
+    if (zmsg_pushmem (zmsg, NULL, 0) < 0)
+        oom ();
+    if (zmsg_send (&zmsg, p->zs_req) < 0) { /* will route to parent's */
+        err ("zmsg_send");                  /*   barrier plugin */
+        goto done;
     }
+    b->count = 0;
+done:
+    if (o)
+        json_object_put (o);
+    if (zmsg)
+        zmsg_destroy (&zmsg);
     return 0;
 }
 
-static int _parse_barrier_enter (json_object *o, int *cp, int *np)
-{
-    json_object *count, *nprocs;
-
-    count = json_object_object_get (o, "count"); 
-    if (!count)
-        goto error;
-    nprocs = json_object_object_get (o, "nprocs"); 
-    if (!nprocs)
-        goto error;
-    *cp = json_object_get_int (count);
-    *np = json_object_get_int (nprocs);
-    return 0;
-error:
-    return -1;
-}
-
-static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, msg_type_t type)
+static void _barrier_enter (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
-    char *barrier_enter = "barrier.enter.";
-    char *barrier_exit = "event.barrier.exit.";
-    char *tag = NULL;
-    json_object *o;
+    barrier_t *b;
+    json_object *o = NULL, *count, *nprocs;
+    char *sender = NULL;
 
-    if (cmb_msg_decode (*zmsg, &tag, &o, NULL, NULL) < 0) {
-        err ("barriersrv: recv");
+    if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) < 0) {
+        err ("%s: error decoding message", __FUNCTION__);
+        goto done;
+    }
+    if (o == NULL || !(sender = cmb_msg_sender (*zmsg))
+                  || !(count = json_object_object_get (o, "count"))
+                  || !(nprocs = json_object_object_get (o, "nprocs"))) {
+        err ("%s: protocol error", __FUNCTION__);
         goto done;
     }
 
-    /* event.barrier.exit.<name> */
-    if (!strncmp (tag, barrier_exit, strlen (barrier_exit))) {
-        zhash_delete (ctx->barriers, tag + strlen (barrier_exit));
+    b = zhash_lookup (ctx->barriers, name);
+    if (!b)
+        b = _barrier_create (p, name, json_object_get_int (nprocs));
+    b->count += json_object_get_int (count);
 
-    /* barrier.enter.<name> */
-    } else if (!strncmp (tag, barrier_enter, strlen (barrier_enter))) {
-        char *name = tag + strlen (barrier_enter);
-        barrier_t *b;
-        int count, nprocs;
-
-        if (_parse_barrier_enter (o, &count, &nprocs) < 0) {
-            msg ("error parsing %s", tag);
-            goto done;
-        }
-        b = zhash_lookup (ctx->barriers, name);
-        if (!b)
-            b = _barrier_create (p, name, nprocs);
-        b->count += count;
-        if (b->count == b->nprocs) /* destroy when we receive our own msg */
-            cmb_msg_send (p->zs_out_event, NULL, "%s", b->exit_tag);
-        else if (p->zs_out_tree && p->timeout == -1)
-            p->timeout = 1; /* 1 ms - then send count upstream */
-    }
+    if (b->count == b->nprocs)
+        cmb_msg_send (p->zs_out_event, NULL, "%s", b->exit_event);
+    else if (p->conf->treeout_uri && p->timeout == -1)
+        p->timeout = 1; /* 1 ms - then send count upstream */
 done:
-    if (tag)
-        free (tag);
     if (o)
         json_object_put (o);
     if (*zmsg)
         zmsg_destroy (zmsg);
+    if (sender)
+        free (sender);
+}
+
+static void _barrier_exit (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
+{
+    ctx_t *ctx = p->ctx;
+
+    zhash_delete (ctx->barriers, name);
+    zmsg_destroy (zmsg);
+}
+
+static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, msg_type_t type)
+{
+    char *name = NULL;
+
+    if (cmb_msg_match_substr (*zmsg, "barrier.enter.", &name))
+        _barrier_enter (p, name, zmsg);
+    else if (cmb_msg_match_substr (*zmsg, "event.barrier.exit.", &name))
+        _barrier_exit (p, name, zmsg);
+
+    if (name)
+        free (name);
 }
 
 static void _timeout (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
 
-    if (p->zs_out_tree)
-        zhash_foreach (ctx->barriers, _send_barrier_enter, p);
+    assert (p->conf->treeout_uri != NULL);
+
+    zhash_foreach (ctx->barriers, _barrier_enter_request, p);
     p->timeout = -1; /* disable timeout */
 }
 
@@ -182,7 +188,6 @@ static void _init (plugin_ctx_t *p)
     ctx_t *ctx;
 
     ctx = p->ctx = xzmalloc (sizeof (ctx_t));
-    //zsocket_set_subscribe (p->zs_in, "barrier.enter.");
     zsocket_set_subscribe (p->zs_in_event, "event.barrier.exit.");
     ctx->barriers = zhash_new ();
     p->timeout = -1; /* no timeout initially */

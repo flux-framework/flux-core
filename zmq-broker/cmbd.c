@@ -122,6 +122,13 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
         err_exit ("zctx_new");
     zctx_set_linger (srv->zctx, 5);
 
+    /* broker side of plugin sockets */
+    /* N.B. each plugin has a private zs_plout */
+    zbind (zctx, &srv->zs_router,      ZMQ_ROUTER, ROUTER_URI, -1);
+    zbind (zctx, &srv->zs_plin,        ZMQ_PULL, PLIN_URI,        -1);
+    zbind (zctx, &srv->zs_plout_event, ZMQ_PUB,  PLOUT_EVENT_URI, -1);
+    zbind (zctx, &srv->zs_plin_event,  ZMQ_PULL, PLIN_EVENT_URI,  -1);
+
     /* external sockets */
     if (conf->event_uri) {
         zbind (zctx, &srv->zs_eventout, ZMQ_PUB, conf->event_uri, -1);
@@ -129,17 +136,11 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
         zsocket_set_subscribe (srv->zs_eventin, "");
     }
     if (conf->treeout_uri)
-        zconnect (zctx, &srv->zs_treeout, ZMQ_PUSH, conf->treeout_uri, -1,NULL);
-    if (conf->treein_uri)
-        zbind (zctx, &srv->zs_treein, ZMQ_PULL, conf->treein_uri, -1);
-
-    /* plugin sockets */
-    zbind (zctx, &srv->zs_plout_event, ZMQ_PUB,  PLOUT_EVENT_URI, -1);
-    zbind (zctx, &srv->zs_plio_router, ZMQ_ROUTER,  PLIO_ROUTER_URI, -1);
-    zbind (zctx, &srv->zs_plin,        ZMQ_PULL, PLIN_URI,        -1);
-    if (conf->treein_uri)
-        zbind (zctx, &srv->zs_plin_tree, ZMQ_PULL, PLIN_TREE_URI, -1);
-    zbind (zctx, &srv->zs_plin_event,  ZMQ_PULL, PLIN_EVENT_URI,  -1);
+        zconnect (zctx, &srv->zs_upreq, ZMQ_DEALER, conf->treeout_uri, -1,NULL);
+    if (conf->treein_uri) {
+        if (zsocket_bind (srv->zs_router, "%s", conf->treein_uri) < 0)
+            err_exit ("zsocket_bind: %s", conf->treein_uri);
+    }
 
     plugin_init (conf, srv);
 
@@ -150,15 +151,13 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
 {
     plugin_fini (conf, srv);
 
-    zsocket_destroy (srv->zctx, srv->zs_plin_event);
-    zsocket_destroy (srv->zctx, srv->zs_plin_tree);
+    zsocket_destroy (srv->zctx, srv->zs_router);
     zsocket_destroy (srv->zctx, srv->zs_plin);
-    zsocket_destroy (srv->zctx, srv->zs_plio_router);
     zsocket_destroy (srv->zctx, srv->zs_plout_event);
-    if (srv->zs_treein)
-        zsocket_destroy (srv->zctx, srv->zs_treein);
-    if (srv->zs_treeout)
-        zsocket_destroy (srv->zctx, srv->zs_treeout);
+    zsocket_destroy (srv->zctx, srv->zs_plin_event);
+
+    if (srv->zs_upreq)
+        zsocket_destroy (srv->zctx, srv->zs_upreq);
     if (srv->zs_eventin)
         zsocket_destroy (srv->zctx, srv->zs_eventin);
     if (srv->zs_eventout)
@@ -196,39 +195,54 @@ static void _route (conf_t *conf, void *src, void *d1, void *d2, char *s)
     }
 }
 
-static void _route_request (server_t *srv, conf_t *conf)
+static void _route_request (conf_t *conf, server_t *srv)
 {
-    zmsg_t *zmsg = zmsg_recv (srv->zs_plio_router);
+    zmsg_t *zmsg = zmsg_recv (srv->zs_router);
 
     if (zmsg)
-        plugin_send (srv, conf, &zmsg);
+        plugin_send (srv, conf, &zmsg); /* prints debug output */
+    if (zmsg && srv->zs_upreq) {
+        if (conf->verbose) {
+            zmsg_dump (zmsg);
+            msg ("router->upreq");
+        }
+        zmsg_send (&zmsg, srv->zs_upreq); 
+    }
+    if (zmsg) {
+        if (conf->verbose) {
+            zmsg_dump (zmsg);
+            msg ("router->router (NAK)");
+        }
+        cmb_msg_sendnak (&zmsg, srv->zs_router);
+    }
+
+    assert (zmsg == NULL);
 }
 
 static void _cmb_poll (conf_t *conf, server_t *srv)
 {
     zmq_pollitem_t zpa[] = {
-{ .socket = srv->zs_treein,     .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-{ .socket = srv->zs_eventin,    .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
+{ .socket = srv->zs_router,     .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
+{ .socket = srv->zs_upreq,      .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
 { .socket = srv->zs_plin,       .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
 { .socket = srv->zs_plin_event, .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-{ .socket = srv->zs_plin_tree,  .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-{ .socket = srv->zs_plio_router,.events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
+{ .socket = srv->zs_eventin,    .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
     };
 
-    zpoll (zpa, 6, -1);
+    zpoll (zpa, sizeof (zpa) / sizeof (zpa[0]), -1);
 
-    //if (zpa[0].revents & ZMQ_POLLIN)
-    //    _route (conf, srv->zs_treein, srv->zs_plout, NULL, "treein->plout");
-    if (zpa[1].revents & ZMQ_POLLIN)
-        _route (conf, srv->zs_eventin, srv->zs_plout_event, NULL, "eventin->plout_event");
-    if (zpa[2].revents & ZMQ_POLLIN)
-        _route (conf, srv->zs_plin, srv->zs_plio_router, NULL, "plin->plio_router");
-    if (zpa[3].revents & ZMQ_POLLIN)
-        _route (conf, srv->zs_plin_event, srv->zs_plout_event, srv->zs_eventout, "plin_event->plout_event,eventout");
-    if (zpa[4].revents & ZMQ_POLLIN)
-        _route (conf, srv->zs_plin_tree, srv->zs_treeout, NULL, "plin_tree->treeout");
-    if (zpa[5].revents & ZMQ_POLLIN)
-        _route_request (srv, conf);
+    if (zpa[0].revents & ZMQ_POLLIN) /* router */
+        _route_request (conf, srv);
+    if (zpa[1].revents & ZMQ_POLLIN) /* upreq (upstream responding to req) */
+        _route (conf, srv->zs_upreq, srv->zs_router, NULL, "upreq->router");
+    if (zpa[2].revents & ZMQ_POLLIN) /* plin (plugin responding to req) */
+        _route (conf, srv->zs_plin, srv->zs_router, NULL, "plin->router");
+    if (zpa[3].revents & ZMQ_POLLIN) /* plin_event (plugin sending event) */
+        _route (conf, srv->zs_plin_event, srv->zs_plout_event, srv->zs_eventout,
+                "plin_event->plout_event,eventout");
+    if (zpa[4].revents & ZMQ_POLLIN) /* eventin (external event input) */
+        _route (conf, srv->zs_eventin, srv->zs_plout_event, NULL,
+                "eventin->plout_event");
 }
 
 /*
