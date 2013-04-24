@@ -519,10 +519,18 @@ int cmb_msg_datacpy (zmsg_t *zmsg, char *buf, int len)
     return zframe_size (zf);
 }
 
-void cmb_msg_send_errnum (zmsg_t **zmsg, void *socket, int errnum)
+void cmb_msg_send_errnum (zmsg_t **zmsg, void *socket, int errnum, void *cc)
 {
     if (cmb_msg_rep_errnum (*zmsg, errnum) < 0)
         goto done;
+    if (cc) {
+        zmsg_t *cpy = zmsg_dup (*zmsg);
+        if (!cpy)
+            err_exit ("zmsg_dup");
+        if (zmsg_send (&cpy, cc) < 0)
+            err_exit ("zmsg_send");
+    }
+    
     if (zmsg_send (zmsg, socket) < 0) {
         err ("%s: zmsg_send", __FUNCTION__);
         goto done;

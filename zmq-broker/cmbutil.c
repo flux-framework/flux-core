@@ -9,12 +9,13 @@
 #include <errno.h>
 #include <sys/time.h>
 #include <libgen.h>
+#include <stdbool.h>
 
 #include "cmb.h"
 #include "log.h"
 #include "util.h"
 
-#define OPTIONS "p:s:b:k:SK:Ct:P:d:fF:n:lx:e:"
+#define OPTIONS "p:s:b:k:SK:Ct:P:d:fF:n:lx:e:T"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -32,6 +33,7 @@ static const struct option longopts[] = {
     {"kvs-torture",required_argument,  0, 't'},
     {"sync",       no_argument,        0, 'S'},
     {"live-query", no_argument,        0, 'l'},
+    {"snoop",      no_argument,        0, 'T'},
     {0, 0, 0, 0},
 };
 
@@ -42,6 +44,7 @@ static void usage (void)
 "  -P,--ping-padding N    pad ping packets with N bytes (adds a JSON string)\n"
 "  -d,--ping-delay N      set delay between ping packets (in msec)\n"
 "  -x,--stats name        get plugin statistics\n"
+"  -T,--snoop             display messages to/from router socket\n"
 "  -f,--fdopen-read       open r/o fd, print name, and read until EOF\n"
 "  -F,--fdopen-write DEST open w/o fd, routing data to DEST, write until EOF\n"
 "  -b,--barrier name      execute barrier across slurm job\n"
@@ -175,6 +178,14 @@ int main (int argc, char *argv[])
                     msg ("%s", event);
                     free (event);
                 }
+                break;
+            }
+            case 'T': { /* --snoop */
+                if (cmb_snoop (c, true) < 0)
+                    err_exit ("cmb_snoop");
+                while (cmb_snoop_one (c) == 0)
+                    ;
+                /* NOTREACHED */
                 break;
             }
             case 'S': { /* --sync */

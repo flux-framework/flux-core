@@ -128,6 +128,7 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
     zbind (zctx, &srv->zs_plin,        ZMQ_PULL, PLIN_URI,        -1);
     zbind (zctx, &srv->zs_plout_event, ZMQ_PUB,  PLOUT_EVENT_URI, -1);
     zbind (zctx, &srv->zs_plin_event,  ZMQ_PULL, PLIN_EVENT_URI,  -1);
+    zbind (zctx, &srv->zs_snoop,       ZMQ_PUB,  SNOOP_URI, -1);
 
     /* external sockets */
     if (conf->event_uri) {
@@ -135,8 +136,11 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
         zbind (zctx, &srv->zs_eventin,  ZMQ_SUB, conf->event_uri, -1);
         zsocket_set_subscribe (srv->zs_eventin, "");
     }
-    if (conf->treeout_uri)
-        zconnect (zctx, &srv->zs_upreq, ZMQ_DEALER, conf->treeout_uri, -1,NULL);
+    if (conf->treeout_uri) {
+        char id[16];
+        snprintf (id, sizeof (id), "node-%d", conf->rank);
+        zconnect (zctx, &srv->zs_upreq, ZMQ_DEALER, conf->treeout_uri, -1, id);
+    }
     if (conf->treein_uri) {
         if (zsocket_bind (srv->zs_router, "%s", conf->treein_uri) < 0)
             err_exit ("zsocket_bind: %s", conf->treein_uri);
@@ -155,6 +159,7 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
     zsocket_destroy (srv->zctx, srv->zs_plin);
     zsocket_destroy (srv->zctx, srv->zs_plout_event);
     zsocket_destroy (srv->zctx, srv->zs_plin_event);
+    zsocket_destroy (srv->zctx, srv->zs_snoop);
 
     if (srv->zs_upreq)
         zsocket_destroy (srv->zctx, srv->zs_upreq);
@@ -176,10 +181,6 @@ static void _route (conf_t *conf, void *src, void *d1, void *d2, char *s)
     if (!m)
         return;
 
-    if (conf->verbose) {
-        zmsg_dump (m);
-        msg ("%s", s);
-    }
     if (d2) {
         cpy = zmsg_dup (m);
         if (!cpy)
@@ -195,26 +196,41 @@ static void _route (conf_t *conf, void *src, void *d1, void *d2, char *s)
     }
 }
 
+static void _route_response (conf_t *conf, server_t *srv, void *sock)
+{
+    zmsg_t *zmsg = zmsg_recv (sock);
+    zmsg_t *cpy;
+
+    /* feed snoop socket */
+    if (zmsg) {
+        cpy = zmsg_dup (zmsg);
+        if (!cpy)
+            err_exit ("zmsg_dup");
+        if (zmsg_send (&cpy, srv->zs_snoop) < 0)
+            err_exit ("zmsg_send");
+    } 
+    zmsg_send (&zmsg, srv->zs_router);
+}
+
 static void _route_request (conf_t *conf, server_t *srv)
 {
     zmsg_t *zmsg = zmsg_recv (srv->zs_router);
+    zmsg_t *cpy;
 
-    if (zmsg)
-        plugin_send (srv, conf, &zmsg); /* prints debug output */
-    if (zmsg && srv->zs_upreq) {
-        if (conf->verbose) {
-            zmsg_dump (zmsg);
-            msg ("router->upreq");
-        }
-        zmsg_send (&zmsg, srv->zs_upreq); 
-    }
+    /* feed snoop socket */
     if (zmsg) {
-        if (conf->verbose) {
-            zmsg_dump (zmsg);
-            msg ("router->router (ENOSYS)");
-        }
-        cmb_msg_send_errnum (&zmsg, srv->zs_router, ENOSYS);
-    }
+        cpy = zmsg_dup (zmsg);
+        if (!cpy)
+            err_exit ("zmsg_dup");
+        if (zmsg_send (&cpy, srv->zs_snoop) < 0)
+            err_exit ("zmsg_send");
+    } 
+    if (zmsg)
+        plugin_send (srv, conf, &zmsg);
+    if (zmsg && srv->zs_upreq)
+        zmsg_send (&zmsg, srv->zs_upreq); 
+    if (zmsg)
+        cmb_msg_send_errnum (&zmsg, srv->zs_router, ENOSYS, srv->zs_snoop);
     assert (zmsg == NULL);
 }
 
@@ -233,9 +249,10 @@ static void _cmb_poll (conf_t *conf, server_t *srv)
     if (zpa[0].revents & ZMQ_POLLIN) /* router */
         _route_request (conf, srv);
     if (zpa[1].revents & ZMQ_POLLIN) /* upreq (upstream responding to req) */
-        _route (conf, srv->zs_upreq, srv->zs_router, NULL, "upreq->router");
+        _route_response (conf, srv, srv->zs_upreq);
     if (zpa[2].revents & ZMQ_POLLIN) /* plin (plugin responding to req) */
-        _route (conf, srv->zs_plin, srv->zs_router, NULL, "plin->router");
+        _route_response (conf, srv, srv->zs_plin);
+
     if (zpa[3].revents & ZMQ_POLLIN) /* plin_event (plugin sending event) */
         _route (conf, srv->zs_plin_event, srv->zs_plout_event, srv->zs_eventout,
                 "plin_event->plout_event,eventout");

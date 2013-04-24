@@ -13,6 +13,7 @@ typedef struct {
     void *zs_req;
     void *zs_in_event;
     void *zs_out_event;
+    void *zs_snoop;
     long timeout;
     void *zs_plout; /* server side socket, but private to this plugin */
     pthread_t t;
@@ -22,7 +23,9 @@ typedef struct {
     void *ctx;
 } plugin_ctx_t;
 
-typedef enum { ZMSG_REQUEST, ZMSG_RESPONSE, ZMSG_EVENT } zmsg_type_t;
+typedef enum {
+    ZMSG_REQUEST, ZMSG_RESPONSE, ZMSG_EVENT, ZMSG_SNOOP }
+zmsg_type_t;
 
 struct plugin_struct {
     const char *name;

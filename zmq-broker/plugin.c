@@ -77,6 +77,7 @@ static void _plugin_poll (plugin_ctx_t *p)
 { .socket = p->zs_in,        .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
 { .socket = p->zs_in_event,  .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
 { .socket = p->zs_req,       .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
+{ .socket = p->zs_snoop,     .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
     };
     zmsg_t *zmsg;
     struct timeval t1, t2, t;
@@ -132,6 +133,9 @@ static void _plugin_poll (plugin_ctx_t *p)
             zmsg = zmsg_recv (p->zs_req);
             type = ZMSG_RESPONSE;
             p->stats.rep_count++;
+        } else if (zpa[3].revents & ZMQ_POLLIN) {   /* debug on 'snoop' */
+            zmsg = zmsg_recv (p->zs_snoop);
+            type = ZMSG_SNOOP;
         } else
             zmsg = NULL;
 
@@ -150,7 +154,7 @@ static void _plugin_poll (plugin_ctx_t *p)
 
         /* send ENOSYS response indicating plugin did not recognize tag */
         if (zmsg && type == ZMSG_REQUEST)
-            cmb_msg_send_errnum (&zmsg, p->zs_out, ENOSYS);
+            cmb_msg_send_errnum (&zmsg, p->zs_out, ENOSYS, NULL);
 
         if (zmsg)
             zmsg_destroy (&zmsg);
@@ -191,6 +195,7 @@ static void _plugin_destroy (void *arg)
         errn_exit (errnum, "pthread_join\n");
 
     /* plugin side */
+    zsocket_destroy (p->srv->zctx, p->zs_snoop);
     zsocket_destroy (p->srv->zctx, p->zs_out_event);
     zsocket_destroy (p->srv->zctx, p->zs_in_event);
     zsocket_destroy (p->srv->zctx, p->zs_out);
@@ -223,12 +228,13 @@ static void _plugin_create (server_t *srv, conf_t *conf, plugin_t plugin)
     zbind (zctx, &p->zs_plout,        ZMQ_PUSH, plout_uri,        -1);
 
     /* plugin side */
-    zconnect (zctx, &p->zs_req,       ZMQ_DEALER, ROUTER_URI, -1,
+    zconnect (zctx, &p->zs_req,       ZMQ_DEALER, ROUTER_URI,     -1,
               (char *)plugin->name);
     zconnect (zctx, &p->zs_in,        ZMQ_PULL, plout_uri,        -1, NULL);
     zconnect (zctx, &p->zs_out,       ZMQ_PUSH, PLIN_URI,         -1, NULL);
     zconnect (zctx, &p->zs_in_event,  ZMQ_SUB,  PLOUT_EVENT_URI,  -1, NULL);
     zconnect (zctx, &p->zs_out_event, ZMQ_PUSH, PLIN_EVENT_URI,   -1, NULL);
+    zconnect (zctx, &p->zs_snoop,     ZMQ_SUB,  SNOOP_URI,        -1, NULL);
 
     errnum = pthread_create (&p->t, NULL, _plugin_thread, p);
     if (errnum)
@@ -256,10 +262,6 @@ static int _send_match (const char *key, void *item, void *arg)
     if (cmb_msg_match_sender (*zmsg, p->plugin->name)
                                             && cmb_msg_hopcount (*zmsg) == 1)
         goto done; /* msg originating from this plugin, this broker */
-    if (p->conf->verbose) {
-        zmsg_dump (*zmsg);
-        msg ("router->plout[%s]", p->plugin->name);
-    }
     if (zmsg_send (zmsg, p->zs_plout) >= 0)
         rc = 1; /* makes zhash_foreach stop iterating and return 1 */
 done:

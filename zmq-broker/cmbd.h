@@ -15,6 +15,7 @@ typedef struct {
     void *zs_eventout;
     void *zs_eventin;
     void *zs_upreq;
+    void *zs_snoop;
     void *zs_plout_event;
     void *zs_plin;
     void *zs_router;
@@ -28,3 +29,4 @@ typedef struct {
 #define ROUTER_URI          "inproc://router"
 #define PLOUT_EVENT_URI     "inproc://plout_event"
 #define PLIN_EVENT_URI      "inproc://plin_event"
+#define SNOOP_URI           "inproc://snoop"

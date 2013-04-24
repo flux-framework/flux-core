@@ -47,7 +47,7 @@ int cmb_msg_hopcount (zmsg_t *zmsg);
 
 int cmb_msg_rep_json (zmsg_t *zmsg, json_object *o);
 int cmb_msg_rep_errnum (zmsg_t *zmsg, int errnum);
-void cmb_msg_send_errnum (zmsg_t **zmsg, void *socket, int errnum);
+void cmb_msg_send_errnum (zmsg_t **zmsg, void *socket, int errnum, void *cc);
 
 int cmb_msg_datacpy (zmsg_t *msg, char *buf, int len);
 

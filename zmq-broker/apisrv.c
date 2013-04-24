@@ -52,6 +52,7 @@ typedef struct _client_struct {
     plugin_ctx_t *p;
     zhash_t *disconnect_notify;
     zhash_t *subscriptions;
+    bool snoop;
     char *uuid;
     cfd_t *cfds;
     int cfd_id;
@@ -287,6 +288,9 @@ static void _client_destroy (plugin_ctx_t *p, client_t *c)
     zhash_foreach (c->subscriptions, _unsubscribe, c);
     zhash_destroy (&c->subscriptions);
 
+    if (c->snoop)
+        zsocket_set_unsubscribe (p->zs_snoop, "");
+
     while ((c->cfds) != NULL)
         _cfd_destroy (p, c, c->cfds);
     free (c->uuid);
@@ -335,7 +339,13 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
         return -1;
     }
         
-    if (cmb_msg_match (zmsg, "api.fdopen.read")) {
+    if (cmb_msg_match (zmsg, "api.snoop.on")) {
+        c->snoop = true;
+        zsocket_set_subscribe (p->zs_snoop, "");
+    } else if (cmb_msg_match (zmsg, "api.snoop.on")) {
+        c->snoop = false;
+        zsocket_set_unsubscribe (p->zs_snoop, "");
+    } else if (cmb_msg_match (zmsg, "api.fdopen.read")) {
         _cfd_create (p, c, NULL);
     } else if (cmb_msg_match_substr (zmsg, "api.fdopen.write.", &name)) {
         _cfd_create (p, c, name);
@@ -447,6 +457,30 @@ static void _recv_event (plugin_ctx_t *p, zmsg_t **zmsg)
     }
 }
 
+static void _recv_snoop (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    ctx_t *ctx = p->ctx;
+    client_t *c;
+
+    for (c = ctx->clients; c != NULL; ) {
+        zmsg_t *cpy;
+        client_t *deleteme = NULL;
+
+        if (c->snoop) {
+            if (!(cpy = zmsg_dup (*zmsg)))
+                oom ();
+            if (zmsg_send_fd (c->fd, &cpy) < 0) {
+                zmsg_destroy (&cpy);
+                deleteme = c; 
+            }
+        }
+        c = c->next;
+        if (deleteme)
+            _client_destroy (p, deleteme);
+    }
+}
+
+
 static void _recv_request (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
@@ -484,6 +518,9 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         case ZMSG_RESPONSE:
             _recv_response (p, zmsg);
             break;
+        case ZMSG_SNOOP:
+            _recv_snoop (p, zmsg);
+            break;
     }
 }
 
@@ -492,7 +529,7 @@ static void _poll_once (plugin_ctx_t *p)
     ctx_t *ctx = p->ctx;
     client_t *c;
     cfd_t *cfd;
-    int zpa_len = _client_count (p) + _cfd_count (p) + 4;
+    int zpa_len = _client_count (p) + _cfd_count (p) + 5;
     zmq_pollitem_t *zpa = xzmalloc (sizeof (zmq_pollitem_t) * zpa_len);
     int i;
     zmsg_t *zmsg;
@@ -508,10 +545,16 @@ static void _poll_once (plugin_ctx_t *p)
     zpa[2].socket = p->zs_req;
     zpa[2].events = ZMQ_POLLIN;
     zpa[2].fd = -1;
-    zpa[3].events = ZMQ_POLLIN | ZMQ_POLLERR;
-    zpa[3].fd = ctx->listen_fd;
+    zpa[3].socket = p->zs_snoop;
+    zpa[3].events = ZMQ_POLLIN;
+    zpa[3].fd = -1;
+
+    /* listen fd */
+    zpa[4].events = ZMQ_POLLIN | ZMQ_POLLERR;
+    zpa[4].fd = ctx->listen_fd;
+
     /* client fds */ 
-    for (i = 4, c = ctx->clients; c != NULL; c = c->next) {
+    for (i = 5, c = ctx->clients; c != NULL; c = c->next) {
         for (cfd = c->cfds; cfd != NULL; cfd = cfd->next, i++) {
             zpa[i].events = ZMQ_POLLERR;
             zpa[i].fd = cfd->fd;
@@ -529,7 +572,7 @@ static void _poll_once (plugin_ctx_t *p)
     zpoll (zpa, zpa_len, -1);
 
     /* client fds */
-    for (i = 4, c = ctx->clients; c != NULL; c = c->next) {
+    for (i = 5, c = ctx->clients; c != NULL; c = c->next) {
         for (cfd = c->cfds; cfd != NULL; i++) {
             cfd_t *deleteme = NULL;
             assert (cfd->fd == zpa[i].fd);
@@ -564,9 +607,9 @@ static void _poll_once (plugin_ctx_t *p)
     }
 
     /* accept new client connection */
-    if (zpa[3].revents & ZMQ_POLLIN)        /* listenfd */
+    if (zpa[4].revents & ZMQ_POLLIN)        /* listenfd */
         _accept (p);
-    if (zpa[3].revents & ZMQ_POLLERR)       /* listenfd - error */
+    if (zpa[4].revents & ZMQ_POLLERR)       /* listenfd - error */
         err_exit ("apisrv: poll on listen fd");
 
     /* zmq sockets - can modify client list (so do after clients) */
@@ -588,6 +631,11 @@ static void _poll_once (plugin_ctx_t *p)
             err ("zmsg_recv");
         type = ZMSG_RESPONSE;
         p->stats.rep_count++;
+    } else if (zpa[3].revents & ZMQ_POLLIN) {/* 'snoop' */
+        zmsg = zmsg_recv (p->zs_snoop);
+        if (!zmsg)
+            err ("zmsg_recv");
+        type = ZMSG_SNOOP;
     } else
         zmsg = NULL;
 
@@ -597,7 +645,7 @@ static void _poll_once (plugin_ctx_t *p)
     if (zmsg)
         _recv (p, &zmsg, type);
     if (zmsg && type == ZMSG_REQUEST)
-        cmb_msg_send_errnum (&zmsg, p->zs_out, ENOSYS);
+        cmb_msg_send_errnum (&zmsg, p->zs_out, ENOSYS, NULL);
 
     free (zpa);
 }

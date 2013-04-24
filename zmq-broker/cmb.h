@@ -10,6 +10,9 @@ void cmb_fini (cmb_t c);
 int cmb_ping (cmb_t c, char *tag, int seq, int padding, char **tagp);
 int cmb_stats (cmb_t c, char *name, int *req, int *rep, int *event);
 
+int cmb_snoop (cmb_t c, bool enable);
+int cmb_snoop_one (cmb_t c);
+
 int cmb_event_subscribe (cmb_t c, char *subscription);
 int cmb_event_unsubscribe (cmb_t c, char *subscription);
 char *cmb_event_recv (cmb_t c);

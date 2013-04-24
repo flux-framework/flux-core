@@ -300,6 +300,25 @@ error:
     return -1;
 }
 
+int cmb_snoop (cmb_t c, bool enable)
+{
+    return cmb_msg_send_fd (c->fd, NULL, "api.snoop.%s", enable ? "on" : "off");
+}
+
+int cmb_snoop_one (cmb_t c)
+{
+    zmsg_t *zmsg; 
+    int rc = -1;
+
+    zmsg = zmsg_recv_fd (c->fd, 0); /* blocking */
+    if (zmsg) {
+        zmsg_dump (zmsg);
+        zmsg_destroy (&zmsg);
+        rc = 0;
+    }
+    return rc;
+}
+
 int cmb_event_subscribe (cmb_t c, char *sub)
 {
     return cmb_msg_send_fd (c->fd, NULL, "api.event.subscribe.%s",

@@ -9,6 +9,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <errno.h>
+#include <stdbool.h>
 
 #include "cmb.h"
 #include "log.h"
