@@ -1,5 +1,18 @@
 /* livesrv.c - node liveness service */
 
+/* N.B. Any node with descendents will publish events directly.
+ * See how this goes.  Do we need to filter events through the root 
+ * to reduce per-sender EPGM overhead on receivers?
+ */
+
+/* FIXME: If a node goes down, the state of its direct descendents will
+ * forever remain unchanged.  We need a takeover scheme.
+ */
+
+/* FIXME: If a node never starts, its parent doesn't know it is supposed
+ * to monitor it.  Need a way to learn session topology.
+ */
+
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -31,7 +44,8 @@
 #define MISSED_TRIGGER_ALLOW    3
 
 typedef struct {
-    int *live;
+    int *live;      /* state of descendents - we actively monitor them */
+    bool *live_all; /* session-wide state, "eventually consistent" */
 } ctx_t;
 
 static void _event_sched_trigger (plugin_ctx_t *p, zmsg_t **zmsg)
@@ -39,21 +53,21 @@ static void _event_sched_trigger (plugin_ctx_t *p, zmsg_t **zmsg)
     ctx_t *ctx = p->ctx;
     int i, myrank = p->conf->rank;
 
-    if (myrank == 0) {
-        for (i = 0; i < p->conf->size; i++) {
-            if (ctx->live[i] != -1)
-                ctx->live[i]++;
-            if (ctx->live[i] > MISSED_TRIGGER_ALLOW) {
-                cmb_msg_send (p->zs_out_event, NULL, "event.live.down.%d", i);
-                ctx->live[i] = -1;
-            } 
-        }
-        if (ctx->live[myrank] == -1)
-            cmb_msg_send (p->zs_out_event, NULL, "event.live.up.%d", myrank);
-        ctx->live[myrank] = 0;
-    } else {
+    /* tell upstream that we're alive */
+    if (myrank > 0)
         cmb_msg_send_rt (p->zs_req, NULL, "live.up.%d", myrank);
+
+    /* age state of descendents, notify of up->down transition, if any */
+    for (i = 0; i < p->conf->size; i++) {
+        if (ctx->live[i] != -1)
+            ctx->live[i]++;
+        if (ctx->live[i] > MISSED_TRIGGER_ALLOW) {
+            ctx->live[i] = -1;
+            ctx->live_all[i] = false;
+            cmb_msg_send (p->zs_out_event, NULL, "event.live.down.%d", i);
+        }
     }
+
     if (zmsg && *zmsg) /* we call with NULL zmsg from _init */
         zmsg_destroy (zmsg);
 }
@@ -62,12 +76,10 @@ static void _event_live_up (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     int rank = strtoul (name, NULL, 10);
-    int myrank = p->conf->rank;
 
     if (rank < 0 || rank >= p->conf->size)
         goto done;
-    if (myrank != 0)
-        ctx->live[rank] = 0;
+    ctx->live_all[rank] = true;
 done:
     zmsg_destroy (zmsg);
 }
@@ -76,12 +88,10 @@ static void _event_live_down (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     int rank = strtoul (name, NULL, 10);
-    int myrank = p->conf->rank;
 
     if (rank < 0 || rank >= p->conf->size)
         goto done;
-    if (myrank != 0)
-        ctx->live[rank] = -1;
+    ctx->live_all[rank] = false;
 done:
     zmsg_destroy (zmsg);
 }
@@ -90,16 +100,16 @@ static void _live_up (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     int rank = strtoul (name, NULL, 10);
-    int myrank = p->conf->rank;
 
     if (rank < 0 || rank >= p->conf->size)
         goto done;
-    if (myrank == 0) {
-        if (ctx->live[rank] == -1)
-            cmb_msg_send (p->zs_out_event, NULL, "event.live.up.%d", rank);
-        ctx->live[rank] = 0;
-    } else
-        cmb_msg_send_rt (p->zs_req, NULL, "live.up.%d", rank);
+
+    /* reset age of descendent state, notify of down->up trandition, if any */
+    ctx->live[rank] = 0;
+    if (ctx->live_all[rank] == false) {
+        ctx->live_all[rank] = true;
+        cmb_msg_send (p->zs_out_event, NULL, "event.live.up.%d", rank);
+    }
 done:
     zmsg_destroy (zmsg);
 }
@@ -119,10 +129,10 @@ static void _live_query (plugin_ctx_t *p, zmsg_t **zmsg)
     for (i = 0; i < p->conf->size; i++) {
         if (!(no = json_object_new_int (i)))
             oom ();
-        if (ctx->live[i] == -1)
-            json_object_array_add (dno, no);
-        else
+        if (ctx->live_all[i])
             json_object_array_add (upo, no);
+        else
+            json_object_array_add (dno, no);
     }
     json_object_object_add (o, "up", upo);
     json_object_object_add (o, "down", dno);
@@ -163,10 +173,20 @@ static void _init (plugin_ctx_t *p)
     int i;
 
     ctx = p->ctx = xzmalloc (sizeof (ctx_t));
-    ctx->live = xzmalloc (p->conf->size * sizeof (int));
+    ctx->live = xzmalloc (p->conf->size * sizeof (ctx->live[0]));
+    ctx->live_all = xzmalloc (p->conf->size * sizeof (ctx->live_all[0]));
 
+    /* Initially set state of descendents to unknown (live[rank] = -1).
+     * We don't know who our descendents are so everybody is unknown here.
+     * As we hear from descendents we begin to monitor them.
+     */
     for (i = 0; i < p->conf->size; i++)
         ctx->live[i] = -1;
+
+    /* Initially set state of all nodes to up (live_all[rank] = true).
+     */
+    for (i = 0; i < p->conf->size; i++)
+        ctx->live_all[i] = true;
 
     zsocket_set_subscribe (p->zs_in_event, "event.sched.trigger");
     zsocket_set_subscribe (p->zs_in_event, "event.live.");
