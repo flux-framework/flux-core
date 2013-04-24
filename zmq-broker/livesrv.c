@@ -54,7 +54,8 @@ static void _event_sched_trigger (plugin_ctx_t *p, zmsg_t **zmsg)
     } else {
         cmb_msg_send_rt (p->zs_req, NULL, "live.up.%d", myrank);
     }
-    zmsg_destroy (zmsg);
+    if (zmsg && *zmsg) /* we call with NULL zmsg from _init */
+        zmsg_destroy (zmsg);
 }
 
 static void _event_live_up (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
@@ -170,9 +171,7 @@ static void _init (plugin_ctx_t *p)
     zsocket_set_subscribe (p->zs_in_event, "event.sched.trigger");
     zsocket_set_subscribe (p->zs_in_event, "event.live.");
 
-    ctx->live[p->conf->rank] = 0;
-    if (p->conf->rank != 0)
-        cmb_msg_send_rt (p->zs_req, NULL, "live.up.%d", p->conf->rank);
+    _event_sched_trigger (p, NULL);
 }
 
 static void _fini (plugin_ctx_t *p)
