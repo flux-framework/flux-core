@@ -184,8 +184,34 @@ data type.}
 \end{table}
 
 \subsubsection {External Architecture}
-The cmbd implements the reduction network and event service described
-in the \ngrm\ comms design.
+The cmbd's do not have knowledge of the full architecture of the session.
+Each cmbd except the root is given the URI of its parent on the command line
+along with its rank, and an EPGM address for generating/accepting multicast
+events.  The architecture looks like Figure~\ref{fig:cmbext}.
+
+Various tree topologies can be interconnected.
+The main topologies experimented with are binary and trinary trees with
+rank 0 at the root, and a flat config where a rank 0 root is the parent
+of all other ranks.  
+The {\em pepe} launcher is used to start the cmbds and a shell from which
+mpi and other tests can be launched.
+About 100 nodes was the largest configuration attempted,
+due to test resource availability.
+
+These networks are only marginally exercised by the plugins described above.
+The syncsrv plugin generates periodic multicast events using EPGM.
+The barriersrv plugin reduces the barrier count over the reduction network,
+and generates completion events using EPGM.
+
+The kvssrv does not use these networks.  Instead the address of a single,
+shared redis server is provided on the cmbd command line, and the hiredis
+API provides inter-node connectivity.  Two strategies were experimented
+with in the prototype.  One is a single redis server on node 0 which
+all other nodes connect to and share.  Another is a redis server per node
+with sharding, where each node's kvssrv connects to a local {\em twemrpoxy}
+redis proxy, which connects to all the nodes' redis servers with the key
+space divided up among the redis servers.  Scaling results of MPICH2
+launch using these two schemes are compared in Figure~\ref{fig:cmbscale}.
 
 \begin{figure}
 \centering
@@ -201,7 +227,7 @@ in the \ngrm\ comms design.
 in a trinary tree.  Poor scaling of zmq-broker PMI tracks the number of
 KVS ops against the single Redis instance.  zmq-broker barriers take 1-2s
 to complete at 12800 tasks, $<$ 100ms at 100 tasks.}
-\label{fig:cmbext}
+\label{fig:cmbscale}
 \end{figure}
 
 
@@ -267,13 +293,17 @@ to complete at 12800 tasks, $<$ 100ms at 100 tasks.}
 {\tt \#include "cmb.h"} and link {\tt -lcmb}.  {\em libcmb} utilizes
 a UNIX domain socket exported by the {\em apisrv} plugin to implement
 a very lightweight interface suitable for linking with applications such
-as MPI runtimes (\zMQ\ is too heavyweight to be used directly by applications.)}
+as MPI runtimes.}
 \label{tab:cmbapi}
 \end{table}
 
 \subsection{Conclusions}
 
-\paragraph{\zMQ\ pub-sub limitations} \zMQ\ pub-sub sockets drop messages when
+\paragraph{\zMQ\ PUB-SUB abuse} This prototype uses \zMQ\ pub-sub sockets
+in a way they were not intended.   We use them even for point to point
+communication (pub-sub in one direction, push-pull in the other),
+with subscriptions used for addressing.  This addressing scheme will not
+scale to a large overlay.  Further, \zMQ\ pub-sub sockets drop messages when
 their internal queues reach a high water mark.\footnote{The {\tt ZMQ\_SNDHWM}
 defaults to 1000 messages in \zMQ\ 3.2 but can be changed via
 {\tt zmq\_setsockopt()}, called before {\tt zmq\_bind()} or
@@ -287,16 +317,27 @@ to limit the volume of events loosed in the system.
 
 \paragraph{\zMQ\ PGM transport}  The PGM/EPGM transport is rate limited by
 default to $100 Kbytes/sec$, although this is tunable by a socket option.
-Some versions of \zMQ\ seem to have better OpenPGM integration than others.
-Although PGM is reliable, pub-sub can lose messages as described above.
+This is to allow headroom for repair messages.
+%Some versions of \zMQ\ seem to have better OpenPGM integration than others.
+Although PGM is (somewhat) reliable, pub-sub can lose messages as described
+above.
+We need to think carefully about what types of messages will be carried
+over PGM and consider other mechanisms for high-volume broadcast,
+such as turning the reduction tree into a broadcast tree, like MRNet.
 
 \paragraph{Flow control}  The prototype implements no flow control.
 The broker's single thread can block if the internal queues for push-pull
 sockets fill up, since we only make blocking {\tt zmq\_msg\_send} calls.
-Some sort of flow control in combination with non-blocking sends needs to
-be implemented.
 
 \paragraph{JSON limitations}  JSON has no reasonable way to represent
 a byte array.  In general JSON is not compact, but byte arrays are truly
 ridiculous as a way of representing opaque data.  One could use base64
 encoding within JSON strings.  We used an opaque \zMQ\ message part.
+
+\paragraph{DKVS thoughts}  Consider strategies for DKVS.  Implement KVS
+key spaces with selectable caching semantics.
+PMI back to back $n^2$ KVS\_Gets are slow.  The individual latency of a get
+needs to be reduced and/or scatter-gather triggered by PMI barrier neds to
+occur to make all the gets local.  Investigate PMIv2 collective fence
+operation.
+Idea from Dong: binomial tree with redis on every node.
