@@ -25,7 +25,6 @@ function make_nutcracker_yml (hl)
 		 "  hash_tag: \"{}\"\n" ..
 		 "  distribution: ketama\n" ..
 		 "  auto_eject_hosts: false\n" ..
-		 "  backlog: 128\n" ..
 		 "  redis: true\n" ..
 		 "  preconnect: true\n" ..
 		 "  servers:\n"
@@ -43,7 +42,6 @@ end
 local h = hostlist.new (pepe.nodelist)
 local eventuri = "epgm://eth0;239.192.1.1:5555"
 local treeinuri = "tcp://*:5556"
-local redisserver = "127.0.0.1"
 local nutconf = make_nutcracker_yml (h)
 
 pepe.run ("echo port 7777 | /usr/sbin/redis-server -")
@@ -52,7 +50,7 @@ pepe.run ("../../twemproxy-0.2.3/src/nutcracker -c " .. nutconf)
 if pepe.rank == 0 then
    pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
 		.. " --tree-in-uri='" .. treeinuri .. "'"
-		.. " --redis-server='" .. redisserver .. "'"
+		.. " --redis-server=localhost"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h)
 else
@@ -61,7 +59,7 @@ else
    pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
 		.. " --tree-in-uri='" .. treeinuri .. "'"
 		.. " --tree-out-uri='" .. treeouturi .. "'"
-		.. " --redis-server='" .. redisserver .. "'"
+		.. " --redis-server=localhost"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h)
 end
