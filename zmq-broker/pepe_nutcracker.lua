@@ -13,8 +13,7 @@ if pepe.rank == 0 then
 end
 
 function k_ary_parent (n, k)
-    local p = (n - 1)/k
-    return (p - p%1)
+    return math.floor ((n - 1)/k)
 end
 
 function make_nutcracker_yml (hl)
@@ -48,15 +47,15 @@ pepe.run ("echo port 7777 | /usr/sbin/redis-server -")
 pepe.run ("../../twemproxy-0.2.3/src/nutcracker -c " .. nutconf)
 
 if pepe.rank == 0 then
-   pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
+    pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
 		.. " --tree-in-uri='" .. treeinuri .. "'"
 		.. " --redis-server=localhost"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h)
 else
-   local parent_rank = k_ary_parent (pepe.rank, 3)
-   local treeouturi = "tcp://" ..  h[parent_rank + 1] .. ":5556"
-   pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
+    local parent_rank = k_ary_parent (pepe.rank, 3)
+    local treeouturi = "tcp://" ..  h[parent_rank + 1] .. ":5556"
+    pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
 		.. " --tree-in-uri='" .. treeinuri .. "'"
 		.. " --tree-out-uri='" .. treeouturi .. "'"
 		.. " --redis-server=localhost"

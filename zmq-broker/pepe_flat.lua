@@ -18,14 +18,14 @@ local treeinuri = "tcp://*:5556"
 local treeouturi = "tcp://" ..  h[1] .. ":5556"
 
 if pepe.rank == 0 then
-   pepe.run ("echo bind 127.0.0.1 | /usr/sbin/redis-server -")
-   pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
+    pepe.run ("echo bind 127.0.0.1 | /usr/sbin/redis-server -")
+    pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
 		.. " --tree-in-uri='" .. treeinuri .. "'"
 		.. " --redis-server=localhost"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h)
 else
-   pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
+    pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
 		.. " --tree-out-uri='" .. treeouturi .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h)

@@ -17,21 +17,20 @@ local eventuri = "epgm://eth0;239.192.1.1:5555"
 local treeinuri = "tcp://*:5556"
 
 function k_ary_parent (n, k)
-    local p = (n - 1)/k
-    return (p - p%1)
+   return math.floor ((n - 1)/k)
 end
 
 if pepe.rank == 0 then
-   pepe.run ("echo bind 127.0.0.1 | /usr/sbin/redis-server -")
-   pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
+    pepe.run ("echo bind 127.0.0.1 | /usr/sbin/redis-server -")
+    pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
 		.. " --tree-in-uri='" .. treeinuri .. "'"
 		.. " --redis-server=localhost"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h)
 else
-   local parent_rank = k_ary_parent (pepe.rank, 3)
-   local treeouturi = "tcp://" ..  h[parent_rank + 1] .. ":5556"
-   pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
+    local parent_rank = k_ary_parent (pepe.rank, 3)
+    local treeouturi = "tcp://" ..  h[parent_rank + 1] .. ":5556"
+    pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
 		.. " --tree-in-uri='" .. treeinuri .. "'"
 		.. " --tree-out-uri='" .. treeouturi .. "'"
 		.. " --rank=" .. pepe.rank
