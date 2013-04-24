@@ -26,7 +26,7 @@ cmbutil: $(CMBUTIL_OBJS)
 
 libpmi.so.0: $(LIBPMI_OBJS)
 	$(CC) -shared -Wl,-soname,libpmi.so.0 \
-	      -o $@ $(LIBPMI_OBJS) -ljson -luuid
+	      -o $@ $(LIBPMI_OBJS) -ljson -luuid -lzmq -lczmq
 
 mpi_hello: mpi_hello.c
 	(source /etc/profile.d/modules.sh;\
