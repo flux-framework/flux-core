@@ -213,6 +213,29 @@ redis proxy, which connects to all the nodes' redis servers with the key
 space divided up among the redis servers.  Scaling results of MPICH2
 launch using these two schemes are compared in Figure~\ref{fig:cmbscale}.
 
+In the twemproxy config, two hash algorithms (Ketama and Modula) were
+used to shard the key space.  The distribution achieved is analyzed in
+Table~\ref{tab:keydist}.
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|l|}\hline
+\textbf{Stat} & \textbf{Ketama} & \textbf{Modula} \\
+\hline
+ Min.   &108.0   &117.0\\
+ 1st Qu.&160.5   &164.5\\
+ Median &184.0   &196.5\\
+ Mean   &190.0   &192.0\\
+ 3rd Qu.&206.5   &223.2\\
+ Max.   &301.0   &276.0\\
+\hline
+\end{tabular}
+\caption{The number of unique keys per server after a 6400 task (64 tasks per
+node, 100 nodes) MPICH2 PSM
+hello world run using a fully distributed {\em twemproxy} KVS configuration.}
+\label{tab:keydist}
+\end{table}
+
 \begin{figure}
 \centering
 \includegraphics[scale=0.15]{zmq-broker-tree.eps}

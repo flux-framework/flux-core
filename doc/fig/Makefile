@@ -6,6 +6,9 @@ DEPFIG = \
 	comms_ex1b.eps \
 	comms_ex1c.eps \
 	comms_ex1d.eps \
+	comms_ex1e.eps \
+	comms_ex1f.eps \
+	comms_ex1g.eps \
 	comms_zmq_reqrep.eps \
 	comms_zmq_pubsub.eps \
 	comms_zmq_pushpull.eps \
@@ -29,7 +32,9 @@ DEPFIG = \
 	redis-pmi.eps \
 	zmq-broker.eps \
 	zmq-broker-tree.eps \
-	zmq-broker-pmi.eps
+	zmq-broker-pmi.eps \
+	zmq-broker2.eps \
+	zmq-broker-pmi2.eps \
 
 all: $(DEPFIG)
 

@@ -1,6 +1,7 @@
 DEPSEC = \
 	redis-pmi.tex \
 	zmq-broker.tex \
+	zmq-broker2.tex \
 
 DEPFIG = \
 	../fig/redis-pmi.eps \
