@@ -138,7 +138,7 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
     }
     if (conf->treeout_uri) {
         char id[16];
-        snprintf (id, sizeof (id), "node-%d", conf->rank);
+        snprintf (id, sizeof (id), "%d", conf->rank);
         zconnect (zctx, &srv->zs_upreq, ZMQ_DEALER, conf->treeout_uri, -1, id);
     }
     if (conf->treein_uri) {

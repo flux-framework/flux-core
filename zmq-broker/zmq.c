@@ -540,6 +540,68 @@ done:
         zmsg_destroy (zmsg);
 }
 
+/* Customized versions of zframe_print() and zmsg_dump() from czmq source.
+ * We don't want to truncate message parts, and want envelop parts represented
+ * more compactly (let's try all on one line).
+ */
+static void
+_zframe_print_compact (zframe_t *self, const char *prefix)
+{
+    assert (self);
+    if (prefix)
+        fprintf (stderr, "%s", prefix);
+    byte *data = zframe_data (self);
+    size_t size = zframe_size (self);
+
+    int is_bin = 0;
+    uint char_nbr;
+    for (char_nbr = 0; char_nbr < size; char_nbr++)
+        if (data [char_nbr] < 9 || data [char_nbr] > 127)
+            is_bin = 1;
+
+    //fprintf (stderr, "[%03d] ", (int) size);
+    size_t max_size = is_bin? 35: 70;
+    const char *elipsis = "";
+    if (size > max_size) {
+        size = max_size;
+        elipsis = "...";
+    }
+    for (char_nbr = 0; char_nbr < size; char_nbr++) {
+        if (is_bin)
+            fprintf (stderr, "%02X", (unsigned char) data [char_nbr]);
+        else
+            fprintf (stderr, "%c", data [char_nbr]);
+    }
+    //fprintf (stderr, "%s\n", elipsis);
+}
+
+void
+cmb_dump (zmsg_t *self)
+{
+    int hops = cmb_msg_hopcount (self);
+    zframe_t *zf = zmsg_first (self);
+
+    fprintf (stderr, "--------------------------------------\n");
+    if (!self || !zf) {
+        fprintf (stderr, "NULL");
+        return;
+    }
+    if (hops > 0) {
+        fprintf (stderr, "[%3.3d] ", hops);
+        while (zf && zframe_size (zf) > 0) {
+            _zframe_print_compact (zf , "|");
+            zf = zmsg_next (self);
+        }
+        if (zf)
+            zf = zmsg_next (self); // skip empty delimiter frame
+        fprintf (stderr, "|\n");
+    }
+    while (zf) {
+        zframe_print (zf, "");
+        zf = zmsg_next (self);
+    }
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

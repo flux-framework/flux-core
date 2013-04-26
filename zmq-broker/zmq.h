@@ -50,4 +50,5 @@ int cmb_msg_rep_errnum (zmsg_t *zmsg, int errnum);
 void cmb_msg_send_errnum (zmsg_t **zmsg, void *socket, int errnum, void *cc);
 
 int cmb_msg_datacpy (zmsg_t *msg, char *buf, int len);
+void cmb_dump (zmsg_t *self);
 
