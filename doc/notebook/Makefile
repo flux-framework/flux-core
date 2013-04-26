@@ -7,6 +7,12 @@ DEPFIG = \
 	../fig/redis-pmi.eps \
 	../fig/zmq-broker.eps \
 	../fig/zmq-broker-pmi.eps \
+	../fig/tree-binary.eps \
+	../fig/tree-degenerate.eps \
+	../fig/tree-trinary.eps \
+	../fig/tree-binomial.eps \
+	../fig/tree-flat.eps
+
 
 DEPBIB = 
 

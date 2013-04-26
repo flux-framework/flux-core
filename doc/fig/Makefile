@@ -35,6 +35,11 @@ DEPFIG = \
 	zmq-broker-pmi.eps \
 	zmq-broker2.eps \
 	zmq-broker-pmi2.eps \
+	tree-flat.eps \
+	tree-binary.eps \
+	tree-trinary.eps \
+	tree-binomial.eps \
+	tree-degenerate.eps \
 
 all: $(DEPFIG)
 
@@ -43,6 +48,17 @@ all: $(DEPFIG)
 
 %.eps: %.gp
 	gnuplot $<
+
+tree-flat.eps: treedot.lua
+	./treedot.lua [0-31] flat | dot -Teps -o $@
+tree-binary.eps: treedot.lua
+	./treedot.lua [0-31] binary | dot -Teps -o $@
+tree-trinary.eps: treedot.lua
+	./treedot.lua [0-31] trinary | dot -Teps -o $@
+tree-binomial.eps: treedot.lua
+	./treedot.lua [0-31] binomial | dot -Teps -o $@
+tree-degenerate.eps: treedot.lua
+	./treedot.lua [0-31] degenerate | dot -Teps -o $@
 
 wrap_graph.ps: ../wrap_thrust/wrap.dot
 	dot -Tps $< -o $@

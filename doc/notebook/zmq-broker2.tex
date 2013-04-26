@@ -88,30 +88,49 @@ in zmq-broker2 since the per-process socket limit is not a factor.}
 \label{fig:cmb2scale}
 \end{figure}
 
-%\begin{figure}
-%\centering
-%\begin{minipage}[b]{0.6\linewidth}
-%\fbox{\includegraphics[scale=0.1]{comms_ex1a}}
-%\end{minipage}
-%\hspace{0.5cm}
-%\begin{minipage}[b]{0.3\linewidth}
-%\fbox{\includegraphics[scale=0.1]{comms_ex1g}}
-%\end{minipage}
-%\hspace{0.5cm}
-%\begin{minipage}[b]{0.3\linewidth}
-%\fbox{\includegraphics[scale=0.1]{comms_ex1e}}
-%\end{minipage}
-%\begin{minipage}[b]{0.6\linewidth}
-%\fbox{\includegraphics[scale=0.1]{comms_ex1f}}
-%\end{minipage}
-%\caption{Different architectures attempted.}
-%\label{FigCommsEx1}
-%\end{figure}
+\begin{figure}
+\begin{minipage}[b]{0.10\linewidth}
+  \centering
+  \fbox{\includegraphics[scale=0.2]{tree-degenerate}}\\
+  degenerate
+\end{minipage}
+\hspace{0.5cm}
+\begin{minipage}[b]{0.80\linewidth}
+  \centering
+  \fbox{\includegraphics[scale=0.15]{tree-flat}}\\ flat\\
+  \vspace{0.5cm}
+  \fbox{\includegraphics[scale=0.3]{tree-binary}}\\ binary\\
+  \vspace{0.5cm}
+  \fbox{\includegraphics[scale=0.2]{tree-trinary}}\\ trinary\\
+  \vspace{0.5cm}
+  \fbox{\includegraphics[scale=0.3]{tree-binomial}}\\ binomial\\
+\end{minipage}
+
+\caption{The cmbd daemon is built to function without knowledge of its
+interconnection topology, except that it is a tree rooted at rank 0.
+At launch time it is told its rank, its parent rank, and the total number
+of ranks in the session.
+Various topologies can be tested by using different functions in the
+{\em pepe} lua configuration script to calculate the parent rank from
+the node rank.
+The topologies depicted above were tested to 100 nodes (32 nodes shown).}
+\label{fig:treetop}
+\end{figure}
+
 
 \begin{figure}
 \centering
 \includegraphics[scale=0.30]{zmq-broker2.eps}
-\caption{Broker internal architecture, take 2.}
+\caption{Broker internal architecture.
+The event pub/sub architecture remains basically unchanged from the
+previous prototype.  The router socket allows plugins to make requests
+that are routed to other plugins by internal routing engine (blue),
+and then the \zMQ\ extended REQ-REP message envelopes allow replies
+to retrace the same route as the request to the original sender.
+The router socket is now used also for the reduction network.  This
+architecture allows services to be located anywhere in the hierarchy
+transparent to applications.  The routing engine sends requests upstream
+if they cannot be matched to a local plugin.}
 \label{fig:cmbint2}
 \end{figure}
 
