@@ -352,11 +352,11 @@ Abbreviations used: MPI\_THREAD\_LEVEL $=$ THD\_LEV; LOCALRANK $=$ LOCRANK.
 \hline
 {\tt  PMI\_Get\_appnum} & $n$ & $n$ & $n$\\
 \hline
-{\tt  PMI\_Publish\_name} & $-$ & $-$ & $-$\\
+{\tt  PMI\_Publish\_name(*)} & $-$ & $-$ & $-$\\
 \hline
-{\tt  PMI\_Unpublish\_name} & $-$ & $-$ & $-$\\
+{\tt  PMI\_Unpublish\_name(*)} & $-$ & $-$ & $-$\\
 \hline
-{\tt  PMI\_Lookup\_name} & $-$ & $-$ & $-$\\
+{\tt  PMI\_Lookup\_name(*)} & $-$ & $-$ & $-$\\
 \hline
 {\tt  PMI\_Barrier} & $3n$ & $7n$ & $3n$ \\
 \hline
@@ -376,7 +376,7 @@ Abbreviations used: MPI\_THREAD\_LEVEL $=$ THD\_LEV; LOCALRANK $=$ LOCRANK.
 \hline
 {\tt  PMI\_KVS\_Get} & $n(n -1) + n$ & $(2n + 1)(n -1)$ & $3n^2 + 6n(n - 1)$ \\
 \hline
-{\tt  PMI\_Spawn\_multiple} & $-$ & $-$ & $-$ \\
+{\tt  PMI\_Spawn\_multiple(*)} & $-$ & $-$ & $-$ \\
 \hline
 \multicolumn{4}{|c|}{\textbf{Extended PMI-1 Functions}}\\
 \hline
@@ -409,7 +409,8 @@ Abbreviations used: MPI\_THREAD\_LEVEL $=$ THD\_LEV; LOCALRANK $=$ LOCRANK.
 {\tt  PMI\_Get\_options} & $-$ & $-$ & $-$\\
 \hline
 \end{tabular}
-\caption{PMI functions implemented by \slurm.
+\caption{PMI-1 functions.  Those not marked with an asterisk (*) are
+implemented by \slurm.
 Their usage in support of launching a simple MPI hello world program
 is shown for \mpich2 (shmem and psm) and \openmpi.
 The column entries list the total number of calls,
