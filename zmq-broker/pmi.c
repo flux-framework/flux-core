@@ -35,6 +35,8 @@ typedef struct {
     int spawned;
     int size;
     int rank;
+    int *clique_ranks;
+    int clique_size;
     int universe_size;
     int appnum;
     int barrier_num;
@@ -50,6 +52,49 @@ static int _env_getint (char *name, int dflt)
 {
     char *ev = getenv (name);
     return ev ? strtoul (ev, NULL, 10) : dflt;
+}
+
+static int _strtoia (char *s, int *ia, int ia_len)
+{
+    char *next;
+    int n, len = 0;
+
+    while (*s) {
+        n = strtoul (s, &next, 10);
+        s = *next == '\0' ? next : next + 1;
+        if (ia) {
+            if (ia_len == len)
+                break;
+            ia[len] = n;
+        }
+        len++;
+    }
+    return len;
+}
+
+static int _env_getints (char *name, int **iap, int *lenp,
+                         int dflt_ia[], int dflt_len)
+{
+    char *s = getenv (name);
+    int *ia;
+    int len;
+
+    if (s) {
+        len = _strtoia (s, NULL, 0);
+        ia = malloc (len * sizeof (int));
+        if (!ia)
+            return -1;
+        (void)_strtoia (s, ia, len);
+    } else {
+        ia = malloc (dflt_len * sizeof (int));
+        if (!ia)
+            return -1;
+        for (len = 0; len < dflt_len; len++)
+            ia[len] = dflt_ia[len];            
+    }
+    *lenp = len;
+    *iap = ia;
+    return 0;
 }
 
 #if FORCE_HASH
@@ -80,6 +125,9 @@ static int _key_tostore (const char *key, char **kp)
 
 int PMI_Init( int *spawned )
 {
+    int dflt_clique_ranks[] = { 0 };
+    int dflt_clique_size = 1;
+
     log_init ("cmb-pmi");
     if (spawned == NULL)
         return PMI_ERR_INVALID_ARG;
@@ -94,9 +142,12 @@ int PMI_Init( int *spawned )
     ctx->size = _env_getint ("SLURM_NTASKS", 1);
     ctx->rank = _env_getint ("SLURM_PROCID", 0);
     //msg ("XXX %d:%s", ctx->rank, __FUNCTION__);
-    ctx->universe_size = _env_getint ("SLURM_NTASKS", 1);
+    ctx->universe_size = ctx->size;
     ctx->appnum = _env_getint ("SLURM_JOB_ID", 1);
     ctx->barrier_num = 0;
+    if (_env_getints ("SLURM_GTIDS", &ctx->clique_ranks, &ctx->clique_size,
+                                      dflt_clique_ranks, dflt_clique_size) < 0)
+        goto nomem;
     snprintf (ctx->kvsname, sizeof (ctx->kvsname), "job%d",
                 _env_getint ("SLURM_STEP_ID", 0));
     if (!(ctx->cctx = cmb_init ())) {
@@ -133,6 +184,8 @@ int PMI_Finalize( void )
     assert (ctx->magic == PMI_CTX_MAGIC);
     if (ctx->cctx)
         cmb_fini (ctx->cctx);
+    if (ctx->clique_ranks)
+        free (ctx->clique_ranks);
     memset (ctx, 0, sizeof (pmi_ctx_t));
     free (ctx);
     ctx = NULL;
@@ -408,11 +461,11 @@ int PMI_Get_id_length_max( int *length )
 /* openmpi */
 int PMI_Get_clique_size( int *size )
 {
-    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    //msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
-    *size = ctx->size;
+    *size = ctx->clique_size;
     return PMI_SUCCESS;
 }
 
@@ -421,14 +474,14 @@ int PMI_Get_clique_ranks( int ranks[], int length)
 {
     int i;
 
-    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    //msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
-    if (length != ctx->size)
+    if (length != ctx->clique_size)
         return PMI_ERR_INVALID_ARG;
     for (i = 0; i < length; i++)
-        ranks[i] = i;
+        ranks[i] = ctx->clique_ranks[i];
     return PMI_SUCCESS;
 }
 
