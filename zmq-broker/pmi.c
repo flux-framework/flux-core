@@ -26,6 +26,7 @@
 #define PMI_MAX_KEYLEN 64
 #define PMI_MAX_VALLEN 1024
 #define PMI_MAX_KVSNAMELEN 64
+#define PMI_MAX_ID_LEN 16
 
 #define FORCE_HASH 0
 
@@ -148,8 +149,8 @@ int PMI_Init( int *spawned )
     if (_env_getints ("SLURM_GTIDS", &ctx->clique_ranks, &ctx->clique_size,
                                       dflt_clique_ranks, dflt_clique_size) < 0)
         goto nomem;
-    snprintf (ctx->kvsname, sizeof (ctx->kvsname), "job%d",
-                _env_getint ("SLURM_STEP_ID", 0));
+    snprintf (ctx->kvsname, sizeof (ctx->kvsname), "%d.%d", ctx->appnum,
+              _env_getint ("SLURM_STEP_ID", 0));
     if (!(ctx->cctx = cmb_init ())) {
         err ("cmb_init");
         goto fail;
@@ -424,37 +425,35 @@ int PMI_Spawn_multiple(int count,
 
 int PMI_Get_id( char id_str[], int length )
 {
-    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
-    return PMI_FAIL;
+    //msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    if (ctx == NULL)
+        return PMI_ERR_INIT;
+    assert (ctx->magic == PMI_CTX_MAGIC);
+    if (id_str == NULL || length < strlen (ctx->kvsname) + 1)
+        return PMI_ERR_INVALID_ARG;
+
+    snprintf (id_str, length + 1, "%s", ctx->kvsname);
+    return PMI_SUCCESS;
 }
 
 /* openmpi */
 int PMI_Get_kvs_domain_id( char id_str[], int length )
 {
-    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
-    if (ctx == NULL)
-        return PMI_ERR_INIT;
-    assert (ctx->magic == PMI_CTX_MAGIC);
-    if (id_str == NULL)
-        return PMI_ERR_INVALID_ARG;
-    assert (ctx->magic == PMI_CTX_MAGIC);
-
-    snprintf (id_str, length, "%s", "foo");
-    return PMI_SUCCESS;
+    //msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    return PMI_Get_id (id_str, length);
 }
 
 /* openmpi */
 int PMI_Get_id_length_max( int *length )
 {
-    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    // msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
     if (length == NULL)
         return PMI_ERR_INVALID_ARG;
-    assert (ctx->magic == PMI_CTX_MAGIC);
 
-    *length = 42;
+    *length = strlen (ctx->kvsname) + 1;
     return PMI_SUCCESS;
 }
 
