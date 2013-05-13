@@ -1,6 +1,4 @@
-/* pmi.c -- libpmi (v1) built directly on hiredis */
-
-/* Presumes slurm underneath. */
+/* pmi.c -- PMI-1 on CMBD and SLURM */
 
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -99,7 +97,7 @@ static int _env_getints (char *name, int **iap, int *lenp,
 }
 
 #if FORCE_HASH
-static int _key_tostore (const char *key, char **kp)
+static int _key_tostore (const char *kvsname, const char *key, char **kp)
 {
     const char *p;
     int n;
@@ -109,18 +107,18 @@ static int _key_tostore (const char *key, char **kp)
         p++;
     if (p) {
         n = strtoul (p, NULL, 10);
-        if (asprintf (kp, "%s:{%d}%s", ctx->kvsname, n, key) < 0)
+        if (asprintf (kp, "%s:{%d}%s", kvsname, n, key) < 0)
             return -1;
     } else {
-        if (asprintf (kp, "%s:%s", ctx->kvsname, key) < 0)
+        if (asprintf (kp, "%s:%s", kvsname, key) < 0)
             return -1;
     }
     return 0;
 }
 #else
-static int _key_tostore (const char *key, char **kp)
+static int _key_tostore (const char *kvsname, const char *key, char **kp)
 {
-    return asprintf (kp, "%s:%s", ctx->kvsname, key);
+    return asprintf (kp, "%s:%s", kvsname, key);
 }
 #endif
 
@@ -343,7 +341,7 @@ int PMI_KVS_Put( const char kvsname[], const char key[], const char value[])
     if (kvsname == NULL || key == NULL || value == NULL)
         return PMI_ERR_INVALID_ARG;
 
-    if (_key_tostore (key, &xkey) < 0)
+    if (_key_tostore (kvsname, key, &xkey) < 0)
         return PMI_ERR_NOMEM;
 
     if (cmb_kvs_put (ctx->cctx, xkey, value) < 0)
@@ -387,7 +385,7 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
     if (kvsname == NULL || key == NULL || value == NULL)
         return PMI_ERR_INVALID_ARG;
 
-    if (_key_tostore (key, &xkey) < 0)
+    if (_key_tostore (kvsname, key, &xkey) < 0)
         return PMI_ERR_NOMEM;
 
     val = cmb_kvs_get (ctx->cctx, xkey);
@@ -486,14 +484,16 @@ int PMI_Get_clique_ranks( int ranks[], int length)
 
 int PMI_KVS_Create( char kvsname[], int length )
 {
-    msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
-    return PMI_FAIL;
+    /* nothing to be done - just start using it */
+    //msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    return PMI_SUCCESS;
 }
 
 int PMI_KVS_Destroy( const char kvsname[] )
 {
+    /* nothign to be done */
     msg ("XXX %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
-    return PMI_FAIL;
+    return PMI_SUCCESS;
 }
 
 int PMI_KVS_Iter_first(const char kvsname[], char key[], int key_len,

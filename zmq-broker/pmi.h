@@ -92,9 +92,11 @@ int PMI_Get_id_length_max( int *length );		/* openmpi */
 int PMI_Get_clique_size( int *size );			/* openmpi */
 int PMI_Get_clique_ranks( int ranks[], int length);	/* openpmi */
 
-/* everything below here not implemented */
+/* no-ops */
 int PMI_KVS_Create( char kvsname[], int length );
 int PMI_KVS_Destroy( const char kvsname[] );
+
+/* PMI_KVS_Iter_{first,next} not implemented */
 int PMI_KVS_Iter_first(const char kvsname[], char key[], int key_len,
                         char val[], int val_len);
 int PMI_KVS_Iter_next(const char kvsname[], char key[], int key_len,
