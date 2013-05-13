@@ -95,7 +95,7 @@ int PMI_Init( int *spawned )
     ctx->rank = _env_getint ("SLURM_PROCID", 0);
     //msg ("XXX %d:%s", ctx->rank, __FUNCTION__);
     ctx->universe_size = _env_getint ("SLURM_NTASKS", 1);
-    ctx->appnum = 0;
+    ctx->appnum = _env_getint ("SLURM_JOB_ID", 1);
     ctx->barrier_num = 0;
     snprintf (ctx->kvsname, sizeof (ctx->kvsname), "job%d",
                 _env_getint ("SLURM_STEP_ID", 0));
