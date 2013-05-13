@@ -46,6 +46,15 @@ shello: mpi_hello
 		module load $(MPIMOD);\
 		$(SRUN) ./mpi_hello)
 
+PMGR_DIR = /home/garlick/proj/ngrm/pmgr/tmp/pmgr_collective
+
+pmgr: $(PMGR_DIR)/test/client
+	time -p (export MPIRUN_CLIENT_DEBUG=2;\
+		export PMI_TRACE=0x18;\
+		export LD_LIBRARY_PATH=$(TOP):$$LD_LIBRARY_PATH;\
+		export LD_LIBRARY_PATH=$(PMGR_DIR)/lib:$$LD_LIBRARY_PATH;\
+		$(SRUN) $(PMGR_DIR)/test/client)
+
 barrier:
 	time -p $(SRUN) ./cmbutil -b testbarrier
 
