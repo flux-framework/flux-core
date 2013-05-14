@@ -299,7 +299,6 @@ Is the root of the tree in the CMB design a single point of failure?
 {\bf jg:} This is one of the issues that will need to be addressed
 in the fault tolerance design for the CMB, a future work item.}
 \fi
-The per-job scheduling trigger probably has insufficient emphasis here.
 The CMB is a distributed service with nodes interconnected in a tree-based
 topology.
 A distinguished {\em control node} serves as the heart of the CMB
@@ -366,7 +365,7 @@ to establish a new one with restored state from slave caches.}
   cmb.child.sessions = $sessions$ &
         List of active child sessions.\\
   cmb.child.$session$.cred = $key$ &
-        Child sesion key.\\
+        Child session key.\\
   cmb.child.$session$.control = $nodelist$ &
         Control node(s) for $session$.\\
   cmb.child.$session$.dns = $nodelist$ &
