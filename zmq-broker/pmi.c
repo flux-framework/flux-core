@@ -57,8 +57,13 @@ enum {
     PMI_TRACE_CLIQUE        = 0x40,
     PMI_TRACE_UNIMPL        = 0x80,
 };
-
 static int pmi_trace = 0;
+#define trace(n, fmt, ...) do { \
+    if ((n) & pmi_trace) msg (fmt, ##__VA_ARGS__); \
+} while (0)
+#define trace_simple(n, ctx) do { \
+    if ((n) & pmi_trace) msg ("%d:%s", (ctx) ? (ctx)->rank : -1, __FUNCTION__);\
+} while (0)
 
 static int _env_getint (char *name, int dflt)
 {
@@ -154,8 +159,7 @@ int PMI_Init( int *spawned )
     ctx->size = _env_getint ("SLURM_NTASKS", 1);
     ctx->rank = _env_getint ("SLURM_PROCID", 0);
     pmi_trace = _env_getint ("PMI_TRACE", 0);
-    if (pmi_trace & PMI_TRACE_INIT)
-        msg ("PMI-TRACE %d:%s", ctx->rank, __FUNCTION__);
+    trace_simple (PMI_TRACE_INIT, ctx);
     ctx->universe_size = ctx->size;
     ctx->appnum = _env_getint ("SLURM_JOB_ID", 1);
     ctx->barrier_num = 0;
@@ -182,8 +186,7 @@ fail:
 
 int PMI_Initialized( int *initialized )
 {
-    if (pmi_trace & PMI_TRACE_INIT)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_INIT, ctx);
     if (initialized == NULL)
         return PMI_ERR_INVALID_ARG;
 
@@ -193,8 +196,7 @@ int PMI_Initialized( int *initialized )
 
 int PMI_Finalize( void )
 {
-    if (pmi_trace & PMI_TRACE_INIT)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_INIT, ctx);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -211,8 +213,7 @@ int PMI_Finalize( void )
 
 int PMI_Get_size( int *size )
 {
-    if (pmi_trace & PMI_TRACE_PARAM)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_PARAM, ctx);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     if (size == NULL)
@@ -225,8 +226,7 @@ int PMI_Get_size( int *size )
 
 int PMI_Get_rank( int *rank )
 {
-    if (pmi_trace & PMI_TRACE_PARAM)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_PARAM, ctx);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     if (rank == NULL)
@@ -239,8 +239,7 @@ int PMI_Get_rank( int *rank )
 
 int PMI_Get_universe_size( int *size )
 {
-    if (pmi_trace & PMI_TRACE_PARAM)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_PARAM, ctx);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     if (size == NULL)
@@ -253,8 +252,7 @@ int PMI_Get_universe_size( int *size )
 
 int PMI_Get_appnum( int *appnum )
 {
-    if (pmi_trace & PMI_TRACE_PARAM)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_PARAM, ctx);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     if (appnum == NULL)
@@ -267,22 +265,19 @@ int PMI_Get_appnum( int *appnum )
 
 int PMI_Publish_name( const char service_name[], const char port[] )
 {
-    if (pmi_trace & PMI_TRACE_UNIMPL)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_UNIMPL, ctx);
     return PMI_FAIL;
 }
 
 int PMI_Unpublish_name( const char service_name[] )
 {
-    if (pmi_trace & PMI_TRACE_UNIMPL)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_UNIMPL, ctx);
     return PMI_FAIL;
 }
 
 int PMI_Lookup_name( const char service_name[], char port[] )
 {
-    if (pmi_trace & PMI_TRACE_UNIMPL)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_UNIMPL, ctx);
     return PMI_FAIL;
 }
 
@@ -290,8 +285,7 @@ int PMI_Barrier( void )
 {
     char *name = NULL;
 
-    if (pmi_trace & PMI_TRACE_BARRIER)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_BARRIER, ctx);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -311,15 +305,13 @@ error:
   
 int PMI_Abort(int exit_code, const char error_msg[])
 {
-    if (pmi_trace & PMI_TRACE_UNIMPL)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_UNIMPL, ctx);
     return PMI_FAIL;
 }
 
 int PMI_KVS_Get_my_name( char kvsname[], int length )
 {
-    if (pmi_trace & PMI_TRACE_KVS)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_KVS, ctx);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -332,8 +324,7 @@ int PMI_KVS_Get_my_name( char kvsname[], int length )
 
 int PMI_KVS_Get_name_length_max( int *length )
 {
-    if (pmi_trace & PMI_TRACE_KVS)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_KVS, ctx);
     if (length == NULL)
         return PMI_ERR_INVALID_ARG;
     *length = PMI_MAX_KVSNAMELEN;
@@ -342,8 +333,7 @@ int PMI_KVS_Get_name_length_max( int *length )
 
 int PMI_KVS_Get_key_length_max( int *length )
 {
-    if (pmi_trace & PMI_TRACE_KVS)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_KVS, ctx);
     if (length == NULL)
         return PMI_ERR_INVALID_ARG;
     *length = PMI_MAX_KEYLEN;
@@ -352,8 +342,7 @@ int PMI_KVS_Get_key_length_max( int *length )
 
 int PMI_KVS_Get_value_length_max( int *length )
 {
-    if (pmi_trace & PMI_TRACE_KVS)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_KVS, ctx);
     if (length == NULL)
         return PMI_ERR_INVALID_ARG;
     *length = PMI_MAX_VALLEN;
@@ -364,8 +353,8 @@ int PMI_KVS_Put( const char kvsname[], const char key[], const char value[])
 {
     char *xkey = NULL;
 
-    if (pmi_trace & PMI_TRACE_KVS_PUT)
-        msg ("PMI-TRACE %d:%s %s:%s = %s", ctx ? ctx->rank : -1, __FUNCTION__, kvsname, key, value);
+    trace (PMI_TRACE_KVS_PUT, "%d:%s %s:%s = %s", ctx ? ctx->rank : -1,
+           __FUNCTION__, kvsname, key, value);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -389,8 +378,8 @@ int PMI_KVS_Commit( const char kvsname[] )
 {
     int errcount, putcount;
 
-    if (pmi_trace & PMI_TRACE_KVS_PUT)
-        msg ("PMI-TRACE %d:%s %s", ctx ? ctx->rank : -1, __FUNCTION__, kvsname);
+    trace (PMI_TRACE_KVS_PUT, "%d:%s %s", ctx ? ctx->rank : -1,
+           __FUNCTION__, kvsname);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -421,8 +410,9 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
         return PMI_ERR_NOMEM;
 
     val = cmb_kvs_get (ctx->cctx, xkey);
-    if (pmi_trace & PMI_TRACE_KVS_GET)
-        msg ("PMI-TRACE %d:%s %s:%s = %s", ctx ? ctx->rank : -1, __FUNCTION__, kvsname, key, val ? val : errno == 0 ? "[nonexistent key]" : "[error]");
+    trace (PMI_TRACE_KVS_GET, "%d:%s %s:%s = %s", ctx ? ctx->rank : -1,
+           __FUNCTION__, kvsname, key,
+           val ? val : errno == 0 ? "[nonexistent key]" : "[error]");
     if (!val && errno == 0) {
         free (xkey);
         return PMI_ERR_INVALID_KEY;
@@ -451,15 +441,13 @@ int PMI_Spawn_multiple(int count,
                        const PMI_keyval_t preput_keyval_vector[],
                        int errors[])
 {
-    if (pmi_trace & PMI_TRACE_UNIMPL)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_UNIMPL, ctx);
     return PMI_FAIL;
 }
 
 int PMI_Get_id( char id_str[], int length )
 {
-    if (pmi_trace & PMI_TRACE_PARAM)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_PARAM, ctx);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -472,15 +460,13 @@ int PMI_Get_id( char id_str[], int length )
 
 int PMI_Get_kvs_domain_id( char id_str[], int length )
 {
-    if (pmi_trace & PMI_TRACE_PARAM)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_PARAM, ctx);
     return PMI_Get_id (id_str, length);
 }
 
 int PMI_Get_id_length_max( int *length )
 {
-    if (pmi_trace & PMI_TRACE_PARAM)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_PARAM, ctx);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -493,8 +479,7 @@ int PMI_Get_id_length_max( int *length )
 
 int PMI_Get_clique_size( int *size )
 {
-    if (pmi_trace & PMI_TRACE_CLIQUE)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_CLIQUE, ctx);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -506,8 +491,7 @@ int PMI_Get_clique_ranks( int ranks[], int length)
 {
     int i;
 
-    if (pmi_trace & PMI_TRACE_CLIQUE)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_CLIQUE, ctx);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -520,15 +504,13 @@ int PMI_Get_clique_ranks( int ranks[], int length)
 
 int PMI_KVS_Create( char kvsname[], int length )
 {
-    if (pmi_trace & PMI_TRACE_KVS)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_KVS, ctx);
     return PMI_SUCCESS;
 }
 
 int PMI_KVS_Destroy( const char kvsname[] )
 {
-    if (pmi_trace & PMI_TRACE_KVS)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_KVS, ctx);
     return PMI_SUCCESS;
 }
 
@@ -537,44 +519,40 @@ int PMI_KVS_Iter_first(const char kvsname[], char key[], int key_len,
 {
     if (pmi_trace & PMI_TRACE_UNIMPL)
         msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_UNIMPL, ctx);
     return PMI_FAIL;
 }
 
 int PMI_KVS_Iter_next(const char kvsname[], char key[], int key_len,
                         char val[], int val_len)
 {
-    if (pmi_trace & PMI_TRACE_UNIMPL)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_UNIMPL, ctx);
     return PMI_FAIL;
 }
 
 int PMI_Parse_option(int num_args, char *args[], int *num_parsed,
                         PMI_keyval_t **keyvalp, int *size)
 {
-    if (pmi_trace & PMI_TRACE_UNIMPL)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_UNIMPL, ctx);
     return PMI_FAIL;
 }
 
 int PMI_Args_to_keyval(int *argcp, char *((*argvp)[]),
                         PMI_keyval_t **keyvalp, int *size)
 {
-    if (pmi_trace & PMI_TRACE_UNIMPL)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_UNIMPL, ctx);
     return PMI_FAIL;
 }
 
 int PMI_Free_keyvals(PMI_keyval_t keyvalp[], int size)
 {
-    if (pmi_trace & PMI_TRACE_UNIMPL)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_UNIMPL, ctx);
     return PMI_FAIL;
 }
 
 int PMI_Get_options(char *str, int *length)
 {
-    if (pmi_trace & PMI_TRACE_UNIMPL)
-        msg ("PMI-TRACE %d:%s", ctx ? ctx->rank : -1, __FUNCTION__);
+    trace_simple (PMI_TRACE_UNIMPL, ctx);
     return PMI_FAIL;
 }
 
