@@ -145,10 +145,9 @@ if they cannot be matched to a local plugin.}
 {\tt void} & {\tt cmb\_fini (cmb\_t c)}
   & Destroy a {\em cmb\_t} context.\\
 \hline
-{\tt int} & {\tt cmb\_ping (cmb\_t c, int seq, int padding, char **tp)}
-  & Send a ping message to the broker's internal bus and wait for it
-    to be echoed back.  {\em padding} bytes of payload will be added to
-    the message.
+{\tt int} & {\tt cmb\_ping (cmb\_t c, char *tag, int seq, int padding, char **tp)}
+  & Send a ping message to the service identified by {\em tag} and wait for
+    a response.  {\em padding} bytes of payload will be added to the message.
     On success, returns $0$; on failure, returns $-1$ with errno set.\\
 \hline
 {\tt int} & {\tt cmb\_snoop (cmb\_t c, bool enable)}

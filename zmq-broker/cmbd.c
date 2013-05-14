@@ -33,6 +33,7 @@ static const struct option longopts[] = {
     {"rank",        required_argument,  0, 'R'},
     {"size",        required_argument,  0, 'S'},
     {"parent",      required_argument,  0, 'p'},
+    {"children",    required_argument,  0, 'c'},
     {0, 0, 0, 0},
 };
 
@@ -47,6 +48,7 @@ static void usage (void)
 " -e,--event-uri URI     Set event URI e.g. epgm://eth0;239.192.1.1:5555\n"
 " -t,--tree-in-uri URI   Set tree-in URI, e.g. tcp://*:5556\n"
 " -p,--parent N,URI      Set parent rank,URI, e.g. 0,tcp://192.168.1.136:5556\n"
+" -c,--children n,n,...  Set ranks of children, comma-sep\n"
 " -r,--redis-server HOST Set redis server hostname\n"
 " -v,--verbose           Show bus traffic\n"
 " -s,--syncperiod N      Set sync period in seconds\n"
@@ -66,7 +68,7 @@ int main (int argc, char *argv[])
     log_init (basename (argv[0]));
 
     conf = xzmalloc (sizeof (conf_t));
-    conf->syncperiod_msec = 10*1000;
+    conf->syncperiod_msec = 2*1000;
     conf->size = 1;
     conf->apisockpath = CMB_API_PATH;
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
@@ -103,6 +105,10 @@ int main (int argc, char *argv[])
             case 'S':   /* --size N */
                 conf->size = strtoul (optarg, NULL, 10);
                 break;
+            case 'c':   /* --children n,n,... */
+                if (getints (optarg, &conf->children, &conf->children_len) < 0)
+                    msg_exit ("out of memory");
+                break;
             default:
                 usage ();
         }
@@ -115,6 +121,8 @@ int main (int argc, char *argv[])
         _cmb_poll (conf, srv);
     _cmb_fini (conf, srv);
 
+    if (conf->children)
+        free (conf->children);
     free (conf);
 
     return 0;

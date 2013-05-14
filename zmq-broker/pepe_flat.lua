@@ -1,4 +1,5 @@
 local hostlist = require ("hostlist")
+local tree = require ("tree")
 
 if pepe.rank == 0 then
     local env = pepe:getenv()
@@ -16,6 +17,10 @@ local h = hostlist.new (pepe.nodelist)
 local eventuri = "epgm://eth0;239.192.1.1:5555"
 local treeinuri = "tcp://*:5556"
 local treeouturi = "tcp://" ..  h[1] .. ":5556"
+local child_opt = tree.k_ary_children (pepe.rank, #h - 1, #h)
+if string.len (child_opt) > 0 then
+    child_opt = " --children=" .. child_opt
+end
 
 if pepe.rank == 0 then
     pepe.run ("echo bind 127.0.0.1 | /usr/sbin/redis-server -")
@@ -23,7 +28,8 @@ if pepe.rank == 0 then
 		.. " --tree-in-uri='" .. treeinuri .. "'"
 		.. " --redis-server=localhost"
 		.. " --rank=" .. pepe.rank
-		.. " --size=" .. #h)
+		.. " --size=" .. #h
+		.. child_opt)
 else
     pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
 		.. " --parent='0," .. treeouturi .. "'"

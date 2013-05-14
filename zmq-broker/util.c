@@ -51,6 +51,60 @@ char *env_getstr (char *name, char *dflt)
     return ev ? xstrdup (ev) : xstrdup (dflt);
 }
 
+static int _strtoia (char *s, int *ia, int ia_len)
+{
+    char *next;
+    int n, len = 0;
+
+    while (*s) {
+        n = strtoul (s, &next, 10);
+        s = *next == '\0' ? next : next + 1;
+        if (ia) {
+            if (ia_len == len)
+                break;
+            ia[len] = n;
+        }
+        len++;
+    }
+    return len;
+}
+
+int getints (char *s, int **iap, int *lenp)
+{
+    int len = _strtoia (s, NULL, 0);
+    int *ia = malloc (len * sizeof (int));
+
+    if (!ia)
+        return -1;
+
+    (void)_strtoia (s, ia, len);
+    *lenp = len;
+    *iap = ia;
+    return 0;
+}
+
+int env_getints (char *name, int **iap, int *lenp, int dflt_ia[], int dflt_len)
+{
+    char *s = getenv (name);
+    int *ia;
+    int len;
+
+    if (s) {
+        if (getints (s, &ia, &len) < 0)
+            return -1;
+    } else {
+        ia = malloc (dflt_len * sizeof (int));
+        if (!ia)
+            return -1;
+        for (len = 0; len < dflt_len; len++)
+            ia[len] = dflt_ia[len];
+    }
+    *lenp = len;
+    *iap = ia;
+    return 0;
+}
+
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

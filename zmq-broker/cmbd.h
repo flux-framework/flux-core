@@ -7,6 +7,8 @@ typedef struct {
     char *treein_uri;
     parent_t parent[2];
     int parent_len;
+    int *children;
+    int children_len;
     char *event_uri;
     bool verbose;
     int syncperiod_msec;

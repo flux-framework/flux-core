@@ -1,4 +1,5 @@
 local hostlist = require ("hostlist")
+local tree = require ("tree")
 
 if pepe.rank == 0 then
     local env = pepe:getenv()
@@ -10,10 +11,6 @@ if pepe.rank == 0 then
     pepe:setenv ("HAVE_PEPE", 1)
     pepe:setenv ("PS1", "${SLURM_JOB_NODELIST} \\\u@\\\h \\\w$ ")
 
-end
-
-function k_ary_parent (n, k)
-    return math.floor ((n - 1)/k)
 end
 
 function make_nutcracker_yml (hl)
@@ -53,7 +50,7 @@ if pepe.rank == 0 then
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h)
 else
-    local parent_rank = k_ary_parent (pepe.rank, 3)
+    local parent_rank = tree.k_ary_parent (pepe.rank, 3)
     local treeouturi = "tcp://" ..  h[parent_rank + 1] .. ":5556"
     pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
 		.. " --tree-in-uri='" .. treeinuri .. "'"

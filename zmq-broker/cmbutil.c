@@ -190,7 +190,7 @@ int main (int argc, char *argv[])
             }
             case 'S': { /* --sync */
                 char *event;
-                if (cmb_event_subscribe (c, "event.sched.trigger") < 0)
+                if (cmb_event_subscribe (c, "event.sched.trigger.") < 0)
                     err_exit ("cmb_event_subscribe");
                 if (!(event = cmb_event_recv (c)))
                     err_exit ("cmb_event_recv");
