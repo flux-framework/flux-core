@@ -1,14 +1,5 @@
 /* livesrv.c - node liveness service */
 
-/* N.B. Any node with descendents will publish events directly.
- * See how this goes.  Do we need to filter events through the root 
- * to reduce per-sender EPGM overhead on receivers?
- */
-
-/* FIXME: If a node goes down, the state of its direct descendents will
- * forever remain unchanged.  We need a takeover scheme.
- */
-
 /* FIXME: If a node never starts, its parent doesn't know it is supposed
  * to monitor it.  Need a way to learn session topology.
  */
@@ -57,6 +48,11 @@ static void _event_sched_trigger (plugin_ctx_t *p, zmsg_t **zmsg)
     if (myrank > 0)
         cmb_msg_send_rt (p->zs_req, NULL, "live.up.%d", myrank);
 
+    /* if self is down, do not issue event.live.down for reparented children */
+    if (!ctx->live_all[myrank])
+        for (i = 0; i < p->conf->size; i++)
+            ctx->live[i] = -1;
+
     /* age state of descendents, notify of up->down transition, if any */
     for (i = 0; i < p->conf->size; i++) {
         if (ctx->live[i] != -1)
@@ -72,14 +68,34 @@ static void _event_sched_trigger (plugin_ctx_t *p, zmsg_t **zmsg)
         zmsg_destroy (zmsg);
 }
 
+static bool _parent_is_down (plugin_ctx_t *p)
+{
+    ctx_t *ctx = p->ctx;
+    int rank = p->conf->parent[p->srv->parent_cur].rank;
+
+    if (rank < 0 || rank >= p->conf->size || !ctx->live_all[rank])
+        return true;
+    return false;
+}
+
 static void _event_live_up (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
-    int rank = strtoul (name, NULL, 10);
+    int i, rank = strtoul (name, NULL, 10);
 
     if (rank < 0 || rank >= p->conf->size)
         goto done;
     ctx->live_all[rank] = true;
+
+    /* reparent if current parent is down and candidate just came up */
+    if (_parent_is_down (p)) {
+        for (i = 0; i < p->conf->parent_len; i++) {
+            if (p->conf->parent[i].rank == rank) {
+                cmb_msg_send_rt (p->zs_req, NULL, "cmb.reparent.%d", rank);
+                break;
+            }
+        }
+    }
 done:
     zmsg_destroy (zmsg);
 }
@@ -92,6 +108,20 @@ static void _event_live_down (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
     if (rank < 0 || rank >= p->conf->size)
         goto done;
     ctx->live_all[rank] = false;
+
+    /* reparent if current parent is down and a candidate is available */
+    if (_parent_is_down (p)) {
+        int i, nrank;
+        for (i = 0; i < p->conf->parent_len; i++) {
+            nrank = p->conf->parent[i].rank;
+            if (nrank < 0 || nrank >= p->conf->size)
+                continue;
+            if (ctx->live_all[nrank]) {
+                cmb_msg_send_rt (p->zs_req, NULL, "cmb.reparent.%d", nrank);
+                break;
+            }
+        }
+    }
 done:
     zmsg_destroy (zmsg);
 }

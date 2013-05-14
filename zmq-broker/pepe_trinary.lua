@@ -16,8 +16,20 @@ local h = hostlist.new (pepe.nodelist)
 local eventuri = "epgm://eth0;239.192.1.1:5555"
 local treeinuri = "tcp://*:5556"
 
+-- N.B. results undefined for n = 0
 function k_ary_parent (n, k)
-   return math.floor ((n - 1)/k)
+    return math.floor ((n - 1)/k)
+end
+
+-- strategy: adoption by grandparent
+-- if root (n = 0) dies, 1 is the new root
+-- N.B. results undefined for n = 0,1
+function k_ary_parent2 (n, k)
+    local p = k_ary_parent (n, k)
+    if (p == 0) then
+        return 1
+    end
+    return k_ary_parent (p, k) 
 end
 
 if pepe.rank == 0 then
@@ -27,12 +39,23 @@ if pepe.rank == 0 then
 		.. " --redis-server=localhost"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h)
-else
-    local parent_rank = k_ary_parent (pepe.rank, 3)
-    local treeouturi = "tcp://" ..  h[parent_rank + 1] .. ":5556"
+elseif pepe.rank == 1 then
+    local p = k_ary_parent (pepe.rank, 3)
+    local parent = p .. ",tcp://" ..  h[p + 1] .. ":5556"
     pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
 		.. " --tree-in-uri='" .. treeinuri .. "'"
-		.. " --tree-out-uri='" .. treeouturi .. "'"
+		.. " --parent='" .. parent .. "'"
+		.. " --rank=" .. pepe.rank
+		.. " --size=" .. #h)
+else
+    local p = k_ary_parent (pepe.rank, 3)
+    local p2 = k_ary_parent2 (pepe.rank, 3)
+    local parent = p .. ",tcp://" ..  h[p + 1] .. ":5556"
+    local parent2 = p2 .. ",tcp://" ..  h[p2 + 1] .. ":5556"
+    pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
+		.. " --tree-in-uri='" .. treeinuri .. "'"
+		.. " --parent='" .. parent .. "'"
+		.. " --parent='" .. parent2 .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h)
 end

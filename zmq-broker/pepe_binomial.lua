@@ -45,7 +45,7 @@ else
     local treeouturi = "tcp://" ..  h[parent_rank + 1] .. ":5556"
     pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
 		.. " --tree-in-uri='" .. treeinuri .. "'"
-		.. " --tree-out-uri='" .. treeouturi .. "'"
+		.. " --parent='" .. parent_rank .. "," .. treeouturi .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h)
 end

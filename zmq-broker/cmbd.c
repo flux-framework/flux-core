@@ -23,16 +23,16 @@
 #include "util.h"
 #include "plugin.h"
 
-#define OPTIONS "t:T:e:vs:r:R:S:"
+#define OPTIONS "t:e:vs:r:R:S:p:"
 static const struct option longopts[] = {
     {"event-uri",   required_argument,  0, 'e'},
     {"tree-in-uri", required_argument,  0, 't'},
-    {"tree-out-uri",required_argument,  0, 'T'},
     {"redis-server",required_argument,  0, 'r'},
     {"verbose",           no_argument,  0, 'v'},
     {"syncperiod",  required_argument,  0, 's'},
     {"rank",        required_argument,  0, 'R'},
     {"size",        required_argument,  0, 'S'},
+    {"parent",      required_argument,  0, 'p'},
     {0, 0, 0, 0},
 };
 
@@ -46,7 +46,7 @@ static void usage (void)
 "Usage: cmbd OPTIONS\n"
 " -e,--event-uri URI     Set event URI e.g. epgm://eth0;239.192.1.1:5555\n"
 " -t,--tree-in-uri URI   Set tree-in URI, e.g. tcp://*:5556\n"
-" -T,--tree-out-uri URI  Set tree-out URI, e.g. tcp://hostname:5556\n"
+" -p,--parent N,URI      Set parent rank,URI, e.g. 0,tcp://192.168.1.136:5556\n"
 " -r,--redis-server HOST Set redis server hostname\n"
 " -v,--verbose           Show bus traffic\n"
 " -s,--syncperiod N      Set sync period in seconds\n"
@@ -61,6 +61,7 @@ int main (int argc, char *argv[])
     int c;
     conf_t *conf;
     server_t *srv;
+    const int parent_max = sizeof (conf->parent) / sizeof (conf->parent[0]);
 
     log_init (basename (argv[0]));
 
@@ -76,9 +77,17 @@ int main (int argc, char *argv[])
             case 't':   /* --tree-in-uri URI */
                 conf->treein_uri = optarg;
                 break;
-            case 'T':   /* --tree-out-uri URI */
-                conf->treeout_uri = optarg;
+            case 'p': { /* --parent rank,URI */
+                char *p;
+                if (conf->parent_len == parent_max)
+                    msg_exit ("too many --parent's, max %d", parent_max);
+                if (!(p = strchr (optarg, ',')))
+                    msg_exit ("malformed -p option");
+                conf->parent[conf->parent_len].rank = strtoul (optarg, NULL,10);
+                conf->parent[conf->parent_len].treeout_uri = p + 1;
+                conf->parent_len++;
                 break;
+            }
             case 'v':   /* --verbose */
                 conf->verbose = true;
                 break;
@@ -136,10 +145,11 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
         zbind (zctx, &srv->zs_eventin,  ZMQ_SUB, conf->event_uri, -1);
         zsocket_set_subscribe (srv->zs_eventin, "");
     }
-    if (conf->treeout_uri) {
+    if (conf->parent_len > 0) {
         char id[16];
         snprintf (id, sizeof (id), "%d", conf->rank);
-        zconnect (zctx, &srv->zs_upreq, ZMQ_DEALER, conf->treeout_uri, -1, id);
+        zconnect (zctx, &srv->zs_upreq, ZMQ_DEALER,
+                  conf->parent[srv->parent_cur].treeout_uri, -1, id);
     }
     if (conf->treein_uri) {
         if (zsocket_bind (srv->zs_router, "%s", conf->treein_uri) < 0)
@@ -173,7 +183,31 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
     free (srv);
 }
 
-static void _route (conf_t *conf, void *src, void *d1, void *d2, char *s)
+static void _cmb_message (conf_t *conf, server_t *srv, zmsg_t **zmsg)
+{
+    char *arg;
+
+    if (cmb_msg_match_substr (*zmsg, "cmb.reparent.", &arg)) {
+        int i, newrank = strtoul (arg, NULL, 10);
+    
+        for (i = 0; i < conf->parent_len; i++)
+            if (conf->parent[i].rank == newrank)
+                break;
+        if (i < conf->parent_len) {
+            if (zsocket_disconnect (srv->zs_upreq, "%s",
+                                conf->parent[srv->parent_cur].treeout_uri) < 0)
+                err_exit ("zsocket_disconnect");
+            if (zsocket_connect (srv->zs_upreq, "%s",
+                                conf->parent[i].treeout_uri) < 0)
+                err_exit ("zsocket_connect");
+            srv->parent_cur = i;
+        }    
+        free (arg);
+        zmsg_destroy (zmsg);
+    }
+}
+
+static void _route_event (conf_t *conf, void *src, void *d1, void *d2, char *s)
 {
     zmsg_t *m, *cpy;
 
@@ -224,12 +258,14 @@ static void _route_request (conf_t *conf, server_t *srv)
             err_exit ("zmsg_dup");
         if (zmsg_send (&cpy, srv->zs_snoop) < 0)
             err_exit ("zmsg_send");
-    } 
+    }
     if (zmsg)
-        plugin_send (srv, conf, &zmsg);
-    if (zmsg && srv->zs_upreq)
-        zmsg_send (&zmsg, srv->zs_upreq); 
+        _cmb_message (conf, srv, &zmsg);    /* internal? */
     if (zmsg)
+        plugin_send (srv, conf, &zmsg);     /* plugin? */
+    if (zmsg && srv->zs_upreq) 
+        zmsg_send (&zmsg, srv->zs_upreq);   /* try upstream? */
+    if (zmsg)                               /* NAK */
         cmb_msg_send_errnum (&zmsg, srv->zs_router, ENOSYS, srv->zs_snoop);
     assert (zmsg == NULL);
 }
@@ -254,11 +290,11 @@ static void _cmb_poll (conf_t *conf, server_t *srv)
         _route_response (conf, srv, srv->zs_plin);
 
     if (zpa[3].revents & ZMQ_POLLIN) /* plin_event (plugin sending event) */
-        _route (conf, srv->zs_plin_event, srv->zs_plout_event, srv->zs_eventout,
-                "plin_event->plout_event,eventout");
+        _route_event (conf, srv->zs_plin_event, srv->zs_plout_event,
+                      srv->zs_eventout, "plin_event->plout_event,eventout");
     if (zpa[4].revents & ZMQ_POLLIN) /* eventin (external event input) */
-        _route (conf, srv->zs_eventin, srv->zs_plout_event, NULL,
-                "eventin->plout_event");
+        _route_event (conf, srv->zs_eventin, srv->zs_plout_event,
+                      NULL, "eventin->plout_event");
 }
 
 /*

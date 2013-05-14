@@ -281,8 +281,8 @@ void plugin_init (conf_t *conf, server_t *srv)
     srv->plugins = zhash_new ();
 
     _plugin_create (srv, conf, &apisrv);
-    if (!conf->treeout_uri) /* root (send on local bus even if no eventout) */
-        _plugin_create (srv, conf, &syncsrv);
+    if (conf->rank == 0) /* we are tree root */
+        _plugin_create (srv, conf, &syncsrv); 
     if (conf->redis_server)
         _plugin_create (srv, conf, &kvssrv);
     _plugin_create (srv, conf, &barriersrv);

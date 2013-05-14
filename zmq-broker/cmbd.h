@@ -1,6 +1,12 @@
 typedef struct {
-    char *treein_uri;
     char *treeout_uri;
+    int rank;
+} parent_t;
+
+typedef struct {
+    char *treein_uri;
+    parent_t parent[2];
+    int parent_len;
     char *event_uri;
     bool verbose;
     int syncperiod_msec;
@@ -21,6 +27,7 @@ typedef struct {
     void *zs_router;
     void *zs_plin_event;
     void *zs_plin_tree;
+    int parent_cur;
     zhash_t *plugins;
 } server_t;
 

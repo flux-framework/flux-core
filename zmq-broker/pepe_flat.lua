@@ -26,7 +26,7 @@ if pepe.rank == 0 then
 		.. " --size=" .. #h)
 else
     pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
-		.. " --tree-out-uri='" .. treeouturi .. "'"
+		.. " --parent='0," .. treeouturi .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h)
 end
