@@ -561,10 +561,10 @@ _zframe_print_compact (zframe_t *self, const char *prefix)
 
     //fprintf (stderr, "[%03d] ", (int) size);
     size_t max_size = is_bin? 35: 70;
-    const char *elipsis = "";
+    //const char *elipsis = "";
     if (size > max_size) {
         size = max_size;
-        elipsis = "...";
+        //elipsis = "...";
     }
     for (char_nbr = 0; char_nbr < size; char_nbr++) {
         if (is_bin)
