@@ -23,9 +23,11 @@
 #include "util.h"
 #include "plugin.h"
 
-#define OPTIONS "t:e:vs:r:R:S:p:c:P:"
+#define OPTIONS "t:e:E:O:vs:r:R:S:p:c:P:"
 static const struct option longopts[] = {
     {"event-uri",   required_argument,  0, 'e'},
+    {"event-out-uri",required_argument, 0, 'O'},
+    {"event-in-uri",required_argument,  0, 'E'},
     {"tree-in-uri", required_argument,  0, 't'},
     {"redis-server",required_argument,  0, 'r'},
     {"verbose",           no_argument,  0, 'v'},
@@ -47,6 +49,8 @@ static void usage (void)
     fprintf (stderr, 
 "Usage: cmbd OPTIONS\n"
 " -e,--event-uri URI     Set event URI e.g. epgm://eth0;239.192.1.1:5555\n"
+" -O,--event-out-uri URI Set event out URI (alternative to -e)\n"
+" -E,--event-in-uri URI  Set event out URI (alternative to -e)\n"
 " -t,--tree-in-uri URI   Set tree-in URI, e.g. tcp://*:5556\n"
 " -p,--parent N,URI      Set parent rank,URI, e.g. 0,tcp://192.168.1.136:5556\n"
 " -c,--children n,n,...  Set ranks of children, comma-sep\n"
@@ -76,7 +80,14 @@ int main (int argc, char *argv[])
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
             case 'e':   /* --event-uri URI */
-                conf->event_uri = optarg;
+                conf->event_in_uri = optarg;
+                conf->event_out_uri = optarg;
+                break;
+            case 'E':   /* --event-in-uri URI */
+                conf->event_in_uri = optarg;
+                break;
+            case 'O':   /* --event-out-uri URI */
+                conf->event_out_uri = optarg;
                 break;
             case 't':   /* --tree-in-uri URI */
                 conf->treein_uri = optarg;
@@ -155,11 +166,12 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
     zbind (zctx, &srv->zs_snoop,       ZMQ_PUB,  SNOOP_URI, -1);
 
     /* external sockets */
-    if (conf->event_uri) {
-        zbind (zctx, &srv->zs_eventout, ZMQ_PUB, conf->event_uri, -1);
-        zbind (zctx, &srv->zs_eventin,  ZMQ_SUB, conf->event_uri, -1);
+    if (conf->event_in_uri) {
+        zbind (zctx, &srv->zs_eventin,  ZMQ_SUB, conf->event_in_uri, -1);
         zsocket_set_subscribe (srv->zs_eventin, "");
     }
+    if (conf->event_out_uri)
+        zbind (zctx, &srv->zs_eventout, ZMQ_PUB, conf->event_out_uri, -1);
     if (conf->parent_len > 0) {
         char id[16];
         snprintf (id, sizeof (id), "%d", conf->rank);
