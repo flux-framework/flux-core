@@ -18,7 +18,6 @@
 #include <sys/socket.h>
 #include <ctype.h>
 #include <stdarg.h>
-#include <uuid/uuid.h>
 #include <json/json.h>
 #include <czmq.h>
 
@@ -30,20 +29,7 @@
 
 struct cmb_struct {
     int fd;
-    char uuid[64];
 };
-
-static void _uuid_generate_str (cmb_t c)
-{
-    char s[sizeof (uuid_t) * 2 + 1];
-    uuid_t uuid;
-    int i;
-
-    uuid_generate (uuid);
-    for (i = 0; i < sizeof (uuid_t); i++)
-        snprintf (s + i*2, sizeof (s) - i*2, "%-.2x", uuid[i]);
-    snprintf (c->uuid, sizeof (c->uuid), "api.%s", s);
-}
 
 static int _json_object_add_int (json_object *o, char *name, int i)
 {
@@ -551,7 +537,6 @@ cmb_t cmb_init (void)
     if (connect (c->fd, (struct sockaddr *)&addr,
                          sizeof (struct sockaddr_un)) < 0)
         goto error;
-    _uuid_generate_str (c);
     return c;
 error:
     if (c)
