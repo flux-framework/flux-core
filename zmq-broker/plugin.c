@@ -29,6 +29,14 @@
 #include "util.h"
 #include "plugin.h"
 
+static plugin_t plugins[] = {
+    &kvssrv,
+    &syncsrv,
+    &barriersrv,
+    &apisrv,
+    &livesrv,
+};
+const int plugins_len = sizeof (plugins)/sizeof (plugins[0]);
 
 /* pluginname.ping - return message to sender without change */
 static void _plugin_ping(plugin_ctx_t *p, zmsg_t **zmsg)
@@ -208,12 +216,28 @@ static void _plugin_destroy (void *arg)
     free (p);
 }
 
-static void _plugin_create (server_t *srv, conf_t *conf, plugin_t plugin)
+static plugin_t _lookup_plugin (char *name)
+{
+    int i;
+
+    for (i = 0; i < plugins_len; i++)
+        if (!strcmp (plugins[i]->name, name))
+            return plugins[i];
+    return NULL;
+}
+
+static int _plugin_create (char *name, server_t *srv, conf_t *conf)
 {
     zctx_t *zctx = srv->zctx;
     plugin_ctx_t *p;
     int errnum;
     char *plout_uri = NULL;
+    plugin_t plugin;
+
+    if (!(plugin = _lookup_plugin (name))) {
+        msg ("unknown plugin '%s'", name);
+        return -1;
+    }
 
     p = xzmalloc (sizeof (plugin_ctx_t));
     p->conf = conf;
@@ -244,6 +268,8 @@ static void _plugin_create (server_t *srv, conf_t *conf, plugin_t plugin)
     zhash_freefn (srv->plugins, plugin->name, _plugin_destroy);
     if (plout_uri)
         free (plout_uri);
+
+    return 0;
 }
 
 static int _send_match (const char *key, void *item, void *arg)
@@ -280,13 +306,8 @@ void plugin_init (conf_t *conf, server_t *srv)
 {
     srv->plugins = zhash_new ();
 
-    _plugin_create (srv, conf, &apisrv);
-    if (conf->rank == 0) /* we are tree root */
-        _plugin_create (srv, conf, &syncsrv); 
-    if (conf->redis_server)
-        _plugin_create (srv, conf, &kvssrv);
-    _plugin_create (srv, conf, &barriersrv);
-    _plugin_create (srv, conf, &livesrv);
+    if (mapstr (conf->plugins, (mapstrfun_t)_plugin_create, srv, conf) < 0)
+        exit (1);
 }
 
 void plugin_fini (conf_t *conf, server_t *srv)

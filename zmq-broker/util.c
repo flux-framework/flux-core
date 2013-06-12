@@ -104,6 +104,26 @@ int env_getints (char *name, int **iap, int *lenp, int dflt_ia[], int dflt_len)
     return 0;
 }
 
+int mapstr (char *s, mapstrfun_t fun, void *arg1, void *arg2)
+{
+    char *cpy = xstrdup (s);
+    char *saveptr, *a1 = cpy;
+    int rc = 0;
+
+    for (;;) {
+        char *name = strtok_r (a1 , ",", &saveptr);
+        if (!name)
+            break;
+        if (fun (name, arg1, arg2) < 0) {
+            rc = -1;
+            break;
+        }
+        a1 = NULL;
+    }
+    free (cpy);
+    return rc;
+}
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

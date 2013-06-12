@@ -16,6 +16,7 @@ typedef struct {
     char *apisockpath;
     int rank;
     int size;
+    char *plugins;
 } conf_t;
 
 typedef struct {

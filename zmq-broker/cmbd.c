@@ -23,7 +23,7 @@
 #include "util.h"
 #include "plugin.h"
 
-#define OPTIONS "t:e:vs:r:R:S:p:"
+#define OPTIONS "t:e:vs:r:R:S:p:c:P:"
 static const struct option longopts[] = {
     {"event-uri",   required_argument,  0, 'e'},
     {"tree-in-uri", required_argument,  0, 't'},
@@ -34,6 +34,7 @@ static const struct option longopts[] = {
     {"size",        required_argument,  0, 'S'},
     {"parent",      required_argument,  0, 'p'},
     {"children",    required_argument,  0, 'c'},
+    {"plugins",     required_argument,  0, 'P'},
     {0, 0, 0, 0},
 };
 
@@ -54,6 +55,7 @@ static void usage (void)
 " -s,--syncperiod N      Set sync period in seconds\n"
 " -R,--rank N            Set cmbd address\n"
 " -S,--size N            Set number of ranks in session\n"
+" -P,--plugins p1,p2,... Load the named plugins (comma separated)\n"
             );
     exit (1);
 }
@@ -109,12 +111,17 @@ int main (int argc, char *argv[])
                 if (getints (optarg, &conf->children, &conf->children_len) < 0)
                     msg_exit ("out of memory");
                 break;
+            case 'P':   /* --plugins p1,p2,... */
+                conf->plugins = optarg;
+                break;
             default:
                 usage ();
         }
     }
     if (optind < argc)
         usage ();
+    if (!conf->plugins)
+        msg_exit ("at least one plugin must be loaded");
 
     _cmb_init (conf, &srv);
     for (;;)
