@@ -23,7 +23,7 @@
 #include "util.h"
 #include "plugin.h"
 
-#define OPTIONS "t:e:E:O:vs:r:R:S:p:c:P:"
+#define OPTIONS "t:e:E:O:vs:r:R:S:p:c:P:L:"
 static const struct option longopts[] = {
     {"event-uri",   required_argument,  0, 'e'},
     {"event-out-uri",required_argument, 0, 'O'},
@@ -37,6 +37,7 @@ static const struct option longopts[] = {
     {"parent",      required_argument,  0, 'p'},
     {"children",    required_argument,  0, 'c'},
     {"plugins",     required_argument,  0, 'P'},
+    {"logdest",     required_argument,  0, 'L'},
     {0, 0, 0, 0},
 };
 
@@ -60,6 +61,7 @@ static void usage (void)
 " -R,--rank N            Set cmbd address\n"
 " -S,--size N            Set number of ranks in session\n"
 " -P,--plugins p1,p2,... Load the named plugins (comma separated)\n"
+" -L,--logdest DEST      Log to DEST, can  be syslog, stderr, or file\n"
             );
     exit (1);
 }
@@ -124,6 +126,9 @@ int main (int argc, char *argv[])
                 break;
             case 'P':   /* --plugins p1,p2,... */
                 conf->plugins = optarg;
+                break;
+            case 'L':   /* --logdest DEST */
+                log_set_dest (optarg);
                 break;
             default:
                 usage ();
