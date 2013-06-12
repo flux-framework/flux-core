@@ -26,6 +26,7 @@
 #include "syncsrv.h"
 #include "kvssrv.h"
 #include "livesrv.h"
+#include "logsrv.h"
 #include "util.h"
 #include "plugin.h"
 
@@ -35,6 +36,7 @@ static plugin_t plugins[] = {
     &barriersrv,
     &apisrv,
     &livesrv,
+    &logsrv,
 };
 const int plugins_len = sizeof (plugins)/sizeof (plugins[0]);
 

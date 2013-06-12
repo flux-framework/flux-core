@@ -15,7 +15,7 @@
 #include "log.h"
 #include "util.h"
 
-#define OPTIONS "p:s:b:k:SK:Ct:P:d:fF:n:lx:e:T"
+#define OPTIONS "p:s:b:k:SK:Ct:P:d:fF:n:lx:e:TL:"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -34,6 +34,7 @@ static const struct option longopts[] = {
     {"sync",       no_argument,        0, 'S'},
     {"live-query", no_argument,        0, 'l'},
     {"snoop",      no_argument,        0, 'T'},
+    {"log",        required_argument,  0, 'L'},
     {0, 0, 0, 0},
 };
 
@@ -56,7 +57,8 @@ static void usage (void)
 "  -s,--subscribe sub     subscribe to events matching substring\n"
 "  -e,--event name        publish event\n"
 "  -S,--sync              block until event.sched.triger\n"
-"  -l,--live-query        get list of up nodes\n");
+"  -l,--live-query        get list of up nodes\n"
+"  -L,--log MSG           log MSG\n");
     exit (1);
 }
 
@@ -295,6 +297,10 @@ int main (int argc, char *argv[])
             case 'd':
             case 'n':
                 break; /* handled in first getopt */
+            case 'L':
+                if (cmb_log (c, "%s", optarg) < 0)
+                    err_exit ("cmb_log");
+                break;
             default:
                 usage ();
         }

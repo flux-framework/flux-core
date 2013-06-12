@@ -477,6 +477,39 @@ error:
     return -1; 
 }
 
+static int _cmb_vlog (cmb_t c, const char *fmt, va_list ap)
+{
+    json_object *o = NULL;
+    char buf[512];
+   
+    vsnprintf (buf, sizeof (buf), fmt, ap); /* ignore overflow */ 
+    if (!(o = json_object_new_object ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (_json_object_add_string (o, "message", buf) < 0)
+        goto error;
+    if (cmb_msg_send_fd (c->fd, o, "log.msg") < 0)
+        goto error;
+    json_object_put (o);
+    return 0;
+error:
+    if (o)
+        json_object_put (o);
+    return -1;
+}
+
+int cmb_log (cmb_t c, const char *fmt, ...)
+{
+    va_list ap;
+    int rc;
+
+    va_start (ap, fmt);
+    rc = _cmb_vlog (c, fmt, ap);
+    va_end (ap);
+    return rc;
+}
+
 int cmb_kvs_commit (cmb_t c, int *ep, int *pp)
 {
     json_object *o = NULL;

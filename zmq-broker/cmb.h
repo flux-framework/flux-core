@@ -28,6 +28,9 @@ int cmb_live_query (cmb_t c, int **up, int *ulp, int **dp, int *dlp, int *nnp);
 
 int cmb_fd_open (cmb_t c, char *wname, char **np);
 
+int cmb_log (cmb_t c, const char *fmt, ...)
+    __attribute__ ((format (printf, 2, 3)));
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
