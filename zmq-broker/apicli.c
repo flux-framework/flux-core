@@ -480,20 +480,26 @@ error:
 static int _cmb_vlog (cmb_t c, const char *fmt, va_list ap)
 {
     json_object *o = NULL;
-    char buf[512];
+    char *str = NULL;
    
-    vsnprintf (buf, sizeof (buf), fmt, ap); /* ignore overflow */ 
+    if (vasprintf (&str, fmt, ap) < 0) {
+        errno = ENOMEM;
+        goto error;
+    }
     if (!(o = json_object_new_object ())) {
         errno = ENOMEM;
         goto error;
     }
-    if (_json_object_add_string (o, "message", buf) < 0)
+    if (_json_object_add_string (o, "message", str) < 0)
         goto error;
     if (cmb_msg_send_fd (c->fd, o, "log.msg") < 0)
         goto error;
+    free (str);
     json_object_put (o);
     return 0;
 error:
+    if (str)
+        free (str);
     if (o)
         json_object_put (o);
     return -1;
