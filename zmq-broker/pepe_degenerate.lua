@@ -28,7 +28,7 @@ if pepe.rank == 0 then
 		.. " --redis-server=localhost"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
-		.. " --plugins=api,barrier,live,kvs,sync"
+		.. " --plugins=api,barrier,live,kvs,log,sync"
 		.. child_opt)
 else
     local parent_rank = pepe.rank - 1
@@ -38,6 +38,6 @@ else
 		.. " --parent='" .. parent_rank .. "," .. treeouturi .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
-		.. " --plugins=api,barrier,live,kvs"
+		.. " --plugins=api,barrier,live,kvs,log"
 		.. child_opt)
 end
