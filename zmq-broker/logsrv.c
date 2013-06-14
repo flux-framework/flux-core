@@ -145,7 +145,7 @@ static void _recv_log_msg (plugin_ctx_t *p, zmsg_t **zmsg)
     if (!o)
         goto done;
 
-    /* add source tag if not present */
+    /* add source if not present */
     if (!json_object_object_get (o, "source")) {
         char rankstr[16];
         json_object *no;
@@ -155,6 +155,10 @@ static void _recv_log_msg (plugin_ctx_t *p, zmsg_t **zmsg)
             oom ();
         json_object_object_add (o, "source", no);
     }
+
+    /* forward upstream */
+    if (p->conf->rank != 0)
+        cmb_msg_send_rt (p->zs_req, o, "log.msg");      
 
     /* forward message to listeners */
     farg.p = p;
