@@ -313,7 +313,7 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
     } else if (cmb_msg_match (*zmsg, "live.query")) {
         _recv_live_query (p, zmsg);
 
-    } else if (cmb_msg_match_substr (*zmsg, "live.hello", &arg)) {
+    } else if (cmb_msg_match_substr (*zmsg, "live.hello.", &arg)) {
         _recv_live_hello (p, arg, zmsg);
 
     /* When a node transitions up, we must:
