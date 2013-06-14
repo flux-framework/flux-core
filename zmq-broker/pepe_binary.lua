@@ -28,7 +28,7 @@ if pepe.rank == 0 then
 		.. " --redis-server=localhost"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
-		.. " --plugins=api,barrier,live,kvs,log,sync"
+		.. " --plugins=api,barrier,live,log,kvs,sync"
 		.. child_opt)
 else
     local parent_rank = tree.k_ary_parent (pepe.rank, 2)
@@ -38,6 +38,6 @@ else
 		.. " --parent='" .. parent_rank .. "," .. treeouturi .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
-		.. " --plugins=api,barrier,live,kvs,log"
+		.. " --plugins=api,barrier,live,log"
 		.. child_opt)
 end
