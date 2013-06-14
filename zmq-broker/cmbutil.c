@@ -301,7 +301,7 @@ int main (int argc, char *argv[])
             case 'n':
                 break; /* handled in first getopt */
             case 'L': { /* --log */
-                if (cmb_log (c, "cmbutil", "%s", optarg) < 0)
+                if (cmb_log (c, "cmbutil", NULL, "%s", optarg) < 0)
                     err_exit ("cmb_log");
                 break;
             }

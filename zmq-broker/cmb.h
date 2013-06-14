@@ -28,8 +28,10 @@ int cmb_live_query (cmb_t c, int **up, int *ulp, int **dp, int *dlp, int *nnp);
 
 int cmb_fd_open (cmb_t c, char *wname, char **np);
 
-int cmb_log (cmb_t c, const char *tag, const char *fmt, ...)
-    __attribute__ ((format (printf, 3, 4)));
+int cmb_vlog (cmb_t c, const char *tag, const char *src,
+              const char *fmt, va_list ap);
+int cmb_log (cmb_t c, const char *tag, const char *src, const char *fmt, ...)
+    __attribute__ ((format (printf, 4, 5)));
 int cmb_log_subscribe (cmb_t c, const char *sub);
 int cmb_log_unsubscribe (cmb_t c, const char *sub);
 char *cmb_log_recv (cmb_t c, char **tagp, char **fromp);

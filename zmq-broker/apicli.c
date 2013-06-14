@@ -477,7 +477,8 @@ error:
     return -1; 
 }
 
-static int _cmb_vlog (cmb_t c, const char *tag, const char *fmt, va_list ap)
+int cmb_vlog (cmb_t c, const char *tag, const char *src,
+              const char *fmt, va_list ap)
 {
     json_object *o = NULL;
     char *str = NULL;
@@ -494,6 +495,10 @@ static int _cmb_vlog (cmb_t c, const char *tag, const char *fmt, va_list ap)
         goto error;
     if (_json_object_add_string (o, "tag", tag) < 0)
         goto error;
+    if (src && strlen (src) > 0) {
+        if (_json_object_add_string (o, "source", src) < 0)
+            goto error;
+    }
     if (cmb_msg_send_fd (c->fd, o, "log.msg") < 0)
         goto error;
     free (str);
@@ -507,13 +512,13 @@ error:
     return -1;
 }
 
-int cmb_log (cmb_t c, const char *tag, const char *fmt, ...)
+int cmb_log (cmb_t c, const char *tag, const char *src, const char *fmt, ...)
 {
     va_list ap;
     int rc;
 
     va_start (ap, fmt);
-    rc = _cmb_vlog (c, tag, fmt, ap);
+    rc = cmb_vlog (c, tag, src, fmt, ap);
     va_end (ap);
     return rc;
 }
