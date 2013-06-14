@@ -156,6 +156,8 @@ static void _recv_log_msg (plugin_ctx_t *p, zmsg_t **zmsg)
         json_object_object_add (o, "source", no);
     }
 
+    /* FIXME: reduction */
+
     /* forward upstream */
     if (p->conf->rank != 0)
         cmb_msg_send_rt (p->zs_req, o, "log.msg");      

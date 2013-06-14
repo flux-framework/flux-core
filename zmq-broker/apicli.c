@@ -482,6 +482,11 @@ int cmb_vlog (cmb_t c, const char *tag, const char *src,
 {
     json_object *o = NULL;
     char *str = NULL;
+    struct timeval tv;
+    char tbuf[64];
+
+    xgettimeofday (&tv, NULL);
+    snprintf (tbuf, sizeof (tbuf), "%lu.%lu", tv.tv_sec, tv.tv_usec);
    
     if (vasprintf (&str, fmt, ap) < 0) {
         errno = ENOMEM;
@@ -499,6 +504,8 @@ int cmb_vlog (cmb_t c, const char *tag, const char *src,
         if (_json_object_add_string (o, "source", src) < 0)
             goto error;
     }
+    if (_json_object_add_string (o, "time", tbuf) < 0)
+        goto error;
     if (cmb_msg_send_fd (c->fd, o, "log.msg") < 0)
         goto error;
     free (str);
@@ -559,11 +566,13 @@ error:
     return -1;
 }
 
-char *cmb_log_recv (cmb_t c, char **tagp, char **srcp)
+char *cmb_log_recv (cmb_t c, char **tagp, struct timeval *tvp, char **srcp)
 {
     json_object *o = NULL;
-    const char *s, *t, *ss;
+    const char *s, *t, *ss, *tm;
     char *str = NULL, *tag = NULL, *src = NULL;
+    char *endptr;
+    struct timeval tv;
 
     if (cmb_msg_recv_fd (c->fd, NULL, &o, NULL, NULL, 0) < 0)
         goto error;
@@ -573,6 +582,10 @@ char *cmb_log_recv (cmb_t c, char **tagp, char **srcp)
         goto error;
     if (_json_object_get_string (o, "source", &ss) < 0)
         goto error;
+    if (_json_object_get_string (o, "time", &tm) < 0)
+        goto error;
+    tv.tv_sec = strtoul (tm, &endptr, 10);
+    tv.tv_usec = *endptr ? strtoul (endptr + 1, NULL, 10) : 0;
     if (!(str = strdup (s))) {
         errno = ENOMEM;
         goto error;
@@ -590,6 +603,8 @@ char *cmb_log_recv (cmb_t c, char **tagp, char **srcp)
         *tagp = tag;
     if (srcp)
         *srcp = src;
+    if (tvp)
+        *tvp = tv;
     return str;
 error:
     if (o)

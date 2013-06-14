@@ -307,10 +307,14 @@ int main (int argc, char *argv[])
             }
             case 'W': {
                 char *s, *t, *ss;
+                struct timeval tv, start, rel;
+                xgettimeofday (&start, NULL);
                 if (cmb_log_subscribe (c, optarg) < 0)
                     err_exit ("cmb_log_subscribe");
-                while ((s = cmb_log_recv (c, &t, &ss))) {
-                    msg ("%s[%s]: %s", t, ss, s);
+                while ((s = cmb_log_recv (c, &t, &tv, &ss))) {
+                    timersub (&tv, &start, &rel);
+                    fprintf (stderr, "[%-.6lu.%-.6lu] %s[%s]: %s\n",
+                             rel.tv_sec, rel.tv_usec, t, ss, s);
                     free (s);
                     free (t);
                 }

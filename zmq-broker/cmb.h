@@ -34,7 +34,7 @@ int cmb_log (cmb_t c, const char *tag, const char *src, const char *fmt, ...)
     __attribute__ ((format (printf, 4, 5)));
 int cmb_log_subscribe (cmb_t c, const char *sub);
 int cmb_log_unsubscribe (cmb_t c, const char *sub);
-char *cmb_log_recv (cmb_t c, char **tagp, char **fromp);
+char *cmb_log_recv (cmb_t c, char **tagp, struct timeval *tvp, char **fromp);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
