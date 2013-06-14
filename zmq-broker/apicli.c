@@ -477,7 +477,7 @@ error:
     return -1; 
 }
 
-static int _cmb_vlog (cmb_t c, const char *fmt, va_list ap)
+static int _cmb_vlog (cmb_t c, const char *tag, const char *fmt, va_list ap)
 {
     json_object *o = NULL;
     char *str = NULL;
@@ -492,6 +492,8 @@ static int _cmb_vlog (cmb_t c, const char *fmt, va_list ap)
     }
     if (_json_object_add_string (o, "message", str) < 0)
         goto error;
+    if (_json_object_add_string (o, "tag", tag) < 0)
+        goto error;
     if (cmb_msg_send_fd (c->fd, o, "log.msg") < 0)
         goto error;
     free (str);
@@ -505,15 +507,95 @@ error:
     return -1;
 }
 
-int cmb_log (cmb_t c, const char *fmt, ...)
+int cmb_log (cmb_t c, const char *tag, const char *fmt, ...)
 {
     va_list ap;
     int rc;
 
     va_start (ap, fmt);
-    rc = _cmb_vlog (c, fmt, ap);
+    rc = _cmb_vlog (c, tag, fmt, ap);
     va_end (ap);
     return rc;
+}
+
+int cmb_log_subscribe (cmb_t c, const char *sub)
+{
+    json_object *o = NULL;
+
+    if (!(o = json_object_new_object ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (cmb_msg_send_fd (c->fd, o, "log.subscribe.%s", sub) < 0)
+        goto error;
+    json_object_put (o);
+    return 0;
+error:
+    if (o)
+        json_object_put (o);
+    return -1;
+}
+
+int cmb_log_unsubscribe (cmb_t c, const char *sub)
+{
+    json_object *o = NULL;
+
+    if (!(o = json_object_new_object ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (cmb_msg_send_fd (c->fd, o, "log.unsubscribe.%s", sub) < 0)
+        goto error;
+    json_object_put (o);
+    return 0;
+error:
+    if (o)
+        json_object_put (o);
+    return -1;
+}
+
+char *cmb_log_recv (cmb_t c, char **tagp, char **srcp)
+{
+    json_object *o = NULL;
+    const char *s, *t, *ss;
+    char *str = NULL, *tag = NULL, *src = NULL;
+
+    if (cmb_msg_recv_fd (c->fd, NULL, &o, NULL, NULL, 0) < 0)
+        goto error;
+    if (_json_object_get_string (o, "message", &s) < 0)
+        goto error;
+    if (_json_object_get_string (o, "tag", &t) < 0)
+        goto error;
+    if (_json_object_get_string (o, "source", &ss) < 0)
+        goto error;
+    if (!(str = strdup (s))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (tagp && !(tag = strdup (t))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (srcp && !(src = strdup (ss))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    json_object_put (o);
+    if (tagp)
+        *tagp = tag;
+    if (srcp)
+        *srcp = src;
+    return str;
+error:
+    if (o)
+        json_object_put (o);
+    if (str)
+        free (str);
+    if (tag)
+        free (tag);
+    if (src)
+        free (src);
+    return NULL;
 }
 
 int cmb_kvs_commit (cmb_t c, int *ep, int *pp)

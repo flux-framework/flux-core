@@ -7,7 +7,7 @@
  * Activity is orchestrated by the event.sched.trigger.<epoch>
  * multicast message, which marks time in the session.  The <epoch> starts
  * with 1 and increases monotonically.  When event.sched.trigger is received,
- * we send a live.hello.<node>.<epoch> message to our parent.
+ * we send a live.hello.<node> message to our parent.
  *
  * Nodes are only responsible for monitoring their direct children, if any.
  * The state of children includes the epoch in which a live.hello message
