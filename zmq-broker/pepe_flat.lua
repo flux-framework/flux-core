@@ -16,7 +16,9 @@ end
 local h = hostlist.new (pepe.nodelist)
 local eventuri = "epgm://eth0;239.192.1.1:5555"
 local treeinuri = "tcp://*:5556"
+local treeinuri2 = "tcp://*:5557"
 local treeouturi = "tcp://" ..  h[1] .. ":5556"
+local treeouturi2 = "tcp://" ..  h[1] .. ":5557"
 local child_opt = tree.k_ary_children (pepe.rank, #h - 1, #h)
 if string.len (child_opt) > 0 then
     child_opt = " --children=" .. child_opt
@@ -26,6 +28,7 @@ if pepe.rank == 0 then
     pepe.run ("echo bind 127.0.0.1 | /usr/sbin/redis-server -")
     pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
 		.. " --tree-in-uri='" .. treeinuri .. "'"
+		.. " --tree-in-uri2='" .. treeinuri2 .. "'"
 		.. " --redis-server=localhost"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
@@ -33,7 +36,7 @@ if pepe.rank == 0 then
 		.. child_opt)
 else
     pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
-		.. " --parent='0," .. treeouturi .. "'"
+		.. " --parent='0," .. treeouturi .. "," .. treeouturi2 .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --plugins=api,barrier,live,log"
 		.. " --size=" .. #h)

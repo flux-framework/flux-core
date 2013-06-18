@@ -16,6 +16,7 @@ end
 local h = hostlist.new (pepe.nodelist)
 local eventuri = "epgm://eth0;239.192.1.1:5555"
 local treeinuri = "tcp://*:5556"
+local treeinuri2 = "tcp://*:5557"
 local child_opt = tree.k_ary_children (pepe.rank, 3, #h)
 if string.len (child_opt) > 0 then
     child_opt = " --children=" .. child_opt
@@ -25,30 +26,38 @@ if pepe.rank == 0 then
     pepe.run ("echo bind 127.0.0.1 | /usr/sbin/redis-server -")
     pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
 		.. " --tree-in-uri='" .. treeinuri .. "'"
+		.. " --tree-in-uri2='" .. treeinuri2 .. "'"
 		.. " --redis-server=localhost"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
 		.. " --plugins=api,barrier,live,log,kvs,sync"
 		.. child_opt)
 elseif pepe.rank == 1 then
-    local p = tree.k_ary_parent (pepe.rank, 3)
-    local parent = p .. ",tcp://" ..  h[p + 1] .. ":5556"
+    local parent_rank = tree.k_ary_parent (pepe.rank, 3)
+    local treeouturi = "tcp://" ..  h[parent_rank + 1] .. ":5556"
+    local treeouturi2 = "tcp://" ..  h[parent_rank + 1] .. ":5557"
     pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
 		.. " --tree-in-uri='" .. treeinuri .. "'"
-		.. " --parent='" .. parent .. "'"
+		.. " --tree-in-uri2='" .. treeinuri2 .. "'"
+		.. " --parent='" .. parent_rank .. treeouturi .. "," .. treeouturi2 .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
 		.. " --plugins=api,barrier,live,log"
 		.. child_opt)
 else
-    local p = tree.k_ary_parent (pepe.rank, 3)
-    local p2 = tree.k_ary_parent2 (pepe.rank, 3)
-    local parent = p .. ",tcp://" ..  h[p + 1] .. ":5556"
-    local parent2 = p2 .. ",tcp://" ..  h[p2 + 1] .. ":5556"
+    local parent_rank = tree.k_ary_parent (pepe.rank, 3)
+    local treeouturi = "tcp://" ..  h[parent_rank + 1] .. ":5556"
+    local treeouturi2 = "tcp://" ..  h[parent_rank + 1] .. ":5557"
+
+    local parent_rank_fail = tree.k_ary_parent2 (pepe.rank, 3)
+    local treeouturi_fail = "tcp://" ..  h[parent_rank_fail + 1] .. ":5556"
+    local treeouturi2_fail = "tcp://" ..  h[parent_rank_fail + 1] .. ":5557"
+
     pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
 		.. " --tree-in-uri='" .. treeinuri .. "'"
-		.. " --parent='" .. parent .. "'"
-		.. " --parent='" .. parent2 .. "'"
+		.. " --tree-in-uri2='" .. treeinuri2 .. "'"
+		.. " --parent='" .. parent_rank "," .. treeouturi .. "," .. treeouturi2 .. "'"
+		.. " --parent='" .. parent_rank_fail "," .. treeouturi_fail .. "," .. treeouturi2_fail .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
 		.. " --plugins=api,barrier,live,log"

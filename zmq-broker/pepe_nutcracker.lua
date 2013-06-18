@@ -1,3 +1,6 @@
+-- FIXME: this test has not been repeated and so the script
+-- needs major updating
+
 local hostlist = require ("hostlist")
 local tree = require ("tree")
 

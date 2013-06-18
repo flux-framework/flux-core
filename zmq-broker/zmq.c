@@ -115,6 +115,40 @@ error:
     return -1;
 }
 
+/* Wrappers for "backwards" dealer-router usage.
+ */
+
+void zmsg_send_router_req (zmsg_t **zmsg, void *sock, char *addr, char *gw)
+{
+    zframe_t *zf;
+
+    if (!(zf = zframe_new (addr, strlen (addr))))
+        oom ();
+    if (zmsg_push (*zmsg, zf) < 0) /* push local addr for reply path */
+        oom ();
+    if (!(zf = zframe_new (gw, strlen (gw))))
+        oom ();
+    if (zmsg_push (*zmsg, zf) < 0) /* push gw addr for routing socket */
+        oom ();
+    zmsg_send (zmsg, sock);
+}
+
+zmsg_t *zmsg_recv_router_rep (void *sock)
+{
+    zmsg_t *zmsg;
+    zframe_t *zf;
+
+    zmsg = zmsg_recv (sock);
+    if (zmsg) {     
+        zf = zmsg_pop (zmsg);
+        if (zf)
+            zframe_destroy (&zf);
+        zf = zmsg_pop (zmsg);
+        if (zf)
+            zframe_destroy (&zf);
+    }
+    return zmsg;
+}
 
 /**
  ** cmb messages
@@ -385,10 +419,10 @@ error:
     return -1;
 }
 
-/* If tag has an address prepended (N!tag), parse and return it.
+/* If request tag has an address prepended (N!tag), parse and return it.
  * Else return -1.
  */
-int cmb_msg_tag_addr (zmsg_t *zmsg)
+int cmb_msg_req_rank (zmsg_t *zmsg)
 {
     zframe_t *zf = _tag_frame (zmsg);
     char *ztag;
@@ -402,6 +436,28 @@ int cmb_msg_tag_addr (zmsg_t *zmsg)
         rank = strtoul (ztag, NULL, 10);
     free (ztag);
 done:
+    return rank;
+}
+
+/* If reply envelope first frame is a numeric address, return it.
+ * Else return -1.
+ */
+int cmb_msg_rep_rank (zmsg_t *zmsg)
+{
+    zframe_t *zf = zmsg_first (zmsg);
+    int rank = -1;
+    char *endptr, *rankstr = NULL;
+
+    if (!zf)
+        goto done;
+    if (!(rankstr = zframe_strdup (zf)))
+        oom ();
+    rank = strtoul (rankstr, &endptr, 10);
+    if (*rankstr == '\0' || *endptr != '\0')
+        rank = -1; 
+done:
+    if (rankstr)
+        free (rankstr);
     return rank;
 }
 

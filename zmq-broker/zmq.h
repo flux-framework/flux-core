@@ -2,15 +2,12 @@ int  zpoll (zmq_pollitem_t *items, int nitems, long timeout);
 void zconnect (zctx_t *zctx, void **sp, int type, char *uri, int hwm, char *id);
 void zbind (zctx_t *zctx, void **sp, int type, char *uri, int hwm);
 
-/* Like zmsg_recv/zmsg_send but for a SOCK_SEQPACKET socket */
 zmsg_t *zmsg_recv_fd (int fd, int flags);
 int zmsg_send_fd (int fd, zmsg_t **msg);
 
-/* CMB "protocol" based on multipart messages (zmsg_t):
- * always a tag part;
- * then, sometimes a JSON part;
- * then (only if there is a JSON part), sometimes an opaque part.
- */
+void zmsg_send_router_req (zmsg_t **zmsg, void *sock, char *addr, char *gw);
+zmsg_t *zmsg_recv_router_rep (void *sock);
+
 int cmb_msg_decode (zmsg_t *msg, char **tagp, json_object **op,
                     void **datap, int *lenp);
 zmsg_t *cmb_msg_encode (char *tag, json_object *o, void *data, int len);
@@ -41,7 +38,8 @@ bool cmb_msg_match (zmsg_t *msg, const char *tag);
 bool cmb_msg_match_substr (zmsg_t *msg, const char *tag, char **restp);
 bool cmb_msg_match_sender (zmsg_t *zmsg, const char *sender);
 
-int cmb_msg_tag_addr (zmsg_t *zmsg);
+int cmb_msg_req_rank (zmsg_t *zmsg);
+int cmb_msg_rep_rank (zmsg_t *zmsg);
 
 char *cmb_msg_sender (zmsg_t *zmsg);
 char *cmb_msg_tag (zmsg_t *zmsg, bool shorten);

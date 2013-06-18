@@ -22,7 +22,8 @@ confpath="./pepe_${conf}.lua"
 test -n "$nnodes" || usage
 test -f "$confpath" || usage
 
-
-salloc -N$nnodes srun -N$nnodes -n$nnodes --pty $pepe -c $confpath $cmd
+ulimit -c unlimited
+salloc -N$nnodes srun --propagate=CORE \
+                      -N$nnodes -n$nnodes --pty $pepe -c $confpath $cmd
 
 # vi:tabstop=4 shiftwidth=4 expandtab
