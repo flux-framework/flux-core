@@ -24,15 +24,29 @@ typedef struct {
     char *plugins;
 } conf_t;
 
+
+/* (dealer)              (dealer)
+ +-----------------------------------------------------------------+
+ | upreq_out             dnreq_in                                  |
+ |                                                                 |
+ |                                                                 |
+ |                                                                 |
+ |                                                                 |
+ | upreq_in              dnreq_out                                 |
+ +-----------------------------------------------------------------+
+  (router)               (router)
+
+*/
+
 typedef struct {
     zctx_t *zctx;
     void *zs_eventout;
     void *zs_eventin;
-    void *zs_upreq;
+    void *zs_upreq_out;
     void *zs_snoop;
     void *zs_plout_event;
     void *zs_plin;
-    void *zs_router;
+    void *zs_upreq_in;
     void *zs_plin_event;
     void *zs_plin_tree;
     int parent_cur;

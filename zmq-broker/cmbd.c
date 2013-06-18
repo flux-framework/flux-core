@@ -164,7 +164,7 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
 
     /* broker side of plugin sockets */
     /* N.B. each plugin has a private zs_plout */
-    zbind (zctx, &srv->zs_router,      ZMQ_ROUTER, ROUTER_URI, -1);
+    zbind (zctx, &srv->zs_upreq_in,    ZMQ_ROUTER, ROUTER_URI, -1);
     zbind (zctx, &srv->zs_plin,        ZMQ_PULL, PLIN_URI,        -1);
     zbind (zctx, &srv->zs_plout_event, ZMQ_PUB,  PLOUT_EVENT_URI, -1);
     zbind (zctx, &srv->zs_plin_event,  ZMQ_PULL, PLIN_EVENT_URI,  -1);
@@ -180,11 +180,11 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
     if (conf->parent_len > 0) {
         char id[16];
         snprintf (id, sizeof (id), "%d", conf->rank);
-        zconnect (zctx, &srv->zs_upreq, ZMQ_DEALER,
+        zconnect (zctx, &srv->zs_upreq_out, ZMQ_DEALER,
                   conf->parent[srv->parent_cur].treeout_uri, -1, id);
     }
     if (conf->treein_uri) {
-        if (zsocket_bind (srv->zs_router, "%s", conf->treein_uri) < 0)
+        if (zsocket_bind (srv->zs_upreq_in, "%s", conf->treein_uri) < 0)
             err_exit ("zsocket_bind: %s", conf->treein_uri);
     }
 
@@ -202,14 +202,14 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
 
     zhash_destroy (&srv->route);
 
-    zsocket_destroy (srv->zctx, srv->zs_router);
+    zsocket_destroy (srv->zctx, srv->zs_upreq_in);
     zsocket_destroy (srv->zctx, srv->zs_plin);
     zsocket_destroy (srv->zctx, srv->zs_plout_event);
     zsocket_destroy (srv->zctx, srv->zs_plin_event);
     zsocket_destroy (srv->zctx, srv->zs_snoop);
 
-    if (srv->zs_upreq)
-        zsocket_destroy (srv->zctx, srv->zs_upreq);
+    if (srv->zs_upreq_out)
+        zsocket_destroy (srv->zctx, srv->zs_upreq_out);
     if (srv->zs_eventin)
         zsocket_destroy (srv->zctx, srv->zs_eventin);
     if (srv->zs_eventout)
@@ -254,10 +254,10 @@ static void _cmb_message (conf_t *conf, server_t *srv, zmsg_t **zmsg)
             if (conf->parent[i].rank == newrank)
                 break;
         if (i < conf->parent_len) {
-            if (zsocket_disconnect (srv->zs_upreq, "%s",
+            if (zsocket_disconnect (srv->zs_upreq_out, "%s",
                                 conf->parent[srv->parent_cur].treeout_uri) < 0)
                 err_exit ("zsocket_disconnect");
-            if (zsocket_connect (srv->zs_upreq, "%s",
+            if (zsocket_connect (srv->zs_upreq_out, "%s",
                                 conf->parent[i].treeout_uri) < 0)
                 err_exit ("zsocket_connect");
             srv->parent_cur = i;
@@ -319,7 +319,7 @@ static void _route_response (conf_t *conf, server_t *srv, void *sock)
         if (zmsg_send (&cpy, srv->zs_snoop) < 0)
             err_exit ("zmsg_send");
     } 
-    zmsg_send (&zmsg, srv->zs_router);
+    zmsg_send (&zmsg, srv->zs_upreq_in);
 }
 
 /* Request tag with address ("N!tag") where N is NOT my rank.
@@ -341,11 +341,11 @@ static void _route_remote_request (conf_t *conf, server_t *srv, zmsg_t **zmsg,
             oom ();
         if (zmsg_push (*zmsg, zf) < 0)
             oom ();
-        zmsg_send (zmsg, srv->zs_router);
-    } else if (srv->zs_upreq)
-        zmsg_send (zmsg, srv->zs_upreq);
+        zmsg_send (zmsg, srv->zs_upreq_in);
+    } else if (srv->zs_upreq_out)
+        zmsg_send (zmsg, srv->zs_upreq_out);
     else
-        cmb_msg_send_errnum (zmsg, srv->zs_router, ENOSYS, srv->zs_snoop);
+        cmb_msg_send_errnum (zmsg, srv->zs_upreq_in, ENOSYS, srv->zs_snoop);
 }
 
 /* Request tag with address ("N!tag") where N is my rank.
@@ -358,7 +358,7 @@ static void _route_local_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
     if (*zmsg)
         plugin_send (srv, conf, zmsg);
     if (*zmsg)
-        cmb_msg_send_errnum (zmsg, srv->zs_router, ENOSYS, srv->zs_snoop);
+        cmb_msg_send_errnum (zmsg, srv->zs_upreq_in, ENOSYS, srv->zs_snoop);
 }
 
 /* Request tag with no address ("tag").
@@ -371,17 +371,17 @@ static void _route_noaddr_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
     _cmb_message (conf, srv, zmsg);
     if (*zmsg)
         plugin_send (srv, conf, zmsg);
-    if (*zmsg && srv->zs_upreq)
-        zmsg_send (zmsg, srv->zs_upreq);
+    if (*zmsg && srv->zs_upreq_out)
+        zmsg_send (zmsg, srv->zs_upreq_out);
     if (*zmsg)
-        cmb_msg_send_errnum (zmsg, srv->zs_router, ENOSYS, srv->zs_snoop);
+        cmb_msg_send_errnum (zmsg, srv->zs_upreq_in, ENOSYS, srv->zs_snoop);
 }
 
 static void _route_request (conf_t *conf, server_t *srv)
 {
     zmsg_t *zmsg;
 
-    zmsg = zmsg_recv (srv->zs_router);
+    zmsg = zmsg_recv (srv->zs_upreq_in);
 
     /* feed snoop socket */
     if (zmsg) {
@@ -408,8 +408,8 @@ static void _route_request (conf_t *conf, server_t *srv)
 static void _cmb_poll (conf_t *conf, server_t *srv)
 {
     zmq_pollitem_t zpa[] = {
-{ .socket = srv->zs_router,     .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-{ .socket = srv->zs_upreq,      .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
+{ .socket = srv->zs_upreq_in,   .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
+{ .socket = srv->zs_upreq_out,  .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
 { .socket = srv->zs_plin,       .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
 { .socket = srv->zs_plin_event, .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
 { .socket = srv->zs_eventin,    .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
@@ -420,7 +420,7 @@ static void _cmb_poll (conf_t *conf, server_t *srv)
     if (zpa[0].revents & ZMQ_POLLIN) /* router */
         _route_request (conf, srv);
     if (zpa[1].revents & ZMQ_POLLIN) /* upreq (upstream responding to req) */
-        _route_response (conf, srv, srv->zs_upreq);
+        _route_response (conf, srv, srv->zs_upreq_out);
     if (zpa[2].revents & ZMQ_POLLIN) /* plin (plugin responding to req) */
         _route_response (conf, srv, srv->zs_plin);
 
