@@ -188,6 +188,9 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
             err_exit ("zsocket_bind: %s", conf->treein_uri);
     }
 
+    if (!(srv->route = zhash_new ()))
+        oom ();
+
     plugin_init (conf, srv);
 
     *srvp = srv;
@@ -196,6 +199,8 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
 static void _cmb_fini (conf_t *conf, server_t *srv)
 {
     plugin_fini (conf, srv);
+
+    zhash_destroy (&srv->route);
 
     zsocket_destroy (srv->zctx, srv->zs_router);
     zsocket_destroy (srv->zctx, srv->zs_plin);
@@ -213,6 +218,29 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
     zctx_destroy (&srv->zctx);
 
     free (srv);
+}
+
+static int _add_route (server_t *srv, int rank, int gw)
+{
+    route_t *rte = xzmalloc (sizeof (route_t));
+    char key[16];
+
+    rte->gw = gw;
+    snprintf (key, sizeof (key), "%d", rank);
+    if (zhash_insert (srv->route, key, rte) < 0) {
+        free (rte);
+        return -1;
+    }
+    zhash_freefn (srv->route, key, (zhash_free_fn *) free);
+    return 0;
+}
+
+static void _del_route (server_t *srv, int rank)
+{
+    char key[16];
+
+    snprintf (key, sizeof (key), "%d", rank);
+    zhash_delete (srv->route, key);
 }
 
 static void _cmb_message (conf_t *conf, server_t *srv, zmsg_t **zmsg)
@@ -235,6 +263,23 @@ static void _cmb_message (conf_t *conf, server_t *srv, zmsg_t **zmsg)
             srv->parent_cur = i;
         }    
         free (arg);
+        zmsg_destroy (zmsg);
+    } else if (cmb_msg_match_substr (*zmsg, "cmb.route.add.", &arg)) {
+        int rank = strtoul (arg, NULL, 10);
+        json_object *gw, *o = NULL;
+
+        if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) < 0) 
+            goto done;
+        if (!o || !(gw = json_object_object_get (o, "gw")))
+            goto done;
+        _add_route (srv, rank, json_object_get_int (gw));
+done:
+        if (o)
+            json_object_put (o);
+        zmsg_destroy (zmsg);
+    } else if (cmb_msg_match_substr (*zmsg, "cmb.route.delete.", &arg)) {
+        int rank = strtoul (arg, NULL, 10);
+        _del_route (srv, rank);
         zmsg_destroy (zmsg);
     }
 }
@@ -265,11 +310,10 @@ static void _route_event (conf_t *conf, void *src, void *d1, void *d2, char *s)
 static void _route_response (conf_t *conf, server_t *srv, void *sock)
 {
     zmsg_t *zmsg = zmsg_recv (sock);
-    zmsg_t *cpy;
 
     /* feed snoop socket */
     if (zmsg) {
-        cpy = zmsg_dup (zmsg);
+        zmsg_t *cpy = zmsg_dup (zmsg);
         if (!cpy)
             err_exit ("zmsg_dup");
         if (zmsg_send (&cpy, srv->zs_snoop) < 0)
@@ -278,27 +322,86 @@ static void _route_response (conf_t *conf, server_t *srv, void *sock)
     zmsg_send (&zmsg, srv->zs_router);
 }
 
+/* Request tag with address ("N!tag") where N is NOT my rank.
+ * Lookup route: if found, prepend next hop and send downstream, else upstream.
+ * If there is no upstream, NAK.
+ */
+static void _route_remote_request (conf_t *conf, server_t *srv, zmsg_t **zmsg,
+                                   int rank)
+{
+    char key[16];
+    route_t *rte;
+
+    snprintf (key, sizeof (key), "%d", rank);
+    rte = zhash_lookup (srv->route, key);
+
+    if (rte) {
+        zframe_t *zf = zframe_new (key, strlen (key));
+        if (!zf)
+            oom ();
+        if (zmsg_push (*zmsg, zf) < 0)
+            oom ();
+        zmsg_send (zmsg, srv->zs_router);
+    } else if (srv->zs_upreq)
+        zmsg_send (zmsg, srv->zs_upreq);
+    else
+        cmb_msg_send_errnum (zmsg, srv->zs_router, ENOSYS, srv->zs_snoop);
+}
+
+/* Request tag with address ("N!tag") where N is my rank.
+ * Try to send it to the to local cmb or plugin.
+ * If that doesn't work, NAK.
+ */
+static void _route_local_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
+{
+    _cmb_message (conf, srv, zmsg);
+    if (*zmsg)
+        plugin_send (srv, conf, zmsg);
+    if (*zmsg)
+        cmb_msg_send_errnum (zmsg, srv->zs_router, ENOSYS, srv->zs_snoop);
+}
+
+/* Request tag with no address ("tag").
+ * Try to send it to local cmb or plugin.
+ * If that doesn't work, send it upstream.
+ * If there is no upstream, NAK.
+ */
+static void _route_noaddr_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
+{
+    _cmb_message (conf, srv, zmsg);
+    if (*zmsg)
+        plugin_send (srv, conf, zmsg);
+    if (*zmsg && srv->zs_upreq)
+        zmsg_send (zmsg, srv->zs_upreq);
+    if (*zmsg)
+        cmb_msg_send_errnum (zmsg, srv->zs_router, ENOSYS, srv->zs_snoop);
+}
+
 static void _route_request (conf_t *conf, server_t *srv)
 {
-    zmsg_t *zmsg = zmsg_recv (srv->zs_router);
-    zmsg_t *cpy;
+    zmsg_t *zmsg;
+
+    zmsg = zmsg_recv (srv->zs_router);
 
     /* feed snoop socket */
     if (zmsg) {
-        cpy = zmsg_dup (zmsg);
+        zmsg_t *cpy = zmsg_dup (zmsg);
         if (!cpy)
             err_exit ("zmsg_dup");
         if (zmsg_send (&cpy, srv->zs_snoop) < 0)
             err_exit ("zmsg_send");
     }
-    if (zmsg)
-        _cmb_message (conf, srv, &zmsg);    /* internal? */
-    if (zmsg)
-        plugin_send (srv, conf, &zmsg);     /* plugin? */
-    if (zmsg && srv->zs_upreq) 
-        zmsg_send (&zmsg, srv->zs_upreq);   /* try upstream? */
-    if (zmsg)                               /* NAK */
-        cmb_msg_send_errnum (&zmsg, srv->zs_router, ENOSYS, srv->zs_snoop);
+
+    if (zmsg) {
+        int rank = cmb_msg_tag_addr (zmsg);
+
+        if (rank == conf->rank)
+            _route_local_request (conf, srv, &zmsg);
+        else if (rank == -1)
+            _route_noaddr_request (conf, srv, &zmsg);
+        else
+            _route_remote_request (conf, srv, &zmsg, rank);
+    }
     assert (zmsg == NULL);
 }
 

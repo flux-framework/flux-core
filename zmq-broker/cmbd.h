@@ -4,6 +4,10 @@ typedef struct {
 } parent_t;
 
 typedef struct {
+    int gw;
+} route_t;
+
+typedef struct {
     char *treein_uri;
     parent_t parent[2];
     int parent_len;
@@ -32,6 +36,7 @@ typedef struct {
     void *zs_plin_event;
     void *zs_plin_tree;
     int parent_cur;
+    zhash_t *route;
     zhash_t *plugins;
 } server_t;
 

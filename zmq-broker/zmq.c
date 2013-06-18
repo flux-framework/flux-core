@@ -385,27 +385,55 @@ error:
     return -1;
 }
 
-bool cmb_msg_match (zmsg_t *zmsg, const char *tag)
+/* If tag has an address prepended (N!tag), parse and return it.
+ * Else return -1.
+ */
+int cmb_msg_tag_addr (zmsg_t *zmsg)
 {
     zframe_t *zf = _tag_frame (zmsg);
+    char *ztag;
+    int rank = -1;
 
     if (!zf)
-        msg_exit ("cmb_msg_match: no tag in message");
-    return zframe_streq (zf, tag);
+        goto done;
+    if (!(ztag = zframe_strdup (zf)))
+        oom ();
+    if (strchr (ztag, '!'))
+        rank = strtoul (ztag, NULL, 10);
+    free (ztag);
+done:
+    return rank;
+}
+
+static char *_ztag_noaddr (zmsg_t *zmsg)
+{
+    zframe_t *zf = _tag_frame (zmsg);
+    char *p, *ztag;
+
+    if (!zf)
+        msg_exit ("_ztag_noaddr: no tag in message");
+    if (!(ztag = zframe_strdup (zf)))
+        oom ();
+    if ((p = strchr (ztag, '!')))
+        memmove (ztag, p + 1, strlen (ztag) - (p - ztag)); /* N.B. include \0 */
+    return ztag;
+}
+
+bool cmb_msg_match (zmsg_t *zmsg, const char *tag)
+{
+    char *ztag = _ztag_noaddr (zmsg);
+    bool match = !strcmp (ztag, tag);
+
+    free (ztag);
+    return match;
 }
 
 bool cmb_msg_match_substr (zmsg_t *zmsg, const char *tag, char **restp)
 {
+    char *ztag = _ztag_noaddr (zmsg);
     int taglen = strlen (tag);
-    zframe_t *zf = _tag_frame (zmsg);
-    char *ztag;
-    int ztaglen;
+    int ztaglen = strlen (ztag);
 
-    if (!zf)
-        msg_exit ("cmb_msg_match: no tag in message");
-    if (!(ztag = zframe_strdup (zf)))
-        oom ();
-    ztaglen = strlen (ztag); 
     if (ztaglen >= taglen && strncmp (tag, ztag, taglen) == 0) {
         if (restp) {
             memmove (ztag, ztag + taglen, ztaglen - taglen + 1);

@@ -308,6 +308,7 @@ int main (int argc, char *argv[])
             case 'W': {
                 char *s, *t, *ss;
                 struct timeval tv, start, rel;
+
                 xgettimeofday (&start, NULL);
                 if (cmb_log_subscribe (c, optarg) < 0)
                     err_exit ("cmb_log_subscribe");
