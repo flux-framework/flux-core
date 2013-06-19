@@ -15,7 +15,7 @@
 #include "log.h"
 #include "util.h"
 
-#define OPTIONS "p:s:b:k:SK:Ct:P:d:fF:n:lx:e:TL:W:"
+#define OPTIONS "p:s:b:k:SK:Ct:P:d:fF:n:lx:e:TL:W:r:R:"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -36,6 +36,8 @@ static const struct option longopts[] = {
     {"snoop",      no_argument,        0, 'T'},
     {"log",        required_argument,  0, 'L'},
     {"log-watch",  required_argument,  0, 'W'},
+    {"route-add",  required_argument,  0, 'r'},
+    {"route-del",  required_argument,  0, 'R'},
     {0, 0, 0, 0},
 };
 
@@ -61,6 +63,8 @@ static void usage (void)
 "  -l,--live-query        get list of up nodes\n"
 "  -L,--log MSG           log MSG\n"
 "  -W,--log-watch tag     watch logs for messages matching tag\n"
+"  -r,--route-add dst:gw  add local route to dst via gw\n"
+"  -R,--route-del dst     delete local route to dst\n"
 );
     exit (1);
 }
@@ -319,6 +323,23 @@ int main (int argc, char *argv[])
                     free (s);
                     free (t);
                 }
+                break;
+            }
+            case 'r': { /* --route-add dst:gw */
+                int rank, gw;
+                char *endptr;
+                rank = strtoul (optarg, &endptr, 10);
+                if (*endptr++ == '\0')
+                    usage ();
+                gw = strtoul (endptr, NULL, 10);
+                if (cmb_route_add (c, rank, gw) < 0)
+                    err ("cmb_route_add %d via %d", rank, gw);
+                break;
+            }
+            case 'R': { /* --route-del dst */
+                int rank = strtoul (optarg, NULL, 10);
+                if (cmb_route_del (c, rank) < 0)
+                    err ("cmb_route_del %d", rank);
                 break;
             }
             default:

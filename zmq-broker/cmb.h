@@ -36,6 +36,9 @@ int cmb_log_subscribe (cmb_t c, const char *sub);
 int cmb_log_unsubscribe (cmb_t c, const char *sub);
 char *cmb_log_recv (cmb_t c, char **tagp, struct timeval *tvp, char **fromp);
 
+int cmb_route_add (cmb_t c, int rank, int gw);
+int cmb_route_del (cmb_t c, int rank);
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

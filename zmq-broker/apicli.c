@@ -658,6 +658,35 @@ error:
     return -1;
 }
 
+int cmb_route_add (cmb_t c, int rank, int gw)
+{
+    json_object *o = NULL;
+
+    if (!(o = json_object_new_object ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (_json_object_add_int (o, "gw", gw) < 0)
+        goto error;
+    if (cmb_msg_send_fd (c->fd, o, "cmb.route.add.%d", rank) < 0)
+        goto error;
+    json_object_put (o);
+    return 0;
+error:
+    if (o)
+        json_object_put (o);
+    return -1;
+}
+
+int cmb_route_del (cmb_t c, int rank)
+{
+    if (cmb_msg_send_fd (c->fd, NULL, "cmb.route.del.%d", rank) < 0)
+        goto error;
+    return 0;
+error:
+    return -1;
+}
+
 cmb_t cmb_init (void)
 {
     cmb_t c = NULL;
