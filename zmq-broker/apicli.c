@@ -679,10 +679,19 @@ error:
 
 int cmb_route_del (cmb_t c, int rank)
 {
-    if (cmb_msg_send_fd (c->fd, NULL, "cmb.route.del.%d", rank) < 0)
+    json_object *o = NULL;
+
+    if (!(o = json_object_new_object ())) {
+        errno = ENOMEM;
         goto error;
+    }
+    if (cmb_msg_send_fd (c->fd, o, "cmb.route.del.%d", rank) < 0)
+        goto error;
+    json_object_put (o);
     return 0;
 error:
+    if (o)
+        json_object_put (o);
     return -1;
 }
 

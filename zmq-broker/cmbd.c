@@ -322,20 +322,17 @@ static void _cmb_message (conf_t *conf, server_t *srv, zmsg_t **zmsg)
         int rank = strtoul (arg, NULL, 10);
         json_object *gw, *o = NULL;
 
-        if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) < 0) 
-            goto done;
-        if (!o || !(gw = json_object_object_get (o, "gw")))
-            goto done;
-        _add_route (srv, rank, json_object_get_int (gw));
-done:
+        if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) == 0
+                    && o != NULL && (gw = json_object_object_get (o, "gw")))
+            _add_route (srv, rank, json_object_get_int (gw));
         if (o)
             json_object_put (o);
+        free (arg);
         zmsg_destroy (zmsg);
-    } else if (cmb_msg_match_substr (*zmsg, "cmb.route.delete.", &arg)) {
-        int rank = strtoul (arg, NULL, 10);
-        _del_route (srv, rank);
+    } else if (cmb_msg_match_substr (*zmsg, "cmb.route.del.", &arg)) {
+        _del_route (srv, strtoul (arg, NULL, 10));
         zmsg_destroy (zmsg);
-    } else if (cmb_msg_match_substr (*zmsg, "cmb.route.query", &arg)) {
+    } else if (cmb_msg_match (*zmsg, "cmb.route.query")) {
         json_object *ao, *o = NULL;
         int rank;
         char key[16];
