@@ -657,7 +657,7 @@ error:
     return -1;
 }
 
-int cmb_route_add (cmb_t c, int rank, int gw)
+int cmb_route_add (cmb_t c, char *dst, char *gw)
 {
     json_object *o = NULL;
 
@@ -665,9 +665,9 @@ int cmb_route_add (cmb_t c, int rank, int gw)
         errno = ENOMEM;
         goto error;
     }
-    if (_json_object_add_int (o, "gw", gw) < 0)
+    if (_json_object_add_string (o, "gw", gw) < 0)
         goto error;
-    if (cmb_msg_send_fd (c->fd, o, "cmb.route.add.%d", rank) < 0)
+    if (cmb_msg_send_fd (c->fd, o, "cmb.route.add.%s", dst) < 0)
         goto error;
     json_object_put (o);
     return 0;
@@ -677,7 +677,7 @@ error:
     return -1;
 }
 
-int cmb_route_del (cmb_t c, int rank)
+int cmb_route_del (cmb_t c, char *dst, char *gw)
 {
     json_object *o = NULL;
 
@@ -685,7 +685,9 @@ int cmb_route_del (cmb_t c, int rank)
         errno = ENOMEM;
         goto error;
     }
-    if (cmb_msg_send_fd (c->fd, o, "cmb.route.del.%d", rank) < 0)
+    if (_json_object_add_string (o, "gw", gw) < 0)
+        goto error;
+    if (cmb_msg_send_fd (c->fd, o, "cmb.route.del.%s", dst) < 0)
         goto error;
     json_object_put (o);
     return 0;

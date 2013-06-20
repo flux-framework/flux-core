@@ -5,7 +5,7 @@ typedef struct {
 } parent_t;
 
 typedef struct {
-    int gw;
+    char *gw;
 } route_t;
 
 typedef struct {

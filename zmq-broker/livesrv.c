@@ -87,23 +87,45 @@ static void _child_add (zhash_t *kids, int rank, int epoch, int parent)
     zhash_freefn (kids, key, free);
 }
 
-static void _route_add (plugin_ctx_t *p, int rank, int gw)
+static void _route_add (plugin_ctx_t *p, char *dst, char *gw)
 {
     json_object *no, *o = NULL;
 
     if (!(o = json_object_new_object ()))
         oom ();
-    if (!(no = json_object_new_int (gw)))
+    if (!(no = json_object_new_string (gw)))
         oom ();
     json_object_object_add (o, "gw", no);
-    cmb_msg_send_rt (p->zs_req, o, "cmb.route.add.%d", rank);
+    cmb_msg_send_rt (p->zs_req, o, "cmb.route.add.%s", dst);
     json_object_put (o);
 }
 
-/* FIXME: racy during reparenting? */
-static void _route_del (plugin_ctx_t *p, int rank)
+static void _route_del (plugin_ctx_t *p, char *dst, char *gw)
 {
-    cmb_msg_send_rt (p->zs_req, NULL, "cmb.route.del.%d", rank);
+    json_object *no, *o = NULL;
+
+    if (!(o = json_object_new_object ()))
+        oom ();
+    if (!(no = json_object_new_string (gw)))
+        oom ();
+    json_object_object_add (o, "gw", no);
+    cmb_msg_send_rt (p->zs_req, o, "cmb.route.del.%s", dst);
+}
+
+static void _route_add_rank (plugin_ctx_t *p, int dst_rank, int gw_rank)
+{
+    char dst[16], gw[16];
+    snprintf (dst, sizeof (dst), "%d", dst_rank);
+    snprintf (gw, sizeof (gw), "%d", gw_rank);
+    _route_add (p, dst, gw);
+}
+
+static void _route_del_rank (plugin_ctx_t *p, int dst_rank, int gw_rank)
+{
+    char dst[16], gw[16];
+    snprintf (dst, sizeof (dst), "%d", dst_rank);
+    snprintf (gw, sizeof (gw), "%d", gw_rank);
+    _route_del (p, dst, gw);
 }
 
 static child_t *_child_find_by_rank (zhash_t *kids, int rank)
@@ -217,7 +239,7 @@ static void _recv_live_hello (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         cp->epoch = epoch;
     } else {
         _child_add (ctx->kids, rank, parent, epoch);
-        _route_add (p, rank, rank);
+        _route_add_rank (p, rank, rank);
     }
 
     if (ctx->state[rank] == false) {
@@ -328,7 +350,7 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
                 ctx->state[cp->rank] = false;
             }
             _child_del (ctx->kids, cp->rank);
-            _route_del (p, cp->rank);
+            _route_del_rank (p, cp->rank, cp->rank);
         }
         zmsg_destroy (zmsg);
 
@@ -349,7 +371,7 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
             ctx->state[rank] = true;
             while ((cp = _child_find_by_parent (ctx->kids, rank))) {
                 _child_del (ctx->kids, cp->rank);
-                _route_del (p, cp->rank);
+                _route_del_rank (p, cp->rank, cp->rank);
             }
             if (p->conf->parent_len > 0 && p->conf->parent[0].rank == rank)
                 _reparent (p);
@@ -391,7 +413,7 @@ static void _init (plugin_ctx_t *p)
 
     for (i = 0; i < conf->children_len; i++) {
         _child_add (ctx->kids, conf->children[i], ctx->epoch, conf->rank);
-        _route_add (p, conf->children[i], conf->children[i]);
+        _route_add_rank (p, conf->children[i], conf->children[i]);
     }
 
     zsocket_set_subscribe (p->zs_in_event, "event.sched.trigger.");

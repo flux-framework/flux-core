@@ -328,20 +328,21 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'r': { /* --route-add dst:gw */
-                int rank, gw;
-                char *endptr;
-                rank = strtoul (optarg, &endptr, 10);
-                if (*endptr++ == '\0')
+                char *gw, *dst = xstrdup (optarg);
+                if (!(gw = strchr (dst, ':')))
                     usage ();
-                gw = strtoul (endptr, NULL, 10);
-                if (cmb_route_add (c, rank, gw) < 0)
-                    err ("cmb_route_add %d via %d", rank, gw);
+                *gw++ = '\0';
+                if (cmb_route_add (c, dst, gw) < 0)
+                    err ("cmb_route_add %s via %s", dst, gw);
                 break;
             }
             case 'R': { /* --route-del dst */
-                int rank = strtoul (optarg, NULL, 10);
-                if (cmb_route_del (c, rank) < 0)
-                    err ("cmb_route_del %d", rank);
+                char *gw, *dst = xstrdup (optarg);
+                if (!(gw = strchr (dst, ':')))
+                    usage ();
+                *gw++ = '\0';
+                if (cmb_route_del (c, dst, gw) < 0)
+                    err ("cmb_route_del %s via %s", dst, gw);
                 break;
             }
             case 'q': { /* --route-del dst */

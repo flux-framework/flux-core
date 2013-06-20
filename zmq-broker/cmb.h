@@ -70,8 +70,8 @@ char *cmb_log_recv (cmb_t c, char **tagp, struct timeval *tvp, char **fromp);
  * Add and del are fire and forget (no reply).
  * Query returns JSON string, caller must free.
  */
-int cmb_route_add (cmb_t c, int rank, int gw);
-int cmb_route_del (cmb_t c, int rank);
+int cmb_route_add (cmb_t c, char *dst, char *gw);
+int cmb_route_del (cmb_t c, char *dst, char *gw);
 char *cmb_route_query (cmb_t c);
 
 /*

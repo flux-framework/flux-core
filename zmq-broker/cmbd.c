@@ -248,27 +248,37 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
     free (srv);
 }
 
-static int _add_route (server_t *srv, int rank, int gw)
+static route_t *_route_create (const char *gw)
 {
     route_t *rte = xzmalloc (sizeof (route_t));
-    char key[16];
+    rte->gw = xstrdup (gw);
+    return rte;
+}
 
-    rte->gw = gw;
-    snprintf (key, sizeof (key), "%d", rank);
-    if (zhash_insert (srv->route, key, rte) < 0) {
-        free (rte);
+static void _free_route (route_t *rte)
+{
+    free (rte->gw);
+    free (rte);
+}
+
+static int _add_route (server_t *srv, const char *rank, const char *gw)
+{
+    route_t *rte = _route_create (gw);
+
+    if (zhash_insert (srv->route, rank, rte) < 0) {
+        _free_route (rte);
         return -1;
     }
-    zhash_freefn (srv->route, key, (zhash_free_fn *) free);
+    zhash_freefn (srv->route, rank, (zhash_free_fn *)_free_route);
     return 0;
 }
 
-static void _del_route (server_t *srv, int rank)
+static void _del_route (server_t *srv, const char *rank, const char *gw)
 {
-    char key[16];
+    route_t *rte = zhash_lookup (srv->route, rank);
 
-    snprintf (key, sizeof (key), "%d", rank);
-    zhash_delete (srv->route, key);
+    if (rte && !strcmp (rte->gw, gw))
+        zhash_delete (srv->route, rank);
 }
 
 static int _route_to_json (const char *rank, route_t *rte, json_object *o)
@@ -277,7 +287,7 @@ static int _route_to_json (const char *rank, route_t *rte, json_object *o)
 
     if (!(oo = json_object_new_object ()))
         oom ();
-    if (!(ro = json_object_new_int (rte->gw)))
+    if (!(ro = json_object_new_string (rte->gw)))
         oom ();
     json_object_object_add (oo, rank, ro);
     json_object_array_add (o, oo);
@@ -319,18 +329,21 @@ static void _cmb_message (conf_t *conf, server_t *srv, zmsg_t **zmsg)
         free (arg);
         zmsg_destroy (zmsg);
     } else if (cmb_msg_match_substr (*zmsg, "cmb.route.add.", &arg)) {
-        int rank = strtoul (arg, NULL, 10);
         json_object *gw, *o = NULL;
 
         if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) == 0
                     && o != NULL && (gw = json_object_object_get (o, "gw")))
-            _add_route (srv, rank, json_object_get_int (gw));
+            _add_route (srv, arg, json_object_get_string (gw));
         if (o)
             json_object_put (o);
         free (arg);
         zmsg_destroy (zmsg);
     } else if (cmb_msg_match_substr (*zmsg, "cmb.route.del.", &arg)) {
-        _del_route (srv, strtoul (arg, NULL, 10));
+        json_object *gw, *o = NULL;
+
+        if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) == 0
+                    && o != NULL && (gw = json_object_object_get (o, "gw")))
+            _del_route (srv, arg, json_object_get_string (gw));
         zmsg_destroy (zmsg);
     } else if (cmb_msg_match (*zmsg, "cmb.route.query")) {
         json_object *ao, *o = NULL;
@@ -388,16 +401,15 @@ static void _route_event (conf_t *conf, void *src, void *d1, void *d2)
 static void _route_request_remote (conf_t *conf, server_t *srv,
                                    zmsg_t **zmsg, int rank, bool upstream_ok)
 {
-    char dst[16], gw[16], loc[16];
+    char dst[16], loc[16];
     route_t *rte;
 
     snprintf (dst, sizeof (dst), "%d", rank);
     rte = zhash_lookup (srv->route, dst);
     if (rte) {
         snprintf (loc, sizeof (loc), "%d", conf->rank);
-        snprintf (gw, sizeof (gw), "%d", rte->gw);
         if (srv->zs_dnreq_out)
-            zmsg_send_router_req (zmsg, srv->zs_dnreq_out, loc, gw);
+            zmsg_send_router_req (zmsg, srv->zs_dnreq_out, loc, rte->gw);
     } else if (upstream_ok && srv->zs_upreq_out)
         zmsg_send (zmsg, srv->zs_upreq_out);
     /* if not sent, *zmsg will not be destroyed, fall through to NAK */
