@@ -15,6 +15,8 @@ CMBD_OBJS = cmbd.o zmq.o util.o log.o plugin.o \
 	apisrv.o syncsrv.o kvssrv.o barriersrv.o livesrv.o logsrv.o
 CMBUTIL_OBJS = cmbutil.o apicli.o util.o log.o zmq.o
 LIBPMI_OBJS = pmi.o apicli.o util.o log.o zmq.o
+OBJS = $(CMBD_OBJS) $(CMBUTIL_OBJS) $(LIBPMI_OBJS)
+INCLUDES = $(wildcard *.h)
 
 all: cmbd cmbutil libpmi.so.0 mpi_hello
 
@@ -77,5 +79,4 @@ xkeys:
 xinfo:
 	srun -l redis-cli -h 127.0.0.1 -p 7777 info|dshbak -c
 
-
-
+$(OBJS): $(INCLUDES)
