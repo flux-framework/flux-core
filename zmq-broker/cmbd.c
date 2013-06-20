@@ -248,10 +248,11 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
     free (srv);
 }
 
-static route_t *_route_create (const char *gw)
+static route_t *_route_create (const char *gw, int flags)
 {
     route_t *rte = xzmalloc (sizeof (route_t));
     rte->gw = xstrdup (gw);
+    rte->flags = flags;
     return rte;
 }
 
@@ -261,38 +262,60 @@ static void _free_route (route_t *rte)
     free (rte);
 }
 
-static int _add_route (server_t *srv, const char *rank, const char *gw)
+static int _add_route (server_t *srv, const char *dst, const char *gw,
+                       int flags)
 {
-    route_t *rte = _route_create (gw);
+    route_t *rte = _route_create (gw, flags);
 
-    if (zhash_insert (srv->route, rank, rte) < 0) {
+    if (zhash_insert (srv->route, dst, rte) < 0) {
         _free_route (rte);
         return -1;
     }
-    zhash_freefn (srv->route, rank, (zhash_free_fn *)_free_route);
+    zhash_freefn (srv->route, dst, (zhash_free_fn *)_free_route);
     return 0;
 }
 
-static void _del_route (server_t *srv, const char *rank, const char *gw)
+static void _del_route (server_t *srv, const char *dst, const char *gw)
 {
-    route_t *rte = zhash_lookup (srv->route, rank);
+    route_t *rte = zhash_lookup (srv->route, dst);
 
     if (rte && !strcmp (rte->gw, gw))
-        zhash_delete (srv->route, rank);
+        zhash_delete (srv->route, dst);
 }
 
-static int _route_to_json (const char *rank, route_t *rte, json_object *o)
+/* helper to build array of routes as a json object */
+static int _route_to_json_full (const char *dst, route_t *rte, json_object *o)
 {
-    json_object *oo, *ro;
+    json_object *oo, *dd, *go, *fo;
 
     if (!(oo = json_object_new_object ()))
         oom ();
-    if (!(ro = json_object_new_string (rte->gw)))
+    if (!(dd = json_object_new_string (dst)))
         oom ();
-    json_object_object_add (oo, rank, ro);
+    if (!(go = json_object_new_string (rte->gw)))
+        oom ();
+    if (!(fo = json_object_new_int (rte->flags)))
+        oom ();
+    json_object_object_add (oo, "dst", dd);
+    json_object_object_add (oo, "gw", dd);
+    json_object_object_add (oo, "flags", fo);
     json_object_array_add (o, oo);
     return 0;
 }
+#if 0
+/* helper to build array of known (public) destinations as a json object */
+static int _route_to_json (const char *dst, route_t *rte, json_object *o)
+{
+    json_object *dd;
+
+    if (!(rte->flags & ROUTE_FLAGS_PRIVATE)) {
+        if (!(dd = json_object_new_string (dst)))
+            oom ();
+        json_object_array_add (o, dd);
+    }
+    return 0;
+}
+#endif
 
 static void _cc_snoop (conf_t *conf, server_t *srv, zmsg_t *zmsg)
 {
@@ -308,8 +331,6 @@ static void _cc_snoop (conf_t *conf, server_t *srv, zmsg_t *zmsg)
 static void _cmb_message (conf_t *conf, server_t *srv, zmsg_t **zmsg)
 {
     char *arg;
-
-    /* FIXME: add replies to protocol */
 
     if (cmb_msg_match_substr (*zmsg, "cmb.reparent.", &arg)) {
         int i, newrank = strtoul (arg, NULL, 10);
@@ -333,7 +354,7 @@ static void _cmb_message (conf_t *conf, server_t *srv, zmsg_t **zmsg)
 
         if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) == 0
                     && o != NULL && (gw = json_object_object_get (o, "gw")))
-            _add_route (srv, arg, json_object_get_string (gw));
+            _add_route (srv, arg, json_object_get_string (gw), 0);
         if (o)
             json_object_put (o);
         free (arg);
@@ -354,7 +375,7 @@ static void _cmb_message (conf_t *conf, server_t *srv, zmsg_t **zmsg)
             oom ();
         if (!(ao = json_object_new_array ()))
             oom ();
-        zhash_foreach (srv->route, (zhash_foreach_fn *)_route_to_json, ao);
+        zhash_foreach (srv->route, (zhash_foreach_fn *)_route_to_json_full,ao);
         json_object_object_add (o, "route", ao);
         if (cmb_msg_rep_json (*zmsg, o) == 0) {
             /* FIXME: refactor */

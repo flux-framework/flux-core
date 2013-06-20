@@ -4,8 +4,12 @@ typedef struct {
     int rank;
 } parent_t;
 
+enum {
+    ROUTE_FLAGS_PRIVATE = 1,
+};
 typedef struct {
     char *gw;
+    int flags;
 } route_t;
 
 typedef struct {
