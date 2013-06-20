@@ -271,6 +271,19 @@ static void _del_route (server_t *srv, int rank)
     zhash_delete (srv->route, key);
 }
 
+static int _route_to_json (const char *rank, route_t *rte, json_object *o)
+{
+    json_object *oo, *ro;
+
+    if (!(oo = json_object_new_object ()))
+        oom ();
+    if (!(ro = json_object_new_int (rte->gw)))
+        oom ();
+    json_object_object_add (oo, rank, ro);
+    json_object_array_add (o, oo);
+    return 0;
+}
+
 static void _cc_snoop (conf_t *conf, server_t *srv, zmsg_t *zmsg)
 {
     if (zmsg) {
@@ -322,10 +335,34 @@ done:
         int rank = strtoul (arg, NULL, 10);
         _del_route (srv, rank);
         zmsg_destroy (zmsg);
+    } else if (cmb_msg_match_substr (*zmsg, "cmb.route.query", &arg)) {
+        json_object *ao, *o = NULL;
+        int rank;
+        char key[16];
+
+        if (!(o = json_object_new_object ()))
+            oom ();
+        if (!(ao = json_object_new_array ()))
+            oom ();
+        zhash_foreach (srv->route, (zhash_foreach_fn *)_route_to_json, ao);
+        json_object_object_add (o, "route", ao);
+        if (cmb_msg_rep_json (*zmsg, o) == 0) {
+            /* FIXME: refactor */
+            rank = cmb_msg_rep_rank (*zmsg);
+            snprintf (key, sizeof (key), "%d", rank);
+            if (rank == -1 || zhash_lookup (srv->route, key)) {
+                if (srv->zs_upreq_in)
+                    zmsg_send (zmsg, srv->zs_upreq_in);
+            } else if (srv->zs_dnreq_in)
+                zmsg_send (zmsg, srv->zs_dnreq_in);
+        }
+        json_object_put (o);
+        if (*zmsg)
+            zmsg_destroy (zmsg);
     }
 }
 
-static void _route_event (conf_t *conf, void *src, void *d1, void *d2, char *s)
+static void _route_event (conf_t *conf, void *src, void *d1, void *d2)
 {
     zmsg_t *m, *cpy;
 
@@ -530,15 +567,10 @@ static void _cmb_poll (conf_t *conf, server_t *srv)
         _route_dnreq_response (conf, srv);
     if (zpa[4].revents & ZMQ_POLLIN)
         _route_plin_response (conf, srv);
-
-    /* Events.
-     */
-    if (zpa[5].revents & ZMQ_POLLIN) /* plin_event (plugin sending event) */
-        _route_event (conf, srv->zs_plin_event, srv->zs_plout_event,
-                      srv->zs_eventout, "plin_event->plout_event,eventout");
-    if (zpa[6].revents & ZMQ_POLLIN) /* eventin (external event input) */
-        _route_event (conf, srv->zs_eventin, srv->zs_plout_event,
-                      NULL, "eventin->plout_event");
+    if (zpa[5].revents & ZMQ_POLLIN)
+        _route_event (conf, srv->zs_plin_event, srv->zs_plout_event, srv->zs_eventout);
+    if (zpa[6].revents & ZMQ_POLLIN)
+        _route_event (conf, srv->zs_eventin, srv->zs_plout_event, NULL);
 }
 
 /*

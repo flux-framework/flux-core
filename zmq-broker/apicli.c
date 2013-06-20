@@ -104,7 +104,6 @@ error:
         free (arr);
     return -1;
 }
-                                       
 
 static int _recvfd (int fd, int *fdp, char *name, int len)
 {
@@ -685,6 +684,39 @@ int cmb_route_del (cmb_t c, int rank)
     return 0;
 error:
     return -1;
+}
+
+/* FIXME: just return JSON string for now */
+char *cmb_route_query (cmb_t c)
+{
+    json_object *o = NULL;
+    char *cpy;
+
+    /* send request */
+    if (!(o = json_object_new_object ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (cmb_msg_send_fd (c->fd, o, "cmb.route.query") < 0)
+        goto error;
+    json_object_put (o);
+    o = NULL;
+
+    /* receive response */
+    if (cmb_msg_recv_fd (c->fd, NULL, &o, NULL, NULL, 0) < 0)
+        goto error;
+    cpy = strdup (json_object_get_string (o));
+    if (!cpy) {
+        errno = ENOMEM;
+        goto error;
+    }
+    json_object_put (o);
+    return cpy;
+error:
+    if (o)
+        json_object_put (o);
+    return NULL;
+    
 }
 
 cmb_t cmb_init (void)

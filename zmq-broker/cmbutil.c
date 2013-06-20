@@ -15,7 +15,7 @@
 #include "log.h"
 #include "util.h"
 
-#define OPTIONS "p:s:b:k:SK:Ct:P:d:fF:n:lx:e:TL:W:r:R:"
+#define OPTIONS "p:s:b:k:SK:Ct:P:d:fF:n:lx:e:TL:W:r:R:q"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -38,6 +38,7 @@ static const struct option longopts[] = {
     {"log-watch",  required_argument,  0, 'W'},
     {"route-add",  required_argument,  0, 'r'},
     {"route-del",  required_argument,  0, 'R'},
+    {"route-query",no_argument,        0, 'q'},
     {0, 0, 0, 0},
 };
 
@@ -65,6 +66,7 @@ static void usage (void)
 "  -W,--log-watch tag     watch logs for messages matching tag\n"
 "  -r,--route-add dst:gw  add local route to dst via gw\n"
 "  -R,--route-del dst     delete local route to dst\n"
+"  -q,--route-query       list routes in JSON format\n"
 );
     exit (1);
 }
@@ -340,6 +342,14 @@ int main (int argc, char *argv[])
                 int rank = strtoul (optarg, NULL, 10);
                 if (cmb_route_del (c, rank) < 0)
                     err ("cmb_route_del %d", rank);
+                break;
+            }
+            case 'q': { /* --route-del dst */
+                char *s = cmb_route_query (c);
+                if (!s)
+                    err ("cmb_route_query");
+                printf ("%s\n", s);
+                free (s);
                 break;
             }
             default:

@@ -38,6 +38,7 @@ char *cmb_log_recv (cmb_t c, char **tagp, struct timeval *tvp, char **fromp);
 
 int cmb_route_add (cmb_t c, int rank, int gw);
 int cmb_route_del (cmb_t c, int rank);
+char *cmb_route_query (cmb_t c);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
