@@ -40,14 +40,14 @@ static plugin_t plugins[] = {
 };
 const int plugins_len = sizeof (plugins)/sizeof (plugins[0]);
 
-/* pluginname.ping - return message to sender without change */
+/* <name>.ping - respond to ping request for this plugin */
 static void _plugin_ping(plugin_ctx_t *p, zmsg_t **zmsg)
 {
-    if (zmsg_send (zmsg, p->zs_out) < 0)
+    if (zmsg_send (zmsg, p->zs_dnreq) < 0)
         err ("%s: zmsg_send", __FUNCTION__);
 }
 
-/* pluginname.stats - return generic plugin statistics */
+/* <name>.stats - respond to stats request for this plugin */
 static void _plugin_stats (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     json_object *no, *o = NULL;
@@ -69,7 +69,7 @@ static void _plugin_stats (plugin_ctx_t *p, zmsg_t **zmsg)
         err ("%s: cmb_msg_rep_json", __FUNCTION__);
         goto done;
     }
-    if (zmsg_send (zmsg, p->zs_out) < 0) {
+    if (zmsg_send (zmsg, p->zs_dnreq) < 0) {
         err ("%s: zmsg_send", __FUNCTION__);
         goto done;
     }
@@ -84,9 +84,9 @@ done:
 static void _plugin_poll (plugin_ctx_t *p)
 {
     zmq_pollitem_t zpa[] = {
-{ .socket = p->zs_in,        .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
+{ .socket = p->zs_upreq,     .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
+{ .socket = p->zs_dnreq,     .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
 { .socket = p->zs_in_event,  .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-{ .socket = p->zs_req,       .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
 { .socket = p->zs_snoop,     .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
     };
     zmsg_t *zmsg;
@@ -127,22 +127,22 @@ static void _plugin_poll (plugin_ctx_t *p)
         }
 
         /* receive a message */
-        if (zpa[0].revents & ZMQ_POLLIN) {          /* request on 'in' */
-            zmsg = zmsg_recv (p->zs_in);
+        if (zpa[0].revents & ZMQ_POLLIN) {   /* response on 'upreq' */
+            zmsg = zmsg_recv (p->zs_upreq);
+            type = ZMSG_RESPONSE;
+            p->stats.rep_count++;
+        } else if (zpa[1].revents & ZMQ_POLLIN) {   /* request on 'dnreq' */
+            zmsg = zmsg_recv (p->zs_dnreq);
             if (!zmsg)
                 err ("zmsg_recv");
             type = ZMSG_REQUEST;
             p->stats.req_count++;
-        } else if (zpa[1].revents & ZMQ_POLLIN) {   /* event on 'in_event' */
+        } else if (zpa[2].revents & ZMQ_POLLIN) {   /* event on 'in_event' */
             zmsg = zmsg_recv (p->zs_in_event);
             if (!zmsg)
                 err ("zmsg_recv");
             type = ZMSG_EVENT;
             p->stats.event_count++;
-        } else if (zpa[2].revents & ZMQ_POLLIN) {   /* response on 'req' */
-            zmsg = zmsg_recv (p->zs_req);
-            type = ZMSG_RESPONSE;
-            p->stats.rep_count++;
         } else if (zpa[3].revents & ZMQ_POLLIN) {   /* debug on 'snoop' */
             zmsg = zmsg_recv (p->zs_snoop);
             type = ZMSG_SNOOP;
@@ -164,18 +164,14 @@ static void _plugin_poll (plugin_ctx_t *p)
 
         /* send ENOSYS response indicating plugin did not recognize tag */
         if (zmsg && type == ZMSG_REQUEST)
-            cmb_msg_send_errnum (&zmsg, p->zs_out, ENOSYS, NULL);
+            cmb_msg_send_errnum (&zmsg, p->zs_dnreq, ENOSYS, NULL);
 
         if (zmsg)
             zmsg_destroy (&zmsg);
-
-
-        if (zmsg)
-            zmsg_destroy (&zmsg);
-        assert (zmsg == NULL);
     }
 
     free (pingtag);
+    free (statstag);
 }
 
 static void *_plugin_thread (void *arg)
@@ -199,21 +195,18 @@ static void _plugin_destroy (void *arg)
     plugin_ctx_t *p = arg;
     int errnum;
 
+    cmb_route_del_internal (p->srv, p->plugin->name, p->plugin->name);
+
     /* FIXME: no mechanism to tell thread to exit yet */
     errnum = pthread_join (p->t, NULL);
     if (errnum)
         errn_exit (errnum, "pthread_join\n");
 
-    /* plugin side */
     zsocket_destroy (p->srv->zctx, p->zs_snoop);
     zsocket_destroy (p->srv->zctx, p->zs_out_event);
     zsocket_destroy (p->srv->zctx, p->zs_in_event);
-    zsocket_destroy (p->srv->zctx, p->zs_out);
-    zsocket_destroy (p->srv->zctx, p->zs_in);
-    zsocket_destroy (p->srv->zctx, p->zs_req);
-
-    /* server side */
-    zsocket_destroy (p->srv->zctx, p->zs_plout);
+    zsocket_destroy (p->srv->zctx, p->zs_dnreq);
+    zsocket_destroy (p->srv->zctx, p->zs_upreq);
 
     free (p);
 }
@@ -233,7 +226,6 @@ static int _plugin_create (char *name, server_t *srv, conf_t *conf)
     zctx_t *zctx = srv->zctx;
     plugin_ctx_t *p;
     int errnum;
-    char *plout_uri = NULL;
     plugin_t plugin;
 
     if (!(plugin = _lookup_plugin (name))) {
@@ -247,20 +239,17 @@ static int _plugin_create (char *name, server_t *srv, conf_t *conf)
     p->plugin = plugin;
     p->timeout = -1;
 
-    if (asprintf (&plout_uri, PLOUT_URI_TMPL, plugin->name) < 0)
-        err_exit ("asprintf");
-
-    /* server side */
-    zbind (zctx, &p->zs_plout,        ZMQ_PUSH, plout_uri,        -1);
-
-    /* plugin side */
-    zconnect (zctx, &p->zs_req,       ZMQ_DEALER, ROUTER_URI,     -1,
+    /* connect sockets in the parent, then use them in the thread */
+    zconnect (zctx, &p->zs_upreq,     ZMQ_DEALER, UPREQ_URI,      -1,
               (char *)plugin->name);
-    zconnect (zctx, &p->zs_in,        ZMQ_PULL, plout_uri,        -1, NULL);
-    zconnect (zctx, &p->zs_out,       ZMQ_PUSH, PLIN_URI,         -1, NULL);
+    zconnect (zctx, &p->zs_dnreq,     ZMQ_DEALER, DNREQ_URI,      -1,
+              (char *)plugin->name);
     zconnect (zctx, &p->zs_in_event,  ZMQ_SUB,  PLOUT_EVENT_URI,  -1, NULL);
     zconnect (zctx, &p->zs_out_event, ZMQ_PUSH, PLIN_EVENT_URI,   -1, NULL);
     zconnect (zctx, &p->zs_snoop,     ZMQ_SUB,  SNOOP_URI,        -1, NULL);
+
+    if (cmb_route_add_internal (p->srv, name, name, ROUTE_FLAGS_PRIVATE) < 0)
+        msg_exit ("failed to add route for plugin %s", name);
 
     errnum = pthread_create (&p->t, NULL, _plugin_thread, p);
     if (errnum)
@@ -268,40 +257,9 @@ static int _plugin_create (char *name, server_t *srv, conf_t *conf)
 
     zhash_insert (srv->plugins, plugin->name, p);
     zhash_freefn (srv->plugins, plugin->name, _plugin_destroy);
-    if (plout_uri)
-        free (plout_uri);
+
 
     return 0;
-}
-
-static int _send_match (const char *key, void *item, void *arg)
-{
-    plugin_ctx_t *p = item;
-    zmsg_t **zmsg = arg;
-    char *ptag = NULL;
-    int rc = 0;
-
-    if (!*zmsg)
-        goto done;
-    if (asprintf (&ptag, "%s.", p->plugin->name) < 0)
-        err_exit ("asprintf");
-    if (!cmb_msg_match_substr (*zmsg, ptag, NULL))
-        goto done;
-    if (cmb_msg_match_sender (*zmsg, p->plugin->name)
-                                            && cmb_msg_hopcount (*zmsg) == 1)
-        goto done; /* msg originating from this plugin, this broker */
-    if (zmsg_send (zmsg, p->zs_plout) >= 0)
-        rc = 1; /* makes zhash_foreach stop iterating and return 1 */
-done:
-    if (ptag)
-        free (ptag);
-    return rc;
-}
-
-/* Send messsage to first matching plugin */
-void plugin_send (server_t *srv, conf_t *conf, zmsg_t **zmsg)
-{
-    zhash_foreach (srv->plugins, _send_match, zmsg);
 }
 
 void plugin_init (conf_t *conf, server_t *srv)

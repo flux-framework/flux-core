@@ -96,7 +96,7 @@ static void _route_add (plugin_ctx_t *p, char *dst, char *gw)
     if (!(no = json_object_new_string (gw)))
         oom ();
     json_object_object_add (o, "gw", no);
-    cmb_msg_send_rt (p->zs_req, o, "cmb.route.add.%s", dst);
+    cmb_msg_send_rt (p->zs_upreq, o, "cmb.route.add.%s", dst);
     json_object_put (o);
 }
 
@@ -109,7 +109,7 @@ static void _route_del (plugin_ctx_t *p, char *dst, char *gw)
     if (!(no = json_object_new_string (gw)))
         oom ();
     json_object_object_add (o, "gw", no);
-    cmb_msg_send_rt (p->zs_req, o, "cmb.route.del.%s", dst);
+    cmb_msg_send_rt (p->zs_upreq, o, "cmb.route.del.%s", dst);
 }
 
 static void _route_add_rank (plugin_ctx_t *p, int dst_rank, int gw_rank)
@@ -207,7 +207,7 @@ static void _send_live_hello (plugin_ctx_t *p)
         oom ();
     json_object_object_add (o, "parent", no);
 
-    cmb_msg_send_rt (p->zs_req, o, "live.hello.%d", p->conf->rank);
+    cmb_msg_send_rt (p->zs_upreq, o, "live.hello.%d", p->conf->rank);
     if (o)
         json_object_put (o);
 }
@@ -283,7 +283,7 @@ static void _recv_live_query (plugin_ctx_t *p, zmsg_t **zmsg)
     json_object_object_add (o, "nnodes", no);
     if (cmb_msg_rep_json (*zmsg, o) < 0)
         goto done;
-    if (zmsg_send (zmsg, p->zs_out) < 0)
+    if (zmsg_send (zmsg, p->zs_dnreq) < 0)
         err ("zmsg_send");
 done:
     if (o)
@@ -313,7 +313,7 @@ static void _reparent (plugin_ctx_t *p)
     for (i = 0; i < p->conf->parent_len; i++) {
         rank = p->conf->parent[i].rank;
         if (i != p->srv->parent_cur && ctx->state[rank] == true) {
-            cmb_msg_send_rt (p->zs_req, NULL, "cmb.reparent.%d", rank);
+            cmb_msg_send_rt (p->zs_upreq, NULL, "cmb.reparent.%d", rank);
             break;
         }
     }

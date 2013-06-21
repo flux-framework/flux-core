@@ -25,6 +25,7 @@ typedef struct {
     int syncperiod_msec;
     char *redis_server;
     char *apisockpath;
+    char rankstr[16];
     int rank;
     int size;
     char *plugins;
@@ -77,7 +78,6 @@ typedef struct {
     void *zs_dnreq_in;
     void *zs_snoop;
     void *zs_plout_event;
-    void *zs_plin;
     void *zs_upreq_in;
     void *zs_dnreq_out;
     void *zs_plin_event;
@@ -89,7 +89,14 @@ typedef struct {
 
 #define PLOUT_URI_TMPL      "inproc://plout_%s"
 #define PLIN_URI            "inproc://plin"
-#define ROUTER_URI          "inproc://router"
+#define UPREQ_URI           "inproc://upreq"
+#define DNREQ_URI           "inproc://dnreq"
 #define PLOUT_EVENT_URI     "inproc://plout_event"
 #define PLIN_EVENT_URI      "inproc://plin_event"
 #define SNOOP_URI           "inproc://snoop"
+
+
+
+int cmb_route_add_internal (server_t *srv, const char *dst, const char *gw, int flags);
+void cmb_route_del_internal (server_t *srv, const char *dst, const char *gw);
+

@@ -138,7 +138,7 @@ static cfd_t *_cfd_create (plugin_ctx_t *p, client_t *c, char *wname)
         err_exit ("sendfd");
     if (close (sv[1]) < 0)
         err_exit ("close");
-    cmb_msg_send (p->zs_out, NULL, "%s.open", cfd->name);
+    cmb_msg_send (p->zs_dnreq, NULL, "%s.open", cfd->name);
 
     cfd->prev = NULL;
     cfd->next = c->cfds;
@@ -161,7 +161,7 @@ static void _cfd_destroy (plugin_ctx_t *p, client_t *c, cfd_t *cfd)
     if (cfd->next)
         cfd->next->prev = cfd->prev;
 
-    cmb_msg_send (p->zs_out, NULL, "%s.close", cfd->name);
+    cmb_msg_send (p->zs_dnreq, NULL, "%s.close", cfd->name);
     free (cfd->name);
     free (cfd);
 }
@@ -197,7 +197,7 @@ static int _cfd_read (plugin_ctx_t *p, cfd_t *cfd)
     if (!(no = json_object_new_string (cfd->name)))
         oom ();
     json_object_object_add (o, "sender", no);
-    cmb_msg_send_long (p->zs_out, o, cfd->buf, n, "%s", cfd->wname);
+    cmb_msg_send_long (p->zs_dnreq, o, cfd->buf, n, "%s", cfd->wname);
     json_object_put (o);
     return -1;
 }
@@ -272,7 +272,7 @@ static int _notify_srv (const char *key, void *item, void *arg)
         err_exit ("zmsg_pushmem");
     if (zmsg_pushstr (zmsg, "%s", c->uuid) < 0)
         err_exit ("zmsg_pushmem");
-    if (zmsg_send (&zmsg, c->p->zs_req) < 0)
+    if (zmsg_send (&zmsg, c->p->zs_upreq) < 0)
         err_exit ("zmsg_send");
 
     return 0;
@@ -378,7 +378,7 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
             err_exit ("zmsg_pushmem");
         if (zmsg_pushstr (zmsg, "%s", c->uuid) < 0)
             err_exit ("zmsg_pushmem");
-        if (zmsg_send (&zmsg, p->zs_req) < 0)
+        if (zmsg_send (&zmsg, p->zs_upreq) < 0)
             err_exit ("zmsg_send");
     }
 done:
@@ -536,13 +536,13 @@ static void _poll_once (plugin_ctx_t *p)
     zmsg_type_t type;
 
     /* zmq sockets */
-    zpa[0].socket = p->zs_in;
+    zpa[0].socket = p->zs_dnreq;
     zpa[0].events = ZMQ_POLLIN;
     zpa[0].fd = -1;
     zpa[1].socket = p->zs_in_event;
     zpa[1].events = ZMQ_POLLIN;
     zpa[1].fd = -1;
-    zpa[2].socket = p->zs_req;
+    zpa[2].socket = p->zs_upreq;
     zpa[2].events = ZMQ_POLLIN;
     zpa[2].fd = -1;
     zpa[3].socket = p->zs_snoop;
@@ -613,8 +613,8 @@ static void _poll_once (plugin_ctx_t *p)
         err_exit ("apisrv: poll on listen fd");
 
     /* zmq sockets - can modify client list (so do after clients) */
-    if (zpa[0].revents & ZMQ_POLLIN) {      /* request on 'in' */
-        zmsg = zmsg_recv (p->zs_in);
+    if (zpa[0].revents & ZMQ_POLLIN) {      /* request on 'dnreq' */
+        zmsg = zmsg_recv (p->zs_dnreq);
         if (!zmsg)
             err ("zmsg_recv");
         type = ZMSG_REQUEST;
@@ -625,8 +625,8 @@ static void _poll_once (plugin_ctx_t *p)
             err ("zmsg_recv");
         type = ZMSG_EVENT;
         p->stats.event_count++;
-    } else if (zpa[2].revents & ZMQ_POLLIN) {/* response on 'req' */
-        zmsg = zmsg_recv (p->zs_req);
+    } else if (zpa[2].revents & ZMQ_POLLIN) {/* response on 'upreq' */
+        zmsg = zmsg_recv (p->zs_upreq);
         if (!zmsg)
             err ("zmsg_recv");
         type = ZMSG_RESPONSE;
@@ -645,7 +645,7 @@ static void _poll_once (plugin_ctx_t *p)
     if (zmsg)
         _recv (p, &zmsg, type);
     if (zmsg && type == ZMSG_REQUEST)
-        cmb_msg_send_errnum (&zmsg, p->zs_out, ENOSYS, NULL);
+        cmb_msg_send_errnum (&zmsg, p->zs_dnreq, ENOSYS, NULL);
 
     free (zpa);
 }

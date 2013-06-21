@@ -46,6 +46,9 @@ static void _cmb_init (conf_t *conf, server_t **srvp);
 static void _cmb_fini (conf_t *conf, server_t *srv);
 static void _cmb_poll (conf_t *conf, server_t *srv);
 
+static void _route_response (conf_t *conf, server_t *srv, zmsg_t **zmsg,
+                            bool dnsock);
+
 static void usage (void)
 {
     fprintf (stderr, 
@@ -151,6 +154,8 @@ int main (int argc, char *argv[])
     if (!conf->plugins)
         msg_exit ("at least one plugin must be loaded");
 
+    snprintf (conf->rankstr, sizeof (conf->rankstr), "%s", optarg);
+
     _cmb_init (conf, &srv);
     for (;;)
         _cmb_poll (conf, srv);
@@ -180,8 +185,8 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
 
     /* broker side of plugin sockets */
     /* N.B. each plugin has a private zs_plout */
-    zbind (zctx, &srv->zs_upreq_in,    ZMQ_ROUTER, ROUTER_URI, -1);
-    zbind (zctx, &srv->zs_plin,        ZMQ_PULL, PLIN_URI,        -1);
+    zbind (zctx, &srv->zs_upreq_in,    ZMQ_ROUTER, UPREQ_URI, -1);
+    zbind (zctx, &srv->zs_dnreq_out,   ZMQ_ROUTER, DNREQ_URI, -1);
     zbind (zctx, &srv->zs_plout_event, ZMQ_PUB,  PLOUT_EVENT_URI, -1);
     zbind (zctx, &srv->zs_plin_event,  ZMQ_PULL, PLIN_EVENT_URI,  -1);
     zbind (zctx, &srv->zs_snoop,       ZMQ_PUB,  SNOOP_URI, -1);
@@ -205,8 +210,10 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
         if (zsocket_bind (srv->zs_upreq_in, "%s", conf->treein_uri) < 0)
             err_exit ("zsocket_bind: %s", conf->treein_uri);
     }
-    if (conf->treein_uri2)
-        zbind (zctx, &srv->zs_dnreq_out, ZMQ_ROUTER, conf->treein_uri2, -1);
+    if (conf->treein_uri2) { /* N.B. ditto */
+        if (zsocket_bind (srv->zs_dnreq_out, "%s", conf->treein_uri2) < 0)
+            err_exit ("zsocket_bind: %s", conf->treein_uri2);
+    }
 
     if (!(srv->route = zhash_new ()))
         oom ();
@@ -224,8 +231,6 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
 
     if (srv->zs_upreq_in)
         zsocket_destroy (srv->zctx, srv->zs_upreq_in);
-    if (srv->zs_plin)
-        zsocket_destroy (srv->zctx, srv->zs_plin);
     if (srv->zs_plout_event)
         zsocket_destroy (srv->zctx, srv->zs_plout_event);
     if (srv->zs_plin_event)
@@ -262,8 +267,7 @@ static void _free_route (route_t *rte)
     free (rte);
 }
 
-static int _add_route (server_t *srv, const char *dst, const char *gw,
-                       int flags)
+int cmb_route_add_internal (server_t *srv, const char *dst, const char *gw, int flags)
 {
     route_t *rte = _route_create (gw, flags);
 
@@ -275,7 +279,7 @@ static int _add_route (server_t *srv, const char *dst, const char *gw,
     return 0;
 }
 
-static void _del_route (server_t *srv, const char *dst, const char *gw)
+void cmb_route_del_internal (server_t *srv, const char *dst, const char *gw)
 {
     route_t *rte = zhash_lookup (srv->route, dst);
 
@@ -317,17 +321,12 @@ static int _route_to_json (const char *dst, route_t *rte, json_object *o)
 }
 #endif
 
-static void _cc_snoop (conf_t *conf, server_t *srv, zmsg_t *zmsg)
-{
-    if (zmsg) {
-        zmsg_t *cpy = zmsg_dup (zmsg);
-        if (!cpy)
-            err_exit ("zmsg_dup");
-        if (zmsg_send (&cpy, srv->zs_snoop) < 0)
-            err_exit ("zmsg_send");
-    } 
-}
+/**
+ ** Request routing
+ **/
 
+/* cmb.* requests are handled by cmb internally.
+ */
 static void _cmb_message (conf_t *conf, server_t *srv, zmsg_t **zmsg)
 {
     char *arg;
@@ -342,8 +341,14 @@ static void _cmb_message (conf_t *conf, server_t *srv, zmsg_t **zmsg)
             if (zsocket_disconnect (srv->zs_upreq_out, "%s",
                                 conf->parent[srv->parent_cur].treeout_uri) < 0)
                 err_exit ("zsocket_disconnect");
+            if (zsocket_disconnect (srv->zs_dnreq_in, "%s",
+                                conf->parent[srv->parent_cur].treeout_uri2)< 0)
+                err_exit ("zsocket_disconnect");
             if (zsocket_connect (srv->zs_upreq_out, "%s",
                                 conf->parent[i].treeout_uri) < 0)
+                err_exit ("zsocket_connect");
+            if (zsocket_connect (srv->zs_dnreq_in, "%s",
+                                conf->parent[i].treeout_uri2) < 0)
                 err_exit ("zsocket_connect");
             srv->parent_cur = i;
         }    
@@ -354,7 +359,7 @@ static void _cmb_message (conf_t *conf, server_t *srv, zmsg_t **zmsg)
 
         if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) == 0
                     && o != NULL && (gw = json_object_object_get (o, "gw")))
-            _add_route (srv, arg, json_object_get_string (gw), 0);
+            cmb_route_add_internal (srv, arg, json_object_get_string (gw), 0);
         if (o)
             json_object_put (o);
         free (arg);
@@ -364,12 +369,10 @@ static void _cmb_message (conf_t *conf, server_t *srv, zmsg_t **zmsg)
 
         if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) == 0
                     && o != NULL && (gw = json_object_object_get (o, "gw")))
-            _del_route (srv, arg, json_object_get_string (gw));
+            cmb_route_del_internal (srv, arg, json_object_get_string (gw));
         zmsg_destroy (zmsg);
     } else if (cmb_msg_match (*zmsg, "cmb.route.query")) {
         json_object *ao, *o = NULL;
-        int rank;
-        char key[16];
 
         if (!(o = json_object_new_object ()))
             oom ();
@@ -377,201 +380,169 @@ static void _cmb_message (conf_t *conf, server_t *srv, zmsg_t **zmsg)
             oom ();
         zhash_foreach (srv->route, (zhash_foreach_fn *)_route_to_json_full,ao);
         json_object_object_add (o, "route", ao);
-        if (cmb_msg_rep_json (*zmsg, o) == 0) {
-            /* FIXME: refactor */
-            rank = cmb_msg_rep_rank (*zmsg);
-            snprintf (key, sizeof (key), "%d", rank);
-            if (rank == -1 || zhash_lookup (srv->route, key)) {
-                if (srv->zs_upreq_in)
-                    zmsg_send (zmsg, srv->zs_upreq_in);
-            } else if (srv->zs_dnreq_in)
-                zmsg_send (zmsg, srv->zs_dnreq_in);
-        }
+        if (cmb_msg_rep_json (*zmsg, o) == 0)
+            _route_response (conf, srv, zmsg, true);
         json_object_put (o);
         if (*zmsg)
             zmsg_destroy (zmsg);
     }
 }
 
-static void _route_event (conf_t *conf, void *src, void *d1, void *d2)
+/* A plugin called 'foo' can send a request to 'foo[.anything]' and expect
+ * the request to go upstream, not back to itself.  This is how instances
+ * of the same plugin on different nodes accomplish reduction.
+ * Compare the tag (dest) and the first frame pushed on the message by the
+ * dealer socket (src).
+ */
+static bool _request_loop_detect (zmsg_t *zmsg)
 {
-    zmsg_t *m, *cpy;
+    char *tag = cmb_msg_tag (zmsg, true); /* short tag name */
+    char *sender = cmb_msg_sender (zmsg);
+    bool res = false;
 
-    m = zmsg_recv (src);
-    if (!m)
-        return;
-
-    if (d2) {
-        cpy = zmsg_dup (m);
-        if (!cpy)
-            err_exit ("zmsg_dup");
-        if (zmsg_send (&cpy, d2) < 0)
-            err_exit ("zmsg_send");
-    }
-    if (d1) {
-        if (zmsg_send (&m, d1) < 0)
-            err_exit ("zmsg_send");
-    } else {
-        zmsg_destroy (&m);
-    }
+    if (!tag || !sender)
+        goto done;
+    if (strchr (tag, '!')) /* don't thwart explicit addressing */
+        goto done;
+    if (!strcmp (tag, sender))
+        res = true;
+done:
+    if (tag)
+        free (tag);
+    if (sender)
+        free (sender);
+    return res;
 }
 
-/* Request tag with address ("N!tag") where N is NOT my rank.
- * Lookup route: if found, send downstream, else upstream
+/* Parse message request tag into addr, service.
  */
-static void _route_request_remote (conf_t *conf, server_t *srv,
-                                   zmsg_t **zmsg, int rank, bool upstream_ok)
+static int _parse_message_tag (zmsg_t *zmsg, char **ap, char **sp)
 {
-    char dst[16], loc[16];
+    char *p, *tag = NULL, *addr = NULL, *service = NULL;
+
+    if (!(tag = cmb_msg_tag (zmsg, false)))
+        goto error;
+    if ((p = strchr (tag, '!'))) {
+        addr = xstrdup (tag);
+        addr[p - tag] = '\0';
+        service = xstrdup (p + 1);
+    } else
+        service = xstrdup (tag);
+    if ((p = strchr (service, '.')))
+        *p = '\0';
+    *ap = addr;
+    *sp = service;
+    free (tag);
+    return 0;
+error:
+    if (tag)
+        free (tag);
+    return -1;
+}
+
+static void _route_response (conf_t *conf, server_t *srv, zmsg_t **zmsg,
+                            bool dnsock)
+{
+    char *sender = NULL;
     route_t *rte;
 
-    snprintf (dst, sizeof (dst), "%d", rank);
-    rte = zhash_lookup (srv->route, dst);
-    if (rte) {
-        snprintf (loc, sizeof (loc), "%d", conf->rank);
-        if (srv->zs_dnreq_out)
-            zmsg_send_router_req (zmsg, srv->zs_dnreq_out, loc, rte->gw);
-    } else if (upstream_ok && srv->zs_upreq_out)
-        zmsg_send (zmsg, srv->zs_upreq_out);
-    /* if not sent, *zmsg will not be destroyed, fall through to NAK */
-}
+    zmsg_cc (*zmsg, srv->zs_snoop);
 
-/* Request tag with address ("N!tag") where N is my rank.
- * Try to send it to the to local cmb or plugin.
- * If that doesn't work, NAK.
- */
-static void _route_request_local (conf_t *conf, server_t *srv, zmsg_t **zmsg)
-{
-    _cmb_message (conf, srv, zmsg);
-    if (*zmsg)
-        plugin_send (srv, conf, zmsg);
-    /* if not sent, *zmsg will not be destroyed, fall through to NAK */
-}
-
-/* Request tag with no address ("tag").
- * Try to send it to local cmb or plugin.
- * If that doesn't work, send it upstream.
- * If there is no upstream, NAK.
- */
-static void _route_request_noaddr (conf_t *conf, server_t *srv, zmsg_t **zmsg)
-{
-    _cmb_message (conf, srv, zmsg);
-    if (*zmsg)
-        plugin_send (srv, conf, zmsg);
-    if (*zmsg && srv->zs_upreq_out)
-        zmsg_send (zmsg, srv->zs_upreq_out);
-    /* if not sent, *zmsg will not be destroyed, fall through to NAK */
-}
-
-/* Message is ready on upreq_in.
- * This will be a request originating from either plugin or downstream node.
- */
-static void _route_upreq_request (conf_t *conf, server_t *srv)
-{
-    zmsg_t *zmsg;
-
-    zmsg = zmsg_recv (srv->zs_upreq_in);
-    _cc_snoop (conf, srv, zmsg);
-
-    if (zmsg) {
-        int rank = cmb_msg_req_rank (zmsg);
-
-        if (rank == conf->rank)
-            _route_request_local (conf, srv, &zmsg);
-        else if (rank == -1)
-            _route_request_noaddr (conf, srv, &zmsg);
+    /* case 1: responses heading upward on the 'dnreq' flow can reverse
+     * direction if they are traversing the tree.
+     */
+    if (dnsock) {
+        sender = cmb_msg_sender (*zmsg);
+        if (!sender)
+            oom ();
+        rte = zhash_lookup (srv->route, sender);
+        if (rte)
+            zmsg_send (zmsg, srv->zs_dnreq_in);
         else
-            _route_request_remote (conf, srv, &zmsg, rank, true);
-    }
-    if (zmsg)
-        cmb_msg_send_errnum (&zmsg, srv->zs_upreq_in, ENOSYS, srv->zs_snoop);
+            zmsg_send (zmsg, srv->zs_upreq_in);
+
+    /* case 2: responses headed downward on 'upreq' flow must continue down.
+     */
+    } else
+        zmsg_send (zmsg, srv->zs_upreq_in);
+
+    if (sender)
+        free (sender);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
 }
 
-/* Message is ready on dnreq_in.
- * This is a request heading downstream.
- * Continue downstream or deliver locally.  It cannot go upstream.
- */
-static void _route_dnreq_request (conf_t *conf, server_t *srv)
+static void _route_request (conf_t *conf, server_t *srv, zmsg_t **zmsg,
+                            bool dnsock)
 {
-    zmsg_t *zmsg;
+    char *addr = NULL, *service = NULL;
+    route_t *rte;
 
-    zmsg = zmsg_recv (srv->zs_dnreq_in);
-    _cc_snoop (conf, srv, zmsg);
+    zmsg_cc (*zmsg, srv->zs_snoop);
 
-    if (zmsg) {
-        int rank = cmb_msg_req_rank (zmsg);
+    if (_parse_message_tag (*zmsg, &addr, &service) < 0)
+        goto done;
 
-        if (rank == conf->rank)
-            _route_request_local (conf, srv, &zmsg);
-        else
-            _route_request_remote (conf, srv, &zmsg, rank, false);
+    /* case 1: request explicitly addressed to me, tag == mynode!service.
+     * Lookup service and if rte->gw == service, route down, else NAK.
+     * Handle tag == mynode!cmb as a special case.
+     */
+    if (addr && !strcmp (addr, conf->rankstr)) {
+        if (!strcmp (service, "cmb"))
+            _cmb_message (conf, srv, zmsg);
+        else {
+            rte = zhash_lookup (srv->route, service);
+            if (rte && !strcmp (rte->gw, service))
+                zmsg_send_unrouter (zmsg, srv->zs_dnreq_out,
+                                    conf->rankstr, rte->gw);
+        }
+
+    /* case 2: request explicitly addressed to a remote node, tag == N!service.
+     * Lookup N and route down if found, route up if not found, or NAK at root.
+     */
+    } else if (addr) {
+        rte = zhash_lookup (srv->route, addr);
+        if (rte)
+            zmsg_send_unrouter (zmsg, srv->zs_dnreq_out,
+                                conf->rankstr, rte->gw);
+        else if (!dnsock && srv->zs_upreq_out)
+            zmsg_send (zmsg, srv->zs_upreq_out);
+            
+
+    /* case 3: request not addressed, e.g. tag == service.
+     * Lookup service and route down if found (and not a loop).
+     * Route up if not found or loop, or NAK at root.
+     * Handle tag == cmb as a special case.
+     */
+    } else {
+        if (!strcmp (service, "cmb"))
+            _cmb_message (conf, srv, zmsg);
+        else {
+            rte = zhash_lookup (srv->route, service);
+            if (rte && !_request_loop_detect (*zmsg)) {
+                zmsg_send_unrouter (zmsg, srv->zs_dnreq_out,
+                                    conf->rankstr, rte->gw);
+            } else if (!dnsock && srv->zs_upreq_out)
+                zmsg_send (zmsg, srv->zs_upreq_out);
+        }
     }
-    if (zmsg)
-        cmb_msg_send_errnum (&zmsg, srv->zs_dnreq_in, ENOSYS, srv->zs_snoop);
-}
 
-/* Message is ready on upreq_out.
- * This is a response heading downstream.
- * Route according to address envelope (never back upstream)
- */
-static void _route_upreq_response (conf_t *conf, server_t *srv)
-{
-    zmsg_t *zmsg;
-
-    zmsg = zmsg_recv (srv->zs_upreq_out);
-    _cc_snoop (conf, srv, zmsg);
-
-    if (zmsg && srv->zs_upreq_in)
-        zmsg_send (&zmsg, srv->zs_upreq_in);
-}
-
-/* Message is ready on plin. 
- * This is a response from a local plugin.
- * Route according to address envelope.
- */
-static void _route_plin_response (conf_t *conf, server_t *srv)
-{
-    zmsg_t *zmsg;
-    char key[16];
-    int rank;
-
-    zmsg = zmsg_recv (srv->zs_plin);
-    _cc_snoop (conf, srv, zmsg);
-
-    if (zmsg) {
-        rank = cmb_msg_rep_rank (zmsg);
-        snprintf (key, sizeof (key), "%d", rank);
-        if (rank == -1 || zhash_lookup (srv->route, key)) {
-            if (srv->zs_upreq_in)
-                zmsg_send (&zmsg, srv->zs_upreq_in);
-        } else if (srv->zs_dnreq_in)
-            zmsg_send (&zmsg, srv->zs_dnreq_in);
+    /* send NAK reply if message was not routed above */
+    if (*zmsg) {
+        if (cmb_msg_rep_errnum (*zmsg, ENOSYS) < 0)
+            goto done;
+        zmsg_cc (*zmsg, srv->zs_snoop);
+        _route_response (conf, srv, zmsg, true);
     }
+done:
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+    if (addr)
+        free (addr);
+    if (service)
+        free (service);
 }
 
-/* Message is ready on dnreq_out.
- * This is a response heading upstream.
- * Route according to address envelope.
- */
-static void _route_dnreq_response (conf_t *conf, server_t *srv)
-{
-    zmsg_t *zmsg;
-    char key[16];
-    int rank;
-
-    zmsg = zmsg_recv_router_rep (srv->zs_dnreq_out);
-    _cc_snoop (conf, srv, zmsg);
-
-    if (zmsg) {
-        rank = cmb_msg_rep_rank (zmsg);
-        snprintf (key, sizeof (key), "%d", rank);
-        if (rank == -1 || zhash_lookup (srv->route, key)) {
-            if (srv->zs_upreq_in)
-                zmsg_send (&zmsg, srv->zs_upreq_in);
-        } else if (srv->zs_dnreq_in)
-            zmsg_send (&zmsg, srv->zs_dnreq_in);
-    }
-}
 
 static void _cmb_poll (conf_t *conf, server_t *srv)
 {
@@ -580,27 +551,52 @@ static void _cmb_poll (conf_t *conf, server_t *srv)
 { .socket = srv->zs_upreq_out,  .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
 { .socket = srv->zs_dnreq_in,   .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
 { .socket = srv->zs_dnreq_out,  .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-{ .socket = srv->zs_plin,       .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
 { .socket = srv->zs_plin_event, .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
 { .socket = srv->zs_eventin,    .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
     };
+    zmsg_t *zmsg = NULL;
 
     zpoll (zpa, sizeof (zpa) / sizeof (zpa[0]), -1);
 
-    if (zpa[0].revents & ZMQ_POLLIN)
-        _route_upreq_request (conf, srv);
-    if (zpa[1].revents & ZMQ_POLLIN)
-        _route_upreq_response (conf, srv);
-    if (zpa[2].revents & ZMQ_POLLIN)
-        _route_dnreq_request (conf, srv);
-    if (zpa[3].revents & ZMQ_POLLIN)
-        _route_dnreq_response (conf, srv);
-    if (zpa[4].revents & ZMQ_POLLIN)
-        _route_plin_response (conf, srv);
-    if (zpa[5].revents & ZMQ_POLLIN)
-        _route_event (conf, srv->zs_plin_event, srv->zs_plout_event, srv->zs_eventout);
-    if (zpa[6].revents & ZMQ_POLLIN)
-        _route_event (conf, srv->zs_eventin, srv->zs_plout_event, NULL);
+    if (zpa[0].revents & ZMQ_POLLIN) {
+        zmsg = zmsg_recv (srv->zs_upreq_in);
+        if (zmsg)
+            _route_request (conf, srv, &zmsg, false);
+    }
+    if (zpa[1].revents & ZMQ_POLLIN) {
+        zmsg = zmsg_recv (srv->zs_upreq_out);
+        if (zmsg)
+            _route_response (conf, srv, &zmsg, false);
+    }
+    if (zpa[2].revents & ZMQ_POLLIN) {
+        zmsg = zmsg_recv (srv->zs_dnreq_in);
+        if (zmsg)
+            _route_request (conf, srv, &zmsg, true);
+    }
+    if (zpa[3].revents & ZMQ_POLLIN) {
+        zmsg = zmsg_recv_unrouter (srv->zs_dnreq_out);
+        if (zmsg)
+            _route_response (conf, srv, &zmsg, true);
+    }
+
+    if (zpa[4].revents & ZMQ_POLLIN) {
+        zmsg = zmsg_recv (srv->zs_plin_event);
+        if (zmsg) {
+            zmsg_cc (zmsg, srv->zs_snoop);
+            if (srv->zs_eventout)
+                zmsg_cc (zmsg, srv->zs_eventout);
+            zmsg_send (&zmsg, srv->zs_plout_event);
+        }
+    }
+    if (zpa[5].revents & ZMQ_POLLIN) {
+        zmsg = zmsg_recv (srv->zs_eventin);
+        if (zmsg) {
+            zmsg_cc (zmsg, srv->zs_snoop);
+            zmsg_send (&zmsg, srv->zs_plout_event);
+        }
+    }
+
+    assert (zmsg == NULL);
 }
 
 /*

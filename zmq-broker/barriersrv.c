@@ -95,8 +95,7 @@ static int _barrier_enter_request (const char *key, void *item, void *arg)
     if (!(no = json_object_new_int (b->nprocs)))
         oom ();
     json_object_object_add (o, "nprocs", no);
-    /* will route to parent's barrier plugin */
-    cmb_msg_send_rt (p->zs_req, o, "barrier.enter.%s", b->name);
+    cmb_msg_send_rt (p->zs_upreq, o, "barrier.enter.%s", b->name);
     b->count = 0;
     if (o)
         json_object_put (o);

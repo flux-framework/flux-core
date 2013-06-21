@@ -5,8 +5,10 @@ void zbind (zctx_t *zctx, void **sp, int type, char *uri, int hwm);
 zmsg_t *zmsg_recv_fd (int fd, int flags);
 int zmsg_send_fd (int fd, zmsg_t **msg);
 
-void zmsg_send_router_req (zmsg_t **zmsg, void *sock, char *addr, char *gw);
-zmsg_t *zmsg_recv_router_rep (void *sock);
+void zmsg_send_unrouter (zmsg_t **zmsg, void *sock, char *addr, char *gw);
+zmsg_t *zmsg_recv_unrouter (void *sock);
+
+void zmsg_cc (zmsg_t *zmsg, void *sock);
 
 int cmb_msg_decode (zmsg_t *msg, char **tagp, json_object **op,
                     void **datap, int *lenp);
@@ -37,9 +39,6 @@ int cmb_msg_recv_fd (int fd, char **tagp, json_object **op,
 bool cmb_msg_match (zmsg_t *msg, const char *tag);
 bool cmb_msg_match_substr (zmsg_t *msg, const char *tag, char **restp);
 bool cmb_msg_match_sender (zmsg_t *zmsg, const char *sender);
-
-int cmb_msg_req_rank (zmsg_t *zmsg);
-int cmb_msg_rep_rank (zmsg_t *zmsg);
 
 char *cmb_msg_sender (zmsg_t *zmsg);
 char *cmb_msg_tag (zmsg_t *zmsg, bool shorten);
