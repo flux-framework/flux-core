@@ -154,7 +154,7 @@ int main (int argc, char *argv[])
     if (!conf->plugins)
         msg_exit ("at least one plugin must be loaded");
 
-    snprintf (conf->rankstr, sizeof (conf->rankstr), "%s", optarg);
+    snprintf (conf->rankstr, sizeof (conf->rankstr), "%d", conf->rank);
 
     _cmb_init (conf, &srv);
     for (;;)

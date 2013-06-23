@@ -102,15 +102,15 @@ done:
 
 static void _recv_log_unsubscribe (plugin_ctx_t *p, char *sub, zmsg_t **zmsg)
 {
-    ctx_t *ctx = p->ctx;
-    listener_t *lp;
+    //ctx_t *ctx = p->ctx;
+    //listener_t *lp;
     char *sender = NULL;
 
     if (!(sender = cmb_msg_sender (*zmsg))) {
         err ("%s: protocol error", __FUNCTION__); 
         goto done;
     }
-    lp = zhash_lookup (ctx->listeners, sender);
+    //lp = zhash_lookup (ctx->listeners, sender);
 
     /* FIXME: delete subscription */
 done:
