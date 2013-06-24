@@ -730,7 +730,7 @@ error:
     
 }
 
-cmb_t cmb_init (void)
+cmb_t cmb_init_full (const char *path, int flags)
 {
     cmb_t c = NULL;
     struct sockaddr_un addr;
@@ -745,7 +745,7 @@ cmb_t cmb_init (void)
         goto error;
     memset (&addr, 0, sizeof (struct sockaddr_un));
     addr.sun_family = AF_UNIX;
-    strncpy (addr.sun_path, CMB_API_PATH, sizeof (addr.sun_path) - 1);
+    strncpy (addr.sun_path, path, sizeof (addr.sun_path) - 1);
 
     if (connect (c->fd, (struct sockaddr *)&addr,
                          sizeof (struct sockaddr_un)) < 0)
@@ -755,6 +755,11 @@ error:
     if (c)
         cmb_fini (c);
     return NULL;
+}
+
+cmb_t cmb_init (void)
+{
+    return cmb_init_full (CMB_API_PATH, 0);
 }
 
 void cmb_fini (cmb_t c)

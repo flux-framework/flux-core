@@ -23,7 +23,7 @@
 #include "util.h"
 #include "plugin.h"
 
-#define OPTIONS "t:e:E:O:vs:r:R:S:p:c:P:L:T:"
+#define OPTIONS "t:e:E:O:vs:r:R:S:p:c:P:L:T:A:"
 static const struct option longopts[] = {
     {"event-uri",   required_argument,  0, 'e'},
     {"event-out-uri",required_argument, 0, 'O'},
@@ -39,6 +39,7 @@ static const struct option longopts[] = {
     {"children",    required_argument,  0, 'c'},
     {"plugins",     required_argument,  0, 'P'},
     {"logdest",     required_argument,  0, 'L'},
+    {"api-socket",  required_argument,  0, 'A'},
     {0, 0, 0, 0},
 };
 
@@ -68,6 +69,7 @@ static void usage (void)
 " -S,--size N            Set number of ranks in session\n"
 " -P,--plugins p1,p2,... Load the named plugins (comma separated)\n"
 " -L,--logdest DEST      Log to DEST, can  be syslog, stderr, or file\n"
+" -A,--api-socket PATH   Listen for API connections on PATH\n"
             );
     exit (1);
 }
@@ -145,6 +147,9 @@ int main (int argc, char *argv[])
                 break;
             case 'L':   /* --logdest DEST */
                 log_set_dest (optarg);
+                break;
+            case 'A':   /* --api-socket DEST */
+                conf->api_sockpath = optarg;
                 break;
             default:
                 usage ();
@@ -563,7 +568,8 @@ done:
   REQ REP               REQ REP
 
 _______________
-[1] Use zmsg_recv_unrouter()/zmsg_send_unrouter() on this socket.
+[1] Use zmsg_recv_unrouter()/zmsg_send_unrouter() on this socket
+because it's being used "backwards" from normal dealer-router flow.
 */
 
 static void _cmb_poll (conf_t *conf, server_t *srv)

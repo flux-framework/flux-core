@@ -15,7 +15,7 @@
 #include "log.h"
 #include "util.h"
 
-#define OPTIONS "p:s:b:k:SK:Ct:P:d:fF:n:lx:e:TL:W:r:R:q"
+#define OPTIONS "p:s:b:k:SK:Ct:P:d:fF:n:lx:e:TL:W:r:R:qz:"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -39,6 +39,7 @@ static const struct option longopts[] = {
     {"route-add",  required_argument,  0, 'r'},
     {"route-del",  required_argument,  0, 'R'},
     {"route-query",no_argument,        0, 'q'},
+    {"socket-path",required_argument,  0, 'z'},
     {0, 0, 0, 0},
 };
 
@@ -67,6 +68,7 @@ static void usage (void)
 "  -r,--route-add dst:gw  add local route to dst via gw\n"
 "  -R,--route-del dst     delete local route to dst\n"
 "  -q,--route-query       list routes in JSON format\n"
+"  -z,--socket-path PATH  use non-default API socket path\n"
 );
     exit (1);
 }
@@ -78,6 +80,7 @@ int main (int argc, char *argv[])
     int nprocs;
     int padding = 0;
     int pingdelay_ms = 1000;
+    char *socket_path = CMB_API_PATH;
 
     log_init (basename (argv[0]));
 
@@ -94,9 +97,12 @@ int main (int argc, char *argv[])
             case 'n': /* --nprocs N */
                 nprocs = strtoul (optarg, NULL, 10);
                 break;
+            case 'z': /* --socket-path PATH */
+                socket_path = optarg;
+                break;
         }
     }
-    if (!(c = cmb_init ()))
+    if (!(c = cmb_init_full (socket_path, 0)))
         err_exit ("cmb_init");
     optind = 0;
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
@@ -305,6 +311,7 @@ int main (int argc, char *argv[])
             case 'P':
             case 'd':
             case 'n':
+            case 'z':
                 break; /* handled in first getopt */
             case 'L': { /* --log */
                 if (cmb_log (c, "cmbutil", NULL, "%s", optarg) < 0)
