@@ -47,7 +47,7 @@ pepe.run ("echo port 7777 | /usr/sbin/redis-server -")
 pepe.run ("../../twemproxy-0.2.3/src/nutcracker -c " .. nutconf)
 
 if pepe.rank == 0 then
-    pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
+    pepe.run ("./cmbd --up-event-uri='" .. eventuri .. "'"
 		.. " --tree-in-uri='" .. treeinuri .. "'"
 		.. " --redis-server=localhost"
 		.. " --rank=" .. pepe.rank
@@ -56,7 +56,7 @@ if pepe.rank == 0 then
 else
     local parent_rank = tree.k_ary_parent (pepe.rank, 3)
     local treeouturi = "tcp://" ..  h[parent_rank + 1] .. ":5556"
-    pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
+    pepe.run ("./cmbd --up-event-uri='" .. eventuri .. "'"
 		.. " --tree-in-uri='" .. treeinuri .. "'"
 		.. " --parent='" .. parent_rank .. "," .. treeouturi .. "'"
 		.. " --redis-server=localhost"

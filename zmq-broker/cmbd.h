@@ -20,8 +20,10 @@ typedef struct {
 typedef struct {
     char *treein_uri;   /* upreq_in binds to this port and UPREQ_URI */
     char *treein_uri2;  /* dnreq_out binds to this port and DNREQ_URI */
-    char *event_in_uri;
-    char *event_out_uri;
+    char *upev_in_uri;
+    char *upev_out_uri;
+    char *dnev_in_uri;
+    char *dnev_out_uri;
     bool verbose;
     char rankstr[16];
     int rank;
@@ -44,15 +46,15 @@ typedef struct {
  */
 typedef struct {
     zctx_t *zctx;
-    void *zs_eventout;
-    void *zs_eventin;
     void *zs_upreq_out;
     void *zs_dnreq_in;
     void *zs_upreq_in;
     void *zs_dnreq_out;
     void *zs_snoop;
-    void *zs_plout_event;
-    void *zs_plin_event;
+    void *zs_upev_out;
+    void *zs_upev_in;
+    void *zs_dnev_out;
+    void *zs_dnev_in;
     int parent_cur;
     zhash_t *route;
     zhash_t *plugins;
@@ -61,8 +63,8 @@ typedef struct {
 #define UPREQ_URI           "inproc://upreq"
 #define DNREQ_URI           "inproc://dnreq"
 
-#define PLOUT_EVENT_URI     "inproc://plout_event"
-#define PLIN_EVENT_URI      "inproc://plin_event"
+#define DNEV_OUT_URI        "inproc://evout"
+#define DNEV_IN_URI         "inproc://evin"
 
 #define SNOOP_URI           "inproc://snoop"
 

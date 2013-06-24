@@ -86,7 +86,7 @@ static void _plugin_poll (plugin_ctx_t *p)
     zmq_pollitem_t zpa[] = {
 { .socket = p->zs_upreq,     .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
 { .socket = p->zs_dnreq,     .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-{ .socket = p->zs_in_event,  .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
+{ .socket = p->zs_evin,      .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
 { .socket = p->zs_snoop,     .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
     };
     zmsg_t *zmsg;
@@ -138,7 +138,7 @@ static void _plugin_poll (plugin_ctx_t *p)
             type = ZMSG_REQUEST;
             p->stats.req_count++;
         } else if (zpa[2].revents & ZMQ_POLLIN) {   /* event on 'in_event' */
-            zmsg = zmsg_recv (p->zs_in_event);
+            zmsg = zmsg_recv (p->zs_evin);
             if (!zmsg)
                 err ("zmsg_recv");
             type = ZMSG_EVENT;
@@ -203,8 +203,8 @@ static void _plugin_destroy (void *arg)
         errn_exit (errnum, "pthread_join\n");
 
     zsocket_destroy (p->srv->zctx, p->zs_snoop);
-    zsocket_destroy (p->srv->zctx, p->zs_out_event);
-    zsocket_destroy (p->srv->zctx, p->zs_in_event);
+    zsocket_destroy (p->srv->zctx, p->zs_evout);
+    zsocket_destroy (p->srv->zctx, p->zs_evin);
     zsocket_destroy (p->srv->zctx, p->zs_dnreq);
     zsocket_destroy (p->srv->zctx, p->zs_upreq);
 
@@ -240,13 +240,17 @@ static int _plugin_create (char *name, server_t *srv, conf_t *conf)
     p->timeout = -1;
 
     /* connect sockets in the parent, then use them in the thread */
-    zconnect (zctx, &p->zs_upreq,     ZMQ_DEALER, UPREQ_URI,      -1,
+    zconnect (zctx, &p->zs_upreq, ZMQ_DEALER, UPREQ_URI, -1,
               (char *)plugin->name);
-    zconnect (zctx, &p->zs_dnreq,     ZMQ_DEALER, DNREQ_URI,      -1,
+    zconnect (zctx, &p->zs_dnreq, ZMQ_DEALER, DNREQ_URI, -1,
               (char *)plugin->name);
-    zconnect (zctx, &p->zs_in_event,  ZMQ_SUB,  PLOUT_EVENT_URI,  -1, NULL);
-    zconnect (zctx, &p->zs_out_event, ZMQ_PUSH, PLIN_EVENT_URI,   -1, NULL);
-    zconnect (zctx, &p->zs_snoop,     ZMQ_SUB,  SNOOP_URI,        -1, NULL);
+    zconnect (zctx, &p->zs_evin,  ZMQ_SUB, DNEV_OUT_URI, -1, NULL);
+#if 0
+    zconnect (zctx, &p->zs_evout, ZMQ_PUSH, DNEV_IN_URI, -1, NULL);
+#else
+    zconnect (zctx, &p->zs_evout, ZMQ_PUB, DNEV_IN_URI, -1, NULL);
+#endif
+    zconnect (zctx, &p->zs_snoop, ZMQ_SUB, SNOOP_URI, -1, NULL);
 
     if (cmb_route_add_internal (p->srv, name, name, ROUTE_FLAGS_PRIVATE) < 0)
         msg_exit ("failed to add route for plugin %s", name);

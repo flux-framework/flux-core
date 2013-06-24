@@ -23,11 +23,13 @@
 #include "util.h"
 #include "plugin.h"
 
-#define OPTIONS "t:e:E:O:vs:r:R:S:p:c:P:L:T:A:"
+#define OPTIONS "t:e:E:O:vs:r:R:S:p:c:P:L:T:A:d:D:"
 static const struct option longopts[] = {
-    {"event-uri",   required_argument,  0, 'e'},
-    {"event-out-uri",required_argument, 0, 'O'},
-    {"event-in-uri",required_argument,  0, 'E'},
+    {"up-event-uri",   required_argument,  0, 'e'},
+    {"up-event-out-uri",required_argument, 0, 'O'},
+    {"up-event-in-uri",required_argument,  0, 'E'},
+    {"dn-event-in-uri",required_argument,  0, 'd'},
+    {"dn-event-out-uri",required_argument,  0, 'D'},
     {"tree-in-uri", required_argument,  0, 't'},
     {"tree-in-uri2",required_argument,  0, 'T'},
     {"redis-server",required_argument,  0, 'r'},
@@ -54,9 +56,11 @@ static void usage (void)
 {
     fprintf (stderr, 
 "Usage: cmbd OPTIONS\n"
-" -e,--event-uri URI     Set event URI e.g. epgm://eth0;239.192.1.1:5555\n"
-" -O,--event-out-uri URI Set event out URI (alternative to -e)\n"
-" -E,--event-in-uri URI  Set event out URI (alternative to -e)\n"
+" -e,--up-event-uri URI      Set upev URI, e.g. epgm://eth0;239.192.1.1:5555\n"
+" -E,--up-event-in-uri URI   Set upev_in URI (alternative to -e)\n"
+" -O,--up-event-out-uri URI  Set upev_out URI (alternative to -e)\n"
+" -d,--dn-event-in-uri URI   Set dnev_in URI\n"
+" -D,--dn-event-out-uri URI  Set dnev_out URI\n"
 " -t,--tree-in-uri URI   Set tree-in URI for upreq, e.g. tcp://*:5556\n"
 " -T,--tree-in-uri2 URI  Set tree-in URI for dnreq, e.g. tcp://*:5557\n"
 " -p,--parent N,URI,URI2 Set parent rank,URIs, e.g.\n"
@@ -89,15 +93,23 @@ int main (int argc, char *argv[])
     conf->api_sockpath = CMB_API_PATH;
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
-            case 'e':   /* --event-uri URI */
-                conf->event_in_uri = optarg;
-                conf->event_out_uri = optarg;
+            case 'e':   /* --up-event-uri URI */
+                if (!strstr (optarg, "pgm://"))
+                    msg_exit ("use -E, -O for non-multicast event socket");
+                conf->upev_in_uri = optarg;
+                conf->upev_out_uri = optarg;
                 break;
-            case 'E':   /* --event-in-uri URI */
-                conf->event_in_uri = optarg;
+            case 'E':   /* --up-event-in-uri URI */
+                conf->upev_in_uri = optarg;
                 break;
-            case 'O':   /* --event-out-uri URI */
-                conf->event_out_uri = optarg;
+            case 'O':   /* --up-event-out-uri URI */
+                conf->upev_out_uri = optarg;
+                break;
+            case 'd':   /* --dn-event-in-uri URI */
+                conf->dnev_in_uri = optarg;
+                break;
+            case 'D':   /* --dn-event-out-uri URI */
+                conf->dnev_out_uri = optarg;
                 break;
             case 't':   /* --tree-in-uri URI */
                 conf->treein_uri = optarg;
@@ -189,21 +201,37 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
         err_exit ("zctx_new");
     zctx_set_linger (srv->zctx, 5);
 
-    /* broker side of plugin sockets */
-    /* N.B. each plugin has a private zs_plout */
     zbind (zctx, &srv->zs_upreq_in,    ZMQ_ROUTER, UPREQ_URI, -1);
     zbind (zctx, &srv->zs_dnreq_out,   ZMQ_ROUTER, DNREQ_URI, -1);
-    zbind (zctx, &srv->zs_plout_event, ZMQ_PUB,  PLOUT_EVENT_URI, -1);
-    zbind (zctx, &srv->zs_plin_event,  ZMQ_PULL, PLIN_EVENT_URI,  -1);
-    zbind (zctx, &srv->zs_snoop,       ZMQ_PUB,  SNOOP_URI, -1);
 
-    /* external sockets */
-    if (conf->event_in_uri) {
-        zbind (zctx, &srv->zs_eventin,  ZMQ_SUB, conf->event_in_uri, -1);
-        zsocket_set_subscribe (srv->zs_eventin, "");
+    zbind (zctx, &srv->zs_dnev_out,    ZMQ_PUB,    DNEV_OUT_URI, -1);
+#if 0
+    zbind (zctx, &srv->zs_dnev_in,     ZMQ_PULL,   DNEV_IN_URI,  -1);
+#else
+    zbind (zctx, &srv->zs_dnev_in,     ZMQ_SUB,    DNEV_IN_URI,  -1);
+    zsocket_set_subscribe (srv->zs_dnev_in, "");
+#endif
+
+    zbind (zctx, &srv->zs_snoop,       ZMQ_PUB,    SNOOP_URI, -1);
+    
+    if (conf->upev_in_uri) {
+        zconnect (zctx, &srv->zs_upev_in,  ZMQ_SUB, conf->upev_in_uri, -1, NULL);
+        zsocket_set_subscribe (srv->zs_upev_in, "");
     }
-    if (conf->event_out_uri)
-        zbind (zctx, &srv->zs_eventout, ZMQ_PUB, conf->event_out_uri, -1);
+    if (conf->upev_out_uri)
+        zconnect (zctx, &srv->zs_upev_out, ZMQ_PUB, conf->upev_out_uri, -1, NULL);
+
+    /* Add dnev bind addresses in addition to default inproc ones.
+     * This is intended for intra-node pub/sub when testing multiple cmbd's
+     * on a single node.
+     */
+    if (conf->dnev_in_uri)
+        if (zsocket_bind (srv->zs_dnev_in, "%s", conf->dnev_in_uri) < 0)
+            err_exit ("zsocket_bind (dnev_in): %s", conf->dnev_in_uri);
+    if (conf->dnev_out_uri)
+        if (zsocket_bind (srv->zs_dnev_out, "%s", conf->dnev_out_uri) < 0)
+            err_exit ("zsocket_bind (dnev_out): %s", conf->dnev_out_uri);
+
     if (conf->parent_len > 0) {
         char id[16];
         snprintf (id, sizeof (id), "%d", conf->rank);
@@ -212,13 +240,14 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
         zconnect (zctx, &srv->zs_dnreq_in, ZMQ_DEALER,
                   conf->parent[srv->parent_cur].treeout_uri2, -1, id);
     }
-    if (conf->treein_uri) { /* N.B. already given an inproc addr above */
+
+    if (conf->treein_uri) {
         if (zsocket_bind (srv->zs_upreq_in, "%s", conf->treein_uri) < 0)
-            err_exit ("zsocket_bind: %s", conf->treein_uri);
+            err_exit ("zsocket_bind (upreq_in): %s", conf->treein_uri);
     }
-    if (conf->treein_uri2) { /* N.B. ditto */
+    if (conf->treein_uri2) {
         if (zsocket_bind (srv->zs_dnreq_out, "%s", conf->treein_uri2) < 0)
-            err_exit ("zsocket_bind: %s", conf->treein_uri2);
+            err_exit ("zsocket_bind (upreq_out): %s", conf->treein_uri2);
     }
 
     if (!(srv->route = zhash_new ()))
@@ -237,10 +266,10 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
 
     if (srv->zs_upreq_in)
         zsocket_destroy (srv->zctx, srv->zs_upreq_in);
-    if (srv->zs_plout_event)
-        zsocket_destroy (srv->zctx, srv->zs_plout_event);
-    if (srv->zs_plin_event)
-        zsocket_destroy (srv->zctx, srv->zs_plin_event);
+    if (srv->zs_dnev_out)
+        zsocket_destroy (srv->zctx, srv->zs_dnev_out);
+    if (srv->zs_dnev_in)
+        zsocket_destroy (srv->zctx, srv->zs_dnev_in);
     if (srv->zs_snoop)
         zsocket_destroy (srv->zctx, srv->zs_snoop);
     if (srv->zs_upreq_out)
@@ -249,10 +278,10 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
         zsocket_destroy (srv->zctx, srv->zs_dnreq_out);
     if (srv->zs_dnreq_in)
         zsocket_destroy (srv->zctx, srv->zs_dnreq_in);
-    if (srv->zs_eventin)
-        zsocket_destroy (srv->zctx, srv->zs_eventin);
-    if (srv->zs_eventout)
-        zsocket_destroy (srv->zctx, srv->zs_eventout);
+    if (srv->zs_upev_in)
+        zsocket_destroy (srv->zctx, srv->zs_upev_in);
+    if (srv->zs_upev_out)
+        zsocket_destroy (srv->zctx, srv->zs_upev_out);
 
     zctx_destroy (&srv->zctx);
 
@@ -394,29 +423,23 @@ static void _cmb_message (conf_t *conf, server_t *srv, zmsg_t **zmsg)
     }
 }
 
-/* A plugin called 'foo' can send a request to 'foo[.anything]' and expect
- * the request to go upstream, not back to itself.  This is how instances
- * of the same plugin on different nodes accomplish reduction.
- * Compare the tag (dest) and the first frame pushed on the message by the
- * dealer socket (src).
- */
 static bool _request_loop_detect (zmsg_t *zmsg)
 {
     char *tag = cmb_msg_tag (zmsg, true); /* short tag name */
-    char *sender = cmb_msg_sender (zmsg);
+    char *lasthop = cmb_msg_nexthop (zmsg);
     bool res = false;
 
-    if (!tag || !sender)
+    if (!tag || !lasthop)
         goto done;
     if (strchr (tag, '!')) /* don't thwart explicit addressing */
         goto done;
-    if (!strcmp (tag, sender))
+    if (!strcmp (tag, lasthop))
         res = true;
 done:
     if (tag)
         free (tag);
-    if (sender)
-        free (sender);
+    if (lasthop)
+        free (lasthop);
     return res;
 }
 
@@ -450,27 +473,40 @@ static void _route_response (conf_t *conf, server_t *srv, zmsg_t **zmsg,
                             bool dnsock)
 {
     char *sender = NULL;
+    char *nexthop = NULL;
     route_t *rte;
 
     zmsg_cc (*zmsg, srv->zs_snoop);
+
+    if (!(sender = cmb_msg_sender (*zmsg)))
+        oom ();
+    if (!(nexthop = cmb_msg_nexthop (*zmsg)))
+        oom ();
 
     /* case 1: responses heading upward on the 'dnreq' flow can reverse
      * direction if they are traversing the tree.
      */
     if (dnsock) {
-        sender = cmb_msg_sender (*zmsg);
-        if (!sender)
-            oom ();
-        rte = zhash_lookup (srv->route, sender);
-        if (rte)
-            zmsg_send (zmsg, srv->zs_dnreq_in);
-        else
+        rte = zhash_lookup (srv->route, nexthop);
+        if (rte) {
+            if (conf->verbose)
+                msg ("%s: dnsock: DOWN %s!...!%s", __FUNCTION__, nexthop, sender);
             zmsg_send (zmsg, srv->zs_upreq_in);
+        } else if (srv->zs_dnreq_in) {
+            if (conf->verbose)
+                msg ("%s: dnsock: UP %s!...!%s", __FUNCTION__, nexthop, sender);
+            zmsg_send (zmsg, srv->zs_dnreq_in);
+        }
+        if (conf->verbose && *zmsg)
+            msg ("%s: dnsock: DROP %s!...!%s", __FUNCTION__, nexthop, sender);
 
     /* case 2: responses headed downward on 'upreq' flow must continue down.
      */
-    } else
+    } else {
+        if (conf->verbose)
+            msg ("%s: upsock: DOWN %s!...!%s", __FUNCTION__, nexthop, sender);
         zmsg_send (zmsg, srv->zs_upreq_in);
+    }
 
     if (sender)
         free (sender);
@@ -494,26 +530,39 @@ static void _route_request (conf_t *conf, server_t *srv, zmsg_t **zmsg,
      * Handle tag == mynode!cmb as a special case.
      */
     if (addr && !strcmp (addr, conf->rankstr)) {
-        if (!strcmp (service, "cmb"))
+        if (!strcmp (service, "cmb")) {
+            if (conf->verbose)
+                msg ("%s: loc addr: internal %s!%s", __FUNCTION__, addr, service);
             _cmb_message (conf, srv, zmsg);
-        else {
+        } else {
             rte = zhash_lookup (srv->route, service);
-            if (rte && !strcmp (rte->gw, service))
+            if (rte && !strcmp (rte->gw, service)) {
+                if (conf->verbose)
+                    msg ("%s: loc addr: DOWN %s!%s", __FUNCTION__, addr, service);
                 zmsg_send_unrouter (zmsg, srv->zs_dnreq_out,
                                     conf->rankstr, rte->gw);
+            }
         }
+        if (conf->verbose && *zmsg)
+            msg ("%s: loc addr: NAK %s!%s", __FUNCTION__, addr, service);
 
     /* case 2: request explicitly addressed to a remote node, tag == N!service.
      * Lookup N and route down if found, route up if not found, or NAK at root.
      */
     } else if (addr) {
         rte = zhash_lookup (srv->route, addr);
-        if (rte)
+        if (rte) {
+            if (conf->verbose)       
+                msg ("%s: remote addr: DOWN %s!%s", __FUNCTION__, addr, service);
             zmsg_send_unrouter (zmsg, srv->zs_dnreq_out,
                                 conf->rankstr, rte->gw);
-        else if (!dnsock && srv->zs_upreq_out)
+        } else if (!dnsock && srv->zs_upreq_out) {
+            if (conf->verbose)
+                msg ("%s: remote addr: UP %s!%s", __FUNCTION__, addr, service);
             zmsg_send (zmsg, srv->zs_upreq_out);
-            
+        }
+        if (conf->verbose && *zmsg)
+            msg ("%s: remote addr: NAK %s!%s", __FUNCTION__, addr, service);
 
     /* case 3: request not addressed, e.g. tag == service.
      * Lookup service and route down if found (and not a loop).
@@ -521,16 +570,25 @@ static void _route_request (conf_t *conf, server_t *srv, zmsg_t **zmsg,
      * Handle tag == cmb as a special case.
      */
     } else {
-        if (!strcmp (service, "cmb"))
+        if (!strcmp (service, "cmb")) {
+            if (conf->verbose)
+                msg ("%s: no addr: internal %s", __FUNCTION__, service);
             _cmb_message (conf, srv, zmsg);
-        else {
+        } else {
             rte = zhash_lookup (srv->route, service);
             if (rte && !_request_loop_detect (*zmsg)) {
+                if (conf->verbose)
+                    msg ("%s: no addr: DOWN %s", __FUNCTION__, service);
                 zmsg_send_unrouter (zmsg, srv->zs_dnreq_out,
                                     conf->rankstr, rte->gw);
-            } else if (!dnsock && srv->zs_upreq_out)
+            } else if (!dnsock && srv->zs_upreq_out) {
+                if (conf->verbose)
+                    msg ("%s: no addr: UP %s", __FUNCTION__, service);
                 zmsg_send (zmsg, srv->zs_upreq_out);
+            }
         }
+        if (conf->verbose && *zmsg)
+            msg ("%s: no addr: NAK %s", __FUNCTION__, service);
     }
 
     /* send NAK reply if message was not routed above */
@@ -549,23 +607,23 @@ done:
 }
 
 /*
-  REQ REP               REQ REP
-   ^   |                 |   ^
-   |   |                 |   |
-   |   v                 v   |
-  (dealer)              (dealer)
- +---------------------------------+
- | upreq_out             dnreq_in  |
- |                                 |
- |             CMBD                |
- |                                 |
- | upreq_in              dnreq_out |
- +---------------------------------+
-  (router)              (router)[1]
-   ^   |                 |   ^
-   |   |                 |   |
-   |   v                 v   |
-  REQ REP               REQ REP
+  REQ REP           REQ REP
+   ^   |             |   ^
+   |   |             |   |
+   |   v             v   |
+  (dealer)          (dealer)     (pub)     (sub)
+ +------------------------------+--------------------+
+ | upreq_out         dnreq_in   | upev_out  upev_in  |
+ |                              |                    |
+ |             CMBD             |                    |
+ |                              |                    |
+ | upreq_in          dnreq_out  | dnev_in   dnev_out |
+ +------------------------------+--------------------+
+  (router)          (router)[1]  (sub)     (pub)
+   ^   |             |   ^
+   |   |             |   |
+   |   v             v   |
+  REQ REP           REQ REP
 
 _______________
 [1] Use zmsg_recv_unrouter()/zmsg_send_unrouter() on this socket
@@ -579,8 +637,8 @@ static void _cmb_poll (conf_t *conf, server_t *srv)
 { .socket = srv->zs_upreq_out,  .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
 { .socket = srv->zs_dnreq_in,   .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
 { .socket = srv->zs_dnreq_out,  .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-{ .socket = srv->zs_plin_event, .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-{ .socket = srv->zs_eventin,    .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
+{ .socket = srv->zs_dnev_in,    .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
+{ .socket = srv->zs_upev_in,    .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
     };
     zmsg_t *zmsg = NULL;
 
@@ -610,22 +668,22 @@ static void _cmb_poll (conf_t *conf, server_t *srv)
         if (zmsg)
             _route_response (conf, srv, &zmsg, true);
     }
-    /* event on plin_event */
+    /* event on dnev_in */
     if (zpa[4].revents & ZMQ_POLLIN) {
-        zmsg = zmsg_recv (srv->zs_plin_event);
+        zmsg = zmsg_recv (srv->zs_dnev_in);
         if (zmsg) {
             zmsg_cc (zmsg, srv->zs_snoop);
-            if (srv->zs_eventout)
-                zmsg_cc (zmsg, srv->zs_eventout);
-            zmsg_send (&zmsg, srv->zs_plout_event);
+            if (srv->zs_upev_out)
+                zmsg_cc (zmsg, srv->zs_upev_out);
+            zmsg_send (&zmsg, srv->zs_dnev_out);
         }
     }
-    /* event on eventin */
+    /* event on upev_in */
     if (zpa[5].revents & ZMQ_POLLIN) {
-        zmsg = zmsg_recv (srv->zs_eventin);
+        zmsg = zmsg_recv (srv->zs_upev_in);
         if (zmsg) {
             zmsg_cc (zmsg, srv->zs_snoop);
-            zmsg_send (&zmsg, srv->zs_plout_event);
+            zmsg_send (&zmsg, srv->zs_dnev_out);
         }
     }
 

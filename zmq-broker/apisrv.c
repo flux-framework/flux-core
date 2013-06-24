@@ -248,7 +248,7 @@ static int _unsubscribe (const char *key, void *item, void *arg)
     client_t *c = arg;
 
     /* FIXME: this assumes zmq subscriptions have use counts (verify this) */
-    zsocket_set_unsubscribe (c->p->zs_in_event, (char *)key);
+    zsocket_set_unsubscribe (c->p->zs_evin, (char *)key);
     return 0;
 }
 
@@ -353,15 +353,15 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
     } else if (cmb_msg_match_substr (zmsg, "api.event.subscribe.", &name)) {
         zhash_insert (c->subscriptions, name, name);
         zhash_freefn (c->subscriptions, name, free);
-        zsocket_set_subscribe (p->zs_in_event, name);
+        zsocket_set_subscribe (p->zs_evin, name);
         name = NULL;
     } else if (cmb_msg_match_substr (zmsg, "api.event.unsubscribe.", &name)) {
         if (zhash_lookup (c->subscriptions, name)) {
             zhash_delete (c->subscriptions, name);
-            zsocket_set_unsubscribe (p->zs_in_event, name);
+            zsocket_set_unsubscribe (p->zs_evin, name);
         }
     } else if (cmb_msg_match_substr (zmsg, "api.event.send.", &name)) {
-        cmb_msg_send (p->zs_out_event, NULL, "%s", name);
+        cmb_msg_send (p->zs_evout, NULL, "%s", name);
     } else {
         if (c->disconnect_notify) {
             char *tag = cmb_msg_tag (zmsg, true); /* first component only */
@@ -539,7 +539,7 @@ static void _poll_once (plugin_ctx_t *p)
     zpa[0].socket = p->zs_dnreq;
     zpa[0].events = ZMQ_POLLIN;
     zpa[0].fd = -1;
-    zpa[1].socket = p->zs_in_event;
+    zpa[1].socket = p->zs_evin;
     zpa[1].events = ZMQ_POLLIN;
     zpa[1].fd = -1;
     zpa[2].socket = p->zs_upreq;
@@ -620,7 +620,7 @@ static void _poll_once (plugin_ctx_t *p)
         type = ZMSG_REQUEST;
         p->stats.req_count++;
     } else if (zpa[1].revents & ZMQ_POLLIN) {/* event on 'in_event' */
-        zmsg = zmsg_recv (p->zs_in_event);
+        zmsg = zmsg_recv (p->zs_evin);
         if (!zmsg)
             err ("zmsg_recv");
         type = ZMSG_EVENT;

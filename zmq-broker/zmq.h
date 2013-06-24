@@ -40,6 +40,7 @@ bool cmb_msg_match (zmsg_t *msg, const char *tag);
 bool cmb_msg_match_substr (zmsg_t *msg, const char *tag, char **restp);
 bool cmb_msg_match_sender (zmsg_t *zmsg, const char *sender);
 
+char *cmb_msg_nexthop (zmsg_t *zmsg);
 char *cmb_msg_sender (zmsg_t *zmsg);
 char *cmb_msg_tag (zmsg_t *zmsg, bool shorten);
 int cmb_msg_hopcount (zmsg_t *zmsg);

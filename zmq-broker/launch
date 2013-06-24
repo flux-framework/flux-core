@@ -19,19 +19,15 @@ while getopts "?hn:c:" opt; do
     esac
 done
 confpath="./pepe_${conf}.lua"
-test -n "$nnodes" || usage
 test -f "$confpath" || usage
 
 ulimit -c unlimited
 
-if [ -n $SLURM_NNODES ]; then
-    srun --propagate=CORE -N${nnodes:-$SLURM_NNODES} \
-      --pty $pepe -c $confpath $cmd
+if [ -n "$SLURM_NNODES" ]; then
+    srun --propagate=CORE -N${nnodes:-$SLURM_NNODES} --pty $pepe -c $confpath $cmd
 else 
     test -n "$nnodes" || usage
-    salloc -N$nnodes \
-      srun --propagate=CORE -N$nnodes \
-      --pty $pepe -c $confpath $cmd
+    salloc -N$nnodes srun --propagate=CORE -N$nnodes --pty $pepe -c $confpath $cmd
 fi
 
 

@@ -24,7 +24,7 @@ end
 
 if pepe.rank == 0 then
     pepe.run ("echo bind 127.0.0.1 | /usr/sbin/redis-server -")
-    pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
+    pepe.run ("./cmbd --up-event-uri='" .. eventuri .. "'"
 		.. " --tree-in-uri='" .. treeinuri .. "'"
 		.. " --tree-in-uri2='" .. treeinuri2 .. "'"
 		.. " --redis-server=localhost"
@@ -36,7 +36,7 @@ else
     local parent_rank = pepe.rank - 1
     local treeouturi = "tcp://" ..  h[parent_rank + 1] .. ":5556"
     local treeouturi2 = "tcp://" ..  h[parent_rank + 1] .. ":5557"
-    pepe.run ("./cmbd --event-uri='" .. eventuri .. "'"
+    pepe.run ("./cmbd --up-event-uri='" .. eventuri .. "'"
 		.. " --tree-in-uri='" .. treeinuri .. "'"
 		.. " --tree-in-uri2='" .. treeinuri2 .. "'"
 		.. " --parent='" .. parent_rank .. "," .. treeouturi .. "," .. treeouturi2 .. "'"

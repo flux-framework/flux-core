@@ -7,6 +7,7 @@ typedef struct cmb_struct *cmb_t;
 /* Create/destroy cmb context used in the other calls.
  */
 cmb_t cmb_init (void);
+cmb_t cmb_init_full (const char *path, int flags);
 void cmb_fini (cmb_t c);
 
 /* Ping a particular plugin.

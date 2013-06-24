@@ -53,7 +53,7 @@ static void _barrier_destroy (void *arg)
     if (b->name)
         free (b->name);
     if (b->exit_event) {
-        zsocket_set_unsubscribe (p->zs_in_event, b->exit_event);
+        zsocket_set_unsubscribe (p->zs_evin, b->exit_event);
         free (b->exit_event);
     }
     free (b);
@@ -72,7 +72,7 @@ static barrier_t *_barrier_create (plugin_ctx_t *p, char *name, int nprocs)
 
     if (asprintf (&b->exit_event, "event.barrier.exit.%s", name) < 0)
         oom ();
-    zsocket_set_subscribe (p->zs_in_event, b->exit_event);
+    zsocket_set_subscribe (p->zs_evin, b->exit_event);
 
     zhash_insert (ctx->barriers, b->name, b);
     zhash_freefn (ctx->barriers, b->name, _barrier_destroy);
@@ -126,7 +126,7 @@ static void _barrier_enter (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
     b->count += json_object_get_int (count);
 
     if (b->count == b->nprocs)
-        cmb_msg_send (p->zs_out_event, NULL, "%s", b->exit_event);
+        cmb_msg_send (p->zs_evout, NULL, "%s", b->exit_event);
     else if (p->conf->rank != 0 && p->timeout == -1)
         p->timeout = 1; /* 1 ms - then send count upstream */
 done:
@@ -174,7 +174,7 @@ static void _init (plugin_ctx_t *p)
     ctx_t *ctx;
 
     ctx = p->ctx = xzmalloc (sizeof (ctx_t));
-    zsocket_set_subscribe (p->zs_in_event, "event.barrier.exit.");
+    zsocket_set_subscribe (p->zs_evin, "event.barrier.exit.");
     ctx->barriers = zhash_new ();
     p->timeout = -1; /* no timeout initially */
 }

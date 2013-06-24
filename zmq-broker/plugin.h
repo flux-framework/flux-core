@@ -10,8 +10,8 @@ typedef struct {
     conf_t *conf;
     void *zs_upreq; /* for making requests */
     void *zs_dnreq; /* for handling requests (reverse message flow) */
-    void *zs_in_event;
-    void *zs_out_event;
+    void *zs_evin;
+    void *zs_evout;
     void *zs_snoop;
     long timeout;
     pthread_t t;

@@ -244,7 +244,7 @@ static void _recv_live_hello (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 
     if (ctx->state[rank] == false) {
         ctx->state[rank] = true;
-        cmb_msg_send (p->zs_out_event, NULL, "event.live.up.%d", rank);
+        cmb_msg_send (p->zs_evout, NULL, "event.live.up.%d", rank);
     }
 done:
     if (o)
@@ -345,12 +345,12 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
             _send_live_hello (p);
         while ((cp = _child_find_aged (ctx->kids, epoch))) {
             if (cp->rank >= 0 && cp->rank < p->conf->size) {
-                cmb_msg_send (p->zs_out_event, NULL, "event.live.down.%d",
+                cmb_msg_send (p->zs_evout, NULL, "event.live.down.%d",
                               cp->rank);
                 ctx->state[cp->rank] = false;
             }
-            _child_del (ctx->kids, cp->rank);
             _route_del_rank (p, cp->rank, cp->rank);
+            _child_del (ctx->kids, cp->rank);
         }
         zmsg_destroy (zmsg);
 
@@ -370,8 +370,8 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         if (rank >= 0 && rank < p->conf->size) {
             ctx->state[rank] = true;
             while ((cp = _child_find_by_parent (ctx->kids, rank))) {
-                _child_del (ctx->kids, cp->rank);
                 _route_del_rank (p, cp->rank, cp->rank);
+                _child_del (ctx->kids, cp->rank);
             }
             if (p->conf->parent_len > 0 && p->conf->parent[0].rank == rank)
                 _reparent (p);
@@ -416,8 +416,8 @@ static void _init (plugin_ctx_t *p)
         _route_add_rank (p, conf->live_children[i], conf->live_children[i]);
     }
 
-    zsocket_set_subscribe (p->zs_in_event, "event.sched.trigger.");
-    zsocket_set_subscribe (p->zs_in_event, "event.live.");
+    zsocket_set_subscribe (p->zs_evin, "event.sched.trigger.");
+    zsocket_set_subscribe (p->zs_evin, "event.live.");
 }
 
 static void _fini (plugin_ctx_t *p)
