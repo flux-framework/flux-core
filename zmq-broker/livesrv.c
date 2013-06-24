@@ -411,9 +411,9 @@ static void _init (plugin_ctx_t *p)
     for (i = 0; i < conf->size; i++)
         ctx->state[i] = true;
 
-    for (i = 0; i < conf->children_len; i++) {
-        _child_add (ctx->kids, conf->children[i], ctx->epoch, conf->rank);
-        _route_add_rank (p, conf->children[i], conf->children[i]);
+    for (i = 0; i < conf->live_children_len; i++) {
+        _child_add (ctx->kids, conf->live_children[i], ctx->epoch, conf->rank);
+        _route_add_rank (p, conf->live_children[i], conf->live_children[i]);
     }
 
     zsocket_set_subscribe (p->zs_in_event, "event.sched.trigger.");

@@ -82,9 +82,9 @@ int main (int argc, char *argv[])
     log_init (basename (argv[0]));
 
     conf = xzmalloc (sizeof (conf_t));
-    conf->syncperiod_msec = 2*1000;
+    conf->sync_period_msec = 2*1000;
     conf->size = 1;
-    conf->apisockpath = CMB_API_PATH;
+    conf->api_sockpath = CMB_API_PATH;
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
             case 'e':   /* --event-uri URI */
@@ -124,10 +124,10 @@ int main (int argc, char *argv[])
                 conf->verbose = true;
                 break;
             case 's':   /* --syncperiod sec */
-                conf->syncperiod_msec = strtoul (optarg, NULL, 10) * 1000;
+                conf->sync_period_msec = strtoul (optarg, NULL, 10) * 1000;
                 break;
             case 'r':   /* --redis-server hostname */
-                conf->redis_server = optarg;
+                conf->kvs_redis_server = optarg;
                 break;
             case 'R':   /* --rank N */
                 conf->rank = strtoul (optarg, NULL, 10);
@@ -136,7 +136,8 @@ int main (int argc, char *argv[])
                 conf->size = strtoul (optarg, NULL, 10);
                 break;
             case 'c':   /* --children n,n,... */
-                if (getints (optarg, &conf->children, &conf->children_len) < 0)
+                if (getints (optarg, &conf->live_children,
+                                     &conf->live_children_len) < 0)
                     msg_exit ("out of memory");
                 break;
             case 'P':   /* --plugins p1,p2,... */
@@ -161,8 +162,8 @@ int main (int argc, char *argv[])
         _cmb_poll (conf, srv);
     _cmb_fini (conf, srv);
 
-    if (conf->children)
-        free (conf->children);
+    if (conf->live_children)
+        free (conf->live_children);
     for (i = 0; i < conf->parent_len; i++) {
         free (conf->parent[i].treeout_uri);
         free (conf->parent[i].treeout_uri2);
@@ -531,7 +532,6 @@ static void _route_request (conf_t *conf, server_t *srv, zmsg_t **zmsg,
     if (*zmsg) {
         if (cmb_msg_rep_errnum (*zmsg, ENOSYS) < 0)
             goto done;
-        zmsg_cc (*zmsg, srv->zs_snoop);
         _route_response (conf, srv, zmsg, true);
     }
 done:
@@ -543,6 +543,28 @@ done:
         free (service);
 }
 
+/*
+  REQ REP               REQ REP
+   ^   |                 |   ^
+   |   |                 |   |
+   |   v                 v   |
+  (dealer)              (dealer)
+ +---------------------------------+
+ | upreq_out             dnreq_in  |
+ |                                 |
+ |             CMBD                |
+ |                                 |
+ | upreq_in              dnreq_out |
+ +---------------------------------+
+  (router)              (router)[1]
+   ^   |                 |   ^
+   |   |                 |   |
+   |   v                 v   |
+  REQ REP               REQ REP
+
+_______________
+[1] Use zmsg_recv_unrouter()/zmsg_send_unrouter() on this socket.
+*/
 
 static void _cmb_poll (conf_t *conf, server_t *srv)
 {
@@ -558,27 +580,31 @@ static void _cmb_poll (conf_t *conf, server_t *srv)
 
     zpoll (zpa, sizeof (zpa) / sizeof (zpa[0]), -1);
 
+    /* request on upreq_in */
     if (zpa[0].revents & ZMQ_POLLIN) {
         zmsg = zmsg_recv (srv->zs_upreq_in);
         if (zmsg)
             _route_request (conf, srv, &zmsg, false);
     }
+    /* response on upreq_out */
     if (zpa[1].revents & ZMQ_POLLIN) {
         zmsg = zmsg_recv (srv->zs_upreq_out);
         if (zmsg)
             _route_response (conf, srv, &zmsg, false);
     }
+    /* request on dnreq_in */
     if (zpa[2].revents & ZMQ_POLLIN) {
         zmsg = zmsg_recv (srv->zs_dnreq_in);
         if (zmsg)
             _route_request (conf, srv, &zmsg, true);
     }
+    /* repsonse on dnreq_out */
     if (zpa[3].revents & ZMQ_POLLIN) {
         zmsg = zmsg_recv_unrouter (srv->zs_dnreq_out);
         if (zmsg)
             _route_response (conf, srv, &zmsg, true);
     }
-
+    /* event on plin_event */
     if (zpa[4].revents & ZMQ_POLLIN) {
         zmsg = zmsg_recv (srv->zs_plin_event);
         if (zmsg) {
@@ -588,6 +614,7 @@ static void _cmb_poll (conf_t *conf, server_t *srv)
             zmsg_send (&zmsg, srv->zs_plout_event);
         }
     }
+    /* event on eventin */
     if (zpa[5].revents & ZMQ_POLLIN) {
         zmsg = zmsg_recv (srv->zs_eventin);
         if (zmsg) {

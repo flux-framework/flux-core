@@ -338,7 +338,7 @@ static void _init (plugin_ctx_t *p)
 
     p->ctx = ctx;
 retryconnect:
-    ctx->rctx = redisConnect (p->conf->redis_server, 6379);
+    ctx->rctx = redisConnect (p->conf->kvs_redis_server, 6379);
     if (ctx->rctx == NULL) {
         err ("redisConnect returned NULL - abort");
         return;

@@ -655,7 +655,7 @@ static void _listener_init (plugin_ctx_t *p)
     ctx_t *ctx = p->ctx;
     struct sockaddr_un addr;
     int fd;
-    char *path = p->conf->apisockpath;
+    char *path = p->conf->api_sockpath;
 
     fd = socket (AF_UNIX, SOCK_SEQPACKET, 0);
     if (fd < 0)
