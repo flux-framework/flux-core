@@ -206,11 +206,14 @@ static void _recv_live_hello (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
             goto done;
         cp->epoch = epoch;
     } else {
-        _child_add (ctx->kids, rank, parent, epoch);
+        _child_add (ctx->kids, rank, epoch, parent);
         _route_add_rank (p, rank, rank);
     }
 
     if (ctx->state[rank] == false) {
+        if (p->conf->verbose)
+            msg ("heard from rank %d (%d:%d), marking up",
+                 rank, epoch, ctx->epoch);
         ctx->state[rank] = true;
         cmb_msg_send (p->zs_evout, NULL, "event.live.up.%d", rank);
     }
@@ -299,6 +302,9 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
             _send_live_hello (p);
         while ((cp = _child_find_aged (ctx->kids, epoch))) {
             if (cp->rank >= 0 && cp->rank < p->conf->size) {
+                if (p->conf->verbose)
+                    msg ("rank %d is stale (%d:%d), marking down",
+                         cp->rank, cp->epoch, ctx->epoch);
                 cmb_msg_send (p->zs_evout, NULL, "event.live.down.%d",
                               cp->rank);
                 ctx->state[cp->rank] = false;
