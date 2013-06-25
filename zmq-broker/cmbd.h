@@ -1,6 +1,6 @@
 typedef struct {
-    char *treeout_uri;  /* upreq_out connects to this port */
-    char *treeout_uri2; /* dnreq_in connects to this port */
+    char *upreq_uri;
+    char *dnreq_uri;
     int rank;
 } parent_t;
 
@@ -18,8 +18,8 @@ typedef struct {
  * This is static and can be shared by all threads.
  */
 typedef struct {
-    char *treein_uri;   /* upreq_in binds to this port and UPREQ_URI */
-    char *treein_uri2;  /* dnreq_out binds to this port and DNREQ_URI */
+    char *upreq_in_uri;
+    char *dnreq_out_uri;
     char *upev_in_uri;
     char *upev_out_uri;
     char *dnev_in_uri;

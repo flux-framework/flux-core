@@ -30,8 +30,8 @@ static const struct option longopts[] = {
     {"up-event-in-uri",required_argument,  0, 'E'},
     {"dn-event-in-uri",required_argument,  0, 'd'},
     {"dn-event-out-uri",required_argument,  0, 'D'},
-    {"tree-in-uri", required_argument,  0, 't'},
-    {"tree-in-uri2",required_argument,  0, 'T'},
+    {"up-req-in-uri", required_argument,  0, 't'},
+    {"dn-req-out-uri",required_argument,  0, 'T'},
     {"redis-server",required_argument,  0, 'r'},
     {"verbose",           no_argument,  0, 'v'},
     {"syncperiod",  required_argument,  0, 's'},
@@ -61,8 +61,8 @@ static void usage (void)
 " -O,--up-event-out-uri URI  Set upev_out URI (alternative to -e)\n"
 " -d,--dn-event-in-uri URI   Set dnev_in URI\n"
 " -D,--dn-event-out-uri URI  Set dnev_out URI\n"
-" -t,--tree-in-uri URI   Set tree-in URI for upreq, e.g. tcp://*:5556\n"
-" -T,--tree-in-uri2 URI  Set tree-in URI for dnreq, e.g. tcp://*:5557\n"
+" -t,--up-req-in-uri URI     Set URI for upreq_in, e.g. tcp://*:5556\n"
+" -T,--dn-req-out-uri URI    Set URI for dnreq_out, e.g. tcp://*:5557\n"
 " -p,--parent N,URI,URI2 Set parent rank,URIs, e.g.\n"
 "                        0,tcp://192.168.1.136:5556,tcp://192.168.1.136:557\n"
 " -c,--children n,n,...  Set ranks of children, comma-sep\n"
@@ -111,13 +111,13 @@ int main (int argc, char *argv[])
             case 'D':   /* --dn-event-out-uri URI */
                 conf->dnev_out_uri = optarg;
                 break;
-            case 't':   /* --tree-in-uri URI */
-                conf->treein_uri = optarg;
+            case 't':   /* --up-req-in-uri URI */
+                conf->upreq_in_uri = optarg;
                 break;
-            case 'T':   /* --tree-in-uri2 URI */
-                conf->treein_uri2 = optarg;
+            case 'T':   /* --dn-req-out-uri URI */
+                conf->dnreq_out_uri = optarg;
                 break;
-            case 'p': { /* --parent rank,URI,URI2 */
+            case 'p': { /* --parent rank,upreq-uri,dnreq-uri */
                 char *p1, *p2, *ac = xstrdup (optarg);
                 if (conf->parent_len == parent_max)
                     msg_exit ("too many --parent's, max %d", parent_max);
@@ -128,8 +128,8 @@ int main (int argc, char *argv[])
                 if (!(p2 = strchr (p1, ',')))
                     msg_exit ("malformed -p option");
                 *p2++ = '\0';
-                conf->parent[conf->parent_len].treeout_uri = xstrdup (p1);
-                conf->parent[conf->parent_len].treeout_uri2 = xstrdup (p2);
+                conf->parent[conf->parent_len].upreq_uri = xstrdup (p1);
+                conf->parent[conf->parent_len].dnreq_uri = xstrdup (p2);
                 conf->parent_len++;
                 free (ac);
                 break;
@@ -182,8 +182,8 @@ int main (int argc, char *argv[])
     if (conf->live_children)
         free (conf->live_children);
     for (i = 0; i < conf->parent_len; i++) {
-        free (conf->parent[i].treeout_uri);
-        free (conf->parent[i].treeout_uri2);
+        free (conf->parent[i].upreq_uri);
+        free (conf->parent[i].dnreq_uri);
     }
     free (conf);
 
@@ -232,18 +232,18 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
         char id[16];
         snprintf (id, sizeof (id), "%d", conf->rank);
         zconnect (zctx, &srv->zs_upreq_out, ZMQ_DEALER,
-                  conf->parent[srv->parent_cur].treeout_uri, 0, id);
+                  conf->parent[srv->parent_cur].upreq_uri, 0, id);
         zconnect (zctx, &srv->zs_dnreq_in, ZMQ_DEALER,
-                  conf->parent[srv->parent_cur].treeout_uri2, 0, id);
+                  conf->parent[srv->parent_cur].dnreq_uri, 0, id);
     }
 
-    if (conf->treein_uri) {
-        if (zsocket_bind (srv->zs_upreq_in, "%s", conf->treein_uri) < 0)
-            err_exit ("zsocket_bind (upreq_in): %s", conf->treein_uri);
+    if (conf->upreq_in_uri) {
+        if (zsocket_bind (srv->zs_upreq_in, "%s", conf->upreq_in_uri) < 0)
+            err_exit ("zsocket_bind (upreq_in): %s", conf->upreq_in_uri);
     }
-    if (conf->treein_uri2) {
-        if (zsocket_bind (srv->zs_dnreq_out, "%s", conf->treein_uri2) < 0)
-            err_exit ("zsocket_bind (upreq_out): %s", conf->treein_uri2);
+    if (conf->dnreq_out_uri) {
+        if (zsocket_bind (srv->zs_dnreq_out, "%s", conf->dnreq_out_uri) < 0)
+            err_exit ("zsocket_bind (upreq_out): %s", conf->dnreq_out_uri);
     }
 
     if (!(srv->route = zhash_new ()))
@@ -370,16 +370,16 @@ static void _cmb_message (conf_t *conf, server_t *srv, zmsg_t **zmsg)
                 break;
         if (i < conf->parent_len) {
             if (zsocket_disconnect (srv->zs_upreq_out, "%s",
-                                conf->parent[srv->parent_cur].treeout_uri) < 0)
+                                conf->parent[srv->parent_cur].upreq_uri) < 0)
                 err_exit ("zsocket_disconnect");
             if (zsocket_disconnect (srv->zs_dnreq_in, "%s",
-                                conf->parent[srv->parent_cur].treeout_uri2)< 0)
+                                conf->parent[srv->parent_cur].dnreq_uri)< 0)
                 err_exit ("zsocket_disconnect");
             if (zsocket_connect (srv->zs_upreq_out, "%s",
-                                conf->parent[i].treeout_uri) < 0)
+                                conf->parent[i].upreq_uri) < 0)
                 err_exit ("zsocket_connect");
             if (zsocket_connect (srv->zs_dnreq_in, "%s",
-                                conf->parent[i].treeout_uri2) < 0)
+                                conf->parent[i].dnreq_uri) < 0)
                 err_exit ("zsocket_connect");
             srv->parent_cur = i;
         }    

@@ -1,0 +1,57 @@
++-------------------------+
+| Launching the framework |
++-------------------------+
+
+Use the ./launch script to start the framework in a slurm job.
+It will work with or without a pre-existing slurm allocation.
+If running outside of an allocation, specify the number of nodes (N)
+with "./launch -n N".
+
+There are pepe config files for several test topologies.  By default,
+./launch uses "flat", but you can select a different config with
+"./launch -c NAME":
+
+binary
+	Binary (k=2) tree with no resiliency.
+
+binomial
+	Binomial tree with no resilency.
+
+degenerate
+	Degenerate (k=1) tree with no resilency.
+
+flat
+	Flat (k=n) tree with no resilency.
+
+trinary
+	Trinary (k=3) tree with resiliency.
+	(Each node except 0, 1 have a backup parent == their grandparent).
+
++-----------------+
+| Message domains |
++-----------------+
+
+There are two orthogonal message domains, events and requests.
+Events utilize pub-sub with hiericical topic names.  One (un)subscribes
+to a topic by substring.  For example, subscribing to "event.sched."
+matches "event.sched.trigger.<epoch>".  A this point all the events
+consist only of the topic name, but a JSON frame could be appended
+should more sophisticated events be required.
+
+Requests are messages that may or may not elicit response messages.
+A request is sent to a service name, which looks just like a subscription
+topic.  If the service name matches as a substring of the service in the
+request, the plugin implementing the service receives the request.
+For example a request sent to "kvs.put" or "kvs.get"  is matched by the
+"kvs" plugin.
+
+Requests build a source-address route as they traverse the overlay tree,
+accumulating address frames as they travel through each hop.  This source-
+address route is used to get any response(s) back to the sender.
+
+
+
+--- FIXME under construction ---
+
+
+
