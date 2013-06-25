@@ -1,8 +1,4 @@
-/* apisrv.c - bridge unix domain API socket and zmq message bus */
-
-/* FIXME: consider adding SO_PEERCRED info for connected clients? */
-
-/* FIXME: writes to fds can block and we have no buffering  */
+/* apisrv.c - bridge unix domain API socket and zmq message broker */
 
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -36,15 +32,6 @@
 
 #define LISTEN_BACKLOG      5
 
-typedef struct _cfd_struct {
-    int fd;
-    struct _cfd_struct *next;
-    struct _cfd_struct *prev;
-    char *name; /* <uuid>.fd.<cfd_id> */
-    char *wname; /* user-provided, indicates API will read */
-    char buf[CMB_API_BUFSIZE / 2];
-} cfd_t;
-
 typedef struct _client_struct {
     int fd;
     struct _client_struct *next;
@@ -54,7 +41,6 @@ typedef struct _client_struct {
     zhash_t *subscriptions;
     bool snoop;
     char *uuid;
-    cfd_t *cfds;
     int cfd_id;
 } client_t;
 
@@ -76,152 +62,6 @@ static char *_uuid_generate (void)
     return xstrdup (s);
 }
 
-static int _fd_setmode (int fd, int mode)
-{
-    int flags;
-
-    flags = fcntl (fd, F_GETFL, 0);
-    if (flags < 0)
-        return -1;
-    flags &= ~O_ACCMODE;
-    flags |= mode;
-    return fcntl (fd, F_SETFL, flags);
-}
-
-static int _sendfd (int fd, int fd_xfer, char *name)
-{
-    struct msghdr msg;
-    struct iovec iov;
-    struct cmsghdr *cmsg;
-    char buf[ CMSG_SPACE (sizeof (fd_xfer)) ];
-    int *fdptr;
-
-    memset (&msg, 0, sizeof (msg));
-
-    iov.iov_base = name;
-    iov.iov_len = strlen (name);
-    msg.msg_iov = &iov;
-    msg.msg_iovlen = 1;
-    msg.msg_control = buf;
-    msg.msg_controllen = sizeof (buf);
-
-    cmsg = CMSG_FIRSTHDR (&msg);
-    cmsg->cmsg_level = SOL_SOCKET;
-    cmsg->cmsg_type = SCM_RIGHTS;
-    cmsg->cmsg_len = CMSG_LEN (sizeof (int));
-    fdptr = (int *) CMSG_DATA (cmsg);
-    memcpy (fdptr, &fd_xfer, sizeof (int));
-    msg.msg_controllen = cmsg->cmsg_len;
-
-    return sendmsg (fd, &msg, 0);
-}
-
-static cfd_t *_cfd_create (plugin_ctx_t *p, client_t *c, char *wname)
-{
-    cfd_t *cfd;
-    int sv[2];
-
-    cfd = xzmalloc (sizeof (cfd_t));
-    cfd->fd = -1;
-    if (socketpair (AF_LOCAL, SOCK_SEQPACKET, 0, sv) < 0)
-        err_exit ("socketpair");
-    if (_fd_setmode (sv[1], wname ? O_RDONLY : O_WRONLY) < 0)
-        err_exit ("fcntl");
-    if (_fd_setmode (sv[0], wname ? O_WRONLY : (O_RDONLY | O_NONBLOCK)) < 0)
-        err_exit ("fcntl");
-    cfd->fd = sv[0];
-    if (asprintf (&cfd->name, "%s.fd.%d", c->uuid, c->cfd_id++) < 0)
-        oom ();
-    if (wname)
-        cfd->wname = xstrdup (wname);
-    if (_sendfd (c->fd, sv[1], cfd->name) < 0)
-        err_exit ("sendfd");
-    if (close (sv[1]) < 0)
-        err_exit ("close");
-    cmb_msg_send (p->zs_dnreq, NULL, "%s.open", cfd->name);
-
-    cfd->prev = NULL;
-    cfd->next = c->cfds;
-    if (cfd->next)
-        cfd->next->prev = cfd;
-    c->cfds = cfd;
-
-    return cfd;
-}
-
-static void _cfd_destroy (plugin_ctx_t *p, client_t *c, cfd_t *cfd)
-{
-    if (cfd->fd != -1)
-        close (cfd->fd);
-
-    if (cfd->prev)
-        cfd->prev->next = cfd->next;
-    else
-        c->cfds = cfd->next;
-    if (cfd->next)
-        cfd->next->prev = cfd->prev;
-
-    cmb_msg_send (p->zs_dnreq, NULL, "%s.close", cfd->name);
-    free (cfd->name);
-    free (cfd);
-}
-
-static int _cfd_count (plugin_ctx_t *p)
-{
-    ctx_t *ctx = p->ctx;
-    client_t *c;
-    cfd_t *cfd;
-    int count = 0;
-
-    for (c = ctx->clients; c != NULL; c = c->next)
-        for (cfd = c->cfds; cfd != NULL; cfd = cfd->next)
-            count++;
-    return count;
-}
-
-/* read from cfd->fd, send message to cfd->wname */
-static int _cfd_read (plugin_ctx_t *p, cfd_t *cfd)
-{
-    int n;
-    json_object *o, *no;
-
-    assert (cfd->wname != NULL);
-    n = read (cfd->fd, cfd->buf, sizeof (cfd->buf));
-    if (n <= 0) {
-        if (errno != ECONNRESET && errno != EWOULDBLOCK && n != 0)
-            err ("apisrv: cfd read");
-        return -1;
-    }
-    if (!(o = json_object_new_object ()))
-        oom ();
-    if (!(no = json_object_new_string (cfd->name)))
-        oom ();
-    json_object_object_add (o, "sender", no);
-    cmb_msg_send_long (p->zs_dnreq, o, cfd->buf, n, "%s", cfd->wname);
-    json_object_put (o);
-    return -1;
-}
-
-/* message received for cfd->name, write to cfd->fd */
-static int _cfd_write (cfd_t *cfd, zmsg_t *zmsg)
-{
-    int len, n;
-
-    if (cfd->wname != NULL) {
-        msg ("_cfd_write: discarding message for O_WRONLY fd");
-        return 0;
-    }
-    len = cmb_msg_datacpy (zmsg, cfd->buf, sizeof (cfd->buf));
-    n = write (cfd->fd, cfd->buf, len);
-    if (n < 0)
-        return -1;
-    if (n < len) {
-        msg ("_cfd_write: short write");
-        return 0;
-    }
-    return 0;
-}
-
 static void _client_create (plugin_ctx_t *p, int fd)
 {
     ctx_t *ctx = p->ctx;
@@ -229,7 +69,6 @@ static void _client_create (plugin_ctx_t *p, int fd)
 
     c = xzmalloc (sizeof (client_t));
     c->fd = fd;
-    c->cfds = NULL;
     c->uuid = _uuid_generate ();
     c->p = p;
     if (!(c->disconnect_notify = zhash_new ()))
@@ -291,8 +130,6 @@ static void _client_destroy (plugin_ctx_t *p, client_t *c)
     if (c->snoop)
         zsocket_set_unsubscribe (p->zs_snoop, "");
 
-    while ((c->cfds) != NULL)
-        _cfd_destroy (p, c, c->cfds);
     free (c->uuid);
     close (c->fd);
 
@@ -345,11 +182,6 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
     } else if (cmb_msg_match (zmsg, "api.snoop.on")) {
         c->snoop = false;
         zsocket_set_unsubscribe (p->zs_snoop, "");
-    } else if (cmb_msg_match (zmsg, "api.fdopen.read")) {
-        _cfd_create (p, c, NULL);
-    } else if (cmb_msg_match_substr (zmsg, "api.fdopen.write.", &name)) {
-        _cfd_create (p, c, name);
-        name = NULL;    
     } else if (cmb_msg_match_substr (zmsg, "api.event.subscribe.", &name)) {
         zhash_insert (c->subscriptions, name, name);
         zhash_freefn (c->subscriptions, name, free);
@@ -481,36 +313,10 @@ static void _recv_snoop (plugin_ctx_t *p, zmsg_t **zmsg)
 }
 
 
-static void _recv_request (plugin_ctx_t *p, zmsg_t **zmsg)
-{
-    ctx_t *ctx = p->ctx;
-    client_t *c;
-    cfd_t *cfd;
-    bool match = false;
-
-    for (c = ctx->clients; c != NULL; c = c->next) {
-        for (cfd = c->cfds; cfd != NULL; ) {
-            cfd_t *deleteme = NULL;
-
-            if (cmb_msg_match (*zmsg, cfd->name)) {
-                if (_cfd_write (cfd, *zmsg) < 0)
-                    deleteme = cfd;
-                match = true;
-            }
-            cfd = cfd->next;
-            if (deleteme)
-                _cfd_destroy (p, c, deleteme);
-        }
-    }
-    if (*zmsg && match)
-        zmsg_destroy (zmsg);
-}
-
 static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
 {
     switch (type) {
         case ZMSG_REQUEST:
-            _recv_request (p, zmsg);
             break;
         case ZMSG_EVENT:
             _recv_event (p, zmsg);
@@ -528,8 +334,7 @@ static void _poll_once (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
     client_t *c;
-    cfd_t *cfd;
-    int zpa_len = _client_count (p) + _cfd_count (p) + 5;
+    int zpa_len = _client_count (p) + 5;
     zmq_pollitem_t *zpa = xzmalloc (sizeof (zmq_pollitem_t) * zpa_len);
     int i;
     zmsg_t *zmsg;
@@ -553,17 +358,8 @@ static void _poll_once (plugin_ctx_t *p)
     zpa[4].events = ZMQ_POLLIN | ZMQ_POLLERR;
     zpa[4].fd = ctx->listen_fd;
 
-    /* client fds */ 
-    for (i = 5, c = ctx->clients; c != NULL; c = c->next) {
-        for (cfd = c->cfds; cfd != NULL; cfd = cfd->next, i++) {
-            zpa[i].events = ZMQ_POLLERR;
-            zpa[i].fd = cfd->fd;
-            if (cfd->wname)
-                zpa[i].events |= ZMQ_POLLIN;
-        }
-    }
     /* clients */
-    for (c = ctx->clients; c != NULL; c = c->next, i++) {
+    for (i = 5, c = ctx->clients; c != NULL; c = c->next, i++) {
         zpa[i].events = ZMQ_POLLIN | ZMQ_POLLERR;
         zpa[i].fd = c->fd;
     }
@@ -571,26 +367,8 @@ static void _poll_once (plugin_ctx_t *p)
 
     zpoll (zpa, zpa_len, -1);
 
-    /* client fds */
-    for (i = 5, c = ctx->clients; c != NULL; c = c->next) {
-        for (cfd = c->cfds; cfd != NULL; i++) {
-            cfd_t *deleteme = NULL;
-            assert (cfd->fd == zpa[i].fd);
-            if (zpa[i].revents & ZMQ_POLLIN) {
-                while (_cfd_read (p, cfd) != -1)
-                    ;
-                if (errno != EWOULDBLOCK)
-                    deleteme = cfd;
-            }
-            if (zpa[i].revents & ZMQ_POLLERR)
-                deleteme = cfd;
-            cfd = cfd->next;
-            if (deleteme)
-                _cfd_destroy (p, c, deleteme);
-        }
-    }
-    /* clients - can modify client fds list (so do after client fds) */
-    for (c = ctx->clients; c != NULL; i++) {
+    /* clients */
+    for (i = 5, c = ctx->clients; c != NULL; i++) {
         client_t *deleteme = NULL;
         assert (c->fd == zpa[i].fd);
         if (zpa[i].revents & ZMQ_POLLIN) {
@@ -619,7 +397,7 @@ static void _poll_once (plugin_ctx_t *p)
             err ("zmsg_recv");
         type = ZMSG_REQUEST;
         p->stats.req_count++;
-    } else if (zpa[1].revents & ZMQ_POLLIN) {/* event on 'in_event' */
+    } else if (zpa[1].revents & ZMQ_POLLIN) {/* event on 'evin' */
         zmsg = zmsg_recv (p->zs_evin);
         if (!zmsg)
             err ("zmsg_recv");

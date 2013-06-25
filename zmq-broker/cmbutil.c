@@ -15,14 +15,12 @@
 #include "log.h"
 #include "util.h"
 
-#define OPTIONS "p:s:b:k:SK:Ct:P:d:fF:n:lx:e:TL:W:r:R:qz:"
+#define OPTIONS "p:s:b:k:SK:Ct:P:d:n:lx:e:TL:W:r:R:qz:"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
     {"ping-padding", required_argument,0, 'P'},
     {"ping-delay", required_argument,  0, 'd'},
-    {"fdopen-read",no_argument,        0, 'f'},
-    {"fdopen-write",required_argument, 0, 'F'},
     {"subscribe",  required_argument,  0, 's'},
     {"event",      required_argument,  0, 'e'},
     {"barrier",    required_argument,  0, 'b'},
@@ -51,8 +49,6 @@ static void usage (void)
 "  -d,--ping-delay N      set delay between ping packets (in msec)\n"
 "  -x,--stats name        get plugin statistics\n"
 "  -T,--snoop             display messages to/from router socket\n"
-"  -f,--fdopen-read       open r/o fd, print name, and read until EOF\n"
-"  -F,--fdopen-write DEST open w/o fd, routing data to DEST, write until EOF\n"
 "  -b,--barrier name      execute barrier across slurm job\n"
 "  -n,--nprocs N          override nprocs (default $SLURM_NPROCS or 1)\n"
 "  -k,--kvs-put key=val   set a key\n"
@@ -131,49 +127,6 @@ int main (int argc, char *argv[])
                     err_exit ("cmb_stats");
                 msg ("%s requests=%d replies=%d events=%d", optarg,
                     req, rep, event);
-                break;
-            }
-            case 'f': { /* --fdopen-read */
-                int fd, n;
-                char *name;
-                char buf[CMB_API_FD_BUFSIZE];
-
-                if ((fd = cmb_fd_open (c, NULL, &name)) < 0)
-                    err_exit ("cmb_fd_open");
-                msg ("fdopen-read: %s", name);
-                while ((n = read (fd, buf, sizeof (buf))) > 0) {
-                    int done, m;
-                    for (done = 0; done < n; done += m) {
-                        m = write (1, buf + done, n - done);
-                        if (m < 0)
-                            err_exit ("write stdout");
-                    }
-                }
-                if (n < 0)
-                    err_exit ("fdopen-read");
-                if (n == 0)
-                    msg ("fdopen-read: EOF");
-                if (close (fd) < 0)
-                    err_exit ("close");
-                break;
-            }
-            case 'F': { /* --fdopen-write DEST */
-                int fd, n;
-                char buf[CMB_API_FD_BUFSIZE];
-
-                if ((fd = cmb_fd_open (c, optarg, NULL)) < 0)
-                    err_exit ("cmb_fd_open");
-                while ((n = read (0, buf, sizeof (buf))) > 0) {
-                    int m;
-                    if ((m = write (fd, buf, n)) < 0)
-                        err_exit ("fdopen-write");
-                    if (m < n)
-                        msg_exit ("fdopen-write: short write");
-                }
-                if (n < 0)
-                    err_exit ("read stdin");
-                if (close (fd) < 0)
-                    err ("close");
                 break;
             }
             case 'b': { /* --barrier NAME */
