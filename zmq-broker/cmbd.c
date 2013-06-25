@@ -253,6 +253,10 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
     if (!(srv->route = zhash_new ()))
         oom ();
 
+    if (srv->zs_upreq_out)
+        cmb_msg_send_rt (srv->zs_upreq_out, NULL, "cmb.route.hello.%d",
+                         conf->rank); 
+
     plugin_init (conf, srv);
 
     *srvp = srv;
@@ -448,6 +452,17 @@ static void _cmb_internal_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
         json_object_put (o);
         if (*zmsg)
             zmsg_destroy (zmsg);
+    } else if (cmb_msg_match_substr (*zmsg, "cmb.route.hello.", &arg)) {
+        char *lasthop = cmb_msg_nexthop (*zmsg);
+        if (lasthop)
+            cmb_route_add_internal (srv, arg, lasthop, 0);
+        if (srv->zs_upreq_out)
+            zmsg_send (zmsg, srv->zs_upreq_out); /* fwd upstream */
+        if (*zmsg)
+            zmsg_destroy (zmsg);
+        if (lasthop)
+            free (lasthop);
+        free (arg);
     }
 }
 
