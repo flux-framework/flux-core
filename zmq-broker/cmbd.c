@@ -419,26 +419,6 @@ static void _cmb_message (conf_t *conf, server_t *srv, zmsg_t **zmsg)
     }
 }
 
-static bool _request_loop_detect (zmsg_t *zmsg)
-{
-    char *tag = cmb_msg_tag (zmsg, true); /* short tag name */
-    char *lasthop = cmb_msg_nexthop (zmsg);
-    bool res = false;
-
-    if (!tag || !lasthop)
-        goto done;
-    if (strchr (tag, '!')) /* don't thwart explicit addressing */
-        goto done;
-    if (!strcmp (tag, lasthop))
-        res = true;
-done:
-    if (tag)
-        free (tag);
-    if (lasthop)
-        free (lasthop);
-    return res;
-}
-
 /* Parse message request tag into addr, service.
  */
 static int _parse_message_tag (zmsg_t *zmsg, char **ap, char **sp)
@@ -506,6 +486,8 @@ static void _route_response (conf_t *conf, server_t *srv, zmsg_t **zmsg,
 
     if (sender)
         free (sender);
+    if (nexthop)
+        free (nexthop);
     if (*zmsg)
         zmsg_destroy (zmsg);
 }
@@ -513,13 +495,14 @@ static void _route_response (conf_t *conf, server_t *srv, zmsg_t **zmsg,
 static void _route_request (conf_t *conf, server_t *srv, zmsg_t **zmsg,
                             bool dnsock)
 {
-    char *addr = NULL, *service = NULL;
+    char *addr = NULL, *service = NULL, *lasthop = NULL;
     route_t *rte;
 
     zmsg_cc (*zmsg, srv->zs_snoop);
 
     if (_parse_message_tag (*zmsg, &addr, &service) < 0)
         goto done;
+    lasthop = cmb_msg_nexthop (*zmsg);
 
     /* case 1: request explicitly addressed to me, tag == mynode!service.
      * Lookup service and if rte->gw == service, route down, else NAK.
@@ -561,8 +544,8 @@ static void _route_request (conf_t *conf, server_t *srv, zmsg_t **zmsg,
             msg ("%s: remote addr: NAK %s!%s", __FUNCTION__, addr, service);
 
     /* case 3: request not addressed, e.g. tag == service.
-     * Lookup service and route down if found (and not a loop).
-     * Route up if not found or loop, or NAK at root.
+     * Lookup service and route down if found (and not looping back to sender).
+     * Route up if not found (or loop), or NAK at root.
      * Handle tag == cmb as a special case.
      */
     } else {
@@ -572,7 +555,7 @@ static void _route_request (conf_t *conf, server_t *srv, zmsg_t **zmsg,
             _cmb_message (conf, srv, zmsg);
         } else {
             rte = zhash_lookup (srv->route, service);
-            if (rte && !_request_loop_detect (*zmsg)) {
+            if (rte && (!lasthop || strcmp (service, lasthop)) != 0) {
                 if (conf->verbose)
                     msg ("%s: no addr: DOWN %s", __FUNCTION__, service);
                 zmsg_send_unrouter (zmsg, srv->zs_dnreq_out,
@@ -600,6 +583,8 @@ done:
         free (addr);
     if (service)
         free (service);
+    if (lasthop)
+        free (lasthop);
 }
 
 /*
