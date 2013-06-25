@@ -16,24 +16,12 @@
 /****************************************************************************
  *  Options
  ****************************************************************************/
-#define _GNU_SOURCE
-#include <getopt.h>
-struct option opt_table [] = {
-    { "help",       0, NULL, 'h' },
-    { "verbose",    0, NULL, 'v' },
-    { "config",     1, NULL, 'c' },
-    { NULL,         0, NULL,  0  }
+#include "optparse.h"
+struct optparse_option opt_table [] = {
+    { "verbose",    'v', 0, 0, NULL,   "Increase verbosity.", NULL, NULL },
+    { "config",     'c', 1, 0, "FILE", "Set config to FILE.", NULL, NULL },
+    OPTPARSE_TABLE_END,
 };
-
-const char * const opt_string = "hvc:";
-
-#define USAGE "\
-Usage %s [OPTIONS] [executable args...]\n\
-    -c, --config=FILE       Specify config file FILE.\n\
-\n\
-    -v, --verbose           Increase verbosity.\n\
-    -h, --help              Display this message\n"
-
 
 /****************************************************************************
  *  Data Types
@@ -152,51 +140,30 @@ void prog_ctx_fini (struct prog_ctx *ctx)
     log_msg_fini ();
 }
 
-static void usage (const char *prog)
-{
-    fprintf (stderr, USAGE, prog);
-}
-
 static int parse_cmdline (struct prog_ctx *ctx, int ac, char *av[])
 {
-    int retvalue = 0;
-    setenv ("POSIXLY_CORRECT", "1", 1);
-    for (;;) {
-        char c = getopt_long (ac, av, opt_string, opt_table, NULL);
+    const char *optarg;
+    int n, optind;
 
-        if (c == -1)
-            break;
+    optparse_t p = optparse_create (ctx->prog);
+    if (p == NULL)
+        log_fatal (1, "Failed to create opt parser!\n");
 
-        switch (c) {
-        case 'h':
-            usage (ctx->prog);
-            exit (0);
-        case 'v':
-            ctx->opts.verbose++;
-            break;
-        case 'c':
-            if (ctx->opts.config_file)
-                free (ctx->opts.config_file);
-            ctx->opts.config_file = strdup (optarg);
-            break;
-        case '?':
-            if (optopt > 0)
-                log_err ("Invalid option \"-%c\"\n", optopt);
-            else
-                log_err ("Invalid option \"%s\"\n", av [optind - 1]);
-            retvalue = -1;
-            break;
-        default:
-            log_err ("Unimplemeted option \"%s\"\n", av [optind - 1]);
-            retvalue = -1;
-            break;
-        }
-    }
+    optparse_set (p, OPTPARSE_USAGE, "[OPTIONS]... COMMAND...");
+    optparse_add_doc (p,
+        "Load and run scripts from config and launch COMMAND", 0);
 
-    if (ctx->opts.verbose > 0)
-        log_msg_set_verbose (ctx->opts.verbose);
-    else if (ctx->opts.verbose < 0)
-        log_msg_quiet ();
+    if (optparse_add_option_table (p, opt_table) != OPTPARSE_SUCCESS)
+        log_fatal (1, "Failed to add option table!\n");
+
+    if ((optind = optparse_parse_args (p, ac, av)) < 0)
+        log_fatal (1, "Option parsing failed!\n");
+
+    if ((n = optparse_getopt (p, "verbose", NULL)) > 0)
+        log_msg_set_verbose (n);
+
+    if (optparse_getopt (p, "config", &optarg) > 0)
+        ctx->opts.config_file = strdup (optarg);
 
     /*
      *  Get remaining args -- the program to run

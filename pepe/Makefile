@@ -2,7 +2,7 @@
 LIBS := 	/usr/local/tools/pmgr/lib/libpmgr_collective.a -llua
 CFLAGS :=       -I/usr/local/tools/pmgr/include
 
-OBJECTS :=     list.o log_msg.o pepe-lua.o pepe-launcher.o
+OBJECTS :=     list.o log_msg.o pepe-lua.o pepe-launcher.o optparse.o
 TARGET :=      pepe-launcher
 
 
