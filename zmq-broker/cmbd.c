@@ -201,25 +201,21 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
         err_exit ("zctx_new");
     zctx_set_linger (srv->zctx, 5);
 
-    zbind (zctx, &srv->zs_upreq_in,    ZMQ_ROUTER, UPREQ_URI, -1);
-    zbind (zctx, &srv->zs_dnreq_out,   ZMQ_ROUTER, DNREQ_URI, -1);
+    zbind (zctx, &srv->zs_upreq_in,    ZMQ_ROUTER, UPREQ_URI, 0);
+    zbind (zctx, &srv->zs_dnreq_out,   ZMQ_ROUTER, DNREQ_URI, 0);
 
-    zbind (zctx, &srv->zs_dnev_out,    ZMQ_PUB,    DNEV_OUT_URI, -1);
-#if 0
-    zbind (zctx, &srv->zs_dnev_in,     ZMQ_PULL,   DNEV_IN_URI,  -1);
-#else
-    zbind (zctx, &srv->zs_dnev_in,     ZMQ_SUB,    DNEV_IN_URI,  -1);
+    zbind (zctx, &srv->zs_dnev_out,    ZMQ_PUB,    DNEV_OUT_URI, 0);
+    zbind (zctx, &srv->zs_dnev_in,     ZMQ_SUB,    DNEV_IN_URI,  0);
     zsocket_set_subscribe (srv->zs_dnev_in, "");
-#endif
 
     zbind (zctx, &srv->zs_snoop,       ZMQ_PUB,    SNOOP_URI, -1);
     
     if (conf->upev_in_uri) {
-        zconnect (zctx, &srv->zs_upev_in,  ZMQ_SUB, conf->upev_in_uri, -1, NULL);
+        zconnect (zctx, &srv->zs_upev_in,  ZMQ_SUB, conf->upev_in_uri, 0, NULL);
         zsocket_set_subscribe (srv->zs_upev_in, "");
     }
     if (conf->upev_out_uri)
-        zconnect (zctx, &srv->zs_upev_out, ZMQ_PUB, conf->upev_out_uri, -1, NULL);
+        zconnect (zctx, &srv->zs_upev_out, ZMQ_PUB, conf->upev_out_uri,0, NULL);
 
     /* Add dnev bind addresses in addition to default inproc ones.
      * This is intended for intra-node pub/sub when testing multiple cmbd's
@@ -236,9 +232,9 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
         char id[16];
         snprintf (id, sizeof (id), "%d", conf->rank);
         zconnect (zctx, &srv->zs_upreq_out, ZMQ_DEALER,
-                  conf->parent[srv->parent_cur].treeout_uri, -1, id);
+                  conf->parent[srv->parent_cur].treeout_uri, 0, id);
         zconnect (zctx, &srv->zs_dnreq_in, ZMQ_DEALER,
-                  conf->parent[srv->parent_cur].treeout_uri2, -1, id);
+                  conf->parent[srv->parent_cur].treeout_uri2, 0, id);
     }
 
     if (conf->treein_uri) {

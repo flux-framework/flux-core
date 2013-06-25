@@ -244,12 +244,8 @@ static int _plugin_create (char *name, server_t *srv, conf_t *conf)
               (char *)plugin->name);
     zconnect (zctx, &p->zs_dnreq, ZMQ_DEALER, DNREQ_URI, -1,
               (char *)plugin->name);
-    zconnect (zctx, &p->zs_evin,  ZMQ_SUB, DNEV_OUT_URI, -1, NULL);
-#if 0
-    zconnect (zctx, &p->zs_evout, ZMQ_PUSH, DNEV_IN_URI, -1, NULL);
-#else
+    zconnect (zctx, &p->zs_evin,  ZMQ_SUB, DNEV_OUT_URI, 0, NULL);
     zconnect (zctx, &p->zs_evout, ZMQ_PUB, DNEV_IN_URI, -1, NULL);
-#endif
     zconnect (zctx, &p->zs_snoop, ZMQ_SUB, SNOOP_URI, -1, NULL);
 
     if (cmb_route_add_internal (p->srv, name, name, ROUTE_FLAGS_PRIVATE) < 0)
