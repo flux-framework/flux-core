@@ -194,6 +194,7 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
 {
     server_t *srv;
     zctx_t *zctx;
+    int i;
 
     srv = xzmalloc (sizeof (server_t));
     srv->zctx = zctx = zctx_new ();
@@ -227,6 +228,9 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
     if (conf->dnev_out_uri)
         if (zsocket_bind (srv->zs_dnev_out, "%s", conf->dnev_out_uri) < 0)
             err_exit ("zsocket_bind (dnev_out): %s", conf->dnev_out_uri);
+
+    for (i = 0; i < conf->parent_len; i++)
+        srv->parent_alive[i] = true;
 
     if (conf->parent_len > 0) {
         char id[16];
@@ -321,54 +325,33 @@ void cmb_route_del_internal (server_t *srv, const char *dst, const char *gw)
 /* helper to build array of routes as a json object */
 static int _route_to_json_full (const char *dst, route_t *rte, json_object *o)
 {
-    json_object *oo, *dd, *go, *fo;
+    json_object *oo, *no;
 
     if (!(oo = json_object_new_object ()))
         oom ();
-    if (!(dd = json_object_new_string (dst)))
+    if (!(no = json_object_new_string (dst)))
         oom ();
-    if (!(go = json_object_new_string (rte->gw)))
+    json_object_object_add (oo, "dst", no);
+    if (!(no = json_object_new_string (rte->gw)))
         oom ();
-    if (!(fo = json_object_new_int (rte->flags)))
+    json_object_object_add (oo, "gw", no);
+    if (!(no = json_object_new_int (rte->flags)))
         oom ();
-    json_object_object_add (oo, "dst", dd);
-    json_object_object_add (oo, "gw", dd);
-    json_object_object_add (oo, "flags", fo);
+    json_object_object_add (oo, "flags", no);
     json_object_array_add (o, oo);
     return 0;
 }
-#if 0
-/* helper to build array of known (public) destinations as a json object */
-static int _route_to_json (const char *dst, route_t *rte, json_object *o)
+
+static void _reparent (conf_t *conf, server_t *srv)
 {
-    json_object *dd;
+    int i;
 
-    if (!(rte->flags & ROUTE_FLAGS_PRIVATE)) {
-        if (!(dd = json_object_new_string (dst)))
-            oom ();
-        json_object_array_add (o, dd);
-    }
-    return 0;
-}
-#endif
-
-/**
- ** Request routing
- **/
-
-/* cmb.* requests are handled by cmb internally.
- */
-static void _cmb_message (conf_t *conf, server_t *srv, zmsg_t **zmsg)
-{
-    char *arg;
-
-    if (cmb_msg_match_substr (*zmsg, "cmb.reparent.", &arg)) {
-        int i, newrank = strtoul (arg, NULL, 10);
-    
-        for (i = 0; i < conf->parent_len; i++)
-            if (conf->parent[i].rank == newrank)
-                break;
-        if (i < conf->parent_len) {
+    for (i = 0; i < conf->parent_len; i++) {
+        if (i != srv->parent_cur && srv->parent_alive[i]) {
+            if (conf->verbose)
+                msg ("%s: disconnect %s, connect %s", __FUNCTION__,
+                    conf->parent[srv->parent_cur].upreq_uri,
+                    conf->parent[i].upreq_uri);
             if (zsocket_disconnect (srv->zs_upreq_out, "%s",
                                 conf->parent[srv->parent_cur].upreq_uri) < 0)
                 err_exit ("zsocket_disconnect");
@@ -382,26 +365,75 @@ static void _cmb_message (conf_t *conf, server_t *srv, zmsg_t **zmsg)
                                 conf->parent[i].dnreq_uri) < 0)
                 err_exit ("zsocket_connect");
             srv->parent_cur = i;
-        }    
-        free (arg);
-        zmsg_destroy (zmsg);
-    } else if (cmb_msg_match_substr (*zmsg, "cmb.route.add.", &arg)) {
-        json_object *gw, *o = NULL;
+            break;
+        }
+    }
+}
 
-        if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) == 0
-                    && o != NULL && (gw = json_object_object_get (o, "gw")))
-            cmb_route_add_internal (srv, arg, json_object_get_string (gw), 0);
+static void _cmb_internal_event (conf_t *conf, server_t *srv, zmsg_t *zmsg)
+{
+    char *arg = NULL;
+
+    if (cmb_msg_match_substr (zmsg, "event.live.down.", &arg)) {
+        int i, rank = strtoul (arg, NULL, 10);
+
+        for (i = 0; i < conf->parent_len; i++) {
+            if (conf->parent[i].rank == rank) {
+                srv->parent_alive[i] = false;
+                if (i == srv->parent_cur)
+                    _reparent (conf, srv);
+            }
+        }
+        free (arg);        
+    } else if (cmb_msg_match_substr (zmsg, "event.live.up.", &arg)) {
+        int i, rank = strtoul (arg, NULL, 10);
+        
+        for (i = 0; i < conf->parent_len; i++) {
+            if (conf->parent[i].rank == rank) {
+                srv->parent_alive[i] = true;
+                if (i == 0 && srv->parent_cur > 0)
+                    _reparent (conf, srv);
+            }
+        }
+        free (arg);
+    }
+}
+
+static void _cmb_internal_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
+{
+    char *arg;
+
+    if (cmb_msg_match_substr (*zmsg, "cmb.route.add.", &arg)) {
+        json_object *oo, *o = NULL;
+        const char *gw = NULL;
+        int flags = 0;
+
+        if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) == 0 && o != NULL) {
+            if ((oo = json_object_object_get (o, "gw")))
+                gw = json_object_get_string (oo);
+            if ((oo = json_object_object_get (o, "flags")))
+                flags = json_object_get_int (oo);
+            if (gw)
+                cmb_route_add_internal (srv, arg, gw, flags);
+        }
         if (o)
             json_object_put (o);
+        zmsg_destroy (zmsg);
         free (arg);
-        zmsg_destroy (zmsg);
     } else if (cmb_msg_match_substr (*zmsg, "cmb.route.del.", &arg)) {
-        json_object *gw, *o = NULL;
+        json_object *oo, *o = NULL;
+        const char *gw = NULL;
 
-        if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) == 0
-                    && o != NULL && (gw = json_object_object_get (o, "gw")))
-            cmb_route_del_internal (srv, arg, json_object_get_string (gw));
+        if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) == 0 && o != NULL) {
+            if ((oo = json_object_object_get (o, "gw")))
+                gw = json_object_get_string (oo);
+            if (gw)
+                cmb_route_del_internal (srv, arg, gw);
+        }
+        if (o)
+            json_object_put (o);
         zmsg_destroy (zmsg);
+        free (arg);
     } else if (cmb_msg_match (*zmsg, "cmb.route.query")) {
         json_object *ao, *o = NULL;
 
@@ -512,7 +544,7 @@ static void _route_request (conf_t *conf, server_t *srv, zmsg_t **zmsg,
         if (!strcmp (service, "cmb")) {
             if (conf->verbose)
                 msg ("%s: loc addr: internal %s!%s", __FUNCTION__, addr, service);
-            _cmb_message (conf, srv, zmsg);
+            _cmb_internal_request (conf, srv, zmsg);
         } else {
             rte = zhash_lookup (srv->route, service);
             if (rte && !strcmp (rte->gw, service)) {
@@ -552,7 +584,7 @@ static void _route_request (conf_t *conf, server_t *srv, zmsg_t **zmsg,
         if (!strcmp (service, "cmb")) {
             if (conf->verbose)
                 msg ("%s: no addr: internal %s", __FUNCTION__, service);
-            _cmb_message (conf, srv, zmsg);
+            _cmb_internal_request (conf, srv, zmsg);
         } else {
             rte = zhash_lookup (srv->route, service);
             if (rte && (!lasthop || strcmp (service, lasthop)) != 0) {
@@ -653,6 +685,7 @@ static void _cmb_poll (conf_t *conf, server_t *srv)
     if (zpa[4].revents & ZMQ_POLLIN) {
         zmsg = zmsg_recv (srv->zs_dnev_in);
         if (zmsg) {
+            _cmb_internal_event (conf, srv, zmsg);
             zmsg_cc (zmsg, srv->zs_snoop);
             if (srv->zs_upev_out)
                 zmsg_cc (zmsg, srv->zs_upev_out);
@@ -663,6 +696,7 @@ static void _cmb_poll (conf_t *conf, server_t *srv)
     if (zpa[5].revents & ZMQ_POLLIN) {
         zmsg = zmsg_recv (srv->zs_upev_in);
         if (zmsg) {
+            _cmb_internal_event (conf, srv, zmsg);
             zmsg_cc (zmsg, srv->zs_snoop);
             zmsg_send (&zmsg, srv->zs_dnev_out);
         }

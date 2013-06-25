@@ -1,3 +1,4 @@
+#define MAX_PARENTS 2
 typedef struct {
     char *upreq_uri;
     char *dnreq_uri;
@@ -29,7 +30,7 @@ typedef struct {
     int rank;
     int size;
     char *plugins;
-    parent_t parent[2];
+    parent_t parent[MAX_PARENTS];
     int parent_len;
     /* Options set in cmbd getopt and read by plugins.
      * FIXME: need a spank-like abstraction for plugin options.
@@ -56,6 +57,7 @@ typedef struct {
     void *zs_dnev_out;
     void *zs_dnev_in;
     int parent_cur;
+    bool parent_alive[MAX_PARENTS];
     zhash_t *route;
     zhash_t *plugins;
 } server_t;

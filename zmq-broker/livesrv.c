@@ -1,37 +1,5 @@
 /* livesrv.c - node liveness service */
 
-/* This simple implementation could probably be improved.
- * However, it is simple enough that we can be assured of
- * "eventually consistent" liveness state.
- *
- * Activity is orchestrated by the event.sched.trigger.<epoch>
- * multicast message, which marks time in the session.  The <epoch> starts
- * with 1 and increases monotonically.  When event.sched.trigger is received,
- * we send a live.hello.<node> message to our parent.
- *
- * Nodes are only responsible for monitoring their direct children, if any.
- * The state of children includes the epoch in which a live.hello message
- * was last received.  If this epoch ages too far beyond the current epoch,
- * the node is marked down and an event.live.down.<node> message
- * is multicast so that liveness state across the job can be updated.
- * Similarly, if a live.hello message is received for a node marked down,
- * an event.live.up.<node> message is multicast.
- *
- * A new node initializes the current epoch to 0, liveness state for
- * all nodes to up, and last epoch seen for children to 0.  If the next
- * event.sched.trigger received is for epoch 1, then we cannot have missed
- * any event.live messages because the session isn't old enough to have
- * created any.  If the next epoch is greater than 1, then we are a late
- * joiner.
- *
- * FIXME: handle late joiner
- * 1) Request state from parent.
- * 2) If parent takes too long, time out and try alternate parent.
- * 3) Any event.live.up/down messages received must be stored and replayed
- * after obtaining the state.
- * 4) Requests for state should be stored and answered after #1
- */
-
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -305,20 +273,6 @@ static bool _got_parent (plugin_ctx_t *p)
     return ctx->state[rank];
 }
 
-static void _reparent (plugin_ctx_t *p)
-{
-    ctx_t *ctx = p->ctx;
-    int i, rank;
-
-    for (i = 0; i < p->conf->parent_len; i++) {
-        rank = p->conf->parent[i].rank;
-        if (i != p->srv->parent_cur && ctx->state[rank] == true) {
-            cmb_msg_send_rt (p->zs_upreq, NULL, "cmb.reparent.%d", rank);
-            break;
-        }
-    }
-}
-
 static void _handle_late_joiner (plugin_ctx_t *p, int epoch)
 {
     /* No-op for now.  FIXME */
@@ -363,7 +317,6 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
     /* When a node transitions up, we must:
      * - mark it up in our state
      * - stop monitoring kids whose real parent came back up
-     * - if primary parent, reparent
      */
     } else if (cmb_msg_match_substr (*zmsg, "event.live.up.", &arg)) {
         rank = strtoul (arg, NULL, 10);
@@ -373,22 +326,16 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
                 _route_del_rank (p, cp->rank, cp->rank);
                 _child_del (ctx->kids, cp->rank);
             }
-            if (p->conf->parent_len > 0 && p->conf->parent[0].rank == rank)
-                _reparent (p);
         }
         zmsg_destroy (zmsg);
 
     /* When a node transitions down, we must:
      * - mark it down in our state
-     * - if current parent, reparent
      */
     } else if (cmb_msg_match_substr (*zmsg, "event.live.down.", &arg)) {
         rank = strtoul (arg, NULL, 10);
-        if (rank >= 0 && rank < p->conf->size) {
+        if (rank >= 0 && rank < p->conf->size)
             ctx->state[rank] = false;
-            if (p->conf->parent_len > 0 && p->conf->parent[p->srv->parent_cur].rank == rank)
-                _reparent (p);
-        }
         zmsg_destroy (zmsg);
     }
 
