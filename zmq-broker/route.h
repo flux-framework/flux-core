@@ -12,7 +12,7 @@ const char *route_lookup (route_ctx_t ctx, const char *dst);
 void route_add_hello (route_ctx_t ctx, zmsg_t *zmsg, int flags);
 void route_del_subtree (route_ctx_t ctx, const char *rank);
 
-json_object *route_dump_json (route_ctx_t ctx);
+json_object *route_dump_json (route_ctx_t ctx, bool private);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

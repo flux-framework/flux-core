@@ -53,11 +53,15 @@ void route_fini (route_ctx_t ctx)
 
 static route_t *_route_create (const char *gw, const char *parent, int flags)
 {
-    route_t *rte = xzmalloc (sizeof (route_t));
-    rte->gw = xstrdup (gw);
-    if (parent)
-        rte->parent = xstrdup (parent);
-    rte->flags = flags;
+    route_t *rte = NULL;
+
+    if (gw) {
+        rte = xzmalloc (sizeof (route_t));
+        rte->gw = xstrdup (gw);
+        if (parent)
+            rte->parent = xstrdup (parent);
+        rte->flags = flags;
+    }
     return rte;
 }
 
@@ -74,10 +78,12 @@ void route_add (route_ctx_t ctx, const char *dst, const char *gw,
 {
     route_t *rte = _route_create (gw, parent, flags);
 
-    zhash_update (ctx->route, dst, rte);
-    zhash_freefn (ctx->route, dst, (zhash_free_fn *)_free_route);
-    if (ctx->verbose)
-        msg ("%s: %s via %s", __FUNCTION__, dst, gw);
+    if (rte) {
+        zhash_update (ctx->route, dst, rte);
+        zhash_freefn (ctx->route, dst, (zhash_free_fn *)_free_route);
+        if (ctx->verbose)
+            msg ("%s: %s via %s", __FUNCTION__, dst, gw);
+    }
 }
 
 void route_del (route_ctx_t ctx, const char *dst, const char *gw)
@@ -97,10 +103,34 @@ const char *route_lookup (route_ctx_t ctx, const char *dst)
     return rte ? rte->gw : NULL;
 }
 
+static void _add_subtree_json (route_ctx_t ctx, json_object *o)
+{
+    json_object *vo, *oo, *dst, *gw, *parent, *flags;
+    int i;
+
+    if ((oo = json_object_object_get (o, "route"))) {
+        for (i = 0; i < json_object_array_length (oo); i++) {
+            vo = json_object_array_get_idx (oo, i);
+            dst = json_object_object_get (vo, "dst");
+            gw = json_object_object_get (vo, "gw");
+            parent = json_object_object_get (vo, "parent");
+            flags = json_object_object_get (vo, "flags");
+
+            if (dst && gw) {
+                route_add (ctx, json_object_get_string (dst),
+                                json_object_get_string (gw),
+                                parent ? json_object_get_string (parent) : NULL,
+                                flags  ? json_object_get_int (flags) : 0);
+            }
+        }
+    }
+}
+
 void route_add_hello (route_ctx_t ctx, zmsg_t *zmsg, int flags)
 {
     zframe_t *zf;
     char *s, *first = NULL, *prev = NULL;
+    json_object *o = NULL;
 
     zf = zmsg_first (zmsg);
     while (zf && zframe_size (zf) != 0) {
@@ -118,6 +148,11 @@ void route_add_hello (route_ctx_t ctx, zmsg_t *zmsg, int flags)
         free (first);
     if (prev)
         free (prev);
+
+    if (cmb_msg_decode (zmsg, NULL, &o, NULL, NULL) == 0 && o != NULL) {
+        _add_subtree_json (ctx, o);
+        json_object_put (o);
+    }
 }
 
 static void _subtree_append (route_ctx_t ctx, const char *rank, zlist_t *rmq);
@@ -160,39 +195,47 @@ void route_del_subtree (route_ctx_t ctx, const char *rank)
     zlist_destroy (&rmq);
 }
 
-static int _route_to_json (const char *dst, route_t *rte, json_object *o)
+typedef struct {
+    json_object *o;
+    bool private;
+} jarg_t;
+
+static int _route_to_json (const char *dst, route_t *rte, jarg_t *arg)
 {
     json_object *oo, *no;
 
-    if (!(oo = json_object_new_object ()))
-        oom ();
-    if (!(no = json_object_new_string (dst)))
-        oom ();
-    json_object_object_add (oo, "dst", no);
-    if (!(no = json_object_new_string (rte->gw)))
-        oom ();
-    json_object_object_add (oo, "gw", no);
-    if (rte->parent) {
-        if (!(no = json_object_new_string (rte->parent)))
+    if (arg->private || !(rte->flags & ROUTE_FLAGS_PRIVATE)) {
+        if (!(oo = json_object_new_object ()))
             oom ();
-        json_object_object_add (oo, "parent", no);
-    }
-    if (!(no = json_object_new_int (rte->flags)))
-        oom ();
-    json_object_object_add (oo, "flags", no);
+        if (!(no = json_object_new_string (dst)))
+            oom ();
+        json_object_object_add (oo, "dst", no);
+        if (!(no = json_object_new_string (rte->gw)))
+            oom ();
+        json_object_object_add (oo, "gw", no);
+        if (rte->parent) {
+            if (!(no = json_object_new_string (rte->parent)))
+                oom ();
+            json_object_object_add (oo, "parent", no);
+        }
+        if (!(no = json_object_new_int (rte->flags)))
+            oom ();
+        json_object_object_add (oo, "flags", no);
 
-    json_object_array_add (o, oo);
+        json_object_array_add (arg->o, oo);
+    }
     return 0;
 }
 
-json_object *route_dump_json (route_ctx_t ctx)
+json_object *route_dump_json (route_ctx_t ctx, bool private)
 {
-    json_object *o;
+    jarg_t arg = { .private = private };
 
-    if (!(o = json_object_new_array ()))
+    if (!(arg.o = json_object_new_array ()))
         oom ();
-    zhash_foreach (ctx->route, (zhash_foreach_fn *)_route_to_json, o);
-    return o;
+    zhash_foreach (ctx->route, (zhash_foreach_fn *)_route_to_json, &arg);
+
+    return arg.o;
 }
 
 

@@ -258,7 +258,6 @@ static int _plugin_create (char *name, server_t *srv, conf_t *conf)
     zhash_insert (srv->plugins, plugin->name, p);
     zhash_freefn (srv->plugins, plugin->name, _plugin_destroy);
 
-
     return 0;
 }
 
