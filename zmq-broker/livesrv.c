@@ -32,13 +32,13 @@
 
 typedef struct {
     int rank;
-    int epoch;  /* epoch of last hello */
-    int parent; /* in case of adoptees */
+    int epoch;
+    int parent;
 } child_t;
 
 typedef struct {
     bool *state;/* the state of everyone: true=up, false=down */
-    int epoch;  /* epoch of last received scheduling trigger (0 initially) */
+    int age;
     zhash_t *kids;
 } ctx_t;
 
@@ -117,15 +117,14 @@ static void _child_del (zhash_t *kids, int rank)
 
 /* Send live.hello.<rank> 
  */
-static void _send_live_hello (plugin_ctx_t *p)
+static void _send_live_hello (plugin_ctx_t *p, int epoch)
 {
-    ctx_t *ctx = p->ctx;
     json_object *no, *o = NULL;
 
     if (!(o = json_object_new_object ()))
         oom ();
 
-    if (!(no = json_object_new_int (ctx->epoch)))
+    if (!(no = json_object_new_int (epoch)))
         oom ();
     json_object_object_add (o, "epoch", no);
 
@@ -161,16 +160,13 @@ static void _recv_live_hello (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 
     cp = _child_find_by_rank (ctx->kids, rank);
     if (cp) {
-        if (epoch < cp->epoch)
-            goto done;
         cp->epoch = epoch;
     } else
         _child_add (ctx->kids, rank, epoch, parent);
 
     if (ctx->state[rank] == false) {
         if (p->conf->verbose)
-            msg ("heard from rank %d (%d:%d), marking up",
-                 rank, epoch, ctx->epoch);
+            msg ("heard from rank %d, marking up", rank);
         ctx->state[rank] = true;
         cmb_msg_send (p->zs_evout, NULL, "event.live.up.%d", rank);
     }
@@ -233,11 +229,6 @@ static bool _got_parent (plugin_ctx_t *p)
     return ctx->state[rank];
 }
 
-static void _handle_late_joiner (plugin_ctx_t *p, int epoch)
-{
-    /* No-op for now.  FIXME */
-}
-
 static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
 {
     char *arg = NULL;
@@ -246,27 +237,25 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
     child_t *cp;
 
     /* On the clock tick, we must:
-     * - notice if we are a late joiner and "catch up" our state
      * - say hello to our parent
      * - age our children
      */
     if (cmb_msg_match_substr (*zmsg, "event.sched.trigger.", &arg)) {
         epoch = strtoul (arg, NULL, 10);
-        if (ctx->epoch == 0 && epoch > 1)
-            _handle_late_joiner (p, epoch);
-        ctx->epoch = epoch;
         if (_got_parent (p))
-            _send_live_hello (p);
-        while ((cp = _child_find_aged (ctx->kids, epoch))) {
-            if (cp->rank >= 0 && cp->rank < p->conf->size) {
-                if (p->conf->verbose)
-                    msg ("rank %d is stale (%d:%d), marking down",
-                         cp->rank, cp->epoch, ctx->epoch);
-                cmb_msg_send (p->zs_evout, NULL, "event.live.down.%d",
-                              cp->rank);
-                ctx->state[cp->rank] = false;
+            _send_live_hello (p, epoch);
+        if (ctx->age++ >= MISSED_EPOCH_ALLOW) {
+            while ((cp = _child_find_aged (ctx->kids, epoch))) {
+                if (cp->rank >= 0 && cp->rank < p->conf->size) {
+                    if (p->conf->verbose)
+                        msg ("rank %d is stale (%d:%d), marking down",
+                             cp->rank, cp->epoch, epoch);
+                    cmb_msg_send (p->zs_evout, NULL, "event.live.down.%d",
+                                  cp->rank);
+                    ctx->state[cp->rank] = false;
+                }
+                _child_del (ctx->kids, cp->rank);
             }
-            _child_del (ctx->kids, cp->rank);
         }
         zmsg_destroy (zmsg);
 
@@ -313,13 +302,12 @@ static void _init (plugin_ctx_t *p)
     ctx->state = xzmalloc (conf->size * sizeof (ctx->state[0]));
     if (!(ctx->kids = zhash_new ()))
         oom ();
-    ctx->epoch = 0;
 
     for (i = 0; i < conf->size; i++)
         ctx->state[i] = true;
 
     for (i = 0; i < conf->live_children_len; i++)
-        _child_add (ctx->kids, conf->live_children[i], ctx->epoch, conf->rank);
+        _child_add (ctx->kids, conf->live_children[i], 0, conf->rank);
 
     zsocket_set_subscribe (p->zs_evin, "event.sched.trigger.");
     zsocket_set_subscribe (p->zs_evin, "event.live.");

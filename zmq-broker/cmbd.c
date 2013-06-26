@@ -247,7 +247,7 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
     }
     if (conf->dnreq_out_uri) {
         if (zsocket_bind (srv->zs_dnreq_out, "%s", conf->dnreq_out_uri) < 0)
-            err_exit ("zsocket_bind (upreq_out): %s", conf->dnreq_out_uri);
+            err_exit ("zsocket_bind (dnreq_out): %s", conf->dnreq_out_uri);
     }
 
     if (!(srv->route = zhash_new ()))
@@ -369,6 +369,9 @@ static void _reparent (conf_t *conf, server_t *srv)
                                 conf->parent[i].dnreq_uri) < 0)
                 err_exit ("zsocket_connect");
             srv->parent_cur = i;
+            /* FIXME: message is lost? */
+            cmb_msg_send_rt (srv->zs_upreq_out, NULL, "cmb.route.hello.%d",
+                             conf->rank); 
             break;
         }
     }
@@ -454,8 +457,12 @@ static void _cmb_internal_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
             zmsg_destroy (zmsg);
     } else if (cmb_msg_match_substr (*zmsg, "cmb.route.hello.", &arg)) {
         char *lasthop = cmb_msg_nexthop (*zmsg);
-        if (lasthop)
+        if (lasthop) {
+            if (conf->verbose)
+                msg ("%s: cmb.route.hello: adding route %s via %s",
+                     __FUNCTION__, arg, lasthop);
             cmb_route_add_internal (srv, arg, lasthop, 0);
+        }
         if (srv->zs_upreq_out)
             zmsg_send (zmsg, srv->zs_upreq_out); /* fwd upstream */
         if (*zmsg)
