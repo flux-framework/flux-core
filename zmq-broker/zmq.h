@@ -5,7 +5,7 @@ void zbind (zctx_t *zctx, void **sp, int type, char *uri, int hwm);
 zmsg_t *zmsg_recv_fd (int fd, int flags);
 int zmsg_send_fd (int fd, zmsg_t **msg);
 
-void zmsg_send_unrouter (zmsg_t **zmsg, void *sock, char *addr, char *gw);
+void zmsg_send_unrouter (zmsg_t **zmsg, void *sock, char *addr, const char *gw);
 zmsg_t *zmsg_recv_unrouter (void *sock);
 
 void zmsg_cc (zmsg_t *zmsg, void *sock);

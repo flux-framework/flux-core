@@ -196,7 +196,7 @@ static void _plugin_destroy (void *arg)
     plugin_ctx_t *p = arg;
     int errnum;
 
-    route_del (p->srv->route_ctx, p->plugin->name, p->plugin->name);
+    route_del (p->srv->rctx, p->plugin->name, p->plugin->name);
 
     /* FIXME: no mechanism to tell thread to exit yet */
     errnum = pthread_join (p->t, NULL);
@@ -249,8 +249,7 @@ static int _plugin_create (char *name, server_t *srv, conf_t *conf)
     zconnect (zctx, &p->zs_evout, ZMQ_PUB, DNEV_IN_URI, -1, NULL);
     zconnect (zctx, &p->zs_snoop, ZMQ_SUB, SNOOP_URI, -1, NULL);
 
-    if (route_add (p->srv->route_ctx, name, name, ROUTE_FLAGS_PRIVATE) < 0)
-        msg_exit ("failed to add route for plugin %s", name);
+    route_add (p->srv->rctx, name, name, NULL, ROUTE_FLAGS_PRIVATE);
 
     errnum = pthread_create (&p->t, NULL, _plugin_thread, p);
     if (errnum)

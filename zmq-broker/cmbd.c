@@ -199,7 +199,7 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
 
     srv = xzmalloc (sizeof (server_t));
     srv->zctx = zctx = zctx_new ();
-    srv->route_ctx = route_init ();
+    srv->rctx = route_init (conf->verbose);
     if (!srv->zctx)
         err_exit ("zctx_new");
     zctx_set_linger (srv->zctx, 5);
@@ -253,8 +253,7 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
     }
 
     if (srv->zs_upreq_out)
-        cmb_msg_send_rt (srv->zs_upreq_out, NULL, "cmb.route.hello.%d",
-                         conf->rank); 
+        cmb_msg_send_rt (srv->zs_upreq_out, NULL, "cmb.route.hello");
 
     plugin_init (conf, srv);
 
@@ -284,7 +283,7 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
     if (srv->zs_upev_out)
         zsocket_destroy (srv->zctx, srv->zs_upev_out);
 
-    route_fini (srv->route_ctx);
+    route_fini (srv->rctx);
     zctx_destroy (&srv->zctx);
 
     free (srv);
@@ -313,10 +312,9 @@ static void _reparent (conf_t *conf, server_t *srv)
                                 conf->parent[i].dnreq_uri) < 0)
                 err_exit ("zsocket_connect");
             srv->parent_cur = i;
-            /* FIXME: message is lost? */
-            sleep (1);
-            cmb_msg_send_rt (srv->zs_upreq_out, NULL, "cmb.route.hello.%d",
-                             conf->rank); 
+            /* FIXME: message is lost without this small delay */
+            usleep (1000*10);
+            cmb_msg_send_rt (srv->zs_upreq_out, NULL, "cmb.route.hello");
             break;
         }
     }
@@ -336,6 +334,8 @@ static void _cmb_internal_event (conf_t *conf, server_t *srv, zmsg_t *zmsg)
                     _reparent (conf, srv);
             }
         }
+
+        route_del_subtree (srv->rctx, arg);
         free (arg);        
     } else if (cmb_msg_match_substr (zmsg, "event.live.up.", &arg)) {
         int i, rank = strtoul (arg, NULL, 10);
@@ -357,16 +357,18 @@ static void _cmb_internal_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
 
     if (cmb_msg_match_substr (*zmsg, "cmb.route.add.", &arg)) {
         json_object *oo, *o = NULL;
-        const char *gw = NULL;
+        const char *gw = NULL, *parent = NULL;
         int flags = 0;
 
         if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) == 0 && o != NULL) {
             if ((oo = json_object_object_get (o, "gw")))
                 gw = json_object_get_string (oo);
+            if ((oo = json_object_object_get (o, "parent")))
+                parent = json_object_get_string (oo);
             if ((oo = json_object_object_get (o, "flags")))
                 flags = json_object_get_int (oo);
             if (gw)
-                route_add (srv->route_ctx, arg, gw, flags);
+                route_add (srv->rctx, arg, gw, parent, flags);
         }
         if (o)
             json_object_put (o);
@@ -380,7 +382,7 @@ static void _cmb_internal_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
             if ((oo = json_object_object_get (o, "gw")))
                 gw = json_object_get_string (oo);
             if (gw)
-                route_del (srv->route_ctx, arg, gw);
+                route_del (srv->rctx, arg, gw);
         }
         if (o)
             json_object_put (o);
@@ -391,28 +393,19 @@ static void _cmb_internal_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
 
         if (!(o = json_object_new_object ()))
             oom ();
-        ao = route_dump_json (srv->route_ctx);
+        ao = route_dump_json (srv->rctx);
         json_object_object_add (o, "route", ao);
         if (cmb_msg_rep_json (*zmsg, o) == 0)
             _route_response (conf, srv, zmsg, true);
         json_object_put (o);
         if (*zmsg)
             zmsg_destroy (zmsg);
-    } else if (cmb_msg_match_substr (*zmsg, "cmb.route.hello.", &arg)) {
-        char *lasthop = cmb_msg_nexthop (*zmsg);
-        if (lasthop) {
-            if (conf->verbose)
-                msg ("%s: cmb.route.hello: adding route %s via %s",
-                     __FUNCTION__, arg, lasthop);
-            route_add (srv->route_ctx, arg, lasthop, 0);
-        }
+    } else if (cmb_msg_match (*zmsg, "cmb.route.hello")) {
+        route_add_hello (srv->rctx, *zmsg, 0);
         if (srv->zs_upreq_out)
             zmsg_send (zmsg, srv->zs_upreq_out); /* fwd upstream */
         if (*zmsg)
             zmsg_destroy (zmsg);
-        if (lasthop)
-            free (lasthop);
-        free (arg);
     }
 }
 
@@ -447,7 +440,6 @@ static void _route_response (conf_t *conf, server_t *srv, zmsg_t **zmsg,
 {
     char *sender = NULL;
     char *nexthop = NULL;
-    route_t *rte;
 
     zmsg_cc (*zmsg, srv->zs_snoop);
 
@@ -460,8 +452,7 @@ static void _route_response (conf_t *conf, server_t *srv, zmsg_t **zmsg,
      * direction if they are traversing the tree.
      */
     if (dnsock) {
-        rte = route_lookup (srv->route_ctx, nexthop);
-        if (rte) {
+        if (route_lookup (srv->rctx, nexthop)) {
             if (conf->verbose)
                 msg ("%s: dnsock: DOWN %s!...!%s", __FUNCTION__, nexthop, sender);
             zmsg_send (zmsg, srv->zs_upreq_in);
@@ -493,7 +484,7 @@ static void _route_request (conf_t *conf, server_t *srv, zmsg_t **zmsg,
                             bool dnsock)
 {
     char *addr = NULL, *service = NULL, *lasthop = NULL;
-    route_t *rte;
+    const char *gw;
 
     zmsg_cc (*zmsg, srv->zs_snoop);
 
@@ -502,7 +493,7 @@ static void _route_request (conf_t *conf, server_t *srv, zmsg_t **zmsg,
     lasthop = cmb_msg_nexthop (*zmsg);
 
     /* case 1: request explicitly addressed to me, tag == mynode!service.
-     * Lookup service and if rte->gw == service, route down, else NAK.
+     * Lookup service in routing table and if found, route down, else NAK.
      * Handle tag == mynode!cmb as a special case.
      */
     if (addr && !strcmp (addr, conf->rankstr)) {
@@ -511,12 +502,11 @@ static void _route_request (conf_t *conf, server_t *srv, zmsg_t **zmsg,
                 msg ("%s: loc addr: internal %s!%s", __FUNCTION__, addr, service);
             _cmb_internal_request (conf, srv, zmsg);
         } else {
-            rte = route_lookup (srv->route_ctx, service);
-            if (rte && !strcmp (rte->gw, service)) {
+            gw = route_lookup (srv->rctx, service);
+            if (gw && !strcmp (gw, service)) {
                 if (conf->verbose)
                     msg ("%s: loc addr: DOWN %s!%s", __FUNCTION__, addr, service);
-                zmsg_send_unrouter (zmsg, srv->zs_dnreq_out,
-                                    conf->rankstr, rte->gw);
+                zmsg_send_unrouter (zmsg, srv->zs_dnreq_out, conf->rankstr, gw);
             }
         }
         if (conf->verbose && *zmsg)
@@ -526,12 +516,11 @@ static void _route_request (conf_t *conf, server_t *srv, zmsg_t **zmsg,
      * Lookup N and route down if found, route up if not found, or NAK at root.
      */
     } else if (addr) {
-        rte = route_lookup (srv->route_ctx, addr);
-        if (rte) {
+        gw = route_lookup (srv->rctx, addr);
+        if (gw) {
             if (conf->verbose)       
                 msg ("%s: remote addr: DOWN %s!%s", __FUNCTION__, addr, service);
-            zmsg_send_unrouter (zmsg, srv->zs_dnreq_out,
-                                conf->rankstr, rte->gw);
+            zmsg_send_unrouter (zmsg, srv->zs_dnreq_out, conf->rankstr, gw);
         } else if (!dnsock && srv->zs_upreq_out) {
             if (conf->verbose)
                 msg ("%s: remote addr: UP %s!%s", __FUNCTION__, addr, service);
@@ -551,12 +540,11 @@ static void _route_request (conf_t *conf, server_t *srv, zmsg_t **zmsg,
                 msg ("%s: no addr: internal %s", __FUNCTION__, service);
             _cmb_internal_request (conf, srv, zmsg);
         } else {
-            rte = route_lookup (srv->route_ctx, service);
-            if (rte && (!lasthop || strcmp (service, lasthop)) != 0) {
+            gw = route_lookup (srv->rctx, service);
+            if (gw && (!lasthop || strcmp (service, lasthop)) != 0) {
                 if (conf->verbose)
                     msg ("%s: no addr: DOWN %s", __FUNCTION__, service);
-                zmsg_send_unrouter (zmsg, srv->zs_dnreq_out,
-                                    conf->rankstr, rte->gw);
+                zmsg_send_unrouter (zmsg, srv->zs_dnreq_out, conf->rankstr, gw);
             } else if (!dnsock && srv->zs_upreq_out) {
                 if (conf->verbose)
                     msg ("%s: no addr: UP %s", __FUNCTION__, service);

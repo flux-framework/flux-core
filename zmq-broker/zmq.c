@@ -118,7 +118,7 @@ error:
 /* Wrappers for "backwards" dealer-router usage.
  */
 
-void zmsg_send_unrouter (zmsg_t **zmsg, void *sock, char *addr, char *gw)
+void zmsg_send_unrouter (zmsg_t **zmsg, void *sock, char *addr, const char *gw)
 {
     zframe_t *zf;
 
