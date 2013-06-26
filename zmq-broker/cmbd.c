@@ -296,6 +296,9 @@ static void _reparent (conf_t *conf, server_t *srv)
 
     for (i = 0; i < conf->parent_len; i++) {
         if (i != srv->parent_cur && srv->parent_alive[i]) {
+            if (srv->parent_alive[srv->parent_cur])
+                cmb_msg_send_rt (srv->zs_upreq_out, NULL,
+                                 "cmb.route.goodbye.%d", conf->rank);
             if (conf->verbose)
                 msg ("%s: disconnect %s, connect %s", __FUNCTION__,
                     conf->parent[srv->parent_cur].upreq_uri,
@@ -313,8 +316,9 @@ static void _reparent (conf_t *conf, server_t *srv)
                                 conf->parent[i].dnreq_uri) < 0)
                 err_exit ("zsocket_connect");
             srv->parent_cur = i;
-            /* FIXME: message is lost without this small delay */
-            usleep (1000*10);
+
+            usleep (1000*10); /* FIXME: message is lost without this delay */
+
             if (!(o = json_object_new_object ()))
                 oom ();
             ao = route_dump_json (srv->rctx, false);
@@ -412,6 +416,13 @@ static void _cmb_internal_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
             zmsg_send (zmsg, srv->zs_upreq_out); /* fwd upstream */
         if (*zmsg)
             zmsg_destroy (zmsg);
+    } else if (cmb_msg_match_substr (*zmsg, "cmb.route.goodbye.", &arg)) {
+        route_del_subtree (srv->rctx, arg);
+        if (srv->zs_upreq_out)
+            zmsg_send (zmsg, srv->zs_upreq_out); /* fwd upstream */
+        if (*zmsg)
+            zmsg_destroy (zmsg);
+        free (arg);
     }
 }
 
