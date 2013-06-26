@@ -10,6 +10,7 @@
 #include <sys/time.h>
 #include <libgen.h>
 #include <stdbool.h>
+#include <json/json.h>
 
 #include "cmb.h"
 #include "log.h"
@@ -307,9 +308,13 @@ int main (int argc, char *argv[])
             }
             case 'q': { /* --route-del dst */
                 char *s = cmb_route_query (c);
+                json_object *o = json_tokener_parse (s);
+                const char *pretty = json_object_to_json_string_ext (o,
+                                    JSON_C_TO_STRING_PRETTY);
                 if (!s)
                     err ("cmb_route_query");
-                printf ("%s\n", s);
+                printf ("%s\n", pretty);
+                json_object_put (o);
                 free (s);
                 break;
             }
