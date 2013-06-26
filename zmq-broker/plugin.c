@@ -19,6 +19,7 @@
 
 #include "log.h"
 #include "zmq.h"
+#include "route.h"
 #include "cmbd.h"
 #include "cmb.h"
 #include "apisrv.h"
@@ -195,7 +196,7 @@ static void _plugin_destroy (void *arg)
     plugin_ctx_t *p = arg;
     int errnum;
 
-    cmb_route_del_internal (p->srv, p->plugin->name, p->plugin->name);
+    route_del (p->srv->route_ctx, p->plugin->name, p->plugin->name);
 
     /* FIXME: no mechanism to tell thread to exit yet */
     errnum = pthread_join (p->t, NULL);
@@ -248,7 +249,7 @@ static int _plugin_create (char *name, server_t *srv, conf_t *conf)
     zconnect (zctx, &p->zs_evout, ZMQ_PUB, DNEV_IN_URI, -1, NULL);
     zconnect (zctx, &p->zs_snoop, ZMQ_SUB, SNOOP_URI, -1, NULL);
 
-    if (cmb_route_add_internal (p->srv, name, name, ROUTE_FLAGS_PRIVATE) < 0)
+    if (route_add (p->srv->route_ctx, name, name, ROUTE_FLAGS_PRIVATE) < 0)
         msg_exit ("failed to add route for plugin %s", name);
 
     errnum = pthread_create (&p->t, NULL, _plugin_thread, p);

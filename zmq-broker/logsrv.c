@@ -20,6 +20,7 @@
 #include <json/json.h>
 
 #include "zmq.h"
+#include "route.h"
 #include "cmbd.h"
 #include "util.h"
 #include "log.h"

@@ -5,16 +5,6 @@ typedef struct {
     int rank;
 } parent_t;
 
-/* server->route hashes to route_t structures.
- */
-enum {
-    ROUTE_FLAGS_PRIVATE = 1,
-};
-typedef struct {
-    char *gw;
-    int flags;
-} route_t;
-
 /* Config state.
  * This is static and can be shared by all threads.
  */
@@ -58,8 +48,8 @@ typedef struct {
     void *zs_dnev_in;
     int parent_cur;
     bool parent_alive[MAX_PARENTS];
-    zhash_t *route;
     zhash_t *plugins;
+    route_ctx_t route_ctx;
 } server_t;
 
 #define UPREQ_URI           "inproc://upreq"
@@ -69,12 +59,3 @@ typedef struct {
 #define DNEV_IN_URI         "inproc://evin"
 
 #define SNOOP_URI           "inproc://snoop"
-
-
-/* plugin.c calls these (in the cmbd thread) to manage routes to
- * plugins at plugin init/finalize time
- */
-int cmb_route_add_internal (server_t *srv, const char *dst, const char *gw,
-                            int flags);
-void cmb_route_del_internal (server_t *srv, const char *dst, const char *gw);
-

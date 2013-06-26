@@ -22,6 +22,7 @@
 
 #include "zmq.h"
 #include "cmb.h"
+#include "route.h"
 #include "cmbd.h"
 #include "util.h"
 #include "log.h"

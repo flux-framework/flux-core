@@ -21,7 +21,6 @@
 #include <json/json.h>
 #include <czmq.h>
 
-#include "cmbd.h"
 #include "log.h"
 #include "zmq.h"
 #include "util.h"
