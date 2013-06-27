@@ -39,7 +39,7 @@ elseif pepe.rank == 1 then
     pepe.run ("./cmbd --up-event-uri='" .. eventuri .. "'"
 		.. " --up-req-in-uri='" .. upreqinuri .. "'"
 		.. " --dn-req-out-uri='" .. dnreqouturi .. "'"
-		.. " --parent='" .. parent_rank .. u1 .. "," .. u2 .. "'"
+		.. " --parent='" .. parent_rank .. "," .. u1 .. "," .. u2 .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
 		.. " --plugins=api,barrier,live,log"
