@@ -252,8 +252,10 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
             err_exit ("zsocket_bind (dnreq_out): %s", conf->dnreq_out_uri);
     }
 
-    if (srv->zs_upreq_out)
+    if (srv->zs_upreq_out) {
+        cmb_msg_send_rt (srv->zs_upreq_out, NULL, "cmb.connect");
         cmb_msg_send_rt (srv->zs_upreq_out, NULL, "cmb.route.hello");
+    }
 
     plugin_init (conf, srv);
 
@@ -317,7 +319,7 @@ static void _reparent (conf_t *conf, server_t *srv)
             srv->parent_cur = i;
 
             usleep (1000*10); /* FIXME: message is lost without this delay */
-            cmb_msg_send_rt (srv->zs_upreq_out, NULL, "cmb.route.hello");
+            cmb_msg_send_rt (srv->zs_upreq_out, NULL, "cmb.connect");
             break;
         }
     }
@@ -354,6 +356,9 @@ static void _cmb_internal_event (conf_t *conf, server_t *srv, zmsg_t *zmsg)
     } else if (cmb_msg_match (zmsg, "event.route.update")) {
         if (srv->zs_upreq_out)
             cmb_msg_send_rt (srv->zs_upreq_out, NULL, "cmb.route.hello");
+    } else if (cmb_msg_match_substr (zmsg, "event.sched.trigger.", &arg)) {
+        srv->epoch = strtoul (arg, NULL, 10);
+        free (arg);
     }
 }
 
@@ -419,6 +424,17 @@ static void _cmb_internal_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
         if (*zmsg)
             zmsg_destroy (zmsg);
         free (arg);
+    } else if (cmb_msg_match (*zmsg, "cmb.connect")) {
+        if (srv->epoch > 2) {
+            zmsg_t *z = cmb_msg_encode ("event.route.update", NULL, NULL, 0);
+            if (srv->zs_upev_out)
+                zmsg_cc (z, srv->zs_upev_out);
+            if (srv->zs_dnev_out)
+                zmsg_cc (z, srv->zs_dnev_out);
+            zmsg_send (&z, srv->zs_snoop);
+        }
+        if (*zmsg)
+            zmsg_destroy (zmsg);
     }
 }
 

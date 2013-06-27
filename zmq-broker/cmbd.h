@@ -50,6 +50,7 @@ typedef struct {
     bool parent_alive[MAX_PARENTS];
     zhash_t *plugins;
     route_ctx_t rctx;
+    int epoch;
 } server_t;
 
 #define UPREQ_URI           "inproc://upreq"
