@@ -351,6 +351,9 @@ static void _cmb_internal_event (conf_t *conf, server_t *srv, zmsg_t *zmsg)
             }
         }
         free (arg);
+    } else if (cmb_msg_match (zmsg, "event.route.update")) {
+        if (srv->zs_upreq_out)
+            cmb_msg_send_rt (srv->zs_upreq_out, NULL, "cmb.route.hello");
     }
 }
 
