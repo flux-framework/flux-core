@@ -103,34 +103,10 @@ const char *route_lookup (route_ctx_t ctx, const char *dst)
     return rte ? rte->gw : NULL;
 }
 
-static void _add_subtree_json (route_ctx_t ctx, json_object *o)
-{
-    json_object *vo, *oo, *dst, *gw, *parent, *flags;
-    int i;
-
-    if ((oo = json_object_object_get (o, "route"))) {
-        for (i = 0; i < json_object_array_length (oo); i++) {
-            vo = json_object_array_get_idx (oo, i);
-            dst = json_object_object_get (vo, "dst");
-            gw = json_object_object_get (vo, "gw");
-            parent = json_object_object_get (vo, "parent");
-            flags = json_object_object_get (vo, "flags");
-
-            if (dst && gw) {
-                route_add (ctx, json_object_get_string (dst),
-                                json_object_get_string (gw),
-                                parent ? json_object_get_string (parent) : NULL,
-                                flags  ? json_object_get_int (flags) : 0);
-            }
-        }
-    }
-}
-
 void route_add_hello (route_ctx_t ctx, zmsg_t *zmsg, int flags)
 {
     zframe_t *zf;
     char *s, *first = NULL, *prev = NULL;
-    json_object *o = NULL;
 
     zf = zmsg_first (zmsg);
     while (zf && zframe_size (zf) != 0) {
@@ -148,11 +124,6 @@ void route_add_hello (route_ctx_t ctx, zmsg_t *zmsg, int flags)
         free (first);
     if (prev)
         free (prev);
-
-    if (cmb_msg_decode (zmsg, NULL, &o, NULL, NULL) == 0 && o != NULL) {
-        _add_subtree_json (ctx, o);
-        json_object_put (o);
-    }
 }
 
 static void _subtree_append (route_ctx_t ctx, const char *rank, zlist_t *rmq);

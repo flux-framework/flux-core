@@ -292,7 +292,6 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
 static void _reparent (conf_t *conf, server_t *srv)
 {
     int i;
-    json_object *o, *ao;
 
     for (i = 0; i < conf->parent_len; i++) {
         if (i != srv->parent_cur && srv->parent_alive[i]) {
@@ -318,13 +317,7 @@ static void _reparent (conf_t *conf, server_t *srv)
             srv->parent_cur = i;
 
             usleep (1000*10); /* FIXME: message is lost without this delay */
-
-            if (!(o = json_object_new_object ()))
-                oom ();
-            ao = route_dump_json (srv->rctx, false);
-            json_object_object_add (o, "route", ao);
-            cmb_msg_send_rt (srv->zs_upreq_out, o, "cmb.route.hello");
-            json_object_put (o);
+            cmb_msg_send_rt (srv->zs_upreq_out, NULL, "cmb.route.hello");
             break;
         }
     }
