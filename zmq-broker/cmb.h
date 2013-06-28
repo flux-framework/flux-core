@@ -12,7 +12,8 @@ void cmb_fini (cmb_t c);
 
 /* Ping a particular plugin.
  */
-int cmb_ping (cmb_t c, char *tag, int seq, int padding, char **tagp);
+int cmb_ping (cmb_t c, char *tag, int seq, int padding, char **tagp,
+              char **routep);
 
 /* Request statisticfs for a particular plugin.
  */

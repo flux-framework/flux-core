@@ -173,13 +173,15 @@ error:
     return -1;
 }
 
-int cmb_ping (cmb_t c, char *name, int seq, int padlen, char **tagp)
+int cmb_ping (cmb_t c, char *name, int seq, int padlen, char **tagp, char **routep)
 {
     json_object *o = NULL;
     int rseq;
     void *rpad = NULL, *pad = NULL;
     char *tag = NULL;
     int rpadlen;
+    char *route_cpy = NULL;
+    const char *route;
 
     /* send request */
     if (!(o = json_object_new_object ())) {
@@ -223,11 +225,23 @@ int cmb_ping (cmb_t c, char *name, int seq, int padlen, char **tagp)
             goto eproto;
         }
     }
+    if (_json_object_get_string (o, "route", &route) < 0) {
+        msg ("cmb_ping: missing route object");
+        goto eproto;
+    }
+    if (!(route_cpy = strdup (route))) {
+        errno = ENOMEM;
+        goto error;
+    }
+        
     if (tagp)
         *tagp = tag;
     else
         free (tag);
-
+    if (routep)
+        *routep = route_cpy;
+    else
+        free (route_cpy);
     json_object_put (o);
     if (pad)
         free (pad);
@@ -245,6 +259,8 @@ error:
         free (rpad);
     if (tag)
         free (tag);
+    if (route_cpy)
+        free (route_cpy);
     return -1;
 }
 

@@ -51,4 +51,5 @@ void cmb_msg_send_errnum (zmsg_t **zmsg, void *socket, int errnum, void *cc);
 
 int cmb_msg_datacpy (zmsg_t *msg, char *buf, int len);
 void cmb_dump (zmsg_t *self);
+char *cmb_route_str (zmsg_t *zmsg, int skiphops);
 

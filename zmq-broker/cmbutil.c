@@ -107,18 +107,20 @@ int main (int argc, char *argv[])
             case 'p': { /* --ping name */
                 int i;
                 struct timeval t, t1, t2;
-                char *tag;
+                char *tag, *route;
                 for (i = 0; ; i++) {
                     xgettimeofday (&t1, NULL);
-                    if (cmb_ping (c, optarg, i, padding, &tag) < 0)
+                    if (cmb_ping (c, optarg, i, padding, &tag, &route) < 0)
                         err_exit ("cmb_ping");
                     xgettimeofday (&t2, NULL);
                     timersub (&t2, &t1, &t);
-                    msg ("%s pad=%d seq=%d time=%0.3f ms", tag,
+                    msg ("%s pad=%d seq=%d time=%0.3f ms (%s)", tag,
                          padding,i,
-                         (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
+                         (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000,
+                         route);
                     usleep (pingdelay_ms * 1000);
                     free (tag);
+                    free (route);
                 }
                 break;
             }

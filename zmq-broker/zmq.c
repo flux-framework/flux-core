@@ -665,6 +665,26 @@ cmb_dump (zmsg_t *self)
     }
 }
 
+char *
+cmb_route_str (zmsg_t *self, int skiphops)
+{
+    int hops = cmb_msg_hopcount (self) - skiphops;
+    zframe_t *zf = zmsg_first (self);
+    const size_t len = 256;
+    char *buf = xzmalloc (len);
+
+    while (hops-- > 0) {
+        int l = strlen (buf);
+        char *s = zframe_strdup (zf);
+        if (!s)
+            oom ();
+        snprintf (buf + l, len - l, "%s%s", l > 0 ? "!" : "", s);
+        free (s);
+        zf = zmsg_next (self);
+    }
+    return buf;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

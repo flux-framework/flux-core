@@ -44,8 +44,25 @@ const int plugins_len = sizeof (plugins)/sizeof (plugins[0]);
 /* <name>.ping - respond to ping request for this plugin */
 static void _plugin_ping(plugin_ctx_t *p, zmsg_t **zmsg)
 {
+    json_object *o, *no;
+    char *s = NULL;
+
+    if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) < 0) {
+        err ("%s: protocol error", __FUNCTION__);
+        goto done;
+    }
+    s = cmb_route_str (*zmsg, 2);
+    if (!(no = json_object_new_string (s)))
+        oom ();
+    json_object_object_add (o, "route", no);
+    cmb_msg_rep_json (*zmsg, o);
     if (zmsg_send (zmsg, p->zs_dnreq) < 0)
         err ("%s: zmsg_send", __FUNCTION__);
+done:
+    if (s)
+        free (s);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
 }
 
 /* <name>.stats - respond to stats request for this plugin */
