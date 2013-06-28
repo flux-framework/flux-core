@@ -1,0 +1,9 @@
+./cmbd \
+  --parent=0,tcp://127.0.0.1:5556,tcp://127.0.0.1:5557 \
+  --up-event-out-uri='tcp://127.0.0.1:5558' \
+  --up-event-in-uri='tcp://127.0.0.1:5559' \
+  --up-req-in-uri='tcp://*:5560' \
+  --dn-req-out-uri='tcp://*:5561' \
+  --rank=1 --size=3 --children=2 \
+  --plugins=api,barrier,live,log \
+  --verbose --api-socket=/tmp/rank.1

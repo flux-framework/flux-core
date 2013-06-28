@@ -1,0 +1,9 @@
+./cmbd \
+  --dn-event-in-uri='tcp://*:5558' \
+  --dn-event-out-uri='tcp://*:5559' \
+  --up-req-in-uri='tcp://*:5556' \
+  --dn-req-out-uri='tcp://*:5557' \
+  --redis-server=localhost \
+  --rank=0 --size=3 --children=1  \
+  --plugins=api,barrier,live,log,kvs,sync \
+  --verbose

@@ -1,3 +1,5 @@
+package.path = "liblua/?.lua;" .. package.path
+
 local hostlist = require ("hostlist")
 local tree = require ("tree")
 
@@ -17,7 +19,7 @@ local h = hostlist.new (pepe.nodelist)
 local eventuri = "epgm://eth0;239.192.1.1:5555"
 local upreqinuri = "tcp://*:5556"
 local dnreqouturi = "tcp://*:5557"
-local child_opt = tree.binomial_children (pepe.rank, 2, #h)
+local child_opt = tree.k_ary_children (pepe.rank, #h - 1, #h)
 if string.len (child_opt) > 0 then
     child_opt = " --children=" .. child_opt
 end
@@ -33,15 +35,11 @@ if pepe.rank == 0 then
 		.. " --plugins=api,barrier,live,log,kvs,sync"
 		.. child_opt)
 else
-    local parent_rank = tree.binomial_parent (pepe.rank, #h)
-    local u1 = "tcp://" ..  h[parent_rank + 1] .. ":5556"
-    local u2 = "tcp://" ..  h[parent_rank + 1] .. ":5557"
+    local u1 = "tcp://" ..  h[1] .. ":5556"
+    local u2 = "tcp://" ..  h[1] .. ":5557"
     pepe.run ("./cmbd --up-event-uri='" .. eventuri .. "'"
-		.. " --up-req-in-uri='" .. upreqinuri .. "'"
-		.. " --dn-req-out-uri='" .. dnreqouturi .. "'"
-		.. " --parent='" .. parent_rank .. "," .. u1 .. "," .. u2 .. "'"
+		.. " --parent='0," .. u1 .. "," .. u2 .. "'"
 		.. " --rank=" .. pepe.rank
-		.. " --size=" .. #h
 		.. " --plugins=api,barrier,live,log"
-		.. child_opt)
+		.. " --size=" .. #h)
 end

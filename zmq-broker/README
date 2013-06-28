@@ -2,14 +2,16 @@
 | Launching the framework |
 +-------------------------+
 
-Use the ./launch script to start the framework in a slurm job.
+Use the ./scripts/launch script to start the framework in a slurm job.
 It will work with or without a pre-existing slurm allocation.
-If running outside of an allocation, specify the number of nodes (N)
-with "./launch -n N".
 
-There are pepe config files for several test topologies.  By default,
-./launch uses "flat", but you can select a different config with
-"./launch -c NAME":
+   ./scripts/launch [-c NAME] [-n nnodes]
+
+The -c option selects a pepe config other than the default (flat).
+The -n option specifies the number of nodes.  If running inside a slurm
+allocation, the default number of nodes is the entire allocation.
+
+There are several pepe config files for different test topologies.
 
 binary
 	Binary (k=2) tree with no resiliency.
@@ -24,8 +26,7 @@ flat
 	Flat (k=N) tree with no resilency.
 
 trinary
-	Trinary (k=3) tree with resiliency.
-	(Each node except 0 and 1 have a backup parent == their grandparent).
+	Trinary (k=3) tree with resiliency (grandparent is backup parent)
 
 +-------------------------+
 | The Event Overlay Plane |
