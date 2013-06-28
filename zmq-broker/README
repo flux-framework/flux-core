@@ -21,22 +21,32 @@ degenerate
 	Degenerate (k=1) tree with no resilency.
 
 flat
-	Flat (k=n) tree with no resilency.
+	Flat (k=N) tree with no resilency.
 
 trinary
 	Trinary (k=3) tree with resiliency.
-	(Each node except 0, 1 have a backup parent == their grandparent).
+	(Each node except 0 and 1 have a backup parent == their grandparent).
 
-+-----------------+
-| Message domains |
-+-----------------+
++-------------------------+
+| The Event Overlay Plane |
++-------------------------+
 
-There are two orthogonal message domains, events and requests.
-Events utilize pub-sub with hiericical topic names.  One (un)subscribes
-to a topic by substring.  For example, subscribing to "event.sched."
-matches "event.sched.trigger.<epoch>".  A this point all the events
-consist only of the topic name, but a JSON frame could be appended
-should more sophisticated events be required.
+There are two orthogonal overlay planes: one for events, and one for
+requests.  Events utilize pub-sub with hiericical topic names.
+One (un)subscribes to a topic by substring.  For example, subscribing
+to "event.sched." matches "event.sched.trigger.<epoch>".  A this point,
+events consist only of one frame containing the topic name.  The events
+that are currently exchange consist of:
+
+event.sched.trigger.<epoch>
+event.live.up.<node>
+event.live.down.<node>
+event.route.update
+event.barrier.exit.<name>
+
++---------------------------+
+| The Request Overlay Plane |
++---------------------------+
 
 Requests are messages that may or may not elicit response messages.
 A request is sent to a service name, which looks just like a subscription
