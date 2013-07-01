@@ -96,7 +96,7 @@ static int _barrier_enter_request (const char *key, void *item, void *arg)
     if (!(no = json_object_new_int (b->nprocs)))
         oom ();
     json_object_object_add (o, "nprocs", no);
-    cmb_msg_send_rt (p->zs_upreq, o, "barrier.enter.%s", b->name);
+    plugin_send_request (p, o, "barrier.enter.%s", b->name);
     b->count = 0;
     if (o)
         json_object_put (o);
@@ -127,7 +127,7 @@ static void _barrier_enter (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
     b->count += json_object_get_int (count);
 
     if (b->count == b->nprocs)
-        cmb_msg_send (p->zs_evout, NULL, "%s", b->exit_event);
+        plugin_send_event (p, "%s", b->exit_event);
     else if (p->conf->rank != 0 && p->timeout == -1)
         p->timeout = 1; /* 1 ms - then send count upstream */
 done:

@@ -107,13 +107,12 @@ static int _notify_srv (const char *key, void *item, void *arg)
     json_object_put (o);
     if (zmsg_pushstr (zmsg, "%s.disconnect", key) < 0)
         err_exit ("zmsg_pushstr");
-
-    if (zmsg_pushmem (zmsg, NULL, 0) < 0)
+    if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* delimiter frame */
         err_exit ("zmsg_pushmem");
     if (zmsg_pushstr (zmsg, "%s", c->uuid) < 0)
         err_exit ("zmsg_pushmem");
-    if (zmsg_send (&zmsg, c->p->zs_upreq) < 0)
-        err_exit ("zmsg_send");
+
+    plugin_send_request_raw (c->p, &zmsg);
 
     return 0;
 }
@@ -194,8 +193,9 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
             zsocket_set_unsubscribe (p->zs_evin, name);
         }
     } else if (cmb_msg_match_substr (zmsg, "api.event.send.", &name)) {
-        cmb_msg_send (p->zs_evout, NULL, "%s", name);
+        plugin_send_event (p, "%s", name);
     } else {
+        /* insert disconnect notifier before forwarding request */
         if (c->disconnect_notify) {
             char *tag = cmb_msg_tag (zmsg, true); /* first component only */
             if (!tag)
@@ -211,8 +211,7 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
             err_exit ("zmsg_pushmem");
         if (zmsg_pushstr (zmsg, "%s", c->uuid) < 0)
             err_exit ("zmsg_pushmem");
-        if (zmsg_send (&zmsg, p->zs_upreq) < 0)
-            err_exit ("zmsg_send");
+        plugin_send_request_raw (p, &zmsg);
     }
 done:
     if (zmsg)
@@ -424,7 +423,7 @@ static void _poll_once (plugin_ctx_t *p)
     if (zmsg)
         _recv (p, &zmsg, type);
     if (zmsg && type == ZMSG_REQUEST)
-        cmb_msg_send_errnum (&zmsg, p->zs_dnreq, ENOSYS, NULL);
+        plugin_send_response_errnum (p, &zmsg, ENOSYS);
 
     free (zpa);
 }

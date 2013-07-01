@@ -250,10 +250,7 @@ static void _kvs_get (plugin_ctx_t *p, zmsg_t **zmsg)
             oom ();
         json_object_object_add (o, "val", val);
     }
-    if (cmb_msg_rep_json (*zmsg, o) < 0)
-        goto done;
-    if (zmsg_send (zmsg, p->zs_dnreq) < 0)
-        err ("zmsg_send"); 
+    plugin_send_response (p, zmsg, o);
 done:
     if (o)
         json_object_put (o);
@@ -290,10 +287,7 @@ static void _kvs_commit (plugin_ctx_t *p, zmsg_t **zmsg)
     if (!(no = json_object_new_int (putcount)))
         oom ();
     json_object_object_add (o, "putcount", no);
-    if (cmb_msg_rep_json (*zmsg, o) < 0)
-        goto done;
-    if (zmsg_send (zmsg, p->zs_dnreq) < 0)
-        err ("zmsg_send"); 
+    plugin_send_response (p, zmsg, o);
 done:
     if (o)
         json_object_put (o);

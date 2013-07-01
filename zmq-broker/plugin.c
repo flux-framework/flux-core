@@ -41,8 +41,90 @@ static plugin_t plugins[] = {
 };
 const int plugins_len = sizeof (plugins)/sizeof (plugins[0]);
 
+
+void plugin_send_request_raw (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    if (zmsg_send (zmsg, p->zs_upreq) < 0)
+        err_exit ("%s: zmsg_send", __FUNCTION__);
+    p->stats.upreq_send_count++;
+}
+
+void plugin_send_response_raw (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    if (zmsg_send (zmsg, p->zs_dnreq) < 0)
+        err_exit ("%s: zmsg_send", __FUNCTION__);
+    p->stats.dnreq_send_count++;
+}
+
+void plugin_send_event_raw (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    if (zmsg_send (zmsg, p->zs_evout) < 0)
+        err_exit ("%s: zmsg_send", __FUNCTION__);
+    p->stats.event_send_count++;
+}
+
+void plugin_send_event (plugin_ctx_t *p, const char *fmt, ...)
+{
+    va_list ap;
+    zmsg_t *zmsg;
+    char *tag;
+    int n;
+
+    va_start (ap, fmt);
+    n = vasprintf (&tag, fmt, ap);
+    va_end (ap);
+    if (n < 0)
+        err_exit ("%s: vasprintf", __FUNCTION__);
+    zmsg = cmb_msg_encode (tag, NULL, NULL, 0);
+    free (tag);
+    plugin_send_event_raw (p, &zmsg);
+}
+
+void plugin_send_request (plugin_ctx_t *p, json_object *o, const char *fmt, ...)
+{
+    va_list ap;
+    zmsg_t *zmsg;
+    char *tag;
+    int n;
+    json_object *empty = NULL;
+
+    va_start (ap, fmt);
+    n = vasprintf (&tag, fmt, ap);
+    va_end (ap);
+    if (n < 0)
+        err_exit ("vasprintf");
+
+    if (!o) {
+        if (!(empty = json_object_new_object ()))
+            oom ();
+        o = empty;
+    }
+    zmsg = cmb_msg_encode (tag, o, NULL, 0);
+    if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* delimiter frame */
+        oom ();
+    plugin_send_request_raw (p, &zmsg);
+
+    if (empty)
+        json_object_put (empty);
+    free (tag);
+}
+
+void plugin_send_response (plugin_ctx_t *p, zmsg_t **req, json_object *o)
+{
+    if (cmb_msg_rep_json (*req, o) < 0)
+        err_exit ("%s: cmb_msg_rep_json", __FUNCTION__);
+    plugin_send_response_raw (p, req);
+}
+
+void plugin_send_response_errnum (plugin_ctx_t *p, zmsg_t **req, int errnum)
+{
+    if (cmb_msg_rep_errnum (*req, errnum) < 0)
+        err_exit ("%s: cmb_msg_rep_errnum", __FUNCTION__);
+    plugin_send_response_raw (p, req);
+}
+
 /* <name>.ping - respond to ping request for this plugin */
-static void _plugin_ping(plugin_ctx_t *p, zmsg_t **zmsg)
+static void _plugin_ping (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     json_object *o, *no;
     char *s = NULL;
@@ -56,8 +138,7 @@ static void _plugin_ping(plugin_ctx_t *p, zmsg_t **zmsg)
         oom ();
     json_object_object_add (o, "route", no);
     cmb_msg_rep_json (*zmsg, o);
-    if (zmsg_send (zmsg, p->zs_dnreq) < 0)
-        err ("%s: zmsg_send", __FUNCTION__);
+    plugin_send_response_raw (p, zmsg);
 done:
     if (s)
         free (s);
@@ -102,10 +183,7 @@ static void _plugin_stats (plugin_ctx_t *p, zmsg_t **zmsg)
         err ("%s: cmb_msg_rep_json", __FUNCTION__);
         goto done;
     }
-    if (zmsg_send (zmsg, p->zs_dnreq) < 0) {
-        err ("%s: zmsg_send", __FUNCTION__);
-        goto done;
-    }
+    plugin_send_response_raw (p, zmsg);
 done:
     if (o)
         json_object_put (o);
@@ -197,7 +275,7 @@ static void _plugin_poll (plugin_ctx_t *p)
 
         /* send ENOSYS response indicating plugin did not recognize tag */
         if (zmsg && type == ZMSG_REQUEST)
-            cmb_msg_send_errnum (&zmsg, p->zs_dnreq, ENOSYS, NULL);
+            plugin_send_response_errnum (p, &zmsg, ENOSYS);
 
         if (zmsg)
             zmsg_destroy (&zmsg);

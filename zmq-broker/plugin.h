@@ -40,3 +40,13 @@ struct plugin_struct {
 /* call from cmbd */
 void plugin_init (conf_t *conf, server_t *srv);
 void plugin_fini (conf_t *conf, server_t *srv);
+
+/* call from plugin */
+void plugin_send_request_raw (plugin_ctx_t *p, zmsg_t **zmsg);
+void plugin_send_request (plugin_ctx_t *p, json_object *o, const char *fmt, ...);
+void plugin_send_response_raw (plugin_ctx_t *p, zmsg_t **zmsg);
+void plugin_send_response (plugin_ctx_t *p, zmsg_t **req, json_object *o);
+void plugin_send_response_errnum (plugin_ctx_t *p, zmsg_t **req, int errnum);
+
+void plugin_send_event_raw (plugin_ctx_t *p, zmsg_t **zmsg);
+void plugin_send_event (plugin_ctx_t *p, const char *fmt, ...);

@@ -134,9 +134,8 @@ static void _send_live_hello (plugin_ctx_t *p, int epoch)
         oom ();
     json_object_object_add (o, "parent", no);
 
-    cmb_msg_send_rt (p->zs_upreq, o, "live.hello.%d", p->conf->rank);
-    if (o)
-        json_object_put (o);
+    plugin_send_request (p, o, "live.hello.%d", p->conf->rank);
+    json_object_put (o);
 }
 
 /* Receive live.hello.<rank>
@@ -169,7 +168,7 @@ static void _recv_live_hello (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         if (p->conf->verbose)
             msg ("heard from rank %d, marking up", rank);
         ctx->state[rank] = true;
-        cmb_msg_send (p->zs_evout, NULL, "event.live.up.%d", rank);
+        plugin_send_event (p, "event.live.up.%d", rank);
     }
 done:
     if (o)
@@ -206,11 +205,7 @@ static void _recv_live_query (plugin_ctx_t *p, zmsg_t **zmsg)
     if (!(no = json_object_new_int (p->conf->size)))
         oom ();
     json_object_object_add (o, "nnodes", no);
-    if (cmb_msg_rep_json (*zmsg, o) < 0)
-        goto done;
-    if (zmsg_send (zmsg, p->zs_dnreq) < 0)
-        err ("zmsg_send");
-done:
+    plugin_send_response (p, zmsg, o);
     if (o)
         json_object_put (o);
     if (*zmsg)
@@ -251,8 +246,7 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
                     if (p->conf->verbose)
                         msg ("rank %d is stale (%d:%d), marking down",
                              cp->rank, cp->epoch, epoch);
-                    cmb_msg_send (p->zs_evout, NULL, "event.live.down.%d",
-                                  cp->rank);
+                    plugin_send_event (p, "event.live.down.%d", cp->rank);
                     ctx->state[cp->rank] = false;
                 }
                 _child_del (ctx->kids, cp->rank);

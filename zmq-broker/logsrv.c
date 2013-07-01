@@ -71,10 +71,7 @@ static int _listener_fwd (const char *key, void *item, void *arg)
 
     if (!(zmsg = zmsg_dup (lp->zmsg)))
         oom ();
-    if (cmb_msg_rep_json (zmsg, farg->o) < 0)
-        err_exit ("%s", __FUNCTION__);
-    if (zmsg_send (&zmsg, farg->p->zs_dnreq) < 0)
-        err ("zmsg_send");
+    plugin_send_response (farg->p, &zmsg, farg->o);
     return 1;
 }
 
@@ -161,7 +158,7 @@ static void _recv_log_msg (plugin_ctx_t *p, zmsg_t **zmsg)
 
     /* forward upstream */
     if (p->conf->rank != 0)
-        cmb_msg_send_rt (p->zs_upreq, o, "log.msg");      
+        plugin_send_request (p, o, "log.msg");
 
     /* forward message to listeners */
     farg.p = p;
