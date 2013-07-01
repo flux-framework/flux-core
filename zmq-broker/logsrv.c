@@ -49,6 +49,7 @@ static listener_t *_listener_create (zmsg_t *zmsg)
         oom ();
     if (!(lp->subscriptions = zlist_new ()))
         oom ();
+    zlist_autofree (lp->subscriptions);
     return lp;
 }
 
@@ -61,17 +62,46 @@ static void _listener_destroy (void *arg)
     free (lp);
 }
 
-static int _listener_fwd (const char *key, void *item, void *arg)
+static char *_match_item (zlist_t *zl, const char *s, bool substr)
 {
-    listener_t *lp = item;
+    char *item = zlist_first (zl);
+
+    while (item && strcmp (item, s) != 0
+                    && (!substr || strncmp (item, s, strlen (item)) != 0))
+        item = zlist_next (zl);
+    return item;
+}
+
+static void _listener_subscribe (listener_t *lp, char *sub)
+{
+    char *item = _match_item (lp->subscriptions, sub, false);
+
+    if (!item)
+        zlist_append (lp->subscriptions, xstrdup (sub));    
+}
+
+static void _listener_unsubscribe (listener_t *lp, char *sub)
+{
+    char *item = _match_item (lp->subscriptions, sub, false);
+
+    if (item)
+        zlist_remove (lp->subscriptions, item);
+}
+
+static int _listener_fwd (const char *key, void *litem, void *arg)
+{
+    listener_t *lp = litem;
     fwdarg_t *farg = arg;
     zmsg_t *zmsg;
+    json_object *o = json_object_object_get (farg->o, "tag");
+    const char *tag = o ? json_object_get_string (o) : "";
+    char *item = _match_item (lp->subscriptions, tag, true);
 
-    /* FIXME: match subscription */
-
-    if (!(zmsg = zmsg_dup (lp->zmsg)))
-        oom ();
-    plugin_send_response (farg->p, &zmsg, farg->o);
+    if (item) {
+        if (!(zmsg = zmsg_dup (lp->zmsg)))
+            oom ();
+        plugin_send_response (farg->p, &zmsg, farg->o);
+    }
     return 1;
 }
 
@@ -91,7 +121,7 @@ static void _recv_log_subscribe (plugin_ctx_t *p, char *sub, zmsg_t **zmsg)
         zhash_freefn (ctx->listeners, sender, _listener_destroy);
     }
 
-    /* FIXME: add subscription */
+    _listener_subscribe (lp, sub);
 done:
     if (sender)
         free (sender);
@@ -100,17 +130,17 @@ done:
 
 static void _recv_log_unsubscribe (plugin_ctx_t *p, char *sub, zmsg_t **zmsg)
 {
-    //ctx_t *ctx = p->ctx;
-    //listener_t *lp;
+    ctx_t *ctx = p->ctx;
+    listener_t *lp;
     char *sender = NULL;
 
     if (!(sender = cmb_msg_sender (*zmsg))) {
         err ("%s: protocol error", __FUNCTION__); 
         goto done;
     }
-    //lp = zhash_lookup (ctx->listeners, sender);
-
-    /* FIXME: delete subscription */
+    lp = zhash_lookup (ctx->listeners, sender);
+    if (lp)
+        _listener_unsubscribe (lp, sub);
 done:
     if (sender)
         free (sender);
