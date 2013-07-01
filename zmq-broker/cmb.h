@@ -54,10 +54,6 @@ int cmb_kvs_commit (cmb_t c, int *errcountp, int *putcountp);
  */
 int cmb_live_query (cmb_t c, int **up, int *ulp, int **dp, int *dlp, int *nnp);
 
-/* This is not working right now.
- */
-int cmb_fd_open (cmb_t c, char *wname, char **np);
-
 /* Log messages.
  * Subscriptions are not implemented yet (all messages are returned).
  */
