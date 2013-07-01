@@ -434,7 +434,7 @@ static void _cmb_internal_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
             oom ();
         ao = route_dump_json (srv->rctx, true);
         json_object_object_add (o, "route", ao);
-        if (cmb_msg_rep_json (*zmsg, o) == 0)
+        if (cmb_msg_replace_json (*zmsg, o) == 0)
             _route_response (conf, srv, zmsg, true);
         json_object_put (o);
         if (*zmsg)
@@ -614,7 +614,7 @@ static void _route_request (conf_t *conf, server_t *srv, zmsg_t **zmsg,
 
     /* send NAK reply if message was not routed above */
     if (*zmsg) {
-        if (cmb_msg_rep_errnum (*zmsg, ENOSYS) < 0)
+        if (cmb_msg_replace_json_errnum (*zmsg, ENOSYS) < 0)
             goto done;
         _route_response (conf, srv, zmsg, true);
     }
@@ -665,7 +665,8 @@ static void _cmb_poll (conf_t *conf, server_t *srv)
     };
     zmsg_t *zmsg = NULL;
 
-    zpoll (zpa, sizeof (zpa) / sizeof (zpa[0]), -1);
+    if (zmq_poll (zpa, sizeof (zpa) / sizeof (zpa[0]), -1) < 0)
+        err_exit ("zmq_poll");
 
     /* request on upreq_in */
     if (zpa[0].revents & ZMQ_POLLIN) {

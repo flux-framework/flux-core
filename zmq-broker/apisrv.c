@@ -365,7 +365,8 @@ static void _poll_once (plugin_ctx_t *p)
     }
     assert (i == zpa_len);
 
-    zpoll (zpa, zpa_len, -1);
+    if ((zmq_poll (zpa, zpa_len, -1)) < 0)
+        err_exit ("zmq_poll");
 
     /* clients */
     for (i = 5, c = ctx->clients; c != NULL; i++) {

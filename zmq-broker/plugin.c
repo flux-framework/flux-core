@@ -111,15 +111,15 @@ void plugin_send_request (plugin_ctx_t *p, json_object *o, const char *fmt, ...)
 
 void plugin_send_response (plugin_ctx_t *p, zmsg_t **req, json_object *o)
 {
-    if (cmb_msg_rep_json (*req, o) < 0)
-        err_exit ("%s: cmb_msg_rep_json", __FUNCTION__);
+    if (cmb_msg_replace_json (*req, o) < 0)
+        err_exit ("%s: cmb_msg_replace_json", __FUNCTION__);
     plugin_send_response_raw (p, req);
 }
 
 void plugin_send_response_errnum (plugin_ctx_t *p, zmsg_t **req, int errnum)
 {
-    if (cmb_msg_rep_errnum (*req, errnum) < 0)
-        err_exit ("%s: cmb_msg_rep_errnum", __FUNCTION__);
+    if (cmb_msg_replace_json_errnum (*req, errnum) < 0)
+        err_exit ("%s: cmb_msg_replace_json_errnum", __FUNCTION__);
     plugin_send_response_raw (p, req);
 }
 
@@ -218,7 +218,8 @@ static void _plugin_poll (plugin_ctx_t *p)
         } else
             msec = -1;
 
-        zpoll(zpa, sizeof (zpa) / sizeof (zpa[0]), msec);
+        if (zmq_poll (zpa, sizeof (zpa) / sizeof (zpa[0]), msec) < 0)
+            err_exit ("zmq_poll");
 
         /* process timeout */
         if (p->timeout > 0) {

@@ -19,38 +19,13 @@
 #include "log.h"
 #include "cmb.h"
 
-#ifndef ZMQ_DONTWAIT
-#   define ZMQ_DONTWAIT   ZMQ_NOBLOCK
-#endif
-#ifndef ZMQ_RCVHWM
-#   define ZMQ_RCVHWM     ZMQ_HWM
-#endif
-#ifndef ZMQ_SNDHWM
-#   define ZMQ_SNDHWM     ZMQ_HWM
-#endif
-#if ZMQ_VERSION_MAJOR == 2
-#   define more_t int64_t
-#   define zmq_ctx_destroy(context) zmq_term(context)
-#   define zmq_msg_send(msg,sock,opt) zmq_send (sock, msg, opt)
-#   define zmq_msg_recv(msg,sock,opt) zmq_recv (sock, msg, opt)
-#   define ZMQ_POLL_MSEC    1000        //  zmq_poll is usec
-#elif ZMQ_VERSION_MAJOR == 3
-#   define more_t int
-#   define ZMQ_POLL_MSEC    1           //  zmq_poll is msec
+#if ZMQ_VERSION_MAJOR != 3
+#error requires zeromq version 3
 #endif
 
 /**
  ** zmq wrappers
  **/
-
-int zpoll (zmq_pollitem_t *items, int nitems, long timeout)
-{
-    int rc;
-
-    if ((rc = zmq_poll (items, nitems, timeout * ZMQ_POLL_MSEC)) < 0)
-        err_exit ("zmq_poll");
-    return rc;
-}
 
 void zconnect (zctx_t *zctx, void **sp, int type, char *uri, int hwm, char *id)
 {
@@ -115,9 +90,6 @@ error:
     return -1;
 }
 
-/* Wrappers for "backwards" dealer-router usage.
- */
-
 void zmsg_send_unrouter (zmsg_t **zmsg, void *sock, char *addr, const char *gw)
 {
     zframe_t *zf;
@@ -140,10 +112,10 @@ zmsg_t *zmsg_recv_unrouter (void *sock)
 
     zmsg = zmsg_recv (sock);
     if (zmsg) {     
-        zf = zmsg_pop (zmsg);
+        zf = zmsg_pop (zmsg);       /* pop-n-toss */
         if (zf)
             zframe_destroy (&zf);
-        zf = zmsg_pop (zmsg);
+        zf = zmsg_pop (zmsg);       /* pop-n-toss */
         if (zf)
             zframe_destroy (&zf);
     }
@@ -289,7 +261,6 @@ bool cmb_msg_match_substr (zmsg_t *zmsg, const char *tag, char **restp)
     return false;
 }
 
-/* extract the first address in the envelope (sender uuid) */
 char *cmb_msg_sender (zmsg_t *zmsg)
 {
     zframe_t *zf = _sender_frame (zmsg);
@@ -327,9 +298,7 @@ char *cmb_msg_tag (zmsg_t *zmsg, bool shorten)
     return tag;
 }
 
-/* Replace request JSON with reply JSON.
- */
-int cmb_msg_rep_json (zmsg_t *zmsg, json_object *o)
+int cmb_msg_replace_json (zmsg_t *zmsg, json_object *o)
 {
     const char *json = json_object_to_json_string (o);
     zframe_t *zf = _json_frame (zmsg);
@@ -339,14 +308,11 @@ int cmb_msg_rep_json (zmsg_t *zmsg, json_object *o)
         errno = EPROTO;
         return -1;
     }
-    /* N.B. calls zmq_msg_init_size internally with unchecked return value */
-    zframe_reset (zf, json, strlen (json));
+    zframe_reset (zf, json, strlen (json)); /* N.B. unchecked malloc inside */
     return 0;
 }
 
-/* Replace request JSON with error JSON.
- */
-int cmb_msg_rep_errnum (zmsg_t *zmsg, int errnum)
+int cmb_msg_replace_json_errnum (zmsg_t *zmsg, int errnum)
 {
     json_object *no, *o = NULL;
     zframe_t *zf = _json_frame (zmsg);
@@ -363,8 +329,7 @@ int cmb_msg_rep_errnum (zmsg_t *zmsg, int errnum)
         goto nomem;
     json_object_object_add (o, "errnum", no);
     json = json_object_to_json_string (o);
-    /* N.B. calls zmq_msg_init_size internally with unchecked return value */
-    zframe_reset (zf, json, strlen (json));
+    zframe_reset (zf, json, strlen (json)); /* N.B. unchecked malloc inside */
     json_object_put (o);
     return 0;
 nomem:
@@ -379,8 +344,7 @@ error:
  * We don't want to truncate message parts, and want envelop parts represented
  * more compactly (let's try all on one line).
  */
-static void
-_zframe_print_compact (zframe_t *self, const char *prefix)
+static void _zframe_print_compact (zframe_t *self, const char *prefix)
 {
     assert (self);
     if (prefix)
@@ -410,8 +374,7 @@ _zframe_print_compact (zframe_t *self, const char *prefix)
     //fprintf (stderr, "%s\n", elipsis);
 }
 
-void
-zmsg_dump_compact (zmsg_t *self)
+void zmsg_dump_compact (zmsg_t *self)
 {
     int hops = zmsg_hopcount (self);
     zframe_t *zf = zmsg_first (self);
@@ -437,8 +400,7 @@ zmsg_dump_compact (zmsg_t *self)
     }
 }
 
-char *
-zmsg_route_str (zmsg_t *self, int skiphops)
+char *zmsg_route_str (zmsg_t *self, int skiphops)
 {
     int hops = zmsg_hopcount (self) - skiphops;
     zframe_t *zf = zmsg_first (self);
