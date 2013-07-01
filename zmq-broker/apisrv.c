@@ -228,7 +228,7 @@ static void _recv_response (plugin_ctx_t *p, zmsg_t **zmsg)
     zframe_t *zf = NULL;
     client_t *c;
 
-    if (cmb_msg_hopcount (*zmsg) != 1) {
+    if (zmsg_hopcount (*zmsg) != 1) {
         msg ("apisrv: ignoring response with bad envelope");
         return;
     }

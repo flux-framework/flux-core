@@ -104,6 +104,50 @@ error:
     return -1;
 }
 
+static int _send_message (cmb_t c, json_object *o, const char *fmt, ...)
+{
+    va_list ap;
+    zmsg_t *zmsg = NULL;
+    char *tag = NULL;
+    int n;
+
+    va_start (ap, fmt);
+    n = vasprintf (&tag, fmt, ap);
+    va_end (ap);
+    if (n < 0)
+        err_exit ("vasprintf");
+
+    zmsg = cmb_msg_encode (tag, o);
+    if (zmsg_send_fd (c->fd, &zmsg) < 0) /* destroys msg on succes */
+        goto error;
+    free (tag);
+    return 0;
+error:
+    if (zmsg)
+        zmsg_destroy (&zmsg);
+    if (tag)
+        free (tag);
+    return -1;
+}
+
+static int _recv_message (cmb_t c, char **tagp, json_object **op, int flags)
+{
+    zmsg_t *zmsg;
+
+    zmsg = zmsg_recv_fd (c->fd, flags);
+    if (!zmsg)
+        goto error;
+    if (cmb_msg_decode (zmsg, tagp, op) < 0)
+        goto error;
+    zmsg_destroy (&zmsg);
+    return 0;
+
+error:
+    if (zmsg)
+        zmsg_destroy (&zmsg);
+    return -1;
+}
+
 int cmb_ping (cmb_t c, char *name, int seq, int padlen, char **tagp, char **routep)
 {
     json_object *o = NULL;
@@ -128,13 +172,13 @@ int cmb_ping (cmb_t c, char *name, int seq, int padlen, char **tagp, char **rout
     pad[padlen] = '\0';
     if (_json_object_add_string (o, "pad", pad) < 0)
         goto error;
-    if (cmb_msg_send_fd (c->fd, o, "%s.ping", name) < 0)
+    if (_send_message (c, o, "%s.ping", name) < 0)
         goto error;
     json_object_put (o);
     o = NULL;
 
     /* receive a copy back */
-    if (cmb_msg_recv_fd (c->fd, &tag, &o, 0) < 0)
+    if (_recv_message (c, &tag, &o, 0) < 0)
         goto error;
     if (!o)
         goto eproto;
@@ -197,13 +241,13 @@ char *cmb_stats (cmb_t c, char *name)
         errno = ENOMEM;
         goto error;
     }
-    if (cmb_msg_send_fd (c->fd, o, "%s.stats", name) < 0)
+    if (_send_message (c, o, "%s.stats", name) < 0)
         goto error;
     json_object_put (o);
     o = NULL;
 
     /* receive response */
-    if (cmb_msg_recv_fd (c->fd, NULL, &o, 0) < 0)
+    if (_recv_message (c, NULL, &o, 0) < 0)
         goto error;
     if (!o)
         goto eproto;
@@ -226,7 +270,7 @@ error:
 
 int cmb_snoop (cmb_t c, bool enable)
 {
-    return cmb_msg_send_fd (c->fd, NULL, "api.snoop.%s", enable ? "on" : "off");
+    return _send_message (c, NULL, "api.snoop.%s", enable ? "on" : "off");
 }
 
 int cmb_snoop_one (cmb_t c)
@@ -236,7 +280,8 @@ int cmb_snoop_one (cmb_t c)
 
     zmsg = zmsg_recv_fd (c->fd, 0); /* blocking */
     if (zmsg) {
-        cmb_dump (zmsg);
+        //zmsg_dump (zmsg);
+        zmsg_dump_compact (zmsg);
         zmsg_destroy (&zmsg);
         rc = 0;
     }
@@ -245,28 +290,26 @@ int cmb_snoop_one (cmb_t c)
 
 int cmb_event_subscribe (cmb_t c, char *sub)
 {
-    return cmb_msg_send_fd (c->fd, NULL, "api.event.subscribe.%s",
-                            sub ? sub : "");
+    return _send_message (c, NULL, "api.event.subscribe.%s", sub ? sub : "");
 }
 
 int cmb_event_unsubscribe (cmb_t c, char *sub)
 {
-    return cmb_msg_send_fd (c->fd, NULL, "api.event.unsubscribe.%s",
-                            sub ? sub : "");
+    return _send_message (c, NULL, "api.event.unsubscribe.%s", sub ? sub : "");
 }
 
 char *cmb_event_recv (cmb_t c)
 {
     char *tag = NULL;
 
-    (void)cmb_msg_recv_fd (c->fd, &tag, NULL, 0);
+    (void)_recv_message (c, &tag, NULL, 0);
 
     return tag;
 }
 
 int cmb_event_send (cmb_t c, char *event)
 {
-    return cmb_msg_send_fd (c->fd, NULL, "api.event.send.%s", event);
+    return _send_message (c, NULL, "api.event.send.%s", event);
 }
 
 int cmb_barrier (cmb_t c, char *name, int nprocs)
@@ -274,8 +317,8 @@ int cmb_barrier (cmb_t c, char *name, int nprocs)
     json_object *o = NULL;
     int count = 1;
 
-    if (cmb_msg_send_fd (c->fd, NULL,
-                         "api.event.subscribe.event.barrier.exit.%s", name) < 0)
+    if (_send_message (c, NULL, "api.event.subscribe.%s.%s",
+                                    "event.barrier.exit",  name) < 0)
         return -1;
 
     /* send request */
@@ -285,17 +328,17 @@ int cmb_barrier (cmb_t c, char *name, int nprocs)
         goto error;
     if (_json_object_add_int (o, "nprocs", nprocs) < 0)
         goto error;
-    if (cmb_msg_send_fd (c->fd, o, "barrier.enter.%s", name) < 0)
+    if (_send_message (c, o, "barrier.enter.%s", name) < 0)
         goto error;
     json_object_put (o);
     o = NULL;
 
     /* wait for event */
-    if (cmb_msg_recv_fd (c->fd, NULL, NULL, 0) < 0)
+    if (_recv_message (c, NULL, NULL, 0) < 0)
         goto error;
 
-    cmb_msg_send_fd (c->fd, NULL,
-                     "api.event.unsubscribe.event.barrier.exit.%s", name);
+    (void)_send_message (c, NULL, "api.event.unsubscribe.%s.%s",
+                                "event.barrier.exit", name);
     return 0;
 nomem:
     errno = ENOMEM;
@@ -315,7 +358,7 @@ int cmb_kvs_put (cmb_t c, const char *key, const char *val)
         goto error;
     if (_json_object_add_string (o, "val", val) < 0)
         goto error;
-    if (cmb_msg_send_fd (c->fd, o, "kvs.put") < 0)
+    if (_send_message (c, o, "kvs.put") < 0)
         goto error;
     json_object_put (o);
     o = NULL;
@@ -339,13 +382,13 @@ char *cmb_kvs_get (cmb_t c, const char *key)
         goto nomem;
     if (_json_object_add_string (o, "key", key) < 0)
         goto error;
-    if (cmb_msg_send_fd (c->fd, o, "kvs.get") < 0)
+    if (_send_message (c, o, "kvs.get") < 0)
         goto error;
     json_object_put (o);
     o = NULL;
 
     /* receive response */
-    if (cmb_msg_recv_fd (c->fd, NULL, &o, 0) < 0)
+    if (_recv_message (c, NULL, &o, 0) < 0)
         goto error;
     if (_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
@@ -379,13 +422,13 @@ int cmb_live_query (cmb_t c, int **upp, int *ulp, int **dp, int *dlp, int *nnp)
         errno = ENOMEM;
         goto error;
     }
-    if (cmb_msg_send_fd (c->fd, o, "live.query") < 0)
+    if (_send_message (c, o, "live.query") < 0)
         goto error;
     json_object_put (o);
     o = NULL;
 
     /* receive response */
-    if (cmb_msg_recv_fd (c->fd, NULL, &o, 0) < 0)
+    if (_recv_message (c, NULL, &o, 0) < 0)
         goto error;
     if (!o)
         goto eproto;
@@ -444,7 +487,7 @@ int cmb_vlog (cmb_t c, const char *tag, const char *src,
     }
     if (_json_object_add_string (o, "time", tbuf) < 0)
         goto error;
-    if (cmb_msg_send_fd (c->fd, o, "log.msg") < 0)
+    if (_send_message (c, o, "log.msg") < 0)
         goto error;
     free (str);
     json_object_put (o);
@@ -476,7 +519,7 @@ int cmb_log_subscribe (cmb_t c, const char *sub)
         errno = ENOMEM;
         goto error;
     }
-    if (cmb_msg_send_fd (c->fd, o, "log.subscribe.%s", sub) < 0)
+    if (_send_message (c, o, "log.subscribe.%s", sub) < 0)
         goto error;
     json_object_put (o);
     return 0;
@@ -494,7 +537,7 @@ int cmb_log_unsubscribe (cmb_t c, const char *sub)
         errno = ENOMEM;
         goto error;
     }
-    if (cmb_msg_send_fd (c->fd, o, "log.unsubscribe.%s", sub) < 0)
+    if (_send_message (c, o, "log.unsubscribe.%s", sub) < 0)
         goto error;
     json_object_put (o);
     return 0;
@@ -512,7 +555,7 @@ char *cmb_log_recv (cmb_t c, char **tagp, struct timeval *tvp, char **srcp)
     char *endptr;
     struct timeval tv;
 
-    if (cmb_msg_recv_fd (c->fd, NULL, &o, 0) < 0)
+    if (_recv_message (c, NULL, &o, 0) < 0)
         goto error;
     if (_json_object_get_string (o, "message", &s) < 0)
         goto error;
@@ -566,13 +609,13 @@ int cmb_kvs_commit (cmb_t c, int *ep, int *pp)
         errno = ENOMEM;
         goto error;
     }
-    if (cmb_msg_send_fd (c->fd, o, "kvs.commit") < 0)
+    if (_send_message (c, o, "kvs.commit") < 0)
         goto error;
     json_object_put (o);
     o = NULL;
 
     /* receive response */
-    if (cmb_msg_recv_fd (c->fd, NULL, &o, 0) < 0)
+    if (_recv_message (c, NULL, &o, 0) < 0)
         goto error;
     if (!o)
         goto eproto;
@@ -606,7 +649,7 @@ int cmb_route_add (cmb_t c, char *dst, char *gw)
     }
     if (_json_object_add_string (o, "gw", gw) < 0)
         goto error;
-    if (cmb_msg_send_fd (c->fd, o, "cmb.route.add.%s", dst) < 0)
+    if (_send_message (c, o, "cmb.route.add.%s", dst) < 0)
         goto error;
     json_object_put (o);
     return 0;
@@ -626,7 +669,7 @@ int cmb_route_del (cmb_t c, char *dst, char *gw)
     }
     if (_json_object_add_string (o, "gw", gw) < 0)
         goto error;
-    if (cmb_msg_send_fd (c->fd, o, "cmb.route.del.%s", dst) < 0)
+    if (_send_message (c, o, "cmb.route.del.%s", dst) < 0)
         goto error;
     json_object_put (o);
     return 0;
@@ -647,13 +690,13 @@ char *cmb_route_query (cmb_t c)
         errno = ENOMEM;
         goto error;
     }
-    if (cmb_msg_send_fd (c->fd, o, "cmb.route.query") < 0)
+    if (_send_message (c, o, "cmb.route.query") < 0)
         goto error;
     json_object_put (o);
     o = NULL;
 
     /* receive response */
-    if (cmb_msg_recv_fd (c->fd, NULL, &o, 0) < 0)
+    if (_recv_message (c, NULL, &o, 0) < 0)
         goto error;
     cpy = strdup (json_object_get_string (o));
     if (!cpy) {

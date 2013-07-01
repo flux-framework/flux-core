@@ -1,5 +1,6 @@
 /* cmbd.c - simple zmq message broker, to run on each node of a job */
 
+#define _GNU_SOURCE /* vasprintf */
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -52,6 +53,10 @@ static void _cmb_poll (conf_t *conf, server_t *srv);
 
 static void _route_response (conf_t *conf, server_t *srv, zmsg_t **zmsg,
                             bool dnsock);
+
+static void _request_send (server_t *srv, json_object *o, const char *fmt, ...)
+                           __attribute__ ((format (printf, 3, 4)));
+
 
 static void usage (void)
 {
@@ -253,8 +258,8 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
     }
 
     if (srv->zs_upreq_out) {
-        cmb_msg_send_rt (srv->zs_upreq_out, NULL, "cmb.connect");
-        cmb_msg_send_rt (srv->zs_upreq_out, NULL, "cmb.route.hello");
+        _request_send (srv, NULL, "cmb.connect");
+        _request_send (srv, NULL, "cmb.route.hello");
     }
 
     plugin_init (conf, srv);
@@ -291,6 +296,30 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
     free (srv);
 }
 
+/* Send upstream request message.
+ */
+static void _request_send (server_t *srv, json_object *o, const char *fmt, ...)
+{
+    va_list ap;
+    zmsg_t *zmsg;
+    char *tag;
+    int n;
+
+    va_start (ap, fmt);
+    n = vasprintf (&tag, fmt, ap);
+    va_end (ap);
+    if (n < 0)
+        err_exit ("vasprintf");
+
+    zmsg = cmb_msg_encode (tag, o);
+    free (tag);
+    if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* message delimiter */
+        oom ();
+    if (zmsg_send (&zmsg, srv->zs_upreq_out) < 0)
+        err_exit ("zmsg_send");
+}
+
+
 static void _reparent (conf_t *conf, server_t *srv)
 {
     int i;
@@ -298,8 +327,7 @@ static void _reparent (conf_t *conf, server_t *srv)
     for (i = 0; i < conf->parent_len; i++) {
         if (i != srv->parent_cur && srv->parent_alive[i]) {
             if (srv->parent_alive[srv->parent_cur])
-                cmb_msg_send_rt (srv->zs_upreq_out, NULL,
-                                 "cmb.route.goodbye.%d", conf->rank);
+                _request_send (srv, NULL, "cmb.route.goodbye.%d", conf->rank);
             if (conf->verbose)
                 msg ("%s: disconnect %s, connect %s", __FUNCTION__,
                     conf->parent[srv->parent_cur].upreq_uri,
@@ -319,7 +347,7 @@ static void _reparent (conf_t *conf, server_t *srv)
             srv->parent_cur = i;
 
             usleep (1000*10); /* FIXME: message is lost without this delay */
-            cmb_msg_send_rt (srv->zs_upreq_out, NULL, "cmb.connect");
+            _request_send (srv, NULL, "cmb.connect");
             break;
         }
     }
@@ -355,7 +383,7 @@ static void _cmb_internal_event (conf_t *conf, server_t *srv, zmsg_t *zmsg)
         free (arg);
     } else if (cmb_msg_match (zmsg, "event.route.update")) {
         if (srv->zs_upreq_out)
-            cmb_msg_send_rt (srv->zs_upreq_out, NULL, "cmb.route.hello");
+            _request_send (srv, NULL, "cmb.route.hello");
     } else if (cmb_msg_match_substr (zmsg, "event.sched.trigger.", &arg)) {
         srv->epoch = strtoul (arg, NULL, 10);
         free (arg);

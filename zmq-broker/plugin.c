@@ -129,17 +129,18 @@ static void _plugin_ping (plugin_ctx_t *p, zmsg_t **zmsg)
     json_object *o, *no;
     char *s = NULL;
 
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0) {
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         err ("%s: protocol error", __FUNCTION__);
         goto done;
     }
-    s = cmb_route_str (*zmsg, 2);
+    s = zmsg_route_str (*zmsg, 2);
     if (!(no = json_object_new_string (s)))
         oom ();
     json_object_object_add (o, "route", no);
-    cmb_msg_rep_json (*zmsg, o);
-    plugin_send_response_raw (p, zmsg);
+    plugin_send_response (p, zmsg, o);
 done:
+    if (o)
+        json_object_put (o);
     if (s)
         free (s);
     if (*zmsg)
@@ -179,11 +180,7 @@ static void _plugin_stats (plugin_ctx_t *p, zmsg_t **zmsg)
         oom ();
     json_object_object_add (o, "event_recv_count", no);
 
-    if (cmb_msg_rep_json (*zmsg, o) < 0) {
-        err ("%s: cmb_msg_rep_json", __FUNCTION__);
-        goto done;
-    }
-    plugin_send_response_raw (p, zmsg);
+    plugin_send_response (p, zmsg, o);
 done:
     if (o)
         json_object_put (o);

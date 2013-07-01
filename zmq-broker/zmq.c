@@ -161,11 +161,7 @@ void zmsg_cc (zmsg_t *zmsg, void *sock)
     }
 }
 
-/**
- ** cmb messages
- **/
-
-int cmb_msg_hopcount (zmsg_t *zmsg)
+int zmsg_hopcount (zmsg_t *zmsg)
 {
     int count = 0;
     zframe_t *zf;
@@ -237,44 +233,6 @@ eproto:
     return -1;
 }
 
-int cmb_msg_recv (void *socket, char **tagp, json_object **op, int flags)
-{
-    zmsg_t *msg = NULL;
-
-    if ((flags & ZMQ_DONTWAIT) && !zsocket_poll (socket, 0)) {
-        errno = EAGAIN; 
-        return -1;
-    }
-    if (!(msg = zmsg_recv (socket)))
-        goto error;
-    if (cmb_msg_decode (msg, tagp, op) < 0)
-        goto error;
-    zmsg_destroy (&msg);
-    return 0;
-error:
-    if (msg)
-        zmsg_destroy (&msg);
-    return -1;
-}
-
-int cmb_msg_recv_fd (int fd, char **tagp, json_object **op, int flags)
-{
-    zmsg_t *zmsg;
-
-    zmsg = zmsg_recv_fd (fd, flags);
-    if (!zmsg)
-        goto error;
-    if (cmb_msg_decode (zmsg, tagp, op) < 0)
-        goto error;
-    zmsg_destroy (&zmsg);
-    return 0;
-
-error:
-    if (zmsg)
-        zmsg_destroy (&zmsg);
-    return -1;
-}
-
 zmsg_t *cmb_msg_encode (char *tag, json_object *o)
 {
     zmsg_t *zmsg = NULL;
@@ -288,73 +246,6 @@ zmsg_t *cmb_msg_encode (char *tag, json_object *o)
             err_exit ("zmsg_addstr");
     }
     return zmsg;
-}
-
-void cmb_msg_send (void *sock, json_object *o, const char *fmt, ...)
-{
-    va_list ap;
-    zmsg_t *zmsg;
-    char *tag;
-    int n;
-
-    va_start (ap, fmt);
-    n = vasprintf (&tag, fmt, ap);
-    va_end (ap);
-    if (n < 0)
-        err_exit ("vasprintf");
-   
-    zmsg = cmb_msg_encode (tag, o);
-    free (tag);
-    if (zmsg_send (&zmsg, sock) < 0)
-        err_exit ("zmsg_send");
-}
-
-/* routed verison of above */
-void cmb_msg_send_rt (void *sock, json_object *o, const char *fmt, ...)
-{
-    va_list ap;
-    zmsg_t *zmsg;
-    char *tag;
-    int n;
-
-    va_start (ap, fmt);
-    n = vasprintf (&tag, fmt, ap);
-    va_end (ap);
-    if (n < 0)
-        err_exit ("vasprintf");
-   
-    zmsg = cmb_msg_encode (tag, o);
-    free (tag);
-    if (zmsg_pushmem (zmsg, NULL, 0) < 0)
-        oom ();
-    if (zmsg_send (&zmsg, sock) < 0)
-        err_exit ("zmsg_send");
-}
-
-int cmb_msg_send_fd (int fd, json_object *o, const char *fmt, ...)
-{
-    va_list ap;
-    zmsg_t *zmsg = NULL;
-    char *tag = NULL;
-    int n;
-
-    va_start (ap, fmt);
-    n = vasprintf (&tag, fmt, ap);
-    va_end (ap);
-    if (n < 0)
-        err_exit ("vasprintf");
-   
-    zmsg = cmb_msg_encode (tag, o);
-    if (zmsg_send_fd (fd, &zmsg) < 0) /* destroys msg on succes */
-        goto error;
-    free (tag);
-    return 0;
-error:
-    if (zmsg)
-        zmsg_destroy (&zmsg);
-    if (tag)
-        free (tag);
-    return -1;
 }
 
 static char *_ztag_noaddr (zmsg_t *zmsg)
@@ -396,15 +287,6 @@ bool cmb_msg_match_substr (zmsg_t *zmsg, const char *tag, char **restp)
     }
     free (ztag);
     return false;
-}
-
-bool cmb_msg_match_sender (zmsg_t *zmsg, const char *sender)
-{
-    zframe_t *zf = _sender_frame (zmsg);
-
-    if (!zf)
-        msg_exit ("cmb_msg_match_sender: no envelope in message");
-    return zframe_streq (zf, sender);
 }
 
 /* extract the first address in the envelope (sender uuid) */
@@ -529,9 +411,9 @@ _zframe_print_compact (zframe_t *self, const char *prefix)
 }
 
 void
-cmb_dump (zmsg_t *self)
+zmsg_dump_compact (zmsg_t *self)
 {
-    int hops = cmb_msg_hopcount (self);
+    int hops = zmsg_hopcount (self);
     zframe_t *zf = zmsg_first (self);
 
     fprintf (stderr, "--------------------------------------\n");
@@ -556,9 +438,9 @@ cmb_dump (zmsg_t *self)
 }
 
 char *
-cmb_route_str (zmsg_t *self, int skiphops)
+zmsg_route_str (zmsg_t *self, int skiphops)
 {
-    int hops = cmb_msg_hopcount (self) - skiphops;
+    int hops = zmsg_hopcount (self) - skiphops;
     zframe_t *zf = zmsg_first (self);
     const size_t len = 256;
     char *buf = xzmalloc (len);
