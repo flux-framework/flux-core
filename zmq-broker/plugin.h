@@ -1,9 +1,12 @@
 typedef struct plugin_struct *plugin_t;
 
 typedef struct {
-    int req_count;
-    int rep_count;
-    int event_count;
+    int upreq_send_count;
+    int upreq_recv_count;
+    int dnreq_send_count;
+    int dnreq_recv_count;
+    int event_send_count;
+    int event_recv_count;
 } plugin_stats_t;
 
 typedef struct {
@@ -34,6 +37,6 @@ struct plugin_struct {
     void (*finiFn)(plugin_ctx_t *p);
 };
 
+/* call from cmbd */
 void plugin_init (conf_t *conf, server_t *srv);
 void plugin_fini (conf_t *conf, server_t *srv);
-void plugin_send (server_t *srv, conf_t *conf, zmsg_t **zmsg);

@@ -74,15 +74,30 @@ static void _plugin_stats (plugin_ctx_t *p, zmsg_t **zmsg)
         err ("%s: error decoding message", __FUNCTION__);
         goto done;
     }
-    if (!(no = json_object_new_int (p->stats.req_count)))
+    if (!(no = json_object_new_int (p->stats.upreq_send_count)))
         oom ();
-    json_object_object_add (o, "req_count", no);
-    if (!(no = json_object_new_int (p->stats.rep_count)))
+    json_object_object_add (o, "upreq_send_count", no);
+
+    if (!(no = json_object_new_int (p->stats.upreq_recv_count)))
         oom ();
-    json_object_object_add (o, "rep_count", no);
-    if (!(no = json_object_new_int (p->stats.event_count)))
+    json_object_object_add (o, "upreq_recv_count", no);
+
+    if (!(no = json_object_new_int (p->stats.dnreq_send_count)))
         oom ();
-    json_object_object_add (o, "event_count", no);
+    json_object_object_add (o, "dnreq_send_count", no);
+
+    if (!(no = json_object_new_int (p->stats.dnreq_recv_count)))
+        oom ();
+    json_object_object_add (o, "dnreq_recv_count", no);
+
+    if (!(no = json_object_new_int (p->stats.event_send_count)))
+        oom ();
+    json_object_object_add (o, "event_send_count", no);
+
+    if (!(no = json_object_new_int (p->stats.event_recv_count)))
+        oom ();
+    json_object_object_add (o, "event_recv_count", no);
+
     if (cmb_msg_rep_json (*zmsg, o) < 0) {
         err ("%s: cmb_msg_rep_json", __FUNCTION__);
         goto done;
@@ -148,19 +163,19 @@ static void _plugin_poll (plugin_ctx_t *p)
         if (zpa[0].revents & ZMQ_POLLIN) {   /* response on 'upreq' */
             zmsg = zmsg_recv (p->zs_upreq);
             type = ZMSG_RESPONSE;
-            p->stats.rep_count++;
+            p->stats.upreq_recv_count++;
         } else if (zpa[1].revents & ZMQ_POLLIN) {   /* request on 'dnreq' */
             zmsg = zmsg_recv (p->zs_dnreq);
             if (!zmsg)
                 err ("zmsg_recv");
             type = ZMSG_REQUEST;
-            p->stats.req_count++;
+            p->stats.dnreq_recv_count++;
         } else if (zpa[2].revents & ZMQ_POLLIN) {   /* event on 'in_event' */
             zmsg = zmsg_recv (p->zs_evin);
             if (!zmsg)
                 err ("zmsg_recv");
             type = ZMSG_EVENT;
-            p->stats.event_count++;
+            p->stats.event_recv_count++;
         } else if (zpa[3].revents & ZMQ_POLLIN) {   /* debug on 'snoop' */
             zmsg = zmsg_recv (p->zs_snoop);
             type = ZMSG_SNOOP;

@@ -397,19 +397,19 @@ static void _poll_once (plugin_ctx_t *p)
         if (!zmsg)
             err ("zmsg_recv");
         type = ZMSG_REQUEST;
-        p->stats.req_count++;
+        p->stats.dnreq_recv_count++;
     } else if (zpa[1].revents & ZMQ_POLLIN) {/* event on 'evin' */
         zmsg = zmsg_recv (p->zs_evin);
         if (!zmsg)
             err ("zmsg_recv");
         type = ZMSG_EVENT;
-        p->stats.event_count++;
+        p->stats.event_recv_count++;
     } else if (zpa[2].revents & ZMQ_POLLIN) {/* response on 'upreq' */
         zmsg = zmsg_recv (p->zs_upreq);
         if (!zmsg)
             err ("zmsg_recv");
         type = ZMSG_RESPONSE;
-        p->stats.rep_count++;
+        p->stats.upreq_recv_count++;
     } else if (zpa[3].revents & ZMQ_POLLIN) {/* 'snoop' */
         zmsg = zmsg_recv (p->zs_snoop);
         if (!zmsg)

@@ -15,9 +15,10 @@ void cmb_fini (cmb_t c);
 int cmb_ping (cmb_t c, char *tag, int seq, int padding, char **tagp,
               char **routep);
 
-/* Request statisticfs for a particular plugin.
+/* Request statistics for a particular plugin.
+ * Returns JSON string, caller must free.
  */
-int cmb_stats (cmb_t c, char *name, int *req, int *rep, int *event);
+char *cmb_stats (cmb_t c, char *name);
 
 /* Watch traffic on the cmb sockets.
  * Packets are converted to ascii and printed on stderr.
@@ -68,7 +69,7 @@ int cmb_log_subscribe (cmb_t c, const char *sub);
 int cmb_log_unsubscribe (cmb_t c, const char *sub);
 char *cmb_log_recv (cmb_t c, char **tagp, struct timeval *tvp, char **fromp);
 
-/* Manipulate cmb routing tables.
+/* Manipulate (local) cmb routing tables.
  * Add and del are fire and forget (no reply).
  * Query returns JSON string, caller must free.
  */

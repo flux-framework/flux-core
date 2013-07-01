@@ -264,9 +264,10 @@ error:
     return -1;
 }
 
-int cmb_stats (cmb_t c, char *name, int *req, int *rep, int *event)
+char *cmb_stats (cmb_t c, char *name)
 {
     json_object *o = NULL;
+    char *cpy = NULL;
 
     /* send request */
     if (!(o = json_object_new_object ())) {
@@ -283,21 +284,21 @@ int cmb_stats (cmb_t c, char *name, int *req, int *rep, int *event)
         goto error;
     if (!o)
         goto eproto;
-    if (_json_object_get_int (o, "errnum", &errno) == 0)
+    cpy = strdup (json_object_get_string (o));
+    if (!cpy) {
+        errno = ENOMEM;
         goto error;
-    if (_json_object_get_int (o, "req_count", req) < 0
-                    || _json_object_get_int (o, "rep_count", rep) < 0
-                    || _json_object_get_int (o, "event_count", event) < 0)
-        goto eproto;
-    if (o)
-        json_object_put (o);
-    return 0;
+    }
+    json_object_put (o);
+    return cpy;
 eproto:
     errno = EPROTO;
 error:    
+    if (cpy)
+        free (cpy);
     if (o)
         json_object_put (o);
-    return -1;
+    return NULL;
 }
 
 int cmb_snoop (cmb_t c, bool enable)

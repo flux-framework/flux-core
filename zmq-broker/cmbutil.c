@@ -125,11 +125,17 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'x': { /* --stats name */
-                int req, rep, event;
-                if (cmb_stats (c, optarg, &req, &rep, &event) < 0)
+                json_object *o;
+                char *s;
+
+                if (!(s = cmb_stats (c, optarg)))
                     err_exit ("cmb_stats");
-                msg ("%s requests=%d replies=%d events=%d", optarg,
-                    req, rep, event);
+                if (!(o = json_tokener_parse (s)))
+                    err_exit ("json_tokener_parse");
+                printf ("%s\n", json_object_to_json_string_ext (o,
+                                    JSON_C_TO_STRING_PRETTY));
+                json_object_put (o);
+                free (s);
                 break;
             }
             case 'b': { /* --barrier NAME */
@@ -308,14 +314,16 @@ int main (int argc, char *argv[])
                     err ("cmb_route_del %s via %s", dst, gw);
                 break;
             }
-            case 'q': { /* --route-del dst */
-                char *s = cmb_route_query (c);
-                json_object *o = json_tokener_parse (s);
-                const char *pretty = json_object_to_json_string_ext (o,
-                                    JSON_C_TO_STRING_PRETTY);
-                if (!s)
-                    err ("cmb_route_query");
-                printf ("%s\n", pretty);
+            case 'q': { /* --route-query */
+                json_object *o;
+                char *s;
+
+                if (!(s = cmb_route_query (c)))
+                    err_exit ("cmb_route_query");
+                if (!(o = json_tokener_parse (s)))
+                    err_exit ("json_tokener_parse");
+                printf ("%s\n", json_object_to_json_string_ext (o,
+                                    JSON_C_TO_STRING_PRETTY));
                 json_object_put (o);
                 free (s);
                 break;
