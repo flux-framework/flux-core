@@ -123,8 +123,7 @@ void plugin_send_response_errnum (plugin_ctx_t *p, zmsg_t **req, int errnum)
     plugin_send_response_raw (p, req);
 }
 
-/* <name>.ping - respond to ping request for this plugin */
-static void _plugin_ping (plugin_ctx_t *p, zmsg_t **zmsg)
+void plugin_ping_respond (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     json_object *o, *no;
     char *s = NULL;
@@ -147,8 +146,7 @@ done:
         zmsg_destroy (zmsg);
 }
 
-/* <name>.stats - respond to stats request for this plugin */
-static void _plugin_stats (plugin_ctx_t *p, zmsg_t **zmsg)
+void plugin_stats_respond (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     json_object *no, *o = NULL;
 
@@ -260,11 +258,11 @@ static void _plugin_poll (plugin_ctx_t *p)
 
         /* intercept and respond to ping requests for this plugin */
         if (zmsg && type == ZMSG_REQUEST && cmb_msg_match (zmsg, pingtag))
-            _plugin_ping (p, &zmsg);
+            plugin_ping_respond (p, &zmsg);
 
         /* intercept and respond to stats request for this plugin */
         if (zmsg && type == ZMSG_REQUEST && cmb_msg_match (zmsg, statstag))
-            _plugin_stats (p, &zmsg);
+            plugin_stats_respond (p, &zmsg);
 
         /* dispatch message to plugin's recvFn() */
         /*     recvFn () shouldn't free zmsg if it doesn't recognize the tag */

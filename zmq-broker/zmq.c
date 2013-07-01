@@ -265,7 +265,7 @@ char *cmb_msg_sender (zmsg_t *zmsg)
 {
     zframe_t *zf = _sender_frame (zmsg);
     if (!zf) {
-        msg ("cmb_msg_sender: empty envelope");
+        msg ("%s: empty envelope", __FUNCTION__);
         return NULL;
     }
     return zframe_strdup (zf); /* caller must free */
@@ -275,7 +275,7 @@ char *cmb_msg_nexthop (zmsg_t *zmsg)
 {
     zframe_t *zf = zmsg_first (zmsg);
     if (!zf) {
-        msg ("cmb_msg_sender: empty envelope");
+        msg ("%s: empty envelope", __FUNCTION__);
         return NULL;
     }
     return zframe_strdup (zf); /* caller must free */
@@ -286,7 +286,7 @@ char *cmb_msg_tag (zmsg_t *zmsg, bool shorten)
     zframe_t *zf = _tag_frame (zmsg);
     char *tag;
     if (!zf) {
-        msg ("cmb_msg_tag: no tag frame");
+        msg ("%s: no tag frame", __FUNCTION__);
         return NULL;
     }
     tag = zframe_strdup (zf); /* caller must free */
