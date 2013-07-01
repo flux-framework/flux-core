@@ -209,7 +209,7 @@ static void _kvs_put (plugin_ctx_t *p, zmsg_t **zmsg)
     char *sender = NULL;
     client_t *c;
 
-    if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) < 0) {
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0) {
         err ("%s: error decoding message", __FUNCTION__);
         goto done;
     }
@@ -236,7 +236,7 @@ static void _kvs_get (plugin_ctx_t *p, zmsg_t **zmsg)
     json_object *o = NULL, *key, *val;
     char *valstr;
 
-    if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) < 0) {
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0) {
         err ("%s: error decoding message", __FUNCTION__);
         goto done;
     }
@@ -267,7 +267,7 @@ static void _kvs_commit (plugin_ctx_t *p, zmsg_t **zmsg)
     int errcount = 0, putcount = 0;
     client_t *c;
 
-    if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) < 0) {
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0) {
         err ("%s: error decoding message", __FUNCTION__);
         goto done;
     }

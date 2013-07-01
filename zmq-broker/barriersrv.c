@@ -110,7 +110,7 @@ static void _barrier_enter (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
     json_object *o = NULL, *count, *nprocs;
     char *sender = NULL;
 
-    if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) < 0) {
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0) {
         err ("%s: error decoding message", __FUNCTION__);
         goto done;
     }

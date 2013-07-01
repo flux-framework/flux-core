@@ -138,7 +138,7 @@ static void _recv_log_msg (plugin_ctx_t *p, zmsg_t **zmsg)
     fwdarg_t farg;
     json_object *o = NULL;
 
-    if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) < 0)
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0)
         goto done;
     if (!o)
         goto done;

@@ -75,7 +75,7 @@ void plugin_send_event (plugin_ctx_t *p, const char *fmt, ...)
     va_end (ap);
     if (n < 0)
         err_exit ("%s: vasprintf", __FUNCTION__);
-    zmsg = cmb_msg_encode (tag, NULL, NULL, 0);
+    zmsg = cmb_msg_encode (tag, NULL);
     free (tag);
     plugin_send_event_raw (p, &zmsg);
 }
@@ -99,7 +99,7 @@ void plugin_send_request (plugin_ctx_t *p, json_object *o, const char *fmt, ...)
             oom ();
         o = empty;
     }
-    zmsg = cmb_msg_encode (tag, o, NULL, 0);
+    zmsg = cmb_msg_encode (tag, o);
     if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* delimiter frame */
         oom ();
     plugin_send_request_raw (p, &zmsg);
@@ -129,7 +129,7 @@ static void _plugin_ping (plugin_ctx_t *p, zmsg_t **zmsg)
     json_object *o, *no;
     char *s = NULL;
 
-    if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) < 0) {
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0) {
         err ("%s: protocol error", __FUNCTION__);
         goto done;
     }
@@ -151,7 +151,7 @@ static void _plugin_stats (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     json_object *no, *o = NULL;
 
-    if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) < 0) {
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0) {
         err ("%s: error decoding message", __FUNCTION__);
         goto done;
     }

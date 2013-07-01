@@ -201,13 +201,6 @@ static zframe_t *_json_frame (zmsg_t *zmsg)
     return (zf ? zmsg_next (zmsg) : NULL);
 }
 
-static zframe_t *_data_frame (zmsg_t *zmsg)
-{
-    zframe_t *zf = _json_frame (zmsg);
-
-    return (zf ? zmsg_next (zmsg) : NULL);
-}
-
 static zframe_t *_sender_frame (zmsg_t *zmsg)
 {
     zframe_t *zf, *prev;
@@ -220,12 +213,10 @@ static zframe_t *_sender_frame (zmsg_t *zmsg)
     return (zf ? prev : NULL);
 }
 
-int cmb_msg_decode (zmsg_t *zmsg, char **tagp, json_object **op,
-                    void **datap, int *lenp)
+int cmb_msg_decode (zmsg_t *zmsg, char **tagp, json_object **op)
 {
     zframe_t *tag = _tag_frame (zmsg);
     zframe_t *json = zmsg_next (zmsg);
-    zframe_t *data = zmsg_next (zmsg);
 
     if (!tag)
         goto eproto;
@@ -240,24 +231,13 @@ int cmb_msg_decode (zmsg_t *zmsg, char **tagp, json_object **op,
         } else
             *op = NULL;
     }
-    if (datap && lenp) {
-        if (data) {
-            *lenp = zframe_size (data);
-            *datap = xzmalloc (zframe_size (data));
-            memcpy (*datap, zframe_data (data), zframe_size (data));
-        } else {
-            *lenp = 0;
-            *datap = NULL;
-        }
-    }
     return 0;
 eproto:
     errno = EPROTO;
     return -1;
 }
 
-int cmb_msg_recv (void *socket, char **tagp, json_object **op,
-                    void **datap, int *lenp, int flags)
+int cmb_msg_recv (void *socket, char **tagp, json_object **op, int flags)
 {
     zmsg_t *msg = NULL;
 
@@ -267,7 +247,7 @@ int cmb_msg_recv (void *socket, char **tagp, json_object **op,
     }
     if (!(msg = zmsg_recv (socket)))
         goto error;
-    if (cmb_msg_decode (msg, tagp, op, datap, lenp) < 0)
+    if (cmb_msg_decode (msg, tagp, op) < 0)
         goto error;
     zmsg_destroy (&msg);
     return 0;
@@ -277,15 +257,14 @@ error:
     return -1;
 }
 
-int cmb_msg_recv_fd (int fd, char **tagp, json_object **op,
-                     void **datap, int *lenp, int flags)
+int cmb_msg_recv_fd (int fd, char **tagp, json_object **op, int flags)
 {
     zmsg_t *zmsg;
 
     zmsg = zmsg_recv_fd (fd, flags);
     if (!zmsg)
         goto error;
-    if (cmb_msg_decode (zmsg, tagp, op, datap, lenp) < 0)
+    if (cmb_msg_decode (zmsg, tagp, op) < 0)
         goto error;
     zmsg_destroy (&zmsg);
     return 0;
@@ -296,7 +275,7 @@ error:
     return -1;
 }
 
-zmsg_t *cmb_msg_encode (char *tag, json_object *o, void *data, int len)
+zmsg_t *cmb_msg_encode (char *tag, json_object *o)
 {
     zmsg_t *zmsg = NULL;
 
@@ -308,32 +287,7 @@ zmsg_t *cmb_msg_encode (char *tag, json_object *o, void *data, int len)
         if (zmsg_addstr (zmsg, "%s", json_object_to_json_string (o)) < 0)
             err_exit ("zmsg_addstr");
     }
-    if (len > 0 && data != NULL) {
-        assert (o != NULL);
-        if (zmsg_addmem (zmsg, data, len) < 0)
-            err_exit ("zmsg_addmem");
-    }
     return zmsg;
-}
-
-void cmb_msg_send_long (void *sock, json_object *o, void *data, int len,
-                        const char *fmt, ...)
-{
-    va_list ap;
-    zmsg_t *zmsg;
-    char *tag;
-    int n;
-
-    va_start (ap, fmt);
-    n = vasprintf (&tag, fmt, ap);
-    va_end (ap);
-    if (n < 0)
-        err_exit ("vasprintf");
-   
-    zmsg = cmb_msg_encode (tag, o, data, len);
-    free (tag);
-    if (zmsg_send (&zmsg, sock) < 0)
-        err_exit ("zmsg_send");
 }
 
 void cmb_msg_send (void *sock, json_object *o, const char *fmt, ...)
@@ -349,7 +303,7 @@ void cmb_msg_send (void *sock, json_object *o, const char *fmt, ...)
     if (n < 0)
         err_exit ("vasprintf");
    
-    zmsg = cmb_msg_encode (tag, o, NULL, 0);
+    zmsg = cmb_msg_encode (tag, o);
     free (tag);
     if (zmsg_send (&zmsg, sock) < 0)
         err_exit ("zmsg_send");
@@ -369,39 +323,12 @@ void cmb_msg_send_rt (void *sock, json_object *o, const char *fmt, ...)
     if (n < 0)
         err_exit ("vasprintf");
    
-    zmsg = cmb_msg_encode (tag, o, NULL, 0);
+    zmsg = cmb_msg_encode (tag, o);
     free (tag);
     if (zmsg_pushmem (zmsg, NULL, 0) < 0)
         oom ();
     if (zmsg_send (&zmsg, sock) < 0)
         err_exit ("zmsg_send");
-}
-
-int cmb_msg_send_long_fd (int fd, json_object *o, void *data, int len,
-                          const char *fmt, ...)
-{
-    va_list ap;
-    zmsg_t *zmsg = NULL;
-    char *tag = NULL;
-    int n;
-
-    va_start (ap, fmt);
-    n = vasprintf (&tag, fmt, ap);
-    va_end (ap);
-    if (n < 0)
-        err_exit ("vasprintf");
-
-    zmsg = cmb_msg_encode (tag, o, data, len);
-    if (zmsg_send_fd (fd, &zmsg) < 0) /* destroys msg on succes */
-        goto error;
-    free (tag);
-    return 0;
-error:
-    if (zmsg)
-        zmsg_destroy (&zmsg);
-    if (tag)
-        free (tag);
-    return -1; 
 }
 
 int cmb_msg_send_fd (int fd, json_object *o, const char *fmt, ...)
@@ -417,7 +344,7 @@ int cmb_msg_send_fd (int fd, json_object *o, const char *fmt, ...)
     if (n < 0)
         err_exit ("vasprintf");
    
-    zmsg = cmb_msg_encode (tag, o, NULL, 0);
+    zmsg = cmb_msg_encode (tag, o);
     if (zmsg_send_fd (fd, &zmsg) < 0) /* destroys msg on succes */
         goto error;
     free (tag);
@@ -564,43 +491,6 @@ error:
     if (o)
         json_object_put (o);
     return -1;
-}
-
-int cmb_msg_datacpy (zmsg_t *zmsg, char *buf, int len)
-{
-    zframe_t *zf = _data_frame (zmsg);
-
-    if (!zf) {
-        msg ("cmb_msg_makenak: no data frame");
-        return -1;
-    }
-    if (zframe_size (zf) > len) {
-        msg ("%s: buffer too small", __FUNCTION__);
-        return -1;
-    }
-    memcpy (buf, zframe_data (zf), zframe_size (zf));
-    return zframe_size (zf);
-}
-
-void cmb_msg_send_errnum (zmsg_t **zmsg, void *socket, int errnum, void *cc)
-{
-    if (cmb_msg_rep_errnum (*zmsg, errnum) < 0)
-        goto done;
-    if (cc) {
-        zmsg_t *cpy = zmsg_dup (*zmsg);
-        if (!cpy)
-            err_exit ("zmsg_dup");
-        if (zmsg_send (&cpy, cc) < 0)
-            err_exit ("zmsg_send");
-    }
-    
-    if (zmsg_send (zmsg, socket) < 0) {
-        err ("%s: zmsg_send", __FUNCTION__);
-        goto done;
-    }
-done:
-    if (zmsg)
-        zmsg_destroy (zmsg);
 }
 
 /* Customized versions of zframe_print() and zmsg_dump() from czmq source.

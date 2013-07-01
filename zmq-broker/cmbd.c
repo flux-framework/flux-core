@@ -371,7 +371,7 @@ static void _cmb_internal_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
         const char *gw = NULL, *parent = NULL;
         int flags = 0;
 
-        if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) == 0 && o != NULL) {
+        if (cmb_msg_decode (*zmsg, NULL, &o) == 0 && o != NULL) {
             if ((oo = json_object_object_get (o, "gw")))
                 gw = json_object_get_string (oo);
             if ((oo = json_object_object_get (o, "parent")))
@@ -389,7 +389,7 @@ static void _cmb_internal_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
         json_object *oo, *o = NULL;
         const char *gw = NULL;
 
-        if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) == 0 && o != NULL) {
+        if (cmb_msg_decode (*zmsg, NULL, &o) == 0 && o != NULL) {
             if ((oo = json_object_object_get (o, "gw")))
                 gw = json_object_get_string (oo);
             if (gw)
@@ -426,7 +426,7 @@ static void _cmb_internal_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
         free (arg);
     } else if (cmb_msg_match (*zmsg, "cmb.connect")) {
         if (srv->epoch > 2) {
-            zmsg_t *z = cmb_msg_encode ("event.route.update", NULL, NULL, 0);
+            zmsg_t *z = cmb_msg_encode ("event.route.update", NULL);
             if (srv->zs_upev_out)
                 zmsg_cc (z, srv->zs_upev_out);
             if (srv->zs_dnev_out)

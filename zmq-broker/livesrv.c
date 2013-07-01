@@ -150,7 +150,7 @@ static void _recv_live_hello (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 
     if (rank < 0 || rank >= p->conf->size)
         goto done;
-    if (cmb_msg_decode (*zmsg, NULL, &o, NULL, NULL) < 0) 
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0) 
         goto done;
     if (!o || !(eo = json_object_object_get (o, "epoch"))
            || !(po = json_object_object_get (o, "parent")))

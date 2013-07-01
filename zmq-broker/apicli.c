@@ -104,84 +104,14 @@ error:
     return -1;
 }
 
-static int _recvfd (int fd, int *fdp, char *name, int len)
-{
-    int fd_xfer, n;
-    char buf[CMSG_SPACE (sizeof (fd_xfer)) ];
-    struct msghdr msghdr;
-    struct iovec iov;
-    struct cmsghdr *cmsg;
-
-    memset (&msghdr, 0, sizeof (msghdr));
-    iov.iov_base = name;
-    iov.iov_len = len - 1;
-    msghdr.msg_iov = &iov;
-    msghdr.msg_iovlen = 1;
-    msghdr.msg_control = buf;
-    msghdr.msg_controllen = sizeof (buf);
-
-    if ((n = recvmsg (fd, &msghdr, 0)) < 0)
-        return -1;
-    
-    name [n] = '\0';
-
-    cmsg = CMSG_FIRSTHDR (&msghdr);
-    if (cmsg == NULL) {
-        msg ("_recvfd: no control message received");
-        return -1;
-    }
-    if (cmsg->cmsg_level != SOL_SOCKET || cmsg->cmsg_type != SCM_RIGHTS) {
-        msg ("_recvfd: message level/rights have wrong values");
-        return -1;
-    }
-    fd_xfer = *(int *) CMSG_DATA (cmsg);
-
-    *fdp = fd_xfer;
-
-    return 0;
-}
-
-int cmb_fd_open (cmb_t c, char *wname, char **np)
-{
-    int newfd = -1;
-    char *name = NULL;
-    char buf[1024];
-
-    if (wname) {
-        if (cmb_msg_send_fd (c->fd, NULL, "api.fdopen.write.%s", wname) < 0)
-            goto error;
-    } else {
-        if (cmb_msg_send_fd (c->fd, NULL, "api.fdopen.read") < 0)
-            goto error;
-    }
-    if (_recvfd (c->fd, &newfd, buf, sizeof (buf)) < 0)
-        goto error;
-    if (np) {
-        name = strdup (buf);
-        if (!name) {
-            errno = ENOMEM;
-            goto error;
-        }
-        *np = name;
-    }
-    return newfd;
-error:
-    if (name)
-        free (name);
-    if (newfd != -1)
-        close (newfd);
-    return -1;
-}
-
 int cmb_ping (cmb_t c, char *name, int seq, int padlen, char **tagp, char **routep)
 {
     json_object *o = NULL;
     int rseq;
-    void *rpad = NULL, *pad = NULL;
     char *tag = NULL;
-    int rpadlen;
     char *route_cpy = NULL;
-    const char *route;
+    char *pad = NULL;
+    const char *route, *rpad;
 
     /* send request */
     if (!(o = json_object_new_object ())) {
@@ -190,40 +120,38 @@ int cmb_ping (cmb_t c, char *name, int seq, int padlen, char **tagp, char **rout
     }
     if (_json_object_add_int (o, "seq", seq) < 0)
         goto error;
-    if (padlen > 0) {
-        pad = malloc (padlen);
-        if (!pad)
-            oom ();
-        memset (pad, 'z', padlen);
+    if (!(pad = malloc (padlen + 1))) {
+        errno = ENOMEM;
+        goto error;
     }
-    if (cmb_msg_send_long_fd (c->fd, o, pad, padlen, "%s.ping", name) < 0)
+    memset (pad, 'x', padlen);
+    pad[padlen] = '\0';
+    if (_json_object_add_string (o, "pad", pad) < 0)
+        goto error;
+    if (cmb_msg_send_fd (c->fd, o, "%s.ping", name) < 0)
         goto error;
     json_object_put (o);
     o = NULL;
 
     /* receive a copy back */
-    if (cmb_msg_recv_fd (c->fd, &tag, &o, &rpad, &rpadlen, 0) < 0)
+    if (cmb_msg_recv_fd (c->fd, &tag, &o, 0) < 0)
         goto error;
     if (!o)
         goto eproto;
-    if (_json_object_get_int (o, "errnum", &errno) == 0)
+    if (_json_object_get_int (o, "errnum", &errno) == 0) /* catch rmt error */
         goto error;
     if (_json_object_get_int (o, "seq", &rseq) < 0)
+        goto eproto;
+    if (_json_object_get_string (o, "pad", &rpad) < 0)
         goto eproto;
     if (seq != rseq) {
         msg ("cmb_ping: seq not the one I sent");
         goto eproto;
     }
-    if (padlen != rpadlen) {
-        msg ("cmb_ping: payload not the size I sent (%d != %d)",
-             padlen, rpadlen);
+    if (padlen != strlen (rpad)) {
+        msg ("cmb_ping: padd not the size I sent (%d != %d)",
+             padlen, (int)strlen (rpad));
         goto eproto;
-    }
-    if (padlen > 0) {
-        if (memcmp (pad, rpad, padlen) != 0) {
-            msg ("cmb_ping: received corrupted payload");
-            goto eproto;
-        }
     }
     if (_json_object_get_string (o, "route", &route) < 0) {
         msg ("cmb_ping: missing route object");
@@ -243,10 +171,7 @@ int cmb_ping (cmb_t c, char *name, int seq, int padlen, char **tagp, char **rout
     else
         free (route_cpy);
     json_object_put (o);
-    if (pad)
-        free (pad);
-    if (rpad)
-        free (rpad);
+    free (pad);
     return 0;
 eproto:
     errno = EPROTO;
@@ -255,8 +180,6 @@ error:
         json_object_put (o);
     if (pad)
         free (pad);
-    if (rpad)
-        free (rpad);
     if (tag)
         free (tag);
     if (route_cpy)
@@ -280,7 +203,7 @@ char *cmb_stats (cmb_t c, char *name)
     o = NULL;
 
     /* receive response */
-    if (cmb_msg_recv_fd (c->fd, NULL, &o, NULL, NULL, 0) < 0)
+    if (cmb_msg_recv_fd (c->fd, NULL, &o, 0) < 0)
         goto error;
     if (!o)
         goto eproto;
@@ -336,7 +259,7 @@ char *cmb_event_recv (cmb_t c)
 {
     char *tag = NULL;
 
-    (void)cmb_msg_recv_fd (c->fd, &tag, NULL, NULL, NULL, 0);
+    (void)cmb_msg_recv_fd (c->fd, &tag, NULL, 0);
 
     return tag;
 }
@@ -368,7 +291,7 @@ int cmb_barrier (cmb_t c, char *name, int nprocs)
     o = NULL;
 
     /* wait for event */
-    if (cmb_msg_recv_fd (c->fd, NULL, NULL, NULL, NULL, 0) < 0)
+    if (cmb_msg_recv_fd (c->fd, NULL, NULL, 0) < 0)
         goto error;
 
     cmb_msg_send_fd (c->fd, NULL,
@@ -422,7 +345,7 @@ char *cmb_kvs_get (cmb_t c, const char *key)
     o = NULL;
 
     /* receive response */
-    if (cmb_msg_recv_fd (c->fd, NULL, &o, NULL, NULL, 0) < 0)
+    if (cmb_msg_recv_fd (c->fd, NULL, &o, 0) < 0)
         goto error;
     if (_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
@@ -462,7 +385,7 @@ int cmb_live_query (cmb_t c, int **upp, int *ulp, int **dp, int *dlp, int *nnp)
     o = NULL;
 
     /* receive response */
-    if (cmb_msg_recv_fd (c->fd, NULL, &o, NULL, NULL, 0) < 0)
+    if (cmb_msg_recv_fd (c->fd, NULL, &o, 0) < 0)
         goto error;
     if (!o)
         goto eproto;
@@ -589,7 +512,7 @@ char *cmb_log_recv (cmb_t c, char **tagp, struct timeval *tvp, char **srcp)
     char *endptr;
     struct timeval tv;
 
-    if (cmb_msg_recv_fd (c->fd, NULL, &o, NULL, NULL, 0) < 0)
+    if (cmb_msg_recv_fd (c->fd, NULL, &o, 0) < 0)
         goto error;
     if (_json_object_get_string (o, "message", &s) < 0)
         goto error;
@@ -649,7 +572,7 @@ int cmb_kvs_commit (cmb_t c, int *ep, int *pp)
     o = NULL;
 
     /* receive response */
-    if (cmb_msg_recv_fd (c->fd, NULL, &o, NULL, NULL, 0) < 0)
+    if (cmb_msg_recv_fd (c->fd, NULL, &o, 0) < 0)
         goto error;
     if (!o)
         goto eproto;
@@ -730,7 +653,7 @@ char *cmb_route_query (cmb_t c)
     o = NULL;
 
     /* receive response */
-    if (cmb_msg_recv_fd (c->fd, NULL, &o, NULL, NULL, 0) < 0)
+    if (cmb_msg_recv_fd (c->fd, NULL, &o, 0) < 0)
         goto error;
     cpy = strdup (json_object_get_string (o));
     if (!cpy) {
