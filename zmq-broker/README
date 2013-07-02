@@ -37,7 +37,7 @@ requests.  Events utilize pub-sub with hiericical topic names.
 One (un)subscribes to a topic by substring.  For example, subscribing
 to "event.sched." matches "event.sched.trigger.<epoch>".  A this point,
 events consist only of one frame containing the topic name.  The events
-that are currently exchange consist of:
+that are currently exchanged consist of:
 
 event.sched.trigger.<epoch>
 event.live.up.<node>
@@ -45,21 +45,35 @@ event.live.down.<node>
 event.route.update
 event.barrier.exit.<name>
 
+An event message consists of only a "tag frame" message part, 
+which contains the topic string.  (In the future a JSON frame may be added).
+
 +---------------------------+
 | The Request Overlay Plane |
 +---------------------------+
 
-Requests are messages that may or may not elicit response messages.
-A request is sent to a service name, which looks just like a subscription
-topic.  If the service name matches as a substring of the service in the
-request, the plugin implementing the service receives the request.
-For example a request sent to "kvs.put" or "kvs.get"  is matched by the
-"kvs" plugin.
+Requests are messages that accumulate address frames as they are
+passed from hop to hop towards their destination.  At the destination,
+this stack of address frames is attached to the response and unwound
+along the route back to the sender.  There may be zero or more responses
+to each message.
 
-Requests build a source-address route as they traverse the overlay tree,
-accumulating address frames as they travel through each hop.  This source-
-address route is used to get any response(s) back to the sender.
+In addition to the address frames, request and response messages
+contain a "tag frame" and an optional JSON frame.  The tag frame is used
+to address the target of the request.  It consists of a pub-sub-like
+hierarchical topic string.  The first word in the topic string identifies
+a plugin that will receive the message.  Remaining parts of the string
+are parsed by that plugin.  For example the "kvs" plugin accepts "kvs.put",
+"kvs.get", and "kvs.commit" messages.  If a local plugin does not match
+the plugin name in the topic string, it is passed upstream toward the root
+of the overlay tree.  If it is not matched at the root, a NAK response is
+sent back.
 
+Topic strings may be prefixed with a UUCP style node address, e.g.
+"42!kvs.put".  This directs the request to the "kvs" plugin on node 42.
+Each node stores routes to its downstream (child) nodes, so that a message
+with a fully qualified topic string can traverse up and down the overlay
+tree as necessary to reach its destination.
 
 
 --- FIXME under construction ---

@@ -57,3 +57,11 @@ void plugin_stats_respond (plugin_ctx_t *p, zmsg_t **zmsg);
 void plugin_timeout_set (plugin_ctx_t *p, unsigned long val);
 void plugin_timeout_clear (plugin_ctx_t *p);
 bool plugin_timeout_isset (plugin_ctx_t *p);
+
+/* FIXME: bit of a layering violation here.
+ * This is a log function for plugins, which generates messages for the
+ * 'logsrv' plugin.  There is some duplication of message generation code
+ * in apicli.c::cmb_vlog().  Careful!  (e.g. avoid within logsrv plugin)
+ */
+void plugin_vlog (plugin_ctx_t *p, const char *fmt, va_list ap);
+void plugin_log (plugin_ctx_t *p, const char *fmt, ...);

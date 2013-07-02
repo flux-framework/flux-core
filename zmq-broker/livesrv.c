@@ -168,6 +168,7 @@ static void _recv_live_hello (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         if (p->conf->verbose)
             msg ("heard from rank %d, marking up", rank);
         ctx->state[rank] = true;
+        plugin_log (p, "event.live.up.%d", rank);
         plugin_send_event (p, "event.live.up.%d", rank);
     }
 done:
@@ -246,6 +247,7 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
                     if (p->conf->verbose)
                         msg ("rank %d is stale (%d:%d), marking down",
                              cp->rank, cp->epoch, epoch);
+                    plugin_log (p, "event.live.down.%d", cp->rank);
                     plugin_send_event (p, "event.live.down.%d", cp->rank);
                     ctx->state[cp->rank] = false;
                 }

@@ -190,7 +190,7 @@ static void _recv_log_msg (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     fwdarg_t farg;
-    json_object *o = NULL;
+    json_object *no, *o = NULL;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0)
         goto done;
@@ -199,11 +199,7 @@ static void _recv_log_msg (plugin_ctx_t *p, zmsg_t **zmsg)
 
     /* add source if not present */
     if (!json_object_object_get (o, "source")) {
-        char rankstr[16];
-        json_object *no;
-
-        snprintf (rankstr, sizeof (rankstr), "%d", p->conf->rank);
-        if (!(no = json_object_new_string (rankstr)))
+        if (!(no = json_object_new_string (p->conf->rankstr)))
             oom ();
         json_object_object_add (o, "source", no);
     }

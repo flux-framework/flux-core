@@ -54,8 +54,9 @@ static void _cmb_poll (conf_t *conf, server_t *srv);
 static void _route_response (conf_t *conf, server_t *srv, zmsg_t **zmsg,
                             bool dnsock);
 
-static void _request_send (server_t *srv, json_object *o, const char *fmt, ...)
-                           __attribute__ ((format (printf, 3, 4)));
+static void _request_send (conf_t *conf, server_t *srv,
+                           json_object *o, const char *fmt, ...)
+                           __attribute__ ((format (printf, 4, 5)));
 
 
 static void usage (void)
@@ -258,8 +259,8 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
     }
 
     if (srv->zs_upreq_out) {
-        _request_send (srv, NULL, "cmb.connect");
-        _request_send (srv, NULL, "cmb.route.hello");
+        _request_send (conf, srv, NULL, "cmb.connect");
+        _request_send (conf, srv, NULL, "cmb.route.hello");
     }
 
     plugin_init (conf, srv);
@@ -298,11 +299,13 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
 
 /* Send upstream request message.
  */
-static void _request_send (server_t *srv, json_object *o, const char *fmt, ...)
+static void _request_send (conf_t *conf, server_t *srv,
+                           json_object *o, const char *fmt, ...)
 {
     va_list ap;
     zmsg_t *zmsg;
-    char *tag;
+    char *tag, *p;
+    const char *gw;
     int n;
 
     va_start (ap, fmt);
@@ -312,13 +315,65 @@ static void _request_send (server_t *srv, json_object *o, const char *fmt, ...)
         err_exit ("vasprintf");
 
     zmsg = cmb_msg_encode (tag, o);
-    free (tag);
     if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* message delimiter */
         oom ();
-    if (zmsg_send (&zmsg, srv->zs_upreq_out) < 0)
-        err_exit ("zmsg_send");
+    if ((p = strchr (tag, '.')))
+        *p = '\0';
+    gw = route_lookup (srv->rctx, tag);
+    if (gw)
+        zmsg_send_unrouter (&zmsg, srv->zs_dnreq_out, conf->rankstr, gw);
+    else if (srv->zs_upreq_out)
+        zmsg_send (&zmsg, srv->zs_upreq_out);
+    if (zmsg)
+        zmsg_destroy (&zmsg);
+    free (tag);
 }
 
+static void _vlog (conf_t *conf, server_t *srv, const char *fmt, va_list ap)
+{
+    json_object *no, *o = NULL;
+    char *str = NULL;
+    struct timeval tv;
+    char tbuf[64];
+
+    xgettimeofday (&tv, NULL);
+    snprintf (tbuf, sizeof (tbuf), "%lu.%lu", tv.tv_sec, tv.tv_usec);
+
+    if (vasprintf (&str, fmt, ap) < 0)
+        oom ();
+    if (!(o = json_object_new_object ()))
+        oom ();
+
+    if (!(no = json_object_new_string (conf->rankstr)))
+        oom ();
+    json_object_object_add (o, "source", no);
+
+    if (!(no = json_object_new_string ("cmb")))
+        oom ();
+    json_object_object_add (o, "tag", no);
+
+    if (!(no = json_object_new_string (tbuf)))
+        oom ();
+    json_object_object_add (o, "time", no);
+
+    if (!(no = json_object_new_string (str)))
+        oom ();
+    json_object_object_add (o, "message", no);
+
+    _request_send (conf, srv, o, "log.msg");
+
+    free (str);
+    json_object_put (o);
+}
+
+static void _log (conf_t *conf, server_t *srv, const char *fmt, ...)
+{
+    va_list ap;
+
+    va_start (ap, fmt);
+    _vlog (conf, srv, fmt, ap);
+    va_end (ap);
+}
 
 static void _reparent (conf_t *conf, server_t *srv)
 {
@@ -326,8 +381,10 @@ static void _reparent (conf_t *conf, server_t *srv)
 
     for (i = 0; i < conf->parent_len; i++) {
         if (i != srv->parent_cur && srv->parent_alive[i]) {
+            _log (conf, srv, "reparent %d->%d",
+                  conf->parent[srv->parent_cur].rank, conf->parent[i].rank);
             if (srv->parent_alive[srv->parent_cur])
-                _request_send (srv, NULL, "cmb.route.goodbye.%d", conf->rank);
+                _request_send (conf, srv, NULL, "cmb.route.goodbye.%d", conf->rank);
             if (conf->verbose)
                 msg ("%s: disconnect %s, connect %s", __FUNCTION__,
                     conf->parent[srv->parent_cur].upreq_uri,
@@ -347,7 +404,7 @@ static void _reparent (conf_t *conf, server_t *srv)
             srv->parent_cur = i;
 
             usleep (1000*10); /* FIXME: message is lost without this delay */
-            _request_send (srv, NULL, "cmb.connect");
+            _request_send (conf, srv, NULL, "cmb.connect");
             break;
         }
     }
@@ -383,7 +440,7 @@ static void _cmb_internal_event (conf_t *conf, server_t *srv, zmsg_t *zmsg)
         free (arg);
     } else if (cmb_msg_match (zmsg, "event.route.update")) {
         if (srv->zs_upreq_out)
-            _request_send (srv, NULL, "cmb.route.hello");
+            _request_send (conf, srv, NULL, "cmb.route.hello");
     } else if (cmb_msg_match_substr (zmsg, "event.sched.trigger.", &arg)) {
         srv->epoch = strtoul (arg, NULL, 10);
         free (arg);

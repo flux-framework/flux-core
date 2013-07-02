@@ -13,6 +13,7 @@
 #include <stdbool.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <stdarg.h>
 
 #include <json/json.h>
 #include <czmq.h>
@@ -136,6 +137,52 @@ void plugin_send_response_errnum (plugin_ctx_t *p, zmsg_t **req, int errnum)
     if (cmb_msg_replace_json_errnum (*req, errnum) < 0)
         err_exit ("%s: cmb_msg_replace_json_errnum", __FUNCTION__);
     plugin_send_response_raw (p, req);
+}
+
+void plugin_vlog (plugin_ctx_t *p, const char *fmt, va_list ap)
+{
+    json_object *no, *o = NULL;
+    char *str = NULL;
+    struct timeval tv;
+    char tbuf[64];
+
+    xgettimeofday (&tv, NULL);
+    snprintf (tbuf, sizeof (tbuf), "%lu.%lu", tv.tv_sec, tv.tv_usec);
+
+    if (vasprintf (&str, fmt, ap) < 0)
+        oom ();
+    if (!(o = json_object_new_object ()))
+        oom ();
+
+   if (!(no = json_object_new_string (p->conf->rankstr)))
+        oom ();
+    json_object_object_add (o, "source", no);
+
+    if (!(no = json_object_new_string (p->plugin->name)))
+        oom ();
+    json_object_object_add (o, "tag", no);
+
+    if (!(no = json_object_new_string (tbuf)))
+        oom ();
+    json_object_object_add (o, "time", no);
+
+    if (!(no = json_object_new_string (str)))
+        oom ();
+    json_object_object_add (o, "message", no);
+
+    plugin_send_request (p, o, "log.msg");
+
+    free (str);
+    json_object_put (o);
+}
+
+void plugin_log (plugin_ctx_t *p, const char *fmt, ...)
+{
+    va_list ap;
+   
+    va_start (ap, fmt);
+    plugin_vlog (p, fmt, ap);
+    va_end (ap);
 }
 
 void plugin_ping_respond (plugin_ctx_t *p, zmsg_t **zmsg)
