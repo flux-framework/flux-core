@@ -35,6 +35,7 @@ typedef struct {
 
 typedef struct {
     zhash_t *listeners;
+    zlist_t *backlog;
 } ctx_t;
 
 typedef struct {
@@ -103,6 +104,29 @@ static int _listener_fwd (const char *key, void *litem, void *arg)
         plugin_send_response (farg->p, &zmsg, farg->o);
     }
     return 1;
+}
+
+
+static void _add_backlog (plugin_ctx_t *p, json_object *o)
+{
+    ctx_t *ctx = p->ctx;
+
+    json_object_get (o);
+    zlist_append (ctx->backlog, o);
+}
+
+static void _send_backlog (plugin_ctx_t *p)
+{
+    ctx_t *ctx = p->ctx;
+    json_object *o;
+
+    /* FIXME: aggregate similar messages */
+    while ((o = zlist_pop (ctx->backlog))) {
+        plugin_send_request (p, o, "log.msg");
+        json_object_put (o);
+    }
+
+    assert (zlist_size (ctx->backlog) == 0);
 }
 
 static void _recv_log_subscribe (plugin_ctx_t *p, char *sub, zmsg_t **zmsg)
@@ -184,11 +208,11 @@ static void _recv_log_msg (plugin_ctx_t *p, zmsg_t **zmsg)
         json_object_object_add (o, "source", no);
     }
 
-    /* FIXME: reduction */
-
-    /* forward upstream */
-    if (p->conf->rank != 0)
-        plugin_send_request (p, o, "log.msg");
+    if (p->conf->rank != 0) {
+        _add_backlog (p, o);
+        if (!plugin_timeout_isset (p))
+            plugin_timeout_set (p, 100); /* 100ms - then send backlog up */
+    }
 
     /* forward message to listeners */
     farg.p = p;
@@ -217,12 +241,19 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         free (arg);
 }
 
+static void _timeout (plugin_ctx_t *p)
+{
+    _send_backlog (p);
+    plugin_timeout_clear (p);
+}
+
 static void _init (plugin_ctx_t *p)
 {
     ctx_t *ctx;
 
     ctx = p->ctx = xzmalloc (sizeof (ctx_t));
     ctx->listeners = zhash_new ();
+    ctx->backlog = zlist_new ();
 }
 
 static void _fini (plugin_ctx_t *p)
@@ -230,6 +261,7 @@ static void _fini (plugin_ctx_t *p)
     ctx_t *ctx = p->ctx;
 
     zhash_destroy (&ctx->listeners);
+    zlist_destroy (&ctx->backlog);
     free (ctx);
 }
 
@@ -238,6 +270,7 @@ struct plugin_struct logsrv = {
     .recvFn    = _recv,
     .initFn    = _init,
     .finiFn    = _fini,
+    .timeoutFn = _timeout,
 };
 
 /*
