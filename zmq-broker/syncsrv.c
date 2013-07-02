@@ -36,7 +36,7 @@ static void _timeout (plugin_ctx_t *p)
 
 static void _init (plugin_ctx_t *p)
 {
-    p->timeout = p->conf->sync_period_msec;
+    plugin_timeout_set (p, p->conf->sync_period_msec);
 }
 
 struct plugin_struct syncsrv = {

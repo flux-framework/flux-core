@@ -53,3 +53,7 @@ void plugin_send_event (plugin_ctx_t *p, const char *fmt, ...);
 
 void plugin_ping_respond (plugin_ctx_t *p, zmsg_t **zmsg);
 void plugin_stats_respond (plugin_ctx_t *p, zmsg_t **zmsg);
+
+void plugin_timeout_set (plugin_ctx_t *p, unsigned long val);
+void plugin_timeout_clear (plugin_ctx_t *p);
+bool plugin_timeout_isset (plugin_ctx_t *p);

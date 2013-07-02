@@ -42,6 +42,21 @@ static plugin_t plugins[] = {
 const int plugins_len = sizeof (plugins)/sizeof (plugins[0]);
 
 
+void plugin_timeout_set (plugin_ctx_t *p, unsigned long val)
+{
+    p->timeout = val;
+}
+
+void plugin_timeout_clear (plugin_ctx_t *p)
+{
+    p->timeout = -1;
+}
+
+bool plugin_timeout_isset (plugin_ctx_t *p)
+{
+    return p->timeout == -1 ? false : true;
+}
+
 void plugin_send_request_raw (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     if (zmsg_send (zmsg, p->zs_upreq) < 0)
@@ -344,7 +359,7 @@ static int _plugin_create (char *name, server_t *srv, conf_t *conf)
     p->conf = conf;
     p->srv = srv;
     p->plugin = plugin;
-    p->timeout = -1;
+    plugin_timeout_clear (p);
 
     /* connect sockets in the parent, then use them in the thread */
     zconnect (zctx, &p->zs_upreq, ZMQ_DEALER, UPREQ_URI, -1,

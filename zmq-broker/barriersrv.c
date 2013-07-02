@@ -128,8 +128,8 @@ static void _barrier_enter (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
 
     if (b->count == b->nprocs)
         plugin_send_event (p, "%s", b->exit_event);
-    else if (p->conf->rank != 0 && p->timeout == -1)
-        p->timeout = 1; /* 1 ms - then send count upstream */
+    else if (p->conf->rank != 0 && !plugin_timeout_isset (p))
+        plugin_timeout_set (p, 1); /* 1 ms - then send count upstream */
 done:
     if (o)
         json_object_put (o);
@@ -167,7 +167,7 @@ static void _timeout (plugin_ctx_t *p)
     assert (p->conf->rank != 0);
 
     zhash_foreach (ctx->barriers, _barrier_enter_request, p);
-    p->timeout = -1; /* disable timeout */
+    plugin_timeout_clear (p);
 }
 
 static void _init (plugin_ctx_t *p)
@@ -177,7 +177,6 @@ static void _init (plugin_ctx_t *p)
     ctx = p->ctx = xzmalloc (sizeof (ctx_t));
     zsocket_set_subscribe (p->zs_evin, "event.barrier.exit.");
     ctx->barriers = zhash_new ();
-    p->timeout = -1; /* no timeout initially */
 }
 
 static void _fini (plugin_ctx_t *p)
