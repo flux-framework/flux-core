@@ -240,7 +240,7 @@ static void _plugin_poll (plugin_ctx_t *p)
             timersub (&t2, &t1, &t);
             elapsed = (t.tv_sec * 1000 + t.tv_usec / 1000);
             if (elapsed < p->timeout) {
-                msec -= elapsed;
+                msec = p->timeout - elapsed;
             } else {
                 if (p->plugin->timeoutFn)
                     p->plugin->timeoutFn (p);
