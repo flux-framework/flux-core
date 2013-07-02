@@ -29,7 +29,7 @@
 
 #include "livesrv.h"
 
-#define MISSED_EPOCH_ALLOW    2
+#define MISSED_EPOCH_ALLOW    5
 
 typedef struct {
     int rank;

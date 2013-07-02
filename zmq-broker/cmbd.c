@@ -368,7 +368,7 @@ static void _cmb_internal_event (conf_t *conf, server_t *srv, zmsg_t *zmsg)
             }
         }
 
-        route_del_subtree (srv->rctx, arg);
+        //route_del_subtree (srv->rctx, arg);
         free (arg);        
     } else if (cmb_msg_match_substr (zmsg, "event.live.up.", &arg)) {
         int i, rank = strtoul (arg, NULL, 10);
@@ -446,7 +446,7 @@ static void _cmb_internal_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
         if (*zmsg)
             zmsg_destroy (zmsg);
     } else if (cmb_msg_match_substr (*zmsg, "cmb.route.goodbye.", &arg)) {
-        route_del_subtree (srv->rctx, arg);
+        //route_del_subtree (srv->rctx, arg);
         if (srv->zs_upreq_out)
             zmsg_send (zmsg, srv->zs_upreq_out); /* fwd upstream */
         if (*zmsg)
