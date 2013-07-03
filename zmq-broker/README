@@ -1,6 +1,4 @@
-+-------------------------+
-| Launching the framework |
-+-------------------------+
+1. Launching the framework
 
 Use the ./scripts/launch script to start the framework in a slurm job.
 It will work with or without a pre-existing slurm allocation.
@@ -28,16 +26,12 @@ flat
 trinary
 	Trinary (k=3) tree with resiliency (grandparent is backup parent)
 
-+-------------------------+
-| The Event Overlay Plane |
-+-------------------------+
+2. Events
 
-There are two orthogonal overlay planes: one for events, and one for
-requests.  Events utilize pub-sub with hiericical topic names.
-One (un)subscribes to a topic by substring.  For example, subscribing
-to "event.sched." matches "event.sched.trigger.<epoch>".  A this point,
-events consist only of one frame containing the topic name.  The events
-that are currently exchanged consist of:
+There are two unrelated message flows: one for events, and one for requests.
+Events utilize pub-sub with hiericical topic names.  One (un)subscribes to
+a topic by substring.  For example, subscribing to "event.live." matches
+"event.live.up.42" and "event.live.down.24".  Examples:
 
 event.sched.trigger.<epoch>
 event.live.up.<node>
@@ -45,38 +39,70 @@ event.live.down.<node>
 event.route.update
 event.barrier.exit.<name>
 
-An event message consists of only a "tag frame" message part, 
-which contains the topic string.  (In the future a JSON frame may be added).
+An event message consists of just one frame:
 
-+---------------------------+
-| The Request Overlay Plane |
-+---------------------------+
++------------+
+| topic name |
++------------+
 
-Requests are messages that accumulate address frames as they are
-passed from hop to hop towards their destination.  At the destination,
-this stack of address frames is attached to the response and unwound
-along the route back to the sender.  There may be zero or more responses
-to each message.
+Between nodes, cmbd instances communicatie events over EPGM reliable
+multicast.  Within a node, the cmbd and plugins communicate over shared
+memory.  The cmbd relays event messages received on EPGM to all local
+plugins, and event messages received from plugins to other plugins and EPGM.
 
-In addition to the address frames, request and response messages
-contain a "tag frame" and an optional JSON frame.  The tag frame is used
-to address the target of the request.  It consists of a pub-sub-like
-hierarchical topic string.  The first word in the topic string identifies
-a plugin that will receive the message.  Remaining parts of the string
-are parsed by that plugin.  For example the "kvs" plugin accepts "kvs.put",
-"kvs.get", and "kvs.commit" messages.  If a local plugin does not match
-the plugin name in the topic string, it is passed upstream toward the root
-of the overlay tree.  If it is not matched at the root, a NAK response is
-sent back.
+3. Requests
 
-Topic strings may be prefixed with a UUCP style node address, e.g.
-"42!kvs.put".  This directs the request to the "kvs" plugin on node 42.
-Each node stores routes to its downstream (child) nodes, so that a message
-with a fully qualified topic string can traverse up and down the overlay
-tree as necessary to reach its destination.
+Requests are messages addressed to a particular plugin, which may
+respond with zero or more reply messages.   The core of a request consists
+of two frames:
 
++------------+
+| topic name |
++------------+
+|    JSON    |
++------------+
 
---- FIXME under construction ---
+The topic name is formatted like an event topic name and is used to
+address a request to a plugin.  For example, a request with the topic
+name "kvs.set" would be addressed to the kvs plugin, and "set" is 
+interpreted internally by the kvs plugin as a method.  The JSON frame
+contains input data to the method.
 
+Request messages accumulate address frames as they are passed through
+routers.  These address frames are then used to route any responses.
+For example, a session is organized in a tree as follows:
 
+    0
+  1   2
+ 3 4 5 6
 
+If an api client on 3 wants to send a message to kvs.set on 0, it sends
+to its cmbd which prepends '3' and sends the message to 1.  1 prepends '1'
+and sends the message to 0.  This is delivered ot the kvs plugin on 0.  
+
+                              +---------+
+                              |    1    |
+               +---------+    +---------+
+               |     3   |    |    3    |
++---------+    +---------+    +---------+
+| kvs.set |    | kvs.set |    | kvs.set |
++---------+    +---------+    +---------+
+|   JSON  |    |   JSON  |    |   JSON  |
++---------+    +---------+    +---------+
+
+When the kvs plugin replies, it replaces/augments the JSON frame,
+leaves the topic field intact, then sends the message to its cmbd,
+which strips the top frame off and delivers the message to 1, which
+strips the top frame off and delivers to 3.
+
+Each node has a route hash contianing the ranks of its children in
+the overlay tree, and the names of its loaded plugins.  The hash is
+consulted to decide whether a request or response should be delivered
+"up" (to the next node in the upstream direction), "down" to a local,
+or "down" to a child node.  Thus it is possible to have routes installed
+that allow requests and responses to traverse tree between any two nodes,
+and to allow the location of well known services to be represented as well.
+
+There is an additional "fully qualified" topic string format that allows
+the destination node to be prepended, e.g. "42!kvs.set" refers to the kvs
+plugin on node 42.
