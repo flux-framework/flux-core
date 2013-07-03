@@ -16,7 +16,7 @@
 #include "log.h"
 #include "util.h"
 
-#define OPTIONS "p:s:b:k:SK:Ct:P:d:n:lx:e:TL:W:r:R:qz:"
+#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:lx:e:TL:W:r:R:qz:"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -25,6 +25,7 @@ static const struct option longopts[] = {
     {"subscribe",  required_argument,  0, 's'},
     {"event",      required_argument,  0, 'e'},
     {"barrier",    required_argument,  0, 'b'},
+    {"barrier-torture", required_argument,  0, 'B'},
     {"nprocs",     required_argument,  0, 'n'},
     {"kvs-put",    required_argument,  0, 'k'},
     {"kvs-get",    required_argument,  0, 'K'},
@@ -51,6 +52,7 @@ static void usage (void)
 "  -x,--stats name        get plugin statistics\n"
 "  -T,--snoop             display messages to/from router socket\n"
 "  -b,--barrier name      execute barrier across slurm job\n"
+"  -B,--barrier-torture N execute N barriers across slurm job\n"
 "  -n,--nprocs N          override nprocs (default $SLURM_NPROCS or 1)\n"
 "  -k,--kvs-put key=val   set a key\n"
 "  -K,--kvs-get key       get a key\n"
@@ -147,6 +149,16 @@ int main (int argc, char *argv[])
                 timersub (&t2, &t1, &t);
                 msg ("barrier time=%0.3f ms",
                      (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
+                break;
+            }
+            case 'B': { /* --barrier-torture N */
+                int i, n = strtoul (optarg, NULL, 10);
+                char name[16];
+                for (i = 0; i < n; i++) {
+                    snprintf (name, sizeof (name), "%d", i);
+                    if (cmb_barrier (c, name, nprocs) < 0)
+                        err_exit ("cmb_barrier %s", name);
+                }
                 break;
             }
             case 's': { /* --subscribe substr */

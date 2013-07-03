@@ -319,10 +319,7 @@ int cmb_barrier (cmb_t c, char *name, int nprocs)
 {
     json_object *o = NULL;
     int count = 1;
-
-    if (_send_message (c, NULL, "api.event.subscribe.%s.%s",
-                                    "event.barrier.exit",  name) < 0)
-        return -1;
+    int errnum = 0;
 
     /* send request */
     if (!(o = json_object_new_object ()))
@@ -336,12 +333,15 @@ int cmb_barrier (cmb_t c, char *name, int nprocs)
     json_object_put (o);
     o = NULL;
 
-    /* wait for event */
-    if (_recv_message (c, NULL, NULL, 0) < 0)
+    /* receive response */
+    if (_recv_message (c, NULL, &o, 0) < 0)
         goto error;
-
-    (void)_send_message (c, NULL, "api.event.unsubscribe.%s.%s",
-                                "event.barrier.exit", name);
+    if (_json_object_get_int (o, "errnum", &errnum) < 0)
+        goto error;
+    if (errnum != 0) {
+        errno = errnum;
+        goto error;
+    }
     return 0;
 nomem:
     errno = ENOMEM;

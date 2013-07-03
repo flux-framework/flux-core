@@ -60,6 +60,8 @@ pmgr: $(PMGR_DIR)/test/client
 
 barrier:
 	time -p $(SRUN) ./cmbutil -b testbarrier
+barrier_torture:
+	time -p $(SRUN) ./cmbutil -B 100000
 
 # Use with single redis configs
 clear:
