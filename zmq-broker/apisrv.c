@@ -194,6 +194,20 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
         }
     } else if (cmb_msg_match_substr (zmsg, "api.event.send.", &name)) {
         plugin_send_event (p, "%s", name);
+    } else if (cmb_msg_match (zmsg, "api.session.info.query")) {
+        json_object *no, *o;
+
+        if (!(o = json_object_new_object ()))
+            oom ();
+        if (!(no = json_object_new_int (p->conf->rank)))
+            oom ();
+        json_object_object_add (o, "rank", no);
+        if (!(no = json_object_new_int (p->conf->size)))
+            oom ();
+        json_object_object_add (o, "size", no);
+        if (cmb_msg_replace_json (zmsg, o) == 0)
+            (void)zmsg_send_fd (c->fd, &zmsg);
+        json_object_put (o);
     } else {
         /* insert disconnect notifier before forwarding request */
         if (c->disconnect_notify) {
@@ -323,7 +337,6 @@ static void _recv_request (plugin_ctx_t *p, zmsg_t **zmsg)
         plugin_stats_respond (p, zmsg);
     }
 }
-
 
 static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
 {

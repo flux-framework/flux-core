@@ -73,6 +73,11 @@ int cmb_route_add (cmb_t c, char *dst, char *gw);
 int cmb_route_del (cmb_t c, char *dst, char *gw);
 char *cmb_route_query (cmb_t c);
 
+/* Return cmb rank and size.
+ */
+int cmb_rank (cmb_t c);
+int cmb_size (cmb_t c);
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

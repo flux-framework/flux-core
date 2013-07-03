@@ -28,6 +28,9 @@
 
 struct cmb_struct {
     int fd;
+    int rank;
+    char rankstr[16];
+    int size;
 };
 
 static int _json_object_add_int (json_object *o, char *name, int i)
@@ -481,10 +484,8 @@ int cmb_vlog (cmb_t c, const char *tag, const char *src,
         goto error;
     if (_json_object_add_string (o, "tag", tag) < 0)
         goto error;
-    if (src && strlen (src) > 0) {
-        if (_json_object_add_string (o, "source", src) < 0)
-            goto error;
-    }
+    if (_json_object_add_string (o, "source", src ? src : c->rankstr) < 0)
+        goto error;
     if (_json_object_add_string (o, "time", tbuf) < 0)
         goto error;
     if (_send_message (c, o, "log.msg") < 0)
@@ -712,6 +713,50 @@ error:
     
 }
 
+int cmb_rank (cmb_t c)
+{
+    return c->rank;
+}
+
+int cmb_size (cmb_t c)
+{
+    return c->size;
+}
+
+static int _session_info_query (cmb_t c)
+{
+    json_object *o = NULL;
+
+    /* send request */
+    if (!(o = json_object_new_object ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (_send_message (c, o, "api.session.info.query") < 0)
+        goto error;
+    json_object_put (o);
+    o = NULL;
+
+    /* receive response */
+    if (_recv_message (c, NULL, &o, 0) < 0)
+        goto error;
+    if (!o)
+        goto eproto;
+    if (_json_object_get_int (o, "rank", &c->rank) < 0)
+        goto error;
+    snprintf (c->rankstr, sizeof (c->rankstr), "%d", c->rank);
+    if (_json_object_get_int (o, "size", &c->size) < 0)
+        goto eproto;
+    json_object_put (o);
+    return 0;
+eproto:
+    errno = EPROTO;
+error:
+    if (o)
+        json_object_put (o);
+    return -1;
+}
+
 cmb_t cmb_init_full (const char *path, int flags)
 {
     cmb_t c = NULL;
@@ -731,6 +776,8 @@ cmb_t cmb_init_full (const char *path, int flags)
 
     if (connect (c->fd, (struct sockaddr *)&addr,
                          sizeof (struct sockaddr_un)) < 0)
+        goto error;
+    if (_session_info_query (c) < 0)
         goto error;
     return c;
 error:

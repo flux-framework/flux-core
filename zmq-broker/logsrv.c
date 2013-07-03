@@ -188,20 +188,10 @@ static void _recv_log_msg (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     fwdarg_t farg;
-    json_object *no, *o = NULL;
+    json_object *o = NULL;
 
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0)
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL)
         goto done;
-    if (!o)
-        goto done;
-
-    /* add source if not present */
-    if (!json_object_object_get (o, "source")) {
-        if (!(no = json_object_new_string (p->conf->rankstr)))
-            oom ();
-        json_object_object_add (o, "source", no);
-    }
-
     if (!plugin_treeroot (p)) {
         _add_backlog (p, o);
         if (!plugin_timeout_isset (p))
