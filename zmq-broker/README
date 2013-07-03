@@ -45,9 +45,9 @@ An event message consists of just one frame:
 | topic name |
 +------------+
 
-Between nodes, cmbd instances communicatie events over EPGM reliable
-multicast.  Within a node, the cmbd and plugins communicate over shared
-memory.  The cmbd relays event messages received on EPGM to all local
+Between nodes, cmbd instances communicate events over EPGM reliable
+multicast.  Within a node, the cmbd and plugins communicate events over
+shared memory.  The cmbd relays event messages received on EPGM to all local
 plugins, and event messages received from plugins to other plugins and EPGM.
 
 3. Requests
@@ -66,11 +66,12 @@ The topic name is formatted like an event topic name and is used to
 address a request to a plugin.  For example, a request with the topic
 name "kvs.set" would be addressed to the kvs plugin, and "set" is 
 interpreted internally by the kvs plugin as a method.  The JSON frame
-contains input data to the method.
+contains input paramters for the method.
 
 Request messages accumulate address frames as they are passed through
-routers.  These address frames are then used to route any responses.
-For example, a session is organized in a tree as follows:
+routers.  The resulting stack of address frames is then used by the
+destination to route responses back to the sender.  For example, a
+session is organized in a binary tree as follows:
 
     0
   1   2
@@ -98,11 +99,32 @@ strips the top frame off and delivers to 3.
 Each node has a route hash contianing the ranks of its children in
 the overlay tree, and the names of its loaded plugins.  The hash is
 consulted to decide whether a request or response should be delivered
-"up" (to the next node in the upstream direction), "down" to a local,
-or "down" to a child node.  Thus it is possible to have routes installed
-that allow requests and responses to traverse tree between any two nodes,
-and to allow the location of well known services to be represented as well.
+"down" to a local plugin, "down" to a child node, or, if the name of
+the desitnation plugin or node could not be found in the hash, "up" towards
+the tree root.  Thus it is possible to have routes installed
+that allow requests and responses to traverse the tree between any pair
+of nodes, and unknown destinations are passed up towards the root until
+they are matched by a node's route hash.  If that doesn't happen they
+are sent an ENOSYS reply by the root.
 
 There is an additional "fully qualified" topic string format that allows
 the destination node to be prepended, e.g. "42!kvs.set" refers to the kvs
 plugin on node 42.
+
+4. Ping
+
+Every plugin has a built-in "ping" method which allows round-trip request
+latency to be measured to a plugin.  In this example, the ping utility
+is run on node 0 and sends packets through a degenerate tree (k=1) to the
+'live' plugin on node 2:
+
+./cmbutil --ping '2!live'
+cmbutil: 2!live.ping pad=0 seq=0 time=1.285 ms (2!1!0)
+cmbutil: 2!live.ping pad=0 seq=1 time=1.414 ms (2!1!0)
+cmbutil: 2!live.ping pad=0 seq=2 time=1.299 ms (2!1!0)
+cmbutil: 2!live.ping pad=0 seq=3 time=1.416 ms (2!1!0)
+cmbutil: 2!live.ping pad=0 seq=4 time=1.575 ms (2!1!0)
+^C
+
+This shows the round-trip-time in milleconds, as well as the route
+taken by the reply.
