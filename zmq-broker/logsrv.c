@@ -125,8 +125,6 @@ static void _send_backlog (plugin_ctx_t *p)
         plugin_send_request (p, o, "log.msg");
         json_object_put (o);
     }
-
-    assert (zlist_size (ctx->backlog) == 0);
 }
 
 static void _recv_log_subscribe (plugin_ctx_t *p, char *sub, zmsg_t **zmsg)
@@ -204,7 +202,7 @@ static void _recv_log_msg (plugin_ctx_t *p, zmsg_t **zmsg)
         json_object_object_add (o, "source", no);
     }
 
-    if (p->conf->rank != 0) {
+    if (!plugin_treeroot (p)) {
         _add_backlog (p, o);
         if (!plugin_timeout_isset (p))
             plugin_timeout_set (p, 100); /* 100ms - then send backlog up */

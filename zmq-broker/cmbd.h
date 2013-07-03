@@ -17,6 +17,7 @@ typedef struct {
     char *dnev_out_uri;
     bool verbose;
     char rankstr[16];
+    bool treeroot;
     int rank;
     int size;
     char *plugins;

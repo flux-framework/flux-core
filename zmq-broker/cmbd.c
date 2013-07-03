@@ -179,6 +179,24 @@ int main (int argc, char *argv[])
     if (!conf->plugins)
         msg_exit ("at least one plugin must be loaded");
 
+    /* FIXME: hardwire rank 0 as root of the reduction tree.
+     * Eventually we must allow for this role to migrate to other nodes
+     * in case node 0 becomes unavailable.
+     */
+    if (conf->rank == 0) {
+        if (conf->parent_len != 0)
+            msg_exit ("rank 0 must not have parents");
+        conf->treeroot = true;
+    } else {
+        if (conf->parent_len == 0)
+            msg_exit ("rank > 0 must have parents");
+        conf->treeroot = false;
+    }
+    if (conf->upreq_in_uri && !conf->dnreq_out_uri)
+        msg_exit ("if --up-req-in-uri is set, --dn-req-out-uri must be also");
+    if (!conf->upreq_in_uri && conf->dnreq_out_uri)
+        msg_exit ("if --dn-req-out-uri is set, --up-req-in-uri must be also");
+
     snprintf (conf->rankstr, sizeof (conf->rankstr), "%d", conf->rank);
 
     _cmb_init (conf, &srv);

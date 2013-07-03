@@ -65,3 +65,5 @@ bool plugin_timeout_isset (plugin_ctx_t *p);
  */
 void plugin_vlog (plugin_ctx_t *p, const char *fmt, va_list ap);
 void plugin_log (plugin_ctx_t *p, const char *fmt, ...);
+
+bool plugin_treeroot (plugin_ctx_t *p);

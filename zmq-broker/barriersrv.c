@@ -128,7 +128,7 @@ static void _barrier_enter (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
 
     if (b->count == b->nprocs)
         plugin_send_event (p, "%s", b->exit_event);
-    else if (p->conf->rank != 0 && !plugin_timeout_isset (p))
+    else if (!plugin_treeroot (p) && !plugin_timeout_isset (p))
         plugin_timeout_set (p, 1); /* 1 ms - then send count upstream */
 done:
     if (o)
@@ -164,7 +164,7 @@ static void _timeout (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
 
-    assert (p->conf->rank != 0);
+    assert (!plugin_treeroot (p));
 
     zhash_foreach (ctx->barriers, _barrier_enter_request, p);
     plugin_timeout_clear (p);

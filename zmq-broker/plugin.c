@@ -42,6 +42,10 @@ static plugin_t plugins[] = {
 };
 const int plugins_len = sizeof (plugins)/sizeof (plugins[0]);
 
+bool plugin_treeroot (plugin_ctx_t *p)
+{
+    return (p->conf->treeroot);
+}
 
 void plugin_timeout_set (plugin_ctx_t *p, unsigned long val)
 {
