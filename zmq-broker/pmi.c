@@ -40,6 +40,7 @@ typedef struct {
     int universe_size;
     int appnum;
     int barrier_num;
+    int cmb_rank;
 
     cmb_t cctx;
     char kvsname[PMI_MAX_KVSNAMELEN];
@@ -65,7 +66,8 @@ static inline void trace (int flags, const char *fmt, ...)
 
     if (ctx && (flags & pmi_trace)) {
         char buf[16];
-        snprintf (buf, sizeof (buf), "%d", ctx->rank);
+        snprintf (buf, sizeof (buf), "%d.%d.%d", ctx->cmb_rank,
+                  ctx->appnum, ctx->rank);
         va_start (ap, fmt);
         cmb_vlog (ctx->cctx, "PMI", buf, fmt, ap);
         va_end (ap);
@@ -170,7 +172,7 @@ int PMI_Init( int *spawned )
     ctx->rank = _env_getint ("SLURM_PROCID", 0);
     pmi_trace = _env_getint ("PMI_TRACE", 0);
     ctx->universe_size = ctx->size;
-    ctx->appnum = _env_getint ("SLURM_JOB_ID", 1);
+    ctx->appnum = _env_getint ("SLURM_STEP_ID", 1);
     ctx->barrier_num = 0;
     if (_env_getints ("SLURM_GTIDS", &ctx->clique_ranks, &ctx->clique_size,
                                       dflt_clique_ranks, dflt_clique_size) < 0)
@@ -181,6 +183,7 @@ int PMI_Init( int *spawned )
         err ("cmb_init");
         goto fail;
     }
+    ctx->cmb_rank = cmb_rank (ctx->cctx);
     trace_simple (PMI_TRACE_INIT);
     *spawned = ctx->spawned;
     return PMI_SUCCESS;
