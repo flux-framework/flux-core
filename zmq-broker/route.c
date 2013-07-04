@@ -19,8 +19,8 @@
 #include "log.h"
 #include "zmq.h"
 #include "route.h"
-#include "cmbd.h"
 #include "cmb.h"
+#include "cmbd.h"
 #include "util.h"
 
 typedef struct {

@@ -20,8 +20,8 @@
 #include "log.h"
 #include "zmq.h"
 #include "route.h"
-#include "cmbd.h"
 #include "cmb.h"
+#include "cmbd.h"
 #include "util.h"
 #include "plugin.h"
 
@@ -347,8 +347,8 @@ static void _request_send (conf_t *conf, server_t *srv,
     free (tag);
 }
 
-static void _vlog (conf_t *conf, server_t *srv, logpri_t pri,
-                   const char *fmt, va_list ap)
+void cmbd_vlog (conf_t *conf, server_t *srv, logpri_t pri,
+               const char *fmt, va_list ap)
 {
     json_object *no, *o = NULL;
     char *str = NULL;
@@ -384,13 +384,12 @@ static void _vlog (conf_t *conf, server_t *srv, logpri_t pri,
     json_object_put (o);
 }
 
-static void _log (conf_t *conf, server_t *srv, logpri_t pri,
-                  const char *fmt, ...)
+void cmbd_log (conf_t *conf, server_t *srv, logpri_t pri, const char *fmt, ...)
 {
     va_list ap;
 
     va_start (ap, fmt);
-    _vlog (conf, srv, pri, fmt, ap);
+    cmbd_vlog (conf, srv, pri, fmt, ap);
     va_end (ap);
 }
 
@@ -400,7 +399,7 @@ static void _reparent (conf_t *conf, server_t *srv)
 
     for (i = 0; i < conf->parent_len; i++) {
         if (i != srv->parent_cur && srv->parent_alive[i]) {
-            _log (conf, srv, CMB_LOG_ALERT, "reparent %d->%d",
+            cmbd_log (conf, srv, CMB_LOG_ALERT, "reparent %d->%d",
                   conf->parent[srv->parent_cur].rank, conf->parent[i].rank);
             if (srv->parent_alive[srv->parent_cur])
                 _request_send (conf, srv, NULL, "cmb.route.goodbye.%d", conf->rank);
