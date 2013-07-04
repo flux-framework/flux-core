@@ -33,6 +33,7 @@ if pepe.rank == 0 then
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
 		.. " --plugins=api,barrier,live,log,kvs,sync"
+		.. " --logdest cmbd.log"
 		.. child_opt)
 else
     local parent_rank = tree.binomial_parent (pepe.rank, #h)

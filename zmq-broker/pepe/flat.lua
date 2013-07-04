@@ -33,6 +33,7 @@ if pepe.rank == 0 then
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
 		.. " --plugins=api,barrier,live,log,kvs,sync"
+		.. " --logdest cmbd.log"
 		.. child_opt)
 else
     local u1 = "tcp://" ..  h[1] .. ":5556"

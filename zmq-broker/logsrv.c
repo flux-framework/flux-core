@@ -31,11 +31,12 @@
 
 const int log_reduction_timeout_msec = 100;
 const int log_circular_buffer_entries = 100000;
-const int log_forward_priority = CMB_LOG_NOTICE;
+const int log_persist_priority = CMB_LOG_NOTICE;
 
 typedef struct {
     char *fac;
-    logpri_t pri; 
+    logpri_t pri_max;  /* the lower the number, the more filtering */
+    logpri_t pri_min;
 } subscription_t;
 
 typedef struct {
@@ -50,12 +51,15 @@ typedef struct {
     int cirbuf_size;
 } ctx_t;
 
+static void _log_external (json_object *o);
+
 static bool _match_subscription (json_object *o, subscription_t *sub)
 {
     json_object *no;
 
     if (!(no = json_object_object_get (o, "priority"))
-            || json_object_get_int (no) > sub->pri
+            || json_object_get_int (no) > sub->pri_max
+            || json_object_get_int (no) < sub->pri_min
             || !(no = json_object_object_get (o, "facility"))
             || strncasecmp (sub->fac, json_object_get_string (no),
                             strlen (sub->fac)) != 0)
@@ -69,7 +73,8 @@ static subscription_t *_create_subscription (char *arg)
     char *nextptr;
     
     /* 'priority.facility' */
-    sub->pri = strtoul (arg, &nextptr, 10);
+    sub->pri_min = CMB_LOG_EMERG;
+    sub->pri_max = strtoul (arg, &nextptr, 10);
     sub->fac = *nextptr ? xstrdup (nextptr + 1) : xstrdup (nextptr);
 
     return sub;
@@ -99,7 +104,6 @@ static void _log_save (plugin_ctx_t *p, json_object *ent)
     ctx->cirbuf_size++;
 }
 
-
 static void _recv_log_dump (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
@@ -118,6 +122,44 @@ static void _recv_log_dump (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     }
     plugin_send_response_errnum (p, zmsg, ENOENT);
     _destroy_subscription (sub);
+}
+
+static void _priority_override (json_object *o)
+{
+    json_object *no;
+
+    if (!(no = json_object_new_int (CMB_LOG_ERR)))
+        oom ();
+    json_object_object_add (o, "priority_override", no);
+}
+
+static void _recv_fault_event (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+{
+    ctx_t *ctx = p->ctx;
+    subscription_t sub = {
+        .pri_min = log_persist_priority,
+        .pri_max = CMB_LOG_DEBUG,
+        .fac = arg
+    };
+    json_object *o;
+    zlist_t *temp;
+
+    if (!(temp = zlist_new ()))
+        oom ();
+    while ((o = zlist_pop (ctx->cirbuf))) {
+        if (_match_subscription (o, &sub)) {
+            if (plugin_treeroot (p))
+                _log_external (o);
+            else {
+                _priority_override (o);
+                plugin_send_request (p, o, "log.msg");
+            }
+            json_object_put (o);
+        } else
+            zlist_append (temp, o);
+    }
+    zlist_destroy (&ctx->cirbuf);
+    ctx->cirbuf = temp;
 }
 
 /* Manage listeners.
@@ -250,15 +292,64 @@ static void _send_backlog (plugin_ctx_t *p)
     }
 }
 
-static bool _forwardable (json_object *o)
+static bool _persistable (json_object *o)
 {
     json_object *no;
 
-    if (!(no = json_object_object_get (o, "priority"))
-            || json_object_get_int (no) > log_forward_priority)
-        return false;
-    return true;
+    if ((no = json_object_object_get (o, "priority"))
+            && json_object_get_int (no) <= log_persist_priority)
+        return true;
+    if ((no = json_object_object_get (o, "priority_override"))
+            && json_object_get_int (no) <= log_persist_priority)
+        return true;
+    return false;
 }
+
+static const char *_logpri2str (logpri_t pri)
+{
+    switch (pri) {
+        case CMB_LOG_EMERG: return "emerg";
+        case CMB_LOG_ALERT: return "alert";
+        case CMB_LOG_CRIT: return "crit";
+        case CMB_LOG_ERR: return "err";
+        case CMB_LOG_WARNING: return "warning";
+        case CMB_LOG_NOTICE: return "notice";
+        case CMB_LOG_INFO: return "info";
+        case CMB_LOG_DEBUG: return "debug";
+    }
+    /*NOTREACHED*/
+    return "unknown";
+}
+
+static void _log_external (json_object *o)
+{
+    json_object *no;
+    logpri_t pri;
+    const char *fac, *src, *ts, *message;
+    char *endptr;
+    struct timeval tv;
+
+    if (!(no = json_object_object_get (o, "facility")))
+        return;
+    fac = json_object_get_string (no);
+    if (!(no = json_object_object_get (o, "priority")))
+        return;
+    pri = json_object_get_int (no);
+    if (!(no = json_object_object_get (o, "source")))
+        return;
+    src = json_object_get_string (no);
+    if (!(no = json_object_object_get (o, "timestamp")))
+        return;
+    ts = json_object_get_string (no);
+    tv.tv_sec = strtoul (ts, &endptr, 10);
+    tv.tv_usec = *endptr ? strtoul (endptr + 1, NULL, 10) : 0;
+    if (!(no = json_object_object_get (o, "message")))
+        return;
+    message = json_object_get_string (no);
+    msg ("[%-.6lu.%-.6lu] %s.%s[%s]: %s", tv.tv_sec, tv.tv_usec,
+         fac, _logpri2str (pri), src, message);
+}
+
 
 typedef struct {
     plugin_ctx_t *p;
@@ -285,7 +376,6 @@ static int _listener_fwd (const char *key, void *litem, void *arg)
     return 1;
 }
 
-
 static void _recv_log_msg (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
@@ -294,10 +384,14 @@ static void _recv_log_msg (plugin_ctx_t *p, zmsg_t **zmsg)
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL)
         goto done;
-    if (!plugin_treeroot (p) && _forwardable (o)) {
-        _add_backlog (p, o);
-        if (!plugin_timeout_isset (p))
-            plugin_timeout_set (p, log_reduction_timeout_msec);
+    if (_persistable (o)) {
+        if (plugin_treeroot (p)) {
+            _log_external (o);
+        } else {
+            _add_backlog (p, o);
+            if (!plugin_timeout_isset (p))
+                plugin_timeout_set (p, log_reduction_timeout_msec);
+        }
     }
     _log_save (p, o);
 
@@ -327,6 +421,8 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         _recv_log_disconnect (p, zmsg);
     else if (cmb_msg_match_substr (*zmsg, "log.dump.", &arg))
         _recv_log_dump (p, arg, zmsg);
+    else if (cmb_msg_match_substr (*zmsg, "event.fault.", &arg))
+        _recv_fault_event (p, arg, zmsg);
 
     if (arg)
         free (arg);
@@ -346,6 +442,8 @@ static void _init (plugin_ctx_t *p)
     ctx->listeners = zhash_new ();
     ctx->backlog = zlist_new ();
     ctx->cirbuf = zlist_new ();
+
+    zsocket_set_subscribe (p->zs_evin, "event.fault.");
 }
 
 static void _fini (plugin_ctx_t *p)
