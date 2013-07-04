@@ -60,6 +60,7 @@ static void _log_save (plugin_ctx_t *p, json_object *ent)
     }
     json_object_get (ent);
     zlist_append (ctx->cirbuf, ent);
+    ctx->cirbuf_size++;
 }
 
 static void _recv_log_dump (plugin_ctx_t *p, zmsg_t **zmsg)
