@@ -124,6 +124,22 @@ int mapstr (char *s, mapstrfun_t fun, void *arg1, void *arg2)
     return rc;
 }
 
+char *argv_concat (int argc, char *argv[])
+{
+    int i, len = 0;
+    char *s;
+
+    for (i = 0; i < argc; i++)
+        len += strlen (argv[i]) + 1;
+    s = xzmalloc (len + 1);
+    for (i = 0; i < argc; i++) {
+        strcat (s, argv[i]);
+        if (i < argc - 1)
+            strcat (s, " "); 
+    }
+    return s; 
+}
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

@@ -2,6 +2,8 @@
 #define CMB_API_BUFSIZE         32768
 #define CMB_API_FD_BUFSIZE      (CMB_API_BUFSIZE - 1024)
 
+#define CMB_FLAGS_TRACE         0x0001
+
 typedef struct cmb_struct *cmb_t;
 
 /* Create/destroy cmb context used in the other calls.
@@ -55,16 +57,37 @@ int cmb_kvs_commit (cmb_t c, int *errcountp, int *putcountp);
 int cmb_live_query (cmb_t c, int **up, int *ulp, int **dp, int *dlp, int *nnp);
 
 /* Log messages.
- * Subscriptions are not implemented yet (all messages are returned).
+ * 'fac' is like syslog facility, only an arbitrary string.
+ * It is suggested to use pub-sub topic string form.
+ * If 'src' is null, it will be the cmb rank (node number).
+ * 'pri' is like syslog priority, use CMB_LOG values.
  */
-int cmb_vlog (cmb_t c, const char *tag, const char *src,
+typedef enum {
+    CMB_LOG_EMERG=0,    /* system is unusable */
+    CMB_LOG_ALERT=1,    /* action must be taken immediately */
+    CMB_LOG_CRIT=2,     /* critical conditions */
+    CMB_LOG_ERR=3,      /* error conditions */
+    CMB_LOG_WARNING=4,  /* warning conditions */
+    CMB_LOG_NOTICE=5,   /* normal, but significant, condition */
+    CMB_LOG_INFO=6,     /* informational message */
+    CMB_LOG_DEBUG=7,    /* debug level message */
+} logpri_t;
+int cmb_vlog (cmb_t c, logpri_t pri, const char *fac, const char *src,
               const char *fmt, va_list ap);
-int cmb_log (cmb_t c, const char *tag, const char *src, const char *fmt, ...)
-    __attribute__ ((format (printf, 4, 5)));
-int cmb_log_subscribe (cmb_t c, const char *sub);
+int cmb_log (cmb_t c, logpri_t pri, const char *fac, const char *src,
+              const char *fmt, ...)
+              __attribute__ ((format (printf, 5, 6)));
+
+/* Read the logs.
+ * Call subscribe/unsubscribe multiple times to maintain subscription list,
+ * then call cmb_log_recv to receive each subscribed-to message.
+ * Call dump to get contents of circular buffer.
+ */
+int cmb_log_subscribe (cmb_t c, logpri_t pri, const char *sub);
 int cmb_log_unsubscribe (cmb_t c, const char *sub);
-int cmb_log_dump (cmb_t c);
-char *cmb_log_recv (cmb_t c, char **tagp, struct timeval *tvp, char **fromp);
+int cmb_log_dump (cmb_t c, logpri_t pri, const char *fac);
+char *cmb_log_recv (cmb_t c, logpri_t *pp, char **fp,
+                    struct timeval *tvp, char **sp);
 
 /* Manipulate (local) cmb routing tables.
  * Add and del are fire and forget (no reply).

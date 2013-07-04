@@ -69,7 +69,7 @@ static inline void trace (int flags, const char *fmt, ...)
         snprintf (buf, sizeof (buf), "%d.%d.%d", ctx->cmb_rank,
                   ctx->appnum, ctx->rank);
         va_start (ap, fmt);
-        cmb_vlog (ctx->cctx, "PMI", buf, fmt, ap);
+        cmb_vlog (ctx->cctx, CMB_LOG_DEBUG, "PMI", buf, fmt, ap);
         va_end (ap);
     }
 }

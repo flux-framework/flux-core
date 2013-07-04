@@ -347,7 +347,8 @@ static void _request_send (conf_t *conf, server_t *srv,
     free (tag);
 }
 
-static void _vlog (conf_t *conf, server_t *srv, const char *fmt, va_list ap)
+static void _vlog (conf_t *conf, server_t *srv, logpri_t pri,
+                   const char *fmt, va_list ap)
 {
     json_object *no, *o = NULL;
     char *str = NULL;
@@ -361,19 +362,18 @@ static void _vlog (conf_t *conf, server_t *srv, const char *fmt, va_list ap)
         oom ();
     if (!(o = json_object_new_object ()))
         oom ();
-
+    if (!(no = json_object_new_string ("cmb")))
+        oom ();
+    json_object_object_add (o, "facility", no);
+    if (!(no = json_object_new_int (pri)))
+        oom ();
+    json_object_object_add (o, "priority", no);
     if (!(no = json_object_new_string (conf->rankstr)))
         oom ();
     json_object_object_add (o, "source", no);
-
-    if (!(no = json_object_new_string ("cmb")))
-        oom ();
-    json_object_object_add (o, "tag", no);
-
     if (!(no = json_object_new_string (tbuf)))
         oom ();
-    json_object_object_add (o, "time", no);
-
+    json_object_object_add (o, "timestamp", no);
     if (!(no = json_object_new_string (str)))
         oom ();
     json_object_object_add (o, "message", no);
@@ -384,12 +384,13 @@ static void _vlog (conf_t *conf, server_t *srv, const char *fmt, va_list ap)
     json_object_put (o);
 }
 
-static void _log (conf_t *conf, server_t *srv, const char *fmt, ...)
+static void _log (conf_t *conf, server_t *srv, logpri_t pri,
+                  const char *fmt, ...)
 {
     va_list ap;
 
     va_start (ap, fmt);
-    _vlog (conf, srv, fmt, ap);
+    _vlog (conf, srv, pri, fmt, ap);
     va_end (ap);
 }
 
@@ -399,7 +400,7 @@ static void _reparent (conf_t *conf, server_t *srv)
 
     for (i = 0; i < conf->parent_len; i++) {
         if (i != srv->parent_cur && srv->parent_alive[i]) {
-            _log (conf, srv, "reparent %d->%d",
+            _log (conf, srv, CMB_LOG_ALERT, "reparent %d->%d",
                   conf->parent[srv->parent_cur].rank, conf->parent[i].rank);
             if (srv->parent_alive[srv->parent_cur])
                 _request_send (conf, srv, NULL, "cmb.route.goodbye.%d", conf->rank);

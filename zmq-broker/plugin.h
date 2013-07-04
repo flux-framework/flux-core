@@ -63,7 +63,8 @@ bool plugin_timeout_isset (plugin_ctx_t *p);
  * 'logsrv' plugin.  There is some duplication of message generation code
  * in apicli.c::cmb_vlog().  Careful!  (e.g. avoid within logsrv plugin)
  */
-void plugin_vlog (plugin_ctx_t *p, const char *fmt, va_list ap);
-void plugin_log (plugin_ctx_t *p, const char *fmt, ...);
+void plugin_vlog (plugin_ctx_t *p, logpri_t pri, const char *fmt, va_list ap);
+void plugin_log (plugin_ctx_t *p, logpri_t pri, const char *fmt, ...);
 
 bool plugin_treeroot (plugin_ctx_t *p);
+

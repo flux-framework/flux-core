@@ -143,7 +143,7 @@ void plugin_send_response_errnum (plugin_ctx_t *p, zmsg_t **req, int errnum)
     plugin_send_response_raw (p, req);
 }
 
-void plugin_vlog (plugin_ctx_t *p, const char *fmt, va_list ap)
+void plugin_vlog (plugin_ctx_t *p, logpri_t pri, const char *fmt, va_list ap)
 {
     json_object *no, *o = NULL;
     char *str = NULL;
@@ -157,19 +157,18 @@ void plugin_vlog (plugin_ctx_t *p, const char *fmt, va_list ap)
         oom ();
     if (!(o = json_object_new_object ()))
         oom ();
-
-   if (!(no = json_object_new_string (p->conf->rankstr)))
-        oom ();
-    json_object_object_add (o, "source", no);
-
     if (!(no = json_object_new_string (p->plugin->name)))
         oom ();
-    json_object_object_add (o, "tag", no);
-
+    json_object_object_add (o, "facility", no);
+    if (!(no = json_object_new_int (pri)))
+        oom ();
+    json_object_object_add (o, "priority", no);
+    if (!(no = json_object_new_string (p->conf->rankstr)))
+        oom ();
+    json_object_object_add (o, "source", no);
     if (!(no = json_object_new_string (tbuf)))
         oom ();
-    json_object_object_add (o, "time", no);
-
+    json_object_object_add (o, "timestamp", no);
     if (!(no = json_object_new_string (str)))
         oom ();
     json_object_object_add (o, "message", no);
@@ -180,12 +179,12 @@ void plugin_vlog (plugin_ctx_t *p, const char *fmt, va_list ap)
     json_object_put (o);
 }
 
-void plugin_log (plugin_ctx_t *p, const char *fmt, ...)
+void plugin_log (plugin_ctx_t *p, logpri_t pri, const char *fmt, ...)
 {
     va_list ap;
    
     va_start (ap, fmt);
-    plugin_vlog (p, fmt, ap);
+    plugin_vlog (p, pri, fmt, ap);
     va_end (ap);
 }
 

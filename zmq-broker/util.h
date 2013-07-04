@@ -32,6 +32,10 @@ int env_getint (char *name, int dflt);
 char *env_getstr (char *name, char *dflt);
 int env_getints (char *name, int **iap, int *lenp, int dflt_ia[], int dflt_len);
 
+/* Return a string with argcv elements space-delimited.  Caller must free.
+ */
+char *argv_concat (int argc, char *argv[]);
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

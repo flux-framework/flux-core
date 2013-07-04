@@ -31,6 +31,7 @@ struct cmb_struct {
     int rank;
     char rankstr[16];
     int size;
+    int flags;
 };
 
 static int _json_object_add_int (json_object *o, char *name, int i)
@@ -121,6 +122,8 @@ static int _send_message (cmb_t c, json_object *o, const char *fmt, ...)
         err_exit ("vasprintf");
 
     zmsg = cmb_msg_encode (tag, o);
+    if (c->flags & CMB_FLAGS_TRACE)
+        zmsg_dump_compact (zmsg);
     if (zmsg_send_fd (c->fd, &zmsg) < 0) /* destroys msg on succes */
         goto error;
     free (tag);
@@ -140,6 +143,8 @@ static int _recv_message (cmb_t c, char **tagp, json_object **op, int flags)
     zmsg = zmsg_recv_fd (c->fd, flags);
     if (!zmsg)
         goto error;
+    if (c->flags & CMB_FLAGS_TRACE)
+        zmsg_dump_compact (zmsg);
     if (cmb_msg_decode (zmsg, tagp, op) < 0)
         goto error;
     zmsg_destroy (&zmsg);
@@ -461,7 +466,7 @@ error:
     return -1; 
 }
 
-int cmb_vlog (cmb_t c, const char *tag, const char *src,
+int cmb_vlog (cmb_t c, logpri_t pri, const char *fac, const char *src,
               const char *fmt, va_list ap)
 {
     json_object *o = NULL;
@@ -476,17 +481,23 @@ int cmb_vlog (cmb_t c, const char *tag, const char *src,
         errno = ENOMEM;
         goto error;
     }
+    if (strlen (str) == 0) {
+        errno = EINVAL;
+        goto error;
+    }
     if (!(o = json_object_new_object ())) {
         errno = ENOMEM;
         goto error;
     }
-    if (_json_object_add_string (o, "message", str) < 0)
+    if (_json_object_add_string (o, "facility", fac) < 0)
         goto error;
-    if (_json_object_add_string (o, "tag", tag) < 0)
+    if (_json_object_add_int (o, "priority", pri) < 0)
         goto error;
     if (_json_object_add_string (o, "source", src ? src : c->rankstr) < 0)
         goto error;
-    if (_json_object_add_string (o, "time", tbuf) < 0)
+    if (_json_object_add_string (o, "timestamp", tbuf) < 0)
+        goto error;
+    if (_json_object_add_string (o, "message", str) < 0)
         goto error;
     if (_send_message (c, o, "log.msg") < 0)
         goto error;
@@ -501,18 +512,19 @@ error:
     return -1;
 }
 
-int cmb_log (cmb_t c, const char *tag, const char *src, const char *fmt, ...)
+int cmb_log (cmb_t c, logpri_t pri, const char *fac, const char *src,
+             const char *fmt, ...)
 {
     va_list ap;
     int rc;
 
     va_start (ap, fmt);
-    rc = cmb_vlog (c, tag, src, fmt, ap);
+    rc = cmb_vlog (c, pri, fac, src, fmt, ap);
     va_end (ap);
     return rc;
 }
 
-int cmb_log_subscribe (cmb_t c, const char *sub)
+int cmb_log_subscribe (cmb_t c, logpri_t pri, const char *sub)
 {
     json_object *o = NULL;
 
@@ -520,7 +532,7 @@ int cmb_log_subscribe (cmb_t c, const char *sub)
         errno = ENOMEM;
         goto error;
     }
-    if (_send_message (c, o, "log.subscribe.%s", sub) < 0)
+    if (_send_message (c, o, "log.subscribe.%d.%s", pri, sub) < 0)
         goto error;
     json_object_put (o);
     return 0;
@@ -548,7 +560,7 @@ error:
     return -1;
 }
 
-int cmb_log_dump (cmb_t c)
+int cmb_log_dump (cmb_t c, logpri_t pri, const char *sub)
 {
     json_object *o = NULL;
 
@@ -556,7 +568,7 @@ int cmb_log_dump (cmb_t c)
         errno = ENOMEM;
         goto error;
     }
-    if (_send_message (c, o, "log.dump") < 0)
+    if (_send_message (c, o, "log.dump.%d.%s", (int)pri, sub) < 0)
         goto error;
     json_object_put (o);
     return 0;
@@ -566,57 +578,48 @@ error:
     return -1;
 }
 
-char *cmb_log_recv (cmb_t c, char **tagp, struct timeval *tvp, char **srcp)
+char *cmb_log_recv (cmb_t c, logpri_t *pp, char **fp, struct timeval *tvp,
+                    char **sp)
 {
     json_object *o = NULL;
-    const char *s, *t, *ss, *tm;
-    char *str = NULL, *tag = NULL, *src = NULL;
+    const char *s, *fac, *src, *tm;
+    char *msg;
+    int pri;
     char *endptr;
     struct timeval tv;
 
-    if (_recv_message (c, NULL, &o, 0) < 0)
+    if (_recv_message (c, NULL, &o, 0) < 0 || o == NULL)
         goto error;
     if (_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
+    if (_json_object_get_string (o, "facility", &fac) < 0)
+        goto eproto;
+    if (_json_object_get_int (o, "priority", &pri) < 0)
+        goto eproto;
+    if (_json_object_get_string (o, "source", &src) < 0)
+        goto eproto;
+    if (_json_object_get_string (o, "timestamp", &tm) < 0)
+        goto eproto;
     if (_json_object_get_string (o, "message", &s) < 0)
-        goto error;
-    if (_json_object_get_string (o, "tag", &t) < 0)
-        goto error;
-    if (_json_object_get_string (o, "source", &ss) < 0)
-        goto error;
-    if (_json_object_get_string (o, "time", &tm) < 0)
-        goto error;
+        goto eproto;
     tv.tv_sec = strtoul (tm, &endptr, 10);
     tv.tv_usec = *endptr ? strtoul (endptr + 1, NULL, 10) : 0;
-    if (!(str = strdup (s))) {
-        errno = ENOMEM;
-        goto error;
-    }
-    if (tagp && !(tag = strdup (t))) {
-        errno = ENOMEM;
-        goto error;
-    }
-    if (srcp && !(src = strdup (ss))) {
-        errno = ENOMEM;
-        goto error;
-    }
-    json_object_put (o);
-    if (tagp)
-        *tagp = tag;
-    if (srcp)
-        *srcp = src;
     if (tvp)
         *tvp = tv;
-    return str;
+    if (pp)
+        *pp = (logpri_t)pri;
+    if (fp)
+        *fp = xstrdup (fac);
+    if (sp)
+        *sp = xstrdup (src); 
+    msg = xstrdup (s);
+    json_object_put (o);
+    return msg;
+eproto:
+    errno = EPROTO;
 error:
     if (o)
         json_object_put (o);
-    if (str)
-        free (str);
-    if (tag)
-        free (tag);
-    if (src)
-        free (src);
     return NULL;
 }
 
@@ -787,6 +790,7 @@ cmb_t cmb_init_full (const char *path, int flags)
         errno = ENOMEM;
         goto error;
     }
+    c->flags = flags;
     c->fd = socket (AF_UNIX, SOCK_SEQPACKET, 0);
     if (c->fd < 0)
         goto error;

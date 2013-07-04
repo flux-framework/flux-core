@@ -16,7 +16,10 @@
 #include "log.h"
 #include "util.h"
 
-#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:lx:e:TL:W:Dr:R:qz:"
+static void _parse_logstr (char *s, logpri_t *pp, char **fp);
+static const char *_logpri2str (logpri_t pri);
+
+#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:lx:e:TL:W:D:r:R:qz:Z"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -36,11 +39,12 @@ static const struct option longopts[] = {
     {"snoop",      no_argument,        0, 'T'},
     {"log",        required_argument,  0, 'L'},
     {"log-watch",  required_argument,  0, 'W'},
-    {"log-dump",   no_argument,        0, 'D'},
+    {"log-dump",   required_argument,  0, 'D'},
     {"route-add",  required_argument,  0, 'r'},
     {"route-del",  required_argument,  0, 'R'},
     {"route-query",no_argument,        0, 'q'},
     {"socket-path",required_argument,  0, 'z'},
+    {"trace-apisock",no_argument,      0, 'Z'},
     {0, 0, 0, 0},
 };
 
@@ -63,9 +67,9 @@ static void usage (void)
 "  -e,--event name        publish event\n"
 "  -S,--sync              block until event.sched.triger\n"
 "  -l,--live-query        get list of up nodes\n"
-"  -L,--log MSG           log MSG\n"
-"  -W,--log-watch tag     watch logs for messages matching tag\n"
-"  -D,--log-dump          dump circular log buffer\n"
+"  -L,--log fac:pri MSG   log MSG to facility at specified priority\n"
+"  -W,--log-watch fac:pri watch logs for messages matching tag\n"
+"  -D,--log-dump fac:pri  dump circular log buffer\n"
 "  -r,--route-add dst:gw  add local route to dst via gw\n"
 "  -R,--route-del dst     delete local route to dst\n"
 "  -q,--route-query       list routes in JSON format\n"
@@ -82,6 +86,10 @@ int main (int argc, char *argv[])
     int padding = 0;
     int pingdelay_ms = 1000;
     char *socket_path = CMB_API_PATH;
+    bool Lopt = false;
+    char *Lopt_facility;
+    logpri_t Lopt_priority;
+    int flags = 0;
 
     log_init (basename (argv[0]));
 
@@ -101,13 +109,22 @@ int main (int argc, char *argv[])
             case 'z': /* --socket-path PATH */
                 socket_path = optarg;
                 break;
+            case 'Z': /* --trace-apisock */
+                flags |= CMB_FLAGS_TRACE;
+                break;
         }
     }
-    if (!(c = cmb_init_full (socket_path, 0)))
+    if (!(c = cmb_init_full (socket_path, flags)))
         err_exit ("cmb_init");
     optind = 0;
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
+            case 'P':
+            case 'd':
+            case 'n':
+            case 'z':
+            case 'Z':
+                break; /* handled in first getopt */
             case 'p': { /* --ping name */
                 int i;
                 struct timeval t, t1, t2;
@@ -284,49 +301,54 @@ int main (int argc, char *argv[])
 
                 break;
             }
-            case 'P':
-            case 'd':
-            case 'n':
-            case 'z':
-                break; /* handled in first getopt */
             case 'L': { /* --log */
-                if (cmb_log (c, "cmbutil", NULL, "%s", optarg) < 0)
-                    err_exit ("cmb_log");
+                Lopt = true;
+                _parse_logstr (optarg, &Lopt_priority, &Lopt_facility);
                 break;
             }
             case 'W': {
-                char *s, *t, *ss;
+                char *src, *fac, *s;
                 struct timeval tv, start = { .tv_sec = 0 }, rel;
+                logpri_t pri;
 
-                if (cmb_log_subscribe (c, optarg) < 0)
+                _parse_logstr (optarg, &pri, &fac);
+                if (cmb_log_subscribe (c, pri, fac) < 0)
                     err_exit ("cmb_log_subscribe");
-                while ((s = cmb_log_recv (c, &t, &tv, &ss))) {
+                free (fac);
+                while ((s = cmb_log_recv (c, &pri, &fac, &tv, &src))) {
                     if (start.tv_sec == 0)
                         start = tv;
                     timersub (&tv, &start, &rel);
-                    fprintf (stderr, "[%-.6lu.%-.6lu] %s[%s]: %s\n",
-                             rel.tv_sec, rel.tv_usec, t, ss, s);
+                    fprintf (stderr, "[%-.6lu.%-.6lu] %s.%s[%s]: %s\n",
+                             rel.tv_sec, rel.tv_usec, fac, _logpri2str (pri),
+                             src, s);
+                    free (fac);
+                    free (src);
                     free (s);
-                    free (t);
                 }
                 if (errno != ENOENT)
                     err ("cmbv_log_recv");
                 break;
             }
             case 'D': {
-                char *s, *t, *ss;
+                char *src, *fac, *s;
                 struct timeval tv, start = { .tv_sec = 0 }, rel;
+                logpri_t pri;
 
-                if (cmb_log_dump (c) < 0)
+                _parse_logstr (optarg, &pri, &fac);
+                if (cmb_log_dump (c, pri, fac) < 0)
                     err_exit ("cmb_log_dump");
-                while ((s = cmb_log_recv (c, &t, &tv, &ss))) {
+                free (fac);
+                while ((s = cmb_log_recv (c, &pri, &fac, &tv, &src))) {
                     if (start.tv_sec == 0)
                         start = tv;
                     timersub (&tv, &start, &rel);
-                    fprintf (stderr, "[%-.6lu.%-.6lu] %s[%s]: %s\n",
-                             rel.tv_sec, rel.tv_usec, t, ss, s);
+                    fprintf (stderr, "[%-.6lu.%-.6lu] %s.%s[%s]: %s\n",
+                             rel.tv_sec, rel.tv_usec, fac, _logpri2str (pri),
+                             src, s);
+                    free (fac);
+                    free (src);
                     free (s);
-                    free (t);
                 }
                 if (errno != ENOENT)
                     err ("cmbv_log_recv");
@@ -368,13 +390,65 @@ int main (int argc, char *argv[])
                 usage ();
         }
     }
-    if (optind < argc)
-        usage ();
+
+    if (Lopt) {
+        char *argstr = argv_concat (argc - optind, argv + optind);
+
+        if (cmb_log (c, Lopt_priority, Lopt_facility, NULL, "%s", argstr) < 0)
+            err_exit ("cmb_log");
+        free (argstr);
+    } else {
+        if (optind < argc)
+            usage ();
+    }
 
     cmb_fini (c);
     exit (0);
 }
 
+static const char *_logpri2str (logpri_t pri)
+{
+    switch (pri) {
+        case CMB_LOG_EMERG: return "emerg";
+        case CMB_LOG_ALERT: return "alert";
+        case CMB_LOG_CRIT: return "crit";
+        case CMB_LOG_ERR: return "err";
+        case CMB_LOG_WARNING: return "warning";
+        case CMB_LOG_NOTICE: return "notice";
+        case CMB_LOG_INFO: return "info";
+        case CMB_LOG_DEBUG: return "debug";
+    }
+    /*NOTREACHED*/
+    return "unknown";
+}
+
+static void _parse_logstr (char *s, logpri_t *pp, char **fp)
+{
+    char *p, *fac = xstrdup (s);
+    logpri_t pri = CMB_LOG_INFO;
+
+    if ((p = strchr (fac, ':'))) {
+        *p++ = '\0';
+        if (!strcmp (p, "emerg"))
+            pri = CMB_LOG_EMERG;
+        else if (!strcmp (p, "alert"))
+            pri = CMB_LOG_ALERT;
+        else if (!strcmp (p, "crit"))
+            pri = CMB_LOG_CRIT;
+        else if (!strcmp (p, "err"))
+            pri = CMB_LOG_ERR;
+        else if (!strcmp (p, "warning"))
+            pri = CMB_LOG_WARNING;
+        else if (!strcmp (p, "notice"))
+            pri = CMB_LOG_NOTICE;
+        else if (!strcmp (p, "info"))
+            pri = CMB_LOG_INFO;
+        else if (!strcmp (p, "debug"))
+            pri = CMB_LOG_DEBUG;
+    }
+    *pp = pri;
+    *fp = fac;
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
