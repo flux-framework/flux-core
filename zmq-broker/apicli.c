@@ -548,6 +548,24 @@ error:
     return -1;
 }
 
+int cmb_log_dump (cmb_t c)
+{
+    json_object *o = NULL;
+
+    if (!(o = json_object_new_object ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (_send_message (c, o, "log.dump") < 0)
+        goto error;
+    json_object_put (o);
+    return 0;
+error:
+    if (o)
+        json_object_put (o);
+    return -1;
+}
+
 char *cmb_log_recv (cmb_t c, char **tagp, struct timeval *tvp, char **srcp)
 {
     json_object *o = NULL;
@@ -557,6 +575,8 @@ char *cmb_log_recv (cmb_t c, char **tagp, struct timeval *tvp, char **srcp)
     struct timeval tv;
 
     if (_recv_message (c, NULL, &o, 0) < 0)
+        goto error;
+    if (_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
     if (_json_object_get_string (o, "message", &s) < 0)
         goto error;

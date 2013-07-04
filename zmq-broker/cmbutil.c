@@ -16,7 +16,7 @@
 #include "log.h"
 #include "util.h"
 
-#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:lx:e:TL:W:r:R:qz:"
+#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:lx:e:TL:W:Dr:R:qz:"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -36,6 +36,7 @@ static const struct option longopts[] = {
     {"snoop",      no_argument,        0, 'T'},
     {"log",        required_argument,  0, 'L'},
     {"log-watch",  required_argument,  0, 'W'},
+    {"log-dump",   no_argument,        0, 'D'},
     {"route-add",  required_argument,  0, 'r'},
     {"route-del",  required_argument,  0, 'R'},
     {"route-query",no_argument,        0, 'q'},
@@ -64,6 +65,7 @@ static void usage (void)
 "  -l,--live-query        get list of up nodes\n"
 "  -L,--log MSG           log MSG\n"
 "  -W,--log-watch tag     watch logs for messages matching tag\n"
+"  -D,--log-dump          dump circular log buffer\n"
 "  -r,--route-add dst:gw  add local route to dst via gw\n"
 "  -R,--route-del dst     delete local route to dst\n"
 "  -q,--route-query       list routes in JSON format\n"
@@ -294,18 +296,40 @@ int main (int argc, char *argv[])
             }
             case 'W': {
                 char *s, *t, *ss;
-                struct timeval tv, start, rel;
+                struct timeval tv, start = { .tv_sec = 0 }, rel;
 
-                xgettimeofday (&start, NULL);
                 if (cmb_log_subscribe (c, optarg) < 0)
                     err_exit ("cmb_log_subscribe");
                 while ((s = cmb_log_recv (c, &t, &tv, &ss))) {
+                    if (start.tv_sec == 0)
+                        start = tv;
                     timersub (&tv, &start, &rel);
                     fprintf (stderr, "[%-.6lu.%-.6lu] %s[%s]: %s\n",
                              rel.tv_sec, rel.tv_usec, t, ss, s);
                     free (s);
                     free (t);
                 }
+                if (errno != ENOENT)
+                    err ("cmbv_log_recv");
+                break;
+            }
+            case 'D': {
+                char *s, *t, *ss;
+                struct timeval tv, start = { .tv_sec = 0 }, rel;
+
+                if (cmb_log_dump (c) < 0)
+                    err_exit ("cmb_log_dump");
+                while ((s = cmb_log_recv (c, &t, &tv, &ss))) {
+                    if (start.tv_sec == 0)
+                        start = tv;
+                    timersub (&tv, &start, &rel);
+                    fprintf (stderr, "[%-.6lu.%-.6lu] %s[%s]: %s\n",
+                             rel.tv_sec, rel.tv_usec, t, ss, s);
+                    free (s);
+                    free (t);
+                }
+                if (errno != ENOENT)
+                    err ("cmbv_log_recv");
                 break;
             }
             case 'r': { /* --route-add dst:gw */

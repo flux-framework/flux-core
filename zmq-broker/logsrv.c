@@ -28,6 +28,9 @@
 
 #include "logsrv.h"
 
+const int log_reduction_timeout_msec = 100;
+const int log_circular_buffer_entries = 100000;
+
 typedef struct {
     zmsg_t *zmsg;
     zlist_t *subscriptions;
@@ -36,12 +39,44 @@ typedef struct {
 typedef struct {
     zhash_t *listeners;
     zlist_t *backlog;
+    zlist_t *cirbuf;
+    int cirbuf_size;
 } ctx_t;
 
 typedef struct {
     plugin_ctx_t *p;
     json_object *o;
 } fwdarg_t;
+
+static void _log_save (plugin_ctx_t *p, json_object *ent)
+{
+    ctx_t *ctx = p->ctx;
+    json_object *o;
+
+    if (ctx->cirbuf_size == log_circular_buffer_entries) {
+        o = zlist_pop (ctx->cirbuf);
+        json_object_put (o);
+        ctx->cirbuf_size--;
+    }
+    json_object_get (ent);
+    zlist_append (ctx->cirbuf, ent);
+}
+
+static void _recv_log_dump (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    ctx_t *ctx = p->ctx;
+    json_object *o;
+    zmsg_t *cpy;
+
+    o = zlist_first (ctx->cirbuf);
+    while (o != NULL) {
+        if (!(cpy = zmsg_dup (*zmsg)))
+            oom ();
+        plugin_send_response (p, &cpy, o);
+        o = zlist_next (ctx->cirbuf);
+    }
+    plugin_send_response_errnum (p, zmsg, ENOENT);
+}
 
 static listener_t *_listener_create (zmsg_t *zmsg)
 {
@@ -195,8 +230,9 @@ static void _recv_log_msg (plugin_ctx_t *p, zmsg_t **zmsg)
     if (!plugin_treeroot (p)) {
         _add_backlog (p, o);
         if (!plugin_timeout_isset (p))
-            plugin_timeout_set (p, 100); /* 100ms - then send backlog up */
+            plugin_timeout_set (p, log_reduction_timeout_msec);
     }
+    _log_save (p, o);
 
     /* forward message to listeners */
     farg.p = p;
@@ -207,6 +243,9 @@ done:
         json_object_put (o);
     zmsg_destroy (zmsg);
 }
+
+/* Define plugin entry points.
+ */
 
 static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
 {
@@ -220,6 +259,8 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         _recv_log_unsubscribe (p, arg, zmsg);
     else if (cmb_msg_match (*zmsg, "log.disconnect"))
         _recv_log_disconnect (p, zmsg);
+    else if (cmb_msg_match (*zmsg, "log.dump"))
+        _recv_log_dump (p, zmsg);
 
     if (arg)
         free (arg);
@@ -238,6 +279,7 @@ static void _init (plugin_ctx_t *p)
     ctx = p->ctx = xzmalloc (sizeof (ctx_t));
     ctx->listeners = zhash_new ();
     ctx->backlog = zlist_new ();
+    ctx->cirbuf = zlist_new ();
 }
 
 static void _fini (plugin_ctx_t *p)
@@ -246,6 +288,7 @@ static void _fini (plugin_ctx_t *p)
 
     zhash_destroy (&ctx->listeners);
     zlist_destroy (&ctx->backlog);
+    zlist_destroy (&ctx->cirbuf);
     free (ctx);
 }
 
