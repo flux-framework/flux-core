@@ -349,10 +349,10 @@ error:
     return -1; 
 }
 
-int cmb_vlog (cmb_t c, logpri_t pri, const char *fac, const char *src,
+int cmb_vlog (cmb_t c, logpri_t pri, const char *fac,
               const char *fmt, va_list ap)
 {
-    json_object *o = util_json_vlog (pri, fac, src, fmt, ap);
+    json_object *o = util_json_vlog (pri, fac, c->rankstr, fmt, ap);
 
     if (!o || _send_message (c, o, "log.msg") < 0)
         goto error;
@@ -364,14 +364,13 @@ error:
     return -1;
 }
 
-int cmb_log (cmb_t c, logpri_t pri, const char *fac, const char *src,
-             const char *fmt, ...)
+int cmb_log (cmb_t c, logpri_t pri, const char *fac, const char *fmt, ...)
 {
     va_list ap;
     int rc;
 
     va_start (ap, fmt);
-    rc = cmb_vlog (c, pri, fac, src, fmt, ap);
+    rc = cmb_vlog (c, pri, fac, fmt, ap);
     va_end (ap);
     return rc;
 }

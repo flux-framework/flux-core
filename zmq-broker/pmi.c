@@ -65,11 +65,11 @@ static inline void trace (int flags, const char *fmt, ...)
     va_list ap;
 
     if (ctx && (flags & pmi_trace)) {
-        char buf[16];
-        snprintf (buf, sizeof (buf), "%d.%d.%d", ctx->cmb_rank,
-                  ctx->appnum, ctx->rank);
+        char buf[64];
+        snprintf (buf, sizeof (buf), "[%d.%d.%d] %s", ctx->cmb_rank,
+                  ctx->appnum, ctx->rank, fmt);
         va_start (ap, fmt);
-        cmb_vlog (ctx->cctx, CMB_LOG_DEBUG, "PMI", buf, fmt, ap);
+        cmb_vlog (ctx->cctx, CMB_LOG_DEBUG, "PMI", buf, ap);
         va_end (ap);
     }
 }

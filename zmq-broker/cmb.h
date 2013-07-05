@@ -72,11 +72,10 @@ typedef enum {
     CMB_LOG_INFO=6,     /* informational message */
     CMB_LOG_DEBUG=7,    /* debug level message */
 } logpri_t;
-int cmb_vlog (cmb_t c, logpri_t pri, const char *fac, const char *src,
+int cmb_vlog (cmb_t c, logpri_t pri, const char *fac,
               const char *fmt, va_list ap);
-int cmb_log (cmb_t c, logpri_t pri, const char *fac, const char *src,
-              const char *fmt, ...)
-              __attribute__ ((format (printf, 5, 6)));
+int cmb_log (cmb_t c, logpri_t pri, const char *fac,
+              const char *fmt, ...) __attribute__ ((format (printf, 4, 5)));
 
 /* Read the logs.
  * Call subscribe/unsubscribe multiple times to maintain subscription list,
