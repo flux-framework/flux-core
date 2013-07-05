@@ -29,7 +29,7 @@
 
 #include "logsrv.h"
 
-const int log_reduction_timeout_msec = 1000;
+const int log_reduction_timeout_msec = 100;
 const int log_circular_buffer_entries = 100000;
 const int log_persist_priority = CMB_LOG_NOTICE;
 
@@ -91,18 +91,17 @@ static void _destroy_subscription (subscription_t *sub)
 /* Manage circular buffer.
  */
 
-static void _log_save (plugin_ctx_t *p, json_object *ent)
+static void _log_save (plugin_ctx_t *p, json_object *o)
 {
     ctx_t *ctx = p->ctx;
-    json_object *o;
 
     if (ctx->cirbuf_size == log_circular_buffer_entries) {
-        o = zlist_pop (ctx->cirbuf);
-        json_object_put (o);
+        json_object *tmp = zlist_pop (ctx->cirbuf);
+        json_object_put (tmp);
         ctx->cirbuf_size--;
     }
-    json_object_get (ent);
-    zlist_append (ctx->cirbuf, ent);
+    json_object_get (o);
+    zlist_append (ctx->cirbuf, o);
     ctx->cirbuf_size++;
 }
 
@@ -126,15 +125,6 @@ static void _recv_log_dump (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     _destroy_subscription (sub);
 }
 
-static void _priority_override (json_object *o)
-{
-    json_object *no;
-
-    if (!(no = json_object_new_int (CMB_LOG_ERR)))
-        oom ();
-    json_object_object_add (o, "priority_override", no);
-}
-
 static void _recv_fault_event (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
@@ -150,7 +140,6 @@ static void _recv_fault_event (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         oom ();
     while ((o = zlist_pop (ctx->cirbuf))) {
         if (_match_subscription (o, &sub)) {
-            _priority_override (o);
             _add_backlog (p, o);
             json_object_put (o);
         } else
@@ -314,15 +303,22 @@ static void _combine_reduce (json_object *o1, json_object *o2)
     (void)util_json_object_get_int (o1, "count", &count1);
     (void)util_json_object_get_int (o2, "count", &count2);
     util_json_object_add_int (o1, "count", count1 + count2);
-    /* replaces existing value */
 }
 
 static void _process_backlog_one (plugin_ctx_t *p, json_object **op)
 {
+    int hopcount = 0;
+
     if (plugin_treeroot (p))
         _log_external (*op);
-    else
+    else {
+        /* Increment hopcount each time a message is forwarded upstream.
+         */
+        (void)util_json_object_get_int (*op, "hopcount", &hopcount);
+        hopcount++;
+        util_json_object_add_int (*op, "hopcount", hopcount);
         plugin_send_request (p, *op, "log.msg");
+    }
     json_object_put (*op);
     *op = NULL;
 }
@@ -368,19 +364,6 @@ static void _add_backlog (plugin_ctx_t *p, json_object *o)
     zlist_append (ctx->backlog, o);
 }
 
-static bool _persistable (json_object *o)
-{
-    int pri;
-
-    if (util_json_object_get_int (o, "priority", &pri) == 0
-        && pri <= log_persist_priority)
-        return true;
-    if (util_json_object_get_int (o, "priority_override", &pri) == 0
-        && pri <= log_persist_priority)
-        return true;
-    return false;
-}
-
 typedef struct {
     plugin_ctx_t *p;
     json_object *o;
@@ -406,41 +389,29 @@ static int _listener_fwd (const char *key, void *litem, void *arg)
     return 1;
 }
 
-/* A numeric frame on top indicates this came from downstream.
- * We then don't want to archive it in our local circular buffer.
- */
-static bool _sender_is_local (zmsg_t *zmsg)
-{
-    char *nexthop, *nextptr;
-    bool ret = true;
-
-    if ((nexthop = cmb_msg_nexthop (zmsg))) {
-        (void)strtoul (nexthop, &nextptr, 10);
-        if (*nextptr == '\0')
-            ret = false;
-        free (nexthop);
-    }
-    return ret;
-}
-
 static void _recv_log_msg (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     fwdarg_t farg;
     json_object *o = NULL;
+    int hopcount = 0, priority = 0;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL)
         goto done;
-    if (_persistable (o)) {
+
+    (void)util_json_object_get_int (o, "priority", &priority);
+    (void)util_json_object_get_int (o, "hopcount", &hopcount);
+
+    if (priority <= log_persist_priority || hopcount > 0) {
         _add_backlog (p, o);
         if (!plugin_timeout_isset (p))
             plugin_timeout_set (p, log_reduction_timeout_msec);
     }
-    if (_sender_is_local (*zmsg))
-        _log_save (p, o);
 
-    farg.p = p;
-    farg.o = o;
+    if (hopcount == 0)
+        _log_save (p, o);
+   
+    farg.p = p; farg.o = o;
     zhash_foreach (ctx->listeners, _listener_fwd, &farg);
 done:
     if (o)
