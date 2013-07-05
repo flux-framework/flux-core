@@ -15,9 +15,9 @@
 #include <assert.h>
 
 #include "zmq.h"
+#include "cmb.h"
 #include "util.h"
 #include "log.h"
-#include "cmb.h"
 
 #if ZMQ_VERSION_MAJOR != 3
 #error requires zeromq version 3

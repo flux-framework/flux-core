@@ -205,7 +205,8 @@ static char *_redis_get (plugin_ctx_t *p, const char *key)
  */
 static void _kvs_put (plugin_ctx_t *p, zmsg_t **zmsg)
 {
-    json_object *o = NULL, *key, *val;
+    json_object *o = NULL;
+    const char *key, *val;
     char *sender = NULL;
     client_t *c;
 
@@ -214,15 +215,14 @@ static void _kvs_put (plugin_ctx_t *p, zmsg_t **zmsg)
         goto done;
     }
     if (o == NULL || !(sender = cmb_msg_sender (*zmsg))
-                            || !(key = json_object_object_get (o, "key"))
-                            || !(val = json_object_object_get (o, "val"))) {
+                  || util_json_object_get_string (o, "key", &key) < 0
+                  || util_json_object_get_string (o, "val", &val) < 0) {
         err ("%s: protocol error", __FUNCTION__);
         goto done;
     }
     if (!(c = _client_find (p, sender)))
         c = _client_create (p, sender);
-    _add_put_queue (c, json_object_get_string (key),
-                       json_object_get_string (val));
+    _add_put_queue (c, key, val);
 done:
     zmsg_destroy (zmsg);
     if (o)
@@ -233,36 +233,34 @@ done:
 
 static void _kvs_get (plugin_ctx_t *p, zmsg_t **zmsg)
 {
-    json_object *o = NULL, *key, *val;
-    char *valstr;
+    json_object *o = NULL;
+    const char *key;
+    char *val;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0) {
         err ("%s: error decoding message", __FUNCTION__);
         goto done;
     }
-    if (o == NULL || !(key = json_object_object_get (o, "key"))) {
+    if (o == NULL || util_json_object_get_string (o, "key", &key) < 0) {
         err ("%s: protocol error", __FUNCTION__);
         goto done;
     }
-    valstr = _redis_get (p, json_object_get_string (key));
-    if (valstr) { /* omit val in response on error */
-        if (!(val = json_object_new_string (valstr)))
-            oom ();
-        json_object_object_add (o, "val", val);
-    }
+    val = _redis_get (p, key);
+    if (val) /* omit val in response on error */
+        util_json_object_add_string (o, "val", val);
     plugin_send_response (p, zmsg, o);
 done:
     if (o)
         json_object_put (o);
-    if (valstr)
-        free (valstr);
+    if (val)
+        free (val);
     if (*zmsg)
         zmsg_destroy (zmsg);
 }
 
 static void _kvs_commit (plugin_ctx_t *p, zmsg_t **zmsg)
 {
-    json_object *o = NULL, *no;
+    json_object *o = NULL;
     char *sender = NULL;
     int errcount = 0, putcount = 0;
     client_t *c;
@@ -281,12 +279,8 @@ static void _kvs_commit (plugin_ctx_t *p, zmsg_t **zmsg)
         putcount = c->putcount;
         c->errcount = c->putcount = 0;
     }
-    if (!(no = json_object_new_int (errcount)))
-        oom ();
-    json_object_object_add (o, "errcount", no);
-    if (!(no = json_object_new_int (putcount)))
-        oom ();
-    json_object_object_add (o, "putcount", no);
+    util_json_object_add_int (o, "errcount", errcount);
+    util_json_object_add_int (o, "putcount", putcount);
     plugin_send_response (p, zmsg, o);
 done:
     if (o)

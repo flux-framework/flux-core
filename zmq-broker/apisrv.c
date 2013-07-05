@@ -100,8 +100,7 @@ static int _notify_srv (const char *key, void *item, void *arg)
 
     if (!(zmsg = zmsg_new ()))
         err_exit ("zmsg_new");
-    if (!(o = json_object_new_object ()))
-        oom ();
+    o = util_json_object_new_object ();
     if (zmsg_pushstr (zmsg, "%s", json_object_to_json_string (o)) < 0)
         err_exit ("zmsg_pushstr");
     json_object_put (o);
@@ -195,16 +194,9 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
     } else if (cmb_msg_match_substr (zmsg, "api.event.send.", &name)) {
         plugin_send_event (p, "%s", name);
     } else if (cmb_msg_match (zmsg, "api.session.info.query")) {
-        json_object *no, *o;
-
-        if (!(o = json_object_new_object ()))
-            oom ();
-        if (!(no = json_object_new_int (p->conf->rank)))
-            oom ();
-        json_object_object_add (o, "rank", no);
-        if (!(no = json_object_new_int (p->conf->size)))
-            oom ();
-        json_object_object_add (o, "size", no);
+        json_object *o = util_json_object_new_object ();
+        util_json_object_add_int (o, "rank", p->conf->rank);
+        util_json_object_add_int (o, "size", p->conf->size);
         if (cmb_msg_replace_json (zmsg, o) == 0)
             (void)zmsg_send_fd (c->fd, &zmsg);
         json_object_put (o);

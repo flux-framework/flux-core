@@ -17,7 +17,6 @@
 #include "util.h"
 
 static void _parse_logstr (char *s, logpri_t *pp, char **fp);
-static const char *_logpri2str (logpri_t pri);
 
 #define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:lx:e:TL:W:D:r:R:qz:Z"
 static const struct option longopts[] = {
@@ -320,7 +319,7 @@ int main (int argc, char *argv[])
                         start = tv;
                     timersub (&tv, &start, &rel);
                     fprintf (stderr, "[%-.6lu.%-.6lu] %s.%s[%s]: %s\n",
-                             rel.tv_sec, rel.tv_usec, fac, _logpri2str (pri),
+                             rel.tv_sec, rel.tv_usec, fac, util_logpri_str(pri),
                              src, s);
                     free (fac);
                     free (src);
@@ -344,7 +343,7 @@ int main (int argc, char *argv[])
                         start = tv;
                     timersub (&tv, &start, &rel);
                     fprintf (stderr, "[%-.6lu.%-.6lu] %s.%s[%s]: %s\n",
-                             rel.tv_sec, rel.tv_usec, fac, _logpri2str (pri),
+                             rel.tv_sec, rel.tv_usec, fac, util_logpri_str(pri),
                              src, s);
                     free (fac);
                     free (src);
@@ -406,22 +405,6 @@ int main (int argc, char *argv[])
     exit (0);
 }
 
-static const char *_logpri2str (logpri_t pri)
-{
-    switch (pri) {
-        case CMB_LOG_EMERG: return "emerg";
-        case CMB_LOG_ALERT: return "alert";
-        case CMB_LOG_CRIT: return "crit";
-        case CMB_LOG_ERR: return "err";
-        case CMB_LOG_WARNING: return "warning";
-        case CMB_LOG_NOTICE: return "notice";
-        case CMB_LOG_INFO: return "info";
-        case CMB_LOG_DEBUG: return "debug";
-    }
-    /*NOTREACHED*/
-    return "unknown";
-}
-
 static void _parse_logstr (char *s, logpri_t *pp, char **fp)
 {
     char *p, *fac = xstrdup (s);
@@ -429,22 +412,7 @@ static void _parse_logstr (char *s, logpri_t *pp, char **fp)
 
     if ((p = strchr (fac, ':'))) {
         *p++ = '\0';
-        if (!strcmp (p, "emerg"))
-            pri = CMB_LOG_EMERG;
-        else if (!strcmp (p, "alert"))
-            pri = CMB_LOG_ALERT;
-        else if (!strcmp (p, "crit"))
-            pri = CMB_LOG_CRIT;
-        else if (!strcmp (p, "err"))
-            pri = CMB_LOG_ERR;
-        else if (!strcmp (p, "warning"))
-            pri = CMB_LOG_WARNING;
-        else if (!strcmp (p, "notice"))
-            pri = CMB_LOG_NOTICE;
-        else if (!strcmp (p, "info"))
-            pri = CMB_LOG_INFO;
-        else if (!strcmp (p, "debug"))
-            pri = CMB_LOG_DEBUG;
+        pri = util_logpri_val (p);
     }
     *pp = pri;
     *fp = fac;

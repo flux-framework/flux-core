@@ -94,16 +94,10 @@ static int _barrier_add_client (barrier_t *b, char *sender, zmsg_t **zmsg)
 
 static void _send_enter_request (plugin_ctx_t *p, barrier_t *b)
 {
-    json_object *no, *o = NULL;
+    json_object *o = util_json_object_new_object ();
 
-    if (!(o = json_object_new_object ()))
-        oom ();
-    if (!(no = json_object_new_int (b->count)))
-        oom ();
-    json_object_object_add (o, "count", no);
-    if (!(no = json_object_new_int (b->nprocs)))
-        oom ();
-    json_object_object_add (o, "nprocs", no);
+    util_json_object_add_int (o, "count", b->count);
+    util_json_object_add_int (o, "nprocs", b->nprocs);
     plugin_send_request (p, o, "barrier.enter.%s", b->name);
     json_object_put (o);
 }
@@ -134,18 +128,21 @@ static void _barrier_enter (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     barrier_t *b;
-    json_object *o = NULL, *count, *nprocs;
+    json_object *o = NULL;
     char *sender = NULL;
+    int count, nprocs;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
-                  || !(sender = cmb_msg_sender (*zmsg))
-                  || !(count = json_object_object_get (o, "count"))
-                  || !(nprocs = json_object_object_get (o, "nprocs"))) {
+     || !(sender = cmb_msg_sender (*zmsg))
+     || util_json_object_get_int (o, "count", &count) < 0
+     || util_json_object_get_int (o, "nprocs", &nprocs) < 0) {
         err ("%s: protocol error", __FUNCTION__);
         goto done;
     }
+
+
     if (!(b = zhash_lookup (ctx->barriers, name)))
-        b = _barrier_create (p, name, json_object_get_int (nprocs));
+        b = _barrier_create (p, name, nprocs);
 
     /* Distinguish client (tracked) vs downstream barrier plugin (untracked).
      * N.B. client, distinguished by sender uuid, can only enter barrier once.
@@ -164,7 +161,7 @@ static void _barrier_enter (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
     /* If the count has been reached, terminate the barrier;
      * o/w set timer to pass count upstream and zero it here.
      */
-    b->count += json_object_get_int (count);
+    b->count += count;
     if (b->count == b->nprocs)
         plugin_send_event (p, "event.barrier.exit.%s", b->name);
     else if (!plugin_treeroot (p) && !plugin_timeout_isset (p))

@@ -55,14 +55,14 @@ static void _log_external (json_object *o);
 
 static bool _match_subscription (json_object *o, subscription_t *sub)
 {
-    json_object *no;
+    int pri;
+    const char *fac;
 
-    if (!(no = json_object_object_get (o, "priority"))
-            || json_object_get_int (no) > sub->pri_max
-            || json_object_get_int (no) < sub->pri_min
-            || !(no = json_object_object_get (o, "facility"))
-            || strncasecmp (sub->fac, json_object_get_string (no),
-                            strlen (sub->fac)) != 0)
+    if (util_json_object_get_int (o, "priority", &pri) < 0
+     || util_json_object_get_string (o, "facility", &fac) < 0
+     || pri > sub->pri_max
+     || pri < sub->pri_min
+     || strncasecmp (sub->fac, fac, strlen (sub->fac)) != 0)
         return false;
     return true;
 }
@@ -294,60 +294,31 @@ static void _send_backlog (plugin_ctx_t *p)
 
 static bool _persistable (json_object *o)
 {
-    json_object *no;
+    int pri;
 
-    if ((no = json_object_object_get (o, "priority"))
-            && json_object_get_int (no) <= log_persist_priority)
+    if (util_json_object_get_int (o, "priority", &pri) == 0
+        && pri <= log_persist_priority)
         return true;
-    if ((no = json_object_object_get (o, "priority_override"))
-            && json_object_get_int (no) <= log_persist_priority)
+    if (util_json_object_get_int (o, "priority_override", &pri) == 0
+        && pri <= log_persist_priority)
         return true;
     return false;
 }
 
-static const char *_logpri2str (logpri_t pri)
-{
-    switch (pri) {
-        case CMB_LOG_EMERG: return "emerg";
-        case CMB_LOG_ALERT: return "alert";
-        case CMB_LOG_CRIT: return "crit";
-        case CMB_LOG_ERR: return "err";
-        case CMB_LOG_WARNING: return "warning";
-        case CMB_LOG_NOTICE: return "notice";
-        case CMB_LOG_INFO: return "info";
-        case CMB_LOG_DEBUG: return "debug";
-    }
-    /*NOTREACHED*/
-    return "unknown";
-}
-
 static void _log_external (json_object *o)
 {
-    json_object *no;
-    logpri_t pri;
-    const char *fac, *src, *ts, *message;
-    char *endptr;
+    const char *fac, *src, *message;
     struct timeval tv;
+    int pri;
 
-    if (!(no = json_object_object_get (o, "facility")))
-        return;
-    fac = json_object_get_string (no);
-    if (!(no = json_object_object_get (o, "priority")))
-        return;
-    pri = json_object_get_int (no);
-    if (!(no = json_object_object_get (o, "source")))
-        return;
-    src = json_object_get_string (no);
-    if (!(no = json_object_object_get (o, "timestamp")))
-        return;
-    ts = json_object_get_string (no);
-    tv.tv_sec = strtoul (ts, &endptr, 10);
-    tv.tv_usec = *endptr ? strtoul (endptr + 1, NULL, 10) : 0;
-    if (!(no = json_object_object_get (o, "message")))
-        return;
-    message = json_object_get_string (no);
-    msg ("[%-.6lu.%-.6lu] %s.%s[%s]: %s", tv.tv_sec, tv.tv_usec,
-         fac, _logpri2str (pri), src, message);
+    if (util_json_object_get_string (o, "facility", &fac) == 0
+     && util_json_object_get_int (o, "priority", &pri) == 0
+     && util_json_object_get_string (o, "source", &src) == 0
+     && util_json_object_get_timeval (o, "timestamp", &tv) == 0 
+     && util_json_object_get_string (o, "message", &message) == 0) {
+        msg ("[%-.6lu.%-.6lu] %s.%s[%s]: %s", tv.tv_sec, tv.tv_usec,
+             fac, util_logpri_str (pri), src, message);
+    }
 }
 
 

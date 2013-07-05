@@ -36,6 +36,28 @@ int env_getints (char *name, int **iap, int *lenp, int dflt_ia[], int dflt_len);
  */
 char *argv_concat (int argc, char *argv[]);
 
+/* JSON helpers
+ */
+json_object *util_json_object_new_object (void);
+void util_json_object_add_int (json_object *o, char *name, int i);
+void util_json_object_add_string (json_object *o, char *name, const char *s);
+void util_json_object_add_timeval (json_object *o, char *name,
+                                   struct timeval *tvp);
+
+int util_json_object_get_int (json_object *o, char *name, int *ip);
+int util_json_object_get_string (json_object *o, char *name, const char **sp);
+int util_json_object_get_timeval (json_object *o, char *name,
+                                  struct timeval *tvp);
+int util_json_object_get_int_array (json_object *o, char *name,
+                                    int **ap, int *lp);
+
+json_object *util_json_vlog (logpri_t pri, const char *fac, const char *src,
+                             const char *fmt, va_list ap);
+
+const char *util_logpri_str (logpri_t pri);
+
+logpri_t util_logpri_val (char *s);
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

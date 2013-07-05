@@ -347,50 +347,19 @@ static void _request_send (conf_t *conf, server_t *srv,
     free (tag);
 }
 
-void cmbd_vlog (conf_t *conf, server_t *srv, logpri_t pri,
-               const char *fmt, va_list ap)
-{
-    json_object *no, *o = NULL;
-    char *str = NULL;
-    struct timeval tv;
-    char tbuf[64];
-
-    xgettimeofday (&tv, NULL);
-    snprintf (tbuf, sizeof (tbuf), "%lu.%lu", tv.tv_sec, tv.tv_usec);
-
-    if (vasprintf (&str, fmt, ap) < 0)
-        oom ();
-    if (!(o = json_object_new_object ()))
-        oom ();
-    if (!(no = json_object_new_string ("cmb")))
-        oom ();
-    json_object_object_add (o, "facility", no);
-    if (!(no = json_object_new_int (pri)))
-        oom ();
-    json_object_object_add (o, "priority", no);
-    if (!(no = json_object_new_string (conf->rankstr)))
-        oom ();
-    json_object_object_add (o, "source", no);
-    if (!(no = json_object_new_string (tbuf)))
-        oom ();
-    json_object_object_add (o, "timestamp", no);
-    if (!(no = json_object_new_string (str)))
-        oom ();
-    json_object_object_add (o, "message", no);
-
-    _request_send (conf, srv, o, "log.msg");
-
-    free (str);
-    json_object_put (o);
-}
-
 void cmbd_log (conf_t *conf, server_t *srv, logpri_t pri, const char *fmt, ...)
 {
     va_list ap;
+    json_object *o;
 
     va_start (ap, fmt);
-    cmbd_vlog (conf, srv, pri, fmt, ap);
+    o = util_json_vlog (pri, "cmb", conf->rankstr, fmt, ap);
     va_end (ap);
+
+    if (o) {
+        _request_send (conf, srv, o, "log.msg");
+        json_object_put (o);
+    }
 }
 
 static void _reparent (conf_t *conf, server_t *srv)
@@ -470,17 +439,14 @@ static void _cmb_internal_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
     char *arg;
 
     if (cmb_msg_match_substr (*zmsg, "cmb.route.add.", &arg)) {
-        json_object *oo, *o = NULL;
+        json_object *o = NULL;
         const char *gw = NULL, *parent = NULL;
         int flags = 0;
 
         if (cmb_msg_decode (*zmsg, NULL, &o) == 0 && o != NULL) {
-            if ((oo = json_object_object_get (o, "gw")))
-                gw = json_object_get_string (oo);
-            if ((oo = json_object_object_get (o, "parent")))
-                parent = json_object_get_string (oo);
-            if ((oo = json_object_object_get (o, "flags")))
-                flags = json_object_get_int (oo);
+            (void)util_json_object_get_string (o, "gw", &gw);
+            (void)util_json_object_get_string (o, "parent", &parent);
+            (void)util_json_object_get_int (o, "flags", &flags);
             if (gw)
                 route_add (srv->rctx, arg, gw, parent, flags);
         }
@@ -489,12 +455,11 @@ static void _cmb_internal_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
         zmsg_destroy (zmsg);
         free (arg);
     } else if (cmb_msg_match_substr (*zmsg, "cmb.route.del.", &arg)) {
-        json_object *oo, *o = NULL;
+        json_object *o = NULL;
         const char *gw = NULL;
 
         if (cmb_msg_decode (*zmsg, NULL, &o) == 0 && o != NULL) {
-            if ((oo = json_object_object_get (o, "gw")))
-                gw = json_object_get_string (oo);
+            (void)util_json_object_get_string (o, "gw", &gw);
             if (gw)
                 route_del (srv->rctx, arg, gw);
         }
@@ -503,12 +468,9 @@ static void _cmb_internal_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
         zmsg_destroy (zmsg);
         free (arg);
     } else if (cmb_msg_match (*zmsg, "cmb.route.query")) {
-        json_object *ao, *o = NULL;
+        json_object *o = util_json_object_new_object ();
 
-        if (!(o = json_object_new_object ()))
-            oom ();
-        ao = route_dump_json (srv->rctx, true);
-        json_object_object_add (o, "route", ao);
+        json_object_object_add (o, "route", route_dump_json (srv->rctx, true));
         if (cmb_msg_replace_json (*zmsg, o) == 0)
             _route_response (conf, srv, zmsg, true);
         json_object_put (o);

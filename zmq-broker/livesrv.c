@@ -120,20 +120,11 @@ static void _child_del (zhash_t *kids, int rank)
  */
 static void _send_live_hello (plugin_ctx_t *p, int epoch)
 {
-    json_object *no, *o = NULL;
+    json_object *o = util_json_object_new_object ();
 
-    if (!(o = json_object_new_object ()))
-        oom ();
-
-    if (!(no = json_object_new_int (epoch)))
-        oom ();
-    json_object_object_add (o, "epoch", no);
-
+    util_json_object_add_int (o, "epoch", epoch);
     assert (p->conf->parent_len > 0);
-    if (!(no = json_object_new_int (p->conf->parent[0].rank)))
-        oom ();
-    json_object_object_add (o, "parent", no);
-
+    util_json_object_add_int (o, "parent", p->conf->parent[0].rank);
     plugin_send_request (p, o, "live.hello.%d", p->conf->rank);
     json_object_put (o);
 }
@@ -183,11 +174,9 @@ done:
 static void _recv_live_query (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
-    json_object *o, *no, *upo, *dno;
+    json_object *no, *upo, *dno, *o = util_json_object_new_object ();
     int i;
 
-    if (!(o = json_object_new_object ()))
-        oom ();
     if (!(upo = json_object_new_array ()))
         oom ();
     if (!(dno = json_object_new_array ()))
@@ -202,13 +191,9 @@ static void _recv_live_query (plugin_ctx_t *p, zmsg_t **zmsg)
     }
     json_object_object_add (o, "up", upo);
     json_object_object_add (o, "down", dno);
-
-    if (!(no = json_object_new_int (p->conf->size)))
-        oom ();
-    json_object_object_add (o, "nnodes", no);
+    util_json_object_add_int (o, "nnodes", p->conf->size);
     plugin_send_response (p, zmsg, o);
-    if (o)
-        json_object_put (o);
+    json_object_put (o);
     if (*zmsg)
         zmsg_destroy (zmsg);
 }
@@ -244,10 +229,9 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         if (ctx->age++ >= MISSED_EPOCH_ALLOW) {
             while ((cp = _child_find_aged (ctx->kids, epoch))) {
                 if (cp->rank >= 0 && cp->rank < p->conf->size) {
-                    if (p->conf->verbose)
-                        msg ("rank %d is stale (%d:%d), marking down",
-                             cp->rank, cp->epoch, epoch);
-                    plugin_log (p, CMB_LOG_DEBUG, "event.live.down.%d", cp->rank);
+                    plugin_log (p, CMB_LOG_ALERT,
+                        "event.live.down.%d: last seen %d, current %d",
+                        cp->rank, cp->epoch, epoch);
                     plugin_send_event (p, "event.live.down.%d", cp->rank);
                     ctx->state[cp->rank] = false;
                 }

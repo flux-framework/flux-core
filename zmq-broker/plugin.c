@@ -143,54 +143,24 @@ void plugin_send_response_errnum (plugin_ctx_t *p, zmsg_t **req, int errnum)
     plugin_send_response_raw (p, req);
 }
 
-void plugin_vlog (plugin_ctx_t *p, logpri_t pri, const char *fmt, va_list ap)
-{
-    json_object *no, *o = NULL;
-    char *str = NULL;
-    struct timeval tv;
-    char tbuf[64];
-
-    xgettimeofday (&tv, NULL);
-    snprintf (tbuf, sizeof (tbuf), "%lu.%lu", tv.tv_sec, tv.tv_usec);
-
-    if (vasprintf (&str, fmt, ap) < 0)
-        oom ();
-    if (!(o = json_object_new_object ()))
-        oom ();
-    if (!(no = json_object_new_string (p->plugin->name)))
-        oom ();
-    json_object_object_add (o, "facility", no);
-    if (!(no = json_object_new_int (pri)))
-        oom ();
-    json_object_object_add (o, "priority", no);
-    if (!(no = json_object_new_string (p->conf->rankstr)))
-        oom ();
-    json_object_object_add (o, "source", no);
-    if (!(no = json_object_new_string (tbuf)))
-        oom ();
-    json_object_object_add (o, "timestamp", no);
-    if (!(no = json_object_new_string (str)))
-        oom ();
-    json_object_object_add (o, "message", no);
-
-    plugin_send_request (p, o, "log.msg");
-
-    free (str);
-    json_object_put (o);
-}
-
 void plugin_log (plugin_ctx_t *p, logpri_t pri, const char *fmt, ...)
 {
     va_list ap;
+    json_object *o;
    
     va_start (ap, fmt);
-    plugin_vlog (p, pri, fmt, ap);
+    o = util_json_vlog (pri, p->plugin->name, p->conf->rankstr, fmt, ap);
     va_end (ap);
+
+    if (o) {
+        plugin_send_request (p, o, "log.msg");
+        json_object_put (o);
+    }
 }
 
 void plugin_ping_respond (plugin_ctx_t *p, zmsg_t **zmsg)
 {
-    json_object *o, *no;
+    json_object *o;
     char *s = NULL;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
@@ -198,9 +168,7 @@ void plugin_ping_respond (plugin_ctx_t *p, zmsg_t **zmsg)
         goto done;
     }
     s = zmsg_route_str (*zmsg, 2);
-    if (!(no = json_object_new_string (s)))
-        oom ();
-    json_object_object_add (o, "route", no);
+    util_json_object_add_string (o, "route", s);
     plugin_send_response (p, zmsg, o);
 done:
     if (o)
@@ -213,35 +181,18 @@ done:
 
 void plugin_stats_respond (plugin_ctx_t *p, zmsg_t **zmsg)
 {
-    json_object *no, *o = NULL;
+    json_object *o = NULL;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0) {
         err ("%s: error decoding message", __FUNCTION__);
         goto done;
     }
-    if (!(no = json_object_new_int (p->stats.upreq_send_count)))
-        oom ();
-    json_object_object_add (o, "upreq_send_count", no);
-
-    if (!(no = json_object_new_int (p->stats.upreq_recv_count)))
-        oom ();
-    json_object_object_add (o, "upreq_recv_count", no);
-
-    if (!(no = json_object_new_int (p->stats.dnreq_send_count)))
-        oom ();
-    json_object_object_add (o, "dnreq_send_count", no);
-
-    if (!(no = json_object_new_int (p->stats.dnreq_recv_count)))
-        oom ();
-    json_object_object_add (o, "dnreq_recv_count", no);
-
-    if (!(no = json_object_new_int (p->stats.event_send_count)))
-        oom ();
-    json_object_object_add (o, "event_send_count", no);
-
-    if (!(no = json_object_new_int (p->stats.event_recv_count)))
-        oom ();
-    json_object_object_add (o, "event_recv_count", no);
+    util_json_object_add_int (o, "upreq_send_count", p->stats.upreq_send_count);
+    util_json_object_add_int (o, "upreq_recv_count", p->stats.upreq_recv_count);
+    util_json_object_add_int (o, "dnreq_send_count", p->stats.dnreq_send_count);
+    util_json_object_add_int (o, "dnreq_recv_count", p->stats.dnreq_recv_count);
+    util_json_object_add_int (o, "event_send_count", p->stats.event_send_count);
+    util_json_object_add_int (o, "event_recv_count", p->stats.event_recv_count);
 
     plugin_send_response (p, zmsg, o);
 done:

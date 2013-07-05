@@ -1,9 +1,14 @@
+#define _GNU_SOURCE
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
 #include <sys/time.h>
+#include <json/json.h>
+#include <stdarg.h>
+#include <stdbool.h>
 
+#include "cmb.h"
 #include "util.h"
 #include "log.h"
 
@@ -138,6 +143,172 @@ char *argv_concat (int argc, char *argv[])
             strcat (s, " "); 
     }
     return s; 
+}
+
+void util_json_object_add_int (json_object *o, char *name, int i)
+{
+    json_object *no;
+
+    if (!(no = json_object_new_int (i)))
+        oom ();
+    json_object_object_add (o, name, no);
+}
+
+void util_json_object_add_string (json_object *o, char *name, const char *s)
+{
+    json_object *no;
+
+    if (!(no = json_object_new_string (s)))
+        oom ();
+    json_object_object_add (o, name, no);
+}
+
+void util_json_object_add_timeval (json_object *o, char *name,
+                                   struct timeval *tvp)
+{
+    json_object *no;
+    char tbuf[32];
+
+    snprintf (tbuf, sizeof (tbuf), "%lu.%lu", tvp->tv_sec, tvp->tv_usec);
+    if (!(no = json_object_new_string (tbuf)))
+        oom ();
+    json_object_object_add (o, name, no);
+}
+
+int util_json_object_get_int (json_object *o, char *name, int *ip)
+{
+    json_object *no = json_object_object_get (o, name);
+    if (!no)
+        return -1;
+    *ip = json_object_get_int (no);
+    return 0;
+}
+
+int util_json_object_get_string (json_object *o, char *name, const char **sp)
+{
+    json_object *no = json_object_object_get (o, name);
+    if (!no)
+        return -1;
+    *sp = json_object_get_string (no);
+    return 0;
+}
+
+int util_json_object_get_timeval (json_object *o, char *name,
+                                  struct timeval *tvp)
+{
+    struct timeval tv;
+    char *endptr;
+    json_object *no = json_object_object_get (o, name);
+    if (!no)
+        return -1;
+    tv.tv_sec = strtoul (json_object_get_string (no), &endptr, 10);
+    tv.tv_usec = *endptr ? strtoul (endptr + 1, NULL, 10) : 0;
+    *tvp = tv;
+    return 0;
+}
+
+int util_json_object_get_int_array (json_object *o, char *name,
+                                    int **ap, int *lp)
+{
+    json_object *no = json_object_object_get (o, name);
+    json_object *vo;
+    int i, len, *arr = NULL;
+
+    if (!no)
+        goto error;
+    len = json_object_array_length (no);
+    arr = xzmalloc (sizeof (int) * len);
+    for (i = 0; i < len; i++) {
+        vo = json_object_array_get_idx (no, i);
+        if (!vo)
+            goto error;
+        arr[i] = json_object_get_int (vo);
+    }
+    *ap = arr;
+    *lp = len;
+    return 0;
+error:
+    if (arr)
+        free (arr);
+    return -1;
+}
+
+json_object *util_json_object_new_object (void)
+{
+    json_object *o;
+
+    if (!(o = json_object_new_object ()))
+        oom ();
+    return o;
+}
+
+const char *util_logpri_str (logpri_t pri)
+{
+    switch (pri) {
+        case CMB_LOG_EMERG: return "emerg";
+        case CMB_LOG_ALERT: return "alert";
+        case CMB_LOG_CRIT: return "crit";
+        case CMB_LOG_ERR: return "err";
+        case CMB_LOG_WARNING: return "warning";
+        case CMB_LOG_NOTICE: return "notice";
+        case CMB_LOG_INFO: return "info";
+        case CMB_LOG_DEBUG: return "debug";
+    }
+    /*NOTREACHED*/
+    return "unknown";
+}
+
+json_object *util_json_vlog (logpri_t pri, const char *fac, const char *src,
+                             const char *fmt, va_list ap)
+{
+    json_object *o = util_json_object_new_object ();
+    char *str = NULL;
+    struct timeval tv;
+
+    xgettimeofday (&tv, NULL);
+
+    if (vasprintf (&str, fmt, ap) < 0)
+        oom ();
+    if (strlen (str) == 0) {
+        errno = EINVAL;
+        goto error;
+    }
+    util_json_object_add_string (o, "facility", fac);
+    util_json_object_add_int (o, "priority", pri);
+    util_json_object_add_string (o, "source", src);
+    util_json_object_add_timeval (o, "timestamp", &tv);
+    util_json_object_add_string (o, "message", str);
+    free (str);
+    return o;
+error:
+    if (str)
+        free (str);
+    json_object_put (o);
+    return NULL;
+}
+
+logpri_t util_logpri_val (char *p)
+{
+    logpri_t pri = CMB_LOG_INFO;
+
+    if (!strcasecmp (p, "emerg"))
+        pri = CMB_LOG_EMERG;
+    else if (!strcasecmp (p, "alert"))
+        pri = CMB_LOG_ALERT;
+    else if (!strcasecmp (p, "crit"))
+        pri = CMB_LOG_CRIT;
+    else if (!strcasecmp (p, "err") || !strcasecmp (p, "error"))
+        pri = CMB_LOG_ERR;
+    else if (!strcasecmp (p, "warning") || !strcasecmp (p, "warn"))
+        pri = CMB_LOG_WARNING;
+    else if (!strcasecmp (p, "notice"))
+        pri = CMB_LOG_NOTICE;
+    else if (!strcasecmp (p, "info"))
+        pri = CMB_LOG_INFO;
+    else if (!strcasecmp (p, "debug"))
+        pri = CMB_LOG_DEBUG;
+
+    return pri;
 }
 
 
