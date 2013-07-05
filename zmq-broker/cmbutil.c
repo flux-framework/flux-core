@@ -309,18 +309,19 @@ int main (int argc, char *argv[])
                 char *src, *fac, *s;
                 struct timeval tv, start = { .tv_sec = 0 }, rel;
                 logpri_t pri;
+                int count;
 
                 _parse_logstr (optarg, &pri, &fac);
                 if (cmb_log_subscribe (c, pri, fac) < 0)
                     err_exit ("cmb_log_subscribe");
                 free (fac);
-                while ((s = cmb_log_recv (c, &pri, &fac, &tv, &src))) {
+                while ((s = cmb_log_recv (c, &pri, &fac, &count, &tv, &src))) {
                     if (start.tv_sec == 0)
                         start = tv;
                     timersub (&tv, &start, &rel);
-                    fprintf (stderr, "[%-.6lu.%-.6lu] %s.%s[%s]: %s\n",
-                             rel.tv_sec, rel.tv_usec, fac, util_logpri_str(pri),
-                             src, s);
+                    fprintf (stderr, "[%-.6lu.%-.6lu] %dx %s.%s[%s]: %s\n",
+                             rel.tv_sec, rel.tv_usec, count,
+                             fac, util_logpri_str(pri), src, s);
                     free (fac);
                     free (src);
                     free (s);
@@ -333,18 +334,19 @@ int main (int argc, char *argv[])
                 char *src, *fac, *s;
                 struct timeval tv, start = { .tv_sec = 0 }, rel;
                 logpri_t pri;
+                int count;
 
                 _parse_logstr (optarg, &pri, &fac);
                 if (cmb_log_dump (c, pri, fac) < 0)
                     err_exit ("cmb_log_dump");
                 free (fac);
-                while ((s = cmb_log_recv (c, &pri, &fac, &tv, &src))) {
+                while ((s = cmb_log_recv (c, &pri, &fac, &count, &tv, &src))) {
                     if (start.tv_sec == 0)
                         start = tv;
                     timersub (&tv, &start, &rel);
-                    fprintf (stderr, "[%-.6lu.%-.6lu] %s.%s[%s]: %s\n",
-                             rel.tv_sec, rel.tv_usec, fac, util_logpri_str(pri),
-                             src, s);
+                    fprintf (stderr, "[%-.6lu.%-.6lu] %dx %s.%s[%s]: %s\n",
+                             rel.tv_sec, rel.tv_usec, count,
+                             fac, util_logpri_str(pri), src, s);
                     free (fac);
                     free (src);
                     free (s);

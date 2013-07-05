@@ -352,32 +352,15 @@ error:
 int cmb_vlog (cmb_t c, logpri_t pri, const char *fac, const char *src,
               const char *fmt, va_list ap)
 {
-    json_object *o = util_json_object_new_object ();
-    char *str = NULL;
-    struct timeval tv;
+    json_object *o = util_json_vlog (pri, fac, src, fmt, ap);
 
-    xgettimeofday (&tv, NULL);
-   
-    if (vasprintf (&str, fmt, ap) < 0)
-        oom ();
-    if (strlen (str) == 0) {
-        errno = EINVAL;
+    if (!o || _send_message (c, o, "log.msg") < 0)
         goto error;
-    }
-    util_json_object_add_string (o, "facility", fac);
-    util_json_object_add_int (o, "priority", pri);
-    util_json_object_add_string (o, "source", src ? src : c->rankstr);
-    util_json_object_add_timeval (o, "timestamp", &tv);
-    util_json_object_add_string (o, "message", str);
-    if (_send_message (c, o, "log.msg") < 0)
-        goto error;
-    free (str);
     json_object_put (o);
     return 0;
 error:
-    if (str)
-        free (str);
-    json_object_put (o);
+    if (o)
+        json_object_put (o);
     return -1;
 }
 
@@ -435,13 +418,13 @@ error:
     return -1;
 }
 
-char *cmb_log_recv (cmb_t c, logpri_t *pp, char **fp, struct timeval *tvp,
-                    char **sp)
+char *cmb_log_recv (cmb_t c, logpri_t *pp, char **fp, int *cp,
+                    struct timeval *tvp, char **sp)
 {
     json_object *o = NULL;
     const char *s, *fac, *src;
     char *msg;
-    int pri;
+    int pri, count;
     struct timeval tv;
 
     if (_recv_message (c, NULL, &o, 0) < 0 || o == NULL)
@@ -452,7 +435,8 @@ char *cmb_log_recv (cmb_t c, logpri_t *pp, char **fp, struct timeval *tvp,
      || util_json_object_get_int (o, "priority", &pri) < 0
      || util_json_object_get_string (o, "source", &src) < 0
      || util_json_object_get_timeval (o, "timestamp", &tv) < 0
-     || util_json_object_get_string (o, "message", &s) < 0)
+     || util_json_object_get_string (o, "message", &s) < 0
+     || util_json_object_get_int (o, "count", &count) < 0)
         goto eproto;
     if (tvp)
         *tvp = tv;
@@ -460,6 +444,8 @@ char *cmb_log_recv (cmb_t c, logpri_t *pp, char **fp, struct timeval *tvp,
         *pp = (logpri_t)pri;
     if (fp)
         *fp = xstrdup (fac);
+    if (cp)
+        *cp = count;
     if (sp)
         *sp = xstrdup (src); 
     msg = xstrdup (s);

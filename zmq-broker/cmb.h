@@ -86,7 +86,7 @@ int cmb_log (cmb_t c, logpri_t pri, const char *fac, const char *src,
 int cmb_log_subscribe (cmb_t c, logpri_t pri, const char *sub);
 int cmb_log_unsubscribe (cmb_t c, const char *sub);
 int cmb_log_dump (cmb_t c, logpri_t pri, const char *fac);
-char *cmb_log_recv (cmb_t c, logpri_t *pp, char **fp,
+char *cmb_log_recv (cmb_t c, logpri_t *pp, char **fp, int *cp,
                     struct timeval *tvp, char **sp);
 
 /* Manipulate (local) cmb routing tables.

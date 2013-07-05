@@ -273,6 +273,7 @@ json_object *util_json_vlog (logpri_t pri, const char *fac, const char *src,
         errno = EINVAL;
         goto error;
     }
+    util_json_object_add_int (o, "count", 1);
     util_json_object_add_string (o, "facility", fac);
     util_json_object_add_int (o, "priority", pri);
     util_json_object_add_string (o, "source", src);

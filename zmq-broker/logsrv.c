@@ -29,12 +29,12 @@
 
 #include "logsrv.h"
 
-const int log_reduction_timeout_msec = 100;
+const int log_reduction_timeout_msec = 1000;
 const int log_circular_buffer_entries = 100000;
 const int log_persist_priority = CMB_LOG_NOTICE;
 
 typedef struct {
-    char *fac;
+    char *fac;         /* FIXME: switch to regex */
     logpri_t pri_max;  /* the lower the number, the more filtering */
     logpri_t pri_min;
 } subscription_t;
@@ -51,7 +51,9 @@ typedef struct {
     int cirbuf_size;
 } ctx_t;
 
-static void _log_external (json_object *o);
+static void _add_backlog (plugin_ctx_t *p, json_object *o);
+static void _process_backlog (plugin_ctx_t *p);
+
 
 static bool _match_subscription (json_object *o, subscription_t *sub)
 {
@@ -148,18 +150,15 @@ static void _recv_fault_event (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         oom ();
     while ((o = zlist_pop (ctx->cirbuf))) {
         if (_match_subscription (o, &sub)) {
-            if (plugin_treeroot (p))
-                _log_external (o);
-            else {
-                _priority_override (o);
-                plugin_send_request (p, o, "log.msg");
-            }
+            _priority_override (o);
+            _add_backlog (p, o);
             json_object_put (o);
         } else
             zlist_append (temp, o);
     }
     zlist_destroy (&ctx->cirbuf);
     ctx->cirbuf = temp;
+    _process_backlog (p);
 }
 
 /* Manage listeners.
@@ -269,27 +268,104 @@ done:
 /* Handle a new log message
  */
 
+static void _log_external (json_object *o)
+{
+    const char *fac, *src, *message;
+    struct timeval tv;
+    int pri, count;
+
+    if (util_json_object_get_string (o, "facility", &fac) == 0
+     && util_json_object_get_int (o, "priority", &pri) == 0
+     && util_json_object_get_string (o, "source", &src) == 0
+     && util_json_object_get_timeval (o, "timestamp", &tv) == 0 
+     && util_json_object_get_string (o, "message", &message) == 0
+     && util_json_object_get_int (o, "count", &count) == 0) {
+        msg ("[%-.6lu.%-.6lu] %dx %s.%s[%s]: %s", tv.tv_sec, tv.tv_usec, count,
+             fac, util_logpri_str (pri), src, message);
+    } /* FIXME: expose iface in log.[ch] to pass syslog facility, priority */
+}
+
+static bool _match_reduce (json_object *o1, json_object *o2)
+{
+    int pri1, pri2;
+    const char *fac1, *fac2;
+    const char *msg1, *msg2;
+
+    if (util_json_object_get_int (o1, "priority", &pri1) < 0
+     || util_json_object_get_int (o2, "priority", &pri2) < 0
+     || pri1 != pri2)
+        return false;
+    if (util_json_object_get_string (o1, "facility", &fac1) < 0
+     || util_json_object_get_string (o2, "facility", &fac2) < 0
+     || strcmp (fac1, fac2) != 0)
+        return false;
+    if (util_json_object_get_string (o1, "message", &msg1) < 0
+     || util_json_object_get_string (o2, "message", &msg2) < 0
+     || strcmp (msg1, msg2) != 0)
+        return false;
+
+    return true;
+}
+
+static void _combine_reduce (json_object *o1, json_object *o2)
+{
+    int count1 = 0, count2 = 0;
+
+    (void)util_json_object_get_int (o1, "count", &count1);
+    (void)util_json_object_get_int (o2, "count", &count2);
+    util_json_object_add_int (o1, "count", count1 + count2);
+    /* replaces existing value */
+}
+
+static void _process_backlog_one (plugin_ctx_t *p, json_object **op)
+{
+    if (plugin_treeroot (p))
+        _log_external (*op);
+    else
+        plugin_send_request (p, *op, "log.msg");
+    json_object_put (*op);
+    *op = NULL;
+}
+
+static bool _timestamp_compare (void *item1, void *item2)
+{
+    json_object *o1 = item1;
+    json_object *o2 = item2;
+    struct timeval tv1, tv2;
+
+    util_json_object_get_timeval (o1, "timestamp", &tv1);
+    util_json_object_get_timeval (o2, "timestamp", &tv2);
+
+    return timercmp (&tv1, &tv2, >);
+}
+
+static void _process_backlog (plugin_ctx_t *p)
+{
+    ctx_t *ctx = p->ctx;
+    json_object *o, *lasto = NULL;
+
+    zlist_sort (ctx->backlog, _timestamp_compare);
+    while ((o = zlist_pop (ctx->backlog))) {
+        if (!lasto) {
+            lasto = o;
+        } else if (_match_reduce (lasto, o)) {
+            _combine_reduce (lasto, o);
+            json_object_put (o);
+        } else {
+            _process_backlog_one (p, &lasto);
+            lasto = o;
+        }
+    }
+    if (lasto)
+        _process_backlog_one (p, &lasto);
+}
+
 static void _add_backlog (plugin_ctx_t *p, json_object *o)
 {
     ctx_t *ctx = p->ctx;
 
     json_object_get (o);
     zlist_append (ctx->backlog, o);
-}
-
-static void _send_backlog (plugin_ctx_t *p)
-{
-    ctx_t *ctx = p->ctx;
-    json_object *o;
-
-    /* FIXME: Perform reduction,
-     * e.g. aggregate similar messages here.
-     */
-
-    while ((o = zlist_pop (ctx->backlog))) {
-        plugin_send_request (p, o, "log.msg");
-        json_object_put (o);
-    }
 }
 
 static bool _persistable (json_object *o)
@@ -304,23 +380,6 @@ static bool _persistable (json_object *o)
         return true;
     return false;
 }
-
-static void _log_external (json_object *o)
-{
-    const char *fac, *src, *message;
-    struct timeval tv;
-    int pri;
-
-    if (util_json_object_get_string (o, "facility", &fac) == 0
-     && util_json_object_get_int (o, "priority", &pri) == 0
-     && util_json_object_get_string (o, "source", &src) == 0
-     && util_json_object_get_timeval (o, "timestamp", &tv) == 0 
-     && util_json_object_get_string (o, "message", &message) == 0) {
-        msg ("[%-.6lu.%-.6lu] %s.%s[%s]: %s", tv.tv_sec, tv.tv_usec,
-             fac, util_logpri_str (pri), src, message);
-    }
-}
-
 
 typedef struct {
     plugin_ctx_t *p;
@@ -347,6 +406,23 @@ static int _listener_fwd (const char *key, void *litem, void *arg)
     return 1;
 }
 
+/* A numeric frame on top indicates this came from downstream.
+ * We then don't want to archive it in our local circular buffer.
+ */
+static bool _sender_is_local (zmsg_t *zmsg)
+{
+    char *nexthop, *nextptr;
+    bool ret = true;
+
+    if ((nexthop = cmb_msg_nexthop (zmsg))) {
+        (void)strtoul (nexthop, &nextptr, 10);
+        if (*nextptr == '\0')
+            ret = false;
+        free (nexthop);
+    }
+    return ret;
+}
+
 static void _recv_log_msg (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
@@ -356,15 +432,12 @@ static void _recv_log_msg (plugin_ctx_t *p, zmsg_t **zmsg)
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL)
         goto done;
     if (_persistable (o)) {
-        if (plugin_treeroot (p)) {
-            _log_external (o);
-        } else {
-            _add_backlog (p, o);
-            if (!plugin_timeout_isset (p))
-                plugin_timeout_set (p, log_reduction_timeout_msec);
-        }
+        _add_backlog (p, o);
+        if (!plugin_timeout_isset (p))
+            plugin_timeout_set (p, log_reduction_timeout_msec);
     }
-    _log_save (p, o);
+    if (_sender_is_local (*zmsg))
+        _log_save (p, o);
 
     farg.p = p;
     farg.o = o;
@@ -401,7 +474,7 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
 
 static void _timeout (plugin_ctx_t *p)
 {
-    _send_backlog (p);
+    _process_backlog (p);
     plugin_timeout_clear (p);
 }
 
