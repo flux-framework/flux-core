@@ -5,5 +5,5 @@
   --dn-req-out-uri='tcp://*:5557' \
   --redis-server=localhost \
   --rank=0 --size=3 --children=1  \
-  --plugins=api,barrier,live,log,kvs,sync \
+  --plugins=api,barrier,live,log,kvs,conf,sync \
   --verbose

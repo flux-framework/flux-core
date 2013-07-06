@@ -5,5 +5,5 @@
   --up-req-in-uri='tcp://*:5560' \
   --dn-req-out-uri='tcp://*:5561' \
   --rank=1 --size=3 --children=2 \
-  --plugins=api,barrier,live,log \
+  --plugins=api,barrier,live,log,conf \
   --verbose --api-socket=/tmp/rank.1

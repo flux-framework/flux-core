@@ -18,7 +18,7 @@
 
 static void _parse_logstr (char *s, logpri_t *pp, char **fp);
 
-#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:lx:e:TL:W:D:r:R:qz:Z"
+#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:lx:e:TL:W:D:r:R:qz:Za:A:"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -44,6 +44,8 @@ static const struct option longopts[] = {
     {"route-query",no_argument,        0, 'q'},
     {"socket-path",required_argument,  0, 'z'},
     {"trace-apisock",no_argument,      0, 'Z'},
+    {"conf-get",   required_argument,  0, 'a'},
+    {"conf-put",   required_argument,  0, 'A'},
     {0, 0, 0, 0},
 };
 
@@ -62,6 +64,8 @@ static void usage (void)
 "  -K,--kvs-get key       get a key\n"
 "  -C,--kvs-commit        commit pending kvs puts\n"
 "  -t,--kvs-torture N     set N keys, then commit\n"
+"  -A,--conf-put key=val  set a config key\n"
+"  -a,--conf-get key      get a conf key\n"
 "  -s,--subscribe sub     subscribe to events matching substring\n"
 "  -e,--event name        publish event\n"
 "  -S,--sync              block until event.sched.triger\n"
@@ -298,6 +302,25 @@ int main (int argc, char *argv[])
                 msg ("kvs_get:    time=%0.3f ms",
                      (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
 
+                break;
+            }
+            case 'A': { /* --conf-put key=val */
+                char *key = optarg;
+                char *val = strchr (optarg, '=');
+                if (val == NULL)
+                    usage ();
+                *val++ = '\0';
+                if (cmb_conf_put (c, key, val) < 0)
+                    err_exit ("cmb_conf_put");
+                break;
+            }
+            case 'a': { /* --conf-get key */
+                char *val = cmb_conf_get (c, optarg);
+                if (!val && errno != 0)
+                    err_exit ("cmb_conf_get");
+                printf ("%s=%s\n", optarg, val ? val : "<nil>");
+                if (val)
+                    free (val);
                 break;
             }
             case 'L': { /* --log */

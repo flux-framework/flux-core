@@ -12,7 +12,8 @@ LDADD = -ljson -lzmq -lczmq -pthread -luuid -lhiredis
 LDADD_C = -ljson -luuid -lzmq -lczmq
 
 CMBD_OBJS = cmbd.o route.o zmq.o util.o log.o plugin.o \
-	apisrv.o syncsrv.o kvssrv.o barriersrv.o livesrv.o logsrv.o
+	apisrv.o syncsrv.o kvssrv.o barriersrv.o livesrv.o logsrv.o \
+	confsrv.o
 CMBUTIL_OBJS = cmbutil.o apicli.o util.o log.o zmq.o
 LIBPMI_OBJS = pmi.o apicli.o util.o log.o zmq.o
 OBJS = $(CMBD_OBJS) $(CMBUTIL_OBJS) $(LIBPMI_OBJS)

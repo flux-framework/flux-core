@@ -307,6 +307,66 @@ error:
     return NULL;
 }
 
+int cmb_conf_put (cmb_t c, const char *key, const char *val)
+{
+    json_object *o = util_json_object_new_object ();
+
+    /* send request */
+    util_json_object_add_string (o, "key", key);
+    util_json_object_add_string (o, "val", val);
+    if (_send_message (c, o, "conf.put") < 0)
+        goto error;
+    json_object_put (o);
+    o = NULL;
+
+    /* receive response */
+    if (_recv_message (c, NULL, &o, 0) < 0)
+        goto error;
+    if (o == NULL || util_json_object_get_int (o, "errnum", &errno) < 0)
+        goto eproto;
+    if (errno != 0)
+        goto error;
+    json_object_put (o);
+    return 0;
+eproto:
+    errno = EPROTO;
+error:
+    if (o)
+        json_object_put (o);
+    return -1;
+}
+
+char *cmb_conf_get (cmb_t c, const char *key)
+{
+    json_object *o = util_json_object_new_object ();
+    const char *val;
+    char *ret;
+
+    /* send request */
+    util_json_object_add_string (o, "key", key);
+    if (_send_message (c, o, "conf.get") < 0)
+        goto error;
+    json_object_put (o);
+    o = NULL;
+
+    /* receive response */
+    if (_recv_message (c, NULL, &o, 0) < 0)
+        goto error;
+    if (util_json_object_get_int (o, "errnum", &errno) == 0)
+        goto error;
+    if (util_json_object_get_string (o, "val", &val) < 0) {
+        errno = 0; /* key was not set */
+        ret = NULL;
+    } else
+        ret = xstrdup (val);
+    json_object_put (o);
+    return ret;
+error:
+    if (o)
+        json_object_put (o);
+    return NULL;
+}
+
 int cmb_live_query (cmb_t c, int **upp, int *ulp, int **dp, int *dlp, int *nnp)
 {
     json_object *o = util_json_object_new_object ();

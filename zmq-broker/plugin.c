@@ -29,6 +29,7 @@
 #include "kvssrv.h"
 #include "livesrv.h"
 #include "logsrv.h"
+#include "confsrv.h"
 #include "util.h"
 #include "plugin.h"
 
@@ -39,6 +40,7 @@ static plugin_t plugins[] = {
     &apisrv,
     &livesrv,
     &logsrv,
+    &confsrv,
 };
 const int plugins_len = sizeof (plugins)/sizeof (plugins[0]);
 

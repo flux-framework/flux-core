@@ -50,6 +50,11 @@ int cmb_kvs_put (cmb_t c, const char *key, const char *val);
 char *cmb_kvs_get (cmb_t c, const char *key);
 int cmb_kvs_commit (cmb_t c, int *errcountp, int *putcountp);
 
+/* Get/put key-value config pairs.
+ */
+int cmb_conf_put (cmb_t c, const char *key, const char *val);
+char *cmb_conf_get (cmb_t c, const char *key);
+
 /* Return state of all nodes in the session.
  * Caller must free the two returned arrays (up and down).
  * To only get one, set the other argument to NULL.
