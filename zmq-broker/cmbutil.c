@@ -18,7 +18,7 @@
 
 static void _parse_logstr (char *s, logpri_t *pp, char **fp);
 
-#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:lx:e:TL:W:D:r:R:qz:Za:A:"
+#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:lx:e:TL:W:D:r:R:qz:Za:A:c"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -44,8 +44,9 @@ static const struct option longopts[] = {
     {"route-query",no_argument,        0, 'q'},
     {"socket-path",required_argument,  0, 'z'},
     {"trace-apisock",no_argument,      0, 'Z'},
-    {"conf-get",   required_argument,  0, 'a'},
-    {"conf-put",   required_argument,  0, 'A'},
+    {"conf-put",   required_argument,  0, 'a'},
+    {"conf-get",   required_argument,  0, 'A'},
+    {"conf-commit",no_argument,        0, 'c'},
     {0, 0, 0, 0},
 };
 
@@ -64,8 +65,9 @@ static void usage (void)
 "  -K,--kvs-get key       get a key\n"
 "  -C,--kvs-commit        commit pending kvs puts\n"
 "  -t,--kvs-torture N     set N keys, then commit\n"
-"  -A,--conf-put key=val  set a config key\n"
-"  -a,--conf-get key      get a conf key\n"
+"  -a,--conf-put key=val  set a config key\n"
+"  -A,--conf-get key      get a conf key\n"
+"  -c,--conf-commit       commit pending conf puts\n"
 "  -s,--subscribe sub     subscribe to events matching substring\n"
 "  -e,--event name        publish event\n"
 "  -S,--sync              block until event.sched.triger\n"
@@ -304,7 +306,7 @@ int main (int argc, char *argv[])
 
                 break;
             }
-            case 'A': { /* --conf-put key=val */
+            case 'a': { /* --conf-put key=val */
                 char *key = optarg;
                 char *val = strchr (optarg, '=');
                 if (val == NULL)
@@ -314,13 +316,18 @@ int main (int argc, char *argv[])
                     err_exit ("cmb_conf_put");
                 break;
             }
-            case 'a': { /* --conf-get key */
+            case 'A': { /* --conf-get key */
                 char *val = cmb_conf_get (c, optarg);
                 if (!val && errno != 0)
                     err_exit ("cmb_conf_get");
                 printf ("%s=%s\n", optarg, val ? val : "<nil>");
                 if (val)
                     free (val);
+                break;
+            }
+            case 'c': { /* --conf-commit */
+                if (cmb_conf_commit (c) < 0)
+                    err_exit ("cmb_conf_commit");
                 break;
             }
             case 'L': { /* --log */

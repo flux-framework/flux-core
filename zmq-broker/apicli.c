@@ -336,6 +336,33 @@ error:
     return -1;
 }
 
+int cmb_conf_commit (cmb_t c)
+{
+    json_object *o = util_json_object_new_object ();
+
+    /* send request */
+    if (_send_message (c, o, "conf.commit") < 0)
+        goto error;
+    json_object_put (o);
+    o = NULL;
+
+    /* receive response */
+    if (_recv_message (c, NULL, &o, 0) < 0)
+        goto error;
+    if (o == NULL || util_json_object_get_int (o, "errnum", &errno) < 0)
+        goto eproto;
+    if (errno != 0)
+        goto error;
+    json_object_put (o);
+    return 0;
+eproto:
+    errno = EPROTO;
+error:
+    if (o)
+        json_object_put (o);
+    return -1;
+}
+
 char *cmb_conf_get (cmb_t c, const char *key)
 {
     json_object *o = util_json_object_new_object ();
