@@ -161,6 +161,40 @@ static void _conf_commit (plugin_ctx_t *p, zmsg_t **zmsg)
         zmsg_destroy (zmsg);
 }
 
+typedef struct {
+    plugin_ctx_t *p;
+    zmsg_t *zmsg;
+} conf_list_one_arg_t;
+
+static int _conf_list_one (const char *key, void *item, void *arg)
+{
+    conf_list_one_arg_t *la = arg;
+    json_object *o = util_json_object_new_object ();
+    ctx_t *ctx = la->p->ctx;
+    zmsg_t *cpy;
+
+    if (!(cpy = zmsg_dup (la->zmsg)))
+        oom ();
+    util_json_object_add_int (o, "store_version", ctx->store_version);
+    util_json_object_add_string (o, "key", key);
+    util_json_object_add_string (o, "val", (char *)item);
+    plugin_send_response (la->p, &cpy, o);
+    json_object_put (o);
+    return 0;
+}
+
+static void _conf_list (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    ctx_t *ctx = p->ctx;
+    conf_list_one_arg_t la = { .p = p, .zmsg = *zmsg };
+
+    if (plugin_treeroot (p)) {
+        zhash_foreach (ctx->store, _conf_list_one, &la);
+        plugin_send_response_errnum (p, zmsg, 0); /* EOF */
+    } else
+        plugin_send_request_raw (p, zmsg);
+}
+
 static void _conf_get_response_clients (plugin_ctx_t *p, req_t *req,
                                         const char *val, int store_version)
 {
@@ -192,7 +226,6 @@ static void _conf_get_response (plugin_ctx_t *p, zmsg_t **zmsg)
     const char *key, *val = NULL;
     int store_version;
     req_t *req;
-
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
           || util_json_object_get_string (o, "key", &key) < 0
@@ -246,6 +279,11 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
     } else if (cmb_msg_match (*zmsg, "conf.commit")) {
         if (type == ZMSG_REQUEST)
             _conf_commit (p, zmsg);
+        else
+            plugin_send_response_raw (p, zmsg);
+    } else if (cmb_msg_match (*zmsg, "conf.list")) {
+        if (type == ZMSG_REQUEST)
+            _conf_list (p, zmsg);
         else
             plugin_send_response_raw (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "conf.disconnect")) {

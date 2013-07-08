@@ -394,6 +394,44 @@ error:
     return NULL;
 }
 
+int cmb_conf_list (cmb_t c)
+{
+    json_object *o = util_json_object_new_object ();
+
+    if (_send_message (c, o, "conf.list") < 0)
+        goto error;
+    json_object_put (o);
+    return 0;
+error:
+    json_object_put (o);
+    return -1;
+}
+
+int cmb_conf_next (cmb_t c, char **kp, char **vp)
+{
+    json_object *o = NULL;
+    const char *key, *val;
+
+    if (_recv_message (c, NULL, &o, 0) < 0)
+        goto error;
+    if (!o)
+        goto eproto;
+    if (util_json_object_get_int (o, "errnum", &errno) == 0)
+        goto error;
+    if (util_json_object_get_string (o, "key", &key) < 0
+     || util_json_object_get_string (o, "val", &val) < 0)
+        goto eproto;
+    *kp = xstrdup (key);
+    *vp = xstrdup (val);
+    return 0;
+eproto:
+    errno = EPROTO;
+error:
+    if (o)
+        json_object_put (o);
+    return -1;
+}
+
 int cmb_live_query (cmb_t c, int **upp, int *ulp, int **dp, int *dlp, int *nnp)
 {
     json_object *o = util_json_object_new_object ();

@@ -18,7 +18,7 @@
 
 static void _parse_logstr (char *s, logpri_t *pp, char **fp);
 
-#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:lx:e:TL:W:D:r:R:qz:Za:A:c"
+#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:lx:e:TL:W:D:r:R:qz:Za:A:cX"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -47,6 +47,7 @@ static const struct option longopts[] = {
     {"conf-put",   required_argument,  0, 'a'},
     {"conf-get",   required_argument,  0, 'A'},
     {"conf-commit",no_argument,        0, 'c'},
+    {"conf-list",  no_argument,        0, 'X'},
     {0, 0, 0, 0},
 };
 
@@ -68,6 +69,7 @@ static void usage (void)
 "  -a,--conf-put key=val  set a config key\n"
 "  -A,--conf-get key      get a conf key\n"
 "  -c,--conf-commit       commit pending conf puts\n"
+"  -X,--conf-list         list conf key-value pairs\n"
 "  -s,--subscribe sub     subscribe to events matching substring\n"
 "  -e,--event name        publish event\n"
 "  -S,--sync              block until event.sched.triger\n"
@@ -330,6 +332,19 @@ int main (int argc, char *argv[])
                     err_exit ("cmb_conf_commit");
                 break;
             }
+            case 'X': { /* --conf-list */
+                char *key, *val;
+                if (cmb_conf_list (c) < 0)
+                    err_exit ("cmb_conf_list");
+                while (cmb_conf_next (c, &key, &val) == 0) {
+                    printf ("%s=%s\n", key, val);
+                    free (key);
+                    free (val);
+                }
+                if (errno != 0)
+                    err_exit ("cmb_conf_next");
+                break;
+            }
             case 'L': { /* --log */
                 Lopt = true;
                 _parse_logstr (optarg, &Lopt_priority, &Lopt_facility);
@@ -411,10 +426,11 @@ int main (int argc, char *argv[])
                     err_exit ("cmb_route_query");
                 if (!(o = json_tokener_parse (s)))
                     err_exit ("json_tokener_parse");
-                printf ("%s\n", json_object_to_json_string_ext (o,
+                msg ("routes=%s", json_object_to_json_string_ext (o,
                                     JSON_C_TO_STRING_PRETTY));
                 json_object_put (o);
                 free (s);
+                msg ("rank=%d size=%d", cmb_rank (c), cmb_size (c));
                 break;
             }
             default:
