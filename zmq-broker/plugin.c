@@ -333,6 +333,8 @@ static void _plugin_destroy (void *arg)
     zsocket_destroy (p->srv->zctx, p->zs_dnreq);
     zsocket_destroy (p->srv->zctx, p->zs_upreq);
 
+    free (p->id);
+
     free (p);
 }
 
