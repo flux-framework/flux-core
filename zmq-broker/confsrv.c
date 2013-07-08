@@ -81,7 +81,6 @@ static void _conf_get (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     json_object *o = NULL;
-    char *sender = NULL;
     const char *key, *val;
     req_t *req;
 
@@ -111,8 +110,6 @@ done:
         json_object_put (o);
     if (*zmsg)
         zmsg_destroy (zmsg);
-    if (sender)
-        free (sender);
 }
 
 static void _conf_put (plugin_ctx_t *p, zmsg_t **zmsg)
@@ -165,20 +162,25 @@ static void _conf_commit (plugin_ctx_t *p, zmsg_t **zmsg)
 }
 
 static void _conf_get_response_clients (plugin_ctx_t *p, req_t *req,
-                                        const char *val)
+                                        const char *val, int store_version)
 {
     zmsg_t *zmsg;
-    json_object *o;
+    json_object *o = NULL;
 
     zmsg = zlist_first (req->clients);
     while (zmsg) {
         if (cmb_msg_decode (zmsg, NULL, &o) == 0 && o != NULL) {
+            util_json_object_add_int (o, "store_version", store_version);
             if (val)
                 util_json_object_add_string (o, "val", val);
             plugin_send_response (p, &zmsg, o);
         }
-        if (o)
+        if (o) {
             json_object_put (o);
+            o = NULL;
+        }
+        if (zmsg)
+            zmsg_destroy (&zmsg);
         zmsg = zlist_next (req->clients);
     }
 }
@@ -188,22 +190,23 @@ static void _conf_get_response (plugin_ctx_t *p, zmsg_t **zmsg)
     ctx_t *ctx = p->ctx;
     json_object *o = NULL;
     const char *key, *val = NULL;
-    int ver;
+    int store_version;
     req_t *req;
 
+
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
-            || util_json_object_get_string (o, "key", &key) < 0
-            || util_json_object_get_int (o, "store_version", &ver) < 0)
-        goto done;
-    if (!(req = zhash_lookup (ctx->reqs, key)))
+          || util_json_object_get_string (o, "key", &key) < 0
+          || util_json_object_get_int (o, "store_version", &store_version) < 0)
         goto done;
     if (util_json_object_get_string (o, "val", &val) == 0
-                                        && ctx->store_version == ver) {
+                                 && ctx->store_version == store_version) {
         zhash_update (ctx->store, key, xstrdup (val));    
         zhash_freefn (ctx->store, key, (zhash_free_fn *)free);
     }
-    _conf_get_response_clients (p, req, val);
-    zhash_delete (ctx->reqs, key);
+    if ((req = zhash_lookup (ctx->reqs, key))) {
+        _conf_get_response_clients (p, req, val, store_version);
+        zhash_delete (ctx->reqs, key);
+    }
 done:
     if (o)
         json_object_put (o);
