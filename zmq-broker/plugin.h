@@ -16,6 +16,7 @@ typedef struct {
     void *zs_evin;
     void *zs_evout;
     void *zs_snoop;
+    char *id;
     long timeout;
     pthread_t t;
     plugin_t plugin;

@@ -364,16 +364,18 @@ static int _plugin_create (char *name, server_t *srv, conf_t *conf)
     p->plugin = plugin;
     plugin_timeout_clear (p);
 
+    p->id = xzmalloc (strlen (name) + 16);
+    snprintf (p->id, strlen (name) + 16, "%s-%d", name, conf->rank);
+
     /* connect sockets in the parent, then use them in the thread */
-    zconnect (zctx, &p->zs_upreq, ZMQ_DEALER, UPREQ_URI, -1,
-              (char *)plugin->name);
-    zconnect (zctx, &p->zs_dnreq, ZMQ_DEALER, DNREQ_URI, -1,
-              (char *)plugin->name);
+    zconnect (zctx, &p->zs_upreq, ZMQ_DEALER, UPREQ_URI, -1, p->id);
+    zconnect (zctx, &p->zs_dnreq, ZMQ_DEALER, DNREQ_URI, -1, p->id);
     zconnect (zctx, &p->zs_evin,  ZMQ_SUB, DNEV_OUT_URI, 0, NULL);
     zconnect (zctx, &p->zs_evout, ZMQ_PUB, DNEV_IN_URI, -1, NULL);
     zconnect (zctx, &p->zs_snoop, ZMQ_SUB, SNOOP_URI, -1, NULL);
 
-    route_add (p->srv->rctx, name, name, NULL, ROUTE_FLAGS_PRIVATE);
+    route_add (p->srv->rctx, p->id, p->id, NULL, ROUTE_FLAGS_PRIVATE);
+    route_add (p->srv->rctx, name, p->id, NULL, ROUTE_FLAGS_PRIVATE);
 
     errnum = pthread_create (&p->t, NULL, _plugin_thread, p);
     if (errnum)

@@ -32,7 +32,7 @@ if pepe.rank == 0 then
 		.. " --redis-server=localhost"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
-		.. " --plugins=api,barrier,live,log,kvs,sync"
+		.. " --plugins=api,barrier,live,log,conf,kvs,sync"
 		.. " --logdest cmbd.log"
 		.. child_opt)
 else
@@ -41,6 +41,6 @@ else
     pepe.run ("./cmbd --up-event-uri='" .. eventuri .. "'"
 		.. " --parent='0," .. u1 .. "," .. u2 .. "'"
 		.. " --rank=" .. pepe.rank
-		.. " --plugins=api,barrier,live,log"
+		.. " --plugins=api,barrier,live,log,conf"
 		.. " --size=" .. #h)
 end

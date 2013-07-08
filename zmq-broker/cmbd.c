@@ -597,7 +597,7 @@ static void _route_request (conf_t *conf, server_t *srv, zmsg_t **zmsg,
             _cmb_internal_request (conf, srv, zmsg);
         } else {
             gw = route_lookup (srv->rctx, service);
-            if (gw && !strcmp (gw, service)) {
+            if (gw) {
                 if (conf->verbose)
                     msg ("%s: loc addr: DOWN %s!%s", __FUNCTION__, addr, service);
                 zmsg_send_unrouter (zmsg, srv->zs_dnreq_out, conf->rankstr, gw);
@@ -635,7 +635,7 @@ static void _route_request (conf_t *conf, server_t *srv, zmsg_t **zmsg,
             _cmb_internal_request (conf, srv, zmsg);
         } else {
             gw = route_lookup (srv->rctx, service);
-            if (gw && (!lasthop || strcmp (service, lasthop)) != 0) {
+            if (gw && (!lasthop || strcmp (gw, lasthop)) != 0) {
                 if (conf->verbose)
                     msg ("%s: no addr: DOWN %s", __FUNCTION__, service);
                 zmsg_send_unrouter (zmsg, srv->zs_dnreq_out, conf->rankstr, gw);

@@ -98,6 +98,7 @@ static void _send_enter_request (plugin_ctx_t *p, barrier_t *b)
 
     util_json_object_add_int (o, "count", b->count);
     util_json_object_add_int (o, "nprocs", b->nprocs);
+    util_json_object_add_int (o, "hopcount", 1);
     plugin_send_request (p, o, "barrier.enter.%s", b->name);
     json_object_put (o);
 }
@@ -130,7 +131,7 @@ static void _barrier_enter (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
     barrier_t *b;
     json_object *o = NULL;
     char *sender = NULL;
-    int count, nprocs;
+    int count, nprocs, hopcount;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
      || !(sender = cmb_msg_sender (*zmsg))
@@ -140,14 +141,13 @@ static void _barrier_enter (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
         goto done;
     }
 
-
     if (!(b = zhash_lookup (ctx->barriers, name)))
         b = _barrier_create (p, name, nprocs);
 
     /* Distinguish client (tracked) vs downstream barrier plugin (untracked).
-     * N.B. client, distinguished by sender uuid, can only enter barrier once.
+     * A client, distinguished by hopcount > 0, can only enter barrier once.
      */
-    if (strcmp (sender, "barrier") != 0) {
+    if (util_json_object_get_int (o, "hopcount", &hopcount) < 0) {
         if (_barrier_add_client (b, sender, zmsg) < 0) {
             plugin_send_response_errnum (p, zmsg, EEXIST);
             plugin_log (p, CMB_LOG_ERR,
