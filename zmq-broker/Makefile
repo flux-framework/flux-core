@@ -8,12 +8,13 @@ NTASKS = $(SLURM_JOB_NUM_NODES)  # override me
 SRUN = srun --overcommit -n$(NTASKS)
 
 CFLAGS = -Werror -Wall -g -fPIC
+CFLAGS += -DWITH_LSD_NOMEM_ERROR_FUNC -DWITH_LSD_FATAL_ERROR_FUNC
 LDADD = -ljson -lzmq -lczmq -pthread -luuid -lhiredis
 LDADD_C = -ljson -luuid -lzmq -lczmq
 
 CMBD_OBJS = cmbd.o route.o zmq.o util.o log.o plugin.o \
 	apisrv.o syncsrv.o kvssrv.o barriersrv.o livesrv.o logsrv.o \
-	confsrv.o
+	confsrv.o hostlist.o lsdfatal.o
 CMBUTIL_OBJS = cmbutil.o apicli.o util.o log.o zmq.o
 LIBPMI_OBJS = pmi.o apicli.o util.o log.o zmq.o
 OBJS = $(CMBD_OBJS) $(CMBUTIL_OBJS) $(LIBPMI_OBJS)
