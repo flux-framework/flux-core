@@ -80,15 +80,16 @@ typedef enum {
     CMB_LOG_INFO=6,     /* informational message */
     CMB_LOG_DEBUG=7,    /* debug level message */
 } logpri_t;
-int cmb_vlog (cmb_t c, logpri_t pri, const char *fac,
-              const char *fmt, va_list ap);
-int cmb_log (cmb_t c, logpri_t pri, const char *fac,
-              const char *fmt, ...) __attribute__ ((format (printf, 4, 5)));
+void cmb_log_set_facility (cmb_t c, const char *facility);
+int cmb_vlog (cmb_t c, logpri_t pri, const char *fmt, va_list ap);
+int cmb_log (cmb_t c, logpri_t pri, const char *fmt, ...)
+            __attribute__ ((format (printf, 3, 4)));
 
 /* Read the logs.
  * Call subscribe/unsubscribe multiple times to maintain subscription list,
  * then call cmb_log_recv to receive each subscribed-to message.
- * Call dump to get contents of circular buffer.
+ * Call dump(), then recv()'s to get contents of circular buffer, terminated
+ * by errnum=0 response.
  */
 int cmb_log_subscribe (cmb_t c, logpri_t pri, const char *sub);
 int cmb_log_unsubscribe (cmb_t c, const char *sub);

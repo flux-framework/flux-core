@@ -32,6 +32,7 @@ struct cmb_struct {
     char rankstr[16];
     int size;
     int flags;
+    char *log_facility;
 };
 
 static int _send_message (cmb_t c, json_object *o, const char *fmt, ...)
@@ -474,10 +475,18 @@ error:
     return -1; 
 }
 
-int cmb_vlog (cmb_t c, logpri_t pri, const char *fac,
-              const char *fmt, va_list ap)
+void cmb_log_set_facility (cmb_t c, const char *facility)
 {
-    json_object *o = util_json_vlog (pri, fac, c->rankstr, fmt, ap);
+    if (c->log_facility)
+        free (c->log_facility);
+    c->log_facility = xstrdup (facility);
+}
+
+int cmb_vlog (cmb_t c, logpri_t pri, const char *fmt, va_list ap)
+{
+    json_object *o = util_json_vlog (pri,
+                             c->log_facility ? c->log_facility : "api-client",
+                             c->rankstr, fmt, ap);
 
     if (!o || _send_message (c, o, "log.msg") < 0)
         goto error;
@@ -489,13 +498,13 @@ error:
     return -1;
 }
 
-int cmb_log (cmb_t c, logpri_t pri, const char *fac, const char *fmt, ...)
+int cmb_log (cmb_t c, logpri_t pri, const char *fmt, ...)
 {
     va_list ap;
     int rc;
 
     va_start (ap, fmt);
-    rc = cmb_vlog (c, pri, fac, fmt, ap);
+    rc = cmb_vlog (c, pri, fmt, ap);
     va_end (ap);
     return rc;
 }
@@ -751,6 +760,8 @@ void cmb_fini (cmb_t c)
 {
     if (c->fd >= 0)
         (void)close (c->fd);
+    if (c->log_facility)
+        free (c->log_facility);
     free (c);
 }
 
