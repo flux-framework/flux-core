@@ -31,6 +31,7 @@ if pepe.rank == 0 then
 		.. " --dn-req-out-uri='" .. dnreqouturi .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
+		.. " --set-conf-hostlist=" .. pepe.nodelist
 		.. " --plugins=api,barrier,live,log,conf,kvs,sync"
 		.. " --logdest cmbd.log"
 		.. child_opt)

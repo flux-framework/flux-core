@@ -7,6 +7,9 @@
 #include <json/json.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
 
 #include "cmb.h"
 #include "util.h"
@@ -310,6 +313,50 @@ logpri_t util_logpri_val (char *p)
         pri = CMB_LOG_DEBUG;
 
     return pri;
+}
+
+char *lookup_host (char *host)
+{
+    struct addrinfo hints, *res = NULL, *r;
+    int errnum;
+    char ipaddr[64];
+    char *ipaddr_list = NULL;
+
+    memset (&hints, 0, sizeof(hints));
+    hints.ai_family = PF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    if ((errnum = getaddrinfo (host, NULL, &hints, &res))) {
+        msg ("getaddrinfo: %s: %s", host, gai_strerror (errnum));
+        goto error;
+    }
+    if (res == NULL) {
+        msg_exit ("unknown host: %s\n", host);
+        goto error;
+    }
+    for (r = res; r != NULL; r = r->ai_next) {
+        if ((errnum = getnameinfo (r->ai_addr, r->ai_addrlen,
+                                   ipaddr, sizeof (ipaddr),
+                                   NULL, 0, NI_NUMERICHOST)))  {
+            msg ("getnameinfo: %s: %s", host, gai_strerror (errnum));
+            goto error;
+        }
+        if (ipaddr_list) {
+            char *new;
+            if (asprintf (&new, "%s,%s", ipaddr_list, ipaddr) < 0)
+                oom ();
+            free (ipaddr_list);
+            ipaddr_list = new;
+        } else
+            ipaddr_list = xstrdup (ipaddr);
+            
+    }
+    freeaddrinfo (res);
+    return ipaddr_list;
+error:
+    if (res)
+        freeaddrinfo (res);
+    return NULL;
 }
 
 

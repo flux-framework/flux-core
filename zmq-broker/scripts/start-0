@@ -8,4 +8,5 @@
   --set-conf sync.period.sec=1.5 \
   --set-conf kvs.redis.hostname=127.0.0.1 \
   --set-conf kvs.redis.port=6379 \
+  --set-conf-hostlist=localhost,localhost,localhost
   --verbose

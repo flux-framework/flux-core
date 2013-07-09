@@ -24,8 +24,9 @@
 #include "cmbd.h"
 #include "util.h"
 #include "plugin.h"
+#include "hostlist.h"
 
-#define OPTIONS "t:e:E:O:vs:R:S:p:c:P:L:T:A:d:D:"
+#define OPTIONS "t:e:E:O:vs:R:S:p:c:P:L:T:A:d:D:H:"
 static const struct option longopts[] = {
     {"up-event-uri",   required_argument,  0, 'e'},
     {"up-event-out-uri",required_argument, 0, 'O'},
@@ -43,6 +44,7 @@ static const struct option longopts[] = {
     {"plugins",     required_argument,  0, 'P'},
     {"logdest",     required_argument,  0, 'L'},
     {"api-socket",  required_argument,  0, 'A'},
+    {"set-conf-hostlist",required_argument,  0, 'H'},
     {0, 0, 0, 0},
 };
 
@@ -74,6 +76,7 @@ static void usage (void)
 " -c,--children n,n,...  Set ranks of children, comma-sep\n"
 " -v,--verbose           Show bus traffic\n"
 " -s,--set-conf key=val  Set plugin configuration key=val\n"
+" -H,--set-conf-hostlist HOSTLIST Set session hostlist\n"
 " -R,--rank N            Set cmbd address\n"
 " -S,--size N            Set number of ranks in session\n"
 " -P,--plugins p1,p2,... Load the named plugins (comma separated)\n"
@@ -152,6 +155,29 @@ int main (int argc, char *argv[])
                 }
                 free (cpy);
                 break;
+            }
+            case 'H': { /* set-conf-hostlist hostlist */
+                hostlist_t hl = hostlist_create (optarg);
+                hostlist_iterator_t itr;
+                char *key, *host, *ipaddr, *val;
+                int rank = 0;
+                if (!hl)
+                    msg_exit ("failed to parse hostlist");
+                itr = hostlist_iterator_create (hl);
+                while ((host = hostlist_next (itr))) {
+                    if (!(ipaddr = lookup_host (host)))
+                        msg_exit ("could not look up %s", host);
+                    if (asprintf (&key, "host.%d", rank++) < 0)
+                        oom ();
+                    if (asprintf (&val, "%s,%s", host, ipaddr) < 0)
+                        oom ();
+                    zhash_update (conf->conf_hash, key, val);
+                    zhash_freefn (conf->conf_hash, key, free);
+                    free (key);
+                    free (host);
+                }
+                hostlist_iterator_destroy (itr);
+                hostlist_destroy (hl);
             }
             case 'R':   /* --rank N */
                 conf->rank = strtoul (optarg, NULL, 10);
