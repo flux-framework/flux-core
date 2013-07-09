@@ -102,6 +102,24 @@ void plugin_send_event (plugin_ctx_t *p, const char *fmt, ...)
     plugin_send_event_raw (p, &zmsg);
 }
 
+void plugin_send_event_json (plugin_ctx_t *p, json_object *o,
+                             const char *fmt, ...)
+{
+    va_list ap;
+    zmsg_t *zmsg;
+    char *tag;
+    int n;
+
+    va_start (ap, fmt);
+    n = vasprintf (&tag, fmt, ap);
+    va_end (ap);
+    if (n < 0)
+        err_exit ("%s: vasprintf", __FUNCTION__);
+    zmsg = cmb_msg_encode (tag, o);
+    free (tag);
+    plugin_send_event_raw (p, &zmsg);
+}
+
 void plugin_send_request (plugin_ctx_t *p, json_object *o, const char *fmt, ...)
 {
     va_list ap;
