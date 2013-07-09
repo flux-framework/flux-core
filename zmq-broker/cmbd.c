@@ -25,7 +25,7 @@
 #include "util.h"
 #include "plugin.h"
 
-#define OPTIONS "t:e:E:O:vs:r:R:S:p:c:P:L:T:A:d:D:"
+#define OPTIONS "t:e:E:O:vs:R:S:p:c:P:L:T:A:d:D:"
 static const struct option longopts[] = {
     {"up-event-uri",   required_argument,  0, 'e'},
     {"up-event-out-uri",required_argument, 0, 'O'},
@@ -34,9 +34,8 @@ static const struct option longopts[] = {
     {"dn-event-out-uri",required_argument,  0, 'D'},
     {"up-req-in-uri", required_argument,  0, 't'},
     {"dn-req-out-uri",required_argument,  0, 'T'},
-    {"redis-server",required_argument,  0, 'r'},
     {"verbose",           no_argument,  0, 'v'},
-    {"syncperiod",  required_argument,  0, 's'},
+    {"set-conf",    required_argument,  0, 's'},
     {"rank",        required_argument,  0, 'R'},
     {"size",        required_argument,  0, 'S'},
     {"parent",      required_argument,  0, 'p'},
@@ -54,7 +53,7 @@ static void _cmb_poll (conf_t *conf, server_t *srv);
 static void _route_response (conf_t *conf, server_t *srv, zmsg_t **zmsg,
                             bool dnsock);
 
-static void _request_send (conf_t *conf, server_t *srv,
+static int _request_send (conf_t *conf, server_t *srv,
                            json_object *o, const char *fmt, ...)
                            __attribute__ ((format (printf, 4, 5)));
 
@@ -73,9 +72,8 @@ static void usage (void)
 " -p,--parent N,URI,URI2 Set parent rank,URIs, e.g.\n"
 "                        0,tcp://192.168.1.136:5556,tcp://192.168.1.136:557\n"
 " -c,--children n,n,...  Set ranks of children, comma-sep\n"
-" -r,--redis-server HOST Set redis server hostname\n"
 " -v,--verbose           Show bus traffic\n"
-" -s,--syncperiod N      Set sync period in seconds\n"
+" -s,--set-conf key=val  Set plugin configuration key=val\n"
 " -R,--rank N            Set cmbd address\n"
 " -S,--size N            Set number of ranks in session\n"
 " -P,--plugins p1,p2,... Load the named plugins (comma separated)\n"
@@ -95,9 +93,10 @@ int main (int argc, char *argv[])
     log_init (basename (argv[0]));
 
     conf = xzmalloc (sizeof (conf_t));
-    conf->sync_period_msec = 2*1000;
     conf->size = 1;
     conf->api_sockpath = CMB_API_PATH;
+    if (!(conf->conf_hash = zhash_new ()))
+        oom ();
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
             case 'e':   /* --up-event-uri URI */
@@ -144,12 +143,16 @@ int main (int argc, char *argv[])
             case 'v':   /* --verbose */
                 conf->verbose = true;
                 break;
-            case 's':   /* --syncperiod sec */
-                conf->sync_period_msec = strtoul (optarg, NULL, 10) * 1000;
+            case 's': { /* --set-conf key=val */
+                char *p, *cpy = xstrdup (optarg);
+                if ((p = strchr (cpy, '='))) {
+                    *p++ = '\0';
+                    zhash_update (conf->conf_hash, cpy, xstrdup (p));
+                    zhash_freefn (conf->conf_hash, cpy, free);
+                }
+                free (cpy);
                 break;
-            case 'r':   /* --redis-server hostname */
-                conf->kvs_redis_server = optarg;
-                break;
+            }
             case 'R':   /* --rank N */
                 conf->rank = strtoul (optarg, NULL, 10);
                 break;
@@ -210,9 +213,86 @@ int main (int argc, char *argv[])
         free (conf->parent[i].upreq_uri);
         free (conf->parent[i].dnreq_uri);
     }
+    if (conf->conf_hash)
+        zhash_destroy (&conf->conf_hash);
     free (conf);
 
     return 0;
+}
+
+typedef struct {
+    server_t *srv;
+    conf_t *conf;
+} conf_set_one_arg_t;
+
+static int _conf_set_one (const char *key, void *item, void *arg)
+{
+    conf_set_one_arg_t *ca = arg;
+    server_t *srv = ca->srv;
+    conf_t *conf = ca->conf;
+    zmsg_t *zmsg = NULL;
+    json_object *o = util_json_object_new_object ();
+
+    util_json_object_add_string (o, "key", key);
+    util_json_object_add_string (o, "val", (const char *)item);
+    if (_request_send (conf, srv, o, "conf.put") < 0)
+        goto error;
+    json_object_put (o);
+    o = NULL;
+    zmsg = NULL;
+
+    if (!(zmsg = zmsg_recv_unrouter (srv->zs_dnreq_out)))
+        goto error;
+    if (cmb_msg_decode (zmsg, NULL, &o) < 0 || !o)
+        goto eproto;
+    if (util_json_object_get_int (o, "errnum", &errno) < 0)
+        goto eproto;
+    if (errno != 0)
+        goto error;
+    zmsg_destroy (&zmsg);
+    json_object_put (o);
+    
+    return 0;
+eproto:
+    errno = EPROTO;
+error:
+    if (zmsg)
+        zmsg_destroy (&zmsg);
+    if (o)
+        json_object_put (o);
+    return 1;
+}
+
+static int _conf_commit (server_t *srv, conf_t *conf)
+{
+    zmsg_t *zmsg = NULL;
+    json_object *o = util_json_object_new_object ();
+
+    if (_request_send (conf, srv, o, "conf.commit") < 0)
+        goto error;
+    json_object_put (o);
+    o = NULL;
+
+    if (!(zmsg = zmsg_recv_unrouter (srv->zs_dnreq_out)))
+        goto error;
+    if (cmb_msg_decode (zmsg, NULL, &o) < 0 || !o)
+        goto eproto;
+    if (util_json_object_get_int (o, "errnum", &errno) < 0)
+        goto eproto;
+    if (errno != 0)
+        goto error;
+    zmsg_destroy (&zmsg);
+    json_object_put (o);
+    
+    return 0;
+eproto:
+    errno = EPROTO;
+error:
+    if (zmsg)
+        zmsg_destroy (&zmsg);
+    if (o)
+        json_object_put (o);
+    return 1;
 }
 
 static void _cmb_init (conf_t *conf, server_t **srvp)
@@ -283,6 +363,17 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
 
     plugin_init (conf, srv);
 
+    /* Now that conf plugin is loaded, initialize conf parameters from the
+     * command line before entering poll loop, thus ensuring that
+     * initialization has completed before it answers any queries.
+     */
+    if (conf->rank == 0) {
+        conf_set_one_arg_t ca = { .srv = srv, .conf = conf };
+        if (zhash_foreach (conf->conf_hash, _conf_set_one, &ca) != 0)
+            err_exit ("failed to initialize conf store on root node");
+        _conf_commit (srv, conf);
+    }
+
     *srvp = srv;
 }
 
@@ -317,14 +408,14 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
 
 /* Send upstream request message.
  */
-static void _request_send (conf_t *conf, server_t *srv,
+static int _request_send (conf_t *conf, server_t *srv,
                            json_object *o, const char *fmt, ...)
 {
     va_list ap;
     zmsg_t *zmsg;
     char *tag, *p;
     const char *gw;
-    int n;
+    int n, ret = 0;
 
     va_start (ap, fmt);
     n = vasprintf (&tag, fmt, ap);
@@ -342,9 +433,14 @@ static void _request_send (conf_t *conf, server_t *srv,
         zmsg_send_unrouter (&zmsg, srv->zs_dnreq_out, conf->rankstr, gw);
     else if (srv->zs_upreq_out)
         zmsg_send (&zmsg, srv->zs_upreq_out);
+    else  {
+        errno = EHOSTUNREACH;
+        ret = -1;
+    }
     if (zmsg)
         zmsg_destroy (&zmsg);
     free (tag);
+    return ret;
 }
 
 void cmbd_log (conf_t *conf, server_t *srv, logpri_t pri, const char *fmt, ...)

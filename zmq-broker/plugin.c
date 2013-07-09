@@ -160,6 +160,34 @@ void plugin_log (plugin_ctx_t *p, logpri_t pri, const char *fmt, ...)
     }
 }
 
+char *plugin_conf_get (plugin_ctx_t *p, char *key)
+{
+    json_object *o = util_json_object_new_object ();
+    const char *val;
+    char *ret = NULL;
+    zmsg_t *zmsg = NULL;
+
+    util_json_object_add_string (o, "key", key);
+    plugin_send_request (p, o, "conf.get");
+    if (!(zmsg = zmsg_recv (p->zs_upreq))) {
+        err ("%s: zmsg_recv", __FUNCTION__);
+        goto done;
+    }
+    if (cmb_msg_decode (zmsg, NULL, &o) < 0) {
+        err ("%s: protocol error", __FUNCTION__);
+        goto done;
+    }
+    if (util_json_object_get_string (o, "val", &val) < 0) /* not set */
+        goto done;
+    ret = xstrdup (val);
+done:
+    if (o)
+        json_object_put (o);
+    if (zmsg)
+        zmsg_destroy (&zmsg);
+    return ret;       
+}
+
 void plugin_ping_respond (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     json_object *o;

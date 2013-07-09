@@ -9,6 +9,7 @@ typedef struct {
  * This is static and can be shared by all threads.
  */
 typedef struct {
+    zhash_t *conf_hash;
     char *upreq_in_uri;
     char *dnreq_out_uri;
     char *upev_in_uri;
@@ -26,11 +27,9 @@ typedef struct {
     /* Options set in cmbd getopt and read by plugins.
      * FIXME: need a spank-like abstraction for plugin options.
      */
-    int sync_period_msec;
     char *api_sockpath;
     int *live_children;
     int live_children_len;
-    char *kvs_redis_server;
 } conf_t;
 
 /* Server state.

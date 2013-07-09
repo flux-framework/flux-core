@@ -29,7 +29,6 @@ if pepe.rank == 0 then
     pepe.run ("./cmbd --up-event-uri='" .. eventuri .. "'"
 		.. " --up-req-in-uri='" .. upreqinuri .. "'"
 		.. " --dn-req-out-uri='" .. dnreqouturi .. "'"
-		.. " --redis-server=localhost"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
 		.. " --plugins=api,barrier,live,log,conf,kvs,sync"
