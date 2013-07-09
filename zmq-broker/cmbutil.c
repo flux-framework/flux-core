@@ -251,7 +251,7 @@ int main (int argc, char *argv[])
                 char *val = cmb_kvs_get (c, optarg);
                 if (!val && errno != 0)
                     err_exit ("cmb_kvs_get");
-                printf ("%s=%s\n", optarg, val ? val : "<nil>");
+                printf ("%s = %s\n", optarg, val ? val : "<nil>");
                 if (val)
                     free (val);
                 break;
@@ -322,7 +322,7 @@ int main (int argc, char *argv[])
                 char *val = cmb_conf_get (c, optarg);
                 if (!val && errno != 0)
                     err_exit ("cmb_conf_get");
-                printf ("%s=%s\n", optarg, val ? val : "<nil>");
+                printf ("%s = %s\n", optarg, val ? val : "<nil>");
                 if (val)
                     free (val);
                 break;
@@ -337,7 +337,7 @@ int main (int argc, char *argv[])
                 if (cmb_conf_list (c) < 0)
                     err_exit ("cmb_conf_list");
                 while (cmb_conf_next (c, &key, &val) == 0) {
-                    printf ("%s=%s\n", key, val);
+                    printf ("%s = %s\n", key, val);
                     free (key);
                     free (val);
                 }
