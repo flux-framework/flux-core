@@ -9,5 +9,8 @@
   --set-conf kvs.redis.hostname=127.0.0.1 \
   --set-conf kvs.redis.port=6379 \
   --set-conf live.missed.trigger.allow=5 \
-  --set-conf-hostlist=localhost,localhost,localhost
+  --set-conf log.reduction.timeout.msec=100 \
+  --set-conf log.circular.buffer.entries=100000 \
+  --set-conf log.persist.priority=notice \
+  --set-conf-hostlist=localhost,localhost,localhost \
   --verbose
