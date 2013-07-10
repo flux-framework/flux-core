@@ -35,6 +35,9 @@ if pepe.rank == 0 then
                 .. " --set-conf sync.period.sec=1.5"
                 .. " --set-conf kvs.redis.hostname=127.0.0.1"
                 .. " --set-conf kvs.redis.port=6379"
+                .. " --set-conf log.reduction.timeout.msec=100"
+                .. " --set-conf log.circular.buffer.entries=100000"
+                .. " --set-conf log.persist.priority=notice"
 		.. " --plugins=api,barrier,live,log,conf,kvs,sync"
 		.. " --logdest cmbd.log"
 		.. child_opt)

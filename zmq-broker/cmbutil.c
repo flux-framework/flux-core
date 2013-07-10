@@ -441,7 +441,8 @@ int main (int argc, char *argv[])
     if (Lopt) {
         char *argstr = argv_concat (argc - optind, argv + optind);
 
-        if (cmb_log (c, Lopt_priority, Lopt_facility, "%s", argstr) < 0)
+        cmb_log_set_facility (c, Lopt_facility);
+        if (cmb_log (c, Lopt_priority, "%s", argstr) < 0)
             err_exit ("cmb_log");
         free (argstr);
     } else {

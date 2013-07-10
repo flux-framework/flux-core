@@ -29,10 +29,6 @@
 
 #include "logsrv.h"
 
-const int log_reduction_timeout_msec = 100;
-const int log_circular_buffer_entries = 100000;
-const int log_persist_priority = CMB_LOG_NOTICE;
-
 typedef struct {
     char *fac;         /* FIXME: switch to regex */
     logpri_t pri_max;  /* the lower the number, the more filtering */
@@ -49,6 +45,9 @@ typedef struct {
     zlist_t *backlog;
     zlist_t *cirbuf;
     int cirbuf_size;
+    int log_reduction_timeout_msec;
+    int log_circular_buffer_entries;
+    int log_persist_priority;
 } ctx_t;
 
 static void _add_backlog (plugin_ctx_t *p, json_object *o);
@@ -95,7 +94,7 @@ static void _log_save (plugin_ctx_t *p, json_object *o)
 {
     ctx_t *ctx = p->ctx;
 
-    if (ctx->cirbuf_size == log_circular_buffer_entries) {
+    if (ctx->cirbuf_size == ctx->log_circular_buffer_entries) {
         json_object *tmp = zlist_pop (ctx->cirbuf);
         json_object_put (tmp);
         ctx->cirbuf_size--;
@@ -129,7 +128,7 @@ static void _recv_fault_event (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     subscription_t sub = {
-        .pri_min = log_persist_priority,
+        .pri_min = ctx->log_persist_priority,
         .pri_max = CMB_LOG_DEBUG,
         .fac = arg
     };
@@ -402,10 +401,10 @@ static void _recv_log_msg (plugin_ctx_t *p, zmsg_t **zmsg)
     (void)util_json_object_get_int (o, "priority", &priority);
     (void)util_json_object_get_int (o, "hopcount", &hopcount);
 
-    if (priority <= log_persist_priority || hopcount > 0) {
+    if (priority <= ctx->log_persist_priority || hopcount > 0) {
         _add_backlog (p, o);
         if (!plugin_timeout_isset (p))
-            plugin_timeout_set (p, log_reduction_timeout_msec);
+            plugin_timeout_set (p, ctx->log_reduction_timeout_msec);
     }
 
     if (hopcount == 0)
@@ -452,11 +451,22 @@ static void _timeout (plugin_ctx_t *p)
 static void _init (plugin_ctx_t *p)
 {
     ctx_t *ctx;
+    char *val;
 
     ctx = p->ctx = xzmalloc (sizeof (ctx_t));
     ctx->listeners = zhash_new ();
     ctx->backlog = zlist_new ();
     ctx->cirbuf = zlist_new ();
+
+    if (!(val = plugin_conf_get (p, "log.reduction.timeout.msec")))
+        msg_exit ("log: log.reduction.timeout.msec is not set");
+    ctx->log_reduction_timeout_msec = strtoul (val, NULL, 10);
+    if (!(val = plugin_conf_get (p, "log.circular.buffer.entries")))
+        msg_exit ("log: log.circular.buffer.entries is not set");
+    ctx->log_circular_buffer_entries = strtoul (val, NULL, 10);
+    if (!(val = plugin_conf_get (p, "log.persist.priority")))
+        msg_exit ("log: log.persist.priority is not set");
+    ctx->log_persist_priority = util_logpri_val (val);
 
     zsocket_set_subscribe (p->zs_evin, "event.fault.");
 }
