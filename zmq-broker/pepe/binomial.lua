@@ -38,6 +38,7 @@ if pepe.rank == 0 then
                 .. " --set-conf log.reduction.timeout.msec=100"
                 .. " --set-conf log.circular.buffer.entries=100000"
                 .. " --set-conf log.persist.priority=notice"
+                .. " --set-conf live.missed.trigger.allow=5"
 		.. " --plugins=api,barrier,live,log,conf,kvs,sync"
 		.. " --logdest cmbd.log"
 		.. child_opt)

@@ -29,8 +29,6 @@
 
 #include "livesrv.h"
 
-#define MISSED_EPOCH_ALLOW    5
-
 typedef struct {
     int rank;
     int epoch;
@@ -41,6 +39,7 @@ typedef struct {
     bool *state;/* the state of everyone: true=up, false=down */
     int age;
     zhash_t *kids;
+    int live_missed_trigger_allow;
 } ctx_t;
 
 static void _child_add (zhash_t *kids, int rank, int epoch, int parent)
@@ -89,20 +88,22 @@ static child_t *_child_find_by_parent (zhash_t *kids, int parent)
 typedef struct {
     int epoch;
     child_t *child;
+    plugin_ctx_t *p;
 } aarg_t;
 
-static int _match_aged (const char *Key, void *item, void *arg)
+static int _match_aged (const char *key, void *item, void *arg)
 {
     aarg_t *ap = arg;
+    ctx_t *ctx = ap->p->ctx;
     child_t *cp = item;
-    if (ap->epoch > cp->epoch + MISSED_EPOCH_ALLOW)
+    if (ap->epoch > cp->epoch + ctx->live_missed_trigger_allow)
         ap->child = cp;
     return (ap->child != NULL);
 }
 
-static child_t *_child_find_aged (zhash_t *kids, int epoch)
+static child_t *_child_find_aged (plugin_ctx_t *p, zhash_t *kids, int epoch)
 {
-    aarg_t aarg = { .epoch = epoch, .child = NULL };
+    aarg_t aarg = { .epoch = epoch, .child = NULL, .p = p };
 
     zhash_foreach (kids, _match_aged, &aarg);
     return aarg.child;
@@ -226,8 +227,8 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         epoch = strtoul (arg, NULL, 10);
         if (_got_parent (p))
             _send_live_hello (p, epoch);
-        if (ctx->age++ >= MISSED_EPOCH_ALLOW) {
-            while ((cp = _child_find_aged (ctx->kids, epoch))) {
+        if (ctx->age++ >= ctx->live_missed_trigger_allow) {
+            while ((cp = _child_find_aged (p, ctx->kids, epoch))) {
                 if (cp->rank >= 0 && cp->rank < p->conf->size) {
                     plugin_log (p, CMB_LOG_ALERT,
                         "event.live.down.%d: last seen %d, current %d",
@@ -278,11 +279,18 @@ static void _init (plugin_ctx_t *p)
     conf_t *conf = p->conf;
     ctx_t *ctx;
     int i;
+    char *val;
 
     ctx = p->ctx = xzmalloc (sizeof (ctx_t));
     ctx->state = xzmalloc (conf->size * sizeof (ctx->state[0]));
     if (!(ctx->kids = zhash_new ()))
         oom ();
+
+    if (!(val = plugin_conf_get (p, "live.missed.trigger.allow")))
+        msg_exit ("live: live.missed.trigger.allow is not set");
+    ctx->live_missed_trigger_allow = strtoul (val, NULL, 10);
+    if (ctx->live_missed_trigger_allow < 2)
+        msg_exit ("live: live.missed.trigger.allow should be >= 2");
 
     for (i = 0; i < conf->size; i++)
         ctx->state[i] = true;
