@@ -324,25 +324,24 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
 static void _init (plugin_ctx_t *p)
 {
     ctx_t *ctx = xzmalloc (sizeof (*ctx));
-    int redis_port = 6379;
-    char *redis_host = NULL;
+    int redis_port;
+    char *redis_host;
     char *val;
 
-    redis_host = plugin_conf_get (p, "kvs.redis.hostname");
-    if ((val = plugin_conf_get (p, "kvs.redis.port"))) {
-        redis_port = strtoul (val, NULL, 10);
-        if (redis_port <= 0 || redis_port > 65535)
-            msg_exit ("kvs: invalid redis port: %s", val);
-        free (val);
-    }
+    if (!(redis_host = plugin_conf_get (p, "kvs.redis.hostname")))
+        msg_exit ("kvs: kvs.redis.hostname is not set");
+    if (!(val = plugin_conf_get (p, "kvs.redis.port")))
+        msg_exit ("kvs: kvs.redis.port is not set");
+    redis_port = strtoul (val, NULL, 10);
+    if (redis_port <= 0 || redis_port > 65535)
+        msg_exit ("kvs: invalid redis port: %s", val);
 
     p->ctx = ctx;
 retryconnect:
-    ctx->rctx = redisConnect (redis_host ? redis_host : "127.0.0.1",
-                              redis_port);
+    ctx->rctx = redisConnect (redis_host, redis_port);
     if (ctx->rctx == NULL) {
         err ("redisConnect returned NULL - abort");
-        return;
+        goto done;
     }
     if (ctx->rctx->err == REDIS_ERR_IO && errno == ECONNREFUSED) {
         redisFree (ctx->rctx);
@@ -354,8 +353,10 @@ retryconnect:
         err ("redisConnect: %s", ctx->rctx->errstr);
         redisFree (ctx->rctx);
         ctx->rctx = NULL;
-        return;
     }
+done:
+    free (redis_host);
+    free (val);
 }
 
 static void _fini (plugin_ctx_t *p)

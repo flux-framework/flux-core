@@ -37,15 +37,15 @@ static void _timeout (plugin_ctx_t *p)
 
 static void _init (plugin_ctx_t *p)
 {
-    double sync_period_sec = 1.0;
+    double sync_period_sec;
     char *val;
 
-    if ((val = plugin_conf_get (p, "sync.period.sec"))) {
-        sync_period_sec = strtod (val, NULL); 
-        if (sync_period_sec <= 0 || sync_period_sec > 30*60)
-            msg_exit ("sync: bad sync.period.sec value: %s", val);
-        free (val);
-    }
+    if (!(val = plugin_conf_get (p, "sync.period.sec")))
+        msg_exit ("sync: sync.period.sec is not set");
+    sync_period_sec = strtod (val, NULL); 
+    if (sync_period_sec <= 0 || sync_period_sec > 30*60)
+        msg_exit ("sync: bad sync.period.sec value: %s", val);
+    free (val);
     plugin_timeout_set (p, (int)(sync_period_sec * 1000)); /* msec */
 }
 

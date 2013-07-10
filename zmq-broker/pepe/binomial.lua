@@ -32,6 +32,9 @@ if pepe.rank == 0 then
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
 		.. " --set-conf-hostlist=" .. pepe.nodelist
+                .. " --set-conf sync.period.sec=1.5"
+                .. " --set-conf kvs.redis.hostname=127.0.0.1"
+                .. " --set-conf kvs.redis.port=6379"
 		.. " --plugins=api,barrier,live,log,conf,kvs,sync"
 		.. " --logdest cmbd.log"
 		.. child_opt)
