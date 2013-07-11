@@ -18,7 +18,7 @@
 
 static void _parse_logstr (char *s, logpri_t *pp, char **fp);
 
-#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:lx:e:TL:W:D:r:R:qz:Za:A:cX"
+#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:lx:e:TL:W:D:r:R:qz:Za:A:cXw:"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -46,6 +46,7 @@ static const struct option longopts[] = {
     {"trace-apisock",no_argument,      0, 'Z'},
     {"conf-put",   required_argument,  0, 'a'},
     {"conf-get",   required_argument,  0, 'A'},
+    {"conf-watch", required_argument,  0, 'w'},
     {"conf-commit",no_argument,        0, 'c'},
     {"conf-list",  no_argument,        0, 'X'},
     {0, 0, 0, 0},
@@ -68,6 +69,7 @@ static void usage (void)
 "  -t,--kvs-torture N     set N keys, then commit\n"
 "  -a,--conf-put key=val  set a config key\n"
 "  -A,--conf-get key      get a conf key\n"
+"  -w,--conf-watch key    watch a conf key\n"
 "  -c,--conf-commit       commit pending conf puts\n"
 "  -X,--conf-list         list conf key-value pairs\n"
 "  -s,--subscribe sub     subscribe to events matching substring\n"
@@ -322,7 +324,7 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'A': { /* --conf-get key */
-                json_object *vo = cmb_conf_get (c, optarg);
+                json_object *vo = cmb_conf_get (c, optarg, false);
                 if (!vo && errno != 0)
                     err_exit ("cmb_conf_get");
                 printf ("%s = %s\n", optarg, vo
@@ -352,9 +354,21 @@ int main (int argc, char *argv[])
                     err_exit ("cmb_conf_next");
                 break;
             }
+            case 'w': { /* --conf-watch key */
+                json_object *vo;
+                if (!(vo = cmb_conf_get (c, optarg, true)))
+                    err_exit ("cmb_conf_get");
+                do {
+                    printf ("%s = %s\n", optarg,
+                            json_object_to_json_string_ext (vo,
+                                                    JSON_C_TO_STRING_SPACED));
+                    json_object_put (vo);
+                } while (cmb_conf_next (c, NULL, &vo) == 0);
+                break;
+            }
             case 'L': { /* --log */
-                Lopt = true;
                 _parse_logstr (optarg, &Lopt_priority, &Lopt_facility);
+                Lopt = true; /* see code after getopt */
                 break;
             }
             case 'W': {

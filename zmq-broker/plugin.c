@@ -182,8 +182,10 @@ json_object *plugin_conf_get (plugin_ctx_t *p, const char *key)
 {
     json_object *vo = NULL, *o = util_json_object_new_object ();
     zmsg_t *zmsg = NULL;
+    bool watch = false;
 
     util_json_object_add_string (o, "key", key);
+    util_json_object_add_boolean (o, "watch", watch);
     plugin_send_request (p, o, "conf.get");
     if (!(zmsg = zmsg_recv (p->zs_upreq))) {
         err ("%s: zmsg_recv", __FUNCTION__);

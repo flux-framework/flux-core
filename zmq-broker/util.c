@@ -150,6 +150,15 @@ char *argv_concat (int argc, char *argv[])
     return s; 
 }
 
+void util_json_object_add_boolean (json_object *o, char *name, bool val)
+{
+    json_object *no;
+
+    if (!(no = json_object_new_boolean (val)))
+        oom ();
+    json_object_object_add (o, name, no);
+}
+
 void util_json_object_add_double (json_object *o, char *name, double n)
 {
     json_object *no;
@@ -187,6 +196,24 @@ void util_json_object_add_timeval (json_object *o, char *name,
     if (!(no = json_object_new_string (tbuf)))
         oom ();
     json_object_object_add (o, name, no);
+}
+
+int util_json_object_get_boolean (json_object *o, char *name, bool *vp)
+{
+    json_object *no = json_object_object_get (o, name);
+    if (!no)
+        return -1;
+    *vp = json_object_get_boolean (no);
+    return 0;
+}
+
+int util_json_object_get_double (json_object *o, char *name, double *dp)
+{
+    json_object *no = json_object_object_get (o, name);
+    if (!no)
+        return -1;
+    *dp = json_object_get_double (no);
+    return 0;
 }
 
 int util_json_object_get_int (json_object *o, char *name, int *ip)

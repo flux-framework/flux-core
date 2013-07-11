@@ -365,13 +365,14 @@ error:
     return -1;
 }
 
-json_object *cmb_conf_get (cmb_t c, const char *key)
+json_object *cmb_conf_get (cmb_t c, const char *key, bool watch)
 {
     json_object *o = util_json_object_new_object ();
     json_object *vo = NULL;
 
     /* send request */
     util_json_object_add_string (o, "key", key);
+    util_json_object_add_boolean (o, "watch", watch);
     if (_send_message (c, o, "conf.get") < 0)
         goto error;
     json_object_put (o);
