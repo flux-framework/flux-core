@@ -57,6 +57,16 @@ typedef struct {
     zhash_t *reqs;      /* key => req struct */
 } ctx_t;
 
+static void _update_version (plugin_ctx_t *p, int new_version)
+{
+    ctx_t *ctx = p->ctx;
+
+    zhash_destroy (&ctx->store);
+    if (!(ctx->store = zhash_new ()))
+        oom ();
+    ctx->store_version = new_version;
+}
+
 static void _req_destroy (req_t *req)
 {
     zlist_destroy (&req->clients);
@@ -239,12 +249,12 @@ static void _conf_get_response (plugin_ctx_t *p, zmsg_t **zmsg)
           || util_json_object_get_string (o, "key", &key) < 0
           || util_json_object_get_int (o, "store_version", &store_version) < 0)
         goto done;
-    if ((vo = json_object_object_get (o, "val"))
-                                 && ctx->store_version == store_version) {
+    if (store_version > ctx->store_version)
+        _update_version (p, store_version);
+    if ((vo = json_object_object_get (o, "val"))) {
         val = json_object_to_json_string (vo);
         zhash_update (ctx->store, key, xstrdup (val));
         zhash_freefn (ctx->store, key, (zhash_free_fn *)free);
-        /* FIXME: am I supposed to free val?  valgrind me */
     }
     if ((req = zhash_lookup (ctx->reqs, key))) {
         _conf_get_response_clients (p, req, vo, store_version);
@@ -263,12 +273,8 @@ static void _event_conf_update (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     int new_version = strtoul (arg, NULL, 10);
 
     if (!plugin_treeroot (p)) {
-        if (ctx->store_version != new_version) {
-            zhash_destroy (&ctx->store);
-            if (!(ctx->store = zhash_new ()))
-                oom ();
-            ctx->store_version = new_version;
-        }
+        if (new_version > ctx->store_version)
+            _update_version (p, new_version);
     }
 }
 
