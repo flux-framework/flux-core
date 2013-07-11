@@ -324,14 +324,17 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
 static void _init (plugin_ctx_t *p)
 {
     ctx_t *ctx = xzmalloc (sizeof (*ctx));
-    int redis_port;
-    char *redis_host;
+    int redis_port = 6379;
+    char *portstr, *redis_host;
 
-    redis_host = plugin_conf_get_string (p, "kvs.redis.hostname");
-    redis_port = plugin_conf_get_int (p, "kvs.redis.port");
-    if (redis_port <= 0 || redis_port > 65535)
-        msg_exit ("kvs: invalid redis port: %d", redis_port);
 
+    redis_host = plugin_conf_get_string (p, "kvs.redis.server");
+    if ((portstr = strchr (redis_host, ':'))) {
+        *portstr++ = '\0';
+        redis_port = strtoul (portstr, NULL, 10);
+        if (redis_port <= 0 || redis_port > 65535)
+            msg_exit ("kvs: invalid redis port: %d", redis_port);
+    }
     p->ctx = ctx;
 retryconnect:
     ctx->rctx = redisConnect (redis_host, redis_port);

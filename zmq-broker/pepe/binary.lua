@@ -33,8 +33,7 @@ if pepe.rank == 0 then
 		.. " --size=" .. #h
 		.. " --set-conf-hostlist=" .. pepe.nodelist
 		.. " --set-conf sync.period.sec=1.5"
-		.. " --set-conf kvs.redis.hostname=\"127.0.0.1\""
-		.. " --set-conf kvs.redis.port=6379"
+		.. " --set-conf kvs.redis.server=\"127.0.0.1\""
 		.. " --set-conf log.reduction.timeout.msec=100"
 		.. " --set-conf log.circular.buffer.entries=100000"
 		.. " --set-conf log.persist.priority=notice"

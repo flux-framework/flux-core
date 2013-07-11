@@ -238,8 +238,9 @@ char *plugin_conf_get_string (plugin_ctx_t *p, const char *key)
 
     if (!(vo = plugin_conf_get (p, key)))
         msg_exit ("%s: key %s is not set", p->plugin->name, key);
-    if (!(v = json_object_get_string (vo)))
+    if (json_object_get_type (vo) != json_type_string)
         msg_exit ("%s: key %s value is not a string", p->plugin->name, key);
+    v = json_object_get_string (vo);
     cpy = xstrdup (v);
     json_object_put (vo);
     return cpy;
