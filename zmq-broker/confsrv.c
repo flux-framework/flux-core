@@ -47,14 +47,14 @@
 #include "confsrv.h"
 
 typedef struct {
-    zlist_t *clients;   /* orig zmsg request */
+    zlist_t *reply_to;   /* item = (zmsg_t *) */
 } req_t;
 
 typedef struct {
     zhash_t *store;
-    zhash_t *store_plus1;
+    zhash_t *store_next;
     int store_version;
-    zhash_t *reqs;      /* key => req struct */
+    zhash_t *proxy;      /* proxy{key} = (req_t *) */
 } ctx_t;
 
 static void _update_version (plugin_ctx_t *p, int new_version)
@@ -69,24 +69,21 @@ static void _update_version (plugin_ctx_t *p, int new_version)
 
 static void _req_destroy (req_t *req)
 {
-    zlist_destroy (&req->clients);
+    zlist_destroy (&req->reply_to);
 }
 
 static req_t *_req_create ()
 {
     req_t *req = xzmalloc (sizeof (req_t));
 
-    if (!(req->clients = zlist_new ()))
+    if (!(req->reply_to = zlist_new ()))
         oom ();
     return req;
 }
 
-static void _req_addclient (req_t *req, zmsg_t **zmsg)
-{
-    zlist_append (req->clients, *zmsg);
-    *zmsg = NULL; /* I own it now */
-}
-
+/* "conf.get" request received.
+ * Answer or initiate upstream proxy request to instiate item in cache.
+ */
 static void _conf_get (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
@@ -99,23 +96,39 @@ static void _conf_get (plugin_ctx_t *p, zmsg_t **zmsg)
         err ("%s: error decoding message", __FUNCTION__);
         goto done;
     }
+    /* Found in local cache.  Respond with value.
+     */
     if ((val = zhash_lookup (ctx->store, key)) != NULL) {
         if (!(vo = json_tokener_parse (val)))
             msg_exit ("conf: JSON parse error %s=%s", key, val);
         json_object_object_add (o, "val", vo);
         util_json_object_add_int (o, "store_version", ctx->store_version);
         plugin_send_response (p, zmsg, o);
+
+    /* Not found in local cache and we hold master copy.
+     * Respond with value missing (indicating key not set).
+     */
     } else if (plugin_treeroot (p)) {
         util_json_object_add_int (o, "store_version", ctx->store_version);
         plugin_send_response (p, zmsg, o);
-    } else if ((req = zhash_lookup (ctx->reqs, key))) {
-        _req_addclient (req, zmsg);
+
+    /* Not the master, and we have already sent a proxy request upstream
+     * for this key.  Add this request to the reply-to list for the proxy.
+     */
+    } else if ((req = zhash_lookup (ctx->proxy, key))) {
+        zlist_append (req->reply_to, *zmsg);
+        *zmsg = NULL; /* now owned by req->reply_to */
+
+    /* Not the master, no proxy request in progress.
+     * Initiate a proxy request with this request in the reply-to list.
+     */
     } else {
         req = _req_create ();
-        zhash_update (ctx->reqs, key, req);
-        zhash_freefn (ctx->reqs, key, (zhash_free_fn *)_req_destroy);
+        zhash_update (ctx->proxy, key, req);
+        zhash_freefn (ctx->proxy, key, (zhash_free_fn *)_req_destroy);
         plugin_send_request (p, o, "conf.get");
-        _req_addclient (req, zmsg);
+        zlist_append (req->reply_to, *zmsg);
+        *zmsg = NULL; /* now owned by req->reply_to */
     }
 done:
     if (o)
@@ -124,31 +137,93 @@ done:
         zmsg_destroy (zmsg);
 }
 
+static void _send_proxy_responses (plugin_ctx_t *p, req_t *req,
+                                   json_object *vo, int store_version)
+{
+    zmsg_t *zmsg = zlist_first (req->reply_to);
+
+    while (zmsg) {
+        json_object *o = NULL;
+        if (cmb_msg_decode (zmsg, NULL, &o) == 0) {
+            if (o) {
+                util_json_object_add_int (o, "store_version", store_version);
+                if (vo) {
+                    json_object_get (vo);
+                    json_object_object_add (o, "val", vo);
+                }
+                plugin_send_response (p, &zmsg, o);
+                json_object_put (o);
+            }
+        }
+        if (zmsg)
+            zmsg_destroy (&zmsg);
+        zmsg = zlist_next (req->reply_to);
+    }
+}
+
+/* "conf.get" proxy response received.
+ * Update cache and respond to original requests.
+ */
+static void _conf_get_response (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    ctx_t *ctx = p->ctx;
+    json_object *vo, *o = NULL;
+    const char *key, *val = NULL;
+    int store_version;
+    req_t *req;
+
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
+          || util_json_object_get_string (o, "key", &key) < 0
+          || util_json_object_get_int (o, "store_version", &store_version) < 0)
+        goto done;
+    /* N.B.  If response is newer than our cache, update now
+     * so we can store the result.
+     */
+    if (store_version > ctx->store_version)
+        _update_version (p, store_version);
+    /* If value is not set, we do not update the cache.
+     * We are not caching "negative" lookups (yet).
+     */
+    if ((vo = json_object_object_get (o, "val"))) {
+        val = json_object_to_json_string (vo);
+        zhash_update (ctx->store, key, xstrdup (val));
+        zhash_freefn (ctx->store, key, (zhash_free_fn *)free);
+    }
+    /* Now respond to the original requests.
+     */
+    if ((req = zhash_lookup (ctx->proxy, key))) {
+        _send_proxy_responses (p, req, vo, store_version);
+        zhash_delete (ctx->proxy, key);
+    }
+done:
+    if (o)
+        json_object_put (o);
+    if (*zmsg)
+        zmsg_destroy (zmsg); 
+}
+
 static void _conf_put (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     json_object *vo, *o = NULL;
     const char *key, *val;
 
-    if (plugin_treeroot (p)) {
-        if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
-                || util_json_object_get_string (o, "key", &key) < 0) {
-            err ("%s: error decoding message", __FUNCTION__);
-            goto done;
-        }
-        if (!ctx->store_plus1 && !(ctx->store_plus1 = zhash_dup (ctx->store)))
-            oom ();
-        if ((vo = json_object_object_get (o, "val"))) {
-            val = json_object_to_json_string (vo);
-            zhash_update (ctx->store_plus1, key, xstrdup (val));
-            zhash_freefn (ctx->store_plus1, key, (zhash_free_fn *) free);
-            /* FIXME: am I supposed to free val?  valgrind me */
-        } else {
-            zhash_delete (ctx->store_plus1, key);
-        }
-        plugin_send_response_errnum (p, zmsg, 0);
-    } else
-        plugin_send_request_raw (p, zmsg);
+    assert (plugin_treeroot (p));
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
+            || util_json_object_get_string (o, "key", &key) < 0) {
+        err ("%s: error decoding message", __FUNCTION__);
+        goto done;
+    }
+    if (!ctx->store_next && !(ctx->store_next = zhash_dup (ctx->store)))
+        oom ();
+    if ((vo = json_object_object_get (o, "val"))) {
+        val = json_object_to_json_string (vo);
+        zhash_update (ctx->store_next, key, xstrdup (val));
+        zhash_freefn (ctx->store_next, key, (zhash_free_fn *) free);
+    } else {
+        zhash_delete (ctx->store_next, key);
+    }
+    plugin_send_response_errnum (p, zmsg, 0); /* success */
 done:
     if (o)
         json_object_put (o);
@@ -160,19 +235,15 @@ static void _conf_commit (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
 
-    if (plugin_treeroot (p)) {
-        if (ctx->store_plus1) {
-            zhash_destroy (&ctx->store);
-            ctx->store = ctx->store_plus1;
-            ctx->store_plus1 = NULL;
-        }
-        ctx->store_version++;
-        plugin_send_event (p, "event.conf.update.%d", ctx->store_version);
+    assert (plugin_treeroot (p));
+    if (ctx->store_next) {
+        zhash_destroy (&ctx->store);
+        ctx->store = ctx->store_next;
+        ctx->store_next = NULL;
+    }
+    ctx->store_version++;
+    plugin_send_event (p, "event.conf.update.%d", ctx->store_version);
         plugin_send_response_errnum (p, zmsg, 0);
-    } else
-        plugin_send_request_raw (p, zmsg);
-    if (*zmsg)
-        zmsg_destroy (zmsg);
 }
 
 typedef struct {
@@ -204,67 +275,9 @@ static void _conf_list (plugin_ctx_t *p, zmsg_t **zmsg)
     ctx_t *ctx = p->ctx;
     conf_list_one_arg_t la = { .p = p, .zmsg = *zmsg };
 
-    if (plugin_treeroot (p)) {
-        zhash_foreach (ctx->store, _conf_list_one, &la);
-        plugin_send_response_errnum (p, zmsg, 0); /* EOF */
-    } else
-        plugin_send_request_raw (p, zmsg);
-}
-
-static void _conf_get_response_clients (plugin_ctx_t *p, req_t *req,
-                                        json_object *vo, int store_version)
-{
-    zmsg_t *zmsg;
-    json_object *o = NULL;
-
-    zmsg = zlist_first (req->clients);
-    while (zmsg) {
-        if (cmb_msg_decode (zmsg, NULL, &o) == 0 && o != NULL) {
-            util_json_object_add_int (o, "store_version", store_version);
-            if (vo) {
-                json_object_get (vo);
-                json_object_object_add (o, "val", vo);
-            }
-            plugin_send_response (p, &zmsg, o);
-        }
-        if (o) {
-            json_object_put (o);
-            o = NULL;
-        }
-        if (zmsg)
-            zmsg_destroy (&zmsg);
-        zmsg = zlist_next (req->clients);
-    }
-}
-
-static void _conf_get_response (plugin_ctx_t *p, zmsg_t **zmsg)
-{
-    ctx_t *ctx = p->ctx;
-    json_object *vo, *o = NULL;
-    const char *key, *val = NULL;
-    int store_version;
-    req_t *req;
-
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
-          || util_json_object_get_string (o, "key", &key) < 0
-          || util_json_object_get_int (o, "store_version", &store_version) < 0)
-        goto done;
-    if (store_version > ctx->store_version)
-        _update_version (p, store_version);
-    if ((vo = json_object_object_get (o, "val"))) {
-        val = json_object_to_json_string (vo);
-        zhash_update (ctx->store, key, xstrdup (val));
-        zhash_freefn (ctx->store, key, (zhash_free_fn *)free);
-    }
-    if ((req = zhash_lookup (ctx->reqs, key))) {
-        _conf_get_response_clients (p, req, vo, store_version);
-        zhash_delete (ctx->reqs, key);
-    }
-done:
-    if (o)
-        json_object_put (o);
-    if (*zmsg)
-        zmsg_destroy (zmsg); 
+    assert (plugin_treeroot (p));
+    zhash_foreach (ctx->store, _conf_list_one, &la);
+    plugin_send_response_errnum (p, zmsg, 0); /* EOF */
 }
 
 static void _event_conf_update (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
@@ -272,10 +285,9 @@ static void _event_conf_update (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     ctx_t *ctx = p->ctx;
     int new_version = strtoul (arg, NULL, 10);
 
-    if (!plugin_treeroot (p)) {
-        if (new_version > ctx->store_version)
-            _update_version (p, new_version);
-    }
+    assert (!plugin_treeroot (p));
+    if (new_version > ctx->store_version)
+        _update_version (p, new_version);
 }
 
 static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
@@ -288,20 +300,29 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         else
             _conf_get_response (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "conf.put")) {
-        if (type == ZMSG_REQUEST)
-            _conf_put (p, zmsg);
-        else
-            plugin_send_response_raw (p, zmsg);
+        if (type == ZMSG_REQUEST) {
+            if (plugin_treeroot (p))
+                _conf_put (p, zmsg);
+            else
+                plugin_send_request_raw (p, zmsg); /* fwd to root */
+        } else
+            plugin_send_response_raw (p, zmsg); /* fwd to requestor */
     } else if (cmb_msg_match (*zmsg, "conf.commit")) {
-        if (type == ZMSG_REQUEST)
-            _conf_commit (p, zmsg);
-        else
-            plugin_send_response_raw (p, zmsg);
+        if (type == ZMSG_REQUEST) {
+            if (plugin_treeroot (p))
+                _conf_commit (p, zmsg);
+            else
+                plugin_send_request_raw (p, zmsg); /* fwd to root */
+        } else
+            plugin_send_response_raw (p, zmsg); /* fwd to requestor */
     } else if (cmb_msg_match (*zmsg, "conf.list")) {
-        if (type == ZMSG_REQUEST)
-            _conf_list (p, zmsg);
-        else
-            plugin_send_response_raw (p, zmsg);
+        if (type == ZMSG_REQUEST) {
+            if (plugin_treeroot (p))
+                _conf_list (p, zmsg);
+            else
+                plugin_send_request_raw (p, zmsg); /* fwd to root */
+        } else
+            plugin_send_response_raw (p, zmsg); /* fwd to requetsor */
     } else if (cmb_msg_match (*zmsg, "conf.disconnect")) {
         /* FIXME: delete state for prematurely disconnecting client */
     } else if (cmb_msg_match_substr (*zmsg, "event.conf.update.", &arg)) {
@@ -323,7 +344,7 @@ static void _init (plugin_ctx_t *p)
         zsocket_set_subscribe (p->zs_evin, "event.conf.");
     if (!(ctx->store = zhash_new ()))
         oom ();
-    if (!(ctx->reqs = zhash_new ()))
+    if (!(ctx->proxy = zhash_new ()))
         oom ();
 }
 
@@ -331,9 +352,9 @@ static void _fini (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
     zhash_destroy (&ctx->store);
-    if (ctx->store_plus1)
-        zhash_destroy (&ctx->store_plus1);
-    zhash_destroy (&ctx->reqs);
+    if (ctx->store_next)
+        zhash_destroy (&ctx->store_next);
+    zhash_destroy (&ctx->proxy);
     free (ctx);
 }
 
