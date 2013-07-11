@@ -311,20 +311,25 @@ int main (int argc, char *argv[])
             case 'a': { /* --conf-put key=val */
                 char *key = optarg;
                 char *val = strchr (optarg, '=');
+                json_object *vo;
                 if (val == NULL)
                     usage ();
                 *val++ = '\0';
-                if (cmb_conf_put (c, key, val) < 0)
+                if (!(vo = json_tokener_parse (val)))
+                    msg_exit ("%s is not valid JSON", val);
+                if (cmb_conf_put (c, key, vo) < 0)
                     err_exit ("cmb_conf_put");
                 break;
             }
             case 'A': { /* --conf-get key */
-                char *val = cmb_conf_get (c, optarg);
-                if (!val && errno != 0)
+                json_object *vo = cmb_conf_get (c, optarg);
+                if (!vo && errno != 0)
                     err_exit ("cmb_conf_get");
-                printf ("%s = %s\n", optarg, val ? val : "<nil>");
-                if (val)
-                    free (val);
+                printf ("%s = %s\n", optarg, vo
+                                ? json_object_to_json_string_ext (vo, JSON_C_TO_STRING_SPACED)
+                                : "<nil>");
+                if (vo)
+                    json_object_put (vo);
                 break;
             }
             case 'c': { /* --conf-commit */
@@ -333,13 +338,15 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'X': { /* --conf-list */
-                char *key, *val;
+                char *key;
+                json_object *vo;
                 if (cmb_conf_list (c) < 0)
                     err_exit ("cmb_conf_list");
-                while (cmb_conf_next (c, &key, &val) == 0) {
-                    printf ("%s = %s\n", key, val);
+                while (cmb_conf_next (c, &key, &vo) == 0) {
+                    printf ("%s = %s\n", key, 
+                        json_object_to_json_string_ext (vo, JSON_C_TO_STRING_SPACED));
                     free (key);
-                    free (val);
+                    json_object_put (vo);
                 }
                 if (errno != 0)
                     err_exit ("cmb_conf_next");

@@ -39,6 +39,7 @@ char *argv_concat (int argc, char *argv[]);
 /* JSON helpers
  */
 json_object *util_json_object_new_object (void);
+void util_json_object_add_double (json_object *o, char *name, double n);
 void util_json_object_add_int (json_object *o, char *name, int i);
 void util_json_object_add_string (json_object *o, char *name, const char *s);
 void util_json_object_add_timeval (json_object *o, char *name,
@@ -57,7 +58,7 @@ json_object *util_json_vlog (logpri_t pri, const char *fac, const char *src,
 const char *util_logpri_str (logpri_t pri);
 logpri_t util_logpri_val (char *s);
 
-char *lookup_host (char *host);
+json_object *lookup_host (char *host);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

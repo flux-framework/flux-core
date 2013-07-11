@@ -63,7 +63,9 @@ bool plugin_timeout_isset (plugin_ctx_t *p);
 
 void plugin_log (plugin_ctx_t *p, logpri_t pri, const char *fmt, ...);
 
-char *plugin_conf_get (plugin_ctx_t *p, char *key);
+double plugin_conf_get_double (plugin_ctx_t *p, const char *key);
+char *plugin_conf_get_string (plugin_ctx_t *p, const char *key);
+int plugin_conf_get_int (plugin_ctx_t *p, const char *key);
 
 bool plugin_treeroot (plugin_ctx_t *p);
 

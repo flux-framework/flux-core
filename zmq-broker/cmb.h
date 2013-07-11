@@ -52,11 +52,11 @@ int cmb_kvs_commit (cmb_t c, int *errcountp, int *putcountp);
 
 /* Get/put key-value config pairs.
  */
-int cmb_conf_put (cmb_t c, const char *key, const char *val);
-char *cmb_conf_get (cmb_t c, const char *key);
+int cmb_conf_put (cmb_t c, const char *key, json_object *vo);
+json_object *cmb_conf_get (cmb_t c, const char *key);
 int cmb_conf_commit (cmb_t c);
 int cmb_conf_list (cmb_t c);
-int cmb_conf_next (cmb_t c, char **key, char **val);
+int cmb_conf_next (cmb_t c, char **key, json_object **vo);
 
 /* Return state of all nodes in the session.
  * Caller must free the two returned arrays (up and down).

@@ -451,22 +451,17 @@ static void _timeout (plugin_ctx_t *p)
 static void _init (plugin_ctx_t *p)
 {
     ctx_t *ctx;
-    char *val;
 
     ctx = p->ctx = xzmalloc (sizeof (ctx_t));
     ctx->listeners = zhash_new ();
     ctx->backlog = zlist_new ();
     ctx->cirbuf = zlist_new ();
 
-    if (!(val = plugin_conf_get (p, "log.reduction.timeout.msec")))
-        msg_exit ("log: log.reduction.timeout.msec is not set");
-    ctx->log_reduction_timeout_msec = strtoul (val, NULL, 10);
-    if (!(val = plugin_conf_get (p, "log.circular.buffer.entries")))
-        msg_exit ("log: log.circular.buffer.entries is not set");
-    ctx->log_circular_buffer_entries = strtoul (val, NULL, 10);
-    if (!(val = plugin_conf_get (p, "log.persist.priority")))
-        msg_exit ("log: log.persist.priority is not set");
-    ctx->log_persist_priority = util_logpri_val (val);
+    ctx->log_reduction_timeout_msec = plugin_conf_get_int (p,
+                                        "log.reduction.timeout.msec");
+    ctx->log_circular_buffer_entries = plugin_conf_get_int (p,
+                                        "log.circular.buffer.entries");
+    //ctx->log_persist_priority = plugin_conf_get_int (p, "log.persist.priority");
 
     zsocket_set_subscribe (p->zs_evin, "event.fault.");
 }

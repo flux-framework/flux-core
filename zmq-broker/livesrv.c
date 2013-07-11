@@ -279,16 +279,14 @@ static void _init (plugin_ctx_t *p)
     conf_t *conf = p->conf;
     ctx_t *ctx;
     int i;
-    char *val;
 
     ctx = p->ctx = xzmalloc (sizeof (ctx_t));
     ctx->state = xzmalloc (conf->size * sizeof (ctx->state[0]));
     if (!(ctx->kids = zhash_new ()))
         oom ();
 
-    if (!(val = plugin_conf_get (p, "live.missed.trigger.allow")))
-        msg_exit ("live: live.missed.trigger.allow is not set");
-    ctx->live_missed_trigger_allow = strtoul (val, NULL, 10);
+    ctx->live_missed_trigger_allow = plugin_conf_get_int (p,
+                                    "live.missed.trigger.allow");
     if (ctx->live_missed_trigger_allow < 2)
         msg_exit ("live: live.missed.trigger.allow should be >= 2");
 

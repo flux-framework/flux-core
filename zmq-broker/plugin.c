@@ -178,11 +178,9 @@ void plugin_log (plugin_ctx_t *p, logpri_t pri, const char *fmt, ...)
     }
 }
 
-char *plugin_conf_get (plugin_ctx_t *p, char *key)
+json_object *plugin_conf_get (plugin_ctx_t *p, const char *key)
 {
-    json_object *o = util_json_object_new_object ();
-    const char *val;
-    char *ret = NULL;
+    json_object *vo = NULL, *o = util_json_object_new_object ();
     zmsg_t *zmsg = NULL;
 
     util_json_object_add_string (o, "key", key);
@@ -195,15 +193,56 @@ char *plugin_conf_get (plugin_ctx_t *p, char *key)
         err ("%s: protocol error", __FUNCTION__);
         goto done;
     }
-    if (util_json_object_get_string (o, "val", &val) < 0) /* not set */
+    if (!(vo = json_object_object_get (o, "val"))) /* not set */
         goto done;
-    ret = xstrdup (val);
+    json_object_get (vo);
 done:
     if (o)
         json_object_put (o);
     if (zmsg)
         zmsg_destroy (&zmsg);
-    return ret;       
+    return vo;       
+}
+
+double plugin_conf_get_double (plugin_ctx_t *p, const char *key)
+{
+    json_object *vo;
+    double v;
+
+    if (!(vo = plugin_conf_get (p, key)))
+        msg_exit ("%s: key %s is not set", p->plugin->name, key);
+    if ((v = json_object_get_double (vo)) == NAN)
+        msg_exit ("%s: key %s value is not a number", p->plugin->name, key);
+    json_object_put (vo);
+    return v;
+}
+
+int plugin_conf_get_int (plugin_ctx_t *p, const char *key)
+{
+    json_object *vo;
+    int v;
+
+    if (!(vo = plugin_conf_get (p, key)))
+        msg_exit ("%s: key %s is not set", p->plugin->name, key);
+    if ((v = json_object_get_int (vo)) == 0 && errno == EINVAL)
+        msg_exit ("%s: key %s value is not a number", p->plugin->name, key);
+    json_object_put (vo);
+    return v;
+}
+
+char *plugin_conf_get_string (plugin_ctx_t *p, const char *key)
+{
+    json_object *vo;
+    const char *v;
+    char *cpy;
+
+    if (!(vo = plugin_conf_get (p, key)))
+        msg_exit ("%s: key %s is not set", p->plugin->name, key);
+    if (!(v = json_object_get_string (vo)))
+        msg_exit ("%s: key %s value is not a string", p->plugin->name, key);
+    cpy = xstrdup (v);
+    json_object_put (vo);
+    return cpy;
 }
 
 void plugin_ping_respond (plugin_ctx_t *p, zmsg_t **zmsg)

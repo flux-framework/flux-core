@@ -326,15 +326,11 @@ static void _init (plugin_ctx_t *p)
     ctx_t *ctx = xzmalloc (sizeof (*ctx));
     int redis_port;
     char *redis_host;
-    char *val;
 
-    if (!(redis_host = plugin_conf_get (p, "kvs.redis.hostname")))
-        msg_exit ("kvs: kvs.redis.hostname is not set");
-    if (!(val = plugin_conf_get (p, "kvs.redis.port")))
-        msg_exit ("kvs: kvs.redis.port is not set");
-    redis_port = strtoul (val, NULL, 10);
+    redis_host = plugin_conf_get_string (p, "kvs.redis.hostname");
+    redis_port = plugin_conf_get_int (p, "kvs.redis.port");
     if (redis_port <= 0 || redis_port > 65535)
-        msg_exit ("kvs: invalid redis port: %s", val);
+        msg_exit ("kvs: invalid redis port: %d", redis_port);
 
     p->ctx = ctx;
 retryconnect:
@@ -356,7 +352,6 @@ retryconnect:
     }
 done:
     free (redis_host);
-    free (val);
 }
 
 static void _fini (plugin_ctx_t *p)

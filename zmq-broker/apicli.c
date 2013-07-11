@@ -308,13 +308,14 @@ error:
     return NULL;
 }
 
-int cmb_conf_put (cmb_t c, const char *key, const char *val)
+int cmb_conf_put (cmb_t c, const char *key, json_object *vo)
 {
     json_object *o = util_json_object_new_object ();
 
     /* send request */
     util_json_object_add_string (o, "key", key);
-    util_json_object_add_string (o, "val", val);
+    if (vo)
+        json_object_object_add (o, "val", vo);
     if (_send_message (c, o, "conf.put") < 0)
         goto error;
     json_object_put (o);
@@ -364,11 +365,10 @@ error:
     return -1;
 }
 
-char *cmb_conf_get (cmb_t c, const char *key)
+json_object *cmb_conf_get (cmb_t c, const char *key)
 {
     json_object *o = util_json_object_new_object ();
-    const char *val;
-    char *ret;
+    json_object *vo = NULL;
 
     /* send request */
     util_json_object_add_string (o, "key", key);
@@ -382,13 +382,12 @@ char *cmb_conf_get (cmb_t c, const char *key)
         goto error;
     if (util_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
-    if (util_json_object_get_string (o, "val", &val) < 0) {
+    if (!(vo = json_object_object_get (o, "val")))
         errno = 0; /* key was not set */
-        ret = NULL;
-    } else
-        ret = xstrdup (val);
+    else
+        json_object_get (vo);
     json_object_put (o);
-    return ret;
+    return vo;
 error:
     if (o)
         json_object_put (o);
@@ -408,10 +407,11 @@ error:
     return -1;
 }
 
-int cmb_conf_next (cmb_t c, char **kp, char **vp)
+int cmb_conf_next (cmb_t c, char **kp, json_object **vop)
 {
     json_object *o = NULL;
-    const char *key, *val;
+    const char *key;
+    json_object *vo;
 
     if (_recv_message (c, NULL, &o, 0) < 0)
         goto error;
@@ -420,10 +420,11 @@ int cmb_conf_next (cmb_t c, char **kp, char **vp)
     if (util_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
     if (util_json_object_get_string (o, "key", &key) < 0
-     || util_json_object_get_string (o, "val", &val) < 0)
+     || !(vo = json_object_object_get (o, "val")))
         goto eproto;
     *kp = xstrdup (key);
-    *vp = xstrdup (val);
+    json_object_get (vo);
+    *vop = vo;
     return 0;
 eproto:
     errno = EPROTO;

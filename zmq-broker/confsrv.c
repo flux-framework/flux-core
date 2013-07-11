@@ -80,7 +80,7 @@ static void _req_addclient (req_t *req, zmsg_t **zmsg)
 static void _conf_get (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
-    json_object *o = NULL;
+    json_object *vo, *o = NULL;
     const char *key, *val;
     req_t *req;
 
@@ -90,7 +90,9 @@ static void _conf_get (plugin_ctx_t *p, zmsg_t **zmsg)
         goto done;
     }
     if ((val = zhash_lookup (ctx->store, key)) != NULL) {
-        util_json_object_add_string (o, "val", val);
+        if (!(vo = json_tokener_parse (val)))
+            msg_exit ("conf: JSON parse error %s=%s", key, val);
+        json_object_object_add (o, "val", vo);
         util_json_object_add_int (o, "store_version", ctx->store_version);
         plugin_send_response (p, zmsg, o);
     } else if (plugin_treeroot (p)) {
@@ -115,7 +117,7 @@ done:
 static void _conf_put (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
-    json_object *o = NULL;
+    json_object *vo, *o = NULL;
     const char *key, *val;
 
     if (plugin_treeroot (p)) {
@@ -126,11 +128,13 @@ static void _conf_put (plugin_ctx_t *p, zmsg_t **zmsg)
         }
         if (!ctx->store_plus1 && !(ctx->store_plus1 = zhash_dup (ctx->store)))
             oom ();
-        if (util_json_object_get_string (o, "val", &val) < 0)
-            zhash_delete (ctx->store_plus1, key);
-        else {
+        if ((vo = json_object_object_get (o, "val"))) {
+            val = json_object_to_json_string (vo);
             zhash_update (ctx->store_plus1, key, xstrdup (val));
             zhash_freefn (ctx->store_plus1, key, (zhash_free_fn *) free);
+            /* FIXME: am I supposed to free val?  valgrind me */
+        } else {
+            zhash_delete (ctx->store_plus1, key);
         }
         plugin_send_response_errnum (p, zmsg, 0);
     } else
@@ -169,7 +173,7 @@ typedef struct {
 static int _conf_list_one (const char *key, void *item, void *arg)
 {
     conf_list_one_arg_t *la = arg;
-    json_object *o = util_json_object_new_object ();
+    json_object *vo, *o = util_json_object_new_object ();
     ctx_t *ctx = la->p->ctx;
     zmsg_t *cpy;
 
@@ -177,7 +181,9 @@ static int _conf_list_one (const char *key, void *item, void *arg)
         oom ();
     util_json_object_add_int (o, "store_version", ctx->store_version);
     util_json_object_add_string (o, "key", key);
-    util_json_object_add_string (o, "val", (char *)item);
+    if (!(vo = json_tokener_parse ((char *)item)))
+        msg_exit ("conf: JSON parse error %s=%s", key, (char *)item);
+    json_object_object_add (o, "val", vo);
     plugin_send_response (la->p, &cpy, o);
     json_object_put (o);
     return 0;
@@ -196,7 +202,7 @@ static void _conf_list (plugin_ctx_t *p, zmsg_t **zmsg)
 }
 
 static void _conf_get_response_clients (plugin_ctx_t *p, req_t *req,
-                                        const char *val, int store_version)
+                                        json_object *vo, int store_version)
 {
     zmsg_t *zmsg;
     json_object *o = NULL;
@@ -205,8 +211,10 @@ static void _conf_get_response_clients (plugin_ctx_t *p, req_t *req,
     while (zmsg) {
         if (cmb_msg_decode (zmsg, NULL, &o) == 0 && o != NULL) {
             util_json_object_add_int (o, "store_version", store_version);
-            if (val)
-                util_json_object_add_string (o, "val", val);
+            if (vo) {
+                json_object_get (vo);
+                json_object_object_add (o, "val", vo);
+            }
             plugin_send_response (p, &zmsg, o);
         }
         if (o) {
@@ -222,7 +230,7 @@ static void _conf_get_response_clients (plugin_ctx_t *p, req_t *req,
 static void _conf_get_response (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
-    json_object *o = NULL;
+    json_object *vo, *o = NULL;
     const char *key, *val = NULL;
     int store_version;
     req_t *req;
@@ -231,13 +239,15 @@ static void _conf_get_response (plugin_ctx_t *p, zmsg_t **zmsg)
           || util_json_object_get_string (o, "key", &key) < 0
           || util_json_object_get_int (o, "store_version", &store_version) < 0)
         goto done;
-    if (util_json_object_get_string (o, "val", &val) == 0
+    if ((vo = json_object_object_get (o, "val"))
                                  && ctx->store_version == store_version) {
-        zhash_update (ctx->store, key, xstrdup (val));    
+        val = json_object_to_json_string (vo);
+        zhash_update (ctx->store, key, xstrdup (val));
         zhash_freefn (ctx->store, key, (zhash_free_fn *)free);
+        /* FIXME: am I supposed to free val?  valgrind me */
     }
     if ((req = zhash_lookup (ctx->reqs, key))) {
-        _conf_get_response_clients (p, req, val, store_version);
+        _conf_get_response_clients (p, req, vo, store_version);
         zhash_delete (ctx->reqs, key);
     }
 done:

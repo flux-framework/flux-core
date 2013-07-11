@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#include <json/json.h>
 
 #include "cmb.h"
 #include "log.h"

@@ -6,7 +6,7 @@
   --rank=0 --size=3 --children=1  \
   --plugins=api,barrier,live,log,kvs,conf,sync \
   --set-conf sync.period.sec=1.5 \
-  --set-conf kvs.redis.hostname=127.0.0.1 \
+  --set-conf kvs.redis.hostname=\"127.0.0.1\" \
   --set-conf kvs.redis.port=6379 \
   --set-conf live.missed.trigger.allow=5 \
   --set-conf log.reduction.timeout.msec=100 \

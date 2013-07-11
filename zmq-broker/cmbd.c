@@ -159,22 +159,23 @@ int main (int argc, char *argv[])
             case 'H': { /* set-conf-hostlist hostlist */
                 hostlist_t hl = hostlist_create (optarg);
                 hostlist_iterator_t itr;
-                char *key, *host, *ipaddr, *val;
+                json_object *o;
+                char *key, *host;
+                const char *val;
                 int rank = 0;
                 if (!hl)
                     msg_exit ("failed to parse hostlist");
                 itr = hostlist_iterator_create (hl);
                 while ((host = hostlist_next (itr))) {
-                    if (!(ipaddr = lookup_host (host)))
+                    if (!(o = lookup_host (host)))
                         msg_exit ("could not look up %s", host);
                     if (asprintf (&key, "host.%d", rank++) < 0)
                         oom ();
-                    if (asprintf (&val, "%s,%s", host, ipaddr) < 0)
-                        oom ();
-                    zhash_update (conf->conf_hash, key, val);
+                    val = json_object_to_json_string (o);
+                    zhash_update (conf->conf_hash, key, xstrdup (val));
                     zhash_freefn (conf->conf_hash, key, free);
                     free (key);
-                    free (host);
+                    json_object_put (o);
                 }
                 hostlist_iterator_destroy (itr);
                 hostlist_destroy (hl);
@@ -257,10 +258,13 @@ static int _conf_set_one (const char *key, void *item, void *arg)
     server_t *srv = ca->srv;
     conf_t *conf = ca->conf;
     zmsg_t *zmsg = NULL;
-    json_object *o = util_json_object_new_object ();
+    json_object *no, *o = util_json_object_new_object ();
 
     util_json_object_add_string (o, "key", key);
-    util_json_object_add_string (o, "val", (const char *)item);
+    if ((no = json_tokener_parse ((char *)item)))
+        json_object_object_add (o, "val", no);
+    else
+        util_json_object_add_string (o, "val", (char *)item);
     if (_request_send (conf, srv, o, "conf.put") < 0)
         goto error;
     json_object_put (o);

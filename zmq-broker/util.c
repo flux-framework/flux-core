@@ -10,6 +10,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <math.h>
+#include <limits.h>
 
 #include "cmb.h"
 #include "util.h"
@@ -146,6 +148,15 @@ char *argv_concat (int argc, char *argv[])
             strcat (s, " "); 
     }
     return s; 
+}
+
+void util_json_object_add_double (json_object *o, char *name, double n)
+{
+    json_object *no;
+
+    if (!(no = json_object_new_double (n)))
+        oom ();
+    json_object_object_add (o, name, no);
 }
 
 void util_json_object_add_int (json_object *o, char *name, int i)
@@ -315,12 +326,14 @@ logpri_t util_logpri_val (char *p)
     return pri;
 }
 
-char *lookup_host (char *host)
+json_object *lookup_host (char *host)
 {
     struct addrinfo hints, *res = NULL, *r;
     int errnum;
     char ipaddr[64];
-    char *ipaddr_list = NULL;
+    json_object *ao, *no, *o = util_json_object_new_object (); 
+
+    util_json_object_add_string (o, "hostname", host);
 
     memset (&hints, 0, sizeof(hints));
     hints.ai_family = PF_UNSPEC;
@@ -334,6 +347,8 @@ char *lookup_host (char *host)
         msg_exit ("unknown host: %s\n", host);
         goto error;
     }
+    if (!(ao = json_object_new_array ()))
+        oom ();
     for (r = res; r != NULL; r = r->ai_next) {
         if ((errnum = getnameinfo (r->ai_addr, r->ai_addrlen,
                                    ipaddr, sizeof (ipaddr),
@@ -341,18 +356,13 @@ char *lookup_host (char *host)
             msg ("getnameinfo: %s: %s", host, gai_strerror (errnum));
             goto error;
         }
-        if (ipaddr_list) {
-            char *new;
-            if (asprintf (&new, "%s,%s", ipaddr_list, ipaddr) < 0)
-                oom ();
-            free (ipaddr_list);
-            ipaddr_list = new;
-        } else
-            ipaddr_list = xstrdup (ipaddr);
-            
+        if (!(no = json_object_new_string (ipaddr)))
+            oom ();
+        json_object_array_add (ao, no);
     }
     freeaddrinfo (res);
-    return ipaddr_list;
+    json_object_object_add (o, "addrs", ao);
+    return o;
 error:
     if (res)
         freeaddrinfo (res);
