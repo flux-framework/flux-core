@@ -314,14 +314,17 @@ int main (int argc, char *argv[])
             case 'a': { /* --conf-put key=val */
                 char *key = optarg;
                 char *val = strchr (optarg, '=');
-                json_object *vo;
-                if (val == NULL)
-                    usage ();
+                json_object *vo = NULL;
+                if (!val)
+                    msg_exit ("malformed key=val argument");
                 *val++ = '\0';
-                if (!(vo = json_tokener_parse (val)))
-                    msg_exit ("%s is not valid JSON", val);
+                if (strlen (val) > 0)
+                    if (!(vo = json_tokener_parse (val)))
+                        vo = json_object_new_string (val);
                 if (cmb_conf_put (c, key, vo) < 0)
                     err_exit ("cmb_conf_put");
+                if (vo)
+                    json_object_put (vo);
                 break;
             }
             case 'A': { /* --conf-get key */
