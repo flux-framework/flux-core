@@ -28,6 +28,8 @@
 
 #include "syncsrv.h"
 
+#define MAX_SYNC_PERIOD_SEC 30*60
+
 static int epoch = 0;
 
 static void _timeout (plugin_ctx_t *p)
@@ -35,14 +37,23 @@ static void _timeout (plugin_ctx_t *p)
     plugin_send_event (p, "event.sched.trigger.%d", ++epoch);
 }
 
+static void _set_sync_period_sec (const char *key, json_object *o, void *arg)
+{
+    plugin_ctx_t *p = arg;
+    double v;
+
+    if (!o)
+        msg_exit ("sync: %s is not set", key);
+    v = json_object_get_double (o);
+    if (v == NAN || v <= 0 || v > MAX_SYNC_PERIOD_SEC)
+        msg_exit ("sync: bad %s value: %f", key, v);
+    plugin_timeout_set (p, (int)(v * 1000)); /* msec */
+    plugin_log (p, CMB_LOG_NOTICE, "%s = %f", key, v);
+}
+
 static void _init (plugin_ctx_t *p)
 {
-    double sync_period_sec;
-
-    sync_period_sec = plugin_conf_get_double (p, "sync.period.sec");
-    if (sync_period_sec <= 0 || sync_period_sec > 30*60)
-        msg_exit ("sync: bad sync.period.sec value");
-    plugin_timeout_set (p, (int)(sync_period_sec * 1000)); /* msec */
+    plugin_conf_watch (p, "sync.period.sec", _set_sync_period_sec, p);
 }
 
 struct plugin_struct syncsrv = {

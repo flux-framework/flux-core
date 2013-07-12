@@ -9,6 +9,13 @@ typedef struct {
     int event_recv_count;
 } plugin_stats_t;
 
+typedef void (ConfSetF (const char *key, json_object *o, void *arg));
+
+typedef struct {
+    void *arg;
+    ConfSetF *set;
+} conf_watcher_t;
+
 typedef struct {
     conf_t *conf;
     void *zs_upreq; /* for making requests */
@@ -22,6 +29,7 @@ typedef struct {
     plugin_t plugin;
     server_t *srv;
     plugin_stats_t stats;
+    zhash_t *conf_watcher;
     void *ctx;
 } plugin_ctx_t;
 
@@ -63,9 +71,12 @@ bool plugin_timeout_isset (plugin_ctx_t *p);
 
 void plugin_log (plugin_ctx_t *p, logpri_t pri, const char *fmt, ...);
 
-double plugin_conf_get_double (plugin_ctx_t *p, const char *key);
-char *plugin_conf_get_string (plugin_ctx_t *p, const char *key);
-int plugin_conf_get_int (plugin_ctx_t *p, const char *key);
+json_object *plugin_conf_get (plugin_ctx_t *p, const char *key);
+void plugin_conf_watch (plugin_ctx_t *p, const char *key,
+                        ConfSetF *set, void *arg);
 
 bool plugin_treeroot (plugin_ctx_t *p);
 
+/*
+ * vi:tabstop=4 shiftwidth=4 expandtab
+ */

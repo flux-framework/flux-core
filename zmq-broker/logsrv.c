@@ -149,6 +149,18 @@ static void _recv_fault_event (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     _process_backlog (p);
 }
 
+static void _resize_cirbuf (plugin_ctx_t *p, int new_size)
+{
+    ctx_t *ctx = p->ctx;
+
+    while (ctx->cirbuf_size > new_size) {
+        json_object *tmp = zlist_pop (ctx->cirbuf);
+        json_object_put (tmp);
+        ctx->cirbuf_size--;
+    }
+    ctx->log_circular_buffer_entries = new_size;
+}
+
 /* Manage listeners.
  */
 
@@ -448,6 +460,57 @@ static void _timeout (plugin_ctx_t *p)
     plugin_timeout_clear (p);
 }
 
+static void _set_log_reduction_timeout_msec (const char *key, json_object *o,
+                                             void *arg)
+{
+    plugin_ctx_t *p = arg;
+    ctx_t *ctx = p->ctx;
+    int i;
+
+    if (!o)
+        msg_exit ("live: %s is not set", key);
+    i = json_object_get_int (o);
+    if (i < 0)
+        msg_exit ("live: bad %s value: %d", key, i);
+    ctx->log_reduction_timeout_msec = i;
+    //plugin_log (p, CMB_LOG_NOTICE, "%s = %d", key, i);
+    msg ("log: %s = %d", key, i);
+}
+
+static void _set_log_circular_buffer_entries (const char *key, json_object *o,
+                                              void *arg)
+{
+    plugin_ctx_t *p = arg;
+    int i;
+
+    if (!o)
+        msg_exit ("live: %s is not set", key);
+    i = json_object_get_int (o);
+    if (i < 0)
+        msg_exit ("live: bad %s value: %d", key, i);
+    _resize_cirbuf (p, i);
+    //plugin_log (p, CMB_LOG_NOTICE, "%s = %d", key, i);
+    msg ("log: %s = %d", key, i);
+}
+
+static void _set_log_persist_priority (const char *key, json_object *o,
+                                       void *arg)
+{
+    plugin_ctx_t *p = arg;
+    ctx_t *ctx = p->ctx;
+    int i;
+
+    if (!o)
+        msg_exit ("live: %s is not set", key);
+    i = json_object_get_int (o);
+    if (i < CMB_LOG_EMERG || i > CMB_LOG_DEBUG)
+        msg_exit ("live: bad %s value: %d", key, i);
+    ctx->log_persist_priority = i;
+    //plugin_log (p, CMB_LOG_NOTICE, "%s = %d", key, i);
+    msg ("log: %s = %d", key, i);
+}
+
+
 static void _init (plugin_ctx_t *p)
 {
     ctx_t *ctx;
@@ -457,11 +520,12 @@ static void _init (plugin_ctx_t *p)
     ctx->backlog = zlist_new ();
     ctx->cirbuf = zlist_new ();
 
-    ctx->log_reduction_timeout_msec = plugin_conf_get_int (p,
-                                        "log.reduction.timeout.msec");
-    ctx->log_circular_buffer_entries = plugin_conf_get_int (p,
-                                        "log.circular.buffer.entries");
-    //ctx->log_persist_priority = plugin_conf_get_int (p, "log.persist.priority");
+    plugin_conf_watch (p, "log.reduction.timeout.msec",
+                      _set_log_reduction_timeout_msec, p);
+    plugin_conf_watch (p, "log.circular.buffer.entries",
+                      _set_log_circular_buffer_entries, p);
+    plugin_conf_watch (p, "log.persist.priority",
+                      _set_log_persist_priority, p);
 
     zsocket_set_subscribe (p->zs_evin, "event.fault.");
 }

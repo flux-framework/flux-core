@@ -178,11 +178,21 @@ void plugin_log (plugin_ctx_t *p, logpri_t pri, const char *fmt, ...)
     }
 }
 
-json_object *plugin_conf_get (plugin_ctx_t *p, const char *key)
+static void _conf_add_watcher (plugin_ctx_t *p, const char *key,
+                               ConfSetF *set, void *arg)
+{
+    conf_watcher_t *wp = xzmalloc (sizeof (conf_watcher_t));
+
+    wp->arg = arg;
+    wp->set = set;
+    zhash_update (p->conf_watcher, key, wp);
+    zhash_freefn (p->conf_watcher, key, free);
+}
+
+static json_object *_conf_get (plugin_ctx_t *p, const char *key, bool watch)
 {
     json_object *vo = NULL, *o = util_json_object_new_object ();
     zmsg_t *zmsg = NULL;
-    bool watch = false;
 
     util_json_object_add_string (o, "key", key);
     util_json_object_add_boolean (o, "watch", watch);
@@ -206,46 +216,32 @@ done:
     return vo;       
 }
 
-double plugin_conf_get_double (plugin_ctx_t *p, const char *key)
+json_object *plugin_conf (plugin_ctx_t *p, const char *key)
 {
-    json_object *vo;
-    double v;
-
-    if (!(vo = plugin_conf_get (p, key)))
-        msg_exit ("%s: key %s is not set", p->plugin->name, key);
-    if ((v = json_object_get_double (vo)) == NAN)
-        msg_exit ("%s: key %s value is not a number", p->plugin->name, key);
-    json_object_put (vo);
-    return v;
+    return _conf_get (p, key, false);
 }
 
-int plugin_conf_get_int (plugin_ctx_t *p, const char *key)
+void plugin_conf_watch (plugin_ctx_t *p, const char *key,
+                        ConfSetF *set, void *arg)
 {
-    json_object *vo;
-    int v;
-
-    if (!(vo = plugin_conf_get (p, key)))
-        msg_exit ("%s: key %s is not set", p->plugin->name, key);
-    if ((v = json_object_get_int (vo)) == 0 && errno == EINVAL)
-        msg_exit ("%s: key %s value is not a number", p->plugin->name, key);
-    json_object_put (vo);
-    return v;
+    set (key, _conf_get (p, key, true), arg);
+    _conf_add_watcher (p, key, set, arg);    
 }
 
-char *plugin_conf_get_string (plugin_ctx_t *p, const char *key)
+void plugin_watch_update (plugin_ctx_t *p, zmsg_t **zmsg)
 {
-    json_object *vo;
-    const char *v;
-    char *cpy;
+    json_object *o = NULL;
+    conf_watcher_t *wp; 
+    const char *key;
 
-    if (!(vo = plugin_conf_get (p, key)))
-        msg_exit ("%s: key %s is not set", p->plugin->name, key);
-    if (json_object_get_type (vo) != json_type_string)
-        msg_exit ("%s: key %s value is not a string", p->plugin->name, key);
-    v = json_object_get_string (vo);
-    cpy = xstrdup (v);
-    json_object_put (vo);
-    return cpy;
+    if (cmb_msg_decode (*zmsg, NULL, &o) == 0 && o != NULL
+                        && util_json_object_get_string (o, "key", &key) == 0
+                        && (wp = zhash_lookup (p->conf_watcher, key))) {
+        wp->set (key, json_object_object_get (o, "val"), wp->arg);
+        zmsg_destroy (zmsg);
+    }
+    if (o)
+        json_object_put (o);
 }
 
 void plugin_ping_respond (plugin_ctx_t *p, zmsg_t **zmsg)
@@ -370,6 +366,10 @@ static void _plugin_poll (plugin_ctx_t *p)
         if (zmsg && type == ZMSG_REQUEST && cmb_msg_match (zmsg, statstag))
             plugin_stats_respond (p, &zmsg);
 
+        /* intercept "conf.get" response for watched conf values */
+        if (zmsg && type == ZMSG_RESPONSE && cmb_msg_match (zmsg, "conf.get"))
+            plugin_watch_update (p, &zmsg);
+
         /* dispatch message to plugin's recvFn() */
         /*     recvFn () shouldn't free zmsg if it doesn't recognize the tag */
         if (zmsg && p->plugin->recvFn)
@@ -421,6 +421,8 @@ static void _plugin_destroy (void *arg)
     zsocket_destroy (p->srv->zctx, p->zs_dnreq);
     zsocket_destroy (p->srv->zctx, p->zs_upreq);
 
+    zhash_destroy (&p->conf_watcher);
+
     free (p->id);
 
     free (p);
@@ -453,6 +455,9 @@ static int _plugin_create (char *name, server_t *srv, conf_t *conf)
     p->srv = srv;
     p->plugin = plugin;
     plugin_timeout_clear (p);
+
+    if (!(p->conf_watcher = zhash_new ()))
+        oom ();
 
     p->id = xzmalloc (strlen (name) + 16);
     snprintf (p->id, strlen (name) + 16, "%s-%d", name, conf->rank);

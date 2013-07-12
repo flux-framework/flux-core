@@ -274,6 +274,22 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         free (arg);
 }
 
+static void _set_live_missed_trigger_allow (const char *key, json_object *o,
+                                            void *arg)
+{
+    plugin_ctx_t *p = arg;
+    ctx_t *ctx = p->ctx;
+    int i;
+
+    if (!o)
+        msg_exit ("live: %s is not set", key);
+    i = json_object_get_int (o);
+    if (i < 2 || i > 100)
+        msg_exit ("live: bad %s value: %d", key, i);
+    ctx->live_missed_trigger_allow = i; 
+    plugin_log (p, CMB_LOG_NOTICE, "%s = %d", key, i);
+}
+
 static void _init (plugin_ctx_t *p)
 {
     conf_t *conf = p->conf;
@@ -285,10 +301,8 @@ static void _init (plugin_ctx_t *p)
     if (!(ctx->kids = zhash_new ()))
         oom ();
 
-    ctx->live_missed_trigger_allow = plugin_conf_get_int (p,
-                                    "live.missed.trigger.allow");
-    if (ctx->live_missed_trigger_allow < 2)
-        msg_exit ("live: live.missed.trigger.allow should be >= 2");
+    plugin_conf_watch (p, "live.missed.trigger.allow",
+                      _set_live_missed_trigger_allow, p);
 
     for (i = 0; i < conf->size; i++)
         ctx->state[i] = true;

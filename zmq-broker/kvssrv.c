@@ -321,40 +321,59 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         _kvs_disconnect (p, zmsg);
 }
 
+static void _redis_connect (plugin_ctx_t *p, char *host, int port)
+{
+    ctx_t *ctx = p->ctx;
+
+    if (ctx->rctx) {
+        plugin_log (p, CMB_LOG_NOTICE, "redisFree");
+        redisFree (ctx->rctx);
+    }
+    for (;;) {
+        plugin_log (p, CMB_LOG_NOTICE, "redisConnect %s:%d", host, port);
+        if (!(ctx->rctx = redisConnect (host, port))) {
+            msg_exit ("kvs: redisConnect failed");
+        } else if (ctx->rctx->err == REDIS_ERR_IO && errno == ECONNREFUSED) {
+            redisFree (ctx->rctx);
+            ctx->rctx = NULL;
+            sleep (2);
+        } else if (ctx->rctx->err)
+            msg_exit ("kvs: redisConnect: %s", ctx->rctx->errstr);
+        else
+            break;
+    }
+}
+
+/* FIXME: allow connect to fail on bad value, then return EINVAL to
+ * kvs operations until ctx->rctx is re-established.
+ */
+static void _set_kvs_redis_server (const char *key, json_object *o, void *arg)
+{
+    plugin_ctx_t *p = arg;
+    char *pp, *host = NULL;
+    int port = 6379;
+
+    if (!o)
+        msg_exit ("kvs: %s is not set", key);
+    if (json_object_get_type (o) != json_type_string)
+        msg_exit ("kvs: bad %s value: not a string", key);
+    host = xstrdup (json_object_get_string (o));
+    if ((pp = strchr (host, ':'))) {
+        *pp++ = '\0';
+        port = strtoul (pp, NULL, 10);
+        if (port <= 0 || port > 65535)
+            msg_exit ("kvs: bad %s port value: %d", key, port);
+    }
+    _redis_connect (p, host, port);
+    if (host)
+        free (host);
+}
+
 static void _init (plugin_ctx_t *p)
 {
     ctx_t *ctx = xzmalloc (sizeof (*ctx));
-    int redis_port = 6379;
-    char *portstr, *redis_host;
-
-
-    redis_host = plugin_conf_get_string (p, "kvs.redis.server");
-    if ((portstr = strchr (redis_host, ':'))) {
-        *portstr++ = '\0';
-        redis_port = strtoul (portstr, NULL, 10);
-        if (redis_port <= 0 || redis_port > 65535)
-            msg_exit ("kvs: invalid redis port: %d", redis_port);
-    }
     p->ctx = ctx;
-retryconnect:
-    ctx->rctx = redisConnect (redis_host, redis_port);
-    if (ctx->rctx == NULL) {
-        err ("redisConnect returned NULL - abort");
-        goto done;
-    }
-    if (ctx->rctx->err == REDIS_ERR_IO && errno == ECONNREFUSED) {
-        redisFree (ctx->rctx);
-        sleep (2);
-        err ("redisConnect: retrying connect");
-        goto retryconnect;
-    }
-    if (ctx->rctx->err) {
-        err ("redisConnect: %s", ctx->rctx->errstr);
-        redisFree (ctx->rctx);
-        ctx->rctx = NULL;
-    }
-done:
-    free (redis_host);
+    plugin_conf_watch (p, "kvs.redis.server", _set_kvs_redis_server, p);
 }
 
 static void _fini (plugin_ctx_t *p)
