@@ -420,13 +420,17 @@ int cmb_conf_next (cmb_t c, char **kp, json_object **vop)
         goto eproto;
     if (util_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
-    if (util_json_object_get_string (o, "key", &key) < 0
-     || !(vo = json_object_object_get (o, "val")))
+    if (util_json_object_get_string (o, "key", &key) < 0)
         goto eproto;
+    if (vop) {
+        vo = json_object_object_get (o, "val");
+        if (vo)
+            json_object_get (vo);
+        *vop = vo;
+    }
     if (kp)
         *kp = xstrdup (key);
-    json_object_get (vo);
-    *vop = vo;
+    json_object_put (o);
     return 0;
 eproto:
     errno = EPROTO;

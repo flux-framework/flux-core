@@ -121,7 +121,7 @@ static void _send_watcher_responses (plugin_ctx_t *p, req_t *wp,
 static void _update_watcher (plugin_ctx_t *p, req_t *wp, const char *val,
                             int store_version)
 {
-    json_object *vo;
+    json_object *vo = NULL;
 
     if (!wp->val_initialized) {
         wp->val = val ? xstrdup (val) : NULL;
@@ -131,7 +131,7 @@ static void _update_watcher (plugin_ctx_t *p, req_t *wp, const char *val,
         if (wp->val)
             free (wp->val);
         wp->val = val ? xstrdup (val) : NULL;
-        if (wp->val)
+        if (val)
             vo = json_tokener_parse (val);
         _send_watcher_responses (p, wp, vo, store_version);
         if (vo)
