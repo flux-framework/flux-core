@@ -47,7 +47,7 @@ typedef struct {
     int cirbuf_size;
     int log_reduction_timeout_msec;
     int log_circular_buffer_entries;
-    int log_persist_priority;
+    logpri_t log_persist_priority;
 } ctx_t;
 
 static void _add_backlog (plugin_ctx_t *p, json_object *o);
@@ -494,16 +494,14 @@ static void _set_log_persist_priority (const char *key, json_object *o,
 {
     plugin_ctx_t *p = arg;
     ctx_t *ctx = p->ctx;
-    int i;
+    const char *s;
 
     if (!o)
         msg_exit ("live: %s is not set", key);
-    i = json_object_get_int (o);
-    if (i < CMB_LOG_EMERG || i > CMB_LOG_DEBUG)
-        msg_exit ("live: bad %s value: %d", key, i);
-    ctx->log_persist_priority = i;
+    s = json_object_get_string (o);
+    if (util_logpri_val (s, &ctx->log_persist_priority) < 0)
+        msg_exit ("live: bad %s value: %s", key, s);
 }
-
 
 static void _init (plugin_ctx_t *p)
 {

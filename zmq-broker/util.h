@@ -59,7 +59,7 @@ json_object *util_json_vlog (logpri_t pri, const char *fac, const char *src,
                              const char *fmt, va_list ap);
 
 const char *util_logpri_str (logpri_t pri);
-logpri_t util_logpri_val (char *s);
+int util_logpri_val (const char *s, logpri_t *lp);
 
 json_object *lookup_host (char *host);
 

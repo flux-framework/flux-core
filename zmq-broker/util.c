@@ -283,22 +283,6 @@ json_object *util_json_object_new_object (void)
     return o;
 }
 
-const char *util_logpri_str (logpri_t pri)
-{
-    switch (pri) {
-        case CMB_LOG_EMERG: return "emerg";
-        case CMB_LOG_ALERT: return "alert";
-        case CMB_LOG_CRIT: return "crit";
-        case CMB_LOG_ERR: return "err";
-        case CMB_LOG_WARNING: return "warning";
-        case CMB_LOG_NOTICE: return "notice";
-        case CMB_LOG_INFO: return "info";
-        case CMB_LOG_DEBUG: return "debug";
-    }
-    /*NOTREACHED*/
-    return "unknown";
-}
-
 json_object *util_json_vlog (logpri_t pri, const char *fac, const char *src,
                              const char *fmt, va_list ap)
 {
@@ -329,28 +313,43 @@ error:
     return NULL;
 }
 
-logpri_t util_logpri_val (char *p)
+const char *util_logpri_str (logpri_t pri)
 {
-    logpri_t pri = CMB_LOG_INFO;
+    switch (pri) {
+        case CMB_LOG_EMERG: return "emerg";
+        case CMB_LOG_ALERT: return "alert";
+        case CMB_LOG_CRIT: return "crit";
+        case CMB_LOG_ERR: return "err";
+        case CMB_LOG_WARNING: return "warning";
+        case CMB_LOG_NOTICE: return "notice";
+        case CMB_LOG_INFO: return "info";
+        case CMB_LOG_DEBUG: return "debug";
+    }
+    /*NOTREACHED*/
+    return "unknown";
+}
 
+int util_logpri_val (const char *p, logpri_t *lp)
+{
     if (!strcasecmp (p, "emerg"))
-        pri = CMB_LOG_EMERG;
+        *lp = CMB_LOG_EMERG;
     else if (!strcasecmp (p, "alert"))
-        pri = CMB_LOG_ALERT;
+        *lp = CMB_LOG_ALERT;
     else if (!strcasecmp (p, "crit"))
-        pri = CMB_LOG_CRIT;
+        *lp = CMB_LOG_CRIT;
     else if (!strcasecmp (p, "err") || !strcasecmp (p, "error"))
-        pri = CMB_LOG_ERR;
+        *lp = CMB_LOG_ERR;
     else if (!strcasecmp (p, "warning") || !strcasecmp (p, "warn"))
-        pri = CMB_LOG_WARNING;
+        *lp = CMB_LOG_WARNING;
     else if (!strcasecmp (p, "notice"))
-        pri = CMB_LOG_NOTICE;
+        *lp = CMB_LOG_NOTICE;
     else if (!strcasecmp (p, "info"))
-        pri = CMB_LOG_INFO;
+        *lp = CMB_LOG_INFO;
     else if (!strcasecmp (p, "debug"))
-        pri = CMB_LOG_DEBUG;
-
-    return pri;
+        *lp = CMB_LOG_DEBUG;
+    else
+        return -1;
+    return 0;
 }
 
 json_object *lookup_host (char *host)

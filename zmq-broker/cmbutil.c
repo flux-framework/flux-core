@@ -16,7 +16,7 @@
 #include "log.h"
 #include "util.h"
 
-static void _parse_logstr (char *s, logpri_t *pp, char **fp);
+static int _parse_logstr (char *s, logpri_t *pp, char **fp);
 
 #define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:lx:e:TL:W:D:r:R:qz:Za:A:cXw:"
 static const struct option longopts[] = {
@@ -369,7 +369,8 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'L': { /* --log */
-                _parse_logstr (optarg, &Lopt_priority, &Lopt_facility);
+                if (_parse_logstr (optarg, &Lopt_priority, &Lopt_facility) < 0)
+                    msg_exit ("bad log priority string");
                 Lopt = true; /* see code after getopt */
                 break;
             }
@@ -379,7 +380,8 @@ int main (int argc, char *argv[])
                 logpri_t pri;
                 int count;
 
-                _parse_logstr (optarg, &pri, &fac);
+                if (_parse_logstr (optarg, &pri, &fac) < 0)
+                    msg_exit ("bad log priority string");
                 if (cmb_log_subscribe (c, pri, fac) < 0)
                     err_exit ("cmb_log_subscribe");
                 free (fac);
@@ -404,7 +406,8 @@ int main (int argc, char *argv[])
                 logpri_t pri;
                 int count;
 
-                _parse_logstr (optarg, &pri, &fac);
+                if (_parse_logstr (optarg, &pri, &fac) < 0)
+                    msg_exit ("bad log priority string");
                 if (cmb_log_dump (c, pri, fac) < 0)
                     err_exit ("cmb_log_dump");
                 free (fac);
@@ -477,17 +480,19 @@ int main (int argc, char *argv[])
     exit (0);
 }
 
-static void _parse_logstr (char *s, logpri_t *pp, char **fp)
+static int _parse_logstr (char *s, logpri_t *pp, char **fp)
 {
     char *p, *fac = xstrdup (s);
     logpri_t pri = CMB_LOG_INFO;
 
     if ((p = strchr (fac, ':'))) {
         *p++ = '\0';
-        pri = util_logpri_val (p);
+        if (util_logpri_val (p, &pri) < 0)
+            return -1;
     }
     *pp = pri;
     *fp = fac;
+    return 0;
 }
 
 /*
