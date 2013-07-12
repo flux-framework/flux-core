@@ -155,7 +155,8 @@ static void _update_version (plugin_ctx_t *p, int new_version)
     /* Request values for watched keys.
      * Watchers will be updated as needed when the replies come in.
      */
-    keys = zhash_keys (ctx->watcher);
+    if (!(keys = zhash_keys (ctx->watcher)))
+        oom ();
     while ((key = zlist_pop (keys))) {
         json_object *o = util_json_object_new_object ();
         util_json_object_add_string (o, "key", key);
@@ -323,9 +324,11 @@ static void _delete_sender_from_req (req_t *req, char *sender)
 
 static void _delete_sender_from_reqhash (zhash_t *h, char *sender)
 {
-    zlist_t *keys = zhash_keys (h);
+    zlist_t *keys;
     const char *key;
 
+    if (!(keys = zhash_keys (h)))
+        oom ();
     while ((key = zlist_pop (keys)))
         _delete_sender_from_req (zhash_lookup (h, key), sender);
     zlist_destroy (&keys);
@@ -388,11 +391,11 @@ static void _conf_commit (plugin_ctx_t *p, zmsg_t **zmsg)
     plugin_send_event (p, "event.conf.update.%d", ctx->store_version);
         plugin_send_response_errnum (p, zmsg, 0);
 
-    keys = zhash_keys (ctx->watcher);
-    while ((key = zlist_pop (keys))) {
+    if (!(keys = zhash_keys (ctx->watcher)))
+        oom ();
+    while ((key = zlist_pop (keys)))
         _update_watcher (p, zhash_lookup (ctx->watcher, key),
-                         zhash_lookup (ctx->store, key), ctx->store_version);
-    }
+                            zhash_lookup (ctx->store, key), ctx->store_version);
     zlist_destroy (&keys);
 }
 
