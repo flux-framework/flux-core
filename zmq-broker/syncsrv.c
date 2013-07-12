@@ -48,7 +48,6 @@ static void _set_sync_period_sec (const char *key, json_object *o, void *arg)
     if (v == NAN || v <= 0 || v > MAX_SYNC_PERIOD_SEC)
         msg_exit ("sync: bad %s value: %f", key, v);
     plugin_timeout_set (p, (int)(v * 1000)); /* msec */
-    plugin_log (p, CMB_LOG_NOTICE, "%s = %f", key, v);
 }
 
 static void _init (plugin_ctx_t *p)

@@ -473,8 +473,6 @@ static void _set_log_reduction_timeout_msec (const char *key, json_object *o,
     if (i < 0)
         msg_exit ("live: bad %s value: %d", key, i);
     ctx->log_reduction_timeout_msec = i;
-    //plugin_log (p, CMB_LOG_NOTICE, "%s = %d", key, i);
-    msg ("log: %s = %d", key, i);
 }
 
 static void _set_log_circular_buffer_entries (const char *key, json_object *o,
@@ -489,8 +487,6 @@ static void _set_log_circular_buffer_entries (const char *key, json_object *o,
     if (i < 0)
         msg_exit ("live: bad %s value: %d", key, i);
     _resize_cirbuf (p, i);
-    //plugin_log (p, CMB_LOG_NOTICE, "%s = %d", key, i);
-    msg ("log: %s = %d", key, i);
 }
 
 static void _set_log_persist_priority (const char *key, json_object *o,
@@ -506,8 +502,6 @@ static void _set_log_persist_priority (const char *key, json_object *o,
     if (i < CMB_LOG_EMERG || i > CMB_LOG_DEBUG)
         msg_exit ("live: bad %s value: %d", key, i);
     ctx->log_persist_priority = i;
-    //plugin_log (p, CMB_LOG_NOTICE, "%s = %d", key, i);
-    msg ("log: %s = %d", key, i);
 }
 
 

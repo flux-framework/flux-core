@@ -325,18 +325,16 @@ static void _redis_connect (plugin_ctx_t *p, char *host, int port)
 {
     ctx_t *ctx = p->ctx;
 
-    if (ctx->rctx) {
-        plugin_log (p, CMB_LOG_NOTICE, "redisFree");
+    if (ctx->rctx)
         redisFree (ctx->rctx);
-    }
     for (;;) {
-        plugin_log (p, CMB_LOG_NOTICE, "redisConnect %s:%d", host, port);
         if (!(ctx->rctx = redisConnect (host, port))) {
             msg_exit ("kvs: redisConnect failed");
         } else if (ctx->rctx->err == REDIS_ERR_IO && errno == ECONNREFUSED) {
             redisFree (ctx->rctx);
             ctx->rctx = NULL;
             sleep (2);
+            msg ("kvs: redisConnect: retrying");
         } else if (ctx->rctx->err)
             msg_exit ("kvs: redisConnect: %s", ctx->rctx->errstr);
         else

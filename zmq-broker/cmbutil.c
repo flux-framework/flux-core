@@ -83,6 +83,7 @@ static void usage (void)
 "  -R,--route-del dst     delete local route to dst\n"
 "  -q,--route-query       list routes in JSON format\n"
 "  -z,--socket-path PATH  use non-default API socket path\n"
+"  -Z,--trace-apisock     trace api socket messages\n"
 );
     exit (1);
 }

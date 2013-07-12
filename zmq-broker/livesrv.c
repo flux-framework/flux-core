@@ -287,7 +287,6 @@ static void _set_live_missed_trigger_allow (const char *key, json_object *o,
     if (i < 2 || i > 100)
         msg_exit ("live: bad %s value: %d", key, i);
     ctx->live_missed_trigger_allow = i; 
-    plugin_log (p, CMB_LOG_NOTICE, "%s = %d", key, i);
 }
 
 static void _init (plugin_ctx_t *p)
