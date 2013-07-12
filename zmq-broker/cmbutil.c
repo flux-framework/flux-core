@@ -356,13 +356,14 @@ int main (int argc, char *argv[])
             }
             case 'w': { /* --conf-watch key */
                 json_object *vo;
-                if (!(vo = cmb_conf_get (c, optarg, true)))
+                if (!(vo = cmb_conf_get (c, optarg, true)) && errno != 0)
                     err_exit ("cmb_conf_get");
                 do {
-                    printf ("%s = %s\n", optarg,
-                            json_object_to_json_string_ext (vo,
-                                                    JSON_C_TO_STRING_SPACED));
-                    json_object_put (vo);
+                    printf ("%s = %s\n", optarg, vo 
+                                ? json_object_to_json_string_ext (vo, JSON_C_TO_STRING_SPACED)
+                                : "<nil>");
+                    if (vo)
+                        json_object_put (vo);
                 } while (cmb_conf_next (c, NULL, &vo) == 0);
                 break;
             }

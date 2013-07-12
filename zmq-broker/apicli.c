@@ -423,7 +423,8 @@ int cmb_conf_next (cmb_t c, char **kp, json_object **vop)
     if (util_json_object_get_string (o, "key", &key) < 0
      || !(vo = json_object_object_get (o, "val")))
         goto eproto;
-    *kp = xstrdup (key);
+    if (kp)
+        *kp = xstrdup (key);
     json_object_get (vo);
     *vop = vo;
     return 0;

@@ -47,38 +47,123 @@
 #include "confsrv.h"
 
 typedef struct {
-    zlist_t *reply_to;   /* item = (zmsg_t *) */
+    zlist_t *reply_to;  /* item = (zmsg_t *) */
+    char *val;
+    bool val_initialized;
 } req_t;
 
 typedef struct {
     zhash_t *store;
     zhash_t *store_next;
     int store_version;
-    zhash_t *proxy;      /* proxy{key} = (req_t *) */
+    zhash_t *proxy;     /* proxy{key} = (req_t *) */
+    zhash_t *watcher;   /* watcher{key} = (req_t *) */
 } ctx_t;
-
-static void _update_version (plugin_ctx_t *p, int new_version)
-{
-    ctx_t *ctx = p->ctx;
-
-    zhash_destroy (&ctx->store);
-    if (!(ctx->store = zhash_new ()))
-        oom ();
-    ctx->store_version = new_version;
-}
 
 static void _req_destroy (req_t *req)
 {
+    if (req->val)
+        free (req->val);
+    assert (zlist_size (req->reply_to) == 0);
     zlist_destroy (&req->reply_to);
 }
 
-static req_t *_req_create ()
+static req_t *_req_create (void)
 {
     req_t *req = xzmalloc (sizeof (req_t));
 
     if (!(req->reply_to = zlist_new ()))
         oom ();
     return req;
+}
+
+static req_t *_install_watcher (plugin_ctx_t *p, const char *key, zmsg_t *zmsg)
+{
+    ctx_t *ctx = p->ctx;
+    req_t *wp;
+    zmsg_t *cpy = zmsg_dup (zmsg);
+
+    if (!(wp = zhash_lookup (ctx->watcher, key))) {
+        wp = _req_create ();
+        zhash_update (ctx->watcher, key, wp);
+        zhash_freefn (ctx->watcher, key, (zhash_free_fn *)_req_destroy);
+    }
+    zlist_append (wp->reply_to, cpy);
+    return wp;
+}
+
+static void _send_watcher_responses (plugin_ctx_t *p, req_t *wp,
+                                     json_object *vo, int store_version)
+{
+    zmsg_t *zmsg = zlist_first (wp->reply_to);
+
+    while (zmsg) {
+        zmsg_t *cpy = zmsg_dup (zmsg);
+        json_object *o;
+
+        if (cmb_msg_decode (cpy, NULL, &o) == 0) {
+            if (o) {
+                util_json_object_add_int (o, "store_version", store_version);
+                if (vo) {
+                    json_object_get (vo);
+                    json_object_object_add (o, "val", vo);
+                }
+                plugin_send_response (p, &cpy, o);
+                json_object_put (o);
+            }
+        }
+        if (cpy)
+            zmsg_destroy (&cpy);
+        zmsg = zlist_next (wp->reply_to);
+    }
+}
+
+static void _update_watcher (plugin_ctx_t *p, req_t *wp, const char *val,
+                            int store_version)
+{
+    json_object *vo;
+
+    if (!wp->val_initialized) {
+        wp->val = val ? xstrdup (val) : NULL;
+        wp->val_initialized = true;
+    } else if ((wp->val && !val) || (!wp->val && val)
+                || (val && wp->val && strcmp (val, wp->val) != 0)) {
+        if (wp->val)
+            free (wp->val);
+        wp->val = val ? xstrdup (val) : NULL;
+        if (wp->val)
+            vo = json_tokener_parse (val);
+        _send_watcher_responses (p, wp, vo, store_version);
+        if (vo)
+            json_object_put (vo);
+    }
+}
+
+static void _update_version (plugin_ctx_t *p, int new_version)
+{
+    ctx_t *ctx = p->ctx;
+    zlist_t *keys;
+    char *key;
+
+    assert (!plugin_treeroot (p));
+
+    zhash_destroy (&ctx->store);
+    if (!(ctx->store = zhash_new ()))
+        oom ();
+    ctx->store_version = new_version;
+
+    /* Request values for watched keys.
+     * Watchers will be updated as needed when the replies come in.
+     */
+    keys = zhash_keys (ctx->watcher);
+    while ((key = zlist_pop (keys))) {
+        json_object *o = util_json_object_new_object ();
+        util_json_object_add_string (o, "key", key);
+        util_json_object_add_boolean (o, "watch", false);
+        plugin_send_request (p, o, "conf.get");
+        json_object_put (o);
+    }
+    zlist_destroy (&keys);
 }
 
 /* "conf.get" request received.
@@ -89,13 +174,19 @@ static void _conf_get (plugin_ctx_t *p, zmsg_t **zmsg)
     ctx_t *ctx = p->ctx;
     json_object *vo, *o = NULL;
     const char *key, *val;
-    req_t *req;
+    req_t *req, *wp = NULL;
+    bool watch;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
-            || util_json_object_get_string (o, "key", &key) < 0) {
+            || util_json_object_get_string (o, "key", &key) < 0
+            || util_json_object_get_boolean (o, "watch", &watch) < 0) {
         err ("%s: error decoding message", __FUNCTION__);
         goto done;
     }
+
+    if (watch)
+        wp = _install_watcher (p, key, *zmsg);
+
     /* Found in local cache.  Respond with value.
      */
     if ((val = zhash_lookup (ctx->store, key)) != NULL) {
@@ -104,6 +195,8 @@ static void _conf_get (plugin_ctx_t *p, zmsg_t **zmsg)
         json_object_object_add (o, "val", vo);
         util_json_object_add_int (o, "store_version", ctx->store_version);
         plugin_send_response (p, zmsg, o);
+        if (wp)
+            _update_watcher (p, wp, val, ctx->store_version);
 
     /* Not found in local cache and we hold master copy.
      * Respond with value missing (indicating key not set).
@@ -111,6 +204,8 @@ static void _conf_get (plugin_ctx_t *p, zmsg_t **zmsg)
     } else if (plugin_treeroot (p)) {
         util_json_object_add_int (o, "store_version", ctx->store_version);
         plugin_send_response (p, zmsg, o);
+        if (wp)
+            _update_watcher (p, wp, val, ctx->store_version);
 
     /* Not the master, and we have already sent a proxy request upstream
      * for this key.  Add this request to the reply-to list for the proxy.
@@ -126,6 +221,7 @@ static void _conf_get (plugin_ctx_t *p, zmsg_t **zmsg)
         req = _req_create ();
         zhash_update (ctx->proxy, key, req);
         zhash_freefn (ctx->proxy, key, (zhash_free_fn *)_req_destroy);
+        util_json_object_add_boolean (o, "watch", false);
         plugin_send_request (p, o, "conf.get");
         zlist_append (req->reply_to, *zmsg);
         *zmsg = NULL; /* now owned by req->reply_to */
@@ -140,9 +236,9 @@ done:
 static void _send_proxy_responses (plugin_ctx_t *p, req_t *req,
                                    json_object *vo, int store_version)
 {
-    zmsg_t *zmsg = zlist_first (req->reply_to);
+    zmsg_t *zmsg;
 
-    while (zmsg) {
+    while ((zmsg = zlist_pop (req->reply_to))) {
         json_object *o = NULL;
         if (cmb_msg_decode (zmsg, NULL, &o) == 0) {
             if (o) {
@@ -157,7 +253,6 @@ static void _send_proxy_responses (plugin_ctx_t *p, req_t *req,
         }
         if (zmsg)
             zmsg_destroy (&zmsg);
-        zmsg = zlist_next (req->reply_to);
     }
 }
 
@@ -170,7 +265,7 @@ static void _conf_get_response (plugin_ctx_t *p, zmsg_t **zmsg)
     json_object *vo, *o = NULL;
     const char *key, *val = NULL;
     int store_version;
-    req_t *req;
+    req_t *req, *wp;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
           || util_json_object_get_string (o, "key", &key) < 0
@@ -195,11 +290,57 @@ static void _conf_get_response (plugin_ctx_t *p, zmsg_t **zmsg)
         _send_proxy_responses (p, req, vo, store_version);
         zhash_delete (ctx->proxy, key);
     }
+    /* And update watchers for this key.
+     */
+    if ((wp = zhash_lookup (ctx->watcher, key)))
+        _update_watcher (p, wp, val, ctx->store_version);
 done:
     if (o)
         json_object_put (o);
     if (*zmsg)
         zmsg_destroy (zmsg); 
+}
+
+static void _delete_sender_from_req (req_t *req, char *sender)
+{
+    zlist_t *cpy;
+    zmsg_t *z;
+
+    if (!(cpy = zlist_new ()))
+        oom ();
+    while ((z = zlist_pop (req->reply_to))) {
+        char *sender2 = cmb_msg_sender (z);
+        if (sender && sender2 && !strcmp (sender, sender2))
+            zmsg_destroy (&z);
+        else
+            zlist_append (cpy, z);
+        if (sender2)
+            free (sender2);
+    }
+    zlist_destroy (&req->reply_to);
+    req->reply_to = cpy;
+}
+
+static void _delete_sender_from_reqhash (zhash_t *h, char *sender)
+{
+    zlist_t *keys = zhash_keys (h);
+    const char *key;
+
+    while ((key = zlist_pop (keys)))
+        _delete_sender_from_req (zhash_lookup (h, key), sender);
+    zlist_destroy (&keys);
+}
+
+static void _conf_disconnect (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    ctx_t *ctx = p->ctx;
+    char *sender = cmb_msg_sender (*zmsg);
+
+    _delete_sender_from_reqhash (ctx->watcher, sender);
+    _delete_sender_from_reqhash (ctx->proxy, sender);
+    if (sender)
+        free (sender);
+    zmsg_destroy (zmsg);
 }
 
 static void _conf_put (plugin_ctx_t *p, zmsg_t **zmsg)
@@ -234,6 +375,8 @@ done:
 static void _conf_commit (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
+    zlist_t *keys;
+    const char *key;
 
     assert (plugin_treeroot (p));
     if (ctx->store_next) {
@@ -244,6 +387,13 @@ static void _conf_commit (plugin_ctx_t *p, zmsg_t **zmsg)
     ctx->store_version++;
     plugin_send_event (p, "event.conf.update.%d", ctx->store_version);
         plugin_send_response_errnum (p, zmsg, 0);
+
+    keys = zhash_keys (ctx->watcher);
+    while ((key = zlist_pop (keys))) {
+        _update_watcher (p, zhash_lookup (ctx->watcher, key),
+                         zhash_lookup (ctx->store, key), ctx->store_version);
+    }
+    zlist_destroy (&keys);
 }
 
 typedef struct {
@@ -324,7 +474,7 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         } else
             plugin_send_response_raw (p, zmsg); /* fwd to requetsor */
     } else if (cmb_msg_match (*zmsg, "conf.disconnect")) {
-        /* FIXME: delete state for prematurely disconnecting client */
+        _conf_disconnect (p, zmsg);
     } else if (cmb_msg_match_substr (*zmsg, "event.conf.update.", &arg)) {
         _event_conf_update (p, arg, zmsg);
     }
@@ -346,6 +496,8 @@ static void _init (plugin_ctx_t *p)
         oom ();
     if (!(ctx->proxy = zhash_new ()))
         oom ();
+    if (!(ctx->watcher = zhash_new ()))
+        oom ();
 }
 
 static void _fini (plugin_ctx_t *p)
@@ -355,6 +507,7 @@ static void _fini (plugin_ctx_t *p)
     if (ctx->store_next)
         zhash_destroy (&ctx->store_next);
     zhash_destroy (&ctx->proxy);
+    zhash_destroy (&ctx->watcher);
     free (ctx);
 }
 
