@@ -104,10 +104,8 @@ static void _send_watcher_responses (plugin_ctx_t *p, req_t *wp,
         if (cmb_msg_decode (cpy, NULL, &o) == 0) {
             if (o) {
                 util_json_object_add_int (o, "store_version", store_version);
-                if (vo) {
-                    json_object_get (vo);
-                    json_object_object_add (o, "val", vo);
-                }
+                json_object_get (vo);
+                json_object_object_add (o, "val", vo);
                 plugin_send_response (p, &cpy, o);
                 json_object_put (o);
             }
@@ -118,6 +116,11 @@ static void _send_watcher_responses (plugin_ctx_t *p, req_t *wp,
     }
 }
 
+static bool _valcmp (const char *v1, const char *v2)
+{
+    return (v1 == v2 || (v1 && v2 && !strcmp (v1, v2)));
+}
+
 static void _update_watcher (plugin_ctx_t *p, req_t *wp, const char *val,
                             int store_version)
 {
@@ -126,8 +129,7 @@ static void _update_watcher (plugin_ctx_t *p, req_t *wp, const char *val,
     if (!wp->val_initialized) {
         wp->val = val ? xstrdup (val) : NULL;
         wp->val_initialized = true;
-    } else if ((wp->val && !val) || (!wp->val && val)
-                || (val && wp->val && strcmp (val, wp->val) != 0)) {
+    } else if (!_valcmp( wp->val, val)) {
         if (wp->val)
             free (wp->val);
         wp->val = val ? xstrdup (val) : NULL;
@@ -203,6 +205,7 @@ static void _conf_get (plugin_ctx_t *p, zmsg_t **zmsg)
      * Respond with value missing (indicating key not set).
      */
     } else if (plugin_treeroot (p)) {
+        json_object_object_add (o, "val", NULL);
         util_json_object_add_int (o, "store_version", ctx->store_version);
         plugin_send_response (p, zmsg, o);
         if (wp)
@@ -244,10 +247,8 @@ static void _send_proxy_responses (plugin_ctx_t *p, req_t *req,
         if (cmb_msg_decode (zmsg, NULL, &o) == 0) {
             if (o) {
                 util_json_object_add_int (o, "store_version", store_version);
-                if (vo) {
-                    json_object_get (vo);
-                    json_object_object_add (o, "val", vo);
-                }
+                json_object_get (vo);
+                json_object_object_add (o, "val", vo);
                 plugin_send_response (p, &zmsg, o);
                 json_object_put (o);
             }

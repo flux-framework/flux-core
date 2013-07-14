@@ -316,7 +316,7 @@ int main (int argc, char *argv[])
                 char *val = strchr (optarg, '=');
                 json_object *vo = NULL;
                 if (!val)
-                    msg_exit ("malformed key=val argument");
+                    msg_exit ("malformed key=[val] argument");
                 *val++ = '\0';
                 if (strlen (val) > 0)
                     if (!(vo = json_tokener_parse (val)))
@@ -331,11 +331,9 @@ int main (int argc, char *argv[])
                 json_object *vo = cmb_conf_get (c, optarg, false);
                 if (!vo && errno != 0)
                     err_exit ("cmb_conf_get");
-                printf ("%s = %s\n", optarg, vo
-                                ? json_object_to_json_string_ext (vo, JSON_C_TO_STRING_SPACED)
-                                : "<nil>");
-                if (vo)
-                    json_object_put (vo);
+                printf ("%s = %s\n", optarg,
+                  json_object_to_json_string_ext (vo, JSON_C_TO_STRING_SPACED));
+                json_object_put (vo);
                 break;
             }
             case 'c': { /* --conf-commit */

@@ -205,8 +205,7 @@ static json_object *_conf_get (plugin_ctx_t *p, const char *key, bool watch)
         err ("%s: protocol error", __FUNCTION__);
         goto done;
     }
-    if (!(vo = json_object_object_get (o, "val"))) /* not set */
-        goto done;
+    vo = json_object_object_get (o, "val");
     json_object_get (vo);
 done:
     if (o)

@@ -314,8 +314,7 @@ int cmb_conf_put (cmb_t c, const char *key, json_object *vo)
 
     /* send request */
     util_json_object_add_string (o, "key", key);
-    if (vo)
-        json_object_object_add (o, "val", vo);
+    json_object_object_add (o, "val", vo);
     if (_send_message (c, o, "conf.put") < 0)
         goto error;
     json_object_put (o);
@@ -383,10 +382,8 @@ json_object *cmb_conf_get (cmb_t c, const char *key, bool watch)
         goto error;
     if (util_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
-    if (!(vo = json_object_object_get (o, "val")))
-        errno = 0; /* key was not set */
-    else
-        json_object_get (vo);
+    vo = json_object_object_get (o, "val");
+    json_object_get (vo);
     json_object_put (o);
     return vo;
 error:
@@ -408,6 +405,7 @@ error:
     return -1;
 }
 
+/* EOF = error response with errnum == 0 */
 int cmb_conf_next (cmb_t c, char **kp, json_object **vop)
 {
     json_object *o = NULL;
@@ -422,10 +420,9 @@ int cmb_conf_next (cmb_t c, char **kp, json_object **vop)
         goto error;
     if (util_json_object_get_string (o, "key", &key) < 0)
         goto eproto;
+    vo = json_object_object_get (o, "val");
     if (vop) {
-        vo = json_object_object_get (o, "val");
-        if (vo)
-            json_object_get (vo);
+        json_object_get (vo);
         *vop = vo;
     }
     if (kp)
