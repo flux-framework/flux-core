@@ -9,8 +9,8 @@ SRUN = srun --overcommit -n$(NTASKS)
 
 CFLAGS = -Werror -Wall -g -fPIC
 CFLAGS += -DWITH_LSD_NOMEM_ERROR_FUNC -DWITH_LSD_FATAL_ERROR_FUNC
-LDADD = -ljson -lzmq -lczmq -pthread -luuid -lhiredis
-LDADD_C = -ljson -luuid -lzmq -lczmq
+LDADD = -ljson -lzmq -lczmq -pthread -luuid -lhiredis -lssl
+LDADD_C = -ljson -luuid -lzmq -lczmq -lssl
 
 CMBD_OBJS = cmbd.o route.o zmq.o util.o log.o plugin.o \
 	apisrv.o syncsrv.o kvssrv.o barriersrv.o livesrv.o logsrv.o \
@@ -20,10 +20,13 @@ LIBPMI_OBJS = pmi.o apicli.o util.o log.o zmq.o
 OBJS = $(CMBD_OBJS) $(CMBUTIL_OBJS) $(LIBPMI_OBJS)
 INCLUDES = $(wildcard *.h)
 
-all: cmbd cmbutil libpmi.so.0 mpi_hello
+all: cmbd cmbutil libpmi.so.0 mpi_hello tbase64
 
 cmbd: $(CMBD_OBJS)
 	$(CC) -o $@ $(CMBD_OBJS) $(LDADD)
+
+tbase64: tbase64.o util.o log.o
+	$(CC) -o $@ tbase64.o util.o log.o -lssl -ljson -lzmq
 
 cmbutil: $(CMBUTIL_OBJS)
 	$(CC) -o $@ $(CMBUTIL_OBJS) $(LDADD_C)

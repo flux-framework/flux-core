@@ -37,12 +37,15 @@ int env_getints (char *name, int **iap, int *lenp, int dflt_ia[], int dflt_len);
 char *argv_concat (int argc, char *argv[]);
 
 /* JSON helpers
+ * N.B. for get_base64(): caller must free returned data if non-NULL.
  */
 json_object *util_json_object_new_object (void);
 void util_json_object_add_boolean (json_object *o, char *name, bool val);
 void util_json_object_add_double (json_object *o, char *name, double n);
 void util_json_object_add_int (json_object *o, char *name, int i);
 void util_json_object_add_string (json_object *o, char *name, const char *s);
+void util_json_object_add_base64 (json_object *o, char *name,
+                                  uint8_t *dat, int len);
 void util_json_object_add_timeval (json_object *o, char *name,
                                    struct timeval *tvp);
 
@@ -50,6 +53,8 @@ int util_json_object_get_boolean (json_object *o, char *name, bool *vp);
 int util_json_object_get_double (json_object *o, char *name, double *dp);
 int util_json_object_get_int (json_object *o, char *name, int *ip);
 int util_json_object_get_string (json_object *o, char *name, const char **sp);
+int util_json_object_get_base64 (json_object *o, char *name,
+                                 uint8_t **datp, int *lenp);
 int util_json_object_get_timeval (json_object *o, char *name,
                                   struct timeval *tvp);
 int util_json_object_get_int_array (json_object *o, char *name,

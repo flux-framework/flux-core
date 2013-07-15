@@ -12,6 +12,8 @@
 #include <netdb.h>
 #include <math.h>
 #include <limits.h>
+#include <openssl/evp.h>
+#include <assert.h>
 
 #include "cmb.h"
 #include "util.h"
@@ -186,6 +188,30 @@ void util_json_object_add_string (json_object *o, char *name, const char *s)
     json_object_object_add (o, name, no);
 }
 
+void util_json_object_add_base64 (json_object *o, char *name,
+                                  uint8_t *dat, int len)
+{
+    EVP_ENCODE_CTX ectx;
+    size_t size = len*2;
+    uint8_t *out;
+    int outlen = 0;
+    int tlen = 0;
+
+    if (size < 64)
+        size = 64;
+    out = xzmalloc (size + 1);
+    EVP_EncodeInit (&ectx);
+    EVP_EncodeUpdate (&ectx, out, &outlen, dat, len);
+    tlen += outlen;
+    EVP_EncodeFinal (&ectx, out + tlen, &outlen);
+    tlen += outlen;
+    assert (tlen < size);
+    if (out[tlen - 1] == '\n')
+        out[tlen - 1] = '\0';
+    util_json_object_add_string (o, name, (char *)out);
+    free (out);
+}
+
 void util_json_object_add_timeval (json_object *o, char *name,
                                    struct timeval *tvp)
 {
@@ -231,6 +257,30 @@ int util_json_object_get_string (json_object *o, char *name, const char **sp)
     if (!no)
         return -1;
     *sp = json_object_get_string (no);
+    return 0;
+}
+
+int util_json_object_get_base64 (json_object *o, char *name,
+                                 uint8_t **datp, int *lenp)
+{
+    const char *s;
+    int slen;
+    EVP_ENCODE_CTX ectx;
+    uint8_t *out = NULL;
+    int outlen = 0;
+    int tlen = 0;
+
+    if (util_json_object_get_string (o, name, &s) == 0) {
+        slen = strlen (s);
+        out = xzmalloc (slen);
+        EVP_DecodeInit (&ectx);
+        EVP_DecodeUpdate (&ectx, out, &outlen, (uint8_t *)s, slen);
+        tlen += outlen;
+        EVP_DecodeFinal (&ectx, out + tlen, &outlen);
+        tlen += outlen;
+    }
+    *datp = out;
+    *lenp = tlen;    
     return 0;
 }
 
