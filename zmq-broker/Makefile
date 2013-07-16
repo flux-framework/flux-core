@@ -25,8 +25,8 @@ all: cmbd cmbutil libpmi.so.0 mpi_hello tbase64
 cmbd: $(CMBD_OBJS)
 	$(CC) -o $@ $(CMBD_OBJS) $(LDADD)
 
-tbase64: tbase64.o util.o log.o
-	$(CC) -o $@ tbase64.o util.o log.o -lssl -ljson -lzmq
+tbase64: tbase64.o util.o log.o zmq.o
+	$(CC) -o $@ tbase64.o util.o log.o zmq.o $(LDADD_C)
 
 cmbutil: $(CMBUTIL_OBJS)
 	$(CC) -o $@ $(CMBUTIL_OBJS) $(LDADD_C)

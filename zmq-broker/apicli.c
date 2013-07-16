@@ -63,11 +63,11 @@ error:
     return -1;
 }
 
-static int _recv_message (cmb_t c, char **tagp, json_object **op, int flags)
+static int _recv_message (cmb_t c, char **tagp, json_object **op, int nonblock)
 {
     zmsg_t *zmsg;
 
-    zmsg = zmsg_recv_fd (c->fd, flags);
+    zmsg = zmsg_recv_fd (c->fd, nonblock);
     if (!zmsg)
         goto error;
     if (c->flags & CMB_FLAGS_TRACE)
@@ -103,7 +103,7 @@ int cmb_ping (cmb_t c, char *name, int seq, int padlen, char **tagp, char **rout
     o = NULL;
 
     /* receive a copy back */
-    if (_recv_message (c, &tag, &o, 0) < 0)
+    if (_recv_message (c, &tag, &o, false) < 0)
         goto error;
     if (!o)
         goto eproto;
@@ -167,7 +167,7 @@ char *cmb_stats (cmb_t c, char *name)
     o = NULL;
 
     /* receive response */
-    if (_recv_message (c, NULL, &o, 0) < 0)
+    if (_recv_message (c, NULL, &o, false) < 0)
         goto error;
     if (!o)
         goto eproto;
@@ -198,7 +198,7 @@ int cmb_snoop_one (cmb_t c)
     zmsg_t *zmsg; 
     int rc = -1;
 
-    zmsg = zmsg_recv_fd (c->fd, 0); /* blocking */
+    zmsg = zmsg_recv_fd (c->fd, false); /* blocking */
     if (zmsg) {
         //zmsg_dump (zmsg);
         zmsg_dump_compact (zmsg);
@@ -222,7 +222,7 @@ char *cmb_event_recv (cmb_t c)
 {
     char *tag = NULL;
 
-    (void)_recv_message (c, &tag, NULL, 0);
+    (void)_recv_message (c, &tag, NULL, false);
 
     return tag;
 }
@@ -247,7 +247,7 @@ int cmb_barrier (cmb_t c, char *name, int nprocs)
     o = NULL;
 
     /* receive response */
-    if (_recv_message (c, NULL, &o, 0) < 0)
+    if (_recv_message (c, NULL, &o, false) < 0)
         goto error;
     if (util_json_object_get_int (o, "errnum", &errnum) < 0)
         goto error;
@@ -291,7 +291,7 @@ char *cmb_kvs_get (cmb_t c, const char *key)
     o = NULL;
 
     /* receive response */
-    if (_recv_message (c, NULL, &o, 0) < 0)
+    if (_recv_message (c, NULL, &o, false) < 0)
         goto error;
     if (util_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
@@ -321,7 +321,7 @@ int cmb_conf_put (cmb_t c, const char *key, json_object *vo)
     o = NULL;
 
     /* receive response */
-    if (_recv_message (c, NULL, &o, 0) < 0)
+    if (_recv_message (c, NULL, &o, false) < 0)
         goto error;
     if (o == NULL || util_json_object_get_int (o, "errnum", &errno) < 0)
         goto eproto;
@@ -348,7 +348,7 @@ int cmb_conf_commit (cmb_t c)
     o = NULL;
 
     /* receive response */
-    if (_recv_message (c, NULL, &o, 0) < 0)
+    if (_recv_message (c, NULL, &o, false) < 0)
         goto error;
     if (o == NULL || util_json_object_get_int (o, "errnum", &errno) < 0)
         goto eproto;
@@ -378,7 +378,7 @@ json_object *cmb_conf_get (cmb_t c, const char *key, bool watch)
     o = NULL;
 
     /* receive response */
-    if (_recv_message (c, NULL, &o, 0) < 0)
+    if (_recv_message (c, NULL, &o, false) < 0)
         goto error;
     if (util_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
@@ -412,7 +412,7 @@ int cmb_conf_next (cmb_t c, char **kp, json_object **vop)
     const char *key;
     json_object *vo;
 
-    if (_recv_message (c, NULL, &o, 0) < 0)
+    if (_recv_message (c, NULL, &o, false) < 0)
         goto error;
     if (!o)
         goto eproto;
@@ -451,7 +451,7 @@ int cmb_live_query (cmb_t c, int **upp, int *ulp, int **dp, int *dlp, int *nnp)
     o = NULL;
 
     /* receive response */
-    if (_recv_message (c, NULL, &o, 0) < 0)
+    if (_recv_message (c, NULL, &o, false) < 0)
         goto error;
     if (!o)
         goto eproto;
@@ -564,7 +564,7 @@ char *cmb_log_recv (cmb_t c, logpri_t *pp, char **fp, int *cp,
     int pri, count;
     struct timeval tv;
 
-    if (_recv_message (c, NULL, &o, 0) < 0 || o == NULL)
+    if (_recv_message (c, NULL, &o, false) < 0 || o == NULL)
         goto error;
     if (util_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
@@ -608,7 +608,7 @@ int cmb_kvs_commit (cmb_t c, int *ep, int *pp)
     o = NULL;
 
     /* receive response */
-    if (_recv_message (c, NULL, &o, 0) < 0)
+    if (_recv_message (c, NULL, &o, false) < 0)
         goto error;
     if (!o)
         goto eproto;
@@ -672,7 +672,7 @@ char *cmb_route_query (cmb_t c)
     o = NULL;
 
     /* receive response */
-    if (_recv_message (c, NULL, &o, 0) < 0)
+    if (_recv_message (c, NULL, &o, false) < 0)
         goto error;
     cpy = xstrdup (json_object_get_string (o));
     json_object_put (o);
@@ -706,7 +706,7 @@ static int _session_info_query (cmb_t c)
     o = NULL;
 
     /* receive response */
-    if (_recv_message (c, NULL, &o, 0) < 0)
+    if (_recv_message (c, NULL, &o, false) < 0)
         goto error;
     if (!o)
         goto eproto;

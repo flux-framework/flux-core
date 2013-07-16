@@ -1,6 +1,4 @@
 #define CMB_API_PATH            "/tmp/cmb_socket"
-#define CMB_API_BUFSIZE         32768
-#define CMB_API_FD_BUFSIZE      (CMB_API_BUFSIZE - 1024)
 
 #define CMB_FLAGS_TRACE         0x0001
 

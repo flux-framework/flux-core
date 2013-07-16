@@ -47,40 +47,107 @@ void zbind (zctx_t *zctx, void **sp, int type, char *uri, int hwm)
         err_exit ("zsocket_bind: %s", uri);
 }
 
-zmsg_t *zmsg_recv_fd (int fd, int flags)
+static int _nonblock (int fd, bool nonblock)
 {
-    char *buf;
+    int flags;
+
+    if ((flags = fcntl (fd, F_GETFL)) < 0)
+        return -1;
+    if (nonblock)
+        flags |= O_NONBLOCK;
+    else
+        flags &= ~O_NONBLOCK;
+    if (fcntl (fd, F_SETFL, flags) < 0)
+        return -1;
+    return 0;
+}
+
+static int _read_all (int fd, uint8_t *buf, size_t len, bool nonblock)
+{
+    int n, count = 0;
+
+    do {
+        if (nonblock && _nonblock (fd, true) < 0)
+            return -1;
+        n = read (fd, buf + count, len - count);
+        if (n <= 0)
+            return n;
+        count += n;
+        if (nonblock && _nonblock (fd, false) < 0)
+            return -1;
+        nonblock = false;
+    } while (count < len);
+
+    return count;
+}
+
+static int _write_all (int fd, uint8_t *buf, size_t len)
+{
+    int n, count = 0;
+
+    do {
+        n = write (fd, buf + count, len - count);
+        if (n < 0)
+            return n;
+        count += n;
+    } while (count < len);
+
+    return count;
+}
+
+zmsg_t *zmsg_recv_fd (int fd, bool nonblock)
+{
+    uint8_t *buf = NULL;
+    uint32_t len;
     int n;
     zmsg_t *msg;
 
-    buf = xzmalloc (CMB_API_BUFSIZE);
-    n = recv (fd, buf, CMB_API_BUFSIZE, flags);
+    n = _read_all (fd, (uint8_t *)&len, sizeof (len), nonblock);
     if (n < 0)
         goto error;
-    if (n == 0) {
-        errno = EPROTO;
+    if (n == 0)
+        goto eproto;
+    len = ntohl (len);
+
+    buf = xzmalloc (len);
+    n = _read_all (fd, buf, len, 0);
+    if (n < 0)
         goto error;
-    }
-    msg = zmsg_decode ((byte *)buf, n);
+    if (n == 0)
+        goto eproto;
+
+    msg = zmsg_decode ((byte *)buf, len);
     free (buf);
     return msg;
+eproto:
+    errno = EPROTO;
 error:
-    free (buf);
+    if (buf)
+        free (buf);
     return NULL;
 }
 
 int zmsg_send_fd (int fd, zmsg_t **msg)
 {
-    char *buf = NULL;
-    int len;
+    uint8_t *buf = NULL;
+    int n, len;
+    uint32_t nlen;
 
-    len = zmsg_encode (*msg, (byte **)&buf);
+    len = zmsg_encode (*msg, &buf);
     if (len < 0) {
         errno = EPROTO;
         goto error;
     }
-    if (send (fd, buf, len, 0) < len)
+    nlen = htonl ((uint32_t)len);
+
+    n = _write_all (fd, (uint8_t *)&nlen, sizeof (nlen));
+    if (n < 0)
         goto error;
+
+    n = _write_all (fd, buf, len);
+    if (n < 0)
+        goto error;
+
     free (buf);
     zmsg_destroy (msg);
     return 0;
@@ -214,7 +281,8 @@ zmsg_t *cmb_msg_encode (char *tag, json_object *o)
     if (zmsg_addstr (zmsg, "%s", tag) < 0)
         err_exit ("zmsg_addstr");
     if (o) {
-        if (zmsg_addstr (zmsg, "%s", json_object_to_json_string (o)) < 0)
+        const char *s = json_object_to_json_string (o);
+        if (zmsg_addstr (zmsg, "%s", s) < 0)
             err_exit ("zmsg_addstr");
     }
     return zmsg;

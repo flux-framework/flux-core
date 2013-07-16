@@ -168,7 +168,7 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
     zmsg_t *zmsg = NULL;
     char *name = NULL;
 
-    zmsg = zmsg_recv_fd (c->fd, MSG_DONTWAIT);
+    zmsg = zmsg_recv_fd (c->fd, true);
     if (!zmsg) {
         if (errno != ECONNRESET && errno != EWOULDBLOCK && errno != EPROTO)
             err ("API read");

@@ -6,9 +6,11 @@ void zbind (zctx_t *zctx, void **sp, int type, char *uri, int hwm);
 
 /* Send/recv zmq messages over a file descriptor.
  * Utilizes zmsg_encode/zmsgs_decode() functions from czmq.
- * N.B. Max message size is hardwired to CMB_API_BUFSIZE.
+ * N.B. The nonblock flag doesn't completely eliminate blocking.
+ * Once a message has begun to be read, the recv may block in order
+ * to read the complete thing.
  */
-zmsg_t *zmsg_recv_fd (int fd, int flags);
+zmsg_t *zmsg_recv_fd (int fd, bool nonblock);
 int zmsg_send_fd (int fd, zmsg_t **msg);
 
 /* Format message frames as text.  The first prints entire message on stdout.
