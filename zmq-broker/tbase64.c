@@ -20,11 +20,12 @@
 #include "log.h"
 #include "zmq.h"
 
-#define OPTIONS "dZJ"
+#define OPTIONS "dZJB"
 static const struct option longopts[] = {
    {"decode",   no_argument,        0, 'd'},
    {"dump-zmq", no_argument,        0, 'Z'},
    {"dump-json", no_argument,       0, 'J'},
+   {"dump-base64", no_argument,     0, 'B'},
    {0, 0, 0, 0},
 };
 
@@ -42,6 +43,7 @@ json_object *buf_to_json (int seq, uint8_t *buf, int len)
 void json_to_buf (json_object *o, int *seqp, uint8_t **bufp, int *lenp)
 {
     int len;
+
     if (util_json_object_get_int (o, "seq", seqp) < 0
             || util_json_object_get_int (o, "len", &len) < 0
             || util_json_object_get_base64 (o, "dat", bufp, lenp) < 0
@@ -49,6 +51,15 @@ void json_to_buf (json_object *o, int *seqp, uint8_t **bufp, int *lenp)
         fprintf (stderr, "error decoding json\n");
         exit (1);
     }
+}
+
+const char *json_to_base64 (json_object *o)
+{
+    const char *s;
+
+    if (util_json_object_get_string (o, "dat", &s) < 0)
+        msg_exit ("error decoding json");
+    return s;
 }
 
 json_object *zmsg_to_json (zmsg_t *zmsg)
@@ -74,8 +85,7 @@ zmsg_t *json_to_zmsg (json_object *o)
     if (!(zmsg = zmsg_new ()))
         oom ();
     s = json_object_to_json_string (o);
-    if (zmsg_addstr (zmsg, "%s", s) < 0)
-    //if (zmsg_addmem (zmsg, s, strlen (s)) < 0)
+    if (zmsg_addmem (zmsg, s, strlen (s)) < 0)
         oom ();
     return zmsg;
 }
@@ -84,7 +94,7 @@ void usage (void)
 {
     fprintf (stderr,
 "Usage: tbase64 --encode\n"
-"       tbase64 --decode [--dump-zmq|--dump-json]\n"
+"       tbase64 --decode [--dump-zmq|--dump-json|--dump-base64]\n"
 );
     exit (1);
 }
@@ -127,7 +137,7 @@ void encode (void)
     }
 }
 
-void decode (bool Zopt, bool Jopt)
+void decode (bool Zopt, bool Jopt, bool Bopt)
 {
     zmsg_t *zmsg;
     const char *s;
@@ -140,7 +150,10 @@ void decode (bool Zopt, bool Jopt)
             zmsg_dump (zmsg);
         } else {
             o = zmsg_to_json (zmsg);
-            if (Jopt) {
+            if (Bopt) {
+                s = json_to_base64 (o);
+                printf ("%s\n", s);
+            } else if (Jopt) {
                 s = json_object_to_json_string (o);
                 printf ("%s\n", s);
             } else {
@@ -162,6 +175,7 @@ int main (int argc, char *argv[])
     bool dopt = false;
     bool Zopt = false;
     bool Jopt = false;
+    bool Bopt = false;
 
     log_init (basename (argv[0]));
 
@@ -176,13 +190,16 @@ int main (int argc, char *argv[])
             case 'J':
                 Jopt = true;
                 break;
+            case 'B':
+                Bopt = true;
+                break;
             default:
                 usage ();
         }
     }
 
     if (dopt)
-        decode (Zopt, Jopt);
+        decode (Zopt, Jopt, Bopt);
     else
         encode ();
 
