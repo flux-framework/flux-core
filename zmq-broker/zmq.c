@@ -278,12 +278,12 @@ zmsg_t *cmb_msg_encode (char *tag, json_object *o)
 
     if (!(zmsg = zmsg_new ()))
         err_exit ("zmsg_new");
-    if (zmsg_addstr (zmsg, "%s", tag) < 0)
-        err_exit ("zmsg_addstr");
+    if (zmsg_addmem (zmsg, tag, strlen (tag)) < 0)
+        err_exit ("zmsg_addmem");
     if (o) {
         const char *s = json_object_to_json_string (o);
-        if (zmsg_addstr (zmsg, "%s", s) < 0)
-            err_exit ("zmsg_addstr");
+        if (zmsg_addmem (zmsg, s, strlen (s)) < 0)
+            err_exit ("zmsg_addmem");
     }
     return zmsg;
 }
