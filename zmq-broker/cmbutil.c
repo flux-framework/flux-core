@@ -453,7 +453,7 @@ int main (int argc, char *argv[])
                     err_exit ("cmb_route_query");
                 if (!(o = json_tokener_parse (s)))
                     err_exit ("json_tokener_parse");
-                msg ("routes=%s", json_object_to_json_string_ext (o,
+                printf ("%s\n", json_object_to_json_string_ext (o,
                                     JSON_C_TO_STRING_PRETTY));
                 json_object_put (o);
                 free (s);
