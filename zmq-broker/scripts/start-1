@@ -4,6 +4,6 @@
   --up-event-in-uri='tcp://127.0.0.1:5559' \
   --up-req-in-uri='tcp://*:5560' \
   --dn-req-out-uri='tcp://*:5561' \
-  --rank=1 --size=3 --children=2 \
+  --rank=1 --size=3 \
   --plugins=api,barrier,live,log,conf \
   --verbose --api-socket=/tmp/rank.1

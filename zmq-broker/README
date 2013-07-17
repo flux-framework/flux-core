@@ -14,9 +14,6 @@ There are several pepe config files for different test topologies.
 binary
 	Binary (k=2) tree with no resiliency.
 
-binomial
-	Binomial tree with no resilency.
-
 degenerate
 	Degenerate (k=1) tree with no resilency.
 

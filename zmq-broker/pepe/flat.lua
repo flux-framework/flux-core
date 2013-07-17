@@ -19,12 +19,9 @@ local h = hostlist.new (pepe.nodelist)
 local eventuri = "epgm://eth0;239.192.1.1:5555"
 local upreqinuri = "tcp://*:5556"
 local dnreqouturi = "tcp://*:5557"
-local child_opt = tree.k_ary_children (pepe.rank, #h - 1, #h)
-if string.len (child_opt) > 0 then
-    child_opt = " --children=" .. child_opt
-end
 
 if pepe.rank == 0 then
+    local topology = tree.k_ary_json (#h, #h)
     pepe.run ("echo bind 127.0.0.1 | /usr/sbin/redis-server -")
     pepe.run ("./cmbd --up-event-uri='" .. eventuri .. "'"
 		.. " --up-req-in-uri='" .. upreqinuri .. "'"
@@ -38,9 +35,9 @@ if pepe.rank == 0 then
                 .. " --set-conf log.circular.buffer.entries=100000"
                 .. " --set-conf log.persist.priority=notice"
                 .. " --set-conf live.missed.trigger.allow=5"
+                .. " --set-conf topology='" .. topology .. "'"
 		.. " --plugins=api,barrier,live,log,conf,kvs,sync"
-		.. " --logdest cmbd.log"
-		.. child_opt)
+		.. " --logdest cmbd.log")
 else
     local u1 = "tcp://" ..  h[1] .. ":5556"
     local u2 = "tcp://" ..  h[1] .. ":5557"

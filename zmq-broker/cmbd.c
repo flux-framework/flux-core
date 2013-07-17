@@ -26,7 +26,7 @@
 #include "plugin.h"
 #include "hostlist.h"
 
-#define OPTIONS "t:e:E:O:vs:R:S:p:c:P:L:T:A:d:D:H:"
+#define OPTIONS "t:e:E:O:vs:R:S:p:P:L:T:A:d:D:H:"
 static const struct option longopts[] = {
     {"up-event-uri",   required_argument,  0, 'e'},
     {"up-event-out-uri",required_argument, 0, 'O'},
@@ -40,7 +40,6 @@ static const struct option longopts[] = {
     {"rank",        required_argument,  0, 'R'},
     {"size",        required_argument,  0, 'S'},
     {"parent",      required_argument,  0, 'p'},
-    {"children",    required_argument,  0, 'c'},
     {"plugins",     required_argument,  0, 'P'},
     {"logdest",     required_argument,  0, 'L'},
     {"api-socket",  required_argument,  0, 'A'},
@@ -73,7 +72,6 @@ static void usage (void)
 " -T,--dn-req-out-uri URI    Set URI for dnreq_out, e.g. tcp://*:5557\n"
 " -p,--parent N,URI,URI2 Set parent rank,URIs, e.g.\n"
 "                        0,tcp://192.168.1.136:5556,tcp://192.168.1.136:557\n"
-" -c,--children n,n,...  Set ranks of children, comma-sep\n"
 " -v,--verbose           Show bus traffic\n"
 " -s,--set-conf key=val  Set plugin configuration key=val\n"
 " -H,--set-conf-hostlist HOSTLIST Set session hostlist\n"
@@ -186,11 +184,6 @@ int main (int argc, char *argv[])
             case 'S':   /* --size N */
                 conf->size = strtoul (optarg, NULL, 10);
                 break;
-            case 'c':   /* --children n,n,... */
-                if (getints (optarg, &conf->live_children,
-                                     &conf->live_children_len) < 0)
-                    msg_exit ("out of memory");
-                break;
             case 'P':   /* --plugins p1,p2,... */
                 conf->plugins = optarg;
                 break;
@@ -234,8 +227,6 @@ int main (int argc, char *argv[])
         _cmb_poll (conf, srv);
     _cmb_fini (conf, srv);
 
-    if (conf->live_children)
-        free (conf->live_children);
     for (i = 0; i < conf->parent_len; i++) {
         free (conf->parent[i].upreq_uri);
         free (conf->parent[i].dnreq_uri);

@@ -28,8 +28,6 @@ typedef struct {
      * FIXME: need a spank-like abstraction for plugin options.
      */
     char *api_sockpath;
-    int *live_children;
-    int live_children_len;
 } conf_t;
 
 /* Server state.
