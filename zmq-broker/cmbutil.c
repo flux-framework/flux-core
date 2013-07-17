@@ -332,7 +332,8 @@ int main (int argc, char *argv[])
                 if (!vo && errno != 0)
                     err_exit ("cmb_conf_get");
                 printf ("%s = %s\n", optarg,
-                  json_object_to_json_string_ext (vo, JSON_C_TO_STRING_SPACED));
+                        json_object_to_json_string_ext (vo,
+                                                    JSON_C_TO_STRING_PLAIN));
                 json_object_put (vo);
                 break;
             }
@@ -348,7 +349,8 @@ int main (int argc, char *argv[])
                     err_exit ("cmb_conf_list");
                 while (cmb_conf_next (c, &key, &vo) == 0) {
                     printf ("%s = %s\n", key, 
-                        json_object_to_json_string_ext (vo, JSON_C_TO_STRING_SPACED));
+                            json_object_to_json_string_ext (vo,
+                                                    JSON_C_TO_STRING_PLAIN));
                     free (key);
                     json_object_put (vo);
                 }
@@ -362,7 +364,8 @@ int main (int argc, char *argv[])
                     err_exit ("cmb_conf_get");
                 do {
                     printf ("%s = %s\n", optarg, vo 
-                                ? json_object_to_json_string_ext (vo, JSON_C_TO_STRING_SPACED)
+                                ? json_object_to_json_string_ext (vo,
+                                                    JSON_C_TO_STRING_PLAIN)
                                 : "<nil>");
                     if (vo)
                         json_object_put (vo);
