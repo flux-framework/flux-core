@@ -56,12 +56,6 @@ int cmb_conf_commit (cmb_t c);
 int cmb_conf_list (cmb_t c);
 int cmb_conf_next (cmb_t c, char **key, json_object **vo);
 
-/* Return state of all nodes in the session.
- * Caller must free the two returned arrays (up and down).
- * To only get one, set the other argument to NULL.
- */
-int cmb_live_query (cmb_t c, int **up, int *ulp, int **dp, int *dlp, int *nnp);
-
 /* Log messages.
  * 'fac' is like syslog facility, only an arbitrary string.
  * It is suggested to use pub-sub topic string form.

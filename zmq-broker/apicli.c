@@ -437,48 +437,6 @@ error:
     return -1;
 }
 
-int cmb_live_query (cmb_t c, int **upp, int *ulp, int **dp, int *dlp, int *nnp)
-{
-    json_object *o = util_json_object_new_object ();
-    int nnodes;
-    int *up, up_len;
-    int *down, down_len;
-
-    /* send request */
-    if (_send_message (c, o, "live.query") < 0)
-        goto error;
-    json_object_put (o);
-    o = NULL;
-
-    /* receive response */
-    if (_recv_message (c, NULL, &o, false) < 0)
-        goto error;
-    if (!o)
-        goto eproto;
-    if (util_json_object_get_int (o, "errnum", &errno) == 0)
-        goto error;
-    if (util_json_object_get_int (o, "nnodes", &nnodes) < 0
-     || util_json_object_get_int_array (o, "up", &up, &up_len) < 0
-     || util_json_object_get_int_array (o, "down", &down, &down_len) < 0)
-        goto eproto;
-
-    *upp = up;
-    *ulp = up_len;
-
-    *dp = down;
-    *dlp = down_len;
-
-    *nnp = nnodes;
-    json_object_put (o);
-    return 0; 
-eproto:
-    errno = EPROTO;
-error:
-    if (o)
-        json_object_put (o);
-    return -1; 
-}
-
 void cmb_log_set_facility (cmb_t c, const char *facility)
 {
     if (c->log_facility)

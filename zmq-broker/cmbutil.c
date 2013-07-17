@@ -18,7 +18,7 @@
 
 static int _parse_logstr (char *s, logpri_t *pp, char **fp);
 
-#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:lx:e:TL:W:D:r:R:qz:Za:A:cXw:"
+#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Za:A:cXw:"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -34,7 +34,6 @@ static const struct option longopts[] = {
     {"kvs-commit", no_argument,        0, 'C'},
     {"kvs-torture",required_argument,  0, 't'},
     {"sync",       no_argument,        0, 'S'},
-    {"live-query", no_argument,        0, 'l'},
     {"snoop",      no_argument,        0, 'T'},
     {"log",        required_argument,  0, 'L'},
     {"log-watch",  required_argument,  0, 'W'},
@@ -75,7 +74,6 @@ static void usage (void)
 "  -s,--subscribe sub     subscribe to events matching substring\n"
 "  -e,--event name        publish event\n"
 "  -S,--sync              block until event.sched.triger\n"
-"  -l,--live-query        get list of up nodes\n"
 "  -L,--log fac:pri MSG   log MSG to facility at specified priority\n"
 "  -W,--log-watch fac:pri watch logs for messages matching tag\n"
 "  -D,--log-dump fac:pri  dump circular log buffer\n"
@@ -220,24 +218,6 @@ int main (int argc, char *argv[])
             case 'e': { /* --event name */
                 if (cmb_event_send (c, optarg) < 0)
                     err_exit ("cmb_event_send");
-                break;
-            }
-
-            case 'l': { /* --live-query */
-                int i, *up = NULL, up_len, *dn = NULL, dn_len, nnodes;
-                if (cmb_live_query (c, &up, &up_len, &dn, &dn_len, &nnodes) < 0)
-                    err_exit ("cmb_live_query");
-                printf ("up:   ");
-                for (i = 0; i < up_len; i++)
-                    printf ("%d%s", up[i], i == up_len - 1 ? "" : ",");
-                printf ("\ndown: ");
-                for (i = 0; i < dn_len; i++)
-                    printf ("%d%s", dn[i], i == dn_len - 1 ? "" : ",");
-                printf ("\n");
-                if (up)
-                    free (up); 
-                if (dn)
-                    free (dn); 
                 break;
             }
             case 'k': { /* --kvs-put key=val */
