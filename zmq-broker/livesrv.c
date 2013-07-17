@@ -32,7 +32,6 @@
 typedef struct {
     int rank;
     int epoch;
-    int parent;
 } child_t;
 
 typedef struct {
@@ -43,14 +42,13 @@ typedef struct {
     json_object *topology;
 } ctx_t;
 
-static void _child_add (zhash_t *kids, int rank, int epoch, int parent)
+static void _child_add (zhash_t *kids, int rank, int epoch)
 {
     char key[16];
     child_t *cp = xzmalloc (sizeof (child_t));
 
     cp->rank = rank;
     cp->epoch = epoch;
-    cp->parent = parent;
     snprintf (key, sizeof (key), "%d", cp->rank);
     zhash_update (kids, key, cp);
     zhash_freefn (kids, key, free);
@@ -62,28 +60,6 @@ static child_t *_child_find_by_rank (zhash_t *kids, int rank)
 
     snprintf (key, sizeof (key), "%d", rank);
     return (child_t *)zhash_lookup (kids, key);
-}
-
-typedef struct {
-    int parent;
-    child_t *child;
-} parg_t;
-
-static int _match_parent (const char *key, void *item, void *arg)
-{
-    parg_t *pp = arg;
-    child_t *cp = item;
-    if (pp->parent == cp->parent)
-        pp->child = cp;
-    return (pp->child != NULL);
-}
-
-static child_t *_child_find_by_parent (zhash_t *kids, int parent)
-{
-    parg_t parg = { .parent = parent, .child = NULL };
-
-    zhash_foreach (kids, _match_parent, &parg);
-    return parg.child;
 }
 
 typedef struct {
@@ -148,7 +124,7 @@ static void _get_children_from_topology (plugin_ctx_t *p, int **iap, int *lenp)
     *lenp = len;
 }
 
-/* Sycnhronize ctx->kids with ctx->topology
+/* Synchronize ctx->kids with ctx->topology after change in topology.
  */
 static void _child_update_all (plugin_ctx_t *p)
 {
@@ -176,7 +152,7 @@ static void _child_update_all (plugin_ctx_t *p)
     /* add any new */
     for (i = 0; i < len; i++) {
         if (!_child_find_by_rank (ctx->kids, children[i]))
-            _child_add (ctx->kids, children[i], epoch, p->conf->rank);
+            _child_add (ctx->kids, children[i], epoch);
     }
     if (children)
         free (children);
@@ -189,8 +165,6 @@ static void _send_live_hello (plugin_ctx_t *p, int epoch)
     json_object *o = util_json_object_new_object ();
 
     util_json_object_add_int (o, "epoch", epoch);
-    assert (p->conf->parent_len > 0);
-    util_json_object_add_int (o, "parent", p->conf->parent[0].rank);
     plugin_send_request (p, o, "live.hello.%d", p->conf->rank);
     json_object_put (o);
 }
@@ -201,25 +175,23 @@ static void _recv_live_hello (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     int rank = strtoul (arg, NULL, 10);
-    json_object *po, *eo, *o = NULL;
-    int epoch, parent;
+    json_object *eo, *o = NULL;
+    int epoch;
     child_t *cp;
 
     if (rank < 0 || rank >= p->conf->size)
         goto done;
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0) 
         goto done;
-    if (!o || !(eo = json_object_object_get (o, "epoch"))
-           || !(po = json_object_object_get (o, "parent")))
+    if (!o || !(eo = json_object_object_get (o, "epoch")))
         goto done;
     epoch = json_object_get_int (eo);
-    parent = json_object_get_int (po);
 
     cp = _child_find_by_rank (ctx->kids, rank);
     if (cp) {
         cp->epoch = epoch;
     } else
-        _child_add (ctx->kids, rank, epoch, parent);
+        _child_add (ctx->kids, rank, epoch);
 
     if (ctx->state[rank] == false) {
         if (p->conf->verbose)
@@ -312,22 +284,14 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
     } else if (cmb_msg_match_substr (*zmsg, "live.hello.", &arg)) {
         _recv_live_hello (p, arg, zmsg);
 
-    /* When a node transitions up, we must:
-     * - mark it up in our state
-     * - stop monitoring kids whose real parent came back up
+    /* When a node transitions up|down, we must:
+     * - mark it up|down in our state
      */
     } else if (cmb_msg_match_substr (*zmsg, "event.live.up.", &arg)) {
         rank = strtoul (arg, NULL, 10);
-        if (rank >= 0 && rank < p->conf->size) {
+        if (rank >= 0 && rank < p->conf->size)
             ctx->state[rank] = true;
-            while ((cp = _child_find_by_parent (ctx->kids, rank)))
-                _child_del (ctx->kids, cp->rank);
-        }
         zmsg_destroy (zmsg);
-
-    /* When a node transitions down, we must:
-     * - mark it down in our state
-     */
     } else if (cmb_msg_match_substr (*zmsg, "event.live.down.", &arg)) {
         rank = strtoul (arg, NULL, 10);
         if (rank >= 0 && rank < p->conf->size)
