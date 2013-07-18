@@ -189,14 +189,84 @@ static void _conf_add_watcher (plugin_ctx_t *p, const char *key,
     zhash_freefn (p->conf_watcher, key, free);
 }
 
+int plugin_conf_commit (plugin_ctx_t *p)
+{
+    json_object *o = util_json_object_new_object ();
+    zmsg_t *zmsg = NULL;
+    int ret = -1;
+
+    /* send request */
+    plugin_send_request (p, o, "conf.commit");
+    json_object_put (o);
+    o = NULL;
+
+    /* receive response */
+    if (!(zmsg = zmsg_recv (p->zs_upreq))) {
+        err ("%s: zmsg_recv", __FUNCTION__);
+        goto done;
+    }
+    if (cmb_msg_decode (zmsg, NULL, &o) < 0
+          || o == NULL || util_json_object_get_int (o, "errnum", &errno) < 0) {
+        err ("%s: protocol error", __FUNCTION__);
+        goto done;
+    }
+    if (errno == 0)
+        ret = 0;
+done:
+    if (o)
+        json_object_put (o);
+    if (zmsg)
+        zmsg_destroy (&zmsg);
+    return ret;       
+}
+
+int plugin_conf_put (plugin_ctx_t *p, const char *key, json_object *vo)
+{
+    json_object *o = util_json_object_new_object ();
+    zmsg_t *zmsg = NULL;
+    int ret = -1;
+
+    /* send request */
+    util_json_object_add_string (o, "key", key);
+    json_object_get (vo);
+    json_object_object_add (o, "val", vo);
+    plugin_send_request (p, o, "conf.put");
+    json_object_put (o);
+    o = NULL;
+
+    /* receive response */
+    if (!(zmsg = zmsg_recv (p->zs_upreq))) {
+        err ("%s: zmsg_recv", __FUNCTION__);
+        goto done;
+    }
+    if (cmb_msg_decode (zmsg, NULL, &o) < 0
+          || o == NULL || util_json_object_get_int (o, "errnum", &errno) < 0) {
+        err ("%s: protocol error", __FUNCTION__);
+        goto done;
+    }
+    if (errno == 0)
+        ret = 0;
+done:
+    if (o)
+        json_object_put (o);
+    if (zmsg)
+        zmsg_destroy (&zmsg);
+    return ret;       
+}
+
 static json_object *_conf_get (plugin_ctx_t *p, const char *key, bool watch)
 {
     json_object *vo = NULL, *o = util_json_object_new_object ();
     zmsg_t *zmsg = NULL;
 
+    /* send request */
     util_json_object_add_string (o, "key", key);
     util_json_object_add_boolean (o, "watch", watch);
     plugin_send_request (p, o, "conf.get");
+    json_object_put (o);
+    o = NULL;
+
+    /* receive response */
     if (!(zmsg = zmsg_recv (p->zs_upreq))) {
         err ("%s: zmsg_recv", __FUNCTION__);
         goto done;
@@ -215,7 +285,7 @@ done:
     return vo;       
 }
 
-json_object *plugin_conf (plugin_ctx_t *p, const char *key)
+json_object *plugin_conf_get (plugin_ctx_t *p, const char *key)
 {
     return _conf_get (p, key, false);
 }
