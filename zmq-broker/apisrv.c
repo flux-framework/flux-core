@@ -451,7 +451,7 @@ static void _listener_init (plugin_ctx_t *p)
     int fd;
     char *path = p->conf->api_sockpath;
 
-    fd = socket (AF_UNIX, SOCK_SEQPACKET, 0);
+    fd = socket (AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0)
         err_exit ("socket");
     if (remove (path) < 0 && errno != ENOENT)

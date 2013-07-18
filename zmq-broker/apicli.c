@@ -695,7 +695,7 @@ cmb_t cmb_init_full (const char *path, int flags)
 
     c = xzmalloc (sizeof (struct cmb_struct));
     c->flags = flags;
-    c->fd = socket (AF_UNIX, SOCK_SEQPACKET, 0);
+    c->fd = socket (AF_UNIX, SOCK_STREAM, 0);
     if (c->fd < 0)
         goto error;
     memset (&addr, 0, sizeof (struct sockaddr_un));
