@@ -35,14 +35,12 @@ struct cmb_struct {
     char *log_facility;
 };
 
-static int _send_message (cmb_t c, json_object *o, const char *fmt, ...)
+static int _send_vmessage (cmb_t c, json_object *o, const char *fmt, va_list ap)
 {
-    va_list ap;
     zmsg_t *zmsg = NULL;
     char *tag = NULL;
     int n;
 
-    va_start (ap, fmt);
     n = vasprintf (&tag, fmt, ap);
     va_end (ap);
     if (n < 0)
@@ -63,6 +61,20 @@ error:
     return -1;
 }
 
+static int _send_message (cmb_t c, json_object *o, const char *fmt, ...)
+{
+    va_list ap;
+    va_start (ap, fmt);
+    return _send_vmessage (c, o, fmt, ap);
+}
+
+int cmb_send_message (cmb_t c, json_object *o, const char *fmt, ...)
+{
+    va_list ap;
+    va_start (ap, fmt);
+    return _send_vmessage (c, o, fmt, ap);
+}
+
 static int _recv_message (cmb_t c, char **tagp, json_object **op, int nonblock)
 {
     zmsg_t *zmsg;
@@ -81,6 +93,16 @@ error:
     if (zmsg)
         zmsg_destroy (&zmsg);
     return -1;
+}
+
+int cmb_recv_message (cmb_t c, char **tagp, json_object **op, int nb)
+{
+    return _recv_message (c, tagp, op, nb);
+}
+
+zmsg_t *cmb_recv_zmsg (cmb_t c, int nb)
+{
+    return zmsg_recv_fd (c->fd, nb);
 }
 
 int cmb_ping (cmb_t c, char *name, int seq, int padlen, char **tagp, char **routep)

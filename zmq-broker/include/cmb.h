@@ -1,6 +1,11 @@
+#ifndef HAVE_CMB_H
+#define HAVE_CMB_H
+
 #define CMB_API_PATH_TMPL       "/tmp/cmb_socket.uid%d"
 
 #define CMB_FLAGS_TRACE         0x0001
+
+#include <czmq.h>
 
 typedef struct cmb_struct *cmb_t;
 
@@ -9,6 +14,20 @@ typedef struct cmb_struct *cmb_t;
 cmb_t cmb_init (void);
 cmb_t cmb_init_full (const char *path, int flags);
 void cmb_fini (cmb_t c);
+
+/*  Send a json encoded message [o] via the current cmb handle [c]
+ *      with tag [fmt]
+ */
+int cmb_send_message (cmb_t c, json_object *o, const char *fmt, ...);
+
+/*  Initiate a recv on the current cmb handle [c].
+ *   Returns by value a new json object [op].
+ */
+int cmb_recv_message (cmb_t c, char **tagp, json_object **op, int nb);
+
+/*  Receive raw zmsg from cmb handle [c]
+ */
+zmsg_t *cmb_recv_zmsg (cmb_t c, int nb);
 
 /* Ping a particular plugin.
  */
@@ -101,6 +120,8 @@ char *cmb_route_query (cmb_t c);
  */
 int cmb_rank (cmb_t c);
 int cmb_size (cmb_t c);
+
+#endif /* !HAVE_CMB_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
