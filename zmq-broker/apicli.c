@@ -314,6 +314,7 @@ int cmb_conf_put (cmb_t c, const char *key, json_object *vo)
 
     /* send request */
     util_json_object_add_string (o, "key", key);
+    json_object_get (vo);
     json_object_object_add (o, "val", vo);
     if (_send_message (c, o, "conf.put") < 0)
         goto error;
