@@ -310,13 +310,17 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'A': { /* --conf-get key */
-                json_object *vo = cmb_conf_get (c, optarg, false);
-                if (!vo && errno != 0)
+                json_object *o = cmb_conf_get (c, optarg, false);
+                if (!o && errno != 0)
                     err_exit ("cmb_conf_get");
-                printf ("%s = %s\n", optarg,
-                        json_object_to_json_string_ext (vo,
+                if (json_object_get_type (o) == json_type_string)
+                    printf ("%s = \"%s\"\n", optarg,
+                            json_object_get_string (o));
+                else
+                    printf ("%s = %s\n", optarg,
+                            json_object_to_json_string_ext (o,
                                                     JSON_C_TO_STRING_PLAIN));
-                json_object_put (vo);
+                json_object_put (o);
                 break;
             }
             case 'c': { /* --conf-commit */
@@ -326,32 +330,39 @@ int main (int argc, char *argv[])
             }
             case 'X': { /* --conf-list */
                 char *key;
-                json_object *vo;
+                json_object *o;
                 if (cmb_conf_list (c) < 0)
                     err_exit ("cmb_conf_list");
-                while (cmb_conf_next (c, &key, &vo) == 0) {
-                    printf ("%s = %s\n", key, 
-                            json_object_to_json_string_ext (vo,
+                while (cmb_conf_next (c, &key, &o) == 0) {
+                    if (json_object_get_type (o) == json_type_string)
+                        printf ("%s = \"%s\"\n", key,
+                                json_object_get_string (o));
+                    else
+                        printf ("%s = %s\n", key, 
+                                json_object_to_json_string_ext (o,
                                                     JSON_C_TO_STRING_PLAIN));
                     free (key);
-                    json_object_put (vo);
+                    json_object_put (o);
                 }
                 if (errno != 0)
                     err_exit ("cmb_conf_next");
                 break;
             }
             case 'w': { /* --conf-watch key */
-                json_object *vo;
-                if (!(vo = cmb_conf_get (c, optarg, true)) && errno != 0)
+                json_object *o;
+                if (!(o = cmb_conf_get (c, optarg, true)) && errno != 0)
                     err_exit ("cmb_conf_get");
                 do {
-                    printf ("%s = %s\n", optarg, vo 
-                                ? json_object_to_json_string_ext (vo,
-                                                    JSON_C_TO_STRING_PLAIN)
-                                : "<nil>");
-                    if (vo)
-                        json_object_put (vo);
-                } while (cmb_conf_next (c, NULL, &vo) == 0);
+                    if (json_object_get_type (o) == json_type_string)
+                        printf ("%s = \"%s\"\n", optarg,
+                                json_object_get_string (o));
+                    else
+                        printf ("%s = %s\n", optarg,
+                                json_object_to_json_string_ext (o,
+                                                    JSON_C_TO_STRING_PLAIN));
+                    if (o)
+                        json_object_put (o);
+                } while (cmb_conf_next (c, NULL, &o) == 0);
                 break;
             }
             case 'L': { /* --log */
