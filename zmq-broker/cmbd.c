@@ -393,9 +393,10 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
     if (conf->rank == 0) {
         conf_set_one_arg_t ca = { .srv = srv, .conf = conf };
         if (zhash_foreach (conf->conf_hash, _conf_set_one, &ca) != 0)
-            err_exit ("failed to initialize conf store on root node");
+            err_exit ("failed to initialize conf store on rank 0");
         _conf_commit (srv, conf);
-    }
+    } else if (zhash_size (conf->conf_hash) > 0)
+        err_exit ("set-conf should only be used on rank 0");
 
     *srvp = srv;
 }
