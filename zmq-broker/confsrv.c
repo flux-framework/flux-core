@@ -44,8 +44,6 @@
 #include "util.h"
 #include "log.h"
 
-#include "confsrv.h"
-
 typedef struct {
     zlist_t *reply_to;  /* item = (zmsg_t *) */
     char *val;

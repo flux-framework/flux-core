@@ -28,8 +28,6 @@
 #include "util.h"
 #include "log.h"
 
-#include "barriersrv.h"
-
 const int barrier_reduction_timeout_msec = 1;
 
 typedef struct _barrier_struct {

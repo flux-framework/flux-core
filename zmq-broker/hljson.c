@@ -10,7 +10,6 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
-//#include <math.h>
 #include <limits.h>
 #include <assert.h>
 

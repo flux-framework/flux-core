@@ -26,8 +26,6 @@
 #include "log.h"
 #include "plugin.h"
 
-#include "syncsrv.h"
-
 #define MAX_SYNC_PERIOD_SEC 30*60
 
 static int epoch = 0;

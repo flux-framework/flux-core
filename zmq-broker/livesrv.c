@@ -27,8 +27,6 @@
 #include "log.h"
 #include "plugin.h"
 
-#include "livesrv.h"
-
 typedef struct {
     int rank;
     int epoch;

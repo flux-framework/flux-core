@@ -27,8 +27,6 @@
 #include "log.h"
 #include "plugin.h"
 
-#include "logsrv.h"
-
 typedef struct {
     char *fac;         /* FIXME: switch to regex */
     logpri_t pri_max;  /* the lower the number, the more filtering */

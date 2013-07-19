@@ -28,8 +28,6 @@
 #include "log.h"
 #include "plugin.h"
 
-#include "kvssrv.h"
-
 typedef struct _kv_struct {
     char *key;
     char *val;

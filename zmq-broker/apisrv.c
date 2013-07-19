@@ -29,8 +29,6 @@
 #include "util.h"
 #include "log.h"
 
-#include "apisrv.h"
-
 #define LISTEN_BACKLOG      5
 
 typedef struct _client_struct {

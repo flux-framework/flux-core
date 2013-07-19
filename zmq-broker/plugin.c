@@ -23,15 +23,16 @@
 #include "route.h"
 #include "cmb.h"
 #include "cmbd.h"
-#include "apisrv.h"
-#include "barriersrv.h"
-#include "syncsrv.h"
-#include "kvssrv.h"
-#include "livesrv.h"
-#include "logsrv.h"
-#include "confsrv.h"
 #include "util.h"
 #include "plugin.h"
+
+struct plugin_struct apisrv;
+struct plugin_struct barriersrv;
+struct plugin_struct confsrv;
+struct plugin_struct kvssrv;
+struct plugin_struct livesrv;
+struct plugin_struct logsrv;
+struct plugin_struct syncsrv;
 
 static plugin_t plugins[] = {
     &kvssrv,
