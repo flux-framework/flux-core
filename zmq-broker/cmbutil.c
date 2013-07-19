@@ -11,6 +11,7 @@
 #include <libgen.h>
 #include <stdbool.h>
 #include <json/json.h>
+#include <sys/param.h>
 
 #include "cmb.h"
 #include "log.h"
@@ -93,7 +94,7 @@ int main (int argc, char *argv[])
     int nprocs;
     int padding = 0;
     int pingdelay_ms = 1000;
-    char *socket_path = CMB_API_PATH;
+    static char socket_path[PATH_MAX + 1];
     bool Lopt = false;
     char *Lopt_facility;
     logpri_t Lopt_priority;
@@ -103,6 +104,7 @@ int main (int argc, char *argv[])
 
     nprocs = env_getint ("SLURM_NPROCS", 1);
 
+    snprintf (socket_path, sizeof (socket_path), CMB_API_PATH_TMPL, getuid ());
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
             case 'P': /* --ping-padding N */
@@ -115,7 +117,7 @@ int main (int argc, char *argv[])
                 nprocs = strtoul (optarg, NULL, 10);
                 break;
             case 'z': /* --socket-path PATH */
-                socket_path = optarg;
+                snprintf (socket_path, sizeof (socket_path), "%s", optarg);
                 break;
             case 'Z': /* --trace-apisock */
                 flags |= CMB_FLAGS_TRACE;

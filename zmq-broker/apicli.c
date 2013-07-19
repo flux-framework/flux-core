@@ -716,7 +716,10 @@ error:
 
 cmb_t cmb_init (void)
 {
-    return cmb_init_full (CMB_API_PATH, 0);
+    char path[PATH_MAX + 1];
+
+    snprintf (path, sizeof (path), CMB_API_PATH_TMPL, getuid ());
+    return cmb_init_full (path, 0);
 }
 
 void cmb_fini (cmb_t c)

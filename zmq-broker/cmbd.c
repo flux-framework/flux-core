@@ -90,12 +90,14 @@ int main (int argc, char *argv[])
     conf_t *conf;
     server_t *srv;
     const int parent_max = sizeof (conf->parent) / sizeof (conf->parent[0]);
+    static char apipath[PATH_MAX + 1];
 
     log_init (basename (argv[0]));
 
     conf = xzmalloc (sizeof (conf_t));
     conf->size = 1;
-    conf->api_sockpath = CMB_API_PATH;
+    snprintf (apipath, sizeof (apipath), CMB_API_PATH_TMPL, getuid ());
+    conf->api_sockpath = apipath;
     if (!(conf->conf_hash = zhash_new ()))
         oom ();
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {

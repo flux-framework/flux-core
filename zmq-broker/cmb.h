@@ -1,4 +1,4 @@
-#define CMB_API_PATH            "/tmp/cmb_socket"
+#define CMB_API_PATH_TMPL       "/tmp/cmb_socket.uid%d"
 
 #define CMB_FLAGS_TRACE         0x0001
 
