@@ -24,7 +24,7 @@
 #include "cmbd.h"
 #include "util.h"
 #include "plugin.h"
-#include "hostlist.h"
+#include "hljson.h"
 
 #define OPTIONS "t:e:E:O:vs:R:S:p:P:L:T:A:d:D:H:"
 static const struct option longopts[] = {
@@ -157,28 +157,12 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'H': { /* set-conf-hostlist hostlist */
-                hostlist_t hl = hostlist_create (optarg);
-                hostlist_iterator_t itr;
-                json_object *o;
-                char *key, *host;
-                const char *val;
-                int rank = 0;
-                if (!hl)
-                    msg_exit ("failed to parse hostlist");
-                itr = hostlist_iterator_create (hl);
-                while ((host = hostlist_next (itr))) {
-                    if (!(o = lookup_host (host)))
-                        msg_exit ("could not look up %s", host);
-                    if (asprintf (&key, "host.%d", rank++) < 0)
-                        oom ();
-                    val = json_object_to_json_string (o);
-                    zhash_update (conf->conf_hash, key, xstrdup (val));
-                    zhash_freefn (conf->conf_hash, key, free);
-                    free (key);
-                    json_object_put (o);
-                }
-                hostlist_iterator_destroy (itr);
-                hostlist_destroy (hl);
+                json_object *o = hostlist_to_json (optarg);
+                const char *val = json_object_to_json_string (o);
+
+                zhash_update (conf->conf_hash, "hosts", xstrdup (val));
+                zhash_freefn (conf->conf_hash, "hosts", free);
+                json_object_put (o);
             }
             case 'R':   /* --rank N */
                 conf->rank = strtoul (optarg, NULL, 10);

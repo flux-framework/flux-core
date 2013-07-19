@@ -18,6 +18,7 @@
 #include "cmb.h"
 #include "util.h"
 #include "log.h"
+#include "hostlist.h"
 
 void oom (void)
 {
@@ -401,50 +402,6 @@ int util_logpri_val (const char *p, logpri_t *lp)
         return -1;
     return 0;
 }
-
-json_object *lookup_host (char *host)
-{
-    struct addrinfo hints, *res = NULL, *r;
-    int errnum;
-    char ipaddr[64];
-    json_object *ao, *no, *o = util_json_object_new_object (); 
-
-    util_json_object_add_string (o, "hostname", host);
-
-    memset (&hints, 0, sizeof(hints));
-    hints.ai_family = PF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-
-    if ((errnum = getaddrinfo (host, NULL, &hints, &res))) {
-        msg ("getaddrinfo: %s: %s", host, gai_strerror (errnum));
-        goto error;
-    }
-    if (res == NULL) {
-        msg_exit ("unknown host: %s\n", host);
-        goto error;
-    }
-    if (!(ao = json_object_new_array ()))
-        oom ();
-    for (r = res; r != NULL; r = r->ai_next) {
-        if ((errnum = getnameinfo (r->ai_addr, r->ai_addrlen,
-                                   ipaddr, sizeof (ipaddr),
-                                   NULL, 0, NI_NUMERICHOST)))  {
-            msg ("getnameinfo: %s: %s", host, gai_strerror (errnum));
-            goto error;
-        }
-        if (!(no = json_object_new_string (ipaddr)))
-            oom ();
-        json_object_array_add (ao, no);
-    }
-    freeaddrinfo (res);
-    json_object_object_add (o, "addrs", ao);
-    return o;
-error:
-    if (res)
-        freeaddrinfo (res);
-    return NULL;
-}
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

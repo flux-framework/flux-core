@@ -66,8 +66,6 @@ json_object *util_json_vlog (logpri_t pri, const char *fac, const char *src,
 const char *util_logpri_str (logpri_t pri);
 int util_logpri_val (const char *s, logpri_t *lp);
 
-json_object *lookup_host (char *host);
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
