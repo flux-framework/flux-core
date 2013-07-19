@@ -16,7 +16,8 @@ if pepe.rank == 0 then
 end
 
 local h = hostlist.new (pepe.nodelist)
-local eventuri = "epgm://eth0;239.192.1.1:5555"
+local mport = 5000 + tonumber (pepe:getenv ("SLURM_JOB_ID")) % 1024;
+local eventuri = "epgm://eth0;239.192.1.1:" .. tostring (mport)
 local upreqinuri = "tcp://*:5556"
 local dnreqouturi = "tcp://*:5557"
 
