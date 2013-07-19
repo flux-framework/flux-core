@@ -70,12 +70,12 @@ static int _read_all (int fd, uint8_t *buf, size_t len, bool nonblock)
         if (nonblock && _nonblock (fd, true) < 0)
             return -1;
         n = read (fd, buf + count, len - count);
-        if (n <= 0)
-            return n;
-        count += n;
         if (nonblock && _nonblock (fd, false) < 0)
             return -1;
         nonblock = false;
+        if (n <= 0)
+            return n;
+        count += n;
     } while (count < len);
 
     return count;
