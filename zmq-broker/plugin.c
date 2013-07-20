@@ -360,104 +360,117 @@ done:
         zmsg_destroy (zmsg);    
 }
 
-
-static void _plugin_poll (plugin_ctx_t *p)
+static int plugin_zloop_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
 {
-    zmq_pollitem_t zpa[] = {
-{ .socket = p->zs_upreq,     .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-{ .socket = p->zs_dnreq,     .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-{ .socket = p->zs_evin,      .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-{ .socket = p->zs_snoop,     .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-    };
     zmsg_t *zmsg;
-    struct timeval t1, t2, t;
-    long elapsed, msec = -1;
-    char *pingtag, *statstag;
     zmsg_type_t type;
+    char *pingtag, *statstag;
 
     if (asprintf (&pingtag, "%s.ping", p->plugin->name) < 0)
         err_exit ("asprintf");
     if (asprintf (&statstag, "%s.stats", p->plugin->name) < 0)
         err_exit ("asprintf");
 
-    for (;;) {
-        /* set up timeout */
-        if (p->timeout > 0) {
-            if (msec == -1) { 
-                msec = p->timeout;
-                xgettimeofday (&t1, NULL);
-            }
-        } else
-            msec = -1;
+    /* receive a message */
+    if (item->socket == p->zs_upreq) {   /* response on 'upreq' */
+        zmsg = zmsg_recv (p->zs_upreq);
+        type = ZMSG_RESPONSE;
+        p->stats.upreq_recv_count++;
+    } else if (item->socket == p->zs_dnreq) {   /* request on 'dnreq' */
+        zmsg = zmsg_recv (p->zs_dnreq);
+        if (!zmsg)
+            err ("zmsg_recv");
+        type = ZMSG_REQUEST;
+        p->stats.dnreq_recv_count++;
+    } else if (item->socket == p->zs_evin) {   /* event on 'in_event' */
+        zmsg = zmsg_recv (p->zs_evin);
+        if (!zmsg)
+            err ("zmsg_recv");
+        type = ZMSG_EVENT;
+        p->stats.event_recv_count++;
+    } else if (item->socket == p->zs_snoop) {   /* debug on 'snoop' */
+        zmsg = zmsg_recv (p->zs_snoop);
+        type = ZMSG_SNOOP;
+    } else
+        zmsg = NULL;
 
-        if (zmq_poll (zpa, sizeof (zpa) / sizeof (zpa[0]), msec) < 0)
-            err_exit ("zmq_poll");
+    /* intercept and respond to ping requests for this plugin */
+    if (zmsg && type == ZMSG_REQUEST && cmb_msg_match (zmsg, pingtag))
+        plugin_ping_respond (p, &zmsg);
 
-        /* process timeout */
-        if (p->timeout > 0) {
-            xgettimeofday (&t2, NULL);
-            timersub (&t2, &t1, &t);
-            elapsed = (t.tv_sec * 1000 + t.tv_usec / 1000);
-            if (elapsed < p->timeout) {
-                msec = p->timeout - elapsed;
-            } else {
-                if (p->plugin->timeoutFn)
-                    p->plugin->timeoutFn (p);
-                msec = -1;
-            }
-        }
+    /* intercept and respond to stats request for this plugin */
+    if (zmsg && type == ZMSG_REQUEST && cmb_msg_match (zmsg, statstag))
+        plugin_stats_respond (p, &zmsg);
 
-        /* receive a message */
-        if (zpa[0].revents & ZMQ_POLLIN) {   /* response on 'upreq' */
-            zmsg = zmsg_recv (p->zs_upreq);
-            type = ZMSG_RESPONSE;
-            p->stats.upreq_recv_count++;
-        } else if (zpa[1].revents & ZMQ_POLLIN) {   /* request on 'dnreq' */
-            zmsg = zmsg_recv (p->zs_dnreq);
-            if (!zmsg)
-                err ("zmsg_recv");
-            type = ZMSG_REQUEST;
-            p->stats.dnreq_recv_count++;
-        } else if (zpa[2].revents & ZMQ_POLLIN) {   /* event on 'in_event' */
-            zmsg = zmsg_recv (p->zs_evin);
-            if (!zmsg)
-                err ("zmsg_recv");
-            type = ZMSG_EVENT;
-            p->stats.event_recv_count++;
-        } else if (zpa[3].revents & ZMQ_POLLIN) {   /* debug on 'snoop' */
-            zmsg = zmsg_recv (p->zs_snoop);
-            type = ZMSG_SNOOP;
-        } else
-            zmsg = NULL;
+    /* intercept "conf.get" response for watched conf values */
+    if (zmsg && type == ZMSG_RESPONSE && cmb_msg_match (zmsg, "conf.get"))
+        plugin_watch_update (p, &zmsg);
 
-        /* intercept and respond to ping requests for this plugin */
-        if (zmsg && type == ZMSG_REQUEST && cmb_msg_match (zmsg, pingtag))
-            plugin_ping_respond (p, &zmsg);
+    /* dispatch message to plugin's recvFn() */
+    /*     recvFn () shouldn't free zmsg if it doesn't recognize the tag */
+    if (zmsg && p->plugin->recvFn)
+        p->plugin->recvFn (p, &zmsg, type);
 
-        /* intercept and respond to stats request for this plugin */
-        if (zmsg && type == ZMSG_REQUEST && cmb_msg_match (zmsg, statstag))
-            plugin_stats_respond (p, &zmsg);
+    /* send ENOSYS response indicating plugin did not recognize tag */
+    if (zmsg && type == ZMSG_REQUEST)
+        plugin_send_response_errnum (p, &zmsg, ENOSYS);
 
-        /* intercept "conf.get" response for watched conf values */
-        if (zmsg && type == ZMSG_RESPONSE && cmb_msg_match (zmsg, "conf.get"))
-            plugin_watch_update (p, &zmsg);
+    if (zmsg)
+        zmsg_destroy (&zmsg);
 
-        /* dispatch message to plugin's recvFn() */
-        /*     recvFn () shouldn't free zmsg if it doesn't recognize the tag */
-        if (zmsg && p->plugin->recvFn)
-            p->plugin->recvFn (p, &zmsg, type);
-
-        /* send ENOSYS response indicating plugin did not recognize tag */
-        if (zmsg && type == ZMSG_REQUEST)
-            plugin_send_response_errnum (p, &zmsg, ENOSYS);
-
-        if (zmsg)
-            zmsg_destroy (&zmsg);
-    }
-
-    free (pingtag);
-    free (statstag);
+    return (0);
 }
+
+
+static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, plugin_ctx_t *p)
+{
+    if (p->plugin->timeoutFn)
+        p->plugin->timeoutFn (p);
+    return (0);
+}
+
+static zloop_t * plugin_zloop_create (plugin_ctx_t *p)
+{
+    int rc;
+    zloop_t *zl;
+    zloop_fn *cb_f = (zloop_fn *) plugin_zloop_cb;
+    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
+
+    if (!(zl = zloop_new ()))
+        err_exit ("zloop_new");
+
+    zp.socket = p->zs_upreq;
+    if ((rc = zloop_poller (zl, &zp, cb_f, (void *) p)) != 0)
+        err_exit ("zloop_poller: rc=%d", rc);
+    zp.socket = p->zs_dnreq;
+    if ((rc = zloop_poller (zl, &zp, cb_f, (void *) p)) != 0)
+        err_exit ("zloop_poller: rc=%d", rc);
+    zp.socket = p->zs_evin;
+    if ((rc = zloop_poller (zl, &zp, cb_f, (void *) p)) != 0)
+        err_exit ("zloop_poller: rc=%d", rc);
+    zp.socket = p->zs_snoop;
+    if ((rc = zloop_poller (zl, &zp, cb_f, (void *) p)) != 0)
+        err_exit ("zloop_poller: rc=%d", rc);
+
+    if ((p->timeout > 0) &&
+        (rc == zloop_timer (zl, p->timeout, 0, (zloop_fn *) plugin_timer_cb, p)) != 0)
+        err_exit ("zloop_timer: rc=%d", rc);
+
+    return (zl);
+}
+
+static void _plugin_zloop (plugin_ctx_t *p)
+{
+    zloop_t *loop;
+
+    if (!(loop = plugin_zloop_create (p)))
+        err_exit ("zloop_new");
+
+    zloop_start (loop);
+
+    zloop_destroy (&loop);
+}
+
 
 static void *_plugin_thread (void *arg)
 {
@@ -468,7 +481,7 @@ static void *_plugin_thread (void *arg)
     if (p->plugin->pollFn)
         p->plugin->pollFn (p);
     else
-        _plugin_poll (p);
+        _plugin_zloop (p);
     if (p->plugin->finiFn)
         p->plugin->finiFn (p);
 
