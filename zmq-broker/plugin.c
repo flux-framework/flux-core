@@ -360,39 +360,23 @@ done:
         zmsg_destroy (zmsg);    
 }
 
-static int plugin_zloop_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
+/*
+ *  Callback hook called for all/most messages:
+ *  Respond to ping and stats requests automatically, handle the call
+ *   to plugin's recvFn, and send ENOSYS if plugin didn't recognize a tag.
+ *
+ *  Returns any unhandled zmsg_t.
+ */
+static zmsg_t * plugin_cb_hook (plugin_ctx_t *p, zmsg_t *zmsg, zmsg_type_t type)
 {
-    zmsg_t *zmsg;
-    zmsg_type_t type;
     char *pingtag, *statstag;
 
+    /* FIXME: Allocate once and store somewhere
+     */
     if (asprintf (&pingtag, "%s.ping", p->plugin->name) < 0)
         err_exit ("asprintf");
     if (asprintf (&statstag, "%s.stats", p->plugin->name) < 0)
         err_exit ("asprintf");
-
-    /* receive a message */
-    if (item->socket == p->zs_upreq) {   /* response on 'upreq' */
-        zmsg = zmsg_recv (p->zs_upreq);
-        type = ZMSG_RESPONSE;
-        p->stats.upreq_recv_count++;
-    } else if (item->socket == p->zs_dnreq) {   /* request on 'dnreq' */
-        zmsg = zmsg_recv (p->zs_dnreq);
-        if (!zmsg)
-            err ("zmsg_recv");
-        type = ZMSG_REQUEST;
-        p->stats.dnreq_recv_count++;
-    } else if (item->socket == p->zs_evin) {   /* event on 'in_event' */
-        zmsg = zmsg_recv (p->zs_evin);
-        if (!zmsg)
-            err ("zmsg_recv");
-        type = ZMSG_EVENT;
-        p->stats.event_recv_count++;
-    } else if (item->socket == p->zs_snoop) {   /* debug on 'snoop' */
-        zmsg = zmsg_recv (p->zs_snoop);
-        type = ZMSG_SNOOP;
-    } else
-        zmsg = NULL;
 
     /* intercept and respond to ping requests for this plugin */
     if (zmsg && type == ZMSG_REQUEST && cmb_msg_match (zmsg, pingtag))
@@ -415,12 +399,49 @@ static int plugin_zloop_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
     if (zmsg && type == ZMSG_REQUEST)
         plugin_send_response_errnum (p, &zmsg, ENOSYS);
 
+    return (zmsg);
+}
+
+static int upreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
+{
+    zmsg_t *zmsg = zmsg_recv (p->zs_upreq);
+    p->stats.upreq_recv_count++;
+    zmsg = plugin_cb_hook (p, zmsg, ZMSG_RESPONSE);
     if (zmsg)
         zmsg_destroy (&zmsg);
 
     return (0);
 }
 
+static int dnreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
+{
+    zmsg_t *zmsg = zmsg_recv (p->zs_dnreq);
+    p->stats.dnreq_recv_count++;
+    zmsg = plugin_cb_hook (p, zmsg, ZMSG_REQUEST);
+    if (zmsg)
+        zmsg_destroy (&zmsg);
+
+    return (0);
+}
+static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
+{
+    zmsg_t *zmsg = zmsg_recv (p->zs_evin);
+    p->stats.event_recv_count++;
+    zmsg = plugin_cb_hook (p, zmsg, ZMSG_EVENT);
+    if (zmsg)
+        zmsg_destroy (&zmsg);
+
+    return (0);
+}
+static int snoop_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
+{
+    zmsg_t *zmsg =  zmsg_recv (p->zs_snoop);
+    zmsg = plugin_cb_hook (p, zmsg, ZMSG_SNOOP);
+    if (zmsg)
+        zmsg_destroy (&zmsg);
+
+    return (0);
+}
 
 static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, plugin_ctx_t *p)
 {
@@ -433,23 +454,22 @@ static zloop_t * plugin_zloop_create (plugin_ctx_t *p)
 {
     int rc;
     zloop_t *zl;
-    zloop_fn *cb_f = (zloop_fn *) plugin_zloop_cb;
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
     if (!(zl = zloop_new ()))
         err_exit ("zloop_new");
 
     zp.socket = p->zs_upreq;
-    if ((rc = zloop_poller (zl, &zp, cb_f, (void *) p)) != 0)
+    if ((rc = zloop_poller (zl, &zp, (zloop_fn *) upreq_cb, (void *) p)) != 0)
         err_exit ("zloop_poller: rc=%d", rc);
     zp.socket = p->zs_dnreq;
-    if ((rc = zloop_poller (zl, &zp, cb_f, (void *) p)) != 0)
+    if ((rc = zloop_poller (zl, &zp, (zloop_fn *) dnreq_cb, (void *) p)) != 0)
         err_exit ("zloop_poller: rc=%d", rc);
     zp.socket = p->zs_evin;
-    if ((rc = zloop_poller (zl, &zp, cb_f, (void *) p)) != 0)
+    if ((rc = zloop_poller (zl, &zp, (zloop_fn *) event_cb, (void *) p)) != 0)
         err_exit ("zloop_poller: rc=%d", rc);
     zp.socket = p->zs_snoop;
-    if ((rc = zloop_poller (zl, &zp, cb_f, (void *) p)) != 0)
+    if ((rc = zloop_poller (zl, &zp, (zloop_fn *) snoop_cb, (void *) p)) != 0)
         err_exit ("zloop_poller: rc=%d", rc);
 
     if ((p->timeout > 0) &&
