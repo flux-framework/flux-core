@@ -1,67 +1,87 @@
 TOP = $(shell pwd)
+INCDIR = $(TOP)/include
+LIBDIR = $(TOP)/lib
+
 ifeq ($(shell hostname),jimbo.chaos)
 MPIMOD = mvapich2-gnu-shmem
 else
 MPIMOD = mvapich2-gnu-psm
 endif
-NTASKS = $(SLURM_JOB_NUM_NODES)  # override me
-SRUN = srun --overcommit -n$(NTASKS)
 
-CFLAGS = -Werror -Wall -g -fPIC
-CFLAGS += -DWITH_LSD_NOMEM_ERROR_FUNC -DWITH_LSD_FATAL_ERROR_FUNC
-LDADD = -ljson -lzmq -lczmq -pthread -luuid -lhiredis -lssl
-LDADD_C = -ljson -luuid -lzmq -lczmq -lssl
+CFLAGS = -Werror -Wall -g -fPIC -I$(INCDIR) \
+	-DWITH_LSD_NOMEM_ERROR_FUNC -DWITH_LSD_FATAL_ERROR_FUNC
+LDFLAGS = -Wl,-rpath,$(LIBDIR)
 
-CMBD_OBJS = cmbd.o route.o zmq.o util.o log.o plugin.o \
-	apisrv.o syncsrv.o kvssrv.o barriersrv.o livesrv.o logsrv.o \
-	confsrv.o hljson.o hostlist.o lsdfatal.o
-CMBUTIL_OBJS = cmbutil.o apicli.o util.o log.o zmq.o
-LIBPMI_OBJS = pmi.o apicli.o util.o log.o zmq.o
-OBJS = $(CMBD_OBJS) $(CMBUTIL_OBJS) $(LIBPMI_OBJS)
-INCLUDES = $(wildcard *.h)
+LDADD_CLI = -ljson -lzmq -lczmq -lssl
+LDADD_SRV = -pthread -luuid -lhiredis $(LDADD_CLI)
 
-all: cmbd cmbutil libpmi.so.0 mpi_hello tbase64
+COMMON_OBJS = util.o log.o zmq.o
+PLUGIN_OBJS = apisrv.o syncsrv.o kvssrv.o barriersrv.o livesrv.o \
+	logsrv.o confsrv.o 
+CMBD_OBJS = cmbd.o route.o plugin.o hljson.o hostlist.o lsdfatal.o \
+	$(COMMON_OBJS) $(PLUGIN_OBJS)
+CMBUTIL_OBJS = cmbutil.o $(COMMON_OBJS)
+TBASE64_OBJS = tbase64.o $(COMMON_OBJS)
+LIBPMI_OBJS = pmi.o $(COMMON_OBJS)
+LIBCMB_OBJS = apicli.o $(COMMON_OBJS)
+
+LIBPMI = $(LIBDIR)/libpmi.so.0
+LIBCMB = $(LIBDIR)/libcmb.so.0
+
+BUILD = $(LIBCMB) $(LIBPMI) cmbd cmbutil tbase64 mpi_hello
+
+all: $(BUILD)
 
 cmbd: $(CMBD_OBJS)
-	$(CC) -o $@ $(CMBD_OBJS) $(LDADD)
+	$(CC) -o $@ $(CMBD_OBJS) $(LDADD_SRV)
 
-tbase64: tbase64.o util.o log.o zmq.o
-	$(CC) -o $@ tbase64.o util.o log.o zmq.o $(LDADD_C)
+tbase64: $(TBASE64_OBJS)
+	$(CC) $(LDFLAGS) -o $@ $(TBASE64_OBJS) $(LDADD_CLI)
 
-cmbutil: $(CMBUTIL_OBJS)
-	$(CC) -o $@ $(CMBUTIL_OBJS) $(LDADD_C)
+cmbutil: $(CMBUTIL_OBJS) $(LIBCMB)
+	$(CC) $(LDFLAGS) -o $@ $(CMBUTIL_OBJS) -L$(LIBDIR) -lcmb
 
-libpmi.so.0: $(LIBPMI_OBJS)
-	$(CC) -shared -Wl,-soname,libpmi.so.0 \
-	      -o $@ $(LIBPMI_OBJS) -ljson -luuid -lzmq -lczmq
+$(LIBPMI): $(LIBPMI_OBJS) $(LIBCMB)
+	$(CC) -shared -Wl,--version-script=pmi_version.map \
+		-o $@ $(LIBPMI_OBJS) -L$(LIBDIR) -lcmb
+
+$(LIBCMB): $(LIBCMB_OBJS)
+	$(CC) -shared -Wl,--version-script=cmb_version.map \
+		-o $@ $(LIBCMB_OBJS) $(LDADD_CLI)
+	ln -sf $(shell basename $(LIBCMB)) $(LIBCMB:.0=)
 
 mpi_hello: mpi_hello.c
 	(source /etc/profile.d/modules.sh;\
 		module load $(MPIMOD);\
-		mpicc -o $@ mpi_hello.c)
+		mpicc $(LDFLAGS) -o $@ mpi_hello.c)
 clean:
-	rm -f *.o cmbd cmbutil libpmi.so.0 mpi_hello
+	rm -f *.o $(BUILD)
+	rm $(LIBDIR)/*.so
+
+# header dependencies
+OBJS = $(CMBD_OBJS) $(CMBUTIL_OBJS) $(TBASE64_OBJS) \
+	$(LIBPMI_OBJS) $(LIBCMB_OBJS)
+INCLUDES = $(wildcard *.h)
+$(OBJS): $(INCLUDES)
+
+##
+## test targets
+##
+
+NTASKS = $(SLURM_JOB_NUM_NODES)  # override me
+SRUN = srun --overcommit -n$(NTASKS)
 
 hello: mpi_hello
 	time -p (source /etc/profile.d/modules.sh;\
 		module load $(MPIMOD);\
 		export PMI_TRACE=0xff;\
-		export LD_LIBRARY_PATH=$(TOP):$$LD_LIBRARY_PATH;\
+		export LD_LIBRARY_PATH=$(TOP)/lib:$$LD_LIBRARY_PATH;\
 		$(SRUN) ./mpi_hello)
 
 shello: mpi_hello
 	time -p (source /etc/profile.d/modules.sh;\
 		module load $(MPIMOD);\
 		$(SRUN) ./mpi_hello)
-
-PMGR_DIR = /home/garlick/proj/ngrm/pmgr/tmp/pmgr_collective
-
-pmgr: $(PMGR_DIR)/test/client
-	time -p (export MPIRUN_CLIENT_DEBUG=2;\
-		export PMI_TRACE=0x18;\
-		export LD_LIBRARY_PATH=$(TOP):$$LD_LIBRARY_PATH;\
-		export LD_LIBRARY_PATH=$(PMGR_DIR)/lib:$$LD_LIBRARY_PATH;\
-		$(SRUN) $(PMGR_DIR)/test/client)
 
 barrier:
 	time -p $(SRUN) ./cmbutil -b testbarrier
@@ -77,13 +97,3 @@ keys:
 info:
 	-redis-cli info
 
-# Use with 'nutcracker' config
-xclear:
-	srun redis-cli -h 127.0.0.1 -p 7777 flushall
-	srun redis-cli -h 127.0.0.1 -p 7777 config resetstat
-xkeys:
-	srun -l redis-cli -h 127.0.0.1 -p 7777 info|grep db0:
-xinfo:
-	srun -l redis-cli -h 127.0.0.1 -p 7777 info|dshbak -c
-
-$(OBJS): $(INCLUDES)
