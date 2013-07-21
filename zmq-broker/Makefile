@@ -12,7 +12,7 @@ CFLAGS = -Werror -Wall -g -fPIC -I$(INCDIR) \
 	-DWITH_LSD_NOMEM_ERROR_FUNC -DWITH_LSD_FATAL_ERROR_FUNC
 LDFLAGS = -Wl,-rpath,$(LIBDIR)
 
-LDADD_CLI = -ljson -lzmq -lczmq -lssl
+LDADD_CLI = -ljson -lzmq -lczmq -lcrypto
 LDADD_SRV = -pthread -luuid -lhiredis $(LDADD_CLI)
 
 COMMON_OBJS = util.o log.o zmq.o
