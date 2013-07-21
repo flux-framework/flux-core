@@ -39,7 +39,7 @@ tbase64: $(TBASE64_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $(TBASE64_OBJS) $(LDADD_CLI)
 
 cmbutil: $(CMBUTIL_OBJS) $(LIBCMB)
-	$(CC) $(LDFLAGS) -o $@ $(CMBUTIL_OBJS) -L$(LIBDIR) -lcmb
+	$(CC) $(LDFLAGS) -o $@ $(CMBUTIL_OBJS) -L$(LIBDIR) -lcmb $(LDADD_CLI)
 
 $(LIBPMI): $(LIBPMI_OBJS) $(LIBCMB)
 	mkdir -p $(shell dirname $@)
