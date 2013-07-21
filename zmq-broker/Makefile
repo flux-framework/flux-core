@@ -42,13 +42,15 @@ cmbutil: $(CMBUTIL_OBJS) $(LIBCMB)
 	$(CC) $(LDFLAGS) -o $@ $(CMBUTIL_OBJS) -L$(LIBDIR) -lcmb
 
 $(LIBPMI): $(LIBPMI_OBJS) $(LIBCMB)
+	mkdir -p $(shell dirname $@)
 	$(CC) -shared -Wl,--version-script=pmi_version.map \
 		-o $@ $(LIBPMI_OBJS) -L$(LIBDIR) -lcmb
 
 $(LIBCMB): $(LIBCMB_OBJS)
+	mkdir -p $(shell dirname $@)
 	$(CC) -shared -Wl,--version-script=cmb_version.map \
 		-o $@ $(LIBCMB_OBJS) $(LDADD_CLI)
-	ln -sf $(shell basename $(LIBCMB)) $(LIBCMB:.0=)
+	ln -sf $(shell basename $@) $(LIBCMB:.0=)
 
 mpi_hello: mpi_hello.c
 	(source /etc/profile.d/modules.sh;\
