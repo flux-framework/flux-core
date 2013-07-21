@@ -58,7 +58,7 @@ mpi_hello: mpi_hello.c
 		mpicc $(LDFLAGS) -o $@ mpi_hello.c)
 clean:
 	rm -f *.o $(BUILD)
-	rm $(LIBDIR)/*.so
+	rm -rf $(LIBDIR)/
 
 # header dependencies
 OBJS = $(CMBD_OBJS) $(CMBUTIL_OBJS) $(TBASE64_OBJS) \
