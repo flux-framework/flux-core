@@ -33,6 +33,7 @@ struct plugin_struct kvssrv;
 struct plugin_struct livesrv;
 struct plugin_struct logsrv;
 struct plugin_struct syncsrv;
+struct plugin_struct echosrv;
 
 static plugin_t plugins[] = {
     &kvssrv,
@@ -42,6 +43,7 @@ static plugin_t plugins[] = {
     &livesrv,
     &logsrv,
     &confsrv,
+    &echosrv,
 };
 const int plugins_len = sizeof (plugins)/sizeof (plugins[0]);
 
