@@ -61,7 +61,7 @@ static char *_uuid_generate (void)
     return xstrdup (s);
 }
 
-static void _client_create (plugin_ctx_t *p, int fd)
+static client_t * _client_create (plugin_ctx_t *p, int fd)
 {
     ctx_t *ctx = p->ctx;
     client_t *c;
@@ -79,6 +79,7 @@ static void _client_create (plugin_ctx_t *p, int fd)
     if (c->next)
         c->next->prev = c;
     ctx->clients = c;
+    return (c);
 }
 
 static int _unsubscribe (const char *key, void *item, void *arg)
@@ -139,26 +140,48 @@ static void _client_destroy (plugin_ctx_t *p, client_t *c)
     free (c);
 }
 
-static int _client_count (plugin_ctx_t *p)
-{
-    ctx_t *ctx = p->ctx;
-    client_t *c;
-    int count = 0;
+static int _client_read (plugin_ctx_t *p, client_t *c);
 
-    for (c = ctx->clients; c != NULL; c = c->next)
-        count++;
-    return count;
+static int client_cb (zloop_t *zl, zmq_pollitem_t *zp, client_t *c)
+{
+    plugin_ctx_t *p = c->p;
+    bool delete = false;
+
+    if (zp->revents & ZMQ_POLLIN) {
+        while (_client_read (p, c) != -1)
+            ;
+        if (errno != EWOULDBLOCK && errno != EAGAIN)
+            delete = true;
+    }
+    if (zp->revents & ZMQ_POLLERR)
+        delete = true;
+
+    if (delete) {
+        /*  Cancel this client's fd from the zloop and destroy client
+         */
+        zloop_poller_end (zl, zp);
+        _client_destroy (c->p, c);
+    }
+    return (0);
 }
 
 static void _accept (plugin_ctx_t *p)
 {
-    ctx_t *ctx = p->ctx;
+    client_t *c;
     int fd;
+    ctx_t *ctx = p->ctx;
+    zmq_pollitem_t zp = { .events = ZMQ_POLLIN | ZMQ_POLLERR };
 
     fd = accept (ctx->listen_fd, NULL, NULL); 
     if (fd < 0)
         err_exit ("accept");
-     _client_create (p, fd);
+    c = _client_create (p, fd);
+
+    /*
+     *  Add this client's fd to the plugin's event loop:
+     */
+    zp.fd = fd;
+    zloop_poller (p->zloop, &zp, (zloop_fn *) client_cb, (void *) c);
 }
 
 static int _client_read (plugin_ctx_t *p, client_t *c)
@@ -346,100 +369,13 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
     }
 }
 
-static void _poll_once (plugin_ctx_t *p)
+static int accept_cb (zloop_t *zl, zmq_pollitem_t *zp, plugin_ctx_t *p)
 {
-    ctx_t *ctx = p->ctx;
-    client_t *c;
-    int zpa_len = _client_count (p) + 5;
-    zmq_pollitem_t *zpa = xzmalloc (sizeof (zmq_pollitem_t) * zpa_len);
-    int i;
-    zmsg_t *zmsg;
-    zmsg_type_t type;
-
-    /* zmq sockets */
-    zpa[0].socket = p->zs_dnreq;
-    zpa[0].events = ZMQ_POLLIN;
-    zpa[0].fd = -1;
-    zpa[1].socket = p->zs_evin;
-    zpa[1].events = ZMQ_POLLIN;
-    zpa[1].fd = -1;
-    zpa[2].socket = p->zs_upreq;
-    zpa[2].events = ZMQ_POLLIN;
-    zpa[2].fd = -1;
-    zpa[3].socket = p->zs_snoop;
-    zpa[3].events = ZMQ_POLLIN;
-    zpa[3].fd = -1;
-
-    /* listen fd */
-    zpa[4].events = ZMQ_POLLIN | ZMQ_POLLERR;
-    zpa[4].fd = ctx->listen_fd;
-
-    /* clients */
-    for (i = 5, c = ctx->clients; c != NULL; c = c->next, i++) {
-        zpa[i].events = ZMQ_POLLIN | ZMQ_POLLERR;
-        zpa[i].fd = c->fd;
-    }
-    assert (i == zpa_len);
-
-    if ((zmq_poll (zpa, zpa_len, -1)) < 0)
-        err_exit ("zmq_poll");
-
-    /* clients */
-    for (i = 5, c = ctx->clients; c != NULL; i++) {
-        client_t *deleteme = NULL;
-        assert (c->fd == zpa[i].fd);
-        if (zpa[i].revents & ZMQ_POLLIN) {
-            while (_client_read (p, c) != -1)
-                ;
-            if (errno != EWOULDBLOCK && errno != EAGAIN)
-                deleteme = c;
-        }
-        if (zpa[i].revents & ZMQ_POLLERR)
-            deleteme = c;
-        c = c->next;
-        if (deleteme)
-            _client_destroy (p, deleteme);
-    }
-
-    /* accept new client connection */
-    if (zpa[4].revents & ZMQ_POLLIN)        /* listenfd */
+    if (zp->revents & ZMQ_POLLIN)        /* listenfd */
         _accept (p);
-    if (zpa[4].revents & ZMQ_POLLERR)       /* listenfd - error */
+    if (zp->revents & ZMQ_POLLERR)       /* listenfd - error */
         err_exit ("apisrv: poll on listen fd");
-
-    /* zmq sockets - can modify client list (so do after clients) */
-    if (zpa[0].revents & ZMQ_POLLIN) {      /* request on 'dnreq' */
-        zmsg = zmsg_recv (p->zs_dnreq);
-        if (!zmsg)
-            err ("zmsg_recv");
-        type = ZMSG_REQUEST;
-        p->stats.dnreq_recv_count++;
-    } else if (zpa[1].revents & ZMQ_POLLIN) {/* event on 'evin' */
-        zmsg = zmsg_recv (p->zs_evin);
-        if (!zmsg)
-            err ("zmsg_recv");
-        type = ZMSG_EVENT;
-        p->stats.event_recv_count++;
-    } else if (zpa[2].revents & ZMQ_POLLIN) {/* response on 'upreq' */
-        zmsg = zmsg_recv (p->zs_upreq);
-        if (!zmsg)
-            err ("zmsg_recv");
-        type = ZMSG_RESPONSE;
-        p->stats.upreq_recv_count++;
-    } else if (zpa[3].revents & ZMQ_POLLIN) {/* 'snoop' */
-        zmsg = zmsg_recv (p->zs_snoop);
-        if (!zmsg)
-            err ("zmsg_recv");
-        type = ZMSG_SNOOP;
-    } else
-        zmsg = NULL;
-
-    if (zmsg)
-        _recv (p, &zmsg, type);
-    if (zmsg && type == ZMSG_REQUEST)
-        plugin_send_response_errnum (p, &zmsg, ENOSYS);
-
-    free (zpa);
+    return (0);
 }
 
 static void _listener_init (plugin_ctx_t *p)
@@ -477,11 +413,18 @@ static void _listener_fini (plugin_ctx_t *p)
 static void _init (plugin_ctx_t *p)
 {
     ctx_t *ctx;
+    zmq_pollitem_t zp = { .events = ZMQ_POLLIN | ZMQ_POLLERR };
 
     p->ctx = ctx = xzmalloc (sizeof (ctx_t));
     ctx->clients = NULL;
 
     _listener_init (p);
+
+    /*
+     *  Add listen fd to zloop reactor:
+     */
+    zp.fd = ctx->listen_fd;
+    zloop_poller (p->zloop, &zp, (zloop_fn *) accept_cb, (void *) p);
 }
 
 static void _fini (plugin_ctx_t *p)
@@ -494,17 +437,11 @@ static void _fini (plugin_ctx_t *p)
     free (ctx);
 }
 
-static void _poll (plugin_ctx_t *p)
-{
-    for (;;)
-        _poll_once (p);
-}
-
 struct plugin_struct apisrv = {
     .name   = "api",
+    .recvFn = _recv,
     .initFn = _init,
     .finiFn = _fini,
-    .pollFn = _poll,
 };
 
 /*
