@@ -1,0 +1,1 @@
+./mpirun_rsh -np 4 atlas1088 atlas1088 atlas1088 atlas1088 ./client

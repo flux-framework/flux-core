@@ -1,0 +1,236 @@
+2013-07-17 Dong Ahn <ahn1@llnl.gov>
+
+	* cobo_be.[h|c], cobo_fen.[h|c] : exposed COBO on top of PMGR.
+
+	* pmgr_collective_client.c : Added pmgr_get_parent_socket 
+	to support COBO.
+
+	* pmgr_collective_client_tree.c : Added CMB support
+
+	* makefile : Linked to CMB object files
+		
+2012-03-08 Adam Moody <moody20@llnl.gov>
+
+	* : tag pmgr-1.0_7
+
+	* pmgr_collective_client_slurm.c : Had timeout in first shared
+	memory barrier to catch processes late to check in, but this was
+	also triggering on some checked in procs leading to a race condition.
+
+	* pmgr_collective_client_common.c : Print value of timeout in
+	exceeded timeout error message.
+
+2012-01-26 Adam Moody <moody20@llnl.gov>
+
+	* : tag pmgr-1.0_6
+
+	* pmgr_collective_common.c,h : Added PMGR_ERR codes along with
+	function to convert integer to string.  Return new error codes
+	int pmgr_read_fd_timeout() and pmgr_write_fd_suppress().
+
+	* pmgr_collective_client_tree.c : Print PMGR_ERR string upon
+	error in tree_check().
+
+	* : parameter adjustments
+	MPIRUN_OPEN_TIMEOUT 600 --> 1800
+	MPIRUN_PORT_SCAN_TIMEOUT 600 --> 1800
+
+2012-01-13 Adam Moody <moody20@llnl.gov>
+
+	* : tag pmgr-1.0_5
+
+	* pmgr_collective_client.c,
+	  pmgr_collective_client_common.c : Disable MPIRUN_PORT_SCAN_TIMEOUT
+	  if set to -1.
+
+	* pmgr_collective_client.c,
+	  pmgr_collective_client_common.c,
+	  pmgr_collective_client_slurm.c: Disable MPIRUN_OPEN_TIMEOUT if set
+	  to -1.
+
+	* pmgr_collective_client_common.c : Added code to increase timeouts
+	by a factor of two after each port sweep, but left this disabled.
+
+	* pmgr_collective_client_common.c : Added code to sleep for some time
+	between port scan attempts.
+
+	* pmgr_collective_client_mpirun.c : Added usleep delay back into
+	connect and close calls based on rank to stagger across ranks.
+
+	* pmgr_collective_client.c : Don't connect back to mpirun if using
+	shared memory.
+
+	* : parameter adjustments
+	MPIRUN_OPEN_TIMEOUT 300 --> 600
+	MPIRUN_CONNECT_TRIES 7 --> 20
+	MPIRUN_CONNECT_TIMEOUT 2 --> 60
+	MPIRUN_PORT_SCAN_TIMEOUT 60 --> 600
+	MPIRUN_PORT_SCAN_CONNECT_TIMEOUT 100 --> 10000
+	MPIRUN_AUTHENTICATE_TIMEOUT 5000 --> 60000
+
+2011-12-07 Adam Moody <moody20@llnl.gov>
+
+	* : tag pmgr-1.0_4
+
+	* : Increased port scan connect timeout from 20msec to 100msec and
+	changed default connection direction from parent-to-children to
+	children-to-parent.  Track IP:port and hostname of parents and
+	children to report in error messages.
+
+2011-11-30 Adam Moody <moody20@llnl.gov>
+
+	* : tag pmgr-1.0_3
+
+	* pmgr_collective_client_common.c,
+	  pmgr_collective_client_tree.c,
+	  pmgr_collective_client_mpirun.c,
+	  pmgr_collective_client_slurm.c : Added support to read SLURM environment
+	  variables to establish TCP socket tree rather than N-to-1 connect back to srun.
+	  Used at large system sizes.
+
+2010-08-20 Adam Moody <moody20@llnl.gov>
+
+	* README.txt : Added text about PMI support.
+
+	* src/pmgr_collective_client.c : Fixed bug to prevent operations on tree when
+	  it is not open.  Close listening socket after parent connects.
+
+2010-08-18 Adam Moody <moody20@llnl.gov>
+
+	* makefile,
+	  src/pmgr_collective_client.c : Added HAVE_PMI ifdef flag to conditionally
+	  compile with PMI calls.
+
+2010-08-17 Adam Moody <moody20@llnl.gov>
+
+	* src/pmgr_collective_client.c : Fixed bug in pmgr_scatter_tree.  Changed
+	  pmgr_alltoall to use tree as best as it can.
+
+2010-08-06 Adam Moody <moody20@llnl.gov>
+
+	* src/pmgr_collective_client.c : Added pmgr_check_tree call to check state
+	  of tree.  Implements an allreduce using the tree and exits if any process
+	  detects a failure.  Created packet protocol for tree, supporting either
+	  collective packets or abort packets.
+
+2009-06-15 Adam Moody <moody20@llnl.gov>
+
+	* src/pmgr_collective_common.c : Changed pmgr_malloc error printf from
+	  %d to %lu for byte count (bug) and added %m to get reason for failure.
+
+2009-04-16 Adam Moody <moody20@llnl.gov>
+
+	* LICENSE.TXT,
+	  src/*,
+	  test/client.c : Added BSD license info for open source release.
+
+2008-06-25 Adam Moody <moody20@llnl.gov>
+
+	* src/pmgr_collective_mpirun.c,
+	  src.pmgr_collective_client.c : Added static keyword to all variables and
+	  functions used within a file to prevent exposing these symbols as external
+	  in the library.
+
+2008-06-18 Adam Moody <moody20@llnl.gov>
+
+	* src/pmgr_collective_client.c : Added ability to run as a single-task job
+	  if MPIRUN_* variables are not found in environment.  This gives a way
+	  to run job serially without needed mpirun or srun.
+	  Added scatter tree when scattering from rank 0.
+	  Rewrote debug levels so that rank 0 prints for 1-3, ranks 0 and N-1 print
+	  for 4-6, and all ranks print for 7-9.
+	  At debug level 3, environment variables values are printed to stdout.
+	  Added error messages for failed read/write from client to mpirun process.
+	  Added error messages for failed read/write to parent and children processes.
+	  Creates a psuedo unique id by combining bits from the timestamp seconds and
+	  the pid for a 1 task job.
+
+	* src/pmgr_collective_mpirun.c : Adjusted error messages to make them more
+	  uniform.
+
+	* src/pmgr_collective_common.c : Added errors messages to pmgr_read_fd()
+	  and pmgr_write_fd().
+
+2008-05-19 Adam Moody <moody20@llnl.gov>
+
+	* src/pmgr_collective_client.c : Use rand_r() instead of srand() to avoid
+	  overwriting random seed a user may have specified (from OSU).
+
+2008-05-18 Adam Moody <moody20@llnl.gov>
+
+	* src/pmgr_collective_client.c : Added IP:port info to error message
+	  on failed connect to track down bad hardware faster.
+
+2008-01-28 Adam Moody <moody20@llnl.gov>
+
+	* test/client.c : Added data correctness test for each collective.
+
+2008-01-23 Adam Moody <moody20@llnl.gov>
+
+	* src/pmgr_collective_mpirun.c : Replaced tab indents with spaces (code cleanup).
+
+2008-01-22 Adam Moody <moody20@llnl.gov>
+
+	* src/pmgr_collective_client.c : Integrated patch from Chris Morrone
+	  to poll on connection and retry with backoff on configurable
+	  timeout.  The default TCP timeout was causing problems at 8192+
+	  task counts.
+
+	* PMGR_COLLECTIVE.README : Added note about pmgr_connect variables.
+
+2008-01-11 Adam Moody <moody20@llnl.gov>
+
+	* src/pmgr_collective_client.h,
+	  src/pmgr_collective_client.c : Dropped hostname string list
+	  from pmgr_init and corresponding MPIRUN_PROCESSES and
+	  NOT_USE_TOTALVIEW variables.  Added pmgr_allgatherstr to assist
+	  user in gathering this info through PMGR_COLLECTIVE calls.
+	  Added pmgr_allreducemaxint as a utility for pmgr_allgatherstr.
+
+	* test/client.c : Removed hostlist parameter from call to pmgr_init.
+
+	* test/mpirun_rsh.c : Removed code which sets MPIRUN_PROCESSES and
+	  NOT_USE_TOTALVIEW.
+
+	* PMGR_COLLECTIVE.README : Removed documentation about MPIRUN_PROCESSES
+	  and NOT_USE_TOTALVIEW.
+
+2008-01-03 Adam Moody <moody20@llnl.gov>
+
+	* src/pmgr_collective_common.h,
+	  src/pmgr_collective_common.c,
+	  src/pmgr_collective_client.c,
+	  src/pmgr_collective_mpirun.c : Moved pmgr_gettimeofday and pmgr_getsecs
+	  to common.
+
+	* src/pmgr_collective_common.c : Added debug statements to time pmgr_* calls.
+
+2008-01-02 Adam Moody <moody20@llnl.gov>
+
+	* makefile : Moved *.h files to src directory.  Have make copy them
+	  to include directory on build.
+
+	* src/pmgr_collective_client.c,
+	  src/pmgr_collective_mpirun.c : Added filename and line number info
+	  to pmgr_error messages.
+
+	* src/pmgr_collective_mpirun.c : Added timers to debug statements.
+
+	* src/pmgr_collective_common.h,
+	  src/pmgr_collective_common.c : Added debug levels to pmgr_debug().
+
+	* test/mpirun_rsh.c : Added to test pmgr_processops functionality.
+
+	* test/client.c : Added pmgr_barrier() test.
+
+	* PMGR_COLLECTIVE.README : Added readme to describe pros and cons
+	  of current implemenation and to document build-time and run-time
+	  options.
+
+2007-12-28 Adam Moody <moody20@llnl.gov>
+
+	* : cleaning up code and adding more info to error messages.
+
+2007-12-28 Adam Moody <moody20@llnl.gov>
+
+	* : initial import -- current version matches OSU MVAPICH-1 code.
