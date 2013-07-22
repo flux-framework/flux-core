@@ -339,23 +339,10 @@ static void _recv_snoop (plugin_ctx_t *p, zmsg_t **zmsg)
     }
 }
 
-/* N.B. local api can't send to api, so "cmbutil [-p|-x] api" will get ENOSYS.
- * Use fully qualified names like "cmbutil [-p|-x] N!api".
- */
-static void _recv_request (plugin_ctx_t *p, zmsg_t **zmsg)
-{
-    if (cmb_msg_match (*zmsg, "api.ping")) {
-        plugin_ping_respond (p, zmsg);
-    } else if (cmb_msg_match (*zmsg, "api.stats")) {
-        plugin_stats_respond (p, zmsg);
-    }
-}
-
 static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
 {
     switch (type) {
         case ZMSG_REQUEST:
-            _recv_request (p, zmsg);
             break;
         case ZMSG_EVENT:
             _recv_event (p, zmsg);
