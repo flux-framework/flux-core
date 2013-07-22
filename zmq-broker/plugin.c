@@ -497,10 +497,7 @@ static void *_plugin_thread (void *arg)
 
     if (p->plugin->initFn)
         p->plugin->initFn (p);
-    if (p->plugin->pollFn)
-        p->plugin->pollFn (p);
-    else
-        zloop_start (p->zloop);
+    zloop_start (p->zloop);
     if (p->plugin->finiFn)
         p->plugin->finiFn (p);
 

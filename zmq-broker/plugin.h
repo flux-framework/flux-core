@@ -42,7 +42,6 @@ struct plugin_struct {
     const char *name;
     void (*timeoutFn)(plugin_ctx_t *p);
     void (*recvFn)(plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type);
-    void (*pollFn)(plugin_ctx_t *p);
     void (*initFn)(plugin_ctx_t *p);
     void (*finiFn)(plugin_ctx_t *p);
 };
