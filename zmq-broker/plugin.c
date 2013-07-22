@@ -26,6 +26,8 @@
 #include "util.h"
 #include "plugin.h"
 
+static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, plugin_ctx_t *p);
+
 struct plugin_struct apisrv;
 struct plugin_struct barriersrv;
 struct plugin_struct confsrv;
@@ -54,11 +56,14 @@ bool plugin_treeroot (plugin_ctx_t *p)
 
 void plugin_timeout_set (plugin_ctx_t *p, unsigned long val)
 {
+    if (zloop_timer (p->zloop, val, 0, (zloop_fn *)plugin_timer_cb, p) < 0)
+        err_exit ("zloop_timer"); 
     p->timeout = val;
 }
 
 void plugin_timeout_clear (plugin_ctx_t *p)
 {
+    (void)zloop_timer_end (p->zloop, p);
     p->timeout = -1;
 }
 
@@ -555,7 +560,7 @@ static int _plugin_create (char *name, server_t *srv, conf_t *conf)
     p->conf = conf;
     p->srv = srv;
     p->plugin = plugin;
-    plugin_timeout_clear (p);
+    p->timeout = -1;
 
     if (!(p->conf_watcher = zhash_new ()))
         oom ();
