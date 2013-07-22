@@ -77,12 +77,6 @@ hello: mpi_hello
 	time -p (source /etc/profile.d/modules.sh;\
 		module load $(MPIMOD);\
 		export PMI_TRACE=0xff;\
-		export LD_LIBRARY_PATH=$(TOP)/lib:$$LD_LIBRARY_PATH;\
-		$(SRUN) ./mpi_hello)
-
-shello: mpi_hello
-	time -p (source /etc/profile.d/modules.sh;\
-		module load $(MPIMOD);\
 		$(SRUN) ./mpi_hello)
 
 barrier:
