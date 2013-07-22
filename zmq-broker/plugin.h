@@ -30,6 +30,7 @@ typedef struct {
     server_t *srv;
     plugin_stats_t stats;
     zhash_t *conf_watcher;
+    zloop_t *zloop;
     void *ctx;
 } plugin_ctx_t;
 

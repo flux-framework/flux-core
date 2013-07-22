@@ -479,31 +479,24 @@ static zloop_t * plugin_zloop_create (plugin_ctx_t *p)
     return (zl);
 }
 
-static void _plugin_zloop (plugin_ctx_t *p)
-{
-    zloop_t *loop;
-
-    if (!(loop = plugin_zloop_create (p)))
-        err_exit ("zloop_new");
-
-    zloop_start (loop);
-
-    zloop_destroy (&loop);
-}
-
-
 static void *_plugin_thread (void *arg)
 {
     plugin_ctx_t *p = arg;
+
+    p->zloop = plugin_zloop_create (p);
+    if (p->zloop == NULL)
+        err_exit ("%s: plugin_zloop_create", p->id);
 
     if (p->plugin->initFn)
         p->plugin->initFn (p);
     if (p->plugin->pollFn)
         p->plugin->pollFn (p);
     else
-        _plugin_zloop (p);
+        zloop_start (p->zloop);
     if (p->plugin->finiFn)
         p->plugin->finiFn (p);
+
+    zloop_destroy (&p->zloop);
 
     return NULL;
 }    
