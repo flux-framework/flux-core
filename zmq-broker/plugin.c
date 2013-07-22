@@ -399,6 +399,9 @@ static zmsg_t * plugin_cb_hook (plugin_ctx_t *p, zmsg_t *zmsg, zmsg_type_t type)
     if (zmsg && type == ZMSG_REQUEST)
         plugin_send_response_errnum (p, &zmsg, ENOSYS);
 
+    free (pingtag);
+    free (statstag);
+
     return (zmsg);
 }
 
