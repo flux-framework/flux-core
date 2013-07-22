@@ -28,7 +28,7 @@ LIBCMB_OBJS = apicli.o $(COMMON_OBJS)
 LIBPMI = $(LIBDIR)/libpmi.so.0
 LIBCMB = $(LIBDIR)/libcmb.so.0
 
-BUILD = $(LIBCMB) $(LIBPMI) cmbd cmbutil tbase64 mpi_hello
+BUILD = $(LIBCMB) $(LIBPMI) cmbd cmbutil tbase64 kvstest mpi_hello
 
 all: $(BUILD)
 
@@ -40,6 +40,9 @@ tbase64: $(TBASE64_OBJS)
 
 cmbutil: $(CMBUTIL_OBJS) $(LIBCMB)
 	$(CC) $(LDFLAGS) -o $@ $(CMBUTIL_OBJS) -L$(LIBDIR) -lcmb $(LDADD_CLI)
+
+kvstest: kvstest.o
+	$(CC) $(LDFLAGS) -o $@ $< -L$(LIBDIR) -lcmb $(LDADD_CLI)
 
 $(LIBPMI): $(LIBPMI_OBJS) $(LIBCMB)
 	mkdir -p $(shell dirname $@)
@@ -55,7 +58,9 @@ $(LIBCMB): $(LIBCMB_OBJS)
 mpi_hello: mpi_hello.c
 	(source /etc/profile.d/modules.sh;\
 		module load $(MPIMOD);\
-		mpicc $(LDFLAGS) -o $@ mpi_hello.c)
+		mpicc $(LDFLAGS) -o $@ $<)
+
+
 clean:
 	rm -f *.o $(BUILD)
 	rm -rf $(LIBDIR)/
@@ -78,6 +83,9 @@ hello: mpi_hello
 		module load $(MPIMOD);\
 		export PMI_TRACE=0xff;\
 		$(SRUN) ./mpi_hello)
+
+dokvstest: kvstest
+	$(SRUN) ./kvstest
 
 barrier:
 	time -p $(SRUN) ./cmbutil -b testbarrier
