@@ -85,7 +85,10 @@ hello: mpi_hello
 		$(SRUN) ./mpi_hello)
 
 dokvstest: kvstest
+	export PMI_TRACE=0xff;\
 	$(SRUN) ./kvstest
+dokvstest_nsquared: kvstest
+	$(SRUN) ./kvstest --n-squared
 
 barrier:
 	time -p $(SRUN) ./cmbutil -b testbarrier

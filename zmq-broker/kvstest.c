@@ -4,6 +4,8 @@
 #include <string.h>
 #include <sys/time.h>
 #include <errno.h>
+#include <stdbool.h>
+#include <getopt.h>
 
 #include "pmi.h"
 
@@ -78,13 +80,28 @@ static void timesince (int rank,  struct timeval *start, const char *s)
              rank, s, t.tv_sec, t.tv_usec / 1000);
 }
 
-int
-main(int argc, char *argv[])
+#define OPTIONS "n"
+static const struct option longopts[] = {
+    {"n-squared",       no_argument,  0, 'n'},
+    {0, 0, 0, 0},
+};
+
+int main(int argc, char *argv[])
 {
     struct timeval t;
     int id = -1, ntasks;
     int rc, spawned, kvsname_len, key_len, val_len;
     char *kvsname, *key, *val, *val2;
+    bool nsquared = false;
+    int ch;
+
+    while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
+        switch (ch) {
+            case 'n':   /* --n-squared */
+                nsquared = true;
+                break;
+        }
+    }
 
     rc = PMI_Init (&spawned);
     if (rc != PMI_SUCCESS)
@@ -137,16 +154,33 @@ main(int argc, char *argv[])
 
     xgettimeofday (id, &t, NULL);
 
-    /* one get per rank */
-    snprintf (key, key_len, "kvstest.%d", id > 0 ? id - 1 : ntasks - 1);
-    rc = PMI_KVS_Get (kvsname, key, val, val_len);
-    if (rc != PMI_SUCCESS)
-        _fatal (id, rc, "PMI_KVS_Get");
-    
-    snprintf (val2, val_len, "sandwich.%d", id > 0 ? id - 1 : ntasks - 1);
-    if (strcmp (val, val2) != 0) {
-        fprintf (stderr, "%d: PMI_KVS_Get: exp %s got %s\n", id, val2, val);
-        return 1;
+    if (nsquared) { /* N gets per rank */
+        int i; 
+
+        for (i = 0; i < ntasks; i++) {
+            snprintf (key, key_len, "kvstest.%d", i);
+            rc = PMI_KVS_Get (kvsname, key, val, val_len);
+            if (rc != PMI_SUCCESS)
+                _fatal (id, rc, "PMI_KVS_Get");
+        
+            snprintf (val2, val_len, "sandwich.%d", i);
+            if (strcmp (val, val2) != 0) {
+                fprintf (stderr, "%d: PMI_KVS_Get: exp %s got %s\n",
+                         id, val2, val);
+                return 1;
+            }
+        }
+    } else { /* one get per rank */
+        snprintf (key, key_len, "kvstest.%d", id > 0 ? id - 1 : ntasks - 1);
+        rc = PMI_KVS_Get (kvsname, key, val, val_len);
+        if (rc != PMI_SUCCESS)
+            _fatal (id, rc, "PMI_KVS_Get");
+        
+        snprintf (val2, val_len, "sandwich.%d", id > 0 ? id - 1 : ntasks - 1);
+        if (strcmp (val, val2) != 0) {
+            fprintf (stderr, "%d: PMI_KVS_Get: exp %s got %s\n", id, val2, val);
+            return 1;
+        }
     }
 
     /* barrier */
@@ -157,10 +191,15 @@ main(int argc, char *argv[])
     if (id == 0)
         timesince (id, &t, "get phase");
 
+    rc = PMI_Finalize ();
+    if (rc != PMI_SUCCESS)
+        _fatal (id, rc, "PMI_Finalize");
+
     free (val);
     free (val2);
     free (key);
     free (kvsname);
+
 
     return 0;
 }
