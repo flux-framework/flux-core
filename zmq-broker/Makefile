@@ -42,7 +42,7 @@ cmbutil: $(CMBUTIL_OBJS) $(LIBCMB)
 	$(CC) $(LDFLAGS) -o $@ $(CMBUTIL_OBJS) -L$(LIBDIR) -lcmb $(LDADD_CLI)
 
 kvstest: kvstest.o
-	$(CC) $(LDFLAGS) -o $@ $< -L$(LIBDIR) -lcmb $(LDADD_CLI)
+	$(CC) $(LDFLAGS) -o $@ $< -L$(LIBDIR) -lpmi
 
 $(LIBPMI): $(LIBPMI_OBJS) $(LIBCMB)
 	mkdir -p $(shell dirname $@)
