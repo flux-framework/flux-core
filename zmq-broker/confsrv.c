@@ -388,7 +388,7 @@ static void _conf_commit (plugin_ctx_t *p, zmsg_t **zmsg)
     }
     ctx->store_version++;
     plugin_send_event (p, "event.conf.update.%d", ctx->store_version);
-        plugin_send_response_errnum (p, zmsg, 0);
+    plugin_send_response_errnum (p, zmsg, 0); /* response */
 
     if (!(keys = zhash_keys (ctx->watcher)))
         oom ();
