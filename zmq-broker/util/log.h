@@ -40,6 +40,11 @@ void msg_exit (const char *fmt, ...)
 void msg (const char *fmt, ...)
         __attribute__ ((format (printf, 1, 2)));
 
+#define oom() do { \
+  errn_exit (ENOMEM, "%s::%s(), line %d", __FILE__, __FUNCTION__, __LINE__); \
+} while (0)
+
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

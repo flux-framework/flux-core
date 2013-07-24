@@ -12,10 +12,6 @@ int mapstr (char *s, mapstrfun_t fun, void *arg1, void *arg2);
  */
 int getints (char *s, int **iap, int *lenp);
 
-/* Print out of memory and exit.
- */
-void oom (void);
-
 /* Memory allocation functions that call oom() on allocation error.
  */
 void *xzmalloc (size_t size);

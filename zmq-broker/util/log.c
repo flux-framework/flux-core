@@ -208,38 +208,48 @@ done:
 static void
 _verr (int errnum, const char *fmt, va_list ap)
 {
+    char *msg;
     char buf[128];
-    //char errbuf[64];
-    //char *s = strerror_r (errnum, errbuf, sizeof (errbuf)); /* GNU version */
     const char *s = zmq_strerror (errnum);
 
-    vsnprintf (buf, sizeof (buf), fmt, ap);  /* ignore overflow */
+    if (vasprintf (&msg, fmt, ap) < 0) {
+        (void)vsnprintf (buf, sizeof (buf), fmt, ap);
+        msg = buf;
+    }
     switch (dest) {
         case DEST_LOGF:
-            fprintf (logf, "%s: %s: %s\n", prog, buf, s);
+            fprintf (logf, "%s: %s: %s\n", prog, msg, s);
             fflush (logf);
             break;
         case DEST_SYSLOG:
-            syslog (syslog_level, "%s: %s", buf, s);
+            syslog (syslog_level, "%s: %s", msg, s);
             break;
     }
+    if (msg != buf)
+        free (msg);
 }
 
 void
 log_msg (const char *fmt, va_list ap)
 {
-    char buf[1024]; /* make it large enough for protocol debug output */
+    char *msg;
+    char buf[128];
 
-    vsnprintf (buf, sizeof (buf), fmt, ap);  /* ignore overflow */
+    if (vasprintf (&msg, fmt, ap) < 0) {
+        (void)vsnprintf (buf, sizeof (buf), fmt, ap);
+        msg = buf;
+    }
     switch (dest) {
         case DEST_LOGF:
-            fprintf (logf, "%s: %s\n", prog, buf);
+            fprintf (logf, "%s: %s\n", prog, msg);
             fflush (logf);
             break;
         case DEST_SYSLOG:
-            syslog (syslog_level, "%s", buf);
+            syslog (syslog_level, "%s", msg);
             break;
     }
+    if (msg != buf)
+        free (msg);
 }
 
 /* Log message and errno string, then exit.
@@ -291,7 +301,6 @@ errn (int errnum, const char *fmt, ...)
     _verr (errnum, fmt, ap);
     va_end (ap);
 }
-
 
 /* Log message, then exit.
  */

@@ -19,13 +19,6 @@
 #include "util.h"
 #include "log.h"
 
-void oom (void)
-{
-    errno = ENOMEM;
-    msg_exit ("out of memory");
-    exit (1);
-}
-
 void *xzmalloc (size_t size)
 {
     void *new;
