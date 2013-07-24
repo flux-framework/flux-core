@@ -17,7 +17,7 @@ LDADD_SRV = -pthread -luuid -lhiredis $(LDADD_CLI)
 
 COMMON_OBJS = util.o log.o zmq.o
 PLUGIN_OBJS = apisrv.o syncsrv.o kvssrv.o barriersrv.o livesrv.o \
-	logsrv.o confsrv.o echosrv.o
+	logsrv.o confsrv.o echosrv.o hkvssrv.o
 CMBD_OBJS = cmbd.o route.o plugin.o hljson.o hostlist.o lsdfatal.o \
 	$(COMMON_OBJS) $(PLUGIN_OBJS)
 CMBUTIL_OBJS = cmbutil.o $(COMMON_OBJS)

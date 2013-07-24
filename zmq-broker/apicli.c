@@ -460,6 +460,92 @@ error:
     return -1;
 }
 
+int cmb_hkvs_put (cmb_t c, const char *key, const char *val)
+{
+    json_object *o = util_json_object_new_object ();
+
+    /* send request */
+    util_json_object_add_string (o, "key", key);
+    util_json_object_add_string (o, "val", val);
+    if (_send_message (c, o, "hkvs.put") < 0)
+        goto error;
+    json_object_put (o);
+    o = NULL;
+
+    /* receive response */
+    if (_recv_message (c, NULL, &o, false) < 0)
+        goto error;
+    if (o == NULL || util_json_object_get_int (o, "errnum", &errno) < 0)
+        goto eproto;
+    if (errno != 0)
+        goto error;
+    json_object_put (o);
+    return 0;
+eproto:
+    errno = EPROTO;
+error:
+    if (o)
+        json_object_put (o);
+    return -1;
+}
+
+int cmb_hkvs_commit (cmb_t c)
+{
+    json_object *o = util_json_object_new_object ();
+
+    /* send request */
+    if (_send_message (c, o, "hkvs.commit") < 0)
+        goto error;
+    json_object_put (o);
+    o = NULL;
+
+    /* receive response */
+    if (_recv_message (c, NULL, &o, false) < 0)
+        goto error;
+    if (o == NULL || util_json_object_get_int (o, "errnum", &errno) < 0)
+        goto eproto;
+    if (errno != 0)
+        goto error;
+    json_object_put (o);
+    return 0;
+eproto:
+    errno = EPROTO;
+error:
+    if (o)
+        json_object_put (o);
+    return -1;
+}
+
+char *cmb_hkvs_get (cmb_t c, const char *key)
+{
+    json_object *o = util_json_object_new_object ();
+    const char *val;
+    char *cpy = NULL;
+
+    /* send request */
+    util_json_object_add_string (o, "key", key);
+    if (_send_message (c, o, "hkvs.get") < 0)
+        goto error;
+    json_object_put (o);
+    o = NULL;
+
+    /* receive response */
+    if (_recv_message (c, NULL, &o, false) < 0)
+        goto error;
+    if (util_json_object_get_int (o, "errnum", &errno) == 0)
+        goto error;
+    if (util_json_object_get_string (o, "val", &val) < 0)
+        goto error;
+    if (val)
+        cpy = xstrdup (val); 
+    json_object_put (o);
+    return cpy;
+error:
+    if (o)
+        json_object_put (o);
+    return NULL;
+}
+
 void cmb_log_set_facility (cmb_t c, const char *facility)
 {
     if (c->log_facility)

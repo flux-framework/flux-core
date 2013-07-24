@@ -30,6 +30,8 @@
 
 #define FORCE_HASH 0
 
+#define USE_HKVS 1
+
 
 typedef struct {
     int magic;
@@ -378,9 +380,13 @@ int PMI_KVS_Put( const char kvsname[], const char key[], const char value[])
 
     if (_key_tostore (kvsname, key, &xkey) < 0)
         return PMI_ERR_NOMEM;
-
+#if USE_HKVS
+    if (cmb_hkvs_put (ctx->cctx, xkey, value) < 0)
+#else
     if (cmb_kvs_put (ctx->cctx, xkey, value) < 0)
+#endif
         goto error;
+
     free (xkey);
     return PMI_SUCCESS;
 error:
@@ -391,8 +397,6 @@ error:
 
 int PMI_KVS_Commit( const char kvsname[] )
 {
-    int errcount, putcount;
-
     trace (PMI_TRACE_KVS_PUT, "%s %s", __FUNCTION__, kvsname);
     if (ctx == NULL)
         return PMI_ERR_INIT;
@@ -400,9 +404,12 @@ int PMI_KVS_Commit( const char kvsname[] )
     if (kvsname == NULL)
         return PMI_ERR_INVALID_ARG;
 
-    if (cmb_kvs_commit (ctx->cctx, &errcount, &putcount) < 0)
-        goto error;
-    if (errcount > 0)
+#if USE_HKVS
+    if (cmb_hkvs_commit (ctx->cctx) < 0)
+#else
+    int errcount, putcount;
+    if (cmb_kvs_commit (ctx->cctx, &errcount, &putcount) < 0 || errcount > 0)
+#endif
         goto error;
     return PMI_SUCCESS;
 error:
@@ -423,7 +430,11 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
     if (_key_tostore (kvsname, key, &xkey) < 0)
         return PMI_ERR_NOMEM;
 
+#if USE_HKVS
+    val = cmb_hkvs_get (ctx->cctx, xkey);
+#else
     val = cmb_kvs_get (ctx->cctx, xkey);
+#endif
     trace (PMI_TRACE_KVS_GET, "%s %s:%s = %s", __FUNCTION__, kvsname, key,
            val ? val : errno == 0 ? "[nonexistent key]" : "[error]");
     if (!val && errno == 0) {

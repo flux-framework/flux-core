@@ -37,7 +37,7 @@ if pepe.rank == 0 then
                 .. " --set-conf log.persist.priority=notice"
 		.. " --set-conf live.missed.trigger.allow=5"
                 .. " --set-conf topology='" .. topology .. "'"
-		.. " --plugins=api,barrier,live,log,conf,kvs,sync"
+		.. " --plugins=api,barrier,live,log,conf,hkvs,kvs,sync"
 		.. " --logdest cmbd.log")
 else
     local parent_rank = pepe.rank - 1
@@ -49,5 +49,5 @@ else
 		.. " --parent='" .. parent_rank .. "," .. u1 .. "," .. u2 .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
-		.. " --plugins=api,barrier,live,log,conf")
+		.. " --plugins=api,barrier,live,log,conf,hkvs")
 end

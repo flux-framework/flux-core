@@ -75,6 +75,12 @@ int cmb_conf_commit (cmb_t c);
 int cmb_conf_list (cmb_t c);
 int cmb_conf_next (cmb_t c, char **key, json_object **vo);
 
+/* Get/put key-value pairs.
+ */
+int cmb_hkvs_put (cmb_t c, const char *key, const char *val);
+char *cmb_hkvs_get (cmb_t c, const char *key);
+int cmb_hkvs_commit (cmb_t c);
+
 /* Log messages.
  * 'fac' is like syslog facility, only an arbitrary string.
  * It is suggested to use pub-sub topic string form.

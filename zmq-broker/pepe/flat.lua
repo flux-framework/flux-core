@@ -37,7 +37,7 @@ if pepe.rank == 0 then
                 .. " --set-conf log.persist.priority=notice"
                 .. " --set-conf live.missed.trigger.allow=5"
                 .. " --set-conf topology='" .. topology .. "'"
-		.. " --plugins=api,barrier,live,log,conf,kvs,sync"
+		.. " --plugins=api,barrier,live,log,conf,hkvs,kvs,sync"
 		.. " --logdest cmbd.log")
 else
     local u1 = "tcp://" ..  h[1] .. ":5556"
@@ -45,6 +45,6 @@ else
     pepe.run ("./cmbd --up-event-uri='" .. eventuri .. "'"
 		.. " --parent='0," .. u1 .. "," .. u2 .. "'"
 		.. " --rank=" .. pepe.rank
-		.. " --plugins=api,barrier,live,log,conf"
+		.. " --plugins=api,barrier,live,log,conf,hkvs"
 		.. " --size=" .. #h)
 end
