@@ -275,8 +275,11 @@ static void _recv_response (plugin_ctx_t *p, zmsg_t **zmsg)
             }
         }
         c = c->next;
-        if (deleteme)
+        if (deleteme) {
+            zmq_pollitem_t zp = { .fd = c->fd };
+            zloop_poller_end (p->zloop, &zp);
             _client_destroy (p, deleteme);
+        }
     }
     if (*zmsg) {
         //msg ("apisrv: discarding response for unknown uuid %s", uuid);
@@ -311,8 +314,11 @@ static void _recv_event (plugin_ctx_t *p, zmsg_t **zmsg)
             }
         }
         c = c->next;
-        if (deleteme)
+        if (deleteme) {
+            zmq_pollitem_t zp = { .fd = c->fd };
+            zloop_poller_end (p->zloop, &zp);
             _client_destroy (p, deleteme);
+        }
     }
 }
 
@@ -334,8 +340,11 @@ static void _recv_snoop (plugin_ctx_t *p, zmsg_t **zmsg)
             }
         }
         c = c->next;
-        if (deleteme)
+        if (deleteme) {
+            zmq_pollitem_t zp = { .fd = c->fd };
+            zloop_poller_end (p->zloop, &zp);
             _client_destroy (p, deleteme);
+        }
     }
 }
 
