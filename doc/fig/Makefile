@@ -40,6 +40,7 @@ DEPFIG = \
 	tree-trinary.eps \
 	tree-binomial.eps \
 	tree-degenerate.eps \
+	zmq-broker-hkvs.eps
 
 all: $(DEPFIG)
 
