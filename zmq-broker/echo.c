@@ -13,7 +13,7 @@
 #include "cmb.h"
 #include "log.h"
 #include "util.h"
-#include "zmq.h"
+#include "zmsg.h"
 
 static struct timespec diff (struct timespec start, struct timespec end)
 {

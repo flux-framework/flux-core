@@ -21,15 +21,13 @@ export CFLAGS LDFLAGS
 LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -lutil
 LDADD_SRV = -pthread -luuid -lhiredis $(LDADD_CLI)
 
-COMMON_OBJS = util.o zmq.o
 PLUGIN_OBJS = apisrv.o syncsrv.o kvssrv.o barriersrv.o livesrv.o \
 	logsrv.o confsrv.o echosrv.o hkvssrv.o
-CMBD_OBJS = cmbd.o route.o plugin.o hljson.o lsdfatal.o \
-	$(COMMON_OBJS) $(PLUGIN_OBJS)
-CMBUTIL_OBJS = cmbutil.o $(COMMON_OBJS)
-TBASE64_OBJS = tbase64.o $(COMMON_OBJS)
-LIBPMI_OBJS = pmi.o $(COMMON_OBJS)
-LIBCMB_OBJS = apicli.o $(COMMON_OBJS)
+CMBD_OBJS = cmbd.o route.o plugin.o lsdfatal.o $(PLUGIN_OBJS)
+CMBUTIL_OBJS = cmbutil.o
+TBASE64_OBJS = tbase64.o
+LIBPMI_OBJS = pmi.o
+LIBCMB_OBJS = apicli.o
 
 LIBPMI = $(LIBDIR)/libpmi.so.0
 LIBCMB = $(LIBDIR)/libcmb.so.0
@@ -56,7 +54,7 @@ kvstest: kvstest.o
 $(LIBPMI): $(LIBPMI_OBJS) $(LIBCMB)
 	mkdir -p $(shell dirname $@)
 	$(CC) -shared -Wl,--version-script=pmi_version.map \
-		-o $@ $(LIBPMI_OBJS) -L$(LIBDIR) -lcmb
+		-o $@ $(LIBPMI_OBJS) -L$(LIBDIR) -lcmb $(LDADD_CLI)
 
 $(LIBCMB): $(LIBCMB_OBJS)
 	mkdir -p $(shell dirname $@)

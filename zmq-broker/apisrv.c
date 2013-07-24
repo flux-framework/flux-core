@@ -21,7 +21,7 @@
 #include <uuid/uuid.h>
 #include <json/json.h>
 
-#include "zmq.h"
+#include "zmsg.h"
 #include "cmb.h"
 #include "route.h"
 #include "cmbd.h"

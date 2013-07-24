@@ -18,7 +18,7 @@
 #include "cmb.h"
 #include "util.h"
 #include "log.h"
-#include "zmq.h"
+#include "zmsg.h"
 
 #define OPTIONS "dZJB"
 static const struct option longopts[] = {

@@ -22,7 +22,7 @@
 #include <czmq.h>
 
 #include "log.h"
-#include "zmq.h"
+#include "zmsg.h"
 #include "cmb.h"
 #include "util.h"
 

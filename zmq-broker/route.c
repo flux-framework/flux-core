@@ -17,7 +17,7 @@
 #include <czmq.h>
 
 #include "log.h"
-#include "zmq.h"
+#include "zmsg.h"
 #include "route.h"
 #include "cmb.h"
 #include "cmbd.h"

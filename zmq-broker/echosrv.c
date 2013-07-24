@@ -3,7 +3,7 @@
 #include <czmq.h>
 #include <json/json.h>
 
-#include "zmq.h"
+#include "zmsg.h"
 #include "route.h"
 #include "cmbd.h"
 #include "log.h"
