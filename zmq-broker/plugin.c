@@ -492,6 +492,14 @@ static zloop_t * plugin_zloop_create (plugin_ctx_t *p)
 static void *_plugin_thread (void *arg)
 {
     plugin_ctx_t *p = arg;
+    sigset_t signal_set;
+    int errnum;
+
+    /* block all signals */
+    if (sigfillset (&signal_set) < 0)
+        err_exit ("sigfillset");
+    if ((errnum = pthread_sigmask (SIG_BLOCK, &signal_set, NULL)) != 0)
+        errn_exit (errnum, "pthread_sigmask");
 
     p->zloop = plugin_zloop_create (p);
     if (p->zloop == NULL)
@@ -518,7 +526,7 @@ static void _plugin_destroy (void *arg)
     /* FIXME: no mechanism to tell thread to exit yet */
     errnum = pthread_join (p->t, NULL);
     if (errnum)
-        errn_exit (errnum, "pthread_join\n");
+        errn_exit (errnum, "pthread_join");
 
     zsocket_destroy (p->srv->zctx, p->zs_snoop);
     zsocket_destroy (p->srv->zctx, p->zs_evout);
@@ -579,7 +587,7 @@ static int _plugin_create (char *name, server_t *srv, conf_t *conf)
 
     errnum = pthread_create (&p->t, NULL, _plugin_thread, p);
     if (errnum)
-        errn_exit (errnum, "pthread_create\n");
+        errn_exit (errnum, "pthread_create");
 
     zhash_insert (srv->plugins, plugin->name, p);
     zhash_freefn (srv->plugins, plugin->name, _plugin_destroy);
