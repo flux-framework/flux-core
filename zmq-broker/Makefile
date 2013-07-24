@@ -1,6 +1,10 @@
-TOP = $(shell pwd)
-INCDIR = $(TOP)/include
-LIBDIR = $(TOP)/lib
+
+TOP =             $(shell pwd)
+LIBDIR =          $(TOP)/lib
+EXTRA_CFLAGS +=   -I$(TOP)/include -I$(TOP)/util
+EXTRA_LDFLAGS +=  -L$(TOP)/lib $(TOP)/util/libutil.a
+
+SUBDIRS :=        util
 
 ifeq ($(shell hostname),jimbo.chaos)
 MPIMOD = mvapich2-gnu-shmem
@@ -8,17 +12,19 @@ else
 MPIMOD = mvapich2-gnu-psm
 endif
 
-CFLAGS = -Werror -Wall -g -fPIC -I$(INCDIR) \
+CFLAGS = -Werror -Wall -g -fPIC $(EXTRA_CFLAGS) \
 	-DWITH_LSD_NOMEM_ERROR_FUNC -DWITH_LSD_FATAL_ERROR_FUNC
 LDFLAGS = -Wl,-rpath,$(LIBDIR)
 
-LDADD_CLI = -ljson -lzmq -lczmq -lcrypto
+export CFLAGS LDFLAGS
+
+LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -lutil
 LDADD_SRV = -pthread -luuid -lhiredis $(LDADD_CLI)
 
-COMMON_OBJS = util.o log.o zmq.o
+COMMON_OBJS = util.o zmq.o
 PLUGIN_OBJS = apisrv.o syncsrv.o kvssrv.o barriersrv.o livesrv.o \
 	logsrv.o confsrv.o echosrv.o hkvssrv.o
-CMBD_OBJS = cmbd.o route.o plugin.o hljson.o hostlist.o lsdfatal.o \
+CMBD_OBJS = cmbd.o route.o plugin.o hljson.o lsdfatal.o \
 	$(COMMON_OBJS) $(PLUGIN_OBJS)
 CMBUTIL_OBJS = cmbutil.o $(COMMON_OBJS)
 TBASE64_OBJS = tbase64.o $(COMMON_OBJS)
@@ -30,7 +36,10 @@ LIBCMB = $(LIBDIR)/libcmb.so.0
 
 BUILD = $(LIBCMB) $(LIBPMI) cmbd cmbutil tbase64 kvstest mpi_hello
 
-all: $(BUILD)
+all: subdirs $(BUILD)
+
+subdirs:
+	@for f in $(SUBDIRS); do make -C $$f; done
 
 cmbd: $(CMBD_OBJS)
 	$(CC) -o $@ $(CMBD_OBJS) $(LDADD_SRV)
@@ -64,6 +73,7 @@ mpi_hello: mpi_hello.c
 clean:
 	rm -f *.o $(BUILD)
 	rm -rf $(LIBDIR)/
+	@for f in $(SUBDIRS); do make -C $$f clean; done
 
 # header dependencies
 OBJS = $(CMBD_OBJS) $(CMBUTIL_OBJS) $(TBASE64_OBJS) \
