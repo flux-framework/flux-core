@@ -80,9 +80,10 @@ static void timesince (int rank,  struct timeval *start, const char *s)
              rank, s, t.tv_sec, t.tv_usec / 1000);
 }
 
-#define OPTIONS "n"
+#define OPTIONS "nN:"
 static const struct option longopts[] = {
-    {"n-squared",       no_argument,  0, 'n'},
+    {"n-squared",    no_argument,        0, 'n'},
+    {"key-count",    required_argument,  0, 'N'},
     {0, 0, 0, 0},
 };
 
@@ -94,11 +95,15 @@ int main(int argc, char *argv[])
     char *kvsname, *key, *val, *val2;
     bool nsquared = false;
     int ch;
+    int i, j, keycount = 1;
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
             case 'n':   /* --n-squared */
                 nsquared = true;
+                break;
+            case 'N':   /* --key-count N */
+                keycount = strtoul (optarg, NULL, 10);
                 break;
         }
     }
@@ -134,15 +139,17 @@ int main(int argc, char *argv[])
 
     xgettimeofday (id, &t, NULL);
 
-    /* one put & commit per rank */
-    snprintf (key, key_len, "kvstest.%d", id);
-    snprintf (val, val_len, "sandwich.%d", id);
-    rc = PMI_KVS_Put (kvsname, key, val);
-    if (rc != PMI_SUCCESS)
-        _fatal (id, rc, "PMI_KVS_Put");
-    rc = PMI_KVS_Commit (kvsname);
-    if (rc != PMI_SUCCESS)
-        _fatal (id, rc, "PMI_KVS_Commit");
+    /* keycount puts & one commit per rank */
+    for (i = 0; i < keycount; i++) {
+        snprintf (key, key_len, "kvstest.%d.%d", id, i);
+        snprintf (val, val_len, "sandwich.%d.%d", id, i);
+        rc = PMI_KVS_Put (kvsname, key, val);
+        if (rc != PMI_SUCCESS)
+            _fatal (id, rc, "PMI_KVS_Put");
+        rc = PMI_KVS_Commit (kvsname);
+        if (rc != PMI_SUCCESS)
+            _fatal (id, rc, "PMI_KVS_Commit");
+    }
 
     /* barrier */
     rc = PMI_Barrier ();
@@ -154,32 +161,35 @@ int main(int argc, char *argv[])
 
     xgettimeofday (id, &t, NULL);
 
-    if (nsquared) { /* N gets per rank */
-        int i; 
-
-        for (i = 0; i < ntasks; i++) {
-            snprintf (key, key_len, "kvstest.%d", i);
+    /* keycount gets (or keycount*N) gets per rank */
+    for (i = 0; i < keycount; i++) {
+        if (nsquared) {
+            for (j = 0; j < ntasks; j++) {
+                snprintf (key, key_len, "kvstest.%d.%d", j, i);
+                rc = PMI_KVS_Get (kvsname, key, val, val_len);
+                if (rc != PMI_SUCCESS)
+                    _fatal (id, rc, "PMI_KVS_Get");
+            
+                snprintf (val2, val_len, "sandwich.%d.%d", j, i);
+                if (strcmp (val, val2) != 0) {
+                    fprintf (stderr, "%d: PMI_KVS_Get: exp %s got %s\n",
+                             id, val2, val);
+                    return 1;
+                }
+            }
+        } else {
+            snprintf (key, key_len, "kvstest.%d.%d",
+                      id > 0 ? id - 1 : ntasks - 1, i);
             rc = PMI_KVS_Get (kvsname, key, val, val_len);
             if (rc != PMI_SUCCESS)
                 _fatal (id, rc, "PMI_KVS_Get");
-        
-            snprintf (val2, val_len, "sandwich.%d", i);
+            
+            snprintf (val2, val_len, "sandwich.%d.%d",
+                      id > 0 ? id - 1 : ntasks - 1, i);
             if (strcmp (val, val2) != 0) {
-                fprintf (stderr, "%d: PMI_KVS_Get: exp %s got %s\n",
-                         id, val2, val);
+                fprintf (stderr, "%d: PMI_KVS_Get: exp %s got %s\n", id, val2, val);
                 return 1;
             }
-        }
-    } else { /* one get per rank */
-        snprintf (key, key_len, "kvstest.%d", id > 0 ? id - 1 : ntasks - 1);
-        rc = PMI_KVS_Get (kvsname, key, val, val_len);
-        if (rc != PMI_SUCCESS)
-            _fatal (id, rc, "PMI_KVS_Get");
-        
-        snprintf (val2, val_len, "sandwich.%d", id > 0 ? id - 1 : ntasks - 1);
-        if (strcmp (val, val2) != 0) {
-            fprintf (stderr, "%d: PMI_KVS_Get: exp %s got %s\n", id, val2, val);
-            return 1;
         }
     }
 
@@ -199,7 +209,6 @@ int main(int argc, char *argv[])
     free (val2);
     free (key);
     free (kvsname);
-
 
     return 0;
 }
