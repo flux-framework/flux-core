@@ -15,7 +15,6 @@
 #include <assert.h>
 
 #include "zmq.h"
-#include "cmb.h"
 #include "util.h"
 #include "log.h"
 

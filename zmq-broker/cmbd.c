@@ -451,13 +451,13 @@ static int _request_send (conf_t *conf, server_t *srv,
     return ret;
 }
 
-void cmbd_log (conf_t *conf, server_t *srv, logpri_t pri, const char *fmt, ...)
+void cmbd_log (conf_t *conf, server_t *srv, int lev, const char *fmt, ...)
 {
     va_list ap;
     json_object *o;
 
     va_start (ap, fmt);
-    o = util_json_vlog (pri, "cmb", conf->rankstr, fmt, ap);
+    o = util_json_vlog (lev, "cmb", conf->rankstr, fmt, ap);
     va_end (ap);
 
     if (o) {
@@ -472,7 +472,7 @@ static void _reparent (conf_t *conf, server_t *srv)
 
     for (i = 0; i < conf->parent_len; i++) {
         if (i != srv->parent_cur && srv->parent_alive[i]) {
-            cmbd_log (conf, srv, CMB_LOG_ALERT, "reparent %d->%d",
+            cmbd_log (conf, srv, LOG_ALERT, "reparent %d->%d",
                   conf->parent[srv->parent_cur].rank, conf->parent[i].rank);
             if (srv->parent_alive[srv->parent_cur])
                 _request_send (conf, srv, NULL, "cmb.route.goodbye.%d", conf->rank);

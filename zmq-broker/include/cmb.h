@@ -85,21 +85,11 @@ int cmb_hkvs_commit (cmb_t c);
  * 'fac' is like syslog facility, only an arbitrary string.
  * It is suggested to use pub-sub topic string form.
  * If 'src' is null, it will be the cmb rank (node number).
- * 'pri' is like syslog priority, use CMB_LOG values.
+ * 'lev' is syslog level.
  */
-typedef enum {
-    CMB_LOG_EMERG=0,    /* system is unusable */
-    CMB_LOG_ALERT=1,    /* action must be taken immediately */
-    CMB_LOG_CRIT=2,     /* critical conditions */
-    CMB_LOG_ERR=3,      /* error conditions */
-    CMB_LOG_WARNING=4,  /* warning conditions */
-    CMB_LOG_NOTICE=5,   /* normal, but significant, condition */
-    CMB_LOG_INFO=6,     /* informational message */
-    CMB_LOG_DEBUG=7,    /* debug level message */
-} logpri_t;
 void cmb_log_set_facility (cmb_t c, const char *facility);
-int cmb_vlog (cmb_t c, logpri_t pri, const char *fmt, va_list ap);
-int cmb_log (cmb_t c, logpri_t pri, const char *fmt, ...)
+int cmb_vlog (cmb_t c, int lev, const char *fmt, va_list ap);
+int cmb_log (cmb_t c, int lev, const char *fmt, ...)
             __attribute__ ((format (printf, 3, 4)));
 
 /* Read the logs.
@@ -108,10 +98,10 @@ int cmb_log (cmb_t c, logpri_t pri, const char *fmt, ...)
  * Call dump(), then recv()'s to get contents of circular buffer, terminated
  * by errnum=0 response.
  */
-int cmb_log_subscribe (cmb_t c, logpri_t pri, const char *sub);
+int cmb_log_subscribe (cmb_t c, int lev, const char *sub);
 int cmb_log_unsubscribe (cmb_t c, const char *sub);
-int cmb_log_dump (cmb_t c, logpri_t pri, const char *fac);
-char *cmb_log_recv (cmb_t c, logpri_t *pp, char **fp, int *cp,
+int cmb_log_dump (cmb_t c, int lev, const char *fac);
+char *cmb_log_recv (cmb_t c, int *lp, char **fp, int *cp,
                     struct timeval *tvp, char **sp);
 
 /* Manipulate (local) cmb routing tables.

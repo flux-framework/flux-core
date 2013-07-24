@@ -21,6 +21,8 @@
  *  <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
+#include <syslog.h>
+
 void log_init (char *p);
 void log_fini (void);
 void log_set_dest (char *dest);
@@ -44,6 +46,8 @@ void msg (const char *fmt, ...)
   errn_exit (ENOMEM, "%s::%s(), line %d", __FILE__, __FUNCTION__, __LINE__); \
 } while (0)
 
+const char *log_leveltostr (int level);
+int log_strtolevel (const char *s);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

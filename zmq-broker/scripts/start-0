@@ -10,7 +10,7 @@
   --set-conf live.missed.trigger.allow=5 \
   --set-conf log.reduction.timeout.msec=100 \
   --set-conf log.circular.buffer.entries=100000 \
-  --set-conf log.persist.priority=notice \
+  --set-conf log.persist.level=notice \
   --set-conf-hostlist=localhost,localhost,localhost \
   --set-conf topology='[[1],[2]]' \
   --verbose

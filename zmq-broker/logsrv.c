@@ -21,7 +21,6 @@
 
 #include "zmq.h"
 #include "route.h"
-#include "cmb.h"
 #include "cmbd.h"
 #include "util.h"
 #include "log.h"
@@ -29,8 +28,8 @@
 
 typedef struct {
     char *fac;         /* FIXME: switch to regex */
-    logpri_t pri_max;  /* the lower the number, the more filtering */
-    logpri_t pri_min;
+    int lev_max;        /* the lower the number, the more filtering */
+    int lev_min;
 } subscription_t;
 
 typedef struct {
@@ -45,7 +44,7 @@ typedef struct {
     int cirbuf_size;
     int log_reduction_timeout_msec;
     int log_circular_buffer_entries;
-    logpri_t log_persist_priority;
+    int log_persist_level;
 } ctx_t;
 
 static void _add_backlog (plugin_ctx_t *p, json_object *o);
@@ -54,13 +53,13 @@ static void _process_backlog (plugin_ctx_t *p);
 
 static bool _match_subscription (json_object *o, subscription_t *sub)
 {
-    int pri;
+    int lev;
     const char *fac;
 
-    if (util_json_object_get_int (o, "priority", &pri) < 0
+    if (util_json_object_get_int (o, "level", &lev) < 0
      || util_json_object_get_string (o, "facility", &fac) < 0
-     || pri > sub->pri_max
-     || pri < sub->pri_min
+     || lev > sub->lev_max
+     || lev < sub->lev_min
      || strncasecmp (sub->fac, fac, strlen (sub->fac)) != 0)
         return false;
     return true;
@@ -71,9 +70,9 @@ static subscription_t *_create_subscription (char *arg)
     subscription_t *sub = xzmalloc (sizeof (*sub));
     char *nextptr;
     
-    /* 'priority.facility' */
-    sub->pri_min = CMB_LOG_EMERG;
-    sub->pri_max = strtoul (arg, &nextptr, 10);
+    /* 'level.facility' */
+    sub->lev_min = LOG_EMERG;
+    sub->lev_max = strtoul (arg, &nextptr, 10);
     sub->fac = *nextptr ? xstrdup (nextptr + 1) : xstrdup (nextptr);
 
     return sub;
@@ -126,8 +125,8 @@ static void _recv_fault_event (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     subscription_t sub = {
-        .pri_min = ctx->log_persist_priority,
-        .pri_max = CMB_LOG_DEBUG,
+        .lev_min = ctx->log_persist_level,
+        .lev_max = LOG_DEBUG,
         .fac = arg
     };
     json_object *o;
@@ -270,28 +269,29 @@ static void _log_external (json_object *o)
 {
     const char *fac, *src, *message;
     struct timeval tv;
-    int pri, count;
+    int lev, count;
 
     if (util_json_object_get_string (o, "facility", &fac) == 0
-     && util_json_object_get_int (o, "priority", &pri) == 0
+     && util_json_object_get_int (o, "level", &lev) == 0
      && util_json_object_get_string (o, "source", &src) == 0
      && util_json_object_get_timeval (o, "timestamp", &tv) == 0 
      && util_json_object_get_string (o, "message", &message) == 0
      && util_json_object_get_int (o, "count", &count) == 0) {
+        const char *levstr = log_leveltostr (lev);
         msg ("[%-.6lu.%-.6lu] %dx %s.%s[%s]: %s", tv.tv_sec, tv.tv_usec, count,
-             fac, util_logpri_str (pri), src, message);
-    } /* FIXME: expose iface in log.[ch] to pass syslog facility, priority */
+             fac, levstr ? levstr : "unknown", src, message);
+    } /* FIXME: expose iface in log.[ch] to pass syslog facility, level */
 }
 
 static bool _match_reduce (json_object *o1, json_object *o2)
 {
-    int pri1, pri2;
+    int lev1, lev2;
     const char *fac1, *fac2;
     const char *msg1, *msg2;
 
-    if (util_json_object_get_int (o1, "priority", &pri1) < 0
-     || util_json_object_get_int (o2, "priority", &pri2) < 0
-     || pri1 != pri2)
+    if (util_json_object_get_int (o1, "level", &lev1) < 0
+     || util_json_object_get_int (o2, "level", &lev2) < 0
+     || lev1 != lev2)
         return false;
     if (util_json_object_get_string (o1, "facility", &fac1) < 0
      || util_json_object_get_string (o2, "facility", &fac2) < 0
@@ -403,15 +403,15 @@ static void _recv_log_msg (plugin_ctx_t *p, zmsg_t **zmsg)
     ctx_t *ctx = p->ctx;
     fwdarg_t farg;
     json_object *o = NULL;
-    int hopcount = 0, priority = 0;
+    int hopcount = 0, level = 0;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL)
         goto done;
 
-    (void)util_json_object_get_int (o, "priority", &priority);
+    (void)util_json_object_get_int (o, "level", &level);
     (void)util_json_object_get_int (o, "hopcount", &hopcount);
 
-    if (priority <= ctx->log_persist_priority || hopcount > 0) {
+    if (level <= ctx->log_persist_level || hopcount > 0) {
         _add_backlog (p, o);
         if (!plugin_timeout_isset (p))
             plugin_timeout_set (p, ctx->log_reduction_timeout_msec);
@@ -487,7 +487,7 @@ static void _set_log_circular_buffer_entries (const char *key, json_object *o,
     _resize_cirbuf (p, i);
 }
 
-static void _set_log_persist_priority (const char *key, json_object *o,
+static void _set_log_persist_level (const char *key, json_object *o,
                                        void *arg)
 {
     plugin_ctx_t *p = arg;
@@ -497,7 +497,8 @@ static void _set_log_persist_priority (const char *key, json_object *o,
     if (!o)
         msg_exit ("live: %s is not set", key);
     s = json_object_get_string (o);
-    if (util_logpri_val (s, &ctx->log_persist_priority) < 0)
+    ctx->log_persist_level = log_strtolevel (s);
+    if (ctx->log_persist_level < 0)
         msg_exit ("live: bad %s value: %s", key, s);
 }
 
@@ -514,8 +515,8 @@ static void _init (plugin_ctx_t *p)
                       _set_log_reduction_timeout_msec, p);
     plugin_conf_watch (p, "log.circular.buffer.entries",
                       _set_log_circular_buffer_entries, p);
-    plugin_conf_watch (p, "log.persist.priority",
-                      _set_log_persist_priority, p);
+    plugin_conf_watch (p, "log.persist.level",
+                      _set_log_persist_level, p);
 
     zsocket_set_subscribe (p->zs_evin, "event.fault.");
 }

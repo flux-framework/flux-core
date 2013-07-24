@@ -13,7 +13,6 @@
 #include <limits.h>
 #include <assert.h>
 
-#include "cmb.h"
 #include "util.h"
 #include "log.h"
 #include "hostlist.h"

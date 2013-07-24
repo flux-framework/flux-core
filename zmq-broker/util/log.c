@@ -86,12 +86,12 @@ static int syslog_facility = LOG_DAEMON;
 static int syslog_level = LOG_ERR;
 
 static int
-_match (char *s, match_t *m)
+_match (const char *s, match_t *m)
 {
     int i;
 
     for (i = 0; m[i].s != NULL; i++)
-        if (!strcmp (m[i].s, s))
+        if (!strcasecmp (m[i].s, s))
             return m[i].n;
     return -1;
 }
@@ -105,6 +105,18 @@ _rmatch (int n, match_t *m)
         if (m[i].n == n)
             return m[i].s;
     return NULL;
+}
+
+const char *
+log_leveltostr (int n)
+{
+    return _rmatch (n, level_tab);
+}
+
+int
+log_strtolevel (const char *s)
+{
+    return _match (s, level_tab);
 }
 
 void

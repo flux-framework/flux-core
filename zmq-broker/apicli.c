@@ -553,9 +553,9 @@ void cmb_log_set_facility (cmb_t c, const char *facility)
     c->log_facility = xstrdup (facility);
 }
 
-int cmb_vlog (cmb_t c, logpri_t pri, const char *fmt, va_list ap)
+int cmb_vlog (cmb_t c, int lev, const char *fmt, va_list ap)
 {
-    json_object *o = util_json_vlog (pri,
+    json_object *o = util_json_vlog (lev,
                              c->log_facility ? c->log_facility : "api-client",
                              c->rankstr, fmt, ap);
 
@@ -569,22 +569,22 @@ error:
     return -1;
 }
 
-int cmb_log (cmb_t c, logpri_t pri, const char *fmt, ...)
+int cmb_log (cmb_t c, int lev, const char *fmt, ...)
 {
     va_list ap;
     int rc;
 
     va_start (ap, fmt);
-    rc = cmb_vlog (c, pri, fmt, ap);
+    rc = cmb_vlog (c, lev, fmt, ap);
     va_end (ap);
     return rc;
 }
 
-int cmb_log_subscribe (cmb_t c, logpri_t pri, const char *sub)
+int cmb_log_subscribe (cmb_t c, int lev, const char *sub)
 {
     json_object *o = util_json_object_new_object ();
 
-    if (_send_message (c, o, "log.subscribe.%d.%s", pri, sub) < 0)
+    if (_send_message (c, o, "log.subscribe.%d.%s", lev, sub) < 0)
         goto error;
     json_object_put (o);
     return 0;
@@ -606,13 +606,13 @@ error:
     return -1;
 }
 
-int cmb_log_dump (cmb_t c, logpri_t pri, const char *sub)
+int cmb_log_dump (cmb_t c, int lev, const char *sub)
 {
     json_object *o;
 
     if (!(o = json_object_new_object ()))
         oom ();
-    if (_send_message (c, o, "log.dump.%d.%s", (int)pri, sub) < 0)
+    if (_send_message (c, o, "log.dump.%d.%s", lev, sub) < 0)
         goto error;
     json_object_put (o);
     return 0;
@@ -622,13 +622,13 @@ error:
     return -1;
 }
 
-char *cmb_log_recv (cmb_t c, logpri_t *pp, char **fp, int *cp,
+char *cmb_log_recv (cmb_t c, int *lp, char **fp, int *cp,
                     struct timeval *tvp, char **sp)
 {
     json_object *o = NULL;
     const char *s, *fac, *src;
     char *msg;
-    int pri, count;
+    int lev, count;
     struct timeval tv;
 
     if (_recv_message (c, NULL, &o, false) < 0 || o == NULL)
@@ -636,7 +636,7 @@ char *cmb_log_recv (cmb_t c, logpri_t *pp, char **fp, int *cp,
     if (util_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
     if (util_json_object_get_string (o, "facility", &fac) < 0
-     || util_json_object_get_int (o, "priority", &pri) < 0
+     || util_json_object_get_int (o, "level", &lev) < 0
      || util_json_object_get_string (o, "source", &src) < 0
      || util_json_object_get_timeval (o, "timestamp", &tv) < 0
      || util_json_object_get_string (o, "message", &s) < 0
@@ -644,8 +644,8 @@ char *cmb_log_recv (cmb_t c, logpri_t *pp, char **fp, int *cp,
         goto eproto;
     if (tvp)
         *tvp = tv;
-    if (pp)
-        *pp = (logpri_t)pri;
+    if (lp)
+        *lp = lev;
     if (fp)
         *fp = xstrdup (fac);
     if (cp)

@@ -21,7 +21,6 @@
 #include "log.h"
 #include "zmq.h"
 #include "route.h"
-#include "cmb.h"
 #include "cmbd.h"
 #include "util.h"
 #include "plugin.h"
@@ -173,13 +172,13 @@ void plugin_send_response_errnum (plugin_ctx_t *p, zmsg_t **req, int errnum)
     plugin_send_response_raw (p, req);
 }
 
-void plugin_log (plugin_ctx_t *p, logpri_t pri, const char *fmt, ...)
+void plugin_log (plugin_ctx_t *p, int lev, const char *fmt, ...)
 {
     va_list ap;
     json_object *o;
    
     va_start (ap, fmt);
-    o = util_json_vlog (pri, p->plugin->name, p->conf->rankstr, fmt, ap);
+    o = util_json_vlog (lev, p->plugin->name, p->conf->rankstr, fmt, ap);
     va_end (ap);
 
     if (o) {

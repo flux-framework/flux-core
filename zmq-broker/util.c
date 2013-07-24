@@ -15,7 +15,6 @@
 #include <openssl/evp.h>
 #include <assert.h>
 
-#include "cmb.h"
 #include "util.h"
 #include "log.h"
 
@@ -326,7 +325,7 @@ json_object *util_json_object_new_object (void)
     return o;
 }
 
-json_object *util_json_vlog (logpri_t pri, const char *fac, const char *src,
+json_object *util_json_vlog (int level, const char *fac, const char *src,
                              const char *fmt, va_list ap)
 {
     json_object *o = util_json_object_new_object ();
@@ -343,7 +342,7 @@ json_object *util_json_vlog (logpri_t pri, const char *fac, const char *src,
     }
     util_json_object_add_int (o, "count", 1);
     util_json_object_add_string (o, "facility", fac);
-    util_json_object_add_int (o, "priority", pri);
+    util_json_object_add_int (o, "level", level);
     util_json_object_add_string (o, "source", src);
     util_json_object_add_timeval (o, "timestamp", &tv);
     util_json_object_add_string (o, "message", str);
@@ -354,45 +353,6 @@ error:
         free (str);
     json_object_put (o);
     return NULL;
-}
-
-const char *util_logpri_str (logpri_t pri)
-{
-    switch (pri) {
-        case CMB_LOG_EMERG: return "emerg";
-        case CMB_LOG_ALERT: return "alert";
-        case CMB_LOG_CRIT: return "crit";
-        case CMB_LOG_ERR: return "err";
-        case CMB_LOG_WARNING: return "warning";
-        case CMB_LOG_NOTICE: return "notice";
-        case CMB_LOG_INFO: return "info";
-        case CMB_LOG_DEBUG: return "debug";
-    }
-    /*NOTREACHED*/
-    return "unknown";
-}
-
-int util_logpri_val (const char *p, logpri_t *lp)
-{
-    if (!strcasecmp (p, "emerg"))
-        *lp = CMB_LOG_EMERG;
-    else if (!strcasecmp (p, "alert"))
-        *lp = CMB_LOG_ALERT;
-    else if (!strcasecmp (p, "crit"))
-        *lp = CMB_LOG_CRIT;
-    else if (!strcasecmp (p, "err") || !strcasecmp (p, "error"))
-        *lp = CMB_LOG_ERR;
-    else if (!strcasecmp (p, "warning") || !strcasecmp (p, "warn"))
-        *lp = CMB_LOG_WARNING;
-    else if (!strcasecmp (p, "notice"))
-        *lp = CMB_LOG_NOTICE;
-    else if (!strcasecmp (p, "info"))
-        *lp = CMB_LOG_INFO;
-    else if (!strcasecmp (p, "debug"))
-        *lp = CMB_LOG_DEBUG;
-    else
-        return -1;
-    return 0;
 }
 
 /*

@@ -20,7 +20,6 @@
 #include <json/json.h>
 
 #include "zmq.h"
-#include "cmb.h"
 #include "route.h"
 #include "cmbd.h"
 #include "util.h"
@@ -109,7 +108,7 @@ static void _age_children (plugin_ctx_t *p)
                 if (p->conf->verbose)
                     msg ("aged %d epoch=%d current epoch=%d",
                          cp->rank, cp->epoch, ctx->epoch);
-                plugin_log (p, CMB_LOG_ALERT,
+                plugin_log (p, LOG_ALERT,
                     "event.live.down.%d: last seen epoch=%d, current epoch=%d",
                     cp->rank, cp->epoch, ctx->epoch);
                 plugin_send_event (p, "event.live.down.%d", cp->rank);
@@ -222,7 +221,7 @@ static void _recv_live_hello (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
             if (p->conf->verbose)
                 msg ("received live.hello from %d epoch=%d current epoch=%d",
                      rank, epoch, ctx->epoch);
-            plugin_log (p, CMB_LOG_ALERT, "event.live.up.%d", rank);
+            plugin_log (p, LOG_ALERT, "event.live.up.%d", rank);
             plugin_send_event (p, "event.live.up.%d", rank);
         }
     }

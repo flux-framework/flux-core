@@ -59,4 +59,4 @@ typedef struct {
 
 #define SNOOP_URI           "inproc://snoop"
 
-void cmbd_log (conf_t *conf, server_t *srv, logpri_t pri, const char *fmt, ...);
+void cmbd_log (conf_t *conf, server_t *srv, int lev, const char *fmt, ...);

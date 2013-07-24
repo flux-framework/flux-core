@@ -17,7 +17,7 @@
 #include "log.h"
 #include "util.h"
 
-static int _parse_logstr (char *s, logpri_t *pp, char **fp);
+static int _parse_logstr (char *s, int *lp, char **fp);
 
 #define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Za:A:cXw:"
 static const struct option longopts[] = {
@@ -75,9 +75,9 @@ static void usage (void)
 "  -s,--subscribe sub     subscribe to events matching substring\n"
 "  -e,--event name        publish event\n"
 "  -S,--sync              block until event.sched.triger\n"
-"  -L,--log fac:pri MSG   log MSG to facility at specified priority\n"
-"  -W,--log-watch fac:pri watch logs for messages matching tag\n"
-"  -D,--log-dump fac:pri  dump circular log buffer\n"
+"  -L,--log fac:lev MSG   log MSG to facility at specified level\n"
+"  -W,--log-watch fac:lev watch logs for messages matching tag\n"
+"  -D,--log-dump fac:lev  dump circular log buffer\n"
 "  -r,--route-add dst:gw  add local route to dst via gw\n"
 "  -R,--route-del dst     delete local route to dst\n"
 "  -q,--route-query       list routes in JSON format\n"
@@ -97,7 +97,7 @@ int main (int argc, char *argv[])
     static char socket_path[PATH_MAX + 1];
     bool Lopt = false;
     char *Lopt_facility;
-    logpri_t Lopt_priority;
+    int Lopt_level;
     int flags = 0;
 
     log_init (basename (argv[0]));
@@ -366,29 +366,31 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'L': { /* --log */
-                if (_parse_logstr (optarg, &Lopt_priority, &Lopt_facility) < 0)
-                    msg_exit ("bad log priority string");
+                if (_parse_logstr (optarg, &Lopt_level, &Lopt_facility) < 0)
+                    msg_exit ("bad log level string");
                 Lopt = true; /* see code after getopt */
                 break;
             }
             case 'W': {
                 char *src, *fac, *s;
                 struct timeval tv, start = { .tv_sec = 0 }, rel;
-                logpri_t pri;
-                int count;
+                int count, lev;
+                const char *levstr;
 
-                if (_parse_logstr (optarg, &pri, &fac) < 0)
-                    msg_exit ("bad log priority string");
-                if (cmb_log_subscribe (c, pri, fac) < 0)
+                if (_parse_logstr (optarg, &lev, &fac) < 0)
+                    msg_exit ("bad log level string");
+                if (cmb_log_subscribe (c, lev, fac) < 0)
                     err_exit ("cmb_log_subscribe");
                 free (fac);
-                while ((s = cmb_log_recv (c, &pri, &fac, &count, &tv, &src))) {
+                while ((s = cmb_log_recv (c, &lev, &fac, &count, &tv, &src))) {
                     if (start.tv_sec == 0)
                         start = tv;
                     timersub (&tv, &start, &rel);
+                    levstr = log_leveltostr (lev);
+                    printf ("XXX lev=%d (%s)\n", lev, levstr);
                     fprintf (stderr, "[%-.6lu.%-.6lu] %dx %s.%s[%s]: %s\n",
                              rel.tv_sec, rel.tv_usec, count,
-                             fac, util_logpri_str(pri), src, s);
+                             fac, levstr ? levstr : "unknown", src, s);
                     free (fac);
                     free (src);
                     free (s);
@@ -400,21 +402,22 @@ int main (int argc, char *argv[])
             case 'D': {
                 char *src, *fac, *s;
                 struct timeval tv, start = { .tv_sec = 0 }, rel;
-                logpri_t pri;
-                int count;
+                int lev, count;
+                const char *levstr;
 
-                if (_parse_logstr (optarg, &pri, &fac) < 0)
-                    msg_exit ("bad log priority string");
-                if (cmb_log_dump (c, pri, fac) < 0)
+                if (_parse_logstr (optarg, &lev, &fac) < 0)
+                    msg_exit ("bad log level string");
+                if (cmb_log_dump (c, lev, fac) < 0)
                     err_exit ("cmb_log_dump");
                 free (fac);
-                while ((s = cmb_log_recv (c, &pri, &fac, &count, &tv, &src))) {
+                while ((s = cmb_log_recv (c, &lev, &fac, &count, &tv, &src))) {
                     if (start.tv_sec == 0)
                         start = tv;
                     timersub (&tv, &start, &rel);
+                    levstr = log_leveltostr (lev);
                     fprintf (stderr, "[%-.6lu.%-.6lu] %dx %s.%s[%s]: %s\n",
                              rel.tv_sec, rel.tv_usec, count,
-                             fac, util_logpri_str(pri), src, s);
+                             fac, levstr ? levstr : "unknown", src, s);
                     free (fac);
                     free (src);
                     free (s);
@@ -465,7 +468,7 @@ int main (int argc, char *argv[])
         char *argstr = argv_concat (argc - optind, argv + optind);
 
         cmb_log_set_facility (c, Lopt_facility);
-        if (cmb_log (c, Lopt_priority, "%s", argstr) < 0)
+        if (cmb_log (c, Lopt_level, "%s", argstr) < 0)
             err_exit ("cmb_log");
         free (argstr);
     } else {
@@ -477,17 +480,18 @@ int main (int argc, char *argv[])
     exit (0);
 }
 
-static int _parse_logstr (char *s, logpri_t *pp, char **fp)
+static int _parse_logstr (char *s, int *lp, char **fp)
 {
     char *p, *fac = xstrdup (s);
-    logpri_t pri = CMB_LOG_INFO;
+    int lev = LOG_INFO;
 
     if ((p = strchr (fac, ':'))) {
         *p++ = '\0';
-        if (util_logpri_val (p, &pri) < 0)
+        lev = log_strtolevel (p);
+        if (lev < 0)
             return -1;
     }
-    *pp = pri;
+    *lp = lev;
     *fp = fac;
     return 0;
 }

@@ -5,7 +5,6 @@
 
 #include "zmq.h"
 #include "route.h"
-#include "cmb.h"
 #include "cmbd.h"
 #include "log.h"
 #include "util.h"

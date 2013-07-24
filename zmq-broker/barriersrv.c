@@ -21,7 +21,6 @@
 #include <json/json.h>
 
 #include "zmq.h"
-#include "cmb.h"
 #include "route.h"
 #include "cmbd.h"
 #include "plugin.h"
@@ -48,7 +47,7 @@ static void _barrier_destroy (void *arg)
     barrier_t *b = arg;
     plugin_ctx_t *p = b->p;
 
-    plugin_log (p, CMB_LOG_DEBUG,
+    plugin_log (p, LOG_DEBUG,
                 "destroy %s nprocs %d count %d errnum %d clients %d",
                 b->name, b->nprocs, b->count, b->errnum,
                 zhash_size (b->clients));
@@ -71,7 +70,7 @@ static barrier_t *_barrier_create (plugin_ctx_t *p, char *name, int nprocs)
     b->p = p;
     zhash_insert (ctx->barriers, b->name, b);
     zhash_freefn (ctx->barriers, b->name, _barrier_destroy);
-    plugin_log (p, CMB_LOG_DEBUG, "create %s nprocs %d", name, nprocs);
+    plugin_log (p, LOG_DEBUG, "create %s nprocs %d", name, nprocs);
 
     return b;
 }
@@ -148,7 +147,7 @@ static void _barrier_enter (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
     if (util_json_object_get_int (o, "hopcount", &hopcount) < 0) {
         if (_barrier_add_client (b, sender, zmsg) < 0) {
             plugin_send_response_errnum (p, zmsg, EEXIST);
-            plugin_log (p, CMB_LOG_ERR,
+            plugin_log (p, LOG_ERR,
                         "abort %s due to double entry by client %s",
                         name, sender);
             plugin_send_event (p, "event.barrier.abort.%s", b->name);
@@ -183,7 +182,7 @@ static int _disconnect (const char *key, void *item, void *arg)
     char *sender = arg;
 
     if (zhash_lookup (b->clients, sender)) {
-        plugin_log (b->p, CMB_LOG_ERR,
+        plugin_log (b->p, LOG_ERR,
                     "abort %s due to premature disconnect by client %s",
                     b->name, sender);
         plugin_send_event (b->p, "event.barrier.abort.%s", b->name);

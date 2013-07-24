@@ -56,11 +56,8 @@ int util_json_object_get_timeval (json_object *o, char *name,
 int util_json_object_get_int_array (json_object *o, char *name,
                                     int **ap, int *lp);
 
-json_object *util_json_vlog (logpri_t pri, const char *fac, const char *src,
+json_object *util_json_vlog (int level, const char *fac, const char *src,
                              const char *fmt, va_list ap);
-
-const char *util_logpri_str (logpri_t pri);
-int util_logpri_val (const char *s, logpri_t *lp);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

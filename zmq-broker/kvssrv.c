@@ -21,7 +21,6 @@
 #include <hiredis/hiredis.h>
 
 #include "zmq.h"
-#include "cmb.h"
 #include "route.h"
 #include "cmbd.h"
 #include "util.h"
