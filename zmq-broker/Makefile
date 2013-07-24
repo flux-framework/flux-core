@@ -78,7 +78,7 @@ clean:
 # header dependencies
 OBJS = $(CMBD_OBJS) $(CMBUTIL_OBJS) $(TBASE64_OBJS) \
 	$(LIBPMI_OBJS) $(LIBCMB_OBJS)
-INCLUDES = $(wildcard *.h)
+INCLUDES = $(wildcard *.h include/*.h)
 $(OBJS): $(INCLUDES)
 
 ##
