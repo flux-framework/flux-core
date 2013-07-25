@@ -59,4 +59,11 @@ typedef struct {
 
 #define SNOOP_URI           "inproc://snoop"
 
+/* FIXME: paths should be configurable */
+#define UPREQ_IPC_URI_TMPL  "ipc:///tmp/cmb_socket_upreq.uid%d"
+#define DNREQ_IPC_URI_TMPL  "ipc:///tmp/cmb_socket_dnreq.uid%d"
+#define EVOUT_IPC_URI_TMPL  "ipc:///tmp/cmb_socket_evout.uid%d"
+#define EVIN_IPC_URI_TMPL   "ipc:///tmp/cmb_socket_evin.uid%d"
+#define SNOOP_IPC_URI_TMPL  "ipc:///tmp/cmb_socket_snoop.uid%d"
+
 void cmbd_log (conf_t *conf, server_t *srv, int lev, const char *fmt, ...);

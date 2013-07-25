@@ -315,36 +315,64 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
         err_exit ("zctx_new");
     zctx_set_linger (srv->zctx, 5);
 
-    zbind (zctx, &srv->zs_upreq_in,    ZMQ_ROUTER, UPREQ_URI, 0);
-    zbind (zctx, &srv->zs_dnreq_out,   ZMQ_ROUTER, DNREQ_URI, 0);
-
-    zbind (zctx, &srv->zs_dnev_out,    ZMQ_PUB,    DNEV_OUT_URI, 0);
-    zbind (zctx, &srv->zs_dnev_in,     ZMQ_SUB,    DNEV_IN_URI,  0);
-    zsocket_set_subscribe (srv->zs_dnev_in, "");
-
-    zbind (zctx, &srv->zs_snoop,       ZMQ_PUB,    SNOOP_URI, -1);
-    
-    if (conf->upev_in_uri) {
-        zconnect (zctx, &srv->zs_upev_in,  ZMQ_SUB, conf->upev_in_uri, 0, NULL);
-        zsocket_set_subscribe (srv->zs_upev_in, "");
+    /* bind: upreq_in */
+    if (!(srv->zs_upreq_in = zsocket_new (zctx, ZMQ_ROUTER)))
+        err_exit ("zsocket_new");
+    zsocket_set_hwm (srv->zs_upreq_in, 0);
+    if (zsocket_bind (srv->zs_upreq_in, "%s", UPREQ_URI) < 0)
+        err_exit ("zsocket_bind %s", UPREQ_URI);
+    if (zsocket_bind (srv->zs_upreq_in, UPREQ_IPC_URI_TMPL, getuid ()) < 0)
+        err_exit (UPREQ_IPC_URI_TMPL, getuid ());
+    if (conf->upreq_in_uri) {
+        if (zsocket_bind (srv->zs_upreq_in, "%s", conf->upreq_in_uri) < 0)
+            err_exit ("zsocket_bind (upreq_in): %s", conf->upreq_in_uri);
     }
-    if (conf->upev_out_uri)
-        zconnect (zctx, &srv->zs_upev_out, ZMQ_PUB, conf->upev_out_uri,0, NULL);
 
-    /* Add dnev bind addresses in addition to default inproc ones.
-     * This is intended for intra-node pub/sub when testing multiple cmbd's
-     * on a single node.
-     */
-    if (conf->dnev_in_uri)
-        if (zsocket_bind (srv->zs_dnev_in, "%s", conf->dnev_in_uri) < 0)
-            err_exit ("zsocket_bind (dnev_in): %s", conf->dnev_in_uri);
+    /* bind: dnreq_out */
+    zbind (zctx, &srv->zs_dnreq_out,   ZMQ_ROUTER, DNREQ_URI, 0);
+    if (zsocket_bind (srv->zs_dnreq_out, DNREQ_IPC_URI_TMPL, getuid ()) < 0)
+        err_exit (DNREQ_IPC_URI_TMPL, getuid ());
+    if (conf->dnreq_out_uri) {
+        if (zsocket_bind (srv->zs_dnreq_out, "%s", conf->dnreq_out_uri) < 0)
+            err_exit ("zsocket_bind (dnreq_out): %s", conf->dnreq_out_uri);
+    }
+
+    /* bind: dnev_out */
+    zbind (zctx, &srv->zs_dnev_out,    ZMQ_PUB,    DNEV_OUT_URI, 0);
+    if (zsocket_bind (srv->zs_dnev_out, EVOUT_IPC_URI_TMPL, getuid ()) < 0)
+        err_exit (EVOUT_IPC_URI_TMPL, getuid ());
     if (conf->dnev_out_uri)
         if (zsocket_bind (srv->zs_dnev_out, "%s", conf->dnev_out_uri) < 0)
             err_exit ("zsocket_bind (dnev_out): %s", conf->dnev_out_uri);
 
+    /* bind: dnev_in */
+    zbind (zctx, &srv->zs_dnev_in,     ZMQ_SUB,    DNEV_IN_URI,  0);
+    if (zsocket_bind (srv->zs_dnev_in, EVIN_IPC_URI_TMPL, getuid ()) < 0)
+        err_exit (EVIN_IPC_URI_TMPL, getuid ());
+    zsocket_set_subscribe (srv->zs_dnev_in, "");
+    if (conf->dnev_in_uri)
+        if (zsocket_bind (srv->zs_dnev_in, "%s", conf->dnev_in_uri) < 0)
+            err_exit ("zsocket_bind (dnev_in): %s", conf->dnev_in_uri);
+
+    /* bind: snoop */
+    zbind (zctx, &srv->zs_snoop,       ZMQ_PUB,    SNOOP_URI, -1);
+    if (zsocket_bind (srv->zs_snoop, SNOOP_IPC_URI_TMPL, getuid ()) < 0)
+        err_exit (SNOOP_IPC_URI_TMPL, getuid ());
+
+    /* connect: upev_in */
+    if (conf->upev_in_uri) {
+        zconnect (zctx, &srv->zs_upev_in,  ZMQ_SUB, conf->upev_in_uri, 0, NULL);
+        zsocket_set_subscribe (srv->zs_upev_in, "");
+    }
+
+    /* connect: upev_out */
+    if (conf->upev_out_uri)
+        zconnect (zctx, &srv->zs_upev_out, ZMQ_PUB, conf->upev_out_uri,0, NULL);
+
     for (i = 0; i < conf->parent_len; i++)
         srv->parent_alive[i] = true;
 
+    /* connect: upreq_out, dnreq_in */
     if (conf->parent_len > 0) {
         char id[16];
         snprintf (id, sizeof (id), "%d", conf->rank);
@@ -352,15 +380,6 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
                   conf->parent[srv->parent_cur].upreq_uri, 0, id);
         zconnect (zctx, &srv->zs_dnreq_in, ZMQ_DEALER,
                   conf->parent[srv->parent_cur].dnreq_uri, 0, id);
-    }
-
-    if (conf->upreq_in_uri) {
-        if (zsocket_bind (srv->zs_upreq_in, "%s", conf->upreq_in_uri) < 0)
-            err_exit ("zsocket_bind (upreq_in): %s", conf->upreq_in_uri);
-    }
-    if (conf->dnreq_out_uri) {
-        if (zsocket_bind (srv->zs_dnreq_out, "%s", conf->dnreq_out_uri) < 0)
-            err_exit ("zsocket_bind (dnreq_out): %s", conf->dnreq_out_uri);
     }
 
     if (srv->zs_upreq_out) {
