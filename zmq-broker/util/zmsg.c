@@ -14,7 +14,7 @@
 #include <json/json.h>
 #include <assert.h>
 
-#include "zmq.h"
+#include "zmsg.h"
 #include "util.h"
 #include "log.h"
 
@@ -44,6 +44,95 @@ void zbind (zctx_t *zctx, void **sp, int type, char *uri, int hwm)
         zsocket_set_hwm (*sp, hwm);
     if (zsocket_bind (*sp, "%s", uri) < 0)
         err_exit ("zsocket_bind: %s", uri);
+}
+
+void *zmonitor (zctx_t *ctx, void *s, const char *uri, int flags)
+{
+    void *mon;
+
+    if (zmq_socket_monitor (s, uri, flags) < 0)
+        err_exit ("zmq_socket_monitor");
+    if (!(mon = zsocket_new (ctx, ZMQ_PAIR)))
+        err_exit ("zsocket_new");
+    if (zsocket_connect (mon, "%s", uri) < 0)
+        err_exit ("zsocket_connect %s", uri);
+    return mon;
+}
+
+void zmonitor_recv (void *s, zmq_event_t *event, bool *vp)
+{
+    zmsg_t *zmsg;
+    zframe_t *zf;
+
+    if (!(zmsg = zmsg_recv (s)))
+        err_exit ("%s: zmq_recvmsg", __FUNCTION__);
+
+    if (zmsg_size (zmsg) == 1) {  /* broken 3.2.2 - addrs invalid */
+        if (!(zf = zmsg_pop (zmsg)))
+            msg_exit ("%s: zmsg_pop", __FUNCTION__);
+        assert (zframe_size (zf) == sizeof (zmq_event_t));
+        memcpy (event, zframe_data (zf), sizeof (zmq_event_t));
+        zframe_destroy (&zf);
+        *vp = false;
+    } else {
+        err_exit ("%s: unexpected event message content", __FUNCTION__);
+        /* FIXME: later versions (3.3?) fix the invalid addrs but 
+         * also change zmq_event_t member names, so this block needs
+         * some conditional-compilation-fu.
+         */
+    }
+    zmsg_destroy (&zmsg);
+}
+
+void zmonitor_dump (char *name, void *s)
+{
+    zmq_event_t event;
+    bool valid_addr;
+
+    zmonitor_recv (s, &event, &valid_addr);
+    switch (event.event) {
+        case ZMQ_EVENT_CONNECTED:
+            msg ("%s: ZMQ_EVENT_CONNECTED from %s on fd %d", name,
+                 valid_addr ? event.data.connected.addr : "<unknown>",
+                 event.data.connected.fd);
+            break;
+        case ZMQ_EVENT_CONNECT_DELAYED:
+            msg ("%s: ZMQ_EVENT_CONNECT_DELAYED", name);
+            break;
+        case ZMQ_EVENT_CONNECT_RETRIED:
+            msg ("%s: ZMQ_EVENT_CONNECT_RETRIED", name);
+            break;
+        case ZMQ_EVENT_LISTENING:
+            msg ("%s: ZMQ_EVENT_LISTENING", name);
+            break;
+        case ZMQ_EVENT_BIND_FAILED:
+            msg ("%s: ZMQ_EVENT_BIND_FAILED", name);
+            break;
+        case ZMQ_EVENT_ACCEPTED:
+            msg ("%s: ZMQ_EVENT_ACCEPTED from %s on fd %d", name,
+                 valid_addr ? event.data.accepted.addr : "<unknown>",
+                 event.data.accepted.fd);
+            break;
+        case ZMQ_EVENT_ACCEPT_FAILED:
+            msg ("%s: ZMQ_EVENT_ACCEPT_FAILED", name);
+            break;
+        case ZMQ_EVENT_CLOSED:
+            msg ("%s: ZMQ_EVENT_CLOSED from %s on fd %d", name,
+                 valid_addr ? event.data.closed.addr : "<unknown>",
+                 event.data.closed.fd);
+            break;
+        case ZMQ_EVENT_CLOSE_FAILED:
+            msg ("%s: ZMQ_EVENT_CLOSE_FAILED", name);
+            break;
+        case ZMQ_EVENT_DISCONNECTED:
+            msg ("%s: ZMQ_EVENT_DISCONNECTED from %s on fd %d", name,
+                 valid_addr ? event.data.disconnected.addr : "<unknown>", 
+                 event.data.disconnected.fd);
+            break;
+        default:
+            msg ("%s: unknown event (%d)", name, event.event);
+            break;
+    }
 }
 
 static int _nonblock (int fd, bool nonblock)
