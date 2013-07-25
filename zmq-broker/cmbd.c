@@ -319,6 +319,8 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
     if (!(srv->zs_upreq_in = zsocket_new (zctx, ZMQ_ROUTER)))
         err_exit ("zsocket_new");
     zsocket_set_hwm (srv->zs_upreq_in, 0);
+    srv->zs_upreq_in_mon = zmonitor (zctx, srv->zs_upreq_in, UPREQ_MON_URI,
+                                                             ZMQ_EVENT_ALL);
     if (zsocket_bind (srv->zs_upreq_in, "%s", UPREQ_URI) < 0)
         err_exit ("zsocket_bind %s", UPREQ_URI);
     if (zsocket_bind (srv->zs_upreq_in, UPREQ_IPC_URI_TMPL, getuid ()) < 0)
@@ -408,6 +410,8 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
 {
     plugin_fini (conf, srv);
 
+    if (srv->zs_upreq_in_mon)
+        zsocket_destroy (srv->zctx, srv->zs_upreq_in_mon);
     if (srv->zs_upreq_in)
         zsocket_destroy (srv->zctx, srv->zs_upreq_in);
     if (srv->zs_dnev_out)
@@ -822,6 +826,7 @@ static void _cmb_poll (conf_t *conf, server_t *srv)
 { .socket = srv->zs_dnreq_out,  .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
 { .socket = srv->zs_dnev_in,    .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
 { .socket = srv->zs_upev_in,    .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
+{ .socket = srv->zs_upreq_in_mon, .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
     };
     zmsg_t *zmsg = NULL;
 
@@ -871,6 +876,15 @@ static void _cmb_poll (conf_t *conf, server_t *srv)
             zmsg_cc (zmsg, srv->zs_snoop);
             zmsg_send (&zmsg, srv->zs_dnev_out);
         }
+    }
+    /* upreq_in monitor event */
+    if (zpa[6].revents & ZMQ_POLLIN) {
+        /* FIXME: we aren't doing anything with this yet
+         * as events received do not contain valid peer addresses
+         * in zmq 3.2.2.
+         */
+        if (conf->verbose)
+            zmonitor_dump ("upreq_in", srv->zs_upreq_in_mon);
     }
 
     assert (zmsg == NULL);
