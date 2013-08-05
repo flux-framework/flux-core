@@ -25,7 +25,12 @@
 #include "util.h"
 #include "plugin.h"
 
-static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, plugin_ctx_t *p);
+struct ptimeout_struct {
+    plugin_ctx_t *p;
+    unsigned long msec;
+};
+
+static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t);
 
 struct plugin_struct apisrv;
 struct plugin_struct barriersrv;
@@ -55,22 +60,45 @@ bool plugin_treeroot (plugin_ctx_t *p)
     return (p->conf->treeroot);
 }
 
-void plugin_timeout_set (plugin_ctx_t *p, unsigned long val)
+/* N.B. zloop_timer() cannot be called repeatedly with the same
+ * arg value to update the timeout of a free running (times = 0) timer.
+ * Doing so creates a new timer, so you will have it going off at both
+ * old and new times.  Also, zloop_timer_end() is deferred until the
+ * bottom of the zloop poll loop, so we can't call zloop_timer_end() followed
+ * immediately by zloop_timer() with the same arg value or the timer is
+ * removed before it can go off.  Workaround: delete and readd but make
+ * sure the arg value is different (malloc-before-free plugin_ctx_t *
+ * wrapper struct shenanegens below).
+ */
+void plugin_timeout_set (plugin_ctx_t *p, unsigned long msec)
 {
-    if (zloop_timer (p->zloop, val, 0, (zloop_fn *)plugin_timer_cb, p) < 0)
+    ptimeout_t t;
+
+    if (p->timeout)
+        (void)zloop_timer_end (p->zloop, p->timeout);
+    if (!(t = xzmalloc (sizeof (struct ptimeout_struct))))
+        oom ();
+    t->p = p;
+    t->msec = msec;
+    if (zloop_timer (p->zloop, msec, 0, (zloop_fn *)plugin_timer_cb, t) < 0)
         err_exit ("zloop_timer"); 
-    p->timeout = val;
+    if (p->timeout)
+        free (p->timeout); /* free after xzmalloc - see comment above */
+    p->timeout = t;
 }
 
 void plugin_timeout_clear (plugin_ctx_t *p)
 {
-    (void)zloop_timer_end (p->zloop, p);
-    p->timeout = -1;
+    if (p->timeout) {
+        (void)zloop_timer_end (p->zloop, p->timeout);
+        free (p->timeout);
+        p->timeout = NULL;
+    }
 }
 
 bool plugin_timeout_isset (plugin_ctx_t *p)
 {
-    return p->timeout == -1 ? false : true;
+    return p->timeout ? true : false;
 }
 
 void plugin_send_request_raw (plugin_ctx_t *p, zmsg_t **zmsg)
@@ -452,8 +480,10 @@ static int snoop_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
     return (0);
 }
 
-static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, plugin_ctx_t *p)
+static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t)
 {
+    plugin_ctx_t *p = t->p;
+
     if (p->plugin->timeoutFn)
         p->plugin->timeoutFn (p);
     return (0);
@@ -480,10 +510,6 @@ static zloop_t * plugin_zloop_create (plugin_ctx_t *p)
     zp.socket = p->zs_snoop;
     if ((rc = zloop_poller (zl, &zp, (zloop_fn *) snoop_cb, (void *) p)) != 0)
         err_exit ("zloop_poller: rc=%d", rc);
-
-    if ((p->timeout > 0) &&
-        (rc == zloop_timer (zl, p->timeout, 0, (zloop_fn *) plugin_timer_cb, p)) != 0)
-        err_exit ("zloop_timer: rc=%d", rc);
 
     return (zl);
 }
@@ -533,6 +559,9 @@ static void _plugin_destroy (void *arg)
     zsocket_destroy (p->srv->zctx, p->zs_dnreq);
     zsocket_destroy (p->srv->zctx, p->zs_upreq);
 
+    if (p->timeout)
+        free (p->timeout);
+
     zhash_destroy (&p->conf_watcher);
 
     free (p->id);
@@ -566,7 +595,6 @@ static int _plugin_create (char *name, server_t *srv, conf_t *conf)
     p->conf = conf;
     p->srv = srv;
     p->plugin = plugin;
-    p->timeout = -1;
 
     if (!(p->conf_watcher = zhash_new ()))
         oom ();

@@ -16,6 +16,8 @@ typedef struct {
     ConfSetF *set;
 } conf_watcher_t;
 
+typedef struct ptimeout_struct *ptimeout_t;
+
 typedef struct {
     conf_t *conf;
     void *zs_upreq; /* for making requests */
@@ -24,7 +26,7 @@ typedef struct {
     void *zs_evout;
     void *zs_snoop;
     char *id;
-    long timeout;
+    ptimeout_t timeout;
     pthread_t t;
     plugin_t plugin;
     server_t *srv;
