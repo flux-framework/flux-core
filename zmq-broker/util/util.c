@@ -13,6 +13,7 @@
 #include <math.h>
 #include <limits.h>
 #include <openssl/evp.h>
+#include <openssl/sha.h>
 #include <assert.h>
 
 #include "util.h"
@@ -142,6 +143,24 @@ char *argv_concat (int argc, char *argv[])
             strcat (s, " "); 
     }
     return s; 
+}
+
+void compute_href (const void *dat, int len, href_t href)
+{
+    unsigned char raw[SHA_DIGEST_LENGTH];
+    SHA_CTX ctx;
+    int i;
+
+    assert(SHA_DIGEST_LENGTH*2 + 1 == sizeof (href_t));
+
+    if (SHA1_Init (&ctx) == 0)
+        err_exit ("%s: SHA1_Init", __FUNCTION__);
+    if (SHA1_Update (&ctx, dat, len) == 0)
+        err_exit ("%s: SHA1_Update", __FUNCTION__);
+    if (SHA1_Final (raw, &ctx) == 0)
+        err_exit ("%s: SHA1_Final", __FUNCTION__);
+    for (i = 0; i < SHA_DIGEST_LENGTH; i++)
+        sprintf (&href[i*2], "%02x", (unsigned int)raw[i]);
 }
 
 void util_json_object_add_boolean (json_object *o, char *name, bool val)

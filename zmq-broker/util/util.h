@@ -1,5 +1,7 @@
 typedef int (*mapstrfun_t) (char *s, void *arg1, void *arg2);
 
+typedef char href_t[41];
+
 /* 's' contains a comma-delimited list.
  * Call 'fun' once for each word in the list.
  * arg1 and arg2 will be passed opaquely to 'fun'.
@@ -31,6 +33,10 @@ int env_getints (char *name, int **iap, int *lenp, int dflt_ia[], int dflt_len);
 /* Return a string with argcv elements space-delimited.  Caller must free.
  */
 char *argv_concat (int argc, char *argv[]);
+
+/* Fill 'href' with ASCII string representation of SHA1 hash of dat/len.
+ */
+void compute_href (const void *dat, int len, href_t href);
 
 /* JSON helpers
  * N.B. for get_base64(): caller must free returned data if non-NULL.
