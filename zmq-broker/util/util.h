@@ -46,6 +46,7 @@ bool verify_json_href (json_object *o, const href_t href);
  * N.B. for get_base64(): caller must free returned data if non-NULL.
  */
 json_object *util_json_object_new_object (void);
+json_object *util_json_object_dup (json_object *o);
 void util_json_object_add_boolean (json_object *o, char *name, bool val);
 void util_json_object_add_double (json_object *o, char *name, double n);
 void util_json_object_add_int (json_object *o, char *name, int i);
