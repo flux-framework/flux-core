@@ -35,7 +35,6 @@ static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t);
 struct plugin_struct apisrv;
 struct plugin_struct barriersrv;
 struct plugin_struct confsrv;
-struct plugin_struct hkvssrv;
 struct plugin_struct kvssrv;
 struct plugin_struct livesrv;
 struct plugin_struct logsrv;
@@ -51,7 +50,6 @@ static plugin_t plugins[] = {
     &logsrv,
     &confsrv,
     &echosrv,
-    &hkvssrv,
 };
 const int plugins_len = sizeof (plugins)/sizeof (plugins[0]);
 

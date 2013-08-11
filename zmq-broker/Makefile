@@ -22,7 +22,7 @@ LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -lutil -luuid
 LDADD_SRV = -pthread --lhiredis $(LDADD_CLI)
 
 PLUGIN_OBJS = apisrv.o syncsrv.o kvssrv.o barriersrv.o livesrv.o \
-	logsrv.o confsrv.o echosrv.o hkvssrv.o
+	logsrv.o confsrv.o echosrv.o
 CMBD_OBJS = cmbd.o route.o plugin.o lsdfatal.o $(PLUGIN_OBJS)
 CMBUTIL_OBJS = cmbutil.o
 TBASE64_OBJS = tbase64.o

@@ -30,9 +30,6 @@
 
 #define FORCE_HASH 0
 
-#define USE_HKVS 1
-
-
 typedef struct {
     int magic;
     int spawned;
@@ -369,6 +366,7 @@ int PMI_KVS_Get_value_length_max( int *length )
 int PMI_KVS_Put( const char kvsname[], const char key[], const char value[])
 {
     char *xkey = NULL;
+    json_object *o;
 
     trace (PMI_TRACE_KVS_PUT, "%s %s:%s = %s",
            __FUNCTION__, kvsname, key, value);
@@ -380,11 +378,11 @@ int PMI_KVS_Put( const char kvsname[], const char key[], const char value[])
 
     if (_key_tostore (kvsname, key, &xkey) < 0)
         return PMI_ERR_NOMEM;
-#if USE_HKVS
-    if (cmb_hkvs_put (ctx->cctx, xkey, value) < 0)
-#else
-    if (cmb_kvs_put (ctx->cctx, xkey, value) < 0)
-#endif
+
+    o = json_object_new_string (value);
+    if (!o)
+        return PMI_ERR_NOMEM;
+    if (cmb_kvs_put (ctx->cctx, xkey, o) < 0)
         goto error;
 
     free (xkey);
@@ -404,12 +402,7 @@ int PMI_KVS_Commit( const char kvsname[] )
     if (kvsname == NULL)
         return PMI_ERR_INVALID_ARG;
 
-#if USE_HKVS
-    if (cmb_hkvs_commit (ctx->cctx) < 0)
-#else
-    int errcount, putcount;
-    if (cmb_kvs_commit (ctx->cctx, &errcount, &putcount) < 0 || errcount > 0)
-#endif
+    if (cmb_kvs_commit (ctx->cctx) < 0)
         goto error;
     return PMI_SUCCESS;
 error:
@@ -419,7 +412,8 @@ error:
 int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int length)
 {
     char *xkey = NULL;
-    char *val = NULL;
+    json_object *o;
+    const char *val = NULL;
 
     if (ctx == NULL)
         return PMI_ERR_INIT;
@@ -430,11 +424,8 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
     if (_key_tostore (kvsname, key, &xkey) < 0)
         return PMI_ERR_NOMEM;
 
-#if USE_HKVS
-    val = cmb_hkvs_get (ctx->cctx, xkey);
-#else
-    val = cmb_kvs_get (ctx->cctx, xkey);
-#endif
+    if (cmb_kvs_get (ctx->cctx, xkey, &o) == 0 && o != NULL)
+        val = json_object_get_string (o);
     trace (PMI_TRACE_KVS_GET, "%s %s:%s = %s", __FUNCTION__, kvsname, key,
            val ? val : errno == 0 ? "[nonexistent key]" : "[error]");
     if (!val && errno == 0) {
@@ -444,14 +435,15 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
     if (!val && errno != 0)
         goto error;
     snprintf (value, length, "%s", val);
-    free (val); 
+    if (o)
+        json_object_put (o);
     free (xkey); 
     return PMI_SUCCESS;
 error:
     if (xkey)
         free (xkey);
-    if (val)
-        free (val);
+    if (o)
+        json_object_put (o);
     return PMI_FAIL;
 }
 

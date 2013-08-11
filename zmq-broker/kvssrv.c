@@ -1,4 +1,4 @@
-/* kvssrv.c - key-value service */ 
+/* kvssrv.c - yet another key value store */
 
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -15,380 +15,405 @@
 #include <sys/un.h>
 #include <sys/socket.h>
 #include <ctype.h>
+#include <sys/time.h>
 #include <zmq.h>
 #include <czmq.h>
 #include <json/json.h>
-#include <hiredis/hiredis.h>
 
 #include "zmsg.h"
 #include "route.h"
 #include "cmbd.h"
+#include "plugin.h"
 #include "util.h"
 #include "log.h"
-#include "plugin.h"
-
-typedef struct _kv_struct {
-    char *key;
-    char *val;
-    struct _kv_struct *next;
-    struct _kv_struct *prev;
-} kv_t;
-
-typedef struct _client_struct {
-    struct _client_struct *next;
-    struct _client_struct *prev;
-    char *identity;
-    int putcount;
-    int errcount;
-    kv_t *put_queue;
-} client_t;
 
 typedef struct {
-    redisContext *rctx;
-    client_t *clients;
+    json_object *o;
+    zlist_t *reqs;
+} hobj_t;
+
+typedef enum { OP_PUT, OP_DEL } optype_t;
+typedef struct {
+    optype_t optype;
+    char *key;
+    char *ref;
+} op_t;
+
+typedef struct {
+    zhash_t *store;
+    href_t rootdir;
+    zlist_t *commit;
 } ctx_t;
 
-static void _add_put_queue (client_t *c, const char *key, const char *val)
+
+static void kvs_cachefill (plugin_ctx_t *p, zmsg_t **zmsg);
+static void kvs_get (plugin_ctx_t *p, zmsg_t **zmsg);
+
+static op_t *op_create (optype_t optype, char *key, char *ref)
 {
-    kv_t *kv = xzmalloc (sizeof (kv_t));
+    op_t *op = xzmalloc (sizeof (*op));
 
-    kv->key = xstrdup (key);
-    kv->val = xstrdup (val);
+    op->optype = optype;
+    op->key = key;
+    op->ref = ref;
 
-    kv->next = c->put_queue;
-    if (kv->next)
-        kv->next->prev = kv;
-    c->put_queue = kv;
+    return op;
 }
 
-static void _flush_put_queue (plugin_ctx_t *p, client_t *c)
+static void op_destroy (op_t *op)
+{
+    if (op->key)
+        free (op->key);
+    if (op->ref)
+        free (op->ref);
+    free (op);
+}
+
+static hobj_t *hobj_create (json_object *o)
+{
+    hobj_t *hp = xzmalloc (sizeof (*hp));
+
+    hp->o = o;
+    if (!(hp->reqs = zlist_new ()))
+        oom ();
+
+    return hp;
+}
+
+static void hobj_destroy (hobj_t *hp)
+{
+    if (hp->o)
+        json_object_put (hp->o);
+    assert (zlist_size (hp->reqs) == 0);
+    zlist_destroy (&hp->reqs);
+    free (hp);
+}
+
+static void cachefill_request_send (plugin_ctx_t *p, const href_t ref)
+{
+    json_object *o = util_json_object_new_object ();
+
+    json_object_object_add (o, ref, NULL);
+    plugin_send_request (p, o, "kvs.cachefill");
+    json_object_put (o);
+}
+
+static bool load (plugin_ctx_t *p, const href_t ref, zmsg_t **zmsg,
+                  json_object **op)
 {
     ctx_t *ctx = p->ctx;
-    kv_t *kp;
-    redisReply *rep;
-    int replycount = 0;
+    hobj_t *hp = zhash_lookup (ctx->store, ref);
+    bool done = true;
 
-    for (kp = c->put_queue; kp != NULL; kp = kp->next)
-        if (kp->next == NULL)
-            break;
-    while (kp) {
-        if (redisAppendCommand (ctx->rctx, "SET %s %s",
-                                            kp->key, kp->val) == REDIS_ERR) {
-            c->errcount++; /* FIXME: report error from ctx->rctx? */
-        } else {
-            replycount++;
+    if (plugin_treeroot (p)) {
+        if (!hp)
+            plugin_panic (p, "dangling ref %s", ref);
+    } else {
+        if (!hp) {
+            hp = hobj_create (NULL);
+            zhash_insert (ctx->store, ref, hp);
+            zhash_freefn (ctx->store, ref, (zhash_free_fn *)hobj_destroy);
+            cachefill_request_send (p, ref);
         }
-        c->putcount++;
-        kp = kp->prev;
+        if (!hp->o) {
+            assert (zmsg != NULL);
+            if (zlist_append (hp->reqs, *zmsg) < 0)
+                oom ();
+            *zmsg = NULL;
+            done = false;
+        }
     }
-    while (replycount-- > 0) {
-        if (redisGetReply (ctx->rctx, (void **)&rep) == REDIS_ERR) {
-            c->errcount++;
+    if (done) {
+        assert (hp != NULL);
+        assert (hp->o != NULL);
+        *op = hp->o;
+    }
+    return done;
+}
+
+static void store (plugin_ctx_t *p, json_object *o, href_t ref)
+{
+    ctx_t *ctx = p->ctx;
+    hobj_t *hp; 
+    zmsg_t *zmsg;
+
+    compute_json_href (o, ref);
+
+    if ((hp = zhash_lookup (ctx->store, ref))) {
+        if (hp->o) {
+            json_object_put (o);
         } else {
-            switch (rep->type) {
-                case REDIS_REPLY_STATUS:
-                    /* success */
+            hp->o = o;
+            while ((zmsg = zlist_pop (hp->reqs))) {
+                if (cmb_msg_match (zmsg, "kvs.cachefill"))
+                    kvs_cachefill (p, &zmsg);
+                else if (cmb_msg_match (zmsg, "kvs.get"))
+                    kvs_get (p, &zmsg);
+                if (zmsg)
+                    zmsg_destroy (&zmsg);
+            }
+        }
+    } else {
+        hp = hobj_create (o);
+        zhash_insert (ctx->store, ref, hp);
+        zhash_freefn (ctx->store, ref, (zhash_free_fn *)hobj_destroy);
+    }
+}
+
+static void kvs_cachefill (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    json_object *val, *cpy = NULL, *o = NULL;
+    json_object_iter iter;
+
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
+        plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
+    }
+    cpy = util_json_object_dup (o);
+    json_object_object_foreachC (o, iter) {
+        if (!load (p, iter.key, zmsg, &val))
+            goto done; /* stall */
+        json_object_get (val);
+        json_object_object_add (cpy, iter.key, val);
+    }
+    plugin_send_response (p, zmsg, cpy);
+done:
+    if (o)
+        json_object_put (o);
+    if (cpy)
+        json_object_put (cpy);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+}
+
+static void kvs_cachefill_response (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    json_object *o = NULL;
+    json_object_iter iter;
+    href_t href;
+    
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
+        plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
+    }
+    json_object_object_foreachC (o, iter) {
+        json_object_get (iter.val);
+        store (p, iter.val, href);
+        if (strcmp (href, iter.key) != 0)
+            plugin_log (p, LOG_ERR, "%s: bad href %s", __FUNCTION__, iter.key);
+    }
+done:
+    if (o)
+        json_object_put (o);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+}
+
+static void kvs_get (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    ctx_t *ctx = p->ctx;
+    json_object *dir, *val, *cpy = NULL, *o = NULL;
+    json_object_iter iter;
+    const char *ref;
+
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
+        plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
+    }
+    if (!load (p, ctx->rootdir, zmsg, &dir))
+        goto done; /* stall */
+    cpy = util_json_object_dup (o);
+    json_object_object_foreachC (o, iter) {
+        if (util_json_object_get_string (dir, iter.key, &ref) < 0)
+            continue;
+        if (!load (p, ref, zmsg, &val))
+            goto done; /* stall */
+        json_object_get (val);
+        json_object_object_add (cpy, iter.key, val); 
+    }
+    plugin_send_response (p, zmsg, cpy);
+done:
+    if (o)
+        json_object_put (o);
+    if (cpy)
+        json_object_put (cpy);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+}
+
+static void kvs_disconnect (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    /* FIXME */
+    zmsg_destroy (zmsg);
+}
+
+static void kvs_put (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    ctx_t *ctx = p->ctx;
+    json_object *o = NULL;
+    json_object_iter iter;
+    href_t ref;
+    op_t *op;
+
+    assert (plugin_treeroot (p));
+
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
+        plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
+    }
+    json_object_object_foreachC (o, iter) {
+        if (json_object_get_type (iter.val) == json_type_null) {
+            op = op_create (OP_DEL, xstrdup (iter.key), NULL);
+        } else { 
+            json_object_get (iter.val);
+            store (p, iter.val, ref);
+            op = op_create (OP_PUT, xstrdup (iter.key), xstrdup (ref));
+        }
+        if (zlist_append (ctx->commit, op) < 0)
+            oom ();
+    }
+    plugin_send_response_errnum (p, zmsg, 0); /* success */
+done:
+    if (o)
+        json_object_put (o);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+}
+
+static void kvs_commit (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    ctx_t *ctx = p->ctx;
+    op_t *op;
+    json_object *o, *cpy;
+
+    assert (plugin_treeroot (p));
+
+    if (zlist_size (ctx->commit) > 0) {
+        (void)load (p, ctx->rootdir, NULL, &o);
+        assert (o != NULL);
+        cpy = util_json_object_dup (o);
+        while ((op = zlist_pop (ctx->commit))) {
+            switch (op->optype) {
+                case OP_PUT:
+                    util_json_object_add_string (cpy, op->key, op->ref);
                     break;
-                case REDIS_REPLY_ERROR:
-                    c->errcount++;
-                    break;
-                case REDIS_REPLY_INTEGER:
-                case REDIS_REPLY_NIL:
-                case REDIS_REPLY_STRING:
-                case REDIS_REPLY_ARRAY:
-                    msg ("redisCommand: unexpected reply type");
-                    c->errcount++;
+                case OP_DEL:
+                    json_object_object_del (cpy, op->key);
                     break;
             }
-            freeReplyObject (rep);
+            op_destroy (op);
         }
+        store (p, cpy, ctx->rootdir);
+        plugin_send_event (p, "event.kvs.setroot.%s", ctx->rootdir);
     }
-    while (c->put_queue) {
-        kp = c->put_queue;
-        c->put_queue= kp->next;
-        free (kp->key);
-        free (kp->val);
-        free (kp);
-    }
+    plugin_send_response_errnum (p, zmsg, 0); /* success */
 }
 
-static client_t *_client_create (plugin_ctx_t *p, const char *identity)
+static void event_kvs_setroot (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
-    client_t *c;
 
-    c = xzmalloc (sizeof (client_t));
-    c->identity = xstrdup (identity);
-    c->prev = NULL;
-    c->next = ctx->clients;
-    if (c->next)
-        c->next->prev = c;
-    ctx->clients = c;
+    assert (!plugin_treeroot (p));
 
-    return c;
-}
-
-static void _client_destroy (plugin_ctx_t *p, client_t *c)
-{   
-    ctx_t *ctx = p->ctx;
-    kv_t *kp, *deleteme;
-
-    free (c->identity);
-    for (kp = c->put_queue; kp != NULL; ) {
-        deleteme = kp;
-        kp = kp->next; 
-        free (deleteme->key);
-        free (deleteme->val);
-        free (deleteme);
-    }
-
-    if (c->prev)
-        c->prev->next = c->next;
+    if (strlen (arg) + 1 == sizeof (href_t))
+        memcpy (ctx->rootdir, arg, sizeof (href_t));
     else
-        ctx->clients = c->next;
-    if (c->next)
-        c->next->prev = c->prev;
-    free (c);
-}   
+        plugin_log (p, LOG_ERR, "%s: bad href %s", __FUNCTION__, arg);
+}
 
-static client_t *_client_find (plugin_ctx_t *p, const char *identity)
+static void kvs_getroot (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
-    client_t *c;
- 
-    for (c = ctx->clients; c != NULL; c = c->next) {
-        if (!strcmp (c->identity, identity))
-            return c;
-    }
-    return NULL;
-}
-
-static char *_redis_get (plugin_ctx_t *p, const char *key)
-{
-    ctx_t *ctx = p->ctx;
-    redisReply *rep;
-    char *val = NULL;
-
-    rep = redisCommand (ctx->rctx, "GET %s", key);
-    if (rep == NULL) {
-        msg ("redisCommand: %s", ctx->rctx->errstr);
-        return NULL; /* FIXME: rctx cannot be reused */
-    }
-    switch (rep->type) {
-        case REDIS_REPLY_ERROR:
-            assert (rep->str != NULL);
-            msg ("redisCommand: error reply: %s", rep->str);
-            break;
-        case REDIS_REPLY_NIL:
-            /* invalid key */ 
-            break;
-        case REDIS_REPLY_STRING:
-            /* success */
-            val = xstrdup (rep->str);
-            break;
-        case REDIS_REPLY_STATUS:
-        case REDIS_REPLY_INTEGER:
-        case REDIS_REPLY_ARRAY:
-            msg ("redisCommand: unexpected reply type (%d)", rep->type);
-            break;
-    }
-    if (rep)
-        freeReplyObject (rep);
-    return val;
-}
-
-/* kvs.put just queues up key-val pairs.  There is no reply.
- * FIXME: auto-flush after some threshold to avoid DoS.
- */
-static void _kvs_put (plugin_ctx_t *p, zmsg_t **zmsg)
-{
-    json_object *o = NULL;
-    const char *key, *val;
-    char *sender = NULL;
-    client_t *c;
-
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0) {
-        err ("%s: error decoding message", __FUNCTION__);
-        goto done;
-    }
-    if (o == NULL || !(sender = cmb_msg_sender (*zmsg))
-                  || util_json_object_get_string (o, "key", &key) < 0
-                  || util_json_object_get_string (o, "val", &val) < 0) {
-        err ("%s: protocol error", __FUNCTION__);
-        goto done;
-    }
-    if (!(c = _client_find (p, sender)))
-        c = _client_create (p, sender);
-    _add_put_queue (c, key, val);
-done:
-    zmsg_destroy (zmsg);
-    if (o)
-        json_object_put (o);
-    if (sender)
-        free (sender);
-}
-
-static void _kvs_get (plugin_ctx_t *p, zmsg_t **zmsg)
-{
-    json_object *o = NULL;
-    const char *key;
-    char *val;
-
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0) {
-        err ("%s: error decoding message", __FUNCTION__);
-        goto done;
-    }
-    if (o == NULL || util_json_object_get_string (o, "key", &key) < 0) {
-        err ("%s: protocol error", __FUNCTION__);
-        goto done;
-    }
-    val = _redis_get (p, key);
-    if (val) /* omit val in response on error */
-        util_json_object_add_string (o, "val", val);
-    plugin_send_response (p, zmsg, o);
-done:
-    if (o)
-        json_object_put (o);
-    if (val)
-        free (val);
-    if (*zmsg)
-        zmsg_destroy (zmsg);
-}
-
-static void _kvs_commit (plugin_ctx_t *p, zmsg_t **zmsg)
-{
-    json_object *o = NULL;
-    char *sender = NULL;
-    int errcount = 0, putcount = 0;
-    client_t *c;
-
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0) {
-        err ("%s: error decoding message", __FUNCTION__);
-        goto done;
-    }
-    if (o == NULL || !(sender = cmb_msg_sender (*zmsg))) {
-        err ("%s: protocol error", __FUNCTION__);
-        goto done;
-    }
-    if ((c = _client_find (p, sender))) {
-        _flush_put_queue (p, c);
-        errcount = c->errcount;
-        putcount = c->putcount;
-        c->errcount = c->putcount = 0;
-    }
-    util_json_object_add_int (o, "errcount", errcount);
-    util_json_object_add_int (o, "putcount", putcount);
-    plugin_send_response (p, zmsg, o);
-done:
-    if (o)
-        json_object_put (o);
-    if (*zmsg)
-        zmsg_destroy (zmsg);
-    if (sender)
-        free (sender);
-}
-
-static void _kvs_disconnect (plugin_ctx_t *p, zmsg_t **zmsg)
-{
-    char *sender = NULL;
-    client_t *c;
-
-    if (!(sender = cmb_msg_sender (*zmsg))) {
-        err ("%s: protocol error", __FUNCTION__);
-        goto done;
-    }
-    if ((c = _client_find (p, sender)))
-        _client_destroy (p, c);
-done:
-    if (*zmsg)
-        zmsg_destroy (zmsg);
-    if (sender)
-        free (sender);
-}
-
-static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
-{
-    if (cmb_msg_match (*zmsg, "kvs.put"))
-        _kvs_put (p, zmsg);
-    else if (cmb_msg_match (*zmsg, "kvs.get"))
-        _kvs_get (p, zmsg);
-    else if (cmb_msg_match (*zmsg, "kvs.commit"))
-        _kvs_commit (p, zmsg);
-    else if (cmb_msg_match (*zmsg, "kvs.disconnect"))
-        _kvs_disconnect (p, zmsg);
-}
-
-static void _redis_connect (plugin_ctx_t *p, char *host, int port)
-{
-    ctx_t *ctx = p->ctx;
-
-    if (ctx->rctx)
-        redisFree (ctx->rctx);
-    for (;;) {
-        if (!(ctx->rctx = redisConnect (host, port))) {
-            msg_exit ("kvs: redisConnect failed");
-        } else if (ctx->rctx->err == REDIS_ERR_IO && errno == ECONNREFUSED) {
-            redisFree (ctx->rctx);
-            ctx->rctx = NULL;
-            sleep (2);
-            msg ("kvs: redisConnect: retrying");
-        } else if (ctx->rctx->err)
-            msg_exit ("kvs: redisConnect: %s", ctx->rctx->errstr);
-        else
-            break;
-    }
-}
-
-/* FIXME: allow connect to fail on bad value, then return EINVAL to
- * kvs operations until ctx->rctx is re-established.
- */
-static void _set_kvs_redis_server (const char *key, json_object *o, void *arg)
-{
-    plugin_ctx_t *p = arg;
-    char *pp, *host = NULL;
-    int port = 6379;
+    json_object *o = json_object_new_string (ctx->rootdir);
 
     if (!o)
-        msg_exit ("kvs: %s is not set", key);
-    if (json_object_get_type (o) != json_type_string)
-        msg_exit ("kvs: bad %s value: not a string", key);
-    host = xstrdup (json_object_get_string (o));
-    if ((pp = strchr (host, ':'))) {
-        *pp++ = '\0';
-        port = strtoul (pp, NULL, 10);
-        if (port <= 0 || port > 65535)
-            msg_exit ("kvs: bad %s port value: %d", key, port);
-    }
-    _redis_connect (p, host, port);
-    if (host)
-        free (host);
+        oom ();
+    plugin_send_response (p, zmsg, o);
 }
 
-static void _init (plugin_ctx_t *p)
+static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
 {
-    ctx_t *ctx = xzmalloc (sizeof (*ctx));
-    p->ctx = ctx;
-    plugin_conf_watch (p, "kvs.redis.server", _set_kvs_redis_server, p);
+    char *arg = NULL;
+
+    if (cmb_msg_match (*zmsg, "kvs.getroot")) {
+        kvs_getroot (p, zmsg);
+    } else if (cmb_msg_match_substr (*zmsg, "event.kvs.setroot.", &arg)) {
+        event_kvs_setroot (p, arg, zmsg);
+    } else if (cmb_msg_match (*zmsg, "kvs.disconnect")) {
+        kvs_disconnect (p, zmsg);
+    } else if (cmb_msg_match (*zmsg, "kvs.get")) {
+        kvs_get (p, zmsg);
+    } else if (cmb_msg_match (*zmsg, "kvs.cachefill")) {
+        if (type == ZMSG_REQUEST)
+            kvs_cachefill (p, zmsg);
+        else
+            kvs_cachefill_response (p, zmsg);
+    } else if (cmb_msg_match (*zmsg, "kvs.put")) {
+        if (type == ZMSG_REQUEST) {
+            if (plugin_treeroot (p))
+                kvs_put (p, zmsg);
+            else
+                plugin_send_request_raw (p, zmsg); /* fwd to root */
+        } else
+            plugin_send_response_raw (p, zmsg); /* fwd to requestor */
+    } else if (cmb_msg_match (*zmsg, "kvs.commit")) {
+        if (type == ZMSG_REQUEST) {
+            if (plugin_treeroot (p))
+                kvs_commit (p, zmsg);
+            else
+                plugin_send_request_raw (p, zmsg); /* fwd to root */
+        } else
+            plugin_send_response_raw (p, zmsg); /* fwd to requestor */
+    }
+
+    if (arg)
+        free (arg);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
 }
 
-static void _fini (plugin_ctx_t *p)
+static void kvs_init (plugin_ctx_t *p)
+{
+    ctx_t *ctx;
+
+    ctx = p->ctx = xzmalloc (sizeof (ctx_t));
+    if (!plugin_treeroot (p))
+        zsocket_set_subscribe (p->zs_evin, "event.kvs.");
+    if (!(ctx->store = zhash_new ()))
+        oom ();
+    if (!(ctx->commit = zlist_new ()))
+        oom ();
+
+    if (plugin_treeroot (p)) {
+        json_object *rootdir = util_json_object_new_object ();
+
+        store (p, rootdir, ctx->rootdir);
+    } else {
+        json_object *rep = plugin_request (p, NULL, "kvs.getroot");
+        const char *ref = json_object_get_string (rep);
+
+        if (ref && strlen (ref) + 1 == sizeof (href_t))
+            memcpy (ctx->rootdir, ref, sizeof (href_t));
+        else
+            plugin_panic (p, "malformed kvs.getroot reply");
+    }
+}
+
+static void kvs_fini (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
 
-    if (ctx->rctx)
-        redisFree (ctx->rctx);
-    while (ctx->clients != NULL)
-        _client_destroy (p, ctx->clients);
+    zhash_destroy (&ctx->store);
+    zlist_destroy (&ctx->commit);
     free (ctx);
 }
 
 struct plugin_struct kvssrv = {
     .name      = "kvs",
-    .initFn    = _init,
-    .recvFn    = _recv,
-    .finiFn    = _fini,
+    .initFn    = kvs_init,
+    .finiFn    = kvs_fini,
+    .recvFn    = kvs_recv,
 };
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

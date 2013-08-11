@@ -284,52 +284,6 @@ error:
     return -1;
 }
 
-int cmb_kvs_put (cmb_t c, const char *key, const char *val)
-{
-    json_object *o = util_json_object_new_object ();
-
-    util_json_object_add_string (o, "key", key);
-    util_json_object_add_string (o, "val", val);
-    if (_send_message (c, o, "kvs.put") < 0)
-        goto error;
-    json_object_put (o);
-    return 0;
-error:
-    json_object_put (o);
-    return -1;
-}
-
-char *cmb_kvs_get (cmb_t c, const char *key)
-{
-    json_object *o = util_json_object_new_object ();
-    const char *val;
-    char *ret;
-
-    /* send request */
-    util_json_object_add_string (o, "key", key);
-    if (_send_message (c, o, "kvs.get") < 0)
-        goto error;
-    json_object_put (o);
-    o = NULL;
-
-    /* receive response */
-    if (_recv_message (c, NULL, &o, false) < 0)
-        goto error;
-    if (util_json_object_get_int (o, "errnum", &errno) == 0)
-        goto error;
-    if (util_json_object_get_string (o, "val", &val) < 0) {
-        errno = 0; /* key was not set */
-        ret = NULL;
-    } else
-        ret = xstrdup (val);
-    json_object_put (o);
-    return ret;
-error:
-    if (o)
-        json_object_put (o);
-    return NULL;
-}
-
 int cmb_conf_put (cmb_t c, const char *key, json_object *vo)
 {
     json_object *o = util_json_object_new_object ();
@@ -460,14 +414,14 @@ error:
     return -1;
 }
 
-int cmb_hkvs_put (cmb_t c, const char *key, const char *val)
+int cmb_kvs_put (cmb_t c, const char *key, json_object *val)
 {
     json_object *o = util_json_object_new_object ();
 
     /* send request */
-    util_json_object_add_string (o, "key", key);
-    util_json_object_add_string (o, "val", val);
-    if (_send_message (c, o, "hkvs.put") < 0)
+    json_object_get (val);
+    json_object_object_add (o, key, val);
+    if (_send_message (c, o, "kvs.put") < 0)
         goto error;
     json_object_put (o);
     o = NULL;
@@ -489,12 +443,12 @@ error:
     return -1;
 }
 
-int cmb_hkvs_commit (cmb_t c)
+int cmb_kvs_commit (cmb_t c)
 {
     json_object *o = util_json_object_new_object ();
 
     /* send request */
-    if (_send_message (c, o, "hkvs.commit") < 0)
+    if (_send_message (c, o, "kvs.commit") < 0)
         goto error;
     json_object_put (o);
     o = NULL;
@@ -516,15 +470,14 @@ error:
     return -1;
 }
 
-char *cmb_hkvs_get (cmb_t c, const char *key)
+int cmb_kvs_get (cmb_t c, const char *key, json_object **op)
 {
     json_object *o = util_json_object_new_object ();
-    const char *val;
-    char *cpy = NULL;
+    json_object *val = NULL;
 
     /* send request */
-    util_json_object_add_string (o, "key", key);
-    if (_send_message (c, o, "hkvs.get") < 0)
+    json_object_object_add (o, key, NULL);
+    if (_send_message (c, o, "kvs.get") < 0)
         goto error;
     json_object_put (o);
     o = NULL;
@@ -534,16 +487,15 @@ char *cmb_hkvs_get (cmb_t c, const char *key)
         goto error;
     if (util_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
-    if (util_json_object_get_string (o, "val", &val) < 0)
-        goto error;
-    if (val)
-        cpy = xstrdup (val); 
+    if ((val = json_object_object_get (o, key)))
+        json_object_get (val);
+    *op = val; 
     json_object_put (o);
-    return cpy;
+    return 0;
 error:
     if (o)
         json_object_put (o);
-    return NULL;
+    return -1;
 }
 
 void cmb_log_set_facility (cmb_t c, const char *facility)
@@ -661,41 +613,6 @@ error:
     if (o)
         json_object_put (o);
     return NULL;
-}
-
-int cmb_kvs_commit (cmb_t c, int *ep, int *pp)
-{
-    json_object *o = util_json_object_new_object ();
-    int errcount, putcount;
-
-    /* send request */
-    if (_send_message (c, o, "kvs.commit") < 0)
-        goto error;
-    json_object_put (o);
-    o = NULL;
-
-    /* receive response */
-    if (_recv_message (c, NULL, &o, false) < 0)
-        goto error;
-    if (!o)
-        goto eproto;
-    if (util_json_object_get_int (o, "errnum", &errno) == 0)
-        goto error;
-    if (util_json_object_get_int (o, "errcount", &errcount) < 0
-     || util_json_object_get_int (o, "putcount", &putcount) < 0)
-        goto eproto;
-    json_object_put (o);
-    if (ep)
-        *ep = errcount;
-    if (pp)
-        *pp = putcount;
-    return 0;
-eproto:
-    errno = EPROTO;
-error:
-    if (o)
-        json_object_put (o);
-    return -1;
 }
 
 int cmb_route_add (cmb_t c, char *dst, char *gw)

@@ -225,42 +225,56 @@ int main (int argc, char *argv[])
             case 'k': { /* --kvs-put key=val */
                 char *key = optarg;
                 char *val = strchr (optarg, '=');
-                if (val == NULL)
-                    usage ();
+                json_object *vo = NULL;
+
+                if (!val)
+                    msg_exit ("malformed key=[val] argument");
                 *val++ = '\0';
-                if (cmb_kvs_put (c, key, val) < 0)
+                if (strlen (val) > 0)
+                    if (!(vo = json_tokener_parse (val)))
+                        vo = json_object_new_string (val);
+                if (cmb_kvs_put (c, key, vo) < 0)
                     err_exit ("cmb_kvs_put");
+                if (vo)
+                    json_object_put (vo);
                 break;
+
             }
             case 'K': { /* --kvs-get key */
-                char *val = cmb_kvs_get (c, optarg);
-                if (!val && errno != 0)
-                    err_exit ("cmb_kvs_get");
-                printf ("%s = %s\n", optarg, val ? val : "<nil>");
-                if (val)
-                    free (val);
+                json_object *o;
+
+                if (cmb_kvs_get (c, optarg, &o) < 0)
+                    err_exit ("cmb_conf_get");
+                if (json_object_get_type (o) == json_type_string)
+                    printf ("%s = \"%s\"\n", optarg,
+                            json_object_get_string (o));
+                else
+                    printf ("%s = %s\n", optarg,
+                            json_object_to_json_string_ext (o,
+                                                    JSON_C_TO_STRING_PLAIN));
+                json_object_put (o);
                 break;
             }
             case 'C': { /* --kvs-commit */
-                int errcount, putcount;
-
-                if (cmb_kvs_commit (c, &errcount, &putcount) < 0)
+                if (cmb_kvs_commit (c) < 0)
                     err_exit ("cmb_kvs_commit");
-                printf ("errcount=%d putcount=%d\n", errcount, putcount);
                 break;
             }
             case 't': { /* --kvs-torture N */
                 int i, n = strtoul (optarg, NULL, 10);
-                char key[16], val[16], *rval;
+                char key[16], val[16];
                 struct timeval t1, t2, t;
-                int errcount, putcount;
+                json_object *vo = NULL;
 
                 xgettimeofday (&t1, NULL);
                 for (i = 0; i < n; i++) {
                     snprintf (key, sizeof (key), "key%d", i);
                     snprintf (val, sizeof (key), "val%d", i);
-                    if (cmb_kvs_put (c, key, val) < 0)
+                    vo = json_object_new_string (val);
+                    if (cmb_kvs_put (c, key, vo) < 0)
                         err_exit ("cmb_kvs_put");
+                    if (vo)
+                        json_object_put (vo);
                 }
                 xgettimeofday (&t2, NULL);
                 timersub(&t2, &t1, &t);
@@ -268,23 +282,26 @@ int main (int argc, char *argv[])
                      (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
 
                 xgettimeofday (&t1, NULL);
-                if (cmb_kvs_commit (c, &errcount, &putcount) < 0)
+                if (cmb_kvs_commit (c) < 0)
                     err_exit ("cmb_kvs_commit");
                 xgettimeofday (&t2, NULL);
                 timersub (&t2, &t1, &t);
-                msg ("kvs_commit: time=%0.3f ms errcount=%d putcount=%d",
-                     (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000,
-                     errcount, putcount);
+                msg ("kvs_commit: time=%0.3f ms",
+                     (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
 
                 xgettimeofday (&t1, NULL);
                 for (i = 0; i < n; i++) {
                     snprintf (key, sizeof (key), "key%d", i);
                     snprintf (val, sizeof (key), "val%d", i);
-                    if (!(rval = cmb_kvs_get (c, key)))
+                    if (cmb_kvs_get (c, key, &vo) < 0)
                         err_exit ("cmb_kvs_get");
-                    if (strcmp (rval, val) != 0)
-                        msg_exit ("cmb_kvs_get: incorrect val");
-                    free (rval);
+                    if (!vo)
+                        msg_exit ("cmb_kvs_get: key '%s' is not set", key);
+                    if (strcmp (json_object_get_string (vo), val) != 0)
+                        msg_exit ("cmb_kvs_get: key '%s' has wrong value '%s'",
+                                  key, json_object_get_string (vo));
+                    if (vo)
+                        json_object_put (vo);
                 }
                 xgettimeofday (&t2, NULL);
                 timersub(&t2, &t1, &t);

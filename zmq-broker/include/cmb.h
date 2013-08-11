@@ -60,13 +60,6 @@ int cmb_event_send (cmb_t c, char *event);
  */
 int cmb_barrier (cmb_t c, char *name, int nprocs);
 
-/* Get/put key-value pairs.
- * Errors from puts are deferred until commit.
- */
-int cmb_kvs_put (cmb_t c, const char *key, const char *val);
-char *cmb_kvs_get (cmb_t c, const char *key);
-int cmb_kvs_commit (cmb_t c, int *errcountp, int *putcountp);
-
 /* Get/put key-value config pairs.
  */
 int cmb_conf_put (cmb_t c, const char *key, json_object *vo);
@@ -77,9 +70,9 @@ int cmb_conf_next (cmb_t c, char **key, json_object **vo);
 
 /* Get/put key-value pairs.
  */
-int cmb_hkvs_put (cmb_t c, const char *key, const char *val);
-char *cmb_hkvs_get (cmb_t c, const char *key);
-int cmb_hkvs_commit (cmb_t c);
+int cmb_kvs_put (cmb_t c, const char *key, json_object *val);
+int cmb_kvs_get (cmb_t c, const char *key, json_object **op);
+int cmb_kvs_commit (cmb_t c);
 
 /* Log messages.
  * 'fac' is like syslog facility, only an arbitrary string.
