@@ -108,6 +108,15 @@ void plugin_send_request_raw (plugin_ctx_t *p, zmsg_t **zmsg)
     p->stats.upreq_send_count++;
 }
 
+zmsg_t *plugin_recv_response_raw (plugin_ctx_t *p)
+{
+    zmsg_t *zmsg = zmsg_recv (p->zs_upreq);
+
+    if (!zmsg)
+        err_exit ("%s: zmsg_recv", __FUNCTION__);
+    return zmsg;
+}
+
 void plugin_send_response_raw (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     if (zmsg_send (zmsg, p->zs_dnreq) < 0)
@@ -185,6 +194,49 @@ void plugin_send_request (plugin_ctx_t *p, json_object *o, const char *fmt, ...)
         json_object_put (empty);
     free (tag);
 }
+
+json_object *plugin_request (plugin_ctx_t *p, json_object *o,
+                             const char *fmt, ...)
+{
+    va_list ap;
+    zmsg_t *zmsg;
+    char *tag;
+    int n;
+    json_object *empty = NULL;
+    json_object *ro = NULL;
+
+    /* send request */
+    va_start (ap, fmt);
+    n = vasprintf (&tag, fmt, ap);
+    va_end (ap);
+    if (n < 0)
+        err_exit ("vasprintf");
+
+    if (!o) {
+        if (!(empty = json_object_new_object ()))
+            oom ();
+        o = empty;
+    }
+    zmsg = cmb_msg_encode (tag, o);
+    if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* delimiter frame */
+        oom ();
+    plugin_send_request_raw (p, &zmsg);
+    assert (zmsg == NULL);
+
+    /* await reply */
+    zmsg = plugin_recv_response_raw (p);
+    if (cmb_msg_decode (zmsg, NULL, &ro) < 0 || ro == NULL)
+        err_exit ("%s: bad reply", __FUNCTION__); /* FIXME */
+
+    if (zmsg)
+        zmsg_destroy (&zmsg);
+    if (empty)
+        json_object_put (empty);
+    free (tag);
+
+    return ro;
+}
+
 
 void plugin_send_response (plugin_ctx_t *p, zmsg_t **req, json_object *o)
 {
