@@ -32,7 +32,7 @@ typedef struct {
     zlist_t *reqs;
 } hobj_t;
 
-typedef enum { OP_LINK, OP_UNLINK, OP_STORE } optype_t;
+typedef enum { OP_NAME, OP_STORE } optype_t;
 typedef struct {
     optype_t optype;
     char *key;
@@ -42,7 +42,7 @@ typedef struct {
 typedef struct {
     zhash_t *store;
     href_t rootdir;
-    zlist_t *writeback; /* list of op_t operations in flight */
+    zlist_t *writeback;
 } ctx_t;
 
 
@@ -76,11 +76,12 @@ static bool op_match (op_t *op1, op_t *op2)
     if (op1->optype == op2->optype) {
         switch (op1->optype) {
             case OP_STORE:
-                match = !strcmp (op1->ref, op2->ref);
+                if (!strcmp (op1->ref, op2->ref))
+                    match = true;
                 break;
-            case OP_LINK:
-            case OP_UNLINK:
-                match = !strcmp (op1->key, op2->key);
+            case OP_NAME:
+                if (!strcmp (op1->key, op2->key))
+                    match = true;
                 break;
         }
     }
@@ -223,6 +224,22 @@ static void store (plugin_ctx_t *p, json_object *o, bool writeback, href_t ref)
     }
 }
 
+static void name_request_send (plugin_ctx_t *p, char *key, const href_t ref)
+{
+    json_object *o = util_json_object_new_object ();
+
+    util_json_object_add_string (o, key, ref);
+    plugin_send_request (p, o, "kvs.name");
+    json_object_put (o);
+}
+
+static void name (plugin_ctx_t *p, char *key, const href_t ref, bool writeback)
+{
+    writeback_add (p, OP_NAME, xstrdup (key), ref ? xstrdup (ref) : NULL);
+    if (writeback)
+        name_request_send (p, key, ref);
+}
+
 static void kvs_load (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     json_object *val, *cpy = NULL, *o = NULL;
@@ -320,6 +337,50 @@ done:
         zmsg_destroy (zmsg);
 }
 
+static void kvs_name (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    json_object *cpy = NULL, *o = NULL;
+    json_object_iter iter;
+    bool writeback = !plugin_treeroot (p);
+
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
+        plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
+    }
+    cpy = util_json_object_dup (o);
+    json_object_object_foreachC (o, iter) {
+        name (p, iter.key, json_object_get_string (iter.val), writeback);
+        json_object_object_add (cpy, iter.key, NULL);
+    }
+    plugin_send_response (p, zmsg, cpy);
+done:
+    if (o)
+        json_object_put (o);
+    if (cpy)
+        json_object_put (cpy);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+}
+
+static void kvs_name_response (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    json_object *o = NULL;
+    json_object_iter iter;
+    
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
+        plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
+    }
+    json_object_object_foreachC (o, iter) {
+        writeback_del (p, OP_NAME, iter.key, NULL);
+    }
+done:
+    if (o)
+        json_object_put (o);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+}
+
 static void kvs_get (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
@@ -372,11 +433,11 @@ static void kvs_put (plugin_ctx_t *p, zmsg_t **zmsg)
     }
     json_object_object_foreachC (o, iter) {
         if (json_object_get_type (iter.val) == json_type_null) {
-            writeback_add (p, OP_UNLINK, xstrdup (iter.key), NULL);
+            writeback_add (p, OP_NAME, xstrdup (iter.key), NULL);
         } else { 
             json_object_get (iter.val);
             store (p, iter.val, false, ref);
-            writeback_add (p, OP_LINK, xstrdup (iter.key), xstrdup (ref)); 
+            writeback_add (p, OP_NAME, xstrdup (iter.key), xstrdup (ref)); 
         }
     }
     plugin_send_response_errnum (p, zmsg, 0); /* success */
@@ -401,11 +462,11 @@ static void kvs_commit (plugin_ctx_t *p, zmsg_t **zmsg)
         cpy = util_json_object_dup (o);
         while ((op = zlist_pop (ctx->writeback))) {
             switch (op->optype) {
-                case OP_LINK:
-                    util_json_object_add_string (cpy, op->key, op->ref);
-                    break;
-                case OP_UNLINK:
-                    json_object_object_del (cpy, op->key);
+                case OP_NAME:
+                    if (op->ref)
+                        util_json_object_add_string (cpy, op->key, op->ref);
+                    else
+                        json_object_object_del (cpy, op->key);
                     break;
                 case OP_STORE:
                     break;
@@ -462,6 +523,11 @@ static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
             kvs_store (p, zmsg);
         else
             kvs_store_response (p, zmsg);
+    } else if (cmb_msg_match (*zmsg, "kvs.name")) {
+        if (type == ZMSG_REQUEST)
+            kvs_name (p, zmsg);
+        else
+            kvs_name_response (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.put")) {
         if (type == ZMSG_REQUEST) {
             if (plugin_treeroot (p))
