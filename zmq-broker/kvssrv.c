@@ -413,19 +413,12 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_disconnect (plugin_ctx_t *p, zmsg_t **zmsg)
-{
-    /* FIXME */
-    zmsg_destroy (zmsg);
-}
-
 static void kvs_put (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     json_object *o = NULL;
     json_object_iter iter;
     href_t ref;
-
-    assert (plugin_treeroot (p));
+    bool writeback = !plugin_treeroot (p);
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
@@ -433,11 +426,11 @@ static void kvs_put (plugin_ctx_t *p, zmsg_t **zmsg)
     }
     json_object_object_foreachC (o, iter) {
         if (json_object_get_type (iter.val) == json_type_null) {
-            writeback_add (p, OP_NAME, xstrdup (iter.key), NULL);
+            name (p, iter.key, NULL, writeback);
         } else { 
             json_object_get (iter.val);
-            store (p, iter.val, false, ref);
-            writeback_add (p, OP_NAME, xstrdup (iter.key), xstrdup (ref)); 
+            store (p, iter.val, writeback, ref);
+            name (p, iter.key, ref, writeback);
         }
     }
     plugin_send_response_errnum (p, zmsg, 0); /* success */
@@ -510,9 +503,11 @@ static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
     } else if (cmb_msg_match_substr (*zmsg, "event.kvs.setroot.", &arg)) {
         event_kvs_setroot (p, arg, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.disconnect")) {
-        kvs_disconnect (p, zmsg);
+        //kvs_disconnect (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.get")) {
         kvs_get (p, zmsg);
+    } else if (cmb_msg_match (*zmsg, "kvs.put")) {
+        kvs_put (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.load")) {
         if (type == ZMSG_REQUEST)
             kvs_load (p, zmsg);
@@ -528,14 +523,6 @@ static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
             kvs_name (p, zmsg);
         else
             kvs_name_response (p, zmsg);
-    } else if (cmb_msg_match (*zmsg, "kvs.put")) {
-        if (type == ZMSG_REQUEST) {
-            if (plugin_treeroot (p))
-                kvs_put (p, zmsg);
-            else
-                plugin_send_request_raw (p, zmsg); /* fwd to root */
-        } else
-            plugin_send_response_raw (p, zmsg); /* fwd to requestor */
     } else if (cmb_msg_match (*zmsg, "kvs.commit")) {
         if (type == ZMSG_REQUEST) {
             if (plugin_treeroot (p))
