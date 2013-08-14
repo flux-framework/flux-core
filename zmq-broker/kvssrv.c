@@ -32,7 +32,7 @@ typedef struct {
     zlist_t *reqs;
 } hobj_t;
 
-typedef enum { OP_PUT, OP_DEL } optype_t;
+typedef enum { OP_LINK, OP_UNLINK, OP_STORE } optype_t;
 typedef struct {
     optype_t optype;
     char *key;
@@ -42,11 +42,11 @@ typedef struct {
 typedef struct {
     zhash_t *store;
     href_t rootdir;
-    zlist_t *commit;
+    zlist_t *writeback; /* list of op_t operations in flight */
 } ctx_t;
 
 
-static void kvs_cachefill (plugin_ctx_t *p, zmsg_t **zmsg);
+static void kvs_load (plugin_ctx_t *p, zmsg_t **zmsg);
 static void kvs_get (plugin_ctx_t *p, zmsg_t **zmsg);
 
 static op_t *op_create (optype_t optype, char *key, char *ref)
@@ -89,12 +89,12 @@ static void hobj_destroy (hobj_t *hp)
     free (hp);
 }
 
-static void cachefill_request_send (plugin_ctx_t *p, const href_t ref)
+static void load_request_send (plugin_ctx_t *p, const href_t ref)
 {
     json_object *o = util_json_object_new_object ();
 
     json_object_object_add (o, ref, NULL);
-    plugin_send_request (p, o, "kvs.cachefill");
+    plugin_send_request (p, o, "kvs.load");
     json_object_put (o);
 }
 
@@ -113,7 +113,7 @@ static bool load (plugin_ctx_t *p, const href_t ref, zmsg_t **zmsg,
             hp = hobj_create (NULL);
             zhash_insert (ctx->store, ref, hp);
             zhash_freefn (ctx->store, ref, (zhash_free_fn *)hobj_destroy);
-            cachefill_request_send (p, ref);
+            load_request_send (p, ref);
         }
         if (!hp->o) {
             assert (zmsg != NULL);
@@ -145,8 +145,8 @@ static void store (plugin_ctx_t *p, json_object *o, href_t ref)
         } else {
             hp->o = o;
             while ((zmsg = zlist_pop (hp->reqs))) {
-                if (cmb_msg_match (zmsg, "kvs.cachefill"))
-                    kvs_cachefill (p, &zmsg);
+                if (cmb_msg_match (zmsg, "kvs.load"))
+                    kvs_load (p, &zmsg);
                 else if (cmb_msg_match (zmsg, "kvs.get"))
                     kvs_get (p, &zmsg);
                 if (zmsg)
@@ -160,7 +160,7 @@ static void store (plugin_ctx_t *p, json_object *o, href_t ref)
     }
 }
 
-static void kvs_cachefill (plugin_ctx_t *p, zmsg_t **zmsg)
+static void kvs_load (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     json_object *val, *cpy = NULL, *o = NULL;
     json_object_iter iter;
@@ -186,7 +186,7 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_cachefill_response (plugin_ctx_t *p, zmsg_t **zmsg)
+static void kvs_load_response (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     json_object *o = NULL;
     json_object_iter iter;
@@ -263,13 +263,13 @@ static void kvs_put (plugin_ctx_t *p, zmsg_t **zmsg)
     }
     json_object_object_foreachC (o, iter) {
         if (json_object_get_type (iter.val) == json_type_null) {
-            op = op_create (OP_DEL, xstrdup (iter.key), NULL);
+            op = op_create (OP_UNLINK, xstrdup (iter.key), NULL);
         } else { 
             json_object_get (iter.val);
             store (p, iter.val, ref);
-            op = op_create (OP_PUT, xstrdup (iter.key), xstrdup (ref));
+            op = op_create (OP_LINK, xstrdup (iter.key), xstrdup (ref));
         }
-        if (zlist_append (ctx->commit, op) < 0)
+        if (zlist_append (ctx->writeback, op) < 0)
             oom ();
     }
     plugin_send_response_errnum (p, zmsg, 0); /* success */
@@ -286,19 +286,26 @@ static void kvs_commit (plugin_ctx_t *p, zmsg_t **zmsg)
     op_t *op;
     json_object *o, *cpy;
 
+    /* FIXME: if not on the treeroot, kvs.commit needs to stall until
+     * the writeback list is empty, then issue upstream kvs.commit and
+     * stall until the result is returned.
+     */
+
     assert (plugin_treeroot (p));
 
-    if (zlist_size (ctx->commit) > 0) {
+    if (zlist_size (ctx->writeback) > 0) {
         (void)load (p, ctx->rootdir, NULL, &o);
         assert (o != NULL);
         cpy = util_json_object_dup (o);
-        while ((op = zlist_pop (ctx->commit))) {
+        while ((op = zlist_pop (ctx->writeback))) {
             switch (op->optype) {
-                case OP_PUT:
+                case OP_LINK:
                     util_json_object_add_string (cpy, op->key, op->ref);
                     break;
-                case OP_DEL:
+                case OP_UNLINK:
                     json_object_object_del (cpy, op->key);
+                    break;
+                case OP_STORE:
                     break;
             }
             op_destroy (op);
@@ -343,11 +350,11 @@ static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         kvs_disconnect (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.get")) {
         kvs_get (p, zmsg);
-    } else if (cmb_msg_match (*zmsg, "kvs.cachefill")) {
+    } else if (cmb_msg_match (*zmsg, "kvs.load")) {
         if (type == ZMSG_REQUEST)
-            kvs_cachefill (p, zmsg);
+            kvs_load (p, zmsg);
         else
-            kvs_cachefill_response (p, zmsg);
+            kvs_load_response (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.put")) {
         if (type == ZMSG_REQUEST) {
             if (plugin_treeroot (p))
@@ -381,7 +388,7 @@ static void kvs_init (plugin_ctx_t *p)
         zsocket_set_subscribe (p->zs_evin, "event.kvs.");
     if (!(ctx->store = zhash_new ()))
         oom ();
-    if (!(ctx->commit = zlist_new ()))
+    if (!(ctx->writeback = zlist_new ()))
         oom ();
 
     if (plugin_treeroot (p)) {
@@ -404,7 +411,7 @@ static void kvs_fini (plugin_ctx_t *p)
     ctx_t *ctx = p->ctx;
 
     zhash_destroy (&ctx->store);
-    zlist_destroy (&ctx->commit);
+    zlist_destroy (&ctx->writeback);
     free (ctx);
 }
 
