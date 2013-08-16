@@ -34,6 +34,10 @@ int env_getints (char *name, int **iap, int *lenp, int dflt_ia[], int dflt_len);
  */
 char *argv_concat (int argc, char *argv[]);
 
+/* Generate a UUID string.  Caller must free.
+ */
+char *uuid_generate_str (void);
+
 /* Fill 'href' with ASCII string representation of SHA1 hash of dat/len.
  * The other two compute and verify same over serialized JSON object.
  */

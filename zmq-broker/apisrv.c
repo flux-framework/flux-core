@@ -18,7 +18,6 @@
 #include <fcntl.h>
 #include <zmq.h>
 #include <czmq.h>
-#include <uuid/uuid.h>
 #include <json/json.h>
 
 #include "zmsg.h"
@@ -49,18 +48,6 @@ typedef struct {
     client_t *clients;
 } ctx_t;
 
-static char *_uuid_generate (void)
-{
-    char s[sizeof (uuid_t) * 2 + 1];
-    uuid_t uuid;
-    int i;
-
-    uuid_generate (uuid);
-    for (i = 0; i < sizeof (uuid_t); i++)
-        snprintf (s + i*2, sizeof (s) - i*2, "%-.2x", uuid[i]);
-    return xstrdup (s);
-}
-
 static client_t * _client_create (plugin_ctx_t *p, int fd)
 {
     ctx_t *ctx = p->ctx;
@@ -68,7 +55,7 @@ static client_t * _client_create (plugin_ctx_t *p, int fd)
 
     c = xzmalloc (sizeof (client_t));
     c->fd = fd;
-    c->uuid = _uuid_generate ();
+    c->uuid = uuid_generate_str ();
     c->p = p;
     if (!(c->disconnect_notify = zhash_new ()))
         oom ();
