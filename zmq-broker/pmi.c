@@ -295,20 +295,30 @@ int PMI_Lookup_name( const char service_name[], char port[] )
     return PMI_FAIL;
 }
 
+/* PMI_Barrier is co-opted as the KVS collective fence (citation required).
+ * PMI_KVS_Commit flushes the writeback caches.
+ * Use a cmb_barrier to ensure all those flushes completed.
+ * Then commit the namespace, actively on rank 0, passively on
+ * other ranks (wait for the named commit to complete).
+ */
 int PMI_Barrier( void )
 {
     char *name = NULL;
+    bool active = false;
 
     trace_simple (PMI_TRACE_BARRIER);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
 
-    if (asprintf (&name, "%s:%d", ctx->kvsname, ctx->barrier_num) < 0)
+    if (asprintf (&name, "%s:%d", ctx->kvsname, ctx->barrier_num++) < 0)
         return PMI_ERR_NOMEM;
     if (cmb_barrier (ctx->cctx, name, ctx->universe_size) < 0)
         goto error;
-    ctx->barrier_num++;
+    if (ctx->rank == 0)
+        active = true;
+    if (cmb_kvs_commit (ctx->cctx, active, name) < 0)
+        goto error;
     free (name);
     return PMI_SUCCESS;
 error:
@@ -393,6 +403,8 @@ error:
     return PMI_FAIL;
 }
 
+/* We just do a flush here.  The actual commit happens in PMI_Barrier.
+ */
 int PMI_KVS_Commit( const char kvsname[] )
 {
     trace (PMI_TRACE_KVS_PUT, "%s %s", __FUNCTION__, kvsname);
@@ -402,7 +414,7 @@ int PMI_KVS_Commit( const char kvsname[] )
     if (kvsname == NULL)
         return PMI_ERR_INVALID_ARG;
 
-    if (cmb_kvs_commit (ctx->cctx) < 0)
+    if (cmb_kvs_flush (ctx->cctx) < 0)
         goto error;
     return PMI_SUCCESS;
 error:
