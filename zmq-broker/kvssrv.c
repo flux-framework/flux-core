@@ -1,4 +1,4 @@
-/* kvssrv.c - key-value store based on hash tree */
+/* kvssrv.c - distributed key-value store based on hash tree */
 
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -41,16 +41,66 @@ typedef struct {
     char *sender;
 } op_t;
 
-typedef enum { WB_CLEAN, WB_FLUSHING, WB_DIRTY } wbstate_t;
+typedef struct {
+    bool done;
+    int rootseq;
+    href_t rootdir;
+    zlist_t *reqs;
+} commit_t;
+
 typedef struct {
     zhash_t *store;
     href_t rootdir;
+    int rootseq;
     zlist_t *writeback;
-    wbstate_t writeback_state;
+    enum { WB_CLEAN, WB_FLUSHING, WB_DIRTY } writeback_state;
+    zlist_t *commit_ops;
+    zhash_t *commits;
 } ctx_t;
 
+static void event_kvs_setroot_send (plugin_ctx_t *p);
 static void kvs_load (plugin_ctx_t *p, zmsg_t **zmsg);
 static void kvs_get (plugin_ctx_t *p, zmsg_t **zmsg);
+
+static commit_t *commit_create (void)
+{
+    commit_t *cp = xzmalloc (sizeof (*cp));
+    if (!(cp->reqs = zlist_new ()))
+        oom ();
+    return cp;
+}
+
+static void commit_destroy (commit_t *cp)
+{
+    assert (zlist_size (cp->reqs) == 0);
+    zlist_destroy (&cp->reqs);
+    free (cp);
+}
+
+static commit_t *commit_new (plugin_ctx_t *p, const char *name)
+{
+    ctx_t *ctx = p->ctx;
+    commit_t *cp = commit_create ();
+
+    zhash_insert (ctx->commits, name, cp);
+    zhash_freefn (ctx->commits, name, (zhash_free_fn *)commit_destroy);
+    return cp;
+}
+
+static commit_t *commit_find (plugin_ctx_t *p, const char *name)
+{
+    ctx_t *ctx = p->ctx;
+    return zhash_lookup (ctx->commits, name);
+}
+
+static void commit_done (plugin_ctx_t *p, commit_t *cp)
+{
+    ctx_t *ctx = p->ctx;
+
+    memcpy (cp->rootdir, ctx->rootdir, sizeof (href_t));
+    cp->rootseq = ctx->rootseq;
+    cp->done = true;
+}
 
 static op_t *op_create (optype_t type, char *key, char *ref, zmsg_t *flush)
 {
@@ -100,17 +150,29 @@ static bool op_match (op_t *op1, op_t *op2)
     return match;
 }
 
+static void commit_add_name (plugin_ctx_t *p, const char *key, const char *ref)
+{
+    ctx_t *ctx = p->ctx;
+    op_t *op;
+
+    assert (plugin_treeroot (p));
+
+    op = op_create (OP_NAME, xstrdup (key), ref ? xstrdup (ref) : NULL, NULL);
+    if (zlist_append (ctx->commit_ops, op) < 0)
+        oom ();
+}
+
 static void writeback_add_name (plugin_ctx_t *p,
                                 const char *key, const char *ref)
 {
     ctx_t *ctx = p->ctx;
     op_t *op;
 
+    assert (!plugin_treeroot (p));
+
     op = op_create (OP_NAME, xstrdup (key), ref ? xstrdup (ref) : NULL, NULL);
     if (zlist_append (ctx->writeback, op) < 0)
         oom ();
-    if (!plugin_treeroot (p))
-        ctx->writeback_state = WB_DIRTY;
 }
 
 static void writeback_add_store (plugin_ctx_t *p, const char *ref)
@@ -154,7 +216,9 @@ static void writeback_del (plugin_ctx_t *p, optype_t type,
         zlist_remove (ctx->writeback, op);
         op_destroy (op);
     }
-    /* If a flush is at the head of the queue, handle it.
+    /* If a flush is at the head of the queue, it means local writeback
+     * is done, so recurse upstream until WB_CLEAN indicating writeback
+     * has been flushed to root.
      */
     op = zlist_first (ctx->writeback);
     if (op && op->type == OP_FLUSH) {
@@ -287,53 +351,78 @@ static void name_request_send (plugin_ctx_t *p, char *key, const href_t ref)
 
 static void name (plugin_ctx_t *p, char *key, const href_t ref, bool writeback)
 {
-    writeback_add_name (p, key, ref);
-    if (writeback)
+    if (writeback) {
+        writeback_add_name (p, key, ref);
         name_request_send (p, key, ref);
+    } else {
+        commit_add_name (p, key, ref);
+    }
 }
 
-static bool setroot (plugin_ctx_t *p, const char *arg)
+static bool decode_rootref (const char *rootref, int *seqp, href_t ref)
 {
-    ctx_t *ctx = p->ctx;
+    char *p;
+    int seq = strtoul (rootref, &p, 10);
 
-    if (!arg || strlen (arg) + 1 != sizeof (href_t))
+    if (*p++ != '.' || strlen (p) + 1 != sizeof (href_t))
         return false;
-    memcpy (ctx->rootdir, arg, sizeof (href_t));
+    *seqp = seq;
+    memcpy (ref, p, sizeof (href_t));
     return true;
 }
 
-static void commit (plugin_ctx_t *p, const char *name)
+static char *encode_rootref (int seq, href_t ref)
+{
+    char *rootref;
+
+    if (asprintf (&rootref, "%d.%s", seq, ref) < 0)
+        oom ();
+    return rootref;
+}
+
+static void setroot (plugin_ctx_t *p, int seq, href_t ref)
+{
+    ctx_t *ctx = p->ctx;
+
+    if (seq == 0 || seq > ctx->rootseq) {
+        memcpy (ctx->rootdir, ref, sizeof (href_t));
+        ctx->rootseq = seq;
+    }
+}
+
+static void create_snapshot_dirent (plugin_ctx_t *p, json_object *dir)
+{
+    ctx_t *ctx = p->ctx;
+    char *snapshot_name;
+
+    if (asprintf (&snapshot_name, "snapshot.%04d", ctx->rootseq) < 0)
+        oom ();
+    util_json_object_add_string (dir, snapshot_name, ctx->rootdir);
+    free (snapshot_name);
+}
+
+static void commit (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
     op_t *op;
-    json_object *o, *cpy;
-    char *commit_name;
+    json_object *dir, *cpy;
 
     assert (plugin_treeroot (p));
 
-    (void)load (p, ctx->rootdir, NULL, &o);
-    assert (o != NULL);
-    cpy = util_json_object_dup (o);
-    while ((op = zlist_pop (ctx->writeback))) {
-        switch (op->type) {
-            case OP_NAME:
-                if (op->ref)
-                    util_json_object_add_string (cpy, op->key, op->ref);
-                else
-                    json_object_object_del (cpy, op->key);
-                break;
-            case OP_STORE: /* shouldn't be any at treeroot */
-            case OP_FLUSH: /* shouldn't be any at treeroot */
-                break;
-        }
+    (void)load (p, ctx->rootdir, NULL, &dir);
+    assert (dir != NULL);
+    cpy = util_json_object_dup (dir);
+    while ((op = zlist_pop (ctx->commit_ops))) {
+        assert (op->type == OP_NAME);
+        if (op->ref)
+            util_json_object_add_string (cpy, op->key, op->ref);
+        else
+            json_object_object_del (cpy, op->key);
         op_destroy (op);
     }
-    if (asprintf (&commit_name, "commit.%s", name) < 0)
-        oom ();
-    util_json_object_add_string (cpy, commit_name, ctx->rootdir);
+    create_snapshot_dirent (p, cpy);
     store (p, cpy, false, ctx->rootdir);
-    plugin_send_event (p, "event.kvs.setroot.%s", ctx->rootdir);
-    free (commit_name);
+    ctx->rootseq++;
 }
 
 static void kvs_load (plugin_ctx_t *p, zmsg_t **zmsg)
@@ -482,7 +571,7 @@ static void kvs_flush (plugin_ctx_t *p, zmsg_t **zmsg)
     ctx_t *ctx = p->ctx;
 
     if (ctx->writeback_state == WB_CLEAN) {
-        plugin_send_response_raw (p, zmsg); /* respond */
+        plugin_send_response_errnum (p, zmsg, 0); /* success */
     } else {
         writeback_add_flush (p, *zmsg); /* enqueue */
         *zmsg = NULL;
@@ -558,50 +647,132 @@ done:
         zmsg_destroy (zmsg);
 }
 
+static void commit_request_send (plugin_ctx_t *p, const char *name)
+{
+    json_object *o = util_json_object_new_object ();
+
+    util_json_object_add_string (o, "name", name);
+    plugin_send_request (p, o, "kvs.commit");
+    json_object_put (o);
+}
+
+static void commit_response_send (plugin_ctx_t *p, commit_t *cp, 
+                                  json_object *o, zmsg_t **zmsg)
+{
+    char *rootref = encode_rootref (cp->rootseq, cp->rootdir);
+
+    util_json_object_add_string (o, "rootref", rootref);
+    plugin_send_response (p, zmsg, o);
+    free (rootref);
+}
+
 static void kvs_commit (plugin_ctx_t *p, zmsg_t **zmsg)
 {
-    //ctx_t *ctx = p->ctx;
-    json_object *o;
+    json_object *o = NULL;
     const char *name;
-    bool active;
+    commit_t *cp;
+
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
+            || util_json_object_get_string (o, "name", &name) < 0) {
+        plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
+    }
+    if (plugin_treeroot (p)) {
+        if (!(cp = commit_find (p, name))) {
+            commit (p);
+            cp = commit_new (p, name);
+            commit_done (p, cp);
+            event_kvs_setroot_send (p);
+        }
+        commit_response_send (p, cp, o, zmsg);
+    } else {
+        if (!(cp = commit_find (p, name))) {
+            commit_request_send (p, name);
+            cp = commit_new (p, name);
+        }
+        if (!cp->done) {
+            zlist_append (cp->reqs, *zmsg);
+            *zmsg = NULL;
+        } else
+            commit_response_send (p, cp, o, zmsg);
+    }
+done:
+    if (o)
+        json_object_put (o);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+}
+
+static void kvs_commit_response (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    json_object *o = NULL;
+    const char *arg, *name;
+    int seq;
+    href_t href;
+    zmsg_t *zmsg2;
+    commit_t *cp;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
             || util_json_object_get_string (o, "name", &name) < 0
-            || util_json_object_get_boolean (o, "active", &active) < 0) {
+            || util_json_object_get_string (o, "rootref", &arg) < 0
+            || !decode_rootref (arg, &seq, href)) {
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
-        //goto done;
-        return;
+        goto done;
     }
-    if (active) {
-        if (plugin_treeroot (p))
-            commit (p, name);
-        else {
-            //zmsg_t *cpy = zmsg_dup (*zmsg);
-
-            //plugin_send_request (p, cpy);
-        }
+    setroot (p, seq, href); /* may be redundant - racing with multicast */
+    cp = commit_find (p, name);
+    assert (cp != NULL);
+    commit_done (p, cp);
+    while ((zmsg2 = zlist_pop (cp->reqs))) {
+        json_object *o2 = NULL;
+        if (cmb_msg_decode (zmsg2, NULL, &o2) == 0 && o2 != NULL)
+            commit_response_send (p, cp, o2, &zmsg2);
+        if (zmsg2)
+            zmsg_destroy (&zmsg2);
+        if (o2)
+            json_object_put (o2);
     }
-
-    plugin_send_response_errnum (p, zmsg, 0); /* success */
+done:
+    if (o)
+        json_object_put (o);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
 }
 
 static void kvs_getroot (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     json_object *o;
+    char *rootref = encode_rootref (ctx->rootseq, ctx->rootdir);
 
-    if (!(o = json_object_new_string (ctx->rootdir)))
+    if (!(o = json_object_new_string (rootref)))
         oom ();
     plugin_send_response (p, zmsg, o);
+    free (rootref);
+    json_object_put (o);
 }
 
 static void event_kvs_setroot (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
+    href_t href;
+    int seq;
+
     assert (!plugin_treeroot (p));
-    if (!setroot (p, arg))
+
+    if (!decode_rootref (arg, &seq, href))
         plugin_log (p, LOG_ERR, "%s: malformed rootref %s", __FUNCTION__, arg);
+    else
+        setroot (p, seq, href);
     if (*zmsg)
         zmsg_destroy (zmsg);
+}
+
+static void event_kvs_setroot_send (plugin_ctx_t *p)
+{
+    ctx_t *ctx = p->ctx;
+    char *rootref = encode_rootref (ctx->rootseq, ctx->rootdir);
+    plugin_send_event (p, "event.kvs.setroot.%s", rootref);
+    free (rootref);
 }
 
 static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
@@ -612,14 +783,10 @@ static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         kvs_getroot (p, zmsg);
     } else if (cmb_msg_match_substr (*zmsg, "event.kvs.setroot.", &arg)) {
         event_kvs_setroot (p, arg, zmsg);
-    } else if (cmb_msg_match (*zmsg, "kvs.disconnect")) {
-        //kvs_disconnect (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.get")) {
         kvs_get (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.put")) {
         kvs_put (p, zmsg);
-    } else if (cmb_msg_match (*zmsg, "kvs.commit")) {
-        kvs_commit (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.load")) {
         if (type == ZMSG_REQUEST)
             kvs_load (p, zmsg);
@@ -640,6 +807,11 @@ static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
             kvs_flush (p, zmsg);
         else
             kvs_flush_response (p, zmsg);
+    } else if (cmb_msg_match (*zmsg, "kvs.commit")) {
+        if (type == ZMSG_REQUEST)
+            kvs_commit (p, zmsg);
+        else
+            kvs_commit_response (p, zmsg);
     }
     if (arg)
         free (arg);
@@ -659,16 +831,26 @@ static void kvs_init (plugin_ctx_t *p)
     if (!(ctx->writeback = zlist_new ()))
         oom ();
     ctx->writeback_state = WB_CLEAN;
+    if (!(ctx->commit_ops = zlist_new ()))
+        oom ();
+    if (!(ctx->commits = zhash_new ()))
+        oom ();
 
     if (plugin_treeroot (p)) {
         json_object *rootdir = util_json_object_new_object ();
+        href_t href;
 
-        store (p, rootdir, false, ctx->rootdir);
+        store (p, rootdir, false, href);
+        setroot (p, 0, href);
     } else {
         json_object *rep = plugin_request (p, NULL, "kvs.getroot");
+        const char *rootref = json_object_get_string (rep);
+        int seq;
+        href_t href;
 
-        if (!setroot (p, json_object_get_string (rep)))
-            plugin_panic (p, "malformed kvs.getroot reply");
+        if (!decode_rootref (rootref, &seq, href))
+            plugin_panic (p, "malformed kvs.getroot reply: %s", rootref);
+        setroot (p, seq, href);
     }
 }
 
@@ -678,6 +860,8 @@ static void kvs_fini (plugin_ctx_t *p)
 
     zhash_destroy (&ctx->store);
     zlist_destroy (&ctx->writeback);
+    zlist_destroy (&ctx->commit_ops);
+    zhash_destroy (&ctx->commits);
     free (ctx);
 }
 

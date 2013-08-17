@@ -304,7 +304,6 @@ int PMI_Lookup_name( const char service_name[], char port[] )
 int PMI_Barrier( void )
 {
     char *name = NULL;
-    bool active = false;
 
     trace_simple (PMI_TRACE_BARRIER);
     if (ctx == NULL)
@@ -315,9 +314,7 @@ int PMI_Barrier( void )
         return PMI_ERR_NOMEM;
     if (cmb_barrier (ctx->cctx, name, ctx->universe_size) < 0)
         goto error;
-    if (ctx->rank == 0)
-        active = true;
-    if (cmb_kvs_commit (ctx->cctx, active, name) < 0)
+    if (cmb_kvs_commit (ctx->cctx, name) < 0)
         goto error;
     free (name);
     return PMI_SUCCESS;

@@ -470,13 +470,12 @@ error:
     return -1;
 }
 
-int cmb_kvs_commit (cmb_t c, bool active, const char *name)
+int cmb_kvs_commit (cmb_t c, const char *name)
 {
     json_object *o = util_json_object_new_object ();
 
     /* send request */
     util_json_object_add_string (o, "name", name);
-    util_json_object_add_boolean (o, "active", active);
     if (_send_message (c, o, "kvs.commit") < 0)
         goto error;
     json_object_put (o);
@@ -485,9 +484,9 @@ int cmb_kvs_commit (cmb_t c, bool active, const char *name)
     /* receive response */
     if (_recv_message (c, NULL, &o, false) < 0)
         goto error;
-    if (o == NULL || util_json_object_get_int (o, "errnum", &errno) < 0)
+    if (o == NULL)
         goto eproto;
-    if (errno != 0)
+    if (util_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
     json_object_put (o);
     return 0;
@@ -514,6 +513,8 @@ int cmb_kvs_get (cmb_t c, const char *key, json_object **op)
     /* receive response */
     if (_recv_message (c, NULL, &o, false) < 0)
         goto error;
+    if (o == NULL)
+        goto eproto;
     if (util_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
     if ((val = json_object_object_get (o, key)))

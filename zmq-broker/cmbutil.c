@@ -260,7 +260,7 @@ int main (int argc, char *argv[])
 
                 if (cmb_kvs_flush (c) < 0)
                     err_exit ("cmb_kvs_flush");
-                if (cmb_kvs_commit (c, true, uuid) < 0)
+                if (cmb_kvs_commit (c, uuid) < 0)
                     err_exit ("cmb_kvs_commit");
                 free (uuid);
                 break;
@@ -290,7 +290,7 @@ int main (int argc, char *argv[])
                      (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
 
                 xgettimeofday (&t1, NULL);
-                if (cmb_kvs_commit (c, true, uuid) < 0)
+                if (cmb_kvs_commit (c, uuid) < 0)
                     err_exit ("cmb_kvs_commit");
                 xgettimeofday (&t2, NULL);
                 timersub (&t2, &t1, &t);

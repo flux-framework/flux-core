@@ -73,7 +73,7 @@ int cmb_conf_next (cmb_t c, char **key, json_object **vo);
 int cmb_kvs_put (cmb_t c, const char *key, json_object *val);
 int cmb_kvs_get (cmb_t c, const char *key, json_object **op);
 int cmb_kvs_flush (cmb_t c);
-int cmb_kvs_commit (cmb_t c, bool active, const char *name);
+int cmb_kvs_commit (cmb_t c, const char *name);
 
 /* Log messages.
  * 'fac' is like syslog facility, only an arbitrary string.
