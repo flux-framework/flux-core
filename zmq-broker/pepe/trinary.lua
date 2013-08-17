@@ -31,13 +31,12 @@ if pepe.rank == 0 then
 		.. " --size=" .. #h
 		.. " --set-conf-hostlist=" .. pepe.nodelist
                 .. " --set-conf sync.period.sec=1.5"
-                .. " --set-conf kvs.redis.server=localhost"
                 .. " --set-conf log.reduction.timeout.msec=100"
                 .. " --set-conf log.circular.buffer.entries=100000"
                 .. " --set-conf log.persist.level=notice"
                 .. " --set-conf live.missed.trigger.allow=5"
                 .. " --set-conf topology='" .. topology .. "'"
-		.. " --plugins=api,barrier,live,log,conf,hkvs,kvs,sync"
+		.. " --plugins=api,barrier,live,log,conf,kvs,sync"
 		.. " --logdest cmbd.log")
 elseif pepe.rank == 1 then
     local parent_rank = tree.k_ary_parent (pepe.rank, 3)
@@ -49,7 +48,7 @@ elseif pepe.rank == 1 then
 		.. " --parent='" .. parent_rank .. "," .. u1 .. "," .. u2 .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
-		.. " --plugins=api,barrier,live,log,conf,hkvs")
+		.. " --plugins=api,barrier,live,log,conf,kvs")
 else
     local parent_rank = tree.k_ary_parent (pepe.rank, 3)
     local u1 = "tcp://" ..  h[parent_rank + 1] .. ":5556"
@@ -65,5 +64,5 @@ else
 		.. " --parent='" .. parent_fail .. "," .. f1 .. "," .. f2 .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
-		.. " --plugins=api,barrier,live,log,conf,hkvs")
+		.. " --plugins=api,barrier,live,log,conf,kvs")
 end
