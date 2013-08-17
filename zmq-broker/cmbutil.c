@@ -19,7 +19,7 @@
 
 static int _parse_logstr (char *s, int *lp, char **fp);
 
-#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Za:A:cXw:"
+#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Za:A:cXw:y"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -33,6 +33,7 @@ static const struct option longopts[] = {
     {"kvs-put",    required_argument,  0, 'k'},
     {"kvs-get",    required_argument,  0, 'K'},
     {"kvs-commit", no_argument,        0, 'C'},
+    {"kvs-dropcache", no_argument,     0, 'y'},
     {"kvs-torture",required_argument,  0, 't'},
     {"sync",       no_argument,        0, 'S'},
     {"snoop",      no_argument,        0, 'T'},
@@ -66,6 +67,7 @@ static void usage (void)
 "  -k,--kvs-put key=val   set a key\n"
 "  -K,--kvs-get key       get a key\n"
 "  -C,--kvs-commit        commit pending kvs puts\n"
+"  -y,--kvs-dropcache     drop cached kvs data\n"
 "  -t,--kvs-torture N     set N keys, then commit\n"
 "  -a,--conf-put key=val  set a config key\n"
 "  -A,--conf-get key      get a conf key\n"
@@ -265,6 +267,11 @@ int main (int argc, char *argv[])
                 free (uuid);
                 break;
             }
+            case 'y': { /* --kvs-dropcache */
+                if (cmb_kvs_dropcache (c) < 0)
+                    err_exit ("cmb_kvs_dropcache");
+                break;
+            }
             case 't': { /* --kvs-torture N */
                 int i, n = strtoul (optarg, NULL, 10);
                 char key[16], val[16];
@@ -413,7 +420,7 @@ int main (int argc, char *argv[])
                         start = tv;
                     timersub (&tv, &start, &rel);
                     levstr = log_leveltostr (lev);
-                    printf ("XXX lev=%d (%s)\n", lev, levstr);
+                    //printf ("XXX lev=%d (%s)\n", lev, levstr);
                     fprintf (stderr, "[%-.6lu.%-.6lu] %dx %s.%s[%s]: %s\n",
                              rel.tv_sec, rel.tv_usec, count,
                              fac, levstr ? levstr : "unknown", src, s);

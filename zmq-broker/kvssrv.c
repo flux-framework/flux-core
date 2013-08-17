@@ -522,6 +522,25 @@ done:
         zmsg_destroy (zmsg);
 }
 
+static void kvs_dropcache (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    ctx_t *ctx = p->ctx;
+    int rc = 0;
+
+    if (!plugin_treeroot (p)) {
+        if (zlist_size (ctx->writeback) > 0)
+            rc = EAGAIN;
+        else {
+            plugin_log (p, LOG_ALERT, "dropped %d cache entries",
+                                      zhash_size (ctx->store));
+            zhash_destroy (&ctx->store);
+            if (!(ctx->store = zhash_new ()))
+                oom ();
+        }
+    }
+    plugin_send_response_errnum (p, zmsg, rc);
+}
+
 static void kvs_name (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     json_object *cpy = NULL, *o = NULL;
@@ -783,6 +802,8 @@ static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         kvs_getroot (p, zmsg);
     } else if (cmb_msg_match_substr (*zmsg, "event.kvs.setroot.", &arg)) {
         event_kvs_setroot (p, arg, zmsg);
+    } else if (cmb_msg_match (*zmsg, "kvs.dropcache")) {
+        kvs_dropcache (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.get")) {
         kvs_get (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.put")) {

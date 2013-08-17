@@ -522,6 +522,35 @@ int cmb_kvs_get (cmb_t c, const char *key, json_object **op)
     *op = val; 
     json_object_put (o);
     return 0;
+eproto:
+    errno = EPROTO;
+error:
+    if (o)
+        json_object_put (o);
+    return -1;
+}
+
+int cmb_kvs_dropcache (cmb_t c)
+{
+    json_object *o = util_json_object_new_object ();
+
+    /* send request */
+    if (_send_message (c, o, "kvs.dropcache") < 0)
+        goto error;
+    json_object_put (o);
+    o = NULL;
+
+    /* receive response */
+    if (_recv_message (c, NULL, &o, false) < 0)
+        goto error;
+    if (o == NULL || util_json_object_get_int (o, "errnum", &errno) < 0)
+        goto eproto;
+    if (errno != 0)
+        goto error;
+    json_object_put (o);
+    return 0;
+eproto:
+    errno = EPROTO;
 error:
     if (o)
         json_object_put (o);
