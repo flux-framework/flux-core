@@ -304,24 +304,31 @@ int PMI_Lookup_name( const char service_name[], char port[] )
 int PMI_Barrier( void )
 {
     char *name = NULL;
+    int rc = PMI_SUCCESS;
 
     trace_simple (PMI_TRACE_BARRIER);
-    if (ctx == NULL)
-        return PMI_ERR_INIT;
+    if (ctx == NULL) {
+        rc = PMI_ERR_INIT;
+        goto done;
+    }
     assert (ctx->magic == PMI_CTX_MAGIC);
 
-    if (asprintf (&name, "%s:%d", ctx->kvsname, ctx->barrier_num++) < 0)
-        return PMI_ERR_NOMEM;
-    if (cmb_barrier (ctx->cctx, name, ctx->universe_size) < 0)
-        goto error;
-    if (cmb_kvs_commit (ctx->cctx, name) < 0)
-        goto error;
-    free (name);
-    return PMI_SUCCESS;
-error:
+    if (asprintf (&name, "%s:%d", ctx->kvsname, ctx->barrier_num++) < 0) {
+        rc = PMI_ERR_NOMEM;
+        goto done;
+    }
+    if (cmb_barrier (ctx->cctx, name, ctx->universe_size) < 0) {
+        rc = PMI_FAIL;
+        goto done;
+    }
+    if (cmb_kvs_commit (ctx->cctx, name) < 0) {
+        rc = PMI_FAIL;
+        goto done;
+    }
+done:
     if (name)
         free (name);
-    return PMI_FAIL;
+    return rc;
 }
   
 int PMI_Abort(int exit_code, const char error_msg[])
@@ -373,31 +380,39 @@ int PMI_KVS_Get_value_length_max( int *length )
 int PMI_KVS_Put( const char kvsname[], const char key[], const char value[])
 {
     char *xkey = NULL;
-    json_object *o;
+    json_object *o = NULL;
+    int rc = PMI_SUCCESS;
 
     trace (PMI_TRACE_KVS_PUT, "%s %s:%s = %s",
            __FUNCTION__, kvsname, key, value);
-    if (ctx == NULL)
-        return PMI_ERR_INIT;
+
+    if (ctx == NULL) {
+        rc = PMI_ERR_INIT;
+        goto done;
+    }
     assert (ctx->magic == PMI_CTX_MAGIC);
-    if (kvsname == NULL || key == NULL || value == NULL)
-        return PMI_ERR_INVALID_ARG;
-
-    if (_key_tostore (kvsname, key, &xkey) < 0)
-        return PMI_ERR_NOMEM;
-
-    o = json_object_new_string (value);
-    if (!o)
-        return PMI_ERR_NOMEM;
-    if (cmb_kvs_put (ctx->cctx, xkey, o) < 0)
-        goto error;
-
-    free (xkey);
-    return PMI_SUCCESS;
-error:
+    if (kvsname == NULL || key == NULL || value == NULL) {
+        rc = PMI_ERR_INVALID_ARG;
+        goto done;
+    }
+    if (_key_tostore (kvsname, key, &xkey) < 0) {
+        rc = PMI_ERR_NOMEM;
+        goto done;
+    }
+    if (!(o = json_object_new_string (value))) {
+        rc = PMI_ERR_NOMEM;
+        goto done;
+    }
+    if (cmb_kvs_put (ctx->cctx, xkey, o) < 0) {
+        rc = PMI_FAIL;
+        goto done;
+    }
+done:
     if (xkey)
         free (xkey);
-    return PMI_FAIL;
+    if (o)
+        json_object_put (o);
+    return rc;
 }
 
 /* We just do a flush here.  The actual commit happens in PMI_Barrier.
@@ -410,7 +425,6 @@ int PMI_KVS_Commit( const char kvsname[] )
     assert (ctx->magic == PMI_CTX_MAGIC);
     if (kvsname == NULL)
         return PMI_ERR_INVALID_ARG;
-
     if (cmb_kvs_flush (ctx->cctx) < 0)
         goto error;
     return PMI_SUCCESS;
@@ -421,39 +435,42 @@ error:
 int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int length)
 {
     char *xkey = NULL;
-    json_object *o;
+    json_object *o = NULL;
     const char *val = NULL;
+    int rc = PMI_SUCCESS;
 
-    if (ctx == NULL)
-        return PMI_ERR_INIT;
+    if (ctx == NULL) {
+        rc = PMI_ERR_INIT;
+        goto done;
+    }
     assert (ctx->magic == PMI_CTX_MAGIC);
-    if (kvsname == NULL || key == NULL || value == NULL)
-        return PMI_ERR_INVALID_ARG;
-
-    if (_key_tostore (kvsname, key, &xkey) < 0)
-        return PMI_ERR_NOMEM;
-
+    if (kvsname == NULL || key == NULL || value == NULL) {
+        rc = PMI_ERR_INVALID_ARG;
+        goto done;
+    }
+    if (_key_tostore (kvsname, key, &xkey) < 0) {
+        rc = PMI_ERR_NOMEM;
+        goto done;
+    }
     if (cmb_kvs_get (ctx->cctx, xkey, &o) == 0 && o != NULL)
         val = json_object_get_string (o);
     trace (PMI_TRACE_KVS_GET, "%s %s:%s = %s", __FUNCTION__, kvsname, key,
            val ? val : errno == 0 ? "[nonexistent key]" : "[error]");
     if (!val && errno == 0) {
-        free (xkey);
-        return PMI_ERR_INVALID_KEY;
+        rc = PMI_ERR_INVALID_KEY;
+        goto done;
     }
-    if (!val && errno != 0)
-        goto error;
+    if (!val && errno != 0) {
+        rc = PMI_FAIL;
+        goto done;
+    }
     snprintf (value, length, "%s", val);
-    if (o)
-        json_object_put (o);
-    free (xkey); 
-    return PMI_SUCCESS;
-error:
+done:
     if (xkey)
         free (xkey);
     if (o)
         json_object_put (o);
-    return PMI_FAIL;
+    return rc;
 }
 
 int PMI_Spawn_multiple(int count,

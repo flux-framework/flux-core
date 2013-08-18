@@ -39,8 +39,12 @@ static void _fatal (int rank, int rc, const char *s)
 
     for (i = 0; i < pmi_errors_len; i++) {
         if (pmi_errors[i].errnum == rc) {
-            fprintf (stderr, "%d: %s: %s\n", rank, s, pmi_errors[i].errstr);
-            break;;
+            fprintf (stderr, "%d: %s: %s%s%s%s\n", rank, s,
+                    pmi_errors[i].errstr,
+                    errno > 0 ? " (" : "",
+                    errno > 0 ? strerror (errno) : "",
+                    errno > 0 ? ") " : "");
+            break;
         }
     }
     if (i == pmi_errors_len)
