@@ -253,20 +253,13 @@ static void _recv_response (plugin_ctx_t *p, zmsg_t **zmsg)
     assert (zframe_size (zf) == 0);
 
     for (c = ctx->clients; c != NULL && *zmsg != NULL; ) {
-        client_t *deleteme = NULL;
 
         if (!strcmp (uuid, c->uuid)) {
-            if (zmsg_send_fd (c->fd, zmsg) < 0) {
+            if (zmsg_send_fd (c->fd, zmsg) < 0)
                 zmsg_destroy (zmsg);
-                deleteme = c; 
-            }
+            break;
         }
         c = c->next;
-        if (deleteme) {
-            zmq_pollitem_t zp = { .fd = c->fd };
-            zloop_poller_end (p->zloop, &zp);
-            _client_destroy (p, deleteme);
-        }
     }
     if (*zmsg) {
         //msg ("apisrv: discarding response for unknown uuid %s", uuid);
@@ -290,22 +283,14 @@ static void _recv_event (plugin_ctx_t *p, zmsg_t **zmsg)
 
     for (c = ctx->clients; c != NULL; ) {
         zmsg_t *cpy;
-        client_t *deleteme = NULL;
 
         if (zhash_foreach (c->subscriptions, _match_subscription, *zmsg)) {
             if (!(cpy = zmsg_dup (*zmsg)))
                 oom ();
-            if (zmsg_send_fd (c->fd, &cpy) < 0) {
+            if (zmsg_send_fd (c->fd, &cpy) < 0)
                 zmsg_destroy (&cpy);
-                deleteme = c; 
-            }
         }
         c = c->next;
-        if (deleteme) {
-            zmq_pollitem_t zp = { .fd = c->fd };
-            zloop_poller_end (p->zloop, &zp);
-            _client_destroy (p, deleteme);
-        }
     }
 }
 
@@ -316,22 +301,14 @@ static void _recv_snoop (plugin_ctx_t *p, zmsg_t **zmsg)
 
     for (c = ctx->clients; c != NULL; ) {
         zmsg_t *cpy;
-        client_t *deleteme = NULL;
 
         if (c->snoop) {
             if (!(cpy = zmsg_dup (*zmsg)))
                 oom ();
-            if (zmsg_send_fd (c->fd, &cpy) < 0) {
+            if (zmsg_send_fd (c->fd, &cpy) < 0)
                 zmsg_destroy (&cpy);
-                deleteme = c; 
-            }
         }
         c = c->next;
-        if (deleteme) {
-            zmq_pollitem_t zp = { .fd = c->fd };
-            zloop_poller_end (p->zloop, &zp);
-            _client_destroy (p, deleteme);
-        }
     }
 }
 
