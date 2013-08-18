@@ -185,19 +185,42 @@ static void writeback_add_store (plugin_ctx_t *p, const char *ref)
     op = op_create (OP_STORE, NULL, xstrdup (ref), NULL);
     if (zlist_append (ctx->writeback, op) < 0)
         oom ();
-    ctx->writeback_state = WB_DIRTY;
+    if (!plugin_treeroot (p))
+        ctx->writeback_state = WB_DIRTY;
 }
 
-static void writeback_add_flush (plugin_ctx_t *p, zmsg_t *flush)
+/* If a flush is at the head of the queue, it means local writeback
+ * is done, so recurse upstream until WB_CLEAN indicating writeback
+ * has been flushed to root.
+ */
+static void writeback_flush_process (plugin_ctx_t *p)
+{
+    ctx_t *ctx = p->ctx;
+    op_t *op = zlist_first (ctx->writeback);
+
+    if (op && op->type == OP_FLUSH) {
+        op = zlist_pop (ctx->writeback);
+        if (ctx->writeback_state == WB_CLEAN) {
+            plugin_send_response_raw (p, &op->flush); /* respond */
+        } else {
+            plugin_send_request_raw (p, &op->flush); /* fwd upstream */
+            ctx->writeback_state = WB_FLUSHING;
+        }
+        op_destroy (op);
+    }
+}
+
+static void writeback_add_flush (plugin_ctx_t *p, zmsg_t *zmsg)
 {
     ctx_t *ctx = p->ctx;
     op_t *op;
 
     assert (!plugin_treeroot (p));
 
-    op = op_create (OP_FLUSH, NULL, NULL, flush);
+    op = op_create (OP_FLUSH, NULL, NULL, zmsg);
     if (zlist_append (ctx->writeback, op) < 0)
         oom ();
+    writeback_flush_process (p);
 }
 
 static void writeback_del (plugin_ctx_t *p, optype_t type,
@@ -216,21 +239,7 @@ static void writeback_del (plugin_ctx_t *p, optype_t type,
         zlist_remove (ctx->writeback, op);
         op_destroy (op);
     }
-    /* If a flush is at the head of the queue, it means local writeback
-     * is done, so recurse upstream until WB_CLEAN indicating writeback
-     * has been flushed to root.
-     */
-    op = zlist_first (ctx->writeback);
-    if (op && op->type == OP_FLUSH) {
-        op = zlist_pop (ctx->writeback);
-        if (ctx->writeback_state == WB_CLEAN) {
-            plugin_send_response_raw (p, &op->flush); /* respond */
-        } else {
-            plugin_send_request_raw (p, &op->flush); /* fwd upstream */
-            ctx->writeback_state = WB_FLUSHING;
-        }
-        op_destroy (op);
-    }
+    writeback_flush_process (p);
 }
 
 static hobj_t *hobj_create (json_object *o)
