@@ -794,6 +794,28 @@ static void event_kvs_setroot_send (plugin_ctx_t *p)
     free (rootref);
 }
 
+static int log_store_entry (const char *key, void *item, void *arg)
+{
+    plugin_ctx_t *p = arg;
+    hobj_t *hp = item; 
+
+    plugin_log (p, LOG_DEBUG, "%s\t%s [%d reqs]", key,
+                hp->o ? json_object_to_json_string (hp->o) : "<unset>",
+                zlist_size (hp->reqs));
+    return 0;
+}
+
+static void event_kvs_debug_store (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    ctx_t *ctx = p->ctx;
+
+    plugin_log (p, LOG_DEBUG, "dumping store contents");
+
+    zhash_foreach (ctx->store, log_store_entry, p);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+}
+
 static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
 {
     char *arg = NULL;
@@ -802,6 +824,8 @@ static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         kvs_getroot (p, zmsg);
     } else if (cmb_msg_match_substr (*zmsg, "event.kvs.setroot.", &arg)) {
         event_kvs_setroot (p, arg, zmsg);
+    } else if (cmb_msg_match (*zmsg, "event.kvs.debug.store")) {
+        event_kvs_debug_store (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.dropcache")) {
         kvs_dropcache (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.get")) {
@@ -846,7 +870,8 @@ static void kvs_init (plugin_ctx_t *p)
 
     ctx = p->ctx = xzmalloc (sizeof (ctx_t));
     if (!plugin_treeroot (p))
-        zsocket_set_subscribe (p->zs_evin, "event.kvs.");
+        zsocket_set_subscribe (p->zs_evin, "event.kvs.setroot.");
+    zsocket_set_subscribe (p->zs_evin, "event.kvs.debug.");
     if (!(ctx->store = zhash_new ()))
         oom ();
     if (!(ctx->writeback = zlist_new ()))
