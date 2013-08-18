@@ -75,7 +75,6 @@ void plugin_timeout_clear (plugin_ctx_t *p);
 bool plugin_timeout_isset (plugin_ctx_t *p);
 
 void plugin_log (plugin_ctx_t *p, int lev, const char *fmt, ...);
-void plugin_panic (plugin_ctx_t *p, const char *fmt, ...);
 
 json_object *plugin_conf_get (plugin_ctx_t *p, const char *key);
 int plugin_conf_put (plugin_ctx_t *p, const char *key, json_object *vo);

@@ -265,24 +265,6 @@ void plugin_log (plugin_ctx_t *p, int lev, const char *fmt, ...)
     }
 }
 
-void plugin_panic (plugin_ctx_t *p, const char *fmt, ...)
-{
-    va_list ap;
-    char *msg;
-    int n;
-   
-    va_start (ap, fmt);
-    n = vasprintf (&msg, fmt, ap);
-    va_end (ap);
-    if (n < 0)
-        err_exit ("%s: vasprintf", __FUNCTION__);
-
-    plugin_log (p, LOG_EMERG, "PANIC: %s", msg);
-    free (msg);
-
-    pthread_exit (NULL);
-}
-
 static void _conf_add_watcher (plugin_ctx_t *p, const char *key,
                                ConfSetF *set, void *arg)
 {

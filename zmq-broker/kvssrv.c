@@ -203,6 +203,7 @@ static void writeback_flush_process (plugin_ctx_t *p)
         if (ctx->writeback_state == WB_CLEAN) {
             plugin_send_response_raw (p, &op->flush); /* respond */
         } else {
+            assert (!plugin_treeroot (p));
             plugin_send_request_raw (p, &op->flush); /* fwd upstream */
             ctx->writeback_state = WB_FLUSHING;
         }
@@ -280,7 +281,7 @@ static bool load (plugin_ctx_t *p, const href_t ref, zmsg_t **zmsg,
 
     if (plugin_treeroot (p)) {
         if (!hp)
-            plugin_panic (p, "dangling ref %s", ref);
+            msg_exit ("dangling ref %s", ref);
     } else {
         if (!hp) {
             hp = hobj_create (NULL);
@@ -904,7 +905,7 @@ static void kvs_init (plugin_ctx_t *p)
         href_t href;
 
         if (!decode_rootref (rootref, &seq, href))
-            plugin_panic (p, "malformed kvs.getroot reply: %s", rootref);
+            msg_exit ("malformed kvs.getroot reply: %s", rootref);
         setroot (p, seq, href);
     }
 }
