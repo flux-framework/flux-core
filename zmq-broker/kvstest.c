@@ -150,10 +150,10 @@ int main(int argc, char *argv[])
         rc = PMI_KVS_Put (kvsname, key, val);
         if (rc != PMI_SUCCESS)
             _fatal (id, rc, "PMI_KVS_Put");
-        rc = PMI_KVS_Commit (kvsname);
-        if (rc != PMI_SUCCESS)
-            _fatal (id, rc, "PMI_KVS_Commit");
     }
+    rc = PMI_KVS_Commit (kvsname);
+    if (rc != PMI_SUCCESS)
+        _fatal (id, rc, "PMI_KVS_Commit");
 
     /* barrier */
     rc = PMI_Barrier ();
@@ -165,7 +165,7 @@ int main(int argc, char *argv[])
 
     xgettimeofday (id, &t, NULL);
 
-    /* keycount gets (or keycount*N) gets per rank */
+    /* keycount (or keycount*N) gets per rank */
     for (i = 0; i < keycount; i++) {
         if (nsquared) {
             for (j = 0; j < ntasks; j++) {

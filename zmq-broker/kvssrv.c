@@ -37,8 +37,7 @@ typedef struct {
     optype_t type;
     char *key;
     char *ref;
-    zmsg_t *flush;
-    char *sender;
+    zmsg_t *zmsg;
 } op_t;
 
 typedef struct {
@@ -102,16 +101,14 @@ static void commit_done (plugin_ctx_t *p, commit_t *cp)
     cp->done = true;
 }
 
-static op_t *op_create (optype_t type, char *key, char *ref, zmsg_t *flush)
+static op_t *op_create (optype_t type, char *key, char *ref, zmsg_t *zmsg)
 {
     op_t *op = xzmalloc (sizeof (*op));
 
     op->type = type;
     op->key = key;
     op->ref = ref;
-    op->flush = flush;
-    if (flush)
-        op->sender = cmb_msg_sender (flush);
+    op->zmsg = zmsg;
 
     return op;
 }
@@ -122,10 +119,8 @@ static void op_destroy (op_t *op)
         free (op->key);
     if (op->ref)
         free (op->ref);
-    if (op->flush)
-        zmsg_destroy (&op->flush);
-    if (op->sender)
-        free (op->sender);
+    if (op->zmsg)
+        zmsg_destroy (&op->zmsg);
     free (op);
 }
 
@@ -173,6 +168,7 @@ static void writeback_add_name (plugin_ctx_t *p,
     op = op_create (OP_NAME, xstrdup (key), ref ? xstrdup (ref) : NULL, NULL);
     if (zlist_append (ctx->writeback, op) < 0)
         oom ();
+    ctx->writeback_state = WB_DIRTY;
 }
 
 static void writeback_add_store (plugin_ctx_t *p, const char *ref)
@@ -185,30 +181,7 @@ static void writeback_add_store (plugin_ctx_t *p, const char *ref)
     op = op_create (OP_STORE, NULL, xstrdup (ref), NULL);
     if (zlist_append (ctx->writeback, op) < 0)
         oom ();
-    if (!plugin_treeroot (p))
-        ctx->writeback_state = WB_DIRTY;
-}
-
-/* If a flush is at the head of the queue, it means local writeback
- * is done, so recurse upstream until WB_CLEAN indicating writeback
- * has been flushed to root.
- */
-static void writeback_flush_process (plugin_ctx_t *p)
-{
-    ctx_t *ctx = p->ctx;
-    op_t *op = zlist_first (ctx->writeback);
-
-    if (op && op->type == OP_FLUSH) {
-        op = zlist_pop (ctx->writeback);
-        if (ctx->writeback_state == WB_CLEAN) {
-            plugin_send_response_raw (p, &op->flush); /* respond */
-        } else {
-            assert (!plugin_treeroot (p));
-            plugin_send_request_raw (p, &op->flush); /* fwd upstream */
-            ctx->writeback_state = WB_FLUSHING;
-        }
-        op_destroy (op);
-    }
+    ctx->writeback_state = WB_DIRTY;
 }
 
 static void writeback_add_flush (plugin_ctx_t *p, zmsg_t *zmsg)
@@ -221,14 +194,13 @@ static void writeback_add_flush (plugin_ctx_t *p, zmsg_t *zmsg)
     op = op_create (OP_FLUSH, NULL, NULL, zmsg);
     if (zlist_append (ctx->writeback, op) < 0)
         oom ();
-    writeback_flush_process (p);
 }
 
 static void writeback_del (plugin_ctx_t *p, optype_t type,
                            char *key, char *ref)
 {
     ctx_t *ctx = p->ctx;
-    op_t mop = { .type = type, .key = key, .ref = ref };
+    op_t mop = { .type = type, .key = key, .ref = ref, .zmsg = NULL };
     op_t *op = zlist_first (ctx->writeback);
 
     while (op) {
@@ -239,8 +211,14 @@ static void writeback_del (plugin_ctx_t *p, optype_t type,
     if (op) {
         zlist_remove (ctx->writeback, op);
         op_destroy (op);
+        /* handle flush(es) now at head of queue */
+        while ((op = zlist_head (ctx->writeback)) && op->type == OP_FLUSH) {
+            ctx->writeback_state = WB_FLUSHING;
+            plugin_send_request_raw (p, &op->zmsg); /* fwd upstream */
+            zlist_remove (ctx->writeback, op);
+            op_destroy (op);
+        }
     }
-    writeback_flush_process (p);
 }
 
 static hobj_t *hobj_create (json_object *o)
@@ -288,13 +266,14 @@ static bool load (plugin_ctx_t *p, const href_t ref, zmsg_t **zmsg,
             zhash_insert (ctx->store, ref, hp);
             zhash_freefn (ctx->store, ref, (zhash_free_fn *)hobj_destroy);
             load_request_send (p, ref);
+            /* leave hp->o == NULL to be filled in on response */
         }
         if (!hp->o) {
             assert (zmsg != NULL);
             if (zlist_append (hp->reqs, *zmsg) < 0)
                 oom ();
             *zmsg = NULL;
-            done = false;
+            done = false; /* stall */
         }
     }
     if (done) {
@@ -329,6 +308,7 @@ static void store (plugin_ctx_t *p, json_object *o, bool writeback, href_t ref)
             json_object_put (o);
         } else {
             hp->o = o;
+            /* restart any stalled requests */
             while ((zmsg = zlist_pop (hp->reqs))) {
                 if (cmb_msg_match (zmsg, "kvs.load"))
                     kvs_load (p, &zmsg);
@@ -599,8 +579,11 @@ static void kvs_flush (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
 
-    if (ctx->writeback_state == WB_CLEAN) {
-        plugin_send_response_errnum (p, zmsg, 0); /* success */
+    if (plugin_treeroot (p) || ctx->writeback_state == WB_CLEAN)
+        plugin_send_response_errnum (p, zmsg, 0);
+    else if (zlist_size (ctx->writeback) == 0) {
+        plugin_send_request_raw (p, zmsg); /* fwd upstream */
+        ctx->writeback_state = WB_FLUSHING;
     } else {
         writeback_add_flush (p, *zmsg); /* enqueue */
         *zmsg = NULL;
@@ -610,10 +593,10 @@ static void kvs_flush (plugin_ctx_t *p, zmsg_t **zmsg)
 static void kvs_flush_response (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
-    
+
+    plugin_send_response_raw (p, zmsg); /* fwd downstream */
     if (ctx->writeback_state == WB_FLUSHING)
         ctx->writeback_state = WB_CLEAN;
-    plugin_send_response_raw (p, zmsg); /* fwd downstream */
 }
 
 static void kvs_get (plugin_ctx_t *p, zmsg_t **zmsg)
