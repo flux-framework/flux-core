@@ -289,11 +289,17 @@ int main (int argc, char *argv[])
                     if (vo)
                         json_object_put (vo);
                 }
+                xgettimeofday (&t2, NULL);
+                timersub(&t2, &t1, &t);
+                msg ("kvs_put:    time=%0.3f ms",
+                     (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
+
+                xgettimeofday (&t1, NULL);
                 if (cmb_kvs_flush (c) < 0)
                     err_exit ("cmb_kvs_flush");
                 xgettimeofday (&t2, NULL);
                 timersub(&t2, &t1, &t);
-                msg ("kvs_put:    time=%0.3f ms",
+                msg ("kvs_flush:  time=%0.3f ms",
                      (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
 
                 xgettimeofday (&t1, NULL);
