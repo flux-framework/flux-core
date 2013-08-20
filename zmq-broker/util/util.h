@@ -39,11 +39,12 @@ char *argv_concat (int argc, char *argv[]);
 char *uuid_generate_str (void);
 
 /* Fill 'href' with ASCII string representation of SHA1 hash of dat/len.
- * The other two compute and verify same over serialized JSON object.
  */
 void compute_href (const void *dat, int len, href_t href);
+
+/* Fill 'href' with ASCII SHA1 hash of serialized JSON object.
+ */
 void compute_json_href (json_object *o, href_t href);
-bool verify_json_href (json_object *o, const href_t href);
 
 
 /* JSON helpers

@@ -183,15 +183,6 @@ void compute_json_href (json_object *o, href_t href)
     compute_href (s, strlen (s), href);
 }
 
-bool verify_json_href (json_object *o, const href_t href)
-{
-    const char *s = json_object_to_json_string (o);
-    href_t xhref;
-
-    compute_href (s, strlen (s), xhref);
-    return !strcmp (href, xhref);
-}
-
 void util_json_object_add_boolean (json_object *o, char *name, bool val)
 {
     json_object *no;
