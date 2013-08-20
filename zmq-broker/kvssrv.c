@@ -798,38 +798,32 @@ static int log_store_entry (const char *key, void *item, void *arg)
     return 0;
 }
 
-static void event_kvs_debug_store (plugin_ctx_t *p, zmsg_t **zmsg)
+static void event_kvs_debug (plugin_ctx_t *p, zmsg_t **zmsg, char *arg)
 {
     ctx_t *ctx = p->ctx;
 
-    zhash_foreach (ctx->store, log_store_entry, p);
-    if (*zmsg)
-        zmsg_destroy (zmsg);
-}
-
-static void event_kvs_debug_stats (plugin_ctx_t *p, zmsg_t **zmsg)
-{
-    ctx_t *ctx = p->ctx;
-    zlist_t *keys;
-    commit_t *cp;
-    int done = 0;
-
-    plugin_log (p, LOG_DEBUG, "writeback size %d", zlist_size (ctx->writeback));
-    plugin_log (p, LOG_DEBUG, "store size %d", zhash_size (ctx->store));
-    plugin_log (p, LOG_DEBUG, "root ref %s (seq=%d)",
-                ctx->rootdir, ctx->rootseq);
-
-    keys = zhash_keys (ctx->commits);
-    cp = zlist_first (keys);
-    while (cp) {
-        if (cp->done)
-            done++;
-        cp = zlist_next (keys);
+    if (!strcmp (arg, "writeback.size"))
+        plugin_log (p, LOG_DEBUG, "writeback %d", zlist_size (ctx->writeback));
+    else if (!strcmp (arg, "store.size"))
+        plugin_log (p, LOG_DEBUG, "store %d", zhash_size (ctx->store));
+    else if (!strcmp (arg, "root"))
+        plugin_log (p, LOG_DEBUG, "root %d,%s", ctx->rootseq, ctx->rootdir);
+    else if (!strcmp (arg, "store"))
+        zhash_foreach (ctx->store, log_store_entry, p);
+    else if (!strcmp (arg, "commit")) {
+        zlist_t *keys = zhash_keys (ctx->commits);
+        commit_t *cp = zlist_first (keys);
+        int done = 0;
+        while (cp) {
+            if (cp->done)
+                done++;
+            cp = zlist_next (keys);
+        }
+        zlist_destroy (&keys);
+        plugin_log (p, LOG_DEBUG, "commits %d/%d complete",
+                    done, zhash_size (ctx->commits));
     }
-    zlist_destroy (&keys);
-    plugin_log (p, LOG_DEBUG, "commits %d/%d complete",
-                done, zhash_size (ctx->commits));
-    
+
     if (*zmsg)
         zmsg_destroy (zmsg);
 }
@@ -842,10 +836,8 @@ static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         kvs_getroot (p, zmsg);
     } else if (cmb_msg_match_substr (*zmsg, "event.kvs.setroot.", &arg)) {
         event_kvs_setroot (p, arg, zmsg);
-    } else if (cmb_msg_match (*zmsg, "event.kvs.debug.store")) {
-        event_kvs_debug_store (p, zmsg);
-    } else if (cmb_msg_match (*zmsg, "event.kvs.debug.stats")) {
-        event_kvs_debug_stats (p, zmsg);
+    } else if (cmb_msg_match_substr (*zmsg, "event.kvs.debug.", &arg)) {
+        event_kvs_debug (p, zmsg, arg);
     } else if (cmb_msg_match (*zmsg, "kvs.dropcache")) {
         kvs_dropcache (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.get")) {
