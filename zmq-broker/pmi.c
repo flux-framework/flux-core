@@ -428,7 +428,7 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
         rc = PMI_ERR_NOMEM;
         goto done;
     }
-    if (cmb_kvs_get (ctx->cctx, xkey, &o) == 0 && o != NULL)
+    if (cmb_kvs_get_val (ctx->cctx, xkey, &o) == 0 && o != NULL)
         val = json_object_get_string (o);
     trace (PMI_TRACE_KVS_GET, "%s %s:%s = %s", __FUNCTION__, kvsname, key,
            val ? val : errno == 0 ? "[nonexistent key]" : "[error]");

@@ -59,7 +59,8 @@ typedef struct {
 
 static void event_kvs_setroot_send (plugin_ctx_t *p);
 static void kvs_load (plugin_ctx_t *p, zmsg_t **zmsg);
-static void kvs_get (plugin_ctx_t *p, zmsg_t **zmsg);
+static void kvs_get_val (plugin_ctx_t *p, zmsg_t **zmsg);
+static void kvs_get_dir (plugin_ctx_t *p, zmsg_t **zmsg);
 
 static json_object *dirent_create (char *type, void *arg)
 {
@@ -336,8 +337,10 @@ static void store (plugin_ctx_t *p, json_object *o, bool writeback, href_t ref)
             while ((zmsg = zlist_pop (hp->reqs))) {
                 if (cmb_msg_match (zmsg, "kvs.load"))
                     kvs_load (p, &zmsg);
-                else if (cmb_msg_match (zmsg, "kvs.get"))
-                    kvs_get (p, &zmsg);
+                else if (cmb_msg_match (zmsg, "kvs.get.val"))
+                    kvs_get_val (p, &zmsg);
+                else if (cmb_msg_match (zmsg, "kvs.get.dir"))
+                    kvs_get_dir (p, &zmsg);
                 if (zmsg)
                     zmsg_destroy (&zmsg);
             }
@@ -770,7 +773,45 @@ fail:
     return true;
 }
 
-static void kvs_get (plugin_ctx_t *p, zmsg_t **zmsg)
+static void kvs_get_val (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    ctx_t *ctx = p->ctx;
+    json_object *dirent, *dir, *val, *ocpy = NULL, *o = NULL;
+    json_object_iter iter;
+    const char *ref;
+
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
+        plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
+    }
+    if (!load (p, ctx->rootdir, zmsg, &dir))
+        goto done; /* stall */
+    ocpy = util_json_object_dup (o);
+    json_object_object_foreachC (o, iter) {
+        if (!strcmp (iter.key, ".")) /* special case root */
+            continue;
+        if (!walk (p, dir, iter.key, &dirent, zmsg))
+            goto done; /* stall */
+        if (!dirent)
+            continue; /* lookup failure */
+        if (util_json_object_get_string (dirent, "FILEREF", &ref) == 0) {
+            if (!load (p, ref, zmsg, &val))
+                goto done; /* stall */
+            json_object_get (val);
+            json_object_object_add (ocpy, iter.key, val);
+        }
+    }
+    plugin_send_response (p, zmsg, ocpy);
+done:
+    if (o)
+        json_object_put (o);
+    if (ocpy)
+        json_object_put (ocpy);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+}
+
+static void kvs_get_dir (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     json_object *dirent, *dir, *val, *dcpy, *ocpy = NULL, *o = NULL;
@@ -801,11 +842,6 @@ static void kvs_get (plugin_ctx_t *p, zmsg_t **zmsg)
             if (!(dcpy = deep_copy (p, val, zmsg, false)))
                 goto done; /* stall */
             json_object_object_add (ocpy, iter.key, dcpy);
-        } else if (util_json_object_get_string (dirent, "FILEREF", &ref) == 0) {
-            if (!load (p, ref, zmsg, &val))
-                goto done; /* stall */
-            json_object_get (val);
-            json_object_object_add (ocpy, iter.key, val);
         }
     }
     plugin_send_response (p, zmsg, ocpy);
@@ -1027,8 +1063,10 @@ static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         event_kvs_debug (p, zmsg, arg);
     } else if (cmb_msg_match (*zmsg, "kvs.clean")) {
         kvs_clean (p, zmsg);
-    } else if (cmb_msg_match (*zmsg, "kvs.get")) {
-        kvs_get (p, zmsg);
+    } else if (cmb_msg_match (*zmsg, "kvs.get.val")) {
+        kvs_get_val (p, zmsg);
+    } else if (cmb_msg_match (*zmsg, "kvs.get.dir")) {
+        kvs_get_dir (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.put")) {
         kvs_put (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.load")) {

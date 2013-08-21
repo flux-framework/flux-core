@@ -249,7 +249,7 @@ int main (int argc, char *argv[])
             case 'K': { /* --kvs-get key */
                 json_object *o;
 
-                if (cmb_kvs_get (c, optarg, &o) < 0)
+                if (cmb_kvs_get_val (c, optarg, &o) < 0)
                     err_exit ("cmb_conf_get");
                 if (!o)
                     errn_exit (ENOENT, "%s", optarg);
@@ -266,7 +266,7 @@ int main (int argc, char *argv[])
             case 'l': { /* --kvs-list name */
                 json_object *o;
 
-                if (cmb_kvs_get (c, optarg, &o) < 0)
+                if (cmb_kvs_get_dir (c, optarg, &o) < 0)
                     err_exit ("cmb_conf_get");
                 if (o == NULL)
                     errn_exit (ENOENT, "%s", optarg);
@@ -331,12 +331,12 @@ int main (int argc, char *argv[])
                 for (i = 0; i < n; i++) {
                     snprintf (key, sizeof (key), "key%d", i);
                     snprintf (val, sizeof (key), "val%d", i);
-                    if (cmb_kvs_get (c, key, &vo) < 0)
-                        err_exit ("cmb_kvs_get");
+                    if (cmb_kvs_get_val (c, key, &vo) < 0)
+                        err_exit ("cmb_kvs_get_val");
                     if (!vo)
-                        msg_exit ("cmb_kvs_get: key '%s' is not set", key);
+                        msg_exit ("cmb_kvs_get_val: key '%s' is not set", key);
                     if (strcmp (json_object_get_string (vo), val) != 0)
-                        msg_exit ("cmb_kvs_get: key '%s' has wrong value '%s'",
+                        msg_exit ("cmb_kvs_get_val: key '%s' wrong value '%s'",
                                   key, json_object_get_string (vo));
                     if (vo)
                         json_object_put (vo);

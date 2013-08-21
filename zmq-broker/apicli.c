@@ -498,14 +498,14 @@ error:
     return -1;
 }
 
-int cmb_kvs_get (cmb_t c, const char *key, json_object **op)
+static int kvs_get (cmb_t c, const char *key, json_object **op, const char *tag)
 {
     json_object *o = util_json_object_new_object ();
     json_object *val = NULL;
 
     /* send request */
     json_object_object_add (o, key, NULL);
-    if (_send_message (c, o, "kvs.get") < 0)
+    if (_send_message (c, o, "%s", tag) < 0)
         goto error;
     json_object_put (o);
     o = NULL;
@@ -528,6 +528,16 @@ error:
     if (o)
         json_object_put (o);
     return -1;
+}
+
+int cmb_kvs_get_val (cmb_t c, const char *key, json_object **op)
+{
+    return kvs_get (c, key, op, "kvs.get.val");
+}
+
+int cmb_kvs_get_dir (cmb_t c, const char *key, json_object **op)
+{
+    return kvs_get (c, key, op, "kvs.get.dir");
 }
 
 int cmb_kvs_clean (cmb_t c)
