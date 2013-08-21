@@ -28,8 +28,6 @@
 #define PMI_MAX_KVSNAMELEN 64
 #define PMI_MAX_ID_LEN 16
 
-#define FORCE_HASH 0
-
 typedef struct {
     int magic;
     int spawned;
@@ -126,31 +124,10 @@ static int _env_getints (char *name, int **iap, int *lenp,
     return 0;
 }
 
-#if FORCE_HASH
 static int _key_tostore (const char *kvsname, const char *key, char **kp)
 {
-    const char *p;
-    int n;
-
-    p = key;
-    while (*p && !isdigit (*p))
-        p++;
-    if (p) {
-        n = strtoul (p, NULL, 10);
-        if (asprintf (kp, "%s:{%d}%s", kvsname, n, key) < 0)
-            return -1;
-    } else {
-        if (asprintf (kp, "%s:%s", kvsname, key) < 0)
-            return -1;
-    }
-    return 0;
+    return asprintf (kp, "%s.%s", kvsname, key);
 }
-#else
-static int _key_tostore (const char *kvsname, const char *key, char **kp)
-{
-    return asprintf (kp, "%s:%s", kvsname, key);
-}
-#endif
 
 int PMI_Init( int *spawned )
 {
@@ -177,8 +154,7 @@ int PMI_Init( int *spawned )
     if (_env_getints ("SLURM_GTIDS", &ctx->clique_ranks, &ctx->clique_size,
                                       dflt_clique_ranks, dflt_clique_size) < 0)
         goto nomem;
-    snprintf (ctx->kvsname, sizeof (ctx->kvsname), "%d.%d", ctx->appnum,
-              _env_getint ("SLURM_STEP_ID", 0));
+    snprintf (ctx->kvsname, sizeof (ctx->kvsname), "slurm.%d", ctx->appnum);
     if (!(ctx->cctx = cmb_init ())) {
         err ("cmb_init");
         goto fail;
