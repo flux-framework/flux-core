@@ -1,5 +1,33 @@
 /* kvssrv.c - distributed key-value store based on hash tree */
 
+/* JSON directory object: 
+ * list of key-value pairs where key is a name, value is a dirent
+ *
+ * JSON dirent objects:
+ * object containing one key-value pair where key is one of
+ * "FILEREF", "DIRREF", "FILEVAL", "DIRVAL", and value is a SHA1
+ * hash key into ctx->store (FILEREF, DIRREF), or an actual directory
+ * or file (value) JSON object (FILEVAL, DIRVAL).  The value types are 
+ * only used when a deep copy of a directory is made, for example
+ * temporarily during a commit, or to prepare a kvs_get_dir result.
+ * They do not appear in "stored" directories (in ctx->store).
+ *
+ * For example, consider KVS containing:
+ * a="foo"
+ * b="bar"
+ * c.d="baz"
+ *
+ * Root directory:
+ * {"a":{"FILEREF":"f1d2d2f924e986ac86fdf7b36c94bcdf32beec15"},
+ *  "b":{"FILEREF","8714e0ef31edb00e33683f575274379955b3526c"},
+ *  "c":{"DIRREF","6eadd3a778e410597c85d74c287a57ad66071a45"}}
+ *
+ * Deep copy of root directory:
+ * {"a":{"FILEVAL":"foo"},
+ *  "b":{"FILEVAL","bar"},
+ *  "c":{"DIRREF",{"d":{"FILEVAL":"baz"}}}}
+ */
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <assert.h>
