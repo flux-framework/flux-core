@@ -44,7 +44,6 @@ typedef struct {
     void *zs_upev_in;
     void *zs_dnev_out;
     void *zs_dnev_in;
-    void *zs_upreq_in_mon;
     int parent_cur;
     bool parent_alive[MAX_PARENTS];
     zhash_t *plugins;
