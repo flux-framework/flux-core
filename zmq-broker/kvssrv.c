@@ -768,10 +768,10 @@ static void kvs_get (plugin_ctx_t *p, zmsg_t **zmsg)
         goto done; /* stall */
     ocpy = util_json_object_dup (o);
     json_object_object_foreachC (o, iter) {
-        if (!strcmp (iter.key, "/")) { /* special case root */
+        if (!strcmp (iter.key, ".")) { /* special case root */
             if (!(dcpy = deep_copy (p, dir, zmsg, false)))
                 goto done; /* stall */
-            json_object_object_add (ocpy, "/", dcpy);
+            json_object_object_add (ocpy, ".", dcpy);
             continue;
         }
         if (!walk (p, dir, iter.key, &dirent, zmsg))

@@ -1,5 +1,6 @@
 /* cmbutil.c - exercise public interfaces */
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <getopt.h>
@@ -18,8 +19,9 @@
 #include "util.h"
 
 static int _parse_logstr (char *s, int *lp, char **fp);
+static void list_kvs (const char *name, json_object *o);
 
-#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Za:A:cXw:y"
+#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Za:A:cXw:yl:"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -32,6 +34,7 @@ static const struct option longopts[] = {
     {"nprocs",     required_argument,  0, 'n'},
     {"kvs-put",    required_argument,  0, 'k'},
     {"kvs-get",    required_argument,  0, 'K'},
+    {"kvs-list",   required_argument,  0, 'l'},
     {"kvs-commit", no_argument,        0, 'C'},
     {"kvs-dropcache", no_argument,     0, 'y'},
     {"kvs-torture",required_argument,  0, 't'},
@@ -66,6 +69,7 @@ static void usage (void)
 "  -n,--nprocs N          override nprocs (default $SLURM_NPROCS or 1)\n"
 "  -k,--kvs-put key=val   set a key\n"
 "  -K,--kvs-get key       get a key\n"
+"  -l,--kvs-list name     list keys in a particular \"directory\"\n"
 "  -C,--kvs-commit        commit pending kvs puts\n"
 "  -y,--kvs-dropcache     drop cached kvs data\n"
 "  -t,--kvs-torture N     set N keys, then commit\n"
@@ -247,6 +251,8 @@ int main (int argc, char *argv[])
 
                 if (cmb_kvs_get (c, optarg, &o) < 0)
                     err_exit ("cmb_conf_get");
+                if (!o)
+                    errn_exit (ENOENT, "%s", optarg);
                 if (json_object_get_type (o) == json_type_string)
                     printf ("%s = \"%s\"\n", optarg,
                             json_object_get_string (o));
@@ -254,6 +260,17 @@ int main (int argc, char *argv[])
                     printf ("%s = %s\n", optarg,
                             json_object_to_json_string_ext (o,
                                                     JSON_C_TO_STRING_PLAIN));
+                json_object_put (o);
+                break;
+            }
+            case 'l': { /* --kvs-list name */
+                json_object *o;
+
+                if (cmb_kvs_get (c, optarg, &o) < 0)
+                    err_exit ("cmb_conf_get");
+                if (o == NULL)
+                    errn_exit (ENOENT, "%s", optarg);
+                list_kvs (optarg, o);
                 json_object_put (o);
                 break;
             }
@@ -533,6 +550,30 @@ static int _parse_logstr (char *s, int *lp, char **fp)
     *lp = lev;
     *fp = fac;
     return 0;
+}
+
+static void list_kvs (const char *name, json_object *o)
+{
+    json_object *co;
+    json_object_iter iter;
+    char *path;
+
+    json_object_object_foreachC (o, iter) {
+        if (!strcmp (name, "."))
+            path = xstrdup (iter.key);
+        else if (asprintf (&path, "%s.%s", name, iter.key) < 0)
+            oom ();
+        if ((co = json_object_object_get (iter.val, "DIRVAL"))) {
+            list_kvs (path, co); 
+        } else if ((co = json_object_object_get (iter.val, "FILEVAL"))) {
+            if (json_object_get_type (co) == json_type_string)
+                printf ("%s = \"%s\"\n", path, json_object_get_string (co));
+            else
+                printf ("%s = %s\n", path, json_object_to_json_string_ext (co,
+                                                JSON_C_TO_STRING_PLAIN));
+        }
+        free (path);
+    }
 }
 
 /*
