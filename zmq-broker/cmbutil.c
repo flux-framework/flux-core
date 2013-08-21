@@ -71,7 +71,7 @@ static void usage (void)
 "  -K,--kvs-get key       get a key\n"
 "  -l,--kvs-list name     list keys in a particular \"directory\"\n"
 "  -C,--kvs-commit        commit pending kvs puts\n"
-"  -y,--kvs-dropcache     drop cached kvs data\n"
+"  -y,--kvs-clean         drop cached and unreferenced kvs data\n"
 "  -t,--kvs-torture N     set N keys, then commit\n"
 "  -a,--conf-put key=val  set a config key\n"
 "  -A,--conf-get key      get a conf key\n"
@@ -284,9 +284,9 @@ int main (int argc, char *argv[])
                 free (uuid);
                 break;
             }
-            case 'y': { /* --kvs-dropcache */
-                if (cmb_kvs_dropcache (c) < 0)
-                    err_exit ("cmb_kvs_dropcache");
+            case 'y': { /* --kvs-clean */
+                if (cmb_kvs_clean (c) < 0)
+                    err_exit ("cmb_kvs_clean");
                 break;
             }
             case 't': { /* --kvs-torture N */

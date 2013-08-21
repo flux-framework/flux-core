@@ -354,9 +354,7 @@ static void store (plugin_ctx_t *p, json_object *o, bool writeback, href_t ref)
     }
 }
 
-/* N.B. removed snapshots so this can work without infinite recursion.
- * Loops in the namespace are not allowed.
- * If 'nf' is true, only make deep copies of directories, not file content.
+/* If 'nf' is true, only make deep copies of directories, not file content.
  */
 static json_object *deep_copy (plugin_ctx_t *p, json_object *dir,
                                zmsg_t **zmsg, bool nf)
@@ -459,20 +457,23 @@ static zlist_t *path_to_list (const char *path)
 }
 
 /* Unwind deep copy of root directory => store and return its href.
- *  (assumes deep copy was created with nf=true)
  */
 static void deep_unwind (plugin_ctx_t *p, json_object *dir, href_t href)
 {
-    json_object *cpy, *ndir;
+    json_object *cpy, *o;
     json_object_iter iter;
     href_t nhref;
 
     cpy = util_json_object_dup (dir);
     json_object_object_foreachC (dir, iter) {
-        if ((ndir = json_object_object_get (iter.val, "DIRVAL"))) {
-            deep_unwind (p, ndir, nhref);
+        if ((o = json_object_object_get (iter.val, "DIRVAL"))) {
+            deep_unwind (p, o, nhref);
             json_object_object_add (cpy, iter.key,
                                     dirent_create ("DIRREF", nhref));
+        } else if ((o = json_object_object_get (iter.val, "FILEVAL"))) {
+            (void)store (p, o, false, nhref);
+            json_object_object_add (cpy, iter.key,
+                                    dirent_create ("FILEREF", nhref));
         }
     }
     store (p, cpy, false, href);
@@ -629,22 +630,38 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_dropcache (plugin_ctx_t *p, zmsg_t **zmsg)
+static void kvs_clean (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
+    int s1, s2;
     int rc = 0;
+    json_object *rootdir, *cpy;
+    href_t href;
 
-    if (!plugin_treeroot (p)) {
-        if (zlist_size (ctx->writeback) > 0)
-            rc = EAGAIN;
-        else {
-            plugin_log (p, LOG_ALERT, "dropped %d cache entries",
-                                      zhash_size (ctx->store));
-            zhash_destroy (&ctx->store);
-            if (!(ctx->store = zhash_new ()))
-                oom ();
-        }
+    if (zlist_size (ctx->writeback) > 0 || zlist_size (ctx->commit_ops) > 0) {
+        plugin_log (p, LOG_ALERT, "cache is busy");
+        rc = EAGAIN;
+        goto done;
     }
+    s1 = zhash_size (ctx->store);
+    if (plugin_treeroot (p)) {
+        (void)load (p, ctx->rootdir, NULL, &rootdir);
+        assert (rootdir != NULL);
+        cpy = deep_copy (p, rootdir, NULL, false);
+        assert (cpy != NULL);
+        zhash_destroy (&ctx->store);
+        if (!(ctx->store = zhash_new ()))
+            oom ();
+        deep_unwind (p, cpy, href);
+        assert (!strcmp (ctx->rootdir, href));
+    } else {
+        zhash_destroy (&ctx->store);
+        if (!(ctx->store = zhash_new ()))
+            oom ();
+    }
+    s2 = zhash_size (ctx->store);
+    plugin_log (p, LOG_ALERT, "dropped %d of %d cache entries", s1 - s2, s1);
+done:
     plugin_send_response_errnum (p, zmsg, rc);
 }
 
@@ -1008,8 +1025,8 @@ static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         event_kvs_setroot (p, arg, zmsg);
     } else if (cmb_msg_match_substr (*zmsg, "event.kvs.debug.", &arg)) {
         event_kvs_debug (p, zmsg, arg);
-    } else if (cmb_msg_match (*zmsg, "kvs.dropcache")) {
-        kvs_dropcache (p, zmsg);
+    } else if (cmb_msg_match (*zmsg, "kvs.clean")) {
+        kvs_clean (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.get")) {
         kvs_get (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.put")) {

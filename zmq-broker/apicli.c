@@ -530,12 +530,12 @@ error:
     return -1;
 }
 
-int cmb_kvs_dropcache (cmb_t c)
+int cmb_kvs_clean (cmb_t c)
 {
     json_object *o = util_json_object_new_object ();
 
     /* send request */
-    if (_send_message (c, o, "kvs.dropcache") < 0)
+    if (_send_message (c, o, "kvs.clean") < 0)
         goto error;
     json_object_put (o);
     o = NULL;
