@@ -39,7 +39,8 @@ typedef struct {
     int appnum;
     int barrier_num;
     int cmb_rank;
-
+    int use_kvs_cache;
+    json_object *kvs_cache;
     cmb_t cctx;
     char kvsname[PMI_MAX_KVSNAMELEN];
 } pmi_ctx_t;
@@ -124,10 +125,6 @@ static int _env_getints (char *name, int **iap, int *lenp,
     return 0;
 }
 
-static int _key_tostore (const char *kvsname, const char *key, char **kp)
-{
-    return asprintf (kp, "%s.%s", kvsname, key);
-}
 
 int PMI_Init( int *spawned )
 {
@@ -148,13 +145,14 @@ int PMI_Init( int *spawned )
     ctx->size = _env_getint ("SLURM_NTASKS", 1);
     ctx->rank = _env_getint ("SLURM_PROCID", 0);
     pmi_trace = _env_getint ("PMI_TRACE", 0);
+    ctx->use_kvs_cache = _env_getint ("PMI_USE_KVS_CACHE", 0);
     ctx->universe_size = ctx->size;
     ctx->appnum = _env_getint ("SLURM_STEP_ID", 1);
     ctx->barrier_num = 0;
     if (_env_getints ("SLURM_GTIDS", &ctx->clique_ranks, &ctx->clique_size,
                                       dflt_clique_ranks, dflt_clique_size) < 0)
         goto nomem;
-    snprintf (ctx->kvsname, sizeof (ctx->kvsname), "slurm.%d", ctx->appnum);
+    snprintf (ctx->kvsname, sizeof (ctx->kvsname), "pmi.%d", ctx->appnum);
     if (!(ctx->cctx = cmb_init ())) {
         err ("cmb_init");
         goto fail;
@@ -194,6 +192,8 @@ int PMI_Finalize( void )
         cmb_fini (ctx->cctx);
     if (ctx->clique_ranks)
         free (ctx->clique_ranks);
+    if (ctx->kvs_cache)
+        json_object_put (ctx->kvs_cache);
     memset (ctx, 0, sizeof (pmi_ctx_t));
     free (ctx);
     ctx = NULL;
@@ -301,6 +301,10 @@ int PMI_Barrier( void )
         rc = PMI_FAIL;
         goto done;
     }
+    if (ctx->kvs_cache) {
+        json_object_put (ctx->kvs_cache);
+        ctx->kvs_cache = NULL;
+    }
 done:
     if (name)
         free (name);
@@ -359,7 +363,7 @@ int PMI_KVS_Put( const char kvsname[], const char key[], const char value[])
     json_object *o = NULL;
     int rc = PMI_SUCCESS;
 
-    trace (PMI_TRACE_KVS_PUT, "%s %s:%s = %s",
+    trace (PMI_TRACE_KVS_PUT, "%s %s.%s = %s",
            __FUNCTION__, kvsname, key, value);
 
     if (ctx == NULL) {
@@ -371,7 +375,7 @@ int PMI_KVS_Put( const char kvsname[], const char key[], const char value[])
         rc = PMI_ERR_INVALID_ARG;
         goto done;
     }
-    if (_key_tostore (kvsname, key, &xkey) < 0) {
+    if (asprintf (&xkey, "%s.%s", kvsname, key) < 0) {
         rc = PMI_ERR_NOMEM;
         goto done;
     }
@@ -424,13 +428,25 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
         rc = PMI_ERR_INVALID_ARG;
         goto done;
     }
-    if (_key_tostore (kvsname, key, &xkey) < 0) {
-        rc = PMI_ERR_NOMEM;
-        goto done;
+    if (ctx->use_kvs_cache && !ctx->kvs_cache) {
+        if (cmb_kvs_get_dir (ctx->cctx, ctx->kvsname, &ctx->kvs_cache) < 0) {
+            rc = PMI_FAIL;
+            goto done;
+        }
     }
-    if (cmb_kvs_get_val (ctx->cctx, xkey, &o) == 0 && o != NULL)
-        val = json_object_get_string (o);
-    trace (PMI_TRACE_KVS_GET, "%s %s:%s = %s", __FUNCTION__, kvsname, key,
+    if (ctx->kvs_cache) {
+        cmb_kvs_get_val_fromcache (ctx->kvs_cache, key, &o);
+        if (o)
+            val = json_object_get_string (o);
+    } else {
+        if (asprintf (&xkey, "%s.%s", kvsname, key) < 0) {
+            rc = PMI_ERR_NOMEM;
+            goto done;
+        }
+        if (cmb_kvs_get_val (ctx->cctx, xkey, &o) == 0 && o != NULL)
+            val = json_object_get_string (o);
+    }
+    trace (PMI_TRACE_KVS_GET, "%s %s.%s = %s", __FUNCTION__, kvsname, key,
            val ? val : errno == 0 ? "[nonexistent key]" : "[error]");
     if (!val && errno == 0) {
         rc = PMI_ERR_INVALID_KEY;

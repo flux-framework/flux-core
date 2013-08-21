@@ -540,6 +540,49 @@ int cmb_kvs_get_dir (cmb_t c, const char *key, json_object **op)
     return kvs_get (c, key, op, "kvs.get.dir");
 }
 
+static zlist_t *path_to_list (const char *path)
+{
+    char *word, *saveptr, *cpy = xstrdup (path);
+    zlist_t *zl;
+
+    if (!(zl = zlist_new ()))
+        oom ();
+    word = strtok_r(cpy, ".", &saveptr);
+    while (word) {
+        zlist_append (zl, xstrdup (word));
+        word = strtok_r (NULL, ".", &saveptr);
+    }
+    free (cpy);
+    return zl;
+}
+
+void cmb_kvs_get_val_fromcache (json_object *dir, const char *path,
+                                json_object **op)
+{
+    zlist_t *zl = path_to_list (path);
+    json_object *dirent, *o = NULL;
+    char *name;
+
+    while (zlist_size (zl) > 1) {
+        name = zlist_pop (zl);
+        dirent = json_object_object_get (dir, name);
+        free (name);
+        if (!dirent || !(dir = json_object_object_get (dirent, "DIRVAL")))
+            goto done;
+    }
+    name = zlist_pop (zl);
+    dirent = json_object_object_get (dir, name);
+    free (name);
+    if (dirent && (o = json_object_object_get (dirent, "FILEVAL"))) {
+        json_object_get (o);
+        *op = o;
+    }
+done:
+    while ((name = zlist_pop (zl)))
+        free (name);
+    zlist_destroy (&zl);
+}
+
 int cmb_kvs_clean (cmb_t c)
 {
     json_object *o = util_json_object_new_object ();

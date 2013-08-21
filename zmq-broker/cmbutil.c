@@ -21,7 +21,7 @@
 static int _parse_logstr (char *s, int *lp, char **fp);
 static void list_kvs (const char *name, json_object *o);
 
-#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Za:A:cXw:yl:"
+#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Za:A:cXw:yl:j:"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -34,6 +34,7 @@ static const struct option longopts[] = {
     {"nprocs",     required_argument,  0, 'n'},
     {"kvs-put",    required_argument,  0, 'k'},
     {"kvs-get",    required_argument,  0, 'K'},
+    {"kvs-get-fromcache", required_argument,  0, 'j'},
     {"kvs-list",   required_argument,  0, 'l'},
     {"kvs-commit", no_argument,        0, 'C'},
     {"kvs-dropcache", no_argument,     0, 'y'},
@@ -69,6 +70,7 @@ static void usage (void)
 "  -n,--nprocs N          override nprocs (default $SLURM_NPROCS or 1)\n"
 "  -k,--kvs-put key=val   set a key\n"
 "  -K,--kvs-get key       get a key\n"
+"  -j,--kvs-get-fromcache key get a key (using cache method)\n"
 "  -l,--kvs-list name     list keys in a particular \"directory\"\n"
 "  -C,--kvs-commit        commit pending kvs puts\n"
 "  -y,--kvs-clean         drop cached and unreferenced kvs data\n"
@@ -260,6 +262,25 @@ int main (int argc, char *argv[])
                     printf ("%s = %s\n", optarg,
                             json_object_to_json_string_ext (o,
                                                     JSON_C_TO_STRING_PLAIN));
+                json_object_put (o);
+                break;
+            }
+            case 'j': { /* --kvs-get-cached key */
+                json_object *dir = NULL, *o = NULL;
+
+                if (cmb_kvs_get_dir (c, ".", &dir) < 0 || dir == NULL)
+                    err_exit ("cmb_conf_get");
+                cmb_kvs_get_val_fromcache (dir, optarg, &o);
+                if (!o)
+                    errn_exit (ENOENT, "%s", optarg);
+                if (json_object_get_type (o) == json_type_string)
+                    printf ("%s = \"%s\"\n", optarg,
+                            json_object_get_string (o));
+                else
+                    printf ("%s = %s\n", optarg,
+                            json_object_to_json_string_ext (o,
+                                                    JSON_C_TO_STRING_PLAIN));
+                json_object_put (dir);
                 json_object_put (o);
                 break;
             }

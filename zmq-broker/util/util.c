@@ -158,7 +158,7 @@ char *uuid_generate_str (void)
     return xstrdup (s);
 }
 
-void compute_href (const void *dat, int len, href_t href)
+static void compute_href (const void *dat, int len, href_t href)
 {
     unsigned char raw[SHA_DIGEST_LENGTH];
     SHA_CTX ctx;

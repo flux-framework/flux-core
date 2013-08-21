@@ -97,6 +97,9 @@ dokvstest: kvstest
 	$(SRUN) ./kvstest
 dokvstest_nsquared: kvstest
 	$(SRUN) ./kvstest --n-squared
+dokvstest_nsquared_cached: kvstest
+	export PMI_USE_KVS_CACHE=1;\
+	$(SRUN) ./kvstest --n-squared
 
 barrier:
 	time -p $(SRUN) ./cmbutil -b testbarrier
