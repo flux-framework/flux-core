@@ -364,17 +364,6 @@ json_object *util_json_object_new_object (void)
     return o;
 }
 
-/* N.B. did I miss this function in json-c?  Ought to be a better way */
-json_object *util_json_object_dup (json_object *o)
-{
-    json_object *cpy = NULL;
-
-    if (o && !(cpy = json_tokener_parse (json_object_to_json_string (o))))
-        oom ();
-
-    return cpy;
-}
-
 json_object *util_json_vlog (int level, const char *fac, const char *src,
                              const char *fmt, va_list ap)
 {

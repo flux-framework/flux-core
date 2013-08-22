@@ -390,27 +390,29 @@ static void store (plugin_ctx_t *p, json_object *o, bool writeback, href_t ref)
 static json_object *deep_copy (plugin_ctx_t *p, json_object *dir,
                                zmsg_t **zmsg, bool nf)
 {
-    json_object *dcpy, *ddcpy, *dirent, *val;
+    json_object *dcpy, *val;
     json_object_iter iter;
     const char *ref;
-    
-    dcpy = util_json_object_dup (dir);
+
+    if (!(dcpy = json_object_new_object ()))
+        oom ();
     
     json_object_object_foreachC (dir, iter) {
-        if (!(dirent = json_object_object_get (dir, iter.key)))
-            continue;
-        if (!nf && util_json_object_get_string (dirent, "FILEREF", &ref) == 0) {
+        if (!nf && util_json_object_get_string (iter.val, "FILEREF", &ref)==0) {
             if (!load (p, ref, zmsg, &val))
                 goto stall;
-            dirent = dirent_create ("FILEVAL", val);
-            json_object_object_add (dcpy, iter.key, dirent);
-        } else if (util_json_object_get_string (dirent, "DIRREF", &ref) == 0) {
+            json_object_object_add (dcpy, iter.key,
+                                    dirent_create ("FILEVAL", val));
+        } else if (util_json_object_get_string (iter.val, "DIRREF", &ref)==0) {
             if (!load (p, ref, zmsg, &val))
                 goto stall;
-            if (!(ddcpy = deep_copy (p, val, zmsg, nf)))
+            if (!(val = deep_copy (p, val, zmsg, nf)))
                 goto stall;
-            dirent = dirent_create ("DIRVAL", ddcpy);
-            json_object_object_add (dcpy, iter.key, dirent);
+            json_object_object_add (dcpy, iter.key,
+                                    dirent_create ("DIRVAL", val));
+        } else {
+            json_object_get (iter.val);
+            json_object_object_add (dcpy, iter.key, iter.val);
         }
     }
     return dcpy;
@@ -471,23 +473,7 @@ static void setroot (plugin_ctx_t *p, int seq, href_t ref)
     }
 }
 
-static zlist_t *path_to_list (const char *path)
-{
-    char *word, *saveptr, *cpy = xstrdup (path);
-    zlist_t *zl;
-
-    if (!(zl = zlist_new ()))
-        oom ();
-    word = strtok_r(cpy, ".", &saveptr);
-    while (word) {
-        zlist_append (zl, xstrdup (word));
-        word = strtok_r (NULL, ".", &saveptr);
-    }
-    free (cpy);
-    return zl;
-}
-
-/* Unwind deep copy of root directory => store and return its href.
+/* Store unwound deep copy of root directory and return its href.
  */
 static void deep_unwind (plugin_ctx_t *p, json_object *dir, href_t href)
 {
@@ -495,16 +481,22 @@ static void deep_unwind (plugin_ctx_t *p, json_object *dir, href_t href)
     json_object_iter iter;
     href_t nhref;
 
-    cpy = util_json_object_dup (dir);
+    if (!(cpy = json_object_new_object ()))
+        oom ();
+
     json_object_object_foreachC (dir, iter) {
         if ((o = json_object_object_get (iter.val, "DIRVAL"))) {
             deep_unwind (p, o, nhref);
             json_object_object_add (cpy, iter.key,
                                     dirent_create ("DIRREF", nhref));
         } else if ((o = json_object_object_get (iter.val, "FILEVAL"))) {
+            json_object_get (o);
             (void)store (p, o, false, nhref);
             json_object_object_add (cpy, iter.key,
                                     dirent_create ("FILEREF", nhref));
+        } else { /* FILEREF, DIRREF */
+            json_object_get (iter.val);
+            json_object_object_add (cpy, iter.key, iter.val);
         }
     }
     store (p, cpy, false, href);
@@ -515,32 +507,29 @@ static void deep_unwind (plugin_ctx_t *p, json_object *dir, href_t href)
  */
 static void deep_put (json_object *dir, const char *path, char *ref)
 {
-    zlist_t *zl = path_to_list (path);
+    char *cpy = xstrdup (path);
+    char *next, *name = cpy;
     json_object *dirent;
-    char *name;
 
-    while (zlist_size (zl) > 1) {
-        name = zlist_pop (zl);
+    while ((next = strchr (name, '.'))) {
+        *next++ = '\0';
         if ((dirent = json_object_object_get (dir, name))) {
-            if (json_object_object_get (dirent, "DIRVAL") == NULL)
-                dirent = NULL; /* wrong type, overwrite */
+            if (!json_object_object_get (dirent, "DIRVAL")) {
+                json_object_object_del (dir, name);
+                dirent = NULL;
+            }
         }
         if (!dirent) {
-            dirent = dirent_create ("DIRVAL", NULL);
+            dirent = dirent_create ("DIRVAL", NULL); /* empty dir */
             json_object_object_add (dir, name, dirent);
         }
         dir = json_object_object_get (dirent, "DIRVAL");
-        free (name);
+        name = next;
     }
-    name = zlist_pop (zl);
-    assert (dir != NULL);
-    assert (name != NULL);
+    json_object_object_del (dir, name);
     if (ref)
         json_object_object_add (dir, name, dirent_create ("FILEREF", ref));
-    else
-        json_object_object_del (dir, name);
-    free (name);
-    zlist_destroy (&zl);
+    free (cpy);
 }
 
 static void commit (plugin_ctx_t *p)
@@ -561,6 +550,7 @@ static void commit (plugin_ctx_t *p)
         op_destroy (op);
     }
     deep_unwind (p, cpy, ctx->rootdir);
+    json_object_put (cpy);
     ctx->rootseq++;
 }
 
@@ -573,7 +563,7 @@ static void kvs_load (plugin_ctx_t *p, zmsg_t **zmsg)
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    cpy = util_json_object_dup (o);
+    cpy = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
         if (!load (p, iter.key, zmsg, &val))
             goto done; /* stall */
@@ -624,7 +614,7 @@ static void kvs_store (plugin_ctx_t *p, zmsg_t **zmsg)
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    cpy = util_json_object_dup (o);
+    cpy = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
         json_object_get (iter.val);
         store (p, iter.val, writeback, href);
@@ -685,6 +675,7 @@ static void kvs_clean (plugin_ctx_t *p, zmsg_t **zmsg)
             oom ();
         deep_unwind (p, cpy, href);
         assert (!strcmp (ctx->rootdir, href));
+        json_object_put (cpy);
     } else {
         zhash_destroy (&ctx->store);
         if (!(ctx->store = zhash_new ()))
@@ -706,7 +697,7 @@ static void kvs_name (plugin_ctx_t *p, zmsg_t **zmsg)
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    cpy = util_json_object_dup (o);
+    cpy = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
         name (p, iter.key, json_object_get_string (iter.val), writeback);
         json_object_object_add (cpy, iter.key, NULL);
@@ -769,36 +760,31 @@ static void kvs_flush_response (plugin_ctx_t *p, zmsg_t **zmsg)
 static bool walk (plugin_ctx_t *p, json_object *dir, const char *path,
                   json_object **dp, zmsg_t **zmsg)
 {
-    zlist_t *zl = path_to_list (path);
-    char *name;
+    char *cpy = xstrdup (path);
+    char *next, *name = cpy;
     const char *ref;
-    json_object *dirent;
+    json_object *dirent = NULL;
 
-    while (zlist_size (zl) > 1) {
-        name = zlist_pop (zl);
-        dirent = json_object_object_get (dir, name);
-        free (name);
-        if (!dirent || util_json_object_get_string (dirent, "DIRREF", &ref) < 0)
-            goto fail;
+    while ((next = strchr (name, '.'))) {
+        *next++ = '\0';
+        if (!(dirent = json_object_object_get (dir, name)))
+            goto done;
+        if (!util_json_object_get_string (dirent, "DIRREF", &ref) < 0) {
+            dirent = NULL;
+            goto done;
+        }
         if (!load (p, ref, zmsg, &dir))
             goto stall;
+        name = next;
     }
-    name = zlist_pop (zl);
-    *dp = json_object_object_get (dir, name);
-    free (name);
-    zlist_destroy (&zl);
+    dirent = json_object_object_get (dir, name);
+done:
+    free (cpy);
+    *dp = dirent;    
     return true;
 stall:
-    while ((name = zlist_pop (zl)))
-        free (name);
-    zlist_destroy (&zl);
+    free (cpy);
     return false;
-fail:
-    while ((name = zlist_pop (zl)))
-        free (name);
-    zlist_destroy (&zl);
-    *dp = NULL;
-    return true;
 }
 
 static void kvs_get_val (plugin_ctx_t *p, zmsg_t **zmsg)
@@ -814,20 +800,22 @@ static void kvs_get_val (plugin_ctx_t *p, zmsg_t **zmsg)
     }
     if (!load (p, ctx->rootdir, zmsg, &dir))
         goto done; /* stall */
-    ocpy = util_json_object_dup (o);
+    ocpy = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
-        if (!strcmp (iter.key, ".")) /* special case root */
+        if (!strcmp (iter.key, ".")) { /* special case root */
+            json_object_object_add (ocpy, iter.key, NULL);
             continue;
+        }
         if (!walk (p, dir, iter.key, &dirent, zmsg))
             goto done; /* stall */
-        if (!dirent)
-            continue; /* lookup failure */
-        if (util_json_object_get_string (dirent, "FILEREF", &ref) == 0) {
+        if (dirent && util_json_object_get_string (dirent, "FILEREF", &ref)==0){
             if (!load (p, ref, zmsg, &val))
                 goto done; /* stall */
             json_object_get (val);
             json_object_object_add (ocpy, iter.key, val);
+            continue; 
         }
+        json_object_object_add (ocpy, iter.key, NULL); /* lookup fail */
     }
     plugin_send_response (p, zmsg, ocpy);
 done:
@@ -842,7 +830,7 @@ done:
 static void kvs_get_dir (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
-    json_object *dirent, *dir, *val, *dcpy, *ocpy = NULL, *o = NULL;
+    json_object *dirent, *dir, *val, *ocpy = NULL, *o = NULL;
     json_object_iter iter;
     const char *ref;
 
@@ -852,25 +840,25 @@ static void kvs_get_dir (plugin_ctx_t *p, zmsg_t **zmsg)
     }
     if (!load (p, ctx->rootdir, zmsg, &dir))
         goto done; /* stall */
-    ocpy = util_json_object_dup (o);
+    ocpy = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
         if (!strcmp (iter.key, ".")) { /* special case root */
-            if (!(dcpy = deep_copy (p, dir, zmsg, false)))
+            if (!(val = deep_copy (p, dir, zmsg, false)))
                 goto done; /* stall */
-            json_object_object_add (ocpy, ".", dcpy);
+            json_object_object_add (ocpy, iter.key, val);
             continue;
         }
         if (!walk (p, dir, iter.key, &dirent, zmsg))
             goto done; /* stall */
-        if (!dirent)
-            continue; /* lookup failure */
-        if (util_json_object_get_string (dirent, "DIRREF", &ref) == 0) {
+        if (dirent && util_json_object_get_string (dirent, "DIRREF", &ref)==0) {
             if (!load (p, ref, zmsg, &val))
                 goto done; /* stall */
-            if (!(dcpy = deep_copy (p, val, zmsg, false)))
+            if (!(val = deep_copy (p, val, zmsg, false)))
                 goto done; /* stall */
-            json_object_object_add (ocpy, iter.key, dcpy);
+            json_object_object_add (ocpy, iter.key, val);
+            continue;
         }
+        json_object_object_add (ocpy, iter.key, NULL); /* Lookup fail */
     }
     plugin_send_response (p, zmsg, ocpy);
 done:
