@@ -417,8 +417,7 @@ static json_object *deep_copy (plugin_ctx_t *p, json_object *dir,
     }
     return dcpy;
 stall:
-    if (dcpy)
-        free (dcpy);
+    json_object_put (dcpy);
     return NULL;
 }
 
