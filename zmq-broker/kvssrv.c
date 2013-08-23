@@ -80,7 +80,7 @@ typedef struct {
     bool done;
     int rootseq;
     href_t rootdir;
-    zlist_t *reqs;
+    zlist_t *waitlist;
 } commit_t;
 
 typedef struct {
@@ -164,15 +164,15 @@ static json_object *dirent_create (char *type, void *arg)
 static commit_t *commit_create (void)
 {
     commit_t *cp = xzmalloc (sizeof (*cp));
-    if (!(cp->reqs = zlist_new ()))
+    if (!(cp->waitlist = zlist_new ()))
         oom ();
     return cp;
 }
 
 static void commit_destroy (commit_t *cp)
 {
-    assert (zlist_size (cp->reqs) == 0);
-    zlist_destroy (&cp->reqs);
+    assert (zlist_size (cp->waitlist) == 0);
+    zlist_destroy (&cp->waitlist);
     free (cp);
 }
 
@@ -1005,12 +1005,14 @@ static void kvs_commit (plugin_ctx_t *p, zmsg_t **zmsg)
     json_object *o = NULL;
     const char *name;
     commit_t *cp;
+    wait_t *wp;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
             || util_json_object_get_string (o, "name", &name) < 0) {
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
+    wp = wait_create (p, kvs_commit, zmsg);
     if (plugin_treeroot (p)) {
         if (!(cp = commit_find (p, name))) {
             commit (p);
@@ -1018,18 +1020,18 @@ static void kvs_commit (plugin_ctx_t *p, zmsg_t **zmsg)
             commit_done (p, cp);
             event_kvs_setroot_send (p);
         }
-        commit_response_send (p, cp, o, zmsg);
     } else {
         if (!(cp = commit_find (p, name))) {
             commit_request_send (p, name);
             cp = commit_new (p, name);
         }
         if (!cp->done) {
-            zlist_append (cp->reqs, *zmsg);
-            *zmsg = NULL;
-        } else
-            commit_response_send (p, cp, o, zmsg);
+            wait_add (cp->waitlist, wp);
+            goto done; /* stall */
+        }
     }
+    wait_destroy (wp, zmsg);
+    commit_response_send (p, cp, o, zmsg);
 done:
     if (o)
         json_object_put (o);
@@ -1043,7 +1045,6 @@ static void kvs_commit_response (plugin_ctx_t *p, zmsg_t **zmsg)
     const char *arg, *name;
     int seq;
     href_t href;
-    zmsg_t *zmsg2;
     commit_t *cp;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
@@ -1057,15 +1058,8 @@ static void kvs_commit_response (plugin_ctx_t *p, zmsg_t **zmsg)
     cp = commit_find (p, name);
     assert (cp != NULL);
     commit_done (p, cp);
-    while ((zmsg2 = zlist_pop (cp->reqs))) {
-        json_object *o2 = NULL;
-        if (cmb_msg_decode (zmsg2, NULL, &o2) == 0 && o2 != NULL)
-            commit_response_send (p, cp, o2, &zmsg2);
-        if (zmsg2)
-            zmsg_destroy (&zmsg2);
-        if (o2)
-            json_object_put (o2);
-    }
+    while (wait_del (cp->waitlist))
+        ;
 done:
     if (o)
         json_object_put (o);
