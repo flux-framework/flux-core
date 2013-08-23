@@ -70,11 +70,11 @@ int cmb_conf_next (cmb_t c, char **key, json_object **vo);
 
 /* Get/put key-value pairs.
  */
+enum { KVS_FLAGS_CACHE=1 };
 int cmb_kvs_put (cmb_t c, const char *key, json_object *val);
-int cmb_kvs_get_val (cmb_t c, const char *key, json_object **op);
-int cmb_kvs_get_dir (cmb_t c, const char *key, json_object **op);
-void cmb_kvs_get_val_fromcache (json_object *cache, const char *key,
-                                json_object **op);
+int cmb_kvs_del (cmb_t c, const char *key);
+int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, int flags);
+int cmb_kvs_get_cache (json_object *cache, const char *key, json_object **vp);
 int cmb_kvs_flush (cmb_t c);
 int cmb_kvs_commit (cmb_t c, const char *name);
 int cmb_kvs_clean (cmb_t c);

@@ -417,30 +417,36 @@ error:
 int cmb_kvs_put (cmb_t c, const char *key, json_object *val)
 {
     json_object *o = util_json_object_new_object ();
+    int rc = -1;
 
     /* send request */
-    json_object_get (val);
+    if (val)
+        json_object_get (val);
     json_object_object_add (o, key, val);
     if (_send_message (c, o, "kvs.put") < 0)
-        goto error;
+        goto done;
     json_object_put (o);
     o = NULL;
 
     /* receive response */
     if (_recv_message (c, NULL, &o, false) < 0)
-        goto error;
-    if (o == NULL || util_json_object_get_int (o, "errnum", &errno) < 0)
-        goto eproto;
+        goto done;
+    if (o == NULL || util_json_object_get_int (o, "errnum", &errno) < 0) {
+        errno = EPROTO;
+        goto done;
+    }
     if (errno != 0)
-        goto error;
-    json_object_put (o);
-    return 0;
-eproto:
-    errno = EPROTO;
-error:
+        goto done;
+    rc = 0;
+done:
     if (o)
         json_object_put (o);
-    return -1;
+    return rc;
+}
+
+int cmb_kvs_del (cmb_t c, const char *key)
+{
+    return cmb_kvs_put (c, key, NULL);
 }
 
 int cmb_kvs_flush (cmb_t c)
@@ -498,69 +504,82 @@ error:
     return -1;
 }
 
-static int kvs_get (cmb_t c, const char *key, json_object **op, const char *tag)
+static json_object *json_kvs_flags (int flags)
 {
     json_object *o = util_json_object_new_object ();
-    json_object *val = NULL;
+
+    util_json_object_add_boolean (o, "cache", (flags & KVS_FLAGS_CACHE));
+
+    return o;
+}
+
+int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, int flags)
+{
+    json_object *o = util_json_object_new_object ();
+    json_object *val;
+    int rc = -1;
 
     /* send request */
-    json_object_object_add (o, key, NULL);
-    if (_send_message (c, o, "%s", tag) < 0)
-        goto error;
+    json_object_object_add (o, key, json_kvs_flags (flags));
+    if (_send_message (c, o, "%s", "kvs.get") < 0)
+        goto done;
     json_object_put (o);
     o = NULL;
 
     /* receive response */
     if (_recv_message (c, NULL, &o, false) < 0)
-        goto error;
-    if (o == NULL)
-        goto eproto;
+        goto done;
+    if (o == NULL) {
+        errno = EPROTO;
+        goto done;
+    }
     if (util_json_object_get_int (o, "errnum", &errno) == 0)
-        goto error;
-    if ((val = json_object_object_get (o, key)))
-        json_object_get (val);
-    *op = val; 
-    json_object_put (o);
-    return 0;
-eproto:
-    errno = EPROTO;
-error:
+        goto done;
+    if (!(val = json_object_object_get (o, key))) {
+        errno = ENOENT;
+        goto done;
+    }
+    json_object_get (val);
+    *valp = val; 
+    rc = 0;
+done:
     if (o)
         json_object_put (o);
-    return -1;
+    return rc;
 }
 
-int cmb_kvs_get_val (cmb_t c, const char *key, json_object **op)
+int cmb_kvs_get_cache (json_object *cache, const char *key, json_object **valp)
 {
-    return kvs_get (c, key, op, "kvs.get.val");
-}
-
-int cmb_kvs_get_dir (cmb_t c, const char *key, json_object **op)
-{
-    return kvs_get (c, key, op, "kvs.get.dir");
-}
-
-void cmb_kvs_get_val_fromcache (json_object *dir, const char *path,
-                                json_object **op)
-{
-    char *cpy = xstrdup (path);
+    char *cpy = xstrdup (key);
     char *next, *name = cpy;
-    json_object *dirent, *o = NULL;
+    json_object *dirent, *val, *dir;
+    int rc = -1;
 
+    dir = cache;
     while ((next = strchr (name, '.'))) {
         *next++ = '\0';
         dirent = json_object_object_get (dir, name);
-        if (!dirent || !(dir = json_object_object_get (dirent, "DIRVAL")))
+        if (!dirent || !(dir = json_object_object_get (dirent, "DIRVAL"))) {
+            errno = ENOENT;
             goto done;
+        }
         name = next;
     }
-    dirent = json_object_object_get (dir, name);
-    if (dirent && (o = json_object_object_get (dirent, "FILEVAL"))) {
-        json_object_get (o);
-        *op = o;
+    dirent = json_object_object_get (dir, name); /* final path component */
+    if (!dirent) {
+        errno = ENOENT;
+        goto done;
     }
+    if (!(val = json_object_object_get (dirent, "FILEVAL"))) {
+        errno = EISDIR;
+        goto done;
+    }
+    json_object_get (val);
+    *valp = val;
+    rc = 0;
 done:
     free (cpy);
+    return rc;
 }
 
 int cmb_kvs_clean (cmb_t c)

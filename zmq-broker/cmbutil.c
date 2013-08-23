@@ -251,10 +251,8 @@ int main (int argc, char *argv[])
             case 'K': { /* --kvs-get key */
                 json_object *o;
 
-                if (cmb_kvs_get_val (c, optarg, &o) < 0)
+                if (cmb_kvs_get (c, optarg, &o, 0) < 0)
                     err_exit ("cmb_conf_get");
-                if (!o)
-                    errn_exit (ENOENT, "%s", optarg);
                 if (json_object_get_type (o) == json_type_string)
                     printf ("%s = \"%s\"\n", optarg,
                             json_object_get_string (o));
@@ -268,11 +266,10 @@ int main (int argc, char *argv[])
             case 'j': { /* --kvs-get-cached key */
                 json_object *dir = NULL, *o = NULL;
 
-                if (cmb_kvs_get_dir (c, ".", &dir) < 0 || dir == NULL)
-                    err_exit ("cmb_conf_get");
-                cmb_kvs_get_val_fromcache (dir, optarg, &o);
-                if (!o)
-                    errn_exit (ENOENT, "%s", optarg);
+                if (cmb_kvs_get (c, ".", &dir, KVS_FLAGS_CACHE) < 0)
+                    err_exit ("cmb_kvs_get");
+                if (cmb_kvs_get_cache (dir, optarg, &o) < 0)
+                    err_exit ("%s", optarg);
                 if (json_object_get_type (o) == json_type_string)
                     printf ("%s = \"%s\"\n", optarg,
                             json_object_get_string (o));
@@ -287,10 +284,8 @@ int main (int argc, char *argv[])
             case 'l': { /* --kvs-list name */
                 json_object *o;
 
-                if (cmb_kvs_get_dir (c, optarg, &o) < 0)
+                if (cmb_kvs_get (c, optarg, &o, KVS_FLAGS_CACHE) < 0)
                     err_exit ("cmb_conf_get");
-                if (o == NULL)
-                    errn_exit (ENOENT, "%s", optarg);
                 list_kvs (optarg, o);
                 json_object_put (o);
                 break;
@@ -352,12 +347,10 @@ int main (int argc, char *argv[])
                 for (i = 0; i < n; i++) {
                     snprintf (key, sizeof (key), "key%d", i);
                     snprintf (val, sizeof (key), "val%d", i);
-                    if (cmb_kvs_get_val (c, key, &vo) < 0)
-                        err_exit ("cmb_kvs_get_val");
-                    if (!vo)
-                        msg_exit ("cmb_kvs_get_val: key '%s' is not set", key);
+                    if (cmb_kvs_get (c, key, &vo, 0) < 0)
+                        err_exit ("cmb_kvs_get");
                     if (strcmp (json_object_get_string (vo), val) != 0)
-                        msg_exit ("cmb_kvs_get_val: key '%s' wrong value '%s'",
+                        msg_exit ("cmb_kvs_get: key '%s' wrong value '%s'",
                                   key, json_object_get_string (vo));
                     if (vo)
                         json_object_put (vo);

@@ -94,9 +94,6 @@ typedef struct {
 } ctx_t;
 
 static void event_kvs_setroot_send (plugin_ctx_t *p);
-static void kvs_load (plugin_ctx_t *p, zmsg_t **zmsg);
-static void kvs_get_val (plugin_ctx_t *p, zmsg_t **zmsg);
-static void kvs_get_dir (plugin_ctx_t *p, zmsg_t **zmsg);
 
 static wait_t *wait_create (plugin_ctx_t *p, wait_fun_t fun, zmsg_t **zmsg)
 {
@@ -904,29 +901,35 @@ stall:
     return false;
 }
 
-static void kvs_get (plugin_ctx_t *p, zmsg_t **zmsg, wait_fun_t fun)
+static void kvs_get (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     json_object *root, *val, *ocpy = NULL, *o = NULL;
     json_object_iter iter;
     wait_t *wp = NULL;
     bool stall = false;
+    bool docache;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    wp = wait_create (p, fun, zmsg);
+    wp = wait_create (p, kvs_get, zmsg);
     if (!load (p, ctx->rootdir, wp, &root)) {
         stall = true;
         goto done;
     }
     ocpy = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
-        if (fun == kvs_get_dir)
-            stall = !lookup_dir (p, root, wp, iter.key, &val);
-        else
-            stall = !lookup_file (p, root, wp, iter.key, &val);
+        if (util_json_object_get_boolean (iter.val, "cache", &docache) < 0) {
+            json_object_object_add (ocpy, iter.key, NULL);
+        } else if (docache) {
+            if (!lookup_dir (p, root, wp, iter.key, &val))
+                stall = true;
+        } else {
+            if (!lookup_file (p, root, wp, iter.key, &val))
+                stall = true;
+        }
         if (!stall)
             json_object_object_add (ocpy, iter.key, val);
     }
@@ -941,16 +944,6 @@ done:
         json_object_put (ocpy);
     if (*zmsg)
         zmsg_destroy (zmsg);
-}
-
-static void kvs_get_dir (plugin_ctx_t *p, zmsg_t **zmsg)
-{
-    kvs_get (p, zmsg, kvs_get_dir);
-}
-
-static void kvs_get_val (plugin_ctx_t *p, zmsg_t **zmsg)
-{
-    kvs_get (p, zmsg, kvs_get_val);
 }
 
 static void kvs_put (plugin_ctx_t *p, zmsg_t **zmsg)
@@ -1156,10 +1149,8 @@ static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         event_kvs_debug (p, zmsg, arg);
     } else if (cmb_msg_match (*zmsg, "kvs.clean")) {
         kvs_clean (p, zmsg);
-    } else if (cmb_msg_match (*zmsg, "kvs.get.val")) {
-        kvs_get_val (p, zmsg);
-    } else if (cmb_msg_match (*zmsg, "kvs.get.dir")) {
-        kvs_get_dir (p, zmsg);
+    } else if (cmb_msg_match (*zmsg, "kvs.get")) {
+        kvs_get (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.put")) {
         kvs_put (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.load")) {

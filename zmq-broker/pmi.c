@@ -416,9 +416,9 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
 {
     char *xkey = NULL;
     json_object *o = NULL;
-    const char *val = NULL;
     int rc = PMI_SUCCESS;
 
+    trace (PMI_TRACE_KVS_GET, "%s %s.%s", __FUNCTION__, kvsname, key);
     if (ctx == NULL) {
         rc = PMI_ERR_INIT;
         goto done;
@@ -429,34 +429,34 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
         goto done;
     }
     if (ctx->use_kvs_cache && !ctx->kvs_cache) {
-        if (cmb_kvs_get_dir (ctx->cctx, ctx->kvsname, &ctx->kvs_cache) < 0) {
+        if (cmb_kvs_get (ctx->cctx, ctx->kvsname, &ctx->kvs_cache,
+                                                        KVS_FLAGS_CACHE) < 0) {
             rc = PMI_FAIL;
             goto done;
         }
     }
     if (ctx->kvs_cache) {
-        cmb_kvs_get_val_fromcache (ctx->kvs_cache, key, &o);
-        if (o)
-            val = json_object_get_string (o);
+        if (cmb_kvs_get_cache (ctx->kvs_cache, key, &o) < 0) {
+            if (errno == ENOENT)
+                rc = PMI_ERR_INVALID_KEY;
+            else
+                rc = PMI_FAIL;
+            goto done;
+        }
     } else {
         if (asprintf (&xkey, "%s.%s", kvsname, key) < 0) {
             rc = PMI_ERR_NOMEM;
             goto done;
         }
-        if (cmb_kvs_get_val (ctx->cctx, xkey, &o) == 0 && o != NULL)
-            val = json_object_get_string (o);
+        if (cmb_kvs_get (ctx->cctx, xkey, &o, 0) < 0) {
+            if (errno == ENOENT)
+                rc = PMI_ERR_INVALID_KEY;
+            else
+                rc = PMI_FAIL;
+            goto done;
+        }
     }
-    trace (PMI_TRACE_KVS_GET, "%s %s.%s = %s", __FUNCTION__, kvsname, key,
-           val ? val : errno == 0 ? "[nonexistent key]" : "[error]");
-    if (!val && errno == 0) {
-        rc = PMI_ERR_INVALID_KEY;
-        goto done;
-    }
-    if (!val && errno != 0) {
-        rc = PMI_FAIL;
-        goto done;
-    }
-    snprintf (value, length, "%s", val);
+    snprintf (value, length, "%s", json_object_get_string (o));
 done:
     if (xkey)
         free (xkey);
