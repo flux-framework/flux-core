@@ -70,7 +70,7 @@ int cmb_conf_next (cmb_t c, char **key, json_object **vo);
 
 /* Get/put key-value pairs.
  */
-enum { KVS_FLAGS_CACHE=1 };
+enum { KVS_FLAGS_CACHE=1, KVS_FLAGS_WATCH=2, KVS_FLAGS_RCVONLY=4 };
 int cmb_kvs_put (cmb_t c, const char *key, json_object *val);
 int cmb_kvs_del (cmb_t c, const char *key);
 int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, int flags);

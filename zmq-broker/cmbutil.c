@@ -21,7 +21,7 @@
 static int _parse_logstr (char *s, int *lp, char **fp);
 static void list_kvs (const char *name, json_object *o);
 
-#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Za:A:cXw:yl:j:"
+#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Za:A:cXw:yl:j:Y:"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -36,6 +36,7 @@ static const struct option longopts[] = {
     {"kvs-get",    required_argument,  0, 'K'},
     {"kvs-get-fromcache", required_argument,  0, 'j'},
     {"kvs-list",   required_argument,  0, 'l'},
+    {"kvs-watch",  required_argument,  0, 'Y'},
     {"kvs-commit", no_argument,        0, 'C'},
     {"kvs-dropcache", no_argument,     0, 'y'},
     {"kvs-torture",required_argument,  0, 't'},
@@ -70,6 +71,7 @@ static void usage (void)
 "  -n,--nprocs N          override nprocs (default $SLURM_NPROCS or 1)\n"
 "  -k,--kvs-put key=val   set a key\n"
 "  -K,--kvs-get key       get a key\n"
+"  -Y,--kvs-watch key     watch a key\n"
 "  -j,--kvs-get-fromcache key get a key (using cache method)\n"
 "  -l,--kvs-list name     list keys in a particular \"directory\"\n"
 "  -C,--kvs-commit        commit pending kvs puts\n"
@@ -261,6 +263,22 @@ int main (int argc, char *argv[])
                             json_object_to_json_string_ext (o,
                                                     JSON_C_TO_STRING_PLAIN));
                 json_object_put (o);
+                break;
+            }
+            case 'Y': { /* --kvs-watch key */
+                json_object *o;
+                if (cmb_kvs_get (c, optarg, &o, KVS_FLAGS_WATCH) < 0)
+                    err_exit ("cmb_conf_get");
+                do {
+                    if (json_object_get_type (o) == json_type_string)
+                        printf ("%s = \"%s\"\n", optarg,
+                                json_object_get_string (o));
+                    else
+                        printf ("%s = %s\n", optarg,
+                                json_object_to_json_string_ext (o,
+                                                   JSON_C_TO_STRING_PLAIN));
+                    json_object_put (o);
+                } while (cmb_kvs_get (c, optarg, &o, KVS_FLAGS_RCVONLY) == 0);
                 break;
             }
             case 'j': { /* --kvs-get-cached key */

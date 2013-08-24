@@ -91,6 +91,7 @@ typedef struct {
     enum { WB_CLEAN, WB_FLUSHING, WB_DIRTY } writeback_state;
     zlist_t *commit_ops;
     zhash_t *commits;
+    zlist_t *watchlist;
 } ctx_t;
 
 static void event_kvs_setroot_send (plugin_ctx_t *p);
@@ -122,16 +123,26 @@ static void wait_add (zlist_t *waitlist, wait_t *wp)
     wp->usecount++;
 }
 
-static bool wait_del (zlist_t *waitlist)
+/* Take all waiters off a waitlist, copying them first to a temporary
+ * list so that they can put themselves back on if they want (e.g. watch)
+ */
+static void wait_del_all (zlist_t *waitlist)
 {
-    wait_t *wp = zlist_pop (waitlist);
-    if (!wp)
-        return false;
-    if (--wp->usecount == 0) {
-        wp->fun (wp->p, &wp->zmsg);
-        wait_destroy (wp, NULL);
+    zlist_t *cpy;
+    wait_t *wp;
+
+    if (!(cpy = zlist_new ()))
+        oom ();
+    while ((wp = zlist_pop (waitlist)))
+        if (zlist_append (cpy, wp) < 0)
+            oom ();
+    while ((wp = zlist_pop (cpy))) {
+        if (--wp->usecount == 0) {
+            wp->fun (wp->p, &wp->zmsg);
+            wait_destroy (wp, NULL);
+        }
     }
-    return true;
+    zlist_destroy (&cpy);
 }
 
 static json_object *dirent_create (char *type, void *arg)
@@ -402,8 +413,7 @@ static void store (plugin_ctx_t *p, json_object *o, bool writeback, href_t ref)
             json_object_put (o);
         } else {
             hp->o = o;
-            while (wait_del (hp->waitlist))
-                ;
+            wait_del_all (hp->waitlist);
         }
     } else {
         hp = hobj_create (o);
@@ -526,6 +536,7 @@ static void setroot (plugin_ctx_t *p, int seq, href_t ref)
     if (seq == 0 || seq > ctx->rootseq) {
         memcpy (ctx->rootdir, ref, sizeof (href_t));
         ctx->rootseq = seq;
+        wait_del_all (ctx->watchlist);
     }
 }
 
@@ -593,6 +604,7 @@ static void commit (plugin_ctx_t *p)
     ctx_t *ctx = p->ctx;
     op_t *op;
     json_object *dir, *cpy;
+    href_t ref;
 
     assert (plugin_treeroot (p));
 
@@ -605,9 +617,9 @@ static void commit (plugin_ctx_t *p)
         deep_put (cpy, op->key, op->ref);
         op_destroy (op);
     }
-    deep_unwind (p, cpy, ctx->rootdir);
+    deep_unwind (p, cpy, ref);
     json_object_put (cpy);
-    ctx->rootseq++;
+    setroot (p, ctx->rootseq + 1, ref);
 }
 
 static void kvs_load (plugin_ctx_t *p, zmsg_t **zmsg)
@@ -908,7 +920,8 @@ static void kvs_get (plugin_ctx_t *p, zmsg_t **zmsg)
     json_object_iter iter;
     wait_t *wp = NULL;
     bool stall = false;
-    bool docache;
+    bool docache, dowatch = false;
+    int errnum = 0;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
@@ -921,9 +934,13 @@ static void kvs_get (plugin_ctx_t *p, zmsg_t **zmsg)
     }
     ocpy = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
-        if (util_json_object_get_boolean (iter.val, "cache", &docache) < 0) {
+        if (util_json_object_get_boolean (iter.val, "cache", &docache) < 0
+         || util_json_object_get_boolean (iter.val, "watch", &dowatch)) {
             json_object_object_add (ocpy, iter.key, NULL);
-        } else if (docache) {
+            errnum = EPROTO;
+            break;
+        }
+        if (docache) {
             if (!lookup_dir (p, root, wp, iter.key, &val))
                 stall = true;
         } else {
@@ -935,7 +952,21 @@ static void kvs_get (plugin_ctx_t *p, zmsg_t **zmsg)
     }
     if (!stall) {
         wait_destroy (wp, zmsg);
-        plugin_send_response (p, zmsg, ocpy);
+        if (errnum > 0)
+            plugin_send_response_errnum (p, zmsg, errnum);
+        else {
+            /* FIXME: value of watch flag for last requested key causes
+             * all requested keys to be watched or not.
+             */
+            if (dowatch) {
+                zmsg_t *cpy = zmsg_dup (*zmsg);
+                if (!cpy)
+                    oom ();
+                wp = wait_create (p, kvs_get, &cpy);
+                wait_add (ctx->watchlist, wp); 
+            }
+            plugin_send_response (p, zmsg, ocpy);
+        }
     }
 done:
     if (o)
@@ -1051,8 +1082,7 @@ static void kvs_commit_response (plugin_ctx_t *p, zmsg_t **zmsg)
     cp = commit_find (p, name);
     assert (cp != NULL);
     commit_done (p, cp);
-    while (wait_del (cp->waitlist))
-        ;
+    wait_del_all (cp->waitlist);
 done:
     if (o)
         json_object_put (o);
@@ -1202,6 +1232,8 @@ static void kvs_init (plugin_ctx_t *p)
         oom ();
     if (!(ctx->commits = zhash_new ()))
         oom ();
+    if (!(ctx->watchlist = zlist_new ()))
+        oom ();
 
     if (plugin_treeroot (p)) {
         json_object *rootdir = util_json_object_new_object ();
@@ -1229,6 +1261,7 @@ static void kvs_fini (plugin_ctx_t *p)
     zlist_destroy (&ctx->writeback);
     zlist_destroy (&ctx->commit_ops);
     zhash_destroy (&ctx->commits);
+    zlist_destroy (&ctx->watchlist);
     free (ctx);
 }
 

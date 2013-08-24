@@ -509,22 +509,25 @@ static json_object *json_kvs_flags (int flags)
     json_object *o = util_json_object_new_object ();
 
     util_json_object_add_boolean (o, "cache", (flags & KVS_FLAGS_CACHE));
+    util_json_object_add_boolean (o, "watch", (flags & KVS_FLAGS_WATCH));
 
     return o;
 }
 
 int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, int flags)
 {
-    json_object *o = util_json_object_new_object ();
-    json_object *val;
+    json_object *val, *o = NULL;
     int rc = -1;
 
     /* send request */
-    json_object_object_add (o, key, json_kvs_flags (flags));
-    if (_send_message (c, o, "%s", "kvs.get") < 0)
-        goto done;
-    json_object_put (o);
-    o = NULL;
+    if (!(flags & KVS_FLAGS_RCVONLY)) {
+        o = util_json_object_new_object ();
+        json_object_object_add (o, key, json_kvs_flags (flags));
+        if (_send_message (c, o, "%s", "kvs.get") < 0)
+            goto done;
+        json_object_put (o);
+        o = NULL;
+    }
 
     /* receive response */
     if (_recv_message (c, NULL, &o, false) < 0)
@@ -534,7 +537,7 @@ int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, int flags)
         goto done;
     }
     if (util_json_object_get_int (o, "errnum", &errno) == 0)
-        goto done;
+        goto done; /* EOF: errno=0 */
     if (!(val = json_object_object_get (o, key))) {
         errno = ENOENT;
         goto done;
