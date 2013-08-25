@@ -7,10 +7,7 @@
  * object containing one key-value pair where key is one of
  * "FILEREF", "DIRREF", "FILEVAL", "DIRVAL", and value is a SHA1
  * hash key into ctx->store (FILEREF, DIRREF), or an actual directory
- * or file (value) JSON object (FILEVAL, DIRVAL).  The value types are 
- * only used when a deep copy of a directory is made, for example
- * temporarily during a commit, or to prepare a kvs_get_dir result.
- * They do not appear in "stored" directories (in ctx->store).
+ * or file (value) JSON object (FILEVAL, DIRVAL).
  *
  * For example, consider KVS containing:
  * a="foo"
@@ -25,7 +22,7 @@
  * Deep copy of root directory:
  * {"a":{"FILEVAL":"foo"},
  *  "b":{"FILEVAL","bar"},
- *  "c":{"DIRREF",{"d":{"FILEVAL":"baz"}}}}
+ *  "c":{"DIRVAL",{"d":{"FILEVAL":"baz"}}}}
  */
 
 #define _GNU_SOURCE
@@ -87,11 +84,15 @@ typedef struct {
     zhash_t *store;
     href_t rootdir;
     int rootseq;
-    zlist_t *writeback;
-    enum { WB_CLEAN, WB_FLUSHING, WB_DIRTY } writeback_state;
-    zlist_t *commit_ops;
     zhash_t *commits;
     zlist_t *watchlist;
+    struct {
+        zlist_t *commit_ops;
+    } master;
+    struct {
+        zlist_t *writeback;
+        enum { WB_CLEAN, WB_FLUSHING, WB_DIRTY } writeback_state;
+    } slave;
 } ctx_t;
 
 static void event_kvs_setroot_send (plugin_ctx_t *p);
@@ -261,7 +262,7 @@ static void commit_add_name (plugin_ctx_t *p, const char *key, const char *ref)
     assert (plugin_treeroot (p));
 
     op = op_create (OP_NAME, xstrdup (key), ref ? xstrdup (ref) : NULL, NULL);
-    if (zlist_append (ctx->commit_ops, op) < 0)
+    if (zlist_append (ctx->master.commit_ops, op) < 0)
         oom ();
 }
 
@@ -274,9 +275,9 @@ static void writeback_add_name (plugin_ctx_t *p,
     assert (!plugin_treeroot (p));
 
     op = op_create (OP_NAME, xstrdup (key), ref ? xstrdup (ref) : NULL, NULL);
-    if (zlist_append (ctx->writeback, op) < 0)
+    if (zlist_append (ctx->slave.writeback, op) < 0)
         oom ();
-    ctx->writeback_state = WB_DIRTY;
+    ctx->slave.writeback_state = WB_DIRTY;
 }
 
 static void writeback_add_store (plugin_ctx_t *p, const char *ref)
@@ -287,9 +288,9 @@ static void writeback_add_store (plugin_ctx_t *p, const char *ref)
     assert (!plugin_treeroot (p));
 
     op = op_create (OP_STORE, NULL, xstrdup (ref), NULL);
-    if (zlist_append (ctx->writeback, op) < 0)
+    if (zlist_append (ctx->slave.writeback, op) < 0)
         oom ();
-    ctx->writeback_state = WB_DIRTY;
+    ctx->slave.writeback_state = WB_DIRTY;
 }
 
 static void writeback_add_flush (plugin_ctx_t *p, zmsg_t *zmsg)
@@ -300,7 +301,7 @@ static void writeback_add_flush (plugin_ctx_t *p, zmsg_t *zmsg)
     assert (!plugin_treeroot (p));
 
     op = op_create (OP_FLUSH, NULL, NULL, zmsg);
-    if (zlist_append (ctx->writeback, op) < 0)
+    if (zlist_append (ctx->slave.writeback, op) < 0)
         oom ();
 }
 
@@ -309,21 +310,21 @@ static void writeback_del (plugin_ctx_t *p, optype_t type,
 {
     ctx_t *ctx = p->ctx;
     op_t mop = { .type = type, .key = key, .ref = ref, .zmsg = NULL };
-    op_t *op = zlist_first (ctx->writeback);
+    op_t *op = zlist_first (ctx->slave.writeback);
 
     while (op) {
         if (op_match (op, &mop))
             break;
-        op = zlist_next (ctx->writeback);
+        op = zlist_next (ctx->slave.writeback);
     }
     if (op) {
-        zlist_remove (ctx->writeback, op);
+        zlist_remove (ctx->slave.writeback, op);
         op_destroy (op);
         /* handle flush(es) now at head of queue */
-        while ((op = zlist_head (ctx->writeback)) && op->type == OP_FLUSH) {
-            ctx->writeback_state = WB_FLUSHING;
+        while ((op = zlist_head (ctx->slave.writeback)) && op->type == OP_FLUSH) {
+            ctx->slave.writeback_state = WB_FLUSHING;
             plugin_send_request_raw (p, &op->zmsg); /* fwd upstream */
-            zlist_remove (ctx->writeback, op);
+            zlist_remove (ctx->slave.writeback, op);
             op_destroy (op);
         }
     }
@@ -612,7 +613,7 @@ static void commit (plugin_ctx_t *p)
     assert (dir != NULL);
     cpy = deep_copy (p, dir, NULL, true);
     assert (cpy != NULL);
-    while ((op = zlist_pop (ctx->commit_ops))) {
+    while ((op = zlist_pop (ctx->master.commit_ops))) {
         assert (op->type == OP_NAME);
         deep_put (cpy, op->key, op->ref);
         op_destroy (op);
@@ -735,7 +736,8 @@ static void kvs_clean (plugin_ctx_t *p, zmsg_t **zmsg)
     json_object *rootdir, *cpy;
     href_t href;
 
-    if (zlist_size (ctx->writeback) > 0 || zlist_size (ctx->commit_ops) > 0) {
+    if ((!plugin_treeroot (p) && zlist_size (ctx->slave.writeback) > 0) ||
+          (plugin_treeroot (p) && zlist_size (ctx->master.commit_ops) > 0)) {
         plugin_log (p, LOG_ALERT, "cache is busy");
         rc = EAGAIN;
         goto done;
@@ -811,11 +813,11 @@ static void kvs_flush (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
 
-    if (plugin_treeroot (p) || ctx->writeback_state == WB_CLEAN)
+    if (plugin_treeroot (p) || ctx->slave.writeback_state == WB_CLEAN)
         plugin_send_response_errnum (p, zmsg, 0);
-    else if (zlist_size (ctx->writeback) == 0) {
+    else if (zlist_size (ctx->slave.writeback) == 0) {
         plugin_send_request_raw (p, zmsg); /* fwd upstream */
-        ctx->writeback_state = WB_FLUSHING;
+        ctx->slave.writeback_state = WB_FLUSHING;
     } else {
         writeback_add_flush (p, *zmsg); /* enqueue */
         *zmsg = NULL;
@@ -827,8 +829,8 @@ static void kvs_flush_response (plugin_ctx_t *p, zmsg_t **zmsg)
     ctx_t *ctx = p->ctx;
 
     plugin_send_response_raw (p, zmsg); /* fwd downstream */
-    if (ctx->writeback_state == WB_FLUSHING)
-        ctx->writeback_state = WB_CLEAN;
+    if (ctx->slave.writeback_state == WB_FLUSHING)
+        ctx->slave.writeback_state = WB_CLEAN;
 }
 
 /* Get dirent containing requested key.
@@ -1142,7 +1144,8 @@ static void event_kvs_debug (plugin_ctx_t *p, zmsg_t **zmsg, char *arg)
     ctx_t *ctx = p->ctx;
 
     if (!strcmp (arg, "writeback.size"))
-        plugin_log (p, LOG_DEBUG, "writeback %d", zlist_size (ctx->writeback));
+        plugin_log (p, LOG_DEBUG, "writeback %d",
+                    zlist_size (ctx->slave.writeback));
     else if (!strcmp (arg, "store.size"))
         plugin_log (p, LOG_DEBUG, "store %d", zhash_size (ctx->store));
     else if (!strcmp (arg, "root"))
@@ -1225,15 +1228,18 @@ static void kvs_init (plugin_ctx_t *p)
     zsocket_set_subscribe (p->zs_evin, "event.kvs.debug.");
     if (!(ctx->store = zhash_new ()))
         oom ();
-    if (!(ctx->writeback = zlist_new ()))
-        oom ();
-    ctx->writeback_state = WB_CLEAN;
-    if (!(ctx->commit_ops = zlist_new ()))
-        oom ();
     if (!(ctx->commits = zhash_new ()))
         oom ();
     if (!(ctx->watchlist = zlist_new ()))
         oom ();
+    if (plugin_treeroot (p)) {
+        if (!(ctx->master.commit_ops = zlist_new ()))
+            oom ();
+    } else {
+        if (!(ctx->slave.writeback = zlist_new ()))
+            oom ();
+        ctx->slave.writeback_state = WB_CLEAN;
+    }
 
     if (plugin_treeroot (p)) {
         json_object *rootdir = util_json_object_new_object ();
@@ -1242,10 +1248,10 @@ static void kvs_init (plugin_ctx_t *p)
         store (p, rootdir, false, href);
         setroot (p, 0, href);
     } else {
-        json_object *rep = plugin_request (p, NULL, "kvs.getroot");
-        const char *rootref = json_object_get_string (rep);
         int seq;
         href_t href;
+        json_object *rep = plugin_request (p, NULL, "kvs.getroot");
+        const char *rootref = json_object_get_string (rep);
 
         if (!decode_rootref (rootref, &seq, href))
             msg_exit ("malformed kvs.getroot reply: %s", rootref);
@@ -1257,11 +1263,16 @@ static void kvs_fini (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
 
-    zhash_destroy (&ctx->store);
-    zlist_destroy (&ctx->writeback);
-    zlist_destroy (&ctx->commit_ops);
-    zhash_destroy (&ctx->commits);
-    zlist_destroy (&ctx->watchlist);
+    if (ctx->store)
+        zhash_destroy (&ctx->store);
+    if (ctx->commits)
+        zhash_destroy (&ctx->commits);
+    if (ctx->watchlist)
+        zlist_destroy (&ctx->watchlist);
+    if (ctx->slave.writeback)
+        zlist_destroy (&ctx->slave.writeback);
+    if (ctx->master.commit_ops)
+        zlist_destroy (&ctx->master.commit_ops);
     free (ctx);
 }
 
