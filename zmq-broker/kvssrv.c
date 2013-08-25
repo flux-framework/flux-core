@@ -65,12 +65,22 @@ typedef struct {
     zlist_t *waitlist;
 } hobj_t;
 
+/* writeback queue entry */
 typedef enum { OP_NAME, OP_STORE, OP_FLUSH } optype_t;
 typedef struct {
     optype_t type;
-    char *key;
-    char *ref;
-    zmsg_t *zmsg;
+    union {
+        struct {
+            char *key;
+            char *ref;
+        } name;
+        struct {
+            char *ref;
+        } store;
+        struct {
+            zmsg_t *zmsg;
+        } flush;
+    } u;
 } op_t;
 
 typedef struct {
@@ -210,26 +220,33 @@ static void commit_done (plugin_ctx_t *p, commit_t *cp)
     cp->done = true;
 }
 
-static op_t *op_create (optype_t type, char *key, char *ref, zmsg_t *zmsg)
+static op_t *op_create (optype_t type)
 {
     op_t *op = xzmalloc (sizeof (*op));
 
     op->type = type;
-    op->key = key;
-    op->ref = ref;
-    op->zmsg = zmsg;
 
     return op;
 }
 
 static void op_destroy (op_t *op)
 {
-    if (op->key)
-        free (op->key);
-    if (op->ref)
-        free (op->ref);
-    if (op->zmsg)
-        zmsg_destroy (&op->zmsg);
+    switch (op->type) {
+        case OP_NAME:
+            if (op->u.name.key)
+                free (op->u.name.key);
+            if (op->u.name.ref)
+                free (op->u.name.ref);
+            break;
+        case OP_STORE:
+            if (op->u.store.ref)
+                free (op->u.store.ref);
+            break;
+        case OP_FLUSH:
+            if (op->u.flush.zmsg)
+                zmsg_destroy (&op->u.flush.zmsg);
+            break;
+    }
     free (op);
 }
 
@@ -239,12 +256,12 @@ static bool op_match (op_t *op1, op_t *op2)
 
     if (op1->type == op2->type) {
         switch (op1->type) {
-            case OP_STORE:
-                if (!strcmp (op1->ref, op2->ref))
+            case OP_NAME:
+                if (!strcmp (op1->u.name.key, op2->u.name.key))
                     match = true;
                 break;
-            case OP_NAME:
-                if (!strcmp (op1->key, op2->key))
+            case OP_STORE:
+                if (!strcmp (op1->u.store.ref, op2->u.store.ref))
                     match = true;
                 break;
             case OP_FLUSH:
@@ -261,7 +278,9 @@ static void commit_add_name (plugin_ctx_t *p, const char *key, const char *ref)
 
     assert (plugin_treeroot (p));
 
-    op = op_create (OP_NAME, xstrdup (key), ref ? xstrdup (ref) : NULL, NULL);
+    op = op_create (OP_NAME);
+    op->u.name.key = xstrdup (key);
+    op->u.name.ref = ref ? xstrdup (ref) : NULL;
     if (zlist_append (ctx->master.commit_ops, op) < 0)
         oom ();
 }
@@ -274,7 +293,9 @@ static void writeback_add_name (plugin_ctx_t *p,
 
     assert (!plugin_treeroot (p));
 
-    op = op_create (OP_NAME, xstrdup (key), ref ? xstrdup (ref) : NULL, NULL);
+    op = op_create (OP_NAME);
+    op->u.name.key = xstrdup (key);
+    op->u.name.ref = ref ? xstrdup (ref) : NULL;
     if (zlist_append (ctx->slave.writeback, op) < 0)
         oom ();
     ctx->slave.writeback_state = WB_DIRTY;
@@ -287,7 +308,8 @@ static void writeback_add_store (plugin_ctx_t *p, const char *ref)
 
     assert (!plugin_treeroot (p));
 
-    op = op_create (OP_STORE, NULL, xstrdup (ref), NULL);
+    op = op_create (OP_STORE);
+    op->u.store.ref = xstrdup (ref);
     if (zlist_append (ctx->slave.writeback, op) < 0)
         oom ();
     ctx->slave.writeback_state = WB_DIRTY;
@@ -300,20 +322,19 @@ static void writeback_add_flush (plugin_ctx_t *p, zmsg_t *zmsg)
 
     assert (!plugin_treeroot (p));
 
-    op = op_create (OP_FLUSH, NULL, NULL, zmsg);
+    op = op_create (OP_FLUSH);
+    op->u.flush.zmsg = zmsg;
     if (zlist_append (ctx->slave.writeback, op) < 0)
         oom ();
 }
 
-static void writeback_del (plugin_ctx_t *p, optype_t type,
-                           char *key, char *ref)
+static void writeback_del (plugin_ctx_t *p, op_t *target)
 {
     ctx_t *ctx = p->ctx;
-    op_t mop = { .type = type, .key = key, .ref = ref, .zmsg = NULL };
     op_t *op = zlist_first (ctx->slave.writeback);
 
     while (op) {
-        if (op_match (op, &mop))
+        if (op_match (op, target))
             break;
         op = zlist_next (ctx->slave.writeback);
     }
@@ -323,7 +344,7 @@ static void writeback_del (plugin_ctx_t *p, optype_t type,
         /* handle flush(es) now at head of queue */
         while ((op = zlist_head (ctx->slave.writeback)) && op->type == OP_FLUSH) {
             ctx->slave.writeback_state = WB_FLUSHING;
-            plugin_send_request_raw (p, &op->zmsg); /* fwd upstream */
+            plugin_send_request_raw (p, &op->u.flush.zmsg); /* fwd upstream */
             zlist_remove (ctx->slave.writeback, op);
             op_destroy (op);
         }
@@ -615,7 +636,7 @@ static void commit (plugin_ctx_t *p)
     assert (cpy != NULL);
     while ((op = zlist_pop (ctx->master.commit_ops))) {
         assert (op->type == OP_NAME);
-        deep_put (cpy, op->key, op->ref);
+        deep_put (cpy, op->u.name.key, op->u.name.ref);
         op_destroy (op);
     }
     deep_unwind (p, cpy, ref);
@@ -713,13 +734,15 @@ static void kvs_store_response (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     json_object *o = NULL;
     json_object_iter iter;
+    op_t target = { .type = OP_STORE };
     
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
     json_object_object_foreachC (o, iter) {
-        writeback_del (p, OP_STORE, NULL, iter.key);
+        target.u.store.ref = iter.key;
+        writeback_del (p, &target);
     }
 done:
     if (o)
@@ -794,13 +817,15 @@ static void kvs_name_response (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     json_object *o = NULL;
     json_object_iter iter;
+    op_t target = { .type = OP_NAME };
     
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
     json_object_object_foreachC (o, iter) {
-        writeback_del (p, OP_NAME, iter.key, NULL);
+        target.u.name.key = iter.key;
+        writeback_del (p, &target);
     }
 done:
     if (o)
