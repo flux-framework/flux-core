@@ -149,7 +149,7 @@ int PMI_Init( int *spawned )
     if (_env_getints ("SLURM_GTIDS", &ctx->clique_ranks, &ctx->clique_size,
                                       dflt_clique_ranks, dflt_clique_size) < 0)
         goto nomem;
-    snprintf (ctx->kvsname, sizeof (ctx->kvsname), "pmi.%d", ctx->appnum);
+    snprintf (ctx->kvsname, sizeof (ctx->kvsname), "%d", ctx->appnum);
     if (!(ctx->cctx = cmb_init ())) {
         err ("cmb_init");
         goto fail;
@@ -354,7 +354,7 @@ int PMI_KVS_Put( const char kvsname[], const char key[], const char value[])
     json_object *o = NULL;
     int rc = PMI_SUCCESS;
 
-    trace (PMI_TRACE_KVS_PUT, "%s %s.%s = %s",
+    trace (PMI_TRACE_KVS_PUT, "%s pmi.%s.%s = %s",
            __FUNCTION__, kvsname, key, value);
 
     if (ctx == NULL) {
@@ -366,7 +366,7 @@ int PMI_KVS_Put( const char kvsname[], const char key[], const char value[])
         rc = PMI_ERR_INVALID_ARG;
         goto done;
     }
-    if (asprintf (&xkey, "%s.%s", kvsname, key) < 0) {
+    if (asprintf (&xkey, "pmi.%s.%s", kvsname, key) < 0) {
         rc = PMI_ERR_NOMEM;
         goto done;
     }
@@ -390,7 +390,7 @@ done:
  */
 int PMI_KVS_Commit( const char kvsname[] )
 {
-    trace (PMI_TRACE_KVS_PUT, "%s %s", __FUNCTION__, kvsname);
+    trace (PMI_TRACE_KVS_PUT, "%s pmi.%s", __FUNCTION__, kvsname);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
@@ -409,7 +409,7 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
     json_object *o = NULL;
     int rc = PMI_SUCCESS;
 
-    trace (PMI_TRACE_KVS_GET, "%s %s.%s", __FUNCTION__, kvsname, key);
+    trace (PMI_TRACE_KVS_GET, "%s pmi.%s.%s", __FUNCTION__, kvsname, key);
     if (ctx == NULL) {
         rc = PMI_ERR_INIT;
         goto done;
@@ -419,7 +419,7 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
         rc = PMI_ERR_INVALID_ARG;
         goto done;
     }
-    if (asprintf (&xkey, "%s.%s", kvsname, key) < 0) {
+    if (asprintf (&xkey, "pmi.%s.%s", kvsname, key) < 0) {
         rc = PMI_ERR_NOMEM;
         goto done;
     }
