@@ -576,12 +576,7 @@ static void deep_unwind (plugin_ctx_t *p, json_object *dir, href_t href)
             deep_unwind (p, o, nhref);
             json_object_object_add (cpy, iter.key,
                                     dirent_create ("DIRREF", nhref));
-        } else if ((o = json_object_object_get (iter.val, "FILEVAL"))) {
-            json_object_get (o);
-            (void)store (p, o, false, nhref);
-            json_object_object_add (cpy, iter.key,
-                                    dirent_create ("FILEREF", nhref));
-        } else { /* FILEREF, DIRREF */
+        } else { /* FILEVAL, FILEREF, DIRREF */
             json_object_get (iter.val);
             json_object_object_add (cpy, iter.key, iter.val);
         }
@@ -892,8 +887,8 @@ stall:
     return false;
 }
 
-static bool lookup_file (plugin_ctx_t *p, json_object *root, wait_t *wp,
-                         const char *name, json_object **valp)
+static bool lookup_shallow (plugin_ctx_t *p, json_object *root, wait_t *wp,
+                            const char *name, json_object **valp)
 {
     json_object *dirent, *val = NULL;
     const char *ref;
@@ -902,10 +897,16 @@ static bool lookup_file (plugin_ctx_t *p, json_object *root, wait_t *wp,
         goto done;
     if (!walk (p, root, name, &dirent, wp))
         goto stall;
-    if (!dirent || util_json_object_get_string (dirent, "FILEREF", &ref) < 0)
+    if (!dirent)
         goto done;
-    if (!load (p, ref, wp, &val))
-        goto stall;
+    if (util_json_object_get_string (dirent, "FILEREF", &ref) == 0
+            || util_json_object_get_string (dirent, "DIRREF", &ref) == 0) {
+        if (!load (p, ref, wp, &val))
+            goto stall;
+    } else if (!(val = json_object_object_get (dirent, "FILEVAL"))
+            && !(val = json_object_object_get (dirent, "DIRVAL"))) {
+        goto done;
+    }
     if (val)
         json_object_get (val);
 done:
@@ -915,8 +916,8 @@ stall:
     return false;
 }
 
-static bool lookup_dir (plugin_ctx_t *p, json_object *root, wait_t *wp,
-                        const char *name, json_object **valp)
+static bool lookup_deep (plugin_ctx_t *p, json_object *root, wait_t *wp,
+                         const char *name, json_object **valp)
 {
     json_object *dirent, *dir, *val = NULL;
     const char *ref;
@@ -970,10 +971,10 @@ static void kvs_get (plugin_ctx_t *p, zmsg_t **zmsg)
             break;
         }
         if (docache) {
-            if (!lookup_dir (p, root, wp, iter.key, &val))
+            if (!lookup_deep (p, root, wp, iter.key, &val))
                 stall = true;
         } else {
-            if (!lookup_file (p, root, wp, iter.key, &val))
+            if (!lookup_shallow (p, root, wp, iter.key, &val))
                 stall = true;
         }
         if (!stall)
