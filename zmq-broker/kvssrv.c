@@ -52,6 +52,10 @@
 #include "util.h"
 #include "log.h"
 
+/* Large values are stored in dirents by reference; small values by value.
+ */
+#define LARGE_VAL 100
+
 typedef void (*wait_fun_t) (plugin_ctx_t *p, zmsg_t **zmsg);
 typedef struct {
     plugin_ctx_t *p;
@@ -72,7 +76,6 @@ typedef struct {
     union {
         struct {
             char *key;
-            char *ref;
         } name;
         struct {
             char *ref;
@@ -91,13 +94,18 @@ typedef struct {
 } commit_t;
 
 typedef struct {
+    char *key;
+    json_object *dirent;
+} name_t;
+
+typedef struct {
     zhash_t *store;
     href_t rootdir;
     int rootseq;
     zhash_t *commits;
     zlist_t *watchlist;
     struct {
-        zlist_t *commit_ops;
+        zlist_t *namequeue;
     } master;
     struct {
         zlist_t *writeback;
@@ -235,8 +243,6 @@ static void op_destroy (op_t *op)
         case OP_NAME:
             if (op->u.name.key)
                 free (op->u.name.key);
-            if (op->u.name.ref)
-                free (op->u.name.ref);
             break;
         case OP_STORE:
             if (op->u.store.ref)
@@ -271,22 +277,7 @@ static bool op_match (op_t *op1, op_t *op2)
     return match;
 }
 
-static void commit_add_name (plugin_ctx_t *p, const char *key, const char *ref)
-{
-    ctx_t *ctx = p->ctx;
-    op_t *op;
-
-    assert (plugin_treeroot (p));
-
-    op = op_create (OP_NAME);
-    op->u.name.key = xstrdup (key);
-    op->u.name.ref = ref ? xstrdup (ref) : NULL;
-    if (zlist_append (ctx->master.commit_ops, op) < 0)
-        oom ();
-}
-
-static void writeback_add_name (plugin_ctx_t *p,
-                                const char *key, const char *ref)
+static void writeback_add_name (plugin_ctx_t *p, const char *key)
 {
     ctx_t *ctx = p->ctx;
     op_t *op;
@@ -295,7 +286,6 @@ static void writeback_add_name (plugin_ctx_t *p,
 
     op = op_create (OP_NAME);
     op->u.name.key = xstrdup (key);
-    op->u.name.ref = ref ? xstrdup (ref) : NULL;
     if (zlist_append (ctx->slave.writeback, op) < 0)
         oom ();
     ctx->slave.writeback_state = WB_DIRTY;
@@ -511,22 +501,30 @@ stall:
 }
 
 
-static void name_request_send (plugin_ctx_t *p, char *key, const href_t ref)
+static void name_request_send (plugin_ctx_t *p, char *key, json_object *dirent)
 {
     json_object *o = util_json_object_new_object ();
 
-    util_json_object_add_string (o, key, ref);
+    json_object_object_add (o, key, dirent);
     plugin_send_request (p, o, "kvs.name");
     json_object_put (o);
 }
 
-static void name (plugin_ctx_t *p, char *key, const href_t ref, bool writeback)
+/* consumes dirent */
+static void name (plugin_ctx_t *p, char *key, json_object *dirent,
+                  bool writeback)
 {
+    ctx_t *ctx = p->ctx;
+
     if (writeback) {
-        writeback_add_name (p, key, ref);
-        name_request_send (p, key, ref);
+        writeback_add_name (p, key);
+        name_request_send (p, key, dirent);
     } else {
-        commit_add_name (p, key, ref);
+        name_t *np = xzmalloc (sizeof (*np));
+        np->key = xstrdup (key);
+        np->dirent = dirent;
+        if (zlist_append (ctx->master.namequeue, np) < 0)
+            oom ();
     }
 }
 
@@ -591,13 +589,12 @@ static void deep_unwind (plugin_ctx_t *p, json_object *dir, href_t href)
     store (p, cpy, false, href);
 }
 
-/* Put (path,ref) to deep copy of root directory.
+/* Put name to deep copy of root directory.  Consumes np.
  *  (assumes deep copy was created with nf=true)
  */
-static void deep_put (json_object *dir, const char *path, char *ref)
+static void deep_put (json_object *dir, name_t *np)
 {
-    char *cpy = xstrdup (path);
-    char *next, *name = cpy;
+    char *next, *name = np->key;
     json_object *dirent;
 
     while ((next = strchr (name, '.'))) {
@@ -615,16 +612,18 @@ static void deep_put (json_object *dir, const char *path, char *ref)
         dir = json_object_object_get (dirent, "DIRVAL");
         name = next;
     }
+    /* dir now is the directory that contains the final path component */
     json_object_object_del (dir, name);
-    if (ref)
-        json_object_object_add (dir, name, dirent_create ("FILEREF", ref));
-    free (cpy);
+    if (np->dirent)
+        json_object_object_add (dir, name, np->dirent); /* consumes dirent */
+    free (np->key);
+    free (np);
 }
 
 static void commit (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
-    op_t *op;
+    name_t *np;
     json_object *dir, *cpy;
     href_t ref;
 
@@ -634,10 +633,8 @@ static void commit (plugin_ctx_t *p)
     assert (dir != NULL);
     cpy = deep_copy (p, dir, NULL, true);
     assert (cpy != NULL);
-    while ((op = zlist_pop (ctx->master.commit_ops))) {
-        assert (op->type == OP_NAME);
-        deep_put (cpy, op->u.name.key, op->u.name.ref);
-        op_destroy (op);
+    while ((np = zlist_pop (ctx->master.namequeue))) {
+        deep_put (cpy, np); /* destroys np */
     }
     deep_unwind (p, cpy, ref);
     json_object_put (cpy);
@@ -760,7 +757,7 @@ static void kvs_clean (plugin_ctx_t *p, zmsg_t **zmsg)
     href_t href;
 
     if ((!plugin_treeroot (p) && zlist_size (ctx->slave.writeback) > 0) ||
-          (plugin_treeroot (p) && zlist_size (ctx->master.commit_ops) > 0)) {
+          (plugin_treeroot (p) && zlist_size (ctx->master.namequeue) > 0)) {
         plugin_log (p, LOG_ALERT, "cache is busy");
         rc = EAGAIN;
         goto done;
@@ -800,8 +797,13 @@ static void kvs_name (plugin_ctx_t *p, zmsg_t **zmsg)
     }
     cpy = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
-        name (p, iter.key, json_object_get_string (iter.val), writeback);
-        json_object_object_add (cpy, iter.key, NULL);
+        if (iter.val) {
+            json_object_get (iter.val);
+            name (p, iter.key, iter.val, writeback);
+            json_object_object_del (cpy, iter.key);
+            json_object_object_add (cpy, iter.key, NULL);
+        } else 
+            name (p, iter.key, NULL, writeback);
     }
     plugin_send_response (p, zmsg, cpy);
 done:
@@ -962,7 +964,7 @@ static void kvs_get (plugin_ctx_t *p, zmsg_t **zmsg)
     ocpy = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
         if (util_json_object_get_boolean (iter.val, "cache", &docache) < 0
-         || util_json_object_get_boolean (iter.val, "watch", &dowatch)) {
+         || util_json_object_get_boolean (iter.val, "watch", &dowatch) < 0) {
             json_object_object_add (ocpy, iter.key, NULL);
             errnum = EPROTO;
             break;
@@ -1018,10 +1020,12 @@ static void kvs_put (plugin_ctx_t *p, zmsg_t **zmsg)
     json_object_object_foreachC (o, iter) {
         if (json_object_get_type (iter.val) == json_type_null) {
             name (p, iter.key, NULL, writeback);
-        } else { 
+        } else if (strlen (json_object_to_json_string (iter.val)) < LARGE_VAL) {
+            name (p, iter.key, dirent_create ("FILEVAL", iter.val), writeback);
+        } else {
             json_object_get (iter.val);
             store (p, iter.val, writeback, ref);
-            name (p, iter.key, ref, writeback);
+            name (p, iter.key, dirent_create ("FILEREF", ref), writeback);
         }
     }
     plugin_send_response_errnum (p, zmsg, 0); /* success */
@@ -1258,7 +1262,7 @@ static void kvs_init (plugin_ctx_t *p)
     if (!(ctx->watchlist = zlist_new ()))
         oom ();
     if (plugin_treeroot (p)) {
-        if (!(ctx->master.commit_ops = zlist_new ()))
+        if (!(ctx->master.namequeue = zlist_new ()))
             oom ();
     } else {
         if (!(ctx->slave.writeback = zlist_new ()))
@@ -1296,8 +1300,8 @@ static void kvs_fini (plugin_ctx_t *p)
         zlist_destroy (&ctx->watchlist);
     if (ctx->slave.writeback)
         zlist_destroy (&ctx->slave.writeback);
-    if (ctx->master.commit_ops)
-        zlist_destroy (&ctx->master.commit_ops);
+    if (ctx->master.namequeue)
+        zlist_destroy (&ctx->master.namequeue);
     free (ctx);
 }
 
