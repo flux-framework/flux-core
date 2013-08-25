@@ -89,7 +89,6 @@ SRUN = srun --overcommit -n$(NTASKS)
 hello: mpi_hello
 	time -p (source /etc/profile.d/modules.sh;\
 		module load $(MPIMOD);\
-		export PMI_TRACE=0xff;\
 		$(SRUN) ./mpi_hello)
 
 dokvstest: kvstest
@@ -98,7 +97,6 @@ dokvstest: kvstest
 dokvstest_nsquared: kvstest
 	$(SRUN) ./kvstest --n-squared
 dokvstest_nsquared_cached: kvstest
-	export PMI_USE_KVS_CACHE=1;\
 	$(SRUN) ./kvstest --n-squared
 
 barrier:
