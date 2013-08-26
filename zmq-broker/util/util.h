@@ -66,6 +66,9 @@ int util_json_object_get_timeval (json_object *o, char *name,
 int util_json_object_get_int_array (json_object *o, char *name,
                                     int **ap, int *lp);
 
+void util_json_encode (json_object *o, char **zbufp, unsigned int *zlenp);
+void util_json_decode (json_object **op, char *zbuf, unsigned int zlen);
+
 json_object *util_json_vlog (int level, const char *fac, const char *src,
                              const char *fmt, va_list ap);
 

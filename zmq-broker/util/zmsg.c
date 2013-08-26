@@ -346,12 +346,10 @@ int cmb_msg_decode (zmsg_t *zmsg, char **tagp, json_object **op)
     if (tagp)
         *tagp = zframe_strdup (tag);
     if (op) {
-        char *tmp = json ? zframe_strdup (json) : NULL;
-
-        if (tmp) {
-            *op = json_tokener_parse (tmp);
-            free (tmp);
-        } else
+        if (json)
+            util_json_decode (op, (char *)zframe_data (json),
+                                          zframe_size (json));
+        else
             *op = NULL;
     }
     return 0;
@@ -360,18 +358,25 @@ eproto:
     return -1;
 }
 
+static void zfree (void *data, void *hint) { free (data); }
+
 zmsg_t *cmb_msg_encode (char *tag, json_object *o)
 {
     zmsg_t *zmsg = NULL;
+    unsigned int zlen;
+    char *zbuf;
+    zframe_t *zf;
 
     if (!(zmsg = zmsg_new ()))
         err_exit ("zmsg_new");
     if (zmsg_addmem (zmsg, tag, strlen (tag)) < 0)
         err_exit ("zmsg_addmem");
     if (o) {
-        const char *s = json_object_to_json_string (o);
-        if (zmsg_addmem (zmsg, s, strlen (s)) < 0)
-            err_exit ("zmsg_addmem");
+        util_json_encode (o, &zbuf, &zlen);
+        if (!(zf = zframe_new_zero_copy (zbuf, zlen, zfree, NULL)))
+            oom ();
+        if (zmsg_add (zmsg, zf) < 0)
+            oom ();
     }
     return zmsg;
 }
@@ -456,36 +461,36 @@ char *cmb_msg_tag (zmsg_t *zmsg, bool shorten)
 
 int cmb_msg_replace_json (zmsg_t *zmsg, json_object *o)
 {
-    const char *json = json_object_to_json_string (o);
     zframe_t *zf = _json_frame (zmsg);
+    char *zbuf;
+    unsigned int zlen;
 
     if (!zf) {
         msg ("%s: no JSON frame", __FUNCTION__);
         errno = EPROTO;
         return -1;
     }
-    zframe_reset (zf, json, strlen (json)); /* N.B. unchecked malloc inside */
+    zmsg_remove (zmsg, zf);
+    zframe_destroy (&zf);
+    util_json_encode (o, &zbuf, &zlen);
+    if (!(zf = zframe_new_zero_copy (zbuf, zlen, zfree, NULL)))
+        oom ();
+    if (zmsg_add (zmsg, zf) < 0)
+        oom ();
     return 0;
 }
 
 int cmb_msg_replace_json_errnum (zmsg_t *zmsg, int errnum)
 {
     json_object *no, *o = NULL;
-    zframe_t *zf = _json_frame (zmsg);
-    const char *json;
 
-    if (!zf) {
-        msg ("%s: no JSON frame", __FUNCTION__);
-        errno = EPROTO;
-        goto error;
-    }
     if (!(o = json_object_new_object ()))
         goto nomem;
     if (!(no = json_object_new_int (errnum)))
         goto nomem;
     json_object_object_add (o, "errnum", no);
-    json = json_object_to_json_string (o);
-    zframe_reset (zf, json, strlen (json)); /* N.B. unchecked malloc inside */
+    if (cmb_msg_replace_json (zmsg, o) < 0)
+        goto error;
     json_object_put (o);
     return 0;
 nomem:
