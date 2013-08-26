@@ -1,5 +1,3 @@
-#define USE_LZ4_COMPRESSION     0
-
 #define _GNU_SOURCE
 #include <stdlib.h>
 #include <stdio.h>
@@ -21,7 +19,6 @@
 
 #include "util.h"
 #include "log.h"
-#include "lz4.h"
 
 void *xzmalloc (size_t size)
 {
@@ -183,20 +180,9 @@ void util_json_encode (json_object *o, char **zbufp, unsigned int *zlenp)
 {
     const char *s = json_object_to_json_string (o);
     unsigned int s_len = strlen (s);
-#if USE_LZ4_COMPRESSION
-    int zlen = LZ4_compressBound (s_len);
-    char *zbuf = xzmalloc (zlen);
-    int rc = LZ4_compress_limitedOutput (s, zbuf, s_len, zlen);
 
-    assert (rc > 0);
-    assert (rc <= zlen);
-    zlen = rc;
-    *zbufp = zbuf;
-    *zlenp = zlen;
-#else
     *zbufp = xstrdup (s);
     *zlenp = s_len;
-#endif
 }
 
 void util_json_decode (json_object **op, char *zbuf, unsigned int zlen)
@@ -205,24 +191,10 @@ void util_json_decode (json_object **op, char *zbuf, unsigned int zlen)
     struct json_tokener *tok;
     char *s;
     int s_len;
-#if USE_LZ4_COMPRESSION
-    int rc;
 
-    s_len = zlen*8;
-    s = malloc (s_len);
-    do {
-        if (!s)
-            oom ();
-        rc = LZ4_decompress_safe (zbuf, s, zlen, s_len);
-        assert (rc >= 0); /* bad input buffer - negative result */
-        if (rc == s_len)
-            s = realloc (s, s_len *= 2);
-    } while (rc == s_len);
-    s_len = rc;
-#else
     s_len = zlen;
     s = zbuf; 
-#endif
+
     if (!(tok = json_tokener_new ()))
         oom ();
     o = json_tokener_parse_ex (tok, s, s_len);
