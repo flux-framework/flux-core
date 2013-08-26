@@ -145,7 +145,7 @@ int main(int argc, char *argv[])
 
     /* keycount puts & one commit per rank */
     for (i = 0; i < keycount; i++) {
-        snprintf (key, key_len, "kvstest.%d.%d", id, i);
+        snprintf (key, key_len, "kvstest-%d-%d", id, i);
         snprintf (val, val_len, "sandwich.%d.%d", id, i);
         rc = PMI_KVS_Put (kvsname, key, val);
         if (rc != PMI_SUCCESS)
@@ -169,7 +169,7 @@ int main(int argc, char *argv[])
     for (i = 0; i < keycount; i++) {
         if (nsquared) {
             for (j = 0; j < ntasks; j++) {
-                snprintf (key, key_len, "kvstest.%d.%d", j, i);
+                snprintf (key, key_len, "kvstest-%d-%d", j, i);
                 rc = PMI_KVS_Get (kvsname, key, val, val_len);
                 if (rc != PMI_SUCCESS)
                     _fatal (id, rc, "PMI_KVS_Get");
@@ -182,7 +182,7 @@ int main(int argc, char *argv[])
                 }
             }
         } else {
-            snprintf (key, key_len, "kvstest.%d.%d",
+            snprintf (key, key_len, "kvstest-%d-%d",
                       id > 0 ? id - 1 : ntasks - 1, i);
             rc = PMI_KVS_Get (kvsname, key, val, val_len);
             if (rc != PMI_SUCCESS)
