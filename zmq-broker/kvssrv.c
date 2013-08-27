@@ -56,11 +56,12 @@
  */
 #define LARGE_VAL 100
 
-typedef void (*wait_fun_t) (plugin_ctx_t *p, zmsg_t **zmsg);
+typedef void (*wait_fun_t) (plugin_ctx_t *p, char *arg, zmsg_t **zmsg);
 typedef struct {
     plugin_ctx_t *p;
     int usecount;
     wait_fun_t fun;    
+    char *arg;
     zmsg_t *zmsg;
 } wait_t;
 
@@ -115,11 +116,14 @@ typedef struct {
 
 static void event_kvs_setroot_send (plugin_ctx_t *p);
 
-static wait_t *wait_create (plugin_ctx_t *p, wait_fun_t fun, zmsg_t **zmsg)
+static wait_t *wait_create (plugin_ctx_t *p, wait_fun_t fun,
+                            char *arg, zmsg_t **zmsg)
 {
     wait_t *wp = xzmalloc (sizeof (*wp));
     wp->usecount = 0;
     wp->fun = fun;
+    if (arg)
+        wp->arg = xstrdup (arg);
     wp->zmsg = *zmsg;
     *zmsg = NULL;
     wp->p = p;
@@ -130,6 +134,8 @@ static wait_t *wait_create (plugin_ctx_t *p, wait_fun_t fun, zmsg_t **zmsg)
 static void wait_destroy (wait_t *wp, zmsg_t **zmsg)
 {
     assert (zmsg != NULL || wp->zmsg == NULL);
+    if (wp->arg)
+        free (wp->arg);
     if (zmsg)
         *zmsg = wp->zmsg;
     free (wp);
@@ -157,7 +163,7 @@ static void wait_del_all (zlist_t *waitlist)
             oom ();
     while ((wp = zlist_pop (cpy))) {
         if (--wp->usecount == 0) {
-            wp->fun (wp->p, &wp->zmsg);
+            wp->fun (wp->p, wp->arg, &wp->zmsg);
             wait_destroy (wp, NULL);
         }
     }
@@ -636,7 +642,7 @@ static void commit (plugin_ctx_t *p)
     setroot (p, ctx->rootseq + 1, ref);
 }
 
-static void kvs_load (plugin_ctx_t *p, zmsg_t **zmsg)
+static void kvs_load (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     json_object *val, *cpy = NULL, *o = NULL;
     json_object_iter iter;
@@ -647,7 +653,7 @@ static void kvs_load (plugin_ctx_t *p, zmsg_t **zmsg)
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    wp = wait_create (p, kvs_load, zmsg);
+    wp = wait_create (p, kvs_load, arg, zmsg);
     cpy = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
         if (!load (p, iter.key, wp, &val))
@@ -693,7 +699,7 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_store (plugin_ctx_t *p, zmsg_t **zmsg)
+static void kvs_store (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     json_object *cpy = NULL, *o = NULL;
     json_object_iter iter;
@@ -743,7 +749,7 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_clean (plugin_ctx_t *p, zmsg_t **zmsg)
+static void kvs_clean (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     int s1, s2;
@@ -780,7 +786,7 @@ done:
     plugin_send_response_errnum (p, zmsg, rc);
 }
 
-static void kvs_name (plugin_ctx_t *p, zmsg_t **zmsg)
+static void kvs_name (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     json_object *cpy = NULL, *o = NULL;
     json_object_iter iter;
@@ -831,7 +837,7 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_flush (plugin_ctx_t *p, zmsg_t **zmsg)
+static void kvs_flush (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
 
@@ -887,27 +893,45 @@ stall:
     return false;
 }
 
-static bool lookup_shallow (plugin_ctx_t *p, json_object *root, wait_t *wp,
-                            const char *name, json_object **valp)
+static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
+                    bool deep, bool dirok, const char *name, json_object **valp)
 {
-    json_object *dirent, *val = NULL;
+    json_object *vp, *dirent, *val = NULL;
     const char *ref;
+    bool isdir = false;
 
-    if (!strcmp (name, "."))
-        goto done;
-    if (!walk (p, root, name, &dirent, wp))
-        goto stall;
-    if (!dirent)
-        goto done;
-    if (util_json_object_get_string (dirent, "FILEREF", &ref) == 0
-            || util_json_object_get_string (dirent, "DIRREF", &ref) == 0) {
-        if (!load (p, ref, wp, &val))
+    if (!strcmp (name, ".")) {
+        val = root;
+        isdir = true;
+    } else {
+        if (!walk (p, root, name, &dirent, wp))
             goto stall;
-    } else if (!(val = json_object_object_get (dirent, "FILEVAL"))
-            && !(val = json_object_object_get (dirent, "DIRVAL"))) {
-        goto done;
+        if (!dirent)
+            goto done;
+        if (util_json_object_get_string (dirent, "DIRREF", &ref) == 0) {
+            if (!dirok)
+                goto done;
+            if (!load (p, ref, wp, &val))
+                goto stall;
+            isdir = true;
+        } else if (util_json_object_get_string (dirent, "FILEREF", &ref) == 0) {
+            if (!load (p, ref, wp, &val))
+                goto stall;
+        } else if ((vp = json_object_object_get (dirent, "DIRVAL"))) {
+            if (!dirok)
+                goto done;
+            val = vp;
+            isdir = true;
+        } else if (!(val = json_object_object_get (dirent, "FILEVAL")))
+            msg_exit ("%s: corrupt internal storage", __FUNCTION__);
     }
-    if (val)
+    /* val now contains the requested object */
+    if (isdir && deep) {
+        if (!plugin_treeroot (p) && !readahead_dir (p, val, wp))
+            goto stall;
+        if (!(val = deep_copy (p, val, wp, false)))
+            goto stall;
+    } else 
         json_object_get (val);
 done:
     *valp = val;
@@ -916,98 +940,65 @@ stall:
     return false;
 }
 
-static bool lookup_deep (plugin_ctx_t *p, json_object *root, wait_t *wp,
-                         const char *name, json_object **valp)
-{
-    json_object *dirent, *dir, *val = NULL;
-    const char *ref;
-
-    if (!strcmp (name, "."))
-        dir = root;
-    else {
-        if (!walk (p, root, name, &dirent, wp))
-            goto stall;
-        if (!dirent || util_json_object_get_string (dirent, "DIRREF", &ref) < 0)
-            goto done;
-        if (!load (p, ref, wp, &dir))
-            goto stall;
-    }
-    if (!plugin_treeroot (p) && !readahead_dir (p, dir, wp))
-        goto stall;
-    if (!(val = deep_copy (p, dir, wp, false)))
-        goto stall;
-done:
-    *valp = val;
-    return true;
-stall:
-    return false;
-}
-
-static void kvs_get (plugin_ctx_t *p, zmsg_t **zmsg)
+static void kvs_get (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
-    json_object *root, *val, *ocpy = NULL, *o = NULL;
+    json_object *root, *reply = NULL, *o = NULL;
     json_object_iter iter;
     wait_t *wp = NULL;
-    bool stall = false;
-    bool docache, dowatch = false;
-    int errnum = 0;
+    bool stall = false, changed = false;
+    bool dirok = true, deep = false, watch = false;
 
+    if (!strcmp (arg, "dir"))           /* kvs.get.dir */
+        deep = true;
+    else if (!strcmp (arg, "watch"))    /* kvs.get.watch */
+        watch = true;
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    wp = wait_create (p, kvs_get, zmsg);
+    wp = wait_create (p, kvs_get, arg, zmsg);
     if (!load (p, ctx->rootdir, wp, &root)) {
         stall = true;
         goto done;
     }
-    ocpy = util_json_object_new_object ();
+    reply = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
-        if (util_json_object_get_boolean (iter.val, "cache", &docache) < 0
-         || util_json_object_get_boolean (iter.val, "watch", &dowatch) < 0) {
-            json_object_object_add (ocpy, iter.key, NULL);
-            errnum = EPROTO;
-            break;
+        json_object *val = NULL;
+        if (!lookup (p, root, wp, deep, dirok, iter.key, &val)) /* val ref++ */
+            stall = true; /* set flag but keep going to maximize readahead */
+        if (stall) {
+            if (val)
+                json_object_put (val);
+            continue;
         }
-        if (docache) {
-            if (!lookup_deep (p, root, wp, iter.key, &val))
-                stall = true;
-        } else {
-            if (!lookup_shallow (p, root, wp, iter.key, &val))
-                stall = true;
-        }
-        if (!stall)
-            json_object_object_add (ocpy, iter.key, val);
+        if (watch && !util_json_match (iter.val, val))
+            changed = true;
+        json_object_object_add (reply, iter.key, val);
     }
     if (!stall) {
-        wait_destroy (wp, zmsg);
-        if (errnum > 0)
-            plugin_send_response_errnum (p, zmsg, errnum);
-        else {
-            /* FIXME: value of watch flag for last requested key causes
-             * all requested keys to be watched or not.
-             */
-            if (dowatch) {
-                zmsg_t *cpy = zmsg_dup (*zmsg);
-                if (!cpy)
-                    oom ();
-                wp = wait_create (p, kvs_get, &cpy);
-                wait_add (ctx->watchlist, wp); 
-            }
-            plugin_send_response (p, zmsg, ocpy);
+        wait_destroy (wp, zmsg); /* get back *zmsg */
+        int rc = cmb_msg_replace_json (*zmsg, reply);
+        assert (rc == 0);
+        if (watch) {
+            zmsg_t *zcpy;
+            if (!(zcpy = zmsg_dup (*zmsg)))
+                oom ();
+            wait_add (ctx->watchlist, wait_create (p, kvs_get, arg, &zcpy));
         }
+        if (!watch || changed)
+            plugin_send_response_raw (p, zmsg);
     }
 done:
     if (o)
         json_object_put (o);
-    if (ocpy)
-        json_object_put (ocpy);
+    if (reply)
+        json_object_put (reply);
     if (*zmsg)
         zmsg_destroy (zmsg);
 }
 
-static void kvs_put (plugin_ctx_t *p, zmsg_t **zmsg)
+static void kvs_put (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     json_object *o = NULL;
     json_object_iter iter;
@@ -1056,7 +1047,7 @@ static void commit_response_send (plugin_ctx_t *p, commit_t *cp,
     free (rootref);
 }
 
-static void kvs_commit (plugin_ctx_t *p, zmsg_t **zmsg)
+static void kvs_commit (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     json_object *o = NULL;
     const char *name;
@@ -1068,7 +1059,7 @@ static void kvs_commit (plugin_ctx_t *p, zmsg_t **zmsg)
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    wp = wait_create (p, kvs_commit, zmsg);
+    wp = wait_create (p, kvs_commit, arg, zmsg);
     if (plugin_treeroot (p)) {
         if (!(cp = commit_find (p, name))) {
             commit (p);
@@ -1122,7 +1113,7 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_getroot (plugin_ctx_t *p, zmsg_t **zmsg)
+static void kvs_getroot (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     json_object *o;
@@ -1169,7 +1160,7 @@ static int log_store_entry (const char *key, void *item, void *arg)
     return 0;
 }
 
-static void event_kvs_debug (plugin_ctx_t *p, zmsg_t **zmsg, char *arg)
+static void event_kvs_debug (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
 
@@ -1195,7 +1186,6 @@ static void event_kvs_debug (plugin_ctx_t *p, zmsg_t **zmsg, char *arg)
         plugin_log (p, LOG_DEBUG, "commits %d/%d complete",
                     done, zhash_size (ctx->commits));
     }
-
     if (*zmsg)
         zmsg_destroy (zmsg);
 }
@@ -1205,40 +1195,40 @@ static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
     char *arg = NULL;
 
     if (cmb_msg_match (*zmsg, "kvs.getroot")) {
-        kvs_getroot (p, zmsg);
+        kvs_getroot (p, NULL, zmsg);
     } else if (cmb_msg_match_substr (*zmsg, "event.kvs.setroot.", &arg)) {
         event_kvs_setroot (p, arg, zmsg);
     } else if (cmb_msg_match_substr (*zmsg, "event.kvs.debug.", &arg)) {
-        event_kvs_debug (p, zmsg, arg);
+        event_kvs_debug (p, arg, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.clean")) {
-        kvs_clean (p, zmsg);
-    } else if (cmb_msg_match (*zmsg, "kvs.get")) {
-        kvs_get (p, zmsg);
+        kvs_clean (p, NULL, zmsg);
+    } else if (cmb_msg_match_substr (*zmsg, "kvs.get.", &arg)) {
+        kvs_get (p, arg, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.put")) {
-        kvs_put (p, zmsg);
+        kvs_put (p, NULL, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.load")) {
         if (type == ZMSG_REQUEST)
-            kvs_load (p, zmsg);
+            kvs_load (p, NULL, zmsg);
         else
             kvs_load_response (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.store")) {
         if (type == ZMSG_REQUEST)
-            kvs_store (p, zmsg);
+            kvs_store (p, NULL, zmsg);
         else
             kvs_store_response (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.name")) {
         if (type == ZMSG_REQUEST)
-            kvs_name (p, zmsg);
+            kvs_name (p, NULL, zmsg);
         else
             kvs_name_response (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.flush")) {
         if (type == ZMSG_REQUEST)
-            kvs_flush (p, zmsg);
+            kvs_flush (p, NULL, zmsg);
         else
             kvs_flush_response (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.commit")) {
         if (type == ZMSG_REQUEST)
-            kvs_commit (p, zmsg);
+            kvs_commit (p, NULL, zmsg);
         else
             kvs_commit_response (p, zmsg);
     }

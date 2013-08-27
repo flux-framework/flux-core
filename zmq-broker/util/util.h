@@ -68,9 +68,11 @@ int util_json_object_get_int_array (json_object *o, char *name,
 
 void util_json_encode (json_object *o, char **zbufp, unsigned int *zlenp);
 void util_json_decode (json_object **op, char *zbuf, unsigned int zlen);
+bool util_json_match (json_object *o1, json_object *o2);
 
 json_object *util_json_vlog (int level, const char *fac, const char *src,
                              const char *fmt, va_list ap);
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

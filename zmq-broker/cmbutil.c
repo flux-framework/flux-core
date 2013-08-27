@@ -253,8 +253,8 @@ int main (int argc, char *argv[])
             case 'K': { /* --kvs-get key */
                 json_object *o;
 
-                if (cmb_kvs_get (c, optarg, &o, 0) < 0)
-                    err_exit ("cmb_conf_get");
+                if (cmb_kvs_get (c, optarg, &o, KVS_GET_VAL) < 0)
+                    err_exit ("cmb_kvs_get");
                 if (json_object_get_type (o) == json_type_string)
                     printf ("%s = \"%s\"\n", optarg,
                             json_object_get_string (o));
@@ -267,8 +267,8 @@ int main (int argc, char *argv[])
             }
             case 'Y': { /* --kvs-watch key */
                 json_object *o;
-                if (cmb_kvs_get (c, optarg, &o, KVS_FLAGS_WATCH) < 0)
-                    err_exit ("cmb_conf_get");
+                if (cmb_kvs_get (c, optarg, &o, KVS_GET_WATCH) < 0)
+                    err_exit ("cmb_kvs_get");
                 do {
                     if (json_object_get_type (o) == json_type_string)
                         printf ("%s = \"%s\"\n", optarg,
@@ -278,16 +278,16 @@ int main (int argc, char *argv[])
                                 json_object_to_json_string_ext (o,
                                                    JSON_C_TO_STRING_PLAIN));
                     json_object_put (o);
-                } while (cmb_kvs_get (c, optarg, &o, KVS_FLAGS_RCVONLY) == 0);
+                } while (cmb_kvs_get (c, optarg, &o, KVS_GET_NEXT) == 0);
                 break;
             }
             case 'j': { /* --kvs-get-cached key */
                 json_object *dir = NULL, *o = NULL;
 
-                if (cmb_kvs_get (c, ".", &dir, KVS_FLAGS_CACHE) < 0)
+                if (cmb_kvs_get (c, ".", &dir, KVS_GET_DIR) < 0)
                     err_exit ("cmb_kvs_get");
                 if (cmb_kvs_get_cache (dir, optarg, &o) < 0)
-                    err_exit ("%s", optarg);
+                    err_exit ("cmb_kvs_get_cache: %s", optarg);
                 if (json_object_get_type (o) == json_type_string)
                     printf ("%s = \"%s\"\n", optarg,
                             json_object_get_string (o));
@@ -302,7 +302,7 @@ int main (int argc, char *argv[])
             case 'l': { /* --kvs-list name */
                 json_object *o;
 
-                if (cmb_kvs_get (c, optarg, &o, KVS_FLAGS_CACHE) < 0)
+                if (cmb_kvs_get (c, optarg, &o, KVS_GET_DIR) < 0)
                     err_exit ("cmb_conf_get");
                 list_kvs (optarg, o);
                 json_object_put (o);

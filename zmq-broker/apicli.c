@@ -504,26 +504,32 @@ error:
     return -1;
 }
 
-static json_object *json_kvs_flags (int flags)
+static const char *kvs_flagstr (kvs_get_t flag)
 {
-    json_object *o = util_json_object_new_object ();
-
-    util_json_object_add_boolean (o, "cache", (flags & KVS_FLAGS_CACHE));
-    util_json_object_add_boolean (o, "watch", (flags & KVS_FLAGS_WATCH));
-
-    return o;
+    switch (flag) {
+        case KVS_GET_VAL:
+            return "val";
+        case KVS_GET_WATCH:
+            return "watch";
+        case KVS_GET_NEXT:
+            return NULL;
+        case KVS_GET_DIR:
+            return "dir";
+    }
+    return NULL;
 }
 
-int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, int flags)
+int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, kvs_get_t flag)
 {
     json_object *val, *o = NULL;
     int rc = -1;
+    const char *flagstr = kvs_flagstr (flag);
 
     /* send request */
-    if (!(flags & KVS_FLAGS_RCVONLY)) {
+    if (flagstr) {
         o = util_json_object_new_object ();
-        json_object_object_add (o, key, json_kvs_flags (flags));
-        if (_send_message (c, o, "%s", "kvs.get") < 0)
+        json_object_object_add (o, key, NULL);
+        if (_send_message (c, o, "kvs.get.%s", flagstr) < 0)
             goto done;
         json_object_put (o);
         o = NULL;

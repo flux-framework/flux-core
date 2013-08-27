@@ -70,11 +70,24 @@ int cmb_conf_next (cmb_t c, char **key, json_object **vo);
 
 /* Get/put key-value pairs.
  */
-enum { KVS_FLAGS_CACHE=1, KVS_FLAGS_WATCH=2, KVS_FLAGS_RCVONLY=4 };
+typedef enum {
+    KVS_GET_VAL=0,      /* get value of key */
+    KVS_GET_WATCH,      /* start watch */
+    KVS_GET_NEXT,       /* receive next watch change */
+    KVS_GET_DIR,        /* get deep copy of directory */
+} kvs_get_t;
+typedef struct cmb_kvs_iterator_struct *cmb_kvs_iterator_t;
+
+int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, kvs_get_t flag);
+
+int cmb_kvs_get_cache (json_object *dir, const char *key, json_object **vp);
+int cmb_kvs_iterator_create (json_object  *dir, cmb_kvs_iterator_t *itrp);
+int cmb_kvs_iterator_next (cmb_kvs_iterator_t itr,
+                           const char *keyp, json_object **valp);
+int cmb_kvs_iterator_destroy (cmb_kvs_iterator_t itr);
+
 int cmb_kvs_put (cmb_t c, const char *key, json_object *val);
 int cmb_kvs_del (cmb_t c, const char *key);
-int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, int flags);
-int cmb_kvs_get_cache (json_object *cache, const char *key, json_object **vp);
 int cmb_kvs_flush (cmb_t c);
 int cmb_kvs_commit (cmb_t c, const char *name);
 int cmb_kvs_clean (cmb_t c);
