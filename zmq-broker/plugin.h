@@ -9,12 +9,12 @@ typedef struct {
     int event_recv_count;
 } plugin_stats_t;
 
-typedef void (ConfSetF (const char *key, json_object *o, void *arg));
+typedef void (kvs_watch_f(const char *key, json_object *o, void *arg));
 
 typedef struct {
     void *arg;
-    ConfSetF *set;
-} conf_watcher_t;
+    kvs_watch_f *set;
+} kvs_watcher_t;
 
 typedef struct ptimeout_struct *ptimeout_t;
 
@@ -31,7 +31,7 @@ typedef struct {
     plugin_t plugin;
     server_t *srv;
     plugin_stats_t stats;
-    zhash_t *conf_watcher;
+    zhash_t *kvs_watcher;
     zloop_t *zloop;
     void *ctx;
 } plugin_ctx_t;
@@ -76,11 +76,12 @@ bool plugin_timeout_isset (plugin_ctx_t *p);
 
 void plugin_log (plugin_ctx_t *p, int lev, const char *fmt, ...);
 
-json_object *plugin_conf_get (plugin_ctx_t *p, const char *key);
-int plugin_conf_put (plugin_ctx_t *p, const char *key, json_object *vo);
-int plugin_conf_commit (plugin_ctx_t *p);
-void plugin_conf_watch (plugin_ctx_t *p, const char *key,
-                        ConfSetF *set, void *arg);
+int plugin_kvs_get (plugin_ctx_t *p, const char *key, json_object **valp);
+int plugin_kvs_put (plugin_ctx_t *p, const char *key, json_object *val);
+int plugin_kvs_flush (plugin_ctx_t *p);
+int plugin_kvs_commit (plugin_ctx_t *p);
+int plugin_kvs_watch (plugin_ctx_t *p, const char *key,
+                      kvs_watch_f *set, void *arg);
 
 bool plugin_treeroot (plugin_ctx_t *p);
 

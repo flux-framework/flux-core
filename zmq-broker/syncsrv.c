@@ -49,7 +49,7 @@ static void _set_sync_period_sec (const char *key, json_object *o, void *arg)
 
 static void _init (plugin_ctx_t *p)
 {
-    plugin_conf_watch (p, "sync.period.sec", _set_sync_period_sec, p);
+    plugin_kvs_watch (p, "conf.sync.period-sec", _set_sync_period_sec, p);
 }
 
 struct plugin_struct syncsrv = {

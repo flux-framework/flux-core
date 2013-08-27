@@ -241,7 +241,7 @@ static void _recv_event_live (plugin_ctx_t *p, bool alive, int rank)
         msg ("%s: received message for bogus rank %d", __FUNCTION__, rank);
         goto done;
     }
-    old = plugin_conf_get (p, "live.down");
+    (void)plugin_kvs_get (p, "conf.live.down", &old);
     if (!(new = json_object_new_array ()))
         oom ();
     if (!alive) {
@@ -259,8 +259,9 @@ static void _recv_event_live (plugin_ctx_t *p, bool alive, int rank)
             }
         }
     }
-    plugin_conf_put (p, "live.down", new);
-    plugin_conf_commit (p);
+    plugin_kvs_put (p, "conf.live.down", new);
+    //plugin_kvs_flush (p);
+    plugin_kvs_commit (p);
 done:
     if (old)
         json_object_put (old);
@@ -328,6 +329,8 @@ static void _set_live_down (const char *key, json_object *o, void *arg)
     plugin_ctx_t *p = arg;
     ctx_t *ctx = p->ctx;
 
+    msg ("XXX %s %s", __FUNCTION__, json_object_to_json_string (o));
+
     if (ctx->conf.live_down)
         json_object_put (ctx->conf.live_down);
     json_object_get (o);
@@ -342,10 +345,10 @@ static void _init (plugin_ctx_t *p)
     if (!(ctx->kids = zhash_new ()))
         oom ();
 
-    plugin_conf_watch (p, "live.missed.trigger.allow",
+    plugin_kvs_watch (p, "conf.live.missed-trigger-allow",
                       _set_live_missed_trigger_allow, p);
-    plugin_conf_watch (p, "topology", _set_topology, p);
-    plugin_conf_watch (p, "live.down", _set_live_down, p);
+    plugin_kvs_watch (p, "conf.live.topology", _set_topology, p);
+    plugin_kvs_watch (p, "conf.live.down", _set_live_down, p);
 
     zsocket_set_subscribe (p->zs_evin, "event.sched.trigger.");
     if (plugin_treeroot (p))

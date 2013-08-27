@@ -284,136 +284,6 @@ error:
     return -1;
 }
 
-int cmb_conf_put (cmb_t c, const char *key, json_object *vo)
-{
-    json_object *o = util_json_object_new_object ();
-
-    /* send request */
-    util_json_object_add_string (o, "key", key);
-    json_object_get (vo);
-    json_object_object_add (o, "val", vo);
-    if (_send_message (c, o, "conf.put") < 0)
-        goto error;
-    json_object_put (o);
-    o = NULL;
-
-    /* receive response */
-    if (_recv_message (c, NULL, &o, false) < 0)
-        goto error;
-    if (o == NULL || util_json_object_get_int (o, "errnum", &errno) < 0)
-        goto eproto;
-    if (errno != 0)
-        goto error;
-    json_object_put (o);
-    return 0;
-eproto:
-    errno = EPROTO;
-error:
-    if (o)
-        json_object_put (o);
-    return -1;
-}
-
-int cmb_conf_commit (cmb_t c)
-{
-    json_object *o = util_json_object_new_object ();
-
-    /* send request */
-    if (_send_message (c, o, "conf.commit") < 0)
-        goto error;
-    json_object_put (o);
-    o = NULL;
-
-    /* receive response */
-    if (_recv_message (c, NULL, &o, false) < 0)
-        goto error;
-    if (o == NULL || util_json_object_get_int (o, "errnum", &errno) < 0)
-        goto eproto;
-    if (errno != 0)
-        goto error;
-    json_object_put (o);
-    return 0;
-eproto:
-    errno = EPROTO;
-error:
-    if (o)
-        json_object_put (o);
-    return -1;
-}
-
-json_object *cmb_conf_get (cmb_t c, const char *key, bool watch)
-{
-    json_object *o = util_json_object_new_object ();
-    json_object *vo = NULL;
-
-    /* send request */
-    util_json_object_add_string (o, "key", key);
-    util_json_object_add_boolean (o, "watch", watch);
-    if (_send_message (c, o, "conf.get") < 0)
-        goto error;
-    json_object_put (o);
-    o = NULL;
-
-    /* receive response */
-    if (_recv_message (c, NULL, &o, false) < 0)
-        goto error;
-    if (util_json_object_get_int (o, "errnum", &errno) == 0)
-        goto error;
-    vo = json_object_object_get (o, "val");
-    json_object_get (vo);
-    json_object_put (o);
-    return vo;
-error:
-    if (o)
-        json_object_put (o);
-    return NULL;
-}
-
-int cmb_conf_list (cmb_t c)
-{
-    json_object *o = util_json_object_new_object ();
-
-    if (_send_message (c, o, "conf.list") < 0)
-        goto error;
-    json_object_put (o);
-    return 0;
-error:
-    json_object_put (o);
-    return -1;
-}
-
-/* EOF = error response with errnum == 0 */
-int cmb_conf_next (cmb_t c, char **kp, json_object **vop)
-{
-    json_object *o = NULL;
-    const char *key;
-    json_object *vo;
-
-    if (_recv_message (c, NULL, &o, false) < 0)
-        goto error;
-    if (!o)
-        goto eproto;
-    if (util_json_object_get_int (o, "errnum", &errno) == 0)
-        goto error;
-    if (util_json_object_get_string (o, "key", &key) < 0)
-        goto eproto;
-    vo = json_object_object_get (o, "val");
-    if (vop) {
-        json_object_get (vo);
-        *vop = vo;
-    }
-    if (kp)
-        *kp = xstrdup (key);
-    json_object_put (o);
-    return 0;
-eproto:
-    errno = EPROTO;
-error:
-    if (o)
-        json_object_put (o);
-    return -1;
-}
-
 int cmb_kvs_put (cmb_t c, const char *key, json_object *val)
 {
     json_object *o = util_json_object_new_object ();
@@ -476,12 +346,15 @@ error:
     return -1;
 }
 
-int cmb_kvs_commit (cmb_t c, const char *name)
+int cmb_kvs_commit (cmb_t c, const char *commit_name)
 {
     json_object *o = util_json_object_new_object ();
 
+    if (!commit_name)
+        commit_name = uuid_generate_str ();
+
     /* send request */
-    util_json_object_add_string (o, "name", name);
+    util_json_object_add_string (o, "name", commit_name);
     if (_send_message (c, o, "kvs.commit") < 0)
         goto error;
     json_object_put (o);
@@ -543,7 +416,7 @@ int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, kvs_get_t flag)
         goto done;
     }
     if (util_json_object_get_int (o, "errnum", &errno) == 0)
-        goto done; /* EOF: errno=0 */
+        goto done;
     if (!(val = json_object_object_get (o, key))) {
         errno = ENOENT;
         goto done;

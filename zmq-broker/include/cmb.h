@@ -60,14 +60,6 @@ int cmb_event_send (cmb_t c, char *event);
  */
 int cmb_barrier (cmb_t c, char *name, int nprocs);
 
-/* Get/put key-value config pairs.
- */
-int cmb_conf_put (cmb_t c, const char *key, json_object *vo);
-json_object *cmb_conf_get (cmb_t c, const char *key, bool watch);
-int cmb_conf_commit (cmb_t c);
-int cmb_conf_list (cmb_t c);
-int cmb_conf_next (cmb_t c, char **key, json_object **vo);
-
 /* Get/put key-value pairs.
  */
 typedef enum {

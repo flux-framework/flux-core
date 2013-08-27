@@ -227,38 +227,38 @@ int main (int argc, char *argv[])
 typedef struct {
     server_t *srv;
     conf_t *conf;
-} conf_set_one_arg_t;
+} kvs_put_one_arg_t;
 
-static int _conf_set_one (const char *key, void *item, void *arg)
+static int _kvs_put_one (const char *key, void *item, void *arg)
 {
-    conf_set_one_arg_t *ca = arg;
+    kvs_put_one_arg_t *ca = arg;
     server_t *srv = ca->srv;
     conf_t *conf = ca->conf;
     zmsg_t *zmsg = NULL;
     json_object *no, *o = util_json_object_new_object ();
 
-    util_json_object_add_string (o, "key", key);
     if ((no = json_tokener_parse ((char *)item)))
-        json_object_object_add (o, "val", no);
+        json_object_object_add (o, key, no);
     else
-        util_json_object_add_string (o, "val", (char *)item);
-    if (_request_send (conf, srv, o, "conf.put") < 0)
+        util_json_object_add_string (o, (char *)key, (char *)item);
+    if (_request_send (conf, srv, o, "kvs.put") < 0) {
         goto error;
+    }
     json_object_put (o);
     o = NULL;
     zmsg = NULL;
 
-    if (!(zmsg = zmsg_recv_unrouter (srv->zs_dnreq_out)))
+    if (!(zmsg = zmsg_recv_unrouter (srv->zs_dnreq_out))) {
         goto error;
-    if (cmb_msg_decode (zmsg, NULL, &o) < 0 || !o)
+    }
+    if (cmb_msg_decode (zmsg, NULL, &o) < 0 || !o
+            || util_json_object_get_int (o, "errnum", &errno) < 0) {
         goto eproto;
-    if (util_json_object_get_int (o, "errnum", &errno) < 0)
-        goto eproto;
+    }
     if (errno != 0)
         goto error;
     zmsg_destroy (&zmsg);
     json_object_put (o);
-    
     return 0;
 eproto:
     errno = EPROTO;
@@ -270,12 +270,14 @@ error:
     return 1;
 }
 
-static int _conf_commit (server_t *srv, conf_t *conf)
+static int _kvs_commit (server_t *srv, conf_t *conf)
 {
     zmsg_t *zmsg = NULL;
     json_object *o = util_json_object_new_object ();
+    char *commit_name = uuid_generate_str ();
 
-    if (_request_send (conf, srv, o, "conf.commit") < 0)
+    util_json_object_add_string (o, "name", commit_name);
+    if (_request_send (conf, srv, o, "kvs.commit") < 0)
         goto error;
     json_object_put (o);
     o = NULL;
@@ -284,13 +286,11 @@ static int _conf_commit (server_t *srv, conf_t *conf)
         goto error;
     if (cmb_msg_decode (zmsg, NULL, &o) < 0 || !o)
         goto eproto;
-    if (util_json_object_get_int (o, "errnum", &errno) < 0)
-        goto eproto;
-    if (errno != 0)
+    if (util_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
     zmsg_destroy (&zmsg);
     json_object_put (o);
-    
+    free (commit_name);
     return 0;
 eproto:
     errno = EPROTO;
@@ -299,6 +299,8 @@ error:
         zmsg_destroy (&zmsg);
     if (o)
         json_object_put (o);
+    if (commit_name)
+        free (commit_name);
     return 1;
 }
 
@@ -394,10 +396,10 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
      * initialization has completed before it answers any queries.
      */
     if (conf->rank == 0) {
-        conf_set_one_arg_t ca = { .srv = srv, .conf = conf };
-        if (zhash_foreach (conf->conf_hash, _conf_set_one, &ca) != 0)
+        kvs_put_one_arg_t ca = { .srv = srv, .conf = conf };
+        if (zhash_foreach (conf->conf_hash, _kvs_put_one, &ca) != 0)
             err_exit ("failed to initialize conf store on rank 0");
-        _conf_commit (srv, conf);
+        _kvs_commit (srv, conf);
     } else if (zhash_size (conf->conf_hash) > 0)
         err_exit ("set-conf should only be used on rank 0");
 

@@ -21,7 +21,7 @@
 static int _parse_logstr (char *s, int *lp, char **fp);
 static void list_kvs (const char *name, json_object *o);
 
-#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Za:A:cXw:yl:j:Y:"
+#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Zyl:j:Y:"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -50,11 +50,6 @@ static const struct option longopts[] = {
     {"route-query",no_argument,        0, 'q'},
     {"socket-path",required_argument,  0, 'z'},
     {"trace-apisock",no_argument,      0, 'Z'},
-    {"conf-put",   required_argument,  0, 'a'},
-    {"conf-get",   required_argument,  0, 'A'},
-    {"conf-watch", required_argument,  0, 'w'},
-    {"conf-commit",no_argument,        0, 'c'},
-    {"conf-list",  no_argument,        0, 'X'},
     {0, 0, 0, 0},
 };
 
@@ -77,11 +72,6 @@ static void usage (void)
 "  -C,--kvs-commit        commit pending kvs puts\n"
 "  -y,--kvs-clean         drop cached and unreferenced kvs data\n"
 "  -t,--kvs-torture N     set N keys, then commit\n"
-"  -a,--conf-put key=val  set a config key\n"
-"  -A,--conf-get key      get a conf key\n"
-"  -w,--conf-watch key    watch a conf key\n"
-"  -c,--conf-commit       commit pending conf puts\n"
-"  -X,--conf-list         list conf key-value pairs\n"
 "  -s,--subscribe sub     subscribe to events matching substring\n"
 "  -e,--event name        publish event\n"
 "  -S,--sync              block until event.sched.triger\n"
@@ -309,13 +299,10 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'C': { /* --kvs-commit */
-                char *uuid = uuid_generate_str ();
-
                 if (cmb_kvs_flush (c) < 0)
                     err_exit ("cmb_kvs_flush");
-                if (cmb_kvs_commit (c, uuid) < 0)
+                if (cmb_kvs_commit (c, NULL) < 0)
                     err_exit ("cmb_kvs_commit");
-                free (uuid);
                 break;
             }
             case 'y': { /* --kvs-clean */
@@ -379,78 +366,6 @@ int main (int argc, char *argv[])
                      (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
 
                 free (uuid);
-                break;
-            }
-            case 'a': { /* --conf-put key=val */
-                char *key = optarg;
-                char *val = strchr (optarg, '=');
-                json_object *vo = NULL;
-                if (!val)
-                    msg_exit ("malformed key=[val] argument");
-                *val++ = '\0';
-                if (strlen (val) > 0)
-                    if (!(vo = json_tokener_parse (val)))
-                        vo = json_object_new_string (val);
-                if (cmb_conf_put (c, key, vo) < 0)
-                    err_exit ("cmb_conf_put");
-                if (vo)
-                    json_object_put (vo);
-                break;
-            }
-            case 'A': { /* --conf-get key */
-                json_object *o = cmb_conf_get (c, optarg, false);
-                if (!o && errno != 0)
-                    err_exit ("cmb_conf_get");
-                if (json_object_get_type (o) == json_type_string)
-                    printf ("%s = \"%s\"\n", optarg,
-                            json_object_get_string (o));
-                else
-                    printf ("%s = %s\n", optarg,
-                            json_object_to_json_string_ext (o,
-                                                    JSON_C_TO_STRING_PLAIN));
-                json_object_put (o);
-                break;
-            }
-            case 'c': { /* --conf-commit */
-                if (cmb_conf_commit (c) < 0)
-                    err_exit ("cmb_conf_commit");
-                break;
-            }
-            case 'X': { /* --conf-list */
-                char *key;
-                json_object *o;
-                if (cmb_conf_list (c) < 0)
-                    err_exit ("cmb_conf_list");
-                while (cmb_conf_next (c, &key, &o) == 0) {
-                    if (json_object_get_type (o) == json_type_string)
-                        printf ("%s = \"%s\"\n", key,
-                                json_object_get_string (o));
-                    else
-                        printf ("%s = %s\n", key, 
-                                json_object_to_json_string_ext (o,
-                                                    JSON_C_TO_STRING_PLAIN));
-                    free (key);
-                    json_object_put (o);
-                }
-                if (errno != 0)
-                    err_exit ("cmb_conf_next");
-                break;
-            }
-            case 'w': { /* --conf-watch key */
-                json_object *o;
-                if (!(o = cmb_conf_get (c, optarg, true)) && errno != 0)
-                    err_exit ("cmb_conf_get");
-                do {
-                    if (json_object_get_type (o) == json_type_string)
-                        printf ("%s = \"%s\"\n", optarg,
-                                json_object_get_string (o));
-                    else
-                        printf ("%s = %s\n", optarg,
-                                json_object_to_json_string_ext (o,
-                                                    JSON_C_TO_STRING_PLAIN));
-                    if (o)
-                        json_object_put (o);
-                } while (cmb_conf_next (c, NULL, &o) == 0);
                 break;
             }
             case 'L': { /* --log */

@@ -511,11 +511,11 @@ static void _init (plugin_ctx_t *p)
     ctx->backlog = zlist_new ();
     ctx->cirbuf = zlist_new ();
 
-    plugin_conf_watch (p, "log.reduction.timeout.msec",
+    plugin_kvs_watch (p, "conf.log.reduction-timeout-msec",
                       _set_log_reduction_timeout_msec, p);
-    plugin_conf_watch (p, "log.circular.buffer.entries",
+    plugin_kvs_watch (p, "conf.log.circular-buffer-entries",
                       _set_log_circular_buffer_entries, p);
-    plugin_conf_watch (p, "log.persist.level",
+    plugin_kvs_watch (p, "conf.log.persist-level",
                       _set_log_persist_level, p);
 
     zsocket_set_subscribe (p->zs_evin, "event.fault.");

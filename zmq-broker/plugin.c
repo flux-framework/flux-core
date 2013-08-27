@@ -34,7 +34,6 @@ static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t);
 
 struct plugin_struct apisrv;
 struct plugin_struct barriersrv;
-struct plugin_struct confsrv;
 struct plugin_struct kvssrv;
 struct plugin_struct livesrv;
 struct plugin_struct logsrv;
@@ -48,7 +47,6 @@ static plugin_t plugins[] = {
     &apisrv,
     &livesrv,
     &logsrv,
-    &confsrv,
     &echosrv,
 };
 const int plugins_len = sizeof (plugins)/sizeof (plugins[0]);
@@ -265,25 +263,25 @@ void plugin_log (plugin_ctx_t *p, int lev, const char *fmt, ...)
     }
 }
 
-static void _conf_add_watcher (plugin_ctx_t *p, const char *key,
-                               ConfSetF *set, void *arg)
+static void _kvs_add_watcher (plugin_ctx_t *p, const char *key,
+                               kvs_watch_f *set, void *arg)
 {
-    conf_watcher_t *wp = xzmalloc (sizeof (conf_watcher_t));
+    kvs_watcher_t *wp = xzmalloc (sizeof (kvs_watcher_t));
 
     wp->arg = arg;
     wp->set = set;
-    zhash_update (p->conf_watcher, key, wp);
-    zhash_freefn (p->conf_watcher, key, free);
+    zhash_update (p->kvs_watcher, key, wp);
+    zhash_freefn (p->kvs_watcher, key, free);
 }
 
-int plugin_conf_commit (plugin_ctx_t *p)
+int plugin_kvs_flush (plugin_ctx_t *p)
 {
     json_object *o = util_json_object_new_object ();
     zmsg_t *zmsg = NULL;
     int ret = -1;
 
     /* send request */
-    plugin_send_request (p, o, "conf.commit");
+    plugin_send_request (p, o, "kvs.flush");
     json_object_put (o);
     o = NULL;
 
@@ -292,13 +290,14 @@ int plugin_conf_commit (plugin_ctx_t *p)
         err ("%s: zmsg_recv", __FUNCTION__);
         goto done;
     }
-    if (cmb_msg_decode (zmsg, NULL, &o) < 0
-          || o == NULL || util_json_object_get_int (o, "errnum", &errno) < 0) {
+    if (cmb_msg_decode (zmsg, NULL, &o) < 0 || o == NULL
+            || util_json_object_get_int (o, "errnum", &errno) < 0) {
         err ("%s: protocol error", __FUNCTION__);
         goto done;
     }
-    if (errno == 0)
-        ret = 0;
+    if (errno != 0)
+        goto done;
+    ret = 0;
 done:
     if (o)
         json_object_put (o);
@@ -307,17 +306,16 @@ done:
     return ret;       
 }
 
-int plugin_conf_put (plugin_ctx_t *p, const char *key, json_object *vo)
+int plugin_kvs_commit (plugin_ctx_t *p)
 {
     json_object *o = util_json_object_new_object ();
     zmsg_t *zmsg = NULL;
     int ret = -1;
+    char *commit_name = uuid_generate_str ();
 
     /* send request */
-    util_json_object_add_string (o, "key", key);
-    json_object_get (vo);
-    json_object_object_add (o, "val", vo);
-    plugin_send_request (p, o, "conf.put");
+    util_json_object_add_string (o, "name", commit_name);
+    plugin_send_request (p, o, "kvs.commit");
     json_object_put (o);
     o = NULL;
 
@@ -326,13 +324,49 @@ int plugin_conf_put (plugin_ctx_t *p, const char *key, json_object *vo)
         err ("%s: zmsg_recv", __FUNCTION__);
         goto done;
     }
-    if (cmb_msg_decode (zmsg, NULL, &o) < 0
-          || o == NULL || util_json_object_get_int (o, "errnum", &errno) < 0) {
+    if (cmb_msg_decode (zmsg, NULL, &o) < 0 || o == NULL) {
         err ("%s: protocol error", __FUNCTION__);
         goto done;
     }
-    if (errno == 0)
-        ret = 0;
+    if (util_json_object_get_int (o, "errnum", &errno) == 0)
+        goto done;
+    ret = 0;
+done:
+    if (o)
+        json_object_put (o);
+    if (zmsg)
+        zmsg_destroy (&zmsg);
+    free (commit_name);
+    return ret;       
+}
+
+int plugin_kvs_put (plugin_ctx_t *p, const char *key, json_object *val)
+{
+    json_object *o = util_json_object_new_object ();
+    zmsg_t *zmsg = NULL;
+    int ret = -1;
+
+    /* send request */
+    if (val)
+        json_object_get (val);
+    json_object_object_add (o, key, val);
+    plugin_send_request (p, o, "kvs.put");
+    json_object_put (o);
+    o = NULL;
+
+    /* receive response */
+    if (!(zmsg = zmsg_recv (p->zs_upreq))) {
+        err ("%s: zmsg_recv", __FUNCTION__);
+        goto done;
+    }
+    if (cmb_msg_decode (zmsg, NULL, &o) < 0 || o == NULL
+            || util_json_object_get_int (o, "errnum", &errno) < 0) {
+        err ("%s: protocol error", __FUNCTION__);
+        goto done;
+    }
+    if (errno != 0)
+        goto done;
+    ret = 0;
 done:
     if (o)
         json_object_put (o);
@@ -341,15 +375,15 @@ done:
     return ret;       
 }
 
-static json_object *_conf_get (plugin_ctx_t *p, const char *key, bool watch)
+int plugin_kvs_get (plugin_ctx_t *p, const char *key, json_object **valp)
 {
-    json_object *vo = NULL, *o = util_json_object_new_object ();
+    json_object *val = NULL, *o = util_json_object_new_object ();
     zmsg_t *zmsg = NULL;
+    int ret = -1;
 
     /* send request */
-    util_json_object_add_string (o, "key", key);
-    util_json_object_add_boolean (o, "watch", watch);
-    plugin_send_request (p, o, "conf.get");
+    json_object_object_add (o, key, NULL);
+    plugin_send_request (p, o, "kvs.get.val");
     json_object_put (o);
     o = NULL;
 
@@ -358,46 +392,67 @@ static json_object *_conf_get (plugin_ctx_t *p, const char *key, bool watch)
         err ("%s: zmsg_recv", __FUNCTION__);
         goto done;
     }
-    if (cmb_msg_decode (zmsg, NULL, &o) < 0) {
+    if (cmb_msg_decode (zmsg, NULL, &o) < 0 || o == NULL) {
         err ("%s: protocol error", __FUNCTION__);
         goto done;
     }
-    vo = json_object_object_get (o, "val");
-    json_object_get (vo);
+    if (util_json_object_get_int (o, "errnum", &errno) == 0)
+        goto done;
+    if (!(val = json_object_object_get (o, key))) {
+        errno = ENOENT;
+        goto done;
+    }
+    json_object_get (val);
+    *valp = val;
+    ret = 0;
 done:
     if (o)
         json_object_put (o);
     if (zmsg)
         zmsg_destroy (&zmsg);
-    return vo;       
+    return ret;       
 }
 
-json_object *plugin_conf_get (plugin_ctx_t *p, const char *key)
+int plugin_kvs_watch (plugin_ctx_t *p, const char *key,
+                      kvs_watch_f *set, void *arg)
 {
-    return _conf_get (p, key, false);
-}
+    json_object *val = NULL;
+    json_object *o = NULL;
 
-void plugin_conf_watch (plugin_ctx_t *p, const char *key,
-                        ConfSetF *set, void *arg)
-{
-    set (key, _conf_get (p, key, true), arg);
-    _conf_add_watcher (p, key, set, arg);    
+    if (plugin_kvs_get (p, key, &val) < 0 && errno != ENOENT)
+        return -1;
+    set (key, val, arg);
+
+    o = util_json_object_new_object ();
+    json_object_object_add (o, key, val);
+    plugin_send_request (p, o, "kvs.get.watch");
+
+    _kvs_add_watcher (p, key, set, arg);    
+    json_object_put (o);
+    return 0;
 }
 
 void plugin_watch_update (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     json_object *o = NULL;
-    conf_watcher_t *wp; 
-    const char *key;
+    json_object_iter iter;
+    kvs_watcher_t *wp; 
+    bool match = false;
 
-    if (cmb_msg_decode (*zmsg, NULL, &o) == 0 && o != NULL
-                        && util_json_object_get_string (o, "key", &key) == 0
-                        && (wp = zhash_lookup (p->conf_watcher, key))) {
-        wp->set (key, json_object_object_get (o, "val"), wp->arg);
-        zmsg_destroy (zmsg);
+    msg ("XXX %s", __FUNCTION__);
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL)
+        return;
+    json_object_object_foreachC (o, iter) {
+        msg ("XXX %s %s", __FUNCTION__, iter.key);
+        if ((wp = zhash_lookup (p->kvs_watcher, iter.key))) {
+            wp->set (iter.key, iter.val, wp->arg);
+            match = true;
+        }
     }
     if (o)
         json_object_put (o);
+    if (match)
+        zmsg_destroy (zmsg);
 }
 
 void plugin_ping_respond (plugin_ctx_t *p, zmsg_t **zmsg)
@@ -470,9 +525,9 @@ static zmsg_t * plugin_cb_hook (plugin_ctx_t *p, zmsg_t *zmsg, zmsg_type_t type)
     if (zmsg && type == ZMSG_REQUEST && cmb_msg_match (zmsg, statstag))
         plugin_stats_respond (p, &zmsg);
 
-    /* intercept "conf.get" response for watched conf values */
-    if (zmsg && type == ZMSG_RESPONSE && cmb_msg_match (zmsg, "conf.get"))
-        plugin_watch_update (p, &zmsg);
+    /* intercept "kvs.get.watch" response for watched keys */
+    if (zmsg && type == ZMSG_RESPONSE && cmb_msg_match (zmsg, "kvs.get.watch"))
+        plugin_watch_update (p, &zmsg); /* zmsg conditionally consumed */
 
     /* dispatch message to plugin's recvFn() */
     /*     recvFn () shouldn't free zmsg if it doesn't recognize the tag */
@@ -612,7 +667,7 @@ static void _plugin_destroy (void *arg)
     if (p->timeout)
         free (p->timeout);
 
-    zhash_destroy (&p->conf_watcher);
+    zhash_destroy (&p->kvs_watcher);
 
     free (p->id);
 
@@ -646,7 +701,7 @@ static int _plugin_create (char *name, server_t *srv, conf_t *conf)
     p->srv = srv;
     p->plugin = plugin;
 
-    if (!(p->conf_watcher = zhash_new ()))
+    if (!(p->kvs_watcher = zhash_new ()))
         oom ();
 
     p->id = xzmalloc (strlen (name) + 16);

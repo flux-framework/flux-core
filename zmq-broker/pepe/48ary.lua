@@ -30,13 +30,13 @@ if pepe.rank == 0 then
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
 		.. " --set-conf-hostlist=" .. pepe.nodelist
-		.. " --set-conf sync.period.sec=1.5"
-		.. " --set-conf log.reduction.timeout.msec=100"
-		.. " --set-conf log.circular.buffer.entries=100000"
-		.. " --set-conf log.persist.level=notice"
-		.. " --set-conf live.missed.trigger.allow=5"
-		.. " --set-conf topology='" .. topology .. "'"
-		.. " --plugins=api,barrier,live,log,conf,kvs,sync"
+		.. " --set-conf conf.sync.period-sec=1.5"
+		.. " --set-conf conf.log.reduction-timeout-msec=100"
+		.. " --set-conf conf.log.circular-buffer-entries=100000"
+		.. " --set-conf conf.log.persist-level=debug"
+		.. " --set-conf conf.live.missed-trigger-allow=5"
+		.. " --set-conf conf.live.topology='" .. topology .. "'"
+		.. " --plugins=api,barrier,live,log,kvs,sync"
 		.. " --logdest cmbd.log")
 else
     local parent_rank = tree.k_ary_parent (pepe.rank, 48)
@@ -48,5 +48,5 @@ else
 		.. " --parent='" .. parent_rank .. "," .. u1 .. "," .. u2 .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
-		.. " --plugins=api,barrier,live,log,conf,kvs")
+		.. " --plugins=api,barrier,live,log,kvs")
 end
