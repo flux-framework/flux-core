@@ -162,77 +162,97 @@ void plugin_send_event_json (plugin_ctx_t *p, json_object *o,
     plugin_send_event_raw (p, &zmsg);
 }
 
-void plugin_send_request (plugin_ctx_t *p, json_object *o, const char *fmt, ...)
+static void plugin_send_vrequest (plugin_ctx_t *p, json_object *o,
+                                  const char *fmt, va_list ap)
 {
-    va_list ap;
-    zmsg_t *zmsg;
-    char *tag;
-    int n;
     json_object *empty = NULL;
+    char *tag;
+    zmsg_t *zmsg;
 
-    va_start (ap, fmt);
-    n = vasprintf (&tag, fmt, ap);
-    va_end (ap);
-    if (n < 0)
-        err_exit ("vasprintf");
+    if (vasprintf (&tag, fmt, ap) < 0)
+        oom ();
 
-    if (!o) {
-        if (!(empty = json_object_new_object ()))
-            oom ();
-        o = empty;
-    }
+    if (!o)
+        o = empty = util_json_object_new_object ();
     zmsg = cmb_msg_encode (tag, o);
     if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* delimiter frame */
         oom ();
     plugin_send_request_raw (p, &zmsg);
-
     if (empty)
         json_object_put (empty);
     free (tag);
+}                        
+
+static json_object *plugin_recv_vresponse (plugin_ctx_t *p,
+                                           const char *fmt, va_list ap)
+{
+    char *tag, *reply_tag;
+    zmsg_t *zmsg;
+    json_object *reply_obj;
+
+    if (vasprintf (&tag, fmt, ap) < 0)
+        oom ();
+
+    for (;;) {
+        zmsg = plugin_recv_response_raw (p);
+        if (cmb_msg_decode (zmsg, &reply_tag, &reply_obj) < 0) {
+            err ("%s: dropping malformed reply", __FUNCTION__);
+            zmsg_destroy (&zmsg);
+            continue;
+        }
+        if (!reply_obj) {
+            msg ("%s: dropping %s reply with no JSON", __FUNCTION__, reply_tag);
+            free (reply_tag);
+            zmsg_destroy (&zmsg);
+            continue;
+        }
+        if (strcmp (tag, reply_tag) != 0) {
+            msg ("%s: dropping %s reply, expected %s", __FUNCTION__,
+                 reply_tag, tag);
+            json_object_put (reply_obj);
+            free (reply_tag);
+            zmsg_destroy (&zmsg);
+            continue;
+        }
+        zmsg_destroy (&zmsg);
+        free (reply_tag);
+        if (util_json_object_get_int (reply_obj, "errnum", &errno) == 0) {
+            if (errno != 0) {
+                free (reply_obj);
+                reply_obj = NULL;
+            }
+        }
+        break;
+    }
+    free (tag);
+    return reply_obj;
+}
+
+void plugin_send_request (plugin_ctx_t *p, json_object *o, const char *fmt, ...)
+{
+    va_list ap;
+
+    va_start (ap, fmt);
+    plugin_send_vrequest (p, o, fmt, ap);
+    va_end (ap);
 }
 
 json_object *plugin_request (plugin_ctx_t *p, json_object *o,
                              const char *fmt, ...)
 {
     va_list ap;
-    zmsg_t *zmsg;
-    char *tag;
-    int n;
-    json_object *empty = NULL;
-    json_object *ro = NULL;
+    json_object *reply;
 
-    /* send request */
     va_start (ap, fmt);
-    n = vasprintf (&tag, fmt, ap);
+    plugin_send_vrequest (p, o, fmt, ap);
     va_end (ap);
-    if (n < 0)
-        err_exit ("vasprintf");
 
-    if (!o) {
-        if (!(empty = json_object_new_object ()))
-            oom ();
-        o = empty;
-    }
-    zmsg = cmb_msg_encode (tag, o);
-    if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* delimiter frame */
-        oom ();
-    plugin_send_request_raw (p, &zmsg);
-    assert (zmsg == NULL);
+    va_start (ap, fmt);
+    reply = plugin_recv_vresponse (p, fmt, ap);
+    va_end (ap);
 
-    /* await reply */
-    zmsg = plugin_recv_response_raw (p);
-    if (cmb_msg_decode (zmsg, NULL, &ro) < 0 || ro == NULL)
-        err_exit ("%s: bad reply", __FUNCTION__); /* FIXME */
-
-    if (zmsg)
-        zmsg_destroy (&zmsg);
-    if (empty)
-        json_object_put (empty);
-    free (tag);
-
-    return ro;
+    return reply;
 }
-
 
 void plugin_send_response (plugin_ctx_t *p, zmsg_t **req, json_object *o)
 {
@@ -251,16 +271,20 @@ void plugin_send_response_errnum (plugin_ctx_t *p, zmsg_t **req, int errnum)
 void plugin_log (plugin_ctx_t *p, int lev, const char *fmt, ...)
 {
     va_list ap;
-    json_object *o;
+    json_object *request;
    
     va_start (ap, fmt);
-    o = util_json_vlog (lev, p->plugin->name, p->conf->rankstr, fmt, ap);
+    request = util_json_vlog (lev, p->plugin->name, p->conf->rankstr, fmt, ap);
     va_end (ap);
 
-    if (o) {
-        plugin_send_request (p, o, "log.msg");
-        json_object_put (o);
+    if (!request) {
+        err ("%s", __FUNCTION__);
+        goto done;
     }
+    plugin_send_request (p, request, "log.msg");
+done:
+    if (request)
+        json_object_put (request);
 }
 
 static void _kvs_add_watcher (plugin_ctx_t *p, const char *key,
@@ -276,129 +300,85 @@ static void _kvs_add_watcher (plugin_ctx_t *p, const char *key,
 
 int plugin_kvs_flush (plugin_ctx_t *p)
 {
-    json_object *o = util_json_object_new_object ();
-    zmsg_t *zmsg = NULL;
+    json_object *request = NULL;
+    json_object *reply = NULL;
     int ret = -1;
 
-    /* send request */
-    plugin_send_request (p, o, "kvs.flush");
-    json_object_put (o);
-    o = NULL;
-
-    /* receive response */
-    if (!(zmsg = zmsg_recv (p->zs_upreq))) {
-        err ("%s: zmsg_recv", __FUNCTION__);
+    reply = plugin_request (p, request, "kvs.flush");
+    if (!reply) {
+        err ("%s", __FUNCTION__);
         goto done;
     }
-    if (cmb_msg_decode (zmsg, NULL, &o) < 0 || o == NULL
-            || util_json_object_get_int (o, "errnum", &errno) < 0) {
-        err ("%s: protocol error", __FUNCTION__);
-        goto done;
-    }
-    if (errno != 0)
-        goto done;
     ret = 0;
 done:
-    if (o)
-        json_object_put (o);
-    if (zmsg)
-        zmsg_destroy (&zmsg);
-    return ret;       
+    if (request)
+        json_object_put (request);
+    if (reply)
+        json_object_put (reply);
+    return ret;
 }
 
 int plugin_kvs_commit (plugin_ctx_t *p)
 {
-    json_object *o = util_json_object_new_object ();
-    zmsg_t *zmsg = NULL;
-    int ret = -1;
+    json_object *request = util_json_object_new_object ();
+    json_object *reply = NULL;
     char *commit_name = uuid_generate_str ();
+    int ret = -1;
 
-    /* send request */
-    util_json_object_add_string (o, "name", commit_name);
-    plugin_send_request (p, o, "kvs.commit");
-    json_object_put (o);
-    o = NULL;
-
-    /* receive response */
-    if (!(zmsg = zmsg_recv (p->zs_upreq))) {
-        err ("%s: zmsg_recv", __FUNCTION__);
+    util_json_object_add_string (request, "name", commit_name);
+    reply = plugin_request (p, request, "kvs.commit");
+    if (!reply) {
+        err ("%s", __FUNCTION__);
         goto done;
     }
-    if (cmb_msg_decode (zmsg, NULL, &o) < 0 || o == NULL) {
-        err ("%s: protocol error", __FUNCTION__);
-        goto done;
-    }
-    if (util_json_object_get_int (o, "errnum", &errno) == 0)
-        goto done;
     ret = 0;
 done:
-    if (o)
-        json_object_put (o);
-    if (zmsg)
-        zmsg_destroy (&zmsg);
-    free (commit_name);
+    if (request)
+        json_object_put (request);
+    if (reply)
+        json_object_put (reply);
+    if (commit_name)
+        free (commit_name);
     return ret;       
 }
 
 int plugin_kvs_put (plugin_ctx_t *p, const char *key, json_object *val)
 {
-    json_object *o = util_json_object_new_object ();
-    zmsg_t *zmsg = NULL;
+    json_object *request = util_json_object_new_object ();
+    json_object *reply = NULL;
     int ret = -1;
 
-    /* send request */
     if (val)
         json_object_get (val);
-    json_object_object_add (o, key, val);
-    plugin_send_request (p, o, "kvs.put");
-    json_object_put (o);
-    o = NULL;
-
-    /* receive response */
-    if (!(zmsg = zmsg_recv (p->zs_upreq))) {
-        err ("%s: zmsg_recv", __FUNCTION__);
+    json_object_object_add (request, key, val);
+    reply = plugin_request (p, request, "kvs.put");
+    if (!reply) {
+        err ("%s", __FUNCTION__);
         goto done;
     }
-    if (cmb_msg_decode (zmsg, NULL, &o) < 0 || o == NULL
-            || util_json_object_get_int (o, "errnum", &errno) < 0) {
-        err ("%s: protocol error", __FUNCTION__);
-        goto done;
-    }
-    if (errno != 0)
-        goto done;
     ret = 0;
 done:
-    if (o)
-        json_object_put (o);
-    if (zmsg)
-        zmsg_destroy (&zmsg);
+    if (request)
+        json_object_put (request);
+    if (reply)
+        json_object_put (reply);
     return ret;       
 }
 
 int plugin_kvs_get (plugin_ctx_t *p, const char *key, json_object **valp)
 {
-    json_object *val = NULL, *o = util_json_object_new_object ();
-    zmsg_t *zmsg = NULL;
+    json_object *val = NULL;
+    json_object *request = util_json_object_new_object ();
+    json_object *reply = NULL;
     int ret = -1;
 
-    /* send request */
-    json_object_object_add (o, key, NULL);
-    plugin_send_request (p, o, "kvs.get.val");
-    json_object_put (o);
-    o = NULL;
-
-    /* receive response */
-    if (!(zmsg = zmsg_recv (p->zs_upreq))) {
-        err ("%s: zmsg_recv", __FUNCTION__);
+    json_object_object_add (request, key, NULL);
+    reply = plugin_request (p, request, "kvs.get.val");
+    if (!reply) {
+        err ("%s", __FUNCTION__);
         goto done;
     }
-    if (cmb_msg_decode (zmsg, NULL, &o) < 0 || o == NULL) {
-        err ("%s: protocol error", __FUNCTION__);
-        goto done;
-    }
-    if (util_json_object_get_int (o, "errnum", &errno) == 0)
-        goto done;
-    if (!(val = json_object_object_get (o, key))) {
+    if (!(val = json_object_object_get (reply, key))) {
         errno = ENOENT;
         goto done;
     }
@@ -406,51 +386,56 @@ int plugin_kvs_get (plugin_ctx_t *p, const char *key, json_object **valp)
     *valp = val;
     ret = 0;
 done:
-    if (o)
-        json_object_put (o);
-    if (zmsg)
-        zmsg_destroy (&zmsg);
+    if (request)
+        json_object_put (request);
+    if (reply)
+        json_object_put (reply);
     return ret;       
 }
 
 int plugin_kvs_watch (plugin_ctx_t *p, const char *key,
                       kvs_watch_f *set, void *arg)
 {
+    json_object *request = util_json_object_new_object ();
     json_object *val = NULL;
-    json_object *o = NULL;
+    int ret = -1;
 
     if (plugin_kvs_get (p, key, &val) < 0 && errno != ENOENT)
-        return -1;
+        goto done;
     set (key, val, arg);
-
-    o = util_json_object_new_object ();
-    json_object_object_add (o, key, val);
-    plugin_send_request (p, o, "kvs.get.watch");
-
-    _kvs_add_watcher (p, key, set, arg);    
-    json_object_put (o);
-    return 0;
+    json_object_object_add (request, key, val);
+    /* N.B. val is either NULL or owned by request now */
+    plugin_send_request (p, request, "kvs.get.watch");
+    _kvs_add_watcher (p, key, set, arg);
+    ret = 0;
+done:
+    if (request)
+        json_object_put (request);
+    return ret;
 }
 
 void plugin_watch_update (plugin_ctx_t *p, zmsg_t **zmsg)
 {
-    json_object *o = NULL;
+    json_object *reply = NULL;
     json_object_iter iter;
     kvs_watcher_t *wp; 
     bool match = false;
 
-    msg ("XXX %s", __FUNCTION__);
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL)
-        return;
-    json_object_object_foreachC (o, iter) {
-        msg ("XXX %s %s", __FUNCTION__, iter.key);
-        if ((wp = zhash_lookup (p->kvs_watcher, iter.key))) {
-            wp->set (iter.key, iter.val, wp->arg);
-            match = true;
+    if (cmb_msg_decode (*zmsg, NULL, &reply) < 0) {
+        err ("%s", __FUNCTION__);
+        goto done;
+    }
+    if (reply) {
+        json_object_object_foreachC (reply, iter) {
+            if ((wp = zhash_lookup (p->kvs_watcher, iter.key))) {
+                wp->set (iter.key, iter.val, wp->arg);
+                match = true;
+            }
         }
     }
-    if (o)
-        json_object_put (o);
+done:
+    if (reply)
+        json_object_put (reply);
     if (match)
         zmsg_destroy (zmsg);
 }

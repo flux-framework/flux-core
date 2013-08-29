@@ -329,8 +329,6 @@ static void _set_live_down (const char *key, json_object *o, void *arg)
     plugin_ctx_t *p = arg;
     ctx_t *ctx = p->ctx;
 
-    msg ("XXX %s %s", __FUNCTION__, json_object_to_json_string (o));
-
     if (ctx->conf.live_down)
         json_object_put (ctx->conf.live_down);
     json_object_get (o);
