@@ -144,24 +144,6 @@ void plugin_send_event (plugin_ctx_t *p, const char *fmt, ...)
     plugin_send_event_raw (p, &zmsg);
 }
 
-void plugin_send_event_json (plugin_ctx_t *p, json_object *o,
-                             const char *fmt, ...)
-{
-    va_list ap;
-    zmsg_t *zmsg;
-    char *tag;
-    int n;
-
-    va_start (ap, fmt);
-    n = vasprintf (&tag, fmt, ap);
-    va_end (ap);
-    if (n < 0)
-        err_exit ("%s: vasprintf", __FUNCTION__);
-    zmsg = cmb_msg_encode (tag, o);
-    free (tag);
-    plugin_send_event_raw (p, &zmsg);
-}
-
 static void plugin_send_vrequest (plugin_ctx_t *p, json_object *o,
                                   const char *fmt, va_list ap)
 {
@@ -207,11 +189,10 @@ static json_object *plugin_recv_vresponse (plugin_ctx_t *p,
             continue;
         }
         if (strcmp (tag, reply_tag) != 0) {
-            msg ("%s: dropping %s reply, expected %s", __FUNCTION__,
-                 reply_tag, tag);
             json_object_put (reply_obj);
             free (reply_tag);
-            zmsg_destroy (&zmsg);
+            if (zlist_append (p->deferred_responses, zmsg) < 0)
+                oom ();
             continue;
         }
         zmsg_destroy (&zmsg);
@@ -479,11 +460,8 @@ done:
         zmsg_destroy (zmsg);    
 }
 
-/* Handle a response.
- */
-static int upreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
+static void plugin_handle_response (plugin_ctx_t *p, zmsg_t *zmsg)
 {
-    zmsg_t *zmsg = zmsg_recv (p->zs_upreq);
     char *tag;
 
     p->stats.upreq_recv_count++;
@@ -502,12 +480,36 @@ static int upreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
     if (zmsg && p->plugin->recvFn)
         p->plugin->recvFn (p, &zmsg, ZMSG_RESPONSE);
     if (zmsg)
-        msg ("dicarding unexpected response from %s", tag);
+        msg ("discarding unexpected response from %s", tag);
 done:
     if (zmsg)
         zmsg_destroy (&zmsg);
     if (tag)
         free (tag);
+}
+
+/* Process any responses received during synchronous request-reply handling.
+ * Call this after every plugin callback that may have invoked one of the
+ * synchronous request-reply functions.
+ */
+static void plugin_handle_deferred_responses (plugin_ctx_t *p)
+{
+    zmsg_t *zmsg;
+
+    while ((zmsg = zlist_pop (p->deferred_responses)))
+        plugin_handle_response (p, zmsg);
+}
+
+/* Handle a response.
+ */
+static int upreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
+{
+    zmsg_t *zmsg = zmsg_recv (p->zs_upreq);
+
+    plugin_handle_response (p, zmsg);
+
+    plugin_handle_deferred_responses (p);
+
     return (0);
 }
 
@@ -546,6 +548,9 @@ done:
         zmsg_destroy (&zmsg);
     if (tag)
         free (tag);
+
+    plugin_handle_deferred_responses (p);
+
     return (0);
 }
 static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
@@ -560,6 +565,8 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
     if (zmsg)
         zmsg_destroy (&zmsg);
 
+    plugin_handle_deferred_responses (p);
+
     return (0);
 }
 static int snoop_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
@@ -572,6 +579,8 @@ static int snoop_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
     if (zmsg)
         zmsg_destroy (&zmsg);
 
+    plugin_handle_deferred_responses (p);
+
     return (0);
 }
 
@@ -581,6 +590,9 @@ static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t)
 
     if (p->plugin->timeoutFn)
         p->plugin->timeoutFn (p);
+
+    plugin_handle_deferred_responses (p);
+
     return (0);
 }
 
@@ -640,6 +652,7 @@ static void _plugin_destroy (void *arg)
 {
     plugin_ctx_t *p = arg;
     int errnum;
+    zmsg_t *zmsg;
 
     route_del (p->srv->rctx, p->plugin->name, p->plugin->name);
 
@@ -658,6 +671,9 @@ static void _plugin_destroy (void *arg)
         free (p->timeout);
 
     zhash_destroy (&p->kvs_watcher);
+    while ((zmsg = zlist_pop (p->deferred_responses)))
+        zmsg_destroy (&zmsg);
+    zlist_destroy (&p->deferred_responses);
 
     free (p->id);
 
@@ -692,6 +708,8 @@ static int _plugin_create (char *name, server_t *srv, conf_t *conf)
     p->plugin = plugin;
 
     if (!(p->kvs_watcher = zhash_new ()))
+        oom ();
+    if (!(p->deferred_responses = zlist_new ()))
         oom ();
 
     p->id = xzmalloc (strlen (name) + 16);

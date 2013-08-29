@@ -33,6 +33,7 @@ typedef struct {
     plugin_stats_t stats;
     zhash_t *kvs_watcher;
     zloop_t *zloop;
+    zlist_t *deferred_responses;
     void *ctx;
 } plugin_ctx_t;
 
