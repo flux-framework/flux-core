@@ -414,26 +414,21 @@ done:
     return ret;
 }
 
-void plugin_watch_update (plugin_ctx_t *p, zmsg_t **zmsg)
+static void plugin_watch_update (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     json_object *reply = NULL;
     json_object_iter iter;
     kvs_watcher_t *wp; 
     bool match = false;
 
-    if (cmb_msg_decode (*zmsg, NULL, &reply) < 0) {
-        err ("%s", __FUNCTION__);
-        goto done;
-    }
-    if (reply) {
+    if (cmb_msg_decode (*zmsg, NULL, &reply) == 0 && reply != NULL) {
         json_object_object_foreachC (reply, iter) {
             if ((wp = zhash_lookup (p->kvs_watcher, iter.key))) {
-                wp->set (iter.key, iter.val, wp->arg);
+                wp->set (iter.key, iter.val, wp->arg); /* call plugin cb */
                 match = true;
             }
         }
     }
-done:
     if (reply)
         json_object_put (reply);
     if (match)
@@ -484,77 +479,84 @@ done:
         zmsg_destroy (zmsg);    
 }
 
-/*
- *  Callback hook called for all/most messages:
- *  Respond to ping and stats requests automatically, handle the call
- *   to plugin's recvFn, and send ENOSYS if plugin didn't recognize a tag.
- *
- *  Returns any unhandled zmsg_t.
+/* Handle a response.
  */
-static zmsg_t * plugin_cb_hook (plugin_ctx_t *p, zmsg_t *zmsg, zmsg_type_t type)
-{
-    char *pingtag, *statstag;
-
-    /* FIXME: Allocate once and store somewhere
-     */
-    if (asprintf (&pingtag, "%s.ping", p->plugin->name) < 0)
-        err_exit ("asprintf");
-    if (asprintf (&statstag, "%s.stats", p->plugin->name) < 0)
-        err_exit ("asprintf");
-
-    /* intercept and respond to ping requests for this plugin */
-    if (zmsg && type == ZMSG_REQUEST && cmb_msg_match (zmsg, pingtag))
-        plugin_ping_respond (p, &zmsg);
-
-    /* intercept and respond to stats request for this plugin */
-    if (zmsg && type == ZMSG_REQUEST && cmb_msg_match (zmsg, statstag))
-        plugin_stats_respond (p, &zmsg);
-
-    /* intercept "kvs.get.watch" response for watched keys */
-    if (zmsg && type == ZMSG_RESPONSE && cmb_msg_match (zmsg, "kvs.get.watch"))
-        plugin_watch_update (p, &zmsg); /* zmsg conditionally consumed */
-
-    /* dispatch message to plugin's recvFn() */
-    /*     recvFn () shouldn't free zmsg if it doesn't recognize the tag */
-    if (zmsg && p->plugin->recvFn)
-        p->plugin->recvFn (p, &zmsg, type);
-
-    /* send ENOSYS response indicating plugin did not recognize tag */
-    if (zmsg && type == ZMSG_REQUEST)
-        plugin_send_response_errnum (p, &zmsg, ENOSYS);
-
-    free (pingtag);
-    free (statstag);
-
-    return (zmsg);
-}
-
 static int upreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
 {
     zmsg_t *zmsg = zmsg_recv (p->zs_upreq);
+    char *tag;
+
     p->stats.upreq_recv_count++;
-    zmsg = plugin_cb_hook (p, zmsg, ZMSG_RESPONSE);
+
+    /* Extract the tag from the message.
+     */
+    if (!(tag = cmb_msg_tag (zmsg, false))) {
+        msg ("discarding malformed message");
+        goto done;
+    }
+    /* Intercept and handle internal watch replies for keys of interest.
+     * If no match, call the user's recv callback.
+     */
+    if (!strcmp (tag, "kvs.get.watch"))
+        plugin_watch_update (p, &zmsg); /* consumes zmsg on match */
+    if (zmsg && p->plugin->recvFn)
+        p->plugin->recvFn (p, &zmsg, ZMSG_RESPONSE);
+    if (zmsg)
+        msg ("dicarding unexpected response from %s", tag);
+done:
     if (zmsg)
         zmsg_destroy (&zmsg);
-
+    if (tag)
+        free (tag);
     return (0);
 }
 
+/* Handle a request.
+ */
 static int dnreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
 {
     zmsg_t *zmsg = zmsg_recv (p->zs_dnreq);
+    char *tag, *method;
+
     p->stats.dnreq_recv_count++;
-    zmsg = plugin_cb_hook (p, zmsg, ZMSG_REQUEST);
+
+    /* Extract the tag from the message.  The first part should match
+     * the plugin name.  The rest is the "method" name.
+     */
+    if (!(tag = cmb_msg_tag (zmsg, false)) || !(method = strchr (tag, '.'))) {
+        msg ("discarding malformed message");
+        goto done;
+    }
+    method++;
+    /* Intercept and handle internal "methods" for this plugin.
+     * If no match, call the user's recv callback.
+     */
+    if (!strcmp (method, "ping"))
+        plugin_ping_respond (p, &zmsg);
+    else if (!strcmp (method, "stats"))
+        plugin_stats_respond (p, &zmsg);
+    else if (zmsg && p->plugin->recvFn)
+        p->plugin->recvFn (p, &zmsg, ZMSG_REQUEST);
+    /* If request wasn't handled above, NAK it.
+     */
+    if (zmsg)
+        plugin_send_response_errnum (p, &zmsg, ENOSYS);
+done:
     if (zmsg)
         zmsg_destroy (&zmsg);
-
+    if (tag)
+        free (tag);
     return (0);
 }
 static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
 {
     zmsg_t *zmsg = zmsg_recv (p->zs_evin);
+
     p->stats.event_recv_count++;
-    zmsg = plugin_cb_hook (p, zmsg, ZMSG_EVENT);
+
+    if (zmsg && p->plugin->recvFn)
+        p->plugin->recvFn (p, &zmsg, ZMSG_EVENT);
+
     if (zmsg)
         zmsg_destroy (&zmsg);
 
@@ -563,7 +565,10 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
 static int snoop_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
 {
     zmsg_t *zmsg =  zmsg_recv (p->zs_snoop);
-    zmsg = plugin_cb_hook (p, zmsg, ZMSG_SNOOP);
+
+    if (zmsg && p->plugin->recvFn)
+        p->plugin->recvFn (p, &zmsg, ZMSG_SNOOP);
+
     if (zmsg)
         zmsg_destroy (&zmsg);
 
