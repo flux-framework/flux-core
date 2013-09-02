@@ -19,7 +19,7 @@ LDFLAGS = -Wl,-rpath,$(LIBDIR)
 export CFLAGS LDFLAGS
 
 LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -lutil -luuid
-LDADD_SRV = -pthread --lhiredis $(LDADD_CLI)
+LDADD_SRV = -pthread $(LDADD_CLI)
 
 PLUGIN_OBJS = apisrv.o syncsrv.o kvssrv.o barriersrv.o livesrv.o \
 	logsrv.o echosrv.o
