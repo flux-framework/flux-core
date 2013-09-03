@@ -40,7 +40,14 @@ DEPFIG = \
 	tree-trinary.eps \
 	tree-binomial.eps \
 	tree-degenerate.eps \
-	zmq-broker-hkvs.eps
+	zmq-broker-hkvs.eps \
+	reflux_rpc.eps \
+	reflux_rev_rpc.eps \
+	reflux_event.eps \
+	reflux_arch_on_node.eps \
+	reflux_arch_off_node.eps \
+	reflux_kvs_merkel.eps \
+	reflux_generic.eps \
 
 all: $(DEPFIG)
 

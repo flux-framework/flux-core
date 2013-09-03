@@ -1,0 +1,229 @@
+\documentclass[default,pdf,colorBG,slideColor]{prosper}
+\usepackage{epsfig}
+\usepackage{pstricks}
+\usepackage{graphicx}
+
+\graphicspath{ {../fig/} }
+
+\title{Runtime Environment for Flux (reflux)}
+\subtitle{{\small {\em prototype status}}}
+\author{Jim Garlick}
+\email{{\rm garlick@llnl.gov}}
+\institution{Livermore Computing \\
+             Lawrence Livermore National Laboratory}
+
+\newcommand{\ngrm}{Flux}
+\newcommand{\zMQ}{\O{}MQ}
+
+\slideCaption{\ngrm\ Progress Report, Sept. 17, 2013}
+
+%\Logo(-1,-1){\epsfig{file=graphic/iccd_logotrans.ps,scale=0.15}}
+
+
+\begin{document}
+
+% ==========================================================================
+\maketitle
+% ==========================================================================
+
+\begin{slide}{Overview}{\small
+\begin{itemize}
+  \item{brief introduction}
+  \item{\zMQ\ patterns in a tree topology}
+  \item{message broker plumbing}
+  \item{kvs}
+  \item{plugins: heartbeat, barriers, logging}
+  \item{putting it together: PMI/mvapich hello world}
+  \item{synchronization, liveness, and routing}
+  \item{design issues}
+\end{itemize}
+}\end{slide}
+
+% ==========================================================================
+\part{brief introduction}
+% ==========================================================================
+
+\begin{slide}{comms framework goals}{\small
+\begin{itemize}
+  \item{Build a foundation for \ngrm\ distributed components.}
+  \item{A {\em comms session} contains each \ngrm\ job, and \\
+	job hierarchy $\sim$ comms session hierarchy}
+  \item{Rich comms within a session,\\
+	No direct comms between sibling sessions,\\
+        Limited comms between parent-child (through gateway)}
+  \item{Parent session can create, resize, destroy child sessions}
+\end{itemize}
+}\end{slide}
+
+\begin{slide}{modest initial prototype goals}{\small
+\begin{itemize}
+  \item{Launch a comms session as a Slurm job}
+  \item{Launch and provide runtime services to
+        lightweight jobs (e.g. MPI plus tools) sharing the session.}
+  \item{(no recursive jobs, no persistent "bootstrap" comms)}
+\end{itemize}
+}\end{slide}
+
+% ==========================================================================
+\part{\zMQ\ patterns in a tree topology}
+% ==========================================================================
+
+\begin{slide}{\zMQ\ pub-sub events}{\small
+\begin{center}
+  \includegraphics[scale=0.20]{reflux_event}
+\end{center}
+}\end{slide}
+
+\begin{slide}{\zMQ\ dealer-router RPC}{\small
+\begin{center}
+  \includegraphics[scale=0.20]{reflux_rpc}
+\end{center}
+}\end{slide}
+
+\begin{slide}{\zMQ\ reverse dealer-router RPC}{\small
+\begin{center}
+  \includegraphics[scale=0.18]{reflux_rev_rpc}
+\end{center}
+}\end{slide}
+
+% ==========================================================================
+\part{message broker plumbing}
+% ==========================================================================
+
+\begin{slide}{broker vs plugins}{\small
+\begin{center}
+  \includegraphics[scale=0.20]{reflux_arch_on_node}
+\end{center}
+}\end{slide}
+
+\begin{slide}{broker vs broker}{\small
+\begin{center}
+  \includegraphics[scale=0.12]{reflux_arch_off_node}
+\end{center}
+}\end{slide}
+
+% ==========================================================================
+\part{kvs}
+% ==========================================================================
+
+\begin{slide}{kvs overview}{\small
+\begin{itemize}
+  \item{in-memory only}
+  \item{content-addressable store (SHA1 of content is key)}
+  \item{"directories" also stored there (names$\rightarrow$SHA1 keys)}
+  \item{master copy at node 0}
+  \item{caches on other nodes, pull from parent (recursive),
+        writeback with flush/commit}
+  \item{consistency: multicast new root directory SHA1}
+\end{itemize}
+}\end{slide}
+
+\begin{slide}{updating a value}{\small
+\begin{center}
+  \includegraphics[scale=0.20]{reflux_kvs_merkel}
+\end{center}
+}\end{slide}
+
+\begin{slide}{kvs messages}{\tiny
+\begin{tabular}{|l|l|l|}
+\hline
+{\em request } & {\em in } & {\em out }\\
+\hline
+kvs.get.<type> & \{"name":null\}
+               & \{"name":val\}\\
+kvs.put        & \{"name":val\}
+               & \{"errnum":<errno>\}\\
+kvs.flush      & -
+               & \{"errnum":<errno>\}\\
+kvs.commit     & \{"commit\_name":"..."\}
+               & "<SHA1>,<vers>"\\
+\hline
+kvs.getroot    & -
+               & "<SHA1>,<vers>"\\
+kvs.name       & \{"name":"<SHA1>"\}
+               & \{"name":null\}\\
+kvs.store      & \{"<SHA1>":val\},
+               & \{"<SHA1>":null\}\\
+kvs.load       & \{"<SHA1>":null\}
+               & \{"<SHA1>":val\}\\
+\hline
+\end{tabular}\\
+\underline{Events}\\
+{\tt event.kvs.setroot.<SHA1>,<vers>}\\
+}\end{slide}
+
+% ==========================================================================
+\part{plugins: heartbeat, barriers, logging}
+% ==========================================================================
+
+\begin{slide}{heartbeat}{\tiny
+\begin{center}
+  \includegraphics[scale=0.05]{reflux_generic}
+\end{center}
+\underline{Events}\\
+{\tt event.sched.trigger.<epoch>}\\
+\underline{Config}\\
+{\tt conf.sync.period-sec = 1.5}\\
+}\end{slide}
+
+\begin{slide}{barriers}{\tiny
+\begin{center}
+  \includegraphics[scale=0.05]{reflux_generic}
+\end{center}
+\underline{Requests}\\
+{\tt barrier.enter.name \{"name":"...", "nprocs":10, "count":1\}}\\
+\underline{Events}\\
+{\tt event.barrier.exit.<name>}\\
+{\tt event.barrier.abort.<name>}\\
+\underline{Config}\\
+{\tt conf.barrier.reduction-timeout-msec = 1}\\
+}\end{slide}
+
+\begin{slide}{logging}{\tiny
+\begin{center}
+  \includegraphics[scale=0.05]{reflux_generic}
+\end{center}
+\underline{Requests}\\
+{\tt log.msg \{"facility":"...", "level":m, "hopcount":n, "message":"..."\}}\\
+{\tt log.dump.<facility>.<level>}\\
+{\tt log.subscribe.<facility>.<level>}\\
+{\tt log.unsubscribe.<facility>.<level>}\\
+{\tt log.disconnect}\\
+\underline{Events}\\
+{\tt event.fault.<facility>}\\
+\underline{Config}\\
+{\tt conf.log.reduction-timeout-msec = 100}\\
+{\tt conf.log.persist-level = "debug"}\\
+{\tt conf.log.circular-buffer-entries = 100000}\\
+}\end{slide}
+
+% ==========================================================================
+\part{putting it together}
+% ==========================================================================
+
+\begin{slide}{PMI Performance}{\small
+\begin{center}
+  \includegraphics[scale=0.80]{zmq-broker-hkvs}
+\end{center}
+}\end{slide}
+
+% ==========================================================================
+\part{synchronization, liveness, and routing}
+% ==========================================================================
+
+% ==========================================================================
+\part{design issues}
+% ==========================================================================
+
+\begin{slide}{open issues}{\small
+\begin{itemize}
+  \item{flow control vs. unchecked \zMQ\ buffer growth}
+  \item{deep security integration}
+  \item{recovery from reconnect/router failover}
+  \item{recovery from node 0 failure}
+  \item{kvs persistence}
+\end{itemize}
+}\end{slide}
+
+
+\end{document}
