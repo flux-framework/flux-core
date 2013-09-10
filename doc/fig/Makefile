@@ -48,6 +48,7 @@ DEPFIG = \
 	reflux_arch_off_node.eps \
 	reflux_kvs_merkel.eps \
 	reflux_generic.eps \
+	reflux_dealer_router.eps \
 
 all: $(DEPFIG)
 

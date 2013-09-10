@@ -6,7 +6,8 @@ DEP_KEEP=\
 	../fig/reflux_arch_on_node.eps \
 	../fig/reflux_arch_off_node.eps \
 	../fig/reflux_kvs_merkel.eps \
-	../fig/reflux_generic.eps
+	../fig/reflux_generic.eps \
+	../fig/reflux_dealer_router.eps
 
 DEP=	
 
