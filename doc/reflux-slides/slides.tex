@@ -1,7 +1,10 @@
 \documentclass[default,pdf,colorBG,slideColor]{prosper}
+\usepackage[T1]{fontenc}
 \usepackage{epsfig}
 \usepackage{pstricks}
 \usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
 
 \graphicspath{ {../fig/} }
 
@@ -15,6 +18,25 @@ LLNL-PRES-XXXXXX-DRAFT}}
 
 \newcommand{\ngrm}{Flux}
 \newcommand{\zMQ}{\O{}MQ}
+
+% For listings:
+\newcommand\Small{\fontsize{6}{6.2}\selectfont}
+\newcommand\Smaller{\fontsize{5.5}{5.5}\selectfont}
+\newcommand\realnumberstyle[1]{}
+\makeatletter
+\newcommand{\zebra}[2]{%
+    {\realnumberstyle{#2}}%
+    \begingroup
+    \lst@basicstyle
+    \ifodd\value{lstnumber}%
+        \color{#1}%
+        \rlap{\hspace*{\lst@numbersep}%
+        \color@block{\linewidth}{\ht\strutbox}{\dp\strutbox}%
+        }%
+    \fi
+    \endgroup
+}
+\makeatother
 
 \slideCaption{\ngrm\ Progress Report, Sept. 17, 2013}
 
@@ -139,6 +161,116 @@ LLNL-PRES-XXXXXX-DRAFT}}
         (technically also downstream)}
 \end{itemize}
 }\end{slide}
+
+
+% ==========================================================================
+\part{current prototype plugin interface}
+% ==========================================================================
+
+\begin{slide}{broker plugin design}{\small
+\begin{itemize}
+ \item{each plugin exists as a thread in message broker daemon}
+ \item{plugins currently built statically into broker (easily fixed) }
+ \item{plugin name is used to ``route'' requests}
+ \item{plugin driver executes {\tt zloop} for each each plugin, and plugin
+        registers one or more of the following callbacks:}
+ \begin{itemize}
+   \item{{\tt init} - called at daemon initialization}
+   \item{{\tt fini} - called as daemon exits}
+   \item{{\tt timeout} - called at configurable timeout interval}
+   \item{{\tt recv} - called when a message is recvd for plugin}
+ \end{itemize}
+\end{itemize}
+}\end{slide}
+
+\begin{slide}{simplified example: echo server}
+{\tiny\bf
+\begin{lstlisting}[
+ frame=shadowbox,
+ rulesepcolor=\color{gray},
+ numbers=left,
+ numbersep=10pt,
+ numberstyle=\tiny\zebra{gray!25},
+ basicstyle=\Small\tt,
+ ]
+void handle_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
+{
+    json_object *o = NULL;
+    if (cmb_msg_decode (*zmsg, NULL, &o) >= 0) {
+        int i, repeat;
+        const char *s;
+
+        /* 'string' to echo is required. */
+        if (util_json_object_get_string (o, "string", &s) < 0) {
+            plugin_send_response_errnum (p, zmsg, EINVAL);
+            goto out;
+	}
+        /* 'repeat' is optional */
+        if (util_json_object_get_int (o, "repeat", &repeat) < 0)
+            repeat = 1;
+        for (i = 0; i < repeat; i++) {
+            zmsg_t *z = zmsg_dup (*zmsg);
+            json_object *resp = json_echo (s, p->conf->rank);
+            plugin_send_response (p, &z, resp);
+            json_object_put (resp);
+        }
+    }
+out:
+    if (o)
+        json_object_put (o);
+    zmsg_destroy (zmsg);
+}
+\end{lstlisting}
+} \end{slide}
+
+\begin{slide}{simplified example: echo client}
+\vspace{-0.3in}
+{\tiny\bf
+\begin{lstlisting}[
+ frame=shadowbox,
+ rulesepcolor=\color{gray},
+ numbers=left,
+ numbersep=10pt,
+ numberstyle=\tiny\zebra{gray!25},
+ basicstyle=\Smaller\tt,
+ ]
+int main (int ac, char *av[])
+{
+    cmb_t c;
+    json_object *o;
+    int id, i, ncopies = 1;
+
+    if (!(c = cmb_init ()))
+	fatal ("Failed to open connect to cmb: %s\n", strerror (errno));
+
+    if (ac > 3)
+        ncopies = atoi (av[2]);
+
+    o = json_object_new_object ();
+    util_json_object_add_string (o, "string", av[1]);
+    util_json_object_add_int (o, "repeat", ncopies);
+    
+    if (cmb_send_message (c, o, "echo") < 0)
+        fatal ("cmb_send_message: %s\n", strerror (errno));
+
+    for (i = 0; i < ncopies; i++) {
+        char *tag, *s;
+        zmsg_t *zmsg;
+
+        if (!(zmsg = cmb_recv_zmsg (c, false)))
+            fatal ("cmb_recv_zmsg: %s\n", strerror (errno));
+
+        cmb_msg_decode (zmsg, &tag, &o);
+
+        util_json_object_get_string (o, "string", &s);
+        util_json_object_get_int (o, "id", &id);
+        printf ("got reply %d from %d: %s\n", i+1, id, s);
+        zmsg_destroy (&zmsg);
+    }
+    return (0);
+}
+\end{lstlisting}
+} \end{slide}
 
 
 % ==========================================================================
