@@ -1,3 +1,5 @@
+#ifndef HAVE_CMBD_H
+#define HAVE_CMBD_H
 #include "cmb_socket.h"
 
 #define MAX_PARENTS 2
@@ -70,3 +72,5 @@ typedef struct {
 #define SNOOP_IPC_URI_TMPL  "ipc:///tmp/cmb_socket_snoop.uid%d"
 
 void cmbd_log (conf_t *conf, server_t *srv, int lev, const char *fmt, ...);
+
+#endif /* !HAVE_CMBD_H */

@@ -1,3 +1,5 @@
+#ifndef KVS_H
+#define KVS_H
 typedef struct kvsctx_struct *kvsctx_t;
 typedef struct kvsdir_struct *kvsdir_t;
 
@@ -171,6 +173,8 @@ void kvs_watch_response (void *h, zmsg_t **zmsg);
 
 kvsctx_t kvs_ctx_create (void *h);
 void kvs_ctx_destroy (kvsctx_t ctx);
+
+#endif /* !HAVE_KVS_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

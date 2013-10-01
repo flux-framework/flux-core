@@ -1,3 +1,6 @@
+#ifndef _HAVE_ZMSG_H
+#define _HAVE_ZMSG_H
+
 /* Create socket, set hwm, set identity, connect/bind all in one go.
  * All errors are fatal.
  */
@@ -71,3 +74,4 @@ int cmb_msg_replace_json (zmsg_t *zmsg, json_object *o);
 int cmb_msg_replace_json_errnum (zmsg_t *zmsg, int errnum);
 
 
+#endif /* !_HAVE_ZMSG_H */

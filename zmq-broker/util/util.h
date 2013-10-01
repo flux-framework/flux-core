@@ -1,3 +1,5 @@
+#ifndef _HAVE_CMB_UTIL_H
+#define _HAVE_CMB_UTIL_H
 typedef int (*mapstrfun_t) (char *s, void *arg1, void *arg2);
 
 typedef char href_t[41];
@@ -74,6 +76,7 @@ json_object *util_json_vlog (int level, const char *fac, const char *src,
                              const char *fmt, va_list ap);
 
 
+#endif /* !_HAVE_CMB_UTIL_H */
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

@@ -21,6 +21,9 @@
  *  <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
+#ifndef HAVE_LOG_H
+#define HAVE_LOG_H
+
 #include <syslog.h>
 
 void log_init (char *p);
@@ -48,6 +51,8 @@ void msg (const char *fmt, ...)
 
 const char *log_leveltostr (int level);
 int log_strtolevel (const char *s);
+
+#endif /* !HAVE_LOG_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

@@ -1,3 +1,6 @@
+#ifndef PLUGIN_H
+#define PLUGIN_H
+
 #include "kvs.h"
 
 typedef struct plugin_struct *plugin_t;
@@ -73,6 +76,8 @@ bool plugin_timeout_isset (plugin_ctx_t *p);
 void plugin_log (plugin_ctx_t *p, int lev, const char *fmt, ...);
 
 bool plugin_treeroot (plugin_ctx_t *p);
+
+#endif /* !PLUGIN_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
