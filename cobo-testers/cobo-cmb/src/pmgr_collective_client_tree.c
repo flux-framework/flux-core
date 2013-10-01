@@ -1240,7 +1240,7 @@ int pmgr_tree_open_cmb (pmgr_tree_t *t, x_comm_fab_cxt *cf_cxt,
 #ifdef HAVE_FLUX_CMB
 #define FLUX_CMB_MAX_STR 128
 
-    int i, error_cnt, put_cnt;
+    int i;
     char keystr[FLUX_CMB_MAX_STR];
     char valstr[FLUX_CMB_MAX_STR];
 
@@ -1272,17 +1272,18 @@ int pmgr_tree_open_cmb (pmgr_tree_t *t, x_comm_fab_cxt *cf_cxt,
         );
     }
     
-    if (cmb_kvs_put (cmb_cxt, keystr, valstr) < 0) {
+    json_object *put_obj = json_object_new_string(valstr);
+    if (cmb_kvs_put (cmb_cxt, keystr, put_obj) < 0) {
         pmgr_error("cmb_kvs_put could not put copy"
             " key/value pair into kvs @ file %s:%d",
             __FILE__, __LINE__
         );
-    }
+    } 
+    json_object_put (put_obj);
 
-    if (cmb_kvs_commit (cmb_cxt, &error_cnt, &put_cnt) < 0) {
-        pmgr_error("cmb_kvs_put could not commit "
-            "error_cnt(%d), put_cnt(%d) @ file %s:%d",
-            error_cnt, put_cnt, __FILE__, __LINE__
+    if (cmb_kvs_flush (cmb_cxt) < 0) {
+        pmgr_error("cmb_kvs_flush could not flush "
+            "@ file %s:%d",__FILE__, __LINE__
         );
     }
 
@@ -1291,7 +1292,13 @@ int pmgr_tree_open_cmb (pmgr_tree_t *t, x_comm_fab_cxt *cf_cxt,
             __FILE__, __LINE__
         );
     }    
-    
+
+    if (cmb_kvs_commit (cmb_cxt, NULL) < 0) {
+        pmgr_error("cmb_kvs_put could not commit "
+            "@ file %s:%d", __FILE__, __LINE__
+        );
+    }
+
     /* compute our depth, parent,and children */
     pmgr_tree_init_binary(t, ranks, rank);
 
@@ -1302,6 +1309,7 @@ int pmgr_tree_open_cmb (pmgr_tree_t *t, x_comm_fab_cxt *cf_cxt,
      * */
     int iter = 0;
     char *res_val = NULL;
+    int resc = 0;
     char *ipstr   = NULL;
     char *portstr = NULL;
     while (iter < 2) {
@@ -1326,14 +1334,20 @@ int pmgr_tree_open_cmb (pmgr_tree_t *t, x_comm_fab_cxt *cf_cxt,
                      * res_val is returned by strdup and it isn't
                      * always safe to free it                  
                      */
-		    res_val = cmb_kvs_get (cmb_cxt, 
-                                  (const char *) keystr);
-                    if ( res_val < 0 ) {
+                    json_object *get_obj; 
+		    resc = cmb_kvs_get (cmb_cxt, 
+                                  (const char *) keystr,
+                                  &get_obj,
+                                  KVS_GET_VAL);
+
+                    if ( resc < 0 ) {
                         pmgr_error("Could not get key/value for %s"
                             " @ file %s:%d",
                             keystr, __FILE__, __LINE__
                         );
                     }
+                    res_val = strdup(json_object_get_string (get_obj));
+                    json_object_put (get_obj);
 
                     /* break the ip:port string */
                     ipstr = strtok(res_val, ":");
@@ -1383,15 +1397,20 @@ int pmgr_tree_open_cmb (pmgr_tree_t *t, x_comm_fab_cxt *cf_cxt,
                         );
                     }
 
+                    json_object *get_obj; 
                     /* extract value for this process */
-		    res_val = cmb_kvs_get (cmb_cxt, 
-                                  (const char *) keystr );
-                    if ( res_val < 0) {
+		    resc = cmb_kvs_get (cmb_cxt, 
+                                  (const char *) keystr,
+                                  &get_obj,
+                                  KVS_GET_VAL);
+                    if ( resc < 0) {
                         pmgr_error("Could not get key/value"
                             " for %s @ file %s:%d",
                             keystr, __FILE__, __LINE__
                         );
                     }
+                    res_val = strdup (json_object_to_json_string (get_obj));
+                    json_object_put (get_obj);
 
                     /* break the ip:port string */
                     ipstr = strtok(res_val, ":");
