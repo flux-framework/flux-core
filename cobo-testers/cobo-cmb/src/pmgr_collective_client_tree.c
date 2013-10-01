@@ -1347,6 +1347,9 @@ int pmgr_tree_open_cmb (pmgr_tree_t *t, x_comm_fab_cxt *cf_cxt,
                         );
                     }
                     res_val = strdup(json_object_get_string (get_obj));
+                    int len = strlen(res_val);
+                    res_val[len-1] = '\0';
+                    res_val++;
                     json_object_put (get_obj);
 
                     /* break the ip:port string */
@@ -1410,6 +1413,9 @@ int pmgr_tree_open_cmb (pmgr_tree_t *t, x_comm_fab_cxt *cf_cxt,
                         );
                     }
                     res_val = strdup (json_object_to_json_string (get_obj));
+                    int len = strlen(res_val);
+                    res_val[len-1] = '\0';
+                    res_val++;
                     json_object_put (get_obj);
 
                     /* break the ip:port string */

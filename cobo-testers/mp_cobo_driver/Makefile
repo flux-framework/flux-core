@@ -7,16 +7,8 @@ endif
 NTASKS = $(SLURM_JOB_NUM_NODES)  # override me
 SRUN   = srun --overcommit -n$(NTASKS)
 
-CMB_DIR = ../../zmq-broker 
-CFLAGS  = -Werror -Wall -g -fPIC -I$(CMB_DIR) -I./ -I../cobo-cmb/include
-LDADD   = -lzmq -lczmq -pthread -luuid -lhiredis
-LDADD_C = -ljson -luuid -lzmq -lczmq
-
-CMB_DEP = ../../zmq-broker/apicli.o \
-          ../../zmq-broker/util.o \
-	  ../../zmq-broker/log.o \
-          ../../zmq-broker/zmq.o
-
+CMB_DIR = ../../zmq-broker#
+CFLAGS  = -Werror -Wall -g -fPIC -I$(CMB_DIR)/include -I./ -I../cobo-cmb/include
 INCLUDES = $(wildcard *.h)
 
 ###########################################################

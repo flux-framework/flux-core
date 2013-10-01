@@ -185,16 +185,32 @@ main (int argc, char *argv[])
      if ( fork () == 0 ) {
          /* CHILD */
          sleep (5); 
+         char **newargv = NULL;
          char argbuf[128];
-         char *newargv[6]; 
-         newargv[0] = strdup ("/usr/bin/srun");
-         newargv[1] = strdup ("--overcommit");
-         snprintf (argbuf, 128, "-n%d", pCount);
-         newargv[2] = strdup (argbuf);
-         newargv[3] = strdup ("./mp_cobo_be");
-         newargv[4] = strdup (ipPortPair);
-         newargv[5] = NULL;
-         execv ((const char *) newargv[0], (char * const *) newargv);
+         if (getenv("COBO_DEBUG") != NULL) {
+             newargv = (char **) malloc (8*sizeof(char *)); 
+             newargv[0] = strdup("/usr/local/bin/totalview");
+             newargv[1] = strdup ("/usr/bin/srun");
+             newargv[2] = strdup ("-a");
+             newargv[3] = strdup ("--overcommit");
+             snprintf (argbuf, 128, "-n%d", pCount);
+             newargv[4] = strdup (argbuf);
+             newargv[5] = strdup ("./mp_cobo_be");
+             newargv[6] = strdup (ipPortPair);
+             newargv[7] = NULL;
+             execv ((const char *) newargv[0], (char * const *) newargv);
+         }
+         else {
+             newargv = (char **) malloc (6*sizeof(char *)); 
+             newargv[0] = strdup ("/usr/bin/srun");
+             newargv[1] = strdup ("--overcommit");
+             snprintf (argbuf, 128, "-n%d", pCount);
+             newargv[2] = strdup (argbuf);
+             newargv[3] = strdup ("./mp_cobo_be");
+             newargv[4] = strdup (ipPortPair);
+             newargv[5] = NULL;
+             execv ((const char *) newargv[0], (char * const *) newargv);
+         }
          /* SINK */
      }
     /*****************************************************************
