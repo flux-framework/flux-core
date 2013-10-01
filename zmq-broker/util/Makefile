@@ -1,5 +1,5 @@
 
-LIBUTIL_SOURCES := log.c hostlist.c cbuf.c util.c zmsg.c hljson.c
+LIBUTIL_SOURCES := log.c hostlist.c cbuf.c util.c zmsg.c hljson.c lsdfatal.c
 
 libutil.a: $(LIBUTIL_SOURCES:.c=.o)
 	ar rcs $@ $^
