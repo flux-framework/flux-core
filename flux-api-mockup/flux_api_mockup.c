@@ -159,9 +159,11 @@ FLUX_init ()
      * MOCKUP for a running lwj
      */
     int s = getAndIncLWJSlot();
+    char hn[128];
+    gethostname (hn, 128);
     lwjArray[s].lwj.id = getAndIncLWJid();
     lwjArray[s].status = FLUX_MOCKUP_STATUS;
-    lwjArray[s].hn = strdup (FLUX_MOCKUP_HOSTNAME);
+    lwjArray[s].hn = strdup (hn);
     lwjArray[s].pid = FLUX_MOCKUP_PID; 
     lwjArray[s].procTableSize = 1; 
     lwjArray[s].procTable 
@@ -169,7 +171,7 @@ FLUX_init ()
     lwjArray[s].procTable[0].pd.executable_name 
         = strdup (FLUX_MOCKUP_EXEC);  
     lwjArray[s].procTable[0].pd.host_name
-        = strdup (FLUX_MOCKUP_HOSTNAME);  
+        = strdup (hn);  
     lwjArray[s].procTable[0].pd.pid 
         = FLUX_MOCKUP_PID;
     lwjArray[s].procTable[0].mpirank = 0;
@@ -321,18 +323,25 @@ flux_rc_e FLUX_query_globalProcTable (
 		 MPIR_PROCDESC_EXT *pt, 
 		 size_t count)
 {
-    flux_rc_e rc;
+    int i;
+    flux_rc_e rc = FLUX_OK;
     flux_lwj_info_t *entry = NULL;
 
     rc = FLUX_getLWJEntry (lwj, &entry);
-    
-    if (rc == FLUX_OK) {	
-	if (entry->procTableSize == count) {
-	    memcpy ((void *) pt, 
-		    (void *) entry->procTable,
-		    sizeof (MPIR_PROCDESC_EXT) 
-		    *  entry->procTableSize);	
-	}
+
+    if ((rc != FLUX_OK)
+	|| (count != entry->procTableSize)) {
+	return rc;
+    }
+
+    for (i=0; i < count; ++i) {
+	pt[i].pd.host_name 
+	    = strdup(entry->procTable[i].pd.host_name);
+	pt[i].pd.executable_name
+	    = strdup(entry->procTable[i].pd.executable_name);
+	pt[i].pd.pid = entry->procTable[i].pd.pid;
+	pt[i].mpirank = entry->procTable[i].mpirank;
+	pt[i].cnodeid = entry->procTable[i].cnodeid;
     }
     
     return rc;
@@ -421,6 +430,7 @@ FLUX_launch_spawn (
                    goto ret_loc;
                }
                else {
+		   char hname[128];				   
                    flux_lwj_info_t *entry = NULL;
                    FLUX_getLWJEntry (me, &entry);
 		   entry->procTableSize = np;
@@ -428,19 +438,24 @@ FLUX_launch_spawn (
                        = (MPIR_PROCDESC_EXT *)
                          malloc (np * sizeof (MPIR_PROCDESC_EXT));
 
+		   gethostname (hname, 128);
+
                    pid_t retPid = fork();                   
                    if (retPid == 0) {
                        execv (lwjpath, lwjargv);
                    }
                    else {
 	               if (sync) {
-			  usleep(100000);
+#if 0
+			  usleep(1000);
                           kill (retPid, SIGSTOP);
+                          kill (retPid, SIGSTOP);
+#endif
 		       }
                        entry->procTable[0].pd.executable_name
                            = strdup (lwjpath);
                        entry->procTable[0].pd.host_name
-                           = strdup (FLUX_MOCKUP_HOSTNAME);
+                           = strdup (hname);
                        entry->procTable[0].pd.pid
                            = retPid;
                        entry->procTable[0].mpirank = 0;
@@ -460,12 +475,15 @@ FLUX_launch_spawn (
          */  
         int i;
         flux_lwj_info_t *entry = NULL;
+	char hname[128];
         FLUX_getLWJEntry (me, &entry);
 	entry->procTableSize = np;
         entry->procTable
             = (MPIR_PROCDESC_EXT *) 
               malloc (np * sizeof (MPIR_PROCDESC_EXT));
          
+	gethostname (hname, 128);
+
         for (i = 0; i < np; ++i) {
             pid_t retPid = fork ();
         
@@ -475,13 +493,16 @@ FLUX_launch_spawn (
             }
             else {
                 if (sync) {
-                    usleep (100000);
+#if 0
+                    usleep (1000);
 		    kill (retPid, SIGSTOP);
+		    kill (retPid, SIGSTOP);
+#endif
                 }
                 entry->procTable[i].pd.executable_name
                     = strdup (lwjpath);
                 entry->procTable[i].pd.host_name
-                    = strdup (FLUX_MOCKUP_HOSTNAME);
+                    = strdup (hname);
                 entry->procTable[i].pd.pid
                     = retPid;
                 entry->procTable[i].mpirank = i;
@@ -505,5 +526,37 @@ FLUX_control_killLWJs (
 		 int size)
 {
     /* logic to flll in */
+    return FLUX_OK;
+}
+
+
+flux_rc_e
+FLUX_control_attachreqLWJ (
+		 const flux_lwj_id_t *target) 
+{
+    flux_rc_e rc = FLUX_ERROR;
+    flux_lwj_info_t *entry = NULL;
+    FLUX_getLWJEntry (target, &entry);
+    if (entry->status == status_running) {
+        entry->status = status_attach_requested;
+        rc = FLUX_OK;
+    } 
+
+    return FLUX_OK;
+}
+
+
+flux_rc_e
+FLUX_control_attachdoneLWJ (
+                 const flux_lwj_id_t *target)
+{
+    flux_rc_e rc = FLUX_ERROR;
+    flux_lwj_info_t *entry = NULL;
+    FLUX_getLWJEntry (target, &entry);
+    if (entry->status == status_attach_requested) {
+        entry->status = status_running;
+        rc = FLUX_OK;
+    }
+
     return FLUX_OK;
 }

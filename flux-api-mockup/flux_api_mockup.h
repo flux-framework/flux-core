@@ -95,7 +95,7 @@ typedef struct _flux_lwj_info_t
 #define FLUX_MOCKUP_LWJ_ID   100
 #define FLUX_MOCKUP_HOSTNAME "sierra324"
 #define FLUX_MOCKUP_EXEC     "/foo/bar"
-#define FLUX_MOCKUP_STATUS   4
+#define FLUX_MOCKUP_STATUS   5
 
 //!
 /*! 
@@ -246,6 +246,27 @@ FLUX_launch_spawn (
 extern flux_rc_e FLUX_control_killLWJs (
                  const flux_lwj_id_t target[], 
 		 int size);
+
+//!
+/*! 
+    Interface that requests for a state change from running
+    to attach_requested
+*/
+extern flux_rc_e
+FLUX_control_attachreqLWJ (
+                 const flux_lwj_id_t *target);
+
+
+//!
+/*! 
+    Interface that requests for a state change from attach_requested
+    to running
+*/
+extern flux_rc_e
+FLUX_control_attachdoneLWJ (
+                 const flux_lwj_id_t *target);
+
+
 
 extern flux_rc_e
 error_log (const char *format, ...);
