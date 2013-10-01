@@ -4,7 +4,7 @@
 # is not given
 #
 
-PREFIX     ?= ./ #/usr/local/tools/pmgr_collective
+PREFIX     ?= /g/g0/dahn/workspace/FLUX-COBO-BUILD/ngrm #/usr/local/tools/pmgr_collective
 PMGR_INC   := -I../include 
 PMGR_LIB   := -L../lib -lpmgr_collective
 PMGR_OBJS  := \
@@ -28,15 +28,22 @@ LDADD_C    := -lpmi
 else
 OPT        ?= -g -O0 -Wall -DHAVE_FLUX_CMB=1 -DMPIRUN_FLUX_CMB_ENABLE=1
 CMB_PREFIX := $(shell ./ap `pwd`/../../zmq-broker)
-CFLAGS     := -I$(CMB_PREFIX)
-EXTRA_DEP  := $(CMB_PREFIX)/apicli.o \
-	      $(CMB_PREFIX)/util.o \
-	      $(CMB_PREFIX)/log.o \
-	      $(CMB_PREFIX)/zmq.o	
-LDADD      := -L$(CMB_PREFIX) -Wl,-rpath=$(CMB_PREFIX) \
-              -lzmq -lczmq -pthread -luuid -lhiredis -lssl
-LDADD_C    := -L$(CMB_PREFIX) -Wl,-rpath=$(CMB_PREFIX) \
-              -ljson -luuid -lzmq -lczmq -lssl
+CFLAGS     := -I$(CMB_PREFIX)/include
+#EXTRA_DEP  := $(CMB_PREFIX)/apicli.o \
+#	      $(CMB_PREFIX)/util.o \
+#	      $(CMB_PREFIX)/log.o \
+#	      $(CMB_PREFIX)/zmq.o	
+#LDADD      := -L$(CMB_PREFIX) -Wl,-rpath=$(CMB_PREFIX) \
+#              -lzmq -lczmq -pthread -luuid -lhiredis -lssl
+#LDADD_C    := -L$(CMB_PREFIX) -Wl,-rpath=$(CMB_PREFIX) \
+#              -ljson -luuid -lzmq -lczmq -lssl
+EXTRA_DEP  :=
+LDADD      := -L$(CMB_PREFIX)/util -Wl,-rpath=$(CMB_PREFIX)/util \
+              -L$(CMB_PREFIX)/lib -Wl,-rpath=$(CMB_PREFIX)/lib \
+              -lutil -lcmb -ljson -luuid -lzmq -lczmq -lssl
+LDADD_C    := -L$(CMB_PREFIX)/util -Wl,-rpath=$(CMB_PREFIX)/util \
+              -L$(CMB_PREFIX)/lib -Wl,-rpath=$(CMB_PREFIX)/lib \
+              -lutil -lcmb -ljson -luuid -lzmq -lczmq -lssl
 endif
 
 
