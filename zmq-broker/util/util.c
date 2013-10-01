@@ -244,6 +244,16 @@ void util_json_object_add_int (json_object *o, char *name, int i)
     json_object_object_add (o, name, no);
 }
 
+void util_json_object_add_int64 (json_object *o, char *name, int64_t i)
+{
+    json_object *no;
+
+    if (!(no = json_object_new_int64 (i)))
+        oom ();
+    json_object_object_add (o, name, no);
+}
+
+
 void util_json_object_add_string (json_object *o, char *name, const char *s)
 {
     json_object *no;
@@ -313,6 +323,15 @@ int util_json_object_get_int (json_object *o, char *name, int *ip)
     if (!no)
         return -1;
     *ip = json_object_get_int (no);
+    return 0;
+}
+
+int util_json_object_get_int64 (json_object *o, char *name, int64_t *ip)
+{
+    json_object *no = json_object_object_get (o, name);
+    if (!no)
+        return -1;
+    *ip = json_object_get_int64 (no);
     return 0;
 }
 
