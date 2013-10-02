@@ -4,7 +4,7 @@ LIBDIR =          $(TOP)/lib
 EXTRA_CFLAGS +=   -I$(TOP)/include -I$(TOP)/util
 EXTRA_LDFLAGS +=  -L$(TOP)/lib $(TOP)/util/libutil.a
 
-SUBDIRS :=
+SUBDIRS :=        wreck
 SUBDIRS_POST :=   test
 
 ifeq ($(shell hostname),jimbo.chaos)
@@ -19,13 +19,14 @@ LDFLAGS = -Wl,-rpath,$(LIBDIR)
 
 export CFLAGS LDFLAGS
 
-LIBUTIL =   util/libutil.a
+LIBUTIL = util/libutil.a
 LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -luuid $(LIBUTIL)
 LDADD_SRV = -pthread $(LDADD_CLI)
 
 PLUGIN_OBJS = apisrv.o syncsrv.o kvssrv.o barriersrv.o livesrv.o \
-	logsrv.o echosrv.o
+	logsrv.o echosrv.o wreck/jobsrv.o wreck/wrexecsrv.o
 CMBD_OBJS = cmbd.o route.o plugin.o kvscli.o $(PLUGIN_OBJS)
+
 CMBUTIL_OBJS = cmbutil.o
 LIBPMI_OBJS = pmi.o
 LIBCMB_OBJS = apicli.o kvscli.o
@@ -66,7 +67,6 @@ mpi_hello: mpi_hello.c
 	(source /etc/profile.d/modules.sh;\
 		module load $(MPIMOD);\
 		mpicc $(LDFLAGS) -o $@ $<)
-
 
 clean:
 	rm -f *.o $(BUILD)
