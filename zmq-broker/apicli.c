@@ -378,6 +378,22 @@ done:
     return rc;
 }
 
+int cmb_kvs_put_boolean (cmb_t c, const char *key, bool val)
+{
+    json_object *o;
+    int rc = -1;
+
+    if (!(o = json_object_new_boolean (val)))
+        oom ();
+    if (cmb_kvs_put (c, key, o) < 0)
+        goto done;
+    rc = 0;
+done:
+    if (o)
+        json_object_put (o);
+    return rc;
+}
+
 int cmb_kvs_del (cmb_t c, const char *key)
 {
     return cmb_kvs_put (c, key, NULL);

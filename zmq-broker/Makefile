@@ -5,6 +5,7 @@ EXTRA_CFLAGS +=   -I$(TOP)/include -I$(TOP)/util
 EXTRA_LDFLAGS +=  -L$(TOP)/lib $(TOP)/util/libutil.a
 
 SUBDIRS :=        util
+SUBDIRS_POST :=   test
 
 ifeq ($(shell hostname),jimbo.chaos)
 MPIMOD = mvapich2-gnu-shmem
@@ -25,31 +26,26 @@ PLUGIN_OBJS = apisrv.o syncsrv.o kvssrv.o barriersrv.o livesrv.o \
 	logsrv.o echosrv.o
 CMBD_OBJS = cmbd.o route.o plugin.o lsdfatal.o $(PLUGIN_OBJS)
 CMBUTIL_OBJS = cmbutil.o
-TBASE64_OBJS = tbase64.o
 LIBPMI_OBJS = pmi.o
 LIBCMB_OBJS = apicli.o
 
 LIBPMI = $(LIBDIR)/libpmi.so.0
 LIBCMB = $(LIBDIR)/libcmb.so.0
 
-BUILD = $(LIBCMB) $(LIBPMI) cmbd cmbutil tbase64 kvstest mpi_hello
+BUILD = $(LIBCMB) $(LIBPMI) cmbd cmbutil mpi_hello
 
-all: subdirs $(BUILD)
+all: subdirs $(BUILD) subdirs_post
 
 subdirs:
 	@for f in $(SUBDIRS); do make -C $$f; done
+subdirs_post:
+	@for f in $(SUBDIRS_POST); do make -C $$f; done
 
 cmbd: $(CMBD_OBJS)
 	$(CC) -o $@ $(CMBD_OBJS) $(LDADD_SRV)
 
-tbase64: $(TBASE64_OBJS)
-	$(CC) $(LDFLAGS) -o $@ $(TBASE64_OBJS) $(LDADD_CLI)
-
 cmbutil: $(CMBUTIL_OBJS) $(LIBCMB)
 	$(CC) $(LDFLAGS) -o $@ $(CMBUTIL_OBJS) -L$(LIBDIR) -lcmb $(LDADD_CLI)
-
-kvstest: kvstest.o
-	$(CC) $(LDFLAGS) -o $@ $< -L$(LIBDIR) -lpmi
 
 $(LIBPMI): $(LIBPMI_OBJS) $(LIBCMB)
 	mkdir -p $(shell dirname $@)
@@ -71,7 +67,7 @@ mpi_hello: mpi_hello.c
 clean:
 	rm -f *.o $(BUILD)
 	rm -rf $(LIBDIR)/
-	@for f in $(SUBDIRS); do make -C $$f clean; done
+	@for f in $(SUBDIRS) $(SUBDIRS_POST); do make -C $$f clean; done
 
 # header dependencies
 OBJS = $(CMBD_OBJS) $(CMBUTIL_OBJS) $(TBASE64_OBJS) \
@@ -91,13 +87,13 @@ hello: mpi_hello
 		module load $(MPIMOD);\
 		$(SRUN) ./mpi_hello)
 
-dokvstest: kvstest
+dokvstest: test/tpmikvs
 	export PMI_TRACE=0xff;\
-	$(SRUN) ./kvstest
-dokvstest_nsquared: kvstest
-	$(SRUN) ./kvstest --n-squared
-dokvstest_nsquared_cached: kvstest
-	$(SRUN) ./kvstest --n-squared
+	$(SRUN) $<
+dokvstest_nsquared: test/tpmikvs
+	$(SRUN) $< --n-squared
+dokvstest_nsquared_cached: test/tpmikvs
+	$(SRUN) $< --n-squared
 
 barrier:
 	time -p $(SRUN) ./cmbutil -b testbarrier
