@@ -374,6 +374,181 @@ done:
     return ret;       
 }
 
+int plugin_kvs_get_string (plugin_ctx_t *p, const char *key, char **valp)
+{
+    json_object *o = NULL;
+    int ret = -1;
+
+    if (plugin_kvs_get (p, key, &o) < 0)
+        goto done;
+    if (json_object_get_type (o) != json_type_string) {
+        errno = EINVAL;
+        goto done;
+    }
+    *valp = xstrdup (json_object_get_string (o));
+    ret = 0;
+done:
+    if (o)
+        json_object_put (o);
+    return ret;
+}
+
+int plugin_kvs_put_string (plugin_ctx_t *p, const char *key, const char *val)
+{
+    json_object *o = NULL;
+    int ret = -1;
+
+    if (val && !(o = json_object_new_string (val)))
+        oom ();
+    if (plugin_kvs_put (p, key, o) < 0)
+        goto done;
+    ret = 0;
+done:
+    if (o)
+        json_object_put (o);
+    return ret;
+}
+
+int plugin_kvs_get_int (plugin_ctx_t *p, const char *key, int *valp)
+{
+    json_object *o = NULL;
+    int ret = -1;
+
+    if (plugin_kvs_get (p, key, &o) < 0)
+        goto done;
+    if (json_object_get_type (o) != json_type_int) {
+        errno = EINVAL;
+        goto done;
+    }
+    *valp = json_object_get_int (o);
+    ret = 0;
+done:
+    if (o)
+        json_object_put (o);
+    return ret;
+}
+
+int plugin_kvs_put_int (plugin_ctx_t *p, const char *key, int val)
+{
+    json_object *o = NULL;
+    int ret = -1;
+
+    if (!(o = json_object_new_int (val)))
+        oom ();
+    if (plugin_kvs_put (p, key, o) < 0)
+        goto done;
+    ret = 0;
+done:
+    if (o)
+        json_object_put (o);
+    return ret;
+}
+
+int plugin_kvs_get_int64 (plugin_ctx_t *p, const char *key, int64_t *valp)
+{
+    json_object *o = NULL;
+    int ret = -1;
+
+    if (plugin_kvs_get (p, key, &o) < 0)
+        goto done;
+    if (json_object_get_type (o) != json_type_int) {
+        errno = EINVAL;
+        goto done;
+    }
+    *valp = json_object_get_int64 (o);
+    ret = 0;
+done:
+    if (o)
+        json_object_put (o);
+    return ret;
+}
+
+int plugin_kvs_put_int64 (plugin_ctx_t *p, const char *key, int64_t val)
+{
+    json_object *o = NULL;
+    int ret = -1;
+
+    if (!(o = json_object_new_int64 (val)))
+        oom ();
+    if (plugin_kvs_put (p, key, o) < 0)
+        goto done;
+    ret = 0;
+done:
+    if (o)
+        json_object_put (o);
+    return ret;
+}
+
+int plugin_kvs_get_double (plugin_ctx_t *p, const char *key, double *valp)
+{
+    json_object *o = NULL;
+    int ret = -1;
+
+    if (plugin_kvs_get (p, key, &o) < 0)
+        goto done;
+    if (json_object_get_type (o) != json_type_double) {
+        errno = EINVAL;
+        goto done;
+    }
+    *valp = json_object_get_double (o);
+    ret = 0;
+done:
+    if (o)
+        json_object_put (o);
+    return ret;
+}
+
+int plugin_kvs_put_double (plugin_ctx_t *p, const char *key, double val)
+{
+    json_object *o = NULL;
+    int ret = -1;
+
+    if (!(o = json_object_new_double (val)))
+        oom ();
+    if (plugin_kvs_put (p, key, o) < 0)
+        goto done;
+    ret = 0;
+done:
+    if (o)
+        json_object_put (o);
+    return ret;
+}
+
+int plugin_kvs_get_boolean (plugin_ctx_t *p, const char *key, bool *valp)
+{
+    json_object *o = NULL;
+    int ret = -1;
+
+    if (plugin_kvs_get (p, key, &o) < 0)
+        goto done;
+    if (json_object_get_type (o) != json_type_boolean) {
+        errno = EINVAL;
+        goto done;
+    }
+    *valp = json_object_get_boolean (o);
+    ret = 0;
+done:
+    if (o)
+        json_object_put (o);
+    return ret;
+}
+
+int plugin_kvs_put_boolean (plugin_ctx_t *p, const char *key, bool val)
+{
+    json_object *o = NULL;
+    int ret = -1;
+
+    if (!(o = json_object_new_boolean (val)))
+        oom ();
+    if (plugin_kvs_put (p, key, o) < 0)
+        goto done;
+    ret = 0;
+done:
+    if (o)
+        json_object_put (o);
+    return ret;
+}
+
 int plugin_kvs_watch (plugin_ctx_t *p, const char *key,
                       kvs_watch_f *set, void *arg)
 {

@@ -77,6 +77,17 @@ bool plugin_timeout_isset (plugin_ctx_t *p);
 
 void plugin_log (plugin_ctx_t *p, int lev, const char *fmt, ...);
 
+int plugin_kvs_get_string (plugin_ctx_t *p, const char *key, char **valp);
+int plugin_kvs_put_string (plugin_ctx_t *p, const char *key, const char *val);
+int plugin_kvs_get_int (plugin_ctx_t *p, const char *key, int *valp);
+int plugin_kvs_put_int (plugin_ctx_t *p, const char *key, int val);
+int plugin_kvs_get_int64 (plugin_ctx_t *p, const char *key, int64_t *valp);
+int plugin_kvs_put_int64 (plugin_ctx_t *p, const char *key, int64_t val);
+int plugin_kvs_get_double (plugin_ctx_t *p, const char *key, double *valp);
+int plugin_kvs_put_double (plugin_ctx_t *p, const char *key, double val);
+int plugin_kvs_get_boolean (plugin_ctx_t *p, const char *key, bool *valp);
+int plugin_kvs_put_boolean (plugin_ctx_t *p, const char *key, bool val);
+
 int plugin_kvs_get (plugin_ctx_t *p, const char *key, json_object **valp);
 int plugin_kvs_put (plugin_ctx_t *p, const char *key, json_object *val);
 int plugin_kvs_flush (plugin_ctx_t *p);

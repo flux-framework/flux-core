@@ -351,7 +351,6 @@ int PMI_KVS_Get_value_length_max( int *length )
 int PMI_KVS_Put( const char kvsname[], const char key[], const char value[])
 {
     char *xkey = NULL;
-    json_object *o = NULL;
     int rc = PMI_SUCCESS;
 
     trace (PMI_TRACE_KVS_PUT, "%s pmi.%s.%s = %s",
@@ -370,19 +369,13 @@ int PMI_KVS_Put( const char kvsname[], const char key[], const char value[])
         rc = PMI_ERR_NOMEM;
         goto done;
     }
-    if (!(o = json_object_new_string (value))) {
-        rc = PMI_ERR_NOMEM;
-        goto done;
-    }
-    if (cmb_kvs_put (ctx->cctx, xkey, o) < 0) {
+    if (cmb_kvs_put_string (ctx->cctx, xkey, value) < 0) {
         rc = PMI_FAIL;
         goto done;
     }
 done:
     if (xkey)
         free (xkey);
-    if (o)
-        json_object_put (o);
     return rc;
 }
 
@@ -406,8 +399,8 @@ error:
 int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int length)
 {
     char *xkey = NULL;
-    json_object *o = NULL;
     int rc = PMI_SUCCESS;
+    char *val = NULL;
 
     trace (PMI_TRACE_KVS_GET, "%s pmi.%s.%s", __FUNCTION__, kvsname, key);
     if (ctx == NULL) {
@@ -423,19 +416,19 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
         rc = PMI_ERR_NOMEM;
         goto done;
     }
-    if (cmb_kvs_get (ctx->cctx, xkey, &o, KVS_GET_VAL) < 0) {
+    if (cmb_kvs_get_string (ctx->cctx, xkey, &val) < 0) {
         if (errno == ENOENT)
             rc = PMI_ERR_INVALID_KEY;
         else
             rc = PMI_FAIL;
         goto done;
     }
-    snprintf (value, length, "%s", json_object_get_string (o));
+    snprintf (value, length, "%s", val);
 done:
     if (xkey)
         free (xkey);
-    if (o)
-        json_object_put (o);
+    if (val)
+        free (val);
     return rc;
 }
 

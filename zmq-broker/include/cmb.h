@@ -62,6 +62,21 @@ int cmb_barrier (cmb_t c, char *name, int nprocs);
 
 /* Get/put key-value pairs.
  */
+
+/* Convenience functions for simple type values.
+ */
+/* N.B. get_string returns a copy of string; put_string makes a copy */
+int cmb_kvs_get_string (cmb_t c, const char *key, char **valp);
+int cmb_kvs_put_string (cmb_t c, const char *key, const char *val);
+int cmb_kvs_get_int (cmb_t c, const char *key, int *valp);
+int cmb_kvs_put_int (cmb_t c, const char *key, int val);
+int cmb_kvs_get_int64 (cmb_t c, const char *key, int64_t *valp);
+int cmb_kvs_put_int64 (cmb_t c, const char *key, int64_t val);
+int cmb_kvs_get_double (cmb_t c, const char *key, double *valp);
+int cmb_kvs_put_double (cmb_t c, const char *key, double val);
+int cmb_kvs_get_boolean (cmb_t c, const char *key, bool *valp);
+int cmb_kvs_put_boolean (cmb_t c, const char *key, bool val);
+
 typedef enum {
     KVS_GET_VAL=0,      /* get value of key */
     KVS_GET_WATCH,      /* start watch */

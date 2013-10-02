@@ -314,6 +314,70 @@ done:
     return rc;
 }
 
+int cmb_kvs_put_string (cmb_t c, const char *key, const char *val)
+{
+    json_object *o = NULL;
+    int rc = -1;
+
+    if (val && !(o = json_object_new_string (val)))
+        oom ();
+    if (cmb_kvs_put (c, key, o) < 0)
+        goto done;
+    rc = 0;
+done:
+    if (o)
+        json_object_put (o);
+    return rc;
+}
+
+int cmb_kvs_put_int (cmb_t c, const char *key, int val)
+{
+    json_object *o;
+    int rc = -1;
+
+    if (!(o = json_object_new_int (val)))
+        oom ();
+    if (cmb_kvs_put (c, key, o) < 0)
+        goto done;
+    rc = 0;
+done:
+    if (o)
+        json_object_put (o);
+    return rc;
+}
+
+int cmb_kvs_put_int64 (cmb_t c, const char *key, int64_t val)
+{
+    json_object *o;
+    int rc = -1;
+
+    if (!(o = json_object_new_int64 (val)))
+        oom ();
+    if (cmb_kvs_put (c, key, o) < 0)
+        goto done;
+    rc = 0;
+done:
+    if (o)
+        json_object_put (o);
+    return rc;
+}
+
+int cmb_kvs_put_double (cmb_t c, const char *key, double val)
+{
+    json_object *o;
+    int rc = -1;
+
+    if (!(o = json_object_new_double (val)))
+        oom ();
+    if (cmb_kvs_put (c, key, o) < 0)
+        goto done;
+    rc = 0;
+done:
+    if (o)
+        json_object_put (o);
+    return rc;
+}
+
 int cmb_kvs_del (cmb_t c, const char *key)
 {
     return cmb_kvs_put (c, key, NULL);
@@ -425,6 +489,103 @@ int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, kvs_get_t flag)
     *valp = val; 
     rc = 0;
 done:
+    if (o)
+        json_object_put (o);
+    return rc;
+}
+
+int cmb_kvs_get_string (cmb_t c, const char *key, char **valp)
+{
+    json_object *o = NULL;
+    const char *s;
+    int rc = -1;
+
+    if (cmb_kvs_get (c, key, &o, KVS_GET_VAL) < 0)
+        goto done;
+    if (json_object_get_type (o) != json_type_string) {
+        errno = EINVAL;
+        goto done;
+    }
+    s = json_object_get_string (o);
+    *valp = xstrdup (s);
+    rc = 0;
+done: 
+    if (o)
+        json_object_put (o);
+    return rc;
+}
+
+int cmb_kvs_get_int (cmb_t c, const char *key, int *valp)
+{
+    json_object *o = NULL;
+    int rc = -1;
+
+    if (cmb_kvs_get (c, key, &o, KVS_GET_VAL) < 0)
+        goto done;
+    if (json_object_get_type (o) != json_type_int) {
+        errno = EINVAL;
+        goto done;
+    }
+    *valp = json_object_get_int (o);
+    rc = 0;
+done: 
+    if (o)
+        json_object_put (o);
+    return rc;
+}
+
+int cmb_kvs_get_int64 (cmb_t c, const char *key, int64_t *valp)
+{
+    json_object *o = NULL;
+    int rc = -1;
+
+    if (cmb_kvs_get (c, key, &o, KVS_GET_VAL) < 0)
+        goto done;
+    if (json_object_get_type (o) != json_type_int) {
+        errno = EINVAL;
+        goto done;
+    }
+    *valp = json_object_get_int64 (o);
+    rc = 0;
+done: 
+    if (o)
+        json_object_put (o);
+    return rc;
+}
+
+int cmb_kvs_get_double (cmb_t c, const char *key, double *valp)
+{
+    json_object *o = NULL;
+    int rc = -1;
+
+    if (cmb_kvs_get (c, key, &o, KVS_GET_VAL) < 0)
+        goto done;
+    if (json_object_get_type (o) != json_type_double) {
+        errno = EINVAL;
+        goto done;
+    }
+    *valp = json_object_get_double (o);
+    rc = 0;
+done: 
+    if (o)
+        json_object_put (o);
+    return rc;
+}
+
+int cmb_kvs_get_boolean (cmb_t c, const char *key, bool *valp)
+{
+    json_object *o = NULL;
+    int rc = -1;
+
+    if (cmb_kvs_get (c, key, &o, KVS_GET_VAL) < 0)
+        goto done;
+    if (json_object_get_type (o) != json_type_boolean) {
+        errno = EINVAL;
+        goto done;
+    }
+    *valp = json_object_get_boolean (o);
+    rc = 0;
+done: 
     if (o)
         json_object_put (o);
     return rc;
