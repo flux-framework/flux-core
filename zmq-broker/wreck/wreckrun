@@ -1,0 +1,78 @@
+#!/bin/bash
+
+declare -r prog=${0##*/}
+declare -r topdir=$(cd $(dirname $0)/.. && pwd)
+declare -r cmbutil=${topdir}/cmbutil
+declare -r wreck=${topdir}/wreck/wreck
+
+declare -r getopt="/usr/bin/getopt -u"
+declare -r long_opts="procs-per-node,help"
+declare -r short_opts="n:h"
+declare -r usage="\
+\n\
+Test script to run a job using CMB KVS and wait for completion\n\
+\n\
+Usage: $prog [OPTIONS]... [COMMANDS]...\n\
+   -h, --help                Display this message.\n\
+   -n, --procs-per-node=N    Run N processes per CMB node (Default=1)\n"
+
+usage()   { echo -e "$usage" >&2; }
+log_msg() { echo -e "$prog: $@" >&2; }
+die()     { log_msg "Fatal: $@"; exit 1; }
+
+GETOPT=$($getopt -o $short_opts -l $long_opts -n $prog -- $@)
+if [ $? != 0 ] ; then
+   usage
+   exit 1
+fi
+
+declare -i nprocs=1
+eval set -- "$GETOPT"
+while true; do
+    case "$1" in
+    -n|--procs-per-node)    nprocs=$2;       shift 2 ;;
+    -h|--help)              usage; exit 0;           ;;
+    --)                     shift; break;            ;;
+    *)                      usage; exit 1;           ;;
+    esac
+done
+
+# submit job
+jobid=$($wreck -n $nprocs "$@")
+if [ $? != 0 ]; then
+   die "cannot submit new job"
+fi
+
+log_msg "Created jobid $jobid"
+
+# watch job state in background:
+coproc stdbuf -oL $cmbutil -Y "lwj.${jobid}.state" </dev/null
+read -u ${COPROC[0]} x
+
+kill_job() {
+  log_msg "Killing LWJ id ${jobid}"
+  $cmbutil -e event.rexec.kill.${jobid}
+  local now=$(date +%s)
+  if [[ $now -eq $last_kill ]]; then
+     log_msg "Detaching from cmb... tasks may still be running."
+     kill -9 %1
+     exit 0
+  fi
+  last_kill=${now}
+}
+
+trap kill_job SIGINT SIGTERM
+
+# Request launch
+$cmbutil -e "event.rexec.run.${jobid}"
+
+# wait for status = complete
+
+while test -n "${COPROC[0]}"  && read -ru "${COPROC[0]}" x; do
+    printf '%s: %s\n' "$(date +%T.%3N)" "${x}"
+    if echo $x | grep -q complete; then
+       kill -9 %1
+       exit 0
+    fi
+done
+
