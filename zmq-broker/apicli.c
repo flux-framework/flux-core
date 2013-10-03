@@ -618,9 +618,18 @@ error:
 
 cmb_t cmb_init (void)
 {
+    const char *val;
     char path[PATH_MAX + 1];
 
-    snprintf (path, sizeof (path), CMB_API_PATH_TMPL, getuid ());
+    if ((val = getenv ("CMB_API_PATH"))) {
+        if (strlen (val) > PATH_MAX) {
+            err ("Crazy value for CMB_API_PATH!");
+            return (NULL);
+        }
+        strcpy(path, val);
+    }
+    else
+        snprintf (path, sizeof (path), CMB_API_PATH_TMPL, getuid ());
     return cmb_init_full (path, 0);
 }
 

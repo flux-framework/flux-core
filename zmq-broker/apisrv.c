@@ -344,6 +344,9 @@ static void _listener_init (plugin_ctx_t *p)
     int fd;
     char *path = p->conf->api_sockpath;
 
+    if (setenv ("CMB_API_PATH", path, 1) < 0)
+        err_exit ("setenv (CMB_API_PATH=%s)", path);
+
     fd = socket (AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0)
         err_exit ("socket");
