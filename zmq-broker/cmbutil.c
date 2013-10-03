@@ -299,9 +299,7 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'C': { /* --kvs-commit */
-                if (cmb_kvs_flush (c) < 0)
-                    err_exit ("cmb_kvs_flush");
-                if (cmb_kvs_commit (c, NULL) < 0)
+                if (cmb_kvs_commit (c) < 0)
                     err_exit ("cmb_kvs_commit");
                 break;
             }
@@ -315,7 +313,6 @@ int main (int argc, char *argv[])
                 char key[16], val[16];
                 struct timeval t1, t2, t;
                 json_object *vo = NULL;
-                char *uuid = uuid_generate_str ();
 
                 xgettimeofday (&t1, NULL);
                 for (i = 0; i < n; i++) {
@@ -333,15 +330,7 @@ int main (int argc, char *argv[])
                      (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
 
                 xgettimeofday (&t1, NULL);
-                if (cmb_kvs_flush (c) < 0)
-                    err_exit ("cmb_kvs_flush");
-                xgettimeofday (&t2, NULL);
-                timersub(&t2, &t1, &t);
-                msg ("kvs_flush:  time=%0.3f ms",
-                     (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
-
-                xgettimeofday (&t1, NULL);
-                if (cmb_kvs_commit (c, uuid) < 0)
+                if (cmb_kvs_commit (c) < 0)
                     err_exit ("cmb_kvs_commit");
                 xgettimeofday (&t2, NULL);
                 timersub (&t2, &t1, &t);
@@ -364,8 +353,6 @@ int main (int argc, char *argv[])
                 timersub(&t2, &t1, &t);
                 msg ("kvs_get:    time=%0.3f ms",
                      (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
-
-                free (uuid);
                 break;
             }
             case 'L': { /* --log */

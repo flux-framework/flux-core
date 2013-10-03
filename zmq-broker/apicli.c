@@ -254,7 +254,7 @@ int cmb_event_send (cmb_t c, char *event)
     return _send_message (c, NULL, "api.event.send.%s", event);
 }
 
-int cmb_barrier (cmb_t c, char *name, int nprocs)
+int cmb_barrier (cmb_t c, const char *name, int nprocs)
 {
     json_object *o = util_json_object_new_object ();
     int count = 1;
@@ -399,7 +399,7 @@ int cmb_kvs_del (cmb_t c, const char *key)
     return cmb_kvs_put (c, key, NULL);
 }
 
-int cmb_kvs_flush (cmb_t c)
+static int kvs_flush (cmb_t c)
 {
     json_object *o = util_json_object_new_object ();
 
@@ -426,15 +426,15 @@ error:
     return -1;
 }
 
-int cmb_kvs_commit (cmb_t c, const char *commit_name)
+static int kvs_commit (cmb_t c, const char *name)
 {
     json_object *o = util_json_object_new_object ();
-
-    if (!commit_name)
-        commit_name = uuid_generate_str ();
+    char *uuid = NULL;
 
     /* send request */
-    util_json_object_add_string (o, "name", commit_name);
+    if (!name)
+        uuid = uuid_generate_str ();
+    util_json_object_add_string (o, "name", name ? name : uuid);
     if (_send_message (c, o, "kvs.commit") < 0)
         goto error;
     json_object_put (o);
@@ -448,13 +448,37 @@ int cmb_kvs_commit (cmb_t c, const char *commit_name)
     if (util_json_object_get_int (o, "errnum", &errno) == 0)
         goto error;
     json_object_put (o);
+    if (uuid)
+        free (uuid);
     return 0;
 eproto:
     errno = EPROTO;
 error:
     if (o)
         json_object_put (o);
+    if (uuid)
+        free (uuid);
     return -1;
+}
+
+int cmb_kvs_commit (cmb_t c)
+{
+    if (kvs_flush (c) < 0)
+        return -1;
+    if (kvs_commit (c, NULL) < 0)
+        return -1;
+    return 0;
+}
+
+int cmb_kvs_fence (cmb_t c, const char *commit_name, int nprocs)
+{
+    if (kvs_flush (c) < 0)
+        return -1;
+    if (cmb_barrier (c, commit_name, nprocs) < 0)
+        return -1;
+    if (kvs_commit (c, commit_name) < 0)
+        return -1;
+    return 0;
 }
 
 static const char *kvs_flagstr (kvs_get_t flag)

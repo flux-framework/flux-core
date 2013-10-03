@@ -128,7 +128,7 @@ void put_boolean (cmb_t c, char *key, bool val)
 }
 void commit (cmb_t c)
 {
-    if (cmb_kvs_commit (c, NULL) < 0)
+    if (cmb_kvs_commit (c) < 0)
         err_exit ("cmb_kvs_commit");
 }
 

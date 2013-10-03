@@ -58,7 +58,7 @@ int cmb_event_send (cmb_t c, char *event);
 /* Execute the named barrier across the session.
  * The barrier can be any size.
  */
-int cmb_barrier (cmb_t c, char *name, int nprocs);
+int cmb_barrier (cmb_t c, const char *name, int nprocs);
 
 /* Get/put key-value pairs.
  */
@@ -95,8 +95,8 @@ int cmb_kvs_iterator_destroy (cmb_kvs_iterator_t itr);
 
 int cmb_kvs_put (cmb_t c, const char *key, json_object *val);
 int cmb_kvs_del (cmb_t c, const char *key);
-int cmb_kvs_flush (cmb_t c);
-int cmb_kvs_commit (cmb_t c, const char *name);
+int cmb_kvs_commit (cmb_t c);
+int cmb_kvs_fence (cmb_t c, const char *name, int nprocs);
 int cmb_kvs_clean (cmb_t c);
 
 /* Log messages.
