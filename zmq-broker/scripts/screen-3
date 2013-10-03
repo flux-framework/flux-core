@@ -1,0 +1,13 @@
+#!/bin/bash
+#
+#  Run the scripts start-{0,1,2} in a single instance of screen(1).
+#  Attach with screen -r -S ${session}.
+#
+dir=$( cd "$(dirname $0)" && pwd)
+session="cmb-test"
+
+screen -d -m -S ${session}
+screen -S ${session} -X zombie kr # keep zombie windows
+screen -S ${session} -p 0 -X exec ${dir}/start-0
+screen -S ${session} -X screen ${dir}/start-1
+screen -S ${session} -X screen ${dir}/start-2
