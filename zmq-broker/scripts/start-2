@@ -4,5 +4,5 @@
   --up-event-out-uri='tcp://127.0.0.1:5558' \
   --up-event-in-uri='tcp://127.0.0.1:5559' \
   --rank=2 --size=3 \
-  --plugins=api,barrier,live,kvs \
+  --plugins=api,barrier,live,kvs,job,rexec \
   --api-socket=/tmp/rank.2

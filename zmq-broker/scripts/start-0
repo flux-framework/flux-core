@@ -4,7 +4,7 @@
   --up-req-in-uri='tcp://*:5556' \
   --dn-req-out-uri='tcp://*:5557' \
   --rank=0 --size=3 \
-  --plugins=api,barrier,live,kvs,log,sync \
+  --plugins=api,barrier,live,kvs,log,sync,job,rexec \
   --set-conf conf.sync.period-sec=1.5 \
   --set-conf conf.live.missed-trigger-allow=5 \
   --set-conf conf.log.reduction-timeout-msec=100 \
