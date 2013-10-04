@@ -31,6 +31,7 @@ void xgettimeofday (struct timeval *tv, struct timezone *tz);
 int env_getint (char *name, int dflt);
 char *env_getstr (char *name, char *dflt);
 int env_getints (char *name, int **iap, int *lenp, int dflt_ia[], int dflt_len);
+int setenvf (const char *name, int overwrite, const char *fmt, ...);
 
 /* Return a string with argcv elements space-delimited.  Caller must free.
  */

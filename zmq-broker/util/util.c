@@ -45,6 +45,23 @@ void xgettimeofday (struct timeval *tv, struct timezone *tz)
         err_exit ("gettimeofday");
 }
 
+int setenvf (const char *name, int overwrite, const char *fmt, ...)
+{
+    va_list ap;
+    char *val;
+    int rc;
+
+    va_start (ap, fmt);
+    rc = vasprintf (&val, fmt, ap);
+    va_end (ap);
+    if (rc < 0)
+        return (rc);
+
+    rc = setenv (name, val, overwrite);
+    free (val);
+    return (rc);
+}
+
 int env_getint (char *name, int dflt)
 {
     char *ev = getenv (name);
