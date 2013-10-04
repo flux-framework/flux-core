@@ -123,11 +123,43 @@ static int _env_getints (char *name, int **iap, int *lenp,
     return 0;
 }
 
-
-int PMI_Init( int *spawned )
+static int _ctx_from_env_slurm (pmi_ctx_t *ctx)
 {
     int dflt_clique_ranks[] = { 0 };
     int dflt_clique_size = 1;
+    ctx->size = _env_getint ("SLURM_NTASKS", 1);
+    ctx->rank = _env_getint ("SLURM_PROCID", 0);
+    ctx->appnum = _env_getint ("SLURM_STEP_ID", 1);
+    if (_env_getints ("SLURM_GTIDS", &ctx->clique_ranks, &ctx->clique_size,
+                                      dflt_clique_ranks, dflt_clique_size) < 0)
+        return (-1);
+    return (0);
+}
+
+static int _ctx_from_env_cmb (pmi_ctx_t *ctx)
+{
+    int dflt_clique_ranks[] = { 0 };
+    int dflt_clique_size = 1;
+    ctx->size = _env_getint ("CMB_LWJ_NTASKS", 1);
+    ctx->rank = _env_getint ("CMB_LWJ_TASK_ID", 0);
+    ctx->appnum = _env_getint ("CMB_LWJ_ID", 1);
+    if (_env_getints ("CMB_LWJ_GTIDS", &ctx->clique_ranks, &ctx->clique_size,
+                                      dflt_clique_ranks, dflt_clique_size) < 0)
+        return (-1);
+
+    return (0);
+}
+
+static int _ctx_from_env (pmi_ctx_t *ctx)
+{
+    if (getenv ("CMB_LWJ_ID"))
+        return (_ctx_from_env_cmb (ctx));
+    else
+        return (_ctx_from_env_slurm (ctx));
+}
+
+int PMI_Init( int *spawned )
+{
 
     log_init ("cmb-pmi");
     if (spawned == NULL)
@@ -138,17 +170,15 @@ int PMI_Init( int *spawned )
     if (ctx == NULL)
         goto nomem;
     memset (ctx, 0, sizeof (pmi_ctx_t));
+    pmi_trace = _env_getint ("PMI_TRACE", 0);
+
+    if (_ctx_from_env (ctx) < 0)
+        goto fail;
+
     ctx->magic = PMI_CTX_MAGIC;
     ctx->spawned = PMI_FALSE;
-    ctx->size = _env_getint ("SLURM_NTASKS", 1);
-    ctx->rank = _env_getint ("SLURM_PROCID", 0);
-    pmi_trace = _env_getint ("PMI_TRACE", 0);
     ctx->universe_size = ctx->size;
-    ctx->appnum = _env_getint ("SLURM_STEP_ID", 1);
     ctx->barrier_num = 0;
-    if (_env_getints ("SLURM_GTIDS", &ctx->clique_ranks, &ctx->clique_size,
-                                      dflt_clique_ranks, dflt_clique_size) < 0)
-        goto nomem;
     snprintf (ctx->kvsname, sizeof (ctx->kvsname), "%d", ctx->appnum);
     if (!(ctx->cctx = cmb_init ())) {
         err ("cmb_init");
