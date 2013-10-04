@@ -83,15 +83,10 @@ typedef enum {
     KVS_GET_NEXT,       /* receive next watch change */
     KVS_GET_DIR,        /* get deep copy of directory */
 } kvs_get_t;
-typedef struct cmb_kvs_iterator_struct *cmb_kvs_iterator_t;
 
 int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, kvs_get_t flag);
 
 int cmb_kvs_get_cache (json_object *dir, const char *key, json_object **vp);
-int cmb_kvs_iterator_create (json_object  *dir, cmb_kvs_iterator_t *itrp);
-int cmb_kvs_iterator_next (cmb_kvs_iterator_t itr,
-                           const char *keyp, json_object **valp);
-int cmb_kvs_iterator_destroy (cmb_kvs_iterator_t itr);
 
 int cmb_kvs_put (cmb_t c, const char *key, json_object *val);
 int cmb_kvs_commit (cmb_t c);
