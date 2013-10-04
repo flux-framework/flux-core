@@ -394,11 +394,6 @@ done:
     return rc;
 }
 
-int cmb_kvs_del (cmb_t c, const char *key)
-{
-    return cmb_kvs_put (c, key, NULL);
-}
-
 static int kvs_flush (cmb_t c)
 {
     json_object *o = util_json_object_new_object ();

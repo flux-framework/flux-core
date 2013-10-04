@@ -94,7 +94,6 @@ int cmb_kvs_iterator_next (cmb_kvs_iterator_t itr,
 int cmb_kvs_iterator_destroy (cmb_kvs_iterator_t itr);
 
 int cmb_kvs_put (cmb_t c, const char *key, json_object *val);
-int cmb_kvs_del (cmb_t c, const char *key);
 int cmb_kvs_commit (cmb_t c);
 int cmb_kvs_fence (cmb_t c, const char *name, int nprocs);
 
