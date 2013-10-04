@@ -97,7 +97,8 @@ int cmb_kvs_put (cmb_t c, const char *key, json_object *val);
 int cmb_kvs_del (cmb_t c, const char *key);
 int cmb_kvs_commit (cmb_t c);
 int cmb_kvs_fence (cmb_t c, const char *name, int nprocs);
-int cmb_kvs_clean (cmb_t c);
+
+int cmb_kvs_dropcache (cmb_t c);
 
 /* Log messages.
  * 'fac' is like syslog facility, only an arbitrary string.

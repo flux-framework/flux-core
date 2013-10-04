@@ -665,7 +665,7 @@ done:
     return rc;
 }
 
-int cmb_kvs_clean (cmb_t c)
+int cmb_kvs_dropcache (cmb_t c)
 {
     json_object *o = util_json_object_new_object ();
 

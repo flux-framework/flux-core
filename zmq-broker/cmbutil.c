@@ -70,7 +70,7 @@ static void usage (void)
 "  -j,--kvs-get-fromcache key get a key (using cache method)\n"
 "  -l,--kvs-list name     list keys in a particular \"directory\"\n"
 "  -C,--kvs-commit        commit pending kvs puts\n"
-"  -y,--kvs-clean         drop cached and unreferenced kvs data\n"
+"  -y,--kvs-dropcache     drop cached and unreferenced kvs data\n"
 "  -t,--kvs-torture N     set N keys, then commit\n"
 "  -s,--subscribe sub     subscribe to events matching substring\n"
 "  -e,--event name        publish event\n"
@@ -303,9 +303,9 @@ int main (int argc, char *argv[])
                     err_exit ("cmb_kvs_commit");
                 break;
             }
-            case 'y': { /* --kvs-clean */
-                if (cmb_kvs_clean (c) < 0)
-                    err_exit ("cmb_kvs_clean");
+            case 'y': { /* --kvs-dropcache */
+                if (cmb_kvs_dropcache (c) < 0)
+                    err_exit ("cmb_kvs_dropcache");
                 break;
             }
             case 't': { /* --kvs-torture N */
