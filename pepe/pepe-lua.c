@@ -395,7 +395,11 @@ static int l_execute (lua_State *L)
         /* exec cmd */
         char * const args[] = { "/bin/sh", "-c", cmd, NULL };
 
-        fd_closeall_on_exec (0);
+        /*  Set close-on-exec flag for all file descriptors, but
+         *   don't touch stdout, stderr, stdin -- these descriptors
+         *   should not ever be closed at program startup.
+         */
+        fd_closeall_on_exec (3);
 
         /*  Check for explicit environment array provided on cmdline
          */
