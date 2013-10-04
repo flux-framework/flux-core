@@ -354,7 +354,7 @@ int plugin_kvs_get (plugin_ctx_t *p, const char *key, json_object **valp)
     int ret = -1;
 
     json_object_object_add (request, key, NULL);
-    reply = plugin_request (p, request, "kvs.get.val");
+    reply = plugin_request (p, request, "kvs.get");
     if (!reply) {
         err ("%s", __FUNCTION__);
         goto done;
@@ -553,21 +553,13 @@ int plugin_kvs_watch (plugin_ctx_t *p, const char *key,
                       kvs_watch_f *set, void *arg)
 {
     json_object *request = util_json_object_new_object ();
-    json_object *val = NULL;
-    int ret = -1;
 
-    if (plugin_kvs_get (p, key, &val) < 0 && errno != ENOENT)
-        goto done;
-    set (key, val, arg);
-    json_object_object_add (request, key, val);
-    /* N.B. val is either NULL or owned by request now */
-    plugin_send_request (p, request, "kvs.get.watch");
     _kvs_add_watcher (p, key, set, arg);
-    ret = 0;
-done:
-    if (request)
-        json_object_put (request);
-    return ret;
+    json_object_object_add (request, key, NULL);
+    plugin_send_request (p, request, "kvs.watch");
+    json_object_put (request);
+
+    return 0;
 }
 
 static void plugin_watch_update (plugin_ctx_t *p, zmsg_t **zmsg)
@@ -650,7 +642,7 @@ static void plugin_handle_response (plugin_ctx_t *p, zmsg_t *zmsg)
     /* Intercept and handle internal watch replies for keys of interest.
      * If no match, call the user's recv callback.
      */
-    if (!strcmp (tag, "kvs.get.watch"))
+    if (!strcmp (tag, "kvs.watch"))
         plugin_watch_update (p, &zmsg); /* consumes zmsg on match */
     if (zmsg && p->plugin->recvFn)
         p->plugin->recvFn (p, &zmsg, ZMSG_RESPONSE);

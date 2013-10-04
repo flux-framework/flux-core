@@ -22,10 +22,11 @@
 #include "log.h"
 #include "zmsg.h"
 
-#define OPTIONS "dZ"
+#define OPTIONS "dZw"
 static const struct option longopts[] = {
    {"debug",         no_argument,        0, 'd'},
-   {"trace-apisock", no_argument,        0, 'd'},
+   {"trace-apisock", no_argument,        0, 'Z'},
+   {"watch",         no_argument,        0, 'w'},
    {0, 0, 0, 0},
 };
 
@@ -35,6 +36,9 @@ static void usage (void)
     fprintf (stderr, "%s", "\
 Usage: tkvs OPTIONS op [key] [val]\n\
 \n\
+Where OPTIONS can be one of\n\
+    -Z,--trace-apisock\n\
+    -w,--watch\n\
 The possible operations are:\n\
     get_string key\n\
     put_string key val\n\
@@ -51,13 +55,20 @@ The possible operations are:\n\
     exit (1);
 }
 
-void get_string (cmb_t c, char *key)
+void get_string (cmb_t c, char *key, bool watch)
 {
     char *val;
+    int flags = 0;
 
-    if (cmb_kvs_get_string (c, key, &val) < 0)
-        err_exit ("cmb_kvs_get_string %s", key);
-    printf ("%s\n", val);
+    if (watch)
+        flags = KVS_GET_WATCH;
+    do {
+        if (cmb_kvs_get_string (c, key, &val, flags) < 0)
+            err_exit ("cmb_kvs_get_string %s", key);
+        printf ("%s\n", val);
+        if (watch)
+            flags = KVS_GET_NEXT;
+    } while (watch);
     free (val);
 }
 
@@ -67,13 +78,20 @@ void put_string (cmb_t c, char *key, char *val)
         err_exit ("cmb_kvs_put_string %s=%s", key, val);
 }
 
-void get_int (cmb_t c, char *key)
+void get_int (cmb_t c, char *key, bool watch)
 {
     int val;
+    int flags = 0;
 
-    if (cmb_kvs_get_int (c, key, &val) < 0)
-        err_exit ("cmb_kvs_get_int %s", key);
-    printf ("%d\n", val);
+    if (watch)
+        flags = KVS_GET_WATCH;
+    do {
+        if (cmb_kvs_get_int (c, key, &val, flags) < 0)
+            err_exit ("cmb_kvs_get_int %s", key);
+        printf ("%d\n", val);
+        if (watch)
+            flags = KVS_GET_NEXT;
+    } while (watch);
 }
 
 void put_int (cmb_t c, char *key, int val)
@@ -82,13 +100,20 @@ void put_int (cmb_t c, char *key, int val)
         err_exit ("cmb_kvs_put_int %s=%d", key, val);
 }
 
-void get_int64 (cmb_t c, char *key)
+void get_int64 (cmb_t c, char *key, bool watch)
 {
     int64_t val;
+    int flags = 0;
 
-    if (cmb_kvs_get_int64 (c, key, &val) < 0)
-        err_exit ("cmb_kvs_get_int64 %s", key);
-    printf ("%lld\n", (long long int) val);
+    if (watch)
+        flags = KVS_GET_WATCH;
+    do {
+        if (cmb_kvs_get_int64 (c, key, &val, flags) < 0)
+            err_exit ("cmb_kvs_get_int64 %s", key);
+        printf ("%lld\n", (long long int) val);
+        if (watch)
+            flags = KVS_GET_NEXT;
+    } while (watch);
 }
 
 void put_int64 (cmb_t c, char *key, int64_t val)
@@ -97,13 +122,20 @@ void put_int64 (cmb_t c, char *key, int64_t val)
         err_exit ("cmb_kvs_put_int64 %s=%lld", key, (long long int)val);
 }
 
-void get_double  (cmb_t c, char *key)
+void get_double  (cmb_t c, char *key, bool watch)
 {
     double val;
+    int flags = 0;
 
-    if (cmb_kvs_get_double (c, key, &val) < 0)
-        err_exit ("cmb_kvs_get_double  %s", key);
-    printf ("%f\n", val);
+    if (watch)
+        flags = KVS_GET_WATCH;
+    do {
+        if (cmb_kvs_get_double (c, key, &val, flags) < 0)
+            err_exit ("cmb_kvs_get_double  %s", key);
+        printf ("%f\n", val);
+        if (watch)
+            flags = KVS_GET_NEXT;
+    } while (watch);
 }
 
 void put_double (cmb_t c, char *key, double val)
@@ -112,13 +144,20 @@ void put_double (cmb_t c, char *key, double val)
         err_exit ("cmb_kvs_put_double %s=%lf", key, val);
 }
 
-void get_boolean (cmb_t c, char *key)
+void get_boolean (cmb_t c, char *key, bool watch)
 {
     bool val;
+    int flags = 0;
 
-    if (cmb_kvs_get_boolean (c, key, &val) < 0)
-        err_exit ("cmb_kvs_get_boolean %s", key);
-    printf ("%s\n", val ? "true" : "false");
+    if (watch)
+        flags = KVS_GET_WATCH;
+    do { 
+        if (cmb_kvs_get_boolean (c, key, &val, 0) < 0)
+            err_exit ("cmb_kvs_get_boolean %s", key);
+        printf ("%s\n", val ? "true" : "false");
+        if (watch)
+            flags = KVS_GET_NEXT;
+    } while (watch);
 }
 
 void put_boolean (cmb_t c, char *key, bool val)
@@ -136,6 +175,7 @@ int main (int argc, char *argv[])
 {
     int ch;
     bool dopt = false;
+    bool wopt = false;
     char *op = NULL;
     char *key = NULL;
     char *val = NULL;
@@ -152,6 +192,9 @@ int main (int argc, char *argv[])
                 break;
             case 'Z': /* --trace-apisock */
                 flags |= CMB_FLAGS_TRACE;
+                break;
+            case 'w': /* --watch */
+                wopt = true;
                 break;
             default:
                 usage ();
@@ -170,25 +213,30 @@ int main (int argc, char *argv[])
         err_exit ("cmb_init");
 
     if (!strcmp (op, "get_string"))
-        get_string (c, key);
+        get_string (c, key, wopt);
     else if (!strcmp (op, "put_string"))
         put_string (c, key, val);
+
+    else if (!strcmp (op, "get_int"))
+        get_int (c, key, wopt);
     else if (!strcmp (op, "put_int"))
         put_int (c, key, strtoul (val, NULL, 10));
-    else if (!strcmp (op, "get_int"))
-        get_int (c, key);
+
+    else if (!strcmp (op, "get_int64"))
+        get_int64 (c, key, wopt);
     else if (!strcmp (op, "put_int64"))
         put_int64 (c, key, strtoull (val, NULL, 10));
-    else if (!strcmp (op, "get_int64"))
-        get_int64 (c, key);
+
+    else if (!strcmp (op, "get_double"))
+        get_double (c, key, wopt);
     else if (!strcmp (op, "put_double"))
         put_double (c, key, strtod (val, NULL));
-    else if (!strcmp (op, "get_double"))
-        get_double (c, key);
+
+    else if (!strcmp (op, "get_boolean"))
+        get_boolean (c, key, wopt);
     else if (!strcmp (op, "put_boolean"))
         put_boolean (c, key, !strcmp (val, "false") ? false : true);
-    else if (!strcmp (op, "get_boolean"))
-        get_boolean (c, key);
+
     else if (!strcmp (op, "commit"))
         commit (c);     
     else

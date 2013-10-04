@@ -19,7 +19,7 @@
 #include "util.h"
 
 static int _parse_logstr (char *s, int *lp, char **fp);
-static void list_kvs (const char *name, json_object *o);
+//static void list_kvs (const char *name, json_object *o);
 
 #define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Zyl:j:Y:"
 static const struct option longopts[] = {
@@ -243,7 +243,7 @@ int main (int argc, char *argv[])
             case 'K': { /* --kvs-get key */
                 json_object *o;
 
-                if (cmb_kvs_get (c, optarg, &o, KVS_GET_VAL) < 0)
+                if (cmb_kvs_get (c, optarg, &o, 0) < 0)
                     err_exit ("cmb_kvs_get");
                 if (json_object_get_type (o) == json_type_string)
                     printf ("%s = \"%s\"\n", optarg,
@@ -256,8 +256,9 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'Y': { /* --kvs-watch key */
-                json_object *o;
-                if (cmb_kvs_get (c, optarg, &o, KVS_GET_WATCH) < 0)
+                json_object *o = NULL;
+                if (cmb_kvs_get (c, optarg, &o, KVS_GET_WATCH) < 0
+                                && errno != ENOENT)
                     err_exit ("cmb_kvs_get");
                 do {
                     if (json_object_get_type (o) == json_type_string)
@@ -272,6 +273,7 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'j': { /* --kvs-get-cached key */
+#if 0
                 json_object *dir = NULL, *o = NULL;
 
                 if (cmb_kvs_get (c, ".", &dir, KVS_GET_DIR) < 0)
@@ -287,15 +289,22 @@ int main (int argc, char *argv[])
                                                     JSON_C_TO_STRING_PLAIN));
                 json_object_put (dir);
                 json_object_put (o);
+#else
+                err_exit ("Unimplemented");            
+#endif
                 break;
             }
             case 'l': { /* --kvs-list name */
+#if 0
                 json_object *o;
 
                 if (cmb_kvs_get (c, optarg, &o, KVS_GET_DIR) < 0)
                     err_exit ("cmb_conf_get");
                 list_kvs (optarg, o);
                 json_object_put (o);
+#else
+                err_exit ("Unimplemented");
+#endif
                 break;
             }
             case 'C': { /* --kvs-commit */
@@ -486,6 +495,7 @@ static int _parse_logstr (char *s, int *lp, char **fp)
     return 0;
 }
 
+#if 0
 static void list_kvs (const char *name, json_object *o)
 {
     json_object *co;
@@ -509,6 +519,7 @@ static void list_kvs (const char *name, json_object *o)
         free (path);
     }
 }
+#endif
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

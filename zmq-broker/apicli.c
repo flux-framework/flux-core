@@ -394,6 +394,7 @@ done:
     return rc;
 }
 
+/* helper for cmb_kvs_commit, cmb_kvs_fence */
 static int kvs_flush (cmb_t c)
 {
     json_object *o = util_json_object_new_object ();
@@ -421,6 +422,7 @@ error:
     return -1;
 }
 
+/* helper for cmb_kvs_commit, cmb_kvs_fence */
 static int kvs_commit (cmb_t c, const char *name)
 {
     json_object *o = util_json_object_new_object ();
@@ -456,6 +458,9 @@ error:
     return -1;
 }
 
+/* This is the user-visible commit operation.
+ * Performs a kvs.flush followed by kvs.commit.
+ */
 int cmb_kvs_commit (cmb_t c)
 {
     if (kvs_flush (c) < 0)
@@ -465,6 +470,9 @@ int cmb_kvs_commit (cmb_t c)
     return 0;
 }
 
+/* This is the user-visible collective commit operation.
+ * Performs a kvs.flush, barrier, then kvs.commit.
+ */
 int cmb_kvs_fence (cmb_t c, const char *commit_name, int nprocs)
 {
     if (kvs_flush (c) < 0)
@@ -476,33 +484,26 @@ int cmb_kvs_fence (cmb_t c, const char *commit_name, int nprocs)
     return 0;
 }
 
-static const char *kvs_flagstr (kvs_get_t flag)
-{
-    switch (flag) {
-        case KVS_GET_VAL:
-            return "val";
-        case KVS_GET_WATCH:
-            return "watch";
-        case KVS_GET_NEXT:
-            return NULL;
-        case KVS_GET_DIR:
-            return "dir";
-    }
-    return NULL;
-}
-
-int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, kvs_get_t flag)
+int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, int flags)
 {
     json_object *val, *o = NULL;
     int rc = -1;
-    const char *flagstr = kvs_flagstr (flag);
 
-    /* send request */
-    if (flagstr) {
+    /* send request (unless KVS_GET_NEXT flag is set) */
+    if (!(flags & KVS_GET_NEXT)) {
         o = util_json_object_new_object ();
         json_object_object_add (o, key, NULL);
-        if (_send_message (c, o, "kvs.get.%s", flagstr) < 0)
-            goto done;
+        if ((flags & KVS_GET_DIRECTORY))
+            util_json_object_add_boolean (o, ".flag_directory", true);
+        if ((flags & KVS_GET_DEEP))
+            util_json_object_add_boolean (o, ".flag_deep", true);
+        if ((flags & KVS_GET_WATCH)) {
+            if (_send_message (c, o, "kvs.watch") < 0)
+                goto done;
+        } else {
+            if (_send_message (c, o, "kvs.get") < 0)
+                goto done;
+        }
         json_object_put (o);
         o = NULL;
     }
@@ -529,13 +530,13 @@ done:
     return rc;
 }
 
-int cmb_kvs_get_string (cmb_t c, const char *key, char **valp)
+int cmb_kvs_get_string (cmb_t c, const char *key, char **valp, int flags)
 {
     json_object *o = NULL;
     const char *s;
     int rc = -1;
 
-    if (cmb_kvs_get (c, key, &o, KVS_GET_VAL) < 0)
+    if (cmb_kvs_get (c, key, &o, flags) < 0)
         goto done;
     if (json_object_get_type (o) != json_type_string) {
         errno = EINVAL;
@@ -550,12 +551,12 @@ done:
     return rc;
 }
 
-int cmb_kvs_get_int (cmb_t c, const char *key, int *valp)
+int cmb_kvs_get_int (cmb_t c, const char *key, int *valp, int flags)
 {
     json_object *o = NULL;
     int rc = -1;
 
-    if (cmb_kvs_get (c, key, &o, KVS_GET_VAL) < 0)
+    if (cmb_kvs_get (c, key, &o, flags) < 0)
         goto done;
     if (json_object_get_type (o) != json_type_int) {
         errno = EINVAL;
@@ -569,12 +570,12 @@ done:
     return rc;
 }
 
-int cmb_kvs_get_int64 (cmb_t c, const char *key, int64_t *valp)
+int cmb_kvs_get_int64 (cmb_t c, const char *key, int64_t *valp, int flags)
 {
     json_object *o = NULL;
     int rc = -1;
 
-    if (cmb_kvs_get (c, key, &o, KVS_GET_VAL) < 0)
+    if (cmb_kvs_get (c, key, &o, flags) < 0)
         goto done;
     if (json_object_get_type (o) != json_type_int) {
         errno = EINVAL;
@@ -588,12 +589,12 @@ done:
     return rc;
 }
 
-int cmb_kvs_get_double (cmb_t c, const char *key, double *valp)
+int cmb_kvs_get_double (cmb_t c, const char *key, double *valp, int flags)
 {
     json_object *o = NULL;
     int rc = -1;
 
-    if (cmb_kvs_get (c, key, &o, KVS_GET_VAL) < 0)
+    if (cmb_kvs_get (c, key, &o, flags) < 0)
         goto done;
     if (json_object_get_type (o) != json_type_double) {
         errno = EINVAL;
@@ -607,12 +608,12 @@ done:
     return rc;
 }
 
-int cmb_kvs_get_boolean (cmb_t c, const char *key, bool *valp)
+int cmb_kvs_get_boolean (cmb_t c, const char *key, bool *valp, int flags)
 {
     json_object *o = NULL;
     int rc = -1;
 
-    if (cmb_kvs_get (c, key, &o, KVS_GET_VAL) < 0)
+    if (cmb_kvs_get (c, key, &o, flags) < 0)
         goto done;
     if (json_object_get_type (o) != json_type_boolean) {
         errno = EINVAL;

@@ -946,13 +946,9 @@ static void kvs_get (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     json_object *root, *reply = NULL, *o = NULL;
     json_object_iter iter;
     wait_t *wp = NULL;
-    bool stall = false, changed = false;
-    bool dirok = true, deep = false, watch = false;
+    bool stall = false;
+    bool dir = false, deep = false;
 
-    if (!strcmp (arg, "dir"))           /* kvs.get.dir */
-        deep = true;
-    else if (!strcmp (arg, "watch"))    /* kvs.get.watch */
-        watch = true;
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
@@ -962,31 +958,104 @@ static void kvs_get (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         stall = true;
         goto done;
     }
+    /* handle flags */
+    (void)util_json_object_get_boolean (o, ".flag_directory", &dir);
+    (void)util_json_object_get_boolean (o, ".flag_deep", &deep);
+
     reply = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
+        if (iter.key[0] == '.') /* ignore flags */
+            continue;
         json_object *val = NULL;
-        if (!lookup (p, root, wp, deep, dirok, iter.key, &val)) /* val ref++ */
+        if (!lookup (p, root, wp, deep, dir, iter.key, &val)) /* val ref++ */
             stall = true; /* set flag but keep going to maximize readahead */
         if (stall) {
             if (val)
                 json_object_put (val);
             continue;
         }
-        if (watch && !util_json_match (iter.val, val))
-            changed = true;
         json_object_object_add (reply, iter.key, val);
     }
     if (!stall) {
         wait_destroy (wp, zmsg); /* get back *zmsg */
-        int rc = cmb_msg_replace_json (*zmsg, reply);
-        assert (rc == 0);
-        if (watch) {
-            zmsg_t *zcpy;
-            if (!(zcpy = zmsg_dup (*zmsg)))
-                oom ();
-            wait_add (ctx->watchlist, wait_create (p, kvs_get, arg, &zcpy));
+        (void)cmb_msg_replace_json (*zmsg, reply);
+        plugin_send_response_raw (p, zmsg);
+    }
+done:
+    if (o)
+        json_object_put (o);
+    if (reply)
+        json_object_put (reply);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+}
+
+static void kvs_watch (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+{
+    ctx_t *ctx = p->ctx;
+    json_object *root, *reply = NULL, *o = NULL;
+    json_object_iter iter;
+    wait_t *wp = NULL;
+    bool stall = false, changed = false, ongoing = false;
+    bool dir = false, deep = false;
+
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
+        plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
+    }
+    wp = wait_create (p, kvs_get, arg, zmsg);
+    if (!load (p, ctx->rootdir, wp, &root)) {
+        stall = true;
+        goto done;
+    }
+    /* handle flags */
+    (void)util_json_object_get_boolean (o, ".flag_directory", &dir);
+    (void)util_json_object_get_boolean (o, ".flag_deep", &deep);
+    (void)util_json_object_get_boolean (o, ".flag_watch_ongoing", &ongoing);
+
+    reply = util_json_object_new_object ();
+    json_object_object_foreachC (o, iter) {
+        if (iter.key[0] == '.') /* ignore flags */
+            continue;
+        json_object *val = NULL;
+        if (!lookup (p, root, wp, deep, dir, iter.key, &val)) /* val ref++ */
+            stall = true; /* set flag but keep going to maximize readahead */
+        if (stall) {
+            if (val)
+                json_object_put (val);
+            continue;
         }
-        if (!watch || changed)
+        if (!util_json_match (iter.val, val))
+            changed = true;
+        json_object_object_add (reply, iter.key, val);
+    }
+    if (!stall) {
+        zmsg_t *zcpy;
+        wait_destroy (wp, zmsg); /* get back *zmsg */
+        (void)cmb_msg_replace_json (*zmsg, reply);
+
+        /* Prepare to resubmit the request on the watchlist for future changes.
+         * Values were updated above.  Flags are reattached here.
+         * We set the 'ongoing' flag for next time so that a reply is
+         * only sent if value changes.
+         */
+        if (!(zcpy = zmsg_dup (*zmsg)))
+            oom ();
+        util_json_object_add_boolean (reply, ".flag_directory", dir);
+        util_json_object_add_boolean (reply, ".flag_deep", deep);
+        util_json_object_add_boolean (reply, ".flag_watch_ongoing", true);
+        (void)cmb_msg_replace_json (zcpy, reply);
+
+        /* On every commit, kvs_watch (p, arg, zcpy) will be called.
+         * No reply will be generated unless a value has changed.
+         */
+        wp = wait_create (p, kvs_watch, arg, &zcpy);
+        wait_add (ctx->watchlist, wp);
+
+        /* Reply to the watch request.
+         * The initial request always gets a reply.
+         */
+        if (changed || !ongoing)
             plugin_send_response_raw (p, zmsg);
     }
 done:
@@ -997,6 +1066,7 @@ done:
     if (*zmsg)
         zmsg_destroy (zmsg);
 }
+
 
 static void kvs_put (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
@@ -1202,8 +1272,10 @@ static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         event_kvs_debug (p, arg, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.clean")) {
         kvs_clean (p, NULL, zmsg);
-    } else if (cmb_msg_match_substr (*zmsg, "kvs.get.", &arg)) {
-        kvs_get (p, arg, zmsg);
+    } else if (cmb_msg_match (*zmsg, "kvs.get")) {
+        kvs_get (p, NULL, zmsg);
+    } else if (cmb_msg_match (*zmsg, "kvs.watch")) {
+        kvs_watch (p, NULL, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.put")) {
         kvs_put (p, NULL, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.load")) {

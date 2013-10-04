@@ -63,36 +63,69 @@ int cmb_barrier (cmb_t c, const char *name, int nprocs);
 /* Get/put key-value pairs.
  */
 
+/* Note on kvs.watch:
+ * To "watch" a value, first call cmb_kvs_get[_*] with flags == KVS_GET_WATCH,
+ * which always returns a value.  After this, whenever the requested key
+ * changes, a reply is returned asynchronously which can be fetched with
+ * cmb_kvs_get[_*] with flags == KVS_GET_NEXT.  Watching should be done
+ * in a dedicated thread with its own cmb_t context as the async kvs.get.watch
+ * replies would interfere with other RPC's.  The interface only supports
+ * watching one value per context.
+ */
+
+/* Flags to cmb_kvs_get() series of functions.
+ * You may 'or' them, for example KVS_GET_WATCH | KVS_GET_DIRECTORY.
+ */
+enum {
+    KVS_GET_WATCH = 1,      /* start watch */
+    KVS_GET_NEXT = 2,       /* receive next watch change */
+    KVS_GET_DIRECTORY = 4,  /* get directory object */
+    KVS_GET_DEEP = 8,       /* if directory object, get deep object */
+};
+
 /* Convenience functions for simple type values.
  */
 /* N.B. get_string returns a copy of string; put_string makes a copy */
-int cmb_kvs_get_string (cmb_t c, const char *key, char **valp);
+int cmb_kvs_get_string (cmb_t c, const char *key, char **valp, int flags);
 int cmb_kvs_put_string (cmb_t c, const char *key, const char *val);
-int cmb_kvs_get_int (cmb_t c, const char *key, int *valp);
+int cmb_kvs_get_int (cmb_t c, const char *key, int *valp, int flags);
 int cmb_kvs_put_int (cmb_t c, const char *key, int val);
-int cmb_kvs_get_int64 (cmb_t c, const char *key, int64_t *valp);
+int cmb_kvs_get_int64 (cmb_t c, const char *key, int64_t *valp, int flags);
 int cmb_kvs_put_int64 (cmb_t c, const char *key, int64_t val);
-int cmb_kvs_get_double (cmb_t c, const char *key, double *valp);
+int cmb_kvs_get_double (cmb_t c, const char *key, double *valp, int flags);
 int cmb_kvs_put_double (cmb_t c, const char *key, double val);
-int cmb_kvs_get_boolean (cmb_t c, const char *key, bool *valp);
+int cmb_kvs_get_boolean (cmb_t c, const char *key, bool *valp, int flags);
 int cmb_kvs_put_boolean (cmb_t c, const char *key, bool val);
 
-typedef enum {
-    KVS_GET_VAL=0,      /* get value of key */
-    KVS_GET_WATCH,      /* start watch */
-    KVS_GET_NEXT,       /* receive next watch change */
-    KVS_GET_DIR,        /* get deep copy of directory */
-} kvs_get_t;
-
-int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, kvs_get_t flag);
-
-int cmb_kvs_get_cache (json_object *dir, const char *key, json_object **vp);
-
+/* Get/put JSON values.
+ * get: call json_object_put() on returned value object when done with it.
+ * put: calls json_object_get() on passed in value object.
+ */
+int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, int flags);
 int cmb_kvs_put (cmb_t c, const char *key, json_object *val);
+
+/* Singleton commit.  This ensures that any values just put by the calling
+ * process will be available to a local get.  N.B. the commit affects the
+ * entire session, but when the call returns one cannot be sure the commit
+ * has been processed anywhere but the local node.  Use a cmb_barrier or 
+ * cmb_kvs_fence if cross-session synchronization is needed.
+ */
 int cmb_kvs_commit (cmb_t c);
+
+/* Collective commit. Internally it executes a barrier across 'nprocs'
+ * tasks, then performs a single commit.  The 'name' should be globally
+ * unique, e.g. derived from lwj id with a sequence number appended;
+ * but for each collective invocation, the (name, nrprocs) tuple must
+ * be the same across all nprocs tasks.
+ */
 int cmb_kvs_fence (cmb_t c, const char *name, int nprocs);
 
+/* Drop cached KVS data.  On the root node, this is a heavy-weight operation
+ * that creates a deep JSON copy of the namespace and recreates the SHA1
+ * store from that.  On non-root nodes, the SHA1 store is summarily dropped.
+ */
 int cmb_kvs_dropcache (cmb_t c);
+
 
 /* Log messages.
  * 'fac' is like syslog facility, only an arbitrary string.

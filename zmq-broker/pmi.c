@@ -405,7 +405,7 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
         rc = PMI_ERR_NOMEM;
         goto done;
     }
-    if (cmb_kvs_get_string (ctx->cctx, xkey, &val) < 0) {
+    if (cmb_kvs_get_string (ctx->cctx, xkey, &val, 0) < 0) {
         if (errno == ENOENT)
             rc = PMI_ERR_INVALID_KEY;
         else
