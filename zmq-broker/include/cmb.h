@@ -79,8 +79,8 @@ int cmb_barrier (cmb_t c, const char *name, int nprocs);
 enum {
     KVS_GET_WATCH = 1,      /* start watch */
     KVS_GET_NEXT = 2,       /* receive next watch change */
-    KVS_GET_DIRECTORY = 4,  /* get directory object */
-    KVS_GET_DEEP = 8,       /* if directory object, get deep object */
+    KVS_GET_DIRECTORY = 4,  /* get directory */
+    KVS_GET_DEEP = 8,       /* get directory recursively (|KVS_GET_DIRECTORY) */
 };
 
 /* Convenience functions for simple type values.
@@ -125,7 +125,6 @@ int cmb_kvs_fence (cmb_t c, const char *name, int nprocs);
  * store from that.  On non-root nodes, the SHA1 store is summarily dropped.
  */
 int cmb_kvs_dropcache (cmb_t c);
-
 
 /* Log messages.
  * 'fac' is like syslog facility, only an arbitrary string.

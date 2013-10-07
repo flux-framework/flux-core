@@ -536,6 +536,10 @@ int cmb_kvs_get_string (cmb_t c, const char *key, char **valp, int flags)
     const char *s;
     int rc = -1;
 
+    if ((flags & KVS_GET_DIRECTORY) || (flags & KVS_GET_DEEP)) {
+        errno = EINVAL;
+        goto done;
+    }
     if (cmb_kvs_get (c, key, &o, flags) < 0)
         goto done;
     if (json_object_get_type (o) != json_type_string) {
@@ -556,6 +560,10 @@ int cmb_kvs_get_int (cmb_t c, const char *key, int *valp, int flags)
     json_object *o = NULL;
     int rc = -1;
 
+    if ((flags & KVS_GET_DIRECTORY) || (flags & KVS_GET_DEEP)) {
+        errno = EINVAL;
+        goto done;
+    }
     if (cmb_kvs_get (c, key, &o, flags) < 0)
         goto done;
     if (json_object_get_type (o) != json_type_int) {
@@ -575,6 +583,10 @@ int cmb_kvs_get_int64 (cmb_t c, const char *key, int64_t *valp, int flags)
     json_object *o = NULL;
     int rc = -1;
 
+    if ((flags & KVS_GET_DIRECTORY) || (flags & KVS_GET_DEEP)) {
+        errno = EINVAL;
+        goto done;
+    }
     if (cmb_kvs_get (c, key, &o, flags) < 0)
         goto done;
     if (json_object_get_type (o) != json_type_int) {
@@ -594,6 +606,10 @@ int cmb_kvs_get_double (cmb_t c, const char *key, double *valp, int flags)
     json_object *o = NULL;
     int rc = -1;
 
+    if ((flags & KVS_GET_DIRECTORY) || (flags & KVS_GET_DEEP)) {
+        errno = EINVAL;
+        goto done;
+    }
     if (cmb_kvs_get (c, key, &o, flags) < 0)
         goto done;
     if (json_object_get_type (o) != json_type_double) {
@@ -613,6 +629,10 @@ int cmb_kvs_get_boolean (cmb_t c, const char *key, bool *valp, int flags)
     json_object *o = NULL;
     int rc = -1;
 
+    if ((flags & KVS_GET_DIRECTORY) || (flags & KVS_GET_DEEP)) {
+        errno = EINVAL;
+        goto done;
+    }
     if (cmb_kvs_get (c, key, &o, flags) < 0)
         goto done;
     if (json_object_get_type (o) != json_type_boolean) {

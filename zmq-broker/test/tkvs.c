@@ -24,7 +24,7 @@
 
 #define OPTIONS "dZw"
 static const struct option longopts[] = {
-   {"debug",         no_argument,        0, 'd'},
+   {"deep",          no_argument,        0, 'd'},
    {"trace-apisock", no_argument,        0, 'Z'},
    {"watch",         no_argument,        0, 'w'},
    {0, 0, 0, 0},
@@ -39,7 +39,10 @@ Usage: tkvs OPTIONS op [key] [val]\n\
 Where OPTIONS can be one of\n\
     -Z,--trace-apisock\n\
     -w,--watch\n\
+    -d,--deep\n\
 The possible operations are:\n\
+    get key\n\
+    put key val\n\
     get_string key\n\
     put_string key val\n\
     get_int key\n\
@@ -50,9 +53,66 @@ The possible operations are:\n\
     put_double key val\n\
     get_boolean key\n\
     put_booelan key val (use \"true\" or \"false\")\n\
+    get_dir key\n\
     commit\n\
 ");
     exit (1);
+}
+
+void get (cmb_t c, char *key, bool watch)
+{
+    int flags = 0;
+    json_object *o;
+
+    if (watch)
+        flags = KVS_GET_WATCH;
+    do {
+        if (cmb_kvs_get (c, key, &o, flags) < 0) {
+            if (errno == ENOENT)
+                printf ("null\n");
+            else
+                err_exit ("cmb_kvs_get %s", key);
+        } else {
+            printf ("%s\n", json_object_to_json_string (o));
+            json_object_put (o);
+        }
+        if (watch)
+            flags = KVS_GET_NEXT;
+    } while (watch);
+}
+
+void put (cmb_t c, char *key, char *val)
+{
+    json_object *o;
+
+    if (!(o = json_tokener_parse (val)))
+        msg_exit ("error parsing json value");
+    if (cmb_kvs_put (c, key, o) < 0)
+        err_exit ("cmb_kvs_put %s=%s", key, val);
+    json_object_put (o);
+}
+
+void get_dir (cmb_t c, char *key, bool watch, bool deep)
+{
+    int dirflags = KVS_GET_DIRECTORY | (deep ? KVS_GET_DEEP : 0);
+    int flags = 0;
+    json_object *dir;
+
+    if (watch)
+        flags = KVS_GET_WATCH;
+    do {
+        if (cmb_kvs_get (c, key, &dir, dirflags | flags) < 0) {
+            if (errno == ENOENT)
+                printf ("null\n");
+            else
+                err_exit ("cmb_kvs_get %s", key);
+        } else {
+            printf ("%s\n", json_object_to_json_string (dir)); 
+            json_object_put (dir);
+        }
+        if (watch)
+            flags = KVS_GET_NEXT;
+    } while (watch);
 }
 
 void get_string (cmb_t c, char *key, bool watch)
@@ -63,13 +123,18 @@ void get_string (cmb_t c, char *key, bool watch)
     if (watch)
         flags = KVS_GET_WATCH;
     do {
-        if (cmb_kvs_get_string (c, key, &val, flags) < 0)
-            err_exit ("cmb_kvs_get_string %s", key);
-        printf ("%s\n", val);
+        if (cmb_kvs_get_string (c, key, &val, flags) < 0) {
+            if (errno == ENOENT)
+                printf ("null\n");
+            else
+                err_exit ("cmb_kvs_get_string %s", key);
+        } else {
+            printf ("%s\n", val);
+            free (val);
+        }
         if (watch)
             flags = KVS_GET_NEXT;
     } while (watch);
-    free (val);
 }
 
 void put_string (cmb_t c, char *key, char *val)
@@ -86,9 +151,13 @@ void get_int (cmb_t c, char *key, bool watch)
     if (watch)
         flags = KVS_GET_WATCH;
     do {
-        if (cmb_kvs_get_int (c, key, &val, flags) < 0)
-            err_exit ("cmb_kvs_get_int %s", key);
-        printf ("%d\n", val);
+        if (cmb_kvs_get_int (c, key, &val, flags) < 0) {
+            if (errno == ENOENT)
+                printf ("null\n");
+            else
+                err_exit ("cmb_kvs_get_int %s", key);
+        } else
+            printf ("%d\n", val);
         if (watch)
             flags = KVS_GET_NEXT;
     } while (watch);
@@ -108,9 +177,13 @@ void get_int64 (cmb_t c, char *key, bool watch)
     if (watch)
         flags = KVS_GET_WATCH;
     do {
-        if (cmb_kvs_get_int64 (c, key, &val, flags) < 0)
-            err_exit ("cmb_kvs_get_int64 %s", key);
-        printf ("%lld\n", (long long int) val);
+        if (cmb_kvs_get_int64 (c, key, &val, flags) < 0) {
+            if (errno == ENOENT)
+                printf ("null\n");
+            else 
+                err_exit ("cmb_kvs_get_int64 %s", key);
+        } else
+            printf ("%lld\n", (long long int) val);
         if (watch)
             flags = KVS_GET_NEXT;
     } while (watch);
@@ -130,9 +203,13 @@ void get_double  (cmb_t c, char *key, bool watch)
     if (watch)
         flags = KVS_GET_WATCH;
     do {
-        if (cmb_kvs_get_double (c, key, &val, flags) < 0)
-            err_exit ("cmb_kvs_get_double  %s", key);
-        printf ("%f\n", val);
+        if (cmb_kvs_get_double (c, key, &val, flags) < 0) {
+            if (errno == ENOENT)
+                printf ("null\n");
+            else
+                err_exit ("cmb_kvs_get_double  %s", key);
+        } else
+            printf ("%f\n", val);
         if (watch)
             flags = KVS_GET_NEXT;
     } while (watch);
@@ -152,9 +229,13 @@ void get_boolean (cmb_t c, char *key, bool watch)
     if (watch)
         flags = KVS_GET_WATCH;
     do { 
-        if (cmb_kvs_get_boolean (c, key, &val, 0) < 0)
-            err_exit ("cmb_kvs_get_boolean %s", key);
-        printf ("%s\n", val ? "true" : "false");
+        if (cmb_kvs_get_boolean (c, key, &val, 0) < 0) {
+            if (errno == ENOENT)
+                printf ("null\n");
+            else
+                err_exit ("cmb_kvs_get_boolean %s", key);
+        } else
+            printf ("%s\n", val ? "true" : "false");
         if (watch)
             flags = KVS_GET_NEXT;
     } while (watch);
@@ -236,6 +317,14 @@ int main (int argc, char *argv[])
         get_boolean (c, key, wopt);
     else if (!strcmp (op, "put_boolean"))
         put_boolean (c, key, !strcmp (val, "false") ? false : true);
+
+    else if (!strcmp (op, "get_dir"))
+        get_dir (c, key, wopt, dopt);
+
+    else if (!strcmp (op, "get"))
+        get (c, key, wopt);
+    else if (!strcmp (op, "put"))
+        put (c, key, val);
 
     else if (!strcmp (op, "commit"))
         commit (c);     

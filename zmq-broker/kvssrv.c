@@ -894,7 +894,7 @@ stall:
 }
 
 static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
-                    bool deep, bool dirok, const char *name, json_object **valp)
+                    bool deep, bool dir, const char *name, json_object **valp)
 {
     json_object *vp, *dirent, *val = NULL;
     const char *ref;
@@ -909,20 +909,27 @@ static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
         if (!dirent)
             goto done;
         if (util_json_object_get_string (dirent, "DIRREF", &ref) == 0) {
-            if (!dirok)
+            if (!dir)
                 goto done;
             if (!load (p, ref, wp, &val))
                 goto stall;
             isdir = true;
         } else if (util_json_object_get_string (dirent, "FILEREF", &ref) == 0) {
+            if (dir)
+                goto done;
             if (!load (p, ref, wp, &val))
                 goto stall;
         } else if ((vp = json_object_object_get (dirent, "DIRVAL"))) {
-            if (!dirok)
+            if (!dir)
                 goto done;
             val = vp;
             isdir = true;
-        } else if (!(val = json_object_object_get (dirent, "FILEVAL")))
+        } else if ((val = json_object_object_get (dirent, "FILEVAL"))) {
+            if (dir) {
+                val = NULL;
+                goto done;
+            }
+        } else 
             msg_exit ("%s: corrupt internal storage", __FUNCTION__);
     }
     /* val now contains the requested object */
