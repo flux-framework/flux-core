@@ -104,6 +104,9 @@ int cmb_kvs_put_boolean (cmb_t c, const char *key, bool val);
 int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, int flags);
 int cmb_kvs_put (cmb_t c, const char *key, json_object *val);
 
+int cmb_kvs_unlink (cmb_t c, const char *key);
+int cmb_kvs_mkdir (cmb_t c, const char *key);
+
 /* Singleton commit.  This ensures that any values just put by the calling
  * process will be available to a local get.  N.B. the commit affects the
  * entire session, but when the call returns one cannot be sure the commit

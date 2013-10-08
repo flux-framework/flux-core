@@ -26,7 +26,7 @@ test "$RESULT" == null
 RESULT=`./tkvs get $DIR`
 test "$RESULT" == null
 
-# N.B. empty directory remians
+# empty directory remians after key removed
 ./tkvs unlink $KEY
 ./tkvs commit
 RESULT=`./tkvs get_dir $DIR`

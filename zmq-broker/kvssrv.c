@@ -1081,14 +1081,23 @@ static void kvs_put (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     json_object_iter iter;
     href_t ref;
     bool writeback = !plugin_treeroot (p);
+    bool dir = false;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
+    (void)util_json_object_get_boolean (o, ".flag_mkdir", &dir);
     json_object_object_foreachC (o, iter) {
+        if (iter.key[0] == '.') /* ignore flags */
+            continue;
         if (json_object_get_type (iter.val) == json_type_null) {
-            name (p, iter.key, NULL, writeback);
+            if (dir) {
+                json_object *empty_dir = util_json_object_new_object ();
+                store (p, empty_dir, writeback, ref);
+                name (p, iter.key, dirent_create ("DIRREF", ref), writeback);
+            } else
+                name (p, iter.key, NULL, writeback);
         } else if (strlen (json_object_to_json_string (iter.val)) < LARGE_VAL) {
             name (p, iter.key, dirent_create ("FILEVAL", iter.val), writeback);
         } else {

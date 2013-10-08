@@ -394,6 +394,40 @@ done:
     return rc;
 }
 
+int cmb_kvs_unlink (cmb_t c, const char *key)
+{
+    return cmb_kvs_put (c, key, NULL);
+}
+
+int cmb_kvs_mkdir (cmb_t c, const char *key)
+{
+    json_object *o = util_json_object_new_object ();
+    int rc = -1;
+
+    /* send request */
+    util_json_object_add_boolean (o, ".flag_mkdir", true);
+    json_object_object_add (o, key, NULL);
+    if (_send_message (c, o, "kvs.put") < 0)
+        goto done;
+    json_object_put (o);
+    o = NULL;
+
+    /* receive response */
+    if (_recv_message (c, NULL, &o, false) < 0)
+        goto done;
+    if (o == NULL || util_json_object_get_int (o, "errnum", &errno) < 0) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (errno != 0)
+        goto done;
+    rc = 0;
+done:
+    if (o)
+        json_object_put (o);
+    return rc;
+}
+
 /* helper for cmb_kvs_commit, cmb_kvs_fence */
 static int kvs_flush (cmb_t c)
 {

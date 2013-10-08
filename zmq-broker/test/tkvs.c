@@ -53,6 +53,7 @@ The possible operations are:\n\
     put_double key val\n\
     get_boolean key\n\
     put_booelan key val (use \"true\" or \"false\")\n\
+    mkdir key\n\
     unlink key\n\
     get_dir key\n\
     commit\n\
@@ -60,10 +61,16 @@ The possible operations are:\n\
     exit (1);
 }
 
+void kvs_mkdir (cmb_t c, char *key)
+{
+    if (cmb_kvs_mkdir (c, key) < 0)
+        err_exit ("cmb_kvs_mkdir %s", key);
+}
+
 void kvs_unlink (cmb_t c, char *key)
 {
-    if (cmb_kvs_put (c, key, NULL) < 0)
-        err_exit ("cmb_kvs_put %s=null", key);
+    if (cmb_kvs_unlink (c, key) < 0)
+        err_exit ("cmb_kvs_unlink %s", key);
 }
 
 void kvs_get (cmb_t c, char *key, bool watch)
@@ -296,6 +303,7 @@ int main (int argc, char *argv[])
         val = argv[optind++];
     if (!op || (!strncmp (op, "get", 3) && !key)
             || (!strcmp (op, "unlink") && !key)
+            || (!strcmp (op, "mkdir") && !key)
             || (!strncmp (op, "put", 3) && (!key || !val)))
         usage ();
     if (!(c = cmb_init_full (path, flags)))
@@ -336,6 +344,8 @@ int main (int argc, char *argv[])
 
     else if (!strcmp (op, "unlink"))
         kvs_unlink (c, key);
+    else if (!strcmp (op, "mkdir"))
+        kvs_mkdir (c, key);
 
     else if (!strcmp (op, "commit"))
         kvs_commit (c);     
