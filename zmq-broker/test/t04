@@ -1,0 +1,26 @@
+#!/bin/bash -e
+
+TEST=`basename $0`
+KEY=$TEST.a.b.c
+
+test_cleanup() {
+    ./tkvs unlink $TEST
+    ./tkvs commit
+}
+
+test_cleanup
+
+RESULT=`./tkvs get_double $KEY`
+test "$RESULT" == "null"
+
+./tkvs put_double $KEY 3.14159
+RESULT=`./tkvs get_double $KEY`
+test "$RESULT" == "null"
+
+./tkvs commit
+RESULT=`./tkvs get_double $KEY` 
+test "$RESULT" == "3.141590"
+
+test_cleanup
+
+exit 0

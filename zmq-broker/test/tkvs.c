@@ -1,6 +1,6 @@
 /* tkvs.c - exercise basic kvs functions */
 
-/* Usage: tkvs [OPTIONS] get[_type]|put[_type]|commit key [val] */
+/* Usage: tkvs [OPTIONS] operation [key [val]] */
 
 #include <sys/types.h>
 #include <sys/time.h>
@@ -53,13 +53,20 @@ The possible operations are:\n\
     put_double key val\n\
     get_boolean key\n\
     put_booelan key val (use \"true\" or \"false\")\n\
+    unlink key\n\
     get_dir key\n\
     commit\n\
 ");
     exit (1);
 }
 
-void get (cmb_t c, char *key, bool watch)
+void kvs_unlink (cmb_t c, char *key)
+{
+    if (cmb_kvs_put (c, key, NULL) < 0)
+        err_exit ("cmb_kvs_put %s=null", key);
+}
+
+void kvs_get (cmb_t c, char *key, bool watch)
 {
     int flags = 0;
     json_object *o;
@@ -81,7 +88,7 @@ void get (cmb_t c, char *key, bool watch)
     } while (watch);
 }
 
-void put (cmb_t c, char *key, char *val)
+void kvs_put (cmb_t c, char *key, char *val)
 {
     json_object *o;
 
@@ -92,7 +99,7 @@ void put (cmb_t c, char *key, char *val)
     json_object_put (o);
 }
 
-void get_dir (cmb_t c, char *key, bool watch, bool deep)
+void kvs_get_dir (cmb_t c, char *key, bool watch, bool deep)
 {
     int dirflags = KVS_GET_DIRECTORY | (deep ? KVS_GET_DEEP : 0);
     int flags = 0;
@@ -115,7 +122,7 @@ void get_dir (cmb_t c, char *key, bool watch, bool deep)
     } while (watch);
 }
 
-void get_string (cmb_t c, char *key, bool watch)
+void kvs_get_string (cmb_t c, char *key, bool watch)
 {
     char *val;
     int flags = 0;
@@ -137,13 +144,13 @@ void get_string (cmb_t c, char *key, bool watch)
     } while (watch);
 }
 
-void put_string (cmb_t c, char *key, char *val)
+void kvs_put_string (cmb_t c, char *key, char *val)
 {
     if (cmb_kvs_put_string (c, key, val) < 0)
         err_exit ("cmb_kvs_put_string %s=%s", key, val);
 }
 
-void get_int (cmb_t c, char *key, bool watch)
+void kvs_get_int (cmb_t c, char *key, bool watch)
 {
     int val;
     int flags = 0;
@@ -163,13 +170,13 @@ void get_int (cmb_t c, char *key, bool watch)
     } while (watch);
 }
 
-void put_int (cmb_t c, char *key, int val)
+void kvs_put_int (cmb_t c, char *key, int val)
 {
     if (cmb_kvs_put_int (c, key, val) < 0)
         err_exit ("cmb_kvs_put_int %s=%d", key, val);
 }
 
-void get_int64 (cmb_t c, char *key, bool watch)
+void kvs_get_int64 (cmb_t c, char *key, bool watch)
 {
     int64_t val;
     int flags = 0;
@@ -189,13 +196,13 @@ void get_int64 (cmb_t c, char *key, bool watch)
     } while (watch);
 }
 
-void put_int64 (cmb_t c, char *key, int64_t val)
+void kvs_put_int64 (cmb_t c, char *key, int64_t val)
 {
     if (cmb_kvs_put_int64 (c, key, val) < 0)
         err_exit ("cmb_kvs_put_int64 %s=%lld", key, (long long int)val);
 }
 
-void get_double  (cmb_t c, char *key, bool watch)
+void kvs_get_double  (cmb_t c, char *key, bool watch)
 {
     double val;
     int flags = 0;
@@ -215,13 +222,13 @@ void get_double  (cmb_t c, char *key, bool watch)
     } while (watch);
 }
 
-void put_double (cmb_t c, char *key, double val)
+void kvs_put_double (cmb_t c, char *key, double val)
 {
     if (cmb_kvs_put_double (c, key, val) < 0)
         err_exit ("cmb_kvs_put_double %s=%lf", key, val);
 }
 
-void get_boolean (cmb_t c, char *key, bool watch)
+void kvs_get_boolean (cmb_t c, char *key, bool watch)
 {
     bool val;
     int flags = 0;
@@ -241,12 +248,12 @@ void get_boolean (cmb_t c, char *key, bool watch)
     } while (watch);
 }
 
-void put_boolean (cmb_t c, char *key, bool val)
+void kvs_put_boolean (cmb_t c, char *key, bool val)
 {
     if (cmb_kvs_put_boolean (c, key, val) < 0)
         err_exit ("cmb_kvs_put_boolean %s=%s", key, val ? "true" : "false");
 }
-void commit (cmb_t c)
+void kvs_commit (cmb_t c)
 {
     if (cmb_kvs_commit (c) < 0)
         err_exit ("cmb_kvs_commit");
@@ -288,46 +295,50 @@ int main (int argc, char *argv[])
     if (optind < argc)
         val = argv[optind++];
     if (!op || (!strncmp (op, "get", 3) && !key)
-            || (!strncmp (op, "set", 3) && (!key || !val)))
+            || (!strcmp (op, "unlink") && !key)
+            || (!strncmp (op, "put", 3) && (!key || !val)))
         usage ();
     if (!(c = cmb_init_full (path, flags)))
         err_exit ("cmb_init");
 
     if (!strcmp (op, "get_string"))
-        get_string (c, key, wopt);
+        kvs_get_string (c, key, wopt);
     else if (!strcmp (op, "put_string"))
-        put_string (c, key, val);
+        kvs_put_string (c, key, val);
 
     else if (!strcmp (op, "get_int"))
-        get_int (c, key, wopt);
+        kvs_get_int (c, key, wopt);
     else if (!strcmp (op, "put_int"))
-        put_int (c, key, strtoul (val, NULL, 10));
+        kvs_put_int (c, key, strtoul (val, NULL, 10));
 
     else if (!strcmp (op, "get_int64"))
-        get_int64 (c, key, wopt);
+        kvs_get_int64 (c, key, wopt);
     else if (!strcmp (op, "put_int64"))
-        put_int64 (c, key, strtoull (val, NULL, 10));
+        kvs_put_int64 (c, key, strtoull (val, NULL, 10));
 
     else if (!strcmp (op, "get_double"))
-        get_double (c, key, wopt);
+        kvs_get_double (c, key, wopt);
     else if (!strcmp (op, "put_double"))
-        put_double (c, key, strtod (val, NULL));
+        kvs_put_double (c, key, strtod (val, NULL));
 
     else if (!strcmp (op, "get_boolean"))
-        get_boolean (c, key, wopt);
+        kvs_get_boolean (c, key, wopt);
     else if (!strcmp (op, "put_boolean"))
-        put_boolean (c, key, !strcmp (val, "false") ? false : true);
+        kvs_put_boolean (c, key, !strcmp (val, "false") ? false : true);
 
     else if (!strcmp (op, "get_dir"))
-        get_dir (c, key, wopt, dopt);
+        kvs_get_dir (c, key, wopt, dopt);
 
     else if (!strcmp (op, "get"))
-        get (c, key, wopt);
+        kvs_get (c, key, wopt);
     else if (!strcmp (op, "put"))
-        put (c, key, val);
+        kvs_put (c, key, val);
+
+    else if (!strcmp (op, "unlink"))
+        kvs_unlink (c, key);
 
     else if (!strcmp (op, "commit"))
-        commit (c);     
+        kvs_commit (c);     
     else
         usage ();
     cmb_fini (c);

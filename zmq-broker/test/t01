@@ -1,0 +1,26 @@
+#!/bin/bash -e
+
+TEST=`basename $0`
+KEY=$TEST.a.b.c
+
+test_cleanup() {
+    ./tkvs unlink $TEST
+    ./tkvs commit
+}
+
+test_cleanup
+
+RESULT=`./tkvs get_string $KEY`
+test "$RESULT" == "null"
+
+./tkvs put_string $KEY "Hello world"
+RESULT=`./tkvs get_string $KEY`
+test "$RESULT" == "null"
+
+./tkvs commit
+RESULT=`./tkvs get_string $KEY` 
+test "$RESULT" == "Hello world"
+
+test_cleanup
+
+exit 0

@@ -15,6 +15,16 @@ BUILD = tbase64 tpmikvs tkvs
 
 all: $(BUILD)
 
+check:
+	@for tst in t[0-9][0-9]; do \
+		./$$tst; \
+		if [ $$? -eq 0 ]; then \
+		  echo PASS: $$tst; \
+		else \
+		  echo FAIL: $$tst; \
+		fi \
+	done
+
 tbase64: tbase64.o
 	$(CC) $(LDFLAGS) -o $@ $< $(LDADD_CLI)
 

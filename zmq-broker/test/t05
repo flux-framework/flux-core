@@ -1,0 +1,37 @@
+#!/bin/bash -e
+
+TEST=`basename $0`
+KEY=$TEST.a.b.c
+DIR=$TEST.a.b
+
+test_cleanup() {
+    ./tkvs unlink $TEST
+    ./tkvs commit
+}
+
+test_cleanup
+
+./tkvs put_int $KEY 69
+./tkvs commit
+
+# Retrieve directory containing new key
+RESULT=`./tkvs get_dir $DIR`
+test "$RESULT" == '{ "c": { "FILEVAL": 69 } }'
+
+# Try to retrieve key as a directory - should be an error
+RESULT=`./tkvs get_dir $KEY`
+test "$RESULT" == null
+
+# Try to retrieve directory as a object - should be an error
+RESULT=`./tkvs get $DIR`
+test "$RESULT" == null
+
+# N.B. empty directory remians
+./tkvs unlink $KEY
+./tkvs commit
+RESULT=`./tkvs get_dir $DIR`
+test "$RESULT" == "{ }"
+
+test_cleanup
+
+exit 0
