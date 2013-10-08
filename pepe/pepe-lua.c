@@ -230,8 +230,6 @@ int l_getenv (lua_State *L)
     extern char **environ;
     const char *val;
 
-    log_msg ("getenv top = %d\n", lua_gettop (L));
-
     if (!lua_istable  (L, 1))
         return luaL_error (L, "getenv: arg #1 expected table got %s",
                 luaL_typename (L, 1));
@@ -378,12 +376,39 @@ int exec_info_wait_for_child (struct exec_info *e)
         return (err);
 }
 
+static int io_devnull (void)
+{
+    int devnull = open ("/dev/null", O_RDWR);
+    if (devnull < 0)
+        return (-1);
+    /*
+     *  Dup appropriate fds onto child STDIN/STDOUT/STDERR
+     */
+    if (  (dup2 (devnull, STDIN_FILENO) < 0)
+       || (dup2 (devnull, STDOUT_FILENO) < 0)
+       || (dup2 (devnull, STDERR_FILENO) < 0))
+            return (-1);
+    return (0);
+}
+
+static int lua_get_closeio_flag (lua_State *L)
+{
+    int found;
+    /* Get pepe table on top of stack */
+    lua_getglobal (L, "pepe");
+    lua_getfield (L, -1, "nocloseio");
+    found = lua_tonumber (L, -1);
+    lua_pop (L, 2);
+    return (found ? 0 : 1);
+}
+
 
 static int l_execute (lua_State *L)
 {
     char *cmd = strdup (luaL_checkstring (L, 1));
     int err;
     struct exec_info *e;
+    int closeio = lua_get_closeio_flag (L);
 
     if (cmd == NULL)
         return luaL_error (L, "bad argument");
@@ -399,6 +424,8 @@ static int l_execute (lua_State *L)
          *   don't touch stdout, stderr, stdin -- these descriptors
          *   should not ever be closed at program startup.
          */
+        if (closeio)
+            io_devnull ();
         fd_closeall_on_exec (3);
 
         /*  Check for explicit environment array provided on cmdline
