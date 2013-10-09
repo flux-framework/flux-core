@@ -954,7 +954,7 @@ static void kvs_get (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     json_object_iter iter;
     wait_t *wp = NULL;
     bool stall = false;
-    bool dir = false, deep = false;
+    bool flag_directory = false, flag_deep = false;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
@@ -965,17 +965,17 @@ static void kvs_get (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         stall = true;
         goto done;
     }
-    /* handle flags */
-    (void)util_json_object_get_boolean (o, ".flag_directory", &dir);
-    (void)util_json_object_get_boolean (o, ".flag_deep", &deep);
+    /* handle flags - they apply to all keys in the request */
+    (void)util_json_object_get_boolean (o, ".flag_directory", &flag_directory);
+    (void)util_json_object_get_boolean (o, ".flag_deep", &flag_deep);
 
     reply = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
         if (iter.key[0] == '.') /* ignore flags */
             continue;
         json_object *val = NULL;
-        if (!lookup (p, root, wp, deep, dir, iter.key, &val)) /* val ref++ */
-            stall = true; /* set flag but keep going to maximize readahead */
+        if (!lookup (p, root, wp, flag_deep, flag_directory, iter.key, &val))
+            stall = true; /* keep going to maximize readahead */
         if (stall) {
             if (val)
                 json_object_put (val);
@@ -1003,8 +1003,8 @@ static void kvs_watch (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     json_object *root, *reply = NULL, *o = NULL;
     json_object_iter iter;
     wait_t *wp = NULL;
-    bool stall = false, changed = false, ongoing = false;
-    bool dir = false, deep = false;
+    bool stall = false, changed = false;
+    bool flag_directory = false, flag_deep = false, flag_continue = false;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
@@ -1015,18 +1015,18 @@ static void kvs_watch (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         stall = true;
         goto done;
     }
-    /* handle flags */
-    (void)util_json_object_get_boolean (o, ".flag_directory", &dir);
-    (void)util_json_object_get_boolean (o, ".flag_deep", &deep);
-    (void)util_json_object_get_boolean (o, ".flag_watch_ongoing", &ongoing);
+    /* handle flags - they apply to all keys in the request */
+    (void)util_json_object_get_boolean (o, ".flag_directory", &flag_directory);
+    (void)util_json_object_get_boolean (o, ".flag_deep", &flag_deep);
+    (void)util_json_object_get_boolean (o, ".flag_continue", &flag_continue);
 
     reply = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
         if (iter.key[0] == '.') /* ignore flags */
             continue;
         json_object *val = NULL;
-        if (!lookup (p, root, wp, deep, dir, iter.key, &val)) /* val ref++ */
-            stall = true; /* set flag but keep going to maximize readahead */
+        if (!lookup (p, root, wp, flag_deep, flag_directory, iter.key, &val))
+            stall = true; /* keep going to maximize readahead */
         if (stall) {
             if (val)
                 json_object_put (val);
@@ -1043,14 +1043,14 @@ static void kvs_watch (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 
         /* Prepare to resubmit the request on the watchlist for future changes.
          * Values were updated above.  Flags are reattached here.
-         * We set the 'ongoing' flag for next time so that a reply is
+         * We set the 'continue' flag for next time so that a reply is
          * only sent if value changes.
          */
         if (!(zcpy = zmsg_dup (*zmsg)))
             oom ();
-        util_json_object_add_boolean (reply, ".flag_directory", dir);
-        util_json_object_add_boolean (reply, ".flag_deep", deep);
-        util_json_object_add_boolean (reply, ".flag_watch_ongoing", true);
+        util_json_object_add_boolean (reply, ".flag_directory", flag_directory);
+        util_json_object_add_boolean (reply, ".flag_deep", flag_deep);
+        util_json_object_add_boolean (reply, ".flag_continue", true);
         (void)cmb_msg_replace_json (zcpy, reply);
 
         /* On every commit, kvs_watch (p, arg, zcpy) will be called.
@@ -1062,7 +1062,7 @@ static void kvs_watch (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         /* Reply to the watch request.
          * The initial request always gets a reply.
          */
-        if (changed || !ongoing)
+        if (changed || !flag_continue)
             plugin_send_response_raw (p, zmsg);
     }
 done:
@@ -1074,25 +1074,24 @@ done:
         zmsg_destroy (zmsg);
 }
 
-
 static void kvs_put (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     json_object *o = NULL;
     json_object_iter iter;
     href_t ref;
     bool writeback = !plugin_treeroot (p);
-    bool dir = false;
+    bool flag_mkdir = false;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    (void)util_json_object_get_boolean (o, ".flag_mkdir", &dir);
+    (void)util_json_object_get_boolean (o, ".flag_mkdir", &flag_mkdir);
     json_object_object_foreachC (o, iter) {
         if (iter.key[0] == '.') /* ignore flags */
             continue;
         if (json_object_get_type (iter.val) == json_type_null) {
-            if (dir) {
+            if (flag_mkdir) {
                 json_object *empty_dir = util_json_object_new_object ();
                 store (p, empty_dir, writeback, ref);
                 name (p, iter.key, dirent_create ("DIRREF", ref), writeback);

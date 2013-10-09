@@ -79,8 +79,8 @@ int cmb_barrier (cmb_t c, const char *name, int nprocs);
 enum {
     KVS_GET_WATCH = 1,      /* start watch */
     KVS_GET_NEXT = 2,       /* receive next watch change */
-    KVS_GET_DIRECTORY = 4,  /* get directory */
-    KVS_GET_DEEP = 8,       /* get directory recursively (|KVS_GET_DIRECTORY) */
+    KVS_GET_DIRECTORY = 4,  /* kvs_get only: get directory */
+    KVS_GET_DEEP = 8,       /* kvs_get only: make get_directory recursive */
 };
 
 /* Convenience functions for simple type values.
@@ -104,7 +104,13 @@ int cmb_kvs_put_boolean (cmb_t c, const char *key, bool val);
 int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, int flags);
 int cmb_kvs_put (cmb_t c, const char *key, json_object *val);
 
+/* Unlink a name from the namespace.  If the key is a directory, its contents
+ * are removed recursively.
+ */
 int cmb_kvs_unlink (cmb_t c, const char *key);
+
+/* Create an empty directory.
+ */
 int cmb_kvs_mkdir (cmb_t c, const char *key);
 
 /* Singleton commit.  This ensures that any values just put by the calling
