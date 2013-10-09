@@ -1,0 +1,31 @@
+#!/bin/bash -e
+
+TEST=`basename $0`
+DIR=$TEST.a.b
+EXPRESULT="$DIR.a{int}
+$DIR.b{int}
+$DIR.c{double}
+$DIR.d{string}
+$DIR.e{boolean}"
+
+test_cleanup() {
+    ./tkvs unlink $TEST
+    ./tkvs commit
+}
+
+test_cleanup
+
+./tkvs put_int $DIR.a 69
+./tkvs put_int64 $DIR.b 70
+./tkvs put_double $DIR.c 3.14
+./tkvs put_string $DIR.d "snerg"
+./tkvs put_boolean $DIR.e "true"
+./tkvs commit
+
+# Retrieve directory containing new key
+RESULT=`./tkvs get_dir $DIR`
+test "$RESULT" == "$EXPRESULT"
+
+test_cleanup
+
+exit 0

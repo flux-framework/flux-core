@@ -74,13 +74,10 @@ int cmb_barrier (cmb_t c, const char *name, int nprocs);
  */
 
 /* Flags to cmb_kvs_get() series of functions.
- * You may 'or' them, for example KVS_GET_WATCH | KVS_GET_DIRECTORY.
  */
 enum {
     KVS_GET_WATCH = 1,      /* start watch */
     KVS_GET_NEXT = 2,       /* receive next watch change */
-    KVS_GET_DIRECTORY = 4,  /* kvs_get only: get directory */
-    KVS_GET_DEEP = 8,       /* kvs_get only: make get_directory recursive */
 };
 
 /* Convenience functions for simple type values.
@@ -103,6 +100,42 @@ int cmb_kvs_put_boolean (cmb_t c, const char *key, bool val);
  */
 int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, int flags);
 int cmb_kvs_put (cmb_t c, const char *key, json_object *val);
+
+/* Get directory value.
+ */
+typedef struct kvsdir_struct *kvsdir_t;
+typedef struct kvsdir_iterator_struct *kvsitr_t;
+int cmb_kvs_get_directory (cmb_t c, const char *key, kvsdir_t *dirp, int flags);
+void cmb_kvsdir_destroy (kvsdir_t dir);
+const char *cmb_kvsdir_key (kvsdir_t dir); /* retrieve saved key for dir */
+
+kvsitr_t cmb_kvsitr_create (kvsdir_t dir);
+void cmb_kvsitr_destroy (kvsitr_t itr);
+const char *cmb_kvsitr_next (kvsitr_t itr);
+
+bool cmb_kvsdir_exists (kvsdir_t dir, const char *name);
+bool cmb_kvsdir_isdirectory (kvsdir_t dir, const char *name);
+bool cmb_kvsdir_isstring (kvsdir_t dir, const char *name);
+bool cmb_kvsdir_isint (kvsdir_t dir, const char *name);
+bool cmb_kvsdir_isint64 (kvsdir_t dir, const char *name);
+bool cmb_kvsdir_isdouble (kvsdir_t dir, const char *name);
+bool cmb_kvsdir_isboolean (kvsdir_t dir, const char *name);
+bool cmb_kvsdir_isobject (kvsdir_t dir, const char *name);
+
+int cmb_kvs_get_at (kvsdir_t dir, const char *name, json_object **valp,
+                    int flags);
+int cmb_kvs_get_directory_at (kvsdir_t dir, const char *name, kvsdir_t *ndir,
+                    int flags);
+int cmb_kvs_get_string_at (kvsdir_t dir, const char *name, char **valp,
+                    int flags);
+int cmb_kvs_get_int_at (kvsdir_t dir, const char *name, int *valp,
+                    int flags);
+int cmb_kvs_get_int64_at (kvsdir_t dir, const char *name, int64_t *valp,
+                    int flags);
+int cmb_kvs_get_double_at (kvsdir_t dir, const char *name, double *valp,
+                    int flags);
+int cmb_kvs_get_boolean_at (kvsdir_t dir, const char *name, bool *valp,
+                    int flags);
 
 /* Unlink a name from the namespace.  If the key is a directory, its contents
  * are removed recursively.

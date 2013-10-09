@@ -22,9 +22,8 @@
 #include "log.h"
 #include "zmsg.h"
 
-#define OPTIONS "dZw"
+#define OPTIONS "Zw"
 static const struct option longopts[] = {
-   {"deep",          no_argument,        0, 'd'},
    {"trace-apisock", no_argument,        0, 'Z'},
    {"watch",         no_argument,        0, 'w'},
    {0, 0, 0, 0},
@@ -56,6 +55,9 @@ The possible operations are:\n\
     mkdir key\n\
     unlink key\n\
     get_dir key\n\
+    get_dir_r key\n\
+    get_all key\n\
+    get_all_r key\n\
     commit\n\
 ");
     exit (1);
@@ -106,23 +108,104 @@ void kvs_put (cmb_t c, char *key, char *val)
     json_object_put (o);
 }
 
-void kvs_get_dir (cmb_t c, char *key, bool watch, bool deep)
+void dump_dir (kvsdir_t dir, bool ropt)
 {
-    int dirflags = KVS_GET_DIRECTORY | (deep ? KVS_GET_DEEP : 0);
+    kvsitr_t itr = cmb_kvsitr_create (dir);
+    const char *name;
+    while ((name = cmb_kvsitr_next (itr))) {
+        if (cmb_kvsdir_isdirectory (dir, name)) {
+            if (ropt) {
+                kvsdir_t ndir;
+                if (cmb_kvs_get_directory_at (dir, name, &ndir, 0) < 0)
+                    err_exit ("cmb_kvs_get_directory_at %s", name);
+                dump_dir (ndir, ropt); 
+            } else
+                printf ("%s.%s{directory}\n", cmb_kvsdir_key (dir), name);
+        } else  {
+            printf ("%s.%s{%s}\n", cmb_kvsdir_key (dir), name,
+                    cmb_kvsdir_isstring (dir, name) ? "string"
+                  : cmb_kvsdir_isint (dir, name) ? "int"
+                  : cmb_kvsdir_isint64 (dir, name) ? "int64"
+                  : cmb_kvsdir_isdouble (dir, name) ? "double"
+                  : cmb_kvsdir_isboolean (dir, name) ? "boolean"
+                  : cmb_kvsdir_isobject (dir, name) ? "JSON" : "unknown");
+        }
+    }
+    cmb_kvsitr_destroy (itr);
+}
+
+void dump_all (kvsdir_t dir, bool ropt)
+{
+    kvsitr_t itr = cmb_kvsitr_create (dir);
+    const char *name;
+    while ((name = cmb_kvsitr_next (itr))) {
+        if (cmb_kvsdir_isdirectory (dir, name)) {
+            if (ropt) {
+                kvsdir_t ndir;
+                if (cmb_kvs_get_directory_at (dir, name, &ndir, 0) < 0)
+                    err_exit ("cmb_kvs_get_directory_at %s", name);
+                dump_all (ndir, ropt); 
+            } else
+                printf ("%s.%s{directory}\n", cmb_kvsdir_key (dir), name);
+        } else if (cmb_kvsdir_isstring (dir, name)) {
+            char *s;
+            if (cmb_kvs_get_string_at (dir, name, &s, 0) < 0)
+                err_exit ("cmb_kvs_get_string_at %s", name);
+            printf ("%s.%s = %s\n", cmb_kvsdir_key (dir), name, s);
+            free (s);
+        } else if (cmb_kvsdir_isint (dir, name)) {
+            int i;
+            if (cmb_kvs_get_int_at (dir, name, &i, 0) < 0)
+                err_exit ("cmb_kvs_get_int64_at %s", name);
+            printf ("%s.%s = %d\n", cmb_kvsdir_key (dir), name, i);
+        } else if (cmb_kvsdir_isint64 (dir, name)) {
+            int64_t i;
+            if (cmb_kvs_get_int64_at (dir, name, &i, 0) < 0)
+                err_exit ("cmb_kvs_get_int64_at %s", name);
+            printf ("%s.%s = %lld\n", cmb_kvsdir_key (dir), name,
+                    (long long int)i);
+        } else if (cmb_kvsdir_isdouble (dir, name)) {
+            double n;
+            if (cmb_kvs_get_double_at (dir, name, &n, 0) < 0)
+                err_exit ("cmb_kvs_get_double_at %s", name);
+            printf ("%s.%s = %lf\n", cmb_kvsdir_key (dir), name, n);
+        } else if (cmb_kvsdir_isboolean (dir, name)) {
+            bool b;
+            if (cmb_kvs_get_boolean_at (dir, name, &b, 0) < 0)
+                err_exit ("cmb_kvs_get_boolean_at %s", name);
+            printf ("%s.%s = %s\n", cmb_kvsdir_key (dir), name, b ? "true" : "false");
+        } else if (cmb_kvsdir_isobject (dir, name)) {
+            json_object *o;
+            if (cmb_kvs_get_at (dir, name, &o, 0) < 0)
+                err_exit ("cmb_kvs_get_object_at %s", name);
+            printf ("%s.%s = %s\n", cmb_kvsdir_key (dir), name, 
+                                            json_object_to_json_string (o));
+            json_object_put (o);
+
+        }
+    }
+    cmb_kvsitr_destroy (itr);
+}
+
+void kvs_get_dir (cmb_t c, char *key, bool watch, bool ropt, bool all)
+{
     int flags = 0;
-    json_object *dir;
+    kvsdir_t dir;
 
     if (watch)
         flags = KVS_GET_WATCH;
     do {
-        if (cmb_kvs_get (c, key, &dir, dirflags | flags) < 0) {
+        if (cmb_kvs_get_directory (c, key, &dir, flags) < 0) {
             if (errno == ENOENT)
                 printf ("null\n");
             else
                 err_exit ("cmb_kvs_get %s", key);
         } else {
-            printf ("%s\n", json_object_to_json_string (dir)); 
-            json_object_put (dir);
+            if (all)
+                dump_all (dir, ropt);
+            else 
+                dump_dir (dir, ropt);
+            cmb_kvsdir_destroy (dir);
         }
         if (watch)
             flags = KVS_GET_NEXT;
@@ -269,7 +352,6 @@ void kvs_commit (cmb_t c)
 int main (int argc, char *argv[])
 {
     int ch;
-    bool dopt = false;
     bool wopt = false;
     char *op = NULL;
     char *key = NULL;
@@ -282,9 +364,6 @@ int main (int argc, char *argv[])
     snprintf (path, sizeof (path), CMB_API_PATH_TMPL, getuid ());
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
-            case 'd':
-                dopt = true;
-                break;
             case 'Z': /* --trace-apisock */
                 flags |= CMB_FLAGS_TRACE;
                 break;
@@ -335,7 +414,14 @@ int main (int argc, char *argv[])
         kvs_put_boolean (c, key, !strcmp (val, "false") ? false : true);
 
     else if (!strcmp (op, "get_dir"))
-        kvs_get_dir (c, key, wopt, dopt);
+        kvs_get_dir (c, key, wopt, false, false);
+    else if (!strcmp (op, "get_dir_r"))
+        kvs_get_dir (c, key, wopt, true, false);
+
+    else if (!strcmp (op, "get_all"))
+        kvs_get_dir (c, key, wopt, false, true);
+    else if (!strcmp (op, "get_all_r"))
+        kvs_get_dir (c, key, wopt, true, true);
 
     else if (!strcmp (op, "get"))
         kvs_get (c, key, wopt);

@@ -527,10 +527,6 @@ int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, int flags)
     if (!(flags & KVS_GET_NEXT)) {
         o = util_json_object_new_object ();
         json_object_object_add (o, key, NULL);
-        if ((flags & KVS_GET_DIRECTORY))
-            util_json_object_add_boolean (o, ".flag_directory", true);
-        if ((flags & KVS_GET_DEEP))
-            util_json_object_add_boolean (o, ".flag_deep", true);
         if ((flags & KVS_GET_WATCH)) {
             if (_send_message (c, o, "kvs.watch") < 0)
                 goto done;
@@ -564,16 +560,331 @@ done:
     return rc;
 }
 
+struct kvsdir_struct {
+    cmb_t c;
+    char *key;
+    json_object *o;
+};
+
+struct kvsdir_iterator_struct {
+    kvsdir_t dir;
+    struct json_object_iterator next;
+    struct json_object_iterator end;
+};
+
+void cmb_kvsdir_destroy (kvsdir_t dir)
+{
+    free (dir->key);
+    json_object_put (dir->o);
+    free (dir);
+}
+
+static kvsdir_t kvsdir_create (cmb_t c, const char *key, json_object *o)
+{
+    kvsdir_t dir = xzmalloc (sizeof (*dir));
+
+    dir->c = c;
+    dir->key = xstrdup (key);
+    dir->o = o;
+    json_object_get (dir->o);
+
+    return dir;
+}
+
+const char *cmb_kvsdir_key (kvsdir_t dir)
+{
+    return dir->key;
+}
+
+kvsitr_t cmb_kvsitr_create (kvsdir_t dir)
+{
+    kvsitr_t itr = xzmalloc (sizeof (*itr));
+
+    itr->dir = dir;
+    itr->next = json_object_iter_begin (itr->dir->o); 
+    itr->end = json_object_iter_end (itr->dir->o); 
+
+    return itr;
+}
+
+void cmb_kvsitr_destroy (kvsitr_t itr)
+{
+    free (itr); 
+}
+
+const char *cmb_kvsitr_next (kvsitr_t itr)
+{
+    const char *name = NULL;
+
+    if (!json_object_iter_equal (&itr->end, &itr->next)) {
+        name = json_object_iter_peek_name (&itr->next);
+        (void)json_object_iter_next (&itr->next);
+    }
+
+    return name;
+}
+
+bool cmb_kvsdir_exists (kvsdir_t dir, const char *name)
+{
+    bool rc = false;
+
+    if (json_object_object_get (dir->o, name))
+        rc = true;
+
+    return rc;
+}
+
+bool cmb_kvsdir_isdirectory (kvsdir_t dir, const char *name)
+{
+    json_object *dirent = json_object_object_get (dir->o, name);
+    bool rc = false;
+
+    if (dirent && (json_object_object_get (dirent, "DIRREF") ||
+                   json_object_object_get (dirent, "DIRVAL")))
+        rc = true;
+
+    return rc;
+}
+
+bool cmb_kvsdir_isstring (kvsdir_t dir, const char *name)
+{
+    json_object *dirent = json_object_object_get (dir->o, name);
+    json_object *val;
+    bool rc = false;
+
+    if (dirent && (val = json_object_object_get (dirent, "FILEVAL"))
+               && json_object_get_type (val) == json_type_string)
+        rc = true;
+
+    return rc;
+}
+
+bool cmb_kvsdir_isint (kvsdir_t dir, const char *name)
+{
+    json_object *dirent = json_object_object_get (dir->o, name);
+    json_object *val;
+    bool rc = false;
+
+    if (dirent && (val = json_object_object_get (dirent, "FILEVAL"))
+               && json_object_get_type (val) == json_type_int)
+        rc = true;
+
+    return rc;
+}
+
+bool cmb_kvsdir_isint64 (kvsdir_t dir, const char *name)
+{
+    return cmb_kvsdir_isint (dir, name); /* no way to distinguish from int */
+}
+
+bool cmb_kvsdir_isdouble (kvsdir_t dir, const char *name)
+{
+    json_object *dirent = json_object_object_get (dir->o, name);
+    json_object *val;
+    bool rc = false;
+
+    if (dirent && (val = json_object_object_get (dirent, "FILEVAL"))
+               && json_object_get_type (val) == json_type_double)
+        rc = true;
+
+    return rc;
+}
+
+bool cmb_kvsdir_isboolean (kvsdir_t dir, const char *name)
+{
+    json_object *dirent = json_object_object_get (dir->o, name);
+    json_object *val;
+    bool rc = false;
+
+    if (dirent && (val = json_object_object_get (dirent, "FILEVAL"))
+               && json_object_get_type (val) == json_type_boolean)
+        rc = true;
+
+    return rc;
+}
+
+bool cmb_kvsdir_isobject (kvsdir_t dir, const char *name)
+{
+    json_object *dirent = json_object_object_get (dir->o, name);
+    json_object *val;
+    bool rc = false;
+
+    if (dirent && (val = json_object_object_get (dirent, "FILEVAL"))
+               && json_object_get_type (val) == json_type_object
+               && !json_object_object_get (val, "DIRREF")
+               && !json_object_object_get (val, "DIRVAL"))
+        rc = true;
+
+    return rc;
+}
+
+int cmb_kvs_get_directory_at (kvsdir_t dir, const char *name, kvsdir_t *ndir,
+                              int flags)
+{
+    char *key;
+    int rc;
+
+    if (asprintf (&key, "%s.%s", dir->key, name) < 0)
+        oom ();
+    rc = cmb_kvs_get_directory (dir->c, key, ndir, flags);
+    free (key);
+
+    return rc;
+}
+
+int cmb_kvs_get_at (kvsdir_t dir, const char *name, json_object **valp,
+                    int flags)
+{
+    char *key;
+    int rc;
+
+    if (asprintf (&key, "%s.%s", dir->key, name) < 0)
+        oom ();
+    rc = cmb_kvs_get (dir->c, key, valp, flags);
+    free (key);
+
+    return rc;
+}
+
+int cmb_kvs_get_string_at (kvsdir_t dir, const char *name, char **valp,
+                           int flags)
+{
+    json_object *o;
+    const char *s;
+    int rc = -1;
+
+    if (cmb_kvs_get_at (dir, name, &o, flags) < 0)
+        goto done;
+    if (json_object_get_type (o) != json_type_string) {
+        errno = EINVAL;
+        goto done;
+    }
+    s = json_object_get_string (o);
+    *valp = xstrdup (s);
+    rc = 0;
+done:
+    return rc;
+}
+
+int cmb_kvs_get_int_at (kvsdir_t dir, const char *name, int *valp, int flags)
+{
+    json_object *o;
+    int rc = -1;
+
+    if (cmb_kvs_get_at (dir, name, &o, flags) < 0)
+        goto done;
+    if (json_object_get_type (o) != json_type_int) {
+        errno = EINVAL;
+        goto done;
+    }
+    *valp = json_object_get_int (o);
+    rc = 0;
+done:
+    return rc;
+}
+
+int cmb_kvs_get_int64_at (kvsdir_t dir, const char *name, int64_t *valp,
+                          int flags)
+{
+    json_object *o;
+    int rc = -1;
+
+    if (cmb_kvs_get_at (dir, name, &o, flags) < 0)
+        goto done;
+    if (json_object_get_type (o) != json_type_int) {
+        errno = EINVAL;
+        goto done;
+    }
+    *valp = json_object_get_int64 (o);
+    rc = 0;
+done:
+    return rc;
+}
+
+int cmb_kvs_get_double_at (kvsdir_t dir, const char *name, double *valp,
+                           int flags)
+{
+    json_object *o;
+    int rc = -1;
+
+    if (cmb_kvs_get_at (dir, name, &o, flags) < 0)
+        goto done;
+    if (json_object_get_type (o) != json_type_double) {
+        errno = EINVAL;
+        goto done;
+    }
+    *valp = json_object_get_double (o);
+    rc = 0;
+done:
+    return rc;
+}
+
+int cmb_kvs_get_boolean_at (kvsdir_t dir, const char *name, bool *valp,
+                            int flags)
+{
+    json_object *o;
+    int rc = -1;
+
+    if (cmb_kvs_get_at (dir, name, &o, flags) < 0)
+        goto done;
+    if (json_object_get_type (o) != json_type_boolean) {
+        errno = EINVAL;
+        goto done;
+    }
+    *valp = json_object_get_boolean (o);
+    rc = 0;
+done:
+    return rc;
+}
+
+int cmb_kvs_get_directory (cmb_t c, const char *key, kvsdir_t *dirp, int flags)
+{
+    json_object *val, *o = NULL;
+    int rc = -1;
+
+    /* send request (unless KVS_GET_NEXT flag is set) */
+    if (!(flags & KVS_GET_NEXT)) {
+        o = util_json_object_new_object ();
+        json_object_object_add (o, key, NULL);
+        util_json_object_add_boolean (o, ".flag_directory", true);
+        if ((flags & KVS_GET_WATCH)) {
+            if (_send_message (c, o, "kvs.watch") < 0)
+                goto done;
+        } else {
+            if (_send_message (c, o, "kvs.get") < 0)
+                goto done;
+        }
+        json_object_put (o);
+        o = NULL;
+    }
+
+    /* receive response */
+    if (_recv_message (c, NULL, &o, false) < 0)
+        goto done;
+    if (o == NULL) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (util_json_object_get_int (o, "errnum", &errno) == 0)
+        goto done;
+    if (!(val = json_object_object_get (o, key))) {
+        errno = ENOENT;
+        goto done;
+    }
+    *dirp = kvsdir_create (c, key, val);
+    rc = 0;
+done:
+    if (o)
+        json_object_put (o);
+    return rc;
+}
+
 int cmb_kvs_get_string (cmb_t c, const char *key, char **valp, int flags)
 {
     json_object *o = NULL;
     const char *s;
     int rc = -1;
 
-    if ((flags & KVS_GET_DIRECTORY) || (flags & KVS_GET_DEEP)) {
-        errno = EINVAL;
-        goto done;
-    }
     if (cmb_kvs_get (c, key, &o, flags) < 0)
         goto done;
     if (json_object_get_type (o) != json_type_string) {
@@ -594,10 +905,6 @@ int cmb_kvs_get_int (cmb_t c, const char *key, int *valp, int flags)
     json_object *o = NULL;
     int rc = -1;
 
-    if ((flags & KVS_GET_DIRECTORY) || (flags & KVS_GET_DEEP)) {
-        errno = EINVAL;
-        goto done;
-    }
     if (cmb_kvs_get (c, key, &o, flags) < 0)
         goto done;
     if (json_object_get_type (o) != json_type_int) {
@@ -617,10 +924,6 @@ int cmb_kvs_get_int64 (cmb_t c, const char *key, int64_t *valp, int flags)
     json_object *o = NULL;
     int rc = -1;
 
-    if ((flags & KVS_GET_DIRECTORY) || (flags & KVS_GET_DEEP)) {
-        errno = EINVAL;
-        goto done;
-    }
     if (cmb_kvs_get (c, key, &o, flags) < 0)
         goto done;
     if (json_object_get_type (o) != json_type_int) {
@@ -640,10 +943,6 @@ int cmb_kvs_get_double (cmb_t c, const char *key, double *valp, int flags)
     json_object *o = NULL;
     int rc = -1;
 
-    if ((flags & KVS_GET_DIRECTORY) || (flags & KVS_GET_DEEP)) {
-        errno = EINVAL;
-        goto done;
-    }
     if (cmb_kvs_get (c, key, &o, flags) < 0)
         goto done;
     if (json_object_get_type (o) != json_type_double) {
@@ -663,10 +962,6 @@ int cmb_kvs_get_boolean (cmb_t c, const char *key, bool *valp, int flags)
     json_object *o = NULL;
     int rc = -1;
 
-    if ((flags & KVS_GET_DIRECTORY) || (flags & KVS_GET_DEEP)) {
-        errno = EINVAL;
-        goto done;
-    }
     if (cmb_kvs_get (c, key, &o, flags) < 0)
         goto done;
     if (json_object_get_type (o) != json_type_boolean) {
@@ -678,40 +973,6 @@ int cmb_kvs_get_boolean (cmb_t c, const char *key, bool *valp, int flags)
 done: 
     if (o)
         json_object_put (o);
-    return rc;
-}
-
-int cmb_kvs_get_cache (json_object *cache, const char *key, json_object **valp)
-{
-    char *cpy = xstrdup (key);
-    char *next, *name = cpy;
-    json_object *dirent, *val, *dir;
-    int rc = -1;
-
-    dir = cache;
-    while ((next = strchr (name, '.'))) {
-        *next++ = '\0';
-        dirent = json_object_object_get (dir, name);
-        if (!dirent || !(dir = json_object_object_get (dirent, "DIRVAL"))) {
-            errno = ENOENT;
-            goto done;
-        }
-        name = next;
-    }
-    dirent = json_object_object_get (dir, name); /* final path component */
-    if (!dirent) {
-        errno = ENOENT;
-        goto done;
-    }
-    if (!(val = json_object_object_get (dirent, "FILEVAL"))) {
-        errno = EISDIR;
-        goto done;
-    }
-    json_object_get (val);
-    *valp = val;
-    rc = 0;
-done:
-    free (cpy);
     return rc;
 }
 

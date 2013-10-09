@@ -16,7 +16,7 @@ test_cleanup
 
 # Retrieve directory containing new key
 RESULT=`./tkvs get_dir $DIR`
-test "$RESULT" == '{ "c": { "FILEVAL": 69 } }'
+test "$RESULT" == "$KEY{int}"
 
 # Try to retrieve key as a directory - should be an error
 RESULT=`./tkvs get_dir $KEY`
@@ -26,11 +26,11 @@ test "$RESULT" == null
 RESULT=`./tkvs get $DIR`
 test "$RESULT" == null
 
-# empty directory remians after key removed
+# empty directory remains after key removed
 ./tkvs unlink $KEY
 ./tkvs commit
 RESULT=`./tkvs get_dir $DIR`
-test "$RESULT" == "{ }"
+test -z "$RESULT"
 
 test_cleanup
 
