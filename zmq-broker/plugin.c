@@ -279,7 +279,7 @@ static void _kvs_add_watcher (plugin_ctx_t *p, const char *key,
     zhash_freefn (p->kvs_watcher, key, free);
 }
 
-int plugin_kvs_flush (plugin_ctx_t *p)
+static int kvs_flush (plugin_ctx_t *p)
 {
     json_object *request = NULL;
     json_object *reply = NULL;
@@ -305,6 +305,9 @@ int plugin_kvs_commit (plugin_ctx_t *p)
     json_object *reply = NULL;
     char *commit_name = uuid_generate_str ();
     int ret = -1;
+
+    if (kvs_flush (p) < 0)
+        goto done;
 
     util_json_object_add_string (request, "name", commit_name);
     reply = plugin_request (p, request, "kvs.commit");

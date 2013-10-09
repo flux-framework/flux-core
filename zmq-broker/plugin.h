@@ -90,7 +90,6 @@ int plugin_kvs_put_boolean (plugin_ctx_t *p, const char *key, bool val);
 
 int plugin_kvs_get (plugin_ctx_t *p, const char *key, json_object **valp);
 int plugin_kvs_put (plugin_ctx_t *p, const char *key, json_object *val);
-int plugin_kvs_flush (plugin_ctx_t *p);
 int plugin_kvs_commit (plugin_ctx_t *p);
 int plugin_kvs_watch (plugin_ctx_t *p, const char *key,
                       kvs_watch_f *set, void *arg);

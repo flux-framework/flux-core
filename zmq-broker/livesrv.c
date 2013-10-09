@@ -260,7 +260,6 @@ static void _recv_event_live (plugin_ctx_t *p, bool alive, int rank)
         }
     }
     plugin_kvs_put (p, "conf.live.down", new);
-    //plugin_kvs_flush (p);
     plugin_kvs_commit (p);
 done:
     if (old)
