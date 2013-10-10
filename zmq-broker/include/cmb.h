@@ -1,11 +1,10 @@
 #ifndef HAVE_CMB_H
 #define HAVE_CMB_H
 
-#define CMB_API_PATH_TMPL       "/tmp/cmb_socket.uid%d"
-
 #define CMB_FLAGS_TRACE         0x0001
 
 #include <czmq.h>
+#include "cmb_socket.h"
 
 typedef struct cmb_struct *cmb_t;
 

@@ -1,3 +1,5 @@
+#include "cmb_socket.h"
+
 #define MAX_PARENTS 2
 typedef struct {
     char *upreq_uri;
