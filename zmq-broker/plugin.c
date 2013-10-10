@@ -429,6 +429,313 @@ done:
     return ret;
 }
 
+int plugin_kvs_unlink (plugin_ctx_t *p, const char *key)
+{
+    return plugin_kvs_put (p, key, NULL);
+}
+
+int plugin_kvs_mkdir (plugin_ctx_t *p, const char *key)
+{
+    json_object *request = util_json_object_new_object ();
+    json_object *reply = NULL;
+    int ret = -1;
+
+    util_json_object_add_boolean (request, ".flag_mkdir", true);
+    json_object_object_add (request, key, NULL);
+    reply = plugin_request (p, request, "kvs.put");
+    if (!reply) {
+        err ("%s", __FUNCTION__);
+        goto done;
+    }
+    ret = 0;
+done:
+    if (request)
+        json_object_put (request);
+    if (reply)
+        json_object_put (reply);
+    return ret;       
+}
+
+struct kvsdir_struct {
+    plugin_ctx_t *p;
+    char *key;
+    json_object *o;
+};
+
+struct kvsdir_iterator_struct {
+    kvsdir_t dir;
+    struct json_object_iterator next;
+    struct json_object_iterator end;
+};
+
+void plugin_kvsdir_destroy (kvsdir_t dir)
+{
+    free (dir->key);
+    json_object_put (dir->o);
+    free (dir);
+}
+
+static kvsdir_t kvsdir_create (plugin_ctx_t *p, const char *key, json_object *o)
+{
+    kvsdir_t dir = xzmalloc (sizeof (*dir));
+
+    dir->p = p;
+    dir->key = xstrdup (key);
+    dir->o = o;
+    json_object_get (dir->o);
+
+    return dir;
+}
+
+const char *plugin_kvsdir_key (kvsdir_t dir)
+{
+    return dir->key;
+}
+
+kvsitr_t plugin_kvsitr_create (kvsdir_t dir)
+{
+    kvsitr_t itr = xzmalloc (sizeof (*itr));
+
+    itr->dir = dir;
+    itr->next = json_object_iter_begin (itr->dir->o);
+    itr->end = json_object_iter_end (itr->dir->o);
+
+    return itr;
+}
+
+void plugin_kvsitr_destroy (kvsitr_t itr)
+{
+    free (itr);
+}
+
+const char *plugin_kvsitr_next (kvsitr_t itr)
+{
+    const char *name = NULL;
+
+    if (!json_object_iter_equal (&itr->end, &itr->next)) {
+        name = json_object_iter_peek_name (&itr->next);
+        (void)json_object_iter_next (&itr->next);
+    }
+
+    return name;
+}
+
+
+bool plugin_kvsdir_exists (kvsdir_t dir, const char *name)
+{
+    bool rc = false;
+
+    if (json_object_object_get (dir->o, name))
+        rc = true;
+
+    return rc;
+}
+
+bool plugin_kvsdir_isdir (kvsdir_t dir, const char *name)
+{
+    json_object *dirent = json_object_object_get (dir->o, name);
+    bool rc = false;
+
+    if (dirent && (json_object_object_get (dirent, "DIRREF") ||
+                   json_object_object_get (dirent, "DIRVAL")))
+        rc = true;
+
+    return rc;
+}
+
+bool plugin_kvsdir_isstring (kvsdir_t dir, const char *name)
+{
+    json_object *dirent = json_object_object_get (dir->o, name);
+    json_object *val;
+    bool rc = false;
+
+    if (dirent && (val = json_object_object_get (dirent, "FILEVAL"))
+               && json_object_get_type (val) == json_type_string)
+        rc = true;
+
+    return rc;
+}
+
+bool plugin_kvsdir_isint (kvsdir_t dir, const char *name)
+{
+    json_object *dirent = json_object_object_get (dir->o, name);
+    json_object *val;
+    bool rc = false;
+
+    if (dirent && (val = json_object_object_get (dirent, "FILEVAL"))
+               && json_object_get_type (val) == json_type_int)
+        rc = true;
+
+    return rc;
+}
+
+bool plugin_kvsdir_isint64 (kvsdir_t dir, const char *name)
+{
+    return plugin_kvsdir_isint (dir, name); /* no way to distinguish from int */
+}
+
+bool plugin_kvsdir_isdouble (kvsdir_t dir, const char *name)
+{
+    json_object *dirent = json_object_object_get (dir->o, name);
+    json_object *val;
+    bool rc = false;
+
+    if (dirent && (val = json_object_object_get (dirent, "FILEVAL"))
+               && json_object_get_type (val) == json_type_double)
+        rc = true;
+
+    return rc;
+}
+
+bool plugin_kvsdir_isboolean (kvsdir_t dir, const char *name)
+{
+    json_object *dirent = json_object_object_get (dir->o, name);
+    json_object *val;
+    bool rc = false;
+
+    if (dirent && (val = json_object_object_get (dirent, "FILEVAL"))
+               && json_object_get_type (val) == json_type_boolean)
+        rc = true;
+
+    return rc;
+}
+
+int plugin_kvs_get_dir_at (kvsdir_t dir, const char *name, kvsdir_t *ndir)
+{
+    char *key; 
+    json_object *val, *dirent = json_object_object_get (dir->o, name);
+    int rc = 0;
+
+    key = plugin_kvsdir_key_at (dir, name);
+    if (dirent && (val = json_object_object_get (dirent, "DIRVAL")))
+        *ndir = kvsdir_create (dir->p, key, val);
+    else
+        rc = plugin_kvs_get_dir (dir->p, key, ndir);
+    free (key);
+
+    return rc;
+}
+
+char *plugin_kvsdir_key_at (kvsdir_t dir, const char *name)
+{
+    char *key;
+
+    if (!strcmp (dir->key, ".") != 0)
+        key = xstrdup (name);
+    else if (asprintf (&key, "%s.%s", dir->key, name) < 0)
+        oom ();
+    return key;
+}
+
+int plugin_kvs_get_at (kvsdir_t dir, const char *name, json_object **valp)
+{
+    json_object *dirent = json_object_object_get (dir->o, name);
+    int rc = 0;
+    char *key;
+
+    /* Currently, a kvs.get with the directory flag set returns the
+     * directory as a hash of dirents, with files included by value.
+     * In the future if that changes, we fall back to recreating the
+     * fully qualified key and making a new kvs.get call.
+     */
+    if (dirent && (*valp = json_object_object_get (dirent, "FILEVAL"))) {
+        json_object_get (*valp);
+    } else {
+        key = plugin_kvsdir_key_at (dir, name);
+        rc = plugin_kvs_get (dir->p, key, valp);
+        free (key);
+    }
+    return rc;
+}
+
+int plugin_kvs_get_string_at (kvsdir_t dir, const char *name, char **valp)
+{
+    json_object *o;
+    const char *s;
+    int rc = -1;
+
+    if (plugin_kvs_get_at (dir, name, &o) < 0)
+        goto done;
+    if (json_object_get_type (o) != json_type_string) {
+        errno = EINVAL;
+        goto done;
+    }
+    s = json_object_get_string (o);
+    *valp = xstrdup (s);
+    rc = 0;
+done:
+    return rc;
+}
+
+int plugin_kvs_get_int_at (kvsdir_t dir, const char *name, int *valp)
+{
+    json_object *o;
+    int rc = -1;
+
+    if (plugin_kvs_get_at (dir, name, &o) < 0)
+        goto done;
+    if (json_object_get_type (o) != json_type_int) {
+        errno = EINVAL;
+        goto done;
+    }
+    *valp = json_object_get_int (o);
+    rc = 0;
+done:
+    return rc;
+}
+
+int plugin_kvs_get_int64_at (kvsdir_t dir, const char *name, int64_t *valp)
+{
+    json_object *o;
+    int rc = -1;
+
+    if (plugin_kvs_get_at (dir, name, &o) < 0)
+        goto done;
+    if (json_object_get_type (o) != json_type_int) {
+        errno = EINVAL;
+        goto done;
+    }
+    *valp = json_object_get_int64 (o);
+    rc = 0;
+done:
+    return rc;
+}
+
+int plugin_kvs_get_double_at (kvsdir_t dir, const char *name, double *valp)
+{
+    json_object *o;
+    int rc = -1;
+
+    if (plugin_kvs_get_at (dir, name, &o) < 0)
+        goto done;
+    if (json_object_get_type (o) != json_type_double) {
+        errno = EINVAL;
+        goto done;
+    }
+    *valp = json_object_get_double (o);
+    rc = 0;
+done:
+    return rc;
+}
+
+int plugin_kvs_get_boolean_at (kvsdir_t dir, const char *name, bool *valp)
+{
+    json_object *o;
+    int rc = -1;
+
+    if (plugin_kvs_get_at (dir, name, &o) < 0)
+        goto done;
+    if (json_object_get_type (o) != json_type_boolean) {
+        errno = EINVAL;
+        goto done;
+    }
+    *valp = json_object_get_boolean (o);
+    rc = 0;
+done:
+    return rc;
+}
+
+
 int plugin_kvs_get (plugin_ctx_t *p, const char *key, json_object **valp)
 {
     json_object *val = NULL;
@@ -448,6 +755,36 @@ int plugin_kvs_get (plugin_ctx_t *p, const char *key, json_object **valp)
     }
     json_object_get (val);
     *valp = val;
+    ret = 0;
+done:
+    if (request)
+        json_object_put (request);
+    if (reply)
+        json_object_put (reply);
+    return ret;       
+}
+
+int plugin_kvs_get_dir (plugin_ctx_t *p, const char *key, kvsdir_t *dirp)
+{
+    json_object *val = NULL;
+    json_object *request = util_json_object_new_object ();
+    json_object *reply = NULL;
+    int ret = -1;
+
+    json_object_object_add (request, key, NULL);
+    util_json_object_add_boolean (request, ".flag_directory", true);
+    reply = plugin_request (p, request, "kvs.get");
+    if (!reply) {
+        err ("%s", __FUNCTION__);
+        goto done;
+    }
+    if (util_json_object_get_int (reply, "errnum", &errno) == 0)
+        goto done;
+    if (!(val = json_object_object_get (reply, key))) {
+        errno = ENOENT;
+        goto done;
+    }
+    *dirp = kvsdir_create (p, key, val);
     ret = 0;
 done:
     if (request)
