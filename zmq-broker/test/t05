@@ -18,13 +18,11 @@ test_cleanup
 RESULT=`./tkvs get_dir $DIR`
 test "$RESULT" == "$KEY{int}"
 
-# Try to retrieve key as a directory - should be an error
-RESULT=`./tkvs get_dir $KEY`
-test "$RESULT" == null
+# Try to retrieve key as a directory - should be ENOTDIR
+./tkvs get_dir $KEY 2>/dev/null && false
 
-# Try to retrieve directory as a object - should be an error
-RESULT=`./tkvs get $DIR`
-test "$RESULT" == null
+# Try to retrieve directory as a object - should be EISDIR
+./tkvs get $DIR >/dev/null 2>/dev/null && false
 
 # empty directory remains after key removed
 ./tkvs unlink $KEY

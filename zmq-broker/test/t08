@@ -24,7 +24,7 @@ test_cleanup
 ./tkvs put_string $DIR.f.g.h.i.j "snerg"
 ./tkvs commit
 
-# Retrieve directory containing new key
+# Retrieve directory recursively (no values)
 RESULT=`./tkvs get_dir_r $DIR`
 
 test_cleanup

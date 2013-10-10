@@ -112,23 +112,26 @@ void dump_dir (kvsdir_t dir, bool ropt)
 {
     kvsitr_t itr = cmb_kvsitr_create (dir);
     const char *name;
+    char *key;
+
     while ((name = cmb_kvsitr_next (itr))) {
-        if (cmb_kvsdir_isdirectory (dir, name)) {
+        key = cmb_kvsdir_key_at (dir, name);
+        if (cmb_kvsdir_isdir (dir, name)) {
             if (ropt) {
                 kvsdir_t ndir;
-                if (cmb_kvs_get_directory_at (dir, name, &ndir, 0) < 0)
-                    err_exit ("cmb_kvs_get_directory_at %s", name);
+                if (cmb_kvs_get_dir_at (dir, name, &ndir) < 0)
+                    err_exit ("cmb_kvs_get_dir_at %s", key);
                 dump_dir (ndir, ropt); 
+                cmb_kvsdir_destroy (ndir);
             } else
-                printf ("%s.%s{directory}\n", cmb_kvsdir_key (dir), name);
+                printf ("%s{%s}\n", key, "dir");
         } else  {
-            printf ("%s.%s{%s}\n", cmb_kvsdir_key (dir), name,
+            printf ("%s{%s}\n", key,
                     cmb_kvsdir_isstring (dir, name) ? "string"
                   : cmb_kvsdir_isint (dir, name) ? "int"
                   : cmb_kvsdir_isint64 (dir, name) ? "int64"
                   : cmb_kvsdir_isdouble (dir, name) ? "double"
-                  : cmb_kvsdir_isboolean (dir, name) ? "boolean"
-                  : cmb_kvsdir_isobject (dir, name) ? "JSON" : "unknown");
+                  : cmb_kvsdir_isboolean (dir, name) ? "boolean" : "JSON");
         }
     }
     cmb_kvsitr_destroy (itr);
@@ -138,51 +141,53 @@ void dump_all (kvsdir_t dir, bool ropt)
 {
     kvsitr_t itr = cmb_kvsitr_create (dir);
     const char *name;
+    char *key;
+
     while ((name = cmb_kvsitr_next (itr))) {
-        if (cmb_kvsdir_isdirectory (dir, name)) {
+        key = cmb_kvsdir_key_at (dir, name);
+        if (cmb_kvsdir_isdir (dir, name)) {
             if (ropt) {
                 kvsdir_t ndir;
-                if (cmb_kvs_get_directory_at (dir, name, &ndir, 0) < 0)
-                    err_exit ("cmb_kvs_get_directory_at %s", name);
+                if (cmb_kvs_get_dir_at (dir, name, &ndir) < 0)
+                    err_exit ("cmb_kvs_get_dir_at %s", key);
                 dump_all (ndir, ropt); 
+                cmb_kvsdir_destroy (ndir);
             } else
-                printf ("%s.%s{directory}\n", cmb_kvsdir_key (dir), name);
+                printf ("%s{%s}\n", key, "dir");
         } else if (cmb_kvsdir_isstring (dir, name)) {
             char *s;
-            if (cmb_kvs_get_string_at (dir, name, &s, 0) < 0)
-                err_exit ("cmb_kvs_get_string_at %s", name);
-            printf ("%s.%s = %s\n", cmb_kvsdir_key (dir), name, s);
+            if (cmb_kvs_get_string_at (dir, name, &s) < 0)
+                err_exit ("cmb_kvs_get_string_at %s", key);
+            printf ("%s = %s\n", key, s);
             free (s);
         } else if (cmb_kvsdir_isint (dir, name)) {
             int i;
-            if (cmb_kvs_get_int_at (dir, name, &i, 0) < 0)
-                err_exit ("cmb_kvs_get_int64_at %s", name);
-            printf ("%s.%s = %d\n", cmb_kvsdir_key (dir), name, i);
+            if (cmb_kvs_get_int_at (dir, name, &i) < 0)
+                err_exit ("cmb_kvs_get_int64_at %s", key);
+            printf ("%s = %d\n", key, i);
         } else if (cmb_kvsdir_isint64 (dir, name)) {
             int64_t i;
-            if (cmb_kvs_get_int64_at (dir, name, &i, 0) < 0)
-                err_exit ("cmb_kvs_get_int64_at %s", name);
-            printf ("%s.%s = %lld\n", cmb_kvsdir_key (dir), name,
-                    (long long int)i);
+            if (cmb_kvs_get_int64_at (dir, name, &i) < 0)
+                err_exit ("cmb_kvs_get_int64_at %s", key);
+            printf ("%s = %lld\n", key, (long long int)i);
         } else if (cmb_kvsdir_isdouble (dir, name)) {
             double n;
-            if (cmb_kvs_get_double_at (dir, name, &n, 0) < 0)
-                err_exit ("cmb_kvs_get_double_at %s", name);
-            printf ("%s.%s = %lf\n", cmb_kvsdir_key (dir), name, n);
+            if (cmb_kvs_get_double_at (dir, name, &n) < 0)
+                err_exit ("cmb_kvs_get_double_at %s", key);
+            printf ("%s = %lf\n", key, n);
         } else if (cmb_kvsdir_isboolean (dir, name)) {
             bool b;
-            if (cmb_kvs_get_boolean_at (dir, name, &b, 0) < 0)
-                err_exit ("cmb_kvs_get_boolean_at %s", name);
-            printf ("%s.%s = %s\n", cmb_kvsdir_key (dir), name, b ? "true" : "false");
-        } else if (cmb_kvsdir_isobject (dir, name)) {
+            if (cmb_kvs_get_boolean_at (dir, name, &b) < 0)
+                err_exit ("cmb_kvs_get_boolean_at %s", key);
+            printf ("%s = %s\n", key, b ? "true" : "false");
+        } else {
             json_object *o;
-            if (cmb_kvs_get_at (dir, name, &o, 0) < 0)
-                err_exit ("cmb_kvs_get_object_at %s", name);
-            printf ("%s.%s = %s\n", cmb_kvsdir_key (dir), name, 
-                                            json_object_to_json_string (o));
+            if (cmb_kvs_get_at (dir, name, &o) < 0)
+                err_exit ("cmb_kvs_get_object_at %s", key);
+            printf ("%s = %s\n", key, json_object_to_json_string (o));
             json_object_put (o);
-
         }
+        free (key);
     }
     cmb_kvsitr_destroy (itr);
 }
@@ -195,7 +200,7 @@ void kvs_get_dir (cmb_t c, char *key, bool watch, bool ropt, bool all)
     if (watch)
         flags = KVS_GET_WATCH;
     do {
-        if (cmb_kvs_get_directory (c, key, &dir, flags) < 0) {
+        if (cmb_kvs_get_dir (c, key, &dir, flags) < 0) {
             if (errno == ENOENT)
                 printf ("null\n");
             else

@@ -900,38 +900,52 @@ stall:
 }
 
 static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
-                    bool dir, const char *name, json_object **valp)
+                    bool dir, const char *name, json_object **valp, int *ep)
 {
     json_object *vp, *dirent, *val = NULL;
     const char *ref;
     bool isdir = false;
+    int errnum = 0;
 
-    if (!strcmp (name, ".")) {
+    if (!strcmp (name, ".")) { /* special case root */
+        if (!dir) {
+            errnum = EISDIR;
+            goto done;
+        }
         val = root;
         isdir = true;
     } else {
         if (!walk (p, root, name, &dirent, wp))
             goto stall;
-        if (!dirent)
-            goto done;
+        if (!dirent) {
+            //errnum = ENOENT;
+            goto done; /* a NULL response is not necessarily an error */
+        }
         if (util_json_object_get_string (dirent, "DIRREF", &ref) == 0) {
-            if (!dir)
+            if (!dir) {
+                errnum = EISDIR;
                 goto done;
+            }
             if (!load (p, ref, wp, &val))
                 goto stall;
             isdir = true;
         } else if (util_json_object_get_string (dirent, "FILEREF", &ref) == 0) {
-            if (dir)
+            if (dir) {
+                errnum = ENOTDIR;
                 goto done;
+            }
             if (!load (p, ref, wp, &val))
                 goto stall;
         } else if ((vp = json_object_object_get (dirent, "DIRVAL"))) {
-            if (!dir)
+            if (!dir) {
+                errnum = EISDIR;
                 goto done;
+            }
             val = vp;
             isdir = true;
         } else if ((val = json_object_object_get (dirent, "FILEVAL"))) {
             if (dir) {
+                errnum = ENOTDIR;
                 val = NULL;
                 goto done;
             }
@@ -948,6 +962,8 @@ static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
         json_object_get (val);
 done:
     *valp = val;
+    if (errnum != 0)
+        *ep = errnum;
     return true;
 stall:
     return false;
@@ -961,6 +977,7 @@ static void kvs_get (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     wait_t *wp = NULL;
     bool stall = false;
     bool flag_directory = false;
+    int errnum = 0;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
@@ -976,10 +993,10 @@ static void kvs_get (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 
     reply = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
-        if (iter.key[0] == '.') /* ignore flags */
+        if (!strncmp (iter.key, ".flag_", 6)) /* ignore flags */
             continue;
         json_object *val = NULL;
-        if (!lookup (p, root, wp, flag_directory, iter.key, &val))
+        if (!lookup (p, root, wp, flag_directory, iter.key, &val, &errnum))
             stall = true; /* keep going to maximize readahead */
         if (stall) {
             if (val)
@@ -988,7 +1005,12 @@ static void kvs_get (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         }
         json_object_object_add (reply, iter.key, val);
     }
-    if (!stall) {
+    /* if any key encountered an error, the whole request fails */
+    /* N.B. unset values are returned as NULL and are not an error */
+    if (errnum != 0) {
+        wait_destroy (wp, zmsg); /* get back *zmsg */
+        plugin_send_response_errnum (p, zmsg, errnum);
+    } else if (!stall) {
         wait_destroy (wp, zmsg); /* get back *zmsg */
         (void)cmb_msg_replace_json (*zmsg, reply);
         plugin_send_response_raw (p, zmsg);
@@ -1010,6 +1032,7 @@ static void kvs_watch (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     wait_t *wp = NULL;
     bool stall = false, changed = false;
     bool flag_directory = false, flag_continue = false;
+    int errnum = 0;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
@@ -1026,10 +1049,10 @@ static void kvs_watch (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 
     reply = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
-        if (iter.key[0] == '.') /* ignore flags */
+        if (!strncmp (iter.key, ".flag_", 6)) /* ignore flags */
             continue;
         json_object *val = NULL;
-        if (!lookup (p, root, wp, flag_directory, iter.key, &val))
+        if (!lookup (p, root, wp, flag_directory, iter.key, &val, &errnum))
             stall = true; /* keep going to maximize readahead */
         if (stall) {
             if (val)
@@ -1040,7 +1063,14 @@ static void kvs_watch (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
             changed = true;
         json_object_object_add (reply, iter.key, val);
     }
-    if (!stall) {
+    /* If any key encountered an error, the whole request fails.
+     * Unset values are returned as NULL and are not an error.
+     * After an error is returned, the key is no longer watched.
+     */
+    if (errnum != 0) {
+        wait_destroy (wp, zmsg); /* get back *zmsg */
+        plugin_send_response_errnum (p, zmsg, errnum);
+    } else if (!stall) {
         zmsg_t *zcpy;
         wait_destroy (wp, zmsg); /* get back *zmsg */
         (void)cmb_msg_replace_json (*zmsg, reply);
@@ -1091,7 +1121,7 @@ static void kvs_put (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     }
     (void)util_json_object_get_boolean (o, ".flag_mkdir", &flag_mkdir);
     json_object_object_foreachC (o, iter) {
-        if (iter.key[0] == '.') /* ignore flags */
+        if (!strncmp (iter.key, ".flag_", 6)) /* ignore flags */
             continue;
         if (json_object_get_type (iter.val) == json_type_null) {
             if (flag_mkdir) {
