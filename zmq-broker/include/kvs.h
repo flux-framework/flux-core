@@ -33,6 +33,7 @@ typedef struct kvsdir_iterator_struct *kvsitr_t;
 kvsitr_t kvsitr_create (kvsdir_t dir);
 void kvsitr_destroy (kvsitr_t itr);
 const char *kvsitr_next (kvsitr_t itr);
+void kvsitr_rewind (kvsitr_t itr);
 
 /* Test attributes of a name returned from kvsitr_next().
  */

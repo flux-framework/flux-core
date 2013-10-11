@@ -59,7 +59,7 @@ void kvs_barrierfun_set (BarrierFun *fun)
     kvs_config.barrier = fun;
 }
 
-kvsdir_t kvsdir_create (void *handle, const char *key, json_object *o)
+static kvsdir_t kvsdir_create (void *handle, const char *key, json_object *o)
 {
     kvsdir_t dir = xzmalloc (sizeof (*dir));
 
@@ -76,9 +76,9 @@ const char *kvsdir_key (kvsdir_t dir)
     return dir->key;
 }
 
-void *kvsdir_handle (kvsdir_t dir)
+void kvsitr_rewind (kvsitr_t itr)
 {
-    return dir->handle;
+    itr->next = json_object_iter_begin (itr->dir->o); 
 }
 
 kvsitr_t kvsitr_create (kvsdir_t dir)
@@ -108,7 +108,6 @@ const char *kvsitr_next (kvsitr_t itr)
 
     return name;
 }
-
 
 int kvs_get (void *h, const char *key, json_object **valp)
 {
