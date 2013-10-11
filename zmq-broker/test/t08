@@ -1,0 +1,32 @@
+#!/bin/bash -e
+
+TEST=`basename $0`
+DIR=$TEST.a.b
+EXPRESULT="a{int}\
+b{int}\
+c{double}\
+d{string}\
+e{boolean}"
+
+
+test_cleanup() {
+    ./tkvs unlink $TEST
+    ./tkvs commit
+}
+
+test_cleanup
+
+./tkvs put_int $DIR.a 69
+./tkvs put_int64 $DIR.b 70
+./tkvs put_double $DIR.c 3.14
+./tkvs put_string $DIR.d "snerg"
+./tkvs put_boolean $DIR.e "true"
+./tkvs put_string $DIR.f.g.h.i.j "snerg"
+./tkvs commit
+
+# Retrieve directory recursively (no values)
+RESULT=`./tkvs get_dir_r $DIR`
+
+test_cleanup
+
+exit 0

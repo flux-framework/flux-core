@@ -1,3 +1,5 @@
+#include "kvs.h"
+
 typedef struct plugin_struct *plugin_t;
 
 typedef struct {
@@ -77,10 +79,6 @@ bool plugin_timeout_isset (plugin_ctx_t *p);
 
 void plugin_log (plugin_ctx_t *p, int lev, const char *fmt, ...);
 
-int plugin_kvs_get (plugin_ctx_t *p, const char *key, json_object **valp);
-int plugin_kvs_put (plugin_ctx_t *p, const char *key, json_object *val);
-int plugin_kvs_flush (plugin_ctx_t *p);
-int plugin_kvs_commit (plugin_ctx_t *p);
 int plugin_kvs_watch (plugin_ctx_t *p, const char *key,
                       kvs_watch_f *set, void *arg);
 

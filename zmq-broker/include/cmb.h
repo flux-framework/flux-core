@@ -1,11 +1,11 @@
 #ifndef HAVE_CMB_H
 #define HAVE_CMB_H
 
-#define CMB_API_PATH_TMPL       "/tmp/cmb_socket.uid%d"
-
 #define CMB_FLAGS_TRACE         0x0001
 
 #include <czmq.h>
+#include "cmb_socket.h"
+#include "kvs.h"
 
 typedef struct cmb_struct *cmb_t;
 
@@ -58,31 +58,7 @@ int cmb_event_send (cmb_t c, char *event);
 /* Execute the named barrier across the session.
  * The barrier can be any size.
  */
-int cmb_barrier (cmb_t c, char *name, int nprocs);
-
-/* Get/put key-value pairs.
- */
-typedef enum {
-    KVS_GET_VAL=0,      /* get value of key */
-    KVS_GET_WATCH,      /* start watch */
-    KVS_GET_NEXT,       /* receive next watch change */
-    KVS_GET_DIR,        /* get deep copy of directory */
-} kvs_get_t;
-typedef struct cmb_kvs_iterator_struct *cmb_kvs_iterator_t;
-
-int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, kvs_get_t flag);
-
-int cmb_kvs_get_cache (json_object *dir, const char *key, json_object **vp);
-int cmb_kvs_iterator_create (json_object  *dir, cmb_kvs_iterator_t *itrp);
-int cmb_kvs_iterator_next (cmb_kvs_iterator_t itr,
-                           const char *keyp, json_object **valp);
-int cmb_kvs_iterator_destroy (cmb_kvs_iterator_t itr);
-
-int cmb_kvs_put (cmb_t c, const char *key, json_object *val);
-int cmb_kvs_del (cmb_t c, const char *key);
-int cmb_kvs_flush (cmb_t c);
-int cmb_kvs_commit (cmb_t c, const char *name);
-int cmb_kvs_clean (cmb_t c);
+int cmb_barrier (cmb_t c, const char *name, int nprocs);
 
 /* Log messages.
  * 'fac' is like syslog facility, only an arbitrary string.

@@ -1,5 +1,8 @@
 { global:
     cmb_*;
+    kvsdir_*;
+    kvsitr_*;
+    kvs_*;
     local: *;
 };
 

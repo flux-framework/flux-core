@@ -95,6 +95,29 @@ error:
     return -1;
 }
 
+json_object *_request (cmb_t c, json_object *request, const char *fmt, ...)
+{
+    va_list ap;
+    json_object *reply = NULL;
+    char *tag;
+    int rc;
+
+    va_start (ap, fmt);
+    rc = _send_vmessage (c, request, fmt, ap);
+    va_end (ap);
+    if (rc < 0)
+        goto done;
+
+    rc = _recv_message (c, &tag, &reply, false);
+    if (rc < 0)
+        goto done;
+
+done:
+    if (tag)
+        free (tag);
+    return reply;
+}
+
 int cmb_recv_message (cmb_t c, char **tagp, json_object **op, int nb)
 {
     return _recv_message (c, tagp, op, nb);
@@ -254,7 +277,7 @@ int cmb_event_send (cmb_t c, char *event)
     return _send_message (c, NULL, "api.event.send.%s", event);
 }
 
-int cmb_barrier (cmb_t c, char *name, int nprocs)
+int cmb_barrier (cmb_t c, const char *name, int nprocs)
 {
     json_object *o = util_json_object_new_object ();
     int count = 1;
@@ -278,213 +301,6 @@ int cmb_barrier (cmb_t c, char *name, int nprocs)
         goto error;
     }
     return 0;
-error:
-    if (o)
-        json_object_put (o);
-    return -1;
-}
-
-int cmb_kvs_put (cmb_t c, const char *key, json_object *val)
-{
-    json_object *o = util_json_object_new_object ();
-    int rc = -1;
-
-    /* send request */
-    if (val)
-        json_object_get (val);
-    json_object_object_add (o, key, val);
-    if (_send_message (c, o, "kvs.put") < 0)
-        goto done;
-    json_object_put (o);
-    o = NULL;
-
-    /* receive response */
-    if (_recv_message (c, NULL, &o, false) < 0)
-        goto done;
-    if (o == NULL || util_json_object_get_int (o, "errnum", &errno) < 0) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (errno != 0)
-        goto done;
-    rc = 0;
-done:
-    if (o)
-        json_object_put (o);
-    return rc;
-}
-
-int cmb_kvs_del (cmb_t c, const char *key)
-{
-    return cmb_kvs_put (c, key, NULL);
-}
-
-int cmb_kvs_flush (cmb_t c)
-{
-    json_object *o = util_json_object_new_object ();
-
-    /* send request */
-    if (_send_message (c, o, "kvs.flush") < 0)
-        goto error;
-    json_object_put (o);
-    o = NULL;
-
-    /* receive response */
-    if (_recv_message (c, NULL, &o, false) < 0)
-        goto error;
-    if (o == NULL || util_json_object_get_int (o, "errnum", &errno) < 0)
-        goto eproto;
-    if (errno != 0)
-        goto error;
-    json_object_put (o);
-    return 0;
-eproto:
-    errno = EPROTO;
-error:
-    if (o)
-        json_object_put (o);
-    return -1;
-}
-
-int cmb_kvs_commit (cmb_t c, const char *commit_name)
-{
-    json_object *o = util_json_object_new_object ();
-
-    if (!commit_name)
-        commit_name = uuid_generate_str ();
-
-    /* send request */
-    util_json_object_add_string (o, "name", commit_name);
-    if (_send_message (c, o, "kvs.commit") < 0)
-        goto error;
-    json_object_put (o);
-    o = NULL;
-
-    /* receive response */
-    if (_recv_message (c, NULL, &o, false) < 0)
-        goto error;
-    if (o == NULL)
-        goto eproto;
-    if (util_json_object_get_int (o, "errnum", &errno) == 0)
-        goto error;
-    json_object_put (o);
-    return 0;
-eproto:
-    errno = EPROTO;
-error:
-    if (o)
-        json_object_put (o);
-    return -1;
-}
-
-static const char *kvs_flagstr (kvs_get_t flag)
-{
-    switch (flag) {
-        case KVS_GET_VAL:
-            return "val";
-        case KVS_GET_WATCH:
-            return "watch";
-        case KVS_GET_NEXT:
-            return NULL;
-        case KVS_GET_DIR:
-            return "dir";
-    }
-    return NULL;
-}
-
-int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, kvs_get_t flag)
-{
-    json_object *val, *o = NULL;
-    int rc = -1;
-    const char *flagstr = kvs_flagstr (flag);
-
-    /* send request */
-    if (flagstr) {
-        o = util_json_object_new_object ();
-        json_object_object_add (o, key, NULL);
-        if (_send_message (c, o, "kvs.get.%s", flagstr) < 0)
-            goto done;
-        json_object_put (o);
-        o = NULL;
-    }
-
-    /* receive response */
-    if (_recv_message (c, NULL, &o, false) < 0)
-        goto done;
-    if (o == NULL) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (util_json_object_get_int (o, "errnum", &errno) == 0)
-        goto done;
-    if (!(val = json_object_object_get (o, key))) {
-        errno = ENOENT;
-        goto done;
-    }
-    json_object_get (val);
-    *valp = val; 
-    rc = 0;
-done:
-    if (o)
-        json_object_put (o);
-    return rc;
-}
-
-int cmb_kvs_get_cache (json_object *cache, const char *key, json_object **valp)
-{
-    char *cpy = xstrdup (key);
-    char *next, *name = cpy;
-    json_object *dirent, *val, *dir;
-    int rc = -1;
-
-    dir = cache;
-    while ((next = strchr (name, '.'))) {
-        *next++ = '\0';
-        dirent = json_object_object_get (dir, name);
-        if (!dirent || !(dir = json_object_object_get (dirent, "DIRVAL"))) {
-            errno = ENOENT;
-            goto done;
-        }
-        name = next;
-    }
-    dirent = json_object_object_get (dir, name); /* final path component */
-    if (!dirent) {
-        errno = ENOENT;
-        goto done;
-    }
-    if (!(val = json_object_object_get (dirent, "FILEVAL"))) {
-        errno = EISDIR;
-        goto done;
-    }
-    json_object_get (val);
-    *valp = val;
-    rc = 0;
-done:
-    free (cpy);
-    return rc;
-}
-
-int cmb_kvs_clean (cmb_t c)
-{
-    json_object *o = util_json_object_new_object ();
-
-    /* send request */
-    if (_send_message (c, o, "kvs.clean") < 0)
-        goto error;
-    json_object_put (o);
-    o = NULL;
-
-    /* receive response */
-    if (_recv_message (c, NULL, &o, false) < 0)
-        goto error;
-    if (o == NULL || util_json_object_get_int (o, "errnum", &errno) < 0)
-        goto eproto;
-    if (errno != 0)
-        goto error;
-    json_object_put (o);
-    return 0;
-eproto:
-    errno = EPROTO;
 error:
     if (o)
         json_object_put (o);
@@ -725,6 +541,9 @@ cmb_t cmb_init_full (const char *path, int flags)
         goto error;
     if (_session_info_query (c) < 0)
         goto error;
+
+    kvs_reqfun_set ((RequestFun *)_request);
+    kvs_barrierfun_set ((BarrierFun *)cmb_barrier);
     return c;
 error:
     if (c)

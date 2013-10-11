@@ -19,9 +19,9 @@
 #include "util.h"
 
 static int _parse_logstr (char *s, int *lp, char **fp);
-static void list_kvs (const char *name, json_object *o);
+static void dump_kvs_dir (kvsdir_t dir);
 
-#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Zyl:j:Y:"
+#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Zyl:Y:"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -34,7 +34,6 @@ static const struct option longopts[] = {
     {"nprocs",     required_argument,  0, 'n'},
     {"kvs-put",    required_argument,  0, 'k'},
     {"kvs-get",    required_argument,  0, 'K'},
-    {"kvs-get-fromcache", required_argument,  0, 'j'},
     {"kvs-list",   required_argument,  0, 'l'},
     {"kvs-watch",  required_argument,  0, 'Y'},
     {"kvs-commit", no_argument,        0, 'C'},
@@ -67,10 +66,9 @@ static void usage (void)
 "  -k,--kvs-put key=val   set a key\n"
 "  -K,--kvs-get key       get a key\n"
 "  -Y,--kvs-watch key     watch a key\n"
-"  -j,--kvs-get-fromcache key get a key (using cache method)\n"
 "  -l,--kvs-list name     list keys in a particular \"directory\"\n"
 "  -C,--kvs-commit        commit pending kvs puts\n"
-"  -y,--kvs-clean         drop cached and unreferenced kvs data\n"
+"  -y,--kvs-dropcache     drop cached and unreferenced kvs data\n"
 "  -t,--kvs-torture N     set N keys, then commit\n"
 "  -s,--subscribe sub     subscribe to events matching substring\n"
 "  -e,--event name        publish event\n"
@@ -233,8 +231,8 @@ int main (int argc, char *argv[])
                 if (strlen (val) > 0)
                     if (!(vo = json_tokener_parse (val)))
                         vo = json_object_new_string (val);
-                if (cmb_kvs_put (c, key, vo) < 0)
-                    err_exit ("cmb_kvs_put");
+                if (kvs_put (c, key, vo) < 0)
+                    err_exit ("kvs_put");
                 if (vo)
                     json_object_put (vo);
                 break;
@@ -243,71 +241,45 @@ int main (int argc, char *argv[])
             case 'K': { /* --kvs-get key */
                 json_object *o;
 
-                if (cmb_kvs_get (c, optarg, &o, KVS_GET_VAL) < 0)
-                    err_exit ("cmb_kvs_get");
-                if (json_object_get_type (o) == json_type_string)
-                    printf ("%s = \"%s\"\n", optarg,
-                            json_object_get_string (o));
-                else
-                    printf ("%s = %s\n", optarg,
-                            json_object_to_json_string_ext (o,
-                                                    JSON_C_TO_STRING_PLAIN));
+                if (kvs_get (c, optarg, &o) < 0)
+                    err_exit ("kvs_get");
+                printf ("%s = %s\n", optarg, json_object_to_json_string_ext (o,
+                                             JSON_C_TO_STRING_PLAIN));
                 json_object_put (o);
                 break;
             }
             case 'Y': { /* --kvs-watch key */
-                json_object *o;
-                if (cmb_kvs_get (c, optarg, &o, KVS_GET_WATCH) < 0)
-                    err_exit ("cmb_kvs_get");
+#if 0
+                json_object *o = NULL;
+                if (kvs_get (c, optarg, &o, KVS_GET_WATCH) < 0
+                                && errno != ENOENT)
+                    err_exit ("kvs_get");
                 do {
-                    if (json_object_get_type (o) == json_type_string)
-                        printf ("%s = \"%s\"\n", optarg,
-                                json_object_get_string (o));
-                    else
-                        printf ("%s = %s\n", optarg,
-                                json_object_to_json_string_ext (o,
-                                                   JSON_C_TO_STRING_PLAIN));
-                    json_object_put (o);
-                } while (cmb_kvs_get (c, optarg, &o, KVS_GET_NEXT) == 0);
-                break;
-            }
-            case 'j': { /* --kvs-get-cached key */
-                json_object *dir = NULL, *o = NULL;
-
-                if (cmb_kvs_get (c, ".", &dir, KVS_GET_DIR) < 0)
-                    err_exit ("cmb_kvs_get");
-                if (cmb_kvs_get_cache (dir, optarg, &o) < 0)
-                    err_exit ("cmb_kvs_get_cache: %s", optarg);
-                if (json_object_get_type (o) == json_type_string)
-                    printf ("%s = \"%s\"\n", optarg,
-                            json_object_get_string (o));
-                else
                     printf ("%s = %s\n", optarg,
-                            json_object_to_json_string_ext (o,
-                                                    JSON_C_TO_STRING_PLAIN));
-                json_object_put (dir);
-                json_object_put (o);
+                                            json_object_to_json_string_ext (o,
+                                            JSON_C_TO_STRING_PLAIN));
+                    json_object_put (o);
+                } while (kvs_get (c, optarg, &o, KVS_GET_NEXT) == 0);
                 break;
+#endif
             }
             case 'l': { /* --kvs-list name */
-                json_object *o;
-
-                if (cmb_kvs_get (c, optarg, &o, KVS_GET_DIR) < 0)
-                    err_exit ("cmb_conf_get");
-                list_kvs (optarg, o);
-                json_object_put (o);
+                kvsdir_t dir;
+    
+                if (kvs_get_dir (c, optarg, &dir) < 0)
+                    err_exit ("kvs_get_dir %s", optarg);
+                dump_kvs_dir (dir);
+                kvsdir_destroy (dir);
                 break;
             }
             case 'C': { /* --kvs-commit */
-                if (cmb_kvs_flush (c) < 0)
-                    err_exit ("cmb_kvs_flush");
-                if (cmb_kvs_commit (c, NULL) < 0)
-                    err_exit ("cmb_kvs_commit");
+                if (kvs_commit (c) < 0)
+                    err_exit ("kvs_commit");
                 break;
             }
-            case 'y': { /* --kvs-clean */
-                if (cmb_kvs_clean (c) < 0)
-                    err_exit ("cmb_kvs_clean");
+            case 'y': { /* --kvs-dropcache */
+                if (kvs_dropcache (c) < 0)
+                    err_exit ("kvs_dropcache");
                 break;
             }
             case 't': { /* --kvs-torture N */
@@ -315,15 +287,14 @@ int main (int argc, char *argv[])
                 char key[16], val[16];
                 struct timeval t1, t2, t;
                 json_object *vo = NULL;
-                char *uuid = uuid_generate_str ();
 
                 xgettimeofday (&t1, NULL);
                 for (i = 0; i < n; i++) {
                     snprintf (key, sizeof (key), "key%d", i);
                     snprintf (val, sizeof (key), "val%d", i);
                     vo = json_object_new_string (val);
-                    if (cmb_kvs_put (c, key, vo) < 0)
-                        err_exit ("cmb_kvs_put");
+                    if (kvs_put (c, key, vo) < 0)
+                        err_exit ("kvs_put");
                     if (vo)
                         json_object_put (vo);
                 }
@@ -333,16 +304,8 @@ int main (int argc, char *argv[])
                      (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
 
                 xgettimeofday (&t1, NULL);
-                if (cmb_kvs_flush (c) < 0)
-                    err_exit ("cmb_kvs_flush");
-                xgettimeofday (&t2, NULL);
-                timersub(&t2, &t1, &t);
-                msg ("kvs_flush:  time=%0.3f ms",
-                     (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
-
-                xgettimeofday (&t1, NULL);
-                if (cmb_kvs_commit (c, uuid) < 0)
-                    err_exit ("cmb_kvs_commit");
+                if (kvs_commit (c) < 0)
+                    err_exit ("kvs_commit");
                 xgettimeofday (&t2, NULL);
                 timersub (&t2, &t1, &t);
                 msg ("kvs_commit: time=%0.3f ms",
@@ -352,10 +315,10 @@ int main (int argc, char *argv[])
                 for (i = 0; i < n; i++) {
                     snprintf (key, sizeof (key), "key%d", i);
                     snprintf (val, sizeof (key), "val%d", i);
-                    if (cmb_kvs_get (c, key, &vo, 0) < 0)
-                        err_exit ("cmb_kvs_get");
+                    if (kvs_get (c, key, &vo) < 0)
+                        err_exit ("kvs_get");
                     if (strcmp (json_object_get_string (vo), val) != 0)
-                        msg_exit ("cmb_kvs_get: key '%s' wrong value '%s'",
+                        msg_exit ("kvs_get: key '%s' wrong value '%s'",
                                   key, json_object_get_string (vo));
                     if (vo)
                         json_object_put (vo);
@@ -364,8 +327,6 @@ int main (int argc, char *argv[])
                 timersub(&t2, &t1, &t);
                 msg ("kvs_get:    time=%0.3f ms",
                      (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
-
-                free (uuid);
                 break;
             }
             case 'L': { /* --log */
@@ -499,28 +460,33 @@ static int _parse_logstr (char *s, int *lp, char **fp)
     return 0;
 }
 
-static void list_kvs (const char *name, json_object *o)
+static void dump_kvs_dir (kvsdir_t dir)
 {
-    json_object *co;
-    json_object_iter iter;
-    char *path;
+    kvsitr_t itr = kvsitr_create (dir);
+    const char *name;
 
-    json_object_object_foreachC (o, iter) {
-        if (!strcmp (name, "."))
-            path = xstrdup (iter.key);
-        else if (asprintf (&path, "%s.%s", name, iter.key) < 0)
-            oom ();
-        if ((co = json_object_object_get (iter.val, "DIRVAL"))) {
-            list_kvs (path, co); 
-        } else if ((co = json_object_object_get (iter.val, "FILEVAL"))) {
-            if (json_object_get_type (co) == json_type_string)
-                printf ("%s = \"%s\"\n", path, json_object_get_string (co));
-            else
-                printf ("%s = %s\n", path, json_object_to_json_string_ext (co,
-                                                JSON_C_TO_STRING_PLAIN));
+    while ((name = kvsitr_next (itr))) {
+        if (kvsdir_isdir (dir, name)) {
+            kvsdir_t ndir;
+
+            if (kvs_get_dir_at (dir, name, &ndir) < 0)
+                err_exit ("kvs_get_dir_at %s", name);
+            dump_kvs_dir (ndir);
+            kvsdir_destroy (ndir);    
+        } else {
+            json_object *o;
+            char *key;
+
+            if (kvs_get_at (dir, name, &o) < 0)
+                err_exit ("kvs_get_at %s", name);
+            key = kvsdir_key_at (dir, name);
+            printf ("%s = %s\n", key,
+                    json_object_to_json_string_ext (o, JSON_C_TO_STRING_PLAIN));
+            json_object_put (o);
+            free (key);
         }
-        free (path);
     }
+    kvsitr_destroy (itr);
 }
 
 /*

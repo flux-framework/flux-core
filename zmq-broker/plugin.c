@@ -279,120 +279,17 @@ static void _kvs_add_watcher (plugin_ctx_t *p, const char *key,
     zhash_freefn (p->kvs_watcher, key, free);
 }
 
-int plugin_kvs_flush (plugin_ctx_t *p)
-{
-    json_object *request = NULL;
-    json_object *reply = NULL;
-    int ret = -1;
-
-    reply = plugin_request (p, request, "kvs.flush");
-    if (!reply) {
-        err ("%s", __FUNCTION__);
-        goto done;
-    }
-    ret = 0;
-done:
-    if (request)
-        json_object_put (request);
-    if (reply)
-        json_object_put (reply);
-    return ret;
-}
-
-int plugin_kvs_commit (plugin_ctx_t *p)
-{
-    json_object *request = util_json_object_new_object ();
-    json_object *reply = NULL;
-    char *commit_name = uuid_generate_str ();
-    int ret = -1;
-
-    util_json_object_add_string (request, "name", commit_name);
-    reply = plugin_request (p, request, "kvs.commit");
-    if (!reply) {
-        err ("%s", __FUNCTION__);
-        goto done;
-    }
-    ret = 0;
-done:
-    if (request)
-        json_object_put (request);
-    if (reply)
-        json_object_put (reply);
-    if (commit_name)
-        free (commit_name);
-    return ret;       
-}
-
-int plugin_kvs_put (plugin_ctx_t *p, const char *key, json_object *val)
-{
-    json_object *request = util_json_object_new_object ();
-    json_object *reply = NULL;
-    int ret = -1;
-
-    if (val)
-        json_object_get (val);
-    json_object_object_add (request, key, val);
-    reply = plugin_request (p, request, "kvs.put");
-    if (!reply) {
-        err ("%s", __FUNCTION__);
-        goto done;
-    }
-    ret = 0;
-done:
-    if (request)
-        json_object_put (request);
-    if (reply)
-        json_object_put (reply);
-    return ret;       
-}
-
-int plugin_kvs_get (plugin_ctx_t *p, const char *key, json_object **valp)
-{
-    json_object *val = NULL;
-    json_object *request = util_json_object_new_object ();
-    json_object *reply = NULL;
-    int ret = -1;
-
-    json_object_object_add (request, key, NULL);
-    reply = plugin_request (p, request, "kvs.get.val");
-    if (!reply) {
-        err ("%s", __FUNCTION__);
-        goto done;
-    }
-    if (!(val = json_object_object_get (reply, key))) {
-        errno = ENOENT;
-        goto done;
-    }
-    json_object_get (val);
-    *valp = val;
-    ret = 0;
-done:
-    if (request)
-        json_object_put (request);
-    if (reply)
-        json_object_put (reply);
-    return ret;       
-}
-
 int plugin_kvs_watch (plugin_ctx_t *p, const char *key,
                       kvs_watch_f *set, void *arg)
 {
     json_object *request = util_json_object_new_object ();
-    json_object *val = NULL;
-    int ret = -1;
 
-    if (plugin_kvs_get (p, key, &val) < 0 && errno != ENOENT)
-        goto done;
-    set (key, val, arg);
-    json_object_object_add (request, key, val);
-    /* N.B. val is either NULL or owned by request now */
-    plugin_send_request (p, request, "kvs.get.watch");
     _kvs_add_watcher (p, key, set, arg);
-    ret = 0;
-done:
-    if (request)
-        json_object_put (request);
-    return ret;
+    json_object_object_add (request, key, NULL);
+    plugin_send_request (p, request, "kvs.watch");
+    json_object_put (request);
+
+    return 0;
 }
 
 static void plugin_watch_update (plugin_ctx_t *p, zmsg_t **zmsg)
@@ -475,7 +372,7 @@ static void plugin_handle_response (plugin_ctx_t *p, zmsg_t *zmsg)
     /* Intercept and handle internal watch replies for keys of interest.
      * If no match, call the user's recv callback.
      */
-    if (!strcmp (tag, "kvs.get.watch"))
+    if (!strcmp (tag, "kvs.watch"))
         plugin_watch_update (p, &zmsg); /* consumes zmsg on match */
     if (zmsg && p->plugin->recvFn)
         p->plugin->recvFn (p, &zmsg, ZMSG_RESPONSE);
@@ -738,6 +635,9 @@ static int _plugin_create (char *name, server_t *srv, conf_t *conf)
 void plugin_init (conf_t *conf, server_t *srv)
 {
     srv->plugins = zhash_new ();
+
+    kvs_reqfun_set ((RequestFun *)plugin_request);
+    //kvs_barrierfun_set ((BarrierFun *)cmb_barrier);
 
     if (mapstr (conf->plugins, (mapstrfun_t)_plugin_create, srv, conf) < 0)
         exit (1);

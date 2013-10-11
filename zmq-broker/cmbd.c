@@ -20,7 +20,6 @@
 #include "log.h"
 #include "zmsg.h"
 #include "route.h"
-#include "cmb.h"
 #include "cmbd.h"
 #include "util.h"
 #include "plugin.h"

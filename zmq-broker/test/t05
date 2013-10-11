@@ -1,0 +1,35 @@
+#!/bin/bash -e
+
+TEST=`basename $0`
+KEY=$TEST.a.b.c
+DIR=$TEST.a.b
+
+test_cleanup() {
+    ./tkvs unlink $TEST
+    ./tkvs commit
+}
+
+test_cleanup
+
+./tkvs put_int $KEY 69
+./tkvs commit
+
+# Retrieve directory containing new key
+RESULT=`./tkvs get_dir $DIR`
+test "$RESULT" == "$KEY{int}"
+
+# Try to retrieve key as a directory - should be ENOTDIR
+./tkvs get_dir $KEY 2>/dev/null && false
+
+# Try to retrieve directory as a object - should be EISDIR
+./tkvs get $DIR >/dev/null 2>/dev/null && false
+
+# empty directory remains after key removed
+./tkvs unlink $KEY
+./tkvs commit
+RESULT=`./tkvs get_dir $DIR`
+test -z "$RESULT"
+
+test_cleanup
+
+exit 0

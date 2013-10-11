@@ -21,7 +21,6 @@
 #include <json/json.h>
 
 #include "zmsg.h"
-#include "cmb.h"
 #include "route.h"
 #include "cmbd.h"
 #include "plugin.h"
