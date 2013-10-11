@@ -63,7 +63,7 @@ void kvs_barrierfun_set (BarrierFun *fun)
     kvs_config.barrier = fun;
 }
 
-static kvsdir_t kvsdir_create (void *handle, const char *key, json_object *o)
+static kvsdir_t kvsdir_alloc (void *handle, const char *key, json_object *o)
 {
     kvsdir_t dir = xzmalloc (sizeof (*dir));
 
@@ -165,7 +165,7 @@ int kvs_get_dir (void *h, const char *key, kvsdir_t *dirp)
         errno = ENOENT;
         goto done;
     }
-    *dirp = kvsdir_create (h, key, val);
+    *dirp = kvsdir_alloc (h, key, val);
     ret = 0;
 done:
     if (request)
@@ -173,6 +173,22 @@ done:
     if (reply)
         json_object_put (reply);
     return ret;
+}
+
+kvsdir_t kvsdir_create (void *h, const char *fmt, ...)
+{
+    kvsdir_t dir;
+    char *key;
+    va_list ap;
+
+    va_start (ap, fmt);
+    if (vasprintf (&key, fmt, ap) < 0)
+        return (NULL);
+    va_end (ap);
+    if (kvs_get_dir (h, key, &dir) < 0)
+        dir = NULL;
+    free (key);
+    return (dir);
 }
 
 int kvs_get_string (void *h, const char *key, char **valp)
@@ -362,7 +378,7 @@ char *kvsdir_key_at (kvsdir_t dir, const char *name)
     return key;
 }
 
-int kvs_get_at (kvsdir_t dir, const char *name, json_object **valp)
+int kvsdir_get (kvsdir_t dir, const char *name, json_object **valp)
 {
     json_object *dirent;
     int rc = -1;
@@ -381,7 +397,7 @@ done:
     return rc;
 }
 
-int kvs_get_dir_at (kvsdir_t dir, const char *name, kvsdir_t *ndir)
+int kvsdir_get_dir (kvsdir_t dir, const char *name, kvsdir_t *ndir)
 {
     char *key;
     int rc = -1;
@@ -397,13 +413,13 @@ done:
     return rc;
 }
 
-int kvs_get_string_at (kvsdir_t dir, const char *name, char **valp)
+int kvsdir_get_string (kvsdir_t dir, const char *name, char **valp)
 {
     json_object *o;
     const char *s;
     int rc = -1;
 
-    if (kvs_get_at (dir, name, &o) < 0)
+    if (kvsdir_get (dir, name, &o) < 0)
         goto done;
     if (json_object_get_type (o) != json_type_string) {
         errno = EINVAL;
@@ -416,12 +432,12 @@ done:
     return rc;
 }
 
-int kvs_get_int_at (kvsdir_t dir, const char *name, int *valp)
+int kvsdir_get_int (kvsdir_t dir, const char *name, int *valp)
 {
     json_object *o;
     int rc = -1;
 
-    if (kvs_get_at (dir, name, &o) < 0)
+    if (kvsdir_get (dir, name, &o) < 0)
         goto done;
     if (json_object_get_type (o) != json_type_int) {
         errno = EINVAL;
@@ -433,12 +449,12 @@ done:
     return rc;
 }
 
-int kvs_get_int64_at (kvsdir_t dir, const char *name, int64_t *valp)
+int kvsdir_get_int64 (kvsdir_t dir, const char *name, int64_t *valp)
 {
     json_object *o;
     int rc = -1;
 
-    if (kvs_get_at (dir, name, &o) < 0)
+    if (kvsdir_get (dir, name, &o) < 0)
         goto done;
     if (json_object_get_type (o) != json_type_int) {
         errno = EINVAL;
@@ -450,12 +466,12 @@ done:
     return rc;
 }
 
-int kvs_get_double_at (kvsdir_t dir, const char *name, double *valp)
+int kvsdir_get_double (kvsdir_t dir, const char *name, double *valp)
 {
     json_object *o;
     int rc = -1;
 
-    if (kvs_get_at (dir, name, &o) < 0)
+    if (kvsdir_get (dir, name, &o) < 0)
         goto done;
     if (json_object_get_type (o) != json_type_double) {
         errno = EINVAL;
@@ -467,12 +483,12 @@ done:
     return rc;
 }
 
-int kvs_get_boolean_at (kvsdir_t dir, const char *name, bool *valp)
+int kvsdir_get_boolean (kvsdir_t dir, const char *name, bool *valp)
 {
     json_object *o;
     int rc = -1;
 
-    if (kvs_get_at (dir, name, &o) < 0)
+    if (kvsdir_get (dir, name, &o) < 0)
         goto done;
     if (json_object_get_type (o) != json_type_boolean) {
         errno = EINVAL;
@@ -517,6 +533,18 @@ done:
     return ret;
 }
 
+
+int kvsdir_put (kvsdir_t dir, const char *name, json_object *val)
+{
+    int rc = -1;
+    char *key;
+    if ((key = kvsdir_key_at (dir, name))) {
+        rc = kvs_put (dir->handle, key, val);
+        free (key);
+    }
+    return (rc);
+}
+
 int kvs_put_string (void *h, const char *key, const char *val)
 {
     json_object *o = NULL;
@@ -531,6 +559,17 @@ done:
     if (o)
         json_object_put (o);
     return rc;
+}
+
+int kvsdir_put_string (kvsdir_t dir, const char *name, const char *val)
+{
+    int rc = -1;
+    char *key;
+    if ((key = kvsdir_key_at (dir, name))) {
+        rc = kvs_put_string (dir->handle, key, val);
+        free (key);
+    }
+    return (rc);
 }
 
 int kvs_put_int (void *h, const char *key, int val)
@@ -549,6 +588,17 @@ done:
     return rc;
 }
 
+int kvsdir_put_int (kvsdir_t dir, const char *name, int val)
+{
+    int rc = -1;
+    char *key;
+    if ((key = kvsdir_key_at (dir, name))) {
+        rc = kvs_put_int (dir->handle, key, val);
+        free (key);
+    }
+    return (rc);
+}
+
 int kvs_put_int64 (void *h, const char *key, int64_t val)
 {
     json_object *o;
@@ -563,6 +613,17 @@ done:
     if (o)
         json_object_put (o);
     return rc;
+}
+
+int kvsdir_put_int64 (kvsdir_t dir, const char *name, int64_t val)
+{
+    int rc = -1;
+    char *key;
+    if ((key = kvsdir_key_at (dir, name))) {
+        rc = kvs_put_int64 (dir->handle, key, val);
+        free (key);
+    }
+    return (rc);
 }
 
 int kvs_put_double (void *h, const char *key, double val)
@@ -581,6 +642,17 @@ done:
     return rc;
 }
 
+int kvsdir_put_double (kvsdir_t dir, const char *name, double val)
+{
+    int rc = -1;
+    char *key;
+    if ((key = kvsdir_key_at (dir, name))) {
+        rc = kvs_put_double (dir->handle, key, val);
+        free (key);
+    }
+    return (rc);
+}
+
 int kvs_put_boolean (void *h, const char *key, bool val)
 {
     json_object *o;
@@ -597,9 +669,32 @@ done:
     return rc;
 }
 
+int kvsdir_put_boolean (kvsdir_t dir, const char *name, bool val)
+{
+    int rc = -1;
+    char *key;
+    if ((key = kvsdir_key_at (dir, name))) {
+        rc = kvs_put_boolean (dir->handle, key, val);
+        free (key);
+    }
+    return (rc);
+}
+
+
 int kvs_unlink (void *h, const char *key)
 {
     return kvs_put (h, key, NULL);
+}
+
+int kvsdir_unlink (kvsdir_t dir, const char *name)
+{
+    int rc = -1;
+    char *key;
+    if ((key = kvsdir_key_at (dir, name))) {
+        rc = kvs_unlink (dir->handle, key);
+        free (key);
+    }
+    return (rc);
 }
 
 int kvs_mkdir (void *h, const char *key)
@@ -632,6 +727,17 @@ done:
     if (reply)
         json_object_put (reply); 
     return ret;
+}
+
+int kvsdir_mkdir (kvsdir_t dir, const char *name)
+{
+    int rc = -1;
+    char *key;
+    if ((key = kvsdir_key_at (dir, name))) {
+        rc = kvs_mkdir (dir->handle, key);
+        free (key);
+    }
+    return (rc);
 }
 
 /* helper for cmb_kvs_commit, cmb_kvs_fence */

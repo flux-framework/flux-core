@@ -469,16 +469,16 @@ static void dump_kvs_dir (kvsdir_t dir)
         if (kvsdir_isdir (dir, name)) {
             kvsdir_t ndir;
 
-            if (kvs_get_dir_at (dir, name, &ndir) < 0)
-                err_exit ("kvs_get_dir_at %s", name);
+            if (kvsdir_get_dir (dir, name, &ndir) < 0)
+                err_exit ("kvsdir_get_dir %s", name);
             dump_kvs_dir (ndir);
-            kvsdir_destroy (ndir);    
+            kvsdir_destroy (ndir);
         } else {
             json_object *o;
             char *key;
 
-            if (kvs_get_at (dir, name, &o) < 0)
-                err_exit ("kvs_get_at %s", name);
+            if (kvsdir_get (dir, name, &o) < 0)
+                err_exit ("kvsdir_get %s", name);
             key = kvsdir_key_at (dir, name);
             printf ("%s = %s\n", key,
                     json_object_to_json_string_ext (o, JSON_C_TO_STRING_PLAIN));

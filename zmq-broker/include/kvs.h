@@ -17,6 +17,12 @@ int kvs_get_int64 (void *h, const char *key, int64_t *valp);
 int kvs_get_double (void *h, const char *key, double *valp);
 int kvs_get_boolean (void *h, const char *key, bool *valp);
 
+/*
+ * Convenience function to create kvsdir_t object from printf format
+ * string. Returns NULL on failure with errno set.
+ */
+kvsdir_t kvsdir_create (void *h, const char *fmt, ...);
+
 /* kvs_put() and kvs_put_string() both make copies of the value argument
  * The caller retains ownership of the original.
  * These functions return -1 on error (errno set), 0 on success.
@@ -27,6 +33,15 @@ int kvs_put_int (void *h, const char *key, int val);
 int kvs_put_int64 (void *h, const char *key, int64_t val);
 int kvs_put_double (void *h, const char *key, double val);
 int kvs_put_boolean (void *h, const char *key, bool val);
+
+/* kvsdir_put_* work as above but 'key' is relative to kvsdir object
+ */
+int kvsdir_put (kvsdir_t dir, const char *key, json_object *val);
+int kvsdir_put_string (kvsdir_t dir, const char *key, const char *val);
+int kvsdir_put_int (kvsdir_t dir, const char *key, int val);
+int kvsdir_put_int64 (kvsdir_t dir, const char *key, int64_t val);
+int kvsdir_put_double (kvsdir_t dir, const char *key, double val);
+int kvsdir_put_boolean (kvsdir_t dir, const char *key, bool val);
 
 /* An iterator interface for walking the list of names in a kvsdir_t
  * returned by kvs_get_dir().  kvsitr_create() always succeeds.
@@ -59,13 +74,13 @@ char *kvsdir_key_at (kvsdir_t dir, const char *name);
 /* Read the value of a name returned from kvsitr_next().
  * These functions return -1 on error (errno set), 0 on success.
  */
-int kvs_get_at (kvsdir_t dir, const char *name, json_object **valp);
-int kvs_get_dir_at (kvsdir_t dir, const char *name, kvsdir_t *dirp);
-int kvs_get_string_at (kvsdir_t dir, const char *name, char **valp);
-int kvs_get_int_at (kvsdir_t dir, const char *name, int *valp);
-int kvs_get_int64_at (kvsdir_t dir, const char *name, int64_t *valp);
-int kvs_get_double_at (kvsdir_t dir, const char *name, double *valp);
-int kvs_get_boolean_at (kvsdir_t dir, const char *name, bool *valp);
+int kvsdir_get (kvsdir_t dir, const char *name, json_object **valp);
+int kvsdir_get_dir (kvsdir_t dir, const char *name, kvsdir_t *dirp);
+int kvsdir_get_string (kvsdir_t dir, const char *name, char **valp);
+int kvsdir_get_int (kvsdir_t dir, const char *name, int *valp);
+int kvsdir_get_int64 (kvsdir_t dir, const char *name, int64_t *valp);
+int kvsdir_get_double (kvsdir_t dir, const char *name, double *valp);
+int kvsdir_get_boolean (kvsdir_t dir, const char *name, bool *valp);
 
 /* Remove a key from the namespace.  If it represents a directory,
  * its contents are also removed.
@@ -73,10 +88,19 @@ int kvs_get_boolean_at (kvsdir_t dir, const char *name, bool *valp);
  */
 int kvs_unlink (void *h, const char *key);
 
+/* Unlink relative to 'dir'
+ */
+int kvsdir_unlink (kvsdir_t dir, const char *key);
+
 /* Create an empty directory.
  * Returns -1 on error (errno set), 0 on success.
  */
 int kvs_mkdir (void *h, const char *key);
+
+/* Create directory relative to 'dir'
+ */
+int kvsdir_mkdir (kvsdir_t dir, const char *key);
+
 
 /* kvs_commit() must be called after kvs_put*, kvs_unlink, and kvs_mkdir
  * to finalize the update.  The new data is immediately available on

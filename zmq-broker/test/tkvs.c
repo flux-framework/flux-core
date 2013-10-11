@@ -110,8 +110,8 @@ void tkvs_dump_dir (kvsdir_t dir, bool ropt)
         if (kvsdir_isdir (dir, name)) {
             if (ropt) {
                 kvsdir_t ndir;
-                if (kvs_get_dir_at (dir, name, &ndir) < 0)
-                    err_exit ("kvs_get_dir_at %s", key);
+                if (kvsdir_get_dir (dir, name, &ndir) < 0)
+                    err_exit ("kvsdir_get_dir %s", key);
                 tkvs_dump_dir (ndir, ropt); 
                 kvsdir_destroy (ndir);
             } else
@@ -139,42 +139,42 @@ void tkvs_dump_all (kvsdir_t dir, bool ropt)
         if (kvsdir_isdir (dir, name)) {
             if (ropt) {
                 kvsdir_t ndir;
-                if (kvs_get_dir_at (dir, name, &ndir) < 0)
-                    err_exit ("kvs_get_dir_at %s", key);
+                if (kvsdir_get_dir (dir, name, &ndir) < 0)
+                    err_exit ("kvsdir_get_dir %s", key);
                 tkvs_dump_all (ndir, ropt); 
                 kvsdir_destroy (ndir);
             } else
                 printf ("%s{%s}\n", key, "dir");
         } else if (kvsdir_isstring (dir, name)) {
             char *s;
-            if (kvs_get_string_at (dir, name, &s) < 0)
-                err_exit ("kvs_get_string_at %s", key);
+            if (kvsdir_get_string (dir, name, &s) < 0)
+                err_exit ("kvsdir_get_string %s", key);
             printf ("%s = %s\n", key, s);
             free (s);
         } else if (kvsdir_isint (dir, name)) {
             int i;
-            if (kvs_get_int_at (dir, name, &i) < 0)
-                err_exit ("kvs_get_int64_at %s", key);
+            if (kvsdir_get_int (dir, name, &i) < 0)
+                err_exit ("kvsdir_get_int64 %s", key);
             printf ("%s = %d\n", key, i);
         } else if (kvsdir_isint64 (dir, name)) {
             int64_t i;
-            if (kvs_get_int64_at (dir, name, &i) < 0)
-                err_exit ("kvs_get_int64_at %s", key);
+            if (kvsdir_get_int64 (dir, name, &i) < 0)
+                err_exit ("kvsdir_get_int64 %s", key);
             printf ("%s = %lld\n", key, (long long int)i);
         } else if (kvsdir_isdouble (dir, name)) {
             double n;
-            if (kvs_get_double_at (dir, name, &n) < 0)
-                err_exit ("kvs_get_double_at %s", key);
+            if (kvsdir_get_double (dir, name, &n) < 0)
+                err_exit ("kvsdir_get_double %s", key);
             printf ("%s = %lf\n", key, n);
         } else if (kvsdir_isboolean (dir, name)) {
             bool b;
-            if (kvs_get_boolean_at (dir, name, &b) < 0)
-                err_exit ("kvs_get_boolean_at %s", key);
+            if (kvsdir_get_boolean (dir, name, &b) < 0)
+                err_exit ("kvsdir_get_boolean %s", key);
             printf ("%s = %s\n", key, b ? "true" : "false");
         } else {
             json_object *o;
-            if (kvs_get_at (dir, name, &o) < 0)
-                err_exit ("kvs_get_object_at %s", key);
+            if (kvsdir_get (dir, name, &o) < 0)
+                err_exit ("kvsdir_get_object %s", key);
             printf ("%s = %s\n", key, json_object_to_json_string (o));
             json_object_put (o);
         }
