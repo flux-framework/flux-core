@@ -1,3 +1,5 @@
+#include "kvs.h"
+
 typedef struct plugin_struct *plugin_t;
 
 typedef struct {
@@ -49,9 +51,6 @@ struct plugin_struct {
     void (*finiFn)(plugin_ctx_t *p);
 };
 
-typedef struct kvsdir_struct *kvsdir_t;
-typedef struct kvsdir_iterator_struct *kvsitr_t;
-
 /* call from cmbd */
 void plugin_init (conf_t *conf, server_t *srv);
 void plugin_fini (conf_t *conf, server_t *srv);
@@ -80,41 +79,6 @@ bool plugin_timeout_isset (plugin_ctx_t *p);
 
 void plugin_log (plugin_ctx_t *p, int lev, const char *fmt, ...);
 
-int plugin_kvs_get (plugin_ctx_t *p, const char *key, json_object **valp);
-int plugin_kvs_get_dir (plugin_ctx_t *p, const char *key, kvsdir_t *dirp);
-int plugin_kvs_get_string (plugin_ctx_t *p, const char *key, char **valp);
-int plugin_kvs_get_int (plugin_ctx_t *p, const char *key, int *valp);
-int plugin_kvs_get_int64 (plugin_ctx_t *p, const char *key, int64_t *valp);
-int plugin_kvs_get_double (plugin_ctx_t *p, const char *key, double *valp);
-int plugin_kvs_get_boolean (plugin_ctx_t *p, const char *key, bool *valp);
-
-int plugin_kvs_get_at (kvsdir_t dir, const char *name, json_object **valp);
-int plugin_kvs_get_dir_at (kvsdir_t dir, const char *name, kvsdir_t *dirp);
-int plugin_kvs_get_string_at (kvsdir_t dir, const char *name, char **valp);
-int plugin_kvs_get_int_at (kvsdir_t dir, const char *name, int *valp);
-int plugin_kvs_get_int64_at (kvsdir_t dir, const char *name, int64_t *valp);
-int plugin_kvs_get_double_at (kvsdir_t dir, const char *name, double *valp);
-int plugin_kvs_get_boolean_at (kvsdir_t dir, const char *name, bool *valp);
-
-void plugin_kvsdir_destroy (kvsdir_t dir);
-const char *plugin_kvsdir_key (kvsdir_t dir);
-char *plugin_kvsdir_key_at (kvsdir_t dir, const char *name);
-
-kvsitr_t plugin_kvsitr_create (kvsdir_t dir);
-void plugin_kvsitr_destroy (kvsitr_t itr);
-const char *plugin_kvsitr_next (kvsitr_t itr);
-
-int plugin_kvs_put (plugin_ctx_t *p, const char *key, json_object *val);
-int plugin_kvs_put_string (plugin_ctx_t *p, const char *key, const char *val);
-int plugin_kvs_put_int (plugin_ctx_t *p, const char *key, int val);
-int plugin_kvs_put_int64 (plugin_ctx_t *p, const char *key, int64_t val);
-int plugin_kvs_put_double (plugin_ctx_t *p, const char *key, double val);
-int plugin_kvs_put_boolean (plugin_ctx_t *p, const char *key, bool val);
-
-int plugin_kvs_unlink (plugin_ctx_t *p, const char *key);
-int plugin_kvs_mkdir (plugin_ctx_t *p, const char *key);
-
-int plugin_kvs_commit (plugin_ctx_t *p);
 int plugin_kvs_watch (plugin_ctx_t *p, const char *key,
                       kvs_watch_f *set, void *arg);
 

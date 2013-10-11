@@ -284,7 +284,7 @@ int PMI_Barrier( void )
         rc = PMI_ERR_NOMEM;
         goto done;
     }
-    if (cmb_kvs_fence (ctx->cctx, name, ctx->universe_size) < 0) {
+    if (kvs_fence (ctx->cctx, name, ctx->universe_size) < 0) {
         rc = PMI_FAIL;
         goto done;
     }
@@ -361,7 +361,7 @@ int PMI_KVS_Put( const char kvsname[], const char key[], const char value[])
         rc = PMI_ERR_NOMEM;
         goto done;
     }
-    if (cmb_kvs_put_string (ctx->cctx, xkey, value) < 0) {
+    if (kvs_put_string (ctx->cctx, xkey, value) < 0) {
         rc = PMI_FAIL;
         goto done;
     }
@@ -405,7 +405,7 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
         rc = PMI_ERR_NOMEM;
         goto done;
     }
-    if (cmb_kvs_get_string (ctx->cctx, xkey, &val, 0) < 0) {
+    if (kvs_get_string (ctx->cctx, xkey, &val) < 0) {
         if (errno == ENOENT)
             rc = PMI_ERR_INVALID_KEY;
         else

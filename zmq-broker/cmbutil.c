@@ -231,8 +231,8 @@ int main (int argc, char *argv[])
                 if (strlen (val) > 0)
                     if (!(vo = json_tokener_parse (val)))
                         vo = json_object_new_string (val);
-                if (cmb_kvs_put (c, key, vo) < 0)
-                    err_exit ("cmb_kvs_put");
+                if (kvs_put (c, key, vo) < 0)
+                    err_exit ("kvs_put");
                 if (vo)
                     json_object_put (vo);
                 break;
@@ -241,43 +241,45 @@ int main (int argc, char *argv[])
             case 'K': { /* --kvs-get key */
                 json_object *o;
 
-                if (cmb_kvs_get (c, optarg, &o, 0) < 0)
-                    err_exit ("cmb_kvs_get");
+                if (kvs_get (c, optarg, &o) < 0)
+                    err_exit ("kvs_get");
                 printf ("%s = %s\n", optarg, json_object_to_json_string_ext (o,
                                              JSON_C_TO_STRING_PLAIN));
                 json_object_put (o);
                 break;
             }
             case 'Y': { /* --kvs-watch key */
+#if 0
                 json_object *o = NULL;
-                if (cmb_kvs_get (c, optarg, &o, KVS_GET_WATCH) < 0
+                if (kvs_get (c, optarg, &o, KVS_GET_WATCH) < 0
                                 && errno != ENOENT)
-                    err_exit ("cmb_kvs_get");
+                    err_exit ("kvs_get");
                 do {
                     printf ("%s = %s\n", optarg,
                                             json_object_to_json_string_ext (o,
                                             JSON_C_TO_STRING_PLAIN));
                     json_object_put (o);
-                } while (cmb_kvs_get (c, optarg, &o, KVS_GET_NEXT) == 0);
+                } while (kvs_get (c, optarg, &o, KVS_GET_NEXT) == 0);
                 break;
+#endif
             }
             case 'l': { /* --kvs-list name */
                 kvsdir_t dir;
     
-                if (cmb_kvs_get_dir (c, optarg, &dir, 0) < 0)
-                    err_exit ("cmb_kvs_get_dir %s", optarg);
+                if (kvs_get_dir (c, optarg, &dir) < 0)
+                    err_exit ("kvs_get_dir %s", optarg);
                 dump_kvs_dir (dir);
-                cmb_kvsdir_destroy (dir);
+                kvsdir_destroy (dir);
                 break;
             }
             case 'C': { /* --kvs-commit */
-                if (cmb_kvs_commit (c) < 0)
-                    err_exit ("cmb_kvs_commit");
+                if (kvs_commit (c) < 0)
+                    err_exit ("kvs_commit");
                 break;
             }
             case 'y': { /* --kvs-dropcache */
-                if (cmb_kvs_dropcache (c) < 0)
-                    err_exit ("cmb_kvs_dropcache");
+                if (kvs_dropcache (c) < 0)
+                    err_exit ("kvs_dropcache");
                 break;
             }
             case 't': { /* --kvs-torture N */
@@ -291,8 +293,8 @@ int main (int argc, char *argv[])
                     snprintf (key, sizeof (key), "key%d", i);
                     snprintf (val, sizeof (key), "val%d", i);
                     vo = json_object_new_string (val);
-                    if (cmb_kvs_put (c, key, vo) < 0)
-                        err_exit ("cmb_kvs_put");
+                    if (kvs_put (c, key, vo) < 0)
+                        err_exit ("kvs_put");
                     if (vo)
                         json_object_put (vo);
                 }
@@ -302,8 +304,8 @@ int main (int argc, char *argv[])
                      (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
 
                 xgettimeofday (&t1, NULL);
-                if (cmb_kvs_commit (c) < 0)
-                    err_exit ("cmb_kvs_commit");
+                if (kvs_commit (c) < 0)
+                    err_exit ("kvs_commit");
                 xgettimeofday (&t2, NULL);
                 timersub (&t2, &t1, &t);
                 msg ("kvs_commit: time=%0.3f ms",
@@ -313,10 +315,10 @@ int main (int argc, char *argv[])
                 for (i = 0; i < n; i++) {
                     snprintf (key, sizeof (key), "key%d", i);
                     snprintf (val, sizeof (key), "val%d", i);
-                    if (cmb_kvs_get (c, key, &vo, 0) < 0)
-                        err_exit ("cmb_kvs_get");
+                    if (kvs_get (c, key, &vo) < 0)
+                        err_exit ("kvs_get");
                     if (strcmp (json_object_get_string (vo), val) != 0)
-                        msg_exit ("cmb_kvs_get: key '%s' wrong value '%s'",
+                        msg_exit ("kvs_get: key '%s' wrong value '%s'",
                                   key, json_object_get_string (vo));
                     if (vo)
                         json_object_put (vo);
@@ -460,31 +462,31 @@ static int _parse_logstr (char *s, int *lp, char **fp)
 
 static void dump_kvs_dir (kvsdir_t dir)
 {
-    kvsitr_t itr = cmb_kvsitr_create (dir);
+    kvsitr_t itr = kvsitr_create (dir);
     const char *name;
 
-    while ((name = cmb_kvsitr_next (itr))) {
-        if (cmb_kvsdir_isdir (dir, name)) {
+    while ((name = kvsitr_next (itr))) {
+        if (kvsdir_isdir (dir, name)) {
             kvsdir_t ndir;
 
-            if (cmb_kvs_get_dir_at (dir, name, &ndir) < 0)
-                err_exit ("cmb_kvs_get_dir_at %s", name);
+            if (kvs_get_dir_at (dir, name, &ndir) < 0)
+                err_exit ("kvs_get_dir_at %s", name);
             dump_kvs_dir (ndir);
-            cmb_kvsdir_destroy (ndir);    
+            kvsdir_destroy (ndir);    
         } else {
             json_object *o;
             char *key;
 
-            if (cmb_kvs_get_at (dir, name, &o) < 0)
-                err_exit ("cmb_kvs_get_at %s", name);
-            key = cmb_kvsdir_key_at (dir, name);
+            if (kvs_get_at (dir, name, &o) < 0)
+                err_exit ("kvs_get_at %s", name);
+            key = kvsdir_key_at (dir, name);
             printf ("%s = %s\n", key,
                     json_object_to_json_string_ext (o, JSON_C_TO_STRING_PLAIN));
             json_object_put (o);
             free (key);
         }
     }
-    cmb_kvsitr_destroy (itr);
+    kvsitr_destroy (itr);
 }
 
 /*

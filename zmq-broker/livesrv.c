@@ -241,7 +241,7 @@ static void _recv_event_live (plugin_ctx_t *p, bool alive, int rank)
         msg ("%s: received message for bogus rank %d", __FUNCTION__, rank);
         goto done;
     }
-    (void)plugin_kvs_get (p, "conf.live.down", &old);
+    (void)kvs_get (p, "conf.live.down", &old);
     if (!(new = json_object_new_array ()))
         oom ();
     if (!alive) {
@@ -259,8 +259,8 @@ static void _recv_event_live (plugin_ctx_t *p, bool alive, int rank)
             }
         }
     }
-    plugin_kvs_put (p, "conf.live.down", new);
-    plugin_kvs_commit (p);
+    kvs_put (p, "conf.live.down", new);
+    kvs_commit (p);
 done:
     if (old)
         json_object_put (old);

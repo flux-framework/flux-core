@@ -5,11 +5,9 @@
 
 #include <czmq.h>
 #include "cmb_socket.h"
+#include "kvs.h"
 
 typedef struct cmb_struct *cmb_t;
-
-typedef struct kvsdir_struct *kvsdir_t;
-typedef struct kvsdir_iterator_struct *kvsitr_t;
 
 /* Create/destroy cmb context used in the other calls.
  */
@@ -61,60 +59,6 @@ int cmb_event_send (cmb_t c, char *event);
  * The barrier can be any size.
  */
 int cmb_barrier (cmb_t c, const char *name, int nprocs);
-
-/* Get/put key-value pairs.
- */
-enum {
-    KVS_GET_WATCH = 1,      /* start watch */
-    KVS_GET_NEXT = 2,       /* receive next watch change */
-};
-
-int cmb_kvs_get (cmb_t c, const char *key, json_object **valp, int flags);
-int cmb_kvs_get_dir (cmb_t c, const char *key, kvsdir_t *dirp, int flags);
-int cmb_kvs_get_string (cmb_t c, const char *key, char **valp, int flags);
-int cmb_kvs_get_int (cmb_t c, const char *key, int *valp, int flags);
-int cmb_kvs_get_int64 (cmb_t c, const char *key, int64_t *valp, int flags);
-int cmb_kvs_get_double (cmb_t c, const char *key, double *valp, int flags);
-int cmb_kvs_get_boolean (cmb_t c, const char *key, bool *valp, int flags);
-
-int cmb_kvs_get_at (kvsdir_t dir, const char *name, json_object **valp);
-int cmb_kvs_get_dir_at (kvsdir_t dir, const char *name, kvsdir_t *dirp);
-int cmb_kvs_get_string_at (kvsdir_t dir, const char *name, char **valp);
-int cmb_kvs_get_int_at (kvsdir_t dir, const char *name, int *valp);
-int cmb_kvs_get_int64_at (kvsdir_t dir, const char *name, int64_t *valp);
-int cmb_kvs_get_double_at (kvsdir_t dir, const char *name, double *valp);
-int cmb_kvs_get_boolean_at (kvsdir_t dir, const char *name, bool *valp);
-
-void cmb_kvsdir_destroy (kvsdir_t dir);
-const char *cmb_kvsdir_key (kvsdir_t dir);
-char *cmb_kvsdir_key_at (kvsdir_t dir, const char *name);
-
-kvsitr_t cmb_kvsitr_create (kvsdir_t dir);
-void cmb_kvsitr_destroy (kvsitr_t itr);
-const char *cmb_kvsitr_next (kvsitr_t itr);
-
-bool cmb_kvsdir_exists (kvsdir_t dir, const char *name);
-bool cmb_kvsdir_isdir (kvsdir_t dir, const char *name);
-bool cmb_kvsdir_isstring (kvsdir_t dir, const char *name);
-bool cmb_kvsdir_isint (kvsdir_t dir, const char *name);
-bool cmb_kvsdir_isint64 (kvsdir_t dir, const char *name);
-bool cmb_kvsdir_isdouble (kvsdir_t dir, const char *name);
-bool cmb_kvsdir_isboolean (kvsdir_t dir, const char *name);
-
-int cmb_kvs_put (cmb_t c, const char *key, json_object *val);
-int cmb_kvs_put_string (cmb_t c, const char *key, const char *val);
-int cmb_kvs_put_int (cmb_t c, const char *key, int val);
-int cmb_kvs_put_int64 (cmb_t c, const char *key, int64_t val);
-int cmb_kvs_put_double (cmb_t c, const char *key, double val);
-int cmb_kvs_put_boolean (cmb_t c, const char *key, bool val);
-
-int cmb_kvs_unlink (cmb_t c, const char *key);
-int cmb_kvs_mkdir (cmb_t c, const char *key);
-
-int cmb_kvs_commit (cmb_t c);
-int cmb_kvs_fence (cmb_t c, const char *name, int nprocs);
-
-int cmb_kvs_dropcache (cmb_t c);
 
 /* Log messages.
  * 'fac' is like syslog facility, only an arbitrary string.

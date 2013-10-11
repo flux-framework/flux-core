@@ -755,7 +755,7 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_clean (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void kvs_clean_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     int s1, s2;
@@ -843,7 +843,7 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_flush (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void kvs_flush_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
 
@@ -969,7 +969,7 @@ stall:
     return false;
 }
 
-static void kvs_get (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void kvs_get_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     json_object *root, *reply = NULL, *o = NULL;
@@ -983,7 +983,7 @@ static void kvs_get (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    wp = wait_create (p, kvs_get, arg, zmsg);
+    wp = wait_create (p, kvs_get_request, arg, zmsg);
     if (!load (p, ctx->rootdir, wp, &root)) {
         stall = true;
         goto done;
@@ -1024,7 +1024,7 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_watch (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     json_object *root, *reply = NULL, *o = NULL;
@@ -1038,7 +1038,7 @@ static void kvs_watch (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    wp = wait_create (p, kvs_get, arg, zmsg);
+    wp = wait_create (p, kvs_watch_request, arg, zmsg);
     if (!load (p, ctx->rootdir, wp, &root)) {
         stall = true;
         goto done;
@@ -1086,10 +1086,10 @@ static void kvs_watch (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         util_json_object_add_boolean (reply, ".flag_continue", true);
         (void)cmb_msg_replace_json (zcpy, reply);
 
-        /* On every commit, kvs_watch (p, arg, zcpy) will be called.
+        /* On every commit, kvs_watch_request (p, arg, zcpy) will be called.
          * No reply will be generated unless a value has changed.
          */
-        wp = wait_create (p, kvs_watch, arg, &zcpy);
+        wp = wait_create (p, kvs_watch_request, arg, &zcpy);
         wait_add (ctx->watchlist, wp);
 
         /* Reply to the watch request.
@@ -1107,7 +1107,7 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_put (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void kvs_put_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     json_object *o = NULL;
     json_object_iter iter;
@@ -1165,7 +1165,7 @@ static void commit_response_send (plugin_ctx_t *p, commit_t *cp,
     free (rootref);
 }
 
-static void kvs_commit (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void kvs_commit_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     json_object *o = NULL;
     const char *name;
@@ -1177,7 +1177,7 @@ static void kvs_commit (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    wp = wait_create (p, kvs_commit, arg, zmsg);
+    wp = wait_create (p, kvs_commit_request, arg, zmsg);
     if (plugin_treeroot (p)) {
         if (!(cp = commit_find (p, name))) {
             commit (p);
@@ -1231,7 +1231,7 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_getroot (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void kvs_getroot_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
     ctx_t *ctx = p->ctx;
     json_object *o;
@@ -1313,19 +1313,19 @@ static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
     char *arg = NULL;
 
     if (cmb_msg_match (*zmsg, "kvs.getroot")) {
-        kvs_getroot (p, NULL, zmsg);
+        kvs_getroot_request (p, NULL, zmsg);
     } else if (cmb_msg_match_substr (*zmsg, "event.kvs.setroot.", &arg)) {
         event_kvs_setroot (p, arg, zmsg);
     } else if (cmb_msg_match_substr (*zmsg, "event.kvs.debug.", &arg)) {
         event_kvs_debug (p, arg, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.clean")) {
-        kvs_clean (p, NULL, zmsg);
+        kvs_clean_request (p, NULL, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.get")) {
-        kvs_get (p, NULL, zmsg);
+        kvs_get_request (p, NULL, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.watch")) {
-        kvs_watch (p, NULL, zmsg);
+        kvs_watch_request (p, NULL, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.put")) {
-        kvs_put (p, NULL, zmsg);
+        kvs_put_request (p, NULL, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.load")) {
         if (type == ZMSG_REQUEST)
             kvs_load (p, NULL, zmsg);
@@ -1343,12 +1343,12 @@ static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
             kvs_name_response (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.flush")) {
         if (type == ZMSG_REQUEST)
-            kvs_flush (p, NULL, zmsg);
+            kvs_flush_request (p, NULL, zmsg);
         else
             kvs_flush_response (p, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.commit")) {
         if (type == ZMSG_REQUEST)
-            kvs_commit (p, NULL, zmsg);
+            kvs_commit_request (p, NULL, zmsg);
         else
             kvs_commit_response (p, zmsg);
     }
