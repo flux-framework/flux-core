@@ -37,10 +37,14 @@ struct kvsdir_iterator_struct {
     struct json_object_iterator end;
 };
 
-static struct {
+struct kvs_config_struct {
     RequestFun *request;
     BarrierFun *barrier;
-} kvs_config;
+};
+static struct kvs_config_struct kvs_config = {
+    .request = NULL,
+    .barrier = NULL
+};
 
 void kvsdir_destroy (kvsdir_t dir)
 {
@@ -117,6 +121,7 @@ int kvs_get (void *h, const char *key, json_object **valp)
     int ret = -1;
 
     json_object_object_add (request, key, NULL);
+    assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.get");
     if (!reply) {
         err ("%s", __FUNCTION__);
@@ -148,6 +153,7 @@ int kvs_get_dir (void *h, const char *key, kvsdir_t *dirp)
 
     util_json_object_add_boolean (request, ".flag_directory", true);
     json_object_object_add (request, key, NULL);
+    assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.get");
     if (!reply) {
         err ("%s", __FUNCTION__);
@@ -488,6 +494,7 @@ int kvs_put (void *h, const char *key, json_object *val)
     if (val)
         json_object_get (val);
     json_object_object_add (request, key, val);
+    assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.put");
     if (!reply) {
         err ("%s", __FUNCTION__);
@@ -604,6 +611,7 @@ int kvs_mkdir (void *h, const char *key)
   
     util_json_object_add_boolean (request, ".flag_mkdir", true);
     json_object_object_add (request, key, NULL); 
+    assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.put");
     if (!reply) {
         err ("%s", __FUNCTION__);
@@ -634,6 +642,7 @@ static int send_kvs_flush (void *h)
     int errnum = 0;
     int ret = -1;
    
+    assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.flush");
     if (!reply) {
         err ("%s", __FUNCTION__);
@@ -668,6 +677,7 @@ static int send_kvs_commit (void *h, const char *name)
     if (!name)
         uuid = uuid_generate_str ();
     util_json_object_add_string (request, "name", name ? name : uuid); 
+    assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.commit");
     if (!reply) {
         err ("%s", __FUNCTION__);
@@ -699,6 +709,10 @@ int kvs_commit (void *h)
 
 int kvs_fence (void *h, const char *name, int nprocs)
 {
+    if (!kvs_config.barrier) {
+        errno = EINVAL;
+        return -1;
+    }
     if (send_kvs_flush (h) < 0)
         return -1;
     if (kvs_config.barrier (h, name, nprocs) < 0)
@@ -714,7 +728,8 @@ int kvs_dropcache (void *h)
     json_object *reply = NULL;
     int errnum = 0;
     int ret = -1;
-  
+ 
+    assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.clean");
     if (!reply) {
         err ("%s", __FUNCTION__);

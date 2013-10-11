@@ -22,10 +22,9 @@
 #include "log.h"
 #include "zmsg.h"
 
-#define OPTIONS "Zw"
+#define OPTIONS "Z"
 static const struct option longopts[] = {
    {"trace-apisock", no_argument,        0, 'Z'},
-   {"watch",         no_argument,        0, 'w'},
    {0, 0, 0, 0},
 };
 
@@ -37,7 +36,6 @@ Usage: tkvs OPTIONS op [key] [val]\n\
 \n\
 Where OPTIONS can be one of\n\
     -Z,--trace-apisock\n\
-    -w,--watch\n\
     -d,--deep\n\
 The possible operations are:\n\
     get key\n\
@@ -75,7 +73,7 @@ void tkvs_unlink (cmb_t c, char *key)
         err_exit ("kvs_unlink %s", key);
 }
 
-void tkvs_get (cmb_t c, char *key, bool watch)
+void tkvs_get (cmb_t c, char *key)
 {
     json_object *o;
 
@@ -185,7 +183,7 @@ void tkvs_dump_all (kvsdir_t dir, bool ropt)
     kvsitr_destroy (itr);
 }
 
-void tkvs_get_dir (cmb_t c, char *key, bool watch, bool ropt, bool all)
+void tkvs_get_dir (cmb_t c, char *key, bool ropt, bool all)
 {
     kvsdir_t dir;
 
@@ -203,7 +201,7 @@ void tkvs_get_dir (cmb_t c, char *key, bool watch, bool ropt, bool all)
     }
 }
 
-void tkvs_get_string (cmb_t c, char *key, bool watch)
+void tkvs_get_string (cmb_t c, char *key)
 {
     char *val;
 
@@ -224,7 +222,7 @@ void tkvs_put_string (cmb_t c, char *key, char *val)
         err_exit ("kvs_put_string %s=%s", key, val);
 }
 
-void tkvs_get_int (cmb_t c, char *key, bool watch)
+void tkvs_get_int (cmb_t c, char *key)
 {
     int val;
 
@@ -243,7 +241,7 @@ void tkvs_put_int (cmb_t c, char *key, int val)
         err_exit ("kvs_put_int %s=%d", key, val);
 }
 
-void tkvs_get_int64 (cmb_t c, char *key, bool watch)
+void tkvs_get_int64 (cmb_t c, char *key)
 {
     int64_t val;
 
@@ -262,7 +260,7 @@ void tkvs_put_int64 (cmb_t c, char *key, int64_t val)
         err_exit ("kvs_put_int64 %s=%lld", key, (long long int)val);
 }
 
-void tkvs_get_double  (cmb_t c, char *key, bool watch)
+void tkvs_get_double  (cmb_t c, char *key)
 {
     double val;
 
@@ -281,7 +279,7 @@ void tkvs_put_double (cmb_t c, char *key, double val)
         err_exit ("kvs_put_double %s=%lf", key, val);
 }
 
-void tkvs_get_boolean (cmb_t c, char *key, bool watch)
+void tkvs_get_boolean (cmb_t c, char *key)
 {
     bool val;
 
@@ -308,7 +306,6 @@ void tkvs_commit (cmb_t c)
 int main (int argc, char *argv[])
 {
     int ch;
-    bool wopt = false;
     char *op = NULL;
     char *key = NULL;
     char *val = NULL;
@@ -322,9 +319,6 @@ int main (int argc, char *argv[])
         switch (ch) {
             case 'Z': /* --trace-apisock */
                 flags |= CMB_FLAGS_TRACE;
-                break;
-            case 'w': /* --watch */
-                wopt = true;
                 break;
             default:
                 usage ();
@@ -345,42 +339,42 @@ int main (int argc, char *argv[])
         err_exit ("cmb_init");
 
     if (!strcmp (op, "get_string"))
-        tkvs_get_string (c, key, wopt);
+        tkvs_get_string (c, key);
     else if (!strcmp (op, "put_string"))
         tkvs_put_string (c, key, val);
 
     else if (!strcmp (op, "get_int"))
-        tkvs_get_int (c, key, wopt);
+        tkvs_get_int (c, key);
     else if (!strcmp (op, "put_int"))
         tkvs_put_int (c, key, strtoul (val, NULL, 10));
 
     else if (!strcmp (op, "get_int64"))
-        tkvs_get_int64 (c, key, wopt);
+        tkvs_get_int64 (c, key);
     else if (!strcmp (op, "put_int64"))
         tkvs_put_int64 (c, key, strtoull (val, NULL, 10));
 
     else if (!strcmp (op, "get_double"))
-        tkvs_get_double (c, key, wopt);
+        tkvs_get_double (c, key);
     else if (!strcmp (op, "put_double"))
         tkvs_put_double (c, key, strtod (val, NULL));
 
     else if (!strcmp (op, "get_boolean"))
-        tkvs_get_boolean (c, key, wopt);
+        tkvs_get_boolean (c, key);
     else if (!strcmp (op, "put_boolean"))
         tkvs_put_boolean (c, key, !strcmp (val, "false") ? false : true);
 
     else if (!strcmp (op, "get_dir"))
-        tkvs_get_dir (c, key, wopt, false, false);
+        tkvs_get_dir (c, key, false, false);
     else if (!strcmp (op, "get_dir_r"))
-        tkvs_get_dir (c, key, wopt, true, false);
+        tkvs_get_dir (c, key, true, false);
 
     else if (!strcmp (op, "get_all"))
-        tkvs_get_dir (c, key, wopt, false, true);
+        tkvs_get_dir (c, key, false, true);
     else if (!strcmp (op, "get_all_r"))
-        tkvs_get_dir (c, key, wopt, true, true);
+        tkvs_get_dir (c, key, true, true);
 
     else if (!strcmp (op, "get"))
-        tkvs_get (c, key, wopt);
+        tkvs_get (c, key);
     else if (!strcmp (op, "put"))
         tkvs_put (c, key, val);
 

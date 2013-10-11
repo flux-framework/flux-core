@@ -3,10 +3,11 @@ void kvsdir_destroy (kvsdir_t dir);
 
 /* The basic get and put operations, with convenience functions
  * for simple types.  You will get an error if you call kvs_get()
- * on a directory (errno = EISDIR).  Use kvs_get_dir() which returns
+ * on a directory (return -1, errno = EISDIR).  Use kvs_get_dir() which returns
  * the opaque kvsdir_t type.  kvs_get(), kvs_get_dir(), and kvs_get_string()
  * return values that must be freed with json_object_put(), kvsdir_destroy(),
  * and free() respectively.
+ * These functions return -1 on error (errno set), 0 on success.
  */
 int kvs_get (void *h, const char *key, json_object **valp);
 int kvs_get_dir (void *h, const char *key, kvsdir_t *dirp);
@@ -18,6 +19,7 @@ int kvs_get_boolean (void *h, const char *key, bool *valp);
 
 /* kvs_put() and kvs_put_string() both make copies of the value argument
  * The caller retains ownership of the original.
+ * These functions return -1 on error (errno set), 0 on success.
  */
 int kvs_put (void *h, const char *key, json_object *val);
 int kvs_put_string (void *h, const char *key, const char *val);
@@ -27,7 +29,8 @@ int kvs_put_double (void *h, const char *key, double val);
 int kvs_put_boolean (void *h, const char *key, bool val);
 
 /* An iterator interface for walking the list of names in a kvsdir_t
- * returned by kvs_get_dir().
+ * returned by kvs_get_dir().  kvsitr_create() always succeeds.
+ * kvsitr_next() returns NULL when the last item is reached.
  */
 typedef struct kvsdir_iterator_struct *kvsitr_t;
 kvsitr_t kvsitr_create (kvsdir_t dir);
@@ -48,11 +51,13 @@ bool kvsdir_isboolean (kvsdir_t dir, const char *name);
 /* Get key associated with a directory or directory entry.
  * kvsdir_key() returns a string owned by the kvsdir_t, while kvsdir_key_at()
  * returns a dynamically allocated string that caller must free().
+ * Both functions always succeed.
  */
 const char *kvsdir_key (kvsdir_t dir);
 char *kvsdir_key_at (kvsdir_t dir, const char *name);
 
 /* Read the value of a name returned from kvsitr_next().
+ * These functions return -1 on error (errno set), 0 on success.
  */
 int kvs_get_at (kvsdir_t dir, const char *name, json_object **valp);
 int kvs_get_dir_at (kvsdir_t dir, const char *name, kvsdir_t *dirp);
@@ -64,16 +69,19 @@ int kvs_get_boolean_at (kvsdir_t dir, const char *name, bool *valp);
 
 /* Remove a key from the namespace.  If it represents a directory,
  * its contents are also removed.
+ * Returns -1 on error (errno set), 0 on success.
  */
 int kvs_unlink (void *h, const char *key);
 
 /* Create an empty directory.
+ * Returns -1 on error (errno set), 0 on success.
  */
 int kvs_mkdir (void *h, const char *key);
 
 /* kvs_commit() must be called after kvs_put*, kvs_unlink, and kvs_mkdir
  * to finalize the update.  The new data is immediately available on
  * the calling node when the commit returns.
+ * Returns -1 on error (errno set), 0 on success.
  */
 int kvs_commit (void *h);
 
@@ -81,12 +89,14 @@ int kvs_commit (void *h);
  * call with identical arguments.  It is internally optimized to minimize
  * the work that needs to be done.  Once the call returns, all changes
  * from participating tasks are available to all tasks.
+ * Returns -1 on error (errno set), 0 on success.
  */
 int kvs_fence (void *h, const char *name, int nprocs);
 
 /* Garbage collect the cache.  On the root node, drop all data that
  * doesn't have a reference in the namespace.  On other nodes, the entire
  * cache is dropped and will be reloaded on demand.
+ * Returns -1 on error (errno set), 0 on success.
  */
 int kvs_dropcache (void *h);
 
