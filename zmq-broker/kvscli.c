@@ -133,8 +133,10 @@ int kvs_get (void *h, const char *key, json_object **valp)
         errno = ENOENT;
         goto done;
     }
-    json_object_get (val);
-    *valp = val;
+    if (valp) {
+        json_object_get (val);
+        *valp = val;
+    }
     ret = 0;
 done:
     if (request)
@@ -165,7 +167,8 @@ int kvs_get_dir (void *h, const char *key, kvsdir_t *dirp)
         errno = ENOENT;
         goto done;
     }
-    *dirp = kvsdir_alloc (h, key, val);
+    if (dirp)
+        *dirp = kvsdir_alloc (h, key, val);
     ret = 0;
 done:
     if (request)
@@ -204,7 +207,8 @@ int kvs_get_string (void *h, const char *key, char **valp)
         goto done;
     }
     s = json_object_get_string (o);
-    *valp = xstrdup (s);
+    if (valp)
+        *valp = xstrdup (s);
     rc = 0;
 done: 
     if (o)
@@ -223,7 +227,8 @@ int kvs_get_int (void *h, const char *key, int *valp)
         errno = EINVAL;
         goto done;
     }
-    *valp = json_object_get_int (o);
+    if (valp)
+        *valp = json_object_get_int (o);
     rc = 0;
 done: 
     if (o)
@@ -242,7 +247,8 @@ int kvs_get_int64 (void *h, const char *key, int64_t *valp)
         errno = EINVAL;
         goto done;
     }
-    *valp = json_object_get_int64 (o);
+    if (valp)
+        *valp = json_object_get_int64 (o);
     rc = 0;
 done: 
     if (o)
@@ -261,7 +267,8 @@ int kvs_get_double (void *h, const char *key, double *valp)
         errno = EINVAL;
         goto done;
     }
-    *valp = json_object_get_double (o);
+    if (valp)
+        *valp = json_object_get_double (o);
     rc = 0;
 done: 
     if (o)
@@ -280,7 +287,8 @@ int kvs_get_boolean (void *h, const char *key, bool *valp)
         errno = EINVAL;
         goto done;
     }
-    *valp = json_object_get_boolean (o);
+    if (valp)
+        *valp = json_object_get_boolean (o);
     rc = 0;
 done: 
     if (o)
@@ -290,81 +298,37 @@ done:
 
 bool kvsdir_exists (kvsdir_t dir, const char *name)
 {
-    bool rc = false;
-
-    if (json_object_object_get (dir->o, name))
-        rc = true;
-
-    return rc;
+    return (kvsdir_get (dir, name, NULL) == 0 || errno == EISDIR);
 }
 
 bool kvsdir_isdir (kvsdir_t dir, const char *name)
 {
-    json_object *dirent = json_object_object_get (dir->o, name);
-    bool rc = false;
-
-    if (dirent && (json_object_object_get (dirent, "DIRREF") ||
-                   json_object_object_get (dirent, "DIRVAL")))
-        rc = true;
-
-    return rc;
+    return (kvsdir_get_dir (dir, name, NULL) == 0);
 }
 
 bool kvsdir_isstring (kvsdir_t dir, const char *name)
 {
-    json_object *dirent = json_object_object_get (dir->o, name);
-    json_object *val;
-    bool rc = false;
-
-    if (dirent && (val = json_object_object_get (dirent, "FILEVAL"))
-               && json_object_get_type (val) == json_type_string)
-        rc = true;
-
-    return rc;
+    return (kvsdir_get_string (dir, name, NULL) == 0);
 }
 
 bool kvsdir_isint (kvsdir_t dir, const char *name)
 {
-    json_object *dirent = json_object_object_get (dir->o, name);
-    json_object *val;
-    bool rc = false;
-
-    if (dirent && (val = json_object_object_get (dirent, "FILEVAL"))
-               && json_object_get_type (val) == json_type_int)
-        rc = true;
-
-    return rc;
+    return (kvsdir_get_int (dir, name, NULL) == 0);
 }
 
 bool kvsdir_isint64 (kvsdir_t dir, const char *name)
 {
-    return kvsdir_isint (dir, name); /* no way to distinguish from int */
+    return (kvsdir_get_int64 (dir, name, NULL) == 0);
 }
 
 bool kvsdir_isdouble (kvsdir_t dir, const char *name)
 {
-    json_object *dirent = json_object_object_get (dir->o, name);
-    json_object *val;
-    bool rc = false;
-
-    if (dirent && (val = json_object_object_get (dirent, "FILEVAL"))
-               && json_object_get_type (val) == json_type_double)
-        rc = true;
-
-    return rc;
+    return (kvsdir_get_double (dir, name, NULL) == 0);
 }
 
 bool kvsdir_isboolean (kvsdir_t dir, const char *name)
 {
-    json_object *dirent = json_object_object_get (dir->o, name);
-    json_object *val;
-    bool rc = false;
-
-    if (dirent && (val = json_object_object_get (dirent, "FILEVAL"))
-               && json_object_get_type (val) == json_type_boolean)
-        rc = true;
-
-    return rc;
+    return (kvsdir_get_boolean (dir, name, NULL) == 0);
 }
 
 char *kvsdir_key_at (kvsdir_t dir, const char *name)
@@ -378,38 +342,83 @@ char *kvsdir_key_at (kvsdir_t dir, const char *name)
     return key;
 }
 
-int kvsdir_get (kvsdir_t dir, const char *name, json_object **valp)
+static int dirent_get (kvsdir_t dir, const char *name, json_object **valp)
 {
-    json_object *dirent;
+    json_object *dirent, *val;
     int rc = -1;
 
     if (!(dirent = json_object_object_get (dir->o, name))) {
         errno = ENOENT;
         goto done;
     }
-    if (!(*valp = json_object_object_get (dirent, "FILEVAL"))) {
+    if (json_object_object_get (dirent, "DIRVAL")
+     || json_object_object_get (dirent, "DIRREF")) {
         errno = EISDIR;
         goto done;
     }
-    json_object_get (*valp);
+    if (!(val = json_object_object_get (dirent, "FILEVAL"))) {
+        errno = ESRCH;
+        goto done;
+    }
+    if (valp) {
+        json_object_get (val);
+        *valp = val;
+    }
     rc = 0;
 done:
     return rc;
 }
 
-int kvsdir_get_dir (kvsdir_t dir, const char *name, kvsdir_t *ndir)
+static int dirent_get_dir (kvsdir_t dir, const char *name, kvsdir_t *dirp)
 {
-    char *key;
+    json_object *dirent, *val;
     int rc = -1;
 
-    if (!json_object_object_get (dir->o, name)) {
+    if (!(dirent = json_object_object_get (dir->o, name))) {
         errno = ENOENT;
         goto done;
     }
-    key = kvsdir_key_at (dir, name);
-    rc = kvs_get_dir (dir->handle, key, ndir);
-    free (key);
+    if (json_object_object_get (dirent, "FILEVAL")
+     || json_object_object_get (dirent, "FILEREF")) {
+        errno = ENOTDIR;
+        goto done;
+    }
+    if (!(val = json_object_object_get (dirent, "DIRVAL"))) {
+        errno = ESRCH; 
+        goto done;
+    }
+    if (dirp)
+        *dirp = kvsdir_alloc (dir->handle, name, val);
+    rc = 0;
 done:
+    return rc;
+}
+
+int kvsdir_get (kvsdir_t dir, const char *name, json_object **valp)
+{
+    int rc;
+    char *key;
+
+    rc = dirent_get (dir, name, valp);
+    if (rc < 0 && (errno == ESRCH || strchr (name, '.'))) {
+        key = kvsdir_key_at (dir, name);
+        rc = kvs_get (dir->handle, key, valp);
+        free (key);
+    }
+    return rc;
+}
+
+int kvsdir_get_dir (kvsdir_t dir, const char *name, kvsdir_t *ndir)
+{
+    int rc;
+    char *key;
+
+    rc = dirent_get_dir (dir, name, ndir);
+    if (rc < 0 && (errno == ESRCH || strchr (name, '.'))) {
+        key = kvsdir_key_at (dir, name);
+        rc = kvs_get_dir (dir->handle, key, ndir);
+        free (key);
+    }
     return rc;
 }
 
@@ -425,8 +434,10 @@ int kvsdir_get_string (kvsdir_t dir, const char *name, char **valp)
         errno = EINVAL;
         goto done;
     }
-    s = json_object_get_string (o);
-    *valp = xstrdup (s);
+    if (valp) {
+        s = json_object_get_string (o);
+        *valp = xstrdup (s);
+    }
     rc = 0;
 done:
     return rc;
@@ -443,7 +454,8 @@ int kvsdir_get_int (kvsdir_t dir, const char *name, int *valp)
         errno = EINVAL;
         goto done;
     }
-    *valp = json_object_get_int (o);
+    if (valp)
+        *valp = json_object_get_int (o);
     rc = 0;
 done:
     return rc;
@@ -460,7 +472,8 @@ int kvsdir_get_int64 (kvsdir_t dir, const char *name, int64_t *valp)
         errno = EINVAL;
         goto done;
     }
-    *valp = json_object_get_int64 (o);
+    if (valp)
+        *valp = json_object_get_int64 (o);
     rc = 0;
 done:
     return rc;
@@ -477,7 +490,8 @@ int kvsdir_get_double (kvsdir_t dir, const char *name, double *valp)
         errno = EINVAL;
         goto done;
     }
-    *valp = json_object_get_double (o);
+    if (valp)
+        *valp = json_object_get_double (o);
     rc = 0;
 done:
     return rc;
@@ -494,7 +508,8 @@ int kvsdir_get_boolean (kvsdir_t dir, const char *name, bool *valp)
         errno = EINVAL;
         goto done;
     }
-    *valp = json_object_get_boolean (o);
+    if (valp)
+        *valp = json_object_get_boolean (o);
     rc = 0;
 done:
     return rc;
