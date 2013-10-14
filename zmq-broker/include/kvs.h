@@ -1,6 +1,7 @@
 typedef struct kvsdir_struct  *kvsdir_t;
 
-void kvsdir_destroy (kvsdir_t dir);
+typedef json_object *(KVSReqF(void *h, json_object *req, const char *fmt, ...));
+typedef int (KVSBarrierF(void *h, const char *name, int nprocs));
 
 /* kvs_get_dir() flags
  * If flags=0, a kvsdir_* function will always issue a new kvs.get request to
@@ -9,14 +10,17 @@ void kvsdir_destroy (kvsdir_t dir);
  *   object will be used to satisfy kvsdir_* requests.
  * If KVS_GET_DIRVAL is set, values cached for directories in the kvsdir
  *   object will be used to satisfy kvsdir_* requests.
- * "subdirectories" inherit these flags from their parent.
- * A single kvs_get_dir() with both flags set will recursively cache values
- * for that entire portion of the namespace.
+ * If both flags are set, the entire relative namespace is cached.
  */
 enum {
     KVS_GET_DIRVAL = 1,
     KVS_GET_FILEVAL = 2,
 };
+
+/* Destroy a kvsdir object
+ *   returned from kvs_get_dir(), kvsdir_create(), or kvsdir_get_dir()
+ */
+void kvsdir_destroy (kvsdir_t dir);
 
 /* The basic get and put operations, with convenience functions
  * for simple types.  You will get an error if you call kvs_get()
@@ -34,8 +38,7 @@ int kvs_get_int64 (void *h, const char *key, int64_t *valp);
 int kvs_get_double (void *h, const char *key, double *valp);
 int kvs_get_boolean (void *h, const char *key, bool *valp);
 
-/*
- * Convenience function to create kvsdir_t object from printf format
+/* Convenience function to create kvsdir_t object from printf format
  * string. Returns NULL on failure with errno set.
  */
 kvsdir_t kvsdir_create (void *h, const char *fmt, ...);
@@ -98,24 +101,17 @@ int kvsdir_get_double (kvsdir_t dir, const char *key, double *valp);
 int kvsdir_get_boolean (kvsdir_t dir, const char *key, bool *valp);
 
 /* Remove a key from the namespace.  If it represents a directory,
- * its contents are also removed.
+ * its contents are also removed.  kvsdir_unlink removes it relative to 'dir'.
  * Returns -1 on error (errno set), 0 on success.
  */
 int kvs_unlink (void *h, const char *key);
-
-/* Unlink relative to 'dir'
- */
 int kvsdir_unlink (kvsdir_t dir, const char *key);
 
-/* Create an empty directory.
+/* Create an empty directory.  kvsdir_mkdir creates it relative to 'dir'.
  * Returns -1 on error (errno set), 0 on success.
  */
 int kvs_mkdir (void *h, const char *key);
-
-/* Create directory relative to 'dir'
- */
 int kvsdir_mkdir (kvsdir_t dir, const char *key);
-
 
 /* kvs_commit() must be called after kvs_put*, kvs_unlink, and kvs_mkdir
  * to finalize the update.  The new data is immediately available on
@@ -142,10 +138,8 @@ int kvs_dropcache (void *h);
 /* These are called internally to register functions that are used
  * by the kvs implementation.
  */
-typedef json_object *(RequestFun(void *h, json_object *req, const char *fmt, ...));
-typedef int (BarrierFun(void *h, const char *name, int nprocs));
-void kvs_reqfun_set (RequestFun *fun);
-void kvs_barrierfun_set (BarrierFun *fun);
+void kvs_reqfun_set (KVSReqF *fun);
+void kvs_barrierfun_set (KVSBarrierF *fun);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

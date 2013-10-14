@@ -39,8 +39,8 @@ struct kvsdir_iterator_struct {
 };
 
 struct kvs_config_struct {
-    RequestFun *request;
-    BarrierFun *barrier;
+    KVSReqF *request;
+    KVSBarrierF *barrier;
 };
 static struct kvs_config_struct kvs_config = {
     .request = NULL,
@@ -52,16 +52,6 @@ void kvsdir_destroy (kvsdir_t dir)
     free (dir->key);
     json_object_put (dir->o);
     free (dir);
-}
-
-void kvs_reqfun_set (RequestFun *fun)
-{
-    kvs_config.request = fun;
-}
-
-void kvs_barrierfun_set (BarrierFun *fun)
-{
-    kvs_config.barrier = fun;
 }
 
 static kvsdir_t kvsdir_alloc (void *handle, const char *key, json_object *o,
@@ -157,8 +147,10 @@ int kvs_get_dir (void *h, const char *key, kvsdir_t *dirp, int flags)
     int ret = -1;
 
     util_json_object_add_boolean (request, ".flag_directory", true);
-    util_json_object_add_boolean (request, ".flag_fileval", (flags & KVS_GET_FILEVAL));
-    util_json_object_add_boolean (request, ".flag_dirval", (flags & KVS_GET_DIRVAL));
+    util_json_object_add_boolean (request, ".flag_fileval",
+                                  (flags & KVS_GET_FILEVAL));
+    util_json_object_add_boolean (request, ".flag_dirval",
+                                  (flags & KVS_GET_DIRVAL));
     json_object_object_add (request, key, NULL);
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.get");
@@ -878,6 +870,16 @@ done:
     if (reply)
         json_object_put (reply); 
     return ret;
+}
+
+void kvs_reqfun_set (KVSReqF *fun)
+{
+    kvs_config.request = fun;
+}
+
+void kvs_barrierfun_set (KVSBarrierF *fun)
+{
+    kvs_config.barrier = fun;
 }
 
 /*

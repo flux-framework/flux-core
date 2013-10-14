@@ -542,8 +542,8 @@ cmb_t cmb_init_full (const char *path, int flags)
     if (_session_info_query (c) < 0)
         goto error;
 
-    kvs_reqfun_set ((RequestFun *)_request);
-    kvs_barrierfun_set ((BarrierFun *)cmb_barrier);
+    kvs_reqfun_set ((KVSReqF *)_request);
+    kvs_barrierfun_set ((KVSBarrierF *)cmb_barrier);
     return c;
 error:
     if (c)
