@@ -3,10 +3,10 @@ void kvsdir_destroy (kvsdir_t dir);
 
 /* The basic get and put operations, with convenience functions
  * for simple types.  You will get an error if you call kvs_get()
- * on a directory (return -1, errno = EISDIR).  Use kvs_get_dir() which returns
- * the opaque kvsdir_t type.  kvs_get(), kvs_get_dir(), and kvs_get_string()
- * return values that must be freed with json_object_put(), kvsdir_destroy(),
- * and free() respectively.
+ * on a directory (return -1, errno = EISDIR).  Use kvs_get_dir() which
+ * returns the opaque kvsdir_t type.  kvs_get(), kvs_get_dir(), and
+ * kvs_get_string() return values that must be freed with json_object_put(),
+ * kvsdir_destroy(), and free() respectively.
  * These functions return -1 on error (errno set), 0 on success.
  */
 int kvs_get (void *h, const char *key, json_object **valp);
@@ -53,34 +53,32 @@ void kvsitr_destroy (kvsitr_t itr);
 const char *kvsitr_next (kvsitr_t itr);
 void kvsitr_rewind (kvsitr_t itr);
 
-/* Test attributes of a name returned from kvsitr_next().
+/* Test attributes of 'key', relative to kvsdir object.
  */
-bool kvsdir_exists (kvsdir_t dir, const char *name);
-bool kvsdir_isdir (kvsdir_t dir, const char *name);
-bool kvsdir_isstring (kvsdir_t dir, const char *name);
-bool kvsdir_isint (kvsdir_t dir, const char *name);
-bool kvsdir_isint64 (kvsdir_t dir, const char *name);
-bool kvsdir_isdouble (kvsdir_t dir, const char *name);
-bool kvsdir_isboolean (kvsdir_t dir, const char *name);
+bool kvsdir_exists (kvsdir_t dir, const char *key);
+bool kvsdir_isdir (kvsdir_t dir, const char *key);
+bool kvsdir_isstring (kvsdir_t dir, const char *key);
+bool kvsdir_isint (kvsdir_t dir, const char *key);
+bool kvsdir_isint64 (kvsdir_t dir, const char *key);
+bool kvsdir_isdouble (kvsdir_t dir, const char *key);
+bool kvsdir_isboolean (kvsdir_t dir, const char *key);
 
 /* Get key associated with a directory or directory entry.
- * kvsdir_key() returns a string owned by the kvsdir_t, while kvsdir_key_at()
- * returns a dynamically allocated string that caller must free().
  * Both functions always succeed.
  */
-const char *kvsdir_key (kvsdir_t dir);
-char *kvsdir_key_at (kvsdir_t dir, const char *name);
+const char *kvsdir_key (kvsdir_t dir); /* caller does not free result */
+char *kvsdir_key_at (kvsdir_t dir, const char *key); /* caller frees result */
 
-/* Read the value of a name returned from kvsitr_next().
+/* Read the value of 'key', relative to kvsdir object.
  * These functions return -1 on error (errno set), 0 on success.
  */
-int kvsdir_get (kvsdir_t dir, const char *name, json_object **valp);
-int kvsdir_get_dir (kvsdir_t dir, const char *name, kvsdir_t *dirp);
-int kvsdir_get_string (kvsdir_t dir, const char *name, char **valp);
-int kvsdir_get_int (kvsdir_t dir, const char *name, int *valp);
-int kvsdir_get_int64 (kvsdir_t dir, const char *name, int64_t *valp);
-int kvsdir_get_double (kvsdir_t dir, const char *name, double *valp);
-int kvsdir_get_boolean (kvsdir_t dir, const char *name, bool *valp);
+int kvsdir_get (kvsdir_t dir, const char *key, json_object **valp);
+int kvsdir_get_dir (kvsdir_t dir, const char *key, kvsdir_t *dirp);
+int kvsdir_get_string (kvsdir_t dir, const char *key, char **valp);
+int kvsdir_get_int (kvsdir_t dir, const char *key, int *valp);
+int kvsdir_get_int64 (kvsdir_t dir, const char *key, int64_t *valp);
+int kvsdir_get_double (kvsdir_t dir, const char *key, double *valp);
+int kvsdir_get_boolean (kvsdir_t dir, const char *key, bool *valp);
 
 /* Remove a key from the namespace.  If it represents a directory,
  * its contents are also removed.
