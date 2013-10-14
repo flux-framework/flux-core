@@ -1,5 +1,22 @@
 typedef struct kvsdir_struct  *kvsdir_t;
+
 void kvsdir_destroy (kvsdir_t dir);
+
+/* kvs_get_dir() flags
+ * If flags=0, a kvsdir_* function will always issue a new kvs.get request to
+ *   obtain/test values relative to the kvsdir object.
+ * If KVS_GET_FILEVAL is set, values cached for non-directories in the kvsdir
+ *   object will be used to satisfy kvsdir_* requests.
+ * If KVS_GET_DIRVAL is set, values cached for directories in the kvsdir
+ *   object will be used to satisfy kvsdir_* requests.
+ * "subdirectories" inherit these flags from their parent.
+ * A single kvs_get_dir() with both flags set will recursively cache values
+ * for that entire portion of the namespace.
+ */
+enum {
+    KVS_GET_DIRVAL = 1,
+    KVS_GET_FILEVAL = 2,
+};
 
 /* The basic get and put operations, with convenience functions
  * for simple types.  You will get an error if you call kvs_get()
@@ -10,7 +27,7 @@ void kvsdir_destroy (kvsdir_t dir);
  * These functions return -1 on error (errno set), 0 on success.
  */
 int kvs_get (void *h, const char *key, json_object **valp);
-int kvs_get_dir (void *h, const char *key, kvsdir_t *dirp);
+int kvs_get_dir (void *h, const char *key, kvsdir_t *dirp, int flags);
 int kvs_get_string (void *h, const char *key, char **valp);
 int kvs_get_int (void *h, const char *key, int *valp);
 int kvs_get_int64 (void *h, const char *key, int64_t *valp);

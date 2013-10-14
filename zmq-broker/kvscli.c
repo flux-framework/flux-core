@@ -29,6 +29,7 @@ struct kvsdir_struct {
     void *handle;
     char *key;
     json_object *o;
+    int flags;
 };
 
 struct kvsdir_iterator_struct {
@@ -63,7 +64,8 @@ void kvs_barrierfun_set (BarrierFun *fun)
     kvs_config.barrier = fun;
 }
 
-static kvsdir_t kvsdir_alloc (void *handle, const char *key, json_object *o)
+static kvsdir_t kvsdir_alloc (void *handle, const char *key, json_object *o,
+                              int flags)
 {
     kvsdir_t dir = xzmalloc (sizeof (*dir));
 
@@ -71,6 +73,7 @@ static kvsdir_t kvsdir_alloc (void *handle, const char *key, json_object *o)
     dir->key = xstrdup (key);
     dir->o = o;
     json_object_get (dir->o);
+    dir->flags = flags;
 
     return dir;
 }
@@ -146,7 +149,7 @@ done:
     return ret;
 }
 
-int kvs_get_dir (void *h, const char *key, kvsdir_t *dirp)
+int kvs_get_dir (void *h, const char *key, kvsdir_t *dirp, int flags)
 {
     json_object *val = NULL;
     json_object *request = util_json_object_new_object ();
@@ -154,6 +157,8 @@ int kvs_get_dir (void *h, const char *key, kvsdir_t *dirp)
     int ret = -1;
 
     util_json_object_add_boolean (request, ".flag_directory", true);
+    util_json_object_add_boolean (request, ".flag_fileval", (flags & KVS_GET_FILEVAL));
+    util_json_object_add_boolean (request, ".flag_dirval", (flags & KVS_GET_DIRVAL));
     json_object_object_add (request, key, NULL);
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.get");
@@ -168,7 +173,7 @@ int kvs_get_dir (void *h, const char *key, kvsdir_t *dirp)
         goto done;
     }
     if (dirp)
-        *dirp = kvsdir_alloc (h, key, val);
+        *dirp = kvsdir_alloc (h, key, val, flags);
     ret = 0;
 done:
     if (request)
@@ -188,7 +193,7 @@ kvsdir_t kvsdir_create (void *h, const char *fmt, ...)
     if (vasprintf (&key, fmt, ap) < 0)
         return (NULL);
     va_end (ap);
-    if (kvs_get_dir (h, key, &dir) < 0)
+    if (kvs_get_dir (h, key, &dir, 0) < 0)
         dir = NULL;
     free (key);
     return (dir);
@@ -356,7 +361,8 @@ static int dirent_get (kvsdir_t dir, const char *name, json_object **valp)
         errno = EISDIR;
         goto done;
     }
-    if (!(val = json_object_object_get (dirent, "FILEVAL"))) {
+    if (!(dir->flags & KVS_GET_FILEVAL)
+                || !(val = json_object_object_get (dirent, "FILEVAL"))) {
         errno = ESRCH;
         goto done;
     }
@@ -383,12 +389,13 @@ static int dirent_get_dir (kvsdir_t dir, const char *name, kvsdir_t *dirp)
         errno = ENOTDIR;
         goto done;
     }
-    if (!(val = json_object_object_get (dirent, "DIRVAL"))) {
+    if (!(dir->flags & KVS_GET_DIRVAL)
+                || !(val = json_object_object_get (dirent, "DIRVAL"))) {
         errno = ESRCH; 
         goto done;
     }
     if (dirp)
-        *dirp = kvsdir_alloc (dir->handle, name, val);
+        *dirp = kvsdir_alloc (dir->handle, name, val, dir->flags);
     rc = 0;
 done:
     return rc;
@@ -416,7 +423,7 @@ int kvsdir_get_dir (kvsdir_t dir, const char *name, kvsdir_t *ndir)
     rc = dirent_get_dir (dir, name, ndir);
     if (rc < 0 && (errno == ESRCH || strchr (name, '.'))) {
         key = kvsdir_key_at (dir, name);
-        rc = kvs_get_dir (dir->handle, key, ndir);
+        rc = kvs_get_dir (dir->handle, key, ndir, 0);
         free (key);
     }
     return rc;

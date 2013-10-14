@@ -116,11 +116,6 @@ typedef struct {
 
 static void event_kvs_setroot_send (plugin_ctx_t *p);
 
-/* flags for readahead_dir() and kvs_copy() */
-#define KVS_FLAGS_FILEVAL     1
-#define KVS_FLAGS_DIRVAL      2
-#define KVS_FLAGS_ALL         (KVS_FLAGS_FILEVAL | KVS_FLAGS_DIRVAL)
-
 static wait_t *wait_create (plugin_ctx_t *p, wait_fun_t fun,
                             char *arg, zmsg_t **zmsg)
 {
@@ -459,12 +454,12 @@ static bool readahead_dir (plugin_ctx_t *p, json_object *dir, wait_t *wp,
     bool done = true;
 
     json_object_object_foreachC (dir, iter) {
-        if ((flags & KVS_FLAGS_FILEVAL) && util_json_object_get_string (iter.val, "FILEREF", &ref) == 0) {
+        if ((flags & KVS_GET_FILEVAL) && util_json_object_get_string (iter.val, "FILEREF", &ref) == 0) {
             if (!load (p, ref, wp, &val)) {
                 done = false;
                 continue;
             }
-        } else if ((flags & KVS_FLAGS_DIRVAL) && util_json_object_get_string (iter.val, "DIRREF", &ref) == 0){
+        } else if ((flags & KVS_GET_DIRVAL) && util_json_object_get_string (iter.val, "DIRREF", &ref) == 0){
             if (!load (p, ref, wp, &val)) {
                 done = false;
                 continue;
@@ -487,13 +482,13 @@ static json_object *kvs_copy (plugin_ctx_t *p, json_object *dir, wait_t *wp,
         oom ();
     
     json_object_object_foreachC (dir, iter) {
-        if ((flags & KVS_FLAGS_FILEVAL)
+        if ((flags & KVS_GET_FILEVAL)
                 && util_json_object_get_string (iter.val, "FILEREF", &ref)==0) {
             if (!load (p, ref, wp, &val))
                 goto stall;
             json_object_object_add (dcpy, iter.key,
                                     dirent_create ("FILEVAL", val));
-        } else if ((flags & KVS_FLAGS_DIRVAL)
+        } else if ((flags & KVS_GET_DIRVAL)
                 && util_json_object_get_string (iter.val, "DIRREF", &ref)==0) {
             if (!load (p, ref, wp, &val))
                 goto stall;
@@ -638,7 +633,7 @@ static void commit (plugin_ctx_t *p)
 
     (void)load (p, ctx->rootdir, NULL, &dir);
     assert (dir != NULL);
-    cpy = kvs_copy (p, dir, NULL, KVS_FLAGS_DIRVAL);
+    cpy = kvs_copy (p, dir, NULL, KVS_GET_DIRVAL);
     assert (cpy != NULL);
     while ((np = zlist_pop (ctx->master.namequeue))) {
         deep_put (cpy, np); /* destroys np */
@@ -773,7 +768,7 @@ static void kvs_clean_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     if (plugin_treeroot (p)) {
         (void)load (p, ctx->rootdir, NULL, &rootdir);
         assert (rootdir != NULL);
-        cpy = kvs_copy (p, rootdir, NULL, KVS_FLAGS_ALL);
+        cpy = kvs_copy (p, rootdir, NULL, KVS_GET_DIRVAL | KVS_GET_FILEVAL);
         assert (cpy != NULL);
         zhash_destroy (&ctx->store);
         if (!(ctx->store = zhash_new ()))
@@ -900,7 +895,8 @@ stall:
 }
 
 static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
-                    bool dir, const char *name, json_object **valp, int *ep)
+                    bool dir, int dir_flags, const char *name,
+                    json_object **valp, int *ep)
 {
     json_object *vp, *dirent, *val = NULL;
     const char *ref;
@@ -954,9 +950,9 @@ static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
     }
     /* val now contains the requested object */
     if (isdir) {
-        if (!plugin_treeroot (p) && !readahead_dir (p, val, wp, KVS_FLAGS_FILEVAL))
+        if (!plugin_treeroot (p) && !readahead_dir (p, val, wp, dir_flags))
             goto stall;
-        if (!(val = kvs_copy (p, val, wp, KVS_FLAGS_FILEVAL)))
+        if (!(val = kvs_copy (p, val, wp, dir_flags)))
             goto stall;
     } else 
         json_object_get (val);
@@ -977,6 +973,9 @@ static void kvs_get_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     wait_t *wp = NULL;
     bool stall = false;
     bool flag_directory = false;
+    bool flag_dirval = false;
+    bool flag_fileval = false;
+    int dir_flags = 0;
     int errnum = 0;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
@@ -990,13 +989,20 @@ static void kvs_get_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     }
     /* handle flags - they apply to all keys in the request */
     (void)util_json_object_get_boolean (o, ".flag_directory", &flag_directory);
+    (void)util_json_object_get_boolean (o, ".flag_dirval", &flag_dirval);
+    (void)util_json_object_get_boolean (o, ".flag_fileval", &flag_fileval);
+    if (flag_dirval)
+        dir_flags |= KVS_GET_DIRVAL;
+    if (flag_fileval)
+        dir_flags |= KVS_GET_FILEVAL;
 
     reply = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
         if (!strncmp (iter.key, ".flag_", 6)) /* ignore flags */
             continue;
         json_object *val = NULL;
-        if (!lookup (p, root, wp, flag_directory, iter.key, &val, &errnum))
+        if (!lookup (p, root, wp, flag_directory, dir_flags, iter.key,
+                     &val, &errnum))
             stall = true; /* keep going to maximize readahead */
         if (stall) {
             if (val)
@@ -1032,6 +1038,8 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     wait_t *wp = NULL;
     bool stall = false, changed = false;
     bool flag_directory = false, flag_continue = false;
+    bool flag_dirval = false, flag_fileval = false;
+    int dir_flags = 0;
     int errnum = 0;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
@@ -1046,13 +1054,20 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     /* handle flags - they apply to all keys in the request */
     (void)util_json_object_get_boolean (o, ".flag_directory", &flag_directory);
     (void)util_json_object_get_boolean (o, ".flag_continue", &flag_continue);
+    (void)util_json_object_get_boolean (o, ".flag_dirval", &flag_dirval);
+    (void)util_json_object_get_boolean (o, ".flag_fileval", &flag_fileval);
+    if (flag_dirval)
+        dir_flags |= KVS_GET_DIRVAL;
+    if (flag_fileval)
+        dir_flags |= KVS_GET_FILEVAL;
 
     reply = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
         if (!strncmp (iter.key, ".flag_", 6)) /* ignore flags */
             continue;
         json_object *val = NULL;
-        if (!lookup (p, root, wp, flag_directory, iter.key, &val, &errnum))
+        if (!lookup (p, root, wp, flag_directory, dir_flags, iter.key,
+                     &val, &errnum))
             stall = true; /* keep going to maximize readahead */
         if (stall) {
             if (val)
@@ -1083,6 +1098,8 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         if (!(zcpy = zmsg_dup (*zmsg)))
             oom ();
         util_json_object_add_boolean (reply, ".flag_directory", flag_directory);
+        util_json_object_add_boolean (reply, ".flag_dirval", flag_dirval);
+        util_json_object_add_boolean (reply, ".flag_fileval", flag_fileval);
         util_json_object_add_boolean (reply, ".flag_continue", true);
         (void)cmb_msg_replace_json (zcpy, reply);
 

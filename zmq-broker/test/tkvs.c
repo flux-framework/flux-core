@@ -22,9 +22,11 @@
 #include "log.h"
 #include "zmsg.h"
 
-#define OPTIONS "Z"
+#define OPTIONS "ZFD"
 static const struct option longopts[] = {
    {"trace-apisock", no_argument,        0, 'Z'},
+   {"get-fileval",   no_argument,        0, 'F'},
+   {"get-dirval",    no_argument,        0, 'D'},
    {0, 0, 0, 0},
 };
 
@@ -183,11 +185,11 @@ void tkvs_dump_all (kvsdir_t dir, bool ropt)
     kvsitr_destroy (itr);
 }
 
-void tkvs_get_dir (cmb_t c, char *key, bool ropt, bool all)
+void tkvs_get_dir (cmb_t c, char *key, bool ropt, bool all, int flags)
 {
     kvsdir_t dir;
 
-    if (kvs_get_dir (c, key, &dir) < 0) {
+    if (kvs_get_dir (c, key, &dir, flags) < 0) {
         if (errno == ENOENT)
             printf ("null\n");
         else
@@ -311,14 +313,21 @@ int main (int argc, char *argv[])
     char *val = NULL;
     cmb_t c;
     char path[PATH_MAX + 1];
-    int flags = 0;
+    int cmb_flags = 0;
+    int kvs_flags = 0;
 
     log_init (basename (argv[0]));
     snprintf (path, sizeof (path), CMB_API_PATH_TMPL, getuid ());
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
             case 'Z': /* --trace-apisock */
-                flags |= CMB_FLAGS_TRACE;
+                cmb_flags |= CMB_FLAGS_TRACE;
+                break;
+            case 'F': /* --get-fileval */
+                kvs_flags |= KVS_GET_FILEVAL;
+                break;
+            case 'D': /* --get-dirval */
+                kvs_flags |= KVS_GET_DIRVAL;
                 break;
             default:
                 usage ();
@@ -335,7 +344,7 @@ int main (int argc, char *argv[])
             || (!strcmp (op, "mkdir") && !key)
             || (!strncmp (op, "put", 3) && (!key || !val)))
         usage ();
-    if (!(c = cmb_init_full (path, flags)))
+    if (!(c = cmb_init_full (path, cmb_flags)))
         err_exit ("cmb_init");
 
     if (!strcmp (op, "get_string"))
@@ -364,14 +373,14 @@ int main (int argc, char *argv[])
         tkvs_put_boolean (c, key, !strcmp (val, "false") ? false : true);
 
     else if (!strcmp (op, "get_dir"))
-        tkvs_get_dir (c, key, false, false);
+        tkvs_get_dir (c, key, false, false, kvs_flags);
     else if (!strcmp (op, "get_dir_r"))
-        tkvs_get_dir (c, key, true, false);
+        tkvs_get_dir (c, key, true, false, kvs_flags);
 
     else if (!strcmp (op, "get_all"))
-        tkvs_get_dir (c, key, false, true);
+        tkvs_get_dir (c, key, false, true, kvs_flags);
     else if (!strcmp (op, "get_all_r"))
-        tkvs_get_dir (c, key, true, true);
+        tkvs_get_dir (c, key, true, true, kvs_flags);
 
     else if (!strcmp (op, "get"))
         tkvs_get (c, key);

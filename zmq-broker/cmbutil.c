@@ -266,7 +266,7 @@ int main (int argc, char *argv[])
             case 'l': { /* --kvs-list name */
                 kvsdir_t dir;
     
-                if (kvs_get_dir (c, optarg, &dir) < 0)
+                if (kvs_get_dir (c, optarg, &dir, 0) < 0)
                     err_exit ("kvs_get_dir %s", optarg);
                 dump_kvs_dir (dir);
                 kvsdir_destroy (dir);

@@ -1,0 +1,34 @@
+#!/bin/bash -e
+
+TEST=`basename $0`
+DIR=$TEST.a.b
+EXPRESULT="$DIR.a = 69
+$DIR.b = 70
+$DIR.c = 3.140000
+$DIR.d = snerg
+$DIR.e = true
+$DIR.f.g.h.i.j = blorg
+$DIR.z.y.q.p.x = nerg"
+
+test_cleanup() {
+    ./tkvs unlink $TEST
+    ./tkvs commit
+}
+
+test_cleanup
+
+./tkvs put_int $DIR.a 69
+./tkvs put_int64 $DIR.b 70
+./tkvs put_double $DIR.c 3.14
+./tkvs put_string $DIR.d "snerg"
+./tkvs put_boolean $DIR.e "true"
+./tkvs put_string $DIR.f.g.h.i.j "blorg"
+./tkvs put_string $DIR.z.y.q.p.x "nerg"
+./tkvs commit
+
+# Retrieve directory recursively, including values
+RESULT=`./tkvs --get-fileval --get-dirval get_all_r $DIR`
+
+test_cleanup
+
+exit 0
