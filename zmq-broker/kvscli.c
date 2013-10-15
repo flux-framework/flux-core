@@ -339,24 +339,68 @@ char *kvsdir_key_at (kvsdir_t dir, const char *name)
     return key;
 }
 
+/* Helper for dirent_get, dirent_get_dir */
+static json_object *get_dirobj (json_object *dirent, int flags)
+{
+    json_object *dirobj = NULL;
+
+    if (json_object_object_get (dirent, "FILEVAL"))
+        errno = ENOTDIR;
+    else if (json_object_object_get (dirent, "FILEREF"))
+        errno = ENOTDIR;
+    else if (json_object_object_get (dirent, "DIRREF"))
+        errno = ESRCH; /* not cached */
+    else if (!(dirobj = json_object_object_get (dirent, "DIRVAL")))
+        errno = ENOENT;
+    else if (!(flags & KVS_GET_DIRVAL)) {
+        errno = ESRCH; /* can't use cache */
+        dirobj = NULL;
+    }
+    return dirobj;
+}
+
+/* Helper for dirent_get */
+static json_object *get_valobj (json_object *dirent, int flags)
+{
+    json_object *valobj = NULL;
+
+    if (json_object_object_get (dirent, "DIRVAL"))
+        errno = EISDIR;
+    else if (json_object_object_get (dirent, "DIRREF"))
+        errno = EISDIR;
+    else if (json_object_object_get (dirent, "FILEREF"))
+        errno = ESRCH; /* not cached */
+    else if (!(valobj = json_object_object_get (dirent, "FILEVAL")))
+        errno = ENOENT;
+    else if (!(flags & KVS_GET_FILEVAL)) {
+        errno = ESRCH; /* can't use cache */
+        valobj = NULL;
+    }
+    return valobj;
+}
+
+/* helper for kvsdir_get */
 static int dirent_get (kvsdir_t dir, const char *name, json_object **valp)
 {
-    json_object *dirent, *val;
+    char *cpy = xstrdup (name);
+    char *p, *saveptr;
+    json_object *val, *dirobj, *dirent;
     int rc = -1;
 
-    if (!(dirent = json_object_object_get (dir->o, name))) {
-        errno = ENOENT;
-        goto done;
-    }
-    if (json_object_object_get (dirent, "DIRVAL")
-     || json_object_object_get (dirent, "DIRREF")) {
-        errno = EISDIR;
-        goto done;
-    }
-    if (!(dir->flags & KVS_GET_FILEVAL)
-                || !(val = json_object_object_get (dirent, "FILEVAL"))) {
-        errno = ESRCH;
-        goto done;
+    dirobj = dir->o;
+    p = strtok_r (cpy, ".", &saveptr);
+    while (p) {
+        if (!(dirent = json_object_object_get (dirobj, p))) {
+            errno = ENOENT;
+            goto done;
+        }
+        if ((p = strtok_r (NULL, ".", &saveptr))) {
+            if (!(dirobj = get_dirobj (dirent, dir->flags)))
+                goto done;
+        } else {
+            if (!(val = get_valobj (dirent, dir->flags)))
+                goto done;
+        }
     }
     if (valp) {
         json_object_get (val);
@@ -364,32 +408,34 @@ static int dirent_get (kvsdir_t dir, const char *name, json_object **valp)
     }
     rc = 0;
 done:
+    free (cpy);
     return rc;
 }
 
+/* Helper for kvsdir_get_dir */
 static int dirent_get_dir (kvsdir_t dir, const char *name, kvsdir_t *dirp)
 {
-    json_object *dirent, *val;
+    char *cpy = xstrdup (name);
+    char *p, *saveptr;
+    json_object *dirobj, *dirent;
     int rc = -1;
 
-    if (!(dirent = json_object_object_get (dir->o, name))) {
-        errno = ENOENT;
-        goto done;
-    }
-    if (json_object_object_get (dirent, "FILEVAL")
-     || json_object_object_get (dirent, "FILEREF")) {
-        errno = ENOTDIR;
-        goto done;
-    }
-    if (!(dir->flags & KVS_GET_DIRVAL)
-                || !(val = json_object_object_get (dirent, "DIRVAL"))) {
-        errno = ESRCH; 
-        goto done;
+    dirobj = dir->o;
+    p = strtok_r (cpy, ".", &saveptr);
+    while (p) {
+        if (!(dirent = json_object_object_get (dirobj, p))) {
+            errno = ENOENT;
+            goto done;
+        }
+        if (!(dirobj = get_dirobj (dirent, dir->flags)))
+            goto done;
+        p = strtok_r (NULL, ".", &saveptr);
     }
     if (dirp)
-        *dirp = kvsdir_alloc (dir->handle, name, val, dir->flags);
+        *dirp = kvsdir_alloc (dir->handle, name, dirobj, dir->flags);
     rc = 0;
 done:
+    free (cpy);
     return rc;
 }
 
@@ -399,7 +445,7 @@ int kvsdir_get (kvsdir_t dir, const char *name, json_object **valp)
     char *key;
 
     rc = dirent_get (dir, name, valp);
-    if (rc < 0 && (errno == ESRCH || strchr (name, '.'))) {
+    if (rc < 0 && errno == ESRCH) { /* not cached - look up full key */
         key = kvsdir_key_at (dir, name);
         rc = kvs_get (dir->handle, key, valp);
         free (key);
@@ -407,15 +453,15 @@ int kvsdir_get (kvsdir_t dir, const char *name, json_object **valp)
     return rc;
 }
 
-int kvsdir_get_dir (kvsdir_t dir, const char *name, kvsdir_t *ndir)
+int kvsdir_get_dir (kvsdir_t dir, const char *name, kvsdir_t *dirp)
 {
     int rc;
     char *key;
 
-    rc = dirent_get_dir (dir, name, ndir);
-    if (rc < 0 && (errno == ESRCH || strchr (name, '.'))) {
+    rc = dirent_get_dir (dir, name, dirp);
+    if (rc < 0 && errno == ESRCH) { /* not cached - look up full key */
         key = kvsdir_key_at (dir, name);
-        rc = kvs_get_dir (dir->handle, key, ndir, 0);
+        rc = kvs_get_dir (dir->handle, key, dirp, 0);
         free (key);
     }
     return rc;
