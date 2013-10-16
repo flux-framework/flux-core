@@ -410,6 +410,8 @@ static kvs_watcher_t *add_watcher (void *h, const char *key, watch_type_t type,
 
 /* N.B. we expect to receive a reply here, not to have it intercepted
  * and routed to kvs_watch_response().
+ * If key is unset, return success with a NULL val, not failure with
+ * errno = ENOENT.  We do that in the dispatch code.
  */
 static int send_kvs_watch (void *h, const char *key, json_object **valp)
 {

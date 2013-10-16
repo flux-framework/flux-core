@@ -39,11 +39,14 @@ static void _set_sync_period_sec (const char *key, double val, void *arg,
 {
     plugin_ctx_t *p = arg;
 
-    if (errnum != 0)
-        errn_exit (errnum, "sync: %s", key);
-    if (val == NAN || val <= 0 || val > MAX_SYNC_PERIOD_SEC)
-        msg_exit ("sync: %s: bad value (%f)", key, val);
-    plugin_timeout_set (p, (int)(val * 1000)); /* msec */
+    if (errnum != 0) {
+        errn (errnum, "sync: %s", key);
+        plugin_timeout_clear (p);
+    } else if (val == NAN || val <= 0 || val > MAX_SYNC_PERIOD_SEC) {
+        msg ("sync: %s: bad value (%f)", key, val);
+        plugin_timeout_clear (p);
+    } else 
+        plugin_timeout_set (p, (int)(val * 1000)); /* msec */
 }
 
 static void _init (plugin_ctx_t *p)
