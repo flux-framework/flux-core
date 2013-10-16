@@ -291,30 +291,26 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         free (arg);
 }
 
-static void _set_live_missed_trigger_allow (const char *key, json_object *o,
-                                            void *arg)
+static void _set_live_missed_trigger_allow (const char *key, int val,
+                                            void *arg, int errnum)
 {
     plugin_ctx_t *p = arg;
     ctx_t *ctx = p->ctx;
-    int i;
 
-    if (!o)
-        msg_exit ("live: %s is not set", key);
-    i = json_object_get_int (o);
-    if (i < 2 || i > 100)
-        msg_exit ("live: bad %s value: %d", key, i);
-    ctx->conf.live_missed_trigger_allow = i; 
+    if (errnum != 0)
+        errn_exit (errnum, "live: %s", key);
+    if (val < 2 || val > 100)
+        msg_exit ("live: %s: bad value (%d)", key, val);
+    ctx->conf.live_missed_trigger_allow = val; 
 }
 
-static void _set_topology (const char *key, json_object *o, void *arg)
+static void _set_topology (const char *key, json_object *o, void *arg, int errnum)
 {
     plugin_ctx_t *p = arg;
     ctx_t *ctx = p->ctx;
 
-    if (!o)
-        msg_exit ("live: %s is not set", key);
-    if (json_object_get_type (o) != json_type_array)
-        msg_exit ("live: %s is not type array", key);
+    if (errnum != 0)
+        errn_exit (errnum, "live: %s", key);
     if (ctx->conf.topology)
         json_object_put (ctx->conf.topology);
     json_object_get (o);
@@ -323,15 +319,20 @@ static void _set_topology (const char *key, json_object *o, void *arg)
     _child_sync_with_topology (p);
 }
 
-static void _set_live_down (const char *key, json_object *o, void *arg)
+static void _set_live_down (const char *key, json_object *o, void *arg, int errnum)
 {
     plugin_ctx_t *p = arg;
     ctx_t *ctx = p->ctx;
 
-    if (ctx->conf.live_down)
+    if (ctx->conf.live_down) {
         json_object_put (ctx->conf.live_down);
-    json_object_get (o);
-    ctx->conf.live_down = o;
+        ctx->conf.live_down = NULL;
+    }
+    if (errnum == 0) {
+        json_object_get (o);
+        ctx->conf.live_down = o;
+    } else if (errnum != ENOENT)
+        errn_exit (errnum, "live: %s", key);
 }
 
 static void _init (plugin_ctx_t *p)
@@ -342,15 +343,14 @@ static void _init (plugin_ctx_t *p)
     if (!(ctx->kids = zhash_new ()))
         oom ();
 
-    plugin_kvs_watch (p, "conf.live.missed-trigger-allow",
-                      _set_live_missed_trigger_allow, p);
-    plugin_kvs_watch (p, "conf.live.topology", _set_topology, p);
-    plugin_kvs_watch (p, "conf.live.down", _set_live_down, p);
+    kvs_watch_int (p, "conf.live.missed-trigger-allow",
+                   _set_live_missed_trigger_allow, p);
+    kvs_watch (p, "conf.live.topology", _set_topology, p);
+    kvs_watch (p, "conf.live.down", _set_live_down, p);
 
     zsocket_set_subscribe (p->zs_evin, "event.sched.trigger.");
     if (plugin_treeroot (p))
         zsocket_set_subscribe (p->zs_evin, "event.live.");
-        
 }
 
 static void _fini (plugin_ctx_t *p)

@@ -34,22 +34,21 @@ static void _timeout (plugin_ctx_t *p)
     plugin_send_event (p, "event.sched.trigger.%d", ++epoch);
 }
 
-static void _set_sync_period_sec (const char *key, json_object *o, void *arg)
+static void _set_sync_period_sec (const char *key, double val, void *arg,
+                                  int errnum)
 {
     plugin_ctx_t *p = arg;
-    double v;
 
-    if (!o)
-        msg_exit ("sync: %s is not set", key);
-    v = json_object_get_double (o);
-    if (v == NAN || v <= 0 || v > MAX_SYNC_PERIOD_SEC)
-        msg_exit ("sync: bad %s value: %f", key, v);
-    plugin_timeout_set (p, (int)(v * 1000)); /* msec */
+    if (errnum != 0)
+        errn_exit (errnum, "sync: %s", key);
+    if (val == NAN || val <= 0 || val > MAX_SYNC_PERIOD_SEC)
+        msg_exit ("sync: %s: bad value (%f)", key, val);
+    plugin_timeout_set (p, (int)(val * 1000)); /* msec */
 }
 
 static void _init (plugin_ctx_t *p)
 {
-    plugin_kvs_watch (p, "conf.sync.period-sec", _set_sync_period_sec, p);
+    kvs_watch_double (p, "conf.sync.period-sec", _set_sync_period_sec, p);
 }
 
 struct plugin_struct syncsrv = {

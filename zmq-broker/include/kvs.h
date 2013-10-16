@@ -1,7 +1,17 @@
-typedef struct kvsdir_struct  *kvsdir_t;
+typedef struct kvsctx_struct *kvsctx_t;
+typedef struct kvsdir_struct *kvsdir_t;
 
 typedef json_object *(KVSReqF(void *h, json_object *req, const char *fmt, ...));
 typedef int (KVSBarrierF(void *h, const char *name, int nprocs));
+typedef kvsctx_t (KVSGetCtxF(void *h));
+
+typedef void (KVSSetF(const char *key, json_object *val, void *arg,int errnum));
+typedef void (KVSSetDirF(const char *key, kvsdir_t dir, void *arg, int errnum));
+typedef void (KVSSetStringF(const char *key, const char *val, void *arg, int errnum));
+typedef void (KVSSetIntF(const char *key, int val, void *arg, int errnum));
+typedef void (KVSSetInt64F(const char *key, int64_t val, void *arg,int errnum));
+typedef void (KVSSetDoubleF(const char *key, double val, void *arg,int errnum));
+typedef void (KVSSetBooleanF(const char *key, bool val, void *arg, int errnum));
 
 /* kvs_get_dir() flags
  * If flags=0, a kvsdir_* function will always issue a new kvs.get request to
@@ -42,6 +52,20 @@ int kvs_get_boolean (void *h, const char *key, bool *valp);
  * string. Returns NULL on failure with errno set.
  */
 kvsdir_t kvsdir_create (void *h, const char *fmt, ...);
+
+/* kvs_watch* is like kvs_get* except the registered callback is called
+ * initially and whenever the requested key changes.
+ * Any storage associated with the value given the callback is freed when
+ * the callback returns.  If a value is unset, the callback gets errnum = ENOENT.
+ */
+int kvs_watch (void *h, const char *key, KVSSetF *set, void *arg);
+int kvs_watch_dir (void *h, const char *key, KVSSetDirF *set,
+                   void *arg, int flags);
+int kvs_watch_string (void *h, const char *key, KVSSetStringF *set, void *arg);
+int kvs_watch_int (void *h, const char *key, KVSSetIntF *set, void *arg);
+int kvs_watch_int64 (void *h, const char *key, KVSSetInt64F *set, void *arg);
+int kvs_watch_double (void *h, const char *key, KVSSetDoubleF *set, void *arg);
+int kvs_watch_boolean (void *h, const char *key, KVSSetBooleanF *set,void *arg);
 
 /* kvs_put() and kvs_put_string() both make copies of the value argument
  * The caller retains ownership of the original.
@@ -135,11 +159,17 @@ int kvs_fence (void *h, const char *name, int nprocs);
  */
 int kvs_dropcache (void *h);
 
-/* These are called internally to register functions that are used
- * by the kvs implementation.
+/* These are called internally by plugin.c and apicli.c and
+ * are part of the KVS internal implementation.  Do not use.
  */
 void kvs_reqfun_set (KVSReqF *fun);
 void kvs_barrierfun_set (KVSBarrierF *fun);
+void kvs_getctxfun_set (KVSGetCtxF *fun);
+
+void kvs_watch_response (void *h, zmsg_t **zmsg);
+
+kvsctx_t kvs_ctx_create (void *h);
+void kvs_ctx_destroy (kvsctx_t ctx);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

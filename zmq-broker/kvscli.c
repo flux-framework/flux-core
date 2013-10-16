@@ -24,6 +24,10 @@
 #include "cmb.h"
 #include "util.h"
 
+struct kvsctx_struct {
+    void *handle;
+    zhash_t *watchers;
+};
 
 struct kvsdir_struct {
     void *handle;
@@ -38,13 +42,27 @@ struct kvsdir_iterator_struct {
     struct json_object_iterator end;
 };
 
+typedef enum {
+    WATCH_STRING, WATCH_INT, WATCH_INT64, WATCH_DOUBLE,
+    WATCH_BOOLEAN, WATCH_OBJECT, WATCH_DIR,
+} watch_type_t;
+
+typedef struct {
+    watch_type_t type;
+    KVSSetF *set;
+    void *arg;
+    int dirflags;
+} kvs_watcher_t;
+
 struct kvs_config_struct {
     KVSReqF *request;
     KVSBarrierF *barrier;
+    KVSGetCtxF *getctx;
 };
 static struct kvs_config_struct kvs_config = {
     .request = NULL,
-    .barrier = NULL
+    .barrier = NULL,
+    .getctx = NULL,
 };
 
 void kvsdir_destroy (kvsdir_t dir)
@@ -290,6 +308,288 @@ int kvs_get_boolean (void *h, const char *key, bool *valp)
 done: 
     if (o)
         json_object_put (o);
+    return rc;
+}
+
+static void dispatch_watch (void *h, kvs_watcher_t *wp, const char *key,
+                            json_object *val)
+{
+    int errnum = val ? 0 : ENOENT;
+
+    switch (wp->type) {
+        case WATCH_STRING: {
+            KVSSetStringF *set = (KVSSetStringF *)wp->set; 
+            const char *s = val ? json_object_get_string (val) : NULL;
+            set (key, s, wp->arg, errnum);
+            break;
+        }
+        case WATCH_INT: {
+            KVSSetIntF *set = (KVSSetIntF *)wp->set; 
+            int i = val ? json_object_get_int (val) : 0;
+            set (key, i, wp->arg, errnum);
+            break;
+        }
+        case WATCH_INT64: {
+            KVSSetInt64F *set = (KVSSetInt64F *)wp->set; 
+            int64_t i = val ? json_object_get_int64 (val) : 0;
+            set (key, i, wp->arg, errnum);
+            break;
+        }
+        case WATCH_DOUBLE: {
+            KVSSetDoubleF *set = (KVSSetDoubleF *)wp->set; 
+            double d = val ? json_object_get_double (val) : 0;
+            set (key, d, wp->arg, errnum);
+            break;
+        }
+        case WATCH_BOOLEAN: {
+            KVSSetBooleanF *set = (KVSSetBooleanF *)wp->set; 
+            bool b = val ? json_object_get_boolean (val) : false;
+            set (key, b, wp->arg, errnum);
+            break;
+        }
+        case WATCH_DIR: {
+            KVSSetDirF *set = (KVSSetDirF *)wp->set;
+            kvsdir_t dir = val ? kvsdir_alloc (h, key, val, wp->dirflags) : NULL;
+            set (key, dir, wp->arg, errnum);
+            if (dir)
+                kvsdir_destroy (dir);
+        }
+        case WATCH_OBJECT: {
+            wp->set (key, val, wp->arg, errnum);
+            break;
+        }
+    }
+}
+
+void kvs_watch_response (void *h, zmsg_t **zmsg)
+{
+    json_object *reply = NULL;
+    json_object_iter iter;
+    kvs_watcher_t *wp;
+    bool match = false;
+    kvsctx_t ctx;
+
+    assert (kvs_config.getctx != NULL);
+    ctx = kvs_config.getctx (h);
+    assert (ctx != NULL);
+    
+    if (cmb_msg_decode (*zmsg, NULL, &reply) == 0 && reply != NULL) {
+        json_object_object_foreachC (reply, iter) {
+            if ((wp = zhash_lookup (ctx->watchers, iter.key))) {
+                dispatch_watch (h, wp, iter.key, iter.val);
+                match = true;
+            }
+        }
+    }
+    if (reply)
+        json_object_put (reply);
+    if (match)
+        zmsg_destroy (zmsg);
+}
+
+static kvs_watcher_t *add_watcher (void *h, const char *key, watch_type_t type,
+                                   KVSSetF *fun, void *arg, int dirflags)
+{
+    kvsctx_t ctx;
+    kvs_watcher_t *wp = xzmalloc (sizeof (*wp));
+
+    assert (kvs_config.getctx != NULL);
+    ctx = kvs_config.getctx (h);
+    assert (ctx != NULL);
+
+    wp->set = fun;
+    wp->type = type;
+    wp->arg = arg;
+    wp->dirflags = dirflags;
+
+    zhash_update (ctx->watchers, key, wp);
+    zhash_freefn (ctx->watchers, key, free);
+
+    return wp;
+}
+
+/* N.B. we expect to receive a reply here, not to have it intercepted
+ * and routed to kvs_watch_response().
+ */
+static int send_kvs_watch (void *h, const char *key, json_object **valp)
+{
+    json_object *val = NULL;
+    json_object *request = util_json_object_new_object ();
+    json_object *reply = NULL;
+    int ret = -1;
+
+    json_object_object_add (request, key, NULL);
+    assert (kvs_config.request != NULL);
+    reply = kvs_config.request (h, request, "kvs.watch");
+    if (!reply) {
+        err ("%s", __FUNCTION__);
+        goto done;
+    }
+    if (util_json_object_get_int (reply, "errnum", &errno) == 0)
+        goto done;
+    if ((val = json_object_object_get (reply, key)))
+        json_object_get (val);
+    *valp = val;
+    ret = 0;
+done:
+    if (request)
+        json_object_put (request);
+    if (reply)
+        json_object_put (reply);
+    return ret;
+}
+
+static int send_kvs_watch_dir (void *h, const char *key, json_object **valp,
+                               int flags)
+{
+    json_object *val = NULL;
+    json_object *request = util_json_object_new_object ();
+    json_object *reply = NULL;
+    int ret = -1;
+
+    util_json_object_add_boolean (request, ".flag_directory", true);
+    util_json_object_add_boolean (request, ".flag_fileval",
+                                  (flags & KVS_GET_FILEVAL));
+    util_json_object_add_boolean (request, ".flag_dirval",
+                                  (flags & KVS_GET_DIRVAL));
+    json_object_object_add (request, key, NULL);
+    assert (kvs_config.request != NULL);
+    reply = kvs_config.request (h, request, "kvs.watch");
+    if (!reply) {
+        err ("%s", __FUNCTION__);
+        goto done;
+    }
+    if (util_json_object_get_int (reply, "errnum", &errno) == 0)
+        goto done;
+    if ((val = json_object_object_get (reply, key)))
+        json_object_get (val);
+    *valp = val; /* value not converted to kvsdir (do it in dispatch) */
+    ret = 0;
+done:
+    if (request)
+        json_object_put (request);
+    if (reply)
+        json_object_put (reply);
+    return ret;
+}
+
+int kvs_watch (void *h, const char *key, KVSSetF *set, void *arg)
+{
+    kvs_watcher_t *wp;
+    json_object *val = NULL;
+    int rc = -1;
+
+    if (send_kvs_watch (h, key, &val) < 0)
+        goto done;
+    wp = add_watcher (h, key, WATCH_OBJECT, set, arg, 0);
+    dispatch_watch (h, wp, key, val);
+    rc = 0;
+done:
+    if (val)
+        json_object_put (val);
+    return rc;
+}
+
+int kvs_watch_dir (void *h, const char *key, KVSSetDirF *set,
+                   void *arg, int flags)
+{
+    kvs_watcher_t *wp;
+    json_object *val = NULL;
+    int rc = -1;
+
+    if (send_kvs_watch_dir (h, key, &val, flags) < 0)
+        goto done;
+    wp = add_watcher (h, key, WATCH_DIR, (KVSSetF *)set, arg, flags);
+    dispatch_watch (h, wp, key, val);
+    rc = 0;
+done:
+    if (val)
+        json_object_put (val);
+    return rc;
+}
+
+int kvs_watch_string (void *h, const char *key, KVSSetStringF *set, void *arg)
+{
+    kvs_watcher_t *wp;
+    json_object *val = NULL;
+    int rc = -1;
+
+    if (send_kvs_watch (h, key, &val) < 0)
+        goto done;
+    wp = add_watcher (h, key, WATCH_STRING, (KVSSetF *)set, arg, 0);
+    dispatch_watch (h, wp, key, val);
+    rc = 0;
+done:
+    if (val)
+        json_object_put (val);
+    return rc;
+}
+
+int kvs_watch_int (void *h, const char *key, KVSSetIntF *set, void *arg)
+{
+    kvs_watcher_t *wp;
+    json_object *val = NULL;
+    int rc = -1;
+
+    if (send_kvs_watch (h, key, &val) < 0)
+        goto done;
+    wp = add_watcher (h, key, WATCH_INT, (KVSSetF *)set, arg, 0);
+    dispatch_watch (h, wp, key, val);
+    rc = 0;
+done:
+    if (val)
+        json_object_put (val);
+    return rc;
+}
+
+int kvs_watch_int64 (void *h, const char *key, KVSSetInt64F *set, void *arg)
+{
+    kvs_watcher_t *wp;
+    json_object *val = NULL;
+    int rc = -1;
+
+    if (send_kvs_watch (h, key, &val) < 0)
+        goto done;
+    wp = add_watcher (h, key, WATCH_INT64, (KVSSetF *)set, arg, 0);
+    dispatch_watch (h, wp, key, val);
+    rc = 0;
+done:
+    if (val)
+        json_object_put (val);
+    return rc;
+}
+
+int kvs_watch_double (void *h, const char *key, KVSSetDoubleF *set, void *arg)
+{
+    kvs_watcher_t *wp;
+    json_object *val = NULL;
+    int rc = -1;
+
+    if (send_kvs_watch (h, key, &val) < 0)
+        goto done;
+    wp = add_watcher (h, key, WATCH_DOUBLE, (KVSSetF *)set, arg, 0);
+    dispatch_watch (h, wp, key, val);
+    rc = 0;
+done:
+    if (val)
+        json_object_put (val);
+    return rc;
+}
+
+int kvs_watch_boolean (void *h, const char *key, KVSSetBooleanF *set, void *arg)
+{
+    kvs_watcher_t *wp;
+    json_object *val = NULL;
+    int rc = -1;
+
+    if (send_kvs_watch (h, key, &val) < 0)
+        goto done;
+    wp = add_watcher (h, key, WATCH_BOOLEAN, (KVSSetF *)set, arg, 0);
+    dispatch_watch (h, wp, key, val);
+    rc = 0;
+done:
+    if (val)
+        json_object_put (val);
     return rc;
 }
 
@@ -918,6 +1218,23 @@ done:
     return ret;
 }
 
+kvsctx_t kvs_ctx_create (void *h)
+{
+    kvsctx_t ctx = xzmalloc (sizeof (*ctx));
+
+    ctx->handle = h;
+    if (!(ctx->watchers = zhash_new ()))
+        oom ();
+
+    return ctx;
+}
+
+void kvs_ctx_destroy (kvsctx_t ctx)
+{
+    zhash_destroy (&ctx->watchers);
+    free (ctx);
+}
+
 void kvs_reqfun_set (KVSReqF *fun)
 {
     kvs_config.request = fun;
@@ -926,6 +1243,11 @@ void kvs_reqfun_set (KVSReqF *fun)
 void kvs_barrierfun_set (KVSBarrierF *fun)
 {
     kvs_config.barrier = fun;
+}
+
+void kvs_getctxfun_set (KVSGetCtxF *fun)
+{
+    kvs_config.getctx = fun;
 }
 
 /*

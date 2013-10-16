@@ -268,51 +268,6 @@ done:
         json_object_put (request);
 }
 
-static void _kvs_add_watcher (plugin_ctx_t *p, const char *key,
-                               kvs_watch_f *set, void *arg)
-{
-    kvs_watcher_t *wp = xzmalloc (sizeof (kvs_watcher_t));
-
-    wp->arg = arg;
-    wp->set = set;
-    zhash_update (p->kvs_watcher, key, wp);
-    zhash_freefn (p->kvs_watcher, key, free);
-}
-
-int plugin_kvs_watch (plugin_ctx_t *p, const char *key,
-                      kvs_watch_f *set, void *arg)
-{
-    json_object *request = util_json_object_new_object ();
-
-    _kvs_add_watcher (p, key, set, arg);
-    json_object_object_add (request, key, NULL);
-    plugin_send_request (p, request, "kvs.watch");
-    json_object_put (request);
-
-    return 0;
-}
-
-static void plugin_watch_update (plugin_ctx_t *p, zmsg_t **zmsg)
-{
-    json_object *reply = NULL;
-    json_object_iter iter;
-    kvs_watcher_t *wp; 
-    bool match = false;
-
-    if (cmb_msg_decode (*zmsg, NULL, &reply) == 0 && reply != NULL) {
-        json_object_object_foreachC (reply, iter) {
-            if ((wp = zhash_lookup (p->kvs_watcher, iter.key))) {
-                wp->set (iter.key, iter.val, wp->arg); /* call plugin cb */
-                match = true;
-            }
-        }
-    }
-    if (reply)
-        json_object_put (reply);
-    if (match)
-        zmsg_destroy (zmsg);
-}
-
 void plugin_ping_respond (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     json_object *o;
@@ -373,7 +328,7 @@ static void plugin_handle_response (plugin_ctx_t *p, zmsg_t *zmsg)
      * If no match, call the user's recv callback.
      */
     if (!strcmp (tag, "kvs.watch"))
-        plugin_watch_update (p, &zmsg); /* consumes zmsg on match */
+        kvs_watch_response (p, &zmsg); /* consumes zmsg on match */
     if (zmsg && p->plugin->recvFn)
         p->plugin->recvFn (p, &zmsg, ZMSG_RESPONSE);
     if (zmsg)
@@ -543,7 +498,14 @@ static void *_plugin_thread (void *arg)
     zloop_destroy (&p->zloop);
 
     return NULL;
-}    
+}
+
+static kvsctx_t _get_kvs_ctx (void *h)
+{
+    plugin_ctx_t *p = h;
+
+    return p->kvs_ctx;
+}
 
 static void _plugin_destroy (void *arg)
 {
@@ -567,7 +529,8 @@ static void _plugin_destroy (void *arg)
     if (p->timeout)
         free (p->timeout);
 
-    zhash_destroy (&p->kvs_watcher);
+    kvs_ctx_destroy (p->kvs_ctx);
+
     while ((zmsg = zlist_pop (p->deferred_responses)))
         zmsg_destroy (&zmsg);
     zlist_destroy (&p->deferred_responses);
@@ -604,8 +567,8 @@ static int _plugin_create (char *name, server_t *srv, conf_t *conf)
     p->srv = srv;
     p->plugin = plugin;
 
-    if (!(p->kvs_watcher = zhash_new ()))
-        oom ();
+    p->kvs_ctx = kvs_ctx_create (p);
+
     if (!(p->deferred_responses = zlist_new ()))
         oom ();
 
@@ -638,6 +601,7 @@ void plugin_init (conf_t *conf, server_t *srv)
 
     kvs_reqfun_set ((KVSReqF *)plugin_request);
     kvs_barrierfun_set (NULL); /* kvs_fence not used in plugin context as yet */
+    kvs_getctxfun_set ((KVSGetCtxF *)_get_kvs_ctx);
 
     if (mapstr (conf->plugins, (mapstrfun_t)_plugin_create, srv, conf) < 0)
         exit (1);

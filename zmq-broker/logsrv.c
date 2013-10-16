@@ -458,48 +458,42 @@ static void _timeout (plugin_ctx_t *p)
     plugin_timeout_clear (p);
 }
 
-static void _set_log_reduction_timeout_msec (const char *key, json_object *o,
-                                             void *arg)
+static void _set_log_reduction_timeout_msec (const char *key, int val,
+                                             void *arg, int errnum)
 {
     plugin_ctx_t *p = arg;
     ctx_t *ctx = p->ctx;
-    int i;
 
-    if (!o)
-        msg_exit ("live: %s is not set", key);
-    i = json_object_get_int (o);
-    if (i < 0)
-        msg_exit ("live: bad %s value: %d", key, i);
-    ctx->log_reduction_timeout_msec = i;
+    if (errnum != 0)
+        errn_exit (errnum, "live: %s", key);
+    if (val < 0)
+        msg_exit ("live: %s: bad value (%d)", key, val);
+    ctx->log_reduction_timeout_msec = val;
 }
 
-static void _set_log_circular_buffer_entries (const char *key, json_object *o,
-                                              void *arg)
+static void _set_log_circular_buffer_entries (const char *key, int val,
+                                              void *arg, int errnum)
 {
     plugin_ctx_t *p = arg;
-    int i;
 
-    if (!o)
-        msg_exit ("live: %s is not set", key);
-    i = json_object_get_int (o);
-    if (i < 0)
-        msg_exit ("live: bad %s value: %d", key, i);
-    _resize_cirbuf (p, i);
+    if (errnum != 0)
+        errn_exit (errnum, "live: %s", key);
+    if (val < 0)
+        msg_exit ("live: %s: bad value (%d)", key, val);
+    _resize_cirbuf (p, val);
 }
 
-static void _set_log_persist_level (const char *key, json_object *o,
-                                       void *arg)
+static void _set_log_persist_level (const char *key, const char *val,
+                                    void *arg, int errnum)
 {
     plugin_ctx_t *p = arg;
     ctx_t *ctx = p->ctx;
-    const char *s;
 
-    if (!o)
-        msg_exit ("live: %s is not set", key);
-    s = json_object_get_string (o);
-    ctx->log_persist_level = log_strtolevel (s);
+    if (errnum != 0)
+        errn_exit (errnum, "live: %s", key);
+    ctx->log_persist_level = log_strtolevel (val);
     if (ctx->log_persist_level < 0)
-        msg_exit ("live: bad %s value: %s", key, s);
+        msg_exit ("live: %s: bad value (%s)", key, val);
 }
 
 static void _init (plugin_ctx_t *p)
@@ -511,11 +505,11 @@ static void _init (plugin_ctx_t *p)
     ctx->backlog = zlist_new ();
     ctx->cirbuf = zlist_new ();
 
-    plugin_kvs_watch (p, "conf.log.reduction-timeout-msec",
+    kvs_watch_int (p, "conf.log.reduction-timeout-msec",
                       _set_log_reduction_timeout_msec, p);
-    plugin_kvs_watch (p, "conf.log.circular-buffer-entries",
+    kvs_watch_int (p, "conf.log.circular-buffer-entries",
                       _set_log_circular_buffer_entries, p);
-    plugin_kvs_watch (p, "conf.log.persist-level",
+    kvs_watch_string (p, "conf.log.persist-level",
                       _set_log_persist_level, p);
 
     zsocket_set_subscribe (p->zs_evin, "event.fault.");

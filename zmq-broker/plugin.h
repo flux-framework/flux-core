@@ -11,13 +11,6 @@ typedef struct {
     int event_recv_count;
 } plugin_stats_t;
 
-typedef void (kvs_watch_f(const char *key, json_object *o, void *arg));
-
-typedef struct {
-    void *arg;
-    kvs_watch_f *set;
-} kvs_watcher_t;
-
 typedef struct ptimeout_struct *ptimeout_t;
 
 typedef struct {
@@ -33,8 +26,8 @@ typedef struct {
     plugin_t plugin;
     server_t *srv;
     plugin_stats_t stats;
-    zhash_t *kvs_watcher;
     zloop_t *zloop;
+    kvsctx_t kvs_ctx;
     zlist_t *deferred_responses;
     void *ctx;
 } plugin_ctx_t;
@@ -78,9 +71,6 @@ void plugin_timeout_clear (plugin_ctx_t *p);
 bool plugin_timeout_isset (plugin_ctx_t *p);
 
 void plugin_log (plugin_ctx_t *p, int lev, const char *fmt, ...);
-
-int plugin_kvs_watch (plugin_ctx_t *p, const char *key,
-                      kvs_watch_f *set, void *arg);
 
 bool plugin_treeroot (plugin_ctx_t *p);
 
