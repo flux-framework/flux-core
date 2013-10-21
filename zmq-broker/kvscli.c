@@ -402,16 +402,18 @@ static kvs_watcher_t *add_watcher (void *h, const char *key, watch_type_t type,
     wp->arg = arg;
     wp->dirflags = dirflags;
 
+    /* If key is already being watched, the new watcher replaces the old.
+     */
     zhash_update (ctx->watchers, key, wp);
     zhash_freefn (ctx->watchers, key, free);
 
     return wp;
 }
 
-/* N.B. we expect to receive a reply here, not to have it intercepted
- * and routed to kvs_watch_response().
- * If key is unset, return success with a NULL val, not failure with
+/* If key is unset, return success with a NULL val, not failure with
  * errno = ENOENT.  We do that in the dispatch code.
+ * We expect to receive a reply here, not to have it intercepted
+ * and routed to kvs_watch_response().
  */
 static int send_kvs_watch (void *h, const char *key, json_object **valp)
 {
@@ -733,8 +735,11 @@ static int dirent_get_dir (kvsdir_t dir, const char *name, kvsdir_t *dirp)
             goto done;
         p = strtok_r (NULL, ".", &saveptr);
     }
-    if (dirp)
-        *dirp = kvsdir_alloc (dir->handle, name, dirobj, dir->flags);
+    if (dirp) {
+        char *key = kvsdir_key_at  (dir, name);
+        *dirp = kvsdir_alloc (dir->handle, key, dirobj, dir->flags);
+        free (key);
+    }
     rc = 0;
 done:
     free (cpy);
