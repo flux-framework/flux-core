@@ -185,7 +185,7 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
     if (cmb_msg_match (zmsg, "api.snoop.on")) {
         c->snoop = true;
         zsocket_set_subscribe (p->zs_snoop, "");
-    } else if (cmb_msg_match (zmsg, "api.snoop.on")) {
+    } else if (cmb_msg_match (zmsg, "api.snoop.off")) {
         c->snoop = false;
         zsocket_set_unsubscribe (p->zs_snoop, "");
     } else if (cmb_msg_match_substr (zmsg, "api.event.subscribe.", &name)) {
