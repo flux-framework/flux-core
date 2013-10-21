@@ -198,10 +198,8 @@ static json_object *plugin_recv_vresponse (plugin_ctx_t *p,
         zmsg_destroy (&zmsg);
         free (reply_tag);
         if (util_json_object_get_int (reply_obj, "errnum", &errno) == 0) {
-            if (errno != 0) {
-                free (reply_obj);
-                reply_obj = NULL;
-            }
+            free (reply_obj);
+            reply_obj = NULL;
         }
         break;
     }

@@ -134,11 +134,7 @@ int kvs_get (void *h, const char *key, json_object **valp)
     json_object_object_add (request, key, NULL);
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.get");
-    if (!reply) {
-        err ("%s", __FUNCTION__);
-        goto done;
-    }
-    if (util_json_object_get_int (reply, "errnum", &errno) == 0)
+    if (!reply)
         goto done;
     if (!(val = json_object_object_get (reply, key))) {
         errno = ENOENT;
@@ -172,11 +168,7 @@ int kvs_get_dir (void *h, const char *key, kvsdir_t *dirp, int flags)
     json_object_object_add (request, key, NULL);
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.get");
-    if (!reply) {
-        err ("%s", __FUNCTION__);
-        goto done;
-    }
-    if (util_json_object_get_int (reply, "errnum", &errno) == 0)
+    if (!reply)
         goto done;
     if (!(val = json_object_object_get (reply, key))) {
         errno = ENOENT;
@@ -426,11 +418,7 @@ static int send_kvs_watch (void *h, const char *key, json_object **valp)
     json_object_object_add (request, key, NULL);
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.watch");
-    if (!reply) {
-        err ("%s", __FUNCTION__);
-        goto done;
-    }
-    if (util_json_object_get_int (reply, "errnum", &errno) == 0)
+    if (!reply)
         goto done;
     if ((val = json_object_object_get (reply, key)))
         json_object_get (val);
@@ -460,11 +448,7 @@ static int send_kvs_watch_dir (void *h, const char *key, json_object **valp,
     json_object_object_add (request, key, NULL);
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.watch");
-    if (!reply) {
-        err ("%s", __FUNCTION__);
-        goto done;
-    }
-    if (util_json_object_get_int (reply, "errnum", &errno) == 0)
+    if (!reply)
         goto done;
     if ((val = json_object_object_get (reply, key)))
         json_object_get (val);
@@ -872,7 +856,6 @@ int kvs_put (void *h, const char *key, json_object *val)
 {
     json_object *request = util_json_object_new_object ();
     json_object *reply = NULL;
-    int errnum;
     int ret = -1;
 
     if (val)
@@ -880,16 +863,10 @@ int kvs_put (void *h, const char *key, json_object *val)
     json_object_object_add (request, key, val);
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.put");
-    if (!reply) {
-        err ("%s", __FUNCTION__);
+    if (!reply && errno > 0)
         goto done;
-    }
-    if (util_json_object_get_int (reply, "errnum", &errnum) < 0) {
+    if (reply) {
         errno = EPROTO;
-        goto done;
-    }
-    if (errnum != 0) {
-        errno = errnum;
         goto done;
     }
     ret = 0;
@@ -1069,23 +1046,16 @@ int kvs_mkdir (void *h, const char *key)
 {
     json_object *request = util_json_object_new_object ();
     json_object *reply = NULL;
-    int errnum = 0;
     int ret = -1;
   
     util_json_object_add_boolean (request, ".flag_mkdir", true);
     json_object_object_add (request, key, NULL); 
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.put");
-    if (!reply) {
-        err ("%s", __FUNCTION__);
+    if (!reply && errno > 0)
         goto done;
-    }
-    if (util_json_object_get_int (reply, "errnum", &errnum) < 0) {
+    if (reply) {
         errno = EPROTO;
-        goto done;
-    }
-    if (errnum != 0) {
-        errno = errnum;
         goto done;
     }
     ret = 0;
@@ -1113,21 +1083,14 @@ static int send_kvs_flush (void *h)
 {
     json_object *request = util_json_object_new_object ();
     json_object *reply = NULL;
-    int errnum = 0;
     int ret = -1;
    
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.flush");
-    if (!reply) {
-        err ("%s", __FUNCTION__);
+    if (!reply && errno > 0)
         goto done;
-    }
-    if (util_json_object_get_int (reply, "errnum", &errnum) < 0) {
+    if (reply) {
         errno = EPROTO;
-        goto done;
-    }
-    if (errnum != 0) {
-        errno = errnum;
         goto done;
     }
     ret = 0;
@@ -1145,7 +1108,6 @@ static int send_kvs_commit (void *h, const char *name)
     json_object *request = util_json_object_new_object ();
     json_object *reply = NULL;
     char *uuid = NULL;
-    int errnum = 0;
     int ret = -1;
   
     if (!name)
@@ -1153,14 +1115,8 @@ static int send_kvs_commit (void *h, const char *name)
     util_json_object_add_string (request, "name", name ? name : uuid); 
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.commit");
-    if (!reply) {
-        err ("%s", __FUNCTION__);
+    if (!reply)
         goto done;
-    }
-    if (util_json_object_get_int (reply, "errnum", &errnum) == 0) {
-        errno = errnum;
-        goto done;
-    }
     ret = 0;
 done:
     if (request)
@@ -1200,21 +1156,14 @@ int kvs_dropcache (void *h)
 {
     json_object *request = util_json_object_new_object ();
     json_object *reply = NULL;
-    int errnum = 0;
     int ret = -1;
  
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.clean");
-    if (!reply) {
-        err ("%s", __FUNCTION__);
+    if (!reply && errno > 0)
         goto done;
-    }
-    if (util_json_object_get_int (reply, "errnum", &errnum) < 0) {
+    if (reply) { 
         errno = EPROTO;
-        goto done;
-    }
-    if (errnum != 0) {
-        errno = errnum;
         goto done;
     }
     ret = 0;
