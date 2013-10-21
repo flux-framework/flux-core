@@ -353,6 +353,7 @@ static void dispatch_watch (void *h, kvs_watcher_t *wp, const char *key,
             set (key, dir, wp->arg, errnum);
             if (dir)
                 kvsdir_destroy (dir);
+            break;
         }
         case WATCH_OBJECT: {
             wp->set (key, val, wp->arg, errnum);
