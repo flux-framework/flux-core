@@ -25,33 +25,54 @@
 #include "log.h"
 #include "plugin.h"
 
-#define MAX_SYNC_PERIOD_SEC 30*60
+#define MAX_SYNC_PERIOD_SEC 30*60.0
 
 static int epoch = 0;
+static bool disabled = false;
 
 static void _timeout (plugin_ctx_t *p)
 {
     plugin_send_event (p, "event.sched.trigger.%d", ++epoch);
 }
 
-static void _set_sync_period_sec (const char *key, double val, void *arg,
-                                  int errnum)
+static void set_config (const char *key, kvsdir_t dir, void *arg, int errnum)
 {
     plugin_ctx_t *p = arg;
+    double val;
 
-    if (errnum != 0) {
-        errn (errnum, "sync: %s", key);
+    if (errnum > 0) {
+        err ("sync: %s", key);
+        goto invalid;
+    }
+    if (kvsdir_get_double (dir, "period-sec", &val) < 0) {
+        err ("sync: %s.period-sec", key);
+        goto invalid;
+    }
+    if (val == NAN || val <= 0 || val > MAX_SYNC_PERIOD_SEC) {
+        msg ("sync: %s.period-sec must be > 0 and <= %.1f", key,
+             MAX_SYNC_PERIOD_SEC);
+        goto invalid;
+    }
+    if (disabled) {
+        msg ("sync: %s values OK, synchronization resumed", key);
+        disabled = false;
+    }
+    plugin_timeout_set (p, (int)(val * 1000)); /* msec */
+    return;
+invalid:
+    if (!disabled) {
+        msg ("sync: %s values invalid, synchronization suspended", key);
+        disabled = true;
         plugin_timeout_clear (p);
-    } else if (val == NAN || val <= 0 || val > MAX_SYNC_PERIOD_SEC) {
-        msg ("sync: %s: bad value (%f)", key, val);
-        plugin_timeout_clear (p);
-    } else 
-        plugin_timeout_set (p, (int)(val * 1000)); /* msec */
+    }
 }
 
 static void _init (plugin_ctx_t *p)
 {
-    kvs_watch_double (p, "conf.sync.period-sec", _set_sync_period_sec, p);
+    int kvs_flags = KVS_GET_DIRVAL | KVS_GET_FILEVAL;
+
+    if (kvs_watch_dir (p, "conf.sync", set_config, p, kvs_flags) < 0)
+        err_exit ("kvs_watch_dir conf.sync");
 }
 
 struct plugin_struct syncsrv = {

@@ -14,13 +14,14 @@ typedef void (KVSSetDoubleF(const char *key, double val, void *arg,int errnum));
 typedef void (KVSSetBooleanF(const char *key, bool val, void *arg, int errnum));
 
 /* kvs_get_dir() flags
- * If flags=0, a kvsdir_* function will always issue a new kvs.get request to
+ * If flags=0, a kvsdir_get* function will always issue a new kvs.get request to
  *   obtain/test values relative to the kvsdir object.
  * If KVS_GET_FILEVAL is set, values cached for non-directories in the kvsdir
- *   object will be used to satisfy kvsdir_* requests.
+ *   object will be used to satisfy kvsdir_get* requests.
  * If KVS_GET_DIRVAL is set, values cached for directories in the kvsdir
- *   object will be used to satisfy kvsdir_* requests.
- * If both flags are set, the entire relative namespace is cached.
+ *   object will be used to satisfy kvsdir_get* requests.
+ * If both flags are set, the entire (relative) namespace is cached in
+ *   the kvsdir object.
  */
 enum {
     KVS_GET_DIRVAL = 1,
@@ -54,13 +55,14 @@ int kvs_get_boolean (void *h, const char *key, bool *valp);
 kvsdir_t kvsdir_create (void *h, const char *fmt, ...);
 
 /* kvs_watch* is like kvs_get* except the registered callback is called
- * initially and whenever the requested key changes.
- * Any storage associated with the value given the callback is freed when
- * the callback returns.  If a value is unset, the callback gets errnum = ENOENT.
+ * to set the value.  It will be called immediately to set the initial
+ * value and again each time the value changes.  There is currently no
+ * "unwatch" function.  Any storage associated with the value given the
+ * callback is freed when the callback returns.  If a value is unset, the
+ * callback gets errnum = ENOENT.
  */
 int kvs_watch (void *h, const char *key, KVSSetF *set, void *arg);
-int kvs_watch_dir (void *h, const char *key, KVSSetDirF *set,
-                   void *arg, int flags);
+int kvs_watch_dir (void *h, const char *key, KVSSetDirF *set, void *arg, int flags);
 int kvs_watch_string (void *h, const char *key, KVSSetStringF *set, void *arg);
 int kvs_watch_int (void *h, const char *key, KVSSetIntF *set, void *arg);
 int kvs_watch_int64 (void *h, const char *key, KVSSetInt64F *set, void *arg);
@@ -98,6 +100,10 @@ const char *kvsitr_next (kvsitr_t itr);
 void kvsitr_rewind (kvsitr_t itr);
 
 /* Test attributes of 'key', relative to kvsdir object.
+ * If the directory was not fetched with any cache flags, all functions
+ * except 'exist' and 'isdir' will have to fetch and discard the values
+ * to determine the type, so you'd be better off calling kvsdir_get_* on
+ * each type and looking for return of -1, errno = EINVAL.
  */
 bool kvsdir_exists (kvsdir_t dir, const char *key);
 bool kvsdir_isdir (kvsdir_t dir, const char *key);

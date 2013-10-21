@@ -45,6 +45,7 @@ typedef struct {
     int log_reduction_timeout_msec;
     int log_circular_buffer_entries;
     int log_persist_level;
+    bool disabled;
 } ctx_t;
 
 static void _add_backlog (plugin_ctx_t *p, json_object *o);
@@ -146,16 +147,21 @@ static void _recv_fault_event (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     _process_backlog (p);
 }
 
-static void _resize_cirbuf (plugin_ctx_t *p, int new_size)
+static bool _resize_cirbuf (plugin_ctx_t *p, int new_size)
 {
     ctx_t *ctx = p->ctx;
+    bool ret = false;
 
-    while (ctx->cirbuf_size > new_size) {
-        json_object *tmp = zlist_pop (ctx->cirbuf);
-        json_object_put (tmp);
-        ctx->cirbuf_size--;
+    if (new_size > 0) {
+        while (ctx->cirbuf_size > new_size) {
+            json_object *tmp = zlist_pop (ctx->cirbuf);
+            json_object_put (tmp);
+            ctx->cirbuf_size--;
+        }
+        ctx->log_circular_buffer_entries = new_size;
+        ret = true;
     }
-    ctx->log_circular_buffer_entries = new_size;
+    return ret;
 }
 
 /* Manage listeners.
@@ -433,7 +439,11 @@ done:
 
 static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
 {
+    ctx_t *ctx = p->ctx;
     char *arg = NULL;
+
+    if (ctx->disabled)
+        return;
 
     if (cmb_msg_match (*zmsg, "log.msg"))
         _recv_log_msg (p, zmsg);
@@ -458,59 +468,66 @@ static void _timeout (plugin_ctx_t *p)
     plugin_timeout_clear (p);
 }
 
-static void _set_log_reduction_timeout_msec (const char *key, int val,
-                                             void *arg, int errnum)
+static void set_config (const char *key, kvsdir_t dir, void *arg, int errnum)
 {
     plugin_ctx_t *p = arg;
     ctx_t *ctx = p->ctx;
+    char *s;
+    int val;
 
-    if (errnum != 0)
-        errn_exit (errnum, "live: %s", key);
-    if (val < 0)
-        msg_exit ("live: %s: bad value (%d)", key, val);
-    ctx->log_reduction_timeout_msec = val;
-}
-
-static void _set_log_circular_buffer_entries (const char *key, int val,
-                                              void *arg, int errnum)
-{
-    plugin_ctx_t *p = arg;
-
-    if (errnum != 0)
-        errn_exit (errnum, "live: %s", key);
-    if (val < 0)
-        msg_exit ("live: %s: bad value (%d)", key, val);
-    _resize_cirbuf (p, val);
-}
-
-static void _set_log_persist_level (const char *key, const char *val,
-                                    void *arg, int errnum)
-{
-    plugin_ctx_t *p = arg;
-    ctx_t *ctx = p->ctx;
-
-    if (errnum != 0)
-        errn_exit (errnum, "live: %s", key);
-    ctx->log_persist_level = log_strtolevel (val);
-    if (ctx->log_persist_level < 0)
-        msg_exit ("live: %s: bad value (%s)", key, val);
+    if (errnum > 0) {
+        err ("log: %s", key);
+        goto invalid;
+    }
+    if (kvsdir_get_int (dir, "reduction-timeout-msec", &val) < 0) {
+        err ("log: %s.reduction-timeout-msec", key);
+        goto invalid; 
+    }
+    if ((ctx->log_reduction_timeout_msec = val) < 0) {
+        msg ("log: %s.reduction-timeout-msec must be >= 0", key);
+        goto invalid; 
+    }
+    if (kvsdir_get_int (dir, "circular-buffer-entries", &val) < 0) {
+        err ("log: %s.circular-buffer-entries", key);
+        goto invalid;
+    }
+    if (!_resize_cirbuf (p, val)) {
+        msg ("log: %s.circular-buffer-entries must be > 0", key);
+        goto invalid;
+    }
+    if (kvsdir_get_string (dir, "persist-level", &s) < 0) {
+        err ("log: %s.persist-level", key);
+        goto invalid;
+    }
+    if ((ctx->log_persist_level = log_strtolevel (s)) < 0) {
+        msg ("log: %s.persist-level invalid level string", key);
+        goto invalid;
+    }
+    if (ctx->disabled) {
+        msg ("log: %s values OK, logging resumed", key);
+        ctx->disabled = false;
+    }
+    return;
+invalid:
+    if (!ctx->disabled) {
+        msg ("log: %s values invalid, logging suspended", key);
+        ctx->disabled = true;
+    }
 }
 
 static void _init (plugin_ctx_t *p)
 {
     ctx_t *ctx;
+    int kvs_flags = KVS_GET_DIRVAL | KVS_GET_FILEVAL;
 
     ctx = p->ctx = xzmalloc (sizeof (ctx_t));
     ctx->listeners = zhash_new ();
     ctx->backlog = zlist_new ();
     ctx->cirbuf = zlist_new ();
+    ctx->disabled = false;
 
-    kvs_watch_int (p, "conf.log.reduction-timeout-msec",
-                      _set_log_reduction_timeout_msec, p);
-    kvs_watch_int (p, "conf.log.circular-buffer-entries",
-                      _set_log_circular_buffer_entries, p);
-    kvs_watch_string (p, "conf.log.persist-level",
-                      _set_log_persist_level, p);
+    if (kvs_watch_dir (p, "conf.log", set_config, p, kvs_flags) < 0)
+        err_exit ("log: %s", "conf.log");
 
     zsocket_set_subscribe (p->zs_evin, "event.fault.");
 }

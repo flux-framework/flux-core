@@ -42,6 +42,7 @@ typedef struct {
     int age;
     int epoch;
     config_t conf;
+    bool disabled;
 } ctx_t;
 
 static bool _alive (plugin_ctx_t *p, int rank)
@@ -273,6 +274,9 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
     char *arg = NULL;
     ctx_t *ctx = p->ctx;
 
+    if (ctx->disabled)
+        return;
+
     if (cmb_msg_match_substr (*zmsg, "event.sched.trigger.", &arg)) {
         ctx->epoch = strtoul (arg, NULL, 10);
         if (!plugin_treeroot (p))
@@ -291,62 +295,73 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         free (arg);
 }
 
-static void _set_live_missed_trigger_allow (const char *key, int val,
-                                            void *arg, int errnum)
+static void set_config (const char *key, kvsdir_t dir, void *arg, int errnum)
 {
     plugin_ctx_t *p = arg;
     ctx_t *ctx = p->ctx;
+    int val;
+    json_object *topo, *down = NULL;
 
-    if (errnum != 0)
-        errn_exit (errnum, "live: %s", key);
-    if (val < 2 || val > 100)
-        msg_exit ("live: %s: bad value (%d)", key, val);
+    if (errnum > 0) {
+        err ("live: %s", key);
+        goto invalid;
+    }
+    if (kvsdir_get_int (dir, "missed-trigger-allow", &val) < 0) {
+        err ("live: %s.missed-trigger-allow", key);
+        goto invalid;
+    }
+    if (val < 2 || val > 100) {
+        msg ("live: %s.missed-trigger-allow must be >= 2, <= 100", key);
+        goto invalid;
+    }
     ctx->conf.live_missed_trigger_allow = val; 
-}
 
-static void _set_topology (const char *key, json_object *o, void *arg, int errnum)
-{
-    plugin_ctx_t *p = arg;
-    ctx_t *ctx = p->ctx;
-
-    if (errnum != 0)
-        errn_exit (errnum, "live: %s", key);
+    if (kvsdir_get (dir, "topology", &topo) < 0) {
+        err ("live: %s.topology", key);
+        goto invalid;
+    }
     if (ctx->conf.topology)
         json_object_put (ctx->conf.topology);
-    json_object_get (o);
-    ctx->conf.topology = o;
-
+    json_object_get (topo);
+    ctx->conf.topology = topo;
     _child_sync_with_topology (p);
-}
 
-static void _set_live_down (const char *key, json_object *o, void *arg, int errnum)
-{
-    plugin_ctx_t *p = arg;
-    ctx_t *ctx = p->ctx;
-
+    if (kvsdir_get (dir, "down", &down) < 0 && errno != ENOENT) {
+        err ("live: %s.down", key);
+        goto invalid;
+    }
     if (ctx->conf.live_down) {
         json_object_put (ctx->conf.live_down);
         ctx->conf.live_down = NULL;
     }
-    if (errnum == 0) {
-        json_object_get (o);
-        ctx->conf.live_down = o;
-    } else if (errnum != ENOENT)
-        errn_exit (errnum, "live: %s", key);
+    if (down) {
+        json_object_get (down);
+        ctx->conf.live_down = down;
+    }
+    if (ctx->disabled) {
+        msg ("live: %s values OK, liveness monitoring resumed", key);
+        ctx->disabled = false;
+    }
+    return;
+invalid:
+    if (!ctx->disabled) {
+        msg ("live: %s values invalid, liveness monitoring suspended", key);
+        ctx->disabled = true;
+    }
 }
 
 static void _init (plugin_ctx_t *p)
 {
     ctx_t *ctx;
+    int kvs_flags = KVS_GET_DIRVAL | KVS_GET_FILEVAL;
 
     ctx = p->ctx = xzmalloc (sizeof (ctx_t));
     if (!(ctx->kids = zhash_new ()))
         oom ();
+    ctx->disabled = false;
 
-    kvs_watch_int (p, "conf.live.missed-trigger-allow",
-                   _set_live_missed_trigger_allow, p);
-    kvs_watch (p, "conf.live.topology", _set_topology, p);
-    kvs_watch (p, "conf.live.down", _set_live_down, p);
+    if (kvs_watch_dir (p, "conf.live", set_config, p, kvs_flags) < 0)
+        err_exit ("log: %s", "conf.live");
 
     zsocket_set_subscribe (p->zs_evin, "event.sched.trigger.");
     if (plugin_treeroot (p))
