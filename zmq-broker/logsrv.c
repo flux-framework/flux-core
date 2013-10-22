@@ -526,7 +526,7 @@ static void _init (plugin_ctx_t *p)
     ctx->cirbuf = zlist_new ();
     ctx->disabled = false;
 
-    if (kvs_watch_dir (p, "conf.log", set_config, p, kvs_flags) < 0)
+    if (kvs_watch_dir (p, kvs_flags, set_config, p, "conf.log") < 0)
         err_exit ("log: %s", "conf.log");
 
     zsocket_set_subscribe (p->zs_evin, "event.fault.");

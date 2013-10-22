@@ -112,7 +112,7 @@ void tkvs_dump_dir (kvsdir_t dir, bool ropt)
         if (kvsdir_isdir (dir, name)) {
             if (ropt) {
                 kvsdir_t ndir;
-                if (kvsdir_get_dir (dir, name, &ndir) < 0)
+                if (kvsdir_get_dir (dir, &ndir, "%s", name) < 0)
                     err_exit ("kvsdir_get_dir %s", key);
                 tkvs_dump_dir (ndir, ropt); 
                 kvsdir_destroy (ndir);
@@ -141,7 +141,7 @@ void tkvs_dump_all (kvsdir_t dir, bool ropt)
         if (kvsdir_isdir (dir, name)) {
             if (ropt) {
                 kvsdir_t ndir;
-                if (kvsdir_get_dir (dir, name, &ndir) < 0)
+                if (kvsdir_get_dir (dir, &ndir, "%s", name) < 0)
                     err_exit ("kvsdir_get_dir %s", key);
                 tkvs_dump_all (ndir, ropt); 
                 kvsdir_destroy (ndir);
@@ -189,7 +189,7 @@ void tkvs_get_dir (cmb_t c, char *key, bool ropt, bool all, int flags)
 {
     kvsdir_t dir;
 
-    if (kvs_get_dir (c, key, &dir, flags) < 0) {
+    if (kvs_get_dir (c, flags, &dir, "%s", key) < 0) {
         if (errno == ENOENT)
             printf ("null\n");
         else

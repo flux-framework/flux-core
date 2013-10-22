@@ -153,12 +153,19 @@ done:
     return ret;
 }
 
-int kvs_get_dir (void *h, const char *key, kvsdir_t *dirp, int flags)
+int kvs_get_dir (void *h, int flags, kvsdir_t *dirp, const char *fmt, ...)
 {
     json_object *val = NULL;
     json_object *request = util_json_object_new_object ();
     json_object *reply = NULL;
     int ret = -1;
+    char *key;
+    va_list ap;
+
+    va_start (ap, fmt);
+    if (vasprintf (&key, fmt, ap) < 0)
+        oom ();
+    va_end (ap);
 
     util_json_object_add_boolean (request, ".flag_directory", true);
     util_json_object_add_boolean (request, ".flag_fileval",
@@ -182,23 +189,9 @@ done:
         json_object_put (request);
     if (reply)
         json_object_put (reply);
+    if (key)
+        free (key);
     return ret;
-}
-
-kvsdir_t kvsdir_create (void *h, const char *fmt, ...)
-{
-    kvsdir_t dir;
-    char *key;
-    va_list ap;
-
-    va_start (ap, fmt);
-    if (vasprintf (&key, fmt, ap) < 0)
-        return (NULL);
-    va_end (ap);
-    if (kvs_get_dir (h, key, &dir, 0) < 0)
-        dir = NULL;
-    free (key);
-    return (dir);
 }
 
 int kvs_get_string (void *h, const char *key, char **valp)
@@ -479,12 +472,19 @@ done:
     return rc;
 }
 
-int kvs_watch_dir (void *h, const char *key, KVSSetDirF *set,
-                   void *arg, int flags)
+int kvs_watch_dir (void *h, int flags, KVSSetDirF *set, void *arg,
+                   const char *fmt, ...)
 {
     kvs_watcher_t *wp;
     json_object *val = NULL;
+    char *key;
     int rc = -1;
+    va_list ap;
+
+    va_start (ap, fmt);
+    if (vasprintf (&key, fmt, ap) < 0)
+        oom ();
+    va_end (ap);
 
     if (send_kvs_watch_dir (h, key, &val, flags) < 0)
         goto done;
@@ -494,6 +494,8 @@ int kvs_watch_dir (void *h, const char *key, KVSSetDirF *set,
 done:
     if (val)
         json_object_put (val);
+    if (key)
+        free (key);
     return rc;
 }
 
@@ -589,7 +591,7 @@ bool kvsdir_exists (kvsdir_t dir, const char *name)
 
 bool kvsdir_isdir (kvsdir_t dir, const char *name)
 {
-    return (kvsdir_get_dir (dir, name, NULL) == 0);
+    return (kvsdir_get_dir (dir, NULL, "%s", name) == 0);
 }
 
 bool kvsdir_isstring (kvsdir_t dir, const char *name)
@@ -745,17 +747,25 @@ int kvsdir_get (kvsdir_t dir, const char *name, json_object **valp)
     return rc;
 }
 
-int kvsdir_get_dir (kvsdir_t dir, const char *name, kvsdir_t *dirp)
+int kvsdir_get_dir (kvsdir_t dir, kvsdir_t *dirp, const char *fmt, ...)
 {
     int rc;
-    char *key;
+    char *name, *key;
+    va_list ap;
+
+    va_start (ap, fmt);
+    if (vasprintf (&name, fmt, ap) < 0)
+        oom ();
+    va_end (ap);
 
     rc = dirent_get_dir (dir, name, dirp);
     if (rc < 0 && errno == ESRCH) { /* not cached - look up full key */
         key = kvsdir_key_at (dir, name);
-        rc = kvs_get_dir (dir->handle, key, dirp, 0);
+        rc = kvs_get_dir (dir->handle, 0, dirp, "%s", key);
         free (key);
     }
+    if (name)
+        free (name);
     return rc;
 }
 

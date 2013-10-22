@@ -71,7 +71,7 @@ static void _init (plugin_ctx_t *p)
 {
     int kvs_flags = KVS_GET_DIRVAL | KVS_GET_FILEVAL;
 
-    if (kvs_watch_dir (p, "conf.sync", set_config, p, kvs_flags) < 0)
+    if (kvs_watch_dir (p, kvs_flags, set_config, p, "conf.sync") < 0)
         err_exit ("kvs_watch_dir conf.sync");
 }
 

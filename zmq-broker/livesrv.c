@@ -360,7 +360,7 @@ static void _init (plugin_ctx_t *p)
         oom ();
     ctx->disabled = false;
 
-    if (kvs_watch_dir (p, "conf.live", set_config, p, kvs_flags) < 0)
+    if (kvs_watch_dir (p, kvs_flags, set_config, p, "conf.live") < 0)
         err_exit ("log: %s", "conf.live");
 
     zsocket_set_subscribe (p->zs_evin, "event.sched.trigger.");

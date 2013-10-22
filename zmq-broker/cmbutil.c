@@ -269,9 +269,9 @@ int main (int argc, char *argv[])
                 zmsg_t *zmsg;
                 int flags = KVS_GET_FILEVAL | KVS_GET_DIRVAL;
 
-                if (kvs_watch_dir (c, optarg, (KVSSetDirF *)watchdir,
-                                                        NULL, flags) < 0)
-                    err_exit ("kvs_watch_dir");
+                if (kvs_watch_dir (c, flags, (KVSSetDirF *)watchdir, NULL,
+                                   "%s", optarg) < 0)
+                    err_exit ("kvs_watch_dir %s", optarg);
                 while ((zmsg = cmb_recv_zmsg (c, false))) {
                     kvs_watch_response (c, &zmsg);
                     if (zmsg)
@@ -283,7 +283,7 @@ int main (int argc, char *argv[])
                 kvsdir_t dir;
                 int flags = KVS_GET_FILEVAL | KVS_GET_DIRVAL;
     
-                if (kvs_get_dir (c, optarg, &dir, flags) < 0)
+                if (kvs_get_dir (c, flags, &dir, "%s", optarg) < 0)
                     err_exit ("kvs_get_dir %s", optarg);
                 dump_kvs_dir (dir);
                 kvsdir_destroy (dir);
@@ -486,7 +486,7 @@ static void dump_kvs_dir (kvsdir_t dir)
         if (kvsdir_isdir (dir, name)) {
             kvsdir_t ndir;
 
-            if (kvsdir_get_dir (dir, name, &ndir) < 0)
+            if (kvsdir_get_dir (dir, &ndir, "%s", name) < 0)
                 err_exit ("kvsdir_get_dir %s", name);
             dump_kvs_dir (ndir);
             kvsdir_destroy (ndir);

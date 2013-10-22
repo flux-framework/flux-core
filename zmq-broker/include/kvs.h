@@ -28,8 +28,7 @@ enum {
     KVS_GET_FILEVAL = 2,
 };
 
-/* Destroy a kvsdir object
- *   returned from kvs_get_dir(), kvsdir_create(), or kvsdir_get_dir()
+/* Destroy a kvsdir object returned from kvs_get_dir() or kvsdir_get_dir()
  */
 void kvsdir_destroy (kvsdir_t dir);
 
@@ -42,17 +41,12 @@ void kvsdir_destroy (kvsdir_t dir);
  * These functions return -1 on error (errno set), 0 on success.
  */
 int kvs_get (void *h, const char *key, json_object **valp);
-int kvs_get_dir (void *h, const char *key, kvsdir_t *dirp, int flags);
+int kvs_get_dir (void *h, int flags, kvsdir_t *dirp, const char *fmt, ...);
 int kvs_get_string (void *h, const char *key, char **valp);
 int kvs_get_int (void *h, const char *key, int *valp);
 int kvs_get_int64 (void *h, const char *key, int64_t *valp);
 int kvs_get_double (void *h, const char *key, double *valp);
 int kvs_get_boolean (void *h, const char *key, bool *valp);
-
-/* Convenience function to create kvsdir_t object from printf format
- * string. Returns NULL on failure with errno set.
- */
-kvsdir_t kvsdir_create (void *h, const char *fmt, ...);
 
 /* kvs_watch* is like kvs_get* except the registered callback is called
  * to set the value.  It will be called immediately to set the initial
@@ -62,7 +56,8 @@ kvsdir_t kvsdir_create (void *h, const char *fmt, ...);
  * callback gets errnum = ENOENT.
  */
 int kvs_watch (void *h, const char *key, KVSSetF *set, void *arg);
-int kvs_watch_dir (void *h, const char *key, KVSSetDirF *set, void *arg, int flags);
+int kvs_watch_dir (void *h, int flags, KVSSetDirF *set, void *arg,
+                   const char *fmt, ...);
 int kvs_watch_string (void *h, const char *key, KVSSetStringF *set, void *arg);
 int kvs_watch_int (void *h, const char *key, KVSSetIntF *set, void *arg);
 int kvs_watch_int64 (void *h, const char *key, KVSSetInt64F *set, void *arg);
@@ -123,7 +118,7 @@ char *kvsdir_key_at (kvsdir_t dir, const char *key); /* caller frees result */
  * These functions return -1 on error (errno set), 0 on success.
  */
 int kvsdir_get (kvsdir_t dir, const char *key, json_object **valp);
-int kvsdir_get_dir (kvsdir_t dir, const char *key, kvsdir_t *dirp);
+int kvsdir_get_dir (kvsdir_t dir, kvsdir_t *dirp, const char *fmt, ...);
 int kvsdir_get_string (kvsdir_t dir, const char *key, char **valp);
 int kvsdir_get_int (kvsdir_t dir, const char *key, int *valp);
 int kvsdir_get_int64 (kvsdir_t dir, const char *key, int64_t *valp);
