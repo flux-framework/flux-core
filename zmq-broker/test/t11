@@ -1,0 +1,17 @@
+#!/bin/bash -e
+
+TEST=`basename $0`
+KEY=$TEST.a
+
+test_cleanup() {
+    ./tkvs unlink $TEST
+    ./tkvs commit
+}
+
+test_cleanup
+
+./tkvswatch 100 100 $KEY
+
+test_cleanup
+
+exit 0

@@ -11,7 +11,7 @@ export CFLAGS LDFLAGS
 
 LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -lutil -luuid
 
-BUILD = tbase64 tpmikvs tkvs
+BUILD = tbase64 tpmikvs tkvs tkvswatch
 
 all: $(BUILD)
 
@@ -33,6 +33,9 @@ tpmikvs: tpmikvs.o
 
 tkvs: tkvs.o
 	$(CC) $(LDFLAGS) -o $@ $< $(LDADD_CLI) -lcmb
+
+tkvswatch: tkvswatch.o
+	$(CC) $(LDFLAGS) -o $@ $< $(LDADD_CLI) -lcmb -lpthread
 
 clean:
 	rm -f *.o a.out
