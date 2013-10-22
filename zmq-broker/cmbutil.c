@@ -21,7 +21,10 @@
 static int _parse_logstr (char *s, int *lp, char **fp);
 static void dump_kvs_dir (kvsdir_t dir);
 
-#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Zyl:Y:"
+static void watch (const char *key, json_object *val, void *arg, int errnum);
+static void watchdir (const char *key, kvsdir_t dir, void *arg, int errnum);
+
+#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Zyl:Y:X:"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -36,6 +39,7 @@ static const struct option longopts[] = {
     {"kvs-get",    required_argument,  0, 'K'},
     {"kvs-list",   required_argument,  0, 'l'},
     {"kvs-watch",  required_argument,  0, 'Y'},
+    {"kvs-watch-dir",required_argument,  0, 'X'},
     {"kvs-commit", no_argument,        0, 'C'},
     {"kvs-dropcache", no_argument,     0, 'y'},
     {"kvs-torture",required_argument,  0, 't'},
@@ -65,7 +69,8 @@ static void usage (void)
 "  -n,--nprocs N          override nprocs (default $SLURM_NPROCS or 1)\n"
 "  -k,--kvs-put key=val   set a key\n"
 "  -K,--kvs-get key       get a key\n"
-"  -Y,--kvs-watch key     watch a key\n"
+"  -Y,--kvs-watch key     watch a key (non-directory)\n"
+"  -X,--kvs-watch-dir key watch a key (directory)\n"
 "  -l,--kvs-list name     list keys in a particular \"directory\"\n"
 "  -C,--kvs-commit        commit pending kvs puts\n"
 "  -y,--kvs-dropcache     drop cached and unreferenced kvs data\n"
@@ -249,24 +254,36 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'Y': { /* --kvs-watch key */
-#if 0
-                json_object *o = NULL;
-                if (kvs_get (c, optarg, &o, KVS_GET_WATCH) < 0
-                                && errno != ENOENT)
-                    err_exit ("kvs_get");
-                do {
-                    printf ("%s = %s\n", optarg,
-                                            json_object_to_json_string_ext (o,
-                                            JSON_C_TO_STRING_PLAIN));
-                    json_object_put (o);
-                } while (kvs_get (c, optarg, &o, KVS_GET_NEXT) == 0);
+                zmsg_t *zmsg;
+
+                if (kvs_watch (c, optarg, (KVSSetF *)watch, NULL) < 0)
+                    err_exit ("kvs_watch");
+                while ((zmsg = cmb_recv_zmsg (c, false))) {
+                    kvs_watch_response (c, &zmsg);
+                    if (zmsg)
+                        zmsg_destroy (&zmsg);
+                } 
                 break;
-#endif
+            }
+            case 'X': { /* --kvs-watch-dir key */
+                zmsg_t *zmsg;
+                int flags = KVS_GET_FILEVAL | KVS_GET_DIRVAL;
+
+                if (kvs_watch_dir (c, optarg, (KVSSetDirF *)watchdir,
+                                                        NULL, flags) < 0)
+                    err_exit ("kvs_watch_dir");
+                while ((zmsg = cmb_recv_zmsg (c, false))) {
+                    kvs_watch_response (c, &zmsg);
+                    if (zmsg)
+                        zmsg_destroy (&zmsg);
+                } 
+                break;
             }
             case 'l': { /* --kvs-list name */
                 kvsdir_t dir;
+                int flags = KVS_GET_FILEVAL | KVS_GET_DIRVAL;
     
-                if (kvs_get_dir (c, optarg, &dir, 0) < 0)
+                if (kvs_get_dir (c, optarg, &dir, flags) < 0)
                     err_exit ("kvs_get_dir %s", optarg);
                 dump_kvs_dir (dir);
                 kvsdir_destroy (dir);
@@ -488,6 +505,25 @@ static void dump_kvs_dir (kvsdir_t dir)
     }
     kvsitr_destroy (itr);
 }
+
+static void watch (const char *key, json_object *val, void *arg, int errnum)
+{
+    if (errnum > 0)
+        printf ("%s: %s\n", key, strerror (errnum));
+    else 
+        printf ("%s=%s\n", key,
+                json_object_to_json_string_ext (val, JSON_C_TO_STRING_PLAIN));
+}
+static void watchdir (const char *key, kvsdir_t dir, void *arg, int errnum)
+{
+    if (errnum > 0)
+        printf ("%s: %s\n", key, strerror (errnum));
+    else {
+        printf ("%s: ===========================\n", key);
+        dump_kvs_dir (dir);
+    }
+}
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

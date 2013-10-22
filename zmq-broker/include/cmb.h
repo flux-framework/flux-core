@@ -29,6 +29,11 @@ int cmb_recv_message (cmb_t c, char **tagp, json_object **op, int nb);
  */
 zmsg_t *cmb_recv_zmsg (cmb_t c, int nb);
 
+/* Send request, receive matching reply.
+ * Discard any messages received that don't match the request.
+ */
+json_object *cmb_request (cmb_t c, json_object *req, const char *fmt, ...);
+
 /* Ping a particular plugin.
  */
 int cmb_ping (cmb_t c, char *tag, int seq, int padding, char **tagp,

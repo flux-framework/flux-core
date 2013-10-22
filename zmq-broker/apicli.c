@@ -33,18 +33,19 @@ struct cmb_struct {
     int size;
     int flags;
     char *log_facility;
+    kvsctx_t kvs_ctx;
 };
 
 static int _send_vmessage (cmb_t c, json_object *o, const char *fmt, va_list ap)
 {
     zmsg_t *zmsg = NULL;
     char *tag = NULL;
-    int n;
+    json_object *empty = NULL;
 
-    n = vasprintf (&tag, fmt, ap);
-    va_end (ap);
-    if (n < 0)
-        err_exit ("vasprintf");
+    if (vasprintf (&tag, fmt, ap) < 0)
+        oom ();
+    if (!o)
+        o = empty = util_json_object_new_object ();
 
     zmsg = cmb_msg_encode (tag, o);
     if (c->flags & CMB_FLAGS_TRACE)
@@ -58,21 +59,79 @@ error:
         zmsg_destroy (&zmsg);
     if (tag)
         free (tag);
+    if (empty)
+        json_object_put (empty);
     return -1;
+}
+
+static json_object *_recv_vmessage (cmb_t c, const char *fmt, va_list ap)
+{
+    zmsg_t *zmsg;
+    char *tag, *recv_tag;
+    json_object *recv_obj;
+
+    if (vasprintf (&tag, fmt, ap) < 0)
+        oom ();
+
+    for (;;) {
+        zmsg = zmsg_recv_fd (c->fd, false);
+        if (!zmsg)
+            goto error;
+        if (c->flags & CMB_FLAGS_TRACE)
+            zmsg_dump_compact (zmsg);
+        if (cmb_msg_decode (zmsg, &recv_tag, &recv_obj) < 0)
+            goto error;
+        if (strcmp (tag, recv_tag) != 0) {
+            if (recv_obj)
+                json_object_put (recv_obj);
+            free (recv_tag);
+            zmsg_destroy (&zmsg); /* destroy unexpected response */
+            continue;
+        }
+        if (!recv_obj) {
+            errno = EPROTO;
+            goto error;
+        }
+        if (util_json_object_get_int (recv_obj, "errnum", &errno) == 0) {
+            free (recv_obj);
+            recv_obj = NULL;
+        }
+        zmsg_destroy (&zmsg);
+        free (recv_tag);
+        break;
+    }
+    free (tag);
+    return recv_obj;
+error:
+    if (zmsg)
+        zmsg_destroy (&zmsg);
+    if (tag)
+        free (tag);
+    return NULL;
 }
 
 static int _send_message (cmb_t c, json_object *o, const char *fmt, ...)
 {
     va_list ap;
+    int rc;
+
     va_start (ap, fmt);
-    return _send_vmessage (c, o, fmt, ap);
+    rc = _send_vmessage (c, o, fmt, ap);
+    va_end (ap);
+
+    return rc;
 }
 
 int cmb_send_message (cmb_t c, json_object *o, const char *fmt, ...)
 {
     va_list ap;
+    int rc;
+
     va_start (ap, fmt);
-    return _send_vmessage (c, o, fmt, ap);
+    rc = _send_vmessage (c, o, fmt, ap);
+    va_end (ap);
+
+    return rc;
 }
 
 static int _recv_message (cmb_t c, char **tagp, json_object **op, int nonblock)
@@ -95,11 +154,10 @@ error:
     return -1;
 }
 
-json_object *_request (cmb_t c, json_object *request, const char *fmt, ...)
+json_object *cmb_request (cmb_t c, json_object *request, const char *fmt, ...)
 {
     va_list ap;
     json_object *reply = NULL;
-    char *tag;
     int rc;
 
     va_start (ap, fmt);
@@ -108,13 +166,11 @@ json_object *_request (cmb_t c, json_object *request, const char *fmt, ...)
     if (rc < 0)
         goto done;
 
-    rc = _recv_message (c, &tag, &reply, false);
-    if (rc < 0)
-        goto done;
+    va_start (ap, fmt);
+    reply = _recv_vmessage (c, fmt, ap);
+    va_end (ap);
 
 done:
-    if (tag)
-        free (tag);
     return reply;
 }
 
@@ -522,6 +578,13 @@ error:
     return -1;
 }
 
+static kvsctx_t get_kvs_ctx (void *h)
+{
+    cmb_t c = h;
+
+    return c->kvs_ctx;
+}
+
 cmb_t cmb_init_full (const char *path, int flags)
 {
     cmb_t c = NULL;
@@ -542,8 +605,10 @@ cmb_t cmb_init_full (const char *path, int flags)
     if (_session_info_query (c) < 0)
         goto error;
 
-    kvs_reqfun_set ((KVSReqF *)_request);
+    c->kvs_ctx = kvs_ctx_create (c);
+    kvs_reqfun_set ((KVSReqF *)cmb_request);
     kvs_barrierfun_set ((KVSBarrierF *)cmb_barrier);
+    kvs_getctxfun_set ((KVSGetCtxF *)get_kvs_ctx);
     return c;
 error:
     if (c)
@@ -565,6 +630,8 @@ void cmb_fini (cmb_t c)
         (void)close (c->fd);
     if (c->log_facility)
         free (c->log_facility);
+    if (c->kvs_ctx)
+        kvs_ctx_destroy (c->kvs_ctx);
     free (c);
 }
 
