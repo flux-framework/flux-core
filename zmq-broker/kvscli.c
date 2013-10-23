@@ -194,6 +194,40 @@ done:
     return ret;
 }
 
+int kvs_get_symlink (void *h, const char *key, char **valp)
+{
+    json_object *val = NULL;
+    json_object *request = util_json_object_new_object ();
+    json_object *reply = NULL;
+    int ret = -1;
+
+    util_json_object_add_boolean (request, ".flag_symlink", true);
+    json_object_object_add (request, key, NULL);
+    assert (kvs_config.request != NULL);
+    reply = kvs_config.request (h, request, "kvs.get");
+    if (!reply)
+        goto done;
+    if (!(val = json_object_object_get (reply, key))) {
+        errno = ENOENT;
+        goto done;
+    }
+    if (json_object_get_type (val) != json_type_string) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (valp) {
+        const char *s = json_object_get_string (val);
+        *valp = xstrdup (s);
+    }
+    ret = 0;
+done:
+    if (request)
+        json_object_put (request);
+    if (reply)
+        json_object_put (reply);
+    return ret;
+}
+
 int kvs_get_string (void *h, const char *key, char **valp)
 {
     json_object *o = NULL;
@@ -594,6 +628,11 @@ bool kvsdir_isdir (kvsdir_t dir, const char *name)
     return (kvsdir_get_dir (dir, NULL, "%s", name) == 0);
 }
 
+bool kvsdir_issymlink (kvsdir_t dir, const char *name)
+{
+    return (kvsdir_get_symlink (dir, name, NULL) == 0);
+}
+
 bool kvsdir_isstring (kvsdir_t dir, const char *name)
 {
     return (kvsdir_get_string (dir, name, NULL) == 0);
@@ -767,6 +806,13 @@ int kvsdir_get_dir (kvsdir_t dir, kvsdir_t *dirp, const char *fmt, ...)
     if (name)
         free (name);
     return rc;
+}
+
+int kvsdir_get_symlink (kvsdir_t dir, const char *name, char **valp)
+{
+    /* FIXME */
+    errno = EINVAL;
+    return -1;
 }
 
 int kvsdir_get_string (kvsdir_t dir, const char *name, char **valp)
@@ -1047,6 +1093,42 @@ int kvsdir_unlink (kvsdir_t dir, const char *name)
     char *key;
     if ((key = kvsdir_key_at (dir, name))) {
         rc = kvs_unlink (dir->handle, key);
+        free (key);
+    }
+    return (rc);
+}
+
+int kvs_symlink (void *h, const char *key, const char *target)
+{
+    json_object *request = util_json_object_new_object ();
+    json_object *reply = NULL;
+    int ret = -1;
+  
+    util_json_object_add_boolean (request, ".flag_symlink", true);
+    util_json_object_add_string (request, (char *)key, target);
+    assert (kvs_config.request != NULL);
+    reply = kvs_config.request (h, request, "kvs.put");
+    if (!reply && errno > 0)
+        goto done;
+    if (reply) {
+        errno = EPROTO;
+        goto done;
+    }
+    ret = 0;
+done:
+    if (request)
+        json_object_put (request);
+    if (reply)
+        json_object_put (reply); 
+    return ret;
+}
+
+int kvsdir_symlink (kvsdir_t dir, const char *name, const char *target)
+{
+    int rc = -1;
+    char *key;
+    if ((key = kvsdir_key_at (dir, name))) {
+        rc = kvs_symlink (dir->handle, key, target);
         free (key);
     }
     return (rc);

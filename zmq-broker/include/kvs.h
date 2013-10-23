@@ -49,6 +49,7 @@ int kvs_get_int (void *h, const char *key, int *valp);
 int kvs_get_int64 (void *h, const char *key, int64_t *valp);
 int kvs_get_double (void *h, const char *key, double *valp);
 int kvs_get_boolean (void *h, const char *key, bool *valp);
+int kvs_get_symlink (void *h, const char *key, char **valp);
 
 /* kvs_watch* is like kvs_get* except the registered callback is called
  * to set the value.  It will be called immediately to set the initial
@@ -109,6 +110,7 @@ bool kvsdir_isint (kvsdir_t dir, const char *key);
 bool kvsdir_isint64 (kvsdir_t dir, const char *key);
 bool kvsdir_isdouble (kvsdir_t dir, const char *key);
 bool kvsdir_isboolean (kvsdir_t dir, const char *key);
+bool kvsdir_issymlink (kvsdir_t dir, const char *key);
 
 /* Get key associated with a directory or directory entry.
  * Both functions always succeed.
@@ -126,6 +128,7 @@ int kvsdir_get_int (kvsdir_t dir, const char *key, int *valp);
 int kvsdir_get_int64 (kvsdir_t dir, const char *key, int64_t *valp);
 int kvsdir_get_double (kvsdir_t dir, const char *key, double *valp);
 int kvsdir_get_boolean (kvsdir_t dir, const char *key, bool *valp);
+int kvsdir_get_symlink (kvsdir_t dir, const char *key, char **valp);
 
 /* Remove a key from the namespace.  If it represents a directory,
  * its contents are also removed.  kvsdir_unlink removes it relative to 'dir'.
@@ -133,6 +136,12 @@ int kvsdir_get_boolean (kvsdir_t dir, const char *key, bool *valp);
  */
 int kvs_unlink (void *h, const char *key);
 int kvsdir_unlink (kvsdir_t dir, const char *key);
+
+/* Create symlink.  kvsdir_symlink creates it relatived to 'dir'.
+ * Returns -1 on error (errno set), 0 on success.
+ */
+int kvs_symlink (void *h, const char *key, const char *target);
+int kvsdir_symlink (kvsdir_t dir, const char *key, const char *target);
 
 /* Create an empty directory.  kvsdir_mkdir creates it relative to 'dir'.
  * Returns -1 on error (errno set), 0 on success.
