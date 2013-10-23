@@ -502,6 +502,7 @@ static json_object *kvs_copy (plugin_ctx_t *p, json_object *dir, wait_t *wp,
                 goto stall;
             json_object_object_add (dcpy, iter.key,
                                     dirent_create ("DIRVAL", val));
+            json_object_put (val);
         } else {
             json_object_get (iter.val);
             json_object_object_add (dcpy, iter.key, iter.val);
