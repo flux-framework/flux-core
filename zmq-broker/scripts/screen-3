@@ -3,10 +3,67 @@
 #  Run the scripts start-{0,1,2} in a single instance of screen(1).
 #  Attach with screen -r -S ${session}.
 #
-dir=$( cd "$(dirname $0)" && pwd)
-session="cmb-test"
 
-screen -d -m -S ${session}
+declare -r prog=${0##*/}
+declare -r topdir=$(cd "$(dirname $0)/.." && pwd)
+declare -r dir=${topdir}/scripts
+declare -r default_session="cmb-test"
+
+declare -r default_valgrind_opts="--tool=memcheck --leak-check=full -v"
+
+declare -r getopt="/usr/bin/getopt"
+declare -r long_opts="session,valgrind,gdb,help"
+declare -r short_opts="S:V::gh"
+declare -r usage="\
+\n\
+Run (3) cmbd processes in the foreground under screen(1) on the local\n\
+node. Optionally run under valgrind and/or gdb.\n\
+\n\
+Usage: $prog [OPTIONS]...\n\
+   -h, --help		Display this message.\n\
+   -V, --valgrind=OPTS  Run cmbd processes under valgrind.\n\
+   -g, --gdb            Run cmbd processes under gdb.\n\
+   -S, --session=NAME   Give screen session name NAME (default=cmb-test)"
+
+usage()    { echo -e "$usage" >&2; }
+log_msg()  { echo -e "$prog: $@";  }
+die()      { log_msg "Fatal: $@"; exit 1; }
+
+GETOPT=$($getopt -o $short_opts -l $long_opts -n $prog -- $@)
+if [ $? != 0 ]; then
+   usage
+   exit 1
+fi
+
+eval set -- "$GETOPT"
+while true; do
+   case "$1" in
+   -h|--help)        usage; exit 0;                ;;
+   -g|--gdb)         GDB=1;                shift   ;;
+   -V|--valgrind)    VALGRIND=1; VOPTS=$2; shift 2 ;;
+   -S|--session)     SESSION=$2;           shift 2 ;;
+   --)               shift; break;                 ;;
+   *)                usage; exit 1;                ;;
+   esac
+done
+
+if [ -n "$GDB" -a -n "$VALGRIND" ]; then
+   die "Please specify only one of --gdb and --valgrind"
+fi
+
+export CMBD=${topdir}/cmbd
+
+if [ -n "$GDB" ]; then
+   export CMDPREFIX="gdb -ex run --args"
+fi
+
+if [ -n "$VALGRIND" ]; then
+   export CMDPREFIX="valgrind ${VOPTS:-${default_valgrind_opts}}"
+fi
+
+session=${SESSION:-${default_session}}
+screen -d -m -S ${session}  || die "Failed to run screen!"
+
 screen -S ${session} -X zombie kr # keep zombie windows
 screen -S ${session} -p 0 -X exec ${dir}/start-0
 screen -S ${session} -X screen ${dir}/start-1

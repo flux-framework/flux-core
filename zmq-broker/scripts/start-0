@@ -1,4 +1,4 @@
-./cmbd \
+${CMDPREFIX} ${CMBD:-./cmbd} \
   --dn-event-in-uri='tcp://*:5558' \
   --dn-event-out-uri='tcp://*:5559' \
   --up-req-in-uri='tcp://*:5556' \

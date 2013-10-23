@@ -1,4 +1,4 @@
-./cmbd \
+${CMDPREFIX} ${CMBD:-./cmbd} \
   --parent=1,tcp://127.0.0.1:5560,tcp://127.0.0.1:5561 \
   --parent=0,tcp://127.0.0.1:5556,tcp://127.0.0.1:5557 \
   --up-event-out-uri='tcp://127.0.0.1:5558' \
