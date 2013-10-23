@@ -52,12 +52,14 @@ The possible operations are:\n\
     put_double key val\n\
     get_boolean key\n\
     put_booelan key val (use \"true\" or \"false\")\n\
+    symlink key val\n\
     mkdir key\n\
     unlink key\n\
     get_dir key\n\
     get_dir_r key\n\
     get_all key\n\
     get_all_r key\n\
+    get_symlink key\n\
     commit\n\
 ");
     exit (1);
@@ -67,6 +69,12 @@ void tkvs_mkdir (cmb_t c, char *key)
 {
     if (kvs_mkdir (c, key) < 0)
         err_exit ("kvs_mkdir %s", key);
+}
+
+void tkvs_symlink(cmb_t c, char *key, char *val)
+{
+    if (kvs_symlink (c, key, val) < 0)
+        err_exit ("kvs_symlink %s", key);
 }
 
 void tkvs_unlink (cmb_t c, char *key)
@@ -202,6 +210,22 @@ void tkvs_get_dir (cmb_t c, char *key, bool ropt, bool all, int flags)
         kvsdir_destroy (dir);
     }
 }
+
+void tkvs_get_symlink (cmb_t c, char *key)
+{
+    char *val;
+
+    if (kvs_get_symlink (c, key, &val) < 0) {
+        if (errno == ENOENT)
+            printf ("null\n");
+        else
+            err_exit ("kvs_get_symlink %s", key);
+    } else {
+        printf ("%s\n", val);
+        free (val);
+    }
+}
+
 
 void tkvs_get_string (cmb_t c, char *key)
 {
@@ -342,6 +366,7 @@ int main (int argc, char *argv[])
     if (!op || (!strncmp (op, "get", 3) && !key)
             || (!strcmp (op, "unlink") && !key)
             || (!strcmp (op, "mkdir") && !key)
+            || (!strcmp (op, "symlink") && (!key || !val))
             || (!strncmp (op, "put", 3) && (!key || !val)))
         usage ();
     if (!(c = cmb_init_full (path, cmb_flags)))
@@ -382,6 +407,9 @@ int main (int argc, char *argv[])
     else if (!strcmp (op, "get_all_r"))
         tkvs_get_dir (c, key, true, true, kvs_flags);
 
+    else if (!strcmp (op, "get_symlink"))
+        tkvs_get_symlink (c, key);
+
     else if (!strcmp (op, "get"))
         tkvs_get (c, key);
     else if (!strcmp (op, "put"))
@@ -391,7 +419,8 @@ int main (int argc, char *argv[])
         tkvs_unlink (c, key);
     else if (!strcmp (op, "mkdir"))
         tkvs_mkdir (c, key);
-
+    else if (!strcmp (op, "symlink"))
+        tkvs_symlink (c, key, val);
     else if (!strcmp (op, "commit"))
         tkvs_commit (c);     
     else

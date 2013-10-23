@@ -56,6 +56,10 @@
  */
 #define LARGE_VAL 100
 
+/* Break cycles in symlink references.
+ */
+#define SYMLINK_CYCLE_LIMIT 10
+
 typedef void (*wait_fun_t) (plugin_ctx_t *p, char *arg, zmsg_t **zmsg);
 typedef struct {
     plugin_ctx_t *p;
@@ -180,7 +184,8 @@ static json_object *dirent_create (char *type, void *arg)
 
         util_json_object_add_string (o, type, ref);
         valid_type = true;
-    } else if (!strcmp (type, "FILEVAL") || !strcmp (type, "DIRVAL")) {
+    } else if (!strcmp (type, "FILEVAL") || !strcmp (type, "DIRVAL")
+                                         || !strcmp (type, "LINKVAL")) {
         json_object *val = arg;
 
         if (val)
@@ -191,6 +196,7 @@ static json_object *dirent_create (char *type, void *arg)
         valid_type = true;
     }
     assert (valid_type == true);
+
     return o;
 }
 
@@ -583,7 +589,7 @@ static void deep_unwind (plugin_ctx_t *p, json_object *dir, href_t href)
             deep_unwind (p, o, nhref);
             json_object_object_add (cpy, iter.key,
                                     dirent_create ("DIRREF", nhref));
-        } else { /* FILEVAL, FILEREF, DIRREF */
+        } else { /* FILEVAL, LINKVAL, FILEREF, DIRREF */
             json_object_get (iter.val);
             json_object_object_add (cpy, iter.key, iter.val);
         }
@@ -864,30 +870,54 @@ static void kvs_flush_response (plugin_ctx_t *p, zmsg_t **zmsg)
 
 /* Get dirent containing requested key.
  */
-static bool walk (plugin_ctx_t *p, json_object *dir, const char *path,
-                  json_object **dp, wait_t *wp)
+static bool walk (plugin_ctx_t *p, json_object *root, const char *path,
+                  json_object **direntp, wait_t *wp, bool symlink, int depth)
 {
     char *cpy = xstrdup (path);
     char *next, *name = cpy;
     const char *ref;
+    const char *link;
     json_object *dirent = NULL;
+    json_object *dir = root;
 
+    depth++;
+
+    /* walk directories */
     while ((next = strchr (name, '.'))) {
         *next++ = '\0';
         if (!(dirent = json_object_object_get (dir, name)))
-            goto done;
-        if (!util_json_object_get_string (dirent, "DIRREF", &ref) < 0) {
-            dirent = NULL;
-            goto done;
+            goto error;
+        /* always deref symlinks in non-terminal directories */
+        if (util_json_object_get_string (dirent, "LINKVAL", &link) == 0) {
+            if (depth == SYMLINK_CYCLE_LIMIT)
+                goto error; /* FIXME: get ELOOP back to kvs_get */
+            if (!walk (p, root, link, &dirent, wp, symlink, depth))
+                goto stall;        
         }
-        if (!load (p, ref, wp, &dir))
-            goto stall;
+        if (util_json_object_get_string (dirent, "DIRREF", &ref) == 0) {
+            if (!load (p, ref, wp, &dir))
+                goto stall;
+        } else {
+            goto error;
+        }
         name = next;
     }
+    /* now terminal path component */
     dirent = json_object_object_get (dir, name);
-done:
+    /* if symlink, deref unless symlink flag is set */
+    if (dirent && !symlink
+               && util_json_object_get_string (dirent, "LINKVAL", &link) == 0) {
+        if (depth == SYMLINK_CYCLE_LIMIT)
+            goto error; /* FIXME: get ELOOP back to kvs_get */
+        if (!walk (p, root, link, &dirent, wp, symlink, depth))
+            goto stall;
+    }
     free (cpy);
-    *dp = dirent;    
+    *direntp = dirent;    
+    return true;
+error:
+    free (cpy);
+    *direntp = NULL;
     return true;
 stall:
     free (cpy);
@@ -895,7 +925,7 @@ stall:
 }
 
 static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
-                    bool dir, int dir_flags, const char *name,
+                    bool dir, int dir_flags, bool symlink, const char *name,
                     json_object **valp, int *ep)
 {
     json_object *vp, *dirent, *val = NULL;
@@ -911,7 +941,7 @@ static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
         val = root;
         isdir = true;
     } else {
-        if (!walk (p, root, name, &dirent, wp))
+        if (!walk (p, root, name, &dirent, wp, symlink, 0))
             goto stall;
         if (!dirent) {
             //errnum = ENOENT;
@@ -939,12 +969,16 @@ static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
             }
             val = vp;
             isdir = true;
-        } else if ((val = json_object_object_get (dirent, "FILEVAL"))) {
+        } else if ((vp = json_object_object_get (dirent, "FILEVAL"))) {
             if (dir) {
                 errnum = ENOTDIR;
-                val = NULL;
                 goto done;
             }
+            val = vp;
+        } else if ((vp = json_object_object_get (dirent, "LINKVAL"))) {
+            assert (symlink == true); /* walk() ensures this */
+            assert (dir == false); /* dir && symlink should never happen */
+            val = vp;
         } else 
             msg_exit ("%s: corrupt internal storage", __FUNCTION__);
     }
@@ -975,6 +1009,7 @@ static void kvs_get_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     bool flag_directory = false;
     bool flag_dirval = false;
     bool flag_fileval = false;
+    bool flag_symlink = false;
     int dir_flags = 0;
     int errnum = 0;
 
@@ -991,6 +1026,7 @@ static void kvs_get_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     (void)util_json_object_get_boolean (o, ".flag_directory", &flag_directory);
     (void)util_json_object_get_boolean (o, ".flag_dirval", &flag_dirval);
     (void)util_json_object_get_boolean (o, ".flag_fileval", &flag_fileval);
+    (void)util_json_object_get_boolean (o, ".flag_symlink", &flag_symlink);
     if (flag_dirval)
         dir_flags |= KVS_GET_DIRVAL;
     if (flag_fileval)
@@ -1001,8 +1037,8 @@ static void kvs_get_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         if (!strncmp (iter.key, ".flag_", 6)) /* ignore flags */
             continue;
         json_object *val = NULL;
-        if (!lookup (p, root, wp, flag_directory, dir_flags, iter.key,
-                     &val, &errnum))
+        if (!lookup (p, root, wp, flag_directory, dir_flags, flag_symlink,
+                     iter.key, &val, &errnum))
             stall = true; /* keep going to maximize readahead */
         if (stall) {
             if (val)
@@ -1039,6 +1075,7 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     bool stall = false, changed = false;
     bool flag_directory = false, flag_continue = false;
     bool flag_dirval = false, flag_fileval = false;
+    bool flag_symlink = false;
     int dir_flags = 0;
     int errnum = 0;
 
@@ -1056,6 +1093,7 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     (void)util_json_object_get_boolean (o, ".flag_continue", &flag_continue);
     (void)util_json_object_get_boolean (o, ".flag_dirval", &flag_dirval);
     (void)util_json_object_get_boolean (o, ".flag_fileval", &flag_fileval);
+    (void)util_json_object_get_boolean (o, ".flag_symlink", &flag_symlink);
     if (flag_dirval)
         dir_flags |= KVS_GET_DIRVAL;
     if (flag_fileval)
@@ -1066,8 +1104,8 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         if (!strncmp (iter.key, ".flag_", 6)) /* ignore flags */
             continue;
         json_object *val = NULL;
-        if (!lookup (p, root, wp, flag_directory, dir_flags, iter.key,
-                     &val, &errnum))
+        if (!lookup (p, root, wp, flag_directory, dir_flags, flag_symlink,
+                     iter.key, &val, &errnum))
             stall = true; /* keep going to maximize readahead */
         if (stall) {
             if (val)
@@ -1100,6 +1138,7 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         util_json_object_add_boolean (reply, ".flag_directory", flag_directory);
         util_json_object_add_boolean (reply, ".flag_dirval", flag_dirval);
         util_json_object_add_boolean (reply, ".flag_fileval", flag_fileval);
+        util_json_object_add_boolean (reply, ".flag_symlink", flag_symlink);
         util_json_object_add_boolean (reply, ".flag_continue", true);
         (void)cmb_msg_replace_json (zcpy, reply);
 
@@ -1131,12 +1170,14 @@ static void kvs_put_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     href_t ref;
     bool writeback = !plugin_treeroot (p);
     bool flag_mkdir = false;
+    bool flag_symlink = false;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
     (void)util_json_object_get_boolean (o, ".flag_mkdir", &flag_mkdir);
+    (void)util_json_object_get_boolean (o, ".flag_symlink", &flag_symlink);
     json_object_object_foreachC (o, iter) {
         if (!strncmp (iter.key, ".flag_", 6)) /* ignore flags */
             continue;
@@ -1147,6 +1188,8 @@ static void kvs_put_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
                 name (p, iter.key, dirent_create ("DIRREF", ref), writeback);
             } else
                 name (p, iter.key, NULL, writeback);
+        } else if (flag_symlink) {
+            name (p, iter.key, dirent_create ("LINKVAL", iter.val), writeback);
         } else if (strlen (json_object_to_json_string (iter.val)) < LARGE_VAL) {
             name (p, iter.key, dirent_create ("FILEVAL", iter.val), writeback);
         } else {

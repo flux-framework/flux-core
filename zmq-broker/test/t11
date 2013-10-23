@@ -1,5 +1,9 @@
 #!/bin/bash -e
 
+# run multi-threaded test program that modifies a watched key 
+# multiple times and verifies that all the threads watching it receive
+# the right number of callbacks with the right content
+
 TEST=`basename $0`
 KEY=$TEST.a
 

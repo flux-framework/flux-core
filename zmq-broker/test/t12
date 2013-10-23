@@ -1,0 +1,30 @@
+#!/bin/bash -e
+
+# test symlink resolution when final path component is a symlink
+
+TEST=`basename $0`
+KEY=$TEST.a.b.c
+KVAL="foo"
+KLINK=$TEST.Q
+
+test_cleanup() {
+    ./tkvs unlink $TEST
+    ./tkvs commit
+}
+
+test_cleanup
+
+./tkvs put_string $KEY "$KVAL"
+./tkvs symlink $KLINK $KEY
+./tkvs commit
+
+RESULT=`./tkvs get_string $KEY`
+test "$RESULT" == "$KVAL"
+RESULT=`./tkvs get_symlink $KLINK`
+test "$RESULT" == "$KEY"
+RESULT=`./tkvs get_string $KLINK`
+test "$RESULT" == "$KVAL"
+
+test_cleanup
+
+exit 0

@@ -199,6 +199,7 @@ int kvs_get_symlink (void *h, const char *key, char **valp)
     json_object *val = NULL;
     json_object *request = util_json_object_new_object ();
     json_object *reply = NULL;
+    const char *s;
     int ret = -1;
 
     util_json_object_add_boolean (request, ".flag_symlink", true);
@@ -215,10 +216,12 @@ int kvs_get_symlink (void *h, const char *key, char **valp)
         errno = EINVAL;
         goto done;
     }
-    if (valp) {
-        const char *s = json_object_get_string (val);
-        *valp = xstrdup (s);
+    if (!(s = json_object_get_string (val))) {
+        errno = EINVAL;
+        goto done;
     }
+    if (valp)
+        *valp = xstrdup (s);
     ret = 0;
 done:
     if (request)
