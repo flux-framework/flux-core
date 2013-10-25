@@ -202,7 +202,7 @@ int kvs_get_symlink (void *h, const char *key, char **valp)
     const char *s;
     int ret = -1;
 
-    util_json_object_add_boolean (request, ".flag_symlink", true);
+    util_json_object_add_boolean (request, ".flag_readlink", true);
     json_object_object_add (request, key, NULL);
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.get");

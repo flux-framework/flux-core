@@ -903,7 +903,7 @@ static void kvs_flush_response (plugin_ctx_t *p, zmsg_t **zmsg)
 /* Get dirent containing requested key.
  */
 static bool walk (plugin_ctx_t *p, json_object *root, const char *path,
-                  json_object **direntp, wait_t *wp, bool symlink, int depth)
+                  json_object **direntp, wait_t *wp, bool readlink, int depth)
 {
     char *cpy = xstrdup (path);
     char *next, *name = cpy;
@@ -923,7 +923,7 @@ static bool walk (plugin_ctx_t *p, json_object *root, const char *path,
         if (util_json_object_get_string (dirent, "LINKVAL", &link) == 0) {
             if (depth == SYMLINK_CYCLE_LIMIT)
                 goto error; /* FIXME: get ELOOP back to kvs_get */
-            if (!walk (p, root, link, &dirent, wp, symlink, depth))
+            if (!walk (p, root, link, &dirent, wp, readlink, depth))
                 goto stall;        
         }
         if (util_json_object_get_string (dirent, "DIRREF", &ref) == 0) {
@@ -936,12 +936,12 @@ static bool walk (plugin_ctx_t *p, json_object *root, const char *path,
     }
     /* now terminal path component */
     dirent = json_object_object_get (dir, name);
-    /* if symlink, deref unless symlink flag is set */
-    if (dirent && !symlink
+    /* if symlink, deref unless 'readlink' flag is set */
+    if (dirent && !readlink
                && util_json_object_get_string (dirent, "LINKVAL", &link) == 0) {
         if (depth == SYMLINK_CYCLE_LIMIT)
             goto error; /* FIXME: get ELOOP back to kvs_get */
-        if (!walk (p, root, link, &dirent, wp, symlink, depth))
+        if (!walk (p, root, link, &dirent, wp, readlink, depth))
             goto stall;
     }
     free (cpy);
@@ -957,7 +957,7 @@ stall:
 }
 
 static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
-                    bool dir, int dir_flags, bool symlink, const char *name,
+                    bool dir, int dir_flags, bool readlink, const char *name,
                     json_object **valp, int *ep)
 {
     json_object *vp, *dirent, *val = NULL;
@@ -973,7 +973,7 @@ static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
         val = root;
         isdir = true;
     } else {
-        if (!walk (p, root, name, &dirent, wp, symlink, 0))
+        if (!walk (p, root, name, &dirent, wp, readlink, 0))
             goto stall;
         if (!dirent) {
             //errnum = ENOENT;
@@ -1008,8 +1008,8 @@ static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
             }
             val = vp;
         } else if ((vp = json_object_object_get (dirent, "LINKVAL"))) {
-            assert (symlink == true); /* walk() ensures this */
-            assert (dir == false); /* dir && symlink should never happen */
+            assert (readlink == true); /* walk() ensures this */
+            assert (dir == false); /* dir && readlink should never happen */
             val = vp;
         } else 
             msg_exit ("%s: corrupt internal storage", __FUNCTION__);
@@ -1041,7 +1041,7 @@ static void kvs_get_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     bool flag_directory = false;
     bool flag_dirval = false;
     bool flag_fileval = false;
-    bool flag_symlink = false;
+    bool flag_readlink = false;
     int dir_flags = 0;
     int errnum = 0;
 
@@ -1058,7 +1058,7 @@ static void kvs_get_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     (void)util_json_object_get_boolean (o, ".flag_directory", &flag_directory);
     (void)util_json_object_get_boolean (o, ".flag_dirval", &flag_dirval);
     (void)util_json_object_get_boolean (o, ".flag_fileval", &flag_fileval);
-    (void)util_json_object_get_boolean (o, ".flag_symlink", &flag_symlink);
+    (void)util_json_object_get_boolean (o, ".flag_readlink", &flag_readlink);
     if (flag_dirval)
         dir_flags |= KVS_GET_DIRVAL;
     if (flag_fileval)
@@ -1069,7 +1069,7 @@ static void kvs_get_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         if (!strncmp (iter.key, ".flag_", 6)) /* ignore flags */
             continue;
         json_object *val = NULL;
-        if (!lookup (p, root, wp, flag_directory, dir_flags, flag_symlink,
+        if (!lookup (p, root, wp, flag_directory, dir_flags, flag_readlink,
                      iter.key, &val, &errnum))
             stall = true; /* keep going to maximize readahead */
         if (stall) {
@@ -1108,7 +1108,7 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     bool stall = false, changed = false;
     bool flag_directory = false, flag_continue = false;
     bool flag_dirval = false, flag_fileval = false;
-    bool flag_symlink = false;
+    bool flag_readlink = false;
     int dir_flags = 0;
     int errnum = 0;
 
@@ -1126,7 +1126,7 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     (void)util_json_object_get_boolean (o, ".flag_continue", &flag_continue);
     (void)util_json_object_get_boolean (o, ".flag_dirval", &flag_dirval);
     (void)util_json_object_get_boolean (o, ".flag_fileval", &flag_fileval);
-    (void)util_json_object_get_boolean (o, ".flag_symlink", &flag_symlink);
+    (void)util_json_object_get_boolean (o, ".flag_readlink", &flag_readlink);
     if (flag_dirval)
         dir_flags |= KVS_GET_DIRVAL;
     if (flag_fileval)
@@ -1137,7 +1137,7 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         if (!strncmp (iter.key, ".flag_", 6)) /* ignore flags */
             continue;
         json_object *val = NULL;
-        if (!lookup (p, root, wp, flag_directory, dir_flags, flag_symlink,
+        if (!lookup (p, root, wp, flag_directory, dir_flags, flag_readlink,
                      iter.key, &val, &errnum))
             stall = true; /* keep going to maximize readahead */
         if (stall) {
@@ -1171,7 +1171,7 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         util_json_object_add_boolean (reply, ".flag_directory", flag_directory);
         util_json_object_add_boolean (reply, ".flag_dirval", flag_dirval);
         util_json_object_add_boolean (reply, ".flag_fileval", flag_fileval);
-        util_json_object_add_boolean (reply, ".flag_symlink", flag_symlink);
+        util_json_object_add_boolean (reply, ".flag_readlink", flag_readlink);
         util_json_object_add_boolean (reply, ".flag_continue", true);
         (void)cmb_msg_replace_json (zcpy, reply);
 
