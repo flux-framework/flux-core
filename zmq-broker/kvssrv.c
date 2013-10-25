@@ -621,7 +621,13 @@ static void deep_unwind (plugin_ctx_t *p, json_object *dir, href_t href)
             deep_unwind (p, o, nhref);
             json_object_object_add (cpy, iter.key,
                                     dirent_create ("DIRREF", nhref));
-        } else { /* FILEVAL, LINKVAL, FILEREF, DIRREF */
+        } else if ((o = json_object_object_get (iter.val, "FILEVAL"))
+                    && strlen (json_object_to_json_string (o)) >= LARGE_VAL) {
+            json_object_get (o);
+            store (p, o, false, nhref);
+            json_object_object_add (cpy, iter.key,
+                                        dirent_create ("FILEREF", nhref));
+        } else { /* FILEVAL, FILEREF, DIRREF */
             json_object_get (iter.val);
             json_object_object_add (cpy, iter.key, iter.val);
         }
