@@ -67,6 +67,7 @@ typedef struct {
     wait_fun_t fun;    
     char *arg;
     zmsg_t *zmsg;
+    char *id;
 } wait_t;
 
 typedef struct {
@@ -135,14 +136,44 @@ static wait_t *wait_create (plugin_ctx_t *p, wait_fun_t fun,
     return wp;
 }
 
+static void wait_set_id (wait_t *wp, char *id)
+{
+    if (wp->id)
+        free (wp->id);
+    wp->id = xstrdup (id);
+}
+
 static void wait_destroy (wait_t *wp, zmsg_t **zmsg)
 {
     assert (zmsg != NULL || wp->zmsg == NULL);
     if (wp->arg)
         free (wp->arg);
+    if (wp->id)
+        free (wp->id);
     if (zmsg)
         *zmsg = wp->zmsg;
     free (wp);
+}
+
+static void wait_destroy_byid (zlist_t **list, char *id)
+{
+    zlist_t *tmp;
+    wait_t *wp;
+    zmsg_t *zmsg;
+
+    if (!(tmp = zlist_new ()))
+        oom ();
+    while ((wp = zlist_pop (*list))) {
+        if (wp->id && strcmp (wp->id, id) == 0) {
+            wait_destroy (wp, &zmsg); 
+            if (zmsg)
+                zmsg_destroy (&zmsg);
+        } else
+            if (zlist_push (tmp, wp) < 0)
+                oom ();
+    }
+    zlist_destroy (list);
+    *list = tmp;
 }
 
 static void wait_add (zlist_t *waitlist, wait_t *wp)
@@ -1069,6 +1100,7 @@ done:
 
 static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 {
+    char *sender = cmb_msg_sender (*zmsg);
     ctx_t *ctx = p->ctx;
     json_object *root, *reply = NULL, *o = NULL;
     json_object_iter iter;
@@ -1147,6 +1179,7 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
          * No reply will be generated unless a value has changed.
          */
         wp = wait_create (p, kvs_watch_request, arg, &zcpy);
+        wait_set_id (wp, sender);
         wait_add (ctx->watchlist, wp);
 
         /* Reply to the watch request.
@@ -1162,6 +1195,8 @@ done:
         json_object_put (reply);
     if (*zmsg)
         zmsg_destroy (zmsg);
+    if (sender)
+        free (sender);
 }
 
 static void kvs_put_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
@@ -1369,6 +1404,18 @@ static void event_kvs_debug (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         zmsg_destroy (zmsg);
 }
 
+static void kvs_disconnect (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+{
+    char *sender = cmb_msg_sender (*zmsg);
+    ctx_t *ctx = p->ctx;
+
+    if (sender) {
+        wait_destroy_byid (&ctx->watchlist, sender);
+        free (sender);
+    }
+    zmsg_destroy (zmsg);
+}
+
 static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
 {
     char *arg = NULL;
@@ -1387,6 +1434,8 @@ static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         kvs_watch_request (p, NULL, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.put")) {
         kvs_put_request (p, NULL, zmsg);
+    } else if (cmb_msg_match (*zmsg, "kvs.disconnect")) {
+        kvs_disconnect (p, NULL, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.load")) {
         if (type == ZMSG_REQUEST)
             kvs_load (p, NULL, zmsg);
