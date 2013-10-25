@@ -53,6 +53,7 @@
 #include "log.h"
 
 /* Large values are stored in dirents by reference; small values by value.
+ *  (-1 = all by reference, 0 = all by value)
  */
 #define LARGE_VAL 100
 
@@ -120,6 +121,15 @@ typedef struct {
 } ctx_t;
 
 static void event_kvs_setroot_send (plugin_ctx_t *p);
+
+static bool store_by_reference (json_object *o)
+{
+    if (LARGE_VAL == -1)
+        return true;
+    if (strlen (json_object_to_json_string (o)) >= LARGE_VAL)
+        return true;
+    return false;
+}
 
 static wait_t *wait_create (plugin_ctx_t *p, wait_fun_t fun,
                             char *arg, zmsg_t **zmsg)
@@ -508,7 +518,13 @@ static bool readahead_dir (plugin_ctx_t *p, json_object *dir, wait_t *wp,
     return done;
 }
 
-static json_object *kvs_copy (plugin_ctx_t *p, json_object *dir, wait_t *wp,
+/* Create a JSON object that is a duplicate of the directory 'dir' with
+ * references to the content-hash replaced with their values.  More precisely,
+ * if 'flags' contains KVS_GET_FILEVAL, replace FILEREF's with their values;
+ * if 'flags' contains KVS_GET_DIRVAL, replace DIRREF's with their values,
+ * and recurse.
+ */
+static json_object *kvs_save (plugin_ctx_t *p, json_object *dir, wait_t *wp,
                               int flags)
 {
     json_object *dcpy, *val;
@@ -529,7 +545,7 @@ static json_object *kvs_copy (plugin_ctx_t *p, json_object *dir, wait_t *wp,
                 && util_json_object_get_string (iter.val, "DIRREF", &ref)==0) {
             if (!load (p, ref, wp, &val))
                 goto stall;
-            if (!(val = kvs_copy (p, val, wp, flags)))
+            if (!(val = kvs_save (p, val, wp, flags)))
                 goto stall;
             json_object_object_add (dcpy, iter.key,
                                     dirent_create ("DIRVAL", val));
@@ -545,6 +561,36 @@ stall:
     return NULL;
 }
 
+/* Given a JSON object created by kvs_save(), restore it to the content-hash
+ * and return the new reference in 'href'.
+ */
+static void kvs_restore (plugin_ctx_t *p, json_object *dir, href_t href)
+{
+    json_object *cpy, *o;
+    json_object_iter iter;
+    href_t nhref;
+
+    if (!(cpy = json_object_new_object ()))
+        oom ();
+
+    json_object_object_foreachC (dir, iter) {
+        if ((o = json_object_object_get (iter.val, "DIRVAL"))) {
+            kvs_restore (p, o, nhref);
+            json_object_object_add (cpy, iter.key,
+                                    dirent_create ("DIRREF", nhref));
+        } else if ((o = json_object_object_get (iter.val, "FILEVAL"))
+                                        && store_by_reference (o)) {
+            json_object_get (o);
+            store (p, o, false, nhref);
+            json_object_object_add (cpy, iter.key,
+                                        dirent_create ("FILEREF", nhref));
+        } else { /* FILEVAL, FILEREF, DIRREF */
+            json_object_get (iter.val);
+            json_object_object_add (cpy, iter.key, iter.val);
+        }
+    }
+    store (p, cpy, false, href);
+}
 
 static void name_request_send (plugin_ctx_t *p, char *key, json_object *dirent)
 {
@@ -605,38 +651,7 @@ static void setroot (plugin_ctx_t *p, int seq, href_t ref)
     }
 }
 
-/* Store unwound deep copy of root directory and return its href.
- */
-static void deep_unwind (plugin_ctx_t *p, json_object *dir, href_t href)
-{
-    json_object *cpy, *o;
-    json_object_iter iter;
-    href_t nhref;
-
-    if (!(cpy = json_object_new_object ()))
-        oom ();
-
-    json_object_object_foreachC (dir, iter) {
-        if ((o = json_object_object_get (iter.val, "DIRVAL"))) {
-            deep_unwind (p, o, nhref);
-            json_object_object_add (cpy, iter.key,
-                                    dirent_create ("DIRREF", nhref));
-        } else if ((o = json_object_object_get (iter.val, "FILEVAL"))
-                    && strlen (json_object_to_json_string (o)) >= LARGE_VAL) {
-            json_object_get (o);
-            store (p, o, false, nhref);
-            json_object_object_add (cpy, iter.key,
-                                        dirent_create ("FILEREF", nhref));
-        } else { /* FILEVAL, FILEREF, DIRREF */
-            json_object_get (iter.val);
-            json_object_object_add (cpy, iter.key, iter.val);
-        }
-    }
-    store (p, cpy, false, href);
-}
-
 /* Put name to deep copy of root directory.  Consumes np.
- *  (assumes deep copy was created with nf=true)
  */
 static void deep_put (json_object *dir, name_t *np)
 {
@@ -677,12 +692,12 @@ static void commit (plugin_ctx_t *p)
 
     (void)load (p, ctx->rootdir, NULL, &dir);
     assert (dir != NULL);
-    cpy = kvs_copy (p, dir, NULL, KVS_GET_DIRVAL);
+    cpy = kvs_save (p, dir, NULL, KVS_GET_DIRVAL);
     assert (cpy != NULL);
     while ((np = zlist_pop (ctx->master.namequeue))) {
         deep_put (cpy, np); /* destroys np */
     }
-    deep_unwind (p, cpy, ref);
+    kvs_restore (p, cpy, ref);
     json_object_put (cpy);
     setroot (p, ctx->rootseq + 1, ref);
 }
@@ -812,12 +827,12 @@ static void kvs_clean_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     if (plugin_treeroot (p)) {
         (void)load (p, ctx->rootdir, NULL, &rootdir);
         assert (rootdir != NULL);
-        cpy = kvs_copy (p, rootdir, NULL, KVS_GET_DIRVAL | KVS_GET_FILEVAL);
+        cpy = kvs_save (p, rootdir, NULL, KVS_GET_DIRVAL | KVS_GET_FILEVAL);
         assert (cpy != NULL);
         zhash_destroy (&ctx->store);
         if (!(ctx->store = zhash_new ()))
             oom ();
-        deep_unwind (p, cpy, href);
+        kvs_restore (p, cpy, href);
         assert (!strcmp (ctx->rootdir, href));
         json_object_put (cpy);
     } else {
@@ -1024,7 +1039,7 @@ static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
     if (isdir) {
         if (!plugin_treeroot (p) && !readahead_dir (p, val, wp, dir_flags))
             goto stall;
-        if (!(val = kvs_copy (p, val, wp, dir_flags)))
+        if (!(val = kvs_save (p, val, wp, dir_flags)))
             goto stall;
     } else 
         json_object_get (val);
@@ -1232,12 +1247,12 @@ static void kvs_put_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
                 name (p, iter.key, NULL, writeback);
         } else if (flag_symlink) {
             name (p, iter.key, dirent_create ("LINKVAL", iter.val), writeback);
-        } else if (strlen (json_object_to_json_string (iter.val)) < LARGE_VAL) {
-            name (p, iter.key, dirent_create ("FILEVAL", iter.val), writeback);
-        } else {
+        } else if (store_by_reference (iter.val)) {
             json_object_get (iter.val);
             store (p, iter.val, writeback, ref);
             name (p, iter.key, dirent_create ("FILEREF", ref), writeback);
+        } else {
+            name (p, iter.key, dirent_create ("FILEVAL", iter.val), writeback);
         }
     }
     plugin_send_response_errnum (p, zmsg, 0); /* success */
