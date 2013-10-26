@@ -6,9 +6,9 @@
  *--------------------------------------------------------------------------------
  *
  *  Update Log:
+ *        Oct 25 2013 DHA: Adapt to new CMB/KVS APIs
  *        Oct 07 2013 DHA: File created
  */
-
 
 
 #include <string.h>
@@ -22,11 +22,11 @@
 #include <zmq.h>
 #include <czmq.h>
 #include "cmb.h"
+#include "kvs.h"
 #include "log.h"
 #include "util.h"
 #include "zmsg.h"
 #include "flux_api.h"
-
 
 typedef enum {
     level0 = 0,
@@ -70,6 +70,7 @@ verbose_level_e vlevel = level0;
 static char 
 myhostname[FLUXAPI_MAX_STRING];
 
+
 /******************************************************
 *
 * Static Functions
@@ -101,21 +102,9 @@ append_timestamp ( const char *ei,const char *fstr,
 
 
 static flux_lwj_status_e
-resolve_raw_state (json_object *o)
+resolve_raw_state (const char *state_str)
 {
     flux_lwj_status_e rc = status_null;
-
-    json_object *val;
-    if (!(json_object_object_get_ex (o,
-                          "FILEVAL", &val))) {
-        error_log (
-            "Failed to resolve the job state",
-            0);
-        goto ret_loc;
-    }
-
-    const char *state_str
-        = json_object_get_string (val);
 
     if (!state_str) {
         error_log (
@@ -137,10 +126,236 @@ resolve_raw_state (json_object *o)
         rc = status_completed;
     }
 
-    json_object_put (val);
-
 ret_loc:
     return rc;
+}
+
+
+static size_t
+query_globalProcTableSizeOr0 (const flux_lwj_id_t *lwj)
+{
+    int krc        = 0;
+    int64_t nprocs = 0;
+    size_t retval  = -1;
+    char kvs_key[FLUXAPI_MAX_STRING]
+                   = {'\0'};
+    kvsdir_t dirobj;
+
+    /*
+     * Retrieve the lwj root directory
+     */
+    snprintf (kvs_key,
+        FLUXAPI_MAX_STRING,
+        "lwj.%ld", *lwj);
+
+    /*
+     * Getting the lwj.* directory
+     */
+    if ( (krc = kvs_get_dir ((void *)cmbcxt,
+                             KVS_GET_FILEVAL,
+                             &dirobj,
+                             kvs_key)) < 0) {
+        error_log (
+            "kvs_get_dir returned error", 0);
+        goto retloc;
+    }
+
+    /*
+     * TODO: 10/23/2013 "size" should be store 
+     * in lwj directory ask Mark about this again
+     */
+    if ( ( krc = kvsdir_get_int64 (dirobj,
+                                JOB_NPROCS_KEY,
+                                &nprocs)) < 0) {
+        //
+        // JOB_NPROCS_KEY doesn't exist. This isn't
+        // an error in this routine 
+        //
+        retval = 0;
+    }
+    else {
+        retval = (nprocs > 0)
+                 ?  nprocs * cmb_size (cmbcxt) 
+                 : 0;
+    }
+
+retloc:
+    return retval;
+}
+
+
+static flux_rc_e
+put_job_metadata (
+                kvsdir_t rootdir, 
+                int sync,
+                const flux_lwj_id_t *coloc_lwj,
+                const char * lwjpath,
+                char * const lwjargv[],
+                int coloc,
+                int nnodes,
+                int nprocs_per_node)
+{
+    int krc = 0;
+    char ** argvptr = NULL;
+    json_object *cmd_array = NULL;
+
+    if ( (krc = kvsdir_put_int64 (rootdir,
+                           JOB_NPROCS_KEY,
+                           nprocs_per_node))) { 
+        error_log (
+            "Failed to put nprocs file", 0);
+        goto error;
+    }
+
+    cmd_array = json_object_new_array ();
+    argvptr = (char **) lwjargv;
+    while (*argvptr != NULL) {
+        json_object *o = json_object_new_string (*argvptr);
+        json_object_array_add (cmd_array, o);
+        argvptr++;
+    }
+
+    if ( (krc = kvsdir_put (rootdir,
+                            JOB_CMDLINE_KEY,
+                            cmd_array)) < 0 ) {
+        error_log ("Failed to put cmdline nprocs file", 0);
+        goto error;
+    }
+
+    if ( (krc = kvs_commit ((void *) cmbcxt) < 0)) {
+        error_log ("kvs_put failed", 0);
+        goto error;
+    }
+
+    json_object_put (cmd_array);
+
+    return FLUX_OK;
+
+error:
+    return FLUX_ERROR;
+}
+
+
+static flux_rc_e
+start_job (const flux_lwj_id_t *lwj)
+{
+    char event_msg[FLUXAPI_MAX_STRING] = {'\0'};
+
+    /*
+     * Now KVS has all information, 
+     * so tell the rexec plug-in to run
+     */
+    snprintf (event_msg, FLUXAPI_MAX_STRING,
+        "%s%lu", REXEC_PLUGIN_RUN_EVENT_MSG, *lwj);
+
+    if ( cmb_event_send (cmbcxt, event_msg) < 0 ) {
+        error_log ("Sending a cmb event failed"
+                   "in FLUX_launch_spawn", 0);
+        return FLUX_ERROR;
+    }
+
+    return FLUX_OK;
+}
+
+
+static flux_rc_e
+iter_and_fill_procdesc (kvsdir_t dirobj,
+               MPIR_PROCDESC_EXT *ptab_buf,
+               const size_t ptab_buf_size,
+               size_t *ret_ptab_size)
+{
+    int rank            = 0;
+    int incr            = 0;
+    int64_t pid         = 0;
+    int64_t nid         = 0;
+    const char *name    = NULL;
+    const char *cmd_str = NULL;
+    json_object *rankobj= NULL;
+    kvsitr_t iter;
+
+    /*
+     * TODO: 10/23/2013 tell Mark/Jim symlink structure 
+     * I need to speed up this query
+     */
+    iter = kvsitr_create (dirobj);
+    while ( (name = kvsitr_next (iter))
+            && (incr < ptab_buf_size)) {
+
+        /*
+         * If an entry is a subdirectory, it is currently
+         * only of the procdesc type. The scheme will be
+         * broken when other types of dirs will be popluated. 
+         */
+        kvsdir_t procdir;
+
+        if (!kvsdir_isdir (dirobj, name)) 
+            continue;
+
+        pid = 0;
+        nid = 0;
+        rank = atoi (name);    
+        cmd_str = NULL;
+
+        if ( kvsdir_get_dir (dirobj, 
+                             &procdir,
+                             name) < 0) {
+            error_log (
+                "error kvsdir_get_dir", 0);
+            goto fatal;
+        } 
+     
+        if ( kvsdir_get (procdir, 
+                         "procdesc", 
+                         &rankobj) < 0) {
+            /* this isn't procdesc directory */
+            continue;
+        } 
+
+        if ( util_json_object_get_string (rankobj, 
+                                          "command",
+                                          &cmd_str) < 0) {
+            error_log (
+                "proctable ill-formed (command)", 0);
+            goto fatal;
+        } 
+
+        if ( util_json_object_get_int64 (rankobj, 
+                                         "nodeid",
+                                         &nid) < 0) {
+            error_log (
+                "proctable ill-formed (nodeid)", 0);
+            goto fatal;
+        } 
+
+        if ( util_json_object_get_int64 (rankobj, 
+                                         "pid",
+                                         &pid) < 0) {
+            error_log (
+                "proctable ill-formed (nodeid)", 0);
+                goto fatal;
+        } 
+            
+        //ptab_buf[rank].pd.host_name = strdup(nid_str); 
+        // TODO: for testing purpose
+        ptab_buf[rank].pd.host_name = strdup (myhostname);
+        ptab_buf[rank].pd.executable_name = strdup (cmd_str);
+        ptab_buf[rank].pd.pid = pid;
+        ptab_buf[rank].mpirank = rank;
+        ptab_buf[rank].cnodeid = 0;
+
+        incr++;
+            
+        json_object_put (rankobj);
+        kvsdir_destroy (procdir);
+    }  
+
+    kvsitr_destroy (iter);
+    *ret_ptab_size = incr;
+
+    return FLUX_OK;
+
+fatal:
+    return FLUX_ERROR; 
 }
 
 
@@ -216,7 +431,7 @@ FLUX_fini ()
 {
     flux_rc_e rc = FLUX_OK;
 
-    if (!cmbcxt) {
+    if (cmbcxt) {
 	cmb_fini (cmbcxt);
     }
     else {
@@ -235,7 +450,6 @@ FLUX_update_createLWJCxt (flux_lwj_id_t *lwj)
     int rc              = FLUX_ERROR;
     int64_t jobid       = -1;
     char *tag           = NULL;
-    zmsg_t *zmsg        = NULL;
     json_object *jobreq = NULL;
     json_object *o      = NULL;
 
@@ -251,17 +465,16 @@ FLUX_update_createLWJCxt (flux_lwj_id_t *lwj)
             "in FLUX_update_createLWJCxt", 0);
 	goto cmb_error;
     }
+    json_object_put (jobreq);
 
-    if ( (zmsg = cmb_recv_zmsg (cmbcxt, false)) == NULL ) {
+    /*
+     * nonblocking flag is false: o is a tuple
+     */ 
+    if ( (rc = cmb_recv_message (cmbcxt, &tag, 
+                                 &o, false)) < 0 ) {
 	error_log (
             "Failed to receive a cmb msg"
             "in FLUX_update_createLWJCxt", 0);
-	goto cmb_error;
-    }
-
-    if ( ( rc = cmb_msg_decode (zmsg, &tag, &o)) < 0) {
-	error_log (
-            "Failed to decode a cmb msg", 0);
 	goto cmb_error;
     }
 
@@ -269,8 +482,10 @@ FLUX_update_createLWJCxt (flux_lwj_id_t *lwj)
 	error_log (
             "Tag mismatch in FLUX_update_createLWJCxt: %s", 
             0, tag);
+        free (tag);
 	goto cmb_error;
     }
+    free (tag);
 
     if ( (rc = util_json_object_get_int64 (o, 
                     NEW_LWJ_MSG_REPLY_FIELD, &jobid) < 0)) {
@@ -282,8 +497,6 @@ FLUX_update_createLWJCxt (flux_lwj_id_t *lwj)
     
     *lwj = jobid;
     json_object_put (o);
-    json_object_put (jobreq);
-    zmsg_destroy (&zmsg);
 
     return FLUX_OK;
 
@@ -317,57 +530,59 @@ FLUX_query_LWJId2JobInfo (
 	         const flux_lwj_id_t *lwj, 
 		 flux_lwj_info_t *lwj_info)
 {
-    int netrc            = -1;
+    int krc              = -1;
     int rc               = FLUX_OK;
-    size_t gtab_size        = 0;
+    char *st_lwj         = NULL;
     flux_lwj_status_e st = status_null;
-    json_object *jobj    = NULL; 
-    json_object *st_jobj = NULL;
-    char kvs_key[FLUXAPI_MAX_STRING] = {'\0'};
+    char kvs_key[FLUXAPI_MAX_STRING] 
+                         = {'\0'};
+    kvsdir_t dirobj;
 
     snprintf (kvs_key,
         FLUXAPI_MAX_STRING,
         "lwj.%ld", *lwj);
-    if ( (netrc = cmb_kvs_get (cmbcxt, kvs_key,
-                               &jobj, KVS_GET_DIR)) < 0) {
+
+    /*
+     * Getting the lwj.* directory
+     */
+    if ( (krc = kvs_get_dir ((void *)cmbcxt, 
+                             KVS_GET_FILEVAL,
+                             &dirobj,
+                             kvs_key)) < 0) {
         error_log (
-            "cmb_kvs_get error", 0);
+            "kvs_get_dir returned error", 0);
         rc = FLUX_ERROR;
-        goto jkvs_error;
+        goto error;
     }
 
-    if (!(json_object_object_get_ex (jobj,
+    /*
+     * Getting the state file.
+     */
+    if ( (krc = kvsdir_get_string (dirobj,
                                JOB_STATE_KEY,
-                               &st_jobj)) ) {
+                               &st_lwj)) < 0 ) {
         error_log (
-            "Key not found? %s", 
+            "key not found? %s", 
             0, JOB_STATE_KEY);
         rc = FLUX_ERROR;
-        goto jkvs_error;
+        goto error;
 
     }
+    kvsdir_destroy (dirobj);
 
+    st = resolve_raw_state (st_lwj);
+    free (st_lwj);
 
-    st = resolve_raw_state (st_jobj);
     lwj_info->lwj = *lwj;
     lwj_info->status = st;
     lwj_info->starter.hostname = strdup (myhostname);
     lwj_info->starter.pid = -1;
-
-    if ( (rc = FLUX_query_globalProcTableSize (
-                   lwj, &gtab_size)) != FLUX_OK) {
-        lwj_info->proc_table_size = gtab_size;
-    }
-    else {
-        lwj_info->proc_table_size = 0;
-    }
-
-    json_object_put (jobj);
-    json_object_put (st_jobj);
+    lwj_info->proc_table_size 
+        = query_globalProcTableSizeOr0 (lwj);
 
     return rc;
 
-jkvs_error:
+error:
     return rc;
 }
 
@@ -377,41 +592,18 @@ FLUX_query_globalProcTableSize (
 	         const flux_lwj_id_t *lwj,
 		 size_t *count)
 {
-    flux_rc_e rc = FLUX_OK;
-    char kvs_key[FLUXAPI_MAX_STRING] = {'\0'};
-    json_object_iter iter;
-    json_object *jobj;
-    int incr = 0;
-    int netrc = 0;
+    flux_rc_e rc   = FLUX_OK;
+    
+    if ( (*count = query_globalProcTableSizeOr0 (
+                                       lwj)) == 0) {
 
-    /*
-     * Retrieve the lwj root directory
-     */
-    snprintf (kvs_key,
-        FLUXAPI_MAX_STRING,
-        "lwj.%ld", *lwj);
-    if ( (netrc = cmb_kvs_get (cmbcxt, kvs_key,
-                               &jobj, KVS_GET_DIR)) < 0) {
-        error_log ("kvs_get error", 0);
+        error_log (
+            "global process count unavailable!", 
+            0);
         rc = FLUX_ERROR;
-        goto ret_loc;
     }
 
-    json_object_object_foreachC (jobj, iter) {
-        json_object *newo = json_object_object_get (
-                                iter.val, "DIRVAL"); 
-        if (newo) {
-            /* FIXME: proctable size should be
-             * stored in kvs as a field 
-             */
-            incr++;
-        }
-    }
-
-    *count = incr;
-
-ret_loc:
-    return rc; 
+    return rc;
 }
 
 
@@ -422,12 +614,9 @@ FLUX_query_globalProcTable (
 		 const size_t ptab_buf_size,
                  size_t *ret_ptab_size)
 {
-    flux_rc_e rc = FLUX_OK;
+    int krc      = 0;
     char kvs_key[FLUXAPI_MAX_STRING] = {'\0'};
-    json_object_iter iter;
-    json_object *jobj;
-    int incr = 0;
-    int netrc = 0;
+    kvsdir_t dirobj;
 
     /*
      * Retrieve the lwj root directory
@@ -435,97 +624,27 @@ FLUX_query_globalProcTable (
     snprintf (kvs_key,
         FLUXAPI_MAX_STRING,
         "lwj.%ld", *lwj);
-    if ( (netrc = cmb_kvs_get (cmbcxt, kvs_key,
-                               &jobj, KVS_GET_DIR)) < 0) {
-        error_log ("kvs_get error", 0);
-        return FLUX_ERROR;
+    if ( (krc = kvs_get_dir ((void *)cmbcxt,
+                             KVS_GET_FILEVAL, 
+                             &dirobj,
+                             kvs_key)) < 0) {
+        error_log (
+            "kvs_get_dir returned error", 0);
+        goto fatal;
     }
 
-    json_object_object_foreachC (jobj, iter) {
-        json_object *newo = json_object_object_get (
-                                iter.val, "DIRVAL");  
-        if (newo) {
-            incr++;
-        }
+    if ( iter_and_fill_procdesc (dirobj, ptab_buf,
+                                 ptab_buf_size,
+                                 ret_ptab_size) != FLUX_OK) {
+        error_log (
+            "failed to fill procdesc", 0);
+        goto fatal;
     }
 
-    json_object_object_foreachC (jobj, iter) {
-        int rank = atoi (iter.key);
-        json_object *newo 
-            = json_object_object_get (
-                  iter.val, "DIRVAL");  
-        if (!newo) {
-            continue;
-        }
+    return FLUX_OK;
 
-        if (rank < ptab_buf_size) {
-            json_object *procdesc 
-                = json_object_object_get(
-                      newo, "procdesc");                       
-            json_object *fobj;
-            fobj = json_object_object_get (
-                       procdesc, "FILEVAL");
-            if (fobj) {
-                json_object *exec_obj;
-                json_object *pid_obj;
-                json_object *hn_obj;
-
-                exec_obj 
-                    = json_object_object_get (
-                          fobj, "command");
-                pid_obj 
-                    = json_object_object_get (
-                          fobj, "pid");
-                hn_obj 
-                    = json_object_object_get (
-                          fobj, "nodeid");
-
-                if (hn_obj) {
-                    ptab_buf[rank].pd.host_name 
-                    = strdup (json_object_get_string (hn_obj));
-                }
-                else {
-                    error_log (
-                        "hostname unavailable for rank %d", 
-                        0, rank);
-                    ptab_buf[rank].pd.host_name = NULL;
-                }
-
-                if (exec_obj) {
-                    ptab_buf[rank].pd.executable_name 
-                        = strdup (json_object_get_string (exec_obj));
-                }
-                else {
-                    error_log (
-                        "exec name unavailable for rank %d", 
-                        0, rank);
-                    ptab_buf[rank].pd.executable_name = NULL;
-                }
-
-                if (pid_obj) {
-                    ptab_buf[rank].pd.pid
-                        = (int) (json_object_get_int64 (pid_obj));
-                }
-                else {
-                    error_log (
-                        "pid unavailable for rank %d", 
-                        0, rank);
-                    ptab_buf[rank].pd.pid = -1;
-                }
-                
-                ptab_buf[rank].mpirank = rank;
-                ptab_buf[rank].cnodeid = 0;
-            }
-            else {
-                error_log (
-                    "procdesc for %d ill-formed", 
-                    0, rank);
-            }
-        }
-    }
-    *ret_ptab_size = incr;
-
-    return rc; 
+fatal:
+    return FLUX_ERROR;
 }
 
 
@@ -561,7 +680,7 @@ FLUX_query_LWJStatus (
     flux_lwj_info_t lwjInfo;
 
     /*
-     * TODO: perf optimization may need here
+     * TODO: perf optimization will be needed here
      */
     if (FLUX_query_LWJId2JobInfo (lwj, &lwjInfo) != FLUX_OK) {
         *status = lwjInfo.status;
@@ -586,130 +705,68 @@ FLUX_monitor_registerStatusCb (
 
 flux_rc_e
 FLUX_launch_spawn (
-		 const flux_lwj_id_t *lwj, 
-		 int sync, 
-		 const flux_lwj_id_t *coloc_lwj,
-                 const char * lwjpath,
-		 char * const lwjargv[],
-                 int coloc,
-		 int nnodes,
-		 int nproc_per_node)
+		const flux_lwj_id_t *lwj, 
+		int sync, 
+		const flux_lwj_id_t *coloc_lwj,
+                const char * lwjpath,
+		char * const lwjargv[],
+                int coloc,
+		int nnodes,
+		int nprocs_per_node)
 { 
-    char ** argvptr;
-    int netrc;
-    flux_rc_e rc = FLUX_OK;
-    json_object *jobj = NULL;
-    json_object *state_jobj = NULL;
-    json_object *proc_jobj = NULL;
-    json_object *cmd_jobj = NULL;
-    json_object *cmd_array = NULL;
-    flux_lwj_status_e status;
+    int krc = 0;
+    char *state_str = NULL;
     char kvs_key[FLUXAPI_MAX_STRING] = {'\0'};
-    char event_msg[FLUXAPI_MAX_STRING] = {'\0'};
+    kvsdir_t rootdir;
+    flux_lwj_status_e status;
 
     /*
-     * Retrieve the lwj root directory
+     * Retrieve the target lwj root directory
      */
     snprintf (kvs_key, 
 	FLUXAPI_MAX_STRING,
 	"lwj.%ld", *lwj); 
-    if ( (netrc = cmb_kvs_get (cmbcxt, kvs_key, 
-                               &jobj, KVS_GET_DIR)) < 0) {
+    if ( (krc = kvs_get_dir ((void *) cmbcxt, 
+                             KVS_GET_FILEVAL,
+                             &rootdir,
+                             kvs_key)) < 0) {
 	error_log ("kvs_get error", 0);
-	rc = FLUX_ERROR;
-        goto ret_loc;
+        goto error;
     }
 
-    /*
-     * Retrieve the raw job state.
-     */
-    if (!(json_object_object_get_ex (jobj, 
-                               JOB_STATE_KEY,
-                               &state_jobj)) ) {
+    if ( (krc = kvsdir_get_string (rootdir,
+                                   JOB_STATE_KEY,
+                                   &state_str)) < 0) {
 	error_log (
             "Failed to retrieve the job state", 0);
-        rc = FLUX_ERROR;
-        goto ret_loc;
+        goto error;
     }
-    if ( (status = resolve_raw_state (state_jobj))
+
+    if ( (status = resolve_raw_state (state_str))
          != status_registered) {
 	error_log (
             "job state (%d) isn't ready for launch", 
             0, status);
-        rc = FLUX_ERROR;
-        goto ret_loc;
+        goto error;
     }
 
-    /*
-     * Put nproc_per_node
-     */
-    proc_jobj = json_object_new_object(); 
-    json_object_object_add (proc_jobj, 
-        "FILEVAL", 
-        json_object_new_int (nproc_per_node));
-    json_object_object_add (jobj, 
-        JOB_NPROCS_KEY, 
-        proc_jobj);
-
-    /*
-     * Put command line into KVS.
-     */
-    cmd_jobj = json_object_new_object ();
-    cmd_array = json_object_new_array ();
-    argvptr = (char **) lwjargv;
-    while (*argvptr != NULL) {
-        json_object *o = json_object_new_string (*argvptr);
-        json_object_array_add (cmd_array, o);
-        argvptr++;
-    }
-    json_object_object_add (cmd_jobj, 
-        "FILEVAL", 
-        cmd_array);
-    json_object_object_add (jobj, 
-        JOB_CMDLINE_KEY,
-        cmd_jobj);
-
-    /*
-     * Put/Flush/Commit 
-     */
-    if (cmb_kvs_put (cmbcxt, kvs_key, jobj) < 0) {
-	error_log (
-            "cmb_kvs_put failed", 0);
-        rc = FLUX_ERROR;
-        goto ret_loc;
-    }
-    if (cmb_kvs_flush (cmbcxt) < 0) {
-	error_log (
-            "cmb_kvs_put failed", 0);
-        rc = FLUX_ERROR;
-        goto ret_loc;
-    }
-    if (cmb_kvs_commit (cmbcxt, NULL) < 0) {
-	error_log (
-            "cmb_kvs_put failed", 0);
-        rc = FLUX_ERROR;
-        goto ret_loc;
+    if ( put_job_metadata (rootdir, sync, coloc_lwj,
+                           lwjpath, lwjargv,
+                           coloc, nnodes, 
+                           nprocs_per_node) != FLUX_OK) {
+	error_log ("failed to put job metadata", 0); 
+        goto error;
     }
 
-    /*
-     * Now KVS has all information, 
-     * so tell the exec plugin to run
-     */
-    snprintf (event_msg,
-	      FLUXAPI_MAX_STRING,
-	      "%s%lu",
-	      REXEC_PLUGIN_RUN_EVENT_MSG,
-	      *lwj);
-
-    if ( (netrc = cmb_event_send (cmbcxt, event_msg)) < 0 ) {
-	error_log ("Sending a cmb event failed"
-		   "in FLUX_launch_spawn", 0);
-	rc = FLUX_ERROR;
-        goto ret_loc;
+    if ( start_job (lwj) != FLUX_OK) {
+	error_log ("failed to start the lwj", 0); 
+        goto error;
     }
-    
-ret_loc:
-    return rc;	
+
+    return FLUX_OK;   
+
+error:
+    return FLUX_ERROR;	
 }
 
 
