@@ -55,7 +55,7 @@
 /* Large values are stored in dirents by reference; small values by value.
  *  (-1 = all by reference, 0 = all by value)
  */
-#define LARGE_VAL 100
+#define LARGE_VAL (sizeof (href_t) + 1)
 
 /* Break cycles in symlink references.
  */
