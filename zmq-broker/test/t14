@@ -1,0 +1,23 @@
+#!/bin/bash -e
+
+# Test path resolution when intermediate component is a symlink 
+#    and points to a nonexistent key
+
+TEST=`basename $0`
+
+test_cleanup() {
+    ./tkvs unlink $TEST
+    ./tkvs commit
+}
+
+test_cleanup
+
+./tkvs symlink $TEST.Z.Y $TEST.a.b
+./tkvs commit
+
+RESULT=`./tkvs get_string $TEST.Z.Y.c`
+test "$RESULT" == "null"
+
+test_cleanup
+
+exit 0

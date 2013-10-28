@@ -1,0 +1,25 @@
+#!/bin/bash -e
+
+# Test path resolution when intermediate component is a symlink to a symlink
+#    and we're doing a readlink
+
+TEST=`basename $0`
+
+test_cleanup() {
+    ./tkvs unlink $TEST
+    ./tkvs commit
+}
+
+test_cleanup
+
+./tkvs symlink $TEST.a.b.c "$TEST.dangle"
+./tkvs symlink $TEST.X.Y $TEST.a.b
+./tkvs symlink $TEST.V.W $TEST.X.Y
+./tkvs commit
+
+RESULT=`./tkvs get_symlink $TEST.V.W.c`
+test "$RESULT" == "$TEST.dangle"
+
+test_cleanup
+
+exit 0

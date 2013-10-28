@@ -5,24 +5,33 @@
  *
  * JSON dirent objects:
  * object containing one key-value pair where key is one of
- * "FILEREF", "DIRREF", "FILEVAL", "DIRVAL", and value is a SHA1
- * hash key into ctx->store (FILEREF, DIRREF), or an actual directory
- * or file (value) JSON object (FILEVAL, DIRVAL).
+ * "FILEREF", "DIRREF", "FILEVAL", "DIRVAL", "LINKVAL", and value is a SHA1
+ * hash key into ctx->store (FILEREF, DIRREF), an actual directory, file
+ * (value), or link target JSON object (FILEVAL, DIRVAL, LINKVAL).
  *
  * For example, consider KVS containing:
  * a="foo"
  * b="bar"
  * c.d="baz"
+ * X -> c.d
  *
  * Root directory:
  * {"a":{"FILEREF":"f1d2d2f924e986ac86fdf7b36c94bcdf32beec15"},
  *  "b":{"FILEREF","8714e0ef31edb00e33683f575274379955b3526c"},
- *  "c":{"DIRREF","6eadd3a778e410597c85d74c287a57ad66071a45"}}
+ *  "c":{"DIRREF","6eadd3a778e410597c85d74c287a57ad66071a45"},
+ *  "X":{"LINKVAL","c.d"}}
  *
  * Deep copy of root directory:
  * {"a":{"FILEVAL":"foo"},
  *  "b":{"FILEVAL","bar"},
- *  "c":{"DIRVAL",{"d":{"FILEVAL":"baz"}}}}
+ *  "c":{"DIRVAL",{"d":{"FILEVAL":"baz"}}},
+ *  "X":{"LINKVAL","c.d"}}
+ *
+ * On LINKVAL's:
+ * - target is always fully qualified key name
+ * - links are always followed in path traversal of intermediate directories
+ * - for kvs_get, terminal links are only followed if 'readlink' flag is set
+ * - for kvs_put, terminal links are never followed
  */
 
 #define _GNU_SOURCE
@@ -681,6 +690,12 @@ static void deep_put (json_object *dir, name_t *np)
     free (np);
 }
 
+/* Read the entire hierarchy of KVS directories into a json object,
+ * apply metdata updates from master.namequeue to it, then put the json
+ * object back to the store and update the root directory reference.
+ * FIXME: garbage collect unreferenced store entries (refcount them)
+ * FIXME: only read in directories affected by the metadata updates
+ */
 static void commit (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
@@ -940,30 +955,30 @@ static bool walk (plugin_ctx_t *p, json_object *root, const char *path,
         *next++ = '\0';
         if (!(dirent = json_object_object_get (dir, name)))
             goto error;
-        /* always deref symlinks in non-terminal directories */
         if (util_json_object_get_string (dirent, "LINKVAL", &link) == 0) {
             if (depth == SYMLINK_CYCLE_LIMIT)
                 goto error; /* FIXME: get ELOOP back to kvs_get */
-            if (!walk (p, root, link, &dirent, wp, readlink, depth))
-                goto stall;        
+            if (!walk (p, root, link, &dirent, wp, false, depth))
+                goto stall;
+            if (!dirent)
+                goto error;
         }
         if (util_json_object_get_string (dirent, "DIRREF", &ref) == 0) {
             if (!load (p, ref, wp, &dir))
                 goto stall;
-        } else {
-            goto error;
-        }
+        } else
+            msg_exit ("corrupt internal storage");
         name = next;
     }
     /* now terminal path component */
     dirent = json_object_object_get (dir, name);
-    /* if symlink, deref unless 'readlink' flag is set */
-    if (dirent && !readlink
-               && util_json_object_get_string (dirent, "LINKVAL", &link) == 0) {
-        if (depth == SYMLINK_CYCLE_LIMIT)
-            goto error; /* FIXME: get ELOOP back to kvs_get */
-        if (!walk (p, root, link, &dirent, wp, readlink, depth))
-            goto stall;
+    if (dirent && util_json_object_get_string (dirent, "LINKVAL", &link) == 0) {
+        if (!readlink) {
+            if (depth == SYMLINK_CYCLE_LIMIT)
+                goto error; /* FIXME: get ELOOP back to kvs_get */
+            if (!walk (p, root, link, &dirent, wp, readlink, depth))
+                goto stall;
+        }
     }
     free (cpy);
     *direntp = dirent;    

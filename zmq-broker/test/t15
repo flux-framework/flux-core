@@ -1,0 +1,25 @@
+#!/bin/bash -e
+
+# Test path resolution when intermediate component is a symlink 
+#    and points to another symlink
+
+TEST=`basename $0`
+
+test_cleanup() {
+    ./tkvs unlink $TEST
+    ./tkvs commit
+}
+
+test_cleanup
+
+./tkvs put_string $TEST.a.b.c "foo"
+./tkvs symlink $TEST.Z.Y $TEST.a.b
+./tkvs symlink $TEST.X.W $TEST.Z.Y
+./tkvs commit
+
+RESULT=`./tkvs get_string $TEST.X.W.c`
+test "$RESULT" == "foo"
+
+test_cleanup
+
+exit 0
