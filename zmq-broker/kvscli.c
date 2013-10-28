@@ -681,7 +681,8 @@ static json_object *get_dirobj (json_object *dirent, int flags)
         errno = ENOTDIR;
     else if (json_object_object_get (dirent, "FILEREF"))
         errno = ENOTDIR;
-    else if (json_object_object_get (dirent, "DIRREF"))
+    else if (json_object_object_get (dirent, "DIRREF")
+          || json_object_object_get (dirent, "LINKVAL"))
         errno = ESRCH; /* not cached */
     else if (!(dirobj = json_object_object_get (dirent, "DIRVAL")))
         errno = ENOENT;
@@ -701,7 +702,8 @@ static json_object *get_valobj (json_object *dirent, int flags)
         errno = EISDIR;
     else if (json_object_object_get (dirent, "DIRREF"))
         errno = EISDIR;
-    else if (json_object_object_get (dirent, "FILEREF"))
+    else if (json_object_object_get (dirent, "FILEREF")
+          || json_object_object_get (dirent, "LINKVAL"))
         errno = ESRCH; /* not cached */
     else if (!(valobj = json_object_object_get (dirent, "FILEVAL")))
         errno = ENOENT;
@@ -813,9 +815,14 @@ int kvsdir_get_dir (kvsdir_t dir, kvsdir_t *dirp, const char *fmt, ...)
 
 int kvsdir_get_symlink (kvsdir_t dir, const char *name, char **valp)
 {
-    /* FIXME */
-    errno = EINVAL;
-    return -1;
+    char *key;
+    int rc;
+
+    key = kvsdir_key_at (dir, name);
+    rc = kvs_get_symlink (dir->handle, key, valp);
+    free (key);
+
+    return rc;
 }
 
 int kvsdir_get_string (kvsdir_t dir, const char *name, char **valp)
