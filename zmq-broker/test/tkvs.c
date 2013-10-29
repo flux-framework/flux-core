@@ -128,7 +128,8 @@ void tkvs_dump_dir (kvsdir_t dir, bool ropt)
                 printf ("%s{%s}\n", key, "dir");
         } else  {
             printf ("%s{%s}\n", key,
-                    kvsdir_isstring (dir, name) ? "string"
+                    kvsdir_issymlink (dir, name) ? "symlink"
+                  : kvsdir_isstring (dir, name) ? "string"
                   : kvsdir_isint (dir, name) ? "int"
                   : kvsdir_isint64 (dir, name) ? "int64"
                   : kvsdir_isdouble (dir, name) ? "double"
@@ -146,7 +147,13 @@ void tkvs_dump_all (kvsdir_t dir, bool ropt)
 
     while ((name = kvsitr_next (itr))) {
         key = kvsdir_key_at (dir, name);
-        if (kvsdir_isdir (dir, name)) {
+        if (kvsdir_issymlink (dir, name)) {
+            char *s;
+            if (kvsdir_get_symlink (dir, name, &s) < 0)
+                err_exit ("kvsdir_get_symlink %s", key);
+            printf ("%s -> %s\n", key, s);
+            free (s);
+        } else if (kvsdir_isdir (dir, name)) {
             if (ropt) {
                 kvsdir_t ndir;
                 if (kvsdir_get_dir (dir, &ndir, "%s", name) < 0)

@@ -1016,6 +1016,10 @@ static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
             goto done; /* a NULL response is not necessarily an error */
         }
         if (util_json_object_get_string (dirent, "DIRREF", &ref) == 0) {
+            if (readlink) {
+                errnum = EINVAL;
+                goto done;
+            }
             if (!dir) {
                 errnum = EISDIR;
                 goto done;
@@ -1024,6 +1028,10 @@ static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
                 goto stall;
             isdir = true;
         } else if (util_json_object_get_string (dirent, "FILEREF", &ref) == 0) {
+            if (readlink) {
+                errnum = EINVAL;
+                goto done;
+            }
             if (dir) {
                 errnum = ENOTDIR;
                 goto done;
@@ -1031,6 +1039,10 @@ static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
             if (!load (p, ref, wp, &val))
                 goto stall;
         } else if ((vp = json_object_object_get (dirent, "DIRVAL"))) {
+            if (readlink) {
+                errnum = EINVAL;
+                goto done;
+            }
             if (!dir) {
                 errnum = EISDIR;
                 goto done;
@@ -1038,6 +1050,10 @@ static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
             val = vp;
             isdir = true;
         } else if ((vp = json_object_object_get (dirent, "FILEVAL"))) {
+            if (readlink) {
+                errnum = EINVAL;
+                goto done;
+            }
             if (dir) {
                 errnum = ENOTDIR;
                 goto done;
