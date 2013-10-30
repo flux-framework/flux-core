@@ -690,6 +690,18 @@ static void deep_put (json_object *dir, name_t *np)
     free (np);
 }
 
+static void update_version (plugin_ctx_t *p, int newvers)
+{
+    json_object *o;
+
+    assert (plugin_treeroot (p));
+
+    if (!(o = json_object_new_int (newvers)))
+        oom ();
+    name (p, "version", dirent_create ("FILEVAL", o), false);
+    json_object_put (o);
+}
+
 /* Read the entire hierarchy of KVS directories into a json object,
  * apply metdata updates from master.namequeue to it, then put the json
  * object back to the store and update the root directory reference.
@@ -709,6 +721,7 @@ static void commit (plugin_ctx_t *p)
     assert (dir != NULL);
     cpy = kvs_save (p, dir, NULL, KVS_GET_DIRVAL);
     assert (cpy != NULL);
+    update_version (p, ctx->rootseq + 1);
     while ((np = zlist_pop (ctx->master.namequeue))) {
         deep_put (cpy, np); /* destroys np */
     }
@@ -1157,10 +1170,10 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     json_object *root, *reply = NULL, *o = NULL;
     json_object_iter iter;
     wait_t *wp = NULL;
-    bool stall = false, changed = false;
-    bool flag_directory = false, flag_continue = false;
+    bool stall = false, changed = false, reply_sent = false;
+    bool flag_directory = false, flag_first = false;
     bool flag_dirval = false, flag_fileval = false;
-    bool flag_readlink = false;
+    bool flag_readlink = false, flag_once = false;
     int dir_flags = 0;
     int errnum = 0;
 
@@ -1175,10 +1188,11 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     }
     /* handle flags - they apply to all keys in the request */
     (void)util_json_object_get_boolean (o, ".flag_directory", &flag_directory);
-    (void)util_json_object_get_boolean (o, ".flag_continue", &flag_continue);
     (void)util_json_object_get_boolean (o, ".flag_dirval", &flag_dirval);
     (void)util_json_object_get_boolean (o, ".flag_fileval", &flag_fileval);
     (void)util_json_object_get_boolean (o, ".flag_readlink", &flag_readlink);
+    (void)util_json_object_get_boolean (o, ".flag_once", &flag_once);
+    (void)util_json_object_get_boolean (o, ".flag_first", &flag_first);
     if (flag_dirval)
         dir_flags |= KVS_GET_DIRVAL;
     if (flag_fileval)
@@ -1186,7 +1200,7 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 
     reply = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
-        if (!strncmp (iter.key, ".flag_", 6)) /* ignore flags */
+        if (!strncmp (iter.key, ".flag_", 6) || !strncmp (iter.key, ".arg_", 5))
             continue;
         json_object *val = NULL;
         if (!lookup (p, root, wp, flag_directory, dir_flags, flag_readlink,
@@ -1209,36 +1223,36 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         wait_destroy (wp, zmsg); /* get back *zmsg */
         plugin_send_response_errnum (p, zmsg, errnum);
     } else if (!stall) {
-        zmsg_t *zcpy;
         wait_destroy (wp, zmsg); /* get back *zmsg */
         (void)cmb_msg_replace_json (*zmsg, reply);
 
-        /* Prepare to resubmit the request on the watchlist for future changes.
-         * Values were updated above.  Flags are reattached here.
-         * We set the 'continue' flag for next time so that a reply is
-         * only sent if value changes.
-         */
-        if (!(zcpy = zmsg_dup (*zmsg)))
-            oom ();
-        util_json_object_add_boolean (reply, ".flag_directory", flag_directory);
-        util_json_object_add_boolean (reply, ".flag_dirval", flag_dirval);
-        util_json_object_add_boolean (reply, ".flag_fileval", flag_fileval);
-        util_json_object_add_boolean (reply, ".flag_readlink", flag_readlink);
-        util_json_object_add_boolean (reply, ".flag_continue", true);
-        (void)cmb_msg_replace_json (zcpy, reply);
-
-        /* On every commit, kvs_watch_request (p, arg, zcpy) will be called.
-         * No reply will be generated unless a value has changed.
-         */
-        wp = wait_create (p, kvs_watch_request, arg, &zcpy);
-        wait_set_id (wp, sender);
-        wait_add (ctx->watchlist, wp);
-
         /* Reply to the watch request.
-         * The initial request always gets a reply.
+         * flag_first is generally true on first call, false thereafter
          */
-        if (changed || !flag_continue)
-            plugin_send_response_raw (p, zmsg);
+        if (changed || flag_first) {
+            zmsg_t *zcpy;
+            if (!(zcpy = zmsg_dup (*zmsg)))
+                oom ();
+            plugin_send_response_raw (p, &zcpy);
+            reply_sent = true;
+        }
+   
+        /* Resubmit the watch request (clear flag_first) */
+        if (!reply_sent || !flag_once) {
+            util_json_object_add_boolean (reply, ".flag_directory", flag_directory);
+            util_json_object_add_boolean (reply, ".flag_dirval", flag_dirval);
+            util_json_object_add_boolean (reply, ".flag_fileval", flag_fileval);
+            util_json_object_add_boolean (reply, ".flag_readlink", flag_readlink);
+            util_json_object_add_boolean (reply, ".flag_once", flag_once);
+            (void)cmb_msg_replace_json (*zmsg, reply);
+
+            /* On every commit, kvs_watch_request (p, arg, zcpy) will be called.
+             * No reply will be generated unless a value has changed.
+             */
+            wp = wait_create (p, kvs_watch_request, arg, zmsg);
+            wait_set_id (wp, sender);
+            wait_add (ctx->watchlist, wp);
+        }
     }
 done:
     if (o)

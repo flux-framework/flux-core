@@ -60,9 +60,26 @@ The possible operations are:\n\
     get_all key\n\
     get_all_r key\n\
     get_symlink key\n\
+    get_version\n\
+    wait_version int\n\
     commit\n\
 ");
     exit (1);
+}
+
+void tkvs_get_version (cmb_t c)
+{
+    int version;
+
+    if (kvs_get_version (c, &version) < 0)
+        err_exit ("kvs_get_version");
+    printf ("%d\n", version);
+}
+
+void tkvs_wait_version (cmb_t c, int version)
+{
+    if (kvs_wait_version (c, version) < 0)
+        err_exit ("kvs_wait_version");
 }
 
 void tkvs_mkdir (cmb_t c, char *key)
@@ -370,66 +387,68 @@ int main (int argc, char *argv[])
         key = argv[optind++];
     if (optind < argc)
         val = argv[optind++];
-    if (!op || (!strncmp (op, "get", 3) && !key)
-            || (!strcmp (op, "unlink") && !key)
-            || (!strcmp (op, "mkdir") && !key)
-            || (!strcmp (op, "symlink") && (!key || !val))
-            || (!strncmp (op, "put", 3) && (!key || !val)))
+    if (!op)
         usage ();
     if (!(c = cmb_init_full (path, cmb_flags)))
         err_exit ("cmb_init");
 
-    if (!strcmp (op, "get_string"))
+    if (!strcmp (op, "get_string") && key)
         tkvs_get_string (c, key);
-    else if (!strcmp (op, "put_string"))
+    else if (!strcmp (op, "put_string") && key && val)
         tkvs_put_string (c, key, val);
 
-    else if (!strcmp (op, "get_int"))
+    else if (!strcmp (op, "get_int") && key)
         tkvs_get_int (c, key);
-    else if (!strcmp (op, "put_int"))
+    else if (!strcmp (op, "put_int") && key && val)
         tkvs_put_int (c, key, strtoul (val, NULL, 10));
 
-    else if (!strcmp (op, "get_int64"))
+    else if (!strcmp (op, "get_int64") && key)
         tkvs_get_int64 (c, key);
-    else if (!strcmp (op, "put_int64"))
+    else if (!strcmp (op, "put_int64") && key && val)
         tkvs_put_int64 (c, key, strtoull (val, NULL, 10));
 
-    else if (!strcmp (op, "get_double"))
+    else if (!strcmp (op, "get_double") && key)
         tkvs_get_double (c, key);
-    else if (!strcmp (op, "put_double"))
+    else if (!strcmp (op, "put_double") && key && val)
         tkvs_put_double (c, key, strtod (val, NULL));
 
-    else if (!strcmp (op, "get_boolean"))
+    else if (!strcmp (op, "get_boolean") && key)
         tkvs_get_boolean (c, key);
-    else if (!strcmp (op, "put_boolean"))
+    else if (!strcmp (op, "put_boolean") && key && val)
         tkvs_put_boolean (c, key, !strcmp (val, "false") ? false : true);
 
-    else if (!strcmp (op, "get_dir"))
+    else if (!strcmp (op, "get_dir") && key)
         tkvs_get_dir (c, key, false, false, kvs_flags);
-    else if (!strcmp (op, "get_dir_r"))
+    else if (!strcmp (op, "get_dir_r") && key)
         tkvs_get_dir (c, key, true, false, kvs_flags);
 
-    else if (!strcmp (op, "get_all"))
+    else if (!strcmp (op, "get_all") && key)
         tkvs_get_dir (c, key, false, true, kvs_flags);
-    else if (!strcmp (op, "get_all_r"))
+    else if (!strcmp (op, "get_all_r") && key)
         tkvs_get_dir (c, key, true, true, kvs_flags);
 
-    else if (!strcmp (op, "get_symlink"))
+    else if (!strcmp (op, "get_symlink") && key)
         tkvs_get_symlink (c, key);
 
-    else if (!strcmp (op, "get"))
+    else if (!strcmp (op, "get") && key)
         tkvs_get (c, key);
-    else if (!strcmp (op, "put"))
+    else if (!strcmp (op, "put") && key && val)
         tkvs_put (c, key, val);
 
-    else if (!strcmp (op, "unlink"))
+    else if (!strcmp (op, "unlink") && key)
         tkvs_unlink (c, key);
-    else if (!strcmp (op, "mkdir"))
+    else if (!strcmp (op, "mkdir") && key)
         tkvs_mkdir (c, key);
-    else if (!strcmp (op, "symlink"))
+    else if (!strcmp (op, "symlink") && key && val)
         tkvs_symlink (c, key, val);
     else if (!strcmp (op, "commit"))
         tkvs_commit (c);     
+
+    else if (!strcmp (op, "get_version"))
+        tkvs_get_version (c);
+    else if (!strcmp (op, "wait_version") && key)
+        tkvs_wait_version (c, strtoul (key, NULL, 10));
+
     else
         usage ();
     cmb_fini (c);

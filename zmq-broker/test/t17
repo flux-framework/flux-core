@@ -1,0 +1,22 @@
+#!/bin/bash -e
+
+# Test get_version/wait_version
+
+TEST=`basename $0`
+
+test_cleanup() {
+    ./tkvs unlink $TEST
+    ./tkvs commit
+}
+
+test_cleanup
+
+VERS=`./tkvs get_version`
+./tkvs wait_version $(($VERS + 2)) &
+./tkvs commit
+./tkvs commit
+wait
+
+test_cleanup
+
+exit 0

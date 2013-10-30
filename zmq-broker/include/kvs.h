@@ -171,6 +171,15 @@ int kvs_fence (void *h, const char *name, int nprocs);
  */
 int kvs_dropcache (void *h);
 
+/* Get the store version (e.g. after a commit).
+ */
+int kvs_get_version (void *h, int *versionp);
+
+/* Wait for the store version to be >= the requested version.
+ * (e.g. and then fetch some data another process commited for us).
+ */
+int kvs_wait_version (void *h, int version);
+
 /* These are called internally by plugin.c and apicli.c and
  * are part of the KVS internal implementation.  Do not use.
  */

@@ -446,6 +446,7 @@ static int send_kvs_watch (void *h, const char *key, json_object **valp)
     int ret = -1;
 
     json_object_object_add (request, key, NULL);
+    util_json_object_add_boolean (request, ".flag_first", true);
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.watch");
     if (!reply)
@@ -462,6 +463,51 @@ done:
     return ret;
 }
 
+/* *valp is IN/OUT parameter.
+ * IN *val is freed internally.  Caller must free OUT *val.
+ */
+static int send_kvs_watch_once (void *h, const char *key, json_object **valp)
+{
+    json_object *val = NULL;
+    json_object *request = util_json_object_new_object ();
+    json_object *reply = NULL;
+    int ret = -1;
+
+    json_object_object_add (request, key, *valp);
+    util_json_object_add_boolean (request, ".flag_once", true);
+    assert (kvs_config.request != NULL);
+    reply = kvs_config.request (h, request, "kvs.watch");
+    if (!reply)
+        goto done;
+    if ((val = json_object_object_get (reply, key)))
+        json_object_get (val);
+    *valp = val;
+    ret = 0;
+done:
+    if (request)
+        json_object_put (request);
+    if (reply)
+        json_object_put (reply);
+    return ret;
+}
+
+static int kvs_watch_once_int (void *h, const char *key, int *valp)
+{
+    json_object *val;
+    int rc = -1;
+
+    if (!(val = json_object_new_int (*valp)))
+        oom ();
+    if (send_kvs_watch_once (h, key, &val) < 0)
+        goto done;
+    rc = 0;
+    *valp = val ? json_object_get_int (val) : 0;
+done:
+    if (val)
+        json_object_put (val);
+    return rc;
+}
+
 static int send_kvs_watch_dir (void *h, const char *key, json_object **valp,
                                int flags)
 {
@@ -470,6 +516,7 @@ static int send_kvs_watch_dir (void *h, const char *key, json_object **valp,
     json_object *reply = NULL;
     int ret = -1;
 
+    util_json_object_add_boolean (request, ".flag_first", true);
     util_json_object_add_boolean (request, ".flag_directory", true);
     util_json_object_add_boolean (request, ".flag_fileval",
                                   (flags & KVS_GET_FILEVAL));
@@ -1252,6 +1299,27 @@ int kvs_fence (void *h, const char *name, int nprocs)
     if (send_kvs_commit (h, name) < 0)
         return -1;
     return 0;
+}
+
+int kvs_get_version (void *h, int *versionp)
+{
+    return kvs_get_int (h, "version", versionp);
+}
+
+int kvs_wait_version (void *h, int version)
+{
+    int vers;
+    int rc = -1;
+
+    if (kvs_get_int (h, "version", &vers) < 0)
+        goto done;
+    while (vers < version) {
+        if (kvs_watch_once_int (h, "version", &vers) < 0)
+            goto done;
+    }
+    rc = 0;
+done:
+    return rc;
 }
 
 int kvs_dropcache (void *h)
