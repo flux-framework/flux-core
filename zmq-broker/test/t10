@@ -27,7 +27,7 @@ test_cleanup
 ./tkvs commit
 
 # Retrieve directory recursively, including values
-RESULT=`./tkvs --get-fileval --get-dirval get_all_r $DIR`
+RESULT=`./tkvs get_all_r $DIR`
 
 test_cleanup
 

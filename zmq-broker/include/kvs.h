@@ -15,21 +15,6 @@ typedef void (KVSSetInt64F(const char *key, int64_t val, void *arg,int errnum));
 typedef void (KVSSetDoubleF(const char *key, double val, void *arg,int errnum));
 typedef void (KVSSetBooleanF(const char *key, bool val, void *arg, int errnum));
 
-/* kvs_get_dir() flags
- * If flags=0, a kvsdir_get* function will always issue a new kvs.get request to
- *   obtain/test values relative to the kvsdir object.
- * If KVS_GET_FILEVAL is set, values cached for non-directories in the kvsdir
- *   object will be used to satisfy kvsdir_get* requests.
- * If KVS_GET_DIRVAL is set, values cached for directories in the kvsdir
- *   object will be used to satisfy kvsdir_get* requests.
- * If both flags are set, the entire (relative) namespace is cached in
- *   the kvsdir object.
- */
-enum {
-    KVS_GET_DIRVAL = 1,
-    KVS_GET_FILEVAL = 2,
-};
-
 /* Destroy a kvsdir object returned from kvs_get_dir() or kvsdir_get_dir()
  */
 void kvsdir_destroy (kvsdir_t dir);
@@ -43,7 +28,7 @@ void kvsdir_destroy (kvsdir_t dir);
  * These functions return -1 on error (errno set), 0 on success.
  */
 int kvs_get (void *h, const char *key, json_object **valp);
-int kvs_get_dir (void *h, int flags, kvsdir_t *dirp, const char *fmt, ...);
+int kvs_get_dir (void *h, kvsdir_t *dirp, const char *fmt, ...);
 int kvs_get_string (void *h, const char *key, char **valp);
 int kvs_get_int (void *h, const char *key, int *valp);
 int kvs_get_int64 (void *h, const char *key, int64_t *valp);
@@ -59,8 +44,7 @@ int kvs_get_symlink (void *h, const char *key, char **valp);
  * callback gets errnum = ENOENT.
  */
 int kvs_watch (void *h, const char *key, KVSSetF *set, void *arg);
-int kvs_watch_dir (void *h, int flags, KVSSetDirF *set, void *arg,
-                   const char *fmt, ...);
+int kvs_watch_dir (void *h, KVSSetDirF *set, void *arg, const char *fmt, ...);
 int kvs_watch_string (void *h, const char *key, KVSSetStringF *set, void *arg);
 int kvs_watch_int (void *h, const char *key, KVSSetIntF *set, void *arg);
 int kvs_watch_int64 (void *h, const char *key, KVSSetInt64F *set, void *arg);

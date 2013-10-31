@@ -218,11 +218,11 @@ void tkvs_dump_all (kvsdir_t dir, bool ropt)
     kvsitr_destroy (itr);
 }
 
-void tkvs_get_dir (cmb_t c, char *key, bool ropt, bool all, int flags)
+void tkvs_get_dir (cmb_t c, char *key, bool ropt, bool all)
 {
     kvsdir_t dir;
 
-    if (kvs_get_dir (c, flags, &dir, "%s", key) < 0) {
+    if (kvs_get_dir (c, &dir, "%s", key) < 0) {
         if (errno == ENOENT)
             printf ("null\n");
         else
@@ -363,7 +363,6 @@ int main (int argc, char *argv[])
     cmb_t c;
     char path[PATH_MAX + 1];
     int cmb_flags = 0;
-    int kvs_flags = 0;
     char *chdir = NULL;
 
     log_init (basename (argv[0]));
@@ -372,12 +371,6 @@ int main (int argc, char *argv[])
         switch (ch) {
             case 'Z': /* --trace-apisock */
                 cmb_flags |= CMB_FLAGS_TRACE;
-                break;
-            case 'F': /* --get-fileval */
-                kvs_flags |= KVS_GET_FILEVAL;
-                break;
-            case 'D': /* --get-dirval */
-                kvs_flags |= KVS_GET_DIRVAL;
                 break;
             case 'c': /* --chdir DIR */
                 chdir = optarg;
@@ -426,14 +419,14 @@ int main (int argc, char *argv[])
         tkvs_put_boolean (c, key, !strcmp (val, "false") ? false : true);
 
     else if (!strcmp (op, "get_dir") && key)
-        tkvs_get_dir (c, key, false, false, kvs_flags);
+        tkvs_get_dir (c, key, false, false);
     else if (!strcmp (op, "get_dir_r") && key)
-        tkvs_get_dir (c, key, true, false, kvs_flags);
+        tkvs_get_dir (c, key, true, false);
 
     else if (!strcmp (op, "get_all") && key)
-        tkvs_get_dir (c, key, false, true, kvs_flags);
+        tkvs_get_dir (c, key, false, true);
     else if (!strcmp (op, "get_all_r") && key)
-        tkvs_get_dir (c, key, true, true, kvs_flags);
+        tkvs_get_dir (c, key, true, true);
 
     else if (!strcmp (op, "get_symlink") && key)
         tkvs_get_symlink (c, key);

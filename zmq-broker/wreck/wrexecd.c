@@ -242,7 +242,7 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
     if (!(ctx->cmb = cmb_init ()))
         log_fatal (ctx, 1, "cmb_init");
 
-    if (kvs_get_dir (ctx->cmb, KVS_GET_FILEVAL, &ctx->kvs,
+    if (kvs_get_dir (ctx->cmb, &ctx->kvs,
                      "lwj.%lu", ctx->id) < 0) {
         log_fatal (ctx, 1, "kvs_get_dir (lwj.%lu): %s\n",
                    ctx->id, strerror (errno));

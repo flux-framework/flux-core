@@ -35,7 +35,6 @@ struct kvsdir_struct {
     void *handle;
     char *key;
     json_object *o;
-    int flags;
 };
 
 struct kvsdir_iterator_struct {
@@ -53,7 +52,6 @@ typedef struct {
     watch_type_t type;
     KVSSetF *set;
     void *arg;
-    int dirflags;
 } kvs_watcher_t;
 
 struct kvs_config_struct {
@@ -97,8 +95,7 @@ void kvsdir_destroy (kvsdir_t dir)
     free (dir);
 }
 
-static kvsdir_t kvsdir_alloc (void *handle, const char *key, json_object *o,
-                              int flags)
+static kvsdir_t kvsdir_alloc (void *handle, const char *key, json_object *o)
 {
     kvsdir_t dir = xzmalloc (sizeof (*dir));
 
@@ -106,7 +103,6 @@ static kvsdir_t kvsdir_alloc (void *handle, const char *key, json_object *o,
     dir->key = xstrdup (key);
     dir->o = o;
     json_object_get (dir->o);
-    dir->flags = flags;
 
     return dir;
 }
@@ -181,7 +177,7 @@ done:
     return ret;
 }
 
-int kvs_get_dir (void *h, int flags, kvsdir_t *dirp, const char *fmt, ...)
+int kvs_get_dir (void *h, kvsdir_t *dirp, const char *fmt, ...)
 {
     json_object *val = NULL;
     json_object *request = util_json_object_new_object ();
@@ -197,10 +193,6 @@ int kvs_get_dir (void *h, int flags, kvsdir_t *dirp, const char *fmt, ...)
     path = pathcat (kvs_getcwd (h), key);
 
     util_json_object_add_boolean (request, ".flag_directory", true);
-    util_json_object_add_boolean (request, ".flag_fileval",
-                                  (flags & KVS_GET_FILEVAL));
-    util_json_object_add_boolean (request, ".flag_dirval",
-                                  (flags & KVS_GET_DIRVAL));
     json_object_object_add (request, path, NULL);
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.get");
@@ -211,7 +203,7 @@ int kvs_get_dir (void *h, int flags, kvsdir_t *dirp, const char *fmt, ...)
         goto done;
     }
     if (dirp)
-        *dirp = kvsdir_alloc (h, path, val, flags);
+        *dirp = kvsdir_alloc (h, path, val);
     ret = 0;
 done:
     if (request)
@@ -405,7 +397,7 @@ static void dispatch_watch (void *h, kvs_watcher_t *wp, const char *key,
         }
         case WATCH_DIR: {
             KVSSetDirF *set = (KVSSetDirF *)wp->set;
-            kvsdir_t dir = val ? kvsdir_alloc (h, key, val, wp->dirflags) : NULL;
+            kvsdir_t dir = val ? kvsdir_alloc (h, key, val) : NULL;
             set (key, dir, wp->arg, errnum);
             if (dir)
                 kvsdir_destroy (dir);
@@ -445,7 +437,7 @@ void kvs_watch_response (void *h, zmsg_t **zmsg)
 }
 
 static kvs_watcher_t *add_watcher (void *h, const char *key, watch_type_t type,
-                                   KVSSetF *fun, void *arg, int dirflags)
+                                   KVSSetF *fun, void *arg)
 {
     kvsctx_t ctx;
     kvs_watcher_t *wp = xzmalloc (sizeof (*wp));
@@ -457,7 +449,6 @@ static kvs_watcher_t *add_watcher (void *h, const char *key, watch_type_t type,
     wp->set = fun;
     wp->type = type;
     wp->arg = arg;
-    wp->dirflags = dirflags;
 
     /* If key is already being watched, the new watcher replaces the old.
      */
@@ -542,8 +533,7 @@ done:
     return rc;
 }
 
-static int send_kvs_watch_dir (void *h, const char *key, json_object **valp,
-                               int flags)
+static int send_kvs_watch_dir (void *h, const char *key, json_object **valp)
 {
     json_object *val = NULL;
     json_object *request = util_json_object_new_object ();
@@ -552,10 +542,6 @@ static int send_kvs_watch_dir (void *h, const char *key, json_object **valp,
 
     util_json_object_add_boolean (request, ".flag_first", true);
     util_json_object_add_boolean (request, ".flag_directory", true);
-    util_json_object_add_boolean (request, ".flag_fileval",
-                                  (flags & KVS_GET_FILEVAL));
-    util_json_object_add_boolean (request, ".flag_dirval",
-                                  (flags & KVS_GET_DIRVAL));
     json_object_object_add (request, key, NULL);
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.watch");
@@ -581,7 +567,7 @@ int kvs_watch (void *h, const char *key, KVSSetF *set, void *arg)
 
     if (send_kvs_watch (h, key, &val) < 0)
         goto done;
-    wp = add_watcher (h, key, WATCH_OBJECT, set, arg, 0);
+    wp = add_watcher (h, key, WATCH_OBJECT, set, arg);
     dispatch_watch (h, wp, key, val);
     rc = 0;
 done:
@@ -590,8 +576,7 @@ done:
     return rc;
 }
 
-int kvs_watch_dir (void *h, int flags, KVSSetDirF *set, void *arg,
-                   const char *fmt, ...)
+int kvs_watch_dir (void *h, KVSSetDirF *set, void *arg, const char *fmt, ...)
 {
     kvs_watcher_t *wp;
     json_object *val = NULL;
@@ -604,9 +589,9 @@ int kvs_watch_dir (void *h, int flags, KVSSetDirF *set, void *arg,
         oom ();
     va_end (ap);
 
-    if (send_kvs_watch_dir (h, key, &val, flags) < 0)
+    if (send_kvs_watch_dir (h, key, &val) < 0)
         goto done;
-    wp = add_watcher (h, key, WATCH_DIR, (KVSSetF *)set, arg, flags);
+    wp = add_watcher (h, key, WATCH_DIR, (KVSSetF *)set, arg);
     dispatch_watch (h, wp, key, val);
     rc = 0;
 done:
@@ -625,7 +610,7 @@ int kvs_watch_string (void *h, const char *key, KVSSetStringF *set, void *arg)
 
     if (send_kvs_watch (h, key, &val) < 0)
         goto done;
-    wp = add_watcher (h, key, WATCH_STRING, (KVSSetF *)set, arg, 0);
+    wp = add_watcher (h, key, WATCH_STRING, (KVSSetF *)set, arg);
     dispatch_watch (h, wp, key, val);
     rc = 0;
 done:
@@ -642,7 +627,7 @@ int kvs_watch_int (void *h, const char *key, KVSSetIntF *set, void *arg)
 
     if (send_kvs_watch (h, key, &val) < 0)
         goto done;
-    wp = add_watcher (h, key, WATCH_INT, (KVSSetF *)set, arg, 0);
+    wp = add_watcher (h, key, WATCH_INT, (KVSSetF *)set, arg);
     dispatch_watch (h, wp, key, val);
     rc = 0;
 done:
@@ -659,7 +644,7 @@ int kvs_watch_int64 (void *h, const char *key, KVSSetInt64F *set, void *arg)
 
     if (send_kvs_watch (h, key, &val) < 0)
         goto done;
-    wp = add_watcher (h, key, WATCH_INT64, (KVSSetF *)set, arg, 0);
+    wp = add_watcher (h, key, WATCH_INT64, (KVSSetF *)set, arg);
     dispatch_watch (h, wp, key, val);
     rc = 0;
 done:
@@ -676,7 +661,7 @@ int kvs_watch_double (void *h, const char *key, KVSSetDoubleF *set, void *arg)
 
     if (send_kvs_watch (h, key, &val) < 0)
         goto done;
-    wp = add_watcher (h, key, WATCH_DOUBLE, (KVSSetF *)set, arg, 0);
+    wp = add_watcher (h, key, WATCH_DOUBLE, (KVSSetF *)set, arg);
     dispatch_watch (h, wp, key, val);
     rc = 0;
 done:
@@ -693,7 +678,7 @@ int kvs_watch_boolean (void *h, const char *key, KVSSetBooleanF *set, void *arg)
 
     if (send_kvs_watch (h, key, &val) < 0)
         goto done;
-    wp = add_watcher (h, key, WATCH_BOOLEAN, (KVSSetF *)set, arg, 0);
+    wp = add_watcher (h, key, WATCH_BOOLEAN, (KVSSetF *)set, arg);
     dispatch_watch (h, wp, key, val);
     rc = 0;
 done:
@@ -753,121 +738,14 @@ char *kvsdir_key_at (kvsdir_t dir, const char *name)
     return key;
 }
 
-/* Helper for dirent_get, dirent_get_dir */
-static json_object *get_dirobj (json_object *dirent, int flags)
-{
-    json_object *dirobj = NULL;
-
-    if (json_object_object_get (dirent, "FILEVAL"))
-        errno = ENOTDIR;
-    else if (json_object_object_get (dirent, "FILEREF"))
-        errno = ENOTDIR;
-    else if (json_object_object_get (dirent, "DIRREF")
-          || json_object_object_get (dirent, "LINKVAL"))
-        errno = ESRCH; /* not cached */
-    else if (!(dirobj = json_object_object_get (dirent, "DIRVAL")))
-        errno = ENOENT;
-    else if (!(flags & KVS_GET_DIRVAL)) {
-        errno = ESRCH; /* can't use cache */
-        dirobj = NULL;
-    }
-    return dirobj;
-}
-
-/* Helper for dirent_get */
-static json_object *get_valobj (json_object *dirent, int flags)
-{
-    json_object *valobj = NULL;
-
-    if (json_object_object_get (dirent, "DIRVAL"))
-        errno = EISDIR;
-    else if (json_object_object_get (dirent, "DIRREF"))
-        errno = EISDIR;
-    else if (json_object_object_get (dirent, "FILEREF")
-          || json_object_object_get (dirent, "LINKVAL"))
-        errno = ESRCH; /* not cached */
-    else if (!(valobj = json_object_object_get (dirent, "FILEVAL")))
-        errno = ENOENT;
-    else if (!(flags & KVS_GET_FILEVAL)) {
-        errno = ESRCH; /* can't use cache */
-        valobj = NULL;
-    }
-    return valobj;
-}
-
-/* helper for kvsdir_get */
-static int dirent_get (kvsdir_t dir, const char *name, json_object **valp)
-{
-    char *cpy = xstrdup (name);
-    char *p, *saveptr;
-    json_object *val, *dirobj, *dirent;
-    int rc = -1;
-
-    dirobj = dir->o;
-    p = strtok_r (cpy, ".", &saveptr);
-    while (p) {
-        if (!(dirent = json_object_object_get (dirobj, p))) {
-            errno = ENOENT;
-            goto done;
-        }
-        if ((p = strtok_r (NULL, ".", &saveptr))) {
-            if (!(dirobj = get_dirobj (dirent, dir->flags)))
-                goto done;
-        } else {
-            if (!(val = get_valobj (dirent, dir->flags)))
-                goto done;
-        }
-    }
-    if (valp) {
-        json_object_get (val);
-        *valp = val;
-    }
-    rc = 0;
-done:
-    free (cpy);
-    return rc;
-}
-
-/* Helper for kvsdir_get_dir */
-static int dirent_get_dir (kvsdir_t dir, const char *name, kvsdir_t *dirp)
-{
-    char *cpy = xstrdup (name);
-    char *p, *saveptr;
-    json_object *dirobj, *dirent;
-    int rc = -1;
-
-    dirobj = dir->o;
-    p = strtok_r (cpy, ".", &saveptr);
-    while (p) {
-        if (!(dirent = json_object_object_get (dirobj, p))) {
-            errno = ENOENT;
-            goto done;
-        }
-        if (!(dirobj = get_dirobj (dirent, dir->flags)))
-            goto done;
-        p = strtok_r (NULL, ".", &saveptr);
-    }
-    if (dirp) {
-        char *key = kvsdir_key_at  (dir, name);
-        *dirp = kvsdir_alloc (dir->handle, key, dirobj, dir->flags);
-        free (key);
-    }
-    rc = 0;
-done:
-    free (cpy);
-    return rc;
-}
-
 int kvsdir_get (kvsdir_t dir, const char *name, json_object **valp)
 {
     int rc;
 
-    rc = dirent_get (dir, name, valp);
-    if (rc < 0 && errno == ESRCH) { /* not cached - look up full key */
-        kvs_pushd (dir->handle, dir->key);
-        rc = kvs_get (dir->handle, name, valp);
-        kvs_popd (dir->handle);
-    }
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_get (dir->handle, name, valp);
+    kvs_popd (dir->handle);
+
     return rc;
 }
 
@@ -882,12 +760,10 @@ int kvsdir_get_dir (kvsdir_t dir, kvsdir_t *dirp, const char *fmt, ...)
         oom ();
     va_end (ap);
 
-    rc = dirent_get_dir (dir, name, dirp);
-    if (rc < 0 && errno == ESRCH) { /* not cached - look up full key */
-        kvs_pushd (dir->handle, dir->key);
-        rc = kvs_get_dir (dir->handle, 0, dirp, "%s", name);
-        kvs_popd (dir->handle);
-    }
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_get_dir (dir->handle, dirp, "%s", name);
+    kvs_popd (dir->handle);
+
     if (name)
         free (name);
     return rc;

@@ -162,7 +162,7 @@ static void add_jobinfo (plugin_ctx_t *p, int64_t id, json_object *req)
     json_object *o;
     kvsdir_t dir;
 
-    if (kvs_get_dir (p, 0, &dir, "lwj.%lu", id) < 0)
+    if (kvs_get_dir (p, &dir, "lwj.%lu", id) < 0)
         err_exit ("kvs_get_dir (id=%lu)", id);
 
     json_object_object_foreachC (req, i)

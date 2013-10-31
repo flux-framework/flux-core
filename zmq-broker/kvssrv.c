@@ -129,6 +129,11 @@ typedef struct {
     } slave;
 } ctx_t;
 
+enum {
+    KVS_GET_DIRVAL = 1,
+    KVS_GET_FILEVAL = 2,
+};
+
 static void event_kvs_setroot_send (plugin_ctx_t *p);
 
 static bool store_by_reference (json_object *o)
@@ -1104,10 +1109,7 @@ static void kvs_get_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     wait_t *wp = NULL;
     bool stall = false;
     bool flag_directory = false;
-    bool flag_dirval = false;
-    bool flag_fileval = false;
     bool flag_readlink = false;
-    int dir_flags = 0;
     int errnum = 0;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
@@ -1121,20 +1123,14 @@ static void kvs_get_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     }
     /* handle flags - they apply to all keys in the request */
     (void)util_json_object_get_boolean (o, ".flag_directory", &flag_directory);
-    (void)util_json_object_get_boolean (o, ".flag_dirval", &flag_dirval);
-    (void)util_json_object_get_boolean (o, ".flag_fileval", &flag_fileval);
     (void)util_json_object_get_boolean (o, ".flag_readlink", &flag_readlink);
-    if (flag_dirval)
-        dir_flags |= KVS_GET_DIRVAL;
-    if (flag_fileval)
-        dir_flags |= KVS_GET_FILEVAL;
 
     reply = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
         if (!strncmp (iter.key, ".flag_", 6)) /* ignore flags */
             continue;
         json_object *val = NULL;
-        if (!lookup (p, root, wp, flag_directory, dir_flags, flag_readlink,
+        if (!lookup (p, root, wp, flag_directory, 0, flag_readlink,
                      iter.key, &val, &errnum))
             stall = true; /* keep going to maximize readahead */
         if (stall) {
@@ -1172,9 +1168,7 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     wait_t *wp = NULL;
     bool stall = false, changed = false, reply_sent = false;
     bool flag_directory = false, flag_first = false;
-    bool flag_dirval = false, flag_fileval = false;
     bool flag_readlink = false, flag_once = false;
-    int dir_flags = 0;
     int errnum = 0;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
@@ -1188,22 +1182,16 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     }
     /* handle flags - they apply to all keys in the request */
     (void)util_json_object_get_boolean (o, ".flag_directory", &flag_directory);
-    (void)util_json_object_get_boolean (o, ".flag_dirval", &flag_dirval);
-    (void)util_json_object_get_boolean (o, ".flag_fileval", &flag_fileval);
     (void)util_json_object_get_boolean (o, ".flag_readlink", &flag_readlink);
     (void)util_json_object_get_boolean (o, ".flag_once", &flag_once);
     (void)util_json_object_get_boolean (o, ".flag_first", &flag_first);
-    if (flag_dirval)
-        dir_flags |= KVS_GET_DIRVAL;
-    if (flag_fileval)
-        dir_flags |= KVS_GET_FILEVAL;
 
     reply = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
         if (!strncmp (iter.key, ".flag_", 6) || !strncmp (iter.key, ".arg_", 5))
             continue;
         json_object *val = NULL;
-        if (!lookup (p, root, wp, flag_directory, dir_flags, flag_readlink,
+        if (!lookup (p, root, wp, flag_directory, 0, flag_readlink,
                      iter.key, &val, &errnum))
             stall = true; /* keep going to maximize readahead */
         if (stall) {
@@ -1240,8 +1228,6 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         /* Resubmit the watch request (clear flag_first) */
         if (!reply_sent || !flag_once) {
             util_json_object_add_boolean (reply, ".flag_directory", flag_directory);
-            util_json_object_add_boolean (reply, ".flag_dirval", flag_dirval);
-            util_json_object_add_boolean (reply, ".flag_fileval", flag_fileval);
             util_json_object_add_boolean (reply, ".flag_readlink", flag_readlink);
             util_json_object_add_boolean (reply, ".flag_once", flag_once);
             (void)cmb_msg_replace_json (*zmsg, reply);

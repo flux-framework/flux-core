@@ -277,9 +277,8 @@ int main (int argc, char *argv[])
             }
             case 'X': { /* --kvs-watch-dir key */
                 zmsg_t *zmsg;
-                int flags = KVS_GET_FILEVAL | KVS_GET_DIRVAL;
 
-                if (kvs_watch_dir (c, flags, (KVSSetDirF *)watchdir, NULL,
+                if (kvs_watch_dir (c, (KVSSetDirF *)watchdir, NULL,
                                    "%s", optarg) < 0)
                     err_exit ("kvs_watch_dir %s", optarg);
                 while ((zmsg = cmb_recv_zmsg (c, false))) {
@@ -291,9 +290,8 @@ int main (int argc, char *argv[])
             }
             case 'l': { /* --kvs-list name */
                 kvsdir_t dir;
-                int flags = KVS_GET_FILEVAL | KVS_GET_DIRVAL;
     
-                if (kvs_get_dir (c, flags, &dir, "%s", optarg) < 0)
+                if (kvs_get_dir (c, &dir, "%s", optarg) < 0)
                     err_exit ("kvs_get_dir %s", optarg);
                 dump_kvs_dir (dir);
                 kvsdir_destroy (dir);

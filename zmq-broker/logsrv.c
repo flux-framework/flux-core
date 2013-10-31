@@ -518,7 +518,6 @@ invalid:
 static void _init (plugin_ctx_t *p)
 {
     ctx_t *ctx;
-    int kvs_flags = KVS_GET_DIRVAL | KVS_GET_FILEVAL;
 
     ctx = p->ctx = xzmalloc (sizeof (ctx_t));
     ctx->listeners = zhash_new ();
@@ -526,7 +525,7 @@ static void _init (plugin_ctx_t *p)
     ctx->cirbuf = zlist_new ();
     ctx->disabled = false;
 
-    if (kvs_watch_dir (p, kvs_flags, set_config, p, "conf.log") < 0)
+    if (kvs_watch_dir (p, set_config, p, "conf.log") < 0)
         err_exit ("log: %s", "conf.log");
 
     zsocket_set_subscribe (p->zs_evin, "event.fault.");
