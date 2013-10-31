@@ -16,7 +16,7 @@ test_cleanup
 
 # Retrieve directory containing new key
 RESULT=`./tkvs get_dir $DIR`
-test "$RESULT" == "$KEY{int}"
+test "$RESULT" == "$KEY{value}"
 
 # Try to retrieve key as a directory - should be ENOTDIR
 ./tkvs get_dir $KEY 2>/dev/null && false

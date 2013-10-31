@@ -689,42 +689,24 @@ done:
 
 bool kvsdir_exists (kvsdir_t dir, const char *name)
 {
-    return (kvsdir_get (dir, name, NULL) == 0 || errno == EISDIR);
+    json_object *dirent = json_object_object_get (dir->o, name);
+
+    return (dirent != NULL);
 }
 
 bool kvsdir_isdir (kvsdir_t dir, const char *name)
 {
-    return (kvsdir_get_dir (dir, NULL, "%s", name) == 0);
+    json_object *dirent = json_object_object_get (dir->o, name);
+
+    return (dirent && (json_object_object_get (dirent, "DIRREF") != NULL
+                    || json_object_object_get (dirent, "DIRVAL") != NULL));
 }
 
 bool kvsdir_issymlink (kvsdir_t dir, const char *name)
 {
-    return (kvsdir_get_symlink (dir, name, NULL) == 0);
-}
+    json_object *dirent = json_object_object_get (dir->o, name);
 
-bool kvsdir_isstring (kvsdir_t dir, const char *name)
-{
-    return (kvsdir_get_string (dir, name, NULL) == 0);
-}
-
-bool kvsdir_isint (kvsdir_t dir, const char *name)
-{
-    return (kvsdir_get_int (dir, name, NULL) == 0);
-}
-
-bool kvsdir_isint64 (kvsdir_t dir, const char *name)
-{
-    return (kvsdir_get_int64 (dir, name, NULL) == 0);
-}
-
-bool kvsdir_isdouble (kvsdir_t dir, const char *name)
-{
-    return (kvsdir_get_double (dir, name, NULL) == 0);
-}
-
-bool kvsdir_isboolean (kvsdir_t dir, const char *name)
-{
-    return (kvsdir_get_boolean (dir, name, NULL) == 0);
+    return (dirent && json_object_object_get (dirent, "LINKVAL") != NULL);
 }
 
 char *kvsdir_key_at (kvsdir_t dir, const char *name)

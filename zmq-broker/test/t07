@@ -2,11 +2,11 @@
 
 TEST=`basename $0`
 DIR=$TEST.a.b
-EXPRESULT="$DIR.a{int}
-$DIR.b{int}
-$DIR.c{double}
-$DIR.d{string}
-$DIR.e{boolean}"
+EXPRESULT="$DIR.a{value}
+$DIR.b{value}
+$DIR.c{value}
+$DIR.d{value}
+$DIR.e{value}"
 
 test_cleanup() {
     ./tkvs unlink $TEST

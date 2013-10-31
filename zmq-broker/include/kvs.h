@@ -81,20 +81,13 @@ void kvsitr_destroy (kvsitr_t itr);
 const char *kvsitr_next (kvsitr_t itr);
 void kvsitr_rewind (kvsitr_t itr);
 
-/* Test attributes of 'key', relative to kvsdir object.
- * If the directory was not fetched with any cache flags, all functions
- * except 'exist' and 'isdir' will have to fetch and discard the values
- * to determine the type, so you'd be better off calling kvsdir_get_* on
- * each type and looking for return of -1, errno = EINVAL.
+/* Test attributes of 'name', relative to kvsdir object.
+ * This is intended for testing names returned by kvsitr_next.
+ * These functions do not recurse like kvsdir_get/kvsdir_put functions.
  */
-bool kvsdir_exists (kvsdir_t dir, const char *key);
-bool kvsdir_isdir (kvsdir_t dir, const char *key);
-bool kvsdir_isstring (kvsdir_t dir, const char *key);
-bool kvsdir_isint (kvsdir_t dir, const char *key);
-bool kvsdir_isint64 (kvsdir_t dir, const char *key);
-bool kvsdir_isdouble (kvsdir_t dir, const char *key);
-bool kvsdir_isboolean (kvsdir_t dir, const char *key);
-bool kvsdir_issymlink (kvsdir_t dir, const char *key);
+bool kvsdir_exists (kvsdir_t dir, const char *name);
+bool kvsdir_isdir (kvsdir_t dir, const char *name);
+bool kvsdir_issymlink (kvsdir_t dir, const char *name);
 
 /* Get key associated with a directory or directory entry.
  * Both functions always succeed.
