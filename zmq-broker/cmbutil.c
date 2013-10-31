@@ -19,7 +19,7 @@
 #include "util.h"
 
 static int _parse_logstr (char *s, int *lp, char **fp);
-static void dump_kvs_dir (kvsdir_t dir);
+static void dump_kvs_dir (cmb_t c, const char *path);
 
 static void watch (const char *key, json_object *val, void *arg, int errnum);
 static void watchdir (const char *key, kvsdir_t dir, void *arg, int errnum);
@@ -278,7 +278,7 @@ int main (int argc, char *argv[])
             case 'X': { /* --kvs-watch-dir key */
                 zmsg_t *zmsg;
 
-                if (kvs_watch_dir (c, (KVSSetDirF *)watchdir, NULL,
+                if (kvs_watch_dir (c, (KVSSetDirF *)watchdir, c,
                                    "%s", optarg) < 0)
                     err_exit ("kvs_watch_dir %s", optarg);
                 while ((zmsg = cmb_recv_zmsg (c, false))) {
@@ -289,12 +289,7 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'l': { /* --kvs-list name */
-                kvsdir_t dir;
-    
-                if (kvs_get_dir (c, &dir, "%s", optarg) < 0)
-                    err_exit ("kvs_get_dir %s", optarg);
-                dump_kvs_dir (dir);
-                kvsdir_destroy (dir);
+                dump_kvs_dir (c, optarg);
                 break;
             }
             case 'C': { /* --kvs-commit */
@@ -485,31 +480,40 @@ static int _parse_logstr (char *s, int *lp, char **fp)
     return 0;
 }
 
-static void dump_kvs_dir (kvsdir_t dir)
+static void dump_kvs_dir (cmb_t c, const char *path)
 {
-    kvsitr_t itr = kvsitr_create (dir);
+    kvsdir_t dir;
+    kvsitr_t itr;
     const char *name;
+    char *key;
 
+    if (kvs_get_dir (c, &dir, "%s", path) < 0)
+        err_exit ("kvs_get_dir %s", path);
+
+    itr = kvsitr_create (dir);
     while ((name = kvsitr_next (itr))) {
-        if (kvsdir_isdir (dir, name)) {
-            kvsdir_t ndir;
+        key = kvsdir_key_at (dir, name);
+        if (kvsdir_issymlink (dir, name)) {
+            char *link;
 
-            if (kvsdir_get_dir (dir, &ndir, "%s", name) < 0)
-                err_exit ("kvsdir_get_dir %s", name);
-            dump_kvs_dir (ndir);
-            kvsdir_destroy (ndir);
+            if (kvs_get_symlink (c, key, &link) < 0)
+                err_exit ("kvs_get_symlink %s", key);
+            printf ("%s -> %s\n", key, link);
+            free (link);
+
+        } else if (kvsdir_isdir (dir, name)) {
+            dump_kvs_dir (c, key);
+
         } else {
             json_object *o;
-            char *key;
 
-            if (kvsdir_get (dir, name, &o) < 0)
-                err_exit ("kvsdir_get %s", name);
-            key = kvsdir_key_at (dir, name);
+            if (kvs_get (c, key, &o) < 0)
+                err_exit ("kvs_get %s", key);
             printf ("%s = %s\n", key,
                     json_object_to_json_string_ext (o, JSON_C_TO_STRING_PLAIN));
             json_object_put (o);
-            free (key);
         }
+        free (key);
     }
     kvsitr_destroy (itr);
 }
@@ -524,11 +528,13 @@ static void watch (const char *key, json_object *val, void *arg, int errnum)
 }
 static void watchdir (const char *key, kvsdir_t dir, void *arg, int errnum)
 {
+    cmb_t c = (cmb_t)arg;
+
     if (errnum > 0)
         printf ("%s: %s\n", key, strerror (errnum));
     else {
         printf ("%s: ===========================\n", key);
-        dump_kvs_dir (dir);
+        dump_kvs_dir (c, key);
     }
 }
 
