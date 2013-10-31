@@ -22,11 +22,12 @@
 #include "log.h"
 #include "zmsg.h"
 
-#define OPTIONS "ZFD"
+#define OPTIONS "ZFDc:"
 static const struct option longopts[] = {
    {"trace-apisock", no_argument,        0, 'Z'},
    {"get-fileval",   no_argument,        0, 'F'},
    {"get-dirval",    no_argument,        0, 'D'},
+   {"chdir",         required_argument,  0, 'c'},
    {0, 0, 0, 0},
 };
 
@@ -208,7 +209,7 @@ void tkvs_dump_all (kvsdir_t dir, bool ropt)
         } else {
             json_object *o;
             if (kvsdir_get (dir, name, &o) < 0)
-                err_exit ("kvsdir_get_object %s", key);
+                err_exit ("kvsdir_get %s", key);
             printf ("%s = %s\n", key, json_object_to_json_string (o));
             json_object_put (o);
         }
@@ -363,6 +364,7 @@ int main (int argc, char *argv[])
     char path[PATH_MAX + 1];
     int cmb_flags = 0;
     int kvs_flags = 0;
+    char *chdir = NULL;
 
     log_init (basename (argv[0]));
     snprintf (path, sizeof (path), CMB_API_PATH_TMPL, getuid ());
@@ -376,6 +378,9 @@ int main (int argc, char *argv[])
                 break;
             case 'D': /* --get-dirval */
                 kvs_flags |= KVS_GET_DIRVAL;
+                break;
+            case 'c': /* --chdir DIR */
+                chdir = optarg;
                 break;
             default:
                 usage ();
@@ -391,6 +396,9 @@ int main (int argc, char *argv[])
         usage ();
     if (!(c = cmb_init_full (path, cmb_flags)))
         err_exit ("cmb_init");
+
+    if (chdir)
+        kvs_chdir (c, chdir);
 
     if (!strcmp (op, "get_string") && key)
         tkvs_get_string (c, key);

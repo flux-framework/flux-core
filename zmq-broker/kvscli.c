@@ -27,6 +27,8 @@
 struct kvsctx_struct {
     void *handle;
     zhash_t *watchers;
+    char *cwd;
+    zlist_t *dirstack;
 };
 
 struct kvsdir_struct {
@@ -64,6 +66,29 @@ static struct kvs_config_struct kvs_config = {
     .barrier = NULL,
     .getctx = NULL,
 };
+
+/* Create new path from current working directory and relative path.
+ * Confusing: "." is our path separator, so think of it as POSIX "/",
+ * and there is no equiv of POSIX "." and "..".
+ */
+static char *pathcat (const char *cwd, const char *relpath)
+{
+    char *path;
+    bool fq = false;
+
+    while (*cwd == '.')
+        cwd++;
+    while (*relpath == '.') {
+        relpath++;
+        fq = true;
+    }
+    if (fq || strlen (cwd) == 0)
+        path = xstrdup (strlen (relpath) > 0 ? relpath : ".");
+    else
+        if (asprintf (&path, "%s.%s", cwd, relpath) < 0)
+            oom ();
+    return path;
+}
 
 void kvsdir_destroy (kvsdir_t dir)
 {
@@ -128,15 +153,16 @@ int kvs_get (void *h, const char *key, json_object **valp)
 {
     json_object *val = NULL;
     json_object *request = util_json_object_new_object ();
+    char *path = pathcat (kvs_getcwd (h), key);
     json_object *reply = NULL;
     int ret = -1;
 
-    json_object_object_add (request, key, NULL);
+    json_object_object_add (request, path, NULL);
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.get");
     if (!reply)
         goto done;
-    if (!(val = json_object_object_get (reply, key))) {
+    if (!(val = json_object_object_get (reply, path))) {
         errno = ENOENT;
         goto done;
     }
@@ -148,6 +174,8 @@ int kvs_get (void *h, const char *key, json_object **valp)
 done:
     if (request)
         json_object_put (request);
+    if (path)
+        free (path);
     if (reply)
         json_object_put (reply);
     return ret;
@@ -159,36 +187,39 @@ int kvs_get_dir (void *h, int flags, kvsdir_t *dirp, const char *fmt, ...)
     json_object *request = util_json_object_new_object ();
     json_object *reply = NULL;
     int ret = -1;
-    char *key;
+    char *key, *path;
     va_list ap;
 
     va_start (ap, fmt);
     if (vasprintf (&key, fmt, ap) < 0)
         oom ();
     va_end (ap);
+    path = pathcat (kvs_getcwd (h), key);
 
     util_json_object_add_boolean (request, ".flag_directory", true);
     util_json_object_add_boolean (request, ".flag_fileval",
                                   (flags & KVS_GET_FILEVAL));
     util_json_object_add_boolean (request, ".flag_dirval",
                                   (flags & KVS_GET_DIRVAL));
-    json_object_object_add (request, key, NULL);
+    json_object_object_add (request, path, NULL);
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.get");
     if (!reply)
         goto done;
-    if (!(val = json_object_object_get (reply, key))) {
+    if (!(val = json_object_object_get (reply, path))) {
         errno = ENOENT;
         goto done;
     }
     if (dirp)
-        *dirp = kvsdir_alloc (h, key, val, flags);
+        *dirp = kvsdir_alloc (h, path, val, flags);
     ret = 0;
 done:
     if (request)
         json_object_put (request);
     if (reply)
         json_object_put (reply);
+    if (path)
+        free (path);
     if (key)
         free (key);
     return ret;
@@ -198,17 +229,18 @@ int kvs_get_symlink (void *h, const char *key, char **valp)
 {
     json_object *val = NULL;
     json_object *request = util_json_object_new_object ();
+    char *path = pathcat (kvs_getcwd (h), key);
     json_object *reply = NULL;
     const char *s;
     int ret = -1;
 
     util_json_object_add_boolean (request, ".flag_readlink", true);
-    json_object_object_add (request, key, NULL);
+    json_object_object_add (request, path, NULL);
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.get");
     if (!reply)
         goto done;
-    if (!(val = json_object_object_get (reply, key))) {
+    if (!(val = json_object_object_get (reply, path))) {
         errno = ENOENT;
         goto done;
     }
@@ -226,6 +258,8 @@ int kvs_get_symlink (void *h, const char *key, char **valp)
 done:
     if (request)
         json_object_put (request);
+    if (path)
+        free (path);
     if (reply)
         json_object_put (reply);
     return ret;
@@ -827,13 +861,12 @@ done:
 int kvsdir_get (kvsdir_t dir, const char *name, json_object **valp)
 {
     int rc;
-    char *key;
 
     rc = dirent_get (dir, name, valp);
     if (rc < 0 && errno == ESRCH) { /* not cached - look up full key */
-        key = kvsdir_key_at (dir, name);
-        rc = kvs_get (dir->handle, key, valp);
-        free (key);
+        kvs_pushd (dir->handle, dir->key);
+        rc = kvs_get (dir->handle, name, valp);
+        kvs_popd (dir->handle);
     }
     return rc;
 }
@@ -841,7 +874,7 @@ int kvsdir_get (kvsdir_t dir, const char *name, json_object **valp)
 int kvsdir_get_dir (kvsdir_t dir, kvsdir_t *dirp, const char *fmt, ...)
 {
     int rc;
-    char *name, *key;
+    char *name;
     va_list ap;
 
     va_start (ap, fmt);
@@ -851,9 +884,9 @@ int kvsdir_get_dir (kvsdir_t dir, kvsdir_t *dirp, const char *fmt, ...)
 
     rc = dirent_get_dir (dir, name, dirp);
     if (rc < 0 && errno == ESRCH) { /* not cached - look up full key */
-        key = kvsdir_key_at (dir, name);
-        rc = kvs_get_dir (dir->handle, 0, dirp, "%s", key);
-        free (key);
+        kvs_pushd (dir->handle, dir->key);
+        rc = kvs_get_dir (dir->handle, 0, dirp, "%s", name);
+        kvs_popd (dir->handle);
     }
     if (name)
         free (name);
@@ -862,12 +895,11 @@ int kvsdir_get_dir (kvsdir_t dir, kvsdir_t *dirp, const char *fmt, ...)
 
 int kvsdir_get_symlink (kvsdir_t dir, const char *name, char **valp)
 {
-    char *key;
     int rc;
 
-    key = kvsdir_key_at (dir, name);
-    rc = kvs_get_symlink (dir->handle, key, valp);
-    free (key);
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_get_symlink (dir->handle, name, valp);
+    kvs_popd (dir->handle);
 
     return rc;
 }
@@ -968,12 +1000,13 @@ done:
 int kvs_put (void *h, const char *key, json_object *val)
 {
     json_object *request = util_json_object_new_object ();
+    char *path = pathcat (kvs_getcwd (h), key);
     json_object *reply = NULL;
     int ret = -1;
 
     if (val)
         json_object_get (val);
-    json_object_object_add (request, key, val);
+    json_object_object_add (request, path, val);
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.put");
     if (!reply && errno > 0)
@@ -986,6 +1019,8 @@ int kvs_put (void *h, const char *key, json_object *val)
 done:
     if (request)
         json_object_put (request);
+    if (path)
+        free (path);
     if (reply)
         json_object_put (reply);
     return ret;
@@ -994,12 +1029,12 @@ done:
 
 int kvsdir_put (kvsdir_t dir, const char *name, json_object *val)
 {
-    int rc = -1;
-    char *key;
-    if ((key = kvsdir_key_at (dir, name))) {
-        rc = kvs_put (dir->handle, key, val);
-        free (key);
-    }
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_put (dir->handle, name, val);
+    kvs_popd (dir->handle);
+
     return (rc);
 }
 
@@ -1021,12 +1056,12 @@ done:
 
 int kvsdir_put_string (kvsdir_t dir, const char *name, const char *val)
 {
-    int rc = -1;
-    char *key;
-    if ((key = kvsdir_key_at (dir, name))) {
-        rc = kvs_put_string (dir->handle, key, val);
-        free (key);
-    }
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_put_string (dir->handle, name, val);
+    kvs_popd (dir->handle);
+
     return (rc);
 }
 
@@ -1048,12 +1083,12 @@ done:
 
 int kvsdir_put_int (kvsdir_t dir, const char *name, int val)
 {
-    int rc = -1;
-    char *key;
-    if ((key = kvsdir_key_at (dir, name))) {
-        rc = kvs_put_int (dir->handle, key, val);
-        free (key);
-    }
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_put_int (dir->handle, name, val);
+    kvs_popd (dir->handle);
+
     return (rc);
 }
 
@@ -1075,12 +1110,12 @@ done:
 
 int kvsdir_put_int64 (kvsdir_t dir, const char *name, int64_t val)
 {
-    int rc = -1;
-    char *key;
-    if ((key = kvsdir_key_at (dir, name))) {
-        rc = kvs_put_int64 (dir->handle, key, val);
-        free (key);
-    }
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_put_int64 (dir->handle, name, val);
+    kvs_popd (dir->handle);
+
     return (rc);
 }
 
@@ -1102,12 +1137,12 @@ done:
 
 int kvsdir_put_double (kvsdir_t dir, const char *name, double val)
 {
-    int rc = -1;
-    char *key;
-    if ((key = kvsdir_key_at (dir, name))) {
-        rc = kvs_put_double (dir->handle, key, val);
-        free (key);
-    }
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_put_double (dir->handle, name, val);
+    kvs_popd (dir->handle);
+
     return (rc);
 }
 
@@ -1129,12 +1164,12 @@ done:
 
 int kvsdir_put_boolean (kvsdir_t dir, const char *name, bool val)
 {
-    int rc = -1;
-    char *key;
-    if ((key = kvsdir_key_at (dir, name))) {
-        rc = kvs_put_boolean (dir->handle, key, val);
-        free (key);
-    }
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_put_boolean (dir->handle, name, val);
+    kvs_popd (dir->handle);
+
     return (rc);
 }
 
@@ -1146,23 +1181,24 @@ int kvs_unlink (void *h, const char *key)
 
 int kvsdir_unlink (kvsdir_t dir, const char *name)
 {
-    int rc = -1;
-    char *key;
-    if ((key = kvsdir_key_at (dir, name))) {
-        rc = kvs_unlink (dir->handle, key);
-        free (key);
-    }
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_unlink (dir->handle, name);
+    kvs_popd (dir->handle);
+
     return (rc);
 }
 
 int kvs_symlink (void *h, const char *key, const char *target)
 {
     json_object *request = util_json_object_new_object ();
+    char *path = pathcat (kvs_getcwd (h), key);
     json_object *reply = NULL;
     int ret = -1;
   
     util_json_object_add_boolean (request, ".flag_symlink", true);
-    util_json_object_add_string (request, (char *)key, target);
+    util_json_object_add_string (request, path, target);
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.put");
     if (!reply && errno > 0)
@@ -1175,6 +1211,8 @@ int kvs_symlink (void *h, const char *key, const char *target)
 done:
     if (request)
         json_object_put (request);
+    if (path)
+        free (path);
     if (reply)
         json_object_put (reply); 
     return ret;
@@ -1182,23 +1220,24 @@ done:
 
 int kvsdir_symlink (kvsdir_t dir, const char *name, const char *target)
 {
-    int rc = -1;
-    char *key;
-    if ((key = kvsdir_key_at (dir, name))) {
-        rc = kvs_symlink (dir->handle, key, target);
-        free (key);
-    }
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_symlink (dir->handle, name, target);
+    kvs_popd (dir->handle);
+
     return (rc);
 }
 
 int kvs_mkdir (void *h, const char *key)
 {
     json_object *request = util_json_object_new_object ();
-    json_object *reply = NULL;
+    char *path = pathcat (kvs_getcwd (h), key);
+    json_object *reply;
     int ret = -1;
-  
+
     util_json_object_add_boolean (request, ".flag_mkdir", true);
-    json_object_object_add (request, key, NULL); 
+    json_object_object_add (request, path, NULL); 
     assert (kvs_config.request != NULL);
     reply = kvs_config.request (h, request, "kvs.put");
     if (!reply && errno > 0)
@@ -1211,6 +1250,8 @@ int kvs_mkdir (void *h, const char *key)
 done:
     if (request)
         json_object_put (request);
+    if (path)
+        free (path);
     if (reply)
         json_object_put (reply); 
     return ret;
@@ -1218,12 +1259,12 @@ done:
 
 int kvsdir_mkdir (kvsdir_t dir, const char *name)
 {
-    int rc = -1;
-    char *key;
-    if ((key = kvsdir_key_at (dir, name))) {
-        rc = kvs_mkdir (dir->handle, key);
-        free (key);
-    }
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_mkdir (dir->handle, name);
+    kvs_popd (dir->handle);
+
     return (rc);
 }
 
@@ -1345,12 +1386,56 @@ done:
     return ret;
 }
 
+const char *kvs_getcwd (void *h)
+{
+    kvsctx_t ctx = kvs_config.getctx (h);
+
+    assert (ctx != NULL);
+    return ctx->cwd;
+}
+
+void kvs_chdir (void *h, const char *path)
+{
+    kvsctx_t ctx = kvs_config.getctx (h);
+    char *new;
+
+    assert (ctx != NULL);
+    new = pathcat (ctx->cwd, xstrdup (path ? path : "."));
+    free (ctx->cwd);
+    ctx->cwd = new;
+}
+
+void kvs_pushd (void *h, const char *path)
+{
+    kvsctx_t ctx = kvs_config.getctx (h);
+
+    assert (ctx != NULL);
+    if (zlist_push (ctx->dirstack, ctx->cwd) < 0)
+        oom ();
+    ctx->cwd = pathcat (ctx->cwd, path ? path : ".");
+}
+
+void kvs_popd (void *h)
+{
+    kvsctx_t ctx = kvs_config.getctx (h);
+
+    assert (ctx != NULL);
+    if (zlist_size (ctx->dirstack) > 0) {
+        free (ctx->cwd);
+        ctx->cwd = zlist_pop (ctx->dirstack);
+    }
+}
+
 kvsctx_t kvs_ctx_create (void *h)
 {
     kvsctx_t ctx = xzmalloc (sizeof (*ctx));
 
     ctx->handle = h;
     if (!(ctx->watchers = zhash_new ()))
+        oom ();
+    if (!(ctx->dirstack = zlist_new ()))
+        oom ();
+    if (!(ctx->cwd = xstrdup (".")))
         oom ();
 
     return ctx;
@@ -1359,6 +1444,8 @@ kvsctx_t kvs_ctx_create (void *h)
 void kvs_ctx_destroy (kvsctx_t ctx)
 {
     zhash_destroy (&ctx->watchers);
+    zlist_destroy (&ctx->dirstack);
+    free (ctx->cwd);
     free (ctx);
 }
 
