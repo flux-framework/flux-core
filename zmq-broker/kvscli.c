@@ -134,6 +134,11 @@ static void kvs_popd (void *h)
     }
 }
 
+/**
+ ** kvsdir_t primary functions.
+ ** A kvsdir_t is analagous to posix (DIR *).
+ **/
+
 void kvsdir_destroy (kvsdir_t dir)
 {
     free (dir->key);
@@ -190,6 +195,43 @@ const char *kvsitr_next (kvsitr_t itr)
 
     return name;
 }
+
+bool kvsdir_exists (kvsdir_t dir, const char *name)
+{
+    json_object *dirent = json_object_object_get (dir->o, name);
+
+    return (dirent != NULL);
+}
+
+bool kvsdir_isdir (kvsdir_t dir, const char *name)
+{
+    json_object *dirent = json_object_object_get (dir->o, name);
+
+    return (dirent && (json_object_object_get (dirent, "DIRREF") != NULL
+                    || json_object_object_get (dirent, "DIRVAL") != NULL));
+}
+
+bool kvsdir_issymlink (kvsdir_t dir, const char *name)
+{
+    json_object *dirent = json_object_object_get (dir->o, name);
+
+    return (dirent && json_object_object_get (dirent, "LINKVAL") != NULL);
+}
+
+char *kvsdir_key_at (kvsdir_t dir, const char *name)
+{
+    char *key;
+
+    if (!strcmp (dir->key, ".") != 0)
+        key = xstrdup (name);
+    else if (asprintf (&key, "%s.%s", dir->key, name) < 0)
+        oom ();
+    return key;
+}
+
+/**
+ ** GET
+ **/
 
 int kvs_get (void *h, const char *key, json_object **valp)
 {
@@ -404,6 +446,10 @@ done:
         json_object_put (o);
     return rc;
 }
+
+/**
+ ** WATCH
+ **/
 
 static void dispatch_watch (void *h, kvs_watcher_t *wp, const char *key,
                             json_object *val)
@@ -733,38 +779,9 @@ done:
     return rc;
 }
 
-bool kvsdir_exists (kvsdir_t dir, const char *name)
-{
-    json_object *dirent = json_object_object_get (dir->o, name);
-
-    return (dirent != NULL);
-}
-
-bool kvsdir_isdir (kvsdir_t dir, const char *name)
-{
-    json_object *dirent = json_object_object_get (dir->o, name);
-
-    return (dirent && (json_object_object_get (dirent, "DIRREF") != NULL
-                    || json_object_object_get (dirent, "DIRVAL") != NULL));
-}
-
-bool kvsdir_issymlink (kvsdir_t dir, const char *name)
-{
-    json_object *dirent = json_object_object_get (dir->o, name);
-
-    return (dirent && json_object_object_get (dirent, "LINKVAL") != NULL);
-}
-
-char *kvsdir_key_at (kvsdir_t dir, const char *name)
-{
-    char *key;
-
-    if (!strcmp (dir->key, ".") != 0)
-        key = xstrdup (name);
-    else if (asprintf (&key, "%s.%s", dir->key, name) < 0)
-        oom ();
-    return key;
-}
+/**
+ ** PUT
+ **/
 
 int kvs_put (void *h, const char *key, json_object *val)
 {
@@ -938,6 +955,10 @@ done:
     return ret;
 }
 
+/**
+ ** Commit/synchronization
+ **/
+
 /* helper for cmb_kvs_commit, cmb_kvs_fence */
 static int send_kvs_flush (void *h)
 {
@@ -1055,6 +1076,10 @@ done:
         json_object_put (reply); 
     return ret;
 }
+
+/**
+ ** Interface to plugin.c/apicli.c
+ **/
 
 kvsctx_t kvs_ctx_create (void *h)
 {

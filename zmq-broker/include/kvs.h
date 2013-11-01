@@ -73,8 +73,9 @@ const char *kvsitr_next (kvsitr_t itr);
 void kvsitr_rewind (kvsitr_t itr);
 
 /* Test attributes of 'name', relative to kvsdir object.
- * This is intended for testing names returned by kvsitr_next.
- * These functions do not recurse like kvsdir_get/kvsdir_put functions.
+ * This is intended for testing names returned by kvsitr_next (no recursion).
+ * Symlinks are not dereferenced, i.e. symlink pointing to dir will read
+ * issymlink=true, isdir=false.
  */
 bool kvsdir_exists (kvsdir_t dir, const char *name);
 bool kvsdir_isdir (kvsdir_t dir, const char *name);
@@ -83,7 +84,7 @@ bool kvsdir_issymlink (kvsdir_t dir, const char *name);
 /* Get key associated with a directory or directory entry.
  * Both functions always succeed.
  */
-const char *kvsdir_key (kvsdir_t dir); /* caller does not free result */
+const char *kvsdir_key (kvsdir_t dir);
 char *kvsdir_key_at (kvsdir_t dir, const char *key); /* caller frees result */
 void *kvsdir_handle (kvsdir_t dir);
 
@@ -118,20 +119,11 @@ int kvs_commit (void *h);
  */
 int kvs_fence (void *h, const char *name, int nprocs);
 
-/* Garbage collect the cache.  On the root node, drop all data that
- * doesn't have a reference in the namespace.  On other nodes, the entire
- * cache is dropped and will be reloaded on demand.
- * Returns -1 on error (errno set), 0 on success.
- */
-int kvs_dropcache (void *h);
-
-/* Get the store version (e.g. after a commit).
+/* Synchronization:
+ * Process A commits data, then gets the store version V and sends it to B.
+ * Process B waits for the store version to be >= V, then reads data.
  */
 int kvs_get_version (void *h, int *versionp);
-
-/* Wait for the store version to be >= the requested version.
- * (e.g. and then fetch some data another process commited for us).
- */
 int kvs_wait_version (void *h, int version);
 
 /* These are called internally by plugin.c and apicli.c and
@@ -144,7 +136,16 @@ void kvs_watch_response (void *h, zmsg_t **zmsg);
 kvsctx_t kvs_ctx_create (void *h);
 void kvs_ctx_destroy (kvsctx_t ctx);
 
-/* kvsdir_t convenience functions
+/* Garbage collect the cache.  On the root node, drop all data that
+ * doesn't have a reference in the namespace.  On other nodes, the entire
+ * cache is dropped and will be reloaded on demand.
+ * Returns -1 on error (errno set), 0 on success.
+ */
+int kvs_dropcache (void *h);
+
+/* kvsdir_ convenience functions
+ * They behave exactly like their kvs_ counterparts, except the 'key' path
+ * is resolved relative to the directory.
  */
 int kvsdir_get (kvsdir_t dir, const char *key, json_object **valp);
 int kvsdir_get_dir (kvsdir_t dir, kvsdir_t *dirp, const char *fmt, ...);
