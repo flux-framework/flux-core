@@ -163,6 +163,11 @@ const char *kvsdir_key (kvsdir_t dir)
     return dir->key;
 }
 
+void *kvsdir_handle (kvsdir_t dir)
+{
+    return dir->handle;
+}
+
 void kvsitr_rewind (kvsitr_t itr)
 {
     itr->next = json_object_iter_begin (itr->dir->o); 
@@ -217,6 +222,7 @@ bool kvsdir_issymlink (kvsdir_t dir, const char *name)
 
     return (dirent && json_object_object_get (dirent, "LINKVAL") != NULL);
 }
+
 
 char *kvsdir_key_at (kvsdir_t dir, const char *name)
 {
