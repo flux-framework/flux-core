@@ -65,6 +65,12 @@ static struct kvs_config_struct kvs_config = {
     .getctx = NULL,
 };
 
+/**
+ ** Current working directory implementation is just used internally
+ ** for now.  I'm not sure it is all that useful of an abstractions
+ ** to expose in the KVS API.
+ **/
+
 /* Create new path from current working directory and relative path.
  * Confusing: "." is our path separator, so think of it as POSIX "/",
  * and there is no equiv of POSIX "." and "..".
@@ -86,6 +92,46 @@ static char *pathcat (const char *cwd, const char *relpath)
         if (asprintf (&path, "%s.%s", cwd, relpath) < 0)
             oom ();
     return path;
+}
+
+const char *kvs_getcwd (void *h)
+{
+    kvsctx_t ctx = kvs_config.getctx (h);
+
+    assert (ctx != NULL);
+    return ctx->cwd;
+}
+#if 0
+static void kvs_chdir (void *h, const char *path)
+{
+    kvsctx_t ctx = kvs_config.getctx (h);
+    char *new;
+
+    assert (ctx != NULL);
+    new = pathcat (ctx->cwd, xstrdup (path ? path : "."));
+    free (ctx->cwd);
+    ctx->cwd = new;
+}
+#endif
+static void kvs_pushd (void *h, const char *path)
+{
+    kvsctx_t ctx = kvs_config.getctx (h);
+
+    assert (ctx != NULL);
+    if (zlist_push (ctx->dirstack, ctx->cwd) < 0)
+        oom ();
+    ctx->cwd = pathcat (ctx->cwd, path ? path : ".");
+}
+
+static void kvs_popd (void *h)
+{
+    kvsctx_t ctx = kvs_config.getctx (h);
+
+    assert (ctx != NULL);
+    if (zlist_size (ctx->dirstack) > 0) {
+        free (ctx->cwd);
+        ctx->cwd = zlist_pop (ctx->dirstack);
+    }
 }
 
 void kvsdir_destroy (kvsdir_t dir)
@@ -1008,46 +1054,6 @@ done:
     if (reply)
         json_object_put (reply); 
     return ret;
-}
-
-const char *kvs_getcwd (void *h)
-{
-    kvsctx_t ctx = kvs_config.getctx (h);
-
-    assert (ctx != NULL);
-    return ctx->cwd;
-}
-
-void kvs_chdir (void *h, const char *path)
-{
-    kvsctx_t ctx = kvs_config.getctx (h);
-    char *new;
-
-    assert (ctx != NULL);
-    new = pathcat (ctx->cwd, xstrdup (path ? path : "."));
-    free (ctx->cwd);
-    ctx->cwd = new;
-}
-
-void kvs_pushd (void *h, const char *path)
-{
-    kvsctx_t ctx = kvs_config.getctx (h);
-
-    assert (ctx != NULL);
-    if (zlist_push (ctx->dirstack, ctx->cwd) < 0)
-        oom ();
-    ctx->cwd = pathcat (ctx->cwd, path ? path : ".");
-}
-
-void kvs_popd (void *h)
-{
-    kvsctx_t ctx = kvs_config.getctx (h);
-
-    assert (ctx != NULL);
-    if (zlist_size (ctx->dirstack) > 0) {
-        free (ctx->cwd);
-        ctx->cwd = zlist_pop (ctx->dirstack);
-    }
 }
 
 kvsctx_t kvs_ctx_create (void *h)

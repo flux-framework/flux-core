@@ -134,17 +134,6 @@ int kvs_get_version (void *h, int *versionp);
  */
 int kvs_wait_version (void *h, int version);
 
-/* Change the KVS "current working directory" (cwd) for this handle.
- * The cwd is prepended to key names in other operations.  It need not
- * exist. The initial cwd is ".".
- * A key name (including 'path' argument below) beginning with "."
- * is assumed to be fully qualified and the cwd will not be prepended to it.
- */
-void kvs_chdir (void *h, const char *path);
-void kvs_pushd (void *h, const char *path);
-void kvs_popd (void *h);
-const char *kvs_getcwd (void *h);
-
 /* These are called internally by plugin.c and apicli.c and
  * are part of the KVS internal implementation.  Do not use.
  */

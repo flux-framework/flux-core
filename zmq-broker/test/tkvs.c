@@ -22,12 +22,9 @@
 #include "log.h"
 #include "zmsg.h"
 
-#define OPTIONS "ZFDc:"
+#define OPTIONS "Z"
 static const struct option longopts[] = {
    {"trace-apisock", no_argument,        0, 'Z'},
-   {"get-fileval",   no_argument,        0, 'F'},
-   {"get-dirval",    no_argument,        0, 'D'},
-   {"chdir",         required_argument,  0, 'c'},
    {0, 0, 0, 0},
 };
 
@@ -347,7 +344,6 @@ int main (int argc, char *argv[])
     cmb_t c;
     char path[PATH_MAX + 1];
     int cmb_flags = 0;
-    char *chdir = NULL;
 
     log_init (basename (argv[0]));
     snprintf (path, sizeof (path), CMB_API_PATH_TMPL, getuid ());
@@ -355,9 +351,6 @@ int main (int argc, char *argv[])
         switch (ch) {
             case 'Z': /* --trace-apisock */
                 cmb_flags |= CMB_FLAGS_TRACE;
-                break;
-            case 'c': /* --chdir DIR */
-                chdir = optarg;
                 break;
             default:
                 usage ();
@@ -373,9 +366,6 @@ int main (int argc, char *argv[])
         usage ();
     if (!(c = cmb_init_full (path, cmb_flags)))
         err_exit ("cmb_init");
-
-    if (chdir)
-        kvs_chdir (c, chdir);
 
     if (!strcmp (op, "get_string") && key)
         tkvs_get_string (c, key);
