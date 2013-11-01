@@ -62,15 +62,6 @@ int kvs_put_int64 (void *h, const char *key, int64_t val);
 int kvs_put_double (void *h, const char *key, double val);
 int kvs_put_boolean (void *h, const char *key, bool val);
 
-/* kvsdir_put_* work as above but 'key' is relative to kvsdir object
- */
-int kvsdir_put (kvsdir_t dir, const char *key, json_object *val);
-int kvsdir_put_string (kvsdir_t dir, const char *key, const char *val);
-int kvsdir_put_int (kvsdir_t dir, const char *key, int val);
-int kvsdir_put_int64 (kvsdir_t dir, const char *key, int64_t val);
-int kvsdir_put_double (kvsdir_t dir, const char *key, double val);
-int kvsdir_put_boolean (kvsdir_t dir, const char *key, bool val);
-
 /* An iterator interface for walking the list of names in a kvsdir_t
  * returned by kvs_get_dir().  kvsitr_create() always succeeds.
  * kvsitr_next() returns NULL when the last item is reached.
@@ -94,37 +85,23 @@ bool kvsdir_issymlink (kvsdir_t dir, const char *name);
  */
 const char *kvsdir_key (kvsdir_t dir); /* caller does not free result */
 char *kvsdir_key_at (kvsdir_t dir, const char *key); /* caller frees result */
-
-/* Read the value of 'key', relative to kvsdir object.
- * These functions return -1 on error (errno set), 0 on success.
- */
-int kvsdir_get (kvsdir_t dir, const char *key, json_object **valp);
-int kvsdir_get_dir (kvsdir_t dir, kvsdir_t *dirp, const char *fmt, ...);
-int kvsdir_get_string (kvsdir_t dir, const char *key, char **valp);
-int kvsdir_get_int (kvsdir_t dir, const char *key, int *valp);
-int kvsdir_get_int64 (kvsdir_t dir, const char *key, int64_t *valp);
-int kvsdir_get_double (kvsdir_t dir, const char *key, double *valp);
-int kvsdir_get_boolean (kvsdir_t dir, const char *key, bool *valp);
-int kvsdir_get_symlink (kvsdir_t dir, const char *key, char **valp);
+void *kvsdir_handle (kvsdir_t dir);
 
 /* Remove a key from the namespace.  If it represents a directory,
  * its contents are also removed.  kvsdir_unlink removes it relative to 'dir'.
  * Returns -1 on error (errno set), 0 on success.
  */
 int kvs_unlink (void *h, const char *key);
-int kvsdir_unlink (kvsdir_t dir, const char *key);
 
 /* Create symlink.  kvsdir_symlink creates it relatived to 'dir'.
  * Returns -1 on error (errno set), 0 on success.
  */
 int kvs_symlink (void *h, const char *key, const char *target);
-int kvsdir_symlink (kvsdir_t dir, const char *key, const char *target);
 
 /* Create an empty directory.  kvsdir_mkdir creates it relative to 'dir'.
  * Returns -1 on error (errno set), 0 on success.
  */
 int kvs_mkdir (void *h, const char *key);
-int kvsdir_mkdir (kvsdir_t dir, const char *key);
 
 /* kvs_commit() must be called after kvs_put*, kvs_unlink, and kvs_mkdir
  * to finalize the update.  The new data is immediately available on
@@ -174,11 +151,32 @@ const char *kvs_getcwd (void *h);
 void kvs_reqfun_set (KVSReqF *fun);
 void kvs_barrierfun_set (KVSBarrierF *fun);
 void kvs_getctxfun_set (KVSGetCtxF *fun);
-
 void kvs_watch_response (void *h, zmsg_t **zmsg);
-
 kvsctx_t kvs_ctx_create (void *h);
 void kvs_ctx_destroy (kvsctx_t ctx);
+
+/* kvsdir_t convenience functions
+ */
+int kvsdir_get (kvsdir_t dir, const char *key, json_object **valp);
+int kvsdir_get_dir (kvsdir_t dir, kvsdir_t *dirp, const char *fmt, ...);
+int kvsdir_get_string (kvsdir_t dir, const char *key, char **valp);
+int kvsdir_get_int (kvsdir_t dir, const char *key, int *valp);
+int kvsdir_get_int64 (kvsdir_t dir, const char *key, int64_t *valp);
+int kvsdir_get_double (kvsdir_t dir, const char *key, double *valp);
+int kvsdir_get_boolean (kvsdir_t dir, const char *key, bool *valp);
+int kvsdir_get_symlink (kvsdir_t dir, const char *key, char **valp);
+
+int kvsdir_put (kvsdir_t dir, const char *key, json_object *val);
+int kvsdir_put_string (kvsdir_t dir, const char *key, const char *val);
+int kvsdir_put_int (kvsdir_t dir, const char *key, int val);
+int kvsdir_put_int64 (kvsdir_t dir, const char *key, int64_t val);
+int kvsdir_put_double (kvsdir_t dir, const char *key, double val);
+int kvsdir_put_boolean (kvsdir_t dir, const char *key, bool val);
+
+int kvsdir_unlink (kvsdir_t dir, const char *key);
+int kvsdir_symlink (kvsdir_t dir, const char *key, const char *target);
+int kvsdir_mkdir (kvsdir_t dir, const char *key);
+
 
 #endif /* !HAVE_KVS_H */
 

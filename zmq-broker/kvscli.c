@@ -720,141 +720,6 @@ char *kvsdir_key_at (kvsdir_t dir, const char *name)
     return key;
 }
 
-int kvsdir_get (kvsdir_t dir, const char *name, json_object **valp)
-{
-    int rc;
-
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_get (dir->handle, name, valp);
-    kvs_popd (dir->handle);
-
-    return rc;
-}
-
-int kvsdir_get_dir (kvsdir_t dir, kvsdir_t *dirp, const char *fmt, ...)
-{
-    int rc;
-    char *name;
-    va_list ap;
-
-    va_start (ap, fmt);
-    if (vasprintf (&name, fmt, ap) < 0)
-        oom ();
-    va_end (ap);
-
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_get_dir (dir->handle, dirp, "%s", name);
-    kvs_popd (dir->handle);
-
-    if (name)
-        free (name);
-    return rc;
-}
-
-int kvsdir_get_symlink (kvsdir_t dir, const char *name, char **valp)
-{
-    int rc;
-
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_get_symlink (dir->handle, name, valp);
-    kvs_popd (dir->handle);
-
-    return rc;
-}
-
-int kvsdir_get_string (kvsdir_t dir, const char *name, char **valp)
-{
-    json_object *o;
-    const char *s;
-    int rc = -1;
-
-    if (kvsdir_get (dir, name, &o) < 0)
-        goto done;
-    if (json_object_get_type (o) != json_type_string) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (valp) {
-        s = json_object_get_string (o);
-        *valp = xstrdup (s);
-    }
-    rc = 0;
-done:
-    return rc;
-}
-
-int kvsdir_get_int (kvsdir_t dir, const char *name, int *valp)
-{
-    json_object *o;
-    int rc = -1;
-
-    if (kvsdir_get (dir, name, &o) < 0)
-        goto done;
-    if (json_object_get_type (o) != json_type_int) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (valp)
-        *valp = json_object_get_int (o);
-    rc = 0;
-done:
-    return rc;
-}
-
-int kvsdir_get_int64 (kvsdir_t dir, const char *name, int64_t *valp)
-{
-    json_object *o;
-    int rc = -1;
-
-    if (kvsdir_get (dir, name, &o) < 0)
-        goto done;
-    if (json_object_get_type (o) != json_type_int) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (valp)
-        *valp = json_object_get_int64 (o);
-    rc = 0;
-done:
-    return rc;
-}
-
-int kvsdir_get_double (kvsdir_t dir, const char *name, double *valp)
-{
-    json_object *o;
-    int rc = -1;
-
-    if (kvsdir_get (dir, name, &o) < 0)
-        goto done;
-    if (json_object_get_type (o) != json_type_double) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (valp)
-        *valp = json_object_get_double (o);
-    rc = 0;
-done:
-    return rc;
-}
-
-int kvsdir_get_boolean (kvsdir_t dir, const char *name, bool *valp)
-{
-    json_object *o;
-    int rc = -1;
-
-    if (kvsdir_get (dir, name, &o) < 0)
-        goto done;
-    if (json_object_get_type (o) != json_type_boolean) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (valp)
-        *valp = json_object_get_boolean (o);
-    rc = 0;
-done:
-    return rc;
-}
-
 int kvs_put (void *h, const char *key, json_object *val)
 {
     json_object *request = util_json_object_new_object ();
@@ -885,17 +750,6 @@ done:
 }
 
 
-int kvsdir_put (kvsdir_t dir, const char *name, json_object *val)
-{
-    int rc;
-
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_put (dir->handle, name, val);
-    kvs_popd (dir->handle);
-
-    return (rc);
-}
-
 int kvs_put_string (void *h, const char *key, const char *val)
 {
     json_object *o = NULL;
@@ -910,17 +764,6 @@ done:
     if (o)
         json_object_put (o);
     return rc;
-}
-
-int kvsdir_put_string (kvsdir_t dir, const char *name, const char *val)
-{
-    int rc;
-
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_put_string (dir->handle, name, val);
-    kvs_popd (dir->handle);
-
-    return (rc);
 }
 
 int kvs_put_int (void *h, const char *key, int val)
@@ -939,17 +782,6 @@ done:
     return rc;
 }
 
-int kvsdir_put_int (kvsdir_t dir, const char *name, int val)
-{
-    int rc;
-
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_put_int (dir->handle, name, val);
-    kvs_popd (dir->handle);
-
-    return (rc);
-}
-
 int kvs_put_int64 (void *h, const char *key, int64_t val)
 {
     json_object *o;
@@ -964,17 +796,6 @@ done:
     if (o)
         json_object_put (o);
     return rc;
-}
-
-int kvsdir_put_int64 (kvsdir_t dir, const char *name, int64_t val)
-{
-    int rc;
-
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_put_int64 (dir->handle, name, val);
-    kvs_popd (dir->handle);
-
-    return (rc);
 }
 
 int kvs_put_double (void *h, const char *key, double val)
@@ -993,17 +814,6 @@ done:
     return rc;
 }
 
-int kvsdir_put_double (kvsdir_t dir, const char *name, double val)
-{
-    int rc;
-
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_put_double (dir->handle, name, val);
-    kvs_popd (dir->handle);
-
-    return (rc);
-}
-
 int kvs_put_boolean (void *h, const char *key, bool val)
 {
     json_object *o;
@@ -1020,32 +830,10 @@ done:
     return rc;
 }
 
-int kvsdir_put_boolean (kvsdir_t dir, const char *name, bool val)
-{
-    int rc;
-
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_put_boolean (dir->handle, name, val);
-    kvs_popd (dir->handle);
-
-    return (rc);
-}
-
 
 int kvs_unlink (void *h, const char *key)
 {
     return kvs_put (h, key, NULL);
-}
-
-int kvsdir_unlink (kvsdir_t dir, const char *name)
-{
-    int rc;
-
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_unlink (dir->handle, name);
-    kvs_popd (dir->handle);
-
-    return (rc);
 }
 
 int kvs_symlink (void *h, const char *key, const char *target)
@@ -1076,17 +864,6 @@ done:
     return ret;
 }
 
-int kvsdir_symlink (kvsdir_t dir, const char *name, const char *target)
-{
-    int rc;
-
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_symlink (dir->handle, name, target);
-    kvs_popd (dir->handle);
-
-    return (rc);
-}
-
 int kvs_mkdir (void *h, const char *key)
 {
     json_object *request = util_json_object_new_object ();
@@ -1113,17 +890,6 @@ done:
     if (reply)
         json_object_put (reply); 
     return ret;
-}
-
-int kvsdir_mkdir (kvsdir_t dir, const char *name)
-{
-    int rc;
-
-    kvs_pushd (dir->handle, dir->key);
-    rc = kvs_mkdir (dir->handle, name);
-    kvs_popd (dir->handle);
-
-    return (rc);
 }
 
 /* helper for cmb_kvs_commit, cmb_kvs_fence */
@@ -1320,6 +1086,206 @@ void kvs_barrierfun_set (KVSBarrierF *fun)
 void kvs_getctxfun_set (KVSGetCtxF *fun)
 {
     kvs_config.getctx = fun;
+}
+
+/**
+ ** kvsdir_t convenience functions
+ **/
+
+int kvsdir_get (kvsdir_t dir, const char *name, json_object **valp)
+{
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_get (dir->handle, name, valp);
+    kvs_popd (dir->handle);
+
+    return rc;
+}
+
+int kvsdir_get_dir (kvsdir_t dir, kvsdir_t *dirp, const char *fmt, ...)
+{
+    int rc;
+    char *name;
+    va_list ap;
+
+    va_start (ap, fmt);
+    if (vasprintf (&name, fmt, ap) < 0)
+        oom ();
+    va_end (ap);
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_get_dir (dir->handle, dirp, "%s", name);
+    kvs_popd (dir->handle);
+
+    if (name)
+        free (name);
+    return rc;
+}
+
+int kvsdir_get_symlink (kvsdir_t dir, const char *name, char **valp)
+{
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_get_symlink (dir->handle, name, valp);
+    kvs_popd (dir->handle);
+
+    return rc;
+}
+
+int kvsdir_get_string (kvsdir_t dir, const char *name, char **valp)
+{
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_get_string (dir->handle, name, valp);
+    kvs_popd (dir->handle);
+
+    return rc;
+}
+
+int kvsdir_get_int (kvsdir_t dir, const char *name, int *valp)
+{
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_get_int (dir->handle, name, valp);
+    kvs_popd (dir->handle);
+
+    return rc;
+}
+
+int kvsdir_get_int64 (kvsdir_t dir, const char *name, int64_t *valp)
+{
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_get_int64 (dir->handle, name, valp);
+    kvs_popd (dir->handle);
+
+    return rc;
+}
+
+int kvsdir_get_double (kvsdir_t dir, const char *name, double *valp)
+{
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_get_double (dir->handle, name, valp);
+    kvs_popd (dir->handle);
+
+    return rc;
+}
+
+int kvsdir_get_boolean (kvsdir_t dir, const char *name, bool *valp)
+{
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_get_boolean (dir->handle, name, valp);
+    kvs_popd (dir->handle);
+
+    return rc;
+}
+
+int kvsdir_put (kvsdir_t dir, const char *name, json_object *val)
+{
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_put (dir->handle, name, val);
+    kvs_popd (dir->handle);
+
+    return (rc);
+}
+
+int kvsdir_put_string (kvsdir_t dir, const char *name, const char *val)
+{
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_put_string (dir->handle, name, val);
+    kvs_popd (dir->handle);
+
+    return (rc);
+}
+
+int kvsdir_put_int (kvsdir_t dir, const char *name, int val)
+{
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_put_int (dir->handle, name, val);
+    kvs_popd (dir->handle);
+
+    return (rc);
+}
+
+int kvsdir_put_int64 (kvsdir_t dir, const char *name, int64_t val)
+{
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_put_int64 (dir->handle, name, val);
+    kvs_popd (dir->handle);
+
+    return (rc);
+}
+
+int kvsdir_put_double (kvsdir_t dir, const char *name, double val)
+{
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_put_double (dir->handle, name, val);
+    kvs_popd (dir->handle);
+
+    return (rc);
+}
+
+int kvsdir_put_boolean (kvsdir_t dir, const char *name, bool val)
+{
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_put_boolean (dir->handle, name, val);
+    kvs_popd (dir->handle);
+
+    return (rc);
+}
+
+int kvsdir_mkdir (kvsdir_t dir, const char *name)
+{
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_mkdir (dir->handle, name);
+    kvs_popd (dir->handle);
+
+    return (rc);
+}
+
+int kvsdir_symlink (kvsdir_t dir, const char *name, const char *target)
+{
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_symlink (dir->handle, name, target);
+    kvs_popd (dir->handle);
+
+    return (rc);
+}
+
+int kvsdir_unlink (kvsdir_t dir, const char *name)
+{
+    int rc;
+
+    kvs_pushd (dir->handle, dir->key);
+    rc = kvs_unlink (dir->handle, name);
+    kvs_popd (dir->handle);
+
+    return (rc);
 }
 
 /*
