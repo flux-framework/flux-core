@@ -30,25 +30,20 @@
 
 static void _store_hosts (plugin_ctx_t *p)
 {
-    char host[MAXHOSTNAMELEN];
-
     char *key;
     long cores = sysconf(_SC_NPROCESSORS_ONLN);
     long pagesize = sysconf(_SC_PAGE_SIZE);
     long pages = sysconf(_SC_PHYS_PAGES);
     long memMB = pages * pagesize / 1024 / 1024;
 
-    if (gethostname(host, sizeof(host)) < 0) {
-	err ("resrc: gethostname failed");
-    }
-    if ((asprintf (&key, "resrc.node.%s.cores", host) < 0) ||
+    if ((asprintf (&key, "resrc.rank.%d.cores", p->conf->rank) < 0) ||
 	kvs_put_int64 (p, key, cores)) {
-	err ("resrc: kvs_put_int64 %s %lu failed", host, cores);
+	err ("resrc: kvs_put_int64 %d %lu failed", p->conf->rank, cores);
     }
     free (key);
-    if ((asprintf (&key, "resrc.node.%s.mem", host) < 0) ||
+    if ((asprintf (&key, "resrc.rank.%d.mem", p->conf->rank) < 0) ||
 	kvs_put_int64 (p, key, memMB)) {
-	err ("resrc: kvs_put_int64 %s %lu failed", host, memMB);
+	err ("resrc: kvs_put_int64 %d %lu failed", p->conf->rank, memMB);
     }
     free (key);
     kvs_commit(p);
