@@ -295,29 +295,34 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         free (arg);
 }
 
-static void set_config (const char *key, kvsdir_t dir, void *arg, int errnum)
+static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)
 {
     plugin_ctx_t *p = arg;
     ctx_t *ctx = p->ctx;
     int val;
     json_object *topo, *down = NULL;
+    char *key;
 
     if (errnum > 0) {
+        err ("live: %s", path);
+        goto invalid;
+    }
+
+    key = kvsdir_key_at (dir, "missed-trigger-allow");    
+    if (kvs_get_int (p, key, &val) < 0) {
         err ("live: %s", key);
         goto invalid;
     }
-    if (kvsdir_get_int (dir, "missed-trigger-allow", &val) < 0) {
-        err ("live: %s.missed-trigger-allow", key);
-        goto invalid;
-    }
     if (val < 2 || val > 100) {
-        msg ("live: %s.missed-trigger-allow must be >= 2, <= 100", key);
+        msg ("live: %s must be >= 2, <= 100", key);
         goto invalid;
     }
     ctx->conf.live_missed_trigger_allow = val; 
+    free (key);
 
-    if (kvsdir_get (dir, "topology", &topo) < 0) {
-        err ("live: %s.topology", key);
+    key = kvsdir_key_at (dir, "topology");    
+    if (kvs_get (p, key, &topo) < 0) {
+        err ("live: %s", key);
         goto invalid;
     }
     if (ctx->conf.topology)
@@ -325,9 +330,11 @@ static void set_config (const char *key, kvsdir_t dir, void *arg, int errnum)
     json_object_get (topo);
     ctx->conf.topology = topo;
     _child_sync_with_topology (p);
+    free (key);
 
-    if (kvsdir_get (dir, "down", &down) < 0 && errno != ENOENT) {
-        err ("live: %s.down", key);
+    key = kvsdir_key_at (dir, "down");    
+    if (kvs_get (p, key, &down) < 0 && errno != ENOENT) {
+        err ("live: %s", key);
         goto invalid;
     }
     if (ctx->conf.live_down) {
@@ -338,14 +345,16 @@ static void set_config (const char *key, kvsdir_t dir, void *arg, int errnum)
         json_object_get (down);
         ctx->conf.live_down = down;
     }
+    free (key);
+
     if (ctx->disabled) {
-        msg ("live: %s values OK, liveness monitoring resumed", key);
+        msg ("live: %s values OK, liveness monitoring resumed", path);
         ctx->disabled = false;
     }
     return;
 invalid:
     if (!ctx->disabled) {
-        msg ("live: %s values invalid, liveness monitoring suspended", key);
+        msg ("live: %s values invalid, liveness monitoring suspended", path);
         ctx->disabled = true;
     }
 }

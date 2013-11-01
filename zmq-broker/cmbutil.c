@@ -516,6 +516,7 @@ static void dump_kvs_dir (cmb_t c, const char *path)
         free (key);
     }
     kvsitr_destroy (itr);
+    kvsdir_destroy (dir);
 }
 
 static void watch (const char *key, json_object *val, void *arg, int errnum)

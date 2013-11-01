@@ -124,34 +124,39 @@ void tkvs_put (cmb_t c, char *key, char *val)
     json_object_put (o);
 }
 
-void tkvs_dump_dir (kvsdir_t dir, bool ropt)
+void tkvs_dump_dir (cmb_t c, const char *path, bool ropt)
 {
-    kvsitr_t itr = kvsitr_create (dir);
+    kvsitr_t itr;
+    kvsdir_t dir;
     const char *name;
     char *key;
 
+    if (kvs_get_dir (c, &dir, "%s", path) < 0)
+        err_exit ("kvs_get_dir %s", path);
+
+    itr = kvsitr_create (dir);
     while ((name = kvsitr_next (itr))) {
         key = kvsdir_key_at (dir, name);
-        if (kvsdir_isdir (dir, name)) {
-            if (ropt) {
-                kvsdir_t ndir;
-                if (kvsdir_get_dir (dir, &ndir, "%s", name) < 0)
-                    err_exit ("kvsdir_get_dir %s", key);
-                tkvs_dump_dir (ndir, ropt); 
-                kvsdir_destroy (ndir);
-            } else
-                printf ("%s{%s}\n", key, "dir");
-        } else  {
-            printf ("%s{%s}\n", key,
-                    kvsdir_issymlink (dir, name) ? "symlink" : "value");
+        if (kvsdir_issymlink (dir, name)) {
+            printf ("%s{symlink}\n", key);
+        } else if (kvsdir_isdir (dir, name)) {
+            if (ropt)
+                tkvs_dump_dir (c, key, ropt); 
+            else
+                printf ("%s{dir}\n", key);
+        } else {
+            printf ("%s{value}\n", key);
         }
+        free (key);
     }
     kvsitr_destroy (itr);
+    kvsdir_destroy (dir);
 }
 
-void tkvs_dump_all (kvsdir_t dir, bool ropt)
+void tkvs_dump_all (cmb_t c, const char *path, bool ropt)
 {
-    kvsitr_t itr = kvsitr_create (dir);
+    kvsitr_t itr;
+    kvsdir_t dir;
     const char *name;
     char *key;
     char *s;
@@ -161,61 +166,45 @@ void tkvs_dump_all (kvsdir_t dir, bool ropt)
     bool b;
     json_object *o;
 
+    if (kvs_get_dir (c, &dir, "%s", path) < 0)
+        err_exit ("kvs_get_dir %s", path);
+
+    itr = kvsitr_create (dir);
     while ((name = kvsitr_next (itr))) {
         key = kvsdir_key_at (dir, name);
         if (kvsdir_issymlink (dir, name)) {
-            if (kvsdir_get_symlink (dir, name, &s) < 0)
-                err_exit ("kvsdir_get_symlink %s", key);
+            if (kvs_get_symlink (c, key, &s) < 0)
+                err_exit ("kvs_get_symlink %s", key);
             printf ("%s -> %s\n", key, s);
             free (s);
         } else if (kvsdir_isdir (dir, name)) {
-            if (ropt) {
-                kvsdir_t ndir;
-                if (kvsdir_get_dir (dir, &ndir, "%s", name) < 0)
-                    err_exit ("kvsdir_get_dir %s", key);
-                tkvs_dump_all (ndir, ropt); 
-                kvsdir_destroy (ndir);
-            } else
+            if (ropt)
+                tkvs_dump_all (c, key, ropt);
+            else
                 printf ("%s{%s}\n", key, "dir");
-        } else if (kvsdir_get_string (dir, name, &s) == 0) {
+        } else if (kvs_get_string (c, key, &s) == 0) {
             printf ("%s = %s\n", key, s);
             free (s);
-        } else if (kvsdir_get_int (dir, name, &i) == 0) {
+        } else if (kvs_get_int (c, key, &i) == 0) {
             printf ("%s = %d\n", key, i);
-        } else if (kvsdir_get_int64 (dir, name, &I) == 0) {
+        } else if (kvs_get_int64 (c, key, &I) == 0) {
             printf ("%s = %lld\n", key, (long long int)i);
-        } else if (kvsdir_get_double (dir, name, &n) == 0) {
+        } else if (kvs_get_double (c, key, &n) == 0) {
             printf ("%s = %lf\n", key, n);
-        } else if (kvsdir_get_boolean (dir, name, &b) == 0) {
+        } else if (kvs_get_boolean (c, key, &b) == 0) {
             printf ("%s = %s\n", key, b ? "true" : "false");
         } else {
-            if (kvsdir_get (dir, name, &o) < 0)
-                err_exit ("kvsdir_get %s", key);
+            if (kvs_get (c, key, &o) < 0)
+                err_exit ("kvs_get %s", key);
             printf ("%s = %s\n", key, json_object_to_json_string (o));
             json_object_put (o);
         }
         free (key);
     }
     kvsitr_destroy (itr);
+    kvsdir_destroy (dir);
 }
 
-void tkvs_get_dir (cmb_t c, char *key, bool ropt, bool all)
-{
-    kvsdir_t dir;
-
-    if (kvs_get_dir (c, &dir, "%s", key) < 0) {
-        if (errno == ENOENT)
-            printf ("null\n");
-        else
-            err_exit ("kvs_get %s", key);
-    } else {
-        if (all)
-            tkvs_dump_all (dir, ropt);
-        else 
-            tkvs_dump_dir (dir, ropt);
-        kvsdir_destroy (dir);
-    }
-}
 
 void tkvs_get_symlink (cmb_t c, char *key)
 {
@@ -393,14 +382,14 @@ int main (int argc, char *argv[])
         tkvs_put_boolean (c, key, !strcmp (val, "false") ? false : true);
 
     else if (!strcmp (op, "get_dir") && key)
-        tkvs_get_dir (c, key, false, false);
+        tkvs_dump_dir (c, key, false);
     else if (!strcmp (op, "get_dir_r") && key)
-        tkvs_get_dir (c, key, true, false);
+        tkvs_dump_dir (c, key, true);
 
     else if (!strcmp (op, "get_all") && key)
-        tkvs_get_dir (c, key, false, true);
+        tkvs_dump_all (c, key, false);
     else if (!strcmp (op, "get_all_r") && key)
-        tkvs_get_dir (c, key, true, true);
+        tkvs_dump_all (c, key, true);
 
     else if (!strcmp (op, "get_symlink") && key)
         tkvs_get_symlink (c, key);

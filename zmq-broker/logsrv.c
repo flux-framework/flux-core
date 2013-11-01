@@ -468,49 +468,59 @@ static void _timeout (plugin_ctx_t *p)
     plugin_timeout_clear (p);
 }
 
-static void set_config (const char *key, kvsdir_t dir, void *arg, int errnum)
+static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)
 {
     plugin_ctx_t *p = arg;
     ctx_t *ctx = p->ctx;
-    char *s;
+    char *s, *key;
     int val;
 
     if (errnum > 0) {
-        err ("log: %s", key);
+        err ("log: %s", path);
         goto invalid;
     }
-    if (kvsdir_get_int (dir, "reduction-timeout-msec", &val) < 0) {
-        err ("log: %s.reduction-timeout-msec", key);
+
+    key = kvsdir_key_at (dir, "reduction-timeout-msec");
+    if (kvs_get_int (p, key, &val) < 0) {
+        err ("log: %s", key);
         goto invalid; 
     }
     if ((ctx->log_reduction_timeout_msec = val) < 0) {
-        msg ("log: %s.reduction-timeout-msec must be >= 0", key);
+        msg ("log: %s must be >= 0", key);
         goto invalid; 
     }
-    if (kvsdir_get_int (dir, "circular-buffer-entries", &val) < 0) {
-        err ("log: %s.circular-buffer-entries", key);
+    free (key);
+
+    key = kvsdir_key_at (dir, "circular-buffer-entries");
+    if (kvs_get_int (p, key, &val) < 0) {
+        err ("log: %s", key);
         goto invalid;
     }
     if (!_resize_cirbuf (p, val)) {
-        msg ("log: %s.circular-buffer-entries must be > 0", key);
+        msg ("log: %s must be > 0", key);
         goto invalid;
     }
-    if (kvsdir_get_string (dir, "persist-level", &s) < 0) {
-        err ("log: %s.persist-level", key);
+    free (key);
+
+    key = kvsdir_key_at (dir, "persist-level");
+    if (kvs_get_string (p, key, &s) < 0) {
+        err ("log: %s", key);
         goto invalid;
     }
     if ((ctx->log_persist_level = log_strtolevel (s)) < 0) {
-        msg ("log: %s.persist-level invalid level string", key);
+        msg ("log: %s invalid level string", key);
         goto invalid;
     }
+    free (key);
+
     if (ctx->disabled) {
-        msg ("log: %s values OK, logging resumed", key);
+        msg ("log: %s values OK, logging resumed", path);
         ctx->disabled = false;
     }
     return;
 invalid:
     if (!ctx->disabled) {
-        msg ("log: %s values invalid, logging suspended", key);
+        msg ("log: %s values invalid, logging suspended", path);
         ctx->disabled = true;
     }
 }
