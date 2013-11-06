@@ -3,6 +3,7 @@
     kvsdir_*;
     kvsitr_*;
     kvs_*;
+    flux_*;
     local: *;
 };
 

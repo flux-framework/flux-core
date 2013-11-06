@@ -150,7 +150,8 @@ static void _barrier_enter (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
             plugin_log (p, LOG_ERR,
                         "abort %s due to double entry by client %s",
                         name, sender);
-            plugin_send_event (p, "event.barrier.abort.%s", b->name);
+            if (flux_event_send (p, "event.barrier.abort.%s", b->name) < 0)
+                err_exit ("%s: flux_event_send", __FUNCTION__);
             goto done;
         }
     }
@@ -159,9 +160,10 @@ static void _barrier_enter (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
      * o/w set timer to pass count upstream and zero it here.
      */
     b->count += count;
-    if (b->count == b->nprocs)
-        plugin_send_event (p, "event.barrier.exit.%s", b->name);
-    else if (!plugin_treeroot (p) && !plugin_timeout_isset (p))
+    if (b->count == b->nprocs) {
+        if (flux_event_send (p, "event.barrier.exit.%s", b->name) < 0)
+            err_exit ("%s: flux_event_send", __FUNCTION__);
+    } else if (!plugin_treeroot (p) && !plugin_timeout_isset (p))
         plugin_timeout_set (p, barrier_reduction_timeout_msec);
 done:
     if (o)
@@ -185,7 +187,8 @@ static int _disconnect (const char *key, void *item, void *arg)
         plugin_log (b->p, LOG_ERR,
                     "abort %s due to premature disconnect by client %s",
                     b->name, sender);
-        plugin_send_event (b->p, "event.barrier.abort.%s", b->name);
+        if (flux_event_send (b->p, "event.barrier.abort.%s", b->name) < 0)
+            err_exit ("%s: flux_event_send", __FUNCTION__);
     }
     return 0;
 }

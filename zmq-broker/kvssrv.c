@@ -1411,7 +1411,8 @@ static void event_kvs_setroot_send (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
     char *rootref = encode_rootref (ctx->rootseq, ctx->rootdir);
-    plugin_send_event (p, "event.kvs.setroot.%s", rootref);
+    if (flux_event_send (p, "event.kvs.setroot.%s", rootref) < 0)
+        err_exit ("flux_event_send");
     free (rootref);
 }
 
@@ -1552,7 +1553,7 @@ static void kvs_init (plugin_ctx_t *p)
     } else {
         int seq;
         href_t href;
-        json_object *rep = plugin_request (p, NULL, "kvs.getroot");
+        json_object *rep = flux_rpc (p, NULL, "kvs.getroot");
         const char *rootref = json_object_get_string (rep);
 
         if (!decode_rootref (rootref, &seq, href))

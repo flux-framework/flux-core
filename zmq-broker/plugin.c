@@ -133,21 +133,21 @@ void plugin_send_event_raw (plugin_ctx_t *p, zmsg_t **zmsg)
     p->stats.event_send_count++;
 }
 
-void plugin_send_event (plugin_ctx_t *p, const char *fmt, ...)
+int flux_event_send (void *h, const char *fmt, ...)
 {
+    plugin_ctx_t *p = (plugin_ctx_t *)h;
     va_list ap;
     zmsg_t *zmsg;
     char *tag;
-    int n;
 
     va_start (ap, fmt);
-    n = vasprintf (&tag, fmt, ap);
+    if (vasprintf (&tag, fmt, ap) < 0)
+        oom ();
     va_end (ap);
-    if (n < 0)
-        err_exit ("%s: vasprintf", __FUNCTION__);
     zmsg = cmb_msg_encode (tag, NULL);
     free (tag);
     plugin_send_event_raw (p, &zmsg);
+    return 0;
 }
 
 static void plugin_send_vrequest (plugin_ctx_t *p, json_object *o,
@@ -222,14 +222,14 @@ void plugin_send_request (plugin_ctx_t *p, json_object *o, const char *fmt, ...)
     va_end (ap);
 }
 
-json_object *plugin_request (plugin_ctx_t *p, json_object *o,
-                             const char *fmt, ...)
+json_object *flux_rpc (void *h, json_object *request, const char *fmt, ...)
 {
+    plugin_ctx_t *p = (plugin_ctx_t *)h;
     va_list ap;
     json_object *reply;
 
     va_start (ap, fmt);
-    plugin_send_vrequest (p, o, fmt, ap);
+    plugin_send_vrequest (p, request, fmt, ap);
     va_end (ap);
 
     va_start (ap, fmt);
@@ -237,6 +237,18 @@ json_object *plugin_request (plugin_ctx_t *p, json_object *o,
     va_end (ap);
 
     return reply;
+}
+
+int flux_rank (void *h)
+{
+    plugin_ctx_t *p = (plugin_ctx_t *)h;
+    return p->conf->rank;
+}
+
+int flux_size (void *h)
+{
+    plugin_ctx_t *p = (plugin_ctx_t *)h;
+    return p->conf->size;
 }
 
 void plugin_send_response (plugin_ctx_t *p, zmsg_t **req, json_object *o)
@@ -603,7 +615,6 @@ void plugin_init (conf_t *conf, server_t *srv)
 {
     srv->plugins = zhash_new ();
 
-    kvs_reqfun_set ((KVSReqF *)plugin_request);
     kvs_barrierfun_set (NULL); /* kvs_fence not used in plugin context as yet */
     kvs_getctxfun_set ((KVSGetCtxF *)_get_kvs_ctx);
 

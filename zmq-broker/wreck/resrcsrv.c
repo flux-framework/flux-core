@@ -36,14 +36,14 @@ static void _store_hosts (plugin_ctx_t *p)
     long pages = sysconf(_SC_PHYS_PAGES);
     long memMB = pages * pagesize / 1024 / 1024;
 
-    if ((asprintf (&key, "resrc.rank.%d.cores", p->conf->rank) < 0) ||
+    if ((asprintf (&key, "resrc.rank.%d.cores", flux_rank (p)) < 0) ||
 	kvs_put_int64 (p, key, cores)) {
-	err ("resrc: kvs_put_int64 %d %lu failed", p->conf->rank, cores);
+	err ("resrc: kvs_put_int64 %d %lu failed", flux_rank (p), cores);
     }
     free (key);
-    if ((asprintf (&key, "resrc.rank.%d.mem", p->conf->rank) < 0) ||
+    if ((asprintf (&key, "resrc.rank.%d.mem", flux_rank (p)) < 0) ||
 	kvs_put_int64 (p, key, memMB)) {
-	err ("resrc: kvs_put_int64 %d %lu failed", p->conf->rank, memMB);
+	err ("resrc: kvs_put_int64 %d %lu failed", flux_rank (p), memMB);
     }
     free (key);
     kvs_commit(p);

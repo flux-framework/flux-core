@@ -199,11 +199,12 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
             zsocket_set_unsubscribe (p->zs_evin, name);
         }
     } else if (cmb_msg_match_substr (zmsg, "api.event.send.", &name)) {
-        plugin_send_event (p, "%s", name);
+        if (flux_event_send (p, "%s", name) < 0)
+            err_exit ("flux_event_send");
     } else if (cmb_msg_match (zmsg, "api.session.info.query")) {
         json_object *o = util_json_object_new_object ();
-        util_json_object_add_int (o, "rank", p->conf->rank);
-        util_json_object_add_int (o, "size", p->conf->size);
+        util_json_object_add_int (o, "rank", flux_rank (p));
+        util_json_object_add_int (o, "size", flux_size (p));
         if (cmb_msg_replace_json (zmsg, o) == 0)
             (void)zmsg_send_fd (c->fd, &zmsg);
         json_object_put (o);

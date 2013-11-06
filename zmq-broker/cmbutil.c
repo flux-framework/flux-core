@@ -231,8 +231,8 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'e': { /* --event name */
-                if (cmb_event_send (c, optarg) < 0)
-                    err_exit ("cmb_event_send");
+                if (flux_event_send (c, "%s", optarg) < 0)
+                    err_exit ("flux_event_send");
                 break;
             }
             case 'k': { /* --kvs-put key=val */
@@ -440,7 +440,7 @@ int main (int argc, char *argv[])
                                     JSON_C_TO_STRING_PRETTY));
                 json_object_put (o);
                 free (s);
-                msg ("rank=%d size=%d", cmb_rank (c), cmb_size (c));
+                msg ("rank=%d size=%d", flux_rank (c), flux_size (c));
                 break;
             }
             default:

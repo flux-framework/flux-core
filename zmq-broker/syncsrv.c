@@ -32,7 +32,8 @@ static bool disabled = false;
 
 static void _timeout (plugin_ctx_t *p)
 {
-    plugin_send_event (p, "event.sched.trigger.%d", ++epoch);
+    if (flux_event_send (p, "event.sched.trigger.%d", ++epoch) < 0)
+        err_exit ("flux_event_send");
 }
 
 static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)

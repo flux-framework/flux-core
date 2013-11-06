@@ -3,7 +3,6 @@
 typedef struct kvsctx_struct *kvsctx_t;
 typedef struct kvsdir_struct *kvsdir_t;
 
-typedef json_object *(KVSReqF(void *h, json_object *req, const char *fmt, ...));
 typedef int (KVSBarrierF(void *h, const char *name, int nprocs));
 typedef kvsctx_t (KVSGetCtxF(void *h));
 
@@ -140,10 +139,9 @@ int kvs_wait_version (void *h, int version);
 /* These are called internally by plugin.c and apicli.c and
  * are part of the KVS internal implementation.  Do not use.
  */
-void kvs_reqfun_set (KVSReqF *fun);
 void kvs_barrierfun_set (KVSBarrierF *fun);
 void kvs_getctxfun_set (KVSGetCtxF *fun);
-void kvs_watch_response (void *h, zmsg_t **zmsg);
+void kvs_watch_response (void *h, zmsg_t **zmsg); /* ok you can use this one */
 kvsctx_t kvs_ctx_create (void *h);
 void kvs_ctx_destroy (kvsctx_t ctx);
 

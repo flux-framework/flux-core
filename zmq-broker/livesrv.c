@@ -112,7 +112,8 @@ static void _age_children (plugin_ctx_t *p)
                 plugin_log (p, LOG_ALERT,
                     "event.live.down.%d: last seen epoch=%d, current epoch=%d",
                     cp->rank, cp->epoch, ctx->epoch);
-                plugin_send_event (p, "event.live.down.%d", cp->rank);
+                if (flux_event_send (p, "event.live.down.%d", cp->rank) < 0)
+                    err_exit ("%s: flux_event_send", __FUNCTION__);
             }
         }
     }
@@ -122,7 +123,7 @@ static void _age_children (plugin_ctx_t *p)
 /* Topology is 2-dim array of integers where topology[rank] = [children].
  * Example: binary tree of 8 nodes, topology = [[1,2],[3,4],[5,6],[7]].
  * 0 parent of 1,2; 1 parent of 3,4; 2 parent of 5,6; 3 is parent of 7.
- * This function returns children of p->conf->rank in an int array,
+ * This function returns children of my rank in an int array,
  * which the caller must free if non-NULL.
  */
 static void _get_children_from_topology (plugin_ctx_t *p, int **iap, int *lenp)
@@ -132,7 +133,7 @@ static void _get_children_from_topology (plugin_ctx_t *p, int **iap, int *lenp)
     int *ia = NULL;
     int rank, i, tlen, len = 0;
 
-    if ((o = json_object_array_get_idx (ctx->conf.topology, p->conf->rank))
+    if ((o = json_object_array_get_idx (ctx->conf.topology, flux_rank (p)))
                             && json_object_get_type (o) == json_type_array
                             && (tlen = json_object_array_length (o)) > 0) {
         ia = xzmalloc (sizeof (int) * tlen);
@@ -140,7 +141,7 @@ static void _get_children_from_topology (plugin_ctx_t *p, int **iap, int *lenp)
             if ((no = json_object_array_get_idx (o, i))
                             && json_object_get_type (no) == json_type_int
                             && (rank = json_object_get_int (no)) > 0
-                            && rank < p->conf->size) {
+                            && rank < flux_size (p)) {
                 ia[len++] = rank;
             }
         }
@@ -187,7 +188,7 @@ static void _send_live_hello (plugin_ctx_t *p, int epoch)
     json_object *o = util_json_object_new_object ();
 
     util_json_object_add_int (o, "epoch", epoch);
-    plugin_send_request (p, o, "live.hello.%d", p->conf->rank);
+    plugin_send_request (p, o, "live.hello.%d", flux_rank (p));
     json_object_put (o);
 }
 
@@ -201,7 +202,7 @@ static void _recv_live_hello (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     int epoch;
     child_t *cp;
 
-    if (rank < 0 || rank >= p->conf->size)
+    if (rank < 0 || rank >= flux_size (p))
         goto done;
     if (!(cp = _child_find_by_rank (p, rank)))
         goto done;
@@ -223,7 +224,8 @@ static void _recv_live_hello (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
                 msg ("received live.hello from %d epoch=%d current epoch=%d",
                      rank, epoch, ctx->epoch);
             plugin_log (p, LOG_ALERT, "event.live.up.%d", rank);
-            plugin_send_event (p, "event.live.up.%d", rank);
+            if (flux_event_send (p, "event.live.up.%d", rank) < 0)
+                err_exit ("%s: flux_event_send", __FUNCTION__);
         }
     }
 done:
@@ -238,7 +240,7 @@ static void _recv_event_live (plugin_ctx_t *p, bool alive, int rank)
     int i, len = 0;
 
     assert (plugin_treeroot (p));
-    if (rank < 0 || rank > p->conf->size) {
+    if (rank < 0 || rank > flux_size (p)) {
         msg ("%s: received message for bogus rank %d", __FUNCTION__, rank);
         goto done;
     }

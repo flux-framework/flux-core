@@ -21,8 +21,10 @@
 
 #include "log.h"
 #include "zmsg.h"
-#include "cmb.h"
 #include "util.h"
+#include "comms.h"
+
+#include "kvs.h"
 
 struct kvsctx_struct {
     void *handle;
@@ -55,12 +57,10 @@ typedef struct {
 } kvs_watcher_t;
 
 struct kvs_config_struct {
-    KVSReqF *request;
     KVSBarrierF *barrier;
     KVSGetCtxF *getctx;
 };
 static struct kvs_config_struct kvs_config = {
-    .request = NULL,
     .barrier = NULL,
     .getctx = NULL,
 };
@@ -248,8 +248,7 @@ int kvs_get (void *h, const char *key, json_object **valp)
     int ret = -1;
 
     json_object_object_add (request, path, NULL);
-    assert (kvs_config.request != NULL);
-    reply = kvs_config.request (h, request, "kvs.get");
+    reply = flux_rpc (h, request, "kvs.get");
     if (!reply)
         goto done;
     if (!(val = json_object_object_get (reply, path))) {
@@ -288,8 +287,7 @@ int kvs_get_dir (void *h, kvsdir_t *dirp, const char *fmt, ...)
 
     util_json_object_add_boolean (request, ".flag_directory", true);
     json_object_object_add (request, path, NULL);
-    assert (kvs_config.request != NULL);
-    reply = kvs_config.request (h, request, "kvs.get");
+    reply = flux_rpc (h, request, "kvs.get");
     if (!reply)
         goto done;
     if (!(val = json_object_object_get (reply, path))) {
@@ -322,8 +320,7 @@ int kvs_get_symlink (void *h, const char *key, char **valp)
 
     util_json_object_add_boolean (request, ".flag_readlink", true);
     json_object_object_add (request, path, NULL);
-    assert (kvs_config.request != NULL);
-    reply = kvs_config.request (h, request, "kvs.get");
+    reply = flux_rpc (h, request, "kvs.get");
     if (!reply)
         goto done;
     if (!(val = json_object_object_get (reply, path))) {
@@ -570,8 +567,7 @@ static int send_kvs_watch (void *h, const char *key, json_object **valp)
 
     json_object_object_add (request, key, NULL);
     util_json_object_add_boolean (request, ".flag_first", true);
-    assert (kvs_config.request != NULL);
-    reply = kvs_config.request (h, request, "kvs.watch");
+    reply = flux_rpc (h, request, "kvs.watch");
     if (!reply)
         goto done;
     if ((val = json_object_object_get (reply, key)))
@@ -598,8 +594,7 @@ int kvs_watch_once (void *h, const char *key, json_object **valp)
 
     json_object_object_add (request, key, *valp);
     util_json_object_add_boolean (request, ".flag_once", true);
-    assert (kvs_config.request != NULL);
-    reply = kvs_config.request (h, request, "kvs.watch");
+    reply = flux_rpc (h, request, "kvs.watch");
     if (!reply)
         goto done;
     if ((val = json_object_object_get (reply, key)))
@@ -641,8 +636,7 @@ static int send_kvs_watch_dir (void *h, const char *key, json_object **valp)
     util_json_object_add_boolean (request, ".flag_first", true);
     util_json_object_add_boolean (request, ".flag_directory", true);
     json_object_object_add (request, key, NULL);
-    assert (kvs_config.request != NULL);
-    reply = kvs_config.request (h, request, "kvs.watch");
+    reply = flux_rpc (h, request, "kvs.watch");
     if (!reply)
         goto done;
     if ((val = json_object_object_get (reply, key)))
@@ -799,8 +793,7 @@ int kvs_put (void *h, const char *key, json_object *val)
     if (val)
         json_object_get (val);
     json_object_object_add (request, path, val);
-    assert (kvs_config.request != NULL);
-    reply = kvs_config.request (h, request, "kvs.put");
+    reply = flux_rpc (h, request, "kvs.put");
     if (!reply && errno > 0)
         goto done;
     if (reply) {
@@ -914,8 +907,7 @@ int kvs_symlink (void *h, const char *key, const char *target)
   
     util_json_object_add_boolean (request, ".flag_symlink", true);
     util_json_object_add_string (request, path, target);
-    assert (kvs_config.request != NULL);
-    reply = kvs_config.request (h, request, "kvs.put");
+    reply = flux_rpc (h, request, "kvs.put");
     if (!reply && errno > 0)
         goto done;
     if (reply) {
@@ -942,8 +934,7 @@ int kvs_mkdir (void *h, const char *key)
 
     util_json_object_add_boolean (request, ".flag_mkdir", true);
     json_object_object_add (request, path, NULL); 
-    assert (kvs_config.request != NULL);
-    reply = kvs_config.request (h, request, "kvs.put");
+    reply = flux_rpc (h, request, "kvs.put");
     if (!reply && errno > 0)
         goto done;
     if (reply) {
@@ -972,8 +963,7 @@ static int send_kvs_flush (void *h)
     json_object *reply = NULL;
     int ret = -1;
    
-    assert (kvs_config.request != NULL);
-    reply = kvs_config.request (h, request, "kvs.flush");
+    reply = flux_rpc (h, request, "kvs.flush");
     if (!reply && errno > 0)
         goto done;
     if (reply) {
@@ -1000,8 +990,7 @@ static int send_kvs_commit (void *h, const char *name)
     if (!name)
         uuid = uuid_generate_str ();
     util_json_object_add_string (request, "name", name ? name : uuid); 
-    assert (kvs_config.request != NULL);
-    reply = kvs_config.request (h, request, "kvs.commit");
+    reply = flux_rpc (h, request, "kvs.commit");
     if (!reply)
         goto done;
     ret = 0;
@@ -1066,8 +1055,7 @@ int kvs_dropcache (void *h)
     json_object *reply = NULL;
     int ret = -1;
  
-    assert (kvs_config.request != NULL);
-    reply = kvs_config.request (h, request, "kvs.clean");
+    reply = flux_rpc (h, request, "kvs.clean");
     if (!reply && errno > 0)
         goto done;
     if (reply) { 
@@ -1108,11 +1096,6 @@ void kvs_ctx_destroy (kvsctx_t ctx)
     zlist_destroy (&ctx->dirstack);
     free (ctx->cwd);
     free (ctx);
-}
-
-void kvs_reqfun_set (KVSReqF *fun)
-{
-    kvs_config.request = fun;
 }
 
 void kvs_barrierfun_set (KVSBarrierF *fun)

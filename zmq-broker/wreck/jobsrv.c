@@ -24,7 +24,7 @@ zlist_t * kvs_jobid_list (plugin_ctx_t *p)
 
     json_object_object_add (request, "lwj.id-list", NULL);
 
-    reply = plugin_request (p, request, "kvs.get.dir");
+    reply = flux_rpc (p, request, "kvs.get.dir");
     if (!reply) {
         err ("kvs_job_list: plugin request failed!");
         goto done;
@@ -120,7 +120,7 @@ static unsigned long lwj_next_id (plugin_ctx_t *p)
         ret = increment_jobid (p);
     else {
         json_object *na = json_object_new_object ();
-        json_object *o = plugin_request (p, na, "job.next-id");
+        json_object *o = flux_rpc (p, na, "job.next-id");
         if (util_json_object_get_int64 (o, "id", (int64_t *) &ret) < 0) {
             err ("lwj_next_id: Bad object!");
             ret = 0;

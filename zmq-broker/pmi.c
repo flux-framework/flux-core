@@ -185,7 +185,7 @@ int PMI_Init( int *spawned )
         goto fail;
     }
     cmb_log_set_facility (ctx->cctx, "PMI");
-    ctx->cmb_rank = cmb_rank (ctx->cctx);
+    ctx->cmb_rank = flux_rank (ctx->cctx);
     trace_simple (PMI_TRACE_INIT);
     *spawned = ctx->spawned;
     return PMI_SUCCESS;

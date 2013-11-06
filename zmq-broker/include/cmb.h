@@ -6,6 +6,7 @@
 #include <czmq.h>
 #include "cmb_socket.h"
 #include "kvs.h"
+#include "comms.h"
 
 typedef struct cmb_struct *cmb_t;
 
@@ -28,11 +29,6 @@ int cmb_recv_message (cmb_t c, char **tagp, json_object **op, int nb);
 /*  Receive raw zmsg from cmb handle [c]
  */
 zmsg_t *cmb_recv_zmsg (cmb_t c, int nb);
-
-/* Send request, receive matching reply.
- * Discard any messages received that don't match the request.
- */
-json_object *cmb_request (cmb_t c, json_object *req, const char *fmt, ...);
 
 /* Ping a particular plugin.
  */
@@ -58,7 +54,6 @@ int cmb_snoop_one (cmb_t c);
 int cmb_event_subscribe (cmb_t c, char *subscription);
 int cmb_event_unsubscribe (cmb_t c, char *subscription);
 char *cmb_event_recv (cmb_t c);
-int cmb_event_send (cmb_t c, char *event);
 
 /* Execute the named barrier across the session.
  * The barrier can be any size.
@@ -95,11 +90,6 @@ char *cmb_log_recv (cmb_t c, int *lp, char **fp, int *cp,
 int cmb_route_add (cmb_t c, char *dst, char *gw);
 int cmb_route_del (cmb_t c, char *dst, char *gw);
 char *cmb_route_query (cmb_t c);
-
-/* Return cmb rank and size.
- */
-int cmb_rank (cmb_t c);
-int cmb_size (cmb_t c);
 
 #endif /* !HAVE_CMB_H */
 

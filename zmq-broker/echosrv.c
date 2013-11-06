@@ -44,7 +44,7 @@ void handle_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
             if (!(z = zmsg_dup (*zmsg)))
                 oom ();
 
-            respo = json_echo (s, p->conf->rank);
+            respo = json_echo (s, flux_rank (p));
             plugin_send_response (p, &z, respo);
             json_object_put (respo);
         }

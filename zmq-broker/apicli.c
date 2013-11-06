@@ -154,8 +154,9 @@ error:
     return -1;
 }
 
-json_object *cmb_request (cmb_t c, json_object *request, const char *fmt, ...)
+json_object *flux_rpc (void *h, json_object *request, const char *fmt, ...)
 {
+    cmb_t c = (cmb_t)h;
     va_list ap;
     json_object *reply = NULL;
     int rc;
@@ -328,9 +329,20 @@ char *cmb_event_recv (cmb_t c)
     return tag;
 }
 
-int cmb_event_send (cmb_t c, char *event)
+int flux_event_send (void *h, const char *fmt, ...)
 {
-    return _send_message (c, NULL, "api.event.send.%s", event);
+    cmb_t c = (cmb_t)h;
+    va_list ap;
+    int rc;
+    char *event;
+
+    va_start (ap, fmt);
+    if (vasprintf (&event, fmt, ap) < 0)
+        oom ();
+    va_end (ap);
+    rc = _send_message (c, NULL, "api.event.send.%s", event);
+    free (event);
+    return rc;
 }
 
 int cmb_barrier (cmb_t c, const char *name, int nprocs)
@@ -533,13 +545,15 @@ error:
     
 }
 
-int cmb_rank (cmb_t c)
+int flux_rank (void *h)
 {
+    cmb_t c = (cmb_t)h;
     return c->rank;
 }
 
-int cmb_size (cmb_t c)
+int flux_size (void *h)
 {
+    cmb_t c = (cmb_t)h;
     return c->size;
 }
 
@@ -606,7 +620,6 @@ cmb_t cmb_init_full (const char *path, int flags)
         goto error;
 
     c->kvs_ctx = kvs_ctx_create (c);
-    kvs_reqfun_set ((KVSReqF *)cmb_request);
     kvs_barrierfun_set ((KVSBarrierF *)cmb_barrier);
     kvs_getctxfun_set ((KVSGetCtxF *)get_kvs_ctx);
     return c;

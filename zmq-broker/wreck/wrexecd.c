@@ -248,8 +248,8 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
                    ctx->id, strerror (errno));
     }
 
-    ctx->nodeid = cmb_rank (ctx->cmb);
-    ctx->nnodes = cmb_size (ctx->cmb);
+    ctx->nodeid = flux_rank (ctx->cmb);
+    ctx->nnodes = flux_size (ctx->cmb);
     log_msg (ctx, "initializing from CMB: rank=%d", ctx->nodeid);
     if (prog_ctx_load_lwj_info (ctx, ctx->id) < 0)
         log_fatal (ctx, 1, "Failed to load lwj info");
@@ -287,7 +287,7 @@ int update_job_state (struct prog_ctx *ctx, const char *state)
     json_object *to =
         json_object_new_string (ctime_iso8601_now (buf, sizeof (buf)));
 
-    assert (cmb_rank (ctx->cmb) == 0);
+    assert (flux_rank (ctx->cmb) == 0);
 
     log_msg (ctx, "updating job state to %s", state);
 
@@ -317,11 +317,11 @@ int rexec_state_change (struct prog_ctx *ctx, const char *state)
         asprintf (&name, "lwj.%lu.shutdown", ctx->id);
 
     /* Wait for all wrexecds to finish and commit */
-    if (kvs_fence (ctx->cmb, name, cmb_size (ctx->cmb)) < 0)
+    if (kvs_fence (ctx->cmb, name, flux_size (ctx->cmb)) < 0)
         log_fatal (ctx, 1, "kvs_fence");
 
     /* Rank 0 updates job state */
-    if ((cmb_rank (ctx->cmb) == 0) && update_job_state (ctx, state) < 0)
+    if ((flux_rank (ctx->cmb) == 0) && update_job_state (ctx, state) < 0)
         log_fatal (ctx, 1, "update_job_state");
 
     return (0);
@@ -703,7 +703,7 @@ int main (int ac, char **av)
     cmb_log_set_facility (ctx->cmb, "wrexecd");
     prog_ctx_zmq_socket_setup (ctx);
 
-    if ((cmb_rank (ctx->cmb) == 0) && update_job_state (ctx, "starting") < 0)
+    if ((flux_rank (ctx->cmb) == 0) && update_job_state (ctx, "starting") < 0)
         log_fatal (ctx, 1, "update_job_state");
 
     if ((parent_fd = optparse_get_int (p, "parent-fd")) >= 0)
