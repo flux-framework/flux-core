@@ -21,6 +21,22 @@ int flux_event_send (void *h, const char *fmt, ...);
  */
 json_object *flux_rpc (void *h, json_object *in, const char *fmt, ...);
 
+/* Group RPC.
+ */
+void flux_rpc_create (void *h, const char *nodelist, flux_rpc_t *fp);
+void flux_rpc_destroy (flux_rpc_t f);
+
+void flux_rpc_put_inarg (flux_rpc_t f, json_object *val);
+int flux_rpc_get_inarg (flux_rpc_t f, json_object **valp);
+
+void flux_rpc_put_outarg (flux_rpc_t f, char *node, json_object *val);
+int flux_rpc_get_outarg (flux_rpc_t f, char *node, json_object **valp);
+
+const char *flux_rpc_next_outarg (flux_rpc_t f); /* returns node */
+void flux_rpc_rewind_outarg (flux_rpc_t f);
+
+int flux_mrpc (flux_rpc_t f, const char *fmt, ...);
+
 #endif /* !defined(COMMS_H) */
 
 /*
