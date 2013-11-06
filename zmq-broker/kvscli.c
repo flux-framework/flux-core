@@ -589,7 +589,7 @@ done:
 /* *valp is IN/OUT parameter.
  * IN *val is freed internally.  Caller must free OUT *val.
  */
-static int send_kvs_watch_once (void *h, const char *key, json_object **valp)
+int kvs_watch_once (void *h, const char *key, json_object **valp)
 {
     json_object *val = NULL;
     json_object *request = util_json_object_new_object ();
@@ -614,14 +614,14 @@ done:
     return ret;
 }
 
-static int kvs_watch_once_int (void *h, const char *key, int *valp)
+int kvs_watch_once_int (void *h, const char *key, int *valp)
 {
     json_object *val;
     int rc = -1;
 
     if (!(val = json_object_new_int (*valp)))
         oom ();
-    if (send_kvs_watch_once (h, key, &val) < 0)
+    if (kvs_watch_once (h, key, &val) < 0)
         goto done;
     rc = 0;
     *valp = val ? json_object_get_int (val) : 0;
