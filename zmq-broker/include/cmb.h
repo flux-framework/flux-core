@@ -6,7 +6,7 @@
 #include <czmq.h>
 #include "cmb_socket.h"
 #include "kvs.h"
-#include "comms.h"
+#include "flux.h"
 
 typedef struct cmb_struct *cmb_t;
 
@@ -54,11 +54,6 @@ int cmb_snoop_one (cmb_t c);
 int cmb_event_subscribe (cmb_t c, char *subscription);
 int cmb_event_unsubscribe (cmb_t c, char *subscription);
 char *cmb_event_recv (cmb_t c);
-
-/* Execute the named barrier across the session.
- * The barrier can be any size.
- */
-int cmb_barrier (cmb_t c, const char *name, int nprocs);
 
 /* Log messages.
  * 'fac' is like syslog facility, only an arbitrary string.

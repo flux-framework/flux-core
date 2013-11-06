@@ -345,36 +345,6 @@ int flux_event_send (void *h, const char *fmt, ...)
     return rc;
 }
 
-int cmb_barrier (cmb_t c, const char *name, int nprocs)
-{
-    json_object *o = util_json_object_new_object ();
-    int count = 1;
-    int errnum = 0;
-
-    /* send request */
-    util_json_object_add_int (o, "count", count);
-    util_json_object_add_int (o, "nprocs", nprocs);
-    if (_send_message (c, o, "barrier.enter.%s", name) < 0)
-        goto error;
-    json_object_put (o);
-    o = NULL;
-
-    /* receive response */
-    if (_recv_message (c, NULL, &o, false) < 0)
-        goto error;
-    if (util_json_object_get_int (o, "errnum", &errnum) < 0)
-        goto error;
-    if (errnum != 0) {
-        errno = errnum;
-        goto error;
-    }
-    return 0;
-error:
-    if (o)
-        json_object_put (o);
-    return -1;
-}
-
 void cmb_log_set_facility (cmb_t c, const char *facility)
 {
     if (c->log_facility)
@@ -620,7 +590,6 @@ cmb_t cmb_init_full (const char *path, int flags)
         goto error;
 
     c->kvs_ctx = kvs_ctx_create (c);
-    kvs_barrierfun_set ((KVSBarrierF *)cmb_barrier);
     kvs_getctxfun_set ((KVSGetCtxF *)get_kvs_ctx);
     return c;
 error:

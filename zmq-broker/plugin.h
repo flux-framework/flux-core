@@ -2,7 +2,7 @@
 #define PLUGIN_H
 
 #include "kvs.h"
-#include "comms.h"
+#include "flux.h"
 
 typedef struct plugin_struct *plugin_t;
 

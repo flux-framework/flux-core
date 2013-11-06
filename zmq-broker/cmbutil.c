@@ -185,8 +185,8 @@ int main (int argc, char *argv[])
             case 'b': { /* --barrier NAME */
                 struct timeval t, t1, t2;
                 xgettimeofday (&t1, NULL);
-                if (cmb_barrier (c, optarg, nprocs) < 0)
-                    err_exit ("cmb_barrier");
+                if (flux_barrier (c, optarg, nprocs) < 0)
+                    err_exit ("flux_barrier");
                 xgettimeofday (&t2, NULL);
                 timersub (&t2, &t1, &t);
                 msg ("barrier time=%0.3f ms",
@@ -198,8 +198,8 @@ int main (int argc, char *argv[])
                 char name[16];
                 for (i = 0; i < n; i++) {
                     snprintf (name, sizeof (name), "%d", i);
-                    if (cmb_barrier (c, name, nprocs) < 0)
-                        err_exit ("cmb_barrier %s", name);
+                    if (flux_barrier (c, name, nprocs) < 0)
+                        err_exit ("flux_barrier %s", name);
                 }
                 break;
             }

@@ -22,7 +22,7 @@
 #include "log.h"
 #include "zmsg.h"
 #include "util.h"
-#include "comms.h"
+#include "flux.h"
 
 #include "kvs.h"
 
@@ -57,11 +57,9 @@ typedef struct {
 } kvs_watcher_t;
 
 struct kvs_config_struct {
-    KVSBarrierF *barrier;
     KVSGetCtxF *getctx;
 };
 static struct kvs_config_struct kvs_config = {
-    .barrier = NULL,
     .getctx = NULL,
 };
 
@@ -1015,13 +1013,9 @@ int kvs_commit (void *h)
 
 int kvs_fence (void *h, const char *name, int nprocs)
 {
-    if (!kvs_config.barrier) {
-        errno = EINVAL;
-        return -1;
-    }
     if (send_kvs_flush (h) < 0)
         return -1;
-    if (kvs_config.barrier (h, name, nprocs) < 0)
+    if (flux_barrier (h, name, nprocs) < 0)
         return -1;
     if (send_kvs_commit (h, name) < 0)
         return -1;
@@ -1096,11 +1090,6 @@ void kvs_ctx_destroy (kvsctx_t ctx)
     zlist_destroy (&ctx->dirstack);
     free (ctx->cwd);
     free (ctx);
-}
-
-void kvs_barrierfun_set (KVSBarrierF *fun)
-{
-    kvs_config.barrier = fun;
 }
 
 void kvs_getctxfun_set (KVSGetCtxF *fun)

@@ -25,11 +25,11 @@ LDADD_SRV = -pthread $(LDADD_CLI)
 
 PLUGIN_OBJS = apisrv.o syncsrv.o kvssrv.o barriersrv.o livesrv.o \
 	logsrv.o echosrv.o wreck/jobsrv.o wreck/resrcsrv.o wreck/wrexecsrv.o
-CMBD_OBJS = cmbd.o route.o plugin.o kvscli.o comms.o $(PLUGIN_OBJS)
+CMBD_OBJS = cmbd.o route.o plugin.o kvscli.o barriercli.o mrpc.o $(PLUGIN_OBJS)
 
 CMBUTIL_OBJS = cmbutil.o
 LIBPMI_OBJS = pmi.o
-LIBCMB_OBJS = apicli.o kvscli.o comms.o
+LIBCMB_OBJS = apicli.o kvscli.o barriercli.o mrpc.o
 
 LIBPMI = $(LIBDIR)/libpmi.so.0
 LIBCMB = $(LIBDIR)/libcmb.so.0

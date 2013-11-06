@@ -615,7 +615,6 @@ void plugin_init (conf_t *conf, server_t *srv)
 {
     srv->plugins = zhash_new ();
 
-    kvs_barrierfun_set (NULL); /* kvs_fence not used in plugin context as yet */
     kvs_getctxfun_set ((KVSGetCtxF *)_get_kvs_ctx);
 
     if (mapstr (conf->plugins, (mapstrfun_t)_plugin_create, srv, conf) < 0)

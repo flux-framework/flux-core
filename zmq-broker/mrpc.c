@@ -1,4 +1,5 @@
-/* comms.c - group rpc, etc */ 
+/* mrpc.c - group rpc implementatino */ 
+
 /* Group RPC event format:
  *    mrpc.<uuid>.<nodelist>.<kvs_version>.[<plugin>[.<method>...]]
  * Group RPC kvs directory:
@@ -30,9 +31,9 @@
 #include "util.h"
 #include "kvs.h"
 
-#include "comms.h"
+#include "flux.h"
 
-struct flux_rpc_struct {
+struct flux_mrpc_struct {
     char *path;
     hostlist_t nodelist;
     int nprocs;
@@ -41,19 +42,19 @@ struct flux_rpc_struct {
     kvsitr_t itr;
 };
 
-void flux_rpc_create (void *h, const char *nodelist, flux_rpc_t *fp)
+flux_mrpc_t flux_mrpc_create (void *h, const char *nodelist)
 {
-    flux_rpc_t f = xzmalloc (sizeof (*f));
+    flux_mrpc_t f = xzmalloc (sizeof (*f));
 
     if (asprintf (&f->path, "mrpc.%s", uuid_generate_str ()) < 0)
         oom ();
     f->nodelist = hostlist_create (nodelist);
     f->h = h;
 
-    *fp = f;
+    return f;
 }
 
-void flux_rpc_destroy (flux_rpc_t f)
+void flux_mrpc_destroy (flux_mrpc_t f)
 {
     if (kvs_unlink (f->h, f->path) < 0)
         err ("kvs_unlink %s", f->path);
@@ -67,7 +68,7 @@ void flux_rpc_destroy (flux_rpc_t f)
     free (f);
 }
 
-void flux_rpc_put_inarg (flux_rpc_t f, json_object *val)
+void flux_mrpc_put_inarg (flux_mrpc_t f, json_object *val)
 {
     char *key;
 
@@ -77,7 +78,7 @@ void flux_rpc_put_inarg (flux_rpc_t f, json_object *val)
     free (key);
 }
 
-int flux_rpc_get_inarg (flux_rpc_t f, json_object **valp)
+int flux_mrpc_get_inarg (flux_mrpc_t f, json_object **valp)
 {
     char *key;
     int rc = -1;
@@ -92,7 +93,7 @@ done:
     return rc;
 }
 
-void flux_rpc_put_outarg (flux_rpc_t f, char *node, json_object *val)
+void flux_mrpc_put_outarg (flux_mrpc_t f, char *node, json_object *val)
 {
     char *key;
 
@@ -102,7 +103,7 @@ void flux_rpc_put_outarg (flux_rpc_t f, char *node, json_object *val)
     free (key);
 }
 
-int flux_rpc_get_outarg (flux_rpc_t f, char *node, json_object **valp)
+int flux_mrpc_get_outarg (flux_mrpc_t f, char *node, json_object **valp)
 {
     char *key;
     int rc = -1;
@@ -117,7 +118,7 @@ done:
     return rc;
 }
 
-const char *flux_rpc_next_outarg (flux_rpc_t f)
+const char *flux_mrpc_next_outarg (flux_mrpc_t f)
 {
     const char *next = NULL;
 
@@ -136,7 +137,7 @@ done:
     return next;
 }
 
-void flux_rpc_rewind_outarg (flux_rpc_t f)
+void flux_mrpc_rewind_outarg (flux_mrpc_t f)
 {
     if (f->itr)
         kvsitr_rewind (f->itr);
@@ -155,7 +156,7 @@ static char *nodelist_string (hostlist_t hl)
     return s;
 }
 
-int flux_mrpc (flux_rpc_t f, const char *fmt, ...)
+int flux_mrpc (flux_mrpc_t f, const char *fmt, ...)
 {
     int rc = -1;
     int version;
