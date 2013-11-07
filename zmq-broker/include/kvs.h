@@ -54,10 +54,12 @@ int kvs_watch_boolean (void *h, const char *key, KVSSetBooleanF *set,void *arg);
  * You should first read the current value, then pass it into the
  * kvs_watch_once call, which will return with a new value when it changes.
  * (The original value is freed inside the function; the new one must
- * be freed by the caller).
+ * be freed by the caller).  *valp may be passed in with a NULL value.
+ * If the key is not set, ENOENT is returned without affecting *valp.
  * FIXME: add more types.
  */
 int kvs_watch_once (void *h, const char *key, json_object **valp);
+int kvs_watch_once_dir (void *h, kvsdir_t *dirp, const char *fmt, ...);
 int kvs_watch_once_int (void *h, const char *key, int *valp);
 
 /* kvs_put() and kvs_put_string() both make copies of the value argument

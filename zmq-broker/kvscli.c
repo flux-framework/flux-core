@@ -551,20 +551,26 @@ static kvs_watcher_t *add_watcher (void *h, const char *key, watch_type_t type,
     return wp;
 }
 
-/* If key is unset, return success with a NULL val, not failure with
- * errno = ENOENT.  We do that in the dispatch code.
- * We expect to receive a reply here, not to have it intercepted
- * and routed to kvs_watch_response().
+/* The "callback" idiom vs the "once" idiom handle a NULL value differently,
+ * so don't convert to ENOENT here.  NULL is a valid value for *valp.
  */
-static int send_kvs_watch (void *h, const char *key, json_object **valp)
+static int send_kvs_watch (void *h, const char *key, json_object **valp,
+                           bool once, bool directory)
 {
     json_object *val = NULL;
     json_object *request = util_json_object_new_object ();
     json_object *reply = NULL;
     int ret = -1;
 
-    json_object_object_add (request, key, NULL);
-    util_json_object_add_boolean (request, ".flag_first", true);
+    if (once) {
+        json_object_object_add (request, key, *valp);
+        util_json_object_add_boolean (request, ".flag_once", true);
+    } else {
+        json_object_object_add (request, key, NULL);
+        util_json_object_add_boolean (request, ".flag_first", true);
+    }
+    if (directory)
+        util_json_object_add_boolean (request, ".flag_directory", true);
     reply = flux_rpc (h, request, "kvs.watch");
     if (!reply)
         goto done;
@@ -581,30 +587,21 @@ done:
 }
 
 /* *valp is IN/OUT parameter.
- * IN *val is freed internally.  Caller must free OUT *val.
+ * IN *valp is freed internally.  Caller must free OUT *val.
  */
 int kvs_watch_once (void *h, const char *key, json_object **valp)
 {
-    json_object *val = NULL;
-    json_object *request = util_json_object_new_object ();
-    json_object *reply = NULL;
-    int ret = -1;
+    int rc = -1;
 
-    json_object_object_add (request, key, *valp);
-    util_json_object_add_boolean (request, ".flag_once", true);
-    reply = flux_rpc (h, request, "kvs.watch");
-    if (!reply)
+    if (send_kvs_watch (h, key, valp, true, false) < 0)
         goto done;
-    if ((val = json_object_object_get (reply, key)))
-        json_object_get (val);
-    *valp = val;
-    ret = 0;
+    if (*valp == NULL) {
+        errno = ENOENT;
+        goto done;
+    }
+    rc = 0;
 done:
-    if (request)
-        json_object_put (request);
-    if (reply)
-        json_object_put (reply);
-    return ret;
+    return rc;
 }
 
 int kvs_watch_once_int (void *h, const char *key, int *valp)
@@ -614,39 +611,52 @@ int kvs_watch_once_int (void *h, const char *key, int *valp)
 
     if (!(val = json_object_new_int (*valp)))
         oom ();
-    if (kvs_watch_once (h, key, &val) < 0)
+    if (send_kvs_watch (h, key, &val, true, false) < 0)
         goto done;
+    if (!val) {
+        errno = ENOENT;
+        goto done;
+    }
+    *valp = json_object_get_int (val);
     rc = 0;
-    *valp = val ? json_object_get_int (val) : 0;
 done:
     if (val)
         json_object_put (val);
     return rc;
 }
 
-static int send_kvs_watch_dir (void *h, const char *key, json_object **valp)
+int kvs_watch_once_dir (void *h, kvsdir_t *dirp, const char *fmt, ...)
 {
     json_object *val = NULL;
-    json_object *request = util_json_object_new_object ();
-    json_object *reply = NULL;
-    int ret = -1;
+    char *key;
+    va_list ap;
+    int rc = -1;
 
-    util_json_object_add_boolean (request, ".flag_first", true);
-    util_json_object_add_boolean (request, ".flag_directory", true);
-    json_object_object_add (request, key, NULL);
-    reply = flux_rpc (h, request, "kvs.watch");
-    if (!reply)
-        goto done;
-    if ((val = json_object_object_get (reply, key)))
+    va_start (ap, fmt);
+    if (vasprintf (&key, fmt, ap) < 0)
+        oom ();
+    va_end (ap);
+
+    if (*dirp) {
+        val = (*dirp)->o;
         json_object_get (val);
-    *valp = val; /* value not converted to kvsdir (do it in dispatch) */
-    ret = 0;
+    }
+    if (send_kvs_watch (h, key, &val, true, true) < 0)
+        goto done;
+    if (val == NULL) {
+        errno = ENOENT;
+        goto done;
+    }
+    if (*dirp)
+        kvsdir_destroy (*dirp);
+    *dirp = kvsdir_alloc (h, key, val);
+    rc = 0;
 done:
-    if (request)
-        json_object_put (request);
-    if (reply)
-        json_object_put (reply);
-    return ret;
+    if (val)
+        json_object_put (val);
+    if (key)
+        free (key);
+    return rc;
 }
 
 int kvs_watch (void *h, const char *key, KVSSetF *set, void *arg)
@@ -655,7 +665,7 @@ int kvs_watch (void *h, const char *key, KVSSetF *set, void *arg)
     json_object *val = NULL;
     int rc = -1;
 
-    if (send_kvs_watch (h, key, &val) < 0)
+    if (send_kvs_watch (h, key, &val, false, false) < 0)
         goto done;
     wp = add_watcher (h, key, WATCH_OBJECT, set, arg);
     dispatch_watch (h, wp, key, val);
@@ -679,7 +689,7 @@ int kvs_watch_dir (void *h, KVSSetDirF *set, void *arg, const char *fmt, ...)
         oom ();
     va_end (ap);
 
-    if (send_kvs_watch_dir (h, key, &val) < 0)
+    if (send_kvs_watch (h, key, &val, false, true) < 0)
         goto done;
     wp = add_watcher (h, key, WATCH_DIR, (KVSSetF *)set, arg);
     dispatch_watch (h, wp, key, val);
@@ -698,7 +708,7 @@ int kvs_watch_string (void *h, const char *key, KVSSetStringF *set, void *arg)
     json_object *val = NULL;
     int rc = -1;
 
-    if (send_kvs_watch (h, key, &val) < 0)
+    if (send_kvs_watch (h, key, &val, false, false) < 0)
         goto done;
     wp = add_watcher (h, key, WATCH_STRING, (KVSSetF *)set, arg);
     dispatch_watch (h, wp, key, val);
@@ -715,7 +725,7 @@ int kvs_watch_int (void *h, const char *key, KVSSetIntF *set, void *arg)
     json_object *val = NULL;
     int rc = -1;
 
-    if (send_kvs_watch (h, key, &val) < 0)
+    if (send_kvs_watch (h, key, &val, false, false) < 0)
         goto done;
     wp = add_watcher (h, key, WATCH_INT, (KVSSetF *)set, arg);
     dispatch_watch (h, wp, key, val);
@@ -732,7 +742,7 @@ int kvs_watch_int64 (void *h, const char *key, KVSSetInt64F *set, void *arg)
     json_object *val = NULL;
     int rc = -1;
 
-    if (send_kvs_watch (h, key, &val) < 0)
+    if (send_kvs_watch (h, key, &val, false, false) < 0)
         goto done;
     wp = add_watcher (h, key, WATCH_INT64, (KVSSetF *)set, arg);
     dispatch_watch (h, wp, key, val);
@@ -749,7 +759,7 @@ int kvs_watch_double (void *h, const char *key, KVSSetDoubleF *set, void *arg)
     json_object *val = NULL;
     int rc = -1;
 
-    if (send_kvs_watch (h, key, &val) < 0)
+    if (send_kvs_watch (h, key, &val, false, false) < 0)
         goto done;
     wp = add_watcher (h, key, WATCH_DOUBLE, (KVSSetF *)set, arg);
     dispatch_watch (h, wp, key, val);
@@ -766,7 +776,7 @@ int kvs_watch_boolean (void *h, const char *key, KVSSetBooleanF *set, void *arg)
     json_object *val = NULL;
     int rc = -1;
 
-    if (send_kvs_watch (h, key, &val) < 0)
+    if (send_kvs_watch (h, key, &val, false, false) < 0)
         goto done;
     wp = add_watcher (h, key, WATCH_BOOLEAN, (KVSSetF *)set, arg);
     dispatch_watch (h, wp, key, val);

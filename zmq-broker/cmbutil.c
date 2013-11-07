@@ -22,9 +22,6 @@
 static int _parse_logstr (char *s, int *lp, char **fp);
 static void dump_kvs_dir (cmb_t c, const char *path);
 
-static void watch (const char *key, json_object *val, void *arg, int errnum);
-static void watchdir (const char *key, kvsdir_t dir, void *arg, int errnum);
-
 #define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Zyl:Y:X:"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
@@ -271,28 +268,43 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'Y': { /* --kvs-watch key */
-                zmsg_t *zmsg;
+                json_object *val = NULL;
+                int rc;
 
-                if (kvs_watch (c, optarg, (KVSSetF *)watch, NULL) < 0)
-                    err_exit ("kvs_watch");
-                while ((zmsg = cmb_recv_zmsg (c, false))) {
-                    kvs_watch_response (c, &zmsg);
-                    if (zmsg)
-                        zmsg_destroy (&zmsg);
-                } 
+                rc = kvs_get (c, optarg, &val);
+                while (rc == 0 || (rc < 0 && errno == ENOENT)) {
+                    if (rc < 0) {
+                        printf ("%s: %s\n", optarg, strerror (errno));
+                        if (val)
+                            json_object_put (val);
+                        val = NULL;
+                    } else
+                        printf ("%s=%s\n", optarg,
+                                json_object_to_json_string_ext (val,
+                                JSON_C_TO_STRING_PLAIN));
+                    rc = kvs_watch_once (c, optarg, &val);
+                }
+                err_exit ("%s", optarg);
                 break;
             }
             case 'X': { /* --kvs-watch-dir key */
-                zmsg_t *zmsg;
+                kvsdir_t dir = NULL;
+                int rc;
 
-                if (kvs_watch_dir (c, (KVSSetDirF *)watchdir, c,
-                                   "%s", optarg) < 0)
-                    err_exit ("kvs_watch_dir %s", optarg);
-                while ((zmsg = cmb_recv_zmsg (c, false))) {
-                    kvs_watch_response (c, &zmsg);
-                    if (zmsg)
-                        zmsg_destroy (&zmsg);
+                rc = kvs_get_dir (c, &dir, "%s", optarg);
+                while (rc == 0 || (rc < 0 && errno == ENOENT)) {
+                    if (rc < 0) {
+                        printf ("%s: %s\n", optarg, strerror (errno));
+                        if (dir)
+                            kvsdir_destroy (dir);
+                        dir = NULL;
+                    } else {
+                        dump_kvs_dir (c, optarg);
+                        printf ("======================\n");
+                    }
+                    rc = kvs_watch_once_dir (c, &dir, "%s", optarg);
                 } 
+                err_exit ("%s", optarg);
                 break;
             }
             case 'l': { /* --kvs-list name */
@@ -525,27 +537,6 @@ static void dump_kvs_dir (cmb_t c, const char *path)
     kvsitr_destroy (itr);
     kvsdir_destroy (dir);
 }
-
-static void watch (const char *key, json_object *val, void *arg, int errnum)
-{
-    if (errnum > 0)
-        printf ("%s: %s\n", key, strerror (errnum));
-    else 
-        printf ("%s=%s\n", key,
-                json_object_to_json_string_ext (val, JSON_C_TO_STRING_PLAIN));
-}
-static void watchdir (const char *key, kvsdir_t dir, void *arg, int errnum)
-{
-    cmb_t c = (cmb_t)arg;
-
-    if (errnum > 0)
-        printf ("%s: %s\n", key, strerror (errnum));
-    else {
-        printf ("%s: ===========================\n", key);
-        dump_kvs_dir (c, key);
-    }
-}
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
