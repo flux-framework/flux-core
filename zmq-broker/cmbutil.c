@@ -374,7 +374,7 @@ int main (int argc, char *argv[])
                 Lopt = true; /* see code after getopt */
                 break;
             }
-            case 'W': {
+            case 'W': { /* --log-watch fac:lev */
                 char *src, *fac, *s;
                 struct timeval tv, start = { .tv_sec = 0 }, rel;
                 int count, lev;
@@ -402,7 +402,7 @@ int main (int argc, char *argv[])
                     err ("cmbv_log_recv");
                 break;
             }
-            case 'D': {
+            case 'D': { /* --log-dump fac:lev */
                 char *src, *fac, *s;
                 struct timeval tv, start = { .tv_sec = 0 }, rel;
                 int lev, count;

@@ -1,9 +1,11 @@
 /* mrpc.c - group rpc implementatino */ 
 
 /* Group RPC event format:
- *    mrpc.<uuid>.<nodelist>.<kvs_version>.[<plugin>[.<method>...]]
- * Group RPC kvs directory:
- *    mrpc.<uuid>
+ *    tag:  mrpc.<plugin>.<method>[.<method>]...
+ *    JSON: path="mrpc.<uuid>"
+ *          dest="nodelist"
+ *          vers=N
+ *          sender=N
  */
 
 #define _GNU_SOURCE
@@ -37,6 +39,8 @@ struct flux_mrpc_struct {
     char *path;
     hostlist_t nodelist;
     int nprocs;
+    int sender;
+    int kvs_version;
     void *h;
     kvsdir_t dir;
     kvsitr_t itr;
@@ -46,25 +50,38 @@ flux_mrpc_t flux_mrpc_create (void *h, const char *nodelist)
 {
     flux_mrpc_t f = xzmalloc (sizeof (*f));
 
+    if (!(f->nodelist = hostlist_create (nodelist))) {
+        errno = EINVAL;
+        goto error;
+    }
     if (asprintf (&f->path, "mrpc.%s", uuid_generate_str ()) < 0)
         oom ();
-    f->nodelist = hostlist_create (nodelist);
     f->h = h;
+    f->sender = flux_rank (h);
 
     return f;
+error:
+    flux_mrpc_destroy (f);
+    return NULL;
 }
 
 void flux_mrpc_destroy (flux_mrpc_t f)
 {
-    if (kvs_unlink (f->h, f->path) < 0)
-        err ("kvs_unlink %s", f->path);
-    if (kvs_commit (f->h) < 0)
-        err ("kvs_commit");
+    if (f->path) {
+#if 0
+        if (f->sender == flux_rank (f->h)) {
+            if (kvs_unlink (f->h, f->path) < 0)
+                err ("kvs_unlink %s", f->path);
+            if (kvs_commit (f->h) < 0)
+                err ("kvs_commit");
+        }
+#endif
+        free (f->path);
+    }
     if (f->dir)
         kvsdir_destroy (f->dir);
     if (f->itr)
         kvsitr_destroy (f->itr);
-    free (f->path);
     free (f);
 }
 
@@ -85,6 +102,7 @@ int flux_mrpc_get_inarg (flux_mrpc_t f, json_object **valp)
 
     if (asprintf (&key, "%s.in", f->path) < 0)
         oom ();
+    msg ("Retrieving key %s.in", f->path);
     if (kvs_get (f->h, key, valp) < 0)
         goto done;
     rc = 0;
@@ -93,22 +111,22 @@ done:
     return rc;
 }
 
-void flux_mrpc_put_outarg (flux_mrpc_t f, char *node, json_object *val)
+void flux_mrpc_put_outarg (flux_mrpc_t f, json_object *val)
 {
     char *key;
 
-    if (asprintf (&key, "%s.out-%s", f->path, node) < 0)
+    if (asprintf (&key, "%s.out-%d", f->path, flux_rank (f->h)) < 0)
         oom ();
     kvs_put (f->h, key, val);
     free (key);
 }
 
-int flux_mrpc_get_outarg (flux_mrpc_t f, char *node, json_object **valp)
+int flux_mrpc_get_outarg (flux_mrpc_t f, int nodeid, json_object **valp)
 {
     char *key;
     int rc = -1;
 
-    if (asprintf (&key, "%s.out-%s", f->path, node) < 0)
+    if (asprintf (&key, "%s.out-%d", f->path, nodeid) < 0)
         oom ();
     if (kvs_get (f->h, key, valp) < 0)
         goto done;
@@ -118,23 +136,20 @@ done:
     return rc;
 }
 
-const char *flux_mrpc_next_outarg (flux_mrpc_t f)
+int flux_mrpc_next_outarg (flux_mrpc_t f)
 {
     const char *next = NULL;
 
     if (!f->dir) {
         if (kvs_get_dir (f->h, &f->dir, "%s", f->path) < 0)
-            goto done;
+            return -1;
         f->itr = kvsitr_create (f->dir);
     }
     while ((next = kvsitr_next (f->itr))) {
-        if (!strncmp (next, "out-", 4)) {
-            next += 4;
-            break;
-        }
+        if (!strncmp (next, "out-", 4))
+            return strtoul (next + 4, NULL, 10);
     }
-done:
-    return next;
+    return -1;
 }
 
 void flux_mrpc_rewind_outarg (flux_mrpc_t f)
@@ -156,13 +171,21 @@ static char *nodelist_string (hostlist_t hl)
     return s;
 }
 
+static bool nodelist_member (hostlist_t hl, int node)
+{
+    char s[16];
+    snprintf (s, sizeof (s), "%d", node);
+    if (hostlist_find (hl, s) < 0)
+        return false;
+    return true;
+}
+
 int flux_mrpc (flux_mrpc_t f, const char *fmt, ...)
 {
     int rc = -1;
-    int version;
     char *tag = NULL, *nodelist = NULL;
     va_list ap;
-    int nprocs;
+    json_object *request = util_json_object_new_object ();
 
     va_start (ap, fmt);
     if (vasprintf (&tag, fmt, ap) < 0)
@@ -170,17 +193,21 @@ int flux_mrpc (flux_mrpc_t f, const char *fmt, ...)
     va_end (ap);
 
     hostlist_uniq (f->nodelist);
-    nprocs = hostlist_count (f->nodelist);
+    f->nprocs = hostlist_count (f->nodelist);
     nodelist = nodelist_string (f->nodelist);
+    util_json_object_add_string (request, "dest", nodelist);
 
     if (kvs_commit (f->h) < 0)
         goto done;
-    if (kvs_get_version (f->h, &version) < 0)
+    if (kvs_get_version (f->h, &f->kvs_version) < 0)
         goto done;
-    if (flux_event_send (f->h, NULL, "%s.%s.%d.%s",   
-                         f->path, nodelist, version, tag) < 0)
+    util_json_object_add_int (request, "vers", f->kvs_version);
+    util_json_object_add_int (request, "sender", f->sender);
+
+    util_json_object_add_string (request, "path", f->path);
+    if (flux_event_send (f->h, request, "mrpc.%s", tag) < 0)
         goto done;
-    if (kvs_fence (f->h, f->path, nprocs) < 0)
+    if (kvs_fence (f->h, f->path, f->nprocs + 1) < 0)
         goto done;
     rc = 0;
 done:
@@ -188,7 +215,56 @@ done:
         free (tag);
     if (nodelist)
         free (nodelist);
+    if (request)
+        json_object_put (request);
     return rc;
+}
+
+flux_mrpc_t flux_mrpc_create_fromevent (void *h, json_object *request)
+{
+    flux_mrpc_t f = xzmalloc (sizeof (*f));
+    const char *tmp;
+
+    if (util_json_object_get_string (request, "dest", &tmp) < 0) {
+        msg ("%s: dest is missing", __FUNCTION__);
+        goto error;
+    }
+    if (!(f->nodelist = hostlist_create (tmp))) {
+        msg ("%s: error creating hostlist from %s", __FUNCTION__, tmp);
+        goto error;
+    }
+    if (!nodelist_member (f->nodelist, flux_rank (h))) {
+        msg ("%s: %d not a member of %s", __FUNCTION__, flux_rank(h), tmp);
+        goto error;
+    }
+    f->nprocs = hostlist_count (f->nodelist);
+    if (util_json_object_get_string (request, "path", &tmp) < 0) {
+        msg ("%s: path is missing", __FUNCTION__);
+        goto error;
+    }
+    f->path = xstrdup (tmp);
+    if (util_json_object_get_int (request, "sender", &f->sender) < 0) {
+        msg ("%s: sender is missing", __FUNCTION__);
+        goto error;
+    }
+    if (util_json_object_get_int (request, "vers", &f->kvs_version) < 0) {
+        msg ("%s: vers is missing", __FUNCTION__);
+        goto error;
+    }
+    f->h = h;
+    if (kvs_wait_version (h, f->kvs_version) < 0) {
+        err ("%s: error waiting for kvs version %d", __FUNCTION__, f->kvs_version);
+        goto error;
+    }
+    return f;
+error:
+    flux_mrpc_destroy (f);
+    return NULL;
+}
+
+int flux_mrpc_respond (flux_mrpc_t f)
+{
+    return kvs_fence (f->h, f->path, f->nprocs + 1);
 }
 
 /*

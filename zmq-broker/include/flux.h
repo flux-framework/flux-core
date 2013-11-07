@@ -36,7 +36,19 @@ int flux_snoop_unsubscribe (void *h, const char *topic);
  */
 json_object *flux_rpc (void *h, json_object *in, const char *fmt, ...);
 
-/* Group RPC - client
+/* Group RPC
+ *
+ * Client:                          Servers:
+ *   flux_mrpc_create()               flux_event_subscribe ("mrpc...")
+ *   flux_mrpc_put_inarg()            while (true) {
+ *   flux_mrpc() ------------------->   (receive event)
+ *                                      flux_mrpc_create_fromevent()
+ *                                      flux_mrpc_get_inarg()
+ *                                      (do some work)
+ *                                      flux_mrpc_put_outarg()
+ *   (returns) <----------------------- flux_mrpc_respond()
+ * - flux_mrpc_get_outarg() ...         flux_mrpc_destroy() 
+ * - flux_mrpc_destroy()              }
  */
 flux_mrpc_t flux_mrpc_create (void *h, const char *nodelist);
 void flux_mrpc_destroy (flux_mrpc_t f);
@@ -44,17 +56,16 @@ void flux_mrpc_destroy (flux_mrpc_t f);
 void flux_mrpc_put_inarg (flux_mrpc_t f, json_object *val);
 int flux_mrpc_get_inarg (flux_mrpc_t f, json_object **valp);
 
-void flux_mrpc_put_outarg (flux_mrpc_t f, char *node, json_object *val);
-int flux_mrpc_get_outarg (flux_mrpc_t f, char *node, json_object **valp);
+void flux_mrpc_put_outarg (flux_mrpc_t f, json_object *val);
+int flux_mrpc_get_outarg (flux_mrpc_t f, int nodeid, json_object **valp);
 
-const char *flux_mrpc_next_outarg (flux_mrpc_t f); /* returns node */
+int flux_mrpc_next_outarg (flux_mrpc_t f); /* returns nodeid (-1 at end)  */
 void flux_mrpc_rewind_outarg (flux_mrpc_t f);
 
 int flux_mrpc (flux_mrpc_t f, const char *fmt, ...);
 
-/* Group RPC - server
- */
-
+flux_mrpc_t flux_mrpc_create_fromevent (void *h, json_object *request);
+int flux_mrpc_respond (flux_mrpc_t f);
 
 #endif /* !defined(FLUX_H) */
 
