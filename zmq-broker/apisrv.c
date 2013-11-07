@@ -35,8 +35,8 @@ typedef struct _client_struct {
     struct _client_struct *prev;
     plugin_ctx_t *p;
     zhash_t *disconnect_notify;
-    zhash_t *subscriptions;
-    bool snoop;
+    zhash_t *event_subscriptions;
+    zhash_t *snoop_subscriptions;
     char *uuid;
     int cfd_id;
 } client_t;
@@ -58,7 +58,9 @@ static client_t * _client_create (plugin_ctx_t *p, int fd)
     c->p = p;
     if (!(c->disconnect_notify = zhash_new ()))
         oom ();
-    if (!(c->subscriptions = zhash_new ()))
+    if (!(c->event_subscriptions = zhash_new ()))
+        oom ();
+    if (!(c->snoop_subscriptions = zhash_new ()))
         oom ();
     c->prev = NULL;
     c->next = ctx->clients;
@@ -68,13 +70,19 @@ static client_t * _client_create (plugin_ctx_t *p, int fd)
     return (c);
 }
 
-static int _unsubscribe (const char *key, void *item, void *arg)
+static int _event_unsubscribe (const char *key, void *item, void *arg)
 {
     client_t *c = arg;
-
-    /* FIXME: this assumes zmq subscriptions have use counts (verify this) */
     if (flux_event_unsubscribe (c->p, key) < 0)
         err_exit ("%s: flux_event_unsubscribe", __FUNCTION__);
+    return 0;
+}
+
+static int _snoop_unsubscribe (const char *key, void *item, void *arg)
+{
+    client_t *c = arg;
+    if (flux_snoop_unsubscribe (c->p, key) < 0)
+        err_exit ("%s: flux_snoop_unsubscribe", __FUNCTION__);
     return 0;
 }
 
@@ -109,11 +117,11 @@ static void _client_destroy (plugin_ctx_t *p, client_t *c)
     zhash_foreach (c->disconnect_notify, _notify_srv, c);
     zhash_destroy (&c->disconnect_notify);
 
-    zhash_foreach (c->subscriptions, _unsubscribe, c);
-    zhash_destroy (&c->subscriptions);
+    zhash_foreach (c->event_subscriptions, _event_unsubscribe, c);
+    zhash_destroy (&c->event_subscriptions);
 
-    if (c->snoop)
-        zsocket_set_unsubscribe (p->zs_snoop, "");
+    zhash_foreach (c->snoop_subscriptions, _snoop_unsubscribe, c);
+    zhash_destroy (&c->snoop_subscriptions);
 
     free (c->uuid);
     close (c->fd);
@@ -183,21 +191,27 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
         return -1;
     }
         
-    if (cmb_msg_match (zmsg, "api.snoop.on")) {
-        c->snoop = true;
-        zsocket_set_subscribe (p->zs_snoop, "");
-    } else if (cmb_msg_match (zmsg, "api.snoop.off")) {
-        c->snoop = false;
-        zsocket_set_unsubscribe (p->zs_snoop, "");
+    if (cmb_msg_match_substr (zmsg, "api.snoop.subscribe.", &name)) {
+        zhash_insert (c->snoop_subscriptions, name, name);
+        zhash_freefn (c->snoop_subscriptions, name, free);
+        if (flux_snoop_subscribe (p, name) < 0)
+            err_exit ("%s: flux_snoop_subscribe", __FUNCTION__);
+        name = NULL;
+    } else if (cmb_msg_match_substr (zmsg, "api.snoop.unsubscribe.", &name)) {
+        if (zhash_lookup (c->snoop_subscriptions, name)) {
+            zhash_delete (c->snoop_subscriptions, name);
+            if (flux_snoop_unsubscribe (p, name) < 0)
+                err_exit ("%s: flux_snoop_unsubscribe", __FUNCTION__);
+        }
     } else if (cmb_msg_match_substr (zmsg, "api.event.subscribe.", &name)) {
-        zhash_insert (c->subscriptions, name, name);
-        zhash_freefn (c->subscriptions, name, free);
+        zhash_insert (c->event_subscriptions, name, name);
+        zhash_freefn (c->event_subscriptions, name, free);
         if (flux_event_subscribe (p, name) < 0)
             err_exit ("%s: flux_event_subscribe", __FUNCTION__);
         name = NULL;
     } else if (cmb_msg_match_substr (zmsg, "api.event.unsubscribe.", &name)) {
-        if (zhash_lookup (c->subscriptions, name)) {
-            zhash_delete (c->subscriptions, name);
+        if (zhash_lookup (c->event_subscriptions, name)) {
+            zhash_delete (c->event_subscriptions, name);
             if (flux_event_unsubscribe (p, name) < 0)
                 err_exit ("%s: flux_event_unsubscribe", __FUNCTION__);
         }
@@ -292,7 +306,7 @@ static void _recv_event (plugin_ctx_t *p, zmsg_t **zmsg)
     for (c = ctx->clients; c != NULL; ) {
         zmsg_t *cpy;
 
-        if (zhash_foreach (c->subscriptions, _match_subscription, *zmsg)) {
+        if (zhash_foreach (c->event_subscriptions, _match_subscription, *zmsg)) {
             if (!(cpy = zmsg_dup (*zmsg)))
                 oom ();
             if (zmsg_send_fd (c->fd, &cpy) < 0)
@@ -310,7 +324,7 @@ static void _recv_snoop (plugin_ctx_t *p, zmsg_t **zmsg)
     for (c = ctx->clients; c != NULL; ) {
         zmsg_t *cpy;
 
-        if (c->snoop) {
+        if (zhash_foreach (c->snoop_subscriptions, _match_subscription, *zmsg)) {
             if (!(cpy = zmsg_dup (*zmsg)))
                 oom ();
             if (zmsg_send_fd (c->fd, &cpy) < 0)

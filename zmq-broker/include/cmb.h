@@ -40,12 +40,6 @@ int cmb_ping (cmb_t c, char *tag, int seq, int padding, char **tagp,
  */
 char *cmb_stats (cmb_t c, char *name);
 
-/* Watch traffic on the cmb sockets.
- * Packets are converted to ascii and printed on stderr.
- */
-int cmb_snoop (cmb_t c, bool enable);
-int cmb_snoop_one (cmb_t c);
-
 /* Log messages.
  * 'fac' is like syslog facility, only an arbitrary string.
  * It is suggested to use pub-sub topic string form.

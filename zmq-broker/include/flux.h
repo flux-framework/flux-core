@@ -13,19 +13,23 @@ int flux_size (void *h);
 
 /* Block until 'nprocs' processes make identical calls to flux_barrier().
  * 'name' should be unique, i.e. there should not be multiple sets of
- * processes potentially executing flux_barrier with the same name
- * concurrently!
+ * processes executing flux_barrier() with the same name concurrently!
  */
 int flux_barrier (void *h, const char *name, int nprocs);
 
-/* Send an event.  Events are strings of form
+/* Send an event.  Event tags are strings of form
  *   event.topic.[subtopic[.subsubtopic...]]
- * JSON content is optional.
+ * the JSON part can be NULL.
  */
 int flux_event_send (void *h, json_object *o, const char *fmt, ...);
-
 int flux_event_subscribe (void *h, const char *topic);
 int flux_event_unsubscribe (void *h, const char *topic);
+
+/* Enable/disable snooping on request/response messages passing
+ * through the local cmb.
+ */
+int flux_snoop_subscribe (void *h, const char *topic);
+int flux_snoop_unsubscribe (void *h, const char *topic);
 
 /* Singleton rpc call.
  *   N.B. if a specific node is desired, prepend "<nodeid>!" to tag.

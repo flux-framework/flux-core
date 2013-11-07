@@ -153,14 +153,28 @@ int flux_event_send (void *h, json_object *o, const char *fmt, ...)
 int flux_event_subscribe (void *h, const char *topic)
 {
     plugin_ctx_t *p = (plugin_ctx_t *)h;
-    zsocket_set_subscribe (p->zs_evin, (char *)topic);
+    zsocket_set_subscribe (p->zs_evin, topic ? (char *)topic : "");
     return 0;
 }
 
 int flux_event_unsubscribe (void *h, const char *topic)
 {
     plugin_ctx_t *p = (plugin_ctx_t *)h;
-    zsocket_set_unsubscribe (p->zs_evin, (char *)topic);
+    zsocket_set_unsubscribe (p->zs_evin, topic ? (char *)topic : "");
+    return 0;
+}
+
+int flux_snoop_subscribe (void *h, const char *topic)
+{
+    plugin_ctx_t *p = (plugin_ctx_t *)h;
+    zsocket_set_subscribe (p->zs_snoop, topic ? (char *)topic : "");
+    return 0;
+}
+
+int flux_snoop_unsubscribe (void *h, const char *topic)
+{
+    plugin_ctx_t *p = (plugin_ctx_t *)h;
+    zsocket_set_unsubscribe (p->zs_snoop, topic ? (char *)topic : "");
     return 0;
 }
 

@@ -17,6 +17,7 @@
 #include "cmb.h"
 #include "log.h"
 #include "util.h"
+#include "zmsg.h"
 
 static int _parse_logstr (char *s, int *lp, char **fp);
 static void dump_kvs_dir (cmb_t c, const char *path);
@@ -211,14 +212,20 @@ int main (int argc, char *argv[])
                     msg ("%s", event);
                     free (event);
                 }
+                if (flux_event_unsubscribe (c, optarg) < 0)
+                    err_exit ("flux_event_unsubscribe");
                 break;
             }
             case 'T': { /* --snoop */
-                if (cmb_snoop (c, true) < 0)
-                    err_exit ("cmb_snoop");
-                while (cmb_snoop_one (c) == 0)
-                    ;
-                /* NOTREACHED */
+                zmsg_t *zmsg;
+                if (flux_snoop_subscribe (c, "") < 0)
+                    err_exit ("flux_snoop_subscribe");
+                while ((zmsg = cmb_recv_zmsg (c, false))) {
+                    zmsg_dump_compact (zmsg);
+                    zmsg_destroy (&zmsg);
+                }
+                if (flux_snoop_unsubscribe (c, "") < 0)
+                    err_exit ("flux_snoop_unsubscribe");
                 break;
             }
             case 'S': { /* --sync */

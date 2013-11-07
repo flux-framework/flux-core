@@ -290,25 +290,18 @@ error:
     return NULL;
 }
 
-int cmb_snoop (cmb_t c, bool enable)
+int flux_snoop_subscribe (void *h, const char *sub)
 {
-    return _send_message (c, NULL, "api.snoop.%s", enable ? "on" : "off");
+    cmb_t c = (cmb_t)h;
+    return _send_message (c, NULL, "api.snoop.subscribe.%s", sub ? sub : "");
 }
 
-int cmb_snoop_one (cmb_t c)
+int flux_snoop_unsubscribe (void *h, const char *sub)
 {
-    zmsg_t *zmsg; 
-    int rc = -1;
-
-    zmsg = zmsg_recv_fd (c->fd, false); /* blocking */
-    if (zmsg) {
-        //zmsg_dump (zmsg);
-        zmsg_dump_compact (zmsg);
-        zmsg_destroy (&zmsg);
-        rc = 0;
-    }
-    return rc;
+    cmb_t c = (cmb_t)h;
+    return _send_message (c, NULL, "api.snoop.unsubscribe.%s", sub ? sub : "");
 }
+
 
 int flux_event_subscribe (void *h, const char *sub)
 {
