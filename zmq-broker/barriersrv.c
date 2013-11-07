@@ -150,7 +150,7 @@ static void _barrier_enter (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
             plugin_log (p, LOG_ERR,
                         "abort %s due to double entry by client %s",
                         name, sender);
-            if (flux_event_send (p, "event.barrier.abort.%s", b->name) < 0)
+            if (flux_event_send (p, NULL, "event.barrier.abort.%s", b->name) < 0)
                 err_exit ("%s: flux_event_send", __FUNCTION__);
             goto done;
         }
@@ -161,7 +161,7 @@ static void _barrier_enter (plugin_ctx_t *p, char *name, zmsg_t **zmsg)
      */
     b->count += count;
     if (b->count == b->nprocs) {
-        if (flux_event_send (p, "event.barrier.exit.%s", b->name) < 0)
+        if (flux_event_send (p, NULL, "event.barrier.exit.%s", b->name) < 0)
             err_exit ("%s: flux_event_send", __FUNCTION__);
     } else if (!plugin_treeroot (p) && !plugin_timeout_isset (p))
         plugin_timeout_set (p, barrier_reduction_timeout_msec);
@@ -187,7 +187,7 @@ static int _disconnect (const char *key, void *item, void *arg)
         plugin_log (b->p, LOG_ERR,
                     "abort %s due to premature disconnect by client %s",
                     b->name, sender);
-        if (flux_event_send (b->p, "event.barrier.abort.%s", b->name) < 0)
+        if (flux_event_send (b->p, NULL, "event.barrier.abort.%s", b->name) < 0)
             err_exit ("%s: flux_event_send", __FUNCTION__);
     }
     return 0;
@@ -269,13 +269,17 @@ static void _init (plugin_ctx_t *p)
     ctx_t *ctx;
 
     ctx = p->ctx = xzmalloc (sizeof (ctx_t));
-    zsocket_set_subscribe (p->zs_evin, "event.barrier.");
+    if (flux_event_subscribe (p, "event.barrier.") < 0)
+        err_exit ("%s: flux_event_subscribe", __FUNCTION__);
+
     ctx->barriers = zhash_new ();
 }
 
 static void _fini (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
+    if (flux_event_unsubscribe (p, "event.barrier.") < 0)
+        err_exit ("%s: flux_event_subscribe", __FUNCTION__);
     zhash_destroy (&ctx->barriers);
     free (ctx);
 }

@@ -46,15 +46,6 @@ char *cmb_stats (cmb_t c, char *name);
 int cmb_snoop (cmb_t c, bool enable);
 int cmb_snoop_one (cmb_t c);
 
-/* Subscribe, send, and receive events.
- * Events are strings that begin with "event.".
- * Subscriptions are substrings, e.g. the subscription "event.live"
- * matches "event.live.up" and event.live.down".
- */
-int cmb_event_subscribe (cmb_t c, char *subscription);
-int cmb_event_unsubscribe (cmb_t c, char *subscription);
-char *cmb_event_recv (cmb_t c);
-
 /* Log messages.
  * 'fac' is like syslog facility, only an arbitrary string.
  * It is suggested to use pub-sub topic string form.

@@ -310,26 +310,19 @@ int cmb_snoop_one (cmb_t c)
     return rc;
 }
 
-int cmb_event_subscribe (cmb_t c, char *sub)
+int flux_event_subscribe (void *h, const char *sub)
 {
+    cmb_t c = (cmb_t)h;
     return _send_message (c, NULL, "api.event.subscribe.%s", sub ? sub : "");
 }
 
-int cmb_event_unsubscribe (cmb_t c, char *sub)
+int flux_event_unsubscribe (void *h, const char *sub)
 {
+    cmb_t c = (cmb_t)h;
     return _send_message (c, NULL, "api.event.unsubscribe.%s", sub ? sub : "");
 }
 
-char *cmb_event_recv (cmb_t c)
-{
-    char *tag = NULL;
-
-    (void)_recv_message (c, &tag, NULL, false);
-
-    return tag;
-}
-
-int flux_event_send (void *h, const char *fmt, ...)
+int flux_event_send (void *h, json_object *o, const char *fmt, ...)
 {
     cmb_t c = (cmb_t)h;
     va_list ap;
@@ -340,7 +333,7 @@ int flux_event_send (void *h, const char *fmt, ...)
     if (vasprintf (&event, fmt, ap) < 0)
         oom ();
     va_end (ap);
-    rc = _send_message (c, NULL, "api.event.send.%s", event);
+    rc = _send_message (c, o, "api.event.send.%s", event);
     free (event);
     return rc;
 }

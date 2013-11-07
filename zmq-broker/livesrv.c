@@ -112,7 +112,7 @@ static void _age_children (plugin_ctx_t *p)
                 plugin_log (p, LOG_ALERT,
                     "event.live.down.%d: last seen epoch=%d, current epoch=%d",
                     cp->rank, cp->epoch, ctx->epoch);
-                if (flux_event_send (p, "event.live.down.%d", cp->rank) < 0)
+                if (flux_event_send (p, NULL, "event.live.down.%d", cp->rank) < 0)
                     err_exit ("%s: flux_event_send", __FUNCTION__);
             }
         }
@@ -224,7 +224,7 @@ static void _recv_live_hello (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
                 msg ("received live.hello from %d epoch=%d current epoch=%d",
                      rank, epoch, ctx->epoch);
             plugin_log (p, LOG_ALERT, "event.live.up.%d", rank);
-            if (flux_event_send (p, "event.live.up.%d", rank) < 0)
+            if (flux_event_send (p, NULL, "event.live.up.%d", rank) < 0)
                 err_exit ("%s: flux_event_send", __FUNCTION__);
         }
     }

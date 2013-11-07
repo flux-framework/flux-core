@@ -133,7 +133,7 @@ void plugin_send_event_raw (plugin_ctx_t *p, zmsg_t **zmsg)
     p->stats.event_send_count++;
 }
 
-int flux_event_send (void *h, const char *fmt, ...)
+int flux_event_send (void *h, json_object *o, const char *fmt, ...)
 {
     plugin_ctx_t *p = (plugin_ctx_t *)h;
     va_list ap;
@@ -144,9 +144,23 @@ int flux_event_send (void *h, const char *fmt, ...)
     if (vasprintf (&tag, fmt, ap) < 0)
         oom ();
     va_end (ap);
-    zmsg = cmb_msg_encode (tag, NULL);
+    zmsg = cmb_msg_encode (tag, o);
     free (tag);
     plugin_send_event_raw (p, &zmsg);
+    return 0;
+}
+
+int flux_event_subscribe (void *h, const char *topic)
+{
+    plugin_ctx_t *p = (plugin_ctx_t *)h;
+    zsocket_set_subscribe (p->zs_evin, (char *)topic);
+    return 0;
+}
+
+int flux_event_unsubscribe (void *h, const char *topic)
+{
+    plugin_ctx_t *p = (plugin_ctx_t *)h;
+    zsocket_set_unsubscribe (p->zs_evin, (char *)topic);
     return 0;
 }
 

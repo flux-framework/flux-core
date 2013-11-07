@@ -177,7 +177,7 @@ int flux_mrpc (flux_mrpc_t f, const char *fmt, ...)
         goto done;
     if (kvs_get_version (f->h, &version) < 0)
         goto done;
-    if (flux_event_send (f->h, "%s.%s.%d.%s",   
+    if (flux_event_send (f->h, NULL, "%s.%s.%d.%s",   
                          f->path, nodelist, version, tag) < 0)
         goto done;
     if (kvs_fence (f->h, f->path, nprocs) < 0)

@@ -1411,7 +1411,7 @@ static void event_kvs_setroot_send (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
     char *rootref = encode_rootref (ctx->rootseq, ctx->rootdir);
-    if (flux_event_send (p, "event.kvs.setroot.%s", rootref) < 0)
+    if (flux_event_send (p, NULL, "event.kvs.setroot.%s", rootref) < 0)
         err_exit ("flux_event_send");
     free (rootref);
 }
@@ -1526,9 +1526,12 @@ static void kvs_init (plugin_ctx_t *p)
     ctx_t *ctx;
 
     ctx = p->ctx = xzmalloc (sizeof (ctx_t));
-    if (!plugin_treeroot (p))
-        zsocket_set_subscribe (p->zs_evin, "event.kvs.setroot.");
-    zsocket_set_subscribe (p->zs_evin, "event.kvs.debug.");
+    if (!plugin_treeroot (p)) {
+        if (flux_event_subscribe (p, "event.kvs.setroot.") < 0)
+            err_exit ("%s: flux_event_subscribe", __FUNCTION__);
+    }
+    if (flux_event_subscribe (p, "event.kvs.debug.") < 0)
+        err_exit ("%s: flux_event_subscribe", __FUNCTION__);
     if (!(ctx->store = zhash_new ()))
         oom ();
     if (!(ctx->commits = zhash_new ()))
@@ -1566,6 +1569,12 @@ static void kvs_fini (plugin_ctx_t *p)
 {
     ctx_t *ctx = p->ctx;
 
+    if (!plugin_treeroot (p)) {
+        if (flux_event_unsubscribe (p, "event.kvs.setroot.") < 0)
+            err_exit ("%s: flux_event_unsubscribe", __FUNCTION__);
+    }
+    if (flux_event_unsubscribe (p, "event.kvs.debug.") < 0)
+        err_exit ("%s: flux_event_unsubscribe", __FUNCTION__);
     if (ctx->store)
         zhash_destroy (&ctx->store);
     if (ctx->commits)

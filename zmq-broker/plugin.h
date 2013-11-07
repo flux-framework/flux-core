@@ -61,8 +61,6 @@ void plugin_send_response (plugin_ctx_t *p, zmsg_t **req, json_object *o);
 void plugin_send_response_errnum (plugin_ctx_t *p, zmsg_t **req, int errnum);
 
 void plugin_send_event_raw (plugin_ctx_t *p, zmsg_t **zmsg);
-void plugin_send_event_json (plugin_ctx_t *p, json_object *o,
-                             const char *fmt, ...);
 
 void plugin_ping_respond (plugin_ctx_t *p, zmsg_t **zmsg);
 void plugin_stats_respond (plugin_ctx_t *p, zmsg_t **zmsg);

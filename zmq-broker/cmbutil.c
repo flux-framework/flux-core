@@ -205,9 +205,9 @@ int main (int argc, char *argv[])
             }
             case 's': { /* --subscribe substr */
                 char *event;
-                if (cmb_event_subscribe (c, optarg) < 0)
-                    err_exit ("cmb_event_subscribe");
-                while ((event = cmb_event_recv (c))) {
+                if (flux_event_subscribe (c, optarg) < 0)
+                    err_exit ("flux_event_subscribe");
+                while (cmb_recv_message (c, &event, NULL, false) == 0) {
                     msg ("%s", event);
                     free (event);
                 }
@@ -223,15 +223,15 @@ int main (int argc, char *argv[])
             }
             case 'S': { /* --sync */
                 char *event;
-                if (cmb_event_subscribe (c, "event.sched.trigger.") < 0)
-                    err_exit ("cmb_event_subscribe");
-                if (!(event = cmb_event_recv (c)))
-                    err_exit ("cmb_event_recv");
+                if (flux_event_subscribe (c, "event.sched.trigger.") < 0)
+                    err_exit ("flux_event_subscribe");
+                if (cmb_recv_message (c, &event, NULL, false) < 0)
+                    err_exit ("cmb_recv_message");
                 free (event);
                 break;
             }
             case 'e': { /* --event name */
-                if (flux_event_send (c, "%s", optarg) < 0)
+                if (flux_event_send (c, NULL, "%s", optarg) < 0)
                     err_exit ("flux_event_send");
                 break;
             }

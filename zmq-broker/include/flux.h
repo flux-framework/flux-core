@@ -20,15 +20,19 @@ int flux_barrier (void *h, const char *name, int nprocs);
 
 /* Send an event.  Events are strings of form
  *   event.topic.[subtopic[.subsubtopic...]]
+ * JSON content is optional.
  */
-int flux_event_send (void *h, const char *fmt, ...);
+int flux_event_send (void *h, json_object *o, const char *fmt, ...);
+
+int flux_event_subscribe (void *h, const char *topic);
+int flux_event_unsubscribe (void *h, const char *topic);
 
 /* Singleton rpc call.
  *   N.B. if a specific node is desired, prepend "<nodeid>!" to tag.
  */
 json_object *flux_rpc (void *h, json_object *in, const char *fmt, ...);
 
-/* Group RPC.
+/* Group RPC - client
  */
 flux_mrpc_t flux_mrpc_create (void *h, const char *nodelist);
 void flux_mrpc_destroy (flux_mrpc_t f);
@@ -43,6 +47,10 @@ const char *flux_mrpc_next_outarg (flux_mrpc_t f); /* returns node */
 void flux_mrpc_rewind_outarg (flux_mrpc_t f);
 
 int flux_mrpc (flux_mrpc_t f, const char *fmt, ...);
+
+/* Group RPC - server
+ */
+
 
 #endif /* !defined(FLUX_H) */
 

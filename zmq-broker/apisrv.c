@@ -73,7 +73,8 @@ static int _unsubscribe (const char *key, void *item, void *arg)
     client_t *c = arg;
 
     /* FIXME: this assumes zmq subscriptions have use counts (verify this) */
-    zsocket_set_unsubscribe (c->p->zs_evin, (char *)key);
+    if (flux_event_unsubscribe (c->p, key) < 0)
+        err_exit ("%s: flux_event_unsubscribe", __FUNCTION__);
     return 0;
 }
 
@@ -191,16 +192,23 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
     } else if (cmb_msg_match_substr (zmsg, "api.event.subscribe.", &name)) {
         zhash_insert (c->subscriptions, name, name);
         zhash_freefn (c->subscriptions, name, free);
-        zsocket_set_subscribe (p->zs_evin, name);
+        if (flux_event_subscribe (p, name) < 0)
+            err_exit ("%s: flux_event_subscribe", __FUNCTION__);
         name = NULL;
     } else if (cmb_msg_match_substr (zmsg, "api.event.unsubscribe.", &name)) {
         if (zhash_lookup (c->subscriptions, name)) {
             zhash_delete (c->subscriptions, name);
-            zsocket_set_unsubscribe (p->zs_evin, name);
+            if (flux_event_unsubscribe (p, name) < 0)
+                err_exit ("%s: flux_event_unsubscribe", __FUNCTION__);
         }
     } else if (cmb_msg_match_substr (zmsg, "api.event.send.", &name)) {
-        if (flux_event_send (p, "%s", name) < 0)
+        json_object *o;
+        if (cmb_msg_decode (zmsg, NULL, &o) < 0)
+            err_exit ("%s: cmb_msg_decode", __FUNCTION__);
+        if (flux_event_send (p, o, "%s", name) < 0)
             err_exit ("flux_event_send");
+        if (o)
+            json_object_put (o);
     } else if (cmb_msg_match (zmsg, "api.session.info.query")) {
         json_object *o = util_json_object_new_object ();
         util_json_object_add_int (o, "rank", flux_rank (p));

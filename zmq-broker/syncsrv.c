@@ -32,7 +32,7 @@ static bool disabled = false;
 
 static void _timeout (plugin_ctx_t *p)
 {
-    if (flux_event_send (p, "event.sched.trigger.%d", ++epoch) < 0)
+    if (flux_event_send (p, NULL, "event.sched.trigger.%d", ++epoch) < 0)
         err_exit ("flux_event_send");
 }
 
