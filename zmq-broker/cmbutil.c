@@ -535,8 +535,10 @@ static void dump_kvs_dir (cmb_t c, const char *path)
     const char *name;
     char *key;
 
-    if (kvs_get_dir (c, &dir, "%s", path) < 0)
-        err_exit ("kvs_get_dir %s", path);
+    if (kvs_get_dir (c, &dir, "%s", path) < 0) {
+        printf ("%s: %s\n", path, strerror (errno));
+        return;
+    }
 
     itr = kvsitr_create (dir);
     while ((name = kvsitr_next (itr))) {
@@ -544,8 +546,10 @@ static void dump_kvs_dir (cmb_t c, const char *path)
         if (kvsdir_issymlink (dir, name)) {
             char *link;
 
-            if (kvs_get_symlink (c, key, &link) < 0)
-                err_exit ("kvs_get_symlink %s", key);
+            if (kvs_get_symlink (c, key, &link) < 0) {
+                printf ("%s: %s\n", key, strerror (errno));
+                continue;
+            }
             printf ("%s -> %s\n", key, link);
             free (link);
 
@@ -555,8 +559,10 @@ static void dump_kvs_dir (cmb_t c, const char *path)
         } else {
             json_object *o;
 
-            if (kvs_get (c, key, &o) < 0)
-                err_exit ("kvs_get %s", key);
+            if (kvs_get (c, key, &o) < 0) {
+                printf ("%s: %s\n", key, strerror (errno));
+                continue;
+            }
             printf ("%s = %s\n", key,
                     json_object_to_json_string_ext (o, JSON_C_TO_STRING_PLAIN));
             json_object_put (o);
