@@ -21,9 +21,8 @@ int getints (char *s, int **iap, int *lenp);
 void *xzmalloc (size_t size);
 char *xstrdup (const char *s);
 
-/* A gettimeofday that exits on error.
- */
-void xgettimeofday (struct timeval *tv, struct timezone *tz);
+double monotime_since (struct timespec t0); /* milliseconds */
+void monotime (struct timespec *tp);
 
 /* Get integer, string, or comma delimited array of ints from the environment
  * by name, or if not set, return (copy in string/int* case) of default arg.

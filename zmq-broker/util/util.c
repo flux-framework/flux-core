@@ -20,6 +20,34 @@
 #include "util.h"
 #include "log.h"
 
+static struct timespec ts_diff (struct timespec start, struct timespec end)
+{
+        struct timespec temp;
+        if ((end.tv_nsec-start.tv_nsec)<0) {
+                temp.tv_sec = end.tv_sec-start.tv_sec-1;
+                temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+        } else {
+                temp.tv_sec = end.tv_sec-start.tv_sec;
+                temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+        }
+        return temp;
+}
+
+double monotime_since (struct timespec t0)
+{
+    struct timespec ts, d;
+    clock_gettime (CLOCK_MONOTONIC, &ts);
+
+    d = ts_diff (t0, ts);
+
+    return ((double) d.tv_sec * 1000 + (double) d.tv_nsec / 1000000);
+}
+
+void monotime (struct timespec *tp)
+{
+    clock_gettime (CLOCK_MONOTONIC, tp);
+}
+
 void *xzmalloc (size_t size)
 {
     void *new;
@@ -37,12 +65,6 @@ char *xstrdup (const char *s)
     if (!cpy)
         oom ();
     return cpy;
-}
-
-void xgettimeofday (struct timeval *tv, struct timezone *tz)
-{
-    if (gettimeofday (tv, tz) < 0)
-        err_exit ("gettimeofday");
 }
 
 int setenvf (const char *name, int overwrite, const char *fmt, ...)
@@ -441,7 +463,8 @@ json_object *util_json_vlog (int level, const char *fac, const char *src,
     char *str = NULL;
     struct timeval tv;
 
-    xgettimeofday (&tv, NULL);
+    if (gettimeofday (&tv, NULL) < 0)
+        err_exit ("gettimeofday");
 
     if (vasprintf (&str, fmt, ap) < 0)
         oom ();

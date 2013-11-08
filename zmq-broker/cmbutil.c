@@ -74,7 +74,7 @@ static void usage (void)
 "  -C,--kvs-commit        commit pending kvs puts\n"
 "  -y,--kvs-dropcache     drop cached and unreferenced kvs data\n"
 "  -t,--kvs-torture N     set N keys, then commit\n"
-"  -M,--mrpc-echo NODES   exercise mrpc echo server\n"
+"  -M,--mrpc-echo NODES   exercise mrpc echo server (-P and -d apply)\n"
 "  -s,--subscribe sub     subscribe to events matching substring\n"
 "  -e,--event name        publish event\n"
 "  -S,--sync              block until event.sched.triger\n"
@@ -150,18 +150,14 @@ int main (int argc, char *argv[])
                 break; /* handled in first getopt */
             case 'p': { /* --ping name */
                 int i;
-                struct timeval t, t1, t2;
+                struct timespec t0;
                 char *tag, *route;
                 for (i = 0; ; i++) {
-                    xgettimeofday (&t1, NULL);
+                    monotime (&t0);
                     if (cmb_ping (c, optarg, i, padding, &tag, &route) < 0)
                         err_exit ("cmb_ping");
-                    xgettimeofday (&t2, NULL);
-                    timersub (&t2, &t1, &t);
                     msg ("%s pad=%d seq=%d time=%0.3f ms (%s)", tag,
-                         padding,i,
-                         (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000,
-                         route);
+                         padding, i, monotime_since (t0), route);
                     usleep (pingdelay_ms * 1000);
                     free (tag);
                     free (route);
@@ -183,14 +179,11 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'b': { /* --barrier NAME */
-                struct timeval t, t1, t2;
-                xgettimeofday (&t1, NULL);
+                struct timespec t0;
+                monotime (&t0);
                 if (flux_barrier (c, optarg, nprocs) < 0)
                     err_exit ("flux_barrier");
-                xgettimeofday (&t2, NULL);
-                timersub (&t2, &t1, &t);
-                msg ("barrier time=%0.3f ms",
-                     (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
+                msg ("barrier time=%0.3f ms", monotime_since (t0));
                 break;
             }
             case 'B': { /* --barrier-torture N */
@@ -326,10 +319,10 @@ int main (int argc, char *argv[])
             case 't': { /* --kvs-torture N */
                 int i, n = strtoul (optarg, NULL, 10);
                 char key[16], val[16];
-                struct timeval t1, t2, t;
+                struct timespec t0;
                 json_object *vo = NULL;
 
-                xgettimeofday (&t1, NULL);
+                monotime (&t0);
                 for (i = 0; i < n; i++) {
                     snprintf (key, sizeof (key), "key%d", i);
                     snprintf (val, sizeof (key), "val%d", i);
@@ -339,20 +332,14 @@ int main (int argc, char *argv[])
                     if (vo)
                         json_object_put (vo);
                 }
-                xgettimeofday (&t2, NULL);
-                timersub(&t2, &t1, &t);
-                msg ("kvs_put:    time=%0.3f ms",
-                     (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
+                msg ("kvs_put:    time=%0.3f ms", monotime_since (t0));
 
-                xgettimeofday (&t1, NULL);
+                monotime (&t0);
                 if (kvs_commit (c) < 0)
                     err_exit ("kvs_commit");
-                xgettimeofday (&t2, NULL);
-                timersub (&t2, &t1, &t);
-                msg ("kvs_commit: time=%0.3f ms",
-                     (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
+                msg ("kvs_commit: time=%0.3f ms", monotime_since (t0));
 
-                xgettimeofday (&t1, NULL);
+                monotime (&t0);
                 for (i = 0; i < n; i++) {
                     snprintf (key, sizeof (key), "key%d", i);
                     snprintf (val, sizeof (key), "val%d", i);
@@ -364,10 +351,7 @@ int main (int argc, char *argv[])
                     if (vo)
                         json_object_put (vo);
                 }
-                xgettimeofday (&t2, NULL);
-                timersub(&t2, &t1, &t);
-                msg ("kvs_get:    time=%0.3f ms",
-                     (double)t.tv_sec * 1000 + (double)t.tv_usec / 1000);
+                msg ("kvs_get:    time=%0.3f ms", monotime_since (t0));
                 break;
             }
             case 'L': { /* --log */
@@ -468,27 +452,42 @@ int main (int argc, char *argv[])
                 flux_mrpc_t f;
                 json_object *inarg, *outarg;
                 int id;
- 
-                if (!(f = flux_mrpc_create (c, optarg)))
-                    err_exit ("flux_mrpc_create");
-                inarg = util_json_object_new_object ();
-                util_json_object_add_int (inarg, "seq", 0);
-                flux_mrpc_put_inarg (f, inarg);
-                if (flux_mrpc (f, "mecho") < 0)
-                    err_exit ("flux_mrpc");
-                while ((id = flux_mrpc_next_outarg (f)) != -1) {
-                    if (flux_mrpc_get_outarg (f, id, &outarg) < 0) {
-                        printf ("%d: no response\n", id);
-                        continue;
+                struct timespec t0;
+                char *pad = NULL; /* --ping-padding bytes */
+                int seq;
+
+                if (padding > 0)
+                    pad = xzmalloc (padding);
+                memset (pad, 'p', padding - 1);
+
+                for (seq = 0; ;seq++) {
+                    monotime (&t0); 
+                    if (!(f = flux_mrpc_create (c, optarg)))
+                        err_exit ("flux_mrpc_create");
+                    inarg = util_json_object_new_object ();
+                    util_json_object_add_int (inarg, "seq", seq);
+                    if (pad)
+                        util_json_object_add_string (inarg, "pad", pad);
+                    flux_mrpc_put_inarg (f, inarg);
+                    if (flux_mrpc (f, "mecho") < 0)
+                        err_exit ("flux_mrpc");
+                    while ((id = flux_mrpc_next_outarg (f)) != -1) {
+                        if (flux_mrpc_get_outarg (f, id, &outarg) < 0) {
+                            msg ("%d: no response", id);
+                            continue;
+                        }
+                        if (!util_json_match (inarg, outarg))
+                            msg ("%d: mangled response", id);
+                        json_object_put (outarg);
                     }
-                    if (!util_json_match (inarg, outarg))
-                        printf ("%d: mangled response\n", id);
-                    else
-                        printf ("%d: OK\n", id);
-                    json_object_put (outarg);
+                    json_object_put (inarg);
+                    flux_mrpc_destroy (f);
+                    msg ("mecho: pad=%d seq=%d time=%0.3f ms",
+                         padding, seq, monotime_since (t0));
+                    usleep (pingdelay_ms * 1000);
                 }
-                json_object_put (inarg);
-                flux_mrpc_destroy (f);
+                if (pad)
+                    free (pad);
                 break;
             }
             default:
@@ -532,7 +531,7 @@ static void dump_kvs_dir (cmb_t c, const char *path)
 {
     kvsdir_t dir;
     kvsitr_t itr;
-    const char *name;
+    const char *name, *js;
     char *key;
 
     if (kvs_get_dir (c, &dir, "%s", path) < 0) {
@@ -558,13 +557,19 @@ static void dump_kvs_dir (cmb_t c, const char *path)
 
         } else {
             json_object *o;
+            int len, max;
 
             if (kvs_get (c, key, &o) < 0) {
                 printf ("%s: %s\n", key, strerror (errno));
                 continue;
             }
-            printf ("%s = %s\n", key,
-                    json_object_to_json_string_ext (o, JSON_C_TO_STRING_PLAIN));
+            js = json_object_to_json_string_ext (o, JSON_C_TO_STRING_PLAIN);
+            len = strlen (js);
+            max = 80 - strlen (key) - 4;
+            if (len > max)
+                printf ("%s = %.*s ...\n", key, max - 4, js);
+            else
+                printf ("%s = %s\n", key, js);
             json_object_put (o);
         }
         free (key);

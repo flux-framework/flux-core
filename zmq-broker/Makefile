@@ -35,7 +35,7 @@ LIBCMB_OBJS = apicli.o kvscli.o barriercli.o mrpc.o
 LIBPMI = $(LIBDIR)/libpmi.so.0
 LIBCMB = $(LIBDIR)/libcmb.so.0
 
-BUILD = $(LIBCMB) $(LIBPMI) cmbd cmbutil mpi_hello
+BUILD = $(LIBCMB) $(LIBPMI) cmbd cmbutil mpi_hello echo
 
 all: subdirs $(BUILD) subdirs_post
 
@@ -68,6 +68,9 @@ mpi_hello: mpi_hello.c
 	(source /etc/profile.d/modules.sh;\
 		module load $(MPIMOD);\
 		mpicc $(LDFLAGS) -o $@ $<)
+
+echo: echo.o
+	$(CC) $(LDFLAGS) -o $@ $< -L$(LIBDIR) -lcmb $(LDADD_CLI)
 
 clean:
 	rm -f *.o $(BUILD)
