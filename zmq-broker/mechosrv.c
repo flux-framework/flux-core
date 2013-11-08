@@ -22,13 +22,18 @@ static void mecho_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         plugin_log (p, LOG_ERR, "ignoring non-event message");
         goto done;
     }
-    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
+    if (cmb_msg_decode (*zmsg, NULL, &request) < 0) {
         plugin_log (p, LOG_ERR, "cmb_msg_decode: %s", strerror (errno));
         goto done;
     }
+    if (!request) {
+        plugin_log (p, LOG_ERR, "missing JSON part");
+        goto done;
+    }
     if (!(f = flux_mrpc_create_fromevent (p, request))) {
-        plugin_log (p, LOG_ERR, "flux_mrpc_create_fromevent: %s",
-                                strerror (errno));
+        if (errno != EINVAL) /* EINVAL == not addressed to me */
+            plugin_log (p, LOG_ERR, "flux_mrpc_create_fromevent: %s",
+                                    strerror (errno));
         goto done;
     }
     if (flux_mrpc_get_inarg (f, &inarg) < 0) {

@@ -59,11 +59,13 @@ int flux_mrpc_get_inarg (flux_mrpc_t f, json_object **valp);
 void flux_mrpc_put_outarg (flux_mrpc_t f, json_object *val);
 int flux_mrpc_get_outarg (flux_mrpc_t f, int nodeid, json_object **valp);
 
-int flux_mrpc_next_outarg (flux_mrpc_t f); /* returns nodeid (-1 at end)  */
+/* returns nodeid (-1 at end)  */
+int flux_mrpc_next_outarg (flux_mrpc_t f);
 void flux_mrpc_rewind_outarg (flux_mrpc_t f);
 
 int flux_mrpc (flux_mrpc_t f, const char *fmt, ...);
 
+/* returns NULL, errno == EINVAL if not addressed to me */
 flux_mrpc_t flux_mrpc_create_fromevent (void *h, json_object *request);
 int flux_mrpc_respond (flux_mrpc_t f);
 

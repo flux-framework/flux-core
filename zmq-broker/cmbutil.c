@@ -468,13 +468,8 @@ int main (int argc, char *argv[])
                 flux_mrpc_t f;
                 json_object *inarg, *outarg;
                 int id;
-                char s[1024];
  
-                if (*optarg != '[')
-                    snprintf (s, sizeof (s), "[%s]", optarg); 
-                else
-                    snprintf (s, sizeof (s), "%s", optarg);
-                if (!(f = flux_mrpc_create (c, s)))
+                if (!(f = flux_mrpc_create (c, optarg)))
                     err_exit ("flux_mrpc_create");
                 inarg = util_json_object_new_object ();
                 util_json_object_add_int (inarg, "seq", 0);
