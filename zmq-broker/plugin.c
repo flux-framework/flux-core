@@ -39,6 +39,7 @@ struct plugin_struct livesrv;
 struct plugin_struct logsrv;
 struct plugin_struct syncsrv;
 struct plugin_struct echosrv;
+struct plugin_struct mechosrv;
 struct plugin_struct jobsrv;
 struct plugin_struct rexecsrv;
 struct plugin_struct resrcsrv;
@@ -51,6 +52,7 @@ static plugin_t plugins[] = {
     &livesrv,
     &logsrv,
     &echosrv,
+    &mechosrv,
     &jobsrv,
     &rexecsrv,
     &resrcsrv

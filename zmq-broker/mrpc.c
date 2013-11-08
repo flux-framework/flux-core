@@ -68,14 +68,12 @@ error:
 void flux_mrpc_destroy (flux_mrpc_t f)
 {
     if (f->path) {
-#if 0
         if (f->sender == flux_rank (f->h)) {
             if (kvs_unlink (f->h, f->path) < 0)
                 err ("kvs_unlink %s", f->path);
             if (kvs_commit (f->h) < 0)
                 err ("kvs_commit");
         }
-#endif
         free (f->path);
     }
     if (f->dir)

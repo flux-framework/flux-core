@@ -22,7 +22,7 @@
 static int _parse_logstr (char *s, int *lp, char **fp);
 static void dump_kvs_dir (cmb_t c, const char *path);
 
-#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Zyl:Y:X:"
+#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Zyl:Y:X:M:"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -41,6 +41,7 @@ static const struct option longopts[] = {
     {"kvs-commit", no_argument,        0, 'C'},
     {"kvs-dropcache", no_argument,     0, 'y'},
     {"kvs-torture",required_argument,  0, 't'},
+    {"mrpc-echo",  required_argument,  0, 'M'},
     {"sync",       no_argument,        0, 'S'},
     {"snoop",      no_argument,        0, 'T'},
     {"log",        required_argument,  0, 'L'},
@@ -73,6 +74,7 @@ static void usage (void)
 "  -C,--kvs-commit        commit pending kvs puts\n"
 "  -y,--kvs-dropcache     drop cached and unreferenced kvs data\n"
 "  -t,--kvs-torture N     set N keys, then commit\n"
+"  -M,--mrpc-echo NODES   exercise mrpc echo server\n"
 "  -s,--subscribe sub     subscribe to events matching substring\n"
 "  -e,--event name        publish event\n"
 "  -S,--sync              block until event.sched.triger\n"
@@ -460,6 +462,38 @@ int main (int argc, char *argv[])
                 json_object_put (o);
                 free (s);
                 msg ("rank=%d size=%d", flux_rank (c), flux_size (c));
+                break;
+            }
+            case 'M': { /* --mrpc-echo NODELIST */
+                flux_mrpc_t f;
+                json_object *inarg, *outarg;
+                int id;
+                char s[1024];
+ 
+                if (*optarg != '[')
+                    snprintf (s, sizeof (s), "[%s]", optarg); 
+                else
+                    snprintf (s, sizeof (s), "%s", optarg);
+                if (!(f = flux_mrpc_create (c, s)))
+                    err_exit ("flux_mrpc_create");
+                inarg = util_json_object_new_object ();
+                util_json_object_add_int (inarg, "seq", 0);
+                flux_mrpc_put_inarg (f, inarg);
+                if (flux_mrpc (f, "mecho") < 0)
+                    err_exit ("flux_mrpc");
+                while ((id = flux_mrpc_next_outarg (f)) != -1) {
+                    if (flux_mrpc_get_outarg (f, id, &outarg) < 0) {
+                        printf ("%d: no response\n", id);
+                        continue;
+                    }
+                    if (!util_json_match (inarg, outarg))
+                        printf ("%d: mangled response\n", id);
+                    else
+                        printf ("%d: OK\n", id);
+                    json_object_put (outarg);
+                }
+                json_object_put (inarg);
+                flux_mrpc_destroy (f);
                 break;
             }
             default:

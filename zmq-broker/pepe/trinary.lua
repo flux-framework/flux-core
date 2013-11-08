@@ -36,7 +36,7 @@ if pepe.rank == 0 then
                 .. " --set-conf conf.log.persist-level=debug"
                 .. " --set-conf conf.live.missed-trigger-allow=5"
                 .. " --set-conf conf.live.topology='" .. topology .. "'"
-		.. " --plugins=api,barrier,live,log,kvs,sync"
+		.. " --plugins=api,barrier,live,log,kvs,sync,mecho"
 		.. " --logdest cmbd.log")
 elseif pepe.rank == 1 then
     local parent_rank = tree.k_ary_parent (pepe.rank, 3)
@@ -48,7 +48,7 @@ elseif pepe.rank == 1 then
 		.. " --parent='" .. parent_rank .. "," .. u1 .. "," .. u2 .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
-		.. " --plugins=api,barrier,live,log,kvs")
+		.. " --plugins=api,barrier,live,log,kvs,mecho")
 else
     local parent_rank = tree.k_ary_parent (pepe.rank, 3)
     local u1 = "tcp://" ..  h[parent_rank + 1] .. ":5556"
@@ -64,5 +64,5 @@ else
 		.. " --parent='" .. parent_fail .. "," .. f1 .. "," .. f2 .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
-		.. " --plugins=api,barrier,live,log,kvs")
+		.. " --plugins=api,barrier,live,log,kvs,mecho")
 end
