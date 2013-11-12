@@ -16,7 +16,7 @@
 #include "cmb.h"
 
 struct prog_ctx {
-    cmb_t cmb;
+    flux_t cmb;
     kvsdir_t kvs;           /* Handle to this job's dir in kvs */
     int64_t id;             /* id of this execution */
     int nnodes;
@@ -42,7 +42,7 @@ void *lsd_nomem_error (const char *file, int line, char *msg)
 
 static void log_fatal (struct prog_ctx *ctx, int code, char *format, ...)
 {
-    cmb_t c;
+    flux_t c;
     va_list ap;
     va_start (ap, format);
     if ((ctx != NULL) && ((c = ctx->cmb) != NULL))
@@ -55,7 +55,7 @@ static void log_fatal (struct prog_ctx *ctx, int code, char *format, ...)
 
 static int log_err (struct prog_ctx *ctx, const char *fmt, ...)
 {
-    cmb_t c = ctx->cmb;
+    flux_t c = ctx->cmb;
     va_list ap;
     va_start (ap, fmt);
     cmb_vlog (c, LOG_ERR, fmt, ap);
@@ -65,7 +65,7 @@ static int log_err (struct prog_ctx *ctx, const char *fmt, ...)
 
 static void log_msg (struct prog_ctx *ctx, const char *fmt, ...)
 {
-    cmb_t c = ctx->cmb;
+    flux_t c = ctx->cmb;
     va_list ap;
     va_start (ap, fmt);
     cmb_vlog (c, LOG_INFO, fmt, ap);

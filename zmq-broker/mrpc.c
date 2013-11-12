@@ -31,14 +31,13 @@
 #include "log.h"
 #include "zmsg.h"
 #include "util.h"
-#include "kvs.h"
-
 #include "flux.h"
+#include "kvs.h"
 
 #define KVS_CLEANUP 1
 
 struct flux_mrpc_struct {
-    void *h;
+    flux_t h;
     char *path;
     char *dest;
     int nprocs;
@@ -81,7 +80,7 @@ static bool dest_member (hostlist_t hl, int node)
     return true;
 }
 
-flux_mrpc_t flux_mrpc_create (void *h, const char *dest)
+flux_mrpc_t flux_mrpc_create (flux_t h, const char *dest)
 {
     flux_mrpc_t f = xzmalloc (sizeof (*f));
     int maxid = flux_size (h) - 1;
@@ -226,7 +225,7 @@ done:
     return rc;
 }
 
-flux_mrpc_t flux_mrpc_create_fromevent (void *h, json_object *request)
+flux_mrpc_t flux_mrpc_create_fromevent (flux_t h, json_object *request)
 {
     flux_mrpc_t f = NULL;
     const char *dest, *path;

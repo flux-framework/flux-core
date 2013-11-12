@@ -20,9 +20,9 @@
 #include "zmsg.h"
 
 static int _parse_logstr (char *s, int *lp, char **fp);
-static void dump_kvs_dir (cmb_t c, const char *path);
+static void dump_kvs_dir (flux_t h, const char *path);
 
-#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:TL:W:D:r:R:qz:Zyl:Y:X:M:"
+#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:T:L:W:D:r:R:qz:Zyl:Y:X:M:"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -43,7 +43,7 @@ static const struct option longopts[] = {
     {"kvs-torture",required_argument,  0, 't'},
     {"mrpc-echo",  required_argument,  0, 'M'},
     {"sync",       no_argument,        0, 'S'},
-    {"snoop",      no_argument,        0, 'T'},
+    {"snoop",      required_argument,  0, 'T'},
     {"log",        required_argument,  0, 'L'},
     {"log-watch",  required_argument,  0, 'W'},
     {"log-dump",   required_argument,  0, 'D'},
@@ -62,7 +62,7 @@ static void usage (void)
 "  -P,--ping-padding N    pad ping packets with N bytes (adds a JSON string)\n"
 "  -d,--ping-delay N      set delay between ping packets (in msec)\n"
 "  -x,--stats name        get plugin statistics\n"
-"  -T,--snoop             display messages to/from router socket\n"
+"  -T,--snoop topic       display messages to/from router socket\n"
 "  -b,--barrier name      execute barrier across slurm job\n"
 "  -B,--barrier-torture N execute N barriers across slurm job\n"
 "  -n,--nprocs N          override nprocs (default $SLURM_NPROCS or 1)\n"
@@ -75,7 +75,7 @@ static void usage (void)
 "  -y,--kvs-dropcache     drop cached and unreferenced kvs data\n"
 "  -t,--kvs-torture N     set N keys, then commit\n"
 "  -M,--mrpc-echo NODES   exercise mrpc echo server (-P and -d apply)\n"
-"  -s,--subscribe sub     subscribe to events matching substring\n"
+"  -s,--subscribe topic   subscribe to event topic\n"
 "  -e,--event name        publish event\n"
 "  -S,--sync              block until event.sched.triger\n"
 "  -L,--log fac:lev MSG   log MSG to facility at specified level\n"
@@ -93,9 +93,10 @@ static void usage (void)
 int main (int argc, char *argv[])
 {
     int ch;
-    cmb_t c;
+    flux_t h;
     int nprocs;
     int padding = 0;
+    char *pad = NULL;
     int pingdelay_ms = 1000;
     static char socket_path[PATH_MAX + 1];
     char *val;
@@ -121,7 +122,13 @@ int main (int argc, char *argv[])
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
             case 'P': /* --ping-padding N */
+                if (pad)
+                    free (pad);
                 padding = strtoul (optarg, NULL, 10);
+                if (padding > 0) {
+                    pad = xzmalloc (padding + 1);
+                    memset (pad, 'p', padding);
+                }
                 break;
             case 'd': /* --ping-delay N */
                 pingdelay_ms = strtoul (optarg, NULL, 10);
@@ -133,12 +140,13 @@ int main (int argc, char *argv[])
                 snprintf (socket_path, sizeof (socket_path), "%s", optarg);
                 break;
             case 'Z': /* --trace-apisock */
-                flags |= CMB_FLAGS_TRACE;
+                flags |= FLUX_FLAGS_TRACE;
                 break;
         }
     }
-    if (!(c = cmb_init_full (socket_path, flags)))
+    if (!(h = cmb_init_full (socket_path)))
         err_exit ("cmb_init");
+    flux_flags_set (h, flags);
     optind = 0;
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
@@ -149,26 +157,45 @@ int main (int argc, char *argv[])
             case 'Z':
                 break; /* handled in first getopt */
             case 'p': { /* --ping name */
-                int i;
+                int seq, rseq, rpadding;
                 struct timespec t0;
-                char *tag, *route;
-                for (i = 0; ; i++) {
+                const char *route, *rpad;
+                json_object *request = util_json_object_new_object ();
+                json_object *response;
+
+                if (pad)
+                    util_json_object_add_string (request, "pad", pad);
+                for (seq = 0; ; seq++) {
                     monotime (&t0);
-                    if (cmb_ping (c, optarg, i, padding, &tag, &route) < 0)
-                        err_exit ("cmb_ping");
-                    msg ("%s pad=%d seq=%d time=%0.3f ms (%s)", tag,
-                         padding, i, monotime_since (t0), route);
+                    json_object_object_del (request, "seq");
+                    util_json_object_add_int (request, "seq", seq);
+                    if (!(response = flux_rpc (h, request, "%s.ping", optarg)))
+                        err_exit ("flux_rpc");
+                    if (util_json_object_get_int (response, "seq", &rseq) < 0
+                            || util_json_object_get_string (response,
+                                                      "pad", &rpad) < 0
+                            || util_json_object_get_string (response,
+                                                      "route", &route) < 0)
+                        msg_exit ("ping: pad, seq, or route missing");
+                    if (seq != rseq)
+                        msg_exit ("ping: seq not the one I sent");
+                    if (padding != (rpadding = strlen (rpad)))
+                        msg_exit ("ping: pad not the size I sent (%d != %d)",
+                                                rpadding, padding);
+                    msg ("%s.ping pad=%d seq=%d time=%0.3f ms (%s)", optarg,
+                         rpadding, rseq, monotime_since (t0), route);
                     usleep (pingdelay_ms * 1000);
-                    free (tag);
-                    free (route);
+                    json_object_put (response);
                 }
+                json_object_put (request);
                 break;
             }
             case 'x': { /* --stats name */
+#if 0
                 json_object *o;
                 char *s;
 
-                if (!(s = cmb_stats (c, optarg)))
+                if (!(s = cmb_stats (h, optarg)))
                     err_exit ("cmb_stats");
                 if (!(o = json_tokener_parse (s)))
                     err_exit ("json_tokener_parse");
@@ -176,12 +203,13 @@ int main (int argc, char *argv[])
                                     JSON_C_TO_STRING_PRETTY));
                 json_object_put (o);
                 free (s);
+#endif
                 break;
             }
             case 'b': { /* --barrier NAME */
                 struct timespec t0;
                 monotime (&t0);
-                if (flux_barrier (c, optarg, nprocs) < 0)
+                if (flux_barrier (h, optarg, nprocs) < 0)
                     err_exit ("flux_barrier");
                 msg ("barrier time=%0.3f ms", monotime_since (t0));
                 break;
@@ -191,46 +219,50 @@ int main (int argc, char *argv[])
                 char name[16];
                 for (i = 0; i < n; i++) {
                     snprintf (name, sizeof (name), "%d", i);
-                    if (flux_barrier (c, name, nprocs) < 0)
+                    if (flux_barrier (h, name, nprocs) < 0)
                         err_exit ("flux_barrier %s", name);
                 }
                 break;
             }
-            case 's': { /* --subscribe substr */
-                char *event;
-                if (flux_event_subscribe (c, optarg) < 0)
-                    err_exit ("flux_event_subscribe");
-                while (cmb_recv_message (c, &event, NULL, false) == 0) {
-                    msg ("%s", event);
-                    free (event);
-                }
-                if (flux_event_unsubscribe (c, optarg) < 0)
-                    err_exit ("flux_event_unsubscribe");
-                break;
-            }
-            case 'T': { /* --snoop */
+            case 's': { /* --subscribe topic */
                 zmsg_t *zmsg;
-                if (flux_snoop_subscribe (c, "") < 0)
-                    err_exit ("flux_snoop_subscribe");
-                while ((zmsg = cmb_recv_zmsg (c, false))) {
+                if (flux_event_subscribe (h, optarg) < 0)
+                    err_exit ("flux_event_subscribe");
+                while (flux_event_recvmsg (h, &zmsg, false) == 0) {
                     zmsg_dump_compact (zmsg);
                     zmsg_destroy (&zmsg);
                 }
-                if (flux_snoop_unsubscribe (c, "") < 0)
+                err_exit ("flux_event_recvmsg");
+                /*NOTREACHED*/
+                if (flux_event_unsubscribe (h, optarg) < 0)
+                    err_exit ("flux_event_unsubscribe");
+                break;
+            }
+            case 'T': { /* --snoop topic */
+                zmsg_t *zmsg;
+                if (flux_snoop_subscribe (h, optarg) < 0)
+                    err_exit ("flux_snoop_subscribe");
+                while (flux_snoop_recvmsg (h, &zmsg, false) == 0) {
+                    zmsg_dump_compact (zmsg);
+                    zmsg_destroy (&zmsg);
+                }
+                err_exit ("flux_snoop_recvmsg");
+                /*NOTREACHED*/
+                if (flux_snoop_unsubscribe (h, optarg) < 0)
                     err_exit ("flux_snoop_unsubscribe");
                 break;
             }
             case 'S': { /* --sync */
-                char *event;
-                if (flux_event_subscribe (c, "event.sched.trigger.") < 0)
+                zmsg_t *zmsg;
+                if (flux_event_subscribe (h, "event.sched.trigger.") < 0)
                     err_exit ("flux_event_subscribe");
-                if (cmb_recv_message (c, &event, NULL, false) < 0)
-                    err_exit ("cmb_recv_message");
-                free (event);
+                if (flux_event_recvmsg (h, &zmsg, false) < 0)
+                    err_exit ("flux_event_recvmsg");
+                zmsg_destroy (&zmsg);
                 break;
             }
             case 'e': { /* --event name */
-                if (flux_event_send (c, NULL, "%s", optarg) < 0)
+                if (flux_event_send (h, NULL, "%s", optarg) < 0)
                     err_exit ("flux_event_send");
                 break;
             }
@@ -245,7 +277,7 @@ int main (int argc, char *argv[])
                 if (strlen (val) > 0)
                     if (!(vo = json_tokener_parse (val)))
                         vo = json_object_new_string (val);
-                if (kvs_put (c, key, vo) < 0)
+                if (kvs_put (h, key, vo) < 0)
                     err_exit ("kvs_put");
                 if (vo)
                     json_object_put (vo);
@@ -255,7 +287,7 @@ int main (int argc, char *argv[])
             case 'K': { /* --kvs-get key */
                 json_object *o;
 
-                if (kvs_get (c, optarg, &o) < 0)
+                if (kvs_get (h, optarg, &o) < 0)
                     err_exit ("kvs_get");
                 printf ("%s = %s\n", optarg, json_object_to_json_string_ext (o,
                                              JSON_C_TO_STRING_PLAIN));
@@ -266,7 +298,7 @@ int main (int argc, char *argv[])
                 json_object *val = NULL;
                 int rc;
 
-                rc = kvs_get (c, optarg, &val);
+                rc = kvs_get (h, optarg, &val);
                 while (rc == 0 || (rc < 0 && errno == ENOENT)) {
                     if (rc < 0) {
                         printf ("%s: %s\n", optarg, strerror (errno));
@@ -277,7 +309,7 @@ int main (int argc, char *argv[])
                         printf ("%s=%s\n", optarg,
                                 json_object_to_json_string_ext (val,
                                 JSON_C_TO_STRING_PLAIN));
-                    rc = kvs_watch_once (c, optarg, &val);
+                    rc = kvs_watch_once (h, optarg, &val);
                 }
                 err_exit ("%s", optarg);
                 break;
@@ -286,7 +318,7 @@ int main (int argc, char *argv[])
                 kvsdir_t dir = NULL;
                 int rc;
 
-                rc = kvs_get_dir (c, &dir, "%s", optarg);
+                rc = kvs_get_dir (h, &dir, "%s", optarg);
                 while (rc == 0 || (rc < 0 && errno == ENOENT)) {
                     if (rc < 0) {
                         printf ("%s: %s\n", optarg, strerror (errno));
@@ -294,25 +326,25 @@ int main (int argc, char *argv[])
                             kvsdir_destroy (dir);
                         dir = NULL;
                     } else {
-                        dump_kvs_dir (c, optarg);
+                        dump_kvs_dir (h, optarg);
                         printf ("======================\n");
                     }
-                    rc = kvs_watch_once_dir (c, &dir, "%s", optarg);
+                    rc = kvs_watch_once_dir (h, &dir, "%s", optarg);
                 } 
                 err_exit ("%s", optarg);
                 break;
             }
             case 'l': { /* --kvs-list name */
-                dump_kvs_dir (c, optarg);
+                dump_kvs_dir (h, optarg);
                 break;
             }
             case 'C': { /* --kvs-commit */
-                if (kvs_commit (c) < 0)
+                if (kvs_commit (h) < 0)
                     err_exit ("kvs_commit");
                 break;
             }
             case 'y': { /* --kvs-dropcache */
-                if (kvs_dropcache (c) < 0)
+                if (kvs_dropcache (h) < 0)
                     err_exit ("kvs_dropcache");
                 break;
             }
@@ -327,7 +359,7 @@ int main (int argc, char *argv[])
                     snprintf (key, sizeof (key), "key%d", i);
                     snprintf (val, sizeof (key), "val%d", i);
                     vo = json_object_new_string (val);
-                    if (kvs_put (c, key, vo) < 0)
+                    if (kvs_put (h, key, vo) < 0)
                         err_exit ("kvs_put");
                     if (vo)
                         json_object_put (vo);
@@ -335,7 +367,7 @@ int main (int argc, char *argv[])
                 msg ("kvs_put:    time=%0.3f ms", monotime_since (t0));
 
                 monotime (&t0);
-                if (kvs_commit (c) < 0)
+                if (kvs_commit (h) < 0)
                     err_exit ("kvs_commit");
                 msg ("kvs_commit: time=%0.3f ms", monotime_since (t0));
 
@@ -343,7 +375,7 @@ int main (int argc, char *argv[])
                 for (i = 0; i < n; i++) {
                     snprintf (key, sizeof (key), "key%d", i);
                     snprintf (val, sizeof (key), "val%d", i);
-                    if (kvs_get (c, key, &vo) < 0)
+                    if (kvs_get (h, key, &vo) < 0)
                         err_exit ("kvs_get");
                     if (strcmp (json_object_get_string (vo), val) != 0)
                         msg_exit ("kvs_get: key '%s' wrong value '%s'",
@@ -361,6 +393,7 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'W': { /* --log-watch fac:lev */
+#if 0
                 char *src, *fac, *s;
                 struct timeval tv, start = { .tv_sec = 0 }, rel;
                 int count, lev;
@@ -386,9 +419,11 @@ int main (int argc, char *argv[])
                 }
                 if (errno != ENOENT)
                     err ("cmbv_log_recv");
+#endif
                 break;
             }
             case 'D': { /* --log-dump fac:lev */
+#if 0
                 char *src, *fac, *s;
                 struct timeval tv, start = { .tv_sec = 0 }, rel;
                 int lev, count;
@@ -413,27 +448,33 @@ int main (int argc, char *argv[])
                 }
                 if (errno != ENOENT)
                     err ("cmbv_log_recv");
+#endif
                 break;
             }
             case 'r': { /* --route-add dst:gw */
+#if 0
                 char *gw, *dst = xstrdup (optarg);
                 if (!(gw = strchr (dst, ':')))
                     usage ();
                 *gw++ = '\0';
                 if (cmb_route_add (c, dst, gw) < 0)
                     err ("cmb_route_add %s via %s", dst, gw);
+#endif
                 break;
             }
             case 'R': { /* --route-del dst */
+#if 0
                 char *gw, *dst = xstrdup (optarg);
                 if (!(gw = strchr (dst, ':')))
                     usage ();
                 *gw++ = '\0';
                 if (cmb_route_del (c, dst, gw) < 0)
                     err ("cmb_route_del %s via %s", dst, gw);
+#endif
                 break;
             }
             case 'q': { /* --route-query */
+#if 0
                 json_object *o;
                 char *s;
 
@@ -446,6 +487,7 @@ int main (int argc, char *argv[])
                 json_object_put (o);
                 free (s);
                 msg ("rank=%d size=%d", flux_rank (c), flux_size (c));
+#endif
                 break;
             }
             case 'M': { /* --mrpc-echo NODELIST */
@@ -453,16 +495,11 @@ int main (int argc, char *argv[])
                 json_object *inarg, *outarg;
                 int id;
                 struct timespec t0;
-                char *pad = NULL; /* --ping-padding bytes */
                 int seq;
-
-                if (padding > 0)
-                    pad = xzmalloc (padding);
-                memset (pad, 'p', padding - 1);
 
                 for (seq = 0; ;seq++) {
                     monotime (&t0); 
-                    if (!(f = flux_mrpc_create (c, optarg)))
+                    if (!(f = flux_mrpc_create (h, optarg)))
                         err_exit ("flux_mrpc_create");
                     inarg = util_json_object_new_object ();
                     util_json_object_add_int (inarg, "seq", seq);
@@ -494,20 +531,20 @@ int main (int argc, char *argv[])
                 usage ();
         }
     }
-
     if (Lopt) {
         char *argstr = argv_concat (argc - optind, argv + optind);
-
+#if 0
         cmb_log_set_facility (c, Lopt_facility);
         if (cmb_log (c, Lopt_level, "%s", argstr) < 0)
             err_exit ("cmb_log");
+#endif
         free (argstr);
     } else {
         if (optind < argc)
             usage ();
     }
 
-    cmb_fini (c);
+    flux_handle_destroy (&h);
     exit (0);
 }
 
@@ -527,14 +564,14 @@ static int _parse_logstr (char *s, int *lp, char **fp)
     return 0;
 }
 
-static void dump_kvs_dir (cmb_t c, const char *path)
+static void dump_kvs_dir (flux_t h, const char *path)
 {
     kvsdir_t dir;
     kvsitr_t itr;
     const char *name, *js;
     char *key;
 
-    if (kvs_get_dir (c, &dir, "%s", path) < 0) {
+    if (kvs_get_dir (h, &dir, "%s", path) < 0) {
         printf ("%s: %s\n", path, strerror (errno));
         return;
     }
@@ -545,7 +582,7 @@ static void dump_kvs_dir (cmb_t c, const char *path)
         if (kvsdir_issymlink (dir, name)) {
             char *link;
 
-            if (kvs_get_symlink (c, key, &link) < 0) {
+            if (kvs_get_symlink (h, key, &link) < 0) {
                 printf ("%s: %s\n", key, strerror (errno));
                 continue;
             }
@@ -553,13 +590,13 @@ static void dump_kvs_dir (cmb_t c, const char *path)
             free (link);
 
         } else if (kvsdir_isdir (dir, name)) {
-            dump_kvs_dir (c, key);
+            dump_kvs_dir (h, key);
 
         } else {
             json_object *o;
             int len, max;
 
-            if (kvs_get (c, key, &o) < 0) {
+            if (kvs_get (h, key, &o) < 0) {
                 printf ("%s: %s\n", key, strerror (errno));
                 continue;
             }
@@ -577,6 +614,95 @@ static void dump_kvs_dir (cmb_t c, const char *path)
     kvsitr_destroy (itr);
     kvsdir_destroy (dir);
 }
+#if 0
+static char *cmb_stats (flux_t h, char *name)
+{
+    json_object *o = util_json_object_new_object ();
+    char *cpy = NULL;
+
+    /* send request */
+    if (_send_message (c, o, "%s.stats", name) < 0)
+        goto error;
+    json_object_put (o);
+    o = NULL;
+
+    /* receive response */
+    if (_recv_message (c, NULL, &o, false) < 0)
+        goto error;
+    if (!o)
+        goto eproto;
+    cpy = strdup (json_object_get_string (o));
+    if (!cpy) {
+        errno = ENOMEM;
+        goto error;
+    }
+    json_object_put (o);
+    return cpy;
+eproto:
+    errno = EPROTO;
+error:    
+    if (cpy)
+        free (cpy);
+    if (o)
+        json_object_put (o);
+    return NULL;
+}
+#endif
+
+#if 0
+int cmb_route_add (cmb_t c, char *dst, char *gw)
+{
+    json_object *o = util_json_object_new_object ();
+
+    util_json_object_add_string (o, "gw", gw);
+    if (_send_message (c, o, "cmb.route.add.%s", dst) < 0)
+        goto error;
+    json_object_put (o);
+    return 0;
+error:
+    json_object_put (o);
+    return -1;
+}
+
+int cmb_route_del (cmb_t c, char *dst, char *gw)
+{
+    json_object *o = util_json_object_new_object ();
+
+    util_json_object_add_string (o, "gw", gw);
+    if (_send_message (c, o, "cmb.route.del.%s", dst) < 0)
+        goto error;
+    json_object_put (o);
+    return 0;
+error:
+    json_object_put (o);
+    return -1;
+}
+
+/* FIXME: just return JSON string for now */
+char *cmb_route_query (cmb_t c)
+{
+    json_object *o = util_json_object_new_object ();
+    char *cpy;
+
+    /* send request */
+    if (_send_message (c, o, "cmb.route.query") < 0)
+        goto error;
+    json_object_put (o);
+    o = NULL;
+
+    /* receive response */
+    if (_recv_message (c, NULL, &o, false) < 0)
+        goto error;
+    cpy = xstrdup (json_object_get_string (o));
+    json_object_put (o);
+    return cpy;
+error:
+    if (o)
+        json_object_put (o);
+    return NULL;
+
+}
+#endif
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

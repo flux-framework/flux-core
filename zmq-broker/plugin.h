@@ -1,7 +1,6 @@
 #ifndef PLUGIN_H
 #define PLUGIN_H
 
-#include "kvs.h"
 #include "flux.h"
 
 typedef struct plugin_struct *plugin_t;
@@ -31,7 +30,6 @@ typedef struct {
     server_t *srv;
     plugin_stats_t stats;
     zloop_t *zloop;
-    kvsctx_t kvs_ctx;
     zlist_t *deferred_responses;
     void *ctx;
 } plugin_ctx_t;

@@ -11,10 +11,10 @@
 #include <stdarg.h>
 #include <json/json.h>
 
-#include "cmb.h"
+#include "flux.h"
 #include "log.h"
-
 #include "pmi.h"
+#include "cmb.h"
 
 #ifndef PMI_FALSE
 #define PMI_FALSE 0
@@ -39,7 +39,7 @@ typedef struct {
     int appnum;
     int barrier_num;
     int cmb_rank;
-    cmb_t cctx;
+    flux_t fctx;
     char kvsname[PMI_MAX_KVSNAMELEN];
 } pmi_ctx_t;
 #define PMI_CTX_MAGIC 0xcafefaad
@@ -66,7 +66,7 @@ static inline void trace (int flags, const char *fmt, ...)
         snprintf (buf, sizeof (buf), "[%d.%d.%d] %s", ctx->cmb_rank,
                   ctx->appnum, ctx->rank, fmt);
         va_start (ap, fmt);
-        cmb_vlog (ctx->cctx, LOG_DEBUG, buf, ap);
+        cmb_vlog (ctx->fctx, LOG_DEBUG, buf, ap);
         va_end (ap);
     }
 }
@@ -180,12 +180,12 @@ int PMI_Init( int *spawned )
     ctx->universe_size = ctx->size;
     ctx->barrier_num = 0;
     snprintf (ctx->kvsname, sizeof (ctx->kvsname), "%d", ctx->appnum);
-    if (!(ctx->cctx = cmb_init ())) {
+    if (!(ctx->fctx = cmb_init ())) {
         err ("cmb_init");
         goto fail;
     }
-    cmb_log_set_facility (ctx->cctx, "PMI");
-    ctx->cmb_rank = flux_rank (ctx->cctx);
+    cmb_log_set_facility (ctx->fctx, "PMI");
+    ctx->cmb_rank = flux_rank (ctx->fctx);
     trace_simple (PMI_TRACE_INIT);
     *spawned = ctx->spawned;
     return PMI_SUCCESS;
@@ -215,8 +215,8 @@ int PMI_Finalize( void )
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
-    if (ctx->cctx)
-        cmb_fini (ctx->cctx);
+    if (ctx->fctx)
+        flux_handle_destroy (&ctx->fctx);
     if (ctx->clique_ranks)
         free (ctx->clique_ranks);
     memset (ctx, 0, sizeof (pmi_ctx_t));
@@ -314,7 +314,7 @@ int PMI_Barrier( void )
         rc = PMI_ERR_NOMEM;
         goto done;
     }
-    if (kvs_fence (ctx->cctx, name, ctx->universe_size) < 0) {
+    if (kvs_fence (ctx->fctx, name, ctx->universe_size) < 0) {
         rc = PMI_FAIL;
         goto done;
     }
@@ -391,7 +391,7 @@ int PMI_KVS_Put( const char kvsname[], const char key[], const char value[])
         rc = PMI_ERR_NOMEM;
         goto done;
     }
-    if (kvs_put_string (ctx->cctx, xkey, value) < 0) {
+    if (kvs_put_string (ctx->fctx, xkey, value) < 0) {
         rc = PMI_FAIL;
         goto done;
     }
@@ -435,7 +435,7 @@ int PMI_KVS_Get( const char kvsname[], const char key[], char value[], int lengt
         rc = PMI_ERR_NOMEM;
         goto done;
     }
-    if (kvs_get_string (ctx->cctx, xkey, &val) < 0) {
+    if (kvs_get_string (ctx->fctx, xkey, &val) < 0) {
         if (errno == ENOENT)
             rc = PMI_ERR_INVALID_KEY;
         else

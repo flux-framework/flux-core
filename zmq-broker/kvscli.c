@@ -26,15 +26,8 @@
 
 #include "kvs.h"
 
-struct kvsctx_struct {
-    void *handle;
-    zhash_t *watchers;
-    char *cwd;
-    zlist_t *dirstack;
-};
-
 struct kvsdir_struct {
-    void *handle;
+    flux_t handle;
     char *key;
     json_object *o;
 };
@@ -56,12 +49,37 @@ typedef struct {
     void *arg;
 } kvs_watcher_t;
 
-struct kvs_config_struct {
-    KVSGetCtxF *getctx;
-};
-static struct kvs_config_struct kvs_config = {
-    .getctx = NULL,
-};
+typedef struct {
+    zhash_t *watchers;
+    char *cwd;
+    zlist_t *dirstack;
+} kvsctx_t;
+
+static void freectx (kvsctx_t *ctx)
+{
+    zhash_destroy (&ctx->watchers);
+    zlist_destroy (&ctx->dirstack);
+    free (ctx->cwd);
+    free (ctx);
+}
+
+static kvsctx_t *getctx (flux_t h)
+{
+    kvsctx_t *ctx = (kvsctx_t *)flux_aux_get (h, "kvs");
+
+    if (!ctx) {
+        ctx = xzmalloc (sizeof (*ctx));
+        if (!(ctx->watchers = zhash_new ()))
+            oom ();
+        if (!(ctx->dirstack = zlist_new ()))
+            oom ();
+        if (!(ctx->cwd = xstrdup (".")))
+            oom ();
+        flux_aux_set (h, "kvs", ctx, (FluxFreeFn *)freectx);
+    } 
+
+    return ctx;
+}
 
 /**
  ** Current working directory implementation is just used internally
@@ -92,40 +110,36 @@ static char *pathcat (const char *cwd, const char *relpath)
     return path;
 }
 
-const char *kvs_getcwd (void *h)
+const char *kvs_getcwd (flux_t h)
 {
-    kvsctx_t ctx = kvs_config.getctx (h);
-
-    assert (ctx != NULL);
+    kvsctx_t *ctx = getctx (h);
     return ctx->cwd;
 }
+
 #if 0
-static void kvs_chdir (void *h, const char *path)
+static void kvs_chdir (flux_t h, const char *path)
 {
-    kvsctx_t ctx = kvs_config.getctx (h);
+    kvsctx_t *ctx = getctx (h);
     char *new;
 
-    assert (ctx != NULL);
     new = pathcat (ctx->cwd, xstrdup (path ? path : "."));
     free (ctx->cwd);
     ctx->cwd = new;
 }
 #endif
-static void kvs_pushd (void *h, const char *path)
+static void kvs_pushd (flux_t h, const char *path)
 {
-    kvsctx_t ctx = kvs_config.getctx (h);
+    kvsctx_t *ctx = getctx (h);
 
-    assert (ctx != NULL);
     if (zlist_push (ctx->dirstack, ctx->cwd) < 0)
         oom ();
     ctx->cwd = pathcat (ctx->cwd, path ? path : ".");
 }
 
-static void kvs_popd (void *h)
+static void kvs_popd (flux_t h)
 {
-    kvsctx_t ctx = kvs_config.getctx (h);
+    kvsctx_t *ctx = getctx (h);
 
-    assert (ctx != NULL);
     if (zlist_size (ctx->dirstack) > 0) {
         free (ctx->cwd);
         ctx->cwd = zlist_pop (ctx->dirstack);
@@ -144,7 +158,7 @@ void kvsdir_destroy (kvsdir_t dir)
     free (dir);
 }
 
-static kvsdir_t kvsdir_alloc (void *handle, const char *key, json_object *o)
+static kvsdir_t kvsdir_alloc (flux_t handle, const char *key, json_object *o)
 {
     kvsdir_t dir = xzmalloc (sizeof (*dir));
 
@@ -237,7 +251,7 @@ char *kvsdir_key_at (kvsdir_t dir, const char *name)
  ** GET
  **/
 
-int kvs_get (void *h, const char *key, json_object **valp)
+int kvs_get (flux_t h, const char *key, json_object **valp)
 {
     json_object *val = NULL;
     json_object *request = util_json_object_new_object ();
@@ -268,7 +282,7 @@ done:
     return ret;
 }
 
-int kvs_get_dir (void *h, kvsdir_t *dirp, const char *fmt, ...)
+int kvs_get_dir (flux_t h, kvsdir_t *dirp, const char *fmt, ...)
 {
     json_object *val = NULL;
     json_object *request = util_json_object_new_object ();
@@ -307,7 +321,7 @@ done:
     return ret;
 }
 
-int kvs_get_symlink (void *h, const char *key, char **valp)
+int kvs_get_symlink (flux_t h, const char *key, char **valp)
 {
     json_object *val = NULL;
     json_object *request = util_json_object_new_object ();
@@ -346,7 +360,7 @@ done:
     return ret;
 }
 
-int kvs_get_string (void *h, const char *key, char **valp)
+int kvs_get_string (flux_t h, const char *key, char **valp)
 {
     json_object *o = NULL;
     const char *s;
@@ -368,7 +382,7 @@ done:
     return rc;
 }
 
-int kvs_get_int (void *h, const char *key, int *valp)
+int kvs_get_int (flux_t h, const char *key, int *valp)
 {
     json_object *o = NULL;
     int rc = -1;
@@ -388,7 +402,7 @@ done:
     return rc;
 }
 
-int kvs_get_int64 (void *h, const char *key, int64_t *valp)
+int kvs_get_int64 (flux_t h, const char *key, int64_t *valp)
 {
     json_object *o = NULL;
     int rc = -1;
@@ -408,7 +422,7 @@ done:
     return rc;
 }
 
-int kvs_get_double (void *h, const char *key, double *valp)
+int kvs_get_double (flux_t h, const char *key, double *valp)
 {
     json_object *o = NULL;
     int rc = -1;
@@ -428,7 +442,7 @@ done:
     return rc;
 }
 
-int kvs_get_boolean (void *h, const char *key, bool *valp)
+int kvs_get_boolean (flux_t h, const char *key, bool *valp)
 {
     json_object *o = NULL;
     int rc = -1;
@@ -452,7 +466,7 @@ done:
  ** WATCH
  **/
 
-static void dispatch_watch (void *h, kvs_watcher_t *wp, const char *key,
+static void dispatch_watch (flux_t h, kvs_watcher_t *wp, const char *key,
                             json_object *val)
 {
     int errnum = val ? 0 : ENOENT;
@@ -503,17 +517,13 @@ static void dispatch_watch (void *h, kvs_watcher_t *wp, const char *key,
     }
 }
 
-void kvs_watch_response (void *h, zmsg_t **zmsg)
+void kvs_watch_response (flux_t h, zmsg_t **zmsg)
 {
     json_object *reply = NULL;
     json_object_iter iter;
     kvs_watcher_t *wp;
     bool match = false;
-    kvsctx_t ctx;
-
-    assert (kvs_config.getctx != NULL);
-    ctx = kvs_config.getctx (h);
-    assert (ctx != NULL);
+    kvsctx_t *ctx = getctx (h);
     
     if (cmb_msg_decode (*zmsg, NULL, &reply) == 0 && reply != NULL) {
         json_object_object_foreachC (reply, iter) {
@@ -529,15 +539,11 @@ void kvs_watch_response (void *h, zmsg_t **zmsg)
         zmsg_destroy (zmsg);
 }
 
-static kvs_watcher_t *add_watcher (void *h, const char *key, watch_type_t type,
+static kvs_watcher_t *add_watcher (flux_t h, const char *key, watch_type_t type,
                                    KVSSetF *fun, void *arg)
 {
-    kvsctx_t ctx;
+    kvsctx_t *ctx = getctx (h);
     kvs_watcher_t *wp = xzmalloc (sizeof (*wp));
-
-    assert (kvs_config.getctx != NULL);
-    ctx = kvs_config.getctx (h);
-    assert (ctx != NULL);
 
     wp->set = fun;
     wp->type = type;
@@ -554,7 +560,7 @@ static kvs_watcher_t *add_watcher (void *h, const char *key, watch_type_t type,
 /* The "callback" idiom vs the "once" idiom handle a NULL value differently,
  * so don't convert to ENOENT here.  NULL is a valid value for *valp.
  */
-static int send_kvs_watch (void *h, const char *key, json_object **valp,
+static int send_kvs_watch (flux_t h, const char *key, json_object **valp,
                            bool once, bool directory)
 {
     json_object *val = NULL;
@@ -589,7 +595,7 @@ done:
 /* *valp is IN/OUT parameter.
  * IN *valp is freed internally.  Caller must free OUT *val.
  */
-int kvs_watch_once (void *h, const char *key, json_object **valp)
+int kvs_watch_once (flux_t h, const char *key, json_object **valp)
 {
     int rc = -1;
 
@@ -604,7 +610,7 @@ done:
     return rc;
 }
 
-int kvs_watch_once_int (void *h, const char *key, int *valp)
+int kvs_watch_once_int (flux_t h, const char *key, int *valp)
 {
     json_object *val;
     int rc = -1;
@@ -625,7 +631,7 @@ done:
     return rc;
 }
 
-int kvs_watch_once_dir (void *h, kvsdir_t *dirp, const char *fmt, ...)
+int kvs_watch_once_dir (flux_t h, kvsdir_t *dirp, const char *fmt, ...)
 {
     json_object *val = NULL;
     char *key;
@@ -659,7 +665,7 @@ done:
     return rc;
 }
 
-int kvs_watch (void *h, const char *key, KVSSetF *set, void *arg)
+int kvs_watch (flux_t h, const char *key, KVSSetF *set, void *arg)
 {
     kvs_watcher_t *wp;
     json_object *val = NULL;
@@ -676,7 +682,7 @@ done:
     return rc;
 }
 
-int kvs_watch_dir (void *h, KVSSetDirF *set, void *arg, const char *fmt, ...)
+int kvs_watch_dir (flux_t h, KVSSetDirF *set, void *arg, const char *fmt, ...)
 {
     kvs_watcher_t *wp;
     json_object *val = NULL;
@@ -702,7 +708,7 @@ done:
     return rc;
 }
 
-int kvs_watch_string (void *h, const char *key, KVSSetStringF *set, void *arg)
+int kvs_watch_string (flux_t h, const char *key, KVSSetStringF *set, void *arg)
 {
     kvs_watcher_t *wp;
     json_object *val = NULL;
@@ -719,7 +725,7 @@ done:
     return rc;
 }
 
-int kvs_watch_int (void *h, const char *key, KVSSetIntF *set, void *arg)
+int kvs_watch_int (flux_t h, const char *key, KVSSetIntF *set, void *arg)
 {
     kvs_watcher_t *wp;
     json_object *val = NULL;
@@ -736,7 +742,7 @@ done:
     return rc;
 }
 
-int kvs_watch_int64 (void *h, const char *key, KVSSetInt64F *set, void *arg)
+int kvs_watch_int64 (flux_t h, const char *key, KVSSetInt64F *set, void *arg)
 {
     kvs_watcher_t *wp;
     json_object *val = NULL;
@@ -753,7 +759,7 @@ done:
     return rc;
 }
 
-int kvs_watch_double (void *h, const char *key, KVSSetDoubleF *set, void *arg)
+int kvs_watch_double (flux_t h, const char *key, KVSSetDoubleF *set, void *arg)
 {
     kvs_watcher_t *wp;
     json_object *val = NULL;
@@ -770,7 +776,7 @@ done:
     return rc;
 }
 
-int kvs_watch_boolean (void *h, const char *key, KVSSetBooleanF *set, void *arg)
+int kvs_watch_boolean (flux_t h, const char *key, KVSSetBooleanF *set, void *arg)
 {
     kvs_watcher_t *wp;
     json_object *val = NULL;
@@ -791,7 +797,7 @@ done:
  ** PUT
  **/
 
-int kvs_put (void *h, const char *key, json_object *val)
+int kvs_put (flux_t h, const char *key, json_object *val)
 {
     json_object *request = util_json_object_new_object ();
     char *path = pathcat (kvs_getcwd (h), key);
@@ -820,7 +826,7 @@ done:
 }
 
 
-int kvs_put_string (void *h, const char *key, const char *val)
+int kvs_put_string (flux_t h, const char *key, const char *val)
 {
     json_object *o = NULL;
     int rc = -1;
@@ -836,7 +842,7 @@ done:
     return rc;
 }
 
-int kvs_put_int (void *h, const char *key, int val)
+int kvs_put_int (flux_t h, const char *key, int val)
 {
     json_object *o;
     int rc = -1;
@@ -852,7 +858,7 @@ done:
     return rc;
 }
 
-int kvs_put_int64 (void *h, const char *key, int64_t val)
+int kvs_put_int64 (flux_t h, const char *key, int64_t val)
 {
     json_object *o;
     int rc = -1;
@@ -868,7 +874,7 @@ done:
     return rc;
 }
 
-int kvs_put_double (void *h, const char *key, double val)
+int kvs_put_double (flux_t h, const char *key, double val)
 {
     json_object *o;
     int rc = -1;
@@ -884,7 +890,7 @@ done:
     return rc;
 }
 
-int kvs_put_boolean (void *h, const char *key, bool val)
+int kvs_put_boolean (flux_t h, const char *key, bool val)
 {
     json_object *o;
     int rc = -1;
@@ -901,12 +907,12 @@ done:
 }
 
 
-int kvs_unlink (void *h, const char *key)
+int kvs_unlink (flux_t h, const char *key)
 {
     return kvs_put (h, key, NULL);
 }
 
-int kvs_symlink (void *h, const char *key, const char *target)
+int kvs_symlink (flux_t h, const char *key, const char *target)
 {
     json_object *request = util_json_object_new_object ();
     char *path = pathcat (kvs_getcwd (h), key);
@@ -933,7 +939,7 @@ done:
     return ret;
 }
 
-int kvs_mkdir (void *h, const char *key)
+int kvs_mkdir (flux_t h, const char *key)
 {
     json_object *request = util_json_object_new_object ();
     char *path = pathcat (kvs_getcwd (h), key);
@@ -965,7 +971,7 @@ done:
  **/
 
 /* helper for cmb_kvs_commit, cmb_kvs_fence */
-static int send_kvs_flush (void *h)
+static int send_kvs_flush (flux_t h)
 {
     json_object *request = util_json_object_new_object ();
     json_object *reply = NULL;
@@ -988,7 +994,7 @@ done:
 }
 
 /* helper for cmb_kvs_commit, cmb_kvs_fence */
-static int send_kvs_commit (void *h, const char *name)
+static int send_kvs_commit (flux_t h, const char *name)
 {
     json_object *request = util_json_object_new_object ();
     json_object *reply = NULL;
@@ -1012,7 +1018,7 @@ done:
     return ret;
 }
 
-int kvs_commit (void *h)
+int kvs_commit (flux_t h)
 {
     if (send_kvs_flush (h) < 0)
         return -1;
@@ -1021,7 +1027,7 @@ int kvs_commit (void *h)
     return 0;
 }
 
-int kvs_fence (void *h, const char *name, int nprocs)
+int kvs_fence (flux_t h, const char *name, int nprocs)
 {
     if (send_kvs_flush (h) < 0)
         return -1;
@@ -1032,12 +1038,12 @@ int kvs_fence (void *h, const char *name, int nprocs)
     return 0;
 }
 
-int kvs_get_version (void *h, int *versionp)
+int kvs_get_version (flux_t h, int *versionp)
 {
     return kvs_get_int (h, "version", versionp);
 }
 
-int kvs_wait_version (void *h, int version)
+int kvs_wait_version (flux_t h, int version)
 {
     int vers;
     int rc = -1;
@@ -1053,7 +1059,7 @@ done:
     return rc;
 }
 
-int kvs_dropcache (void *h)
+int kvs_dropcache (flux_t h)
 {
     json_object *request = util_json_object_new_object ();
     json_object *reply = NULL;
@@ -1075,37 +1081,6 @@ done:
     return ret;
 }
 
-/**
- ** Interface to plugin.c/apicli.c
- **/
-
-kvsctx_t kvs_ctx_create (void *h)
-{
-    kvsctx_t ctx = xzmalloc (sizeof (*ctx));
-
-    ctx->handle = h;
-    if (!(ctx->watchers = zhash_new ()))
-        oom ();
-    if (!(ctx->dirstack = zlist_new ()))
-        oom ();
-    if (!(ctx->cwd = xstrdup (".")))
-        oom ();
-
-    return ctx;
-}
-
-void kvs_ctx_destroy (kvsctx_t ctx)
-{
-    zhash_destroy (&ctx->watchers);
-    zlist_destroy (&ctx->dirstack);
-    free (ctx->cwd);
-    free (ctx);
-}
-
-void kvs_getctxfun_set (KVSGetCtxF *fun)
-{
-    kvs_config.getctx = fun;
-}
 
 /**
  ** kvsdir_t convenience functions

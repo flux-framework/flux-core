@@ -10,6 +10,7 @@
 #include <czmq.h>
 
 #include "cmb.h"
+#include "flux.h"
 #include "log.h"
 #include "util.h"
 #include "zmsg.h"
@@ -20,9 +21,9 @@ int main (int ac, char **av)
 	char *tag;
 	const char *s;
 	struct timespec ts0;
-	cmb_t c = cmb_init ();
+	flux_t h = cmb_init ();
 
-	if (!c) {
+	if (!h) {
 		fprintf (stderr, "Failed to open connection to cmb!\n");
 		exit (1);
 	}
@@ -39,8 +40,8 @@ int main (int ac, char **av)
 	util_json_object_add_string (o, "string", av[1]);
 
 	monotime (&ts0);
-	if (cmb_send_message (c, o, "echo") < 0) {
-		fprintf (stderr, "cmb_send_message failed!\n");
+	if (flux_request_send (h, o, "echo") < 0) {
+		fprintf (stderr, "flux_request_send failed!\n");
 		exit (1);
 	}
 
@@ -49,7 +50,7 @@ int main (int ac, char **av)
 		zmsg_t *zmsg;
 		double ms;
 
-		if (!(zmsg = cmb_recv_zmsg (c, false))) {
+		if (flux_response_recvmsg (h, &zmsg, false) < 0) {
 			fprintf (stderr, "Failed to recv zmsg!\n");
 			exit (1);
 		}

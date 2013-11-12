@@ -24,13 +24,15 @@ LIBUTIL = util/libutil.a
 LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -luuid $(LIBUTIL)
 LDADD_SRV = -pthread $(LDADD_CLI)
 
+COMMON_OBJS = kvscli.o barriercli.o logcli.o mrpc.o handle.o
 PLUGIN_OBJS = apisrv.o syncsrv.o kvssrv.o barriersrv.o livesrv.o mechosrv.o \
-	logsrv.o echosrv.o wreck/jobsrv.o wreck/resrcsrv.o wreck/wrexecsrv.o
-CMBD_OBJS = cmbd.o route.o plugin.o kvscli.o barriercli.o mrpc.o $(PLUGIN_OBJS)
+	logsrv.o echosrv.o \
+	wreck/jobsrv.o wreck/resrcsrv.o wreck/wrexecsrv.o
+CMBD_OBJS = cmbd.o route.o plugin.o $(COMMON_OBJS) $(PLUGIN_OBJS)
 
 CMBUTIL_OBJS = cmbutil.o
 LIBPMI_OBJS = pmi.o
-LIBCMB_OBJS = apicli.o kvscli.o barriercli.o mrpc.o
+LIBCMB_OBJS = apicli.o $(COMMON_OBJS)
 
 LIBPMI = $(LIBDIR)/libpmi.so.0
 LIBCMB = $(LIBDIR)/libcmb.so.0

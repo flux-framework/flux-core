@@ -1,9 +1,6 @@
 #ifndef KVS_H
 #define KVS_H
-typedef struct kvsctx_struct *kvsctx_t;
 typedef struct kvsdir_struct *kvsdir_t;
-
-typedef kvsctx_t (KVSGetCtxF(void *h));
 
 typedef void (KVSSetF(const char *key, json_object *val, void *arg,int errnum));
 typedef void (KVSSetDirF(const char *key, kvsdir_t dir, void *arg, int errnum));
@@ -25,14 +22,14 @@ void kvsdir_destroy (kvsdir_t dir);
  * kvsdir_destroy(), and free() respectively.
  * These functions return -1 on error (errno set), 0 on success.
  */
-int kvs_get (void *h, const char *key, json_object **valp);
-int kvs_get_dir (void *h, kvsdir_t *dirp, const char *fmt, ...);
-int kvs_get_string (void *h, const char *key, char **valp);
-int kvs_get_int (void *h, const char *key, int *valp);
-int kvs_get_int64 (void *h, const char *key, int64_t *valp);
-int kvs_get_double (void *h, const char *key, double *valp);
-int kvs_get_boolean (void *h, const char *key, bool *valp);
-int kvs_get_symlink (void *h, const char *key, char **valp);
+int kvs_get (flux_t h, const char *key, json_object **valp);
+int kvs_get_dir (flux_t h, kvsdir_t *dirp, const char *fmt, ...);
+int kvs_get_string (flux_t h, const char *key, char **valp);
+int kvs_get_int (flux_t h, const char *key, int *valp);
+int kvs_get_int64 (flux_t h, const char *key, int64_t *valp);
+int kvs_get_double (flux_t h, const char *key, double *valp);
+int kvs_get_boolean (flux_t h, const char *key, bool *valp);
+int kvs_get_symlink (flux_t h, const char *key, char **valp);
 
 /* kvs_watch* is like kvs_get* except the registered callback is called
  * to set the value.  It will be called immediately to set the initial
@@ -41,13 +38,13 @@ int kvs_get_symlink (void *h, const char *key, char **valp);
  * callback is freed when the callback returns.  If a value is unset, the
  * callback gets errnum = ENOENT.
  */
-int kvs_watch (void *h, const char *key, KVSSetF *set, void *arg);
-int kvs_watch_dir (void *h, KVSSetDirF *set, void *arg, const char *fmt, ...);
-int kvs_watch_string (void *h, const char *key, KVSSetStringF *set, void *arg);
-int kvs_watch_int (void *h, const char *key, KVSSetIntF *set, void *arg);
-int kvs_watch_int64 (void *h, const char *key, KVSSetInt64F *set, void *arg);
-int kvs_watch_double (void *h, const char *key, KVSSetDoubleF *set, void *arg);
-int kvs_watch_boolean (void *h, const char *key, KVSSetBooleanF *set,void *arg);
+int kvs_watch (flux_t h, const char *key, KVSSetF *set, void *arg);
+int kvs_watch_dir (flux_t h, KVSSetDirF *set, void *arg, const char *fmt, ...);
+int kvs_watch_string (flux_t h, const char *key, KVSSetStringF *set, void *arg);
+int kvs_watch_int (flux_t h, const char *key, KVSSetIntF *set, void *arg);
+int kvs_watch_int64 (flux_t h, const char *key, KVSSetInt64F *set, void *arg);
+int kvs_watch_double (flux_t h, const char *key, KVSSetDoubleF *set, void *arg);
+int kvs_watch_boolean (flux_t h, const char *key, KVSSetBooleanF *set,void *arg);
 
 /* While the above callback interface makes sense in plugin context,
  * the following is better for API context.  'valp' is an IN/OUT parameter.
@@ -58,20 +55,20 @@ int kvs_watch_boolean (void *h, const char *key, KVSSetBooleanF *set,void *arg);
  * If the key is not set, ENOENT is returned without affecting *valp.
  * FIXME: add more types.
  */
-int kvs_watch_once (void *h, const char *key, json_object **valp);
-int kvs_watch_once_dir (void *h, kvsdir_t *dirp, const char *fmt, ...);
-int kvs_watch_once_int (void *h, const char *key, int *valp);
+int kvs_watch_once (flux_t h, const char *key, json_object **valp);
+int kvs_watch_once_dir (flux_t h, kvsdir_t *dirp, const char *fmt, ...);
+int kvs_watch_once_int (flux_t h, const char *key, int *valp);
 
 /* kvs_put() and kvs_put_string() both make copies of the value argument
  * The caller retains ownership of the original.
  * These functions return -1 on error (errno set), 0 on success.
  */
-int kvs_put (void *h, const char *key, json_object *val);
-int kvs_put_string (void *h, const char *key, const char *val);
-int kvs_put_int (void *h, const char *key, int val);
-int kvs_put_int64 (void *h, const char *key, int64_t val);
-int kvs_put_double (void *h, const char *key, double val);
-int kvs_put_boolean (void *h, const char *key, bool val);
+int kvs_put (flux_t h, const char *key, json_object *val);
+int kvs_put_string (flux_t h, const char *key, const char *val);
+int kvs_put_int (flux_t h, const char *key, int val);
+int kvs_put_int64 (flux_t h, const char *key, int64_t val);
+int kvs_put_double (flux_t h, const char *key, double val);
+int kvs_put_boolean (flux_t h, const char *key, bool val);
 
 /* An iterator interface for walking the list of names in a kvsdir_t
  * returned by kvs_get_dir().  kvsitr_create() always succeeds.
@@ -103,24 +100,24 @@ void *kvsdir_handle (kvsdir_t dir);
  * its contents are also removed.  kvsdir_unlink removes it relative to 'dir'.
  * Returns -1 on error (errno set), 0 on success.
  */
-int kvs_unlink (void *h, const char *key);
+int kvs_unlink (flux_t h, const char *key);
 
 /* Create symlink.  kvsdir_symlink creates it relatived to 'dir'.
  * Returns -1 on error (errno set), 0 on success.
  */
-int kvs_symlink (void *h, const char *key, const char *target);
+int kvs_symlink (flux_t h, const char *key, const char *target);
 
 /* Create an empty directory.  kvsdir_mkdir creates it relative to 'dir'.
  * Returns -1 on error (errno set), 0 on success.
  */
-int kvs_mkdir (void *h, const char *key);
+int kvs_mkdir (flux_t h, const char *key);
 
 /* kvs_commit() must be called after kvs_put*, kvs_unlink, and kvs_mkdir
  * to finalize the update.  The new data is immediately available on
  * the calling node when the commit returns.
  * Returns -1 on error (errno set), 0 on success.
  */
-int kvs_commit (void *h);
+int kvs_commit (flux_t h);
 
 /* kvs_fence() is a collective commit operation.  nprocs tasks make the
  * call with identical arguments.  It is internally optimized to minimize
@@ -128,29 +125,21 @@ int kvs_commit (void *h);
  * from participating tasks are available to all tasks.
  * Returns -1 on error (errno set), 0 on success.
  */
-int kvs_fence (void *h, const char *name, int nprocs);
+int kvs_fence (flux_t h, const char *name, int nprocs);
 
 /* Synchronization:
  * Process A commits data, then gets the store version V and sends it to B.
  * Process B waits for the store version to be >= V, then reads data.
  */
-int kvs_get_version (void *h, int *versionp);
-int kvs_wait_version (void *h, int version);
-
-/* These are called internally by plugin.c and apicli.c and
- * are part of the KVS internal implementation.  Do not use.
- */
-void kvs_getctxfun_set (KVSGetCtxF *fun);
-void kvs_watch_response (void *h, zmsg_t **zmsg);
-kvsctx_t kvs_ctx_create (void *h);
-void kvs_ctx_destroy (kvsctx_t ctx);
+int kvs_get_version (flux_t h, int *versionp);
+int kvs_wait_version (flux_t h, int version);
 
 /* Garbage collect the cache.  On the root node, drop all data that
  * doesn't have a reference in the namespace.  On other nodes, the entire
  * cache is dropped and will be reloaded on demand.
  * Returns -1 on error (errno set), 0 on success.
  */
-int kvs_dropcache (void *h);
+int kvs_dropcache (flux_t h);
 
 /* kvsdir_ convenience functions
  * They behave exactly like their kvs_ counterparts, except the 'key' path
@@ -175,6 +164,10 @@ int kvsdir_put_boolean (kvsdir_t dir, const char *key, bool val);
 int kvsdir_unlink (kvsdir_t dir, const char *key);
 int kvsdir_symlink (kvsdir_t dir, const char *key, const char *target);
 int kvsdir_mkdir (kvsdir_t dir, const char *key);
+
+/* Do not use.
+ */
+void kvs_watch_response (flux_t h, zmsg_t **zmsg);
 
 
 #endif /* !HAVE_KVS_H */

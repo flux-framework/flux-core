@@ -1,40 +1,50 @@
 #ifndef FLUX_H
 #define FLUX_H
 
+#include <czmq.h>
+
+typedef void (FluxFreeFn)(void *arg);
+
+typedef struct flux_handle_struct *flux_t;
+
+#include "kvs.h"
+#include "flux_log.h"
+
+enum {
+    FLUX_FLAGS_TRACE = 1,
+};
+
 typedef struct flux_mrpc_struct *flux_mrpc_t;
 
-/* Return the rank of the "local" node in the comms session.
- */
-int flux_rank (void *h);
+void flux_handle_destroy (flux_t *hp);
+void *flux_aux_get (flux_t h, const char *name);
+void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn *destroy);
 
-/* Return the number of nodes in the comms session.
- */
-int flux_size (void *h);
+int flux_request_sendmsg (flux_t h, zmsg_t **zmsg);
+int flux_request_send (flux_t h, json_object *request, const char *fmt, ...);
+int flux_response_recvmsg (flux_t h, zmsg_t **zmsg, bool nb);
+int flux_response_recv (flux_t h, json_object **respp, char **tagp, bool nb);
+int flux_response_putmsg (flux_t h, zmsg_t **zmsg);
 
-/* Block until 'nprocs' processes make identical calls to flux_barrier().
- * 'name' should be unique, i.e. there should not be multiple sets of
- * processes executing flux_barrier() with the same name concurrently!
- */
-int flux_barrier (void *h, const char *name, int nprocs);
+int flux_event_sendmsg (flux_t h, zmsg_t **zmsg);
+int flux_event_send (flux_t h, json_object *request, const char *fmt, ...);
+int flux_event_recvmsg (flux_t h, zmsg_t **zmsg, bool nonblock);
+int flux_event_subscribe (flux_t h, const char *topic);
+int flux_event_unsubscribe (flux_t h, const char *topic);
 
-/* Send an event.  Event tags are strings of form
- *   event.topic.[subtopic[.subsubtopic...]]
- * the JSON part can be NULL.
- */
-int flux_event_send (void *h, json_object *o, const char *fmt, ...);
-int flux_event_subscribe (void *h, const char *topic);
-int flux_event_unsubscribe (void *h, const char *topic);
+int flux_snoop_recvmsg (flux_t h, zmsg_t **zmsg, bool nb);
+int flux_snoop_subscribe (flux_t h, const char *topic);
+int flux_snoop_unsubscribe (flux_t h, const char *topic);
 
-/* Enable/disable snooping on request/response messages passing
- * through the local cmb.
- */
-int flux_snoop_subscribe (void *h, const char *topic);
-int flux_snoop_unsubscribe (void *h, const char *topic);
+int flux_rank (flux_t h);
+int flux_size (flux_t h);
 
-/* Singleton rpc call.
- *   N.B. if a specific node is desired, prepend "<nodeid>!" to tag.
- */
-json_object *flux_rpc (void *h, json_object *in, const char *fmt, ...);
+int flux_barrier (flux_t h, const char *name, int nprocs);
+
+void flux_flags_set (flux_t h, int flags);
+void flux_flags_unset (flux_t h, int flags);
+
+json_object *flux_rpc (flux_t h, json_object *in, const char *fmt, ...);
 
 /* Group RPC
  *
@@ -50,7 +60,7 @@ json_object *flux_rpc (void *h, json_object *in, const char *fmt, ...);
  * - flux_mrpc_get_outarg() ...         flux_mrpc_destroy() 
  * - flux_mrpc_destroy()              }
  */
-flux_mrpc_t flux_mrpc_create (void *h, const char *nodelist);
+flux_mrpc_t flux_mrpc_create (flux_t h, const char *nodelist);
 void flux_mrpc_destroy (flux_mrpc_t f);
 
 void flux_mrpc_put_inarg (flux_mrpc_t f, json_object *val);
@@ -66,7 +76,7 @@ void flux_mrpc_rewind_outarg (flux_mrpc_t f);
 int flux_mrpc (flux_mrpc_t f, const char *fmt, ...);
 
 /* returns NULL, errno == EINVAL if not addressed to me */
-flux_mrpc_t flux_mrpc_create_fromevent (void *h, json_object *request);
+flux_mrpc_t flux_mrpc_create_fromevent (flux_t h, json_object *request);
 int flux_mrpc_respond (flux_mrpc_t f);
 
 #endif /* !defined(FLUX_H) */

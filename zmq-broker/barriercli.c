@@ -24,7 +24,7 @@
 #include "util.h"
 #include "flux.h"
 
-int flux_barrier (void *h, const char *name, int nprocs)
+int flux_barrier (flux_t h, const char *name, int nprocs)
 {
     json_object *request = util_json_object_new_object ();
     json_object *reply = NULL;

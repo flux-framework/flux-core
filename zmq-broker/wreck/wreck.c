@@ -22,14 +22,14 @@ struct optparse_option options [] = {
     OPTPARSE_TABLE_END,
 };
 
-static int64_t process_reply (cmb_t c)
+static int64_t process_reply (flux_t c)
 {
     int64_t jobid;
     char *tag;
     zmsg_t *zmsg;
     json_object *o = NULL;
 
-    if (!(zmsg = cmb_recv_zmsg (c, false))) {
+    if (flux_response_recvmsg (c, &zmsg, false) < 0) {
         fprintf (stderr, "Failed to recv zmsg!\n");
         exit (1);
     }
@@ -98,7 +98,7 @@ int get_int (const char *arg)
 
 int main (int ac, char **av)
 {
-    cmb_t c;
+    flux_t c;
     optparse_t p;
     json_object *jobreq;
     const char *optarg;
@@ -132,7 +132,7 @@ int main (int ac, char **av)
                 argv_to_json (ac-optind, &av[optind]));
     }
 
-    if (cmb_send_message (c, jobreq, "job.create") < 0) {
+    if (flux_request_send (c, jobreq, "job.create") < 0) {
         fprintf (stderr, "cmb_send_message failed!\n");
         exit (1);
     }

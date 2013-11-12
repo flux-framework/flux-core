@@ -24,6 +24,7 @@
 #include "util.h"
 #include "plugin.h"
 #include "hljson.h"
+#include "flux.h"
 
 #define OPTIONS "t:e:E:O:vs:R:S:p:P:L:T:A:d:D:H:"
 static const struct option longopts[] = {
