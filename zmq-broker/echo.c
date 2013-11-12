@@ -50,7 +50,7 @@ int main (int ac, char **av)
 		zmsg_t *zmsg;
 		double ms;
 
-		if (flux_response_recvmsg (h, &zmsg, false) < 0) {
+		if (!(zmsg = flux_response_recvmsg (h, false))) {
 			fprintf (stderr, "Failed to recv zmsg!\n");
 			exit (1);
 		}

@@ -30,15 +30,15 @@
 static int epoch = 0;
 static bool disabled = false;
 
-static void _timeout (plugin_ctx_t *p)
+static void syncsrv_timeout (flux_t h)
 {
-    if (flux_event_send (p, NULL, "event.sched.trigger.%d", ++epoch) < 0)
+    if (flux_event_send (h, NULL, "event.sched.trigger.%d", ++epoch) < 0)
         err_exit ("flux_event_send");
 }
 
 static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)
 {
-    plugin_ctx_t *p = arg;
+    flux_t h = arg;
     double val;
     char *key;
 
@@ -48,7 +48,7 @@ static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)
     }
 
     key = kvsdir_key_at (dir, "period-sec");
-    if (kvs_get_double (p, key, &val) < 0) {
+    if (kvs_get_double (h, key, &val) < 0) {
         err ("sync: %s", key);
         goto invalid;
     }
@@ -62,26 +62,26 @@ static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)
         msg ("sync: %s values OK, synchronization resumed", path);
         disabled = false;
     }
-    plugin_timeout_set (p, (int)(val * 1000)); /* msec */
+    flux_timeout_set (h, (int)(val * 1000)); /* msec */
     return;
 invalid:
     if (!disabled) {
         msg ("sync: %s values invalid, synchronization suspended", path);
         disabled = true;
-        plugin_timeout_clear (p);
+        flux_timeout_clear (h);
     }
 }
 
-static void _init (plugin_ctx_t *p)
+static void syncsrv_init (flux_t h)
 {
-    if (kvs_watch_dir (p, set_config, p, "conf.sync") < 0)
+    if (kvs_watch_dir (h, set_config, h, "conf.sync") < 0)
         err_exit ("kvs_watch_dir conf.sync");
 }
 
 struct plugin_struct syncsrv = {
     .name      = "sync",
-    .initFn    = _init,
-    .timeoutFn = _timeout,
+    .initFn    = syncsrv_init,
+    .timeoutFn = syncsrv_timeout,
 };
 
 /*

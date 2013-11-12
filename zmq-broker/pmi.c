@@ -66,7 +66,7 @@ static inline void trace (int flags, const char *fmt, ...)
         snprintf (buf, sizeof (buf), "[%d.%d.%d] %s", ctx->cmb_rank,
                   ctx->appnum, ctx->rank, fmt);
         va_start (ap, fmt);
-        cmb_vlog (ctx->fctx, LOG_DEBUG, buf, ap);
+        flux_vlog (ctx->fctx, LOG_DEBUG, buf, ap);
         va_end (ap);
     }
 }
@@ -184,7 +184,7 @@ int PMI_Init( int *spawned )
         err ("cmb_init");
         goto fail;
     }
-    cmb_log_set_facility (ctx->fctx, "PMI");
+    flux_log_set_facility (ctx->fctx, "PMI");
     ctx->cmb_rank = flux_rank (ctx->fctx);
     trace_simple (PMI_TRACE_INIT);
     *spawned = ctx->spawned;

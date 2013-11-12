@@ -10,7 +10,6 @@
 #include "util.h"
 #include "plugin.h"
 
-
 static json_object * json_echo (const char *s, int id)
 {
     json_object *o = util_json_object_new_object ();
@@ -23,7 +22,7 @@ static json_object * json_echo (const char *s, int id)
     return o;
 }
 
-void handle_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
+static void handle_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
 {
     json_object *o = NULL;
     if (cmb_msg_decode (*zmsg, NULL, &o) >= 0) {
@@ -44,8 +43,9 @@ void handle_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
             if (!(z = zmsg_dup (*zmsg)))
                 oom ();
 
-            respo = json_echo (s, flux_rank (p));
-            plugin_send_response (p, &z, respo);
+            respo = json_echo (s, flux_rank (h));
+            cmb_msg_replace_json (z, respo);
+            flux_response_sendmsg (h, &z);
             json_object_put (respo);
         }
     }

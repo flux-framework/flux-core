@@ -188,6 +188,9 @@ int main (int argc, char *argv[])
     if (!conf->plugins)
         msg_exit ("at least one plugin must be loaded");
 
+    if (setenv ("CMB_API_PATH", conf->api_sockpath, 1) < 0)
+        err_exit ("setenv (CMB_API_PATH=%s)", conf->api_sockpath);
+
     /* FIXME: hardwire rank 0 as root of the reduction tree.
      * Eventually we must allow for this role to migrate to other nodes
      * in case node 0 becomes unavailable.

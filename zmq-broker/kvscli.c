@@ -65,7 +65,7 @@ static void freectx (kvsctx_t *ctx)
 
 static kvsctx_t *getctx (flux_t h)
 {
-    kvsctx_t *ctx = (kvsctx_t *)flux_aux_get (h, "kvs");
+    kvsctx_t *ctx = (kvsctx_t *)flux_aux_get (h, "kvscli");
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
@@ -75,7 +75,7 @@ static kvsctx_t *getctx (flux_t h)
             oom ();
         if (!(ctx->cwd = xstrdup (".")))
             oom ();
-        flux_aux_set (h, "kvs", ctx, (FluxFreeFn *)freectx);
+        flux_aux_set (h, "kvscli", ctx, (FluxFreeFn *)freectx);
     } 
 
     return ctx;

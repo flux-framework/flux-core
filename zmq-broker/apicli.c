@@ -126,6 +126,11 @@ static int cmb_size (cmb_t *c)
     return c->size;
 }
 
+static bool cmb_treeroot (cmb_t *c)
+{
+    return (c->rank == 0);
+}
+
 static int cmb_session_info_query (cmb_t *c)
 {
     json_object *request = util_json_object_new_object ();
@@ -193,18 +198,26 @@ flux_t cmb_init_full (const char *path, int flags)
         goto error;
 
     h = flux_handle_create (c, (FluxFreeFn *)cmb_fini, flags);
-    h->request_sendmsg = (FluxRequestSendMsg *)cmb_request_sendmsg;
-    h->response_recvmsg = (FluxResponseRecvMsg *)cmb_response_recvmsg;
-    h->response_putmsg = (FluxResponsePutMsg *)cmb_response_putmsg;
-    h->event_sendmsg = (FluxEventSendMsg *)cmb_event_sendmsg;
-    h->event_recvmsg = (FluxEventRecvMsg *)cmb_response_recvmsg; /* FIXME */
-    h->event_subscribe = (FluxEventSub *)cmb_event_subscribe;
-    h->event_unsubscribe = (FluxEventUnsub *)cmb_event_unsubscribe;
-    h->snoop_recvmsg = (FluxSnoopRecvMsg *)cmb_response_recvmsg; /* FIXME */
-    h->snoop_subscribe = (FluxSnoopSub *)cmb_snoop_subscribe;
-    h->snoop_unsubscribe = (FluxSnoopUnsub *)cmb_snoop_unsubscribe;
-    h->rank = (FluxRank *)cmb_rank;
-    h->size = (FluxSize *)cmb_size;
+    h->request_sendmsg = (FluxSendMsg *)cmb_request_sendmsg;
+    h->request_recvmsg = NULL; /* ENOSYS */
+    h->response_sendmsg = NULL; /* ENOSYS */
+    h->response_recvmsg = (FluxRecvMsg *)cmb_response_recvmsg;
+    h->response_putmsg = (FluxPutMsg *)cmb_response_putmsg;
+    h->event_sendmsg = (FluxSendMsg *)cmb_event_sendmsg;
+    h->event_recvmsg = (FluxRecvMsg *)cmb_response_recvmsg; /* FIXME */
+    h->event_subscribe = (FluxSub *)cmb_event_subscribe;
+    h->event_unsubscribe = (FluxSub *)cmb_event_unsubscribe;
+    h->snoop_recvmsg = (FluxRecvMsg *)cmb_response_recvmsg; /* FIXME */
+    h->snoop_subscribe = (FluxSub *)cmb_snoop_subscribe;
+    h->snoop_unsubscribe = (FluxSub *)cmb_snoop_unsubscribe;
+    h->rank = (FluxGetInt *)cmb_rank;
+    h->size = (FluxGetInt *)cmb_size;
+    h->treeroot = (FluxGetBool *)cmb_treeroot;
+    h->timeout_set = NULL; /* ENOSYS */
+    h->timeout_clear = NULL; /* ENOSYS */
+    h->timeout_isset = NULL; /* ENOSYS */
+    h->get_zloop = NULL; /* ENOSYS */
+    h->get_zctx = NULL; /* ENOSYS */
     return h;
 error:
     cmb_fini (&c);

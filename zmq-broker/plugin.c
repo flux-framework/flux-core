@@ -25,6 +25,39 @@
 #include "util.h"
 #include "plugin.h"
 
+#include "flux.h"
+#include "flux_handle.h"
+
+typedef struct {
+    int upreq_send_count;
+    int upreq_recv_count;
+    int dnreq_send_count;
+    int dnreq_recv_count;
+    int event_send_count;
+    int event_recv_count;
+} plugin_stats_t;
+
+typedef struct ptimeout_struct *ptimeout_t;
+
+typedef struct {
+    conf_t *conf;
+    void *zs_upreq; /* for making requests */
+    void *zs_dnreq; /* for handling requests (reverse message flow) */
+    void *zs_evin;
+    void *zs_evout;
+    void *zs_snoop;
+    char *id;
+    ptimeout_t timeout;
+    pthread_t t;
+    plugin_t plugin;
+    server_t *srv;
+    plugin_stats_t stats;
+    zloop_t *zloop;
+    zlist_t *deferred_responses;
+    void *ctx;
+    flux_t h;
+} plugin_ctx_t;
+
 struct ptimeout_struct {
     plugin_ctx_t *p;
     unsigned long msec;
@@ -57,9 +90,103 @@ static plugin_t plugins[] = {
     &rexecsrv,
     &resrcsrv
 };
-const int plugins_len = sizeof (plugins)/sizeof (plugins[0]);
+static const int plugins_len = sizeof (plugins)/sizeof (plugins[0]);
 
-bool plugin_treeroot (plugin_ctx_t *p)
+/**
+ ** flux_t implementation
+ **/
+
+static int plugin_request_sendmsg (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    int rc;
+
+    rc = zmsg_send (zmsg, p->zs_upreq);
+    p->stats.upreq_send_count++;
+    return rc;
+}
+
+static zmsg_t *plugin_request_recvmsg (plugin_ctx_t *p, bool nb)
+{
+    return zmsg_recv (p->zs_dnreq); /* FIXME: ignores nb flag */
+}
+
+
+static int plugin_response_sendmsg (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    int rc;
+
+    rc = zmsg_send (zmsg, p->zs_dnreq);
+    p->stats.dnreq_send_count++;
+    return rc;
+}
+
+static zmsg_t *plugin_response_recvmsg (plugin_ctx_t *p, bool nb)
+{
+    return zmsg_recv (p->zs_upreq); /* FIXME: ignores nb flag */
+}
+
+static int plugin_response_putmsg (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    if (zlist_append (p->deferred_responses, *zmsg) < 0)
+        oom ();
+    *zmsg = NULL;
+    return 0;
+}
+
+static int plugin_event_sendmsg (plugin_ctx_t *p, zmsg_t **zmsg)
+{
+    int rc;
+
+    rc = zmsg_send (zmsg, p->zs_evout);
+    p->stats.event_send_count++;
+    return rc;
+}
+
+static zmsg_t *plugin_event_recvmsg (plugin_ctx_t *p, bool nb)
+{
+    return zmsg_recv (p->zs_evin); /* FIXME: ignores nb flag */
+}
+
+static int plugin_event_subscribe (plugin_ctx_t *p, const char *topic)
+{
+    zsocket_set_subscribe (p->zs_evin, topic ? (char *)topic : "");
+    return 0;
+}
+
+static int plugin_event_unsubscribe (plugin_ctx_t *p, const char *topic)
+{
+    zsocket_set_unsubscribe (p->zs_evin, topic ? (char *)topic : "");
+    return 0;
+}
+
+static zmsg_t *plugin_snoop_recvmsg (plugin_ctx_t *p, bool nb)
+{
+    return zmsg_recv (p->zs_snoop); /* FIXME: ignores nb flag */
+}
+
+static int plugin_snoop_subscribe (plugin_ctx_t *p, const char *topic)
+{
+    zsocket_set_subscribe (p->zs_snoop, topic ? (char *)topic : "");
+    return 0;
+}
+
+static int plugin_snoop_unsubscribe (plugin_ctx_t *p, const char *topic)
+{
+    zsocket_set_unsubscribe (p->zs_snoop, topic ? (char *)topic : "");
+    return 0;
+}
+
+static int plugin_rank (plugin_ctx_t *p)
+{
+    return p->conf->rank;
+}
+
+static int plugin_size (plugin_ctx_t *p)
+{
+    return p->conf->size;
+}
+
+static bool plugin_treeroot (plugin_ctx_t *p)
 {
     return (p->conf->treeroot);
 }
@@ -74,7 +201,7 @@ bool plugin_treeroot (plugin_ctx_t *p)
  * sure the arg value is different (malloc-before-free plugin_ctx_t *
  * wrapper struct shenanegens below).
  */
-void plugin_timeout_set (plugin_ctx_t *p, unsigned long msec)
+static int plugin_timeout_set (plugin_ctx_t *p, unsigned long msec)
 {
     ptimeout_t t;
 
@@ -89,232 +216,39 @@ void plugin_timeout_set (plugin_ctx_t *p, unsigned long msec)
     if (p->timeout)
         free (p->timeout); /* free after xzmalloc - see comment above */
     p->timeout = t;
+    return 0;
 }
 
-void plugin_timeout_clear (plugin_ctx_t *p)
+static int plugin_timeout_clear (plugin_ctx_t *p)
 {
     if (p->timeout) {
         (void)zloop_timer_end (p->zloop, p->timeout);
         free (p->timeout);
         p->timeout = NULL;
     }
+    return 0;
 }
 
-bool plugin_timeout_isset (plugin_ctx_t *p)
+static bool plugin_timeout_isset (plugin_ctx_t *p)
 {
     return p->timeout ? true : false;
 }
 
-void plugin_send_request_raw (plugin_ctx_t *p, zmsg_t **zmsg)
+static zloop_t *plugin_get_zloop (plugin_ctx_t *p)
 {
-    if (zmsg_send (zmsg, p->zs_upreq) < 0)
-        err_exit ("%s: zmsg_send", __FUNCTION__);
-    p->stats.upreq_send_count++;
+    return p->zloop;
 }
 
-zmsg_t *plugin_recv_response_raw (plugin_ctx_t *p)
+static zctx_t *plugin_get_zctx (plugin_ctx_t *p)
 {
-    zmsg_t *zmsg = zmsg_recv (p->zs_upreq);
-
-    if (!zmsg)
-        err_exit ("%s: zmsg_recv", __FUNCTION__);
-    return zmsg;
+    return p->srv->zctx;
 }
 
-void plugin_send_response_raw (plugin_ctx_t *p, zmsg_t **zmsg)
-{
-    if (zmsg_send (zmsg, p->zs_dnreq) < 0)
-        err_exit ("%s: zmsg_send", __FUNCTION__);
-    p->stats.dnreq_send_count++;
-}
+/**
+ ** end of handle implementation
+ **/
 
-void plugin_send_event_raw (plugin_ctx_t *p, zmsg_t **zmsg)
-{
-    if (zmsg_send (zmsg, p->zs_evout) < 0)
-        err_exit ("%s: zmsg_send", __FUNCTION__);
-    p->stats.event_send_count++;
-}
-
-int flux_event_send (void *h, json_object *o, const char *fmt, ...)
-{
-    plugin_ctx_t *p = (plugin_ctx_t *)h;
-    va_list ap;
-    zmsg_t *zmsg;
-    char *tag;
-
-    va_start (ap, fmt);
-    if (vasprintf (&tag, fmt, ap) < 0)
-        oom ();
-    va_end (ap);
-    zmsg = cmb_msg_encode (tag, o);
-    free (tag);
-    plugin_send_event_raw (p, &zmsg);
-    return 0;
-}
-
-int flux_event_subscribe (void *h, const char *topic)
-{
-    plugin_ctx_t *p = (plugin_ctx_t *)h;
-    zsocket_set_subscribe (p->zs_evin, topic ? (char *)topic : "");
-    return 0;
-}
-
-int flux_event_unsubscribe (void *h, const char *topic)
-{
-    plugin_ctx_t *p = (plugin_ctx_t *)h;
-    zsocket_set_unsubscribe (p->zs_evin, topic ? (char *)topic : "");
-    return 0;
-}
-
-int flux_snoop_subscribe (void *h, const char *topic)
-{
-    plugin_ctx_t *p = (plugin_ctx_t *)h;
-    zsocket_set_subscribe (p->zs_snoop, topic ? (char *)topic : "");
-    return 0;
-}
-
-int flux_snoop_unsubscribe (void *h, const char *topic)
-{
-    plugin_ctx_t *p = (plugin_ctx_t *)h;
-    zsocket_set_unsubscribe (p->zs_snoop, topic ? (char *)topic : "");
-    return 0;
-}
-
-static void plugin_send_vrequest (plugin_ctx_t *p, json_object *o,
-                                  const char *fmt, va_list ap)
-{
-    json_object *empty = NULL;
-    char *tag;
-    zmsg_t *zmsg;
-
-    if (vasprintf (&tag, fmt, ap) < 0)
-        oom ();
-
-    if (!o)
-        o = empty = util_json_object_new_object ();
-    zmsg = cmb_msg_encode (tag, o);
-    if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* delimiter frame */
-        oom ();
-    plugin_send_request_raw (p, &zmsg);
-    if (empty)
-        json_object_put (empty);
-    free (tag);
-}                        
-
-static json_object *plugin_recv_vresponse (plugin_ctx_t *p,
-                                           const char *fmt, va_list ap)
-{
-    char *tag, *reply_tag;
-    zmsg_t *zmsg;
-    json_object *reply_obj;
-
-    if (vasprintf (&tag, fmt, ap) < 0)
-        oom ();
-
-    for (;;) {
-        zmsg = plugin_recv_response_raw (p);
-        if (cmb_msg_decode (zmsg, &reply_tag, &reply_obj) < 0) {
-            err ("%s: dropping malformed reply", __FUNCTION__);
-            zmsg_destroy (&zmsg);
-            continue;
-        }
-        if (!reply_obj) {
-            msg ("%s: dropping %s reply with no JSON", __FUNCTION__, reply_tag);
-            free (reply_tag);
-            zmsg_destroy (&zmsg);
-            continue;
-        }
-        if (strcmp (tag, reply_tag) != 0) {
-            json_object_put (reply_obj);
-            free (reply_tag);
-            if (zlist_append (p->deferred_responses, zmsg) < 0)
-                oom ();
-            continue;
-        }
-        zmsg_destroy (&zmsg);
-        free (reply_tag);
-        if (util_json_object_get_int (reply_obj, "errnum", &errno) == 0) {
-            free (reply_obj);
-            reply_obj = NULL;
-        }
-        break;
-    }
-    free (tag);
-    return reply_obj;
-}
-
-void plugin_send_request (plugin_ctx_t *p, json_object *o, const char *fmt, ...)
-{
-    va_list ap;
-
-    va_start (ap, fmt);
-    plugin_send_vrequest (p, o, fmt, ap);
-    va_end (ap);
-}
-
-json_object *flux_rpc (void *h, json_object *request, const char *fmt, ...)
-{
-    plugin_ctx_t *p = (plugin_ctx_t *)h;
-    va_list ap;
-    json_object *reply;
-
-    va_start (ap, fmt);
-    plugin_send_vrequest (p, request, fmt, ap);
-    va_end (ap);
-
-    va_start (ap, fmt);
-    reply = plugin_recv_vresponse (p, fmt, ap);
-    va_end (ap);
-
-    return reply;
-}
-
-int flux_rank (void *h)
-{
-    plugin_ctx_t *p = (plugin_ctx_t *)h;
-    return p->conf->rank;
-}
-
-int flux_size (void *h)
-{
-    plugin_ctx_t *p = (plugin_ctx_t *)h;
-    return p->conf->size;
-}
-
-void plugin_send_response (plugin_ctx_t *p, zmsg_t **req, json_object *o)
-{
-    if (cmb_msg_replace_json (*req, o) < 0)
-        err_exit ("%s: cmb_msg_replace_json", __FUNCTION__);
-    plugin_send_response_raw (p, req);
-}
-
-void plugin_send_response_errnum (plugin_ctx_t *p, zmsg_t **req, int errnum)
-{
-    if (cmb_msg_replace_json_errnum (*req, errnum) < 0)
-        err_exit ("%s: cmb_msg_replace_json_errnum", __FUNCTION__);
-    plugin_send_response_raw (p, req);
-}
-
-void plugin_log (plugin_ctx_t *p, int lev, const char *fmt, ...)
-{
-    va_list ap;
-    json_object *request;
-   
-    va_start (ap, fmt);
-    request = util_json_vlog (lev, p->plugin->name, p->conf->rankstr, fmt, ap);
-    va_end (ap);
-
-    if (!request) {
-        err ("%s", __FUNCTION__);
-        goto done;
-    }
-    plugin_send_request (p, request, "log.msg");
-done:
-    if (request)
-        json_object_put (request);
-}
-
-void plugin_ping_respond (plugin_ctx_t *p, zmsg_t **zmsg)
+static void plugin_ping_respond (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     json_object *o;
     char *s = NULL;
@@ -325,7 +259,10 @@ void plugin_ping_respond (plugin_ctx_t *p, zmsg_t **zmsg)
     }
     s = zmsg_route_str (*zmsg, 2);
     util_json_object_add_string (o, "route", s);
-    plugin_send_response (p, zmsg, o);
+    if (flux_respond (p->h, zmsg, o) < 0) {
+        err ("%s: flux_respond", __FUNCTION__);
+        goto done;
+    }
 done:
     if (o)
         json_object_put (o);
@@ -350,7 +287,10 @@ void plugin_stats_respond (plugin_ctx_t *p, zmsg_t **zmsg)
     util_json_object_add_int (o, "event_send_count", p->stats.event_send_count);
     util_json_object_add_int (o, "event_recv_count", p->stats.event_recv_count);
 
-    plugin_send_response (p, zmsg, o);
+    if (flux_respond (p->h, zmsg, o) < 0) {
+        err ("%s: flux_respond", __FUNCTION__);
+        goto done;
+    }
 done:
     if (o)
         json_object_put (o);
@@ -374,9 +314,9 @@ static void plugin_handle_response (plugin_ctx_t *p, zmsg_t *zmsg)
      * If no match, call the user's recv callback.
      */
     if (!strcmp (tag, "kvs.watch"))
-        kvs_watch_response (p, &zmsg); /* consumes zmsg on match */
+        kvs_watch_response (p->h, &zmsg); /* consumes zmsg on match */
     if (zmsg && p->plugin->recvFn)
-        p->plugin->recvFn (p, &zmsg, ZMSG_RESPONSE);
+        p->plugin->recvFn (p->h, &zmsg, ZMSG_RESPONSE);
     if (zmsg)
         msg ("discarding unexpected response from %s", tag);
 done:
@@ -436,11 +376,15 @@ static int dnreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
     else if (!strcmp (method, "stats"))
         plugin_stats_respond (p, &zmsg);
     else if (zmsg && p->plugin->recvFn)
-        p->plugin->recvFn (p, &zmsg, ZMSG_REQUEST);
+        p->plugin->recvFn (p->h, &zmsg, ZMSG_REQUEST);
     /* If request wasn't handled above, NAK it.
      */
-    if (zmsg)
-        plugin_send_response_errnum (p, &zmsg, ENOSYS);
+    if (zmsg) {
+        if (flux_respond_errnum (p->h, &zmsg, ENOSYS) < 0) {
+            err ("%s: flux_respond_errnum", __FUNCTION__);
+            goto done;
+        }
+    }
 done:
     if (zmsg)
         zmsg_destroy (&zmsg);
@@ -458,7 +402,7 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
     p->stats.event_recv_count++;
 
     if (zmsg && p->plugin->recvFn)
-        p->plugin->recvFn (p, &zmsg, ZMSG_EVENT);
+        p->plugin->recvFn (p->h, &zmsg, ZMSG_EVENT);
 
     if (zmsg)
         zmsg_destroy (&zmsg);
@@ -472,7 +416,7 @@ static int snoop_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
     zmsg_t *zmsg =  zmsg_recv (p->zs_snoop);
 
     if (zmsg && p->plugin->recvFn)
-        p->plugin->recvFn (p, &zmsg, ZMSG_SNOOP);
+        p->plugin->recvFn (p->h, &zmsg, ZMSG_SNOOP);
 
     if (zmsg)
         zmsg_destroy (&zmsg);
@@ -487,7 +431,7 @@ static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t)
     plugin_ctx_t *p = t->p;
 
     if (p->plugin->timeoutFn)
-        p->plugin->timeoutFn (p);
+        p->plugin->timeoutFn (p->h);
 
     plugin_handle_deferred_responses (p);
 
@@ -519,7 +463,7 @@ static zloop_t * plugin_zloop_create (plugin_ctx_t *p)
     return (zl);
 }
 
-static void *_plugin_thread (void *arg)
+static void *plugin_thread (void *arg)
 {
     plugin_ctx_t *p = arg;
     sigset_t signal_set;
@@ -536,24 +480,17 @@ static void *_plugin_thread (void *arg)
         err_exit ("%s: plugin_zloop_create", p->id);
 
     if (p->plugin->initFn)
-        p->plugin->initFn (p);
+        p->plugin->initFn (p->h);
     zloop_start (p->zloop);
     if (p->plugin->finiFn)
-        p->plugin->finiFn (p);
+        p->plugin->finiFn (p->h);
 
     zloop_destroy (&p->zloop);
 
     return NULL;
 }
 
-static kvsctx_t _get_kvs_ctx (void *h)
-{
-    plugin_ctx_t *p = h;
-
-    return p->kvs_ctx;
-}
-
-static void _plugin_destroy (void *arg)
+static void plugin_destroy (void *arg)
 {
     plugin_ctx_t *p = arg;
     int errnum;
@@ -575,8 +512,6 @@ static void _plugin_destroy (void *arg)
     if (p->timeout)
         free (p->timeout);
 
-    kvs_ctx_destroy (p->kvs_ctx);
-
     while ((zmsg = zlist_pop (p->deferred_responses)))
         zmsg_destroy (&zmsg);
     zlist_destroy (&p->deferred_responses);
@@ -586,7 +521,7 @@ static void _plugin_destroy (void *arg)
     free (p);
 }
 
-static plugin_t _lookup_plugin (char *name)
+static plugin_t lookup_plugin (char *name)
 {
     int i;
 
@@ -596,14 +531,15 @@ static plugin_t _lookup_plugin (char *name)
     return NULL;
 }
 
-static int _plugin_create (char *name, server_t *srv, conf_t *conf)
+static int plugin_create (char *name, server_t *srv, conf_t *conf)
 {
     zctx_t *zctx = srv->zctx;
     plugin_ctx_t *p;
+    flux_t h;
     int errnum;
     plugin_t plugin;
 
-    if (!(plugin = _lookup_plugin (name))) {
+    if (!(plugin = lookup_plugin (name))) {
         msg ("unknown plugin '%s'", name);
         return -1;
     }
@@ -613,13 +549,34 @@ static int _plugin_create (char *name, server_t *srv, conf_t *conf)
     p->srv = srv;
     p->plugin = plugin;
 
-    p->kvs_ctx = kvs_ctx_create (p);
-
     if (!(p->deferred_responses = zlist_new ()))
         oom ();
 
     p->id = xzmalloc (strlen (name) + 16);
     snprintf (p->id, strlen (name) + 16, "%s-%d", name, conf->rank);
+
+    h = flux_handle_create (p, (FluxFreeFn *)plugin_destroy, 0);
+    h->request_sendmsg = (FluxSendMsg *)plugin_request_sendmsg;
+    h->request_recvmsg = (FluxRecvMsg *)plugin_request_recvmsg;
+    h->response_sendmsg = (FluxSendMsg *)plugin_response_sendmsg;
+    h->response_recvmsg = (FluxRecvMsg *)plugin_response_recvmsg;
+    h->response_putmsg = (FluxPutMsg *)plugin_response_putmsg;
+    h->event_sendmsg = (FluxSendMsg *)plugin_event_sendmsg;
+    h->event_recvmsg = (FluxRecvMsg *)plugin_event_recvmsg;
+    h->event_subscribe = (FluxSub *)plugin_event_subscribe;
+    h->event_unsubscribe = (FluxSub *)plugin_event_unsubscribe;
+    h->snoop_recvmsg = (FluxRecvMsg *)plugin_snoop_recvmsg;
+    h->snoop_subscribe = (FluxSub *)plugin_snoop_subscribe;
+    h->snoop_unsubscribe = (FluxSub *)plugin_snoop_unsubscribe;
+    h->rank = (FluxGetInt *)plugin_rank;
+    h->size = (FluxGetInt *)plugin_size;
+    h->treeroot = (FluxGetBool *)plugin_treeroot;
+    h->timeout_set = (FluxTimeoutSet *)plugin_timeout_set;
+    h->timeout_clear = (FluxTimeoutClear *)plugin_timeout_clear;
+    h->timeout_isset = (FluxGetBool *)plugin_timeout_isset;
+    h->get_zloop = (FluxGetZloop *)plugin_get_zloop;
+    h->get_zctx = (FluxGetZctx *)plugin_get_zctx;
+    p->h = h;
 
     /* connect sockets in the parent, then use them in the thread */
     zconnect (zctx, &p->zs_upreq, ZMQ_DEALER, UPREQ_URI, -1, p->id);
@@ -631,12 +588,12 @@ static int _plugin_create (char *name, server_t *srv, conf_t *conf)
     route_add (p->srv->rctx, p->id, p->id, NULL, ROUTE_FLAGS_PRIVATE);
     route_add (p->srv->rctx, name, p->id, NULL, ROUTE_FLAGS_PRIVATE);
 
-    errnum = pthread_create (&p->t, NULL, _plugin_thread, p);
+    errnum = pthread_create (&p->t, NULL, plugin_thread, p);
     if (errnum)
         errn_exit (errnum, "pthread_create");
 
     zhash_insert (srv->plugins, plugin->name, p);
-    zhash_freefn (srv->plugins, plugin->name, _plugin_destroy);
+    zhash_freefn (srv->plugins, plugin->name, plugin_destroy);
 
     return 0;
 }
@@ -645,9 +602,7 @@ void plugin_init (conf_t *conf, server_t *srv)
 {
     srv->plugins = zhash_new ();
 
-    kvs_getctxfun_set ((KVSGetCtxF *)_get_kvs_ctx);
-
-    if (mapstr (conf->plugins, (mapstrfun_t)_plugin_create, srv, conf) < 0)
+    if (mapstr (conf->plugins, (mapstrfun_t)plugin_create, srv, conf) < 0)
         exit (1);
 }
 

@@ -24,8 +24,6 @@
 #include "util.h"
 #include "flux.h"
 
-#include "flux_log.h"
-
 typedef struct {
     char *facility; 
 } logctx_t;
@@ -39,12 +37,12 @@ static void freectx (logctx_t *ctx)
 
 static logctx_t *getctx (flux_t h)
 {
-    logctx_t *ctx = (logctx_t *)flux_aux_get (h, "log");
+    logctx_t *ctx = (logctx_t *)flux_aux_get (h, "logcli");
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
         ctx->facility = xstrdup ("unknown");
-        flux_aux_set (h, "log", ctx, (FluxFreeFn *)freectx);
+        flux_aux_set (h, "logcli", ctx, (FluxFreeFn *)freectx);
     }
     
     return ctx;
@@ -81,7 +79,7 @@ error:
     return NULL;
 }
 
-void cmb_log_set_facility (flux_t h, const char *facility)
+void flux_log_set_facility (flux_t h, const char *facility)
 {
     logctx_t *ctx = getctx (h);
 
@@ -90,7 +88,7 @@ void cmb_log_set_facility (flux_t h, const char *facility)
     ctx->facility = xstrdup (facility);
 }
 
-int cmb_vlog (flux_t h, int lev, const char *fmt, va_list ap)
+int flux_vlog (flux_t h, int lev, const char *fmt, va_list ap)
 {
     logctx_t *ctx = getctx (h);
     json_object *request = NULL;
@@ -109,33 +107,33 @@ done:
     return rc;
 }
 
-int cmb_log (flux_t h, int lev, const char *fmt, ...)
+int flux_log (flux_t h, int lev, const char *fmt, ...)
 {
     va_list ap;
     int rc;
 
     va_start (ap, fmt);
-    rc = cmb_vlog (h, lev, fmt, ap);
+    rc = flux_vlog (h, lev, fmt, ap);
     va_end (ap);
     return rc;
 }
 
-int cmb_log_subscribe (flux_t h, int lev, const char *sub)
+int flux_log_subscribe (flux_t h, int lev, const char *sub)
 {
     return flux_request_send (h, NULL, "log.subscribe.%d.%s", lev, sub);
 }
 
-int cmb_log_unsubscribe (flux_t h, const char *sub)
+int flux_log_unsubscribe (flux_t h, const char *sub)
 {
     return flux_request_send (h, NULL, "log.unsubscribe.%s", sub);
 }
 
-int cmb_log_dump (flux_t h, int lev, const char *sub)
+int flux_log_dump (flux_t h, int lev, const char *sub)
 {
     return flux_request_send (h, NULL, "log.dump.%d.%s", lev, sub);
 }
 
-char *cmb_log_decode (zmsg_t *zmsg, int *lp, char **fp, int *cp,
+char *flux_log_decode (zmsg_t *zmsg, int *lp, char **fp, int *cp,
                     struct timeval *tvp, char **sp)
 {
     json_object *response = NULL;

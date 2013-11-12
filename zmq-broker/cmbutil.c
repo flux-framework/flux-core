@@ -144,9 +144,8 @@ int main (int argc, char *argv[])
                 break;
         }
     }
-    if (!(h = cmb_init_full (socket_path)))
+    if (!(h = cmb_init_full (socket_path, flags)))
         err_exit ("cmb_init");
-    flux_flags_set (h, flags);
     optind = 0;
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
@@ -228,7 +227,7 @@ int main (int argc, char *argv[])
                 zmsg_t *zmsg;
                 if (flux_event_subscribe (h, optarg) < 0)
                     err_exit ("flux_event_subscribe");
-                while (flux_event_recvmsg (h, &zmsg, false) == 0) {
+                while ((zmsg = flux_event_recvmsg (h, false))) {
                     zmsg_dump_compact (zmsg);
                     zmsg_destroy (&zmsg);
                 }
@@ -242,7 +241,7 @@ int main (int argc, char *argv[])
                 zmsg_t *zmsg;
                 if (flux_snoop_subscribe (h, optarg) < 0)
                     err_exit ("flux_snoop_subscribe");
-                while (flux_snoop_recvmsg (h, &zmsg, false) == 0) {
+                while ((zmsg = flux_snoop_recvmsg (h, false))) {
                     zmsg_dump_compact (zmsg);
                     zmsg_destroy (&zmsg);
                 }
@@ -256,7 +255,7 @@ int main (int argc, char *argv[])
                 zmsg_t *zmsg;
                 if (flux_event_subscribe (h, "event.sched.trigger.") < 0)
                     err_exit ("flux_event_subscribe");
-                if (flux_event_recvmsg (h, &zmsg, false) < 0)
+                if (!(zmsg = flux_event_recvmsg (h, false)))
                     err_exit ("flux_event_recvmsg");
                 zmsg_destroy (&zmsg);
                 break;

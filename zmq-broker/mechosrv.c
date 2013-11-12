@@ -12,37 +12,37 @@
 
 /* Copy input arguments to output arguments and respond to RPC.
  */
-static void mecho_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
+static void mechosrv_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
 {
     json_object *request = NULL;
     json_object *inarg = NULL;
     flux_mrpc_t f = NULL;
 
     if (type != ZMSG_EVENT) {
-        plugin_log (p, LOG_ERR, "ignoring non-event message");
+        flux_log (h, LOG_ERR, "ignoring non-event message");
         goto done;
     }
     if (cmb_msg_decode (*zmsg, NULL, &request) < 0) {
-        plugin_log (p, LOG_ERR, "cmb_msg_decode: %s", strerror (errno));
+        flux_log (h, LOG_ERR, "cmb_msg_decode: %s", strerror (errno));
         goto done;
     }
     if (!request) {
-        plugin_log (p, LOG_ERR, "missing JSON part");
+        flux_log (h, LOG_ERR, "missing JSON part");
         goto done;
     }
-    if (!(f = flux_mrpc_create_fromevent (p, request))) {
+    if (!(f = flux_mrpc_create_fromevent (h, request))) {
         if (errno != EINVAL) /* EINVAL == not addressed to me */
-            plugin_log (p, LOG_ERR, "flux_mrpc_create_fromevent: %s",
+            flux_log (h, LOG_ERR, "flux_mrpc_create_fromevent: %s",
                                     strerror (errno));
         goto done;
     }
     if (flux_mrpc_get_inarg (f, &inarg) < 0) {
-        plugin_log (p, LOG_ERR, "flux_mrpc_get_inarg: %s", strerror (errno));
+        flux_log (h, LOG_ERR, "flux_mrpc_get_inarg: %s", strerror (errno));
         goto done;
     }
     flux_mrpc_put_outarg (f, inarg);
     if (flux_mrpc_respond (f) < 0) {
-        plugin_log (p, LOG_ERR, "flux_mrpc_respond: %s", strerror (errno));
+        flux_log (h, LOG_ERR, "flux_mrpc_respond: %s", strerror (errno));
         goto done;
     }
 done:
@@ -55,23 +55,23 @@ done:
     zmsg_destroy (zmsg);
 }
 
-static void mecho_init (plugin_ctx_t *p)
+static void mechosrv_init (flux_t h)
 {
-    if (flux_event_subscribe (p, "mrpc.mecho") < 0)
+    if (flux_event_subscribe (h, "mrpc.mecho") < 0)
         err_exit ("%s: flux_event_subscribe", __FUNCTION__);
 }
 
-static void mecho_fini (plugin_ctx_t *p)
+static void mechosrv_fini (flux_t h)
 {
-    if (flux_event_unsubscribe (p, "mrpc.mecho") < 0)
+    if (flux_event_unsubscribe (h, "mrpc.mecho") < 0)
         err_exit ("%s: flux_event_unsubscribe", __FUNCTION__);
 }
 
 struct plugin_struct mechosrv = {
     .name = "mecho",
-    .recvFn = mecho_recv,
-    .initFn = mecho_init,
-    .finiFn = mecho_fini,
+    .recvFn = mechosrv_recv,
+    .initFn = mechosrv_init,
+    .finiFn = mechosrv_fini,
 };
 
 /*

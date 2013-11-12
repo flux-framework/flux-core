@@ -43,11 +43,37 @@ typedef struct {
     int epoch;
     config_t conf;
     bool disabled;
+    flux_t h;
 } ctx_t;
 
-static bool _alive (plugin_ctx_t *p, int rank)
+static void freectx (ctx_t *ctx)
 {
-    ctx_t *ctx = p->ctx;
+    zhash_destroy (&ctx->kids);
+    if (ctx->conf.topology)
+        json_object_put (ctx->conf.topology);
+    if (ctx->conf.live_down)
+        json_object_put (ctx->conf.live_down);
+    free (ctx);
+}
+
+static ctx_t *getctx (flux_t h)
+{
+    ctx_t *ctx = (ctx_t *)flux_aux_get (h, "livesrv");
+
+    if (!ctx) {
+        ctx = xzmalloc (sizeof (*ctx));
+        if (!(ctx->kids = zhash_new ()))
+            oom ();
+        ctx->disabled = false;
+        ctx->h = h;
+        flux_aux_set (h, "livesrv", ctx, (FluxFreeFn *)freectx);
+    }
+
+    return ctx;
+}
+
+static bool alive (ctx_t *ctx, int rank)
+{
     int i, len;
     bool alive = true;
     json_object *o;
@@ -65,9 +91,8 @@ static bool _alive (plugin_ctx_t *p, int rank)
     return alive;
 }
 
-static void _child_add (plugin_ctx_t *p, int rank)
+static void child_add (ctx_t *ctx, int rank)
 {
-    ctx_t *ctx = p->ctx;
     char key[16];
     child_t *cp = xzmalloc (sizeof (child_t));
 
@@ -78,24 +103,21 @@ static void _child_add (plugin_ctx_t *p, int rank)
     zhash_freefn (ctx->kids, key, free);
 }
 
-static void _child_del (plugin_ctx_t *p, char *key)
+static void child_del (ctx_t *ctx, char *key)
 {
-    ctx_t *ctx = p->ctx;
     zhash_delete (ctx->kids, key);
 }
 
-static child_t *_child_find_by_rank (plugin_ctx_t *p, int rank)
+static child_t *child_find_by_rank (ctx_t *ctx, int rank)
 {
-    ctx_t *ctx = p->ctx;
     char key[16];
 
     snprintf (key, sizeof (key), "%d", rank);
     return (child_t *)zhash_lookup (ctx->kids, key);
 }
 
-static void _age_children (plugin_ctx_t *p)
+static void age_children (ctx_t *ctx)
 {
-    ctx_t *ctx = p->ctx;
     zlist_t *keys;
     char *key;
     child_t *cp;
@@ -105,14 +127,14 @@ static void _age_children (plugin_ctx_t *p)
     while ((key = zlist_pop (keys))) {
         cp = zhash_lookup (ctx->kids, key); 
         if (ctx->epoch > cp->epoch + ctx->conf.live_missed_trigger_allow) {
-            if (_alive (p, cp->rank)) {
-                if (p->conf->verbose)
-                    msg ("aged %d epoch=%d current epoch=%d",
-                         cp->rank, cp->epoch, ctx->epoch);
-                plugin_log (p, LOG_ALERT,
+            if (alive (ctx, cp->rank)) {
+                //msg ("aged %d epoch=%d current epoch=%d",
+                //     cp->rank, cp->epoch, ctx->epoch);
+                flux_log (ctx->h, LOG_ALERT,
                     "event.live.down.%d: last seen epoch=%d, current epoch=%d",
                     cp->rank, cp->epoch, ctx->epoch);
-                if (flux_event_send (p, NULL, "event.live.down.%d", cp->rank) < 0)
+                if (flux_event_send (ctx->h, NULL, "event.live.down.%d",
+                                     cp->rank) < 0)
                     err_exit ("%s: flux_event_send", __FUNCTION__);
             }
         }
@@ -126,14 +148,13 @@ static void _age_children (plugin_ctx_t *p)
  * This function returns children of my rank in an int array,
  * which the caller must free if non-NULL.
  */
-static void _get_children_from_topology (plugin_ctx_t *p, int **iap, int *lenp)
+static void get_children_from_topology (ctx_t *ctx, int **iap, int *lenp)
 {
-    ctx_t *ctx = p->ctx;
     json_object *o, *no;
     int *ia = NULL;
     int rank, i, tlen, len = 0;
 
-    if ((o = json_object_array_get_idx (ctx->conf.topology, flux_rank (p)))
+    if ((o = json_object_array_get_idx (ctx->conf.topology, flux_rank (ctx->h)))
                             && json_object_get_type (o) == json_type_array
                             && (tlen = json_object_array_length (o)) > 0) {
         ia = xzmalloc (sizeof (int) * tlen);
@@ -141,7 +162,7 @@ static void _get_children_from_topology (plugin_ctx_t *p, int **iap, int *lenp)
             if ((no = json_object_array_get_idx (o, i))
                             && json_object_get_type (no) == json_type_int
                             && (rank = json_object_get_int (no)) > 0
-                            && rank < flux_size (p)) {
+                            && rank < flux_size (ctx->h)) {
                 ia[len++] = rank;
             }
         }
@@ -150,14 +171,13 @@ static void _get_children_from_topology (plugin_ctx_t *p, int **iap, int *lenp)
     *lenp = len;
 }
 
-static void _child_sync_with_topology (plugin_ctx_t *p)
+static void child_sync_with_topology (ctx_t *ctx)
 {
-    ctx_t *ctx = p->ctx;
     int *children, len, i, rank;
     zlist_t *keys;
     char *key;
 
-    _get_children_from_topology (p, &children, &len);
+    get_children_from_topology (ctx, &children, &len);
 
     /* del any old */
     if (!(keys = zhash_keys (ctx->kids)))
@@ -168,14 +188,14 @@ static void _child_sync_with_topology (plugin_ctx_t *p)
             if (children[i] == rank)
                 break;
         if (i == len)
-            _child_del (p, key);
+            child_del (ctx, key);
     }
     zlist_destroy (&keys);
 
     /* add any new */
     for (i = 0; i < len; i++) {
-        if (!_child_find_by_rank (p, children[i]))
-            _child_add (p, children[i]);
+        if (!child_find_by_rank (ctx, children[i]))
+            child_add (ctx, children[i]);
     }
     if (children)
         free (children);
@@ -183,28 +203,27 @@ static void _child_sync_with_topology (plugin_ctx_t *p)
 
 /* Send live.hello.<rank> 
  */
-static void _send_live_hello (plugin_ctx_t *p, int epoch)
+static void send_live_hello (ctx_t *ctx)
 {
-    json_object *o = util_json_object_new_object ();
+    json_object *request = util_json_object_new_object ();
 
-    util_json_object_add_int (o, "epoch", epoch);
-    plugin_send_request (p, o, "live.hello.%d", flux_rank (p));
-    json_object_put (o);
+    util_json_object_add_int (request, "epoch", ctx->epoch);
+    flux_request_send (ctx->h, request, "live.hello.%d", flux_rank (ctx->h));
+    json_object_put (request);
 }
 
 /* Receive live.hello.<rank>
  */
-static void _recv_live_hello (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void recv_live_hello (ctx_t *ctx, char *arg, zmsg_t **zmsg)
 {
-    ctx_t *ctx = p->ctx;
     int rank = strtoul (arg, NULL, 10);
     json_object *eo, *o = NULL;
     int epoch;
     child_t *cp;
 
-    if (rank < 0 || rank >= flux_size (p))
+    if (rank < 0 || rank >= flux_size (ctx->h))
         goto done;
-    if (!(cp = _child_find_by_rank (p, rank)))
+    if (!(cp = child_find_by_rank (ctx, rank)))
         goto done;
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0) 
         goto done;
@@ -214,17 +233,15 @@ static void _recv_live_hello (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     if (cp->epoch < epoch)
         cp->epoch = epoch;
 
-    if (!_alive (p, cp->rank)) {
+    if (!alive (ctx, cp->rank)) {
         if (ctx->epoch > cp->epoch + ctx->conf.live_missed_trigger_allow) {
-            if (p->conf->verbose)
-                msg ("ignoring live.hello from %d epoch=%d current epoch=%d",
-                     rank, epoch, ctx->epoch);
+            //msg ("ignoring live.hello from %d epoch=%d current epoch=%d",
+            //     rank, epoch, ctx->epoch);
         } else {
-            if (p->conf->verbose)
-                msg ("received live.hello from %d epoch=%d current epoch=%d",
-                     rank, epoch, ctx->epoch);
-            plugin_log (p, LOG_ALERT, "event.live.up.%d", rank);
-            if (flux_event_send (p, NULL, "event.live.up.%d", rank) < 0)
+            //msg ("received live.hello from %d epoch=%d current epoch=%d",
+            //     rank, epoch, ctx->epoch);
+            flux_log (ctx->h, LOG_ALERT, "event.live.up.%d", rank);
+            if (flux_event_send (ctx->h, NULL, "event.live.up.%d", rank) < 0)
                 err_exit ("%s: flux_event_send", __FUNCTION__);
         }
     }
@@ -234,17 +251,17 @@ done:
     zmsg_destroy (zmsg);
 }
 
-static void _recv_event_live (plugin_ctx_t *p, bool alive, int rank)
+static void recv_event_live (ctx_t *ctx, bool alive, int rank)
 {
     json_object *o, *new = NULL, *old = NULL;
     int i, len = 0;
 
-    assert (plugin_treeroot (p));
-    if (rank < 0 || rank > flux_size (p)) {
+    assert (flux_treeroot (ctx->h));
+    if (rank < 0 || rank > flux_size (ctx->h)) {
         msg ("%s: received message for bogus rank %d", __FUNCTION__, rank);
         goto done;
     }
-    (void)kvs_get (p, "conf.live.down", &old);
+    (void)kvs_get (ctx->h, "conf.live.down", &old);
     if (!(new = json_object_new_array ()))
         oom ();
     if (!alive) {
@@ -262,8 +279,8 @@ static void _recv_event_live (plugin_ctx_t *p, bool alive, int rank)
             }
         }
     }
-    kvs_put (p, "conf.live.down", new);
-    kvs_commit (p);
+    kvs_put (ctx->h, "conf.live.down", new);
+    kvs_commit (ctx->h);
 done:
     if (old)
         json_object_put (old);
@@ -271,27 +288,27 @@ done:
         json_object_put (new);
 }
 
-static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
+static void livesrv_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
 {
+    ctx_t *ctx = getctx (h);
     char *arg = NULL;
-    ctx_t *ctx = p->ctx;
 
     if (ctx->disabled)
         return;
 
     if (cmb_msg_match_substr (*zmsg, "event.sched.trigger.", &arg)) {
         ctx->epoch = strtoul (arg, NULL, 10);
-        if (!plugin_treeroot (p))
-            _send_live_hello (p, ctx->epoch);
+        if (!flux_treeroot (ctx->h))
+            send_live_hello (ctx);
         if (ctx->age++ >= ctx->conf.live_missed_trigger_allow)
-            _age_children (p);
+            age_children (ctx);
         zmsg_destroy (zmsg);
     } else if (cmb_msg_match_substr (*zmsg, "live.hello.", &arg))
-        _recv_live_hello (p, arg, zmsg);
+        recv_live_hello (ctx, arg, zmsg);
     else if (cmb_msg_match_substr (*zmsg, "event.live.up.", &arg))
-        _recv_event_live (p, true, strtoul (arg, NULL, 10));
+        recv_event_live (ctx, true, strtoul (arg, NULL, 10));
     else if (cmb_msg_match_substr (*zmsg, "event.live.down.", &arg))
-        _recv_event_live (p, false, strtoul (arg, NULL, 10));
+        recv_event_live (ctx, false, strtoul (arg, NULL, 10));
 
     if (arg)
         free (arg);
@@ -299,19 +316,17 @@ static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
 
 static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)
 {
-    plugin_ctx_t *p = arg;
-    ctx_t *ctx = p->ctx;
+    ctx_t *ctx = arg;
     int val;
     json_object *topo, *down = NULL;
     char *key;
 
-    if (errnum > 0) {
+    if (errnum != 0) {
         err ("live: %s", path);
         goto invalid;
     }
-
     key = kvsdir_key_at (dir, "missed-trigger-allow");    
-    if (kvs_get_int (p, key, &val) < 0) {
+    if (kvs_get_int (ctx->h, key, &val) < 0) {
         err ("live: %s", key);
         goto invalid;
     }
@@ -323,7 +338,7 @@ static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)
     free (key);
 
     key = kvsdir_key_at (dir, "topology");    
-    if (kvs_get (p, key, &topo) < 0) {
+    if (kvs_get (ctx->h, key, &topo) < 0) {
         err ("live: %s", key);
         goto invalid;
     }
@@ -331,11 +346,11 @@ static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)
         json_object_put (ctx->conf.topology);
     json_object_get (topo);
     ctx->conf.topology = topo;
-    _child_sync_with_topology (p);
+    child_sync_with_topology (ctx);
     free (key);
 
     key = kvsdir_key_at (dir, "down");    
-    if (kvs_get (p, key, &down) < 0 && errno != ENOENT) {
+    if (kvs_get (ctx->h, key, &down) < 0 && errno != ENOENT) {
         err ("live: %s", key);
         goto invalid;
     }
@@ -361,40 +376,24 @@ invalid:
     }
 }
 
-static void _init (plugin_ctx_t *p)
+static void livesrv_init (flux_t h)
 {
-    ctx_t *ctx;
+    ctx_t *ctx = getctx (h);
 
-    ctx = p->ctx = xzmalloc (sizeof (ctx_t));
-    if (!(ctx->kids = zhash_new ()))
-        oom ();
-    ctx->disabled = false;
-
-    if (kvs_watch_dir (p, set_config, p, "conf.live") < 0)
-        err_exit ("log: %s", "conf.live");
-
-    zsocket_set_subscribe (p->zs_evin, "event.sched.trigger.");
-    if (plugin_treeroot (p))
-        zsocket_set_subscribe (p->zs_evin, "event.live.");
-}
-
-static void _fini (plugin_ctx_t *p)
-{
-    ctx_t *ctx = p->ctx;
-
-    zhash_destroy (&ctx->kids);
-    if (ctx->conf.topology)
-        json_object_put (ctx->conf.topology);
-    if (ctx->conf.live_down)
-        json_object_put (ctx->conf.live_down);
-    free (ctx);
+    if (kvs_watch_dir (h, set_config, ctx, "conf.live") < 0)
+        err_exit ("live: kvs_watch_dir");
+    if (flux_event_subscribe (h, "event.sched.trigger.") < 0)
+        err_exit ("live: flux_event_subscribe");
+    if (flux_treeroot (h)) {
+        if (flux_event_subscribe (h, "event.live.") < 0)
+            err_exit ("live: flux_event_subscribe");
+    }
 }
 
 struct plugin_struct livesrv = {
     .name      = "live",
-    .initFn    = _init,
-    .recvFn    = _recv,
-    .finiFn    = _fini,
+    .initFn    = livesrv_init,
+    .recvFn    = livesrv_recv,
 };
 
 /*

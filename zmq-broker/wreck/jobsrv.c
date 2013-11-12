@@ -67,7 +67,7 @@ void jobid_list_free (zlist_t *list)
 
 #endif
 
-static int kvs_job_new (plugin_ctx_t *p, unsigned long jobid)
+static int kvs_job_new (flux_t h, unsigned long jobid)
 {
     int rc;
     char *key;
@@ -75,8 +75,8 @@ static int kvs_job_new (plugin_ctx_t *p, unsigned long jobid)
     if (asprintf (&key, "lwj.%lu.state", jobid) < 0)
         return (-1);
 
-    rc = kvs_put_string (p, key, "reserved");
-    kvs_commit (p);
+    rc = kvs_put_string (h, key, "reserved");
+    kvs_commit (h);
 
     free (key);
     return rc;
@@ -85,27 +85,27 @@ static int kvs_job_new (plugin_ctx_t *p, unsigned long jobid)
 /*
  *  Set a new value for lwj.next-id and commit
  */
-static int set_next_jobid (plugin_ctx_t *p, unsigned long jobid)
+static int set_next_jobid (flux_t h, unsigned long jobid)
 {
     int rc;
-    if ((rc = kvs_put_int64 (p, "lwj.next-id", jobid)) < 0) {
+    if ((rc = kvs_put_int64 (h, "lwj.next-id", jobid)) < 0) {
         err ("kvs_put: %s", strerror (errno));
         return -1;
     }
-    return kvs_commit (p);
+    return kvs_commit (h);
 }
 
 /*
  *  Get and increment lwj.next-id (called from treeroot only)
  */
-static unsigned long increment_jobid (plugin_ctx_t *p)
+static unsigned long increment_jobid (flux_t h)
 {
     int64_t ret;
     int rc;
-    rc = kvs_get_int64 (p, "lwj.next-id", &ret);
+    rc = kvs_get_int64 (h, "lwj.next-id", &ret);
     if (rc < 0 && (errno == ENOENT))
         ret = 1;
-    set_next_jobid (p, ret+1);
+    set_next_jobid (h, ret+1);
     return (unsigned long) ret;
 }
 
@@ -113,14 +113,14 @@ static unsigned long increment_jobid (plugin_ctx_t *p)
  *  Tree-wide call for lwj_next_id. If not treeroot forward request
  *   up the tree. Otherwise increment jobid and return result.
  */
-static unsigned long lwj_next_id (plugin_ctx_t *p)
+static unsigned long lwj_next_id (flux_t h)
 {
     unsigned long ret;
-    if (plugin_treeroot (p))
-        ret = increment_jobid (p);
+    if (flux_treeroot (h))
+        ret = increment_jobid (h);
     else {
         json_object *na = json_object_new_object ();
-        json_object *o = flux_rpc (p, na, "job.next-id");
+        json_object *o = flux_rpc (h, na, "job.next-id");
         if (util_json_object_get_int64 (o, "id", (int64_t *) &ret) < 0) {
             err ("lwj_next_id: Bad object!");
             ret = 0;
@@ -155,14 +155,14 @@ static char * ctime_iso8601_now (char *buf, size_t sz)
     return (buf);
 }
 
-static void add_jobinfo (plugin_ctx_t *p, int64_t id, json_object *req)
+static void add_jobinfo (flux_t h, int64_t id, json_object *req)
 {
     char buf [64];
     json_object_iter i;
     json_object *o;
     kvsdir_t dir;
 
-    if (kvs_get_dir (p, &dir, "lwj.%lu", id) < 0)
+    if (kvs_get_dir (h, &dir, "lwj.%lu", id) < 0)
         err_exit ("kvs_get_dir (id=%lu)", id);
 
     json_object_object_foreachC (req, i)
@@ -175,40 +175,40 @@ static void add_jobinfo (plugin_ctx_t *p, int64_t id, json_object *req)
     kvsdir_destroy (dir);
 }
 
-static void handle_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
+static void handle_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
 {
     json_object *o = NULL;
     char *tag;
 
     if (cmb_msg_decode (*zmsg, &tag, &o) >= 0) {
         if (strcmp (tag, "job.next-id") == 0) {
-            if (plugin_treeroot (p)) {
-                unsigned long id = lwj_next_id (p);
+            if (flux_treeroot (h)) {
+                unsigned long id = lwj_next_id (h);
                 json_object *ox = json_id (id);
-                plugin_send_response (p, zmsg, ox);
+                flux_respond (h, zmsg, ox);
                 json_object_put (o);
             }
             else {
                 fprintf (stderr, "%s: forwarding request\n", tag);
-                plugin_send_request (p, o, tag);
+                flux_request_send (h, o, tag);
             }
         }
         if (strcmp (tag, "job.create") == 0) {
             json_object *jobinfo = NULL;
-            unsigned long id = lwj_next_id (p);
-            int rc = kvs_job_new ((void *)p, id);
+            unsigned long id = lwj_next_id (h);
+            int rc = kvs_job_new (h, id);
             if (rc < 0) {
-                plugin_send_response_errnum (p, zmsg, errno);
+                flux_respond_errnum (h, zmsg, errno);
                 goto out;
             }
-            add_jobinfo (p, id, o);
+            add_jobinfo (h, id, o);
 
-            kvs_commit ((void *)p);
+            kvs_commit (h);
 
             /* Generate reply with new jobid */
             jobinfo = util_json_object_new_object ();
             util_json_object_add_int64 (jobinfo, "jobid", id);
-            plugin_send_response (p, zmsg, jobinfo);
+            flux_respond (h, zmsg, jobinfo);
             json_object_put (jobinfo);
         }
     }

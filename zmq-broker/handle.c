@@ -85,19 +85,46 @@ int flux_request_sendmsg (flux_t h, zmsg_t **zmsg)
     return h->request_sendmsg (getimpl (h), zmsg);
 }
 
-int flux_response_recvmsg (flux_t h, zmsg_t **zmsg, bool nonblock)
+zmsg_t *flux_request_recvmsg (flux_t h, bool nonblock)
 {
-    int rc;
+    zmsg_t *zmsg;
 
-    if (!h->response_recvmsg) {
+    if (!h->request_recvmsg) {
+        errno = ENOSYS;
+        return NULL;
+    }
+    zmsg = h->request_recvmsg (getimpl (h), nonblock);
+    if (zmsg && h->flags & FLUX_FLAGS_TRACE)
+        zmsg_dump_compact (zmsg);
+
+    return zmsg;
+}
+
+int flux_response_sendmsg (flux_t h, zmsg_t **zmsg)
+{
+    if (!h->response_sendmsg) {
         errno = ENOSYS;
         return -1;
     }
-    rc = h->response_recvmsg (getimpl (h), zmsg, nonblock);
     if (h->flags & FLUX_FLAGS_TRACE)
         zmsg_dump_compact (*zmsg);
 
-    return rc;
+    return h->response_sendmsg (getimpl (h), zmsg);
+}
+
+zmsg_t *flux_response_recvmsg (flux_t h, bool nonblock)
+{
+    zmsg_t *zmsg;
+
+    if (!h->response_recvmsg) {
+        errno = ENOSYS;
+        return NULL;
+    }
+    zmsg = h->response_recvmsg (getimpl (h), nonblock);
+    if (zmsg && h->flags & FLUX_FLAGS_TRACE)
+        zmsg_dump_compact (zmsg);
+
+    return zmsg;
 }
 
 int flux_response_putmsg (flux_t h, zmsg_t **zmsg)
@@ -122,19 +149,19 @@ int flux_event_sendmsg (flux_t h, zmsg_t **zmsg)
     return h->event_sendmsg (getimpl (h), zmsg);
 }
 
-int flux_event_recvmsg (flux_t h, zmsg_t **zmsg, bool nonblock)
+zmsg_t *flux_event_recvmsg (flux_t h, bool nonblock)
 {
-    int rc;
+    zmsg_t *zmsg;
 
     if (!h->event_recvmsg) {
         errno = ENOSYS;
-        return -1;
+        return NULL;
     }
-    rc = h->event_recvmsg (getimpl (h), zmsg, nonblock);
-    if (h->flags & FLUX_FLAGS_TRACE)
-        zmsg_dump_compact (*zmsg);
+    zmsg = h->event_recvmsg (getimpl (h), nonblock);
+    if (zmsg && h->flags & FLUX_FLAGS_TRACE)
+        zmsg_dump_compact (zmsg);
 
-    return rc;
+    return zmsg;
 }
 
 int flux_event_subscribe (flux_t h, const char *topic)
@@ -157,14 +184,13 @@ int flux_event_unsubscribe (flux_t h, const char *topic)
     return h->event_unsubscribe (getimpl (h), topic);
 }
 
-int flux_snoop_recvmsg (flux_t h, zmsg_t **zmsg, bool nonblock)
+zmsg_t *flux_snoop_recvmsg (flux_t h, bool nonblock)
 {
     if (!h->snoop_recvmsg) {
         errno = ENOSYS;
-        return -1;
+        return NULL;
     }
-
-    return h->snoop_recvmsg (getimpl (h), zmsg, nonblock);
+    return h->snoop_recvmsg (getimpl (h), nonblock);
 }
 
 int flux_snoop_subscribe (flux_t h, const char *topic)
@@ -205,6 +231,47 @@ int flux_size (flux_t h)
     }
 
     return h->size (getimpl (h));
+}
+
+bool flux_treeroot (flux_t h)
+{
+    if (!h->treeroot)
+        return false;
+    return h->treeroot (getimpl (h));
+}
+
+int flux_timeout_set (flux_t h, unsigned long msec)
+{
+    if (!h->timeout_set) {
+        errno = ENOSYS;
+        return -1;
+    }
+    return h->timeout_set (getimpl (h), msec);
+}
+
+int flux_timeout_clear (flux_t h)
+{
+    if (!h->timeout_clear) {
+        errno = ENOSYS;
+        return -1;
+    }
+    return h->timeout_clear (getimpl (h));
+}
+
+bool flux_timeout_isset (flux_t h)
+{
+    if (!h->timeout_isset)
+        return false;
+    return h->timeout_isset (getimpl (h));
+}
+
+zloop_t *flux_get_zloop (flux_t h)
+{
+    if (!h->get_zloop) {
+        errno = ENOSYS;
+        return NULL;
+    }
+    return h->get_zloop (getimpl (h));
 }
 
 /**
@@ -259,7 +326,7 @@ int flux_response_recv (flux_t h, json_object **respp, char **tagp, bool nb)
     zmsg_t *zmsg;
     int rc = -1;
 
-    if (flux_response_recvmsg (h, &zmsg, nb) < 0)
+    if (!(zmsg = flux_response_recvmsg (h, nb)))
         goto done;
     if (cmb_msg_decode (zmsg, tagp, respp) < 0)
         goto done;
@@ -293,7 +360,7 @@ json_object *flux_rpc (flux_t h, json_object *request, const char *fmt, ...)
     if (flux_request_sendmsg (h, &zmsg) < 0)
         goto done;
     do {
-        if (flux_response_recvmsg (h, &zmsg, false) < 0)
+        if (!(zmsg = flux_response_recvmsg (h, false)))
             goto done;
         if (!cmb_msg_match (zmsg, tag)) {
             if (zlist_append (nomatch, zmsg) < 0)
@@ -327,6 +394,20 @@ done:
         zlist_destroy (&nomatch);
     }
     return response;
+}
+
+int flux_respond (flux_t h, zmsg_t **reqmsg, json_object *response)
+{
+    if (cmb_msg_replace_json (*reqmsg, response) < 0)
+        return -1;
+    return flux_response_sendmsg (h, reqmsg);
+}
+
+int flux_respond_errnum (flux_t h, zmsg_t **reqmsg, int errnum)
+{
+    if (cmb_msg_replace_json_errnum (*reqmsg, errnum) < 0)
+        return -1;
+    return flux_response_sendmsg (h, reqmsg);
 }
 
 /*

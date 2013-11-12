@@ -1,41 +1,48 @@
 #ifndef HAVE_FLUX_HANDLE_H
 #define HAVE_FLUX_HANDLE_H
 
-typedef int FluxRequestSendMsg(void *impl, zmsg_t **zmsg);
-typedef int FluxResponseRecvMsg(void *impl, zmsg_t **zmsg, bool nonblock);
-typedef int FluxResponsePutMsg(void *impl, zmsg_t **zmsg);
+typedef int FluxSendMsg(void *impl, zmsg_t **zmsg);
+typedef zmsg_t *FluxRecvMsg(void *impl, bool nonblock);
+typedef int FluxPutMsg(void *impl, zmsg_t **zmsg);
+typedef int FluxSub(void *impl, const char *topic);
+typedef int FluxTimeoutSet(void *impl, unsigned long msec);
+typedef int FluxTimeoutClear (void *impl);
+typedef zloop_t *FluxGetZloop (void *impl);
+typedef zctx_t *FluxGetZctx (void *impl);
 
-typedef int FluxEventSendMsg(void *impl, zmsg_t **zmsg);
-typedef int FluxEventRecvMsg(void *impl, zmsg_t **zmsg, bool nonblock);
-typedef int FluxEventSub(void *impl, const char *topic);
-typedef int FluxEventUnsub(void *impl, const char *topic);
-
-typedef int FluxSnoopRecvMsg(void *impl, zmsg_t **zmsg, bool nonblock);
-typedef int FluxSnoopSub(void *impl, const char *topic);
-typedef int FluxSnoopUnsub(void *impl, const char *topic);
-
-typedef int FluxRank(void *impl);
-typedef int FluxSize(void *impl);
+typedef int FluxGetInt(void *impl);
+typedef bool FluxGetBool(void *impl);
 
 struct flux_handle_struct {
-    FluxRequestSendMsg      *request_sendmsg;
-    FluxResponseRecvMsg     *response_recvmsg;
-    FluxResponsePutMsg      *response_putmsg;
+    FluxSendMsg         *request_sendmsg;
+    FluxRecvMsg         *request_recvmsg;
+    FluxSendMsg         *response_sendmsg;
+    FluxRecvMsg         *response_recvmsg;
+    FluxPutMsg          *response_putmsg;
 
-    FluxEventSendMsg        *event_sendmsg;
-    FluxEventRecvMsg        *event_recvmsg;
-    FluxEventSub            *event_subscribe;
-    FluxEventUnsub          *event_unsubscribe;
+    FluxSendMsg         *event_sendmsg;
+    FluxRecvMsg         *event_recvmsg;
+    FluxSub             *event_subscribe;
+    FluxSub             *event_unsubscribe;
 
-    FluxSnoopRecvMsg        *snoop_recvmsg;
-    FluxSnoopSub            *snoop_subscribe;
-    FluxSnoopUnsub          *snoop_unsubscribe;
-    FluxRank                *rank;
-    FluxSize                *size;
+    FluxRecvMsg         *snoop_recvmsg;
+    FluxSub             *snoop_subscribe;
+    FluxSub             *snoop_unsubscribe;
 
-    int                     flags;
+    FluxTimeoutSet      *timeout_set;
+    FluxTimeoutClear    *timeout_clear;
+    FluxGetBool         *timeout_isset;
 
-    zhash_t                 *aux;
+    FluxGetZloop        *get_zloop;
+    FluxGetZctx         *get_zctx;
+
+    FluxGetInt          *rank;
+    FluxGetInt          *size;
+    FluxGetBool         *treeroot;
+
+    int                 flags;
+
+    zhash_t             *aux;
 };
 
 flux_t flux_handle_create (void *impl, FluxFreeFn *impl_destroy, int flags);

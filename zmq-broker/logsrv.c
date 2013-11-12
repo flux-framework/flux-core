@@ -46,13 +46,38 @@ typedef struct {
     int log_circular_buffer_entries;
     int log_persist_level;
     bool disabled;
+    flux_t h;
 } ctx_t;
 
-static void _add_backlog (plugin_ctx_t *p, json_object *o);
-static void _process_backlog (plugin_ctx_t *p);
+static void add_backlog (ctx_t *ctx, json_object *o);
+static void process_backlog (ctx_t *ctx);
 
+static void freectx (ctx_t *ctx)
+{
+    zhash_destroy (&ctx->listeners);
+    zlist_destroy (&ctx->backlog);
+    zlist_destroy (&ctx->cirbuf);
+    free (ctx);
+}
 
-static bool _match_subscription (json_object *o, subscription_t *sub)
+static ctx_t *getctx (flux_t h)
+{
+    ctx_t *ctx = (ctx_t *)flux_aux_get (h, "logsrv");
+
+    if (!ctx) {
+        ctx = xzmalloc (sizeof (*ctx));
+        ctx->listeners = zhash_new ();
+        ctx->backlog = zlist_new ();
+        ctx->cirbuf = zlist_new ();
+        ctx->disabled = false;
+        ctx->h = h;
+        flux_aux_set (h, "logsrv", ctx, (FluxFreeFn *)freectx);
+    }
+
+    return ctx;
+}
+
+static bool match_subscription (json_object *o, subscription_t *sub)
 {
     int lev;
     const char *fac;
@@ -66,7 +91,7 @@ static bool _match_subscription (json_object *o, subscription_t *sub)
     return true;
 }
 
-static subscription_t *_create_subscription (char *arg)
+static subscription_t *create_subscription (char *arg)
 {
     subscription_t *sub = xzmalloc (sizeof (*sub));
     char *nextptr;
@@ -79,7 +104,7 @@ static subscription_t *_create_subscription (char *arg)
     return sub;
 }
 
-static void _destroy_subscription (subscription_t *sub)
+static void destroy_subscription (subscription_t *sub)
 {
     free (sub->fac);
     free (sub);
@@ -88,10 +113,8 @@ static void _destroy_subscription (subscription_t *sub)
 /* Manage circular buffer.
  */
 
-static void _log_save (plugin_ctx_t *p, json_object *o)
+static void log_save (ctx_t *ctx, json_object *o)
 {
-    ctx_t *ctx = p->ctx;
-
     if (ctx->cirbuf_size == ctx->log_circular_buffer_entries) {
         json_object *tmp = zlist_pop (ctx->cirbuf);
         json_object_put (tmp);
@@ -102,29 +125,27 @@ static void _log_save (plugin_ctx_t *p, json_object *o)
     ctx->cirbuf_size++;
 }
 
-static void _recv_log_dump (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void recv_log_dump (ctx_t *ctx, char *arg, zmsg_t **zmsg)
 {
-    ctx_t *ctx = p->ctx;
     json_object *o;
     zmsg_t *cpy;
-    subscription_t *sub = _create_subscription (arg);
+    subscription_t *sub = create_subscription (arg);
 
     o = zlist_first (ctx->cirbuf);
     while (o != NULL) {
-        if (_match_subscription (o, sub)) {
+        if (match_subscription (o, sub)) {
             if (!(cpy = zmsg_dup (*zmsg)))
                 oom ();
-            plugin_send_response (p, &cpy, o);
+            flux_respond (ctx->h, &cpy, o);
         }
         o = zlist_next (ctx->cirbuf);
     }
-    plugin_send_response_errnum (p, zmsg, ENOENT);
-    _destroy_subscription (sub);
+    flux_respond_errnum (ctx->h, zmsg, ENOENT);
+    destroy_subscription (sub);
 }
 
-static void _recv_fault_event (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void recv_fault_event (ctx_t *ctx, char *arg, zmsg_t **zmsg)
 {
-    ctx_t *ctx = p->ctx;
     subscription_t sub = {
         .lev_min = ctx->log_persist_level,
         .lev_max = LOG_DEBUG,
@@ -136,20 +157,19 @@ static void _recv_fault_event (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     if (!(temp = zlist_new ()))
         oom ();
     while ((o = zlist_pop (ctx->cirbuf))) {
-        if (_match_subscription (o, &sub)) {
-            _add_backlog (p, o);
+        if (match_subscription (o, &sub)) {
+            add_backlog (ctx, o);
             json_object_put (o);
         } else
             zlist_append (temp, o);
     }
     zlist_destroy (&ctx->cirbuf);
     ctx->cirbuf = temp;
-    _process_backlog (p);
+    process_backlog (ctx);
 }
 
-static bool _resize_cirbuf (plugin_ctx_t *p, int new_size)
+static bool resize_cirbuf (ctx_t *ctx, int new_size)
 {
-    ctx_t *ctx = p->ctx;
     bool ret = false;
 
     if (new_size > 0) {
@@ -167,7 +187,7 @@ static bool _resize_cirbuf (plugin_ctx_t *p, int new_size)
 /* Manage listeners.
  */
 
-static listener_t *_listener_create (zmsg_t *zmsg)
+static listener_t *listener_create (zmsg_t *zmsg)
 {
     listener_t *lp = xzmalloc (sizeof (listener_t));
     if (!(lp->zmsg = zmsg_dup (zmsg)))
@@ -177,24 +197,24 @@ static listener_t *_listener_create (zmsg_t *zmsg)
     return lp;
 }
 
-static void _listener_destroy (void *arg)
+static void listener_destroy (void *arg)
 {
     listener_t *lp = arg;
     subscription_t *sub;
 
     zmsg_destroy (&lp->zmsg);
     while ((sub = zlist_pop (lp->subscriptions)))
-        _destroy_subscription (sub);
+        destroy_subscription (sub);
     zlist_destroy (&lp->subscriptions);
     free (lp);
 }
 
-static void _listener_subscribe (listener_t *lp, char *arg)
+static void listener_subscribe (listener_t *lp, char *arg)
 {
-    zlist_append (lp->subscriptions, _create_subscription (arg));    
+    zlist_append (lp->subscriptions, create_subscription (arg));    
 }
 
-static void _listener_unsubscribe (listener_t *lp, char *fac)
+static void listener_unsubscribe (listener_t *lp, char *fac)
 {
     subscription_t *sub;
 
@@ -203,7 +223,7 @@ static void _listener_unsubscribe (listener_t *lp, char *fac)
         while (sub) { 
             if (!strncasecmp (fac, sub->fac, strlen (fac))) {
                 zlist_remove (lp->subscriptions, sub);
-                _destroy_subscription (sub);
+                destroy_subscription (sub);
                 break;
             }
             sub = zlist_next (lp->subscriptions);
@@ -211,9 +231,8 @@ static void _listener_unsubscribe (listener_t *lp, char *fac)
     } while (sub);
 }
 
-static void _recv_log_subscribe (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void recv_log_subscribe (ctx_t *ctx, char *arg, zmsg_t **zmsg)
 {
-    ctx_t *ctx = p->ctx;
     char *sender = NULL;
     listener_t *lp;
     
@@ -222,21 +241,19 @@ static void _recv_log_subscribe (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         goto done;
     }
     if (!(lp = zhash_lookup (ctx->listeners, sender))) {
-        lp = _listener_create (*zmsg);
+        lp = listener_create (*zmsg);
         zhash_insert (ctx->listeners, sender, lp);
-        zhash_freefn (ctx->listeners, sender, _listener_destroy);
+        zhash_freefn (ctx->listeners, sender, listener_destroy);
     }
-
-    _listener_subscribe (lp, arg);
+    listener_subscribe (lp, arg);
 done:
     if (sender)
         free (sender);
     zmsg_destroy (zmsg);
 }
 
-static void _recv_log_unsubscribe (plugin_ctx_t *p, char *sub, zmsg_t **zmsg)
+static void recv_log_unsubscribe (ctx_t *ctx, char *sub, zmsg_t **zmsg)
 {
-    ctx_t *ctx = p->ctx;
     listener_t *lp;
     char *sender = NULL;
 
@@ -246,16 +263,15 @@ static void _recv_log_unsubscribe (plugin_ctx_t *p, char *sub, zmsg_t **zmsg)
     }
     lp = zhash_lookup (ctx->listeners, sender);
     if (lp)
-        _listener_unsubscribe (lp, sub);
+        listener_unsubscribe (lp, sub);
 done:
     if (sender)
         free (sender);
     zmsg_destroy (zmsg);
 }
 
-static void _recv_log_disconnect (plugin_ctx_t *p, zmsg_t **zmsg)
+static void recv_log_disconnect (ctx_t *ctx, zmsg_t **zmsg)
 {
-    ctx_t *ctx = p->ctx;
     char *sender;
 
     if (!(sender = cmb_msg_sender (*zmsg))) {
@@ -271,7 +287,7 @@ done:
 /* Handle a new log message
  */
 
-static void _log_external (json_object *o)
+static void log_external (json_object *o)
 {
     const char *fac, *src, *message;
     struct timeval tv;
@@ -289,7 +305,7 @@ static void _log_external (json_object *o)
     } /* FIXME: expose iface in log.[ch] to pass syslog facility, level */
 }
 
-static bool _match_reduce (json_object *o1, json_object *o2)
+static bool match_reduce (json_object *o1, json_object *o2)
 {
     int lev1, lev2;
     const char *fac1, *fac2;
@@ -311,7 +327,7 @@ static bool _match_reduce (json_object *o1, json_object *o2)
     return true;
 }
 
-static void _combine_reduce (json_object *o1, json_object *o2)
+static void combine_reduce (json_object *o1, json_object *o2)
 {
     int count1 = 0, count2 = 0;
 
@@ -320,25 +336,25 @@ static void _combine_reduce (json_object *o1, json_object *o2)
     util_json_object_add_int (o1, "count", count1 + count2);
 }
 
-static void _process_backlog_one (plugin_ctx_t *p, json_object **op)
+static void process_backlog_one (ctx_t *ctx, json_object **op)
 {
     int hopcount = 0;
 
-    if (plugin_treeroot (p))
-        _log_external (*op);
+    if (flux_treeroot (ctx->h))
+        log_external (*op);
     else {
         /* Increment hopcount each time a message is forwarded upstream.
          */
         (void)util_json_object_get_int (*op, "hopcount", &hopcount);
         hopcount++;
         util_json_object_add_int (*op, "hopcount", hopcount);
-        plugin_send_request (p, *op, "log.msg");
+        flux_request_send (ctx->h, *op, "log.msg");
     }
     json_object_put (*op);
     *op = NULL;
 }
 
-static bool _timestamp_compare (void *item1, void *item2)
+static bool timestamp_compare (void *item1, void *item2)
 {
     json_object *o1 = item1;
     json_object *o2 = item2;
@@ -350,53 +366,51 @@ static bool _timestamp_compare (void *item1, void *item2)
     return timercmp (&tv1, &tv2, >);
 }
 
-static void _process_backlog (plugin_ctx_t *p)
+static void process_backlog (ctx_t *ctx)
 {
-    ctx_t *ctx = p->ctx;
     json_object *o, *lasto = NULL;
 
-    zlist_sort (ctx->backlog, _timestamp_compare);
+    zlist_sort (ctx->backlog, timestamp_compare);
     while ((o = zlist_pop (ctx->backlog))) {
         if (!lasto) {
             lasto = o;
-        } else if (_match_reduce (lasto, o)) {
-            _combine_reduce (lasto, o);
+        } else if (match_reduce (lasto, o)) {
+            combine_reduce (lasto, o);
             json_object_put (o);
         } else {
-            _process_backlog_one (p, &lasto);
+            process_backlog_one (ctx, &lasto);
             lasto = o;
         }
     }
     if (lasto)
-        _process_backlog_one (p, &lasto);
+        process_backlog_one (ctx, &lasto);
 }
 
-static void _add_backlog (plugin_ctx_t *p, json_object *o)
+static void add_backlog (ctx_t *ctx, json_object *o)
 {
-    ctx_t *ctx = p->ctx;
-
     json_object_get (o);
     zlist_append (ctx->backlog, o);
 }
 
 typedef struct {
-    plugin_ctx_t *p;
+    ctx_t *ctx;
     json_object *o;
 } fwdarg_t;
 
-static int _listener_fwd (const char *key, void *litem, void *arg)
+static int listener_fwd (const char *key, void *litem, void *arg)
 {
     listener_t *lp = litem;
     fwdarg_t *farg = arg;
+    ctx_t *ctx = farg->ctx;
     zmsg_t *zmsg;
     subscription_t *sub;
 
     sub = zlist_first (lp->subscriptions);
     while (sub) {
-        if (_match_subscription (farg->o, sub)) {
+        if (match_subscription (farg->o, sub)) {
             if (!(zmsg = zmsg_dup (lp->zmsg)))
                 oom ();
-            plugin_send_response (farg->p, &zmsg, farg->o);
+            flux_respond (ctx->h, &zmsg, farg->o);
             break;
         }
         sub = zlist_next (lp->subscriptions);
@@ -404,9 +418,8 @@ static int _listener_fwd (const char *key, void *litem, void *arg)
     return 1;
 }
 
-static void _recv_log_msg (plugin_ctx_t *p, zmsg_t **zmsg)
+static void recv_log_msg (ctx_t *ctx, zmsg_t **zmsg)
 {
-    ctx_t *ctx = p->ctx;
     fwdarg_t farg;
     json_object *o = NULL;
     int hopcount = 0, level = 0;
@@ -418,70 +431,67 @@ static void _recv_log_msg (plugin_ctx_t *p, zmsg_t **zmsg)
     (void)util_json_object_get_int (o, "hopcount", &hopcount);
 
     if (level <= ctx->log_persist_level || hopcount > 0) {
-        _add_backlog (p, o);
-        if (!plugin_timeout_isset (p))
-            plugin_timeout_set (p, ctx->log_reduction_timeout_msec);
+        add_backlog (ctx, o);
+        if (!flux_timeout_isset (ctx->h))
+            flux_timeout_set (ctx->h, ctx->log_reduction_timeout_msec);
     }
 
     if (hopcount == 0)
-        _log_save (p, o);
+        log_save (ctx, o);
    
-    farg.p = p; farg.o = o;
-    zhash_foreach (ctx->listeners, _listener_fwd, &farg);
+    farg.ctx = ctx;
+    farg.o = o;
+    zhash_foreach (ctx->listeners, listener_fwd, &farg);
 done:
     if (o)
         json_object_put (o);
     zmsg_destroy (zmsg);
 }
 
-/* Define plugin entry points.
- */
-
-static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
+static void logsrv_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
 {
-    ctx_t *ctx = p->ctx;
+    ctx_t *ctx = getctx (h);
     char *arg = NULL;
 
     if (ctx->disabled)
         return;
 
     if (cmb_msg_match (*zmsg, "log.msg"))
-        _recv_log_msg (p, zmsg);
+        recv_log_msg (ctx, zmsg);
     else if (cmb_msg_match_substr (*zmsg, "log.subscribe.", &arg))
-        _recv_log_subscribe (p, arg, zmsg);
+        recv_log_subscribe (ctx, arg, zmsg);
     else if (cmb_msg_match_substr (*zmsg, "log.unsubscribe.", &arg))
-        _recv_log_unsubscribe (p, arg, zmsg);
+        recv_log_unsubscribe (ctx, arg, zmsg);
     else if (cmb_msg_match (*zmsg, "log.disconnect"))
-        _recv_log_disconnect (p, zmsg);
+        recv_log_disconnect (ctx, zmsg);
     else if (cmb_msg_match_substr (*zmsg, "log.dump.", &arg))
-        _recv_log_dump (p, arg, zmsg);
+        recv_log_dump (ctx, arg, zmsg);
     else if (cmb_msg_match_substr (*zmsg, "event.fault.", &arg))
-        _recv_fault_event (p, arg, zmsg);
+        recv_fault_event (ctx, arg, zmsg);
 
     if (arg)
         free (arg);
 }
 
-static void _timeout (plugin_ctx_t *p)
+static void logsrv_timeout (flux_t h)
 {
-    _process_backlog (p);
-    plugin_timeout_clear (p);
+    process_backlog (getctx (h));
+    flux_timeout_clear (h);
 }
 
 static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)
 {
-    plugin_ctx_t *p = arg;
-    ctx_t *ctx = p->ctx;
+    ctx_t *ctx = arg;
     char *s, *key;
     int val;
 
-    if (errnum > 0) {
+    if (errnum != 0) {
         err ("log: %s", path);
         goto invalid;
     }
 
     key = kvsdir_key_at (dir, "reduction-timeout-msec");
-    if (kvs_get_int (p, key, &val) < 0) {
+    if (kvs_get_int (ctx->h, key, &val) < 0) {
         err ("log: %s", key);
         goto invalid; 
     }
@@ -492,18 +502,18 @@ static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)
     free (key);
 
     key = kvsdir_key_at (dir, "circular-buffer-entries");
-    if (kvs_get_int (p, key, &val) < 0) {
+    if (kvs_get_int (ctx->h, key, &val) < 0) {
         err ("log: %s", key);
         goto invalid;
     }
-    if (!_resize_cirbuf (p, val)) {
+    if (!resize_cirbuf (ctx, val)) {
         msg ("log: %s must be > 0", key);
         goto invalid;
     }
     free (key);
 
     key = kvsdir_key_at (dir, "persist-level");
-    if (kvs_get_string (p, key, &s) < 0) {
+    if (kvs_get_string (ctx->h, key, &s) < 0) {
         err ("log: %s", key);
         goto invalid;
     }
@@ -525,38 +535,29 @@ invalid:
     }
 }
 
-static void _init (plugin_ctx_t *p)
+static void logsrv_init (flux_t h)
 {
-    ctx_t *ctx;
+    ctx_t *ctx = getctx (h);
 
-    ctx = p->ctx = xzmalloc (sizeof (ctx_t));
-    ctx->listeners = zhash_new ();
-    ctx->backlog = zlist_new ();
-    ctx->cirbuf = zlist_new ();
-    ctx->disabled = false;
-
-    if (kvs_watch_dir (p, set_config, p, "conf.log") < 0)
+    if (kvs_watch_dir (h, set_config, ctx, "conf.log") < 0)
         err_exit ("log: %s", "conf.log");
 
-    zsocket_set_subscribe (p->zs_evin, "event.fault.");
+    flux_event_subscribe (h, "event.fault.");
 }
 
-static void _fini (plugin_ctx_t *p)
+static void logsrv_fini (flux_t h)
 {
-    ctx_t *ctx = p->ctx;
+    //ctx_t *ctx = getctx (h);
 
-    zhash_destroy (&ctx->listeners);
-    zlist_destroy (&ctx->backlog);
-    zlist_destroy (&ctx->cirbuf);
-    free (ctx);
+    flux_event_unsubscribe (h, "event.fault.");
 }
 
 struct plugin_struct logsrv = {
     .name      = "log",
-    .recvFn    = _recv,
-    .initFn    = _init,
-    .finiFn    = _fini,
-    .timeoutFn = _timeout,
+    .recvFn    = logsrv_recv,
+    .initFn    = logsrv_init,
+    .finiFn    = logsrv_fini,
+    .timeoutFn = logsrv_timeout,
 };
 
 /*

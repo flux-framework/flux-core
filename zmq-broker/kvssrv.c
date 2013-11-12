@@ -70,16 +70,6 @@
  */
 #define SYMLINK_CYCLE_LIMIT 10
 
-typedef void (*wait_fun_t) (plugin_ctx_t *p, char *arg, zmsg_t **zmsg);
-typedef struct {
-    plugin_ctx_t *p;
-    int usecount;
-    wait_fun_t fun;    
-    char *arg;
-    zmsg_t *zmsg;
-    char *id;
-} wait_t;
-
 typedef struct {
     json_object *o;
     zlist_t *waitlist;
@@ -127,14 +117,68 @@ typedef struct {
         zlist_t *writeback;
         enum { WB_CLEAN, WB_FLUSHING, WB_DIRTY } writeback_state;
     } slave;
+    flux_t h;
 } ctx_t;
+
+typedef void (*wait_fun_t) (ctx_t *ctx, char *arg, zmsg_t **zmsg);
+typedef struct {
+    ctx_t *ctx;
+    int usecount;
+    wait_fun_t fun;    
+    char *arg;
+    zmsg_t *zmsg;
+    char *id;
+} wait_t;
 
 enum {
     KVS_GET_DIRVAL = 1,
     KVS_GET_FILEVAL = 2,
 };
 
-static void event_kvs_setroot_send (plugin_ctx_t *p);
+static void event_kvs_setroot_send (ctx_t *ctx);
+
+
+static void freectx (ctx_t *ctx)
+{
+    if (ctx->store)
+        zhash_destroy (&ctx->store);
+    if (ctx->commits)
+        zhash_destroy (&ctx->commits);
+    if (ctx->watchlist)
+        zlist_destroy (&ctx->watchlist);
+    if (ctx->slave.writeback)
+        zlist_destroy (&ctx->slave.writeback);
+    if (ctx->master.namequeue)
+        zlist_destroy (&ctx->master.namequeue);
+    free (ctx);
+}
+
+static ctx_t *getctx (flux_t h)
+{
+    ctx_t *ctx = (ctx_t *)flux_aux_get (h, "kvssrv");
+
+    if (!ctx) {
+        ctx = xzmalloc (sizeof (*ctx));
+        if (!(ctx->store = zhash_new ()))
+            oom ();
+        if (!(ctx->commits = zhash_new ()))
+            oom ();
+        if (!(ctx->watchlist = zlist_new ()))
+            oom ();
+        if (flux_treeroot (h)) {
+            if (!(ctx->master.namequeue = zlist_new ()))
+                oom ();
+        } else {
+            if (!(ctx->slave.writeback = zlist_new ()))
+                oom ();
+            ctx->slave.writeback_state = WB_CLEAN;
+        }
+        ctx->h = h;
+        flux_aux_set (h, "kvssrv", ctx, (FluxFreeFn *)freectx);
+    }
+
+    return ctx;
+}
 
 static bool store_by_reference (json_object *o)
 {
@@ -145,7 +189,7 @@ static bool store_by_reference (json_object *o)
     return false;
 }
 
-static wait_t *wait_create (plugin_ctx_t *p, wait_fun_t fun,
+static wait_t *wait_create (ctx_t *ctx, wait_fun_t fun,
                             char *arg, zmsg_t **zmsg)
 {
     wait_t *wp = xzmalloc (sizeof (*wp));
@@ -155,7 +199,7 @@ static wait_t *wait_create (plugin_ctx_t *p, wait_fun_t fun,
         wp->arg = xstrdup (arg);
     wp->zmsg = *zmsg;
     *zmsg = NULL;
-    wp->p = p;
+    wp->ctx = ctx;
 
     return wp;
 }
@@ -222,7 +266,7 @@ static void wait_del_all (zlist_t *waitlist)
             oom ();
     while ((wp = zlist_pop (cpy))) {
         if (--wp->usecount == 0) {
-            wp->fun (wp->p, wp->arg, &wp->zmsg);
+            wp->fun (wp->ctx, wp->arg, &wp->zmsg);
             wait_destroy (wp, NULL);
         }
     }
@@ -270,9 +314,8 @@ static void commit_destroy (commit_t *cp)
     free (cp);
 }
 
-static commit_t *commit_new (plugin_ctx_t *p, const char *name)
+static commit_t *commit_new (ctx_t *ctx, const char *name)
 {
-    ctx_t *ctx = p->ctx;
     commit_t *cp = commit_create ();
 
     zhash_insert (ctx->commits, name, cp);
@@ -280,16 +323,13 @@ static commit_t *commit_new (plugin_ctx_t *p, const char *name)
     return cp;
 }
 
-static commit_t *commit_find (plugin_ctx_t *p, const char *name)
+static commit_t *commit_find (ctx_t *ctx, const char *name)
 {
-    ctx_t *ctx = p->ctx;
     return zhash_lookup (ctx->commits, name);
 }
 
-static void commit_done (plugin_ctx_t *p, commit_t *cp)
+static void commit_done (ctx_t *ctx, commit_t *cp)
 {
-    ctx_t *ctx = p->ctx;
-
     memcpy (cp->rootdir, ctx->rootdir, sizeof (href_t));
     cp->rootseq = ctx->rootseq;
     cp->done = true;
@@ -344,12 +384,11 @@ static bool op_match (op_t *op1, op_t *op2)
     return match;
 }
 
-static void writeback_add_name (plugin_ctx_t *p, const char *key)
+static void writeback_add_name (ctx_t *ctx, const char *key)
 {
-    ctx_t *ctx = p->ctx;
     op_t *op;
 
-    assert (!plugin_treeroot (p));
+    assert (!flux_treeroot (ctx->h));
 
     op = op_create (OP_NAME);
     op->u.name.key = xstrdup (key);
@@ -358,12 +397,11 @@ static void writeback_add_name (plugin_ctx_t *p, const char *key)
     ctx->slave.writeback_state = WB_DIRTY;
 }
 
-static void writeback_add_store (plugin_ctx_t *p, const char *ref)
+static void writeback_add_store (ctx_t *ctx, const char *ref)
 {
-    ctx_t *ctx = p->ctx;
     op_t *op;
 
-    assert (!plugin_treeroot (p));
+    assert (!flux_treeroot (ctx->h));
 
     op = op_create (OP_STORE);
     op->u.store.ref = xstrdup (ref);
@@ -372,12 +410,11 @@ static void writeback_add_store (plugin_ctx_t *p, const char *ref)
     ctx->slave.writeback_state = WB_DIRTY;
 }
 
-static void writeback_add_flush (plugin_ctx_t *p, zmsg_t *zmsg)
+static void writeback_add_flush (ctx_t *ctx, zmsg_t *zmsg)
 {
-    ctx_t *ctx = p->ctx;
     op_t *op;
 
-    assert (!plugin_treeroot (p));
+    assert (!flux_treeroot (ctx->h));
 
     op = op_create (OP_FLUSH);
     op->u.flush.zmsg = zmsg;
@@ -385,9 +422,8 @@ static void writeback_add_flush (plugin_ctx_t *p, zmsg_t *zmsg)
         oom ();
 }
 
-static void writeback_del (plugin_ctx_t *p, op_t *target)
+static void writeback_del (ctx_t *ctx, op_t *target)
 {
-    ctx_t *ctx = p->ctx;
     op_t *op = zlist_first (ctx->slave.writeback);
 
     while (op) {
@@ -401,7 +437,7 @@ static void writeback_del (plugin_ctx_t *p, op_t *target)
         /* handle flush(es) now at head of queue */
         while ((op = zlist_head (ctx->slave.writeback)) && op->type == OP_FLUSH) {
             ctx->slave.writeback_state = WB_FLUSHING;
-            plugin_send_request_raw (p, &op->u.flush.zmsg); /* fwd upstream */
+            flux_request_sendmsg (ctx->h, &op->u.flush.zmsg); /* fwd upstream */
             zlist_remove (ctx->slave.writeback, op);
             op_destroy (op);
         }
@@ -428,23 +464,21 @@ static void hobj_destroy (hobj_t *hp)
     free (hp);
 }
 
-static void load_request_send (plugin_ctx_t *p, const href_t ref)
+static void load_request_send (ctx_t *ctx, const href_t ref)
 {
     json_object *o = util_json_object_new_object ();
 
     json_object_object_add (o, ref, NULL);
-    plugin_send_request (p, o, "kvs.load");
+    flux_request_send (ctx->h, o, "kvs.load");
     json_object_put (o);
 }
 
-static bool load (plugin_ctx_t *p, const href_t ref, wait_t *wp,
-                  json_object **op)
+static bool load (ctx_t *ctx, const href_t ref, wait_t *wp, json_object **op)
 {
-    ctx_t *ctx = p->ctx;
     hobj_t *hp = zhash_lookup (ctx->store, ref);
     bool done = true;
 
-    if (plugin_treeroot (p)) {
+    if (flux_treeroot (ctx->h)) {
         if (!hp)
             msg_exit ("dangling ref %s", ref);
     } else {
@@ -452,7 +486,7 @@ static bool load (plugin_ctx_t *p, const href_t ref, wait_t *wp,
             hp = hobj_create (NULL);
             zhash_insert (ctx->store, ref, hp);
             zhash_freefn (ctx->store, ref, (zhash_free_fn *)hobj_destroy);
-            load_request_send (p, ref);
+            load_request_send (ctx, ref);
             /* leave hp->o == NULL to be filled in on response */
         }
         if (!hp->o) {
@@ -469,20 +503,18 @@ static bool load (plugin_ctx_t *p, const href_t ref, wait_t *wp,
     return done;
 }
 
-static void store_request_send (plugin_ctx_t *p, const href_t ref,
-                                json_object *val)
+static void store_request_send (ctx_t *ctx, const href_t ref, json_object *val)
 {
     json_object *o = util_json_object_new_object ();
 
     json_object_get (val);
     json_object_object_add (o, ref, val);
-    plugin_send_request (p, o, "kvs.store");
+    flux_request_send (ctx->h, o, "kvs.store");
     json_object_put (o);
 }
 
-static void store (plugin_ctx_t *p, json_object *o, bool writeback, href_t ref)
+static void store (ctx_t *ctx, json_object *o, bool writeback, href_t ref)
 {
-    ctx_t *ctx = p->ctx;
     hobj_t *hp; 
 
     compute_json_href (o, ref);
@@ -499,15 +531,14 @@ static void store (plugin_ctx_t *p, json_object *o, bool writeback, href_t ref)
         zhash_insert (ctx->store, ref, hp);
         zhash_freefn (ctx->store, ref, (zhash_free_fn *)hobj_destroy);
         if (writeback) {
-            assert (!plugin_treeroot (p));
-            writeback_add_store (p, ref);
-            store_request_send (p, ref, o);
+            assert (!flux_treeroot (ctx->h));
+            writeback_add_store (ctx, ref);
+            store_request_send (ctx, ref, o);
         }
     }
 }
 
-static bool readahead_dir (plugin_ctx_t *p, json_object *dir, wait_t *wp,
-                          int flags)
+static bool readahead_dir (ctx_t *ctx, json_object *dir, wait_t *wp, int flags)
 {
     json_object *val;
     json_object_iter iter;
@@ -516,16 +547,16 @@ static bool readahead_dir (plugin_ctx_t *p, json_object *dir, wait_t *wp,
 
     json_object_object_foreachC (dir, iter) {
         if ((flags & KVS_GET_FILEVAL) && util_json_object_get_string (iter.val, "FILEREF", &ref) == 0) {
-            if (!load (p, ref, wp, &val)) {
+            if (!load (ctx, ref, wp, &val)) {
                 done = false;
                 continue;
             }
         } else if ((flags & KVS_GET_DIRVAL) && util_json_object_get_string (iter.val, "DIRREF", &ref) == 0){
-            if (!load (p, ref, wp, &val)) {
+            if (!load (ctx, ref, wp, &val)) {
                 done = false;
                 continue;
             }
-            if (!readahead_dir (p, val, wp, flags))
+            if (!readahead_dir (ctx, val, wp, flags))
                 done = false;
         }
     }
@@ -538,7 +569,7 @@ static bool readahead_dir (plugin_ctx_t *p, json_object *dir, wait_t *wp,
  * if 'flags' contains KVS_GET_DIRVAL, replace DIRREF's with their values,
  * and recurse.
  */
-static json_object *kvs_save (plugin_ctx_t *p, json_object *dir, wait_t *wp,
+static json_object *kvs_save (ctx_t *ctx, json_object *dir, wait_t *wp,
                               int flags)
 {
     json_object *dcpy, *val;
@@ -551,15 +582,15 @@ static json_object *kvs_save (plugin_ctx_t *p, json_object *dir, wait_t *wp,
     json_object_object_foreachC (dir, iter) {
         if ((flags & KVS_GET_FILEVAL)
                 && util_json_object_get_string (iter.val, "FILEREF", &ref)==0) {
-            if (!load (p, ref, wp, &val))
+            if (!load (ctx, ref, wp, &val))
                 goto stall;
             json_object_object_add (dcpy, iter.key,
                                     dirent_create ("FILEVAL", val));
         } else if ((flags & KVS_GET_DIRVAL)
                 && util_json_object_get_string (iter.val, "DIRREF", &ref)==0) {
-            if (!load (p, ref, wp, &val))
+            if (!load (ctx, ref, wp, &val))
                 goto stall;
-            if (!(val = kvs_save (p, val, wp, flags)))
+            if (!(val = kvs_save (ctx, val, wp, flags)))
                 goto stall;
             json_object_object_add (dcpy, iter.key,
                                     dirent_create ("DIRVAL", val));
@@ -578,7 +609,7 @@ stall:
 /* Given a JSON object created by kvs_save(), restore it to the content-hash
  * and return the new reference in 'href'.
  */
-static void kvs_restore (plugin_ctx_t *p, json_object *dir, href_t href)
+static void kvs_restore (ctx_t *ctx, json_object *dir, href_t href)
 {
     json_object *cpy, *o;
     json_object_iter iter;
@@ -589,13 +620,13 @@ static void kvs_restore (plugin_ctx_t *p, json_object *dir, href_t href)
 
     json_object_object_foreachC (dir, iter) {
         if ((o = json_object_object_get (iter.val, "DIRVAL"))) {
-            kvs_restore (p, o, nhref);
+            kvs_restore (ctx, o, nhref);
             json_object_object_add (cpy, iter.key,
                                     dirent_create ("DIRREF", nhref));
         } else if ((o = json_object_object_get (iter.val, "FILEVAL"))
                                         && store_by_reference (o)) {
             json_object_get (o);
-            store (p, o, false, nhref);
+            store (ctx, o, false, nhref);
             json_object_object_add (cpy, iter.key,
                                         dirent_create ("FILEREF", nhref));
         } else { /* FILEVAL, FILEREF, DIRREF */
@@ -603,27 +634,25 @@ static void kvs_restore (plugin_ctx_t *p, json_object *dir, href_t href)
             json_object_object_add (cpy, iter.key, iter.val);
         }
     }
-    store (p, cpy, false, href);
+    store (ctx, cpy, false, href);
 }
 
-static void name_request_send (plugin_ctx_t *p, char *key, json_object *dirent)
+static void name_request_send (ctx_t *ctx, char *key, json_object *dirent)
 {
     json_object *o = util_json_object_new_object ();
 
     json_object_object_add (o, key, dirent);
-    plugin_send_request (p, o, "kvs.name");
+    flux_request_send (ctx->h, o, "kvs.name");
     json_object_put (o);
 }
 
 /* consumes dirent */
-static void name (plugin_ctx_t *p, char *key, json_object *dirent,
+static void name (ctx_t *ctx, char *key, json_object *dirent,
                   bool writeback)
 {
-    ctx_t *ctx = p->ctx;
-
     if (writeback) {
-        writeback_add_name (p, key);
-        name_request_send (p, key, dirent);
+        writeback_add_name (ctx, key);
+        name_request_send (ctx, key, dirent);
     } else {
         name_t *np = xzmalloc (sizeof (*np));
         np->key = xstrdup (key);
@@ -654,10 +683,8 @@ static char *encode_rootref (int seq, href_t ref)
     return rootref;
 }
 
-static void setroot (plugin_ctx_t *p, int seq, href_t ref)
+static void setroot (ctx_t *ctx, int seq, href_t ref)
 {
-    ctx_t *ctx = p->ctx;
-
     if (seq == 0 || seq > ctx->rootseq) {
         memcpy (ctx->rootdir, ref, sizeof (href_t));
         ctx->rootseq = seq;
@@ -695,15 +722,15 @@ static void deep_put (json_object *dir, name_t *np)
     free (np);
 }
 
-static void update_version (plugin_ctx_t *p, int newvers)
+static void update_version (ctx_t *ctx, int newvers)
 {
     json_object *o;
 
-    assert (plugin_treeroot (p));
+    assert (flux_treeroot (ctx->h));
 
     if (!(o = json_object_new_int (newvers)))
         oom ();
-    name (p, "version", dirent_create ("FILEVAL", o), false);
+    name (ctx, "version", dirent_create ("FILEVAL", o), false);
     json_object_put (o);
 }
 
@@ -713,29 +740,28 @@ static void update_version (plugin_ctx_t *p, int newvers)
  * FIXME: garbage collect unreferenced store entries (refcount them)
  * FIXME: only read in directories affected by the metadata updates
  */
-static void commit (plugin_ctx_t *p)
+static void commit (ctx_t *ctx)
 {
-    ctx_t *ctx = p->ctx;
     name_t *np;
     json_object *dir, *cpy;
     href_t ref;
 
-    assert (plugin_treeroot (p));
+    assert (flux_treeroot (ctx->h));
 
-    (void)load (p, ctx->rootdir, NULL, &dir);
+    (void)load (ctx, ctx->rootdir, NULL, &dir);
     assert (dir != NULL);
-    cpy = kvs_save (p, dir, NULL, KVS_GET_DIRVAL);
+    cpy = kvs_save (ctx, dir, NULL, KVS_GET_DIRVAL);
     assert (cpy != NULL);
-    update_version (p, ctx->rootseq + 1);
+    update_version (ctx, ctx->rootseq + 1);
     while ((np = zlist_pop (ctx->master.namequeue))) {
         deep_put (cpy, np); /* destroys np */
     }
-    kvs_restore (p, cpy, ref);
+    kvs_restore (ctx, cpy, ref);
     json_object_put (cpy);
-    setroot (p, ctx->rootseq + 1, ref);
+    setroot (ctx, ctx->rootseq + 1, ref);
 }
 
-static void kvs_load (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void kvs_load (ctx_t *ctx, char *arg, zmsg_t **zmsg)
 {
     json_object *val, *cpy = NULL, *o = NULL;
     json_object_iter iter;
@@ -743,13 +769,13 @@ static void kvs_load (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     bool stall = false;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
-        plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    wp = wait_create (p, kvs_load, arg, zmsg);
+    wp = wait_create (ctx, kvs_load, arg, zmsg);
     cpy = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
-        if (!load (p, iter.key, wp, &val))
+        if (!load (ctx, iter.key, wp, &val))
             stall = true;
         else {
             json_object_get (val);
@@ -758,7 +784,7 @@ static void kvs_load (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     }
     if (!stall) {
         wait_destroy (wp, zmsg);
-        plugin_send_response (p, zmsg, cpy);
+        flux_respond (ctx->h, zmsg, cpy);
     }
 done:
     if (o)
@@ -769,21 +795,21 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_load_response (plugin_ctx_t *p, zmsg_t **zmsg)
+static void kvs_load_response (ctx_t *ctx, zmsg_t **zmsg)
 {
     json_object *o = NULL;
     json_object_iter iter;
     href_t href;
     
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
-        plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
     json_object_object_foreachC (o, iter) {
         json_object_get (iter.val);
-        store (p, iter.val, false, href);
+        store (ctx, iter.val, false, href);
         if (strcmp (href, iter.key) != 0)
-            plugin_log (p, LOG_ERR, "%s: bad href %s", __FUNCTION__, iter.key);
+            flux_log (ctx->h, LOG_ERR, "%s: bad href %s", __FUNCTION__, iter.key);
     }
 done:
     if (o)
@@ -792,26 +818,26 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_store (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void kvs_store (ctx_t *ctx, char *arg, zmsg_t **zmsg)
 {
     json_object *cpy = NULL, *o = NULL;
     json_object_iter iter;
-    bool writeback = !plugin_treeroot (p);
+    bool writeback = !flux_treeroot (ctx->h);
     href_t href;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
-        plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
     cpy = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
         json_object_get (iter.val);
-        store (p, iter.val, writeback, href);
+        store (ctx, iter.val, writeback, href);
         if (strcmp (href, iter.key) != 0)
-            plugin_log (p, LOG_ERR, "%s: bad href %s", __FUNCTION__, iter.key);
+            flux_log (ctx->h, LOG_ERR, "%s: bad href %s", __FUNCTION__, iter.key);
         json_object_object_add (cpy, iter.key, NULL);
     }
-    plugin_send_response (p, zmsg, cpy);
+    flux_respond (ctx->h, zmsg, cpy);
 done:
     if (o)
         json_object_put (o);
@@ -821,19 +847,19 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_store_response (plugin_ctx_t *p, zmsg_t **zmsg)
+static void kvs_store_response (ctx_t *ctx, zmsg_t **zmsg)
 {
     json_object *o = NULL;
     json_object_iter iter;
     op_t target = { .type = OP_STORE };
     
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
-        plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
     json_object_object_foreachC (o, iter) {
         target.u.store.ref = iter.key;
-        writeback_del (p, &target);
+        writeback_del (ctx, &target);
     }
 done:
     if (o)
@@ -842,30 +868,29 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_clean_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void kvs_clean_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
 {
-    ctx_t *ctx = p->ctx;
     int s1, s2;
     int rc = 0;
     json_object *rootdir, *cpy;
     href_t href;
 
-    if ((!plugin_treeroot (p) && zlist_size (ctx->slave.writeback) > 0) ||
-          (plugin_treeroot (p) && zlist_size (ctx->master.namequeue) > 0)) {
-        plugin_log (p, LOG_ALERT, "cache is busy");
+    if ((!flux_treeroot (ctx->h) && zlist_size (ctx->slave.writeback) > 0) ||
+          (flux_treeroot (ctx->h) && zlist_size (ctx->master.namequeue) > 0)) {
+        flux_log (ctx->h, LOG_ALERT, "cache is busy");
         rc = EAGAIN;
         goto done;
     }
     s1 = zhash_size (ctx->store);
-    if (plugin_treeroot (p)) {
-        (void)load (p, ctx->rootdir, NULL, &rootdir);
+    if (flux_treeroot (ctx->h)) {
+        (void)load (ctx, ctx->rootdir, NULL, &rootdir);
         assert (rootdir != NULL);
-        cpy = kvs_save (p, rootdir, NULL, KVS_GET_DIRVAL | KVS_GET_FILEVAL);
+        cpy = kvs_save (ctx, rootdir, NULL, KVS_GET_DIRVAL | KVS_GET_FILEVAL);
         assert (cpy != NULL);
         zhash_destroy (&ctx->store);
         if (!(ctx->store = zhash_new ()))
             oom ();
-        kvs_restore (p, cpy, href);
+        kvs_restore (ctx, cpy, href);
         assert (!strcmp (ctx->rootdir, href));
         json_object_put (cpy);
     } else {
@@ -874,32 +899,32 @@ static void kvs_clean_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
             oom ();
     }
     s2 = zhash_size (ctx->store);
-    plugin_log (p, LOG_ALERT, "dropped %d of %d cache entries", s1 - s2, s1);
+    flux_log (ctx->h, LOG_ALERT, "dropped %d of %d cache entries", s1 - s2, s1);
 done:
-    plugin_send_response_errnum (p, zmsg, rc);
+    flux_respond_errnum (ctx->h, zmsg, rc);
 }
 
-static void kvs_name (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void kvs_name (ctx_t *ctx, char *arg, zmsg_t **zmsg)
 {
     json_object *cpy = NULL, *o = NULL;
     json_object_iter iter;
-    bool writeback = !plugin_treeroot (p);
+    bool writeback = !flux_treeroot (ctx->h);
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
-        plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
     cpy = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
         if (iter.val) {
             json_object_get (iter.val);
-            name (p, iter.key, iter.val, writeback);
+            name (ctx, iter.key, iter.val, writeback);
             json_object_object_del (cpy, iter.key);
             json_object_object_add (cpy, iter.key, NULL);
         } else 
-            name (p, iter.key, NULL, writeback);
+            name (ctx, iter.key, NULL, writeback);
     }
-    plugin_send_response (p, zmsg, cpy);
+    flux_respond (ctx->h, zmsg, cpy);
 done:
     if (o)
         json_object_put (o);
@@ -909,19 +934,19 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_name_response (plugin_ctx_t *p, zmsg_t **zmsg)
+static void kvs_name_response (ctx_t *ctx, zmsg_t **zmsg)
 {
     json_object *o = NULL;
     json_object_iter iter;
     op_t target = { .type = OP_NAME };
     
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
-        plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
     json_object_object_foreachC (o, iter) {
         target.u.name.key = iter.key;
-        writeback_del (p, &target);
+        writeback_del (ctx, &target);
     }
 done:
     if (o)
@@ -930,33 +955,29 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_flush_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void kvs_flush_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
 {
-    ctx_t *ctx = p->ctx;
-
-    if (plugin_treeroot (p) || ctx->slave.writeback_state == WB_CLEAN)
-        plugin_send_response_errnum (p, zmsg, 0);
+    if (flux_treeroot (ctx->h) || ctx->slave.writeback_state == WB_CLEAN)
+        flux_respond_errnum (ctx->h, zmsg, 0);
     else if (zlist_size (ctx->slave.writeback) == 0) {
-        plugin_send_request_raw (p, zmsg); /* fwd upstream */
+        flux_request_sendmsg (ctx->h, zmsg); /* fwd upstream */
         ctx->slave.writeback_state = WB_FLUSHING;
     } else {
-        writeback_add_flush (p, *zmsg); /* enqueue */
+        writeback_add_flush (ctx, *zmsg); /* enqueue */
         *zmsg = NULL;
     }
 }
 
-static void kvs_flush_response (plugin_ctx_t *p, zmsg_t **zmsg)
+static void kvs_flush_response (ctx_t *ctx, zmsg_t **zmsg)
 {
-    ctx_t *ctx = p->ctx;
-
-    plugin_send_response_raw (p, zmsg); /* fwd downstream */
+    flux_response_sendmsg (ctx->h, zmsg); /* fwd downstream */
     if (ctx->slave.writeback_state == WB_FLUSHING)
         ctx->slave.writeback_state = WB_CLEAN;
 }
 
 /* Get dirent containing requested key.
  */
-static bool walk (plugin_ctx_t *p, json_object *root, const char *path,
+static bool walk (ctx_t *ctx, json_object *root, const char *path,
                   json_object **direntp, wait_t *wp, bool readlink, int depth)
 {
     char *cpy = xstrdup (path);
@@ -976,13 +997,13 @@ static bool walk (plugin_ctx_t *p, json_object *root, const char *path,
         if (util_json_object_get_string (dirent, "LINKVAL", &link) == 0) {
             if (depth == SYMLINK_CYCLE_LIMIT)
                 goto error; /* FIXME: get ELOOP back to kvs_get */
-            if (!walk (p, root, link, &dirent, wp, false, depth))
+            if (!walk (ctx, root, link, &dirent, wp, false, depth))
                 goto stall;
             if (!dirent)
                 goto error;
         }
         if (util_json_object_get_string (dirent, "DIRREF", &ref) == 0) {
-            if (!load (p, ref, wp, &dir))
+            if (!load (ctx, ref, wp, &dir))
                 goto stall;
         } else
             msg_exit ("corrupt internal storage");
@@ -994,7 +1015,7 @@ static bool walk (plugin_ctx_t *p, json_object *root, const char *path,
         if (!readlink) {
             if (depth == SYMLINK_CYCLE_LIMIT)
                 goto error; /* FIXME: get ELOOP back to kvs_get */
-            if (!walk (p, root, link, &dirent, wp, readlink, depth))
+            if (!walk (ctx, root, link, &dirent, wp, readlink, depth))
                 goto stall;
         }
     }
@@ -1010,7 +1031,7 @@ stall:
     return false;
 }
 
-static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
+static bool lookup (ctx_t *ctx, json_object *root, wait_t *wp,
                     bool dir, int dir_flags, bool readlink, const char *name,
                     json_object **valp, int *ep)
 {
@@ -1027,7 +1048,7 @@ static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
         val = root;
         isdir = true;
     } else {
-        if (!walk (p, root, name, &dirent, wp, readlink, 0))
+        if (!walk (ctx, root, name, &dirent, wp, readlink, 0))
             goto stall;
         if (!dirent) {
             //errnum = ENOENT;
@@ -1042,7 +1063,7 @@ static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
                 errnum = EISDIR;
                 goto done;
             }
-            if (!load (p, ref, wp, &val))
+            if (!load (ctx, ref, wp, &val))
                 goto stall;
             isdir = true;
         } else if (util_json_object_get_string (dirent, "FILEREF", &ref) == 0) {
@@ -1054,7 +1075,7 @@ static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
                 errnum = ENOTDIR;
                 goto done;
             }
-            if (!load (p, ref, wp, &val))
+            if (!load (ctx, ref, wp, &val))
                 goto stall;
         } else if ((vp = json_object_object_get (dirent, "DIRVAL"))) {
             if (readlink) {
@@ -1086,9 +1107,9 @@ static bool lookup (plugin_ctx_t *p, json_object *root, wait_t *wp,
     }
     /* val now contains the requested object */
     if (isdir) {
-        if (!plugin_treeroot (p) && !readahead_dir (p, val, wp, dir_flags))
+        if (!flux_treeroot (ctx->h) && !readahead_dir (ctx, val, wp, dir_flags))
             goto stall;
-        if (!(val = kvs_save (p, val, wp, dir_flags)))
+        if (!(val = kvs_save (ctx, val, wp, dir_flags)))
             goto stall;
     } else 
         json_object_get (val);
@@ -1101,9 +1122,8 @@ stall:
     return false;
 }
 
-static void kvs_get_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void kvs_get_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
 {
-    ctx_t *ctx = p->ctx;
     json_object *root, *reply = NULL, *o = NULL;
     json_object_iter iter;
     wait_t *wp = NULL;
@@ -1113,11 +1133,11 @@ static void kvs_get_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     int errnum = 0;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
-        plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    wp = wait_create (p, kvs_get_request, arg, zmsg);
-    if (!load (p, ctx->rootdir, wp, &root)) {
+    wp = wait_create (ctx, kvs_get_request, arg, zmsg);
+    if (!load (ctx, ctx->rootdir, wp, &root)) {
         stall = true;
         goto done;
     }
@@ -1130,7 +1150,7 @@ static void kvs_get_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         if (!strncmp (iter.key, ".flag_", 6)) /* ignore flags */
             continue;
         json_object *val = NULL;
-        if (!lookup (p, root, wp, flag_directory, 0, flag_readlink,
+        if (!lookup (ctx, root, wp, flag_directory, 0, flag_readlink,
                      iter.key, &val, &errnum))
             stall = true; /* keep going to maximize readahead */
         if (stall) {
@@ -1144,11 +1164,11 @@ static void kvs_get_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     /* N.B. unset values are returned as NULL and are not an error */
     if (errnum != 0) {
         wait_destroy (wp, zmsg); /* get back *zmsg */
-        plugin_send_response_errnum (p, zmsg, errnum);
+        flux_respond_errnum (ctx->h, zmsg, errnum);
     } else if (!stall) {
         wait_destroy (wp, zmsg); /* get back *zmsg */
         (void)cmb_msg_replace_json (*zmsg, reply);
-        plugin_send_response_raw (p, zmsg);
+        flux_response_sendmsg (ctx->h, zmsg);
     }
 done:
     if (o)
@@ -1159,10 +1179,9 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void kvs_watch_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
 {
     char *sender = cmb_msg_sender (*zmsg);
-    ctx_t *ctx = p->ctx;
     json_object *root, *reply = NULL, *o = NULL;
     json_object_iter iter;
     wait_t *wp = NULL;
@@ -1172,11 +1191,11 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     int errnum = 0;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
-        plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    wp = wait_create (p, kvs_watch_request, arg, zmsg);
-    if (!load (p, ctx->rootdir, wp, &root)) {
+    wp = wait_create (ctx, kvs_watch_request, arg, zmsg);
+    if (!load (ctx, ctx->rootdir, wp, &root)) {
         stall = true;
         goto done;
     }
@@ -1191,7 +1210,7 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         if (!strncmp (iter.key, ".flag_", 6) || !strncmp (iter.key, ".arg_", 5))
             continue;
         json_object *val = NULL;
-        if (!lookup (p, root, wp, flag_directory, 0, flag_readlink,
+        if (!lookup (ctx, root, wp, flag_directory, 0, flag_readlink,
                      iter.key, &val, &errnum))
             stall = true; /* keep going to maximize readahead */
         if (stall) {
@@ -1209,7 +1228,7 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
      */
     if (errnum != 0) {
         wait_destroy (wp, zmsg); /* get back *zmsg */
-        plugin_send_response_errnum (p, zmsg, errnum);
+        flux_respond_errnum (ctx->h, zmsg, errnum);
     } else if (!stall) {
         wait_destroy (wp, zmsg); /* get back *zmsg */
         (void)cmb_msg_replace_json (*zmsg, reply);
@@ -1221,7 +1240,7 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
             zmsg_t *zcpy;
             if (!(zcpy = zmsg_dup (*zmsg)))
                 oom ();
-            plugin_send_response_raw (p, &zcpy);
+            flux_response_sendmsg (ctx->h, &zcpy);
             reply_sent = true;
         }
    
@@ -1235,7 +1254,7 @@ static void kvs_watch_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
             /* On every commit, kvs_watch_request (p, arg, zcpy) will be called.
              * No reply will be generated unless a value has changed.
              */
-            wp = wait_create (p, kvs_watch_request, arg, zmsg);
+            wp = wait_create (ctx, kvs_watch_request, arg, zmsg);
             wait_set_id (wp, sender);
             wait_add (ctx->watchlist, wp);
         }
@@ -1251,17 +1270,17 @@ done:
         free (sender);
 }
 
-static void kvs_put_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void kvs_put_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
 {
     json_object *o = NULL;
     json_object_iter iter;
     href_t ref;
-    bool writeback = !plugin_treeroot (p);
+    bool writeback = !flux_treeroot (ctx->h);
     bool flag_mkdir = false;
     bool flag_symlink = false;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
-        plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
     (void)util_json_object_get_boolean (o, ".flag_mkdir", &flag_mkdir);
@@ -1272,21 +1291,21 @@ static void kvs_put_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         if (json_object_get_type (iter.val) == json_type_null) {
             if (flag_mkdir) {
                 json_object *empty_dir = util_json_object_new_object ();
-                store (p, empty_dir, writeback, ref);
-                name (p, iter.key, dirent_create ("DIRREF", ref), writeback);
+                store (ctx, empty_dir, writeback, ref);
+                name (ctx, iter.key, dirent_create ("DIRREF", ref), writeback);
             } else
-                name (p, iter.key, NULL, writeback);
+                name (ctx, iter.key, NULL, writeback);
         } else if (flag_symlink) {
-            name (p, iter.key, dirent_create ("LINKVAL", iter.val), writeback);
+            name (ctx, iter.key, dirent_create ("LINKVAL", iter.val), writeback);
         } else if (store_by_reference (iter.val)) {
             json_object_get (iter.val);
-            store (p, iter.val, writeback, ref);
-            name (p, iter.key, dirent_create ("FILEREF", ref), writeback);
+            store (ctx, iter.val, writeback, ref);
+            name (ctx, iter.key, dirent_create ("FILEREF", ref), writeback);
         } else {
-            name (p, iter.key, dirent_create ("FILEVAL", iter.val), writeback);
+            name (ctx, iter.key, dirent_create ("FILEVAL", iter.val), writeback);
         }
     }
-    plugin_send_response_errnum (p, zmsg, 0); /* success */
+    flux_respond_errnum (ctx->h, zmsg, 0); /* success */
 done:
     if (o)
         json_object_put (o);
@@ -1294,26 +1313,26 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void commit_request_send (plugin_ctx_t *p, const char *name)
+static void commit_request_send (ctx_t *ctx, const char *name)
 {
     json_object *o = util_json_object_new_object ();
 
     util_json_object_add_string (o, "name", name);
-    plugin_send_request (p, o, "kvs.commit");
+    flux_request_send (ctx->h, o, "kvs.commit");
     json_object_put (o);
 }
 
-static void commit_response_send (plugin_ctx_t *p, commit_t *cp, 
+static void commit_response_send (ctx_t *ctx, commit_t *cp, 
                                   json_object *o, zmsg_t **zmsg)
 {
     char *rootref = encode_rootref (cp->rootseq, cp->rootdir);
 
     util_json_object_add_string (o, "rootref", rootref);
-    plugin_send_response (p, zmsg, o);
+    flux_respond (ctx->h, zmsg, o);
     free (rootref);
 }
 
-static void kvs_commit_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void kvs_commit_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
 {
     json_object *o = NULL;
     const char *name;
@@ -1322,21 +1341,21 @@ static void kvs_commit_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
             || util_json_object_get_string (o, "name", &name) < 0) {
-        plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    wp = wait_create (p, kvs_commit_request, arg, zmsg);
-    if (plugin_treeroot (p)) {
-        if (!(cp = commit_find (p, name))) {
-            commit (p);
-            cp = commit_new (p, name);
-            commit_done (p, cp);
-            event_kvs_setroot_send (p);
+    wp = wait_create (ctx, kvs_commit_request, arg, zmsg);
+    if (flux_treeroot (ctx->h)) {
+        if (!(cp = commit_find (ctx, name))) {
+            commit (ctx);
+            cp = commit_new (ctx, name);
+            commit_done (ctx, cp);
+            event_kvs_setroot_send (ctx);
         }
     } else {
-        if (!(cp = commit_find (p, name))) {
-            commit_request_send (p, name);
-            cp = commit_new (p, name);
+        if (!(cp = commit_find (ctx, name))) {
+            commit_request_send (ctx, name);
+            cp = commit_new (ctx, name);
         }
         if (!cp->done) {
             wait_add (cp->waitlist, wp);
@@ -1344,7 +1363,7 @@ static void kvs_commit_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
         }
     }
     wait_destroy (wp, zmsg);
-    commit_response_send (p, cp, o, zmsg);
+    commit_response_send (ctx, cp, o, zmsg);
 done:
     if (o)
         json_object_put (o);
@@ -1352,7 +1371,7 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_commit_response (plugin_ctx_t *p, zmsg_t **zmsg)
+static void kvs_commit_response (ctx_t *ctx, zmsg_t **zmsg)
 {
     json_object *o = NULL;
     const char *arg, *name;
@@ -1364,13 +1383,13 @@ static void kvs_commit_response (plugin_ctx_t *p, zmsg_t **zmsg)
             || util_json_object_get_string (o, "name", &name) < 0
             || util_json_object_get_string (o, "rootref", &arg) < 0
             || !decode_rootref (arg, &seq, href)) {
-        plugin_log (p, LOG_ERR, "%s: bad message", __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    setroot (p, seq, href); /* may be redundant - racing with multicast */
-    cp = commit_find (p, name);
+    setroot (ctx, seq, href); /* may be redundant - racing with multicast */
+    cp = commit_find (ctx, name);
     assert (cp != NULL);
-    commit_done (p, cp);
+    commit_done (ctx, cp);
     wait_del_all (cp->waitlist);
 done:
     if (o)
@@ -1379,67 +1398,64 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void kvs_getroot_request (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void kvs_getroot_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
 {
-    ctx_t *ctx = p->ctx;
     json_object *o;
     char *rootref = encode_rootref (ctx->rootseq, ctx->rootdir);
 
     if (!(o = json_object_new_string (rootref)))
         oom ();
-    plugin_send_response (p, zmsg, o);
+    flux_respond (ctx->h, zmsg, o);
     free (rootref);
     json_object_put (o);
 }
 
-static void event_kvs_setroot (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void event_kvs_setroot (ctx_t *ctx, char *arg, zmsg_t **zmsg)
 {
     href_t href;
     int seq;
 
-    assert (!plugin_treeroot (p));
+    assert (!flux_treeroot (ctx->h));
 
     if (!decode_rootref (arg, &seq, href))
-        plugin_log (p, LOG_ERR, "%s: malformed rootref %s", __FUNCTION__, arg);
+        flux_log (ctx->h, LOG_ERR, "%s: malformed rootref %s",
+                                   __FUNCTION__, arg);
     else
-        setroot (p, seq, href);
+        setroot (ctx, seq, href);
     if (*zmsg)
         zmsg_destroy (zmsg);
 }
 
-static void event_kvs_setroot_send (plugin_ctx_t *p)
+static void event_kvs_setroot_send (ctx_t *ctx)
 {
-    ctx_t *ctx = p->ctx;
     char *rootref = encode_rootref (ctx->rootseq, ctx->rootdir);
-    if (flux_event_send (p, NULL, "event.kvs.setroot.%s", rootref) < 0)
+    if (flux_event_send (ctx->h, NULL, "event.kvs.setroot.%s", rootref) < 0)
         err_exit ("flux_event_send");
     free (rootref);
 }
 
 static int log_store_entry (const char *key, void *item, void *arg)
 {
-    plugin_ctx_t *p = arg;
+    ctx_t *ctx = arg;
     hobj_t *hp = item; 
 
-    plugin_log (p, LOG_DEBUG, "%s\t%s [%d waiters]", key,
+    flux_log (ctx->h, LOG_DEBUG, "%s\t%s [%d waiters]", key,
                 hp->o ? json_object_to_json_string (hp->o) : "<unset>",
-                zlist_size (hp->waitlist));
+                (int)zlist_size (hp->waitlist));
     return 0;
 }
 
-static void event_kvs_debug (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void event_kvs_debug (ctx_t *ctx, char *arg, zmsg_t **zmsg)
 {
-    ctx_t *ctx = p->ctx;
-
     if (!strcmp (arg, "writeback.size"))
-        plugin_log (p, LOG_DEBUG, "writeback %d",
-                    zlist_size (ctx->slave.writeback));
+        flux_log (ctx->h, LOG_DEBUG, "writeback %d",
+                    (int)zlist_size (ctx->slave.writeback));
     else if (!strcmp (arg, "store.size"))
-        plugin_log (p, LOG_DEBUG, "store %d", zhash_size (ctx->store));
+        flux_log (ctx->h, LOG_DEBUG, "store %d", (int)zhash_size (ctx->store));
     else if (!strcmp (arg, "root"))
-        plugin_log (p, LOG_DEBUG, "root %d,%s", ctx->rootseq, ctx->rootdir);
+        flux_log (ctx->h, LOG_DEBUG, "root %d,%s", ctx->rootseq, ctx->rootdir);
     else if (!strcmp (arg, "store"))
-        zhash_foreach (ctx->store, log_store_entry, p);
+        zhash_foreach (ctx->store, log_store_entry, ctx);
     else if (!strcmp (arg, "commit")) {
         zlist_t *keys = zhash_keys (ctx->commits);
         commit_t *cp = zlist_first (keys);
@@ -1450,17 +1466,16 @@ static void event_kvs_debug (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
             cp = zlist_next (keys);
         }
         zlist_destroy (&keys);
-        plugin_log (p, LOG_DEBUG, "commits %d/%d complete",
-                    done, zhash_size (ctx->commits));
+        flux_log (ctx->h, LOG_DEBUG, "commits %d/%d complete",
+                    done, (int)zhash_size (ctx->commits));
     }
     if (*zmsg)
         zmsg_destroy (zmsg);
 }
 
-static void kvs_disconnect (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
+static void kvs_disconnect (ctx_t *ctx, char *arg, zmsg_t **zmsg)
 {
     char *sender = cmb_msg_sender (*zmsg);
-    ctx_t *ctx = p->ctx;
 
     if (sender) {
         wait_destroy_byid (&ctx->watchlist, sender);
@@ -1469,51 +1484,52 @@ static void kvs_disconnect (plugin_ctx_t *p, char *arg, zmsg_t **zmsg)
     zmsg_destroy (zmsg);
 }
 
-static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
+static void kvssrv_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
 {
+    ctx_t *ctx = getctx (h);
     char *arg = NULL;
 
     if (cmb_msg_match (*zmsg, "kvs.getroot")) {
-        kvs_getroot_request (p, NULL, zmsg);
+        kvs_getroot_request (ctx, NULL, zmsg);
     } else if (cmb_msg_match_substr (*zmsg, "event.kvs.setroot.", &arg)) {
-        event_kvs_setroot (p, arg, zmsg);
+        event_kvs_setroot (ctx, arg, zmsg);
     } else if (cmb_msg_match_substr (*zmsg, "event.kvs.debug.", &arg)) {
-        event_kvs_debug (p, arg, zmsg);
+        event_kvs_debug (ctx, arg, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.clean")) {
-        kvs_clean_request (p, NULL, zmsg);
+        kvs_clean_request (ctx, NULL, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.get")) {
-        kvs_get_request (p, NULL, zmsg);
+        kvs_get_request (ctx, NULL, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.watch")) {
-        kvs_watch_request (p, NULL, zmsg);
+        kvs_watch_request (ctx, NULL, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.put")) {
-        kvs_put_request (p, NULL, zmsg);
+        kvs_put_request (ctx, NULL, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.disconnect")) {
-        kvs_disconnect (p, NULL, zmsg);
+        kvs_disconnect (ctx, NULL, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.load")) {
         if (type == ZMSG_REQUEST)
-            kvs_load (p, NULL, zmsg);
+            kvs_load (ctx, NULL, zmsg);
         else
-            kvs_load_response (p, zmsg);
+            kvs_load_response (ctx, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.store")) {
         if (type == ZMSG_REQUEST)
-            kvs_store (p, NULL, zmsg);
+            kvs_store (ctx, NULL, zmsg);
         else
-            kvs_store_response (p, zmsg);
+            kvs_store_response (ctx, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.name")) {
         if (type == ZMSG_REQUEST)
-            kvs_name (p, NULL, zmsg);
+            kvs_name (ctx, NULL, zmsg);
         else
-            kvs_name_response (p, zmsg);
+            kvs_name_response (ctx, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.flush")) {
         if (type == ZMSG_REQUEST)
-            kvs_flush_request (p, NULL, zmsg);
+            kvs_flush_request (ctx, NULL, zmsg);
         else
-            kvs_flush_response (p, zmsg);
+            kvs_flush_response (ctx, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.commit")) {
         if (type == ZMSG_REQUEST)
-            kvs_commit_request (p, NULL, zmsg);
+            kvs_commit_request (ctx, NULL, zmsg);
         else
-            kvs_commit_response (p, zmsg);
+            kvs_commit_response (ctx, zmsg);
     }
     if (arg)
         free (arg);
@@ -1521,78 +1537,50 @@ static void kvs_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
         zmsg_destroy (zmsg);
 }
 
-static void kvs_init (plugin_ctx_t *p)
+static void kvssrv_init (flux_t h)
 {
-    ctx_t *ctx;
+    ctx_t *ctx = getctx (h);
 
-    ctx = p->ctx = xzmalloc (sizeof (ctx_t));
-    if (!plugin_treeroot (p)) {
-        if (flux_event_subscribe (p, "event.kvs.setroot.") < 0)
+    if (!flux_treeroot (h)) {
+        if (flux_event_subscribe (h, "event.kvs.setroot.") < 0)
             err_exit ("%s: flux_event_subscribe", __FUNCTION__);
     }
-    if (flux_event_subscribe (p, "event.kvs.debug.") < 0)
+    if (flux_event_subscribe (h, "event.kvs.debug.") < 0)
         err_exit ("%s: flux_event_subscribe", __FUNCTION__);
-    if (!(ctx->store = zhash_new ()))
-        oom ();
-    if (!(ctx->commits = zhash_new ()))
-        oom ();
-    if (!(ctx->watchlist = zlist_new ()))
-        oom ();
-    if (plugin_treeroot (p)) {
-        if (!(ctx->master.namequeue = zlist_new ()))
-            oom ();
-    } else {
-        if (!(ctx->slave.writeback = zlist_new ()))
-            oom ();
-        ctx->slave.writeback_state = WB_CLEAN;
-    }
 
-    if (plugin_treeroot (p)) {
+    if (flux_treeroot (h)) {
         json_object *rootdir = util_json_object_new_object ();
         href_t href;
 
-        store (p, rootdir, false, href);
-        setroot (p, 0, href);
+        store (ctx, rootdir, false, href);
+        setroot (ctx, 0, href);
     } else {
         int seq;
         href_t href;
-        json_object *rep = flux_rpc (p, NULL, "kvs.getroot");
+        json_object *rep = flux_rpc (h, NULL, "kvs.getroot");
         const char *rootref = json_object_get_string (rep);
 
         if (!decode_rootref (rootref, &seq, href))
             msg_exit ("malformed kvs.getroot reply: %s", rootref);
-        setroot (p, seq, href);
+        setroot (ctx, seq, href);
     }
 }
 
-static void kvs_fini (plugin_ctx_t *p)
+static void kvssrv_fini (flux_t h)
 {
-    ctx_t *ctx = p->ctx;
-
-    if (!plugin_treeroot (p)) {
-        if (flux_event_unsubscribe (p, "event.kvs.setroot.") < 0)
+    if (!flux_treeroot (h)) {
+        if (flux_event_unsubscribe (h, "event.kvs.setroot.") < 0)
             err_exit ("%s: flux_event_unsubscribe", __FUNCTION__);
     }
-    if (flux_event_unsubscribe (p, "event.kvs.debug.") < 0)
+    if (flux_event_unsubscribe (h, "event.kvs.debug.") < 0)
         err_exit ("%s: flux_event_unsubscribe", __FUNCTION__);
-    if (ctx->store)
-        zhash_destroy (&ctx->store);
-    if (ctx->commits)
-        zhash_destroy (&ctx->commits);
-    if (ctx->watchlist)
-        zlist_destroy (&ctx->watchlist);
-    if (ctx->slave.writeback)
-        zlist_destroy (&ctx->slave.writeback);
-    if (ctx->master.namequeue)
-        zlist_destroy (&ctx->master.namequeue);
-    free (ctx);
 }
 
 struct plugin_struct kvssrv = {
     .name      = "kvs",
-    .initFn    = kvs_init,
-    .finiFn    = kvs_fini,
-    .recvFn    = kvs_recv,
+    .initFn    = kvssrv_init,
+    .finiFn    = kvssrv_fini,
+    .recvFn    = kvssrv_recv,
 };
 
 /*

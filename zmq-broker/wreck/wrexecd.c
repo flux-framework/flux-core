@@ -46,7 +46,7 @@ static void log_fatal (struct prog_ctx *ctx, int code, char *format, ...)
     va_list ap;
     va_start (ap, format);
     if ((ctx != NULL) && ((c = ctx->cmb) != NULL))
-        cmb_vlog (c, LOG_EMERG, format, ap);
+        flux_vlog (c, LOG_EMERG, format, ap);
     else
         vfprintf (stderr, format, ap);
     va_end (ap);
@@ -58,7 +58,7 @@ static int log_err (struct prog_ctx *ctx, const char *fmt, ...)
     flux_t c = ctx->cmb;
     va_list ap;
     va_start (ap, fmt);
-    cmb_vlog (c, LOG_ERR, fmt, ap);
+    flux_vlog (c, LOG_ERR, fmt, ap);
     va_end (ap);
     return (-1);
 }
@@ -68,7 +68,7 @@ static void log_msg (struct prog_ctx *ctx, const char *fmt, ...)
     flux_t c = ctx->cmb;
     va_list ap;
     va_start (ap, fmt);
-    cmb_vlog (c, LOG_INFO, fmt, ap);
+    flux_vlog (c, LOG_INFO, fmt, ap);
     va_end (ap);
 }
 
@@ -700,7 +700,7 @@ int main (int ac, char **av)
         log_fatal (ctx, 1, "Failed to get lwj id from cmdline");
 
     prog_ctx_init_from_cmb (ctx);
-    cmb_log_set_facility (ctx->cmb, "wrexecd");
+    flux_log_set_facility (ctx->cmb, "wrexecd");
     prog_ctx_zmq_socket_setup (ctx);
 
     if ((flux_rank (ctx->cmb) == 0) && update_job_state (ctx, "starting") < 0)

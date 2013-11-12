@@ -29,7 +29,7 @@ static int64_t process_reply (flux_t c)
     zmsg_t *zmsg;
     json_object *o = NULL;
 
-    if (flux_response_recvmsg (c, &zmsg, false) < 0) {
+    if (!(zmsg = flux_response_recvmsg (c, false))) {
         fprintf (stderr, "Failed to recv zmsg!\n");
         exit (1);
     }

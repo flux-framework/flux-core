@@ -28,7 +28,7 @@ COMMON_OBJS = kvscli.o barriercli.o logcli.o mrpc.o handle.o
 PLUGIN_OBJS = apisrv.o syncsrv.o kvssrv.o barriersrv.o livesrv.o mechosrv.o \
 	logsrv.o echosrv.o \
 	wreck/jobsrv.o wreck/resrcsrv.o wreck/wrexecsrv.o
-CMBD_OBJS = cmbd.o route.o plugin.o $(COMMON_OBJS) $(PLUGIN_OBJS)
+CMBD_OBJS = route.o plugin.o $(COMMON_OBJS) $(PLUGIN_OBJS) cmbd.o
 
 CMBUTIL_OBJS = cmbutil.o
 LIBPMI_OBJS = pmi.o
@@ -37,7 +37,7 @@ LIBCMB_OBJS = apicli.o $(COMMON_OBJS)
 LIBPMI = $(LIBDIR)/libpmi.so.0
 LIBCMB = $(LIBDIR)/libcmb.so.0
 
-BUILD = $(LIBCMB) $(LIBPMI) cmbd cmbutil mpi_hello echo
+BUILD = $(LIBCMB) $(LIBPMI) cmbutil mpi_hello echo cmbd
 
 all: subdirs $(BUILD) subdirs_post
 

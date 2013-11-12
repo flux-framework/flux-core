@@ -8,7 +8,6 @@ typedef void (FluxFreeFn)(void *arg);
 typedef struct flux_handle_struct *flux_t;
 
 #include "kvs.h"
-#include "flux_log.h"
 
 enum {
     FLUX_FLAGS_TRACE = 1,
@@ -17,34 +16,58 @@ enum {
 typedef struct flux_mrpc_struct *flux_mrpc_t;
 
 void flux_handle_destroy (flux_t *hp);
+
 void *flux_aux_get (flux_t h, const char *name);
 void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn *destroy);
 
+void flux_flags_set (flux_t h, int flags);
+void flux_flags_unset (flux_t h, int flags);
+
 int flux_request_sendmsg (flux_t h, zmsg_t **zmsg);
-int flux_request_send (flux_t h, json_object *request, const char *fmt, ...);
-int flux_response_recvmsg (flux_t h, zmsg_t **zmsg, bool nb);
-int flux_response_recv (flux_t h, json_object **respp, char **tagp, bool nb);
+zmsg_t *flux_request_recvmsg (flux_t h, bool nb);
+int flux_response_sendmsg (flux_t h, zmsg_t **zmsg);
+zmsg_t *flux_response_recvmsg (flux_t h, bool nb);
 int flux_response_putmsg (flux_t h, zmsg_t **zmsg);
+int flux_request_send (flux_t h, json_object *request, const char *fmt, ...);
+json_object *flux_rpc (flux_t h, json_object *in, const char *fmt, ...);
+int flux_response_recv (flux_t h, json_object **respp, char **tagp, bool nb);
+int flux_respond (flux_t h, zmsg_t **request, json_object *response);
+int flux_respond_errnum (flux_t h, zmsg_t **request, int errnum);
 
 int flux_event_sendmsg (flux_t h, zmsg_t **zmsg);
+zmsg_t *flux_event_recvmsg (flux_t h, bool nonblock);
 int flux_event_send (flux_t h, json_object *request, const char *fmt, ...);
-int flux_event_recvmsg (flux_t h, zmsg_t **zmsg, bool nonblock);
 int flux_event_subscribe (flux_t h, const char *topic);
 int flux_event_unsubscribe (flux_t h, const char *topic);
 
-int flux_snoop_recvmsg (flux_t h, zmsg_t **zmsg, bool nb);
+zmsg_t *flux_snoop_recvmsg (flux_t h, bool nb);
 int flux_snoop_subscribe (flux_t h, const char *topic);
 int flux_snoop_unsubscribe (flux_t h, const char *topic);
 
 int flux_rank (flux_t h);
 int flux_size (flux_t h);
+bool flux_treeroot (flux_t h);
+
+int flux_timeout_set (flux_t h, unsigned long msec);
+int flux_timeout_clear (flux_t h);
+bool flux_timeout_isset (flux_t h);
+
+zloop_t *flux_get_zloop (flux_t h);
+zctx_t *flux_get_zctx (flux_t h);
 
 int flux_barrier (flux_t h, const char *name, int nprocs);
 
-void flux_flags_set (flux_t h, int flags);
-void flux_flags_unset (flux_t h, int flags);
+void flux_log_set_facility (flux_t h, const char *facility);
+int flux_vlog (flux_t h, int lev, const char *fmt, va_list ap);
+int flux_log (flux_t h, int lev, const char *fmt, ...)
+            __attribute__ ((format (printf, 3, 4)));
 
-json_object *flux_rpc (flux_t h, json_object *in, const char *fmt, ...);
+int flux_log_subscribe (flux_t h, int lev, const char *sub);
+int flux_log_unsubscribe (flux_t h, const char *sub);
+int flux_log_dump (flux_t h, int lev, const char *fac);
+
+char *flux_log_decode (zmsg_t *zmsg, int *lp, char **fp, int *cp,
+                    struct timeval *tvp, char **sp);
 
 /* Group RPC
  *

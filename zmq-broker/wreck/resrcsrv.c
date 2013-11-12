@@ -28,7 +28,7 @@
 #include "util.h"
 #include "plugin.h"
 
-static void _store_hosts (plugin_ctx_t *p)
+static void _store_hosts (flux_t h)
 {
     char *key;
     long cores = sysconf(_SC_NPROCESSORS_ONLN);
@@ -36,22 +36,22 @@ static void _store_hosts (plugin_ctx_t *p)
     long pages = sysconf(_SC_PHYS_PAGES);
     long memMB = pages * pagesize / 1024 / 1024;
 
-    if ((asprintf (&key, "resrc.rank.%d.cores", flux_rank (p)) < 0) ||
-	kvs_put_int64 (p, key, cores)) {
-	err ("resrc: kvs_put_int64 %d %lu failed", flux_rank (p), cores);
+    if ((asprintf (&key, "resrc.rank.%d.cores", flux_rank (h)) < 0) ||
+	kvs_put_int64 (h, key, cores)) {
+	err ("resrc: kvs_put_int64 %d %lu failed", flux_rank (h), cores);
     }
     free (key);
-    if ((asprintf (&key, "resrc.rank.%d.mem", flux_rank (p)) < 0) ||
-	kvs_put_int64 (p, key, memMB)) {
-	err ("resrc: kvs_put_int64 %d %lu failed", flux_rank (p), memMB);
+    if ((asprintf (&key, "resrc.rank.%d.mem", flux_rank (h)) < 0) ||
+	kvs_put_int64 (h, key, memMB)) {
+	err ("resrc: kvs_put_int64 %d %lu failed", flux_rank (h), memMB);
     }
     free (key);
-    kvs_commit(p);
+    kvs_commit(h);
 }
 
-static void _init (plugin_ctx_t *p)
+static void _init (flux_t h)
 {
-    _store_hosts(p);
+    _store_hosts(h);
 }
 
 struct plugin_struct resrcsrv = {

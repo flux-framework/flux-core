@@ -15,9 +15,13 @@
 
 #include "rexec-config.h"  /* For REXECD_PATH */
 
+struct rexec_ctx {
+    zlist_t *session_list;
+    flux_t h;
+};
 
 struct rexec_session {
-    plugin_ctx_t *p;
+    struct rexec_ctx *ctx;
     int64_t id;      /* LWJ id */
     int rank;
     int uid;
@@ -31,10 +35,26 @@ struct rexec_session {
     void *zs_rep;   /* replies to client requests (zbind) */
 };
 
-struct rexec_ctx {
-    zlist_t *session_list;
-};
+static void freectx (struct rexec_ctx *ctx)
+{
+    zlist_destroy (&ctx->session_list);
+    free (ctx);
+}
 
+static struct rexec_ctx *getctx (flux_t h)
+{
+    struct rexec_ctx *ctx = (struct rexec_ctx *)flux_aux_get (h, "rexecsrv");
+
+    if (!ctx) {
+        ctx = xzmalloc (sizeof (*ctx));
+        if (!(ctx->session_list = zlist_new ()))
+            oom ();
+        ctx->h = h;
+        flux_aux_set (h, "rexecsrv", ctx, (FluxFreeFn *)freectx);
+    }
+
+    return ctx;
+}
 
 static void rexec_session_destroy (struct rexec_session *c)
 {
@@ -49,7 +69,7 @@ static void rexec_session_destroy (struct rexec_session *c)
 
 static int rexec_session_connect_to_helper (struct rexec_session *c)
 {
-    zctx_t *zctx = c->p->srv->zctx;
+    zctx_t *zctx = flux_get_zctx (c->ctx->h);
 
     snprintf (c->req_uri, sizeof (c->req_uri),
              "ipc:///tmp/cmb-%d-%d-rexec-req-%lu", c->rank, c->uid, c->id);
@@ -66,14 +86,14 @@ static json_object * rexec_session_json (struct rexec_session *c)
 }
 
 
-static struct rexec_session * rexec_session_create (plugin_ctx_t *p, int64_t id)
+static struct rexec_session * rexec_session_create (struct rexec_ctx *ctx, int64_t id)
 {
     struct rexec_session *c = xzmalloc (sizeof (*c));
-    zctx_t *zctx = p->srv->zctx;
+    zctx_t *zctx = flux_get_zctx (ctx->h);
 
-    c->p    = p;
+    c->ctx  = ctx;
     c->id   = id;
-    c->rank = p->conf->rank;
+    c->rank = flux_rank (ctx->h);
     c->uid  = (int) geteuid (); /* runs as user for now */
 
     snprintf (c->rep_uri, sizeof (c->rep_uri),
@@ -94,8 +114,8 @@ static void closeall (int fd)
 
 static int rexec_session_remove (struct rexec_session *c)
 {
-    plugin_ctx_t *p = c->p;
-    struct rexec_ctx *ctx = p->ctx;
+    struct rexec_ctx *ctx = c->ctx;
+    zloop_t *zloop = flux_get_zloop (ctx->h);
 
     msg ("removing client %lu", c->id);
 
@@ -103,7 +123,7 @@ static int rexec_session_remove (struct rexec_session *c)
         .events = ZMQ_POLLIN | ZMQ_POLLERR,
         .socket = c->zs_rep
     };
-    zloop_poller_end (p->zloop, &zp);
+    zloop_poller_end (zloop, &zp);
     zlist_remove (ctx->session_list, c);
     rexec_session_destroy (c);
     return (0);
@@ -152,17 +172,17 @@ static int client_cb (zloop_t *zl, zmq_pollitem_t *zp, struct rexec_session *c)
     return (0);
 }
 
-static int rexec_session_add (plugin_ctx_t *p, struct rexec_session *c)
+static int rexec_session_add (struct rexec_ctx *ctx, struct rexec_session *c)
 {
     zmq_pollitem_t zp = {
         .events = ZMQ_POLLIN | ZMQ_POLLERR,
         .socket = c->zs_rep
     };
-    struct rexec_ctx *ctx = p->ctx;
+    zloop_t *zloop = flux_get_zloop (ctx->h);
 
     if (zlist_append (ctx->session_list, c) < 0)
         msg ("failed to insert %lu", c->id);
-    zloop_poller (p->zloop, &zp, (zloop_fn *) client_cb, (void *) c);
+    zloop_poller (zloop, &zp, (zloop_fn *) client_cb, (void *) c);
     return (0);
 }
 
@@ -220,7 +240,7 @@ static zmsg_t *rexec_session_handler_msg_create (struct rexec_session *s)
     return (zmsg);
 }
 
-static int spawn_exec_handler (plugin_ctx_t *p, int64_t id)
+static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
 {
     struct rexec_session *cli;
     zmsg_t *zmsg;
@@ -230,7 +250,7 @@ static int spawn_exec_handler (plugin_ctx_t *p, int64_t id)
     int status;
     pid_t pid;
 
-    if ((cli = rexec_session_create (p, id)) == NULL)
+    if ((cli = rexec_session_create (ctx, id)) == NULL)
         return (-1);
 
     if (socketpair (AF_UNIX, SOCK_STREAM, 0, fds) < 0)
@@ -264,7 +284,7 @@ static int spawn_exec_handler (plugin_ctx_t *p, int64_t id)
     }
 
     rexec_session_connect_to_helper (cli);
-    rexec_session_add (p, cli);
+    rexec_session_add (ctx, cli);
     return (0);
 }
 
@@ -297,10 +317,9 @@ static struct rexec_session * rexec_json_to_session (struct rexec_ctx *ctx,
     return rexec_session_lookup (ctx, id);
 }
 
-static int fwd_to_session (plugin_ctx_t *p, zmsg_t **zmsg, json_object *o)
+static int fwd_to_session (struct rexec_ctx *ctx, zmsg_t **zmsg, json_object *o)
 {
     int rc;
-    struct rexec_ctx *ctx = p->ctx;
     struct rexec_session *s = rexec_json_to_session (ctx, o);
     if (s == NULL) {
         //plugin_send_response_errnum (p, &s->zmsg, ENOSYS);
@@ -347,14 +366,14 @@ static int rexec_kill (struct rexec_ctx *ctx, int64_t id, int sig)
     return rexec_session_kill (s, sig);
 }
 
-static void handle_event (plugin_ctx_t *p, zmsg_t **zmsg)
+static void handle_event (struct rexec_ctx *ctx, zmsg_t **zmsg)
 {
     char *tag = cmb_msg_tag (*zmsg, false);
     if (strncmp (tag, "event.rexec.run", 15) == 0) {
         int64_t id = id_from_tag (tag + 16, NULL);
         if (id < 0)
             err ("Invalid rexec tag `%s'", tag);
-        spawn_exec_handler (p, id);
+        spawn_exec_handler (ctx, id);
     }
     else if (strncmp (tag, "event.rexec.kill", 16) == 0) {
         int sig = SIGKILL;
@@ -362,46 +381,44 @@ static void handle_event (plugin_ctx_t *p, zmsg_t **zmsg)
         int64_t id = id_from_tag (tag + 17, &endptr);
         if (endptr && *endptr == '.')
             sig = atoi (endptr);
-        rexec_kill (p->ctx, id, sig);
+        rexec_kill (ctx, id, sig);
     }
     free (tag);
 }
 
-static void handle_request (plugin_ctx_t *p, zmsg_t **zmsg)
+static void handle_request (struct rexec_ctx *ctx, zmsg_t **zmsg)
 {
     json_object *o;
     char *tag;
 
     if (cmb_msg_decode (*zmsg, &tag, &o) >= 0) {
         msg ("forwarding %s to session", tag);
-        fwd_to_session (p, zmsg, o);
+        fwd_to_session (ctx, zmsg, o);
     }
     if (zmsg)
         zmsg_destroy (zmsg);
 }
 
-static void handle_recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
+static void handle_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
 {
+    struct rexec_ctx *ctx = getctx (h);
+
     switch (type) {
         case ZMSG_REQUEST:
-            handle_request (p, zmsg);
+            handle_request (ctx, zmsg);
             break;
         case ZMSG_EVENT:
-            handle_event (p, zmsg);
+            handle_event (ctx, zmsg);
             break;
         default:
             break;
     }
 }
 
-static void rexec_init (plugin_ctx_t *p)
+static void rexec_init (flux_t h)
 {
-    struct rexec_ctx *ctx = xzmalloc (sizeof (*ctx));
-    ctx->session_list = zlist_new ();
-    p->ctx = (void *) ctx;
-
-    zsocket_set_subscribe (p->zs_evin, "event.rexec.run.");
-    zsocket_set_subscribe (p->zs_evin, "event.rexec.kill.");
+    flux_event_subscribe (h, "event.rexec.run.");
+    flux_event_subscribe (h, "event.rexec.kill.");
 }
 
 struct plugin_struct rexecsrv = {

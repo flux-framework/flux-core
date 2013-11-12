@@ -29,11 +29,19 @@
 
 #define LISTEN_BACKLOG      5
 
+struct _client_struct;
+
+typedef struct {
+    int listen_fd;
+    struct _client_struct *clients;
+    flux_t h;
+} ctx_t;
+
 typedef struct _client_struct {
     int fd;
     struct _client_struct *next;
     struct _client_struct *prev;
-    plugin_ctx_t *p;
+    ctx_t *ctx;
     zhash_t *disconnect_notify;
     zhash_t *event_subscriptions;
     zhash_t *snoop_subscriptions;
@@ -41,21 +49,32 @@ typedef struct _client_struct {
     int cfd_id;
 } client_t;
 
-
-typedef struct {
-    int listen_fd;
-    client_t *clients;
-} ctx_t;
-
-static client_t * _client_create (plugin_ctx_t *p, int fd)
+static void freectx (ctx_t *ctx)
 {
-    ctx_t *ctx = p->ctx;
+    free (ctx);
+}
+
+static ctx_t *getctx (flux_t h)
+{
+    ctx_t *ctx = (ctx_t *)flux_aux_get (h, "apisrv");
+
+    if (!ctx) {
+        ctx = xzmalloc (sizeof (*ctx));
+        ctx->h = h;
+        flux_aux_set (h, "apisrv", ctx, (FluxFreeFn *)freectx);
+    }
+
+    return ctx;
+}
+
+static client_t * client_create (ctx_t *ctx, int fd)
+{
     client_t *c;
 
     c = xzmalloc (sizeof (client_t));
     c->fd = fd;
     c->uuid = uuid_generate_str ();
-    c->p = p;
+    c->ctx = ctx;
     if (!(c->disconnect_notify = zhash_new ()))
         oom ();
     if (!(c->event_subscriptions = zhash_new ()))
@@ -73,7 +92,7 @@ static client_t * _client_create (plugin_ctx_t *p, int fd)
 static int _event_unsubscribe (const char *key, void *item, void *arg)
 {
     client_t *c = arg;
-    if (flux_event_unsubscribe (c->p, key) < 0)
+    if (flux_event_unsubscribe (c->ctx->h, key) < 0)
         err_exit ("%s: flux_event_unsubscribe", __FUNCTION__);
     return 0;
 }
@@ -81,12 +100,12 @@ static int _event_unsubscribe (const char *key, void *item, void *arg)
 static int _snoop_unsubscribe (const char *key, void *item, void *arg)
 {
     client_t *c = arg;
-    if (flux_snoop_unsubscribe (c->p, key) < 0)
+    if (flux_snoop_unsubscribe (c->ctx->h, key) < 0)
         err_exit ("%s: flux_snoop_unsubscribe", __FUNCTION__);
     return 0;
 }
 
-static int _notify_srv (const char *key, void *item, void *arg)
+static int notify_srv (const char *key, void *item, void *arg)
 {
     client_t *c = arg;
     zmsg_t *zmsg; 
@@ -105,16 +124,14 @@ static int _notify_srv (const char *key, void *item, void *arg)
     if (zmsg_pushstr (zmsg, "%s", c->uuid) < 0)
         err_exit ("zmsg_pushmem");
 
-    plugin_send_request_raw (c->p, &zmsg);
+    flux_request_sendmsg (c->ctx->h, &zmsg);
 
     return 0;
 }
 
-static void _client_destroy (plugin_ctx_t *p, client_t *c)
+static void client_destroy (ctx_t *ctx, client_t *c)
 {
-    ctx_t *ctx = p->ctx;
-
-    zhash_foreach (c->disconnect_notify, _notify_srv, c);
+    zhash_foreach (c->disconnect_notify, notify_srv, c);
     zhash_destroy (&c->disconnect_notify);
 
     zhash_foreach (c->event_subscriptions, _event_unsubscribe, c);
@@ -135,51 +152,7 @@ static void _client_destroy (plugin_ctx_t *p, client_t *c)
     free (c);
 }
 
-static int _client_read (plugin_ctx_t *p, client_t *c);
-
-static int client_cb (zloop_t *zl, zmq_pollitem_t *zp, client_t *c)
-{
-    plugin_ctx_t *p = c->p;
-    bool delete = false;
-
-    if (zp->revents & ZMQ_POLLIN) {
-        while (_client_read (p, c) != -1)
-            ;
-        if (errno != EWOULDBLOCK && errno != EAGAIN)
-            delete = true;
-    }
-    if (zp->revents & ZMQ_POLLERR)
-        delete = true;
-
-    if (delete) {
-        /*  Cancel this client's fd from the zloop and destroy client
-         */
-        zloop_poller_end (zl, zp);
-        _client_destroy (c->p, c);
-    }
-    return (0);
-}
-
-static void _accept (plugin_ctx_t *p)
-{
-    client_t *c;
-    int fd;
-    ctx_t *ctx = p->ctx;
-    zmq_pollitem_t zp = { .events = ZMQ_POLLIN | ZMQ_POLLERR };
-
-    fd = accept (ctx->listen_fd, NULL, NULL); 
-    if (fd < 0)
-        err_exit ("accept");
-    c = _client_create (p, fd);
-
-    /*
-     *  Add this client's fd to the plugin's event loop:
-     */
-    zp.fd = fd;
-    zloop_poller (p->zloop, &zp, (zloop_fn *) client_cb, (void *) c);
-}
-
-static int _client_read (plugin_ctx_t *p, client_t *c)
+static int client_read (ctx_t *ctx, client_t *c)
 {
     zmsg_t *zmsg = NULL;
     char *name = NULL;
@@ -194,39 +167,39 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
     if (cmb_msg_match_substr (zmsg, "api.snoop.subscribe.", &name)) {
         zhash_insert (c->snoop_subscriptions, name, name);
         zhash_freefn (c->snoop_subscriptions, name, free);
-        if (flux_snoop_subscribe (p, name) < 0)
+        if (flux_snoop_subscribe (ctx->h, name) < 0)
             err_exit ("%s: flux_snoop_subscribe", __FUNCTION__);
         name = NULL;
     } else if (cmb_msg_match_substr (zmsg, "api.snoop.unsubscribe.", &name)) {
         if (zhash_lookup (c->snoop_subscriptions, name)) {
             zhash_delete (c->snoop_subscriptions, name);
-            if (flux_snoop_unsubscribe (p, name) < 0)
+            if (flux_snoop_unsubscribe (ctx->h, name) < 0)
                 err_exit ("%s: flux_snoop_unsubscribe", __FUNCTION__);
         }
     } else if (cmb_msg_match_substr (zmsg, "api.event.subscribe.", &name)) {
         zhash_insert (c->event_subscriptions, name, name);
         zhash_freefn (c->event_subscriptions, name, free);
-        if (flux_event_subscribe (p, name) < 0)
+        if (flux_event_subscribe (ctx->h, name) < 0)
             err_exit ("%s: flux_event_subscribe", __FUNCTION__);
         name = NULL;
     } else if (cmb_msg_match_substr (zmsg, "api.event.unsubscribe.", &name)) {
         if (zhash_lookup (c->event_subscriptions, name)) {
             zhash_delete (c->event_subscriptions, name);
-            if (flux_event_unsubscribe (p, name) < 0)
+            if (flux_event_unsubscribe (ctx->h, name) < 0)
                 err_exit ("%s: flux_event_unsubscribe", __FUNCTION__);
         }
     } else if (cmb_msg_match_substr (zmsg, "api.event.send.", &name)) {
         json_object *o;
         if (cmb_msg_decode (zmsg, NULL, &o) < 0)
             err_exit ("%s: cmb_msg_decode", __FUNCTION__);
-        if (flux_event_send (p, o, "%s", name) < 0)
+        if (flux_event_send (ctx->h, o, "%s", name) < 0)
             err_exit ("flux_event_send");
         if (o)
             json_object_put (o);
     } else if (cmb_msg_match (zmsg, "api.session.info.query")) {
         json_object *o = util_json_object_new_object ();
-        util_json_object_add_int (o, "rank", flux_rank (p));
-        util_json_object_add_int (o, "size", flux_size (p));
+        util_json_object_add_int (o, "rank", flux_rank (ctx->h));
+        util_json_object_add_int (o, "size", flux_size (ctx->h));
         if (cmb_msg_replace_json (zmsg, o) == 0)
             (void)zmsg_send_fd (c->fd, &zmsg);
         json_object_put (o);
@@ -247,7 +220,7 @@ static int _client_read (plugin_ctx_t *p, client_t *c)
             err_exit ("zmsg_pushmem");
         if (zmsg_pushstr (zmsg, "%s", c->uuid) < 0)
             err_exit ("zmsg_pushmem");
-        plugin_send_request_raw (p, &zmsg);
+        flux_request_sendmsg (ctx->h, &zmsg);
     }
 done:
     if (zmsg)
@@ -257,9 +230,31 @@ done:
     return 0;
 }
 
-static void _recv_response (plugin_ctx_t *p, zmsg_t **zmsg)
+static int client_cb (zloop_t *zl, zmq_pollitem_t *zp, client_t *c)
 {
-    ctx_t *ctx = p->ctx;
+    ctx_t *ctx = c->ctx;
+    bool delete = false;
+
+    if (zp->revents & ZMQ_POLLIN) {
+        while (client_read (ctx, c) != -1)
+            ;
+        if (errno != EWOULDBLOCK && errno != EAGAIN)
+            delete = true;
+    }
+    if (zp->revents & ZMQ_POLLERR)
+        delete = true;
+
+    if (delete) {
+        /*  Cancel this client's fd from the zloop and destroy client
+         */
+        zloop_poller_end (zl, zp);
+        client_destroy (ctx, c);
+    }
+    return (0);
+}
+
+static void recv_response (ctx_t *ctx, zmsg_t **zmsg)
+{
     char *uuid = NULL;
     zframe_t *zf = NULL;
     client_t *c;
@@ -293,20 +288,19 @@ static void _recv_response (plugin_ctx_t *p, zmsg_t **zmsg)
         free (uuid);
 }
 
-static int _match_subscription (const char *key, void *item, void *arg)
+static int match_subscription (const char *key, void *item, void *arg)
 {
     return cmb_msg_match_substr ((zmsg_t *)arg, key, NULL) ? 1 : 0;
 }
 
-static void _recv_event (plugin_ctx_t *p, zmsg_t **zmsg)
+static void recv_event (ctx_t *ctx, zmsg_t **zmsg)
 {
-    ctx_t *ctx = p->ctx;
     client_t *c;
 
     for (c = ctx->clients; c != NULL; ) {
         zmsg_t *cpy;
 
-        if (zhash_foreach (c->event_subscriptions, _match_subscription, *zmsg)) {
+        if (zhash_foreach (c->event_subscriptions, match_subscription, *zmsg)) {
             if (!(cpy = zmsg_dup (*zmsg)))
                 oom ();
             if (zmsg_send_fd (c->fd, &cpy) < 0)
@@ -316,15 +310,14 @@ static void _recv_event (plugin_ctx_t *p, zmsg_t **zmsg)
     }
 }
 
-static void _recv_snoop (plugin_ctx_t *p, zmsg_t **zmsg)
+static void recv_snoop (ctx_t *ctx, zmsg_t **zmsg)
 {
-    ctx_t *ctx = p->ctx;
     client_t *c;
 
     for (c = ctx->clients; c != NULL; ) {
         zmsg_t *cpy;
 
-        if (zhash_foreach (c->snoop_subscriptions, _match_subscription, *zmsg)) {
+        if (zhash_foreach (c->snoop_subscriptions, match_subscription, *zmsg)) {
             if (!(cpy = zmsg_dup (*zmsg)))
                 oom ();
             if (zmsg_send_fd (c->fd, &cpy) < 0)
@@ -334,42 +327,50 @@ static void _recv_snoop (plugin_ctx_t *p, zmsg_t **zmsg)
     }
 }
 
-static void _recv (plugin_ctx_t *p, zmsg_t **zmsg, zmsg_type_t type)
+static void apisrv_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
 {
+    ctx_t *ctx = getctx (h);
+
     switch (type) {
         case ZMSG_REQUEST:
             break;
         case ZMSG_EVENT:
-            _recv_event (p, zmsg);
+            recv_event (ctx, zmsg);
             break;
         case ZMSG_RESPONSE:
-            _recv_response (p, zmsg);
+            recv_response (ctx, zmsg);
             break;
         case ZMSG_SNOOP:
-            _recv_snoop (p, zmsg);
+            recv_snoop (ctx, zmsg);
             break;
     }
 }
 
-static int accept_cb (zloop_t *zl, zmq_pollitem_t *zp, plugin_ctx_t *p)
+static int listener_cb (zloop_t *zl, zmq_pollitem_t *zp, ctx_t *ctx)
 {
-    if (zp->revents & ZMQ_POLLIN)        /* listenfd */
-        _accept (p);
+    if (zp->revents & ZMQ_POLLIN) {       /* listenfd */
+        zloop_t *zloop = flux_get_zloop (ctx->h);
+        zmq_pollitem_t nzp = { .events = ZMQ_POLLIN | ZMQ_POLLERR };
+        client_t *c;
+
+        if ((nzp.fd = accept (ctx->listen_fd, NULL, NULL)) < 0)
+            err_exit ("accept");
+        c = client_create (ctx, nzp.fd);
+        zloop_poller (zloop, &nzp, (zloop_fn *) client_cb, (void *) c);
+    }
     if (zp->revents & ZMQ_POLLERR)       /* listenfd - error */
         err_exit ("apisrv: poll on listen fd");
     return (0);
 }
 
-static void _listener_init (plugin_ctx_t *p)
+static int listener_init (ctx_t *ctx)
 {
-    ctx_t *ctx = p->ctx;
     struct sockaddr_un addr;
     int fd;
-    char *path = p->conf->api_sockpath;
+    char *path = getenv ("CMB_API_PATH"); /* set by cmbd after getopt */
 
-    if (setenv ("CMB_API_PATH", path, 1) < 0)
-        err_exit ("setenv (CMB_API_PATH=%s)", path);
-
+    if (!path)
+        msg_exit ("CMB_API_PATH is not set");
     fd = socket (AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0)
         err_exit ("socket");
@@ -384,49 +385,34 @@ static void _listener_init (plugin_ctx_t *p)
     if (listen (fd, LISTEN_BACKLOG) < 0)
         err_exit ("listen");
 
-    ctx->listen_fd = fd;
+    return fd;
 }
 
-static void _listener_fini (plugin_ctx_t *p)
+static void apisrv_init (flux_t h)
 {
-    ctx_t *ctx = p->ctx;
+    ctx_t *ctx = getctx (h);
+    zloop_t *zloop = flux_get_zloop (h);
+    zmq_pollitem_t zp = { .events = ZMQ_POLLIN | ZMQ_POLLERR };
+
+    zp.fd = ctx->listen_fd = listener_init (ctx);
+    zloop_poller (zloop, &zp, (zloop_fn *) listener_cb, (void *)ctx);
+}
+
+static void apisrv_fini (flux_t h)
+{
+    ctx_t *ctx = getctx (h);
 
     if (close (ctx->listen_fd) < 0)
         err_exit ("listen");
-}
-
-static void _init (plugin_ctx_t *p)
-{
-    ctx_t *ctx;
-    zmq_pollitem_t zp = { .events = ZMQ_POLLIN | ZMQ_POLLERR };
-
-    p->ctx = ctx = xzmalloc (sizeof (ctx_t));
-    ctx->clients = NULL;
-
-    _listener_init (p);
-
-    /*
-     *  Add listen fd to zloop reactor:
-     */
-    zp.fd = ctx->listen_fd;
-    zloop_poller (p->zloop, &zp, (zloop_fn *) accept_cb, (void *) p);
-}
-
-static void _fini (plugin_ctx_t *p)
-{
-    ctx_t *ctx = p->ctx;
-
-    _listener_fini (p);
     while (ctx->clients != NULL)
-        _client_destroy (p, ctx->clients);
-    free (ctx);
+        client_destroy (ctx, ctx->clients);
 }
 
 struct plugin_struct apisrv = {
     .name   = "api",
-    .recvFn = _recv,
-    .initFn = _init,
-    .finiFn = _fini,
+    .recvFn = apisrv_recv,
+    .initFn = apisrv_init,
+    .finiFn = apisrv_fini,
 };
 
 /*
