@@ -382,6 +382,7 @@ json_object *flux_rpc (flux_t h, json_object *request, const char *fmt, ...)
         if (!cmb_msg_match (zmsg, tag)) {
             if (zlist_append (nomatch, zmsg) < 0)
                 oom ();
+            zmsg = NULL;
         }
     } while (zmsg == NULL);
     if (cmb_msg_decode (zmsg, NULL, &response) < 0)
