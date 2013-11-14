@@ -26,7 +26,9 @@
 #include "flux.h"
 #include "flux_handle.h"
 
+#define CMB_CTX_MAGIC   0xf434aaab
 typedef struct {
+    int magic;
     int fd;
     int rank;
     int size;
@@ -35,6 +37,7 @@ typedef struct {
 
 static int cmb_request_sendmsg (cmb_t *c, zmsg_t **zmsg)
 {
+    assert (c->magic == CMB_CTX_MAGIC);
     return zmsg_send_fd (c->fd, zmsg);
 }
 
@@ -42,6 +45,7 @@ static int cmb_response_recvmsg (cmb_t *c, zmsg_t **zmsg, bool nonblock)
 {
     zmsg_t *z;
 
+    assert (c->magic == CMB_CTX_MAGIC);
     if (!(z = zlist_pop (c->resp)) && !(z = zmsg_recv_fd (c->fd, nonblock)))
         return -1;
     *zmsg = z;
@@ -50,6 +54,7 @@ static int cmb_response_recvmsg (cmb_t *c, zmsg_t **zmsg, bool nonblock)
 
 static int cmb_response_putmsg (cmb_t *c, zmsg_t **zmsg)
 {
+    assert (c->magic == CMB_CTX_MAGIC);
     if (zlist_append (c->resp, *zmsg) < 0)
         return -1;
     *zmsg = NULL;
@@ -66,6 +71,7 @@ static int cmb_request_send (cmb_t *c, json_object *o, const char *fmt, ...)
     int rc;
     va_list ap;
 
+    assert (c->magic == CMB_CTX_MAGIC);
     va_start (ap, fmt);
     if (vasprintf (&tag, fmt, ap) < 0)
         oom ();
@@ -80,21 +86,25 @@ static int cmb_request_send (cmb_t *c, json_object *o, const char *fmt, ...)
 
 static int cmb_snoop_subscribe (cmb_t *c, const char *s)
 {
+    assert (c->magic == CMB_CTX_MAGIC);
     return cmb_request_send (c, NULL, "api.snoop.subscribe.%s", s ? s: "");
 }
 
 static int cmb_snoop_unsubscribe (cmb_t *c, const char *s)
 {
+    assert (c->magic == CMB_CTX_MAGIC);
     return cmb_request_send (c, NULL, "api.snoop.unsubscribe.%s", s ? s: "");
 }
 
 static int cmb_event_subscribe (cmb_t *c, const char *s)
 {
+    assert (c->magic == CMB_CTX_MAGIC);
     return cmb_request_send (c, NULL, "api.event.subscribe.%s", s ? s: "");
 }
 
 static int cmb_event_unsubscribe (cmb_t *c, const char *s)
 {
+    assert (c->magic == CMB_CTX_MAGIC);
     return cmb_request_send (c, NULL, "api.event.unsubscribe.%s", s ? s: "");
 }
 
@@ -104,6 +114,7 @@ static int cmb_event_sendmsg (cmb_t *c, zmsg_t **zmsg)
     json_object *o = NULL;
     char *tag = NULL;
 
+    assert (c->magic == CMB_CTX_MAGIC);
     if (cmb_msg_decode (*zmsg, &tag, &o) < 0)
         return -1;
     rc = cmb_request_send (c, o, "api.event.send.%s", tag ? tag : "");
@@ -118,16 +129,19 @@ static int cmb_event_sendmsg (cmb_t *c, zmsg_t **zmsg)
 
 static int cmb_rank (cmb_t *c)
 {
+    assert (c->magic == CMB_CTX_MAGIC);
     return c->rank;
 }
 
 static int cmb_size (cmb_t *c)
 {
+    assert (c->magic == CMB_CTX_MAGIC);
     return c->size;
 }
 
 static bool cmb_treeroot (cmb_t *c)
 {
+    assert (c->magic == CMB_CTX_MAGIC);
     return (c->rank == 0);
 }
 
@@ -139,6 +153,7 @@ static int cmb_session_info_query (cmb_t *c)
     int errnum;
     int rc = -1;
 
+    assert (c->magic == CMB_CTX_MAGIC);
     if (cmb_request_send (c, request, "api.session.info.query") < 0)
         goto done;
     if (cmb_response_recvmsg (c, &zmsg, false) < 0)
@@ -165,14 +180,12 @@ done:
     return rc;
 }
 
-static void cmb_fini (cmb_t **cp)
+static void cmb_fini (cmb_t *c)
 {
-    if (cp && *cp) {
-        if ((*cp)->fd >= 0)
-            (void)close ((*cp)->fd);
-        free (*cp);
-        *cp = NULL;
-    }
+    assert (c->magic == CMB_CTX_MAGIC);
+    if (c->fd >= 0)
+        (void)close (c->fd);
+    free (c);
 }
 
 flux_t cmb_init_full (const char *path, int flags)
@@ -184,6 +197,7 @@ flux_t cmb_init_full (const char *path, int flags)
     c = xzmalloc (sizeof (*c));
     if (!(c->resp = zlist_new ()))
         oom ();
+    c->magic = CMB_CTX_MAGIC;
     c->fd = socket (AF_UNIX, SOCK_STREAM, 0);
     if (c->fd < 0)
         goto error;
@@ -220,7 +234,7 @@ flux_t cmb_init_full (const char *path, int flags)
     h->get_zctx = NULL; /* ENOSYS */
     return h;
 error:
-    cmb_fini (&c);
+    cmb_fini (c);
     return NULL;
 }
 

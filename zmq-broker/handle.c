@@ -39,16 +39,20 @@ flux_t flux_handle_create (void *impl, FluxFreeFn *destroy, int flags)
     h->flags = flags;
     if (!(h->aux = zhash_new()))
         oom ();
-    flux_aux_set (h, impl, "handle_impl", destroy);
+    flux_aux_set (h, "handle_impl", impl, destroy);
 
     return h;
 }
 
 void flux_handle_destroy (flux_t *hp)
 {
-    zhash_destroy (&(*hp)->aux);
-    free (*hp);
-    *hp = NULL;
+    flux_t h;
+
+    if (hp && (h = *hp)) {
+        zhash_destroy (&h->aux);
+        free (h);
+        *hp = NULL;
+    }
 }
 
 void flux_flags_set (flux_t h, int flags)
@@ -68,8 +72,7 @@ void *flux_aux_get (flux_t h, const char *name)
 
 void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn *destroy)
 {
-    if (zhash_insert (h->aux, name, aux) < 0)
-        oom ();
+    zhash_update (h->aux, name, aux);
     zhash_freefn (h->aux, name, destroy);
 }
 
