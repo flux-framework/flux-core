@@ -277,6 +277,15 @@ zloop_t *flux_get_zloop (flux_t h)
     return h->get_zloop (getimpl (h));
 }
 
+zctx_t *flux_get_zctx (flux_t h)
+{
+    if (!h->get_zctx) {
+        errno = ENOSYS;
+        return NULL;
+    }
+    return h->get_zctx (getimpl (h));
+}
+
 /**
  ** Higher level functions built on those above
  **/
