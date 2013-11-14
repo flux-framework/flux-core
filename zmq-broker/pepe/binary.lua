@@ -36,7 +36,7 @@ if pepe.rank == 0 then
 		.. " --set-conf conf.log.persist-level=debug"
 		.. " --set-conf conf.live.missed-trigger-allow=5"
 		.. " --set-conf conf.live.topology='" .. topology .. "'"
-		.. " --plugins=api,barrier,live,log,kvs,sync,job,rexec,resrc,mecho"
+		.. " --plugins=api,barrier,live,log,kvs,sync,job,rexec,resrc,mecho,sched"
 		.. " --logdest cmbd.log")
 else
     local parent_rank = tree.k_ary_parent (pepe.rank, 2)

@@ -1,7 +1,7 @@
 topdir  :=          $(shell cd .. && pwd)
 builddir  :=        $(shell pwd)
 programs =          wrexecd wreck
-plugins  =          jobsrv.o resrcsrv.o wrexecsrv.o
+plugins  =          jobsrv.o resrcsrv.o schedsrv.o wrexecsrv.o
 
 CFLAGS +=           -ggdb -Wall -Werror \
                     -I$(topdir) -I$(topdir)/include -I$(topdir)/util
@@ -9,7 +9,7 @@ LDFLAGS +=          -L$(topdir)/lib \
 		    -L$(topdir)/util \
 		    -L$(topdir)/zutil \
 		    -Wl,-rpath=$(topdir)/lib
-		    
+
 LIBADD +=           $(topdir)/util/libutil.a -lcmb -lczmq
 CLEANFILES :=       $(programs) rexec-config.h
 
@@ -26,7 +26,7 @@ wrexecd : $(wrexecd_SOURCES:.c=.o)
 
 wreck : $(wreck_SOURCES:.c=.o)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBADD)
-	
+
 
 clean:
 	rm -f *.o $(CLEANFILES) tags

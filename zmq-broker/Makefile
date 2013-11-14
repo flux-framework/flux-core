@@ -27,7 +27,7 @@ LDADD_SRV = -pthread $(LDADD_CLI)
 COMMON_OBJS = kvscli.o barriercli.o logcli.o mrpc.o handle.o
 PLUGIN_OBJS = apisrv.o syncsrv.o kvssrv.o barriersrv.o livesrv.o mechosrv.o \
 	logsrv.o echosrv.o \
-	wreck/jobsrv.o wreck/resrcsrv.o wreck/wrexecsrv.o
+	wreck/jobsrv.o wreck/resrcsrv.o wreck/wrexecsrv.o wreck/schedsrv.o
 CMBD_OBJS = route.o plugin.o $(COMMON_OBJS) $(PLUGIN_OBJS) cmbd.o
 
 CMBUTIL_OBJS = cmbutil.o

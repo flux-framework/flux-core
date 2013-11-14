@@ -80,6 +80,7 @@ struct plugin_struct mechosrv;
 struct plugin_struct jobsrv;
 struct plugin_struct rexecsrv;
 struct plugin_struct resrcsrv;
+struct plugin_struct schedsrv;
 
 static plugin_t plugins[] = {
     &kvssrv,
@@ -92,7 +93,8 @@ static plugin_t plugins[] = {
     &mechosrv,
     &jobsrv,
     &rexecsrv,
-    &resrcsrv
+    &resrcsrv,
+    &schedsrv
 };
 static const int plugins_len = sizeof (plugins)/sizeof (plugins[0]);
 
