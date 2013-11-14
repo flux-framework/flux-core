@@ -84,13 +84,13 @@ static void set (const char *key, int val, void *arg, int errnum)
 void *thread (void *arg)
 {
     thd_t *t = (thd_t *)arg;
-    cmb_t c;
+    flux_t h;
 
-    if (!(c = cmb_init ())) {
+    if (!(h = cmb_init ())) {
         err ("%d: cmb_init", t->n);
         goto done;
     }
-    if (kvs_watch_int (c, key, set, t) < 0) {
+    if (kvs_watch_int (h, key, set, t) < 0) {
         err ("%d: kvs_watch_int", t->n);
         goto done;
     }
@@ -98,17 +98,17 @@ void *thread (void *arg)
     while (t->count < changes) {
         zmsg_t *zmsg;
 
-        if (!(zmsg = cmb_recv_zmsg (c, false))) {
-            err ("cmb_recv_zmsg");
+        if (!(zmsg = flux_response_recvmsg (h, false))) {
+            err ("flux_response_recvmsg");
             goto done;
         }
-        kvs_watch_response (c, &zmsg);
+        kvs_watch_response (h, &zmsg);
         if (zmsg)
             zmsg_destroy (&zmsg);
     }
 done:
-    if (c)
-        cmb_fini (c);
+    if (h)
+        flux_handle_destroy (&h);
 
     return NULL;
 }
@@ -117,7 +117,7 @@ int main (int argc, char *argv[])
 {
     thd_t *thd;
     int i, rc;
-    cmb_t c;
+    flux_t h;
 
     log_init (basename (argv[0]));
 
@@ -131,12 +131,12 @@ int main (int argc, char *argv[])
 
     thd = xzmalloc (sizeof (*thd) * nthreads);
     
-    if (!(c = cmb_init ()))
+    if (!(h = cmb_init ()))
         err_exit ("cmb_init");
 
-    if (kvs_put_int (c, key, -1) < 0)
+    if (kvs_put_int (h, key, -1) < 0)
         err_exit ("kvs_put_int %s", key);
-    if (kvs_commit (c) < 0)
+    if (kvs_commit (h) < 0)
         err_exit ("kvs_commit");
 
     for (i = 0; i < nthreads; i++) {
@@ -150,9 +150,9 @@ int main (int argc, char *argv[])
     wait_ready ();
 
     for (i = 0; i < changes; i++) {
-        if (kvs_put_int (c, key, i) < 0)
+        if (kvs_put_int (h, key, i) < 0)
             err_exit ("kvs_put_int %s", key);
-        if (kvs_commit (c) < 0)
+        if (kvs_commit (h) < 0)
             err_exit ("kvs_commit");
     }
     
@@ -164,7 +164,7 @@ int main (int argc, char *argv[])
 
     free (thd);
 
-    cmb_fini (c);
+    flux_handle_destroy (&h);
 
     log_fini ();
 
