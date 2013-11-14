@@ -41,15 +41,14 @@ static int cmb_request_sendmsg (cmb_t *c, zmsg_t **zmsg)
     return zmsg_send_fd (c->fd, zmsg);
 }
 
-static int cmb_response_recvmsg (cmb_t *c, zmsg_t **zmsg, bool nonblock)
+static zmsg_t *cmb_response_recvmsg (cmb_t *c, bool nonblock)
 {
     zmsg_t *z;
 
     assert (c->magic == CMB_CTX_MAGIC);
-    if (!(z = zlist_pop (c->resp)) && !(z = zmsg_recv_fd (c->fd, nonblock)))
-        return -1;
-    *zmsg = z;
-    return 0;
+    if (!(z = zlist_pop (c->resp)))
+        z = zmsg_recv_fd (c->fd, nonblock);
+    return z;
 }
 
 static int cmb_response_putmsg (cmb_t *c, zmsg_t **zmsg)
@@ -145,29 +144,21 @@ static bool cmb_treeroot (cmb_t *c)
     return (c->rank == 0);
 }
 
-static int cmb_session_info_query (cmb_t *c)
+static int cmb_session_info_query (flux_t h, int *rankp, int *sizep)
 {
     json_object *request = util_json_object_new_object ();
     json_object *response = NULL;
-    zmsg_t *zmsg = NULL;
     int errnum;
     int rc = -1;
 
-    assert (c->magic == CMB_CTX_MAGIC);
-    if (cmb_request_send (c, request, "api.session.info.query") < 0)
+    if (!(response = flux_rpc (h, request, "api.session.info.query")))
         goto done;
-    if (cmb_response_recvmsg (c, &zmsg, false) < 0)
-        goto done;
-    if (cmb_msg_decode (zmsg, NULL, &response) < 0 || !response) {
-        errno = EPROTO;
-        goto done;
-    }
     if (util_json_object_get_int (response, "errnum", &errnum) == 0) {
         errno = errnum;
         goto done;
     }
-    if (util_json_object_get_int (response, "rank", &c->rank) < 0
-            || util_json_object_get_int (response, "size", &c->size) < 0) {
+    if (util_json_object_get_int (response, "rank", rankp) < 0
+            || util_json_object_get_int (response, "size", sizep) < 0) {
         errno = EPROTO;
         goto done;
     }
@@ -190,7 +181,7 @@ static void cmb_fini (cmb_t *c)
 
 flux_t cmb_init_full (const char *path, int flags)
 {
-    flux_t h;
+    flux_t h = NULL;
     cmb_t *c = NULL;
     struct sockaddr_un addr;
 
@@ -207,8 +198,6 @@ flux_t cmb_init_full (const char *path, int flags)
 
     if (connect (c->fd, (struct sockaddr *)&addr,
                          sizeof (struct sockaddr_un)) < 0)
-        goto error;
-    if (cmb_session_info_query (c) < 0)
         goto error;
 
     h = flux_handle_create (c, (FluxFreeFn *)cmb_fini, flags);
@@ -232,9 +221,14 @@ flux_t cmb_init_full (const char *path, int flags)
     h->timeout_isset = NULL; /* ENOSYS */
     h->get_zloop = NULL; /* ENOSYS */
     h->get_zctx = NULL; /* ENOSYS */
+    if (cmb_session_info_query (h, &c->rank, &c->size) < 0)
+        goto error;
     return h;
 error:
-    cmb_fini (c);
+    if (h)
+        flux_handle_destroy (&h);
+    else if (c)
+        cmb_fini (c);
     return NULL;
 }
 
