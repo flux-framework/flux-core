@@ -27,19 +27,27 @@
 #include "flux.h"
 #include "handle.h"
 
+struct flux_handle_struct {
+    const struct flux_handle_ops    *ops;
+    int                             flags;
+    zhash_t                         *aux;
+};
+
 static void *getimpl (flux_t h)
 {
     return flux_aux_get (h, "handle_impl");
 }
 
-flux_t flux_handle_create (void *impl, FluxFreeFn *destroy, int flags)
+flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops,
+                           int flags)
 {
     flux_t h = xzmalloc (sizeof (*h));
 
     h->flags = flags;
     if (!(h->aux = zhash_new()))
         oom ();
-    flux_aux_set (h, "handle_impl", impl, destroy);
+    flux_aux_set (h, "handle_impl", impl, ops->impl_destroy);
+    h->ops = ops;
 
     return h;
 }
@@ -78,25 +86,25 @@ void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn *destroy)
 
 int flux_request_sendmsg (flux_t h, zmsg_t **zmsg)
 {
-    if (!h->request_sendmsg) {
+    if (!h->ops->request_sendmsg) {
         errno = ENOSYS;
         return -1;
     }
     if (h->flags & FLUX_FLAGS_TRACE)
         zmsg_dump_compact (*zmsg);
 
-    return h->request_sendmsg (getimpl (h), zmsg);
+    return h->ops->request_sendmsg (getimpl (h), zmsg);
 }
 
 zmsg_t *flux_request_recvmsg (flux_t h, bool nonblock)
 {
     zmsg_t *zmsg;
 
-    if (!h->request_recvmsg) {
+    if (!h->ops->request_recvmsg) {
         errno = ENOSYS;
         return NULL;
     }
-    zmsg = h->request_recvmsg (getimpl (h), nonblock);
+    zmsg = h->ops->request_recvmsg (getimpl (h), nonblock);
     if (zmsg && h->flags & FLUX_FLAGS_TRACE)
         zmsg_dump_compact (zmsg);
 
@@ -105,25 +113,25 @@ zmsg_t *flux_request_recvmsg (flux_t h, bool nonblock)
 
 int flux_response_sendmsg (flux_t h, zmsg_t **zmsg)
 {
-    if (!h->response_sendmsg) {
+    if (!h->ops->response_sendmsg) {
         errno = ENOSYS;
         return -1;
     }
     if (h->flags & FLUX_FLAGS_TRACE)
         zmsg_dump_compact (*zmsg);
 
-    return h->response_sendmsg (getimpl (h), zmsg);
+    return h->ops->response_sendmsg (getimpl (h), zmsg);
 }
 
 zmsg_t *flux_response_recvmsg (flux_t h, bool nonblock)
 {
     zmsg_t *zmsg;
 
-    if (!h->response_recvmsg) {
+    if (!h->ops->response_recvmsg) {
         errno = ENOSYS;
         return NULL;
     }
-    zmsg = h->response_recvmsg (getimpl (h), nonblock);
+    zmsg = h->ops->response_recvmsg (getimpl (h), nonblock);
     if (zmsg && h->flags & FLUX_FLAGS_TRACE)
         zmsg_dump_compact (zmsg);
 
@@ -132,35 +140,35 @@ zmsg_t *flux_response_recvmsg (flux_t h, bool nonblock)
 
 int flux_response_putmsg (flux_t h, zmsg_t **zmsg)
 {
-    if (!h->response_putmsg) {
+    if (!h->ops->response_putmsg) {
         errno = ENOSYS;
         return -1;
     }
 
-    return h->response_putmsg (getimpl (h), zmsg);
+    return h->ops->response_putmsg (getimpl (h), zmsg);
 }
 
 int flux_event_sendmsg (flux_t h, zmsg_t **zmsg)
 {
-    if (!h->event_sendmsg) {
+    if (!h->ops->event_sendmsg) {
         errno = ENOSYS;
         return -1;
     }
     if (h->flags & FLUX_FLAGS_TRACE)
         zmsg_dump_compact (*zmsg);
 
-    return h->event_sendmsg (getimpl (h), zmsg);
+    return h->ops->event_sendmsg (getimpl (h), zmsg);
 }
 
 zmsg_t *flux_event_recvmsg (flux_t h, bool nonblock)
 {
     zmsg_t *zmsg;
 
-    if (!h->event_recvmsg) {
+    if (!h->ops->event_recvmsg) {
         errno = ENOSYS;
         return NULL;
     }
-    zmsg = h->event_recvmsg (getimpl (h), nonblock);
+    zmsg = h->ops->event_recvmsg (getimpl (h), nonblock);
     if (zmsg && h->flags & FLUX_FLAGS_TRACE)
         zmsg_dump_compact (zmsg);
 
@@ -169,121 +177,121 @@ zmsg_t *flux_event_recvmsg (flux_t h, bool nonblock)
 
 int flux_event_subscribe (flux_t h, const char *topic)
 {
-    if (!h->event_subscribe) {
+    if (!h->ops->event_subscribe) {
         errno = ENOSYS;
         return -1;
     }
 
-    return h->event_subscribe (getimpl (h), topic);
+    return h->ops->event_subscribe (getimpl (h), topic);
 }
 
 int flux_event_unsubscribe (flux_t h, const char *topic)
 {
-    if (!h->event_unsubscribe) {
+    if (!h->ops->event_unsubscribe) {
         errno = ENOSYS;
         return -1;
     }
 
-    return h->event_unsubscribe (getimpl (h), topic);
+    return h->ops->event_unsubscribe (getimpl (h), topic);
 }
 
 zmsg_t *flux_snoop_recvmsg (flux_t h, bool nonblock)
 {
-    if (!h->snoop_recvmsg) {
+    if (!h->ops->snoop_recvmsg) {
         errno = ENOSYS;
         return NULL;
     }
-    return h->snoop_recvmsg (getimpl (h), nonblock);
+    return h->ops->snoop_recvmsg (getimpl (h), nonblock);
 }
 
 int flux_snoop_subscribe (flux_t h, const char *topic)
 {
-    if (!h->snoop_subscribe) {
+    if (!h->ops->snoop_subscribe) {
         errno = ENOSYS;
         return -1;
     }
 
-    return h->snoop_subscribe (getimpl (h), topic);
+    return h->ops->snoop_subscribe (getimpl (h), topic);
 }
 
 int flux_snoop_unsubscribe (flux_t h, const char *topic)
 {
-    if (!h->snoop_unsubscribe) {
+    if (!h->ops->snoop_unsubscribe) {
         errno = ENOSYS;
         return -1;
     }
 
-    return h->snoop_unsubscribe (getimpl (h), topic);
+    return h->ops->snoop_unsubscribe (getimpl (h), topic);
 }
 
 int flux_rank (flux_t h)
 {
-    if (!h->rank) {
+    if (!h->ops->rank) {
         errno = ENOSYS;
         return -1;
     }
 
-    return h->rank (getimpl (h));
+    return h->ops->rank (getimpl (h));
 }
 
 int flux_size (flux_t h)
 {
-    if (!h->size) {
+    if (!h->ops->size) {
         errno = ENOSYS;
         return -1;
     }
 
-    return h->size (getimpl (h));
+    return h->ops->size (getimpl (h));
 }
 
 bool flux_treeroot (flux_t h)
 {
-    if (!h->treeroot)
+    if (!h->ops->treeroot)
         return false;
-    return h->treeroot (getimpl (h));
+    return h->ops->treeroot (getimpl (h));
 }
 
 int flux_timeout_set (flux_t h, unsigned long msec)
 {
-    if (!h->timeout_set) {
+    if (!h->ops->timeout_set) {
         errno = ENOSYS;
         return -1;
     }
-    return h->timeout_set (getimpl (h), msec);
+    return h->ops->timeout_set (getimpl (h), msec);
 }
 
 int flux_timeout_clear (flux_t h)
 {
-    if (!h->timeout_clear) {
+    if (!h->ops->timeout_clear) {
         errno = ENOSYS;
         return -1;
     }
-    return h->timeout_clear (getimpl (h));
+    return h->ops->timeout_clear (getimpl (h));
 }
 
 bool flux_timeout_isset (flux_t h)
 {
-    if (!h->timeout_isset)
+    if (!h->ops->timeout_isset)
         return false;
-    return h->timeout_isset (getimpl (h));
+    return h->ops->timeout_isset (getimpl (h));
 }
 
 zloop_t *flux_get_zloop (flux_t h)
 {
-    if (!h->get_zloop) {
+    if (!h->ops->get_zloop) {
         errno = ENOSYS;
         return NULL;
     }
-    return h->get_zloop (getimpl (h));
+    return h->ops->get_zloop (getimpl (h));
 }
 
 zctx_t *flux_get_zctx (flux_t h)
 {
-    if (!h->get_zctx) {
+    if (!h->ops->get_zctx) {
         errno = ENOSYS;
         return NULL;
     }
-    return h->get_zctx (getimpl (h));
+    return h->ops->get_zctx (getimpl (h));
 }
 
 /**

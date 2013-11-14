@@ -35,14 +35,18 @@ typedef struct {
     zlist_t *resp;
 } cmb_t;
 
-static int cmb_request_sendmsg (cmb_t *c, zmsg_t **zmsg)
+static const struct flux_handle_ops cmb_ops;
+
+static int cmb_request_sendmsg (void *impl, zmsg_t **zmsg)
 {
+    cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
     return zmsg_send_fd (c->fd, zmsg);
 }
 
-static zmsg_t *cmb_response_recvmsg (cmb_t *c, bool nonblock)
+static zmsg_t *cmb_response_recvmsg (void *impl, bool nonblock)
 {
+    cmb_t *c = impl;
     zmsg_t *z;
 
     assert (c->magic == CMB_CTX_MAGIC);
@@ -51,8 +55,9 @@ static zmsg_t *cmb_response_recvmsg (cmb_t *c, bool nonblock)
     return z;
 }
 
-static int cmb_response_putmsg (cmb_t *c, zmsg_t **zmsg)
+static int cmb_response_putmsg (void *impl, zmsg_t **zmsg)
 {
+    cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
     if (zlist_append (c->resp, *zmsg) < 0)
         return -1;
@@ -63,8 +68,9 @@ static int cmb_response_putmsg (cmb_t *c, zmsg_t **zmsg)
 /* If 'o' is NULL, there will be no json part,
  *   unlike flux_request_send() which will fill in an empty JSON part.
  */
-static int cmb_request_send (cmb_t *c, json_object *o, const char *fmt, ...)
+static int cmb_request_send (void *impl, json_object *o, const char *fmt, ...)
 {
+    cmb_t *c = impl;
     zmsg_t *zmsg;
     char *tag;
     int rc;
@@ -85,32 +91,37 @@ static int cmb_request_send (cmb_t *c, json_object *o, const char *fmt, ...)
     return rc;
 }
 
-static int cmb_snoop_subscribe (cmb_t *c, const char *s)
+static int cmb_snoop_subscribe (void *impl, const char *s)
 {
+    cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
     return cmb_request_send (c, NULL, "api.snoop.subscribe.%s", s ? s: "");
 }
 
-static int cmb_snoop_unsubscribe (cmb_t *c, const char *s)
+static int cmb_snoop_unsubscribe (void *impl, const char *s)
 {
+    cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
     return cmb_request_send (c, NULL, "api.snoop.unsubscribe.%s", s ? s: "");
 }
 
-static int cmb_event_subscribe (cmb_t *c, const char *s)
+static int cmb_event_subscribe (void *impl, const char *s)
 {
+    cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
     return cmb_request_send (c, NULL, "api.event.subscribe.%s", s ? s: "");
 }
 
-static int cmb_event_unsubscribe (cmb_t *c, const char *s)
+static int cmb_event_unsubscribe (void *impl, const char *s)
 {
+    cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
     return cmb_request_send (c, NULL, "api.event.unsubscribe.%s", s ? s: "");
 }
 
-static int cmb_event_sendmsg (cmb_t *c, zmsg_t **zmsg)
+static int cmb_event_sendmsg (void *impl, zmsg_t **zmsg)
 {
+    cmb_t *c = impl;
     int rc;
     json_object *o = NULL;
     char *tag = NULL;
@@ -128,20 +139,23 @@ static int cmb_event_sendmsg (cmb_t *c, zmsg_t **zmsg)
     return rc;
 }
 
-static int cmb_rank (cmb_t *c)
+static int cmb_rank (void *impl)
 {
+    cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
     return c->rank;
 }
 
-static int cmb_size (cmb_t *c)
+static int cmb_size (void *impl)
 {
+    cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
     return c->size;
 }
 
-static bool cmb_treeroot (cmb_t *c)
+static bool cmb_treeroot (void *impl)
 {
+    cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
     return (c->rank == 0);
 }
@@ -173,8 +187,9 @@ done:
     return rc;
 }
 
-static void cmb_fini (cmb_t *c)
+static void cmb_fini (void *impl)
 {
+    cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
     if (c->fd >= 0)
         (void)close (c->fd);
@@ -201,28 +216,7 @@ flux_t cmb_init_full (const char *path, int flags)
     if (connect (c->fd, (struct sockaddr *)&addr,
                          sizeof (struct sockaddr_un)) < 0)
         goto error;
-
-    h = flux_handle_create (c, (FluxFreeFn *)cmb_fini, flags);
-    h->request_sendmsg = (FluxSendMsg *)cmb_request_sendmsg;
-    h->request_recvmsg = NULL; /* ENOSYS */
-    h->response_sendmsg = NULL; /* ENOSYS */
-    h->response_recvmsg = (FluxRecvMsg *)cmb_response_recvmsg;
-    h->response_putmsg = (FluxPutMsg *)cmb_response_putmsg;
-    h->event_sendmsg = (FluxSendMsg *)cmb_event_sendmsg;
-    h->event_recvmsg = (FluxRecvMsg *)cmb_response_recvmsg; /* FIXME */
-    h->event_subscribe = (FluxSub *)cmb_event_subscribe;
-    h->event_unsubscribe = (FluxSub *)cmb_event_unsubscribe;
-    h->snoop_recvmsg = (FluxRecvMsg *)cmb_response_recvmsg; /* FIXME */
-    h->snoop_subscribe = (FluxSub *)cmb_snoop_subscribe;
-    h->snoop_unsubscribe = (FluxSub *)cmb_snoop_unsubscribe;
-    h->rank = (FluxGetInt *)cmb_rank;
-    h->size = (FluxGetInt *)cmb_size;
-    h->treeroot = (FluxGetBool *)cmb_treeroot;
-    h->timeout_set = NULL; /* ENOSYS */
-    h->timeout_clear = NULL; /* ENOSYS */
-    h->timeout_isset = NULL; /* ENOSYS */
-    h->get_zloop = NULL; /* ENOSYS */
-    h->get_zctx = NULL; /* ENOSYS */
+    h = flux_handle_create (c, &cmb_ops, flags);
     if (cmb_session_info_query (h, &c->rank, &c->size) < 0)
         goto error;
     return h;
@@ -250,6 +244,23 @@ flux_t cmb_init (void)
         snprintf (path, sizeof (path), CMB_API_PATH_TMPL, getuid ());
     return cmb_init_full (path, 0);
 }
+
+static const struct flux_handle_ops cmb_ops = {
+    .request_sendmsg = cmb_request_sendmsg,
+    .response_recvmsg = cmb_response_recvmsg,
+    .response_putmsg = cmb_response_putmsg,
+    .event_sendmsg = cmb_event_sendmsg,
+    .event_recvmsg = cmb_response_recvmsg, /* FIXME */
+    .event_subscribe = cmb_event_subscribe,
+    .event_unsubscribe = cmb_event_unsubscribe,
+    .snoop_recvmsg = cmb_response_recvmsg, /* FIXME */
+    .snoop_subscribe = cmb_snoop_subscribe,
+    .snoop_unsubscribe = cmb_snoop_unsubscribe,
+    .rank = cmb_rank,
+    .size = cmb_size,
+    .treeroot = cmb_treeroot,
+    .impl_destroy = cmb_fini,
+};
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

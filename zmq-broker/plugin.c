@@ -39,7 +39,9 @@ typedef struct {
 
 typedef struct ptimeout_struct *ptimeout_t;
 
+#define PLUGIN_MAGIC    0xfeefbe01
 typedef struct {
+    int magic;
     conf_t *conf;
     void *zs_upreq; /* for making requests */
     void *zs_dnreq; /* for handling requests (reverse message flow) */
@@ -62,6 +64,8 @@ struct ptimeout_struct {
     plugin_ctx_t *p;
     unsigned long msec;
 };
+
+static const struct flux_handle_ops plugin_ops;
 
 static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t);
 
@@ -96,98 +100,128 @@ static const int plugins_len = sizeof (plugins)/sizeof (plugins[0]);
  ** flux_t implementation
  **/
 
-static int plugin_request_sendmsg (plugin_ctx_t *p, zmsg_t **zmsg)
+static int plugin_request_sendmsg (void *impl, zmsg_t **zmsg)
 {
+    plugin_ctx_t *p = impl;
     int rc;
 
+    assert (p->magic == PLUGIN_MAGIC);
     rc = zmsg_send (zmsg, p->zs_upreq);
     p->stats.upreq_send_count++;
     return rc;
 }
 
-static zmsg_t *plugin_request_recvmsg (plugin_ctx_t *p, bool nb)
+static zmsg_t *plugin_request_recvmsg (void *impl, bool nb)
 {
+    plugin_ctx_t *p = impl;
+    assert (p->magic == PLUGIN_MAGIC);
     return zmsg_recv (p->zs_dnreq); /* FIXME: ignores nb flag */
 }
 
 
-static int plugin_response_sendmsg (plugin_ctx_t *p, zmsg_t **zmsg)
+static int plugin_response_sendmsg (void *impl, zmsg_t **zmsg)
 {
     int rc;
+    plugin_ctx_t *p = impl;
 
+    assert (p->magic == PLUGIN_MAGIC);
     rc = zmsg_send (zmsg, p->zs_dnreq);
     p->stats.dnreq_send_count++;
     return rc;
 }
 
-static zmsg_t *plugin_response_recvmsg (plugin_ctx_t *p, bool nb)
+static zmsg_t *plugin_response_recvmsg (void *impl, bool nb)
 {
+    plugin_ctx_t *p = impl;
+    assert (p->magic == PLUGIN_MAGIC);
     return zmsg_recv (p->zs_upreq); /* FIXME: ignores nb flag */
 }
 
-static int plugin_response_putmsg (plugin_ctx_t *p, zmsg_t **zmsg)
+static int plugin_response_putmsg (void *impl, zmsg_t **zmsg)
 {
+    plugin_ctx_t *p = impl;
+    assert (p->magic == PLUGIN_MAGIC);
     if (zlist_append (p->deferred_responses, *zmsg) < 0)
         oom ();
     *zmsg = NULL;
     return 0;
 }
 
-static int plugin_event_sendmsg (plugin_ctx_t *p, zmsg_t **zmsg)
+static int plugin_event_sendmsg (void *impl, zmsg_t **zmsg)
 {
     int rc;
+    plugin_ctx_t *p = impl;
 
+    assert (p->magic == PLUGIN_MAGIC);
     rc = zmsg_send (zmsg, p->zs_evout);
     p->stats.event_send_count++;
     return rc;
 }
 
-static zmsg_t *plugin_event_recvmsg (plugin_ctx_t *p, bool nb)
+static zmsg_t *plugin_event_recvmsg (void *impl, bool nb)
 {
+    plugin_ctx_t *p = impl;
+    assert (p->magic == PLUGIN_MAGIC);
     return zmsg_recv (p->zs_evin); /* FIXME: ignores nb flag */
 }
 
-static int plugin_event_subscribe (plugin_ctx_t *p, const char *topic)
+static int plugin_event_subscribe (void *impl, const char *topic)
 {
+    plugin_ctx_t *p = impl;
+    assert (p->magic == PLUGIN_MAGIC);
     zsocket_set_subscribe (p->zs_evin, topic ? (char *)topic : "");
     return 0;
 }
 
-static int plugin_event_unsubscribe (plugin_ctx_t *p, const char *topic)
+static int plugin_event_unsubscribe (void *impl, const char *topic)
 {
+    plugin_ctx_t *p = impl;
+    assert (p->magic == PLUGIN_MAGIC);
     zsocket_set_unsubscribe (p->zs_evin, topic ? (char *)topic : "");
     return 0;
 }
 
-static zmsg_t *plugin_snoop_recvmsg (plugin_ctx_t *p, bool nb)
+static zmsg_t *plugin_snoop_recvmsg (void *impl, bool nb)
 {
+    plugin_ctx_t *p = impl;
+    assert (p->magic == PLUGIN_MAGIC);
     return zmsg_recv (p->zs_snoop); /* FIXME: ignores nb flag */
 }
 
-static int plugin_snoop_subscribe (plugin_ctx_t *p, const char *topic)
+static int plugin_snoop_subscribe (void *impl, const char *topic)
 {
+    plugin_ctx_t *p = impl;
+    assert (p->magic == PLUGIN_MAGIC);
     zsocket_set_subscribe (p->zs_snoop, topic ? (char *)topic : "");
     return 0;
 }
 
-static int plugin_snoop_unsubscribe (plugin_ctx_t *p, const char *topic)
+static int plugin_snoop_unsubscribe (void *impl, const char *topic)
 {
+    plugin_ctx_t *p = impl;
+    assert (p->magic == PLUGIN_MAGIC);
     zsocket_set_unsubscribe (p->zs_snoop, topic ? (char *)topic : "");
     return 0;
 }
 
-static int plugin_rank (plugin_ctx_t *p)
+static int plugin_rank (void *impl)
 {
+    plugin_ctx_t *p = impl;
+    assert (p->magic == PLUGIN_MAGIC);
     return p->conf->rank;
 }
 
-static int plugin_size (plugin_ctx_t *p)
+static int plugin_size (void *impl)
 {
+    plugin_ctx_t *p = impl;
+    assert (p->magic == PLUGIN_MAGIC);
     return p->conf->size;
 }
 
-static bool plugin_treeroot (plugin_ctx_t *p)
+static bool plugin_treeroot (void *impl)
 {
+    plugin_ctx_t *p = impl;
+    assert (p->magic == PLUGIN_MAGIC);
     return (p->conf->treeroot);
 }
 
@@ -201,10 +235,12 @@ static bool plugin_treeroot (plugin_ctx_t *p)
  * sure the arg value is different (malloc-before-free plugin_ctx_t *
  * wrapper struct shenanegens below).
  */
-static int plugin_timeout_set (plugin_ctx_t *p, unsigned long msec)
+static int plugin_timeout_set (void *impl, unsigned long msec)
 {
     ptimeout_t t;
+    plugin_ctx_t *p = impl;
 
+    assert (p->magic == PLUGIN_MAGIC);
     if (p->timeout)
         (void)zloop_timer_end (p->zloop, p->timeout);
     if (!(t = xzmalloc (sizeof (struct ptimeout_struct))))
@@ -219,8 +255,11 @@ static int plugin_timeout_set (plugin_ctx_t *p, unsigned long msec)
     return 0;
 }
 
-static int plugin_timeout_clear (plugin_ctx_t *p)
+static int plugin_timeout_clear (void *impl)
 {
+    plugin_ctx_t *p = impl;
+
+    assert (p->magic == PLUGIN_MAGIC);
     if (p->timeout) {
         (void)zloop_timer_end (p->zloop, p->timeout);
         free (p->timeout);
@@ -229,18 +268,24 @@ static int plugin_timeout_clear (plugin_ctx_t *p)
     return 0;
 }
 
-static bool plugin_timeout_isset (plugin_ctx_t *p)
+static bool plugin_timeout_isset (void *impl)
 {
+    plugin_ctx_t *p = impl;
+    assert (p->magic == PLUGIN_MAGIC);
     return p->timeout ? true : false;
 }
 
-static zloop_t *plugin_get_zloop (plugin_ctx_t *p)
+static zloop_t *plugin_get_zloop (void *impl)
 {
+    plugin_ctx_t *p = impl;
+    assert (p->magic == PLUGIN_MAGIC);
     return p->zloop;
 }
 
-static zctx_t *plugin_get_zctx (plugin_ctx_t *p)
+static zctx_t *plugin_get_zctx (void *impl)
 {
+    plugin_ctx_t *p = impl;
+    assert (p->magic == PLUGIN_MAGIC);
     return p->srv->zctx;
 }
 
@@ -545,6 +590,7 @@ static int plugin_create (char *name, server_t *srv, conf_t *conf)
     }
 
     p = xzmalloc (sizeof (plugin_ctx_t));
+    p->magic = PLUGIN_MAGIC;
     p->conf = conf;
     p->srv = srv;
     p->plugin = plugin;
@@ -555,27 +601,7 @@ static int plugin_create (char *name, server_t *srv, conf_t *conf)
     p->id = xzmalloc (strlen (name) + 16);
     snprintf (p->id, strlen (name) + 16, "%s-%d", name, conf->rank);
 
-    h = flux_handle_create (p, (FluxFreeFn *)plugin_destroy, 0);
-    h->request_sendmsg = (FluxSendMsg *)plugin_request_sendmsg;
-    h->request_recvmsg = (FluxRecvMsg *)plugin_request_recvmsg;
-    h->response_sendmsg = (FluxSendMsg *)plugin_response_sendmsg;
-    h->response_recvmsg = (FluxRecvMsg *)plugin_response_recvmsg;
-    h->response_putmsg = (FluxPutMsg *)plugin_response_putmsg;
-    h->event_sendmsg = (FluxSendMsg *)plugin_event_sendmsg;
-    h->event_recvmsg = (FluxRecvMsg *)plugin_event_recvmsg;
-    h->event_subscribe = (FluxSub *)plugin_event_subscribe;
-    h->event_unsubscribe = (FluxSub *)plugin_event_unsubscribe;
-    h->snoop_recvmsg = (FluxRecvMsg *)plugin_snoop_recvmsg;
-    h->snoop_subscribe = (FluxSub *)plugin_snoop_subscribe;
-    h->snoop_unsubscribe = (FluxSub *)plugin_snoop_unsubscribe;
-    h->rank = (FluxGetInt *)plugin_rank;
-    h->size = (FluxGetInt *)plugin_size;
-    h->treeroot = (FluxGetBool *)plugin_treeroot;
-    h->timeout_set = (FluxTimeoutSet *)plugin_timeout_set;
-    h->timeout_clear = (FluxTimeoutClear *)plugin_timeout_clear;
-    h->timeout_isset = (FluxGetBool *)plugin_timeout_isset;
-    h->get_zloop = (FluxGetZloop *)plugin_get_zloop;
-    h->get_zctx = (FluxGetZctx *)plugin_get_zctx;
+    h = flux_handle_create (p, &plugin_ops, 0);
     p->h = h;
 
     /* connect sockets in the parent, then use them in the thread */
@@ -610,6 +636,29 @@ void plugin_fini (conf_t *conf, server_t *srv)
 {
     zhash_destroy (&srv->plugins);
 }
+
+static const struct flux_handle_ops plugin_ops = {
+    .request_sendmsg = plugin_request_sendmsg,
+    .request_recvmsg = plugin_request_recvmsg,
+    .response_sendmsg = plugin_response_sendmsg,
+    .response_recvmsg = plugin_response_recvmsg,
+    .response_putmsg = plugin_response_putmsg,
+    .event_sendmsg = plugin_event_sendmsg,
+    .event_recvmsg = plugin_event_recvmsg,
+    .event_subscribe = plugin_event_subscribe,
+    .event_unsubscribe = plugin_event_unsubscribe,
+    .snoop_recvmsg = plugin_snoop_recvmsg,
+    .snoop_subscribe = plugin_snoop_subscribe,
+    .snoop_unsubscribe = plugin_snoop_unsubscribe,
+    .rank = plugin_rank,
+    .size = plugin_size,
+    .treeroot = plugin_treeroot,
+    .timeout_set = plugin_timeout_set,
+    .timeout_clear = plugin_timeout_clear,
+    .timeout_isset = plugin_timeout_isset,
+    .get_zloop = plugin_get_zloop,
+    .get_zctx = plugin_get_zctx,
+};
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
