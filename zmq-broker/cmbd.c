@@ -475,13 +475,47 @@ static int _request_send (conf_t *conf, server_t *srv,
     return ret;
 }
 
+/* FIXME: duplicated from logcli.c
+ *    (pending pending of cmbd flux_t handle)
+ */
+static json_object *log_create (int level, const char *fac, const char *src,
+                                const char *fmt, va_list ap)
+{
+    json_object *o = util_json_object_new_object ();
+    char *str = NULL;
+    struct timeval tv;
+
+    if (gettimeofday (&tv, NULL) < 0)
+        err_exit ("gettimeofday");
+
+    if (vasprintf (&str, fmt, ap) < 0)
+        oom ();
+    if (strlen (str) == 0) {
+        errno = EINVAL;
+        goto error;
+    }
+    util_json_object_add_int (o, "count", 1);
+    util_json_object_add_string (o, "facility", fac);
+    util_json_object_add_int (o, "level", level);
+    util_json_object_add_string (o, "source", src);
+    util_json_object_add_timeval (o, "timestamp", &tv);
+    util_json_object_add_string (o, "message", str);
+    free (str);
+    return o;
+error:
+    if (str)
+        free (str);
+    json_object_put (o);
+    return NULL;
+}
+
 void cmbd_log (conf_t *conf, server_t *srv, int lev, const char *fmt, ...)
 {
     va_list ap;
     json_object *o;
 
     va_start (ap, fmt);
-    o = util_json_vlog (lev, "cmb", conf->rankstr, fmt, ap);
+    o = log_create (lev, "cmb", conf->rankstr, fmt, ap);
     va_end (ap);
 
     if (o) {
