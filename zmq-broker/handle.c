@@ -25,7 +25,7 @@
 #include "util.h"
 
 #include "flux.h"
-#include "flux_handle.h"
+#include "handle.h"
 
 static void *getimpl (flux_t h)
 {

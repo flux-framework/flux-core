@@ -24,7 +24,7 @@
 #include "cmb.h"
 #include "util.h"
 #include "flux.h"
-#include "flux_handle.h"
+#include "handle.h"
 
 #define CMB_CTX_MAGIC   0xf434aaab
 typedef struct {

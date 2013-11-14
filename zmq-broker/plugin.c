@@ -26,7 +26,7 @@
 #include "plugin.h"
 
 #include "flux.h"
-#include "flux_handle.h"
+#include "handle.h"
 
 typedef struct {
     int upreq_send_count;
