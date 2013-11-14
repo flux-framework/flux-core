@@ -198,6 +198,10 @@ static int client_read (ctx_t *ctx, client_t *c)
             json_object_put (o);
     } else if (cmb_msg_match (zmsg, "api.session.info.query")) {
         json_object *o = util_json_object_new_object ();
+        zframe_t *zf = zmsg_pop (zmsg);
+        assert (zf != NULL);
+        assert (zframe_size (zf) == 0);
+        zframe_destroy (&zf);
         util_json_object_add_int (o, "rank", flux_rank (ctx->h));
         util_json_object_add_int (o, "size", flux_size (ctx->h));
         if (cmb_msg_replace_json (zmsg, o) == 0)
@@ -216,8 +220,6 @@ static int client_read (ctx_t *ctx, client_t *c)
             } else
                 free (tag);
         }
-        if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* env delimiter */
-            err_exit ("zmsg_pushmem");
         if (zmsg_pushstr (zmsg, "%s", c->uuid) < 0)
             err_exit ("zmsg_pushmem");
         flux_request_sendmsg (ctx->h, &zmsg);

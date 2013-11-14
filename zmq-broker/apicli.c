@@ -77,6 +77,8 @@ static int cmb_request_send (cmb_t *c, json_object *o, const char *fmt, ...)
     va_end (ap);
     zmsg = cmb_msg_encode (tag, o);
     free (tag);
+    if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* add route delimiter */
+        err_exit ("zmsg_pushmem");
     if ((rc = cmb_request_sendmsg (c, &zmsg)) < 0)
         zmsg_destroy (&zmsg);
 

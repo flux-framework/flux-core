@@ -326,6 +326,8 @@ int flux_request_send (flux_t h, json_object *request, const char *fmt, ...)
         request = empty = util_json_object_new_object ();
     zmsg = cmb_msg_encode (tag, request);
     free (tag);
+    if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* add route delimiter */
+        err_exit ("zmsg_pushmem");
     if ((rc = flux_request_sendmsg (h, &zmsg)) < 0)
         zmsg_destroy (&zmsg);
     if (empty)
@@ -369,6 +371,9 @@ json_object *flux_rpc (flux_t h, json_object *request, const char *fmt, ...)
     if (!request)
         request = empty = util_json_object_new_object ();
     zmsg = cmb_msg_encode (tag, request);
+
+    if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* add route delimiter */
+        err_exit ("zmsg_pushmem");
     if (flux_request_sendmsg (h, &zmsg) < 0)
         goto done;
     do {
