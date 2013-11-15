@@ -84,6 +84,7 @@ int flux_snoop_unsubscribe (flux_t h, const char *topic);
 /* Get information about this cmbd instance's position in the flux comms
  * session.
  */
+int flux_info (flux_t h, int *rankp, int *sizep, bool *treerootp);
 int flux_rank (flux_t h);
 int flux_size (flux_t h);
 bool flux_treeroot (flux_t h);

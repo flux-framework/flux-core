@@ -24,7 +24,7 @@ LIBUTIL = util/libutil.a
 LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -luuid $(LIBUTIL)
 LDADD_SRV = -pthread $(LDADD_CLI)
 
-COMMON_OBJS = kvscli.o barriercli.o logcli.o mrpc.o handle.o
+COMMON_OBJS = kvscli.o barriercli.o logcli.o cmbdcli.o mrpc.o handle.o
 PLUGIN_OBJS = apisrv.o syncsrv.o kvssrv.o barriersrv.o livesrv.o mechosrv.o \
 	logsrv.o echosrv.o \
 	wreck/jobsrv.o wreck/resrcsrv.o wreck/wrexecsrv.o wreck/schedsrv.o

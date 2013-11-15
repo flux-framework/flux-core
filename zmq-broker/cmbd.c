@@ -662,6 +662,17 @@ static void _cmb_internal_request (conf_t *conf, server_t *srv, zmsg_t **zmsg)
         }
         if (*zmsg)
             zmsg_destroy (zmsg);
+    } else if (cmb_msg_match (*zmsg, "cmb.info")) {
+        json_object *o = util_json_object_new_object ();
+
+        util_json_object_add_int (o, "rank", conf->rank);
+        util_json_object_add_int (o, "size", conf->size);
+        util_json_object_add_boolean (o, "treeroot", conf->treeroot);
+        if (cmb_msg_replace_json (*zmsg, o) == 0)
+            _route_response (conf, srv, zmsg, true);
+        json_object_put (o);
+        if (*zmsg)
+            zmsg_destroy (zmsg);
     }
 }
 

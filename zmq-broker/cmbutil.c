@@ -22,7 +22,7 @@
 static int _parse_logstr (char *s, int *lp, char **fp);
 static void dump_kvs_dir (flux_t h, const char *path);
 
-#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:T:L:W:D:r:R:qz:Zyl:Y:X:M:"
+#define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:T:L:W:D:r:R:qz:Zyl:Y:X:M:i"
 static const struct option longopts[] = {
     {"ping",       required_argument,  0, 'p'},
     {"stats",      required_argument,  0, 'x'},
@@ -52,6 +52,7 @@ static const struct option longopts[] = {
     {"route-query",no_argument,        0, 'q'},
     {"socket-path",required_argument,  0, 'z'},
     {"trace-apisock",no_argument,      0, 'Z'},
+    {"info",       no_argument,        0, 'i'},
     {0, 0, 0, 0},
 };
 
@@ -86,6 +87,7 @@ static void usage (void)
 "  -q,--route-query       list routes in JSON format\n"
 "  -z,--socket-path PATH  use non-default API socket path\n"
 "  -Z,--trace-apisock     trace api socket messages\n"
+"  -i,--info              display comms session rank, size, treeroot status\n"
 );
     exit (1);
 }
@@ -524,6 +526,16 @@ int main (int argc, char *argv[])
                 }
                 if (pad)
                     free (pad);
+                break;
+            }
+            case 'i': { /* --info */
+                int rank, size;
+                bool treeroot;
+
+                if (flux_info (h, &rank, &size, &treeroot) < 0)
+                    err_exit ("flux_info");
+                printf ("rank=%d size=%d treeroot=%s\n", rank, size,
+                        treeroot ? "true" : "false");
                 break;
             }
             default:
