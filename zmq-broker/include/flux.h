@@ -1,28 +1,53 @@
 #ifndef FLUX_H
 #define FLUX_H
 
-#include <czmq.h>
+/* The flux_t handle and its operations works in multiple environments.
+ * Not all environments will implement all operations.
+ * If an unimplemented function is called, it will return an error
+ * with errno == ENOSYS.
+ */
 
 typedef void (*FluxFreeFn)(void *arg);
 
 typedef struct flux_handle_struct *flux_t;
 
-#include "kvs.h"
+#include <czmq.h>
 
+#include "kvs.h"
+#include "mrpc.h"
+
+/* Flags for handle creation and flux_flags_set()/flux_flags_unset.
+ */
 enum {
-    FLUX_FLAGS_TRACE = 1,
+    FLUX_FLAGS_TRACE = 1,   /* print 0MQ messages sent over the flux_t */
+                            /*   handle on stdout. */
 };
 
-typedef struct flux_mrpc_struct *flux_mrpc_t;
-
+/* API users: create a flux_t handle using cmb_init().
+ * Destroy it with flux_handle_destroy().
+ */
 void flux_handle_destroy (flux_t *hp);
 
+/* A mechanism is provide for other modules to attach auxiliary state to
+ * the flux_t handle by name.  The FluxFreeFn, if non-NULL, will be called
+ * to destroy this state when the handle is destroyed.
+ */
 void *flux_aux_get (flux_t h, const char *name);
 void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn destroy);
 
+/* Set/clear FLUX_FLAGS_* on a flux_t handle.
+ * Flags can also be set when the handle is created, e.g. in cmb_init_full().
+ */
 void flux_flags_set (flux_t h, int flags);
 void flux_flags_unset (flux_t h, int flags);
 
+/* Send/receive requests and responses.
+ * - flux_request_sendmsg() expects a route delimiter (request envelope)
+ * - flux_request_sendmsg()/flux_response_sendmsg() free '*zmsg' and set it
+ *   to NULL on success.
+ * - int-returning functions return 0 on success, -1 on failure with errno set.
+ * - pointer-returning functions return NULL on failure with errno set.
+ */
 int flux_request_sendmsg (flux_t h, zmsg_t **zmsg);
 zmsg_t *flux_request_recvmsg (flux_t h, bool nb);
 int flux_response_sendmsg (flux_t h, zmsg_t **zmsg);
@@ -34,29 +59,55 @@ int flux_response_recv (flux_t h, json_object **respp, char **tagp, bool nb);
 int flux_respond (flux_t h, zmsg_t **request, json_object *response);
 int flux_respond_errnum (flux_t h, zmsg_t **request, int errnum);
 
+/* Send/receive events.
+ * - an event consists of a tag frame and an optional JSON frame
+ * - flux_event_sendmsg() frees '*zmsg' and sets it to NULL on success.
+ * - int-returning functions return 0 on success, -1 on failure with errno set.
+ * - pointer-returning functions return NULL on failure with errno set.
+ * - topics are period-delimited strings following 0MQ subscription semantics
+ */
 int flux_event_sendmsg (flux_t h, zmsg_t **zmsg);
 zmsg_t *flux_event_recvmsg (flux_t h, bool nonblock);
 int flux_event_send (flux_t h, json_object *request, const char *fmt, ...);
 int flux_event_subscribe (flux_t h, const char *topic);
 int flux_event_unsubscribe (flux_t h, const char *topic);
 
+/* Receive messages from the cmbd's snoop socket.
+ * - int-returning functions return 0 on success, -1 on failure with errno set.
+ * - pointer-returning functions return NULL on failure with errno set.
+ * - topics are period-delimited strings following 0MQ subscription semantics
+ */
 zmsg_t *flux_snoop_recvmsg (flux_t h, bool nb);
 int flux_snoop_subscribe (flux_t h, const char *topic);
 int flux_snoop_unsubscribe (flux_t h, const char *topic);
 
+/* Get information about this cmbd instance's position in the flux comms
+ * session.
+ */
 int flux_rank (flux_t h);
 int flux_size (flux_t h);
 bool flux_treeroot (flux_t h);
 
+/* Set/clear/test timeout callback arming.
+ */
 int flux_timeout_set (flux_t h, unsigned long msec);
 int flux_timeout_clear (flux_t h);
 bool flux_timeout_isset (flux_t h);
 
+/* Accessors for zloop reactor and zeromq context.
+ * N.B. The zctx_t is thread-safe but zeromq sockets, and therefore
+ * flux_t handle operations are not.
+ */
 zloop_t *flux_get_zloop (flux_t h);
 zctx_t *flux_get_zctx (flux_t h);
 
+/* Execute a barrier across 'nprocs' processes.
+ * The 'name' must be unique across the comms session.
+ */
 int flux_barrier (flux_t h, const char *name, int nprocs);
 
+/* Interface for logging via the comms' reduction network.
+ */
 void flux_log_set_facility (flux_t h, const char *facility);
 int flux_vlog (flux_t h, int lev, const char *fmt, va_list ap);
 int flux_log (flux_t h, int lev, const char *fmt, ...)
@@ -68,39 +119,6 @@ int flux_log_dump (flux_t h, int lev, const char *fac);
 
 char *flux_log_decode (zmsg_t *zmsg, int *lp, char **fp, int *cp,
                     struct timeval *tvp, char **sp);
-
-/* Group RPC
- *
- * Client:                          Servers:
- *   flux_mrpc_create()               flux_event_subscribe ("mrpc...")
- *   flux_mrpc_put_inarg()            while (true) {
- *   flux_mrpc() ------------------->   (receive event)
- *                                      flux_mrpc_create_fromevent()
- *                                      flux_mrpc_get_inarg()
- *                                      (do some work)
- *                                      flux_mrpc_put_outarg()
- *   (returns) <----------------------- flux_mrpc_respond()
- * - flux_mrpc_get_outarg() ...         flux_mrpc_destroy() 
- * - flux_mrpc_destroy()              }
- */
-flux_mrpc_t flux_mrpc_create (flux_t h, const char *nodelist);
-void flux_mrpc_destroy (flux_mrpc_t f);
-
-void flux_mrpc_put_inarg (flux_mrpc_t f, json_object *val);
-int flux_mrpc_get_inarg (flux_mrpc_t f, json_object **valp);
-
-void flux_mrpc_put_outarg (flux_mrpc_t f, json_object *val);
-int flux_mrpc_get_outarg (flux_mrpc_t f, int nodeid, json_object **valp);
-
-/* returns nodeid (-1 at end)  */
-int flux_mrpc_next_outarg (flux_mrpc_t f);
-void flux_mrpc_rewind_outarg (flux_mrpc_t f);
-
-int flux_mrpc (flux_mrpc_t f, const char *fmt, ...);
-
-/* returns NULL, errno == EINVAL if not addressed to me */
-flux_mrpc_t flux_mrpc_create_fromevent (flux_t h, json_object *request);
-int flux_mrpc_respond (flux_mrpc_t f);
 
 #endif /* !defined(FLUX_H) */
 
