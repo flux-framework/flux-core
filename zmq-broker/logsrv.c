@@ -71,7 +71,7 @@ static ctx_t *getctx (flux_t h)
         ctx->cirbuf = zlist_new ();
         ctx->disabled = false;
         ctx->h = h;
-        flux_aux_set (h, "logsrv", ctx, (FluxFreeFn *)freectx);
+        flux_aux_set (h, "logsrv", ctx, (FluxFreeFn)freectx);
     }
 
     return ctx;

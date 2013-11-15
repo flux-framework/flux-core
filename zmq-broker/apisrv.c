@@ -61,7 +61,7 @@ static ctx_t *getctx (flux_t h)
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
         ctx->h = h;
-        flux_aux_set (h, "apisrv", ctx, (FluxFreeFn *)freectx);
+        flux_aux_set (h, "apisrv", ctx, (FluxFreeFn)freectx);
     }
 
     return ctx;

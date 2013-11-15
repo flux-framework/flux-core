@@ -50,7 +50,7 @@ static struct rexec_ctx *getctx (flux_t h)
         if (!(ctx->session_list = zlist_new ()))
             oom ();
         ctx->h = h;
-        flux_aux_set (h, "rexecsrv", ctx, (FluxFreeFn *)freectx);
+        flux_aux_set (h, "rexecsrv", ctx, (FluxFreeFn)freectx);
     }
 
     return ctx;

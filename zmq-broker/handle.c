@@ -78,7 +78,7 @@ void *flux_aux_get (flux_t h, const char *name)
     return zhash_lookup (h->aux, name);
 }
 
-void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn *destroy)
+void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn destroy)
 {
     zhash_update (h->aux, name, aux);
     zhash_freefn (h->aux, name, destroy);

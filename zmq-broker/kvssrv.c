@@ -174,7 +174,7 @@ static ctx_t *getctx (flux_t h)
             ctx->slave.writeback_state = WB_CLEAN;
         }
         ctx->h = h;
-        flux_aux_set (h, "kvssrv", ctx, (FluxFreeFn *)freectx);
+        flux_aux_set (h, "kvssrv", ctx, (FluxFreeFn)freectx);
     }
 
     return ctx;

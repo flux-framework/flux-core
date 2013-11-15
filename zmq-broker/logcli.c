@@ -42,7 +42,7 @@ static logctx_t *getctx (flux_t h)
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
         ctx->facility = xstrdup ("unknown");
-        flux_aux_set (h, "logcli", ctx, (FluxFreeFn *)freectx);
+        flux_aux_set (h, "logcli", ctx, (FluxFreeFn)freectx);
     }
     
     return ctx;

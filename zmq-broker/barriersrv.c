@@ -58,7 +58,7 @@ static ctx_t *getctx (flux_t h)
         if (!(ctx->barriers = zhash_new ()))
             oom ();
         ctx->h = h;
-        flux_aux_set (h, "barriersrv", ctx, (FluxFreeFn *)freectx);
+        flux_aux_set (h, "barriersrv", ctx, (FluxFreeFn)freectx);
     }
 
     return ctx;

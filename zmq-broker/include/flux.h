@@ -3,7 +3,7 @@
 
 #include <czmq.h>
 
-typedef void (FluxFreeFn)(void *arg);
+typedef void (*FluxFreeFn)(void *arg);
 
 typedef struct flux_handle_struct *flux_t;
 
@@ -18,7 +18,7 @@ typedef struct flux_mrpc_struct *flux_mrpc_t;
 void flux_handle_destroy (flux_t *hp);
 
 void *flux_aux_get (flux_t h, const char *name);
-void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn *destroy);
+void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn destroy);
 
 void flux_flags_set (flux_t h, int flags);
 void flux_flags_unset (flux_t h, int flags);

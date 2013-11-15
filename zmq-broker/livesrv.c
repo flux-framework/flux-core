@@ -66,7 +66,7 @@ static ctx_t *getctx (flux_t h)
             oom ();
         ctx->disabled = false;
         ctx->h = h;
-        flux_aux_set (h, "livesrv", ctx, (FluxFreeFn *)freectx);
+        flux_aux_set (h, "livesrv", ctx, (FluxFreeFn)freectx);
     }
 
     return ctx;

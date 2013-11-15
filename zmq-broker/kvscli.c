@@ -75,7 +75,7 @@ static kvsctx_t *getctx (flux_t h)
             oom ();
         if (!(ctx->cwd = xstrdup (".")))
             oom ();
-        flux_aux_set (h, "kvscli", ctx, (FluxFreeFn *)freectx);
+        flux_aux_set (h, "kvscli", ctx, (FluxFreeFn)freectx);
     } 
 
     return ctx;
