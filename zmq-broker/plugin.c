@@ -317,7 +317,7 @@ done:
         zmsg_destroy (zmsg);
 }
 
-void plugin_stats_respond (plugin_ctx_t *p, zmsg_t **zmsg)
+static void plugin_stats_respond (plugin_ctx_t *p, zmsg_t **zmsg)
 {
     json_object *o = NULL;
 
