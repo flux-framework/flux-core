@@ -56,12 +56,13 @@ $(LIBPMI): $(LIBPMI_OBJS) $(LIBCMB)
 	mkdir -p $(shell dirname $@)
 	$(CC) -shared -Wl,--version-script=pmi_version.map \
 		-o $@ $(LIBPMI_OBJS) -L$(LIBDIR) -lcmb $(LDADD_CLI)
+	ln -sf $(shell basename $@) $(@:.0=)
 
 $(LIBCMB): $(LIBCMB_OBJS) $(LIBUTIL)
 	mkdir -p $(shell dirname $@)
 	$(CC) -shared -Wl,--version-script=cmb_version.map \
 		-o $@ $(LIBCMB_OBJS) $(LDADD_CLI)
-	ln -sf $(shell basename $@) $(LIBCMB:.0=)
+	ln -sf $(shell basename $@) $(@:.0=)
 
 $(LIBUTIL):
 	@make -C util
