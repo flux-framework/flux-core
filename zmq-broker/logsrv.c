@@ -552,12 +552,12 @@ static void logsrv_fini (flux_t h)
     flux_event_unsubscribe (h, "event.fault.");
 }
 
-struct plugin_struct logsrv = {
-    .name      = "log",
-    .recvFn    = logsrv_recv,
-    .initFn    = logsrv_init,
-    .finiFn    = logsrv_fini,
-    .timeoutFn = logsrv_timeout,
+const struct plugin_ops logsrv = {
+    .name    = "log",
+    .recv    = logsrv_recv,
+    .init    = logsrv_init,
+    .fini    = logsrv_fini,
+    .timeout = logsrv_timeout,
 };
 
 /*

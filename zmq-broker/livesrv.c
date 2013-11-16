@@ -390,10 +390,10 @@ static void livesrv_init (flux_t h)
     }
 }
 
-struct plugin_struct livesrv = {
-    .name      = "live",
-    .initFn    = livesrv_init,
-    .recvFn    = livesrv_recv,
+const struct plugin_ops livesrv = {
+    .name    = "live",
+    .init    = livesrv_init,
+    .recv    = livesrv_recv,
 };
 
 /*

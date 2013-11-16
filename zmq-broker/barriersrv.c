@@ -301,12 +301,12 @@ static void barriersrv_fini (flux_t h)
         err_exit ("%s: flux_event_subscribe", __FUNCTION__);
 }
 
-struct plugin_struct barriersrv = {
+const struct plugin_ops barriersrv = {
     .name      = "barrier",
-    .initFn    = barriersrv_init,
-    .finiFn    = barriersrv_fini,
-    .recvFn    = barriersrv_recv,
-    .timeoutFn = barriersrv_timeout,
+    .init    = barriersrv_init,
+    .fini    = barriersrv_fini,
+    .recv    = barriersrv_recv,
+    .timeout = barriersrv_timeout,
 };
 
 /*

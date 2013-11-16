@@ -54,9 +54,9 @@ static void _init (flux_t h)
     _store_hosts(h);
 }
 
-struct plugin_struct resrcsrv = {
-    .name      = "resrc",
-    .initFn    = _init,
+const struct plugin_ops resrcsrv = {
+    .name    = "resrc",
+    .init    = _init,
 };
 
 /*

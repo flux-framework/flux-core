@@ -7,13 +7,12 @@ typedef enum {
     ZMSG_REQUEST, ZMSG_RESPONSE, ZMSG_EVENT, ZMSG_SNOOP }
 zmsg_type_t;
 
-typedef struct plugin_struct *plugin_t;
-struct plugin_struct {
+struct plugin_ops {
     const char *name;
-    void (*timeoutFn)(flux_t h);
-    void (*recvFn)(flux_t h, zmsg_t **zmsg, zmsg_type_t type);
-    void (*initFn)(flux_t h);
-    void (*finiFn)(flux_t h);
+    void (*timeout)(flux_t h);
+    void (*recv)(flux_t h, zmsg_t **zmsg, zmsg_type_t type);
+    void (*init)(flux_t h);
+    void (*fini)(flux_t h);
 };
 
 /* call from cmbd to initialize/finalize the plugin loader

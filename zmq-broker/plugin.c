@@ -51,13 +51,14 @@ typedef struct {
     char *id;
     ptimeout_t timeout;
     pthread_t t;
-    plugin_t plugin;
+    const struct plugin_ops *ops;
     server_t *srv;
     plugin_stats_t stats;
     zloop_t *zloop;
     zlist_t *deferred_responses;
     void *ctx;
     flux_t h;
+    char *name;
 } plugin_ctx_t;
 
 struct ptimeout_struct {
@@ -65,24 +66,24 @@ struct ptimeout_struct {
     unsigned long msec;
 };
 
-static const struct flux_handle_ops plugin_ops;
+static const struct flux_handle_ops plugin_handle_ops;
 
 static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t);
 
-struct plugin_struct apisrv;
-struct plugin_struct barriersrv;
-struct plugin_struct kvssrv;
-struct plugin_struct livesrv;
-struct plugin_struct logsrv;
-struct plugin_struct syncsrv;
-struct plugin_struct echosrv;
-struct plugin_struct mechosrv;
-struct plugin_struct jobsrv;
-struct plugin_struct rexecsrv;
-struct plugin_struct resrcsrv;
-struct plugin_struct schedsrv;
+const struct plugin_ops apisrv;
+const struct plugin_ops barriersrv;
+const struct plugin_ops kvssrv;
+const struct plugin_ops livesrv;
+const struct plugin_ops logsrv;
+const struct plugin_ops syncsrv;
+const struct plugin_ops echosrv;
+const struct plugin_ops mechosrv;
+const struct plugin_ops jobsrv;
+const struct plugin_ops rexecsrv;
+const struct plugin_ops resrcsrv;
+const struct plugin_ops schedsrv;
 
-static plugin_t plugins[] = {
+static const struct plugin_ops *plugins[] = {
     &kvssrv,
     &syncsrv,
     &barriersrv,
@@ -362,8 +363,8 @@ static void plugin_handle_response (plugin_ctx_t *p, zmsg_t *zmsg)
      */
     if (!strcmp (tag, "kvs.watch"))
         kvs_watch_response (p->h, &zmsg); /* consumes zmsg on match */
-    if (zmsg && p->plugin->recvFn)
-        p->plugin->recvFn (p->h, &zmsg, ZMSG_RESPONSE);
+    if (zmsg && p->ops->recv)
+        p->ops->recv (p->h, &zmsg, ZMSG_RESPONSE);
     if (zmsg)
         msg ("discarding unexpected response from %s", tag);
 done:
@@ -422,8 +423,8 @@ static int dnreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
         plugin_ping_respond (p, &zmsg);
     else if (!strcmp (method, "stats"))
         plugin_stats_respond (p, &zmsg);
-    else if (zmsg && p->plugin->recvFn)
-        p->plugin->recvFn (p->h, &zmsg, ZMSG_REQUEST);
+    else if (zmsg && p->ops->recv)
+        p->ops->recv (p->h, &zmsg, ZMSG_REQUEST);
     /* If request wasn't handled above, NAK it.
      */
     if (zmsg) {
@@ -448,8 +449,8 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
 
     p->stats.event_recv_count++;
 
-    if (zmsg && p->plugin->recvFn)
-        p->plugin->recvFn (p->h, &zmsg, ZMSG_EVENT);
+    if (zmsg && p->ops->recv)
+        p->ops->recv (p->h, &zmsg, ZMSG_EVENT);
 
     if (zmsg)
         zmsg_destroy (&zmsg);
@@ -462,8 +463,9 @@ static int snoop_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
 {
     zmsg_t *zmsg =  zmsg_recv (p->zs_snoop);
 
-    if (zmsg && p->plugin->recvFn)
-        p->plugin->recvFn (p->h, &zmsg, ZMSG_SNOOP);
+    if (zmsg && p->ops->recv)
+        p->ops->recv (p->h, &zmsg, ZMSG_SNOOP);
+
 
     if (zmsg)
         zmsg_destroy (&zmsg);
@@ -477,8 +479,8 @@ static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t)
 {
     plugin_ctx_t *p = t->p;
 
-    if (p->plugin->timeoutFn)
-        p->plugin->timeoutFn (p->h);
+    if (p->ops->timeout)
+        p->ops->timeout (p->h);
 
     plugin_handle_deferred_responses (p);
 
@@ -526,11 +528,11 @@ static void *plugin_thread (void *arg)
     if (p->zloop == NULL)
         err_exit ("%s: plugin_zloop_create", p->id);
 
-    if (p->plugin->initFn)
-        p->plugin->initFn (p->h);
+    if (p->ops->init)
+        p->ops->init (p->h);
     zloop_start (p->zloop);
-    if (p->plugin->finiFn)
-        p->plugin->finiFn (p->h);
+    if (p->ops->fini)
+        p->ops->fini (p->h);
 
     zloop_destroy (&p->zloop);
 
@@ -543,7 +545,7 @@ static void plugin_destroy (void *arg)
     int errnum;
     zmsg_t *zmsg;
 
-    route_del (p->srv->rctx, p->plugin->name, p->plugin->name);
+    route_del (p->srv->rctx, p->name, p->name);
 
     /* FIXME: no mechanism to tell thread to exit yet */
     errnum = pthread_join (p->t, NULL);
@@ -563,12 +565,13 @@ static void plugin_destroy (void *arg)
         zmsg_destroy (&zmsg);
     zlist_destroy (&p->deferred_responses);
 
+    free (p->name);
     free (p->id);
 
     free (p);
 }
 
-static plugin_t lookup_plugin (char *name)
+static const struct plugin_ops *lookup_plugin (char *name)
 {
     int i;
 
@@ -584,9 +587,9 @@ static int plugin_create (char *name, server_t *srv, conf_t *conf)
     plugin_ctx_t *p;
     flux_t h;
     int errnum;
-    plugin_t plugin;
+    const struct plugin_ops *ops;
 
-    if (!(plugin = lookup_plugin (name))) {
+    if (!(ops = lookup_plugin (name))) {
         msg ("unknown plugin '%s'", name);
         return -1;
     }
@@ -595,7 +598,8 @@ static int plugin_create (char *name, server_t *srv, conf_t *conf)
     p->magic = PLUGIN_MAGIC;
     p->conf = conf;
     p->srv = srv;
-    p->plugin = plugin;
+    p->ops = ops;
+    p->name = xstrdup (name);
 
     if (!(p->deferred_responses = zlist_new ()))
         oom ();
@@ -603,7 +607,7 @@ static int plugin_create (char *name, server_t *srv, conf_t *conf)
     p->id = xzmalloc (strlen (name) + 16);
     snprintf (p->id, strlen (name) + 16, "%s-%d", name, conf->rank);
 
-    h = flux_handle_create (p, &plugin_ops, 0);
+    h = flux_handle_create (p, &plugin_handle_ops, 0);
     p->h = h;
 
     /* connect sockets in the parent, then use them in the thread */
@@ -620,8 +624,8 @@ static int plugin_create (char *name, server_t *srv, conf_t *conf)
     if (errnum)
         errn_exit (errnum, "pthread_create");
 
-    zhash_insert (srv->plugins, plugin->name, p);
-    zhash_freefn (srv->plugins, plugin->name, plugin_destroy);
+    zhash_insert (srv->plugins, name, p);
+    zhash_freefn (srv->plugins, name, plugin_destroy);
 
     return 0;
 }
@@ -639,7 +643,7 @@ void plugin_fini (conf_t *conf, server_t *srv)
     zhash_destroy (&srv->plugins);
 }
 
-static const struct flux_handle_ops plugin_ops = {
+static const struct flux_handle_ops plugin_handle_ops = {
     .request_sendmsg = plugin_request_sendmsg,
     .request_recvmsg = plugin_request_recvmsg,
     .response_sendmsg = plugin_response_sendmsg,
