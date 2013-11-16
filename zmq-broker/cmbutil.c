@@ -453,42 +453,32 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'r': { /* --route-add dst:gw */
-#if 0
                 char *gw, *dst = xstrdup (optarg);
                 if (!(gw = strchr (dst, ':')))
                     usage ();
                 *gw++ = '\0';
-                if (cmb_route_add (c, dst, gw) < 0)
+                if (flux_route_add (h, dst, gw) < 0)
                     err ("cmb_route_add %s via %s", dst, gw);
-#endif
+                free (dst);
                 break;
             }
             case 'R': { /* --route-del dst */
-#if 0
                 char *gw, *dst = xstrdup (optarg);
                 if (!(gw = strchr (dst, ':')))
                     usage ();
                 *gw++ = '\0';
-                if (cmb_route_del (c, dst, gw) < 0)
+                if (flux_route_del (h, dst, gw) < 0)
                     err ("cmb_route_del %s via %s", dst, gw);
-#endif
+                free (dst);
                 break;
             }
             case 'q': { /* --route-query */
-#if 0
                 json_object *o;
-                char *s;
-
-                if (!(s = cmb_route_query (c)))
-                    err_exit ("cmb_route_query");
-                if (!(o = json_tokener_parse (s)))
-                    err_exit ("json_tokener_parse");
+                if (!(o = flux_route_query (h)))
+                    err_exit ("flux_route_query");
                 printf ("%s\n", json_object_to_json_string_ext (o,
                                     JSON_C_TO_STRING_PRETTY));
                 json_object_put (o);
-                free (s);
-                msg ("rank=%d size=%d", flux_rank (c), flux_size (c));
-#endif
                 break;
             }
             case 'M': { /* --mrpc-echo NODELIST */
@@ -657,61 +647,6 @@ error:
     if (o)
         json_object_put (o);
     return NULL;
-}
-#endif
-
-#if 0
-int cmb_route_add (cmb_t c, char *dst, char *gw)
-{
-    json_object *o = util_json_object_new_object ();
-
-    util_json_object_add_string (o, "gw", gw);
-    if (_send_message (c, o, "cmb.route.add.%s", dst) < 0)
-        goto error;
-    json_object_put (o);
-    return 0;
-error:
-    json_object_put (o);
-    return -1;
-}
-
-int cmb_route_del (cmb_t c, char *dst, char *gw)
-{
-    json_object *o = util_json_object_new_object ();
-
-    util_json_object_add_string (o, "gw", gw);
-    if (_send_message (c, o, "cmb.route.del.%s", dst) < 0)
-        goto error;
-    json_object_put (o);
-    return 0;
-error:
-    json_object_put (o);
-    return -1;
-}
-
-/* FIXME: just return JSON string for now */
-char *cmb_route_query (cmb_t c)
-{
-    json_object *o = util_json_object_new_object ();
-    char *cpy;
-
-    /* send request */
-    if (_send_message (c, o, "cmb.route.query") < 0)
-        goto error;
-    json_object_put (o);
-    o = NULL;
-
-    /* receive response */
-    if (_recv_message (c, NULL, &o, false) < 0)
-        goto error;
-    cpy = xstrdup (json_object_get_string (o));
-    json_object_put (o);
-    return cpy;
-error:
-    if (o)
-        json_object_put (o);
-    return NULL;
-
 }
 #endif
 

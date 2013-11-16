@@ -89,6 +89,12 @@ int flux_rank (flux_t h);
 int flux_size (flux_t h);
 bool flux_treeroot (flux_t h);
 
+/* Manipulate and query cmb routing tables.
+ */
+int flux_route_add (flux_t h, const char *dst, const char *gw);
+int flux_route_del (flux_t h, const char *dst, const char *gw);
+json_object *flux_route_query (flux_t h);
+
 /* Set/clear/test timeout callback arming.
  */
 int flux_timeout_set (flux_t h, unsigned long msec);

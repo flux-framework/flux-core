@@ -55,6 +55,42 @@ done:
     return ret;
 }
 
+int flux_route_add (flux_t h, const char *dst, const char *gw)
+{
+    json_object *request = util_json_object_new_object ();
+    int rc = -1;
+
+    util_json_object_add_string (request, "gw", gw);
+    if (flux_request_send (h, request, "cmb.route.add.%s", dst) < 0)
+        goto done;
+    rc = 0;
+done:
+    if (request)
+        json_object_put (request);
+    return rc;
+}
+
+int flux_route_del (flux_t h, const char *dst, const char *gw)
+{
+    json_object *request = util_json_object_new_object ();
+    int rc = -1;
+
+    util_json_object_add_string (request, "gw", gw);
+    if (flux_request_send (h, request, "cmb.route.del.%s", dst) < 0)
+        goto done;
+    rc = 0;
+done:
+    if (request)
+        json_object_put (request);
+    return rc;
+}
+
+json_object *flux_route_query (flux_t h)
+{
+    return flux_rpc (h, NULL, "cmb.route.query");
+}
+
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
