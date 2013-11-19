@@ -98,8 +98,7 @@ static void _sched_fini (flux_t p)
 {
 }
 
-const struct plugin_ops schedsrv = {
-    .name   = "sched",
+const struct plugin_ops ops = {
     .init = _sched_init,
     .recv = _recv,
     .fini = _sched_fini,

@@ -78,8 +78,7 @@ static void syncsrv_init (flux_t h)
         err_exit ("kvs_watch_dir conf.sync");
 }
 
-const struct plugin_ops syncsrv = {
-    .name    = "sync",
+const struct plugin_ops ops = {
     .init    = syncsrv_init,
     .timeout = syncsrv_timeout,
 };

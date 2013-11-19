@@ -219,8 +219,7 @@ out:
     zmsg_destroy (zmsg);
 }
 
-const struct plugin_ops jobsrv = {
-    .name = "job",
+const struct plugin_ops ops = {
     .recv = handle_recv,
 };
 

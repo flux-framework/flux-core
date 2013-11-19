@@ -56,8 +56,7 @@ out:
     zmsg_destroy (zmsg);
 }
 
-const struct plugin_ops echosrv = {
-    .name = "echo",
+const struct plugin_ops ops = {
     .recv = handle_recv,
 };
 

@@ -67,8 +67,7 @@ static void mechosrv_fini (flux_t h)
         err_exit ("%s: flux_event_unsubscribe", __FUNCTION__);
 }
 
-const struct plugin_ops mechosrv = {
-    .name = "mecho",
+const struct plugin_ops ops = {
     .recv = mechosrv_recv,
     .init = mechosrv_init,
     .fini = mechosrv_fini,

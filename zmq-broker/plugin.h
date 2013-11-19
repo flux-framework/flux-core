@@ -3,12 +3,16 @@
 
 #include "flux.h"
 
+/* A plugin defines 'const struct plugin_ops ops = {...}' containing
+ * its implementations of one or more of the plugin operations.
+ * It is compiled into a .so which the plugin loader dlopens.
+ */
+
 typedef enum {
     ZMSG_REQUEST, ZMSG_RESPONSE, ZMSG_EVENT, ZMSG_SNOOP }
 zmsg_type_t;
 
 struct plugin_ops {
-    const char *name;
     void (*timeout)(flux_t h);
     void (*recv)(flux_t h, zmsg_t **zmsg, zmsg_type_t type);
     void (*init)(flux_t h);

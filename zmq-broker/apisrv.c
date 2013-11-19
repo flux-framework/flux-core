@@ -410,8 +410,7 @@ static void apisrv_fini (flux_t h)
         client_destroy (ctx, ctx->clients);
 }
 
-const struct plugin_ops apisrv = {
-    .name   = "api",
+const struct plugin_ops ops = {
     .recv = apisrv_recv,
     .init = apisrv_init,
     .fini = apisrv_fini,

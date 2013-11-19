@@ -1576,8 +1576,7 @@ static void kvssrv_fini (flux_t h)
         err_exit ("%s: flux_event_unsubscribe", __FUNCTION__);
 }
 
-const struct plugin_ops kvssrv = {
-    .name      = "kvs",
+const struct plugin_ops ops = {
     .init    = kvssrv_init,
     .fini    = kvssrv_fini,
     .recv    = kvssrv_recv,

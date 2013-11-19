@@ -1,7 +1,7 @@
 
 TOP =             $(shell pwd)
 LIBDIR =          $(TOP)/lib
-EXTRA_CFLAGS +=   -I$(TOP)/include -I$(TOP)/util
+EXTRA_CFLAGS +=   -I$(TOP) -I$(TOP)/include -I$(TOP)/util
 EXTRA_LDFLAGS +=  -L$(TOP)/lib $(TOP)/util/libutil.a
 
 SUBDIRS :=        wreck
@@ -22,13 +22,10 @@ export CFLAGS LDFLAGS
 
 LIBUTIL = util/libutil.a
 LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -luuid $(LIBUTIL)
-LDADD_SRV = -pthread $(LDADD_CLI)
+LDADD_SRV = -pthread -rdynamic $(LDADD_CLI) -ldl
 
 COMMON_OBJS = kvscli.o barriercli.o logcli.o cmbdcli.o mrpc.o handle.o
-PLUGIN_OBJS = apisrv.o syncsrv.o kvssrv.o barriersrv.o livesrv.o mechosrv.o \
-	logsrv.o echosrv.o \
-	wreck/jobsrv.o wreck/resrcsrv.o wreck/wrexecsrv.o wreck/schedsrv.o
-CMBD_OBJS = route.o plugin.o $(COMMON_OBJS) $(PLUGIN_OBJS) cmbd.o
+CMBD_OBJS = route.o plugin.o $(COMMON_OBJS) cmbd.o
 
 CMBUTIL_OBJS = cmbutil.o
 LIBPMI_OBJS = pmi.o
@@ -37,9 +34,20 @@ LIBCMB_OBJS = apicli.o $(COMMON_OBJS)
 LIBPMI = $(LIBDIR)/libpmi.so.0
 LIBCMB = $(LIBDIR)/libcmb.so.0
 
-BUILD = $(LIBCMB) $(LIBPMI) cmbutil mpi_hello echo cmbd
+PLUGINS = apisrv.so syncsrv.so kvssrv.so barriersrv.so livesrv.so \
+	mechosrv.so logsrv.so echosrv.so \
+	jobsrv.so resrcsrv.so rexecsrv.so schedsrv.so
+
+BUILD = $(LIBCMB) $(LIBPMI) cmbutil mpi_hello echo cmbd $(PLUGINS)
 
 all: subdirs $(BUILD) subdirs_post
+
+%.so: %.c
+	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $<
+rexecsrv.so: wreck/wrexecsrv.c
+	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $<
+%.so: wreck/%.c
+	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $<
 
 subdirs: $(LIBUTIL) $(LIBCMB)
 	@for f in $(SUBDIRS); do make -C $$f; done
@@ -76,7 +84,7 @@ echo: echo.o
 	$(CC) $(LDFLAGS) -o $@ $< -L$(LIBDIR) -lcmb $(LDADD_CLI)
 
 clean:
-	rm -f *.o $(BUILD)
+	rm -f *.o *.so $(BUILD)
 	rm -rf $(LIBDIR)/
 	@make -C util clean
 	@for f in $(SUBDIRS) $(SUBDIRS_POST); do make -C $$f clean; done

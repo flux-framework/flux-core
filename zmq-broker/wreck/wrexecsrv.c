@@ -421,8 +421,7 @@ static void rexec_init (flux_t h)
     flux_event_subscribe (h, "event.rexec.kill.");
 }
 
-const struct plugin_ops rexecsrv = {
-    .name = "rexec",
+const struct plugin_ops ops = {
     .init = rexec_init,
     .recv = handle_recv,
 };

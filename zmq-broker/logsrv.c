@@ -552,8 +552,7 @@ static void logsrv_fini (flux_t h)
     flux_event_unsubscribe (h, "event.fault.");
 }
 
-const struct plugin_ops logsrv = {
-    .name    = "log",
+const struct plugin_ops ops = {
     .recv    = logsrv_recv,
     .init    = logsrv_init,
     .fini    = logsrv_fini,

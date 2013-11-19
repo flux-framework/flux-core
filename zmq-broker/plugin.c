@@ -14,6 +14,7 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <stdarg.h>
+#include <dlfcn.h>
 
 #include <json/json.h>
 #include <czmq.h>
@@ -59,6 +60,7 @@ typedef struct {
     void *ctx;
     flux_t h;
     char *name;
+    void *dso;
 } plugin_ctx_t;
 
 struct ptimeout_struct {
@@ -69,35 +71,6 @@ struct ptimeout_struct {
 static const struct flux_handle_ops plugin_handle_ops;
 
 static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t);
-
-const struct plugin_ops apisrv;
-const struct plugin_ops barriersrv;
-const struct plugin_ops kvssrv;
-const struct plugin_ops livesrv;
-const struct plugin_ops logsrv;
-const struct plugin_ops syncsrv;
-const struct plugin_ops echosrv;
-const struct plugin_ops mechosrv;
-const struct plugin_ops jobsrv;
-const struct plugin_ops rexecsrv;
-const struct plugin_ops resrcsrv;
-const struct plugin_ops schedsrv;
-
-static const struct plugin_ops *plugins[] = {
-    &kvssrv,
-    &syncsrv,
-    &barriersrv,
-    &apisrv,
-    &livesrv,
-    &logsrv,
-    &echosrv,
-    &mechosrv,
-    &jobsrv,
-    &rexecsrv,
-    &resrcsrv,
-    &schedsrv
-};
-static const int plugins_len = sizeof (plugins)/sizeof (plugins[0]);
 
 /**
  ** flux_t implementation
@@ -571,16 +544,6 @@ static void plugin_destroy (void *arg)
     free (p);
 }
 
-static const struct plugin_ops *lookup_plugin (char *name)
-{
-    int i;
-
-    for (i = 0; i < plugins_len; i++)
-        if (!strcmp (plugins[i]->name, name))
-            return plugins[i];
-    return NULL;
-}
-
 static int plugin_create (char *name, server_t *srv, conf_t *conf)
 {
     zctx_t *zctx = srv->zctx;
@@ -588,9 +551,20 @@ static int plugin_create (char *name, server_t *srv, conf_t *conf)
     flux_t h;
     int errnum;
     const struct plugin_ops *ops;
+    char path[PATH_MAX + 1];
+    void *dso;
+    char *errstr;
 
-    if (!(ops = lookup_plugin (name))) {
-        msg ("unknown plugin '%s'", name);
+    snprintf (path, sizeof (path), "./%ssrv.so", name);
+    if (!(dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL))) {
+        err ("%s", dlerror ());
+        return -1;
+    }
+    dlerror ();
+    ops = (const struct plugin_ops *)dlsym (dso, "ops");
+    if ((errstr = dlerror ()) != NULL) {
+        err ("%s", errstr);
+        dlclose (dso);
         return -1;
     }
 
@@ -599,6 +573,7 @@ static int plugin_create (char *name, server_t *srv, conf_t *conf)
     p->conf = conf;
     p->srv = srv;
     p->ops = ops;
+    p->dso = dso;
     p->name = xstrdup (name);
 
     if (!(p->deferred_responses = zlist_new ()))
