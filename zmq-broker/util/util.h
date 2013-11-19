@@ -1,14 +1,7 @@
 #ifndef _HAVE_CMB_UTIL_H
 #define _HAVE_CMB_UTIL_H
-typedef int (*mapstrfun_t) (char *s, void *arg1, void *arg2);
 
 typedef char href_t[41];
-
-/* 's' contains a comma-delimited list.
- * Call 'fun' once for each word in the list.
- * arg1 and arg2 will be passed opaquely to 'fun'.
- */
-int mapstr (char *s, mapstrfun_t fun, void *arg1, void *arg2);
 
 /* 's' contains a comma-delimited list of integers.
  * Parse and return ints in an array (iap), and its length in lenp.

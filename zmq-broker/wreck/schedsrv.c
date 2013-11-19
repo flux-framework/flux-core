@@ -8,8 +8,6 @@
 #include <czmq.h>
 #include <json/json.h>
 
-#include "route.h"
-#include "cmbd.h"
 #include "zmsg.h"
 #include "log.h"
 #include "util.h"
@@ -33,7 +31,7 @@ static void watchid (const char *key, kvsdir_t dir, void *arg, int errnum)
     }
 }
 
-static void _sched_init (flux_t p)
+static int _sched_init (flux_t p, zhash_t *args)
 {
     kvsdir_t dir = NULL;
     int rc = 0;
@@ -67,6 +65,7 @@ static void _sched_init (flux_t p)
     }
 
     flux_log (p, LOG_INFO, "sched plugin initialized");
+    return 0;
 }
 
 static void _recv (flux_t p, zmsg_t **zmsg, zmsg_type_t type)

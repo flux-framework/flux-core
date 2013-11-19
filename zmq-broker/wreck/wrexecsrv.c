@@ -6,8 +6,6 @@
 #include <json/arraylist.h>
 #include <uuid/uuid.h>
 
-#include "route.h"
-#include "cmbd.h"
 #include "util/zmsg.h"
 #include "util/log.h"
 #include "util/util.h"
@@ -415,10 +413,11 @@ static void handle_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
     }
 }
 
-static void rexec_init (flux_t h)
+static int rexec_init (flux_t h, zhash_t *args)
 {
     flux_event_subscribe (h, "event.rexec.run.");
     flux_event_subscribe (h, "event.rexec.kill.");
+    return 0;
 }
 
 const struct plugin_ops ops = {

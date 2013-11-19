@@ -20,8 +20,6 @@
 #include <json/json.h>
 
 #include "zmsg.h"
-#include "route.h"
-#include "cmbd.h"
 #include "log.h"
 #include "plugin.h"
 
@@ -72,10 +70,13 @@ invalid:
     }
 }
 
-static void syncsrv_init (flux_t h)
+static int syncsrv_init (flux_t h, zhash_t *args)
 {
-    if (kvs_watch_dir (h, set_config, h, "conf.sync") < 0)
-        err_exit ("kvs_watch_dir conf.sync");
+    if (kvs_watch_dir (h, set_config, h, "conf.sync") < 0) {
+        err ("kvs_watch_dir conf.sync");
+        return -1;
+    }
+    return 0;
 }
 
 const struct plugin_ops ops = {

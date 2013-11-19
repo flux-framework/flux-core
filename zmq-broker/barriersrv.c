@@ -21,8 +21,6 @@
 #include <json/json.h>
 
 #include "zmsg.h"
-#include "route.h"
-#include "cmbd.h"
 #include "plugin.h"
 #include "util.h"
 #include "log.h"
@@ -285,12 +283,15 @@ static void barriersrv_timeout (flux_t h)
     flux_timeout_clear (h);
 }
 
-static void barriersrv_init (flux_t h)
+static int barriersrv_init (flux_t h, zhash_t *args)
 {
     //ctx_t *ctx = getctx (h);
 
-    if (flux_event_subscribe (h, "event.barrier.") < 0)
-        err_exit ("%s: flux_event_subscribe", __FUNCTION__);
+    if (flux_event_subscribe (h, "event.barrier.") < 0) {
+        err ("%s: flux_event_subscribe", __FUNCTION__);
+        return -1;
+    }
+    return 0;
 }
 
 static void barriersrv_fini (flux_t h)

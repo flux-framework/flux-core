@@ -21,8 +21,6 @@
 #include <czmq.h>
 #include <json/json.h>
 
-#include "route.h"
-#include "cmbd.h"
 #include "zmsg.h"
 #include "log.h"
 #include "util.h"
@@ -49,9 +47,10 @@ static void _store_hosts (flux_t h)
     kvs_commit(h);
 }
 
-static void _init (flux_t h)
+static int _init (flux_t h, zhash_t *args)
 {
     _store_hosts(h);
+    return 0;
 }
 
 const struct plugin_ops ops = {

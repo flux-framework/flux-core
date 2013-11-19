@@ -55,8 +55,6 @@
 #include <json/json.h>
 
 #include "zmsg.h"
-#include "route.h"
-#include "cmbd.h"
 #include "plugin.h"
 #include "util.h"
 #include "log.h"
@@ -1537,33 +1535,67 @@ static void kvssrv_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
         zmsg_destroy (zmsg);
 }
 
-static void kvssrv_init (flux_t h)
+static void setargs (ctx_t *ctx, zhash_t *args)
+{
+    zlist_t *keys = zhash_keys (args);
+    char *key, *val;
+    json_object *vo;
+    href_t ref;
+
+    while ((key = zlist_pop (keys))) {
+        val = zhash_lookup (args, key);
+        if (!(vo = json_tokener_parse (val)))
+            vo = json_object_new_string (val);
+        if (!vo)
+            continue;
+        if (store_by_reference (vo)) {
+            store (ctx, vo, false, ref);
+            name (ctx, key, dirent_create ("FILEREF", ref), false);
+        } else {
+            name (ctx, key, dirent_create ("FILEVAL", vo), false);
+        }
+    }
+    zlist_destroy (&keys);
+    commit (ctx);
+}
+
+static int kvssrv_init (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
+    bool treeroot = flux_treeroot (h);
 
-    if (!flux_treeroot (h)) {
-        if (flux_event_subscribe (h, "event.kvs.setroot.") < 0)
-            err_exit ("%s: flux_event_subscribe", __FUNCTION__);
+    if (!treeroot) {
+        if (flux_event_subscribe (h, "event.kvs.setroot.") < 0) {
+            err ("%s: flux_event_subscribe", __FUNCTION__);
+            return -1;
+        }
     }
-    if (flux_event_subscribe (h, "event.kvs.debug.") < 0)
-        err_exit ("%s: flux_event_subscribe", __FUNCTION__);
+    if (flux_event_subscribe (h, "event.kvs.debug.") < 0) {
+        err ("%s: flux_event_subscribe", __FUNCTION__);
+        return -1;
+    }
 
-    if (flux_treeroot (h)) {
+    if (treeroot) {
         json_object *rootdir = util_json_object_new_object ();
         href_t href;
 
         store (ctx, rootdir, false, href);
         setroot (ctx, 0, href);
+        if (args)
+            setargs (ctx, args);
     } else {
         int seq;
         href_t href;
         json_object *rep = flux_rpc (h, NULL, "kvs.getroot");
         const char *rootref = json_object_get_string (rep);
 
-        if (!decode_rootref (rootref, &seq, href))
-            msg_exit ("malformed kvs.getroot reply: %s", rootref);
+        if (!decode_rootref (rootref, &seq, href)) {
+            msg ("malformed kvs.getroot reply: %s", rootref);
+            return -1;
+        }
         setroot (ctx, seq, href);
     }
+    return 0;
 }
 
 static void kvssrv_fini (flux_t h)

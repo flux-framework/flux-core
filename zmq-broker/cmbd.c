@@ -20,11 +20,11 @@
 #include "log.h"
 #include "zmsg.h"
 #include "route.h"
-#include "cmbd.h"
 #include "util.h"
 #include "plugin.h"
 #include "hljson.h"
 #include "flux.h"
+#include "cmb_socket.h"
 
 #define OPTIONS "t:e:E:O:vs:R:S:p:P:L:T:A:d:D:H:"
 static const struct option longopts[] = {
@@ -47,6 +47,67 @@ static const struct option longopts[] = {
     {0, 0, 0, 0},
 };
 
+
+#define MAX_PARENTS 2
+typedef struct {
+    char *upreq_uri;
+    char *dnreq_uri;
+    int rank;
+} parent_t;
+
+/* Config state.
+ * This is static and can be shared by all threads.
+ */
+typedef struct {
+    zhash_t *conf_hash;
+    char *upreq_in_uri;
+    char *dnreq_out_uri;
+    char *upev_in_uri;
+    char *upev_out_uri;
+    char *dnev_in_uri;
+    char *dnev_out_uri;
+    bool verbose;
+    char rankstr[16];
+    bool treeroot;
+    int rank;
+    int size;
+    char *plugins;
+    parent_t parent[MAX_PARENTS];
+    int parent_len;
+    /* Options set in cmbd getopt and read by plugins.
+     * FIXME: need a spank-like abstraction for plugin options.
+     */
+    char *api_sockpath;
+} conf_t;
+
+/* Server state.
+ * This is dynamic and is only accessed by the main (zpoll) thread.
+ */
+typedef struct {
+    zctx_t *zctx;
+    void *zs_upreq_out;
+    void *zs_dnreq_in;
+    void *zs_upreq_in;
+    void *zs_dnreq_out;
+    void *zs_snoop;
+    void *zs_upev_out;
+    void *zs_upev_in;
+    void *zs_dnev_out;
+    void *zs_dnev_in;
+    int parent_cur;
+    bool parent_alive[MAX_PARENTS];
+    zhash_t *plugins;
+    route_ctx_t rctx;
+    int epoch;
+} server_t;
+
+/* FIXME: paths should be configurable */
+#define UPREQ_IPC_URI_TMPL  "ipc:///tmp/cmb_socket_upreq.uid%d"
+#define DNREQ_IPC_URI_TMPL  "ipc:///tmp/cmb_socket_dnreq.uid%d"
+#define EVOUT_IPC_URI_TMPL  "ipc:///tmp/cmb_socket_evout.uid%d"
+#define EVIN_IPC_URI_TMPL   "ipc:///tmp/cmb_socket_evin.uid%d"
+#define SNOOP_IPC_URI_TMPL  "ipc:///tmp/cmb_socket_snoop.uid%d"
+
 static void _cmb_init (conf_t *conf, server_t **srvp);
 static void _cmb_fini (conf_t *conf, server_t *srv);
 static void _cmb_poll (conf_t *conf, server_t *srv);
@@ -58,6 +119,7 @@ static int _request_send (conf_t *conf, server_t *srv,
                            json_object *o, const char *fmt, ...)
                            __attribute__ ((format (printf, 4, 5)));
 
+static void cmbd_log (conf_t *conf, server_t *srv, int lev, const char *fmt, ...);
 
 static void usage (void)
 {
@@ -227,84 +289,41 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-typedef struct {
-    server_t *srv;
-    conf_t *conf;
-} kvs_put_one_arg_t;
-
-static int _kvs_put_one (const char *key, void *item, void *arg)
+static int load_plugin (conf_t *conf, server_t *srv, char *name)
 {
-    kvs_put_one_arg_t *ca = arg;
-    server_t *srv = ca->srv;
-    conf_t *conf = ca->conf;
-    zmsg_t *zmsg = NULL;
-    json_object *no, *o = util_json_object_new_object ();
+    int idlen = strlen (name) + 16;
+    char *id = xzmalloc (idlen);
+    plugin_ctx_t p;
+    int rc = -1;
+    zhash_t *args = NULL;
 
-    if ((no = json_tokener_parse ((char *)item)))
-        json_object_object_add (o, key, no);
-    else
-        util_json_object_add_string (o, (char *)key, (char *)item);
-    if (_request_send (conf, srv, o, "kvs.put") < 0) {
-        goto error;
+    snprintf (id, idlen, "%s-%d", name, conf->rank);
+    if (!strcmp (name, "kvs") && conf->treeroot)
+        args = conf->conf_hash;
+    if ((p = plugin_load (srv->zctx, conf->rank, conf->size, conf->treeroot,
+                          name, id, args))) {
+        route_add (srv->rctx, id, id, NULL, ROUTE_FLAGS_PRIVATE);
+        route_add (srv->rctx, name, id, NULL, ROUTE_FLAGS_PRIVATE);
+        zhash_update (srv->plugins, name, p);
+        zhash_freefn (srv->plugins, name, (zhash_free_fn *)plugin_unload);
+        /* FIXME: routes need to be removed when plugins are unloaded */
+        rc = 0;
     }
-    json_object_put (o);
-    o = NULL;
-    zmsg = NULL;
-
-    if (!(zmsg = zmsg_recv_unrouter (srv->zs_dnreq_out))) {
-        goto error;
-    }
-    if (cmb_msg_decode (zmsg, NULL, &o) < 0 || !o
-            || util_json_object_get_int (o, "errnum", &errno) < 0) {
-        goto eproto;
-    }
-    if (errno != 0)
-        goto error;
-    zmsg_destroy (&zmsg);
-    json_object_put (o);
-    return 0;
-eproto:
-    errno = EPROTO;
-error:
-    if (zmsg)
-        zmsg_destroy (&zmsg);
-    if (o)
-        json_object_put (o);
-    return 1;
+    free (id);
+    return rc;
 }
 
-static int _kvs_commit (server_t *srv, conf_t *conf)
+static void load_plugins (conf_t *conf, server_t *srv)
 {
-    zmsg_t *zmsg = NULL;
-    json_object *o = util_json_object_new_object ();
-    char *commit_name = uuid_generate_str ();
+    char *cpy = xstrdup (conf->plugins);
+    char *name, *saveptr, *a1 = cpy;
 
-    util_json_object_add_string (o, "name", commit_name);
-    if (_request_send (conf, srv, o, "kvs.commit") < 0)
-        goto error;
-    json_object_put (o);
-    o = NULL;
-
-    if (!(zmsg = zmsg_recv_unrouter (srv->zs_dnreq_out)))
-        goto error;
-    if (cmb_msg_decode (zmsg, NULL, &o) < 0 || !o)
-        goto eproto;
-    if (util_json_object_get_int (o, "errnum", &errno) == 0)
-        goto error;
-    zmsg_destroy (&zmsg);
-    json_object_put (o);
-    free (commit_name);
-    return 0;
-eproto:
-    errno = EPROTO;
-error:
-    if (zmsg)
-        zmsg_destroy (&zmsg);
-    if (o)
-        json_object_put (o);
-    if (commit_name)
-        free (commit_name);
-    return 1;
+    while((name = strtok_r (a1, ",", &saveptr))) {
+        if (load_plugin (conf, srv, name) < 0)
+            err ("failed to load plugin %s", name);
+        a1 = NULL;
+    }
+    free (cpy);
 }
 
 static void _cmb_init (conf_t *conf, server_t **srvp)
@@ -392,26 +411,18 @@ static void _cmb_init (conf_t *conf, server_t **srvp)
         _request_send (conf, srv, NULL, "cmb.route.hello");
     }
 
-    plugin_init (conf, srv);
-
-    /* Now that conf plugin is loaded, initialize conf parameters from the
-     * command line before entering poll loop, thus ensuring that
-     * initialization has completed before it answers any queries.
+    /* Load all configured plugins.
      */
-    if (conf->rank == 0) {
-        kvs_put_one_arg_t ca = { .srv = srv, .conf = conf };
-        if (zhash_foreach (conf->conf_hash, _kvs_put_one, &ca) != 0)
-            err_exit ("failed to initialize conf store on rank 0");
-        _kvs_commit (srv, conf);
-    } else if (zhash_size (conf->conf_hash) > 0)
-        err_exit ("set-conf should only be used on rank 0");
+    srv->plugins = zhash_new ();
+    load_plugins (conf, srv);
 
     *srvp = srv;
 }
 
 static void _cmb_fini (conf_t *conf, server_t *srv)
 {
-    plugin_fini (conf, srv);
+
+    zhash_destroy (&srv->plugins);
 
     if (srv->zs_upreq_in)
         zsocket_destroy (srv->zctx, srv->zs_upreq_in);
@@ -432,6 +443,7 @@ static void _cmb_fini (conf_t *conf, server_t *srv)
     if (srv->zs_upev_out)
         zsocket_destroy (srv->zctx, srv->zs_upev_out);
 
+    zhash_destroy (&conf->conf_hash);
     route_fini (srv->rctx);
     zctx_destroy (&srv->zctx);
 

@@ -4,8 +4,6 @@
 #include <json/json.h>
 
 #include "zmsg.h"
-#include "route.h"
-#include "cmbd.h"
 #include "log.h"
 #include "util.h"
 #include "plugin.h"

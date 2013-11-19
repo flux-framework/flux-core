@@ -20,8 +20,6 @@
 #include <json/json.h>
 
 #include "zmsg.h"
-#include "route.h"
-#include "cmbd.h"
 #include "util.h"
 #include "log.h"
 #include "plugin.h"
@@ -376,18 +374,26 @@ invalid:
     }
 }
 
-static void livesrv_init (flux_t h)
+static int livesrv_init (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
+    bool treeroot = flux_treeroot (h);
 
-    if (kvs_watch_dir (h, set_config, ctx, "conf.live") < 0)
-        err_exit ("live: kvs_watch_dir");
-    if (flux_event_subscribe (h, "event.sched.trigger.") < 0)
-        err_exit ("live: flux_event_subscribe");
-    if (flux_treeroot (h)) {
-        if (flux_event_subscribe (h, "event.live.") < 0)
-            err_exit ("live: flux_event_subscribe");
+    if (kvs_watch_dir (h, set_config, ctx, "conf.live") < 0) {
+        err ("live: kvs_watch_dir");
+        return -1;
     }
+    if (flux_event_subscribe (h, "event.sched.trigger.") < 0) {
+        err ("live: flux_event_subscribe");
+        return -1;
+    }
+    if (treeroot) {
+        if (flux_event_subscribe (h, "event.live.") < 0) {
+            err ("live: flux_event_subscribe");
+            return -1;
+        }
+    }
+    return 0;
 }
 
 const struct plugin_ops ops = {

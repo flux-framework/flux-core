@@ -4,8 +4,6 @@
 #include <json/json.h>
 
 #include "zmsg.h"
-#include "route.h"
-#include "cmbd.h"
 #include "log.h"
 #include "util.h"
 #include "plugin.h"
@@ -55,10 +53,13 @@ done:
     zmsg_destroy (zmsg);
 }
 
-static void mechosrv_init (flux_t h)
+static int mechosrv_init (flux_t h, zhash_t *args)
 {
-    if (flux_event_subscribe (h, "mrpc.mecho") < 0)
-        err_exit ("%s: flux_event_subscribe", __FUNCTION__);
+    if (flux_event_subscribe (h, "mrpc.mecho") < 0) {
+        err ("%s: flux_event_subscribe", __FUNCTION__);
+        return -1;
+    }
+    return 0;
 }
 
 static void mechosrv_fini (flux_t h)

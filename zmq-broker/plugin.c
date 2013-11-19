@@ -21,8 +21,6 @@
 
 #include "log.h"
 #include "zmsg.h"
-#include "route.h"
-#include "cmbd.h"
 #include "util.h"
 #include "plugin.h"
 
@@ -40,10 +38,10 @@ typedef struct {
 
 typedef struct ptimeout_struct *ptimeout_t;
 
+
 #define PLUGIN_MAGIC    0xfeefbe01
-typedef struct {
+struct plugin_ctx_struct {
     int magic;
-    conf_t *conf;
     void *zs_upreq; /* for making requests */
     void *zs_dnreq; /* for handling requests (reverse message flow) */
     void *zs_evin;
@@ -53,18 +51,21 @@ typedef struct {
     ptimeout_t timeout;
     pthread_t t;
     const struct plugin_ops *ops;
-    server_t *srv;
     plugin_stats_t stats;
     zloop_t *zloop;
     zlist_t *deferred_responses;
-    void *ctx;
+    void *zctx;
     flux_t h;
     char *name;
     void *dso;
-} plugin_ctx_t;
+    int rank;
+    int size;
+    bool treeroot;
+    zhash_t *args;
+};
 
 struct ptimeout_struct {
-    plugin_ctx_t *p;
+    plugin_ctx_t p;
     unsigned long msec;
 };
 
@@ -78,7 +79,7 @@ static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t);
 
 static int plugin_request_sendmsg (void *impl, zmsg_t **zmsg)
 {
-    plugin_ctx_t *p = impl;
+    plugin_ctx_t p = impl;
     int rc;
 
     assert (p->magic == PLUGIN_MAGIC);
@@ -89,7 +90,7 @@ static int plugin_request_sendmsg (void *impl, zmsg_t **zmsg)
 
 static zmsg_t *plugin_request_recvmsg (void *impl, bool nb)
 {
-    plugin_ctx_t *p = impl;
+    plugin_ctx_t p = impl;
     assert (p->magic == PLUGIN_MAGIC);
     return zmsg_recv (p->zs_dnreq); /* FIXME: ignores nb flag */
 }
@@ -98,7 +99,7 @@ static zmsg_t *plugin_request_recvmsg (void *impl, bool nb)
 static int plugin_response_sendmsg (void *impl, zmsg_t **zmsg)
 {
     int rc;
-    plugin_ctx_t *p = impl;
+    plugin_ctx_t p = impl;
 
     assert (p->magic == PLUGIN_MAGIC);
     rc = zmsg_send (zmsg, p->zs_dnreq);
@@ -108,14 +109,14 @@ static int plugin_response_sendmsg (void *impl, zmsg_t **zmsg)
 
 static zmsg_t *plugin_response_recvmsg (void *impl, bool nb)
 {
-    plugin_ctx_t *p = impl;
+    plugin_ctx_t p = impl;
     assert (p->magic == PLUGIN_MAGIC);
     return zmsg_recv (p->zs_upreq); /* FIXME: ignores nb flag */
 }
 
 static int plugin_response_putmsg (void *impl, zmsg_t **zmsg)
 {
-    plugin_ctx_t *p = impl;
+    plugin_ctx_t p = impl;
     assert (p->magic == PLUGIN_MAGIC);
     if (zlist_append (p->deferred_responses, *zmsg) < 0)
         oom ();
@@ -126,7 +127,7 @@ static int plugin_response_putmsg (void *impl, zmsg_t **zmsg)
 static int plugin_event_sendmsg (void *impl, zmsg_t **zmsg)
 {
     int rc;
-    plugin_ctx_t *p = impl;
+    plugin_ctx_t p = impl;
 
     assert (p->magic == PLUGIN_MAGIC);
     rc = zmsg_send (zmsg, p->zs_evout);
@@ -136,14 +137,14 @@ static int plugin_event_sendmsg (void *impl, zmsg_t **zmsg)
 
 static zmsg_t *plugin_event_recvmsg (void *impl, bool nb)
 {
-    plugin_ctx_t *p = impl;
+    plugin_ctx_t p = impl;
     assert (p->magic == PLUGIN_MAGIC);
     return zmsg_recv (p->zs_evin); /* FIXME: ignores nb flag */
 }
 
 static int plugin_event_subscribe (void *impl, const char *topic)
 {
-    plugin_ctx_t *p = impl;
+    plugin_ctx_t p = impl;
     assert (p->magic == PLUGIN_MAGIC);
     zsocket_set_subscribe (p->zs_evin, topic ? (char *)topic : "");
     return 0;
@@ -151,7 +152,7 @@ static int plugin_event_subscribe (void *impl, const char *topic)
 
 static int plugin_event_unsubscribe (void *impl, const char *topic)
 {
-    plugin_ctx_t *p = impl;
+    plugin_ctx_t p = impl;
     assert (p->magic == PLUGIN_MAGIC);
     zsocket_set_unsubscribe (p->zs_evin, topic ? (char *)topic : "");
     return 0;
@@ -159,14 +160,14 @@ static int plugin_event_unsubscribe (void *impl, const char *topic)
 
 static zmsg_t *plugin_snoop_recvmsg (void *impl, bool nb)
 {
-    plugin_ctx_t *p = impl;
+    plugin_ctx_t p = impl;
     assert (p->magic == PLUGIN_MAGIC);
     return zmsg_recv (p->zs_snoop); /* FIXME: ignores nb flag */
 }
 
 static int plugin_snoop_subscribe (void *impl, const char *topic)
 {
-    plugin_ctx_t *p = impl;
+    plugin_ctx_t p = impl;
     assert (p->magic == PLUGIN_MAGIC);
     zsocket_set_subscribe (p->zs_snoop, topic ? (char *)topic : "");
     return 0;
@@ -174,7 +175,7 @@ static int plugin_snoop_subscribe (void *impl, const char *topic)
 
 static int plugin_snoop_unsubscribe (void *impl, const char *topic)
 {
-    plugin_ctx_t *p = impl;
+    plugin_ctx_t p = impl;
     assert (p->magic == PLUGIN_MAGIC);
     zsocket_set_unsubscribe (p->zs_snoop, topic ? (char *)topic : "");
     return 0;
@@ -182,23 +183,23 @@ static int plugin_snoop_unsubscribe (void *impl, const char *topic)
 
 static int plugin_rank (void *impl)
 {
-    plugin_ctx_t *p = impl;
+    plugin_ctx_t p = impl;
     assert (p->magic == PLUGIN_MAGIC);
-    return p->conf->rank;
+    return p->rank;
 }
 
 static int plugin_size (void *impl)
 {
-    plugin_ctx_t *p = impl;
+    plugin_ctx_t p = impl;
     assert (p->magic == PLUGIN_MAGIC);
-    return p->conf->size;
+    return p->size;
 }
 
 static bool plugin_treeroot (void *impl)
 {
-    plugin_ctx_t *p = impl;
+    plugin_ctx_t p = impl;
     assert (p->magic == PLUGIN_MAGIC);
-    return (p->conf->treeroot);
+    return (p->treeroot);
 }
 
 /* N.B. zloop_timer() cannot be called repeatedly with the same
@@ -208,13 +209,13 @@ static bool plugin_treeroot (void *impl)
  * bottom of the zloop poll loop, so we can't call zloop_timer_end() followed
  * immediately by zloop_timer() with the same arg value or the timer is
  * removed before it can go off.  Workaround: delete and readd but make
- * sure the arg value is different (malloc-before-free plugin_ctx_t *
+ * sure the arg value is different (malloc-before-free plugin_ctx_t
  * wrapper struct shenanegens below).
  */
 static int plugin_timeout_set (void *impl, unsigned long msec)
 {
     ptimeout_t t;
-    plugin_ctx_t *p = impl;
+    plugin_ctx_t p = impl;
 
     assert (p->magic == PLUGIN_MAGIC);
     if (p->timeout)
@@ -233,7 +234,7 @@ static int plugin_timeout_set (void *impl, unsigned long msec)
 
 static int plugin_timeout_clear (void *impl)
 {
-    plugin_ctx_t *p = impl;
+    plugin_ctx_t p = impl;
 
     assert (p->magic == PLUGIN_MAGIC);
     if (p->timeout) {
@@ -246,30 +247,30 @@ static int plugin_timeout_clear (void *impl)
 
 static bool plugin_timeout_isset (void *impl)
 {
-    plugin_ctx_t *p = impl;
+    plugin_ctx_t p = impl;
     assert (p->magic == PLUGIN_MAGIC);
     return p->timeout ? true : false;
 }
 
 static zloop_t *plugin_get_zloop (void *impl)
 {
-    plugin_ctx_t *p = impl;
+    plugin_ctx_t p = impl;
     assert (p->magic == PLUGIN_MAGIC);
     return p->zloop;
 }
 
 static zctx_t *plugin_get_zctx (void *impl)
 {
-    plugin_ctx_t *p = impl;
+    plugin_ctx_t p = impl;
     assert (p->magic == PLUGIN_MAGIC);
-    return p->srv->zctx;
+    return p->zctx;
 }
 
 /**
  ** end of handle implementation
  **/
 
-static void plugin_ping_respond (plugin_ctx_t *p, zmsg_t **zmsg)
+static void plugin_ping_respond (plugin_ctx_t p, zmsg_t **zmsg)
 {
     json_object *o;
     char *s = NULL;
@@ -293,7 +294,7 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void plugin_stats_respond (plugin_ctx_t *p, zmsg_t **zmsg)
+static void plugin_stats_respond (plugin_ctx_t p, zmsg_t **zmsg)
 {
     json_object *o = NULL;
 
@@ -319,7 +320,7 @@ done:
         zmsg_destroy (zmsg);    
 }
 
-static void plugin_handle_response (plugin_ctx_t *p, zmsg_t *zmsg)
+static void plugin_handle_response (plugin_ctx_t p, zmsg_t *zmsg)
 {
     char *tag;
 
@@ -351,7 +352,7 @@ done:
  * Call this after every plugin callback that may have invoked one of the
  * synchronous request-reply functions.
  */
-static void plugin_handle_deferred_responses (plugin_ctx_t *p)
+static void plugin_handle_deferred_responses (plugin_ctx_t p)
 {
     zmsg_t *zmsg;
 
@@ -361,7 +362,7 @@ static void plugin_handle_deferred_responses (plugin_ctx_t *p)
 
 /* Handle a response.
  */
-static int upreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
+static int upreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 {
     zmsg_t *zmsg = zmsg_recv (p->zs_upreq);
 
@@ -374,7 +375,7 @@ static int upreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
 
 /* Handle a request.
  */
-static int dnreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
+static int dnreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 {
     zmsg_t *zmsg = zmsg_recv (p->zs_dnreq);
     char *tag, *method;
@@ -416,7 +417,7 @@ done:
 
     return (0);
 }
-static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
+static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 {
     zmsg_t *zmsg = zmsg_recv (p->zs_evin);
 
@@ -432,7 +433,7 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
 
     return (0);
 }
-static int snoop_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
+static int snoop_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 {
     zmsg_t *zmsg =  zmsg_recv (p->zs_snoop);
 
@@ -450,7 +451,7 @@ static int snoop_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t *p)
 
 static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t)
 {
-    plugin_ctx_t *p = t->p;
+    plugin_ctx_t p = t->p;
 
     if (p->ops->timeout)
         p->ops->timeout (p->h);
@@ -460,7 +461,7 @@ static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t)
     return (0);
 }
 
-static zloop_t * plugin_zloop_create (plugin_ctx_t *p)
+static zloop_t * plugin_zloop_create (plugin_ctx_t p)
 {
     int rc;
     zloop_t *zl;
@@ -487,7 +488,7 @@ static zloop_t * plugin_zloop_create (plugin_ctx_t *p)
 
 static void *plugin_thread (void *arg)
 {
-    plugin_ctx_t *p = arg;
+    plugin_ctx_t p = arg;
     sigset_t signal_set;
     int errnum;
 
@@ -501,35 +502,37 @@ static void *plugin_thread (void *arg)
     if (p->zloop == NULL)
         err_exit ("%s: plugin_zloop_create", p->id);
 
-    if (p->ops->init)
-        p->ops->init (p->h);
+    if (p->ops->init) {
+        if (p->ops->init (p->h, p->args) < 0) {
+            err ("%s: init failed", p->name);
+            goto done;
+        }
+    }
+
     zloop_start (p->zloop);
     if (p->ops->fini)
         p->ops->fini (p->h);
-
+done:
     zloop_destroy (&p->zloop);
 
     return NULL;
 }
 
-static void plugin_destroy (void *arg)
+void plugin_unload (plugin_ctx_t p)
 {
-    plugin_ctx_t *p = arg;
     int errnum;
     zmsg_t *zmsg;
-
-    route_del (p->srv->rctx, p->name, p->name);
 
     /* FIXME: no mechanism to tell thread to exit yet */
     errnum = pthread_join (p->t, NULL);
     if (errnum)
         errn_exit (errnum, "pthread_join");
 
-    zsocket_destroy (p->srv->zctx, p->zs_snoop);
-    zsocket_destroy (p->srv->zctx, p->zs_evout);
-    zsocket_destroy (p->srv->zctx, p->zs_evin);
-    zsocket_destroy (p->srv->zctx, p->zs_dnreq);
-    zsocket_destroy (p->srv->zctx, p->zs_upreq);
+    zsocket_destroy (p->zctx, p->zs_snoop);
+    zsocket_destroy (p->zctx, p->zs_evout);
+    zsocket_destroy (p->zctx, p->zs_evin);
+    zsocket_destroy (p->zctx, p->zs_dnreq);
+    zsocket_destroy (p->zctx, p->zs_upreq);
 
     if (p->timeout)
         free (p->timeout);
@@ -538,16 +541,17 @@ static void plugin_destroy (void *arg)
         zmsg_destroy (&zmsg);
     zlist_destroy (&p->deferred_responses);
 
+    dlclose (p->dso);
     free (p->name);
     free (p->id);
 
     free (p);
 }
 
-static int plugin_create (char *name, server_t *srv, conf_t *conf)
+plugin_ctx_t plugin_load (zctx_t *zctx, int rank, int size, bool treeroot,
+                          char *name, char *id, zhash_t *args)
 {
-    zctx_t *zctx = srv->zctx;
-    plugin_ctx_t *p;
+    plugin_ctx_t p;
     flux_t h;
     int errnum;
     const struct plugin_ops *ops;
@@ -558,64 +562,45 @@ static int plugin_create (char *name, server_t *srv, conf_t *conf)
     snprintf (path, sizeof (path), "./%ssrv.so", name);
     if (!(dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL))) {
         err ("%s", dlerror ());
-        return -1;
+        return NULL;
     }
     dlerror ();
     ops = (const struct plugin_ops *)dlsym (dso, "ops");
     if ((errstr = dlerror ()) != NULL) {
         err ("%s", errstr);
         dlclose (dso);
-        return -1;
+        return NULL;
     }
 
-    p = xzmalloc (sizeof (plugin_ctx_t));
+    p = xzmalloc (sizeof (*p));
     p->magic = PLUGIN_MAGIC;
-    p->conf = conf;
-    p->srv = srv;
+    p->zctx = zctx;
+    p->rank = rank;
+    p->size = size;
+    p->treeroot = treeroot;
+    p->args = args;
     p->ops = ops;
     p->dso = dso;
     p->name = xstrdup (name);
-
+    p->id = xstrdup (id);
     if (!(p->deferred_responses = zlist_new ()))
         oom ();
-
-    p->id = xzmalloc (strlen (name) + 16);
-    snprintf (p->id, strlen (name) + 16, "%s-%d", name, conf->rank);
 
     h = flux_handle_create (p, &plugin_handle_ops, 0);
     p->h = h;
 
     /* connect sockets in the parent, then use them in the thread */
-    zconnect (zctx, &p->zs_upreq, ZMQ_DEALER, UPREQ_URI, -1, p->id);
-    zconnect (zctx, &p->zs_dnreq, ZMQ_DEALER, DNREQ_URI, -1, p->id);
+    zconnect (zctx, &p->zs_upreq, ZMQ_DEALER, UPREQ_URI, -1, id);
+    zconnect (zctx, &p->zs_dnreq, ZMQ_DEALER, DNREQ_URI, -1, id);
     zconnect (zctx, &p->zs_evin,  ZMQ_SUB, DNEV_OUT_URI, 0, NULL);
     zconnect (zctx, &p->zs_evout, ZMQ_PUB, DNEV_IN_URI, -1, NULL);
     zconnect (zctx, &p->zs_snoop, ZMQ_SUB, SNOOP_URI, -1, NULL);
-
-    route_add (p->srv->rctx, p->id, p->id, NULL, ROUTE_FLAGS_PRIVATE);
-    route_add (p->srv->rctx, name, p->id, NULL, ROUTE_FLAGS_PRIVATE);
 
     errnum = pthread_create (&p->t, NULL, plugin_thread, p);
     if (errnum)
         errn_exit (errnum, "pthread_create");
 
-    zhash_insert (srv->plugins, name, p);
-    zhash_freefn (srv->plugins, name, plugin_destroy);
-
-    return 0;
-}
-
-void plugin_init (conf_t *conf, server_t *srv)
-{
-    srv->plugins = zhash_new ();
-
-    if (mapstr (conf->plugins, (mapstrfun_t)plugin_create, srv, conf) < 0)
-        exit (1);
-}
-
-void plugin_fini (conf_t *conf, server_t *srv)
-{
-    zhash_destroy (&srv->plugins);
+    return p;
 }
 
 static const struct flux_handle_ops plugin_handle_ops = {

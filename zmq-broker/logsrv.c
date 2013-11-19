@@ -20,8 +20,6 @@
 #include <json/json.h>
 
 #include "zmsg.h"
-#include "route.h"
-#include "cmbd.h"
 #include "util.h"
 #include "log.h"
 #include "plugin.h"
@@ -535,14 +533,16 @@ invalid:
     }
 }
 
-static void logsrv_init (flux_t h)
+static int logsrv_init (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
 
-    if (kvs_watch_dir (h, set_config, ctx, "conf.log") < 0)
-        err_exit ("log: %s", "conf.log");
-
+    if (kvs_watch_dir (h, set_config, ctx, "conf.log") < 0) {
+        err ("log: %s", "conf.log");
+        return -1;
+    }
     flux_event_subscribe (h, "event.fault.");
+    return 0;
 }
 
 static void logsrv_fini (flux_t h)

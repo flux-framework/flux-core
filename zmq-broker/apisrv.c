@@ -21,8 +21,6 @@
 #include <json/json.h>
 
 #include "zmsg.h"
-#include "route.h"
-#include "cmbd.h"
 #include "plugin.h"
 #include "util.h"
 #include "log.h"
@@ -390,7 +388,7 @@ static int listener_init (ctx_t *ctx)
     return fd;
 }
 
-static void apisrv_init (flux_t h)
+static int apisrv_init (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
     zloop_t *zloop = flux_get_zloop (h);
@@ -398,6 +396,8 @@ static void apisrv_init (flux_t h)
 
     zp.fd = ctx->listen_fd = listener_init (ctx);
     zloop_poller (zloop, &zp, (zloop_fn *) listener_cb, (void *)ctx);
+
+    return 0;
 }
 
 static void apisrv_fini (flux_t h)
