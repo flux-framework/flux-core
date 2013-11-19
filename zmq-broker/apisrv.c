@@ -194,17 +194,6 @@ static int client_read (ctx_t *ctx, client_t *c)
             err_exit ("flux_event_send");
         if (o)
             json_object_put (o);
-    } else if (cmb_msg_match (zmsg, "api.session.info.query")) {
-        json_object *o = util_json_object_new_object ();
-        zframe_t *zf = zmsg_pop (zmsg);
-        assert (zf != NULL);
-        assert (zframe_size (zf) == 0);
-        zframe_destroy (&zf);
-        util_json_object_add_int (o, "rank", flux_rank (ctx->h));
-        util_json_object_add_int (o, "size", flux_size (ctx->h));
-        if (cmb_msg_replace_json (zmsg, o) == 0)
-            (void)zmsg_send_fd (c->fd, &zmsg);
-        json_object_put (o);
     } else {
         /* insert disconnect notifier before forwarding request */
         if (c->disconnect_notify) {

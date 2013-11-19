@@ -24,10 +24,6 @@ struct flux_handle_ops {
     zloop_t *   (*get_zloop)(void *impl);
     zctx_t *    (*get_zctx)(void *impl);
 
-    int         (*rank)(void *impl);
-    int         (*size)(void *impl);
-    bool        (*treeroot)(void *impl);
-
     void        (*impl_destroy)(void *impl);
 };
 

@@ -222,33 +222,6 @@ int flux_snoop_unsubscribe (flux_t h, const char *topic)
     return h->ops->snoop_unsubscribe (h->impl, topic);
 }
 
-int flux_rank (flux_t h)
-{
-    if (!h->ops->rank) {
-        errno = ENOSYS;
-        return -1;
-    }
-
-    return h->ops->rank (h->impl);
-}
-
-int flux_size (flux_t h)
-{
-    if (!h->ops->size) {
-        errno = ENOSYS;
-        return -1;
-    }
-
-    return h->ops->size (h->impl);
-}
-
-bool flux_treeroot (flux_t h)
-{
-    if (!h->ops->treeroot)
-        return false;
-    return h->ops->treeroot (h->impl);
-}
-
 int flux_timeout_set (flux_t h, unsigned long msec)
 {
     if (!h->ops->timeout_set) {

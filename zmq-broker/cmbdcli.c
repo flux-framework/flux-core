@@ -55,6 +55,27 @@ done:
     return ret;
 }
 
+int flux_rank (flux_t h)
+{
+    int rank = -1;
+    flux_info (h, &rank, NULL, NULL);
+    return rank;
+}
+
+int flux_size (flux_t h)
+{
+    int size = -1;
+    flux_info (h, NULL, &size, NULL);
+    return size;
+}
+
+bool flux_treeroot (flux_t h)
+{
+    bool treeroot = false;
+    flux_info (h, NULL, NULL, &treeroot);
+    return treeroot;
+}
+
 int flux_route_add (flux_t h, const char *dst, const char *gw)
 {
     json_object *request = util_json_object_new_object ();

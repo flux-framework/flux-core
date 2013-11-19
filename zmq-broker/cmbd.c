@@ -300,8 +300,7 @@ static int load_plugin (conf_t *conf, server_t *srv, char *name)
     snprintf (id, idlen, "%s-%d", name, conf->rank);
     if (!strcmp (name, "kvs") && conf->treeroot)
         args = conf->conf_hash;
-    if ((p = plugin_load (srv->zctx, conf->rank, conf->size, conf->treeroot,
-                          name, id, args))) {
+    if ((p = plugin_load (srv->zctx, name, id, args))) {
         route_add (srv->rctx, id, id, NULL, ROUTE_FLAGS_PRIVATE);
         route_add (srv->rctx, name, id, NULL, ROUTE_FLAGS_PRIVATE);
         zhash_update (srv->plugins, name, p);

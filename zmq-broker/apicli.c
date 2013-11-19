@@ -139,54 +139,6 @@ static int cmb_event_sendmsg (void *impl, zmsg_t **zmsg)
     return rc;
 }
 
-static int cmb_rank (void *impl)
-{
-    cmb_t *c = impl;
-    assert (c->magic == CMB_CTX_MAGIC);
-    return c->rank;
-}
-
-static int cmb_size (void *impl)
-{
-    cmb_t *c = impl;
-    assert (c->magic == CMB_CTX_MAGIC);
-    return c->size;
-}
-
-static bool cmb_treeroot (void *impl)
-{
-    cmb_t *c = impl;
-    assert (c->magic == CMB_CTX_MAGIC);
-    return (c->rank == 0);
-}
-
-static int cmb_session_info_query (flux_t h, int *rankp, int *sizep)
-{
-    json_object *request = util_json_object_new_object ();
-    json_object *response = NULL;
-    int errnum;
-    int rc = -1;
-
-    if (!(response = flux_rpc (h, request, "api.session.info.query")))
-        goto done;
-    if (util_json_object_get_int (response, "errnum", &errnum) == 0) {
-        errno = errnum;
-        goto done;
-    }
-    if (util_json_object_get_int (response, "rank", rankp) < 0
-            || util_json_object_get_int (response, "size", sizep) < 0) {
-        errno = EPROTO;
-        goto done;
-    }
-    rc = 0;
-done:
-    if (request)
-        json_object_put (request);
-    if (response)
-        json_object_put (response);
-    return rc;
-}
-
 static void cmb_fini (void *impl)
 {
     cmb_t *c = impl;
@@ -198,7 +150,6 @@ static void cmb_fini (void *impl)
 
 flux_t cmb_init_full (const char *path, int flags)
 {
-    flux_t h = NULL;
     cmb_t *c = NULL;
     struct sockaddr_un addr;
 
@@ -216,14 +167,9 @@ flux_t cmb_init_full (const char *path, int flags)
     if (connect (c->fd, (struct sockaddr *)&addr,
                          sizeof (struct sockaddr_un)) < 0)
         goto error;
-    h = flux_handle_create (c, &cmb_ops, flags);
-    if (cmb_session_info_query (h, &c->rank, &c->size) < 0)
-        goto error;
-    return h;
+    return flux_handle_create (c, &cmb_ops, flags);
 error:
-    if (h)
-        flux_handle_destroy (&h);
-    else if (c)
+    if (c)
         cmb_fini (c);
     return NULL;
 }
@@ -256,9 +202,6 @@ static const struct flux_handle_ops cmb_ops = {
     .snoop_recvmsg = cmb_response_recvmsg, /* FIXME */
     .snoop_subscribe = cmb_snoop_subscribe,
     .snoop_unsubscribe = cmb_snoop_unsubscribe,
-    .rank = cmb_rank,
-    .size = cmb_size,
-    .treeroot = cmb_treeroot,
     .impl_destroy = cmb_fini,
 };
 

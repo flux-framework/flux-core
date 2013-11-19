@@ -58,9 +58,6 @@ struct plugin_ctx_struct {
     flux_t h;
     char *name;
     void *dso;
-    int rank;
-    int size;
-    bool treeroot;
     zhash_t *args;
 };
 
@@ -179,27 +176,6 @@ static int plugin_snoop_unsubscribe (void *impl, const char *topic)
     assert (p->magic == PLUGIN_MAGIC);
     zsocket_set_unsubscribe (p->zs_snoop, topic ? (char *)topic : "");
     return 0;
-}
-
-static int plugin_rank (void *impl)
-{
-    plugin_ctx_t p = impl;
-    assert (p->magic == PLUGIN_MAGIC);
-    return p->rank;
-}
-
-static int plugin_size (void *impl)
-{
-    plugin_ctx_t p = impl;
-    assert (p->magic == PLUGIN_MAGIC);
-    return p->size;
-}
-
-static bool plugin_treeroot (void *impl)
-{
-    plugin_ctx_t p = impl;
-    assert (p->magic == PLUGIN_MAGIC);
-    return (p->treeroot);
 }
 
 /* N.B. zloop_timer() cannot be called repeatedly with the same
@@ -548,8 +524,7 @@ void plugin_unload (plugin_ctx_t p)
     free (p);
 }
 
-plugin_ctx_t plugin_load (zctx_t *zctx, int rank, int size, bool treeroot,
-                          char *name, char *id, zhash_t *args)
+plugin_ctx_t plugin_load (zctx_t *zctx, char *name, char *id, zhash_t *args)
 {
     plugin_ctx_t p;
     flux_t h;
@@ -575,9 +550,6 @@ plugin_ctx_t plugin_load (zctx_t *zctx, int rank, int size, bool treeroot,
     p = xzmalloc (sizeof (*p));
     p->magic = PLUGIN_MAGIC;
     p->zctx = zctx;
-    p->rank = rank;
-    p->size = size;
-    p->treeroot = treeroot;
     p->args = args;
     p->ops = ops;
     p->dso = dso;
@@ -616,9 +588,6 @@ static const struct flux_handle_ops plugin_handle_ops = {
     .snoop_recvmsg = plugin_snoop_recvmsg,
     .snoop_subscribe = plugin_snoop_subscribe,
     .snoop_unsubscribe = plugin_snoop_unsubscribe,
-    .rank = plugin_rank,
-    .size = plugin_size,
-    .treeroot = plugin_treeroot,
     .timeout_set = plugin_timeout_set,
     .timeout_clear = plugin_timeout_clear,
     .timeout_isset = plugin_timeout_isset,
