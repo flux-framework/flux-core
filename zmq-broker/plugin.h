@@ -28,13 +28,15 @@ struct plugin_ops {
 typedef struct plugin_ctx_struct *plugin_ctx_t;
 
 /* Load the specified plugin by 'name' and return a handle for it,
- * or NULL on failure.  We dlopen() the file "./<name>srv.so".
+ * or NULL on failure.  We dlopen() the file "<name>srv.so".
+ * 'searchpath' is a colon-separated list of directories to search.
  * 'id' is a session-wide unique socket id for this instance of the plugin,
  * used to form the return address when the plugin a request on its dealer
  * socket.  'args' is a hash of key-value pairs that may be NULL, or may
  * be used to pass arguments to the plugins's ops->init() function.
  */
-plugin_ctx_t plugin_load (zctx_t *zctx, char *name, char *id, zhash_t *args);
+plugin_ctx_t plugin_load (zctx_t *zctx, const char *searchpath,
+                          char *name, char *id, zhash_t *args);
 
 /* Unload a plugin by handle.
  * (FIXME: This is not used yet and is a work in progress)

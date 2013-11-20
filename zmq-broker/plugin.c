@@ -534,19 +534,37 @@ void plugin_unload (plugin_ctx_t p)
     free (p);
 }
 
-plugin_ctx_t plugin_load (zctx_t *zctx, char *name, char *id, zhash_t *args)
+static void *plugin_dlopen (const char *searchpath, const char *name)
+{
+    char *cpy = xstrdup (searchpath);
+    char *path, *dir, *saveptr, *a1 = cpy;
+    void *dso = NULL;
+
+    while ((dir = strtok_r (a1, ":", &saveptr))) {
+        if (asprintf (&path, "%s/%ssrv.so", dir, name) < 0)
+            oom ();
+        dso = dlopen (path, RTLD_NOW | RTLD_LOCAL);
+        free (path);
+        if (dso)
+            break;
+        a1 = NULL;
+    }
+    free (cpy);
+    return dso;
+}
+
+plugin_ctx_t plugin_load (zctx_t *zctx, const char *searchpath,
+                          char *name, char *id, zhash_t *args)
 {
     plugin_ctx_t p;
     flux_t h;
     int errnum;
     const struct plugin_ops *ops;
-    char path[PATH_MAX + 1];
     void *dso;
     char *errstr;
-
-    snprintf (path, sizeof (path), "./%ssrv.so", name);
-    if (!(dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL))) {
-        err ("%s", dlerror ());
+        
+    if (!(dso = plugin_dlopen (searchpath, name))) {
+        msg ("plugin `%s' not found in search path (%s)", name, searchpath);
         return NULL;
     }
     dlerror ();

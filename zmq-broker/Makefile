@@ -15,7 +15,8 @@ endif
 
 CFLAGS = -Werror -Wall -g -fPIC $(EXTRA_CFLAGS) \
 	-DWITH_LSD_NOMEM_ERROR_FUNC -DWITH_LSD_FATAL_ERROR_FUNC \
-	-DWANT_RECKLESS_HOSTRANGE_EXPANSION
+	-DWANT_RECKLESS_HOSTRANGE_EXPANSION \
+	-DPLUGIN_PATH=\"$(TOP)/plugins\"
 LDFLAGS = -Wl,-rpath,$(LIBDIR)
 
 export CFLAGS LDFLAGS
@@ -34,19 +35,23 @@ LIBCMB_OBJS = apicli.o $(COMMON_OBJS)
 LIBPMI = $(LIBDIR)/libpmi.so.0
 LIBCMB = $(LIBDIR)/libcmb.so.0
 
-PLUGINS = apisrv.so syncsrv.so kvssrv.so barriersrv.so livesrv.so \
-	mechosrv.so logsrv.so echosrv.so \
-	jobsrv.so resrcsrv.so rexecsrv.so schedsrv.so
+PLUGINS = plugins/apisrv.so plugins/syncsrv.so plugins/kvssrv.so \
+	plugins/barriersrv.so plugins/livesrv.so plugins/mechosrv.so \
+	plugins/logsrv.so plugins/echosrv.so plugins/jobsrv.so \
+	plugins/resrcsrv.so plugins/rexecsrv.so plugins/schedsrv.so
 
 BUILD = $(LIBCMB) $(LIBPMI) cmbutil mpi_hello echo cmbd $(PLUGINS)
 
 all: subdirs $(BUILD) subdirs_post
 
-%.so: %.c
+plugins/%.so: %.c
+	mkdir -p plugins
 	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $<
-rexecsrv.so: wreck/wrexecsrv.c
+plugins/rexecsrv.so: wreck/wrexecsrv.c
+	mkdir -p plugins
 	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $<
-%.so: wreck/%.c
+plugins/%.so: wreck/%.c
+	mkdir -p plugins
 	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $<
 
 subdirs: $(LIBUTIL) $(LIBCMB)
@@ -86,6 +91,7 @@ echo: echo.o
 clean:
 	rm -f *.o *.so $(BUILD)
 	rm -rf $(LIBDIR)/
+	rm -rf plugins/
 	@make -C util clean
 	@for f in $(SUBDIRS) $(SUBDIRS_POST); do make -C $$f clean; done
 

@@ -26,28 +26,6 @@
 #include "flux.h"
 #include "cmb_socket.h"
 
-#define OPTIONS "t:e:E:O:vs:R:S:p:P:L:T:A:d:D:H:"
-static const struct option longopts[] = {
-    {"up-event-uri",   required_argument,  0, 'e'},
-    {"up-event-out-uri",required_argument, 0, 'O'},
-    {"up-event-in-uri",required_argument,  0, 'E'},
-    {"dn-event-in-uri",required_argument,  0, 'd'},
-    {"dn-event-out-uri",required_argument,  0, 'D'},
-    {"up-req-in-uri", required_argument,  0, 't'},
-    {"dn-req-out-uri",required_argument,  0, 'T'},
-    {"verbose",           no_argument,  0, 'v'},
-    {"set-conf",    required_argument,  0, 's'},
-    {"rank",        required_argument,  0, 'R'},
-    {"size",        required_argument,  0, 'S'},
-    {"parent",      required_argument,  0, 'p'},
-    {"plugins",     required_argument,  0, 'P'},
-    {"logdest",     required_argument,  0, 'L'},
-    {"api-socket",  required_argument,  0, 'A'},
-    {"set-conf-hostlist",required_argument,  0, 'H'},
-    {0, 0, 0, 0},
-};
-
-
 #define MAX_PARENTS 2
 struct parent_struct {
     char *upreq_uri;
@@ -96,6 +74,7 @@ typedef struct {
     int size;                   /* session size */
     /* Plugins
      */
+    char *plugin_path;          /* colon-separated list of directories */
     char *plugins;              /* comma-separated list of plugins to load */
     zhash_t *loaded_plugins;    /* hash of plugin handles by plugin name */
     zhash_t *kvs_arg;
@@ -123,6 +102,27 @@ static int request_send (ctx_t *ctx, json_object *o, const char *fmt, ...);
 
 static void cmbd_log (ctx_t *ctx, int lev, const char *fmt, ...);
 
+#define OPTIONS "t:e:E:O:vs:R:S:p:P:L:T:A:d:D:H:"
+static const struct option longopts[] = {
+    {"up-event-uri",   required_argument,  0, 'e'},
+    {"up-event-out-uri",required_argument, 0, 'O'},
+    {"up-event-in-uri",required_argument,  0, 'E'},
+    {"dn-event-in-uri",required_argument,  0, 'd'},
+    {"dn-event-out-uri",required_argument,  0, 'D'},
+    {"up-req-in-uri", required_argument,  0, 't'},
+    {"dn-req-out-uri",required_argument,  0, 'T'},
+    {"verbose",           no_argument,  0, 'v'},
+    {"set-conf",    required_argument,  0, 's'},
+    {"rank",        required_argument,  0, 'R'},
+    {"size",        required_argument,  0, 'S'},
+    {"parent",      required_argument,  0, 'p'},
+    {"plugins",     required_argument,  0, 'P'},
+    {"logdest",     required_argument,  0, 'L'},
+    {"api-socket",  required_argument,  0, 'A'},
+    {"set-conf-hostlist",required_argument,  0, 'H'},
+    {0, 0, 0, 0},
+};
+
 static void usage (void)
 {
     fprintf (stderr, 
@@ -134,16 +134,17 @@ static void usage (void)
 " -D,--dn-event-out-uri URI  Set dnev_out URI\n"
 " -t,--up-req-in-uri URI     Set URI for upreq_in, e.g. tcp://*:5556\n"
 " -T,--dn-req-out-uri URI    Set URI for dnreq_out, e.g. tcp://*:5557\n"
-" -p,--parent N,URI,URI2 Set parent rank,URIs, e.g.\n"
-"                        0,tcp://192.168.1.136:5556,tcp://192.168.1.136:557\n"
-" -v,--verbose           Show bus traffic\n"
-" -s,--set-conf key=val  Set plugin configuration key=val\n"
+" -p,--parent N,URI,URI2     Set parent rank,URIs, e.g.\n"
+"                            0,tcp://192.168.1.136:5556,tcp://192.168.1.136:557\n"
+" -v,--verbose               Show bus traffic\n"
+" -s,--set-conf key=val      Set plugin configuration key=val\n"
 " -H,--set-conf-hostlist HOSTLIST Set session hostlist\n"
-" -R,--rank N            Set cmbd address\n"
-" -S,--size N            Set number of ranks in session\n"
-" -P,--plugins p1,p2,... Load the named plugins (comma separated)\n"
-" -L,--logdest DEST      Log to DEST, can  be syslog, stderr, or file\n"
-" -A,--api-socket PATH   Listen for API connections on PATH\n"
+" -R,--rank N                Set cmbd address\n"
+" -S,--size N                Set number of ranks in session\n"
+" -P,--plugins p1,p2,...     Load the named plugins (comma separated)\n"
+" -X,--plugin-path PATH      Set plugin search path (colon separated)\n"
+" -L,--logdest DEST          Log to DEST, can  be syslog, stderr, or file\n"
+" -A,--api-socket PATH       Listen for API connections on PATH\n"
             );
     exit (1);
 }
@@ -234,6 +235,9 @@ int main (int argc, char *argv[])
             case 'P':   /* --plugins p1,p2,... */
                 ctx.plugins = optarg;
                 break;
+            case 'X':   /* --plugin-path PATH */
+                ctx.plugin_path = optarg;
+                break;
             case 'L':   /* --logdest DEST */
                 log_set_dest (optarg);
                 break;
@@ -251,6 +255,8 @@ int main (int argc, char *argv[])
         usage ();
     if (!ctx.plugins)
         msg_exit ("at least one plugin must be loaded");
+    if (!ctx.plugin_path)
+        ctx.plugin_path = PLUGIN_PATH; /* compiled in default */
 
     /* FIXME: hardwire rank 0 as root of the reduction tree.
      * Eventually we must allow for this role to migrate to other nodes
@@ -301,7 +307,7 @@ static int load_plugin (ctx_t *ctx, char *name)
     else if (!strcmp (name, "api"))
         args = ctx->api_arg;
 
-    if ((p = plugin_load (ctx->zctx, name, id, args))) {
+    if ((p = plugin_load (ctx->zctx, ctx->plugin_path, name, id, args))) {
         if (zhash_insert (ctx->loaded_plugins, name, p) < 0) {
             plugin_unload (p);
             goto done;
