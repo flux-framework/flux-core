@@ -41,6 +41,11 @@ plugin_ctx_t plugin_load (zctx_t *zctx, char *name, char *id, zhash_t *args);
  */
 void plugin_unload (plugin_ctx_t p);
 
+/* Accessors for name and id, so routes cna be removed during unloading.
+ */
+const char *plugin_name (plugin_ctx_t p);
+const char *plugin_id (plugin_ctx_t p);
+
 #endif /* !PLUGIN_H */
 
 /*

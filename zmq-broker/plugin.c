@@ -494,6 +494,16 @@ done:
     return NULL;
 }
 
+const char *plugin_name (plugin_ctx_t p)
+{
+    return p->name;
+}
+
+const char *plugin_id (plugin_ctx_t p)
+{
+    return p->id;
+}
+
 void plugin_unload (plugin_ctx_t p)
 {
     int errnum;
