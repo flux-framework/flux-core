@@ -55,42 +55,56 @@ struct parent_struct {
     int rank;
 };
 
-struct config_struct {
-    zhash_t *conf_hash;
-    char *upreq_in_uri;
-    char *dnreq_out_uri;
-    char *upev_in_uri;
-    char *upev_out_uri;
-    char *dnev_in_uri;
-    char *dnev_out_uri;
-    bool verbose;
-    char rankstr[16];
-    bool treeroot;
-    int rank;
-    int size;
-    char *plugins;
-    struct parent_struct parent[MAX_PARENTS];
-    int parent_len;
-    char *api_sockpath;
-};
-
 typedef struct {
-    zctx_t *zctx;
-    void *zs_upreq_out;
-    void *zs_dnreq_in;
-    void *zs_upreq_in;
-    void *zs_dnreq_out;
+    /* 0MQ
+     */
+    zctx_t *zctx;               /* zeromq context (MT-safe) */
+
+    void *zs_upreq_out;         /* DEALER - tree parent, upstream reqs */
+    void *zs_dnreq_in;          /* rev DEALER - tree parent, downstream reqs */
+
+    char *uri_upreq_in;         /* URI to listen for tree children */
+    void *zs_upreq_in;          /* ROUTER - optional tree children + plugins */
+
+    char *uri_dnreq_out;        /* URI to listen for tree children */
+    void *zs_dnreq_out;         /* ROUTER - optional tree children + plugins */
+
+    char *uri_upev_out;         /* URI to send external events */
+    void *zs_upev_out;          /* PUB - publish external events */
+
+    char *uri_upev_in;          /* URI to recv external events */
+    void *zs_upev_in;           /* SUB - subscribe to external events */
+
+    char *uri_dnev_out;         /* URI to listen for tree children */
+    void *zs_dnev_out;          /* PUB - optional tree children + plugins */
+
+    char *uri_dnev_in;          /* URI to listen for tree children */
+    void *zs_dnev_in;           /* SUB - optional tree children + plugins */
+
     void *zs_snoop;
-    void *zs_upev_out;
-    void *zs_upev_in;
-    void *zs_dnev_out;
-    void *zs_dnev_in;
-    int parent_cur;
-    bool parent_alive[MAX_PARENTS];
-    zhash_t *plugins;
-    route_ctx_t rctx;
-    int epoch;
-    struct config_struct conf;
+
+    /* Wireup
+     */
+    struct parent_struct parent[MAX_PARENTS]; /* configured parents */
+    int parent_len;             /* length of parent_struct array */
+    int parent_cur;             /* current parent */
+    bool parent_alive[MAX_PARENTS]; /* liveness state of parent nodes */
+    /* Session parameters
+     */
+    bool treeroot;              /* true if we are the root of reduction tree */
+    int rank;                   /* our rank in session */
+    int size;                   /* session size */
+    /* Plugins
+     */
+    char *plugins;              /* comma-separated list of plugins to load */
+    zhash_t *loaded_plugins;    /* hash of plugin handles by plugin name */
+    zhash_t *kvs_arg;
+    zhash_t *api_arg;
+    /* Misc
+     */
+    bool verbose;               /* enable debug to stderr */
+    route_ctx_t rctx;           /* routing table */
+    int epoch;                  /* current sched trigger epoch */
 } ctx_t;
 
 /* FIXME: paths should be configurable */
@@ -142,62 +156,63 @@ int main (int argc, char *argv[])
     memset (&ctx, 0, sizeof (ctx));
     log_init (basename (argv[0]));
 
-    ctx.conf.size = 1;
-    if (!(ctx.conf.conf_hash = zhash_new ()))
+    ctx.size = 1;
+    if (!(ctx.kvs_arg = zhash_new ()))
+        oom ();
+    if (!(ctx.api_arg = zhash_new ()))
         oom ();
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
             case 'e':   /* --up-event-uri URI */
                 if (!strstr (optarg, "pgm://"))
                     msg_exit ("use -E, -O for non-multicast event socket");
-                ctx.conf.upev_in_uri = optarg;
-                ctx.conf.upev_out_uri = optarg;
+                ctx.uri_upev_in = optarg;
+                ctx.uri_upev_out = optarg;
                 break;
             case 'E':   /* --up-event-in-uri URI */
-                ctx.conf.upev_in_uri = optarg;
+                ctx.uri_upev_in = optarg;
                 break;
             case 'O':   /* --up-event-out-uri URI */
-                ctx.conf.upev_out_uri = optarg;
+                ctx.uri_upev_out = optarg;
                 break;
             case 'd':   /* --dn-event-in-uri URI */
-                ctx.conf.dnev_in_uri = optarg;
+                ctx.uri_dnev_in = optarg;
                 break;
             case 'D':   /* --dn-event-out-uri URI */
-                ctx.conf.dnev_out_uri = optarg;
+                ctx.uri_dnev_out = optarg;
                 break;
             case 't':   /* --up-req-in-uri URI */
-                ctx.conf.upreq_in_uri = optarg;
+                ctx.uri_upreq_in = optarg;
                 break;
             case 'T':   /* --dn-req-out-uri URI */
-                ctx.conf.dnreq_out_uri = optarg;
+                ctx.uri_dnreq_out = optarg;
                 break;
             case 'p': { /* --parent rank,upreq-uri,dnreq-uri */
                 char *p1, *p2, *ac = xstrdup (optarg);
-                if (ctx.conf.parent_len == MAX_PARENTS)
+                if (ctx.parent_len == MAX_PARENTS)
                     msg_exit ("too many --parent's, max %d", MAX_PARENTS);
-                ctx.conf.parent[ctx.conf.parent_len].rank = strtoul (ac,
-                                                                     NULL, 10);
+                ctx.parent[ctx.parent_len].rank = strtoul (ac, NULL, 10);
                 if (!(p1 = strchr (ac, ',')))
                     msg_exit ("malformed -p option");
                 p1++;
                 if (!(p2 = strchr (p1, ',')))
                     msg_exit ("malformed -p option");
                 *p2++ = '\0';
-                ctx.conf.parent[ctx.conf.parent_len].upreq_uri = xstrdup (p1);
-                ctx.conf.parent[ctx.conf.parent_len].dnreq_uri = xstrdup (p2);
-                ctx.conf.parent_len++;
+                ctx.parent[ctx.parent_len].upreq_uri = xstrdup (p1);
+                ctx.parent[ctx.parent_len].dnreq_uri = xstrdup (p2);
+                ctx.parent_len++;
                 free (ac);
                 break;
             }
             case 'v':   /* --verbose */
-                ctx.conf.verbose = true;
+                ctx.verbose = true;
                 break;
             case 's': { /* --set-conf key=val */
                 char *p, *cpy = xstrdup (optarg);
                 if ((p = strchr (cpy, '='))) {
                     *p++ = '\0';
-                    zhash_update (ctx.conf.conf_hash, cpy, xstrdup (p));
-                    zhash_freefn (ctx.conf.conf_hash, cpy, free);
+                    zhash_update (ctx.kvs_arg, cpy, xstrdup (p));
+                    zhash_freefn (ctx.kvs_arg, cpy, free);
                 }
                 free (cpy);
                 break;
@@ -206,75 +221,68 @@ int main (int argc, char *argv[])
                 json_object *o = hostlist_to_json (optarg);
                 const char *val = json_object_to_json_string (o);
 
-                zhash_update (ctx.conf.conf_hash, "hosts", xstrdup (val));
-                zhash_freefn (ctx.conf.conf_hash, "hosts", free);
+                zhash_update (ctx.kvs_arg, "hosts", xstrdup (val));
+                zhash_freefn (ctx.kvs_arg, "hosts", free);
                 json_object_put (o);
             }
             case 'R':   /* --rank N */
-                ctx.conf.rank = strtoul (optarg, NULL, 10);
+                ctx.rank = strtoul (optarg, NULL, 10);
                 break;
             case 'S':   /* --size N */
-                ctx.conf.size = strtoul (optarg, NULL, 10);
+                ctx.size = strtoul (optarg, NULL, 10);
                 break;
             case 'P':   /* --plugins p1,p2,... */
-                ctx.conf.plugins = optarg;
+                ctx.plugins = optarg;
                 break;
             case 'L':   /* --logdest DEST */
                 log_set_dest (optarg);
                 break;
-            case 'A':   /* --api-socket DEST */
-                ctx.conf.api_sockpath = xstrdup (optarg);
+            case 'A': { /* --api-socket DEST */
+                char *cpy = xstrdup (optarg);
+                zhash_update (ctx.api_arg, "sockpath", cpy);
+                zhash_freefn (ctx.api_arg, "sockpath", free);
                 break;
+            }
             default:
                 usage ();
         }
     }
     if (optind < argc)
         usage ();
-    if (!ctx.conf.plugins)
+    if (!ctx.plugins)
         msg_exit ("at least one plugin must be loaded");
-
-    if (!ctx.conf.api_sockpath) {
-        ctx.conf.api_sockpath = xzmalloc (PATH_MAX + 1);
-        snprintf (ctx.conf.api_sockpath, PATH_MAX + 1, CMB_API_PATH_TMPL,
-                  getuid ());
-    }
-    if (setenv ("CMB_API_PATH", ctx.conf.api_sockpath, 1) < 0)
-        err_exit ("setenv (CMB_API_PATH=%s)", ctx.conf.api_sockpath);
 
     /* FIXME: hardwire rank 0 as root of the reduction tree.
      * Eventually we must allow for this role to migrate to other nodes
      * in case node 0 becomes unavailable.
      */
-    if (ctx.conf.rank == 0) {
-        if (ctx.conf.parent_len != 0)
+    if (ctx.rank == 0) {
+        if (ctx.parent_len != 0)
             msg_exit ("rank 0 must not have parents");
-        ctx.conf.treeroot = true;
+        ctx.treeroot = true;
     } else {
-        if (ctx.conf.parent_len == 0)
+        if (ctx.parent_len == 0)
             msg_exit ("rank > 0 must have parents");
-        ctx.conf.treeroot = false;
+        ctx.treeroot = false;
     }
-    if (ctx.conf.upreq_in_uri && !ctx.conf.dnreq_out_uri)
+    if (ctx.uri_upreq_in && !ctx.uri_dnreq_out)
         msg_exit ("if --up-req-in-uri is set, --dn-req-out-uri must be also");
-    if (!ctx.conf.upreq_in_uri && ctx.conf.dnreq_out_uri)
+    if (!ctx.uri_upreq_in && ctx.uri_dnreq_out)
         msg_exit ("if --dn-req-out-uri is set, --up-req-in-uri must be also");
-
-    snprintf (ctx.conf.rankstr, sizeof (ctx.conf.rankstr), "%d",
-              ctx.conf.rank);
 
     cmb_init (&ctx);
     for (;;)
         cmb_poll (&ctx);
     cmb_fini (&ctx);
 
-    for (i = 0; i < ctx.conf.parent_len; i++) {
-        free (ctx.conf.parent[i].upreq_uri);
-        free (ctx.conf.parent[i].dnreq_uri);
+    for (i = 0; i < ctx.parent_len; i++) {
+        free (ctx.parent[i].upreq_uri);
+        free (ctx.parent[i].dnreq_uri);
     }
-    if (ctx.conf.conf_hash)
-        zhash_destroy (&ctx.conf.conf_hash);
-    free (ctx.conf.api_sockpath);
+    if (ctx.kvs_arg)
+        zhash_destroy (&ctx.kvs_arg);
+    if (ctx.api_arg)
+        zhash_destroy (&ctx.api_arg);
 
     return 0;
 }
@@ -287,11 +295,14 @@ static int load_plugin (ctx_t *ctx, char *name)
     int rc = -1;
     zhash_t *args = NULL;
 
-    snprintf (id, idlen, "%s-%d", name, ctx->conf.rank);
-    if (!strcmp (name, "kvs") && ctx->conf.treeroot)
-        args = ctx->conf.conf_hash;
+    snprintf (id, idlen, "%s-%d", name, ctx->rank);
+    if (!strcmp (name, "kvs") && ctx->treeroot)
+        args = ctx->kvs_arg;
+    else if (!strcmp (name, "api"))
+        args = ctx->api_arg;
+
     if ((p = plugin_load (ctx->zctx, name, id, args))) {
-        if (zhash_insert (ctx->plugins, name, p) < 0) {
+        if (zhash_insert (ctx->loaded_plugins, name, p) < 0) {
             plugin_unload (p);
             goto done;
         }
@@ -318,7 +329,7 @@ static void unload_plugin (ctx_t *ctx, plugin_ctx_t p)
 
 static void load_plugins (ctx_t *ctx)
 {
-    char *cpy = xstrdup (ctx->conf.plugins);
+    char *cpy = xstrdup (ctx->plugins);
     char *name, *saveptr, *a1 = cpy;
 
     while((name = strtok_r (a1, ",", &saveptr))) {
@@ -331,12 +342,12 @@ static void load_plugins (ctx_t *ctx)
 
 static void unload_plugins (ctx_t *ctx)
 {
-    zlist_t *keys = zhash_keys (ctx->plugins);
+    zlist_t *keys = zhash_keys (ctx->loaded_plugins);
     plugin_ctx_t p;
     char *name;
 
     while ((name = zlist_pop (keys)))
-        if ((p = zhash_lookup (ctx->plugins, name)))
+        if ((p = zhash_lookup (ctx->loaded_plugins, name)))
             unload_plugin (ctx, p);
     zlist_destroy (&keys);
 }
@@ -349,7 +360,7 @@ static void cmb_init (ctx_t *ctx)
     if (!ctx->zctx)
         err_exit ("zctx_new");
     zctx_set_linger (ctx->zctx, 5);
-    ctx->rctx = route_init (ctx->conf.verbose);
+    ctx->rctx = route_init (ctx->verbose);
 
     /* bind: upreq_in */
     if (!(ctx->zs_upreq_in = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
@@ -359,36 +370,36 @@ static void cmb_init (ctx_t *ctx)
         err_exit ("zsocket_bind %s", UPREQ_URI);
     if (zsocket_bind (ctx->zs_upreq_in, UPREQ_IPC_URI_TMPL, getuid ()) < 0)
         err_exit (UPREQ_IPC_URI_TMPL, getuid ());
-    if (ctx->conf.upreq_in_uri) {
-        if (zsocket_bind (ctx->zs_upreq_in, "%s", ctx->conf.upreq_in_uri) < 0)
-            err_exit ("zsocket_bind (upreq_in): %s", ctx->conf.upreq_in_uri);
+    if (ctx->uri_upreq_in) {
+        if (zsocket_bind (ctx->zs_upreq_in, "%s", ctx->uri_upreq_in) < 0)
+            err_exit ("zsocket_bind (upreq_in): %s", ctx->uri_upreq_in);
     }
 
     /* bind: dnreq_out */
     zbind (ctx->zctx, &ctx->zs_dnreq_out, ZMQ_ROUTER, DNREQ_URI, 0);
     if (zsocket_bind (ctx->zs_dnreq_out, DNREQ_IPC_URI_TMPL, getuid ()) < 0)
         err_exit (DNREQ_IPC_URI_TMPL, getuid ());
-    if (ctx->conf.dnreq_out_uri) {
-        if (zsocket_bind (ctx->zs_dnreq_out, "%s", ctx->conf.dnreq_out_uri) < 0)
-            err_exit ("zsocket_bind (dnreq_out): %s", ctx->conf.dnreq_out_uri);
+    if (ctx->uri_dnreq_out) {
+        if (zsocket_bind (ctx->zs_dnreq_out, "%s", ctx->uri_dnreq_out) < 0)
+            err_exit ("zsocket_bind (dnreq_out): %s", ctx->uri_dnreq_out);
     }
 
     /* bind: dnev_out */
     zbind (ctx->zctx, &ctx->zs_dnev_out, ZMQ_PUB, DNEV_OUT_URI, 0);
     if (zsocket_bind (ctx->zs_dnev_out, EVOUT_IPC_URI_TMPL, getuid ()) < 0)
         err_exit (EVOUT_IPC_URI_TMPL, getuid ());
-    if (ctx->conf.dnev_out_uri)
-        if (zsocket_bind (ctx->zs_dnev_out, "%s", ctx->conf.dnev_out_uri) < 0)
-            err_exit ("zsocket_bind (dnev_out): %s", ctx->conf.dnev_out_uri);
+    if (ctx->uri_dnev_out)
+        if (zsocket_bind (ctx->zs_dnev_out, "%s", ctx->uri_dnev_out) < 0)
+            err_exit ("zsocket_bind (dnev_out): %s", ctx->uri_dnev_out);
 
     /* bind: dnev_in */
     zbind (ctx->zctx, &ctx->zs_dnev_in, ZMQ_SUB, DNEV_IN_URI,  0);
     if (zsocket_bind (ctx->zs_dnev_in, EVIN_IPC_URI_TMPL, getuid ()) < 0)
         err_exit (EVIN_IPC_URI_TMPL, getuid ());
     zsocket_set_subscribe (ctx->zs_dnev_in, "");
-    if (ctx->conf.dnev_in_uri)
-        if (zsocket_bind (ctx->zs_dnev_in, "%s", ctx->conf.dnev_in_uri) < 0)
-            err_exit ("zsocket_bind (dnev_in): %s", ctx->conf.dnev_in_uri);
+    if (ctx->uri_dnev_in)
+        if (zsocket_bind (ctx->zs_dnev_in, "%s", ctx->uri_dnev_in) < 0)
+            err_exit ("zsocket_bind (dnev_in): %s", ctx->uri_dnev_in);
 
     /* bind: snoop */
     zbind (ctx->zctx, &ctx->zs_snoop, ZMQ_PUB, SNOOP_URI, -1);
@@ -396,28 +407,28 @@ static void cmb_init (ctx_t *ctx)
         err_exit (SNOOP_IPC_URI_TMPL, getuid ());
 
     /* connect: upev_in */
-    if (ctx->conf.upev_in_uri) {
+    if (ctx->uri_upev_in) {
         zconnect (ctx->zctx, &ctx->zs_upev_in,  ZMQ_SUB,
-                  ctx->conf.upev_in_uri, 0, NULL);
+                  ctx->uri_upev_in, 0, NULL);
         zsocket_set_subscribe (ctx->zs_upev_in, "");
     }
 
     /* connect: upev_out */
-    if (ctx->conf.upev_out_uri)
+    if (ctx->uri_upev_out)
         zconnect (ctx->zctx, &ctx->zs_upev_out, ZMQ_PUB,
-                  ctx->conf.upev_out_uri,0, NULL);
+                  ctx->uri_upev_out, 0, NULL);
 
-    for (i = 0; i < ctx->conf.parent_len; i++)
+    for (i = 0; i < ctx->parent_len; i++)
         ctx->parent_alive[i] = true;
 
     /* connect: upreq_out, dnreq_in */
-    if (ctx->conf.parent_len > 0) {
+    if (ctx->parent_len > 0) {
         char id[16];
-        snprintf (id, sizeof (id), "%d", ctx->conf.rank);
+        snprintf (id, sizeof (id), "%d", ctx->rank);
         zconnect (ctx->zctx, &ctx->zs_upreq_out, ZMQ_DEALER,
-                  ctx->conf.parent[ctx->parent_cur].upreq_uri, 0, id);
+                  ctx->parent[ctx->parent_cur].upreq_uri, 0, id);
         zconnect (ctx->zctx, &ctx->zs_dnreq_in, ZMQ_DEALER,
-                  ctx->conf.parent[ctx->parent_cur].dnreq_uri, 0, id);
+                  ctx->parent[ctx->parent_cur].dnreq_uri, 0, id);
     }
 
     if (ctx->zs_upreq_out) {
@@ -425,14 +436,14 @@ static void cmb_init (ctx_t *ctx)
         request_send (ctx, NULL, "cmb.route.hello");
     }
 
-    ctx->plugins = zhash_new ();
+    ctx->loaded_plugins = zhash_new ();
     load_plugins (ctx);
 }
 
 static void cmb_fini (ctx_t *ctx)
 {
     unload_plugins (ctx);
-    zhash_destroy (&ctx->plugins);
+    zhash_destroy (&ctx->loaded_plugins);
 
     if (ctx->zs_upreq_in)
         zsocket_destroy (ctx->zctx, ctx->zs_upreq_in);
@@ -453,7 +464,6 @@ static void cmb_fini (ctx_t *ctx)
     if (ctx->zs_upev_out)
         zsocket_destroy (ctx->zctx, ctx->zs_upev_out);
 
-    zhash_destroy (&ctx->conf.conf_hash);
     route_fini (ctx->rctx);
     zctx_destroy (&ctx->zctx);
 }
@@ -480,11 +490,15 @@ static int request_send (ctx_t *ctx, json_object *o, const char *fmt, ...)
     if ((p = strchr (tag, '.')))
         *p = '\0';
     gw = route_lookup (ctx->rctx, tag);
-    if (gw)
-        zmsg_send_unrouter (&zmsg, ctx->zs_dnreq_out, ctx->conf.rankstr, gw);
-    else if (ctx->zs_upreq_out)
+    if (gw) {
+        char *myaddr;
+        if (asprintf (&myaddr, "%d", ctx->rank) < 0)
+            oom ();
+        zmsg_send_unrouter (&zmsg, ctx->zs_dnreq_out, myaddr, gw);
+        free (myaddr);
+    } else if (ctx->zs_upreq_out) {
         zmsg_send (&zmsg, ctx->zs_upreq_out);
-    else  {
+    } else  {
         errno = EHOSTUNREACH;
         ret = -1;
     }
@@ -532,43 +546,47 @@ void cmbd_log (ctx_t *ctx, int lev, const char *fmt, ...)
 {
     va_list ap;
     json_object *o;
+    char *myaddr;
 
+    if (asprintf (&myaddr, "%d", ctx->rank) < 0)
+        oom ();
     va_start (ap, fmt);
-    o = log_create (lev, "cmb", ctx->conf.rankstr, fmt, ap);
+    o = log_create (lev, "cmb", myaddr, fmt, ap);
     va_end (ap);
 
     if (o) {
         request_send (ctx, o, "log.msg");
         json_object_put (o);
     }
+    free (myaddr);
 }
 
 static void _reparent (ctx_t *ctx)
 {
     int i;
 
-    for (i = 0; i < ctx->conf.parent_len; i++) {
+    for (i = 0; i < ctx->parent_len; i++) {
         if (i != ctx->parent_cur && ctx->parent_alive[i]) {
             cmbd_log (ctx, LOG_ALERT, "reparent %d->%d",
-                  ctx->conf.parent[ctx->parent_cur].rank,
-                  ctx->conf.parent[i].rank);
+                  ctx->parent[ctx->parent_cur].rank,
+                  ctx->parent[i].rank);
             if (ctx->parent_alive[ctx->parent_cur])
-                request_send (ctx, NULL, "cmb.route.goodbye.%d", ctx->conf.rank);
-            if (ctx->conf.verbose)
+                request_send (ctx, NULL, "cmb.route.goodbye.%d", ctx->rank);
+            if (ctx->verbose)
                 msg ("%s: disconnect %s, connect %s", __FUNCTION__,
-                    ctx->conf.parent[ctx->parent_cur].upreq_uri,
-                    ctx->conf.parent[i].upreq_uri);
+                    ctx->parent[ctx->parent_cur].upreq_uri,
+                    ctx->parent[i].upreq_uri);
             if (zsocket_disconnect (ctx->zs_upreq_out, "%s",
-                              ctx->conf.parent[ctx->parent_cur].upreq_uri) < 0)
+                              ctx->parent[ctx->parent_cur].upreq_uri) < 0)
                 err_exit ("zsocket_disconnect");
             if (zsocket_disconnect (ctx->zs_dnreq_in, "%s",
-                                ctx->conf.parent[ctx->parent_cur].dnreq_uri)< 0)
+                                ctx->parent[ctx->parent_cur].dnreq_uri)< 0)
                 err_exit ("zsocket_disconnect");
             if (zsocket_connect (ctx->zs_upreq_out, "%s",
-                                ctx->conf.parent[i].upreq_uri) < 0)
+                                ctx->parent[i].upreq_uri) < 0)
                 err_exit ("zsocket_connect");
             if (zsocket_connect (ctx->zs_dnreq_in, "%s",
-                                ctx->conf.parent[i].dnreq_uri) < 0)
+                                ctx->parent[i].dnreq_uri) < 0)
                 err_exit ("zsocket_connect");
             ctx->parent_cur = i;
 
@@ -586,8 +604,8 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
     if (cmb_msg_match_substr (zmsg, "event.live.down.", &arg)) {
         int i, rank = strtoul (arg, NULL, 10);
 
-        for (i = 0; i < ctx->conf.parent_len; i++) {
-            if (ctx->conf.parent[i].rank == rank) {
+        for (i = 0; i < ctx->parent_len; i++) {
+            if (ctx->parent[i].rank == rank) {
                 ctx->parent_alive[i] = false;
                 if (i == ctx->parent_cur)
                     _reparent (ctx);
@@ -599,8 +617,8 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
     } else if (cmb_msg_match_substr (zmsg, "event.live.up.", &arg)) {
         int i, rank = strtoul (arg, NULL, 10);
         
-        for (i = 0; i < ctx->conf.parent_len; i++) {
-            if (ctx->conf.parent[i].rank == rank) {
+        for (i = 0; i < ctx->parent_len; i++) {
+            if (ctx->parent[i].rank == rank) {
                 ctx->parent_alive[i] = true;
                 if (i == 0 && ctx->parent_cur > 0)
                     _reparent (ctx);
@@ -685,9 +703,9 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
     } else if (cmb_msg_match (*zmsg, "cmb.info")) {
         json_object *o = util_json_object_new_object ();
 
-        util_json_object_add_int (o, "rank", ctx->conf.rank);
-        util_json_object_add_int (o, "size", ctx->conf.size);
-        util_json_object_add_boolean (o, "treeroot", ctx->conf.treeroot);
+        util_json_object_add_int (o, "rank", ctx->rank);
+        util_json_object_add_int (o, "size", ctx->size);
+        util_json_object_add_boolean (o, "treeroot", ctx->treeroot);
         if (cmb_msg_replace_json (*zmsg, o) == 0)
             route_response (ctx, zmsg, true);
         json_object_put (o);
@@ -739,21 +757,21 @@ static void route_response (ctx_t *ctx, zmsg_t **zmsg, bool dnsock)
      */
     if (dnsock) {
         if (route_lookup (ctx->rctx, nexthop)) {
-            if (ctx->conf.verbose)
+            if (ctx->verbose)
                 msg ("%s: dnsock: DOWN %s!...!%s", __FUNCTION__, nexthop, sender);
             zmsg_send (zmsg, ctx->zs_upreq_in);
         } else if (ctx->zs_dnreq_in) {
-            if (ctx->conf.verbose)
+            if (ctx->verbose)
                 msg ("%s: dnsock: UP %s!...!%s", __FUNCTION__, nexthop, sender);
             zmsg_send (zmsg, ctx->zs_dnreq_in);
         }
-        if (ctx->conf.verbose && *zmsg)
+        if (ctx->verbose && *zmsg)
             msg ("%s: dnsock: DROP %s!...!%s", __FUNCTION__, nexthop, sender);
 
     /* case 2: responses headed downward on 'upreq' flow must continue down.
      */
     } else {
-        if (ctx->conf.verbose)
+        if (ctx->verbose)
             msg ("%s: upsock: DOWN %s!...!%s", __FUNCTION__, nexthop, sender);
         zmsg_send (zmsg, ctx->zs_upreq_in);
     }
@@ -768,9 +786,11 @@ static void route_response (ctx_t *ctx, zmsg_t **zmsg, bool dnsock)
 
 static void route_request (ctx_t *ctx, zmsg_t **zmsg, bool dnsock)
 {
-    char *addr = NULL, *service = NULL, *lasthop = NULL;
+    char *myaddr = NULL, *addr = NULL, *service = NULL, *lasthop = NULL;
     const char *gw;
 
+    if (asprintf (&myaddr, "%d", ctx->rank) < 0)
+        oom ();
     zmsg_cc (*zmsg, ctx->zs_snoop);
 
     if (parse_message_tag (*zmsg, &addr, &service) < 0)
@@ -781,21 +801,20 @@ static void route_request (ctx_t *ctx, zmsg_t **zmsg, bool dnsock)
      * Lookup service in routing table and if found, route down, else NAK.
      * Handle tag == mynode!cmb as a special case.
      */
-    if (addr && !strcmp (addr, ctx->conf.rankstr)) {
+    if (addr && !strcmp (addr, myaddr)) {
         if (!strcmp (service, "cmb")) {
-            if (ctx->conf.verbose)
+            if (ctx->verbose)
                 msg ("%s: loc addr: internal %s!%s", __FUNCTION__, addr, service);
             cmb_internal_request (ctx, zmsg);
         } else {
             gw = route_lookup (ctx->rctx, service);
             if (gw) {
-                if (ctx->conf.verbose)
+                if (ctx->verbose)
                     msg ("%s: loc addr: DOWN %s!%s", __FUNCTION__, addr, service);
-                zmsg_send_unrouter (zmsg, ctx->zs_dnreq_out,
-                                    ctx->conf.rankstr, gw);
+                zmsg_send_unrouter (zmsg, ctx->zs_dnreq_out, myaddr, gw);
             }
         }
-        if (ctx->conf.verbose && *zmsg)
+        if (ctx->verbose && *zmsg)
             msg ("%s: loc addr: NAK %s!%s", __FUNCTION__, addr, service);
 
     /* case 2: request explicitly addressed to a remote node, tag == N!service.
@@ -804,15 +823,15 @@ static void route_request (ctx_t *ctx, zmsg_t **zmsg, bool dnsock)
     } else if (addr) {
         gw = route_lookup (ctx->rctx, addr);
         if (gw) {
-            if (ctx->conf.verbose)       
+            if (ctx->verbose)       
                 msg ("%s: remote addr: DOWN %s!%s", __FUNCTION__, addr, service);
-            zmsg_send_unrouter (zmsg, ctx->zs_dnreq_out, ctx->conf.rankstr, gw);
+            zmsg_send_unrouter (zmsg, ctx->zs_dnreq_out, myaddr, gw);
         } else if (!dnsock && ctx->zs_upreq_out) {
-            if (ctx->conf.verbose)
+            if (ctx->verbose)
                 msg ("%s: remote addr: UP %s!%s", __FUNCTION__, addr, service);
             zmsg_send (zmsg, ctx->zs_upreq_out);
         }
-        if (ctx->conf.verbose && *zmsg)
+        if (ctx->verbose && *zmsg)
             msg ("%s: remote addr: NAK %s!%s", __FUNCTION__, addr, service);
 
     /* case 3: request not addressed, e.g. tag == service.
@@ -822,23 +841,22 @@ static void route_request (ctx_t *ctx, zmsg_t **zmsg, bool dnsock)
      */
     } else {
         if (!strcmp (service, "cmb")) {
-            if (ctx->conf.verbose)
+            if (ctx->verbose)
                 msg ("%s: no addr: internal %s", __FUNCTION__, service);
             cmb_internal_request (ctx, zmsg);
         } else {
             gw = route_lookup (ctx->rctx, service);
             if (gw && (!lasthop || strcmp (gw, lasthop)) != 0) {
-                if (ctx->conf.verbose)
+                if (ctx->verbose)
                     msg ("%s: no addr: DOWN %s", __FUNCTION__, service);
-                zmsg_send_unrouter (zmsg, ctx->zs_dnreq_out,
-                                    ctx->conf.rankstr, gw);
+                zmsg_send_unrouter (zmsg, ctx->zs_dnreq_out, myaddr, gw);
             } else if (!dnsock && ctx->zs_upreq_out) {
-                if (ctx->conf.verbose)
+                if (ctx->verbose)
                     msg ("%s: no addr: UP %s", __FUNCTION__, service);
                 zmsg_send (zmsg, ctx->zs_upreq_out);
             }
         }
-        if (ctx->conf.verbose && *zmsg)
+        if (ctx->verbose && *zmsg)
             msg ("%s: no addr: NAK %s", __FUNCTION__, service);
     }
 
@@ -857,6 +875,8 @@ done:
         free (service);
     if (lasthop)
         free (lasthop);
+    if (myaddr)
+        free (myaddr);
 }
 
 /*

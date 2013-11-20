@@ -24,6 +24,7 @@
 #include "plugin.h"
 #include "util.h"
 #include "log.h"
+#include "cmb_socket.h"
 
 #define LISTEN_BACKLOG      5
 
@@ -352,29 +353,37 @@ static int listener_cb (zloop_t *zl, zmq_pollitem_t *zp, ctx_t *ctx)
     return (0);
 }
 
-static int listener_init (ctx_t *ctx)
+static int listener_init (ctx_t *ctx, char *sockpath)
 {
     struct sockaddr_un addr;
     int fd;
-    char *path = getenv ("CMB_API_PATH"); /* set by cmbd after getopt */
 
-    if (!path)
-        msg_exit ("CMB_API_PATH is not set");
     fd = socket (AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0)
-        err_exit ("socket");
-    if (remove (path) < 0 && errno != ENOENT)
-        err_exit ("remove %s", path);
+    if (fd < 0) {
+        err ("socket");
+        goto done;
+    }
+    if (remove (sockpath) < 0 && errno != ENOENT) {
+        err ("remove %s", sockpath);
+        goto error_close;
+    }
     memset (&addr, 0, sizeof (struct sockaddr_un));
     addr.sun_family = AF_UNIX;
-    strncpy (addr.sun_path, path, sizeof (addr.sun_path) - 1);
+    strncpy (addr.sun_path, sockpath, sizeof (addr.sun_path) - 1);
 
-    if (bind (fd, (struct sockaddr *)&addr, sizeof (struct sockaddr_un)) < 0)
-        err_exit ("bind");
-    if (listen (fd, LISTEN_BACKLOG) < 0)
-        err_exit ("listen");
-
+    if (bind (fd, (struct sockaddr *)&addr, sizeof (struct sockaddr_un)) < 0) {
+        err ("bind");
+        goto error_close;
+    }
+    if (listen (fd, LISTEN_BACKLOG) < 0) {
+        err ("listen");
+        goto error_close;
+    }
+done:
     return fd;
+error_close:
+    close (fd);
+    return -1;
 }
 
 static int apisrv_init (flux_t h, zhash_t *args)
@@ -382,11 +391,22 @@ static int apisrv_init (flux_t h, zhash_t *args)
     ctx_t *ctx = getctx (h);
     zloop_t *zloop = flux_get_zloop (h);
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN | ZMQ_POLLERR };
+    char *sockpath = NULL, *dfltpath = NULL;
+    int rc = -1;
 
-    zp.fd = ctx->listen_fd = listener_init (ctx);
+    if (!args || !(sockpath = zhash_lookup (args, "sockpath"))) {
+        if (asprintf (&dfltpath, CMB_API_PATH_TMPL, geteuid ()) < 0)
+            oom ();
+        sockpath = dfltpath;
+    }
+    if ((zp.fd = ctx->listen_fd = listener_init (ctx, sockpath)) < 0)
+        goto done;
     zloop_poller (zloop, &zp, (zloop_fn *) listener_cb, (void *)ctx);
-
-    return 0;
+    rc = 0;
+done:
+    if (dfltpath)
+        free (dfltpath);
+    return rc;
 }
 
 static void apisrv_fini (flux_t h)
