@@ -398,9 +398,16 @@ static char *_ztag_noaddr (zmsg_t *zmsg)
 bool cmb_msg_match (zmsg_t *zmsg, const char *tag)
 {
     char *ztag = _ztag_noaddr (zmsg);
-    bool match = !strcmp (ztag, tag);
+    const char *tag_noaddr;
+    bool match;
 
+    if ((tag_noaddr = strchr (tag, '!')))
+        tag_noaddr++;
+    else
+        tag_noaddr = tag;
+    match = !strcmp (ztag, tag_noaddr);
     free (ztag);
+
     return match;
 }
 

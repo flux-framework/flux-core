@@ -108,6 +108,17 @@ bool flux_timeout_isset (flux_t h);
 zloop_t *flux_get_zloop (flux_t h);
 zctx_t *flux_get_zctx (flux_t h);
 
+/* Ping plugin 'name'.
+ * 'pad' is a string used to increase the size of the ping packet for
+ * measuring RTT in comparison to rough message size.
+ * 'seq' is a sequence number.
+ * The pad and seq are echoed in the response, and any mismatch will result
+ * in an error return with errno = EPROTO.
+ * A string representation of the route taken is the return value on success
+ * (caller must free).  On error, return NULL with errno set.
+ */
+char *flux_ping (flux_t h, const char *name, const char *pad, int seq);
+
 /* Execute a barrier across 'nprocs' processes.
  * The 'name' must be unique across the comms session.
  */

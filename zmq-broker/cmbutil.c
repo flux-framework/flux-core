@@ -159,53 +159,28 @@ int main (int argc, char *argv[])
             case 'Z':
                 break; /* handled in first getopt */
             case 'p': { /* --ping name */
-                int seq, rseq, rpadding;
+                int seq;
                 struct timespec t0;
-                const char *route, *rpad;
-                json_object *request = util_json_object_new_object ();
-                json_object *response;
+                char *route;
 
-                if (pad)
-                    util_json_object_add_string (request, "pad", pad);
                 for (seq = 0; ; seq++) {
                     monotime (&t0);
-                    json_object_object_del (request, "seq");
-                    util_json_object_add_int (request, "seq", seq);
-                    if (!(response = flux_rpc (h, request, "%s.ping", optarg)))
-                        err_exit ("flux_rpc");
-                    if (util_json_object_get_int (response, "seq", &rseq) < 0
-                            || util_json_object_get_string (response,
-                                                      "pad", &rpad) < 0
-                            || util_json_object_get_string (response,
-                                                      "route", &route) < 0)
-                        msg_exit ("ping: pad, seq, or route missing");
-                    if (seq != rseq)
-                        msg_exit ("ping: seq not the one I sent");
-                    if (padding != (rpadding = strlen (rpad)))
-                        msg_exit ("ping: pad not the size I sent (%d != %d)",
-                                                rpadding, padding);
+                    if (!(route = flux_ping (h, optarg, pad, seq)))
+                        err_exit ("%s.ping", optarg);
                     msg ("%s.ping pad=%d seq=%d time=%0.3f ms (%s)", optarg,
-                         rpadding, rseq, monotime_since (t0), route);
+                         padding, seq, monotime_since (t0), route);
+                    free (route);
                     usleep (pingdelay_ms * 1000);
-                    json_object_put (response);
                 }
-                json_object_put (request);
                 break;
             }
             case 'x': { /* --stats name */
-#if 0
-                json_object *o;
-                char *s;
-
-                if (!(s = cmb_stats (h, optarg)))
-                    err_exit ("cmb_stats");
-                if (!(o = json_tokener_parse (s)))
-                    err_exit ("json_tokener_parse");
-                printf ("%s\n", json_object_to_json_string_ext (o,
+                json_object *response;
+                if (!(response = flux_rpc (h, NULL, "%s.stats", optarg)))
+                    err_exit ("flux_rpc %s.stats", optarg);
+                printf ("%s\n", json_object_to_json_string_ext (response,
                                     JSON_C_TO_STRING_PRETTY));
-                json_object_put (o);
-                free (s);
-#endif
+                json_object_put (response);
                 break;
             }
             case 'b': { /* --barrier NAME */
@@ -612,40 +587,6 @@ static void dump_kvs_dir (flux_t h, const char *path)
     kvsitr_destroy (itr);
     kvsdir_destroy (dir);
 }
-#if 0
-static char *cmb_stats (flux_t h, char *name)
-{
-    json_object *o = util_json_object_new_object ();
-    char *cpy = NULL;
-
-    /* send request */
-    if (_send_message (c, o, "%s.stats", name) < 0)
-        goto error;
-    json_object_put (o);
-    o = NULL;
-
-    /* receive response */
-    if (_recv_message (c, NULL, &o, false) < 0)
-        goto error;
-    if (!o)
-        goto eproto;
-    cpy = strdup (json_object_get_string (o));
-    if (!cpy) {
-        errno = ENOMEM;
-        goto error;
-    }
-    json_object_put (o);
-    return cpy;
-eproto:
-    errno = EPROTO;
-error:    
-    if (cpy)
-        free (cpy);
-    if (o)
-        json_object_put (o);
-    return NULL;
-}
-#endif
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
