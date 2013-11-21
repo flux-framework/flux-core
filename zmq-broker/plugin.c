@@ -589,6 +589,8 @@ plugin_ctx_t plugin_load (zctx_t *zctx, const char *searchpath,
     h = flux_handle_create (p, &plugin_handle_ops, 0);
     p->h = h;
 
+    flux_log_set_facility (h, name);
+
     /* connect sockets in the parent, then use them in the thread */
     zconnect (zctx, &p->zs_upreq, ZMQ_DEALER, UPREQ_URI, -1, id);
     zconnect (zctx, &p->zs_dnreq, ZMQ_DEALER, DNREQ_URI, -1, id);

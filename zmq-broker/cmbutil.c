@@ -19,8 +19,9 @@
 #include "util.h"
 #include "zmsg.h"
 
-static int _parse_logstr (char *s, int *lp, char **fp);
+static int parse_logstr (char *s, int *lp, char **fp);
 static void dump_kvs_dir (flux_t h, const char *path);
+static void dump_log (flux_t h);
 
 #define OPTIONS "p:s:b:B:k:SK:Ct:P:d:n:x:e:T:L:W:D:r:R:qz:Zyl:Y:X:M:i"
 static const struct option longopts[] = {
@@ -388,68 +389,31 @@ int main (int argc, char *argv[])
                 break;
             }
             case 'L': { /* --log */
-                if (_parse_logstr (optarg, &Lopt_level, &Lopt_facility) < 0)
+                if (parse_logstr (optarg, &Lopt_level, &Lopt_facility) < 0)
                     msg_exit ("bad log level string");
                 Lopt = true; /* see code after getopt */
                 break;
             }
             case 'W': { /* --log-watch fac:lev */
-#if 0
-                char *src, *fac, *s;
-                struct timeval tv, start = { .tv_sec = 0 }, rel;
-                int count, lev;
-                const char *levstr;
-
-                if (_parse_logstr (optarg, &lev, &fac) < 0)
+                char *fac;
+                int lev;
+                if (parse_logstr (optarg, &lev, &fac) < 0)
                     msg_exit ("bad log level string");
-                if (cmb_log_subscribe (c, lev, fac) < 0)
-                    err_exit ("cmb_log_subscribe");
+                if (flux_log_subscribe (h, lev, fac) < 0)
+                    err_exit ("flux_log_subscribe");
+                dump_log (h);
                 free (fac);
-                while ((s = cmb_log_recv (c, &lev, &fac, &count, &tv, &src))) {
-                    if (start.tv_sec == 0)
-                        start = tv;
-                    timersub (&tv, &start, &rel);
-                    levstr = log_leveltostr (lev);
-                    //printf ("XXX lev=%d (%s)\n", lev, levstr);
-                    fprintf (stderr, "[%-.6lu.%-.6lu] %dx %s.%s[%s]: %s\n",
-                             rel.tv_sec, rel.tv_usec, count,
-                             fac, levstr ? levstr : "unknown", src, s);
-                    free (fac);
-                    free (src);
-                    free (s);
-                }
-                if (errno != ENOENT)
-                    err ("cmbv_log_recv");
-#endif
                 break;
             }
             case 'D': { /* --log-dump fac:lev */
-#if 0
-                char *src, *fac, *s;
-                struct timeval tv, start = { .tv_sec = 0 }, rel;
-                int lev, count;
-                const char *levstr;
-
-                if (_parse_logstr (optarg, &lev, &fac) < 0)
+                char *fac;
+                int lev;
+                if (parse_logstr (optarg, &lev, &fac) < 0)
                     msg_exit ("bad log level string");
-                if (cmb_log_dump (c, lev, fac) < 0)
+                if (flux_log_dump (h, lev, fac) < 0)
                     err_exit ("cmb_log_dump");
+                dump_log (h);
                 free (fac);
-                while ((s = cmb_log_recv (c, &lev, &fac, &count, &tv, &src))) {
-                    if (start.tv_sec == 0)
-                        start = tv;
-                    timersub (&tv, &start, &rel);
-                    levstr = log_leveltostr (lev);
-                    fprintf (stderr, "[%-.6lu.%-.6lu] %dx %s.%s[%s]: %s\n",
-                             rel.tv_sec, rel.tv_usec, count,
-                             fac, levstr ? levstr : "unknown", src, s);
-                    free (fac);
-                    free (src);
-                    free (s);
-                }
-                if (errno != ENOENT)
-                    err ("cmbv_log_recv");
-#endif
                 break;
             }
             case 'r': { /* --route-add dst:gw */
@@ -534,11 +498,9 @@ int main (int argc, char *argv[])
     }
     if (Lopt) {
         char *argstr = argv_concat (argc - optind, argv + optind);
-#if 0
-        cmb_log_set_facility (c, Lopt_facility);
-        if (cmb_log (c, Lopt_level, "%s", argstr) < 0)
+        flux_log_set_facility (h, Lopt_facility);
+        if (flux_log (h, Lopt_level, "%s", argstr) < 0)
             err_exit ("cmb_log");
-#endif
         free (argstr);
     } else {
         if (optind < argc)
@@ -549,7 +511,7 @@ int main (int argc, char *argv[])
     exit (0);
 }
 
-static int _parse_logstr (char *s, int *lp, char **fp)
+static int parse_logstr (char *s, int *lp, char **fp)
 {
     char *p, *fac = xstrdup (s);
     int lev = LOG_INFO;
@@ -563,6 +525,41 @@ static int _parse_logstr (char *s, int *lp, char **fp)
     *lp = lev;
     *fp = fac;
     return 0;
+}
+
+/* Dump all flux_log responses ot stderr.
+ * In the case of a log subscription, will run forever.
+ * In the case of a log dump, will terminate when logsrv responds with ENOENT.
+ */
+static void dump_log (flux_t h)
+{
+    char *src, *fac, *s;
+    struct timeval tv, start = { .tv_sec = 0 }, rel;
+    int count, lev;
+    zmsg_t *zmsg;
+    const char *levstr;
+
+    while ((zmsg = flux_response_recvmsg (h, false))) {
+        if (!(s = flux_log_decode (zmsg, &lev, &fac, &count, &tv, &src))) {
+            if (errno != ENOENT)
+                err ("flux_log_decode");
+            zmsg_destroy (&zmsg);
+            return;
+        }
+        if (start.tv_sec == 0)
+            start = tv;
+        timersub (&tv, &start, &rel);
+        levstr = log_leveltostr (lev);
+        //printf ("XXX lev=%d (%s)\n", lev, levstr);
+        fprintf (stderr, "[%-.6lu.%-.6lu] %dx %s.%s[%s]: %s\n",
+                 rel.tv_sec, rel.tv_usec, count,
+                 fac, levstr ? levstr : "unknown", src, s);
+        zmsg_destroy (&zmsg);
+        free (fac);
+        free (src);
+        free (s);
+    }
+    err ("flux_response_recvmsg");
 }
 
 static void dump_kvs_dir (flux_t h, const char *path)

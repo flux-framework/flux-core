@@ -1446,8 +1446,8 @@ static int log_store_entry (const char *key, void *item, void *arg)
 static void event_kvs_debug (ctx_t *ctx, char *arg, zmsg_t **zmsg)
 {
     if (!strcmp (arg, "writeback.size"))
-        flux_log (ctx->h, LOG_DEBUG, "writeback %d",
-                    (int)zlist_size (ctx->slave.writeback));
+        flux_log (ctx->h, LOG_DEBUG, "writeback %d", ctx->slave.writeback ?
+                    (int)zlist_size (ctx->slave.writeback) : 0);
     else if (!strcmp (arg, "store.size"))
         flux_log (ctx->h, LOG_DEBUG, "store %d", (int)zhash_size (ctx->store));
     else if (!strcmp (arg, "root"))
