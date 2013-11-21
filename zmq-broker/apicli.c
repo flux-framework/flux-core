@@ -31,8 +31,8 @@ typedef struct {
     int magic;
     int fd;
     int rank;
-    int size;
     zlist_t *resp;
+    flux_t h;
 } cmb_t;
 
 static const struct flux_handle_ops cmb_ops;
@@ -139,6 +139,17 @@ static int cmb_event_sendmsg (void *impl, zmsg_t **zmsg)
     return rc;
 }
 
+static int cmb_rank (void *impl)
+{
+    cmb_t *c = impl;
+    assert (c->magic == CMB_CTX_MAGIC);
+    if (c->rank == -1) {
+        if (flux_info (c->h, &c->rank, NULL, NULL) < 0)
+            return -1;
+    }
+    return c->rank;
+}
+
 static void cmb_fini (void *impl)
 {
     cmb_t *c = impl;
@@ -157,6 +168,7 @@ flux_t cmb_init_full (const char *path, int flags)
     if (!(c->resp = zlist_new ()))
         oom ();
     c->magic = CMB_CTX_MAGIC;
+    c->rank = -1;
     c->fd = socket (AF_UNIX, SOCK_STREAM, 0);
     if (c->fd < 0)
         goto error;
@@ -167,7 +179,8 @@ flux_t cmb_init_full (const char *path, int flags)
     if (connect (c->fd, (struct sockaddr *)&addr,
                          sizeof (struct sockaddr_un)) < 0)
         goto error;
-    return flux_handle_create (c, &cmb_ops, flags);
+    c->h = flux_handle_create (c, &cmb_ops, flags);
+    return c->h;
 error:
     if (c)
         cmb_fini (c);
@@ -202,6 +215,7 @@ static const struct flux_handle_ops cmb_ops = {
     .snoop_recvmsg = cmb_response_recvmsg, /* FIXME */
     .snoop_subscribe = cmb_snoop_subscribe,
     .snoop_unsubscribe = cmb_snoop_unsubscribe,
+    .rank = cmb_rank,
     .impl_destroy = cmb_fini,
 };
 

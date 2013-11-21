@@ -30,12 +30,13 @@ typedef struct plugin_ctx_struct *plugin_ctx_t;
 /* Load the specified plugin by 'name' and return a handle for it,
  * or NULL on failure.  We dlopen() the file "<name>srv.so".
  * 'searchpath' is a colon-separated list of directories to search.
+ * 'rank' is the rank of this cmbd instance.
  * 'id' is a session-wide unique socket id for this instance of the plugin,
  * used to form the return address when the plugin a request on its dealer
  * socket.  'args' is a hash of key-value pairs that may be NULL, or may
  * be used to pass arguments to the plugins's ops->init() function.
  */
-plugin_ctx_t plugin_load (zctx_t *zctx, const char *searchpath,
+plugin_ctx_t plugin_load (zctx_t *zctx, int rank, const char *searchpath,
                           char *name, char *id, zhash_t *args);
 
 /* Unload a plugin by handle.

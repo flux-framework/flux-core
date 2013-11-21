@@ -307,7 +307,8 @@ static int load_plugin (ctx_t *ctx, char *name)
     else if (!strcmp (name, "api"))
         args = ctx->api_arg;
 
-    if ((p = plugin_load (ctx->zctx, ctx->plugin_path, name, id, args))) {
+    if ((p = plugin_load (ctx->zctx, ctx->rank, ctx->plugin_path,
+                          name, id, args))) {
         if (zhash_insert (ctx->loaded_plugins, name, p) < 0) {
             plugin_unload (p);
             goto done;

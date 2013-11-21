@@ -21,6 +21,8 @@ struct flux_handle_ops {
     int         (*timeout_clear)(void *impl);
     bool        (*timeout_isset)(void *impl);
 
+    int         (*rank)(void *impl);
+
     zloop_t *   (*get_zloop)(void *impl);
     zctx_t *    (*get_zctx)(void *impl);
 

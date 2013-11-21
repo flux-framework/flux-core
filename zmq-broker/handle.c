@@ -247,6 +247,15 @@ bool flux_timeout_isset (flux_t h)
     return h->ops->timeout_isset (h->impl);
 }
 
+int flux_rank (flux_t h)
+{
+    if (!h->ops->rank) {
+        errno = ENOSYS;
+        return -1;
+    }
+    return h->ops->rank (h->impl);
+}
+
 zloop_t *flux_get_zloop (flux_t h)
 {
     if (!h->ops->get_zloop) {

@@ -55,13 +55,6 @@ done:
     return ret;
 }
 
-int flux_rank (flux_t h)
-{
-    int rank = -1;
-    flux_info (h, &rank, NULL, NULL);
-    return rank;
-}
-
 int flux_size (flux_t h)
 {
     int size = -1;

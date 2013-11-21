@@ -59,6 +59,7 @@ struct plugin_ctx_struct {
     char *name;
     void *dso;
     zhash_t *args;
+    int rank;
 };
 
 struct ptimeout_struct {
@@ -226,6 +227,13 @@ static bool plugin_timeout_isset (void *impl)
     plugin_ctx_t p = impl;
     assert (p->magic == PLUGIN_MAGIC);
     return p->timeout ? true : false;
+}
+
+static int plugin_rank (void *impl)
+{
+    plugin_ctx_t p = impl;
+    assert (p->magic == PLUGIN_MAGIC);
+    return p->rank;
 }
 
 static zloop_t *plugin_get_zloop (void *impl)
@@ -553,7 +561,7 @@ static void *plugin_dlopen (const char *searchpath, const char *name)
     return dso;
 }
 
-plugin_ctx_t plugin_load (zctx_t *zctx, const char *searchpath,
+plugin_ctx_t plugin_load (zctx_t *zctx, int rank, const char *searchpath,
                           char *name, char *id, zhash_t *args)
 {
     plugin_ctx_t p;
@@ -583,6 +591,7 @@ plugin_ctx_t plugin_load (zctx_t *zctx, const char *searchpath,
     p->dso = dso;
     p->name = xstrdup (name);
     p->id = xstrdup (id);
+    p->rank = rank;
     if (!(p->deferred_responses = zlist_new ()))
         oom ();
 
@@ -621,6 +630,7 @@ static const struct flux_handle_ops plugin_handle_ops = {
     .timeout_set = plugin_timeout_set,
     .timeout_clear = plugin_timeout_clear,
     .timeout_isset = plugin_timeout_isset,
+    .rank = plugin_rank,
     .get_zloop = plugin_get_zloop,
     .get_zctx = plugin_get_zctx,
 };
