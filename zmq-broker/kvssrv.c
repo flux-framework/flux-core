@@ -386,7 +386,7 @@ static void writeback_add_name (ctx_t *ctx, const char *key)
 {
     op_t *op;
 
-    assert (!flux_treeroot (ctx->h));
+    //assert (!flux_treeroot (ctx->h));
 
     op = op_create (OP_NAME);
     op->u.name.key = xstrdup (key);
@@ -399,7 +399,7 @@ static void writeback_add_store (ctx_t *ctx, const char *ref)
 {
     op_t *op;
 
-    assert (!flux_treeroot (ctx->h));
+    //assert (!flux_treeroot (ctx->h));
 
     op = op_create (OP_STORE);
     op->u.store.ref = xstrdup (ref);
@@ -412,7 +412,7 @@ static void writeback_add_flush (ctx_t *ctx, zmsg_t *zmsg)
 {
     op_t *op;
 
-    assert (!flux_treeroot (ctx->h));
+    //assert (!flux_treeroot (ctx->h));
 
     op = op_create (OP_FLUSH);
     op->u.flush.zmsg = zmsg;
@@ -529,7 +529,7 @@ static void store (ctx_t *ctx, json_object *o, bool writeback, href_t ref)
         zhash_insert (ctx->store, ref, hp);
         zhash_freefn (ctx->store, ref, (zhash_free_fn *)hobj_destroy);
         if (writeback) {
-            assert (!flux_treeroot (ctx->h));
+            //assert (!flux_treeroot (ctx->h));
             writeback_add_store (ctx, ref);
             store_request_send (ctx, ref, o);
         }
@@ -724,7 +724,7 @@ static void update_version (ctx_t *ctx, int newvers)
 {
     json_object *o;
 
-    assert (flux_treeroot (ctx->h));
+    //assert (flux_treeroot (ctx->h));
 
     if (!(o = json_object_new_int (newvers)))
         oom ();
@@ -744,7 +744,7 @@ static void commit (ctx_t *ctx)
     json_object *dir, *cpy;
     href_t ref;
 
-    assert (flux_treeroot (ctx->h));
+    //assert (flux_treeroot (ctx->h));
 
     (void)load (ctx, ctx->rootdir, NULL, &dir);
     assert (dir != NULL);
@@ -1413,7 +1413,7 @@ static void event_kvs_setroot (ctx_t *ctx, char *arg, zmsg_t **zmsg)
     href_t href;
     int seq;
 
-    assert (!flux_treeroot (ctx->h));
+    //assert (!flux_treeroot (ctx->h));
 
     if (!decode_rootref (arg, &seq, href))
         flux_log (ctx->h, LOG_ERR, "%s: malformed rootref %s",
