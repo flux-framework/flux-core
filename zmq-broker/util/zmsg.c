@@ -245,10 +245,14 @@ error:
     return -1;
 }
 
-void zmsg_send_unrouter (zmsg_t **zmsg, void *sock, char *addr, const char *gw)
+int zmsg_send_unrouter (zmsg_t **zmsg, void *sock, int myrank, const char *gw)
 {
     zframe_t *zf;
+    char *addr;
+    int rc;
 
+    if (asprintf (&addr, "%d", myrank) < 0)
+        oom ();
     if (!(zf = zframe_new (addr, strlen (addr))))
         oom ();
     if (zmsg_push (*zmsg, zf) < 0) /* push local addr for reply path */
@@ -257,7 +261,9 @@ void zmsg_send_unrouter (zmsg_t **zmsg, void *sock, char *addr, const char *gw)
         oom ();
     if (zmsg_push (*zmsg, zf) < 0) /* push gw addr for routing socket */
         oom ();
-    zmsg_send (zmsg, sock);
+    rc = zmsg_send (zmsg, sock);
+    free (addr);
+    return rc;
 }
 
 zmsg_t *zmsg_recv_unrouter (void *sock)

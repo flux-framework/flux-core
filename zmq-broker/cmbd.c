@@ -498,11 +498,7 @@ static int request_send (ctx_t *ctx, json_object *o, const char *fmt, ...)
         *p = '\0';
     gw = route_lookup (ctx->rctx, tag);
     if (gw) {
-        char *myaddr;
-        if (asprintf (&myaddr, "%d", ctx->rank) < 0)
-            oom ();
-        zmsg_send_unrouter (&zmsg, ctx->zs_dnreq_out, myaddr, gw);
-        free (myaddr);
+        zmsg_send_unrouter (&zmsg, ctx->zs_dnreq_out, ctx->rank, gw);
     } else if (ctx->zs_upreq_out) {
         zmsg_send (&zmsg, ctx->zs_upreq_out);
     } else  {
@@ -818,7 +814,7 @@ static void route_request (ctx_t *ctx, zmsg_t **zmsg, bool dnsock)
             if (gw) {
                 if (ctx->verbose)
                     msg ("%s: loc addr: DOWN %s!%s", __FUNCTION__, addr, service);
-                zmsg_send_unrouter (zmsg, ctx->zs_dnreq_out, myaddr, gw);
+                zmsg_send_unrouter (zmsg, ctx->zs_dnreq_out, ctx->rank, gw);
             }
         }
         if (ctx->verbose && *zmsg)
@@ -832,7 +828,7 @@ static void route_request (ctx_t *ctx, zmsg_t **zmsg, bool dnsock)
         if (gw) {
             if (ctx->verbose)       
                 msg ("%s: remote addr: DOWN %s!%s", __FUNCTION__, addr, service);
-            zmsg_send_unrouter (zmsg, ctx->zs_dnreq_out, myaddr, gw);
+            zmsg_send_unrouter (zmsg, ctx->zs_dnreq_out, ctx->rank, gw);
         } else if (!dnsock && ctx->zs_upreq_out) {
             if (ctx->verbose)
                 msg ("%s: remote addr: UP %s!%s", __FUNCTION__, addr, service);
@@ -856,7 +852,7 @@ static void route_request (ctx_t *ctx, zmsg_t **zmsg, bool dnsock)
             if (gw && (!lasthop || strcmp (gw, lasthop)) != 0) {
                 if (ctx->verbose)
                     msg ("%s: no addr: DOWN %s", __FUNCTION__, service);
-                zmsg_send_unrouter (zmsg, ctx->zs_dnreq_out, myaddr, gw);
+                zmsg_send_unrouter (zmsg, ctx->zs_dnreq_out, ctx->rank, gw);
             } else if (!dnsock && ctx->zs_upreq_out) {
                 if (ctx->verbose)
                     msg ("%s: no addr: UP %s", __FUNCTION__, service);
