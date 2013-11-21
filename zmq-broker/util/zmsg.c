@@ -283,15 +283,15 @@ zmsg_t *zmsg_recv_unrouter (void *sock)
     return zmsg;
 }
 
-void zmsg_cc (zmsg_t *zmsg, void *sock)
+int zmsg_cc (zmsg_t *zmsg, void *sock)
 {
-    if (zmsg) {
-        zmsg_t *cpy = zmsg_dup (zmsg);
-        if (!cpy)
-            err_exit ("zmsg_dup");
-        if (zmsg_send (&cpy, sock) < 0)
-            err_exit ("zmsg_send");
-    }
+    zmsg_t *cpy;
+
+    if (!zmsg)
+        return 0;
+    if (!(cpy = zmsg_dup (zmsg)))
+        err_exit ("zmsg_dup");
+    return zmsg_send (&cpy, sock);
 }
 
 int zmsg_hopcount (zmsg_t *zmsg)

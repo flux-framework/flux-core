@@ -40,7 +40,7 @@ zmsg_t *zmsg_recv_unrouter (void *sock);
 
 /* Send a copy of zmsg to sock.
  */
-void zmsg_cc (zmsg_t *zmsg, void *sock);
+int zmsg_cc (zmsg_t *zmsg, void *sock);
 
 /* Return the number of non-nil routing frames in the message.
  */
