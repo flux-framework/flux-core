@@ -24,6 +24,7 @@
 #include "plugin.h"
 #include "hljson.h"
 #include "flux.h"
+#include "handle.h"
 #include "cmb_socket.h"
 
 #define MAX_PARENTS 2
@@ -84,6 +85,7 @@ typedef struct {
     bool verbose;               /* enable debug to stderr */
     route_ctx_t rctx;           /* routing table */
     int epoch;                  /* current sched trigger epoch */
+    flux_t h;
 } ctx_t;
 
 /* FIXME: paths should be configurable */
@@ -96,11 +98,6 @@ typedef struct {
 static void cmb_init (ctx_t *ctx);
 static void cmb_fini (ctx_t *ctx);
 static void cmb_poll (ctx_t *ctx);
-
-static void route_response (ctx_t *ctx, zmsg_t **zmsg, bool dnsock);
-static int request_send (ctx_t *ctx, json_object *o, const char *fmt, ...);
-
-static void cmbd_log (ctx_t *ctx, int lev, const char *fmt, ...);
 
 #define OPTIONS "t:e:E:O:vs:R:S:p:P:L:T:A:d:D:H:"
 static const struct option longopts[] = {
@@ -122,6 +119,8 @@ static const struct option longopts[] = {
     {"set-conf-hostlist",required_argument,  0, 'H'},
     {0, 0, 0, 0},
 };
+
+static const struct flux_handle_ops cmbd_handle_ops;
 
 static void usage (void)
 {
@@ -438,13 +437,21 @@ static void cmb_init (ctx_t *ctx)
                   ctx->parent[ctx->parent_cur].dnreq_uri, 0, id);
     }
 
+    /* create flux_t handle */
+    ctx->h = flux_handle_create (ctx, &cmbd_handle_ops, 0);
+    flux_log_set_facility (ctx->h, "cmbd");
+
     if (ctx->zs_upreq_out) {
-        request_send (ctx, NULL, "cmb.connect");
-        request_send (ctx, NULL, "cmb.route.hello");
+        if (flux_request_send (ctx->h, NULL, "cmb.connect") < 0)
+            err_exit ("error sending cmb.connect upstream");
+        if (flux_request_send (ctx->h, NULL, "cmb.route.hello") < 0)
+            err_exit ("error sending cmb.route.hello upstream");
     }
 
     ctx->loaded_plugins = zhash_new ();
     load_plugins (ctx);
+
+    flux_log (ctx->h, LOG_INFO, "initialization complete");
 }
 
 static void cmb_fini (ctx_t *ctx)
@@ -475,106 +482,20 @@ static void cmb_fini (ctx_t *ctx)
     zctx_destroy (&ctx->zctx);
 }
 
-/* Send upstream request message.
- */
-static int request_send (ctx_t *ctx, json_object *o, const char *fmt, ...)
-{
-    va_list ap;
-    zmsg_t *zmsg;
-    char *tag, *p;
-    const char *gw;
-    int n, ret = 0;
-
-    va_start (ap, fmt);
-    n = vasprintf (&tag, fmt, ap);
-    va_end (ap);
-    if (n < 0)
-        err_exit ("vasprintf");
-
-    zmsg = cmb_msg_encode (tag, o);
-    if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* message delimiter */
-        oom ();
-    if ((p = strchr (tag, '.')))
-        *p = '\0';
-    gw = route_lookup (ctx->rctx, tag);
-    if (gw) {
-        zmsg_send_unrouter (&zmsg, ctx->zs_dnreq_out, ctx->rank, gw);
-    } else if (ctx->zs_upreq_out) {
-        zmsg_send (&zmsg, ctx->zs_upreq_out);
-    } else  {
-        errno = EHOSTUNREACH;
-        ret = -1;
-    }
-    if (zmsg)
-        zmsg_destroy (&zmsg);
-    free (tag);
-    return ret;
-}
-
-/* FIXME: duplicated from logcli.c
- *    (pending pending of cmbd flux_t handle)
- */
-static json_object *log_create (int level, const char *fac, const char *src,
-                                const char *fmt, va_list ap)
-{
-    json_object *o = util_json_object_new_object ();
-    char *str = NULL;
-    struct timeval tv;
-
-    if (gettimeofday (&tv, NULL) < 0)
-        err_exit ("gettimeofday");
-
-    if (vasprintf (&str, fmt, ap) < 0)
-        oom ();
-    if (strlen (str) == 0) {
-        errno = EINVAL;
-        goto error;
-    }
-    util_json_object_add_int (o, "count", 1);
-    util_json_object_add_string (o, "facility", fac);
-    util_json_object_add_int (o, "level", level);
-    util_json_object_add_string (o, "source", src);
-    util_json_object_add_timeval (o, "timestamp", &tv);
-    util_json_object_add_string (o, "message", str);
-    free (str);
-    return o;
-error:
-    if (str)
-        free (str);
-    json_object_put (o);
-    return NULL;
-}
-
-void cmbd_log (ctx_t *ctx, int lev, const char *fmt, ...)
-{
-    va_list ap;
-    json_object *o;
-    char *myaddr;
-
-    if (asprintf (&myaddr, "%d", ctx->rank) < 0)
-        oom ();
-    va_start (ap, fmt);
-    o = log_create (lev, "cmb", myaddr, fmt, ap);
-    va_end (ap);
-
-    if (o) {
-        request_send (ctx, o, "log.msg");
-        json_object_put (o);
-    }
-    free (myaddr);
-}
-
 static void _reparent (ctx_t *ctx)
 {
     int i;
 
     for (i = 0; i < ctx->parent_len; i++) {
         if (i != ctx->parent_cur && ctx->parent_alive[i]) {
-            cmbd_log (ctx, LOG_ALERT, "reparent %d->%d",
+            flux_log (ctx->h, LOG_ALERT, "reparent %d->%d",
                   ctx->parent[ctx->parent_cur].rank,
                   ctx->parent[i].rank);
-            if (ctx->parent_alive[ctx->parent_cur])
-                request_send (ctx, NULL, "cmb.route.goodbye.%d", ctx->rank);
+            if (ctx->parent_alive[ctx->parent_cur]) {
+                if (flux_request_send (ctx->h, NULL, "cmb.route.goodbye.%d",
+                                       ctx->rank) < 0)
+                    err_exit ("flux_request_send");
+            }
             if (ctx->verbose)
                 msg ("%s: disconnect %s, connect %s", __FUNCTION__,
                     ctx->parent[ctx->parent_cur].upreq_uri,
@@ -594,7 +515,8 @@ static void _reparent (ctx_t *ctx)
             ctx->parent_cur = i;
 
             usleep (1000*10); /* FIXME: message is lost without this delay */
-            request_send (ctx, NULL, "cmb.connect");
+            if (flux_request_send (ctx->h, NULL, "cmb.connect") < 0)
+                err_exit ("flux_request_send");
             break;
         }
     }
@@ -630,7 +552,8 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
         free (arg);
     } else if (cmb_msg_match (zmsg, "event.route.update")) {
         if (ctx->zs_upreq_out)
-            request_send (ctx, NULL, "cmb.route.hello");
+            if (flux_request_send (ctx->h, NULL, "cmb.route.hello") < 0)
+                err_exit ("flux_request_send");
     } else if (cmb_msg_match_substr (zmsg, "event.sched.trigger.", &arg)) {
         ctx->epoch = strtoul (arg, NULL, 10);
         free (arg);
@@ -639,82 +562,70 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
 
 static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
 {
-    char *arg;
+    char *arg = NULL;
+    bool handled = true;
 
     if (cmb_msg_match_substr (*zmsg, "cmb.route.add.", &arg)) {
-        json_object *o = NULL;
+        json_object *request = NULL;
         const char *gw = NULL, *parent = NULL;
         int flags = 0;
 
-        if (cmb_msg_decode (*zmsg, NULL, &o) == 0 && o != NULL) {
-            (void)util_json_object_get_string (o, "gw", &gw);
-            (void)util_json_object_get_string (o, "parent", &parent);
-            (void)util_json_object_get_int (o, "flags", &flags);
+        if (cmb_msg_decode (*zmsg, NULL, &request) == 0 && request != NULL) {
+            (void)util_json_object_get_string (request, "gw", &gw);
+            (void)util_json_object_get_string (request, "parent", &parent);
+            (void)util_json_object_get_int (request, "flags", &flags);
             if (gw)
                 route_add (ctx->rctx, arg, gw, parent, flags);
         }
-        if (o)
-            json_object_put (o);
-        zmsg_destroy (zmsg);
-        free (arg);
+        if (request)
+            json_object_put (request);
     } else if (cmb_msg_match_substr (*zmsg, "cmb.route.del.", &arg)) {
-        json_object *o = NULL;
+        json_object *request = NULL;
         const char *gw = NULL;
 
-        if (cmb_msg_decode (*zmsg, NULL, &o) == 0 && o != NULL) {
-            (void)util_json_object_get_string (o, "gw", &gw);
+        if (cmb_msg_decode (*zmsg, NULL, &request) == 0 && request != NULL) {
+            (void)util_json_object_get_string (request, "gw", &gw);
             if (gw)
                 route_del (ctx->rctx, arg, gw);
         }
-        if (o)
-            json_object_put (o);
-        zmsg_destroy (zmsg);
-        free (arg);
+        if (request)
+            json_object_put (request);
     } else if (cmb_msg_match (*zmsg, "cmb.route.query")) {
-        json_object *o = util_json_object_new_object ();
+        json_object *response = util_json_object_new_object ();
 
-        json_object_object_add (o, "route", route_dump_json (ctx->rctx, true));
-        if (cmb_msg_replace_json (*zmsg, o) == 0)
-            route_response (ctx, zmsg, true);
-        json_object_put (o);
-        if (*zmsg)
-            zmsg_destroy (zmsg);
+        json_object_object_add (response , "route",
+                                route_dump_json (ctx->rctx, true));
+        if (flux_respond (ctx->h, zmsg, response) < 0)
+            err_exit ("flux_respond");
+        json_object_put (response);
     } else if (cmb_msg_match (*zmsg, "cmb.route.hello")) {
         route_add_hello (ctx->rctx, *zmsg, 0);
         if (ctx->zs_upreq_out)
             zmsg_send (zmsg, ctx->zs_upreq_out); /* fwd upstream */
-        if (*zmsg)
-            zmsg_destroy (zmsg);
     } else if (cmb_msg_match_substr (*zmsg, "cmb.route.goodbye.", &arg)) {
         //route_del_subtree (ctx->rctx, arg);
         if (ctx->zs_upreq_out)
             zmsg_send (zmsg, ctx->zs_upreq_out); /* fwd upstream */
-        if (*zmsg)
-            zmsg_destroy (zmsg);
-        free (arg);
     } else if (cmb_msg_match (*zmsg, "cmb.connect")) {
-        if (ctx->epoch > 2) {
-            zmsg_t *z = cmb_msg_encode ("event.route.update", NULL);
-            if (ctx->zs_upev_out)
-                zmsg_cc (z, ctx->zs_upev_out);
-            if (ctx->zs_dnev_out)
-                zmsg_cc (z, ctx->zs_dnev_out);
-            zmsg_send (&z, ctx->zs_snoop);
-        }
-        if (*zmsg)
-            zmsg_destroy (zmsg);
+        if (ctx->epoch > 2)
+            flux_event_send (ctx->h, NULL, "event.route.update");
     } else if (cmb_msg_match (*zmsg, "cmb.info")) {
-        json_object *o = util_json_object_new_object ();
+        json_object *response = util_json_object_new_object ();
 
-        util_json_object_add_int (o, "rank", ctx->rank);
-        util_json_object_add_int (o, "size", ctx->size);
-        util_json_object_add_boolean (o, "treeroot", ctx->treeroot);
-        if (cmb_msg_replace_json (*zmsg, o) == 0)
-            route_response (ctx, zmsg, true);
-        json_object_put (o);
-        if (*zmsg)
-            zmsg_destroy (zmsg);
-    }
+        util_json_object_add_int (response, "rank", ctx->rank);
+        util_json_object_add_int (response, "size", ctx->size);
+        util_json_object_add_boolean (response, "treeroot", ctx->treeroot);
+        if (flux_respond (ctx->h, zmsg, response) < 0)
+            err_exit ("flux_respond");
+        json_object_put (response);
+    } else
+        handled = false;
+
+    if (arg)
+        free (arg);
+    /* If zmsg is not destroyed, route_request() will respond with ENOSYS */
+    if (handled && *zmsg)
+        zmsg_destroy (zmsg);
 }
 
 /* Parse message request tag into addr, service.
@@ -745,44 +656,26 @@ error:
 
 static void route_response (ctx_t *ctx, zmsg_t **zmsg, bool dnsock)
 {
-    char *sender = NULL;
-    char *nexthop = NULL;
-
     zmsg_cc (*zmsg, ctx->zs_snoop);
-
-    if (!(sender = cmb_msg_sender (*zmsg)))
-        oom ();
-    if (!(nexthop = cmb_msg_nexthop (*zmsg)))
-        oom ();
 
     /* case 1: responses heading upward on the 'dnreq' flow can reverse
      * direction if they are traversing the tree.
+     * Need to consult routing tables.  flux_response_sendmsg() does that.
      */
     if (dnsock) {
-        if (route_lookup (ctx->rctx, nexthop)) {
-            if (ctx->verbose)
-                msg ("%s: dnsock: DOWN %s!...!%s", __FUNCTION__, nexthop, sender);
-            zmsg_send (zmsg, ctx->zs_upreq_in);
-        } else if (ctx->zs_dnreq_in) {
-            if (ctx->verbose)
-                msg ("%s: dnsock: UP %s!...!%s", __FUNCTION__, nexthop, sender);
-            zmsg_send (zmsg, ctx->zs_dnreq_in);
-        }
-        if (ctx->verbose && *zmsg)
-            msg ("%s: dnsock: DROP %s!...!%s", __FUNCTION__, nexthop, sender);
+        if (flux_response_sendmsg (ctx->h, zmsg) < 0)
+            err ("%s: flux_response_sendmsg", __FUNCTION__);
 
     /* case 2: responses headed downward on 'upreq' flow must continue down.
+     * Ignore routing tables.
      */
-    } else {
-        if (ctx->verbose)
-            msg ("%s: upsock: DOWN %s!...!%s", __FUNCTION__, nexthop, sender);
-        zmsg_send (zmsg, ctx->zs_upreq_in);
-    }
+    } else if (ctx->zs_upreq_in) {
+        if (zmsg_send (zmsg, ctx->zs_upreq_in) < 0)
+            err ("%s: zmsg_send(zs_upreq_in)", __FUNCTION__);
 
-    if (sender)
-        free (sender);
-    if (nexthop)
-        free (nexthop);
+    } else
+        errn (EHOSTUNREACH, "%s", __FUNCTION__); /* DROP */
+
     if (*zmsg)
         zmsg_destroy (zmsg);
 }
@@ -796,9 +689,14 @@ static void route_request (ctx_t *ctx, zmsg_t **zmsg, bool dnsock)
         oom ();
     zmsg_cc (*zmsg, ctx->zs_snoop);
 
-    if (parse_message_tag (*zmsg, &addr, &service) < 0)
+    if (parse_message_tag (*zmsg, &addr, &service) < 0) {
+        errn (EPROTO, "%s: parse_message_tag failed", __FUNCTION__);
         goto done;
-    lasthop = cmb_msg_nexthop (*zmsg);
+    }
+    if (!(lasthop = cmb_msg_nexthop (*zmsg))) {
+        errn (EPROTO, "%s: cmb_msg_nexthop failed", __FUNCTION__);
+        goto done;
+    }
 
     /* case 1: request explicitly addressed to me, tag == mynode!service.
      * Lookup service in routing table and if found, route down, else NAK.
@@ -806,36 +704,23 @@ static void route_request (ctx_t *ctx, zmsg_t **zmsg, bool dnsock)
      */
     if (addr && !strcmp (addr, myaddr)) {
         if (!strcmp (service, "cmb")) {
-            if (ctx->verbose)
-                msg ("%s: loc addr: internal %s!%s", __FUNCTION__, addr, service);
             cmb_internal_request (ctx, zmsg);
-        } else {
-            gw = route_lookup (ctx->rctx, service);
-            if (gw) {
-                if (ctx->verbose)
-                    msg ("%s: loc addr: DOWN %s!%s", __FUNCTION__, addr, service);
-                zmsg_send_unrouter (zmsg, ctx->zs_dnreq_out, ctx->rank, gw);
-            }
-        }
-        if (ctx->verbose && *zmsg)
-            msg ("%s: loc addr: NAK %s!%s", __FUNCTION__, addr, service);
+        } else if ((gw = route_lookup (ctx->rctx, service))) {
+            if (zmsg_send_unrouter (zmsg, ctx->zs_dnreq_out, ctx->rank, gw) < 0)
+                err ("%s: zmsg_send_unrouter(zs_dnreq_out)", __FUNCTION__);
+        } /* else (silently) NAK */
 
     /* case 2: request explicitly addressed to a remote node, tag == N!service.
      * Lookup N and route down if found, route up if not found, or NAK at root.
      */
     } else if (addr) {
-        gw = route_lookup (ctx->rctx, addr);
-        if (gw) {
-            if (ctx->verbose)       
-                msg ("%s: remote addr: DOWN %s!%s", __FUNCTION__, addr, service);
-            zmsg_send_unrouter (zmsg, ctx->zs_dnreq_out, ctx->rank, gw);
+        if ((gw = route_lookup (ctx->rctx, addr))) {
+            if (zmsg_send_unrouter (zmsg, ctx->zs_dnreq_out, ctx->rank, gw) < 0)
+                err ("%s: zmsg_send_unrouter(zs_dnreq_out)", __FUNCTION__);
         } else if (!dnsock && ctx->zs_upreq_out) {
-            if (ctx->verbose)
-                msg ("%s: remote addr: UP %s!%s", __FUNCTION__, addr, service);
-            zmsg_send (zmsg, ctx->zs_upreq_out);
-        }
-        if (ctx->verbose && *zmsg)
-            msg ("%s: remote addr: NAK %s!%s", __FUNCTION__, addr, service);
+            if (zmsg_send (zmsg, ctx->zs_upreq_out) < 0)
+                err ("%s: zmsg_send(zs_upreq_out", __FUNCTION__);
+        } /* else (silently) NAK */
 
     /* case 3: request not addressed, e.g. tag == service.
      * Lookup service and route down if found (and not looping back to sender).
@@ -844,30 +729,23 @@ static void route_request (ctx_t *ctx, zmsg_t **zmsg, bool dnsock)
      */
     } else {
         if (!strcmp (service, "cmb")) {
-            if (ctx->verbose)
-                msg ("%s: no addr: internal %s", __FUNCTION__, service);
             cmb_internal_request (ctx, zmsg);
         } else {
             gw = route_lookup (ctx->rctx, service);
             if (gw && (!lasthop || strcmp (gw, lasthop)) != 0) {
-                if (ctx->verbose)
-                    msg ("%s: no addr: DOWN %s", __FUNCTION__, service);
-                zmsg_send_unrouter (zmsg, ctx->zs_dnreq_out, ctx->rank, gw);
+                if (zmsg_send_unrouter (zmsg, ctx->zs_dnreq_out, ctx->rank, gw) < 0)
+                    err ("%s: zmsg_send_unrouter(zs_dnreq_out)", __FUNCTION__);
             } else if (!dnsock && ctx->zs_upreq_out) {
-                if (ctx->verbose)
-                    msg ("%s: no addr: UP %s", __FUNCTION__, service);
-                zmsg_send (zmsg, ctx->zs_upreq_out);
-            }
+                if (zmsg_send (zmsg, ctx->zs_upreq_out) < 0)
+                    err ("%s: zmsg_send(zs_upreq_out)", __FUNCTION__);
+            } /* else (silently) NAK */
         }
-        if (ctx->verbose && *zmsg)
-            msg ("%s: no addr: NAK %s", __FUNCTION__, service);
     }
 
     /* send NAK reply if message was not routed above */
     if (*zmsg) {
-        if (cmb_msg_replace_json_errnum (*zmsg, ENOSYS) < 0)
-            goto done;
-        route_response (ctx, zmsg, true);
+        if (flux_respond_errnum (ctx->h, zmsg, ENOSYS) < 0)
+            err_exit ("%s: flux_respond", __FUNCTION__);
     }
 done:
     if (*zmsg)
@@ -968,6 +846,100 @@ static void cmb_poll (ctx_t *ctx)
 
     assert (zmsg == NULL);
 }
+
+/* flux_t handle operations
+ * (routing logic needs to access sockets directly, but handle is still
+ * useful in handling internal "services" and making some higher level
+ * calls such as flux_log().
+ * NOTE: Avoid making blocking RPC calls in the cmbd poll loop!
+ */
+
+static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
+{
+    ctx_t *ctx = impl;
+    char *addr = NULL, *service = NULL;
+    const char *gw;
+    int rc = -1;
+
+    if (parse_message_tag (*zmsg, &addr, &service) < 0)
+        goto done;
+    if (addr) { /* FIXME: N!tag style addressing currently unsupported here */
+        errno = EHOSTUNREACH;
+        goto done;
+    }
+    gw = route_lookup (ctx->rctx, service);
+    if (gw) {
+        if (zmsg_send_unrouter (zmsg, ctx->zs_dnreq_out, ctx->rank, gw) < 0)
+            goto done;
+    } else if (ctx->zs_upreq_out) {
+        if (zmsg_send (zmsg, ctx->zs_upreq_out) < 0)
+            goto done;
+    } else  {
+        errno = EHOSTUNREACH;
+        goto done;
+    }
+    rc = 0;
+done:
+    if (addr)
+        free (addr);
+    if (service)
+        free (service);
+    return rc;
+}
+
+static int cmbd_response_sendmsg (void *impl, zmsg_t **zmsg)
+{
+    ctx_t *ctx = impl;
+    int rc = -1;
+    char *nexthop;
+
+    if (!(nexthop = cmb_msg_nexthop (*zmsg))) {
+        if (errno == 0)
+            errno = EPROTO;
+        goto done;
+    }
+    if (route_lookup (ctx->rctx, nexthop)) {
+        if (zmsg_send (zmsg, ctx->zs_upreq_in) < 0)
+            goto done;
+    } else if (ctx->zs_dnreq_in) {
+        if (zmsg_send (zmsg, ctx->zs_dnreq_in) < 0)
+            goto done;
+    } else {
+        errno = EHOSTUNREACH;
+        goto done; /* DROP */
+    }
+    rc = 0;
+done:
+    if (nexthop)
+        free (nexthop);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+    return rc;
+}
+
+static int cmbd_event_sendmsg (void *impl, zmsg_t **zmsg)
+{
+    ctx_t *ctx = impl;
+
+    if (ctx->zs_dnev_out)
+        zmsg_cc (*zmsg, ctx->zs_dnev_out);
+    if (ctx->zs_upev_out)
+        zmsg_cc (*zmsg, ctx->zs_upev_out);
+    return zmsg_cc (*zmsg, ctx->zs_snoop);
+}
+
+static int cmbd_rank (void *impl)
+{
+    ctx_t *ctx = impl;
+    return ctx->rank;
+}
+
+static const struct flux_handle_ops cmbd_handle_ops = {
+    .request_sendmsg = cmbd_request_sendmsg,
+    .response_sendmsg = cmbd_response_sendmsg,
+    .event_sendmsg = cmbd_event_sendmsg,
+    .rank = cmbd_rank,
+};
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
