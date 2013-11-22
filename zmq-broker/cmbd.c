@@ -306,8 +306,7 @@ static int load_plugin (ctx_t *ctx, char *name)
     else if (!strcmp (name, "api"))
         args = ctx->api_arg;
 
-    if ((p = plugin_load (ctx->zctx, ctx->rank, ctx->plugin_path,
-                          name, id, args))) {
+    if ((p = plugin_load (ctx->h, ctx->plugin_path, name, id, args))) {
         if (zhash_insert (ctx->loaded_plugins, name, p) < 0) {
             plugin_unload (p);
             goto done;
@@ -934,11 +933,18 @@ static int cmbd_rank (void *impl)
     return ctx->rank;
 }
 
+static zctx_t *cmbd_get_zctx (void *impl)
+{
+    ctx_t *ctx = impl;
+    return ctx->zctx;
+}
+
 static const struct flux_handle_ops cmbd_handle_ops = {
     .request_sendmsg = cmbd_request_sendmsg,
     .response_sendmsg = cmbd_response_sendmsg,
     .event_sendmsg = cmbd_event_sendmsg,
     .rank = cmbd_rank,
+    .get_zctx = cmbd_get_zctx,
 };
 
 /*

@@ -36,7 +36,7 @@ typedef struct plugin_ctx_struct *plugin_ctx_t;
  * socket.  'args' is a hash of key-value pairs that may be NULL, or may
  * be used to pass arguments to the plugins's ops->init() function.
  */
-plugin_ctx_t plugin_load (zctx_t *zctx, int rank, const char *searchpath,
+plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
                           char *name, char *id, zhash_t *args);
 
 /* Unload a plugin by handle.

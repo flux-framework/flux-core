@@ -561,11 +561,10 @@ static void *plugin_dlopen (const char *searchpath, const char *name)
     return dso;
 }
 
-plugin_ctx_t plugin_load (zctx_t *zctx, int rank, const char *searchpath,
+plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
                           char *name, char *id, zhash_t *args)
 {
     plugin_ctx_t p;
-    flux_t h;
     int errnum;
     const struct plugin_ops *ops;
     void *dso;
@@ -585,27 +584,25 @@ plugin_ctx_t plugin_load (zctx_t *zctx, int rank, const char *searchpath,
 
     p = xzmalloc (sizeof (*p));
     p->magic = PLUGIN_MAGIC;
-    p->zctx = zctx;
+    p->zctx = flux_get_zctx (h);
     p->args = args;
     p->ops = ops;
     p->dso = dso;
     p->name = xstrdup (name);
     p->id = xstrdup (id);
-    p->rank = rank;
+    p->rank = flux_rank (h);
     if (!(p->deferred_responses = zlist_new ()))
         oom ();
 
-    h = flux_handle_create (p, &plugin_handle_ops, 0);
-    p->h = h;
-
-    flux_log_set_facility (h, name);
+    p->h = flux_handle_create (p, &plugin_handle_ops, 0);
+    flux_log_set_facility (p->h, name);
 
     /* connect sockets in the parent, then use them in the thread */
-    zconnect (zctx, &p->zs_upreq, ZMQ_DEALER, UPREQ_URI, -1, id);
-    zconnect (zctx, &p->zs_dnreq, ZMQ_DEALER, DNREQ_URI, -1, id);
-    zconnect (zctx, &p->zs_evin,  ZMQ_SUB, DNEV_OUT_URI, 0, NULL);
-    zconnect (zctx, &p->zs_evout, ZMQ_PUB, DNEV_IN_URI, -1, NULL);
-    zconnect (zctx, &p->zs_snoop, ZMQ_SUB, SNOOP_URI, -1, NULL);
+    zconnect (p->zctx, &p->zs_upreq, ZMQ_DEALER, UPREQ_URI, -1, id);
+    zconnect (p->zctx, &p->zs_dnreq, ZMQ_DEALER, DNREQ_URI, -1, id);
+    zconnect (p->zctx, &p->zs_evin,  ZMQ_SUB, DNEV_OUT_URI, 0, NULL);
+    zconnect (p->zctx, &p->zs_evout, ZMQ_PUB, DNEV_IN_URI, -1, NULL);
+    zconnect (p->zctx, &p->zs_snoop, ZMQ_SUB, SNOOP_URI, -1, NULL);
 
     errnum = pthread_create (&p->t, NULL, plugin_thread, p);
     if (errnum)
