@@ -4,7 +4,7 @@ LIBDIR =          $(TOP)/lib
 EXTRA_CFLAGS +=   -I$(TOP) -I$(TOP)/include -I$(TOP)/util
 EXTRA_LDFLAGS +=  -L$(TOP)/lib $(TOP)/util/libutil.a
 
-SUBDIRS :=        wreck
+SUBDIRS :=        wreck dlua
 SUBDIRS_POST :=   test
 
 ifeq ($(shell hostname),jimbo.chaos)
