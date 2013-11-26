@@ -138,6 +138,33 @@ int flux_log_dump (flux_t h, int lev, const char *fac);
 char *flux_log_decode (zmsg_t *zmsg, int *lp, char **fp, int *cp,
                     struct timeval *tvp, char **sp);
 
+/* Flux reactor API
+ */
+enum {
+    FLUX_MSGTYPE_REQUEST = 1,
+    FLUX_MSGTYPE_RESPONSE = 2,
+    FLUX_MSGTYPE_EVENT = 4,
+    FLUX_MSGTYPE_SNOOP = 8,
+    FLUX_MSGTYPE_ANY = (FLUX_MSGTYPE_REQUEST|FLUX_MSGTYPE_RESPONSE
+                       |FLUX_MSGTYPE_EVENT|FLUX_MSGTYPE_SNOOP)
+};
+
+typedef int (*FluxMsgHandler)(flux_t h, int typemask, zmsg_t *zmsg, void *arg);
+typedef int (*FluxFdHandler)(flux_t h, int fd, short revents, void *arg);
+
+int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
+                         FluxMsgHandler cb, void *arg);
+int flux_msghandler_append (flux_t h, int typemask, const char *pattern,
+                            FluxMsgHandler cb, void *arg);
+int flux_msghandler_remove (flux_t h, int typemask, const char *pattern);
+
+int flux_fdhandler_add (flux_t h, int fd, short events,
+                        FluxFdHandler cb, void *arg);
+void flux_fdhandler_remove (flux_t h, int fd, short events);
+
+int flux_poll (flux_t h);
+
+
 #endif /* !defined(FLUX_H) */
 
 /*
