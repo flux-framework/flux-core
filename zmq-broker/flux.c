@@ -43,6 +43,7 @@ static void help (void)
     usage ();
     fprintf (stderr, "\nThe most commonly used flux commands are:\n"
 "   kvs        Get and put simple values in the Flux key-value store\n"
+"   kvswatch   Watch values in the Flux key-value store\n"
 "   ping       Time round-trip RPC to a Flux plugin\n"
 "   mecho      Time round-trip group RPC to the mecho plugin\n"
 "   route      Manipulate routing tables in the Flux message broker\n"

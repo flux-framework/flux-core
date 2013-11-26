@@ -43,7 +43,8 @@ PLUGINS = plugins/apisrv.so plugins/syncsrv.so plugins/kvssrv.so \
 	plugins/resrcsrv.so plugins/rexecsrv.so plugins/schedsrv.so
 
 SUBCMDS = libexec/kvs libexec/ping libexec/mecho libexec/route \
-	libexec/stats libexec/barrier libexec/snoop libexec/event
+	libexec/stats libexec/barrier libexec/snoop libexec/event \
+	libexec/kvswatch
 
 BUILD = $(LIBCMB) $(LIBPMI) flux cmbutil mpi_hello echo cmbd \
 	$(PLUGINS) $(SUBCMDS)
