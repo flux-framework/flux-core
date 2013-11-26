@@ -322,7 +322,7 @@ static void plugin_handle_response (plugin_ctx_t p, zmsg_t *zmsg)
     if (!strcmp (tag, "kvs.watch"))
         kvs_watch_response (p->h, &zmsg); /* consumes zmsg on match */
     if (zmsg && p->ops->recv)
-        p->ops->recv (p->h, &zmsg, ZMSG_RESPONSE);
+        p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_RESPONSE);
     if (zmsg)
         msg ("discarding unexpected response from %s", tag);
 done:
@@ -382,7 +382,7 @@ static int dnreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
     else if (!strcmp (method, "stats"))
         plugin_stats_respond (p, &zmsg);
     else if (zmsg && p->ops->recv)
-        p->ops->recv (p->h, &zmsg, ZMSG_REQUEST);
+        p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_REQUEST);
     /* If request wasn't handled above, NAK it.
      */
     if (zmsg) {
@@ -408,7 +408,7 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
     p->stats.event_recv_count++;
 
     if (zmsg && p->ops->recv)
-        p->ops->recv (p->h, &zmsg, ZMSG_EVENT);
+        p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_EVENT);
 
     if (zmsg)
         zmsg_destroy (&zmsg);
@@ -422,7 +422,7 @@ static int snoop_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
     zmsg_t *zmsg =  zmsg_recv (p->zs_snoop);
 
     if (zmsg && p->ops->recv)
-        p->ops->recv (p->h, &zmsg, ZMSG_SNOOP);
+        p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_SNOOP);
 
 
     if (zmsg)
