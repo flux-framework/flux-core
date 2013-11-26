@@ -54,6 +54,8 @@ static void help (void)
 "   snoop      Snoop on local Flux message broker traffic\n"
 "   event      Send and receive Flux events\n"
 "   logger     Log a message to Flux logging system\n"
+"   log        Manipulate flux logs\n"
+"   info       Display local rank, session size, and treeroot status\n"
 );
 }
 
