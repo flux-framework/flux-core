@@ -30,7 +30,6 @@ COMMON_OBJS = kvscli.o barriercli.o logcli.o cmbdcli.o mrpc.o handle.o
 CMBD_OBJS = route.o plugin.o $(COMMON_OBJS) cmbd.o
 
 FLUX_OBJS = flux.o
-CMBUTIL_OBJS = cmbutil.o
 LIBPMI_OBJS = pmi.o
 LIBCMB_OBJS = apicli.o $(COMMON_OBJS)
 
@@ -47,7 +46,7 @@ SUBCMDS = libexec/kvs libexec/ping libexec/mecho libexec/route \
 	libexec/kvswatch libexec/kvsdir libexec/kvstorture \
 	libexec/logger libexec/log libexec/info
 
-BUILD = $(LIBCMB) $(LIBPMI) flux cmbutil mpi_hello echo cmbd \
+BUILD = $(LIBCMB) $(LIBPMI) flux mpi_hello echo cmbd \
 	$(PLUGINS) $(SUBCMDS)
 
 all: subdirs $(BUILD) subdirs_post
@@ -69,9 +68,6 @@ subdirs_post:
 
 cmbd: $(CMBD_OBJS)
 	$(CC) -o $@ $(CMBD_OBJS) $(LDADD_SRV)
-
-cmbutil: $(CMBUTIL_OBJS) $(LIBCMB)
-	$(CC) $(LDFLAGS) -o $@ $(CMBUTIL_OBJS) -L$(LIBDIR) -lcmb $(LDADD_CLI)
 
 flux: $(FLUX_OBJS) $(LIBCMB)
 	$(CC) $(LDFLAGS) -o $@ $(FLUX_OBJS) $(LDADD_CLI)
@@ -106,12 +102,12 @@ clean:
 	rm -f *.o *.so $(BUILD)
 	rm -rf $(LIBDIR)/
 	rm -rf plugins/
+	rm -rf libexec
 	@make -C util clean
 	@for f in $(SUBDIRS) $(SUBDIRS_POST); do make -C $$f clean; done
 
 # header dependencies
-OBJS = $(CMBD_OBJS) $(CMBUTIL_OBJS) $(TBASE64_OBJS) \
-	$(LIBPMI_OBJS) $(LIBCMB_OBJS)
+OBJS = $(CMBD_OBJS) $(FLUX_OBJS) $(LIBPMI_OBJS) $(LIBCMB_OBJS)
 INCLUDES = $(wildcard *.h include/*.h)
 $(OBJS): $(INCLUDES)
 
@@ -132,20 +128,3 @@ dokvstest: test/tpmikvs
 	$(SRUN) $<
 dokvstest_nsquared: test/tpmikvs
 	$(SRUN) $< --n-squared
-dokvstest_nsquared_cached: test/tpmikvs
-	$(SRUN) $< --n-squared
-
-barrier:
-	time -p $(SRUN) ./cmbutil -b testbarrier
-barrier_torture:
-	time -p $(SRUN) ./cmbutil -B 100000
-
-# Use with single redis configs
-clear:
-	redis-cli flushall
-	redis-cli config resetstat
-keys:
-	@redis-cli info|grep db0:
-info:
-	-redis-cli info
-
