@@ -16,7 +16,8 @@ endif
 CFLAGS = -Werror -Wall -g -fPIC $(EXTRA_CFLAGS) \
 	-DWITH_LSD_NOMEM_ERROR_FUNC -DWITH_LSD_FATAL_ERROR_FUNC \
 	-DWANT_RECKLESS_HOSTRANGE_EXPANSION \
-	-DPLUGIN_PATH=\"$(TOP)/plugins\"
+	-DPLUGIN_PATH=\"$(TOP)/plugins\" \
+	-DEXEC_PATH=\"$(TOP)/libexec\"
 LDFLAGS = -Wl,-rpath,$(LIBDIR)
 
 export CFLAGS LDFLAGS
@@ -28,6 +29,7 @@ LDADD_SRV = -pthread -rdynamic $(LDADD_CLI) -ldl
 COMMON_OBJS = kvscli.o barriercli.o logcli.o cmbdcli.o mrpc.o handle.o
 CMBD_OBJS = route.o plugin.o $(COMMON_OBJS) cmbd.o
 
+FLUX_OBJS = flux.o
 CMBUTIL_OBJS = cmbutil.o
 LIBPMI_OBJS = pmi.o
 LIBCMB_OBJS = apicli.o $(COMMON_OBJS)
@@ -40,7 +42,11 @@ PLUGINS = plugins/apisrv.so plugins/syncsrv.so plugins/kvssrv.so \
 	plugins/logsrv.so plugins/echosrv.so plugins/jobsrv.so \
 	plugins/resrcsrv.so plugins/rexecsrv.so plugins/schedsrv.so
 
-BUILD = $(LIBCMB) $(LIBPMI) cmbutil mpi_hello echo cmbd $(PLUGINS)
+SUBCMDS = libexec/kvs libexec/ping libexec/mecho libexec/route \
+	libexec/stats libexec/barrier libexec/snoop
+
+BUILD = $(LIBCMB) $(LIBPMI) flux cmbutil mpi_hello echo cmbd \
+	$(PLUGINS) $(SUBCMDS)
 
 all: subdirs $(BUILD) subdirs_post
 
@@ -64,6 +70,12 @@ cmbd: $(CMBD_OBJS)
 
 cmbutil: $(CMBUTIL_OBJS) $(LIBCMB)
 	$(CC) $(LDFLAGS) -o $@ $(CMBUTIL_OBJS) -L$(LIBDIR) -lcmb $(LDADD_CLI)
+
+flux: $(FLUX_OBJS) $(LIBCMB)
+	$(CC) $(LDFLAGS) -o $@ $(FLUX_OBJS) $(LDADD_CLI)
+libexec/%: flux-%.o
+	mkdir -p $(shell dirname $@)
+	$(CC) $(LDFLAGS) -o $@ $< -L$(LIBDIR) -lcmb $(LDADD_CLI)
 
 $(LIBPMI): $(LIBPMI_OBJS) $(LIBCMB)
 	mkdir -p $(shell dirname $@)
