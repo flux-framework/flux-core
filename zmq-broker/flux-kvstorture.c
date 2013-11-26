@@ -30,7 +30,7 @@ int main (int argc, char *argv[])
     flux_t h;
     int ch;
     int i, iter = -1;
-    char key[16], val[16];
+    char key[64], val[64];
     struct timespec t0;
     json_object *vo = NULL;
 
@@ -55,17 +55,21 @@ int main (int argc, char *argv[])
     if (!(h = cmb_init ()))
         err_exit ("cmb_init");
 
+    if (kvs_unlink (h, "kvstorture") < 0)
+        err_exit ("kvs_unlink");
+
     monotime (&t0);
     for (i = 0; i < iter; i++) {
-        snprintf (key, sizeof (key), "key%d", i);
-        snprintf (val, sizeof (key), "val%d", i);
+        snprintf (key, sizeof (key), "kvstorture.key%d", i);
+        snprintf (val, sizeof (key), "kvstorture.val%d", i);
         vo = json_object_new_string (val);
         if (kvs_put (h, key, vo) < 0)
             err_exit ("kvs_put");
         if (vo)
             json_object_put (vo);
     }
-    msg ("kvs_put:    time=%0.3f ms", monotime_since (t0));
+    msg ("kvs_put:    time=%0.3f ms (%d iterations)",
+         monotime_since (t0), iter);
 
     monotime (&t0);
     if (kvs_commit (h) < 0)
@@ -74,8 +78,8 @@ int main (int argc, char *argv[])
 
     monotime (&t0);
     for (i = 0; i < iter; i++) {
-        snprintf (key, sizeof (key), "key%d", i);
-        snprintf (val, sizeof (key), "val%d", i);
+        snprintf (key, sizeof (key), "kvstorture.key%d", i);
+        snprintf (val, sizeof (key), "kvstorture.val%d", i);
         if (kvs_get (h, key, &vo) < 0)
             err_exit ("kvs_get");
         if (strcmp (json_object_get_string (vo), val) != 0)
@@ -84,7 +88,8 @@ int main (int argc, char *argv[])
         if (vo)
             json_object_put (vo);
     }
-    msg ("kvs_get:    time=%0.3f ms", monotime_since (t0));
+    msg ("kvs_get:    time=%0.3f ms (%d iterations)",
+         monotime_since (t0), iter);
 
     flux_handle_destroy (&h);
     log_fini ();
