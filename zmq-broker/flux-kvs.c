@@ -10,9 +10,10 @@
 #include "util.h"
 #include "log.h"
 
-#define OPTIONS "h"
+#define OPTIONS "hd"
 static const struct option longopts[] = {
     {"help",       no_argument,  0, 'h'},
+    {"dropcache",  no_argument,  0, 'd'},
     { 0, 0, 0, 0 },
 };
 
@@ -22,8 +23,7 @@ void put (flux_t h, const char *key, const char *val);
 
 void usage (void)
 {
-    fprintf (stderr, 
-"Usage: flux-kvs key[=val] [key[=val]] ...\n"
+    fprintf (stderr, "Usage: flux-kvs [--dropcache] key[=val] [key[=val]] ...\n"
 "where the arguments are one or more of:\n"
 "    key         displays value of key\n"
 "    key=        unlinks key\n"
@@ -45,6 +45,7 @@ int main (int argc, char *argv[])
     flux_t h;
     bool need_commit = false;
     int i, ch;
+    bool dopt;
 
     log_init (basename (argv[0]));
 
@@ -53,16 +54,24 @@ int main (int argc, char *argv[])
             case 'h': /* --help */
                 usage ();
                 break;
+            case 'd': /* --dropcache */
+                dopt = true;
+                break;
             default:
                 usage ();
                 break;
         }
     }
-    if (optind == argc)
+    if (optind == argc && !dopt)
         usage ();
 
     if (!(h = cmb_init ()))
         err_exit ("cmb_init");
+
+    if (dopt) {
+        if (kvs_dropcache (h) < 0)
+            err_exit ("kvs_dropcache");
+    }
 
     for (i = 1; i < argc; i++) {
         char *key = xstrdup (argv[i]);

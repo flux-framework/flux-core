@@ -44,6 +44,8 @@ static void help (void)
     fprintf (stderr, "\nThe most commonly used flux commands are:\n"
 "   kvs        Get and put simple values in the Flux key-value store\n"
 "   kvswatch   Watch values in the Flux key-value store\n"
+"   kvsdir     List key-value pairs in the Flux key-value store\n"
+"   kvstorture Torture-test the Flux key-value store\n"
 "   ping       Time round-trip RPC to a Flux plugin\n"
 "   mecho      Time round-trip group RPC to the mecho plugin\n"
 "   route      Manipulate routing tables in the Flux message broker\n"
@@ -51,6 +53,7 @@ static void help (void)
 "   barrier    Execute a Flux barrier\n"
 "   snoop      Snoop on local Flux message broker traffic\n"
 "   event      Send and receive Flux events\n"
+"   logger     Log a message to Flux logging system\n"
 );
 }
 

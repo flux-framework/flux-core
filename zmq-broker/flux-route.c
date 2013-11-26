@@ -86,7 +86,8 @@ int main (int argc, char *argv[])
         printf ("%s\n", json_object_to_json_string_ext (o,
                                     JSON_C_TO_STRING_PRETTY));
         json_object_put (o);
-    }
+    } else
+        usage ();
 
     flux_handle_destroy (&h);
     log_fini ();
