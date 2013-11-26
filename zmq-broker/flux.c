@@ -49,6 +49,7 @@ static void help (void)
 "   stats      Obtain message counts from a Flux plugin\n"
 "   barrier    Execute a Flux barrier\n"
 "   snoop      Snoop on local Flux message broker traffic\n"
+"   event      Send and receive Flux events\n"
 );
 }
 

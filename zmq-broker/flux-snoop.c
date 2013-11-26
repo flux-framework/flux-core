@@ -58,6 +58,8 @@ int main (int argc, char *argv[])
         zmsg_dump_compact (zmsg);
         zmsg_destroy (&zmsg);
     }
+    if (flux_event_unsubscribe (h, topic) < 0)
+        err_exit ("flux_snoop_unsubscribe");
 
     flux_handle_destroy (&h);
     log_fini ();
