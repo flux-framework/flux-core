@@ -255,7 +255,7 @@ static void barrier_exit (ctx_t *ctx, char *name, int errnum, zmsg_t **zmsg)
 /* Define plugin entry points.
  */
 
-static void barriersrv_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
+static void barriersrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
 {
     ctx_t *ctx = getctx (h);
     char *name = NULL;

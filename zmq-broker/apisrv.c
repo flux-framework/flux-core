@@ -317,23 +317,16 @@ static void recv_snoop (ctx_t *ctx, zmsg_t **zmsg)
     }
 }
 
-static void apisrv_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
+static void apisrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
 {
     ctx_t *ctx = getctx (h);
 
-    switch (type) {
-        case ZMSG_REQUEST:
-            break;
-        case ZMSG_EVENT:
-            recv_event (ctx, zmsg);
-            break;
-        case ZMSG_RESPONSE:
-            recv_response (ctx, zmsg);
-            break;
-        case ZMSG_SNOOP:
-            recv_snoop (ctx, zmsg);
-            break;
-    }
+    if ((typemask & FLUX_MSGTYPE_EVENT))
+        recv_event (ctx, zmsg);
+    else if ((typemask & FLUX_MSGTYPE_RESPONSE))
+        recv_response (ctx, zmsg);
+    else if ((typemask & FLUX_MSGTYPE_SNOOP))
+        recv_snoop (ctx, zmsg);
 }
 
 static int listener_cb (zloop_t *zl, zmq_pollitem_t *zp, ctx_t *ctx)

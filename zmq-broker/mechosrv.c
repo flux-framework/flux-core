@@ -10,13 +10,13 @@
 
 /* Copy input arguments to output arguments and respond to RPC.
  */
-static void mechosrv_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
+static void mechosrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
 {
     json_object *request = NULL;
     json_object *inarg = NULL;
     flux_mrpc_t f = NULL;
 
-    if (type != ZMSG_EVENT) {
+    if (!(typemask & FLUX_MSGTYPE_EVENT)) {
         flux_log (h, LOG_ERR, "ignoring non-event message");
         goto done;
     }

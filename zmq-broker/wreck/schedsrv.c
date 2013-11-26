@@ -68,27 +68,20 @@ static int _sched_init (flux_t p, zhash_t *args)
     return 0;
 }
 
-static void _recv (flux_t p, zmsg_t **zmsg, zmsg_type_t type)
+static void _recv (flux_t p, zmsg_t **zmsg, int typemask)
 {
     char *tag = cmb_msg_tag (*zmsg, false);
 
-    switch (type) {
-    case ZMSG_REQUEST:
+    if ((typemask & FLUX_MSGTYPE_REQUEST))
         flux_log (p, LOG_INFO, "received request %s", tag);
-        break;
-    case ZMSG_RESPONSE:
+    else if ((typemask & FLUX_MSGTYPE_RESPONSE))
         flux_log (p, LOG_INFO, "received response %s", tag);
-        break;
-    case ZMSG_EVENT:
+    else if ((typemask & FLUX_MSGTYPE_EVENT))
         flux_log (p, LOG_INFO, "received event %s", tag);
-        break;
-    case ZMSG_SNOOP:
+    else if ((typemask & FLUX_MSGTYPE_SNOOP))
         flux_log (p, LOG_INFO, "received snoop %s", tag);
-        break;
-    default:
+    else
         flux_log (p, LOG_ERR, "received unknown %s", tag);
-        break;
-    }
     free (tag);
     zmsg_destroy (zmsg);
 }

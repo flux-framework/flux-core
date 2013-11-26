@@ -397,20 +397,14 @@ static void handle_request (struct rexec_ctx *ctx, zmsg_t **zmsg)
         zmsg_destroy (zmsg);
 }
 
-static void handle_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
+static void handle_recv (flux_t h, zmsg_t **zmsg, int typemask)
 {
     struct rexec_ctx *ctx = getctx (h);
 
-    switch (type) {
-        case ZMSG_REQUEST:
-            handle_request (ctx, zmsg);
-            break;
-        case ZMSG_EVENT:
-            handle_event (ctx, zmsg);
-            break;
-        default:
-            break;
-    }
+    if ((typemask & FLUX_MSGTYPE_REQUEST))
+        handle_request (ctx, zmsg);
+    else if ((typemask & FLUX_MSGTYPE_EVENT))
+        handle_event (ctx, zmsg);
 }
 
 static int rexec_init (flux_t h, zhash_t *args)

@@ -1482,7 +1482,7 @@ static void kvs_disconnect (ctx_t *ctx, char *arg, zmsg_t **zmsg)
     zmsg_destroy (zmsg);
 }
 
-static void kvssrv_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
+static void kvssrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
 {
     ctx_t *ctx = getctx (h);
     char *arg = NULL;
@@ -1504,27 +1504,27 @@ static void kvssrv_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
     } else if (cmb_msg_match (*zmsg, "kvs.disconnect")) {
         kvs_disconnect (ctx, NULL, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.load")) {
-        if (type == ZMSG_REQUEST)
+        if ((typemask & FLUX_MSGTYPE_REQUEST))
             kvs_load (ctx, NULL, zmsg);
         else
             kvs_load_response (ctx, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.store")) {
-        if (type == ZMSG_REQUEST)
+        if ((typemask & FLUX_MSGTYPE_REQUEST))
             kvs_store (ctx, NULL, zmsg);
         else
             kvs_store_response (ctx, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.name")) {
-        if (type == ZMSG_REQUEST)
+        if ((typemask & FLUX_MSGTYPE_REQUEST))
             kvs_name (ctx, NULL, zmsg);
         else
             kvs_name_response (ctx, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.flush")) {
-        if (type == ZMSG_REQUEST)
+        if ((typemask & FLUX_MSGTYPE_REQUEST))
             kvs_flush_request (ctx, NULL, zmsg);
         else
             kvs_flush_response (ctx, zmsg);
     } else if (cmb_msg_match (*zmsg, "kvs.commit")) {
-        if (type == ZMSG_REQUEST)
+        if ((typemask & FLUX_MSGTYPE_REQUEST))
             kvs_commit_request (ctx, NULL, zmsg);
         else
             kvs_commit_response (ctx, zmsg);
