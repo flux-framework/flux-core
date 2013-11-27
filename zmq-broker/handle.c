@@ -422,9 +422,9 @@ static bool dispatch_info_match (struct dispatch_info *info,
     return false;
 }
 
-static void dispatch_msghandler (int typemask, zmsg_t **zmsg, void *arg)
+static void dispatch_msghandler (flux_t h, int typemask, zmsg_t **zmsg,
+                                 void *arg)
 {
-    flux_t h = arg;
     struct dispatch_info *info;
     char *tag;
 
@@ -435,23 +435,36 @@ static void dispatch_msghandler (int typemask, zmsg_t **zmsg, void *arg)
     while (info) {
         if (dispatch_info_match (info, tag, typemask)) {
             info->fn (h, typemask, zmsg, arg);
-            if (!*zmsg) /* fall through to next match if message not consumed */
+            if (!*zmsg)
                 break;
+            /* fall through to next match if zmsg uncomsumed */
         }
         info = zlist_next (h->dispatch->d);
     }
 done:
-    if (*zmsg)
-        zmsg_destroy (zmsg);
     if (tag)
         free (tag);
+    /* If we return with zmsg unconsumed, the impl's reactor will
+     * dispose of it.
+     */
 }
+
+static int dispatch_install (flux_t h)
+{
+    if (!h->ops->reactor_msghandler_set) {
+        errno = ENOSYS;
+        return -1;
+    }
+    return h->ops->reactor_msghandler_set (h->impl, dispatch_msghandler, NULL);
+};
 
 int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
                          FluxMsgHandler cb, void *arg)
 {
     struct dispatch_info *info;
 
+    if (dispatch_install (h) < 0)
+        return -1;
     info = dispatch_info_create (typemask, pattern, cb, arg);
     if (zlist_push (h->dispatch->d, info) < 0)
         oom ();
@@ -463,6 +476,8 @@ int flux_msghandler_append (flux_t h, int typemask, const char *pattern,
 {
     struct dispatch_info *info;
 
+    if (dispatch_install (h) < 0)
+        return -1;
     info = dispatch_info_create (typemask, pattern, cb, arg);
     if (zlist_append (h->dispatch->d, info) < 0)
         oom ();
@@ -506,7 +521,7 @@ int flux_reactor_start (flux_t h)
         errno = ENOSYS;
         return -1;
     }
-    return h->ops->reactor_start (h->impl, dispatch_msghandler, h);
+    return h->ops->reactor_start (h->impl);
 }
 
 void flux_reactor_stop (flux_t h)
