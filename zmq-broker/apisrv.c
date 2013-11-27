@@ -155,13 +155,20 @@ static int client_read (ctx_t *ctx, client_t *c)
 {
     zmsg_t *zmsg = NULL;
     char *name = NULL;
+    int typemask;
 
-    zmsg = zmsg_recv_fd (c->fd, true);
+    zmsg = zmsg_recv_fd_typemask (c->fd, &typemask, true);
     if (!zmsg) {
         if (errno != ECONNRESET && errno != EWOULDBLOCK && errno != EPROTO)
             err ("API read");
         return -1;
     }
+    if ((typemask & FLUX_MSGTYPE_EVENT)) {
+        flux_event_sendmsg (ctx->h, &zmsg);
+        goto done;
+    }
+    if (!(typemask & FLUX_MSGTYPE_REQUEST))
+        goto done; /* DROP */
         
     if (cmb_msg_match_substr (zmsg, "api.snoop.subscribe.", &name)) {
         zhash_insert (c->snoop_subscriptions, name, name);
@@ -187,14 +194,6 @@ static int client_read (ctx_t *ctx, client_t *c)
             if (flux_event_unsubscribe (ctx->h, name) < 0)
                 err_exit ("%s: flux_event_unsubscribe", __FUNCTION__);
         }
-    } else if (cmb_msg_match_substr (zmsg, "api.event.send.", &name)) {
-        json_object *o;
-        if (cmb_msg_decode (zmsg, NULL, &o) < 0)
-            err_exit ("%s: cmb_msg_decode", __FUNCTION__);
-        if (flux_event_send (ctx->h, o, "%s", name) < 0)
-            err_exit ("flux_event_send");
-        if (o)
-            json_object_put (o);
     } else {
         /* insert disconnect notifier before forwarding request */
         if (c->disconnect_notify) {
@@ -262,7 +261,7 @@ static void recv_response (ctx_t *ctx, zmsg_t **zmsg)
     for (c = ctx->clients; c != NULL && *zmsg != NULL; ) {
 
         if (!strcmp (uuid, c->uuid)) {
-            if (zmsg_send_fd (c->fd, zmsg) < 0)
+            if (zmsg_send_fd_typemask (c->fd, FLUX_MSGTYPE_RESPONSE, zmsg) < 0)
                 zmsg_destroy (zmsg);
             break;
         }
@@ -293,7 +292,7 @@ static void recv_event (ctx_t *ctx, zmsg_t **zmsg)
         if (zhash_foreach (c->event_subscriptions, match_subscription, *zmsg)) {
             if (!(cpy = zmsg_dup (*zmsg)))
                 oom ();
-            if (zmsg_send_fd (c->fd, &cpy) < 0)
+            if (zmsg_send_fd_typemask (c->fd, FLUX_MSGTYPE_EVENT, &cpy) < 0)
                 zmsg_destroy (&cpy);
         }
         c = c->next;
@@ -310,7 +309,7 @@ static void recv_snoop (ctx_t *ctx, zmsg_t **zmsg)
         if (zhash_foreach (c->snoop_subscriptions, match_subscription, *zmsg)) {
             if (!(cpy = zmsg_dup (*zmsg)))
                 oom ();
-            if (zmsg_send_fd (c->fd, &cpy) < 0)
+            if (zmsg_send_fd_typemask (c->fd, FLUX_MSGTYPE_SNOOP, &cpy) < 0)
                 zmsg_destroy (&cpy);
         }
         c = c->next;

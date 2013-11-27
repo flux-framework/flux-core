@@ -32,6 +32,8 @@ typedef struct {
     int fd;
     int rank;
     zlist_t *resp;
+    zlist_t *event;
+    zlist_t *snoop;
     flux_t h;
 } cmb_t;
 
@@ -41,17 +43,29 @@ static int cmb_request_sendmsg (void *impl, zmsg_t **zmsg)
 {
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
-    return zmsg_send_fd (c->fd, zmsg);
+    return zmsg_send_fd_typemask (c->fd, FLUX_MSGTYPE_REQUEST, zmsg);
 }
 
 static zmsg_t *cmb_response_recvmsg (void *impl, bool nonblock)
 {
     cmb_t *c = impl;
     zmsg_t *z;
+    int typemask;
 
     assert (c->magic == CMB_CTX_MAGIC);
-    if (!(z = zlist_pop (c->resp)))
-        z = zmsg_recv_fd (c->fd, nonblock);
+    if (!(z = zlist_pop (c->resp))) {
+        while ((z = zmsg_recv_fd_typemask (c->fd, &typemask, nonblock))) {
+            if ((typemask & FLUX_MSGTYPE_RESPONSE)) {
+                break;
+            } else if ((typemask & FLUX_MSGTYPE_EVENT)) {
+                if (zlist_append (c->event, z) < 0)
+                    oom ();
+            } else if ((typemask & FLUX_MSGTYPE_SNOOP)) {
+                if (zlist_append (c->snoop, z) < 0)
+                    oom ();
+            }
+        }
+    }
     return z;
 }
 
@@ -139,6 +153,53 @@ static int cmb_event_sendmsg (void *impl, zmsg_t **zmsg)
     return rc;
 }
 
+static zmsg_t *cmb_event_recvmsg (void *impl, bool nonblock)
+{
+    cmb_t *c = impl;
+    zmsg_t *z;
+    int typemask;
+
+    assert (c->magic == CMB_CTX_MAGIC);
+    if (!(z = zlist_pop (c->event))) {
+        while ((z = zmsg_recv_fd_typemask (c->fd, &typemask, nonblock))) {
+            if ((typemask & FLUX_MSGTYPE_EVENT)) {
+                break;
+            } else if ((typemask & FLUX_MSGTYPE_RESPONSE)) {
+                if (zlist_append (c->resp, z) < 0)
+                    oom ();
+            } else if ((typemask & FLUX_MSGTYPE_SNOOP)) {
+                if (zlist_append (c->snoop, z) < 0)
+                    oom ();
+            }
+        }
+    }
+    return z;
+}
+
+static zmsg_t *cmb_snoop_recvmsg (void *impl, bool nonblock)
+{
+    cmb_t *c = impl;
+    zmsg_t *z;
+    int typemask;
+
+    assert (c->magic == CMB_CTX_MAGIC);
+    if (!(z = zlist_pop (c->snoop))) {
+        while ((z = zmsg_recv_fd_typemask (c->fd, &typemask, nonblock))) {
+            if ((typemask & FLUX_MSGTYPE_SNOOP)) {
+                break;
+            } else if ((typemask & FLUX_MSGTYPE_RESPONSE)) {
+                if (zlist_append (c->resp, z) < 0)
+                    oom ();
+            } else if ((typemask & FLUX_MSGTYPE_EVENT)) {
+                if (zlist_append (c->event, z) < 0)
+                    oom ();
+            }
+        }
+    }
+    return z;
+}
+
+
 static int cmb_rank (void *impl)
 {
     cmb_t *c = impl;
@@ -166,6 +227,10 @@ flux_t cmb_init_full (const char *path, int flags)
 
     c = xzmalloc (sizeof (*c));
     if (!(c->resp = zlist_new ()))
+        oom ();
+    if (!(c->snoop = zlist_new ()))
+        oom ();
+    if (!(c->event = zlist_new ()))
         oom ();
     c->magic = CMB_CTX_MAGIC;
     c->rank = -1;
@@ -214,10 +279,10 @@ static const struct flux_handle_ops cmb_ops = {
     .response_recvmsg = cmb_response_recvmsg,
     .response_putmsg = cmb_response_putmsg,
     .event_sendmsg = cmb_event_sendmsg,
-    .event_recvmsg = cmb_response_recvmsg, /* FIXME */
+    .event_recvmsg = cmb_event_recvmsg,
     .event_subscribe = cmb_event_subscribe,
     .event_unsubscribe = cmb_event_unsubscribe,
-    .snoop_recvmsg = cmb_response_recvmsg, /* FIXME */
+    .snoop_recvmsg = cmb_snoop_recvmsg,
     .snoop_subscribe = cmb_snoop_subscribe,
     .snoop_unsubscribe = cmb_snoop_unsubscribe,
     .rank = cmb_rank,
