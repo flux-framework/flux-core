@@ -138,17 +138,32 @@ int flux_log_dump (flux_t h, int lev, const char *fac);
 char *flux_log_decode (zmsg_t *zmsg, int *lp, char **fp, int *cp,
                     struct timeval *tvp, char **sp);
 
-/* Flux reactor API
+/* Message manipulation utility functions
  */
 enum {
     FLUX_MSGTYPE_REQUEST = 1,
     FLUX_MSGTYPE_RESPONSE = 2,
     FLUX_MSGTYPE_EVENT = 4,
     FLUX_MSGTYPE_SNOOP = 8,
-    FLUX_MSGTYPE_ANY = (FLUX_MSGTYPE_REQUEST|FLUX_MSGTYPE_RESPONSE
-                       |FLUX_MSGTYPE_EVENT|FLUX_MSGTYPE_SNOOP)
+    FLUX_MSGTYPE_ANY = 0xf,
+    FLUX_MSGTYPE_MASK = 0xf,
+    /* leave open possiblity of adding 'flags' bits here */
 };
 
+/* Return string representation of message type.
+ */
+const char *flux_msgtype_string (int typemask);
+
+/* Return copy of zmsg tag. Caller must free.
+ */
+char *flux_zmsg_tag (zmsg_t *zmsg);
+
+/* Get json object from a zmsg. Caller must call json_object_put().
+ */
+json_object *flux_zmsg_json(zmsg_t *zmsg);
+
+/* Flux reactor API
+ */
 typedef void (*FluxMsgHandler)(flux_t h, int typemask, zmsg_t **zmsg, void *arg);
 typedef void (*FluxFdHandler)(flux_t h, int fd, short revents, void *arg);
 

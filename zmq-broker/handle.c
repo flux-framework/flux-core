@@ -275,6 +275,77 @@ zctx_t *flux_get_zctx (flux_t h)
 }
 
 /**
+ ** Utility
+ **/
+
+struct map_struct {
+    const char *name;
+    int typemask;
+};
+
+static struct map_struct msgtype_map[] = {
+    { "request", FLUX_MSGTYPE_REQUEST },
+    { "response", FLUX_MSGTYPE_RESPONSE},
+    { "event", FLUX_MSGTYPE_EVENT},
+    { "snoop", FLUX_MSGTYPE_SNOOP},
+};
+
+const char *flux_msgtype_string (int typemask)
+{
+    const int len = sizeof (msgtype_map) / sizeof (msgtype_map[0]);
+    int i;
+
+    for (i = 0; i < len; i++)
+        if ((typemask & msgtype_map[i].typemask))
+            return msgtype_map[i].name;
+    return "unknown";
+}
+
+static zframe_t *tag_frame (zmsg_t *zmsg)
+{
+    zframe_t *zf;
+
+    zf = zmsg_first (zmsg);
+    while (zf && zframe_size (zf) != 0)
+        zf = zmsg_next (zmsg); /* skip non-empty */
+    if (zf)
+        zf = zmsg_next (zmsg); /* skip empty */
+    if (!zf)
+        zf = zmsg_first (zmsg); /* rewind - there was no envelope */
+    return zf;
+}
+
+static zframe_t *json_frame (zmsg_t *zmsg)
+{
+    zframe_t *zf = tag_frame (zmsg);
+
+    return (zf ? zmsg_next (zmsg) : NULL);
+}
+
+char *flux_zmsg_tag (zmsg_t *zmsg)
+{
+    zframe_t *zf = tag_frame (zmsg);
+    char *tag;
+
+    if (!zf)
+        return NULL;
+    if (!(tag = zframe_strdup (zf)))
+        oom ();
+    return tag;
+}
+
+json_object *flux_zmsg_json (zmsg_t *zmsg)
+{
+    zframe_t *zf = json_frame (zmsg);
+    json_object *o;
+
+    if (!zf)
+        return NULL;
+    util_json_decode (&o, (char *)zframe_data (zf), zframe_size (zf));
+    return o;
+}
+
+/**
  ** Reactor
  **/
 
