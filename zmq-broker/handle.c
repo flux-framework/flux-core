@@ -275,6 +275,62 @@ zctx_t *flux_get_zctx (flux_t h)
 }
 
 /**
+ ** Reactor
+ **/
+
+static void reactor_recvmsg (int typemask, zmsg_t **zmsg, void *arg)
+{
+    //flux_t h = arg;
+}
+
+int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
+                         FluxMsgHandler cb, void *arg)
+{
+    return 0;
+}
+
+int flux_msghandler_append (flux_t h, int typemask, const char *pattern,
+                            FluxMsgHandler cb, void *arg)
+{
+    return 0;
+}
+
+void flux_msghandler_remove (flux_t h, int typemask, const char *pattern)
+{
+}
+
+int flux_fdhandler_add (flux_t h, int fd, short events,
+                        FluxFdHandler cb, void *arg)
+{
+    if (!h->ops->reactor_fdhandler_add) {
+        errno = ENOSYS;
+        return -1;
+    }
+    return h->ops->reactor_fdhandler_add (h->impl, fd, events, cb, arg);
+}
+
+void flux_fdhandler_remove (flux_t h, int fd, short events)
+{
+    if (h->ops->reactor_fdhandler_remove)
+        h->ops->reactor_fdhandler_remove (h->impl, fd, events);
+}
+
+int flux_reactor_start (flux_t h)
+{
+    if (!h->ops->reactor_start) {
+        errno = ENOSYS;
+        return -1;
+    }
+    return h->ops->reactor_start (h->impl, reactor_recvmsg, h);
+}
+
+void flux_reactor_stop (flux_t h)
+{
+    if (h->ops->reactor_stop)
+        h->ops->reactor_stop (h->impl);
+}
+
+/**
  ** Higher level functions built on those above
  **/
 

@@ -156,14 +156,14 @@ int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
                          FluxMsgHandler cb, void *arg);
 int flux_msghandler_append (flux_t h, int typemask, const char *pattern,
                             FluxMsgHandler cb, void *arg);
-int flux_msghandler_remove (flux_t h, int typemask, const char *pattern);
+void flux_msghandler_remove (flux_t h, int typemask, const char *pattern);
 
 int flux_fdhandler_add (flux_t h, int fd, short events,
                         FluxFdHandler cb, void *arg);
 void flux_fdhandler_remove (flux_t h, int fd, short events);
 
 int flux_reactor_start (flux_t h);
-int flux_reactor_stop (flux_t h);
+void flux_reactor_stop (flux_t h);
 
 
 #endif /* !defined(FLUX_H) */
