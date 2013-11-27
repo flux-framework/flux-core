@@ -38,7 +38,6 @@ typedef struct {
 
 typedef struct ptimeout_struct *ptimeout_t;
 
-
 #define PLUGIN_MAGIC    0xfeefbe01
 struct plugin_ctx_struct {
     int magic;
@@ -62,6 +61,8 @@ struct plugin_ctx_struct {
     int rank;
     FluxMsgHandler reactor_msghandler;
     void *reactor_msghandler_arg;
+    FluxFdHandler reactor_fdhandler;
+    void *reactor_fdhandler_arg;
     bool reactor_stop;
 };
 
@@ -251,6 +252,54 @@ static zctx_t *plugin_get_zctx (void *impl)
     plugin_ctx_t p = impl;
     assert (p->magic == PLUGIN_MAGIC);
     return p->zctx;
+}
+
+static int plugin_reactor_msghandler_set (void *impl,
+                                          FluxMsgHandler cb, void *arg)
+{
+    plugin_ctx_t p = impl;
+    p->reactor_msghandler = cb;
+    p->reactor_msghandler_arg = arg;
+    return 0;
+}
+
+static int plugin_reactor_fdhandler_set (void *impl,
+                                          FluxFdHandler cb, void *arg)
+{
+    plugin_ctx_t p = impl;
+    p->reactor_fdhandler = cb;
+    p->reactor_fdhandler_arg = arg;
+    return 0;
+}
+
+static void plugin_reactor_stop (void *impl)
+{
+    plugin_ctx_t p = impl;
+    p->reactor_stop = true;
+}
+
+static int fd_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
+{
+    if (p->reactor_fdhandler)
+        p->reactor_fdhandler (p->h, item->fd, item->revents,
+                              p->reactor_fdhandler_arg);
+    return (p->reactor_stop ? -1 : 0);
+}
+
+static int plugin_reactor_fd_add (void *impl, int fd, short events)
+{
+    plugin_ctx_t p = impl;
+    zmq_pollitem_t item = { .fd = fd, .events = events };
+
+    return zloop_poller (p->zloop, &item, (zloop_fn *)fd_cb, p);
+}
+
+static void plugin_reactor_fd_remove (void *impl, int fd, short events)
+{
+    plugin_ctx_t p = impl;
+    zmq_pollitem_t item = { .fd = fd, .events = events };
+
+    zloop_poller_end (p->zloop, &item); /* FIXME: 'events' are ignored */
 }
 
 /**
@@ -583,21 +632,6 @@ static void *plugin_dlopen (const char *searchpath, const char *name)
     return dso;
 }
 
-static int plugin_reactor_msghandler_set (void *impl,
-                                          FluxMsgHandler cb, void *arg)
-{
-    plugin_ctx_t p = impl;
-    p->reactor_msghandler = cb;
-    p->reactor_msghandler_arg = arg;
-    return 0;
-}
-
-static void plugin_reactor_stop (void *impl)
-{
-    plugin_ctx_t p = impl;
-    p->reactor_stop = true;
-}
-
 plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
                           char *name, char *id, zhash_t *args)
 {
@@ -668,7 +702,10 @@ static const struct flux_handle_ops plugin_handle_ops = {
     .get_zloop = plugin_get_zloop,
     .get_zctx = plugin_get_zctx,
     .reactor_msghandler_set = plugin_reactor_msghandler_set,
+    .reactor_fdhandler_set = plugin_reactor_fdhandler_set,
     .reactor_stop = plugin_reactor_stop,
+    .reactor_fd_add = plugin_reactor_fd_add,
+    .reactor_fd_remove = plugin_reactor_fd_remove,
 };
 
 /*
