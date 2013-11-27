@@ -18,6 +18,7 @@
 #include <stdarg.h>
 #include <json/json.h>
 #include <czmq.h>
+#include <fnmatch.h>
 
 #include "hostlist.h"
 #include "log.h"
@@ -27,11 +28,17 @@
 #include "flux.h"
 #include "handle.h"
 
+typedef struct dispatch_struct *dispatch_t;
+
+static void dispatch_destroy (dispatch_t d);
+static dispatch_t dispatch_create (void);
+
 struct flux_handle_struct {
-    const struct flux_handle_ops    *ops;
-    int                             flags;
-    void                            *impl;
-    zhash_t                         *aux;
+    const struct flux_handle_ops *ops;
+    int             flags;
+    void            *impl;
+    dispatch_t      dispatch; /* for event reactor */
+    zhash_t         *aux;
 };
 
 flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops,
@@ -42,6 +49,7 @@ flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops,
     h->flags = flags;
     if (!(h->aux = zhash_new()))
         oom ();
+    h->dispatch = dispatch_create ();
     h->ops = ops;
     h->impl = impl;
 
@@ -56,6 +64,7 @@ void flux_handle_destroy (flux_t *hp)
         if (h->ops->impl_destroy)
             h->ops->impl_destroy (h->impl);
         zhash_destroy (&h->aux);
+        dispatch_destroy (h->dispatch);
         free (h);
         *hp = NULL;
     }
@@ -350,25 +359,129 @@ json_object *flux_zmsg_json (zmsg_t *zmsg)
  ** Reactor
  **/
 
-static void reactor_recvmsg (int typemask, zmsg_t **zmsg, void *arg)
+struct dispatch_struct {
+    zlist_t *d;
+};
+
+struct dispatch_info {
+    int             typemask;
+    char *          pattern;
+    FluxMsgHandler  fn;
+    void *          arg;
+};
+
+static struct dispatch_info *dispatch_info_create (int typemask,
+                                                   const char *pattern,
+                                                   FluxMsgHandler cb, void *arg)
 {
-    //flux_t h = arg;
+    struct dispatch_info *info = xzmalloc (sizeof (*info));
+
+    info->typemask = typemask;
+    info->fn = cb;
+    info->arg = arg;
+    if (pattern)
+        info->pattern = xstrdup (pattern);
+
+    return info;
+}
+
+static void dispatch_info_destroy (struct dispatch_info *info)
+{
+    if (info->pattern)
+        free (info->pattern);
+    free (info);
+}
+
+static dispatch_t dispatch_create (void)
+{
+    dispatch_t d = xzmalloc (sizeof (*d));
+    if (!(d->d = zlist_new ()))
+        oom ();
+    return d;
+}
+
+static void dispatch_destroy (dispatch_t d)
+{
+    struct dispatch_info *info;
+
+    while ((info = zlist_pop (d->d)))
+        dispatch_info_destroy (info);
+    zlist_destroy (&d->d);
+    free (d);
+}
+
+static bool dispatch_info_match (struct dispatch_info *info,
+                                 const char *tag, int typemask)
+{
+    if (!(info->typemask & (typemask & FLUX_MSGTYPE_MASK)))
+        return false;
+    if (!info->pattern)
+        return true;
+    if (fnmatch (info->pattern, tag, 0) == 0)
+        return true;
+    return false;
+}
+
+static void dispatch_msghandler (int typemask, zmsg_t **zmsg, void *arg)
+{
+    flux_t h = arg;
+    struct dispatch_info *info;
+    char *tag;
+
+    assert (*zmsg != NULL);
+    if (!(tag = flux_zmsg_tag (*zmsg)))
+        goto done;
+    info = zlist_first (h->dispatch->d);
+    while (info) {
+        if (dispatch_info_match (info, tag, typemask)) {
+            info->fn (h, typemask, zmsg, arg);
+            if (!*zmsg) /* fall through to next match if message not consumed */
+                break;
+        }
+        info = zlist_next (h->dispatch->d);
+    }
+done:
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+    if (tag)
+        free (tag);
 }
 
 int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
                          FluxMsgHandler cb, void *arg)
 {
+    struct dispatch_info *info;
+
+    info = dispatch_info_create (typemask, pattern, cb, arg);
+    if (zlist_push (h->dispatch->d, info) < 0)
+        oom ();
     return 0;
 }
 
 int flux_msghandler_append (flux_t h, int typemask, const char *pattern,
                             FluxMsgHandler cb, void *arg)
 {
+    struct dispatch_info *info;
+
+    info = dispatch_info_create (typemask, pattern, cb, arg);
+    if (zlist_append (h->dispatch->d, info) < 0)
+        oom ();
     return 0;
 }
 
 void flux_msghandler_remove (flux_t h, int typemask, const char *pattern)
 {
+    struct dispatch_info *info;
+
+    info = zlist_first (h->dispatch->d);
+    while (info) {
+        if (info->typemask == typemask && info->pattern == pattern) {
+            zlist_remove (h->dispatch->d, info);
+            dispatch_info_destroy (info);
+            break;
+        }
+        info = zlist_next (h->dispatch->d);
+    }
 }
 
 int flux_fdhandler_add (flux_t h, int fd, short events,
@@ -393,7 +506,7 @@ int flux_reactor_start (flux_t h)
         errno = ENOSYS;
         return -1;
     }
-    return h->ops->reactor_start (h->impl, reactor_recvmsg, h);
+    return h->ops->reactor_start (h->impl, dispatch_msghandler, h);
 }
 
 void flux_reactor_stop (flux_t h)
