@@ -1,6 +1,8 @@
 #ifndef HAVE_FLUX_HANDLE_H
 #define HAVE_FLUX_HANDLE_H
 
+typedef void (*FluxHandleRecvMsg)(int typemask, zmsg_t **zmsg, void *arg);
+
 struct flux_handle_ops {
     int         (*request_sendmsg)(void *impl, zmsg_t **zmsg);
     zmsg_t *    (*request_recvmsg)(void *impl, bool nonblock);
@@ -23,8 +25,14 @@ struct flux_handle_ops {
 
     int         (*rank)(void *impl);
 
-    zloop_t *   (*get_zloop)(void *impl);
+    zloop_t *   (*get_zloop)(void *impl); /* deprecated */
     zctx_t *    (*get_zctx)(void *impl);
+
+    int         (*reactor_start)(void *impl, FluxHandleRecvMsg recv, void *arg);
+    void        (*reactor_stop)(void *impl);
+    int         (*reactor_fdhandler_add)(void *impl, int fd, short events,
+                                         FluxFdHandler cb, void *arg);
+    void        (*reactor_fdhandler_remove)(void *impl, int fd, short events);
 
     void        (*impl_destroy)(void *impl);
 };
