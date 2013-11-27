@@ -22,6 +22,9 @@ void zmonitor_dump (char *name, void *s);
 zmsg_t *zmsg_recv_fd (int fd, bool nonblock);
 int zmsg_send_fd (int fd, zmsg_t **msg);
 
+zmsg_t *zmsg_recv_fd_typemask (int fd, int *typemask, bool nonblock);
+int zmsg_send_fd_typemask (int fd, int typemask, zmsg_t **msg);
+
 /* Format message frames as text.  The first prints entire message on stdout.
  * The second returns a string representing only routing frames that the
  * caller must free.
