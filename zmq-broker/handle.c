@@ -332,8 +332,17 @@ json_object *flux_zmsg_json (zmsg_t *zmsg)
     zframe_t *zf = unwrap_zmsg (zmsg, 1);
     json_object *o = NULL;
 
-    if (zf)
-        util_json_decode (&o, (char *)zframe_data (zf), zframe_size (zf));
+    if (zf) {
+        json_tokener *tok;
+        if (!(tok = json_tokener_new ()))
+            oom ();
+        o = json_tokener_parse_ex (tok,  (const char *)zframe_data (zf),
+                                                       zframe_size (zf));
+        json_tokener_free (tok);
+    } else {
+        if (!(o = json_object_new_object ()))
+            oom ();
+    }
     return o;
 }
 
