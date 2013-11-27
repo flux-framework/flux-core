@@ -60,6 +60,9 @@ struct plugin_ctx_struct {
     void *dso;
     zhash_t *args;
     int rank;
+    FluxMsgHandler reactor_msghandler;
+    void *reactor_msghandler_arg;
+    bool reactor_stop;
 };
 
 struct ptimeout_struct {
@@ -310,6 +313,12 @@ static void plugin_handle_response (plugin_ctx_t p, zmsg_t *zmsg)
 
     p->stats.upreq_recv_count++;
 
+    if (zmsg && p->reactor_msghandler)
+        p->reactor_msghandler (p->h, FLUX_MSGTYPE_RESPONSE, &zmsg,
+                               p->reactor_msghandler_arg);
+    if (!zmsg)
+        goto done;
+
     /* Extract the tag from the message.
      */
     if (!(tag = cmb_msg_tag (zmsg, false))) {
@@ -366,6 +375,12 @@ static int dnreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 
     p->stats.dnreq_recv_count++;
 
+    if (zmsg && p->reactor_msghandler)
+        p->reactor_msghandler (p->h, FLUX_MSGTYPE_REQUEST, &zmsg,
+                               p->reactor_msghandler_arg);
+    if (!zmsg)
+        goto done;
+
     /* Extract the tag from the message.  The first part should match
      * the plugin name.  The rest is the "method" name.
      */
@@ -399,14 +414,18 @@ done:
 
     plugin_handle_deferred_responses (p);
 
-    return (0);
+    return (p->reactor_stop ? -1 : 0);
 }
+
 static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 {
     zmsg_t *zmsg = zmsg_recv (p->zs_evin);
 
     p->stats.event_recv_count++;
 
+    if (zmsg && p->reactor_msghandler)
+        p->reactor_msghandler (p->h, FLUX_MSGTYPE_EVENT, &zmsg,
+                               p->reactor_msghandler_arg);
     if (zmsg && p->ops->recv)
         p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_EVENT);
 
@@ -415,22 +434,25 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 
     plugin_handle_deferred_responses (p);
 
-    return (0);
+    return (p->reactor_stop ? -1 : 0);
 }
+
 static int snoop_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 {
     zmsg_t *zmsg =  zmsg_recv (p->zs_snoop);
 
+    if (zmsg && p->reactor_msghandler)
+        p->reactor_msghandler (p->h, FLUX_MSGTYPE_SNOOP, &zmsg,
+                               p->reactor_msghandler_arg);
     if (zmsg && p->ops->recv)
         p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_SNOOP);
-
 
     if (zmsg)
         zmsg_destroy (&zmsg);
 
     plugin_handle_deferred_responses (p);
 
-    return (0);
+    return (p->reactor_stop ? -1 : 0);
 }
 
 static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t)
@@ -442,7 +464,7 @@ static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t)
 
     plugin_handle_deferred_responses (p);
 
-    return (0);
+    return (p->reactor_stop ? -1 : 0);
 }
 
 static zloop_t * plugin_zloop_create (plugin_ctx_t p)
@@ -561,6 +583,21 @@ static void *plugin_dlopen (const char *searchpath, const char *name)
     return dso;
 }
 
+static int plugin_reactor_msghandler_set (void *impl,
+                                          FluxMsgHandler cb, void *arg)
+{
+    plugin_ctx_t p = impl;
+    p->reactor_msghandler = cb;
+    p->reactor_msghandler_arg = arg;
+    return 0;
+}
+
+static void plugin_reactor_stop (void *impl)
+{
+    plugin_ctx_t p = impl;
+    p->reactor_stop = true;
+}
+
 plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
                           char *name, char *id, zhash_t *args)
 {
@@ -630,6 +667,8 @@ static const struct flux_handle_ops plugin_handle_ops = {
     .rank = plugin_rank,
     .get_zloop = plugin_get_zloop,
     .get_zctx = plugin_get_zctx,
+    .reactor_msghandler_set = plugin_reactor_msghandler_set,
+    .reactor_stop = plugin_reactor_stop,
 };
 
 /*
