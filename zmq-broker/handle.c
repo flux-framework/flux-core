@@ -289,59 +289,51 @@ static struct map_struct msgtype_map[] = {
     { "event", FLUX_MSGTYPE_EVENT},
     { "snoop", FLUX_MSGTYPE_SNOOP},
 };
+static const int msgtype_map_len = 
+                            sizeof (msgtype_map) / sizeof (msgtype_map[0]);
 
 const char *flux_msgtype_string (int typemask)
 {
-    const int len = sizeof (msgtype_map) / sizeof (msgtype_map[0]);
     int i;
 
-    for (i = 0; i < len; i++)
+    for (i = 0; i < msgtype_map_len; i++)
         if ((typemask & msgtype_map[i].typemask))
             return msgtype_map[i].name;
     return "unknown";
 }
 
-static zframe_t *tag_frame (zmsg_t *zmsg)
+static zframe_t *unwrap_zmsg (zmsg_t *zmsg, int frameno)
 {
-    zframe_t *zf;
+    zframe_t *zf = zmsg_first (zmsg);
 
-    zf = zmsg_first (zmsg);
     while (zf && zframe_size (zf) != 0)
-        zf = zmsg_next (zmsg); /* skip non-empty */
+        zf = zmsg_next (zmsg); /* skip non-empty routing envelope frames */
     if (zf)
-        zf = zmsg_next (zmsg); /* skip empty */
+        zf = zmsg_next (zmsg); /* skip empty routing envelope delimiter */
     if (!zf)
-        zf = zmsg_first (zmsg); /* rewind - there was no envelope */
+        zf = zmsg_first (zmsg); /* rewind - there was no routing envelope */
+    while (zf && frameno-- > 0) /* frame 0=tag, 1=json */
+        zf = zmsg_next (zmsg);
     return zf;
-}
-
-static zframe_t *json_frame (zmsg_t *zmsg)
-{
-    zframe_t *zf = tag_frame (zmsg);
-
-    return (zf ? zmsg_next (zmsg) : NULL);
 }
 
 char *flux_zmsg_tag (zmsg_t *zmsg)
 {
-    zframe_t *zf = tag_frame (zmsg);
-    char *tag;
+    zframe_t *zf = unwrap_zmsg (zmsg, 0);
+    char *tag = NULL;
 
-    if (!zf)
-        return NULL;
-    if (!(tag = zframe_strdup (zf)))
+    if (zf && !(tag = zframe_strdup (zf)))
         oom ();
     return tag;
 }
 
 json_object *flux_zmsg_json (zmsg_t *zmsg)
 {
-    zframe_t *zf = json_frame (zmsg);
-    json_object *o;
+    zframe_t *zf = unwrap_zmsg (zmsg, 1);
+    json_object *o = NULL;
 
-    if (!zf)
-        return NULL;
-    util_json_decode (&o, (char *)zframe_data (zf), zframe_size (zf));
+    if (zf)
+        util_json_decode (&o, (char *)zframe_data (zf), zframe_size (zf));
     return o;
 }
 
