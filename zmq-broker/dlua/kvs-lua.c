@@ -197,6 +197,16 @@ err:
     return (1);
 }
 
+static int l_kvsdir_watch_dir (lua_State *L)
+{
+    flux_t h;
+    kvsdir_t dir;
+
+    dir = lua_get_kvsdir (L, 1);
+    h = kvsdir_handle (dir);
+
+    return l_pushresult (L, kvs_watch_once_dir (h, &dir, kvsdir_key (dir)));
+}
 
 static int l_kvsdir_index (lua_State *L)
 {
@@ -231,6 +241,7 @@ static const struct luaL_Reg kvsdir_functions [] = {
     { "commit",          l_kvsdir_commit   },
     { "keys",            l_kvsdir_next     },
     { "watch",           l_kvsdir_watch    },
+    { "watch_dir",       l_kvsdir_watch_dir },
 };
 
 static const struct luaL_Reg kvsitr_methods [] = {
