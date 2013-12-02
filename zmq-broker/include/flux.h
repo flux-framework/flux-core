@@ -15,6 +15,7 @@ typedef struct flux_handle_struct *flux_t;
 
 #include "kvs.h"
 #include "mrpc.h"
+#include "reactor.h"
 
 /* Flags for handle creation and flux_flags_set()/flux_flags_unset.
  */
@@ -161,25 +162,6 @@ char *flux_zmsg_tag (zmsg_t *zmsg);
 /* Get json object from a zmsg. Caller must call json_object_put().
  */
 json_object *flux_zmsg_json(zmsg_t *zmsg);
-
-/* Flux reactor API
- */
-typedef void (*FluxMsgHandler)(flux_t h, int typemask, zmsg_t **zmsg, void *arg);
-typedef void (*FluxFdHandler)(flux_t h, int fd, short revents, void *arg);
-
-int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
-                         FluxMsgHandler cb, void *arg);
-int flux_msghandler_append (flux_t h, int typemask, const char *pattern,
-                            FluxMsgHandler cb, void *arg);
-void flux_msghandler_remove (flux_t h, int typemask, const char *pattern);
-
-int flux_fdhandler_add (flux_t h, int fd, short events,
-                        FluxFdHandler cb, void *arg);
-void flux_fdhandler_remove (flux_t h, int fd, short events);
-
-int flux_reactor_start (flux_t h);
-void flux_reactor_stop (flux_t h);
-
 
 #endif /* !defined(FLUX_H) */
 
