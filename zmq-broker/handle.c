@@ -487,7 +487,7 @@ static void dispatch_fdhandler (flux_t h, int fd, short events, void *arg)
     
     info = zlist_first (h->dispatch->fd);
     while (info) {
-        if (info->fd == fd && info->events == events) {
+        if (info->fd == fd && (info->events & events)) {
             info->fn (h, fd, events, info->arg);
             break;
         }
