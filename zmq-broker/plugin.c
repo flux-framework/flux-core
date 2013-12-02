@@ -360,36 +360,15 @@ done:
 
 static void plugin_handle_response (plugin_ctx_t p, zmsg_t *zmsg)
 {
-    char *tag;
-
     p->stats.upreq_recv_count++;
 
     if (zmsg && p->reactor_msghandler)
         p->reactor_msghandler (p->h, FLUX_MSGTYPE_RESPONSE, &zmsg,
                                p->reactor_msghandler_arg);
-    if (!zmsg)
-        goto done;
-
-    /* Extract the tag from the message.
-     */
-    if (!(tag = cmb_msg_tag (zmsg, false))) {
-        msg ("discarding malformed message");
-        goto done;
-    }
-    /* Intercept and handle internal watch replies for keys of interest.
-     * If no match, call the user's recv callback.
-     */
-    if (!strcmp (tag, "kvs.watch"))
-        kvs_watch_response (p->h, &zmsg); /* consumes zmsg on match */
     if (zmsg && p->ops->recv)
         p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_RESPONSE);
     if (zmsg)
-        msg ("discarding unexpected response from %s", tag);
-done:
-    if (zmsg)
         zmsg_destroy (&zmsg);
-    if (tag)
-        free (tag);
 }
 
 /* Process any responses received during synchronous request-reply handling.

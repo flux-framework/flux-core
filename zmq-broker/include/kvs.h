@@ -165,11 +165,6 @@ int kvsdir_unlink (kvsdir_t dir, const char *key);
 int kvsdir_symlink (kvsdir_t dir, const char *key, const char *target);
 int kvsdir_mkdir (kvsdir_t dir, const char *key);
 
-/* Do not use.
- */
-void kvs_watch_response (flux_t h, zmsg_t **zmsg);
-
-
 #endif /* !HAVE_KVS_H */
 
 /*
