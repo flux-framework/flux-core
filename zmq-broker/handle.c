@@ -362,6 +362,7 @@ json_object *flux_zmsg_json (zmsg_t *zmsg)
 struct dispatch_struct {
     zlist_t *msg;
     zlist_t *fd;
+    zlist_t *zs;
 };
 
 struct dispatch_msg_info {
@@ -375,6 +376,13 @@ struct dispatch_fd_info {
     int fd;
     short events;
     FluxFdHandler fn;
+    void *arg;
+};
+
+struct dispatch_zs_info {
+    void *zs;
+    short events;
+    FluxZsHandler fn;
     void *arg;
 };
 
@@ -417,12 +425,32 @@ static void dispatch_fd_info_destroy (struct dispatch_fd_info *info)
     free (info);
 }
 
+static struct dispatch_zs_info *dispatch_zs_info_create (void *zs,
+                        short events, FluxZsHandler cb, void *arg)
+{
+    struct dispatch_zs_info *info = xzmalloc (sizeof (*info));
+
+    info->zs = zs;
+    info->events = events;
+    info->fn = cb;
+    info->arg = arg;
+
+    return info;
+}
+
+static void dispatch_zs_info_destroy (struct dispatch_zs_info *info)
+{
+    free (info);
+}
+
 static dispatch_t dispatch_create (void)
 {
     dispatch_t d = xzmalloc (sizeof (*d));
     if (!(d->msg = zlist_new ()))
         oom ();
     if (!(d->fd = zlist_new ()))
+        oom ();
+    if (!(d->zs = zlist_new ()))
         oom ();
     return d;
 }
@@ -431,13 +459,17 @@ static void dispatch_destroy (dispatch_t d)
 {
     struct dispatch_msg_info *info_msg;
     struct dispatch_fd_info *info_fd;
+    struct dispatch_zs_info *info_zs;
 
     while ((info_msg = zlist_pop (d->msg)))
         dispatch_msg_info_destroy (info_msg);
     zlist_destroy (&d->msg);
     while ((info_fd = zlist_pop (d->fd)))
         dispatch_fd_info_destroy (info_fd);
-    zlist_destroy (&d->msg);
+    zlist_destroy (&d->fd);
+    while ((info_zs = zlist_pop (d->zs)))
+        dispatch_zs_info_destroy (info_zs);
+    zlist_destroy (&d->zs);
     free (d);
 }
 
@@ -480,7 +512,6 @@ done:
      */
 }
 
-
 static void dispatch_fdhandler (flux_t h, int fd, short events, void *arg)
 {
     struct dispatch_fd_info *info;
@@ -492,6 +523,20 @@ static void dispatch_fdhandler (flux_t h, int fd, short events, void *arg)
             break;
         }
         info = zlist_next (h->dispatch->fd);
+    }
+}
+
+static void dispatch_zshandler (flux_t h, void *zs, short events, void *arg)
+{
+    struct dispatch_zs_info *info;
+    
+    info = zlist_first (h->dispatch->zs);
+    while (info) {
+        if (info->zs == zs && (info->events & events)) {
+            info->fn (h, zs, events, info->arg);
+            break;
+        }
+        info = zlist_next (h->dispatch->zs);
     }
 }
 
@@ -511,6 +556,15 @@ static int dispatch_fd_install (flux_t h)
         return -1;
     }
     return h->ops->reactor_fdhandler_set (h->impl, dispatch_fdhandler, NULL);
+};
+
+static int dispatch_zs_install (flux_t h)
+{
+    if (!h->ops->reactor_zshandler_set) {
+        errno = ENOSYS;
+        return -1;
+    }
+    return h->ops->reactor_zshandler_set (h->impl, dispatch_zshandler, NULL);
 };
 
 int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
@@ -586,6 +640,40 @@ void flux_fdhandler_remove (flux_t h, int fd, short events)
     }
     if (h->ops->reactor_fd_remove)
         h->ops->reactor_fd_remove (h->impl, fd, events);
+}
+
+int flux_zshandler_add (flux_t h, void *zs, short events,
+                        FluxZsHandler cb, void *arg)
+{
+    struct dispatch_zs_info *info;
+
+    if (!h->ops->reactor_zs_add) {
+        errno = ENOSYS;
+        return -1;
+    }
+    if (dispatch_zs_install (h) < 0)
+        return -1;
+    info = dispatch_zs_info_create (zs, events, cb, arg);
+    if (zlist_append (h->dispatch->zs, info) < 0)
+        oom ();
+    return h->ops->reactor_zs_add (h->impl, zs, events);
+}
+
+void flux_zshandler_remove (flux_t h, void *zs, short events)
+{
+    struct dispatch_zs_info *info;
+
+    info = zlist_first (h->dispatch->zs);
+    while (info) {
+        if (info->zs == zs && info->events == events) {
+            zlist_remove (h->dispatch->zs, info);
+            dispatch_zs_info_destroy (info);
+            break;
+        }
+        info = zlist_next (h->dispatch->zs);
+    }
+    if (h->ops->reactor_zs_remove)
+        h->ops->reactor_zs_remove (h->impl, zs, events);
 }
 
 int flux_reactor_start (flux_t h)
