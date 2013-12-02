@@ -219,27 +219,27 @@ done:
     return 0;
 }
 
-static int client_cb (zloop_t *zl, zmq_pollitem_t *zp, client_t *c)
+static void client_cb (flux_t h, int fd, short revents, void *arg)
 {
+    client_t *c = arg;
     ctx_t *ctx = c->ctx;
     bool delete = false;
 
-    if (zp->revents & ZMQ_POLLIN) {
+    if (revents & ZMQ_POLLIN) {
         while (client_read (ctx, c) != -1)
             ;
         if (errno != EWOULDBLOCK && errno != EAGAIN)
             delete = true;
     }
-    if (zp->revents & ZMQ_POLLERR)
+    if (revents & ZMQ_POLLERR)
         delete = true;
 
     if (delete) {
-        /*  Cancel this client's fd from the zloop and destroy client
+        /*  Cancel this client's fd from the reactor and destroy client
          */
-        zloop_poller_end (zl, zp);
+        flux_fdhandler_remove (h, fd, ZMQ_POLLIN | ZMQ_POLLERR);
         client_destroy (ctx, c);
     }
-    return (0);
 }
 
 static void recv_response (ctx_t *ctx, zmsg_t **zmsg)
@@ -328,21 +328,23 @@ static void apisrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
         recv_snoop (ctx, zmsg);
 }
 
-static int listener_cb (zloop_t *zl, zmq_pollitem_t *zp, ctx_t *ctx)
+static void listener_cb (flux_t h, int fd, short revents, void *arg)
 {
-    if (zp->revents & ZMQ_POLLIN) {       /* listenfd */
-        zloop_t *zloop = flux_get_zloop (ctx->h);
-        zmq_pollitem_t nzp = { .events = ZMQ_POLLIN | ZMQ_POLLERR };
-        client_t *c;
+    ctx_t *ctx = arg;
 
-        if ((nzp.fd = accept (ctx->listen_fd, NULL, NULL)) < 0)
+    if (revents & ZMQ_POLLIN) {       /* listenfd */
+        client_t *c;
+        int cfd;
+
+        if ((cfd = accept (fd, NULL, NULL)) < 0)
             err_exit ("accept");
-        c = client_create (ctx, nzp.fd);
-        zloop_poller (zloop, &nzp, (zloop_fn *) client_cb, (void *) c);
+        c = client_create (ctx, cfd);
+        if (flux_fdhandler_add (h, cfd, ZMQ_POLLIN | ZMQ_POLLERR,
+                                                    client_cb, c) < 0)
+            err_exit ("%s: flux_fdhandler_add", __FUNCTION__);
     }
-    if (zp->revents & ZMQ_POLLERR)       /* listenfd - error */
+    if (revents & ZMQ_POLLERR)       /* listenfd - error */
         err_exit ("apisrv: poll on listen fd");
-    return (0);
 }
 
 static int listener_init (ctx_t *ctx, char *sockpath)
@@ -381,8 +383,6 @@ error_close:
 static int apisrv_init (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
-    zloop_t *zloop = flux_get_zloop (h);
-    zmq_pollitem_t zp = { .events = ZMQ_POLLIN | ZMQ_POLLERR };
     char *sockpath = NULL, *dfltpath = NULL;
     int rc = -1;
 
@@ -391,9 +391,11 @@ static int apisrv_init (flux_t h, zhash_t *args)
             oom ();
         sockpath = dfltpath;
     }
-    if ((zp.fd = ctx->listen_fd = listener_init (ctx, sockpath)) < 0)
+    if ((ctx->listen_fd = listener_init (ctx, sockpath)) < 0)
         goto done;
-    zloop_poller (zloop, &zp, (zloop_fn *) listener_cb, (void *)ctx);
+    if (flux_fdhandler_add (h, ctx->listen_fd, ZMQ_POLLIN | ZMQ_POLLERR,
+                                                    listener_cb, ctx) < 0)
+        err_exit ("%s: flux_fdhandler_add", __FUNCTION__);
     rc = 0;
 done:
     if (dfltpath)
