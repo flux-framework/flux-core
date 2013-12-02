@@ -55,6 +55,8 @@ typedef struct {
     zlist_t *dirstack;
 } kvsctx_t;
 
+static void watch_rep_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg);
+
 static void freectx (kvsctx_t *ctx)
 {
     zhash_destroy (&ctx->watchers);
@@ -76,8 +78,9 @@ static kvsctx_t *getctx (flux_t h)
         if (!(ctx->cwd = xstrdup (".")))
             oom ();
         flux_aux_set (h, "kvscli", ctx, (FluxFreeFn)freectx);
+        (void)flux_msghandler_add (h, FLUX_MSGTYPE_RESPONSE, "kvs.watch",
+                                                watch_rep_cb, ctx);
     } 
-
     return ctx;
 }
 
@@ -517,13 +520,13 @@ static void dispatch_watch (flux_t h, kvs_watcher_t *wp, const char *key,
     }
 }
 
-void kvs_watch_response (flux_t h, zmsg_t **zmsg)
+static void watch_rep_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    kvsctx_t *ctx = arg;
     json_object *reply = NULL;
     json_object_iter iter;
     kvs_watcher_t *wp;
     bool match = false;
-    kvsctx_t *ctx = getctx (h);
     
     if (cmb_msg_decode (*zmsg, NULL, &reply) == 0 && reply != NULL) {
         json_object_object_foreachC (reply, iter) {

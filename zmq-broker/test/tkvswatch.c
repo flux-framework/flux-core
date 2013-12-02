@@ -72,39 +72,29 @@ static void wait_ready (void)
         errn_exit (rc, "pthread_mutex_unlock");
 }
 
-static void set (const char *key, int val, void *arg, int errnum)
-{
-    thd_t *t = (thd_t *)arg;
-
-    assert (errnum == 0);
-    assert (val == t->count - 1);
-    t->count++;
-}
-
 void *thread (void *arg)
 {
     thd_t *t = (thd_t *)arg;
     flux_t h;
+    int val;
 
     if (!(h = cmb_init ())) {
         err ("%d: cmb_init", t->n);
         goto done;
     }
-    if (kvs_watch_int (h, key, set, t) < 0) {
-        err ("%d: kvs_watch_int", t->n);
+    if (kvs_get_int (h, key, &val) < 0) {
+        err ("%d: kvs_get_int", t->n);
         goto done;
     }
+    t->count++;
     signal_ready ();
     while (t->count < changes) {
-        zmsg_t *zmsg;
-
-        if (!(zmsg = flux_response_recvmsg (h, false))) {
-            err ("flux_response_recvmsg");
+        if (kvs_watch_once_int (h, key, &val) < 0) {
+            err ("%d: kvs_watch_once_int", t->n);
             goto done;
         }
-        kvs_watch_response (h, &zmsg);
-        if (zmsg)
-            zmsg_destroy (&zmsg);
+        assert (val == t->count - 1);
+        t->count++;
     }
 done:
     if (h)
