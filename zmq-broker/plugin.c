@@ -306,8 +306,9 @@ static void plugin_reactor_fd_remove (void *impl, int fd, short events)
  ** end of handle implementation
  **/
 
-static void plugin_ping_respond (plugin_ctx_t p, zmsg_t **zmsg)
+static void ping_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    //plugin_ctx_t p = arg;
     json_object *o;
     char *s = NULL;
 
@@ -317,7 +318,7 @@ static void plugin_ping_respond (plugin_ctx_t p, zmsg_t **zmsg)
     }
     s = zmsg_route_str (*zmsg, 2);
     util_json_object_add_string (o, "route", s);
-    if (flux_respond (p->h, zmsg, o) < 0) {
+    if (flux_respond (h, zmsg, o) < 0) {
         err ("%s: flux_respond", __FUNCTION__);
         goto done;
     }
@@ -330,8 +331,9 @@ done:
         zmsg_destroy (zmsg);
 }
 
-static void plugin_stats_respond (plugin_ctx_t p, zmsg_t **zmsg)
+static void stats_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    plugin_ctx_t p = arg;
     json_object *o = NULL;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0) {
@@ -345,7 +347,7 @@ static void plugin_stats_respond (plugin_ctx_t p, zmsg_t **zmsg)
     util_json_object_add_int (o, "event_send_count", p->stats.event_send_count);
     util_json_object_add_int (o, "event_recv_count", p->stats.event_recv_count);
 
-    if (flux_respond (p->h, zmsg, o) < 0) {
+    if (flux_respond (h, zmsg, o) < 0) {
         err ("%s: flux_respond", __FUNCTION__);
         goto done;
     }
@@ -409,7 +411,6 @@ static int upreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
     zmsg_t *zmsg = zmsg_recv (p->zs_upreq);
 
     plugin_handle_response (p, zmsg);
-
     plugin_handle_deferred_responses (p);
 
     return (0);
@@ -420,35 +421,14 @@ static int upreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 static int dnreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 {
     zmsg_t *zmsg = zmsg_recv (p->zs_dnreq);
-    char *tag, *method;
 
     p->stats.dnreq_recv_count++;
 
     if (zmsg && p->reactor_msghandler)
         p->reactor_msghandler (p->h, FLUX_MSGTYPE_REQUEST, &zmsg,
                                p->reactor_msghandler_arg);
-    if (!zmsg)
-        goto done;
-
-    /* Extract the tag from the message.  The first part should match
-     * the plugin name.  The rest is the "method" name.
-     */
-    if (!(tag = cmb_msg_tag (zmsg, false)) || !(method = strchr (tag, '.'))) {
-        msg ("discarding malformed message");
-        goto done;
-    }
-    method++;
-    /* Intercept and handle internal "methods" for this plugin.
-     * If no match, call the user's recv callback.
-     */
-    if (!strcmp (method, "ping"))
-        plugin_ping_respond (p, &zmsg);
-    else if (!strcmp (method, "stats"))
-        plugin_stats_respond (p, &zmsg);
-    else if (zmsg && p->ops->recv)
+    if (zmsg && p->ops->recv)
         p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_REQUEST);
-    /* If request wasn't handled above, NAK it.
-     */
     if (zmsg) {
         if (flux_respond_errnum (p->h, &zmsg, ENOSYS) < 0) {
             err ("%s: flux_respond_errnum", __FUNCTION__);
@@ -458,9 +438,6 @@ static int dnreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 done:
     if (zmsg)
         zmsg_destroy (&zmsg);
-    if (tag)
-        free (tag);
-
     plugin_handle_deferred_responses (p);
 
     return (p->reactor_stop ? -1 : 0);
@@ -556,6 +533,16 @@ static void *plugin_thread (void *arg)
     p->zloop = plugin_zloop_create (p);
     if (p->zloop == NULL)
         err_exit ("%s: plugin_zloop_create", p->id);
+
+    /* Register callbacks for ping, stats which can be overridden
+     * in p->ops->init() if desired.
+     */
+    if (flux_msghandler_add (p->h, FLUX_MSGTYPE_REQUEST, "*.ping",
+                                                          ping_req_cb, p) < 0)
+        err_exit ("%s: flux_msghandler_add *.ping", p->id);
+    if (flux_msghandler_add (p->h, FLUX_MSGTYPE_REQUEST, "*.stats",
+                                                          stats_req_cb, p) < 0)
+        err_exit ("%s: flux_msghandler_add *.stats", p->id);
 
     if (p->ops->init) {
         if (p->ops->init (p->h, p->args) < 0) {
