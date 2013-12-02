@@ -1,8 +1,9 @@
 #ifndef REACTOR_H
 #define REACTOR_H
 
-typedef void (*FluxMsgHandler)(flux_t h, int typemask, zmsg_t **zmsg, void *arg);
+typedef void (*FluxMsgHandler)(flux_t h, int typemask, zmsg_t **zmsg, void*arg);
 typedef void (*FluxFdHandler)(flux_t h, int fd, short revents, void *arg);
+typedef void (*FluxZsHandler)(flux_t h, void *zs, short revents, void *arg);
 
 /* Register a FluxMsgHandler callback to be called whenever a message
  * matching typemask and pattern (glob) is received.  The callback is
@@ -35,6 +36,18 @@ int flux_fdhandler_add (flux_t h, int fd, short events,
  * identical fd and events is removed.
  */
 void flux_fdhandler_remove (flux_t h, int fd, short events);
+
+
+/* Regisiter a FluxZsHandler callback to be called whenever an event
+ * in the 'events' mask occurs on the given zeromq socket 'zs'.
+ */
+int flux_zshandler_add (flux_t h, void *zs, short events,
+                        FluxZsHandler cb, void *arg);
+
+/* Unregister a FluxZsHandler callback.  Only the first callback with
+ * identical zs and events is removed.
+ */
+void flux_zshandler_remove (flux_t h, void *zs, short events);
 
 /* Start the flux event reactor.
  */

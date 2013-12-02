@@ -63,6 +63,8 @@ struct plugin_ctx_struct {
     void *reactor_msghandler_arg;
     FluxFdHandler reactor_fdhandler;
     void *reactor_fdhandler_arg;
+    FluxZsHandler reactor_zshandler;
+    void *reactor_zshandler_arg;
     bool reactor_stop;
 };
 
@@ -272,6 +274,15 @@ static int plugin_reactor_fdhandler_set (void *impl,
     return 0;
 }
 
+static int plugin_reactor_zshandler_set (void *impl,
+                                          FluxZsHandler cb, void *arg)
+{
+    plugin_ctx_t p = impl;
+    p->reactor_zshandler = cb;
+    p->reactor_zshandler_arg = arg;
+    return 0;
+}
+
 static void plugin_reactor_stop (void *impl)
 {
     plugin_ctx_t p = impl;
@@ -301,6 +312,31 @@ static void plugin_reactor_fd_remove (void *impl, int fd, short events)
 
     zloop_poller_end (p->zloop, &item); /* FIXME: 'events' are ignored */
 }
+
+static int zs_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
+{
+    if (p->reactor_zshandler)
+        p->reactor_zshandler (p->h, item->socket, item->revents,
+                              p->reactor_zshandler_arg);
+    return (p->reactor_stop ? -1 : 0);
+}
+
+static int plugin_reactor_zs_add (void *impl, void *zs, short events)
+{
+    plugin_ctx_t p = impl;
+    zmq_pollitem_t item = { .socket = zs, .events = events };
+
+    return zloop_poller (p->zloop, &item, (zloop_fn *)zs_cb, p);
+}
+
+static void plugin_reactor_zs_remove (void *impl, void *zs, short events)
+{
+    plugin_ctx_t p = impl;
+    zmq_pollitem_t item = { .socket = zs, .events = events };
+
+    zloop_poller_end (p->zloop, &item); /* FIXME: 'events' are ignored */
+}
+
 
 /**
  ** end of handle implementation
@@ -669,9 +705,12 @@ static const struct flux_handle_ops plugin_handle_ops = {
     .get_zctx = plugin_get_zctx,
     .reactor_msghandler_set = plugin_reactor_msghandler_set,
     .reactor_fdhandler_set = plugin_reactor_fdhandler_set,
+    .reactor_zshandler_set = plugin_reactor_zshandler_set,
     .reactor_stop = plugin_reactor_stop,
     .reactor_fd_add = plugin_reactor_fd_add,
     .reactor_fd_remove = plugin_reactor_fd_remove,
+    .reactor_zs_add = plugin_reactor_zs_add,
+    .reactor_zs_remove = plugin_reactor_zs_remove,
 };
 
 /*

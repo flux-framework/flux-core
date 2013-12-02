@@ -26,6 +26,17 @@ struct flux_handle_ops {
     zloop_t *   (*get_zloop)(void *impl); /* deprecated */
     zctx_t *    (*get_zctx)(void *impl);
 
+    /* On the reactor interface:
+     * The handle implementation "owns" the reactor (zloop or whatever).
+     * The generic handle.c code registers three callbacks, one for messages
+     * (Flux message types on Flux plumbing), one for events on file
+     * descriptors, and one for events on zeromq sockets.  These handlers
+     * are registered with the reactor_*handler_set() calls and there is
+     * exactly one for each type.  File descriptors and zmq sockets are
+     * added/removed using the reactor_*_add/remove() calls.  The three
+     * callbacks will demultiplex messages to user callbacks, but that need
+     * not concern the handle implementation.
+     */
     int         (*reactor_start)(void *impl);
     void        (*reactor_stop)(void *impl);
     int         (*reactor_msghandler_set)(void *impl,
@@ -34,6 +45,10 @@ struct flux_handle_ops {
                                           FluxFdHandler cb, void *arg);
     int         (*reactor_fd_add)(void *impl, int fd, short events);
     void        (*reactor_fd_remove)(void *impl, int fd, short events);
+    int         (*reactor_zshandler_set)(void *impl,
+                                          FluxZsHandler cb, void *arg);
+    int         (*reactor_zs_add)(void *impl, void *zs, short events);
+    void        (*reactor_zs_remove)(void *impl, void *zs, short events);
 
     void        (*impl_destroy)(void *impl);
 };
