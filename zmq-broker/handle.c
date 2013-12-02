@@ -265,15 +265,6 @@ int flux_rank (flux_t h)
     return h->ops->rank (h->impl);
 }
 
-zloop_t *flux_get_zloop (flux_t h)
-{
-    if (!h->ops->get_zloop) {
-        errno = ENOSYS;
-        return NULL;
-    }
-    return h->ops->get_zloop (h->impl);
-}
-
 zctx_t *flux_get_zctx (flux_t h)
 {
     if (!h->ops->get_zctx) {

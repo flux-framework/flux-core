@@ -23,7 +23,6 @@ struct flux_handle_ops {
 
     int         (*rank)(void *impl);
 
-    zloop_t *   (*get_zloop)(void *impl); /* deprecated */
     zctx_t *    (*get_zctx)(void *impl);
 
     /* On the reactor interface:

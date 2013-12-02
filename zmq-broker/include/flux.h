@@ -102,11 +102,10 @@ int flux_timeout_set (flux_t h, unsigned long msec);
 int flux_timeout_clear (flux_t h);
 bool flux_timeout_isset (flux_t h);
 
-/* Accessors for zloop reactor and zeromq context.
+/* Accessor zeromq context.
  * N.B. The zctx_t is thread-safe but zeromq sockets, and therefore
  * flux_t handle operations are not.
  */
-zloop_t *flux_get_zloop (flux_t h);
 zctx_t *flux_get_zctx (flux_t h);
 
 /* Ping plugin 'name'.
