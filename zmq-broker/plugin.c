@@ -242,13 +242,6 @@ static int plugin_rank (void *impl)
     return p->rank;
 }
 
-static zloop_t *plugin_get_zloop (void *impl)
-{
-    plugin_ctx_t p = impl;
-    assert (p->magic == PLUGIN_MAGIC);
-    return p->zloop;
-}
-
 static zctx_t *plugin_get_zctx (void *impl)
 {
     plugin_ctx_t p = impl;
@@ -701,7 +694,6 @@ static const struct flux_handle_ops plugin_handle_ops = {
     .timeout_clear = plugin_timeout_clear,
     .timeout_isset = plugin_timeout_isset,
     .rank = plugin_rank,
-    .get_zloop = plugin_get_zloop,
     .get_zctx = plugin_get_zctx,
     .reactor_msghandler_set = plugin_reactor_msghandler_set,
     .reactor_fdhandler_set = plugin_reactor_fdhandler_set,
