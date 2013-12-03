@@ -136,21 +136,8 @@ static int cmb_event_unsubscribe (void *impl, const char *s)
 static int cmb_event_sendmsg (void *impl, zmsg_t **zmsg)
 {
     cmb_t *c = impl;
-    int rc;
-    json_object *o = NULL;
-    char *tag = NULL;
-
     assert (c->magic == CMB_CTX_MAGIC);
-    if (cmb_msg_decode (*zmsg, &tag, &o) < 0)
-        return -1;
-    rc = cmb_request_send (c, o, "api.event.send.%s", tag ? tag : "");
-    if (rc == 0)
-        zmsg_destroy (zmsg);
-    if (tag)
-        free (tag);
-    if (o)
-        json_object_put (o);
-    return rc;
+    return zmsg_send_fd_typemask (c->fd, FLUX_MSGTYPE_EVENT, zmsg);
 }
 
 static zmsg_t *cmb_event_recvmsg (void *impl, bool nonblock)
