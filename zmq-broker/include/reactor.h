@@ -1,5 +1,5 @@
-#ifndef REACTOR_H
-#define REACTOR_H
+#ifndef FLUX_REACTOR_H
+#define FLUX_REACTOR_H
 
 typedef void (*FluxMsgHandler)(flux_t h, int typemask, zmsg_t **zmsg, void*arg);
 typedef void (*FluxFdHandler)(flux_t h, int fd, short revents, void *arg);
@@ -26,7 +26,7 @@ int flux_msghandler_append (flux_t h, int typemask, const char *pattern,
 void flux_msghandler_remove (flux_t h, int typemask, const char *pattern);
 
 
-/* Regisiter a FluxFdHandler callback to be called whenever an event
+/* Register a FluxFdHandler callback to be called whenever an event
  * in the 'events' mask occurs on the given file descriptor 'fd'.
  */
 int flux_fdhandler_add (flux_t h, int fd, short events,
@@ -38,7 +38,7 @@ int flux_fdhandler_add (flux_t h, int fd, short events,
 void flux_fdhandler_remove (flux_t h, int fd, short events);
 
 
-/* Regisiter a FluxZsHandler callback to be called whenever an event
+/* Register a FluxZsHandler callback to be called whenever an event
  * in the 'events' mask occurs on the given zeromq socket 'zs'.
  */
 int flux_zshandler_add (flux_t h, void *zs, short events,
@@ -58,7 +58,7 @@ int flux_reactor_start (flux_t h);
  */
 void flux_reactor_stop (flux_t h);
 
-#endif /* !defined(REACTOR_H) */
+#endif /* !FLUX_REACTOR_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
