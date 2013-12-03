@@ -188,7 +188,7 @@ static char ** rexec_session_args_create (struct rexec_session *s)
 
     args [0] = strdup (REXECD_PATH);
     args [1] = strdup (buf);
-    args [2] = strdup ("--parent-fd=0");
+    args [2] = strdup ("--parent-fd=3");
     args [3] = NULL;
 
     return (args);
@@ -212,12 +212,12 @@ static void exec_handler (struct rexec_session *s, int *pfds)
     /*
      *  Grandchild performs the exec
      */
-    dup2 (pfds[0], STDIN_FILENO);
-    dup2 (pfds[0], STDOUT_FILENO);
-    closeall (3);
+    //dup2 (pfds[0], STDIN_FILENO);
+    dup2 (pfds[0], 3);
+    closeall (4);
     msg ("running %s %s %s", args[0], args[1], args[2]);
     if (execvp (args[0], args) < 0) {
-        close (STDOUT_FILENO);
+        close (3);
         err_exit ("execvp");
     }
     exit (255);
@@ -267,12 +267,11 @@ static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
 
     /* Blocking wait for exec helper to close fd */
     n = read (fds[1], &c, 1);
-    close (fds[1]);
-
     if (n < 1) {
-        msg ("Error reading status from rexecd");
+        msg ("Error reading status from rexecd: %s", strerror (errno));
         return (-1);
     }
+    close (fds[1]);
 
     rexec_session_connect_to_helper (cli);
     rexec_session_add (ctx, cli);
