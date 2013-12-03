@@ -244,7 +244,7 @@ flux_t cmb_init_full (const char *path, int flags)
     if (connect (c->fd, (struct sockaddr *)&addr,
                          sizeof (struct sockaddr_un)) < 0)
         goto error;
-    c->h = flux_handle_create (c, &cmb_ops, flags);
+    c->h = handle_create (c, &cmb_ops, flags);
     return c->h;
 error:
     if (c)

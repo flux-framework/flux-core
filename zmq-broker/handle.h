@@ -21,17 +21,6 @@ struct flux_handle_ops {
 
     zctx_t *    (*get_zctx)(void *impl);
 
-    /* On the reactor interface:
-     * The handle implementation "owns" the reactor (zloop or whatever).
-     * The generic handle.c code registers three callbacks, one for messages
-     * (Flux message types on Flux plumbing), one for events on file
-     * descriptors, and one for events on zeromq sockets.  These handlers
-     * are registered with the reactor_*handler_set() calls and there is
-     * exactly one for each type.  File descriptors and zmq sockets are
-     * added/removed using the reactor_*_add/remove() calls.  The three
-     * callbacks will demultiplex messages to user callbacks, but that need
-     * not concern the handle implementation.
-     */
     int         (*reactor_start)(void *impl);
     void        (*reactor_stop)(void *impl);
     int         (*reactor_msghandler_set)(void *impl,
@@ -44,8 +33,6 @@ struct flux_handle_ops {
                                           FluxZsHandler cb, void *arg);
     int         (*reactor_zs_add)(void *impl, void *zs, short events);
     void        (*reactor_zs_remove)(void *impl, void *zs, short events);
-    int         (*reactor_tmouthandler_set)(void *impl,
-                                          FluxTmoutHandler cb, void *arg);
     int         (*reactor_timeout_set)(void *impl, unsigned long msec);
     int         (*reactor_timeout_clear)(void *impl);
     bool        (*reactor_timeout_isset)(void *impl);
@@ -53,8 +40,13 @@ struct flux_handle_ops {
     void        (*impl_destroy)(void *impl);
 };
 
-flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops,
-                           int flags);
+/* These functions should only be called from handle implementations.
+ */
+flux_t handle_create (void *impl, const struct flux_handle_ops *ops, int flags);
+void handle_event_msg (flux_t h, int typemask, zmsg_t **zmsg);
+void handle_event_fd (flux_t h, int fd, short revents);
+void handle_event_zs (flux_t h, void *zs, short revents);
+void handle_event_tmout (flux_t h);
 
 #endif /* !HAVE_FLUX_HANDLE_H */
 

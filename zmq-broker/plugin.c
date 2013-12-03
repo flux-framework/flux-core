@@ -59,14 +59,6 @@ struct plugin_ctx_struct {
     void *dso;
     zhash_t *args;
     int rank;
-    FluxMsgHandler reactor_msghandler;
-    void *reactor_msghandler_arg;
-    FluxFdHandler reactor_fdhandler;
-    void *reactor_fdhandler_arg;
-    FluxZsHandler reactor_zshandler;
-    void *reactor_zshandler_arg;
-    FluxTmoutHandler reactor_tmouthandler;
-    void *reactor_tmouthandler_arg;
     bool reactor_stop;
 };
 
@@ -200,43 +192,6 @@ static zctx_t *plugin_get_zctx (void *impl)
     return p->zctx;
 }
 
-static int plugin_reactor_msghandler_set (void *impl,
-                                          FluxMsgHandler cb, void *arg)
-{
-    plugin_ctx_t p = impl;
-    p->reactor_msghandler = cb;
-    p->reactor_msghandler_arg = arg;
-    return 0;
-}
-
-static int plugin_reactor_fdhandler_set (void *impl,
-                                          FluxFdHandler cb, void *arg)
-{
-    plugin_ctx_t p = impl;
-    p->reactor_fdhandler = cb;
-    p->reactor_fdhandler_arg = arg;
-    return 0;
-}
-
-static int plugin_reactor_zshandler_set (void *impl,
-                                          FluxZsHandler cb, void *arg)
-{
-    plugin_ctx_t p = impl;
-    p->reactor_zshandler = cb;
-    p->reactor_zshandler_arg = arg;
-    return 0;
-}
-
-static int plugin_reactor_tmouthandler_set (void *impl,
-                                          FluxTmoutHandler cb, void *arg)
-{
-    plugin_ctx_t p = impl;
-    p->reactor_tmouthandler = cb;
-    p->reactor_tmouthandler_arg = arg;
-    return 0;
-}
-
-
 static void plugin_reactor_stop (void *impl)
 {
     plugin_ctx_t p = impl;
@@ -245,9 +200,7 @@ static void plugin_reactor_stop (void *impl)
 
 static int fd_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 {
-    if (p->reactor_fdhandler)
-        p->reactor_fdhandler (p->h, item->fd, item->revents,
-                              p->reactor_fdhandler_arg);
+    handle_event_fd (p->h, item->fd, item->revents);
     return (p->reactor_stop ? -1 : 0);
 }
 
@@ -269,9 +222,7 @@ static void plugin_reactor_fd_remove (void *impl, int fd, short events)
 
 static int zs_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 {
-    if (p->reactor_zshandler)
-        p->reactor_zshandler (p->h, item->socket, item->revents,
-                              p->reactor_zshandler_arg);
+    handle_event_zs (p->h, item->socket, item->revents);
     return (p->reactor_stop ? -1 : 0);
 }
 
@@ -403,9 +354,8 @@ static void plugin_handle_response (plugin_ctx_t p, zmsg_t *zmsg)
 {
     p->stats.upreq_recv_count++;
 
-    if (zmsg && p->reactor_msghandler)
-        p->reactor_msghandler (p->h, FLUX_MSGTYPE_RESPONSE, &zmsg,
-                               p->reactor_msghandler_arg);
+    if (zmsg)
+        handle_event_msg (p->h, FLUX_MSGTYPE_RESPONSE, &zmsg);
     if (zmsg && p->ops->recv)
         p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_RESPONSE);
     if (zmsg)
@@ -444,9 +394,8 @@ static int dnreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 
     p->stats.dnreq_recv_count++;
 
-    if (zmsg && p->reactor_msghandler)
-        p->reactor_msghandler (p->h, FLUX_MSGTYPE_REQUEST, &zmsg,
-                               p->reactor_msghandler_arg);
+    if (zmsg)
+        handle_event_msg (p->h, FLUX_MSGTYPE_REQUEST, &zmsg);
     if (zmsg && p->ops->recv)
         p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_REQUEST);
     if (zmsg) {
@@ -469,9 +418,8 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 
     p->stats.event_recv_count++;
 
-    if (zmsg && p->reactor_msghandler)
-        p->reactor_msghandler (p->h, FLUX_MSGTYPE_EVENT, &zmsg,
-                               p->reactor_msghandler_arg);
+    if (zmsg)
+        handle_event_msg (p->h, FLUX_MSGTYPE_EVENT, &zmsg);
     if (zmsg && p->ops->recv)
         p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_EVENT);
 
@@ -487,9 +435,8 @@ static int snoop_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 {
     zmsg_t *zmsg =  zmsg_recv (p->zs_snoop);
 
-    if (zmsg && p->reactor_msghandler)
-        p->reactor_msghandler (p->h, FLUX_MSGTYPE_SNOOP, &zmsg,
-                               p->reactor_msghandler_arg);
+    if (zmsg)
+        handle_event_msg (p->h, FLUX_MSGTYPE_SNOOP, &zmsg);
     if (zmsg && p->ops->recv)
         p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_SNOOP);
 
@@ -505,9 +452,9 @@ static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t)
 {
     plugin_ctx_t p = t->p;
 
-    if (p->reactor_tmouthandler)
-        p->reactor_tmouthandler (p->h, p->reactor_tmouthandler_arg);
-    else if (p->ops->timeout)
+    handle_event_tmout (p->h);
+
+    if (p->ops->timeout)
         p->ops->timeout (p->h);
 
     plugin_handle_deferred_responses (p);
@@ -674,7 +621,7 @@ plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
     if (!(p->deferred_responses = zlist_new ()))
         oom ();
 
-    p->h = flux_handle_create (p, &plugin_handle_ops, 0);
+    p->h = handle_create (p, &plugin_handle_ops, 0);
     flux_log_set_facility (p->h, name);
 
     /* connect sockets in the parent, then use them in the thread */
@@ -706,10 +653,6 @@ static const struct flux_handle_ops plugin_handle_ops = {
     .snoop_unsubscribe = plugin_snoop_unsubscribe,
     .rank = plugin_rank,
     .get_zctx = plugin_get_zctx,
-    .reactor_msghandler_set = plugin_reactor_msghandler_set,
-    .reactor_fdhandler_set = plugin_reactor_fdhandler_set,
-    .reactor_zshandler_set = plugin_reactor_zshandler_set,
-    .reactor_tmouthandler_set = plugin_reactor_tmouthandler_set,
     .reactor_stop = plugin_reactor_stop,
     .reactor_fd_add = plugin_reactor_fd_add,
     .reactor_fd_remove = plugin_reactor_fd_remove,

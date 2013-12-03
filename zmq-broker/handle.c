@@ -41,8 +41,7 @@ struct flux_handle_struct {
     zhash_t         *aux;
 };
 
-flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops,
-                           int flags)
+flux_t handle_create (void *impl, const struct flux_handle_ops *ops, int flags)
 {
     flux_t h = xzmalloc (sizeof (*h));
 
@@ -328,6 +327,8 @@ struct dispatch_struct {
     zlist_t *msg;
     zlist_t *fd;
     zlist_t *zs;
+    FluxTmoutHandler tmout_fn;
+    void *tmout_arg;
 };
 
 struct dispatch_msg_info {
@@ -450,8 +451,7 @@ static bool dispatch_msg_info_match (struct dispatch_msg_info *info,
     return false;
 }
 
-static void dispatch_msghandler (flux_t h, int typemask, zmsg_t **zmsg,
-                                 void *arg)
+void handle_event_msg (flux_t h, int typemask, zmsg_t **zmsg)
 {
     struct dispatch_msg_info *info;
     char *tag;
@@ -477,7 +477,7 @@ done:
      */
 }
 
-static void dispatch_fdhandler (flux_t h, int fd, short events, void *arg)
+void handle_event_fd (flux_t h, int fd, short events)
 {
     struct dispatch_fd_info *info;
     
@@ -491,7 +491,7 @@ static void dispatch_fdhandler (flux_t h, int fd, short events, void *arg)
     }
 }
 
-static void dispatch_zshandler (flux_t h, void *zs, short events, void *arg)
+void handle_event_zs (flux_t h, void *zs, short events)
 {
     struct dispatch_zs_info *info;
     
@@ -505,40 +505,17 @@ static void dispatch_zshandler (flux_t h, void *zs, short events, void *arg)
     }
 }
 
-static int dispatch_msg_install (flux_t h)
+void handle_event_tmout (flux_t h)
 {
-    if (!h->ops->reactor_msghandler_set) {
-        errno = ENOSYS;
-        return -1;
-    }
-    return h->ops->reactor_msghandler_set (h->impl, dispatch_msghandler, NULL);
-};
-
-static int dispatch_fd_install (flux_t h)
-{
-    if (!h->ops->reactor_fdhandler_set) {
-        errno = ENOSYS;
-        return -1;
-    }
-    return h->ops->reactor_fdhandler_set (h->impl, dispatch_fdhandler, NULL);
-};
-
-static int dispatch_zs_install (flux_t h)
-{
-    if (!h->ops->reactor_zshandler_set) {
-        errno = ENOSYS;
-        return -1;
-    }
-    return h->ops->reactor_zshandler_set (h->impl, dispatch_zshandler, NULL);
-};
+    if (h->dispatch->tmout_fn)
+        h->dispatch->tmout_fn (h, h->dispatch->tmout_arg);
+}
 
 int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
                          FluxMsgHandler cb, void *arg)
 {
     struct dispatch_msg_info *info;
 
-    if (dispatch_msg_install (h) < 0)
-        return -1;
     info = dispatch_msg_info_create (typemask, pattern, cb, arg);
     if (zlist_push (h->dispatch->msg, info) < 0)
         oom ();
@@ -550,8 +527,6 @@ int flux_msghandler_append (flux_t h, int typemask, const char *pattern,
 {
     struct dispatch_msg_info *info;
 
-    if (dispatch_msg_install (h) < 0)
-        return -1;
     info = dispatch_msg_info_create (typemask, pattern, cb, arg);
     if (zlist_append (h->dispatch->msg, info) < 0)
         oom ();
@@ -582,8 +557,6 @@ int flux_fdhandler_add (flux_t h, int fd, short events,
         errno = ENOSYS;
         return -1;
     }
-    if (dispatch_fd_install (h) < 0)
-        return -1;
     info = dispatch_fd_info_create (fd, events, cb, arg);
     if (zlist_append (h->dispatch->fd, info) < 0)
         oom ();
@@ -616,8 +589,6 @@ int flux_zshandler_add (flux_t h, void *zs, short events,
         errno = ENOSYS;
         return -1;
     }
-    if (dispatch_zs_install (h) < 0)
-        return -1;
     info = dispatch_zs_info_create (zs, events, cb, arg);
     if (zlist_append (h->dispatch->zs, info) < 0)
         oom ();
@@ -643,11 +614,9 @@ void flux_zshandler_remove (flux_t h, void *zs, short events)
 
 int flux_tmouthandler_set (flux_t h, FluxTmoutHandler cb, void *arg)
 {
-    if (!h->ops->reactor_tmouthandler_set) {
-        errno = ENOSYS;
-        return -1;
-    }
-    return h->ops->reactor_tmouthandler_set (h->impl, cb, arg);
+    h->dispatch->tmout_fn = cb;
+    h->dispatch->tmout_arg = arg;
+    return 0;
 }
 
 int flux_timeout_set (flux_t h, unsigned long msec)
