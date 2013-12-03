@@ -50,7 +50,7 @@ static int l_flux_new (lua_State *L)
 static int l_flux_kvsdir_new (lua_State *L)
 {
     const char *path = ".";
-    kvsdir_t *dirp;
+    kvsdir_t dir;
     flux_t f = lua_get_flux (L, 1);
 
     if (lua_isstring (L, 2)) {
@@ -62,10 +62,9 @@ static int l_flux_kvsdir_new (lua_State *L)
         path = lua_tostring (L, 2);
     }
 
-    dirp = lua_newuserdata (L, sizeof (*dirp));
-    if (kvs_get_dir (f, dirp, path) < 0)
+    if (kvs_get_dir (f, &dir, path) < 0)
         return luaL_error (L, "kvs_get_dir: %s", strerror (errno));
-    return l_kvsdir_instantiate (L);
+    return l_push_kvsdir (L, dir);
 }
 
 static int l_flux_destroy (lua_State *L)
@@ -486,7 +485,7 @@ int luaopen_flux (lua_State *L)
     /*
      * Load required kvs library
      */
-    l_loadlibrary (L, "kvs");
+    luaopen_kvs (L);
     luaL_register (L, "flux", flux_functions);
     return (1);
 }
