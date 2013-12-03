@@ -10,10 +10,20 @@
 #include <czmq.h>
 #include <sys/syslog.h>
 
+#include <lua.h>
+#include <lauxlib.h>
+
+
+#include "rexec-config.h"   /* For REXECD_LUA */
 #include "util/optparse.h"
 #include "util/util.h"
 #include "util/zmsg.h"
 #include "cmb.h"
+
+#include "luastack.h"
+#include "dlua/lutil.h"
+#include "dlua/kvs-lua.h"
+#include "dlua/flux-lua.h"
 
 struct prog_ctx {
     flux_t cmb;
@@ -33,6 +43,15 @@ struct prog_ctx {
     int signalfd;
     int *pids;
     int exited;
+
+    /*  Per-task data. These members are only valid between fork and
+     *   exec within each task and are created on-demand as needed by
+     *   Lua scripts.
+     */
+    int taskid;             /* Current taskid executing lua_stack */
+    flux_t task_handle;     /* Per task flux handle               */
+    kvsdir_t task_kvs;
+    lua_stack_t lua_stack;
 };
 
 void *lsd_nomem_error (const char *file, int line, char *msg)
@@ -124,7 +143,6 @@ int rexec_send_msg (struct prog_ctx *ctx, char *tag, json_object *o)
     zmsg_t *zmsg = cmb_msg_encode (tag, o);
     if (!zmsg)
         return (-1);
-    fprintf (stderr, "rexec_send_msg:\n");
     zmsg_dump (zmsg);
     return zmsg_send (&zmsg, ctx->zs_req);
 }
@@ -157,6 +175,9 @@ struct prog_ctx * prog_ctx_create (void)
 
     ctx->id = -1;
     ctx->nodeid = -1;
+    ctx->taskid = -1;
+
+    ctx->lua_stack = lua_stack_create ();
 
     return (ctx);
 }
@@ -275,14 +296,16 @@ void closeall (int fd)
 
 void child_io_devnull (struct prog_ctx *ctx)
 {
-    int devnull = open ("/dev/null", O_RDWR);
     /*
      *  Dup appropriate fds onto child STDIN/STDOUT/STDERR
      */
+#if 0 // XXX: Disable for now so we get stdio on the stdio of cmbd.
+    int devnull = open ("/dev/null", O_RDWR);
     if (  (dup2 (devnull, STDIN_FILENO) < 0)
        || (dup2 (devnull, STDOUT_FILENO) < 0)
        || (dup2 (devnull, STDERR_FILENO) < 0))
             log_fatal (ctx, 1, "dup2: %s", strerror (errno));
+#endif
 
     closeall (3);
 }
@@ -417,6 +440,12 @@ int exec_command (struct prog_ctx *ctx, int i)
         if (sigmask_unblock_all () < 0)
             fprintf (stderr, "sigprocmask: %s\n", strerror (errno));
 
+        /*
+         *  Set current taskid and invoke rexecd_task_init
+         */
+        ctx->taskid = i;
+        lua_stack_call (ctx->lua_stack, "rexecd_task_init");
+
         setenvf ("MPIRUN_RANK",       1, "%d", globalid (ctx, i));
         setenvf ("CMB_LWJ_TASK_ID",       1, "%d", globalid (ctx, i));
         setenvf ("CMB_LWJ_LOCAL_TASK_ID", 1, "%d", i);
@@ -427,6 +456,7 @@ int exec_command (struct prog_ctx *ctx, int i)
             exit (255);
             //log_fatal (ctx, 1, "execvp: %s", strerror (errno));
         }
+        exit (255);
     }
 
     /*
@@ -473,11 +503,106 @@ char *gtid_list_create (struct prog_ctx *ctx, char *buf, size_t len)
     return (buf);
 }
 
+static struct prog_ctx *l_get_prog_ctx (lua_State *L, int index)
+{
+    struct prog_ctx **ctxp = luaL_checkudata (L, index, "WRECK.ctx");
+    return (*ctxp);
+}
+
+static int l_wreck_index (lua_State *L)
+{
+    struct prog_ctx *ctx = l_get_prog_ctx (L, 1);
+    const char *key = lua_tostring (L, 2);
+
+    if (key == NULL)
+        return luaL_error (L, "wreck: invalid key");
+
+    if (strcmp (key, "id") == 0) {
+        lua_pushnumber (L, ctx->id);
+        return (1);
+    }
+    if (strcmp (key, "globalid") == 0) {
+        if (ctx->taskid < 0)
+            return lua_pusherror (L, "No valid taskid in this context");
+        lua_pushnumber (L, globalid (ctx, ctx->taskid));
+        return (1);
+    }
+    if (strcmp (key, "taskid") == 0) {
+        if (ctx->taskid < 0)
+            return lua_pusherror (L, "No valid taskid in this context");
+        lua_pushnumber (L, ctx->taskid);
+        return (1);
+    }
+    if (strcmp (key, "kvsdir") == 0) {
+        kvsdir_t dir = ctx->kvs;
+        if (ctx->taskid >= 0) {
+            if (ctx->task_kvs)
+                dir = ctx->task_kvs;
+            else {
+                if (!ctx->task_handle)
+                    ctx->task_handle = cmb_init ();
+                if (!ctx->task_kvs)
+                    kvs_get_dir (ctx->task_handle, &dir, "lwj.%ld", ctx->id);
+                ctx->task_kvs = dir;
+            }
+        }
+        l_push_kvsdir (L, dir);
+        return (1);
+    }
+    if (strcmp (key, "flux") == 0) {
+        flux_t f = ctx->cmb;
+        if (ctx->taskid >= 0) {
+            if (!ctx->task_handle)
+                ctx->task_handle = cmb_init ();
+            f = ctx->task_handle;
+        }
+        lua_push_flux_handle (L, f);
+        return (1);
+    }
+    if (strcmp (key, "nodeid") == 0) {
+        lua_pushnumber (L, ctx->nodeid);
+        return (1);
+    }
+    return (0);
+}
+
+
+static int l_push_prog_ctx (lua_State *L, struct prog_ctx *ctx)
+{
+    struct prog_ctx **ctxp = lua_newuserdata (L, sizeof (*ctxp));
+    *ctxp = ctx;
+    luaL_getmetatable (L, "WRECK.ctx");
+    lua_setmetatable (L, -2);
+    return (1);
+}
+
+static const struct luaL_Reg wreck_methods [] = {
+    { "__index",    l_wreck_index },
+    { NULL,         NULL          },
+};
+
+static int wreck_lua_init (struct prog_ctx *ctx)
+{
+    lua_State *L = lua_stack_state (ctx->lua_stack);
+
+    luaopen_flux (L); /* Also loads kvs metatable */
+
+    luaL_newmetatable (L, "WRECK.ctx");
+    luaL_register (L, NULL, wreck_methods);
+    l_push_prog_ctx (L, ctx);
+    lua_setglobal (L, "wreck");
+    lua_stack_append_file (ctx->lua_stack, REXECD_LUA_PATTERN);
+    return (0);
+}
 
 int exec_commands (struct prog_ctx *ctx)
 {
     char buf [4096];
     int i;
+
+    wreck_lua_init (ctx);
+
+    lua_stack_call (ctx->lua_stack, "rexecd_init");
 
     setenvf ("CMB_LWJ_ID",     1, "%d", ctx->id);
     setenvf ("CMB_LWJ_NNODES", 1, "%d", ctx->nnodes);

@@ -13,16 +13,17 @@ LDFLAGS +=          -L$(topdir)/lib \
 LIBADD +=           $(topdir)/util/libutil.a -lcmb -lczmq -ljson -lzmq -lcrypto -luuid
 CLEANFILES :=       $(programs) rexec-config.h
 
-wrexecd_SOURCES :=  wrexecd.c
+wrexecd_SOURCES :=  wrexecd.c luastack.c
 wreck_SOURCES :=    wreck.c
 
 all:                rexec-config.h $(programs) $(plugins) $(tests)
 
 rexec-config.h :
 	@(echo '#define REXECD_PATH "$(builddir)/wrexecd"') > $@
+	@(echo '#define REXECD_LUA_PATTERN  "$(builddir)/lua.d/*.lua"') >> $@
 
 wrexecd : $(wrexecd_SOURCES:.c=.o)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LIBADD)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBADD) $(topdir)/dlua/libdlua.a -llua
 
 wreck : $(wreck_SOURCES:.c=.o)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBADD)
