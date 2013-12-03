@@ -20,6 +20,7 @@ static const struct option longopts[] = {
 
 void usage (void)
 {
+    msg ("peep!");
     fprintf (stderr, 
 "Usage: flux-mecho [--pad-bytes N] [--delay-msec N] nodelist\n"
 );
@@ -40,7 +41,7 @@ int main (int argc, char *argv[])
     int id;
     flux_mrpc_t f;
 
-    log_init ("flux-ping");
+    log_init ("flux-mecho");
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {

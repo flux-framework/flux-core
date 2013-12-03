@@ -36,7 +36,7 @@ int main (int argc, char *argv[])
     int iter = 1;
     int i;
 
-    log_init ("flux-ping");
+    log_init ("flux-barrier");
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {

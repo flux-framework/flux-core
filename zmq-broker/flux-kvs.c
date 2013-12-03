@@ -47,7 +47,7 @@ int main (int argc, char *argv[])
     int i, ch;
     bool dopt;
 
-    log_init (basename (argv[0]));
+    log_init ("flux-kvs");
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
