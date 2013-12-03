@@ -437,7 +437,7 @@ static void cmb_init (ctx_t *ctx)
     }
 
     /* create flux_t handle */
-    ctx->h = flux_handle_create (ctx, &cmbd_handle_ops, 0);
+    ctx->h = handle_create (ctx, &cmbd_handle_ops, 0);
     flux_log_set_facility (ctx->h, "cmbd");
 
     if (ctx->zs_upreq_out) {
