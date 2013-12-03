@@ -17,10 +17,6 @@ struct flux_handle_ops {
     int         (*snoop_subscribe)(void *impl, const char *topic);
     int         (*snoop_unsubscribe)(void *impl, const char *topic);
 
-    int         (*timeout_set)(void *impl, unsigned long msec);
-    int         (*timeout_clear)(void *impl);
-    bool        (*timeout_isset)(void *impl);
-
     int         (*rank)(void *impl);
 
     zctx_t *    (*get_zctx)(void *impl);
@@ -48,6 +44,11 @@ struct flux_handle_ops {
                                           FluxZsHandler cb, void *arg);
     int         (*reactor_zs_add)(void *impl, void *zs, short events);
     void        (*reactor_zs_remove)(void *impl, void *zs, short events);
+    int         (*reactor_tmouthandler_set)(void *impl,
+                                          FluxTmoutHandler cb, void *arg);
+    int         (*reactor_timeout_set)(void *impl, unsigned long msec);
+    int         (*reactor_timeout_clear)(void *impl);
+    bool        (*reactor_timeout_isset)(void *impl);
 
     void        (*impl_destroy)(void *impl);
 };

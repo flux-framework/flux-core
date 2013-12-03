@@ -96,12 +96,6 @@ int flux_route_add (flux_t h, const char *dst, const char *gw);
 int flux_route_del (flux_t h, const char *dst, const char *gw);
 json_object *flux_route_query (flux_t h);
 
-/* Set/clear/test timeout callback arming.
- */
-int flux_timeout_set (flux_t h, unsigned long msec);
-int flux_timeout_clear (flux_t h);
-bool flux_timeout_isset (flux_t h);
-
 /* Accessor zeromq context.
  * N.B. The zctx_t is thread-safe but zeromq sockets, and therefore
  * flux_t handle operations are not.
