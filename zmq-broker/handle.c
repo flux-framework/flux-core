@@ -230,32 +230,6 @@ int flux_snoop_unsubscribe (flux_t h, const char *topic)
 
     return h->ops->snoop_unsubscribe (h->impl, topic);
 }
-
-int flux_timeout_set (flux_t h, unsigned long msec)
-{
-    if (!h->ops->timeout_set) {
-        errno = ENOSYS;
-        return -1;
-    }
-    return h->ops->timeout_set (h->impl, msec);
-}
-
-int flux_timeout_clear (flux_t h)
-{
-    if (!h->ops->timeout_clear) {
-        errno = ENOSYS;
-        return -1;
-    }
-    return h->ops->timeout_clear (h->impl);
-}
-
-bool flux_timeout_isset (flux_t h)
-{
-    if (!h->ops->timeout_isset)
-        return false;
-    return h->ops->timeout_isset (h->impl);
-}
-
 int flux_rank (flux_t h)
 {
     if (!h->ops->rank) {
@@ -666,6 +640,41 @@ void flux_zshandler_remove (flux_t h, void *zs, short events)
     if (h->ops->reactor_zs_remove)
         h->ops->reactor_zs_remove (h->impl, zs, events);
 }
+
+int flux_tmouthandler_set (flux_t h, FluxTmoutHandler cb, void *arg)
+{
+    if (!h->ops->reactor_tmouthandler_set) {
+        errno = ENOSYS;
+        return -1;
+    }
+    return h->ops->reactor_tmouthandler_set (h->impl, cb, arg);
+}
+
+int flux_timeout_set (flux_t h, unsigned long msec)
+{
+    if (!h->ops->reactor_timeout_set) {
+        errno = ENOSYS;
+        return -1;
+    }
+    return h->ops->reactor_timeout_set (h->impl, msec);
+}
+
+int flux_timeout_clear (flux_t h)
+{
+    if (!h->ops->reactor_timeout_clear) {
+        errno = ENOSYS;
+        return -1;
+    }
+    return h->ops->reactor_timeout_clear (h->impl);
+}
+
+bool flux_timeout_isset (flux_t h)
+{
+    if (!h->ops->reactor_timeout_isset)
+        return false;
+    return h->ops->reactor_timeout_isset (h->impl);
+}
+
 
 int flux_reactor_start (flux_t h)
 {

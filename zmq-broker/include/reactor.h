@@ -4,6 +4,7 @@
 typedef void (*FluxMsgHandler)(flux_t h, int typemask, zmsg_t **zmsg, void*arg);
 typedef void (*FluxFdHandler)(flux_t h, int fd, short revents, void *arg);
 typedef void (*FluxZsHandler)(flux_t h, void *zs, short revents, void *arg);
+typedef void (*FluxTmoutHandler)(flux_t h, void *arg);
 
 /* Register a FluxMsgHandler callback to be called whenever a message
  * matching typemask and pattern (glob) is received.  The callback is
@@ -48,6 +49,24 @@ int flux_zshandler_add (flux_t h, void *zs, short events,
  * identical zs and events is removed.
  */
 void flux_zshandler_remove (flux_t h, void *zs, short events);
+
+/* Register a FluxTmoutHandler callback.  If a callback was previously
+ * registered, this call replaces it.
+ */
+int flux_tmouthandler_set (flux_t h, FluxTmoutHandler cb, void *arg);
+
+/* Arm the reactor free running timer such that a FluxTmoutHandler, if
+ * registered, will be called every 'msec' milliseconds.
+ */
+int flux_timeout_set (flux_t h, unsigned long msec);
+
+/* Disarm the reactor free running timer.
+ */
+int flux_timeout_clear (flux_t h);
+
+/* Test whether the reactor free running timer is armed.
+ */
+bool flux_timeout_isset (flux_t h);
 
 /* Start the flux event reactor.
  */

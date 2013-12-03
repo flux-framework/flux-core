@@ -65,6 +65,8 @@ struct plugin_ctx_struct {
     void *reactor_fdhandler_arg;
     FluxZsHandler reactor_zshandler;
     void *reactor_zshandler_arg;
+    FluxTmoutHandler reactor_tmouthandler;
+    void *reactor_tmouthandler_arg;
     bool reactor_stop;
 };
 
@@ -184,57 +186,6 @@ static int plugin_snoop_unsubscribe (void *impl, const char *topic)
     zsocket_set_unsubscribe (p->zs_snoop, topic ? (char *)topic : "");
     return 0;
 }
-
-/* N.B. zloop_timer() cannot be called repeatedly with the same
- * arg value to update the timeout of a free running (times = 0) timer.
- * Doing so creates a new timer, so you will have it going off at both
- * old and new times.  Also, zloop_timer_end() is deferred until the
- * bottom of the zloop poll loop, so we can't call zloop_timer_end() followed
- * immediately by zloop_timer() with the same arg value or the timer is
- * removed before it can go off.  Workaround: delete and readd but make
- * sure the arg value is different (malloc-before-free plugin_ctx_t
- * wrapper struct shenanegens below).
- */
-static int plugin_timeout_set (void *impl, unsigned long msec)
-{
-    ptimeout_t t;
-    plugin_ctx_t p = impl;
-
-    assert (p->magic == PLUGIN_MAGIC);
-    if (p->timeout)
-        (void)zloop_timer_end (p->zloop, p->timeout);
-    if (!(t = xzmalloc (sizeof (struct ptimeout_struct))))
-        oom ();
-    t->p = p;
-    t->msec = msec;
-    if (zloop_timer (p->zloop, msec, 0, (zloop_fn *)plugin_timer_cb, t) < 0)
-        err_exit ("zloop_timer"); 
-    if (p->timeout)
-        free (p->timeout); /* free after xzmalloc - see comment above */
-    p->timeout = t;
-    return 0;
-}
-
-static int plugin_timeout_clear (void *impl)
-{
-    plugin_ctx_t p = impl;
-
-    assert (p->magic == PLUGIN_MAGIC);
-    if (p->timeout) {
-        (void)zloop_timer_end (p->zloop, p->timeout);
-        free (p->timeout);
-        p->timeout = NULL;
-    }
-    return 0;
-}
-
-static bool plugin_timeout_isset (void *impl)
-{
-    plugin_ctx_t p = impl;
-    assert (p->magic == PLUGIN_MAGIC);
-    return p->timeout ? true : false;
-}
-
 static int plugin_rank (void *impl)
 {
     plugin_ctx_t p = impl;
@@ -275,6 +226,16 @@ static int plugin_reactor_zshandler_set (void *impl,
     p->reactor_zshandler_arg = arg;
     return 0;
 }
+
+static int plugin_reactor_tmouthandler_set (void *impl,
+                                          FluxTmoutHandler cb, void *arg)
+{
+    plugin_ctx_t p = impl;
+    p->reactor_tmouthandler = cb;
+    p->reactor_tmouthandler_arg = arg;
+    return 0;
+}
+
 
 static void plugin_reactor_stop (void *impl)
 {
@@ -328,6 +289,57 @@ static void plugin_reactor_zs_remove (void *impl, void *zs, short events)
     zmq_pollitem_t item = { .socket = zs, .events = events };
 
     zloop_poller_end (p->zloop, &item); /* FIXME: 'events' are ignored */
+}
+
+
+/* N.B. zloop_timer() cannot be called repeatedly with the same
+ * arg value to update the timeout of a free running (times = 0) timer.
+ * Doing so creates a new timer, so you will have it going off at both
+ * old and new times.  Also, zloop_timer_end() is deferred until the
+ * bottom of the zloop poll loop, so we can't call zloop_timer_end() followed
+ * immediately by zloop_timer() with the same arg value or the timer is
+ * removed before it can go off.  Workaround: delete and readd but make
+ * sure the arg value is different (malloc-before-free plugin_ctx_t
+ * wrapper struct shenanegens below).
+ */
+static int plugin_reactor_timeout_set (void *impl, unsigned long msec)
+{
+    ptimeout_t t;
+    plugin_ctx_t p = impl;
+
+    assert (p->magic == PLUGIN_MAGIC);
+    if (p->timeout)
+        (void)zloop_timer_end (p->zloop, p->timeout);
+    if (!(t = xzmalloc (sizeof (struct ptimeout_struct))))
+        oom ();
+    t->p = p;
+    t->msec = msec;
+    if (zloop_timer (p->zloop, msec, 0, (zloop_fn *)plugin_timer_cb, t) < 0)
+        err_exit ("zloop_timer"); 
+    if (p->timeout)
+        free (p->timeout); /* free after xzmalloc - see comment above */
+    p->timeout = t;
+    return 0;
+}
+
+static int plugin_reactor_timeout_clear (void *impl)
+{
+    plugin_ctx_t p = impl;
+
+    assert (p->magic == PLUGIN_MAGIC);
+    if (p->timeout) {
+        (void)zloop_timer_end (p->zloop, p->timeout);
+        free (p->timeout);
+        p->timeout = NULL;
+    }
+    return 0;
+}
+
+static bool plugin_reactor_timeout_isset (void *impl)
+{
+    plugin_ctx_t p = impl;
+    assert (p->magic == PLUGIN_MAGIC);
+    return p->timeout ? true : false;
 }
 
 
@@ -493,7 +505,9 @@ static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t)
 {
     plugin_ctx_t p = t->p;
 
-    if (p->ops->timeout)
+    if (p->reactor_tmouthandler)
+        p->reactor_tmouthandler (p->h, p->reactor_tmouthandler_arg);
+    else if (p->ops->timeout)
         p->ops->timeout (p->h);
 
     plugin_handle_deferred_responses (p);
@@ -690,19 +704,20 @@ static const struct flux_handle_ops plugin_handle_ops = {
     .snoop_recvmsg = plugin_snoop_recvmsg,
     .snoop_subscribe = plugin_snoop_subscribe,
     .snoop_unsubscribe = plugin_snoop_unsubscribe,
-    .timeout_set = plugin_timeout_set,
-    .timeout_clear = plugin_timeout_clear,
-    .timeout_isset = plugin_timeout_isset,
     .rank = plugin_rank,
     .get_zctx = plugin_get_zctx,
     .reactor_msghandler_set = plugin_reactor_msghandler_set,
     .reactor_fdhandler_set = plugin_reactor_fdhandler_set,
     .reactor_zshandler_set = plugin_reactor_zshandler_set,
+    .reactor_tmouthandler_set = plugin_reactor_tmouthandler_set,
     .reactor_stop = plugin_reactor_stop,
     .reactor_fd_add = plugin_reactor_fd_add,
     .reactor_fd_remove = plugin_reactor_fd_remove,
     .reactor_zs_add = plugin_reactor_zs_add,
     .reactor_zs_remove = plugin_reactor_zs_remove,
+    .reactor_timeout_set = plugin_reactor_timeout_set,
+    .reactor_timeout_clear = plugin_reactor_timeout_clear,
+    .reactor_timeout_isset = plugin_reactor_timeout_isset,
 };
 
 /*
