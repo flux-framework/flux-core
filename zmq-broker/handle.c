@@ -614,7 +614,20 @@ int flux_tmouthandler_set (flux_t h, FluxTmoutHandler cb, void *arg)
 {
     dispatch_t *d;
 
-    /* remove existing (if any) */
+    flux_tmouthandler_remove (h); /* remove existing / clear timer */
+    d = dispatch_create (DSP_TYPE_TMOUT);
+    d->tmout.fn = cb;
+    d->tmout.arg = arg;
+    if (zlist_append (h->reactor->dsp, d) < 0)
+        oom ();
+    return 0;
+}
+
+void flux_tmouthandler_remove (flux_t h)
+{
+    dispatch_t *d;
+
+    flux_timeout_clear (h);
     d = zlist_first (h->reactor->dsp);
     while (d) {
         if (d->type == DSP_TYPE_TMOUT) {
@@ -624,13 +637,6 @@ int flux_tmouthandler_set (flux_t h, FluxTmoutHandler cb, void *arg)
         }
         d = zlist_next (h->reactor->dsp);
     }
-
-    d = dispatch_create (DSP_TYPE_TMOUT);
-    d->tmout.fn = cb;
-    d->tmout.arg = arg;
-    if (zlist_append (h->reactor->dsp, d) < 0)
-        oom ();
-    return 0;
 }
 
 int flux_timeout_set (flux_t h, unsigned long msec)
