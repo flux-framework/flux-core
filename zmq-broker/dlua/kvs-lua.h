@@ -5,13 +5,7 @@
 #include <lauxlib.h>
 
 int luaopen_kvs (lua_State *L);
-
-/* Instantiate userdata on top of stack as a CMB.kvsdir object */
-static inline int l_kvsdir_instantiate (lua_State *L)
-{
-    luaL_getmetatable (L, "CMB.kvsdir");
-    lua_setmetatable (L, -2);
-    return (1);
-}
+int l_push_kvsdir (lua_State *L, kvsdir_t dir);
 
 #endif /* !HAVE_KVS_LUA_H */
+
