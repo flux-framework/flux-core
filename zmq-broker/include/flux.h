@@ -162,7 +162,7 @@ char *flux_zmsg_tag (zmsg_t *zmsg);
  */
 json_object *flux_zmsg_json(zmsg_t *zmsg);
 
-#endif /* !defined(FLUX_H) */
+#endif /* !FLUX_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
