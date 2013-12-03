@@ -148,7 +148,7 @@ static int handle_client_msg (struct rexec_session *c, zmsg_t *zmsg)
 }
 #endif
 
-static void client_cb (flux_t h, void *zs, short revents, void *arg)
+static int client_cb (flux_t h, void *zs, short revents, void *arg)
 {
     struct rexec_session *c = arg;
     zmsg_t *new;
@@ -164,6 +164,7 @@ static void client_cb (flux_t h, void *zs, short revents, void *arg)
     }
     else
         err ("client_cb: zmsg_recv");
+    return 0;
 }
 
 static int rexec_session_add (struct rexec_ctx *ctx, struct rexec_session *c)
@@ -389,7 +390,7 @@ static void handle_request (struct rexec_ctx *ctx, zmsg_t **zmsg)
         zmsg_destroy (zmsg);
 }
 
-static void handle_recv (flux_t h, zmsg_t **zmsg, int typemask)
+static int handle_recv (flux_t h, zmsg_t **zmsg, int typemask)
 {
     struct rexec_ctx *ctx = getctx (h);
 
@@ -397,6 +398,7 @@ static void handle_recv (flux_t h, zmsg_t **zmsg, int typemask)
         handle_request (ctx, zmsg);
     else if ((typemask & FLUX_MSGTYPE_EVENT))
         handle_event (ctx, zmsg);
+    return 0;
 }
 
 static int rexec_init (flux_t h, zhash_t *args)

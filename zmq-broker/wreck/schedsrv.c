@@ -68,7 +68,7 @@ static int _sched_init (flux_t p, zhash_t *args)
     return 0;
 }
 
-static void _recv (flux_t p, zmsg_t **zmsg, int typemask)
+static int _recv (flux_t p, zmsg_t **zmsg, int typemask)
 {
     char *tag = cmb_msg_tag (*zmsg, false);
 
@@ -84,6 +84,7 @@ static void _recv (flux_t p, zmsg_t **zmsg, int typemask)
         flux_log (p, LOG_ERR, "received unknown %s", tag);
     free (tag);
     zmsg_destroy (zmsg);
+    return 0;
 }
 
 static void _sched_fini (flux_t p)

@@ -406,18 +406,22 @@ static bool dispatch_msg_match (dispatch_t *d, const char *tag, int typemask)
     return false;
 }
 
-void handle_event_msg (flux_t h, int typemask, zmsg_t **zmsg)
+int handle_event_msg (flux_t h, int typemask, zmsg_t **zmsg)
 {
     dispatch_t *d;
     char *tag;
+    int rc = 0;
 
     assert (*zmsg != NULL);
-    if (!(tag = flux_zmsg_tag (*zmsg)))
+    if (!(tag = flux_zmsg_tag (*zmsg))) {
+        rc = -1;
+        errno = EPROTO;
         goto done;
+    }
     d = zlist_first (h->reactor->dsp);
     while (d) {
         if (dispatch_msg_match (d, tag, typemask)) {
-            d->u.msg.fn (h, typemask, zmsg, d->u.msg.arg);
+            rc = d->u.msg.fn (h, typemask, zmsg, d->u.msg.arg);
             if (!*zmsg)
                 break;
             /* fall through to next match if zmsg uncomsumed */
@@ -430,50 +434,57 @@ done:
     /* If we return with zmsg unconsumed, the impl's reactor will
      * dispose of it.
      */
+    return rc;
 }
 
-void handle_event_fd (flux_t h, int fd, short events)
+int handle_event_fd (flux_t h, int fd, short events)
 {
     dispatch_t *d;
+    int rc = 0;
     
     d = zlist_first (h->reactor->dsp);
     while (d) {
         if (d->type == DSP_TYPE_FD && d->u.fd.fd == fd
                                    && (d->u.fd.events & events)) {
-            d->u.fd.fn (h, fd, events, d->u.fd.arg);
+            rc = d->u.fd.fn (h, fd, events, d->u.fd.arg);
             break;
         }
         d = zlist_next (h->reactor->dsp);
     }
+    return rc;
 }
 
-void handle_event_zs (flux_t h, void *zs, short events)
+int handle_event_zs (flux_t h, void *zs, short events)
 {
     dispatch_t *d;
+    int rc = 0;
     
     d = zlist_first (h->reactor->dsp);
     while (d) {
         if (d->type == DSP_TYPE_ZS && d->u.zs.zs == zs
                                    && (d->u.zs.events & events)) {
-            d->u.zs.fn (h, zs, events, d->u.zs.arg);
+            rc = d->u.zs.fn (h, zs, events, d->u.zs.arg);
             break;
         }
         d = zlist_next (h->reactor->dsp);
     }
+    return rc;
 }
 
-void handle_event_tmout (flux_t h)
+int handle_event_tmout (flux_t h)
 {
     dispatch_t *d;
+    int rc = 0;
     
     d = zlist_first (h->reactor->dsp);
     while (d) {
         if (d->type == DSP_TYPE_TMOUT) {
-            d->u.tmout.fn (h, d->u.tmout.arg);
+            rc = d->u.tmout.fn (h, d->u.tmout.arg);
             break;
         }
         d = zlist_next (h->reactor->dsp);
     }
+    return rc;
 }
 
 int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
@@ -660,7 +671,7 @@ int flux_reactor_start (flux_t h)
 void flux_reactor_stop (flux_t h)
 {
     if (h->ops->reactor_stop)
-        h->ops->reactor_stop (h->impl);
+        h->ops->reactor_stop (h->impl, 0);
 }
 
 /**

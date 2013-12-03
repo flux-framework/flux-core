@@ -55,7 +55,7 @@ typedef struct {
     zlist_t *dirstack;
 } kvsctx_t;
 
-static void watch_rep_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg);
+static int watch_rep_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg);
 
 static void freectx (kvsctx_t *ctx)
 {
@@ -520,7 +520,7 @@ static void dispatch_watch (flux_t h, kvs_watcher_t *wp, const char *key,
     }
 }
 
-static void watch_rep_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static int watch_rep_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     kvsctx_t *ctx = arg;
     json_object *reply = NULL;
@@ -540,6 +540,7 @@ static void watch_rep_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         json_object_put (reply);
     if (match)
         zmsg_destroy (zmsg);
+    return 0;
 }
 
 static kvs_watcher_t *add_watcher (flux_t h, const char *key, watch_type_t type,
