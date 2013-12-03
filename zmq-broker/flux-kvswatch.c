@@ -33,7 +33,7 @@ int main (int argc, char *argv[])
     char *key;
     bool dopt;
 
-    log_init ("flux-event");
+    log_init ("flux-kvswatch");
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
