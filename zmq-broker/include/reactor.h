@@ -1,10 +1,14 @@
 #ifndef FLUX_REACTOR_H
 #define FLUX_REACTOR_H
 
-typedef void (*FluxMsgHandler)(flux_t h, int typemask, zmsg_t **zmsg, void*arg);
-typedef void (*FluxFdHandler)(flux_t h, int fd, short revents, void *arg);
-typedef void (*FluxZsHandler)(flux_t h, void *zs, short revents, void *arg);
-typedef void (*FluxTmoutHandler)(flux_t h, void *arg);
+/* FluxMsgHandler indicates zmsg is "consumed" by destroy it.
+ * Callbacks return 0 on success, -1 on error and set errno.
+ * Error terminates reactor, and flux_reactor_start() returns -1.
+ */
+typedef int (*FluxMsgHandler)(flux_t h, int typemask, zmsg_t **zmsg, void *arg);
+typedef int (*FluxFdHandler)(flux_t h, int fd, short revents, void *arg);
+typedef int (*FluxZsHandler)(flux_t h, void *zs, short revents, void *arg);
+typedef int (*FluxTmoutHandler)(flux_t h, void *arg);
 
 /* Register a FluxMsgHandler callback to be called whenever a message
  * matching typemask and pattern (glob) is received.  The callback is
@@ -69,6 +73,7 @@ int flux_timeout_clear (flux_t h);
 bool flux_timeout_isset (flux_t h);
 
 /* Start the flux event reactor.
+ * Returns 0 if flux_reactor_stop() terminated reactor; -1 if error did.
  */
 int flux_reactor_start (flux_t h);
 

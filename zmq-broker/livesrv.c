@@ -286,13 +286,13 @@ done:
         json_object_put (new);
 }
 
-static void livesrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
+static int livesrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
 {
     ctx_t *ctx = getctx (h);
     char *arg = NULL;
 
     if (ctx->disabled)
-        return;
+        return 0;
 
     if (cmb_msg_match_substr (*zmsg, "event.sched.trigger.", &arg)) {
         ctx->epoch = strtoul (arg, NULL, 10);
@@ -310,6 +310,7 @@ static void livesrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
 
     if (arg)
         free (arg);
+    return 0;
 }
 
 static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)

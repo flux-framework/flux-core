@@ -219,7 +219,7 @@ done:
     return 0;
 }
 
-static void client_cb (flux_t h, int fd, short revents, void *arg)
+static int client_cb (flux_t h, int fd, short revents, void *arg)
 {
     client_t *c = arg;
     ctx_t *ctx = c->ctx;
@@ -240,6 +240,7 @@ static void client_cb (flux_t h, int fd, short revents, void *arg)
         flux_fdhandler_remove (h, fd, ZMQ_POLLIN | ZMQ_POLLERR);
         client_destroy (ctx, c);
     }
+    return 0;
 }
 
 static void recv_response (ctx_t *ctx, zmsg_t **zmsg)
@@ -316,7 +317,7 @@ static void recv_snoop (ctx_t *ctx, zmsg_t **zmsg)
     }
 }
 
-static void apisrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
+static int apisrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
 {
     ctx_t *ctx = getctx (h);
 
@@ -326,25 +327,36 @@ static void apisrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
         recv_response (ctx, zmsg);
     else if ((typemask & FLUX_MSGTYPE_SNOOP))
         recv_snoop (ctx, zmsg);
+    return 0;
 }
 
-static void listener_cb (flux_t h, int fd, short revents, void *arg)
+static int listener_cb (flux_t h, int fd, short revents, void *arg)
 {
     ctx_t *ctx = arg;
+    int rc = 0;
 
     if (revents & ZMQ_POLLIN) {       /* listenfd */
         client_t *c;
         int cfd;
 
-        if ((cfd = accept (fd, NULL, NULL)) < 0)
-            err_exit ("accept");
+        if ((cfd = accept (fd, NULL, NULL)) < 0) {
+            err ("accept");
+            goto done;
+        }
         c = client_create (ctx, cfd);
         if (flux_fdhandler_add (h, cfd, ZMQ_POLLIN | ZMQ_POLLERR,
-                                                    client_cb, c) < 0)
-            err_exit ("%s: flux_fdhandler_add", __FUNCTION__);
+                                                    client_cb, c) < 0) {
+            err ("%s: flux_fdhandler_add", __FUNCTION__);
+            rc = -1; /* terminate reactor */
+            goto done;
+        }
     }
-    if (revents & ZMQ_POLLERR)       /* listenfd - error */
-        err_exit ("apisrv: poll on listen fd");
+    if (revents & ZMQ_POLLERR) {      /* listenfd - error */
+        err ("apisrv: poll on listen fd");
+        goto done;
+    }
+done:
+    return rc;
 }
 
 static int listener_init (ctx_t *ctx, char *sockpath)

@@ -1482,7 +1482,7 @@ static void kvs_disconnect (ctx_t *ctx, char *arg, zmsg_t **zmsg)
     zmsg_destroy (zmsg);
 }
 
-static void kvssrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
+static int kvssrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
 {
     ctx_t *ctx = getctx (h);
     char *arg = NULL;
@@ -1533,6 +1533,7 @@ static void kvssrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
         free (arg);
     if (*zmsg)
         zmsg_destroy (zmsg);
+    return 0;
 }
 
 static void setargs (ctx_t *ctx, zhash_t *args)

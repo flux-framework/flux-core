@@ -10,7 +10,7 @@
 
 /* Copy input arguments to output arguments and respond to RPC.
  */
-static void mechosrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
+static int mechosrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
 {
     json_object *request = NULL;
     json_object *inarg = NULL;
@@ -51,6 +51,7 @@ done:
     if (f)
         flux_mrpc_destroy (f);
     zmsg_destroy (zmsg);
+    return 0;
 }
 
 static int mechosrv_init (flux_t h, zhash_t *args)

@@ -60,12 +60,16 @@ struct plugin_ctx_struct {
     zhash_t *args;
     int rank;
     bool reactor_stop;
+    int reactor_rc;
 };
 
 struct ptimeout_struct {
     plugin_ctx_t p;
     unsigned long msec;
 };
+
+#define ZLOOP_RETURN(p) \
+    return ((p)->reactor_stop ? (p)->reactor_rc : 0)
 
 static const struct flux_handle_ops plugin_handle_ops;
 
@@ -192,16 +196,26 @@ static zctx_t *plugin_get_zctx (void *impl)
     return p->zctx;
 }
 
-static void plugin_reactor_stop (void *impl)
+static int plugin_reactor_start (void *impl)
+{
+    plugin_ctx_t p = impl;
+    if (zloop_start (p->zloop) < 0)
+        return -1;
+    return 0;
+};
+
+static void plugin_reactor_stop (void *impl, int rc)
 {
     plugin_ctx_t p = impl;
     p->reactor_stop = true;
+    p->reactor_rc = rc;
 }
 
 static int fd_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 {
-    handle_event_fd (p->h, item->fd, item->revents);
-    return (p->reactor_stop ? -1 : 0);
+    if (handle_event_fd (p->h, item->fd, item->revents) < 0)
+        plugin_reactor_stop (p, -1);
+    ZLOOP_RETURN(p);
 }
 
 static int plugin_reactor_fd_add (void *impl, int fd, short events)
@@ -222,8 +236,9 @@ static void plugin_reactor_fd_remove (void *impl, int fd, short events)
 
 static int zs_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 {
-    handle_event_zs (p->h, item->socket, item->revents);
-    return (p->reactor_stop ? -1 : 0);
+    if (handle_event_zs (p->h, item->socket, item->revents) < 0)
+        plugin_reactor_stop (p, -1);
+    ZLOOP_RETURN(p);
 }
 
 static int plugin_reactor_zs_add (void *impl, void *zs, short events)
@@ -298,20 +313,22 @@ static bool plugin_reactor_timeout_isset (void *impl)
  ** end of handle implementation
  **/
 
-static void ping_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static int ping_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     //plugin_ctx_t p = arg;
     json_object *o;
     char *s = NULL;
+    int rc = 0;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         err ("%s: protocol error", __FUNCTION__);
-        goto done;
+        goto done; /* reactor continues */
     }
     s = zmsg_route_str (*zmsg, 2);
     util_json_object_add_string (o, "route", s);
     if (flux_respond (h, zmsg, o) < 0) {
         err ("%s: flux_respond", __FUNCTION__);
+        rc = -1; /* reactor terminates */
         goto done;
     }
 done:
@@ -321,16 +338,18 @@ done:
         free (s);
     if (*zmsg)
         zmsg_destroy (zmsg);
+    return rc;
 }
 
-static void stats_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static int stats_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     plugin_ctx_t p = arg;
     json_object *o = NULL;
+    int rc = 0;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0) {
         err ("%s: error decoding message", __FUNCTION__);
-        goto done;
+        goto done; /* reactor continues */
     }
     util_json_object_add_int (o, "upreq_send_count", p->stats.upreq_send_count);
     util_json_object_add_int (o, "upreq_recv_count", p->stats.upreq_recv_count);
@@ -341,6 +360,7 @@ static void stats_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 
     if (flux_respond (h, zmsg, o) < 0) {
         err ("%s: flux_respond", __FUNCTION__);
+        rc = -1; /* reactor terminates */
         goto done;
     }
 done:
@@ -348,16 +368,26 @@ done:
         json_object_put (o);
     if (*zmsg)
         zmsg_destroy (zmsg);    
+    return rc;
 }
 
 static void plugin_handle_response (plugin_ctx_t p, zmsg_t *zmsg)
 {
     p->stats.upreq_recv_count++;
 
-    if (zmsg)
-        handle_event_msg (p->h, FLUX_MSGTYPE_RESPONSE, &zmsg);
-    if (zmsg && p->ops->recv)
-        p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_RESPONSE);
+    if (zmsg) {
+        if (handle_event_msg (p->h, FLUX_MSGTYPE_RESPONSE, &zmsg) < 0) {
+            plugin_reactor_stop (p, -1);
+            goto done;
+        }
+    }
+    if (zmsg && p->ops->recv) {
+        if (p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_RESPONSE) < 0) {
+            plugin_reactor_stop (p, -1);
+            goto done;
+        }
+    }
+done:
     if (zmsg)
         zmsg_destroy (&zmsg);
 }
@@ -382,8 +412,7 @@ static int upreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 
     plugin_handle_response (p, zmsg);
     plugin_handle_deferred_responses (p);
-
-    return (0);
+    ZLOOP_RETURN(p);
 }
 
 /* Handle a request.
@@ -394,22 +423,29 @@ static int dnreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 
     p->stats.dnreq_recv_count++;
 
-    if (zmsg)
-        handle_event_msg (p->h, FLUX_MSGTYPE_REQUEST, &zmsg);
-    if (zmsg && p->ops->recv)
-        p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_REQUEST);
+    if (zmsg) {
+        if (handle_event_msg (p->h, FLUX_MSGTYPE_REQUEST, &zmsg) < 0) {
+            plugin_reactor_stop (p, -1);
+            goto done;
+        }
+    }
+    if (zmsg && p->ops->recv) {
+        if (p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_REQUEST) < 0) {
+            plugin_reactor_stop (p, -1);
+            goto done;
+        }
+    }
     if (zmsg) {
         if (flux_respond_errnum (p->h, &zmsg, ENOSYS) < 0) {
             err ("%s: flux_respond_errnum", __FUNCTION__);
             goto done;
         }
     }
+    plugin_handle_deferred_responses (p);
 done:
     if (zmsg)
         zmsg_destroy (&zmsg);
-    plugin_handle_deferred_responses (p);
-
-    return (p->reactor_stop ? -1 : 0);
+    ZLOOP_RETURN(p);
 }
 
 static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
@@ -418,48 +454,65 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 
     p->stats.event_recv_count++;
 
-    if (zmsg)
-        handle_event_msg (p->h, FLUX_MSGTYPE_EVENT, &zmsg);
-    if (zmsg && p->ops->recv)
-        p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_EVENT);
-
+    if (zmsg) {
+        if (handle_event_msg (p->h, FLUX_MSGTYPE_EVENT, &zmsg) < 0) {
+            plugin_reactor_stop (p, -1);
+            goto done;
+        }
+    }
+    if (zmsg && p->ops->recv) {
+        if (p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_EVENT) < 0) {
+            plugin_reactor_stop (p, -1);
+            goto done;
+        }
+    }
+    plugin_handle_deferred_responses (p);
+done:
     if (zmsg)
         zmsg_destroy (&zmsg);
-
-    plugin_handle_deferred_responses (p);
-
-    return (p->reactor_stop ? -1 : 0);
+    ZLOOP_RETURN(p);
 }
 
 static int snoop_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 {
     zmsg_t *zmsg =  zmsg_recv (p->zs_snoop);
 
-    if (zmsg)
-        handle_event_msg (p->h, FLUX_MSGTYPE_SNOOP, &zmsg);
-    if (zmsg && p->ops->recv)
-        p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_SNOOP);
-
+    if (zmsg) {
+        if (handle_event_msg (p->h, FLUX_MSGTYPE_SNOOP, &zmsg) < 0) {
+            plugin_reactor_stop (p, -1);
+            goto done;
+        }
+    }
+    if (zmsg && p->ops->recv) {
+        if (p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_SNOOP) < 0) {
+            plugin_reactor_stop (p, -1);
+            goto done;
+        }
+    }
+    plugin_handle_deferred_responses (p);
+done:
     if (zmsg)
         zmsg_destroy (&zmsg);
-
-    plugin_handle_deferred_responses (p);
-
-    return (p->reactor_stop ? -1 : 0);
+    ZLOOP_RETURN(p);
 }
 
 static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t)
 {
     plugin_ctx_t p = t->p;
 
-    handle_event_tmout (p->h);
-
-    if (p->ops->timeout)
-        p->ops->timeout (p->h);
-
+    if (handle_event_tmout (p->h) < 0) {
+        plugin_reactor_stop (p, -1);
+        goto done;
+    }
+    if (p->ops->timeout) {
+        if (p->ops->timeout (p->h) < 0) {
+            plugin_reactor_stop (p, -1);
+            goto done;
+        }
+    }
     plugin_handle_deferred_responses (p);
-
-    return (p->reactor_stop ? -1 : 0);
+done:
+    ZLOOP_RETURN(p);
 }
 
 static zloop_t * plugin_zloop_create (plugin_ctx_t p)
@@ -520,7 +573,7 @@ static void *plugin_thread (void *arg)
         }
     }
 
-    zloop_start (p->zloop);
+    (void)plugin_reactor_start (p); /* XXX ignore return code here */
     if (p->ops->fini)
         p->ops->fini (p->h);
 done:
@@ -654,6 +707,7 @@ static const struct flux_handle_ops plugin_handle_ops = {
     .rank = plugin_rank,
     .get_zctx = plugin_get_zctx,
     .reactor_stop = plugin_reactor_stop,
+    .reactor_start = plugin_reactor_start,
     .reactor_fd_add = plugin_reactor_fd_add,
     .reactor_fd_remove = plugin_reactor_fd_remove,
     .reactor_zs_add = plugin_reactor_zs_add,

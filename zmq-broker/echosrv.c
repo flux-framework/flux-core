@@ -20,7 +20,7 @@ static json_object * json_echo (const char *s, int id)
     return o;
 }
 
-static void handle_recv (flux_t h, zmsg_t **zmsg, int typemask)
+static int handle_recv (flux_t h, zmsg_t **zmsg, int typemask)
 {
     json_object *o = NULL;
     if (cmb_msg_decode (*zmsg, NULL, &o) >= 0) {
@@ -52,6 +52,7 @@ out:
     if (o)
         json_object_put (o);
     zmsg_destroy (zmsg);
+    return 0;
 }
 
 const struct plugin_ops ops = {
