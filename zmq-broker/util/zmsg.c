@@ -199,7 +199,7 @@ zmsg_t *zmsg_recv_fd_typemask (int fd, int *typemask, bool nonblock)
         mask = ntohl (mask);
     }
 
-    n = _read_all (fd, (uint8_t *)&len, sizeof (len), nonblock);
+    n = _read_all (fd, (uint8_t *)&len, sizeof (len), 0);
     if (n < 0)
         goto error;
     if (n == 0)
