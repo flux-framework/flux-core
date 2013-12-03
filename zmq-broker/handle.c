@@ -352,7 +352,7 @@ typedef struct {
             FluxTmoutHandler fn;
             void *arg;
         } tmout;
-    } u;
+    };
 } dispatch_t;
 
 struct reactor_struct {
@@ -370,8 +370,8 @@ static dispatch_t *dispatch_create (dispatch_type_t type)
 
 static void dispatch_destroy (dispatch_t *d)
 {
-    if (d->type == DSP_TYPE_MSG && d->u.msg.pattern)
-        free (d->u.msg.pattern);
+    if (d->type == DSP_TYPE_MSG && d->msg.pattern)
+        free (d->msg.pattern);
     free (d);
 }
 
@@ -396,11 +396,11 @@ static void reactor_destroy (reactor_t r)
 static bool dispatch_msg_match (dispatch_t *d, const char *tag, int typemask)
 {
     if (d->type == DSP_TYPE_MSG) {
-        if (!(d->u.msg.typemask & (typemask & FLUX_MSGTYPE_MASK)))
+        if (!(d->msg.typemask & (typemask & FLUX_MSGTYPE_MASK)))
             return false;
-        if (!d->u.msg.pattern)
+        if (!d->msg.pattern)
             return true;
-        if (fnmatch (d->u.msg.pattern, tag, 0) == 0)
+        if (fnmatch (d->msg.pattern, tag, 0) == 0)
             return true;
     }
     return false;
@@ -421,7 +421,7 @@ int handle_event_msg (flux_t h, int typemask, zmsg_t **zmsg)
     d = zlist_first (h->reactor->dsp);
     while (d) {
         if (dispatch_msg_match (d, tag, typemask)) {
-            rc = d->u.msg.fn (h, typemask, zmsg, d->u.msg.arg);
+            rc = d->msg.fn (h, typemask, zmsg, d->msg.arg);
             if (!*zmsg)
                 break;
             /* fall through to next match if zmsg uncomsumed */
@@ -444,9 +444,9 @@ int handle_event_fd (flux_t h, int fd, short events)
     
     d = zlist_first (h->reactor->dsp);
     while (d) {
-        if (d->type == DSP_TYPE_FD && d->u.fd.fd == fd
-                                   && (d->u.fd.events & events)) {
-            rc = d->u.fd.fn (h, fd, events, d->u.fd.arg);
+        if (d->type == DSP_TYPE_FD && d->fd.fd == fd
+                                   && (d->fd.events & events)) {
+            rc = d->fd.fn (h, fd, events, d->fd.arg);
             break;
         }
         d = zlist_next (h->reactor->dsp);
@@ -461,9 +461,9 @@ int handle_event_zs (flux_t h, void *zs, short events)
     
     d = zlist_first (h->reactor->dsp);
     while (d) {
-        if (d->type == DSP_TYPE_ZS && d->u.zs.zs == zs
-                                   && (d->u.zs.events & events)) {
-            rc = d->u.zs.fn (h, zs, events, d->u.zs.arg);
+        if (d->type == DSP_TYPE_ZS && d->zs.zs == zs
+                                   && (d->zs.events & events)) {
+            rc = d->zs.fn (h, zs, events, d->zs.arg);
             break;
         }
         d = zlist_next (h->reactor->dsp);
@@ -479,7 +479,7 @@ int handle_event_tmout (flux_t h)
     d = zlist_first (h->reactor->dsp);
     while (d) {
         if (d->type == DSP_TYPE_TMOUT) {
-            rc = d->u.tmout.fn (h, d->u.tmout.arg);
+            rc = d->tmout.fn (h, d->tmout.arg);
             break;
         }
         d = zlist_next (h->reactor->dsp);
@@ -492,10 +492,10 @@ int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
 {
     dispatch_t *d = dispatch_create (DSP_TYPE_MSG);
 
-    d->u.msg.typemask = typemask;
-    d->u.msg.pattern = xstrdup (pattern);
-    d->u.msg.fn = cb;
-    d->u.msg.arg = arg;
+    d->msg.typemask = typemask;
+    d->msg.pattern = xstrdup (pattern);
+    d->msg.fn = cb;
+    d->msg.arg = arg;
     if (zlist_push (h->reactor->dsp, d) < 0)
         oom ();
     return 0;
@@ -506,10 +506,10 @@ int flux_msghandler_append (flux_t h, int typemask, const char *pattern,
 {
     dispatch_t *d = dispatch_create (DSP_TYPE_MSG);
 
-    d->u.msg.typemask = typemask;
-    d->u.msg.pattern = xstrdup (pattern);
-    d->u.msg.fn = cb;
-    d->u.msg.arg = arg;
+    d->msg.typemask = typemask;
+    d->msg.pattern = xstrdup (pattern);
+    d->msg.fn = cb;
+    d->msg.arg = arg;
     if (zlist_append (h->reactor->dsp, d) < 0)
         oom ();
     return 0;
@@ -521,8 +521,8 @@ void flux_msghandler_remove (flux_t h, int typemask, const char *pattern)
 
     d = zlist_first (h->reactor->dsp);
     while (d) {
-        if (d->type == DSP_TYPE_MSG && d->u.msg.typemask == typemask
-                                    && !strcmp (d->u.msg.pattern, pattern)) {
+        if (d->type == DSP_TYPE_MSG && d->msg.typemask == typemask
+                                    && !strcmp (d->msg.pattern, pattern)) {
             zlist_remove (h->reactor->dsp, d);
             dispatch_destroy (d);
             break;
@@ -544,10 +544,10 @@ int flux_fdhandler_add (flux_t h, int fd, short events,
         return -1;
 
     d = dispatch_create (DSP_TYPE_FD);
-    d->u.fd.fd = fd;
-    d->u.fd.events = events;
-    d->u.fd.fn = cb;
-    d->u.fd.arg = arg;
+    d->fd.fd = fd;
+    d->fd.events = events;
+    d->fd.fn = cb;
+    d->fd.arg = arg;
     if (zlist_append (h->reactor->dsp, d) < 0)
         oom ();
     return 0;
@@ -559,8 +559,8 @@ void flux_fdhandler_remove (flux_t h, int fd, short events)
 
     d = zlist_first (h->reactor->dsp);
     while (d) {
-        if (d->type == DSP_TYPE_FD && d->u.fd.fd == fd
-                                   && d->u.fd.events == events) {
+        if (d->type == DSP_TYPE_FD && d->fd.fd == fd
+                                   && d->fd.events == events) {
             zlist_remove (h->reactor->dsp, d);
             dispatch_destroy (d);
             break;
@@ -583,10 +583,10 @@ int flux_zshandler_add (flux_t h, void *zs, short events,
     if (h->ops->reactor_zs_add (h->impl, zs, events) < 0)
         return -1;
     d = dispatch_create (DSP_TYPE_ZS);
-    d->u.zs.zs = zs;
-    d->u.zs.events = events;
-    d->u.zs.fn = cb;
-    d->u.zs.arg = arg;
+    d->zs.zs = zs;
+    d->zs.events = events;
+    d->zs.fn = cb;
+    d->zs.arg = arg;
     if (zlist_append (h->reactor->dsp, d) < 0)
         oom ();
     return 0;
@@ -598,8 +598,8 @@ void flux_zshandler_remove (flux_t h, void *zs, short events)
 
     d = zlist_first (h->reactor->dsp);
     while (d) {
-        if (d->type == DSP_TYPE_ZS && d->u.zs.zs == zs
-                                   && d->u.zs.events == events) {
+        if (d->type == DSP_TYPE_ZS && d->zs.zs == zs
+                                   && d->zs.events == events) {
             zlist_remove (h->reactor->dsp, d);
             dispatch_destroy (d);
             break;
@@ -626,8 +626,8 @@ int flux_tmouthandler_set (flux_t h, FluxTmoutHandler cb, void *arg)
     }
 
     d = dispatch_create (DSP_TYPE_TMOUT);
-    d->u.tmout.fn = cb;
-    d->u.tmout.arg = arg;
+    d->tmout.fn = cb;
+    d->tmout.arg = arg;
     if (zlist_append (h->reactor->dsp, d) < 0)
         oom ();
     return 0;
