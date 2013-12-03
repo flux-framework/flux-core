@@ -1,7 +1,7 @@
 #!/usr/bin/lua
 
+local posix = require 'posix'
 local flux = require 'flux'
-local kvs = require 'kvs'
 
 -------------------------------------------------------------------------------
 -- Local functions:
@@ -32,7 +32,7 @@ end
 local function lwj_return_code (f, id)
     local lwj = f:kvsdir ("lwj.%d", id)
     local max = 0
-    for taskid in kvsdir.keys (lwj) do
+    for taskid in lwj:keys () do
         if is_integer (taskid) then
             local x = lwj[taskid].exit_status
             if x > 0 then
@@ -110,7 +110,7 @@ local rc,err = f:sendevent ("event.rexec.run.%d", resp.jobid)
 if not rc then log_fatal ("%s\n", err) end
 
 repeat
- local r = kvs.watch (lwj, "state", r)
+ local r = lwj:watch ("state", r)
  log_msg ("State = %s\n", r)
 until r == "complete"
 
