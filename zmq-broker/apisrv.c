@@ -97,13 +97,13 @@ static subscription_t *subscription_create (flux_t h, int type, char *topic)
     sub->topic = xstrdup (topic);
     if (type == FLUX_MSGTYPE_EVENT) {
         (void)flux_event_subscribe (h, topic);
-        flux_log (h, LOG_DEBUG, "event subscribe %s", topic);
+        //flux_log (h, LOG_DEBUG, "event subscribe %s", topic);
     } else if (type == FLUX_MSGTYPE_SNOOP) {
         /* N.B. snoop messages may have routing headers, so do not attempt
          * to subscribe by tag - just use "" to subscribe to all.
          */
         (void)flux_snoop_subscribe (h, "");
-        flux_log (h, LOG_DEBUG, "snoop subscribe %s", topic);
+        //flux_log (h, LOG_DEBUG, "snoop subscribe %s", topic);
     }
     return sub;
 }
@@ -112,10 +112,10 @@ static void subscription_destroy (flux_t h, subscription_t *sub)
 {
     if (sub->type == FLUX_MSGTYPE_EVENT) {
         (void)flux_event_unsubscribe (h, sub->topic);
-        flux_log (h, LOG_DEBUG, "event unsubscribe %s", sub->topic);
+        //flux_log (h, LOG_DEBUG, "event unsubscribe %s", sub->topic);
     } else if (sub->type == FLUX_MSGTYPE_SNOOP) {
         (void)flux_snoop_unsubscribe (h, "");
-        flux_log (h, LOG_DEBUG, "snoop unsubscribe %s", sub->topic);
+        //flux_log (h, LOG_DEBUG, "snoop unsubscribe %s", sub->topic);
     }
     free (sub->topic);
     free (sub);
@@ -321,7 +321,7 @@ static void recv_event (ctx_t *ctx, zmsg_t **zmsg)
 
 
     if (tag) {
-        flux_log (ctx->h, LOG_DEBUG, "event received: %s", tag);
+        //flux_log (ctx->h, LOG_DEBUG, "event received: %s", tag);
         for (c = ctx->clients; c != NULL; c = c->next) {
             if (subscription_match (c, FLUX_MSGTYPE_EVENT, tag)) {
                 if (!(cpy = zmsg_dup (*zmsg)))
@@ -342,7 +342,7 @@ static void recv_snoop (ctx_t *ctx, zmsg_t **zmsg)
 
     if (tag) {
         if (strcmp (tag, "log.msg") != 0 && strcmp (tag, "cmb.info") != 0)
-            flux_log (ctx->h, LOG_DEBUG, "snoop received: %s", tag);
+            //flux_log (ctx->h, LOG_DEBUG, "snoop received: %s", tag);
         for (c = ctx->clients; c != NULL; c = c->next) {
             if (subscription_match (c, FLUX_MSGTYPE_SNOOP, tag)) {
                 if (!(cpy = zmsg_dup (*zmsg)))
