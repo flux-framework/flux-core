@@ -21,20 +21,10 @@ struct flux_handle_ops {
 
     zctx_t *    (*get_zctx)(void *impl);
 
-    /* N.B. reactor_start() should return 0 if stopped by reactor_stop(),
-     * or -1 if reactor stopped due to error, for example a -1 return
-     * from a handle_event_*() function.
-     */
     int         (*reactor_start)(void *impl);
     void        (*reactor_stop)(void *impl, int rc);
-    int         (*reactor_msghandler_set)(void *impl,
-                                          FluxMsgHandler cb, void *arg);
-    int         (*reactor_fdhandler_set)(void *impl,
-                                          FluxFdHandler cb, void *arg);
     int         (*reactor_fd_add)(void *impl, int fd, short events);
     void        (*reactor_fd_remove)(void *impl, int fd, short events);
-    int         (*reactor_zshandler_set)(void *impl,
-                                          FluxZsHandler cb, void *arg);
     int         (*reactor_zs_add)(void *impl, void *zs, short events);
     void        (*reactor_zs_remove)(void *impl, void *zs, short events);
     int         (*reactor_timeout_set)(void *impl, unsigned long msec);

@@ -20,7 +20,6 @@ static const struct option longopts[] = {
 
 void usage (void)
 {
-    msg ("peep!");
     fprintf (stderr, 
 "Usage: flux-mecho [--pad-bytes N] [--delay-msec N] nodelist\n"
 );
