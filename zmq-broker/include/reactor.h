@@ -1,7 +1,7 @@
 #ifndef FLUX_REACTOR_H
 #define FLUX_REACTOR_H
 
-/* FluxMsgHandler indicates zmsg is "consumed" by destroy it.
+/* FluxMsgHandler indicates zmsg is "consumed" by destroying it.
  * Callbacks return 0 on success, -1 on error and set errno.
  * Error terminates reactor, and flux_reactor_start() returns -1.
  */

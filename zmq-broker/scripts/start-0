@@ -4,6 +4,7 @@ ${CMDPREFIX} ${CMBD:-./cmbd} \
   --up-req-in-uri='tcp://*:5556' \
   --dn-req-out-uri='tcp://*:5557' \
   --rank=0 --size=3 \
+  --logdest=cmbd.log \
   --plugins=api,barrier,live,kvs,log,sync,job,rexec,mecho \
   --set-conf conf.sync.period-sec=1.5 \
   --set-conf conf.live.missed-trigger-allow=5 \
