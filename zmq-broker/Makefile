@@ -1,8 +1,8 @@
 
 TOP =             $(shell pwd)
 LIBDIR =          $(TOP)/lib
-EXTRA_CFLAGS +=   -I$(TOP) -I$(TOP)/include -I$(TOP)/util
-EXTRA_LDFLAGS +=  -L$(TOP)/lib $(TOP)/util/libutil.a
+EXTRA_CFLAGS +=   -I$(TOP) -I$(TOP)/include -I$(TOP)/util -I$(TOP)/zutil
+EXTRA_LDFLAGS +=  -L$(TOP)/lib $(TOP)/zutil/libzutil.a $(TOP)/util/libutil.a
 
 SUBDIRS :=        wreck dlua
 SUBDIRS_POST :=   test
@@ -23,7 +23,8 @@ LDFLAGS = -Wl,-rpath,$(LIBDIR)
 export CFLAGS LDFLAGS
 
 LIBUTIL = util/libutil.a
-LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -luuid $(LIBUTIL)
+LIBZUTIL = zutil/libzutil.a
+LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -luuid
 LDADD_SRV = -pthread -rdynamic $(LDADD_CLI) -ldl
 
 COMMON_OBJS = kvscli.o barriercli.o logcli.o cmbdcli.o mrpc.o handle.o
@@ -61,7 +62,7 @@ plugins/%.so: wreck/%.c
 	mkdir -p plugins
 	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $<
 
-subdirs: $(LIBUTIL) $(LIBCMB)
+subdirs: $(LIBUTIL) $(LIBZUTIL) $(LIBCMB)
 	@for f in $(SUBDIRS); do make -C $$f; done
 subdirs_post:
 	@for f in $(SUBDIRS_POST); do make -C $$f; done
@@ -89,6 +90,8 @@ $(LIBCMB): $(LIBCMB_OBJS) $(LIBUTIL)
 
 $(LIBUTIL):
 	@make -C util
+$(LIBZUTIL):
+	@make -C zutil
 
 mpi_hello: mpi_hello.c
 	(source /etc/profile.d/modules.sh;\
@@ -104,6 +107,7 @@ clean:
 	rm -rf plugins/
 	rm -rf libexec
 	@make -C util clean
+	@make -C zutil clean
 	@for f in $(SUBDIRS) $(SUBDIRS_POST); do make -C $$f clean; done
 
 # header dependencies
