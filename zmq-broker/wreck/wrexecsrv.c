@@ -263,10 +263,11 @@ static struct rexec_session *rexec_session_lookup (struct rexec_ctx *ctx, int64_
     /* Warning: zlist has no search. linear search here */
     struct rexec_session *s;
     s = zlist_first (ctx->session_list);
-    do {
+    while (s) {
         if (s->id == id)
             return (s);
-    } while ((s = zlist_next (ctx->session_list)));
+        s = zlist_next (ctx->session_list);
+    }
     return (NULL);
 }
 
