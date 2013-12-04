@@ -51,6 +51,7 @@ struct prog_ctx {
      *   exec within each task and are created on-demand as needed by
      *   Lua scripts.
      */
+    int in_task;            /* Non-zero if currently in task ctx  */
     int taskid;             /* Current taskid executing lua_stack */
     flux_t task_handle;     /* Per task flux handle               */
     kvsdir_t task_kvs;
@@ -515,6 +516,7 @@ int exec_command (struct prog_ctx *ctx, int i)
          *  Set current taskid and invoke rexecd_task_init
          */
         ctx->taskid = i;
+        ctx->in_task = 1;
         lua_stack_call (ctx->lua_stack, "rexecd_task_init");
 
         prog_ctx_setenvf (ctx, "MPIRUN_RANK",     1, "%d", globalid (ctx, i));
@@ -652,6 +654,26 @@ static int l_push_environ (lua_State *L, int index)
     return (1);
 }
 
+static flux_t prog_ctx_flux_handle (struct prog_ctx *ctx)
+{
+    if (!ctx->in_task)
+        return (ctx->cmb);
+    if (!ctx->task_handle)
+        ctx->task_handle = cmb_init ();
+    return (ctx->task_handle);
+}
+
+static kvsdir_t prog_ctx_kvsdir (struct prog_ctx *ctx)
+{
+    if (!ctx->in_task)
+        return (ctx->kvs);
+    if (!ctx->task_kvs) {
+        kvs_get_dir (prog_ctx_flux_handle (ctx),
+                &ctx->task_kvs, "lwj.%ld", ctx->id);
+    }
+    return (ctx->task_kvs);
+}
+
 static int l_wreck_index (lua_State *L)
 {
     struct prog_ctx *ctx = l_get_prog_ctx (L, 1);
@@ -665,41 +687,23 @@ static int l_wreck_index (lua_State *L)
         return (1);
     }
     if (strcmp (key, "globalid") == 0) {
-        if (ctx->taskid < 0)
+        if (!ctx->in_task)
             return lua_pusherror (L, "No valid taskid in this context");
         lua_pushnumber (L, globalid (ctx, ctx->taskid));
         return (1);
     }
     if (strcmp (key, "taskid") == 0) {
-        if (ctx->taskid < 0)
+        if (!ctx->in_task)
             return lua_pusherror (L, "No valid taskid in this context");
         lua_pushnumber (L, ctx->taskid);
         return (1);
     }
     if (strcmp (key, "kvsdir") == 0) {
-        kvsdir_t dir = ctx->kvs;
-        if (ctx->taskid >= 0) {
-            if (ctx->task_kvs)
-                dir = ctx->task_kvs;
-            else {
-                if (!ctx->task_handle)
-                    ctx->task_handle = cmb_init ();
-                if (!ctx->task_kvs)
-                    kvs_get_dir (ctx->task_handle, &dir, "lwj.%ld", ctx->id);
-                ctx->task_kvs = dir;
-            }
-        }
-        l_push_kvsdir (L, dir);
+        l_push_kvsdir (L, prog_ctx_kvsdir (ctx));
         return (1);
     }
     if (strcmp (key, "flux") == 0) {
-        flux_t f = ctx->cmb;
-        if (ctx->taskid >= 0) {
-            if (!ctx->task_handle)
-                ctx->task_handle = cmb_init ();
-            f = ctx->task_handle;
-        }
-        lua_push_flux_handle (L, f);
+        lua_push_flux_handle (L, prog_ctx_flux_handle (ctx));
         return (1);
     }
     if (strcmp (key, "nodeid") == 0) {
