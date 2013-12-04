@@ -357,6 +357,7 @@ typedef struct {
 
 struct reactor_struct {
     zlist_t *dsp;
+    bool timeout_set;
 };
 
 static dispatch_t *dispatch_create (dispatch_type_t type)
@@ -627,7 +628,7 @@ void flux_tmouthandler_remove (flux_t h)
 {
     dispatch_t *d;
 
-    flux_timeout_clear (h);
+    flux_timeout_set (h, 0);
     d = zlist_first (h->reactor->dsp);
     while (d) {
         if (d->type == DSP_TYPE_TMOUT) {
@@ -645,25 +646,16 @@ int flux_timeout_set (flux_t h, unsigned long msec)
         errno = ENOSYS;
         return -1;
     }
-    return h->ops->reactor_timeout_set (h->impl, msec);
-}
-
-int flux_timeout_clear (flux_t h)
-{
-    if (!h->ops->reactor_timeout_clear) {
-        errno = ENOSYS;
+    if (h->ops->reactor_timeout_set (h->impl, msec) < 0)
         return -1;
-    }
-    return h->ops->reactor_timeout_clear (h->impl);
+    h->reactor->timeout_set = msec > 0 ? true : false;
+    return 0;
 }
 
 bool flux_timeout_isset (flux_t h)
 {
-    if (!h->ops->reactor_timeout_isset)
-        return false;
-    return h->ops->reactor_timeout_isset (h->impl);
+    return h->reactor->timeout_set;
 }
-
 
 int flux_reactor_start (flux_t h)
 {

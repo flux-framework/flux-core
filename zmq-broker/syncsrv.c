@@ -69,7 +69,7 @@ invalid:
     if (!disabled) {
         msg ("sync: %s values invalid, synchronization suspended", path);
         disabled = true;
-        flux_timeout_clear (h);
+        flux_timeout_set (h, 0);
     }
 }
 
