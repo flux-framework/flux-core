@@ -230,7 +230,6 @@ int json_array_to_argv (struct prog_ctx *ctx,
             return (-1);
         }
         (*argvp) [i] = strdup (json_object_get_string (ox));
-        json_object_put (ox);
     }
     return (0);
 }
