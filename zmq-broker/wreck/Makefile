@@ -1,6 +1,6 @@
 topdir  :=          $(shell cd .. && pwd)
 builddir  :=        $(shell pwd)
-programs =          wrexecd wreck
+programs =          wrexecd
 plugins  =          jobsrv.o resrcsrv.o schedsrv.o wrexecsrv.o
 
 CFLAGS +=           -ggdb -Wall -Werror \
@@ -14,7 +14,6 @@ LIBADD +=           $(topdir)/util/libutil.a -lcmb -lczmq -ljson -lzmq -lcrypto 
 CLEANFILES :=       $(programs) rexec-config.h
 
 wrexecd_SOURCES :=  wrexecd.c luastack.c
-wreck_SOURCES :=    wreck.c
 
 all:                rexec-config.h $(programs) $(plugins) $(tests)
 
@@ -24,10 +23,6 @@ rexec-config.h :
 
 wrexecd : $(wrexecd_SOURCES:.c=.o)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBADD) $(topdir)/dlua/libdlua.a -llua
-
-wreck : $(wreck_SOURCES:.c=.o)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LIBADD)
-
 
 clean:
 	rm -f *.o $(CLEANFILES) tags
