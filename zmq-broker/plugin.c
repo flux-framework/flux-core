@@ -147,16 +147,17 @@ static zmsg_t *plugin_event_recvmsg (void *impl, bool nb)
 static int plugin_event_subscribe (void *impl, const char *topic)
 {
     plugin_ctx_t p = impl;
+    char *s = topic ? (char *)topic : "";
     assert (p->magic == PLUGIN_MAGIC);
-    zsocket_set_subscribe (p->zs_evin, topic ? (char *)topic : "");
-    return 0;
+    return zmq_setsockopt (p->zs_evin, ZMQ_SUBSCRIBE, s, strlen (s));
 }
 
 static int plugin_event_unsubscribe (void *impl, const char *topic)
 {
     plugin_ctx_t p = impl;
+    char *s = topic ? (char *)topic : "";
     assert (p->magic == PLUGIN_MAGIC);
-    zsocket_set_unsubscribe (p->zs_evin, topic ? (char *)topic : "");
+    return zmq_setsockopt (p->zs_evin, ZMQ_UNSUBSCRIBE, s, strlen (s));
     return 0;
 }
 
@@ -170,18 +171,21 @@ static zmsg_t *plugin_snoop_recvmsg (void *impl, bool nb)
 static int plugin_snoop_subscribe (void *impl, const char *topic)
 {
     plugin_ctx_t p = impl;
+    char *s = topic ? (char *)topic : "";
     assert (p->magic == PLUGIN_MAGIC);
-    zsocket_set_subscribe (p->zs_snoop, topic ? (char *)topic : "");
+    return zmq_setsockopt (p->zs_snoop, ZMQ_SUBSCRIBE, s, strlen (s));
     return 0;
 }
 
 static int plugin_snoop_unsubscribe (void *impl, const char *topic)
 {
     plugin_ctx_t p = impl;
+    char *s = topic ? (char *)topic : "";
     assert (p->magic == PLUGIN_MAGIC);
-    zsocket_set_unsubscribe (p->zs_snoop, topic ? (char *)topic : "");
+    return zmq_setsockopt (p->zs_snoop, ZMQ_UNSUBSCRIBE, s, strlen (s));
     return 0;
 }
+
 static int plugin_rank (void *impl)
 {
     plugin_ctx_t p = impl;
