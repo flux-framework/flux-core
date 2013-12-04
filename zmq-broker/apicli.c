@@ -79,58 +79,32 @@ static int cmb_response_putmsg (void *impl, zmsg_t **zmsg)
     return 0;
 }
 
-/* If 'o' is NULL, there will be no json part,
- *   unlike flux_request_send() which will fill in an empty JSON part.
- */
-static int cmb_request_send (void *impl, json_object *o, const char *fmt, ...)
-{
-    cmb_t *c = impl;
-    zmsg_t *zmsg;
-    char *tag;
-    int rc;
-    va_list ap;
-
-    assert (c->magic == CMB_CTX_MAGIC);
-    va_start (ap, fmt);
-    if (vasprintf (&tag, fmt, ap) < 0)
-        oom ();
-    va_end (ap);
-    zmsg = cmb_msg_encode (tag, o);
-    free (tag);
-    if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* add route delimiter */
-        err_exit ("zmsg_pushmem");
-    if ((rc = cmb_request_sendmsg (c, &zmsg)) < 0)
-        zmsg_destroy (&zmsg);
-
-    return rc;
-}
-
 static int cmb_snoop_subscribe (void *impl, const char *s)
 {
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
-    return cmb_request_send (c, NULL, "api.snoop.subscribe.%s", s ? s: "");
+    return flux_request_send (c->h, NULL, "api.snoop.subscribe.%s", s ? s: "");
 }
 
 static int cmb_snoop_unsubscribe (void *impl, const char *s)
 {
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
-    return cmb_request_send (c, NULL, "api.snoop.unsubscribe.%s", s ? s: "");
+    return flux_request_send (c->h, NULL, "api.snoop.unsubscribe.%s", s ? s: "");
 }
 
 static int cmb_event_subscribe (void *impl, const char *s)
 {
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
-    return cmb_request_send (c, NULL, "api.event.subscribe.%s", s ? s: "");
+    return flux_request_send (c->h, NULL, "api.event.subscribe.%s", s ? s: "");
 }
 
 static int cmb_event_unsubscribe (void *impl, const char *s)
 {
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
-    return cmb_request_send (c, NULL, "api.event.unsubscribe.%s", s ? s: "");
+    return flux_request_send (c->h, NULL, "api.event.unsubscribe.%s", s ? s: "");
 }
 
 static int cmb_event_sendmsg (void *impl, zmsg_t **zmsg)
@@ -185,7 +159,6 @@ static zmsg_t *cmb_snoop_recvmsg (void *impl, bool nonblock)
     }
     return z;
 }
-
 
 static int cmb_rank (void *impl)
 {

@@ -363,9 +363,7 @@ struct reactor_struct {
 static dispatch_t *dispatch_create (dispatch_type_t type)
 {
     dispatch_t *d = xzmalloc (sizeof (*d));
-
     d->type = type;
-
     return d;
 }
 

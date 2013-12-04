@@ -158,7 +158,6 @@ static int plugin_event_unsubscribe (void *impl, const char *topic)
     char *s = topic ? (char *)topic : "";
     assert (p->magic == PLUGIN_MAGIC);
     return zmq_setsockopt (p->zs_evin, ZMQ_UNSUBSCRIBE, s, strlen (s));
-    return 0;
 }
 
 static zmsg_t *plugin_snoop_recvmsg (void *impl, bool nb)
@@ -174,7 +173,6 @@ static int plugin_snoop_subscribe (void *impl, const char *topic)
     char *s = topic ? (char *)topic : "";
     assert (p->magic == PLUGIN_MAGIC);
     return zmq_setsockopt (p->zs_snoop, ZMQ_SUBSCRIBE, s, strlen (s));
-    return 0;
 }
 
 static int plugin_snoop_unsubscribe (void *impl, const char *topic)
@@ -183,7 +181,6 @@ static int plugin_snoop_unsubscribe (void *impl, const char *topic)
     char *s = topic ? (char *)topic : "";
     assert (p->magic == PLUGIN_MAGIC);
     return zmq_setsockopt (p->zs_snoop, ZMQ_UNSUBSCRIBE, s, strlen (s));
-    return 0;
 }
 
 static int plugin_rank (void *impl)
@@ -261,7 +258,6 @@ static void plugin_reactor_zs_remove (void *impl, void *zs, short events)
     zloop_poller_end (p->zloop, &item); /* FIXME: 'events' are ignored */
 }
 
-
 /* N.B. zloop_timer() cannot be called repeatedly with the same
  * arg value to update the timeout of a free running (times = 0) timer.
  * Doing so creates a new timer, so you will have it going off at both
@@ -300,7 +296,6 @@ static int plugin_reactor_timeout_set (void *impl, unsigned long msec)
 
 static int ping_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
-    //plugin_ctx_t p = arg;
     json_object *o;
     char *s = NULL;
     int rc = 0;
