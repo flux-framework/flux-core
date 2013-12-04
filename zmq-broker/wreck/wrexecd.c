@@ -55,6 +55,7 @@ struct prog_ctx {
     flux_t task_handle;     /* Per task flux handle               */
     kvsdir_t task_kvs;
     lua_stack_t lua_stack;
+    int envref;             /* Global reference to Lua env obj    */
 };
 
 void *lsd_nomem_error (const char *file, int line, char *msg)
@@ -183,6 +184,7 @@ struct prog_ctx * prog_ctx_create (void)
     ctx->nodeid = -1;
     ctx->taskid = -1;
 
+    ctx->envref = -1;
     ctx->lua_stack = lua_stack_create ();
 
     return (ctx);
@@ -705,7 +707,15 @@ static int l_wreck_index (lua_State *L)
         return (1);
     }
     if (strcmp (key, "environ") == 0) {
-        l_push_environ (L, 1);
+        if (ctx->envref < 0) {
+            /* Push environment object, then take a reference
+             *  in the registry so we don't have to create a new environ
+             *  object each time wreck.environ is accessed
+             */
+            l_push_environ (L, 1);
+            ctx->envref = luaL_ref (L, LUA_REGISTRYINDEX);
+        }
+        lua_rawgeti (L, LUA_REGISTRYINDEX, ctx->envref);
         return (1);
     }
     if (strcmp (key, "argv") == 0) {
