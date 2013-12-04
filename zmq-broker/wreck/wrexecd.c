@@ -422,14 +422,32 @@ int send_exit_message (struct prog_ctx *ctx, int taskid, int status)
 
     if (asprintf (&key, "lwj.%lu.%d.exit_status", ctx->id, global_taskid) < 0)
         return (-1);
-
     if (kvs_put (ctx->cmb, key, o) < 0)
         return (-1);
+    free (key);
+    json_object_put (o);
+
+    if (WIFSIGNALED (status)) {
+        o = json_object_new_int (WTERMSIG (status));
+        if (asprintf (&key, "lwj.%lu.%d.exit_sig", ctx->id, global_taskid) < 0)
+            return (-1);
+        if (kvs_put (ctx->cmb, key, o) < 0)
+            return (-1);
+        free (key);
+        json_object_put (o);
+    }
+    else {
+        o = json_object_new_int (WEXITSTATUS (status));
+        if (asprintf (&key, "lwj.%lu.%d.exit_code", ctx->id, global_taskid) < 0)
+            return (-1);
+        if (kvs_put (ctx->cmb, key, o) < 0)
+            return (-1);
+        free (key);
+        json_object_put (o);
+    }
 
     if (kvs_commit (ctx->cmb) < 0)
         return (-1);
-
-    json_object_put (o);
 
     return (0);
 }

@@ -34,9 +34,16 @@ local function lwj_return_code (f, id)
     local max = 0
     for taskid in lwj:keys () do
         if is_integer (taskid) then
-            local x = lwj[taskid].exit_status
+            local t = lwj[taskid]
+            local x = t.exit_status
             if x > 0 then
-                log_msg ("task %d exited with exit code %d\n", taskid, x)
+                local code = t.exit_code
+                local sig = t.exit_sig
+                if code then
+                    log_msg ("task %d exited with exit code %d\n", taskid, code)
+                elseif sig then
+                    log_msg ("task %d exited with signal %d\n", taskid, sig)
+                end
             end
             if x > max then
                 max = x
