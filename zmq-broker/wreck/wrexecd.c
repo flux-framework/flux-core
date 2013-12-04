@@ -9,6 +9,7 @@
 #include <json/json.h>
 #include <czmq.h>
 #include <sys/syslog.h>
+#include <envz.h>
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -35,6 +36,8 @@ struct prog_ctx {
 
     int argc;
     char **argv;
+    char *envz;
+    size_t envz_len;
 
     zctx_t *zctx;
     zloop_t *zl;            /* zmq event loop       */
@@ -172,6 +175,9 @@ struct prog_ctx * prog_ctx_create (void)
     ctx->zl = zloop_new ();
     if (!ctx->zl)
         log_fatal (ctx, 1, "zloop_new");
+
+    ctx->envz = NULL;
+    ctx->envz_len = 0;
 
     ctx->id = -1;
     ctx->nodeid = -1;
@@ -428,6 +434,52 @@ int send_exit_message (struct prog_ctx *ctx, int taskid, int status)
     return (0);
 }
 
+void prog_ctx_unsetenv (struct prog_ctx *ctx, const char *name)
+{
+    envz_remove (&ctx->envz, &ctx->envz_len, name);
+}
+
+int prog_ctx_setenv (struct prog_ctx *ctx, const char *name, const char *value)
+{
+    return ((int) envz_add (&ctx->envz, &ctx->envz_len, name, value));
+}
+
+int prog_ctx_setenvf (struct prog_ctx *ctx, const char *name, int overwrite,
+        const char *fmt, ...)
+{
+    va_list ap;
+    char *val;
+    int rc;
+
+    va_start (ap, fmt);
+    rc = vasprintf (&val, fmt, ap);
+    va_end (ap);
+    if (rc < 0)
+        return (rc);
+    if (overwrite)
+        prog_ctx_unsetenv (ctx, name);
+    rc = prog_ctx_setenv (ctx, name, val);
+    free (val);
+    return (rc);
+
+}
+
+char * prog_ctx_getenv (struct prog_ctx *ctx, const char *name)
+{
+    return envz_get (ctx->envz, ctx->envz_len, name);
+}
+
+char ** prog_ctx_env_create (struct prog_ctx *ctx)
+{
+    char **env;
+    size_t count;
+    envz_strip (&ctx->envz, &ctx->envz_len);
+    count = argz_count (ctx->envz, ctx->envz_len);
+    env = xzmalloc ((count + 1) * sizeof (char *));
+    argz_extract (ctx->envz, ctx->envz_len, env);
+    return (env);
+}
+
 int exec_command (struct prog_ctx *ctx, int i)
 {
     pid_t cpid = fork ();
@@ -446,15 +498,19 @@ int exec_command (struct prog_ctx *ctx, int i)
         ctx->taskid = i;
         lua_stack_call (ctx->lua_stack, "rexecd_task_init");
 
-        setenvf ("MPIRUN_RANK",       1, "%d", globalid (ctx, i));
-        setenvf ("CMB_LWJ_TASK_ID",       1, "%d", globalid (ctx, i));
-        setenvf ("CMB_LWJ_LOCAL_TASK_ID", 1, "%d", i);
+        prog_ctx_setenvf (ctx, "MPIRUN_RANK",     1, "%d", globalid (ctx, i));
+        prog_ctx_setenvf (ctx, "CMB_LWJ_TASK_ID", 1, "%d", globalid (ctx, i));
+        prog_ctx_setenvf (ctx, "CMB_LWJ_LOCAL_TASK_ID", 1, "%d", i);
 
         /* give each task its own process group so we can use killpg(2) */
         setpgrp();
+        /*
+         *  Reassign environment:
+         */
+        environ = prog_ctx_env_create (ctx);
         if (execvp (ctx->argv [0], ctx->argv) < 0) {
+            fprintf (stderr, "execvp: %s\n", strerror (errno));
             exit (255);
-            //log_fatal (ctx, 1, "execvp: %s", strerror (errno));
         }
         exit (255);
     }
@@ -507,6 +563,74 @@ static struct prog_ctx *l_get_prog_ctx (lua_State *L, int index)
 {
     struct prog_ctx **ctxp = luaL_checkudata (L, index, "WRECK.ctx");
     return (*ctxp);
+}
+
+static int l_environ_destroy (lua_State *L)
+{
+    int *refp = luaL_checkudata (L, 1, "WRECK.environ");
+    luaL_unref (L, LUA_REGISTRYINDEX, *refp);
+    return (0);
+}
+
+static struct prog_ctx *l_get_prog_ctx_from_environ (lua_State *L, int index)
+{
+    struct prog_ctx *ctx;
+    int *refp = luaL_checkudata (L, index, "WRECK.environ");
+    lua_rawgeti (L, LUA_REGISTRYINDEX, *refp);
+    ctx = l_get_prog_ctx (L, -1);
+    lua_pop (L, 1);
+    return ctx;
+}
+
+static int l_environ_index (lua_State *L)
+{
+    struct prog_ctx *ctx = l_get_prog_ctx_from_environ (L, 1);
+    const char *key = lua_tostring (L, 2);
+    const char *val = prog_ctx_getenv (ctx, key);
+
+    if (val)
+        lua_pushstring (L, val);
+    else
+        lua_pushnil (L);
+    return (1);
+}
+
+static int l_environ_newindex (lua_State *L)
+{
+    struct prog_ctx *ctx = l_get_prog_ctx_from_environ (L, 1);
+    const char *key = lua_tostring (L, 2);
+
+    if (lua_isnil (L, 3))
+        prog_ctx_unsetenv (ctx, key);
+    else
+        prog_ctx_setenv (ctx, key, lua_tostring (L, 3));
+    return (0);
+}
+
+static int l_push_environ (lua_State *L, int index)
+{
+    int ref;
+    int *ctxref;
+
+    /*
+     *  Store the "environ" object as a reference to the existing
+     *   prog_ctx object, which already stores our real environment.
+     */
+    if (!lua_isuserdata (L, index))
+        return lua_pusherror (L, "Invalid index when pushing environ");
+
+    /*  Push userdata at stack position [index] to top of stack and then
+     *   take a reference to it in the registry:
+     */
+    lua_pushvalue (L, index);
+    ref = luaL_ref (L, LUA_REGISTRYINDEX);
+
+    ctxref = lua_newuserdata (L, sizeof (int *));
+    *ctxref = ref;
+    luaL_getmetatable (L, "WRECK.environ");
+    lua_setmetatable (L, -2);
+
+    return (1);
 }
 
 static int l_wreck_index (lua_State *L)
@@ -563,9 +687,12 @@ static int l_wreck_index (lua_State *L)
         lua_pushnumber (L, ctx->nodeid);
         return (1);
     }
+    if (strcmp (key, "environ") == 0) {
+        l_push_environ (L, 1);
+        return (1);
+    }
     return (0);
 }
-
 
 static int l_push_prog_ctx (lua_State *L, struct prog_ctx *ctx)
 {
@@ -581,6 +708,13 @@ static const struct luaL_Reg wreck_methods [] = {
     { NULL,         NULL          },
 };
 
+static const struct luaL_Reg environ_methods [] = {
+    { "__gc",       l_environ_destroy  },
+    { "__index",    l_environ_index    },
+    { "__newindex", l_environ_newindex },
+    { NULL,         NULL           },
+};
+
 static int wreck_lua_init (struct prog_ctx *ctx)
 {
     lua_State *L = lua_stack_state (ctx->lua_stack);
@@ -589,6 +723,8 @@ static int wreck_lua_init (struct prog_ctx *ctx)
 
     luaL_newmetatable (L, "WRECK.ctx");
     luaL_register (L, NULL, wreck_methods);
+    luaL_newmetatable (L, "WRECK.environ");
+    luaL_register (L, NULL, environ_methods);
     l_push_prog_ctx (L, ctx);
     lua_setglobal (L, "wreck");
     lua_stack_append_file (ctx->lua_stack, REXECD_LUA_PATTERN);
@@ -604,13 +740,13 @@ int exec_commands (struct prog_ctx *ctx)
 
     lua_stack_call (ctx->lua_stack, "rexecd_init");
 
-    setenvf ("CMB_LWJ_ID",     1, "%d", ctx->id);
-    setenvf ("CMB_LWJ_NNODES", 1, "%d", ctx->nnodes);
-    setenvf ("CMB_NODE_ID",    1, "%d", ctx->nodeid);
-    setenvf ("CMB_LWJ_NTASKS", 1, "%d", ctx->nprocs * ctx->nnodes);
-    setenvf ("MPIRUN_NPROCS",  1, "%d", ctx->nprocs * ctx->nnodes);
+    prog_ctx_setenvf (ctx, "CMB_LWJ_ID",    1, "%d", ctx->id);
+    prog_ctx_setenvf (ctx, "CMB_LWJ_NNODES",1, "%d", ctx->nnodes);
+    prog_ctx_setenvf (ctx, "CMB_NODE_ID",   1, "%d", ctx->nodeid);
+    prog_ctx_setenvf (ctx, "CMB_LWJ_NTASKS",1, "%d", ctx->nprocs * ctx->nnodes);
+    prog_ctx_setenvf (ctx, "MPIRUN_NPROCS", 1, "%d", ctx->nprocs * ctx->nnodes);
     gtid_list_create (ctx, buf, sizeof (buf));
-    setenvf ("CMB_LWJ_GTIDS",  1, "%s", buf);
+    prog_ctx_setenvf (ctx, "CMB_LWJ_GTIDS",  1, "%s", buf);
 
     for (i = 0; i < ctx->nprocs; i++)
         exec_command (ctx, i);
