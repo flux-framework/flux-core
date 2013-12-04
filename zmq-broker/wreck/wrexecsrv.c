@@ -75,15 +75,6 @@ static int rexec_session_connect_to_helper (struct rexec_session *c)
     return (0);
 }
 
-static json_object * rexec_session_json (struct rexec_session *c)
-{
-    json_object *o = json_object_new_object ();
-    util_json_object_add_int (o, "nodeid", c->rank);
-    util_json_object_add_int64 (o, "id", c->id);
-    return (o);
-}
-
-
 static struct rexec_session * rexec_session_create (struct rexec_ctx *ctx, int64_t id)
 {
     struct rexec_session *c = xzmalloc (sizeof (*c));
@@ -223,18 +214,9 @@ static void exec_handler (struct rexec_session *s, int *pfds)
     exit (255);
 }
 
-static zmsg_t *rexec_session_handler_msg_create (struct rexec_session *s)
-{
-    json_object *o = rexec_session_json (s);
-    zmsg_t *zmsg = cmb_msg_encode ("rexec.run", o);
-    json_object_put (o);
-    return (zmsg);
-}
-
 static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
 {
     struct rexec_session *cli;
-    zmsg_t *zmsg;
     int fds[2];
     char c;
     int n;
@@ -262,8 +244,6 @@ static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
      *  Close child side of socketpair and send zmsg to (grand)child
      */
     close (fds[0]);
-    zmsg = rexec_session_handler_msg_create (cli);
-    zmsg_send_fd (fds[1], &zmsg);
 
     /* Blocking wait for exec helper to close fd */
     n = read (fds[1], &c, 1);
