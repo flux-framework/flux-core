@@ -66,12 +66,9 @@ void flux_tmouthandler_remove (flux_t h);
 
 /* Arm the reactor timer such that a FluxTmoutHandler,
  * if registered, will be called every 'msec' milliseconds.
+ * Setting msec=0 disarms the timer.
  */
 int flux_timeout_set (flux_t h, unsigned long msec);
-
-/* Disarm the reactor timer.
- */
-int flux_timeout_clear (flux_t h);
 
 /* Test whether the reactor timer is armed.
  */

@@ -274,44 +274,25 @@ static void plugin_reactor_zs_remove (void *impl, void *zs, short events)
  */
 static int plugin_reactor_timeout_set (void *impl, unsigned long msec)
 {
-    ptimeout_t t;
+    ptimeout_t t = NULL;
     plugin_ctx_t p = impl;
 
     assert (p->magic == PLUGIN_MAGIC);
     if (p->timeout)
         (void)zloop_timer_end (p->zloop, p->timeout);
-    if (!(t = xzmalloc (sizeof (struct ptimeout_struct))))
-        oom ();
-    t->p = p;
-    t->msec = msec;
-    if (zloop_timer (p->zloop, msec, 0, (zloop_fn *)plugin_timer_cb, t) < 0)
-        err_exit ("zloop_timer"); 
+    if (msec > 0) {
+        if (!(t = xzmalloc (sizeof (struct ptimeout_struct))))
+            oom ();
+        t->p = p;
+        t->msec = msec;
+        if (zloop_timer (p->zloop, msec, 0, (zloop_fn *)plugin_timer_cb, t) < 0)
+            err_exit ("zloop_timer"); 
+    }
     if (p->timeout)
         free (p->timeout); /* free after xzmalloc - see comment above */
     p->timeout = t;
     return 0;
 }
-
-static int plugin_reactor_timeout_clear (void *impl)
-{
-    plugin_ctx_t p = impl;
-
-    assert (p->magic == PLUGIN_MAGIC);
-    if (p->timeout) {
-        (void)zloop_timer_end (p->zloop, p->timeout);
-        free (p->timeout);
-        p->timeout = NULL;
-    }
-    return 0;
-}
-
-static bool plugin_reactor_timeout_isset (void *impl)
-{
-    plugin_ctx_t p = impl;
-    assert (p->magic == PLUGIN_MAGIC);
-    return p->timeout ? true : false;
-}
-
 
 /**
  ** end of handle implementation
@@ -717,8 +698,6 @@ static const struct flux_handle_ops plugin_handle_ops = {
     .reactor_zs_add = plugin_reactor_zs_add,
     .reactor_zs_remove = plugin_reactor_zs_remove,
     .reactor_timeout_set = plugin_reactor_timeout_set,
-    .reactor_timeout_clear = plugin_reactor_timeout_clear,
-    .reactor_timeout_isset = plugin_reactor_timeout_isset,
 };
 
 /*

@@ -475,7 +475,7 @@ static int logsrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
 static int logsrv_timeout (flux_t h)
 {
     process_backlog (getctx (h));
-    flux_timeout_clear (h);
+    flux_timeout_set (h, 0);
     return 0;
 }
 

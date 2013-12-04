@@ -281,7 +281,7 @@ static int barriersrv_timeout (flux_t h)
     assert (!flux_treeroot (h));
 
     zhash_foreach (ctx->barriers, timeout_reduction, ctx);
-    flux_timeout_clear (h);
+    flux_timeout_set (h, 0);
     return 0;
 }
 

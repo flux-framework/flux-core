@@ -28,8 +28,6 @@ struct flux_handle_ops {
     int         (*reactor_zs_add)(void *impl, void *zs, short events);
     void        (*reactor_zs_remove)(void *impl, void *zs, short events);
     int         (*reactor_timeout_set)(void *impl, unsigned long msec);
-    int         (*reactor_timeout_clear)(void *impl);
-    bool        (*reactor_timeout_isset)(void *impl);
 
     void        (*impl_destroy)(void *impl);
 };
