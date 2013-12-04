@@ -53,6 +53,16 @@ local function lwj_return_code (f, id)
     return max
 end
 
+--
+-- Get the current env with some env vars filtered out:
+--
+local function get_filtered_env ()
+    local env = posix.getenv()
+    for k,v in pairs (env) do
+        if k:match ("SLURM_") then env[k] = nil end
+    end
+    return (env)
+end
 
 -------------------------------------------------------------------------------
 -- Main program:
@@ -70,9 +80,9 @@ local cmdidx = 1
 if arg[1]:sub (1,2) == "-n" then
     local s = table.remove (arg, 1)
     if s:len() == 2 then
-        nprocs = tostring (table.remove (arg, 2))
+        nprocs = tonumber (table.remove (arg, 1))
     else
-        nprocs = tostring (s:sub(3))
+        nprocs = tonumber (s:sub(3))
     end
 end
 
@@ -87,6 +97,8 @@ if not f then log_fatal ("%s\n", err) end
 local jobreq = {
       nprocs  = nprocs,
       cmdline = { unpack(arg) },
+      environ = get_filtered_env(),
+      cwd = posix.getcwd(),
 }
 
 log_msg ("Starting %d procs per node running \"%s\"\n",
