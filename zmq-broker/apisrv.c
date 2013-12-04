@@ -28,11 +28,9 @@
 
 #define LISTEN_BACKLOG      5
 
-struct _client_struct;
-
 typedef struct {
     int listen_fd;
-    struct _client_struct *clients;
+    zlist_t *clients;
     flux_t h;
 } ctx_t;
 
@@ -41,10 +39,8 @@ typedef struct {
     char *topic;
 } subscription_t;
 
-typedef struct _client_struct {
+typedef struct {
     int fd;
-    struct _client_struct *next;
-    struct _client_struct *prev;
     ctx_t *ctx;
     zhash_t *disconnect_notify;
     zlist_t *subscriptions;
@@ -54,6 +50,7 @@ typedef struct _client_struct {
 
 static void freectx (ctx_t *ctx)
 {
+    zlist_destroy (&ctx->clients);
     free (ctx);
 }
 
@@ -64,6 +61,8 @@ static ctx_t *getctx (flux_t h)
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
         ctx->h = h;
+        if (!(ctx->clients = zlist_new ()))
+            oom ();
         flux_aux_set (h, "apisrv", ctx, (FluxFreeFn)freectx);
     }
 
@@ -74,7 +73,7 @@ static client_t * client_create (ctx_t *ctx, int fd)
 {
     client_t *c;
 
-    c = xzmalloc (sizeof (client_t));
+    c = xzmalloc (sizeof (*c));
     c->fd = fd;
     c->uuid = uuid_generate_str ();
     c->ctx = ctx;
@@ -82,11 +81,6 @@ static client_t * client_create (ctx_t *ctx, int fd)
         oom ();
     if (!(c->subscriptions = zlist_new ()))
         oom ();
-    c->prev = NULL;
-    c->next = ctx->clients;
-    if (c->next)
-        c->next->prev = c;
-    ctx->clients = c;
     return (c);
 }
 
@@ -172,9 +166,10 @@ static int notify_srv (const char *key, void *item, void *arg)
     return 0;
 }
 
-static void client_destroy (ctx_t *ctx, client_t *c)
+static void client_destroy (client_t *c)
 {
     subscription_t *sub;
+    ctx_t *ctx = c->ctx;
 
     zhash_foreach (c->disconnect_notify, notify_srv, c);
     zhash_destroy (&c->disconnect_notify);
@@ -186,12 +181,6 @@ static void client_destroy (ctx_t *ctx, client_t *c)
     free (c->uuid);
     close (c->fd);
 
-    if (c->prev)
-        c->prev->next = c->next;
-    else
-        ctx->clients = c->next;
-    if (c->next)
-        c->next->prev = c->prev;
     free (c);
 }
 
@@ -273,7 +262,8 @@ static int client_cb (flux_t h, int fd, short revents, void *arg)
         /*  Cancel this client's fd from the reactor and destroy client
          */
         flux_fdhandler_remove (h, fd, ZMQ_POLLIN | ZMQ_POLLERR);
-        client_destroy (ctx, c);
+        zlist_remove (ctx->clients, c);
+        client_destroy (c);
     }
     return 0;
 }
@@ -294,14 +284,14 @@ static void recv_response (ctx_t *ctx, zmsg_t **zmsg)
     assert (zf != NULL);
     assert (zframe_size (zf) == 0);
 
-    for (c = ctx->clients; c != NULL && *zmsg != NULL; ) {
-
+    c = zlist_first (ctx->clients);
+    while (c && *zmsg) {
         if (!strcmp (uuid, c->uuid)) {
             if (zmsg_send_fd_typemask (c->fd, FLUX_MSGTYPE_RESPONSE, zmsg) < 0)
                 zmsg_destroy (zmsg);
             break;
         }
-        c = c->next;
+        c = zlist_next (ctx->clients);
     }
     if (*zmsg)
         zmsg_destroy (zmsg); /* discard response for unknown uuid */
@@ -317,15 +307,16 @@ static void recv_event (ctx_t *ctx, zmsg_t **zmsg)
     char *tag = flux_zmsg_tag (*zmsg);
     zmsg_t *cpy;
 
-
     if (tag) {
-        for (c = ctx->clients; c != NULL; c = c->next) {
+        c = zlist_first (ctx->clients);
+        while (c) {
             if (subscription_match (c, FLUX_MSGTYPE_EVENT, tag)) {
                 if (!(cpy = zmsg_dup (*zmsg)))
                     oom ();
                 if (zmsg_send_fd_typemask (c->fd, FLUX_MSGTYPE_EVENT, &cpy) < 0)
                     zmsg_destroy (&cpy);
             }
+            c = zlist_next (ctx->clients);
         }
         free (tag);
     }
@@ -338,13 +329,15 @@ static void recv_snoop (ctx_t *ctx, zmsg_t **zmsg)
     zmsg_t *cpy;
 
     if (tag) {
-        for (c = ctx->clients; c != NULL; c = c->next) {
+        c = zlist_first (ctx->clients);
+        while (c) {
             if (subscription_match (c, FLUX_MSGTYPE_SNOOP, tag)) {
                 if (!(cpy = zmsg_dup (*zmsg)))
                     oom ();
                 if (zmsg_send_fd_typemask (c->fd, FLUX_MSGTYPE_SNOOP, &cpy) < 0)
                     zmsg_destroy (&cpy);
             }
+            c = zlist_next (ctx->clients);
         }
         free (tag);
     }
@@ -377,6 +370,8 @@ static int listener_cb (flux_t h, int fd, short revents, void *arg)
             goto done;
         }
         c = client_create (ctx, cfd);
+        if (zlist_append (ctx->clients, c) < 0)
+            oom ();
         if (flux_fdhandler_add (h, cfd, ZMQ_POLLIN | ZMQ_POLLERR,
                                                     client_cb, c) < 0) {
             flux_log (h, LOG_ERR, "flux_fdhandler_add: %s", strerror (errno));
@@ -452,11 +447,12 @@ done:
 static void apisrv_fini (flux_t h)
 {
     ctx_t *ctx = getctx (h);
+    client_t *c;
 
     if (close (ctx->listen_fd) < 0)
         flux_log (h, LOG_ERR, "close listen_fd: %s", strerror (errno));
-    while (ctx->clients != NULL)
-        client_destroy (ctx, ctx->clients);
+    while ((c = zlist_pop (ctx->clients)))
+        client_destroy (c);
 }
 
 const struct plugin_ops ops = {
