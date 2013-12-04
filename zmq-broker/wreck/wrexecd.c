@@ -708,6 +708,16 @@ static int l_wreck_index (lua_State *L)
         l_push_environ (L, 1);
         return (1);
     }
+    if (strcmp (key, "argv") == 0) {
+        /*  Push copy of argv */
+        int i;
+        lua_newtable (L);
+        for (i = 0; i < ctx->argc; i++) {
+            lua_pushstring (L, ctx->argv[i]);
+            lua_rawseti (L, -2, i);
+        }
+        return (1);
+    }
     return (0);
 }
 
