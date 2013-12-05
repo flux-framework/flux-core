@@ -1,5 +1,13 @@
 #!/usr/bin/lua
+local libexec = os.getenv ("FLUX_EXEC_PATH")
+if libexec then
+   package.cpath = package.cpath .. ';' .. libexec .. "/../dlua/?.so"
+   package.path  = package.path  .. ';' .. libexec .. "/../dlua/?.lua"
+end
 
+-------------------------------------------------------------------------------
+-- Modules:
+-------------------------------------------------------------------------------
 local posix = require 'posix'
 local flux = require 'flux'
 local timer = require 'timer'
