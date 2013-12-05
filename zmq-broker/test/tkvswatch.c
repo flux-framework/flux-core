@@ -29,6 +29,8 @@
 #include "log.h"
 #include "zmsg.h"
 
+#define USE_REACTOR 1
+
 int changes = -1;
 int nthreads = -1;
 char *key = NULL;
@@ -43,6 +45,7 @@ typedef struct {
     pthread_attr_t attr;
     int n;
     int count;
+    flux_t h;
 } thd_t;
 
 static void signal_ready (void)
@@ -72,33 +75,41 @@ static void wait_ready (void)
         errn_exit (rc, "pthread_mutex_unlock");
 }
 
+/* expect val: {-1,0,1,...,(changes - 1)}
+ * count will therefore run 0...changes.
+ */
+static void watch_cb (const char *k, int val, void *arg, int errnum)
+{
+    thd_t *t = arg;
+
+    t->count++;
+    if (t->count == changes)
+        flux_reactor_stop (t->h);
+}
+
 void *thread (void *arg)
 {
-    thd_t *t = (thd_t *)arg;
-    flux_t h;
-    int val;
+    thd_t *t = arg;
 
-    if (!(h = cmb_init ())) {
+    if (!(t->h = cmb_init ())) {
         err ("%d: cmb_init", t->n);
         goto done;
     }
-    if (kvs_get_int (h, key, &val) < 0) {
-        err ("%d: kvs_get_int", t->n);
+    signal_ready ();
+    /* The first kvs.watch reply is handled synchronously, then other kvs.watch
+     * replies will arrive asynchronously and be handled by the reactor.
+     */
+    if (kvs_watch_int (t->h, key, watch_cb, t) < 0) {
+        err ("%d: kvs_watch_int", t->n);
         goto done;
     }
-    t->count++;
-    signal_ready ();
-    while (t->count < changes) {
-        if (kvs_watch_once_int (h, key, &val) < 0) {
-            err ("%d: kvs_watch_once_int", t->n);
-            goto done;
-        }
-        assert (val == t->count - 1);
-        t->count++;
+    if (flux_reactor_start (t->h) < 0) {
+        err ("%d: flux_reactor_start", t->n);
+        goto done;
     }
 done:
-    if (h)
-        flux_handle_destroy (&h);
+    if (t->h)
+        flux_handle_destroy (&t->h);
 
     return NULL;
 }
