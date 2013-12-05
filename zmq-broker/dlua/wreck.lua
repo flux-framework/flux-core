@@ -2,6 +2,7 @@
 
 local posix = require 'posix'
 local flux = require 'flux'
+local timer = require 'timer'
 
 -------------------------------------------------------------------------------
 -- Local functions:
@@ -85,6 +86,8 @@ end
 
 local nprocs = 1
 local cmdidx = 1
+local terminate = false
+local sigtimer
 
 if arg[1]:sub (1,2) == "-n" then
     local s = table.remove (arg, 1)
@@ -94,6 +97,14 @@ if arg[1]:sub (1,2) == "-n" then
         nprocs = tonumber (s:sub(3))
     end
 end
+
+
+-- Set signal handlers
+posix.signal[posix.SIGINT] = function () terminate = true end
+posix.signal[posix.SIGTERM] = posix.signal[posix.SIGINT]
+
+-- Start in-program timer:
+local tt = timer.new()
 
 --  Create new connection to local cmbd:
 --
@@ -110,8 +121,8 @@ local jobreq = {
       cwd = posix.getcwd(),
 }
 
-log_msg ("Starting %d procs per node running \"%s\"\n",
-    nprocs, table.concat (arg, ' '))
+log_msg ("%4.03fs: Starting %d procs per node running \"%s\"\n",
+    tt:get0(), nprocs, table.concat (arg, ' '))
 
 --
 --  Send job request message with tag="job.create"
@@ -123,7 +134,7 @@ if resp.errnum then
     log_fatal ("job.create message failed with errnum=%d\n", resp.errnum)
 end
 
-log_msg ("Registered jobid %d\n", resp.jobid)
+log_msg ("%4.03fs: Registered jobid %d\n", tt:get0(), resp.jobid)
 
 --
 --  Get a handle to this lwj kvsdir:
@@ -137,9 +148,29 @@ if not lwj then log_fatal ("%s\n", err) end
 local rc,err = f:sendevent ("event.rexec.run.%d", resp.jobid)
 if not rc then log_fatal ("%s\n", err) end
 
+local sigtimer = nil
 repeat
- local r = lwj:watch ("state", r)
- log_msg ("State = %s\n", r)
+ local r,err = lwj:watch ("state", r)
+ if r then log_msg ("%-4.03fs: State = %s\n", tt:get0(), r) end
+
+ --
+ --  If we catch a signal then lwj:watch() will be interrupted.
+ --   Check to see if we should terminate the job now:
+ --
+ if terminate then
+    log_msg ("%4.03fs: Killing LWJ %d\n", tt:get0(), resp.jobid)
+    local rc,err = f:sendevent ("event.rexec.kill.%d", resp.jobid)
+    if not rc then log_msg ("Error: Failed to send kill event: %s", err) end
+    if not sigtimer then
+       sigtimer = timer.new()
+    else
+       if sigtimer:get() < 1.0 then
+         log_msg ("Detaching from job. Processes may still be running\n");
+         os.exit (0);
+       end
+    end
+    terminate = false
+ end
 until r == "complete"
 
 local rc = lwj_return_code (f, resp.jobid)
