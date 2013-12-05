@@ -69,7 +69,7 @@ struct ptimeout_struct {
 };
 
 #define ZLOOP_RETURN(p) \
-    return ((p)->reactor_stop ? (p)->reactor_rc : 0)
+    return ((p)->reactor_stop ? (-1) : (0))
 
 static const struct flux_handle_ops plugin_handle_ops;
 
@@ -200,9 +200,8 @@ static zctx_t *plugin_get_zctx (void *impl)
 static int plugin_reactor_start (void *impl)
 {
     plugin_ctx_t p = impl;
-    if (zloop_start (p->zloop) < 0)
-        return -1;
-    return 0;
+    zloop_start (p->zloop);
+    return p->reactor_rc;
 };
 
 static void plugin_reactor_stop (void *impl, int rc)
@@ -553,7 +552,7 @@ static void *plugin_thread (void *arg)
         }
     }
 
-    (void)plugin_reactor_start (p); /* XXX ignore return code here */
+    (void)flux_reactor_start (p->h); /* XXX ignore return code here */
     if (p->ops->fini)
         p->ops->fini (p->h);
 done:
