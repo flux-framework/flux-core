@@ -30,25 +30,32 @@ end
 --  Get the LWJ return code as highest of all task return codes
 ---
 local function lwj_return_code (f, id)
+    local hostlist = require 'hostlist'
     local lwj = f:kvsdir ("lwj.%d", id)
     local max = 0
+    local msgs = {}
     for taskid in lwj:keys () do
         if is_integer (taskid) then
             local t = lwj[taskid]
             local x = t.exit_status
             if x > 0 then
-                local code = t.exit_code
-                local sig = t.exit_sig
-                if code then
-                    log_msg ("task %d exited with exit code %d\n", taskid, code)
-                elseif sig then
-                    log_msg ("task %d exited with signal %d\n", taskid, sig)
+                local s = "exited with " ..
+                          (t.exit_code and "exit code" or "signal") ..
+                          " %d\n"
+                s = s:format(t.exit_code or t.exit_sig)
+                if not msgs[s] then
+                    msgs[s] = hostlist.new(taskid)
+                else
+                    msgs[s]:concat (taskid)
                 end
             end
             if x > max then
                 max = x
             end
         end
+    end
+    for s,h in pairs (msgs) do
+        log_msg ("tasks %s: %s\n", tostring (h:sort()), s)
     end
     return max
 end
