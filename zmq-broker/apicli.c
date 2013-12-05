@@ -333,11 +333,22 @@ static int cmb_reactor_timeout_set (void *impl, unsigned long msec)
 static void cmb_fini (void *impl)
 {
     cmb_t *c = impl;
+    zmsg_t *z;
+
     assert (c->magic == CMB_CTX_MAGIC);
     if (c->fd >= 0)
         (void)close (c->fd);
     if (c->zloop)
         zloop_destroy (&c->zloop);
+    while ((z = zlist_pop (c->resp)))
+        zmsg_destroy (&z);
+    zlist_destroy (&c->resp);
+    while ((z = zlist_pop (c->snoop)))
+        zmsg_destroy (&z);
+    zlist_destroy (&c->snoop);
+    while ((z = zlist_pop (c->event)))
+        zmsg_destroy (&z);
+    zlist_destroy (&c->event);
     free (c);
 }
 
@@ -424,7 +435,7 @@ static const struct flux_handle_ops cmb_ops = {
     .reactor_zs_add = cmb_reactor_zs_add,
     .reactor_zs_remove = cmb_reactor_zs_remove,
     .reactor_timeout_set = cmb_reactor_timeout_set,
-    //.impl_destroy = cmb_fini,
+    .impl_destroy = cmb_fini,
 };
 
 /*
