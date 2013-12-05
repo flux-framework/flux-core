@@ -45,6 +45,7 @@ struct prog_ctx {
     void *zs_rep;
     int signalfd;
     int *pids;
+    int *status;
     int exited;
 
     /*  Per-task data. These members are only valid between fork and
@@ -156,6 +157,7 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
 {
     zloop_destroy (&ctx->zl);
     free (ctx->pids);
+    free (ctx->status);
     close (ctx->signalfd);
 
     zmq_close (ctx->zs_req);
@@ -254,6 +256,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
         ctx->nprocs = 1;
 
     ctx->pids = xzmalloc (ctx->nprocs * sizeof (*ctx->pids));
+    ctx->status = xzmalloc (ctx->nprocs * sizeof (*ctx->status));
 
     return (0);
 }
@@ -732,6 +735,34 @@ static int l_wreck_index (lua_State *L)
         }
         return (1);
     }
+    if (strcmp (key, "exit_status") == 0) {
+        if (ctx->in_task || ctx->taskid < 0)
+            return lua_pusherror (L, "Not valid in this context");
+        lua_pushnumber (L, ctx->status [ctx->taskid]);
+        return (1);
+    }
+    if (strcmp (key, "exitcode") == 0) {
+        int status;
+        if (ctx->in_task || ctx->taskid < 0)
+            return lua_pusherror (L, "Not valid in this context");
+        status = ctx->status [ctx->taskid];
+        if (WIFEXITED (status))
+            lua_pushnumber (L, WEXITSTATUS(status));
+        else
+            lua_pushnil (L);
+        return (1);
+    }
+    if (strcmp (key, "termsig") == 0) {
+        int status;
+        if (ctx->in_task || ctx->taskid < 0)
+            return lua_pusherror (L, "Not valid in this context");
+        status = ctx->status [ctx->taskid];
+        if (WIFSIGNALED (status))
+            lua_pushnumber (L, WTERMSIG (status));
+        else
+            lua_pushnil (L);
+        return (1);
+    }
     return (0);
 }
 
@@ -825,6 +856,11 @@ int reap_child (struct prog_ctx *ctx)
     id = pid_to_taskid (ctx, wpid);
     log_msg (ctx, "task%d: pid %d (%s) exited with status 0x%04x",
             id, wpid, ctx->argv [0], status);
+    ctx->status [id] = status;
+
+    ctx->taskid = id;
+    lua_stack_call (ctx->lua_stack, "rexecd_task_exit");
+
     if (send_exit_message (ctx, id, status) < 0)
         log_msg (ctx, "Sending exit message failed!");
     return (1);
