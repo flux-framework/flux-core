@@ -65,6 +65,8 @@ end
 --
 local function get_filtered_env ()
     local env = posix.getenv()
+    env.HOSTNAME = nil
+    env.ENVIRONMENT = nil
     for k,v in pairs (env) do
         if k:match ("SLURM_") then env[k] = nil end
     end
