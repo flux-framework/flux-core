@@ -216,30 +216,45 @@ static int l_kvsdir_watch_dir (lua_State *L)
 
 static int l_kvsdir_index (lua_State *L)
 {
+    int rc;
+    flux_t f;
     kvsdir_t d;
     const char *key = lua_tostring (L, 2);
+    char *fullkey = NULL;
+    json_object *o = NULL;
 
     if (key == NULL)
         return luaL_error (L, "kvsdir: invalid index");
-
+    /*
+     *  To support indeces like kvsdir ["a.relative.path"] we have
+     *   to pretend that kvsdir objects support this kind of
+     *   non-local indexing by using full paths and flux handle :-(
+     */
     d = lua_get_kvsdir (L, 1);
+    f = kvsdir_handle (d);
+    fullkey = kvsdir_key_at (d, key);
 
-    if (!kvsdir_exists (d, key)) {
-        /* First check metatable to see if this is a method */
+    if (kvs_get (f, fullkey, &o) == 0)
+        rc = json_object_to_lua (L, o);
+    else if (errno == EISDIR)
+        rc = l_kvsdir_kvsdir_new (L);
+    else {
+        /* No key. First check metatable to see if this is a method */
         lua_getmetatable (L, 1);
         lua_getfield (L, -1, key);
-        if (lua_isnil (L, -1))
-            return lua_pusherror (L, "Key not found.");
-        return (1);
+
+        /* If not then return error */
+        if (lua_isnil (L, -1)) {
+             rc = lua_pusherror (L, "Key not found.");
+            goto out;
+        }
+        rc = 1;
     }
-    if (kvsdir_isdir (d, key))
-        return l_kvsdir_kvsdir_new (L);
-    else {
-        json_object *o;
-        kvsdir_get (d, key, &o);
-        json_object_to_lua (L, o);
-    }
-    return (1);
+out:
+    if (o)
+        json_object_put (o);
+    free (fullkey);
+    return (rc);
 }
 
 #if 0
