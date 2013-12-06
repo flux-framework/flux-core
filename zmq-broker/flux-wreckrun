@@ -8,6 +8,20 @@ local flux = require 'flux'
 local timer = require 'timer'
 
 local prog = string.match (arg[0], "([^/]+)$")
+local shortprog = prog:match ("flux%-(.+)$")
+
+-------------------------------------------------------------------------------
+-- Program options
+-------------------------------------------------------------------------------
+function parse_cmdline (arg)
+    local getopt = require 'alt_getopt' .get_opts
+    local opt_table = {
+        ['help']            = "h",
+        ['nprocs-per-node'] = "n",
+    }
+    local optstring = "hn:"
+    return getopt (arg, optstring, opt_table)
+end
 
 -------------------------------------------------------------------------------
 -- Local functions:
@@ -15,8 +29,14 @@ local prog = string.match (arg[0], "([^/]+)$")
 local function usage ()
     io.stderr:write ("Usage: "..prog.." [-n nprocs] COMMANDS...\n")
 end
+
+local function usage_and_exit (n)
+    usage()
+    os.exit (n or 0)
+end
+
 local function log_msg (...)
-    io.stderr:write (prog..": " .. string.format (...))
+    io.stderr:write (shortprog..": " .. string.format (...))
 end
 
 local function log_fatal (...)
@@ -84,25 +104,22 @@ end
 -------------------------------------------------------------------------------
 --  Parse cmdline args:
 --
-if #arg < 1 then
-    usage ()
-    os.exit (1)
-end
-
-local nprocs = 1
-local cmdidx = 1
 local terminate = false
 local sigtimer
 
-if arg[1]:sub (1,2) == "-n" then
-    local s = table.remove (arg, 1)
-    if s:len() == 2 then
-        nprocs = tonumber (table.remove (arg, 1))
-    else
-        nprocs = tonumber (s:sub(3))
-    end
+local opts, optind = parse_cmdline (arg)
+if opts.h then usage_and_exit () end
+if optind > #arg then
+    log_msg ("Error: remote command required\n")
+    usage_and_exit (1)
 end
 
+local nprocs = opts.n or 1
+local cmdline = {}
+for i = optind, #arg do
+    log_msg ("optind = %d arg[%d] = %s\n", optind, i, arg[i])
+    table.insert (cmdline, arg[i])
+end
 
 -- Set signal handlers
 posix.signal[posix.SIGINT] = function () terminate = true end
@@ -121,13 +138,13 @@ if not f then log_fatal ("%s\n", err) end
 --
 local jobreq = {
       nprocs  = nprocs,
-      cmdline = { unpack(arg) },
+      cmdline = cmdline,
       environ = get_filtered_env(),
       cwd = posix.getcwd(),
 }
 
 log_msg ("%4.03fs: Starting %d procs per node running \"%s\"\n",
-    tt:get0(), nprocs, table.concat (arg, ' '))
+    tt:get0(), nprocs, table.concat (cmdline, ' '))
 
 --
 --  Send job request message with tag="job.create"
