@@ -40,7 +40,7 @@ static int l_flux_new (lua_State *L)
     *fluxp = cmb_init ();
 
     if (*fluxp == NULL)
-        return luaL_error (L, "flux_init: %s", strerror (errno));
+        return lua_pusherror (L, strerror (errno));
 
     luaL_getmetatable (L, "FLUX.handle");
     lua_setmetatable (L, -2);
@@ -63,7 +63,7 @@ static int l_flux_kvsdir_new (lua_State *L)
     }
 
     if (kvs_get_dir (f, &dir, path) < 0)
-        return luaL_error (L, "kvs_get_dir: %s", strerror (errno));
+        return lua_pusherror (L, strerror (errno));
     return l_push_kvsdir (L, dir);
 }
 

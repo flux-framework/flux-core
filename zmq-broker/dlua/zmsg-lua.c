@@ -113,7 +113,7 @@ static int l_zmsg_info_index (lua_State *L)
     struct zmsg_info *zi = l_get_zmsg_info (L, 1);
     const char *key = lua_tostring (L, 2);
     if (key == NULL)
-        return luaL_error (L, "zmsg: invalid member");
+        return lua_pusherror (L, "zmsg: invalid member");
 
     if (strcmp (key, "type") == 0) {
         lua_pushstring (L, zmsg_type_string (zi->type));

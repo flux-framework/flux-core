@@ -96,7 +96,7 @@ static int l_kvsdir_newindex (lua_State *L)
                             lua_typename (L, lua_type (L, 3)));
     }
     if (rc < 0)
-        return luaL_error (L, "kvsdir_put (key=%s, type=%s): %s",
+        return lua_pusherror (L, "kvsdir_put (key=%s, type=%s): %s",
                            key, lua_typename (L, lua_type (L, 3)),
                            strerror (errno));
     return (0);
