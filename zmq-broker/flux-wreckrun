@@ -117,7 +117,6 @@ end
 local nprocs = opts.n or 1
 local cmdline = {}
 for i = optind, #arg do
-    log_msg ("optind = %d arg[%d] = %s\n", optind, i, arg[i])
     table.insert (cmdline, arg[i])
 end
 
