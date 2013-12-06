@@ -145,18 +145,26 @@ int main (int argc, char *argv[])
     return 0;
 }
 
+void exec_subcommand_dir (const char *dir, char *argv[], const char *prefix)
+{
+    char *path;
+    if (asprintf (&path, "%s/%s%s", dir, prefix ? prefix : "", argv[0]) < 0)
+        oom ();
+    execvp (path, argv); /* no return if successful */
+    free (path);
+}
+
 void exec_subcommand (const char *searchpath, char *argv[])
 {
     char *cpy = xstrdup (searchpath);
-    char *path, *dir, *saveptr, *a1 = cpy;
+    char *dir, *saveptr, *a1 = cpy;
 
     while ((dir = strtok_r (a1, ":", &saveptr))) {
-        if (asprintf (&path, "%s/%s", dir, argv[0]) < 0)
-            oom ();
-        execvp (path, argv); /* no return if successful */
-        free (path);
+        exec_subcommand_dir (dir, argv, NULL);
         a1 = NULL;
     }
+    /* Also try flux_exe_path with flux- prepended */
+    exec_subcommand_dir (flux_exe_dir, argv, "flux-");
     free (cpy);
     msg_exit ("`%s' is not a flux command.  See 'flux --help'", argv[0]);
 }
