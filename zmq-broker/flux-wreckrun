@@ -1,9 +1,4 @@
 #!/usr/bin/lua
-local libexec = os.getenv ("FLUX_EXEC_PATH")
-if libexec then
-   package.cpath = package.cpath .. ';' .. libexec .. "/../dlua/?.so"
-   package.path  = package.path  .. ';' .. libexec .. "/../dlua/?.lua"
-end
 
 -------------------------------------------------------------------------------
 -- Modules:
@@ -12,14 +7,16 @@ local posix = require 'posix'
 local flux = require 'flux'
 local timer = require 'timer'
 
+local prog = string.match (arg[0], "([^/]+)$")
+
 -------------------------------------------------------------------------------
 -- Local functions:
 -------------------------------------------------------------------------------
 local function usage ()
-    io.stderr:write ("Usage: wreck [-n nprocs] COMMANDS...\n")
+    io.stderr:write ("Usage: "..prog.." [-n nprocs] COMMANDS...\n")
 end
 local function log_msg (...)
-    io.stderr:write ("wreck: " .. string.format (...))
+    io.stderr:write (prog..": " .. string.format (...))
 end
 
 local function log_fatal (...)
