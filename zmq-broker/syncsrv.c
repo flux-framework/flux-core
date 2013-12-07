@@ -28,10 +28,13 @@
 static int epoch = 0;
 static bool disabled = false;
 
-static void syncsrv_timeout (flux_t h)
+static int syncsrv_timeout (flux_t h)
 {
-    if (flux_event_send (h, NULL, "event.sched.trigger.%d", ++epoch) < 0)
-        err_exit ("flux_event_send");
+    if (flux_event_send (h, NULL, "event.sched.trigger.%d", ++epoch) < 0) {
+        err ("flux_event_send");
+        return -1;
+    }
+    return 0;
 }
 
 static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)
@@ -66,7 +69,7 @@ invalid:
     if (!disabled) {
         msg ("sync: %s values invalid, synchronization suspended", path);
         disabled = true;
-        flux_timeout_clear (h);
+        flux_timeout_set (h, 0);
     }
 }
 

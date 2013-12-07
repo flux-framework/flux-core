@@ -173,7 +173,7 @@ static void add_jobinfo (flux_t h, int64_t id, json_object *req)
     kvsdir_destroy (dir);
 }
 
-static void handle_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
+static int handle_recv (flux_t h, zmsg_t **zmsg, int typemask)
 {
     json_object *o = NULL;
     char *tag;
@@ -215,6 +215,7 @@ out:
     if (o)
         json_object_put (o);
     zmsg_destroy (zmsg);
+    return 0;
 }
 
 const struct plugin_ops ops = {

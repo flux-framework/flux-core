@@ -11,16 +11,12 @@
 #define DNEV_IN_URI         "inproc://evin"
 #define SNOOP_URI           "inproc://snoop"
 
-typedef enum {
-    ZMSG_REQUEST, ZMSG_RESPONSE, ZMSG_EVENT, ZMSG_SNOOP }
-zmsg_type_t;
-
 /* A plugin defines 'const struct plugin_ops ops = {...}' containing
  * its implementations of one or more of the plugin operations.
  */
 struct plugin_ops {
-    void (*timeout)(flux_t h);
-    void (*recv)(flux_t h, zmsg_t **zmsg, zmsg_type_t type);
+    int (*timeout)(flux_t h);
+    int (*recv)(flux_t h, zmsg_t **zmsg, int typemask);
     int (*init)(flux_t h, zhash_t *args);
     void (*fini)(flux_t h);
 };

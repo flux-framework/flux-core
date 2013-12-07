@@ -37,4 +37,4 @@ int flux_mrpc (flux_mrpc_t f, const char *fmt, ...);
 flux_mrpc_t flux_mrpc_create_fromevent (flux_t h, json_object *request);
 int flux_mrpc_respond (flux_mrpc_t f);
 
-#endif /* !defined(FLUX_MRPC_H) */
+#endif /* !FLUX_MRPC_H */

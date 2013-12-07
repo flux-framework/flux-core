@@ -42,7 +42,7 @@
 
 #include "log.h"
 
-static char *prog = "log";
+static char *prog = "flux";
 
 typedef struct {
     char *s;
@@ -208,6 +208,8 @@ log_get_dest (void)
                       _rmatch (syslog_level, level_tab));
             break;
         case DEST_LOGF:
+            if (!logf)
+                logf = stderr;
             snprintf (res, len, "%s", logf == stdout ? "stdout" :
                                       logf == stderr ? "stderr" : 
                                       logf == NULL   ? "unknown" : filename);
@@ -230,6 +232,8 @@ _verr (int errnum, const char *fmt, va_list ap)
     }
     switch (dest) {
         case DEST_LOGF:
+            if (!logf)
+                logf = stderr;
             fprintf (logf, "%s: %s: %s\n", prog, msg, s);
             fflush (logf);
             break;
@@ -253,6 +257,8 @@ log_msg (const char *fmt, va_list ap)
     }
     switch (dest) {
         case DEST_LOGF:
+            if (!logf)
+                logf = stderr;
             fprintf (logf, "%s: %s\n", prog, msg);
             fflush (logf);
             break;

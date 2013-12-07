@@ -15,6 +15,7 @@ typedef struct flux_handle_struct *flux_t;
 
 #include "kvs.h"
 #include "mrpc.h"
+#include "reactor.h"
 
 /* Flags for handle creation and flux_flags_set()/flux_flags_unset.
  */
@@ -95,17 +96,10 @@ int flux_route_add (flux_t h, const char *dst, const char *gw);
 int flux_route_del (flux_t h, const char *dst, const char *gw);
 json_object *flux_route_query (flux_t h);
 
-/* Set/clear/test timeout callback arming.
- */
-int flux_timeout_set (flux_t h, unsigned long msec);
-int flux_timeout_clear (flux_t h);
-bool flux_timeout_isset (flux_t h);
-
-/* Accessors for zloop reactor and zeromq context.
+/* Accessor zeromq context.
  * N.B. The zctx_t is thread-safe but zeromq sockets, and therefore
  * flux_t handle operations are not.
  */
-zloop_t *flux_get_zloop (flux_t h);
 zctx_t *flux_get_zctx (flux_t h);
 
 /* Ping plugin 'name'.
@@ -138,7 +132,31 @@ int flux_log_dump (flux_t h, int lev, const char *fac);
 char *flux_log_decode (zmsg_t *zmsg, int *lp, char **fp, int *cp,
                     struct timeval *tvp, char **sp);
 
-#endif /* !defined(FLUX_H) */
+/* Message manipulation utility functions
+ */
+enum {
+    FLUX_MSGTYPE_REQUEST = 1,
+    FLUX_MSGTYPE_RESPONSE = 2,
+    FLUX_MSGTYPE_EVENT = 4,
+    FLUX_MSGTYPE_SNOOP = 8,
+    FLUX_MSGTYPE_ANY = 0xf,
+    FLUX_MSGTYPE_MASK = 0xf,
+    /* leave open possiblity of adding 'flags' bits here */
+};
+
+/* Return string representation of message type.
+ */
+const char *flux_msgtype_string (int typemask);
+
+/* Return copy of zmsg tag. Caller must free.
+ */
+char *flux_zmsg_tag (zmsg_t *zmsg);
+
+/* Get json object from a zmsg. Caller must call json_object_put().
+ */
+json_object *flux_zmsg_json(zmsg_t *zmsg);
+
+#endif /* !FLUX_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

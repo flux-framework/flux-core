@@ -40,7 +40,7 @@ int main (int argc, char *argv[])
     int id;
     flux_mrpc_t f;
 
-    log_init ("flux-ping");
+    log_init ("flux-mecho");
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {

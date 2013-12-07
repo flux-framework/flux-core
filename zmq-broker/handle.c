@@ -18,6 +18,7 @@
 #include <stdarg.h>
 #include <json/json.h>
 #include <czmq.h>
+#include <fnmatch.h>
 
 #include "hostlist.h"
 #include "log.h"
@@ -27,21 +28,27 @@
 #include "flux.h"
 #include "handle.h"
 
+typedef struct reactor_struct *reactor_t;
+
+static void reactor_destroy (reactor_t r);
+static reactor_t reactor_create (void);
+
 struct flux_handle_struct {
-    const struct flux_handle_ops    *ops;
-    int                             flags;
-    void                            *impl;
-    zhash_t                         *aux;
+    const struct flux_handle_ops *ops;
+    int             flags;
+    void            *impl;
+    reactor_t       reactor;
+    zhash_t         *aux;
 };
 
-flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops,
-                           int flags)
+flux_t handle_create (void *impl, const struct flux_handle_ops *ops, int flags)
 {
     flux_t h = xzmalloc (sizeof (*h));
 
     h->flags = flags;
     if (!(h->aux = zhash_new()))
         oom ();
+    h->reactor = reactor_create ();
     h->ops = ops;
     h->impl = impl;
 
@@ -56,6 +63,7 @@ void flux_handle_destroy (flux_t *hp)
         if (h->ops->impl_destroy)
             h->ops->impl_destroy (h->impl);
         zhash_destroy (&h->aux);
+        reactor_destroy (h->reactor);
         free (h);
         *hp = NULL;
     }
@@ -221,32 +229,6 @@ int flux_snoop_unsubscribe (flux_t h, const char *topic)
 
     return h->ops->snoop_unsubscribe (h->impl, topic);
 }
-
-int flux_timeout_set (flux_t h, unsigned long msec)
-{
-    if (!h->ops->timeout_set) {
-        errno = ENOSYS;
-        return -1;
-    }
-    return h->ops->timeout_set (h->impl, msec);
-}
-
-int flux_timeout_clear (flux_t h)
-{
-    if (!h->ops->timeout_clear) {
-        errno = ENOSYS;
-        return -1;
-    }
-    return h->ops->timeout_clear (h->impl);
-}
-
-bool flux_timeout_isset (flux_t h)
-{
-    if (!h->ops->timeout_isset)
-        return false;
-    return h->ops->timeout_isset (h->impl);
-}
-
 int flux_rank (flux_t h)
 {
     if (!h->ops->rank) {
@@ -256,15 +238,6 @@ int flux_rank (flux_t h)
     return h->ops->rank (h->impl);
 }
 
-zloop_t *flux_get_zloop (flux_t h)
-{
-    if (!h->ops->get_zloop) {
-        errno = ENOSYS;
-        return NULL;
-    }
-    return h->ops->get_zloop (h->impl);
-}
-
 zctx_t *flux_get_zctx (flux_t h)
 {
     if (!h->ops->get_zctx) {
@@ -272,6 +245,429 @@ zctx_t *flux_get_zctx (flux_t h)
         return NULL;
     }
     return h->ops->get_zctx (h->impl);
+}
+
+/**
+ ** Utility
+ **/
+
+struct map_struct {
+    const char *name;
+    int typemask;
+};
+
+static struct map_struct msgtype_map[] = {
+    { "request", FLUX_MSGTYPE_REQUEST },
+    { "response", FLUX_MSGTYPE_RESPONSE},
+    { "event", FLUX_MSGTYPE_EVENT},
+    { "snoop", FLUX_MSGTYPE_SNOOP},
+};
+static const int msgtype_map_len = 
+                            sizeof (msgtype_map) / sizeof (msgtype_map[0]);
+
+const char *flux_msgtype_string (int typemask)
+{
+    int i;
+
+    for (i = 0; i < msgtype_map_len; i++)
+        if ((typemask & msgtype_map[i].typemask))
+            return msgtype_map[i].name;
+    return "unknown";
+}
+
+static zframe_t *unwrap_zmsg (zmsg_t *zmsg, int frameno)
+{
+    zframe_t *zf = zmsg_first (zmsg);
+
+    while (zf && zframe_size (zf) != 0)
+        zf = zmsg_next (zmsg); /* skip non-empty routing envelope frames */
+    if (zf)
+        zf = zmsg_next (zmsg); /* skip empty routing envelope delimiter */
+    if (!zf)
+        zf = zmsg_first (zmsg); /* rewind - there was no routing envelope */
+    while (zf && frameno-- > 0) /* frame 0=tag, 1=json */
+        zf = zmsg_next (zmsg);
+    return zf;
+}
+
+char *flux_zmsg_tag (zmsg_t *zmsg)
+{
+    zframe_t *zf = unwrap_zmsg (zmsg, 0);
+    char *tag = NULL;
+
+    if (zf && !(tag = zframe_strdup (zf)))
+        oom ();
+    return tag;
+}
+
+json_object *flux_zmsg_json (zmsg_t *zmsg)
+{
+    zframe_t *zf = unwrap_zmsg (zmsg, 1);
+    json_object *o = NULL;
+
+    if (zf) {
+        json_tokener *tok;
+        if (!(tok = json_tokener_new ()))
+            oom ();
+        o = json_tokener_parse_ex (tok,  (const char *)zframe_data (zf),
+                                                       zframe_size (zf));
+        json_tokener_free (tok);
+    } else {
+        if (!(o = json_object_new_object ()))
+            oom ();
+    }
+    return o;
+}
+
+/**
+ ** Reactor
+ **/
+
+typedef enum {
+    DSP_TYPE_MSG, DSP_TYPE_FD, DSP_TYPE_ZS, DSP_TYPE_TMOUT
+} dispatch_type_t;
+
+typedef struct {
+    dispatch_type_t type;
+    union {
+        struct {
+            int typemask;
+            char *pattern;
+            FluxMsgHandler fn;
+            void *arg;
+        } msg;
+        struct {
+            int fd;
+            short events;
+            FluxFdHandler fn;
+            void *arg;
+        } fd;
+        struct {
+            void *zs;
+            short events;
+            FluxZsHandler fn;
+            void *arg;
+        } zs;
+        struct {
+            FluxTmoutHandler fn;
+            void *arg;
+        } tmout;
+    };
+} dispatch_t;
+
+struct reactor_struct {
+    zlist_t *dsp;
+    bool timeout_set;
+};
+
+static dispatch_t *dispatch_create (dispatch_type_t type)
+{
+    dispatch_t *d = xzmalloc (sizeof (*d));
+    d->type = type;
+    return d;
+}
+
+static void dispatch_destroy (dispatch_t *d)
+{
+    if (d->type == DSP_TYPE_MSG && d->msg.pattern)
+        free (d->msg.pattern);
+    free (d);
+}
+
+static reactor_t reactor_create (void)
+{
+    reactor_t r = xzmalloc (sizeof (*r));
+    if (!(r->dsp = zlist_new ()))
+        oom ();
+    return r;
+}
+
+static void reactor_destroy (reactor_t r)
+{
+    dispatch_t *d;
+
+    while ((d = zlist_pop (r->dsp)))
+        dispatch_destroy (d);
+    zlist_destroy (&r->dsp);
+    free (r);
+}
+
+static bool dispatch_msg_match (dispatch_t *d, const char *tag, int typemask)
+{
+    if (d->type == DSP_TYPE_MSG) {
+        if (!(d->msg.typemask & (typemask & FLUX_MSGTYPE_MASK)))
+            return false;
+        if (!d->msg.pattern)
+            return true;
+        if (fnmatch (d->msg.pattern, tag, 0) == 0)
+            return true;
+    }
+    return false;
+}
+
+int handle_event_msg (flux_t h, int typemask, zmsg_t **zmsg)
+{
+    dispatch_t *d;
+    char *tag;
+    int rc = 0;
+
+    assert (*zmsg != NULL);
+    if (!(tag = flux_zmsg_tag (*zmsg))) {
+        rc = -1;
+        errno = EPROTO;
+        goto done;
+    }
+    d = zlist_first (h->reactor->dsp);
+    while (d) {
+        if (dispatch_msg_match (d, tag, typemask)) {
+            rc = d->msg.fn (h, typemask, zmsg, d->msg.arg);
+            if (!*zmsg)
+                break;
+            /* fall through to next match if zmsg uncomsumed */
+        }
+        d = zlist_next (h->reactor->dsp);
+    }
+done:
+    if (tag)
+        free (tag);
+    /* If we return with zmsg unconsumed, the impl's reactor will
+     * dispose of it.
+     */
+    return rc;
+}
+
+int handle_event_fd (flux_t h, int fd, short events)
+{
+    dispatch_t *d;
+    int rc = 0;
+    
+    d = zlist_first (h->reactor->dsp);
+    while (d) {
+        if (d->type == DSP_TYPE_FD && d->fd.fd == fd
+                                   && (d->fd.events & events)) {
+            rc = d->fd.fn (h, fd, events, d->fd.arg);
+            break;
+        }
+        d = zlist_next (h->reactor->dsp);
+    }
+    return rc;
+}
+
+int handle_event_zs (flux_t h, void *zs, short events)
+{
+    dispatch_t *d;
+    int rc = 0;
+    
+    d = zlist_first (h->reactor->dsp);
+    while (d) {
+        if (d->type == DSP_TYPE_ZS && d->zs.zs == zs
+                                   && (d->zs.events & events)) {
+            rc = d->zs.fn (h, zs, events, d->zs.arg);
+            break;
+        }
+        d = zlist_next (h->reactor->dsp);
+    }
+    return rc;
+}
+
+int handle_event_tmout (flux_t h)
+{
+    dispatch_t *d;
+    int rc = 0;
+    
+    d = zlist_first (h->reactor->dsp);
+    while (d) {
+        if (d->type == DSP_TYPE_TMOUT) {
+            rc = d->tmout.fn (h, d->tmout.arg);
+            break;
+        }
+        d = zlist_next (h->reactor->dsp);
+    }
+    return rc;
+}
+
+int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
+                         FluxMsgHandler cb, void *arg)
+{
+    dispatch_t *d = dispatch_create (DSP_TYPE_MSG);
+
+    d->msg.typemask = typemask;
+    d->msg.pattern = xstrdup (pattern);
+    d->msg.fn = cb;
+    d->msg.arg = arg;
+    if (zlist_push (h->reactor->dsp, d) < 0)
+        oom ();
+    return 0;
+}
+
+int flux_msghandler_append (flux_t h, int typemask, const char *pattern,
+                            FluxMsgHandler cb, void *arg)
+{
+    dispatch_t *d = dispatch_create (DSP_TYPE_MSG);
+
+    d->msg.typemask = typemask;
+    d->msg.pattern = xstrdup (pattern);
+    d->msg.fn = cb;
+    d->msg.arg = arg;
+    if (zlist_append (h->reactor->dsp, d) < 0)
+        oom ();
+    return 0;
+}
+
+void flux_msghandler_remove (flux_t h, int typemask, const char *pattern)
+{
+    dispatch_t *d;
+
+    d = zlist_first (h->reactor->dsp);
+    while (d) {
+        if (d->type == DSP_TYPE_MSG && d->msg.typemask == typemask
+                                    && !strcmp (d->msg.pattern, pattern)) {
+            zlist_remove (h->reactor->dsp, d);
+            dispatch_destroy (d);
+            break;
+        }
+        d = zlist_next (h->reactor->dsp);
+    }
+}
+
+int flux_fdhandler_add (flux_t h, int fd, short events,
+                        FluxFdHandler cb, void *arg)
+{
+    dispatch_t *d;
+
+    if (!h->ops->reactor_fd_add) {
+        errno = ENOSYS;
+        return -1;
+    }
+    if (h->ops->reactor_fd_add (h->impl, fd, events) < 0)
+        return -1;
+
+    d = dispatch_create (DSP_TYPE_FD);
+    d->fd.fd = fd;
+    d->fd.events = events;
+    d->fd.fn = cb;
+    d->fd.arg = arg;
+    if (zlist_append (h->reactor->dsp, d) < 0)
+        oom ();
+    return 0;
+}
+
+void flux_fdhandler_remove (flux_t h, int fd, short events)
+{
+    dispatch_t *d;
+
+    d = zlist_first (h->reactor->dsp);
+    while (d) {
+        if (d->type == DSP_TYPE_FD && d->fd.fd == fd
+                                   && d->fd.events == events) {
+            zlist_remove (h->reactor->dsp, d);
+            dispatch_destroy (d);
+            break;
+        }
+        d = zlist_next (h->reactor->dsp);
+    }
+    if (h->ops->reactor_fd_remove)
+        h->ops->reactor_fd_remove (h->impl, fd, events);
+}
+
+int flux_zshandler_add (flux_t h, void *zs, short events,
+                        FluxZsHandler cb, void *arg)
+{
+    dispatch_t *d;
+
+    if (!h->ops->reactor_zs_add) {
+        errno = ENOSYS;
+        return -1;
+    }
+    if (h->ops->reactor_zs_add (h->impl, zs, events) < 0)
+        return -1;
+    d = dispatch_create (DSP_TYPE_ZS);
+    d->zs.zs = zs;
+    d->zs.events = events;
+    d->zs.fn = cb;
+    d->zs.arg = arg;
+    if (zlist_append (h->reactor->dsp, d) < 0)
+        oom ();
+    return 0;
+}
+
+void flux_zshandler_remove (flux_t h, void *zs, short events)
+{
+    dispatch_t *d;
+
+    d = zlist_first (h->reactor->dsp);
+    while (d) {
+        if (d->type == DSP_TYPE_ZS && d->zs.zs == zs
+                                   && d->zs.events == events) {
+            zlist_remove (h->reactor->dsp, d);
+            dispatch_destroy (d);
+            break;
+        }
+        d = zlist_next (h->reactor->dsp);
+    }
+    if (h->ops->reactor_zs_remove)
+        h->ops->reactor_zs_remove (h->impl, zs, events);
+}
+
+int flux_tmouthandler_set (flux_t h, FluxTmoutHandler cb, void *arg)
+{
+    dispatch_t *d;
+
+    flux_tmouthandler_remove (h); /* remove existing / clear timer */
+    d = dispatch_create (DSP_TYPE_TMOUT);
+    d->tmout.fn = cb;
+    d->tmout.arg = arg;
+    if (zlist_append (h->reactor->dsp, d) < 0)
+        oom ();
+    return 0;
+}
+
+void flux_tmouthandler_remove (flux_t h)
+{
+    dispatch_t *d;
+
+    flux_timeout_set (h, 0);
+    d = zlist_first (h->reactor->dsp);
+    while (d) {
+        if (d->type == DSP_TYPE_TMOUT) {
+            zlist_remove (h->reactor->dsp, d);
+            dispatch_destroy (d);
+            break;
+        }
+        d = zlist_next (h->reactor->dsp);
+    }
+}
+
+int flux_timeout_set (flux_t h, unsigned long msec)
+{
+    if (!h->ops->reactor_timeout_set) {
+        errno = ENOSYS;
+        return -1;
+    }
+    if (h->ops->reactor_timeout_set (h->impl, msec) < 0)
+        return -1;
+    h->reactor->timeout_set = msec > 0 ? true : false;
+    return 0;
+}
+
+bool flux_timeout_isset (flux_t h)
+{
+    return h->reactor->timeout_set;
+}
+
+int flux_reactor_start (flux_t h)
+{
+    if (!h->ops->reactor_start) {
+        errno = ENOSYS;
+        return -1;
+    }
+    return h->ops->reactor_start (h->impl);
+}
+
+void flux_reactor_stop (flux_t h)
+{
+    if (h->ops->reactor_stop)
+        h->ops->reactor_stop (h->impl, 0);
 }
 
 /**

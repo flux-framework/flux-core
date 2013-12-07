@@ -17,20 +17,28 @@ struct flux_handle_ops {
     int         (*snoop_subscribe)(void *impl, const char *topic);
     int         (*snoop_unsubscribe)(void *impl, const char *topic);
 
-    int         (*timeout_set)(void *impl, unsigned long msec);
-    int         (*timeout_clear)(void *impl);
-    bool        (*timeout_isset)(void *impl);
-
     int         (*rank)(void *impl);
 
-    zloop_t *   (*get_zloop)(void *impl);
     zctx_t *    (*get_zctx)(void *impl);
+
+    int         (*reactor_start)(void *impl);
+    void        (*reactor_stop)(void *impl, int rc);
+    int         (*reactor_fd_add)(void *impl, int fd, short events);
+    void        (*reactor_fd_remove)(void *impl, int fd, short events);
+    int         (*reactor_zs_add)(void *impl, void *zs, short events);
+    void        (*reactor_zs_remove)(void *impl, void *zs, short events);
+    int         (*reactor_timeout_set)(void *impl, unsigned long msec);
 
     void        (*impl_destroy)(void *impl);
 };
 
-flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops,
-                           int flags);
+/* These functions should only be called from handle implementations.
+ */
+flux_t handle_create (void *impl, const struct flux_handle_ops *ops, int flags);
+int handle_event_msg (flux_t h, int typemask, zmsg_t **zmsg);
+int handle_event_fd (flux_t h, int fd, short revents);
+int handle_event_zs (flux_t h, void *zs, short revents);
+int handle_event_tmout (flux_t h);
 
 #endif /* !HAVE_FLUX_HANDLE_H */
 

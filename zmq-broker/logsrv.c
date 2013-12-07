@@ -446,13 +446,13 @@ done:
     zmsg_destroy (zmsg);
 }
 
-static void logsrv_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
+static int logsrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
 {
     ctx_t *ctx = getctx (h);
     char *arg = NULL;
 
     if (ctx->disabled)
-        return;
+        return 0;
 
     if (cmb_msg_match (*zmsg, "log.msg"))
         recv_log_msg (ctx, zmsg);
@@ -469,12 +469,14 @@ static void logsrv_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
 
     if (arg)
         free (arg);
+    return 0;
 }
 
-static void logsrv_timeout (flux_t h)
+static int logsrv_timeout (flux_t h)
 {
     process_backlog (getctx (h));
-    flux_timeout_clear (h);
+    flux_timeout_set (h, 0);
+    return 0;
 }
 
 static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)

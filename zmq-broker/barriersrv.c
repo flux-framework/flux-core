@@ -255,7 +255,7 @@ static void barrier_exit (ctx_t *ctx, char *name, int errnum, zmsg_t **zmsg)
 /* Define plugin entry points.
  */
 
-static void barriersrv_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
+static int barriersrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
 {
     ctx_t *ctx = getctx (h);
     char *name = NULL;
@@ -271,16 +271,18 @@ static void barriersrv_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
 
     if (name)
         free (name);
+    return 0;
 }
 
-static void barriersrv_timeout (flux_t h)
+static int barriersrv_timeout (flux_t h)
 {
     ctx_t *ctx = getctx (h);
 
     assert (!flux_treeroot (h));
 
     zhash_foreach (ctx->barriers, timeout_reduction, ctx);
-    flux_timeout_clear (h);
+    flux_timeout_set (h, 0);
+    return 0;
 }
 
 static int barriersrv_init (flux_t h, zhash_t *args)

@@ -113,15 +113,11 @@ static void closeall (int fd)
 static int rexec_session_remove (struct rexec_session *c)
 {
     struct rexec_ctx *ctx = c->ctx;
-    zloop_t *zloop = flux_get_zloop (ctx->h);
 
     msg ("removing client %lu", c->id);
 
-    zmq_pollitem_t zp = {
-        .events = ZMQ_POLLIN | ZMQ_POLLERR,
-        .socket = c->zs_rep
-    };
-    zloop_poller_end (zloop, &zp);
+    flux_zshandler_remove (ctx->h, c->zs_rep, ZMQ_POLLIN | ZMQ_POLLERR);
+
     zlist_remove (ctx->session_list, c);
     rexec_session_destroy (c);
     return (0);
@@ -152,11 +148,12 @@ static int handle_client_msg (struct rexec_session *c, zmsg_t *zmsg)
 }
 #endif
 
-static int client_cb (zloop_t *zl, zmq_pollitem_t *zp, struct rexec_session *c)
+static int client_cb (flux_t h, void *zs, short revents, void *arg)
 {
+    struct rexec_session *c = arg;
     zmsg_t *new;
 
-    if (zp->revents & ZMQ_POLLERR) {
+    if (revents & ZMQ_POLLERR) {
         rexec_session_remove (c);
     }
     new = zmsg_recv (c->zs_rep);
@@ -167,20 +164,16 @@ static int client_cb (zloop_t *zl, zmq_pollitem_t *zp, struct rexec_session *c)
     }
     else
         err ("client_cb: zmsg_recv");
-    return (0);
+    return 0;
 }
 
 static int rexec_session_add (struct rexec_ctx *ctx, struct rexec_session *c)
 {
-    zmq_pollitem_t zp = {
-        .events = ZMQ_POLLIN | ZMQ_POLLERR,
-        .socket = c->zs_rep
-    };
-    zloop_t *zloop = flux_get_zloop (ctx->h);
-
     if (zlist_append (ctx->session_list, c) < 0)
         msg ("failed to insert %lu", c->id);
-    zloop_poller (zloop, &zp, (zloop_fn *) client_cb, (void *) c);
+    if (flux_zshandler_add (ctx->h, c->zs_rep, ZMQ_POLLIN | ZMQ_POLLERR,
+                                                    client_cb, c) < 0)
+        err ("failed to insert %lu", c->id);
     return (0);
 }
 
@@ -397,20 +390,15 @@ static void handle_request (struct rexec_ctx *ctx, zmsg_t **zmsg)
         zmsg_destroy (zmsg);
 }
 
-static void handle_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
+static int handle_recv (flux_t h, zmsg_t **zmsg, int typemask)
 {
     struct rexec_ctx *ctx = getctx (h);
 
-    switch (type) {
-        case ZMSG_REQUEST:
-            handle_request (ctx, zmsg);
-            break;
-        case ZMSG_EVENT:
-            handle_event (ctx, zmsg);
-            break;
-        default:
-            break;
-    }
+    if ((typemask & FLUX_MSGTYPE_REQUEST))
+        handle_request (ctx, zmsg);
+    else if ((typemask & FLUX_MSGTYPE_EVENT))
+        handle_event (ctx, zmsg);
+    return 0;
 }
 
 static int rexec_init (flux_t h, zhash_t *args)

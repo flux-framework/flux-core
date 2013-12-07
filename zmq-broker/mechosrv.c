@@ -10,13 +10,13 @@
 
 /* Copy input arguments to output arguments and respond to RPC.
  */
-static void mechosrv_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
+static int mechosrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
 {
     json_object *request = NULL;
     json_object *inarg = NULL;
     flux_mrpc_t f = NULL;
 
-    if (type != ZMSG_EVENT) {
+    if (!(typemask & FLUX_MSGTYPE_EVENT)) {
         flux_log (h, LOG_ERR, "ignoring non-event message");
         goto done;
     }
@@ -51,12 +51,13 @@ done:
     if (f)
         flux_mrpc_destroy (f);
     zmsg_destroy (zmsg);
+    return 0;
 }
 
 static int mechosrv_init (flux_t h, zhash_t *args)
 {
     if (flux_event_subscribe (h, "mrpc.mecho") < 0) {
-        err ("%s: flux_event_subscribe", __FUNCTION__);
+        flux_log (h, LOG_ERR, "%s: flux_event_subscribe", __FUNCTION__);
         return -1;
     }
     return 0;
@@ -65,7 +66,7 @@ static int mechosrv_init (flux_t h, zhash_t *args)
 static void mechosrv_fini (flux_t h)
 {
     if (flux_event_unsubscribe (h, "mrpc.mecho") < 0)
-        err_exit ("%s: flux_event_unsubscribe", __FUNCTION__);
+        flux_log (h, LOG_ERR, "%s: flux_event_unsubscribe", __FUNCTION__);
 }
 
 const struct plugin_ops ops = {

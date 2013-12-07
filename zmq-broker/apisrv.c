@@ -28,28 +28,29 @@
 
 #define LISTEN_BACKLOG      5
 
-struct _client_struct;
-
 typedef struct {
     int listen_fd;
-    struct _client_struct *clients;
+    zlist_t *clients;
     flux_t h;
 } ctx_t;
 
-typedef struct _client_struct {
+typedef struct {
+    int type; 
+    char *topic;
+} subscription_t;
+
+typedef struct {
     int fd;
-    struct _client_struct *next;
-    struct _client_struct *prev;
     ctx_t *ctx;
     zhash_t *disconnect_notify;
-    zhash_t *event_subscriptions;
-    zhash_t *snoop_subscriptions;
+    zlist_t *subscriptions;
     char *uuid;
     int cfd_id;
 } client_t;
 
 static void freectx (ctx_t *ctx)
 {
+    zlist_destroy (&ctx->clients);
     free (ctx);
 }
 
@@ -60,6 +61,8 @@ static ctx_t *getctx (flux_t h)
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
         ctx->h = h;
+        if (!(ctx->clients = zlist_new ()))
+            oom ();
         flux_aux_set (h, "apisrv", ctx, (FluxFreeFn)freectx);
     }
 
@@ -70,38 +73,73 @@ static client_t * client_create (ctx_t *ctx, int fd)
 {
     client_t *c;
 
-    c = xzmalloc (sizeof (client_t));
+    c = xzmalloc (sizeof (*c));
     c->fd = fd;
     c->uuid = uuid_generate_str ();
     c->ctx = ctx;
     if (!(c->disconnect_notify = zhash_new ()))
         oom ();
-    if (!(c->event_subscriptions = zhash_new ()))
+    if (!(c->subscriptions = zlist_new ()))
         oom ();
-    if (!(c->snoop_subscriptions = zhash_new ()))
-        oom ();
-    c->prev = NULL;
-    c->next = ctx->clients;
-    if (c->next)
-        c->next->prev = c;
-    ctx->clients = c;
     return (c);
 }
 
-static int _event_unsubscribe (const char *key, void *item, void *arg)
+static subscription_t *subscription_create (flux_t h, int type, char *topic)
 {
-    client_t *c = arg;
-    if (flux_event_unsubscribe (c->ctx->h, key) < 0)
-        err_exit ("%s: flux_event_unsubscribe", __FUNCTION__);
-    return 0;
+    subscription_t *sub = xzmalloc (sizeof (*sub));
+    sub->type = type;
+    sub->topic = xstrdup (topic);
+    if (type == FLUX_MSGTYPE_EVENT) {
+        (void)flux_event_subscribe (h, topic);
+        flux_log (h, LOG_DEBUG, "event subscribe %s", topic);
+    } else if (type == FLUX_MSGTYPE_SNOOP) {
+        /* N.B. snoop messages may have routing headers, so do not attempt
+         * to subscribe by tag - just use "" to subscribe to all.
+         */
+        (void)flux_snoop_subscribe (h, "");
+        flux_log (h, LOG_DEBUG, "snoop subscribe %s", topic);
+    }
+    return sub;
 }
 
-static int _snoop_unsubscribe (const char *key, void *item, void *arg)
+static void subscription_destroy (flux_t h, subscription_t *sub)
 {
-    client_t *c = arg;
-    if (flux_snoop_unsubscribe (c->ctx->h, key) < 0)
-        err_exit ("%s: flux_snoop_unsubscribe", __FUNCTION__);
-    return 0;
+    if (sub->type == FLUX_MSGTYPE_EVENT) {
+        (void)flux_event_unsubscribe (h, sub->topic);
+        flux_log (h, LOG_DEBUG, "event unsubscribe %s", sub->topic);
+    } else if (sub->type == FLUX_MSGTYPE_SNOOP) {
+        (void)flux_snoop_unsubscribe (h, "");
+        flux_log (h, LOG_DEBUG, "snoop unsubscribe %s", sub->topic);
+    }
+    free (sub->topic);
+    free (sub);
+}
+
+static subscription_t *subscription_lookup (client_t *c, int type, char *topic)
+{
+    subscription_t *sub;
+
+    sub = zlist_first (c->subscriptions);
+    while (sub) {
+        if (sub->type == type && !strcmp (sub->topic, topic))
+            return sub;
+        sub = zlist_next (c->subscriptions);
+    }
+    return NULL;
+}
+
+static bool subscription_match (client_t *c, int type, char *topic)
+{
+    subscription_t *sub;
+
+    sub = zlist_first (c->subscriptions);
+    while (sub) {
+        if (sub->type == type && !strncmp (sub->topic, topic,
+                                           strlen (sub->topic)))
+            return true;
+        sub = zlist_next (c->subscriptions);
+    }
+    return false;
 }
 
 static int notify_srv (const char *key, void *item, void *arg)
@@ -111,43 +149,38 @@ static int notify_srv (const char *key, void *item, void *arg)
     json_object *o;
 
     if (!(zmsg = zmsg_new ()))
-        err_exit ("zmsg_new");
+        oom ();
     o = util_json_object_new_object ();
     if (zmsg_pushstr (zmsg, "%s", json_object_to_json_string (o)) < 0)
-        err_exit ("zmsg_pushstr");
+        oom ();
     json_object_put (o);
     if (zmsg_pushstr (zmsg, "%s.disconnect", key) < 0)
-        err_exit ("zmsg_pushstr");
+        oom ();
     if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* delimiter frame */
-        err_exit ("zmsg_pushmem");
+        oom ();
     if (zmsg_pushstr (zmsg, "%s", c->uuid) < 0)
-        err_exit ("zmsg_pushmem");
+        oom ();
 
     flux_request_sendmsg (c->ctx->h, &zmsg);
 
     return 0;
 }
 
-static void client_destroy (ctx_t *ctx, client_t *c)
+static void client_destroy (client_t *c)
 {
+    subscription_t *sub;
+    ctx_t *ctx = c->ctx;
+
     zhash_foreach (c->disconnect_notify, notify_srv, c);
     zhash_destroy (&c->disconnect_notify);
 
-    zhash_foreach (c->event_subscriptions, _event_unsubscribe, c);
-    zhash_destroy (&c->event_subscriptions);
-
-    zhash_foreach (c->snoop_subscriptions, _snoop_unsubscribe, c);
-    zhash_destroy (&c->snoop_subscriptions);
+    while ((sub = zlist_pop (c->subscriptions)))
+        subscription_destroy (ctx->h, sub);
+    zlist_destroy (&c->subscriptions);
 
     free (c->uuid);
     close (c->fd);
 
-    if (c->prev)
-        c->prev->next = c->next;
-    else
-        ctx->clients = c->next;
-    if (c->next)
-        c->next->prev = c->prev;
     free (c);
 }
 
@@ -155,46 +188,36 @@ static int client_read (ctx_t *ctx, client_t *c)
 {
     zmsg_t *zmsg = NULL;
     char *name = NULL;
+    int typemask;
+    subscription_t *sub;
 
-    zmsg = zmsg_recv_fd (c->fd, true);
+    zmsg = zmsg_recv_fd_typemask (c->fd, &typemask, true);
     if (!zmsg) {
         if (errno != ECONNRESET && errno != EWOULDBLOCK && errno != EPROTO)
-            err ("API read");
+            flux_log (ctx->h, LOG_ERR, "API read: %s", strerror (errno));
         return -1;
     }
+    if ((typemask & FLUX_MSGTYPE_EVENT)) {
+        flux_event_sendmsg (ctx->h, &zmsg);
+        goto done;
+    }
+    if (!(typemask & FLUX_MSGTYPE_REQUEST))
+        goto done; /* DROP */
         
     if (cmb_msg_match_substr (zmsg, "api.snoop.subscribe.", &name)) {
-        zhash_insert (c->snoop_subscriptions, name, name);
-        zhash_freefn (c->snoop_subscriptions, name, free);
-        if (flux_snoop_subscribe (ctx->h, name) < 0)
-            err_exit ("%s: flux_snoop_subscribe", __FUNCTION__);
-        name = NULL;
+        sub = subscription_create (ctx->h, FLUX_MSGTYPE_SNOOP, name);
+        if (zlist_append (c->subscriptions, sub) < 0)
+            oom ();
     } else if (cmb_msg_match_substr (zmsg, "api.snoop.unsubscribe.", &name)) {
-        if (zhash_lookup (c->snoop_subscriptions, name)) {
-            zhash_delete (c->snoop_subscriptions, name);
-            if (flux_snoop_unsubscribe (ctx->h, name) < 0)
-                err_exit ("%s: flux_snoop_unsubscribe", __FUNCTION__);
-        }
+        if ((sub = subscription_lookup (c, FLUX_MSGTYPE_SNOOP, name)))
+            zlist_remove (c->subscriptions, sub);
     } else if (cmb_msg_match_substr (zmsg, "api.event.subscribe.", &name)) {
-        zhash_insert (c->event_subscriptions, name, name);
-        zhash_freefn (c->event_subscriptions, name, free);
-        if (flux_event_subscribe (ctx->h, name) < 0)
-            err_exit ("%s: flux_event_subscribe", __FUNCTION__);
-        name = NULL;
+        sub = subscription_create (ctx->h, FLUX_MSGTYPE_EVENT, name);
+        if (zlist_append (c->subscriptions, sub) < 0)
+            oom ();
     } else if (cmb_msg_match_substr (zmsg, "api.event.unsubscribe.", &name)) {
-        if (zhash_lookup (c->event_subscriptions, name)) {
-            zhash_delete (c->event_subscriptions, name);
-            if (flux_event_unsubscribe (ctx->h, name) < 0)
-                err_exit ("%s: flux_event_unsubscribe", __FUNCTION__);
-        }
-    } else if (cmb_msg_match_substr (zmsg, "api.event.send.", &name)) {
-        json_object *o;
-        if (cmb_msg_decode (zmsg, NULL, &o) < 0)
-            err_exit ("%s: cmb_msg_decode", __FUNCTION__);
-        if (flux_event_send (ctx->h, o, "%s", name) < 0)
-            err_exit ("flux_event_send");
-        if (o)
-            json_object_put (o);
+        if ((sub = subscription_lookup (c, FLUX_MSGTYPE_EVENT, name)))
+            zlist_remove (c->subscriptions, sub);
     } else {
         /* insert disconnect notifier before forwarding request */
         if (c->disconnect_notify) {
@@ -203,13 +226,13 @@ static int client_read (ctx_t *ctx, client_t *c)
                 goto done;
             if (zhash_lookup (c->disconnect_notify, tag) == NULL) {
                 if (zhash_insert (c->disconnect_notify, tag, tag) < 0)
-                    err_exit ("zhash_insert");
+                    oom ();
                 zhash_freefn (c->disconnect_notify, tag, free);
             } else
                 free (tag);
         }
         if (zmsg_pushstr (zmsg, "%s", c->uuid) < 0)
-            err_exit ("zmsg_pushmem");
+            oom ();
         flux_request_sendmsg (ctx->h, &zmsg);
     }
 done:
@@ -220,27 +243,29 @@ done:
     return 0;
 }
 
-static int client_cb (zloop_t *zl, zmq_pollitem_t *zp, client_t *c)
+static int client_cb (flux_t h, int fd, short revents, void *arg)
 {
+    client_t *c = arg;
     ctx_t *ctx = c->ctx;
     bool delete = false;
 
-    if (zp->revents & ZMQ_POLLIN) {
+    if (revents & ZMQ_POLLIN) {
         while (client_read (ctx, c) != -1)
             ;
         if (errno != EWOULDBLOCK && errno != EAGAIN)
             delete = true;
     }
-    if (zp->revents & ZMQ_POLLERR)
+    if (revents & ZMQ_POLLERR)
         delete = true;
 
     if (delete) {
-        /*  Cancel this client's fd from the zloop and destroy client
+        /*  Cancel this client's fd from the reactor and destroy client
          */
-        zloop_poller_end (zl, zp);
-        client_destroy (ctx, c);
+        flux_fdhandler_remove (h, fd, ZMQ_POLLIN | ZMQ_POLLERR);
+        zlist_remove (ctx->clients, c);
+        client_destroy (c);
     }
-    return (0);
+    return 0;
 }
 
 static void recv_response (ctx_t *ctx, zmsg_t **zmsg)
@@ -250,7 +275,7 @@ static void recv_response (ctx_t *ctx, zmsg_t **zmsg)
     client_t *c;
 
     if (zmsg_hopcount (*zmsg) != 1) {
-        msg ("apisrv: ignoring response with bad envelope");
+        flux_log (ctx->h, LOG_ERR, "dropping response with bad envelope");
         return;
     }
     uuid = zmsg_popstr (*zmsg);
@@ -259,98 +284,107 @@ static void recv_response (ctx_t *ctx, zmsg_t **zmsg)
     assert (zf != NULL);
     assert (zframe_size (zf) == 0);
 
-    for (c = ctx->clients; c != NULL && *zmsg != NULL; ) {
-
+    c = zlist_first (ctx->clients);
+    while (c && *zmsg) {
         if (!strcmp (uuid, c->uuid)) {
-            if (zmsg_send_fd (c->fd, zmsg) < 0)
+            if (zmsg_send_fd_typemask (c->fd, FLUX_MSGTYPE_RESPONSE, zmsg) < 0)
                 zmsg_destroy (zmsg);
             break;
         }
-        c = c->next;
+        c = zlist_next (ctx->clients);
     }
-    if (*zmsg) {
-        //msg ("apisrv: discarding response for unknown uuid %s", uuid);
-        zmsg_destroy (zmsg);
-    }
+    if (*zmsg)
+        zmsg_destroy (zmsg); /* discard response for unknown uuid */
     if (zf)
         zframe_destroy (&zf);
     if (uuid)
         free (uuid);
 }
 
-static int match_subscription (const char *key, void *item, void *arg)
-{
-    return cmb_msg_match_substr ((zmsg_t *)arg, key, NULL) ? 1 : 0;
-}
-
 static void recv_event (ctx_t *ctx, zmsg_t **zmsg)
 {
     client_t *c;
+    char *tag = flux_zmsg_tag (*zmsg);
+    zmsg_t *cpy;
 
-    for (c = ctx->clients; c != NULL; ) {
-        zmsg_t *cpy;
-
-        if (zhash_foreach (c->event_subscriptions, match_subscription, *zmsg)) {
-            if (!(cpy = zmsg_dup (*zmsg)))
-                oom ();
-            if (zmsg_send_fd (c->fd, &cpy) < 0)
-                zmsg_destroy (&cpy);
+    if (tag) {
+        c = zlist_first (ctx->clients);
+        while (c) {
+            if (subscription_match (c, FLUX_MSGTYPE_EVENT, tag)) {
+                if (!(cpy = zmsg_dup (*zmsg)))
+                    oom ();
+                if (zmsg_send_fd_typemask (c->fd, FLUX_MSGTYPE_EVENT, &cpy) < 0)
+                    zmsg_destroy (&cpy);
+            }
+            c = zlist_next (ctx->clients);
         }
-        c = c->next;
+        free (tag);
     }
 }
 
 static void recv_snoop (ctx_t *ctx, zmsg_t **zmsg)
 {
     client_t *c;
+    char *tag = flux_zmsg_tag (*zmsg);
+    zmsg_t *cpy;
 
-    for (c = ctx->clients; c != NULL; ) {
-        zmsg_t *cpy;
-
-        if (zhash_foreach (c->snoop_subscriptions, match_subscription, *zmsg)) {
-            if (!(cpy = zmsg_dup (*zmsg)))
-                oom ();
-            if (zmsg_send_fd (c->fd, &cpy) < 0)
-                zmsg_destroy (&cpy);
+    if (tag) {
+        c = zlist_first (ctx->clients);
+        while (c) {
+            if (subscription_match (c, FLUX_MSGTYPE_SNOOP, tag)) {
+                if (!(cpy = zmsg_dup (*zmsg)))
+                    oom ();
+                if (zmsg_send_fd_typemask (c->fd, FLUX_MSGTYPE_SNOOP, &cpy) < 0)
+                    zmsg_destroy (&cpy);
+            }
+            c = zlist_next (ctx->clients);
         }
-        c = c->next;
+        free (tag);
     }
 }
 
-static void apisrv_recv (flux_t h, zmsg_t **zmsg, zmsg_type_t type)
+static int apisrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
 {
     ctx_t *ctx = getctx (h);
 
-    switch (type) {
-        case ZMSG_REQUEST:
-            break;
-        case ZMSG_EVENT:
-            recv_event (ctx, zmsg);
-            break;
-        case ZMSG_RESPONSE:
-            recv_response (ctx, zmsg);
-            break;
-        case ZMSG_SNOOP:
-            recv_snoop (ctx, zmsg);
-            break;
-    }
+    if ((typemask & FLUX_MSGTYPE_EVENT))
+        recv_event (ctx, zmsg);
+    else if ((typemask & FLUX_MSGTYPE_RESPONSE))
+        recv_response (ctx, zmsg);
+    else if ((typemask & FLUX_MSGTYPE_SNOOP))
+        recv_snoop (ctx, zmsg);
+    return 0;
 }
 
-static int listener_cb (zloop_t *zl, zmq_pollitem_t *zp, ctx_t *ctx)
+static int listener_cb (flux_t h, int fd, short revents, void *arg)
 {
-    if (zp->revents & ZMQ_POLLIN) {       /* listenfd */
-        zloop_t *zloop = flux_get_zloop (ctx->h);
-        zmq_pollitem_t nzp = { .events = ZMQ_POLLIN | ZMQ_POLLERR };
-        client_t *c;
+    ctx_t *ctx = arg;
+    int rc = 0;
 
-        if ((nzp.fd = accept (ctx->listen_fd, NULL, NULL)) < 0)
-            err_exit ("accept");
-        c = client_create (ctx, nzp.fd);
-        zloop_poller (zloop, &nzp, (zloop_fn *) client_cb, (void *) c);
+    if (revents & ZMQ_POLLIN) {
+        client_t *c;
+        int cfd;
+
+        if ((cfd = accept (fd, NULL, NULL)) < 0) {
+            flux_log (h, LOG_ERR, "accept: %s", strerror (errno));
+            goto done;
+        }
+        c = client_create (ctx, cfd);
+        if (zlist_append (ctx->clients, c) < 0)
+            oom ();
+        if (flux_fdhandler_add (h, cfd, ZMQ_POLLIN | ZMQ_POLLERR,
+                                                    client_cb, c) < 0) {
+            flux_log (h, LOG_ERR, "flux_fdhandler_add: %s", strerror (errno));
+            rc = -1; /* terminate reactor */
+            goto done;
+        }
     }
-    if (zp->revents & ZMQ_POLLERR)       /* listenfd - error */
-        err_exit ("apisrv: poll on listen fd");
-    return (0);
+    if (revents & ZMQ_POLLERR) {
+        flux_log (h, LOG_ERR, "poll listen fd: %s", strerror (errno));
+        goto done;
+    }
+done:
+    return rc;
 }
 
 static int listener_init (ctx_t *ctx, char *sockpath)
@@ -360,11 +394,11 @@ static int listener_init (ctx_t *ctx, char *sockpath)
 
     fd = socket (AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) {
-        err ("socket");
+        flux_log (ctx->h, LOG_ERR, "socket: %s", strerror (errno));
         goto done;
     }
     if (remove (sockpath) < 0 && errno != ENOENT) {
-        err ("remove %s", sockpath);
+        flux_log (ctx->h, LOG_ERR, "remove %s: %s", sockpath, strerror (errno));
         goto error_close;
     }
     memset (&addr, 0, sizeof (struct sockaddr_un));
@@ -372,11 +406,11 @@ static int listener_init (ctx_t *ctx, char *sockpath)
     strncpy (addr.sun_path, sockpath, sizeof (addr.sun_path) - 1);
 
     if (bind (fd, (struct sockaddr *)&addr, sizeof (struct sockaddr_un)) < 0) {
-        err ("bind");
+        flux_log (ctx->h, LOG_ERR, "bind: %s", strerror (errno));
         goto error_close;
     }
     if (listen (fd, LISTEN_BACKLOG) < 0) {
-        err ("listen");
+        flux_log (ctx->h, LOG_ERR, "listen: %s", strerror (errno));
         goto error_close;
     }
 done:
@@ -389,8 +423,6 @@ error_close:
 static int apisrv_init (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
-    zloop_t *zloop = flux_get_zloop (h);
-    zmq_pollitem_t zp = { .events = ZMQ_POLLIN | ZMQ_POLLERR };
     char *sockpath = NULL, *dfltpath = NULL;
     int rc = -1;
 
@@ -399,9 +431,12 @@ static int apisrv_init (flux_t h, zhash_t *args)
             oom ();
         sockpath = dfltpath;
     }
-    if ((zp.fd = ctx->listen_fd = listener_init (ctx, sockpath)) < 0)
+    if ((ctx->listen_fd = listener_init (ctx, sockpath)) < 0)
         goto done;
-    zloop_poller (zloop, &zp, (zloop_fn *) listener_cb, (void *)ctx);
+    if (flux_fdhandler_add (h, ctx->listen_fd, ZMQ_POLLIN | ZMQ_POLLERR,
+                                                    listener_cb, ctx) < 0)
+        flux_log (h, LOG_ERR, "flux_fdhandler_add listen_fd: %s",
+                  strerror (errno));
     rc = 0;
 done:
     if (dfltpath)
@@ -412,11 +447,12 @@ done:
 static void apisrv_fini (flux_t h)
 {
     ctx_t *ctx = getctx (h);
+    client_t *c;
 
     if (close (ctx->listen_fd) < 0)
-        err_exit ("listen");
-    while (ctx->clients != NULL)
-        client_destroy (ctx, ctx->clients);
+        flux_log (h, LOG_ERR, "close listen_fd: %s", strerror (errno));
+    while ((c = zlist_pop (ctx->clients)))
+        client_destroy (c);
 }
 
 const struct plugin_ops ops = {
