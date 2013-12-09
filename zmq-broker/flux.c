@@ -19,6 +19,9 @@
 #include "util.h"
 #include "zmsg.h"
 
+static char  flux_exe_path [MAXPATHLEN];
+static char *flux_exe_dir;
+
 void exec_subcommand (const char *exec_path, char *argv[]);
 
 #define OPTIONS "+s:tx:h"
@@ -59,6 +62,21 @@ static void help (void)
 );
 }
 
+int setup_lua_env (const char *exedir)
+{
+    char *s;
+
+    /* XXX: For now Lua paths are set relative to path of the executable.
+     *  Once we know where these things will be installed we can make these
+     *  paths configurable on installation.
+     */
+    s = getenv ("LUA_CPATH");
+    setenvf ("LUA_CPATH", 1, "%s/dlua/?.so;%s", exedir, s ? s : ";;");
+    s = getenv ("LUA_PATH");
+    setenvf ("LUA_PATH", 1, "%s/dlua/?.lua;%s", exedir, s ? s : ";;");
+    return (0);
+}
+
 int main (int argc, char *argv[])
 {
     int ch;
@@ -92,6 +110,16 @@ int main (int argc, char *argv[])
     argc -= optind;
     argv += optind;
 
+    /*  Set global execpath to path to this executable.
+     *   (using non-portable /proc/self/exe support for now)
+     */
+    memset (flux_exe_path, 0, MAXPATHLEN);
+    if (readlink ("/proc/self/exe", flux_exe_path, MAXPATHLEN - 1) < 0)
+        err_exit ("readlink (/proc/self/exe)");
+    flux_exe_dir = dirname (flux_exe_path);
+
+    setup_lua_env (flux_exe_dir);
+
     if (!(exec_path = getenv ("FLUX_EXEC_PATH"))) {
         exec_path = EXEC_PATH;
         if (setenv ("FLUX_EXEC_PATH", exec_path, 1) < 0)
@@ -117,18 +145,26 @@ int main (int argc, char *argv[])
     return 0;
 }
 
+void exec_subcommand_dir (const char *dir, char *argv[], const char *prefix)
+{
+    char *path;
+    if (asprintf (&path, "%s/%s%s", dir, prefix ? prefix : "", argv[0]) < 0)
+        oom ();
+    execvp (path, argv); /* no return if successful */
+    free (path);
+}
+
 void exec_subcommand (const char *searchpath, char *argv[])
 {
     char *cpy = xstrdup (searchpath);
-    char *path, *dir, *saveptr, *a1 = cpy;
+    char *dir, *saveptr, *a1 = cpy;
 
     while ((dir = strtok_r (a1, ":", &saveptr))) {
-        if (asprintf (&path, "%s/%s", dir, argv[0]) < 0)
-            oom ();
-        execvp (path, argv); /* no return if successful */
-        free (path);
+        exec_subcommand_dir (dir, argv, NULL);
         a1 = NULL;
     }
+    /* Also try flux_exe_path with flux- prepended */
+    exec_subcommand_dir (flux_exe_dir, argv, "flux-");
     free (cpy);
     msg_exit ("`%s' is not a flux command.  See 'flux --help'", argv[0]);
 }

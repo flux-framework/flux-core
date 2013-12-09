@@ -75,15 +75,6 @@ static int rexec_session_connect_to_helper (struct rexec_session *c)
     return (0);
 }
 
-static json_object * rexec_session_json (struct rexec_session *c)
-{
-    json_object *o = json_object_new_object ();
-    util_json_object_add_int (o, "nodeid", c->rank);
-    util_json_object_add_int64 (o, "id", c->id);
-    return (o);
-}
-
-
 static struct rexec_session * rexec_session_create (struct rexec_ctx *ctx, int64_t id)
 {
     struct rexec_session *c = xzmalloc (sizeof (*c));
@@ -188,7 +179,7 @@ static char ** rexec_session_args_create (struct rexec_session *s)
 
     args [0] = strdup (REXECD_PATH);
     args [1] = strdup (buf);
-    args [2] = strdup ("--parent-fd=0");
+    args [2] = strdup ("--parent-fd=3");
     args [3] = NULL;
 
     return (args);
@@ -212,29 +203,20 @@ static void exec_handler (struct rexec_session *s, int *pfds)
     /*
      *  Grandchild performs the exec
      */
-    dup2 (pfds[0], STDIN_FILENO);
-    dup2 (pfds[0], STDOUT_FILENO);
-    closeall (3);
+    //dup2 (pfds[0], STDIN_FILENO);
+    dup2 (pfds[0], 3);
+    closeall (4);
     msg ("running %s %s %s", args[0], args[1], args[2]);
     if (execvp (args[0], args) < 0) {
-        close (STDOUT_FILENO);
+        close (3);
         err_exit ("execvp");
     }
     exit (255);
 }
 
-static zmsg_t *rexec_session_handler_msg_create (struct rexec_session *s)
-{
-    json_object *o = rexec_session_json (s);
-    zmsg_t *zmsg = cmb_msg_encode ("rexec.run", o);
-    json_object_put (o);
-    return (zmsg);
-}
-
 static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
 {
     struct rexec_session *cli;
-    zmsg_t *zmsg;
     int fds[2];
     char c;
     int n;
@@ -262,17 +244,14 @@ static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
      *  Close child side of socketpair and send zmsg to (grand)child
      */
     close (fds[0]);
-    zmsg = rexec_session_handler_msg_create (cli);
-    zmsg_send_fd (fds[1], &zmsg);
 
     /* Blocking wait for exec helper to close fd */
     n = read (fds[1], &c, 1);
-    close (fds[1]);
-
     if (n < 1) {
-        msg ("Error reading status from rexecd");
+        msg ("Error reading status from rexecd: %s", strerror (errno));
         return (-1);
     }
+    close (fds[1]);
 
     rexec_session_connect_to_helper (cli);
     rexec_session_add (ctx, cli);
@@ -284,10 +263,11 @@ static struct rexec_session *rexec_session_lookup (struct rexec_ctx *ctx, int64_
     /* Warning: zlist has no search. linear search here */
     struct rexec_session *s;
     s = zlist_first (ctx->session_list);
-    do {
+    while (s) {
         if (s->id == id)
             return (s);
-    } while ((s = zlist_next (ctx->session_list)));
+        s = zlist_next (ctx->session_list);
+    }
     return (NULL);
 }
 
@@ -357,6 +337,77 @@ static int rexec_kill (struct rexec_ctx *ctx, int64_t id, int sig)
     return rexec_session_kill (s, sig);
 }
 
+static int mrpc_respond_errnum (flux_mrpc_t mrpc, int errnum)
+{
+    json_object *o = json_object_new_object ();
+    util_json_object_add_int (o, "errnum", errnum);
+    flux_mrpc_put_outarg (mrpc, o);
+    json_object_put (o);
+    return (0);
+}
+
+static int mrpc_handler (struct rexec_ctx *ctx, zmsg_t *zmsg)
+{
+    int64_t id;
+    const char *method;
+    json_object *inarg = NULL;
+    json_object *request = NULL;
+    int rc = -1;
+    flux_t f = ctx->h;
+    flux_mrpc_t mrpc;
+
+    cmb_msg_decode (zmsg, NULL, &request);
+
+    mrpc = flux_mrpc_create_fromevent (f, request);
+    if (mrpc == NULL) {
+        if (errno != EINVAL) /* EINVAL == not addressed to me */
+            flux_log (f, LOG_ERR, "flux_mrpc_create_fromevent: %s",
+                      strerror (errno));
+        return (0);
+    }
+    if (flux_mrpc_get_inarg (mrpc, &inarg) < 0) {
+        flux_log (f, LOG_ERR, "flux_mrpc_get_inarg: %s", strerror (errno));
+        goto done;
+    }
+    if (util_json_object_get_int64 (inarg, "id", &id) < 0) {
+        mrpc_respond_errnum (mrpc, errno);
+        flux_log (f, LOG_ERR, "rexec mrpc failed to get arg `id'");
+        goto done;
+    }
+    if (util_json_object_get_string (inarg, "method", &method) < 0) {
+        mrpc_respond_errnum (mrpc, errno);
+        flux_log (f, LOG_ERR, "rexec mrpc failed to get arg `id'");
+        goto done;
+    }
+
+    if (strcmp (method, "run") == 0) {
+        rc = spawn_exec_handler (ctx, id);
+    }
+    else if (strcmp (method, "kill") == 0) {
+        int sig = -1;
+        util_json_object_get_int (inarg, "signal", &sig);
+        if (sig == -1)
+            sig = 9;
+        rc = rexec_kill (ctx, id, sig);
+    }
+    else {
+        mrpc_respond_errnum (mrpc, EINVAL);
+        flux_log (f, LOG_ERR, "rexec mrpc failed to get arg `id'");
+    }
+
+done:
+    flux_mrpc_respond (mrpc);
+    flux_mrpc_destroy (mrpc);
+
+    if (request)
+        json_object_put (request);
+    if (inarg)
+        json_object_put (inarg);
+    if (mrpc)
+        flux_mrpc_destroy (mrpc);
+    return (rc);
+}
+
 static void handle_event (struct rexec_ctx *ctx, zmsg_t **zmsg)
 {
     char *tag = cmb_msg_tag (*zmsg, false);
@@ -374,7 +425,12 @@ static void handle_event (struct rexec_ctx *ctx, zmsg_t **zmsg)
             sig = atoi (endptr);
         rexec_kill (ctx, id, sig);
     }
+    else if (strncmp (tag, "mrpc.rexec", 10) == 0) {
+        mrpc_handler (ctx, *zmsg);
+    }
     free (tag);
+    if (zmsg && *zmsg)
+        zmsg_destroy (zmsg);
 }
 
 static void handle_request (struct rexec_ctx *ctx, zmsg_t **zmsg)
@@ -405,6 +461,7 @@ static int rexec_init (flux_t h, zhash_t *args)
 {
     flux_event_subscribe (h, "event.rexec.run.");
     flux_event_subscribe (h, "event.rexec.kill.");
+    flux_event_subscribe (h, "mrpc.rexec");
     return 0;
 }
 

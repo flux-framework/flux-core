@@ -37,21 +37,28 @@ static int l_kvsdir_destroy (lua_State *L)
     return (0);
 }
 
+int l_push_kvsdir (lua_State *L, kvsdir_t dir)
+{
+    kvsdir_t *new = lua_newuserdata (L, sizeof (*new));
+    *new = dir;
+    return l_kvsdir_instantiate (L);
+}
+
 static int l_kvsdir_kvsdir_new (lua_State *L)
 {
     const char *key;
-    kvsdir_t *new;
+    kvsdir_t new;
     kvsdir_t d;
 
     d = lua_get_kvsdir (L, 1);
     key = luaL_checkstring (L, 2);
 
-    new = lua_newuserdata (L, sizeof (*new));
-    if (kvsdir_get_dir (d, new, key) < 0)
+    if (kvsdir_get_dir (d, &new, key) < 0)
         return lua_pusherror (L, "kvsdir_get_dir: %s", strerror (errno));
 
-    return l_kvsdir_instantiate (L);
+    return l_push_kvsdir (L, new);
 }
+
 static int l_kvsdir_tostring (lua_State *L)
 {
     kvsdir_t d = lua_get_kvsdir (L, 1);
@@ -89,7 +96,7 @@ static int l_kvsdir_newindex (lua_State *L)
                             lua_typename (L, lua_type (L, 3)));
     }
     if (rc < 0)
-        return luaL_error (L, "kvsdir_put (key=%s, type=%s): %s",
+        return lua_pusherror (L, "kvsdir_put (key=%s, type=%s): %s",
                            key, lua_typename (L, lua_type (L, 3)),
                            strerror (errno));
     return (0);
@@ -171,7 +178,6 @@ static int l_kvsdir_watch (lua_State *L)
     json_object *o;
     kvsdir_t dir;
 
-
     dir = lua_get_kvsdir (L, 1);
     h = kvsdir_handle (dir);
     key = kvsdir_key_at (dir, lua_tostring (L, 2));
@@ -197,41 +203,69 @@ err:
     return (1);
 }
 
+static int l_kvsdir_watch_dir (lua_State *L)
+{
+    flux_t h;
+    kvsdir_t dir;
+
+    dir = lua_get_kvsdir (L, 1);
+    h = kvsdir_handle (dir);
+
+    return l_pushresult (L, kvs_watch_once_dir (h, &dir, kvsdir_key (dir)));
+}
 
 static int l_kvsdir_index (lua_State *L)
 {
+    int rc;
+    flux_t f;
     kvsdir_t d;
     const char *key = lua_tostring (L, 2);
+    char *fullkey = NULL;
+    json_object *o = NULL;
 
     if (key == NULL)
         return luaL_error (L, "kvsdir: invalid index");
-
+    /*
+     *  To support indeces like kvsdir ["a.relative.path"] we have
+     *   to pretend that kvsdir objects support this kind of
+     *   non-local indexing by using full paths and flux handle :-(
+     */
     d = lua_get_kvsdir (L, 1);
+    f = kvsdir_handle (d);
+    fullkey = kvsdir_key_at (d, key);
 
-    if (!kvsdir_exists (d, key)) {
-        /* First check metatable to see if this is a method */
+    if (kvs_get (f, fullkey, &o) == 0)
+        rc = json_object_to_lua (L, o);
+    else if (errno == EISDIR)
+        rc = l_kvsdir_kvsdir_new (L);
+    else {
+        /* No key. First check metatable to see if this is a method */
         lua_getmetatable (L, 1);
         lua_getfield (L, -1, key);
-        if (lua_isnil (L, -1))
-            return lua_pusherror (L, "Key not found.");
-        return (1);
+
+        /* If not then return error */
+        if (lua_isnil (L, -1)) {
+             rc = lua_pusherror (L, "Key not found.");
+            goto out;
+        }
+        rc = 1;
     }
-    if (kvsdir_isdir (d, key))
-        return l_kvsdir_kvsdir_new (L);
-    else {
-        json_object *o;
-        kvsdir_get (d, key, &o);
-        json_object_to_lua (L, o);
-    }
-    return (1);
+out:
+    if (o)
+        json_object_put (o);
+    free (fullkey);
+    return (rc);
 }
 
-
+#if 0
 static const struct luaL_Reg kvsdir_functions [] = {
-    { "commit",          l_kvsdir_commit   },
-    { "keys",            l_kvsdir_next     },
-    { "watch",           l_kvsdir_watch    },
+    { "commit",          l_kvsdir_commit    },
+    { "keys",            l_kvsdir_next      },
+    { "watch",           l_kvsdir_watch     },
+    { "watch_dir",       l_kvsdir_watch_dir },
+    { NULL,              NULL               },
 };
+#endif
 
 static const struct luaL_Reg kvsitr_methods [] = {
     { "__gc",           l_kvsitr_destroy   },
@@ -243,6 +277,10 @@ static const struct luaL_Reg kvsdir_methods [] = {
     { "__index",         l_kvsdir_index    },
     { "__newindex",      l_kvsdir_newindex },
     { "__tostring",      l_kvsdir_tostring },
+    { "commit",          l_kvsdir_commit   },
+    { "keys",            l_kvsdir_next     },
+    { "watch",           l_kvsdir_watch    },
+    { "watch_dir",       l_kvsdir_watch_dir},
     { NULL,              NULL              }
 };
 
@@ -258,7 +296,7 @@ int l_kvsdir_register_metatable (lua_State *L)
 int luaopen_kvs (lua_State *L)
 {
     l_kvsdir_register_metatable (L);
-    luaL_register (L, "kvsdir", kvsdir_functions);
+    //luaL_register (L, "kvsdir", kvsdir_functions);
     return (1);
 }
 

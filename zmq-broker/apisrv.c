@@ -413,6 +413,8 @@ static int listener_init (ctx_t *ctx, char *sockpath)
         flux_log (ctx->h, LOG_ERR, "listen: %s", strerror (errno));
         goto error_close;
     }
+    if (setenv ("CMB_API_PATH", sockpath, 1) < 0)
+        err_exit ("setenv (CMB_API_PATH=%s)", sockpath);
 done:
     return fd;
 error_close:
