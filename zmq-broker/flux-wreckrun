@@ -114,7 +114,7 @@ if optind > #arg then
     usage_and_exit (1)
 end
 
-local nprocs = opts.n or 1
+local nprocs = tonumber (opts.n) or 1
 local cmdline = {}
 for i = optind, #arg do
     table.insert (cmdline, arg[i])
@@ -173,6 +173,8 @@ local sigtimer = nil
 repeat
  local r,err = lwj:watch ("state", r)
  if r then log_msg ("%-4.03fs: State = %s\n", tt:get0(), r) end
+
+ if not r then log_msg ("%s\n", err) end
 
  --
  --  If we catch a signal then lwj:watch() will be interrupted.
