@@ -29,19 +29,21 @@ zmsg_t *l_cmb_zmsg_encode (lua_State *L)
 static int l_zi_resp_cb (lua_State *L,
     struct zmsg_info *zi, json_object *resp, void *arg)
 {
-    zmsg_t *zmsg = zmsg_dup ((zmsg_t *) zmsg_info_zmsg (zi));
+    zmsg_t **old = zmsg_info_zmsg (zi);
+    zmsg_t **zmsg = malloc (sizeof (*zmsg));
+    *zmsg = zmsg_dup (*old);
 
-    if (cmb_msg_replace_json (zmsg, resp) < 0)
+    if (cmb_msg_replace_json (*zmsg, resp) < 0)
         return lua_pusherror (L, "cmb_msg_replace_json: %s", strerror (errno));
 
-    return lua_push_zmsg_info (L, zmsg_info_create (zmsg, ZMSG_RESPONSE));
+    return lua_push_zmsg_info (L, zmsg_info_create (zmsg, FLUX_MSGTYPE_RESPONSE));
 }
 
-static int l_cmb_zmsg_create_type (lua_State *L, zmsg_type_t type)
+static int l_cmb_zmsg_create_type (lua_State *L, int type)
 {
     struct zmsg_info *zi;
-	zmsg_t *zmsg;
-	if ((zmsg = l_cmb_zmsg_encode (L)) == NULL)
+	zmsg_t **zmsg = malloc (sizeof (*zmsg));
+	if ((*zmsg = l_cmb_zmsg_encode (L)) == NULL)
         return luaL_error (L, "Failed to encode zmsg");
     zi = zmsg_info_create (zmsg, type);
     zmsg_info_register_resp_cb (zi, l_zi_resp_cb, NULL);
@@ -51,22 +53,22 @@ static int l_cmb_zmsg_create_type (lua_State *L, zmsg_type_t type)
 
 static int l_cmb_zmsg_create_response (lua_State *L)
 {
-    return l_cmb_zmsg_create_type (L, ZMSG_RESPONSE);
+    return l_cmb_zmsg_create_type (L, FLUX_MSGTYPE_RESPONSE);
 }
 
 static int l_cmb_zmsg_create_request (lua_State *L)
 {
-    return l_cmb_zmsg_create_type (L, ZMSG_REQUEST);
+    return l_cmb_zmsg_create_type (L, FLUX_MSGTYPE_REQUEST);
 }
 
 static int l_cmb_zmsg_create_event (lua_State *L)
 {
-    return l_cmb_zmsg_create_type (L, ZMSG_EVENT);
+    return l_cmb_zmsg_create_type (L, FLUX_MSGTYPE_EVENT);
 }
 
 static int l_cmb_zmsg_create_snoop (lua_State *L)
 {
-    return l_cmb_zmsg_create_type (L, ZMSG_SNOOP);
+    return l_cmb_zmsg_create_type (L, FLUX_MSGTYPE_SNOOP);
 }
 
 static const struct luaL_Reg zmsg_info_test_functions [] = {

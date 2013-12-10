@@ -17,8 +17,8 @@
  */
 
 struct zmsg_info {
-    zmsg_type_t type;
-    zmsg_t *zmsg;
+    int     typemask;
+    zmsg_t **zmsg;
     char *tag;
     json_object *o;
 
@@ -26,21 +26,21 @@ struct zmsg_info {
     void *arg;
 };
 
-static const char * zmsg_type_string (zmsg_type_t type);
+static const char * zmsg_type_string (int typemask);
 
-struct zmsg_info * zmsg_info_create (zmsg_t *zmsg, zmsg_type_t type)
+struct zmsg_info * zmsg_info_create (zmsg_t **zmsg, int typemask)
 {
     struct zmsg_info *zi = malloc (sizeof (*zi));
     if (zi == NULL)
         return (NULL);
 
-    if (cmb_msg_decode (zmsg, &zi->tag, &zi->o) < 0) {
+    if (cmb_msg_decode (*zmsg, &zi->tag, &zi->o) < 0) {
         free (zi);
         return (NULL);
     }
 
     zi->zmsg = zmsg;
-    zi->type = type;
+    zi->typemask = typemask;
 
     zi->resp = NULL;
     zi->arg = NULL;
@@ -50,8 +50,8 @@ struct zmsg_info * zmsg_info_create (zmsg_t *zmsg, zmsg_type_t type)
 
 static void zmsg_info_destroy (struct zmsg_info *zi)
 {
-    if (zi->zmsg)
-        zmsg_destroy (&zi->zmsg);
+    if (zi->zmsg && *zi->zmsg)
+        zmsg_destroy (zi->zmsg);
     if (zi->o)
         json_object_put (zi->o);
     if (zi->tag)
@@ -64,7 +64,7 @@ const json_object *zmsg_info_json (struct zmsg_info *zi)
     return (zi->o);
 }
 
-const zmsg_t *zmsg_info_zmsg (struct zmsg_info *zi)
+zmsg_t **zmsg_info_zmsg (struct zmsg_info *zi)
 {
     return (zi->zmsg);
 }
@@ -89,20 +89,20 @@ static int l_zmsg_info_destroy (lua_State *L)
     return (0);
 }
 
-static const char * zmsg_type_string (zmsg_type_t type)
+static const char * zmsg_type_string (int type)
 {
     switch (type) {
-        case ZMSG_REQUEST:
+        case FLUX_MSGTYPE_REQUEST:
             return ("request");
-            break;
-        case ZMSG_EVENT:
+        case FLUX_MSGTYPE_EVENT:
             return ("event");
-            break;
-        case ZMSG_RESPONSE:
+        case FLUX_MSGTYPE_RESPONSE:
             return ("response");
-            break;
-        case ZMSG_SNOOP:
+        case FLUX_MSGTYPE_SNOOP:
             return ("snoop");
+        case FLUX_MSGTYPE_ANY:
+            return ("all");
+        default:
             break;
     }
     return ("Unknown");
@@ -116,7 +116,7 @@ static int l_zmsg_info_index (lua_State *L)
         return lua_pusherror (L, "zmsg: invalid member");
 
     if (strcmp (key, "type") == 0) {
-        lua_pushstring (L, zmsg_type_string (zi->type));
+        lua_pushstring (L, zmsg_type_string (zi->typemask));
         return (1);
     }
     if (strcmp (key, "tag") == 0) {
