@@ -13,11 +13,13 @@
 #include "cmb.h"
 #include "flux.h"
 #include "mrpc.h"
+#include "reactor.h"
 
 #include "json-lua.h"
 #include "kvs-lua.h"
 #include "zmsg-lua.h"
 #include "lutil.h"
+
 
 int lua_push_flux_handle (lua_State *L, flux_t f)
 {
@@ -437,6 +439,206 @@ static int l_flux_mrpc_new (lua_State *L)
     return lua_push_mrpc (L, m);
 }
 
+/*
+ *  Reactor:
+ */
+
+/*
+ *  Convert a table of flux.TYPEMASK to int typemask
+ */
+static int l_get_typemask (lua_State *L, int index)
+{
+    int top = lua_gettop (L);
+    int typemask = 0;
+    /* Copy table to top of stack: */
+    lua_pushvalue (L, index);
+    lua_pushnil (L);
+
+    while (lua_next (L, -2)) {
+        int mask = lua_tointeger (L, -2);
+        if (mask == 0) {
+            lua_settop (L, top);
+            return (0);
+        }
+        typemask = typemask | mask;
+    }
+    lua_pop (L, 1);
+    return typemask;
+}
+
+static int l_get_flux_reftable (lua_State *L, flux_t f)
+{
+    /*
+     *  Use flux handle as lightuserdata index into registry.
+     *   This allows multiple flux handles per lua_State.
+     */
+    lua_pushlightuserdata (L, (void *)f);
+    lua_gettable (L, LUA_REGISTRYINDEX);
+
+    if (lua_isnil (L, -1)) {
+        lua_pop (L, 1);
+        /*   New table indexed by flux handle address */
+        lua_pushlightuserdata (L, (void *)f);
+        lua_newtable (L);
+        lua_settable (L, LUA_REGISTRYINDEX);
+
+        /*  Create internal flux table entries */
+
+        /*  Get table again */
+        lua_pushlightuserdata (L, (void *)f);
+        lua_gettable (L, LUA_REGISTRYINDEX);
+
+        lua_newtable (L);
+        lua_setfield (L, -2, "msghandlers");
+        lua_newtable (L);
+        lua_setfield (L, -2, "fdhandlers");
+    }
+
+    return (1);
+}
+
+int *lua_flux_msghandler_create (lua_State *L, flux_t f, int index)
+{
+    int ref;
+    int *refp;
+    /*
+     *  Store the msghandler table at index into the flux.msghandlers array
+     */
+    l_get_flux_reftable (L, f);
+    lua_getfield (L, -1, "msghandlers");
+    lua_pushvalue (L, index);
+
+    ref = luaL_ref (L, -2);
+
+    refp = lua_newuserdata (L, sizeof (*refp));
+    luaL_getmetatable (L, "FLUX.msghandler");
+    lua_setmetatable (L, -2);
+    *refp = ref;
+
+    return (refp);
+}
+
+static int l_get_msghandler_table (lua_State *L, flux_t f, int ref)
+{
+    l_get_flux_reftable (L, f);
+    lua_getfield (L, -1, "msghandlers");
+    lua_rawgeti (L, -1, ref);
+    return (1);
+}
+
+static int l_f_zi_resp_cb (lua_State *L,
+    struct zmsg_info *zi, json_object *resp, void *arg)
+{
+    flux_t f = arg;
+    return l_pushresult (L, flux_respond (f, zmsg_info_zmsg (zi), resp));
+}
+
+static int create_and_push_zmsg_info (lua_State *L,
+        flux_t f, int typemask, zmsg_t **zmsg)
+{
+    struct zmsg_info * zi = zmsg_info_create (zmsg, typemask);
+    zmsg_info_register_resp_cb (zi, (zi_resp_f) l_f_zi_resp_cb, (void *) f);
+    return lua_push_zmsg_info (L, zi);
+}
+
+static int msghandler (flux_t f, int typemask, zmsg_t **zmsg, void *arg)
+{
+    int rc;
+    int *refp = arg;
+    lua_State *L = flux_aux_get (f, "lua_State");
+    assert (L != NULL);
+
+    l_get_msghandler_table (L, f, *refp);
+    lua_getfield (L, -1, "handler");
+    assert (!lua_isnoneornil (L, -1));
+
+    lua_push_flux_handle (L, f);
+    create_and_push_zmsg_info (L, f, typemask, zmsg);
+    lua_pushvalue (L, -4);
+
+    if (lua_pcall (L, 3, 1, 0) < 0)
+        return luaL_error (L, "Call of msghandler failed!");
+
+    rc = lua_tonumber (L, -1);
+    return (rc);
+}
+
+static int l_msghandler_remove (lua_State *L)
+{
+    const char *pattern;
+    int typemask;
+
+    flux_t f = lua_get_flux (L, 1);
+    int *refp = luaL_checkudata (L, 2, "FLUX.msghandler");
+
+    l_get_flux_reftable (L, f);
+    lua_getfield (L, -1, "msghandlers");
+    lua_rawgeti (L, -1, *refp);
+
+    lua_getfield (L, 2, "pattern");
+    pattern = lua_tostring (L, -1);
+    lua_getfield (L, 2, "msgtypes");
+    if (lua_isnil (L, -1))
+        typemask = FLUX_MSGTYPE_ANY;
+    else
+        typemask = l_get_typemask (L, -1);
+
+    luaL_unref (L, -1, *refp);
+    return (1);
+}
+
+static int l_msghandler_add (lua_State *L)
+{
+    const char *pattern;
+    int typemask;
+    int *refp;
+    flux_t f = lua_get_flux (L, 1);
+
+    flux_aux_set (f, "lua_State", (void *) L, NULL);
+
+    if (!lua_istable (L, 2))
+        return lua_pusherror (L, "Expected table as 2nd argument");
+
+    /*
+     *  Check table for mandatory arguments
+     */
+    lua_getfield (L, 2, "pattern");
+    if (lua_isnil (L, -1))
+        return lua_pusherror (L, "Mandatory table argument 'pattern' missing");
+    pattern = lua_tostring (L, -1);
+    lua_pop (L, 1);
+
+    lua_getfield (L, 2, "handler");
+    if (lua_isnil (L, -1))
+        return lua_pusherror (L, "Mandatory table argument 'handler' missing");
+    lua_pop (L, 1);
+
+    lua_getfield (L, 2, "msgtypes");
+    if (lua_isnil (L, -1))
+        typemask = FLUX_MSGTYPE_ANY;
+    else
+        typemask = l_get_typemask (L, -1);
+    if (typemask == 0)
+        return lua_pusherror (L, "Invalid typemask in msghandler");
+    lua_pop (L, 1);
+
+    /*
+     *  Register msghandler object in table referenced by flux handle
+     *   and use this as callback to flux_msghandler call:
+     *
+     */
+    refp = lua_flux_msghandler_create (L, f, 2);
+    l_pushresult (L, flux_msghandler_add (f,
+            typemask, pattern, msghandler, (void *) refp));
+
+    return (1);
+}
+
+static int l_flux_reactor_start (lua_State *L)
+{
+    return l_pushresult (L, flux_reactor_start (lua_get_flux (L, 1)));
+}
+
 static const struct luaL_Reg flux_functions [] = {
     { "new",             l_flux_new         },
     { NULL,              NULL              }
@@ -454,6 +656,10 @@ static const struct luaL_Reg flux_methods [] = {
     { "sendevent",       l_flux_send_event  },
     { "subscribe",       l_flux_subscribe   },
     { "unsubscribe",     l_flux_unsubscribe },
+
+    { "addhandler",      l_msghandler_add    },
+    { "delhandler",      l_msghandler_remove },
+    { "reactor",         l_flux_reactor_start },
     { NULL,              NULL               }
 };
 
