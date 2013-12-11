@@ -71,24 +71,25 @@ int main (int argc, char *argv[])
     if (dopt) {
         if (kvs_dropcache (h) < 0)
             err_exit ("kvs_dropcache");
-    }
+    } else {
+        for (i = 1; i < argc; i++) {
+            char *key = xstrdup (argv[i]);
+            char *val = strchr (key, '=');
 
-    for (i = 1; i < argc; i++) {
-        char *key = xstrdup (argv[i]);
-        char *val = strchr (key, '=');
-
-        if (val) {
-            *val++ = '\0';
-            if (*val)
-                put (h, key, val);
-            else
-                del (h, key);
-            need_commit = true;
-        } else {
-            get (h, key);
-        free (key);
+            if (val) {
+                *val++ = '\0';
+                if (*val)
+                    put (h, key, val);
+                else
+                    del (h, key);
+                need_commit = true;
+            } else {
+                get (h, key);
+            }
+            free (key);
         }
     }
+
     if (need_commit) {
         if (kvs_commit (h) < 0)
             err_exit ("kvs_commit");
