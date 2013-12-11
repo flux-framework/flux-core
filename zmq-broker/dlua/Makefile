@@ -2,11 +2,11 @@
 all: flux.so libdlua.a
 
 topdir   = $(shell cd .. && pwd)
-flux_OBJS += flux-lua.o kvs-lua.o json-lua.o lutil.o
+flux_OBJS += flux-lua.o kvs-lua.o json-lua.o zmsg-lua.o lutil.o
 json_test_OBJS += json-lua.o json-test.o
 zmsg_test_OBJS += zmsg-lua.o zmsg-test.o json-lua.o lutil.o
 
-libdlua_SOURCES := json-lua.c zmsg-lua.c lutil.c flux-lua.c kvs-lua.c
+libdlua_SOURCES := json-lua.c zmsg-lua.c lutil.c flux-lua.c kvs-lua.c zmsg-lua.o
 
 LIBS     += -lcmb
 LDFLAGS  += -L $(topdir)/lib -Wl,-rpath=$(topdir)/lib
