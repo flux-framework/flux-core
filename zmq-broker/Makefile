@@ -24,7 +24,7 @@ export CFLAGS LDFLAGS
 
 LIBUTIL = util/libutil.a
 LIBZUTIL = zutil/libzutil.a
-LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -luuid
+LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -luuid -lutil
 LDADD_SRV = -pthread -rdynamic $(LDADD_CLI) -ldl
 
 COMMON_OBJS = kvscli.o barriercli.o logcli.o cmbdcli.o mrpc.o handle.o
@@ -45,7 +45,7 @@ PLUGINS = plugins/apisrv.so plugins/syncsrv.so plugins/kvssrv.so \
 SUBCMDS = libexec/kvs libexec/ping libexec/mecho libexec/route \
 	libexec/stats libexec/barrier libexec/snoop libexec/event \
 	libexec/kvswatch libexec/kvsdir libexec/kvstorture \
-	libexec/logger libexec/log libexec/info
+	libexec/logger libexec/log libexec/info libexec/zio
 
 BUILD = $(LIBCMB) $(LIBPMI) flux mpi_hello echo cmbd \
 	$(PLUGINS) $(SUBCMDS)
