@@ -1,5 +1,5 @@
 CFLAGS += -I..
-LIBZUTIL_SOURCES := zio.c cbuf.c
+LIBZUTIL_SOURCES := zio.c cbuf.c forkzio.c
 
 all: libzutil.a zio-test
 
