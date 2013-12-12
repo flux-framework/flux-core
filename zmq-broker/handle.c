@@ -360,6 +360,11 @@ struct reactor_struct {
     bool timeout_set;
 };
 
+static bool reactor_empty (reactor_t r)
+{
+    return ((zlist_size (r->dsp) == 0) && !r->timeout_set);
+}
+
 static dispatch_t *dispatch_create (dispatch_type_t type)
 {
     dispatch_t *d = xzmalloc (sizeof (*d));
@@ -524,6 +529,8 @@ void flux_msghandler_remove (flux_t h, int typemask, const char *pattern)
                                     && !strcmp (d->msg.pattern, pattern)) {
             zlist_remove (h->reactor->dsp, d);
             dispatch_destroy (d);
+            if (reactor_empty (h->reactor))
+                flux_reactor_stop (h);
             break;
         }
         d = zlist_next (h->reactor->dsp);
@@ -562,6 +569,8 @@ void flux_fdhandler_remove (flux_t h, int fd, short events)
                                    && d->fd.events == events) {
             zlist_remove (h->reactor->dsp, d);
             dispatch_destroy (d);
+            if (reactor_empty (h->reactor))
+                flux_reactor_stop (h);
             break;
         }
         d = zlist_next (h->reactor->dsp);
@@ -601,6 +610,8 @@ void flux_zshandler_remove (flux_t h, void *zs, short events)
                                    && d->zs.events == events) {
             zlist_remove (h->reactor->dsp, d);
             dispatch_destroy (d);
+            if (reactor_empty (h->reactor))
+                flux_reactor_stop (h);
             break;
         }
         d = zlist_next (h->reactor->dsp);
@@ -632,6 +643,8 @@ void flux_tmouthandler_remove (flux_t h)
         if (d->type == DSP_TYPE_TMOUT) {
             zlist_remove (h->reactor->dsp, d);
             dispatch_destroy (d);
+            if (reactor_empty (h->reactor))
+                flux_reactor_stop (h);
             break;
         }
         d = zlist_next (h->reactor->dsp);
