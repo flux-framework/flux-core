@@ -17,9 +17,11 @@ function parse_cmdline (arg)
     local getopt = require 'alt_getopt' .get_opts
     local opt_table = {
         ['help']            = "h",
-        ['nprocs-per-node'] = "n",
+        ['ntasks']          = "n",
+        ['nprocs-per-node'] = "N",
+        ['now']             = "i",
     }
-    local optstring = "hn:"
+    local optstring = "hn:N:i"
     return getopt (arg, optstring, opt_table)
 end
 
@@ -28,6 +30,12 @@ end
 -------------------------------------------------------------------------------
 local function usage ()
     io.stderr:write ("Usage: "..prog.." [-n nprocs] COMMANDS...\n")
+    io.stderr:write ([[
+  -h, --help                 Display this message
+  -n, --ntasks=N             Request to run a total of N tasks
+  -N, --nprocs-per-node=N    Run at most N processes per node
+  -i, --now                  Start job immediately. 
+]])
 end
 
 local function usage_and_exit (n)
@@ -45,8 +53,7 @@ local function log_fatal (...)
 end
 
 --
---  Check that parameter [a] is an integer
---
+--  Check that parameter [a] is an integer --
 local function is_integer (a)
     local b = tonumber (a)
     return (type (b) == "number") and (math.floor(b) == b)
@@ -114,7 +121,8 @@ if optind > #arg then
     usage_and_exit (1)
 end
 
-local nprocs = tonumber (opts.n) or 1
+local ntasks = tonumber (opts.n) or 1
+local ppn    = opts.N and tonumber (opts.N) or nil
 local cmdline = {}
 for i = optind, #arg do
     table.insert (cmdline, arg[i])
@@ -136,14 +144,15 @@ if not f then log_fatal ("flux.new: %s\n", err) end
 --  Create a job request as Lua table:
 --
 local jobreq = {
-      nprocs  = nprocs,
-      cmdline = cmdline,
-      environ = get_filtered_env(),
-      cwd = posix.getcwd(),
+      ntasks             = ntasks,
+      ['tasks-per-node'] = ppn,
+      cmdline            = cmdline,
+      environ            = get_filtered_env(),
+      cwd                = posix.getcwd(),
 }
 
-log_msg ("%4.03fs: Starting %d procs per node running \"%s\"\n",
-    tt:get0(), nprocs, table.concat (cmdline, ' '))
+log_msg ("%4.03fs: Sending LWJ request for %d tasks (cmdline \"%s\")\n",
+    tt:get0(), ntasks, table.concat (cmdline, ' '))
 
 --
 --  Send job request message with tag="job.create"
@@ -163,11 +172,13 @@ log_msg ("%4.03fs: Registered jobid %d\n", tt:get0(), resp.jobid)
 local lwj, err = f:kvsdir ("lwj.%d", resp.jobid)
 if not lwj then log_fatal ("f:kvsdir(lwj.%d): %s\n", resp.jobid, err) end
 
---
---  Send event to run the job
---
-local rc,err = f:sendevent ("event.rexec.run.%d", resp.jobid)
-if not rc then log_fatal ("sendevent: %s\n", err) end
+if (opts.i) then
+    --
+    --  Send event to run the job
+    --
+    local rc,err = f:sendevent ("event.rexec.run.%d", resp.jobid)
+    if not rc then log_fatal ("sendevent: %s\n", err) end
+end
 
 local sigtimer = nil
 repeat
