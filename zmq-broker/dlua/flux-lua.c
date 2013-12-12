@@ -20,14 +20,148 @@
 #include "zmsg-lua.h"
 #include "lutil.h"
 
+/*
+ *  Create a table in the registry referencing the flux userdata
+ *   that is currently at position [index] on the stack.
+ */
+static int lua_flux_obj_ref_create (lua_State *L, int index)
+{
+    int top = lua_gettop (L);
+    int i = index < 0 ? top + index + 1 : index;
 
+    assert (lua_isuserdata (L, i));
+
+    lua_newtable (L);
+    /*
+     *  We don't want this reference for the flux userdata to
+     *   count for GC, so we store the flux userdata object in
+     *   a subtable with weak values set
+     */
+    lua_newtable (L);
+    lua_pushliteral (L, "__mode");
+    lua_pushliteral (L, "v");
+    lua_rawset (L, -3);
+    lua_setmetatable (L, -2);
+
+    lua_pushvalue (L, i);
+    lua_rawseti (L, -2, 1);  /* t[1] = userdata */
+
+    /* Return new flux obj reference table on top of stack */
+    return (1);
+}
+
+
+/*
+ *  The flux 'reftable' is a table of references to flux C userdata
+ *   and other object types for the flux Lua support. It is used to
+ *   keep references to userdata objects that are currently extant,
+ *   for storing ancillary data for these references, and as a lookup
+ *   table for the 'flux' userdata object corresponding to a given
+ *   flux_t C object.
+ *
+ *  The reftable is stored by the address of the flux_t [f] pointer
+ *   (using lightuserdata), and contains at least the following tables:
+ *     flux = { userdata },
+ *     msghandler = { table of msghandler tables },
+ *     ...
+ *
+ *  The flux userdata itself is stored in a separate table so that
+ *   it can be referenced "weak", that is we use this table to translate
+ *   between flux_t C object and flux userdata Lua object, not to
+ *   store an extra reference.
+ *
+ */
+static int l_get_flux_reftable (lua_State *L, flux_t f)
+{
+    /*
+     *  Use flux handle as lightuserdata index into registry.
+     *   This allows multiple flux handles per lua_State.
+     */
+    lua_pushlightuserdata (L, (void *)f);
+    lua_gettable (L, LUA_REGISTRYINDEX);
+
+    if (lua_isnil (L, -1)) {
+        lua_pop (L, 1);
+        /*   New table indexed by flux handle address */
+        lua_pushlightuserdata (L, (void *)f);
+        lua_newtable (L);
+        lua_settable (L, LUA_REGISTRYINDEX);
+
+        /*  Create internal flux table entries */
+
+        /*  Get table again */
+        lua_pushlightuserdata (L, (void *)f);
+        lua_gettable (L, LUA_REGISTRYINDEX);
+
+        lua_newtable (L);
+        lua_setfield (L, -2, "msghandler");
+    }
+
+    return (1);
+}
+
+/*
+ *  When we push a flux_t handle [f], we first check to see if
+ *   there is an existing flux reftable, and if so we just return
+ *   a reference to the existing object. Otherwise, create the reftable
+ *   and return the new object.
+ */
 int lua_push_flux_handle (lua_State *L, flux_t f)
 {
-    flux_t *fp = lua_newuserdata (L, sizeof (*fp));
+    flux_t *fp;
+    int top = lua_gettop (L);
+
+    /*
+     *  First see if this flux_t object already has a lua component:
+     */
+    l_get_flux_reftable (L, f);  /* [ reftable, ... ] */
+    lua_pushliteral (L, "flux"); /* [ flux, reftable, ... ] */
+    lua_rawget (L, -2);          /* [ value, reftable, ... ] */
+    if (lua_istable (L, -1)) {
+        lua_rawgeti (L, -1, 1);  /* [ userdata, table, reftable, ... ] */
+
+        assert (lua_isuserdata (L, -1));
+
+        /* Restore stack with userdata on top */
+        lua_replace (L, top+1);  /* [ table, userdata, ... ] */
+        lua_settop (L, top+1);   /* [ userdata, .... ] */
+
+        return (1);
+    }
+
+    /*
+     *  Otherwise create a new object:
+     */
+    fp = lua_newuserdata (L, sizeof (*fp));
     *fp = f;
     luaL_getmetatable (L, "FLUX.handle");
     lua_setmetatable (L, -2);
+
+    /*
+     *  Set flux weak key reference table in flux reftable such that
+     *    reftable = {
+     *        flux = { [1] = <userdata> }. -- with mettable { __mode = v }
+     *        ...
+     *   }
+     */
+    l_get_flux_reftable (L, f);     /* [ table, udata, ... ] */
+    lua_pushliteral (L, "flux");    /* [ 'flux', table, udata, ... ]     */
+    lua_flux_obj_ref_create (L, -3);/* [ objref, 'flux', t, udata, ... ] */
+    lua_rawset (L, -3);             /* reftable.flux = ...               */
+                                    /*  [ t, udata, ... ]                */
+    lua_pop (L, 1);                 /* pop reftable leaving userdata     */
+
     return (1);
+}
+
+static void l_flux_reftable_unref (lua_State *L, flux_t f)
+{
+    l_get_flux_reftable (L, f);
+    if (lua_istable (L, -1)) {
+        lua_pushliteral (L, "flux");
+        lua_pushnil (L);
+        lua_rawset (L, -3);
+    }
 }
 
 static flux_t lua_get_flux (lua_State *L, int index)
@@ -36,17 +170,20 @@ static flux_t lua_get_flux (lua_State *L, int index)
     return (*fluxp);
 }
 
+static int l_flux_destroy (lua_State *L)
+{
+    flux_t f = lua_get_flux (L, 1);
+    l_flux_reftable_unref (L, f);
+    flux_handle_destroy (&f);
+    return (0);
+}
+
 static int l_flux_new (lua_State *L)
 {
-    flux_t *fluxp = lua_newuserdata (L, sizeof (*fluxp));
-    *fluxp = cmb_init ();
-
-    if (*fluxp == NULL)
+    flux_t f = cmb_init ();
+    if (f == NULL)
         return lua_pusherror (L, strerror (errno));
-
-    luaL_getmetatable (L, "FLUX.handle");
-    lua_setmetatable (L, -2);
-    return (1);
+    return (lua_push_flux_handle (L, f));
 }
 
 static int l_flux_kvsdir_new (lua_State *L)
@@ -67,14 +204,6 @@ static int l_flux_kvsdir_new (lua_State *L)
     if (kvs_get_dir (f, &dir, path) < 0)
         return lua_pusherror (L, strerror (errno));
     return l_push_kvsdir (L, dir);
-}
-
-static int l_flux_destroy (lua_State *L)
-{
-    flux_t f = lua_get_flux (L, 1);
-    lua_pop (L, 1);
-    flux_handle_destroy (&f);
-    return (0);
 }
 
 static int l_flux_barrier (lua_State *L)
@@ -442,6 +571,11 @@ static int l_flux_mrpc_new (lua_State *L)
 /*
  *  Reactor:
  */
+struct l_flux_ref {
+    lua_State *L;    /* Copy of this lua state */
+    flux_t flux;     /* Copy of flux handle for flux reftable lookup */
+    int    ref;      /* reference into flux reftable                 */
+};
 
 /*
  *  Convert a table of flux.TYPEMASK to int typemask
@@ -449,80 +583,100 @@ static int l_flux_mrpc_new (lua_State *L)
 static int l_get_typemask (lua_State *L, int index)
 {
     int top = lua_gettop (L);
+    int t = index < 0 ? top + index + 1 : index;
     int typemask = 0;
-    /* Copy table to top of stack: */
-    lua_pushvalue (L, index);
-    lua_pushnil (L);
 
-    while (lua_next (L, -2)) {
-        int mask = lua_tointeger (L, -2);
-        if (mask == 0) {
-            lua_settop (L, top);
-            return (0);
-        }
+    lua_pushnil (L);
+    while (lua_next (L, t)) {
+        int mask = lua_tointeger (L, -1);
         typemask = typemask | mask;
+        lua_pop (L, 1);
     }
-    lua_pop (L, 1);
     return typemask;
 }
 
-static int l_get_flux_reftable (lua_State *L, flux_t f)
+void l_flux_ref_destroy (struct l_flux_ref *r, const char *type)
 {
-    /*
-     *  Use flux handle as lightuserdata index into registry.
-     *   This allows multiple flux handles per lua_State.
-     */
-    lua_pushlightuserdata (L, (void *)f);
-    lua_gettable (L, LUA_REGISTRYINDEX);
+    lua_State *L = r->L;
+    int top = lua_gettop (L);
 
-    if (lua_isnil (L, -1)) {
-        lua_pop (L, 1);
-        /*   New table indexed by flux handle address */
-        lua_pushlightuserdata (L, (void *)f);
-        lua_newtable (L);
-        lua_settable (L, LUA_REGISTRYINDEX);
-
-        /*  Create internal flux table entries */
-
-        /*  Get table again */
-        lua_pushlightuserdata (L, (void *)f);
-        lua_gettable (L, LUA_REGISTRYINDEX);
-
-        lua_newtable (L);
-        lua_setfield (L, -2, "msghandlers");
-        lua_newtable (L);
-        lua_setfield (L, -2, "fdhandlers");
-    }
-
-    return (1);
+    l_get_flux_reftable (L, r->flux);
+    lua_getfield (L, -1, type);
+    luaL_unref (L, -1, r->ref);
+    lua_settop (L, top);
 }
 
-int *lua_flux_msghandler_create (lua_State *L, flux_t f, int index)
+struct l_flux_ref *l_flux_ref_create (lua_State *L, flux_t f,
+        int index, const char *type)
 {
     int ref;
-    int *refp;
+    struct l_flux_ref *mh;
+    char metatable [1024];
+
     /*
      *  Store the msghandler table at index into the flux.msghandlers array
      */
     l_get_flux_reftable (L, f);
-    lua_getfield (L, -1, "msghandlers");
-    lua_pushvalue (L, index);
+    lua_getfield (L, -1, type);
 
+    /*
+     *  Should have copy of reftable[type] here, o/w create a new table:
+     */
+    if (lua_isnil (L, -1)) {
+        lua_newtable (L);
+        lua_setfield (L, -2, type);
+        lua_getfield (L, -1, type);
+    }
+
+    /*  Copy the value at index and return a reference in the retable[type]
+     *    table:
+     */
+    lua_pushvalue (L, index);
     ref = luaL_ref (L, -2);
 
-    refp = lua_newuserdata (L, sizeof (*refp));
-    luaL_getmetatable (L, "FLUX.msghandler");
-    lua_setmetatable (L, -2);
-    *refp = ref;
+    /*
+     *  Get name for metatable:
+     */
+    if (snprintf (metatable, sizeof (metatable) - 1, "FLUX.%s", type) < 0)
+        return (NULL);
 
-    return (refp);
+    mh = lua_newuserdata (L, sizeof (*mh));
+    luaL_getmetatable (L, metatable);
+    lua_setmetatable (L, -2);
+
+    mh->L = L;
+    mh->ref = ref;
+    mh->flux = f;
+
+    /*
+     *  Ensure our userdata object isn't GC'd by tying it to msghandler
+     *   table:
+     */
+    assert (lua_istable (L, index));
+    lua_pushvalue (L, -1); /* Copy it first so it remains at top of stack */
+    lua_setfield (L, index, "userdata");
+
+    return (mh);
+
 }
 
-static int l_get_msghandler_table (lua_State *L, flux_t f, int ref)
+/*
+ *  Get the flux reftable of type [name] for the flux_ref object [r]
+ */
+static int l_flux_ref_gettable (struct l_flux_ref *r, const char *name)
 {
-    l_get_flux_reftable (L, f);
-    lua_getfield (L, -1, "msghandlers");
-    lua_rawgeti (L, -1, ref);
+    lua_State *L = r->L;
+    int top = lua_gettop (L);
+
+    l_get_flux_reftable (L, r->flux);
+    lua_getfield (L, -1, name);
+    assert (lua_istable (L, -1));
+
+    lua_rawgeti (L, -1, r->ref);
+    assert (lua_istable (L, -1));
+
+    lua_replace (L, top+1);
+    lua_settop (L, top+1);
     return (1);
 }
 
@@ -544,20 +698,32 @@ static int create_and_push_zmsg_info (lua_State *L,
 static int msghandler (flux_t f, int typemask, zmsg_t **zmsg, void *arg)
 {
     int rc;
-    int *refp = arg;
-    lua_State *L = flux_aux_get (f, "lua_State");
+    int t;
+    struct l_flux_ref *mh = arg;
+    lua_State *L = mh->L;
+
     assert (L != NULL);
 
-    l_get_msghandler_table (L, f, *refp);
-    lua_getfield (L, -1, "handler");
-    assert (!lua_isnoneornil (L, -1));
+    l_flux_ref_gettable (mh, "msghandler");
+    t = lua_gettop (L);
+
+    lua_getfield (L, t, "handler");
+    assert (lua_isfunction (L, -1));
 
     lua_push_flux_handle (L, f);
-    create_and_push_zmsg_info (L, f, typemask, zmsg);
-    lua_pushvalue (L, -4);
+    assert (lua_isuserdata (L, -1));
 
-    if (lua_pcall (L, 3, 1, 0) < 0)
-        return luaL_error (L, "Call of msghandler failed!");
+    create_and_push_zmsg_info (L, f, typemask, zmsg);
+    assert (lua_isuserdata (L, -1));
+
+    lua_getfield (L, t, "userdata");
+    assert (lua_isuserdata (L, -1));
+
+    if ((rc = lua_pcall (L, 3, 1, 0))) {
+        return luaL_error (L, "pcall: %s", lua_tostring (L, -1));
+    }
+
+    zmsg = NULL;
 
     rc = lua_tonumber (L, -1);
     return (rc);
@@ -565,36 +731,35 @@ static int msghandler (flux_t f, int typemask, zmsg_t **zmsg, void *arg)
 
 static int l_msghandler_remove (lua_State *L)
 {
+    int t;
     const char *pattern;
     int typemask;
+    struct l_flux_ref *mh = luaL_checkudata (L, 1, "FLUX.msghandler");
 
-    flux_t f = lua_get_flux (L, 1);
-    int *refp = luaL_checkudata (L, 2, "FLUX.msghandler");
+    l_flux_ref_gettable (mh, "msghandler");
+    t = lua_gettop (L);
 
-    l_get_flux_reftable (L, f);
-    lua_getfield (L, -1, "msghandlers");
-    lua_rawgeti (L, -1, *refp);
-
-    lua_getfield (L, 2, "pattern");
+    lua_getfield (L, t, "pattern");
     pattern = lua_tostring (L, -1);
-    lua_getfield (L, 2, "msgtypes");
+    lua_getfield (L, t, "msgtypes");
     if (lua_isnil (L, -1))
         typemask = FLUX_MSGTYPE_ANY;
     else
         typemask = l_get_typemask (L, -1);
-
-    luaL_unref (L, -1, *refp);
-    return (1);
+    /*
+     *  Drop reference to the table and allow garbage collection
+     */
+    flux_msghandler_remove (mh->flux, typemask, pattern);
+    l_flux_ref_destroy (mh, "msghandler");
+    return (0);
 }
 
 static int l_msghandler_add (lua_State *L)
 {
     const char *pattern;
     int typemask;
-    int *refp;
+    struct l_flux_ref *mh = NULL;
     flux_t f = lua_get_flux (L, 1);
-
-    flux_aux_set (f, "lua_State", (void *) L, NULL);
 
     if (!lua_istable (L, 2))
         return lua_pusherror (L, "Expected table as 2nd argument");
@@ -622,16 +787,45 @@ static int l_msghandler_add (lua_State *L)
         return lua_pusherror (L, "Invalid typemask in msghandler");
     lua_pop (L, 1);
 
-    /*
-     *  Register msghandler object in table referenced by flux handle
-     *   and use this as callback to flux_msghandler call:
-     *
-     */
-    refp = lua_flux_msghandler_create (L, f, 2);
-    l_pushresult (L, flux_msghandler_add (f,
-            typemask, pattern, msghandler, (void *) refp));
+    mh = l_flux_ref_create (L, f, 2, "msghandler");
+    flux_msghandler_add (f, typemask, pattern, msghandler, (void *) mh);
 
     return (1);
+}
+
+static int l_msghandler_index (lua_State *L)
+{
+    struct l_flux_ref *mh = luaL_checkudata (L, 1, "FLUX.msghandler");
+    const char *key = lua_tostring (L, 2);
+
+    /*
+     *  Check for method names
+     */
+    if (strcmp (key, "remove") == 0) {
+        lua_getmetatable (L, 1);
+        lua_getfield (L, -1, "remove");
+        return (1);
+    }
+
+    /*  Get a copy of the underlying msghandler Lua table and pass-through
+     *   the index:
+     */
+    l_flux_ref_gettable (mh, "msghandler");
+    lua_getfield (L, -1, key);
+    return (1);
+}
+
+static int l_msghandler_newindex (lua_State *L)
+{
+    struct l_flux_ref *mh = luaL_checkudata (L, 1, "FLUX.msghandler");
+
+    /*  Set value in the underlying msghandler table:
+     */
+    l_flux_ref_gettable (mh, "msghandler");
+    lua_pushvalue (L, 2); /* Key   */
+    lua_pushvalue (L, 3); /* Value */
+    lua_rawset (L, -3);
+    return (0);
 }
 
 static int l_flux_reactor_start (lua_State *L)
@@ -657,8 +851,7 @@ static const struct luaL_Reg flux_methods [] = {
     { "subscribe",       l_flux_subscribe   },
     { "unsubscribe",     l_flux_unsubscribe },
 
-    { "addhandler",      l_msghandler_add    },
-    { "delhandler",      l_msghandler_remove },
+    { "msghandler",      l_msghandler_add    },
     { "reactor",         l_flux_reactor_start },
     { NULL,              NULL               }
 };
@@ -679,12 +872,28 @@ static const struct luaL_Reg mrpc_outargs_methods [] = {
     { NULL,              NULL                        }
 };
 
+static const struct luaL_Reg msghandler_methods [] = {
+    { "__index",         l_msghandler_index    },
+    { "__newindex",      l_msghandler_newindex },
+    { "remove",          l_msghandler_remove   },
+    { NULL,              NULL                  }
+};
+
+#define MSGTYPE_SET(L, name) do { \
+  lua_pushlstring(L, #name, sizeof(#name)-1); \
+  lua_pushnumber(L, FLUX_ ## name); \
+  lua_settable(L, -3); \
+} while (0);
+
+
 int luaopen_flux (lua_State *L)
 {
     luaL_newmetatable (L, "FLUX.mrpc");
     luaL_register (L, NULL, mrpc_methods);
     luaL_newmetatable (L, "FLUX.mrpc_outarg");
     luaL_register (L, NULL, mrpc_outargs_methods);
+    luaL_newmetatable (L, "FLUX.msghandler");
+    luaL_register (L, NULL, msghandler_methods);
 
     luaL_newmetatable (L, "FLUX.handle");
     luaL_register (L, NULL, flux_methods);
@@ -692,7 +901,15 @@ int luaopen_flux (lua_State *L)
      * Load required kvs library
      */
     luaopen_kvs (L);
+    l_zmsg_info_register_metatable (L);
     luaL_register (L, "flux", flux_functions);
+
+    MSGTYPE_SET (L, MSGTYPE_REQUEST);
+    MSGTYPE_SET (L, MSGTYPE_RESPONSE);
+    MSGTYPE_SET (L, MSGTYPE_EVENT);
+    MSGTYPE_SET (L, MSGTYPE_SNOOP);
+    MSGTYPE_SET (L, MSGTYPE_ANY);
+
     return (1);
 }
 
