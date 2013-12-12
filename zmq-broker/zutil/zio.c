@@ -747,6 +747,51 @@ int zio_dst_fd (zio_t zio)
     return (zio->dstfd);
 }
 
+int zio_json_decode (json_object *o, char **dp, bool *eofp, char **namep)
+{
+    json_object_iter itr;
+    json_object *d = NULL;
+    int count = 0;
+    char *name = NULL;
+    bool eof = false;
+    char *data = NULL;
+    int len;
+
+    if (!o)
+        return -1;
+    json_object_object_foreachC (o, itr) {
+        name = itr.key;
+        d = itr.val;
+        count++;
+    }
+    if (count != 1 || d == NULL || name == NULL)
+        return -1; /* expect exactly one data object */
+    (void)util_json_object_get_boolean (d, "eof", &eof);
+    if (util_json_object_get_base64 (d, "data", (uint8_t **) &data, &len) < 0)
+        return -1;
+    if (eofp)
+        *eofp = eof;
+    if (namep)
+        *namep = xstrdup (name);
+    if (dp)
+        *dp = data;
+    else if (data)
+        free (data);
+    return len;
+}
+
+json_object *zio_json_encode (char *data, ssize_t len, bool eof, char *name)
+{
+    json_object *o, *d;
+
+    d = zio_data_object (data, len);
+    if (eof)
+        util_json_object_add_boolean (d, "eof", 1);
+    o = util_json_object_new_object ();
+    json_object_object_add (o, name, d);
+    return (o);
+}
+
 /*
  * vi: ts=4 sw=4 expandtab
  */

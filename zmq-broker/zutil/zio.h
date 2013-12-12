@@ -115,4 +115,15 @@ int zio_set_close_cb (zio_t zio, zio_close_f closef);
 
 int zio_flush (zio_t zio);
 
+/*
+ *  Extract data, eof, and stream name from object.
+ *   Returns size of data or -1 on error.
+ */
+int zio_json_decode (json_object *o, char **dp, bool *eofp, char **namep);
+
+/*  Create an object containing one data object comprised of the provided
+ *   data, eof status, and stream name.
+ */
+json_object *zio_json_encode (char *data, ssize_t len, bool eof, char *name);
+
 #endif /* !HAVE_ZIO_H */
