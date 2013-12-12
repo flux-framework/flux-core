@@ -252,7 +252,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
         log_fatal (ctx, 1, "Failed to get cmdline from kvs");
     json_object_put (v);
 
-    if (kvsdir_get_int (ctx->kvs, "nprocs", &ctx->nprocs) < 0) /* Assume ENOENT */
+    if (kvsdir_get_int (ctx->kvs, "tasks-per-node", &ctx->nprocs) < 0)
         ctx->nprocs = 1;
 
     ctx->pids = xzmalloc (ctx->nprocs * sizeof (*ctx->pids));
