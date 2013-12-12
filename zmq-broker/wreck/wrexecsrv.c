@@ -14,6 +14,7 @@
 #include "rexec-config.h"  /* For REXECD_PATH */
 
 struct rexec_ctx {
+    int nodeid;
     zlist_t *session_list;
     flux_t h;
 };
@@ -48,6 +49,7 @@ static struct rexec_ctx *getctx (flux_t h)
         if (!(ctx->session_list = zlist_new ()))
             oom ();
         ctx->h = h;
+        ctx->nodeid = flux_rank (h);
         flux_aux_set (h, "rexecsrv", ctx, (FluxFreeFn)freectx);
     }
 
@@ -334,6 +336,8 @@ static int rexec_session_kill (struct rexec_session *s, int sig)
 static int rexec_kill (struct rexec_ctx *ctx, int64_t id, int sig)
 {
     struct rexec_session *s = rexec_session_lookup (ctx, id);
+    if (s == NULL)
+        return (0);
     return rexec_session_kill (s, sig);
 }
 
@@ -408,6 +412,25 @@ done:
     return (rc);
 }
 
+int lwj_targets_this_node (struct rexec_ctx *ctx, int64_t id)
+{
+    kvsdir_t tmp;
+    /*
+     *  If no 'rank' subdir exists for this lwj, then we are running
+     *   without resource assignment so we run everywhere
+     */
+    if (kvs_get_dir (ctx->h, &tmp, "lwj.%ld.rank", id) < 0) {
+        flux_log (ctx->h, LOG_INFO, "No dir lwj.%ld.rank: %s\n", id, strerror (errno));
+        return (1);
+    }
+
+    kvsdir_destroy (tmp);
+    if (kvs_get_dir (ctx->h, &tmp, "lwj.%ld.rank.%d", id, ctx->nodeid) < 0)
+        return (0);
+    kvsdir_destroy (tmp);
+    return (1);
+}
+
 static void handle_event (struct rexec_ctx *ctx, zmsg_t **zmsg)
 {
     char *tag = cmb_msg_tag (*zmsg, false);
@@ -415,7 +438,8 @@ static void handle_event (struct rexec_ctx *ctx, zmsg_t **zmsg)
         int64_t id = id_from_tag (tag + 16, NULL);
         if (id < 0)
             err ("Invalid rexec tag `%s'", tag);
-        spawn_exec_handler (ctx, id);
+        if (lwj_targets_this_node (ctx, id))
+            spawn_exec_handler (ctx, id);
     }
     else if (strncmp (tag, "event.rexec.kill", 16) == 0) {
         int sig = SIGKILL;
