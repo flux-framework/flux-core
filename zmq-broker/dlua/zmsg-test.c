@@ -18,8 +18,9 @@
 zmsg_t *l_cmb_zmsg_encode (lua_State *L)
 {
 	const char *tag = lua_tostring (L, 1);
-	json_object *o = lua_value_to_json (L, 2);
+	json_object *o;
 
+    lua_value_to_json (L, 2, &o);
 	if ((o == NULL) || (tag == NULL))
 		return NULL;
 

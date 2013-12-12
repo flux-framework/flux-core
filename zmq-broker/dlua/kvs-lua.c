@@ -89,7 +89,10 @@ static int l_kvsdir_newindex (lua_State *L)
     else if (lua_isstring (L, 3))
         rc = kvsdir_put_string (d, key, lua_tostring (L, 3));
     else if (lua_istable (L, 3)) {
-        rc = kvsdir_put (d, key, lua_value_to_json (L, 3));
+        json_object *o;
+        lua_value_to_json (L, 3, &o);
+        rc = kvsdir_put (d, key, o);
+        json_object_put (o);
     }
     else {
         return luaL_error (L, "Unsupported type for kvs assignment: %s",
@@ -189,7 +192,7 @@ static int l_kvsdir_watch (lua_State *L)
     }
     else {
         /*  Otherwise, the alue at top of stack is initial json_object */
-        o = lua_value_to_json (L, -1);
+        lua_value_to_json (L, -1, &o);
     }
 
     rc = kvs_watch_once (h, key, &o);

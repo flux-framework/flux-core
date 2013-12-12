@@ -7,8 +7,8 @@
 static int l_json_test (lua_State *L)
 {
 	int rc;
-	json_object *o = lua_value_to_json (L, -1);
-	if (o == NULL) {
+	json_object *o;
+	if (lua_value_to_json (L, -1, &o) < 0) {
 		lua_pushnil (L);
 		lua_pushstring (L, "lua_value_to_json failure");
 		return (2);

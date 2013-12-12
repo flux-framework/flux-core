@@ -3,7 +3,9 @@
 #define HAVE_JSON_LUA
 #include <json/json.h>
 
+void lua_push_json_null (lua_State *L);
+int lua_is_json_null (lua_State *L, int index);
 int json_object_to_lua (lua_State *L, json_object *o);
-json_object * lua_value_to_json (lua_State *L, int index);
+int lua_value_to_json (lua_State *L, int index, json_object **v);
 
 #endif /* HAVE_JSON_LUA */

@@ -257,11 +257,13 @@ static int l_flux_send (lua_State *L)
     int rc;
     flux_t f = lua_get_flux (L, 1);
     const char *tag = luaL_checkstring (L, 2);
+    json_object *o;
 
-    json_object *o = lua_value_to_json (L, 3);
+    if (lua_value_to_json (L, 3, &o) < 0)
+        return lua_pusherror (L, "JSON conversion error");
 
     if (tag == NULL)
-        lua_pusherror (L, "Invalid args");
+        return lua_pusherror (L, "Invalid args");
 
     rc = flux_request_send (f, o, tag);
     json_object_put (o);
@@ -292,11 +294,14 @@ static int l_flux_rpc (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
     const char *tag = luaL_checkstring (L, 2);
-    json_object *o = lua_value_to_json (L, 3);
+    json_object *o;
     json_object *resp;
 
+    if (lua_value_to_json (L, 3, &o) < 0)
+        return lua_pusherror (L, "JSON conversion error");
+
     if (tag == NULL || o == NULL)
-        lua_pusherror (L, "Invalid args");
+        return lua_pusherror (L, "Invalid args");
 
     resp = flux_rpc (f, o, tag);
     json_object_put (o);
@@ -342,7 +347,7 @@ static int l_flux_send_event (lua_State *L)
      */
     if ((lua_gettop (L) >= 3) && (lua_istable (L, 2))) {
         eventidx = 3;
-        o = lua_value_to_json (L, 2);
+        lua_value_to_json (L, 2, &o);
     }
 
     if ((l_format_args (L, eventidx) < 0))
@@ -517,16 +522,16 @@ static int l_flux_mrpc_newindex (lua_State *L)
     const char *key = lua_tostring (L, 2);
 
     if (strcmp (key, "inarg") == 0) {
-        json_object *o = lua_value_to_json (L, 3);
-        if (o == NULL)
+        json_object *o = NULL;
+        if (lua_value_to_json (L, 3, &o) < 0)
             return lua_pusherror (L, "Failed to create json from argument");
         flux_mrpc_put_inarg (m, o);
         json_object_put (o);
         return (0);
     }
     if (strcmp (key, "out") == 0) {
-        json_object *o = lua_value_to_json (L, 3);
-        if (o == NULL)
+        json_object *o = NULL;
+        if (lua_value_to_json (L, 3, &o) < 0)
             return lua_pusherror (L, "Failed to create json from argument");
         flux_mrpc_put_outarg (m, o);
         json_object_put (o);
@@ -560,7 +565,8 @@ static int l_flux_mrpc_new (lua_State *L)
         return lua_pusherror (L, "flux_mrpc_create: %s", strerror (errno));
 
     if (lua_istable (L, 3)) {
-        json_object *o = lua_value_to_json (L, 3);
+        json_object *o;
+        lua_value_to_json (L, 3, &o);
         flux_mrpc_put_inarg (m, o);
         json_object_put (o);
     }
@@ -909,6 +915,10 @@ int luaopen_flux (lua_State *L)
     MSGTYPE_SET (L, MSGTYPE_EVENT);
     MSGTYPE_SET (L, MSGTYPE_SNOOP);
     MSGTYPE_SET (L, MSGTYPE_ANY);
+
+    lua_push_json_null (L);
+    lua_pushliteral (L, "NULL");
+    lua_settable (L, -3);
 
     return (1);
 }
