@@ -132,29 +132,18 @@ static json_object *getnext (kz_t kz)
 
 static json_object *getnext_blocking (kz_t kz)
 {
-    json_object *val = NULL;
-    char *key;
-    bool refresh = false;
+    json_object *val;
 
-    if (asprintf (&key, "%.6d", kz->seq) < 0)
-        oom ();
-    do {
-        while (!kz->dir || refresh) {
-            if (kvs_watch_once_dir (kz->h, &kz->dir, "%s", kz->name) < 0) {
-                if (errno != ENOENT)
-                    goto done;
+    while (!(val = getnext (kz)) || errno != EAGAIN) {
+        if (kvs_watch_once_dir (kz->h, &kz->dir, "%s", kz->name) < 0) {
+            if (errno != ENOENT)
+                break;
+            if (kz->dir) {
+                kvsdir_destroy (kz->dir);
+                kz->dir = NULL;
             }
         }
-        if (kvsdir_get (kz->dir, key, &val) < 0) {
-            if (errno != ENOENT)
-                goto done;
-            refresh = true;
-        }
-    } while (val == NULL);
-    kz->seq++;
-done:
-    if (key)
-        free (key);
+    }
     return val;
 }
 
