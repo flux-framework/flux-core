@@ -31,6 +31,8 @@ struct prog_ctx {
     kvsdir_t kvs;           /* Handle to this job's dir in kvs */
     kvsdir_t resources;     /* Handle to this node's resource dir in kvs */
 
+    int noderank;
+
     int64_t id;             /* id of this execution */
     int nnodes;
     int nodeid;
@@ -46,6 +48,8 @@ struct prog_ctx {
     void *zs_req;
     void *zs_rep;
     int signalfd;
+
+    int *globalids;
     int *pids;
     int *status;
     int exited;
@@ -248,28 +252,58 @@ int json_array_to_argv (struct prog_ctx *ctx,
     return (0);
 }
 
+int cmp_int (const void *x, const void *y)
+{
+    int a = *(int *)x;
+    int b = *(int *)y;
+
+    if (a < b)
+        return (-1);
+    else if (a == b)
+        return (0);
+    return (1);
+}
+
 /*
  *  Get total number of nodes in this job from lwj.%d.rank dir
  */
-int prog_ctx_get_nnodes (struct prog_ctx *ctx)
+int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
 {
     int n = 0;
+    int j;
     kvsdir_t rank;
     kvsitr_t i;
     const char *key;
+    int *nodeids;
+
+    nodeids = malloc (flux_size (ctx->cmb) * sizeof (int));
 
     if (kvsdir_get_dir (ctx->kvs, &rank, "rank") < 0) {
         log_msg (ctx, "get_dir (%s.rank): %s",
                  kvsdir_key (ctx->kvs),
                  strerror (errno));
-        return flux_size (ctx->cmb);
+        ctx->nnodes = flux_size (ctx->cmb);
+        ctx->nodeid = ctx->noderank;
     }
 
     i = kvsitr_create (rank);
-    while ((key = kvsitr_next (i)))
+    while ((key = kvsitr_next (i))) {
+        nodeids[n] = atoi (key);
         n++;
+    }
     kvsitr_destroy (i);
-    return (n);
+    kvsdir_destroy (rank);
+    ctx->nnodes = n;
+
+    qsort (nodeids, n, sizeof (int), &cmp_int);
+    for (j = 0; j < n; j++) {
+        if (nodeids[j] == ctx->noderank) {
+            ctx->nodeid = j;
+            break;
+        }
+    }
+    free (nodeids);
+    return (0);
 }
 
 int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
@@ -282,7 +316,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
     if (json_array_to_argv (ctx, v, &ctx->argv, &ctx->argc) < 0)
         log_fatal (ctx, 1, "Failed to get cmdline from kvs");
 
-    ctx->nnodes = prog_ctx_get_nnodes (ctx);
+    prog_ctx_get_nodeinfo (ctx);
 
     /*
      *  See if we've got 'cores' assigned for this host
@@ -294,6 +328,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
     else if (kvsdir_get_int (ctx->kvs, "tasks-per-node", &ctx->nprocs) < 0)
             ctx->nprocs = 1;
 
+    ctx->globalids = xzmalloc (ctx->nprocs * sizeof (*ctx->globalids));
     ctx->pids = xzmalloc (ctx->nprocs * sizeof (*ctx->pids));
     ctx->status = xzmalloc (ctx->nprocs * sizeof (*ctx->status));
 
@@ -331,7 +366,7 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
                    ctx->id, strerror (errno));
     }
 
-    ctx->nodeid = flux_rank (ctx->cmb);
+    ctx->noderank = flux_rank (ctx->cmb);
     /*
      *  If the "rank" dir exists in kvs, then this LWJ has been
      *   assigned specific resources by a scheduler.
@@ -346,16 +381,16 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
         log_msg (ctx, "Found kvs 'rank' dir");
         int rc = kvsdir_get_dir (ctx->kvs,
                                  &ctx->resources,
-                                 "rank.%d", ctx->nodeid);
+                                 "rank.%d", ctx->noderank);
         if (rc < 0) {
             if (errno == ENOENT)
                 return (-1);
             log_fatal (ctx, 1, "kvs_get_dir (lwj.%lu.rank.%d): %s\n",
-                        ctx->id, ctx->nodeid, strerror (errno));
+                        ctx->id, ctx->noderank, strerror (errno));
         }
     }
 
-    log_msg (ctx, "initializing from CMB: rank=%d", ctx->nodeid);
+    log_msg (ctx, "initializing from CMB: rank=%d", ctx->noderank);
     if (prog_ctx_load_lwj_info (ctx, ctx->id) < 0)
         log_fatal (ctx, 1, "Failed to load lwj info");
 
@@ -394,7 +429,7 @@ int update_job_state (struct prog_ctx *ctx, const char *state)
     json_object *to =
         json_object_new_string (ctime_iso8601_now (buf, sizeof (buf)));
 
-    assert (flux_rank (ctx->cmb) == 0);
+    assert (ctx->nodeid == 0);
 
     log_msg (ctx, "updating job state to %s", state);
 
@@ -428,7 +463,7 @@ int rexec_state_change (struct prog_ctx *ctx, const char *state)
         log_fatal (ctx, 1, "kvs_fence");
 
     /* Rank 0 updates job state */
-    if ((flux_rank (ctx->cmb) == 0) && update_job_state (ctx, state) < 0)
+    if ((ctx->nodeid == 0) && update_job_state (ctx, state) < 0)
         log_fatal (ctx, 1, "update_job_state");
 
     return (0);
@@ -441,7 +476,7 @@ json_object * json_task_info_object_create (struct prog_ctx *ctx,
     json_object *o = json_object_new_object ();
     json_object *ocmd = json_object_new_string (cmd);
     json_object *opid = json_object_new_int (pid);
-    json_object *onodeid = json_object_new_int (ctx->nodeid);
+    json_object *onodeid = json_object_new_int (ctx->noderank);
     json_object_object_add (o, "command", ocmd);
     json_object_object_add (o, "pid", opid);
     json_object_object_add (o, "nodeid", onodeid);
@@ -1119,7 +1154,7 @@ int main (int ac, char **av)
     flux_log_set_facility (ctx->cmb, "wrexecd");
     prog_ctx_zmq_socket_setup (ctx);
 
-    if ((flux_rank (ctx->cmb) == 0) && update_job_state (ctx, "starting") < 0)
+    if ((ctx->nodeid == 0) && update_job_state (ctx, "starting") < 0)
         log_fatal (ctx, 1, "update_job_state");
 
     if ((parent_fd = optparse_get_int (p, "parent-fd")) >= 0)
