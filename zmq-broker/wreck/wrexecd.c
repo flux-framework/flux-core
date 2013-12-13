@@ -26,6 +26,18 @@
 #include "dlua/kvs-lua.h"
 #include "dlua/flux-lua.h"
 
+struct task_info {
+    struct prog_ctx *ctx;
+
+    int      id;              /* local id for this task */
+    int      globalid;
+    pid_t    pid;
+
+    flux_t   f;               /* local flux handle for task */
+    kvsdir_t kvs;             /* kvs handle to this task's dir in kvs */
+    int      status;
+};
+
 struct prog_ctx {
     flux_t cmb;
     kvsdir_t kvs;           /* Handle to this job's dir in kvs */
@@ -37,6 +49,7 @@ struct prog_ctx {
     int nnodes;
     int nodeid;
     int nprocs;             /* number of copies of command to execute */
+    int exited;
 
     int argc;
     char **argv;
@@ -49,19 +62,14 @@ struct prog_ctx {
     void *zs_rep;
     int signalfd;
 
-    int *globalids;
-    int *pids;
-    int *status;
-    int exited;
-
     /*  Per-task data. These members are only valid between fork and
      *   exec within each task and are created on-demand as needed by
      *   Lua scripts.
      */
+    struct task_info **task;
     int in_task;            /* Non-zero if currently in task ctx  */
     int taskid;             /* Current taskid executing lua_stack */
-    flux_t task_handle;     /* Per task flux handle               */
-    kvsdir_t task_kvs;
+
     lua_stack_t lua_stack;
     int envref;             /* Global reference to Lua env obj    */
 };
@@ -71,9 +79,29 @@ void *lsd_nomem_error (const char *file, int line, char *msg)
     return (NULL);
 }
 
+struct task_info *prog_ctx_current_task (struct prog_ctx *ctx)
+{
+    if (ctx->taskid >= 0)
+        return (ctx->task[ctx->taskid]);
+    return (NULL);
+}
+
+static flux_t prog_ctx_flux_handle (struct prog_ctx *ctx)
+{
+    struct task_info *t;
+
+    if (!ctx->in_task)
+        return (ctx->cmb);
+
+    t = prog_ctx_current_task (ctx);
+    if (!t->f)
+        t->f = cmb_init ();
+    return (t->f);
+}
+
 static void log_fatal (struct prog_ctx *ctx, int code, char *format, ...)
 {
-    flux_t c;
+    flux_t c = prog_ctx_flux_handle (ctx);
     va_list ap;
     va_start (ap, format);
     if ((ctx != NULL) && ((c = ctx->cmb) != NULL))
@@ -86,7 +114,7 @@ static void log_fatal (struct prog_ctx *ctx, int code, char *format, ...)
 
 static int log_err (struct prog_ctx *ctx, const char *fmt, ...)
 {
-    flux_t c = ctx->cmb;
+    flux_t c = prog_ctx_flux_handle (ctx);
     va_list ap;
     va_start (ap, fmt);
     flux_vlog (c, LOG_ERR, fmt, ap);
@@ -96,7 +124,7 @@ static int log_err (struct prog_ctx *ctx, const char *fmt, ...)
 
 static void log_msg (struct prog_ctx *ctx, const char *fmt, ...)
 {
-    flux_t c = ctx->cmb;
+    flux_t c = prog_ctx_flux_handle (ctx);
     va_list ap;
     va_start (ap, fmt);
     flux_vlog (c, LOG_INFO, fmt, ap);
@@ -106,6 +134,31 @@ static void log_msg (struct prog_ctx *ctx, const char *fmt, ...)
 int globalid (struct prog_ctx *ctx, int localid)
 {
     return ((ctx->nodeid * ctx->nprocs) + localid);
+}
+
+struct task_info * task_info_create (struct prog_ctx *ctx, int id)
+{
+    struct task_info *t = xzmalloc (sizeof (*t));
+
+    t->ctx = ctx;
+    t->id = id;
+    t->globalid = globalid (ctx, id);
+    t->pid = (pid_t) 0;
+
+    /* Handles to CMB are created on-demand (for lua callbacks) */
+    t->f = NULL;
+    t->kvs = NULL;
+
+    return (t);
+}
+
+void task_info_destroy (struct task_info *t)
+{
+    if (t->kvs)
+        kvsdir_destroy (t->kvs);
+    if (t->f)
+        flux_handle_destroy (&t->f);
+    free (t);
 }
 
 static int sigmask_unblock_all (void)
@@ -161,14 +214,17 @@ int rexec_send_msg (struct prog_ctx *ctx, char *tag, json_object *o)
 
 void prog_ctx_destroy (struct prog_ctx *ctx)
 {
+    int i;
+
+    for (i = 0; i < ctx->nprocs; i++)
+        task_info_destroy (ctx->task [i]);
+
     if (ctx->kvs)
         kvsdir_destroy (ctx->kvs);
     if (ctx->resources)
         kvsdir_destroy (ctx->resources);
 
     zloop_destroy (&ctx->zl);
-    free (ctx->pids);
-    free (ctx->status);
     free (ctx->envz);
     close (ctx->signalfd);
 
@@ -308,6 +364,7 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
 
 int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
 {
+    int i;
     json_object *v;
 
     if (kvsdir_get (ctx->kvs, "cmdline", &v) < 0)
@@ -328,9 +385,9 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
     else if (kvsdir_get_int (ctx->kvs, "tasks-per-node", &ctx->nprocs) < 0)
             ctx->nprocs = 1;
 
-    ctx->globalids = xzmalloc (ctx->nprocs * sizeof (*ctx->globalids));
-    ctx->pids = xzmalloc (ctx->nprocs * sizeof (*ctx->pids));
-    ctx->status = xzmalloc (ctx->nprocs * sizeof (*ctx->status));
+    ctx->task = xzmalloc (ctx->nprocs * sizeof (*ctx->task));
+    for (i = 0; i < ctx->nprocs; i++)
+        ctx->task [i] = task_info_create (ctx, i);
 
     log_msg (ctx, "lwj %ld: node%d: nprocs=%d, nnodes=%d, cmdline=%s",
                    ctx->id, ctx->nodeid, ctx->nprocs, ctx->nnodes,
@@ -488,11 +545,11 @@ int rexec_taskinfo_put (struct prog_ctx *ctx, int localid)
     json_object *o;
     char *key;
     int rc;
-    int global_taskid = globalid (ctx, localid);
+    struct task_info *t = ctx->task [localid];
 
-    o = json_task_info_object_create (ctx, ctx->argv [0], ctx->pids [localid]);
+    o = json_task_info_object_create (ctx, ctx->argv [0], t->pid);
 
-    asprintf (&key, "%d.procdesc", global_taskid);
+    asprintf (&key, "%d.procdesc", t->globalid);
 
     rc = kvsdir_put (ctx->kvs, key, o);
     free (key);
@@ -520,22 +577,22 @@ int send_startup_message (struct prog_ctx *ctx)
     return (0);
 }
 
-int send_exit_message (struct prog_ctx *ctx, int taskid, int status)
+int send_exit_message (struct task_info *t)
 {
     char *key;
-    int global_taskid = globalid (ctx, taskid);
-    json_object *o = json_object_new_int (status);
+    struct prog_ctx *ctx = t->ctx;
+    json_object *o = json_object_new_int (t->status);
 
-    if (asprintf (&key, "lwj.%lu.%d.exit_status", ctx->id, global_taskid) < 0)
+    if (asprintf (&key, "lwj.%lu.%d.exit_status", ctx->id, t->globalid) < 0)
         return (-1);
     if (kvs_put (ctx->cmb, key, o) < 0)
         return (-1);
     free (key);
     json_object_put (o);
 
-    if (WIFSIGNALED (status)) {
-        o = json_object_new_int (WTERMSIG (status));
-        if (asprintf (&key, "lwj.%lu.%d.exit_sig", ctx->id, global_taskid) < 0)
+    if (WIFSIGNALED (t->status)) {
+        o = json_object_new_int (WTERMSIG (t->status));
+        if (asprintf (&key, "lwj.%lu.%d.exit_sig", ctx->id, t->globalid) < 0)
             return (-1);
         if (kvs_put (ctx->cmb, key, o) < 0)
             return (-1);
@@ -543,8 +600,8 @@ int send_exit_message (struct prog_ctx *ctx, int taskid, int status)
         json_object_put (o);
     }
     else {
-        o = json_object_new_int (WEXITSTATUS (status));
-        if (asprintf (&key, "lwj.%lu.%d.exit_code", ctx->id, global_taskid) < 0)
+        o = json_object_new_int (WEXITSTATUS (t->status));
+        if (asprintf (&key, "lwj.%lu.%d.exit_code", ctx->id, t->globalid) < 0)
             return (-1);
         if (kvs_put (ctx->cmb, key, o) < 0)
             return (-1);
@@ -606,6 +663,7 @@ char ** prog_ctx_env_create (struct prog_ctx *ctx)
 
 int exec_command (struct prog_ctx *ctx, int i)
 {
+    struct task_info *t = ctx->task [i];
     pid_t cpid = fork ();
 
     if (cpid < 0)
@@ -644,7 +702,7 @@ int exec_command (struct prog_ctx *ctx, int i)
      *  Parent: Close child fds
      */
     log_msg (ctx, "in parent: child pid[%d] = %d", i, cpid);
-    ctx->pids [i] = cpid;
+    t->pid = cpid;
 
     return (0);
 }
@@ -758,30 +816,29 @@ static int l_push_environ (lua_State *L, int index)
     return (1);
 }
 
-static flux_t prog_ctx_flux_handle (struct prog_ctx *ctx)
-{
-    if (!ctx->in_task)
-        return (ctx->cmb);
-    if (!ctx->task_handle)
-        ctx->task_handle = cmb_init ();
-    return (ctx->task_handle);
-}
-
 static kvsdir_t prog_ctx_kvsdir (struct prog_ctx *ctx)
 {
+    struct task_info *t;
+
     if (!ctx->in_task)
         return (ctx->kvs);
-    if (!ctx->task_kvs) {
-        kvs_get_dir (prog_ctx_flux_handle (ctx),
-                &ctx->task_kvs, "lwj.%ld", ctx->id);
+
+    t = prog_ctx_current_task (ctx);
+    if (!t->kvs) {
+        if (kvs_get_dir (prog_ctx_flux_handle (ctx),
+            &t->kvs, "lwj.%ld.%d", ctx->id, t->id) < 0)
+            log_err (ctx, "kvs_get_dir: %s", strerror (errno));
     }
-    return (ctx->task_kvs);
+    return (t->kvs);
 }
 
 static int l_wreck_index (lua_State *L)
 {
+    struct task_info *t;
     struct prog_ctx *ctx = l_get_prog_ctx (L, 1);
     const char *key = lua_tostring (L, 2);
+
+    t = prog_ctx_current_task (ctx);
 
     if (key == NULL)
         return luaL_error (L, "wreck: invalid key");
@@ -791,18 +848,17 @@ static int l_wreck_index (lua_State *L)
         return (1);
     }
     if (strcmp (key, "globalid") == 0) {
-        if (!ctx->in_task)
-            return lua_pusherror (L, "No valid taskid in this context");
-        lua_pushnumber (L, globalid (ctx, ctx->taskid));
+        lua_pushnumber (L, t->globalid);
         return (1);
     }
     if (strcmp (key, "taskid") == 0) {
-        if (!ctx->in_task)
-            return lua_pusherror (L, "No valid taskid in this context");
-        lua_pushnumber (L, ctx->taskid);
+        lua_pushnumber (L, t->id);
         return (1);
     }
     if (strcmp (key, "kvsdir") == 0) {
+        kvsdir_t d = prog_ctx_kvsdir (ctx);
+        if (d == NULL)
+            return lua_pusherror (L, "No such file or directory");
         l_push_kvsdir (L, prog_ctx_kvsdir (ctx));
         return (1);
     }
@@ -839,14 +895,14 @@ static int l_wreck_index (lua_State *L)
     if (strcmp (key, "exit_status") == 0) {
         if (ctx->in_task || ctx->taskid < 0)
             return lua_pusherror (L, "Not valid in this context");
-        lua_pushnumber (L, ctx->status [ctx->taskid]);
+        lua_pushnumber (L, t->status);
         return (1);
     }
     if (strcmp (key, "exitcode") == 0) {
         int status;
         if (ctx->in_task || ctx->taskid < 0)
             return lua_pusherror (L, "Not valid in this context");
-        status = ctx->status [ctx->taskid];
+        status = t->status;
         if (WIFEXITED (status))
             lua_pushnumber (L, WEXITSTATUS(status));
         else
@@ -857,7 +913,7 @@ static int l_wreck_index (lua_State *L)
         int status;
         if (ctx->in_task || ctx->taskid < 0)
             return lua_pusherror (L, "Not valid in this context");
-        status = ctx->status [ctx->taskid];
+        status = t->status;
         if (WIFSIGNALED (status))
             lua_pushnumber (L, WTERMSIG (status));
         else
@@ -927,21 +983,22 @@ int exec_commands (struct prog_ctx *ctx)
     return send_startup_message (ctx);
 }
 
-int pid_to_taskid (struct prog_ctx *ctx, pid_t pid)
+struct task_info *pid_to_task (struct prog_ctx *ctx, pid_t pid)
 {
-    int i = 0;
-    while (ctx->pids [i] != pid)
-        i++;
+    int i;
+    struct task_info *t = NULL;
 
-    if (i >= ctx->nprocs)
-        return (-1);
-
-    return (i);
+    for (i = 0; i < ctx->nprocs; i++) {
+        t = ctx->task[i];
+        if (t->pid == pid)
+            break;
+    }
+    return (t);
 }
 
 int reap_child (struct prog_ctx *ctx)
 {
-    int id;
+    struct task_info *t;
     int status;
     pid_t wpid;
 
@@ -954,15 +1011,15 @@ int reap_child (struct prog_ctx *ctx)
         return (0);
     }
 
-    id = pid_to_taskid (ctx, wpid);
+    t = pid_to_task (ctx, wpid);
     log_msg (ctx, "task%d: pid %d (%s) exited with status 0x%04x",
-            id, wpid, ctx->argv [0], status);
-    ctx->status [id] = status;
+            t->id, wpid, ctx->argv [0], status);
+    t->status = status;
 
-    ctx->taskid = id;
+    ctx->taskid = t->id;
     lua_stack_call (ctx->lua_stack, "rexecd_task_exit");
 
-    if (send_exit_message (ctx, id, status) < 0)
+    if (send_exit_message (t) < 0)
         log_msg (ctx, "Sending exit message failed!");
     return (1);
 }
@@ -971,7 +1028,7 @@ int prog_ctx_signal (struct prog_ctx *ctx, int sig)
 {
     int i;
     for (i = 0; i < ctx->nprocs; i++)
-        killpg (ctx->pids [i], sig);
+        killpg (ctx->task[i]->pid, sig);
     return (0);
 }
 
