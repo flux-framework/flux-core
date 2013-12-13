@@ -8,21 +8,21 @@
  * We try to kvs_get '000000' from the stream.  If ESRCH, we either block
  * until that key appears, or if KZ_FLAGS_NONBLOCK, return -1, errno = EAGAIN.
  * Once we have the value, its data is extracted and returned.
- * If the EOF flag was set, the next read will return 0, otherwise the next
- * read repeats the above for '000001' and so on.
+ * The next read repeats the above for '000001' and so on.
+ * If the value contains an EOF flag, return 0.
  *
  * kz_put (only valid for kz_open KZ_FLAGS_WRITE):
- * If KVS_FLAGS_APPEND, we seek to next available key and begin writing there.
- * If the EOF flag is encountered before that, return -1, errno = EINVAL.
- * If not appending, any existing contents are removed and writing begins
- * at '000000'.  Each kz_put returns either -1 or the number of bytes requested
- * to be written (there are no short writes).
+ * If KZ_FLAGS_TRUNC, any existing contents are removed.
+ * Writing begins at '000000'.  Each kz_put returns either -1 or
+ * the number of bytes requested to be written (there are no short writes).
+ * If not KZ_FLAGS_DELAYCOMMIT, a kvs_commit is issued after every kz_put.
  *
- * kz_flush (only valid for kz_open KZ_FLAGS_WRITE):
- * Issue a kvs_commit().
+ * kz_flush
+ * If KZ_FLAGS_WRITE, issues a kvs_commit(), otherwise no-op.
  *
  * kz_close
- * Issues a kz_flush if KZ_FLAGS_WRITE and destroys the handle.
+ * If KZ_FLAGS_WRITE, puts a value containing the EOF flag and issues
+ * a kvs_commit().
  */
 
 #define _GNU_SOURCE
@@ -53,11 +53,6 @@ struct kz_struct {
 kz_t kz_open (flux_t h, const char *name, int flags)
 {
     kz_t kz = xzmalloc (sizeof (*kz));
-
-    if ((flags & KZ_FLAGS_APPEND)) {
-        errno = EINVAL; /* not yet supported */
-        goto error;
-    }
 
     kz->flags = flags;
     kz->name = xstrdup (name);
@@ -106,9 +101,10 @@ int kz_put (kz_t kz, char *data, int len)
         oom ();
     if (kvs_put (kz->h, key, val) < 0)
         goto done;
-    /* FIXME: use flags to regulate this? */
-    if (kvs_commit (kz->h) < 0)
-        goto done;
+    if (!(kz->flags & KZ_FLAGS_DELAYCOMMIT)) {
+        if (kvs_commit (kz->h) < 0)
+            goto done;
+    }
     rc = len;
 done:
     if (key)
@@ -136,29 +132,18 @@ static json_object *getnext (kz_t kz)
 
 static json_object *getnext_blocking (kz_t kz)
 {
-    json_object *val = NULL;
-    char *key;
-    bool refresh = false;
+    json_object *val;
 
-    if (asprintf (&key, "%.6d", kz->seq) < 0)
-        oom ();
-    do {
-        while (!kz->dir || refresh) {
-            if (kvs_watch_once_dir (kz->h, &kz->dir, "%s", kz->name) < 0) {
-                if (errno != ENOENT)
-                    goto done;
+    while (!(val = getnext (kz)) || errno != EAGAIN) {
+        if (kvs_watch_once_dir (kz->h, &kz->dir, "%s", kz->name) < 0) {
+            if (errno != ENOENT)
+                break;
+            if (kz->dir) {
+                kvsdir_destroy (kz->dir);
+                kz->dir = NULL;
             }
         }
-        if (kvsdir_get (kz->dir, key, &val) < 0) {
-            if (errno != ENOENT)
-                goto done;
-            refresh = true;
-        }
-    } while (val == NULL);
-    kz->seq++;
-done:
-    if (key)
-        free (key);
+    }
     return val;
 }
 
