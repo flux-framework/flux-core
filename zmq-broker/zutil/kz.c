@@ -134,7 +134,9 @@ static json_object *getnext_blocking (kz_t kz)
 {
     json_object *val;
 
-    while (!(val = getnext (kz)) || errno != EAGAIN) {
+    while (!(val = getnext (kz))) {
+        if (errno != EAGAIN)
+            break;
         if (kvs_watch_once_dir (kz->h, &kz->dir, "%s", kz->name) < 0) {
             if (errno != ENOENT)
                 break;
