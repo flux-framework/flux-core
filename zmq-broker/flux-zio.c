@@ -24,12 +24,13 @@ typedef struct {
 } ctx_t;
 
 static void copy (flux_t h, const char *src, const char *dst, bool trunc,
-                  int blocksize);
+                  bool lazy, int blocksize);
 static void attach (flux_t h, const char *key, int flags, bool trunc,
-                   int blocksize);
-static void run (flux_t h, const char *key, int ac, char **av, int flags);
+                   bool lazy, int blocksize);
+static void run (flux_t h, const char *key, int ac, char **av, int flags,
+                 bool trunc, bool lazy);
 
-#define OPTIONS "hra:cpk:dfb:"
+#define OPTIONS "hra:cpk:dfb:l"
 static const struct option longopts[] = {
     {"help",         no_argument,        0, 'h'},
     {"run",          no_argument,        0, 'r'},
@@ -39,6 +40,7 @@ static const struct option longopts[] = {
     {"pty",          no_argument,        0, 'p'},
     {"debug",        no_argument,        0, 'd'},
     {"force",        no_argument,        0, 'f'},
+    {"lazy",         no_argument,        0, 'l'},
     {"blocksize",    required_argument,  0, 'b'},
     { 0, 0, 0, 0 },
 };
@@ -50,10 +52,11 @@ void usage (void)
 "       flux-zio [OPTIONS] --attach NAME\n"
 "       flux-zio [OPTIONS] --copy from to\n"
 "Where OPTIONS are:\n"
-"  -k,--key NAME         set KVS target for zio streams\n"
+"  -k,--key NAME         run with stdio attached to the specified KVS dir\n"
 "  -p,--pty              run/attach using a pty\n"
-"  -f,--force            truncate stdin on write [copy,attach]\n"
-"  -b,--blocksize BYTES  set stdin blocksize (default 4096) [copy,attach]\n"
+"  -f,--force            truncate KVS on write\n"
+"  -b,--blocksize BYTES  set stdin blocksize (default 4096)\n"
+"  -l,--lazy             flush data to KVS lazily (defer commit until close)\n"
 );
     exit (1);
 }
@@ -65,6 +68,7 @@ int main (int argc, char *argv[])
     bool aopt = false;
     bool ropt = false;
     bool fopt = false;
+    bool lopt = false;
     char *key = NULL;
     int flags = 0;
     int blocksize = 4096;
@@ -95,6 +99,9 @@ int main (int argc, char *argv[])
                 break;
             case 'f': /* --force */
                 fopt = true;
+                break;
+            case 'l': /* --lazy */
+                lopt = true;
                 break;
             case 'b': /* --blocksize bytes */
                 blocksize = strtoul (optarg, NULL, 10);
@@ -128,11 +135,11 @@ int main (int argc, char *argv[])
     }
 
     if (aopt) {
-        attach (h, key, flags, fopt, blocksize);
+        attach (h, key, flags, fopt, lopt, blocksize);
     } else if (ropt) {
-        run (h, key, argc, argv, flags);
+        run (h, key, argc, argv, flags, fopt, lopt);
     } else if (copt) {
-        copy (h, argv[0], argv[1], fopt, blocksize);
+        copy (h, argv[0], argv[1], fopt, lopt, blocksize);
     }
 
     flux_handle_destroy (&h);
@@ -271,12 +278,19 @@ static void run_stdin_ready_cb (kz_t kz, void *arg)
     }
 }
 
-static void run (flux_t h, const char *key, int ac, char **av, int flags)
+static void run (flux_t h, const char *key, int ac, char **av, int flags,
+                 bool trunc, bool lazy)
 {
     zctx_t *zctx = zctx_new ();
     forkzio_t fz;
     ctx_t *ctx = xzmalloc (sizeof (*ctx));
     char *name;
+    int kzoutflags = KZ_FLAGS_WRITE;
+
+    if (trunc)
+        kzoutflags |= KZ_FLAGS_TRUNC;
+    if (lazy)
+        kzoutflags |= KZ_FLAGS_DELAYCOMMIT;
 
     ctx->h = h;
 
@@ -300,14 +314,14 @@ static void run (flux_t h, const char *key, int ac, char **av, int flags)
 
     if (asprintf (&name, "%s.stdout", key) < 0)
         oom ();
-    ctx->kz[1] = kz_open (h, name, KZ_FLAGS_WRITE);
+    ctx->kz[1] = kz_open (h, name, kzoutflags);
     if (!ctx->kz[1])
         err_exit ("kz_open %s", name);
     free (name);
 
     if (asprintf (&name, "%s.stderr", key) < 0)
         oom ();
-    ctx->kz[2] = kz_open (h, name, KZ_FLAGS_WRITE);
+    ctx->kz[2] = kz_open (h, name, kzoutflags);
     if (!ctx->kz[2])
         err_exit ("kz_open %s", name);
     free (name);
@@ -437,13 +451,18 @@ static int attach_stdin_ready_cb (flux_t h, int fd, short revents, void *arg)
 }
 
 static void attach (flux_t h, const char *key, int flags, bool trunc,
-                    int blocksize)
+                    bool lazy, int blocksize)
 {
     ctx_t *ctx = xzmalloc (sizeof (*ctx));
     char *name;
     int fdin = dup (STDIN_FILENO);
     struct termios saved_tio;
-    int kzoutflags = KZ_FLAGS_WRITE | (trunc ? KZ_FLAGS_TRUNC : 0);
+    int kzoutflags = KZ_FLAGS_WRITE;
+
+    if (trunc)
+        kzoutflags |= KZ_FLAGS_TRUNC;
+    if (lazy)
+        kzoutflags |= KZ_FLAGS_DELAYCOMMIT;
 
     msg ("process attached to %s", key);
     
@@ -516,12 +535,18 @@ static void attach (flux_t h, const char *key, int flags, bool trunc,
     free (ctx);
 }
 
-static void copy_k2k (flux_t h, const char *src, const char *dst, bool trunc)
+static void copy_k2k (flux_t h, const char *src, const char *dst, bool trunc,
+                      bool lazy)
 {
-    int kzoutflags = KZ_FLAGS_WRITE | (trunc ? KZ_FLAGS_TRUNC : 0);
+    int kzoutflags = KZ_FLAGS_WRITE;
     kz_t kzin, kzout;
     char *data;
     int len;
+
+    if (trunc)
+        kzoutflags |= KZ_FLAGS_TRUNC;
+    if (lazy)
+        kzoutflags |= KZ_FLAGS_DELAYCOMMIT;
 
     if (!(kzin = kz_open (h, src, KZ_FLAGS_READ)))
         err_exit ("kz_open %s", src);
@@ -541,13 +566,18 @@ static void copy_k2k (flux_t h, const char *src, const char *dst, bool trunc)
 }
 
 static void copy_f2k (flux_t h, const char *src, const char *dst, bool trunc,
-                      int blocksize)
+                      bool lazy, int blocksize)
 {
     int srcfd = STDIN_FILENO;
-    int kzoutflags = KZ_FLAGS_WRITE | (trunc ? KZ_FLAGS_TRUNC : 0);
+    int kzoutflags = KZ_FLAGS_WRITE;
     kz_t kzout;
     char *data;
     int len;
+
+    if (trunc)
+        kzoutflags |= KZ_FLAGS_TRUNC;
+    if (lazy)
+        kzoutflags |= KZ_FLAGS_DELAYCOMMIT;
 
     if (strcmp (src, "-") != 0) {
         if ((srcfd = open (src, O_RDONLY)) < 0)
@@ -601,12 +631,12 @@ static bool isfile (const char *name)
 }
 
 static void copy (flux_t h, const char *src, const char *dst, bool trunc,
-                  int blocksize)
+                  bool lazy, int blocksize)
 {
     if (!isfile (src) && !isfile (dst)) {
-        copy_k2k (h, src, dst, trunc);
+        copy_k2k (h, src, dst, trunc, lazy);
     } else if (isfile (src) && !isfile (dst)) {
-        copy_f2k (h, src, dst, trunc, blocksize);
+        copy_f2k (h, src, dst, trunc, lazy, blocksize);
     } else if (!isfile (src) && isfile (dst)) {
         copy_k2f (h, src, dst);
     } else {
