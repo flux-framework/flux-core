@@ -25,6 +25,11 @@
 #include "dlua/lutil.h"
 #include "dlua/kvs-lua.h"
 #include "dlua/flux-lua.h"
+#include "zutil/zio.h"
+#include "zutil/kz.h"
+
+enum { IN=0, OUT, ERR, NR_IO };
+const char *ionames [] = { "stdin", "stdout", "stderr" };
 
 struct task_info {
     struct prog_ctx *ctx;
@@ -36,6 +41,11 @@ struct task_info {
     flux_t   f;               /* local flux handle for task */
     kvsdir_t kvs;             /* kvs handle to this task's dir in kvs */
     int      status;
+    int      exited;          /* non-zero if this task exited */
+
+    /*  IO */
+    zio_t zio[3];
+    kz_t  kz[3];
 };
 
 struct prog_ctx {
@@ -136,8 +146,89 @@ int globalid (struct prog_ctx *ctx, int localid)
     return ((ctx->nodeid * ctx->nprocs) + localid);
 }
 
+const char * ioname (int s)
+{
+    if (s == IN)
+        return "stdin";
+    if (s == OUT)
+        return "stdout";
+    if (s == ERR)
+        return "stderr";
+    return "";
+}
+
+static int run_send_kz (kz_t *kzp, char *data, int len)
+{
+    int rc = -1;
+
+    if (!*kzp) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (len == 0) {
+        if (kz_close (*kzp) < 0)
+            goto done;
+        *kzp = NULL;
+    } else {
+        if (kz_put (*kzp, data, len) < 0)
+            goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+
+int do_output (zio_t z, json_object *o, struct task_info *t)
+{
+    char *data;
+    bool eof;
+    char *stream;
+    int x;
+    int len = 0;
+    int rc = -1;
+
+    /* Ugh. This needs to be fixed. We unpack json here just
+     *  to send to kz which repacks it. Maybe zio shouldn't bother
+     *  ecoding to json?
+     */
+    len = zio_json_decode (o, &data, &eof, &stream);
+    if (len < 0 || (len > 0 && eof)) {
+        errno = EPROTO;
+        goto done;
+    }
+    log_msg (t->ctx, "%s: len=%d eof=%d", stream, len, eof);
+    if (!strcmp (stream, "stdout"))
+        x = OUT;
+    else if (!strcmp (stream, "stderr"))
+        x = ERR;
+    else {
+        errno = EPROTO;
+        goto done;
+    }
+    if ((rc = run_send_kz (&t->kz[x], data, len)) < 0)
+        log_err (t->ctx, "%s: run_send_kz: %s\n", ioname (x), strerror (errno));
+done:
+    if (data)
+        free (data);
+    if (stream)
+        free (stream);
+
+    if (eof) {
+        /* check to see if all tasks completed.
+         *  XXX: for now we wake up signal callback which can end the
+         *   zloop for us (we can't do it from the zio callback)
+         *   We need a better way to do this...
+         */
+        kill (getpid(), SIGCHLD);
+    }
+    return (rc);
+}
+
 struct task_info * task_info_create (struct prog_ctx *ctx, int id)
 {
+    int i;
+    char *key;
     struct task_info *t = xzmalloc (sizeof (*t));
 
     t->ctx = ctx;
@@ -149,7 +240,53 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
     t->f = NULL;
     t->kvs = NULL;
 
+    for (i = 0; i < NR_IO; i++) {
+        int flags = KZ_FLAGS_WRITE;
+        if (i == IN) {
+            flags = KZ_FLAGS_READ;
+            t->zio [i] = zio_pipe_writer_create (ioname (i), (void *) t);
+        }
+        else {
+            log_msg (ctx, "Creating pipe reader %s\n", ioname (i));
+            t->zio [i] = zio_pipe_reader_create (ioname (i), NULL, (void *) t);
+            zio_set_send_cb (t->zio [i], (zio_send_f) do_output);
+        }
+
+        asprintf (&key, "lwj.%ld.%d.%s", ctx->id, t->id, ioname (i));
+        t->kz [i] = kz_open (ctx->cmb, key, flags);
+        free (key);
+    }
+
     return (t);
+}
+
+int task_completed (struct task_info *t)
+{
+    return (t->exited &&
+            zio_closed (t->zio [OUT]) && zio_closed (t->zio [ERR]));
+}
+
+int all_tasks_completed (struct prog_ctx *ctx)
+{
+    int i;
+    for (i = 0; i < ctx->nprocs; i++)
+        if (!task_completed (ctx->task [i]))
+            return (0);
+    return (1);
+}
+
+void task_io_flush (struct task_info *t)
+{
+    int i;
+    for (i = 0; i < NR_IO; i++) {
+        zio_flush (t->zio [i]);
+        zio_destroy (t->zio [i]);
+        if (t->kz [i]) {
+            kz_flush (t->kz [i]);
+            kz_close (t->kz [i]);
+            t->kz [i] = NULL;
+        }
+    }
 }
 
 void task_info_destroy (struct task_info *t)
@@ -216,8 +353,10 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
 {
     int i;
 
-    for (i = 0; i < ctx->nprocs; i++)
+    for (i = 0; i < ctx->nprocs; i++) {
+        task_io_flush (ctx->task [i]);
         task_info_destroy (ctx->task [i]);
+    }
 
     if (ctx->kvs)
         kvsdir_destroy (ctx->kvs);
@@ -385,9 +524,9 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
     else if (kvsdir_get_int (ctx->kvs, "tasks-per-node", &ctx->nprocs) < 0)
             ctx->nprocs = 1;
 
-    ctx->task = xzmalloc (ctx->nprocs * sizeof (*ctx->task));
+    ctx->task = xzmalloc (ctx->nprocs * sizeof (struct task_info *));
     for (i = 0; i < ctx->nprocs; i++)
-        ctx->task [i] = task_info_create (ctx, i);
+        ctx->task[i] = task_info_create (ctx, i);
 
     log_msg (ctx, "lwj %ld: node%d: nprocs=%d, nnodes=%d, cmdline=%s",
                    ctx->id, ctx->nodeid, ctx->nprocs, ctx->nnodes,
@@ -463,20 +602,31 @@ void closeall (int fd)
     return;
 }
 
-void child_io_devnull (struct prog_ctx *ctx)
+void child_io_setup (struct task_info *t)
 {
+    /*
+     *  Close parent end of stdio fds in child
+     */
+    close (zio_dst_fd (t->zio [IN]));
+    close (zio_src_fd (t->zio [OUT]));
+    close (zio_src_fd (t->zio [ERR]));
+
     /*
      *  Dup appropriate fds onto child STDIN/STDOUT/STDERR
      */
-#if 0 // XXX: Disable for now so we get stdio on the stdio of cmbd.
-    int devnull = open ("/dev/null", O_RDWR);
-    if (  (dup2 (devnull, STDIN_FILENO) < 0)
-       || (dup2 (devnull, STDOUT_FILENO) < 0)
-       || (dup2 (devnull, STDERR_FILENO) < 0))
-            log_fatal (ctx, 1, "dup2: %s", strerror (errno));
-#endif
+    if (  (dup2 (zio_src_fd (t->zio [IN]), STDIN_FILENO) < 0)
+       || (dup2 (zio_dst_fd (t->zio [OUT]), STDOUT_FILENO) < 0)
+       || (dup2 (zio_dst_fd (t->zio [ERR]), STDERR_FILENO) < 0))
+        log_fatal (t->ctx, 1, "dup2: %s", strerror (errno));
 
     closeall (3);
+}
+
+void close_child_fds (struct task_info *t)
+{
+    close (zio_src_fd (t->zio [IN]));
+    close (zio_dst_fd (t->zio [OUT]));
+    close (zio_dst_fd (t->zio [ERR]));
 }
 
 int update_job_state (struct prog_ctx *ctx, const char *state)
@@ -669,6 +819,7 @@ int exec_command (struct prog_ctx *ctx, int i)
     if (cpid < 0)
         log_fatal (ctx, 1, "fork: %s", strerror (errno));
     if (cpid == 0) {
+        child_io_setup (t);
         //log_msg (ctx, "in child going to exec %s", ctx->argv [0]);
 
         if (sigmask_unblock_all () < 0)
@@ -701,8 +852,10 @@ int exec_command (struct prog_ctx *ctx, int i)
     /*
      *  Parent: Close child fds
      */
+    close_child_fds (t);
     log_msg (ctx, "in parent: child pid[%d] = %d", i, cpid);
     t->pid = cpid;
+
 
     return (0);
 }
@@ -1015,6 +1168,7 @@ int reap_child (struct prog_ctx *ctx)
     log_msg (ctx, "task%d: pid %d (%s) exited with status 0x%04x",
             t->id, wpid, ctx->argv [0], status);
     t->status = status;
+    t->exited = 1;
 
     ctx->taskid = t->id;
     lua_stack_call (ctx->lua_stack, "rexecd_task_exit");
@@ -1058,13 +1212,10 @@ int signal_cb (zloop_t *zl, zmq_pollitem_t *zp, struct prog_ctx *ctx)
     }
 
     /* SIGCHLD assumed */
-
-    while (reap_child (ctx)) {
-        if (++ctx->exited == ctx->nprocs) {
-            rexec_state_change (ctx, "complete");
-            return (-1); /* Wakeup zloop */
-        }
-    }
+    while (reap_child (ctx))
+        ++ctx->exited;
+    if (all_tasks_completed (ctx))
+        return (-1); /* Wakeup zloop */
     return (0);
 }
 
@@ -1098,9 +1249,25 @@ int cmb_cb (zloop_t *zl, zmq_pollitem_t *zp, struct prog_ctx *ctx)
     return (0);
 }
 
+int task_info_io_setup (struct task_info *t)
+{
+    zloop_t *zl = t->ctx->zl;
+    int i;
+
+    for (i = 0; i < NR_IO; i++) {
+        zio_zloop_attach (t->zio [i], zl);
+        zio_set_debug (t->zio [i], NULL, NULL);
+    }
+    return (0);
+}
+
 int prog_ctx_zloop_init (struct prog_ctx *ctx)
 {
+    int i;
     zmq_pollitem_t zp = { .fd = -1, .events = 0, .revents = 0, .socket = 0 };
+
+    for (i = 0; i < ctx->nprocs; i++)
+        task_info_io_setup (ctx->task [i]);
 
     /*
      *  Listen for "events" coming from the signalfd
@@ -1221,7 +1388,7 @@ int main (int ac, char **av)
 
     while (zloop_start (ctx->zl) == 0)
         {log_msg (ctx, "EINTR?");}
-
+    rexec_state_change (ctx, "complete");
     log_msg (ctx, "exiting...");
 
     prog_ctx_destroy (ctx);
