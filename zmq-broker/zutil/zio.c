@@ -438,6 +438,12 @@ int zio_flush (zio_t zio)
     int len;
     int rc = 0;
 
+    /*
+     *  Nothing to flush if EOF already sent to consumer:
+     */
+    if (zio_eof_sent (zio))
+        return (0);
+
     while (((len = zio_data_to_flush (zio)) > 0) || zio_eof (zio)) {
         char * buf = NULL;
         int n = 0;
