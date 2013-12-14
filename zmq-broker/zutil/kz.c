@@ -63,15 +63,19 @@ kz_t kz_open (flux_t h, const char *name, int flags)
     kz->h = h;
 
     if ((flags & KZ_FLAGS_WRITE)) {
-        if ((flags & KZ_FLAGS_TRUNC)) {
-            if (kvs_unlink (h, name) < 0)
-                goto error;
-        } else {
-            if (kvs_get_dir (h, &kz->dir, "%s", name) == 0) {
+        if (!(flags & KZ_FLAGS_TRUNC)) {
+            if (kvs_get_dir (h, NULL, "%s", name) == 0) {
                 errno = EEXIST;
                 goto error;
             }
         }
+        if (kvs_mkdir (h, name) < 0)
+            goto error;
+        if (kvs_commit (h) < 0)
+            goto error;
+    } else if ((flags & KZ_FLAGS_READ)) {
+        if (kvs_get_dir (h, &kz->dir, "%s", name) < 0)
+            goto error;
     }
     return kz;
 error:

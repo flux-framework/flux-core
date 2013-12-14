@@ -11,6 +11,8 @@ enum {
     KZ_FLAGS_MODEMASK       = 0x0003,
 
     KZ_FLAGS_NONBLOCK       = 0x0010, /* currently only applies to reads */
+    KZ_FLAGS_NOEXIST        = 0x0020, /* allow open for reading to succeed */
+                                      /*   even if name doesn't exist yet */
 
     KZ_FLAGS_TRUNC          = 0x0100, /* remove contents before writing */
     KZ_FLAGS_DELAYCOMMIT    = 0x0200, /* commit on flush/close */
