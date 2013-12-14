@@ -312,7 +312,8 @@ static void run (flux_t h, const char *key, int ac, char **av, int flags,
 
     if (asprintf (&name, "%s.stdin", key) < 0)
         oom ();
-    ctx->kz[0] = kz_open (h, name, KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK);
+    ctx->kz[0] = kz_open (h, name,
+                          KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK | KZ_FLAGS_NOEXIST);
     if (!ctx->kz[0])
         err_exit ("kz_open %s", name);
     if (kz_set_ready_cb (ctx->kz[0], run_stdin_ready_cb, ctx) < 0)
