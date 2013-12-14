@@ -271,12 +271,11 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
             t->zio [i] = zio_pipe_writer_create (ioname (i), (void *) t);
         }
         else {
-            log_msg (ctx, "Creating pipe reader %s\n", ioname (i));
             t->zio [i] = zio_pipe_reader_create (ioname (i), NULL, (void *) t);
             zio_set_send_cb (t->zio [i], (zio_send_f) do_output);
         }
 
-        asprintf (&key, "lwj.%ld.%d.%s", ctx->id, t->id, ioname (i));
+        asprintf (&key, "lwj.%ld.%d.%s", ctx->id, t->globalid, ioname (i));
         t->kz [i] = kz_open (ctx->cmb, key, flags);
         if (i == IN)
             kz_set_ready_cb (t->kz [i], (kz_ready_f) kz_stdin, t);
