@@ -2,6 +2,7 @@
 #include <czmq.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <string.h>
 
 #include "zio.h"
 #include "util/util.h"
@@ -175,7 +176,7 @@ static zio_t zio_allocate (const char *name, int reader, void *arg)
     if (!(z = malloc (sizeof (*z))))
         return NULL;
 
-    memset (z, sizeof (*z), 0);
+    memset (z, 0, sizeof (*z));
     assert (z->magic = ZIO_MAGIC);
 
     if (!(z->name = strdup (name))) {
