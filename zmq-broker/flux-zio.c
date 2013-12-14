@@ -149,7 +149,7 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-static int run_send_kz (kz_t *kzp, char *data, int len)
+static int run_send_kz (kz_t *kzp, char *data, int len, bool eof)
 {
     int rc = -1;
 
@@ -157,30 +157,36 @@ static int run_send_kz (kz_t *kzp, char *data, int len)
         errno = EPROTO;
         goto done;
     }
-    if (len == 0) {
+    if (len > 0 && data != NULL) {
+        if (kz_put (*kzp, data, len) < 0)
+            goto done;
+    }
+    if (eof) {
         if (kz_close (*kzp) < 0)
             goto done;
         *kzp = NULL;
-    } else {
-        if (kz_put (*kzp, data, len) < 0)
-            goto done;
     }
     rc = 0;
 done:
     return rc;
 }
 
-static json_object *run_recv_zs (void *zs)
+static json_object *run_recv_zs (void *zs, char **streamp)
 {
     zmsg_t *zmsg = zmsg_recv (zs);
     json_object *o = NULL;
     char *buf = NULL;
+    char *stream = NULL;
 
-    if (!zmsg || !(buf = zmsg_popstr (zmsg)) || strlen (buf) == 0)
+    if (!zmsg || !(stream = zmsg_popstr (zmsg)) || strlen (stream) == 0
+              || !(buf = zmsg_popstr (zmsg))    || strlen (buf) == 0)
         goto done;
     if (!(o = json_tokener_parse (buf)))
         goto done;
+    *streamp = stream;
 done:
+    if (!o && stream)
+        free (stream);
     if (buf)
         free (buf);
     if (zmsg)
@@ -198,21 +204,20 @@ static int run_zs_ready_cb (flux_t h, void *zs, short revents, void *arg)
     int len = 0;
     int rc = -1;
 
-    if (!(o = run_recv_zs (zs))) {
+    if (!(o = run_recv_zs (zs, &stream))) {
         flux_reactor_stop (h);
         rc = 0;
         goto done;
     }
-    len = zio_json_decode (o, &data, &eof, &stream);
-    if (len < 0 || (len > 0 && eof)) {
+    if ((len = zio_json_decode (o, (void **) &data, &eof)) < 0) {
         errno = EPROTO;
         goto done;
     }
     if (!strcmp (stream, "stdout")) {
-        if (run_send_kz (&ctx->kz[1], data, len) < 0)
+        if (run_send_kz (&ctx->kz[1], data, len, eof) < 0)
             goto done;        
     } else if (!strcmp (stream, "stderr")) {
-        if (run_send_kz (&ctx->kz[2], data, len) < 0)
+        if (run_send_kz (&ctx->kz[2], data, len, eof) < 0)
             goto done;        
     } else {
         errno = EPROTO;
@@ -229,7 +234,7 @@ done:
     return rc;
 }
 
-static int run_send_zs (void *zs, json_object *o)
+static int run_send_zs (void *zs, json_object *o, char *stream)
 {
     zmsg_t *zmsg;
     const char *s;
@@ -238,7 +243,9 @@ static int run_send_zs (void *zs, json_object *o)
     if (!(zmsg = zmsg_new ()))
         oom ();
     s = json_object_to_json_string (o);
-    if (zmsg_addstr (zmsg, s) < 0)
+    if (zmsg_pushstr (zmsg, s) < 0)
+        goto done;
+    if (zmsg_pushstr (zmsg, stream) < 0)
         goto done;
     if (zmsg_send (&zmsg, zs) < 0)
         goto done;
@@ -261,18 +268,18 @@ static void run_stdin_ready_cb (kz_t kz, void *arg)
             if (errno != EAGAIN)
                 err_exit ("kz_get stdin");
         } else if (len > 0) {
-            if (!(o = zio_json_encode (data, len, false, "stdin")))
+            if (!(o = zio_json_encode (data, len, false)))
                 err_exit ("zio_json_encode");
-            if (run_send_zs (ctx->zs, o) < 0)
+            if (run_send_zs (ctx->zs, o, "stdin") < 0)
                 err_exit ("run_send_zs");
             free (data);
             json_object_put (o);
         }
     } while (len > 0);
     if (len == 0) { /* EOF */
-        if (!(o = zio_json_encode (NULL, 0, true, "stdin")))
+        if (!(o = zio_json_encode (NULL, 0, true)))
             err_exit ("zio_json_encode");
-        if (run_send_zs (ctx->zs, o) < 0)
+        if (run_send_zs (ctx->zs, o, "stdin") < 0)
             err_exit ("run_send_zs");
         json_object_put (o);
     }

@@ -341,29 +341,16 @@ static int zio_read (zio_t zio, void *dst, int len)
         return cbuf_read (zio->buf, dst, len);
 }
 
-static json_object * zio_data_object (void *p, size_t len)
-{
-    json_object *o = util_json_object_new_object ();
-    if (len && p)
-        util_json_object_add_base64 (o, "data", (uint8_t *) p, len);
-    return (o);
-}
-
 static json_object * zio_json_object_create (zio_t zio, void *data, size_t len)
 {
-    json_object *o, *d;
-
-    d = zio_data_object (data, len);
+    bool eof = false;
     if (zio_eof_pending (zio)) {
-        util_json_object_add_boolean (d, "eof", 1);
+        eof = true;
         zio_debug (zio, "Setting EOF sent\n");
         zio->flags |= ZIO_EOF_SENT;
     }
-    o = util_json_object_new_object ();
-    json_object_object_add (o, zio->name, d);
-    return (o);
+    return zio_json_encode (data, len, eof);
 }
-
 
 static int zio_sendmsg (zio_t zio, json_object *o)
 {
@@ -594,39 +581,34 @@ static int zio_write_data (zio_t zio, char *buf, size_t len)
 }
 
 /*
- *  Write json object to this object, buffering unwritten data.
- *   Only consumes data destined for this object by zio->name;
+ *  Write json object to this zio object, buffering unwritten data.
  */
 int zio_write_json (zio_t zio, json_object *o)
 {
-    int rc = 0;
-    json_object *x;
+    char *s;
+    int len, rc = 0;
+    bool eof;
 
-    errno = EINVAL;
-    if ((zio == NULL) || (zio->magic != ZIO_MAGIC) || !zio_writer (zio))
+    if ((zio == NULL) || (zio->magic != ZIO_MAGIC) || !zio_writer (zio)) {
+        errno = EINVAL;
         return (-1);
-
-    if (json_object_object_get_ex (o, zio->name, &x)) {
-        char *s;
-        int len = 0;
-        bool eof = false;
-
-        if ((util_json_object_get_boolean (x, "eof", &eof) == 0) && eof) {
-            zio_set_eof (zio);
-        }
-        if (util_json_object_get_base64 (x, "data", (uint8_t **) &s, &len) == 0)
-            rc = zio_write_data (zio, s, len);
-
-        zio_debug (zio, "zio_write: %d bytes, eof=%d\n", len, zio_eof (zio));
-
-        /*
-         *  Delete data that we've consumed
-         */
-        json_object_object_del (o, zio->name);
-
-        if (zio_write_pending (zio))
-            zio_writer_schedule (zio);
     }
+    len = zio_json_decode (o, (void **)&s, &eof);
+    if (len < 0) {
+        errno = EINVAL;
+        return (-1);
+    }
+    if (eof)
+        zio_set_eof (zio);
+    if (len > 0) {
+        rc = zio_write_data (zio, s, len);
+        free (s);
+    }
+
+    zio_debug (zio, "zio_write: %d bytes, eof=%d\n", len, zio_eof (zio));
+
+    if (zio_write_pending (zio))
+        zio_writer_schedule (zio);
 
     return (rc);
 }
@@ -659,7 +641,8 @@ int zio_zmsg_send (zio_t zio, json_object *o, void *arg)
         return (-1);
     zmsg_t *zmsg = zmsg_new ();
     s = json_object_to_json_string (o);
-    zmsg_addstr (zmsg, s);
+    zmsg_pushstr (zmsg, s);
+    zmsg_pushstr (zmsg, zio_name (zio));
     return (zmsg_send (&zmsg, zio->dstsock));
 }
 
@@ -747,48 +730,27 @@ int zio_dst_fd (zio_t zio)
     return (zio->dstfd);
 }
 
-int zio_json_decode (json_object *o, char **dp, bool *eofp, char **namep)
+int zio_json_decode (json_object *o, void **pp, bool *eofp)
 {
-    json_object_iter itr;
-    json_object *d = NULL;
-    int count = 0;
-    char *name = NULL;
-    bool eof = false;
-    char *data = NULL;
-    int len;
+    int len, rc = -1;
 
-    if (!o)
-        return -1;
-    json_object_object_foreachC (o, itr) {
-        name = itr.key;
-        d = itr.val;
-        count++;
+    if (o) {
+        if (util_json_object_get_boolean (o, "eof", eofp) == 0)
+            rc = 0;
+        if (util_json_object_get_base64 (o, "data", (uint8_t **) pp, &len) == 0)
+            rc = len; 
     }
-    if (count != 1 || d == NULL || name == NULL)
-        return -1; /* expect exactly one data object */
-    (void)util_json_object_get_boolean (d, "eof", &eof);
-    if (util_json_object_get_base64 (d, "data", (uint8_t **) &data, &len) < 0)
-        return -1;
-    if (eofp)
-        *eofp = eof;
-    if (namep)
-        *namep = xstrdup (name);
-    if (dp)
-        *dp = data;
-    else if (data)
-        free (data);
-    return len;
+    return rc;
 }
 
-json_object *zio_json_encode (char *data, ssize_t len, bool eof, char *name)
+json_object *zio_json_encode (void *p, int len, bool eof)
 {
-    json_object *o, *d;
+    json_object *o = util_json_object_new_object ();
 
-    d = zio_data_object (data, len);
+    if (len && p)
+        util_json_object_add_base64 (o, "data", (uint8_t *) p, len);
     if (eof)
-        util_json_object_add_boolean (d, "eof", 1);
-    o = util_json_object_new_object ();
-    json_object_object_add (o, name, d);
+        util_json_object_add_boolean (o, "eof", 1);
     return (o);
 }
 

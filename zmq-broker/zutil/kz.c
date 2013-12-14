@@ -48,6 +48,7 @@ struct kz_struct {
     kvsdir_t dir;
     kz_ready_f ready_cb;
     void *ready_arg;
+    bool eof;
 };
 
 kz_t kz_open (flux_t h, const char *name, int flags)
@@ -97,7 +98,7 @@ int kz_put (kz_t kz, char *data, int len)
         errno = EINVAL;
         goto done;
     }
-    if (!(val = zio_json_encode (data, len, false, kz->stream))) {
+    if (!(val = zio_json_encode (data, len, false))) {
         errno = EPROTO;
         goto done;
     }
@@ -157,7 +158,6 @@ int kz_get (kz_t kz, char **datap)
 {
     json_object *val = NULL;
     char *stream = NULL;
-    bool eof = false;
     char *data;
     int len = -1;
 
@@ -165,17 +165,15 @@ int kz_get (kz_t kz, char **datap)
         errno = EINVAL;
         goto done;
     }
+    if (kz->eof)
+        return 0;
     if ((kz->flags & KZ_FLAGS_NONBLOCK))
         val = getnext (kz);
     else
         val = getnext_blocking (kz);
     if (!val)
         goto done;
-    if ((len = zio_json_decode (val, &data, &eof, &stream)) < 0) {
-        errno = EPROTO;
-        goto done;
-    }
-    if ((len > 0 && eof) || strcmp (stream, kz->stream) != 0) {
+    if ((len = zio_json_decode (val, (void **) &data, &kz->eof)) < 0) {
         errno = EPROTO;
         goto done;
     }
@@ -203,7 +201,7 @@ int kz_close (kz_t kz)
     if ((kz->flags & KZ_FLAGS_WRITE)) {
         if (asprintf (&key, "%s.%.6d", kz->name, kz->seq++) < 0)
             oom ();
-        if (!(val = zio_json_encode (NULL, 0, true, kz->stream))) { /* EOF */
+        if (!(val = zio_json_encode (NULL, 0, true))) { /* EOF */
             errno = EPROTO;
             goto done;
         }
