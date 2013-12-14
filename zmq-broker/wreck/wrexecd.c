@@ -858,8 +858,8 @@ int exec_command (struct prog_ctx *ctx, int i)
         ctx->in_task = 1;
         lua_stack_call (ctx->lua_stack, "rexecd_task_init");
 
-        prog_ctx_setenvf (ctx, "MPIRUN_RANK",     1, "%d", globalid (ctx, i));
-        prog_ctx_setenvf (ctx, "CMB_LWJ_TASK_ID", 1, "%d", globalid (ctx, i));
+        prog_ctx_setenvf (ctx, "MPIRUN_RANK",     1, "%d", t->globalid);
+        prog_ctx_setenvf (ctx, "CMB_LWJ_TASK_ID", 1, "%d", t->globalid);
         prog_ctx_setenvf (ctx, "CMB_LWJ_LOCAL_TASK_ID", 1, "%d", i);
 
         /* give each task its own process group so we can use killpg(2) */
@@ -898,7 +898,8 @@ char *gtid_list_create (struct prog_ctx *ctx, char *buf, size_t len)
         int count;
 
         if (!truncated)  {
-            count = snprintf (buf + n, len - n, "%u,", globalid (ctx, i));
+            struct task_info *t = ctx->task [i];
+            count = snprintf (buf + n, len - n, "%u,", t->globalid);
 
             if ((count >= (len - n)) || (count < 0))
                 truncated = 1;
