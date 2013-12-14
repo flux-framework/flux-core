@@ -225,6 +225,30 @@ done:
     return (rc);
 }
 
+void kz_stdin (kz_t kz, struct task_info *t)
+{
+    char *data;
+    int len = kz_get (kz, &data);
+    json_object *o = NULL;
+
+    if ((len < 0) && (errno != EAGAIN)) {
+        log_err (t->ctx, "kz_get: %s", strerror (errno));
+        return;
+    }
+    else if (len == 0)
+        o = zio_json_encode (NULL, 0, true, "stdin");
+    else
+        o = zio_json_encode (data, len, false, "stdin");
+
+    if (o == NULL) {
+        log_err (t->ctx, "zio_json_encode failed");
+        return;
+    }
+    zio_write_json (t->zio [IN], o);
+    json_object_put (o);
+    return;
+}
+
 struct task_info * task_info_create (struct prog_ctx *ctx, int id)
 {
     int i;
@@ -243,7 +267,7 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
     for (i = 0; i < NR_IO; i++) {
         int flags = KZ_FLAGS_WRITE;
         if (i == IN) {
-            flags = KZ_FLAGS_READ;
+            flags = KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK;
             t->zio [i] = zio_pipe_writer_create (ioname (i), (void *) t);
         }
         else {
@@ -254,6 +278,8 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
 
         asprintf (&key, "lwj.%ld.%d.%s", ctx->id, t->id, ioname (i));
         t->kz [i] = kz_open (ctx->cmb, key, flags);
+        if (i == IN)
+            kz_set_ready_cb (t->kz [i], (kz_ready_f) kz_stdin, t);
         free (key);
     }
 
