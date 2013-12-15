@@ -157,72 +157,33 @@ const char * ioname (int s)
     return "";
 }
 
-static int run_send_kz (kz_t *kzp, char *data, int len)
+void prog_ctx_signal_eof (struct prog_ctx *ctx)
 {
-    int rc = -1;
-
-    if (!*kzp) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (len == 0) {
-        if (kz_close (*kzp) < 0)
-            goto done;
-        *kzp = NULL;
-    } else {
-        if (kz_put (*kzp, data, len) < 0)
-            goto done;
-    }
-    rc = 0;
-done:
-    return rc;
+    /*
+     *  Signal that a stdio reader has been closed as this event may
+     *   indicate completion if all tasks have exited and other IO
+     *   streams are closed.
+     *  XXX: For now we wake up the signal callback and force the
+     *   check there.
+     */
+    kill (getpid(), SIGCHLD);
+}
+int stdout_cb (zio_t z, json_object *o, struct task_info *t)
+{
+    if (kz_put_json (t->kz[OUT], o) < 0)
+        return log_err (t->ctx, "stdout: kz_put_json: %s", strerror (errno));
+    if (zio_json_eof (o))
+        prog_ctx_signal_eof (t->ctx);
+    return (0);
 }
 
-
-int do_output (zio_t z, json_object *o, struct task_info *t)
+int stderr_cb (zio_t z, json_object *o, struct task_info *t)
 {
-    char *data;
-    bool eof;
-    char *stream;
-    int x;
-    int len = 0;
-    int rc = -1;
-
-    /* Ugh. This needs to be fixed. We unpack json here just
-     *  to send to kz which repacks it. Maybe zio shouldn't bother
-     *  ecoding to json?
-     */
-    len = zio_json_decode (o, &data, &eof, &stream);
-    if (len < 0 || (len > 0 && eof)) {
-        errno = EPROTO;
-        goto done;
-    }
-    log_msg (t->ctx, "%s: len=%d eof=%d", stream, len, eof);
-    if (!strcmp (stream, "stdout"))
-        x = OUT;
-    else if (!strcmp (stream, "stderr"))
-        x = ERR;
-    else {
-        errno = EPROTO;
-        goto done;
-    }
-    if ((rc = run_send_kz (&t->kz[x], data, len)) < 0)
-        log_err (t->ctx, "%s: run_send_kz: %s\n", ioname (x), strerror (errno));
-done:
-    if (data)
-        free (data);
-    if (stream)
-        free (stream);
-
-    if (eof) {
-        /* check to see if all tasks completed.
-         *  XXX: for now we wake up signal callback which can end the
-         *   zloop for us (we can't do it from the zio callback)
-         *   We need a better way to do this...
-         */
-        kill (getpid(), SIGCHLD);
-    }
-    return (rc);
+    if (kz_put_json (t->kz[ERR], o) < 0)
+        return log_err (t->ctx, "stderr: kz_put_json: %s", strerror (errno));
+    if (zio_json_eof (o))
+        prog_ctx_signal_eof (t->ctx);
+    return (0);
 }
 
 void kz_stdin (kz_t kz, struct task_info *t)
@@ -236,9 +197,9 @@ void kz_stdin (kz_t kz, struct task_info *t)
         return;
     }
     else if (len == 0)
-        o = zio_json_encode (NULL, 0, true, "stdin");
+        o = zio_json_encode (NULL, 0, true);
     else
-        o = zio_json_encode (data, len, false, "stdin");
+        o = zio_json_encode (data, len, false);
 
     if (o == NULL) {
         log_err (t->ctx, "zio_json_encode failed");
@@ -252,7 +213,6 @@ void kz_stdin (kz_t kz, struct task_info *t)
 struct task_info * task_info_create (struct prog_ctx *ctx, int id)
 {
     int i;
-    char *key;
     struct task_info *t = xzmalloc (sizeof (*t));
 
     t->ctx = ctx;
@@ -264,19 +224,22 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
     t->f = NULL;
     t->kvs = NULL;
 
-    for (i = 0; i < NR_IO; i++) {
-        int flags = KZ_FLAGS_WRITE;
-        if (i == IN) {
-            flags = KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK;
-            t->zio [i] = zio_pipe_writer_create (ioname (i), (void *) t);
-        }
-        else {
-            t->zio [i] = zio_pipe_reader_create (ioname (i), NULL, (void *) t);
-            zio_set_send_cb (t->zio [i], (zio_send_f) do_output);
-        }
+    t->zio [OUT] = zio_pipe_reader_create ("stdout", NULL, (void *) t);
+    zio_set_send_cb (t->zio [OUT], (zio_send_f) stdout_cb);
 
+    t->zio [ERR] = zio_pipe_reader_create ("stderr", NULL, (void *) t);
+    zio_set_send_cb (t->zio [ERR], (zio_send_f) stderr_cb);
+
+    t->zio [IN] = zio_pipe_writer_create ("stdin", (void *) t);
+
+    for (i = 0; i < NR_IO; i++) {
+        char *key;
+        int flags = KZ_FLAGS_WRITE | KZ_FLAGS_RAW;
+        if (i == IN)
+            flags = KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK | KZ_FLAGS_NOEXIST;
         asprintf (&key, "lwj.%ld.%d.%s", ctx->id, t->globalid, ioname (i));
-        t->kz [i] = kz_open (ctx->cmb, key, flags);
+        if ((t->kz [i] = kz_open (ctx->cmb, key, flags)) == NULL)
+            log_fatal (ctx, 1, "kz_open (%s): %s", ioname (i), strerror (errno));
         if (i == IN)
             kz_set_ready_cb (t->kz [i], (kz_ready_f) kz_stdin, t);
         free (key);
