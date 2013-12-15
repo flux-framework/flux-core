@@ -23,13 +23,6 @@ struct forkzio_handle_struct {
     zio_t zio[3];
 };
 
-static char *get_stream_fromjson (json_object *o)
-{
-    json_object_iter itr;
-    json_object_object_foreachC (o, itr) { break; }
-    return itr.key ? xstrdup (itr.key) : NULL;
-}
-
 /* Data is ready on the zmq pair socket.
  * Look for a zio matching the stream name and send it.
  */
@@ -44,11 +37,12 @@ static int forkzio_zsock_cb (zloop_t *zl, zmq_pollitem_t *zp, void *arg)
 
     if (!(zmsg = zmsg_recv (zp->socket)))
         goto done;
+    if (!(stream = zmsg_popstr (zmsg)))
+        goto done;
     if (!(buf = zmsg_popstr (zmsg)))
         goto done;
     if (!(o = json_tokener_parse (buf)))
         goto done;
-    stream = get_stream_fromjson (o);
     for (i = 0; i < 3; i++) {
         if (!ctx->zio[i] || strcmp (zio_name (ctx->zio[i]), stream) != 0)
             continue;
