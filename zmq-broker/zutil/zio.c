@@ -754,6 +754,13 @@ json_object *zio_json_encode (void *p, int len, bool eof)
     return (o);
 }
 
+bool zio_json_eof (json_object *o)
+{
+    bool eof = false;
+    (void)util_json_object_get_boolean (o, "eof", &eof);
+    return eof;
+}
+
 /*
  * vi: ts=4 sw=4 expandtab
  */

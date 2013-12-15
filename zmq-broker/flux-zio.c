@@ -546,26 +546,27 @@ static void attach (flux_t h, const char *key, int flags, bool trunc,
 static void copy_k2k (flux_t h, const char *src, const char *dst, bool trunc,
                       bool lazy)
 {
-    int kzoutflags = KZ_FLAGS_WRITE;
+    int kzoutflags = KZ_FLAGS_WRITE | KZ_FLAGS_RAW;
     kz_t kzin, kzout;
-    char *data;
-    int len;
+    json_object *val;
+    bool eof = false;
 
     if (trunc)
         kzoutflags |= KZ_FLAGS_TRUNC;
     if (lazy)
         kzoutflags |= KZ_FLAGS_DELAYCOMMIT;
 
-    if (!(kzin = kz_open (h, src, KZ_FLAGS_READ)))
+    if (!(kzin = kz_open (h, src, KZ_FLAGS_READ | KZ_FLAGS_RAW)))
         err_exit ("kz_open %s", src);
     if (!(kzout = kz_open (h, dst, kzoutflags)))
         err_exit ("kz_open %s", dst);
-    while ((len = kz_get (kzin, &data)) > 0) {
-        if (kz_put (kzout, data, len) < 0)
-            err_exit ("kz_put %s", dst);
-        free (data);
+    while (!eof && (val = kz_get_json (kzin))) {
+        if (kz_put_json (kzout, val) < 0)
+            err_exit ("kz_put_json %s", dst);
+        eof = zio_json_eof (val);
+        json_object_put (val);
     }
-    if (len < 0)
+    if (val == NULL)
         err_exit ("kz_get %s", src);
     if (kz_close (kzin) < 0) 
         err_exit ("kz_close %s", src);

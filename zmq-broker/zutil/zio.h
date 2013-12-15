@@ -125,5 +125,8 @@ int zio_json_decode (json_object *o, void **pp, bool *eofp);
  */
 json_object *zio_json_encode (void *p, int len, bool eof);
 
+/*  Test if object has eof=true.
+ */
+bool zio_json_eof (json_object *o);
 
 #endif /* !HAVE_ZIO_H */
