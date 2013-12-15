@@ -128,7 +128,7 @@ int kz_put (kz_t kz, char *data, int len)
     json_object *val = NULL;
     int rc = -1;
 
-    if (len == 0 || data == NULL) {
+    if (len == 0 || data == NULL || (kz->flags & KZ_FLAGS_RAW)) {
         errno = EINVAL;
         goto done;
     }
