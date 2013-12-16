@@ -12,10 +12,10 @@ enum {
 
     KZ_FLAGS_NONBLOCK       = 0x0010, /* currently only applies to reads */
     KZ_FLAGS_NOEXIST        = 0x0020, /* allow open for reading to succeed */
-                                      /*   even if name doesn't exist yet */
+                                      /*   even if stream doesn't exist yet */
 
     KZ_FLAGS_TRUNC          = 0x0100, /* remove contents before writing */
-    KZ_FLAGS_DELAYCOMMIT    = 0x0200, /* commit on flush/close */
+    KZ_FLAGS_DELAYCOMMIT    = 0x0200, /* commit only on flush/close */
     KZ_FLAGS_RAW            = 0x0400, /* use only *_json I/O methods */
 };    
 

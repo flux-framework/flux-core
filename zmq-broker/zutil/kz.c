@@ -72,8 +72,10 @@ kz_t kz_open (flux_t h, const char *name, int flags)
         }
         if (kvs_mkdir (h, name) < 0)
             goto error;
-        if (kvs_commit (h) < 0)
-            goto error;
+        if (!(flags & KZ_FLAGS_DELAYCOMMIT)) {
+            if (kvs_commit (h) < 0)
+                goto error;
+        }
     } else if ((flags & KZ_FLAGS_READ)) {
         if (!(flags & KZ_FLAGS_NOEXIST)) {
             if (kvs_get_dir (h, &kz->dir, "%s", name) < 0)
