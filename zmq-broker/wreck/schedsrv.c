@@ -13,7 +13,6 @@
 #include "util.h"
 #include "plugin.h"
 
-static void _complete_job (const char *key, kvsdir_t dir, void *arg, int errnum);
 
 static void _wait_for_new_dir(flux_t p, char *name)
 {
@@ -28,7 +27,7 @@ static void _wait_for_new_dir(flux_t p, char *name)
     }
 }
 
-static bool _reserved_job (flux_t p, const char *path)
+static bool _pending_job (flux_t p, const char *path)
 {
     bool rval = false;
     char *key = NULL;
@@ -36,12 +35,12 @@ static bool _reserved_job (flux_t p, const char *path)
 
 
     if (asprintf (&key, "%s.state", path) < 0) {
-        flux_log (p, LOG_ERR, "reserved_job key create failed");
+        flux_log (p, LOG_ERR, "pending_job key create failed");
     } else if (kvs_get_string (p, key, &job_state) < 0) {
-        flux_log (p, LOG_ERR, "reserved_job get job_state: %s",
+        flux_log (p, LOG_ERR, "pending_job get job_state: %s",
                   strerror (errno));
-    } else if (!strncmp (job_state, "reserved", 8)) {
-        flux_log (p, LOG_INFO, "reserved_job %s", path);
+    } else if (!strncmp (job_state, "pending", 8)) {
+        flux_log (p, LOG_INFO, "pending_job %s", path);
         rval = true;
     }
     free (key);
@@ -178,8 +177,6 @@ static bool _allocate_job (flux_t p, const char *path)
     } else if (flux_event_send (p, NULL, "event.rexec.run.%s", jobid) < 0) {
         flux_log (p, LOG_ERR, "allocate_job event send failed: %s",
                   strerror (errno));
-    } else if (kvs_watch_int64 (p, key, (KVSSetInt64F*)_complete_job, p) < 0) {
-        flux_log (p, LOG_ERR, "watch lwj state: %s", strerror (errno));
     } else {
         flux_log (p, LOG_INFO, "allocate_job %s", jobid);
         rval = true;
@@ -218,7 +215,6 @@ static void _sched_loop (flux_t p)
     kvsdir_t dir;
     kvsitr_t itr;
 
-    sleep(1); // temporary hack to allow all components of job to appear
     if (kvs_get_dir (p, &dir, "lwj") < 0) {
         flux_log (p, LOG_ERR, "sched_loop get lwj dir: %s", strerror (errno));
         return;
@@ -227,9 +223,11 @@ static void _sched_loop (flux_t p)
     while ((name = kvsitr_next (itr))) {
         key = kvsdir_key_at (dir, name);
         if (kvsdir_isdir (dir, name)) {
-            if (_reserved_job (p, key)) {
-                if (_sched_job(p, key))
+            if (_pending_job (p, key)) {
+                if (!_sched_job(p, key)) {
+                    /* There was a problem.  Let's stop for now */
                     break;
+                }
             }
         }
         free (key);
@@ -293,8 +291,35 @@ static void _reclaim_resrcs(flux_t p, char *job)
     kvsdir_destroy (dir);
 }
 
+static void _new_job_state (const char *key, kvsdir_t dir, void *arg, int errnum)
+{
+    char *job_state = NULL;
+    flux_t p = (flux_t)arg;
+
+    if (errnum > 0) {
+        flux_log (p, LOG_ERR, "new_job_state %s: %s", key, strerror (errnum));
+    } else if (kvs_get_string (p, key, &job_state) < 0) {
+        flux_log (p, LOG_ERR, "new_job_state %s: %s", key, strerror (errno));
+    } else if (!strncmp (job_state, "pending", 7)) {
+        flux_log (p, LOG_INFO, "new_job_state %s: %s", key, job_state);
+        _sched_loop (p);
+    } else if (!strncmp (job_state, "complete", 8)) {
+        char *job = strdup(key);
+        char *ptr = strstr(job, ".state");
+
+        flux_log (p, LOG_INFO, "new_job_state %s: %s", key, job_state);
+        if (ptr) {
+            *ptr = '\0';
+            _reclaim_resrcs(p, job);
+        }
+        _sched_loop (p);
+        free (job);
+    }
+}
+
 static void _new_job (const char *key, kvsdir_t dir, void *arg, int errnum)
 {
+    char *key2;
     flux_t p = (flux_t)arg;
     long jobid;
 
@@ -302,32 +327,13 @@ static void _new_job (const char *key, kvsdir_t dir, void *arg, int errnum)
         flux_log (p, LOG_ERR, "%s: %s", key, strerror (errnum));
     } else if (kvs_get_int64 (p, key, &jobid) < 0) {
         flux_log (p, LOG_ERR, "new_job get %s: %s", key, strerror (errno));
+    } else if (asprintf (&key2, "lwj.%lu.state", jobid - 1) < 0) {
+        flux_log (p, LOG_ERR, "allocate_job key create failed");
+    } else if (kvs_watch_string (p, key2, (KVSSetStringF*)_new_job_state, p)
+               < 0) {
+        flux_log (p, LOG_ERR, "watch lwj state: %s", strerror (errno));
     } else {
         flux_log (p, LOG_INFO, "job ID %ld submitted", jobid - 1);
-        _sched_loop (p);
-    }
-}
-
-static void _complete_job (const char *key, kvsdir_t dir, void *arg, int errnum)
-{
-    char *job_state = NULL;
-    flux_t p = (flux_t)arg;
-
-    if (errnum > 0) {
-        flux_log (p, LOG_ERR, "complete_job %s: %s", key, strerror (errnum));
-    } else if (kvs_get_string (p, key, &job_state) < 0) {
-        flux_log (p, LOG_ERR, "complete_job %s: %s", key, strerror (errno));
-    } else if (!strncmp (job_state, "complete", 8)) {
-        char *job = strdup(key);
-        char *ptr = strstr(job, ".state");
-
-        flux_log (p, LOG_INFO, "complete_job %s: %s", key, job_state);
-        if (ptr) {
-            *ptr = '\0';
-            _reclaim_resrcs(p, job);
-        }
-        _sched_loop (p);
-        free (job);
     }
 }
 

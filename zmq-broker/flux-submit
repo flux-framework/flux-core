@@ -130,6 +130,11 @@ if resp.errnum then
 end
 
 log_msg ("%4.03fs: Submitted jobid %d\n", tt:get0(), resp.jobid)
+local lwj, err = f:kvsdir ("lwj.%d", resp.jobid)
+if not lwj then log_fatal ("f:kvsdir(lwj.%d): %s\n", resp.jobid, err) end
+
+lwj.state = "pending"
+lwj:commit()
 
 os.exit (0)
 
