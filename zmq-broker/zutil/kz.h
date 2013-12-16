@@ -11,9 +11,12 @@ enum {
     KZ_FLAGS_MODEMASK       = 0x0003,
 
     KZ_FLAGS_NONBLOCK       = 0x0010, /* currently only applies to reads */
+    KZ_FLAGS_NOEXIST        = 0x0020, /* allow open for reading to succeed */
+                                      /*   even if name doesn't exist yet */
 
     KZ_FLAGS_TRUNC          = 0x0100, /* remove contents before writing */
     KZ_FLAGS_DELAYCOMMIT    = 0x0200, /* commit on flush/close */
+    KZ_FLAGS_RAW            = 0x0400, /* use only *_json I/O methods */
 };    
 
 /* Prepare to read or write a KVS stream.
@@ -49,6 +52,23 @@ int kz_close (kz_t kz);
  * Your function should call kz_get() until it returns -1, errno = EAGAIN.
  */
 int kz_set_ready_cb (kz_t kz, kz_ready_f ready_cb, void *arg);
+
+/* "Raw" get/put methods that use JSON objects encoded/decoded with
+ * zio_json_encode/zio_json_decode.  The KVS stream must have been opened
+ * with the KZ_FLAGS_RAW option, and these methods cannot be mixed with
+ * the character-oriented methods.  EOF is handled in-band with these methods
+ * (get/put JSON objects with the EOF flag set).  Simply closing the KVS stream
+ * does not result in an EOF.
+ */
+/* Put a JSON object.  Returns 0 on success, -1 on failure, with errno set.
+ * Caller retains ownership of 'o'.
+ */
+int kz_put_json (kz_t kz, json_object *o);
+
+/* Get a JSON object.  Returns the object or NULL on failure with errno set.
+ * Caller must free the returned object.
+ */
+json_object *kz_get_json (kz_t kz);
 
 #endif /* !HAVE_FLUX_KZ_H */
 

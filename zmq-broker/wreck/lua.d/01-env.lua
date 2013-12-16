@@ -41,6 +41,9 @@ end
 function rexecd_task_init ()
     local p = require 'posix'
     local taskid = wreck.taskid;
+
+    if not wreck.kvsdir then return end
+
     local task = wreck.kvsdir[taskid]
     if not task then return end
 
