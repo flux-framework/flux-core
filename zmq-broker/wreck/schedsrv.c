@@ -177,7 +177,11 @@ static bool _allocate_job (flux_t p, const char *path)
     } else if (flux_event_send (p, NULL, "event.rexec.run.%s", jobid) < 0) {
         flux_log (p, LOG_ERR, "allocate_job event send failed: %s",
                   strerror (errno));
+    } else if (kvs_put_string (p, key, "runrequest") < 0) {
+        flux_log (p, LOG_ERR, "allocate_job %s state update failed: %s",
+                  jobid, strerror (errno));
     } else {
+        kvs_commit(p);
         flux_log (p, LOG_INFO, "allocate_job %s", jobid);
         rval = true;
     }
