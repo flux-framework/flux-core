@@ -181,6 +181,13 @@ if (opts.i) then
     --
     local rc,err = f:sendevent ("event.rexec.run.%d", resp.jobid)
     if not rc then log_fatal ("sendevent: %s\n", err) end
+else
+    --
+    --  Update job state to 'pending' to notify scheduler:
+    --
+    lwj.state = 'pending'
+    lwj['pending-time'] = posix.strftime ("%FT%T")
+    lwj:commit()
 end
 
 local sigtimer = nil
