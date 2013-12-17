@@ -14,6 +14,20 @@
 #include "plugin.h"
 
 
+static char * ctime_iso8601_now (char *buf, size_t sz)
+{
+    struct tm tm;
+    time_t now = time (NULL);
+
+    memset (buf, 0, sz);
+
+    if (!localtime_r (&now, &tm))
+        err_exit ("localtime");
+    strftime (buf, sz, "%FT%T", &tm);
+
+    return (buf);
+}
+
 static void _wait_for_new_dir(flux_t p, char *name)
 {
     kvsdir_t dir = NULL;
@@ -166,9 +180,12 @@ static bool _alloc_resrcs (flux_t p, const char *job, long cores)
 static bool _allocate_job (flux_t p, const char *path)
 {
     bool rval = false;
-    char *key = NULL;
     char *jobid = NULL;
+    char *key = NULL;
+    char *key2 = NULL;
+    char buf [64];
 
+    ctime_iso8601_now (buf, sizeof (buf));
     if ((jobid = strstr(path, "lwj.")))
         jobid += 4;
 
@@ -180,12 +197,18 @@ static bool _allocate_job (flux_t p, const char *path)
     } else if (kvs_put_string (p, key, "runrequest") < 0) {
         flux_log (p, LOG_ERR, "allocate_job %s state update failed: %s",
                   jobid, strerror (errno));
+    } else if (asprintf (&key2, "%s.runrequest-time", path) < 0) {
+        flux_log (p, LOG_ERR, "allocate_job key2 create failed");
+    } else if (kvs_put_string (p, key2, buf) < 0) {
+        flux_log (p, LOG_ERR, "allocate_job %s runrequest-time failed: %s",
+                  jobid, strerror (errno));
     } else {
         kvs_commit(p);
         flux_log (p, LOG_INFO, "job %s runrequest", jobid);
         rval = true;
     }
     free (key);
+    free (key2);
 
     return rval;
 }
@@ -298,6 +321,8 @@ static void _reclaim_resrcs(flux_t p, char *job)
 static void _new_job_state (const char *key, kvsdir_t dir, void *arg, int errnum)
 {
     char *job_state = NULL;
+    char *key2 = NULL;
+    char *req_time = NULL;
     flux_t p = (flux_t)arg;
 
     if (errnum > 0) {
@@ -311,19 +336,26 @@ static void _new_job_state (const char *key, kvsdir_t dir, void *arg, int errnum
         char *job = strdup(key);
         char *ptr = strstr(job, ".state");
 
-        flux_log (p, LOG_INFO, "new_job_state %s: %s", key, job_state);
         if (ptr) {
             *ptr = '\0';
-            _reclaim_resrcs(p, job);
-            if (kvs_put_string (p, key, "reaped") < 0) {
-                flux_log (p, LOG_ERR, "new_job_state %s state update failed: %s",
-                          job, strerror (errno));
+            if (asprintf (&key2, "%s.runrequest-time", job) < 0) {
+                flux_log (p, LOG_ERR, "new_job_state key2 create failed");
+            } else if (kvs_get_string (p, key2, &req_time) == 0) {
+                _reclaim_resrcs(p, job);
+                if (kvs_put_string (p, key, "reaped") < 0) {
+                    flux_log (p, LOG_ERR,
+                              "new_job_state %s state update failed: %s", job,
+                              strerror (errno));
+                } else {
+                    kvs_commit(p);
+                    flux_log (p, LOG_INFO, "job %s reaped", job);
+                    _sched_loop (p);
+                }
             } else {
-                kvs_commit(p);
-                flux_log (p, LOG_INFO, "job %s reaped", job);
+                flux_log (p, LOG_INFO, "new_job_state ignored %s", job);
             }
+            free (key2);
         }
-        _sched_loop (p);
         free (job);
     }
 }
