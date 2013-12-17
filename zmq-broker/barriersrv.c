@@ -274,9 +274,9 @@ static int barriersrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
     return 0;
 }
 
-static int barriersrv_timeout (flux_t h)
+static int timeout_cb (flux_t h, void *arg)
 {
-    ctx_t *ctx = getctx (h);
+    ctx_t *ctx = arg;
 
     assert (!flux_treeroot (h));
 
@@ -287,10 +287,14 @@ static int barriersrv_timeout (flux_t h)
 
 static int barriersrv_init (flux_t h, zhash_t *args)
 {
-    //ctx_t *ctx = getctx (h);
+    ctx_t *ctx = getctx (h);
 
     if (flux_event_subscribe (h, "event.barrier.") < 0) {
         err ("%s: flux_event_subscribe", __FUNCTION__);
+        return -1;
+    }
+    if (flux_tmouthandler_set (h, timeout_cb, ctx) < 0) {
+        flux_log (h, LOG_ERR, "flux_tmouthandler_set: %s", strerror (errno));
         return -1;
     }
     if (flux_reactor_start (h) < 0) {
@@ -312,7 +316,6 @@ const struct plugin_ops ops = {
     .init    = barriersrv_init,
     .fini    = barriersrv_fini,
     .recv    = barriersrv_recv,
-    .timeout = barriersrv_timeout,
 };
 
 /*

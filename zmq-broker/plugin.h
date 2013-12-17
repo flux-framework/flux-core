@@ -15,7 +15,6 @@
  * its implementations of one or more of the plugin operations.
  */
 struct plugin_ops {
-    int (*timeout)(flux_t h);
     int (*recv)(flux_t h, zmsg_t **zmsg, int typemask);
     int (*init)(flux_t h, zhash_t *args);
     void (*fini)(flux_t h);

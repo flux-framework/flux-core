@@ -28,7 +28,7 @@
 static int epoch = 0;
 static bool disabled = false;
 
-static int syncsrv_timeout (flux_t h)
+static int timeout_cb (flux_t h, void *arg)
 {
     if (flux_event_send (h, NULL, "event.sched.trigger.%d", ++epoch) < 0) {
         err ("flux_event_send");
@@ -75,6 +75,10 @@ invalid:
 
 static int syncsrv_init (flux_t h, zhash_t *args)
 {
+    if (flux_tmouthandler_set (h, timeout_cb, NULL) < 0) {
+        flux_log (h, LOG_ERR, "flux_tmouthandler_set: %s", strerror (errno));
+        return -1;
+    }
     if (kvs_watch_dir (h, set_config, h, "conf.sync") < 0) {
         err ("kvs_watch_dir conf.sync");
         return -1;
@@ -88,7 +92,6 @@ static int syncsrv_init (flux_t h, zhash_t *args)
 
 const struct plugin_ops ops = {
     .init    = syncsrv_init,
-    .timeout = syncsrv_timeout,
 };
 
 /*

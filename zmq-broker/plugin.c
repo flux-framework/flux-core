@@ -483,12 +483,6 @@ static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t)
         plugin_reactor_stop (p, -1);
         goto done;
     }
-    if (p->ops->timeout) {
-        if (p->ops->timeout (p->h) < 0) {
-            plugin_reactor_stop (p, -1);
-            goto done;
-        }
-    }
     plugin_handle_deferred_responses (p);
 done:
     ZLOOP_RETURN(p);

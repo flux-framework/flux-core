@@ -472,9 +472,10 @@ static int logsrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
     return 0;
 }
 
-static int logsrv_timeout (flux_t h)
+static int timeout_cb (flux_t h, void *arg)
 {
-    process_backlog (getctx (h));
+    ctx_t *ctx = arg;
+    process_backlog (ctx);
     flux_timeout_set (h, 0);
     return 0;
 }
@@ -544,6 +545,11 @@ static int logsrv_init (flux_t h, zhash_t *args)
         return -1;
     }
     flux_event_subscribe (h, "event.fault.");
+    if (flux_tmouthandler_set (h, timeout_cb, ctx) < 0) {
+        flux_log (h, LOG_ERR, "flux_tmouthandler_set: %s", strerror (errno));
+        return -1;
+    }
+    
     if (flux_reactor_start (h) < 0) {
         flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
         return -1;
@@ -562,7 +568,6 @@ const struct plugin_ops ops = {
     .recv    = logsrv_recv,
     .init    = logsrv_init,
     .fini    = logsrv_fini,
-    .timeout = logsrv_timeout,
 };
 
 /*

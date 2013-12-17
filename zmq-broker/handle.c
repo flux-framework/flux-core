@@ -419,7 +419,7 @@ int handle_event_msg (flux_t h, int typemask, zmsg_t **zmsg)
     }
     d = zlist_first (h->reactor->dsp);
     while (d) {
-        if (dispatch_msg_match (d, tag, typemask)) {
+        if (dispatch_msg_match (d, tag, typemask) && d->msg.fn != NULL) {
             rc = d->msg.fn (h, typemask, zmsg, d->msg.arg);
             if (!*zmsg)
                 break;
@@ -444,7 +444,7 @@ int handle_event_fd (flux_t h, int fd, short events)
     d = zlist_first (h->reactor->dsp);
     while (d) {
         if (d->type == DSP_TYPE_FD && d->fd.fd == fd
-                                   && (d->fd.events & events)) {
+                            && (d->fd.events & events) && d->fd.fn != NULL) {
             rc = d->fd.fn (h, fd, events, d->fd.arg);
             break;
         }
@@ -477,7 +477,7 @@ int handle_event_tmout (flux_t h)
     
     d = zlist_first (h->reactor->dsp);
     while (d) {
-        if (d->type == DSP_TYPE_TMOUT) {
+        if (d->type == DSP_TYPE_TMOUT && d->tmout.fn != NULL) {
             rc = d->tmout.fn (h, d->tmout.arg);
             break;
         }
