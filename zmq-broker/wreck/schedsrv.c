@@ -83,9 +83,9 @@ static long _read_alloc_cores (flux_t p, const char *path, long alloc)
             flux_log (p, LOG_ERR, "read_alloc_cores put %ld alloc.cores failed",
                       alloc_cores + alloc);
         } else {
+            kvs_commit(p);
             flux_log (p, LOG_INFO, "read_alloc_cores put %s = %ld", key,
                       alloc_cores + alloc);
-            kvs_commit(p);
             /* when alloc is requested, return the number allocated */
             idle_cores = alloc;
         }
@@ -104,8 +104,8 @@ static void _store_cores(flux_t p, const char *job, const char *path, long alloc
     } else if (kvs_put_int64 (p, key, alloc) < 0) {
         flux_log (p, LOG_ERR, "store_cores put %ld cores failed", alloc);
     } else {
-        flux_log (p, LOG_INFO, "store_cores put %s = %ld", key, alloc);
         kvs_commit(p);
+        flux_log (p, LOG_INFO, "store_cores put %s = %ld", key, alloc);
     }
     free (key);
 }
@@ -182,7 +182,7 @@ static bool _allocate_job (flux_t p, const char *path)
                   jobid, strerror (errno));
     } else {
         kvs_commit(p);
-        flux_log (p, LOG_INFO, "allocate_job %s", jobid);
+        flux_log (p, LOG_INFO, "job %s runrequest", jobid);
         rval = true;
     }
     free (key);
@@ -280,9 +280,9 @@ static void _reclaim_resrcs(flux_t p, char *job)
                               "reclaim_resrcs put %ld alloc.cores failed",
                               alloc_cores);
                 } else {
+                    kvs_commit(p);
                     flux_log (p, LOG_INFO, "reclaim_resrcs put %s = %ld", key2,
                               alloc_cores);
-                    kvs_commit(p);
                 }
             }
             free (key2);
@@ -315,6 +315,13 @@ static void _new_job_state (const char *key, kvsdir_t dir, void *arg, int errnum
         if (ptr) {
             *ptr = '\0';
             _reclaim_resrcs(p, job);
+            if (kvs_put_string (p, key, "reaped") < 0) {
+                flux_log (p, LOG_ERR, "new_job_state %s state update failed: %s",
+                          job, strerror (errno));
+            } else {
+                kvs_commit(p);
+                flux_log (p, LOG_INFO, "job %s reaped", job);
+            }
         }
         _sched_loop (p);
         free (job);
