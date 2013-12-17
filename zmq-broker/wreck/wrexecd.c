@@ -50,7 +50,7 @@ struct task_info {
 };
 
 struct prog_ctx {
-    flux_t cmb;
+    flux_t   flux;
     kvsdir_t kvs;           /* Handle to this job's dir in kvs */
     kvsdir_t resources;     /* Handle to this node's resource dir in kvs */
 
@@ -108,7 +108,7 @@ static flux_t prog_ctx_flux_handle (struct prog_ctx *ctx)
     struct task_info *t;
 
     if (!ctx->in_task)
-        return (ctx->cmb);
+        return (ctx->flux);
 
     t = prog_ctx_current_task (ctx);
     if (!t->f)
@@ -121,7 +121,7 @@ static void log_fatal (struct prog_ctx *ctx, int code, char *format, ...)
     flux_t c = prog_ctx_flux_handle (ctx);
     va_list ap;
     va_start (ap, format);
-    if ((ctx != NULL) && ((c = ctx->cmb) != NULL))
+    if ((ctx != NULL) && ((c = ctx->flux) != NULL))
         flux_vlog (c, LOG_EMERG, format, ap);
     else
         vfprintf (stderr, format, ap);
@@ -245,7 +245,7 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
         if (i == IN)
             flags = KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK | KZ_FLAGS_NOEXIST;
         asprintf (&key, "lwj.%ld.%d.%s", ctx->id, t->globalid, ioname (i));
-        if ((t->kz [i] = kz_open (ctx->cmb, key, flags)) == NULL)
+        if ((t->kz [i] = kz_open (ctx->flux, key, flags)) == NULL)
             log_fatal (ctx, 1, "kz_open (%s): %s", key, strerror (errno));
         if (i == IN)
             kz_set_ready_cb (t->kz [i], (kz_ready_f) kz_stdin, t);
@@ -367,6 +367,8 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
     zmq_close (ctx->zs_rep);
 
     zmq_term (ctx->zctx);
+    if (ctx->flux)
+        flux_handle_destroy (&ctx->flux);
 
     free (ctx);
 }
@@ -462,7 +464,7 @@ int cores_on_node (struct prog_ctx *ctx, int nodeid)
 
     if (asprintf (&key, "lwj.%ld.rank.%d.cores", ctx->id, nodeid) < 0)
         log_fatal (ctx, 1, "cores_on_node: out of memory");
-    rc = kvs_get_int (ctx->cmb, key, &ncores);
+    rc = kvs_get_int (ctx->flux, key, &ncores);
     free (key);
     return (rc < 0 ? -1 : ncores);
 }
@@ -479,13 +481,13 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
     const char *key;
     int *nodeids;
 
-    nodeids = malloc (flux_size (ctx->cmb) * sizeof (int));
+    nodeids = malloc (flux_size (ctx->flux) * sizeof (int));
 
     if (kvsdir_get_dir (ctx->kvs, &rank, "rank") < 0) {
         log_msg (ctx, "get_dir (%s.rank): %s",
                  kvsdir_key (ctx->kvs),
                  strerror (errno));
-        ctx->nnodes = flux_size (ctx->cmb);
+        ctx->nnodes = flux_size (ctx->flux);
         ctx->nodeid = ctx->noderank;
     }
 
@@ -574,16 +576,16 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
     /*
      * Connect to CMB over api socket
      */
-    if (!(ctx->cmb = cmb_init ()))
+    if (!(ctx->flux = cmb_init ()))
         log_fatal (ctx, 1, "cmb_init");
 
-    if (kvs_get_dir (ctx->cmb, &ctx->kvs,
+    if (kvs_get_dir (ctx->flux, &ctx->kvs,
                      "lwj.%lu", ctx->id) < 0) {
         log_fatal (ctx, 1, "kvs_get_dir (lwj.%lu): %s\n",
                    ctx->id, strerror (errno));
     }
 
-    ctx->noderank = flux_rank (ctx->cmb);
+    ctx->noderank = flux_rank (ctx->flux);
     /*
      *  If the "rank" dir exists in kvs, then this LWJ has been
      *   assigned specific resources by a scheduler.
@@ -671,7 +673,7 @@ int update_job_state (struct prog_ctx *ctx, const char *state)
     free (key);
     json_object_put (to);
 
-    if (kvs_commit (ctx->cmb) < 0)
+    if (kvs_commit (ctx->flux) < 0)
         return (-1);
 
     return (0);
@@ -687,7 +689,7 @@ int rexec_state_change (struct prog_ctx *ctx, const char *state)
         asprintf (&name, "lwj.%lu.shutdown", ctx->id);
 
     /* Wait for all wrexecds to finish and commit */
-    if (kvs_fence (ctx->cmb, name, ctx->nnodes) < 0)
+    if (kvs_fence (ctx->flux, name, ctx->nnodes) < 0)
         log_fatal (ctx, 1, "kvs_fence");
 
     /* Rank 0 updates job state */
@@ -725,7 +727,7 @@ int rexec_taskinfo_put (struct prog_ctx *ctx, int localid)
     rc = kvsdir_put (ctx->kvs, key, o);
     free (key);
     json_object_put (o);
-    //kvs_commit (ctx->cmb);
+    //kvs_commit (ctx->flux);
 
     if (rc < 0)
         return log_err (ctx, "kvs_put failure");
@@ -761,7 +763,7 @@ int send_exit_message (struct task_info *t)
 
     if (asprintf (&key, "lwj.%lu.%d.exit_status", ctx->id, t->globalid) < 0)
         return (-1);
-    if (kvs_put (ctx->cmb, key, o) < 0)
+    if (kvs_put (ctx->flux, key, o) < 0)
         return (-1);
     free (key);
     json_object_put (o);
@@ -770,7 +772,7 @@ int send_exit_message (struct task_info *t)
         o = json_object_new_int (WTERMSIG (t->status));
         if (asprintf (&key, "lwj.%lu.%d.exit_sig", ctx->id, t->globalid) < 0)
             return (-1);
-        if (kvs_put (ctx->cmb, key, o) < 0)
+        if (kvs_put (ctx->flux, key, o) < 0)
             return (-1);
         free (key);
         json_object_put (o);
@@ -779,13 +781,13 @@ int send_exit_message (struct task_info *t)
         o = json_object_new_int (WEXITSTATUS (t->status));
         if (asprintf (&key, "lwj.%lu.%d.exit_code", ctx->id, t->globalid) < 0)
             return (-1);
-        if (kvs_put (ctx->cmb, key, o) < 0)
+        if (kvs_put (ctx->flux, key, o) < 0)
             return (-1);
         free (key);
         json_object_put (o);
     }
 
-    if (kvs_commit (ctx->cmb) < 0)
+    if (kvs_commit (ctx->flux) < 0)
         return (-1);
 
     return (0);
@@ -1462,7 +1464,7 @@ int main (int ac, char **av)
     if (prog_ctx_init_from_cmb (ctx) < 0) /* Nothing to do here */
         exit (0);
 
-    flux_log_set_facility (ctx->cmb, "wrexecd");
+    flux_log_set_facility (ctx->flux, "wrexecd");
     prog_ctx_zmq_socket_setup (ctx);
 
     if ((ctx->nodeid == 0) && update_job_state (ctx, "starting") < 0)
