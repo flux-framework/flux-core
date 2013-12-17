@@ -109,6 +109,47 @@ local function get_filtered_env ()
     return (env)
 end
 
+
+local function summarize_tasks_per_node (r)
+    local hostlist = require 'hostlist'
+    local m = {}
+    for msg, ids in pairs (r) do
+        local h = hostlist.new()
+        for _,id in pairs (ids) do
+            h:concat (id)
+        end
+        table.insert (m, string.format ("node%s: %s", tostring (h:sort()), msg))
+    end
+    return table.concat (m, ', ')
+end
+
+local function alloc_tasks_hack (f, opts, lwj)
+    local r = {}
+    local total = 0
+    local size = f.size
+    local ntasks = tonumber (opts.n)
+
+    local res, err = f:kvsdir ("resrc.rank")
+    if not res then
+        log_fatal ("Failed to get resrc.rank")
+    end
+
+    log_msg ("Allocating %d tasks across %d available nodes..\n", ntasks, size)
+    for i = 0, size-1 do
+        local key = string.format ("rank.%d.cores", i)
+        local n = opts.N and tonumber (opts.N) or res[i].cores
+        if (total + n) > ntasks then
+           n = ntasks - total
+        end
+        lwj[key] = n
+        if r[n] then table.insert (r[n], i) else r[n] = { i } end
+        total = total + n
+        if total == ntasks then break end
+    end
+    lwj:commit()
+    log_msg ("tasks per node: %s\n", summarize_tasks_per_node (r))
+end
+
 -------------------------------------------------------------------------------
 -- Main program:
 -------------------------------------------------------------------------------
@@ -175,10 +216,11 @@ log_msg ("%4.03fs: Registered jobid %d\n", tt:get0(), resp.jobid)
 local lwj, err = f:kvsdir ("lwj.%d", resp.jobid)
 if not lwj then log_fatal ("f:kvsdir(lwj.%d): %s\n", resp.jobid, err) end
 
-if (opts.i) then
+if opts.i then
     --
     --  Send event to run the job
     --
+    alloc_tasks_hack (f, opts, lwj)
     local rc,err = f:sendevent ("event.rexec.run.%d", resp.jobid)
     if not rc then log_fatal ("sendevent: %s\n", err) end
 else
