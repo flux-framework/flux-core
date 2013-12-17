@@ -74,7 +74,6 @@ struct prog_ctx {
     size_t envz_len;
 
     zctx_t *zctx;
-    zloop_t *zl;            /* zmq event loop       */
     void *zs_req;
     void *zs_rep;
     int signalfd;
@@ -358,7 +357,6 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
     if (ctx->resources)
         kvsdir_destroy (ctx->resources);
 
-    zloop_destroy (&ctx->zl);
     free (ctx->envz);
     close (ctx->signalfd);
 
@@ -380,10 +378,6 @@ struct prog_ctx * prog_ctx_create (void)
     zsys_handler_set (NULL); /* Disable czmq SIGINT/SIGTERM handlers */
     if (!ctx)
         log_fatal (ctx, 1, "malloc");
-    ctx->zctx = zctx_new ();
-    ctx->zl = zloop_new ();
-    if (!ctx->zl)
-        log_fatal (ctx, 1, "zloop_new");
 
     ctx->envz = NULL;
     ctx->envz_len = 0;
@@ -402,6 +396,9 @@ static int prog_ctx_zmq_socket_setup (struct prog_ctx *ctx)
 {
     char uri [1024];
     unsigned long uid = geteuid();
+
+    if ((ctx->zctx = zctx_new ()) == NULL)
+        log_fatal (ctx, 1, "zctx_new: %s", strerror (errno));
 
     snprintf (uri, sizeof (uri), "ipc:///tmp/cmb-%d-%lu-rexec-req-%lu",
                 ctx->nodeid, uid, ctx->id);
@@ -1280,12 +1277,12 @@ int cleanup (struct prog_ctx *ctx)
     return prog_ctx_signal (ctx, SIGKILL);
 }
 
-int signal_cb (zloop_t *zl, zmq_pollitem_t *zp, struct prog_ctx *ctx)
+int signal_cb (flux_t f, int fd, short revents, struct prog_ctx *ctx)
 {
     int n;
     struct signalfd_siginfo si;
 
-    n = read (zp->fd, &si, sizeof (si));
+    n = read (fd, &si, sizeof (si));
     if (n < 0) {
         log_err (ctx, "read");
         return (0);
@@ -1304,16 +1301,16 @@ int signal_cb (zloop_t *zl, zmq_pollitem_t *zp, struct prog_ctx *ctx)
     while (reap_child (ctx))
         ++ctx->exited;
     if (all_tasks_completed (ctx))
-        return (-1); /* Wakeup zloop */
+        flux_reactor_stop (f);
     return (0);
 }
 
-int cmb_cb (zloop_t *zl, zmq_pollitem_t *zp, struct prog_ctx *ctx)
+int cmb_cb (flux_t f, void *zs, short revents, struct prog_ctx *ctx)
 {
     char *tag;
     json_object *o;
 
-    zmsg_t *zmsg = zmsg_recv (zp->socket);
+    zmsg_t *zmsg = zmsg_recv (zs);
     if (!zmsg) {
         log_msg (ctx, "rexec_cb: no msg to recv!");
         return (0);
@@ -1340,37 +1337,39 @@ int cmb_cb (zloop_t *zl, zmq_pollitem_t *zp, struct prog_ctx *ctx)
 
 int task_info_io_setup (struct task_info *t)
 {
-    zloop_t *zl = t->ctx->zl;
+    flux_t f = t->ctx->flux;
     int i;
 
     for (i = 0; i < NR_IO; i++) {
-        zio_zloop_attach (t->zio [i], zl);
+        zio_flux_attach (t->zio [i], f);
         zio_set_debug (t->zio [i], NULL, NULL);
     }
     return (0);
 }
 
-int prog_ctx_zloop_init (struct prog_ctx *ctx)
+int prog_ctx_reactor_init (struct prog_ctx *ctx)
 {
     int i;
-    zmq_pollitem_t zp = { .fd = -1, .events = 0, .revents = 0, .socket = 0 };
-
     for (i = 0; i < ctx->nprocs; i++)
         task_info_io_setup (ctx->task [i]);
 
     /*
      *  Listen for "events" coming from the signalfd
      */
-    zp.events = ZMQ_POLLIN | ZMQ_POLLERR;
-    zp.fd = ctx->signalfd;
-    zloop_poller (ctx->zl, &zp, (zloop_fn *) signal_cb, (void *) ctx);
+    flux_fdhandler_add (ctx->flux,
+        ctx->signalfd,
+        ZMQ_POLLIN | ZMQ_POLLERR,
+        (FluxFdHandler) signal_cb,
+        (void *) ctx);
 
     /*
      *  Add a handler for events coming from CMB
      */
-    zp.fd = -1;
-    zp.socket = ctx->zs_rep;
-    zloop_poller (ctx->zl, &zp, (zloop_fn *) cmb_cb, (void *) ctx);
+    flux_zshandler_add (ctx->flux,
+        ctx->zs_rep,
+        ZMQ_POLLIN | ZMQ_POLLERR,
+        (FluxZsHandler) cmb_cb,
+        (void *) ctx);
 
     return (0);
 }
@@ -1472,11 +1471,11 @@ int main (int ac, char **av)
 
     if ((parent_fd = optparse_get_int (p, "parent-fd")) >= 0)
         prog_ctx_signal_parent (parent_fd);
-    prog_ctx_zloop_init (ctx);
+    prog_ctx_reactor_init (ctx);
     exec_commands (ctx);
 
-    while (zloop_start (ctx->zl) == 0)
-        {log_msg (ctx, "EINTR?");}
+    flux_reactor_start (ctx->flux);
+
     rexec_state_change (ctx, "complete");
     log_msg (ctx, "exiting...");
 
