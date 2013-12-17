@@ -97,7 +97,7 @@ int zio_set_debug (zio_t zio, const char *prefix, zio_log_f logf);
 /*
  *  Disable any debug for zio object [zio].
  */
-int zio_set_quite (zio_t zio);
+int zio_set_quiet (zio_t zio);
 
 /*
  *  Override the default send() function for ZIO readers. (Default
