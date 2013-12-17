@@ -2,6 +2,8 @@
 #ifndef HAVE_ZIO_H
 #define HAVE_ZIO_H 1
 #include <json/json.h>
+#include "flux.h"
+#include "reactor.h"
 
 typedef struct zio_ctx * zio_t;
 
@@ -78,6 +80,16 @@ int zio_write_json (zio_t z, json_object *o);
  *    for writing.
  */
 int zio_zloop_attach (zio_t z, zloop_t *zloop);
+
+/*
+ *   Attach zio object [x] to flux reactor in handle [flux].
+ *    zio object will be automatcially detached after EOF is
+ *    received and sent.  ZIO readers will use reactor callback
+ *    to schedule reads when data is ready. ZIO writers will
+ *    use reactor to schedule writes to dstfd when it is ready
+ *    for writing.
+ */
+int zio_flux_attach (zio_t z, flux_t flux);
 
 /*
  *  ZIO buffering options:

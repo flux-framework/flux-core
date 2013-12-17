@@ -45,6 +45,7 @@ struct zio_ctx {
     zio_close_f close;  /*  Callback after eof is sent                       */
 
     zloop_t    *zloop;  /*  zloop if we are connected to one                 */
+    flux_t      flux;   /*  flux handle if we are using flux reactor         */
     void *arg;          /*  Arg passed to callbacks                          */
 };
 
@@ -355,12 +356,14 @@ static json_object * zio_json_object_create (zio_t zio, void *data, size_t len)
 
 static int zio_sendmsg (zio_t zio, json_object *o)
 {
+    zio_debug (zio, "sendmsg: %s\n", json_object_to_json_string (o));
     return (*zio->send) (zio, o, zio->arg);
 }
 
 static int zio_send (zio_t zio, char *p, size_t len)
 {
     int rc;
+    zio_debug (zio, "zio_send (len=%d)\n", len);
     json_object *o = zio_json_object_create (zio, p, len);
     rc = zio_sendmsg (zio, o);
     json_object_put (o);
@@ -463,7 +466,7 @@ int zio_flush (zio_t zio)
     return (rc);
 }
 
-static int zio_read_cb (zloop_t *zl, zmq_pollitem_t *zp, zio_t zio)
+static int zio_read_cb_common (zio_t zio)
 {
     int n;
     if ((n = cbuf_write_from_fd (zio->buf, zio->srcfd, -1, NULL)) < 0) {
@@ -482,9 +485,30 @@ static int zio_read_cb (zloop_t *zl, zmq_pollitem_t *zp, zio_t zio)
 
     zio_flush (zio);
 
+    return (0);
+}
+
+static int zio_zloop_read_cb (zloop_t *zl, zmq_pollitem_t *zp, zio_t zio)
+{
+    if (zio_read_cb_common (zio) < 0)
+        return (-1);
+
     if (zio_eof_sent (zio)) {
         zio_debug (zio, "reader detaching from zloop\n");
         zloop_poller_end (zl, zp);
+        return (zio_close (zio));
+    }
+    return (0);
+}
+
+static int zio_flux_read_cb (flux_t f, int fd, short revents, zio_t zio)
+{
+    if (zio_read_cb_common (zio) < 0)
+        return (-1);
+
+    if (zio_eof_sent (zio)) {
+        zio_debug (zio, "reader detaching from flux reactor\n");
+        flux_fdhandler_remove (f, fd, ZMQ_POLLIN|ZMQ_POLLERR);
         return (zio_close (zio));
     }
     return (0);
@@ -505,7 +529,7 @@ static int zio_write_pending (zio_t zio)
  *  Callback when zio->dstfd is writeable. Write buffered data to
  *   file descriptor.
  */
-static int zio_writer_cb (zloop_t *zl, zmq_pollitem_t *zp, zio_t zio)
+static int zio_writer_cb (zio_t zio)
 {
     int rc = cbuf_read_to_fd (zio->buf, zio->dstfd, -1);
     if (rc < 0) {
@@ -516,27 +540,59 @@ static int zio_writer_cb (zloop_t *zl, zmq_pollitem_t *zp, zio_t zio)
     }
     if ((rc == 0) && zio_eof_pending (zio))
         rc = zio_close (zio);
-
-    if (!zio_write_pending (zio))
-        zloop_poller_end (zl, zp);
-
     return (rc);
 }
 
-static int zio_reader_poll (zio_t zio)
+static int zio_zloop_writer_cb (zloop_t *zl, zmq_pollitem_t *zp, zio_t zio)
+{
+    int rc = zio_writer_cb (zio);
+    if (!zio_write_pending (zio))
+        zloop_poller_end (zl, zp);
+    return (rc);
+}
+
+static int zio_flux_writer_cb (flux_t f, int fd, short revents, zio_t zio)
+{
+    int rc = zio_writer_cb (zio);
+    if (!zio_write_pending (zio))
+        flux_fdhandler_remove (f, fd, ZMQ_POLLOUT | ZMQ_POLLERR);
+    return (rc);
+}
+
+static int zio_zloop_reader_poll (zio_t zio)
 {
     zmq_pollitem_t zp = { .fd = zio->srcfd,
                           .events = ZMQ_POLLIN | ZMQ_POLLERR | ZMQ_IGNERR,
                           .socket = NULL };
 
-    zloop_poller (zio->zloop, &zp, (zloop_fn *) zio_read_cb, (void *) zio);
+    zloop_poller (zio->zloop, &zp,
+        (zloop_fn *) zio_zloop_read_cb, (void *) zio);
     return (0);
+}
+
+static int zio_flux_reader_poll (zio_t zio)
+{
+    if (!zio->flux)
+        return (-1);
+    return flux_fdhandler_add (zio->flux, zio->srcfd,
+            ZMQ_POLLIN | ZMQ_POLLERR | ZMQ_IGNERR,
+            (FluxFdHandler) &zio_flux_read_cb,
+            (void *) zio);
+}
+
+static int zio_reader_poll (zio_t zio)
+{
+    if (zio->zloop)
+        return zio_zloop_reader_poll (zio);
+    else if (zio->flux)
+        return zio_flux_reader_poll (zio);
+    return (-1);
 }
 
 /*
  *  Schedule pending data to write to zio->dstfd
  */
-static int zio_writer_schedule (zio_t zio)
+static int zio_zloop_writer_schedule (zio_t zio)
 {
     zmq_pollitem_t zp = { .fd = zio->dstfd,
                           .events = ZMQ_POLLOUT | ZMQ_POLLERR,
@@ -544,9 +600,28 @@ static int zio_writer_schedule (zio_t zio)
     if (!zio->zloop)
         return (-1);
 
-    return zloop_poller (zio->zloop, &zp, (zloop_fn *) zio_writer_cb, (void *) zio);
+    return zloop_poller (zio->zloop, &zp,
+        (zloop_fn *) zio_zloop_writer_cb, (void *) zio);
 }
 
+static int zio_flux_writer_schedule (zio_t zio)
+{
+    if (!zio->flux)
+        return (-1);
+    return flux_fdhandler_add (zio->flux, zio->dstfd,
+            ZMQ_POLLOUT | ZMQ_POLLERR,
+            (FluxFdHandler) zio_flux_writer_cb,
+            (void *) zio);
+}
+
+static int zio_writer_schedule (zio_t zio)
+{
+    if (zio->zloop)
+        return zio_zloop_writer_schedule (zio);
+    else if (zio->flux)
+        return zio_flux_writer_schedule (zio);
+    return (-1);
+}
 
 /*
  *  write data into zio buffer
@@ -620,14 +695,8 @@ int zio_write_json (zio_t zio, json_object *o)
     return (rc);
 }
 
-int zio_zloop_attach (zio_t zio, zloop_t *zloop)
+static int zio_bootstrap (zio_t zio)
 {
-    errno = EINVAL;
-    if ((zio == NULL) || (zio->magic != ZIO_MAGIC))
-        return (-1);
-
-    zio->zloop = zloop;
-
     if (zio_reader (zio))
         zio_reader_poll (zio);
     else if (zio_writer (zio)) {
@@ -641,9 +710,30 @@ int zio_zloop_attach (zio_t zio, zloop_t *zloop)
     return (0);
 }
 
+int zio_zloop_attach (zio_t zio, zloop_t *zloop)
+{
+    errno = EINVAL;
+    if ((zio == NULL) || (zio->magic != ZIO_MAGIC))
+        return (-1);
+
+    zio->zloop = zloop;
+    return (zio_bootstrap (zio));
+}
+
+int zio_flux_attach (zio_t zio, flux_t f)
+{
+    errno = EINVAL;
+    if ((zio == NULL) || (zio->magic != ZIO_MAGIC))
+        return (-1);
+
+    zio->flux = f;
+    return (zio_bootstrap (zio));
+}
+
 int zio_zmsg_send (zio_t zio, json_object *o, void *arg)
 {
     const char *s;
+    zio_debug (zio, "%s: send: %s\n", zio->name, json_object_to_json_string (o));
     if (!zio->dstsock)
         return (-1);
     zmsg_t *zmsg = zmsg_new ();
