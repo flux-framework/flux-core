@@ -544,6 +544,10 @@ static int logsrv_init (flux_t h, zhash_t *args)
         return -1;
     }
     flux_event_subscribe (h, "event.fault.");
+    if (flux_reactor_start (h) < 0) {
+        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
+        return -1;
+    }
     return 0;
 }
 

@@ -436,9 +436,14 @@ static int apisrv_init (flux_t h, zhash_t *args)
     if ((ctx->listen_fd = listener_init (ctx, sockpath)) < 0)
         goto done;
     if (flux_fdhandler_add (h, ctx->listen_fd, ZMQ_POLLIN | ZMQ_POLLERR,
-                                                    listener_cb, ctx) < 0)
-        flux_log (h, LOG_ERR, "flux_fdhandler_add listen_fd: %s",
-                  strerror (errno));
+                                                    listener_cb, ctx) < 0) {
+        flux_log (h, LOG_ERR, "flux_fdhandler_add: %s", strerror (errno));
+        goto done;
+    }
+    if (flux_reactor_start (h) < 0) {
+        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
+        goto done;
+    }
     rc = 0;
 done:
     if (dfltpath)

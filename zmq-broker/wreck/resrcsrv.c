@@ -50,6 +50,10 @@ static void _store_hosts (flux_t h)
 static int _init (flux_t h, zhash_t *args)
 {
     _store_hosts(h);
+    if (flux_reactor_start (h) < 0) {
+        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
+        return -1;
+    }
     return 0;
 }
 

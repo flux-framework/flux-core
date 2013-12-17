@@ -79,6 +79,10 @@ static int syncsrv_init (flux_t h, zhash_t *args)
         err ("kvs_watch_dir conf.sync");
         return -1;
     }
+    if (flux_reactor_start (h) < 0) {
+        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
+        return -1;
+    }
     return 0;
 }
 

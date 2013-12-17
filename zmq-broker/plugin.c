@@ -545,14 +545,12 @@ static void *plugin_thread (void *arg)
                                                           stats_req_cb, p) < 0)
         err_exit ("%s: flux_msghandler_add *.stats", p->id);
 
-    if (p->ops->init) {
-        if (p->ops->init (p->h, p->args) < 0) {
-            err ("%s: init failed", p->name);
-            goto done;
-        }
+    if (!p->ops->init)
+        err_exit ("%s: Plugin must define 'init' method", p->id);
+    if (p->ops->init (p->h, p->args) < 0) {
+        err ("%s: init failed", p->name);
+        goto done;
     }
-
-    (void)flux_reactor_start (p->h); /* XXX ignore return code here */
     if (p->ops->fini)
         p->ops->fini (p->h);
 done:

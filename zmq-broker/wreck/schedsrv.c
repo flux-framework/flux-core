@@ -65,6 +65,10 @@ static int _sched_init (flux_t p, zhash_t *args)
     }
 
     flux_log (p, LOG_INFO, "sched plugin initialized");
+    if (flux_reactor_start (p) < 0) {
+        flux_log (p, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
+        return -1;
+    }
     return 0;
 }
 

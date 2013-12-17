@@ -20,7 +20,7 @@ static json_object * json_echo (const char *s, int id)
     return o;
 }
 
-static int handle_recv (flux_t h, zmsg_t **zmsg, int typemask)
+static int echo_recv (flux_t h, zmsg_t **zmsg, int typemask)
 {
     json_object *o = NULL;
     if (cmb_msg_decode (*zmsg, NULL, &o) >= 0) {
@@ -55,8 +55,18 @@ out:
     return 0;
 }
 
+static int echo_init (flux_t h, zhash_t *args)
+{
+    if (flux_reactor_start (h) < 0) {
+        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
+        return -1;
+    }
+    return 0;
+}
+
 const struct plugin_ops ops = {
-    .recv = handle_recv,
+    .init = echo_init,
+    .recv = echo_recv,
 };
 
 /*

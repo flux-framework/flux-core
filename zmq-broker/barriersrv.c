@@ -293,6 +293,10 @@ static int barriersrv_init (flux_t h, zhash_t *args)
         err ("%s: flux_event_subscribe", __FUNCTION__);
         return -1;
     }
+    if (flux_reactor_start (h) < 0) {
+        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
+        return -1;
+    }
     return 0;
 }
 
