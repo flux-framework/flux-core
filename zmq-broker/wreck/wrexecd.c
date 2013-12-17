@@ -240,7 +240,7 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
             flags = KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK | KZ_FLAGS_NOEXIST;
         asprintf (&key, "lwj.%ld.%d.%s", ctx->id, t->globalid, ioname (i));
         if ((t->kz [i] = kz_open (ctx->cmb, key, flags)) == NULL)
-            log_fatal (ctx, 1, "kz_open (%s): %s", ioname (i), strerror (errno));
+            log_fatal (ctx, 1, "kz_open (%s): %s", key, strerror (errno));
         if (i == IN)
             kz_set_ready_cb (t->kz [i], (kz_ready_f) kz_stdin, t);
         free (key);
