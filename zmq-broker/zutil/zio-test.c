@@ -8,16 +8,20 @@
 int output_thread_cb (zloop_t *zl, zmq_pollitem_t *zp, zio_t z)
 {
 	zmsg_t *zmsg;
+	char *name;
 	char *buf;
 
 	zmsg = zmsg_recv (zp->socket);
 	if (!zmsg) {
 		return (-1);
 	}
+	name = zmsg_popstr (zmsg);
 	buf = zmsg_popstr (zmsg);
 	json_object *o = json_tokener_parse (buf);
 	zio_write_json (z, o);
 	zmsg_destroy (&zmsg);
+	free (name);
+	free (buf);
 	json_object_put (o);
 	if (zio_closed (z))
 		return (-1);  /* Wakeup zloop if we're done */
