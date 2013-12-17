@@ -59,6 +59,7 @@ struct prog_ctx {
     int nnodes;
     int nodeid;
     int nprocs;             /* number of copies of command to execute */
+    int globalbasis;        /* Global rank of first task on this node */
     int exited;
 
     int argc;
@@ -143,7 +144,7 @@ static void log_msg (struct prog_ctx *ctx, const char *fmt, ...)
 
 int globalid (struct prog_ctx *ctx, int localid)
 {
-    return ((ctx->nodeid * ctx->nprocs) + localid);
+    return (ctx->globalbasis + localid);
 }
 
 const char * ioname (int s)
@@ -447,6 +448,19 @@ int cmp_int (const void *x, const void *y)
     return (1);
 }
 
+int cores_on_node (struct prog_ctx *ctx, int nodeid)
+{
+    int rc;
+    int ncores;
+    char *key;
+
+    if (asprintf (&key, "lwj.%ld.rank.%d.cores", ctx->id, nodeid) < 0)
+        log_fatal (ctx, 1, "cores_on_node: out of memory");
+    rc = kvs_get_int (ctx->cmb, key, &ncores);
+    free (key);
+    return (rc < 0 ? -1 : ncores);
+}
+
 /*
  *  Get total number of nodes in this job from lwj.%d.rank dir
  */
@@ -480,12 +494,18 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
 
     qsort (nodeids, n, sizeof (int), &cmp_int);
     for (j = 0; j < n; j++) {
+        int ncores;
         if (nodeids[j] == ctx->noderank) {
             ctx->nodeid = j;
             break;
         }
+        if ((ncores = cores_on_node (ctx, j)) < 0)
+            log_fatal (ctx, 1, "Failed to get ncores for node%d\n", nodeids[j]);
+        ctx->globalbasis += ncores;
     }
     free (nodeids);
+    log_msg (ctx, "lwj.%ld: node%d: basis=%d\n",
+        ctx->id, ctx->nodeid, ctx->globalbasis);
     return (0);
 }
 
