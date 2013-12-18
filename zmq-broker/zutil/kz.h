@@ -12,16 +12,27 @@ enum {
 
     KZ_FLAGS_NONBLOCK       = 0x0010, /* currently only applies to reads */
     KZ_FLAGS_NOEXIST        = 0x0020, /* allow open for reading to succeed */
-                                      /*   even if name doesn't exist yet */
+                                      /*   even if stream doesn't exist yet */
 
     KZ_FLAGS_TRUNC          = 0x0100, /* remove contents before writing */
-    KZ_FLAGS_DELAYCOMMIT    = 0x0200, /* commit on flush/close */
-    KZ_FLAGS_RAW            = 0x0400, /* use only *_json I/O methods */
-};    
+    KZ_FLAGS_RAW            = 0x0200, /* use only *_json I/O methods */
+    KZ_FLAGS_NOCOMMIT_OPEN  = 0x0400, /* skip commit at open (FLAGS_WRITE) */
+    KZ_FLAGS_NOCOMMIT_PUT   = 0x0800, /* skip commit at put */
+    KZ_FLAGS_NOCOMMIT_CLOSE = 0x1000, /* skip commit at close */
+
+    KZ_FLAGS_DELAYCOMMIT    = (KZ_FLAGS_NOCOMMIT_OPEN | KZ_FLAGS_NOCOMMIT_PUT),
+};
 
 /* Prepare to read or write a KVS stream.
  */
 kz_t kz_open (flux_t h, const char *name, int flags);
+
+/* Prepare to write to one KVS stream that is a part of a group.
+ * The kvs_commit()s normally issued at open and close are replaced with
+ * a kvs_fence().
+ */
+kz_t kz_gopen (flux_t h, const char *grpname, int nprocs,
+               const char *name, int flags);
 
 /* Write one block of data to a KVS stream.  Unless kz was opened with
  * KZ_FLAGS_DELAYCOMMIT, data will committed to the KVS.

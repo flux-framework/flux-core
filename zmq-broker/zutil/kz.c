@@ -15,14 +15,14 @@
  * If KZ_FLAGS_TRUNC, any existing contents are removed.
  * Writing begins at '000000'.  Each kz_put returns either -1 or
  * the number of bytes requested to be written (there are no short writes).
- * If not KZ_FLAGS_DELAYCOMMIT, a kvs_commit is issued after every kz_put.
+ * A kvs_commit is issued after every kz_put, unless disabled.
  *
  * kz_flush
  * If KZ_FLAGS_WRITE, issues a kvs_commit(), otherwise no-op.
  *
  * kz_close
  * If KZ_FLAGS_WRITE, puts a value containing the EOF flag and issues
- * a kvs_commit().
+ * a kvs_commit(), unless disabled
  */
 
 #define _GNU_SOURCE
@@ -49,7 +49,21 @@ struct kz_struct {
     kz_ready_f ready_cb;
     void *ready_arg;
     bool eof;
+    int nprocs;
+    char *grpname;
+    int fencecount;
 };
+
+static void kz_destroy (kz_t kz)
+{
+    if (kz->name)
+        free (kz->name);
+    if (kz->dir)
+        kvsdir_destroy (kz->dir);
+    if (kz->grpname)
+        free (kz->grpname);
+    free (kz);
+}
 
 kz_t kz_open (flux_t h, const char *name, int flags)
 {
@@ -72,8 +86,10 @@ kz_t kz_open (flux_t h, const char *name, int flags)
         }
         if (kvs_mkdir (h, name) < 0)
             goto error;
-        if (kvs_commit (h) < 0)
-            goto error;
+        if (!(flags & KZ_FLAGS_NOCOMMIT_OPEN)) {
+            if (kvs_commit (h) < 0)
+                goto error;
+        }
     } else if ((flags & KZ_FLAGS_READ)) {
         if (!(flags & KZ_FLAGS_NOEXIST)) {
             if (kvs_get_dir (h, &kz->dir, "%s", name) < 0)
@@ -82,11 +98,41 @@ kz_t kz_open (flux_t h, const char *name, int flags)
     }
     return kz;
 error:
-    if (kz->name)
-        free (kz->name);
-    if (kz->dir)
-        kvsdir_destroy (kz->dir);
-    free (kz);
+    kz_destroy (kz);
+    return NULL;
+}
+
+static int kz_fence (kz_t kz)
+{
+    char *name;
+    int rc;
+    if (asprintf (&name, "%s.%d", kz->grpname, kz->fencecount++) < 0)
+        oom ();
+    rc = kvs_fence (kz->h, name, kz->nprocs);
+    free (name);
+    return rc;
+}
+
+kz_t kz_gopen (flux_t h, const char *grpname, int nprocs,
+               const char *name, int flags)
+{
+    kz_t kz;
+
+    if (!(flags & KZ_FLAGS_WRITE) || !grpname || nprocs <= 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+    flags |= KZ_FLAGS_NOCOMMIT_OPEN;
+    flags |= KZ_FLAGS_NOCOMMIT_CLOSE;
+    if (!(kz = kz_open (h, name, flags)))
+        return NULL;
+    kz->grpname = xstrdup (grpname);
+    kz->nprocs = nprocs;
+    if (kz_fence (kz) < 0)
+        goto error;
+    return kz;
+error:
+    kz_destroy (kz);
     return NULL;
 }
 
@@ -103,7 +149,7 @@ static int putnext (kz_t kz, json_object *val)
         oom ();
     if (kvs_put (kz->h, key, val) < 0)
         goto done;
-    if (!(kz->flags & KZ_FLAGS_DELAYCOMMIT)) {
+    if (!(kz->flags & KZ_FLAGS_NOCOMMIT_PUT)) {
         if (kvs_commit (kz->h) < 0)
             goto done;
     }
@@ -128,7 +174,7 @@ int kz_put (kz_t kz, char *data, int len)
     json_object *val = NULL;
     int rc = -1;
 
-    if (len == 0 || data == NULL) {
+    if (len == 0 || data == NULL || (kz->flags & KZ_FLAGS_RAW)) {
         errno = EINVAL;
         goto done;
     }
@@ -255,20 +301,22 @@ int kz_close (kz_t kz)
             if (kvs_put (kz->h, key, val) < 0)
                 goto done;
         }
-        if (kvs_commit (kz->h) < 0)
-            goto done;
+        if (!(kz->flags & KZ_FLAGS_NOCOMMIT_CLOSE)) {
+            if (kvs_commit (kz->h) < 0)
+                goto done;
+        }
+        if (kz->nprocs > 0 && kz->grpname) {
+            if (kz_fence (kz) < 0)
+                goto done;
+        }
     }
+    rc = 0;
 done:
     if (val)
         json_object_put (val);
     if (key)
         free (key);
-    free (kz->name);
-    if (kz->dir)
-        kvsdir_destroy (kz->dir);
-    free (kz);
-    rc = 0;
-
+    kz_destroy (kz);
     return rc;
 }
 
