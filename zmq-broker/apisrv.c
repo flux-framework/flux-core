@@ -423,7 +423,7 @@ static msghandler_t htab[] = {
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
-static int apisrv_init (flux_t h, zhash_t *args)
+static int apisrv_main (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
     char *sockpath = NULL, *dfltpath = NULL;
@@ -466,7 +466,7 @@ done:
 }
 
 const struct plugin_ops ops = {
-    .init = apisrv_init,
+    .main = apisrv_main,
 };
 
 /*

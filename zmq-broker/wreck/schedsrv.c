@@ -31,7 +31,7 @@ static void watchid (const char *key, kvsdir_t dir, void *arg, int errnum)
     }
 }
 
-static int _sched_init (flux_t p, zhash_t *args)
+static int _sched_main (flux_t p, zhash_t *args)
 {
     kvsdir_t dir = NULL;
     int rc = 0;
@@ -74,7 +74,7 @@ static int _sched_init (flux_t p, zhash_t *args)
 }
 
 const struct plugin_ops ops = {
-    .init = _sched_init,
+    .main = _sched_main,
 };
 
 /*

@@ -569,7 +569,7 @@ static msghandler_t htab[] = {
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
 
-static int logsrv_init (flux_t h, zhash_t *args)
+static int logsrv_main (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
 
@@ -594,7 +594,7 @@ static int logsrv_init (flux_t h, zhash_t *args)
 }
 
 const struct plugin_ops ops = {
-    .init    = logsrv_init,
+    .main    = logsrv_main,
 };
 
 /*

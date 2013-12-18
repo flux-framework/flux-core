@@ -218,7 +218,7 @@ out:
     return 0;
 }
 
-int job_init (flux_t h, zhash_t *args)
+int job_main (flux_t h, zhash_t *args)
 {
     if (flux_msghandler_add (h, FLUX_MSGTYPE_REQUEST, "job.*",
                                             job_request_cb, NULL) < 0) {
@@ -233,7 +233,7 @@ int job_init (flux_t h, zhash_t *args)
 }
 
 const struct plugin_ops ops = {
-    .init = job_init,
+    .main = job_main,
 };
 
 /*

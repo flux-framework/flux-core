@@ -506,7 +506,7 @@ static void *plugin_thread (void *arg)
         err_exit ("%s: plugin_zloop_create", p->id);
 
     /* Register callbacks for ping, stats which can be overridden
-     * in p->ops->init() if desired.
+     * in p->ops->main() if desired.
      */
     if (flux_msghandler_add (p->h, FLUX_MSGTYPE_REQUEST, "*.ping",
                                                           ping_req_cb, p) < 0)
@@ -515,10 +515,10 @@ static void *plugin_thread (void *arg)
                                                           stats_req_cb, p) < 0)
         err_exit ("%s: flux_msghandler_add *.stats", p->id);
 
-    if (!p->ops->init)
-        err_exit ("%s: Plugin must define 'init' method", p->id);
-    if (p->ops->init (p->h, p->args) < 0) {
-        err ("%s: init failed", p->name);
+    if (!p->ops->main)
+        err_exit ("%s: Plugin must define 'main' method", p->id);
+    if (p->ops->main(p->h, p->args) < 0) {
+        err ("%s: main returned error", p->name);
         goto done;
     }
 done:

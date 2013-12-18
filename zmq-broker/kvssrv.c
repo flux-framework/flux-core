@@ -1560,7 +1560,7 @@ static msghandler_t htab[] = {
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
-static int kvssrv_init (flux_t h, zhash_t *args)
+static int kvssrv_main (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
     bool treeroot = flux_treeroot (h);
@@ -1600,7 +1600,7 @@ static int kvssrv_init (flux_t h, zhash_t *args)
 }
 
 const struct plugin_ops ops = {
-    .init    = kvssrv_init,
+    .main    = kvssrv_main,
 };
 
 /*

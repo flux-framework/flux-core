@@ -15,7 +15,7 @@
  * its implementations of one or more of the plugin operations.
  */
 struct plugin_ops {
-    int (*init)(flux_t h, zhash_t *args);
+    int (*main)(flux_t h, zhash_t *args);
 };
 
 typedef struct plugin_ctx_struct *plugin_ctx_t;
@@ -27,7 +27,7 @@ typedef struct plugin_ctx_struct *plugin_ctx_t;
  * 'id' is a session-wide unique socket id for this instance of the plugin,
  * used to form the return address when the plugin a request on its dealer
  * socket.  'args' is a hash of key-value pairs that may be NULL, or may
- * be used to pass arguments to the plugins's ops->init() function.
+ * be used to pass arguments to the plugins's ops->main() function.
  */
 plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
                           char *name, char *id, zhash_t *args);

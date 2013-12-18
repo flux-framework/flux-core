@@ -47,7 +47,7 @@ static void _store_hosts (flux_t h)
     kvs_commit(h);
 }
 
-static int _init (flux_t h, zhash_t *args)
+static int resrc_main (flux_t h, zhash_t *args)
 {
     _store_hosts(h);
     if (flux_reactor_start (h) < 0) {
@@ -58,7 +58,7 @@ static int _init (flux_t h, zhash_t *args)
 }
 
 const struct plugin_ops ops = {
-    .init    = _init,
+    .main    = resrc_main,
 };
 
 /*

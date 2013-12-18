@@ -55,7 +55,7 @@ out:
     return 0;
 }
 
-static int echo_init (flux_t h, zhash_t *args)
+static int echo_main (flux_t h, zhash_t *args)
 {
     if (flux_msghandler_add (h, FLUX_MSGTYPE_EVENT, "echo",
                              echo_request_cb, NULL) < 0) {
@@ -70,7 +70,7 @@ static int echo_init (flux_t h, zhash_t *args)
 }
 
 const struct plugin_ops ops = {
-    .init = echo_init,
+    .main = echo_main,
 };
 
 /*

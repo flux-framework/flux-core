@@ -456,7 +456,7 @@ static msghandler_t htab[] = {
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
-static int rexec_init (flux_t h, zhash_t *args)
+static int rexec_main (flux_t h, zhash_t *args)
 {
     struct rexec_ctx *ctx = getctx (h);
 
@@ -476,7 +476,7 @@ static int rexec_init (flux_t h, zhash_t *args)
 }
 
 const struct plugin_ops ops = {
-    .init = rexec_init,
+    .main = rexec_main,
 };
 
 /*

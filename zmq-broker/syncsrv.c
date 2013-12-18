@@ -80,7 +80,7 @@ invalid:
     }
 }
 
-static int syncsrv_init (flux_t h, zhash_t *args)
+static int syncsrv_main (flux_t h, zhash_t *args)
 {
     if (flux_tmouthandler_set (h, timeout_cb, NULL) < 0) {
         flux_log (h, LOG_ERR, "flux_tmouthandler_set: %s", strerror (errno));
@@ -98,7 +98,7 @@ static int syncsrv_init (flux_t h, zhash_t *args)
 }
 
 const struct plugin_ops ops = {
-    .init    = syncsrv_init,
+    .main    = syncsrv_main,
 };
 
 /*
