@@ -68,15 +68,8 @@ static int mechosrv_init (flux_t h, zhash_t *args)
     return 0;
 }
 
-static void mechosrv_fini (flux_t h)
-{
-    if (flux_event_unsubscribe (h, "mrpc.mecho") < 0)
-        flux_log (h, LOG_ERR, "%s: flux_event_unsubscribe", __FUNCTION__);
-}
-
 const struct plugin_ops ops = {
     .init = mechosrv_init,
-    .fini = mechosrv_fini,
 };
 
 /*

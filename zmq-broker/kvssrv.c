@@ -1599,19 +1599,8 @@ static int kvssrv_init (flux_t h, zhash_t *args)
     return 0;
 }
 
-static void kvssrv_fini (flux_t h)
-{
-    if (!flux_treeroot (h)) {
-        if (flux_event_unsubscribe (h, "event.kvs.setroot.") < 0)
-            err_exit ("%s: flux_event_unsubscribe", __FUNCTION__);
-    }
-    if (flux_event_unsubscribe (h, "event.kvs.debug.") < 0)
-        err_exit ("%s: flux_event_unsubscribe", __FUNCTION__);
-}
-
 const struct plugin_ops ops = {
     .init    = kvssrv_init,
-    .fini    = kvssrv_fini,
 };
 
 /*

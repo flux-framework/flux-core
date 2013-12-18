@@ -453,23 +453,20 @@ static int apisrv_init (flux_t h, zhash_t *args)
 done:
     if (dfltpath)
         free (dfltpath);
+    if (ctx->listen_fd >= 0) {
+        if (close (ctx->listen_fd) < 0)
+            flux_log (h, LOG_ERR, "close listen_fd: %s", strerror (errno));
+    }
+    if (ctx->clients) {
+        client_t *c;
+        while ((c = zlist_pop (ctx->clients)))
+            client_destroy (c);
+    }
     return rc;
-}
-
-static void apisrv_fini (flux_t h)
-{
-    ctx_t *ctx = getctx (h);
-    client_t *c;
-
-    if (close (ctx->listen_fd) < 0)
-        flux_log (h, LOG_ERR, "close listen_fd: %s", strerror (errno));
-    while ((c = zlist_pop (ctx->clients)))
-        client_destroy (c);
 }
 
 const struct plugin_ops ops = {
     .init = apisrv_init,
-    .fini = apisrv_fini,
 };
 
 /*

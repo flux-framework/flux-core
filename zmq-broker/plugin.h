@@ -16,7 +16,6 @@
  */
 struct plugin_ops {
     int (*init)(flux_t h, zhash_t *args);
-    void (*fini)(flux_t h);
 };
 
 typedef struct plugin_ctx_struct *plugin_ctx_t;

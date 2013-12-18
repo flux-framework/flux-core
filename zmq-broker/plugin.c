@@ -521,8 +521,6 @@ static void *plugin_thread (void *arg)
         err ("%s: init failed", p->name);
         goto done;
     }
-    if (p->ops->fini)
-        p->ops->fini (p->h);
 done:
     zloop_destroy (&p->zloop);
 

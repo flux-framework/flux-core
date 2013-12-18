@@ -593,16 +593,8 @@ static int logsrv_init (flux_t h, zhash_t *args)
     return 0;
 }
 
-static void logsrv_fini (flux_t h)
-{
-    //ctx_t *ctx = getctx (h);
-
-    flux_event_unsubscribe (h, "event.fault.");
-}
-
 const struct plugin_ops ops = {
     .init    = logsrv_init,
-    .fini    = logsrv_fini,
 };
 
 /*

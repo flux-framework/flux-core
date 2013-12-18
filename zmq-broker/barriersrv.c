@@ -324,17 +324,8 @@ static int barriersrv_init (flux_t h, zhash_t *args)
     return 0;
 }
 
-static void barriersrv_fini (flux_t h)
-{
-    //ctx_t *ctx = getctx (h);
-    //
-    if (flux_event_unsubscribe (h, "event.barrier.") < 0)
-        err_exit ("%s: flux_event_subscribe", __FUNCTION__);
-}
-
 const struct plugin_ops ops = {
     .init    = barriersrv_init,
-    .fini    = barriersrv_fini,
 };
 
 /*
