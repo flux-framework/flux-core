@@ -500,6 +500,18 @@ int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
     return 0;
 }
 
+int flux_msghandler_addvec (flux_t h, msghandler_t *handlers, int len,
+                            void *arg)
+{
+    int i;
+
+    for (i = 0; i < len; i++)
+        if (flux_msghandler_add (h, handlers[i].typemask, handlers[i].pattern,
+                                    handlers[i].cb, arg) < 0)
+            return -1;
+    return 0;        
+}
+
 int flux_msghandler_append (flux_t h, int typemask, const char *pattern,
                             FluxMsgHandler cb, void *arg)
 {
