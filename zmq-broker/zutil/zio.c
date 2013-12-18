@@ -428,6 +428,9 @@ int zio_flush (zio_t zio)
     int len;
     int rc = 0;
 
+    if ((zio == NULL) || (zio->magic != ZIO_MAGIC) || !(zio->send))
+        return (-1);
+
     /*
      *  Nothing to flush if EOF already sent to consumer:
      */
