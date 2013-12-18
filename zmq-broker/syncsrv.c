@@ -20,6 +20,7 @@
 #include <json/json.h>
 
 #include "zmsg.h"
+#include "util.h"
 #include "log.h"
 #include "plugin.h"
 
@@ -30,11 +31,17 @@ static bool disabled = false;
 
 static int timeout_cb (flux_t h, void *arg)
 {
-    if (flux_event_send (h, NULL, "event.sched.trigger.%d", ++epoch) < 0) {
+    json_object *o = util_json_object_new_object ();
+    int rc = -1;
+    util_json_object_add_int (o, "epoch", ++epoch);
+    if (flux_event_send (h, o, "event.sched.trigger") < 0) {
         err ("flux_event_send");
-        return -1;
+        goto done;
     }
-    return 0;
+    rc = 0;
+done:
+    json_object_put (o);
+    return rc;
 }
 
 static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)

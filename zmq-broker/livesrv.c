@@ -44,6 +44,8 @@ typedef struct {
     flux_t h;
 } ctx_t;
 
+static int live_event_send (flux_t h, int rank, bool alive);
+
 static void freectx (ctx_t *ctx)
 {
     zhash_destroy (&ctx->kids);
@@ -129,11 +131,10 @@ static void age_children (ctx_t *ctx)
                 //msg ("aged %d epoch=%d current epoch=%d",
                 //     cp->rank, cp->epoch, ctx->epoch);
                 flux_log (ctx->h, LOG_ALERT,
-                    "event.live.down.%d: last seen epoch=%d, current epoch=%d",
+                    "node %d is down: last seen epoch=%d, current epoch=%d",
                     cp->rank, cp->epoch, ctx->epoch);
-                if (flux_event_send (ctx->h, NULL, "event.live.down.%d",
-                                     cp->rank) < 0)
-                    err_exit ("%s: flux_event_send", __FUNCTION__);
+                if (live_event_send (ctx->h, cp->rank, false) < 0)
+                    err_exit ("%s: live_event_send", __FUNCTION__);
             }
         }
     }
@@ -199,35 +200,50 @@ static void child_sync_with_topology (ctx_t *ctx)
         free (children);
 }
 
-/* Send live.hello.<rank> 
+/* Send live.hello
  */
-static void send_live_hello (ctx_t *ctx)
+static int hello_request_send (flux_t h, int epoch, int rank)
 {
-    json_object *request = util_json_object_new_object ();
+    json_object *o = util_json_object_new_object ();
+    int rc;
 
-    util_json_object_add_int (request, "epoch", ctx->epoch);
-    flux_request_send (ctx->h, request, "live.hello.%d", flux_rank (ctx->h));
-    json_object_put (request);
+    util_json_object_add_int (o, "epoch", epoch);
+    util_json_object_add_int (o, "rank", rank);
+    rc = flux_request_send (h, o, "live.hello");
+    json_object_put (o);
+    return rc;
 }
 
-/* Receive live.hello.<rank>
- */
-static void recv_live_hello (ctx_t *ctx, char *arg, zmsg_t **zmsg)
+static int live_event_send (flux_t h, int rank, bool alive)
 {
-    int rank = strtoul (arg, NULL, 10);
-    json_object *eo, *o = NULL;
+    json_object *o = util_json_object_new_object ();
+    int rc;
+    util_json_object_add_int (o, "rank", rank);
+    util_json_object_add_boolean (o, "alive", alive);
+    rc = flux_event_send (h, o, "event.live", rank);
+    json_object_put (o);
+    return rc;
+}
+
+/* Receive live.hello
+ */
+static int hello_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    int rank;
+    json_object *o = NULL;
     int epoch;
     child_t *cp;
 
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || !o
+                || util_json_object_get_int (o, "epoch", &epoch) < 0
+                || util_json_object_get_int (o, "rank", &rank) < 0) {
+        goto done;
+    }
     if (rank < 0 || rank >= flux_size (ctx->h))
         goto done;
     if (!(cp = child_find_by_rank (ctx, rank)))
         goto done;
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0) 
-        goto done;
-    if (!o || !(eo = json_object_object_get (o, "epoch")))
-        goto done;
-    epoch = json_object_get_int (eo);
     if (cp->epoch < epoch)
         cp->epoch = epoch;
 
@@ -238,18 +254,19 @@ static void recv_live_hello (ctx_t *ctx, char *arg, zmsg_t **zmsg)
         } else {
             //msg ("received live.hello from %d epoch=%d current epoch=%d",
             //     rank, epoch, ctx->epoch);
-            flux_log (ctx->h, LOG_ALERT, "event.live.up.%d", rank);
-            if (flux_event_send (ctx->h, NULL, "event.live.up.%d", rank) < 0)
-                err_exit ("%s: flux_event_send", __FUNCTION__);
+            flux_log (ctx->h, LOG_ALERT, "node %d is UP", rank);
+            if (live_event_send (ctx->h, rank, true) < 0)
+                err_exit ("%s: live_event_send", __FUNCTION__);
         }
     }
 done:
     if (o)
         json_object_put (o);
     zmsg_destroy (zmsg);
+    return 0;
 }
 
-static void recv_event_live (ctx_t *ctx, bool alive, int rank)
+static void setlive (ctx_t *ctx, bool alive, int rank)
 {
     json_object *o, *new = NULL, *old = NULL;
     int i, len = 0;
@@ -286,30 +303,48 @@ done:
         json_object_put (new);
 }
 
-static int livesrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
+static int live_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
-    ctx_t *ctx = getctx (h);
-    char *arg = NULL;
-
-    if (ctx->disabled)
-        return 0;
-
-    if (cmb_msg_match_substr (*zmsg, "event.sched.trigger.", &arg)) {
-        ctx->epoch = strtoul (arg, NULL, 10);
-        if (!flux_treeroot (ctx->h))
-            send_live_hello (ctx);
-        if (ctx->age++ >= ctx->conf.live_missed_trigger_allow)
-            age_children (ctx);
+    ctx_t *ctx = arg;
+    json_object *o = NULL;
+    int rank;
+    bool alive;
+    
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
+           || util_json_object_get_int (o, "rank", &rank) < 0
+           || util_json_object_get_boolean (o, "alive", &alive) < 0) {
+        goto done;        
+    }
+    setlive (ctx, alive, rank);
+done:
+    if (o)
+        json_object_put (o);
+    if (*zmsg)
         zmsg_destroy (zmsg);
-    } else if (cmb_msg_match_substr (*zmsg, "live.hello.", &arg))
-        recv_live_hello (ctx, arg, zmsg);
-    else if (cmb_msg_match_substr (*zmsg, "event.live.up.", &arg))
-        recv_event_live (ctx, true, strtoul (arg, NULL, 10));
-    else if (cmb_msg_match_substr (*zmsg, "event.live.down.", &arg))
-        recv_event_live (ctx, false, strtoul (arg, NULL, 10));
+    return 0;
+}
 
-    if (arg)
-        free (arg);
+static int trigger_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    json_object *o = NULL;
+
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
+            || util_json_object_get_int (o, "epoch", &ctx->epoch) < 0) {
+        flux_log (h, LOG_ERR, "received mangled trigger event");
+        goto done;        
+    }
+    if (!flux_treeroot (ctx->h)) {
+        if (hello_request_send (ctx->h, ctx->epoch, flux_rank (h)) < 0)
+            flux_log (h, LOG_ERR, "hello_request_send: %s", strerror (errno));
+    }
+    if (ctx->age++ >= ctx->conf.live_missed_trigger_allow)
+        age_children (ctx);
+done:
+    if (o)
+        json_object_put (o);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
     return 0;
 }
 
@@ -375,24 +410,34 @@ invalid:
     }
 }
 
+static msghandler_t htab[] = {
+    { FLUX_MSGTYPE_REQUEST,     "live.hello",          hello_request_cb },
+    { FLUX_MSGTYPE_EVENT,       "event.sched.trigger", trigger_event_cb },
+    { FLUX_MSGTYPE_EVENT,       "event.live",          live_event_cb },
+};
+const int htablen = sizeof (htab) / sizeof (htab[0]);
+
 static int livesrv_init (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
-    bool treeroot = flux_treeroot (h);
 
     if (kvs_watch_dir (h, set_config, ctx, "conf.live") < 0) {
-        err ("live: kvs_watch_dir");
+        flux_log (h, LOG_ERR, "kvs_watch_dir: %s", strerror (errno));
         return -1;
     }
-    if (flux_event_subscribe (h, "event.sched.trigger.") < 0) {
-        err ("live: flux_event_subscribe");
+    if (flux_event_subscribe (h, "event.sched.trigger") < 0) {
+        flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
         return -1;
     }
-    if (treeroot) {
-        if (flux_event_subscribe (h, "event.live.") < 0) {
-            err ("live: flux_event_subscribe");
+    if (flux_treeroot (h)) {
+        if (flux_event_subscribe (h, "event.live") < 0) {
+            flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
             return -1;
         }
+    }
+    if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
+        flux_log (h, LOG_ERR, "flux_msghandler_addvec: %s", strerror (errno));
+        return -1;
     }
     if (flux_reactor_start (h) < 0) {
         flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
@@ -403,7 +448,6 @@ static int livesrv_init (flux_t h, zhash_t *args)
 
 const struct plugin_ops ops = {
     .init    = livesrv_init,
-    .recv    = livesrv_recv,
 };
 
 /*

@@ -118,12 +118,13 @@ typedef struct {
     flux_t h;
 } ctx_t;
 
-typedef void (*wait_fun_t) (ctx_t *ctx, char *arg, zmsg_t **zmsg);
 typedef struct {
     ctx_t *ctx;
     int usecount;
-    wait_fun_t fun;    
-    char *arg;
+    FluxMsgHandler fun;
+    flux_t h;
+    int typemask;
+    void *arg;
     zmsg_t *zmsg;
     char *id;
 } wait_t;
@@ -133,7 +134,7 @@ enum {
     KVS_GET_FILEVAL = 2,
 };
 
-static void event_kvs_setroot_send (ctx_t *ctx);
+static int setroot_event_send (ctx_t *ctx);
 
 
 static void freectx (ctx_t *ctx)
@@ -187,17 +188,17 @@ static bool store_by_reference (json_object *o)
     return false;
 }
 
-static wait_t *wait_create (ctx_t *ctx, wait_fun_t fun,
-                            char *arg, zmsg_t **zmsg)
+static wait_t *wait_create (flux_t h, int typemask, void *arg,
+                            FluxMsgHandler fun, zmsg_t **zmsg)
 {
     wait_t *wp = xzmalloc (sizeof (*wp));
     wp->usecount = 0;
+    wp->h = h;
+    wp->typemask = typemask;
+    wp->arg = arg;
     wp->fun = fun;
-    if (arg)
-        wp->arg = xstrdup (arg);
     wp->zmsg = *zmsg;
     *zmsg = NULL;
-    wp->ctx = ctx;
 
     return wp;
 }
@@ -212,8 +213,6 @@ static void wait_set_id (wait_t *wp, char *id)
 static void wait_destroy (wait_t *wp, zmsg_t **zmsg)
 {
     assert (zmsg != NULL || wp->zmsg == NULL);
-    if (wp->arg)
-        free (wp->arg);
     if (wp->id)
         free (wp->id);
     if (zmsg)
@@ -264,7 +263,7 @@ static void wait_del_all (zlist_t *waitlist)
             oom ();
     while ((wp = zlist_pop (cpy))) {
         if (--wp->usecount == 0) {
-            wp->fun (wp->ctx, wp->arg, &wp->zmsg);
+            wp->fun (wp->h, wp->typemask, &wp->zmsg, wp->arg);
             wait_destroy (wp, NULL);
         }
     }
@@ -759,8 +758,9 @@ static void commit (ctx_t *ctx)
     setroot (ctx, ctx->rootseq + 1, ref);
 }
 
-static void kvs_load (ctx_t *ctx, char *arg, zmsg_t **zmsg)
+static int load_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    ctx_t *ctx = arg;
     json_object *val, *cpy = NULL, *o = NULL;
     json_object_iter iter;
     wait_t *wp = NULL;
@@ -770,7 +770,7 @@ static void kvs_load (ctx_t *ctx, char *arg, zmsg_t **zmsg)
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    wp = wait_create (ctx, kvs_load, arg, zmsg);
+    wp = wait_create (h, typemask, arg, load_request_cb, zmsg);
     cpy = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
         if (!load (ctx, iter.key, wp, &val))
@@ -791,10 +791,12 @@ done:
         json_object_put (cpy);
     if (*zmsg)
         zmsg_destroy (zmsg);
+    return 0;
 }
 
-static void kvs_load_response (ctx_t *ctx, zmsg_t **zmsg)
+static int load_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    ctx_t *ctx = arg;
     json_object *o = NULL;
     json_object_iter iter;
     href_t href;
@@ -814,10 +816,12 @@ done:
         json_object_put (o);
     if (*zmsg)
         zmsg_destroy (zmsg);
+    return 0;
 }
 
-static void kvs_store (ctx_t *ctx, char *arg, zmsg_t **zmsg)
+static int store_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    ctx_t *ctx = arg;
     json_object *cpy = NULL, *o = NULL;
     json_object_iter iter;
     bool writeback = !flux_treeroot (ctx->h);
@@ -843,10 +847,12 @@ done:
         json_object_put (cpy);
     if (*zmsg)
         zmsg_destroy (zmsg);
+    return 0;
 }
 
-static void kvs_store_response (ctx_t *ctx, zmsg_t **zmsg)
+static int store_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    ctx_t *ctx = arg;
     json_object *o = NULL;
     json_object_iter iter;
     op_t target = { .type = OP_STORE };
@@ -864,10 +870,12 @@ done:
         json_object_put (o);
     if (*zmsg)
         zmsg_destroy (zmsg);
+    return 0;
 }
 
-static void kvs_clean_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
+static int clean_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    ctx_t *ctx = arg;
     int s1, s2;
     int rc = 0;
     json_object *rootdir, *cpy;
@@ -900,10 +908,12 @@ static void kvs_clean_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
     flux_log (ctx->h, LOG_ALERT, "dropped %d of %d cache entries", s1 - s2, s1);
 done:
     flux_respond_errnum (ctx->h, zmsg, rc);
+    return 0;
 }
 
-static void kvs_name (ctx_t *ctx, char *arg, zmsg_t **zmsg)
+static int name_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    ctx_t *ctx = arg;
     json_object *cpy = NULL, *o = NULL;
     json_object_iter iter;
     bool writeback = !flux_treeroot (ctx->h);
@@ -930,10 +940,12 @@ done:
         json_object_put (cpy);
     if (*zmsg)
         zmsg_destroy (zmsg);
+    return 0;
 }
 
-static void kvs_name_response (ctx_t *ctx, zmsg_t **zmsg)
+static int name_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    ctx_t *ctx = arg;
     json_object *o = NULL;
     json_object_iter iter;
     op_t target = { .type = OP_NAME };
@@ -951,10 +963,12 @@ done:
         json_object_put (o);
     if (*zmsg)
         zmsg_destroy (zmsg);
+    return 0;
 }
 
-static void kvs_flush_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
+static int flush_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    ctx_t *ctx = arg;
     if (flux_treeroot (ctx->h) || ctx->slave.writeback_state == WB_CLEAN)
         flux_respond_errnum (ctx->h, zmsg, 0);
     else if (zlist_size (ctx->slave.writeback) == 0) {
@@ -964,13 +978,16 @@ static void kvs_flush_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
         writeback_add_flush (ctx, *zmsg); /* enqueue */
         *zmsg = NULL;
     }
+    return 0;
 }
 
-static void kvs_flush_response (ctx_t *ctx, zmsg_t **zmsg)
+static int flush_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
-    flux_response_sendmsg (ctx->h, zmsg); /* fwd downstream */
+    ctx_t *ctx = arg;
+    flux_response_sendmsg (h, zmsg); /* fwd downstream */
     if (ctx->slave.writeback_state == WB_FLUSHING)
         ctx->slave.writeback_state = WB_CLEAN;
+    return 0;
 }
 
 /* Get dirent containing requested key.
@@ -1120,8 +1137,9 @@ stall:
     return false;
 }
 
-static void kvs_get_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
+static int get_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    ctx_t *ctx = arg;
     json_object *root, *reply = NULL, *o = NULL;
     json_object_iter iter;
     wait_t *wp = NULL;
@@ -1134,7 +1152,7 @@ static void kvs_get_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    wp = wait_create (ctx, kvs_get_request, arg, zmsg);
+    wp = wait_create (h, typemask, arg, get_request_cb, zmsg);
     if (!load (ctx, ctx->rootdir, wp, &root)) {
         stall = true;
         goto done;
@@ -1175,10 +1193,12 @@ done:
         json_object_put (reply);
     if (*zmsg)
         zmsg_destroy (zmsg);
+    return 0;
 }
 
-static void kvs_watch_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
+static int watch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    ctx_t *ctx = arg;
     char *sender = cmb_msg_sender (*zmsg);
     json_object *root, *reply = NULL, *o = NULL;
     json_object_iter iter;
@@ -1192,7 +1212,7 @@ static void kvs_watch_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    wp = wait_create (ctx, kvs_watch_request, arg, zmsg);
+    wp = wait_create (h, typemask, arg, watch_request_cb, zmsg);
     if (!load (ctx, ctx->rootdir, wp, &root)) {
         stall = true;
         goto done;
@@ -1249,10 +1269,10 @@ static void kvs_watch_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
             util_json_object_add_boolean (reply, ".flag_once", flag_once);
             (void)cmb_msg_replace_json (*zmsg, reply);
 
-            /* On every commit, kvs_watch_request (p, arg, zcpy) will be called.
+            /* On every commit, __FUNCTION__ (zcpy) will be called.
              * No reply will be generated unless a value has changed.
              */
-            wp = wait_create (ctx, kvs_watch_request, arg, zmsg);
+            wp = wait_create (h, typemask, arg, watch_request_cb, zmsg);
             wait_set_id (wp, sender);
             wait_add (ctx->watchlist, wp);
         }
@@ -1266,10 +1286,12 @@ done:
         zmsg_destroy (zmsg);
     if (sender)
         free (sender);
+    return 0;
 }
 
-static void kvs_put_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
+static int put_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    ctx_t *ctx = arg;
     json_object *o = NULL;
     json_object_iter iter;
     href_t ref;
@@ -1303,12 +1325,13 @@ static void kvs_put_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
             name (ctx, iter.key, dirent_create ("FILEVAL", iter.val), writeback);
         }
     }
-    flux_respond_errnum (ctx->h, zmsg, 0); /* success */
+    flux_respond_errnum (h, zmsg, 0); /* success */
 done:
     if (o)
         json_object_put (o);
     if (*zmsg)
         zmsg_destroy (zmsg);
+    return 0;
 }
 
 static void commit_request_send (ctx_t *ctx, const char *name)
@@ -1330,8 +1353,9 @@ static void commit_response_send (ctx_t *ctx, commit_t *cp,
     free (rootref);
 }
 
-static void kvs_commit_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
+static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    ctx_t *ctx = arg;
     json_object *o = NULL;
     const char *name;
     commit_t *cp;
@@ -1342,13 +1366,13 @@ static void kvs_commit_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    wp = wait_create (ctx, kvs_commit_request, arg, zmsg);
+    wp = wait_create (h, typemask, arg, commit_request_cb, zmsg);
     if (flux_treeroot (ctx->h)) {
         if (!(cp = commit_find (ctx, name))) {
             commit (ctx);
             cp = commit_new (ctx, name);
             commit_done (ctx, cp);
-            event_kvs_setroot_send (ctx);
+            (void)setroot_event_send (ctx);
         }
     } else {
         if (!(cp = commit_find (ctx, name))) {
@@ -1367,20 +1391,22 @@ done:
         json_object_put (o);
     if (*zmsg)
         zmsg_destroy (zmsg);
+    return 0;
 }
 
-static void kvs_commit_response (ctx_t *ctx, zmsg_t **zmsg)
+static int commit_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    ctx_t *ctx = arg;
     json_object *o = NULL;
-    const char *arg, *name;
+    const char *rootref, *name;
     int seq;
     href_t href;
     commit_t *cp;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
             || util_json_object_get_string (o, "name", &name) < 0
-            || util_json_object_get_string (o, "rootref", &arg) < 0
-            || !decode_rootref (arg, &seq, href)) {
+            || util_json_object_get_string (o, "rootref", &rootref) < 0
+            || !decode_rootref (rootref, &seq, href)) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
@@ -1394,85 +1420,86 @@ done:
         json_object_put (o);
     if (*zmsg)
         zmsg_destroy (zmsg);
-}
-
-static void kvs_getroot_request (ctx_t *ctx, char *arg, zmsg_t **zmsg)
-{
-    json_object *o;
-    char *rootref = encode_rootref (ctx->rootseq, ctx->rootdir);
-
-    if (!(o = json_object_new_string (rootref)))
-        oom ();
-    flux_respond (ctx->h, zmsg, o);
-    free (rootref);
-    json_object_put (o);
-}
-
-static void event_kvs_setroot (ctx_t *ctx, char *arg, zmsg_t **zmsg)
-{
-    href_t href;
-    int seq;
-
-    //assert (!flux_treeroot (ctx->h));
-
-    if (!decode_rootref (arg, &seq, href))
-        flux_log (ctx->h, LOG_ERR, "%s: malformed rootref %s",
-                                   __FUNCTION__, arg);
-    else
-        setroot (ctx, seq, href);
-    if (*zmsg)
-        zmsg_destroy (zmsg);
-}
-
-static void event_kvs_setroot_send (ctx_t *ctx)
-{
-    char *rootref = encode_rootref (ctx->rootseq, ctx->rootdir);
-    if (flux_event_send (ctx->h, NULL, "event.kvs.setroot.%s", rootref) < 0)
-        err_exit ("flux_event_send");
-    free (rootref);
-}
-
-static int log_store_entry (const char *key, void *item, void *arg)
-{
-    ctx_t *ctx = arg;
-    hobj_t *hp = item; 
-
-    flux_log (ctx->h, LOG_DEBUG, "%s\t%s [%d waiters]", key,
-                hp->o ? json_object_to_json_string (hp->o) : "<unset>",
-                (int)zlist_size (hp->waitlist));
     return 0;
 }
 
-static void event_kvs_debug (ctx_t *ctx, char *arg, zmsg_t **zmsg)
+static int getroot_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
-    if (!strcmp (arg, "writeback.size"))
-        flux_log (ctx->h, LOG_DEBUG, "writeback %d", ctx->slave.writeback ?
-                    (int)zlist_size (ctx->slave.writeback) : 0);
-    else if (!strcmp (arg, "store.size"))
-        flux_log (ctx->h, LOG_DEBUG, "store %d", (int)zhash_size (ctx->store));
-    else if (!strcmp (arg, "root"))
-        flux_log (ctx->h, LOG_DEBUG, "root %d,%s", ctx->rootseq, ctx->rootdir);
-    else if (!strcmp (arg, "store"))
-        zhash_foreach (ctx->store, log_store_entry, ctx);
-    else if (!strcmp (arg, "commit")) {
-        zlist_t *keys = zhash_keys (ctx->commits);
-        commit_t *cp = zlist_first (keys);
-        int done = 0;
-        while (cp) {
-            if (cp->done)
-                done++;
-            cp = zlist_next (keys);
-        }
-        zlist_destroy (&keys);
-        flux_log (ctx->h, LOG_DEBUG, "commits %d/%d complete",
-                    done, (int)zhash_size (ctx->commits));
-    }
-    if (*zmsg)
-        zmsg_destroy (zmsg);
+    ctx_t *ctx = arg;
+    char *rootref = encode_rootref (ctx->rootseq, ctx->rootdir);
+    json_object *o = util_json_object_new_object ();
+
+    util_json_object_add_string (o, "rootref", rootref);
+    flux_respond (h, zmsg, o);
+    free (rootref);
+    json_object_put (o);
+    return 0;
 }
 
-static void kvs_disconnect (ctx_t *ctx, char *arg, zmsg_t **zmsg)
+static int getroot_request_send (ctx_t *ctx)
 {
+    int seq;
+    href_t href;
+    json_object *reply = flux_rpc (ctx->h, NULL, "kvs.getroot");
+    const char *rootref;
+    int rc = -1;
+
+    if (!reply || util_json_object_get_string (reply, "rootref", &rootref) < 0
+               || !decode_rootref (rootref, &seq, href)) {
+        flux_log (ctx->h, LOG_ERR, "%s: bad response", __FUNCTION__);
+        goto done;
+    }
+    setroot (ctx, seq, href);
+    rc = 0;
+done:
+    if (reply)
+        json_object_put (reply);
+    return rc;
+}
+
+static int setroot_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    href_t href;
+    int seq;
+    const char *rootref;
+    json_object *o = NULL;
+
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
+                || util_json_object_get_string (o, "rootrev", &rootref) < 0
+                || !decode_rootref (rootref, &seq, href)) {
+        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
+    }
+    setroot (ctx, seq, href);
+done:
+    if (o)
+        json_object_put (o);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+    return 0;
+}
+
+static int setroot_event_send (ctx_t *ctx)
+{
+    char *rootref = encode_rootref (ctx->rootseq, ctx->rootdir);
+    json_object *o = util_json_object_new_object ();
+    int rc = -1;
+
+    util_json_object_add_string (o, "rootref", rootref);
+    if (flux_event_send (ctx->h, o, "event.kvs.setroot") < 0)
+        goto done;
+    json_object_put (o);
+    free (rootref);
+    rc = 0;
+done:
+    return rc;
+}
+
+static int disconnect_request_cb (flux_t h, int typemask, zmsg_t **zmsg,
+                                  void *arg)
+{
+    ctx_t *ctx = arg;
     char *sender = cmb_msg_sender (*zmsg);
 
     if (sender) {
@@ -1480,59 +1507,6 @@ static void kvs_disconnect (ctx_t *ctx, char *arg, zmsg_t **zmsg)
         free (sender);
     }
     zmsg_destroy (zmsg);
-}
-
-static int kvssrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
-{
-    ctx_t *ctx = getctx (h);
-    char *arg = NULL;
-
-    if (cmb_msg_match (*zmsg, "kvs.getroot")) {
-        kvs_getroot_request (ctx, NULL, zmsg);
-    } else if (cmb_msg_match_substr (*zmsg, "event.kvs.setroot.", &arg)) {
-        event_kvs_setroot (ctx, arg, zmsg);
-    } else if (cmb_msg_match_substr (*zmsg, "event.kvs.debug.", &arg)) {
-        event_kvs_debug (ctx, arg, zmsg);
-    } else if (cmb_msg_match (*zmsg, "kvs.clean")) {
-        kvs_clean_request (ctx, NULL, zmsg);
-    } else if (cmb_msg_match (*zmsg, "kvs.get")) {
-        kvs_get_request (ctx, NULL, zmsg);
-    } else if (cmb_msg_match (*zmsg, "kvs.watch")) {
-        kvs_watch_request (ctx, NULL, zmsg);
-    } else if (cmb_msg_match (*zmsg, "kvs.put")) {
-        kvs_put_request (ctx, NULL, zmsg);
-    } else if (cmb_msg_match (*zmsg, "kvs.disconnect")) {
-        kvs_disconnect (ctx, NULL, zmsg);
-    } else if (cmb_msg_match (*zmsg, "kvs.load")) {
-        if ((typemask & FLUX_MSGTYPE_REQUEST))
-            kvs_load (ctx, NULL, zmsg);
-        else
-            kvs_load_response (ctx, zmsg);
-    } else if (cmb_msg_match (*zmsg, "kvs.store")) {
-        if ((typemask & FLUX_MSGTYPE_REQUEST))
-            kvs_store (ctx, NULL, zmsg);
-        else
-            kvs_store_response (ctx, zmsg);
-    } else if (cmb_msg_match (*zmsg, "kvs.name")) {
-        if ((typemask & FLUX_MSGTYPE_REQUEST))
-            kvs_name (ctx, NULL, zmsg);
-        else
-            kvs_name_response (ctx, zmsg);
-    } else if (cmb_msg_match (*zmsg, "kvs.flush")) {
-        if ((typemask & FLUX_MSGTYPE_REQUEST))
-            kvs_flush_request (ctx, NULL, zmsg);
-        else
-            kvs_flush_response (ctx, zmsg);
-    } else if (cmb_msg_match (*zmsg, "kvs.commit")) {
-        if ((typemask & FLUX_MSGTYPE_REQUEST))
-            kvs_commit_request (ctx, NULL, zmsg);
-        else
-            kvs_commit_response (ctx, zmsg);
-    }
-    if (arg)
-        free (arg);
-    if (*zmsg)
-        zmsg_destroy (zmsg);
     return 0;
 }
 
@@ -1560,6 +1534,32 @@ static void setargs (ctx_t *ctx, zhash_t *args)
     commit (ctx);
 }
 
+static msghandler_t htab[] = {
+    { FLUX_MSGTYPE_EVENT,   "event.kvs.setroot",    setroot_event_cb },
+    { FLUX_MSGTYPE_REQUEST, "kvs.getroot",          getroot_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "kvs.clean",            clean_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "kvs.get",              get_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "kvs.watch",            watch_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "kvs.put",              put_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "kvs.disconnect",       disconnect_request_cb },
+
+    { FLUX_MSGTYPE_REQUEST, "kvs.load",             load_request_cb },
+    { FLUX_MSGTYPE_RESPONSE,"kvs.load",             load_response_cb },
+
+    { FLUX_MSGTYPE_REQUEST, "kvs.store",            store_request_cb },
+    { FLUX_MSGTYPE_RESPONSE,"kvs.store",            store_response_cb },
+
+    { FLUX_MSGTYPE_REQUEST, "kvs.name",             name_request_cb },
+    { FLUX_MSGTYPE_RESPONSE,"kvs.name",             name_response_cb },
+
+    { FLUX_MSGTYPE_REQUEST, "kvs.flush",            flush_request_cb },
+    { FLUX_MSGTYPE_RESPONSE,"kvs.flush",            flush_response_cb },
+
+    { FLUX_MSGTYPE_REQUEST, "kvs.commit",           commit_request_cb },
+    { FLUX_MSGTYPE_RESPONSE,"kvs.commit",           commit_response_cb },
+};
+const int htablen = sizeof (htab) / sizeof (htab[0]);
+
 static int kvssrv_init (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
@@ -1585,16 +1585,12 @@ static int kvssrv_init (flux_t h, zhash_t *args)
         if (args)
             setargs (ctx, args);
     } else {
-        int seq;
-        href_t href;
-        json_object *rep = flux_rpc (h, NULL, "kvs.getroot");
-        const char *rootref = json_object_get_string (rep);
-
-        if (!decode_rootref (rootref, &seq, href)) {
-            msg ("malformed kvs.getroot reply: %s", rootref);
+        if (getroot_request_send (ctx) < 0)
             return -1;
-        }
-        setroot (ctx, seq, href);
+    }
+    if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
+        flux_log (h, LOG_ERR, "flux_msghandler_add: %s", strerror (errno));
+        return -1;
     }
     if (flux_reactor_start (h) < 0) {
         flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
@@ -1616,7 +1612,6 @@ static void kvssrv_fini (flux_t h)
 const struct plugin_ops ops = {
     .init    = kvssrv_init,
     .fini    = kvssrv_fini,
-    .recv    = kvssrv_recv,
 };
 
 /*

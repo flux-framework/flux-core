@@ -360,12 +360,6 @@ static void plugin_handle_response (plugin_ctx_t p, zmsg_t *zmsg)
             goto done;
         }
     }
-    if (zmsg && p->ops->recv) {
-        if (p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_RESPONSE) < 0) {
-            plugin_reactor_stop (p, -1);
-            goto done;
-        }
-    }
 done:
     if (zmsg)
         zmsg_destroy (&zmsg);
@@ -408,12 +402,6 @@ static int dnreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
             goto done;
         }
     }
-    if (zmsg && p->ops->recv) {
-        if (p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_REQUEST) < 0) {
-            plugin_reactor_stop (p, -1);
-            goto done;
-        }
-    }
     if (zmsg) {
         if (flux_respond_errnum (p->h, &zmsg, ENOSYS) < 0) {
             err ("%s: flux_respond_errnum", __FUNCTION__);
@@ -439,12 +427,6 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
             goto done;
         }
     }
-    if (zmsg && p->ops->recv) {
-        if (p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_EVENT) < 0) {
-            plugin_reactor_stop (p, -1);
-            goto done;
-        }
-    }
     plugin_handle_deferred_responses (p);
 done:
     if (zmsg)
@@ -458,12 +440,6 @@ static int snoop_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 
     if (zmsg) {
         if (handle_event_msg (p->h, FLUX_MSGTYPE_SNOOP, &zmsg) < 0) {
-            plugin_reactor_stop (p, -1);
-            goto done;
-        }
-    }
-    if (zmsg && p->ops->recv) {
-        if (p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_SNOOP) < 0) {
             plugin_reactor_stop (p, -1);
             goto done;
         }

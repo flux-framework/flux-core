@@ -41,6 +41,8 @@ typedef struct _barrier_struct {
     int errnum;
 } barrier_t;
 
+static int exit_event_send (flux_t h, const char *name, int errnum);
+
 static void freectx (ctx_t *ctx)
 {
     zhash_destroy (&ctx->barriers);
@@ -76,7 +78,7 @@ static void barrier_destroy (void *arg)
     return;
 }
 
-static barrier_t *barrier_create (ctx_t *ctx, char *name, int nprocs)
+static barrier_t *barrier_create (ctx_t *ctx, const char *name, int nprocs)
 {
     barrier_t *b;
 
@@ -111,10 +113,11 @@ static void send_enter_request (ctx_t *ctx, barrier_t *b)
 {
     json_object *o = util_json_object_new_object ();
 
+    util_json_object_add_string (o, "name", b->name);
     util_json_object_add_int (o, "count", b->count);
     util_json_object_add_int (o, "nprocs", b->nprocs);
     util_json_object_add_int (o, "hopcount", 1);
-    flux_request_send (ctx->h, o, "barrier.enter.%s", b->name);
+    flux_request_send (ctx->h, o, "barrier.enter");
     json_object_put (o);
 }
 
@@ -140,18 +143,21 @@ static int timeout_reduction (const char *key, void *item, void *arg)
  * notification upon barrier termination.
  */
 
-static void barrier_enter (ctx_t *ctx, char *name, zmsg_t **zmsg)
+static int enter_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    ctx_t *ctx = arg;
     barrier_t *b;
     json_object *o = NULL;
     char *sender = NULL;
+    const char *name;
     int count, nprocs, hopcount;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
      || !(sender = cmb_msg_sender (*zmsg))
+     || util_json_object_get_string (o, "name", &name) < 0
      || util_json_object_get_int (o, "count", &count) < 0
      || util_json_object_get_int (o, "nprocs", &nprocs) < 0) {
-        err ("%s: protocol error", __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "%s: ignoring bad message", __FUNCTION__);
         goto done;
     }
 
@@ -167,9 +173,8 @@ static void barrier_enter (ctx_t *ctx, char *name, zmsg_t **zmsg)
             flux_log (ctx->h, LOG_ERR,
                         "abort %s due to double entry by client %s",
                         name, sender);
-            if (flux_event_send (ctx->h, NULL, "event.barrier.abort.%s",
-                                                                b->name) < 0)
-                err_exit ("%s: flux_event_send", __FUNCTION__);
+            if (exit_event_send (ctx->h, b->name, ECONNABORTED) < 0)
+                flux_log (ctx->h, LOG_ERR, "exit_event_send: %s", strerror (errno));
             goto done;
         }
     }
@@ -179,9 +184,8 @@ static void barrier_enter (ctx_t *ctx, char *name, zmsg_t **zmsg)
      */
     b->count += count;
     if (b->count == b->nprocs) {
-        if (flux_event_send (ctx->h, NULL, "event.barrier.exit.%s",
-                                                                b->name) < 0)
-            err_exit ("%s: flux_event_send", __FUNCTION__);
+        if (exit_event_send (ctx->h, b->name, 0) < 0)
+            flux_log (ctx->h, LOG_ERR, "exit_event_send: %s", strerror (errno));
     } else if (!flux_treeroot (ctx->h) && !flux_timeout_isset (ctx->h))
         flux_timeout_set (ctx->h, barrier_reduction_timeout_msec);
 done:
@@ -191,6 +195,7 @@ done:
         zmsg_destroy (zmsg);
     if (sender)
         free (sender);
+    return 0;
 }
 
 /* Upon client disconnect, abort any pending barriers it was
@@ -204,18 +209,19 @@ static int disconnect (const char *key, void *item, void *arg)
     char *sender = arg;
 
     if (zhash_lookup (b->clients, sender)) {
-        flux_log (ctx->h, LOG_ERR,
+        flux_log (ctx->h, LOG_INFO,
                     "abort %s due to premature disconnect by client %s",
                     b->name, sender);
-        if (flux_event_send (ctx->h, NULL, "event.barrier.abort.%s",
-                                                            b->name) < 0)
-            err_exit ("%s: flux_event_send", __FUNCTION__);
+        if (exit_event_send (ctx->h, b->name, ECONNABORTED) < 0)
+            flux_log (ctx->h, LOG_ERR, "exit_event_send: %s", strerror (errno));
     }
     return 0;
 }
 
-static void barrier_disconnect (ctx_t *ctx, zmsg_t **zmsg)
+static int disconnect_request_cb (flux_t h, int typemask, zmsg_t **zmsg,
+                                  void *arg)
 {
+    ctx_t *ctx = arg;
     char *sender = cmb_msg_sender (*zmsg);
 
     if (sender) {
@@ -223,10 +229,8 @@ static void barrier_disconnect (ctx_t *ctx, zmsg_t **zmsg)
         free (sender);
     }
     zmsg_destroy (zmsg);
+    return 0;
 }
-
-/* Upon barrier termination, notify any "connected" clients.
- */
 
 static int send_enter_response (const char *key, void *item, void *arg)
 {
@@ -240,37 +244,42 @@ static int send_enter_response (const char *key, void *item, void *arg)
     return 0;
 }
 
-static void barrier_exit (ctx_t *ctx, char *name, int errnum, zmsg_t **zmsg)
+static int exit_event_send (flux_t h, const char *name, int errnum)
 {
-    barrier_t *b;
+    json_object *o = util_json_object_new_object ();
+    int rc;
 
+    util_json_object_add_string (o, "name", name);
+    util_json_object_add_int (o, "errnum", errnum);
+    rc = flux_event_send (h, o, "event.barrier.exit");
+    json_object_put (o);
+    return rc;
+}
+
+static int exit_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    barrier_t *b;
+    json_object *o = NULL;
+    const char *name;
+    int errnum;
+
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
+            || util_json_object_get_string (o, "name", &name) < 0
+            || util_json_object_get_int (o, "errnum", &errnum) < 0) {
+        flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
+    }
     if ((b = zhash_lookup (ctx->barriers, name))) {
         b->errnum = errnum;       
         zhash_foreach (b->clients, send_enter_response, b);
         zhash_delete (ctx->barriers, name);
     }
-    zmsg_destroy (zmsg);
-}
-
-/* Define plugin entry points.
- */
-
-static int barriersrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
-{
-    ctx_t *ctx = getctx (h);
-    char *name = NULL;
-
-    if (cmb_msg_match_substr (*zmsg, "barrier.enter.", &name))
-        barrier_enter (ctx, name, zmsg);
-    else if (cmb_msg_match_substr (*zmsg, "event.barrier.exit.", &name))
-        barrier_exit (ctx, name, 0, zmsg);
-    else if (cmb_msg_match_substr (*zmsg, "event.barrier.abort.", &name))
-        barrier_exit (ctx, name, ECONNABORTED, zmsg);
-    else if (cmb_msg_match (*zmsg, "barrier.disconnect"))
-        barrier_disconnect (ctx, zmsg);
-
-    if (name)
-        free (name);
+done:
+    if (o)
+        json_object_put (o);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
     return 0;
 }
 
@@ -285,6 +294,13 @@ static int timeout_cb (flux_t h, void *arg)
     return 0;
 }
 
+static msghandler_t htab[] = {
+    { FLUX_MSGTYPE_REQUEST,     "barrier.enter",       enter_request_cb },
+    { FLUX_MSGTYPE_REQUEST,     "barrier.disconnect",  disconnect_request_cb },
+    { FLUX_MSGTYPE_EVENT,       "event.barrier.exit",  exit_event_cb },
+};
+const int htablen = sizeof (htab) / sizeof (htab[0]);
+
 static int barriersrv_init (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
@@ -295,6 +311,10 @@ static int barriersrv_init (flux_t h, zhash_t *args)
     }
     if (flux_tmouthandler_set (h, timeout_cb, ctx) < 0) {
         flux_log (h, LOG_ERR, "flux_tmouthandler_set: %s", strerror (errno));
+        return -1;
+    }
+    if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
+        flux_log (h, LOG_ERR, "flux_msghandler_addvec: %s", strerror (errno));
         return -1;
     }
     if (flux_reactor_start (h) < 0) {
@@ -315,7 +335,6 @@ static void barriersrv_fini (flux_t h)
 const struct plugin_ops ops = {
     .init    = barriersrv_init,
     .fini    = barriersrv_fini,
-    .recv    = barriersrv_recv,
 };
 
 /*

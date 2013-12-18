@@ -10,16 +10,12 @@
 
 /* Copy input arguments to output arguments and respond to RPC.
  */
-static int mechosrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
+static int mecho_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     json_object *request = NULL;
     json_object *inarg = NULL;
     flux_mrpc_t f = NULL;
 
-    if (!(typemask & FLUX_MSGTYPE_EVENT)) {
-        flux_log (h, LOG_ERR, "ignoring non-event message");
-        goto done;
-    }
     if (cmb_msg_decode (*zmsg, NULL, &request) < 0) {
         flux_log (h, LOG_ERR, "cmb_msg_decode: %s", strerror (errno));
         goto done;
@@ -60,6 +56,11 @@ static int mechosrv_init (flux_t h, zhash_t *args)
         flux_log (h, LOG_ERR, "%s: flux_event_subscribe", __FUNCTION__);
         return -1;
     }
+    if (flux_msghandler_add (h, FLUX_MSGTYPE_EVENT, "mrpc.mecho",
+                                                    mecho_mrpc_cb, NULL) < 0) {
+        flux_log (h, LOG_ERR, "flux_msghandler_add: %s", strerror (errno));
+        return -1;
+    }
     if (flux_reactor_start (h) < 0) {
         flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
         return -1;
@@ -74,7 +75,6 @@ static void mechosrv_fini (flux_t h)
 }
 
 const struct plugin_ops ops = {
-    .recv = mechosrv_recv,
     .init = mechosrv_init,
     .fini = mechosrv_fini,
 };

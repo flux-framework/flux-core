@@ -25,7 +25,7 @@
 #include "plugin.h"
 
 typedef struct {
-    char *fac;         /* FIXME: switch to regex */
+    char *fac;          /* FIXME: switch to regex */
     int lev_max;        /* the lower the number, the more filtering */
     int lev_min;
 } subscription_t;
@@ -89,7 +89,7 @@ static bool match_subscription (json_object *o, subscription_t *sub)
     return true;
 }
 
-static subscription_t *create_subscription (char *arg)
+static subscription_t *create_subscription (const char *arg)
 {
     subscription_t *sub = xzmalloc (sizeof (*sub));
     char *nextptr;
@@ -123,12 +123,19 @@ static void log_save (ctx_t *ctx, json_object *o)
     ctx->cirbuf_size++;
 }
 
-static void recv_log_dump (ctx_t *ctx, char *arg, zmsg_t **zmsg)
+static int dump_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
-    json_object *o;
+    ctx_t *ctx = arg;
+    json_object *o = NULL;
     zmsg_t *cpy;
-    subscription_t *sub = create_subscription (arg);
+    const char *fac;
+    subscription_t *sub;
 
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
+                    || util_json_object_get_string (o, "fac", &fac) < 0)
+        goto done;
+
+    sub = create_subscription (fac);
     o = zlist_first (ctx->cirbuf);
     while (o != NULL) {
         if (match_subscription (o, sub)) {
@@ -140,30 +147,46 @@ static void recv_log_dump (ctx_t *ctx, char *arg, zmsg_t **zmsg)
     }
     flux_respond_errnum (ctx->h, zmsg, ENOENT);
     destroy_subscription (sub);
+done:
+    if (o)
+        json_object_put (o);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+    return 0;
 }
 
-static void recv_fault_event (ctx_t *ctx, char *arg, zmsg_t **zmsg)
+static int fault_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    ctx_t *ctx = arg;
     subscription_t sub = {
         .lev_min = ctx->log_persist_level,
         .lev_max = LOG_DEBUG,
-        .fac = arg
     };
-    json_object *o;
+    json_object *o, *so;
     zlist_t *temp;
 
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
+       || util_json_object_get_string (o, "fac", (const char **)&sub.fac) < 0) {
+        goto done;
+    }
     if (!(temp = zlist_new ()))
         oom ();
-    while ((o = zlist_pop (ctx->cirbuf))) {
-        if (match_subscription (o, &sub)) {
-            add_backlog (ctx, o);
-            json_object_put (o);
+    while ((so = zlist_pop (ctx->cirbuf))) {
+        if (match_subscription (so, &sub)) {
+            add_backlog (ctx, so);
+            json_object_put (so);
         } else
-            zlist_append (temp, o);
+            zlist_append (temp, so);
     }
     zlist_destroy (&ctx->cirbuf);
     ctx->cirbuf = temp;
     process_backlog (ctx);
+done:
+    if (o)
+        json_object_put (o);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+    return 0;
 }
 
 static bool resize_cirbuf (ctx_t *ctx, int new_size)
@@ -207,12 +230,12 @@ static void listener_destroy (void *arg)
     free (lp);
 }
 
-static void listener_subscribe (listener_t *lp, char *arg)
+static void listener_subscribe (listener_t *lp, const char *arg)
 {
     zlist_append (lp->subscriptions, create_subscription (arg));    
 }
 
-static void listener_unsubscribe (listener_t *lp, char *fac)
+static void listener_unsubscribe (listener_t *lp, const char *fac)
 {
     subscription_t *sub;
 
@@ -229,12 +252,19 @@ static void listener_unsubscribe (listener_t *lp, char *fac)
     } while (sub);
 }
 
-static void recv_log_subscribe (ctx_t *ctx, char *arg, zmsg_t **zmsg)
+static int subscribe_request_cb (flux_t h, int typemask, zmsg_t **zmsg,
+                                 void *arg)
+                                    
 {
+    ctx_t *ctx = arg;
     char *sender = NULL;
     listener_t *lp;
-    
-    if (!(sender = cmb_msg_sender (*zmsg))) {
+    const char *sub;
+    json_object *o = NULL;
+
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
+                    || util_json_object_get_string (o, "sub", &sub) < 0
+                    || !(sender = cmb_msg_sender (*zmsg))) {
         err ("%s: protocol error", __FUNCTION__); 
         goto done;
     }
@@ -243,19 +273,28 @@ static void recv_log_subscribe (ctx_t *ctx, char *arg, zmsg_t **zmsg)
         zhash_insert (ctx->listeners, sender, lp);
         zhash_freefn (ctx->listeners, sender, listener_destroy);
     }
-    listener_subscribe (lp, arg);
+    listener_subscribe (lp, sub);
 done:
     if (sender)
         free (sender);
+    if (o)
+        json_object_put (o);
     zmsg_destroy (zmsg);
+    return 0;
 }
 
-static void recv_log_unsubscribe (ctx_t *ctx, char *sub, zmsg_t **zmsg)
+static int unsubscribe_request_cb (flux_t h, int typemask, zmsg_t **zmsg,
+                                   void *arg)
 {
+    ctx_t *ctx = arg;
     listener_t *lp;
     char *sender = NULL;
+    const char *sub;
+    json_object *o = NULL;
 
-    if (!(sender = cmb_msg_sender (*zmsg))) {
+    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
+                    || util_json_object_get_string (o, "sub", &sub) < 0
+                    || !(sender = cmb_msg_sender (*zmsg))) {
         err ("%s: protocol error", __FUNCTION__); 
         goto done;
     }
@@ -265,11 +304,17 @@ static void recv_log_unsubscribe (ctx_t *ctx, char *sub, zmsg_t **zmsg)
 done:
     if (sender)
         free (sender);
-    zmsg_destroy (zmsg);
+    if (o)
+        json_object_put (o);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+    return 0;
 }
 
-static void recv_log_disconnect (ctx_t *ctx, zmsg_t **zmsg)
+static int disconnect_request_cb (flux_t h, int typemask, zmsg_t **zmsg,
+                                  void *arg)
 {
+    ctx_t *ctx = arg;
     char *sender;
 
     if (!(sender = cmb_msg_sender (*zmsg))) {
@@ -280,6 +325,7 @@ static void recv_log_disconnect (ctx_t *ctx, zmsg_t **zmsg)
     free (sender);
 done:
     zmsg_destroy (zmsg);
+    return 0;
 }
 
 /* Handle a new log message
@@ -416,8 +462,9 @@ static int listener_fwd (const char *key, void *litem, void *arg)
     return 1;
 }
 
-static void recv_log_msg (ctx_t *ctx, zmsg_t **zmsg)
+static int msg_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    ctx_t *ctx = arg;
     fwdarg_t farg;
     json_object *o = NULL;
     int hopcount = 0, level = 0;
@@ -444,31 +491,6 @@ done:
     if (o)
         json_object_put (o);
     zmsg_destroy (zmsg);
-}
-
-static int logsrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
-{
-    ctx_t *ctx = getctx (h);
-    char *arg = NULL;
-
-    if (ctx->disabled)
-        return 0;
-
-    if (cmb_msg_match (*zmsg, "log.msg"))
-        recv_log_msg (ctx, zmsg);
-    else if (cmb_msg_match_substr (*zmsg, "log.subscribe.", &arg))
-        recv_log_subscribe (ctx, arg, zmsg);
-    else if (cmb_msg_match_substr (*zmsg, "log.unsubscribe.", &arg))
-        recv_log_unsubscribe (ctx, arg, zmsg);
-    else if (cmb_msg_match (*zmsg, "log.disconnect"))
-        recv_log_disconnect (ctx, zmsg);
-    else if (cmb_msg_match_substr (*zmsg, "log.dump.", &arg))
-        recv_log_dump (ctx, arg, zmsg);
-    else if (cmb_msg_match_substr (*zmsg, "event.fault.", &arg))
-        recv_fault_event (ctx, arg, zmsg);
-
-    if (arg)
-        free (arg);
     return 0;
 }
 
@@ -536,6 +558,17 @@ invalid:
     }
 }
 
+static msghandler_t htab[] = {
+    { FLUX_MSGTYPE_REQUEST,   "log.msg",          msg_request_cb },
+    { FLUX_MSGTYPE_REQUEST,   "log.subscribe",    subscribe_request_cb },
+    { FLUX_MSGTYPE_REQUEST,   "log.unsubscribe",  unsubscribe_request_cb },
+    { FLUX_MSGTYPE_REQUEST,   "log.disconnect",   disconnect_request_cb },
+    { FLUX_MSGTYPE_REQUEST,   "log.dump",         dump_request_cb },
+    { FLUX_MSGTYPE_EVENT,     "event.fault.*",    fault_event_cb },
+};
+const int htablen = sizeof (htab) / sizeof (htab[0]);
+
+
 static int logsrv_init (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
@@ -549,7 +582,10 @@ static int logsrv_init (flux_t h, zhash_t *args)
         flux_log (h, LOG_ERR, "flux_tmouthandler_set: %s", strerror (errno));
         return -1;
     }
-    
+    if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
+        flux_log (h, LOG_ERR, "flux_msghandler_addvec: %s", strerror (errno));
+        return -1;
+    }
     if (flux_reactor_start (h) < 0) {
         flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
         return -1;
@@ -565,7 +601,6 @@ static void logsrv_fini (flux_t h)
 }
 
 const struct plugin_ops ops = {
-    .recv    = logsrv_recv,
     .init    = logsrv_init,
     .fini    = logsrv_fini,
 };
