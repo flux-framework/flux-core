@@ -499,7 +499,7 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
             ctx->nodeid = j;
             break;
         }
-        if ((ncores = cores_on_node (ctx, j)) < 0)
+        if ((ncores = cores_on_node (ctx, nodeids[j])) < 0)
             log_fatal (ctx, 1, "Failed to get ncores for node%d\n", nodeids[j]);
         ctx->globalbasis += ncores;
     }
