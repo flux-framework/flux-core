@@ -10,6 +10,7 @@
 #include <czmq.h>
 #include <sys/syslog.h>
 #include <envz.h>
+#include <sys/ptrace.h>
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -61,6 +62,11 @@ struct prog_ctx {
     int nprocs;             /* number of copies of command to execute */
     int globalbasis;        /* Global rank of first task on this node */
     int exited;
+
+    /*
+     *  Flags:
+     */
+    unsigned stop_children:1;
 
     int argc;
     char **argv;
@@ -513,6 +519,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
 {
     int i;
     json_object *v;
+    int t;
 
     if (kvsdir_get (ctx->kvs, "cmdline", &v) < 0)
         log_fatal (ctx, 1, "kvs_get: cmdline");
@@ -540,6 +547,12 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
                    ctx->id, ctx->nodeid, ctx->nprocs, ctx->nnodes,
                    json_object_to_json_string (v));
     json_object_put (v);
+
+    if (kvsdir_get_int (ctx->kvs, "stop-in-exec", &t) < 0) { /* Assume ENOENT */
+        ctx->stop_children = 0;
+    }
+    else
+        ctx->stop_children = t;
 
     return (0);
 }
@@ -722,12 +735,17 @@ int rexec_taskinfo_put (struct prog_ctx *ctx, int localid)
 int send_startup_message (struct prog_ctx *ctx)
 {
     int i;
+    const char * state = "running";
+
     for (i = 0; i < ctx->nprocs; i++) {
         if (rexec_taskinfo_put (ctx, i) < 0)
             return (-1);
     }
 
-    if (rexec_state_change (ctx, "running") < 0) {
+    if (ctx->stop_children)
+        state = "sync";
+
+    if (rexec_state_change (ctx, state) < 0) {
         log_err (ctx, "rexec_state_change");
         return (-1);
     }
@@ -843,6 +861,11 @@ int exec_command (struct prog_ctx *ctx, int i)
         prog_ctx_setenvf (ctx, "MPIRUN_RANK",     1, "%d", t->globalid);
         prog_ctx_setenvf (ctx, "CMB_LWJ_TASK_ID", 1, "%d", t->globalid);
         prog_ctx_setenvf (ctx, "CMB_LWJ_LOCAL_TASK_ID", 1, "%d", i);
+
+        if (ctx->stop_children) {
+            /* Stop process on exec with parent attached */
+            ptrace (PTRACE_TRACEME, 0, NULL, 0);
+        }
 
         /* give each task its own process group so we can use killpg(2) */
         setpgrp();
@@ -1122,6 +1145,62 @@ static int wreck_lua_init (struct prog_ctx *ctx)
     return (0);
 }
 
+int task_exit (struct task_info *t, int status)
+{
+    struct prog_ctx *ctx = t->ctx;
+
+    log_msg (ctx, "task%d: pid %d (%s) exited with status 0x%04x",
+            t->id, t->pid, ctx->argv [0], status);
+    t->status = status;
+    t->exited = 1;
+
+    ctx->taskid = t->id;
+    lua_stack_call (ctx->lua_stack, "rexecd_task_exit");
+
+    if (send_exit_message (t) < 0)
+        log_msg (ctx, "Sending exit message failed!");
+    return (0);
+}
+
+int start_trace_task (struct task_info *t)
+{
+    int status;
+    pid_t pid = t->pid;
+    struct prog_ctx *ctx = t->ctx;
+
+    int rc = waitpid (pid, &status, WUNTRACED);
+    if (rc < 0) {
+        log_err (ctx, "start_trace: waitpid: %s\n", strerror (errno));
+        return (-1);
+    }
+    if (WIFSTOPPED (status)) {
+        /*
+         *  Send SIGSTOP and detach from process.
+         */
+        if (kill (pid, SIGSTOP) < 0) {
+            log_err (ctx, "start_trace: kill: %s\n", strerror (errno));
+            return (-1);
+        }
+        if (ptrace (PTRACE_DETACH, pid, NULL, 0) < 0) {
+            log_err (ctx, "start_trace: ptrace: %s\n", strerror (errno));
+            return (-1);
+        }
+        return (0);
+    }
+
+    /*
+     *  Otherwise, did task exit?
+     */
+    if (WIFEXITED (status)) {
+        log_err (ctx, "start_trace: task unexpectedly exited\n");
+        task_exit (t, status);
+    }
+    else
+        log_err (ctx, "start_trace: Unexpected status 0x%04x\n", status);
+
+    return (-1);
+}
+
 int exec_commands (struct prog_ctx *ctx)
 {
     char buf [4096];
@@ -1141,6 +1220,11 @@ int exec_commands (struct prog_ctx *ctx)
 
     for (i = 0; i < ctx->nprocs; i++)
         exec_command (ctx, i);
+
+    for (i = 0; i < ctx->nprocs; i++) {
+        if (ctx->stop_children)
+            start_trace_task (ctx->task [i]);
+    }
 
     return send_startup_message (ctx);
 }
@@ -1173,17 +1257,11 @@ int reap_child (struct prog_ctx *ctx)
         return (0);
     }
 
-    t = pid_to_task (ctx, wpid);
-    log_msg (ctx, "task%d: pid %d (%s) exited with status 0x%04x",
-            t->id, wpid, ctx->argv [0], status);
-    t->status = status;
-    t->exited = 1;
+    if ((t = pid_to_task (ctx, wpid)) == NULL)
+        return log_err (ctx, "Failed to find task for pid %d\n", wpid);
 
-    ctx->taskid = t->id;
-    lua_stack_call (ctx->lua_stack, "rexecd_task_exit");
+    task_exit (t, status);
 
-    if (send_exit_message (t) < 0)
-        log_msg (ctx, "Sending exit message failed!");
     return (1);
 }
 

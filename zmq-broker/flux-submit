@@ -19,8 +19,9 @@ function parse_cmdline (arg)
         ['help']            = "h",
         ['ntasks']          = "n",
         ['nprocs-per-node'] = "N",
+        ['sync']            = "S",
     }
-    local optstring = "hn:N:"
+    local optstring = "hn:N:S"
     return getopt (arg, optstring, opt_table)
 end
 
@@ -33,6 +34,7 @@ local function usage ()
   -h, --help                 Display this message
   -n, --ntasks=N             Request to run a total of N tasks
   -N, --nprocs-per-node=N    Run at most N processes per node
+  -S, --sync                 Stop tasks in exec to wait for debugger
 ]])
 end
 
@@ -114,6 +116,7 @@ local jobreq = {
       cmdline            = cmdline,
       environ            = get_filtered_env(),
       cwd                = posix.getcwd(),
+      ['stop-in-exec']   = opts.S,
 }
 
 log_msg ("%4.03fs: Submitting LWJ request for %d tasks (cmdline \"%s\")\n",
