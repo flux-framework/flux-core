@@ -3,7 +3,7 @@
 pepe=../pepe/pepe-launcher
 conf=flat
 nnodes=
-cmd=/bin/bash
+PTY="--pty"
 
 usage ()
 {
@@ -11,23 +11,36 @@ usage ()
     exit 1
 }
 
-while getopts "?hn:c:" opt; do
+while getopts ":hbn:c:" opt; do
     case ${opt} in
-        h|\?) usage ;;
-        n) nnodes=${OPTARG} ;;
-        c) conf=${OPTARG} ;;
+        \?) break;;
+        h) usage ;;
+        n) nnodes=${OPTARG};;
+        c) conf=${OPTARG};;
+        b) PTY=;;
     esac
 done
+
+#
+#  Set command to execute to remainder of cmdline:
+#
+ARGS=( ${@:$OPTIND} )
+if test ${#ARGS[@]} -eq 0; then
+   set /bin/bash
+else
+   set "${ARGS[@]}"
+fi
+
 confpath="./pepe/${conf}.lua"
 test -f "$confpath" || usage
 
 ulimit -c unlimited
 
 if [ -n "$SLURM_NNODES" ]; then
-    srun --propagate=CORE -N${nnodes:-$SLURM_NNODES} --pty $pepe -c $confpath $cmd
+    srun --propagate=CORE -N${nnodes:-$SLURM_NNODES} ${PTY} $pepe -c $confpath -- "$@"
 else 
     test -n "$nnodes" || usage
-    salloc -N$nnodes srun --propagate=CORE -N$nnodes --pty $pepe -c $confpath $cmd
+    salloc -N$nnodes srun --propagate=CORE -N$nnodes ${PTY} $pepe -c $confpath -- "$@"
 fi
 
 
