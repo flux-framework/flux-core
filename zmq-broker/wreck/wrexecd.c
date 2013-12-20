@@ -110,8 +110,12 @@ static flux_t prog_ctx_flux_handle (struct prog_ctx *ctx)
         return (ctx->flux);
 
     t = prog_ctx_current_task (ctx);
-    if (!t->f)
+    if (!t->f) {
+        char name [128];
         t->f = cmb_init ();
+        snprintf (name, sizeof (name) - 1, "lwj.%ld.%d", ctx->id, t->globalid);
+        flux_log_set_facility (t->f, name);
+    }
     return (t->f);
 }
 
@@ -558,11 +562,15 @@ int prog_ctx_signal_parent (int fd)
 
 int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
 {
+    char name [128];
     /*
      * Connect to CMB over api socket
      */
     if (!(ctx->flux = cmb_init ()))
         log_fatal (ctx, 1, "cmb_init");
+
+    snprintf (name, sizeof (name) - 1, "lwj.%ld", ctx->id);
+    flux_log_set_facility (ctx->flux, name);
 
     if (kvs_get_dir (ctx->flux, &ctx->kvs,
                      "lwj.%lu", ctx->id) < 0) {
@@ -1451,7 +1459,6 @@ int main (int ac, char **av)
     if (prog_ctx_init_from_cmb (ctx) < 0) /* Nothing to do here */
         exit (0);
 
-    flux_log_set_facility (ctx->flux, "wrexecd");
     prog_ctx_zmq_socket_setup (ctx);
 
     if ((ctx->nodeid == 0) && update_job_state (ctx, "starting") < 0)
