@@ -265,7 +265,6 @@ void task_io_flush (struct task_info *t)
         zio_flush (t->zio [i]);
         zio_destroy (t->zio [i]);
         if (t->kz [i]) {
-            kz_flush (t->kz [i]);
             kz_close (t->kz [i]);
             t->kz [i] = NULL;
         }
