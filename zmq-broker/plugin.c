@@ -320,6 +320,23 @@ done:
     return rc;
 }
 
+static int clearstats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    plugin_ctx_t p = arg;
+
+    memset (&p->stats, 0, sizeof (p->stats));
+
+    if (typemask & FLUX_MSGTYPE_REQUEST) {
+        if (flux_respond_errnum (h, zmsg, 0) < 0)
+            err ("%s: flux_respond_errnum", __FUNCTION__);
+            goto done;
+    }
+done:
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+    return 0;
+}
+
 static int stats_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     plugin_ctx_t p = arg;
@@ -494,6 +511,15 @@ static void *plugin_thread (void *arg)
     plugin_ctx_t p = arg;
     sigset_t signal_set;
     int errnum;
+    /* XXX why doesn't this work as static outside this function? --jg
+     */
+    msghandler_t htab[] = {
+        { FLUX_MSGTYPE_REQUEST,     "*.ping",               ping_req_cb },
+        { FLUX_MSGTYPE_REQUEST,     "*.stats",              stats_req_cb },
+        { FLUX_MSGTYPE_REQUEST,     "*.clearstats",         clearstats_cb },
+        { FLUX_MSGTYPE_EVENT,       "event.*.clearstats",   clearstats_cb },
+    };
+    const int htablen = sizeof (htab) / sizeof (htab[0]);
 
     /* block all signals */
     if (sigfillset (&signal_set) < 0)
@@ -505,15 +531,17 @@ static void *plugin_thread (void *arg)
     if (p->zloop == NULL)
         err_exit ("%s: plugin_zloop_create", p->id);
 
-    /* Register callbacks for ping, stats which can be overridden
-     * in p->ops->main() if desired.
+    /* Register callbacks for "internal" methods.
+     * These can be overridden in p->ops->main() if desired.
      */
-    if (flux_msghandler_add (p->h, FLUX_MSGTYPE_REQUEST, "*.ping",
-                                                          ping_req_cb, p) < 0)
-        err_exit ("%s: flux_msghandler_add *.ping", p->id);
-    if (flux_msghandler_add (p->h, FLUX_MSGTYPE_REQUEST, "*.stats",
-                                                          stats_req_cb, p) < 0)
-        err_exit ("%s: flux_msghandler_add *.stats", p->id);
+    char *topic;
+    if (asprintf (&topic, "event.%s.clearstats", p->name) < 0)
+        oom ();
+    if (flux_event_subscribe (p->h, topic) < 0)
+        err_exit ("%s: flux_event_subscribe %s", p->id, topic);
+    if (flux_msghandler_addvec (p->h, htab, htablen, p) < 0)
+        err_exit ("%s: flux_msghandler_addvec", p->id);
+    free (topic);
 
     if (!p->ops->main)
         err_exit ("%s: Plugin must define 'main' method", p->id);
