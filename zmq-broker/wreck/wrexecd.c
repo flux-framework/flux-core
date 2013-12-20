@@ -64,9 +64,9 @@ struct prog_ctx {
     int exited;
 
     /*
-     *  Flags:
+     *  Flags and options
      */
-    unsigned stop_children:1;
+    zhash_t *options;
 
     int argc;
     char **argv;
@@ -151,6 +151,21 @@ static void log_msg (struct prog_ctx *ctx, const char *fmt, ...)
     va_end (ap);
 }
 
+const char * prog_ctx_getopt (struct prog_ctx *ctx, const char *opt)
+{
+    if (ctx->options)
+        return zhash_lookup (ctx->options, opt);
+    return (NULL);
+}
+
+int prog_ctx_setopt (struct prog_ctx *ctx, const char *opt, const char *val)
+{
+    log_msg (ctx, "Setting option %s = %s\n", opt, val);
+    zhash_insert (ctx->options, opt, strdup (val));
+    zhash_freefn (ctx->options, opt, (zhash_free_fn *) free);
+    return (0);
+}
+
 int globalid (struct prog_ctx *ctx, int localid)
 {
     return (ctx->globalbasis + localid);
@@ -208,6 +223,37 @@ void kz_stdin (kz_t kz, struct task_info *t)
     return;
 }
 
+int prog_ctx_io_flags (struct prog_ctx *ctx)
+{
+    int flags = KZ_FLAGS_RAW;
+    if (!prog_ctx_getopt (ctx, "stdio-commit-on-open"))
+        flags |= KZ_FLAGS_NOCOMMIT_OPEN;
+    if (!prog_ctx_getopt (ctx, "stdio-commit-on-close"))
+        flags |= KZ_FLAGS_NOCOMMIT_CLOSE;
+    if (prog_ctx_getopt (ctx, "stdio-delay-commit"))
+        flags |= KZ_FLAGS_NOCOMMIT_PUT;
+    return (flags);
+}
+
+kz_t task_kz_open (struct task_info *t, int type)
+{
+    struct prog_ctx *ctx = t->ctx;
+    kz_t kz;
+    char *key;
+    int flags = prog_ctx_io_flags (ctx);
+
+    if (type == IN)
+        flags |= KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK | KZ_FLAGS_NOEXIST;
+    else
+        flags |= KZ_FLAGS_WRITE;
+
+    asprintf (&key, "lwj.%ld.%d.%s", ctx->id, t->globalid, ioname (type));
+    if ((kz = kz_open (ctx->flux, key, flags)) == NULL)
+        log_fatal (ctx, 1, "kz_open (%s): %s", key, strerror (errno));
+    free (key);
+    return (kz);
+}
+
 struct task_info * task_info_create (struct prog_ctx *ctx, int id)
 {
     int i;
@@ -230,19 +276,9 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
 
     t->zio [IN] = zio_pipe_writer_create ("stdin", (void *) t);
 
-    for (i = 0; i < NR_IO; i++) {
-        char *key;
-        int flags = KZ_FLAGS_WRITE | KZ_FLAGS_RAW;
-        if (i == IN)
-            flags = KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK |
-                    KZ_FLAGS_NOEXIST | KZ_FLAGS_RAW;
-        asprintf (&key, "lwj.%ld.%d.%s", ctx->id, t->globalid, ioname (i));
-        if ((t->kz [i] = kz_open (ctx->flux, key, flags)) == NULL)
-            log_fatal (ctx, 1, "kz_open (%s): %s", key, strerror (errno));
-        if (i == IN)
-            kz_set_ready_cb (t->kz [i], (kz_ready_f) kz_stdin, t);
-        free (key);
-    }
+    for (i = 0; i < NR_IO; i++)
+        t->kz [i] = task_kz_open (t, i);
+    kz_set_ready_cb (t->kz [IN], (kz_ready_f) kz_stdin, t);
 
     return (t);
 }
@@ -370,6 +406,8 @@ struct prog_ctx * prog_ctx_create (void)
     zsys_handler_set (NULL); /* Disable czmq SIGINT/SIGTERM handlers */
     if (!ctx)
         log_fatal (ctx, 1, "malloc");
+
+    ctx->options = zhash_new ();
 
     ctx->envz = NULL;
     ctx->envz_len = 0;
@@ -506,11 +544,56 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
     return (0);
 }
 
+int prog_ctx_options_init (struct prog_ctx *ctx)
+{
+    kvsdir_t opts;
+    kvsitr_t i;
+    const char *opt;
+
+    if (kvsdir_get_dir (ctx->kvs, &opts, "options") < 0)
+        return (0); /* Assume ENOENT */
+    i = kvsitr_create (opts);
+    while ((opt = kvsitr_next (i))) {
+        json_object *v;
+        char s [64];
+
+        if (kvsdir_get (opts, opt, &v) < 0) {
+            log_err (ctx, "skipping option '%s': %s", opt, strerror (errno));
+            continue;
+        }
+
+        switch (json_object_get_type (v)) {
+            case json_type_null:
+                prog_ctx_setopt (ctx, opt, "");
+                break;
+            case json_type_string:
+                prog_ctx_setopt (ctx, opt, json_object_get_string (v));
+                break;
+            case json_type_int:
+                snprintf (s, sizeof (s) -1, "%ld", json_object_get_int64 (v));
+                prog_ctx_setopt (ctx, opt, s);
+                break;
+            case json_type_boolean:
+                if (json_object_get_boolean (v))
+                    prog_ctx_setopt (ctx, opt, "");
+                break;
+            default:
+                log_err (ctx, "skipping option '%s': invalid type", opt);
+                break;
+        }
+    }
+    kvsitr_destroy (i);
+    kvsdir_destroy (opts);
+    return (0);
+}
+
 int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
 {
     int i;
     json_object *v;
-    int t;
+
+    if (prog_ctx_options_init (ctx) < 0)
+        log_fatal (ctx, 1, "failed to read %s.options", kvsdir_key (ctx->kvs));
 
     if (kvsdir_get (ctx->kvs, "cmdline", &v) < 0)
         log_fatal (ctx, 1, "kvs_get: cmdline");
@@ -538,12 +621,6 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
                    ctx->id, ctx->nodeid, ctx->nprocs, ctx->nnodes,
                    json_object_to_json_string (v));
     json_object_put (v);
-
-    if (kvsdir_get_int (ctx->kvs, "stop-in-exec", &t) < 0) { /* Assume ENOENT */
-        ctx->stop_children = 0;
-    }
-    else
-        ctx->stop_children = t;
 
     return (0);
 }
@@ -737,7 +814,7 @@ int send_startup_message (struct prog_ctx *ctx)
             return (-1);
     }
 
-    if (ctx->stop_children)
+    if (prog_ctx_getopt (ctx, "stop-children-in-exec"))
         state = "sync";
 
     if (rexec_state_change (ctx, state) < 0) {
@@ -857,7 +934,7 @@ int exec_command (struct prog_ctx *ctx, int i)
         prog_ctx_setenvf (ctx, "CMB_LWJ_TASK_ID", 1, "%d", t->globalid);
         prog_ctx_setenvf (ctx, "CMB_LWJ_LOCAL_TASK_ID", 1, "%d", i);
 
-        if (ctx->stop_children) {
+        if (prog_ctx_getopt (ctx, "stop-children-in-exec")) {
             /* Stop process on exec with parent attached */
             ptrace (PTRACE_TRACEME, 0, NULL, 0);
         }
@@ -1200,6 +1277,7 @@ int exec_commands (struct prog_ctx *ctx)
 {
     char buf [4096];
     int i;
+    int stop_children = 0;
 
     wreck_lua_init (ctx);
 
@@ -1216,8 +1294,10 @@ int exec_commands (struct prog_ctx *ctx)
     for (i = 0; i < ctx->nprocs; i++)
         exec_command (ctx, i);
 
+    if (prog_ctx_getopt (ctx, "stop-children-in-exec"))
+        stop_children = 1;
     for (i = 0; i < ctx->nprocs; i++) {
-        if (ctx->stop_children)
+        if (stop_children)
             start_trace_task (ctx->task [i]);
     }
 
