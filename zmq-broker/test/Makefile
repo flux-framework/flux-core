@@ -13,8 +13,15 @@ BUILD = tbase64 tpmikvs tkvs tkvswatch
 
 all: $(BUILD)
 
+# for screen3
+check1:
+	export FLUX_API_PATH=/tmp/rank.1; make check
+check2:
+	export FLUX_API_PATH=/tmp/rank.2; make check
+check3: check check1 check2
+
 check:
-	@for tst in t[0-9][0-9]; do \
+	@for tst in $${TESTS:-t[0-9][0-9]}; do \
 		./$$tst; \
 		if [ $$? -eq 0 ]; then \
 		  echo PASS: $$tst; \

@@ -10,17 +10,22 @@
 #include "util.h"
 #include "log.h"
 
-#define OPTIONS "ht:"
+#define OPTIONS "hc:s:p:q"
 static const struct option longopts[] = {
-    {"help",            no_argument,  0, 'h'},
-    {"test-iterations", required_argument,  0, 't'},
+    {"help",            no_argument,        0, 'h'},
+    {"quiet",           no_argument,        0, 'q'},
+    {"count",           required_argument,  0, 'c'},
+    {"size",            required_argument,  0, 's'},
+    {"prefix",          required_argument,  0, 'p'},
     { 0, 0, 0, 0 },
 };
+
+static void fill (char *s, int i, int len);
 
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-kvstorture [--test-iterations N]\n"
+"Usage: flux-kvstorture [--quiet] [--prefix NAME] [--size BYTES] [--count N]\n"
 );
     exit (1);
 }
@@ -29,10 +34,13 @@ int main (int argc, char *argv[])
 {
     flux_t h;
     int ch;
-    int i, iter = -1;
-    char key[64], val[64];
+    int i, count = 20;
+    int size = 20;
+    char *key, *val;
+    bool quiet = false;
     struct timespec t0;
     json_object *vo = NULL;
+    char *prefix = "kvstorture";
 
     log_init ("flux-kvstorture");
 
@@ -41,15 +49,26 @@ int main (int argc, char *argv[])
             case 'h': /* --help */
                 usage ();
                 break;
-            case 't': /* --test-iterations */
-                iter = strtoul (optarg, NULL, 10);
+            case 's': /* --size BYTES */
+                size = strtoul (optarg, NULL, 10);
+                break;
+            case 'c': /* --count */
+                count = strtoul (optarg, NULL, 10);
+                break;
+            case 'p': /* --prefix NAME */
+                prefix = optarg;
+                break;
+            case 'q': /* --quiet */
+                quiet = true;
                 break;
             default:
                 usage ();
                 break;
         }
     }
-    if (optind != argc || iter == -1)
+    if (optind != argc)
+        usage ();
+    if (size < 1 || count < 1)
         usage ();
 
     if (!(h = cmb_init ()))
@@ -57,29 +76,36 @@ int main (int argc, char *argv[])
 
     if (kvs_unlink (h, "kvstorture") < 0)
         err_exit ("kvs_unlink");
-
+    
+    val = xzmalloc (size);
+    
     monotime (&t0);
-    for (i = 0; i < iter; i++) {
-        snprintf (key, sizeof (key), "kvstorture.key%d", i);
-        snprintf (val, sizeof (key), "kvstorture.val%d", i);
+    for (i = 0; i < count; i++) {
+        if (asprintf (&key, "%s.key%d", prefix, i) < 0)
+            oom ();
+        fill (val, i, size);
         vo = json_object_new_string (val);
         if (kvs_put (h, key, vo) < 0)
             err_exit ("kvs_put");
         if (vo)
             json_object_put (vo);
+        free (key);
     }
-    msg ("kvs_put:    time=%0.3f ms (%d iterations)",
-         monotime_since (t0), iter);
+    if (!quiet)
+        msg ("kvs_put:    time=%0.3f ms (%d keys of size %d)",
+             monotime_since (t0), count, size);
 
     monotime (&t0);
     if (kvs_commit (h) < 0)
         err_exit ("kvs_commit");
-    msg ("kvs_commit: time=%0.3f ms", monotime_since (t0));
+    if (!quiet)
+        msg ("kvs_commit: time=%0.3f ms", monotime_since (t0));
 
     monotime (&t0);
-    for (i = 0; i < iter; i++) {
-        snprintf (key, sizeof (key), "kvstorture.key%d", i);
-        snprintf (val, sizeof (key), "kvstorture.val%d", i);
+    for (i = 0; i < count; i++) {
+        if (asprintf (&key, "%s.key%d", prefix, i) < 0)
+            oom ();
+        fill (val, i, size);
         if (kvs_get (h, key, &vo) < 0)
             err_exit ("kvs_get");
         if (strcmp (json_object_get_string (vo), val) != 0)
@@ -87,13 +113,21 @@ int main (int argc, char *argv[])
                       key, json_object_get_string (vo));
         if (vo)
             json_object_put (vo);
+        free (key);
     }
-    msg ("kvs_get:    time=%0.3f ms (%d iterations)",
-         monotime_since (t0), iter);
+    if (!quiet)
+        msg ("kvs_get:    time=%0.3f ms (%d keys of size %d)",
+             monotime_since (t0), count, size);
 
     flux_handle_destroy (&h);
     log_fini ();
     return 0;
+}
+
+static void fill (char *s, int i, int len)
+{
+    snprintf (s, len, "%d", i);
+    memset (s + strlen (s), 'x', len - strlen (s) - 1);
 }
 
 /*

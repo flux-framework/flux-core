@@ -1,0 +1,18 @@
+#!/bin/bash -e
+
+# KVS torture test
+
+TEST=`basename $0`
+
+test_cleanup() {
+    ./tkvs unlink $TEST
+    ./tkvs commit
+}
+
+test_cleanup
+
+../flux kvstorture --quiet --prefix=$TEST
+
+test_cleanup
+
+exit 0
