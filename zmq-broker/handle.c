@@ -495,15 +495,23 @@ int handle_event_tmout (flux_t h)
 int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
                          FluxMsgHandler cb, void *arg)
 {
-    dispatch_t *d = dispatch_create (DSP_TYPE_MSG);
+    dispatch_t *d;
+    int rc = -1;
 
+    if (typemask == 0 || !pattern || !cb) {
+        errno = EINVAL;
+        goto done;
+    }
+    d = dispatch_create (DSP_TYPE_MSG);
     d->msg.typemask = typemask;
     d->msg.pattern = xstrdup (pattern);
     d->msg.fn = cb;
     d->msg.arg = arg;
     if (zlist_push (h->reactor->dsp, d) < 0)
         oom ();
-    return 0;
+    rc = 0;
+done:
+    return rc;
 }
 
 int flux_msghandler_addvec (flux_t h, msghandler_t *handlers, int len,
@@ -521,15 +529,23 @@ int flux_msghandler_addvec (flux_t h, msghandler_t *handlers, int len,
 int flux_msghandler_append (flux_t h, int typemask, const char *pattern,
                             FluxMsgHandler cb, void *arg)
 {
-    dispatch_t *d = dispatch_create (DSP_TYPE_MSG);
+    dispatch_t *d;
+    int rc = -1;
 
+    if (typemask == 0 || !pattern || !cb) {
+        errno = EINVAL;
+        goto done;
+    }
+    d = dispatch_create (DSP_TYPE_MSG);
     d->msg.typemask = typemask;
     d->msg.pattern = xstrdup (pattern);
     d->msg.fn = cb;
     d->msg.arg = arg;
     if (zlist_append (h->reactor->dsp, d) < 0)
         oom ();
-    return 0;
+    rc = 0;
+done:
+    return rc;
 }
 
 void flux_msghandler_remove (flux_t h, int typemask, const char *pattern)
@@ -552,13 +568,18 @@ int flux_fdhandler_add (flux_t h, int fd, short events,
                         FluxFdHandler cb, void *arg)
 {
     dispatch_t *d;
+    int rc = -1;
 
+    if (fd < 0 || events == 0 || !cb) {
+        errno = EINVAL;
+        goto done;
+    }
     if (!h->ops->reactor_fd_add) {
         errno = ENOSYS;
-        return -1;
+        goto done;
     }
     if (h->ops->reactor_fd_add (h->impl, fd, events) < 0)
-        return -1;
+        goto done;
 
     d = dispatch_create (DSP_TYPE_FD);
     d->fd.fd = fd;
@@ -567,7 +588,9 @@ int flux_fdhandler_add (flux_t h, int fd, short events,
     d->fd.arg = arg;
     if (zlist_append (h->reactor->dsp, d) < 0)
         oom ();
-    return 0;
+    rc = 0;
+done:
+    return rc;
 }
 
 void flux_fdhandler_remove (flux_t h, int fd, short events)
