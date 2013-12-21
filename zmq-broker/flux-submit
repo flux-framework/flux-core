@@ -3,101 +3,20 @@
 -------------------------------------------------------------------------------
 -- Modules:
 -------------------------------------------------------------------------------
-local posix = require 'posix'
 local flux = require 'flux'
 local timer = require 'timer'
-
 local prog = string.match (arg[0], "([^/]+)$")
 local shortprog = prog:match ("flux%-(.+)$")
 
--------------------------------------------------------------------------------
--- Program options
--------------------------------------------------------------------------------
-function parse_cmdline (arg)
-    local getopt = require 'alt_getopt' .get_opts
-    local opt_table = {
-        ['help']            = "h",
-        ['ntasks']          = "n",
-        ['nprocs-per-node'] = "N",
-        ['sync']            = "S",
-    }
-    local optstring = "hn:N:S"
-    return getopt (arg, optstring, opt_table)
-end
-
--------------------------------------------------------------------------------
--- Local functions:
--------------------------------------------------------------------------------
-local function usage ()
-    io.stderr:write ("Usage: "..prog.." [-n ntasks] COMMANDS...\n")
-    io.stderr:write ([[
-  -h, --help                 Display this message
-  -n, --ntasks=N             Request to run a total of N tasks
-  -N, --nprocs-per-node=N    Run at most N processes per node
-  -S, --sync                 Stop tasks in exec to wait for debugger
-]])
-end
-
-local function usage_and_exit (n)
-    usage()
-    os.exit (n or 0)
-end
-
-local function log_msg (...)
-    io.stderr:write (shortprog..": " .. string.format (...))
-end
-
-local function log_fatal (...)
-    log_msg (...)
-    os.exit (1)
-end
-
---
---  Check that parameter [a] is an integer
---
-local function is_integer (a)
-    local b = tonumber (a)
-    return (type (b) == "number") and (math.floor(b) == b)
-end
-
---
--- Get the current env with some env vars filtered out:
---
-local function get_filtered_env ()
-    local env = posix.getenv()
-    env.HOSTNAME = nil
-    env.ENVIRONMENT = nil
-    for k,v in pairs (env) do
-        if k:match ("SLURM_") then env[k] = nil end
-    end
-    return (env)
-end
-
+local wreck = require 'wreckopts' .new (shortprog)
 -------------------------------------------------------------------------------
 -- Main program:
 -------------------------------------------------------------------------------
 --  Parse cmdline args:
 --
-local terminate = false
-local sigtimer
-
-local opts, optind = parse_cmdline (arg)
-if opts.h then usage_and_exit () end
-if optind > #arg then
-    log_msg ("Error: remote command required\n")
-    usage_and_exit (1)
+if not wreck:parse_cmdline (arg) then
+    wreck:die ("Failed to parse command line args\n")
 end
-
-local ntasks = tonumber (opts.n) or 1
-local ppn    = opts.N and tonumber (opts.N) or nil
-local cmdline = {}
-for i = optind, #arg do
-    table.insert (cmdline, arg[i])
-end
-
--- Set signal handlers
-posix.signal[posix.SIGINT] = function () terminate = true end
-posix.signal[posix.SIGTERM] = posix.signal[posix.SIGINT]
 
 -- Start in-program timer:
 local tt = timer.new()
@@ -105,36 +24,29 @@ local tt = timer.new()
 --  Create new connection to local cmbd:
 --
 local f, err = flux.new()
-if not f then log_fatal ("flux.new: %s\n", err) end
+if not f then wreck:die ("flux.new: %s\n", err) end
 
 --
 --  Create a job request as Lua table:
 --
-local jobreq = {
-      ntasks             = ntasks,
-      ['tasks-per-node'] = ppn,
-      cmdline            = cmdline,
-      environ            = get_filtered_env(),
-      cwd                = posix.getcwd(),
-      ['stop-in-exec']   = opts.S,
-}
+local jobreq = wreck:jobreq ()
 
-log_msg ("%4.03fs: Submitting LWJ request for %d tasks (cmdline \"%s\")\n",
-    tt:get0(), ntasks, table.concat (cmdline, ' '))
+wreck:say ("%4.03fs: Submitting LWJ request for %d tasks (cmdline \"%s\")\n",
+    tt:get0(), wreck.ntasks, table.concat (wreck.cmdline, ' '))
 
 --
 --  Send job request message with tag="job.create"
 --
 local resp, err = f:rpc ('job.create', jobreq)
-if not resp then log_fatal ("flux.rpc: %s\n", err) end
+if not resp then wreck:die ("flux.rpc: %s\n", err) end
 
 if resp.errnum then
-    log_fatal ("job.create message failed with errnum=%d\n", resp.errnum)
+    wreck:die ("job.create message failed with errnum=%d\n", resp.errnum)
 end
 
-log_msg ("%4.03fs: Submitted jobid %d\n", tt:get0(), resp.jobid)
+wreck:say ("%4.03fs: Submitted jobid %d\n", tt:get0(), resp.jobid)
 local lwj, err = f:kvsdir ("lwj.%d", resp.jobid)
-if not lwj then log_fatal ("f:kvsdir(lwj.%d): %s\n", resp.jobid, err) end
+if not lwj then wreck:die ("f:kvsdir(lwj.%d): %s\n", resp.jobid, err) end
 
 lwj.state = "pending"
 lwj:commit()
