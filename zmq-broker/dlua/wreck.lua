@@ -5,6 +5,7 @@ wreck.__index = wreck;
 
 local lwj_options = {
 --    ['ntasks'] =                "Set total number of tasks to execute",
+    ['commit-on-task-exit'] =   "Call kvs_commit for each task exit",
     ['stdio-delay-commit'] =    "Don't call kvs_commit for each line of output",
     ['stdio-commit-on-open'] =  "Commit to kvs on stdio open in each task",
     ['stdio-commit-on-close'] = "Commit to kvs on stdio close in each task",

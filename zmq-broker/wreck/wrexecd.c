@@ -503,7 +503,7 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
 {
     int n = 0;
     int j;
-    kvsdir_t rank;
+    kvsdir_t rank = NULL;
     kvsitr_t i;
     const char *key;
     int *nodeids;
@@ -857,8 +857,11 @@ int send_exit_message (struct task_info *t)
         json_object_put (o);
     }
 
-    if (kvs_commit (ctx->flux) < 0)
-        return (-1);
+    if (prog_ctx_getopt (ctx, "commit-on-task-exit")) {
+        log_msg (ctx, "commit on task exit\n");
+        if (kvs_commit (ctx->flux) < 0)
+            return (-1);
+    }
 
     return (0);
 }
