@@ -68,14 +68,46 @@ local function summarize_tasks_per_node (r)
     return table.concat (m, ', ')
 end
 
+local function fake_resource_array (wreck, nnodes)
+    local res = {}
+    local total = 0
+    local ppn = wreck.tasks_per_node or (wreck.ntasks / nnodes)
+    for i = 0, nnodes - 1 do
+        local n = ppn
+        if (total + ppn) > wreck.ntasks then
+            n = wreck.ntasks - total
+        end
+        res[i] = { cores = n }
+        total = total + n
+    end
+    return res
+end
+
 local function alloc_tasks_hack (f, wreck, lwj)
     local r = {}
     local total = 0
     local size = f.size
+    local res
 
-    local res, err = f:kvsdir ("resrc.rank")
-    if not res then
-        wreck:die ("Failed to get resrc.rank")
+
+    if (wreck.tasks_per_node or wreck.nnodes) then
+        if wreck.ntasks == 1 then
+            if wreck.tasks_per_node then
+                if wreck.nnodes then
+                    wreck.ntasks = wreck.tasks_per_node * wreck.nnodes
+                else
+                    wreck.ntasks = wreck.tasks_per_node * f.size
+                end
+            else
+                wreck.ntasks = wreck.nnodes
+            end
+        end
+        res = fake_resource_array (wreck, wreck.nnodes or f.size)
+    else
+        res, err = f:kvsdir ("resrc.rank")
+        if not res then
+            wreck:die ("Failed to get resrc.rank")
+        end
     end
 
     wreck:say ("Allocating %d tasks across %d available nodes..\n",
@@ -106,8 +138,10 @@ local terminate = false
 local sigtimer
 
 wreck:add_options ({
-    { name = "tasks-per-node", char = "N", arg = "N",
+    { name = "tasks-per-node", char = "t", arg = "N",
         usage = "Force number of tasks per node" },
+    { name = "nnodes", char = "N", arg = "N",
+        usage = "Force number of nodes" },
     { name = 'now', char = 'i',
         usage = "Run job immediately" },
 })
@@ -158,6 +192,8 @@ if wreck:getopt ("i") then
     --
     --  Send event to run the job
     --
+    wreck.nnodes = wreck:getopt ("N")
+    wreck.tasks_per_node = wreck:getopt ("t")
     alloc_tasks_hack (f, wreck, lwj)
     wreck:say ("%-4.03fs: Sending run event\n", tt:get0())
     local rc,err = f:sendevent ("event.rexec.run.%d", resp.jobid)
