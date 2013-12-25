@@ -95,6 +95,8 @@ static int l_get_flux_reftable (lua_State *L, flux_t f)
 
         lua_newtable (L);
         lua_setfield (L, -2, "msghandler");
+        lua_newtable (L);
+        lua_setfield (L, -2, "kvswatcher");
     }
 
     return (1);
@@ -620,7 +622,7 @@ struct l_flux_ref *l_flux_ref_create (lua_State *L, flux_t f,
     char metatable [1024];
 
     /*
-     *  Store the msghandler table at index into the flux.msghandlers array
+     *  Store the table argument at index into the flux.<type> array
      */
     l_get_flux_reftable (L, f);
     lua_getfield (L, -1, type);
@@ -655,7 +657,7 @@ struct l_flux_ref *l_flux_ref_create (lua_State *L, flux_t f,
     mh->flux = f;
 
     /*
-     *  Ensure our userdata object isn't GC'd by tying it to msghandler
+     *  Ensure our userdata object isn't GC'd by tying it to the new
      *   table:
      */
     assert (lua_istable (L, index));
@@ -834,6 +836,109 @@ static int l_msghandler_newindex (lua_State *L)
     return (0);
 }
 
+static void l_kvswatcher (const char *key, json_object *val, void *arg, int errnum)
+{
+    int rc;
+    int t;
+    struct l_flux_ref *kw = arg;
+    lua_State *L = kw->L;
+
+    assert (L != NULL);
+
+    l_flux_ref_gettable (kw, "kvswatcher");
+    t = lua_gettop (L);
+
+    lua_getfield (L, t, "handler");
+    assert (lua_isfunction (L, -1));
+
+    lua_getfield (L, t, "userdata");
+    assert (lua_isuserdata (L, -1));
+
+    if (val) {
+        json_object_to_lua (L, val);
+        lua_pushnil (L);
+    }
+    else {
+        lua_pushnil (L);
+        lua_pushnumber (L, errnum);
+    }
+
+    if ((rc = lua_pcall (L, 3, 1, 0))) {
+        luaL_error (L, "pcall: %s", lua_tostring (L, -1));
+    }
+}
+
+static int l_kvswatcher_remove (lua_State *L)
+{
+    /* No support for removing kvs watchers */
+    lua_pushnil (L);
+    lua_pushliteral (L, "Not implemented");
+    return (2);
+}
+
+static int l_kvswatcher_add (lua_State *L)
+{
+    struct l_flux_ref *kw = NULL;
+    flux_t f = lua_get_flux (L, 1);
+    const char *key;
+
+    if (!lua_istable (L, 2))
+        return lua_pusherror (L, "Expected table as 2nd argument");
+
+    /*
+     *  Check table for mandatory arguments
+     */
+    lua_getfield (L, 2, "key");
+    if (lua_isnil (L, -1))
+        return lua_pusherror (L, "Mandatory table argument 'key' missing");
+    key = lua_tostring (L, -1);
+
+    lua_getfield (L, 2, "handler");
+    if (lua_isnil (L, -1))
+        return lua_pusherror (L, "Mandatory table argument 'handler' missing");
+    assert (lua_isfunction (L, -1));
+
+    kw = l_flux_ref_create (L, f, 2, "kvswatcher");
+    kvs_watch (f, key, l_kvswatcher, (void *) kw);
+
+    return (1);
+}
+
+static int l_kvswatcher_index (lua_State *L)
+{
+    struct l_flux_ref *kw = luaL_checkudata (L, 1, "FLUX.kvswatcher");
+    const char *key = lua_tostring (L, 2);
+
+    /*
+     *  Check for method names
+     */
+    if (strcmp (key, "remove") == 0) {
+        lua_getmetatable (L, 1);
+        lua_getfield (L, -1, "remove");
+        return (1);
+    }
+
+    /*  Get a copy of the underlying kvswatcher Lua table and pass-through
+     *   the index:
+     */
+    l_flux_ref_gettable (kw, "kvswatcher");
+    lua_getfield (L, -1, key);
+    return (1);
+}
+
+static int l_kvswatcher_newindex (lua_State *L)
+{
+    struct l_flux_ref *kw = luaL_checkudata (L, 1, "FLUX.kvswatcher");
+
+    /*  Set value in the underlying msghandler table:
+     */
+    l_flux_ref_gettable (kw, "kvswatcher");
+    lua_pushvalue (L, 2); /* Key   */
+    lua_pushvalue (L, 3); /* Value */
+    lua_rawset (L, -3);
+    return (0);
+}
+
 static int l_flux_reactor_start (lua_State *L)
 {
     return l_pushresult (L, flux_reactor_start (lua_get_flux (L, 1)));
@@ -858,6 +963,7 @@ static const struct luaL_Reg flux_methods [] = {
     { "unsubscribe",     l_flux_unsubscribe },
 
     { "msghandler",      l_msghandler_add    },
+    { "kvswatcher",      l_kvswatcher_add    },
     { "reactor",         l_flux_reactor_start },
     { NULL,              NULL               }
 };
@@ -885,6 +991,14 @@ static const struct luaL_Reg msghandler_methods [] = {
     { NULL,              NULL                  }
 };
 
+static const struct luaL_Reg kvswatcher_methods [] = {
+    { "__index",         l_kvswatcher_index    },
+    { "__newindex",      l_kvswatcher_newindex },
+    { "remove",          l_kvswatcher_remove   },
+    { NULL,              NULL                  }
+};
+
+
 #define MSGTYPE_SET(L, name) do { \
   lua_pushlstring(L, #name, sizeof(#name)-1); \
   lua_pushnumber(L, FLUX_ ## name); \
@@ -900,6 +1014,8 @@ int luaopen_flux (lua_State *L)
     luaL_register (L, NULL, mrpc_outargs_methods);
     luaL_newmetatable (L, "FLUX.msghandler");
     luaL_register (L, NULL, msghandler_methods);
+    luaL_newmetatable (L, "FLUX.kvswatcher");
+    luaL_register (L, NULL, kvswatcher_methods);
 
     luaL_newmetatable (L, "FLUX.handle");
     luaL_register (L, NULL, flux_methods);
