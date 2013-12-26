@@ -576,6 +576,7 @@ static void *plugin_dlopen (const char *searchpath, const char *name)
     while ((dir = strtok_r (a1, ":", &saveptr))) {
         if (asprintf (&path, "%s/%ssrv.so", dir, name) < 0)
             oom ();
+        dlerror ();
         dso = dlopen (path, RTLD_NOW | RTLD_LOCAL);
         free (path);
         if (dso)
@@ -594,9 +595,11 @@ plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
     const struct plugin_ops *ops;
     void *dso;
     char *errstr;
-        
+
     if (!(dso = plugin_dlopen (searchpath, name))) {
         msg ("plugin `%s' not found in search path (%s)", name, searchpath);
+        if ((errstr = dlerror ()) != NULL)
+            err ("%s: %s", name, errstr);
         return NULL;
     }
     dlerror ();
