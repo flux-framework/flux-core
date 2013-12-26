@@ -1466,7 +1466,7 @@ static int setroot_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     json_object *o = NULL;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
-                || util_json_object_get_string (o, "rootrev", &rootref) < 0
+                || util_json_object_get_string (o, "rootref", &rootref) < 0
                 || !decode_rootref (rootref, &seq, href)) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
@@ -1566,7 +1566,7 @@ static int kvssrv_main (flux_t h, zhash_t *args)
     bool treeroot = flux_treeroot (h);
 
     if (!treeroot) {
-        if (flux_event_subscribe (h, "event.kvs.setroot.") < 0) {
+        if (flux_event_subscribe (h, "event.kvs.setroot") < 0) {
             err ("%s: flux_event_subscribe", __FUNCTION__);
             return -1;
         }
