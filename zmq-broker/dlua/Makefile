@@ -8,7 +8,7 @@ zmsg_test_OBJS += zmsg-lua.o zmsg-test.o json-lua.o lutil.o
 
 libdlua_SOURCES := json-lua.c zmsg-lua.c lutil.c flux-lua.c kvs-lua.c zmsg-lua.o
 
-LIBS     += -lcmb
+LIBS     += -lcmb $(topdir)/zutil/libzutil.a $(topdir)/util/libutil.a
 LDFLAGS  += -L $(topdir)/lib -Wl,-rpath=$(topdir)/lib
 CFLAGS   += -I$(topdir) -I$(topdir)/include
 
