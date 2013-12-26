@@ -1112,6 +1112,76 @@ static int l_flux_reactor_start (lua_State *L)
     return l_pushresult (L, flux_reactor_start (lua_get_flux (L, 1)));
 }
 
+static int lua_push_kz (lua_State *L, kz_t kz)
+{
+    kz_t *kzp = lua_newuserdata (L, sizeof (*kzp));
+    *kzp = kz;
+    luaL_getmetatable (L, "FLUX.kz");
+    lua_setmetatable (L, -2);
+    return (1);
+}
+
+static int l_flux_kz_open (lua_State *L)
+{
+    kz_t kz;
+    flux_t f = lua_get_flux (L, 1);
+    const char *key = lua_tostring (L, 2);
+    const char *mode = lua_tostring (L, 3);
+    int flags;
+
+    if (mode[0] == 'r')
+        flags = KZ_FLAGS_READ | KZ_FLAGS_NOEXIST | KZ_FLAGS_NONBLOCK;
+    else if (mode[0] == 'w')
+        flags = KZ_FLAGS_WRITE;
+    else
+        return lua_pusherror (L, "Expected 'r' or 'w' mode for kz_open");
+
+    kz = kz_open (f, key, flags);
+    return lua_push_kz (L, kz);
+}
+
+static kz_t lua_get_kz (lua_State *L, int index)
+{
+    kz_t *kzp = luaL_checkudata (L, index, "FLUX.kz");
+    return (*kzp);
+}
+
+static int l_kz_index (lua_State *L)
+{
+    const char *key = lua_tostring (L, 2);
+
+    lua_getmetatable (L, 1);
+    lua_getfield (L, -1, key);
+    return (1);
+}
+
+static int l_kz_gc (lua_State *L)
+{
+    kz_t *kzp = luaL_checkudata (L, 1, "FLUX.kz");
+    if (*kzp != NULL)
+        kz_close (*kzp);
+    return (0);
+}
+
+static int l_kz_close (lua_State *L)
+{
+    kz_t *kzp = luaL_checkudata (L, 1, "FLUX.kz");
+    kz_close (*kzp);
+    *kzp = NULL;
+    return (0);
+}
+
+static int l_kz_write (lua_State *L)
+{
+    kz_t kz = lua_get_kz (L, 1);
+    size_t len;
+    const char *s = lua_tolstring (L, 2, &len);
+
+    if (kz_put (kz, (char *) s, len) < 0)
+        return lua_pusherror (L, strerror (errno));
+    return (1); /* len */
+}
+
 static const struct luaL_Reg flux_functions [] = {
     { "new",             l_flux_new         },
     { NULL,              NULL              }
@@ -1129,7 +1199,7 @@ static const struct luaL_Reg flux_methods [] = {
     { "sendevent",       l_flux_send_event  },
     { "subscribe",       l_flux_subscribe   },
     { "unsubscribe",     l_flux_unsubscribe },
-
+    { "kz_open",         l_flux_kz_open     },
     { "msghandler",      l_msghandler_add    },
     { "kvswatcher",      l_kvswatcher_add    },
     { "iowatcher",       l_iowatcher_add     },
@@ -1173,6 +1243,14 @@ static const struct luaL_Reg iowatcher_methods [] = {
     { NULL,              NULL                  }
 };
 
+static const struct luaL_Reg kz_methods [] = {
+    { "__index",         l_kz_index           },
+    { "__gc",            l_kz_gc              },
+    { "close",           l_kz_close           },
+    { "write",           l_kz_write           },
+    { NULL,              NULL                 }
+};
+
 #define MSGTYPE_SET(L, name) do { \
   lua_pushlstring(L, #name, sizeof(#name)-1); \
   lua_pushnumber(L, FLUX_ ## name); \
@@ -1192,6 +1270,8 @@ int luaopen_flux (lua_State *L)
     luaL_register (L, NULL, kvswatcher_methods);
     luaL_newmetatable (L, "FLUX.iowatcher");
     luaL_register (L, NULL, iowatcher_methods);
+    luaL_newmetatable (L, "FLUX.kz");
+    luaL_register (L, NULL, kz_methods);
 
     luaL_newmetatable (L, "FLUX.handle");
     luaL_register (L, NULL, flux_methods);
