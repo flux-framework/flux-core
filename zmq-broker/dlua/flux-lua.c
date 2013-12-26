@@ -19,6 +19,7 @@
 #include "kvs-lua.h"
 #include "zmsg-lua.h"
 #include "lutil.h"
+#include "util/util.h"
 #include "zutil/zio.h"
 #include "zutil/kz.h"
 
@@ -965,12 +966,20 @@ static int iowatcher_zio_cb (zio_t zio, json_object *o, void *arg)
     t = lua_gettop (L);
 
     lua_getfield (L, t, "handler");
-    assert (lua_isuserdata (L, -1));
+    if (!lua_isfunction (L, -1))
+        luaL_error (L, "handler is %s not function", luaL_typename (L, -1));
 
     lua_getfield (L, t, "userdata");
     assert (lua_isuserdata (L, -1));
 
     if (o) {
+        int len;
+        uint8_t *pp;
+        util_json_object_get_base64 (o, "data", &pp, &len);
+        if (len > 0) {
+            json_object *s = json_object_new_string ((char *)pp);
+            json_object_object_add (o, "data", s);
+        }
         json_object_to_lua (L, o);
         json_object_put (o);
     }
