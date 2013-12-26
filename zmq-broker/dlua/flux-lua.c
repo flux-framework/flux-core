@@ -19,6 +19,8 @@
 #include "kvs-lua.h"
 #include "zmsg-lua.h"
 #include "lutil.h"
+#include "zutil/zio.h"
+#include "zutil/kz.h"
 
 /*
  *  Create a table in the registry referencing the flux userdata
@@ -97,6 +99,8 @@ static int l_get_flux_reftable (lua_State *L, flux_t f)
         lua_setfield (L, -2, "msghandler");
         lua_newtable (L);
         lua_setfield (L, -2, "kvswatcher");
+        lua_newtable (L);
+        lua_setfield (L, -2, "iowatcher");
     }
 
     return (1);
@@ -947,6 +951,162 @@ static int l_kvswatcher_newindex (lua_State *L)
     return (0);
 }
 
+static int iowatcher_zio_cb (zio_t zio, json_object *o, void *arg)
+{
+    int rc;
+    int t;
+    struct l_flux_ref *iow = arg;
+    lua_State *L = iow->L;
+
+    assert (L != NULL);
+    lua_settop (L, 0); /* XXX: Reset lua stack so we don't overflow */
+
+    l_flux_ref_gettable (iow, "iowatcher");
+    t = lua_gettop (L);
+
+    lua_getfield (L, t, "handler");
+    assert (lua_isuserdata (L, -1));
+
+    lua_getfield (L, t, "userdata");
+    assert (lua_isuserdata (L, -1));
+
+    if (o) {
+        json_object_to_lua (L, o);
+        json_object_put (o);
+    }
+
+    rc = lua_pcall (L, 2, 1, 0);
+    if (rc)
+        fprintf (stderr, "lua_pcall: %s\n", lua_tostring (L, -1));
+
+    return rc ? -1 : 0;
+}
+
+static void iowatcher_kz_ready_cb (kz_t kz, void *arg)
+{
+    int len;
+    int t;
+    char *data;
+    struct l_flux_ref *iow = arg;
+    lua_State *L = iow->L;
+
+    assert (L != NULL);
+
+    /* Reset stack so we don't overflow */
+    lua_settop (L, 0);
+
+    l_flux_ref_gettable (iow, "iowatcher");
+    t = lua_gettop (L);
+    lua_getfield (L, t, "handler");
+    assert (lua_isfunction (L, -1));
+
+    lua_getfield (L, t, "userdata");
+    assert (lua_isuserdata (L, -1));
+
+    while ((len = kz_get (kz, &data)) >= 0) {
+        /*
+         *  Recreate stack on each iteration:
+         */
+        lua_pushvalue (L, 2);
+        assert (lua_isfunction (L, -1));
+        lua_pushvalue (L, 3);
+        assert (lua_isuserdata (L, -1));
+
+        if (len > 0) {
+            lua_pushlstring (L, data, len);
+            free (data);
+        }
+        if (len == 0)
+            lua_pushnil (L);
+
+        if (lua_pcall (L, 2, 1, 0)) {
+            fprintf (stderr, "kz_ready: %s\n",  lua_tostring (L, -1));
+            break;
+        }
+        if (len == 0)
+            break;
+        lua_pop (L, 1);
+    }
+
+    lua_settop (L, 0);
+}
+
+static int l_iowatcher_add (lua_State *L)
+{
+    struct l_flux_ref *iow = NULL;
+    flux_t f = lua_get_flux (L, 1);
+
+    if (!lua_istable (L, 2))
+        return lua_pusherror (L,
+            "Expected table, got %s", luaL_typename (L, 2));
+
+    lua_getfield (L, 2, "handler");
+    if (lua_isnil (L, -1))
+        return lua_pusherror (L, "Mandatory table argument 'handler' missing");
+    assert (lua_isfunction (L, -1));
+
+    lua_getfield (L, 2, "fd");
+    if (!lua_isnil (L, -1)) {
+        zio_t zio;
+        int fd = lua_tointeger (L, -1);
+        if (fd < 0)
+            return lua_pusherror (L, "Invalid fd=%d", fd);
+        fd = dup (fd);
+        iow = l_flux_ref_create (L, f, 2, "iowatcher");
+        zio = zio_reader_create ("", fd, NULL, iow);
+        if (!zio)
+            fprintf (stderr, "failed to create zio!\n");
+        zio_flux_attach (zio, f);
+        zio_set_send_cb (zio, (zio_send_f) iowatcher_zio_cb);
+    }
+    lua_getfield (L, 2, "key");
+    if (!lua_isnil (L, -1)) {
+        int flags = KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK | KZ_FLAGS_NOEXIST;
+        kz_t kz;
+        const char *key = lua_tostring (L, -1);
+        if ((kz = kz_open (f, key, flags)) == NULL)
+            return lua_pusherror (L, "kz_open: %s", strerror (errno));
+        iow = l_flux_ref_create (L, f, 2, "iowatcher");
+        kz_set_ready_cb (kz, (kz_ready_f) iowatcher_kz_ready_cb, (void *) iow);
+    }
+    return (1);
+}
+
+static int l_iowatcher_index (lua_State *L)
+{
+    struct l_flux_ref *iow = luaL_checkudata (L, 1, "FLUX.iowatcher");
+    const char *key = lua_tostring (L, 2);
+
+    /*
+     *  Check for method names
+     */
+    if (strcmp (key, "remove") == 0) {
+        lua_getmetatable (L, 1);
+        lua_getfield (L, -1, "remove");
+        return (1);
+    }
+
+    /*  Get a copy of the underlying kvswatcher Lua table and pass-through
+     *   the index:
+     */
+    l_flux_ref_gettable (iow, "iowatcher");
+    lua_getfield (L, -1, key);
+    return (1);
+}
+
+static int l_iowatcher_newindex (lua_State *L)
+{
+    struct l_flux_ref *iow = luaL_checkudata (L, 1, "FLUX.iowatcher");
+
+    /*  Set value in the underlying table:
+     */
+    l_flux_ref_gettable (iow, "iowatcher");
+    lua_pushvalue (L, 2); /* Key   */
+    lua_pushvalue (L, 3); /* Value */
+    lua_rawset (L, -3);
+    return (0);
+}
+
 static int l_flux_reactor_start (lua_State *L)
 {
     return l_pushresult (L, flux_reactor_start (lua_get_flux (L, 1)));
@@ -972,6 +1132,7 @@ static const struct luaL_Reg flux_methods [] = {
 
     { "msghandler",      l_msghandler_add    },
     { "kvswatcher",      l_kvswatcher_add    },
+    { "iowatcher",       l_iowatcher_add     },
     { "reactor",         l_flux_reactor_start },
     { NULL,              NULL               }
 };
@@ -1006,6 +1167,11 @@ static const struct luaL_Reg kvswatcher_methods [] = {
     { NULL,              NULL                  }
 };
 
+static const struct luaL_Reg iowatcher_methods [] = {
+    { "__index",         l_iowatcher_index    },
+    { "__newindex",      l_iowatcher_newindex },
+    { NULL,              NULL                  }
+};
 
 #define MSGTYPE_SET(L, name) do { \
   lua_pushlstring(L, #name, sizeof(#name)-1); \
@@ -1024,6 +1190,8 @@ int luaopen_flux (lua_State *L)
     luaL_register (L, NULL, msghandler_methods);
     luaL_newmetatable (L, "FLUX.kvswatcher");
     luaL_register (L, NULL, kvswatcher_methods);
+    luaL_newmetatable (L, "FLUX.iowatcher");
+    luaL_register (L, NULL, iowatcher_methods);
 
     luaL_newmetatable (L, "FLUX.handle");
     luaL_register (L, NULL, flux_methods);
