@@ -734,6 +734,10 @@ static int msghandler (flux_t f, int typemask, zmsg_t **zmsg, void *arg)
     zmsg = NULL;
 
     rc = lua_tonumber (L, -1);
+
+    /* Reset Lua stack */
+    lua_settop (L, 0);
+
     return (rc);
 }
 
@@ -844,6 +848,8 @@ static void l_kvswatcher (const char *key, json_object *val, void *arg, int errn
     lua_State *L = kw->L;
 
     assert (L != NULL);
+    /* Reset lua stack */
+    lua_settop (L, 0);
 
     l_flux_ref_gettable (kw, "kvswatcher");
     t = lua_gettop (L);
@@ -866,6 +872,8 @@ static void l_kvswatcher (const char *key, json_object *val, void *arg, int errn
     if ((rc = lua_pcall (L, 3, 1, 0))) {
         luaL_error (L, "pcall: %s", lua_tostring (L, -1));
     }
+    /* Reset stack */
+    lua_settop (L, 0);
 }
 
 static int l_kvswatcher_remove (lua_State *L)
