@@ -23,7 +23,7 @@ LDFLAGS = -Wl,-rpath,$(LIBDIR)
 export CFLAGS LDFLAGS
 
 LIBUTIL = util/libutil.a
-LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -luuid $(LIBUTIL)
+LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -luuid -lm 
 LDADD_SRV = -pthread -rdynamic $(LDADD_CLI) -ldl
 
 COMMON_OBJS = kvscli.o barriercli.o logcli.o cmbdcli.o mrpc.o handle.o
@@ -53,13 +53,13 @@ all: subdirs $(BUILD) subdirs_post
 
 plugins/%.so: %.c
 	mkdir -p plugins
-	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $<
+	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL)
 plugins/rexecsrv.so: wreck/wrexecsrv.c
 	mkdir -p plugins
-	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $<
+	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL)
 plugins/%.so: wreck/%.c
 	mkdir -p plugins
-	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $<
+	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL)
 
 subdirs: $(LIBUTIL) $(LIBCMB)
 	@for f in $(SUBDIRS); do make -C $$f; done
