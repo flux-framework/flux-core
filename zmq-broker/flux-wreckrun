@@ -145,6 +145,8 @@ wreck:add_options ({
         usage = "Force number of nodes" },
     { name = 'now', char = 'i',
         usage = "Run job immediately" },
+    { name = 'label-io', char = 'l',
+        usage = "Label output with taskid" },
 })
 
 if not wreck:parse_cmdline (arg) then
@@ -225,21 +227,20 @@ end
 --  IO watcher creation helper function:
 --
 local function io_watcher_create (stream, jobid, taskid)
-    local s = io.stdout
-    if stream == "stderr" then s = io.stderr end
-
+    local s = stream == "stdout" and io.stdout or io.stderr
     local iow,err = f:iowatcher {
         key = string.format ("lwj.%d.%d.%s", jobid, taskid, stream),
-        taskid = taskid,
         handler = function (iow, data)
             if not data then
                 nio = nio - 1
                 check_job_completed ()
                 return
             end
-            s:write (taskid..": "..data)
+            if (wreck.opts.l) then s:write (taskid..": ") end
+            s:write (data)
         end
     }
+    if not iow then wreck:die (err) end
     return iow
 end
 
@@ -247,10 +248,11 @@ end
 --  Create iowatchers for all tasks stdout/err:
 --
 for i=0, wreck.ntasks-1 do
-    io_watcher_create ("stdout", resp.jobid, i)
-    io_watcher_create ("stderr", resp.jobid, i)
-    nio = nio + 2
+    for _,stream in pairs{ "stdout", "stderr"} do
+        iow = io_watcher_create (stream, resp.jobid, i)
+    end
 end
+nio = wreck.ntasks * 2
 
 --
 --  Open stdin (to task 0 only for now)
