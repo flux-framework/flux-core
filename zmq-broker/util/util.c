@@ -195,6 +195,12 @@ static void compute_href (const void *dat, int len, href_t href)
         sprintf (&href[i*2], "%02x", (unsigned int)raw[i]);
 }
 
+int util_json_size (json_object *o)
+{
+    const char *s = json_object_to_json_string (o);
+    return strlen (s);
+}
+
 bool util_json_match (json_object *o1, json_object *o2)
 {
     const char *s1 = json_object_to_json_string (o1);
