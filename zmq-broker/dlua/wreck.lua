@@ -23,8 +23,8 @@ local function opt_table (w)
     for x,t in pairs (default_opts) do
         o[x] = t.char
     end
-    for k,v in pairs (w.extra_options) do
-        o[k] = v.char
+    for _,v in pairs (w.extra_options) do
+        o[v.name] = v.char
     end
     return o
 end
