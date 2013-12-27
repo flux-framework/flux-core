@@ -26,7 +26,8 @@ LIBUTIL = util/libutil.a
 LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -luuid -lm 
 LDADD_SRV = -pthread -rdynamic $(LDADD_CLI) -ldl
 
-COMMON_OBJS = kvscli.o barriercli.o logcli.o cmbdcli.o mrpc.o handle.o
+COMMON_OBJS = kvscli.o barriercli.o logcli.o cmbdcli.o mrpc.o handle.o \
+	waitqueue.o
 CMBD_OBJS = route.o plugin.o $(COMMON_OBJS) cmbd.o
 
 FLUX_OBJS = flux.o
