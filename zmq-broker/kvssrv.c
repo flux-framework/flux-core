@@ -89,7 +89,7 @@ typedef struct {
         struct {
             zmsg_t *zmsg;
         } flush;
-    } u;
+    };
 } op_t;
 
 typedef struct {
@@ -251,16 +251,16 @@ static void op_destroy (op_t *op)
 {
     switch (op->type) {
         case OP_NAME:
-            if (op->u.name.key)
-                free (op->u.name.key);
+            if (op->name.key)
+                free (op->name.key);
             break;
         case OP_STORE:
-            if (op->u.store.ref)
-                free (op->u.store.ref);
+            if (op->store.ref)
+                free (op->store.ref);
             break;
         case OP_FLUSH:
-            if (op->u.flush.zmsg)
-                zmsg_destroy (&op->u.flush.zmsg);
+            if (op->flush.zmsg)
+                zmsg_destroy (&op->flush.zmsg);
             break;
     }
     free (op);
@@ -273,11 +273,11 @@ static bool op_match (op_t *op1, op_t *op2)
     if (op1->type == op2->type) {
         switch (op1->type) {
             case OP_NAME:
-                if (!strcmp (op1->u.name.key, op2->u.name.key))
+                if (!strcmp (op1->name.key, op2->name.key))
                     match = true;
                 break;
             case OP_STORE:
-                if (!strcmp (op1->u.store.ref, op2->u.store.ref))
+                if (!strcmp (op1->store.ref, op2->store.ref))
                     match = true;
                 break;
             case OP_FLUSH:
@@ -294,7 +294,7 @@ static void writeback_add_name (ctx_t *ctx, const char *key)
     //assert (!flux_treeroot (ctx->h));
 
     op = op_create (OP_NAME);
-    op->u.name.key = xstrdup (key);
+    op->name.key = xstrdup (key);
     if (zlist_append (ctx->slave.writeback, op) < 0)
         oom ();
     ctx->slave.writeback_state = WB_DIRTY;
@@ -307,7 +307,7 @@ static void writeback_add_store (ctx_t *ctx, const char *ref)
     //assert (!flux_treeroot (ctx->h));
 
     op = op_create (OP_STORE);
-    op->u.store.ref = xstrdup (ref);
+    op->store.ref = xstrdup (ref);
     if (zlist_append (ctx->slave.writeback, op) < 0)
         oom ();
     ctx->slave.writeback_state = WB_DIRTY;
@@ -320,7 +320,7 @@ static void writeback_add_flush (ctx_t *ctx, zmsg_t *zmsg)
     //assert (!flux_treeroot (ctx->h));
 
     op = op_create (OP_FLUSH);
-    op->u.flush.zmsg = zmsg;
+    op->flush.zmsg = zmsg;
     if (zlist_append (ctx->slave.writeback, op) < 0)
         oom ();
 }
@@ -340,7 +340,7 @@ static void writeback_del (ctx_t *ctx, op_t *target)
         /* handle flush(es) now at head of queue */
         while ((op = zlist_head (ctx->slave.writeback)) && op->type == OP_FLUSH) {
             ctx->slave.writeback_state = WB_FLUSHING;
-            flux_request_sendmsg (ctx->h, &op->u.flush.zmsg); /* fwd upstream */
+            flux_request_sendmsg (ctx->h, &op->flush.zmsg); /* fwd upstream */
             zlist_remove (ctx->slave.writeback, op);
             op_destroy (op);
         }
@@ -765,7 +765,7 @@ static int store_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         goto done;
     }
     json_object_object_foreachC (o, iter) {
-        target.u.store.ref = iter.key;
+        target.store.ref = iter.key;
         writeback_del (ctx, &target);
     }
 done:
@@ -856,7 +856,7 @@ static int name_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         goto done;
     }
     json_object_object_foreachC (o, iter) {
-        target.u.name.key = iter.key;
+        target.name.key = iter.key;
         writeback_del (ctx, &target);
     }
 done:
