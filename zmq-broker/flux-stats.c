@@ -64,16 +64,16 @@ int main (int argc, char *argv[])
         err_exit ("cmb_init");
 
     if (copt) {
-        if (!(response = flux_rpc (h, NULL, "%s.clearstats", target))) {
+        if (!(response = flux_rpc (h, NULL, "%s.stats.clear", target))) {
             if (errno != 0)
                 err_exit ("flux_rpc %s.clearstats", target);
         } else
             json_object_put (response);
     } else if (Copt) {
-        if (flux_event_send (h, NULL, "event.%s.clearstats", target) < 0)
-            err_exit ("flux_event_send event.%s.clearstats", target);
+        if (flux_event_send (h, NULL, "event.%s.stats.clear", target) < 0)
+            err_exit ("flux_event_send event.%s.stats.clear", target);
     } else {
-        if (!(response = flux_rpc (h, NULL, "%s.stats", target)))
+        if (!(response = flux_rpc (h, NULL, "%s.stats.get", target)))
             err_exit ("flux_rpc %s.stats", target);
         printf ("%s\n", json_object_to_json_string_ext (response,
                 JSON_C_TO_STRING_PRETTY));
