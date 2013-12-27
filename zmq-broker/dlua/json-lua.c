@@ -3,8 +3,20 @@
 #include <lauxlib.h>
 #include <json/json.h>
 
+static void * json_null;
+
 static int json_object_to_lua_table (lua_State *L, json_object *o);
 static int json_array_to_lua (lua_State *L, json_object *o);
+
+void lua_push_json_null (lua_State *L)
+{
+    lua_pushlightuserdata (L, json_null);
+}
+
+int lua_is_json_null (lua_State *L, int index)
+{
+    return (lua_touserdata (L, index) == json_null);
+}
 
 int json_object_to_lua (lua_State *L, json_object *o)
 {
@@ -69,14 +81,14 @@ static int json_object_to_lua_table (lua_State *L, json_object *o)
 
 static json_object * lua_table_to_json (lua_State *L, int i);
 
-json_object * lua_value_to_json (lua_State *L, int i)
+int lua_value_to_json (lua_State *L, int i, json_object **valp)
 {
     int index = (i < 0) ? (lua_gettop (L) + 1) + i : i;
+    json_object *o = NULL;
 
     if (lua_isnoneornil (L, i))
-        return (NULL);
+        return (-1);
 
-    json_object *o;
     switch (lua_type (L, index)) {
         case LUA_TNUMBER:
             o = json_object_new_int64 (lua_tointeger (L, index));
@@ -93,12 +105,17 @@ json_object * lua_value_to_json (lua_State *L, int i)
         case LUA_TNIL:
             o = json_object_new_object ();
             break;
+        case LUA_TLIGHTUSERDATA:
+            fprintf (stderr, "Got userdata\n");
+            if (lua_touserdata (L, index) == json_null)
+                break;
         default:
             luaL_error (L, "Unexpected Lua type %s",
                 lua_typename (L, lua_type (L, index)));
-            return (NULL);
+            return (-1);
     }
-    return (o);
+    *valp = o;
+    return (0);
 }
 
 static int lua_is_integer (lua_State *L, int index)
@@ -135,7 +152,7 @@ static json_object * lua_table_to_json_array (lua_State *L, int index)
         int i = lua_tointeger (L, -2);
         json_object *val;
 
-        if (!(val = lua_value_to_json (L, -1))) {
+        if (lua_value_to_json (L, -1, &val) < 0) {
             json_object_put (o);
             return (NULL);
         }
@@ -162,7 +179,7 @@ static json_object * lua_table_to_json (lua_State *L, int index)
         json_object *val;
         /* -2: key, -1: value */
         const char *key = lua_tostring (L, -2);
-        if (!(val = lua_value_to_json (L, -1))) {
+        if (lua_value_to_json (L, -1, &val) < 0) {
             json_object_put (o);
             return (NULL);
         }

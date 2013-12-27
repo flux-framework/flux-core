@@ -136,7 +136,8 @@ static int l_zmsg_info_index (lua_State *L)
 static int l_zmsg_info_respond (lua_State *L)
 {
     struct zmsg_info *zi = l_get_zmsg_info (L, 1);
-    json_object *o = lua_value_to_json (L, 2);
+    json_object *o;
+    lua_value_to_json (L, 2, &o);
     if (o && zi->resp)
         return ((*zi->resp) (L, zi, o, zi->arg));
     return lua_pusherror (L, "zmsg_info_respond: Not implemented");

@@ -2,8 +2,7 @@
 
 -------------------------------------------------------------------------------
 -- Modules:
--------------------------------------------------------------------------------
-local posix = require 'posix'
+------------------------------------------------------------------------------- local posix = require 'posix'
 local flux = require 'flux'
 local timer = require 'timer'
 
@@ -50,7 +49,8 @@ local function lwj_return_code (f, wreck, id)
         end
     end
     for s,h in pairs (msgs) do
-        wreck:say ("tasks %s: %s\n", tostring (h:sort()), s)
+        wreck:say ("task%s %s: %s\n",
+                    #h > 1 and "s" or "", tostring (h:sort()), s)
     end
     return max
 end
@@ -88,7 +88,6 @@ local function alloc_tasks_hack (f, wreck, lwj)
     local total = 0
     local size = f.size
     local res
-
 
     if (wreck.tasks_per_node or wreck.nnodes) then
         if wreck.ntasks == 1 then
@@ -136,6 +135,8 @@ end
 local wreck = require 'wreck' .new (shortprog)
 local terminate = false
 local sigtimer
+local nio = 0
+local state = ""
 
 wreck:add_options ({
     { name = "tasks-per-node", char = "t", arg = "N",
@@ -144,6 +145,8 @@ wreck:add_options ({
         usage = "Force number of nodes" },
     { name = 'now', char = 'i',
         usage = "Run job immediately" },
+    { name = 'label-io', char = 'l',
+        usage = "Label output with taskid" },
 })
 
 if not wreck:parse_cmdline (arg) then
@@ -207,39 +210,108 @@ else
     lwj:commit()
 end
 
-local sigtimer = nil
-repeat
- local r,err = lwj:watch ("state", r)
- if r then wreck:say ("%-4.03fs: State = %s\n", tt:get0(), r) end
-
- if not r then wreck:say ("%s\n", err) end
-
- --
- --  If we catch a signal then lwj:watch() will be interrupted.
- --   Check to see if we should terminate the job now:
- --
- if terminate then
-    wreck:say ("%4.03fs: Killing LWJ %d\n", tt:get0(), resp.jobid)
-    local rc,err = f:sendevent ("event.rexec.kill.%d", resp.jobid)
-    if not rc then
-        wreck:say ("Error: Failed to send kill event: %s", err)
+--
+--  Check if job state is "complete" and all IO from tasks have closed:
+--
+local function check_job_completed ()
+    if nio <= 0 and (state == "complete" or state == "reaped") then
+        local rc = lwj_return_code (f, wreck, resp.jobid)
+        if rc == 0 then
+            wreck:say ("All tasks completed successfully.\n");
+        end
+        os.exit (rc)
     end
-    if not sigtimer then
-       sigtimer = timer.new()
-    else
-       if sigtimer:get() < 1.0 then
-         wreck:say ("Detaching from job. Processes may still be running\n");
-         os.exit (0);
-       end
-    end
-    terminate = false
- end
-until r == "complete"
-
-local rc = lwj_return_code (f, wreck, resp.jobid)
-if rc == 0 then
-    wreck:say ("All tasks completed successfully.\n");
 end
+
+
+--  IO watcher creation helper function:
+--
+local function io_watcher_create (stream, jobid, taskid)
+    local s = stream == "stdout" and io.stdout or io.stderr
+    local iow,err = f:iowatcher {
+        key = string.format ("lwj.%d.%d.%s", jobid, taskid, stream),
+        handler = function (iow, data)
+            if not data then
+                nio = nio - 1
+                check_job_completed ()
+                return
+            end
+            if (wreck.opts.l) then s:write (taskid..": ") end
+            s:write (data)
+        end
+    }
+    if not iow then wreck:die (err) end
+    return iow
+end
+
+--
+--  Create iowatchers for all tasks stdout/err:
+--
+for i=0, wreck.ntasks-1 do
+    for _,stream in pairs{ "stdout", "stderr"} do
+        iow = io_watcher_create (stream, resp.jobid, i)
+    end
+end
+nio = wreck.ntasks * 2
+
+--
+--  Open stdin (to task 0 only for now)
+--
+local kz, err = f:kz_open (tostring (lwj)..".0.stdin", "w")
+if not kz then wreck:die (err) end
+
+--
+--  Add a file descriptor iowatcher for this script's stdin:
+--
+f:iowatcher {
+    fd = posix.fileno (io.input()),
+    handler = function (iow, data)
+        if data.data then kz:write (data.data) end
+        if data.eof  then kz:close ()          end
+    end
+}
+
+--
+--  Finally, a kvswatcher for the LWJ state:
+--
+local kw, err = f:kvswatcher  {
+    key = string.format ("lwj.%d.state", resp.jobid),
+    handler = function (kw, result)
+        if result then
+            state = result
+            wreck:say ("%-4.03fs: State = %s\n", tt:get0(), result)
+            check_job_completed ()
+        end
+    end
+}
+
+--
+--  Begin reactor loop:
+--
+local sigtimer = nil
+
+repeat
+    local r = f:reactor()
+    --
+    --  If we catch a signal then lwj:watch() will be interrupted.
+    --   Check to see if we should terminate the job now:
+    --
+    if terminate then
+        wreck:say ("%4.03fs: Killing LWJ %d\n", tt:get0(), resp.jobid)
+        local rc,err = f:sendevent ("event.rexec.kill.%d", resp.jobid)
+        if not rc then
+            wreck:say ("Error: Failed to send kill event: %s", err)
+        end
+        if not sigtimer then
+            sigtimer = timer.new()
+            sigtimer:get()
+        elseif sigtimer:get() < 1.0 then
+            wreck:say ("Detaching from job. Processes may still be running\n");
+            os.exit (0);
+        end
+        terminate = false
+    end
+until false
 
 
 -- vi: ts=4 sw=4 expandtab

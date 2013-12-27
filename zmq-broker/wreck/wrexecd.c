@@ -213,13 +213,11 @@ int stderr_cb (zio_t z, json_object *o, struct task_info *t)
 
 void kz_stdin (kz_t kz, struct task_info *t)
 {
-    json_object *o = kz_get_json (kz);
-    if (o == NULL) {
-        log_err (t->ctx, "kz_get: %s", strerror (errno));
-        return;
+    json_object *o;
+    while ((o = kz_get_json (kz))) {
+        zio_write_json (t->zio [IN], o);
+        json_object_put (o);
     }
-    zio_write_json (t->zio [IN], o);
-    json_object_put (o);
     return;
 }
 
