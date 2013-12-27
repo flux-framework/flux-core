@@ -924,13 +924,11 @@ static int name_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     }
     cpy = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
-        if (iter.val) {
+        if (iter.val)
             json_object_get (iter.val);
-            name (ctx, iter.key, iter.val, writeback);
-            json_object_object_del (cpy, iter.key);
-            json_object_object_add (cpy, iter.key, NULL);
-        } else 
-            name (ctx, iter.key, NULL, writeback);
+        name (ctx, iter.key, iter.val, writeback);
+        json_object_object_del (cpy, iter.key);
+        json_object_object_add (cpy, iter.key, NULL);
     }
     flux_respond (ctx->h, zmsg, cpy);
 done:
