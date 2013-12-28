@@ -10,10 +10,11 @@
 #include "util.h"
 #include "log.h"
 
-#define OPTIONS "hd"
+#define OPTIONS "hdD"
 static const struct option longopts[] = {
     {"help",       no_argument,  0, 'h'},
     {"dropcache",  no_argument,  0, 'd'},
+    {"dropcache-all",  no_argument,  0, 'D'},
     { 0, 0, 0, 0 },
 };
 
@@ -23,7 +24,7 @@ void put (flux_t h, const char *key, const char *val);
 
 void usage (void)
 {
-    fprintf (stderr, "Usage: flux-kvs [--dropcache] key[=val] [key[=val]] ...\n"
+    fprintf (stderr, "Usage: flux-kvs key[=val] [key[=val]] ...\n"
 "where the arguments are one or more of:\n"
 "    key         displays value of key\n"
 "    key=        unlinks key\n"
@@ -36,6 +37,8 @@ void usage (void)
 "    \"string\"    json string\n"
 "    {...}       json object\n"
 "remember to escape any characters that are interpted by your shell\n"
+"Use --dropcache to drop the local slave cache\n."
+"Use --dropcache-all to drop slave caches across the session\n."
 );
     exit (1);
 }
@@ -45,7 +48,8 @@ int main (int argc, char *argv[])
     flux_t h;
     bool need_commit = false;
     int i, ch;
-    bool dopt;
+    bool dopt = false;
+    bool Dopt = false;
 
     log_init ("flux-kvs");
 
@@ -57,12 +61,15 @@ int main (int argc, char *argv[])
             case 'd': /* --dropcache */
                 dopt = true;
                 break;
+            case 'D': /* --dropcache-all */
+                Dopt = true;
+                break;
             default:
                 usage ();
                 break;
         }
     }
-    if (optind == argc && !dopt)
+    if (optind == argc && !(dopt || Dopt))
         usage ();
 
     if (!(h = cmb_init ()))
@@ -72,8 +79,12 @@ int main (int argc, char *argv[])
         if (kvs_dropcache (h) < 0)
             err_exit ("kvs_dropcache");
     }
+    if (Dopt) {
+        if (flux_event_send (h, NULL, "event.kvs.dropcache") < 0)
+            err_exit ("flux_event_send");
+    }
 
-    for (i = 1; i < argc; i++) {
+    for (i = optind; i < argc; i++) {
         char *key = xstrdup (argv[i]);
         char *val = strchr (key, '=');
 

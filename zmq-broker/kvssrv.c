@@ -776,22 +776,25 @@ done:
     return 0;
 }
 
-static int clean_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static int dropcache_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     int s1, s2;
     int rc = 0;
-    json_object *rootdir, *cpy;
-    href_t href;
+    bool master = flux_treeroot (h);
 
-    if ((!flux_treeroot (ctx->h) && zlist_size (ctx->slave.writeback) > 0) ||
-          (flux_treeroot (ctx->h) && zlist_size (ctx->master.namequeue) > 0)) {
-        flux_log (ctx->h, LOG_ALERT, "cache is busy");
-        rc = EAGAIN;
-        goto done;
-    }
     s1 = zhash_size (ctx->store);
-    if (flux_treeroot (ctx->h)) {
+    if (master) {
+    /* No dropcache allowed on the master.
+     * We cannot clean up here without dropping all client caches too
+     * because 'stores' for in-cache objects are suppressed and never
+     * reach the master.  Also it's too dangerous to depend on multicast
+     * to drop master and slaves at once without flushing pending work.
+     */
+#if 0
+        href_t href;
+        json_object *cpy, *rootdir;
+
         (void)load (ctx, ctx->rootdir, NULL, &rootdir);
         assert (rootdir != NULL);
         cpy = kvs_save (ctx, rootdir, NULL, KVS_GET_DIRVAL | KVS_GET_FILEVAL);
@@ -802,15 +805,22 @@ static int clean_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         kvs_restore (ctx, cpy, href);
         assert (!strcmp (ctx->rootdir, href));
         json_object_put (cpy);
+#endif
     } else {
+        if (zlist_size (ctx->slave.writeback) > 0) {
+            flux_log (h, LOG_ALERT, "cache is busy");
+            rc = EAGAIN;
+            goto done;
+        }
         zhash_destroy (&ctx->store);
         if (!(ctx->store = zhash_new ()))
             oom ();
     }
     s2 = zhash_size (ctx->store);
-    flux_log (ctx->h, LOG_ALERT, "dropped %d of %d cache entries", s1 - s2, s1);
+    flux_log (h, LOG_ALERT, "dropped %d of %d cache entries", s1 - s2, s1);
 done:
-    flux_respond_errnum (ctx->h, zmsg, rc);
+    if ((typemask & FLUX_MSGTYPE_REQUEST))
+        flux_respond_errnum (h, zmsg, rc);
     return 0;
 }
 
@@ -1438,7 +1448,8 @@ static void setargs (ctx_t *ctx, zhash_t *args)
 static msghandler_t htab[] = {
     { FLUX_MSGTYPE_EVENT,   "event.kvs.setroot",    setroot_event_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.getroot",          getroot_request_cb },
-    { FLUX_MSGTYPE_REQUEST, "kvs.clean",            clean_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "kvs.dropcache",        dropcache_cb },
+    { FLUX_MSGTYPE_EVENT,   "event.kvs.dropcache",  dropcache_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.get",              get_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.watch",            watch_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.put",              put_request_cb },
@@ -1468,15 +1479,14 @@ static int kvssrv_main (flux_t h, zhash_t *args)
 
     if (!treeroot) {
         if (flux_event_subscribe (h, "event.kvs.setroot") < 0) {
-            err ("%s: flux_event_subscribe", __FUNCTION__);
+            flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
             return -1;
         }
     }
-    if (flux_event_subscribe (h, "event.kvs.debug.") < 0) {
-        err ("%s: flux_event_subscribe", __FUNCTION__);
+    if (flux_event_subscribe (h, "event.kvs.dropcache") < 0) {
+        flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
         return -1;
     }
-
     if (treeroot) {
         json_object *rootdir = util_json_object_new_object ();
         href_t href;
