@@ -10,18 +10,21 @@
 #include "util.h"
 #include "log.h"
 
-#define OPTIONS "hcC"
+#define OPTIONS "hcCp:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"clear",      no_argument,        0, 'c'},
     {"clear-all",  no_argument,        0, 'C'},
+    {"parse",      required_argument,  0, 'p'},
     { 0, 0, 0, 0 },
 };
+
+static void parse_json (const char *n, json_object *o);
 
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-stats [--clear] [node!]name\n"
+"Usage: flux-stats [--clear] [--parse obj[.obj...]] [node!]name\n"
 "       flux-stats --clear-all name\n"
 );
     exit (1);
@@ -32,6 +35,7 @@ int main (int argc, char *argv[])
     flux_t h;
     int ch;
     char *target;
+    char *objname = NULL;
     bool copt = false;
     bool Copt = false;
     json_object *response;
@@ -48,6 +52,9 @@ int main (int argc, char *argv[])
                 break;
             case 'C': /* --clear-all */
                 Copt = true;
+                break;
+            case 'p': /* --parse objname */
+                objname = optarg;
                 break;
             default:
                 usage ();
@@ -75,13 +82,28 @@ int main (int argc, char *argv[])
     } else {
         if (!(response = flux_rpc (h, NULL, "%s.stats.get", target)))
             err_exit ("flux_rpc %s.stats", target);
-        printf ("%s\n", json_object_to_json_string_ext (response,
-                JSON_C_TO_STRING_PRETTY));
+        parse_json (objname, response);
         json_object_put (response);
     }
     flux_handle_destroy (&h);
     log_fini ();
     return 0;
+}
+
+static void parse_json (const char *n, json_object *o)
+{
+    if (n) {
+        char *cpy = xstrdup (n);
+        char *name, *saveptr, *a1 = cpy;
+
+        while ((name = strtok_r (a1, ".", &saveptr))) {
+            if (!(o = json_object_object_get (o, name)))
+                err_exit ("`%s' not found in response", n);
+            a1 = NULL;
+        }
+    }
+    printf ("%s\n",
+            json_object_to_json_string_ext (o, JSON_C_TO_STRING_PRETTY));
 }
 
 /*
