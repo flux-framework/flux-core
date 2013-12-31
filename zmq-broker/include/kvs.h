@@ -99,6 +99,8 @@ void *kvsdir_handle (kvsdir_t dir);
 
 /* Remove a key from the namespace.  If it represents a directory,
  * its contents are also removed.  kvsdir_unlink removes it relative to 'dir'.
+ * Since ordering of put/mkdir/unlink requests within a commit is not defined,
+ * the idiom: "unlink a; put a.a; put a.b; commit" should be avoided.
  * Returns -1 on error (errno set), 0 on success.
  */
 int kvs_unlink (flux_t h, const char *key);
@@ -109,6 +111,12 @@ int kvs_unlink (flux_t h, const char *key);
 int kvs_symlink (flux_t h, const char *key, const char *target);
 
 /* Create an empty directory.  kvsdir_mkdir creates it relative to 'dir'.
+ * Usually this is not necessary, as kvs_put() will create directories
+ * for path components if they do not exist.
+ * A kvs_mkdir() of an existing directory is not an error.
+ * A kvs_mkdir() may replace a populated directory with an empty one.
+ * Since ordering of put/mkdir/unlink requests within a commit is not defined,
+ * the idiom: "mkdir a; put a.a; put a.b; commit" should be avoided.
  * Returns -1 on error (errno set), 0 on success.
  */
 int kvs_mkdir (flux_t h, const char *key);

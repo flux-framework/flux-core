@@ -71,41 +71,28 @@
  */
 #define SYMLINK_CYCLE_LIMIT 10
 
+/* Hash object in ctx->store by SHA1 key.
+ */
 typedef struct {
-    waitqueue_t waitlist;
-    json_object *o;
-    int size;
-    bool dirty; /* stored upstream? */
+    waitqueue_t waitlist;   /* waiters for HOBJ_COMPLETE */
+    json_object *o;         /* value object */
+    int size;               /* size of value for stats, est by serialization */
+    enum {
+        HOBJ_COMPLETE,      /* nothing in progress, o != NULL */
+        HOBJ_INCOMPLETE,    /* load in progress, o == NULL */
+        HOBJ_DIRTY,         /* store in progress, o != NULL */
+    } state;
 } hobj_t;
 
-/* writeback queue entry */
-typedef enum { OP_NAME, OP_STORE, OP_FLUSH } optype_t;
+/* A commit_t is created to contain "put" metadata until kvs_commit is called.
+ */
 typedef struct {
-    optype_t type;
-    union {
-        struct {
-            char *key;
-        } name;
-        struct {
-            char *ref;
-        } store;
-        struct {
-            zmsg_t *zmsg;
-        } flush;
-    };
-} op_t;
-
-typedef struct {
-    bool done;
-    int rootseq;
-    href_t rootdir;
-    waitqueue_t waitlist;
+    zhash_t *dirents;       /* hash key (e.g. a.b.c) => dirent */
+    zmsg_t *request;        /* request message */
+    bool closed;            /* commit cannot be ammended, clock started */
+    struct timespec t0;     /* commit begin timestamp */
+    bool internal;          /* commit generated internally, don't time this */
 } commit_t;
-
-typedef struct {
-    char *key;
-    json_object *dirent;
-} name_t;
 
 /* A get_t is created to time kvs_get.
  * Only needed for tracking the total time servicing a get including stalls.
@@ -114,6 +101,8 @@ typedef struct {
     struct timespec t0;
 } get_t;
 
+/* Statistics gathered for kvs.stats.get, etc.
+ */
 typedef struct {
     tstat_t commit_time;
     tstat_t get_time;
@@ -122,21 +111,15 @@ typedef struct {
 } stats_t;
 
 typedef struct {
-    zhash_t *store;
-    href_t rootdir;
-    int rootseq;
-    zhash_t *commits;
+    zhash_t *store;         /* hash SHA1 => hobj_t */
+    href_t rootdir;         /* current root SHA1 */
+    int rootseq;            /* current root version (for ordering) */
+    zhash_t *commits;       /* hash of pending put/commits by sender name */
     zhash_t *gets;          /* hash of pending get requests by sender name */
     waitqueue_t watchlist;
-    struct {
-        zlist_t *namequeue;
-    } master;
-    struct {
-        zlist_t *writeback;
-        enum { WB_CLEAN, WB_FLUSHING, WB_DIRTY } writeback_state;
-    } slave;
     stats_t stats;
     flux_t h;
+    bool master;            /* for now minimize flux_treeroot() calls */
 } ctx_t;
 
 enum {
@@ -156,10 +139,6 @@ static void freectx (ctx_t *ctx)
         zhash_destroy (&ctx->gets);
     if (ctx->watchlist)
         wait_queue_destroy (ctx->watchlist);
-    if (ctx->slave.writeback)
-        zlist_destroy (&ctx->slave.writeback);
-    if (ctx->master.namequeue)
-        zlist_destroy (&ctx->master.namequeue);
     free (ctx);
 }
 
@@ -176,15 +155,8 @@ static ctx_t *getctx (flux_t h)
         if (!(ctx->gets = zhash_new ()))
             oom ();
         ctx->watchlist = wait_queue_create ();
-        if (flux_treeroot (h)) {
-            if (!(ctx->master.namequeue = zlist_new ()))
-                oom ();
-        } else {
-            if (!(ctx->slave.writeback = zlist_new ()))
-                oom ();
-            ctx->slave.writeback_state = WB_CLEAN;
-        }
         ctx->h = h;
+        ctx->master = flux_treeroot (h);
         flux_aux_set (h, "kvssrv", ctx, (FluxFreeFn)freectx);
     }
 
@@ -228,144 +200,22 @@ static json_object *dirent_create (char *type, void *arg)
 
 static commit_t *commit_create (void)
 {
-    commit_t *cp = xzmalloc (sizeof (*cp));
-    cp->waitlist = wait_queue_create ();
-    return cp;
-}
-
-static void commit_destroy (commit_t *cp)
-{
-    wait_queue_destroy (cp->waitlist);
-    free (cp);
-}
-
-static commit_t *commit_new (ctx_t *ctx, const char *name)
-{
-    commit_t *cp = commit_create ();
-
-    zhash_insert (ctx->commits, name, cp);
-    zhash_freefn (ctx->commits, name, (zhash_free_fn *)commit_destroy);
-    return cp;
-}
-
-static commit_t *commit_find (ctx_t *ctx, const char *name)
-{
-    return zhash_lookup (ctx->commits, name);
-}
-
-static void commit_done (ctx_t *ctx, commit_t *cp)
-{
-    memcpy (cp->rootdir, ctx->rootdir, sizeof (href_t));
-    cp->rootseq = ctx->rootseq;
-    cp->done = true;
-}
-
-static op_t *op_create (optype_t type)
-{
-    op_t *op = xzmalloc (sizeof (*op));
-
-    op->type = type;
-    return op;
-}
-
-static void op_destroy (ctx_t *ctx, op_t *op)
-{
-    switch (op->type) {
-        case OP_NAME:
-            if (op->name.key)
-                free (op->name.key);
-            break;
-        case OP_STORE:
-            if (op->store.ref)
-                free (op->store.ref);
-            break;
-        case OP_FLUSH:
-            if (op->flush.zmsg)
-                zmsg_destroy (&op->flush.zmsg);
-            break;
-    }
-    free (op);
-}
-
-static bool op_match (op_t *op1, op_t *op2)
-{
-    bool match = false;
-
-    if (op1->type == op2->type) {
-        switch (op1->type) {
-            case OP_NAME:
-                if (!strcmp (op1->name.key, op2->name.key))
-                    match = true;
-                break;
-            case OP_STORE:
-                if (!strcmp (op1->store.ref, op2->store.ref))
-                    match = true;
-                break;
-            case OP_FLUSH:
-                break;
-        }
-    }
-    return match;
-}
-
-static void writeback_add_name (ctx_t *ctx, const char *key)
-{
-    op_t *op;
-
-    //assert (!flux_treeroot (ctx->h));
-
-    op = op_create (OP_NAME);
-    op->name.key = xstrdup (key);
-    if (zlist_append (ctx->slave.writeback, op) < 0)
+    commit_t *c = xzmalloc (sizeof (*c));
+    if (!(c->dirents = zhash_new ()))
         oom ();
-    ctx->slave.writeback_state = WB_DIRTY;
+    return c;
 }
 
-static void writeback_add_store (ctx_t *ctx, const char *ref)
+static void commit_destroy (commit_t *c)
 {
-    op_t *op;
-
-    //assert (!flux_treeroot (ctx->h));
-
-    op = op_create (OP_STORE);
-    op->store.ref = xstrdup (ref);
-    if (zlist_append (ctx->slave.writeback, op) < 0)
-        oom ();
-    ctx->slave.writeback_state = WB_DIRTY;
+    zhash_destroy (&c->dirents);
+    free (c);
 }
 
-static void writeback_add_flush (ctx_t *ctx, zmsg_t *zmsg)
+static void commit_add (commit_t *c, const char *key, json_object *dirent)
 {
-    op_t *op;
-
-    //assert (!flux_treeroot (ctx->h));
-
-    op = op_create (OP_FLUSH);
-    op->flush.zmsg = zmsg;
-    if (zlist_append (ctx->slave.writeback, op) < 0)
-        oom ();
-}
-
-static void writeback_del (ctx_t *ctx, op_t *target)
-{
-    op_t *op = zlist_first (ctx->slave.writeback);
-
-    while (op) {
-        if (op_match (op, target))
-            break;
-        op = zlist_next (ctx->slave.writeback);
-    }
-    if (op) {
-        zlist_remove (ctx->slave.writeback, op);
-        op_destroy (ctx, op);
-        /* handle flush(es) now at head of queue */
-        while ((op = zlist_head (ctx->slave.writeback)) && op->type == OP_FLUSH) {
-            ctx->slave.writeback_state = WB_FLUSHING;
-            flux_request_sendmsg (ctx->h, &op->flush.zmsg); /* fwd upstream */
-            zlist_remove (ctx->slave.writeback, op);
-            op_destroy (ctx, op);
-        }
-    }
+    zhash_insert (c->dirents, key, dirent);
+    zhash_freefn (c->dirents, key, (zhash_free_fn *)json_object_put);
 }
 
 static get_t *get_create (void)
@@ -427,18 +277,25 @@ static bool load (ctx_t *ctx, const href_t ref, wait_t w, json_object **op)
     hobj_t *hp = zhash_lookup (ctx->store, ref);
     bool done = true;
 
-    if (flux_treeroot (ctx->h)) {
-        if (!hp)
+    if (ctx->master) {
+        /* FIXME: probably should handle this "can't happen" situation.
+         */
+        if (!hp || hp->state != HOBJ_COMPLETE)
             msg_exit ("dangling ref %s", ref);
     } else {
+        /* Create an incomplete hash entry if none found.
+         */
         if (!hp) {
             hp = hobj_create (ctx, NULL);
             zhash_insert (ctx->store, ref, hp);
             zhash_freefn (ctx->store, ref, (zhash_free_fn *)hobj_destroy);
+            hp->state = HOBJ_INCOMPLETE;
             load_request_send (ctx, ref);
-            /* leave hp->o == NULL to be filled in on response */
         }
-        if (!hp->o) {
+        /* If hash entry is incomplete (either created above or earlier),
+         * arrange to stall caller if wait_t was provided.
+         */
+        if (hp->state == HOBJ_INCOMPLETE) {
             if (w)
                 wait_addqueue (hp->waitlist, w);
             done = false; /* stall */
@@ -457,9 +314,11 @@ static bool load (ctx_t *ctx, const href_t ref, wait_t w, json_object **op)
 static void load_complete (ctx_t *ctx, href_t ref, json_object *o)
 {
     hobj_t *hp = zhash_lookup (ctx->store, ref);
-    assert (hp != NULL); 
-    if (!hobj_update (ctx, hp, o))
-        ctx->stats.noop_stores++; /* should never happen */
+
+    assert (hp != NULL);
+    assert (hp->state == HOBJ_INCOMPLETE);
+    (void)hobj_update (ctx, hp, o);
+    hp->state = HOBJ_COMPLETE;
     wait_runqueue (hp->waitlist);
 }
 
@@ -473,7 +332,20 @@ static void store_request_send (ctx_t *ctx, const href_t ref, json_object *val)
     json_object_put (o);
 }
 
-static void store (ctx_t *ctx, json_object *o, bool writeback, href_t ref)
+static bool store_isdirty (ctx_t *ctx, const href_t ref, wait_t w)
+{
+    hobj_t *hp = zhash_lookup (ctx->store, ref);
+
+    assert (hp != NULL);
+    assert (hp->o != NULL);
+
+    if (hp->state == HOBJ_DIRTY && w != NULL)
+        wait_addqueue (hp->waitlist, w);
+
+    return (hp->state == HOBJ_DIRTY);
+}
+
+static void store (ctx_t *ctx, json_object *o, href_t ref)
 {
     hobj_t *hp; 
 
@@ -486,10 +358,10 @@ static void store (ctx_t *ctx, json_object *o, bool writeback, href_t ref)
         hp = hobj_create (ctx, o);
         zhash_insert (ctx->store, ref, hp);
         zhash_freefn (ctx->store, ref, (zhash_free_fn *)hobj_destroy);
-        if (writeback) {
-            //assert (!flux_treeroot (ctx->h));
-            hp->dirty = true;
-            writeback_add_store (ctx, ref);
+        if (ctx->master) {
+            hp->state = HOBJ_COMPLETE;
+        } else {
+            hp->state = HOBJ_DIRTY;
             store_request_send (ctx, ref, o);
         }
     }
@@ -502,7 +374,9 @@ static void store_complete (ctx_t *ctx, href_t ref)
     hobj_t *hp = zhash_lookup (ctx->store, ref);
 
     assert (hp != NULL);
-    hp->dirty = false;
+    assert (hp->state == HOBJ_DIRTY);
+    hp->state = HOBJ_COMPLETE;
+    wait_runqueue (hp->waitlist);
 }
 
 static bool readahead_dir (ctx_t *ctx, json_object *dir, wait_t w, int flags)
@@ -592,7 +466,7 @@ static void kvs_restore (ctx_t *ctx, json_object *dir, href_t href)
         } else if ((o = json_object_object_get (iter.val, "FILEVAL"))
                                         && store_by_reference (o)) {
             json_object_get (o);
-            store (ctx, o, false, nhref);
+            store (ctx, o, nhref);
             json_object_object_add (cpy, iter.key,
                                         dirent_create ("FILEREF", nhref));
         } else { /* FILEVAL, FILEREF, DIRREF */
@@ -600,32 +474,7 @@ static void kvs_restore (ctx_t *ctx, json_object *dir, href_t href)
             json_object_object_add (cpy, iter.key, iter.val);
         }
     }
-    store (ctx, cpy, false, href);
-}
-
-static void name_request_send (ctx_t *ctx, char *key, json_object *dirent)
-{
-    json_object *o = util_json_object_new_object ();
-
-    json_object_object_add (o, key, dirent);
-    flux_request_send (ctx->h, o, "kvs.name");
-    json_object_put (o);
-}
-
-/* consumes dirent */
-static void name (ctx_t *ctx, char *key, json_object *dirent,
-                  bool writeback)
-{
-    if (writeback) {
-        writeback_add_name (ctx, key);
-        name_request_send (ctx, key, dirent);
-    } else {
-        name_t *np = xzmalloc (sizeof (*np));
-        np->key = xstrdup (key);
-        np->dirent = dirent;
-        if (zlist_append (ctx->master.namequeue, np) < 0)
-            oom ();
-    }
+    store (ctx, cpy, href);
 }
 
 static bool decode_rootref (const char *rootref, int *seqp, href_t ref)
@@ -658,11 +507,11 @@ static void setroot (ctx_t *ctx, int seq, href_t ref)
     }
 }
 
-/* Put name to deep copy of root directory.  Consumes np.
+/* Put (name,ndirent) to deep copy of root directory. 
  */
-static void deep_put (json_object *dir, name_t *np)
+static void deep_put (json_object *dir, char *nkey, json_object *ndirent)
 {
-    char *next, *name = np->key;
+    char *next, *name = nkey;
     json_object *dirent;
 
     while ((next = strchr (name, '.'))) {
@@ -682,46 +531,50 @@ static void deep_put (json_object *dir, name_t *np)
     }
     /* dir now is the directory that contains the final path component */
     json_object_object_del (dir, name);
-    if (np->dirent)
-        json_object_object_add (dir, name, np->dirent); /* consumes dirent */
-    free (np->key);
-    free (np);
+    if (ndirent) {
+        json_object_get (ndirent);
+        json_object_object_add (dir, name, ndirent); /* consumes ndirent */
+    }
 }
 
-static void update_version (ctx_t *ctx, int newvers)
-{
-    json_object *o;
-
-    //assert (flux_treeroot (ctx->h));
-
-    if (!(o = json_object_new_int (newvers)))
-        oom ();
-    name (ctx, "version", dirent_create ("FILEVAL", o), false);
-    json_object_put (o);
-}
-
-/* Read the entire hierarchy of KVS directories into a json object,
- * apply metdata updates from master.namequeue to it, then put the json
- * object back to the store and update the root directory reference.
- * FIXME: garbage collect unreferenced store entries (refcount them)
- * FIXME: only read in directories affected by the metadata updates
+/* This is the rather heavy-weight and naive code that applies commit_t 'c'
+ * to the store.  It should only be called on the master.
  */
-static void commit (ctx_t *ctx)
+static void commit_apply (ctx_t *ctx, commit_t *c)
 {
-    name_t *np;
     json_object *dir, *cpy;
     href_t ref;
+    json_object *dirent;
+    zlist_t *keys;
+    char *key;
+    json_object *vers;
 
-    //assert (flux_treeroot (ctx->h));
-
+    /* Load the entire store into 'cpy'.
+     */
     (void)load (ctx, ctx->rootdir, NULL, &dir);
     assert (dir != NULL);
     cpy = kvs_save (ctx, dir, NULL, KVS_GET_DIRVAL);
     assert (cpy != NULL);
-    update_version (ctx, ctx->rootseq + 1);
-    while ((np = zlist_pop (ctx->master.namequeue))) {
-        deep_put (cpy, np); /* destroys np */
+
+    /* Apply the key=>val updates in the commit to 'cpy'.
+     */
+    keys = zhash_keys (c->dirents);
+    while ((key = zlist_pop (keys))) {
+        dirent = zhash_lookup (c->dirents, key);
+        deep_put (cpy, key, dirent);
+        free (key);
     }
+    zlist_destroy (&keys);
+
+    /* Store version=version + 1 in 'cpy'.
+     */
+    if (!(vers = json_object_new_int (ctx->rootseq + 1)))
+        oom ();
+    deep_put (cpy, "version", dirent_create ("FILEVAL", vers));
+    json_object_put (vers);
+
+    /* Write 'cpy' to the store and move hte root pointer to the new 'ref'.
+     */
     kvs_restore (ctx, cpy, ref);
     json_object_put (cpy);
     setroot (ctx, ctx->rootseq + 1, ref);
@@ -790,7 +643,6 @@ static int store_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     json_object *cpy = NULL, *o = NULL;
     json_object_iter iter;
-    bool writeback = !flux_treeroot (ctx->h);
     href_t href;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
@@ -800,7 +652,7 @@ static int store_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     cpy = util_json_object_new_object ();
     json_object_object_foreachC (o, iter) {
         json_object_get (iter.val);
-        store (ctx, iter.val, writeback, href);
+        store (ctx, iter.val, href);
         if (strcmp (href, iter.key) != 0)
             flux_log (ctx->h, LOG_ERR, "%s: bad href %s", __FUNCTION__, iter.key);
         json_object_object_add (cpy, iter.key, NULL);
@@ -821,7 +673,6 @@ static int store_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     json_object *o = NULL;
     json_object_iter iter;
-    op_t target = { .type = OP_STORE };
     
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
@@ -829,8 +680,6 @@ static int store_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     }
     json_object_object_foreachC (o, iter) {
         store_complete (ctx, iter.key);
-        target.store.ref = iter.key;
-        writeback_del (ctx, &target);
     }
 done:
     if (o)
@@ -845,10 +694,9 @@ static int dropcache_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     int s1, s2;
     int rc = 0;
-    bool master = flux_treeroot (h);
 
     s1 = zhash_size (ctx->store);
-    if (master) {
+    if (ctx->master) {
     /* No dropcache allowed on the master.
      * We cannot clean up here without dropping all client caches too
      * because 'stores' for in-cache objects are suppressed and never
@@ -871,97 +719,23 @@ static int dropcache_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         json_object_put (cpy);
 #endif
     } else {
-        if (zlist_size (ctx->slave.writeback) > 0) {
-            flux_log (h, LOG_ALERT, "cache is busy");
-            rc = EAGAIN;
-            goto done;
-        }
-        zhash_destroy (&ctx->store);
-        if (!(ctx->store = zhash_new ()))
+        zlist_t *keys;
+        char *key;
+
+        if (!(keys = zhash_keys (ctx->store)))
             oom ();
+        while ((key = zlist_pop (keys))) {
+            hobj_t *hp = zhash_lookup (ctx->store, key);
+            if (hp && hp->state == HOBJ_COMPLETE)
+                zhash_delete (ctx->store, key);
+            free (key);
+        }
+        zlist_destroy (&keys);
     }
     s2 = zhash_size (ctx->store);
     flux_log (h, LOG_ALERT, "dropped %d of %d cache entries", s1 - s2, s1);
-done:
     if ((typemask & FLUX_MSGTYPE_REQUEST))
         flux_respond_errnum (h, zmsg, rc);
-    return 0;
-}
-
-static int name_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
-{
-    ctx_t *ctx = arg;
-    json_object *cpy = NULL, *o = NULL;
-    json_object_iter iter;
-    bool writeback = !flux_treeroot (ctx->h);
-
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
-        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
-        goto done;
-    }
-    cpy = util_json_object_new_object ();
-    json_object_object_foreachC (o, iter) {
-        if (iter.val)
-            json_object_get (iter.val);
-        name (ctx, iter.key, iter.val, writeback);
-        json_object_object_del (cpy, iter.key);
-        json_object_object_add (cpy, iter.key, NULL);
-    }
-    flux_respond (ctx->h, zmsg, cpy);
-done:
-    if (o)
-        json_object_put (o);
-    if (cpy)
-        json_object_put (cpy);
-    if (*zmsg)
-        zmsg_destroy (zmsg);
-    return 0;
-}
-
-static int name_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
-{
-    ctx_t *ctx = arg;
-    json_object *o = NULL;
-    json_object_iter iter;
-    op_t target = { .type = OP_NAME };
-    
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
-        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
-        goto done;
-    }
-    json_object_object_foreachC (o, iter) {
-        target.name.key = iter.key;
-        writeback_del (ctx, &target);
-    }
-done:
-    if (o)
-        json_object_put (o);
-    if (*zmsg)
-        zmsg_destroy (zmsg);
-    return 0;
-}
-
-static int flush_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
-{
-    ctx_t *ctx = arg;
-    if (flux_treeroot (ctx->h) || ctx->slave.writeback_state == WB_CLEAN)
-        flux_respond_errnum (ctx->h, zmsg, 0);
-    else if (zlist_size (ctx->slave.writeback) == 0) {
-        flux_request_sendmsg (ctx->h, zmsg); /* fwd upstream */
-        ctx->slave.writeback_state = WB_FLUSHING;
-    } else {
-        writeback_add_flush (ctx, *zmsg); /* enqueue */
-        *zmsg = NULL;
-    }
-    return 0;
-}
-
-static int flush_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
-{
-    ctx_t *ctx = arg;
-    flux_response_sendmsg (h, zmsg); /* fwd downstream */
-    if (ctx->slave.writeback_state == WB_FLUSHING)
-        ctx->slave.writeback_state = WB_CLEAN;
     return 0;
 }
 
@@ -1097,7 +871,7 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t w,
     }
     /* val now contains the requested object */
     if (isdir) {
-        if (!flux_treeroot (ctx->h) && !readahead_dir (ctx, val, w, dir_flags))
+        if (!ctx->master && !readahead_dir (ctx, val, w, dir_flags))
             goto stall;
         if (!(val = kvs_save (ctx, val, w, dir_flags)))
             goto stall;
@@ -1182,6 +956,8 @@ done:
         json_object_put (reply);
     if (*zmsg)
         zmsg_destroy (zmsg);
+    if (sender)
+        free (sender);
     return 0;
 }
 
@@ -1284,14 +1060,31 @@ static int put_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     json_object *o = NULL;
     json_object_iter iter;
     href_t ref;
-    bool writeback = !flux_treeroot (ctx->h);
     bool flag_mkdir = false;
     bool flag_symlink = false;
     struct timespec t0;
+    char *sender = NULL;
+    commit_t *c;
 
     monotime (&t0);
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
-        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
+        flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
+    }
+    if (!(sender = cmb_msg_sender (*zmsg))) {
+        flux_log (h, LOG_ERR, "%s: could not determine message sender",
+                  __FUNCTION__);
+        goto done;
+    }
+    if (!(c = zhash_lookup (ctx->commits, sender))) {
+        c = commit_create ();
+        zhash_insert (ctx->commits, sender, c);
+        zhash_freefn (ctx->commits, sender, (zhash_free_fn *)commit_destroy);
+    }
+    /* Handle commit already in progress.
+     */
+    if (c->closed) {
+        flux_respond_errnum (h, zmsg, EINVAL);
         goto done;
     }
     (void)util_json_object_get_boolean (o, ".flag_mkdir", &flag_mkdir);
@@ -1302,18 +1095,18 @@ static int put_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         if (json_object_get_type (iter.val) == json_type_null) {
             if (flag_mkdir) {
                 json_object *empty_dir = util_json_object_new_object ();
-                store (ctx, empty_dir, writeback, ref);
-                name (ctx, iter.key, dirent_create ("DIRREF", ref), writeback);
+                store (ctx, empty_dir, ref);
+                commit_add (c, iter.key, dirent_create ("DIRREF", ref));
             } else
-                name (ctx, iter.key, NULL, writeback);
+                commit_add (c, iter.key, NULL);
         } else if (flag_symlink) {
-            name (ctx, iter.key, dirent_create ("LINKVAL", iter.val), writeback);
+            commit_add (c, iter.key, dirent_create ("LINKVAL", iter.val));
         } else if (store_by_reference (iter.val)) {
             json_object_get (iter.val);
-            store (ctx, iter.val, writeback, ref);
-            name (ctx, iter.key, dirent_create ("FILEREF", ref), writeback);
+            store (ctx, iter.val, ref);
+            commit_add (c, iter.key, dirent_create ("FILEREF", ref));
         } else {
-            name (ctx, iter.key, dirent_create ("FILEVAL", iter.val), writeback);
+            commit_add (c, iter.key, dirent_create ("FILEVAL", iter.val));
         }
     }
     flux_respond_errnum (h, zmsg, 0); /* success */
@@ -1323,69 +1116,194 @@ done:
         json_object_put (o);
     if (*zmsg)
         zmsg_destroy (zmsg);
+    if (sender)
+        free (sender);
     return 0;
 }
 
-static void commit_request_send (ctx_t *ctx, const char *name)
+/* Send a commit message upstream.
+ */
+static void send_upstream_commit (ctx_t *ctx, commit_t *c, const char *name,
+                                  zmsg_t **zmsg)
 {
-    json_object *o = util_json_object_new_object ();
+    json_object *request, *dirent;
+    zlist_t *keys;
+    char *key;
 
-    util_json_object_add_string (o, "name", name);
-    flux_request_send (ctx->h, o, "kvs.commit");
-    json_object_put (o);
+    /* Stash (take ownership of) orig. commit request.
+     */
+    assert (c->request == NULL);
+    c->request = *zmsg;
+    *zmsg = NULL;
+
+    /* Send a new request upstream.
+     * When the response is recieved, we will look up this commit_t by name
+     * and respond to c->request.
+     */
+    request = util_json_object_new_object ();
+    util_json_object_add_string (request, ".arg_name", name);
+    if (!(keys = zhash_keys (c->dirents)))
+        oom ();
+    while ((key = zlist_pop (keys))) {
+        dirent = zhash_lookup (c->dirents, key);
+        if (dirent)
+            json_object_get (dirent);
+        json_object_object_add (request, key, dirent);
+        free (key);
+    }
+    zlist_destroy (&keys);
+    flux_request_send (ctx->h, request, "kvs.commit");
 }
 
-static void commit_response_send (ctx_t *ctx, commit_t *cp, 
-                                  json_object *o, zmsg_t **zmsg)
+/* If commit contains references to dirty hash entries (store in progress),
+ * arrange for commit_request_cb () to be restarted once these are all clean.
+ * Return true if handler should stall; false if there are no dirty references.
+ */
+static bool commit_dirty (ctx_t *ctx, commit_t *c, wait_t w)
 {
-    char *rootref = encode_rootref (cp->rootseq, cp->rootdir);
+    zlist_t *keys;
+    char *key;
+    json_object *dirent;
+    const char *ref;
+    bool dirty = false;
 
-    util_json_object_add_string (o, "rootref", rootref);
-    flux_respond (ctx->h, zmsg, o);
-    free (rootref);
+    if (!(keys = zhash_keys (c->dirents)))
+        oom ();
+    while ((key = zlist_pop (keys))) {
+        dirent = zhash_lookup (c->dirents, key);
+        if (dirent) { 
+            if ((util_json_object_get_string (dirent, "FILEREF", &ref) == 0
+              || util_json_object_get_string (dirent, "DIRREF", &ref) == 0)
+                                            && store_isdirty (ctx, ref, w)) {
+                dirty = true;
+            }
+        }
+        free (key);
+    }
+    zlist_destroy (&keys);
+
+    return dirty;
+}
+
+static void commit_respond (ctx_t *ctx, zmsg_t **zmsg, const char *name,
+                            const char *rootref)
+{
+    json_object *response = util_json_object_new_object ();
+    
+    util_json_object_add_string (response, "name", name);
+    if (rootref) {
+        util_json_object_add_string (response, "rootref", rootref);
+    } else {
+        char *tmp = encode_rootref (ctx->rootseq, ctx->rootdir);
+        util_json_object_add_string (response, "rootref", tmp);
+        free (tmp);
+    }
+    if (flux_respond (ctx->h, zmsg, response) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: flux_respond: %s", __FUNCTION__,
+                  strerror (errno));
+    }
+    json_object_put (response);
 }
 
 static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    json_object *o = NULL;
-    const char *name;
-    commit_t *cp;
+    json_object *request = NULL;
+    commit_t *c = NULL;
     wait_t w;
+    char *sender = NULL;
+    json_object_iter iter;
+    const char *name;
+    bool internal = true;
 
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
-            || util_json_object_get_string (o, "name", &name) < 0) {
+    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    w = wait_create (h, typemask, zmsg, commit_request_cb, arg);
-    if (flux_treeroot (ctx->h)) {
-        if (!(cp = commit_find (ctx, name))) {
-            commit (ctx);
-            cp = commit_new (ctx, name);
-            commit_done (ctx, cp);
-            (void)setroot_event_send (ctx);
-        }
-    } else {
-        if (!(cp = commit_find (ctx, name))) {
-            commit_request_send (ctx, name);
-            cp = commit_new (ctx, name);
-        }
-        if (!cp->done) {
-            wait_addqueue (cp->waitlist, w);
-            goto done; /* stall */
-        }
+    if (!(sender = cmb_msg_sender (*zmsg))) {
+        flux_log (h, LOG_ERR, "%s: could not determine message sender",
+                  __FUNCTION__);
+        goto done;
     }
-    wait_destroy (w, zmsg);
-    commit_response_send (ctx, cp, o, zmsg);
+    /* Commits generated internally will contain metadata and .arg_name,
+     * while commits generated externally (e.g. kvscli.c) will be empty.
+     */
+    if (util_json_object_get_string (request, ".arg_name", &name) < 0) {
+        name = sender;
+        internal = false;
+    }
+    if (!(c = zhash_lookup (ctx->commits, name))) {
+        c = commit_create ();
+        c->internal = internal;
+        if (c->internal) {
+            json_object_object_foreachC (request, iter) {
+                if (!strncmp (iter.key, ".arg_", 5))
+                    continue;
+                if (iter.val)
+                    json_object_get (iter.val);
+                commit_add (c, iter.key, iter.val);
+            }
+        }
+        zhash_insert (ctx->commits, name, c);
+        zhash_freefn (ctx->commits, name, (zhash_free_fn *)commit_destroy);
+    }
+    /* If this is the first time through, close the commit to new put
+     * requests and begin timing the operation.  We only time external
+     * commit requests as internal commits are only generated while 
+     * servicing external commits and will be included in their times.
+     */
+    if (!c->closed) {
+        c->closed = true;
+        if (!c->internal)
+            monotime (&c->t0);
+    }
+    /* Handle commit already in progress (upstream request sent).
+     * N.B. we can stall and restart as stores complete but not after req sent.
+     */
+    if (c->request != NULL) {
+        flux_respond_errnum (h, zmsg, EINVAL);
+        goto done;
+    }
+
+    /* Handle zero-length commit.
+     */
+    if (zhash_size (c->dirents) == 0) {
+        commit_respond (ctx, zmsg, name, NULL);
+        zhash_delete (ctx->commits, name);
+
+    /* Master: apply the commit and generate a response synchronously.
+     */
+    } else if (ctx->master) {
+        commit_apply (ctx, c);      /* updates ctx->rootseq, ctx->rootref */
+        setroot_event_send (ctx); 
+        commit_respond (ctx, zmsg, name, NULL);
+        zhash_delete (ctx->commits, name);
+
+    /* Slave: commit must wait for any referenced hash entries to be stored
+     * upstream, then stash 'zmsg' in the commit_t and send a new internal
+     * commit upstream.
+     */
+    } else {
+        w = wait_create (h, typemask, zmsg, commit_request_cb, arg);
+        if (commit_dirty (ctx, c, w))
+            goto done; /* stall */
+        wait_destroy (w, zmsg); /* get back *zmsg */
+        send_upstream_commit (ctx, c, name, zmsg); 
+    }
+    if (!c->internal)
+        tstat_push (&ctx->stats.commit_time,  monotime_since (c->t0));
 done:
-    if (o)
-        json_object_put (o);
+    if (request)
+        json_object_put (request);
     if (*zmsg)
         zmsg_destroy (zmsg);
+    if (sender)
+        free (sender);
     return 0;
 }
 
+/* We got a response from upstream.
+ */
 static int commit_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1393,20 +1311,29 @@ static int commit_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     const char *rootref, *name;
     int seq;
     href_t href;
-    commit_t *cp;
+    commit_t *c;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
-            || util_json_object_get_string (o, "name", &name) < 0
             || util_json_object_get_string (o, "rootref", &rootref) < 0
-            || !decode_rootref (rootref, &seq, href)) {
+            || !decode_rootref (rootref, &seq, href)
+            || util_json_object_get_string (o, "name", &name) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    setroot (ctx, seq, href); /* may be redundant - racing with multicast */
-    cp = commit_find (ctx, name);
-    assert (cp != NULL);
-    commit_done (ctx, cp);
-    wait_runqueue (cp->waitlist);
+    /* Update the cache on this node.
+     * If we have already advanced here or beyond, this is a no-op.
+     */
+    setroot (ctx, seq, href);
+
+    /* Find the original commit_t associated with this request and respond.
+     */
+    if ((c = zhash_lookup (ctx->commits, name))) {
+        assert (c->request != NULL);
+        commit_respond (ctx, &c->request, name, rootref);
+        if (!c->internal)
+            tstat_push (&ctx->stats.commit_time,  monotime_since (c->t0));
+        zhash_delete (ctx->commits, name);
+    }
 done:
     if (o)
         json_object_put (o);
@@ -1496,19 +1423,22 @@ static int disconnect_request_cb (flux_t h, int typemask, zmsg_t **zmsg,
 
     if (sender) {
         wait_destroy_byid (ctx->watchlist, sender);
+        zhash_delete (ctx->commits, sender);
+        zhash_delete (ctx->gets, sender);
         free (sender);
     }
     zmsg_destroy (zmsg);
     return 0;
 }
 
-static void stats_cache_objects (ctx_t *ctx, tstat_t *ts, int *sp, int *ni)
+static void stats_cache_objects (ctx_t *ctx, tstat_t *ts, int *sp, int *ni, int *nd)
 {
     zlist_t *keys;
     hobj_t *hp;
     char *key;
     int size = 0;
     int incomplete = 0;
+    int dirty = 0;
 
     if (!(keys = zhash_keys (ctx->store)))
         oom ();
@@ -1516,7 +1446,9 @@ static void stats_cache_objects (ctx_t *ctx, tstat_t *ts, int *sp, int *ni)
         if (!(hp = zhash_lookup (ctx->store, key)) || !hp->o)
             continue;
         tstat_push (ts, hp->size);
-        if (hp->o == NULL)
+        if (hp->state == HOBJ_DIRTY)
+            dirty++;
+        else if (hp->state == HOBJ_INCOMPLETE)
             incomplete++;
         size += hp->size;
         free (key);
@@ -1524,6 +1456,7 @@ static void stats_cache_objects (ctx_t *ctx, tstat_t *ts, int *sp, int *ni)
     zlist_destroy (&keys);
     *sp = size;
     *ni = incomplete;
+    *nd = dirty;
 }
 
 static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
@@ -1539,14 +1472,21 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     }
     if (fnmatch ("*.stats.get", tag, 0) == 0) {
         tstat_t ts;
-        int size, incomplete;
+        int size, incomplete, dirty;
 
         memset (&ts, 0, sizeof (ts));
-        stats_cache_objects (ctx, &ts, &size, &incomplete);
+        stats_cache_objects (ctx, &ts, &size, &incomplete, &dirty);
         util_json_object_add_double (o, "obj size total (MiB)",
                                      (double)size/1048576);
         util_json_object_add_tstat (o, "obj size (KiB)", &ts, 1E-3);
+        util_json_object_add_int (o, "#obj dirty", dirty);
         util_json_object_add_int (o, "#obj incomplete", incomplete);
+        util_json_object_add_int (o, "#pending commits",
+                                  zhash_size (ctx->commits));
+        util_json_object_add_int (o, "#pending gets",
+                                  zhash_size (ctx->gets));
+        util_json_object_add_int (o, "#watchers",
+                                  wait_queue_length (ctx->watchlist));
 
         util_json_object_add_tstat (o, "commits (sec)",
                                     &ctx->stats.commit_time, 1E-3);
@@ -1557,10 +1497,6 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         util_json_object_add_tstat (o, "puts (sec)",
                                     &ctx->stats.put_time, 1E-3);
 
-        util_json_object_add_int (o, "slave writeback queue length",
-                   !flux_treeroot (h) ? zlist_size (ctx->slave.writeback) : 0);
-        util_json_object_add_int (o, "master commit queue length",
-                   flux_treeroot (h) ? zlist_size (ctx->master.namequeue) : 0);
         util_json_object_add_int (o, "#no-op stores", ctx->stats.noop_stores);
 
         util_json_object_add_int (o, "store revision", ctx->rootseq);
@@ -1596,7 +1532,9 @@ static void setargs (ctx_t *ctx, zhash_t *args)
     char *key, *val;
     json_object *vo;
     href_t ref;
+    commit_t *c;
 
+    c = commit_create ();
     while ((key = zlist_pop (keys))) {
         val = zhash_lookup (args, key);
         if (!(vo = json_tokener_parse (val)))
@@ -1604,14 +1542,16 @@ static void setargs (ctx_t *ctx, zhash_t *args)
         if (!vo)
             continue;
         if (store_by_reference (vo)) {
-            store (ctx, vo, false, ref);
-            name (ctx, key, dirent_create ("FILEREF", ref), false);
+            store (ctx, vo, ref);
+            commit_add (c, key, dirent_create ("FILEREF", ref));
         } else {
-            name (ctx, key, dirent_create ("FILEVAL", vo), false);
+            commit_add (c, key, dirent_create ("FILEVAL", vo));
         }
+        free (key);
     }
     zlist_destroy (&keys);
-    commit (ctx);
+    commit_apply (ctx, c);
+    commit_destroy (c);
 }
 
 static msghandler_t htab[] = {
@@ -1630,12 +1570,6 @@ static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.store",            store_request_cb },
     { FLUX_MSGTYPE_RESPONSE,"kvs.store",            store_response_cb },
 
-    { FLUX_MSGTYPE_REQUEST, "kvs.name",             name_request_cb },
-    { FLUX_MSGTYPE_RESPONSE,"kvs.name",             name_response_cb },
-
-    { FLUX_MSGTYPE_REQUEST, "kvs.flush",            flush_request_cb },
-    { FLUX_MSGTYPE_RESPONSE,"kvs.flush",            flush_response_cb },
-
     { FLUX_MSGTYPE_REQUEST, "kvs.commit",           commit_request_cb },
     { FLUX_MSGTYPE_RESPONSE,"kvs.commit",           commit_response_cb },
 
@@ -1647,9 +1581,8 @@ const int htablen = sizeof (htab) / sizeof (htab[0]);
 static int kvssrv_main (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
-    bool treeroot = flux_treeroot (h);
 
-    if (!treeroot) {
+    if (!ctx->master) {
         if (flux_event_subscribe (h, "event.kvs.setroot") < 0) {
             flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
             return -1;
@@ -1663,11 +1596,11 @@ static int kvssrv_main (flux_t h, zhash_t *args)
         flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
         return -1;
     }
-    if (treeroot) {
+    if (ctx->master) {
         json_object *rootdir = util_json_object_new_object ();
         href_t href;
 
-        store (ctx, rootdir, false, href);
+        store (ctx, rootdir, href);
         setroot (ctx, 0, href);
         if (args)
             setargs (ctx, args);
