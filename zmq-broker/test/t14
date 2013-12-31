@@ -6,16 +6,20 @@
 TEST=`basename $0`
 
 test_cleanup() {
-    ./tkvs unlink $TEST
-    ./tkvs commit
+    ../flux kvs --quiet $TEST=
+}
+kvs() {
+    ../flux kvs --no-commit --quiet --null-noerror "$@"
+}
+kvssymlink() {
+    ../flux kvs --symlink "$1"
 }
 
 test_cleanup
 
-./tkvs symlink $TEST.Z.Y $TEST.a.b
-./tkvs commit
+kvssymlink $TEST.Z.Y=$TEST.a.b
 
-RESULT=`./tkvs get_string $TEST.Z.Y.c`
+RESULT=`kvs $TEST.Z.Y.c`
 test "$RESULT" == "null"
 
 test_cleanup

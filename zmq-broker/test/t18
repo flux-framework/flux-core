@@ -5,8 +5,7 @@
 TEST=`basename $0`
 
 test_cleanup() {
-    ./tkvs unlink $TEST
-    ./tkvs commit
+    ../flux kvs --quiet $TEST=
 }
 
 test_cleanup

@@ -6,18 +6,28 @@
 TEST=`basename $0`
 
 test_cleanup() {
-    ./tkvs unlink $TEST
-    ./tkvs commit
+    ../flux kvs --quiet $TEST=
+}
+kvs() {
+    ../flux kvs --no-commit --quiet --null-noerror "$@"
+}
+kvsdir() {
+    ../flux kvsdir --values --recursive "$@"
+}
+kvssymlink() {
+    ../flux kvs --symlink "$1"
+}
+kvsreadlink() {
+    ../flux kvs --quiet --readlink "$1"
 }
 
 test_cleanup
 
-./tkvs symlink $TEST.a.b.c "$TEST.dangle"
-./tkvs symlink $TEST.X.Y $TEST.a.b
-./tkvs symlink $TEST.V.W $TEST.X.Y
-./tkvs commit
+kvssymlink $TEST.a.b.c="$TEST.dangle"
+kvssymlink $TEST.X.Y=$TEST.a.b
+kvssymlink $TEST.V.W=$TEST.X.Y
 
-RESULT=`./tkvs get_symlink $TEST.V.W.c`
+RESULT=`kvsreadlink $TEST.V.W.c`
 test "$RESULT" == "$TEST.dangle"
 
 test_cleanup

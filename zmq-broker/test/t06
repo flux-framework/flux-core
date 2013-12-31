@@ -4,15 +4,20 @@ TEST=`basename $0`
 KEY=$TEST.a.b.c
 
 test_cleanup() {
-    ./tkvs unlink $TEST
-    ./tkvs commit
+    ../flux kvs --quiet $TEST=
+}
+
+kvsdir() {
+    ../flux kvsdir --values --recursive "$@"
+}
+kvsmkdir() {
+    ../flux kvs --mkdir $1
 }
 
 test_cleanup
 
-./tkvs mkdir $KEY
-./tkvs commit
-RESULT=`./tkvs get_dir $KEY`
+kvsmkdir $KEY
+RESULT=`kvsdir $KEY`
 test -z "$RESULT"
 
 test_cleanup

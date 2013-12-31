@@ -8,22 +8,37 @@ KVAL="foo"
 KLINK=$TEST.Q
 
 test_cleanup() {
-    ./tkvs unlink $TEST
-    ./tkvs commit
+    ../flux kvs --quiet $TEST=
+}
+kvs() {
+    ../flux kvs --no-commit --quiet --null-noerror "$@"
+}
+kvsdir() {
+    ../flux kvsdir --values --recursive "$@"
+}
+kvssymlink() {
+    ../flux kvs --symlink "$1"
+}
+kvsreadlink() {
+    ../flux kvs --quiet --readlink "$1"
 }
 
 test_cleanup
 
-./tkvs put_string $KEY "$KVAL"
-./tkvs symlink $KLINK $KEY
-./tkvs commit
+kvs $KEY="\"$KVAL\"" ^
+kvssymlink $KLINK=$KEY 
 
-RESULT=`./tkvs get_string $KEY`
-test "$RESULT" == "$KVAL"
-RESULT=`./tkvs get_symlink $KLINK`
+# check regular key value 
+RESULT=`kvs $KEY`
+test "$RESULT" == "\"$KVAL\""
+
+# symlink should have same value as regular key
+RESULT=`kvs $KLINK`
+test "$RESULT" == "\"$KVAL\""
+
+# read the link value
+RESULT=`kvsreadlink $KLINK`
 test "$RESULT" == "$KEY"
-RESULT=`./tkvs get_string $KLINK`
-test "$RESULT" == "$KVAL"
 
 test_cleanup
 

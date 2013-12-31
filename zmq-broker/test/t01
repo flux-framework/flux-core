@@ -4,22 +4,28 @@ TEST=`basename $0`
 KEY=$TEST.a.b.c
 
 test_cleanup() {
-    ./tkvs unlink $TEST
-    ./tkvs commit
+    ../flux kvs --quiet $TEST=
+}
+
+kvs() {
+    ../flux kvs --no-commit --quiet --null-noerror "$@"
 }
 
 test_cleanup
 
-RESULT=`./tkvs get_string $KEY`
+# read nonexistent key
+RESULT=`kvs $KEY`
 test "$RESULT" == "null"
 
-./tkvs put_string $KEY "Hello world"
-RESULT=`./tkvs get_string $KEY`
+# put with no commit should have no effect
+kvs $KEY="\"Hello world\""
+RESULT=`kvs $KEY`
 test "$RESULT" == "null"
 
-./tkvs commit
-RESULT=`./tkvs get_string $KEY` 
-test "$RESULT" == "Hello world"
+# put with commit should work
+kvs $KEY="\"Hello world\"" ^
+RESULT=`kvs $KEY`
+test "$RESULT" == "\"Hello world\""
 
 test_cleanup
 
