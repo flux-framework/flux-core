@@ -1502,13 +1502,13 @@ static int disconnect_request_cb (flux_t h, int typemask, zmsg_t **zmsg,
     return 0;
 }
 
-static void stats_cache_objects (ctx_t *ctx, tstat_t *ts, int *sp, int *np)
+static void stats_cache_objects (ctx_t *ctx, tstat_t *ts, int *sp, int *ni)
 {
     zlist_t *keys;
     hobj_t *hp;
     char *key;
     int size = 0;
-    int num = 0;
+    int incomplete = 0;
 
     if (!(keys = zhash_keys (ctx->store)))
         oom ();
@@ -1516,12 +1516,14 @@ static void stats_cache_objects (ctx_t *ctx, tstat_t *ts, int *sp, int *np)
         if (!(hp = zhash_lookup (ctx->store, key)) || !hp->o)
             continue;
         tstat_push (ts, hp->size);
+        if (hp->o == NULL)
+            incomplete++;
         size += hp->size;
-        num++;
+        free (key);
     }
     zlist_destroy (&keys);
     *sp = size;
-    *np = num;
+    *ni = incomplete;
 }
 
 static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
@@ -1537,13 +1539,14 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     }
     if (fnmatch ("*.stats.get", tag, 0) == 0) {
         tstat_t ts;
-        int size, num;
+        int size, incomplete;
 
         memset (&ts, 0, sizeof (ts));
-        stats_cache_objects (ctx, &ts, &size, &num);
+        stats_cache_objects (ctx, &ts, &size, &incomplete);
         util_json_object_add_double (o, "obj size total (MiB)",
                                      (double)size/1048576);
         util_json_object_add_tstat (o, "obj size (KiB)", &ts, 1E-3);
+        util_json_object_add_int (o, "#obj incomplete", incomplete);
 
         util_json_object_add_tstat (o, "commits (sec)",
                                     &ctx->stats.commit_time, 1E-3);
@@ -1559,6 +1562,8 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         util_json_object_add_int (o, "master commit queue length",
                    flux_treeroot (h) ? zlist_size (ctx->master.namequeue) : 0);
         util_json_object_add_int (o, "#no-op stores", ctx->stats.noop_stores);
+
+        util_json_object_add_int (o, "store revision", ctx->rootseq);
  
         if (flux_respond (h, zmsg, o) < 0) {
             err ("%s: flux_respond", __FUNCTION__);
