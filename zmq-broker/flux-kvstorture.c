@@ -10,10 +10,11 @@
 #include "util.h"
 #include "log.h"
 
-#define OPTIONS "hc:s:p:q"
+#define OPTIONS "hc:s:p:qv"
 static const struct option longopts[] = {
     {"help",            no_argument,        0, 'h'},
     {"quiet",           no_argument,        0, 'q'},
+    {"verbose",         no_argument,        0, 'v'},
     {"count",           required_argument,  0, 'c'},
     {"size",            required_argument,  0, 's'},
     {"prefix",          required_argument,  0, 'p'},
@@ -25,7 +26,7 @@ static void fill (char *s, int i, int len);
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-kvstorture [--quiet] [--prefix NAME] [--size BYTES] [--count N]\n"
+"Usage: flux-kvstorture [--quiet|--verbose] [--prefix NAME] [--size BYTES] [--count N]\n"
 );
     exit (1);
 }
@@ -41,6 +42,8 @@ int main (int argc, char *argv[])
     struct timespec t0;
     json_object *vo = NULL;
     char *prefix = "kvstorture";
+    bool verbose = false;
+    const char *s;
 
     log_init ("flux-kvstorture");
 
@@ -58,6 +61,9 @@ int main (int argc, char *argv[])
             case 'p': /* --prefix NAME */
                 prefix = optarg;
                 break;
+            case 'v': /* --verbose */
+                verbose = true;
+                break;
             case 'q': /* --quiet */
                 quiet = true;
                 break;
@@ -74,8 +80,10 @@ int main (int argc, char *argv[])
     if (!(h = cmb_init ()))
         err_exit ("cmb_init");
 
-    if (kvs_unlink (h, "kvstorture") < 0)
-        err_exit ("kvs_unlink");
+    if (kvs_unlink (h, prefix) < 0)
+        err_exit ("kvs_unlink %s", prefix);
+    if (kvs_commit (h) < 0)
+        err_exit ("kvs_commit");
     
     val = xzmalloc (size);
     
@@ -86,7 +94,9 @@ int main (int argc, char *argv[])
         fill (val, i, size);
         vo = json_object_new_string (val);
         if (kvs_put (h, key, vo) < 0)
-            err_exit ("kvs_put");
+            err_exit ("kvs_put %s", key);
+        if (verbose)
+            msg ("%s = %s", key, val);
         if (vo)
             json_object_put (vo);
         free (key);
@@ -107,8 +117,11 @@ int main (int argc, char *argv[])
             oom ();
         fill (val, i, size);
         if (kvs_get (h, key, &vo) < 0)
-            err_exit ("kvs_get");
-        if (strcmp (json_object_get_string (vo), val) != 0)
+            err_exit ("kvs_get '%s'", key);
+        s = json_object_get_string (vo);
+        if (verbose)
+            msg ("%s = %s", key, s);
+        if (strcmp (s, val) != 0)
             msg_exit ("kvs_get: key '%s' wrong value '%s'",
                       key, json_object_get_string (vo));
         if (vo)
