@@ -1088,12 +1088,6 @@ stall:
     return false;
 }
 
-static void get_wait_destroy (wait_t w, void *arg)
-{
-    ctx_t *ctx = arg;
-    tstat_push (&ctx->stats.get_time,  wait_get_time (w));
-}
-
 static int get_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1110,8 +1104,6 @@ static int get_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         goto done;
     }
     w = wait_create (h, typemask, zmsg, get_request_cb, arg);
-    wait_set_time (w);
-    wait_set_destroy_cb (w, get_wait_destroy);
     if (!load (ctx, ctx->rootdir, w, &root)) {
         stall = true;
         goto done;
@@ -1315,12 +1307,6 @@ static void commit_response_send (ctx_t *ctx, commit_t *cp,
     free (rootref);
 }
 
-static void commit_wait_destroy (wait_t w, void *arg)
-{
-    ctx_t *ctx = arg;
-    tstat_push (&ctx->stats.commit_time,  wait_get_time (w));
-}
-
 static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1335,8 +1321,6 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         goto done;
     }
     w = wait_create (h, typemask, zmsg, commit_request_cb, arg);
-    wait_set_time (w);
-    wait_set_destroy_cb (w, commit_wait_destroy);
     if (flux_treeroot (ctx->h)) {
         if (!(cp = commit_find (ctx, name))) {
             commit (ctx);
