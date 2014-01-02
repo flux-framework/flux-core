@@ -92,14 +92,14 @@ int main (int argc, char *argv[])
         free (key);
     }
     if (!quiet)
-        msg ("kvs_put:    time=%0.3f ms (%d keys of size %d)",
-             monotime_since (t0), count, size);
+        msg ("kvs_put:    time=%0.3f s (%d keys of size %d)",
+             monotime_since (t0)/1000, count, size);
 
     monotime (&t0);
     if (kvs_commit (h) < 0)
         err_exit ("kvs_commit");
     if (!quiet)
-        msg ("kvs_commit: time=%0.3f ms", monotime_since (t0));
+        msg ("kvs_commit: time=%0.3f s", monotime_since (t0)/1000);
 
     monotime (&t0);
     for (i = 0; i < count; i++) {
@@ -116,8 +116,8 @@ int main (int argc, char *argv[])
         free (key);
     }
     if (!quiet)
-        msg ("kvs_get:    time=%0.3f ms (%d keys of size %d)",
-             monotime_since (t0), count, size);
+        msg ("kvs_get:    time=%0.3f s (%d keys of size %d)",
+             monotime_since (t0)/1000, count, size);
 
     flux_handle_destroy (&h);
     log_fini ();
