@@ -84,7 +84,7 @@ static void dump_kvs_dir (flux_t h, const char *path,
     char *key;
 
     if (kvs_get_dir (h, &dir, "%s", path) < 0)
-        err_exit ("%s: %s\n", path, strerror (errno));
+        err_exit ("%s", path);
 
     itr = kvsitr_create (dir);
     while ((name = kvsitr_next (itr))) {
