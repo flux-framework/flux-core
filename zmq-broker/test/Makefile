@@ -27,6 +27,7 @@ check:
 		  echo PASS: $$tst; \
 		else \
 		  echo FAIL: $$tst; \
+		  exit 1; \
 		fi \
 	done
 
