@@ -107,6 +107,13 @@ typedef struct {
     json_object *dirent;
 } name_t;
 
+/* A get_t is created to time kvs_get.
+ * Only needed for tracking the total time servicing a get including stalls.
+ */
+typedef struct {
+    struct timespec t0;
+} get_t;
+
 typedef struct {
     tstat_t commit_time;
     tstat_t get_time;
@@ -119,6 +126,7 @@ typedef struct {
     href_t rootdir;
     int rootseq;
     zhash_t *commits;
+    zhash_t *gets;          /* hash of pending get requests by sender name */
     waitqueue_t watchlist;
     struct {
         zlist_t *namequeue;
@@ -144,6 +152,8 @@ static void freectx (ctx_t *ctx)
         zhash_destroy (&ctx->store);
     if (ctx->commits)
         zhash_destroy (&ctx->commits);
+    if (ctx->gets)
+        zhash_destroy (&ctx->gets);
     if (ctx->watchlist)
         wait_queue_destroy (ctx->watchlist);
     if (ctx->slave.writeback)
@@ -162,6 +172,8 @@ static ctx_t *getctx (flux_t h)
         if (!(ctx->store = zhash_new ()))
             oom ();
         if (!(ctx->commits = zhash_new ()))
+            oom ();
+        if (!(ctx->gets = zhash_new ()))
             oom ();
         ctx->watchlist = wait_queue_create ();
         if (flux_treeroot (h)) {
@@ -354,6 +366,18 @@ static void writeback_del (ctx_t *ctx, op_t *target)
             op_destroy (ctx, op);
         }
     }
+}
+
+static get_t *get_create (void)
+{
+    get_t *g = xzmalloc (sizeof (*g));
+    monotime (&g->t0);
+    return g;
+}
+
+static void get_destroy (get_t *g)
+{
+    free (g);
 }
 
 static bool hobj_update (ctx_t *ctx, hobj_t *hp, json_object *o)
@@ -1098,10 +1122,22 @@ static int get_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     bool flag_directory = false;
     bool flag_readlink = false;
     int errnum = 0;
+    char *sender = NULL;
+    get_t *g;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
+    }
+    if (!(sender = cmb_msg_sender (*zmsg))) {
+        flux_log (h, LOG_ERR, "%s: could not determine message sender",
+                  __FUNCTION__);
+        goto done;
+    }
+    if (!(g = zhash_lookup (ctx->gets, sender))) {
+        g = get_create ();
+        zhash_insert (ctx->gets, sender, g);
+        zhash_freefn (ctx->gets, sender, (zhash_free_fn *)get_destroy);
     }
     w = wait_create (h, typemask, zmsg, get_request_cb, arg);
     if (!load (ctx, ctx->rootdir, w, &root)) {
@@ -1137,6 +1173,8 @@ static int get_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         (void)cmb_msg_replace_json (*zmsg, reply);
         flux_response_sendmsg (ctx->h, zmsg);
     }
+    tstat_push (&ctx->stats.get_time, monotime_since (g->t0));
+    zhash_delete (ctx->gets, sender);
 done:
     if (o)
         json_object_put (o);
