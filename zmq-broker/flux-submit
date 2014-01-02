@@ -8,7 +8,7 @@ local timer = require 'timer'
 local prog = string.match (arg[0], "([^/]+)$")
 local shortprog = prog:match ("flux%-(.+)$")
 
-local wreck = require 'wreckopts' .new (shortprog)
+local wreck = require 'wreck' .new (shortprog)
 -------------------------------------------------------------------------------
 -- Main program:
 -------------------------------------------------------------------------------
