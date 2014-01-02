@@ -71,12 +71,17 @@
  */
 #define SYMLINK_CYCLE_LIMIT 10
 
+/* Expire hobj from cache after 'max_lastuse_age' heartbeats.
+ */
+const int max_lastuse_age = 5;
+
 /* Hash object in ctx->store by SHA1 key.
  */
 typedef struct {
     waitqueue_t waitlist;   /* waiters for HOBJ_COMPLETE */
     json_object *o;         /* value object */
     int size;               /* size of value for stats, est by serialization */
+    int lastuse_epoch;      /* time of last use for cache expiry */
     enum {
         HOBJ_COMPLETE,      /* nothing in progress, o != NULL */
         HOBJ_INCOMPLETE,    /* load in progress, o == NULL */
@@ -117,9 +122,11 @@ typedef struct {
     zhash_t *commits;       /* hash of pending put/commits by sender name */
     zhash_t *gets;          /* hash of pending get requests by sender name */
     waitqueue_t watchlist;
+    int watchlist_lastrun_epoch;
     stats_t stats;
     flux_t h;
     bool master;            /* for now minimize flux_treeroot() calls */
+    int epoch;              /* tracks current event.sched.trigger epoch */
 } ctx_t;
 
 enum {
@@ -277,6 +284,9 @@ static bool load (ctx_t *ctx, const href_t ref, wait_t w, json_object **op)
     hobj_t *hp = zhash_lookup (ctx->store, ref);
     bool done = true;
 
+    if (hp)
+        hp->lastuse_epoch = ctx->epoch;
+
     if (ctx->master) {
         /* FIXME: probably should handle this "can't happen" situation.
          */
@@ -304,7 +314,8 @@ static bool load (ctx_t *ctx, const href_t ref, wait_t w, json_object **op)
     if (done) {
         assert (hp != NULL);
         assert (hp->o != NULL);
-        *op = hp->o;
+        if (op)
+            *op = hp->o;
     }
     return done;
 }
@@ -332,17 +343,19 @@ static void store_request_send (ctx_t *ctx, const href_t ref, json_object *val)
     json_object_put (o);
 }
 
+/* N.B. cache may have expired (if not dirty) so consider object
+ * states of missing and incomplete to be "not dirty" in this context.
+ */
 static bool store_isdirty (ctx_t *ctx, const href_t ref, wait_t w)
 {
     hobj_t *hp = zhash_lookup (ctx->store, ref);
 
-    assert (hp != NULL);
-    assert (hp->o != NULL);
-
-    if (hp->state == HOBJ_DIRTY && w != NULL)
-        wait_addqueue (hp->waitlist, w);
-
-    return (hp->state == HOBJ_DIRTY);
+    if (hp && hp->state == HOBJ_DIRTY) {
+        if (w)
+            wait_addqueue (hp->waitlist, w);
+        return true;
+    }
+    return false;
 }
 
 static void store (ctx_t *ctx, json_object *o, href_t ref)
@@ -504,6 +517,7 @@ static void setroot (ctx_t *ctx, int seq, href_t ref)
         memcpy (ctx->rootdir, ref, sizeof (href_t));
         ctx->rootseq = seq;
         wait_runqueue (ctx->watchlist);
+        ctx->watchlist_lastrun_epoch = ctx->epoch;
     }
 }
 
@@ -689,13 +703,39 @@ done:
     return 0;
 }
 
+static int expire_cache (ctx_t *ctx, int thresh)
+{
+    zlist_t *keys;
+    char *key;
+    hobj_t *hp;
+    int expcount = 0;
+
+    if (!(keys = zhash_keys (ctx->store)))
+        oom ();
+    while ((key = zlist_pop (keys))) {
+        if ((hp = zhash_lookup (ctx->store, key))) {
+            if (hp->lastuse_epoch == 0)
+                hp->lastuse_epoch = ctx->epoch;
+            if (hp->state == HOBJ_COMPLETE
+              && (thresh == 0 || ctx->epoch - hp->lastuse_epoch  > thresh)) {
+                zhash_delete (ctx->store, key);
+                expcount++;
+            }
+        }
+        free (key);
+    }
+    zlist_destroy (&keys);
+    return expcount;
+}
+
 static int dropcache_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    int s1, s2;
     int rc = 0;
+    int expcount = 0;
+    int sz;
 
-    s1 = zhash_size (ctx->store);
+    sz = zhash_size (ctx->store);
     if (ctx->master) {
     /* No dropcache allowed on the master.
      * We cannot clean up here without dropping all client caches too
@@ -719,23 +759,43 @@ static int dropcache_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         json_object_put (cpy);
 #endif
     } else {
-        zlist_t *keys;
-        char *key;
-
-        if (!(keys = zhash_keys (ctx->store)))
-            oom ();
-        while ((key = zlist_pop (keys))) {
-            hobj_t *hp = zhash_lookup (ctx->store, key);
-            if (hp && hp->state == HOBJ_COMPLETE)
-                zhash_delete (ctx->store, key);
-            free (key);
-        }
-        zlist_destroy (&keys);
+        expcount = expire_cache (ctx, 0);
     }
-    s2 = zhash_size (ctx->store);
-    flux_log (h, LOG_ALERT, "dropped %d of %d cache entries", s1 - s2, s1);
+    flux_log (h, LOG_ALERT, "dropped %d of %d cache entries", expcount, sz);
     if ((typemask & FLUX_MSGTYPE_REQUEST))
         flux_respond_errnum (h, zmsg, rc);
+    return 0;
+}
+
+static int heartbeat_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    json_object *event = NULL;
+    int expcount = 0;
+
+    if (cmb_msg_decode (*zmsg, NULL, &event) < 0 || event == NULL
+                || util_json_object_get_int (event, "epoch", &ctx->epoch) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
+    }
+    if (ctx->master) {
+        /* no cache expiry on master - see comment in dropcache_cb */
+    } else {
+        /* "touch" objects involved in watched keys */
+        if (ctx->epoch - ctx->watchlist_lastrun_epoch > max_lastuse_age) {
+            wait_runqueue (ctx->watchlist);
+            ctx->watchlist_lastrun_epoch = ctx->epoch;
+        }
+        /* "touch" root */
+        (void)load (ctx, ctx->rootdir, NULL, NULL);
+
+        expcount = expire_cache (ctx, max_lastuse_age);
+    }
+    if (expcount > 0)
+        flux_log (ctx->h, LOG_INFO, "expired %d cache entries", expcount);
+done:
+    if (event)
+        json_object_put (event);
     return 0;
 }
 
@@ -1559,6 +1619,7 @@ static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.getroot",          getroot_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.dropcache",        dropcache_cb },
     { FLUX_MSGTYPE_EVENT,   "event.kvs.dropcache",  dropcache_cb },
+    { FLUX_MSGTYPE_EVENT,   "event.sched.trigger",  heartbeat_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.get",              get_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.watch",            watch_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.put",              put_request_cb },
@@ -1582,6 +1643,10 @@ static int kvssrv_main (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
 
+    if (flux_event_subscribe (h, "event.sched.trigger") < 0) {
+        flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
+        return -1;
+    }
     if (!ctx->master) {
         if (flux_event_subscribe (h, "event.kvs.setroot") < 0) {
             flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
