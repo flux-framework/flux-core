@@ -11,16 +11,18 @@
 #include "zmsg.h"
 #include "log.h"
 
-#define OPTIONS "h"
+#define OPTIONS "ha"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
+    {"all",        no_argument,        0, 'a'},
     { 0, 0, 0, 0 },
 };
 
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-snoop [subscription]\n"
+"Usage: flux-snoop [--all] [subscription]\n"
+"Note: without --all, cmb.info and log.msg messages are suppresssed\n"
 );
     exit (1);
 }
@@ -29,6 +31,7 @@ int main (int argc, char *argv[])
 {
     flux_t h;
     int ch;
+    bool aopt = false;
     char *topic = NULL;
     zmsg_t *zmsg;
 
@@ -38,6 +41,9 @@ int main (int argc, char *argv[])
         switch (ch) {
             case 'h': /* --help */
                 usage ();
+                break;
+            case 'a': /* --all */
+                aopt = true;
                 break;
             default:
                 usage ();
@@ -55,7 +61,11 @@ int main (int argc, char *argv[])
     if (flux_snoop_subscribe (h, topic) < 0)
         err_exit ("flux_snoop_subscribe");
     while ((zmsg = flux_snoop_recvmsg (h, false))) {
-        zmsg_dump_compact (zmsg);
+        char *tag = flux_zmsg_tag (zmsg);
+        if (aopt || (strcmp (tag, "cmb.info") && strcmp (tag, "log.msg"))) {
+            zmsg_dump_compact (zmsg);
+        }
+        free (tag);
         zmsg_destroy (&zmsg);
     }
     if (flux_event_unsubscribe (h, topic) < 0)

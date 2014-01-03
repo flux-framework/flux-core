@@ -83,10 +83,8 @@ static void dump_kvs_dir (flux_t h, const char *path,
     const char *name, *js;
     char *key;
 
-    if (kvs_get_dir (h, &dir, "%s", path) < 0) {
-        printf ("%s: %s\n", path, strerror (errno));
-        return;
-    }
+    if (kvs_get_dir (h, &dir, "%s", path) < 0)
+        err_exit ("%s", path);
 
     itr = kvsitr_create (dir);
     while ((name = kvsitr_next (itr))) {
@@ -103,7 +101,7 @@ static void dump_kvs_dir (flux_t h, const char *path,
                 printf ("%s%s -> %s\n", key, F, link);
                 free (link);
             } else
-                printf ("%s%s", key, F);
+                printf ("%s%s\n", key, F);
         } else if (kvsdir_isdir (dir, name)) {
             char *F = Fopt ? "." : "";
 

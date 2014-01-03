@@ -1069,7 +1069,7 @@ int kvs_dropcache (flux_t h)
     json_object *reply = NULL;
     int ret = -1;
  
-    reply = flux_rpc (h, request, "kvs.clean");
+    reply = flux_rpc (h, request, "kvs.dropcache");
     if (!reply && errno > 0)
         goto done;
     if (reply) { 

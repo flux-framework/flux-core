@@ -37,6 +37,10 @@ char *uuid_generate_str (void);
  */
 void compute_json_href (json_object *o, href_t href);
 
+/* Calculate encoded size of JSON object.
+ */
+int util_json_size (json_object *o);
+
 /* JSON helpers
  * N.B. for get_base64(): caller must free returned data if non-NULL.
  */

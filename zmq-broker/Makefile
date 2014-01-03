@@ -24,10 +24,11 @@ export CFLAGS LDFLAGS
 
 LIBUTIL = util/libutil.a
 LIBZUTIL = zutil/libzutil.a
-LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -luuid -lutil
+LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -luuid -lutil -lm
 LDADD_SRV = -pthread -rdynamic $(LDADD_CLI) -ldl
 
-COMMON_OBJS = kvscli.o barriercli.o logcli.o cmbdcli.o mrpc.o handle.o
+COMMON_OBJS = kvscli.o barriercli.o logcli.o cmbdcli.o mrpc.o handle.o \
+	waitqueue.o
 CMBD_OBJS = route.o plugin.o $(COMMON_OBJS) cmbd.o
 
 FLUX_OBJS = flux.o
@@ -55,13 +56,13 @@ all: subdirs $(BUILD) subdirs_post
 
 plugins/%.so: %.c
 	mkdir -p plugins
-	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $<
+	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL)
 plugins/rexecsrv.so: wreck/wrexecsrv.c
 	mkdir -p plugins
-	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $<
+	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL)
 plugins/%.so: wreck/%.c
 	mkdir -p plugins
-	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $<
+	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL)
 
 subdirs: $(LIBUTIL) $(LIBZUTIL) $(LIBCMB)
 	@for f in $(SUBDIRS); do make -C $$f; done

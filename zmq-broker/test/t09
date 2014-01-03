@@ -4,28 +4,28 @@ TEST=`basename $0`
 DIR=$TEST.a.b
 EXPRESULT="$DIR.a = 69
 $DIR.b = 70
-$DIR.c = 3.140000
-$DIR.d = snerg
-$DIR.e = true
-$DIR.f.g.h.i.j = blorg"
+$DIR.c.d.e.f.g = 3.140000
+$DIR.d = \"snerg\"
+$DIR.e = true"
 
 test_cleanup() {
-    ./tkvs unlink $TEST
-    ./tkvs commit
+    ../flux kvs --quiet $TEST=
+}
+
+kvs() {
+    ../flux kvs --no-commit --quiet --null-noerror "$@"
+}
+kvsdir() {
+    ../flux kvsdir --values --recursive "$@"
 }
 
 test_cleanup
 
-./tkvs put_int $DIR.a 69
-./tkvs put_int64 $DIR.b 70
-./tkvs put_double $DIR.c 3.14
-./tkvs put_string $DIR.d "snerg"
-./tkvs put_boolean $DIR.e "true"
-./tkvs put_string $DIR.f.g.h.i.j "blorg"
-./tkvs commit
+kvs $DIR.a=69 $DIR.b=70 $DIR.c.d.e.f.g=3.14 $DIR.d=\"snerg\" $DIR.e=true ^
 
-# Retrieve directory recursively, including values
-RESULT=`./tkvs get_all_r $DIR`
+# Retrieve directory containing new keys
+RESULT=`kvsdir $DIR | sort`
+test "$RESULT" == "$EXPRESULT"
 
 test_cleanup
 

@@ -10,7 +10,7 @@ test_cleanup() {
 
 test_cleanup
 
-../flux kvstorture --quiet --prefix=$TEST
+../flux kvstorture --size 1024 --quiet --prefix=$TEST
 
 test_cleanup
 

@@ -5,16 +5,24 @@
 TEST=`basename $0`
 
 test_cleanup() {
-    ./tkvs unlink $TEST
-    ./tkvs commit
+    ../flux kvs --quiet $TEST=
+}
+kvs() {
+    ../flux kvs --no-commit --quiet --null-noerror "$@"
+}
+kvsgetv() {
+    ../flux kvs --get-version
+}
+kvswaitv() {
+    ../flux kvs --wait-version=$1
 }
 
 test_cleanup
 
-VERS=`./tkvs get_version`
-./tkvs wait_version $(($VERS + 2)) &
-./tkvs commit
-./tkvs commit
+VERS=`kvsgetv`
+kvswaitv $(($VERS + 2)) &
+kvs foo=bar ^
+kvs foo2=baz ^
 wait
 
 test_cleanup

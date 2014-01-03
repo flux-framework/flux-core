@@ -15,6 +15,7 @@
 #include <sys/time.h>
 #include <stdarg.h>
 #include <dlfcn.h>
+#include <fnmatch.h>
 
 #include <json/json.h>
 #include <czmq.h>
@@ -28,12 +29,12 @@
 #include "handle.h"
 
 typedef struct {
-    int upreq_send_count;
-    int upreq_recv_count;
-    int dnreq_send_count;
-    int dnreq_recv_count;
-    int event_send_count;
-    int event_recv_count;
+    int upreq_tx;
+    int upreq_rx;
+    int dnreq_tx;
+    int dnreq_rx;
+    int event_tx;
+    int event_rx;
 } plugin_stats_t;
 
 typedef struct ptimeout_struct *ptimeout_t;
@@ -86,7 +87,7 @@ static int plugin_request_sendmsg (void *impl, zmsg_t **zmsg)
 
     assert (p->magic == PLUGIN_MAGIC);
     rc = zmsg_send (zmsg, p->zs_upreq);
-    p->stats.upreq_send_count++;
+    p->stats.upreq_tx++;
     return rc;
 }
 
@@ -105,7 +106,7 @@ static int plugin_response_sendmsg (void *impl, zmsg_t **zmsg)
 
     assert (p->magic == PLUGIN_MAGIC);
     rc = zmsg_send (zmsg, p->zs_dnreq);
-    p->stats.dnreq_send_count++;
+    p->stats.dnreq_tx++;
     return rc;
 }
 
@@ -133,7 +134,7 @@ static int plugin_event_sendmsg (void *impl, zmsg_t **zmsg)
 
     assert (p->magic == PLUGIN_MAGIC);
     rc = zmsg_send (zmsg, p->zs_evout);
-    p->stats.event_send_count++;
+    p->stats.event_tx++;
     return rc;
 }
 
@@ -320,29 +321,44 @@ done:
     return rc;
 }
 
-static int stats_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     plugin_ctx_t p = arg;
     json_object *o = NULL;
     int rc = 0;
+    char *tag = NULL;
 
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0) {
-        err ("%s: error decoding message", __FUNCTION__);
-        goto done; /* reactor continues */
-    }
-    util_json_object_add_int (o, "upreq_send_count", p->stats.upreq_send_count);
-    util_json_object_add_int (o, "upreq_recv_count", p->stats.upreq_recv_count);
-    util_json_object_add_int (o, "dnreq_send_count", p->stats.dnreq_send_count);
-    util_json_object_add_int (o, "dnreq_recv_count", p->stats.dnreq_recv_count);
-    util_json_object_add_int (o, "event_send_count", p->stats.event_send_count);
-    util_json_object_add_int (o, "event_recv_count", p->stats.event_recv_count);
-
-    if (flux_respond (h, zmsg, o) < 0) {
-        err ("%s: flux_respond", __FUNCTION__);
-        rc = -1; /* reactor terminates */
+    if (cmb_msg_decode (*zmsg, &tag, &o) < 0) {
+        flux_log (p->h, LOG_ERR, "%s: error decoding message", __FUNCTION__);
         goto done;
     }
+    if (fnmatch ("*.get", tag, 0) == 0) {
+        util_json_object_add_int (o, "#upreq (tx)", p->stats.upreq_tx);
+        util_json_object_add_int (o, "#upreq (rx)", p->stats.upreq_rx);
+        util_json_object_add_int (o, "#dnreq (tx)", p->stats.dnreq_tx);
+        util_json_object_add_int (o, "#dnreq (rx)", p->stats.dnreq_rx);
+        util_json_object_add_int (o, "#event (tx)", p->stats.event_tx);
+        util_json_object_add_int (o, "#event (rx)", p->stats.event_rx);
+        if (flux_respond (h, zmsg, o) < 0) {
+            err ("%s: flux_respond", __FUNCTION__);
+            rc = -1;
+            goto done;
+        }
+    } else if (fnmatch ("*.clear", tag, 0) == 0) {
+        memset (&p->stats, 0, sizeof (p->stats));
+        if (typemask & FLUX_MSGTYPE_REQUEST) {
+            if (flux_respond_errnum (h, zmsg, 0) < 0) {
+                err ("%s: flux_respond_errnum", __FUNCTION__);
+                rc = -1;
+                goto done;
+            }
+        }
+    } else {
+        flux_log (p->h, LOG_ERR, "%s: %s: unknown tag", __FUNCTION__, tag);
+    }
 done:
+    if (tag)
+        free (tag);
     if (o)
         json_object_put (o);
     if (*zmsg)
@@ -352,7 +368,7 @@ done:
 
 static void plugin_handle_response (plugin_ctx_t p, zmsg_t *zmsg)
 {
-    p->stats.upreq_recv_count++;
+    p->stats.upreq_rx++;
 
     if (zmsg) {
         if (handle_event_msg (p->h, FLUX_MSGTYPE_RESPONSE, &zmsg) < 0) {
@@ -394,7 +410,7 @@ static int dnreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 {
     zmsg_t *zmsg = zmsg_recv (p->zs_dnreq);
 
-    p->stats.dnreq_recv_count++;
+    p->stats.dnreq_rx++;
 
     if (zmsg) {
         if (handle_event_msg (p->h, FLUX_MSGTYPE_REQUEST, &zmsg) < 0) {
@@ -419,7 +435,7 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 {
     zmsg_t *zmsg = zmsg_recv (p->zs_evin);
 
-    p->stats.event_recv_count++;
+    p->stats.event_rx++;
 
     if (zmsg) {
         if (handle_event_msg (p->h, FLUX_MSGTYPE_EVENT, &zmsg) < 0) {
@@ -489,6 +505,38 @@ static zloop_t * plugin_zloop_create (plugin_ctx_t p)
     return (zl);
 }
 
+static void register_event (plugin_ctx_t p, char *name, FluxMsgHandler cb)
+{
+    char *s;
+
+    if (asprintf (&s, "event.%s.%s", p->name, name) < 0)
+        oom ();
+    if (flux_msghandler_add (p->h, FLUX_MSGTYPE_EVENT, s, cb, p) < 0)
+        err_exit ("%s: flux_msghandler_add", p->id);
+    /* Trim a glob wildcard off the end to form a subscription string.
+     * 0MQ subscriptions are a rooted substring match.
+     * Globs in other places are fatal.
+     */
+    if (s[strlen (s) - 1] == '*')
+        s[strlen (s) - 1] = '\0';
+    if (strchr (s, '*'))
+        err_exit ("%s: cant deal with '%s' subscription", __FUNCTION__, name);
+    if (flux_event_subscribe (p->h, s) < 0)
+        err_exit ("%s: flux_event_subscribe %s", p->id, s);
+    free (s);
+}
+
+static void register_request (plugin_ctx_t p, char *name, FluxMsgHandler cb)
+{
+    char *s;
+
+    if (asprintf (&s, "%s.%s", p->name, name) < 0)
+        oom ();
+    if (flux_msghandler_add (p->h, FLUX_MSGTYPE_REQUEST, s, cb, p) < 0)
+        err_exit ("%s: flux_msghandler_add %s", p->id, s);
+    free (s);
+}
+
 static void *plugin_thread (void *arg)
 {
     plugin_ctx_t p = arg;
@@ -505,15 +553,12 @@ static void *plugin_thread (void *arg)
     if (p->zloop == NULL)
         err_exit ("%s: plugin_zloop_create", p->id);
 
-    /* Register callbacks for ping, stats which can be overridden
-     * in p->ops->main() if desired.
+    /* Register callbacks for "internal" methods.
+     * These can be overridden in p->ops->main() if desired.
      */
-    if (flux_msghandler_add (p->h, FLUX_MSGTYPE_REQUEST, "*.ping",
-                                                          ping_req_cb, p) < 0)
-        err_exit ("%s: flux_msghandler_add *.ping", p->id);
-    if (flux_msghandler_add (p->h, FLUX_MSGTYPE_REQUEST, "*.stats",
-                                                          stats_req_cb, p) < 0)
-        err_exit ("%s: flux_msghandler_add *.stats", p->id);
+    register_request (p, "ping",    ping_req_cb);
+    register_request (p, "stats.*", stats_cb);
+    register_event   (p, "stats.*", stats_cb);
 
     if (!p->ops->main)
         err_exit ("%s: Plugin must define 'main' method", p->id);

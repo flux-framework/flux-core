@@ -22,7 +22,7 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-event --pub message\n"
+"Usage: flux-event --pub message [json]\n"
 "       flux-event --sub [topic]\n"
 );
     exit (1);
@@ -32,7 +32,7 @@ int main (int argc, char *argv[])
 {
     flux_t h;
     int ch;
-    char *topic = NULL;
+    char *arg = NULL;
     zmsg_t *zmsg;
     char *pub = NULL;
     bool sub = false;
@@ -44,7 +44,7 @@ int main (int argc, char *argv[])
             case 'h': /* --help */
                 usage ();
                 break;
-            case 'p': /* --publish message */
+            case 'p': /* --publish message [json] */
                 pub = optarg;
                 break;
             case 's': /* --subscribe [topic] */
@@ -58,9 +58,7 @@ int main (int argc, char *argv[])
     if (optind != argc && optind != argc - 1)
         usage ();
     if (optind == argc - 1)
-        topic = argv[optind];
-    if (topic && !sub)
-        usage ();
+        arg = argv[optind];
     if (!pub && !sub)
         usage ();
 
@@ -68,17 +66,23 @@ int main (int argc, char *argv[])
         err_exit ("cmb_init");
 
     if (pub) {
-        if (flux_event_send (h, NULL, "%s", pub) < 0 )
+        json_object *o = NULL;
+        enum json_tokener_error e;
+        if (arg && !(o = json_tokener_parse_verbose (arg, &e)))
+            msg_exit ("json parse error: %s", json_tokener_error_desc (e));
+        if (flux_event_send (h, o, "%s", pub) < 0 )
             err_exit ("flux_event_send");
+        if (o)
+            json_object_put (o);
     }
     if (sub) {
-        if (flux_event_subscribe (h, topic) < 0)
+        if (flux_event_subscribe (h, arg) < 0)
             err_exit ("flux_event_subscribe");
         while ((zmsg = flux_event_recvmsg (h, false))) {
             zmsg_dump_compact (zmsg);
             zmsg_destroy (&zmsg);
         }
-        if (flux_event_unsubscribe (h, topic) < 0)
+        if (flux_event_unsubscribe (h, arg) < 0)
             err_exit ("flux_event_unsubscribe");
     }
 

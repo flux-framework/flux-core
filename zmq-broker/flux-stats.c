@@ -10,16 +10,26 @@
 #include "util.h"
 #include "log.h"
 
-#define OPTIONS "h"
+#define OPTIONS "hcCp:s:t:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
+    {"clear",      no_argument,        0, 'c'},
+    {"clear-all",  no_argument,        0, 'C'},
+    {"parse",      required_argument,  0, 'p'},
+    {"scale",      required_argument,  0, 's'},
+    {"type",       required_argument,  0, 't'},
     { 0, 0, 0, 0 },
 };
+
+static void parse_stats (const char *n, json_object *o, double scale,
+                         json_type type);
 
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-stats [node!]tag\n"
+"Usage: flux-stats [--scale N] [--type int|double] --parse a[.b]... [node!]name\n"
+"       flux-stats --clear-all name\n"
+"       flux-stats --clear [node!]name\n"
 );
     exit (1);
 }
@@ -29,6 +39,11 @@ int main (int argc, char *argv[])
     flux_t h;
     int ch;
     char *target;
+    char *objname = NULL;
+    bool copt = false;
+    bool Copt = false;
+    double scale = 1.0;
+    json_type type = json_type_object;
     json_object *response;
 
     log_init ("flux-stats");
@@ -38,6 +53,29 @@ int main (int argc, char *argv[])
             case 'h': /* --help */
                 usage ();
                 break;
+            case 'c': /* --clear */
+                copt = true;
+                break;
+            case 'C': /* --clear-all */
+                Copt = true;
+                break;
+            case 'p': /* --parse objname */
+                objname = optarg;
+                break;
+            case 's': /* --scale N */
+                scale = strtod (optarg, NULL);
+                break;
+            case 't': /* --type TYPE */
+                if (!strcasecmp (optarg, "int"))
+                    type = json_type_int;
+                else if (!strcasecmp (optarg, "double"))
+                    type = json_type_double;
+                else
+                    usage ();
+                break;
+            case 'd': /* --parse-double objname */
+                objname = optarg;
+                break;
             default:
                 usage ();
                 break;
@@ -45,20 +83,74 @@ int main (int argc, char *argv[])
     }
     if (optind != argc - 1)
         usage ();
+    if (scale != 1.0 && type != json_type_int && type != json_type_double)
+        msg_exit ("Use --scale only with --type int or --type double");
     target = argv[optind];
+    if (Copt && strchr (target, '!'))
+        msg_exit ("Use --clear not --clear-all to clear a single node.");
 
     if (!(h = cmb_init ()))
         err_exit ("cmb_init");
 
-    if (!(response = flux_rpc (h, NULL, "%s.stats", target)))
-        err_exit ("flux_rpc %s.stats", optarg);
-    printf ("%s\n", json_object_to_json_string_ext (response,
-            JSON_C_TO_STRING_PRETTY));
-    json_object_put (response);
-
+    if (copt) {
+        if ((response = flux_rpc (h, NULL, "%s.stats.clear", target)))
+            errn_exit (EPROTO, "unexpected response to %s.clearstats", target);
+        if (errno != 0)
+            err_exit ("flux_rpc %s.clearstats", target);
+    } else if (Copt) {
+        if (flux_event_send (h, NULL, "event.%s.stats.clear", target) < 0)
+            err_exit ("flux_event_send event.%s.stats.clear", target);
+    } else {
+        if (!(response = flux_rpc (h, NULL, "%s.stats.get", target)))
+            err_exit ("flux_rpc %s.stats", target);
+        parse_stats (objname, response, scale, type);
+        json_object_put (response);
+    }
     flux_handle_destroy (&h);
     log_fini ();
     return 0;
+}
+
+static void parse_stats (const char *n, json_object *o, double scale,
+                         json_type type)
+{
+    if (n) {
+        char *cpy = xstrdup (n);
+        char *name, *saveptr, *a1 = cpy;
+
+        while ((name = strtok_r (a1, ".", &saveptr))) {
+            if (!(o = json_object_object_get (o, name)))
+                err_exit ("`%s' not found in response", n);
+            a1 = NULL;
+        }
+        free (cpy);
+    }
+    switch (type) {
+        case json_type_double: {
+            double d;
+            errno = 0;
+            d = json_object_get_double (o);
+            if (errno != 0)
+                err_exit ("couldn't convert value to double");
+            printf ("%lf\n", d * scale);
+            break;
+        } 
+        case json_type_int: {
+            double d;
+            errno = 0;
+            d = json_object_get_double (o);
+            if (errno != 0)
+                err_exit ("couldn't convert value to double (en route to int)");
+            printf ("%d\n", (int)(d * scale));
+            break;
+        }
+        default: {
+            const char *s;
+            s = json_object_to_json_string_ext (o, JSON_C_TO_STRING_PRETTY);
+            printf ("%s\n", s);
+            break;
+        }
+    }
 }
 
 /*

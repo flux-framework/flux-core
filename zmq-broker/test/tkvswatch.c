@@ -1,11 +1,9 @@
 /* tkvswatch.c - exercise kvs watch functions */
 
-
-
 /* Usage ./tkvswatch nthreads changes key
  * Spawn 'nthreads' threads each watching the same value.
- * Change it 'changes' times and ensure that all the changes are
- * delivered to all the threads.
+ * Change it 'changes' times and ensure that at minimum the last
+ * value is read.
  */
 
 #include <sys/types.h>
@@ -44,7 +42,6 @@ typedef struct {
     pthread_t tid;
     pthread_attr_t attr;
     int n;
-    int count;
     flux_t h;
 } thd_t;
 
@@ -82,8 +79,7 @@ static void watch_cb (const char *k, int val, void *arg, int errnum)
 {
     thd_t *t = arg;
 
-    t->count++;
-    if (t->count == changes)
+    if (errnum == 0 && val + 1 == changes)
         flux_reactor_stop (t->h);
 }
 
@@ -142,7 +138,6 @@ int main (int argc, char *argv[])
 
     for (i = 0; i < nthreads; i++) {
         thd[i].n = i;
-        thd[i].count = 0;
         if ((rc = pthread_attr_init (&thd[i].attr)))
             errn (rc, "pthread_attr_init");
         if ((rc = pthread_create (&thd[i].tid, &thd[i].attr, thread, &thd[i])))
@@ -160,7 +155,6 @@ int main (int argc, char *argv[])
     for (i = 0; i < nthreads; i++) {
         if ((rc = pthread_join (thd[i].tid, NULL)))
             errn (rc, "pthread_join");
-        assert (thd[i].count == changes);
     }
 
     free (thd);
