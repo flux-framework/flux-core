@@ -459,37 +459,6 @@ stall:
     return NULL;
 }
 
-/* Given a JSON object created by kvs_save(), restore it to the content-hash
- * and return the new reference in 'href'.
- */
-static void kvs_restore (ctx_t *ctx, json_object *dir, href_t href)
-{
-    json_object *cpy, *o;
-    json_object_iter iter;
-    href_t nhref;
-
-    if (!(cpy = json_object_new_object ()))
-        oom ();
-
-    json_object_object_foreachC (dir, iter) {
-        if ((o = json_object_object_get (iter.val, "DIRVAL"))) {
-            kvs_restore (ctx, o, nhref);
-            json_object_object_add (cpy, iter.key,
-                                    dirent_create ("DIRREF", nhref));
-        } else if ((o = json_object_object_get (iter.val, "FILEVAL"))
-                                        && store_by_reference (o)) {
-            json_object_get (o);
-            store (ctx, o, nhref);
-            json_object_object_add (cpy, iter.key,
-                                        dirent_create ("FILEREF", nhref));
-        } else { /* FILEVAL, FILEREF, DIRREF */
-            json_object_get (iter.val);
-            json_object_object_add (cpy, iter.key, iter.val);
-        }
-    }
-    store (ctx, cpy, href);
-}
-
 static bool decode_rootref (const char *rootref, int *seqp, href_t ref)
 {
     char *p;
@@ -519,79 +488,6 @@ static void setroot (ctx_t *ctx, int seq, href_t ref)
         wait_runqueue (ctx->watchlist);
         ctx->watchlist_lastrun_epoch = ctx->epoch;
     }
-}
-
-/* Put (name,ndirent) to deep copy of root directory. 
- */
-static void deep_put (json_object *dir, char *nkey, json_object *ndirent)
-{
-    char *next, *name = nkey;
-    json_object *dirent;
-
-    while ((next = strchr (name, '.'))) {
-        *next++ = '\0';
-        if ((dirent = json_object_object_get (dir, name))) {
-            if (!json_object_object_get (dirent, "DIRVAL")) {
-                json_object_object_del (dir, name);
-                dirent = NULL;
-            }
-        }
-        if (!dirent) {
-            dirent = dirent_create ("DIRVAL", NULL); /* empty dir */
-            json_object_object_add (dir, name, dirent);
-        }
-        dir = json_object_object_get (dirent, "DIRVAL");
-        name = next;
-    }
-    /* dir now is the directory that contains the final path component */
-    json_object_object_del (dir, name);
-    if (ndirent) {
-        json_object_get (ndirent);
-        json_object_object_add (dir, name, ndirent); /* consumes ndirent */
-    }
-}
-
-/* This is the rather heavy-weight and naive code that applies commit_t 'c'
- * to the store.  It should only be called on the master.
- */
-void commit_apply (ctx_t *ctx, commit_t *c)
-{
-    json_object *dir, *cpy;
-    href_t ref;
-    json_object *dirent;
-    zlist_t *keys;
-    char *key;
-    json_object *vers;
-
-    /* Load the entire store into 'cpy'.
-     */
-    (void)load (ctx, ctx->rootdir, NULL, &dir);
-    assert (dir != NULL);
-    cpy = kvs_save (ctx, dir, NULL, KVS_GET_DIRVAL);
-    assert (cpy != NULL);
-
-    /* Apply the key=>val updates in the commit to 'cpy'.
-     */
-    keys = zhash_keys (c->dirents);
-    while ((key = zlist_pop (keys))) {
-        dirent = zhash_lookup (c->dirents, key);
-        deep_put (cpy, key, dirent);
-        free (key);
-    }
-    zlist_destroy (&keys);
-
-    /* Store version=version + 1 in 'cpy'.
-     */
-    if (!(vers = json_object_new_int (ctx->rootseq + 1)))
-        oom ();
-    deep_put (cpy, "version", dirent_create ("FILEVAL", vers));
-    json_object_put (vers);
-
-    /* Write 'cpy' to the store and move hte root pointer to the new 'ref'.
-     */
-    kvs_restore (ctx, cpy, ref);
-    json_object_put (cpy);
-    setroot (ctx, ctx->rootseq + 1, ref);
 }
 
 static void putdir_int (json_object *dir, const char *name, int i)
@@ -626,9 +522,6 @@ static void commit_unroll (ctx_t *ctx, json_object *dir)
     zlist_t *keys;
     char *key, *refcpy;
 
-    //msg ("XXX %s (%s)", __FUNCTION__, dir
-    // ? json_object_to_json_string_ext (dir, JSON_C_TO_STRING_PLAIN) : "NULL");
-
     if (!(new = zhash_new ()))
         oom ();
     json_object_object_foreachC (dir, iter) {
@@ -636,8 +529,6 @@ static void commit_unroll (ctx_t *ctx, json_object *dir)
             commit_unroll (ctx, subdir); /* depth first */
             json_object_get (subdir);
             store (ctx, subdir, ref);
-            //msg ("XXX %s (%s, %s) => %s", __FUNCTION__, iter.key, ref,
-            // json_object_to_json_string_ext (subdir, JSON_C_TO_STRING_PLAIN));
             zhash_insert (new, iter.key, xstrdup (ref));
         }
     }
@@ -663,10 +554,6 @@ static void commit_link_dirent (ctx_t *ctx, json_object *dir,
 {
     char *next, *name = xstrdup (key);
     json_object *o, *subdir = NULL, *subdirent;
-
-    //msg ("XXX %s (%s, %s)", __FUNCTION__, key, dirent
-    //      ? json_object_to_json_string_ext (dirent, JSON_C_TO_STRING_PLAIN)
-    //      : "NULL");
 
     /* This is the first part of a key with multiple path components.
      * Make sure that it is a directory in DIRVAL form, then recurse
@@ -714,7 +601,7 @@ done:
     free (name);
 }
 
-void commit_apply_lite (ctx_t *ctx, commit_t *c)
+void commit_apply (ctx_t *ctx, commit_t *c)
 {
     json_object *rootdir = NULL;
     json_object *rootcpy;
@@ -753,8 +640,6 @@ void commit_apply_lite (ctx_t *ctx, commit_t *c)
      */
     putdir_int (rootcpy, "version", ctx->rootseq + 1); /* one last change */
     store (ctx, rootcpy, ref);
-    //msg ("XXX %s %s => %s", __FUNCTION__, ref,
-    //     json_object_to_json_string_ext (rootcpy, JSON_C_TO_STRING_PLAIN));
     setroot (ctx, ctx->rootseq + 1, ref);
 }
 
@@ -1036,15 +921,12 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t w,
         val = root;
         isdir = true;
     } else {
-        //msg ("XXX %s: %s", __FUNCTION__, name);
         if (!walk (ctx, root, name, &dirent, w, readlink, 0))
             goto stall;
         if (!dirent) {
             //errnum = ENOENT;
             goto done; /* a NULL response is not necessarily an error */
         }
-        //msg ("XXX %s: %s: %s", __FUNCTION__, name,
-        //    json_object_to_json_string_ext (dirent, JSON_C_TO_STRING_PLAIN));
         if (util_json_object_get_string (dirent, "DIRREF", &ref) == 0) {
             if (readlink) {
                 errnum = EINVAL;
@@ -1501,11 +1383,7 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     /* Master: apply the commit and generate a response synchronously.
      */
     } else if (ctx->master) {
-#if 0
-        commit_apply (ctx, c);      /* updates ctx->rootseq, ctx->rootref */
-#else
-        commit_apply_lite (ctx, c); /* updates ctx->rootseq, ctx->rootref */
-#endif
+        commit_apply (ctx, c); /* updates ctx->rootseq, ctx->rootref */
         setroot_event_send (ctx); 
         commit_respond (ctx, zmsg, name, NULL);
         zhash_delete (ctx->commits, name);
