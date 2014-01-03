@@ -2,51 +2,19 @@
 
 -------------------------------------------------------------------------------
 -- Modules:
--------------------------------------------------------------------------------
-local posix = require 'posix'
+------------------------------------------------------------------------------- local posix = require 'posix'
 local flux = require 'flux'
 local timer = require 'timer'
 
 local prog = string.match (arg[0], "([^/]+)$")
 local shortprog = prog:match ("flux%-(.+)$")
 
--------------------------------------------------------------------------------
--- Program options
--------------------------------------------------------------------------------
-function parse_cmdline (arg)
-    local getopt = require 'alt_getopt' .get_opts
-    local opt_table = {
-        ['help']            = "h",
-        ['nprocs-per-node'] = "n",
-    }
-    local optstring = "hn:"
-    return getopt (arg, optstring, opt_table)
-end
 
 -------------------------------------------------------------------------------
 -- Local functions:
 -------------------------------------------------------------------------------
-local function usage ()
-    io.stderr:write ("Usage: "..prog.." [-n nprocs] COMMANDS...\n")
-end
-
-local function usage_and_exit (n)
-    usage()
-    os.exit (n or 0)
-end
-
-local function log_msg (...)
-    io.stderr:write (shortprog..": " .. string.format (...))
-end
-
-local function log_fatal (...)
-    log_msg (...)
-    os.exit (1)
-end
-
 --
---  Check that parameter [a] is an integer
---
+--  Check that parameter [a] is an integer --
 local function is_integer (a)
     local b = tonumber (a)
     return (type (b) == "number") and (math.floor(b) == b)
@@ -55,7 +23,7 @@ end
 ---
 --  Get the LWJ return code as highest of all task return codes
 ---
-local function lwj_return_code (f, id)
+local function lwj_return_code (f, wreck, id)
     local hostlist = require 'hostlist'
     local lwj = f:kvsdir ("lwj.%d", id)
     local max = 0
@@ -81,22 +49,82 @@ local function lwj_return_code (f, id)
         end
     end
     for s,h in pairs (msgs) do
-        log_msg ("tasks %s: %s\n", tostring (h:sort()), s)
+        wreck:say ("task%s %s: %s\n",
+                    #h > 1 and "s" or "", tostring (h:sort()), s)
     end
     return max
 end
 
---
--- Get the current env with some env vars filtered out:
---
-local function get_filtered_env ()
-    local env = posix.getenv()
-    env.HOSTNAME = nil
-    env.ENVIRONMENT = nil
-    for k,v in pairs (env) do
-        if k:match ("SLURM_") then env[k] = nil end
+local function summarize_tasks_per_node (r)
+    local hostlist = require 'hostlist'
+    local m = {}
+    for msg, ids in pairs (r) do
+        local h = hostlist.new()
+        for _,id in pairs (ids) do
+            h:concat (id)
+        end
+        table.insert (m, string.format ("node%s: %s", tostring (h:sort()), msg))
     end
-    return (env)
+    return table.concat (m, ', ')
+end
+
+local function fake_resource_array (wreck, nnodes)
+    local res = {}
+    local total = 0
+    local ppn = wreck.tasks_per_node or (wreck.ntasks / nnodes)
+    for i = 0, nnodes - 1 do
+        local n = ppn
+        if (total + ppn) > wreck.ntasks then
+            n = wreck.ntasks - total
+        end
+        res[i] = { cores = n }
+        total = total + n
+    end
+    return res
+end
+
+local function alloc_tasks_hack (f, wreck, lwj)
+    local r = {}
+    local total = 0
+    local size = f.size
+    local res
+
+    if (wreck.tasks_per_node or wreck.nnodes) then
+        if wreck.ntasks == 1 then
+            if wreck.tasks_per_node then
+                if wreck.nnodes then
+                    wreck.ntasks = wreck.tasks_per_node * wreck.nnodes
+                else
+                    wreck.ntasks = wreck.tasks_per_node * f.size
+                end
+            else
+                wreck.ntasks = wreck.nnodes
+            end
+        end
+        res = fake_resource_array (wreck, wreck.nnodes or f.size)
+    else
+        res, err = f:kvsdir ("resrc.rank")
+        if not res then
+            wreck:die ("Failed to get resrc.rank")
+        end
+    end
+
+    wreck:say ("Allocating %d tasks across %d available nodes..\n",
+                wreck.ntasks, size)
+
+    for i = 0, size-1 do
+        local key = "rank."..i..".cores"
+        local n = res[i].cores
+        if (total + n) > wreck.ntasks then
+           n = wreck.ntasks - total
+        end
+        lwj[key] = n
+        if r[n] then table.insert (r[n], i) else r[n] = { i } end
+        total = total + n
+        if total == wreck.ntasks then break end
+    end
+    lwj:commit()
+    wreck:say ("tasks per node: %s\n", summarize_tasks_per_node (r))
 end
 
 -------------------------------------------------------------------------------
@@ -104,20 +132,25 @@ end
 -------------------------------------------------------------------------------
 --  Parse cmdline args:
 --
+local wreck = require 'wreck' .new (shortprog)
 local terminate = false
 local sigtimer
+local nio = 0
+local state = ""
 
-local opts, optind = parse_cmdline (arg)
-if opts.h then usage_and_exit () end
-if optind > #arg then
-    log_msg ("Error: remote command required\n")
-    usage_and_exit (1)
-end
+wreck:add_options ({
+    { name = "tasks-per-node", char = "t", arg = "N",
+        usage = "Force number of tasks per node" },
+    { name = "nnodes", char = "N", arg = "N",
+        usage = "Force number of nodes" },
+    { name = 'now', char = 'i',
+        usage = "Run job immediately" },
+    { name = 'label-io', char = 'l',
+        usage = "Label output with taskid" },
+})
 
-local nprocs = tonumber (opts.n) or 1
-local cmdline = {}
-for i = optind, #arg do
-    table.insert (cmdline, arg[i])
+if not wreck:parse_cmdline (arg) then
+    wreck:die ("Failed to process cmdline args\n")
 end
 
 -- Set signal handlers
@@ -130,76 +163,155 @@ local tt = timer.new()
 --  Create new connection to local cmbd:
 --
 local f, err = flux.new()
-if not f then log_fatal ("flux.new: %s\n", err) end
+if not f then wreck:die ("Connecting to flux failed: %s\n", err) end
 
 --
 --  Create a job request as Lua table:
 --
-local jobreq = {
-      nprocs  = nprocs,
-      cmdline = cmdline,
-      environ = get_filtered_env(),
-      cwd = posix.getcwd(),
-}
+local jobreq = wreck:jobreq()
 
-log_msg ("%4.03fs: Starting %d procs per node running \"%s\"\n",
-    tt:get0(), nprocs, table.concat (cmdline, ' '))
+wreck:say ("%4.03fs: Sending LWJ request for %d tasks (cmdline \"%s\")\n",
+    tt:get0(), wreck.ntasks, table.concat (wreck.cmdline, ' '))
 
 --
 --  Send job request message with tag="job.create"
 --
 local resp, err = f:rpc ('job.create', jobreq)
-if not resp then log_fatal ("flux.rpc: %s\n", err) end
+if not resp then wreck:die ("flux.rpc: %s\n", err) end
 
 if resp.errnum then
-    log_fatal ("job.create message failed with errnum=%d\n", resp.errnum)
+    wreck:die ("job.create message failed with errnum=%d\n", resp.errnum)
 end
 
-log_msg ("%4.03fs: Registered jobid %d\n", tt:get0(), resp.jobid)
+wreck:say ("%4.03fs: Registered jobid %d\n", tt:get0(), resp.jobid)
 
 --
 --  Get a handle to this lwj kvsdir:
 --
 local lwj, err = f:kvsdir ("lwj.%d", resp.jobid)
-if not lwj then log_fatal ("f:kvsdir(lwj.%d): %s\n", resp.jobid, err) end
+if not lwj then wreck:die ("f:kvsdir(lwj.%d): %s\n", resp.jobid, err) end
 
---
---  Send event to run the job
---
-local rc,err = f:sendevent ("event.rexec.run.%d", resp.jobid)
-if not rc then log_fatal ("sendevent: %s\n", err) end
-
-local sigtimer = nil
-repeat
- local r,err = lwj:watch ("state", r)
- if r then log_msg ("%-4.03fs: State = %s\n", tt:get0(), r) end
-
- if not r then log_msg ("%s\n", err) end
-
- --
- --  If we catch a signal then lwj:watch() will be interrupted.
- --   Check to see if we should terminate the job now:
- --
- if terminate then
-    log_msg ("%4.03fs: Killing LWJ %d\n", tt:get0(), resp.jobid)
-    local rc,err = f:sendevent ("event.rexec.kill.%d", resp.jobid)
-    if not rc then log_msg ("Error: Failed to send kill event: %s", err) end
-    if not sigtimer then
-       sigtimer = timer.new()
-    else
-       if sigtimer:get() < 1.0 then
-         log_msg ("Detaching from job. Processes may still be running\n");
-         os.exit (0);
-       end
-    end
-    terminate = false
- end
-until r == "complete"
-
-local rc = lwj_return_code (f, resp.jobid)
-if rc == 0 then
-    log_msg ("All tasks completed successfully.\n");
+if wreck:getopt ("i") then
+    --
+    --  Send event to run the job
+    --
+    wreck.nnodes = wreck:getopt ("N")
+    wreck.tasks_per_node = wreck:getopt ("t")
+    alloc_tasks_hack (f, wreck, lwj)
+    wreck:say ("%-4.03fs: Sending run event\n", tt:get0())
+    local rc,err = f:sendevent ("event.rexec.run.%d", resp.jobid)
+    if not rc then wreck:die ("sendevent: %s\n", err) end
+else
+    --
+    --  Update job state to 'pending' to notify scheduler:
+    --
+    lwj.state = 'pending'
+    lwj['pending-time'] = posix.strftime ("%FT%T")
+    lwj:commit()
 end
+
+--
+--  Check if job state is "complete" and all IO from tasks have closed:
+--
+local function check_job_completed ()
+    if nio <= 0 and (state == "complete" or state == "reaped") then
+        local rc = lwj_return_code (f, wreck, resp.jobid)
+        if rc == 0 then
+            wreck:say ("All tasks completed successfully.\n");
+        end
+        os.exit (rc)
+    end
+end
+
+
+--  IO watcher creation helper function:
+--
+local function io_watcher_create (stream, jobid, taskid)
+    local s = stream == "stdout" and io.stdout or io.stderr
+    local iow,err = f:iowatcher {
+        key = string.format ("lwj.%d.%d.%s", jobid, taskid, stream),
+        handler = function (iow, data)
+            if not data then
+                nio = nio - 1
+                check_job_completed ()
+                return
+            end
+            if (wreck.opts.l) then s:write (taskid..": ") end
+            s:write (data)
+        end
+    }
+    if not iow then wreck:die (err) end
+    return iow
+end
+
+--
+--  Create iowatchers for all tasks stdout/err:
+--
+for i=0, wreck.ntasks-1 do
+    for _,stream in pairs{ "stdout", "stderr"} do
+        iow = io_watcher_create (stream, resp.jobid, i)
+    end
+end
+nio = wreck.ntasks * 2
+
+--
+--  Open stdin (to task 0 only for now)
+--
+local kz, err = f:kz_open (tostring (lwj)..".0.stdin", "w")
+if not kz then wreck:die (err) end
+
+--
+--  Add a file descriptor iowatcher for this script's stdin:
+--
+f:iowatcher {
+    fd = posix.fileno (io.input()),
+    handler = function (iow, data)
+        if data.data then kz:write (data.data) end
+        if data.eof  then kz:close ()          end
+    end
+}
+
+--
+--  Finally, a kvswatcher for the LWJ state:
+--
+local kw, err = f:kvswatcher  {
+    key = string.format ("lwj.%d.state", resp.jobid),
+    handler = function (kw, result)
+        if result then
+            state = result
+            wreck:say ("%-4.03fs: State = %s\n", tt:get0(), result)
+            check_job_completed ()
+        end
+    end
+}
+
+--
+--  Begin reactor loop:
+--
+local sigtimer = nil
+
+repeat
+    local r = f:reactor()
+    --
+    --  If we catch a signal then lwj:watch() will be interrupted.
+    --   Check to see if we should terminate the job now:
+    --
+    if terminate then
+        wreck:say ("%4.03fs: Killing LWJ %d\n", tt:get0(), resp.jobid)
+        local rc,err = f:sendevent ("event.rexec.kill.%d", resp.jobid)
+        if not rc then
+            wreck:say ("Error: Failed to send kill event: %s", err)
+        end
+        if not sigtimer then
+            sigtimer = timer.new()
+            sigtimer:get()
+        elseif sigtimer:get() < 1.0 then
+            wreck:say ("Detaching from job. Processes may still be running\n");
+            os.exit (0);
+        end
+        terminate = false
+    end
+until false
 
 
 -- vi: ts=4 sw=4 expandtab

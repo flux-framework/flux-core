@@ -39,6 +39,11 @@ static void _store_hosts (flux_t h)
 	err ("resrc: kvs_put_int64 %d %lu failed", flux_rank (h), cores);
     }
     free (key);
+    if ((asprintf (&key, "resrc.rank.%d.alloc.cores", flux_rank (h)) < 0) ||
+	kvs_put_int64 (h, key, 0)) {
+	err ("resrc: kvs_put_int64 %d %d failed", flux_rank (h), 0);
+    }
+    free (key);
     if ((asprintf (&key, "resrc.rank.%d.mem", flux_rank (h)) < 0) ||
 	kvs_put_int64 (h, key, memMB)) {
 	err ("resrc: kvs_put_int64 %d %lu failed", flux_rank (h), memMB);

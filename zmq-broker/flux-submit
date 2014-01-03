@@ -1,0 +1,56 @@
+#!/usr/bin/lua
+
+-------------------------------------------------------------------------------
+-- Modules:
+-------------------------------------------------------------------------------
+local flux = require 'flux'
+local timer = require 'timer'
+local prog = string.match (arg[0], "([^/]+)$")
+local shortprog = prog:match ("flux%-(.+)$")
+
+local wreck = require 'wreck' .new (shortprog)
+-------------------------------------------------------------------------------
+-- Main program:
+-------------------------------------------------------------------------------
+--  Parse cmdline args:
+--
+if not wreck:parse_cmdline (arg) then
+    wreck:die ("Failed to parse command line args\n")
+end
+
+-- Start in-program timer:
+local tt = timer.new()
+
+--  Create new connection to local cmbd:
+--
+local f, err = flux.new()
+if not f then wreck:die ("flux.new: %s\n", err) end
+
+--
+--  Create a job request as Lua table:
+--
+local jobreq = wreck:jobreq ()
+
+wreck:say ("%4.03fs: Submitting LWJ request for %d tasks (cmdline \"%s\")\n",
+    tt:get0(), wreck.ntasks, table.concat (wreck.cmdline, ' '))
+
+--
+--  Send job request message with tag="job.create"
+--
+local resp, err = f:rpc ('job.create', jobreq)
+if not resp then wreck:die ("flux.rpc: %s\n", err) end
+
+if resp.errnum then
+    wreck:die ("job.create message failed with errnum=%d\n", resp.errnum)
+end
+
+wreck:say ("%4.03fs: Submitted jobid %d\n", tt:get0(), resp.jobid)
+local lwj, err = f:kvsdir ("lwj.%d", resp.jobid)
+if not lwj then wreck:die ("f:kvsdir(lwj.%d): %s\n", resp.jobid, err) end
+
+lwj.state = "pending"
+lwj:commit()
+
+os.exit (0)
+
+-- vi: ts=4 sw=4 expandtab
