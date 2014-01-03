@@ -20,6 +20,7 @@
 #include <json/json.h>
 
 #include "zmsg.h"
+#include "util.h"
 #include "log.h"
 #include "plugin.h"
 
@@ -28,13 +29,19 @@
 static int epoch = 0;
 static bool disabled = false;
 
-static int syncsrv_timeout (flux_t h)
+static int timeout_cb (flux_t h, void *arg)
 {
-    if (flux_event_send (h, NULL, "event.sched.trigger.%d", ++epoch) < 0) {
+    json_object *o = util_json_object_new_object ();
+    int rc = -1;
+    util_json_object_add_int (o, "epoch", ++epoch);
+    if (flux_event_send (h, o, "event.sched.trigger") < 0) {
         err ("flux_event_send");
-        return -1;
+        goto done;
     }
-    return 0;
+    rc = 0;
+done:
+    json_object_put (o);
+    return rc;
 }
 
 static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)
@@ -73,18 +80,25 @@ invalid:
     }
 }
 
-static int syncsrv_init (flux_t h, zhash_t *args)
+static int syncsrv_main (flux_t h, zhash_t *args)
 {
+    if (flux_tmouthandler_set (h, timeout_cb, NULL) < 0) {
+        flux_log (h, LOG_ERR, "flux_tmouthandler_set: %s", strerror (errno));
+        return -1;
+    }
     if (kvs_watch_dir (h, set_config, h, "conf.sync") < 0) {
         err ("kvs_watch_dir conf.sync");
+        return -1;
+    }
+    if (flux_reactor_start (h) < 0) {
+        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
         return -1;
     }
     return 0;
 }
 
 const struct plugin_ops ops = {
-    .init    = syncsrv_init,
-    .timeout = syncsrv_timeout,
+    .main    = syncsrv_main,
 };
 
 /*

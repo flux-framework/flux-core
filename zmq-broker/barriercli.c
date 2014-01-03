@@ -30,10 +30,11 @@ int flux_barrier (flux_t h, const char *name, int nprocs)
     json_object *reply = NULL;
     int ret = -1;
 
+    util_json_object_add_string (request, "name", name);
     util_json_object_add_int (request, "count", 1);
     util_json_object_add_int (request, "nprocs", nprocs);
 
-    reply = flux_rpc (h, request, "barrier.enter.%s", name);
+    reply = flux_rpc (h, request, "barrier.enter");
     if (!reply && errno > 0)
         goto done;
     if (reply) {

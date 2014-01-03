@@ -399,12 +399,18 @@ static void reactor_destroy (reactor_t r)
 
 static bool dispatch_msg_match (dispatch_t *d, const char *tag, int typemask)
 {
+    const char *baretag;
+
     if (d->type == DSP_TYPE_MSG) {
         if (!(d->msg.typemask & (typemask & FLUX_MSGTYPE_MASK)))
             return false;
         if (!d->msg.pattern)
             return true;
-        if (fnmatch (d->msg.pattern, tag, 0) == 0)
+        if ((baretag = strchr (tag, '!')))
+            baretag++;
+        else
+            baretag = tag;
+        if (fnmatch (d->msg.pattern, baretag, 0) == 0)
             return true;
     }
     return false;
@@ -424,7 +430,7 @@ int handle_event_msg (flux_t h, int typemask, zmsg_t **zmsg)
     }
     d = zlist_first (h->reactor->dsp);
     while (d) {
-        if (dispatch_msg_match (d, tag, typemask)) {
+        if (dispatch_msg_match (d, tag, typemask) && d->msg.fn != NULL) {
             rc = d->msg.fn (h, typemask, zmsg, d->msg.arg);
             if (!*zmsg)
                 break;
@@ -449,7 +455,7 @@ int handle_event_fd (flux_t h, int fd, short events)
     d = zlist_first (h->reactor->dsp);
     while (d) {
         if (d->type == DSP_TYPE_FD && d->fd.fd == fd
-                                   && (d->fd.events & events)) {
+                            && (d->fd.events & events) && d->fd.fn != NULL) {
             rc = d->fd.fn (h, fd, events, d->fd.arg);
             break;
         }
@@ -482,7 +488,7 @@ int handle_event_tmout (flux_t h)
     
     d = zlist_first (h->reactor->dsp);
     while (d) {
-        if (d->type == DSP_TYPE_TMOUT) {
+        if (d->type == DSP_TYPE_TMOUT && d->tmout.fn != NULL) {
             rc = d->tmout.fn (h, d->tmout.arg);
             break;
         }
@@ -494,29 +500,57 @@ int handle_event_tmout (flux_t h)
 int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
                          FluxMsgHandler cb, void *arg)
 {
-    dispatch_t *d = dispatch_create (DSP_TYPE_MSG);
+    dispatch_t *d;
+    int rc = -1;
 
+    if (typemask == 0 || !pattern || !cb) {
+        errno = EINVAL;
+        goto done;
+    }
+    d = dispatch_create (DSP_TYPE_MSG);
     d->msg.typemask = typemask;
     d->msg.pattern = xstrdup (pattern);
     d->msg.fn = cb;
     d->msg.arg = arg;
     if (zlist_push (h->reactor->dsp, d) < 0)
         oom ();
-    return 0;
+    rc = 0;
+done:
+    return rc;
+}
+
+int flux_msghandler_addvec (flux_t h, msghandler_t *handlers, int len,
+                            void *arg)
+{
+    int i;
+
+    for (i = 0; i < len; i++)
+        if (flux_msghandler_add (h, handlers[i].typemask, handlers[i].pattern,
+                                    handlers[i].cb, arg) < 0)
+            return -1;
+    return 0;        
 }
 
 int flux_msghandler_append (flux_t h, int typemask, const char *pattern,
                             FluxMsgHandler cb, void *arg)
 {
-    dispatch_t *d = dispatch_create (DSP_TYPE_MSG);
+    dispatch_t *d;
+    int rc = -1;
 
+    if (typemask == 0 || !pattern || !cb) {
+        errno = EINVAL;
+        goto done;
+    }
+    d = dispatch_create (DSP_TYPE_MSG);
     d->msg.typemask = typemask;
     d->msg.pattern = xstrdup (pattern);
     d->msg.fn = cb;
     d->msg.arg = arg;
     if (zlist_append (h->reactor->dsp, d) < 0)
         oom ();
-    return 0;
+    rc = 0;
+done:
+    return rc;
 }
 
 void flux_msghandler_remove (flux_t h, int typemask, const char *pattern)
@@ -541,13 +575,18 @@ int flux_fdhandler_add (flux_t h, int fd, short events,
                         FluxFdHandler cb, void *arg)
 {
     dispatch_t *d;
+    int rc = -1;
 
+    if (fd < 0 || events == 0 || !cb) {
+        errno = EINVAL;
+        goto done;
+    }
     if (!h->ops->reactor_fd_add) {
         errno = ENOSYS;
-        return -1;
+        goto done;
     }
     if (h->ops->reactor_fd_add (h->impl, fd, events) < 0)
-        return -1;
+        goto done;
 
     d = dispatch_create (DSP_TYPE_FD);
     d->fd.fd = fd;
@@ -556,7 +595,9 @@ int flux_fdhandler_add (flux_t h, int fd, short events,
     d->fd.arg = arg;
     if (zlist_append (h->reactor->dsp, d) < 0)
         oom ();
-    return 0;
+    rc = 0;
+done:
+    return rc;
 }
 
 void flux_fdhandler_remove (flux_t h, int fd, short events)

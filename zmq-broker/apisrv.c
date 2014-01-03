@@ -268,15 +268,16 @@ static int client_cb (flux_t h, int fd, short revents, void *arg)
     return 0;
 }
 
-static void recv_response (ctx_t *ctx, zmsg_t **zmsg)
+static int response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    ctx_t *ctx = arg;
     char *uuid = NULL;
     zframe_t *zf = NULL;
     client_t *c;
 
     if (zmsg_hopcount (*zmsg) != 1) {
         flux_log (ctx->h, LOG_ERR, "dropping response with bad envelope");
-        return;
+        goto done;
     }
     uuid = zmsg_popstr (*zmsg);
     assert (uuid != NULL);
@@ -299,10 +300,13 @@ static void recv_response (ctx_t *ctx, zmsg_t **zmsg)
         zframe_destroy (&zf);
     if (uuid)
         free (uuid);
+done:
+    return 0;
 }
 
-static void recv_event (ctx_t *ctx, zmsg_t **zmsg)
+static int event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    ctx_t *ctx = arg;
     client_t *c;
     char *tag = flux_zmsg_tag (*zmsg);
     zmsg_t *cpy;
@@ -320,10 +324,12 @@ static void recv_event (ctx_t *ctx, zmsg_t **zmsg)
         }
         free (tag);
     }
+    return 0;
 }
 
-static void recv_snoop (ctx_t *ctx, zmsg_t **zmsg)
+static int snoop_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    ctx_t *ctx = arg;
     client_t *c;
     char *tag = flux_zmsg_tag (*zmsg);
     zmsg_t *cpy;
@@ -341,18 +347,6 @@ static void recv_snoop (ctx_t *ctx, zmsg_t **zmsg)
         }
         free (tag);
     }
-}
-
-static int apisrv_recv (flux_t h, zmsg_t **zmsg, int typemask)
-{
-    ctx_t *ctx = getctx (h);
-
-    if ((typemask & FLUX_MSGTYPE_EVENT))
-        recv_event (ctx, zmsg);
-    else if ((typemask & FLUX_MSGTYPE_RESPONSE))
-        recv_response (ctx, zmsg);
-    else if ((typemask & FLUX_MSGTYPE_SNOOP))
-        recv_snoop (ctx, zmsg);
     return 0;
 }
 
@@ -422,7 +416,14 @@ error_close:
     return -1;
 }
 
-static int apisrv_init (flux_t h, zhash_t *args)
+static msghandler_t htab[] = {
+    { FLUX_MSGTYPE_EVENT,     "*",          event_cb },
+    { FLUX_MSGTYPE_SNOOP,     "*",          snoop_cb },
+    { FLUX_MSGTYPE_RESPONSE,  "*",          response_cb },
+};
+const int htablen = sizeof (htab) / sizeof (htab[0]);
+
+static int apisrv_main (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
     char *sockpath = NULL, *dfltpath = NULL;
@@ -436,31 +437,36 @@ static int apisrv_init (flux_t h, zhash_t *args)
     if ((ctx->listen_fd = listener_init (ctx, sockpath)) < 0)
         goto done;
     if (flux_fdhandler_add (h, ctx->listen_fd, ZMQ_POLLIN | ZMQ_POLLERR,
-                                                    listener_cb, ctx) < 0)
-        flux_log (h, LOG_ERR, "flux_fdhandler_add listen_fd: %s",
-                  strerror (errno));
+                                                    listener_cb, ctx) < 0) {
+        flux_log (h, LOG_ERR, "flux_fdhandler_add: %s", strerror (errno));
+        goto done;
+    }
+    if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
+        flux_log (h, LOG_ERR, "flux_msghandler_addvec: %s", strerror (errno));
+        goto done;
+    }
+    if (flux_reactor_start (h) < 0) {
+        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
+        goto done;
+    }
     rc = 0;
 done:
     if (dfltpath)
         free (dfltpath);
+    if (ctx->listen_fd >= 0) {
+        if (close (ctx->listen_fd) < 0)
+            flux_log (h, LOG_ERR, "close listen_fd: %s", strerror (errno));
+    }
+    if (ctx->clients) {
+        client_t *c;
+        while ((c = zlist_pop (ctx->clients)))
+            client_destroy (c);
+    }
     return rc;
 }
 
-static void apisrv_fini (flux_t h)
-{
-    ctx_t *ctx = getctx (h);
-    client_t *c;
-
-    if (close (ctx->listen_fd) < 0)
-        flux_log (h, LOG_ERR, "close listen_fd: %s", strerror (errno));
-    while ((c = zlist_pop (ctx->clients)))
-        client_destroy (c);
-}
-
 const struct plugin_ops ops = {
-    .recv = apisrv_recv,
-    .init = apisrv_init,
-    .fini = apisrv_fini,
+    .main = apisrv_main,
 };
 
 /*

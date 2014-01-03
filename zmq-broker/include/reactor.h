@@ -10,6 +10,12 @@ typedef int (*FluxFdHandler)(flux_t h, int fd, short revents, void *arg);
 typedef int (*FluxZsHandler)(flux_t h, void *zs, short revents, void *arg);
 typedef int (*FluxTmoutHandler)(flux_t h, void *arg);
 
+typedef struct {
+    int typemask;
+    const char *pattern;
+    FluxMsgHandler cb;
+} msghandler_t; 
+
 /* Register a FluxMsgHandler callback to be called whenever a message
  * matching typemask and pattern (glob) is received.  The callback is
  * added to the beginning of the msghandler list.  If the callback
@@ -18,6 +24,11 @@ typedef int (*FluxTmoutHandler)(flux_t h, void *arg);
  */
 int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
                          FluxMsgHandler cb, void *arg);
+
+/* Register a batch of FluxMsgHandler's
+ */
+int flux_msghandler_addvec (flux_t h, msghandler_t *handlers, int len,
+                            void *arg);
 
 /* Register a FluxMsgHandler callback as above, except the callback is
  * added to the end of the msghandler list.

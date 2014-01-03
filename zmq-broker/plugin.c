@@ -360,12 +360,6 @@ static void plugin_handle_response (plugin_ctx_t p, zmsg_t *zmsg)
             goto done;
         }
     }
-    if (zmsg && p->ops->recv) {
-        if (p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_RESPONSE) < 0) {
-            plugin_reactor_stop (p, -1);
-            goto done;
-        }
-    }
 done:
     if (zmsg)
         zmsg_destroy (&zmsg);
@@ -408,12 +402,6 @@ static int dnreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
             goto done;
         }
     }
-    if (zmsg && p->ops->recv) {
-        if (p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_REQUEST) < 0) {
-            plugin_reactor_stop (p, -1);
-            goto done;
-        }
-    }
     if (zmsg) {
         if (flux_respond_errnum (p->h, &zmsg, ENOSYS) < 0) {
             err ("%s: flux_respond_errnum", __FUNCTION__);
@@ -439,12 +427,6 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
             goto done;
         }
     }
-    if (zmsg && p->ops->recv) {
-        if (p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_EVENT) < 0) {
-            plugin_reactor_stop (p, -1);
-            goto done;
-        }
-    }
     plugin_handle_deferred_responses (p);
 done:
     if (zmsg)
@@ -458,12 +440,6 @@ static int snoop_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 
     if (zmsg) {
         if (handle_event_msg (p->h, FLUX_MSGTYPE_SNOOP, &zmsg) < 0) {
-            plugin_reactor_stop (p, -1);
-            goto done;
-        }
-    }
-    if (zmsg && p->ops->recv) {
-        if (p->ops->recv (p->h, &zmsg, FLUX_MSGTYPE_SNOOP) < 0) {
             plugin_reactor_stop (p, -1);
             goto done;
         }
@@ -482,12 +458,6 @@ static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t)
     if (handle_event_tmout (p->h) < 0) {
         plugin_reactor_stop (p, -1);
         goto done;
-    }
-    if (p->ops->timeout) {
-        if (p->ops->timeout (p->h) < 0) {
-            plugin_reactor_stop (p, -1);
-            goto done;
-        }
     }
     plugin_handle_deferred_responses (p);
 done:
@@ -536,7 +506,7 @@ static void *plugin_thread (void *arg)
         err_exit ("%s: plugin_zloop_create", p->id);
 
     /* Register callbacks for ping, stats which can be overridden
-     * in p->ops->init() if desired.
+     * in p->ops->main() if desired.
      */
     if (flux_msghandler_add (p->h, FLUX_MSGTYPE_REQUEST, "*.ping",
                                                           ping_req_cb, p) < 0)
@@ -545,16 +515,12 @@ static void *plugin_thread (void *arg)
                                                           stats_req_cb, p) < 0)
         err_exit ("%s: flux_msghandler_add *.stats", p->id);
 
-    if (p->ops->init) {
-        if (p->ops->init (p->h, p->args) < 0) {
-            err ("%s: init failed", p->name);
-            goto done;
-        }
+    if (!p->ops->main)
+        err_exit ("%s: Plugin must define 'main' method", p->id);
+    if (p->ops->main(p->h, p->args) < 0) {
+        err ("%s: main returned error", p->name);
+        goto done;
     }
-
-    (void)flux_reactor_start (p->h); /* XXX ignore return code here */
-    if (p->ops->fini)
-        p->ops->fini (p->h);
 done:
     zloop_destroy (&p->zloop);
 
@@ -610,6 +576,7 @@ static void *plugin_dlopen (const char *searchpath, const char *name)
     while ((dir = strtok_r (a1, ":", &saveptr))) {
         if (asprintf (&path, "%s/%ssrv.so", dir, name) < 0)
             oom ();
+        dlerror ();
         dso = dlopen (path, RTLD_NOW | RTLD_LOCAL);
         free (path);
         if (dso)
@@ -628,9 +595,11 @@ plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
     const struct plugin_ops *ops;
     void *dso;
     char *errstr;
-        
+
     if (!(dso = plugin_dlopen (searchpath, name))) {
         msg ("plugin `%s' not found in search path (%s)", name, searchpath);
+        if ((errstr = dlerror ()) != NULL)
+            err ("%s: %s", name, errstr);
         return NULL;
     }
     dlerror ();

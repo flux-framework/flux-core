@@ -173,7 +173,7 @@ static void add_jobinfo (flux_t h, int64_t id, json_object *req)
     kvsdir_destroy (dir);
 }
 
-static int handle_recv (flux_t h, zmsg_t **zmsg, int typemask)
+static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     json_object *o = NULL;
     char *tag;
@@ -218,8 +218,22 @@ out:
     return 0;
 }
 
+int job_main (flux_t h, zhash_t *args)
+{
+    if (flux_msghandler_add (h, FLUX_MSGTYPE_REQUEST, "job.*",
+                                            job_request_cb, NULL) < 0) {
+        flux_log (h, LOG_ERR, "flux_msghandler_add: %s", strerror (errno));
+        return -1;
+    }
+    if (flux_reactor_start (h) < 0) {
+        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
+        return -1;
+    }
+    return 0;
+}
+
 const struct plugin_ops ops = {
-    .recv = handle_recv,
+    .main = job_main,
 };
 
 /*

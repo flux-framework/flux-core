@@ -431,8 +431,9 @@ int lwj_targets_this_node (struct rexec_ctx *ctx, int64_t id)
     return (1);
 }
 
-static void handle_event (struct rexec_ctx *ctx, zmsg_t **zmsg)
+static int event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    struct rexec_ctx *ctx = arg;
     char *tag = cmb_msg_tag (*zmsg, false);
     if (strncmp (tag, "event.rexec.run", 15) == 0) {
         int64_t id = id_from_tag (tag + 16, NULL);
@@ -455,10 +456,12 @@ static void handle_event (struct rexec_ctx *ctx, zmsg_t **zmsg)
     free (tag);
     if (zmsg && *zmsg)
         zmsg_destroy (zmsg);
+    return 0;
 }
 
-static void handle_request (struct rexec_ctx *ctx, zmsg_t **zmsg)
+static int request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    struct rexec_ctx *ctx = arg;
     json_object *o;
     char *tag;
 
@@ -466,32 +469,38 @@ static void handle_request (struct rexec_ctx *ctx, zmsg_t **zmsg)
         msg ("forwarding %s to session", tag);
         fwd_to_session (ctx, zmsg, o);
     }
-    if (zmsg)
+    if (*zmsg)
         zmsg_destroy (zmsg);
-}
-
-static int handle_recv (flux_t h, zmsg_t **zmsg, int typemask)
-{
-    struct rexec_ctx *ctx = getctx (h);
-
-    if ((typemask & FLUX_MSGTYPE_REQUEST))
-        handle_request (ctx, zmsg);
-    else if ((typemask & FLUX_MSGTYPE_EVENT))
-        handle_event (ctx, zmsg);
     return 0;
 }
 
-static int rexec_init (flux_t h, zhash_t *args)
+static msghandler_t htab[] = {
+    { FLUX_MSGTYPE_REQUEST,   "*",          request_cb },
+    { FLUX_MSGTYPE_EVENT,     "event.rexec.*", event_cb },
+};
+const int htablen = sizeof (htab) / sizeof (htab[0]);
+
+static int rexec_main (flux_t h, zhash_t *args)
 {
+    struct rexec_ctx *ctx = getctx (h);
+
     flux_event_subscribe (h, "event.rexec.run.");
     flux_event_subscribe (h, "event.rexec.kill.");
     flux_event_subscribe (h, "mrpc.rexec");
+
+    if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
+        flux_log (h, LOG_ERR, "flux_msghandler_addvec: %s", strerror (errno));
+        return -1;
+    }
+    if (flux_reactor_start (h) < 0) {
+        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
+        return -1;
+    }
     return 0;
 }
 
 const struct plugin_ops ops = {
-    .init = rexec_init,
-    .recv = handle_recv,
+    .main = rexec_main,
 };
 
 /*

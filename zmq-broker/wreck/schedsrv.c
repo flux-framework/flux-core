@@ -380,7 +380,7 @@ static void _new_job (const char *key, kvsdir_t dir, void *arg, int errnum)
     }
 }
 
-static int _sched_init (flux_t p, zhash_t *args)
+static int _sched_main (flux_t p, zhash_t *args)
 {
     flux_log_set_facility (p, "sched");
     flux_log (p, LOG_INFO, "sched plugin starting");
@@ -396,36 +396,15 @@ static int _sched_init (flux_t p, zhash_t *args)
     } else {
         flux_log (p, LOG_INFO, "sched plugin initialized");
     }
+    if (flux_reactor_start (p) < 0) {
+        flux_log (p, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
+        return -1;
+    }
     return 0;
-}
-
-static int _recv (flux_t p, zmsg_t **zmsg, int typemask)
-{
-    char *tag = cmb_msg_tag (*zmsg, false);
-
-    if ((typemask & FLUX_MSGTYPE_REQUEST))
-        flux_log (p, LOG_INFO, "received request %s", tag);
-    else if ((typemask & FLUX_MSGTYPE_RESPONSE))
-        flux_log (p, LOG_INFO, "received response %s", tag);
-    else if ((typemask & FLUX_MSGTYPE_EVENT))
-        flux_log (p, LOG_INFO, "received event %s", tag);
-    else if ((typemask & FLUX_MSGTYPE_SNOOP))
-        flux_log (p, LOG_INFO, "received snoop %s", tag);
-    else
-        flux_log (p, LOG_ERR, "received unknown %s", tag);
-    free (tag);
-    zmsg_destroy (zmsg);
-    return 0;
-}
-
-static void _sched_fini (flux_t p)
-{
 }
 
 const struct plugin_ops ops = {
-    .init = _sched_init,
-    .recv = _recv,
-    .fini = _sched_fini,
+    .main = _sched_main,
 };
 
 /*
