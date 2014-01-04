@@ -402,15 +402,6 @@ static void setroot (ctx_t *ctx, const char *rootdir, int rootseq)
     }
 }
 
-static void putdir_int (json_object *dir, const char *name, int i)
-{
-    json_object *o;
-    if (!(o = json_object_new_int (i)))
-        oom ();
-    json_object_object_del (dir, name);
-    json_object_object_add (dir, name, dirent_create ("FILEVAL", o));
-}
-
 static json_object *copydir (json_object *dir)
 {
     json_object *cpy;
@@ -513,7 +504,7 @@ done:
     free (name);
 }
 
-static void commit_apply (ctx_t *ctx, commit_t *c)
+static bool commit_apply (ctx_t *ctx, commit_t *c)
 {
     json_object *rootdir = NULL;
     json_object *rootcpy;
@@ -548,11 +539,13 @@ static void commit_apply (ctx_t *ctx, commit_t *c)
     commit_unroll (ctx, rootcpy);
 
     /* 'rootcpy' is now the new root directory.  Write it to the store
-     * and update the root href.
+     * and update the root href if it's different.
      */
-    putdir_int (rootcpy, "version", ctx->rootseq + 1); /* one last change */
     store (ctx, rootcpy, ref);
+    if (!strcmp (ref, ctx->rootdir))
+        return false; /* nothing changed */
     setroot (ctx, ref, ctx->rootseq + 1);
+    return true;
 }
 
 static int load_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
@@ -1277,8 +1270,8 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     /* Master: apply the commit and generate a response synchronously.
      */
     } else if (ctx->master) {
-        commit_apply (ctx, c); /* updates ctx->rootseq, ctx->rootdir */
-        setroot_event_send (ctx); 
+        if (commit_apply (ctx, c)) /* updates ctx->rootseq, ctx->rootdir */
+            setroot_event_send (ctx); 
         commit_respond (ctx, zmsg, name, NULL, 0);
         zhash_delete (ctx->commits, name);
 
@@ -1341,6 +1334,42 @@ done:
         json_object_put (o);
     if (*zmsg)
         zmsg_destroy (zmsg);
+    return 0;
+}
+
+/* For wait_version().
+ */
+static int sync_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    json_object *request = NULL;
+    json_object *response = NULL;
+    char *sender = NULL;
+    int rootseq;
+
+    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+                || util_json_object_get_int (request, "rootseq", &rootseq) < 0
+                || !(sender = cmb_msg_sender (*zmsg))) {
+        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
+    }
+    if (ctx->rootseq < rootseq) {
+        wait_t w = wait_create (h, typemask, zmsg, sync_request_cb, arg);
+        wait_set_id (w, sender);
+        wait_addqueue (ctx->watchlist, w);
+        goto done; /* stall */
+    }
+    response = util_json_object_new_object ();
+    util_json_object_add_int (response, "rootseq", ctx->rootseq);
+    util_json_object_add_string (response, "rootdir", ctx->rootdir);
+    flux_respond (h, zmsg, response);
+done:
+    if (sender)
+        free (sender);
+    if (request)
+        json_object_put (request);
+    if (response)
+        json_object_put (response);
     return 0;
 }
 
@@ -1555,6 +1584,7 @@ static void setargs (ctx_t *ctx, zhash_t *args)
 static msghandler_t htab[] = {
     { FLUX_MSGTYPE_EVENT,   "event.kvs.setroot",    setroot_event_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.getroot",          getroot_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "kvs.sync",             sync_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.dropcache",        dropcache_cb },
     { FLUX_MSGTYPE_EVENT,   "event.kvs.dropcache",  dropcache_cb },
     { FLUX_MSGTYPE_EVENT,   "event.sched.trigger",  heartbeat_cb },

@@ -1000,23 +1000,45 @@ int kvs_fence (flux_t h, const char *name, int nprocs)
 
 int kvs_get_version (flux_t h, int *versionp)
 {
-    return kvs_get_int (h, "version", versionp);
+    json_object *request = util_json_object_new_object ();
+    json_object *reply = NULL;
+    int ret = -1;
+    int version;
+ 
+    reply = flux_rpc (h, request, "kvs.getroot");
+    if (!reply)
+        goto done;
+    if (util_json_object_get_int (reply, "rootseq", &version) < 0) {
+        errno = EPROTO;
+        goto done;
+    }
+    *versionp = version;
+    ret = 0;
+done:
+    if (request)
+        json_object_put (request);
+    if (reply)
+        json_object_put (reply); 
+    return ret;
 }
 
 int kvs_wait_version (flux_t h, int version)
 {
-    int vers;
-    int rc = -1;
-
-    if (kvs_get_int (h, "version", &vers) < 0)
+    json_object *request = util_json_object_new_object ();
+    json_object *reply = NULL;
+    int ret = -1;
+ 
+    util_json_object_add_int (request, "rootseq", version);
+    reply = flux_rpc (h, request, "kvs.sync");
+    if (!reply)
         goto done;
-    while (vers < version) {
-        if (kvs_watch_once_int (h, "version", &vers) < 0)
-            goto done;
-    }
-    rc = 0;
+    ret = 0;
 done:
-    return rc;
+    if (request)
+        json_object_put (request);
+    if (reply)
+        json_object_put (reply); 
+    return ret;
 }
 
 int kvs_dropcache (flux_t h)

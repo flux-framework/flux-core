@@ -21,8 +21,8 @@ test_cleanup
 
 VERS=`kvsgetv`
 kvswaitv $(($VERS + 2)) &
-kvs foo=bar ^
-kvs foo2=baz ^
+kvs foo=42 ^
+kvs foo2=43 ^
 wait
 
 test_cleanup
