@@ -13,6 +13,7 @@
 #include <stdbool.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <sys/resource.h>
 
 #include <json/json.h>
 #include <czmq.h>
@@ -617,6 +618,35 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         if (flux_respond (ctx->h, zmsg, response) < 0)
             err_exit ("flux_respond");
         json_object_put (response);
+    } else if (cmb_msg_match (*zmsg, "cmb.rusage")) {
+        json_object *response;
+        struct rusage usage;
+
+        if (getrusage (RUSAGE_SELF, &usage) < 0) {
+            if (flux_respond_errnum (ctx->h, zmsg, errno) < 0)
+                err_exit ("flux_respond_errnum");
+        } else {
+            response = util_json_object_new_object ();
+            util_json_object_add_timeval (response, "utime", &usage.ru_utime);
+            util_json_object_add_timeval (response, "stime", &usage.ru_stime);
+            util_json_object_add_int64 (response, "maxrss", usage.ru_maxrss);
+            util_json_object_add_int64 (response, "ixrss", usage.ru_ixrss);
+            util_json_object_add_int64 (response, "idrss", usage.ru_idrss);
+            util_json_object_add_int64 (response, "isrss", usage.ru_isrss);
+            util_json_object_add_int64 (response, "minflt", usage.ru_minflt);
+            util_json_object_add_int64 (response, "majflt", usage.ru_majflt);
+            util_json_object_add_int64 (response, "nswap", usage.ru_nswap);
+            util_json_object_add_int64 (response, "inblock", usage.ru_inblock);
+            util_json_object_add_int64 (response, "oublock", usage.ru_oublock);
+            util_json_object_add_int64 (response, "msgsnd", usage.ru_msgsnd);
+            util_json_object_add_int64 (response, "msgrcv", usage.ru_msgrcv);
+            util_json_object_add_int64 (response, "nsignals", usage.ru_nsignals);
+            util_json_object_add_int64 (response, "nvcsw", usage.ru_nvcsw);
+            util_json_object_add_int64 (response, "nivcsw", usage.ru_nivcsw);
+            if (flux_respond (ctx->h, zmsg, response) < 0)
+                err_exit ("flux_respond");
+            json_object_put (response);
+        }
     } else
         handled = false;
 
