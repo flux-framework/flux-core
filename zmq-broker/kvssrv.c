@@ -392,99 +392,11 @@ static void store_complete (ctx_t *ctx, href_t ref)
     wait_runqueue (hp->waitlist);
 }
 
-static bool readahead_dir (ctx_t *ctx, json_object *dir, wait_t w, int flags)
+static void setroot (ctx_t *ctx, const char *rootdir, int rootseq)
 {
-    json_object *val;
-    json_object_iter iter;
-    const char *ref;
-    bool done = true;
-
-    json_object_object_foreachC (dir, iter) {
-        if ((flags & KVS_GET_FILEVAL) && util_json_object_get_string (iter.val, "FILEREF", &ref) == 0) {
-            if (!load (ctx, ref, w, &val)) {
-                done = false;
-                continue;
-            }
-        } else if ((flags & KVS_GET_DIRVAL) && util_json_object_get_string (iter.val, "DIRREF", &ref) == 0){
-            if (!load (ctx, ref, w, &val)) {
-                done = false;
-                continue;
-            }
-            if (!readahead_dir (ctx, val, w, flags))
-                done = false;
-        }
-    }
-    return done;
-}
-
-/* Create a JSON object that is a duplicate of the directory 'dir' with
- * references to the content-hash replaced with their values.  More precisely,
- * if 'flags' contains KVS_GET_FILEVAL, replace FILEREF's with their values;
- * if 'flags' contains KVS_GET_DIRVAL, replace DIRREF's with their values,
- * and recurse.
- */
-static json_object *kvs_save (ctx_t *ctx, json_object *dir, wait_t w, int flags)
-{
-    json_object *dcpy, *val;
-    json_object_iter iter;
-    const char *ref;
-
-    if (!(dcpy = json_object_new_object ()))
-        oom ();
-    
-    json_object_object_foreachC (dir, iter) {
-        if ((flags & KVS_GET_FILEVAL)
-                && util_json_object_get_string (iter.val, "FILEREF", &ref)==0) {
-            if (!load (ctx, ref, w, &val))
-                goto stall;
-            json_object_object_add (dcpy, iter.key,
-                                    dirent_create ("FILEVAL", val));
-        } else if ((flags & KVS_GET_DIRVAL)
-                && util_json_object_get_string (iter.val, "DIRREF", &ref)==0) {
-            if (!load (ctx, ref, w, &val))
-                goto stall;
-            if (!(val = kvs_save (ctx, val, w, flags)))
-                goto stall;
-            json_object_object_add (dcpy, iter.key,
-                                    dirent_create ("DIRVAL", val));
-            json_object_put (val);
-        } else {
-            json_object_get (iter.val);
-            json_object_object_add (dcpy, iter.key, iter.val);
-        }
-    }
-    return dcpy;
-stall:
-    json_object_put (dcpy);
-    return NULL;
-}
-
-static bool decode_rootref (const char *rootref, int *seqp, href_t ref)
-{
-    char *p;
-    int seq = strtoul (rootref, &p, 10);
-
-    if (*p++ != '.' || strlen (p) + 1 != sizeof (href_t))
-        return false;
-    *seqp = seq;
-    memcpy (ref, p, sizeof (href_t));
-    return true;
-}
-
-static char *encode_rootref (int seq, href_t ref)
-{
-    char *rootref;
-
-    if (asprintf (&rootref, "%d.%s", seq, ref) < 0)
-        oom ();
-    return rootref;
-}
-
-static void setroot (ctx_t *ctx, int seq, href_t ref)
-{
-    if (seq == 0 || seq > ctx->rootseq) {
-        memcpy (ctx->rootdir, ref, sizeof (href_t));
-        ctx->rootseq = seq;
+    if (rootseq == 0 || rootseq > ctx->rootseq) {
+        memcpy (ctx->rootdir, rootdir, sizeof (href_t));
+        ctx->rootseq = rootseq;
         wait_runqueue (ctx->watchlist);
         ctx->watchlist_lastrun_epoch = ctx->epoch;
     }
@@ -601,7 +513,7 @@ done:
     free (name);
 }
 
-void commit_apply (ctx_t *ctx, commit_t *c)
+static void commit_apply (ctx_t *ctx, commit_t *c)
 {
     json_object *rootdir = NULL;
     json_object *rootcpy;
@@ -640,7 +552,7 @@ void commit_apply (ctx_t *ctx, commit_t *c)
      */
     putdir_int (rootcpy, "version", ctx->rootseq + 1); /* one last change */
     store (ctx, rootcpy, ref);
-    setroot (ctx, ctx->rootseq + 1, ref);
+    setroot (ctx, ref, ctx->rootseq + 1);
 }
 
 static int load_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
@@ -792,21 +704,6 @@ static int dropcache_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
      * reach the master.  Also it's too dangerous to depend on multicast
      * to drop master and slaves at once without flushing pending work.
      */
-#if 0
-        href_t href;
-        json_object *cpy, *rootdir;
-
-        (void)load (ctx, ctx->rootdir, NULL, &rootdir);
-        assert (rootdir != NULL);
-        cpy = kvs_save (ctx, rootdir, NULL, KVS_GET_DIRVAL | KVS_GET_FILEVAL);
-        assert (cpy != NULL);
-        zhash_destroy (&ctx->store);
-        if (!(ctx->store = zhash_new ()))
-            oom ();
-        kvs_restore (ctx, cpy, href);
-        assert (!strcmp (ctx->rootdir, href));
-        json_object_put (cpy);
-#endif
     } else {
         expcount = expire_cache (ctx, 0);
     }
@@ -905,7 +802,7 @@ stall:
 }
 
 static bool lookup (ctx_t *ctx, json_object *root, wait_t w,
-                    bool dir, int dir_flags, bool readlink, const char *name,
+                    bool dir, bool readlink, const char *name,
                     json_object **valp, int *ep)
 {
     json_object *vp, *dirent, *val = NULL;
@@ -979,12 +876,9 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t w,
             msg_exit ("%s: corrupt internal storage", __FUNCTION__);
     }
     /* val now contains the requested object */
-    if (isdir) {
-        if (!ctx->master && !readahead_dir (ctx, val, w, dir_flags))
-            goto stall;
-        if (!(val = kvs_save (ctx, val, w, dir_flags)))
-            goto stall;
-    } else 
+    if (isdir)
+        val = copydir (val);
+    else 
         json_object_get (val);
 done:
     *valp = val;
@@ -1036,7 +930,7 @@ static int get_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         if (!strncmp (iter.key, ".flag_", 6)) /* ignore flags */
             continue;
         json_object *val = NULL;
-        if (!lookup (ctx, root, w, flag_directory, 0, flag_readlink,
+        if (!lookup (ctx, root, w, flag_directory, flag_readlink,
                      iter.key, &val, &errnum))
             stall = true; /* keep going to maximize readahead */
         if (stall) {
@@ -1102,7 +996,7 @@ static int watch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         if (!strncmp (iter.key, ".flag_", 6) || !strncmp (iter.key, ".arg_", 5))
             continue;
         json_object *val = NULL;
-        if (!lookup (ctx, root, w, flag_directory, 0, flag_readlink,
+        if (!lookup (ctx, root, w, flag_directory, flag_readlink,
                      iter.key, &val, &errnum))
             stall = true; /* keep going to maximize readahead */
         if (stall) {
@@ -1295,17 +1189,17 @@ static bool commit_dirty (ctx_t *ctx, commit_t *c, wait_t w)
 }
 
 static void commit_respond (ctx_t *ctx, zmsg_t **zmsg, const char *name,
-                            const char *rootref)
+                            const char *rootdir, int rootseq)
 {
     json_object *response = util_json_object_new_object ();
     
     util_json_object_add_string (response, "name", name);
-    if (rootref) {
-        util_json_object_add_string (response, "rootref", rootref);
+    if (rootdir) {
+        util_json_object_add_int (response, "rootseq", rootseq);
+        util_json_object_add_string (response, "rootdir", rootdir);
     } else {
-        char *tmp = encode_rootref (ctx->rootseq, ctx->rootdir);
-        util_json_object_add_string (response, "rootref", tmp);
-        free (tmp);
+        util_json_object_add_int (response, "rootseq", ctx->rootseq);
+        util_json_object_add_string (response, "rootdir", ctx->rootdir);
     }
     if (flux_respond (ctx->h, zmsg, response) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: flux_respond: %s", __FUNCTION__,
@@ -1377,15 +1271,15 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     /* Handle zero-length commit.
      */
     if (zhash_size (c->dirents) == 0) {
-        commit_respond (ctx, zmsg, name, NULL);
+        commit_respond (ctx, zmsg, name, NULL, 0);
         zhash_delete (ctx->commits, name);
 
     /* Master: apply the commit and generate a response synchronously.
      */
     } else if (ctx->master) {
-        commit_apply (ctx, c); /* updates ctx->rootseq, ctx->rootref */
+        commit_apply (ctx, c); /* updates ctx->rootseq, ctx->rootdir */
         setroot_event_send (ctx); 
-        commit_respond (ctx, zmsg, name, NULL);
+        commit_respond (ctx, zmsg, name, NULL, 0);
         zhash_delete (ctx->commits, name);
 
     /* Slave: commit must wait for any referenced hash entries to be stored
@@ -1417,14 +1311,13 @@ static int commit_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     json_object *o = NULL;
-    const char *rootref, *name;
-    int seq;
-    href_t href;
+    const char *rootdir, *name;
+    int rootseq;
     commit_t *c;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
-            || util_json_object_get_string (o, "rootref", &rootref) < 0
-            || !decode_rootref (rootref, &seq, href)
+            || util_json_object_get_int (o, "rootseq", &rootseq) < 0
+            || util_json_object_get_string (o, "rootdir", &rootdir) < 0
             || util_json_object_get_string (o, "name", &name) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
@@ -1432,13 +1325,13 @@ static int commit_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     /* Update the cache on this node.
      * If we have already advanced here or beyond, this is a no-op.
      */
-    setroot (ctx, seq, href);
+    setroot (ctx, rootdir, rootseq);
 
     /* Find the original commit_t associated with this request and respond.
      */
     if ((c = zhash_lookup (ctx->commits, name))) {
         assert (c->request != NULL);
-        commit_respond (ctx, &c->request, name, rootref);
+        commit_respond (ctx, &c->request, name, rootdir, rootseq);
         if (!c->internal)
             tstat_push (&ctx->stats.commit_time,  monotime_since (c->t0));
         zhash_delete (ctx->commits, name);
@@ -1454,30 +1347,28 @@ done:
 static int getroot_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    char *rootref = encode_rootref (ctx->rootseq, ctx->rootdir);
     json_object *o = util_json_object_new_object ();
 
-    util_json_object_add_string (o, "rootref", rootref);
+    util_json_object_add_int (o, "rootseq", ctx->rootseq);
+    util_json_object_add_string (o, "rootdir", ctx->rootdir);
     flux_respond (h, zmsg, o);
-    free (rootref);
     json_object_put (o);
     return 0;
 }
 
 static int getroot_request_send (ctx_t *ctx)
 {
-    int seq;
-    href_t href;
     json_object *reply = flux_rpc (ctx->h, NULL, "kvs.getroot");
-    const char *rootref;
+    int rootseq;
+    const char *rootdir;
     int rc = -1;
 
-    if (!reply || util_json_object_get_string (reply, "rootref", &rootref) < 0
-               || !decode_rootref (rootref, &seq, href)) {
+    if (!reply || util_json_object_get_int (reply, "rootseq", &rootseq) < 0
+            || util_json_object_get_string (reply, "rootdir", &rootdir) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: bad response", __FUNCTION__);
         goto done;
     }
-    setroot (ctx, seq, href);
+    setroot (ctx, rootdir, rootseq);
     rc = 0;
 done:
     if (reply)
@@ -1488,18 +1379,17 @@ done:
 static int setroot_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    href_t href;
-    int seq;
-    const char *rootref;
+    int rootseq;
+    const char *rootdir;
     json_object *o = NULL;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
-                || util_json_object_get_string (o, "rootref", &rootref) < 0
-                || !decode_rootref (rootref, &seq, href)) {
+                || util_json_object_get_int (o, "rootseq", &rootseq) < 0
+                || util_json_object_get_string (o, "rootdir", &rootdir) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    setroot (ctx, seq, href);
+    setroot (ctx, rootdir, rootseq);
 done:
     if (o)
         json_object_put (o);
@@ -1510,15 +1400,14 @@ done:
 
 static int setroot_event_send (ctx_t *ctx)
 {
-    char *rootref = encode_rootref (ctx->rootseq, ctx->rootdir);
     json_object *o = util_json_object_new_object ();
     int rc = -1;
 
-    util_json_object_add_string (o, "rootref", rootref);
+    util_json_object_add_int (o, "rootseq", ctx->rootseq);
+    util_json_object_add_string (o, "rootdir", ctx->rootdir);
     if (flux_event_send (ctx->h, o, "event.kvs.setroot") < 0)
         goto done;
     json_object_put (o);
-    free (rootref);
     rc = 0;
 done:
     return rc;
@@ -1715,7 +1604,7 @@ static int kvssrv_main (flux_t h, zhash_t *args)
         href_t href;
 
         store (ctx, rootdir, href);
-        setroot (ctx, 0, href);
+        setroot (ctx, href, 0);
         if (args)
             setargs (ctx, args);
     } else {
