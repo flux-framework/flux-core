@@ -622,7 +622,7 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         json_object *response;
         struct rusage usage;
 
-        if (getrusage (RUSAGE_SELF, &usage) < 0) {
+        if (getrusage (RUSAGE_THREAD, &usage) < 0) {
             if (flux_respond_errnum (ctx->h, zmsg, errno) < 0)
                 err_exit ("flux_respond_errnum");
         } else {

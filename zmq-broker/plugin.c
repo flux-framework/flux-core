@@ -379,7 +379,7 @@ static int rusage_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         flux_log (p->h, LOG_ERR, "%s: error decoding message", __FUNCTION__);
         goto done;
     }
-    if (getrusage (RUSAGE_SELF, &usage) < 0) {
+    if (getrusage (RUSAGE_THREAD, &usage) < 0) {
         if (flux_respond_errnum (h, zmsg, errno) < 0) {
             err ("%s: flux_respond_errnum", __FUNCTION__);
             rc = -1;
