@@ -513,6 +513,9 @@ static bool commit_apply (ctx_t *ctx, commit_t *c)
     json_object *dirent;
     href_t ref;
 
+    if (zhash_size (c->dirents) == 0)
+        goto done_nochange;
+
     /* Load the current root directory into 'rootdir'.
      */
     bool stall = !load (ctx, ctx->rootdir, NULL, &rootdir);
@@ -543,9 +546,11 @@ static bool commit_apply (ctx_t *ctx, commit_t *c)
      */
     store (ctx, rootcpy, ref);
     if (!strcmp (ref, ctx->rootdir))
-        return false; /* nothing changed */
+        goto done_nochange;
     setroot (ctx, ref, ctx->rootseq + 1);
     return true;
+done_nochange:
+    return false;
 }
 
 static int load_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
@@ -1257,19 +1262,13 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
      * N.B. we can stall and restart as stores complete but not after req sent.
      */
     if (c->request != NULL) {
-        flux_respond_errnum (h, zmsg, EINVAL);
+        flux_respond_errnum (h, zmsg, EINPROGRESS);
         goto done;
     }
 
-    /* Handle zero-length commit.
-     */
-    if (zhash_size (c->dirents) == 0) {
-        commit_respond (ctx, zmsg, name, NULL, 0);
-        zhash_delete (ctx->commits, name);
-
     /* Master: apply the commit and generate a response synchronously.
      */
-    } else if (ctx->master) {
+    if (ctx->master) {
         if (commit_apply (ctx, c)) /* updates ctx->rootseq, ctx->rootdir */
             setroot_event_send (ctx); 
         commit_respond (ctx, zmsg, name, NULL, 0);
