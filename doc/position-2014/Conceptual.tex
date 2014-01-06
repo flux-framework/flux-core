@@ -1,0 +1,172 @@
+\subsection{Conceptual Software Design}
+We describe some of our primary conceptual models
+that will embody this new paradigm while addressing
+the multitude of design challenges described above.
+These models form the basis for the software design
+of FLUX.
+
+\vspace{1ex}
+\noindent{\em Unified Job Model:} Traditionally, a job is
+simply defined to be a resource allocation, a concept
+too weak to support the new paradigm. Rather, we unify
+the traditional job notion with the notion of a resource
+manager instance---an independent set of resource
+manager services. The RM instance must be delegated
+the main responsibility of managing the resources allocated
+to the job. Then, the unified job model becomes
+the foundation on which to build a hierarchical, 
+resource-management scheme to address the multidimensional
+scale challenge. In addition, an RM instance can
+implement compatibility mode with a particular
+traditional paradigm only over its own allocation, 
+providing a straightforward path to address
+the backward compatibility challenge.
+
+\vspace{1ex}
+\noindent{\em Job Hierarchy Model:} To scale the new paradigm
+in the scaling limit of the entire computing facility, 
+we must avoid a centralized approach: the new paradigm 
+requires a hierarchical management scheme with a well-balanced, 
+multilevel delegation structure. For this purpose, 
+we use a tree-based job hierarchy model that has 
+many proven advantages for extreme scalability. 
+In this model, a job is only required to manage 
+its children jobs, which would be only a small fraction 
+of the total number of jobs that are run across 
+the entire computing facility. Further, several guiding 
+principles throughout the job hierarchy strike 
+a balance between the management responsibility 
+of a parent job and delegation and empowerment 
+of a child job:
+
+\begin{enumerate}
+\item{Parent bounding rule: the parent job grants 
+and confines the resource allocation of all of its children.}
+
+\item{Child empowerment rule: within the bound set 
+by the parent, the child job is delegated the ownership 
+of the allocation and becomes solely responsible 
+for most efficient uses of the resources.}
+
+\item{Parental consent rule: the child job must ask 
+its parent job when it wants to grow or shrink the resource 
+allocation, and it is up to the parent to grant the request.}
+\end{enumerate}
+
+In general, these rules enforce the first principle 
+of the new paradigm: imposing highly complex resource bounds 
+to guarantee the highest operational efficiency 
+at any level across the computing facility, while enabling 
+most efficient execution and scheduling of the workloads 
+within these bounds. 
+
+At the same time, this model is the most fundamental 
+design concept, which forms the basis to address 
+many of the design challenges including 
+the {\em multidimensional scale}, {\em dynamic workload}, 
+{\em power}, and {\em scheduling challenges}.
+
+\vspace{1ex}
+\noindent{\em Generalized Resource Model:} In the traditional 
+paradigm, compute resources are modeled primarily 
+as a collection of compute nodes, a simplistic perspective 
+ill-suited for the new paradigm. Today's applications 
+are diverse with disparate limiting performance factors 
+beyond floating point computation. 
+
+Further, computing centers are increasingly concerned 
+about managing new resource types such as power 
+and shared persistent storage. The generalized resource 
+model is our concept to represent various resource types 
+and their relationships that can impact how well applications 
+perform and the computing facility operates. 
+Our generalized resource model also includes a unified 
+resource specification and description language. 
+Speaking the same resource description language 
+for request specification provides transparency and 
+fine-grained expressibility. Our generalized resource 
+model addresses not only the {\em diverse workload} 
+and {\em power challenges}, but the {\em scheduling challenge}.
+
+More specifically, the unified language approach 
+allows users to express their resource requests 
+more flexibly, e.g., using ranges or boolean 
+expressions instead of hard amounts to allow requests 
+to be fulfilled from several equivalent resource types. 
+This makes the scheduling granularity 
+of jobs finer and more malleable.
+
+\vspace{1ex}
+\noindent{\em Resource Allocation Elasticity Model:} As our 
+applications and their programming models are becoming 
+increasingly dynamic, the new paradigm must support 
+an elasticity model where an existing resource allocation 
+can grow and shrink, depending on the current needs 
+of applications and/or the computing facility. 
+
+We support the elasticity model within our job hierarchy 
+framework above: a child job sends a grow or shrink request 
+to its parent, which can go up the job hierarchy 
+until all requisite constraints are known for this request. 
+Also, combining this with the generalized resource model, 
+the elasticity can be expressed for any resource including 
+power consumption. Our elasticity model not only addresses 
+the {\em dynamic workload} and {\em power} challenges, but also 
+{\em scheduling challenge}. When a significant schedule stall 
+is created with no small jobs to backfill, some of the 
+currently running jobs can grow into these stalled 
+resources and possibly complete sooner.
+
+\vspace{1ex}
+\noindent{\em Common Scalable Persistent Communication Infrastructure Model:} 
+Our scalability strategy with respect to a large number 
+of compute nodes is to provide a common scalable communication 
+framework within each job. When a job is created, a secure, scalable 
+overlay network with common communication service is established 
+across its allocated nodes. Except for the root-level job, 
+the existing communication session of the parent job assists 
+the child job with rapid creation of its own session. 
+
+A communication session is only aware of its parent 
+and child and passes the limited set of control information 
+through this communication channel. Thus, this model 
+enables highly scalable communication within a job, while 
+limiting communications between jobs, addressing 
+both the {\em multidimensional scale} and {\em security challenges}. 
+
+Further, this backbone per-job communication network 
+supports many well-known bootstrap interfaces 
+for distributed programs including many MPI implementations 
+as well as run-time tools, and thus in part addresses 
+the {\em productivity challenges}.
+
+\vspace{1ex}
+\noindent{\em Self-Hosting Model:} We use a self-hosting model 
+to instantiate a new RM instance: the parent is capable 
+of launching a standalone copy of itself as a child job, 
+but possibly with different plugins. This makes it easier 
+for developers or a quality assurance team to test 
+new RM versions, helping addressing the 
+{\em higher downtime costs challenge}. Further, self-hosting 
+with new and experimental plugins encourages 
+experimentation and facilitates research activities 
+within a production instance, addressing 
+the {\em productivity challenges}, too
+
+\vspace{1ex}
+\noindent{\em Lightweight Virtualization Model:} The lightweight 
+virtualization model is our response to the 
+{\em higher downtime costs}, {\em separation-of-concerns} 
+and {\em security challenges}. Full-fledged virtualization 
+techniques like Xen and Kernel-based Virtual Machine (KVM) 
+have many advantages for these design challenges, but 
+that approach has proven to be ineffective for HPC 
+due in large part its high overhead~\cite{VirtHPC}. 
+Instead, our virtualization strategy exploits OS-enforced
+resource management and isolation mechanisms 
+to launch applications in containers with virtually 
+no impact on performance~\cite{ContainerVirt}. Within a container, 
+private file system namespaces allow the system 
+and applications to have divergent file system views, 
+and to access file systems with different constraints.
+

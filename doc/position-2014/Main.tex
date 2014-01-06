@@ -1,0 +1,45 @@
+\documentclass{llncs}
+\usepackage{makeidx}  % allows for indexgeneration
+
+% enable/disable margin comments
+\newif\ifcomments
+%\commentsfalse
+\commentstrue
+
+\pagestyle{headings} 
+
+
+\begin{document}
+
+\title{FLUX: A Next-Generation Resource Management Framework for Large HPC Centers}
+%\titlerunning{FLUX}
+
+\author{Dong H. Ahn \and Jim Garlick \and Mark Grondona \and Don Lipari \and Becky Springmeyer}
+\institute{Lawrence Livermore National Laboratory, Livermore, CA 94550, USA, \\
+\email{\{ahn1,garlick,grondona1,lipari1,springme\}@llnl.gov}
+}
+\authorrunning{Ahn, Garlick, Grondona, Lipari, Springmeyer}
+
+\maketitle
+
+\input{Abstract}
+\input{Introduction}
+\input{Paradigm}
+\input{Design}
+\input{Conceptual}
+\input{FLUX}
+\input{FLUX-Overview}
+\input{FLUX-Runtime}
+\input{FLUX-LWJ}
+\input{FLUX-CMB}
+\input{FLUX-KVS}
+\input{Results-Perf}
+\input{Results-Case}
+\input{Related}
+\input{Discussions}
+\input{Conclusion}
+
+\bibliographystyle{splncs}
+\bibliography{project}
+
+\end{document}

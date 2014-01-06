@@ -1,0 +1,84 @@
+\section{Introduction}
+
+Resource management (RM) software is critical
+for high performance computing (HPC).
+It is the centerpiece that allows efficient
+execution of HPC applications while providing
+the computing facility with the main means
+to maximize the utilization of its computing
+resources.
+
+However, several growing trends make even
+best-in-breed RM software systems increasingly ineffective.
+As numbers and types of compute cores of
+HPC systems continue to grow, the key RM challenges associated only
+with today's leadership-class machines are quickly
+permeating to {\em all} computing resources
+such as commodity Linux clusters. Thus the RM must increase
+its purview to resources across the entire
+computing facility to have to provide 
+extreme scalability, low noise, fault tolerance,
+and heterogeneity management while under increasingly
+stricter power bounds.
+
+In fact, a greater interplay among various classes
+of clusters across the entire computing facility already 
+makes the current paradigm of single-cluster scheduling
+largely ineffective. An application running on a compute
+cluster heavily utilizes site-wide shared resources
+such as I/O and visualization clusters.
+Thus, avoiding any significant site-wide bottleneck
+requires the RM to schedule the job to all dependent
+resources together.
+
+Meanwhile, greater difficulties in code development
+on larger systems have begun to impose far more complex
+requirements on the RM. For example, without adequate
+RM support, debugging, tuning, testing and verification
+of the applications have become too difficult
+and time-consuming for end-users.
+The next-generation code development environments
+require the RM to provide effective mechanisms
+to support the reproducible results of program execution,
+to provide accurate correlations between user-level errors
+and system-level events,
+and to integrate and accelerate a rich set of scalable tools.
+
+In short, without the RM that can effectively
+address all of these challenges, it has become apparent
+that HPC centers will suffer a significant loss
+in both user productivity and efficient uses of its
+next-generation computing resources. 
+
+Our response to this critical need is FLUX,
+an RM software framework that can solve the key emerging
+challenges in a simple, extensible, distributed
+and autonomous fashion.
+It aims at managing the whole computing facility
+as one common pool of diverse resources.
+Hence, scheduling decisions will be far more efficient
+as well as extendible to accommodate emerging constraints
+such as a strict power bound.
+
+Further, FLUX integrates system monitoring and
+administration, lightweight virtualization, 
+and distributed tool communication capabilities 
+that are currently provided by disjoint
+and often overlapping software. 
+Integration of these facilities within the common framework
+designed from the ground up for scalability, security,
+and fault tolerance will result in a more efficient
+and capable system.
+
+\ifcomments
+\marginpar{\tiny DA: Please check your author information.}
+
+\ifcomments
+\marginpar{\tiny DA: Author list alphabetic for now.}
+
+\ifcomments
+\marginpar{\tiny DA: List contributions here?}
+
+\ifcomments
+\marginpar{\tiny DA: Paper roadmap here}
+
