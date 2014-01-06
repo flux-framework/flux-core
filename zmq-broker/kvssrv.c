@@ -1124,7 +1124,7 @@ done:
 
 /* Send a commit message upstream.
  */
-static void send_upstream_commit (ctx_t *ctx, commit_t *c, const char *name,
+static void send_upstream_commit (ctx_t *ctx, commit_t *c, const char *sender,
                                   zmsg_t **zmsg)
 {
     json_object *request, *dirent;
@@ -1138,11 +1138,11 @@ static void send_upstream_commit (ctx_t *ctx, commit_t *c, const char *name,
     *zmsg = NULL;
 
     /* Send a new request upstream.
-     * When the response is recieved, we will look up this commit_t by name
+     * When the response is recieved, we will look up this commit_t by sender
      * and respond to c->request.
      */
     request = util_json_object_new_object ();
-    util_json_object_add_string (request, ".arg_name", name);
+    util_json_object_add_string (request, ".arg_sender", sender);
     if (!(keys = zhash_keys (c->dirents)))
         oom ();
     while ((key = zlist_pop (keys))) {
@@ -1186,12 +1186,12 @@ static bool commit_dirty (ctx_t *ctx, commit_t *c, wait_t w)
     return dirty;
 }
 
-static void commit_respond (ctx_t *ctx, zmsg_t **zmsg, const char *name,
+static void commit_respond (ctx_t *ctx, zmsg_t **zmsg, const char *sender,
                             const char *rootdir, int rootseq)
 {
     json_object *response = util_json_object_new_object ();
     
-    util_json_object_add_string (response, "name", name);
+    util_json_object_add_string (response, "sender", sender);
     if (rootdir) {
         util_json_object_add_int (response, "rootseq", rootseq);
         util_json_object_add_string (response, "rootdir", rootdir);
@@ -1213,9 +1213,9 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     commit_t *c = NULL;
     wait_t w;
     char *sender = NULL;
+    const char *arg_sender;
     json_object_iter iter;
-    const char *name;
-    bool internal = true;
+    bool internal = false;
 
     if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
@@ -1226,27 +1226,28 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
                   __FUNCTION__);
         goto done;
     }
-    /* Commits generated internally will contain metadata and .arg_name,
-     * while commits generated externally (e.g. kvscli.c) will be empty.
+    /* Commits generated internally will contain .arg_sender.  If present,
+     * we should ignore the true sender and use it to identify the commit.
      */
-    if (util_json_object_get_string (request, ".arg_name", &name) < 0) {
-        name = sender;
-        internal = false;
+    if (util_json_object_get_string (request, ".arg_sender", &arg_sender)==0) {
+        free (sender);
+        sender = xstrdup (arg_sender);
+        internal = true;
     }
-    if (!(c = zhash_lookup (ctx->commits, name))) {
+    if (!(c = zhash_lookup (ctx->commits, sender))) {
         c = commit_create ();
         c->internal = internal;
-        if (c->internal) {
-            json_object_object_foreachC (request, iter) {
-                if (!strncmp (iter.key, ".arg_", 5))
-                    continue;
-                if (iter.val)
-                    json_object_get (iter.val);
-                commit_add (c, iter.key, iter.val);
-            }
-        }
-        zhash_insert (ctx->commits, name, c);
-        zhash_freefn (ctx->commits, name, (zhash_free_fn *)commit_destroy);
+        zhash_insert (ctx->commits, sender, c);
+        zhash_freefn (ctx->commits, sender, (zhash_free_fn *)commit_destroy);
+    }
+    /* Internal requests will also contain metadata.
+     */
+    json_object_object_foreachC (request, iter) {
+        if (!strncmp (iter.key, ".arg_", 5))
+            continue;
+        if (iter.val)
+            json_object_get (iter.val);
+        commit_add (c, iter.key, iter.val);
     }
     /* If this is the first time through, close the commit to new put
      * requests and begin timing the operation.  We only time external
@@ -1271,8 +1272,8 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     if (ctx->master) {
         if (commit_apply (ctx, c)) /* updates ctx->rootseq, ctx->rootdir */
             setroot_event_send (ctx); 
-        commit_respond (ctx, zmsg, name, NULL, 0);
-        zhash_delete (ctx->commits, name);
+        commit_respond (ctx, zmsg, sender, NULL, 0);
+        zhash_delete (ctx->commits, sender);
 
     /* Slave: commit must wait for any referenced hash entries to be stored
      * upstream, then stash 'zmsg' in the commit_t and send a new internal
@@ -1283,7 +1284,7 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         if (commit_dirty (ctx, c, w))
             goto done; /* stall */
         wait_destroy (w, zmsg); /* get back *zmsg */
-        send_upstream_commit (ctx, c, name, zmsg); 
+        send_upstream_commit (ctx, c, sender, zmsg); 
     }
     if (!c->internal)
         tstat_push (&ctx->stats.commit_time,  monotime_since (c->t0));
@@ -1303,14 +1304,14 @@ static int commit_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     json_object *o = NULL;
-    const char *rootdir, *name;
+    const char *rootdir, *sender;
     int rootseq;
     commit_t *c;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
             || util_json_object_get_int (o, "rootseq", &rootseq) < 0
             || util_json_object_get_string (o, "rootdir", &rootdir) < 0
-            || util_json_object_get_string (o, "name", &name) < 0) {
+            || util_json_object_get_string (o, "sender", &sender) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
@@ -1321,12 +1322,12 @@ static int commit_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 
     /* Find the original commit_t associated with this request and respond.
      */
-    if ((c = zhash_lookup (ctx->commits, name))) {
+    if ((c = zhash_lookup (ctx->commits, sender))) {
         assert (c->request != NULL);
-        commit_respond (ctx, &c->request, name, rootdir, rootseq);
+        commit_respond (ctx, &c->request, sender, rootdir, rootseq);
         if (!c->internal)
             tstat_push (&ctx->stats.commit_time,  monotime_since (c->t0));
-        zhash_delete (ctx->commits, name);
+        zhash_delete (ctx->commits, sender);
     }
 done:
     if (o)
