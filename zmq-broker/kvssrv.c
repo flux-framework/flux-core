@@ -1217,17 +1217,15 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     if (!(c = zhash_lookup (ctx->commits, sender))) {
         c = commit_create ();
         c->internal = internal;
+        json_object_object_foreachC (request, iter) {
+            if (!strncmp (iter.key, ".arg_", 5))
+                continue;
+            if (iter.val)
+                json_object_get (iter.val);
+            commit_add (c, iter.key, iter.val);
+        }
         zhash_insert (ctx->commits, sender, c);
         zhash_freefn (ctx->commits, sender, (zhash_free_fn *)commit_destroy);
-    }
-    /* Internal requests will also contain metadata.
-     */
-    json_object_object_foreachC (request, iter) {
-        if (!strncmp (iter.key, ".arg_", 5))
-            continue;
-        if (iter.val)
-            json_object_get (iter.val);
-        commit_add (c, iter.key, iter.val);
     }
     /* If this is the first time through, close the commit to new put
      * requests and begin timing the operation.  We only time external
