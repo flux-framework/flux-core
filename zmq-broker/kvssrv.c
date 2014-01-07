@@ -75,6 +75,10 @@
  */
 const int max_lastuse_age = 5;
 
+/* Coalesce commits that arrive in this window.
+ */
+const int min_commit_msec = 1;
+
 /* Hash object in ctx->store by SHA1 key.
  */
 typedef struct {
@@ -127,6 +131,7 @@ typedef struct {
     flux_t h;
     bool master;            /* for now minimize flux_treeroot() calls */
     int epoch;              /* tracks current event.sched.trigger epoch */
+    struct timespec commit_time; /* time of most recent commit */
 } ctx_t;
 
 enum {
@@ -135,6 +140,8 @@ enum {
 };
 
 static int setroot_event_send (ctx_t *ctx);
+static void commit_respond (ctx_t *ctx, zmsg_t **zmsg, const char *sender,
+                            const char *rootdir, int rootseq);
 
 static void freectx (ctx_t *ctx)
 {
@@ -504,46 +511,97 @@ done:
     free (name);
 }
 
-static bool commit_apply (ctx_t *ctx, commit_t *c)
+static json_object *commit_apply_start (ctx_t *ctx)
 {
     json_object *rootdir = NULL;
-    json_object *rootcpy;
-    href_t ref;
-    json_object_iter iter;
-
-    if (!c->dirents)
-        goto done_nochange;
-
-    /* Load the current root directory into 'rootdir'.
-     */
     bool stall = !load (ctx, ctx->rootdir, NULL, &rootdir);
+
     assert (!stall);
     assert (rootdir != NULL);
-    rootcpy = copydir (rootdir); /* do not corrupt store by modifying orig. */
+    return copydir (rootdir); /* do not corrupt store by modifying orig. */
+}
 
-    /* Iterate through the (key, dirent) pairs in the commit_t applying
-     * them to rootcpy.  Any changed directories are converted to DIRVALs
-     * (non-recursively) to be written out after all the commit_t changes
-     * are applied.
-     */
-    json_object_object_foreachC (c->dirents, iter) {
-        commit_link_dirent (ctx, rootcpy, iter.key, iter.val);
+static void commit_apply_one (ctx_t *ctx, json_object *rootcpy, commit_t *c)
+{
+    json_object_iter iter;
+
+    if (c->dirents) {
+        json_object_object_foreachC (c->dirents, iter) {
+            commit_link_dirent (ctx, rootcpy, iter.key, iter.val);
+        }
     }
-    /* Now that we're done applying commit_t changes, convert DIRVALs back
-     * to DIRREFs.
-     */
-    commit_unroll (ctx, rootcpy);
+}
 
-    /* 'rootcpy' is now the new root directory.  Write it to the store
-     * and update the root href if it's different.
-     */
+static bool commit_apply_finish (ctx_t *ctx, json_object *rootcpy)
+{
+    href_t ref;
+
+    commit_unroll (ctx, rootcpy);
     store (ctx, rootcpy, ref);
     if (!strcmp (ref, ctx->rootdir))
-        goto done_nochange;
+        return false;
     setroot (ctx, ref, ctx->rootseq + 1);
+    monotime (&ctx->commit_time);
     return true;
-done_nochange:
-    return false;
+}
+
+static bool commit_apply (ctx_t *ctx, commit_t *c)
+{
+    json_object *rootcpy;
+
+    if (!c->dirents)
+        return false;
+    rootcpy = commit_apply_start (ctx);
+    commit_apply_one (ctx, rootcpy, c);
+    return commit_apply_finish (ctx, rootcpy);
+}
+
+static void commit_all (ctx_t *ctx, zhash_t *commits)
+{
+    json_object *rootcpy;
+    char *key;
+    zlist_t *keys;
+    commit_t *c;
+    int count = 0;
+
+    rootcpy = commit_apply_start (ctx);
+
+    if (!(keys = zhash_keys (commits)))
+        oom ();
+    key = zlist_first (keys);
+    while (key) {
+        if ((c = zhash_lookup (commits, key)) && c->closed) {
+            commit_apply_one (ctx, rootcpy, c);
+            count++;
+        }
+        key = zlist_next (keys);
+    }
+
+    if (commit_apply_finish (ctx, rootcpy))
+        setroot_event_send (ctx); 
+
+    while ((key = zlist_pop (keys))) {
+        if ((c = zhash_lookup (commits, key)) && c->closed) {
+            assert (c->request != NULL);
+            commit_respond (ctx, &c->request, key, NULL, 0);
+            if (!c->internal)
+                tstat_push (&ctx->stats.commit_time,  monotime_since (c->t0));
+            zhash_delete (commits, key);
+        }
+        free (key);
+    }
+    zlist_destroy (&keys);
+    if (count > 1)
+        flux_log (ctx->h, LOG_INFO, "coalesced %d commits", count);
+}
+
+static int timeout_cb (flux_t h, void *arg)
+{
+    ctx_t *ctx = arg;
+
+    commit_all (ctx, ctx->commits);
+    flux_timeout_set (h, 0);
+    return 0;
 }
 
 static int load_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
@@ -1170,6 +1228,8 @@ static void commit_respond (ctx_t *ctx, zmsg_t **zmsg, const char *sender,
                             const char *rootdir, int rootseq)
 {
     json_object *response = util_json_object_new_object ();
+
+    assert (*zmsg != NULL);
     
     util_json_object_add_string (response, "sender", sender);
     if (rootdir) {
@@ -1237,21 +1297,20 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         if (!c->internal)
             monotime (&c->t0);
     }
-    /* Handle commit already in progress (upstream request sent).
-     * N.B. we can stall and restart as stores complete but not after req sent.
-     */
-    if (c->request != NULL) {
-        flux_respond_errnum (h, zmsg, EINPROGRESS);
-        goto done;
-    }
 
-    /* Master: apply the commit and generate a response synchronously.
+    /* Master: apply the commit and generate a response (subject to rate lim)
      */
     if (ctx->master) {
-        if (commit_apply (ctx, c)) /* updates ctx->rootseq, ctx->rootdir */
-            setroot_event_send (ctx); 
-        commit_respond (ctx, zmsg, sender, NULL, 0);
-        zhash_delete (ctx->commits, sender);
+        assert (c->request == NULL);
+        c->request = *zmsg;
+        *zmsg = NULL;
+
+        int msec = (int)monotime_since (ctx->commit_time);
+        if (msec < min_commit_msec) {
+            if (!flux_timeout_isset (h))
+                flux_timeout_set (h, min_commit_msec - msec);
+        } else
+            commit_all (ctx, ctx->commits);
 
     /* Slave: commit must wait for any referenced hash entries to be stored
      * upstream, then stash 'zmsg' in the commit_t and send a new internal
@@ -1265,8 +1324,6 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         send_upstream_commit (ctx, c, sender, zmsg); 
         goto done;
     }
-    if (!c->internal)
-        tstat_push (&ctx->stats.commit_time,  monotime_since (c->t0));
 done:
     if (request)
         json_object_put (request);
@@ -1606,6 +1663,10 @@ static int kvssrv_main (flux_t h, zhash_t *args)
     }
     if (flux_event_subscribe (h, "event.kvs.stats.") < 0) {
         flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
+        return -1;
+    }
+    if (flux_tmouthandler_set (h, timeout_cb, ctx) < 0) {
+        flux_log (h, LOG_ERR, "flux_tmouthandler_set: %s", strerror (errno));
         return -1;
     }
     if (ctx->master) {
