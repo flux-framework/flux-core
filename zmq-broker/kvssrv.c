@@ -92,7 +92,7 @@ typedef struct {
 /* A commit_t is created to contain "put" metadata until kvs_commit is called.
  */
 typedef struct {
-    zhash_t *dirents;       /* hash key (e.g. a.b.c) => dirent */
+    json_object *dirents;   /* hash key (e.g. a.b.c) => dirent */
     zmsg_t *request;        /* request message */
     bool closed;            /* commit cannot be ammended, clock started */
     struct timespec t0;     /* commit begin timestamp */
@@ -208,21 +208,21 @@ static json_object *dirent_create (char *type, void *arg)
 static commit_t *commit_create (void)
 {
     commit_t *c = xzmalloc (sizeof (*c));
-    if (!(c->dirents = zhash_new ()))
-        oom ();
     return c;
 }
 
 static void commit_destroy (commit_t *c)
 {
-    zhash_destroy (&c->dirents);
+    if (c->dirents)
+        json_object_put (c->dirents);
     free (c);
 }
 
 static void commit_add (commit_t *c, const char *key, json_object *dirent)
 {
-    zhash_insert (c->dirents, key, dirent);
-    zhash_freefn (c->dirents, key, (zhash_free_fn *)json_object_put);
+    if (!c->dirents)
+        c->dirents = util_json_object_new_object ();
+    json_object_object_add (c->dirents, key, dirent);
 }
 
 static get_t *get_create (void)
@@ -508,12 +508,10 @@ static bool commit_apply (ctx_t *ctx, commit_t *c)
 {
     json_object *rootdir = NULL;
     json_object *rootcpy;
-    zlist_t *keys;
-    char *key;
-    json_object *dirent;
     href_t ref;
+    json_object_iter iter;
 
-    if (zhash_size (c->dirents) == 0)
+    if (!c->dirents)
         goto done_nochange;
 
     /* Load the current root directory into 'rootdir'.
@@ -528,14 +526,9 @@ static bool commit_apply (ctx_t *ctx, commit_t *c)
      * (non-recursively) to be written out after all the commit_t changes
      * are applied.
      */
-    if (!(keys = zhash_keys (c->dirents)))
-        oom ();
-    while ((key = zlist_pop (keys))) {
-        dirent = zhash_lookup (c->dirents, key);
-        commit_link_dirent (ctx, rootcpy, key, dirent);
-        free (key);
+    json_object_object_foreachC (c->dirents, iter) {
+        commit_link_dirent (ctx, rootcpy, iter.key, iter.val);
     }
-    zlist_destroy (&keys);
     /* Now that we're done applying commit_t changes, convert DIRVALs back
      * to DIRREFs.
      */
@@ -1127,9 +1120,7 @@ done:
 static void send_upstream_commit (ctx_t *ctx, commit_t *c, const char *sender,
                                   zmsg_t **zmsg)
 {
-    json_object *request, *dirent;
-    zlist_t *keys;
-    char *key;
+    json_object *o;
 
     /* Stash (take ownership of) orig. commit request.
      */
@@ -1141,19 +1132,13 @@ static void send_upstream_commit (ctx_t *ctx, commit_t *c, const char *sender,
      * When the response is recieved, we will look up this commit_t by sender
      * and respond to c->request.
      */
-    request = util_json_object_new_object ();
-    util_json_object_add_string (request, ".arg_sender", sender);
-    if (!(keys = zhash_keys (c->dirents)))
-        oom ();
-    while ((key = zlist_pop (keys))) {
-        dirent = zhash_lookup (c->dirents, key);
-        if (dirent)
-            json_object_get (dirent);
-        json_object_object_add (request, key, dirent);
-        free (key);
-    }
-    zlist_destroy (&keys);
-    flux_request_send (ctx->h, request, "kvs.commit");
+    assert (c->dirents != NULL);
+    o = c->dirents;
+    c->dirents = NULL;
+
+    util_json_object_add_string (o, ".arg_sender", sender);
+    flux_request_send (ctx->h, o, "kvs.commit");
+    json_object_put (o);
 }
 
 /* If commit contains references to dirty hash entries (store in progress),
@@ -1162,26 +1147,21 @@ static void send_upstream_commit (ctx_t *ctx, commit_t *c, const char *sender,
  */
 static bool commit_dirty (ctx_t *ctx, commit_t *c, wait_t w)
 {
-    zlist_t *keys;
-    char *key;
-    json_object *dirent;
     const char *ref;
+    json_object_iter iter;
     bool dirty = false;
 
-    if (!(keys = zhash_keys (c->dirents)))
-        oom ();
-    while ((key = zlist_pop (keys))) {
-        dirent = zhash_lookup (c->dirents, key);
-        if (dirent) { 
-            if ((util_json_object_get_string (dirent, "FILEREF", &ref) == 0
-              || util_json_object_get_string (dirent, "DIRREF", &ref) == 0)
+    if (c->dirents) {
+        json_object_object_foreachC (c->dirents, iter) {
+            if (!iter.val)
+                continue;
+            if ((util_json_object_get_string (iter.val, "FILEREF", &ref) == 0
+              || util_json_object_get_string (iter.val, "DIRREF", &ref) == 0)
                                             && store_isdirty (ctx, ref, w)) {
                 dirty = true;
             }
         }
-        free (key);
     }
-    zlist_destroy (&keys);
 
     return dirty;
 }
@@ -1285,6 +1265,7 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             goto done; /* stall */
         wait_destroy (w, zmsg); /* get back *zmsg */
         send_upstream_commit (ctx, c, sender, zmsg); 
+        goto done;
     }
     if (!c->internal)
         tstat_push (&ctx->stats.commit_time,  monotime_since (c->t0));
