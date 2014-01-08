@@ -48,6 +48,11 @@ void monotime (struct timespec *tp)
     clock_gettime (CLOCK_MONOTONIC, tp);
 }
 
+bool monotime_isset (struct timespec t)
+{
+    return (t.tv_sec || t.tv_nsec);
+}
+
 void *xzmalloc (size_t size)
 {
     void *new;
