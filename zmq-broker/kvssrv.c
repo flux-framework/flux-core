@@ -75,7 +75,7 @@
  */
 const int max_lastuse_age = 5;
 
-/* Coalesce commits that arrive within <min_commit_msec> of previous commit.
+/* Coalesce commits that arrive within <min_commit_msec> of previous update.
  */
 const int min_commit_msec = 1;
 
