@@ -117,6 +117,7 @@ typedef struct {
     tstat_t commit_merges;
     tstat_t get_time;
     tstat_t put_time;
+    int faults;
     int noop_stores;
 } stats_t;
 
@@ -285,6 +286,8 @@ static void load_request_send (ctx_t *ctx, const href_t ref)
     json_object_object_add (o, ref, NULL);
     flux_request_send (ctx->h, o, "kvs.load");
     json_object_put (o);
+
+    ctx->stats.faults++;
 }
 
 static bool load (ctx_t *ctx, const href_t ref, wait_t w, json_object **op)
@@ -766,7 +769,6 @@ static int heartbeat_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     json_object *event = NULL;
-    int expcount = 0;
 
     if (cmb_msg_decode (*zmsg, NULL, &event) < 0 || event == NULL
                 || util_json_object_get_int (event, "epoch", &ctx->epoch) < 0) {
@@ -784,10 +786,8 @@ static int heartbeat_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         /* "touch" root */
         (void)load (ctx, ctx->rootdir, NULL, NULL);
 
-        expcount = expire_cache (ctx, max_lastuse_age);
+        expire_cache (ctx, max_lastuse_age);
     }
-    if (expcount > 0)
-        flux_log (ctx->h, LOG_INFO, "expired %d cache entries", expcount);
 done:
     if (event)
         json_object_put (event);
@@ -1564,6 +1564,7 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
                                     &ctx->stats.commit_merges, 1);
 
         util_json_object_add_int (o, "#no-op stores", ctx->stats.noop_stores);
+        util_json_object_add_int (o, "#faults", ctx->stats.faults);
 
         util_json_object_add_int (o, "store revision", ctx->rootseq);
  
