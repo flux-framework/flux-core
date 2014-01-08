@@ -75,9 +75,13 @@
  */
 const int max_lastuse_age = 5;
 
-/* Coalesce commits that arrive in this window.
+/* Coalesce commits that arrive within <min_commit_msec> of previous commit.
  */
 const int min_commit_msec = 1;
+
+/* Include root directory in event.kvs.setroot message.
+ */
+const bool event_includes_rootdir = true;
 
 /* Hash object in ctx->store by SHA1 key.
  */
@@ -1447,12 +1451,18 @@ static int setroot_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     int rootseq;
     const char *rootdir;
     json_object *o = NULL;
+    json_object *root = NULL;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
                 || util_json_object_get_int (o, "rootseq", &rootseq) < 0
                 || util_json_object_get_string (o, "rootdir", &rootdir) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
+    }
+    if ((root = json_object_object_get (o, "rootdirval"))) {
+        href_t ref;
+        json_object_get (root);
+        store (ctx, root, ref);
     }
     setroot (ctx, rootdir, rootseq);
 done:
@@ -1470,6 +1480,15 @@ static int setroot_event_send (ctx_t *ctx)
 
     util_json_object_add_int (o, "rootseq", ctx->rootseq);
     util_json_object_add_string (o, "rootdir", ctx->rootdir);
+    if (event_includes_rootdir) {
+        json_object *root;
+        bool stall;
+
+        stall = !load (ctx, ctx->rootdir, NULL, &root);
+        assert (stall == false);
+        json_object_get (root);
+        json_object_object_add (o, "rootdirval", root);
+    }
     if (flux_event_send (ctx->h, o, "event.kvs.setroot") < 0)
         goto done;
     json_object_put (o);
