@@ -114,6 +114,7 @@ typedef struct {
  */
 typedef struct {
     tstat_t commit_time;
+    tstat_t commit_merges;
     tstat_t get_time;
     tstat_t put_time;
     int noop_stores;
@@ -591,8 +592,7 @@ static void commit_all (ctx_t *ctx, zhash_t *commits)
         free (key);
     }
     zlist_destroy (&keys);
-    if (count > 1)
-        flux_log (ctx->h, LOG_INFO, "coalesced %d commits", count);
+    tstat_push (&ctx->stats.commit_merges, count);
 }
 
 static int timeout_cb (flux_t h, void *arg)
@@ -1551,14 +1551,17 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         util_json_object_add_int (o, "#watchers",
                                   wait_queue_length (ctx->watchlist));
 
-        util_json_object_add_tstat (o, "commits (sec)",
-                                    &ctx->stats.commit_time, 1E-3);
-
         util_json_object_add_tstat (o, "gets (sec)",
                                     &ctx->stats.get_time, 1E-3);
 
         util_json_object_add_tstat (o, "puts (sec)",
                                     &ctx->stats.put_time, 1E-3);
+
+        util_json_object_add_tstat (o, "commits (sec)",
+                                    &ctx->stats.commit_time, 1E-3);
+
+        util_json_object_add_tstat (o, "commits per update",
+                                    &ctx->stats.commit_merges, 1);
 
         util_json_object_add_int (o, "#no-op stores", ctx->stats.noop_stores);
 
