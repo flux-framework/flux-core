@@ -531,7 +531,7 @@ static json_object *commit_apply_start (ctx_t *ctx)
     return copydir (rootdir); /* do not corrupt store by modifying orig. */
 }
 
-static void commit_apply_one (ctx_t *ctx, json_object *rootcpy, commit_t *c)
+static void commit_apply_dirents (ctx_t *ctx, json_object *rootcpy, commit_t *c)
 {
     json_object_iter iter;
 
@@ -555,17 +555,22 @@ static bool commit_apply_finish (ctx_t *ctx, json_object *rootcpy)
     return true;
 }
 
-static bool commit_apply (ctx_t *ctx, commit_t *c)
+/* Apply a single commit.
+ * N.B. This is only used during initialization
+ */
+static bool commit_apply_one (ctx_t *ctx, commit_t *c)
 {
     json_object *rootcpy;
 
     if (!c->dirents)
         return false;
     rootcpy = commit_apply_start (ctx);
-    commit_apply_one (ctx, rootcpy, c);
+    commit_apply_dirents (ctx, rootcpy, c);
     return commit_apply_finish (ctx, rootcpy);
 }
 
+/* Apply all the commits found in ctx->commits in COMMIT_MASTER state.
+ */
 static void commit_apply_all (ctx_t *ctx, zhash_t *commits)
 {
     json_object *rootcpy;
@@ -581,7 +586,7 @@ static void commit_apply_all (ctx_t *ctx, zhash_t *commits)
     key = zlist_first (keys);
     while (key) {
         if ((c = zhash_lookup (commits, key)) && c->state == COMMIT_MASTER) {
-            commit_apply_one (ctx, rootcpy, c);
+            commit_apply_dirents (ctx, rootcpy, c);
             count++;
         }
         key = zlist_next (keys);
@@ -1635,7 +1640,7 @@ static void setargs (ctx_t *ctx, zhash_t *args)
         free (key);
     }
     zlist_destroy (&keys);
-    commit_apply (ctx, c);
+    commit_apply_one (ctx, c);
     commit_destroy (c);
 }
 
