@@ -97,14 +97,16 @@ typedef struct {
     } state;
 } hobj_t;
 
-/* A commit_t is created to contain "put" metadata until kvs_commit is called.
- */
 typedef struct {
     json_object *dirents;   /* hash key (e.g. a.b.c) => dirent */
     zmsg_t *request;        /* request message */
-    bool closed;            /* commit cannot be ammended, clock started */
     struct timespec t0;     /* commit begin timestamp */
-    bool internal;          /* commit generated internally, don't time this */
+    enum {
+        COMMIT_PUT,         /* put is still appending items to this commit */
+        COMMIT_STORE,       /* stores running for objs referenced by commit */
+        COMMIT_UPSTREAM,    /* upstream commit running */
+        COMMIT_MASTER,      /* master commit in progress */
+    } state;
 } commit_t;
 
 /* A get_t is created to time kvs_get.
@@ -564,7 +566,7 @@ static bool commit_apply (ctx_t *ctx, commit_t *c)
     return commit_apply_finish (ctx, rootcpy);
 }
 
-static void commit_all (ctx_t *ctx, zhash_t *commits)
+static void commit_apply_all (ctx_t *ctx, zhash_t *commits)
 {
     json_object *rootcpy;
     char *key;
@@ -578,7 +580,7 @@ static void commit_all (ctx_t *ctx, zhash_t *commits)
         oom ();
     key = zlist_first (keys);
     while (key) {
-        if ((c = zhash_lookup (commits, key)) && c->closed) {
+        if ((c = zhash_lookup (commits, key)) && c->state == COMMIT_MASTER) {
             commit_apply_one (ctx, rootcpy, c);
             count++;
         }
@@ -589,10 +591,10 @@ static void commit_all (ctx_t *ctx, zhash_t *commits)
         setroot_event_send (ctx); 
 
     while ((key = zlist_pop (keys))) {
-        if ((c = zhash_lookup (commits, key)) && c->closed) {
+        if ((c = zhash_lookup (commits, key)) && c->state == COMMIT_MASTER) {
             assert (c->request != NULL);
             commit_respond (ctx, &c->request, key, NULL, 0);
-            if (!c->internal)
+            if (monotime_isset (c->t0))
                 tstat_push (&ctx->stats.commit_time,  monotime_since (c->t0));
             zhash_delete (commits, key);
         }
@@ -606,7 +608,7 @@ static int timeout_cb (flux_t h, void *arg)
 {
     ctx_t *ctx = arg;
 
-    commit_all (ctx, ctx->commits);
+    commit_apply_all (ctx, ctx->commits);
     flux_timeout_set (h, 0);
     return 0;
 }
@@ -1134,12 +1136,13 @@ static int put_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     }
     if (!(c = zhash_lookup (ctx->commits, sender))) {
         c = commit_create ();
+        c->state = COMMIT_PUT;
         zhash_insert (ctx->commits, sender, c);
         zhash_freefn (ctx->commits, sender, (zhash_free_fn *)commit_destroy);
     }
     /* Handle commit already in progress.
      */
-    if (c->closed) {
+    if (c->state != COMMIT_PUT) {
         flux_respond_errnum (h, zmsg, EINVAL);
         goto done;
     }
@@ -1259,7 +1262,6 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     char *sender = NULL;
     const char *arg_sender;
     json_object_iter iter;
-    bool internal = false;
 
     if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
@@ -1276,11 +1278,10 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     if (util_json_object_get_string (request, ".arg_sender", &arg_sender)==0) {
         free (sender);
         sender = xstrdup (arg_sender);
-        internal = true;
     }
     if (!(c = zhash_lookup (ctx->commits, sender))) {
         c = commit_create ();
-        c->internal = internal;
+        c->state = COMMIT_STORE;
         json_object_object_foreachC (request, iter) {
             if (!strncmp (iter.key, ".arg_", 5))
                 continue;
@@ -1290,16 +1291,9 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         }
         zhash_insert (ctx->commits, sender, c);
         zhash_freefn (ctx->commits, sender, (zhash_free_fn *)commit_destroy);
-    }
-    /* If this is the first time through, close the commit to new put
-     * requests and begin timing the operation.  We only time external
-     * commit requests as internal commits are only generated while 
-     * servicing external commits and will be included in their times.
-     */
-    if (!c->closed) {
-        c->closed = true;
-        if (!c->internal)
-            monotime (&c->t0);
+    } else if (c->state == COMMIT_PUT) {
+        c->state = COMMIT_STORE;
+        monotime (&c->t0);
     }
 
     /* Master: apply the commit and generate a response (subject to rate lim)
@@ -1308,23 +1302,27 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         assert (c->request == NULL);
         c->request = *zmsg;
         *zmsg = NULL;
+        assert (c->state == COMMIT_STORE);
+        c->state = COMMIT_MASTER;
 
         int msec = (int)monotime_since (ctx->commit_time);
         if (msec < min_commit_msec) {
             if (!flux_timeout_isset (h))
                 flux_timeout_set (h, min_commit_msec - msec);
         } else
-            commit_all (ctx, ctx->commits);
+            commit_apply_all (ctx, ctx->commits);
 
     /* Slave: commit must wait for any referenced hash entries to be stored
      * upstream, then stash 'zmsg' in the commit_t and send a new internal
      * commit upstream.
      */
     } else {
+        assert (c->state == COMMIT_STORE);
         w = wait_create (h, typemask, zmsg, commit_request_cb, arg);
         if (commit_dirty (ctx, c, w))
             goto done; /* stall */
         wait_destroy (w, zmsg); /* get back *zmsg */
+        c->state = COMMIT_UPSTREAM;
         send_upstream_commit (ctx, c, sender, zmsg); 
         goto done;
     }
@@ -1363,9 +1361,10 @@ static int commit_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     /* Find the original commit_t associated with this request and respond.
      */
     if ((c = zhash_lookup (ctx->commits, sender))) {
+        assert (c->state == COMMIT_UPSTREAM);
         assert (c->request != NULL);
         commit_respond (ctx, &c->request, sender, rootdir, rootseq);
-        if (!c->internal)
+        if (monotime_isset (c->t0))
             tstat_push (&ctx->stats.commit_time,  monotime_since (c->t0));
         zhash_delete (ctx->commits, sender);
     }
