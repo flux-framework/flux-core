@@ -1,1 +1,73 @@
-\section{Related work}
+\section{Related Work}
+
+The Flux initiative grows out of a large body of pre-existing work,
+both in the academic and commercial domains.  In the areas of
+scheduling and resource management, Flux grew out of a growing need
+that was previously serviced by LLNL's own SLURM resource
+manager~\cite{Jette02slurm} and proprietary LCRM~\cite{LCRM} job
+scheduler.
+
+In designing Flux, we looked at the solutions provided by existing
+commercial products like IBM's Platform LSF~\cite{LSF}, Adaptive
+Computing's Moab~\cite{Moab}, Altair's PBS Professional~\cite{PSBPro},
+and Univa's Grid Engine Software~\cite{UnivaGE}.
+
+There are also a number of open source products that provide batch
+scheduling and resource management.  In addition to SLURM, the list
+includes Globus~\cite{GlobusToolkit},
+HTCondor~\cite{Litzkow88,Raman98}, PBS~\cite{PBS},
+Maui~\cite{Jackson01corealgorithms}, Mesos~\cite{Mesos} and
+Cobalt~\cite{Cobalt}.
+
+There were also historical efforts that offered novel approaches when
+they were introduced but are not in widespread use today.  This list
+includes NQS~\cite{NQS}, AppLeS~\cite{AppLeS},
+Legion~\cite{LegionRM,LegionGrid}, OAR~\cite{Oar} and
+OpenCCS~\cite{Keller98ccsresource}.
+
+In all the above, the basic functionality is the same.  Users submit
+job allocation requests for computing resources and a scheduler
+decides where and when to fulfill the request.  Some schedulers are
+optimized for high throughput while others provide high performance.
+
+In various ways, each of the above solutions reached or are reaching
+their limits in managing the large and diverse collection of computing
+resources being delivered today.  Not only are the size of today's
+machines reaching a unprecedented scale, but the collection of
+resources which much be orchestrated to service the complex job
+dependencies of today is truly daunting.  In addition, the quantity of
+jobs today's computing facilities are being expected to process has
+grown considerably.
+
+Flux was initiated to address these needs.  At its core, Flux is
+designed to manage all of the computing resources in a center.  It is
+designed to handle a very high job throughput across a large number of
+diverse computing clusters and ancillary resources while providing
+levels of service that meet the needs of the most demanding users.
+
+One of the core requirements for Flux was to provide a framework that
+allowed for multiple solutions to be ``plugged in''.  Rather than
+design the best scheduling algorithm in the world, we recognized the
+need to allow Flux to offer a range of solutions, from simple to
+complex, each tailored to their specific purposes.  We found many
+papers that describe novel approaches to job scheduling and designed
+Flux to serve as a test bed for academic research as well as a
+production environment.
+
+The some of the published research we will be exploring using Flux as a
+test bed include the following:
+
+\begin{itemize}
+\item Multi-level hierarchic genetic-based scheduling of independent jobs in dynamic heterogeneous grid environment~\cite{Koodziej20121}
+
+\item Scalable, Low Complexity, and Fast Greedy Scheduling Heuristics for Highly Heterogeneous Distributed Computing Systems~\cite{Diaz13}
+
+\item A Comparative Study of Job Scheduling Strategies in Large-scale Parallel Computational Systems~\cite{chandio2013comparative}
+
+\item Hierarchical scheduling strategies for parallel tasks and advance reservations in grids~\cite{Kurowski13}
+
+\item Job Coscheduling on Coupled High-End Computing Systems~\cite{6047306}
+
+\item A Metascheduler For The Grid~\cite{1029934}
+
+\end{itemize}
