@@ -1,5 +1,7 @@
 #!/bin/bash -e
 
+# basic put, commit, get test (double value)
+
 TEST=`basename $0`
 KEY=$TEST.a.b.c
 

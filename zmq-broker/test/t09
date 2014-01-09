@@ -1,5 +1,8 @@
 #!/bin/bash -e
 
+# create a directory, put various keys into it including a subdir,
+# retrieve recursively
+
 TEST=`basename $0`
 DIR=$TEST.a.b
 EXPRESULT="$DIR.a = 69

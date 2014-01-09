@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-# KVS torture test
+# KVS torture test (small values)
 
 TEST=`basename $0`
 
