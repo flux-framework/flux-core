@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <libgen.h>
 #include <pthread.h>
+#include <getopt.h>
 
 #include "cmb.h"
 #include "util.h"
@@ -20,11 +21,24 @@ typedef struct {
 static int count = -1;
 static int nthreads = -1;
 static char *prefix = NULL;
+static bool fopt = false;
+
+#define OPTIONS "f"
+static const struct option longopts[] = {
+   {"fence",   no_argument,         0, 'f'},
+   {0, 0, 0, 0},
+};
+
+static void usage (void)
+{
+    fprintf (stderr, "Usage: tcommit [--fence] nthreads count prefix\n");
+    exit (1);
+}
 
 void *thread (void *arg)
 {
     thd_t *t = arg;
-    char *key;
+    char *key, *fence = NULL;
     int i;
 
     if (!(t->h = cmb_init ())) {
@@ -34,11 +48,20 @@ void *thread (void *arg)
     for (i = 0; i < count; i++) {
         if (asprintf (&key, "%s.%d.%d", prefix, t->n, i) < 0)
             oom ();
+        if (fopt && asprintf (&fence, "%s-%d", prefix, i) < 0)
+            oom ();
         if (kvs_put_int (t->h, key, 42) < 0)
             err_exit ("%s", key);
-        if (kvs_commit (t->h) < 0)
-            err_exit ("kvs_commit");
+        if (fopt) {
+            if (kvs_fence (t->h, fence, nthreads) < 0)
+                err_exit ("kvs_commit");
+        } else {
+            if (kvs_commit (t->h) < 0)
+                err_exit ("kvs_commit");
+        }
         free (key);
+        if (fence)
+            free (fence);
     }
 done:
     if (t->h)
@@ -50,16 +73,25 @@ int main (int argc, char *argv[])
 {
     thd_t *thd;
     int i, rc;
+    int ch;
 
     log_init (basename (argv[0]));
 
-    if (argc != 4) {
-        fprintf (stderr, "Usage: tcommit nthreads count prefix\n");
-        exit (1);
+    while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
+        switch (ch) {
+            case 'f':
+                fopt = true;
+                break;
+            default:
+                usage ();
+        }
     }
-    nthreads = strtoul (argv[1], NULL, 10);
-    count = strtoul (argv[2], NULL, 10);
-    prefix = argv[3];
+    if (argc - optind != 3)
+        usage ();
+
+    nthreads = strtoul (argv[optind++], NULL, 10);
+    count = strtoul (argv[optind++], NULL, 10);
+    prefix = argv[optind++];
 
     thd = xzmalloc (sizeof (*thd) * nthreads);
 
