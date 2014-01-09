@@ -994,8 +994,22 @@ done:
 
 int kvs_fence (flux_t h, const char *name, int nprocs)
 {
-    errno = EINVAL;
-    return -1;
+    json_object *request = util_json_object_new_object ();
+    json_object *reply = NULL;
+    int ret = -1;
+  
+    util_json_object_add_string (request, ".arg_fence", name);
+    util_json_object_add_int (request, ".arg_nprocs", nprocs);
+    reply = flux_rpc (h, request, "kvs.commit");
+    if (!reply)
+        goto done;
+    ret = 0;
+done:
+    if (request)
+        json_object_put (request);
+    if (reply)
+        json_object_put (reply); 
+    return ret;
 }
 
 int kvs_get_version (flux_t h, int *versionp)

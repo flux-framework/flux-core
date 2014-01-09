@@ -101,13 +101,20 @@ typedef struct {
     json_object *dirents;   /* hash key (e.g. a.b.c) => dirent */
     zmsg_t *request;        /* request message */
     struct timespec t0;     /* commit begin timestamp */
+    char *fence;            /* fence name, if applicable */
     enum {
         COMMIT_PUT,         /* put is still appending items to this commit */
         COMMIT_STORE,       /* stores running for objs referenced by commit */
         COMMIT_UPSTREAM,    /* upstream commit running */
-        COMMIT_MASTER,      /* master commit in progress */
+        COMMIT_MASTER,      /* (master only) commit ASAP */
+        COMMIT_FENCE,       /* (master only) commit upon fence count==nprocs */
     } state;
 } commit_t;
+
+typedef struct {
+    int nprocs;
+    int count;
+} fence_t;
 
 /* A get_t is created to time kvs_get.
  * Only needed for tracking the total time servicing a get including stalls.
@@ -132,6 +139,7 @@ typedef struct {
     href_t rootdir;         /* current root SHA1 */
     int rootseq;            /* current root version (for ordering) */
     zhash_t *commits;       /* hash of pending put/commits by sender name */
+    zhash_t *fences;        /* hash of pending fences by name (master only) */
     zhash_t *gets;          /* hash of pending get requests by sender name */
     waitqueue_t watchlist;
     int watchlist_lastrun_epoch;
@@ -147,7 +155,7 @@ enum {
     KVS_GET_FILEVAL = 2,
 };
 
-static int setroot_event_send (ctx_t *ctx);
+static int setroot_event_send (ctx_t *ctx, const char *fence);
 static void commit_respond (ctx_t *ctx, zmsg_t **zmsg, const char *sender,
                             const char *rootdir, int rootseq);
 
@@ -157,6 +165,8 @@ static void freectx (ctx_t *ctx)
         zhash_destroy (&ctx->store);
     if (ctx->commits)
         zhash_destroy (&ctx->commits);
+    if (ctx->fences)
+        zhash_destroy (&ctx->fences);
     if (ctx->gets)
         zhash_destroy (&ctx->gets);
     if (ctx->watchlist)
@@ -173,6 +183,8 @@ static ctx_t *getctx (flux_t h)
         if (!(ctx->store = zhash_new ()))
             oom ();
         if (!(ctx->commits = zhash_new ()))
+            oom ();
+        if (!(ctx->fences = zhash_new ()))
             oom ();
         if (!(ctx->gets = zhash_new ()))
             oom ();
@@ -230,6 +242,8 @@ static void commit_destroy (commit_t *c)
 {
     if (c->dirents)
         json_object_put (c->dirents);
+    if (c->fence)
+        free (c->fence);
     free (c);
 }
 
@@ -238,6 +252,18 @@ static void commit_add (commit_t *c, const char *key, json_object *dirent)
     if (!c->dirents)
         c->dirents = util_json_object_new_object ();
     json_object_object_add (c->dirents, key, dirent);
+}
+
+static fence_t *fence_create (int nprocs)
+{
+    fence_t *f = xzmalloc (sizeof (*f));
+    f->nprocs = nprocs;
+    return f;
+}
+
+static void fence_destroy (fence_t *f)
+{
+    free (f); 
 }
 
 static get_t *get_create (void)
@@ -571,7 +597,7 @@ static bool commit_apply_one (ctx_t *ctx, commit_t *c)
 
 /* Apply all the commits found in ctx->commits in COMMIT_MASTER state.
  */
-static void commit_apply_all (ctx_t *ctx, zhash_t *commits)
+static void commit_apply_all (ctx_t *ctx)
 {
     json_object *rootcpy;
     char *key;
@@ -581,11 +607,12 @@ static void commit_apply_all (ctx_t *ctx, zhash_t *commits)
 
     rootcpy = commit_apply_start (ctx);
 
-    if (!(keys = zhash_keys (commits)))
+    if (!(keys = zhash_keys (ctx->commits)))
         oom ();
     key = zlist_first (keys);
     while (key) {
-        if ((c = zhash_lookup (commits, key)) && c->state == COMMIT_MASTER) {
+        if ((c = zhash_lookup (ctx->commits, key))
+                                            && c->state == COMMIT_MASTER) {
             commit_apply_dirents (ctx, rootcpy, c);
             count++;
         }
@@ -593,15 +620,16 @@ static void commit_apply_all (ctx_t *ctx, zhash_t *commits)
     }
 
     if (commit_apply_finish (ctx, rootcpy))
-        setroot_event_send (ctx); 
+        setroot_event_send (ctx, NULL); 
 
     while ((key = zlist_pop (keys))) {
-        if ((c = zhash_lookup (commits, key)) && c->state == COMMIT_MASTER) {
+        if ((c = zhash_lookup (ctx->commits, key))
+                                            && c->state == COMMIT_MASTER) {
             assert (c->request != NULL);
             commit_respond (ctx, &c->request, key, NULL, 0);
             if (monotime_isset (c->t0))
                 tstat_push (&ctx->stats.commit_time,  monotime_since (c->t0));
-            zhash_delete (commits, key);
+            zhash_delete (ctx->commits, key);
         }
         free (key);
     }
@@ -609,11 +637,74 @@ static void commit_apply_all (ctx_t *ctx, zhash_t *commits)
     tstat_push (&ctx->stats.commit_merges, count);
 }
 
+/* Fence.
+ */
+static void commit_apply_fence (ctx_t *ctx, const char *name)
+{
+    json_object *rootcpy;
+    char *key;
+    zlist_t *keys;
+    commit_t *c;
+
+    rootcpy = commit_apply_start (ctx);
+
+    if (!(keys = zhash_keys (ctx->commits)))
+        oom ();
+    key = zlist_first (keys);
+    while (key) {
+        if ((c = zhash_lookup (ctx->commits, key)) && c->state == COMMIT_FENCE
+                                              && !strcmp (name, c->fence)) {
+            commit_apply_dirents (ctx, rootcpy, c);
+        }
+        key = zlist_next (keys);
+    }
+
+    (void)commit_apply_finish (ctx, rootcpy);
+    setroot_event_send (ctx, name); 
+
+    while ((key = zlist_pop (keys))) {
+        if ((c = zhash_lookup (ctx->commits, key))
+                                            && c->state == COMMIT_FENCE
+                                              && !strcmp (name, c->fence)) {
+            if (c->request)
+                commit_respond (ctx, &c->request, key, NULL, 0);
+            zhash_delete (ctx->commits, key);
+        }
+        free (key);
+    }
+    zlist_destroy (&keys);
+}
+
+static void commit_complete_fence (ctx_t *ctx, const char *fence,
+                                   const char *rootdir, int rootseq)
+{
+    char *key;
+    zlist_t *keys;
+    commit_t *c;
+
+    zhash_delete (ctx->fences, fence);
+
+    if (!(keys = zhash_keys (ctx->commits)))
+        oom ();
+    key = zlist_first (keys);
+    while (key) {
+        if ((c = zhash_lookup (ctx->commits, key)) && c->fence
+                                              && !strcmp (fence, c->fence)) {
+            if (c->request)
+                commit_respond (ctx, &c->request, key, rootdir, rootseq);
+            zhash_delete (ctx->commits, key);
+        }
+        key = zlist_next (keys);
+    }
+    zlist_destroy (&keys);
+
+}
+
 static int timeout_cb (flux_t h, void *arg)
 {
     ctx_t *ctx = arg;
 
-    commit_apply_all (ctx, ctx->commits);
+    commit_apply_all (ctx);
     flux_timeout_set (h, 0);
     return 0;
 }
@@ -1185,27 +1276,23 @@ done:
     return 0;
 }
 
-/* Send a commit message upstream.
+/* Send a new commit request upstream.
+ * When the response is recieved, we will look up this commit_t by sender
+ * and respond to c->request (if set).
  */
 static void send_upstream_commit (ctx_t *ctx, commit_t *c, const char *sender,
-                                  zmsg_t **zmsg)
+                                  const char *fence, int nprocs)
 {
     json_object *o;
 
-    /* Stash (take ownership of) orig. commit request.
-     */
-    assert (c->request == NULL);
-    c->request = *zmsg;
-    *zmsg = NULL;
-
-    /* Send a new request upstream.
-     * When the response is recieved, we will look up this commit_t by sender
-     * and respond to c->request.
-     */
     assert (c->dirents != NULL);
     o = c->dirents;
     c->dirents = NULL;
 
+    if (fence) {
+        util_json_object_add_string (o, ".arg_fence", fence);
+        util_json_object_add_int (o, ".arg_nprocs", nprocs);
+    }
     util_json_object_add_string (o, ".arg_sender", sender);
     flux_request_send (ctx->h, o, "kvs.commit");
     json_object_put (o);
@@ -1267,6 +1354,9 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     char *sender = NULL;
     const char *arg_sender;
     json_object_iter iter;
+    int nprocs;
+    const char *fence = NULL;
+    bool internal = false;
 
     if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
@@ -1277,12 +1367,22 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
                   __FUNCTION__);
         goto done;
     }
+    /* Get optional fence arguments.
+     */ 
+    if (util_json_object_get_string (request, ".arg_fence", &fence) == 0) {
+        if (util_json_object_get_int (request, ".arg_nprocs", &nprocs) < 0) {
+            flux_log (h, LOG_ERR, "%s: fence with no nprocs", __FUNCTION__);
+            goto done;
+        }
+    }
+
     /* Commits generated internally will contain .arg_sender.  If present,
-     * we should ignore the true sender and use it to identify the commit.
+     * we should ignore the true sender and use it to hash the commit.
      */
     if (util_json_object_get_string (request, ".arg_sender", &arg_sender)==0) {
         free (sender);
         sender = xstrdup (arg_sender);
+        internal = true;
     }
     if (!(c = zhash_lookup (ctx->commits, sender))) {
         c = commit_create ();
@@ -1300,22 +1400,45 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         c->state = COMMIT_STORE;
         monotime (&c->t0);
     }
+    if (fence && !c->fence)
+        c->fence = xstrdup (fence);
+
+    if (ctx->master && c->state != COMMIT_STORE) { /* XXX */
+        flux_log (h, LOG_ERR, "XXX encountered old commit (%d)", c->state);
+        goto done;
+    }
 
     /* Master: apply the commit and generate a response (subject to rate lim)
      */
     if (ctx->master) {
-        assert (c->request == NULL);
-        c->request = *zmsg;
-        *zmsg = NULL;
         assert (c->state == COMMIT_STORE);
-        c->state = COMMIT_MASTER;
-
-        int msec = (int)monotime_since (ctx->commit_time);
-        if (msec < min_commit_msec) {
-            if (!flux_timeout_isset (h))
-                flux_timeout_set (h, min_commit_msec - msec);
-        } else
-            commit_apply_all (ctx, ctx->commits);
+        if (!(fence && internal)) { /* setting c->request means reply needed */
+            assert (c->request == NULL);
+            c->request = *zmsg;
+            *zmsg = NULL;
+        }
+        if (fence) {
+            c->state = COMMIT_FENCE;
+            fence_t *f;
+            if (!(f = zhash_lookup (ctx->fences, fence))) {
+                f = fence_create (nprocs);
+                zhash_insert (ctx->fences, fence, f);
+                zhash_freefn (ctx->fences, fence,
+                              (zhash_free_fn *)fence_destroy);
+            }
+            if (++f->count == f->nprocs) {
+                commit_apply_fence (ctx, fence);
+                zhash_delete (ctx->fences, fence);
+            }
+        } else {
+            c->state = COMMIT_MASTER;
+            int msec = (int)monotime_since (ctx->commit_time);
+            if (msec < min_commit_msec) {
+                if (!flux_timeout_isset (h))
+                    flux_timeout_set (h, min_commit_msec - msec);
+            } else
+                commit_apply_all (ctx);
+        }
 
     /* Slave: commit must wait for any referenced hash entries to be stored
      * upstream, then stash 'zmsg' in the commit_t and send a new internal
@@ -1328,7 +1451,12 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             goto done; /* stall */
         wait_destroy (w, zmsg); /* get back *zmsg */
         c->state = COMMIT_UPSTREAM;
-        send_upstream_commit (ctx, c, sender, zmsg); 
+        send_upstream_commit (ctx, c, sender, fence, nprocs);
+        if (!(fence && internal)) {
+            assert (c->request == NULL);
+            c->request = *zmsg; /* setting c->request means reply needed */
+            *zmsg = NULL;
+        }
         goto done;
     }
 done:
@@ -1454,6 +1582,7 @@ static int setroot_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     int rootseq;
     const char *rootdir;
+    const char *fence = NULL;
     json_object *o = NULL;
     json_object *root = NULL;
 
@@ -1469,6 +1598,9 @@ static int setroot_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         store (ctx, root, ref);
     }
     setroot (ctx, rootdir, rootseq);
+    (void)util_json_object_get_string (o, "fence", &fence);
+    if (fence)
+        commit_complete_fence (ctx, fence, rootdir, rootseq);
 done:
     if (o)
         json_object_put (o);
@@ -1477,13 +1609,15 @@ done:
     return 0;
 }
 
-static int setroot_event_send (ctx_t *ctx)
+static int setroot_event_send (ctx_t *ctx, const char *fence)
 {
     json_object *o = util_json_object_new_object ();
     int rc = -1;
 
     util_json_object_add_int (o, "rootseq", ctx->rootseq);
     util_json_object_add_string (o, "rootdir", ctx->rootdir);
+    if (fence)
+        util_json_object_add_string (o, "fence", fence);
     if (event_includes_rootdir) {
         json_object *root;
         bool stall;
@@ -1569,6 +1703,8 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         util_json_object_add_int (o, "#obj incomplete", incomplete);
         util_json_object_add_int (o, "#pending commits",
                                   zhash_size (ctx->commits));
+        util_json_object_add_int (o, "#pending fences",
+                                  zhash_size (ctx->fences));
         util_json_object_add_int (o, "#pending gets",
                                   zhash_size (ctx->gets));
         util_json_object_add_int (o, "#watchers",
