@@ -1285,9 +1285,11 @@ static void send_upstream_commit (ctx_t *ctx, commit_t *c, const char *sender,
 {
     json_object *o;
 
-    FASSERT (ctx->h, c->dirents != NULL);
-    o = c->dirents;
-    c->dirents = NULL;
+    if (c->dirents) {
+        o = c->dirents;
+        c->dirents = NULL;
+    } else
+        o = util_json_object_new_object ();
 
     if (fence) {
         util_json_object_add_string (o, ".arg_fence", fence);
