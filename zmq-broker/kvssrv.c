@@ -355,8 +355,8 @@ static bool load (ctx_t *ctx, const href_t ref, wait_t w, json_object **op)
         }
     }
     if (done) {
-        assert (hp != NULL);
-        assert (hp->o != NULL);
+        FASSERT (ctx->h, hp != NULL);
+        FASSERT (ctx->h, hp->o != NULL);
         if (op)
             *op = hp->o;
     }
@@ -369,8 +369,8 @@ static void load_complete (ctx_t *ctx, href_t ref, json_object *o)
 {
     hobj_t *hp = zhash_lookup (ctx->store, ref);
 
-    assert (hp != NULL);
-    assert (hp->state == HOBJ_INCOMPLETE);
+    FASSERT (ctx->h, hp != NULL);
+    FASSERT (ctx->h, hp->state == HOBJ_INCOMPLETE);
     (void)hobj_update (ctx, hp, o);
     hp->state = HOBJ_COMPLETE;
     wait_runqueue (hp->waitlist);
@@ -429,8 +429,8 @@ static void store_complete (ctx_t *ctx, href_t ref)
 {
     hobj_t *hp = zhash_lookup (ctx->store, ref);
 
-    assert (hp != NULL);
-    assert (hp->state == HOBJ_DIRTY);
+    FASSERT (ctx->h, hp != NULL);
+    FASSERT (ctx->h, hp->state == HOBJ_DIRTY);
     hp->state = HOBJ_COMPLETE;
     wait_runqueue (hp->waitlist);
 }
@@ -483,7 +483,7 @@ static void commit_unroll (ctx_t *ctx, json_object *dir)
         oom ();
     while ((key = zlist_pop (keys))) {
         refcpy = zhash_lookup (new, key);
-        assert (refcpy != NULL);
+        FASSERT (ctx->h, refcpy != NULL);
         json_object_object_del (dir, key);
         json_object_object_add (dir, key, dirent_create ("DIRREF", refcpy));
         free (refcpy);
@@ -518,7 +518,7 @@ static void commit_link_dirent (ctx_t *ctx, json_object *dir,
             subdir = o;
         } else if ((o = json_object_object_get (subdirent, "DIRREF"))) {
             bool stall = !load (ctx, json_object_get_string (o), NULL, &subdir);
-            assert (stall == false);
+            FASSERT (ctx->h, stall == false);
             json_object_object_del (dir, name);
             subdir = copydir (subdir);/* do not corrupt store by modify orig. */
             json_object_object_add (dir, name, dirent_create ("DIRVAL",subdir));
@@ -552,8 +552,8 @@ static json_object *commit_apply_start (ctx_t *ctx)
     json_object *rootdir = NULL;
     bool stall = !load (ctx, ctx->rootdir, NULL, &rootdir);
 
-    assert (!stall);
-    assert (rootdir != NULL);
+    FASSERT (ctx->h, !stall);
+    FASSERT (ctx->h, rootdir != NULL);
     return copydir (rootdir); /* do not corrupt store by modifying orig. */
 }
 
@@ -625,7 +625,7 @@ static void commit_apply_all (ctx_t *ctx)
     while ((key = zlist_pop (keys))) {
         if ((c = zhash_lookup (ctx->commits, key))
                                             && c->state == COMMIT_MASTER) {
-            assert (c->request != NULL);
+            FASSERT (ctx->h, c->request != NULL);
             commit_respond (ctx, &c->request, key, NULL, 0);
             if (monotime_isset (c->t0))
                 tstat_push (&ctx->stats.commit_time,  monotime_since (c->t0));
@@ -1020,8 +1020,8 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t w,
             }
             val = vp;
         } else if ((vp = json_object_object_get (dirent, "LINKVAL"))) {
-            assert (readlink == true); /* walk() ensures this */
-            assert (dir == false); /* dir && readlink should never happen */
+            FASSERT (ctx->h, readlink == true); /* walk() ensures this */
+            FASSERT (ctx->h, dir == false); /* dir && readlink should never happen */
             val = vp;
         } else
             msg_exit ("%s: corrupt internal storage", __FUNCTION__);
@@ -1285,7 +1285,7 @@ static void send_upstream_commit (ctx_t *ctx, commit_t *c, const char *sender,
 {
     json_object *o;
 
-    assert (c->dirents != NULL);
+    FASSERT (ctx->h, c->dirents != NULL);
     o = c->dirents;
     c->dirents = NULL;
 
@@ -1328,7 +1328,7 @@ static void commit_respond (ctx_t *ctx, zmsg_t **zmsg, const char *sender,
 {
     json_object *response = util_json_object_new_object ();
 
-    assert (*zmsg != NULL);
+    FASSERT (ctx->h, *zmsg != NULL);
     
     util_json_object_add_string (response, "sender", sender);
     if (rootdir) {
@@ -1411,9 +1411,9 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     /* Master: apply the commit and generate a response (subject to rate lim)
      */
     if (ctx->master) {
-        assert (c->state == COMMIT_STORE);
+        FASSERT (h, c->state == COMMIT_STORE);
         if (!(fence && internal)) { /* setting c->request means reply needed */
-            assert (c->request == NULL);
+            FASSERT (h, c->request == NULL);
             c->request = *zmsg;
             *zmsg = NULL;
         }
@@ -1445,7 +1445,7 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
      * commit upstream.
      */
     } else {
-        assert (c->state == COMMIT_STORE);
+        FASSERT (h, c->state == COMMIT_STORE);
         w = wait_create (h, typemask, zmsg, commit_request_cb, arg);
         if (commit_dirty (ctx, c, w))
             goto done; /* stall */
@@ -1453,7 +1453,7 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         c->state = COMMIT_UPSTREAM;
         send_upstream_commit (ctx, c, sender, fence, nprocs);
         if (!(fence && internal)) {
-            assert (c->request == NULL);
+            FASSERT (h, c->request == NULL);
             c->request = *zmsg; /* setting c->request means reply needed */
             *zmsg = NULL;
         }
@@ -1494,8 +1494,8 @@ static int commit_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     /* Find the original commit_t associated with this request and respond.
      */
     if ((c = zhash_lookup (ctx->commits, sender))) {
-        assert (c->state == COMMIT_UPSTREAM);
-        assert (c->request != NULL);
+        FASSERT (h, c->state == COMMIT_UPSTREAM);
+        FASSERT (h, c->request != NULL);
         commit_respond (ctx, &c->request, sender, rootdir, rootseq);
         if (monotime_isset (c->t0))
             tstat_push (&ctx->stats.commit_time,  monotime_since (c->t0));
@@ -1623,7 +1623,7 @@ static int setroot_event_send (ctx_t *ctx, const char *fence)
         bool stall;
 
         stall = !load (ctx, ctx->rootdir, NULL, &root);
-        assert (stall == false);
+        FASSERT (ctx->h, stall == false);
         json_object_get (root);
         json_object_object_add (o, "rootdirval", root);
     }
