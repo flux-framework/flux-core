@@ -156,6 +156,10 @@ char *flux_zmsg_tag (zmsg_t *zmsg);
  */
 json_object *flux_zmsg_json(zmsg_t *zmsg);
 
+void flux_assfail (flux_t h, char *ass, char *file, int line);
+#define FASSERT(h, exp) if ((exp)); \
+                        else flux_assfail(h, #exp, __FILE__, __LINE__)
+
 #endif /* !FLUX_H */
 
 /*
