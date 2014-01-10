@@ -47,7 +47,7 @@ SUBCMDS = libexec/kvs libexec/ping libexec/mecho libexec/route \
 	libexec/stats libexec/barrier libexec/snoop libexec/event \
 	libexec/kvswatch libexec/kvsdir libexec/kvstorture \
 	libexec/logger libexec/log libexec/info libexec/kvscopy \
-	libexec/zio libexec/whatsup
+	libexec/zio libexec/whatsup libexec/host
 
 BUILD = $(LIBCMB) $(LIBPMI) flux mpi_hello echo cmbd \
 	$(PLUGINS) $(SUBCMDS)
