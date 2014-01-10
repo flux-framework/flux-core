@@ -1,0 +1,49 @@
+#!/usr/bin/lua 
+
+-- flux-topo - emit graphviz representation of Flux session topology
+
+local flux = require 'flux'
+local getopt = require 'alt_getopt'.get_opts
+
+local prog = string.match (arg[0], "([^/]+)$")
+
+function die (...)
+    io.stderr:write (prog..": "..string.format (...))
+    os.exit (1)
+end
+
+function dot_hostlabel (rank, hosts)
+    print (rank.." [label=\""..rank..":"..hosts[rank + 1]['name'].."\"]")
+end
+
+function dot_edge (parent, child)
+    print (parent.." -- "..child)
+end
+
+local opts, optind = getopt (arg, "Hh", { })
+if opts.h then
+    print ("Usage: flux-topo [-H] | dot -Tpng | display")
+    os.exit (0)
+end
+
+local f, err = flux.new()
+if not f then die ("flux.new: %s\n", err) end
+
+local kvs, err = f:kvsdir (".");
+if not kvs then die ("kvsdir . %s\n", err) end
+if not kvs.conf.live.topology then die ("conf.live.topology: not found\n") end
+if opts.H then if not kvs.hosts then die ("hosts not found\n") end end
+
+print ("graph flux {")
+if opts.H then dot_hostlabel (0, kvs.hosts) end
+for i,ca in ipairs(kvs.conf.live.topology) do
+    for j,child in ipairs(ca) do
+        if opts.H then dot_hostlabel (child, kvs.hosts) end
+        dot_edge (i - 1, child)
+    end
+end
+print ("}")
+
+os.exit (0)
+
+-- vi: ts=4 sw=4 expandtab
