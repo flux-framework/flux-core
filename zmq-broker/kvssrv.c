@@ -130,6 +130,7 @@ typedef struct {
     tstat_t commit_merges;
     tstat_t get_time;
     tstat_t put_time;
+    tstat_t fence_time;
     int faults;
     int noop_stores;
 } stats_t;
@@ -1400,7 +1401,8 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         zhash_freefn (ctx->commits, sender, (zhash_free_fn *)commit_destroy);
     } else if (c->state == COMMIT_PUT) {
         c->state = COMMIT_STORE;
-        monotime (&c->t0);
+        if (!fence)
+            monotime (&c->t0);
     }
     if (fence && !c->fence)
         c->fence = xstrdup (fence);
@@ -1428,8 +1430,15 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
                 zhash_freefn (ctx->fences, fence,
                               (zhash_free_fn *)fence_destroy);
             }
+            /* Once count is reached, apply all the commits comprising the
+             * fence.  We only time this part as otherwise we would be timing
+             * synchronization which may have nothing to do with us.
+             */
             if (++f->count == f->nprocs) {
+                struct timespec t0;
+                monotime (&t0);
                 commit_apply_fence (ctx, fence);
+                tstat_push (&ctx->stats.fence_time,  monotime_since (t0));
                 zhash_delete (ctx->fences, fence);
             }
         } else {
@@ -1720,6 +1729,9 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 
         util_json_object_add_tstat (o, "commits (sec)",
                                     &ctx->stats.commit_time, 1E-3);
+
+        util_json_object_add_tstat (o, "fences after sync (sec)",
+                                    &ctx->stats.fence_time, 1E-3);
 
         util_json_object_add_tstat (o, "commits per update",
                                     &ctx->stats.commit_merges, 1);
