@@ -33,7 +33,6 @@ int main (int argc, char *argv[])
     flux_t h;
     int ch;
     char *arg = NULL;
-    zmsg_t *zmsg;
     char *pub = NULL;
     bool sub = false;
 
@@ -76,11 +75,26 @@ int main (int argc, char *argv[])
             json_object_put (o);
     }
     if (sub) {
+        json_object *o = NULL;
+        const char *s;
+        char *tag = NULL;
         if (flux_event_subscribe (h, arg) < 0)
             err_exit ("flux_event_subscribe");
-        while ((zmsg = flux_event_recvmsg (h, false))) {
-            zmsg_dump_compact (zmsg);
-            zmsg_destroy (&zmsg);
+        while (flux_event_recv (h, &o, &tag, false) == 0) {
+            printf ("--------------------------------------\n");
+            if (tag) {
+                printf ("%s\n", tag);
+                free (tag);
+                tag = NULL;
+            } else
+                printf ("<empty tag>\n"); 
+            if (o) {
+                s = json_object_to_json_string_ext (o, JSON_C_TO_STRING_PLAIN);
+                printf ("%s\n", s);
+                json_object_put (o);
+                o = NULL;
+            } else
+                printf ("<empty paylod>\n");
         }
         if (flux_event_unsubscribe (h, arg) < 0)
             err_exit ("flux_event_unsubscribe");
