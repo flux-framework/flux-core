@@ -70,6 +70,7 @@ int flux_respond_errnum (flux_t h, zmsg_t **request, int errnum);
 int flux_event_sendmsg (flux_t h, zmsg_t **zmsg);
 zmsg_t *flux_event_recvmsg (flux_t h, bool nonblock);
 int flux_event_send (flux_t h, json_object *request, const char *fmt, ...);
+int flux_event_recv (flux_t h, json_object **respp, char **tagp, bool nb);
 int flux_event_subscribe (flux_t h, const char *topic);
 int flux_event_unsubscribe (flux_t h, const char *topic);
 
