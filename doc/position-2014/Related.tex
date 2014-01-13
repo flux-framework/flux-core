@@ -35,39 +35,22 @@ their limits in managing the large and diverse collection of computing
 resources being delivered today.  Not only are the size of today's
 machines reaching a unprecedented scale, but the collection of
 resources which much be orchestrated to service the complex job
-dependencies of today is truly daunting.  In addition, the quantity of
-jobs today's computing facilities are being expected to process has
-grown considerably.
+dependencies of today is expanding.  In addition, the quantity of jobs
+today's computing facilities are being expected to process has grown
+considerably.
 
 Flux was initiated to address these needs.  At its core, Flux is
-designed to manage all of the computing resources in a center.  It is
-designed to handle a very high job throughput across a large number of
-diverse computing clusters and ancillary resources while providing
-levels of service that meet the needs of the most demanding users.
+designed to manage all of the computing resources in a center.  Flux's
+hierarchical job model is a unique solution that breaks up the
+activities of a centralized scheduler and distributes the work to
+multiple, smaller schedulers each handling a subset of the workload.
+Flux provides a framework that allows for multiple solutions to be
+``plugged in''.  Rather than design the best scheduling algorithm in
+the world, we recognized the need to allow Flux to offer a range of
+solutions, from simple to complex, each suited to their specific
+purposes.
 
-One of the core requirements for Flux was to provide a framework that
-allows for multiple solutions to be ``plugged in''.  Rather than
-design the best scheduling algorithm in the world, we recognized the
-need to allow Flux to offer a range of solutions, from simple to
-complex, each tailored to their specific purposes.  We found many
-papers that describe novel approaches to job scheduling and designed
-Flux to serve as a test bed for academic research as well as a
-production environment.
-
-The some of the published research we will be exploring using Flux as a
-test bed include the following:
-
-\begin{itemize}
-\item Multi-level hierarchic genetic-based scheduling of independent jobs in dynamic heterogeneous grid environment~\cite{Koodziej20121}
-
-\item Scalable, Low Complexity, and Fast Greedy Scheduling Heuristics for Highly Heterogeneous Distributed Computing Systems~\cite{Diaz13}
-
-\item A Comparative Study of Job Scheduling Strategies in Large-scale Parallel Computational Systems~\cite{chandio2013comparative}
-
-\item Hierarchical scheduling strategies for parallel tasks and advance reservations in grids~\cite{Kurowski13}
-
-\item Job Coscheduling on Coupled High-End Computing Systems~\cite{6047306}
-
-\item A Metascheduler For The Grid~\cite{1029934}
-
-\end{itemize}
+This enables Flux to handle a very high job throughput across a large
+number of diverse computing clusters and ancillary resources while
+providing levels of service that meet the needs of the most demanding
+users.
