@@ -1,5 +1,7 @@
 #!/bin/bash -e
 
+# check directory semantics
+
 TEST=`basename $0`
 KEY=$TEST.a.b.c
 DIR=$TEST.a.b

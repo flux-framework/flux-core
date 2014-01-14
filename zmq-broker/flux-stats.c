@@ -10,18 +10,19 @@
 #include "util.h"
 #include "log.h"
 
-#define OPTIONS "hcCp:s:t:"
+#define OPTIONS "hcCp:s:t:r"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"clear",      no_argument,        0, 'c'},
     {"clear-all",  no_argument,        0, 'C'},
+    {"rusage",     no_argument,        0, 'r'},
     {"parse",      required_argument,  0, 'p'},
     {"scale",      required_argument,  0, 's'},
     {"type",       required_argument,  0, 't'},
     { 0, 0, 0, 0 },
 };
 
-static void parse_stats (const char *n, json_object *o, double scale,
+static void parse_json (const char *n, json_object *o, double scale,
                          json_type type);
 
 void usage (void)
@@ -42,6 +43,7 @@ int main (int argc, char *argv[])
     char *objname = NULL;
     bool copt = false;
     bool Copt = false;
+    bool ropt = false;
     double scale = 1.0;
     json_type type = json_type_object;
     json_object *response;
@@ -58,6 +60,9 @@ int main (int argc, char *argv[])
                 break;
             case 'C': /* --clear-all */
                 Copt = true;
+                break;
+            case 'r': /* --rusage */
+                ropt = true;
                 break;
             case 'p': /* --parse objname */
                 objname = optarg;
@@ -100,10 +105,15 @@ int main (int argc, char *argv[])
     } else if (Copt) {
         if (flux_event_send (h, NULL, "event.%s.stats.clear", target) < 0)
             err_exit ("flux_event_send event.%s.stats.clear", target);
+    } else if (ropt) {
+        if (!(response = flux_rpc (h, NULL, "%s.rusage", target)))
+            errn_exit (EPROTO, "flux_rpc %s.rusage", target);
+        parse_json (objname, response, scale, type);
+        json_object_put (response);
     } else {
         if (!(response = flux_rpc (h, NULL, "%s.stats.get", target)))
             err_exit ("flux_rpc %s.stats", target);
-        parse_stats (objname, response, scale, type);
+        parse_json (objname, response, scale, type);
         json_object_put (response);
     }
     flux_handle_destroy (&h);
@@ -111,7 +121,7 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-static void parse_stats (const char *n, json_object *o, double scale,
+static void parse_json (const char *n, json_object *o, double scale,
                          json_type type)
 {
     if (n) {

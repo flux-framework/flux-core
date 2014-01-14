@@ -16,6 +16,7 @@ char *xstrdup (const char *s);
 
 double monotime_since (struct timespec t0); /* milliseconds */
 void monotime (struct timespec *tp);
+bool monotime_isset (struct timespec t);
 
 /* Get integer, string, or comma delimited array of ints from the environment
  * by name, or if not set, return (copy in string/int* case) of default arg.

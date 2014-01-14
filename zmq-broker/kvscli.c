@@ -974,40 +974,12 @@ done:
  ** Commit/synchronization
  **/
 
-/* helper for cmb_kvs_commit, cmb_kvs_fence */
-static int send_kvs_flush (flux_t h)
+int kvs_commit (flux_t h)
 {
     json_object *request = util_json_object_new_object ();
     json_object *reply = NULL;
-    int ret = -1;
-   
-    reply = flux_rpc (h, request, "kvs.flush");
-    if (!reply && errno > 0)
-        goto done;
-    if (reply) {
-        errno = EPROTO;
-        goto done;
-    }
-    ret = 0;
-done:
-    if (request)
-        json_object_put (request);
-    if (reply)
-        json_object_put (reply); 
-    return ret;
-}
-
-/* helper for cmb_kvs_commit, cmb_kvs_fence */
-static int send_kvs_commit (flux_t h, const char *name)
-{
-    json_object *request = util_json_object_new_object ();
-    json_object *reply = NULL;
-    char *uuid = NULL;
     int ret = -1;
   
-    if (!name)
-        uuid = uuid_generate_str ();
-    util_json_object_add_string (request, "name", name ? name : uuid); 
     reply = flux_rpc (h, request, "kvs.commit");
     if (!reply)
         goto done;
@@ -1017,50 +989,70 @@ done:
         json_object_put (request);
     if (reply)
         json_object_put (reply); 
-    if (uuid)
-        free (uuid);
     return ret;
-}
-
-int kvs_commit (flux_t h)
-{
-    if (send_kvs_flush (h) < 0)
-        return -1;
-    if (send_kvs_commit (h, NULL) < 0)
-        return -1;
-    return 0;
 }
 
 int kvs_fence (flux_t h, const char *name, int nprocs)
 {
-    if (send_kvs_flush (h) < 0)
-        return -1;
-    if (flux_barrier (h, name, nprocs) < 0)
-        return -1;
-    if (send_kvs_commit (h, name) < 0)
-        return -1;
-    return 0;
+    json_object *request = util_json_object_new_object ();
+    json_object *reply = NULL;
+    int ret = -1;
+  
+    util_json_object_add_string (request, ".arg_fence", name);
+    util_json_object_add_int (request, ".arg_nprocs", nprocs);
+    reply = flux_rpc (h, request, "kvs.commit");
+    if (!reply)
+        goto done;
+    ret = 0;
+done:
+    if (request)
+        json_object_put (request);
+    if (reply)
+        json_object_put (reply); 
+    return ret;
 }
 
 int kvs_get_version (flux_t h, int *versionp)
 {
-    return kvs_get_int (h, "version", versionp);
+    json_object *request = util_json_object_new_object ();
+    json_object *reply = NULL;
+    int ret = -1;
+    int version;
+ 
+    reply = flux_rpc (h, request, "kvs.getroot");
+    if (!reply)
+        goto done;
+    if (util_json_object_get_int (reply, "rootseq", &version) < 0) {
+        errno = EPROTO;
+        goto done;
+    }
+    *versionp = version;
+    ret = 0;
+done:
+    if (request)
+        json_object_put (request);
+    if (reply)
+        json_object_put (reply); 
+    return ret;
 }
 
 int kvs_wait_version (flux_t h, int version)
 {
-    int vers;
-    int rc = -1;
-
-    if (kvs_get_int (h, "version", &vers) < 0)
+    json_object *request = util_json_object_new_object ();
+    json_object *reply = NULL;
+    int ret = -1;
+ 
+    util_json_object_add_int (request, "rootseq", version);
+    reply = flux_rpc (h, request, "kvs.sync");
+    if (!reply)
         goto done;
-    while (vers < version) {
-        if (kvs_watch_once_int (h, "version", &vers) < 0)
-            goto done;
-    }
-    rc = 0;
+    ret = 0;
 done:
-    return rc;
+    if (request)
+        json_object_put (request);
+    if (reply)
+        json_object_put (reply); 
+    return ret;
 }
 
 int kvs_dropcache (flux_t h)

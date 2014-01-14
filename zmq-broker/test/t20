@@ -1,5 +1,8 @@
 #!/bin/bash -e
 
+# FIXME: this test is effectively disabled with the '|| true's appended below
+# Check that puts of the same value don't increase the size of the store
+
 TEST=`basename $0`
 
 test_cleanup() {

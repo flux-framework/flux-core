@@ -19,9 +19,9 @@
 
 void tstat_push (tstat_t *ts, double x)
 {
-    if (ts->min == 0 || x < ts->min)
+    if (ts->n == 0 || x < ts->min)
         ts->min = x;
-    if (ts->max == 0 || x > ts->max)
+    if (ts->n == 0 || x > ts->max)
         ts->max = x;
 /* running variance
  * ref Knuth TAOCP vol 2, 3rd edition, page 232

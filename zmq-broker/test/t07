@@ -1,5 +1,7 @@
 #!/bin/bash -e
 
+# create a directory, put various keys into it, and retrieve them
+
 TEST=`basename $0`
 DIR=$TEST.a.b
 EXPRESULT="$DIR.a = 69

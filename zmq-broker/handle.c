@@ -747,6 +747,22 @@ int flux_event_send (flux_t h, json_object *request, const char *fmt, ...)
     return rc;
 }
 
+int flux_event_recv (flux_t h, json_object **respp, char **tagp, bool nb)
+{
+    zmsg_t *zmsg;
+    int rc = -1;
+
+    if (!(zmsg = flux_event_recvmsg (h, nb)))
+        goto done;
+    if (cmb_msg_decode (zmsg, tagp, respp) < 0)
+        goto done;
+    rc = 0;
+done:
+    if (zmsg)
+        zmsg_destroy (&zmsg);
+    return rc;
+}
+
 int flux_request_send (flux_t h, json_object *request, const char *fmt, ...)
 {
     zmsg_t *zmsg;
@@ -905,6 +921,14 @@ done:
     if (request)
         json_object_put (request);
     return ret;
+}
+
+void flux_assfail (flux_t h, char *ass, char *file, int line)
+{
+    flux_log (h, LOG_CRIT, "assertion failure: %s:%d: %s", file, line, ass);
+    sleep (5);
+    if (raise (SIGABRT) < 0)
+        exit (1);
 }
 
 /*
