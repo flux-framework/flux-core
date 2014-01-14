@@ -22,6 +22,9 @@ static const struct option longopts[] = {
 static void mon_list (flux_t h, int argc, char *argv[]);
 static void mon_add (flux_t h, int argc, char *argv[]);
 static void mon_del (flux_t h, int argc, char *argv[]);
+static void mon_commit (flux_t h, int argc, char *argv[]);
+static void mon_set (flux_t h, int argc, char *argv[]);
+static void mon_get (flux_t h, int argc, char *argv[]);
 
 void usage (void)
 {
@@ -29,6 +32,9 @@ void usage (void)
 "Usage: flux-mon list\n"
 "       flux-mon add <name> rpc <request tag>\n"
 "       flux-mon del <name>\n"
+"       flux-mon set commit-type=always|onrequest|ondel\n"
+"       flux-mon get commit-type\n"
+"       flux-mon commit\n"
 );
     exit (1);
 }
@@ -64,6 +70,12 @@ int main (int argc, char *argv[])
         mon_add (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "del"))
         mon_del (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "commit"))
+        mon_commit (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "set"))
+        mon_set (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "get"))
+        mon_get (h, argc - optind, argv + optind);
     else
         usage ();
 
@@ -144,6 +156,68 @@ static void mon_list (flux_t h, int argc, char *argv[])
     }
     kvsitr_destroy (itr);
     kvsdir_destroy (dir);
+}
+
+static void mon_commit (flux_t h, int argc, char *argv[])
+{
+    char *name;
+    int nprocs;
+    json_object *event;
+
+    if (argc != 0)
+        usage ();
+    name = uuid_generate_str ();
+    nprocs = flux_size (h) + 1;
+    event = util_json_object_new_object ();
+
+    util_json_object_add_string (event, "name", name);    
+    util_json_object_add_int (event, "nprocs", nprocs);
+    if (flux_event_send (h, event, "event.mon.commit") < 0)
+        err_exit ("flux_event_send"); 
+    if (kvs_fence (h, name, nprocs) < 0)
+        err_exit ("kvs_fence");
+    free (name);
+}
+
+static void mon_set (flux_t h, int argc, char *argv[])
+{
+    char *key;
+
+    if (argc != 2)
+        usage ();
+    if (!strcmp (argv[0], "commit-type")) {
+        if (!(!strcmp (argv[1], "always") || !strcmp (argv[1], "onrequest")
+                                          || !strcmp (argv[1], "ondel")))
+            usage ();
+        if (asprintf (&key, "conf.mon.%s", argv[0]) < 0)
+            oom ();
+        if (kvs_put_string (h, key, argv[1]) < 0)
+            err_exit ("%s", key);
+        if (kvs_commit (h) < 0)
+            err_exit ("kvs_commit");
+        free (key);
+    } else {
+        usage ();
+    }
+}
+
+static void mon_get (flux_t h, int argc, char *argv[])
+{
+    char *key;
+    char *val = NULL;
+
+    if (argc != 1)
+        usage ();
+    if (!strcmp (argv[0], "commit-type")) {
+        if (asprintf (&key, "conf.mon.%s", argv[0]) < 0)
+            oom ();
+        if (kvs_get_string (h, key, &val) < 0 && errno == ESRCH)
+            err_exit ("%s", key);
+        printf ("%s: %s\n", argv[0], val ? val : "default");
+        free (key);
+        if (val)
+            free (val);
+    }
 }
 
 /*
