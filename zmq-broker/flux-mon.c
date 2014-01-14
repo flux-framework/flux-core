@@ -27,11 +27,8 @@ void usage (void)
 {
     fprintf (stderr, 
 "Usage: flux-mon list\n"
-"       flux-mon add name <type> <args>\n"
-"       flux-mon del name\n"
-"To add RPC source e.g. kvs-stats:\n"
-"       flux-mon add kvs-stat rpc kvs.stats.get\n"
-
+"       flux-mon add <name> rpc <request tag>\n"
+"       flux-mon del <name>\n"
 );
     exit (1);
 }
@@ -83,8 +80,10 @@ static void mon_del (flux_t h, int argc, char *argv[])
         usage ();
     if (asprintf (&key, "conf.mon.source.%s", argv[0]) < 0)
         oom ();
+    if (kvs_get (h, key, NULL) < 0 && errno == ENOENT)
+        err_exit ("%s", key);
     if (kvs_unlink (h, key) < 0)
-        err_exit ("kvs_unlink %s", key);
+        err_exit ("%s", key);
     if (kvs_commit (h) < 0)
         err_exit ("kvs_commit");
     free (key);
