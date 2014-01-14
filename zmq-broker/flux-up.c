@@ -1,4 +1,4 @@
-/* flux-whatsup.c - list node status */
+/* flux-up.c - list node status */
 
 #define _GNU_SOURCE
 #include <getopt.h>
@@ -11,25 +11,35 @@
 #include "log.h"
 #include "hostlist.h"
 
-#define OPTIONS "hduH"
+#define OPTIONS "hduHcn"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"down",       no_argument,        0, 'd'},
     {"up",         no_argument,        0, 'u'},
     {"hostname",   no_argument,        0, 'H'},
+    {"comma",      no_argument,        0, 'c'},
+    {"newline",    no_argument,        0, 'n'},
     { 0, 0, 0, 0 },
 };
 
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-whatsup\n"
+"Usage: flux-up [--up|--down] [--hostname] [--comma|--newline] [nodelist]\n"
 );
     exit (1);
 }
 
+#define CHUNK_SIZE 80
+typedef enum {
+    HLSTR_COMMA,
+    HLSTR_NEWLINE,
+    HLSTR_RANGED,
+} hlstr_type_t;
+
 static char *rank2str (int rank);
 static char *rank2host (json_object *hosts, int rank);
+static char *hostlist_tostring (hostlist_t hl, hlstr_type_t type);
 
 int main (int argc, char *argv[])
 {
@@ -38,13 +48,15 @@ int main (int argc, char *argv[])
     json_object *o, *dn = NULL;
     json_object *hosts;
     hostlist_t dnhl, uphl;
-    char *s, buf[256];
+    char *s;
     int i, len;
     bool dopt = false;
     bool uopt = false;
     bool Hopt = false;
+    bool copt = false;
+    bool nopt = false;
 
-    log_init ("flux-whatsup");
+    log_init ("flux-up");
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
@@ -56,6 +68,12 @@ int main (int argc, char *argv[])
                 break;
             case 'u': /* --up */
                 uopt = true;
+                break;
+            case 'c': /* --comma */
+                copt = true;
+                break;
+            case 'n': /* --newline */
+                nopt = true;
                 break;
             default:
                 usage ();
@@ -110,25 +128,75 @@ int main (int argc, char *argv[])
                 hostlist_push_host (uphl, s); 
             free (s);
         }
-        hostlist_sort (uphl);
-        hostlist_uniq (uphl);
-        hostlist_ranged_string (uphl, sizeof (buf), buf);
-        printf ("up:   %s\n", buf);
+        if (nopt)
+            s = hostlist_tostring (uphl, HLSTR_NEWLINE);
+        else if (copt)
+            s = hostlist_tostring (uphl, HLSTR_COMMA);
+        else
+            s = hostlist_tostring (uphl, HLSTR_RANGED);
+        printf ("%s%s%s", uopt ? "" : "up:\t", s,
+                uopt && strlen (s) == 0 ? "" : "\n");
         hostlist_destroy (uphl);
+        free (s);
     }
 
     if (dopt || !uopt) {
-        hostlist_sort (dnhl);
-        hostlist_uniq (dnhl);
-        hostlist_ranged_string (dnhl, sizeof (buf), buf);
-        if (dopt || !uopt)
-            printf ("down: %s\n", buf);
+        if (nopt)
+            s = hostlist_tostring (dnhl, HLSTR_NEWLINE);
+        else if (copt)
+            s = hostlist_tostring (dnhl, HLSTR_COMMA);
+        else
+            s = hostlist_tostring (dnhl, HLSTR_RANGED);
+        printf ("%s%s%s", dopt ? "" : "down:\t", s,
+                dopt && strlen (s) == 0 ? "" : "\n");
+        free (s);
     }
 
     hostlist_destroy (dnhl);
     flux_handle_destroy (&h);
     log_fini ();
     return 0;
+}
+
+static char *hostlist_tostring (hostlist_t hl, hlstr_type_t type)
+{
+    int len = CHUNK_SIZE;
+    char *buf = xzmalloc (len);
+
+    hostlist_sort (hl);
+    hostlist_uniq (hl);
+
+    switch (type) {
+        case HLSTR_COMMA:
+            while (hostlist_deranged_string (hl, len, buf) < 0)
+                if (!(buf = realloc (buf, len += CHUNK_SIZE)))
+                    oom ();
+            break;
+        case HLSTR_RANGED:
+            while (hostlist_ranged_string (hl, len, buf) < 0)
+                if (!(buf = realloc (buf, len += CHUNK_SIZE)))
+                    oom ();
+            break;
+        case HLSTR_NEWLINE: {
+            hostlist_iterator_t itr;
+            char *host;
+
+            if (!(itr = hostlist_iterator_create (hl)))
+                oom ();
+            while ((host = hostlist_next (itr))) {
+                while (len - strlen (buf) < strlen (host) + 2) {
+                    if (!(buf = realloc (buf, len += CHUNK_SIZE)))
+                        oom ();
+                }
+                snprintf (buf + strlen (buf), len - strlen (buf), "%s\n", host);
+            }
+            hostlist_iterator_destroy (itr);
+            break;
+        }
+    }
+    if (buf[strlen (buf) - 1] == '\n')
+        buf[strlen (buf) - 1] = '\0';
+    return buf;
 }
 
 static char *rank2host (json_object *hosts, int rank)
