@@ -43,13 +43,13 @@ PLUGINS = plugins/apisrv.so plugins/hbsrv.so plugins/kvssrv.so \
 	plugins/barriersrv.so plugins/livesrv.so plugins/mechosrv.so \
 	plugins/logsrv.so plugins/echosrv.so plugins/jobsrv.so \
 	plugins/resrcsrv.so plugins/rexecsrv.so plugins/schedsrv.so \
-	plugins/eventsrv.so plugins/ranksrv.so
+	plugins/eventsrv.so plugins/ranksrv.so plugins/monsrv.so
 
 SUBCMDS = libexec/kvs libexec/ping libexec/mecho libexec/route \
 	libexec/stats libexec/barrier libexec/snoop libexec/event \
 	libexec/kvswatch libexec/kvsdir libexec/kvstorture \
 	libexec/logger libexec/log libexec/info libexec/kvscopy \
-	libexec/zio libexec/up libexec/host libexec/keygen
+	libexec/zio libexec/up libexec/host libexec/keygen libexec/mon
 
 BUILD = $(LIBCMB) $(LIBPMI) flux mpi_hello echo cmbd \
 	$(PLUGINS) $(SUBCMDS)
