@@ -1,0 +1,348 @@
+%%% listings-lua.sty
+%%% Copyright 2013 Stephan Hennig
+%%
+%% This work may be distributed and/or modified under the conditions of
+%% the LaTeX Project Public License, either version 1.3 of this license
+%% or (at your option) any later version.  The latest version of this
+%% license is in http://www.latex-project.org/lppl.txt
+%% and version 1.3 or later is part of all distributions of LaTeX
+%% version 2005/12/01 or later.
+%%
+%% See file README for more information.
+%%
+\ProvidesPackage{listings-lua}
+  [2013/06/14 v0.4 Lua support for the listings package (SH)]
+\NeedsTeXFormat{LaTeX2e}[1999/12/01]
+% Load the listings package.
+\RequirePackage{listings}
+%
+% Lua 5.0
+%
+\lstdefinelanguage[5.0]{Lua}{%
+  % To enable highlighting of library keywords, the dot needs to be a
+  % letter.
+  alsoletter={.},%
+  % language keywords
+  morekeywords=[1]{%
+    and,%
+    break,%
+    do,%
+    else,%
+    elseif,%
+    end,%
+    false,%
+    for,%
+    function,%
+    if,%
+    in,%
+    local,%
+    nil,%
+    not,%
+    or,%
+    repeat,%
+    return,%
+    then,%
+    true,%
+    until,%
+    while,%
+  },%
+  % standard library identifiers
+  morekeywords=[2]{%
+    % base library
+    _G,%
+    _LOADED,%
+    _REQUIREDNAME,%
+    _VERSION,%
+    LUA_PATH,%
+    assert,%
+    collectgarbage,%
+    dofile,%
+    error,%
+    gcinfo,%
+    getfenv,%
+    getmetatable,%
+    ipairs,%
+    loadfile,%
+    loadlib,%
+    loadstring,%
+    newproxy,%
+    next,%
+    pairs,%
+    pcall,%
+    print,%
+    rawequal,%
+    rawget,%
+    rawset,%
+    require,%
+    setfenv,%
+    setmetatable,%
+    tonumber,%
+    tostring,%
+    type,%
+    unpack,%
+    xpcall,%
+    % coroutine library
+    coroutine,%
+    coroutine.create,%
+    coroutine.resume,%
+    coroutine.status,%
+    coroutine.wrap,%
+    coroutine.yield,%
+    % debug library
+    _TRACEBACK,%
+    debug,%
+    debug.debug,%
+    debug.gethook,%
+    debug.getinfo,%
+    debug.getlocal,%
+    debug.getupvalue,%
+    debug.sethook,%
+    debug.setlocal,%
+    debug.setupvalue,%
+    debug.traceback,%
+    % io library
+    io,%
+    io.close,%
+    io.flush,%
+    io.input,%
+    io.lines,%
+    io.open,%
+    io.output,%
+    io.popen,%
+    io.read,%
+    io.stderr,%
+    io.stdin,%
+    io.stdout,%
+    io.tmpfile,%
+    io.type,%
+    io.write,%
+    % mathematical library
+    __pow,%
+    math,%
+    math.abs,%
+    math.acos,%
+    math.asin,%
+    math.atan,%
+    math.atan2,%
+    math.ceil,%
+    math.cos,%
+    math.deg,%
+    math.exp,%
+    math.floor,%
+    math.frexp,%
+    math.ldexp,%
+    math.log,%
+    math.log10,%
+    math.max,%
+    math.min,%
+    math.mod,%
+    math.pi,%
+    math.pow,%
+    math.rad,%
+    math.random,%
+    math.randomseed,%
+    math.sin,%
+    math.sqrt,%
+    math.tan,%
+    % os library
+    os,%
+    os.clock,%
+    os.date,%
+    os.difftime,%
+    os.execute,%
+    os.exit,%
+    os.getenv,%
+    os.remove,%
+    os.rename,%
+    os.setlocale,%
+    os.time,%
+    os.tmpname,%
+    % string library
+    string,%
+    string.byte,%
+    string.char,%
+    string.dump,%
+    string.find,%
+    string.format,%
+    string.gfind,%
+    string.gsub,%
+    string.len,%
+    string.lower,%
+    string.rep,%
+    string.sub,%
+    string.upper,%
+    % table library
+    table,%
+    table.concat,%
+    table.foreach,%
+    table.foreachi,%
+    table.getn,%
+    table.insert,%
+    table.remove,%
+    table.setn,%
+    table.sort,%
+    % additional identifiers
+    _PROMPT,%
+    _PROMPT2,%
+    arg,%
+  },%
+  sensitive=true,%
+  % single line comments
+  morecomment=[l]{--},%
+  % multi line comments
+  morecomment=[s]{--[[}{]]},%
+  % backslash escaped strings
+  morestring=[b]",%
+  morestring=[b]',%
+  % multi line strings
+  morestring=[s]{[[}{]]},%
+}[keywords,comments,strings]%
+%
+% Lua 5.1
+%
+\lstdefinelanguage[5.1]{Lua}[5.0]{Lua}{%
+  % standard library identifiers
+  deletekeywords=[2]{%
+    % base library
+    _LOADED,%
+    _REQUIREDNAME,%
+    LUA_PATH,%
+    gcinfo,%
+    loadlib,%
+    % debug library
+    _TRACEBACK,%
+    % mathematical library
+    __pow,%
+    math.mod,%
+    % string library
+    string.gfind,%
+    % table library
+    table.foreach,%
+    table.foreachi,%
+    table.getn,%
+    table.setn,%
+  },%
+  % standard library identifiers
+  morekeywords=[2]{%
+    % base library
+    load,%
+    select,%
+    % coroutine library
+    coroutine.running,%
+    % debug library
+    debug.getfenv,%
+    debug.getmetatable,%
+    debug.getregistry,%
+    debug.setfenv,%
+    debug.setmetatable,%
+    % mathematical library
+    math.cosh,%
+    math.fmod,%
+    math.huge,%
+    math.modf,%
+    math.sinh,%
+    math.tanh,%
+    % package library
+    module,%
+    package,%
+    package.config,%
+    package.cpath,%
+    package.loaded,%
+    package.loaders,%
+    package.loadlib,%
+    package.path,%
+    package.preload,%
+    package.seeall,%
+    % string library
+    string.gmatch,%
+    string.match,%
+    string.reverse,%
+    % table library
+    table.maxn,%
+  },%
+  % long bracket comments
+  morecomment=[s]{--[=[}{]=]},%
+  morecomment=[s]{--[==[}{]==]},%
+  morecomment=[s]{--[===[}{]===]},%
+  morecomment=[s]{--[====[}{]====]},%
+  morecomment=[s]{--[=====[}{]=====]},%
+  morecomment=[s]{--[======[}{]======]},%
+  morecomment=[s]{--[=======[}{]=======]},%
+  morecomment=[s]{--[========[}{]========]},%
+  morecomment=[s]{--[=========[}{]=========]},%
+  morecomment=[s]{--[==========[}{]==========]},%
+  % long bracket strings
+  morestring=[s]{[=[}{]=]},%
+  morestring=[s]{[==[}{]==]},%
+  morestring=[s]{[===[}{]===]},%
+  morestring=[s]{[====[}{]====]},%
+  morestring=[s]{[=====[}{]=====]},%
+  morestring=[s]{[======[}{]======]},%
+  morestring=[s]{[=======[}{]=======]},%
+  morestring=[s]{[========[}{]========]},%
+  morestring=[s]{[=========[}{]=========]},%
+  morestring=[s]{[==========[}{]==========]},%
+}[keywords,comments,strings]%
+%
+% Lua 5.2
+%
+\lstdefinelanguage[5.2]{Lua}[5.1]{Lua}{%
+  % language keywords
+  morekeywords=[1]{%
+    goto,%
+  },%
+  % standard library identifiers
+  deletekeywords=[2]{%
+    % base library
+    getfenv,%
+    loadstring,%
+    module,%
+    newproxy,%
+    setfenv,%
+    unpack,%
+    % debug library
+    debug.getfenv,%
+    debug.setfenv,%
+    % mathematical library
+    math.log10,%
+    % package library
+    package.loaders,%
+    package.seeall,%
+    % table library
+    table.maxn,%
+  },%
+  % standard library identifiers
+  morekeywords=[2]{%
+    % base library
+    rawlen,%
+    % bit library
+    bit32,%
+    bit32.arshift,%
+    bit32.band,%
+    bit32.bnot,%
+    bit32.bor,%
+    bit32.btest,%
+    bit32.bxor,%
+    bit32.extract,%
+    bit32.lrotate,%
+    bit32.lshift,%
+    bit32.replace,%
+    bit32.rrotate,%
+    bit32.rshift,%
+    % debug library
+    debug.getuservalue,%
+    debug.setuservalue,%
+    debug.upvalueid,%
+    debug.upvaluejoin,%
+    % package library
+    package.searchers,%
+    package.searchpath,%
+    % table library
+    table.pack,%
+    table.unpack,%
+    % additional identifiers
+    _ENV,%
+  },%
+  % labels
+  moredelim=[s][keywordstyle3]{::}{::},%
+}[keywords,comments,strings]%
