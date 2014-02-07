@@ -68,6 +68,7 @@ struct plugin_ctx_struct {
 struct ptimeout_struct {
     plugin_ctx_t p;
     unsigned long msec;
+    int id;
 };
 
 #define ZLOOP_RETURN(p) \
@@ -75,7 +76,11 @@ struct ptimeout_struct {
 
 static const struct flux_handle_ops plugin_handle_ops;
 
-static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t);
+#if CZMQ_VERSION_MAJOR < 2
+static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, void *arg);
+#else
+static int plugin_timer_cb (zloop_t *zl, int timer_id, void *arg);
+#endif
 
 /**
  ** flux_t implementation
@@ -276,6 +281,8 @@ static void plugin_reactor_zs_remove (void *impl, void *zs, short events)
  * sure the arg value is different (malloc-before-free plugin_ctx_t
  * wrapper struct shenanegens below).
  */
+/* This need goes away in czmq v2 but we keep the old code for now.
+ */
 static int plugin_reactor_timeout_set (void *impl, unsigned long msec)
 {
     ptimeout_t t = NULL;
@@ -283,13 +290,17 @@ static int plugin_reactor_timeout_set (void *impl, unsigned long msec)
 
     assert (p->magic == PLUGIN_MAGIC);
     if (p->timeout)
+#if CZMQ_VERSION_MAJOR < 2
         (void)zloop_timer_end (p->zloop, p->timeout);
+#else
+        (void)zloop_timer_end (p->zloop, p->timeout->id);
+#endif
     if (msec > 0) {
         if (!(t = xzmalloc (sizeof (struct ptimeout_struct))))
             oom ();
         t->p = p;
         t->msec = msec;
-        if (zloop_timer (p->zloop, msec, 0, (zloop_fn *)plugin_timer_cb, t) < 0)
+        if ((t->id = zloop_timer (p->zloop, msec, 0, plugin_timer_cb, t)) < 0)
             err_exit ("zloop_timer"); 
     }
     if (p->timeout)
@@ -527,8 +538,13 @@ done:
     ZLOOP_RETURN(p);
 }
 
-static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, ptimeout_t t)
+#if CZMQ_VERSION_MAJOR < 2
+static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, void *arg)
+#else
+static int plugin_timer_cb (zloop_t *zl, int timer_id, void *arg)
+#endif
 {
+    ptimeout_t t = arg;
     plugin_ctx_t p = t->p;
 
     if (handle_event_tmout (p->h) < 0) {

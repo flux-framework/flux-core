@@ -46,6 +46,7 @@ typedef struct {
 struct timeout_struct {
     cmb_t *c;
     unsigned long msec;
+    int id;
 };
 
 static void cmb_reactor_stop (void *impl, int rc);
@@ -305,8 +306,13 @@ static void cmb_reactor_zs_remove (void *impl, void *zs, short events)
     zloop_poller_end (c->zloop, &item); /* FIXME: 'events' are ignored */
 }
 
-static int cmb_timer_cb (zloop_t *zl, zmq_pollitem_t *i, timeout_t t)
+#if CZMQ_VERSION_MAJOR < 2
+static int cmb_timer_cb (zloop_t *zl, zmq_pollitem_t *i, void *arg)
+#else
+static int cmb_timer_cb (zloop_t *zl, int timer_id, void *arg)
+#endif
 {
+    timeout_t t = arg;
     cmb_t *c = t->c;
 
     if (handle_event_tmout (c->h) < 0)
@@ -323,13 +329,17 @@ static int cmb_reactor_timeout_set (void *impl, unsigned long msec)
     timeout_t t = NULL;
 
     if (c->timeout)
+#if CZMQ_VERSION_MAJOR < 2
         (void)zloop_timer_end (c->zloop, c->timeout);
+#else
+        (void)zloop_timer_end (c->zloop, c->timeout->id);
+#endif
     if (msec > 0) {
         if (!(t = xzmalloc (sizeof (struct timeout_struct))))
             oom ();
         t->c = c;
         t->msec = msec;
-        if (zloop_timer (c->zloop, msec, 0, (zloop_fn *)cmb_timer_cb, t) < 0)
+        if ((t->id = zloop_timer (c->zloop, msec, 0, cmb_timer_cb, t)) < 0)
             err_exit ("zloop_timer");
     }
     if (c->timeout)
