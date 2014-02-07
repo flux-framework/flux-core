@@ -28,7 +28,7 @@
 #include "handle.h"
 #include "cmb_socket.h"
 
-#define HAS_AUTH 0
+#define HAS_AUTH 1
 
 #define MAX_PARENTS 2
 struct parent_struct {
@@ -369,6 +369,7 @@ static void *cmb_init_upreq_in (ctx_t *ctx)
         err_exit ("zsocket_new");
 #if HAS_AUTH
     zsocket_set_zap_domain (s, "global");
+    zsocket_set_plain_server (s, 1);
 #endif
     zsocket_set_hwm (s, 0);
     if (zsocket_bind (s, "%s", UPREQ_URI) < 0)
@@ -389,6 +390,7 @@ static void *cmb_init_dnreq_out (ctx_t *ctx)
         err_exit ("zsocket_new");
 #if HAS_AUTH
     zsocket_set_zap_domain (s, "global");
+    zsocket_set_plain_server (s, 1);
 #endif
     zsocket_set_hwm (s, 0);
     if (zsocket_bind (s, "%s", DNREQ_URI) < 0)
@@ -407,9 +409,6 @@ static void *cmb_init_dnev_out (ctx_t *ctx)
     void *s;
     if (!(s = zsocket_new (ctx->zctx, ZMQ_PUB)))
         err_exit ("zsocket_new");
-#if HAS_AUTH
-    zsocket_set_zap_domain (s, "global");
-#endif
     zsocket_set_hwm (s, 0);
     if (zsocket_bind (s, "%s", DNEV_OUT_URI) < 0)
         err_exit ("%s", DNEV_OUT_URI);
@@ -427,9 +426,6 @@ static void *cmb_init_dnev_in (ctx_t *ctx)
     void *s;
     if (!(s = zsocket_new (ctx->zctx, ZMQ_SUB)))
         err_exit ("zsocket_new");
-#if HAS_AUTH
-    zsocket_set_zap_domain (s, "global");
-#endif
     zsocket_set_hwm (s, 0);
     if (zsocket_bind (s, "%s", DNEV_IN_URI) < 0)
         err_exit ("%s", DNEV_IN_URI);
@@ -449,6 +445,7 @@ static void *cmb_init_snoop (ctx_t *ctx)
         err_exit ("zsocket_new");
 #if HAS_AUTH
     zsocket_set_zap_domain (s, "global");
+    zsocket_set_plain_server (s, 1);
 #endif
     //zsocket_set_hwm (s, 0); // leave default hwm
     if (zsocket_bind (s, "%s", SNOOP_URI) < 0)
@@ -489,6 +486,11 @@ static void *cmb_init_upreq_out (ctx_t *ctx)
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
         err_exit ("zsocket_new");
+#if HAS_AUTH
+    zsocket_set_zap_domain (s, "global");
+    zsocket_set_plain_username (s, "flux");
+    zsocket_set_plain_password (s, "treefrog");
+#endif
     zsocket_set_hwm (s, 0);
     snprintf (id, sizeof (id), "%d", ctx->rank);
     zsocket_set_identity (s, id); 
@@ -505,6 +507,11 @@ static void *cmb_init_dnreq_in (ctx_t *ctx)
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
         err_exit ("zsocket_new");
+#if HAS_AUTH
+    zsocket_set_zap_domain (s, "global");
+    zsocket_set_plain_username (s, "flux");
+    zsocket_set_plain_password (s, "treefrog");
+#endif
     zsocket_set_hwm (s, 0);
     snprintf (id, sizeof (id), "%d", ctx->rank);
     zsocket_set_identity (s, id); 
@@ -526,8 +533,9 @@ static void cmb_init (ctx_t *ctx)
 #if HAS_AUTH
     if (!(ctx->auth = zauth_new (ctx->zctx)))
         err_exit ("zauth_new");
-    zauth_set_verbose (ctx->auth, true);
+    //zauth_set_verbose (ctx->auth, true);
     //zauth_allow (ctx->auth, "127.0.0.1");
+    zauth_configure_plain (ctx->auth, "*", "passwords");
 #endif
 
     /* Bind to downstream ports.
