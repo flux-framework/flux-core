@@ -7,12 +7,6 @@
 void zconnect (zctx_t *zctx, void **sp, int type, char *uri, int hwm, char *id);
 void zbind (zctx_t *zctx, void **sp, int type, char *uri, int hwm);
 
-/* Helpers for zmq_socket_monitor.
- */
-void *zmonitor (zctx_t *ctx, void *s, const char *uri, int flags);
-void zmonitor_recv (void *s, zmq_event_t *event, bool *valid_addrsp);
-void zmonitor_dump (char *name, void *s);
-
 /* Send/recv zmq messages over a file descriptor.
  * Utilizes zmsg_encode/zmsgs_decode() functions from czmq.
  * N.B. The nonblock flag doesn't completely eliminate blocking.
