@@ -28,6 +28,8 @@
 #include "handle.h"
 #include "cmb_socket.h"
 
+#define HAS_AUTH 0
+
 #define MAX_PARENTS 2
 struct parent_struct {
     char *upreq_uri;
@@ -39,7 +41,9 @@ typedef struct {
     /* 0MQ
      */
     zctx_t *zctx;               /* zeromq context (MT-safe) */
-
+#if HAS_AUTH
+    zauth_t *auth;
+#endif
     void *zs_upreq_out;         /* DEALER - tree parent, upstream reqs */
     void *zs_dnreq_in;          /* rev DEALER - tree parent, downstream reqs */
 
@@ -358,89 +362,203 @@ static void unload_plugins (ctx_t *ctx)
     zlist_destroy (&keys);
 }
 
+static void *cmb_init_upreq_in (ctx_t *ctx)
+{
+    void *s;
+    if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
+        err_exit ("zsocket_new");
+#if HAS_AUTH
+    zsocket_set_zap_domain (s, "global");
+#endif
+    zsocket_set_hwm (s, 0);
+    if (zsocket_bind (s, "%s", UPREQ_URI) < 0)
+        err_exit ("%s", UPREQ_URI);
+    if (zsocket_bind (s, UPREQ_IPC_URI_TMPL, getuid ()) < 0)
+        err_exit (UPREQ_IPC_URI_TMPL, getuid ());
+    if (ctx->uri_upreq_in) {
+        if (zsocket_bind (s, "%s", ctx->uri_upreq_in) < 0)
+            err_exit ("%s", ctx->uri_upreq_in);
+    }
+    return s;
+}
+
+static void *cmb_init_dnreq_out (ctx_t *ctx)
+{
+    void *s;
+    if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
+        err_exit ("zsocket_new");
+#if HAS_AUTH
+    zsocket_set_zap_domain (s, "global");
+#endif
+    zsocket_set_hwm (s, 0);
+    if (zsocket_bind (s, "%s", DNREQ_URI) < 0)
+        err_exit ("%s", DNREQ_URI);
+    if (zsocket_bind (s, DNREQ_IPC_URI_TMPL, getuid ()) < 0)
+        err_exit (DNREQ_IPC_URI_TMPL, getuid ());
+    if (ctx->uri_dnreq_out) {
+        if (zsocket_bind (s, "%s", ctx->uri_dnreq_out) < 0)
+            err_exit ("%s", ctx->uri_dnreq_out);
+    }
+    return s;
+}
+
+static void *cmb_init_dnev_out (ctx_t *ctx)
+{
+    void *s;
+    if (!(s = zsocket_new (ctx->zctx, ZMQ_PUB)))
+        err_exit ("zsocket_new");
+#if HAS_AUTH
+    zsocket_set_zap_domain (s, "global");
+#endif
+    zsocket_set_hwm (s, 0);
+    if (zsocket_bind (s, "%s", DNEV_OUT_URI) < 0)
+        err_exit ("%s", DNEV_OUT_URI);
+    if (zsocket_bind (s, EVOUT_IPC_URI_TMPL, getuid ()) < 0)
+        err_exit (EVOUT_IPC_URI_TMPL, getuid ());
+    if (ctx->uri_dnev_out) {
+        if (zsocket_bind (s, "%s", ctx->uri_dnev_out) < 0)
+            err_exit ("%s", ctx->uri_dnev_out);
+    }
+    return s;
+}
+
+static void *cmb_init_dnev_in (ctx_t *ctx)
+{
+    void *s;
+    if (!(s = zsocket_new (ctx->zctx, ZMQ_SUB)))
+        err_exit ("zsocket_new");
+#if HAS_AUTH
+    zsocket_set_zap_domain (s, "global");
+#endif
+    zsocket_set_hwm (s, 0);
+    if (zsocket_bind (s, "%s", DNEV_IN_URI) < 0)
+        err_exit ("%s", DNEV_IN_URI);
+    if (zsocket_bind (s, EVIN_IPC_URI_TMPL, getuid ()) < 0)
+        err_exit (EVIN_IPC_URI_TMPL, getuid ());
+    zsocket_set_subscribe (s, "");
+    if (ctx->uri_dnev_in)
+        if (zsocket_bind (s, "%s", ctx->uri_dnev_in) < 0)
+            err_exit ("%s", ctx->uri_dnev_in);
+    return s;
+}
+
+static void *cmb_init_snoop (ctx_t *ctx)
+{
+    void *s;
+    if (!(s = zsocket_new (ctx->zctx, ZMQ_PUB)))
+        err_exit ("zsocket_new");
+#if HAS_AUTH
+    zsocket_set_zap_domain (s, "global");
+#endif
+    //zsocket_set_hwm (s, 0); // leave default hwm
+    if (zsocket_bind (s, "%s", SNOOP_URI) < 0)
+        err_exit ("%s", SNOOP_URI);
+    if (zsocket_bind (s, SNOOP_IPC_URI_TMPL, getuid ()) < 0)
+        err_exit (SNOOP_IPC_URI_TMPL, getuid ());
+    return s;
+}
+
+static void *cmb_init_upev_in (ctx_t *ctx)
+{
+    void *s;
+    if (!(s = zsocket_new (ctx->zctx, ZMQ_SUB)))
+        err_exit ("zsocket_new");
+    zsocket_set_hwm (s, 0);
+    if (zsocket_connect (s, "%s", ctx->uri_upev_in) < 0)
+        err_exit ("%s", ctx->uri_upev_in);
+    zsocket_set_subscribe (s, "");
+    return s;
+}
+
+static void *cmb_init_upev_out (ctx_t *ctx)
+{
+    void *s;
+    if (!(s = zsocket_new (ctx->zctx, ZMQ_PUB)))
+        err_exit ("zsocket_new");
+    zsocket_set_hwm (s, 0);
+    if (zsocket_connect (s, "%s", ctx->uri_upev_out) < 0)
+        err_exit ("%s", ctx->uri_upev_out);
+    return s;
+}
+
+static void *cmb_init_upreq_out (ctx_t *ctx)
+{
+    void *s;
+    char id[16];
+    char *uri = ctx->parent[ctx->parent_cur].upreq_uri;
+
+    if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
+        err_exit ("zsocket_new");
+    zsocket_set_hwm (s, 0);
+    snprintf (id, sizeof (id), "%d", ctx->rank);
+    zsocket_set_identity (s, id); 
+    if (zsocket_connect (s, "%s", uri) < 0)
+        err_exit ("%s", uri);
+    return s;
+}
+
+static void *cmb_init_dnreq_in (ctx_t *ctx)
+{
+    void *s;
+    char id[16];
+    char *uri = ctx->parent[ctx->parent_cur].dnreq_uri;
+
+    if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
+        err_exit ("zsocket_new");
+    zsocket_set_hwm (s, 0);
+    snprintf (id, sizeof (id), "%d", ctx->rank);
+    zsocket_set_identity (s, id); 
+    if (zsocket_connect (s, "%s", uri) < 0)
+        err_exit ("%s", uri);
+    return s;
+}
+
 static void cmb_init (ctx_t *ctx)
 {
     int i;
+
+    ctx->rctx = route_init (ctx->verbose);
 
     ctx->zctx = zctx_new ();
     if (!ctx->zctx)
         err_exit ("zctx_new");
     zctx_set_linger (ctx->zctx, 5);
-    ctx->rctx = route_init (ctx->verbose);
+#if HAS_AUTH
+    if (!(ctx->auth = zauth_new (ctx->zctx)))
+        err_exit ("zauth_new");
+    zauth_set_verbose (ctx->auth, true);
+    //zauth_allow (ctx->auth, "127.0.0.1");
+#endif
 
-    /* bind: upreq_in */
-    if (!(ctx->zs_upreq_in = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
-        err_exit ("zsocket_new");
-    zsocket_set_hwm (ctx->zs_upreq_in, 0);
-    if (zsocket_bind (ctx->zs_upreq_in, "%s", UPREQ_URI) < 0)
-        err_exit ("zsocket_bind %s", UPREQ_URI);
-    if (zsocket_bind (ctx->zs_upreq_in, UPREQ_IPC_URI_TMPL, getuid ()) < 0)
-        err_exit (UPREQ_IPC_URI_TMPL, getuid ());
-    if (ctx->uri_upreq_in) {
-        if (zsocket_bind (ctx->zs_upreq_in, "%s", ctx->uri_upreq_in) < 0)
-            err_exit ("zsocket_bind (upreq_in): %s", ctx->uri_upreq_in);
-    }
+    /* Bind to downstream ports.
+     */
+    ctx->zs_upreq_in = cmb_init_upreq_in (ctx);
+    ctx->zs_dnreq_out = cmb_init_dnreq_out (ctx);
+    ctx->zs_dnev_out = cmb_init_dnev_out (ctx);
+    ctx->zs_dnev_in = cmb_init_dnev_in (ctx);
+    ctx->zs_snoop = cmb_init_snoop (ctx);
 
-    /* bind: dnreq_out */
-    zbind (ctx->zctx, &ctx->zs_dnreq_out, ZMQ_ROUTER, DNREQ_URI, 0);
-    if (zsocket_bind (ctx->zs_dnreq_out, DNREQ_IPC_URI_TMPL, getuid ()) < 0)
-        err_exit (DNREQ_IPC_URI_TMPL, getuid ());
-    if (ctx->uri_dnreq_out) {
-        if (zsocket_bind (ctx->zs_dnreq_out, "%s", ctx->uri_dnreq_out) < 0)
-            err_exit ("zsocket_bind (dnreq_out): %s", ctx->uri_dnreq_out);
-    }
-
-    /* bind: dnev_out */
-    zbind (ctx->zctx, &ctx->zs_dnev_out, ZMQ_PUB, DNEV_OUT_URI, 0);
-    if (zsocket_bind (ctx->zs_dnev_out, EVOUT_IPC_URI_TMPL, getuid ()) < 0)
-        err_exit (EVOUT_IPC_URI_TMPL, getuid ());
-    if (ctx->uri_dnev_out)
-        if (zsocket_bind (ctx->zs_dnev_out, "%s", ctx->uri_dnev_out) < 0)
-            err_exit ("zsocket_bind (dnev_out): %s", ctx->uri_dnev_out);
-
-    /* bind: dnev_in */
-    zbind (ctx->zctx, &ctx->zs_dnev_in, ZMQ_SUB, DNEV_IN_URI,  0);
-    if (zsocket_bind (ctx->zs_dnev_in, EVIN_IPC_URI_TMPL, getuid ()) < 0)
-        err_exit (EVIN_IPC_URI_TMPL, getuid ());
-    zsocket_set_subscribe (ctx->zs_dnev_in, "");
-    if (ctx->uri_dnev_in)
-        if (zsocket_bind (ctx->zs_dnev_in, "%s", ctx->uri_dnev_in) < 0)
-            err_exit ("zsocket_bind (dnev_in): %s", ctx->uri_dnev_in);
-
-    /* bind: snoop */
-    zbind (ctx->zctx, &ctx->zs_snoop, ZMQ_PUB, SNOOP_URI, -1);
-    if (zsocket_bind (ctx->zs_snoop, SNOOP_IPC_URI_TMPL, getuid ()) < 0)
-        err_exit (SNOOP_IPC_URI_TMPL, getuid ());
-
-    /* connect: upev_in */
-    if (ctx->uri_upev_in) {
-        zconnect (ctx->zctx, &ctx->zs_upev_in,  ZMQ_SUB,
-                  ctx->uri_upev_in, 0, NULL);
-        zsocket_set_subscribe (ctx->zs_upev_in, "");
-    }
-
-    /* connect: upev_out */
+    /* Connect to upstream ports.
+     */
+    if (ctx->uri_upev_in)
+        ctx->zs_upev_in = cmb_init_upev_in (ctx);
     if (ctx->uri_upev_out)
-        zconnect (ctx->zctx, &ctx->zs_upev_out, ZMQ_PUB,
-                  ctx->uri_upev_out, 0, NULL);
+        ctx->zs_upev_out = cmb_init_upev_out (ctx);
 
     for (i = 0; i < ctx->parent_len; i++)
         ctx->parent_alive[i] = true;
 
-    /* connect: upreq_out, dnreq_in */
     if (ctx->parent_len > 0) {
-        char id[16];
-        snprintf (id, sizeof (id), "%d", ctx->rank);
-        zconnect (ctx->zctx, &ctx->zs_upreq_out, ZMQ_DEALER,
-                  ctx->parent[ctx->parent_cur].upreq_uri, 0, id);
-        zconnect (ctx->zctx, &ctx->zs_dnreq_in, ZMQ_DEALER,
-                  ctx->parent[ctx->parent_cur].dnreq_uri, 0, id);
+        ctx->zs_upreq_out = cmb_init_upreq_out (ctx);
+        ctx->zs_dnreq_in  = cmb_init_dnreq_in (ctx);
     }
 
     /* create flux_t handle */
     ctx->h = handle_create (ctx, &cmbd_handle_ops, 0);
     flux_log_set_facility (ctx->h, "cmbd");
 
+    /* Contact upstream.
+     */
     if (ctx->zs_upreq_out) {
         if (flux_request_send (ctx->h, NULL, "cmb.connect") < 0)
             err_exit ("error sending cmb.connect upstream");
