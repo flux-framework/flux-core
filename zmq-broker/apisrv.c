@@ -151,14 +151,19 @@ static int notify_srv (const char *key, void *item, void *arg)
     if (!(zmsg = zmsg_new ()))
         oom ();
     o = util_json_object_new_object ();
-    if (zmsg_pushstr (zmsg, "%s", json_object_to_json_string (o)) < 0)
+    if (zmsg_pushstr (zmsg, json_object_to_json_string (o)) < 0)
         oom ();
     json_object_put (o);
+#if CZMQ_VERSION_MAJOR < 2
     if (zmsg_pushstr (zmsg, "%s.disconnect", key) < 0)
         oom ();
+#else
+    if (zmsg_pushstrf (zmsg, "%s.disconnect", key) < 0)
+        oom ();
+#endif
     if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* delimiter frame */
         oom ();
-    if (zmsg_pushstr (zmsg, "%s", c->uuid) < 0)
+    if (zmsg_pushstr (zmsg, c->uuid) < 0)
         oom ();
 
     flux_request_sendmsg (c->ctx->h, &zmsg);
@@ -231,7 +236,7 @@ static int client_read (ctx_t *ctx, client_t *c)
             } else
                 free (tag);
         }
-        if (zmsg_pushstr (zmsg, "%s", c->uuid) < 0)
+        if (zmsg_pushstr (zmsg, c->uuid) < 0)
             oom ();
         flux_request_sendmsg (ctx->h, &zmsg);
     }
