@@ -303,8 +303,6 @@ eproto:
     return -1;
 }
 
-static void zfree (void *data, void *hint) { free (data); }
-
 zmsg_t *cmb_msg_encode (char *tag, json_object *o)
 {
     zmsg_t *zmsg = NULL;
@@ -318,8 +316,9 @@ zmsg_t *cmb_msg_encode (char *tag, json_object *o)
         err_exit ("zmsg_addmem");
     if (o) {
         util_json_encode (o, &zbuf, &zlen);
-        if (!(zf = zframe_new_zero_copy (zbuf, zlen, zfree, NULL)))
+        if (!(zf = zframe_new (zbuf, zlen)))
             oom ();
+        free (zbuf);
         if (zmsg_add (zmsg, zf) < 0)
             oom ();
     }
@@ -425,8 +424,9 @@ int cmb_msg_replace_json (zmsg_t *zmsg, json_object *o)
     zmsg_remove (zmsg, zf);
     zframe_destroy (&zf);
     util_json_encode (o, &zbuf, &zlen);
-    if (!(zf = zframe_new_zero_copy (zbuf, zlen, zfree, NULL)))
+    if (!(zf = zframe_new (zbuf, zlen)))
         oom ();
+    free (zbuf);
     if (zmsg_add (zmsg, zf) < 0)
         oom ();
     return 0;
