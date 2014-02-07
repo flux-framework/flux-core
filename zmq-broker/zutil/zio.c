@@ -565,20 +565,27 @@ static int zio_flux_writer_cb (flux_t f, int fd, short revents, zio_t zio)
 static int zio_zloop_reader_poll (zio_t zio)
 {
     zmq_pollitem_t zp = { .fd = zio->srcfd,
-                          .events = ZMQ_POLLIN | ZMQ_POLLERR | ZMQ_IGNERR,
+                          .events = ZMQ_POLLIN | ZMQ_POLLERR,
                           .socket = NULL };
-
+#ifdef ZMQ_IGNERR
+    zp.events |= ZMQ_IGNERR;
+#endif
     zloop_poller (zio->zloop, &zp,
         (zloop_fn *) zio_zloop_read_cb, (void *) zio);
+#ifndef ZMQ_IGNERR
+    zloop_set_tolerant (zio->zloop, &zp);
+#endif
     return (0);
 }
 
+/* Note: flux reactor sets ZMQ_IGNERR/zloop_set_tolerant as default in fd_add.
+ */
 static int zio_flux_reader_poll (zio_t zio)
 {
     if (!zio->flux)
         return (-1);
     return flux_fdhandler_add (zio->flux, zio->srcfd,
-            ZMQ_POLLIN | ZMQ_POLLERR | ZMQ_IGNERR,
+            ZMQ_POLLIN | ZMQ_POLLERR,
             (FluxFdHandler) &zio_flux_read_cb,
             (void *) zio);
 }

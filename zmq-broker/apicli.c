@@ -260,7 +260,15 @@ static int cmb_reactor_fd_add (void *impl, int fd, short events)
     cmb_t *c = impl;
     zmq_pollitem_t item = { .fd = fd, .events = events };
 
-    return zloop_poller (c->zloop, &item, (zloop_fn *)fd_cb, c);
+#ifdef ZMQ_IGNERR
+    item.events |= ZMQ_IGNERR;
+#endif
+    if (zloop_poller (c->zloop, &item, (zloop_fn *)fd_cb, c) < 0)
+        return -1;
+#ifndef ZMQ_IGNERR
+    zloop_set_tolerant (c->zloop, &item);
+#endif
+    return 0;
 }
 
 static void cmb_reactor_fd_remove (void *impl, int fd, short events)
