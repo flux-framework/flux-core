@@ -18,8 +18,8 @@
 #include "util.h"
 #include "log.h"
 
-#if ZMQ_VERSION_MAJOR != 3
-#error requires zeromq version 3
+#if ZMQ_VERSION_MAJOR < 3
+#error requires zeromq version 3 or greater
 #endif
 
 /**
