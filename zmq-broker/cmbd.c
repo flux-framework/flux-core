@@ -43,6 +43,8 @@ typedef struct {
     zctx_t *zctx;               /* zeromq context (MT-safe) */
 #if HAS_AUTH
     zauth_t *auth;
+    zcert_t *srv_cert;
+    zcert_t *cli_cert;
 #endif
     void *zs_upreq_out;         /* DEALER - tree parent, upstream reqs */
     void *zs_dnreq_in;          /* rev DEALER - tree parent, downstream reqs */
@@ -369,7 +371,8 @@ static void *cmb_init_upreq_in (ctx_t *ctx)
         err_exit ("zsocket_new");
 #if HAS_AUTH
     zsocket_set_zap_domain (s, "global");
-    zsocket_set_plain_server (s, 1);
+    zcert_apply (ctx->srv_cert, s);
+    zsocket_set_curve_server (s, 1);
 #endif
     zsocket_set_hwm (s, 0);
     if (zsocket_bind (s, "%s", UPREQ_URI) < 0)
@@ -390,7 +393,8 @@ static void *cmb_init_dnreq_out (ctx_t *ctx)
         err_exit ("zsocket_new");
 #if HAS_AUTH
     zsocket_set_zap_domain (s, "global");
-    zsocket_set_plain_server (s, 1);
+    zcert_apply (ctx->srv_cert, s);
+    zsocket_set_curve_server (s, 1);
 #endif
     zsocket_set_hwm (s, 0);
     if (zsocket_bind (s, "%s", DNREQ_URI) < 0)
@@ -445,7 +449,8 @@ static void *cmb_init_snoop (ctx_t *ctx)
         err_exit ("zsocket_new");
 #if HAS_AUTH
     zsocket_set_zap_domain (s, "global");
-    zsocket_set_plain_server (s, 1);
+    zcert_apply (ctx->srv_cert, s);
+    zsocket_set_curve_server (s, 1);
 #endif
     //zsocket_set_hwm (s, 0); // leave default hwm
     if (zsocket_bind (s, "%s", SNOOP_URI) < 0)
@@ -488,8 +493,9 @@ static void *cmb_init_upreq_out (ctx_t *ctx)
         err_exit ("zsocket_new");
 #if HAS_AUTH
     zsocket_set_zap_domain (s, "global");
-    zsocket_set_plain_username (s, "flux");
-    zsocket_set_plain_password (s, "treefrog");
+    zcert_apply (ctx->cli_cert, s);
+    char *srvkey = zcert_public_txt (ctx->srv_cert);
+    zsocket_set_curve_serverkey (s, srvkey);
 #endif
     zsocket_set_hwm (s, 0);
     snprintf (id, sizeof (id), "%d", ctx->rank);
@@ -509,8 +515,9 @@ static void *cmb_init_dnreq_in (ctx_t *ctx)
         err_exit ("zsocket_new");
 #if HAS_AUTH
     zsocket_set_zap_domain (s, "global");
-    zsocket_set_plain_username (s, "flux");
-    zsocket_set_plain_password (s, "treefrog");
+    zcert_apply (ctx->cli_cert, s);
+    char *srvkey = zcert_public_txt (ctx->srv_cert);
+    zsocket_set_curve_serverkey (s, srvkey);
 #endif
     zsocket_set_hwm (s, 0);
     snprintf (id, sizeof (id), "%d", ctx->rank);
@@ -533,9 +540,33 @@ static void cmb_init (ctx_t *ctx)
 #if HAS_AUTH
     if (!(ctx->auth = zauth_new (ctx->zctx)))
         err_exit ("zauth_new");
-    //zauth_set_verbose (ctx->auth, true);
+    zauth_set_verbose (ctx->auth, true);
     //zauth_allow (ctx->auth, "127.0.0.1");
-    zauth_configure_plain (ctx->auth, "*", "passwords");
+    zauth_configure_curve (ctx->auth, "*", CURVE_ALLOW_ANY);
+
+    /* FIXME: starting a session with no keys will fail as
+     * some ranks > 0 will fail to open certs created by rank 0.
+     */
+    if (zsys_dir_create (".curve") < 0)
+        err_exit (".curve");
+    if (!(ctx->srv_cert = zcert_load (".curve/server"))) {
+        if (ctx->treeroot) {
+            if (!(ctx->srv_cert = zcert_new ()))
+                oom ();
+            if (zcert_save (ctx->srv_cert ,".curve/server") < 0)
+                err_exit (".curve/server"); 
+        } else
+            err_exit (".curve/server");
+    }
+    if (!(ctx->cli_cert = zcert_load (".curve/client"))) {
+        if (ctx->treeroot) {
+            if (!(ctx->cli_cert = zcert_new ()))
+                oom ();
+            if (zcert_save (ctx->cli_cert ,".curve/client") < 0)
+                err_exit (".curve/client"); 
+        } else
+            err_exit (".curve/client");
+    }
 #endif
 
     /* Bind to downstream ports.
