@@ -8,14 +8,19 @@
 #include <errno.h>
 #include <getopt.h>
 #include <libgen.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <unistd.h>
 #include <sys/param.h>
 #include <stdbool.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <pwd.h>
 
 #include <json/json.h>
+#include <zmq.h>
 #include <czmq.h>
 
 #include "log.h"
@@ -28,7 +33,11 @@
 #include "handle.h"
 #include "cmb_socket.h"
 
-#define HAS_AUTH 1
+#if ZMQ_VERSION_MAJOR >= 4
+#define HAVE_EXPERIMENTAL_SECURITY 1
+#endif
+
+#define DEFAULT_ZAP_DOMAIN  "flux"
 
 #define MAX_PARENTS 2
 struct parent_struct {
@@ -41,11 +50,14 @@ typedef struct {
     /* 0MQ
      */
     zctx_t *zctx;               /* zeromq context (MT-safe) */
-#if HAS_AUTH
+#if HAVE_EXPERIMENTAL_SECURITY
     zauth_t *auth;
     zcert_t *srv_cert;
     zcert_t *cli_cert;
+    struct passwd *pw;
 #endif
+    char *session_name;
+
     void *zs_upreq_out;         /* DEALER - tree parent, upstream reqs */
     void *zs_dnreq_in;          /* rev DEALER - tree parent, downstream reqs */
 
@@ -106,8 +118,9 @@ static void cmb_init (ctx_t *ctx);
 static void cmb_fini (ctx_t *ctx);
 static void cmb_poll (ctx_t *ctx);
 
-#define OPTIONS "t:e:E:O:vs:R:S:p:P:L:T:A:d:D:H:"
+#define OPTIONS "t:e:E:O:vs:R:S:p:P:L:T:A:d:D:H:N:"
 static const struct option longopts[] = {
+    {"session-name",   required_argument,  0, 'N'},
     {"up-event-uri",   required_argument,  0, 'e'},
     {"up-event-out-uri",required_argument, 0, 'O'},
     {"up-event-in-uri",required_argument,  0, 'E'},
@@ -133,6 +146,7 @@ static void usage (void)
 {
     fprintf (stderr, 
 "Usage: cmbd OPTIONS\n"
+" -N,--session-name NAME     Set session name\n"
 " -e,--up-event-uri URI      Set upev URI, e.g. epgm://eth0;239.192.1.1:5555\n"
 " -E,--up-event-in-uri URI   Set upev_in URI (alternative to -e)\n"
 " -O,--up-event-out-uri URI  Set upev_out URI (alternative to -e)\n"
@@ -168,8 +182,12 @@ int main (int argc, char *argv[])
         oom ();
     if (!(ctx.api_arg = zhash_new ()))
         oom ();
+    ctx.session_name = "flux";
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
+            case 'N':   /* --session-name NAME */
+                ctx.session_name = optarg;
+                break;
             case 'e':   /* --up-event-uri URI */
                 if (!strstr (optarg, "pgm://"))
                     msg_exit ("use -E, -O for non-multicast event socket");
@@ -369,8 +387,8 @@ static void *cmb_init_upreq_in (ctx_t *ctx)
     void *s;
     if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
         err_exit ("zsocket_new");
-#if HAS_AUTH
-    zsocket_set_zap_domain (s, "global");
+#if HAVE_EXPERIMENTAL_SECURITY
+    zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
     zcert_apply (ctx->srv_cert, s);
     zsocket_set_curve_server (s, 1);
 #endif
@@ -391,8 +409,8 @@ static void *cmb_init_dnreq_out (ctx_t *ctx)
     void *s;
     if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
         err_exit ("zsocket_new");
-#if HAS_AUTH
-    zsocket_set_zap_domain (s, "global");
+#if HAVE_EXPERIMENTAL_SECURITY
+    zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
     zcert_apply (ctx->srv_cert, s);
     zsocket_set_curve_server (s, 1);
 #endif
@@ -447,8 +465,8 @@ static void *cmb_init_snoop (ctx_t *ctx)
     void *s;
     if (!(s = zsocket_new (ctx->zctx, ZMQ_PUB)))
         err_exit ("zsocket_new");
-#if HAS_AUTH
-    zsocket_set_zap_domain (s, "global");
+#if HAVE_EXPERIMENTAL_SECURITY
+    zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
     zcert_apply (ctx->srv_cert, s);
     zsocket_set_curve_server (s, 1);
 #endif
@@ -483,16 +501,15 @@ static void *cmb_init_upev_out (ctx_t *ctx)
     return s;
 }
 
-static void *cmb_init_upreq_out (ctx_t *ctx)
-{
+static void *cmb_init_upreq_out (ctx_t *ctx) {
     void *s;
     char id[16];
     char *uri = ctx->parent[ctx->parent_cur].upreq_uri;
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
         err_exit ("zsocket_new");
-#if HAS_AUTH
-    zsocket_set_zap_domain (s, "global");
+#if HAVE_EXPERIMENTAL_SECURITY
+    zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
     zcert_apply (ctx->cli_cert, s);
     char *srvkey = zcert_public_txt (ctx->srv_cert);
     zsocket_set_curve_serverkey (s, srvkey);
@@ -513,8 +530,8 @@ static void *cmb_init_dnreq_in (ctx_t *ctx)
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
         err_exit ("zsocket_new");
-#if HAS_AUTH
-    zsocket_set_zap_domain (s, "global");
+#if HAVE_EXPERIMENTAL_SECURITY
+    zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
     zcert_apply (ctx->cli_cert, s);
     char *srvkey = zcert_public_txt (ctx->srv_cert);
     zsocket_set_curve_serverkey (s, srvkey);
@@ -527,6 +544,59 @@ static void *cmb_init_dnreq_in (ctx_t *ctx)
     return s;
 }
 
+#if HAVE_EXPERIMENTAL_SECURITY
+/* FIXME: factor common code here and flux-keygen.c
+ * Instances wire up actively in the upstream direction, thus we consider
+ * "upstream" to be servers, and "downstream" to be clients.  Interior
+ * cmbds are both.
+ *
+ * All clients share a client cert.  All servers share a server cert.
+ * For now, we load the keys out of the session owner's ~/.curve directory,
+ * and require them to be generated in advance with "flux keygen".
+ * (This is a little too much sharing to be healthy, no doubt.)
+ */
+static zauth_t *cmb_init_curve (ctx_t *ctx)
+{
+    char *curve_path, *path;
+    struct stat sb;
+    zauth_t *auth;
+
+    if (!(ctx->pw = getpwuid (geteuid ()))
+            || (ctx->pw->pw_dir == NULL || strlen (ctx->pw->pw_dir) == 0))
+        msg_exit ("could not determine home directory");
+    if (asprintf (&curve_path, "%s/.curve", ctx->pw->pw_dir) < 0)
+        oom ();
+    if (lstat (curve_path, &sb) < 0) /* don't follow symlinks */
+        err_exit ("%s", curve_path);
+    if (!S_ISDIR (sb.st_mode))
+        msg_exit ("%s: not a directory", curve_path);
+    if ((sb.st_mode & (S_IRWXU|S_IRWXG|S_IRWXO)) != 0700)
+        msg_exit ("%s: permissions not set to 0700", curve_path);
+    if ((sb.st_uid != geteuid ()))
+        msg_exit ("%s: invalid owner", curve_path);
+
+    if (asprintf (&path, "%s/%s.client", curve_path, ctx->session_name) < 0)
+        oom ();
+    if (!(ctx->cli_cert = zcert_load (path)))
+        err_exit ("%s", path);
+    free (path);
+
+    if (asprintf (&path, "%s/%s.server", curve_path, ctx->session_name) < 0)
+        oom ();
+    if (!(ctx->srv_cert = zcert_load (path)))
+        err_exit ("%s", path);
+    free (path);
+
+    if (!(auth = zauth_new (ctx->zctx)))
+        err_exit ("zauth_new");
+    zauth_set_verbose (auth, true);
+    //zauth_allow (auth, "127.0.0.1");
+    zauth_configure_curve (auth, "*", CURVE_ALLOW_ANY);
+
+    return auth;
+}
+#endif
+
 static void cmb_init (ctx_t *ctx)
 {
     int i;
@@ -537,38 +607,9 @@ static void cmb_init (ctx_t *ctx)
     if (!ctx->zctx)
         err_exit ("zctx_new");
     zctx_set_linger (ctx->zctx, 5);
-#if HAS_AUTH
-    if (!(ctx->auth = zauth_new (ctx->zctx)))
-        err_exit ("zauth_new");
-    zauth_set_verbose (ctx->auth, true);
-    //zauth_allow (ctx->auth, "127.0.0.1");
-    zauth_configure_curve (ctx->auth, "*", CURVE_ALLOW_ANY);
-
-    /* FIXME: starting a session with no keys will fail as
-     * some ranks > 0 will fail to open certs created by rank 0.
-     */
-    if (zsys_dir_create (".curve") < 0)
-        err_exit (".curve");
-    if (!(ctx->srv_cert = zcert_load (".curve/server"))) {
-        if (ctx->treeroot) {
-            if (!(ctx->srv_cert = zcert_new ()))
-                oom ();
-            if (zcert_save (ctx->srv_cert ,".curve/server") < 0)
-                err_exit (".curve/server"); 
-        } else
-            err_exit (".curve/server");
-    }
-    if (!(ctx->cli_cert = zcert_load (".curve/client"))) {
-        if (ctx->treeroot) {
-            if (!(ctx->cli_cert = zcert_new ()))
-                oom ();
-            if (zcert_save (ctx->cli_cert ,".curve/client") < 0)
-                err_exit (".curve/client"); 
-        } else
-            err_exit (".curve/client");
-    }
+#if HAVE_EXPERIMENTAL_SECURITY
+    ctx->auth = cmb_init_curve (ctx);
 #endif
-
     /* Bind to downstream ports.
      */
     ctx->zs_upreq_in = cmb_init_upreq_in (ctx);
