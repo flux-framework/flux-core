@@ -55,9 +55,10 @@ typedef struct {
     zcert_t *srv_cert;
     zcert_t *cli_cert;
     struct passwd *pw;
-    bool security_disable;
 #endif
+    bool security_disable;
     char *session_name;
+    bool upev_mcast;
 
     void *zs_upreq_out;         /* DEALER - tree parent, upstream reqs */
     void *zs_dnreq_in;          /* rev DEALER - tree parent, downstream reqs */
@@ -107,6 +108,9 @@ typedef struct {
     int epoch;                  /* current sched trigger epoch */
     flux_t h;
 } ctx_t;
+
+static int cmbd_upev_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
+static zmsg_t *cmbd_upev_recvmsg (ctx_t *ctx);
 
 static void cmb_init (ctx_t *ctx);
 static void cmb_fini (ctx_t *ctx);
@@ -186,16 +190,15 @@ int main (int argc, char *argv[])
             case 'N':   /* --session-name NAME */
                 ctx.session_name = optarg;
                 break;
-#if HAVE_EXPERIMENTAL_SECURITY
             case 'n':   /* --no-security */
                 ctx.security_disable = true;
                 break;
-#endif
             case 'e':   /* --up-event-uri URI */
                 if (!strstr (optarg, "pgm://"))
                     msg_exit ("use -E, -O for non-multicast event socket");
                 ctx.uri_upev_in = optarg;
                 ctx.uri_upev_out = optarg;
+                ctx.upev_mcast = true;
                 break;
             case 'E':   /* --up-event-in-uri URI */
                 ctx.uri_upev_in = optarg;
@@ -284,6 +287,20 @@ int main (int argc, char *argv[])
         msg_exit ("at least one plugin must be loaded");
     if (!ctx.plugin_path)
         ctx.plugin_path = PLUGIN_PATH; /* compiled in default */
+
+    if (ctx.upev_mcast && strcmp (ctx.uri_upev_out, ctx.uri_upev_in) != 0)
+        usage ();
+#if HAVE_EXPERIMENTAL_SECURITY
+    /* N.B. Event sockets currently do not employ curve and we only
+     * encrypt messages when epgm
+     */
+    if (!ctx.security_disable &&
+           ((ctx.uri_upev_out && strstr (ctx.uri_upev_out, "tcp://"))
+         || (ctx.uri_upev_in && strstr (ctx.uri_upev_in, "tcp://"))
+         || (ctx.uri_dnev_out && strstr (ctx.uri_dnev_out, "tcp://"))
+         || (ctx.uri_dnev_in && strstr (ctx.uri_dnev_in, "tcp://"))))
+        msg_exit ("use --disable-security if you want tcp:// on event sockets");
+#endif
 
     /* FIXME: hardwire rank 0 as root of the reduction tree.
      * Eventually we must allow for this role to migrate to other nodes
@@ -1052,14 +1069,13 @@ static void cmb_poll (ctx_t *ctx)
         if (zmsg) {
             cmb_internal_event (ctx, zmsg);
             zmsg_cc (zmsg, ctx->zs_snoop);
-            if (ctx->zs_upev_out)
-                zmsg_cc (zmsg, ctx->zs_upev_out);
-            zmsg_send (&zmsg, ctx->zs_dnev_out);
+            zmsg_cc (zmsg, ctx->zs_dnev_out);
+            cmbd_upev_sendmsg (ctx, &zmsg);
         }
     }
     /* event on upev_in */
     if (zpa[5].revents & ZMQ_POLLIN) {
-        zmsg = zmsg_recv (ctx->zs_upev_in);
+        zmsg = cmbd_upev_recvmsg (ctx);
         if (zmsg) {
             cmb_internal_event (ctx, zmsg);
             zmsg_cc (zmsg, ctx->zs_snoop);
@@ -1069,6 +1085,38 @@ static void cmb_poll (ctx_t *ctx)
 
     assert (zmsg == NULL);
 }
+
+static int cmbd_upev_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
+{
+    int rc = 0;
+    if (ctx->zs_upev_out) {
+#if HAVE_EXPERIMENTAL_SECURITY
+        if (!ctx->security_disable && ctx->upev_mcast) {
+            // encrypt
+        }
+#endif
+        rc = zmsg_send (zmsg, ctx->zs_upev_out);
+    }
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+    return rc;
+}
+
+static zmsg_t *cmbd_upev_recvmsg (ctx_t *ctx)
+{
+    zmsg_t *zmsg = NULL;
+
+    if (ctx->zs_upev_in) {
+        zmsg = zmsg_recv (ctx->zs_upev_in);
+#if HAVE_EXPERIMENTAL_SECURITY
+        if (!ctx->security_disable && ctx->upev_mcast && zmsg) {
+            // decrypt
+        }
+#endif
+    }
+    return zmsg;
+}
+
 
 /* flux_t handle operations
  * (routing logic needs to access sockets directly, but handle is still
@@ -1144,11 +1192,10 @@ static int cmbd_event_sendmsg (void *impl, zmsg_t **zmsg)
 {
     ctx_t *ctx = impl;
 
+    zmsg_cc (*zmsg, ctx->zs_snoop);
     if (ctx->zs_dnev_out)
         zmsg_cc (*zmsg, ctx->zs_dnev_out);
-    if (ctx->zs_upev_out)
-        zmsg_cc (*zmsg, ctx->zs_upev_out);
-    return zmsg_cc (*zmsg, ctx->zs_snoop);
+    return cmbd_upev_sendmsg (ctx, zmsg);
 }
 
 static int cmbd_rank (void *impl)
