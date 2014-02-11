@@ -55,6 +55,7 @@ typedef struct {
     zcert_t *srv_cert;
     zcert_t *cli_cert;
     struct passwd *pw;
+    bool security_disable;
 #endif
     char *session_name;
 
@@ -118,9 +119,10 @@ static void cmb_init (ctx_t *ctx);
 static void cmb_fini (ctx_t *ctx);
 static void cmb_poll (ctx_t *ctx);
 
-#define OPTIONS "t:e:E:O:vs:R:S:p:P:L:T:A:d:D:H:N:"
+#define OPTIONS "t:e:E:O:vs:R:S:p:P:L:T:A:d:D:H:N:n"
 static const struct option longopts[] = {
     {"session-name",   required_argument,  0, 'N'},
+    {"no-security",    no_argument,        0, 'N'},
     {"up-event-uri",   required_argument,  0, 'e'},
     {"up-event-out-uri",required_argument, 0, 'O'},
     {"up-event-in-uri",required_argument,  0, 'E'},
@@ -147,6 +149,9 @@ static void usage (void)
     fprintf (stderr, 
 "Usage: cmbd OPTIONS\n"
 " -N,--session-name NAME     Set session name\n"
+#if HAVE_EXPERIMENTAL_SECURITY
+" -n,--no-security           Disable session security\n"
+#endif
 " -e,--up-event-uri URI      Set upev URI, e.g. epgm://eth0;239.192.1.1:5555\n"
 " -E,--up-event-in-uri URI   Set upev_in URI (alternative to -e)\n"
 " -O,--up-event-out-uri URI  Set upev_out URI (alternative to -e)\n"
@@ -188,6 +193,11 @@ int main (int argc, char *argv[])
             case 'N':   /* --session-name NAME */
                 ctx.session_name = optarg;
                 break;
+#if HAVE_EXPERIMENTAL_SECURITY
+            case 'n':   /* --no-security */
+                ctx.security_disable = true;
+                break;
+#endif
             case 'e':   /* --up-event-uri URI */
                 if (!strstr (optarg, "pgm://"))
                     msg_exit ("use -E, -O for non-multicast event socket");
@@ -388,9 +398,11 @@ static void *cmb_init_upreq_in (ctx_t *ctx)
     if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
         err_exit ("zsocket_new");
 #if HAVE_EXPERIMENTAL_SECURITY
-    zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
-    zcert_apply (ctx->srv_cert, s);
-    zsocket_set_curve_server (s, 1);
+    if (!ctx->security_disable) {
+        zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
+        zcert_apply (ctx->srv_cert, s);
+        zsocket_set_curve_server (s, 1);
+    }
 #endif
     zsocket_set_hwm (s, 0);
     if (zsocket_bind (s, "%s", UPREQ_URI) < 0)
@@ -410,9 +422,11 @@ static void *cmb_init_dnreq_out (ctx_t *ctx)
     if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
         err_exit ("zsocket_new");
 #if HAVE_EXPERIMENTAL_SECURITY
-    zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
-    zcert_apply (ctx->srv_cert, s);
-    zsocket_set_curve_server (s, 1);
+    if (!ctx->security_disable) {
+        zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
+        zcert_apply (ctx->srv_cert, s);
+        zsocket_set_curve_server (s, 1);
+    }
 #endif
     zsocket_set_hwm (s, 0);
     if (zsocket_bind (s, "%s", DNREQ_URI) < 0)
@@ -465,11 +479,6 @@ static void *cmb_init_snoop (ctx_t *ctx)
     void *s;
     if (!(s = zsocket_new (ctx->zctx, ZMQ_PUB)))
         err_exit ("zsocket_new");
-#if HAVE_EXPERIMENTAL_SECURITY
-    zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
-    zcert_apply (ctx->srv_cert, s);
-    zsocket_set_curve_server (s, 1);
-#endif
     //zsocket_set_hwm (s, 0); // leave default hwm
     if (zsocket_bind (s, "%s", SNOOP_URI) < 0)
         err_exit ("%s", SNOOP_URI);
@@ -509,10 +518,12 @@ static void *cmb_init_upreq_out (ctx_t *ctx) {
     if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
         err_exit ("zsocket_new");
 #if HAVE_EXPERIMENTAL_SECURITY
-    zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
-    zcert_apply (ctx->cli_cert, s);
-    char *srvkey = zcert_public_txt (ctx->srv_cert);
-    zsocket_set_curve_serverkey (s, srvkey);
+    if (!ctx->security_disable) {
+        zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
+        zcert_apply (ctx->cli_cert, s);
+        char *srvkey = zcert_public_txt (ctx->srv_cert);
+        zsocket_set_curve_serverkey (s, srvkey);
+    }
 #endif
     zsocket_set_hwm (s, 0);
     snprintf (id, sizeof (id), "%d", ctx->rank);
@@ -531,10 +542,12 @@ static void *cmb_init_dnreq_in (ctx_t *ctx)
     if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
         err_exit ("zsocket_new");
 #if HAVE_EXPERIMENTAL_SECURITY
-    zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
-    zcert_apply (ctx->cli_cert, s);
-    char *srvkey = zcert_public_txt (ctx->srv_cert);
-    zsocket_set_curve_serverkey (s, srvkey);
+    if (!ctx->security_disable) {
+        zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
+        zcert_apply (ctx->cli_cert, s);
+        char *srvkey = zcert_public_txt (ctx->srv_cert);
+        zsocket_set_curve_serverkey (s, srvkey);
+    }
 #endif
     zsocket_set_hwm (s, 0);
     snprintf (id, sizeof (id), "%d", ctx->rank);
