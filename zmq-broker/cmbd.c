@@ -292,7 +292,8 @@ int main (int argc, char *argv[])
         usage ();
 #if HAVE_EXPERIMENTAL_SECURITY
     /* N.B. Event sockets currently do not employ curve and we only
-     * encrypt messages when epgm
+     * encrypt messages when epgm.  It would be insecure to open up unprotected
+     * tcp ports here.
      */
     if (!ctx.security_disable &&
            ((ctx.uri_upev_out && strstr (ctx.uri_upev_out, "tcp://"))
@@ -455,6 +456,7 @@ static void *cmb_init_dnev_out (ctx_t *ctx)
     if (zsocket_bind (s, "%s", DNEV_OUT_URI) < 0)
         err_exit ("%s", DNEV_OUT_URI);
     if (ctx->uri_dnev_out) {
+        /* FIXME: if ipc:// verify owner/perms */
         if (zsocket_bind (s, "%s", ctx->uri_dnev_out) < 0)
             err_exit ("%s", ctx->uri_dnev_out);
     }
@@ -470,9 +472,11 @@ static void *cmb_init_dnev_in (ctx_t *ctx)
     if (zsocket_bind (s, "%s", DNEV_IN_URI) < 0)
         err_exit ("%s", DNEV_IN_URI);
     zsocket_set_subscribe (s, "");
-    if (ctx->uri_dnev_in)
+    if (ctx->uri_dnev_in) {
+        /* FIXME: if ipc:// verify owner/perms */
         if (zsocket_bind (s, "%s", ctx->uri_dnev_in) < 0)
             err_exit ("%s", ctx->uri_dnev_in);
+    }
     return s;
 }
 
@@ -604,7 +608,7 @@ static zauth_t *cmb_init_curve (ctx_t *ctx)
         err_exit ("zauth_new");
     zauth_set_verbose (auth, true);
     //zauth_allow (auth, "127.0.0.1");
-    zauth_configure_curve (auth, "*", CURVE_ALLOW_ANY);
+    zauth_configure_curve (auth, "*", curve_path);
 
     return auth;
 }
