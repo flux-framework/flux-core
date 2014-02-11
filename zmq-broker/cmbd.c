@@ -606,7 +606,8 @@ static zauth_t *cmb_init_curve (ctx_t *ctx)
 
     if (!(auth = zauth_new (ctx->zctx)))
         err_exit ("zauth_new");
-    zauth_set_verbose (auth, true);
+    if (ctx->verbose)
+        zauth_set_verbose (auth, true);
     //zauth_allow (auth, "127.0.0.1");
     zauth_configure_curve (auth, "*", curve_path);
 
