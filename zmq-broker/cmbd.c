@@ -108,13 +108,6 @@ typedef struct {
     flux_t h;
 } ctx_t;
 
-/* FIXME: paths should be configurable */
-#define UPREQ_IPC_URI_TMPL  "ipc:///tmp/cmb_socket_upreq.uid%d"
-#define DNREQ_IPC_URI_TMPL  "ipc:///tmp/cmb_socket_dnreq.uid%d"
-#define EVOUT_IPC_URI_TMPL  "ipc:///tmp/cmb_socket_evout.uid%d"
-#define EVIN_IPC_URI_TMPL   "ipc:///tmp/cmb_socket_evin.uid%d"
-#define SNOOP_IPC_URI_TMPL  "ipc:///tmp/cmb_socket_snoop.uid%d"
-
 static void cmb_init (ctx_t *ctx);
 static void cmb_fini (ctx_t *ctx);
 static void cmb_poll (ctx_t *ctx);
@@ -407,8 +400,6 @@ static void *cmb_init_upreq_in (ctx_t *ctx)
     zsocket_set_hwm (s, 0);
     if (zsocket_bind (s, "%s", UPREQ_URI) < 0)
         err_exit ("%s", UPREQ_URI);
-    if (zsocket_bind (s, UPREQ_IPC_URI_TMPL, getuid ()) < 0)
-        err_exit (UPREQ_IPC_URI_TMPL, getuid ());
     if (ctx->uri_upreq_in) {
         if (zsocket_bind (s, "%s", ctx->uri_upreq_in) < 0)
             err_exit ("%s", ctx->uri_upreq_in);
@@ -431,8 +422,6 @@ static void *cmb_init_dnreq_out (ctx_t *ctx)
     zsocket_set_hwm (s, 0);
     if (zsocket_bind (s, "%s", DNREQ_URI) < 0)
         err_exit ("%s", DNREQ_URI);
-    if (zsocket_bind (s, DNREQ_IPC_URI_TMPL, getuid ()) < 0)
-        err_exit (DNREQ_IPC_URI_TMPL, getuid ());
     if (ctx->uri_dnreq_out) {
         if (zsocket_bind (s, "%s", ctx->uri_dnreq_out) < 0)
             err_exit ("%s", ctx->uri_dnreq_out);
@@ -448,8 +437,6 @@ static void *cmb_init_dnev_out (ctx_t *ctx)
     zsocket_set_hwm (s, 0);
     if (zsocket_bind (s, "%s", DNEV_OUT_URI) < 0)
         err_exit ("%s", DNEV_OUT_URI);
-    if (zsocket_bind (s, EVOUT_IPC_URI_TMPL, getuid ()) < 0)
-        err_exit (EVOUT_IPC_URI_TMPL, getuid ());
     if (ctx->uri_dnev_out) {
         if (zsocket_bind (s, "%s", ctx->uri_dnev_out) < 0)
             err_exit ("%s", ctx->uri_dnev_out);
@@ -465,8 +452,6 @@ static void *cmb_init_dnev_in (ctx_t *ctx)
     zsocket_set_hwm (s, 0);
     if (zsocket_bind (s, "%s", DNEV_IN_URI) < 0)
         err_exit ("%s", DNEV_IN_URI);
-    if (zsocket_bind (s, EVIN_IPC_URI_TMPL, getuid ()) < 0)
-        err_exit (EVIN_IPC_URI_TMPL, getuid ());
     zsocket_set_subscribe (s, "");
     if (ctx->uri_dnev_in)
         if (zsocket_bind (s, "%s", ctx->uri_dnev_in) < 0)
@@ -482,8 +467,6 @@ static void *cmb_init_snoop (ctx_t *ctx)
     //zsocket_set_hwm (s, 0); // leave default hwm
     if (zsocket_bind (s, "%s", SNOOP_URI) < 0)
         err_exit ("%s", SNOOP_URI);
-    if (zsocket_bind (s, SNOOP_IPC_URI_TMPL, getuid ()) < 0)
-        err_exit (SNOOP_IPC_URI_TMPL, getuid ());
     return s;
 }
 
