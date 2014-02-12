@@ -37,9 +37,9 @@
 #include "cmb_socket.h"
 
 #if ZMQ_VERSION_MAJOR >= 4
-#define HAVE_CURVE_SECURITY 1 /* for request overlays */
+#define HAVE_CURVE_SECURITY 1
 #endif
-#define HAVE_MUNGE_SECURITY 1 /* for event overlay */
+#define HAVE_MUNGE_SECURITY 1
 
 #define DEFAULT_ZAP_DOMAIN  "flux"
 
@@ -595,15 +595,23 @@ static void *cmb_init_dnreq_in (ctx_t *ctx)
 }
 
 #if HAVE_CURVE_SECURITY
-/* FIXME: factor common code here and flux-keygen.c
- * Instances wire up actively in the upstream direction, thus we consider
- * "upstream" to be servers, and "downstream" to be clients.  Interior
- * cmbds are both.
+/* cmbd instances wire up actively in the upstream direction; that is, we
+ * have downstream facing sockets that call "bind" in the server role,
+ * and upstream facing sockets that call "connect" in the client role.
+ * As a result, cmbds may be acting as client, server, or both depending
+ * on their position in the tree.
  *
  * All clients share a client cert.  All servers share a server cert.
  * For now, we load the keys out of the session owner's ~/.curve directory,
  * and require them to be generated in advance with "flux keygen".
- * (This is a little too much sharing to be healthy, no doubt.)
+ *
+ * Although we use curve on all sockets, it only has an effect currently
+ * on TCP sockets.  It is a no-op on epgm://, inproc://, and ipc:// sockets.
+ * We depend on that behavior as some sockets are bound to multiple transports:
+ *   tcp://    - which we need to secure with CURVE
+ *   epgm://   - which we are already securing with MUNGE
+ *   inproc:// - where it buys us nothing, and would cost performance
+ *   ipc://    - could go either way; for now we secure socket paths
  */
 static zauth_t *cmb_init_curve (ctx_t *ctx)
 {
@@ -1142,6 +1150,7 @@ static void cmb_poll (ctx_t *ctx)
     assert (zmsg == NULL);
 }
 
+#if HAVE_MUNGE_SECURITY
 /* Events sent on the PGM multicast overlay plane are encrypted with MUNGE.
  * Start with two-part zmsg: Tag + json.
  * Serialize it to string form with zmsg_encode().
@@ -1152,7 +1161,6 @@ static void cmb_poll (ctx_t *ctx)
  * authentication, since MUNGE context was created with
  * MUNGE_OPT_UID_RESTRICTION set to cmbd's effective UID.
  */
-#if HAVE_MUNGE_SECURITY
 static void zmsg_repl_zf2 (zmsg_t *zmsg, zframe_t *zf)
 {
     zframe_t *lf = zmsg_last (zmsg);
@@ -1174,21 +1182,19 @@ static int event_encode (ctx_t *ctx, zmsg_t *zmsg)
     assert (zmsg != NULL);
     assert (zmsg_size (zmsg) == 2); /* tag + json */
 
-    if (!ctx->security_disable && ctx->upev_mcast) {
-        if ((len  = zmsg_encode (zmsg, (byte **)&buf)) < 0) {
-            flux_log (ctx->h, LOG_ERR, "%s: zmsg_encode failed", __FUNCTION__);
-            goto done;
-        }
-        if ((e = munge_encode (&cr, ctx->mctx, buf, len)) != EMUNGE_SUCCESS) {
-            flux_log (ctx->h, LOG_ERR, "%s: munge_encode failed: %s",
-                      __FUNCTION__, munge_strerror (e));
-            goto done;
-        }
-        if (!(zf = zframe_new (cr, strlen (cr) + 1)))
-            oom ();
-        zmsg_repl_zf2 (zmsg, zf);
-        assert (zmsg_size (zmsg) == 2);
+    if ((len  = zmsg_encode (zmsg, (byte **)&buf)) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: zmsg_encode failed", __FUNCTION__);
+        goto done;
     }
+    if ((e = munge_encode (&cr, ctx->mctx, buf, len)) != EMUNGE_SUCCESS) {
+        flux_log (ctx->h, LOG_ERR, "%s: munge_encode failed: %s",
+                  __FUNCTION__, munge_strerror (e));
+        goto done;
+    }
+    if (!(zf = zframe_new (cr, strlen (cr) + 1)))
+        oom ();
+    zmsg_repl_zf2 (zmsg, zf);
+    assert (zmsg_size (zmsg) == 2);
     rc = 0;
 done:
     if (buf)
@@ -1207,31 +1213,29 @@ static int event_decode (ctx_t *ctx, zmsg_t *zmsg)
     int len;
     int rc = -1;
 
-    if (!ctx->security_disable && ctx->upev_mcast) {
-        if (zmsg_size (zmsg) != 2 || !(tag = cmb_msg_tag (zmsg, false))
-               || !(zf = zmsg_last (zmsg)) || zframe_size (zf) < 1
-               || (*(zframe_data (zf) + zframe_size (zf) - 1) != '\0')) {
-            flux_log (ctx->h, LOG_ERR, "%s: malformed message", __FUNCTION__);
-            goto done;
-        }
-        if ((e = munge_decode ((char *)zframe_data (zf), ctx->mctx,
-                        (void *)&buf, &len, NULL, NULL)) != EMUNGE_SUCCESS) {
-            flux_log (ctx->h, LOG_ERR, "%s: munge_decode failed: %s",
-                      __FUNCTION__, munge_strerror (e));
-            goto done;
-        }
-        if (!(zmsg2 = zmsg_decode ((byte *)buf, len))) {
-            flux_log (ctx->h, LOG_ERR, "%s: zmsg_decode failed", __FUNCTION__);
-            goto done;
-        }
-        if (zmsg_size (zmsg2) != 2 || !(tag2 = cmb_msg_tag (zmsg2, false))
-                || strcmp (tag, tag2) != 0 || !(zf2 = zmsg_last (zmsg2))) {
-            flux_log (ctx->h, LOG_ERR, "%s: malformed payload", __FUNCTION__);
-            goto done;
-        }
-        zmsg_remove (zmsg2, zf2);
-        zmsg_repl_zf2 (zmsg, zf2);
+    if (zmsg_size (zmsg) != 2 || !(tag = cmb_msg_tag (zmsg, false))
+           || !(zf = zmsg_last (zmsg)) || zframe_size (zf) < 1
+           || (*(zframe_data (zf) + zframe_size (zf) - 1) != '\0')) {
+        flux_log (ctx->h, LOG_ERR, "%s: malformed message", __FUNCTION__);
+        goto done;
     }
+    if ((e = munge_decode ((char *)zframe_data (zf), ctx->mctx,
+                    (void *)&buf, &len, NULL, NULL)) != EMUNGE_SUCCESS) {
+        flux_log (ctx->h, LOG_ERR, "%s: munge_decode failed: %s",
+                  __FUNCTION__, munge_strerror (e));
+        goto done;
+    }
+    if (!(zmsg2 = zmsg_decode ((byte *)buf, len))) {
+        flux_log (ctx->h, LOG_ERR, "%s: zmsg_decode failed", __FUNCTION__);
+        goto done;
+    }
+    if (zmsg_size (zmsg2) != 2 || !(tag2 = cmb_msg_tag (zmsg2, false))
+            || strcmp (tag, tag2) != 0 || !(zf2 = zmsg_last (zmsg2))) {
+        flux_log (ctx->h, LOG_ERR, "%s: malformed payload", __FUNCTION__);
+        goto done;
+    }
+    zmsg_remove (zmsg2, zf2);
+    zmsg_repl_zf2 (zmsg, zf2);
     rc = 0;
 done:
     if (buf)
@@ -1252,8 +1256,10 @@ static int cmbd_upev_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
 
     if (ctx->zs_upev_out) {
 #if HAVE_MUNGE_SECURITY
-        if (event_encode (ctx, *zmsg) < 0)
-            goto done;
+        if (!ctx->security_disable && ctx->upev_mcast) {
+            if (event_encode (ctx, *zmsg) < 0)
+                goto done;
+        }
 #endif
         rc = zmsg_send (zmsg, ctx->zs_upev_out);
     }
@@ -1271,9 +1277,11 @@ static zmsg_t *cmbd_upev_recvmsg (ctx_t *ctx)
         if (!(zmsg = zmsg_recv (ctx->zs_upev_in)))
             goto done;
 #if HAVE_MUNGE_SECURITY
-        if (event_decode (ctx, zmsg) < 0) {
-            zmsg_destroy (&zmsg);
-            goto done;
+        if (!ctx->security_disable && ctx->upev_mcast) {
+            if (event_decode (ctx, zmsg) < 0) {
+                zmsg_destroy (&zmsg);
+                goto done;
+            }
         }
 #endif
     }
