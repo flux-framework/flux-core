@@ -152,10 +152,8 @@ static void usage (void)
 {
     fprintf (stderr, 
 "Usage: cmbd OPTIONS\n"
-" -N,--session-name NAME     Set session name\n"
-#if HAVE_CURVE_SECURITY
-" -n,--no-security           Disable session security\n"
-#endif
+" -N,--session-name NAME     Set session name (default: flux)\n"
+" -n,--no-security           Disable session security (default: %s, %s)\n"
 " -e,--up-event-uri URI      Set upev URI, e.g. epgm://eth0;239.192.1.1:5555\n"
 " -E,--up-event-in-uri URI   Set upev_in URI (alternative to -e)\n"
 " -O,--up-event-out-uri URI  Set upev_out URI (alternative to -e)\n"
@@ -173,8 +171,18 @@ static void usage (void)
 " -P,--plugins p1,p2,...     Load the named plugins (comma separated)\n"
 " -X,--plugin-path PATH      Set plugin search path (colon separated)\n"
 " -L,--logdest DEST          Log to DEST, can  be syslog, stderr, or file\n"
-" -A,--api-socket PATH       Listen for API connections on PATH\n"
-            );
+" -A,--api-socket PATH       Listen for API connections on PATH\n",
+#if HAVE_MUNGE_SECURITY
+"MUNGE",
+#else
+"no MUNGE",
+#endif
+#if HAVE_CURVE_SECURITY
+"CURVE"
+#else
+"no CURVE"
+#endif
+);
     exit (1);
 }
 
