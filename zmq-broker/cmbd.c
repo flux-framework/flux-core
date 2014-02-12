@@ -406,9 +406,43 @@ static void unload_plugins (ctx_t *ctx)
     zlist_destroy (&keys);
 }
 
+/* zeromq unlinks ipc:// paths before binding them.
+ * Therefore checking them here is maybe not that useful.
+ * N.B. ipc://@ designates abstract AF_LOCAL namespace (since zeromq4)
+ */
+static bool check_uri (const char *uri)
+{
+    bool ispath = false;
+
+    if (uri && strncmp (uri, "ipc://", 6) == 0) {
+#if ZMQ_VERSION_MAJOR >= 4
+        if (strncmp (uri, "ipc://@", 7) != 0)
+            ispath = true;
+#else
+        ispath = true;
+#endif
+    }
+    if (ispath) {
+        struct stat sb;
+        const char *path = uri + 6;
+
+        if (lstat (path, &sb) == 0) {
+            if (S_ISLNK (sb.st_mode)) 
+                msg_exit ("%s is a symlink", path);
+            if (!S_ISSOCK (sb.st_mode))
+                msg_exit ("%s is not a socket", path);
+            if (sb.st_uid != geteuid ())
+                msg_exit ("%s has wrong owner", path);
+        }
+    }
+    return (uri != NULL);
+}
+
 static void *cmb_init_upreq_in (ctx_t *ctx)
 {
     void *s;
+    const char *uri = UPREQ_URI;
+
     if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
         err_exit ("zsocket_new");
 #if HAVE_CURVE_SECURITY
@@ -419,9 +453,11 @@ static void *cmb_init_upreq_in (ctx_t *ctx)
     }
 #endif
     zsocket_set_hwm (s, 0);
-    if (zsocket_bind (s, "%s", UPREQ_URI) < 0)
-        err_exit ("%s", UPREQ_URI);
-    if (ctx->uri_upreq_in) {
+    if (check_uri (uri)) {
+        if (zsocket_bind (s, "%s", uri) < 0)
+            err_exit ("%s", uri);
+    }
+    if (check_uri (ctx->uri_upreq_in)) {
         if (zsocket_bind (s, "%s", ctx->uri_upreq_in) < 0)
             err_exit ("%s", ctx->uri_upreq_in);
     }
@@ -431,6 +467,8 @@ static void *cmb_init_upreq_in (ctx_t *ctx)
 static void *cmb_init_dnreq_out (ctx_t *ctx)
 {
     void *s;
+    const char *uri = DNREQ_URI;
+
     if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
         err_exit ("zsocket_new");
 #if HAVE_CURVE_SECURITY
@@ -441,9 +479,11 @@ static void *cmb_init_dnreq_out (ctx_t *ctx)
     }
 #endif
     zsocket_set_hwm (s, 0);
-    if (zsocket_bind (s, "%s", DNREQ_URI) < 0)
-        err_exit ("%s", DNREQ_URI);
-    if (ctx->uri_dnreq_out) {
+    if (check_uri (uri)) {
+        if (zsocket_bind (s, "%s", DNREQ_URI) < 0)
+            err_exit ("%s", DNREQ_URI);
+    }
+    if (check_uri (ctx->uri_dnreq_out)) {
         if (zsocket_bind (s, "%s", ctx->uri_dnreq_out) < 0)
             err_exit ("%s", ctx->uri_dnreq_out);
     }
@@ -453,6 +493,8 @@ static void *cmb_init_dnreq_out (ctx_t *ctx)
 static void *cmb_init_dnev_out (ctx_t *ctx)
 {
     void *s;
+    const char *uri = DNEV_OUT_URI;
+
     if (!(s = zsocket_new (ctx->zctx, ZMQ_PUB)))
         err_exit ("zsocket_new");
 #if HAVE_CURVE_SECURITY
@@ -463,10 +505,11 @@ static void *cmb_init_dnev_out (ctx_t *ctx)
     }
 #endif
     zsocket_set_hwm (s, 0);
-    if (zsocket_bind (s, "%s", DNEV_OUT_URI) < 0)
-        err_exit ("%s", DNEV_OUT_URI);
-    if (ctx->uri_dnev_out) {
-        /* FIXME: if ipc:// verify owner/perms */
+    if (check_uri (uri)) {
+        if (zsocket_bind (s, "%s", uri) < 0)
+            err_exit ("%s", uri);
+    }
+    if (check_uri (ctx->uri_dnev_out)) {
         if (zsocket_bind (s, "%s", ctx->uri_dnev_out) < 0)
             err_exit ("%s", ctx->uri_dnev_out);
     }
@@ -476,6 +519,8 @@ static void *cmb_init_dnev_out (ctx_t *ctx)
 static void *cmb_init_dnev_in (ctx_t *ctx)
 {
     void *s;
+    const char *uri = DNEV_IN_URI;
+
     if (!(s = zsocket_new (ctx->zctx, ZMQ_SUB)))
         err_exit ("zsocket_new");
 #if HAVE_CURVE_SECURITY
@@ -486,25 +531,37 @@ static void *cmb_init_dnev_in (ctx_t *ctx)
     }
 #endif
     zsocket_set_hwm (s, 0);
-    if (zsocket_bind (s, "%s", DNEV_IN_URI) < 0)
-        err_exit ("%s", DNEV_IN_URI);
-    zsocket_set_subscribe (s, "");
-    if (ctx->uri_dnev_in) {
-        /* FIXME: if ipc:// verify owner/perms */
+    if (check_uri (uri)) {
+        if (zsocket_bind (s, "%s", uri) < 0)
+            err_exit ("%s", uri);
+    }
+    if (check_uri (ctx->uri_dnev_in)) {
         if (zsocket_bind (s, "%s", ctx->uri_dnev_in) < 0)
             err_exit ("%s", ctx->uri_dnev_in);
     }
+    zsocket_set_subscribe (s, "");
     return s;
 }
 
 static void *cmb_init_snoop (ctx_t *ctx)
 {
     void *s;
+    const char *uri = SNOOP_URI;
+
     if (!(s = zsocket_new (ctx->zctx, ZMQ_PUB)))
         err_exit ("zsocket_new");
+#if HAVE_CURVE_SECURITY
+    if (!ctx->security_disable) {
+        zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
+        zcert_apply (ctx->srv_cert, s);
+        zsocket_set_curve_server (s, 1);
+    }
+#endif
     //zsocket_set_hwm (s, 0); // leave default hwm
-    if (zsocket_bind (s, "%s", SNOOP_URI) < 0)
-        err_exit ("%s", SNOOP_URI);
+    if (check_uri (uri)) {
+        if (zsocket_bind (s, "%s", SNOOP_URI) < 0)
+            err_exit ("%s", SNOOP_URI);
+    }
     return s;
 }
 
@@ -606,12 +663,8 @@ static void *cmb_init_dnreq_in (ctx_t *ctx)
  * and require them to be generated in advance with "flux keygen".
  *
  * Although we use curve on all sockets, it only has an effect currently
- * on TCP sockets.  It is a no-op on epgm://, inproc://, and ipc:// sockets.
- * We depend on that behavior as some sockets are bound to multiple transports:
- *   tcp://    - which we need to secure with CURVE
- *   epgm://   - which we are already securing with MUNGE
- *   inproc:// - where it buys us nothing, and would cost performance
- *   ipc://    - could go either way; for now we secure socket paths
+ * sockets bound to tcp:// or ipc:// endpoints.  It is a no-op when
+ * epgm:// and inproc:// are used.
  */
 static zauth_t *cmb_init_curve (ctx_t *ctx)
 {
@@ -661,6 +714,12 @@ static void cmb_init (ctx_t *ctx)
     int i;
 
     ctx->rctx = route_init (ctx->verbose);
+
+    /* Set a restrictive umask so that zmq's unlink/bind doesn't create
+     * a path that an unauthorized user else could connect to.
+     * Not necessarily that useful when we are also doing CURVE auth.
+     */
+    (void)umask (077);
 
     ctx->zctx = zctx_new ();
     if (!ctx->zctx)
