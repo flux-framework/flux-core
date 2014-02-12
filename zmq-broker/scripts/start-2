@@ -1,8 +1,9 @@
 ${CMDPREFIX} ${CMBD:-./cmbd} \
+  --verbose \
   --parent=1,tcp://127.0.0.1:5560,tcp://127.0.0.1:5561 \
   --parent=0,tcp://127.0.0.1:5556,tcp://127.0.0.1:5557 \
-  --up-event-out-uri='ipc:///tmp/cmb_ev_0_in' \
-  --up-event-in-uri='ipc:///tmp/cmb_ev_0_out' \
+  --up-event-out-uri='tcp://127.0.0.1:5558' \
+  --up-event-in-uri='tcp://127.0.0.1:5559' \
   --rank=2 --size=3 \
   --plugins=api,barrier,live,kvs,job,rexec,mecho \
   --api-socket=/tmp/rank.2

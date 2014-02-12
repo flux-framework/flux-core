@@ -1,6 +1,7 @@
 ${CMDPREFIX} ${CMBD:-./cmbd} \
-  --dn-event-in-uri='ipc:///tmp/cmb_ev_0_in' \
-  --dn-event-out-uri='ipc:///tmp/cmb_ev_0_out' \
+  --verbose \
+  --dn-event-in-uri='tcp://*:5558' \
+  --dn-event-out-uri='tcp://*:5559' \
   --up-req-in-uri='tcp://*:5556' \
   --dn-req-out-uri='tcp://*:5557' \
   --rank=0 --size=3 \

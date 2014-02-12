@@ -305,18 +305,6 @@ int main (int argc, char *argv[])
 
     if (ctx.upev_mcast && strcmp (ctx.uri_upev_out, ctx.uri_upev_in) != 0)
         usage ();
-#if HAVE_CURVE_SECURITY
-    /* N.B. Event sockets currently do not employ curve and we only
-     * encrypt messages when epgm.  It would be insecure to open up unprotected
-     * tcp ports here.
-     */
-    if (!ctx.security_disable &&
-           ((ctx.uri_upev_out && strstr (ctx.uri_upev_out, "tcp://"))
-         || (ctx.uri_upev_in && strstr (ctx.uri_upev_in, "tcp://"))
-         || (ctx.uri_dnev_out && strstr (ctx.uri_dnev_out, "tcp://"))
-         || (ctx.uri_dnev_in && strstr (ctx.uri_dnev_in, "tcp://"))))
-        msg_exit ("use --disable-security if you want tcp:// on event sockets");
-#endif
 
     /* FIXME: hardwire rank 0 as root of the reduction tree.
      * Eventually we must allow for this role to migrate to other nodes
@@ -467,6 +455,13 @@ static void *cmb_init_dnev_out (ctx_t *ctx)
     void *s;
     if (!(s = zsocket_new (ctx->zctx, ZMQ_PUB)))
         err_exit ("zsocket_new");
+#if HAVE_CURVE_SECURITY
+    if (!ctx->security_disable) {
+        zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
+        zcert_apply (ctx->srv_cert, s);
+        zsocket_set_curve_server (s, 1);
+    }
+#endif
     zsocket_set_hwm (s, 0);
     if (zsocket_bind (s, "%s", DNEV_OUT_URI) < 0)
         err_exit ("%s", DNEV_OUT_URI);
@@ -483,6 +478,13 @@ static void *cmb_init_dnev_in (ctx_t *ctx)
     void *s;
     if (!(s = zsocket_new (ctx->zctx, ZMQ_SUB)))
         err_exit ("zsocket_new");
+#if HAVE_CURVE_SECURITY
+    if (!ctx->security_disable) {
+        zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
+        zcert_apply (ctx->srv_cert, s);
+        zsocket_set_curve_server (s, 1);
+    }
+#endif
     zsocket_set_hwm (s, 0);
     if (zsocket_bind (s, "%s", DNEV_IN_URI) < 0)
         err_exit ("%s", DNEV_IN_URI);
@@ -511,6 +513,14 @@ static void *cmb_init_upev_in (ctx_t *ctx)
     void *s;
     if (!(s = zsocket_new (ctx->zctx, ZMQ_SUB)))
         err_exit ("zsocket_new");
+#if HAVE_CURVE_SECURITY
+    if (!ctx->security_disable) {
+        zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
+        zcert_apply (ctx->cli_cert, s);
+        char *srvkey = zcert_public_txt (ctx->srv_cert);
+        zsocket_set_curve_serverkey (s, srvkey);
+    }
+#endif
     zsocket_set_hwm (s, 0);
     if (zsocket_connect (s, "%s", ctx->uri_upev_in) < 0)
         err_exit ("%s", ctx->uri_upev_in);
@@ -523,6 +533,14 @@ static void *cmb_init_upev_out (ctx_t *ctx)
     void *s;
     if (!(s = zsocket_new (ctx->zctx, ZMQ_PUB)))
         err_exit ("zsocket_new");
+#if HAVE_CURVE_SECURITY
+    if (!ctx->security_disable) {
+        zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
+        zcert_apply (ctx->cli_cert, s);
+        char *srvkey = zcert_public_txt (ctx->srv_cert);
+        zsocket_set_curve_serverkey (s, srvkey);
+    }
+#endif
     zsocket_set_hwm (s, 0);
     if (zsocket_connect (s, "%s", ctx->uri_upev_out) < 0)
         err_exit ("%s", ctx->uri_upev_out);
