@@ -23,6 +23,9 @@
 #include <zmq.h>
 #include <czmq.h>
 
+#define GPL_LICENSED 1
+#include <munge.h>
+
 #include "log.h"
 #include "zmsg.h"
 #include "route.h"
@@ -34,8 +37,9 @@
 #include "cmb_socket.h"
 
 #if ZMQ_VERSION_MAJOR >= 4
-#define HAVE_EXPERIMENTAL_SECURITY 1
+#define HAVE_CURVE_SECURITY 1 /* for request overlays */
 #endif
+#define HAVE_MUNGE_SECURITY 1 /* for event overlay */
 
 #define DEFAULT_ZAP_DOMAIN  "flux"
 
@@ -50,11 +54,14 @@ typedef struct {
     /* 0MQ
      */
     zctx_t *zctx;               /* zeromq context (MT-safe) */
-#if HAVE_EXPERIMENTAL_SECURITY
+#if HAVE_CURVE_SECURITY
     zauth_t *auth;
     zcert_t *srv_cert;
     zcert_t *cli_cert;
     struct passwd *pw;
+#endif
+#if HAVE_MUNGE_SECURITY
+    munge_ctx_t mctx;
 #endif
     bool security_disable;
     char *session_name;
@@ -146,7 +153,7 @@ static void usage (void)
     fprintf (stderr, 
 "Usage: cmbd OPTIONS\n"
 " -N,--session-name NAME     Set session name\n"
-#if HAVE_EXPERIMENTAL_SECURITY
+#if HAVE_CURVE_SECURITY
 " -n,--no-security           Disable session security\n"
 #endif
 " -e,--up-event-uri URI      Set upev URI, e.g. epgm://eth0;239.192.1.1:5555\n"
@@ -290,7 +297,7 @@ int main (int argc, char *argv[])
 
     if (ctx.upev_mcast && strcmp (ctx.uri_upev_out, ctx.uri_upev_in) != 0)
         usage ();
-#if HAVE_EXPERIMENTAL_SECURITY
+#if HAVE_CURVE_SECURITY
     /* N.B. Event sockets currently do not employ curve and we only
      * encrypt messages when epgm.  It would be insecure to open up unprotected
      * tcp ports here.
@@ -408,7 +415,7 @@ static void *cmb_init_upreq_in (ctx_t *ctx)
     void *s;
     if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
         err_exit ("zsocket_new");
-#if HAVE_EXPERIMENTAL_SECURITY
+#if HAVE_CURVE_SECURITY
     if (!ctx->security_disable) {
         zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
         zcert_apply (ctx->srv_cert, s);
@@ -430,7 +437,7 @@ static void *cmb_init_dnreq_out (ctx_t *ctx)
     void *s;
     if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
         err_exit ("zsocket_new");
-#if HAVE_EXPERIMENTAL_SECURITY
+#if HAVE_CURVE_SECURITY
     if (!ctx->security_disable) {
         zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
         zcert_apply (ctx->srv_cert, s);
@@ -521,7 +528,7 @@ static void *cmb_init_upreq_out (ctx_t *ctx) {
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
         err_exit ("zsocket_new");
-#if HAVE_EXPERIMENTAL_SECURITY
+#if HAVE_CURVE_SECURITY
     if (!ctx->security_disable) {
         zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
         zcert_apply (ctx->cli_cert, s);
@@ -545,7 +552,7 @@ static void *cmb_init_dnreq_in (ctx_t *ctx)
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
         err_exit ("zsocket_new");
-#if HAVE_EXPERIMENTAL_SECURITY
+#if HAVE_CURVE_SECURITY
     if (!ctx->security_disable) {
         zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
         zcert_apply (ctx->cli_cert, s);
@@ -561,7 +568,7 @@ static void *cmb_init_dnreq_in (ctx_t *ctx)
     return s;
 }
 
-#if HAVE_EXPERIMENTAL_SECURITY
+#if HAVE_CURVE_SECURITY
 /* FIXME: factor common code here and flux-keygen.c
  * Instances wire up actively in the upstream direction, thus we consider
  * "upstream" to be servers, and "downstream" to be clients.  Interior
@@ -625,8 +632,19 @@ static void cmb_init (ctx_t *ctx)
     if (!ctx->zctx)
         err_exit ("zctx_new");
     zctx_set_linger (ctx->zctx, 5);
-#if HAVE_EXPERIMENTAL_SECURITY
-    ctx->auth = cmb_init_curve (ctx);
+#if HAVE_CURVE_SECURITY
+    if (!ctx->security_disable)
+        ctx->auth = cmb_init_curve (ctx);
+#endif
+#if HAVE_MUNGE_SECURITY
+    if (!ctx->security_disable) {
+        munge_err_t e;
+        if (!(ctx->mctx = munge_ctx_create ()))
+            oom ();
+        e = munge_ctx_set (ctx->mctx, MUNGE_OPT_UID_RESTRICTION, geteuid ());
+        if (e != EMUNGE_SUCCESS)
+            err_exit ("munge_ctx_set: %s", munge_strerror (e));
+    }
 #endif
     /* Bind to downstream ports.
      */
@@ -693,7 +711,14 @@ static void cmb_fini (ctx_t *ctx)
         zsocket_destroy (ctx->zctx, ctx->zs_upev_in);
     if (ctx->zs_upev_out)
         zsocket_destroy (ctx->zctx, ctx->zs_upev_out);
-
+#if HAVE_CURVE_SECURITY
+    if (ctx->auth)
+        zauth_destroy (&ctx->auth);
+#endif
+#if HAVE_MUNGE_SECURITY
+    if (ctx->mctx)
+        munge_ctx_destroy (ctx->mctx);
+#endif
     route_fini (ctx->rctx);
     zctx_destroy (&ctx->zctx);
 }
@@ -1091,17 +1116,122 @@ static void cmb_poll (ctx_t *ctx)
     assert (zmsg == NULL);
 }
 
+/* Events sent on the PGM multicast overlay plane are encrypted with MUNGE.
+ * Start with two-part zmsg: Tag + json.
+ * Serialize it to string form with zmsg_encode().
+ * Transform that (as payload) to a MUNGE cred string with munge_encode().
+ * Now replace the json frame in the original message with the munge cred.
+ * Thus the final message is cleartext tag + munge cred.
+ * N.B.: Confidentiality of payload is obtained in addition to the usual
+ * authentication, since MUNGE context was created with
+ * MUNGE_OPT_UID_RESTRICTION set to cmbd's effective UID.
+ */
+#if HAVE_MUNGE_SECURITY
+static void zmsg_repl_zf2 (zmsg_t *zmsg, zframe_t *zf)
+{
+    zframe_t *lf = zmsg_last (zmsg);
+    assert (lf != NULL);
+    zmsg_remove (zmsg, lf);
+    zframe_destroy (&lf);
+    if (zmsg_add (zmsg, zf))
+        oom ();
+}
+
+static int event_encode (ctx_t *ctx, zmsg_t *zmsg)
+{
+    char *buf = NULL, *cr = NULL;
+    munge_err_t e;
+    zframe_t *zf;
+    size_t len;
+    int rc = -1;
+
+    assert (zmsg != NULL);
+    assert (zmsg_size (zmsg) == 2); /* tag + json */
+
+    if (!ctx->security_disable && ctx->upev_mcast) {
+        if ((len  = zmsg_encode (zmsg, (byte **)&buf)) < 0) {
+            flux_log (ctx->h, LOG_ERR, "%s: zmsg_encode failed", __FUNCTION__);
+            goto done;
+        }
+        if ((e = munge_encode (&cr, ctx->mctx, buf, len)) != EMUNGE_SUCCESS) {
+            flux_log (ctx->h, LOG_ERR, "%s: munge_encode failed: %s",
+                      __FUNCTION__, munge_strerror (e));
+            goto done;
+        }
+        if (!(zf = zframe_new (cr, strlen (cr) + 1)))
+            oom ();
+        zmsg_repl_zf2 (zmsg, zf);
+        assert (zmsg_size (zmsg) == 2);
+    }
+    rc = 0;
+done:
+    if (buf)
+        free (buf);
+    if (cr)
+        free (cr);
+    return rc;
+}
+
+static int event_decode (ctx_t *ctx, zmsg_t *zmsg)
+{
+    char *buf = NULL, *tag = NULL, *tag2 = NULL;
+    zmsg_t *zmsg2 = NULL;
+    munge_err_t e;
+    zframe_t *zf, *zf2;
+    int len;
+    int rc = -1;
+
+    if (!ctx->security_disable && ctx->upev_mcast) {
+        if (zmsg_size (zmsg) != 2 || !(tag = cmb_msg_tag (zmsg, false))
+               || !(zf = zmsg_last (zmsg)) || zframe_size (zf) < 1
+               || (*(zframe_data (zf) + zframe_size (zf) - 1) != '\0')) {
+            flux_log (ctx->h, LOG_ERR, "%s: malformed message", __FUNCTION__);
+            goto done;
+        }
+        if ((e = munge_decode ((char *)zframe_data (zf), ctx->mctx,
+                        (void *)&buf, &len, NULL, NULL)) != EMUNGE_SUCCESS) {
+            flux_log (ctx->h, LOG_ERR, "%s: munge_decode failed: %s",
+                      __FUNCTION__, munge_strerror (e));
+            goto done;
+        }
+        if (!(zmsg2 = zmsg_decode ((byte *)buf, len))) {
+            flux_log (ctx->h, LOG_ERR, "%s: zmsg_decode failed", __FUNCTION__);
+            goto done;
+        }
+        if (zmsg_size (zmsg2) != 2 || !(tag2 = cmb_msg_tag (zmsg2, false))
+                || strcmp (tag, tag2) != 0 || !(zf2 = zmsg_last (zmsg2))) {
+            flux_log (ctx->h, LOG_ERR, "%s: malformed payload", __FUNCTION__);
+            goto done;
+        }
+        zmsg_remove (zmsg2, zf2);
+        zmsg_repl_zf2 (zmsg, zf2);
+    }
+    rc = 0;
+done:
+    if (buf)
+        free (buf);
+    if (tag)
+        free (tag);
+    if (tag2)
+        free (tag2);
+    if (zmsg2)
+        zmsg_destroy (&zmsg2); 
+    return rc;
+}
+#endif
+
 static int cmbd_upev_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
 {
-    int rc = 0;
+    int rc = -1;
+
     if (ctx->zs_upev_out) {
-#if HAVE_EXPERIMENTAL_SECURITY
-        if (!ctx->security_disable && ctx->upev_mcast) {
-            // encrypt
-        }
+#if HAVE_MUNGE_SECURITY
+        if (event_encode (ctx, *zmsg) < 0)
+            goto done;
 #endif
         rc = zmsg_send (zmsg, ctx->zs_upev_out);
     }
+done:
     if (*zmsg)
         zmsg_destroy (zmsg);
     return rc;
@@ -1112,13 +1242,16 @@ static zmsg_t *cmbd_upev_recvmsg (ctx_t *ctx)
     zmsg_t *zmsg = NULL;
 
     if (ctx->zs_upev_in) {
-        zmsg = zmsg_recv (ctx->zs_upev_in);
-#if HAVE_EXPERIMENTAL_SECURITY
-        if (!ctx->security_disable && ctx->upev_mcast && zmsg) {
-            // decrypt
+        if (!(zmsg = zmsg_recv (ctx->zs_upev_in)))
+            goto done;
+#if HAVE_MUNGE_SECURITY
+        if (event_decode (ctx, zmsg) < 0) {
+            zmsg_destroy (&zmsg);
+            goto done;
         }
 #endif
     }
+done:
     return zmsg;
 }
 

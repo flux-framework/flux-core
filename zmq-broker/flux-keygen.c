@@ -8,11 +8,16 @@
 #include <json/json.h>
 #include <assert.h>
 #include <libgen.h>
+#include <zmq.h>
 #include <czmq.h>
 
 #include "cmb.h"
 #include "util.h"
 #include "log.h"
+
+#if ZMQ_VERSION_MAJOR >= 4
+#define HAVE_CURVE_SECURITY 1
+#endif
 
 #define OPTIONS "hfn:"
 static const struct option longopts[] = {
@@ -22,7 +27,7 @@ static const struct option longopts[] = {
     { 0, 0, 0, 0 },
 };
 
-static char * ctime_iso8601_now (char *buf, size_t sz);
+char * ctime_iso8601_now (char *buf, size_t sz);
 
 void usage (void)
 {
@@ -65,7 +70,6 @@ int main (int argc, char *argv[])
     }
     if (optind < argc)
         usage ();
-
     if (!(pw = getpwuid (geteuid ()))
                     || (pw->pw_dir == NULL || strlen (pw->pw_dir) == 0))
         msg_exit ("could not determine home directory");
@@ -105,6 +109,7 @@ int main (int argc, char *argv[])
     }
     /* Create certs.
      */
+#if HAVE_CURVE_SECURITY
     for (i = 0; i < ncerts; i += 2) { /* skip _secret */
         zcert_t *cert;
         char buf[64];
@@ -138,6 +143,9 @@ int main (int argc, char *argv[])
         zcert_destroy (&cert);
         free (path);
     }
+#else
+    msg_exit ("Flux was built without support for CURVE security");
+#endif
 
     free (curve_path);
 
@@ -146,7 +154,7 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-static char * ctime_iso8601_now (char *buf, size_t sz)
+char * ctime_iso8601_now (char *buf, size_t sz)
 {
     struct tm tm;
     time_t now = time (NULL);
