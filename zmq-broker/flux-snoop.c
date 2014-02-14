@@ -33,10 +33,11 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-snoop OPTIONS [--all] [topic...]\n"
-"Note: without --all, cmb.info and log.msg messages are suppresssed\n"
-"OPTIONS include:\n"
+"Usage: flux-snoop OPTIONS [topic [topic...]]\n"
+"  -a,--all                  Include suppressed cmb.info, log.msg messages\n"
+#if HAVE_CURVE_SECURITY
 "  -n,--no-security          Try to connect without CURVE security\n"
+#endif
 "  -v,--verbose              Verbose connect output\n"
 "  -N,--session-name NAME    Set session name (default flux)\n"
 );
@@ -104,20 +105,32 @@ int main (int argc, char *argv[])
         msg ("connecting to %s...", uri);
     s = connect_snoop (zctx, nopt, vopt, session, uri);
 
-    /* FIXME: subscriptions don't quite work here with messages Cc'ed from
-     * router sockets that have sender frames prepended.
-     */
     if (zlist_size (subs) > 0) {
         while ((sub = zlist_pop (subs)))
             zsocket_set_subscribe (s, sub);
     } else
         zsocket_set_subscribe (s, "");
+
+    /* The snoop socket includes two extra header frames:
+     * First the tag frame, stripped of any node! prefix so subscriptions work.
+     * Second, the message type as a stringified integer.
+     */
     while ((zmsg = zmsg_recv (s))) {
-        char *tag = flux_zmsg_tag (zmsg);
-        if (aopt || (strcmp (tag, "cmb.info") && strcmp (tag, "log.msg"))) {
-            zmsg_dump_compact (zmsg);
+        char *tag = zmsg_popstr (zmsg);
+        char *typestr = zmsg_popstr (zmsg);
+        int type;
+
+        if (tag && typestr) {
+            if (aopt || (strcmp (tag, "cmb.info") && strcmp (tag, "log.msg"))) {
+                type = strtoul (typestr, NULL, 10);
+                fprintf (stderr, "--- %-9s", flux_msgtype_string (type));
+                zmsg_dump_compact (zmsg);
+            }
         }
-        free (tag);
+        if (tag)
+            free (tag);
+        if (typestr)
+            free (typestr);
         zmsg_destroy (&zmsg);
     }
     zsocket_set_unsubscribe (s, topic ? topic : "");

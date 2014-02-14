@@ -117,6 +117,7 @@ typedef struct {
     flux_t h;
 } ctx_t;
 
+static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg);
 static int cmbd_upev_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
 static zmsg_t *cmbd_upev_recvmsg (ctx_t *ctx);
 
@@ -1048,7 +1049,7 @@ error:
 
 static void route_response (ctx_t *ctx, zmsg_t **zmsg, bool dnsock)
 {
-    zmsg_cc (*zmsg, ctx->zs_snoop);
+    snoop_cc (ctx, FLUX_MSGTYPE_RESPONSE, *zmsg);
 
     /* case 1: responses heading upward on the 'dnreq' flow can reverse
      * direction if they are traversing the tree.
@@ -1079,7 +1080,7 @@ static void route_request (ctx_t *ctx, zmsg_t **zmsg, bool dnsock)
 
     if (asprintf (&myaddr, "%d", ctx->rank) < 0)
         oom ();
-    zmsg_cc (*zmsg, ctx->zs_snoop);
+    snoop_cc (ctx, FLUX_MSGTYPE_REQUEST, *zmsg);
 
     if (parse_message_tag (*zmsg, &addr, &service) < 0) {
         errn (EPROTO, "%s: parse_message_tag failed", __FUNCTION__);
@@ -1220,7 +1221,7 @@ static void cmb_poll (ctx_t *ctx)
         zmsg = zmsg_recv (ctx->zs_dnev_in);
         if (zmsg) {
             cmb_internal_event (ctx, zmsg);
-            zmsg_cc (zmsg, ctx->zs_snoop);
+            snoop_cc (ctx, FLUX_MSGTYPE_EVENT, zmsg);
             zmsg_cc (zmsg, ctx->zs_dnev_out);
             cmbd_upev_sendmsg (ctx, &zmsg);
         }
@@ -1230,7 +1231,7 @@ static void cmb_poll (ctx_t *ctx)
         zmsg = cmbd_upev_recvmsg (ctx);
         if (zmsg) {
             cmb_internal_event (ctx, zmsg);
-            zmsg_cc (zmsg, ctx->zs_snoop);
+            snoop_cc (ctx, FLUX_MSGTYPE_EVENT, zmsg);
             zmsg_send (&zmsg, ctx->zs_dnev_out);
         }
     }
@@ -1377,6 +1378,29 @@ done:
     return zmsg;
 }
 
+static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg)
+{
+    zmsg_t *cpy;
+    char *typestr, *tag, *tagp;
+
+    if (!zmsg)
+        return 0;
+    if (!(cpy = zmsg_dup (zmsg)))
+        err_exit ("zmsg_dup");
+    if (asprintf (&typestr, "%d", type) < 0)
+        oom ();
+    if (zmsg_pushstr (cpy, typestr) < 0)
+        oom ();
+    free (typestr);
+    tag = cmb_msg_tag (zmsg, false);
+    tagp = strchr (tag, '!');
+    if (zmsg_pushstr (cpy, tagp ? tagp + 1 : tag) < 0)
+        oom ();
+    free (tag);
+
+    return zmsg_send (&cpy, ctx->zs_snoop);
+}
+
 
 /* flux_t handle operations
  * (routing logic needs to access sockets directly, but handle is still
@@ -1452,7 +1476,7 @@ static int cmbd_event_sendmsg (void *impl, zmsg_t **zmsg)
 {
     ctx_t *ctx = impl;
 
-    zmsg_cc (*zmsg, ctx->zs_snoop);
+    snoop_cc (ctx, FLUX_MSGTYPE_EVENT, *zmsg);
     if (ctx->zs_dnev_out)
         zmsg_cc (*zmsg, ctx->zs_dnev_out);
     return cmbd_upev_sendmsg (ctx, zmsg);
