@@ -10,6 +10,7 @@
 #include <libgen.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/signalfd.h>
 #include <unistd.h>
 #include <unistd.h>
 #include <sys/param.h>
@@ -43,6 +44,9 @@
 
 #define DEFAULT_ZAP_DOMAIN  "flux"
 
+#define ZLOOP_RETURN(p) \
+    return ((ctx)->reactor_stop ? (-1) : (0))
+
 #define MAX_PARENTS 2
 struct parent_struct {
     char *upreq_uri;
@@ -54,6 +58,9 @@ typedef struct {
     /* 0MQ
      */
     zctx_t *zctx;               /* zeromq context (MT-safe) */
+    zloop_t *zl;
+    bool reactor_stop;
+    int sigfd;
 #if HAVE_CURVE_SECURITY
     zauth_t *auth;
     zcert_t *srv_cert;
@@ -121,9 +128,16 @@ static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg);
 static int cmbd_upev_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
 static zmsg_t *cmbd_upev_recvmsg (ctx_t *ctx);
 
+static int upev_in_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
+static int dnev_in_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
+static int dnreq_out_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
+static int dnreq_in_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
+static int upreq_out_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
+static int upreq_in_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
+static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
+
 static void cmb_init (ctx_t *ctx);
 static void cmb_fini (ctx_t *ctx);
-static void cmb_poll (ctx_t *ctx);
 
 #define OPTIONS "t:e:E:O:vs:R:S:p:P:L:T:A:d:D:H:N:n"
 static const struct option longopts[] = {
@@ -327,8 +341,10 @@ int main (int argc, char *argv[])
         msg_exit ("if --dn-req-out-uri is set, --up-req-in-uri must be also");
 
     cmb_init (&ctx);
-    for (;;)
-        cmb_poll (&ctx);
+
+    zloop_start (ctx.zl);
+    msg ("zloop reactor stopped");
+
     cmb_fini (&ctx);
 
     for (i = 0; i < ctx.parent_len; i++) {
@@ -396,7 +412,7 @@ static void load_plugins (ctx_t *ctx)
     free (cpy);
 }
 
-static void unload_plugins (ctx_t *ctx)
+void unload_plugins (ctx_t *ctx)
 {
     zlist_t *keys = zhash_keys (ctx->loaded_plugins);
     plugin_ctx_t p;
@@ -444,6 +460,7 @@ static void *cmb_init_upreq_in (ctx_t *ctx)
 {
     void *s;
     const char *uri = UPREQ_URI;
+    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
         err_exit ("zsocket_new");
@@ -463,6 +480,9 @@ static void *cmb_init_upreq_in (ctx_t *ctx)
         if (zsocket_bind (s, "%s", ctx->uri_upreq_in) < 0)
             err_exit ("%s", ctx->uri_upreq_in);
     }
+    zp.socket = s;
+    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)upreq_in_cb, ctx) < 0)
+        err_exit ("zloop_poller");
     return s;
 }
 
@@ -470,6 +490,7 @@ static void *cmb_init_dnreq_out (ctx_t *ctx)
 {
     void *s;
     const char *uri = DNREQ_URI;
+    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
         err_exit ("zsocket_new");
@@ -489,6 +510,9 @@ static void *cmb_init_dnreq_out (ctx_t *ctx)
         if (zsocket_bind (s, "%s", ctx->uri_dnreq_out) < 0)
             err_exit ("%s", ctx->uri_dnreq_out);
     }
+    zp.socket = s;
+    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)dnreq_out_cb, ctx) < 0)
+        err_exit ("zloop_poller");
     return s;
 }
 
@@ -522,6 +546,7 @@ static void *cmb_init_dnev_in (ctx_t *ctx)
 {
     void *s;
     const char *uri = DNEV_IN_URI;
+    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_SUB)))
         err_exit ("zsocket_new");
@@ -542,6 +567,9 @@ static void *cmb_init_dnev_in (ctx_t *ctx)
             err_exit ("%s", ctx->uri_dnev_in);
     }
     zsocket_set_subscribe (s, "");
+    zp.socket = s;
+    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)dnev_in_cb, ctx) < 0)
+        err_exit ("zloop_poller");
     return s;
 }
 
@@ -571,6 +599,8 @@ static void *cmb_init_snoop (ctx_t *ctx)
 static void *cmb_init_upev_in (ctx_t *ctx)
 {
     void *s;
+    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
+
     if (!(s = zsocket_new (ctx->zctx, ZMQ_SUB)))
         err_exit ("zsocket_new");
 #if HAVE_CURVE_SECURITY
@@ -585,6 +615,9 @@ static void *cmb_init_upev_in (ctx_t *ctx)
     if (zsocket_connect (s, "%s", ctx->uri_upev_in) < 0)
         err_exit ("%s", ctx->uri_upev_in);
     zsocket_set_subscribe (s, "");
+    zp.socket = s;
+    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)upev_in_cb, ctx) < 0)
+        err_exit ("zloop_poller");
     return s;
 }
 
@@ -611,6 +644,7 @@ static void *cmb_init_upreq_out (ctx_t *ctx) {
     void *s;
     char id[16];
     char *uri = ctx->parent[ctx->parent_cur].upreq_uri;
+    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
         err_exit ("zsocket_new");
@@ -627,6 +661,9 @@ static void *cmb_init_upreq_out (ctx_t *ctx) {
     zsocket_set_identity (s, id); 
     if (zsocket_connect (s, "%s", uri) < 0)
         err_exit ("%s", uri);
+    zp.socket = s;
+    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)upreq_out_cb, ctx) < 0)
+        err_exit ("zloop_poller");
     return s;
 }
 
@@ -635,6 +672,7 @@ static void *cmb_init_dnreq_in (ctx_t *ctx)
     void *s;
     char id[16];
     char *uri = ctx->parent[ctx->parent_cur].dnreq_uri;
+    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
         err_exit ("zsocket_new");
@@ -651,7 +689,37 @@ static void *cmb_init_dnreq_in (ctx_t *ctx)
     zsocket_set_identity (s, id); 
     if (zsocket_connect (s, "%s", uri) < 0)
         err_exit ("%s", uri);
+    zp.socket = s;
+    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)dnreq_in_cb, ctx) < 0)
+        err_exit ("zloop_poller");
     return s;
+}
+
+/* signalfd + zloop example: https://gist.github.com/mhaberler/8426050
+ */
+static int cmb_init_signalfd (ctx_t *ctx)
+{
+    sigset_t sigmask;
+    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .socket = NULL };
+
+    zsys_handler_set (NULL);
+    sigemptyset(&sigmask);
+    sigfillset(&sigmask);
+    if (sigprocmask (SIG_SETMASK, &sigmask, NULL) < 0)
+        err_exit ("sigprocmask");
+    sigemptyset(&sigmask);
+    sigaddset(&sigmask, SIGINT);
+    sigaddset(&sigmask, SIGQUIT);
+    sigaddset(&sigmask, SIGTERM);
+    sigaddset(&sigmask, SIGSEGV);
+    sigaddset(&sigmask, SIGFPE);
+    sigaddset(&sigmask, SIGCHLD);
+
+    if ((zp.fd = signalfd(-1, &sigmask, SFD_NONBLOCK | SFD_CLOEXEC)) < 0)
+        err_exit ("signalfd");
+    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)signal_cb, ctx) < 0)
+        err_exit ("zloop_poller");
+    return zp.fd;
 }
 
 #if HAVE_CURVE_SECURITY
@@ -728,6 +796,11 @@ static void cmb_init (ctx_t *ctx)
     if (!ctx->zctx)
         err_exit ("zctx_new");
     zctx_set_linger (ctx->zctx, 5);
+    if (!(ctx->zl = zloop_new ()))
+        err_exit ("zloop_new");
+    //if (ctx->verbose)
+    //    zloop_set_verbose (ctx->zl, true);
+    ctx->sigfd = cmb_init_signalfd (ctx);
 #if HAVE_CURVE_SECURITY
     if (!ctx->security_disable)
         ctx->auth = cmb_init_curve (ctx);
@@ -786,27 +859,9 @@ static void cmb_init (ctx_t *ctx)
 
 static void cmb_fini (ctx_t *ctx)
 {
-    unload_plugins (ctx);
+    //unload_plugins (ctx);  /* FIXME */
     zhash_destroy (&ctx->loaded_plugins);
 
-    if (ctx->zs_upreq_in)
-        zsocket_destroy (ctx->zctx, ctx->zs_upreq_in);
-    if (ctx->zs_dnev_out)
-        zsocket_destroy (ctx->zctx, ctx->zs_dnev_out);
-    if (ctx->zs_dnev_in)
-        zsocket_destroy (ctx->zctx, ctx->zs_dnev_in);
-    if (ctx->zs_snoop)
-        zsocket_destroy (ctx->zctx, ctx->zs_snoop);
-    if (ctx->zs_upreq_out)
-        zsocket_destroy (ctx->zctx, ctx->zs_upreq_out);
-    if (ctx->zs_dnreq_out)
-        zsocket_destroy (ctx->zctx, ctx->zs_dnreq_out);
-    if (ctx->zs_dnreq_in)
-        zsocket_destroy (ctx->zctx, ctx->zs_dnreq_in);
-    if (ctx->zs_upev_in)
-        zsocket_destroy (ctx->zctx, ctx->zs_upev_in);
-    if (ctx->zs_upev_out)
-        zsocket_destroy (ctx->zctx, ctx->zs_upev_out);
 #if HAVE_CURVE_SECURITY
     if (ctx->auth)
         zauth_destroy (&ctx->auth);
@@ -815,8 +870,9 @@ static void cmb_fini (ctx_t *ctx)
     if (ctx->mctx)
         munge_ctx_destroy (ctx->mctx);
 #endif
+    zloop_destroy (&ctx->zl);
     route_fini (ctx->rctx);
-    zctx_destroy (&ctx->zctx);
+    zctx_destroy (&ctx->zctx); /* destorys all sockets created in ctx */
 }
 
 static void _reparent (ctx_t *ctx)
@@ -1137,66 +1193,80 @@ done:
         free (myaddr);
 }
 
-static void cmb_poll (ctx_t *ctx)
+static int upreq_in_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
-    zmq_pollitem_t zpa[] = {
-{ .socket = ctx->zs_upreq_in,   .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-{ .socket = ctx->zs_upreq_out,  .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-{ .socket = ctx->zs_dnreq_in,   .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-{ .socket = ctx->zs_dnreq_out,  .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-{ .socket = ctx->zs_dnev_in,    .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-{ .socket = ctx->zs_upev_in,    .events = ZMQ_POLLIN, .revents = 0, .fd = -1 },
-    };
-    zmsg_t *zmsg = NULL;
+    zmsg_t *zmsg = zmsg_recv (ctx->zs_upreq_in);
 
-    if (zmq_poll (zpa, sizeof (zpa) / sizeof (zpa[0]), -1) < 0)
-        err_exit ("zmq_poll");
+    if (zmsg)
+        route_request (ctx, &zmsg, false);
+    ZLOOP_RETURN(ctx);
+}
 
-    /* request on upreq_in */
-    if (zpa[0].revents & ZMQ_POLLIN) {
-        zmsg = zmsg_recv (ctx->zs_upreq_in);
-        if (zmsg)
-            route_request (ctx, &zmsg, false);
-    }
-    /* response on upreq_out */
-    if (zpa[1].revents & ZMQ_POLLIN) {
-        zmsg = zmsg_recv (ctx->zs_upreq_out);
-        if (zmsg)
-            route_response (ctx, &zmsg, false);
-    }
-    /* request on dnreq_in */
-    if (zpa[2].revents & ZMQ_POLLIN) {
-        zmsg = zmsg_recv (ctx->zs_dnreq_in);
-        if (zmsg)
-            route_request (ctx, &zmsg, true);
-    }
-    /* repsonse on dnreq_out */
-    if (zpa[3].revents & ZMQ_POLLIN) {
-        zmsg = zmsg_recv_unrouter (ctx->zs_dnreq_out);
-        if (zmsg)
-            route_response (ctx, &zmsg, true);
-    }
-    /* event on dnev_in */
-    if (zpa[4].revents & ZMQ_POLLIN) {
-        zmsg = zmsg_recv (ctx->zs_dnev_in);
-        if (zmsg) {
-            cmb_internal_event (ctx, zmsg);
-            snoop_cc (ctx, FLUX_MSGTYPE_EVENT, zmsg);
-            zmsg_cc (zmsg, ctx->zs_dnev_out);
-            cmbd_upev_sendmsg (ctx, &zmsg);
-        }
-    }
-    /* event on upev_in */
-    if (zpa[5].revents & ZMQ_POLLIN) {
-        zmsg = cmbd_upev_recvmsg (ctx);
-        if (zmsg) {
-            cmb_internal_event (ctx, zmsg);
-            snoop_cc (ctx, FLUX_MSGTYPE_EVENT, zmsg);
-            zmsg_send (&zmsg, ctx->zs_dnev_out);
-        }
-    }
+static int upreq_out_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
+{
+    zmsg_t *zmsg = zmsg_recv (ctx->zs_upreq_out);
 
-    assert (zmsg == NULL);
+    if (zmsg)
+        route_response (ctx, &zmsg, false);
+    ZLOOP_RETURN(ctx);
+}
+
+static int dnreq_in_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
+{
+    zmsg_t *zmsg = zmsg_recv (ctx->zs_dnreq_in);
+
+    if (zmsg)
+        route_request (ctx, &zmsg, true);
+    ZLOOP_RETURN(ctx);
+}
+
+static int dnreq_out_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
+{
+    zmsg_t *zmsg = zmsg_recv_unrouter (ctx->zs_dnreq_out);
+
+    if (zmsg)
+        route_response (ctx, &zmsg, true);
+    ZLOOP_RETURN(ctx);
+}
+
+static int dnev_in_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
+{
+    zmsg_t *zmsg = zmsg_recv (ctx->zs_dnev_in);
+
+    if (zmsg) {
+        cmb_internal_event (ctx, zmsg);
+        snoop_cc (ctx, FLUX_MSGTYPE_EVENT, zmsg);
+        zmsg_cc (zmsg, ctx->zs_dnev_out);
+        cmbd_upev_sendmsg (ctx, &zmsg);
+    }
+    ZLOOP_RETURN(ctx);
+}
+
+static int upev_in_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
+{
+    zmsg_t *zmsg = cmbd_upev_recvmsg (ctx);
+
+    if (zmsg) {
+        cmb_internal_event (ctx, zmsg);
+        snoop_cc (ctx, FLUX_MSGTYPE_EVENT, zmsg);
+        zmsg_send (&zmsg, ctx->zs_dnev_out);
+    }
+    ZLOOP_RETURN(ctx);
+}
+
+static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
+{
+    struct signalfd_siginfo fdsi;
+    ssize_t n;
+
+    if ((n = read (item->fd, &fdsi, sizeof (fdsi))) < 0) {
+        if (errno != EWOULDBLOCK)
+            err_exit ("read");
+    } else if (n == sizeof (fdsi)){    
+        msg ("signal %d (%s)", fdsi.ssi_signo, strsignal (fdsi.ssi_signo));
+        ctx->reactor_stop = true;
+    }
+    ZLOOP_RETURN(ctx);
 }
 
 #if HAVE_MUNGE_SECURITY
