@@ -74,15 +74,6 @@ int flux_event_recv (flux_t h, json_object **respp, char **tagp, bool nb);
 int flux_event_subscribe (flux_t h, const char *topic);
 int flux_event_unsubscribe (flux_t h, const char *topic);
 
-/* Receive messages from the cmbd's snoop socket.
- * - int-returning functions return 0 on success, -1 on failure with errno set.
- * - pointer-returning functions return NULL on failure with errno set.
- * - topics are period-delimited strings following 0MQ subscription semantics
- */
-zmsg_t *flux_snoop_recvmsg (flux_t h, bool nb);
-int flux_snoop_subscribe (flux_t h, const char *topic);
-int flux_snoop_unsubscribe (flux_t h, const char *topic);
-
 /* Get information about this cmbd instance's position in the flux comms
  * session.
  */
@@ -133,15 +124,21 @@ int flux_log_dump (flux_t h, int lev, const char *fac);
 char *flux_log_decode (zmsg_t *zmsg, int *lp, char **fp, int *cp,
                     struct timeval *tvp, char **sp);
 
+/* flux_getattr is used to read misc. attributes internal to the cmbd.
+ * The caller must dispose of the returned string with free ().
+ * The following attributes are valid:
+ *    cmbd-snoop-uri   The name of the socket to be used by flux-snoop.
+ */
+char *flux_getattr (flux_t h, const char *name);
+
 /* Message manipulation utility functions
  */
 enum {
     FLUX_MSGTYPE_REQUEST = 1,
     FLUX_MSGTYPE_RESPONSE = 2,
     FLUX_MSGTYPE_EVENT = 4,
-    FLUX_MSGTYPE_SNOOP = 8,
-    FLUX_MSGTYPE_ANY = 0xf,
-    FLUX_MSGTYPE_MASK = 0xf,
+    FLUX_MSGTYPE_ANY = 7,
+    FLUX_MSGTYPE_MASK = 7,
     /* leave open possiblity of adding 'flags' bits here */
 };
 

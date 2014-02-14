@@ -1294,7 +1294,6 @@ int luaopen_flux (lua_State *L)
     MSGTYPE_SET (L, MSGTYPE_REQUEST);
     MSGTYPE_SET (L, MSGTYPE_RESPONSE);
     MSGTYPE_SET (L, MSGTYPE_EVENT);
-    MSGTYPE_SET (L, MSGTYPE_SNOOP);
     MSGTYPE_SET (L, MSGTYPE_ANY);
 
     lua_push_json_null (L);

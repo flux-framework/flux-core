@@ -35,7 +35,6 @@ typedef struct {
     int rank;
     zlist_t *resp;      /* deferred */
     zlist_t *event;     /* deferred */
-    zlist_t *snoop;     /* deferred */
     flux_t h;
     timeout_t timeout;
     zloop_t *zloop;
@@ -68,9 +67,6 @@ static void append_deferred (cmb_t *c, zmsg_t **zmsg, int typemask)
     if ((typemask & FLUX_MSGTYPE_EVENT)) {
         if (zlist_append (c->event, *zmsg) < 0)
             oom ();
-    } else if ((typemask & FLUX_MSGTYPE_SNOOP)) {
-        if (zlist_append (c->snoop, *zmsg) < 0)
-            oom ();
     } else if ((typemask & FLUX_MSGTYPE_RESPONSE)) {
         if (zlist_append (c->resp, *zmsg) < 0)
             oom ();
@@ -86,12 +82,6 @@ static int handle_deferred (cmb_t *c)
 
     while ((zmsg = zlist_pop (c->event))) {
         if (handle_event_msg (c->h, FLUX_MSGTYPE_EVENT, &zmsg) < 0) {
-            cmb_reactor_stop (c, -1);
-            goto done;
-        }
-    }
-    while ((zmsg = zlist_pop (c->snoop))) {
-        if (handle_event_msg (c->h, FLUX_MSGTYPE_SNOOP, &zmsg) < 0) {
             cmb_reactor_stop (c, -1);
             goto done;
         }
@@ -131,20 +121,6 @@ static int cmb_response_putmsg (void *impl, zmsg_t **zmsg)
     return 0;
 }
 
-static int cmb_snoop_subscribe (void *impl, const char *s)
-{
-    cmb_t *c = impl;
-    assert (c->magic == CMB_CTX_MAGIC);
-    return flux_request_send (c->h, NULL, "api.snoop.subscribe.%s", s ? s: "");
-}
-
-static int cmb_snoop_unsubscribe (void *impl, const char *s)
-{
-    cmb_t *c = impl;
-    assert (c->magic == CMB_CTX_MAGIC);
-    return flux_request_send (c->h, NULL, "api.snoop.unsubscribe.%s", s ? s: "");
-}
-
 static int cmb_event_subscribe (void *impl, const char *s)
 {
     cmb_t *c = impl;
@@ -176,21 +152,6 @@ static zmsg_t *cmb_event_recvmsg (void *impl, bool nonblock)
     if (!(z = zlist_pop (c->event))) {
         while ((z = zmsg_recv_fd_typemask (c->fd, &typemask, nonblock))
                                         && !(typemask & FLUX_MSGTYPE_EVENT))
-            append_deferred (c, &z, typemask);
-    }
-    return z;
-}
-
-static zmsg_t *cmb_snoop_recvmsg (void *impl, bool nonblock)
-{
-    cmb_t *c = impl;
-    zmsg_t *z;
-    int typemask;
-
-    assert (c->magic == CMB_CTX_MAGIC);
-    if (!(z = zlist_pop (c->snoop))) {
-        while ((z = zmsg_recv_fd_typemask (c->fd, &typemask, nonblock))
-                                        && !(typemask & FLUX_MSGTYPE_SNOOP))
             append_deferred (c, &z, typemask);
     }
     return z;
@@ -361,9 +322,6 @@ static void cmb_fini (void *impl)
     while ((z = zlist_pop (c->resp)))
         zmsg_destroy (&z);
     zlist_destroy (&c->resp);
-    while ((z = zlist_pop (c->snoop)))
-        zmsg_destroy (&z);
-    zlist_destroy (&c->snoop);
     while ((z = zlist_pop (c->event)))
         zmsg_destroy (&z);
     zlist_destroy (&c->event);
@@ -378,8 +336,6 @@ flux_t cmb_init_full (const char *path, int flags)
 
     c = xzmalloc (sizeof (*c));
     if (!(c->resp = zlist_new ()))
-        oom ();
-    if (!(c->snoop = zlist_new ()))
         oom ();
     if (!(c->event = zlist_new ()))
         oom ();
@@ -442,9 +398,6 @@ static const struct flux_handle_ops cmb_ops = {
     .event_recvmsg = cmb_event_recvmsg,
     .event_subscribe = cmb_event_subscribe,
     .event_unsubscribe = cmb_event_unsubscribe,
-    .snoop_recvmsg = cmb_snoop_recvmsg,
-    .snoop_subscribe = cmb_snoop_subscribe,
-    .snoop_unsubscribe = cmb_snoop_unsubscribe,
     .rank = cmb_rank,
     .reactor_stop = cmb_reactor_stop,
     .reactor_start = cmb_reactor_start,

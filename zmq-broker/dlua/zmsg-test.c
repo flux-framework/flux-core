@@ -67,16 +67,10 @@ static int l_cmb_zmsg_create_event (lua_State *L)
     return l_cmb_zmsg_create_type (L, FLUX_MSGTYPE_EVENT);
 }
 
-static int l_cmb_zmsg_create_snoop (lua_State *L)
-{
-    return l_cmb_zmsg_create_type (L, FLUX_MSGTYPE_SNOOP);
-}
-
 static const struct luaL_Reg zmsg_info_test_functions [] = {
 	{ "req",       l_cmb_zmsg_create_request   },
 	{ "resp",      l_cmb_zmsg_create_response  },
 	{ "event",     l_cmb_zmsg_create_event     },
-	{ "snoop",     l_cmb_zmsg_create_snoop     },
 	{ NULL,        NULL              }
 };
 

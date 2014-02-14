@@ -201,34 +201,6 @@ int flux_event_unsubscribe (flux_t h, const char *topic)
     return h->ops->event_unsubscribe (h->impl, topic);
 }
 
-zmsg_t *flux_snoop_recvmsg (flux_t h, bool nonblock)
-{
-    if (!h->ops->snoop_recvmsg) {
-        errno = ENOSYS;
-        return NULL;
-    }
-    return h->ops->snoop_recvmsg (h->impl, nonblock);
-}
-
-int flux_snoop_subscribe (flux_t h, const char *topic)
-{
-    if (!h->ops->snoop_subscribe) {
-        errno = ENOSYS;
-        return -1;
-    }
-
-    return h->ops->snoop_subscribe (h->impl, topic);
-}
-
-int flux_snoop_unsubscribe (flux_t h, const char *topic)
-{
-    if (!h->ops->snoop_unsubscribe) {
-        errno = ENOSYS;
-        return -1;
-    }
-
-    return h->ops->snoop_unsubscribe (h->impl, topic);
-}
 int flux_rank (flux_t h)
 {
     if (!h->ops->rank) {
@@ -260,7 +232,6 @@ static struct map_struct msgtype_map[] = {
     { "request", FLUX_MSGTYPE_REQUEST },
     { "response", FLUX_MSGTYPE_RESPONSE},
     { "event", FLUX_MSGTYPE_EVENT},
-    { "snoop", FLUX_MSGTYPE_SNOOP},
 };
 static const int msgtype_map_len = 
                             sizeof (msgtype_map) / sizeof (msgtype_map[0]);

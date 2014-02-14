@@ -47,7 +47,6 @@ struct plugin_ctx_struct {
     void *zs_dnreq; /* for handling requests (reverse message flow) */
     void *zs_evin;
     void *zs_evout;
-    void *zs_snoop;
     char *id;
     ptimeout_t timeout;
     pthread_t t;
@@ -165,29 +164,6 @@ static int plugin_event_unsubscribe (void *impl, const char *topic)
     char *s = topic ? (char *)topic : "";
     assert (p->magic == PLUGIN_MAGIC);
     return zmq_setsockopt (p->zs_evin, ZMQ_UNSUBSCRIBE, s, strlen (s));
-}
-
-static zmsg_t *plugin_snoop_recvmsg (void *impl, bool nb)
-{
-    plugin_ctx_t p = impl;
-    assert (p->magic == PLUGIN_MAGIC);
-    return zmsg_recv (p->zs_snoop); /* FIXME: ignores nb flag */
-}
-
-static int plugin_snoop_subscribe (void *impl, const char *topic)
-{
-    plugin_ctx_t p = impl;
-    char *s = topic ? (char *)topic : "";
-    assert (p->magic == PLUGIN_MAGIC);
-    return zmq_setsockopt (p->zs_snoop, ZMQ_SUBSCRIBE, s, strlen (s));
-}
-
-static int plugin_snoop_unsubscribe (void *impl, const char *topic)
-{
-    plugin_ctx_t p = impl;
-    char *s = topic ? (char *)topic : "";
-    assert (p->magic == PLUGIN_MAGIC);
-    return zmq_setsockopt (p->zs_snoop, ZMQ_UNSUBSCRIBE, s, strlen (s));
 }
 
 static int plugin_rank (void *impl)
@@ -521,23 +497,6 @@ done:
     ZLOOP_RETURN(p);
 }
 
-static int snoop_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
-{
-    zmsg_t *zmsg =  zmsg_recv (p->zs_snoop);
-
-    if (zmsg) {
-        if (handle_event_msg (p->h, FLUX_MSGTYPE_SNOOP, &zmsg) < 0) {
-            plugin_reactor_stop (p, -1);
-            goto done;
-        }
-    }
-    plugin_handle_deferred_responses (p);
-done:
-    if (zmsg)
-        zmsg_destroy (&zmsg);
-    ZLOOP_RETURN(p);
-}
-
 #if CZMQ_VERSION_MAJOR < 2
 static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, void *arg)
 #else
@@ -573,9 +532,6 @@ static zloop_t * plugin_zloop_create (plugin_ctx_t p)
         err_exit ("zloop_poller: rc=%d", rc);
     zp.socket = p->zs_evin;
     if ((rc = zloop_poller (zl, &zp, (zloop_fn *) event_cb, (void *) p)) != 0)
-        err_exit ("zloop_poller: rc=%d", rc);
-    zp.socket = p->zs_snoop;
-    if ((rc = zloop_poller (zl, &zp, (zloop_fn *) snoop_cb, (void *) p)) != 0)
         err_exit ("zloop_poller: rc=%d", rc);
 
     return (zl);
@@ -669,7 +625,6 @@ void plugin_unload (plugin_ctx_t p)
     if (errnum)
         errn_exit (errnum, "pthread_join");
 
-    zsocket_destroy (p->zctx, p->zs_snoop);
     zsocket_destroy (p->zctx, p->zs_evout);
     zsocket_destroy (p->zctx, p->zs_evin);
     zsocket_destroy (p->zctx, p->zs_dnreq);
@@ -752,7 +707,6 @@ plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
     zconnect (p->zctx, &p->zs_dnreq, ZMQ_DEALER, DNREQ_URI, -1, id);
     zconnect (p->zctx, &p->zs_evin,  ZMQ_SUB, DNEV_OUT_URI, 0, NULL);
     zconnect (p->zctx, &p->zs_evout, ZMQ_PUB, DNEV_IN_URI, -1, NULL);
-    zconnect (p->zctx, &p->zs_snoop, ZMQ_SUB, SNOOP_URI, -1, NULL);
 
     errnum = pthread_create (&p->t, NULL, plugin_thread, p);
     if (errnum)
@@ -771,9 +725,6 @@ static const struct flux_handle_ops plugin_handle_ops = {
     .event_recvmsg = plugin_event_recvmsg,
     .event_subscribe = plugin_event_subscribe,
     .event_unsubscribe = plugin_event_unsubscribe,
-    .snoop_recvmsg = plugin_snoop_recvmsg,
-    .snoop_subscribe = plugin_snoop_subscribe,
-    .snoop_unsubscribe = plugin_snoop_unsubscribe,
     .rank = plugin_rank,
     .get_zctx = plugin_get_zctx,
     .reactor_stop = plugin_reactor_stop,

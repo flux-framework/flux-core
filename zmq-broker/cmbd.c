@@ -88,6 +88,7 @@ typedef struct {
     char *uri_dnev_in;          /* URI to listen for tree children */
     void *zs_dnev_in;           /* SUB - optional tree children + plugins */
 
+    char *uri_snoop;
     void *zs_snoop;
 
     /* Wireup
@@ -546,7 +547,6 @@ static void *cmb_init_dnev_in (ctx_t *ctx)
 static void *cmb_init_snoop (ctx_t *ctx)
 {
     void *s;
-    const char *uri = SNOOP_URI;
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_PUB)))
         err_exit ("zsocket_new");
@@ -557,11 +557,13 @@ static void *cmb_init_snoop (ctx_t *ctx)
         zsocket_set_curve_server (s, 1);
     }
 #endif
-    //zsocket_set_hwm (s, 0); // leave default hwm
-    if (check_uri (uri)) {
-        if (zsocket_bind (s, "%s", SNOOP_URI) < 0)
-            err_exit ("%s", SNOOP_URI);
-    }
+    /* Dynamically allocate the snoop URI in the ipc:// space.
+     * Make it available to clients via the flux_getattr().
+     */
+    assert (ctx->uri_snoop == NULL);
+    if (zsocket_bind (s, "%s", "ipc://*") < 0)
+        err_exit ("%s", "ipc://*");
+    ctx->uri_snoop = zsocket_last_endpoint (s); /* need to xstrdup? */
     return s;
 }
 
@@ -894,6 +896,14 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
     }
 }
 
+static char *cmb_getattr (ctx_t *ctx, const char *name)
+{
+    char *val = NULL;
+    if (!strcmp (name, "cmbd-snoop-uri"))
+        val = ctx->uri_snoop;
+    return val;
+}
+
 static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
 {
     char *arg = NULL;
@@ -952,6 +962,25 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         if (flux_respond (ctx->h, zmsg, response) < 0)
             err_exit ("flux_respond");
         json_object_put (response);
+    } else if (cmb_msg_match (*zmsg, "cmb.getattr")) {
+        json_object *request = NULL;
+        json_object *response = util_json_object_new_object ();
+        const char *name = NULL;
+        char *val = NULL;
+
+        if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+                || util_json_object_get_string (request, "name", &name) < 0) {
+            flux_respond_errnum (ctx->h, zmsg, EPROTO);
+        } else if (!(val = cmb_getattr (ctx, name))) {
+            flux_respond_errnum (ctx->h, zmsg, ESRCH);
+        } else {
+            util_json_object_add_string (response, (char *)name, val);
+            flux_respond (ctx->h, zmsg, response);
+        }
+        if (request)
+            json_object_put (request);
+        if (response)
+            json_object_put (response);
     } else if (cmb_msg_match (*zmsg, "cmb.rusage")) {
         json_object *response;
         struct rusage usage;

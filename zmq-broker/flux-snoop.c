@@ -6,26 +6,45 @@
 #include <assert.h>
 #include <libgen.h>
 
+#include <zmq.h>
+#include <czmq.h>
+
 #include "cmb.h"
 #include "util.h"
 #include "zmsg.h"
 #include "log.h"
 
-#define OPTIONS "ha"
+#if ZMQ_VERSION_MAJOR >= 4
+#define HAVE_CURVE_SECURITY 1
+#endif
+
+#define DEFAULT_ZAP_DOMAIN  "flux"
+
+#define OPTIONS "hanN:v"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"all",        no_argument,        0, 'a'},
+    {"no-security",no_argument,        0, 'n'},
+    {"verbose",    no_argument,        0, 'v'},
+    {"session-name",required_argument, 0, 'N'},
     { 0, 0, 0, 0 },
 };
 
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-snoop [--all] [subscription]\n"
+"Usage: flux-snoop OPTIONS [--all] [topic...]\n"
 "Note: without --all, cmb.info and log.msg messages are suppresssed\n"
+"OPTIONS include:\n"
+"  -n,--no-security          Try to connect without CURVE security\n"
+"  -v,--verbose              Verbose connect output\n"
+"  -N,--session-name NAME    Set session name (default flux)\n"
 );
     exit (1);
 }
+
+static void *connect_snoop (zctx_t *zctx, bool nopt, bool vopt,
+                            const char *session, const char *uri);
 
 int main (int argc, char *argv[])
 {
@@ -33,10 +52,20 @@ int main (int argc, char *argv[])
     int ch;
     bool aopt = false;
     char *topic = NULL;
+    char *uri = NULL;
+    bool nopt = false;
+    bool vopt = false;
+    char *session = "flux";
+    zctx_t *zctx;
+    void *s;
     zmsg_t *zmsg;
+    zlist_t *subs;
+    char *sub;
 
     log_init ("flux-snoop");
 
+    if (!(subs = zlist_new ()))
+        oom ();
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
             case 'h': /* --help */
@@ -45,22 +74,45 @@ int main (int argc, char *argv[])
             case 'a': /* --all */
                 aopt = true;
                 break;
+            case 'n': /* --no-security */
+                nopt = true;;
+                break;
+            case 'v': /* --verbose */
+                vopt = true;;
+                break;
+            case 'N': /* --session-name NAME */
+                session = optarg;;
+                break;
             default:
                 usage ();
                 break;
         }
     }
-    if (optind != argc && optind != argc - 1)
-        usage ();
-    if (optind == argc - 1)
-        topic = argv[optind];
-
+    while (optind < argc) {
+        if (zlist_append (subs, argv[optind++]) < 0)
+            oom ();
+    }
     if (!(h = cmb_init ()))
         err_exit ("cmb_init");
+    uri = flux_getattr (h, "cmbd-snoop-uri");
 
-    if (flux_snoop_subscribe (h, topic) < 0)
-        err_exit ("flux_snoop_subscribe");
-    while ((zmsg = flux_snoop_recvmsg (h, false))) {
+    if (!(zctx = zctx_new ()))
+        err_exit ("zctx_new");
+    zctx_set_linger (zctx, 5);
+
+    if (vopt)
+        msg ("connecting to %s...", uri);
+    s = connect_snoop (zctx, nopt, vopt, session, uri);
+
+    /* FIXME: subscriptions don't quite work here with messages Cc'ed from
+     * router sockets that have sender frames prepended.
+     */
+    if (zlist_size (subs) > 0) {
+        while ((sub = zlist_pop (subs)))
+            zsocket_set_subscribe (s, sub);
+    } else
+        zsocket_set_subscribe (s, "");
+    while ((zmsg = zmsg_recv (s))) {
         char *tag = flux_zmsg_tag (zmsg);
         if (aopt || (strcmp (tag, "cmb.info") && strcmp (tag, "log.msg"))) {
             zmsg_dump_compact (zmsg);
@@ -68,12 +120,73 @@ int main (int argc, char *argv[])
         free (tag);
         zmsg_destroy (&zmsg);
     }
-    if (flux_event_unsubscribe (h, topic) < 0)
-        err_exit ("flux_snoop_unsubscribe");
+    zsocket_set_unsubscribe (s, topic ? topic : "");
 
+    zlist_destroy (&subs);
+    free (uri);
+    zsocket_destroy (zctx, s);
+    zctx_destroy (&zctx);
     flux_handle_destroy (&h);
     log_fini ();
     return 0;
+}
+
+static void *connect_snoop (zctx_t *zctx, bool nopt, bool vopt,
+                            const char *session, const char *uri)
+{
+    void *s;
+
+    if (!(s = zsocket_new (zctx, ZMQ_SUB)))
+        err_exit ("zsocket_new");
+#if HAVE_CURVE_SECURITY
+    if (!nopt) {
+        char *curve_path, *path;
+        struct stat sb;
+        struct passwd *pw;
+        zauth_t *auth;
+        zcert_t *cli_cert, *srv_cert;
+        char *srvkey = NULL;
+
+        if (!(pw = getpwuid (geteuid ())) || (pw->pw_dir == NULL
+                                          || strlen (pw->pw_dir) == 0))
+            msg_exit ("could not determine home directory");
+        if (asprintf (&curve_path, "%s/.curve", pw->pw_dir) < 0)
+            oom ();
+        if (lstat (curve_path, &sb) < 0) /* don't follow symlinks */
+            err_exit ("%s", curve_path);
+        if (!S_ISDIR (sb.st_mode))
+            msg_exit ("%s: not a directory", curve_path);
+        if ((sb.st_mode & (S_IRWXU|S_IRWXG|S_IRWXO)) != 0700)
+            msg_exit ("%s: permissions not set to 0700", curve_path);
+        if ((sb.st_uid != geteuid ()))
+            msg_exit ("%s: invalid owner", curve_path);
+        if (asprintf (&path, "%s/%s.client", curve_path, session) < 0)
+            oom ();
+        if (!(cli_cert = zcert_load (path)))
+            err_exit ("%s", path);
+        free (path);
+
+        if (asprintf (&path, "%s/%s.server", curve_path, session) < 0)
+            oom ();
+        if (!(srv_cert = zcert_load (path))) /* zcert_load_public? */
+            err_exit ("%s", path);
+        free (path);
+
+        if (!(auth = zauth_new (zctx)))
+            err_exit ("zauth_new");
+        if (vopt)
+            zauth_set_verbose (auth, true);
+        zauth_configure_curve (auth, "*", curve_path);
+
+        zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
+        zcert_apply (cli_cert, s);
+        srvkey = zcert_public_txt (srv_cert);
+        zsocket_set_curve_serverkey (s, srvkey);
+    }
+#endif
+    if (zsocket_connect (s, "%s", uri) < 0)
+        err_exit ("%s", uri);
+    return s;
 }
 
 /*

@@ -98,8 +98,6 @@ static const char * zmsg_type_string (int type)
             return ("event");
         case FLUX_MSGTYPE_RESPONSE:
             return ("response");
-        case FLUX_MSGTYPE_SNOOP:
-            return ("snoop");
         case FLUX_MSGTYPE_ANY:
             return ("all");
         default:
