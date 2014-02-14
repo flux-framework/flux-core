@@ -1424,9 +1424,11 @@ static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
     }
     gw = route_lookup (ctx->rctx, service);
     if (gw) {
+        snoop_cc (ctx, FLUX_MSGTYPE_REQUEST, *zmsg);
         if (zmsg_send_unrouter (zmsg, ctx->zs_dnreq_out, ctx->rank, gw) < 0)
             goto done;
     } else if (ctx->zs_upreq_out) {
+        snoop_cc (ctx, FLUX_MSGTYPE_REQUEST, *zmsg);
         if (zmsg_send (zmsg, ctx->zs_upreq_out) < 0)
             goto done;
     } else  {
@@ -1454,9 +1456,11 @@ static int cmbd_response_sendmsg (void *impl, zmsg_t **zmsg)
         goto done;
     }
     if (route_lookup (ctx->rctx, nexthop)) {
+        snoop_cc (ctx, FLUX_MSGTYPE_RESPONSE, *zmsg);
         if (zmsg_send (zmsg, ctx->zs_upreq_in) < 0)
             goto done;
     } else if (ctx->zs_dnreq_in) {
+        snoop_cc (ctx, FLUX_MSGTYPE_RESPONSE, *zmsg);
         if (zmsg_send (zmsg, ctx->zs_dnreq_in) < 0)
             goto done;
     } else {
