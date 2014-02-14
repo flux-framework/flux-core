@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/time.h>
+#include <sys/resource.h>
 #include <json/json.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -444,6 +445,28 @@ json_object *util_json_object_new_object (void)
 
     if (!(o = json_object_new_object ()))
         oom ();
+    return o;
+}
+
+json_object *rusage_to_json (struct rusage *ru)
+{
+    json_object *o = util_json_object_new_object ();
+    util_json_object_add_timeval (o, "utime", &ru->ru_utime);
+    util_json_object_add_timeval (o, "stime", &ru->ru_stime);
+    util_json_object_add_int64 (o, "maxrss", ru->ru_maxrss);
+    util_json_object_add_int64 (o, "ixrss", ru->ru_ixrss);
+    util_json_object_add_int64 (o, "idrss", ru->ru_idrss);
+    util_json_object_add_int64 (o, "isrss", ru->ru_isrss);
+    util_json_object_add_int64 (o, "minflt", ru->ru_minflt);
+    util_json_object_add_int64 (o, "majflt", ru->ru_majflt);
+    util_json_object_add_int64 (o, "nswap", ru->ru_nswap);
+    util_json_object_add_int64 (o, "inblock", ru->ru_inblock);
+    util_json_object_add_int64 (o, "oublock", ru->ru_oublock);
+    util_json_object_add_int64 (o, "msgsnd", ru->ru_msgsnd);
+    util_json_object_add_int64 (o, "msgrcv", ru->ru_msgrcv);
+    util_json_object_add_int64 (o, "nsignals", ru->ru_nsignals);
+    util_json_object_add_int64 (o, "nvcsw", ru->ru_nvcsw);
+    util_json_object_add_int64 (o, "nivcsw", ru->ru_nivcsw);
     return o;
 }
 

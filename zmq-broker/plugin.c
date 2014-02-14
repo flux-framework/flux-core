@@ -381,23 +381,7 @@ static int rusage_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         }
         goto done;
     }
-    response = util_json_object_new_object ();
-    util_json_object_add_timeval (response, "utime", &usage.ru_utime);
-    util_json_object_add_timeval (response, "stime", &usage.ru_stime);
-    util_json_object_add_int64 (response, "maxrss", usage.ru_maxrss);
-    util_json_object_add_int64 (response, "ixrss", usage.ru_ixrss);
-    util_json_object_add_int64 (response, "idrss", usage.ru_idrss);
-    util_json_object_add_int64 (response, "isrss", usage.ru_isrss);
-    util_json_object_add_int64 (response, "minflt", usage.ru_minflt);
-    util_json_object_add_int64 (response, "majflt", usage.ru_majflt);
-    util_json_object_add_int64 (response, "nswap", usage.ru_nswap);
-    util_json_object_add_int64 (response, "inblock", usage.ru_inblock);
-    util_json_object_add_int64 (response, "oublock", usage.ru_oublock);
-    util_json_object_add_int64 (response, "msgsnd", usage.ru_msgsnd);
-    util_json_object_add_int64 (response, "msgrcv", usage.ru_msgrcv);
-    util_json_object_add_int64 (response, "nsignals", usage.ru_nsignals);
-    util_json_object_add_int64 (response, "nvcsw", usage.ru_nvcsw);
-    util_json_object_add_int64 (response, "nivcsw", usage.ru_nivcsw);
+    response = rusage_to_json (&usage);
     if (flux_respond (h, zmsg, response) < 0) {
         err ("%s: flux_respond", __FUNCTION__);
         rc = -1;

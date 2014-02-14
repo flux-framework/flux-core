@@ -72,6 +72,10 @@ void util_json_encode (json_object *o, char **zbufp, unsigned int *zlenp);
 void util_json_decode (json_object **op, char *zbuf, unsigned int zlen);
 bool util_json_match (json_object *o1, json_object *o2);
 
+struct rusage;
+json_object *rusage_to_json (struct rusage *ru);
+
+
 #endif /* !_HAVE_CMB_UTIL_H */
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
