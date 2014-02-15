@@ -18,6 +18,10 @@
 #define HAVE_CURVE_SECURITY 1
 #endif
 
+#if HAVE_CURVE_SECURITY
+#include "curve.h"
+#endif
+
 #define DEFAULT_ZAP_DOMAIN  "flux"
 
 #define OPTIONS "hanN:v"
@@ -153,48 +157,30 @@ static void *connect_snoop (zctx_t *zctx, bool nopt, bool vopt,
         err_exit ("zsocket_new");
 #if HAVE_CURVE_SECURITY
     if (!nopt) {
-        char *curve_path, *path;
-        struct stat sb;
-        struct passwd *pw;
+        char *dir = flux_curve_getpath ();
         zauth_t *auth;
         zcert_t *cli_cert, *srv_cert;
         char *srvkey = NULL;
 
-        if (!(pw = getpwuid (geteuid ())) || (pw->pw_dir == NULL
-                                          || strlen (pw->pw_dir) == 0))
-            msg_exit ("could not determine home directory");
-        if (asprintf (&curve_path, "%s/.curve", pw->pw_dir) < 0)
-            oom ();
-        if (lstat (curve_path, &sb) < 0) /* don't follow symlinks */
-            err_exit ("%s", curve_path);
-        if (!S_ISDIR (sb.st_mode))
-            msg_exit ("%s: not a directory", curve_path);
-        if ((sb.st_mode & (S_IRWXU|S_IRWXG|S_IRWXO)) != 0700)
-            msg_exit ("%s: permissions not set to 0700", curve_path);
-        if ((sb.st_uid != geteuid ()))
-            msg_exit ("%s: invalid owner", curve_path);
-        if (asprintf (&path, "%s/%s.client", curve_path, session) < 0)
-            oom ();
-        if (!(cli_cert = zcert_load (path)))
-            err_exit ("%s", path);
-        free (path);
-
-        if (asprintf (&path, "%s/%s.server", curve_path, session) < 0)
-            oom ();
-        if (!(srv_cert = zcert_load (path))) /* zcert_load_public? */
-            err_exit ("%s", path);
-        free (path);
+        if (!dir || flux_curve_checkpath (dir, false) < 0)
+            exit (1);
+        if (!(cli_cert = flux_curve_getcli (dir, session)))
+            exit (1);
+        if (!(srv_cert = flux_curve_getsrv (dir, session)))
+            exit (1);
 
         if (!(auth = zauth_new (zctx)))
             err_exit ("zauth_new");
         if (vopt)
             zauth_set_verbose (auth, true);
-        zauth_configure_curve (auth, "*", curve_path);
+        zauth_configure_curve (auth, "*", dir);
 
         zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
         zcert_apply (cli_cert, s);
         srvkey = zcert_public_txt (srv_cert);
         zsocket_set_curve_serverkey (s, srvkey);
+
+        free (dir);
     }
 #endif
     if (zsocket_connect (s, "%s", uri) < 0)

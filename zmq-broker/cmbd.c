@@ -40,9 +40,14 @@
 #if ZMQ_VERSION_MAJOR >= 4
 #define HAVE_CURVE_SECURITY 1
 #endif
+
+#if HAVE_CURVE_SECURITY
+#include "curve.h"
+#define DEFAULT_ZAP_DOMAIN  "flux"
+#endif
+
 #define HAVE_MUNGE_SECURITY 1
 
-#define DEFAULT_ZAP_DOMAIN  "flux"
 
 #define ZLOOP_RETURN(p) \
     return ((ctx)->reactor_stop ? (-1) : (0))
@@ -739,42 +744,21 @@ static int cmb_init_signalfd (ctx_t *ctx)
  */
 static zauth_t *cmb_init_curve (ctx_t *ctx)
 {
-    char *curve_path, *path;
-    struct stat sb;
+    char *dir = flux_curve_getpath ();
     zauth_t *auth;
 
-    if (!(ctx->pw = getpwuid (geteuid ()))
-            || (ctx->pw->pw_dir == NULL || strlen (ctx->pw->pw_dir) == 0))
-        msg_exit ("could not determine home directory");
-    if (asprintf (&curve_path, "%s/.curve", ctx->pw->pw_dir) < 0)
-        oom ();
-    if (lstat (curve_path, &sb) < 0) /* don't follow symlinks */
-        err_exit ("%s", curve_path);
-    if (!S_ISDIR (sb.st_mode))
-        msg_exit ("%s: not a directory", curve_path);
-    if ((sb.st_mode & (S_IRWXU|S_IRWXG|S_IRWXO)) != 0700)
-        msg_exit ("%s: permissions not set to 0700", curve_path);
-    if ((sb.st_uid != geteuid ()))
-        msg_exit ("%s: invalid owner", curve_path);
-
-    if (asprintf (&path, "%s/%s.client", curve_path, ctx->session_name) < 0)
-        oom ();
-    if (!(ctx->cli_cert = zcert_load (path)))
-        err_exit ("%s", path);
-    free (path);
-
-    if (asprintf (&path, "%s/%s.server", curve_path, ctx->session_name) < 0)
-        oom ();
-    if (!(ctx->srv_cert = zcert_load (path)))
-        err_exit ("%s", path);
-    free (path);
-
+    if (!dir || flux_curve_checkpath (dir, false) < 0)
+        exit (1);  
+    if (!(ctx->cli_cert = flux_curve_getcli (dir, ctx->session_name)))
+        exit (1);
+    if (!(ctx->srv_cert = flux_curve_getsrv (dir, ctx->session_name)))
+        exit (1);
     if (!(auth = zauth_new (ctx->zctx)))
         err_exit ("zauth_new");
     if (ctx->verbose)
         zauth_set_verbose (auth, true);
     //zauth_allow (auth, "127.0.0.1");
-    zauth_configure_curve (auth, "*", curve_path);
+    zauth_configure_curve (auth, "*", dir);
 
     return auth;
 }
