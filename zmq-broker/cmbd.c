@@ -713,6 +713,7 @@ static int cmb_init_signalfd (ctx_t *ctx)
     if (sigprocmask (SIG_SETMASK, &sigmask, NULL) < 0)
         err_exit ("sigprocmask");
     sigemptyset(&sigmask);
+    sigaddset(&sigmask, SIGHUP);
     sigaddset(&sigmask, SIGINT);
     sigaddset(&sigmask, SIGQUIT);
     sigaddset(&sigmask, SIGTERM);
