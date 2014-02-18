@@ -16,6 +16,7 @@
 
 #if ZMQ_VERSION_MAJOR >= 4
 #define HAVE_CURVE_SECURITY 1
+#define HAVE_ZMONITOR 1
 #endif
 
 #if HAVE_CURVE_SECURITY
@@ -50,22 +51,29 @@ void usage (void)
 
 static void *connect_snoop (zctx_t *zctx, bool nopt, bool vopt,
                             const char *session, const char *uri);
+static int snoop_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg);
+#if HAVE_ZMONITOR
+static int zmon_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg);
+#endif
+
+static bool aopt = false;
 
 int main (int argc, char *argv[])
 {
     flux_t h;
     int ch;
-    bool aopt = false;
-    char *topic = NULL;
     char *uri = NULL;
     bool nopt = false;
     bool vopt = false;
     char *session = "flux";
     zctx_t *zctx;
-    void *s;
-    zmsg_t *zmsg;
     zlist_t *subs;
-    char *sub;
+    void *s;
+#if HAVE_ZMONITOR
+    zmonitor_t *zmon;
+#endif
+    zloop_t *zloop;
+    zmq_pollitem_t zp;
 
     log_init ("flux-snoop");
 
@@ -99,50 +107,66 @@ int main (int argc, char *argv[])
     }
     if (!(h = cmb_init ()))
         err_exit ("cmb_init");
-    uri = flux_getattr (h, "cmbd-snoop-uri");
+    if (!(uri = flux_getattr (h, "cmbd-snoop-uri")))
+        err_exit ("cmbd-snoop-uri");
 
+    /* N.B. flux_get_zctx () is not implemented for the API socket since
+     * it has no internal zctx (despite supporting the flux reactor).
+     */
     if (!(zctx = zctx_new ()))
         err_exit ("zctx_new");
     zctx_set_linger (zctx, 5);
 
+    /* N.B. We use the zloop reactor and handle disconnects via zmonitor.
+     * If zmonitor is not available (zmq version < 4), restarting cmbd
+     * will not be detected.  Also, as the snoop socket name may change
+     * across restarts, we may hang forever reconnecting to the wrong socket.
+     */
+    if (!(zloop = zloop_new ()))
+        oom ();
+
+    /* Connect to the snoop socket and subscribe to topics of interest.
+     */
     if (vopt)
         msg ("connecting to %s...", uri);
     s = connect_snoop (zctx, nopt, vopt, session, uri);
-
-    if (zlist_size (subs) > 0) {
+    zp.socket = s;
+    zp.events = ZMQ_POLLIN;
+    if (zloop_poller (zloop, &zp, snoop_cb, NULL) < 0)
+        err_exit ("zloop_poller");
+    if (zlist_size (subs) == 0)
+        zsocket_set_subscribe (s, "");
+    else {
+        char *sub;
         while ((sub = zlist_pop (subs)))
             zsocket_set_subscribe (s, sub);
-    } else
-        zsocket_set_subscribe (s, "");
-
-    /* The snoop socket includes two extra header frames:
-     * First the tag frame, stripped of any node! prefix so subscriptions work.
-     * Second, the message type as a stringified integer.
-     */
-    while ((zmsg = zmsg_recv (s))) {
-        char *tag = zmsg_popstr (zmsg);
-        char *typestr = zmsg_popstr (zmsg);
-        int type;
-
-        if (tag && typestr) {
-            if (aopt || (strcmp (tag, "cmb.info") && strcmp (tag, "log.msg"))) {
-                type = strtoul (typestr, NULL, 10);
-                fprintf (stderr, "--- %-9s", flux_msgtype_string (type));
-                zmsg_dump_compact (zmsg);
-            }
-        }
-        if (tag)
-            free (tag);
-        if (typestr)
-            free (typestr);
-        zmsg_destroy (&zmsg);
     }
-    zsocket_set_unsubscribe (s, topic ? topic : "");
+
+#if HAVE_ZMONITOR
+    if (!(zmon = zmonitor_new (zctx, s, ZMQ_EVENT_DISCONNECTED)))
+        err_exit ("zmonitor_new");
+    if (vopt)
+        zmonitor_set_verbose (zmon, true);
+    zp.socket = zmonitor_socket (zmon);
+    zp.events = ZMQ_POLLIN;
+    if (zloop_poller (zloop, &zp, zmon_cb, NULL) < 0)
+        err_exit ("zloop_poller");
+#endif
+
+    if (zloop_start (zloop) < 0)
+        err_exit ("zloop_start");
+    if (vopt)
+        msg ("disconnecting");
+
+#if HAVE_ZMONITOR
+    zmonitor_destroy (&zmon);
+#endif
+
+    zloop_destroy (&zloop);
+    zctx_destroy (&zctx); /* destroys 's' */
 
     zlist_destroy (&subs);
     free (uri);
-    zsocket_destroy (zctx, s);
-    zctx_destroy (&zctx);
     flux_handle_destroy (&h);
     log_fini ();
     return 0;
@@ -187,6 +211,57 @@ static void *connect_snoop (zctx_t *zctx, bool nopt, bool vopt,
         err_exit ("%s", uri);
     return s;
 }
+
+/* The snoop socket includes two extra header frames:
+ * First the tag frame, stripped of any node! prefix so subscriptions work.
+ * Second, the message type as a stringified integer.
+ */
+static int snoop_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
+{
+    void *zs = item->socket;
+    zmsg_t *zmsg;
+
+    if ((zmsg = zmsg_recv (zs))) {
+        char *tag = zmsg_popstr (zmsg);
+        char *typestr = zmsg_popstr (zmsg);
+        int type;
+
+        if (tag && typestr) {
+            if (aopt || (strcmp (tag, "cmb.info") && strcmp (tag, "log.msg"))) {
+                type = strtoul (typestr, NULL, 10);
+                fprintf (stderr, "--- %-9s", flux_msgtype_string (type));
+                zmsg_dump_compact (zmsg);
+            }
+        }
+        if (tag)
+            free (tag);
+        if (typestr)
+            free (typestr);
+        zmsg_destroy (&zmsg);
+    }
+    return 0;
+}
+
+#if HAVE_ZMONITOR
+static int zmon_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
+{
+    void *zs = item->socket;
+    zmsg_t *zmsg;
+    int event;
+    char *s;
+
+    if ((zmsg = zmsg_recv (zs))) {
+        if ((s = zmsg_popstr (zmsg))) {
+            event = strtoul (s, NULL, 10);
+            if (event == ZMQ_EVENT_DISCONNECTED)
+                msg_exit ("lost connection to snoop socket");
+            free (s);
+        }
+        zmsg_destroy (&zmsg);
+    }
+    return 0;
+}
+#endif
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
