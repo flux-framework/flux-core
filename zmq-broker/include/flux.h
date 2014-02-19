@@ -145,6 +145,7 @@ enum {
 /* Return string representation of message type.
  */
 const char *flux_msgtype_string (int typemask);
+const char *flux_msgtype_shortstr (int typemask);
 
 /* Return copy of zmsg tag. Caller must free.
  */

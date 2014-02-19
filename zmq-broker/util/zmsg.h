@@ -23,7 +23,7 @@ int zmsg_send_fd_typemask (int fd, int typemask, zmsg_t **msg);
  * The second returns a string representing only routing frames that the
  * caller must free.
  */
-void zmsg_dump_compact (zmsg_t *self);
+void zmsg_dump_compact (zmsg_t *self, const char *prefix);
 char *zmsg_route_str (zmsg_t *zmsg, int skiphops);
 
 /* For "reverse" message flow over dealer-router:

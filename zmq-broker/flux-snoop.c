@@ -229,8 +229,7 @@ static int snoop_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
         if (tag && typestr) {
             if (aopt || (strcmp (tag, "cmb.info") && strcmp (tag, "log.msg"))) {
                 type = strtoul (typestr, NULL, 10);
-                fprintf (stderr, "--- %-9s", flux_msgtype_string (type));
-                zmsg_dump_compact (zmsg);
+                zmsg_dump_compact (zmsg, flux_msgtype_shortstr (type));
             }
         }
         if (tag)

@@ -487,7 +487,7 @@ static void _zframe_print_compact (zframe_t *self, const char *prefix)
     //fprintf (stderr, "%s\n", elipsis);
 }
 
-void zmsg_dump_compact (zmsg_t *self)
+void zmsg_dump_compact (zmsg_t *self, const char *prefix)
 {
     int hops = zmsg_hopcount (self);
     zframe_t *zf = zmsg_first (self);
@@ -498,7 +498,7 @@ void zmsg_dump_compact (zmsg_t *self)
         return;
     }
     if (hops > 0) {
-        fprintf (stderr, "[%3.3d] ", hops);
+        fprintf (stderr, "%s[%3.3d] ", prefix ? prefix : "", hops);
         while (zf && zframe_size (zf) > 0) {
             _zframe_print_compact (zf , "|");
             zf = zmsg_next (self);
@@ -508,7 +508,7 @@ void zmsg_dump_compact (zmsg_t *self)
         fprintf (stderr, "|\n");
     }
     while (zf) {
-        zframe_print (zf, "");
+        zframe_print (zf, prefix ? prefix : "");
         zf = zmsg_next (self);
     }
 }

@@ -97,7 +97,7 @@ int flux_request_sendmsg (flux_t h, zmsg_t **zmsg)
         return -1;
     }
     if (h->flags & FLUX_FLAGS_TRACE)
-        zmsg_dump_compact (*zmsg);
+        zmsg_dump_compact (*zmsg, flux_msgtype_shortstr (FLUX_MSGTYPE_REQUEST));
 
     return h->ops->request_sendmsg (h->impl, zmsg);
 }
@@ -112,7 +112,7 @@ zmsg_t *flux_request_recvmsg (flux_t h, bool nonblock)
     }
     zmsg = h->ops->request_recvmsg (h->impl, nonblock);
     if (zmsg && h->flags & FLUX_FLAGS_TRACE)
-        zmsg_dump_compact (zmsg);
+        zmsg_dump_compact (zmsg, flux_msgtype_shortstr (FLUX_MSGTYPE_REQUEST));
 
     return zmsg;
 }
@@ -124,7 +124,7 @@ int flux_response_sendmsg (flux_t h, zmsg_t **zmsg)
         return -1;
     }
     if (h->flags & FLUX_FLAGS_TRACE)
-        zmsg_dump_compact (*zmsg);
+        zmsg_dump_compact (*zmsg, flux_msgtype_shortstr(FLUX_MSGTYPE_RESPONSE));
 
     return h->ops->response_sendmsg (h->impl, zmsg);
 }
@@ -139,7 +139,7 @@ zmsg_t *flux_response_recvmsg (flux_t h, bool nonblock)
     }
     zmsg = h->ops->response_recvmsg (h->impl, nonblock);
     if (zmsg && h->flags & FLUX_FLAGS_TRACE)
-        zmsg_dump_compact (zmsg);
+        zmsg_dump_compact (zmsg, flux_msgtype_shortstr (FLUX_MSGTYPE_RESPONSE));
 
     return zmsg;
 }
@@ -161,7 +161,7 @@ int flux_event_sendmsg (flux_t h, zmsg_t **zmsg)
         return -1;
     }
     if (h->flags & FLUX_FLAGS_TRACE)
-        zmsg_dump_compact (*zmsg);
+        zmsg_dump_compact (*zmsg, flux_msgtype_shortstr (FLUX_MSGTYPE_EVENT));
 
     return h->ops->event_sendmsg (h->impl, zmsg);
 }
@@ -176,7 +176,7 @@ zmsg_t *flux_event_recvmsg (flux_t h, bool nonblock)
     }
     zmsg = h->ops->event_recvmsg (h->impl, nonblock);
     if (zmsg && h->flags & FLUX_FLAGS_TRACE)
-        zmsg_dump_compact (zmsg);
+        zmsg_dump_compact (zmsg, flux_msgtype_shortstr (FLUX_MSGTYPE_EVENT));
 
     return zmsg;
 }
@@ -225,13 +225,14 @@ zctx_t *flux_get_zctx (flux_t h)
 
 struct map_struct {
     const char *name;
+    const char *sname;
     int typemask;
 };
 
 static struct map_struct msgtype_map[] = {
-    { "request", FLUX_MSGTYPE_REQUEST },
-    { "response", FLUX_MSGTYPE_RESPONSE},
-    { "event", FLUX_MSGTYPE_EVENT},
+    { "request", ">", FLUX_MSGTYPE_REQUEST },
+    { "response", "<", FLUX_MSGTYPE_RESPONSE},
+    { "event", "e", FLUX_MSGTYPE_EVENT},
 };
 static const int msgtype_map_len = 
                             sizeof (msgtype_map) / sizeof (msgtype_map[0]);
@@ -244,6 +245,16 @@ const char *flux_msgtype_string (int typemask)
         if ((typemask & msgtype_map[i].typemask))
             return msgtype_map[i].name;
     return "unknown";
+}
+
+const char *flux_msgtype_shortstr (int typemask)
+{
+    int i;
+
+    for (i = 0; i < msgtype_map_len; i++)
+        if ((typemask & msgtype_map[i].typemask))
+            return msgtype_map[i].sname;
+    return "?";
 }
 
 static zframe_t *unwrap_zmsg (zmsg_t *zmsg, int frameno)
