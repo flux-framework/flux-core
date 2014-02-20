@@ -16,14 +16,16 @@
 
 #if ZMQ_VERSION_MAJOR >= 4
 #define HAVE_CURVE_SECURITY 1
-#define HAVE_ZMONITOR 1
-#endif
-
-#if HAVE_CURVE_SECURITY
 #include "curve.h"
 #endif
 
+#if CZMQ_VERSION_MAJOR >= 2 && ZMQ_VERSION_MAJOR >= 4
+#define HAVE_ZMONITOR 1
+#endif
+
 #define DEFAULT_ZAP_DOMAIN  "flux"
+
+#define DEFAULT_ZMON_URI    "inproc://monitor.snoop"
 
 #define OPTIONS "hanN:vl"
 static const struct option longopts[] = {
@@ -54,9 +56,7 @@ void usage (void)
 static void *connect_snoop (zctx_t *zctx, bool nopt, bool vopt,
                             const char *session, const char *uri);
 static int snoop_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg);
-#if HAVE_ZMONITOR
 static int zmon_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg);
-#endif
 
 static bool aopt = false;
 static bool lopt = false;
@@ -72,9 +72,6 @@ int main (int argc, char *argv[])
     zctx_t *zctx;
     zlist_t *subs;
     void *s;
-#if HAVE_ZMONITOR
-    zmonitor_t *zmon;
-#endif
     zloop_t *zloop;
     zmq_pollitem_t zp;
 
@@ -124,9 +121,9 @@ int main (int argc, char *argv[])
     zctx_set_linger (zctx, 5);
 
     /* N.B. We use the zloop reactor and handle disconnects via zmonitor.
-     * If zmonitor is not available (zmq version < 4), restarting cmbd
-     * will not be detected.  Also, as the snoop socket name may change
-     * across restarts, we may hang forever reconnecting to the wrong socket.
+     * We must handle disconnects, since the default zmq "hidden reconnect"
+     * behavior doesn't work across a cmbd restart, where the dynamically
+     * assigned snoop URI may change.
      */
     if (!(zloop = zloop_new ()))
         oom ();
@@ -143,21 +140,29 @@ int main (int argc, char *argv[])
     if (zlist_size (subs) == 0)
         zsocket_set_subscribe (s, "");
     else {
-        char *sub;
+        char *sub; /* actual argv element, do not free */
         while ((sub = zlist_pop (subs)))
             zsocket_set_subscribe (s, sub);
     }
 
 #if HAVE_ZMONITOR
+    zmonitor_t *zmon;
     if (!(zmon = zmonitor_new (zctx, s, ZMQ_EVENT_DISCONNECTED)))
         err_exit ("zmonitor_new");
     if (vopt)
         zmonitor_set_verbose (zmon, true);
     zp.socket = zmonitor_socket (zmon);
+#else
+    if (zmq_socket_monitor (s, DEFAULT_ZMON_URI, ZMQ_EVENT_DISCONNECTED) < 0)
+        err_exit ("zmq_socket_monitor");
+    if (!(zp.socket = zsocket_new  (zctx, ZMQ_PAIR)))
+        err_exit ("zsocket_new");
+    if (zsocket_connect (zp.socket, DEFAULT_ZMON_URI) < 0)
+        err_exit ("zsocket_connect %s", DEFAULT_ZMON_URI);
+#endif
     zp.events = ZMQ_POLLIN;
     if (zloop_poller (zloop, &zp, zmon_cb, NULL) < 0)
         err_exit ("zloop_poller");
-#endif
 
     if (zloop_start (zloop) < 0)
         err_exit ("zloop_start");
@@ -169,7 +174,7 @@ int main (int argc, char *argv[])
 #endif
 
     zloop_destroy (&zloop);
-    zctx_destroy (&zctx); /* destroys 's' */
+    zctx_destroy (&zctx); /* destroys 's' and 'zp.socket' */
 
     zlist_destroy (&subs);
     free (uri);
@@ -251,26 +256,32 @@ static int snoop_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
     return 0;
 }
 
-#if HAVE_ZMONITOR
 static int zmon_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
 {
-    void *zs = item->socket;
     zmsg_t *zmsg;
-    int event;
-    char *s;
+    int event = 0;
 
-    if ((zmsg = zmsg_recv (zs))) {
-        if ((s = zmsg_popstr (zmsg))) {
+    if ((zmsg = zmsg_recv (item->socket))) {
+#if HAVE_ZMONITOR
+        char *s = zmsg_popstr (zmsg);
+        if (s) {
             event = strtoul (s, NULL, 10);
-            if (event == ZMQ_EVENT_DISCONNECTED)
-                msg_exit ("lost connection to snoop socket");
             free (s);
         }
+#else
+        zmq_event_t ev;
+        zframe_t *zf = zmsg_first (zmsg);
+        if (zf && zframe_size (zf) == sizeof (ev)) {
+            memcpy (&ev, zframe_data (zf), zframe_size (zf));
+            event = ev.event;
+        }
+#endif
+        if (event == ZMQ_EVENT_DISCONNECTED)
+            msg_exit ("lost connection to snoop socket");
         zmsg_destroy (&zmsg);
     }
     return 0;
 }
-#endif
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
