@@ -44,9 +44,7 @@ void usage (void)
 int main (int argc, char *argv[])
 {
     char *name = "flux";
-    char *dir;
     bool fopt = false;
-    zcert_t *cert;
     int ch;
 
     log_init ("flux-keygen");
@@ -70,6 +68,7 @@ int main (int argc, char *argv[])
     if (optind < argc)
         usage ();
 #if HAVE_CURVE_SECURITY
+    char *dir;
     if (!(dir = flux_curve_getpath ()) || flux_curve_checkpath (dir, true) < 0)
         exit (1);
     if (flux_curve_gencli (dir, name, fopt) < 0 || flux_curve_gensrv (dir,
@@ -81,6 +80,7 @@ int main (int argc, char *argv[])
 
     /* Try loading keys just to be sure they work.
      */
+    zcert_t *cert;
     if (!(cert = flux_curve_getcli (dir, name)))
         exit (1);
     zcert_destroy (&cert);
