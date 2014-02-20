@@ -32,7 +32,7 @@ char *zmsg_route_str (zmsg_t *zmsg, int skiphops);
  *   zmsg_recv_unrouter() - pops two frames and destroys them.
  * Use both on router socket.  Dealer socket requires no intervention.
  */
-int zmsg_send_unrouter (zmsg_t **zmsg, void *sock, int myrank, const char *gw);
+int zmsg_send_unrouter (zmsg_t **zmsg, void *sock, const char *id, const char *gw);
 zmsg_t *zmsg_recv_unrouter (void *sock);
 
 /* Send a copy of zmsg to sock.

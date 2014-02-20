@@ -184,24 +184,20 @@ int zmsg_send_fd (int fd, zmsg_t **msg)
     return zmsg_send_fd_typemask (fd, -1, msg);
 }
 
-int zmsg_send_unrouter (zmsg_t **zmsg, void *sock, int myrank, const char *gw)
+int zmsg_send_unrouter (zmsg_t **zmsg, void *sock, const char *id, const char *gw)
 {
     zframe_t *zf;
-    char *addr;
     int rc;
 
-    if (asprintf (&addr, "%d", myrank) < 0)
+    if (!(zf = zframe_new (id, strlen (id))))
         oom ();
-    if (!(zf = zframe_new (addr, strlen (addr))))
-        oom ();
-    if (zmsg_push (*zmsg, zf) < 0) /* push local addr for reply path */
+    if (zmsg_push (*zmsg, zf) < 0) /* push local id for reply path */
         oom ();
     if (!(zf = zframe_new (gw, strlen (gw))))
         oom ();
-    if (zmsg_push (*zmsg, zf) < 0) /* push gw addr for routing socket */
+    if (zmsg_push (*zmsg, zf) < 0) /* push gw id for routing socket */
         oom ();
     rc = zmsg_send (zmsg, sock);
-    free (addr);
     return rc;
 }
 
