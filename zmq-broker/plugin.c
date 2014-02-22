@@ -299,7 +299,7 @@ static int ping_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         err ("%s: protocol error", __FUNCTION__);
         goto done; /* reactor continues */
     }
-    s = zmsg_route_str (*zmsg, 2);
+    s = zmsg_route_str (*zmsg, 1);
     util_json_object_add_string (o, "route", s);
     if (flux_respond (h, zmsg, o) < 0) {
         err ("%s: flux_respond", __FUNCTION__);
