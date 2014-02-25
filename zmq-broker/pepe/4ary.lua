@@ -18,14 +18,12 @@ end
 local h = hostlist.new (pepe.nodelist)
 local mport = 5000 + tonumber (pepe:getenv ("SLURM_JOB_ID")) % 1024;
 local eventuri = "epgm://eth0;239.192.1.1:" .. tostring (mport)
-local upreqinuri = "tcp://*:5556"
 local dnreqouturi = "tcp://*:5557"
 
 if pepe.rank == 0 then
     local topology = tree.k_ary_json (4, #h)
     pepe.run ("echo bind 127.0.0.1 | /usr/sbin/redis-server -")
     pepe.run ("./cmbd --up-event-uri='" .. eventuri .. "'"
-		.. " --up-req-in-uri='" .. upreqinuri .. "'"
 		.. " --dn-req-out-uri='" .. dnreqouturi .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
@@ -43,7 +41,6 @@ else
     local u1 = "tcp://" ..  h[parent_rank + 1] .. ":5556"
     local u2 = "tcp://" ..  h[parent_rank + 1] .. ":5557"
     pepe.run ("./cmbd --up-event-uri='" .. eventuri .. "'"
-		.. " --up-req-in-uri='" .. upreqinuri .. "'"
 		.. " --dn-req-out-uri='" .. dnreqouturi .. "'"
 		.. " --parent='" .. parent_rank .. "," .. u1 .. "," .. u2 .. "'"
 		.. " --rank=" .. pepe.rank
