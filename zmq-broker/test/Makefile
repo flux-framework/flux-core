@@ -9,7 +9,7 @@ export CFLAGS LDFLAGS
 
 LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -lutil -luuid
 
-BUILD = tbase64 tpmikvs tkvswatch tcommit
+BUILD = tbase64 tpmikvs tkvswatch tcommit tasyncsock
 
 all: $(BUILD)
 
@@ -41,6 +41,9 @@ tkvswatch: tkvswatch.o
 	$(CC) $(LDFLAGS) -o $@ $< $(LDADD_CLI) -lcmb -lpthread
 
 tcommit: tcommit.o
+	$(CC) $(LDFLAGS) -o $@ $< $(LDADD_CLI) -lcmb
+
+tasyncsock: tasyncsock.o
 	$(CC) $(LDFLAGS) -o $@ $< $(LDADD_CLI) -lcmb
 
 clean:
