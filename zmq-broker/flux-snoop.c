@@ -25,12 +25,13 @@
 
 #define DEFAULT_ZAP_DOMAIN  "flux"
 
-#define OPTIONS "hanN:v"
+#define OPTIONS "hanN:vl"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"all",        no_argument,        0, 'a'},
     {"no-security",no_argument,        0, 'n'},
     {"verbose",    no_argument,        0, 'v'},
+    {"long",       no_argument,        0, 'l'},
     {"session-name",required_argument, 0, 'N'},
     { 0, 0, 0, 0 },
 };
@@ -44,6 +45,7 @@ void usage (void)
 "  -n,--no-security          Try to connect without CURVE security\n"
 #endif
 "  -v,--verbose              Verbose connect output\n"
+"  -l,--long                 Display long message format\n"
 "  -N,--session-name NAME    Set session name (default flux)\n"
 );
     exit (1);
@@ -57,6 +59,7 @@ static int zmon_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg);
 #endif
 
 static bool aopt = false;
+static bool lopt = false;
 
 int main (int argc, char *argv[])
 {
@@ -86,6 +89,9 @@ int main (int argc, char *argv[])
                 break;
             case 'a': /* --all */
                 aopt = true;
+                break;
+            case 'l': /* --long */
+                lopt = true;
                 break;
             case 'n': /* --no-security */
                 nopt = true;;
@@ -228,8 +234,12 @@ static int snoop_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
 
         if (tag && typestr) {
             if (aopt || (strcmp (tag, "cmb.info") && strcmp (tag, "log.msg"))) {
-                type = strtoul (typestr, NULL, 10);
-                zmsg_dump_compact (zmsg, flux_msgtype_shortstr (type));
+                if (lopt) {
+                    zmsg_dump (zmsg);
+                } else {
+                    type = strtoul (typestr, NULL, 10);
+                    zmsg_dump_compact (zmsg, flux_msgtype_shortstr (type));
+                }
             }
         }
         if (tag)
