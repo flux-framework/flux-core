@@ -37,23 +37,12 @@
 #include "flux.h"
 #include "handle.h"
 #include "cmb_socket.h"
-
-#if ZMQ_VERSION_MAJOR >= 4
-#define HAVE_CURVE_SECURITY 1
-#endif
+#include "security.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
 #define zsocket_set_immediate   zsocket_set_delay_attach_on_connect
 #endif
-
-#if HAVE_CURVE_SECURITY
-#include "curve.h"
-#define DEFAULT_ZAP_DOMAIN  "flux"
-#endif
-
-#define HAVE_MUNGE_SECURITY 1
-
 
 #define ZLOOP_RETURN(p) \
     return ((ctx)->reactor_stop ? (-1) : (0))
@@ -73,15 +62,9 @@ typedef struct {
     zloop_t *zl;
     bool reactor_stop;
     int sigfd;
-#if HAVE_CURVE_SECURITY
-    zauth_t *auth;
-    zcert_t *srv_cert;
-    zcert_t *cli_cert;
-#endif
-#if HAVE_MUNGE_SECURITY
-    munge_ctx_t mctx;
-#endif
-    bool security_disable;
+    flux_sec_t sec;
+    bool security_clr;
+    bool security_set;
 
     void *zs_upreq_out;         /* DEALER - tree parent, upstream reqs */
     void *zs_dnreq_in;          /* rev DEALER - tree parent, downstream reqs */
@@ -153,7 +136,7 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static void cmbd_init (ctx_t *ctx);
 static void cmbd_fini (ctx_t *ctx);
 
-#define OPTIONS "t:e:E:O:vs:R:S:p:P:L:T:A:d:D:H:N:n"
+#define OPTIONS "t:e:E:O:vs:R:S:p:P:L:T:A:d:D:H:N:nci"
 static const struct option longopts[] = {
     {"session-name",   required_argument,  0, 'N'},
     {"no-security",    no_argument,        0, 'N'},
@@ -165,6 +148,8 @@ static const struct option longopts[] = {
     {"up-req-in-uri", required_argument,  0, 't'},
     {"dn-req-out-uri",required_argument,  0, 'T'},
     {"verbose",           no_argument,  0, 'v'},
+    {"plain-insecurity",  no_argument,  0, 'i'},
+    {"curve-security",    no_argument,  0, 'c'},
     {"set-conf",    required_argument,  0, 's'},
     {"rank",        required_argument,  0, 'R'},
     {"size",        required_argument,  0, 'S'},
@@ -183,7 +168,7 @@ static void usage (void)
     fprintf (stderr, 
 "Usage: cmbd OPTIONS\n"
 " -N,--session-name NAME     Set session name (default: flux)\n"
-" -n,--no-security           Disable session security (default: %s, %s)\n"
+" -n,--no-security           Disable session security\n"
 " -e,--up-event-uri URI      Set upev URI, e.g. epgm://eth0;239.192.1.1:5555\n"
 " -E,--up-event-in-uri URI   Set upev_in URI (alternative to -e)\n"
 " -O,--up-event-out-uri URI  Set upev_out URI (alternative to -e)\n"
@@ -201,17 +186,7 @@ static void usage (void)
 " -P,--plugins p1,p2,...     Load the named plugins (comma separated)\n"
 " -X,--plugin-path PATH      Set plugin search path (colon separated)\n"
 " -L,--logdest DEST          Log to DEST, can  be syslog, stderr, or file\n"
-" -A,--api-socket PATH       Listen for API connections on PATH\n",
-#if HAVE_MUNGE_SECURITY
-"MUNGE",
-#else
-"no MUNGE",
-#endif
-#if HAVE_CURVE_SECURITY
-"CURVE"
-#else
-"no CURVE"
-#endif
+" -A,--api-socket PATH       Listen for API connections on PATH\n"
 );
     exit (1);
 }
@@ -245,7 +220,13 @@ int main (int argc, char *argv[])
                 ctx.session_name = optarg;
                 break;
             case 'n':   /* --no-security */
-                ctx.security_disable = true;
+                ctx.security_clr = FLUX_SEC_TYPE_ALL;
+                break;
+            case 'c':   /* --curve-security */
+                ctx.security_set |= FLUX_SEC_TYPE_CURVE;
+                break;
+            case 'i':   /* --plain-insecurity */
+                ctx.security_set |= FLUX_SEC_TYPE_PLAIN;
                 break;
             case 'e':   /* --up-event-uri URI */
                 if (!strstr (optarg, "pgm://"))
@@ -515,13 +496,8 @@ static void *cmbd_init_upreq_in (ctx_t *ctx)
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
         err_exit ("zsocket_new");
-#if HAVE_CURVE_SECURITY
-    if (!ctx->security_disable) {
-        zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
-        zcert_apply (ctx->srv_cert, s);
-        zsocket_set_curve_server (s, 1);
-    }
-#endif
+    if (flux_sec_ssockinit (ctx->sec, s) < 0)
+        msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ctx->sec));
     zsocket_set_hwm (s, 0);
     uri = zlist_first (ctx->uri_upreq_in);
     while (uri) {
@@ -545,13 +521,8 @@ static void *cmbd_init_dnreq_out (ctx_t *ctx)
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
         err_exit ("zsocket_new");
-#if HAVE_CURVE_SECURITY
-    if (!ctx->security_disable) {
-        zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
-        zcert_apply (ctx->srv_cert, s);
-        zsocket_set_curve_server (s, 1);
-    }
-#endif
+    if (flux_sec_ssockinit (ctx->sec, s) < 0)
+        msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ctx->sec));
     zsocket_set_hwm (s, 0);
     if (check_uri (uri)) {
         if (zsocket_bind (s, "%s", DNREQ_URI) < 0)
@@ -574,13 +545,8 @@ static void *cmbd_init_dnev_out (ctx_t *ctx)
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_PUB)))
         err_exit ("zsocket_new");
-#if HAVE_CURVE_SECURITY
-    if (!ctx->security_disable) {
-        zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
-        zcert_apply (ctx->srv_cert, s);
-        zsocket_set_curve_server (s, 1);
-    }
-#endif
+    if (flux_sec_ssockinit (ctx->sec, s) < 0)
+        msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ctx->sec));
     zsocket_set_hwm (s, 0);
     if (check_uri (uri)) {
         if (zsocket_bind (s, "%s", uri) < 0)
@@ -601,13 +567,8 @@ static void *cmbd_init_dnev_in (ctx_t *ctx)
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_SUB)))
         err_exit ("zsocket_new");
-#if HAVE_CURVE_SECURITY
-    if (!ctx->security_disable) {
-        zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
-        zcert_apply (ctx->srv_cert, s);
-        zsocket_set_curve_server (s, 1);
-    }
-#endif
+    if (flux_sec_ssockinit (ctx->sec, s) < 0)
+        msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ctx->sec));
     zsocket_set_hwm (s, 0);
     if (check_uri (uri)) {
         if (zsocket_bind (s, "%s", uri) < 0)
@@ -630,13 +591,8 @@ static void *cmbd_init_snoop (ctx_t *ctx)
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_PUB)))
         err_exit ("zsocket_new");
-#if HAVE_CURVE_SECURITY
-    if (!ctx->security_disable) {
-        zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
-        zcert_apply (ctx->srv_cert, s);
-        zsocket_set_curve_server (s, 1);
-    }
-#endif
+    if (flux_sec_ssockinit (ctx->sec, s) < 0)
+        msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ctx->sec));
     /* Dynamically allocate the snoop URI in the ipc:// space.
      * Make it available to clients via the flux_getattr().
      */
@@ -654,14 +610,8 @@ static void *cmbd_init_upev_in (ctx_t *ctx)
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_SUB)))
         err_exit ("zsocket_new");
-#if HAVE_CURVE_SECURITY
-    if (!ctx->security_disable) {
-        zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
-        zcert_apply (ctx->cli_cert, s);
-        char *srvkey = zcert_public_txt (ctx->srv_cert);
-        zsocket_set_curve_serverkey (s, srvkey);
-    }
-#endif
+    if (!ctx->upev_mcast && flux_sec_csockinit (ctx->sec, s) < 0)
+        msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
     zsocket_set_hwm (s, 0);
     if (zsocket_connect (s, "%s", ctx->uri_upev_in) < 0)
         err_exit ("%s", ctx->uri_upev_in);
@@ -677,14 +627,8 @@ static void *cmbd_init_upev_out (ctx_t *ctx)
     void *s;
     if (!(s = zsocket_new (ctx->zctx, ZMQ_PUB)))
         err_exit ("zsocket_new");
-#if HAVE_CURVE_SECURITY
-    if (!ctx->security_disable) {
-        zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
-        zcert_apply (ctx->cli_cert, s);
-        char *srvkey = zcert_public_txt (ctx->srv_cert);
-        zsocket_set_curve_serverkey (s, srvkey);
-    }
-#endif
+    if (!ctx->upev_mcast && flux_sec_csockinit (ctx->sec, s) < 0)
+        msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
     zsocket_set_hwm (s, 0);
     if (zsocket_connect (s, "%s", ctx->uri_upev_out) < 0)
         err_exit ("%s", ctx->uri_upev_out);
@@ -699,14 +643,8 @@ static void *cmbd_init_upreq_out (ctx_t *ctx) {
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
         err_exit ("zsocket_new");
-#if HAVE_CURVE_SECURITY
-    if (!ctx->security_disable) {
-        zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
-        zcert_apply (ctx->cli_cert, s);
-        char *srvkey = zcert_public_txt (ctx->srv_cert);
-        zsocket_set_curve_serverkey (s, srvkey);
-    }
-#endif
+    if (flux_sec_csockinit (ctx->sec, s) < 0)
+        msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
     zsocket_set_hwm (s, 0);
     snprintf (id, sizeof (id), "%d", ctx->rank);
     zsocket_set_identity (s, id); 
@@ -727,14 +665,8 @@ static void *cmbd_init_dnreq_in (ctx_t *ctx)
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
         err_exit ("zsocket_new");
-#if HAVE_CURVE_SECURITY
-    if (!ctx->security_disable) {
-        zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
-        zcert_apply (ctx->cli_cert, s);
-        char *srvkey = zcert_public_txt (ctx->srv_cert);
-        zsocket_set_curve_serverkey (s, srvkey);
-    }
-#endif
+    if (flux_sec_csockinit (ctx->sec, s) < 0)
+        msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
     zsocket_set_hwm (s, 0);
     snprintf (id, sizeof (id), "%d", ctx->rank);
     zsocket_set_identity (s, id); 
@@ -774,44 +706,6 @@ static int cmbd_init_signalfd (ctx_t *ctx)
     return zp.fd;
 }
 
-#if HAVE_CURVE_SECURITY
-/* cmbd instances wire up actively in the upstream direction; that is, we
- * have downstream facing sockets that call "bind" in the server role,
- * and upstream facing sockets that call "connect" in the client role.
- * As a result, cmbds may be acting as client, server, or both depending
- * on their position in the tree.
- *
- * All clients share a client cert.  All servers share a server cert.
- * For now, we load the keys out of the session owner's ~/.curve directory,
- * and require them to be generated in advance with "flux keygen".
- *
- * Although we use curve on all sockets, it only has an effect currently
- * sockets bound to tcp:// or ipc:// endpoints.  It is a no-op when
- * epgm:// and inproc:// are used.
- */
-static zauth_t *cmbd_init_curve (ctx_t *ctx)
-{
-    char *dir = flux_curve_getpath ();
-    zauth_t *auth;
-
-    if (!dir || flux_curve_checkpath (dir, false) < 0)
-        exit (1);  
-    if (!(ctx->cli_cert = flux_curve_getcli (dir, ctx->session_name)))
-        exit (1);
-    if (!(ctx->srv_cert = flux_curve_getsrv (dir, ctx->session_name)))
-        exit (1);
-    if (!(auth = zauth_new (ctx->zctx)))
-        err_exit ("zauth_new");
-    if (ctx->verbose)
-        zauth_set_verbose (auth, true);
-    //zauth_allow (auth, "127.0.0.1");
-    zauth_configure_curve (auth, "*", dir);
-    free (dir);
-
-    return auth;
-}
-#endif
-
 static void cmbd_init (ctx_t *ctx)
 {
     int i;
@@ -833,20 +727,20 @@ static void cmbd_init (ctx_t *ctx)
     //if (ctx->verbose)
     //    zloop_set_verbose (ctx->zl, true);
     ctx->sigfd = cmbd_init_signalfd (ctx);
-#if HAVE_CURVE_SECURITY
-    if (!ctx->security_disable)
-        ctx->auth = cmbd_init_curve (ctx);
-#endif
-#if HAVE_MUNGE_SECURITY
-    if (!ctx->security_disable) {
-        munge_err_t e;
-        if (!(ctx->mctx = munge_ctx_create ()))
-            oom ();
-        e = munge_ctx_set (ctx->mctx, MUNGE_OPT_UID_RESTRICTION, geteuid ());
-        if (e != EMUNGE_SUCCESS)
-            err_exit ("munge_ctx_set: %s", munge_strerror (e));
-    }
-#endif
+
+    /* Initialize security.
+     */
+    if (!(ctx->sec = flux_sec_create ()))
+        err_exit ("flux_sec_create");
+    if (ctx->security_clr && flux_sec_disable (ctx->sec, ctx->security_clr) < 0)
+        err_exit ("flux_sec_disable");
+    if (ctx->security_set && flux_sec_enable (ctx->sec, ctx->security_set) < 0)
+        err_exit ("flux_sec_enable");
+    if (flux_sec_zauth_init (ctx->sec, ctx->zctx, ctx->session_name) < 0)
+        msg_exit ("flux_sec_zauth_init: %s", flux_sec_errstr (ctx->sec));
+    if (flux_sec_munge_init (ctx->sec) < 0)
+        msg_exit ("flux_sec_munge_init: %s", flux_sec_errstr (ctx->sec));
+
     /* Bind to downstream ports.
      */
     ctx->zs_upreq_in = cmbd_init_upreq_in (ctx);
@@ -894,7 +788,7 @@ static void cmbd_init (ctx_t *ctx)
     ctx->loaded_plugins = zhash_new ();
     load_plugins (ctx);
 
-    flux_log (ctx->h, LOG_INFO, "initialization complete");
+    flux_log (ctx->h, LOG_INFO, "%s", flux_sec_confstr (ctx->sec));
 }
 
 static void cmbd_fini (ctx_t *ctx)
@@ -902,18 +796,8 @@ static void cmbd_fini (ctx_t *ctx)
     //unload_plugins (ctx);  /* FIXME */
     zhash_destroy (&ctx->loaded_plugins);
 
-#if HAVE_CURVE_SECURITY
-    if (ctx->cli_cert)
-        zcert_destroy (&ctx->cli_cert);
-    if (ctx->srv_cert)
-        zcert_destroy (&ctx->srv_cert);
-    if (ctx->auth)
-        zauth_destroy (&ctx->auth);
-#endif
-#if HAVE_MUNGE_SECURITY
-    if (ctx->mctx)
-        munge_ctx_destroy (ctx->mctx);
-#endif
+    if (ctx->sec)
+        flux_sec_destroy (ctx->sec);
     zloop_destroy (&ctx->zl);
     route_fini (ctx->rctx);
     zctx_destroy (&ctx->zctx); /* destorys all sockets created in ctx */
@@ -1198,117 +1082,22 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
     ZLOOP_RETURN(ctx);
 }
 
-#if HAVE_MUNGE_SECURITY
-/* Events sent on the PGM multicast overlay plane are encrypted with MUNGE.
- * Start with two-part zmsg: Tag + json.
- * Serialize it to string form with zmsg_encode().
- * Transform that (as payload) to a MUNGE cred string with munge_encode().
- * Now replace the json frame in the original message with the munge cred.
- * Thus the final message is cleartext tag + munge cred.
- * N.B.: Confidentiality of payload is obtained in addition to the usual
- * authentication, since MUNGE context was created with
- * MUNGE_OPT_UID_RESTRICTION set to cmbd's effective UID.
- */
-static void zmsg_repl_zf2 (zmsg_t *zmsg, zframe_t *zf)
-{
-    zframe_t *lf = zmsg_last (zmsg);
-    assert (lf != NULL);
-    zmsg_remove (zmsg, lf);
-    zframe_destroy (&lf);
-    if (zmsg_add (zmsg, zf))
-        oom ();
-}
-
-static int event_encode (ctx_t *ctx, zmsg_t *zmsg)
-{
-    char *buf = NULL, *cr = NULL;
-    munge_err_t e;
-    zframe_t *zf;
-    size_t len;
-    int rc = -1;
-
-    assert (zmsg != NULL);
-    assert (zmsg_size (zmsg) == 2); /* tag + json */
-
-    if ((len  = zmsg_encode (zmsg, (byte **)&buf)) < 0) {
-        flux_log (ctx->h, LOG_ERR, "%s: zmsg_encode failed", __FUNCTION__);
-        goto done;
-    }
-    if ((e = munge_encode (&cr, ctx->mctx, buf, len)) != EMUNGE_SUCCESS) {
-        flux_log (ctx->h, LOG_ERR, "%s: munge_encode failed: %s",
-                  __FUNCTION__, munge_strerror (e));
-        goto done;
-    }
-    if (!(zf = zframe_new (cr, strlen (cr) + 1)))
-        oom ();
-    zmsg_repl_zf2 (zmsg, zf);
-    assert (zmsg_size (zmsg) == 2);
-    rc = 0;
-done:
-    if (buf)
-        free (buf);
-    if (cr)
-        free (cr);
-    return rc;
-}
-
-static int event_decode (ctx_t *ctx, zmsg_t *zmsg)
-{
-    char *buf = NULL, *tag = NULL, *tag2 = NULL;
-    zmsg_t *zmsg2 = NULL;
-    munge_err_t e;
-    zframe_t *zf, *zf2;
-    int len;
-    int rc = -1;
-
-    if (zmsg_size (zmsg) != 2 || !(tag = cmb_msg_tag (zmsg, false))
-           || !(zf = zmsg_last (zmsg)) || zframe_size (zf) < 1
-           || (*(zframe_data (zf) + zframe_size (zf) - 1) != '\0')) {
-        flux_log (ctx->h, LOG_ERR, "%s: malformed message", __FUNCTION__);
-        goto done;
-    }
-    if ((e = munge_decode ((char *)zframe_data (zf), ctx->mctx,
-                    (void *)&buf, &len, NULL, NULL)) != EMUNGE_SUCCESS) {
-        flux_log (ctx->h, LOG_ERR, "%s: munge_decode failed: %s",
-                  __FUNCTION__, munge_strerror (e));
-        goto done;
-    }
-    if (!(zmsg2 = zmsg_decode ((byte *)buf, len))) {
-        flux_log (ctx->h, LOG_ERR, "%s: zmsg_decode failed", __FUNCTION__);
-        goto done;
-    }
-    if (zmsg_size (zmsg2) != 2 || !(tag2 = cmb_msg_tag (zmsg2, false))
-            || strcmp (tag, tag2) != 0 || !(zf2 = zmsg_last (zmsg2))) {
-        flux_log (ctx->h, LOG_ERR, "%s: malformed payload", __FUNCTION__);
-        goto done;
-    }
-    zmsg_remove (zmsg2, zf2);
-    zmsg_repl_zf2 (zmsg, zf2);
-    rc = 0;
-done:
-    if (buf)
-        free (buf);
-    if (tag)
-        free (tag);
-    if (tag2)
-        free (tag2);
-    if (zmsg2)
-        zmsg_destroy (&zmsg2); 
-    return rc;
-}
-#endif
-
 static int cmbd_upev_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
 {
     int rc = -1;
 
+    if (!*zmsg || zmsg_content_size (*zmsg) == 0) {
+        errno = EINVAL;
+        goto done;
+    }
     if (ctx->zs_upev_out) {
-#if HAVE_MUNGE_SECURITY
-        if (!ctx->security_disable && ctx->upev_mcast) {
-            if (event_encode (ctx, *zmsg) < 0)
+        if (ctx->upev_mcast) {
+            if (flux_sec_munge_zmsg (ctx->sec, zmsg) < 0) {
+                flux_log (ctx->h, LOG_ERR, "%s: discarding message: %s",
+                          __FUNCTION__, flux_sec_errstr (ctx->sec));
                 goto done;
+            }
         }
-#endif
         rc = zmsg_send (zmsg, ctx->zs_upev_out);
     }
 done:
@@ -1324,17 +1113,24 @@ static zmsg_t *cmbd_upev_recvmsg (ctx_t *ctx)
     if (ctx->zs_upev_in) {
         if (!(zmsg = zmsg_recv (ctx->zs_upev_in)))
             goto done;
-#if HAVE_MUNGE_SECURITY
-        if (!ctx->security_disable && ctx->upev_mcast) {
-            if (event_decode (ctx, zmsg) < 0) {
-                zmsg_destroy (&zmsg);
-                goto done;
+        if (zmsg_content_size (zmsg) == 0) {
+            flux_log (ctx->h, LOG_INFO, "%s: discarding runt", __FUNCTION__);
+            goto discard;
+        }
+        if (ctx->upev_mcast) {
+            if (flux_sec_unmunge_zmsg (ctx->sec, &zmsg) < 0) {
+                flux_log (ctx->h, LOG_INFO, "%s: discarding message: %s",
+                          __FUNCTION__, flux_sec_errstr (ctx->sec));
+                goto discard;
             }
         }
-#endif
     }
 done:
     return zmsg;
+discard:
+    if (zmsg)
+        zmsg_destroy (&zmsg);
+    return NULL;
 }
 
 static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg)

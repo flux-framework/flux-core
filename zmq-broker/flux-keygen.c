@@ -14,38 +14,31 @@
 #include "cmb.h"
 #include "util.h"
 #include "log.h"
+#include "security.h"
 
-#if ZMQ_VERSION_MAJOR >= 4
-#define HAVE_CURVE_SECURITY 1
-#endif
-
-#if HAVE_CURVE_SECURITY
-#include "curve.h"
-#endif
-
-#define OPTIONS "hfn:"
+#define OPTIONS "hfp"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"force",      no_argument,        0, 'f'},
-    {"name",       required_argument,  0, 'n'},
+    {"plain",      no_argument,        0, 'p'},
     { 0, 0, 0, 0 },
 };
-
-char * ctime_iso8601_now (char *buf, size_t sz);
 
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-keygen [--force] [--name NAME]\n"
+"Usage: flux-keygen [--force] [--plain|--curve]\n"
 );
     exit (1);
 }
 
 int main (int argc, char *argv[])
 {
-    char *name = "flux";
-    bool fopt = false;
     int ch;
+    flux_sec_t sec;
+    bool force = false;
+    bool plain = false;
+    bool curve = false;
 
     log_init ("flux-keygen");
 
@@ -55,10 +48,13 @@ int main (int argc, char *argv[])
                 usage ();
                 break;
             case 'f': /* --force */
-                fopt = true;
+                force = true;
                 break;
-            case 'n': /* --name */
-                name = optarg;
+            case 'p': /* --plain */
+                plain = true;
+                break;
+            case 'c': /* --curve */
+                curve = true;
                 break;
             default:
                 usage ();
@@ -67,31 +63,17 @@ int main (int argc, char *argv[])
     }
     if (optind < argc)
         usage ();
-#if HAVE_CURVE_SECURITY
-    char *dir;
-    if (!(dir = flux_curve_getpath ()) || flux_curve_checkpath (dir, true) < 0)
-        exit (1);
-    if (flux_curve_gencli (dir, name, fopt) < 0 || flux_curve_gensrv (dir,
-                                                             name, fopt) < 0) {
-        if (!fopt)
-            fprintf (stderr, "Use --force to unlink before regen.\n"); 
-        exit (1);
-    }
-
-    /* Try loading keys just to be sure they work.
-     */
-    zcert_t *cert;
-    if (!(cert = flux_curve_getcli (dir, name)))
-        exit (1);
-    zcert_destroy (&cert);
-    if (!(cert = flux_curve_getsrv (dir, name)))
-        exit (1);
-    zcert_destroy (&cert);
-    free (dir);
-#else
-    msg_exit ("Flux was built without support for CURVE security");
-#endif
-
+    if (plain && curve)
+        usage ();
+    if (!(sec = flux_sec_create ()))
+        err_exit ("flux_sec_create");
+    if (plain && flux_sec_enable (sec, FLUX_SEC_TYPE_PLAIN) < 0)
+        msg_exit ("PLAIN security is not available");
+    if (curve && flux_sec_enable (sec, FLUX_SEC_TYPE_CURVE) < 0)
+        msg_exit ("CURVE security is not available");
+    if (flux_sec_keygen (sec, force, true) < 0)
+        msg_exit ("%s", flux_sec_errstr (sec));
+    flux_sec_destroy (sec);
 
     log_fini ();
     

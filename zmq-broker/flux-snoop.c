@@ -13,19 +13,7 @@
 #include "util.h"
 #include "zmsg.h"
 #include "log.h"
-
-#if ZMQ_VERSION_MAJOR >= 4
-#define HAVE_CURVE_SECURITY 1
-#include "curve.h"
-#endif
-
-#if CZMQ_VERSION_MAJOR >= 2 && ZMQ_VERSION_MAJOR >= 4
-#define HAVE_ZMONITOR 1
-#endif
-
-#define DEFAULT_ZAP_DOMAIN  "flux"
-
-#define DEFAULT_ZMON_URI    "inproc://monitor.snoop"
+#include "security.h"
 
 #define OPTIONS "hanN:vl"
 static const struct option longopts[] = {
@@ -43,9 +31,7 @@ void usage (void)
     fprintf (stderr, 
 "Usage: flux-snoop OPTIONS [topic [topic...]]\n"
 "  -a,--all                  Include suppressed cmb.info, log.msg messages\n"
-#if HAVE_CURVE_SECURITY
 "  -n,--no-security          Try to connect without CURVE security\n"
-#endif
 "  -v,--verbose              Verbose connect output\n"
 "  -l,--long                 Display long message format\n"
 "  -N,--session-name NAME    Set session name (default flux)\n"
@@ -53,8 +39,7 @@ void usage (void)
     exit (1);
 }
 
-static void *connect_snoop (zctx_t *zctx, bool nopt, bool vopt,
-                            const char *session, const char *uri);
+static void *connect_snoop (zctx_t *zctx, flux_sec_t sec, const char *uri);
 static int snoop_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg);
 static int zmon_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg);
 
@@ -66,14 +51,15 @@ int main (int argc, char *argv[])
     flux_t h;
     int ch;
     char *uri = NULL;
-    bool nopt = false;
     bool vopt = false;
+    bool nopt = false;
     char *session = "flux";
     zctx_t *zctx;
     zlist_t *subs;
     void *s;
     zloop_t *zloop;
     zmq_pollitem_t zp;
+    flux_sec_t sec;
 
     log_init ("flux-snoop");
 
@@ -91,10 +77,10 @@ int main (int argc, char *argv[])
                 lopt = true;
                 break;
             case 'n': /* --no-security */
-                nopt = true;;
+                nopt = true;
                 break;
             case 'v': /* --verbose */
-                vopt = true;;
+                vopt = true;
                 break;
             case 'N': /* --session-name NAME */
                 session = optarg;;
@@ -128,15 +114,30 @@ int main (int argc, char *argv[])
     if (!(zloop = zloop_new ()))
         oom ();
 
+    /* Initialize security ctx.
+     */
+    if (!(sec = flux_sec_create ()))
+        err_exit ("flux_sec_create");
+    if (nopt) {
+        if (flux_sec_disable (sec, FLUX_SEC_TYPE_ALL) < 0)
+            err_exit ("flux_sec_disable");
+        msg ("Security is disabled");
+    }
+    if (flux_sec_zauth_init (sec, zctx, session) < 0)
+        msg_exit ("flux_sec_zinit: %s", flux_sec_errstr (sec));
+
     /* Connect to the snoop socket and subscribe to topics of interest.
      */
     if (vopt)
         msg ("connecting to %s...", uri);
-    s = connect_snoop (zctx, nopt, vopt, session, uri);
+
+    if (!(s = connect_snoop (zctx, sec, uri)))
+        err_exit ("%s", uri);
     zp.socket = s;
     zp.events = ZMQ_POLLIN;
     if (zloop_poller (zloop, &zp, snoop_cb, NULL) < 0)
         err_exit ("zloop_poller");
+
     if (zlist_size (subs) == 0)
         zsocket_set_subscribe (s, "");
     else {
@@ -145,7 +146,7 @@ int main (int argc, char *argv[])
             zsocket_set_subscribe (s, sub);
     }
 
-#if HAVE_ZMONITOR
+#if CZMQ_VERSION_MAJOR >= 2 && ZMQ_VERSION_MAJOR >= 4
     zmonitor_t *zmon;
     if (!(zmon = zmonitor_new (zctx, s, ZMQ_EVENT_DISCONNECTED)))
         err_exit ("zmonitor_new");
@@ -153,6 +154,7 @@ int main (int argc, char *argv[])
         zmonitor_set_verbose (zmon, true);
     zp.socket = zmonitor_socket (zmon);
 #else
+#define DEFAULT_ZMON_URI    "inproc://monitor.snoop"
     if (zmq_socket_monitor (s, DEFAULT_ZMON_URI, ZMQ_EVENT_DISCONNECTED) < 0)
         err_exit ("zmq_socket_monitor");
     if (!(zp.socket = zsocket_new  (zctx, ZMQ_PAIR)))
@@ -169,7 +171,7 @@ int main (int argc, char *argv[])
     if (vopt)
         msg ("disconnecting");
 
-#if HAVE_ZMONITOR
+#if CZMQ_VERSION_MAJOR >= 2 && ZMQ_VERSION_MAJOR >= 4
     zmonitor_destroy (&zmon);
 #endif
 
@@ -183,43 +185,17 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-static void *connect_snoop (zctx_t *zctx, bool nopt, bool vopt,
-                            const char *session, const char *uri)
+static void *connect_snoop (zctx_t *zctx, flux_sec_t sec, const char *uri)
 {
     void *s;
 
     if (!(s = zsocket_new (zctx, ZMQ_SUB)))
         err_exit ("zsocket_new");
-#if HAVE_CURVE_SECURITY
-    if (!nopt) {
-        char *dir = flux_curve_getpath ();
-        zauth_t *auth;
-        zcert_t *cli_cert, *srv_cert;
-        char *srvkey = NULL;
-
-        if (!dir || flux_curve_checkpath (dir, false) < 0)
-            exit (1);
-        if (!(cli_cert = flux_curve_getcli (dir, session)))
-            exit (1);
-        if (!(srv_cert = flux_curve_getsrv (dir, session)))
-            exit (1);
-
-        if (!(auth = zauth_new (zctx)))
-            err_exit ("zauth_new");
-        if (vopt)
-            zauth_set_verbose (auth, true);
-        zauth_configure_curve (auth, "*", dir);
-
-        zsocket_set_zap_domain (s, DEFAULT_ZAP_DOMAIN);
-        zcert_apply (cli_cert, s);
-        srvkey = zcert_public_txt (srv_cert);
-        zsocket_set_curve_serverkey (s, srvkey);
-
-        free (dir);
-    }
-#endif
+    if (flux_sec_csockinit (sec, s) < 0)
+        msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (sec));
     if (zsocket_connect (s, "%s", uri) < 0)
         err_exit ("%s", uri);
+
     return s;
 }
 
@@ -262,7 +238,7 @@ static int zmon_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
     int event = 0;
 
     if ((zmsg = zmsg_recv (item->socket))) {
-#if HAVE_ZMONITOR
+#if ZMQ_VERSION_MAJOR >= 4
         char *s = zmsg_popstr (zmsg);
         if (s) {
             event = strtoul (s, NULL, 10);
