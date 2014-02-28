@@ -1114,13 +1114,13 @@ static zmsg_t *cmbd_upev_recvmsg (ctx_t *ctx)
         if (!(zmsg = zmsg_recv (ctx->zs_upev_in)))
             goto done;
         if (zmsg_content_size (zmsg) == 0) {
-            flux_log (ctx->h, LOG_INFO, "%s: discarding runt", __FUNCTION__);
+            //flux_log (ctx->h, LOG_INFO, "%s: discarding runt", __FUNCTION__);
             goto discard;
         }
         if (ctx->upev_mcast) {
             if (flux_sec_unmunge_zmsg (ctx->sec, &zmsg) < 0) {
-                flux_log (ctx->h, LOG_INFO, "%s: discarding message: %s",
-                          __FUNCTION__, flux_sec_errstr (ctx->sec));
+                //flux_log (ctx->h, LOG_INFO, "%s: discarding message: %s",
+                //          __FUNCTION__, flux_sec_errstr (ctx->sec));
                 goto discard;
             }
         }
