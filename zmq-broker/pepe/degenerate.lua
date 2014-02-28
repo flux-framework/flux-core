@@ -22,7 +22,6 @@ local dnreqouturi = "tcp://*:5557"
 
 if pepe.rank == 0 then
     local topology = tree.k_ary_json (1, #h)
-    pepe.run ("echo bind 127.0.0.1 | /usr/sbin/redis-server -")
     pepe.run ("./cmbd --up-event-uri='" .. eventuri .. "'"
 		.. " --dn-req-out-uri='" .. dnreqouturi .. "'"
 		.. " --rank=" .. pepe.rank
