@@ -320,6 +320,8 @@ static int listener_cb (flux_t h, int fd, short revents, void *arg)
 {
     ctx_t *ctx = arg;
     int rc = 0;
+    struct ucred cr;
+    socklen_t crlen = sizeof (cr);
 
     if (revents & ZMQ_POLLIN) {
         client_t *c;
@@ -329,6 +331,22 @@ static int listener_cb (flux_t h, int fd, short revents, void *arg)
             flux_log (h, LOG_ERR, "accept: %s", strerror (errno));
             goto done;
         }
+        /* Deny the connection if the connecting uid doesn't match
+         * the uid cmbd (hence this thread) is executing under.
+         */
+        if (getsockopt (cfd, SOL_SOCKET, SO_PEERCRED, &cr, &crlen) < 0) {
+            flux_log (h, LOG_ERR, "getsockopt SO_PEERCRED: %s",
+                      strerror (errno));
+            close (cfd);
+            goto done;
+        }
+        assert (crlen == sizeof (cr));
+        if (cr.uid != geteuid ()) {
+            flux_log (h, LOG_ERR, "connect by uid %d denied", cr.uid);
+            close (cfd);
+            goto done;
+        }
+        //flux_log (h, LOG_INFO, "connect by uid %d allowed", cr.uid);
         c = client_create (ctx, cfd);
         if (zlist_append (ctx->clients, c) < 0)
             oom ();
