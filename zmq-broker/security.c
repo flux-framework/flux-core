@@ -3,10 +3,10 @@
 
 /* ZeroMQ security:
  *
- * ZMQ v4 introduced ZAP, the ZFS authentication protocol, and altered
+ * ZeroQM v4 introduced ZAP, the ZeroMQ authentication protocol, and altered
  * its wire protocol (ZMTP) to incorporate a generic security handshake
  * similar to SASL.  Three security modes were initially implemented:
- * NONE  - equivalent to ZMQ v3
+ * NONE  - equivalent to ZeroMQ v3
  * PLAIN - a toy method where client sends server a password in the clear,
  *         connects or is denied, then procedes as with NONE
  * CURVE - Implements the CurveCP handshake and Bernstein's Curve25519
@@ -35,7 +35,7 @@
  * Flux, the upev sockets are either epgm or something else but never both.
  * If epgm, we encode/decode messages with MUNGE.
  *
- * Since ZMQ internally handles pub/sub topic strings for subscriptions,
+ * Since ZeroMQ internally handles pub/sub topic strings for subscriptions,
  * we leave the topic string in the clear, but substitute a munge encoded
  * version of the entire message (including the topic string) for subsequent
  * message parts.  The clear topic string can be compared to the munge one
@@ -47,14 +47,14 @@
  * We set the MUNGE_OPT_UID_RESTRICTION flag to get privacy for the
  * non-topic string portion of the message.
  *
- * Ultimately we hope for some "native" ZMQ mechanism for protecting the
+ * Ultimately we hope for some "native" ZeroMQ mechanism for protecting the
  * epgm transport.  At best what we have done is a half-measure.
  *
  * The flux_sec_t abstraction:
  *
  * Call flux_sec_create() to create a security context with default
  * security modes enabled (MUNGE + CURVE, unless building against an older
- * zeromq, then just MUNGE).
+ * ZeroMQ, then just MUNGE).
  *
  * Call flux_sec_enable() / flux_sec_disable() to change which security
  * modes are used.
