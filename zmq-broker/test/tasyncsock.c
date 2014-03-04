@@ -1,9 +1,26 @@
-/* tasyncsock.c - test ZMQ_IMMEDIATE */
+/* tasyncsock.c - test socket ZMQ_IMMEDIATE, ZMQ_LINGER sockopts */
 
-/* Without the ZMQ_IMMEDIATE socket option, a message sent immediately
- * after the first connect on a dealer socket may be lost.
+/* Set up a server that receives a fixed number of messages on a ROUTER
+ * socket bound to an ipc:// endpoint, socket with timeout.
+ * Set up a client in another thread that connects a DEALER socket to the
+ * server and sends one message a fixed number of times.
+ * If the correct number of messages is received, silently exit 0.
+ * If one of the receives times out meaning some number of messages
+ * were lost, allow SIGALRM to terminate the program (exit != 0).
+ *
+ * If --raw is specified, raw zmq_* functions are used to send the
+ * messages; otherwise czmq is used.  zmq_* differs from czmq in its default
+ * ZMQ_LINGER setting (zmq_* is -1, while czmq is 0).
+ *
+ * The two socket options ZMQ_IMMEDIATE and ZMQ_LINGER may be altered
+ * in the client using the --immediate=N and --linger=N options.  *
+ * Without ZMQ_IMMEDIATE set to 1 (the default), messages may be dropped
+ * on a DEALER socket if they manage to be sent before the DEALER has
+ * connected to anybody.
+ *
+ * Without ZMQ_LINGER set to != -1, messages may be dropped on the DEALER
+ * socket if they manage to not be sent before the socket is destroyed.
  */
-
 #include <sys/types.h>
 #include <sys/time.h>
 #include <json/json.h>
@@ -31,67 +48,168 @@
 #endif
 
 static char *uri = NULL;
+static bool raw = false;
+static bool lopt = false;
+static int linger = 0;
+static bool iopt = false;
+static int imm = 0;
+static int iter = 0;
+static bool vopt = false;
+static int bufsize = 0;
+static bool mopt = false;
+static int sleep_usec = 0;
 
-const bool use_raw = 0;
+void *mon_init (void *zctx, void *zs, int events)
+{
+    void *mon;
+    if (zmq_socket_monitor (zs, "inproc://mon", ZMQ_EVENT_ALL) < 0)
+        err_exit ("zmq_socket_monitor");
+    if (!(mon = zsocket_new  (zctx, ZMQ_PAIR)))
+        err_exit ("zsocket_new");
+    if (zsocket_connect (mon, "inproc://mon") < 0)
+        err_exit ("zsocket_connect inproc://mon");
+    return mon;
+}
+
+void mon_waitevent (void *mon, int wevent)
+{
+    int event = 0;
+    zmsg_t *zmsg;
+    zmq_event_t ev;
+    zframe_t *zf;
+
+    while (event != wevent) {
+        if (!(zmsg = zmsg_recv (mon))) 
+            err_exit ("zmsg_recv mon");
+        memset (&ev, 0, sizeof (ev));
+        if ((zf = zmsg_first (zmsg)) && zframe_size (zf) <= sizeof (ev)) {
+            memcpy (&ev, zframe_data (zf), zframe_size (zf));
+            event = ev.event;
+            //msg ("event=%d", event);
+        }
+        zmsg_destroy (&zmsg);
+    }
+}
+
+void send_czmq (char *buf, int len)
+{
+    zctx_t *zctx;
+    void *zs, *mon;
+    zmsg_t *zmsg;
+
+    if (!(zctx = zctx_new ()))
+        err_exit ("C: zctx_new");
+    if (lopt) /* zctx linger default = 0 (flush none) */
+        zctx_set_linger (zctx, linger); 
+    if (!(zs = zsocket_new (zctx, ZMQ_DEALER)))
+        err_exit ("C: zsocket_new");
+    //if (lopt) // doesn't work here 
+    //    zsocket_set_linger (zs, linger); 
+    if (iopt)
+        zsocket_set_immediate (zs, imm);
+    if (mopt)
+        mon = mon_init (zctx, zs, ZMQ_EVENT_CONNECTED);
+    //zsocket_set_sndhwm (zs, 0); /* unlimited */
+    if (zsocket_connect (zs, uri) < 0)
+        err_exit ("C: zsocket_connect");
+    if (mopt)
+        mon_waitevent (mon, ZMQ_EVENT_CONNECTED);
+    if (!(zmsg = zmsg_new ()))
+        oom ();
+    if (zmsg_pushmem (zmsg, buf, bufsize) < 0)
+        oom ();
+    if (zmsg_send (&zmsg, zs) < 0)
+        err_exit ("C: zmsg_send");
+    if (sleep_usec > 0)
+        usleep (sleep_usec);
+    zctx_destroy (&zctx);
+}
+
+void send_raw (char *buf, int len)
+{
+    void *zctx;
+    void *zs;
+    int hwm = 0;
+
+    if (!(zctx = zmq_init (1)))
+        err_exit ("C: zmq_init");
+    if (!(zs = zmq_socket (zctx, ZMQ_DEALER)))
+        err_exit ("C: zmq_socket");
+    if (iopt) {
+        if (zmq_setsockopt (zs, ZMQ_IMMEDIATE, &imm, sizeof (imm)) < 0)
+            err_exit ("C: zmq_setsockopt ZMQ_IMMEDIATE %d", imm);
+    }
+    if (lopt) { /* zmq linger default = -1 (flush all) */
+        if (zmq_setsockopt (zs, ZMQ_LINGER, &linger, sizeof (linger)) < 0)
+            err_exit ("C: zmq_setsockopt ZMQ_LINGER %d", linger);
+    }
+    if (zmq_setsockopt (zs, ZMQ_SNDHWM, &hwm, sizeof (hwm)) < 0)
+        err_exit ("C: zmq_setsockopt ZMQ_SNDHWM %d", linger);
+    if (zmq_connect (zs, uri) < 0)
+        err_exit ("C: zmq_connect");
+    if (zmq_send (zs, buf, bufsize, 0) < 0)
+        err_exit ("zmq_send");
+    if (sleep_usec > 0)
+        usleep (sleep_usec);
+    if (zmq_close (zs) < 0)
+        err_exit ("zmq_close");
+#if ZMQ_VERSION_MAJOR < 4
+    if (zmq_ctx_destroy (zctx) < 0)
+        err_exit ("zmq_ctx_destroy");
+#else
+    if (zmq_ctx_term (zctx) < 0)
+        err_exit ("zmq_ctx_term");
+#endif
+}
 
 void *thread (void *arg)
 {
-    char buf[1];
+    int i;
+    char *buf = NULL;
 
-    memset (buf, 0, sizeof (buf));
-    if (use_raw) {
-        void *zctx;
-        void *zs;
-        int i;
-
-        if (!(zctx = zmq_init (1)))
-            err_exit ("C: zmq_init");
-        if (!(zs = zmq_socket (zctx, ZMQ_DEALER)))
-            err_exit ("C: zmq_socket");
-
-        i = 1;
-        if (zmq_setsockopt (zs, ZMQ_IMMEDIATE, &i, sizeof (i)) < 0)
-            err_exit ("C: zmq_setsockopt");
-
-        msg ("C: connect");
-        if (zmq_connect (zs, uri) < 0)
-            err_exit ("C: zmq_connect");
-
-        msg ("C: send");
-        if (zmq_send (zs, buf, sizeof (buf), 0) < 0)
-            err_exit ("zmq_send");
-       
-        msg ("C: done"); 
-        zmq_term (&zctx);
-    } else {
-        zctx_t *zctx;
-        void *zs;
-        zmsg_t *zmsg;
-
-        if (!(zctx = zctx_new ()))
-            err_exit ("C: zctx_new");
-        zctx_set_linger (zctx, -1); /* restore zmq -1 default linger value */
-        if (!(zs = zsocket_new (zctx, ZMQ_DEALER)))
-            err_exit ("C: zsocket_new");
-        zsocket_set_immediate (zs, 1);
-
-        msg ("C: connect %s", uri);
-        if (zsocket_connect (zs, uri) < 0)
-            err_exit ("C: zsocket_connect");
-
-        msg ("C: send");
-        if (!(zmsg = zmsg_new ()))
-            oom ();
-        if (zmsg_pushmem (zmsg, buf, sizeof (buf)) < 0)
-            oom ();
-        if (zmsg_send (&zmsg, zs) < 0)
-            err_exit ("C: zmsg_send");
-
-        msg ("C: done");
-        zctx_destroy (&zctx);
+    if (bufsize > 0)
+        buf = xzmalloc (bufsize);
+    for (i = 0; i < iter; i++) {
+        if (vopt)
+            msg ("sending %d of %d", i + 1, iter);
+        if (raw)
+            send_raw (buf, bufsize);
+        else
+            send_czmq (buf, bufsize);
     }
-
+    if (buf)
+        free (buf);
     return NULL;
+}
+
+#define OPTIONS "rtl:i:vT:s:mS:"
+static const struct option longopts[] = {
+   {"raw",         no_argument,        0, 'r'},
+   {"tcp",         no_argument,        0, 't'},
+   {"verbose",     no_argument,        0, 'v'},
+   {"monitor",     no_argument,        0, 'm'},
+   {"linger",      required_argument,  0, 'l'},
+   {"immediate",   required_argument,  0, 'i'},
+   {"size",        required_argument,  0, 's'},
+   {"timeout",     required_argument,  0, 'T'},
+   {"sleep-usec",  required_argument,  0, 'S'},
+   {0, 0, 0, 0},
+};
+
+static void usage (void)
+{
+    fprintf (stderr, 
+"Usage: tasyncsock OPTIONS iterations\n"
+"       --raw          use zmq_ functions instead of CZMQ\n"
+"       --tcp          use tcp transport instead of ipc\n"
+"       --linger=N     override default linger (-1=infinite)\n"
+"       --immediate=1  set 'immediate' socket option\n"
+"       --timeout=N    set receive timeout in seconds (default 1)\n"
+"       --size=N       set message payload size (default 0)\n"
+"       --monitor      wait for connect event before send\n"
+"       --sleep-usec N sleep N usec before closing socket\n"
+"       --verbose      be chatty\n");
+    exit (1);
 }
 
 int main (int argc, char *argv[])
@@ -102,13 +220,53 @@ int main (int argc, char *argv[])
     pthread_t tid;
     pthread_attr_t attr;
     zmsg_t *zmsg;
+    int i, ch;
+    const char *uritmpl = "ipc://*";
+    int timeout_sec = 1;
 
     log_init (basename (argv[0]));
 
-    if (argc != 1) {
-        fprintf (stderr, "Usage: tasyncsock\n");
-        exit (1);
+    while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
+        switch (ch) {
+            case 'r':
+                raw = true;
+                break;
+            case 'l':
+                lopt = true;
+                linger = strtol (optarg, NULL, 10);
+                break;
+            case 'i':
+                iopt = true;
+                imm = strtol (optarg, NULL, 10);
+                break;
+            case 't':
+                uritmpl = "tcp://*:*";
+                break;
+            case 'T':
+                timeout_sec = strtoul (optarg, NULL, 10);
+                break;
+            case 's':
+                bufsize = strtoul (optarg, NULL, 10);
+                break;
+            case 'v':
+                vopt = true;
+                break;
+            case 'm':
+                mopt = true;
+                break;
+            case 'S':
+                sleep_usec = strtoul (optarg, NULL, 10);;
+                break;
+            default:
+                usage ();
+                /*NOTREACHED*/
+        }
     }
+    if (optind != argc - 1)
+        usage ();
+    if (mopt && raw)
+        msg_exit ("--monitor is not implemented for raw mode");
+    iter = strtoul (argv[optind++], NULL, 10);
 
     /* Create socket and bind to it.
      * Store uri in global variable.
@@ -117,33 +275,38 @@ int main (int argc, char *argv[])
         err_exit ("S: zctx_new");
     if (!(zs = zsocket_new (zctx, ZMQ_ROUTER)))
         err_exit ("S: zsocket_new");
-    if (zsocket_bind (zs, "ipc://*") < 0)
+    zsocket_set_rcvhwm (zs, 0); /* unlimited */
+    if (zsocket_bind (zs, uritmpl) < 0)
         err_exit ("S: zsocket_bind");
     uri = zsocket_last_endpoint (zs);
-    msg ("S: bind %s", uri);
 
     /* Spawn thread which will be our client.
      */
-    msg ("S: start client");
     if ((rc = pthread_attr_init (&attr)))
         errn (rc, "S: pthread_attr_init");
     if ((rc = pthread_create (&tid, &attr, thread, NULL)))
         errn (rc, "S: pthread_create");
 
-    /* Handle one client message.
+    /* Handle 'iter' client messages with timeout
      */
-    msg ("S: recv");
-    if (!(zmsg = zmsg_recv (zs)))
-        err_exit ("S: zmsg_recv");
-    zmsg_dump (zmsg);
+    for (i = 0; i < iter; i++) {
+        alarm (timeout_sec);
+        if (!(zmsg = zmsg_recv (zs)))
+            err_exit ("S: zmsg_recv");
+        zmsg_destroy (&zmsg);
+        alarm (0);
+        if (vopt)
+            msg ("received message %d of %d", i + 1, iter);
+    }
 
     /* Wait for thread to terminate, then clean up.
      */
-    msg ("S: pthread_join");
     if ((rc = pthread_join (tid, NULL)))
         errn (rc, "S: pthread_join");
     zctx_destroy (&zctx); /* destroys sockets too */
-    msg ("S: done");
+
+    if (strstr (uri, "ipc://"))
+        (void)unlink (uri);
 
     log_fini ();
 
