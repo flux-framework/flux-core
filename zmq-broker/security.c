@@ -242,7 +242,7 @@ einval:
 int flux_sec_disable (flux_sec_t c, int tm)
 {
     c->typemask &= ~tm;
-    return validate_type (tm);
+    return validate_type (c->typemask);
 }
 
 int flux_sec_enable (flux_sec_t c, int tm)
@@ -252,12 +252,12 @@ int flux_sec_enable (flux_sec_t c, int tm)
     else if ((tm & (FLUX_SEC_TYPE_PLAIN)))
         c->typemask &= ~(int)FLUX_SEC_TYPE_CURVE;
     c->typemask |= tm;
-    return validate_type (tm);
+    return validate_type (c->typemask);
 }
 
 bool flux_sec_type_enabled (flux_sec_t c, int tm)
 {
-    return (c->typemask & tm);
+    return ((c->typemask & tm) == tm);
 }
 
 int flux_sec_keygen (flux_sec_t c, bool force, bool verbose)
