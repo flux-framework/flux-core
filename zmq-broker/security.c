@@ -559,18 +559,21 @@ int flux_sec_munge_zmsg (flux_sec_t c, zmsg_t **zmsg)
 {
     char *buf = NULL, *cr = NULL;
     munge_err_t e;
-    zframe_t *topicf = NULL, *zf;
+    zframe_t *topicf = NULL, *zf = NULL;
     size_t len;
     int rc = -1;
 
-    if (!(c->typemask & FLUX_SEC_TYPE_MUNGE) || !*zmsg
-                                             || !zmsg_content_size (*zmsg)) {
+    if (!(c->typemask & FLUX_SEC_TYPE_MUNGE))
         return 0;
+    if (!*zmsg || zmsg_size (*zmsg) == 0) {
+        seterrstr (c, "null message");
+        errno = EINVAL;
+        goto done;
     }
     if ((len  = zmsg_encode (*zmsg, (byte **)&buf)) < 0) {
-        seterrstr (c, "zmsg_encode: %s", strerror (errno));
         if (errno == 0)
             errno = EINVAL;
+        seterrstr (c, "zmsg_encode: %s", strerror (errno));
         goto done;
     }
     if ((e = munge_encode (&cr, c->mctx, buf, len)) != EMUNGE_SUCCESS) {
