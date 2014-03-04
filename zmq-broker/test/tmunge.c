@@ -22,19 +22,20 @@
 #include "zmsg.h"
 #include "security.h"
 
-#ifndef ZMQ_IMMEDIATE
-#define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
-#define zsocket_set_immediate   zsocket_set_delay_attach_on_connect
+#if CZMQ_VERSION_MAJOR < 2
+#define zmsg_pushstrf zmsg_pushstr
 #endif
 
-static char *uri = NULL;
+static const char *uri = "inproc://tmunge";
+static int nframes;
+static zctx_t *zctx;
 
 void *thread (void *arg)
 {
-    zctx_t *zctx;
     void *zs;
     zmsg_t *zmsg;
     flux_sec_t sec;
+    int i;
 
     if (!(sec = flux_sec_create ()))
         err_exit ("C: flux_sec_create");
@@ -45,37 +46,23 @@ void *thread (void *arg)
     if (flux_sec_munge_init (sec) < 0)
         err_exit ("C: flux_sec_munge_init: %s", flux_sec_errstr (sec));
 
-    if (!(zctx = zctx_new ()))
-        err_exit ("C: zctx_new");
-    zctx_set_linger (zctx, -1); /* restore zmq -1 default linger value */
-    if (!(zs = zsocket_new (zctx, ZMQ_DEALER)))
+    if (!(zs = zsocket_new (zctx, ZMQ_PUB)))
         err_exit ("C: zsocket_new");
-    zsocket_set_immediate (zs, 1);
 
-    msg ("C: connect %s", uri);
     if (zsocket_connect (zs, uri) < 0)
         err_exit ("C: zsocket_connect");
 
-    msg ("C: create");
     if (!(zmsg = zmsg_new ()))
         oom ();
-    if (zmsg_pushstr (zmsg, "frame.3") < 0)
-        oom ();
-    if (zmsg_pushstr (zmsg, "frame.2") < 0)
-        oom ();
-    if (zmsg_pushstr (zmsg, "frame.1") < 0)
-        oom ();
-    zmsg_dump (zmsg);
-    msg ("C: munge");
+    for (i = nframes - 1; i >= 0; i--)
+        if (zmsg_pushstrf (zmsg, "frame.%d", i) < 0)
+            oom ();
+    //zmsg_dump (zmsg);
     if (flux_sec_munge_zmsg (sec, &zmsg) < 0)
         err_exit ("C: flux_sec_munge_zmsg: %s", flux_sec_errstr (sec));
-    zmsg_dump (zmsg);
-    msg ("C: send");
+    //zmsg_dump (zmsg);
     if (zmsg_send (&zmsg, zs) < 0)
         err_exit ("C: zmsg_send");
-
-    msg ("C: done");
-    zctx_destroy (&zctx);
 
     flux_sec_destroy (sec);
 
@@ -85,20 +72,20 @@ void *thread (void *arg)
 int main (int argc, char *argv[])
 {
     int rc;
-    zctx_t *zctx;
     void *zs;
     pthread_t tid;
     pthread_attr_t attr;
     zmsg_t *zmsg;
     flux_sec_t sec;
-    zframe_t *zf;
+    int n;
 
     log_init (basename (argv[0]));
 
-    if (argc != 1) {
-        fprintf (stderr, "Usage: tasyncsock\n");
+    if (argc != 2) {
+        fprintf (stderr, "Usage: tmunge nframes\n");
         exit (1);
     }
+    nframes = strtoul (argv[1], NULL, 10);
 
     if (!(sec = flux_sec_create ()))
         err_exit ("flux_sec_create");
@@ -109,21 +96,14 @@ int main (int argc, char *argv[])
     if (flux_sec_munge_init (sec) < 0)
         err_exit ("flux_sec_munge_init: %s", flux_sec_errstr (sec));
 
-    /* Create socket and bind to it.
-     * Store uri in global variable.
-     */
     if (!(zctx = zctx_new ()))
         err_exit ("S: zctx_new");
-    if (!(zs = zsocket_new (zctx, ZMQ_ROUTER)))
+    if (!(zs = zsocket_new (zctx, ZMQ_SUB)))
         err_exit ("S: zsocket_new");
-    if (zsocket_bind (zs, "ipc://*") < 0)
+    if (zsocket_bind (zs, uri) < 0)
         err_exit ("S: zsocket_bind");
-    uri = zsocket_last_endpoint (zs);
-    msg ("S: bind %s", uri);
+    zsocket_set_subscribe (zs, "");
 
-    /* Spawn thread which will be our client.
-     */
-    msg ("S: start client");
     if ((rc = pthread_attr_init (&attr)))
         errn (rc, "S: pthread_attr_init");
     if ((rc = pthread_create (&tid, &attr, thread, NULL)))
@@ -131,24 +111,20 @@ int main (int argc, char *argv[])
 
     /* Handle one client message.
      */
-    msg ("S: recv");
     if (!(zmsg = zmsg_recv (zs)))
         err_exit ("S: zmsg_recv");
-    if ((zf = zmsg_pop (zmsg))) /* drop uuid */
-        zframe_destroy (&zf);
-    zmsg_dump (zmsg);
-    msg ("S: unmunge");
+    //zmsg_dump (zmsg);
     if (flux_sec_unmunge_zmsg (sec, &zmsg) < 0)
         err_exit ("S: flux_sec_unmunge_zmsg: %s", flux_sec_errstr (sec));
-    zmsg_dump (zmsg);
+    //zmsg_dump (zmsg);
+    if ((n = zmsg_size (zmsg) != nframes))
+        msg_exit ("S: expected %d frames, got %d", nframes, n);
 
     /* Wait for thread to terminate, then clean up.
      */
-    msg ("S: pthread_join");
     if ((rc = pthread_join (tid, NULL)))
         errn (rc, "S: pthread_join");
     zctx_destroy (&zctx); /* destroys sockets too */
-    msg ("S: done");
 
     flux_sec_destroy (sec);
 
