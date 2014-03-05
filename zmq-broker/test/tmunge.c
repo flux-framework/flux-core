@@ -28,11 +28,10 @@
 
 static const char *uri = "inproc://tmunge";
 static int nframes;
-static zctx_t *zctx;
+static void *cs;
 
 void *thread (void *arg)
 {
-    void *zs;
     zmsg_t *zmsg;
     flux_sec_t sec;
     int i;
@@ -46,12 +45,6 @@ void *thread (void *arg)
     if (flux_sec_munge_init (sec) < 0)
         err_exit ("C: flux_sec_munge_init: %s", flux_sec_errstr (sec));
 
-    if (!(zs = zsocket_new (zctx, ZMQ_PUB)))
-        err_exit ("C: zsocket_new");
-
-    if (zsocket_connect (zs, uri) < 0)
-        err_exit ("C: zsocket_connect");
-
     if (!(zmsg = zmsg_new ()))
         oom ();
     for (i = nframes - 1; i >= 0; i--)
@@ -61,7 +54,7 @@ void *thread (void *arg)
     if (flux_sec_munge_zmsg (sec, &zmsg) < 0)
         err_exit ("C: flux_sec_munge_zmsg: %s", flux_sec_errstr (sec));
     //zmsg_dump (zmsg);
-    if (zmsg_send (&zmsg, zs) < 0)
+    if (zmsg_send (&zmsg, cs) < 0)
         err_exit ("C: zmsg_send");
 
     flux_sec_destroy (sec);
@@ -78,6 +71,7 @@ int main (int argc, char *argv[])
     zmsg_t *zmsg;
     flux_sec_t sec;
     int n;
+    zctx_t *zctx;
 
     log_init (basename (argv[0]));
 
@@ -103,6 +97,11 @@ int main (int argc, char *argv[])
     if (zsocket_bind (zs, uri) < 0)
         err_exit ("S: zsocket_bind");
     zsocket_set_subscribe (zs, "");
+
+    if (!(cs = zsocket_new (zctx, ZMQ_PUB)))
+        err_exit ("S: zsocket_new");
+    if (zsocket_connect (cs, uri) < 0)
+        err_exit ("S: zsocket_connect");
 
     if ((rc = pthread_attr_init (&attr)))
         errn (rc, "S: pthread_attr_init");
