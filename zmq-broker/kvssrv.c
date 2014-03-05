@@ -1775,19 +1775,23 @@ static void setargs (ctx_t *ctx, zhash_t *args)
     commit_t *c;
 
     c = commit_create ();
-    while ((key = zlist_pop (keys))) {
-        val = zhash_lookup (args, key);
-        if (!(vo = json_tokener_parse (val)))
-            vo = json_object_new_string (val);
-        if (!vo)
-            continue;
-        if (store_by_reference (vo)) {
-            store (ctx, vo, ref);
-            commit_add (c, key, dirent_create ("FILEREF", ref));
-        } else {
-            commit_add (c, key, dirent_create ("FILEVAL", vo));
+
+    key = zlist_first (keys);
+    while (key) {
+        if (!strncmp (key, "kvs.", 4) && strlen (key + 4) > 0) {
+            val = zhash_lookup (args, key);
+            if (!(vo = json_tokener_parse (val)))
+                vo = json_object_new_string (val);
+            if (vo) {
+                if (store_by_reference (vo)) {
+                    store (ctx, vo, ref);
+                    commit_add (c, key + 4, dirent_create ("FILEREF", ref));
+                } else {
+                    commit_add (c, key + 4, dirent_create ("FILEVAL", vo));
+                }
+            }
         }
-        free (key);
+        key = zlist_next (keys);
     }
     zlist_destroy (&keys);
     commit_apply_one (ctx, c);
@@ -1852,8 +1856,7 @@ static int kvssrv_main (flux_t h, zhash_t *args)
 
         store (ctx, rootdir, href);
         setroot (ctx, href, 0);
-        if (args)
-            setargs (ctx, args);
+        setargs (ctx, args);
     } else {
         if (getroot_request_send (ctx) < 0)
             return -1;

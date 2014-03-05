@@ -109,8 +109,7 @@ typedef struct {
     char *plugin_path;          /* colon-separated list of directories */
     char *plugins;              /* comma-separated list of plugins to load */
     zhash_t *loaded_plugins;    /* hash of plugin handles by plugin name */
-    zhash_t *kvs_arg;
-    zhash_t *api_arg;
+    zhash_t *plugin_args;
     /* Misc
      */
     bool verbose;               /* enable debug to stderr */
@@ -200,9 +199,7 @@ int main (int argc, char *argv[])
     log_init (basename (argv[0]));
 
     ctx.size = 1;
-    if (!(ctx.kvs_arg = zhash_new ()))
-        oom ();
-    if (!(ctx.api_arg = zhash_new ()))
+    if (!(ctx.plugin_args = zhash_new ()))
         oom ();
     if (!(ctx.uri_upreq_in = zlist_new ()))
         oom ();
@@ -280,11 +277,14 @@ int main (int argc, char *argv[])
                 ctx.verbose = true;
                 break;
             case 's': { /* --set-conf key=val */
-                char *p, *cpy = xstrdup (optarg);
+                char *p, *cpy = xstrdup (optarg), *key;
                 if ((p = strchr (cpy, '='))) {
                     *p++ = '\0';
-                    zhash_update (ctx.kvs_arg, cpy, xstrdup (p));
-                    zhash_freefn (ctx.kvs_arg, cpy, free);
+                    if (asprintf (&key, "kvs.%s", cpy) < 0)
+                        oom ();
+                    zhash_update (ctx.plugin_args, key, xstrdup (p));
+                    zhash_freefn (ctx.plugin_args, key, free);
+                    free (key);
                 }
                 free (cpy);
                 break;
@@ -293,8 +293,8 @@ int main (int argc, char *argv[])
                 json_object *o = hostlist_to_json (optarg);
                 const char *val = json_object_to_json_string (o);
 
-                zhash_update (ctx.kvs_arg, "hosts", xstrdup (val));
-                zhash_freefn (ctx.kvs_arg, "hosts", free);
+                zhash_update (ctx.plugin_args, "kvs.hosts", xstrdup (val));
+                zhash_freefn (ctx.plugin_args, "kvs.hosts", free);
                 json_object_put (o);
                 break;
             }
@@ -316,8 +316,8 @@ int main (int argc, char *argv[])
                 break;
             case 'A': { /* --api-socket DEST */
                 char *cpy = xstrdup (optarg);
-                zhash_update (ctx.api_arg, "sockpath", cpy);
-                zhash_freefn (ctx.api_arg, "sockpath", free);
+                zhash_update (ctx.plugin_args, "api.sockpath", cpy);
+                zhash_freefn (ctx.plugin_args, "api.sockpath", free);
                 break;
             }
             default:
@@ -373,10 +373,8 @@ int main (int argc, char *argv[])
     }
     if (ctx.id)
         free (ctx.id);
-    if (ctx.kvs_arg)
-        zhash_destroy (&ctx.kvs_arg);
-    if (ctx.api_arg)
-        zhash_destroy (&ctx.api_arg);
+    if (ctx.plugin_args)
+        zhash_destroy (&ctx.plugin_args);
     if (ctx.uri_upreq_in)
         zlist_destroy (&ctx.uri_upreq_in);
 
@@ -388,15 +386,9 @@ static int load_plugin (ctx_t *ctx, char *name)
     char *uuid = uuid_generate_str ();
     plugin_ctx_t p;
     int rc = -1;
-    zhash_t *args = NULL;
 
-    /* FIXME: hardwired args */
-    if (!strcmp (name, "kvs") && ctx->treeroot)
-        args = ctx->kvs_arg;
-    else if (!strcmp (name, "api"))
-        args = ctx->api_arg;
-
-    if ((p = plugin_load (ctx->h, ctx->plugin_path, name, uuid, args))) {
+    if ((p = plugin_load (ctx->h, ctx->plugin_path, name, uuid,
+                          ctx->plugin_args))) {
         if (zhash_insert (ctx->loaded_plugins, name, p) < 0) {
             plugin_unload (p);
             goto done;
