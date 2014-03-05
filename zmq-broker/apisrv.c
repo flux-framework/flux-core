@@ -31,7 +31,8 @@
 typedef struct {
     int listen_fd;
     zlist_t *clients;
-    flux_t h;
+    flux_t h;   
+    uid_t session_owner;
 } ctx_t;
 
 typedef struct {
@@ -46,7 +47,10 @@ typedef struct {
     zlist_t *subscriptions;
     char *uuid;
     int cfd_id;
+    struct ucred ucred;
 } client_t;
+
+static void client_destroy (client_t *c);
 
 static void freectx (ctx_t *ctx)
 {
@@ -63,6 +67,7 @@ static ctx_t *getctx (flux_t h)
         ctx->h = h;
         if (!(ctx->clients = zlist_new ()))
             oom ();
+        ctx->session_owner = geteuid ();
         flux_aux_set (h, "apisrv", ctx, (FluxFreeFn)freectx);
     }
 
@@ -72,6 +77,8 @@ static ctx_t *getctx (flux_t h)
 static client_t * client_create (ctx_t *ctx, int fd)
 {
     client_t *c;
+    socklen_t crlen = sizeof (c->ucred);
+    flux_t h = ctx->h;
 
     c = xzmalloc (sizeof (*c));
     c->fd = fd;
@@ -81,7 +88,22 @@ static client_t * client_create (ctx_t *ctx, int fd)
         oom ();
     if (!(c->subscriptions = zlist_new ()))
         oom ();
+    if (getsockopt (fd, SOL_SOCKET, SO_PEERCRED, &c->ucred, &crlen) < 0) {
+        flux_log (h, LOG_ERR, "getsockopt SO_PEERCRED: %s", strerror (errno));
+        goto error;
+    }
+    assert (crlen == sizeof (c->ucred));
+    /* Deny connections by uid other than session owner for now.
+     */
+    if (c->ucred.uid != ctx->session_owner) {
+        flux_log (h, LOG_ERR, "connect by uid=%d pid=%d denied",
+                  c->ucred.uid, (int)c->ucred.pid);
+        goto error;
+    }
     return (c);
+error:
+    client_destroy (c);
+    return NULL;
 }
 
 static subscription_t *subscription_create (flux_t h, int type, char *topic)
@@ -167,15 +189,19 @@ static void client_destroy (client_t *c)
     subscription_t *sub;
     ctx_t *ctx = c->ctx;
 
-    zhash_foreach (c->disconnect_notify, notify_srv, c);
-    zhash_destroy (&c->disconnect_notify);
-
-    while ((sub = zlist_pop (c->subscriptions)))
-        subscription_destroy (ctx->h, sub);
-    zlist_destroy (&c->subscriptions);
-
-    free (c->uuid);
-    close (c->fd);
+    if (c->disconnect_notify) {
+        zhash_foreach (c->disconnect_notify, notify_srv, c);
+        zhash_destroy (&c->disconnect_notify);
+    }
+    if (c->subscriptions) {
+        while ((sub = zlist_pop (c->subscriptions)))
+            subscription_destroy (ctx->h, sub);
+        zlist_destroy (&c->subscriptions);
+    }
+    if (c->uuid)
+        free (c->uuid);
+    if (c->fd != -1)
+        close (c->fd);
 
     free (c);
 }
@@ -320,8 +346,6 @@ static int listener_cb (flux_t h, int fd, short revents, void *arg)
 {
     ctx_t *ctx = arg;
     int rc = 0;
-    struct ucred cr;
-    socklen_t crlen = sizeof (cr);
 
     if (revents & ZMQ_POLLIN) {
         client_t *c;
@@ -331,23 +355,10 @@ static int listener_cb (flux_t h, int fd, short revents, void *arg)
             flux_log (h, LOG_ERR, "accept: %s", strerror (errno));
             goto done;
         }
-        /* Deny the connection if the connecting uid doesn't match
-         * the uid cmbd (hence this thread) is executing under.
-         */
-        if (getsockopt (cfd, SOL_SOCKET, SO_PEERCRED, &cr, &crlen) < 0) {
-            flux_log (h, LOG_ERR, "getsockopt SO_PEERCRED: %s",
-                      strerror (errno));
+        if (!(c = client_create (ctx, cfd))) {
             close (cfd);
             goto done;
         }
-        assert (crlen == sizeof (cr));
-        if (cr.uid != geteuid ()) {
-            flux_log (h, LOG_ERR, "connect by uid %d denied", cr.uid);
-            close (cfd);
-            goto done;
-        }
-        //flux_log (h, LOG_INFO, "connect by uid %d allowed", cr.uid);
-        c = client_create (ctx, cfd);
         if (zlist_append (ctx->clients, c) < 0)
             oom ();
         if (flux_fdhandler_add (h, cfd, ZMQ_POLLIN | ZMQ_POLLERR,
