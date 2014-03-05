@@ -4,6 +4,8 @@ ${CMDPREFIX} ${CMBD:-./cmbd} \
   --parent=0,tcp://127.0.0.1:5556,tcp://127.0.0.1:5557 \
   --up-event-out-uri='tcp://127.0.0.1:5558' \
   --up-event-in-uri='tcp://127.0.0.1:5559' \
+  --up-req-in-uri='tcp://*:5562' \
+  --dn-req-out-uri='tcp://*:5563' \
   --rank=2 --size=3 \
   --plugins=api,barrier,live,kvs,job,rexec,mecho \
   --api-socket=/tmp/rank.2
