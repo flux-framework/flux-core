@@ -30,25 +30,12 @@
  * or tcp endpoints.  It is silently disabled on inproc and [e]pgm endpoints.
  * This allows a socket to be connected to multiple endpoints of different
  * types and for appropriate security to be transparently enabled/disabled
- * for that endpoint.  This seems fine for inproc, but not for epgm which
- * actually moves packets across the network.  To protect epgm events in
- * Flux, the upev sockets are either epgm or something else but never both.
- * If epgm, we encode/decode messages with MUNGE.
- *
- * Since ZeroMQ internally handles pub/sub topic strings for subscriptions,
- * we leave the topic string in the clear, but substitute a munge encoded
- * version of the entire message (including the topic string) for subsequent
- * message parts.  The clear topic string can be compared to the munge one
- * on receipt to ensure that it hasn't changed.  Of course we can't protect
- * against various DoS attacks (such as unsubscribing a recipient from
- * all messages) or tampering with a topic string on an in-flight message
- * with this strategy.
- * 
- * We set the MUNGE_OPT_UID_RESTRICTION flag to get privacy for the
- * non-topic string portion of the message.
- *
- * Ultimately we hope for some "native" ZeroMQ mechanism for protecting the
- * epgm transport.  At best what we have done is a half-measure.
+ * for that endpoint.  This scheme is appropriate for inproc, but not for
+ * epgm which exposes messages on a physical network.  To protect epgm msgs
+ * in Flux, we encode/decode them with MUNGE.  MUNGE_OPT_UID_RESTRICTION
+ * is used to obtain privacy.  Topic strings are encoded so ZeroMQ's
+ * subscriptions have to be bypassed by subscribing to all epgm messages at
+ * the cmbd level.
  *
  * The flux_sec_t abstraction:
  *
@@ -86,7 +73,9 @@
  *
  * Insecurities:
  *
- * See the caveats about epgm above in "Handling epgm with MUNGE".
+ * epgm PUB/SUB sockets are probably subject to some form of DoS attack at the
+ * ZMTP level since MUNGE is added at the "application layer" leaving ZeroMQ
+ * message routing machinery exposed.
  *
  * Initially we locate .flux in your home directory and load certificates
  * out of it presuming it is pre-shared and trusted.  Of course if it's
@@ -559,14 +548,13 @@ int flux_sec_munge_zmsg (flux_sec_t c, zmsg_t **zmsg)
 {
     char *buf = NULL, *cr = NULL;
     munge_err_t e;
-    zframe_t *topicf = NULL, *zf = NULL;
+    zframe_t *zf;
     size_t len;
     int rc = -1;
 
     if (!(c->typemask & FLUX_SEC_TYPE_MUNGE))
         return 0;
-    if (!*zmsg || zmsg_size (*zmsg) == 0) {
-        seterrstr (c, "null message");
+    if (!*zmsg) {
         errno = EINVAL;
         goto done;
     }
@@ -582,48 +570,36 @@ int flux_sec_munge_zmsg (flux_sec_t c, zmsg_t **zmsg)
             errno = EINVAL;
         goto done;
     }
-    topicf = zmsg_pop (*zmsg);          /* pop topic */
-    assert (topicf != NULL);
-    while ((zf = zmsg_pop (*zmsg)))     /* pop remaining parts (free) */
+    while ((zf = zmsg_pop (*zmsg)))     /* pop original parts and free */
         zframe_destroy (&zf);
-    if (zmsg_pushstr (*zmsg, cr) < 0)   /* push munge cred */    
+    if (zmsg_pushstr (*zmsg, cr) < 0)   /* push munge cred */
         oom ();
-    if (zmsg_push (*zmsg, topicf) < 0)  /* push topic */
-        oom ();
-    assert (zmsg_size (*zmsg) == 2);
     rc = 0;
 done:
     if (buf)
         free (buf);
     if (cr)
         free (cr);
-    if (zf)
-        zframe_destroy (&zf);
     return rc;
 }
 
 int flux_sec_unmunge_zmsg (flux_sec_t c, zmsg_t **zmsg)
 {
-    char *cr = NULL, *topic = NULL, *buf = NULL, *mtopic = NULL;
+    char *cr = NULL, *buf = NULL;
     int len;
     munge_err_t e;
     int rc = -1;
-    zframe_t *zf;
 
     if (!(c->typemask & FLUX_SEC_TYPE_MUNGE) || !*zmsg
                                              || !zmsg_content_size (*zmsg)) {
         return 0;
     }
-    topic = zmsg_popstr (*zmsg);        /* pop topic */
-    assert (topic != NULL);
     cr = zmsg_popstr (*zmsg);           /* pop munge cred */
     if (!cr) {
-        seterrstr (c, "message (topic='%s') has no MUNGE cred", topic);
+        seterrstr (c, "message has no MUNGE cred");
         errno = EINVAL;
         goto done;
     }
-    zmsg_destroy (zmsg);
-    
     e = munge_decode (cr, c->mctx, (void *)&buf, &len, NULL, NULL);
     if (e != EMUNGE_SUCCESS) {
         seterrstr (c, "munge_decode: %s", munge_strerror (e));
@@ -631,27 +607,17 @@ int flux_sec_unmunge_zmsg (flux_sec_t c, zmsg_t **zmsg)
             errno = EINVAL;
         goto done;
     }
+    zmsg_destroy (zmsg);
     if (!(*zmsg = zmsg_decode ((byte *)buf, len))) {
         seterrstr (c, "zmsg_decode: %s", strerror (errno));
         if (errno == 0)
             errno = EINVAL;
         goto done;
     }
-    if (!(zf = zmsg_first (*zmsg)) || !(mtopic = zframe_strdup (zf))
-                                   || strcmp (topic, mtopic) != 0) {
-        seterrstr (c, "clear topic '%s' != munged topic '%s'",
-                   topic, mtopic ? mtopic : "<null>");
-        errno = EINVAL;
-        goto done;
-    }
     rc = 0;
 done:
     if (buf)
         free (buf);
-    if (topic)
-        free (topic);
-    if (mtopic)
-        free (mtopic);
     if (cr)
         free (cr);
     return rc;
