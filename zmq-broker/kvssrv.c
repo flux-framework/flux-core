@@ -1778,7 +1778,7 @@ static void setargs (ctx_t *ctx, zhash_t *args)
 
     key = zlist_first (keys);
     while (key) {
-        if (!strncmp (key, "kvs.", 4) && strlen (key + 4) > 0) {
+        if (!strncmp (key, "kvs:", 4) && strlen (key + 4) > 0) {
             val = zhash_lookup (args, key);
             if (!(vo = json_tokener_parse (val)))
                 vo = json_object_new_string (val);

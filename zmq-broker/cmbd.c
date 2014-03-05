@@ -135,28 +135,26 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static void cmbd_init (ctx_t *ctx);
 static void cmbd_fini (ctx_t *ctx);
 
-#define OPTIONS "t:e:E:O:vs:R:S:p:P:L:T:A:d:D:H:N:nci"
+#define OPTIONS "t:e:E:O:vR:S:p:P:L:T:d:D:H:N:nci"
 static const struct option longopts[] = {
-    {"session-name",   required_argument,  0, 'N'},
-    {"no-security",    no_argument,        0, 'N'},
-    {"up-event-uri",   required_argument,  0, 'e'},
-    {"up-event-out-uri",required_argument, 0, 'O'},
-    {"up-event-in-uri",required_argument,  0, 'E'},
-    {"dn-event-in-uri",required_argument,  0, 'd'},
+    {"session-name",    required_argument,  0, 'N'},
+    {"no-security",     no_argument,        0, 'N'},
+    {"up-event-uri",    required_argument,  0, 'e'},
+    {"up-event-out-uri",required_argument,  0, 'O'},
+    {"up-event-in-uri", required_argument,  0, 'E'},
+    {"dn-event-in-uri", required_argument,  0, 'd'},
     {"dn-event-out-uri",required_argument,  0, 'D'},
-    {"up-req-in-uri", required_argument,  0, 't'},
-    {"dn-req-out-uri",required_argument,  0, 'T'},
-    {"verbose",           no_argument,  0, 'v'},
-    {"plain-insecurity",  no_argument,  0, 'i'},
-    {"curve-security",    no_argument,  0, 'c'},
-    {"set-conf",    required_argument,  0, 's'},
-    {"rank",        required_argument,  0, 'R'},
-    {"size",        required_argument,  0, 'S'},
-    {"parent",      required_argument,  0, 'p'},
-    {"plugins",     required_argument,  0, 'P'},
-    {"logdest",     required_argument,  0, 'L'},
-    {"api-socket",  required_argument,  0, 'A'},
-    {"set-conf-hostlist",required_argument,  0, 'H'},
+    {"up-req-in-uri",   required_argument,  0, 't'},
+    {"dn-req-out-uri",  required_argument,  0, 'T'},
+    {"verbose",         no_argument,        0, 'v'},
+    {"plain-insecurity",no_argument,        0, 'i'},
+    {"curve-security",  no_argument,        0, 'c'},
+    {"rank",            required_argument,  0, 'R'},
+    {"size",            required_argument,  0, 'S'},
+    {"parent",          required_argument,  0, 'p'},
+    {"plugins",         required_argument,  0, 'P'},
+    {"logdest",         required_argument,  0, 'L'},
+    {"hostlist",        required_argument,  0, 'H'},
     {0, 0, 0, 0},
 };
 
@@ -165,7 +163,7 @@ static const struct flux_handle_ops cmbd_handle_ops;
 static void usage (void)
 {
     fprintf (stderr, 
-"Usage: cmbd OPTIONS\n"
+"Usage: cmbd OPTIONS [plugin:key=val ...]\n"
 " -N,--session-name NAME     Set session name (default: flux)\n"
 " -n,--no-security           Disable session security\n"
 " -e,--up-event-uri URI      Set upev URI, e.g. epgm://eth0;239.192.1.1:5555\n"
@@ -178,14 +176,12 @@ static void usage (void)
 " -p,--parent N,URI,URI2     Set parent rank,URIs, e.g.\n"
 "                            0,tcp://192.168.1.136:5556,tcp://192.168.1.136:557\n"
 " -v,--verbose               Show bus traffic\n"
-" -s,--set-conf key=val      Set plugin configuration key=val\n"
-" -H,--set-conf-hostlist HOSTLIST Set session hostlist\n"
+" -H,--hostlist HOSTLIST     Set session hostlist\n"
 " -R,--rank N                Set cmbd address\n"
 " -S,--size N                Set number of ranks in session\n"
 " -P,--plugins p1,p2,...     Load the named plugins (comma separated)\n"
 " -X,--plugin-path PATH      Set plugin search path (colon separated)\n"
 " -L,--logdest DEST          Log to DEST, can  be syslog, stderr, or file\n"
-" -A,--api-socket PATH       Listen for API connections on PATH\n"
 );
     exit (1);
 }
@@ -276,25 +272,12 @@ int main (int argc, char *argv[])
             case 'v':   /* --verbose */
                 ctx.verbose = true;
                 break;
-            case 's': { /* --set-conf key=val */
-                char *p, *cpy = xstrdup (optarg), *key;
-                if ((p = strchr (cpy, '='))) {
-                    *p++ = '\0';
-                    if (asprintf (&key, "kvs.%s", cpy) < 0)
-                        oom ();
-                    zhash_update (ctx.plugin_args, key, xstrdup (p));
-                    zhash_freefn (ctx.plugin_args, key, free);
-                    free (key);
-                }
-                free (cpy);
-                break;
-            }
-            case 'H': { /* set-conf-hostlist hostlist */
+            case 'H': { /* --hostlist hostlist */
                 json_object *o = hostlist_to_json (optarg);
                 const char *val = json_object_to_json_string (o);
 
-                zhash_update (ctx.plugin_args, "kvs.hosts", xstrdup (val));
-                zhash_freefn (ctx.plugin_args, "kvs.hosts", free);
+                zhash_update (ctx.plugin_args, "kvs:hosts", xstrdup (val));
+                zhash_freefn (ctx.plugin_args, "kvs:hosts", free);
                 json_object_put (o);
                 break;
             }
@@ -314,18 +297,21 @@ int main (int argc, char *argv[])
             case 'L':   /* --logdest DEST */
                 log_set_dest (optarg);
                 break;
-            case 'A': { /* --api-socket DEST */
-                char *cpy = xstrdup (optarg);
-                zhash_update (ctx.plugin_args, "api.sockpath", cpy);
-                zhash_freefn (ctx.plugin_args, "api.sockpath", free);
-                break;
-            }
             default:
                 usage ();
         }
     }
-    if (optind < argc)
-        usage ();
+    /* Remaining args are for plugins.
+     */
+    for (i = optind; i < argc; i++) {
+        char *p, *cpy = xstrdup (argv[i]);
+        if ((p = strchr (cpy, '='))) {
+            *p++ = '\0';
+            zhash_update (ctx.plugin_args, cpy, xstrdup (p));
+            zhash_freefn (ctx.plugin_args, cpy, free);
+        }
+        free (cpy);
+    }
     if (!ctx.plugins)
         msg_exit ("at least one plugin must be loaded");
     if (!ctx.plugin_path)

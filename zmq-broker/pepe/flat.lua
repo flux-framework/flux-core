@@ -26,15 +26,15 @@ if pepe.rank == 0 then
 		.. " --dn-req-out-uri='" .. dnreqouturi .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
-		.. " --set-conf-hostlist=" .. pepe.nodelist
-                .. " --set-conf conf.sync.period-sec=1.5"
-                .. " --set-conf conf.log.reduction-timeout-msec=100"
-                .. " --set-conf conf.log.circular-buffer-entries=100000"
-                .. " --set-conf conf.log.persist-level=debug"
-                .. " --set-conf conf.live.missed-trigger-allow=5"
-                .. " --set-conf conf.live.topology='" .. topology .. "'"
+		.. " --hostlist=" .. pepe.nodelist
+		.. " --logdest cmbd.log"
 		.. " --plugins=api,barrier,live,log,kvs,sync,mecho"
-		.. " --logdest cmbd.log")
+                .. " kvs:conf.sync.period-sec=1.5"
+                .. " kvs:conf.log.reduction-timeout-msec=100"
+                .. " kvs:conf.log.circular-buffer-entries=100000"
+                .. " kvs:conf.log.persist-level=debug"
+                .. " kvs:conf.live.missed-trigger-allow=5"
+                .. " kvs:conf.live.topology='" .. topology .. "'")
 else
     local u1 = "tcp://" ..  h[1] .. ":5556"
     local u2 = "tcp://" ..  h[1] .. ":5557"

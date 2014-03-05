@@ -6,11 +6,11 @@ ${CMDPREFIX} ${CMBD:-./cmbd} \
   --dn-req-out-uri='tcp://*:5557' \
   --rank=0 --size=3 \
   --logdest=cmbd.log \
+  --hostlist=localhost,localhost,localhost \
   --plugins=api,barrier,live,kvs,log,sync,job,rexec,mecho \
-  --set-conf conf.sync.period-sec=1.5 \
-  --set-conf conf.live.missed-trigger-allow=5 \
-  --set-conf conf.log.reduction-timeout-msec=100 \
-  --set-conf conf.log.circular-buffer-entries=100000 \
-  --set-conf conf.log.persist-level=debug \
-  --set-conf-hostlist=localhost,localhost,localhost \
-  --set-conf conf.live.topology='[[1],[2]]' 
+  kvs:conf.sync.period-sec=1.5 \
+  kvs:conf.live.missed-trigger-allow=5 \
+  kvs:conf.log.reduction-timeout-msec=100 \
+  kvs:conf.log.circular-buffer-entries=100000 \
+  kvs:conf.log.persist-level=debug \
+  kvs:conf.live.topology='[[1],[2]]' 

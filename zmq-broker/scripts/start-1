@@ -7,4 +7,4 @@ ${CMDPREFIX} ${CMBD:-./cmbd} \
   --dn-req-out-uri='tcp://*:5561' \
   --rank=1 --size=3 \
   --plugins=api,barrier,live,log,kvs,job,rexec,mecho \
-  --api-socket=/tmp/rank.1
+  api:sockpath=/tmp/rank.1
