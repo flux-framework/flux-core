@@ -207,8 +207,6 @@ int main (int argc, char *argv[])
     if (!(ctx.uri_upreq_in = zlist_new ()))
         oom ();
     zlist_autofree (ctx.uri_upreq_in);
-    if (zlist_push (ctx.uri_upreq_in, xstrdup (UPREQ_URI)) < 0)
-        oom ();
     ctx.session_name = "flux";
     if (gethostname (ctx.hostname, sizeof (ctx.hostname)) < 0)
         err_exit ("gethostname");
@@ -336,15 +334,7 @@ int main (int argc, char *argv[])
     if (ctx.upev_mcast && strcmp (ctx.uri_upev_out, ctx.uri_upev_in) != 0)
         usage ();
 
-    if (zlist_size (ctx.uri_upreq_in) == 1) {
-        const char *tmpdir = getenv ("TMPDIR");
-        char *uri;
-        if (!tmpdir || strlen (tmpdir) == 0)
-            tmpdir = "/tmp";            
-        if (asprintf (&uri, "ipc://%s/flux_socket", tmpdir) < 0)
-            oom ();
-        if (zlist_push (ctx.uri_upreq_in, uri) < 0)
-            oom ();
+    if (zlist_size (ctx.uri_upreq_in) == 0) {
         if (zlist_push (ctx.uri_upreq_in, xstrdup ("tcp://*:5556")) < 0)
             oom ();
     }
@@ -499,6 +489,8 @@ static void *cmbd_init_upreq_in (ctx_t *ctx)
     if (flux_sec_ssockinit (ctx->sec, s) < 0)
         msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ctx->sec));
     zsocket_set_hwm (s, 0);
+    if (zsocket_bind (s, "%s", UPREQ_URI) < 0) /* always bind to inproc */
+        err_exit ("%s", UPREQ_URI);
     uri = zlist_first (ctx->uri_upreq_in);
     while (uri) {
         if (check_uri (uri)) {
