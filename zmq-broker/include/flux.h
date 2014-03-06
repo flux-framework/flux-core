@@ -16,6 +16,7 @@ typedef struct flux_handle_struct *flux_t;
 #include "kvs.h"
 #include "mrpc.h"
 #include "reactor.h"
+#include "security.h"
 
 /* Flags for handle creation and flux_flags_set()/flux_flags_unset.
  */
@@ -88,11 +89,15 @@ int flux_route_add (flux_t h, const char *dst, const char *gw);
 int flux_route_del (flux_t h, const char *dst, const char *gw);
 json_object *flux_route_query (flux_t h);
 
-/* Accessor zeromq context.
+/* Accessor for zeromq context.
  * N.B. The zctx_t is thread-safe but zeromq sockets, and therefore
  * flux_t handle operations are not.
  */
 zctx_t *flux_get_zctx (flux_t h);
+
+/* Accessor for security context.  Same comments on thread safety apply.
+ */
+flux_sec_t flux_get_sec (flux_t h);
 
 /* Ping plugin 'name'.
  * 'pad' is a string used to increase the size of the ping packet for

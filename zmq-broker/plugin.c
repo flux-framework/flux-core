@@ -55,6 +55,7 @@ struct plugin_ctx_struct {
     zloop_t *zloop;
     zlist_t *deferred_responses;
     void *zctx;
+    flux_sec_t sec;
     flux_t h;
     char *name;
     void *dso;
@@ -178,6 +179,13 @@ static zctx_t *plugin_get_zctx (void *impl)
     plugin_ctx_t p = impl;
     assert (p->magic == PLUGIN_MAGIC);
     return p->zctx;
+}
+
+static flux_sec_t plugin_get_sec (void *impl)
+{
+    plugin_ctx_t p = impl;
+    assert (p->magic == PLUGIN_MAGIC);
+    return p->sec;
 }
 
 static int plugin_reactor_start (void *impl)
@@ -674,6 +682,7 @@ plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
     p = xzmalloc (sizeof (*p));
     p->magic = PLUGIN_MAGIC;
     p->zctx = flux_get_zctx (h);
+    p->sec = flux_get_sec (h);
     p->args = args;
     p->ops = ops;
     p->dso = dso;
@@ -711,6 +720,7 @@ static const struct flux_handle_ops plugin_handle_ops = {
     .event_unsubscribe = plugin_event_unsubscribe,
     .rank = plugin_rank,
     .get_zctx = plugin_get_zctx,
+    .get_sec = plugin_get_sec,
     .reactor_stop = plugin_reactor_stop,
     .reactor_start = plugin_reactor_start,
     .reactor_fd_add = plugin_reactor_fd_add,

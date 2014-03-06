@@ -1326,12 +1326,19 @@ static zctx_t *cmbd_get_zctx (void *impl)
     return ctx->zctx;
 }
 
+static flux_sec_t cmbd_get_sec (void *impl)
+{
+    ctx_t *ctx = impl;
+    return ctx->sec;
+}
+
 static const struct flux_handle_ops cmbd_handle_ops = {
     .request_sendmsg = cmbd_request_sendmsg,
     .response_sendmsg = cmbd_response_sendmsg,
     .event_sendmsg = cmbd_event_sendmsg,
     .rank = cmbd_rank,
     .get_zctx = cmbd_get_zctx,
+    .get_sec = cmbd_get_sec,
 };
 
 /*

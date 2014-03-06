@@ -219,6 +219,15 @@ zctx_t *flux_get_zctx (flux_t h)
     return h->ops->get_zctx (h->impl);
 }
 
+flux_sec_t flux_get_sec (flux_t h)
+{
+    if (!h->ops->get_sec) {
+        errno = ENOSYS;
+        return NULL;
+    }
+    return h->ops->get_sec (h->impl);
+}
+
 /**
  ** Utility
  **/

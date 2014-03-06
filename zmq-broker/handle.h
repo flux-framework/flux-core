@@ -20,6 +20,7 @@ struct flux_handle_ops {
     int         (*rank)(void *impl);
 
     zctx_t *    (*get_zctx)(void *impl);
+    flux_sec_t  (*get_sec)(void *impl);
 
     int         (*reactor_start)(void *impl);
     void        (*reactor_stop)(void *impl, int rc);
