@@ -1,16 +1,14 @@
 ${CMDPREFIX} ${CMBD:-./cmbd} \
   --verbose \
-  --dn-event-in-uri='tcp://*:5558' \
-  --dn-event-out-uri='tcp://*:5559' \
   --up-req-in-uri='tcp://*:5556' \
   --dn-req-out-uri='tcp://*:5557' \
   --rank=0 --size=3 \
   --logdest=cmbd.log \
   --hostlist=localhost,localhost,localhost \
-  --plugins=api,barrier,live,kvs,log,sync,job,rexec,mecho \
+  --plugins=api,barrier,live,kvs,log,sync,job,rexec,mecho,event \
   kvs:conf.sync.period-sec=1.5 \
   kvs:conf.live.missed-trigger-allow=5 \
   kvs:conf.log.reduction-timeout-msec=100 \
   kvs:conf.log.circular-buffer-entries=100000 \
   kvs:conf.log.persist-level=debug \
-  kvs:conf.live.topology='[[1],[2]]' 
+  kvs:conf.live.topology='[[1],[2]]'

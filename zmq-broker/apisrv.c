@@ -219,10 +219,6 @@ static int client_read (ctx_t *ctx, client_t *c)
             flux_log (ctx->h, LOG_ERR, "API read: %s", strerror (errno));
         return -1;
     }
-    if ((typemask & FLUX_MSGTYPE_EVENT)) {
-        flux_event_sendmsg (ctx->h, &zmsg);
-        goto done;
-    }
     if (!(typemask & FLUX_MSGTYPE_REQUEST))
         goto done; /* DROP */
         

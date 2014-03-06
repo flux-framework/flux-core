@@ -135,13 +135,6 @@ static int cmb_event_unsubscribe (void *impl, const char *s)
     return flux_request_send (c->h, NULL, "api.event.unsubscribe.%s", s ? s: "");
 }
 
-static int cmb_event_sendmsg (void *impl, zmsg_t **zmsg)
-{
-    cmb_t *c = impl;
-    assert (c->magic == CMB_CTX_MAGIC);
-    return zmsg_send_fd_typemask (c->fd, FLUX_MSGTYPE_EVENT, zmsg);
-}
-
 static zmsg_t *cmb_event_recvmsg (void *impl, bool nonblock)
 {
     cmb_t *c = impl;
@@ -394,7 +387,6 @@ static const struct flux_handle_ops cmb_ops = {
     .request_sendmsg = cmb_request_sendmsg,
     .response_recvmsg = cmb_response_recvmsg,
     .response_putmsg = cmb_response_putmsg,
-    .event_sendmsg = cmb_event_sendmsg,
     .event_recvmsg = cmb_event_recvmsg,
     .event_subscribe = cmb_event_subscribe,
     .event_unsubscribe = cmb_event_unsubscribe,

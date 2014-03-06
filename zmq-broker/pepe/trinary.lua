@@ -22,13 +22,15 @@ local dnreqouturi = "tcp://*:5557"
 
 if pepe.rank == 0 then
     local topology = tree.k_ary_json (3, #h)
-    pepe.run ("./cmbd --up-event-uri='" .. eventuri .. "'"
+    pepe.run ("./cmbd"
 		.. " --dn-req-out-uri='" .. dnreqouturi .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
 		.. " --hostlist=" .. pepe.nodelist
 		.. " --logdest cmbd.log"
-		.. " --plugins=api,barrier,live,log,kvs,sync,mecho"
+		.. " --plugins=event,api,barrier,live,log,kvs,sync,mecho"
+                .. " kvs:conf.event.mcast-uri='" .. eventuri .. "'"
+                .. " kvs:conf.event.mcast-all-publish=false"
                 .. " kvs:conf.sync.period-sec=1.5"
                 .. " kvs:conf.log.reduction-timeout-msec=100"
                 .. " kvs:conf.log.circular-buffer-entries=100000"
@@ -39,12 +41,12 @@ elseif pepe.rank == 1 then
     local parent_rank = tree.k_ary_parent (pepe.rank, 3)
     local u1 = "tcp://" ..  h[parent_rank + 1] .. ":5556"
     local u2 = "tcp://" ..  h[parent_rank + 1] .. ":5557"
-    pepe.run ("./cmbd --up-event-uri='" .. eventuri .. "'"
+    pepe.run ("./cmbd"
 		.. " --dn-req-out-uri='" .. dnreqouturi .. "'"
 		.. " --parent='" .. parent_rank .. "," .. u1 .. "," .. u2 .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
-		.. " --plugins=api,barrier,live,log,kvs,mecho")
+		.. " --plugins=event,api,barrier,live,log,kvs,mecho")
 else
     local parent_rank = tree.k_ary_parent (pepe.rank, 3)
     local u1 = "tcp://" ..  h[parent_rank + 1] .. ":5556"
@@ -53,11 +55,11 @@ else
     local f1 = "tcp://" ..  h[parent_fail + 1] .. ":5556"
     local f2 = "tcp://" ..  h[parent_fail + 1] .. ":5557"
 
-    pepe.run ("./cmbd --up-event-uri='" .. eventuri .. "'"
+    pepe.run ("./cmbd"
 		.. " --dn-req-out-uri='" .. dnreqouturi .. "'"
 		.. " --parent='" .. parent_rank .. "," .. u1 .. "," .. u2 .. "'"
 		.. " --parent='" .. parent_fail .. "," .. f1 .. "," .. f2 .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
-		.. " --plugins=api,barrier,live,log,kvs,mecho")
+		.. " --plugins=event,api,barrier,live,log,kvs,mecho")
 end

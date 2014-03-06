@@ -46,7 +46,7 @@ struct plugin_ctx_struct {
     void *zs_upreq; /* for making requests */
     void *zs_dnreq; /* for handling requests (reverse message flow) */
     void *zs_evin;
-    void *zs_evout;
+    //void *zs_evout;
     char *id;
     ptimeout_t timeout;
     pthread_t t;
@@ -131,17 +131,6 @@ static int plugin_response_putmsg (void *impl, zmsg_t **zmsg)
         oom ();
     *zmsg = NULL;
     return 0;
-}
-
-static int plugin_event_sendmsg (void *impl, zmsg_t **zmsg)
-{
-    int rc;
-    plugin_ctx_t p = impl;
-
-    assert (p->magic == PLUGIN_MAGIC);
-    rc = zmsg_send (zmsg, p->zs_evout);
-    p->stats.event_tx++;
-    return rc;
 }
 
 static zmsg_t *plugin_event_recvmsg (void *impl, bool nb)
@@ -617,7 +606,7 @@ void plugin_unload (plugin_ctx_t p)
     if (errnum)
         errn_exit (errnum, "pthread_join");
 
-    zsocket_destroy (p->zctx, p->zs_evout);
+    //zsocket_destroy (p->zctx, p->zs_evout);
     zsocket_destroy (p->zctx, p->zs_evin);
     zsocket_destroy (p->zctx, p->zs_dnreq);
     zsocket_destroy (p->zctx, p->zs_upreq);
@@ -699,7 +688,7 @@ plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
     zconnect (p->zctx, &p->zs_upreq, ZMQ_DEALER, UPREQ_URI, -1, id);
     zconnect (p->zctx, &p->zs_dnreq, ZMQ_DEALER, DNREQ_URI, -1, id);
     zconnect (p->zctx, &p->zs_evin,  ZMQ_SUB, DNEV_OUT_URI, 0, NULL);
-    zconnect (p->zctx, &p->zs_evout, ZMQ_PUB, DNEV_IN_URI, -1, NULL);
+    //zconnect (p->zctx, &p->zs_evout, ZMQ_PUB, DNEV_IN_URI, -1, NULL);
 
     errnum = pthread_create (&p->t, NULL, plugin_thread, p);
     if (errnum)
@@ -714,7 +703,6 @@ static const struct flux_handle_ops plugin_handle_ops = {
     .response_sendmsg = plugin_response_sendmsg,
     .response_recvmsg = plugin_response_recvmsg,
     .response_putmsg = plugin_response_putmsg,
-    .event_sendmsg = plugin_event_sendmsg,
     .event_recvmsg = plugin_event_recvmsg,
     .event_subscribe = plugin_event_subscribe,
     .event_unsubscribe = plugin_event_unsubscribe,

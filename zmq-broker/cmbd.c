@@ -25,9 +25,6 @@
 #include <zmq.h>
 #include <czmq.h>
 
-#define GPL_LICENSED 1
-#include <munge.h>
-
 #include "log.h"
 #include "zmsg.h"
 #include "route.h"
@@ -75,18 +72,11 @@ typedef struct {
     char *uri_dnreq_out;        /* URI to listen for tree children */
     void *zs_dnreq_out;         /* ROUTER - optional tree children + plugins */
 
-    char *uri_upev_out;         /* URI to send external events */
-    void *zs_upev_out;          /* PUB - publish external events */
-
     char *uri_upev_in;          /* URI to recv external events */
     void *zs_upev_in;           /* SUB - subscribe to external events */
-    bool upev_mcast;
 
     char *uri_dnev_out;         /* URI to listen for tree children */
     void *zs_dnev_out;          /* PUB - optional tree children + plugins */
-
-    char *uri_dnev_in;          /* URI to listen for tree children */
-    void *zs_dnev_in;           /* SUB - optional tree children + plugins */
 
     char *uri_snoop;
     void *zs_snoop;
@@ -121,11 +111,8 @@ typedef struct {
 } ctx_t;
 
 static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg);
-static int cmbd_upev_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
-static zmsg_t *cmbd_upev_recvmsg (ctx_t *ctx);
 
 static int upev_in_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
-static int dnev_in_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int dnreq_out_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int dnreq_in_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int upreq_out_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
@@ -135,14 +122,11 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static void cmbd_init (ctx_t *ctx);
 static void cmbd_fini (ctx_t *ctx);
 
-#define OPTIONS "t:e:E:O:vR:S:p:P:L:T:d:D:H:N:nci"
+#define OPTIONS "t:E:vR:S:p:P:L:T:D:H:N:nci"
 static const struct option longopts[] = {
     {"session-name",    required_argument,  0, 'N'},
-    {"no-security",     no_argument,        0, 'N'},
-    {"up-event-uri",    required_argument,  0, 'e'},
-    {"up-event-out-uri",required_argument,  0, 'O'},
+    {"no-security",     no_argument,        0, 'n'},
     {"up-event-in-uri", required_argument,  0, 'E'},
-    {"dn-event-in-uri", required_argument,  0, 'd'},
     {"dn-event-out-uri",required_argument,  0, 'D'},
     {"up-req-in-uri",   required_argument,  0, 't'},
     {"dn-req-out-uri",  required_argument,  0, 'T'},
@@ -166,10 +150,7 @@ static void usage (void)
 "Usage: cmbd OPTIONS [plugin:key=val ...]\n"
 " -N,--session-name NAME     Set session name (default: flux)\n"
 " -n,--no-security           Disable session security\n"
-" -e,--up-event-uri URI      Set upev URI, e.g. epgm://eth0;239.192.1.1:5555\n"
-" -E,--up-event-in-uri URI   Set upev_in URI (alternative to -e)\n"
-" -O,--up-event-out-uri URI  Set upev_out URI (alternative to -e)\n"
-" -d,--dn-event-in-uri URI   Set dnev_in URI\n"
+" -E,--up-event-in-uri URI   Set upev_in URI\n"
 " -D,--dn-event-out-uri URI  Set dnev_out URI\n"
 " -t,--up-req-in-uri URI     Set URIs for upreq_in, (comma separated)\n"
 " -T,--dn-req-out-uri URI    Set URI for dnreq_out, e.g. tcp://*:5557\n"
@@ -219,21 +200,10 @@ int main (int argc, char *argv[])
             case 'i':   /* --plain-insecurity */
                 ctx.security_set |= FLUX_SEC_TYPE_PLAIN;
                 break;
-            case 'e':   /* --up-event-uri URI */
-                if (!strstr (optarg, "pgm://"))
-                    msg_exit ("use -E, -O for non-multicast event socket");
-                ctx.uri_upev_in = optarg;
-                ctx.uri_upev_out = optarg;
-                ctx.upev_mcast = true;
-                break;
             case 'E':   /* --up-event-in-uri URI */
+                if (strstr (optarg, "pgm://"))
+                    msg ("--up-event-in-uri should be an ipc:// endpoint");
                 ctx.uri_upev_in = optarg;
-                break;
-            case 'O':   /* --up-event-out-uri URI */
-                ctx.uri_upev_out = optarg;
-                break;
-            case 'd':   /* --dn-event-in-uri URI */
-                ctx.uri_dnev_in = optarg;
                 break;
             case 'D':   /* --dn-event-out-uri URI */
                 ctx.uri_dnev_out = optarg;
@@ -317,11 +287,21 @@ int main (int argc, char *argv[])
     if (!ctx.plugin_path)
         ctx.plugin_path = PLUGIN_PATH; /* compiled in default */
 
-    if (ctx.upev_mcast && strcmp (ctx.uri_upev_out, ctx.uri_upev_in) != 0)
-        usage ();
-
     if (zlist_size (ctx.uri_upreq_in) == 0) {
         if (zlist_push (ctx.uri_upreq_in, xstrdup ("tcp://*:5556")) < 0)
+            oom ();
+    }
+
+    /* Try to guess the right uri for events.
+     * If we're loading the event comms module, peek at its config.
+     * Otherwise generate a default same as its default.
+     */
+    if (!ctx.uri_upev_in) {
+#define UPEV_URI_TMPL "ipc:///tmp/flux_event_uid%d"
+        char *s;
+        if ((s = zhash_lookup (ctx.plugin_args, "event:local-uri")))
+            ctx.uri_upev_in = xstrdup (s);
+        else if (asprintf (&ctx.uri_upev_in, UPEV_URI_TMPL, geteuid ()) < 0)
             oom ();
     }
 
@@ -529,32 +509,6 @@ static void *cmbd_init_dnev_out (ctx_t *ctx)
     return s;
 }
 
-static void *cmbd_init_dnev_in (ctx_t *ctx)
-{
-    void *s;
-    const char *uri = DNEV_IN_URI;
-    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
-
-    if (!(s = zsocket_new (ctx->zctx, ZMQ_SUB)))
-        err_exit ("zsocket_new");
-    if (flux_sec_ssockinit (ctx->sec, s) < 0)
-        msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ctx->sec));
-    zsocket_set_hwm (s, 0);
-    if (check_uri (uri)) {
-        if (zsocket_bind (s, "%s", uri) < 0)
-            err_exit ("%s", uri);
-    }
-    if (check_uri (ctx->uri_dnev_in)) {
-        if (zsocket_bind (s, "%s", ctx->uri_dnev_in) < 0)
-            err_exit ("%s", ctx->uri_dnev_in);
-    }
-    zsocket_set_subscribe (s, "");
-    zp.socket = s;
-    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)dnev_in_cb, ctx) < 0)
-        err_exit ("zloop_poller");
-    return s;
-}
-
 static void *cmbd_init_snoop (ctx_t *ctx)
 {
     void *s;
@@ -580,7 +534,7 @@ static void *cmbd_init_upev_in (ctx_t *ctx)
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_SUB)))
         err_exit ("zsocket_new");
-    if (!ctx->upev_mcast && flux_sec_csockinit (ctx->sec, s) < 0)
+    if (flux_sec_csockinit (ctx->sec, s) < 0)
         msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
     zsocket_set_hwm (s, 0);
     if (zsocket_connect (s, "%s", ctx->uri_upev_in) < 0)
@@ -589,19 +543,6 @@ static void *cmbd_init_upev_in (ctx_t *ctx)
     zp.socket = s;
     if (zloop_poller (ctx->zl, &zp, (zloop_fn *)upev_in_cb, ctx) < 0)
         err_exit ("zloop_poller");
-    return s;
-}
-
-static void *cmbd_init_upev_out (ctx_t *ctx)
-{
-    void *s;
-    if (!(s = zsocket_new (ctx->zctx, ZMQ_PUB)))
-        err_exit ("zsocket_new");
-    if (!ctx->upev_mcast && flux_sec_csockinit (ctx->sec, s) < 0)
-        msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
-    zsocket_set_hwm (s, 0);
-    if (zsocket_connect (s, "%s", ctx->uri_upev_out) < 0)
-        err_exit ("%s", ctx->uri_upev_out);
     return s;
 }
 
@@ -716,7 +657,6 @@ static void cmbd_init (ctx_t *ctx)
     ctx->zs_upreq_in = cmbd_init_upreq_in (ctx);
     ctx->zs_dnreq_out = cmbd_init_dnreq_out (ctx);
     ctx->zs_dnev_out = cmbd_init_dnev_out (ctx);
-    ctx->zs_dnev_in = cmbd_init_dnev_in (ctx);
     ctx->zs_snoop = cmbd_init_snoop (ctx);
 #if 0
     /* Increase max number of sockets and number of I/O thraeds.
@@ -731,8 +671,6 @@ static void cmbd_init (ctx_t *ctx)
      */
     if (ctx->uri_upev_in)
         ctx->zs_upev_in = cmbd_init_upev_in (ctx);
-    if (ctx->uri_upev_out)
-        ctx->zs_upev_out = cmbd_init_upev_out (ctx);
 
     for (i = 0; i < ctx->parent_len; i++)
         ctx->parent_alive[i] = true;
@@ -1012,23 +950,9 @@ static int dnreq_out_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
     ZLOOP_RETURN(ctx);
 }
 
-static int dnev_in_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
-{
-    zmsg_t *zmsg = zmsg_recv (ctx->zs_dnev_in);
-
-    if (zmsg) {
-        cmb_internal_event (ctx, zmsg);
-        snoop_cc (ctx, FLUX_MSGTYPE_EVENT, zmsg);
-        zmsg_cc (zmsg, ctx->zs_dnev_out);
-        cmbd_upev_sendmsg (ctx, &zmsg);
-    }
-    ZLOOP_RETURN(ctx);
-}
-
 static int upev_in_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
-    zmsg_t *zmsg = cmbd_upev_recvmsg (ctx);
-
+    zmsg_t *zmsg = zmsg_recv (ctx->zs_upev_in);
     if (zmsg) {
         cmb_internal_event (ctx, zmsg);
         snoop_cc (ctx, FLUX_MSGTYPE_EVENT, zmsg);
@@ -1050,57 +974,6 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
         ctx->reactor_stop = true;
     }
     ZLOOP_RETURN(ctx);
-}
-
-static int cmbd_upev_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
-{
-    int rc = -1;
-
-    if (!*zmsg || zmsg_content_size (*zmsg) == 0) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (ctx->zs_upev_out) {
-        if (ctx->upev_mcast) {
-            if (flux_sec_munge_zmsg (ctx->sec, zmsg) < 0) {
-                flux_log (ctx->h, LOG_ERR, "%s: discarding message: %s",
-                          __FUNCTION__, flux_sec_errstr (ctx->sec));
-                goto done;
-            }
-        }
-        rc = zmsg_send (zmsg, ctx->zs_upev_out);
-    }
-done:
-    if (*zmsg)
-        zmsg_destroy (zmsg);
-    return rc;
-}
-
-static zmsg_t *cmbd_upev_recvmsg (ctx_t *ctx)
-{
-    zmsg_t *zmsg = NULL;
-
-    if (ctx->zs_upev_in) {
-        if (!(zmsg = zmsg_recv (ctx->zs_upev_in)))
-            goto done;
-        if (zmsg_content_size (zmsg) == 0) {
-            //flux_log (ctx->h, LOG_INFO, "%s: discarding runt", __FUNCTION__);
-            goto discard;
-        }
-        if (ctx->upev_mcast) {
-            if (flux_sec_unmunge_zmsg (ctx->sec, &zmsg) < 0) {
-                //flux_log (ctx->h, LOG_INFO, "%s: discarding message: %s",
-                //          __FUNCTION__, flux_sec_errstr (ctx->sec));
-                goto discard;
-            }
-        }
-    }
-done:
-    return zmsg;
-discard:
-    if (zmsg)
-        zmsg_destroy (&zmsg);
-    return NULL;
 }
 
 static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg)
@@ -1282,16 +1155,6 @@ done:
     return rc;
 }
 
-static int cmbd_event_sendmsg (void *impl, zmsg_t **zmsg)
-{
-    ctx_t *ctx = impl;
-
-    snoop_cc (ctx, FLUX_MSGTYPE_EVENT, *zmsg);
-    if (ctx->zs_dnev_out)
-        zmsg_cc (*zmsg, ctx->zs_dnev_out);
-    return cmbd_upev_sendmsg (ctx, zmsg);
-}
-
 static int cmbd_rank (void *impl)
 {
     ctx_t *ctx = impl;
@@ -1313,7 +1176,6 @@ static flux_sec_t cmbd_get_sec (void *impl)
 static const struct flux_handle_ops cmbd_handle_ops = {
     .request_sendmsg = cmbd_request_sendmsg,
     .response_sendmsg = cmbd_response_sendmsg,
-    .event_sendmsg = cmbd_event_sendmsg,
     .rank = cmbd_rank,
     .get_zctx = cmbd_get_zctx,
     .get_sec = cmbd_get_sec,

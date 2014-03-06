@@ -154,18 +154,6 @@ int flux_response_putmsg (flux_t h, zmsg_t **zmsg)
     return h->ops->response_putmsg (h->impl, zmsg);
 }
 
-int flux_event_sendmsg (flux_t h, zmsg_t **zmsg)
-{
-    if (!h->ops->event_sendmsg) {
-        errno = ENOSYS;
-        return -1;
-    }
-    if (h->flags & FLUX_FLAGS_TRACE)
-        zmsg_dump_compact (*zmsg, flux_msgtype_shortstr (FLUX_MSGTYPE_EVENT));
-
-    return h->ops->event_sendmsg (h->impl, zmsg);
-}
-
 zmsg_t *flux_event_recvmsg (flux_t h, bool nonblock)
 {
     zmsg_t *zmsg;
@@ -718,25 +706,6 @@ void flux_reactor_stop (flux_t h)
 /**
  ** Higher level functions built on those above
  **/
-
-int flux_event_send (flux_t h, json_object *request, const char *fmt, ...)
-{
-    zmsg_t *zmsg;
-    char *tag;
-    int rc;
-    va_list ap;
-
-    va_start (ap, fmt);
-    if (vasprintf (&tag, fmt, ap) < 0)
-        oom ();
-    va_end (ap);
-
-    zmsg = cmb_msg_encode (tag, request);
-    free (tag);
-    if ((rc = flux_event_sendmsg (h, &zmsg)) < 0)
-        zmsg_destroy (&zmsg);
-    return rc;
-}
 
 int flux_event_recv (flux_t h, json_object **respp, char **tagp, bool nb)
 {

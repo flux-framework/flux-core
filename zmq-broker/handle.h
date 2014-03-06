@@ -8,7 +8,6 @@ struct flux_handle_ops {
     zmsg_t *    (*response_recvmsg)(void *impl, bool nonblock);
     int         (*response_putmsg)(void *impl, zmsg_t **zmsg);
 
-    int         (*event_sendmsg)(void *impl, zmsg_t **zmsg);
     zmsg_t *    (*event_recvmsg)(void *impl, bool nonblock);
     int         (*event_subscribe)(void *impl, const char *topic);
     int         (*event_unsubscribe)(void *impl, const char *topic);

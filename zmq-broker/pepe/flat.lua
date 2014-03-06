@@ -22,13 +22,15 @@ local dnreqouturi = "tcp://*:5557"
 
 if pepe.rank == 0 then
     local topology = tree.k_ary_json (#h, #h)
-    pepe.run ("./cmbd --up-event-uri='" .. eventuri .. "'"
+    pepe.run ("./cmbd"
 		.. " --dn-req-out-uri='" .. dnreqouturi .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
 		.. " --hostlist=" .. pepe.nodelist
 		.. " --logdest cmbd.log"
-		.. " --plugins=api,barrier,live,log,kvs,sync,mecho"
+		.. " --plugins=event,api,barrier,live,log,kvs,sync,mecho"
+                .. " kvs:conf.event.mcast-uri='" .. eventuri .. "'"
+                .. " kvs:conf.event.mcast-all-publish=false"
                 .. " kvs:conf.sync.period-sec=1.5"
                 .. " kvs:conf.log.reduction-timeout-msec=100"
                 .. " kvs:conf.log.circular-buffer-entries=100000"
@@ -38,9 +40,9 @@ if pepe.rank == 0 then
 else
     local u1 = "tcp://" ..  h[1] .. ":5556"
     local u2 = "tcp://" ..  h[1] .. ":5557"
-    pepe.run ("./cmbd --up-event-uri='" .. eventuri .. "'"
+    pepe.run ("./cmbd"
 		.. " --parent='0," .. u1 .. "," .. u2 .. "'"
 		.. " --rank=" .. pepe.rank
-		.. " --plugins=api,barrier,live,log,kvs,mecho"
+		.. " --plugins=event,api,barrier,live,log,kvs,mecho"
 		.. " --size=" .. #h)
 end
