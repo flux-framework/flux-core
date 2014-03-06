@@ -128,6 +128,7 @@ struct flux_sec_struct {
     char *confstr;
     uid_t uid;
     uid_t gid;
+    pthread_mutex_t lock;
 };
 
 static int getsecdirs (flux_sec_t c);
@@ -139,6 +140,20 @@ static char *getpasswd (flux_sec_t c, const char *user);
 static int genpasswd (flux_sec_t c, const char *user, bool force, bool verbose);
 #endif
 
+static void lock_sec (flux_sec_t c)
+{
+    int e = pthread_mutex_lock (&c->lock);
+    if (e)
+        errn_exit (e, "pthread_mutex_lock");
+}
+
+static void unlock_sec (flux_sec_t c)
+{
+    int e = pthread_mutex_unlock (&c->lock);
+    if (e)
+        errn_exit (e, "pthread_mutex_unlock");
+}
+
 const char *flux_sec_errstr (flux_sec_t c)
 {
     return (c->errstr ? c->errstr : "Success");
@@ -146,6 +161,7 @@ const char *flux_sec_errstr (flux_sec_t c)
 
 const char *flux_sec_confstr (flux_sec_t c)
 {
+    lock_sec (c);
     if (c->confstr)
         free (c->confstr);
     if (asprintf (&c->confstr, "Security: epgm=%s, tcp/ipc=%s",
@@ -153,12 +169,15 @@ const char *flux_sec_confstr (flux_sec_t c)
                (c->typemask & FLUX_SEC_TYPE_PLAIN) ? "PLAIN"
              : (c->typemask & FLUX_SEC_TYPE_CURVE) ? "CURVE" : "off") < 0)
         oom ();
+    unlock_sec (c);
     return c->confstr;
 }
 
 static void seterrstr (flux_sec_t c, const char *fmt, ...)
 {
     va_list ap;
+
+    /* XXX c->lock held */
 
     if (c->errstr)
         free (c->errstr);
@@ -192,13 +211,17 @@ void flux_sec_destroy (flux_sec_t c)
         free (c->errstr);
     if (c->confstr)
         free (c->confstr);
+    (void)pthread_mutex_destroy (&c->lock);
     free (c);
 }
 
 flux_sec_t flux_sec_create (void)
 {
     flux_sec_t c = xzmalloc (sizeof (*c));
+    int e;
 
+    if ((e = pthread_mutex_init (&c->lock, NULL)))
+        errn_exit (e, "pthread_mutex_init"); 
     c->uid = getuid ();
     c->gid = getgid ();
     if (getsecdirs (c) < 0) 
@@ -215,6 +238,7 @@ error:
 
 static int validate_type (int tm)
 {
+    /* XXX c->lock held */
 #if HAVE_ZAUTH
     if ((tm & FLUX_SEC_TYPE_CURVE) && (tm & FLUX_SEC_TYPE_PLAIN))
         goto einval; /* both can't be enabled */
@@ -230,72 +254,98 @@ einval:
 
 int flux_sec_disable (flux_sec_t c, int tm)
 {
+    int rc;
+    lock_sec (c);
     c->typemask &= ~tm;
-    return validate_type (c->typemask);
+    rc = validate_type (c->typemask);
+    unlock_sec (c);
+    return rc;
 }
 
 int flux_sec_enable (flux_sec_t c, int tm)
 {
+    int rc;
+    lock_sec (c);
     if ((tm & (FLUX_SEC_TYPE_CURVE))) /* plain/curve are like radio buttons */
         c->typemask &= ~(int)FLUX_SEC_TYPE_PLAIN;
     else if ((tm & (FLUX_SEC_TYPE_PLAIN)))
         c->typemask &= ~(int)FLUX_SEC_TYPE_CURVE;
     c->typemask |= tm;
-    return validate_type (c->typemask);
+    rc = validate_type (c->typemask);
+    unlock_sec (c);
+    return rc;
 }
 
 bool flux_sec_type_enabled (flux_sec_t c, int tm)
 {
-    return ((c->typemask & tm) == tm);
+    bool ret;
+    lock_sec (c);
+    ret = ((c->typemask & tm) == tm);
+    unlock_sec (c);
+    return ret;
 }
 
 int flux_sec_keygen (flux_sec_t c, bool force, bool verbose)
 {
+    int rc = -1;
+    lock_sec (c);
     if (checksecdirs (c, true) < 0)
-        return -1;
+        goto done_unlock;
 #if HAVE_ZAUTH
     if ((c->typemask & FLUX_SEC_TYPE_CURVE)) {
         if (gencurve (c, "client", force, verbose) < 0)
-            return -1;
+            goto done_unlock;
         if (gencurve (c, "server", force, verbose) < 0)
-            return -1;
+            goto done_unlock;
     }
     if ((c->typemask & FLUX_SEC_TYPE_PLAIN)) {
         if (genpasswd (c, "client", force, verbose) < 0)
-            return -1;
+            goto done_unlock;
     }
 #endif
-    return 0;
+    rc = 0;
+done_unlock:
+    unlock_sec (c);
+    return rc;
 }
 
 int flux_sec_zauth_init (flux_sec_t c, zctx_t *zctx, const char *domain)
 {
 #if HAVE_ZAUTH
+    int rc = -1;
+    lock_sec (c);
     if (checksecdirs (c, false) < 0)
-        return -1;
+        goto done_unlock;
     c->zctx = zctx;
     c->domain = xstrdup (domain ? domain : DEFAULT_ZAP_DOMAIN) ;
     if ((c->typemask & FLUX_SEC_TYPE_CURVE)) {
         if (!(c->zauth = zauth_new (c->zctx)))
-            return -1;
+            goto done_unlock;
         //zauth_set_verbose (c->zauth, true);
         if (!(c->cli_cert = getcurve (c, "client")))
-            return -1;
+            goto done_unlock;
         if (!(c->srv_cert = getcurve (c, "server")))
-            return -1;
+            goto done_unlock;
         zauth_configure_curve (c->zauth, "*", c->curve_dir);
     } else if ((c->typemask & FLUX_SEC_TYPE_PLAIN)) {
         if (!(c->zauth = zauth_new (c->zctx)))
-            return -1;
+            goto done_unlock;
         //zauth_set_verbose (c->zauth, true); // displays passwords on stdout!
         zauth_configure_plain (c->zauth, "*", c->passwd_file);
     }
-#endif
+    rc = 0;
+done_unlock:
+    unlock_sec (c);
+    return rc;
+#else
     return 0;
+#endif
 }
 
 int flux_sec_munge_init (flux_sec_t c)
 {
+    int rc = -1;
+    lock_sec (c);
     if ((c->typemask & FLUX_SEC_TYPE_MUNGE)) {
         munge_err_t e;
         if (!(c->mctx = munge_ctx_create ()))
@@ -304,15 +354,20 @@ int flux_sec_munge_init (flux_sec_t c)
         if (e != EMUNGE_SUCCESS) {
             seterrstr (c, "munge_ctx_set: %s", munge_strerror (e));
             errno = EINVAL;
-            return -1;
+            goto done_unlock;
         }
     }
-    return 0;
+    rc = 0;
+done_unlock:
+    unlock_sec (c);
+    return rc;
 }
 
 int flux_sec_csockinit (flux_sec_t c, void *sock)
 {
 #if HAVE_ZAUTH
+    int rc = -1;
+    lock_sec (c);
     if ((c->typemask & FLUX_SEC_TYPE_CURVE)) {
         zsocket_set_zap_domain (sock, c->domain);
         zcert_apply (c->cli_cert, sock);
@@ -321,20 +376,26 @@ int flux_sec_csockinit (flux_sec_t c, void *sock)
         char *passwd = NULL;
         if (!(passwd = getpasswd (c, "client"))) {
             seterrstr (c, "client not found in %s", c->passwd_file);
-            return -1;
+            goto done_unlock;
         }
         zsocket_set_plain_username (sock, "client");
         //zsocket_set_plain_password (sock, "treefrog"); // hah hah
         zsocket_set_plain_password (sock, passwd);
         free (passwd);
     }
-#endif
+    rc = 0;
+done_unlock:
+    unlock_sec (c);
+    return rc;
+#else
     return 0;
+#endif
 }
 
 int flux_sec_ssockinit (flux_sec_t c, void *sock)
 {
 #if HAVE_ZAUTH
+    lock_sec (c);
     if ((c->typemask & (FLUX_SEC_TYPE_CURVE))) {
         zsocket_set_zap_domain (sock, DEFAULT_ZAP_DOMAIN);
         zcert_apply (c->srv_cert, sock);
@@ -342,6 +403,7 @@ int flux_sec_ssockinit (flux_sec_t c, void *sock)
     } else if ((c->typemask & (FLUX_SEC_TYPE_PLAIN))) {
         zsocket_set_plain_server (sock, 1);
     }
+    unlock_sec (c);
 #endif
     return 0;
 }
@@ -350,6 +412,8 @@ static int getsecdirs (flux_sec_t c)
 {
     struct passwd *pw = getpwuid (c->uid);
     int rc = -1;
+
+    /* XXX c->lock held (except in flux_sec_create) */
 
 	if (!pw || !pw->pw_dir || strlen (pw->pw_dir) == 0) {
         seterrstr (c, "who are you?");
@@ -371,6 +435,8 @@ static int checksecdir (flux_sec_t c, const char *path, bool create)
 {
     struct stat sb;
     int rc = -1;
+
+    /* XXX c->lock held */
 
     if (create && mkdir (path, 0700) < 0) {
         if (errno != EEXIST) {
@@ -404,6 +470,8 @@ done:
 
 static int checksecdirs (flux_sec_t c, bool create)
 {
+    /* XXX c->lock held */
+
     if (checksecdir (c, c->dir, create) < 0)
         return -1;
     if (checksecdir (c, c->curve_dir, create) < 0)
@@ -433,6 +501,8 @@ static int gencurve (flux_sec_t c, const char *role, bool force, bool verbose)
     char buf[64];
     struct stat sb;
     int rc = -1;
+
+    /* XXX c->lock held */
 
     if (asprintf (&path, "%s/%s", c->curve_dir, role) < 0)
         oom ();
@@ -480,6 +550,8 @@ static zcert_t *getcurve (flux_sec_t c, const char *role)
     char *path = NULL;;
     zcert_t *cert = NULL;
 
+    /* XXX c->lock held */
+
     if (asprintf (&path, "%s/%s", c->curve_dir, role) < 0)
         oom ();
     if (!(cert = zcert_load (path)))
@@ -492,6 +564,8 @@ static char *getpasswd (flux_sec_t c, const char *user)
 {
     zhash_t *passwds;
     char *passwd = NULL;
+
+    /* XXX c->lock held */
 
     if (!(passwds = zhash_new ()))
         oom ();
@@ -514,6 +588,8 @@ static int genpasswd (flux_sec_t c, const char *user, bool force, bool verbose)
     char *passwd = uuid_generate_str ();
     mode_t old_mask;
     int rc = -1;
+
+    /* XXX c->lock held */
 
     if (force)
         (void)unlink (c->passwd_file);
@@ -552,30 +628,34 @@ int flux_sec_munge_zmsg (flux_sec_t c, zmsg_t **zmsg)
     size_t len;
     int rc = -1;
 
-    if (!(c->typemask & FLUX_SEC_TYPE_MUNGE))
+    lock_sec (c);
+    if (!(c->typemask & FLUX_SEC_TYPE_MUNGE)) {
+        unlock_sec (c);
         return 0;
+    }
     if (!*zmsg) {
         errno = EINVAL;
-        goto done;
+        goto done_unlock;
     }
     if ((len  = zmsg_encode (*zmsg, (byte **)&buf)) < 0) {
         if (errno == 0)
             errno = EINVAL;
         seterrstr (c, "zmsg_encode: %s", strerror (errno));
-        goto done;
+        goto done_unlock;
     }
     if ((e = munge_encode (&cr, c->mctx, buf, len)) != EMUNGE_SUCCESS) {
         seterrstr (c, "munge_encode: %s", munge_strerror (e));
         if (errno == 0)
             errno = EINVAL;
-        goto done;
+        goto done_unlock;
     }
     while ((zf = zmsg_pop (*zmsg)))     /* pop original parts and free */
         zframe_destroy (&zf);
     if (zmsg_pushstr (*zmsg, cr) < 0)   /* push munge cred */
         oom ();
     rc = 0;
-done:
+done_unlock:
+    unlock_sec (c);
     if (buf)
         free (buf);
     if (cr)
@@ -590,32 +670,35 @@ int flux_sec_unmunge_zmsg (flux_sec_t c, zmsg_t **zmsg)
     munge_err_t e;
     int rc = -1;
 
+    lock_sec (c);
     if (!(c->typemask & FLUX_SEC_TYPE_MUNGE) || !*zmsg
                                              || !zmsg_content_size (*zmsg)) {
+        unlock_sec (c);
         return 0;
     }
     cr = zmsg_popstr (*zmsg);           /* pop munge cred */
     if (!cr) {
         seterrstr (c, "message has no MUNGE cred");
         errno = EINVAL;
-        goto done;
+        goto done_unlock;
     }
     e = munge_decode (cr, c->mctx, (void *)&buf, &len, NULL, NULL);
     if (e != EMUNGE_SUCCESS) {
         seterrstr (c, "munge_decode: %s", munge_strerror (e));
         if (errno == 0)
             errno = EINVAL;
-        goto done;
+        goto done_unlock;
     }
     zmsg_destroy (zmsg);
     if (!(*zmsg = zmsg_decode ((byte *)buf, len))) {
         seterrstr (c, "zmsg_decode: %s", strerror (errno));
         if (errno == 0)
             errno = EINVAL;
-        goto done;
+        goto done_unlock;
     }
     rc = 0;
-done:
+done_unlock:
+    unlock_sec (c);
     if (buf)
         free (buf);
     if (cr)
