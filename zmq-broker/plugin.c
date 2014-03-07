@@ -46,7 +46,6 @@ struct plugin_ctx_struct {
     void *zs_upreq; /* for making requests */
     void *zs_dnreq; /* for handling requests (reverse message flow) */
     void *zs_evin;
-    //void *zs_evout;
     char *id;
     ptimeout_t timeout;
     pthread_t t;
@@ -606,7 +605,6 @@ void plugin_unload (plugin_ctx_t p)
     if (errnum)
         errn_exit (errnum, "pthread_join");
 
-    //zsocket_destroy (p->zctx, p->zs_evout);
     zsocket_destroy (p->zctx, p->zs_evin);
     zsocket_destroy (p->zctx, p->zs_dnreq);
     zsocket_destroy (p->zctx, p->zs_upreq);
@@ -687,8 +685,7 @@ plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
     /* connect sockets in the parent, then use them in the thread */
     zconnect (p->zctx, &p->zs_upreq, ZMQ_DEALER, UPREQ_URI, -1, id);
     zconnect (p->zctx, &p->zs_dnreq, ZMQ_DEALER, DNREQ_URI, -1, id);
-    zconnect (p->zctx, &p->zs_evin,  ZMQ_SUB, DNEV_OUT_URI, 0, NULL);
-    //zconnect (p->zctx, &p->zs_evout, ZMQ_PUB, DNEV_IN_URI, -1, NULL);
+    zconnect (p->zctx, &p->zs_evin,  ZMQ_SUB, EVENT_URI, 0, NULL);
 
     errnum = pthread_create (&p->t, NULL, plugin_thread, p);
     if (errnum)

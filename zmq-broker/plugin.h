@@ -7,8 +7,7 @@
  */
 #define UPREQ_URI           "inproc://upreq"
 #define DNREQ_URI           "inproc://dnreq"
-#define DNEV_OUT_URI        "inproc://evout"
-#define DNEV_IN_URI         "inproc://evin"
+#define EVENT_URI           "inproc://event"
 
 /* A plugin defines 'const struct plugin_ops ops = {...}' containing
  * its implementations of one or more of the plugin operations.

@@ -72,11 +72,10 @@ typedef struct {
     char *uri_dnreq_out;        /* URI to listen for tree children */
     void *zs_dnreq_out;         /* ROUTER - optional tree children + plugins */
 
-    char *uri_upev_in;          /* URI to recv external events */
-    void *zs_upev_in;           /* SUB - subscribe to external events */
+    char *uri_event_in;         /* SUB - to event module's ipc:// socket */
+    void *zs_event_in;
 
-    char *uri_dnev_out;         /* URI to listen for tree children */
-    void *zs_dnev_out;          /* PUB - optional tree children + plugins */
+    void *zs_event_out;         /* PUB - to plugins */
 
     char *uri_snoop;
     void *zs_snoop;
@@ -112,7 +111,7 @@ typedef struct {
 
 static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg);
 
-static int upev_in_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
+static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int dnreq_out_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int dnreq_in_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int upreq_out_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
@@ -122,12 +121,11 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static void cmbd_init (ctx_t *ctx);
 static void cmbd_fini (ctx_t *ctx);
 
-#define OPTIONS "t:E:vR:S:p:P:L:T:D:H:N:nci"
+#define OPTIONS "t:E:vR:S:p:P:L:T:H:N:nci"
 static const struct option longopts[] = {
     {"session-name",    required_argument,  0, 'N'},
     {"no-security",     no_argument,        0, 'n'},
     {"up-event-in-uri", required_argument,  0, 'E'},
-    {"dn-event-out-uri",required_argument,  0, 'D'},
     {"up-req-in-uri",   required_argument,  0, 't'},
     {"dn-req-out-uri",  required_argument,  0, 'T'},
     {"verbose",         no_argument,        0, 'v'},
@@ -150,8 +148,7 @@ static void usage (void)
 "Usage: cmbd OPTIONS [plugin:key=val ...]\n"
 " -N,--session-name NAME     Set session name (default: flux)\n"
 " -n,--no-security           Disable session security\n"
-" -E,--up-event-in-uri URI   Set upev_in URI\n"
-" -D,--dn-event-out-uri URI  Set dnev_out URI\n"
+" -E,--event-uri URI         Override default ipc:// event URI\n"
 " -t,--up-req-in-uri URI     Set URIs for upreq_in, (comma separated)\n"
 " -T,--dn-req-out-uri URI    Set URI for dnreq_out, e.g. tcp://*:5557\n"
 " -p,--parent N,URI,URI2     Set parent rank,URIs, e.g.\n"
@@ -200,13 +197,10 @@ int main (int argc, char *argv[])
             case 'i':   /* --plain-insecurity */
                 ctx.security_set |= FLUX_SEC_TYPE_PLAIN;
                 break;
-            case 'E':   /* --up-event-in-uri URI */
+            case 'E':   /* --event-uri URI */
                 if (strstr (optarg, "pgm://"))
-                    msg ("--up-event-in-uri should be an ipc:// endpoint");
-                ctx.uri_upev_in = optarg;
-                break;
-            case 'D':   /* --dn-event-out-uri URI */
-                ctx.uri_dnev_out = optarg;
+                    msg ("--event-uri should be an ipc:// endpoint");
+                ctx.uri_event_in = optarg;
                 break;
             case 't': { /* --up-req-in-uri URI[,URI,...] */
                 char *cpy = xstrdup (optarg);
@@ -296,12 +290,12 @@ int main (int argc, char *argv[])
      * If we're loading the event comms module, peek at its config.
      * Otherwise generate a default same as its default.
      */
-    if (!ctx.uri_upev_in) {
-#define UPEV_URI_TMPL "ipc:///tmp/flux_event_uid%d"
+    if (!ctx.uri_event_in) {
+#define EVENT_URI_TMPL "ipc:///tmp/flux_event_uid%d"
         char *s;
         if ((s = zhash_lookup (ctx.plugin_args, "event:local-uri")))
-            ctx.uri_upev_in = xstrdup (s);
-        else if (asprintf (&ctx.uri_upev_in, UPEV_URI_TMPL, geteuid ()) < 0)
+            ctx.uri_event_in = xstrdup (s);
+        else if (asprintf (&ctx.uri_event_in, EVENT_URI_TMPL, geteuid ()) < 0)
             oom ();
     }
 
@@ -488,24 +482,18 @@ static void *cmbd_init_dnreq_out (ctx_t *ctx)
     return s;
 }
 
-static void *cmbd_init_dnev_out (ctx_t *ctx)
+static void *cmbd_init_event_out (ctx_t *ctx)
 {
     void *s;
-    const char *uri = DNEV_OUT_URI;
 
+    /* Bind only to inproc://event for publishing to plugins.
+     * No security.
+     */
     if (!(s = zsocket_new (ctx->zctx, ZMQ_PUB)))
         err_exit ("zsocket_new");
-    if (flux_sec_ssockinit (ctx->sec, s) < 0)
-        msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ctx->sec));
     zsocket_set_hwm (s, 0);
-    if (check_uri (uri)) {
-        if (zsocket_bind (s, "%s", uri) < 0)
-            err_exit ("%s", uri);
-    }
-    if (check_uri (ctx->uri_dnev_out)) {
-        if (zsocket_bind (s, "%s", ctx->uri_dnev_out) < 0)
-            err_exit ("%s", ctx->uri_dnev_out);
-    }
+    if (zsocket_bind (s, "%s", EVENT_URI) < 0)
+        err_exit ("%s", EVENT_URI);
     return s;
 }
 
@@ -527,7 +515,7 @@ static void *cmbd_init_snoop (ctx_t *ctx)
     return s;
 }
 
-static void *cmbd_init_upev_in (ctx_t *ctx)
+static void *cmbd_init_event_in (ctx_t *ctx)
 {
     void *s;
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
@@ -537,11 +525,11 @@ static void *cmbd_init_upev_in (ctx_t *ctx)
     if (flux_sec_csockinit (ctx->sec, s) < 0)
         msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
     zsocket_set_hwm (s, 0);
-    if (zsocket_connect (s, "%s", ctx->uri_upev_in) < 0)
-        err_exit ("%s", ctx->uri_upev_in);
+    if (zsocket_connect (s, "%s", ctx->uri_event_in) < 0)
+        err_exit ("%s", ctx->uri_event_in);
     zsocket_set_subscribe (s, "");
     zp.socket = s;
-    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)upev_in_cb, ctx) < 0)
+    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)event_cb, ctx) < 0)
         err_exit ("zloop_poller");
     return s;
 }
@@ -656,7 +644,7 @@ static void cmbd_init (ctx_t *ctx)
      */
     ctx->zs_upreq_in = cmbd_init_upreq_in (ctx);
     ctx->zs_dnreq_out = cmbd_init_dnreq_out (ctx);
-    ctx->zs_dnev_out = cmbd_init_dnev_out (ctx);
+    ctx->zs_event_out = cmbd_init_event_out (ctx);
     ctx->zs_snoop = cmbd_init_snoop (ctx);
 #if 0
     /* Increase max number of sockets and number of I/O thraeds.
@@ -669,8 +657,7 @@ static void cmbd_init (ctx_t *ctx)
 #endif
     /* Connect to upstream ports.
      */
-    if (ctx->uri_upev_in)
-        ctx->zs_upev_in = cmbd_init_upev_in (ctx);
+    ctx->zs_event_in = cmbd_init_event_in (ctx);
 
     for (i = 0; i < ctx->parent_len; i++)
         ctx->parent_alive[i] = true;
@@ -950,13 +937,13 @@ static int dnreq_out_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
     ZLOOP_RETURN(ctx);
 }
 
-static int upev_in_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
+static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
-    zmsg_t *zmsg = zmsg_recv (ctx->zs_upev_in);
+    zmsg_t *zmsg = zmsg_recv (ctx->zs_event_in);
     if (zmsg) {
         cmb_internal_event (ctx, zmsg);
         snoop_cc (ctx, FLUX_MSGTYPE_EVENT, zmsg);
-        zmsg_send (&zmsg, ctx->zs_dnev_out);
+        zmsg_send (&zmsg, ctx->zs_event_out);
     }
     ZLOOP_RETURN(ctx);
 }
