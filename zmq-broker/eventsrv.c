@@ -1,10 +1,5 @@
 /* eventsrv.c - event relay */
 
-/* Provides a local event nexus on an ipc:// socket.
- * Publish events on request.  Provide ipc uri on request.
- * Establish a relay between epgm:// socket and ipc:// socket.
- */
-
 /* N.B. For a given epgm uri, there can be only one publisher and one
  * subscriber per node.  Messages published on the the same node will not
  * be "looped back" to a subscriber on the same node via epgm.
@@ -39,7 +34,9 @@
 
 typedef struct {
     flux_t h;
-    char *local_uri;
+    char *local_inproc_uri;
+    char *local_ipc_uri;
+    char *local_tcp_uri;
     void *local_zs_pub;
     char *mcast_uri;
     void *mcast_zs_pub;
@@ -48,12 +45,18 @@ typedef struct {
     flux_sec_t sec;
     bool mcast_all_publish;
     bool treeroot;
+    pid_t pid;
+    char hostname[HOST_NAME_MAX + 1];
 } ctx_t;
 
 static void freectx (ctx_t *ctx)
 {
-    if (ctx->local_uri)
-        free (ctx->local_uri);
+    if (ctx->local_inproc_uri)
+        free (ctx->local_inproc_uri);
+    if (ctx->local_ipc_uri)
+        free (ctx->local_ipc_uri);
+    if (ctx->local_tcp_uri)
+        free (ctx->local_tcp_uri);
     if (ctx->mcast_uri)
         free (ctx->mcast_uri);
     if (ctx->local_zs_pub)
@@ -75,6 +78,9 @@ static ctx_t *getctx (flux_t h)
         ctx->zctx = flux_get_zctx (h);
         ctx->sec = flux_get_sec (h);
         ctx->treeroot = flux_treeroot (h);
+        ctx->pid = getpid ();
+        if (gethostname (ctx->hostname, HOST_NAME_MAX) < 0)
+            err_exit ("gethostname");
         flux_aux_set (h, "eventsrv", ctx, (FluxFreeFn)freectx);
     }
     return ctx;
@@ -169,9 +175,65 @@ done:
     return 0;
 }
 
+static int geturi_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    json_object *request = NULL;
+    json_object *response = util_json_object_new_object ();
+    const char *hostname;
+    int pid;
+    char *uri;
+
+    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || !request) {
+        flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
+    }
+    if (util_json_object_get_string (request, "hostname", &hostname) < 0
+            || util_json_object_get_int (request, "pid", &pid) < 0) {
+        flux_respond_errnum (h, zmsg, EINVAL);
+        goto done;
+    }
+    if (strcmp (hostname, ctx->hostname)) {  /* different host, use tcp:// */
+        if (!ctx->local_tcp_uri) {
+            if (zsocket_bind (ctx->local_zs_pub, "tcp://*:*") < 0) {
+                flux_log (h, LOG_ERR, "zsocket_bind tcp://*:*: %s",
+                          strerror (errno));
+                flux_respond_errnum (h, zmsg, errno);
+                goto done;
+            }
+            ctx->local_tcp_uri = zsocket_last_endpoint (ctx->local_zs_pub);
+        }
+        uri = ctx->local_tcp_uri;
+    } else if (pid != ctx->pid) {            /* different process use ipc:// */
+        if (!ctx->local_ipc_uri) {
+            if (zsocket_bind (ctx->local_zs_pub, "ipc://*") < 0) {
+                flux_log (h, LOG_ERR, "zsocket_bind ipc://* %s",
+                          strerror (errno));
+                flux_respond_errnum (h, zmsg, errno);
+                goto done;
+            }
+            ctx->local_ipc_uri = zsocket_last_endpoint (ctx->local_zs_pub);
+        }
+        uri = ctx->local_ipc_uri;
+    } else {                                 /* same process use inproc:// */
+        uri = ctx->local_inproc_uri;
+    }
+    util_json_object_add_string (response, "uri", uri);
+    flux_respond (h, zmsg, response);
+done:
+    if (request)
+        json_object_put (request);
+    if (response)
+        json_object_put (response);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+    return 0;
+}
+
 static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "event.pub",   pub_request_cb },
     { FLUX_MSGTYPE_RESPONSE, "event.pub",   pub_response_cb },
+    { FLUX_MSGTYPE_REQUEST,  "event.geturi",geturi_request_cb },
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
@@ -180,7 +242,6 @@ static int eventsrv_main (flux_t h, zhash_t *args)
     ctx_t *ctx = getctx (h);
     int rc = -1;
     char *s;
-    uid_t uid = geteuid ();
 
     /* Read global configuration once.
      *   (Handling live change is courting deadlock)
@@ -189,13 +250,13 @@ static int eventsrv_main (flux_t h, zhash_t *args)
     (void)kvs_get_boolean (h, "conf.event.mcast-all-publish",
                            &ctx->mcast_all_publish);
 
-    /* event:local-uri - override default ipc socket
-     *   Publish/relay events on ipc scoket.
+    /* Create a local PUB socket relay with an inproc:// endpoint
+     *   Other endpoints will be added as needed by event.geturi requests.
      */
-    if ((s = zhash_lookup (args, "event:local-uri")))
-        ctx->local_uri = xstrdup (s);
-    else if (asprintf (&ctx->local_uri, "ipc:///tmp/flux_event_uid%d", uid) < 0)
+    s = uuid_generate_str ();
+    if (asprintf (&ctx->local_inproc_uri, "inproc://%s", s) < 0)
         oom ();
+    free (s);
     if (!(ctx->local_zs_pub = zsocket_new (ctx->zctx, ZMQ_PUB))) {
         flux_log (h, LOG_ERR, "zsocket_new: %s", strerror (errno));
         goto done;
@@ -206,8 +267,8 @@ static int eventsrv_main (flux_t h, zhash_t *args)
                   flux_sec_errstr (ctx->sec));
         goto done;
     }
-    if (zsocket_bind (ctx->local_zs_pub, ctx->local_uri) < 0) {
-        flux_log (h, LOG_ERR, "zsocket_bind %s: %s", ctx->local_uri,
+    if (zsocket_bind (ctx->local_zs_pub, ctx->local_inproc_uri) < 0) {
+        flux_log (h, LOG_ERR, "zsocket_bind %s: %s", ctx->local_inproc_uri,
                   strerror (errno));
         goto done;
     }

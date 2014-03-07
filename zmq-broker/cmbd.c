@@ -105,7 +105,7 @@ typedef struct {
     int epoch;                  /* current sched trigger epoch */
     flux_t h;
     pid_t pid;
-    char hostname[MAXHOSTNAMELEN + 1];
+    char hostname[HOST_NAME_MAX + 1];
 } ctx_t;
 
 static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg);
@@ -117,14 +117,15 @@ static int upreq_out_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int upreq_in_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 
+static void cmb_event_geturi_request (ctx_t *ctx);
+
 static void cmbd_init (ctx_t *ctx);
 static void cmbd_fini (ctx_t *ctx);
 
-#define OPTIONS "t:E:vR:S:p:P:L:T:H:N:nci"
+#define OPTIONS "t:vR:S:p:P:L:T:H:N:nci"
 static const struct option longopts[] = {
     {"session-name",    required_argument,  0, 'N'},
     {"no-security",     no_argument,        0, 'n'},
-    {"up-event-in-uri", required_argument,  0, 'E'},
     {"up-req-in-uri",   required_argument,  0, 't'},
     {"dn-req-out-uri",  required_argument,  0, 'T'},
     {"verbose",         no_argument,        0, 'v'},
@@ -147,7 +148,6 @@ static void usage (void)
 "Usage: cmbd OPTIONS [plugin:key=val ...]\n"
 " -N,--session-name NAME     Set session name (default: flux)\n"
 " -n,--no-security           Disable session security\n"
-" -E,--event-uri URI         Override default ipc:// event URI\n"
 " -t,--up-req-in-uri URI     Set URIs for upreq_in, (comma separated)\n"
 " -T,--dn-req-out-uri URI    Set URI for dnreq_out, e.g. tcp://*:5557\n"
 " -p,--parent N,URI,URI2     Set parent rank,URIs, e.g.\n"
@@ -178,7 +178,7 @@ int main (int argc, char *argv[])
         oom ();
     zlist_autofree (ctx.uri_upreq_in);
     ctx.session_name = "flux";
-    if (gethostname (ctx.hostname, sizeof (ctx.hostname)) < 0)
+    if (gethostname (ctx.hostname, HOST_NAME_MAX) < 0)
         err_exit ("gethostname");
     ctx.pid = getpid();
 
@@ -195,11 +195,6 @@ int main (int argc, char *argv[])
                 break;
             case 'i':   /* --plain-insecurity */
                 ctx.security_set |= FLUX_SEC_TYPE_PLAIN;
-                break;
-            case 'E':   /* --event-uri URI */
-                if (strstr (optarg, "pgm://"))
-                    msg ("--event-uri should be an ipc:// endpoint");
-                ctx.uri_event_in = optarg;
                 break;
             case 't': { /* --up-req-in-uri URI[,URI,...] */
                 char *cpy = xstrdup (optarg);
@@ -282,19 +277,6 @@ int main (int argc, char *argv[])
 
     if (zlist_size (ctx.uri_upreq_in) == 0) {
         if (zlist_push (ctx.uri_upreq_in, xstrdup ("tcp://*:5556")) < 0)
-            oom ();
-    }
-
-    /* Try to guess the right uri for events.
-     * If we're loading the event comms module, peek at its config.
-     * Otherwise generate a default same as its default.
-     */
-    if (!ctx.uri_event_in) {
-#define EVENT_URI_TMPL "ipc:///tmp/flux_event_uid%d"
-        char *s;
-        if ((s = zhash_lookup (ctx.plugin_args, "event:local-uri")))
-            ctx.uri_event_in = xstrdup (s);
-        else if (asprintf (&ctx.uri_event_in, EVENT_URI_TMPL, geteuid ()) < 0)
             oom ();
     }
 
@@ -656,8 +638,6 @@ static void cmbd_init (ctx_t *ctx)
 #endif
     /* Connect to upstream ports.
      */
-    ctx->zs_event_in = cmbd_init_event_in (ctx);
-
     for (i = 0; i < ctx->parent_len; i++)
         ctx->parent_alive[i] = true;
 
@@ -683,6 +663,10 @@ static void cmbd_init (ctx_t *ctx)
     load_plugins (ctx);
 
     flux_log (ctx->h, LOG_INFO, "%s", flux_sec_confstr (ctx->sec));
+
+    /* Start event initialization, complete it when response arrives.
+     */
+    cmb_event_geturi_request (ctx);
 }
 
 static void cmbd_fini (ctx_t *ctx)
@@ -700,6 +684,9 @@ static void cmbd_fini (ctx_t *ctx)
 static void _reparent (ctx_t *ctx)
 {
     int i;
+
+    /* FIXME: possibly need to reconnect to event socket...
+     */
 
     for (i = 0; i < ctx->parent_len; i++) {
         if (i != ctx->parent_cur && ctx->parent_alive[i]) {
@@ -774,6 +761,49 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
         ctx->epoch = strtoul (arg, NULL, 10);
         free (arg);
     }
+}
+
+/* Send a request to event module for uri to subscribe to.
+ * The request will go to local plugin if loaded, else upstream.
+ */
+static void cmb_event_geturi_request (ctx_t *ctx)
+{
+    json_object *request = util_json_object_new_object ();
+
+    util_json_object_add_int (request, "pid", ctx->pid);
+    util_json_object_add_string (request, "hostname", ctx->hostname);
+    if (flux_request_send (ctx->h, request, "event.geturi") < 0)
+        err_exit ("%s: flux_request_send", __FUNCTION__);
+    json_object_put (request);
+}
+
+static int cmb_internal_response (ctx_t *ctx, zmsg_t **zmsg)
+{
+    json_object *response = NULL;
+    int rc = -1;
+
+    if (cmb_msg_match (*zmsg, "event.geturi")) {
+        const char *uri;
+        if (cmb_msg_decode (*zmsg, NULL, &response) < 0 || !response
+                || util_json_object_get_string (response, "uri", &uri) < 0) {
+            errno = EPROTO;
+            goto done; 
+        }
+        if (ctx->uri_event_in != NULL) {
+            msg ("Ignoring unsolicited event.geturi response");
+            errno = EINVAL;
+            goto done;
+        }
+        ctx->uri_event_in = xstrdup (uri);        
+        ctx->zs_event_in = cmbd_init_event_in (ctx);
+        //msg ("Listening for events on %s", ctx->uri_event_in);
+        zmsg_destroy (zmsg);
+        rc = 0;
+    }
+done:
+    if (response)
+        json_object_put (response);
+    return rc;
 }
 
 static char *cmb_getattr (ctx_t *ctx, const char *name)
@@ -1122,8 +1152,11 @@ static int cmbd_response_sendmsg (void *impl, zmsg_t **zmsg)
 
     snoop_cc (ctx, FLUX_MSGTYPE_RESPONSE, *zmsg);
     if (!(addr = cmb_msg_nexthop (*zmsg))) {
-        if (errno == 0)
-            errno = EPROTO;
+        errno = EINVAL;
+        goto done;
+    }
+    if (strlen (addr) == 0) { /* empty sender - must be me */
+        rc = cmb_internal_response (ctx, zmsg);
         goto done;
     }
     if (ctx->parent_len > 0 && !strcmp (ctx->parent[ctx->parent_cur].id, addr))
