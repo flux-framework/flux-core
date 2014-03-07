@@ -63,21 +63,20 @@ typedef struct {
     bool security_clr;
     bool security_set;
 
-    void *zs_upreq_out;         /* DEALER - tree parent, upstream reqs */
-    void *zs_dnreq_in;          /* rev DEALER - tree parent, downstream reqs */
-
-    zlist_t *uri_upreq_in;      /* URIs to listen for tree children */
-    void *zs_upreq_in;          /* ROUTER - optional tree children + plugins */
-
-    char *uri_dnreq_out;        /* URI to listen for tree children */
-    void *zs_dnreq_out;         /* ROUTER - optional tree children + plugins */
+    /* Sockets.
+     */
+    void *zs_upreq_out;         /* DEALER - uri from parent[cur] (upstream) */
+    void *zs_dnreq_in;          /* rDEALER - uri from parent[cur] (dnstream) */
+    void *zs_upreq_in;          /* ROUTER - plugins/downstream */
+    void *zs_dnreq_out;         /* rROUTER - plugins/downstream */
+    zlist_t *uri_upreq_in;
+    char *uri_dnreq_out;
 
     char *uri_event_in;         /* SUB - to event module's ipc:// socket */
-    void *zs_event_in;
-
+    void *zs_event_in;          /*       (event module takes care of epgm) */
     void *zs_event_out;         /* PUB - to plugins */
 
-    char *uri_snoop;
+    char *uri_snoop;            /* PUB - to flux-snoop (uri is generated) */
     void *zs_snoop;
 
     /* Wireup
