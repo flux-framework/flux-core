@@ -169,89 +169,6 @@ done:
     return 0;
 }
 
-static void reconfig (ctx_t *ctx)
-{
-    if (ctx->mcast_zs_pub) {
-        zsocket_destroy (ctx->zctx, ctx->mcast_zs_pub);
-        ctx->mcast_zs_pub = NULL;
-    }
-    if (ctx->mcast_zs_sub) {
-        zsocket_destroy (ctx->zctx, ctx->mcast_zs_sub);
-        ctx->mcast_zs_sub = NULL;
-    }
-    if (ctx->mcast_uri) {
-        if (!(ctx->mcast_zs_sub = zsocket_new (ctx->zctx, ZMQ_SUB))) {
-            flux_log (ctx->h, LOG_ERR, "zsocket_new: %s", strerror (errno));
-            goto done;
-        }
-        zsocket_set_rcvhwm (ctx->mcast_zs_sub, 0);
-        if (zsocket_connect (ctx->mcast_zs_sub, "%s", ctx->mcast_uri) < 0) {
-            flux_log (ctx->h, LOG_ERR, "zsocket_connect%s: %s", ctx->mcast_uri,
-                      strerror (errno));
-            goto done;
-        }
-        zsocket_set_subscribe (ctx->mcast_zs_sub, "");
-        if (flux_zshandler_add (ctx->h, ctx->mcast_zs_sub, ZMQ_POLLIN,
-                                mcast_event_cb, ctx) < 0) {
-            flux_log (ctx->h, LOG_ERR, "flux_zshandler_add: %s",
-                      strerror (errno));
-            goto done;
-        }
-    }
-    if (ctx->mcast_uri && (ctx->treeroot || ctx->mcast_all_publish)) {
-        if (!(ctx->mcast_zs_pub = zsocket_new (ctx->zctx, ZMQ_PUB))) {
-            flux_log (ctx->h, LOG_ERR, "zsocket_new: %s", strerror (errno));
-            goto done;
-        }
-        zsocket_set_sndhwm (ctx->mcast_zs_pub, 0);
-        if (zsocket_connect (ctx->mcast_zs_pub, "%s", ctx->mcast_uri) < 0) {
-            flux_log (ctx->h, LOG_ERR, "zsocket_connect %s: %s",
-                      ctx->mcast_uri, strerror (errno));
-            goto done;
-        }
-    }
-done:
-    return;
-}
-
-static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)
-{
-    ctx_t *ctx = arg;
-    char *key;
-    char *mcast_uri = NULL;
-    bool mcast_all_publish = false;;
-    bool config_changed = false;
-
-    if (errnum == 0) {
-        key = kvsdir_key_at (dir, "mcast-uri");
-        (void)kvs_get_string (ctx->h, key, &mcast_uri);
-        free (key);
-
-        key = kvsdir_key_at (dir, "mcast-all-publish");
-        (void)kvs_get_boolean (ctx->h, key, &mcast_all_publish);
-        free (key);
-    }
-    if (mcast_uri) {
-        if (!ctx->mcast_uri || strcmp (mcast_uri, ctx->mcast_uri) != 0) {
-            if (ctx->mcast_uri)
-                free (ctx->mcast_uri);
-            ctx->mcast_uri = xstrdup (mcast_uri);
-            config_changed = true;
-        }
-        free (mcast_uri);
-    } else if (ctx->mcast_uri) {
-        free (ctx->mcast_uri);
-        ctx->mcast_uri = NULL;
-        config_changed = true;
-    }
-    if (ctx->mcast_all_publish != mcast_all_publish) {
-        ctx->mcast_all_publish = mcast_all_publish;
-        config_changed = true;
-    }
-    if (config_changed)
-        reconfig (ctx);
-}
-
 static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "event.pub",   pub_request_cb },
     { FLUX_MSGTYPE_RESPONSE, "event.pub",   pub_response_cb },
@@ -265,8 +182,15 @@ static int eventsrv_main (flux_t h, zhash_t *args)
     char *s;
     uid_t uid = geteuid ();
 
+    /* Read global configuration once.
+     *   (Handling live change is courting deadlock)
+     */
+    (void)kvs_get_string (h, "conf.event.mcast-uri", &ctx->mcast_uri);
+    (void)kvs_get_boolean (h, "conf.event.mcast-all-publish",
+                           &ctx->mcast_all_publish);
+
     /* event:local-uri - override default ipc socket
-     *   Publish/relay events here.
+     *   Publish/relay events on ipc scoket.
      */
     if ((s = zhash_lookup (args, "event:local-uri")))
         ctx->local_uri = xstrdup (s);
@@ -288,13 +212,41 @@ static int eventsrv_main (flux_t h, zhash_t *args)
         goto done;
     }
 
-    /* Fetch global config from kvs
-     *   config.event.mcast-uri: "epgm://..."
-     *   config.event.mcast-all-publish: true|false
+    /* conf.event.mcast-uri - if set, relay events from epgm to ipc socket
      */
-    if (kvs_watch_dir (h, set_config, ctx, "conf.event") < 0) {
-        err ("log: %s", "conf.log");
-        return -1;
+    if (ctx->mcast_uri) {
+        if (!(ctx->mcast_zs_sub = zsocket_new (ctx->zctx, ZMQ_SUB))) {
+            flux_log (ctx->h, LOG_ERR, "zsocket_new: %s", strerror (errno));
+            goto done;
+        }
+        zsocket_set_rcvhwm (ctx->mcast_zs_sub, 0);
+        if (zsocket_connect (ctx->mcast_zs_sub, "%s", ctx->mcast_uri) < 0) {
+            flux_log (ctx->h, LOG_ERR, "zsocket_connect%s: %s", ctx->mcast_uri,
+                      strerror (errno));
+            goto done;
+        }
+        zsocket_set_subscribe (ctx->mcast_zs_sub, "");
+        if (flux_zshandler_add (ctx->h, ctx->mcast_zs_sub, ZMQ_POLLIN,
+                                mcast_event_cb, ctx) < 0) {
+            flux_log (ctx->h, LOG_ERR, "flux_zshandler_add: %s",
+                      strerror (errno));
+            goto done;
+        }
+    }
+    /* conf.event.mcast-all-publish - all nodes can publish to mcast-uri
+     *   Arrange to publish events to ipc and epgm if treeroot or this.
+     */
+    if (ctx->mcast_uri && (ctx->treeroot || ctx->mcast_all_publish)) {
+        if (!(ctx->mcast_zs_pub = zsocket_new (ctx->zctx, ZMQ_PUB))) {
+            flux_log (ctx->h, LOG_ERR, "zsocket_new: %s", strerror (errno));
+            goto done;
+        }
+        zsocket_set_sndhwm (ctx->mcast_zs_pub, 0);
+        if (zsocket_connect (ctx->mcast_zs_pub, "%s", ctx->mcast_uri) < 0) {
+            flux_log (ctx->h, LOG_ERR, "zsocket_connect %s: %s",
+                      ctx->mcast_uri, strerror (errno));
+            goto done;
+        }
     }
 
     /* Start reactor.
