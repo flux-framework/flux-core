@@ -23,8 +23,9 @@
 #include "zmsg.h"
 #include "util.h"
 #include "flux.h"
+#include "event.h"
 
-static int event_pub (flux_t h, const char *topic, json_object *payload)
+int flux_event_pub (flux_t h, const char *topic, json_object *payload)
 {
     json_object *request = util_json_object_new_object ();
     json_object *response = NULL;
@@ -52,6 +53,38 @@ done:
     return ret;
 }
 
+int flux_event_geturi (flux_t h, char **urip)
+{
+    json_object *request = util_json_object_new_object ();
+    json_object *response = NULL;
+    char hostname[HOST_NAME_MAX + 1];
+    pid_t pid = getpid ();
+    int ret = -1;
+    const char *uri;
+
+    if (gethostname (hostname, HOST_NAME_MAX) < 0)
+        err_exit ("gethostname");
+    util_json_object_add_int (request, "pid", pid);
+    util_json_object_add_string (request, "hostname", hostname);
+    if (!(response = flux_rpc (h, request, "event.geturi")))
+        goto done;
+    if (util_json_object_get_string (response, "uri", &uri) < 0) {
+        errno = EPROTO;
+        goto done;
+    }
+    *urip = xstrdup (uri);
+    ret = 0;
+done:
+    if (request)
+        json_object_put (request);
+    if (response)
+        json_object_put (response);
+    return ret;
+}
+
+/* Emulate form flux_t handle operations.
+ */
+
 int flux_event_sendmsg (flux_t h, zmsg_t **zmsg)
 {
     char *topic = NULL;
@@ -62,7 +95,7 @@ int flux_event_sendmsg (flux_t h, zmsg_t **zmsg)
         errno = EINVAL;
         goto done;
     }
-    if (event_pub (h, topic, payload) < 0)
+    if (flux_event_pub (h, topic, payload) < 0)
         goto done;
     if (*zmsg)
         zmsg_destroy (zmsg);
@@ -86,7 +119,7 @@ int flux_event_send (flux_t h, json_object *request, const char *fmt, ...)
         oom ();
     va_end (ap);
 
-    rc = event_pub (h, topic, request);
+    rc = flux_event_pub (h, topic, request);
     free (topic);
     return rc;
 }
