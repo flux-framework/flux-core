@@ -665,6 +665,7 @@ static void cmbd_init (ctx_t *ctx)
     flux_log (ctx->h, LOG_INFO, "%s", flux_sec_confstr (ctx->sec));
 
     /* Start event initialization, complete it when response arrives.
+     *   N.B. avoid flux_event_geturi () as zloop isn't running yet.
      */
     cmb_event_geturi_request (ctx);
 }
@@ -786,17 +787,18 @@ static int cmb_internal_response (ctx_t *ctx, zmsg_t **zmsg)
         const char *uri;
         if (cmb_msg_decode (*zmsg, NULL, &response) < 0 || !response
                 || util_json_object_get_string (response, "uri", &uri) < 0) {
+            flux_log (ctx->h, LOG_ERR, "mangled event.geturi response");
             errno = EPROTO;
             goto done; 
         }
         if (ctx->uri_event_in != NULL) {
-            msg ("Ignoring unsolicited event.geturi response");
+            flux_log (ctx->h, LOG_ERR, "unexpected event.geturi response");
             errno = EINVAL;
             goto done;
         }
         ctx->uri_event_in = xstrdup (uri);        
         ctx->zs_event_in = cmbd_init_event_in (ctx);
-        //msg ("Listening for events on %s", ctx->uri_event_in);
+        //flux_log (ctx->h, LOG_INFO, "subscribed to %s", ctx->uri_event_in);
         zmsg_destroy (zmsg);
         rc = 0;
     }

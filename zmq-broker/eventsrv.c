@@ -44,6 +44,7 @@ typedef struct {
     zctx_t *zctx;
     flux_sec_t sec;
     bool mcast_all_publish;
+    char *tcp_if;
     bool treeroot;
     pid_t pid;
     char hostname[HOST_NAME_MAX + 1];
@@ -51,6 +52,8 @@ typedef struct {
 
 static void freectx (ctx_t *ctx)
 {
+    if (ctx->tcp_if)
+        free (ctx->tcp_if);
     if (ctx->local_inproc_uri)
         free (ctx->local_inproc_uri);
     if (ctx->local_ipc_uri)
@@ -195,7 +198,8 @@ static int geturi_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     }
     if (strcmp (hostname, ctx->hostname)) {  /* different host, use tcp:// */
         if (!ctx->local_tcp_uri) {
-            if (zsocket_bind (ctx->local_zs_pub, "tcp://*:*") < 0) {
+            if (zsocket_bind (ctx->local_zs_pub, "tcp://%s:*",
+                              ctx->tcp_if ? ctx->tcp_if : "eth0") < 0) {
                 flux_log (h, LOG_ERR, "zsocket_bind tcp://*:*: %s",
                           strerror (errno));
                 flux_respond_errnum (h, zmsg, errno);
@@ -246,6 +250,7 @@ static int eventsrv_main (flux_t h, zhash_t *args)
     /* Read global configuration once.
      *   (Handling live change is courting deadlock)
      */
+    (void)kvs_get_string (h, "conf.event.tcp-if", &ctx->tcp_if);
     (void)kvs_get_string (h, "conf.event.mcast-uri", &ctx->mcast_uri);
     (void)kvs_get_boolean (h, "conf.event.mcast-all-publish",
                            &ctx->mcast_all_publish);
@@ -295,7 +300,8 @@ static int eventsrv_main (flux_t h, zhash_t *args)
         }
     }
     /* conf.event.mcast-all-publish - all nodes can publish to mcast-uri
-     *   Arrange to publish events to ipc and epgm if treeroot or this.
+     *   Without this, only the root will publish to mcast-uri'
+     *   and the rest will fwd event.pub requests upstream.
      */
     if (ctx->mcast_uri && (ctx->treeroot || ctx->mcast_all_publish)) {
         if (!(ctx->mcast_zs_pub = zsocket_new (ctx->zctx, ZMQ_PUB))) {
