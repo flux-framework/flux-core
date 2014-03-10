@@ -1,7 +1,6 @@
 ${CMDPREFIX} ${CMBD:-./cmbd} \
   --verbose \
-  --up-req-in-uri='tcp://*:5556' \
-  --dn-req-out-uri='tcp://*:5557' \
+  --request-uri='tcp://*:5556' \
   --rank=0 --size=3 \
   --logdest=cmbd.log \
   --hostlist=localhost,localhost,localhost \

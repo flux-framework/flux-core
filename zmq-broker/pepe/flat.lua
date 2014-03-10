@@ -18,12 +18,10 @@ end
 local h = hostlist.new (pepe.nodelist)
 local mport = 5000 + tonumber (pepe:getenv ("SLURM_JOB_ID")) % 1024;
 local eventuri = "epgm://eth0;239.192.1.1:" .. tostring (mport)
-local dnreqouturi = "tcp://*:5557"
 
 if pepe.rank == 0 then
     local topology = tree.k_ary_json (#h, #h)
     pepe.run ("./cmbd"
-		.. " --dn-req-out-uri='" .. dnreqouturi .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
 		.. " --hostlist=" .. pepe.nodelist
@@ -38,10 +36,9 @@ if pepe.rank == 0 then
                 .. " kvs:conf.live.missed-hb-allow=5"
                 .. " kvs:conf.live.topology='" .. topology .. "'")
 else
-    local u1 = "tcp://" ..  h[1] .. ":5556"
-    local u2 = "tcp://" ..  h[1] .. ":5557"
+    local parent_uri = "tcp://" ..  h[1] .. ":5556"
     pepe.run ("./cmbd"
-		.. " --parent='0," .. u1 .. "," .. u2 .. "'"
+		.. " --parent='0," .. parent_uri .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --plugins=event,api,barrier,live,log,kvs,mecho"
 		.. " --size=" .. #h)
