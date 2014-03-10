@@ -5,9 +5,9 @@ ${CMDPREFIX} ${CMBD:-./cmbd} \
   --rank=0 --size=3 \
   --logdest=cmbd.log \
   --hostlist=localhost,localhost,localhost \
-  --plugins=api,barrier,live,kvs,log,sync,job,rexec,mecho,event \
-  kvs:conf.sync.period-sec=1.5 \
-  kvs:conf.live.missed-trigger-allow=5 \
+  --plugins=api,barrier,live,kvs,log,hb,job,rexec,mecho,event \
+  kvs:conf.hb.period-sec=1.5 \
+  kvs:conf.live.missed-hb-allow=5 \
   kvs:conf.log.reduction-timeout-msec=100 \
   kvs:conf.log.circular-buffer-entries=100000 \
   kvs:conf.log.persist-level=debug \

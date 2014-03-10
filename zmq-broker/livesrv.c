@@ -30,7 +30,7 @@ typedef struct {
 } child_t;
 
 typedef struct {
-    int live_missed_trigger_allow;
+    int live_missed_hb_allow;
     json_object *topology;
     json_object *live_down;
 } config_t;
@@ -126,7 +126,7 @@ static void age_children (ctx_t *ctx)
         oom ();
     while ((key = zlist_pop (keys))) {
         cp = zhash_lookup (ctx->kids, key); 
-        if (ctx->epoch > cp->epoch + ctx->conf.live_missed_trigger_allow) {
+        if (ctx->epoch > cp->epoch + ctx->conf.live_missed_hb_allow) {
             if (alive (ctx, cp->rank)) {
                 //msg ("aged %d epoch=%d current epoch=%d",
                 //     cp->rank, cp->epoch, ctx->epoch);
@@ -248,7 +248,7 @@ static int hello_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         cp->epoch = epoch;
 
     if (!alive (ctx, cp->rank)) {
-        if (ctx->epoch > cp->epoch + ctx->conf.live_missed_trigger_allow) {
+        if (ctx->epoch > cp->epoch + ctx->conf.live_missed_hb_allow) {
             //msg ("ignoring live.hello from %d epoch=%d current epoch=%d",
             //     rank, epoch, ctx->epoch);
         } else {
@@ -324,21 +324,21 @@ done:
     return 0;
 }
 
-static int trigger_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     json_object *o = NULL;
 
     if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
             || util_json_object_get_int (o, "epoch", &ctx->epoch) < 0) {
-        flux_log (h, LOG_ERR, "received mangled trigger event");
+        flux_log (h, LOG_ERR, "received mangled heartbeat event");
         goto done;        
     }
     if (!flux_treeroot (ctx->h)) {
         if (hello_request_send (ctx->h, ctx->epoch, flux_rank (h)) < 0)
             flux_log (h, LOG_ERR, "hello_request_send: %s", strerror (errno));
     }
-    if (ctx->age++ >= ctx->conf.live_missed_trigger_allow)
+    if (ctx->age++ >= ctx->conf.live_missed_hb_allow)
         age_children (ctx);
 done:
     if (o)
@@ -359,7 +359,7 @@ static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)
         err ("live: %s", path);
         goto invalid;
     }
-    key = kvsdir_key_at (dir, "missed-trigger-allow");    
+    key = kvsdir_key_at (dir, "missed-hb-allow");    
     if (kvs_get_int (ctx->h, key, &val) < 0) {
         err ("live: %s", key);
         goto invalid;
@@ -368,7 +368,7 @@ static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)
         msg ("live: %s must be >= 2, <= 100", key);
         goto invalid;
     }
-    ctx->conf.live_missed_trigger_allow = val; 
+    ctx->conf.live_missed_hb_allow = val; 
     free (key);
 
     key = kvsdir_key_at (dir, "topology");    
@@ -412,7 +412,7 @@ invalid:
 
 static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST,     "live.hello",          hello_request_cb },
-    { FLUX_MSGTYPE_EVENT,       "event.sched.trigger", trigger_event_cb },
+    { FLUX_MSGTYPE_EVENT,       "hb",                  hb_cb },
     { FLUX_MSGTYPE_EVENT,       "event.live",          live_event_cb },
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
@@ -425,7 +425,7 @@ static int livesrv_main (flux_t h, zhash_t *args)
         flux_log (h, LOG_ERR, "kvs_watch_dir: %s", strerror (errno));
         return -1;
     }
-    if (flux_event_subscribe (h, "event.sched.trigger") < 0) {
+    if (flux_event_subscribe (h, "hb") < 0) {
         flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
         return -1;
     }

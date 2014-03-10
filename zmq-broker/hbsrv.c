@@ -1,4 +1,4 @@
-/* syncsrv.c - generate scheduling trigger */
+/* hbsrv.c - generate session heartbeat */
 
 #include <stdio.h>
 #include <assert.h>
@@ -27,14 +27,13 @@
 #define MAX_SYNC_PERIOD_SEC 30*60.0
 
 static int epoch = 0;
-static bool disabled = false;
 
 static int timeout_cb (flux_t h, void *arg)
 {
     json_object *o = util_json_object_new_object ();
     int rc = -1;
     util_json_object_add_int (o, "epoch", ++epoch);
-    if (flux_event_send (h, o, "event.sched.trigger") < 0) {
+    if (flux_event_send (h, o, "hb") < 0) {
         err ("flux_event_send");
         goto done;
     }
@@ -48,46 +47,40 @@ static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)
 {
     flux_t h = arg;
     double val;
-    char *key;
+    char *key = NULL;
 
     if (errnum > 0) {
-        err ("sync: %s", path);
-        goto invalid;
+        flux_log (h, LOG_ERR, "%s: %s", key, strerror (errnum));
+        goto done;
     }
-
     key = kvsdir_key_at (dir, "period-sec");
     if (kvs_get_double (h, key, &val) < 0) {
-        err ("sync: %s", key);
-        goto invalid;
+        flux_log (h, LOG_ERR, "%s: %s", key, strerror (errno));
+        goto done;
     }
     if (val == NAN || val <= 0 || val > MAX_SYNC_PERIOD_SEC) {
-        msg ("sync: %s must be > 0 and <= %.1f", key, MAX_SYNC_PERIOD_SEC);
-        goto invalid;
+        flux_log (h, LOG_ERR, "%s: %.1f out of range (0 < sec < %.1f", key,
+                  val, MAX_SYNC_PERIOD_SEC);
+        goto done;
     }
-    free (key);
-
-    if (disabled) {
-        msg ("sync: %s values OK, synchronization resumed", path);
-        disabled = false;
+    if (flux_timeout_set (h, (int)(val * 1000)) < 0) { /* msec */
+        flux_log (h, LOG_ERR, "flux_timeout_set %d", (int)(val * 1000));
+        goto done;
     }
-    flux_timeout_set (h, (int)(val * 1000)); /* msec */
-    return;
-invalid:
-    if (!disabled) {
-        msg ("sync: %s values invalid, synchronization suspended", path);
-        disabled = true;
-        flux_timeout_set (h, 0);
-    }
+    flux_log (h, LOG_INFO, "heartbeat period set to %.1fs", val);
+done:
+    if (key)
+        free (key);
 }
 
-static int syncsrv_main (flux_t h, zhash_t *args)
+static int hbsrv_main (flux_t h, zhash_t *args)
 {
     if (flux_tmouthandler_set (h, timeout_cb, NULL) < 0) {
         flux_log (h, LOG_ERR, "flux_tmouthandler_set: %s", strerror (errno));
         return -1;
     }
-    if (kvs_watch_dir (h, set_config, h, "conf.sync") < 0) {
-        err ("kvs_watch_dir conf.sync");
+    if (kvs_watch_dir (h, set_config, h, "conf.hb") < 0) {
+        flux_log (h, LOG_ERR, "kvs_watch_dir conf.hb: %s", strerror (errno));
         return -1;
     }
     if (flux_reactor_start (h) < 0) {
@@ -98,7 +91,7 @@ static int syncsrv_main (flux_t h, zhash_t *args)
 }
 
 const struct plugin_ops ops = {
-    .main    = syncsrv_main,
+    .main    = hbsrv_main,
 };
 
 /*

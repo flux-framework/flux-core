@@ -102,7 +102,7 @@ typedef struct {
      */
     bool verbose;               /* enable debug to stderr */
     route_ctx_t rctx;           /* routing table */
-    int epoch;                  /* current sched trigger epoch */
+    int epoch;                  /* current heartbeat epoch */
     flux_t h;
     pid_t pid;
     char hostname[HOST_NAME_MAX + 1];
@@ -758,9 +758,12 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
         if (ctx->zs_upreq_out)
             if (flux_request_send (ctx->h, NULL, "cmb.route.hello") < 0)
                 err_exit ("flux_request_send");
-    } else if (cmb_msg_match_substr (zmsg, "event.sched.trigger.", &arg)) {
-        ctx->epoch = strtoul (arg, NULL, 10);
-        free (arg);
+    } else if (cmb_msg_match (zmsg, "hb")) {
+        json_object *request = NULL;
+        if (cmb_msg_decode (zmsg, NULL, &request) == 0 && request != NULL)
+            (void)util_json_object_get_int (request, "epoch", &ctx->epoch);
+        if (request)
+            json_object_put (request);
     }
 }
 

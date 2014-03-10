@@ -147,7 +147,7 @@ typedef struct {
     stats_t stats;
     flux_t h;
     bool master;            /* for now minimize flux_treeroot() calls */
-    int epoch;              /* tracks current event.sched.trigger epoch */
+    int epoch;              /* tracks current heartbeat epoch */
     struct timespec commit_time; /* time of most recent commit */
 } ctx_t;
 
@@ -868,7 +868,7 @@ static int dropcache_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     return 0;
 }
 
-static int heartbeat_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     json_object *event = NULL;
@@ -1804,7 +1804,7 @@ static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.sync",             sync_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.dropcache",        dropcache_cb },
     { FLUX_MSGTYPE_EVENT,   "event.kvs.dropcache",  dropcache_cb },
-    { FLUX_MSGTYPE_EVENT,   "event.sched.trigger",  heartbeat_cb },
+    { FLUX_MSGTYPE_EVENT,   "hb",                   hb_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.get",              get_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.watch",            watch_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.put",              put_request_cb },
@@ -1828,7 +1828,7 @@ static int kvssrv_main (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
 
-    if (flux_event_subscribe (h, "event.sched.trigger") < 0) {
+    if (flux_event_subscribe (h, "hb") < 0) {
         flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
         return -1;
     }

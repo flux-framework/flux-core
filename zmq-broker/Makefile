@@ -39,7 +39,7 @@ LIBCMB_OBJS = apicli.o $(COMMON_OBJS)
 LIBPMI = $(LIBDIR)/libpmi.so.0
 LIBCMB = $(LIBDIR)/libcmb.so.0
 
-PLUGINS = plugins/apisrv.so plugins/syncsrv.so plugins/kvssrv.so \
+PLUGINS = plugins/apisrv.so plugins/hbsrv.so plugins/kvssrv.so \
 	plugins/barriersrv.so plugins/livesrv.so plugins/mechosrv.so \
 	plugins/logsrv.so plugins/echosrv.so plugins/jobsrv.so \
 	plugins/resrcsrv.so plugins/rexecsrv.so plugins/schedsrv.so \

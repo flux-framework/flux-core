@@ -28,14 +28,14 @@ if pepe.rank == 0 then
 		.. " --size=" .. #h
 		.. " --hostlist=" .. pepe.nodelist
 		.. " --logdest cmbd.log"
-		.. " --plugins=event,api,barrier,live,log,kvs,sync,mecho"
+		.. " --plugins=event,api,barrier,live,log,kvs,hb,mecho"
                 .. " kvs:conf.event.mcast-uri='" .. eventuri .. "'"
                 .. " kvs:conf.event.mcast-all-publish=false"
-                .. " kvs:conf.sync.period-sec=1.5"
+                .. " kvs:conf.hb.period-sec=1.5"
                 .. " kvs:conf.log.reduction-timeout-msec=100"
                 .. " kvs:conf.log.circular-buffer-entries=100000"
                 .. " kvs:conf.log.persist-level=debug"
-		.. " kvs:conf.live.missed-trigger-allow=5"
+		.. " kvs:conf.live.missed-hb-allow=5"
                 .. " kvs:conf.live.topology='" .. topology .. "'")
 else
     local parent_rank = pepe.rank - 1
