@@ -334,10 +334,8 @@ static void unload_plugin (ctx_t *ctx, plugin_ctx_t p)
     const char *name = plugin_name (p);
     const char *id = plugin_id (p);
 
-    if (name && id) {
-        route_del (ctx->rctx, id, id);
+    if (name && id)
         route_del (ctx->rctx, name, id);
-    }
     plugin_unload (p);
 }
 
@@ -613,8 +611,6 @@ static void cmbd_init (ctx_t *ctx)
     if (ctx->zs_parent) {
         if (flux_request_send (ctx->h, NULL, "cmb.connect") < 0)
             err_exit ("error sending cmb.connect upstream");
-        if (flux_request_send (ctx->h, NULL, "cmb.route.hello") < 0)
-            err_exit ("error sending cmb.route.hello upstream");
     }
 
     ctx->loaded_plugins = zhash_new ();
@@ -651,15 +647,6 @@ static void _reparent (ctx_t *ctx)
         if (i != ctx->parent_cur && ctx->parent[i].alive) {
             flux_log (ctx->h, LOG_ALERT, "reparent %d->%d",
                       ctx->parent[ctx->parent_cur].rank, ctx->parent[i].rank);
-            if (ctx->parent[ctx->parent_cur].alive) {
-                if (flux_request_send (ctx->h, NULL, "cmb.route.goodbye.%d",
-                                       ctx->rank) < 0)
-                    err_exit ("flux_request_send");
-            }
-            if (ctx->verbose)
-                msg ("%s: disconnect %s, connect %s", __FUNCTION__,
-                    ctx->parent[ctx->parent_cur].uri,
-                    ctx->parent[i].uri);
             if (zsocket_disconnect (ctx->zs_parent, "%s",
                               ctx->parent[ctx->parent_cur].uri) < 0)
                 err_exit ("zsocket_disconnect");
@@ -667,10 +654,7 @@ static void _reparent (ctx_t *ctx)
                 err_exit ("zsocket_connect");
             ctx->parent_cur = i;
 
-            /* setsockopt ZMQ_IMMEDIATE should fix this -jg */
             usleep (1000*10); /* FIXME! */
-            if (flux_request_send (ctx->h, NULL, "cmb.connect") < 0)
-                err_exit ("flux_request_send");
             break;
         }
     }
@@ -699,17 +683,12 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
                             _reparent (ctx);
                     } else {
                         ctx->parent[i].alive = false;
-                        //route_del_subtree (ctx->rctx, rank);
                         if (i == ctx->parent_cur)
                             _reparent (ctx);
                     }
                 }
             }
         }
-    } else if (cmb_msg_match (zmsg, "route.update")) {
-        if (ctx->zs_parent)
-            if (flux_request_send (ctx->h, NULL, "cmb.route.hello") < 0)
-                err_exit ("flux_request_send");
     } else if (cmb_msg_match (zmsg, "hb")) {
         if (cmb_msg_decode (zmsg, NULL, &event) == 0 && event!= NULL)
             (void)util_json_object_get_int (event, "epoch", &ctx->epoch);
@@ -808,17 +787,6 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         if (flux_respond (ctx->h, zmsg, response) < 0)
             err_exit ("flux_respond");
         json_object_put (response);
-    } else if (cmb_msg_match (*zmsg, "cmb.route.hello")) {
-        route_add_hello (ctx->rctx, *zmsg, 0);
-        if (ctx->zs_parent)
-            zmsg_send (zmsg, ctx->zs_parent); /* fwd upstream */
-    } else if (cmb_msg_match_substr (*zmsg, "cmb.route.goodbye.", &arg)) {
-        //route_del_subtree (ctx->rctx, arg);
-        if (ctx->zs_parent)
-            zmsg_send (zmsg, ctx->zs_parent); /* fwd upstream */
-    } else if (cmb_msg_match (*zmsg, "cmb.connect")) {
-        if (ctx->epoch > 2)
-            flux_event_send (ctx->h, NULL, "route.update");
     } else if (cmb_msg_match (*zmsg, "cmb.info")) {
         json_object *response = util_json_object_new_object ();
 
@@ -860,8 +828,6 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
                 err_exit ("flux_respond");
             json_object_put (response);
         }
-    } else if (cmb_msg_match (*zmsg, "cmb.disconnect")) {
-        zmsg_destroy (zmsg); /* no response */
     } else
         handled = false;
 
