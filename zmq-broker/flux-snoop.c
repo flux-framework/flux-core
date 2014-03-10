@@ -28,16 +28,18 @@ static const struct option longopts[] = {
     { 0, 0, 0, 0 },
 };
 
+static char *suppressed[] = { "cmb.info", "log.msg", "event.pub" };
+
 void usage (void)
 {
     fprintf (stderr, 
 "Usage: flux-snoop OPTIONS [topic [topic...]]\n"
-"  -a,--all                  Include suppressed cmb.info, log.msg messages\n"
-"  -n,--no-security          Try to connect without CURVE security\n"
-"  -v,--verbose              Verbose connect output\n"
-"  -l,--long                 Display long message format\n"
-"  -N,--session-name NAME    Set session name (default flux)\n"
-"  -e,--event-socket         Connect directly to event socket\n"
+"  -a,--all               Do not suppress cmb.info, log.msg, event.pub\n"
+"  -n,--no-security       Try to connect without CURVE security\n"
+"  -v,--verbose           Verbose connect output\n"
+"  -l,--long              Display long message format\n"
+"  -N,--session-name NAME Set session name (default flux)\n"
+"  -e,--event-socket      Connect directly to event socket\n"
 );
     exit (1);
 }
@@ -231,6 +233,16 @@ static int event_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
     return 0;
 }
 
+static bool suppress (const char *tag)
+{
+    int i;
+
+    for (i = 0; i < sizeof (suppressed)/sizeof (suppressed[0]); i++)
+        if (!strcmp (tag, suppressed[i]))
+            return true;
+    return false;
+}
+
 /* The snoop socket includes two extra header frames:
  * First the tag frame, stripped of any node! prefix so subscriptions work.
  * Second, the message type as a stringified integer.
@@ -246,7 +258,7 @@ static int snoop_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
         int type;
 
         if (tag && typestr) {
-            if (aopt || (strcmp (tag, "cmb.info") && strcmp (tag, "log.msg"))) {
+            if (aopt || !suppress (tag)) {
                 if (lopt) {
                     zmsg_dump (zmsg);
                 } else {

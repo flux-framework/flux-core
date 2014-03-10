@@ -730,7 +730,7 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
     json_object *event = NULL;
 
     /* On receipt of a liveness state change, look to see if my parent
-     * has changed state and possibly reconnect to a new parent.
+     * has changed state and possibly reconnect to a new parent:
      * If current parent goes down, connect to alternate parent.
      * If parent[0] returns to service, connect to that.
      */
