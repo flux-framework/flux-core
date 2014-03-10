@@ -50,6 +50,7 @@ struct parent_struct {
     char *dnreq_uri;
     int rank;
     char *id;
+    bool alive;
 };
 
 typedef struct {
@@ -84,7 +85,6 @@ typedef struct {
     struct parent_struct parent[MAX_PARENTS]; /* configured parents */
     int parent_len;             /* length of parent_struct array */
     int parent_cur;             /* current parent */
-    bool parent_alive[MAX_PARENTS]; /* liveness state of parent nodes */
     /* Session parameters
      */
     bool treeroot;              /* true if we are the root of reduction tree */
@@ -639,7 +639,7 @@ static void cmbd_init (ctx_t *ctx)
     /* Connect to upstream ports.
      */
     for (i = 0; i < ctx->parent_len; i++)
-        ctx->parent_alive[i] = true;
+        ctx->parent[i].alive = true;
 
     if (ctx->parent_len > 0) {
         ctx->zs_upreq_out = cmbd_init_upreq_out (ctx);
@@ -690,11 +690,10 @@ static void _reparent (ctx_t *ctx)
      */
 
     for (i = 0; i < ctx->parent_len; i++) {
-        if (i != ctx->parent_cur && ctx->parent_alive[i]) {
+        if (i != ctx->parent_cur && ctx->parent[i].alive) {
             flux_log (ctx->h, LOG_ALERT, "reparent %d->%d",
-                  ctx->parent[ctx->parent_cur].rank,
-                  ctx->parent[i].rank);
-            if (ctx->parent_alive[ctx->parent_cur]) {
+                      ctx->parent[ctx->parent_cur].rank, ctx->parent[i].rank);
+            if (ctx->parent[ctx->parent_cur].alive) {
                 if (flux_request_send (ctx->h, NULL, "cmb.route.goodbye.%d",
                                        ctx->rank) < 0)
                     err_exit ("flux_request_send");
@@ -728,43 +727,44 @@ static void _reparent (ctx_t *ctx)
 
 static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
 {
-    char *arg = NULL;
+    json_object *event = NULL;
 
-    if (cmb_msg_match_substr (zmsg, "event.live.down.", &arg)) {
-        int i, rank = strtoul (arg, NULL, 10);
-
-        for (i = 0; i < ctx->parent_len; i++) {
-            if (ctx->parent[i].rank == rank) {
-                ctx->parent_alive[i] = false;
-                if (i == ctx->parent_cur)
-                    _reparent (ctx);
+    /* On receipt of a liveness state change, look to see if my parent
+     * has changed state and possibly reconnect to a new parent.
+     * If current parent goes down, connect to alternate parent.
+     * If parent[0] returns to service, connect to that.
+     */
+    if (cmb_msg_match (zmsg, "live")) {
+        bool alive;
+        int rank, i;
+        if (cmb_msg_decode (zmsg, NULL, &event) == 0 && event != NULL
+                && util_json_object_get_boolean (event, "alive", &alive) == 0
+                && util_json_object_get_int (event, "rank", &rank) == 0) {
+            for (i = 0; i < ctx->parent_len; i++) {
+                if (ctx->parent[i].rank == rank) {
+                    if (alive) {
+                        ctx->parent[i].alive = true;
+                        if (i == 0 && ctx->parent_cur > 0)
+                            _reparent (ctx);
+                    } else {
+                        ctx->parent[i].alive = false;
+                        //route_del_subtree (ctx->rctx, rank);
+                        if (i == ctx->parent_cur)
+                            _reparent (ctx);
+                    }
+                }
             }
         }
-
-        //route_del_subtree (ctx->rctx, arg);
-        free (arg);        
-    } else if (cmb_msg_match_substr (zmsg, "event.live.up.", &arg)) {
-        int i, rank = strtoul (arg, NULL, 10);
-        
-        for (i = 0; i < ctx->parent_len; i++) {
-            if (ctx->parent[i].rank == rank) {
-                ctx->parent_alive[i] = true;
-                if (i == 0 && ctx->parent_cur > 0)
-                    _reparent (ctx);
-            }
-        }
-        free (arg);
-    } else if (cmb_msg_match (zmsg, "event.route.update")) {
+    } else if (cmb_msg_match (zmsg, "route.update")) {
         if (ctx->zs_upreq_out)
             if (flux_request_send (ctx->h, NULL, "cmb.route.hello") < 0)
                 err_exit ("flux_request_send");
     } else if (cmb_msg_match (zmsg, "hb")) {
-        json_object *request = NULL;
-        if (cmb_msg_decode (zmsg, NULL, &request) == 0 && request != NULL)
-            (void)util_json_object_get_int (request, "epoch", &ctx->epoch);
-        if (request)
-            json_object_put (request);
+        if (cmb_msg_decode (zmsg, NULL, &event) == 0 && event!= NULL)
+            (void)util_json_object_get_int (event, "epoch", &ctx->epoch);
     }
+    if (event)
+        json_object_put (event);
 }
 
 /* Send a request to event module for uri to subscribe to.
@@ -867,7 +867,7 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             zmsg_send (zmsg, ctx->zs_upreq_out); /* fwd upstream */
     } else if (cmb_msg_match (*zmsg, "cmb.connect")) {
         if (ctx->epoch > 2)
-            flux_event_send (ctx->h, NULL, "event.route.update");
+            flux_event_send (ctx->h, NULL, "route.update");
     } else if (cmb_msg_match (*zmsg, "cmb.info")) {
         json_object *response = util_json_object_new_object ();
 

@@ -220,7 +220,7 @@ static int live_event_send (flux_t h, int rank, bool alive)
     int rc;
     util_json_object_add_int (o, "rank", rank);
     util_json_object_add_boolean (o, "alive", alive);
-    rc = flux_event_send (h, o, "event.live", rank);
+    rc = flux_event_send (h, o, "live", rank);
     json_object_put (o);
     return rc;
 }
@@ -413,7 +413,7 @@ invalid:
 static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST,     "live.hello",          hello_request_cb },
     { FLUX_MSGTYPE_EVENT,       "hb",                  hb_cb },
-    { FLUX_MSGTYPE_EVENT,       "event.live",          live_event_cb },
+    { FLUX_MSGTYPE_EVENT,       "live",                live_event_cb },
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
@@ -430,7 +430,7 @@ static int livesrv_main (flux_t h, zhash_t *args)
         return -1;
     }
     if (flux_treeroot (h)) {
-        if (flux_event_subscribe (h, "event.live") < 0) {
+        if (flux_event_subscribe (h, "live") < 0) {
             flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
             return -1;
         }
