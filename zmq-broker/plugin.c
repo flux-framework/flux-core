@@ -521,7 +521,7 @@ static void register_event (plugin_ctx_t p, char *name, FluxMsgHandler cb)
 {
     char *s;
 
-    if (asprintf (&s, "event.%s.%s", p->name, name) < 0)
+    if (asprintf (&s, "%s.%s", p->name, name) < 0)
         oom ();
     if (flux_msghandler_add (p->h, FLUX_MSGTYPE_EVENT, s, cb, p) < 0)
         err_exit ("%s: flux_msghandler_add", p->id);

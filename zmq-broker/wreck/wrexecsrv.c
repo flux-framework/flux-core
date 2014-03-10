@@ -435,14 +435,14 @@ static int event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     struct rexec_ctx *ctx = arg;
     char *tag = cmb_msg_tag (*zmsg, false);
-    if (strncmp (tag, "event.rexec.run", 15) == 0) {
+    if (strncmp (tag, "rexec.run", 15) == 0) {
         int64_t id = id_from_tag (tag + 16, NULL);
         if (id < 0)
             err ("Invalid rexec tag `%s'", tag);
         if (lwj_targets_this_node (ctx, id))
             spawn_exec_handler (ctx, id);
     }
-    else if (strncmp (tag, "event.rexec.kill", 16) == 0) {
+    else if (strncmp (tag, "rexec.kill", 16) == 0) {
         int sig = SIGKILL;
         char *endptr = NULL;
         int64_t id = id_from_tag (tag + 17, &endptr);
@@ -476,7 +476,7 @@ static int request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 
 static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST,   "*",          request_cb },
-    { FLUX_MSGTYPE_EVENT,     "event.rexec.*", event_cb },
+    { FLUX_MSGTYPE_EVENT,     "rexec.*", event_cb },
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
@@ -484,8 +484,8 @@ static int rexec_main (flux_t h, zhash_t *args)
 {
     struct rexec_ctx *ctx = getctx (h);
 
-    flux_event_subscribe (h, "event.rexec.run.");
-    flux_event_subscribe (h, "event.rexec.kill.");
+    flux_event_subscribe (h, "rexec.run.");
+    flux_event_subscribe (h, "rexec.kill.");
     flux_event_subscribe (h, "mrpc.rexec");
 
     if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {

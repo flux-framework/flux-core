@@ -251,7 +251,7 @@ static int exit_event_send (flux_t h, const char *name, int errnum)
 
     util_json_object_add_string (o, "name", name);
     util_json_object_add_int (o, "errnum", errnum);
-    rc = flux_event_send (h, o, "event.barrier.exit");
+    rc = flux_event_send (h, o, "barrier.exit");
     json_object_put (o);
     return rc;
 }
@@ -297,7 +297,7 @@ static int timeout_cb (flux_t h, void *arg)
 static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST,     "barrier.enter",       enter_request_cb },
     { FLUX_MSGTYPE_REQUEST,     "barrier.disconnect",  disconnect_request_cb },
-    { FLUX_MSGTYPE_EVENT,       "event.barrier.exit",  exit_event_cb },
+    { FLUX_MSGTYPE_EVENT,       "barrier.exit",        exit_event_cb },
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
@@ -305,7 +305,7 @@ static int barriersrv_main (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
 
-    if (flux_event_subscribe (h, "event.barrier.") < 0) {
+    if (flux_event_subscribe (h, "barrier.") < 0) {
         err ("%s: flux_event_subscribe", __FUNCTION__);
         return -1;
     }

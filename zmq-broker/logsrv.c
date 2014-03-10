@@ -564,7 +564,7 @@ static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST,   "log.unsubscribe",  unsubscribe_request_cb },
     { FLUX_MSGTYPE_REQUEST,   "log.disconnect",   disconnect_request_cb },
     { FLUX_MSGTYPE_REQUEST,   "log.dump",         dump_request_cb },
-    { FLUX_MSGTYPE_EVENT,     "event.fault.*",    fault_event_cb },
+    { FLUX_MSGTYPE_EVENT,     "fault.*",          fault_event_cb },
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
@@ -577,7 +577,7 @@ static int logsrv_main (flux_t h, zhash_t *args)
         err ("log: %s", "conf.log");
         return -1;
     }
-    flux_event_subscribe (h, "event.fault.");
+    flux_event_subscribe (h, "fault.");
     if (flux_tmouthandler_set (h, timeout_cb, ctx) < 0) {
         flux_log (h, LOG_ERR, "flux_tmouthandler_set: %s", strerror (errno));
         return -1;

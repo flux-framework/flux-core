@@ -79,7 +79,7 @@ const int max_lastuse_age = 5;
  */
 const int min_commit_msec = 1;
 
-/* Include root directory in event.kvs.setroot message.
+/* Include root directory in kvs.setroot event.
  */
 const bool event_includes_rootdir = true;
 
@@ -1638,7 +1638,7 @@ static int setroot_event_send (ctx_t *ctx, const char *fence)
         json_object_get (root);
         json_object_object_add (o, "rootdirval", root);
     }
-    if (flux_event_send (ctx->h, o, "event.kvs.setroot") < 0)
+    if (flux_event_send (ctx->h, o, "kvs.setroot") < 0)
         goto done;
     json_object_put (o);
     rc = 0;
@@ -1799,11 +1799,11 @@ static void setargs (ctx_t *ctx, zhash_t *args)
 }
 
 static msghandler_t htab[] = {
-    { FLUX_MSGTYPE_EVENT,   "event.kvs.setroot",    setroot_event_cb },
+    { FLUX_MSGTYPE_EVENT,   "kvs.setroot",          setroot_event_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.getroot",          getroot_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.sync",             sync_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.dropcache",        dropcache_cb },
-    { FLUX_MSGTYPE_EVENT,   "event.kvs.dropcache",  dropcache_cb },
+    { FLUX_MSGTYPE_EVENT,   "kvs.dropcache",        dropcache_cb },
     { FLUX_MSGTYPE_EVENT,   "hb",                   hb_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.get",              get_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.watch",            watch_request_cb },
@@ -1820,7 +1820,7 @@ static msghandler_t htab[] = {
     { FLUX_MSGTYPE_RESPONSE,"kvs.commit",           commit_response_cb },
 
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.*",          stats_cb },
-    { FLUX_MSGTYPE_EVENT,   "event.kvs.stats.*",    stats_cb },
+    { FLUX_MSGTYPE_EVENT,   "kvs.stats.*",          stats_cb },
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
@@ -1833,16 +1833,16 @@ static int kvssrv_main (flux_t h, zhash_t *args)
         return -1;
     }
     if (!ctx->master) {
-        if (flux_event_subscribe (h, "event.kvs.setroot") < 0) {
+        if (flux_event_subscribe (h, "kvs.setroot") < 0) {
             flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
             return -1;
         }
     }
-    if (flux_event_subscribe (h, "event.kvs.dropcache") < 0) {
+    if (flux_event_subscribe (h, "kvs.dropcache") < 0) {
         flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
         return -1;
     }
-    if (flux_event_subscribe (h, "event.kvs.stats.") < 0) {
+    if (flux_event_subscribe (h, "kvs.stats.") < 0) {
         flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
         return -1;
     }

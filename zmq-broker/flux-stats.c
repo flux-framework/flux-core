@@ -103,8 +103,8 @@ int main (int argc, char *argv[])
         if (errno != 0)
             err_exit ("flux_rpc %s.clearstats", target);
     } else if (Copt) {
-        if (flux_event_send (h, NULL, "event.%s.stats.clear", target) < 0)
-            err_exit ("flux_event_send event.%s.stats.clear", target);
+        if (flux_event_send (h, NULL, "%s.stats.clear", target) < 0)
+            err_exit ("flux_event_send %s.stats.clear", target);
     } else if (ropt) {
         if (!(response = flux_rpc (h, NULL, "%s.rusage", target)))
             errn_exit (EPROTO, "flux_rpc %s.rusage", target);
