@@ -45,26 +45,22 @@
     return ((ctx)->reactor_stop ? (-1) : (0))
 
 typedef struct {
-    char *uri;
-} parent_t;
-
-typedef struct {
     /* 0MQ
      */
     zctx_t *zctx;               /* zeromq context (MT-safe) */
     zloop_t *zl;
     bool reactor_stop;
     int sigfd;
-    flux_sec_t sec;
+    flux_sec_t sec;             /* security context (MT-safe) */
     bool security_clr;
     bool security_set;
-
     /* Sockets.
      */
     void *zs_parent;            /* DEALER - requests to parent */
+    zlist_t *uri_parent;
 
-    void *zs_request;           /* ROUTER - requests from plugins/downstream */
-    zlist_t *uri_request;
+    void *zs_child;             /* ROUTER - requests from plugins/downstream */
+    zlist_t *uri_child;
 
     void *zs_plugins;           /* rROUTER - requests to plugins */
 
@@ -75,19 +71,13 @@ typedef struct {
 
     char *uri_snoop;            /* PUB - to flux-snoop (uri is generated) */
     void *zs_snoop;
-
-    /* Wireup
-     */
-    zlist_t *parents;           /* List of parent_t, appended in descending */
-                                /*    order of desirability */
-    parent_t *parent;            /* Current parent */
     /* Session parameters
      */
     bool treeroot;              /* true if we are the root of reduction tree */
-    int rank;                   /* our rank in session */
-    char *id;
     int size;                   /* session size */
-    char *session_name;
+    int rank;                   /* our rank in session */
+    char *rankstr;              /*   string version of above */
+    char *session_name;         /* Zauth "domain" (default "flux") */
     /* Plugins
      */
     char *plugin_path;          /* colon-separated list of directories */
@@ -98,7 +88,6 @@ typedef struct {
      */
     bool verbose;               /* enable debug to stderr */
     route_ctx_t rctx;           /* routing table */
-    int epoch;                  /* current heartbeat epoch */
     flux_t h;
     pid_t pid;
     char hostname[HOST_NAME_MAX + 1];
@@ -109,11 +98,8 @@ static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg);
 static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
-static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
+static int child_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
-
-static parent_t *parent_create (const char *uri);
-static void parent_destroy (parent_t *pp);
 
 static void cmb_event_geturi_request (ctx_t *ctx);
 
@@ -124,13 +110,13 @@ static void cmbd_fini (ctx_t *ctx);
 static const struct option longopts[] = {
     {"session-name",    required_argument,  0, 'N'},
     {"no-security",     no_argument,        0, 'n'},
-    {"request-uri",     required_argument,  0, 't'},
+    {"child-uri",       required_argument,  0, 't'},
+    {"parent-uri",      required_argument,  0, 'p'},
     {"verbose",         no_argument,        0, 'v'},
     {"plain-insecurity",no_argument,        0, 'i'},
     {"curve-security",  no_argument,        0, 'c'},
     {"rank",            required_argument,  0, 'R'},
     {"size",            required_argument,  0, 'S'},
-    {"parent",          required_argument,  0, 'p'},
     {"plugins",         required_argument,  0, 'P'},
     {"logdest",         required_argument,  0, 'L'},
     {"hostlist",        required_argument,  0, 'H'},
@@ -143,8 +129,8 @@ static void usage (void)
 {
     fprintf (stderr, 
 "Usage: cmbd OPTIONS --plugins name[,name,...] [plugin:key=val ...]\n"
-" -t,--request-uri URI[,...]   Set URIs to listen for requests\n"
-" -p,--parent URI              Set parent URI to connect for requests\n"
+" -t,--child-uri URI           Set child URI to bind and receive requests\n"
+" -p,--parent-uri URI          Set parent URI to connect and send requests\n"
 " -v,--verbose                 Be chatty\n"
 " -H,--hostlist HOSTLIST       Set session hostlist (sets 'hosts' in the KVS)\n"
 " -R,--rank N                  Set cmbd rank (0...size-1)\n"
@@ -171,11 +157,12 @@ int main (int argc, char *argv[])
     ctx.size = 1;
     if (!(ctx.plugin_args = zhash_new ()))
         oom ();
-    if (!(ctx.uri_request = zlist_new ()))
+    if (!(ctx.uri_child = zlist_new ()))
         oom ();
-    zlist_autofree (ctx.uri_request);
-    if (!(ctx.parents = zlist_new ()))
+    zlist_autofree (ctx.uri_child);
+    if (!(ctx.uri_parent = zlist_new ()))
         oom ();
+    zlist_autofree (ctx.uri_parent);
     ctx.session_name = "flux";
     if (gethostname (ctx.hostname, HOST_NAME_MAX) < 0)
         err_exit ("gethostname");
@@ -195,22 +182,14 @@ int main (int argc, char *argv[])
             case 'i':   /* --plain-insecurity */
                 ctx.security_set |= FLUX_SEC_TYPE_PLAIN;
                 break;
-            case 't': { /* --request-uri URI[,URI,...] */
-                char *cpy = xstrdup (optarg);
-                char *uri, *saveptr, *a1 = cpy;
-
-                while ((uri = strtok_r (a1, ",", &saveptr))) {
-                    zlist_push (ctx.uri_request, xstrdup (uri));
-                    a1 = NULL;
-                }
-                free (cpy);
-                break;
-            }
-            case 'p': { /* --parent uri */
-                if (zlist_append (ctx.parents, parent_create (optarg)) < 0)
+            case 't':   /* --child-uri URI[,URI,...] */
+                if (zlist_append (ctx.uri_child, xstrdup (optarg)) < 0)
                     oom ();
                 break;
-            }
+            case 'p':   /* --parent-uri URI */
+                if (zlist_append (ctx.uri_parent, xstrdup (optarg)) < 0)
+                    oom ();
+                break;
             case 'v':   /* --verbose */
                 ctx.verbose = true;
                 break;
@@ -225,7 +204,7 @@ int main (int argc, char *argv[])
             }
             case 'R':   /* --rank N */
                 ctx.rank = strtoul (optarg, NULL, 10);
-                ctx.id = xstrdup (optarg);
+                ctx.rankstr = xstrdup (optarg);
                 break;
             case 'S':   /* --size N */
                 ctx.size = strtoul (optarg, NULL, 10);
@@ -243,8 +222,6 @@ int main (int argc, char *argv[])
                 usage ();
         }
     }
-    /* Remaining args are for plugins.
-     */
     for (i = optind; i < argc; i++) {
         char *p, *cpy = xstrdup (argv[i]);
         if ((p = strchr (cpy, '='))) {
@@ -259,24 +236,12 @@ int main (int argc, char *argv[])
     if (!ctx.plugin_path)
         ctx.plugin_path = PLUGIN_PATH; /* compiled in default */
 
-    if (zlist_size (ctx.uri_request) == 0) {
-        if (zlist_push (ctx.uri_request, xstrdup ("tcp://*:5556")) < 0)
-            oom ();
-    }
-
-    /* FIXME: hardwire rank 0 as root of the reduction tree.
-     * Eventually we must allow for this role to migrate to other nodes
-     * in case node 0 becomes unavailable.
-     */
-    if (ctx.rank == 0) {
-        if (zlist_size (ctx.parents) > 0)
-            msg_exit ("rank 0 must not have parents");
+    if (ctx.rank == 0)
         ctx.treeroot = true;
-    } else {
-        if (zlist_size (ctx.parents) == 0)
-            msg_exit ("rank > 0 must have parents");
-        ctx.treeroot = false;
-    }
+    if (ctx.treeroot && zlist_size (ctx.uri_parent) > 0)
+        msg_exit ("treeroot must NOT have parents");
+    if (!ctx.treeroot && zlist_size (ctx.uri_parent) == 0)
+        msg_exit ("non-treeroot must have parents");
 
     char *proctitle;
     if (asprintf (&proctitle, "cmbd-%d", ctx.rank) < 0)
@@ -291,33 +256,15 @@ int main (int argc, char *argv[])
 
     cmbd_fini (&ctx);
 
-    if (ctx.id)
-        free (ctx.id);
+    if (ctx.rankstr)
+        free (ctx.rankstr);
     if (ctx.plugin_args)
         zhash_destroy (&ctx.plugin_args);
-    if (ctx.uri_request)
-        zlist_destroy (&ctx.uri_request);
-    if (ctx.parents) {
-        parent_t *pp;
-        while ((pp = zlist_pop (ctx.parents)))
-            parent_destroy (pp);
-        zlist_destroy (&ctx.parents);
-    }
+    if (ctx.uri_child)
+        zlist_destroy (&ctx.uri_child);
+    if (ctx.uri_parent)
+        zlist_destroy (&ctx.uri_parent);
     return 0;
-}
-
-static parent_t *parent_create (const char *uri)
-{
-    parent_t *pp = xzmalloc (sizeof (*pp));
-    pp->uri = xstrdup (uri);
-    return pp;
-}
-
-static void parent_destroy (parent_t *pp)
-{
-    if (pp->uri)
-        free (pp->uri);
-    free (pp);
 }
 
 static int load_plugin (ctx_t *ctx, char *name)
@@ -375,39 +322,7 @@ void unload_plugins (ctx_t *ctx)
     zlist_destroy (&keys);
 }
 
-/* zeromq unlinks ipc:// paths before binding them.
- * Therefore checking them here is maybe not that useful.
- * N.B. ipc://@ designates abstract AF_LOCAL namespace (since zeromq4)
- */
-static bool check_uri (const char *uri)
-{
-    bool ispath = false;
-
-    if (uri && strncmp (uri, "ipc://", 6) == 0) {
-#if ZMQ_VERSION_MAJOR >= 4
-        if (strncmp (uri, "ipc://@", 7) != 0)
-            ispath = true;
-#else
-        ispath = true;
-#endif
-    }
-    if (ispath) {
-        struct stat sb;
-        const char *path = uri + 6;
-
-        if (lstat (path, &sb) == 0) {
-            if (S_ISLNK (sb.st_mode)) 
-                msg_exit ("%s is a symlink", path);
-            if (!S_ISSOCK (sb.st_mode))
-                msg_exit ("%s is not a socket", path);
-            if (sb.st_uid != geteuid ())
-                msg_exit ("%s has wrong owner", path);
-        }
-    }
-    return (uri != NULL);
-}
-
-static void *cmbd_init_request (ctx_t *ctx)
+static void *cmbd_init_child (ctx_t *ctx)
 {
     void *s;
     char *uri;
@@ -420,16 +335,13 @@ static void *cmbd_init_request (ctx_t *ctx)
     zsocket_set_hwm (s, 0);
     if (zsocket_bind (s, "%s", UPREQ_URI) < 0) /* always bind to inproc */
         err_exit ("%s", UPREQ_URI);
-    uri = zlist_first (ctx->uri_request);
-    while (uri) {
-        if (check_uri (uri)) {
-            if (zsocket_bind (s, "%s", uri) < 0)
-                err_exit ("%s", uri);
-        }
-        uri = zlist_next (ctx->uri_request);
+    uri = zlist_first (ctx->uri_child);
+    for (; uri != NULL; uri = zlist_next (ctx->uri_child)) {
+        if (zsocket_bind (s, "%s", uri) < 0)
+            err_exit ("%s", uri);
     }
     zp.socket = s;
-    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)request_cb, ctx) < 0)
+    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)child_cb, ctx) < 0)
         err_exit ("zloop_poller");
     return s;
 }
@@ -439,9 +351,6 @@ static void *cmbd_init_plugins (ctx_t *ctx)
     void *s;
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
-    /* Bind only to inproc://dnreq for sending requests to plugins.
-     * No security.
-     */
     if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
         err_exit ("zsocket_new");
     zsocket_set_hwm (s, 0);
@@ -457,9 +366,6 @@ static void *cmbd_init_event_out (ctx_t *ctx)
 {
     void *s;
 
-    /* Bind only to inproc://event for publishing to plugins.
-     * No security.
-     */
     if (!(s = zsocket_new (ctx->zctx, ZMQ_PUB)))
         err_exit ("zsocket_new");
     zsocket_set_hwm (s, 0);
@@ -476,13 +382,10 @@ static void *cmbd_init_snoop (ctx_t *ctx)
         err_exit ("zsocket_new");
     if (flux_sec_ssockinit (ctx->sec, s) < 0)
         msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ctx->sec));
-    /* Dynamically allocate the snoop URI in the ipc:// space.
-     * Make it available to clients via the flux_getattr().
-     */
     assert (ctx->uri_snoop == NULL);
     if (zsocket_bind (s, "%s", "ipc://*") < 0)
         err_exit ("%s", "ipc://*");
-    ctx->uri_snoop = zsocket_last_endpoint (s); /* need to xstrdup? */
+    ctx->uri_snoop = zsocket_last_endpoint (s);
     return s;
 }
 
@@ -510,22 +413,21 @@ static void *cmbd_init_event_in (ctx_t *ctx)
 
 static void *cmbd_init_parent (ctx_t *ctx) {
     void *s = NULL;
-    parent_t *pp = zlist_first (ctx->parents);
+    char *uri = zlist_first (ctx->uri_parent);
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
-    if (pp) {
+    if (uri) {
         if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
             err_exit ("zsocket_new");
         if (flux_sec_csockinit (ctx->sec, s) < 0)
             msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
         zsocket_set_hwm (s, 0);
-        zsocket_set_identity (s, ctx->id); 
-        if (zsocket_connect (s, "%s", pp->uri) < 0)
-            err_exit ("%s", pp->uri);
+        zsocket_set_identity (s, ctx->rankstr); 
+        if (zsocket_connect (s, "%s", uri) < 0)
+            err_exit ("%s", uri);
         zp.socket = s;
         if (zloop_poller (ctx->zl, &zp, (zloop_fn *)parent_cb, ctx) < 0)
             err_exit ("zloop_poller");
-        ctx->parent = pp;
     }
     return s;
 }
@@ -562,11 +464,7 @@ static void cmbd_init (ctx_t *ctx)
 {
     ctx->rctx = route_init (ctx->verbose);
 
-    /* Set a restrictive umask so that zmq's unlink/bind doesn't create
-     * a path that an unauthorized user else could connect to.
-     * Not necessarily that useful when we are also doing CURVE auth.
-     */
-    (void)umask (077);
+    //(void)umask (077); 
 
     ctx->zctx = zctx_new ();
     if (!ctx->zctx)
@@ -593,7 +491,7 @@ static void cmbd_init (ctx_t *ctx)
 
     /* Bind to downstream ports.
      */
-    ctx->zs_request = cmbd_init_request (ctx);
+    ctx->zs_child = cmbd_init_child (ctx);
     ctx->zs_plugins = cmbd_init_plugins (ctx);
     ctx->zs_event_out = cmbd_init_event_out (ctx);
     ctx->zs_snoop = cmbd_init_snoop (ctx);
@@ -778,9 +676,9 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         zmsg_destroy (zmsg);
 }
 
-static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
+static int child_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
-    zmsg_t *zmsg = zmsg_recv (ctx->zs_request);
+    zmsg_t *zmsg = zmsg_recv (ctx->zs_child);
 
     if (zmsg) {
         if (flux_request_sendmsg (ctx->h, &zmsg) < 0)
@@ -863,11 +761,7 @@ static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg)
     return zmsg_send (&cpy, ctx->zs_snoop);
 }
 
-/* Extract 'servicep' from message topic string.  Caller must free.
- * Return value is -1 (malformed packet), or the hopcount.
- * If return value is > 0, '*lasthopp' is set to a copy of the top
- * routing frame and must be freed by the caller.
- * (helper for cmbd_request_sendmsg)
+/* Helper for cmbd_request_sendmsg
  */
 static int parse_request (zmsg_t *zmsg, char **servicep, char **lasthopp)
 {
@@ -916,22 +810,16 @@ static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
     const char *gw;
     int rc = -1;
 
-    /* FIXME: detect routing loop if hopcount > 2*tree_depth */
-
     errno = 0;
     if ((hopcount = parse_request (*zmsg, &service, &lasthop)) < 0) {
         errno = EPROTO;
         goto done;
     }
-
-    /* FIXME: avoid sending request to socket without routing envelope */
-
     snoop_cc (ctx, FLUX_MSGTYPE_REQUEST, *zmsg);
-
     if (!strcmp (service, "cmb")) {
         if (hopcount > 0) {
             cmb_internal_request (ctx, zmsg);
-        } else if (!ctx->treeroot) {
+        } else if (!ctx->treeroot) { /* we're sending so route upstream */
             if (zmsg_send (zmsg, ctx->zs_parent) < 0)
                 err ("%s: zs_parent", __FUNCTION__);
         } else
@@ -939,7 +827,7 @@ static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
     } else {
         if ((gw = route_lookup (ctx->rctx, service))
                             && (!lasthop || strcmp (lasthop, gw) != 0)) {
-            if (zmsg_send_unrouter (zmsg, ctx->zs_plugins, ctx->id, gw))
+            if (zmsg_send_unrouter (zmsg, ctx->zs_plugins, ctx->rankstr, gw))
                 err ("%s: zs_plugins", __FUNCTION__);
         } else if (!ctx->treeroot) {
             if (zmsg_send (zmsg, ctx->zs_parent) < 0)
@@ -954,6 +842,8 @@ done:
         if (errno == 0)
             errno = ENOSYS;
     }
+    if (*zmsg)
+        zmsg_destroy (zmsg);
     if (service)
         free (service);
     if (lasthop)
@@ -976,7 +866,7 @@ static int cmbd_response_sendmsg (void *impl, zmsg_t **zmsg)
         rc = cmb_internal_response (ctx, zmsg);
         goto done;
     }
-    if (zmsg_send (zmsg, ctx->zs_request) < 0)
+    if (zmsg_send (zmsg, ctx->zs_child) < 0)
         goto done;
     rc = 0;
 done:

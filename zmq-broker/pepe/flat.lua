@@ -22,6 +22,7 @@ local eventuri = "epgm://eth0;239.192.1.1:" .. tostring (mport)
 if pepe.rank == 0 then
     local topology = tree.k_ary_json (#h, #h)
     pepe.run ("./cmbd"
+		.. " --child-uri='tcp://*:5556'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
 		.. " --hostlist=" .. pepe.nodelist
@@ -38,7 +39,8 @@ if pepe.rank == 0 then
 else
     local parent_uri = "tcp://" ..  h[1] .. ":5556"
     pepe.run ("./cmbd"
-		.. " --parent='" .. parent_uri .. "'"
+		.. " --child-uri='tcp://*:5556'"
+		.. " --parent-uri='" .. parent_uri .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
 		.. " --plugins=event,api,barrier,live,log,kvs,job,rexec,resrc,mecho")

@@ -1,6 +1,6 @@
 ${CMDPREFIX} ${CMBD:-./cmbd} \
   --verbose \
-  --request-uri='tcp://*:5556' \
+  --child-uri='tcp://*:5556' \
   --rank=0 --size=3 \
   --logdest=cmbd.log \
   --hostlist=localhost,localhost,localhost \

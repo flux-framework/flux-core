@@ -1,7 +1,6 @@
 ${CMDPREFIX} ${CMBD:-./cmbd} \
   --verbose \
-  --parent=tcp://127.0.0.1:5557 \
-  --request-uri='tcp://*:5558' \
+  --parent-uri=tcp://127.0.0.1:5557 \
   --rank=2 --size=3 \
   --plugins=api,barrier,live,kvs,job,rexec,mecho \
   api:sockpath=/tmp/rank.2
