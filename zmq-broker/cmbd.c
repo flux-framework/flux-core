@@ -44,13 +44,9 @@
 #define ZLOOP_RETURN(p) \
     return ((ctx)->reactor_stop ? (-1) : (0))
 
-#define MAX_PARENTS 2
-struct parent_struct {
+typedef struct {
     char *uri;
-    int rank;
-    char *id;
-    bool alive;
-};
+} parent_t;
 
 typedef struct {
     /* 0MQ
@@ -66,12 +62,15 @@ typedef struct {
     /* Sockets.
      */
     void *zs_parent;            /* DEALER - requests to parent */
+
     void *zs_request;           /* ROUTER - requests from plugins/downstream */
-    void *zs_plugins;           /* rROUTER - requests to plugins */
     zlist_t *uri_request;
+
+    void *zs_plugins;           /* rROUTER - requests to plugins */
 
     char *uri_event_in;         /* SUB - to event module's ipc:// socket */
     void *zs_event_in;          /*       (event module takes care of epgm) */
+
     void *zs_event_out;         /* PUB - to plugins */
 
     char *uri_snoop;            /* PUB - to flux-snoop (uri is generated) */
@@ -79,9 +78,9 @@ typedef struct {
 
     /* Wireup
      */
-    struct parent_struct parent[MAX_PARENTS]; /* configured parents */
-    int parent_len;             /* length of parent_struct array */
-    int parent_cur;             /* current parent */
+    zlist_t *parents;           /* List of parent_t, appended in descending */
+                                /*    order of desirability */
+    parent_t *parent;            /* Current parent */
     /* Session parameters
      */
     bool treeroot;              /* true if we are the root of reduction tree */
@@ -113,6 +112,9 @@ static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 
+static parent_t *parent_create (const char *uri);
+static void parent_destroy (parent_t *pp);
+
 static void cmb_event_geturi_request (ctx_t *ctx);
 
 static void cmbd_init (ctx_t *ctx);
@@ -142,7 +144,7 @@ static void usage (void)
     fprintf (stderr, 
 "Usage: cmbd OPTIONS --plugins name[,name,...] [plugin:key=val ...]\n"
 " -t,--request-uri URI[,...]   Set URIs to listen for requests\n"
-" -p,--parent N,URI            Set parent rank,URI to connect for requests\n"
+" -p,--parent URI              Set parent URI to connect for requests\n"
 " -v,--verbose                 Be chatty\n"
 " -H,--hostlist HOSTLIST       Set session hostlist (sets 'hosts' in the KVS)\n"
 " -R,--rank N                  Set cmbd rank (0...size-1)\n"
@@ -172,6 +174,8 @@ int main (int argc, char *argv[])
     if (!(ctx.uri_request = zlist_new ()))
         oom ();
     zlist_autofree (ctx.uri_request);
+    if (!(ctx.parents = zlist_new ()))
+        oom ();
     ctx.session_name = "flux";
     if (gethostname (ctx.hostname, HOST_NAME_MAX) < 0)
         err_exit ("gethostname");
@@ -202,17 +206,9 @@ int main (int argc, char *argv[])
                 free (cpy);
                 break;
             }
-            case 'p': { /* --parent rank,uri */
-                char *p = NULL, *ac = xstrdup (optarg);
-                if (ctx.parent_len == MAX_PARENTS)
-                    msg_exit ("too many --parent's, max %d", MAX_PARENTS);
-                ctx.parent[ctx.parent_len].rank = strtoul (ac, &p, 10);
-                ctx.parent[ctx.parent_len].id = ac; /* string form of rank */
-                if (!p || *p != ',')
-                    msg_exit ("malformed -p option");
-                *p++ = '\0';
-                ctx.parent[ctx.parent_len].uri = xstrdup (p);
-                ctx.parent_len++;
+            case 'p': { /* --parent uri */
+                if (zlist_append (ctx.parents, parent_create (optarg)) < 0)
+                    oom ();
                 break;
             }
             case 'v':   /* --verbose */
@@ -273,11 +269,11 @@ int main (int argc, char *argv[])
      * in case node 0 becomes unavailable.
      */
     if (ctx.rank == 0) {
-        if (ctx.parent_len != 0)
+        if (zlist_size (ctx.parents) > 0)
             msg_exit ("rank 0 must not have parents");
         ctx.treeroot = true;
     } else {
-        if (ctx.parent_len == 0)
+        if (zlist_size (ctx.parents) == 0)
             msg_exit ("rank > 0 must have parents");
         ctx.treeroot = false;
     }
@@ -295,18 +291,33 @@ int main (int argc, char *argv[])
 
     cmbd_fini (&ctx);
 
-    for (i = 0; i < ctx.parent_len; i++) {
-        free (ctx.parent[i].uri);
-        free (ctx.parent[i].id);
-    }
     if (ctx.id)
         free (ctx.id);
     if (ctx.plugin_args)
         zhash_destroy (&ctx.plugin_args);
     if (ctx.uri_request)
         zlist_destroy (&ctx.uri_request);
-
+    if (ctx.parents) {
+        parent_t *pp;
+        while ((pp = zlist_pop (ctx.parents)))
+            parent_destroy (pp);
+        zlist_destroy (&ctx.parents);
+    }
     return 0;
+}
+
+static parent_t *parent_create (const char *uri)
+{
+    parent_t *pp = xzmalloc (sizeof (*pp));
+    pp->uri = xstrdup (uri);
+    return pp;
+}
+
+static void parent_destroy (parent_t *pp)
+{
+    if (pp->uri)
+        free (pp->uri);
+    free (pp);
 }
 
 static int load_plugin (ctx_t *ctx, char *name)
@@ -475,6 +486,9 @@ static void *cmbd_init_snoop (ctx_t *ctx)
     return s;
 }
 
+/* This isn't called until we have a response to event.geturi request,
+ * which fills in ctx->uri_event_in.
+ */
 static void *cmbd_init_event_in (ctx_t *ctx)
 {
     void *s;
@@ -495,23 +509,24 @@ static void *cmbd_init_event_in (ctx_t *ctx)
 }
 
 static void *cmbd_init_parent (ctx_t *ctx) {
-    void *s;
-    char id[16];
-    char *uri = ctx->parent[ctx->parent_cur].uri;
+    void *s = NULL;
+    parent_t *pp = zlist_first (ctx->parents);
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
-    if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
-        err_exit ("zsocket_new");
-    if (flux_sec_csockinit (ctx->sec, s) < 0)
-        msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
-    zsocket_set_hwm (s, 0);
-    snprintf (id, sizeof (id), "%d", ctx->rank);
-    zsocket_set_identity (s, id); 
-    if (zsocket_connect (s, "%s", uri) < 0)
-        err_exit ("%s", uri);
-    zp.socket = s;
-    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)parent_cb, ctx) < 0)
-        err_exit ("zloop_poller");
+    if (pp) {
+        if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
+            err_exit ("zsocket_new");
+        if (flux_sec_csockinit (ctx->sec, s) < 0)
+            msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
+        zsocket_set_hwm (s, 0);
+        zsocket_set_identity (s, ctx->id); 
+        if (zsocket_connect (s, "%s", pp->uri) < 0)
+            err_exit ("%s", pp->uri);
+        zp.socket = s;
+        if (zloop_poller (ctx->zl, &zp, (zloop_fn *)parent_cb, ctx) < 0)
+            err_exit ("zloop_poller");
+        ctx->parent = pp;
+    }
     return s;
 }
 
@@ -545,8 +560,6 @@ static int cmbd_init_signalfd (ctx_t *ctx)
 
 static void cmbd_init (ctx_t *ctx)
 {
-    int i;
-
     ctx->rctx = route_init (ctx->verbose);
 
     /* Set a restrictive umask so that zmq's unlink/bind doesn't create
@@ -593,33 +606,21 @@ static void cmbd_init (ctx_t *ctx)
     if (zmq_ctx_set (zctx_underlying (ctx->zctx), ZMQ_IO_THREADS, 4) < 0)
         err_exit ("zmq_ctx_set ZMQ_IO_THREADS");
 #endif
-    /* Connect to upstream ports.
+    /* Connect to upstream ports, if any
      */
-    for (i = 0; i < ctx->parent_len; i++)
-        ctx->parent[i].alive = true;
-
-    if (ctx->parent_len > 0) {
-        ctx->zs_parent = cmbd_init_parent (ctx);
-    }
+    ctx->zs_parent = cmbd_init_parent (ctx);
 
     /* create flux_t handle */
     ctx->h = handle_create (ctx, &cmbd_handle_ops, 0);
     flux_log_set_facility (ctx->h, "cmbd");
-
-    /* Contact upstream.
-     */
-    if (ctx->zs_parent) {
-        if (flux_request_send (ctx->h, NULL, "cmb.connect") < 0)
-            err_exit ("error sending cmb.connect upstream");
-    }
 
     ctx->loaded_plugins = zhash_new ();
     load_plugins (ctx);
 
     flux_log (ctx->h, LOG_INFO, "%s", flux_sec_confstr (ctx->sec));
 
-    /* Start event initialization, complete it when response arrives.
-     *   N.B. avoid flux_event_geturi () as zloop isn't running yet.
+    /* Send request for event URI (maybe upstream, maybe plugin)
+     * When the response is received we will subscribe to it.
      */
     cmb_event_geturi_request (ctx);
 }
@@ -634,67 +635,6 @@ static void cmbd_fini (ctx_t *ctx)
     zloop_destroy (&ctx->zl);
     route_fini (ctx->rctx);
     zctx_destroy (&ctx->zctx); /* destorys all sockets created in ctx */
-}
-
-static void _reparent (ctx_t *ctx)
-{
-    int i;
-
-    /* FIXME: possibly need to reconnect to event socket...
-     */
-
-    for (i = 0; i < ctx->parent_len; i++) {
-        if (i != ctx->parent_cur && ctx->parent[i].alive) {
-            flux_log (ctx->h, LOG_ALERT, "reparent %d->%d",
-                      ctx->parent[ctx->parent_cur].rank, ctx->parent[i].rank);
-            if (zsocket_disconnect (ctx->zs_parent, "%s",
-                              ctx->parent[ctx->parent_cur].uri) < 0)
-                err_exit ("zsocket_disconnect");
-            if (zsocket_connect (ctx->zs_parent, "%s", ctx->parent[i].uri) < 0)
-                err_exit ("zsocket_connect");
-            ctx->parent_cur = i;
-
-            usleep (1000*10); /* FIXME! */
-            break;
-        }
-    }
-}
-
-static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
-{
-    json_object *event = NULL;
-
-    /* On receipt of a liveness state change, look to see if my parent
-     * has changed state and possibly reconnect to a new parent:
-     * If current parent goes down, connect to alternate parent.
-     * If parent[0] returns to service, connect to that.
-     */
-    if (cmb_msg_match (zmsg, "live")) {
-        bool alive;
-        int rank, i;
-        if (cmb_msg_decode (zmsg, NULL, &event) == 0 && event != NULL
-                && util_json_object_get_boolean (event, "alive", &alive) == 0
-                && util_json_object_get_int (event, "rank", &rank) == 0) {
-            for (i = 0; i < ctx->parent_len; i++) {
-                if (ctx->parent[i].rank == rank) {
-                    if (alive) {
-                        ctx->parent[i].alive = true;
-                        if (i == 0 && ctx->parent_cur > 0)
-                            _reparent (ctx);
-                    } else {
-                        ctx->parent[i].alive = false;
-                        if (i == ctx->parent_cur)
-                            _reparent (ctx);
-                    }
-                }
-            }
-        }
-    } else if (cmb_msg_match (zmsg, "hb")) {
-        if (cmb_msg_decode (zmsg, NULL, &event) == 0 && event!= NULL)
-            (void)util_json_object_get_int (event, "epoch", &ctx->epoch);
-    }
-    if (event)
-        json_object_put (event);
 }
 
 /* Send a request to event module for uri to subscribe to.
@@ -879,7 +819,6 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
     zmsg_t *zmsg = zmsg_recv (ctx->zs_event_in);
     if (zmsg) {
-        cmb_internal_event (ctx, zmsg);
         snoop_cc (ctx, FLUX_MSGTYPE_EVENT, zmsg);
         zmsg_send (&zmsg, ctx->zs_event_out);
     }
@@ -926,7 +865,7 @@ static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg)
 
 /* Extract 'servicep' from message topic string.  Caller must free.
  * Return value is -1 (malformed packet), or the hopcount.
- * If retuern value is > 0, '*lasthopp' is set to a copy of the top
+ * If return value is > 0, '*lasthopp' is set to a copy of the top
  * routing frame and must be freed by the caller.
  * (helper for cmbd_request_sendmsg)
  */

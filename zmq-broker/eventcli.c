@@ -82,7 +82,7 @@ done:
     return ret;
 }
 
-/* Emulate form flux_t handle operations.
+/* Emulate former flux_t handle operations.
  */
 
 int flux_event_sendmsg (flux_t h, zmsg_t **zmsg)

@@ -39,7 +39,7 @@ else
     local parent_rank = tree.k_ary_parent (pepe.rank, 2)
     local parent_uri = "tcp://" ..  h[parent_rank + 1] .. ":5556"
     pepe.run ("./cmbd"
-		.. " --parent='" .. parent_rank .. "," .. parent_uri .. "'"
+		.. " --parent='" .. parent_uri .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
 		.. " --plugins=event,api,barrier,live,log,kvs,job,rexec,resrc,mecho")

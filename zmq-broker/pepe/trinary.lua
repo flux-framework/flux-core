@@ -26,33 +26,21 @@ if pepe.rank == 0 then
 		.. " --size=" .. #h
 		.. " --hostlist=" .. pepe.nodelist
 		.. " --logdest cmbd.log"
-		.. " --plugins=event,api,barrier,live,log,kvs,hb,mecho"
+		.. " --plugins=event,api,barrier,live,log,kvs,hb,job,rexec,resrc,mecho,sched"
                 .. " kvs:conf.event.mcast-uri='" .. eventuri .. "'"
                 .. " kvs:conf.event.mcast-all-publish=false"
-                .. " kvs:conf.hb.period-sec=1.5"
-                .. " kvs:conf.log.reduction-timeout-msec=100"
-                .. " kvs:conf.log.circular-buffer-entries=100000"
-                .. " kvs:conf.log.persist-level=debug"
-                .. " kvs:conf.live.missed-hb-allow=5"
-                .. " kvs:conf.live.topology='" .. topology .. "'")
-elseif pepe.rank == 1 then
-    local parent_rank = tree.k_ary_parent (pepe.rank, 3)
-    local parent_uri = "tcp://" ..  h[parent_rank + 1] .. ":5556"
-    pepe.run ("./cmbd"
-		.. " --parent='" .. parent_rank .. "," .. parent_uri .. "'"
-		.. " --rank=" .. pepe.rank
-		.. " --size=" .. #h
-		.. " --plugins=event,api,barrier,live,log,kvs,mecho")
+		.. " kvs:conf.hb.period-sec=1.5"
+		.. " kvs:conf.log.reduction-timeout-msec=100"
+		.. " kvs:conf.log.circular-buffer-entries=100000"
+		.. " kvs:conf.log.persist-level=debug"
+		.. " kvs:conf.live.missed-hb-allow=5"
+		.. " kvs:conf.live.topology='" .. topology .. "'")
 else
     local parent_rank = tree.k_ary_parent (pepe.rank, 3)
     local parent_uri = "tcp://" ..  h[parent_rank + 1] .. ":5556"
-    local fail_rank = tree.k_ary_parent2 (pepe.rank, 3)
-    local fail_uri = "tcp://" ..  h[parent_fail + 1] .. ":5556"
-
     pepe.run ("./cmbd"
-		.. " --parent='" .. parent_rank .. "," .. parent_uri .. "'"
-		.. " --parent='" .. fail_rank .. "," .. fail_uri .. "'"
+		.. " --parent='" .. parent_uri .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. #h
-		.. " --plugins=event,api,barrier,live,log,kvs,mecho")
+		.. " --plugins=event,api,barrier,live,log,kvs,job,rexec,resrc,mecho")
 end
