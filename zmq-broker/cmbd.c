@@ -842,8 +842,8 @@ done:
         if (errno == 0)
             errno = ENOSYS;
     }
-    if (*zmsg)
-        zmsg_destroy (zmsg);
+    /* N.B. don't destroy zmsg on error as we use it to send errnum reply.
+     */
     if (service)
         free (service);
     if (lasthop)

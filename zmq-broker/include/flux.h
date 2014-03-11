@@ -61,7 +61,14 @@ int flux_response_recv (flux_t h, json_object **respp, char **tagp, bool nb);
 int flux_respond (flux_t h, zmsg_t **request, json_object *response);
 int flux_respond_errnum (flux_t h, zmsg_t **request, int errnum);
 
-/* Send/receive events.
+/* Send a request to a particular cmb rank
+ *   otherwise identical to flux_request_sendmsg()/flux_request_send()
+ */
+int flux_rank_request_sendmsg (flux_t h, int rank, zmsg_t **zmsg);
+int flux_rank_request_send (flux_t h, int rank,
+                            json_object *request, const char *fmt, ...);
+
+/* Send/receive events
  * - an event consists of a tag frame and an optional JSON frame
  * - flux_event_sendmsg() frees '*zmsg' and sets it to NULL on success.
  * - int-returning functions return 0 on success, -1 on failure with errno set.

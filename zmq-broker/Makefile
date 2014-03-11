@@ -29,7 +29,7 @@ LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -luuid -lutil -lm \
 LDADD_SRV = -pthread -rdynamic $(LDADD_CLI) -ldl
 
 COMMON_OBJS = kvscli.o barriercli.o logcli.o cmbdcli.o mrpc.o handle.o \
-	waitqueue.o security.o eventcli.o
+	waitqueue.o security.o eventcli.o rankcli.o
 CMBD_OBJS = route.o plugin.o $(COMMON_OBJS) cmbd.o
 
 FLUX_OBJS = flux.o
@@ -43,7 +43,7 @@ PLUGINS = plugins/apisrv.so plugins/hbsrv.so plugins/kvssrv.so \
 	plugins/barriersrv.so plugins/livesrv.so plugins/mechosrv.so \
 	plugins/logsrv.so plugins/echosrv.so plugins/jobsrv.so \
 	plugins/resrcsrv.so plugins/rexecsrv.so plugins/schedsrv.so \
-	plugins/eventsrv.so
+	plugins/eventsrv.so plugins/ranksrv.so
 
 SUBCMDS = libexec/kvs libexec/ping libexec/mecho libexec/route \
 	libexec/stats libexec/barrier libexec/snoop libexec/event \
