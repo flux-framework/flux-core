@@ -26,16 +26,15 @@ void usage (void)
     exit (1);
 }
 
+static char *ping (flux_t h, int rank, const char *name, const char *pad,
+                   int seq);
+
 int main (int argc, char *argv[])
 {
     flux_t h;
-    int ch;
-    int msec = 1000;
-    int bytes = 0;
-    char *pad = NULL;
-    int seq;
+    int ch, seq, bytes = 0, msec = 1000, rank = -1;
+    char *rankstr = NULL, *p, *route, *target, *pad = NULL;
     struct timespec t0;
-    char *route, *target;
 
     log_init ("flux-ping");
 
@@ -60,15 +59,23 @@ int main (int argc, char *argv[])
     if (optind != argc - 1)
         usage ();
     target = argv[optind];
+    if ((p = strchr (target, '!'))) {
+        rankstr = target;
+        *p++ = '\0';
+        rank = strtoul (rankstr, NULL, 10);
+        target = p;
+    }
 
     if (!(h = cmb_init ()))
         err_exit ("cmb_init");
 
     for (seq = 0; ; seq++) {
         monotime (&t0);
-        if (!(route = flux_ping (h, target, pad, seq)))
+        if (!(route = ping (h, rank, target, pad, seq)))
             err_exit ("%s.ping", target);
-        printf ("%s.ping pad=%d seq=%d time=%0.3f ms (%s)\n",
+        printf ("%s%s%s.ping pad=%d seq=%d time=%0.3f ms (%s)\n",
+                rankstr ? rankstr : "",
+                rankstr ? "!" : "",
                 target, bytes, seq, monotime_since (t0), route);
         free (route);
         usleep (msec * 1000);
@@ -77,6 +84,63 @@ int main (int argc, char *argv[])
     flux_handle_destroy (&h);
     log_fini ();
     return 0;
+}
+
+/* Ping plugin 'name'.
+ * 'pad' is a string used to increase the size of the ping packet for
+ * measuring RTT in comparison to rough message size.
+ * 'seq' is a sequence number.
+ * The pad and seq are echoed in the response, and any mismatch will result
+ * in an error return with errno = EPROTO.
+ * A string representation of the route taken is the return value on success
+ * (caller must free).  On error, return NULL with errno set.
+ */
+static char *ping (flux_t h, int rank, const char *name, const char *pad,
+                        int seq)
+{
+    json_object *request = util_json_object_new_object ();
+    json_object *response = NULL;
+    int rseq;
+    const char *route, *rpad;
+    char *ret = NULL;
+
+    if (pad)
+        util_json_object_add_string (request, "pad", pad);
+    util_json_object_add_int (request, "seq", seq);
+
+    if (rank == -1) {
+        if (!(response = flux_rpc (h, request, "%s.ping", name)))
+            goto done;
+    } else {
+        if (!(response = flux_rank_rpc (h, rank, request, "%s.ping", name)))
+            goto done;
+    }
+
+    if (util_json_object_get_int (response, "seq", &rseq) < 0
+            || util_json_object_get_string (response, "route", &route) < 0) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (seq != rseq) {
+        msg ("%s: seq not echoed back", __FUNCTION__);
+        errno = EPROTO;
+        goto done;
+    }
+    if (pad) {
+        if (util_json_object_get_string (response, "pad", &rpad) < 0
+                                || !rpad || strlen (pad) != strlen (rpad)) {
+            msg ("%s: pad not echoed back", __FUNCTION__);
+            errno = EPROTO;
+            goto done;
+        }
+    }
+    ret = strdup (route);
+done:
+    if (response)
+        json_object_put (response);
+    if (request)
+        json_object_put (request);
+    return ret;
 }
 
 /*
