@@ -765,17 +765,40 @@ done:
     return rc;
 }
 
+zmsg_t *flux_response_matched_recvmsg (flux_t h, const char *match, bool nb)
+{
+    zmsg_t *zmsg, *response = NULL;
+    zlist_t *nomatch;
+
+    if (!(nomatch = zlist_new ()))
+        oom ();
+    do {
+        if (!(response = flux_response_recvmsg (h, nb)))
+            goto done;
+        if (!cmb_msg_match (response, match)) {
+            if (zlist_append (nomatch, response) < 0)
+                oom ();
+            response = NULL;
+        }
+    } while (!response);
+done:
+    if (nomatch) { 
+        while ((zmsg = zlist_pop (nomatch))) {
+            if (flux_response_putmsg (h, &zmsg) < 0)
+                zmsg_destroy (&zmsg);
+        }
+        zlist_destroy (&nomatch);
+    }
+    return response;
+}
+
 json_object *flux_rpc (flux_t h, json_object *request, const char *fmt, ...)
 {
     char *tag = NULL;
     json_object *response = NULL;
     zmsg_t *zmsg = NULL;
-    zlist_t *nomatch = NULL;
     va_list ap;
     json_object *empty = NULL;
-
-    if (!(nomatch = zlist_new ()))
-        oom ();
 
     va_start (ap, fmt);
     if (vasprintf (&tag, fmt, ap) < 0)
@@ -790,22 +813,10 @@ json_object *flux_rpc (flux_t h, json_object *request, const char *fmt, ...)
         err_exit ("zmsg_pushmem");
     if (flux_request_sendmsg (h, &zmsg) < 0)
         goto done;
-    do {
-        if (!(zmsg = flux_response_recvmsg (h, false)))
-            goto done;
-        if (!cmb_msg_match (zmsg, tag)) {
-            if (zlist_append (nomatch, zmsg) < 0)
-                oom ();
-            zmsg = NULL;
-        }
-    } while (zmsg == NULL);
-    if (cmb_msg_decode (zmsg, NULL, &response) < 0)
+    if (!(zmsg = flux_response_matched_recvmsg (h, tag, false)))
         goto done;
-    if (!response) {
-        json_object_put (response);
-        response = NULL;
+    if (cmb_msg_decode (zmsg, NULL, &response) < 0 || !response)
         goto done;
-    }
     if (util_json_object_get_int (response, "errnum", &errno) == 0) {
         json_object_put (response);
         response = NULL;
@@ -818,13 +829,6 @@ done:
         zmsg_destroy (&zmsg);
     if (empty)
         json_object_put (empty);
-    if (nomatch) {
-        while ((zmsg = zlist_pop (nomatch))) {
-            if (flux_response_putmsg (h, &zmsg) < 0)
-                zmsg_destroy (&zmsg);
-        }
-        zlist_destroy (&nomatch);
-    }
     return response;
 }
 
