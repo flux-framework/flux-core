@@ -295,6 +295,10 @@ static int ping_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         err ("%s: protocol error", __FUNCTION__);
         goto done; /* reactor continues */
     }
+    /* Route string will not include the endpoints.
+     * On arrival here, uuid of dst plugin has been stripped.
+     * The '1' arg to zmsg_route_str strips the uuid of the sender.
+     */
     s = zmsg_route_str (*zmsg, 1);
     util_json_object_add_string (o, "route", s);
     if (flux_respond (h, zmsg, o) < 0) {
