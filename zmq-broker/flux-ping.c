@@ -108,14 +108,8 @@ static char *ping (flux_t h, int rank, const char *name, const char *pad,
         util_json_object_add_string (request, "pad", pad);
     util_json_object_add_int (request, "seq", seq);
 
-    if (rank == -1) {
-        if (!(response = flux_rpc (h, request, "%s.ping", name)))
-            goto done;
-    } else {
-        if (!(response = flux_rank_rpc (h, rank, request, "%s.ping", name)))
-            goto done;
-    }
-
+    if (!(response = flux_rank_rpc (h, rank, request, "%s.ping", name)))
+        goto done;
     if (util_json_object_get_int (response, "seq", &rseq) < 0
             || util_json_object_get_string (response, "route", &route) < 0) {
         errno = EPROTO;

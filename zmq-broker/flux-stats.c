@@ -38,8 +38,8 @@ void usage (void)
 int main (int argc, char *argv[])
 {
     flux_t h;
-    int ch;
-    char *target;
+    int ch, rank = -1;
+    char *p, *target, *rankstr = NULL;
     char *objname = NULL;
     bool copt = false;
     bool Copt = false;
@@ -91,28 +91,35 @@ int main (int argc, char *argv[])
     if (scale != 1.0 && type != json_type_int && type != json_type_double)
         msg_exit ("Use --scale only with --type int or --type double");
     target = argv[optind];
-    if (Copt && strchr (target, '!'))
+    if ((p = strchr (target, '!'))) {
+        rankstr = target;
+        *p++ = '\0';
+        rank = strtoul (rankstr, NULL, 10);
+        target = p;
+    }
+
+    if (Copt && rankstr)
         msg_exit ("Use --clear not --clear-all to clear a single node.");
 
     if (!(h = cmb_init ()))
         err_exit ("cmb_init");
 
     if (copt) {
-        if ((response = flux_rpc (h, NULL, "%s.stats.clear", target)))
+        if ((response = flux_rank_rpc (h, rank, NULL, "%s.stats.clear",target)))
             errn_exit (EPROTO, "unexpected response to %s.clearstats", target);
         if (errno != 0)
-            err_exit ("flux_rpc %s.clearstats", target);
+            err_exit ("flux_rank_rpc %s.clearstats", target);
     } else if (Copt) {
         if (flux_event_send (h, NULL, "%s.stats.clear", target) < 0)
             err_exit ("flux_event_send %s.stats.clear", target);
     } else if (ropt) {
-        if (!(response = flux_rpc (h, NULL, "%s.rusage", target)))
-            errn_exit (EPROTO, "flux_rpc %s.rusage", target);
+        if (!(response = flux_rank_rpc (h, rank, NULL, "%s.rusage", target)))
+            errn_exit (EPROTO, "flux_rank_rpc %s.rusage", target);
         parse_json (objname, response, scale, type);
         json_object_put (response);
     } else {
-        if (!(response = flux_rpc (h, NULL, "%s.stats.get", target)))
-            err_exit ("flux_rpc %s.stats", target);
+        if (!(response = flux_rank_rpc (h, rank, NULL, "%s.stats.get", target)))
+            err_exit ("flux_rank_rpc %s.stats", target);
         parse_json (objname, response, scale, type);
         json_object_put (response);
     }
