@@ -37,8 +37,7 @@ static int flux_rank_fwd (flux_t h, int rank, const char *topic, JSON payload)
         goto done;
     ret = 0;
 done:
-    if (request)
-        Jput (request);
+    Jput (request);
     return ret;
 }
 
@@ -47,6 +46,11 @@ int flux_rank_request_sendmsg (flux_t h, int rank, zmsg_t **zmsg)
     char *topic = NULL;
     JSON payload = NULL;
     int rc = -1;
+
+    if (rank == -1) {
+        rc = flux_request_sendmsg (h, zmsg);
+        goto done;
+    }
 
     if (!*zmsg || cmb_msg_decode (*zmsg, &topic, &payload) < 0) {
         errno = EINVAL;
@@ -60,8 +64,7 @@ int flux_rank_request_sendmsg (flux_t h, int rank, zmsg_t **zmsg)
 done:
     if (topic)
         free (topic);
-    if (payload)
-        Jput (payload);
+    Jput (payload);
     return rc;
 }
 
@@ -77,13 +80,15 @@ int flux_rank_request_send (flux_t h, int rank, JSON request,
         oom ();
     va_end (ap);
 
-    rc = flux_rank_fwd (h, rank, topic, request);
+    if (rank == -1)
+        rc = flux_request_send (h, request, "%s", topic);
+    else
+        rc = flux_rank_fwd (h, rank, topic, request);
     free (topic);
     return rc;
 }
 
-JSON flux_rank_rpc (flux_t h, int rank, json_object *request,
-                    const char *fmt, ...)
+JSON flux_rank_rpc (flux_t h, int rank, JSON request, const char *fmt, ...)
 {
     char *tag = NULL;
     JSON response = NULL;
@@ -118,8 +123,7 @@ done:
         free (tag);
     if (zmsg)
         zmsg_destroy (&zmsg);
-    if (empty)
-        json_object_put (empty);
+    Jput (empty);
     return response;
 }
 
