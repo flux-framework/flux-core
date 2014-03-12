@@ -449,59 +449,29 @@ error:
     return -1;
 }
 
-/* Customized versions of zframe_print() and zmsg_dump() from czmq source.
- * We don't want to truncate message parts, and want envelop parts represented
- * more compactly (let's try all on one line).
- */
-static void _zframe_print_compact (zframe_t *self, const char *prefix)
-{
-    assert (self);
-    if (prefix)
-        fprintf (stderr, "%s", prefix);
-    byte *data = zframe_data (self);
-    size_t size = zframe_size (self);
-
-    int is_bin = 0;
-    uint char_nbr;
-    for (char_nbr = 0; char_nbr < size; char_nbr++)
-        if (data [char_nbr] < 9 || data [char_nbr] > 127)
-            is_bin = 1;
-
-    //fprintf (stderr, "[%03d] ", (int) size);
-    size_t max_size = is_bin? 35: 70;
-    //const char *elipsis = "";
-    if (size > max_size) {
-        size = max_size;
-        //elipsis = "...";
-    }
-    for (char_nbr = 0; char_nbr < size; char_nbr++) {
-        if (is_bin)
-            fprintf (stderr, "%02X", (unsigned char) data [char_nbr]);
-        else
-            fprintf (stderr, "%c", data [char_nbr]);
-    }
-    //fprintf (stderr, "%s\n", elipsis);
-}
-
 void zmsg_dump_compact (zmsg_t *self, const char *prefix)
 {
-    int hops = zmsg_hopcount (self);
-    zframe_t *zf = zmsg_first (self);
+    int hops;
+    zframe_t *zf;
 
     fprintf (stderr, "--------------------------------------\n");
-    if (!self || !zf) {
+    if (!self) {
         fprintf (stderr, "NULL");
         return;
     }
+    hops = zmsg_hopcount (self);
     if (hops > 0) {
-        fprintf (stderr, "%s[%3.3d] ", prefix ? prefix : "", hops);
-        while (zf && zframe_size (zf) > 0) {
-            _zframe_print_compact (zf , "|");
+        char *rte = zmsg_route_str (self, 0);
+        fprintf (stderr, "%s[%3.3d] |%s|\n", prefix ? prefix : "", hops, rte);
+
+        zf = zmsg_first (self);
+        while (zf && zframe_size (zf) > 0)
             zf = zmsg_next (self);
-        }
         if (zf)
             zf = zmsg_next (self); // skip empty delimiter frame
-        fprintf (stderr, "|\n");
+        free (rte);
+    } else {
+        zf = zmsg_first (self);
     }
     while (zf) {
         zframe_print (zf, prefix ? prefix : "");
@@ -515,16 +485,26 @@ char *zmsg_route_str (zmsg_t *self, int skiphops)
     zframe_t *zf = zmsg_first (self);
     const size_t len = 256;
     char *buf = xzmalloc (len);
+    zlist_t *ids;
+    char *s;
 
+    if (!(ids = zlist_new ()))
+        oom (); 
     while (hops-- > 0) {
-        int l = strlen (buf);
-        char *s = zframe_strdup (zf);
-        if (!s)
+        if (!(s = zframe_strdup (zf)))
             oom ();
-        snprintf (buf + l, len - l, "%s%s", l > 0 ? "!" : "", s);
-        free (s);
+        if (strlen (s) == 32) /* abbreviate long uuids */
+            s[5] = '\0';
+        if (zlist_push (ids, s) < 0)
+            oom ();
         zf = zmsg_next (self);
     }
+    while ((s = zlist_pop (ids))) {
+        int l = strlen (buf);
+        snprintf (buf + l, len - l, "%s%s", l > 0 ? "!" : "", s);
+        free (s);
+    }
+    zlist_destroy (&ids);
     return buf;
 }
 
