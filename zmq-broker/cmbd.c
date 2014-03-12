@@ -204,7 +204,6 @@ int main (int argc, char *argv[])
             }
             case 'R':   /* --rank N */
                 ctx.rank = strtoul (optarg, NULL, 10);
-                ctx.rankstr = xstrdup (optarg);
                 break;
             case 'S':   /* --size N */
                 ctx.size = strtoul (optarg, NULL, 10);
@@ -236,6 +235,8 @@ int main (int argc, char *argv[])
     if (!ctx.plugin_path)
         ctx.plugin_path = PLUGIN_PATH; /* compiled in default */
 
+    if (asprintf (&ctx.rankstr, "%d", ctx.rank) < 0)
+        oom ();
     if (ctx.rank == 0)
         ctx.treeroot = true;
     if (ctx.treeroot && zlist_size (ctx.uri_parent) > 0)
