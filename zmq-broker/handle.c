@@ -846,47 +846,6 @@ int flux_respond_errnum (flux_t h, zmsg_t **reqmsg, int errnum)
     return flux_response_sendmsg (h, reqmsg);
 }
 
-char *flux_ping (flux_t h, const char *name, const char *pad, int seq)
-{
-    json_object *request = util_json_object_new_object ();
-    json_object *response = NULL;
-    int rseq;
-    const char *route, *rpad;
-    char *ret = NULL;
-
-    if (pad)
-        util_json_object_add_string (request, "pad", pad);
-    util_json_object_add_int (request, "seq", seq);
-    if (!(response = flux_rpc (h, request, "%s.ping", name)))
-        goto done;
-
-    if (util_json_object_get_int (response, "seq", &rseq) < 0
-            || util_json_object_get_string (response, "route", &route) < 0) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (seq != rseq) {
-        msg ("%s: seq not echoed back", __FUNCTION__);
-        errno = EPROTO;
-        goto done;
-    }
-    if (pad) {
-        if (util_json_object_get_string (response, "pad", &rpad) < 0
-                                || !rpad || strlen (pad) != strlen (rpad)) {
-            msg ("%s: pad not echoed back", __FUNCTION__);
-            errno = EPROTO;
-            goto done;
-        }
-    }
-    ret = strdup (route);
-done:
-    if (response)
-        json_object_put (response);
-    if (request)
-        json_object_put (request);
-    return ret;
-}
-
 void flux_assfail (flux_t h, char *ass, char *file, int line)
 {
     flux_log (h, LOG_CRIT, "assertion failure: %s:%d: %s", file, line, ass);
