@@ -181,7 +181,7 @@ static void *init_dealer (ctx_t *ctx, const char *id, const char *uri)
         goto error;
     }
     zsocket_set_sndhwm (s, 0);
-    zsocket_set_identity (s, id);
+    zsocket_set_identity (s, (char *)id);
     if (flux_sec_csockinit (ctx->sec, s) < 0) {
         flux_log (ctx->h, LOG_ERR, "flux_sec_csockinit: %s",
                   flux_sec_errstr (ctx->sec));
