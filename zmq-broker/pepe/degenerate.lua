@@ -18,16 +18,20 @@ end
 local h = hostlist.new (pepe.nodelist)
 local mport = 5000 + tonumber (pepe:getenv ("SLURM_JOB_ID")) % 1024;
 local eventuri = "epgm://eth0;239.192.1.1:" .. tostring (mport)
+local plugins = "event,api,barrier,live,log,kvs,job,rexec,resrc,mecho,rank"
+
+local right_rank = (pepe.rank + 1) % pepe.nprocs
+local right_uri = "tcp://" ..  h[right_rank + 1] .. ":5556"
 
 if pepe.rank == 0 then
-    local topology = tree.k_ary_json (1, #h)
-    pepe.run ("./cmbd"
+    local topology = tree.k_ary_json (1, pepe.nprocs)
+    pepe.run ("./cmbd --plugins=hb,sched," .. plugins
 		.. " --child-uri='tcp://*:5556'"
 		.. " --rank=" .. pepe.rank
-		.. " --size=" .. #h
+		.. " --size=" .. pepe.nprocs
 		.. " --hostlist=" .. pepe.nodelist
-		.. " --logdest cmbd.log"
-		.. " --plugins=event,api,barrier,live,log,kvs,hb,job,rexec,resrc,mecho,sched"
+		.. " --logdest=cmbd.log"
+		.. " rank:right-uri=" .. right_uri
                 .. " kvs:conf.event.mcast-uri='" .. eventuri .. "'"
                 .. " kvs:conf.event.mcast-all-publish=false"
 		.. " kvs:conf.hb.period-sec=1.5"
@@ -39,10 +43,10 @@ if pepe.rank == 0 then
 else
     local parent_rank = pepe.rank - 1
     local parent_uri = "tcp://" ..  h[parent_rank + 1] .. ":5556"
-    pepe.run ("./cmbd"
+    pepe.run ("./cmbd --plugins=" .. plugins
 		.. " --child-uri='tcp://*:5556'"
 		.. " --parent-uri='" .. parent_uri .. "'"
 		.. " --rank=" .. pepe.rank
-		.. " --size=" .. #h
-		.. " --plugins=event,api,barrier,live,log,kvs,job,rexec,resrc,mecho")
+		.. " --size=" .. pepe.nprocs
+		.. " rank:right-uri=" .. right_uri)
 end
