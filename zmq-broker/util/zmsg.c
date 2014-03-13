@@ -481,10 +481,9 @@ void zmsg_dump_compact (zmsg_t *self, const char *prefix)
 
 char *zmsg_route_str (zmsg_t *self, int skiphops)
 {
-    int hops = zmsg_hopcount (self) - skiphops;
+    int len = 0, hops = zmsg_hopcount (self) - skiphops;
     zframe_t *zf = zmsg_first (self);
-    const size_t len = 256;
-    char *buf = xzmalloc (len);
+    char *buf;
     zlist_t *ids;
     char *s;
 
@@ -497,8 +496,10 @@ char *zmsg_route_str (zmsg_t *self, int skiphops)
             s[5] = '\0';
         if (zlist_push (ids, s) < 0)
             oom ();
+        len += strlen (s) + 1;
         zf = zmsg_next (self);
     }
+    buf = xzmalloc (len);
     while ((s = zlist_pop (ids))) {
         int l = strlen (buf);
         snprintf (buf + l, len - l, "%s%s", l > 0 ? "!" : "", s);
