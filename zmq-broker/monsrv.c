@@ -219,12 +219,12 @@ static void set_source (const char *path, kvsdir_t dir, void *arg, int errnum)
     kvsitr_destroy (itr);
 
     if (zhash_size (ctx->sources) > 0) {
-        if (flux_event_subscribe (ctx->h, "event.sched.trigger") < 0) {
+        if (flux_event_subscribe (ctx->h, "hb") < 0) {
             flux_log (ctx->h, LOG_ERR, "flux_event_subscribe: %s",
                       strerror (errno));
         }
     } else {
-        if (flux_event_unsubscribe (ctx->h, "event.sched.trigger") < 0) {
+        if (flux_event_unsubscribe (ctx->h, "hb") < 0) {
             flux_log (ctx->h, LOG_ERR, "flux_event_subscribe: %s",
                       strerror (errno));
         }
@@ -255,8 +255,8 @@ static void set_commit (const char *path, const char *s, void *arg, int errnum)
 }
 
 static msghandler_t htab[] = {
-    { FLUX_MSGTYPE_EVENT,   "event.sched.trigger",  heartbeat_cb },
-    { FLUX_MSGTYPE_EVENT,   "event.mon.commit",     commit_cb },
+    { FLUX_MSGTYPE_EVENT,   "hb",             heartbeat_cb },
+    { FLUX_MSGTYPE_EVENT,   "mon.commit",     commit_cb },
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
@@ -264,7 +264,7 @@ static int monsrv_main (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
 
-    if (flux_event_subscribe (ctx->h, "event.mon.commit") < 0) {
+    if (flux_event_subscribe (ctx->h, "mon.commit") < 0) {
         flux_log (ctx->h, LOG_ERR, "flux_event_subscribe: %s",strerror (errno));
         return -1;
     }

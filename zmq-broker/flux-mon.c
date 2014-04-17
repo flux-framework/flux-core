@@ -172,7 +172,7 @@ static void mon_commit (flux_t h, int argc, char *argv[])
 
     util_json_object_add_string (event, "name", name);    
     util_json_object_add_int (event, "nprocs", nprocs);
-    if (flux_event_send (h, event, "event.mon.commit") < 0)
+    if (flux_event_send (h, event, "mon.commit") < 0)
         err_exit ("flux_event_send"); 
     if (kvs_fence (h, name, nprocs) < 0)
         err_exit ("kvs_fence");
