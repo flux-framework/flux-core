@@ -213,7 +213,7 @@ static void mon_get (flux_t h, int argc, char *argv[])
             oom ();
         if (kvs_get_string (h, key, &val) < 0 && errno == ESRCH)
             err_exit ("%s", key);
-        printf ("%s: %s\n", argv[0], val ? val : "default");
+        printf ("%s: %s\n", argv[0], val ? val : "always");
         free (key);
         if (val)
             free (val);
