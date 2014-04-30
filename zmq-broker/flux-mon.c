@@ -9,6 +9,7 @@
 #include "cmb.h"
 #include "util.h"
 #include "log.h"
+#include "shortjson.h"
 
 #define OPTIONS "h"
 static const struct option longopts[] = {
@@ -89,16 +90,15 @@ static void mon_del (flux_t h, int argc, char *argv[])
 static void mon_add (flux_t h, int argc, char *argv[])
 {
     char *name, *key, *tag;
-    json_object *o;
+    JSON o = Jnew ();
 
     if (argc != 2)
         usage ();
     name = argv[0];
     tag = argv[1];
 
-    o = util_json_object_new_object ();
-    util_json_object_add_string (o, "name", name);
-    util_json_object_add_string (o, "tag", tag);
+    Jadd_str (o, "name", name);
+    Jadd_str (o, "tag", tag);
 
     if (asprintf (&key, "conf.mon.source.%s", name) < 0)
         oom ();
@@ -107,13 +107,13 @@ static void mon_add (flux_t h, int argc, char *argv[])
     if (kvs_commit (h) < 0)
         err_exit ("kvs_commit");
     free (key);
-    json_object_put (o);
+    Jput (o);
 }
 
 static void mon_list (flux_t h, int argc, char *argv[])
 {
-    json_object *o;
-    const char *name, *s;
+    JSON o;
+    const char *name;
     kvsdir_t dir;
     kvsitr_t itr;
 
@@ -128,9 +128,8 @@ static void mon_list (flux_t h, int argc, char *argv[])
     itr = kvsitr_create (dir);
     while ((name = kvsitr_next (itr))) {
         if ((kvsdir_get (dir, name, &o) == 0)) {
-            s = json_object_to_json_string_ext (o, JSON_C_TO_STRING_PLAIN);
-            printf ("%s:  %s\n", name, s);
-            json_object_put (o);
+            printf ("%s:  %s\n", name, Jtostr (o));
+            Jput (o);
         }
     }
     kvsitr_destroy (itr);

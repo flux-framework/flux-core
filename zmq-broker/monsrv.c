@@ -1,5 +1,14 @@
 /* monsrv.c - monitoring plugin */
 
+/* Super-simple demo implementation.
+ * On every session heartbeat, source some data and ship it upstream.
+ * On the master (root) node, reduce it, and sink it.
+ * The source function is hardwired as a specific rpc.
+ * The reduce function merely hashes the rpc responses by comms rank.
+ * The sink function commits the reduced blob to the KVS under the
+ * heartbeat epoch.
+ */
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <assert.h>
@@ -24,6 +33,7 @@
 #include "util.h"
 #include "log.h"
 #include "plugin.h"
+#include "shortjson.h"
 
 typedef struct {
     char *tag;
@@ -31,7 +41,7 @@ typedef struct {
 
 typedef struct {
     int epoch;
-    zhash_t *sources;
+    zhash_t *sources; /* source_t's, hashed by source name */
     flux_t h;
     bool master;
 } ctx_t;
@@ -71,22 +81,24 @@ static source_t *source_create (const char *tag)
     return src;
 }
 
-static json_object *mon_source (ctx_t *ctx)
+static JSON mon_source (ctx_t *ctx)
 {
-    json_object *o, *data = NULL;
+    JSON o, data = NULL;
     zlist_t *keys;
     char *key;
     source_t *src;
 
     if (zhash_size (ctx->sources) > 0) {
-        data = util_json_object_new_object ();;
+        data = Jnew ();
         if (!(keys = zhash_keys (ctx->sources)))
             oom ();
         while ((key = zlist_pop (keys))) {
             src = zhash_lookup (ctx->sources, key);
             if (src) {
-                if ((o = flux_rpc (ctx->h, NULL, "%s", src->tag)))
-                    json_object_object_add (data, key, o);
+                if ((o = flux_rpc (ctx->h, NULL, "%s", src->tag))) {
+                    Jadd_obj (data, key, o);
+                    Jput (o);
+                }
             }
             free (key);
         }
@@ -98,13 +110,13 @@ static json_object *mon_source (ctx_t *ctx)
 static int heartbeat_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    json_object *event = NULL;
+    JSON event = NULL;
     int rc = 0;
-    json_object *o = NULL;
+    JSON o = NULL;
     char *key = NULL;
 
     if (cmb_msg_decode (*zmsg, NULL, &event) < 0 || event == NULL
-                || util_json_object_get_int (event, "epoch", &ctx->epoch) < 0) {
+                || !Jget_int  (event, "epoch", &ctx->epoch)) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
@@ -123,21 +135,21 @@ static int heartbeat_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         }
     }
 done:
-    if (o)
-        json_object_put (o);
+    Jput (o);
     if (key)
         free (key);
-    if (event)
-        json_object_put (event);
+    Jput (event);
     return rc;
 }
 
+/* KVS conf.mon.source has changed - update ctx->sources to match.
+ */
 static void set_source (const char *path, kvsdir_t dir, void *arg, int errnum)
 {
     ctx_t *ctx = arg;
     const char *key;
     kvsitr_t itr;
-    json_object *o;
+    JSON o;
 
     if (errnum > 0)
         return;
@@ -153,12 +165,12 @@ static void set_source (const char *path, kvsdir_t dir, void *arg, int errnum)
 
         if (kvsdir_get (dir, key, &o) < 0)
             continue;
-        if (util_json_object_get_string (o, "tag", &tag) == 0) {
+        if (Jget_str (o, "tag", &tag)) {
             src = source_create (tag);
             zhash_insert (ctx->sources, key, src);
             zhash_freefn (ctx->sources, key, (zhash_free_fn *)source_destroy);
         }
-        json_object_put (o);
+        Jput (o);
     }
     kvsitr_destroy (itr);
 
