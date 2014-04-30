@@ -24,7 +24,7 @@ void usage (void)
 {
     fprintf (stderr, 
 "Usage: flux-mon list\n"
-"       flux-mon add <name> rpc <request tag>\n"
+"       flux-mon add <name> <tag>\n"
 "       flux-mon del <name>\n"
 );
     exit (1);
@@ -88,24 +88,18 @@ static void mon_del (flux_t h, int argc, char *argv[])
 
 static void mon_add (flux_t h, int argc, char *argv[])
 {
-    char *name, *type, *key;
+    char *name, *key, *tag;
     json_object *o;
 
-    if (argc < 2)
+    if (argc != 2)
         usage ();
     name = argv[0];
-    type = argv[1];
+    tag = argv[1];
 
     o = util_json_object_new_object ();
     util_json_object_add_string (o, "name", name);
-    if (!strcmp (type, "rpc")) {
-        if (argc != 3)
-            usage ();
-        util_json_object_add_string (o, "type", "rpc");
-        util_json_object_add_string (o, "tag", argv[2]);
-    } else {
-        usage ();
-    }
+    util_json_object_add_string (o, "tag", tag);
+
     if (asprintf (&key, "conf.mon.source.%s", name) < 0)
         oom ();
     if (kvs_put (h, key, o) < 0)

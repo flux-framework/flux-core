@@ -25,16 +25,8 @@
 #include "log.h"
 #include "plugin.h"
 
-typedef enum {
-    SRC_RPC,
-} source_type_t;
 typedef struct {
-    source_type_t type;
-    union {
-        struct {
-            char *tag;
-        } rpc;
-    };
+    char *tag;
 } source_t;
 
 typedef struct {
@@ -68,18 +60,14 @@ static ctx_t *getctx (flux_t h)
 
 static void source_destroy (source_t *src)
 {
-    switch (src->type) {
-        case SRC_RPC:
-            free (src->rpc.tag);
-    }
+    free (src->tag);
     free (src);
 }
 
-static source_t *source_create_rpc (const char *tag)
+static source_t *source_create (const char *tag)
 {
     source_t *src = xzmalloc (sizeof (*src));
-    src->type = SRC_RPC;
-    src->rpc.tag = xstrdup (tag);
+    src->tag = xstrdup (tag);
     return src;
 }
 
@@ -97,12 +85,8 @@ static json_object *mon_source (ctx_t *ctx)
         while ((key = zlist_pop (keys))) {
             src = zhash_lookup (ctx->sources, key);
             if (src) {
-                switch (src->type) {
-                    case SRC_RPC:
-                        if ((o = flux_rpc (ctx->h, NULL, "%s", src->rpc.tag)))
-                            json_object_object_add (data, key, o);
-                        break;
-                }
+                if ((o = flux_rpc (ctx->h, NULL, "%s", src->tag)))
+                    json_object_object_add (data, key, o);
             }
             free (key);
         }
@@ -158,25 +142,19 @@ static void set_source (const char *path, kvsdir_t dir, void *arg, int errnum)
     if (errnum > 0)
         return;
 
-    /* FIXME: drop and recreate isn't very efficient and won't work
-     * if we start keeping state in the source_t.
-     */
     zhash_destroy (&ctx->sources);
     if (!(ctx->sources = zhash_new ()))
         oom ();
     if (!(itr = kvsitr_create (dir)))
         oom ();
     while ((key = kvsitr_next (itr))) {
-        const char *type;
         const char *tag;
         source_t *src;
 
         if (kvsdir_get (dir, key, &o) < 0)
             continue;
-        if (util_json_object_get_string (o, "type", &type) == 0
-                && !strcmp (type, "rpc")
-                && util_json_object_get_string (o, "tag", &tag) == 0) {
-            src = source_create_rpc (tag);
+        if (util_json_object_get_string (o, "tag", &tag) == 0) {
+            src = source_create (tag);
             zhash_insert (ctx->sources, key, src);
             zhash_freefn (ctx->sources, key, (zhash_free_fn *)source_destroy);
         }
