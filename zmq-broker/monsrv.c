@@ -62,7 +62,7 @@ static ctx_t *getctx (flux_t h)
         if (!(ctx->sources = zhash_new ()))
             oom ();
         ctx->master = flux_treeroot (h);
-        flux_aux_set (h, "kvssrv", ctx, (FluxFreeFn)freectx);
+        flux_aux_set (h, "monsrv", ctx, (FluxFreeFn)freectx);
     }
 
     return ctx;
