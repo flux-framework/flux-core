@@ -61,6 +61,14 @@ Jadd_obj (JSON o, const char *name, JSON obj)
     json_object_object_add (o, (char *)name, Jget (obj));
 }
 
+/* Add a new (empty) object to JSON.
+ */
+static __inline__ void
+Jadd_new (JSON o, const char *name)
+{
+    json_object_object_add (o, (char *)name, Jnew ());
+}
+
 /* Get integer from JSON.
  */
 static __inline__ bool
