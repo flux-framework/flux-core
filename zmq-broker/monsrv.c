@@ -1,14 +1,5 @@
 /* monsrv.c - monitoring plugin */
 
-/* Super-simple demo implementation.
- * On every session heartbeat, source some data and ship it upstream.
- * On the master (root) node, reduce it, and sink it.
- * The source function is hardwired as a specific rpc.
- * The reduce function merely hashes the rpc responses by comms rank.
- * The sink function commits the reduced blob to the KVS under the
- * heartbeat epoch.
- */
-
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <assert.h>
@@ -35,20 +26,21 @@
 #include "plugin.h"
 #include "shortjson.h"
 
-typedef struct {
-    char *tag;
-} source_t;
+static const char *mon_conf_dir = "conf.mon.source";
 
 typedef struct {
     int epoch;
-    zhash_t *sources; /* source_t's, hashed by source name */
     flux_t h;
     bool master;
+    int rank;
+    char *rankstr;
+    zhash_t *cache; /* cached monitoring data, key=name */
 } ctx_t;
 
 static void freectx (ctx_t *ctx)
 {
-    zhash_destroy (&ctx->sources);
+    free (ctx->rankstr);
+    zhash_destroy (&ctx->cache);
     free (ctx);
 }
 
@@ -59,122 +51,112 @@ static ctx_t *getctx (flux_t h)
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
         ctx->h = h;
-        if (!(ctx->sources = zhash_new ()))
-            oom ();
         ctx->master = flux_treeroot (h);
+        ctx->rank = flux_rank (h);
+        if (asprintf (&ctx->rankstr, "%d", ctx->rank) < 0)
+            oom (); 
+        if (!(ctx->cache = zhash_new ()))
+            oom ();
         flux_aux_set (h, "monsrv", ctx, (FluxFreeFn)freectx);
     }
 
     return ctx;
 }
 
-static void source_destroy (source_t *src)
+static JSON cache_add (ctx_t *ctx, const char *name, JSON *entp)
 {
-    free (src->tag);
-    free (src);
+    JSON ent = NULL;
+    int old_epoch, new_epoch;
+
+    if (!Jget_int (*entp, "epoch", &new_epoch))
+        goto done;
+    if (!(ent = zhash_lookup (ctx->cache, name))
+            || !Jget_int (ent, "epoch", &old_epoch) || old_epoch < new_epoch) {
+        ent = *entp;
+        *entp = NULL;
+        zhash_update (ctx->cache, name, ent);
+        zhash_freefn (ctx->cache, name, (zhash_free_fn *)Jput);
+    } else if (new_epoch < old_epoch)
+        ent = NULL;
+done:
+    return ent;
 }
 
-static source_t *source_create (const char *tag)
+static void poll_one (ctx_t *ctx, const char *name, JSON *entp)
 {
-    source_t *src = xzmalloc (sizeof (*src));
-    src->tag = xstrdup (tag);
-    return src;
-}
+    JSON ent = cache_add (ctx, name, entp);
+    JSON res, data;
+    const char *tag;
 
-static JSON mon_source (ctx_t *ctx)
-{
-    JSON o, data = NULL;
-    zlist_t *keys;
-    char *key;
-    source_t *src;
-
-    if (zhash_size (ctx->sources) > 0) {
-        data = Jnew ();
-        if (!(keys = zhash_keys (ctx->sources)))
-            oom ();
-        while ((key = zlist_pop (keys))) {
-            src = zhash_lookup (ctx->sources, key);
-            if (src) {
-                if ((o = flux_rpc (ctx->h, NULL, "%s", src->tag))) {
-                    Jadd_obj (data, key, o);
-                    Jput (o);
-                }
-            }
-            free (key);
+    if (ent && Jget_str (ent, "tag", &tag)) {
+        if ((res = flux_rpc (ctx->h, NULL, "%s", tag))) {
+            if (Jget_obj (ent, "data", &data))
+                Jadd_obj (data, ctx->rankstr, res);
+            Jput (res);
         }
-        zlist_destroy (&keys);
     }
-    return data;
 }
 
-static int heartbeat_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void poll_all (ctx_t *ctx)
+{
+    kvsdir_t dir = NULL;
+    kvsitr_t itr = NULL;
+    const char *name;
+
+    if (kvs_get_dir (ctx->h, &dir, "%s", mon_conf_dir) < 0)
+        goto done;
+    if (!(itr = kvsitr_create (dir)))
+        oom ();
+    while ((name = kvsitr_next (itr))) {
+        JSON ent = NULL;
+        if (kvsdir_get (dir, name, &ent) == 0) {
+            Jadd_int (ent, "epoch", ctx->epoch);
+            Jadd_new (ent, "data");
+            poll_one (ctx, name, &ent);
+        }
+        Jput (ent);
+    }
+done:
+    if (itr)
+        kvsitr_destroy (itr);
+    if (dir)
+        kvsdir_destroy (dir);
+}
+
+static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     JSON event = NULL;
     int rc = 0;
-    JSON o = NULL;
-    char *key = NULL;
 
     if (cmb_msg_decode (*zmsg, NULL, &event) < 0 || event == NULL
                 || !Jget_int  (event, "epoch", &ctx->epoch)) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    if ((o = mon_source (ctx))) {
-        if (asprintf (&key, "mon.%d.%d", flux_rank (h), ctx->epoch) < 0)
-            oom ();
-        if (kvs_put (h, key, o) < 0) {
-            flux_log (h, LOG_ERR, "%s: kvs_put %s: %s", __FUNCTION__, key,
-                      strerror (errno));
-            goto done;
-        }
-        if (kvs_commit (h) < 0) {
-            flux_log (h, LOG_ERR, "%s: kvs_commit %s: %s", __FUNCTION__,
-                      key, strerror (errno));
-            goto done;
-        }
-    }
+    poll_all (ctx);
 done:
-    Jput (o);
-    if (key)
-        free (key);
     Jput (event);
     return rc;
 }
 
-/* KVS conf.mon.source has changed - update ctx->sources to match.
+/* Detect the presence (or absence) of content in our conf KVS space.
+ * We will ignore hb events to reduce overhead if there is no content.
  */
-static void set_source (const char *path, kvsdir_t dir, void *arg, int errnum)
+static void conf_cb (const char *path, kvsdir_t dir, void *arg, int errnum)
 {
     ctx_t *ctx = arg;
-    const char *key;
     kvsitr_t itr;
-    JSON o;
+    int entries = 0;
 
-    if (errnum > 0)
-        return;
-
-    zhash_destroy (&ctx->sources);
-    if (!(ctx->sources = zhash_new ()))
-        oom ();
-    if (!(itr = kvsitr_create (dir)))
-        oom ();
-    while ((key = kvsitr_next (itr))) {
-        const char *tag;
-        source_t *src;
-
-        if (kvsdir_get (dir, key, &o) < 0)
-            continue;
-        if (Jget_str (o, "tag", &tag)) {
-            src = source_create (tag);
-            zhash_insert (ctx->sources, key, src);
-            zhash_freefn (ctx->sources, key, (zhash_free_fn *)source_destroy);
-        }
-        Jput (o);
+    if (errnum == 0) {
+        if (!(itr = kvsitr_create (dir)))
+            oom ();
+        while (kvsitr_next (itr))
+            entries++;
+        kvsitr_destroy (itr);
     }
-    kvsitr_destroy (itr);
-
-    if (zhash_size (ctx->sources) > 0) {
+    if (entries > 0) {
         if (flux_event_subscribe (ctx->h, "hb") < 0) {
             flux_log (ctx->h, LOG_ERR, "flux_event_subscribe: %s",
                       strerror (errno));
@@ -188,7 +170,7 @@ static void set_source (const char *path, kvsdir_t dir, void *arg, int errnum)
 }
 
 static msghandler_t htab[] = {
-    { FLUX_MSGTYPE_EVENT,   "hb",             heartbeat_cb },
+    { FLUX_MSGTYPE_EVENT,   "hb",             hb_cb },
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
@@ -196,7 +178,7 @@ static int monsrv_main (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
 
-    if (kvs_watch_dir (h, set_source, ctx, "conf.mon.source") < 0) {
+    if (kvs_watch_dir (h, conf_cb, ctx, mon_conf_dir) < 0) {
         flux_log (ctx->h, LOG_ERR, "kvs_watch_dir: %s", strerror (errno));
         return -1;
     }
