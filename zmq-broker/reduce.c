@@ -35,7 +35,20 @@ struct red_struct {
     zlist_t *items;    
     flux_t h;
     int flags;
+    int timeout; /* in msec */
+    int timer_id;
+    bool armed;
 };
+
+static int red_timeout (flux_t h, void *arg)
+{
+    red_t r = arg;
+    int rc = 0;
+
+    r->armed = false; /* it's a one-shot timer */
+    flux_red_flush (r);
+    return rc;
+}
 
 red_t flux_red_create (flux_t h, FluxSinkFn sinkfn, FluxRedFn redfn,
                        int flags, void *arg)
@@ -48,6 +61,7 @@ red_t flux_red_create (flux_t h, FluxSinkFn sinkfn, FluxRedFn redfn,
     r->h = h;
     if (!(r->items = zlist_new ()))
         oom ();
+
     return r;
 }
 
@@ -62,21 +76,43 @@ void flux_red_flush (red_t r)
 {
     void *item;
 
-    assert (r->sinkfn != NULL);
-    while ((item = zlist_pop (r->items)))
-        r->sinkfn (r->h, item, r->arg);
+    while ((item = zlist_pop (r->items))) {
+        if (r->sinkfn)
+            r->sinkfn (r->h, item, r->arg);
+    }
+    if ((r->flags & FLUX_RED_TIMEDFLUSH)) {
+        if (r->armed) {
+            flux_tmouthandler_remove (r->h, r->timer_id);
+            r->armed = false;
+        }
+    }
 }
 
 int flux_red_append (red_t r, void *item)
 {
+    int count;
+
     if (zlist_append (r->items, item) < 0)
         oom ();
     if (r->redfn)
         r->redfn (r->h, r->items, r->arg);
     if (r->flags & FLUX_RED_AUTOFLUSH)
         flux_red_flush (r);
-         
-    return zlist_size (r->items);
+    count = zlist_size (r->items);
+    if ((r->flags & FLUX_RED_TIMEDFLUSH)) {
+        if (count > 0 && !r->armed)  {
+            r->timer_id = flux_tmouthandler_add (r->h, r->timeout, true,
+                                                 red_timeout, r);
+            r->armed = true;
+        }
+    }
+
+    return count;
+}
+
+void flux_red_set_timeout_msec (red_t r, int msec)
+{
+    r->timeout = msec;
 }
 
 /*
