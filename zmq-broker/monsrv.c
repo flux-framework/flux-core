@@ -28,7 +28,7 @@
 #include "reduce.h"
 
 static const char *mon_conf_dir = "conf.mon.source";
-const int red_flags = FLUX_RED_AUTOFLUSH;
+const int red_timeout_msec = 2;
 
 typedef struct {
     int epoch;
@@ -68,6 +68,27 @@ static ctx_t *getctx (flux_t h)
     return ctx;
 }
 
+static red_t rcache_lookup (ctx_t *ctx, const char *name)
+{
+    return zhash_lookup (ctx->rcache, name);
+}
+
+static red_t rcache_add (ctx_t *ctx, const char *name)
+{
+    flux_t h = ctx->h;
+    red_t r;
+
+    if (ctx->master) {
+        r = flux_red_create (h, mon_sink, mon_reduce, FLUX_RED_TIMEDFLUSH, ctx);
+        flux_red_set_timeout_msec (r, red_timeout_msec);
+    } else {
+        r = flux_red_create (h, mon_sink, mon_reduce, FLUX_RED_AUTOFLUSH, ctx);
+    }
+    zhash_insert (ctx->rcache, name, r);
+    zhash_freefn (ctx->rcache, name, (zhash_free_fn *)flux_red_destroy);
+    return r;
+}
+
 static int push_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -81,13 +102,12 @@ static int push_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    if (!(r = zhash_lookup (ctx->rcache, name))) {
-        r = flux_red_create (h, mon_sink, mon_reduce, red_flags, ctx);
-        zhash_insert (ctx->rcache, name, r);
-        zhash_freefn (ctx->rcache, name, (zhash_free_fn *)flux_red_destroy);
-    }
+    if (!(r = rcache_lookup (ctx, name)))
+        r = rcache_add (ctx, name);
+    Jget (request);
     flux_red_append (r, request);
 done:
+    Jput (request);
     return rc;
 }
 
@@ -104,11 +124,8 @@ static void poll_one (ctx_t *ctx, const char *name, const char *tag)
         Jadd_obj (o, "data", data);        
         Jadd_obj (data, ctx->rankstr, res);
         Jput (res);
-        if (!(r = zhash_lookup (ctx->rcache, name))) {
-            r = flux_red_create (ctx->h, mon_sink, mon_reduce, red_flags, ctx);
-            zhash_insert (ctx->rcache, name, r);
-            zhash_freefn (ctx->rcache, name, (zhash_free_fn *)flux_red_destroy);
-        }
+        if (!(r = rcache_lookup (ctx, name)))
+            r = rcache_add (ctx, name);
         flux_red_append (r, o);
     }
 }
