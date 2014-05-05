@@ -25,8 +25,10 @@
 #include "log.h"
 #include "plugin.h"
 #include "shortjson.h"
+#include "reduce.h"
 
 static const char *mon_conf_dir = "conf.mon.source";
+const int red_flags = FLUX_RED_AUTOFLUSH;
 
 typedef struct {
     int epoch;
@@ -34,13 +36,16 @@ typedef struct {
     bool master;
     int rank;
     char *rankstr;
-    zhash_t *cache; /* cached monitoring data, key=name */
+    zhash_t *rcache;    /* hash of red_t by name */
 } ctx_t;
+
+static void mon_sink (flux_t h, void *item, void *arg);
+static void mon_reduce (flux_t h, zlist_t *items, void *arg);
 
 static void freectx (ctx_t *ctx)
 {
+    zhash_destroy (&ctx->rcache);
     free (ctx->rankstr);
-    zhash_destroy (&ctx->cache);
     free (ctx);
 }
 
@@ -55,7 +60,7 @@ static ctx_t *getctx (flux_t h)
         ctx->rank = flux_rank (h);
         if (asprintf (&ctx->rankstr, "%d", ctx->rank) < 0)
             oom (); 
-        if (!(ctx->cache = zhash_new ()))
+        if (!(ctx->rcache = zhash_new ()))
             oom ();
         flux_aux_set (h, "monsrv", ctx, (FluxFreeFn)freectx);
     }
@@ -63,37 +68,48 @@ static ctx_t *getctx (flux_t h)
     return ctx;
 }
 
-static JSON cache_add (ctx_t *ctx, const char *name, JSON *entp)
+static int push_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
-    JSON ent = NULL;
-    int old_epoch, new_epoch;
+    ctx_t *ctx = arg;
+    JSON request = NULL;
+    const char *name;
+    red_t r;
+    int rc = 0;
 
-    if (!Jget_int (*entp, "epoch", &new_epoch))
+    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+            || !Jget_str (request, "name", &name)) {
+        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
-    if (!(ent = zhash_lookup (ctx->cache, name))
-            || !Jget_int (ent, "epoch", &old_epoch) || old_epoch < new_epoch) {
-        ent = *entp;
-        *entp = NULL;
-        zhash_update (ctx->cache, name, ent);
-        zhash_freefn (ctx->cache, name, (zhash_free_fn *)Jput);
-    } else if (new_epoch < old_epoch)
-        ent = NULL;
+    }
+    if (!(r = zhash_lookup (ctx->rcache, name))) {
+        r = flux_red_create (h, mon_sink, mon_reduce, red_flags, ctx);
+        zhash_insert (ctx->rcache, name, r);
+        zhash_freefn (ctx->rcache, name, (zhash_free_fn *)flux_red_destroy);
+    }
+    flux_red_append (r, request);
 done:
-    return ent;
+    return rc;
 }
 
-static void poll_one (ctx_t *ctx, const char *name, JSON *entp)
+static void poll_one (ctx_t *ctx, const char *name, const char *tag)
 {
-    JSON ent = cache_add (ctx, name, entp);
-    JSON res, data;
-    const char *tag;
+    red_t r;
+    JSON res;
 
-    if (ent && Jget_str (ent, "tag", &tag)) {
-        if ((res = flux_rpc (ctx->h, NULL, "%s", tag))) {
-            if (Jget_obj (ent, "data", &data))
-                Jadd_obj (data, ctx->rankstr, res);
-            Jput (res);
+    if ((res = flux_rpc (ctx->h, NULL, "%s", tag))) {
+        JSON data = Jnew ();
+        JSON o = Jnew ();
+        Jadd_int (o, "epoch", ctx->epoch);
+        Jadd_str  (o, "name", name);
+        Jadd_obj (o, "data", data);        
+        Jadd_obj (data, ctx->rankstr, res);
+        Jput (res);
+        if (!(r = zhash_lookup (ctx->rcache, name))) {
+            r = flux_red_create (ctx->h, mon_sink, mon_reduce, red_flags, ctx);
+            zhash_insert (ctx->rcache, name, r);
+            zhash_freefn (ctx->rcache, name, (zhash_free_fn *)flux_red_destroy);
         }
+        flux_red_append (r, o);
     }
 }
 
@@ -101,7 +117,7 @@ static void poll_all (ctx_t *ctx)
 {
     kvsdir_t dir = NULL;
     kvsitr_t itr = NULL;
-    const char *name;
+    const char *name, *tag;
 
     if (kvs_get_dir (ctx->h, &dir, "%s", mon_conf_dir) < 0)
         goto done;
@@ -109,10 +125,8 @@ static void poll_all (ctx_t *ctx)
         oom ();
     while ((name = kvsitr_next (itr))) {
         JSON ent = NULL;
-        if (kvsdir_get (dir, name, &ent) == 0) {
-            Jadd_int (ent, "epoch", ctx->epoch);
-            Jadd_new (ent, "data");
-            poll_one (ctx, name, &ent);
+        if (kvsdir_get (dir, name, &ent) == 0 && Jget_str (ent, "tag", &tag)) {
+            poll_one (ctx, name, tag);
         }
         Jput (ent);
     }
@@ -169,8 +183,72 @@ static void conf_cb (const char *path, kvsdir_t dir, void *arg, int errnum)
     }
 }
 
+static void mon_sink (flux_t h, void *item, void *arg)
+{
+    ctx_t *ctx = arg;
+    JSON o = item;
+    JSON oo, data, odata;
+    const char *name;
+    int epoch;
+    char *key;
+
+    if (!Jget_str (o, "name", &name) || !Jget_int (o, "epoch", &epoch)
+                                     || !Jget_obj (o, "data", &data))
+        return;
+    if (ctx->master) {  /* sink to the kvs */
+        if (asprintf (&key, "mon.%s.%d", name, epoch) < 0)
+            oom ();
+        if (kvs_get (h, key, &oo) == 0) {
+            if (Jget_obj (oo, "data", &odata))
+                Jmerge (data, odata);
+            Jput (oo);
+        }
+        kvs_put (h, key, o);
+        kvs_commit (h);
+        free (key);
+    } else {            /* push upstream */
+        flux_request_send (h, o, "%s", "mon.push");
+    }
+    Jput (o);
+}
+
+static void mon_reduce (flux_t h, zlist_t *items, void *arg)
+{
+    zlist_t *tmp; 
+    int e1, e2;
+    JSON o1, o2, d1, d2;
+
+    if (!(tmp = zlist_new ()))
+        oom ();
+    while ((o1 = zlist_pop (items))) {
+        if (zlist_append (tmp, o1) < 0)
+            oom ();
+    }
+    while ((o1 = zlist_pop (tmp))) {
+        if (!Jget_int (o1, "epoch", &e1) || !Jget_obj (o1, "data", &d1)) {
+            Jput (o1);
+            continue;
+        }
+        o2 = zlist_first (items);
+        while (o2) {
+            if (Jget_int (o2, "epoch", &e2) && e1 == e2)
+                break;
+            o2 = zlist_next (items);
+        }
+        if (o2) {
+            if (Jget_obj (o2, "data", &d2))
+                Jmerge (d2, d1);
+            Jput (o1);
+        } else {
+            if (zlist_append (items, o1) < 0)
+                oom ();
+        }
+    }
+}
+
 static msghandler_t htab[] = {
     { FLUX_MSGTYPE_EVENT,   "hb",             hb_cb },
+    { FLUX_MSGTYPE_REQUEST, "mon.push",       push_request_cb },
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
