@@ -27,7 +27,9 @@ struct flux_handle_ops {
     void        (*reactor_fd_remove)(void *impl, int fd, short events);
     int         (*reactor_zs_add)(void *impl, void *zs, short events);
     void        (*reactor_zs_remove)(void *impl, void *zs, short events);
-    int         (*reactor_timeout_set)(void *impl, unsigned long msec);
+    int         (*reactor_tmout_add)(void *impl, unsigned long msec,
+                                     bool oneshot);
+    void        (*reactor_tmout_remove)(void *impl, int timer_id);
 
     void        (*impl_destroy)(void *impl);
 };
@@ -38,7 +40,7 @@ flux_t handle_create (void *impl, const struct flux_handle_ops *ops, int flags);
 int handle_event_msg (flux_t h, int typemask, zmsg_t **zmsg);
 int handle_event_fd (flux_t h, int fd, short revents);
 int handle_event_zs (flux_t h, void *zs, short revents);
-int handle_event_tmout (flux_t h);
+int handle_event_tmout (flux_t h, int timer_id);
 
 #endif /* !HAVE_FLUX_HANDLE_H */
 

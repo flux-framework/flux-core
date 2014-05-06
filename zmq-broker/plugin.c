@@ -38,8 +38,6 @@ typedef struct {
     int event_rx;
 } plugin_stats_t;
 
-typedef struct ptimeout_struct *ptimeout_t;
-
 #define PLUGIN_MAGIC    0xfeefbe01
 struct plugin_ctx_struct {
     int magic;
@@ -47,7 +45,6 @@ struct plugin_ctx_struct {
     void *zs_dnreq; /* for handling requests (reverse message flow) */
     void *zs_evin;
     char *id;
-    ptimeout_t timeout;
     pthread_t t;
     const struct plugin_ops *ops;
     plugin_stats_t stats;
@@ -64,22 +61,15 @@ struct plugin_ctx_struct {
     int reactor_rc;
 };
 
-struct ptimeout_struct {
-    plugin_ctx_t p;
-    unsigned long msec;
-    int id;
-};
+#if CZMQ_VERSION_MAJOR < 2
+#error Need CZMQ v2 timer API
+#endif
 
 #define ZLOOP_RETURN(p) \
     return ((p)->reactor_stop ? (-1) : (0))
 
 static const struct flux_handle_ops plugin_handle_ops;
 
-#if CZMQ_VERSION_MAJOR < 2
-static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, void *arg);
-#else
-static int plugin_timer_cb (zloop_t *zl, int timer_id, void *arg);
-#endif
 
 /**
  ** flux_t implementation
@@ -243,42 +233,26 @@ static void plugin_reactor_zs_remove (void *impl, void *zs, short events)
     zloop_poller_end (p->zloop, &item); /* FIXME: 'events' are ignored */
 }
 
-/* N.B. zloop_timer() cannot be called repeatedly with the same
- * arg value to update the timeout of a free running (times = 0) timer.
- * Doing so creates a new timer, so you will have it going off at both
- * old and new times.  Also, zloop_timer_end() is deferred until the
- * bottom of the zloop poll loop, so we can't call zloop_timer_end() followed
- * immediately by zloop_timer() with the same arg value or the timer is
- * removed before it can go off.  Workaround: delete and readd but make
- * sure the arg value is different (malloc-before-free plugin_ctx_t
- * wrapper struct shenanegens below).
- */
-/* This need goes away in czmq v2 but we keep the old code for now.
- */
-static int plugin_reactor_timeout_set (void *impl, unsigned long msec)
+static int tmout_cb (zloop_t *zl, int timer_id, plugin_ctx_t p)
 {
-    ptimeout_t t = NULL;
+    if (handle_event_tmout (p->h, timer_id) < 0)
+        plugin_reactor_stop (p, -1);
+    ZLOOP_RETURN(p);
+}
+
+static int plugin_reactor_tmout_add (void *impl, unsigned long msec, bool oneshot)
+{
+    plugin_ctx_t p = impl;
+    int times = oneshot ? 1 : 0;
+
+    return zloop_timer (p->zloop, msec, times, (zloop_timer_fn *)tmout_cb, p);
+}
+
+static void plugin_reactor_tmout_remove (void *impl, int timer_id)
+{
     plugin_ctx_t p = impl;
 
-    assert (p->magic == PLUGIN_MAGIC);
-    if (p->timeout)
-#if CZMQ_VERSION_MAJOR < 2
-        (void)zloop_timer_end (p->zloop, p->timeout);
-#else
-        (void)zloop_timer_end (p->zloop, p->timeout->id);
-#endif
-    if (msec > 0) {
-        if (!(t = xzmalloc (sizeof (struct ptimeout_struct))))
-            oom ();
-        t->p = p;
-        t->msec = msec;
-        if ((t->id = zloop_timer (p->zloop, msec, 0, plugin_timer_cb, t)) < 0)
-            err_exit ("zloop_timer"); 
-    }
-    if (p->timeout)
-        free (p->timeout); /* free after xzmalloc - see comment above */
-    p->timeout = t;
-    return 0;
+    zloop_timer_end (p->zloop, timer_id);
 }
 
 /**
@@ -481,24 +455,6 @@ done:
     ZLOOP_RETURN(p);
 }
 
-#if CZMQ_VERSION_MAJOR < 2
-static int plugin_timer_cb (zloop_t *zl, zmq_pollitem_t *i, void *arg)
-#else
-static int plugin_timer_cb (zloop_t *zl, int timer_id, void *arg)
-#endif
-{
-    ptimeout_t t = arg;
-    plugin_ctx_t p = t->p;
-
-    if (handle_event_tmout (p->h) < 0) {
-        plugin_reactor_stop (p, -1);
-        goto done;
-    }
-    plugin_handle_deferred_responses (p);
-done:
-    ZLOOP_RETURN(p);
-}
-
 static zloop_t * plugin_zloop_create (plugin_ctx_t p)
 {
     int rc;
@@ -613,9 +569,6 @@ void plugin_unload (plugin_ctx_t p)
     zsocket_destroy (p->zctx, p->zs_dnreq);
     zsocket_destroy (p->zctx, p->zs_upreq);
 
-    if (p->timeout)
-        free (p->timeout);
-
     while ((zmsg = zlist_pop (p->deferred_responses)))
         zmsg_destroy (&zmsg);
     zlist_destroy (&p->deferred_responses);
@@ -716,7 +669,8 @@ static const struct flux_handle_ops plugin_handle_ops = {
     .reactor_fd_remove = plugin_reactor_fd_remove,
     .reactor_zs_add = plugin_reactor_zs_add,
     .reactor_zs_remove = plugin_reactor_zs_remove,
-    .reactor_timeout_set = plugin_reactor_timeout_set,
+    .reactor_tmout_add = plugin_reactor_tmout_add,
+    .reactor_tmout_remove = plugin_reactor_tmout_remove,
 };
 
 /*

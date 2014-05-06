@@ -261,45 +261,34 @@ static void cmb_reactor_zs_remove (void *impl, void *zs, short events)
 }
 
 #if CZMQ_VERSION_MAJOR < 2
-static int cmb_timer_cb (zloop_t *zl, zmq_pollitem_t *i, void *arg)
-#else
-static int cmb_timer_cb (zloop_t *zl, int timer_id, void *arg)
+#error I broke timeouts for old czmq -jg
 #endif
+
+static int tmout_cb (zloop_t *zl, int timer_id, void *arg)
 {
     timeout_t t = arg;
     cmb_t *c = t->c;
 
-    if (handle_event_tmout (c->h) < 0)
+    if (handle_event_tmout (c->h, timer_id) < 0)
         cmb_reactor_stop (c, -1);
     else
         handle_deferred (c);
     ZLOOP_RETURN(c);
 }
 
-/* see comment block in plugin.c::plugin_reactor_timeout_set() */
-static int cmb_reactor_timeout_set (void *impl, unsigned long msec)
+static int cmb_reactor_tmout_add (void *impl, unsigned long msec, bool oneshot)
 {
     cmb_t *c = impl;
-    timeout_t t = NULL;
+    int times = oneshot ? 1 : 0;
 
-    if (c->timeout)
-#if CZMQ_VERSION_MAJOR < 2
-        (void)zloop_timer_end (c->zloop, c->timeout);
-#else
-        (void)zloop_timer_end (c->zloop, c->timeout->id);
-#endif
-    if (msec > 0) {
-        if (!(t = xzmalloc (sizeof (struct timeout_struct))))
-            oom ();
-        t->c = c;
-        t->msec = msec;
-        if ((t->id = zloop_timer (c->zloop, msec, 0, cmb_timer_cb, t)) < 0)
-            err_exit ("zloop_timer");
-    }
-    if (c->timeout)
-        free (c->timeout);
-    c->timeout = t;
-    return 0;
+    return zloop_timer (c->zloop, msec, times, tmout_cb, c);
+}
+
+static void cmb_reactor_tmout_remove (void *impl, int timer_id)
+{
+    cmb_t *c = impl;
+
+    zloop_timer_end (c->zloop, timer_id);
 }
 
 static void cmb_fini (void *impl)
@@ -397,7 +386,8 @@ static const struct flux_handle_ops cmb_ops = {
     .reactor_fd_remove = cmb_reactor_fd_remove,
     .reactor_zs_add = cmb_reactor_zs_add,
     .reactor_zs_remove = cmb_reactor_zs_remove,
-    .reactor_timeout_set = cmb_reactor_timeout_set,
+    .reactor_tmout_add = cmb_reactor_tmout_add,
+    .reactor_tmout_remove = cmb_reactor_tmout_remove,
     .impl_destroy = cmb_fini,
 };
 
