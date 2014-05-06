@@ -27,6 +27,8 @@
 #define MAX_SYNC_PERIOD_SEC 30*60.0
 
 static int epoch = 0;
+static int id = -1;
+static bool armed = false;
 
 static int timeout_cb (flux_t h, void *arg)
 {
@@ -63,10 +65,16 @@ static void set_config (const char *path, kvsdir_t dir, void *arg, int errnum)
                   val, MAX_SYNC_PERIOD_SEC);
         goto done;
     }
-    if (flux_timeout_set (h, (int)(val * 1000)) < 0) { /* msec */
-        flux_log (h, LOG_ERR, "flux_timeout_set %d", (int)(val * 1000));
+    if (armed) {
+        flux_tmouthandler_remove (h, id);
+        armed = false;
+    }
+    id = flux_tmouthandler_add (h, (int)(val * 1000), false, timeout_cb, NULL);
+    if (id < 0) {
+        flux_log (h, LOG_ERR, "flux_tmouthandler_add: %s", strerror (errno));
         goto done;
     }
+    armed = true;
     flux_log (h, LOG_INFO, "heartbeat period set to %.1fs", val);
 done:
     if (key)
@@ -75,10 +83,6 @@ done:
 
 static int hbsrv_main (flux_t h, zhash_t *args)
 {
-    if (flux_tmouthandler_set (h, timeout_cb, NULL) < 0) {
-        flux_log (h, LOG_ERR, "flux_tmouthandler_set: %s", strerror (errno));
-        return -1;
-    }
     if (kvs_watch_dir (h, set_config, h, "conf.hb") < 0) {
         flux_log (h, LOG_ERR, "kvs_watch_dir conf.hb: %s", strerror (errno));
         return -1;
