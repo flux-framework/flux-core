@@ -13,6 +13,29 @@
 #include "util.h"
 #include "plugin.h"
 
+/*
+ * A basic scheduling service plugin that schedules jobs to resources.
+ * It waits for the resource service plugin to populate the kvs (under
+ * the resrc.rank hierarchy) with the discoved resources.  Then it
+ * attempts to schedule every new job submitted to the lwj kvs tree.
+ *
+ * Only cores are supported at this time.  Cores from more than one
+ * node are grabbed if needed.  Node count requests are not supported at
+ * this point.
+ *
+ * As jobs are submitted, the sched plugin looks for available cores
+ * from the registered resources.  It then allocates what cores it
+ * finds to the lwj's.  The existing wreck infrastructure is used to
+ * launch the jobs.
+ *
+ * The sched plugin increases the associated resource's allocated core
+ * count when a job begins.  When the job terminates, the allocated
+ * core count is debited.
+
+ * Jobs remain queued in the "reserved" state until they can run.
+ * There is no priority.  Jobs are scheduled in order of arrival.
+ * Completed jobs remain in the lwj kvs tree in the "completed" state.
+ */
 
 static char * ctime_iso8601_now (char *buf, size_t sz)
 {
@@ -41,6 +64,12 @@ static void _wait_for_new_dir(flux_t p, char *name)
     }
 }
 
+/*
+ * _pending_job() - determine whether a job is pending.
+ * IN:  path - the kvs job
+ * Returns: true if the job is pending
+ *          false otherwise
+ */
 static bool _pending_job (flux_t p, const char *path)
 {
     bool rval = false;
@@ -63,6 +92,15 @@ static bool _pending_job (flux_t p, const char *path)
     return rval;
 }
 
+/*
+ * _read_alloc_cores() - Read a resource's idle cores or allocate some
+ * cores
+ * IN:  path - the kvs resource
+ * IN:  alloc - if zero, just read the idle cores
+ *              if non-zero, allocate requested cores
+ * Returns:  the number of idle cores when alloc is zero
+ *           the number of cores allocated when alloc is non-zero
+ */
 static long _read_alloc_cores (flux_t p, const char *path, long alloc)
 {
     char *key = NULL;
@@ -109,6 +147,12 @@ static long _read_alloc_cores (flux_t p, const char *path, long alloc)
     return idle_cores;
 }
 
+/*
+ * _store_cores() - write a job's allocated cores to the lwj kvs
+ * IN: job - path to the lwj
+ *     path - path to the allocated resource
+ * Results in an entry of the form:  lwj.3.rank.2.cores = 4
+ */
 static void _store_cores(flux_t p, const char *job, const char *path, long alloc)
 {
     char *key = NULL;
@@ -124,6 +168,13 @@ static void _store_cores(flux_t p, const char *job, const char *path, long alloc
     free (key);
 }
 
+/*
+ * _alloc_resrcs - allocate resources to a job
+ * This includes cores from multiple ranks if needed to satisfy request.
+ * IN:  job - path to the lwj in the kvs
+ * IN:  cores - number of cores to allocate
+ * Returns: true if all requested cores were allocated.
+ */
 static bool _alloc_resrcs (flux_t p, const char *job, long cores)
 {
     bool rval = false;
@@ -177,6 +228,12 @@ static bool _alloc_resrcs (flux_t p, const char *job, long cores)
     return rval;
 }
 
+/*
+ * _allocate_job() - updates the state of a job's kvs entry to
+ * indicate launch readiness.
+ * IN: path - the job id
+ * Returns true on success
+ */
 static bool _allocate_job (flux_t p, const char *path)
 {
     bool rval = false;
@@ -213,6 +270,11 @@ static bool _allocate_job (flux_t p, const char *path)
     return rval;
 }
 
+/*
+ * _sched_job() - Find the resources for a job and run it if possible
+ * IN:  path - path to the lwj
+ * Returns true on success
+ */
 static bool _sched_job (flux_t p, const char *path)
 {
     bool rval = false;
@@ -235,6 +297,10 @@ static bool _sched_job (flux_t p, const char *path)
     return rval;
 }
 
+/*
+ * _sched_loop() - loop through the pending jobs and schedule what we can.
+ * IN:  p - flux handle
+ */
 static void _sched_loop (flux_t p)
 {
     char *key = NULL;
@@ -263,6 +329,11 @@ static void _sched_loop (flux_t p)
     kvsdir_destroy (dir);
 }
 
+/*
+ * _reclaim_resrcs() - increase the idle core count of each of a job's
+ * resources following the termination of a running job.
+ * IN: job - the job that just terminated
+ */
 static void _reclaim_resrcs(flux_t p, char *job)
 {
     char *key = NULL;
@@ -318,6 +389,16 @@ static void _reclaim_resrcs(flux_t p, char *job)
     kvsdir_destroy (dir);
 }
 
+/*
+ * _new_job_state() - callback for when a job state change is detected
+ * If the job just became pending, try to schedule it
+ * If the job just terminated, reclaim its resources and kick off a
+ * scheduling loop
+ * IN:  key - key to the new job state
+ * IN:  dir - kvsdir handle
+ * IN:  arg - flux handle
+ * IN:  errnum - error number
+ */
 static void _new_job_state (const char *key, kvsdir_t dir, void *arg, int errnum)
 {
     char *job_state = NULL;
@@ -360,6 +441,13 @@ static void _new_job_state (const char *key, kvsdir_t dir, void *arg, int errnum
     }
 }
 
+/*
+ * _new_job() - callback for when a new job is submitted to the lwj kvs
+ * IN:  key - key to the new job id
+ * IN:  dir - kvsdir handle
+ * IN:  arg - flux handle
+ * IN:  errnum - error number
+ */
 static void _new_job (const char *key, kvsdir_t dir, void *arg, int errnum)
 {
     char *key2;
@@ -371,7 +459,7 @@ static void _new_job (const char *key, kvsdir_t dir, void *arg, int errnum)
     } else if (kvs_get_int64 (p, key, &jobid) < 0) {
         flux_log (p, LOG_ERR, "new_job get %s: %s", key, strerror (errno));
     } else if (asprintf (&key2, "lwj.%lu.state", jobid - 1) < 0) {
-        flux_log (p, LOG_ERR, "allocate_job key create failed");
+        flux_log (p, LOG_ERR, "new_job key create failed");
     } else if (kvs_watch_string (p, key2, (KVSSetStringF*)_new_job_state, p)
                < 0) {
         flux_log (p, LOG_ERR, "watch lwj state: %s", strerror (errno));
@@ -380,6 +468,9 @@ static void _new_job (const char *key, kvsdir_t dir, void *arg, int errnum)
     }
 }
 
+/*
+ * _sched_main() - plugin entry point
+ */
 static int _sched_main (flux_t p, zhash_t *args)
 {
     flux_log_set_facility (p, "sched");
