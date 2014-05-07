@@ -28,6 +28,8 @@
 
 #include "reduce.h"
 
+typedef struct hwm_struct *hwm_t;
+
 struct red_struct {
     FluxSinkFn  sinkfn;
     FluxRedFn   redfn;
@@ -38,17 +40,17 @@ struct red_struct {
     int timeout; /* in msec */
     int timer_id;
     bool armed;
+    hwm_t hwm;
 };
 
-static int red_timeout (flux_t h, void *arg)
-{
-    red_t r = arg;
-    int rc = 0;
+static void timer_enable (red_t r);
+static void timer_disable (red_t r);
 
-    r->armed = false; /* it's a one-shot timer */
-    flux_red_flush (r);
-    return rc;
-}
+static void hwm_destroy (hwm_t h);
+static hwm_t hwm_create (void);
+static void hwm_acct (hwm_t h, int count, int batchnum);
+static bool hwm_flushable (hwm_t h);
+static bool hwm_valid (hwm_t h);
 
 red_t flux_red_create (flux_t h, FluxSinkFn sinkfn, FluxRedFn redfn,
                        int flags, void *arg)
@@ -61,6 +63,8 @@ red_t flux_red_create (flux_t h, FluxSinkFn sinkfn, FluxRedFn redfn,
     r->h = h;
     if (!(r->items = zlist_new ()))
         oom ();
+    if ((r->flags & FLUX_RED_HWMFLUSH))
+        r->hwm = hwm_create ();
 
     return r;
 }
@@ -68,6 +72,8 @@ red_t flux_red_create (flux_t h, FluxSinkFn sinkfn, FluxRedFn redfn,
 void flux_red_destroy (red_t r)
 {
     flux_red_flush (r);
+    if (r->hwm)
+        hwm_destroy (r->hwm);
     zlist_destroy (&r->items);
     free (r);
 }
@@ -79,16 +85,14 @@ void flux_red_flush (red_t r)
     while ((item = zlist_pop (r->items))) {
         if (r->sinkfn)
             r->sinkfn (r->h, item, r->arg);
+        else
+            ; /* presumably we don't own the items - otherwise mem leak! */
     }
-    if ((r->flags & FLUX_RED_TIMEDFLUSH)) {
-        if (r->armed) {
-            flux_tmouthandler_remove (r->h, r->timer_id);
-            r->armed = false;
-        }
-    }
+    if ((r->flags & FLUX_RED_TIMEDFLUSH))
+        timer_disable (r);
 }
 
-int flux_red_append (red_t r, void *item)
+int flux_red_append (red_t r, void *item, int batchnum)
 {
     int count;
 
@@ -96,16 +100,14 @@ int flux_red_append (red_t r, void *item)
         oom ();
     if (r->redfn)
         r->redfn (r->h, r->items, r->arg);
-    if (r->flags & FLUX_RED_AUTOFLUSH)
-        flux_red_flush (r);
-    count = zlist_size (r->items);
-    if ((r->flags & FLUX_RED_TIMEDFLUSH)) {
-        if (count > 0 && !r->armed)  {
-            r->timer_id = flux_tmouthandler_add (r->h, r->timeout, true,
-                                                 red_timeout, r);
-            r->armed = true;
-        }
+    if ((r->flags & FLUX_RED_HWMFLUSH)) {
+        hwm_acct (r->hwm, 1, batchnum);
+        if (!hwm_valid (r->hwm) || hwm_flushable (r->hwm))
+            flux_red_flush (r);
     }
+    count = zlist_size (r->items);
+    if ((r->flags & FLUX_RED_TIMEDFLUSH) && count > 0)
+        timer_enable (r);
 
     return count;
 }
@@ -113,6 +115,73 @@ int flux_red_append (red_t r, void *item)
 void flux_red_set_timeout_msec (red_t r, int msec)
 {
     r->timeout = msec;
+}
+
+static int timer_cb (flux_t h, void *arg)
+{
+    red_t r = arg;
+    int rc = 0;
+
+    r->armed = false; /* it's a one-shot timer */
+    flux_red_flush (r);
+    return rc;
+}
+
+static void timer_enable (red_t r)
+{
+    if (!r->armed) {
+        r->timer_id = flux_tmouthandler_add (r->h, r->timeout, true,
+                                             timer_cb, r);
+        r->armed = true;
+    }
+}
+
+static void timer_disable (red_t r)
+{
+    if (r->armed) {
+        flux_tmouthandler_remove (r->h, r->timer_id);
+        r->armed = false;
+    }
+}
+
+struct hwm_struct {
+    int last;
+    int cur;
+    int cur_batchnum;
+};
+
+static bool hwm_flushable (hwm_t h)
+{
+    return (h->last > 0 && h->last == h->cur);
+}
+
+static bool hwm_valid (hwm_t h)
+{
+    return (h->last > 0);
+}
+
+static hwm_t hwm_create (void)
+{
+    hwm_t h = xzmalloc (sizeof *h);
+    return h;
+}
+
+static void hwm_destroy (hwm_t h)
+{
+    free (h);
+}
+
+static void hwm_acct (hwm_t h, int count, int batchnum)
+{
+    if (batchnum == h->cur_batchnum - 1)
+        h->last++;
+    else if (batchnum == h->cur_batchnum)
+        h->cur++;
+    else if (batchnum > h->cur_batchnum) {
+        h->last = h->cur;
+        h->cur = 1;
+        h->cur_batchnum = batchnum;
+    }
 }
 
 /*

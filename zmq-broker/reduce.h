@@ -1,9 +1,15 @@
 typedef struct red_struct *red_t;
 
+/* Select the way that the sink function is called.
+ * If no flags, sink is only called via flux_red_flush ().
+ * If TIMEDFLUSH, flush timer starts on first append when empty.
+ * If HWMFLUSH, initially every append is flushed; after batchnum
+ * is incremented, hwm is calculated of previous batch and flush
+ * occurs when it is reached.
+ */
 enum {
-    FLUX_RED_AUTOFLUSH = 1, /* immediately sink after append */
-    FLUX_RED_TIMEDFLUSH = 2,/* sink after first item aged past timeout */
-    FLUX_RED_ADAPTFLUSH = 4,/* timeout followed by hwm-triggered flush */
+    FLUX_RED_TIMEDFLUSH = 1,
+    FLUX_RED_HWMFLUSH = 2,
 };
 
 /* Reduction function will be called every time an item is appended
@@ -27,10 +33,10 @@ void flux_red_flush (red_t r);
 
 /* Append an item to the reduction handle.
  * The reduction function is immediately called.
- * If FLUX_RED_AUTOFLUSH is set, the sink function is then called.
+ * The sink function is called according to flags.
  * Returns the number of items queued in the handle (after reduction).
  */
-int flux_red_append (red_t r, void *item);
+int flux_red_append (red_t r, void *item, int batchnum);
 
 void flux_red_set_timeout_msec (red_t r, int msec);
 

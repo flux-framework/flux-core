@@ -82,7 +82,7 @@ static red_t rcache_add (ctx_t *ctx, const char *name)
         r = flux_red_create (h, mon_sink, mon_reduce, FLUX_RED_TIMEDFLUSH, ctx);
         flux_red_set_timeout_msec (r, red_timeout_msec);
     } else {
-        r = flux_red_create (h, mon_sink, mon_reduce, FLUX_RED_AUTOFLUSH, ctx);
+        r = flux_red_create (h, mon_sink, mon_reduce, FLUX_RED_HWMFLUSH, ctx);
     }
     zhash_insert (ctx->rcache, name, r);
     zhash_freefn (ctx->rcache, name, (zhash_free_fn *)flux_red_destroy);
@@ -95,17 +95,19 @@ static int push_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     JSON request = NULL;
     const char *name;
     red_t r;
+    int epoch;
     int rc = 0;
 
     if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
-            || !Jget_str (request, "name", &name)) {
+            || !Jget_str (request, "name", &name)
+            || !Jget_int (request, "epoch", &epoch)) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
     if (!(r = rcache_lookup (ctx, name)))
         r = rcache_add (ctx, name);
     Jget (request);
-    flux_red_append (r, request);
+    flux_red_append (r, request, epoch);
 done:
     Jput (request);
     return rc;
@@ -126,7 +128,7 @@ static void poll_one (ctx_t *ctx, const char *name, const char *tag)
         Jput (res);
         if (!(r = rcache_lookup (ctx, name)))
             r = rcache_add (ctx, name);
-        flux_red_append (r, o);
+        flux_red_append (r, o, ctx->epoch);
     }
 }
 
