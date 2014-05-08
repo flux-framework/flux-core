@@ -10,7 +10,7 @@ LDFLAGS +=          -L$(topdir)/lib \
 		    -L$(topdir)/zutil \
 		    -Wl,-rpath=$(topdir)/lib
 
-LIBADD +=           $(topdir)/util/libutil.a $(topdir)/zutil/libzutil.a -lcmb -lczmq -ljson -lzmq -luuid
+LIBADD +=           $(topdir)/util/libutil.a $(topdir)/zutil/libzutil.a -lcmb -lczmq -ljson -lzmq
 CLEANFILES :=       $(programs) rexec-config.h
 
 wrexecd_SOURCES :=  wrexecd.c luastack.c

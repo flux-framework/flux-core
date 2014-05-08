@@ -7,7 +7,7 @@ LDFLAGS = -Wl,-rpath,$(LIBDIR)
 
 export CFLAGS LDFLAGS
 
-LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lutil -luuid
+LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lutil
 
 BUILD = tenc tpmikvs tkvswatch tcommit tasyncsock tmunge
 

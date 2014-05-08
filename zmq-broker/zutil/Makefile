@@ -17,6 +17,6 @@ tests: libzutil.a $(TEST_programs)
 
 %-test : %-test.o
 	$(CC) -o $@ $< $(CFLAGS) $(LDFLAGS) \
-	 libzutil.a ../util/libutil.a -ljson -lczmq -lssl -luuid -lcmb
+	 libzutil.a ../util/libutil.a -ljson -lczmq -lcmb
 clean:
 	rm -f *.a *.o $(TEST_programs)
