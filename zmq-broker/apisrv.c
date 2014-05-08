@@ -45,7 +45,7 @@ typedef struct {
     ctx_t *ctx;
     zhash_t *disconnect_notify;
     zlist_t *subscriptions;
-    char *uuid;
+    zuuid_t *uuid;
     int cfd_id;
     struct ucred ucred;
 } client_t;
@@ -82,7 +82,8 @@ static client_t * client_create (ctx_t *ctx, int fd)
 
     c = xzmalloc (sizeof (*c));
     c->fd = fd;
-    c->uuid = uuid_generate_str ();
+    if (!(c->uuid = zuuid_new ()))
+        oom ();
     c->ctx = ctx;
     if (!(c->disconnect_notify = zhash_new ()))
         oom ();
@@ -176,7 +177,7 @@ static int notify_srv (const char *key, void *item, void *arg)
 #endif
     if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* delimiter frame */
         oom ();
-    if (zmsg_pushstr (zmsg, c->uuid) < 0)
+    if (zmsg_pushstr (zmsg, zuuid_str (c->uuid)) < 0)
         oom ();
 
     flux_request_sendmsg (c->ctx->h, &zmsg);
@@ -199,7 +200,7 @@ static void client_destroy (client_t *c)
         zlist_destroy (&c->subscriptions);
     }
     if (c->uuid)
-        free (c->uuid);
+        zuuid_destroy (&c->uuid);
     if (c->fd != -1)
         close (c->fd);
 
@@ -242,7 +243,7 @@ static int client_read (ctx_t *ctx, client_t *c)
             } else
                 free (tag);
         }
-        if (zmsg_pushstr (zmsg, c->uuid) < 0)
+        if (zmsg_pushstr (zmsg, zuuid_str (c->uuid)) < 0)
             oom ();
         flux_request_sendmsg (ctx->h, &zmsg);
     }
@@ -298,7 +299,7 @@ static int response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 
     c = zlist_first (ctx->clients);
     while (c && *zmsg) {
-        if (!strcmp (uuid, c->uuid)) {
+        if (!strcmp (uuid, zuuid_str (c->uuid))) {
             if (zmsg_send_fd_typemask (c->fd, FLUX_MSGTYPE_RESPONSE, zmsg) < 0)
                 zmsg_destroy (zmsg);
             break;

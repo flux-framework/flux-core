@@ -15,7 +15,6 @@
 #include <limits.h>
 #include <openssl/evp.h>
 #include <openssl/sha.h>
-#include <uuid/uuid.h>
 #include <assert.h>
 
 #include "util.h"
@@ -169,18 +168,6 @@ char *argv_concat (int argc, char *argv[])
             strcat (s, " "); 
     }
     return s; 
-}
-
-char *uuid_generate_str (void)
-{
-    char s[sizeof (uuid_t) * 2 + 1];
-    uuid_t uuid;
-    int i;
-
-    uuid_generate (uuid);
-    for (i = 0; i < sizeof (uuid_t); i++)
-        snprintf (s + i*2, sizeof (s) - i*2, "%-.2x", uuid[i]);
-    return xstrdup (s);
 }
 
 static void compute_href (const void *dat, int len, href_t href)

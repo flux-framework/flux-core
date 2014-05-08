@@ -24,7 +24,7 @@ export CFLAGS LDFLAGS
 
 LIBUTIL = util/libutil.a
 LIBZUTIL = zutil/libzutil.a
-LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -luuid -lutil -lm \
+LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -lutil -lm \
 	-lmunge
 LDADD_SRV = -pthread -rdynamic $(LDADD_CLI) -ldl
 

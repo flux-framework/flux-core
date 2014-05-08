@@ -30,10 +30,6 @@ int setenvf (const char *name, int overwrite, const char *fmt, ...);
  */
 char *argv_concat (int argc, char *argv[]);
 
-/* Generate a UUID string.  Caller must free.
- */
-char *uuid_generate_str (void);
-
 /* Fill 'href' with ASCII SHA1 hash of serialized JSON object.
  */
 void compute_json_href (json_object *o, href_t href);

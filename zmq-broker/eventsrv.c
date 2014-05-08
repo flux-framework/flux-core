@@ -245,7 +245,7 @@ static int eventsrv_main (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
     int rc = -1;
-    char *s;
+    zuuid_t *uuid;
 
     /* Read global configuration once.
      *   (Handling live change is courting deadlock)
@@ -255,13 +255,15 @@ static int eventsrv_main (flux_t h, zhash_t *args)
     (void)kvs_get_boolean (h, "conf.event.mcast-all-publish",
                            &ctx->mcast_all_publish);
 
+
     /* Create a local PUB socket relay with an inproc:// endpoint
      *   Other endpoints will be added as needed by event.geturi requests.
      */
-    s = uuid_generate_str ();
-    if (asprintf (&ctx->local_inproc_uri, "inproc://%s", s) < 0)
+    if (!(uuid = zuuid_new ()))
         oom ();
-    free (s);
+    if (asprintf (&ctx->local_inproc_uri, "inproc://%s", zuuid_str (uuid)) < 0)
+        oom ();
+    zuuid_destroy (&uuid);
     if (!(ctx->local_zs_pub = zsocket_new (ctx->zctx, ZMQ_PUB))) {
         flux_log (h, LOG_ERR, "zsocket_new: %s", strerror (errno));
         goto done;

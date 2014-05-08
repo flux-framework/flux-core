@@ -270,21 +270,25 @@ int main (int argc, char *argv[])
 
 static int load_plugin (ctx_t *ctx, char *name)
 {
-    char *uuid = uuid_generate_str ();
+    zuuid_t *uuid;
     plugin_ctx_t p;
     int rc = -1;
 
-    if ((p = plugin_load (ctx->h, ctx->plugin_path, name, uuid,
+    if (!(uuid = zuuid_new ()))
+        oom ();
+
+    if ((p = plugin_load (ctx->h, ctx->plugin_path, name, zuuid_str (uuid),
                           ctx->plugin_args))) {
         if (zhash_insert (ctx->loaded_plugins, name, p) < 0) {
             plugin_unload (p);
             goto done;
         }
-        route_add (ctx->rctx, name, uuid, NULL, ROUTE_FLAGS_PRIVATE);
+        route_add (ctx->rctx, name, zuuid_str (uuid), NULL,
+                   ROUTE_FLAGS_PRIVATE);
         rc = 0;
     }
 done:
-    free (uuid);
+    zuuid_destroy (&uuid);
     return rc;
 }
 
