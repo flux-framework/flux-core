@@ -84,7 +84,7 @@
  * misplaced.
  *
  * PLAIN is just a toy, perhaps useful when studying the performance
- * impact of the other modes.  We generate a base64 uuid as the clear
+ * impact of the other modes.  We generate a uuid as the clear
  * password when we flux-keygen it, then store it in the clear in your
  * .flux directory.  It traverses the wire in the clear between Flux nodes.
  * Do not use with the assumption that it buys you any meaningful security.

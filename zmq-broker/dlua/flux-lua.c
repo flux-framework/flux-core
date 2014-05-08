@@ -975,7 +975,7 @@ static int iowatcher_zio_cb (zio_t zio, json_object *o, void *arg)
     if (o) {
         int len;
         uint8_t *pp;
-        util_json_object_get_base64 (o, "data", &pp, &len);
+        util_json_object_get_data (o, "data", &pp, &len);
         if (len > 0) {
             json_object *s = json_object_new_string ((char *)pp);
             json_object_object_add (o, "data", s);

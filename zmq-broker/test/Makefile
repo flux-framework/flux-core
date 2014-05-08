@@ -7,9 +7,9 @@ LDFLAGS = -Wl,-rpath,$(LIBDIR)
 
 export CFLAGS LDFLAGS
 
-LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -lutil -luuid
+LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lutil -luuid
 
-BUILD = tbase64 tpmikvs tkvswatch tcommit tasyncsock tmunge
+BUILD = tenc tpmikvs tkvswatch tcommit tasyncsock tmunge
 
 all: $(BUILD)
 
@@ -31,7 +31,7 @@ check:
 		fi \
 	done
 
-tbase64: tbase64.o
+tenc: tenc.o
 	$(CC) $(LDFLAGS) -o $@ $< $(LDADD_CLI)
 
 tpmikvs: tpmikvs.o

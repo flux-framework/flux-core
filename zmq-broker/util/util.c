@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
-#include <sys/time.h>
+#include <time.h>
 #include <sys/resource.h>
 #include <json/json.h>
 #include <stdarg.h>
@@ -13,9 +13,8 @@
 #include <netdb.h>
 #include <math.h>
 #include <limits.h>
-#include <openssl/evp.h>
-#include <openssl/sha.h>
 #include <assert.h>
+#include <zmq.h>
 
 #include "util.h"
 #include "log.h"
@@ -256,28 +255,25 @@ void util_json_object_add_string (json_object *o, char *name, const char *s)
     json_object_object_add (o, name, no);
 }
 
-void util_json_object_add_base64 (json_object *o, char *name,
-                                  uint8_t *dat, int len)
+/* Z85 (1 char pad len + data + pad)
+ */
+void util_json_object_add_data (json_object *o, char *name,
+                                uint8_t *dat, int len)
 {
-    EVP_ENCODE_CTX ectx;
-    size_t size = len*2;
-    uint8_t *out;
-    int outlen = 0;
-    int tlen = 0;
+    int r = (len + 1) % 4;
+    int padlen = r > 0 ? 4 - r : 0;
+    int dlen = len + 1 + padlen;
+    uint8_t *d = xzmalloc (dlen);
+    char *p, *s = xzmalloc (dlen * 1.25 + 1);
 
-    if (size < 64)
-        size = 64;
-    out = xzmalloc (size + 1);
-    EVP_EncodeInit (&ectx);
-    EVP_EncodeUpdate (&ectx, out, &outlen, dat, len);
-    tlen += outlen;
-    EVP_EncodeFinal (&ectx, out + tlen, &outlen);
-    tlen += outlen;
-    assert (tlen < size);
-    if (out[tlen - 1] == '\n')
-        out[tlen - 1] = '\0';
-    util_json_object_add_string (o, name, (char *)out);
-    free (out);
+    d[0] = padlen;
+    memcpy (&d[1], dat, len);
+    p = zmq_z85_encode (s, d, dlen);
+    assert (p != NULL);
+
+    util_json_object_add_string (o, name, s);
+    free (s);
+    free (d);
 }
 
 void util_json_object_add_timeval (json_object *o, char *name,
@@ -337,27 +333,25 @@ int util_json_object_get_string (json_object *o, char *name, const char **sp)
     return 0;
 }
 
-int util_json_object_get_base64 (json_object *o, char *name,
-                                 uint8_t **datp, int *lenp)
+/* Z85 (1 char pad len + data + pad)
+ */
+int util_json_object_get_data (json_object *o, char *name,
+                               uint8_t **datp, int *lenp)
 {
     const char *s;
-    int slen;
-    EVP_ENCODE_CTX ectx;
-    uint8_t *out = NULL;
-    int outlen = 0;
-    int tlen = 0;
+    int dlen, len;
+    uint8_t *d, *p;
 
-    if (util_json_object_get_string (o, name, &s) == 0) {
-        slen = strlen (s);
-        out = xzmalloc (slen);
-        EVP_DecodeInit (&ectx);
-        EVP_DecodeUpdate (&ectx, out, &outlen, (uint8_t *)s, slen);
-        tlen += outlen;
-        EVP_DecodeFinal (&ectx, out + tlen, &outlen);
-        tlen += outlen;
-    }
-    *datp = out;
-    *lenp = tlen;    
+    if (util_json_object_get_string (o, name, &s) == -1)
+        return -1;
+    dlen = strlen (s) * 0.8;
+    d = xzmalloc (dlen);
+    p = zmq_z85_decode (d, (char *)s);
+    assert (p != NULL);
+    len = dlen - 1 - d[0];
+    memmove (&d[0], &d[1], len);
+    *datp = d;
+    *lenp = len;    
     return 0;
 }
 
