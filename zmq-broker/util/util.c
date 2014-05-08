@@ -170,24 +170,6 @@ char *argv_concat (int argc, char *argv[])
     return s; 
 }
 
-static void compute_href (const void *dat, int len, href_t href)
-{
-    unsigned char raw[SHA_DIGEST_LENGTH];
-    SHA_CTX ctx;
-    int i;
-
-    assert(SHA_DIGEST_LENGTH*2 + 1 == sizeof (href_t));
-
-    if (SHA1_Init (&ctx) == 0)
-        err_exit ("%s: SHA1_Init", __FUNCTION__);
-    if (SHA1_Update (&ctx, dat, len) == 0)
-        err_exit ("%s: SHA1_Update", __FUNCTION__);
-    if (SHA1_Final (raw, &ctx) == 0)
-        err_exit ("%s: SHA1_Final", __FUNCTION__);
-    for (i = 0; i < SHA_DIGEST_LENGTH; i++)
-        sprintf (&href[i*2], "%02x", (unsigned int)raw[i]);
-}
-
 int util_json_size (json_object *o)
 {
     const char *s = json_object_to_json_string (o);
@@ -226,13 +208,6 @@ void util_json_decode (json_object **op, char *zbuf, unsigned int zlen)
     o = json_tokener_parse_ex (tok, s, s_len);
     json_tokener_free (tok); 
     *op = o;
-}
-
-void compute_json_href (json_object *o, href_t href)
-{
-    const char *s = json_object_to_json_string (o);
-
-    compute_href (s, strlen (s), href);
 }
 
 void util_json_object_add_boolean (json_object *o, char *name, bool val)

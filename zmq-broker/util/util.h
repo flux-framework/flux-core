@@ -1,8 +1,6 @@
 #ifndef _HAVE_CMB_UTIL_H
 #define _HAVE_CMB_UTIL_H
 
-typedef char href_t[41];
-
 /* 's' contains a comma-delimited list of integers.
  * Parse and return ints in an array (iap), and its length in lenp.
  * Caller must free.
@@ -29,10 +27,6 @@ int setenvf (const char *name, int overwrite, const char *fmt, ...);
 /* Return a string with argcv elements space-delimited.  Caller must free.
  */
 char *argv_concat (int argc, char *argv[]);
-
-/* Fill 'href' with ASCII SHA1 hash of serialized JSON object.
- */
-void compute_json_href (json_object *o, href_t href);
 
 /* Calculate encoded size of JSON object.
  */
