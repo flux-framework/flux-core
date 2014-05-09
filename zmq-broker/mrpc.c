@@ -38,6 +38,7 @@
 
 struct flux_mrpc_struct {
     flux_t h;
+    zuuid_t *uuid;
     char *path;
     char *dest;
     int nprocs;
@@ -94,7 +95,9 @@ flux_mrpc_t flux_mrpc_create (flux_t h, const char *dest)
         goto error;
     }
     f->nprocs = hostlist_count (f->hl);
-    if (asprintf (&f->path, "mrpc.%s", uuid_generate_str ()) < 0)
+    if (!(f->uuid = zuuid_new ()))
+        oom ();
+    if (asprintf (&f->path, "mrpc.%s", zuuid_str (f->uuid)) < 0)
         oom ();
 
     return f;
@@ -116,6 +119,8 @@ void flux_mrpc_destroy (flux_mrpc_t f)
 #endif
         free (f->path);
     }
+    if (f->uuid)
+        zuuid_destroy (&f->uuid);
     if (f->itr)
         hostlist_iterator_destroy (f->itr);
     if (f->hl)

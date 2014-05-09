@@ -23,7 +23,7 @@ void usage (void)
 {
     fprintf (stderr, 
 "Usage: flux-copy src dst\n"
-"Content stored in the KVS will be base64 encoded.\n"
+"Content stored in the KVS will be z85-encoded.\n"
 "src and dst can be:\n"
 "       \"-\"                     stdin/stdout\n"
 "       name including \"/\"      file\n"
@@ -75,7 +75,7 @@ int main (int argc, char *argv[])
         json_object *o;
         if (kvs_get (h, src, &o) < 0)
             err_exit ("kvs_get %s", src);
-        if (util_json_object_get_base64 (o, "data", &buf, &len) < 0)
+        if (util_json_object_get_data (o, "data", &buf, &len) < 0)
             err_exit ("%s: JSON decode error", src);
     }
 
@@ -94,7 +94,7 @@ int main (int argc, char *argv[])
             err_exit ("write %s", dst);
     } else {
         json_object *o = util_json_object_new_object ();
-        util_json_object_add_base64 (o, "data", buf, len);
+        util_json_object_add_data (o, "data", buf, len);
         if (kvs_put (h, dst, o) < 0)
             err_exit ("kvs_put %s", dst);
         json_object_put (o);

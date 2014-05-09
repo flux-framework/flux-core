@@ -62,6 +62,8 @@
 #include "log.h"
 #include "waitqueue.h"
 
+typedef char href_t[41];
+
 /* Large values are stored in dirents by reference; small values by value.
  *  (-1 = all by reference, 0 = all by value)
  */
@@ -406,8 +408,18 @@ static bool store_isdirty (ctx_t *ctx, const href_t ref, wait_t w)
 static void store (ctx_t *ctx, json_object *o, href_t ref)
 {
     hobj_t *hp; 
+    zdigest_t *zd;
+    const char *s = json_object_to_json_string (o);
+    const char *zdstr;
 
-    compute_json_href (o, ref);
+    if (!(zd = zdigest_new ()))
+        oom ();
+    zdigest_update (zd, (byte *)s, strlen (s));
+    zdstr = zdigest_string (zd);
+    assert (zdstr != NULL); /* indicates czmq built without crypto? */
+    assert (sizeof (href_t) == strlen (zdstr) + 1);
+    memcpy (ref, zdstr, strlen (zdstr) + 1);
+    zdigest_destroy (&zd);
 
     if ((hp = zhash_lookup (ctx->store, ref))) {
         if (!hobj_update (ctx, hp, o))

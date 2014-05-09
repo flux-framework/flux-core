@@ -84,7 +84,7 @@
  * misplaced.
  *
  * PLAIN is just a toy, perhaps useful when studying the performance
- * impact of the other modes.  We generate a base64 uuid as the clear
+ * impact of the other modes.  We generate a uuid as the clear
  * password when we flux-keygen it, then store it in the clear in your
  * .flux directory.  It traverses the wire in the clear between Flux nodes.
  * Do not use with the assumption that it buys you any meaningful security.
@@ -585,11 +585,16 @@ static int genpasswd (flux_sec_t c, const char *user, bool force, bool verbose)
 {
     struct stat sb;
     zhash_t *passwds = NULL;
-    char *passwd = uuid_generate_str ();
+    char *passwd;
+    zuuid_t *uuid;
     mode_t old_mask;
     int rc = -1;
 
     /* XXX c->lock held */
+
+    if (!(uuid = zuuid_new ()))
+        oom ();
+    passwd = zuuid_str (uuid);
 
     if (force)
         (void)unlink (c->passwd_file);
@@ -616,6 +621,8 @@ done:
         zhash_destroy (&passwds);
     if (passwd)
         free (passwd);
+    if (uuid)
+        zuuid_destroy (&uuid);
     return rc;
 }
 #endif

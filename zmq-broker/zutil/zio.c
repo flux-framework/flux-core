@@ -844,7 +844,7 @@ int zio_json_decode (json_object *o, void **pp, bool *eofp)
     if (o) {
         if (util_json_object_get_boolean (o, "eof", eofp) == 0)
             rc = 0;
-        if (util_json_object_get_base64 (o, "data", (uint8_t **) pp, &len) == 0)
+        if (util_json_object_get_data (o, "data", (uint8_t **) pp, &len) == 0)
             rc = len; 
     }
     return rc;
@@ -855,7 +855,7 @@ json_object *zio_json_encode (void *p, int len, bool eof)
     json_object *o = util_json_object_new_object ();
 
     if (len && p)
-        util_json_object_add_base64 (o, "data", (uint8_t *) p, len);
+        util_json_object_add_data (o, "data", (uint8_t *) p, len);
     if (eof)
         util_json_object_add_boolean (o, "eof", 1);
     return (o);

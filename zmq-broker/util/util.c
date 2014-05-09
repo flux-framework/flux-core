@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
-#include <sys/time.h>
+#include <time.h>
 #include <sys/resource.h>
 #include <json/json.h>
 #include <stdarg.h>
@@ -13,10 +13,8 @@
 #include <netdb.h>
 #include <math.h>
 #include <limits.h>
-#include <openssl/evp.h>
-#include <openssl/sha.h>
-#include <uuid/uuid.h>
 #include <assert.h>
+#include <zmq.h>
 
 #include "util.h"
 #include "log.h"
@@ -171,36 +169,6 @@ char *argv_concat (int argc, char *argv[])
     return s; 
 }
 
-char *uuid_generate_str (void)
-{
-    char s[sizeof (uuid_t) * 2 + 1];
-    uuid_t uuid;
-    int i;
-
-    uuid_generate (uuid);
-    for (i = 0; i < sizeof (uuid_t); i++)
-        snprintf (s + i*2, sizeof (s) - i*2, "%-.2x", uuid[i]);
-    return xstrdup (s);
-}
-
-static void compute_href (const void *dat, int len, href_t href)
-{
-    unsigned char raw[SHA_DIGEST_LENGTH];
-    SHA_CTX ctx;
-    int i;
-
-    assert(SHA_DIGEST_LENGTH*2 + 1 == sizeof (href_t));
-
-    if (SHA1_Init (&ctx) == 0)
-        err_exit ("%s: SHA1_Init", __FUNCTION__);
-    if (SHA1_Update (&ctx, dat, len) == 0)
-        err_exit ("%s: SHA1_Update", __FUNCTION__);
-    if (SHA1_Final (raw, &ctx) == 0)
-        err_exit ("%s: SHA1_Final", __FUNCTION__);
-    for (i = 0; i < SHA_DIGEST_LENGTH; i++)
-        sprintf (&href[i*2], "%02x", (unsigned int)raw[i]);
-}
-
 int util_json_size (json_object *o)
 {
     const char *s = json_object_to_json_string (o);
@@ -239,13 +207,6 @@ void util_json_decode (json_object **op, char *zbuf, unsigned int zlen)
     o = json_tokener_parse_ex (tok, s, s_len);
     json_tokener_free (tok); 
     *op = o;
-}
-
-void compute_json_href (json_object *o, href_t href)
-{
-    const char *s = json_object_to_json_string (o);
-
-    compute_href (s, strlen (s), href);
 }
 
 void util_json_object_add_boolean (json_object *o, char *name, bool val)
@@ -294,28 +255,25 @@ void util_json_object_add_string (json_object *o, char *name, const char *s)
     json_object_object_add (o, name, no);
 }
 
-void util_json_object_add_base64 (json_object *o, char *name,
-                                  uint8_t *dat, int len)
+/* Z85 (1 char pad len + data + pad)
+ */
+void util_json_object_add_data (json_object *o, char *name,
+                                uint8_t *dat, int len)
 {
-    EVP_ENCODE_CTX ectx;
-    size_t size = len*2;
-    uint8_t *out;
-    int outlen = 0;
-    int tlen = 0;
+    int r = (len + 1) % 4;
+    int padlen = r > 0 ? 4 - r : 0;
+    int dlen = len + 1 + padlen;
+    uint8_t *d = xzmalloc (dlen);
+    char *p, *s = xzmalloc (dlen * 1.25 + 1);
 
-    if (size < 64)
-        size = 64;
-    out = xzmalloc (size + 1);
-    EVP_EncodeInit (&ectx);
-    EVP_EncodeUpdate (&ectx, out, &outlen, dat, len);
-    tlen += outlen;
-    EVP_EncodeFinal (&ectx, out + tlen, &outlen);
-    tlen += outlen;
-    assert (tlen < size);
-    if (out[tlen - 1] == '\n')
-        out[tlen - 1] = '\0';
-    util_json_object_add_string (o, name, (char *)out);
-    free (out);
+    d[0] = padlen;
+    memcpy (&d[1], dat, len);
+    p = zmq_z85_encode (s, d, dlen);
+    assert (p != NULL);
+
+    util_json_object_add_string (o, name, s);
+    free (s);
+    free (d);
 }
 
 void util_json_object_add_timeval (json_object *o, char *name,
@@ -375,27 +333,25 @@ int util_json_object_get_string (json_object *o, char *name, const char **sp)
     return 0;
 }
 
-int util_json_object_get_base64 (json_object *o, char *name,
-                                 uint8_t **datp, int *lenp)
+/* Z85 (1 char pad len + data + pad)
+ */
+int util_json_object_get_data (json_object *o, char *name,
+                               uint8_t **datp, int *lenp)
 {
     const char *s;
-    int slen;
-    EVP_ENCODE_CTX ectx;
-    uint8_t *out = NULL;
-    int outlen = 0;
-    int tlen = 0;
+    int dlen, len;
+    uint8_t *d, *p;
 
-    if (util_json_object_get_string (o, name, &s) == 0) {
-        slen = strlen (s);
-        out = xzmalloc (slen);
-        EVP_DecodeInit (&ectx);
-        EVP_DecodeUpdate (&ectx, out, &outlen, (uint8_t *)s, slen);
-        tlen += outlen;
-        EVP_DecodeFinal (&ectx, out + tlen, &outlen);
-        tlen += outlen;
-    }
-    *datp = out;
-    *lenp = tlen;    
+    if (util_json_object_get_string (o, name, &s) == -1)
+        return -1;
+    dlen = strlen (s) * 0.8;
+    d = xzmalloc (dlen);
+    p = zmq_z85_decode (d, (char *)s);
+    assert (p != NULL);
+    len = dlen - 1 - d[0];
+    memmove (&d[0], &d[1], len);
+    *datp = d;
+    *lenp = len;    
     return 0;
 }
 

@@ -35,10 +35,6 @@ char *zmsg_route_str (zmsg_t *zmsg, int skiphops);
 int zmsg_send_unrouter (zmsg_t **zmsg, void *sock, const char *id, const char *gw);
 zmsg_t *zmsg_recv_unrouter (void *sock);
 
-/* Send a copy of zmsg to sock.
- */
-int zmsg_cc (zmsg_t *zmsg, void *sock);
-
 /* Return the number of non-nil routing frames in the message.
  */
 int zmsg_hopcount (zmsg_t *zmsg);

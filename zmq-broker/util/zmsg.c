@@ -218,17 +218,6 @@ zmsg_t *zmsg_recv_unrouter (void *sock)
     return zmsg;
 }
 
-int zmsg_cc (zmsg_t *zmsg, void *sock)
-{
-    zmsg_t *cpy;
-
-    if (!zmsg)
-        return 0;
-    if (!(cpy = zmsg_dup (zmsg)))
-        err_exit ("zmsg_dup");
-    return zmsg_send (&cpy, sock);
-}
-
 int zmsg_hopcount (zmsg_t *zmsg)
 {
     int count = 0;

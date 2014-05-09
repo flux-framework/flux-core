@@ -1,8 +1,6 @@
 #ifndef _HAVE_CMB_UTIL_H
 #define _HAVE_CMB_UTIL_H
 
-typedef char href_t[41];
-
 /* 's' contains a comma-delimited list of integers.
  * Parse and return ints in an array (iap), and its length in lenp.
  * Caller must free.
@@ -30,20 +28,12 @@ int setenvf (const char *name, int overwrite, const char *fmt, ...);
  */
 char *argv_concat (int argc, char *argv[]);
 
-/* Generate a UUID string.  Caller must free.
- */
-char *uuid_generate_str (void);
-
-/* Fill 'href' with ASCII SHA1 hash of serialized JSON object.
- */
-void compute_json_href (json_object *o, href_t href);
-
 /* Calculate encoded size of JSON object.
  */
 int util_json_size (json_object *o);
 
 /* JSON helpers
- * N.B. for get_base64(): caller must free returned data if non-NULL.
+ * N.B. for get_data(): caller must free returned data if non-NULL.
  */
 json_object *util_json_object_new_object (void);
 void util_json_object_add_boolean (json_object *o, char *name, bool val);
@@ -51,7 +41,7 @@ void util_json_object_add_double (json_object *o, char *name, double n);
 void util_json_object_add_int (json_object *o, char *name, int i);
 void util_json_object_add_int64 (json_object *o, char *name, int64_t i);
 void util_json_object_add_string (json_object *o, char *name, const char *s);
-void util_json_object_add_base64 (json_object *o, char *name,
+void util_json_object_add_data (json_object *o, char *name,
                                   uint8_t *dat, int len);
 void util_json_object_add_timeval (json_object *o, char *name,
                                    struct timeval *tvp);
@@ -61,7 +51,7 @@ int util_json_object_get_double (json_object *o, char *name, double *dp);
 int util_json_object_get_int (json_object *o, char *name, int *ip);
 int util_json_object_get_int64 (json_object *o, char *name, int64_t *ip);
 int util_json_object_get_string (json_object *o, char *name, const char **sp);
-int util_json_object_get_base64 (json_object *o, char *name,
+int util_json_object_get_data (json_object *o, char *name,
                                  uint8_t **datp, int *lenp);
 int util_json_object_get_timeval (json_object *o, char *name,
                                   struct timeval *tvp);

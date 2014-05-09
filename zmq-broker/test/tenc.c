@@ -1,4 +1,4 @@
-/* tbase64.c - encode/decode data on stdin/stdout as zmq encapsulated json */
+/* tenc.c - encode/decode data on stdin/stdout as zmq encapsulated json */
 
 #include <sys/types.h>
 #include <sys/time.h>
@@ -25,7 +25,7 @@ static const struct option longopts[] = {
    {"decode",   no_argument,        0, 'd'},
    {"dump-zmq", no_argument,        0, 'Z'},
    {"dump-json", no_argument,       0, 'J'},
-   {"dump-base64", no_argument,     0, 'B'},
+   {"dump-enc", no_argument,     0, 'B'},
    {0, 0, 0, 0},
 };
 
@@ -36,7 +36,7 @@ json_object *buf_to_json (int seq, uint8_t *buf, int len)
 
     util_json_object_add_int (o, "seq", seq);
     util_json_object_add_int (o, "len", len);
-    util_json_object_add_base64 (o, "dat", buf, len);
+    util_json_object_add_data (o, "dat", buf, len);
     return o;
 }
 
@@ -46,14 +46,14 @@ void json_to_buf (json_object *o, int *seqp, uint8_t **bufp, int *lenp)
 
     if (util_json_object_get_int (o, "seq", seqp) < 0
             || util_json_object_get_int (o, "len", &len) < 0
-            || util_json_object_get_base64 (o, "dat", bufp, lenp) < 0
+            || util_json_object_get_data (o, "dat", bufp, lenp) < 0
             || len != *lenp) {
         fprintf (stderr, "error decoding json\n");
         exit (1);
     }
 }
 
-const char *json_to_base64 (json_object *o)
+const char *json_to_data (json_object *o)
 {
     const char *s;
 
@@ -93,8 +93,8 @@ zmsg_t *json_to_zmsg (json_object *o)
 void usage (void)
 {
     fprintf (stderr,
-"Usage: tbase64 --encode\n"
-"       tbase64 --decode [--dump-zmq|--dump-json|--dump-base64]\n"
+"Usage: tenc --encode\n"
+"       tenc --decode [--dump-zmq|--dump-json|--dump-enc]\n"
 );
     exit (1);
 }
@@ -151,7 +151,7 @@ void decode (bool Zopt, bool Jopt, bool Bopt)
         } else {
             o = zmsg_to_json (zmsg);
             if (Bopt) {
-                s = json_to_base64 (o);
+                s = json_to_data (o);
                 printf ("%s\n", s);
             } else if (Jopt) {
                 s = json_object_to_json_string (o);
