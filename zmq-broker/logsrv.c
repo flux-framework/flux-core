@@ -45,10 +45,12 @@ typedef struct {
     int log_persist_level;
     bool disabled;
     flux_t h;
+    bool timer_armed;
 } ctx_t;
 
 static void add_backlog (ctx_t *ctx, json_object *o);
 static void process_backlog (ctx_t *ctx);
+static int timeout_cb (flux_t h, void *arg);
 
 static void freectx (ctx_t *ctx)
 {
@@ -477,8 +479,15 @@ static int msg_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 
     if (level <= ctx->log_persist_level || hopcount > 0) {
         add_backlog (ctx, o);
-        if (!flux_timeout_isset (ctx->h))
-            flux_timeout_set (ctx->h, ctx->log_reduction_timeout_msec);
+        if (!ctx->timer_armed) {
+            if (flux_tmouthandler_add (h, ctx->log_reduction_timeout_msec,
+                                       true, timeout_cb, ctx) < 0) {
+                flux_log (h, LOG_ERR, "flux_tmouthandler_add: %s",
+                          strerror (errno));
+                goto done;
+            }
+            ctx->timer_armed = true;
+        }
     }
 
     if (hopcount == 0)
@@ -497,8 +506,8 @@ done:
 static int timeout_cb (flux_t h, void *arg)
 {
     ctx_t *ctx = arg;
+    ctx->timer_armed = false; /* one shot */
     process_backlog (ctx);
-    flux_timeout_set (h, 0);
     return 0;
 }
 
@@ -578,10 +587,6 @@ static int logsrv_main (flux_t h, zhash_t *args)
         return -1;
     }
     flux_event_subscribe (h, "fault.");
-    if (flux_tmouthandler_set (h, timeout_cb, ctx) < 0) {
-        flux_log (h, LOG_ERR, "flux_tmouthandler_set: %s", strerror (errno));
-        return -1;
-    }
     if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
         flux_log (h, LOG_ERR, "flux_msghandler_addvec: %s", strerror (errno));
         return -1;

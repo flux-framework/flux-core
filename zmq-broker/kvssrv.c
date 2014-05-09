@@ -149,6 +149,7 @@ typedef struct {
     bool master;            /* for now minimize flux_treeroot() calls */
     int epoch;              /* tracks current heartbeat epoch */
     struct timespec commit_time; /* time of most recent commit */
+    bool timer_armed;
 } ctx_t;
 
 enum {
@@ -705,8 +706,8 @@ static int timeout_cb (flux_t h, void *arg)
 {
     ctx_t *ctx = arg;
 
+    ctx->timer_armed = false; /* it's a one shot timer */
     commit_apply_all (ctx);
-    flux_timeout_set (h, 0);
     return 0;
 }
 
@@ -1445,8 +1446,15 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             c->state = COMMIT_MASTER;
             int msec = (int)monotime_since (ctx->commit_time);
             if (msec < min_commit_msec) {
-                if (!flux_timeout_isset (h))
-                    flux_timeout_set (h, min_commit_msec - msec);
+                if (!ctx->timer_armed) {
+                    if (flux_tmouthandler_add (h, min_commit_msec - msec, true,
+                                      timeout_cb, ctx) < 0) {
+                        flux_log (h, LOG_ERR, "flux_tmouthandler_add: %s",
+                                  strerror (errno));
+                        goto done; /* XXX audit this path */
+                    }
+                    ctx->timer_armed = true;
+                }
             } else
                 commit_apply_all (ctx);
         }
@@ -1844,10 +1852,6 @@ static int kvssrv_main (flux_t h, zhash_t *args)
     }
     if (flux_event_subscribe (h, "kvs.stats.") < 0) {
         flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
-        return -1;
-    }
-    if (flux_tmouthandler_set (h, timeout_cb, ctx) < 0) {
-        flux_log (h, LOG_ERR, "flux_tmouthandler_set: %s", strerror (errno));
         return -1;
     }
     if (ctx->master) {

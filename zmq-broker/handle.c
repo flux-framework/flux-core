@@ -328,6 +328,7 @@ typedef struct {
             void *arg;
         } zs;
         struct {
+            int timer_id;
             FluxTmoutHandler fn;
             void *arg;
         } tmout;
@@ -460,14 +461,15 @@ int handle_event_zs (flux_t h, void *zs, short events)
     return rc;
 }
 
-int handle_event_tmout (flux_t h)
+int handle_event_tmout (flux_t h, int timer_id)
 {
     dispatch_t *d;
     int rc = 0;
     
     d = zlist_first (h->reactor->dsp);
     while (d) {
-        if (d->type == DSP_TYPE_TMOUT && d->tmout.fn != NULL) {
+        if (d->type == DSP_TYPE_TMOUT && d->tmout.fn != NULL
+                                      && d->tmout.timer_id == timer_id) {
             rc = d->tmout.fn (h, d->tmout.arg);
             break;
         }
@@ -640,27 +642,34 @@ void flux_zshandler_remove (flux_t h, void *zs, short events)
         h->ops->reactor_zs_remove (h->impl, zs, events);
 }
 
-int flux_tmouthandler_set (flux_t h, FluxTmoutHandler cb, void *arg)
+int flux_tmouthandler_add (flux_t h, unsigned long msec, bool oneshot,
+                           FluxTmoutHandler cb, void *arg)
 {
     dispatch_t *d;
+    int id;
 
-    flux_tmouthandler_remove (h); /* remove existing / clear timer */
+    if (!h->ops->reactor_tmout_add) {
+        errno = ENOSYS;
+        return -1;
+    }
+    if ((id = h->ops->reactor_tmout_add (h->impl, msec, oneshot)) < 0)
+        return -1;
     d = dispatch_create (DSP_TYPE_TMOUT);
     d->tmout.fn = cb;
     d->tmout.arg = arg;
+    d->tmout.timer_id = id;
     if (zlist_append (h->reactor->dsp, d) < 0)
         oom ();
-    return 0;
+    return id;
 }
 
-void flux_tmouthandler_remove (flux_t h)
+void flux_tmouthandler_remove (flux_t h, int timer_id)
 {
     dispatch_t *d;
 
-    flux_timeout_set (h, 0);
     d = zlist_first (h->reactor->dsp);
     while (d) {
-        if (d->type == DSP_TYPE_TMOUT) {
+        if (d->type == DSP_TYPE_TMOUT && d->tmout.timer_id == timer_id) {
             zlist_remove (h->reactor->dsp, d);
             dispatch_destroy (d);
             if (reactor_empty (h->reactor))
@@ -669,23 +678,8 @@ void flux_tmouthandler_remove (flux_t h)
         }
         d = zlist_next (h->reactor->dsp);
     }
-}
-
-int flux_timeout_set (flux_t h, unsigned long msec)
-{
-    if (!h->ops->reactor_timeout_set) {
-        errno = ENOSYS;
-        return -1;
-    }
-    if (h->ops->reactor_timeout_set (h->impl, msec) < 0)
-        return -1;
-    h->reactor->timeout_set = msec > 0 ? true : false;
-    return 0;
-}
-
-bool flux_timeout_isset (flux_t h)
-{
-    return h->reactor->timeout_set;
+    if (h->ops->reactor_tmout_remove)
+        h->ops->reactor_tmout_remove (h->impl, timer_id);
 }
 
 int flux_reactor_start (flux_t h)

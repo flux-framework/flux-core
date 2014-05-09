@@ -30,6 +30,7 @@ const int barrier_reduction_timeout_msec = 1;
 typedef struct {
     zhash_t *barriers;
     flux_t h;
+    bool timer_armed;
 } ctx_t;
 
 typedef struct _barrier_struct {
@@ -42,6 +43,7 @@ typedef struct _barrier_struct {
 } barrier_t;
 
 static int exit_event_send (flux_t h, const char *name, int errnum);
+static int timeout_cb (flux_t h, void *arg);
 
 static void freectx (ctx_t *ctx)
 {
@@ -186,8 +188,14 @@ static int enter_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     if (b->count == b->nprocs) {
         if (exit_event_send (ctx->h, b->name, 0) < 0)
             flux_log (ctx->h, LOG_ERR, "exit_event_send: %s", strerror (errno));
-    } else if (!flux_treeroot (ctx->h) && !flux_timeout_isset (ctx->h))
-        flux_timeout_set (ctx->h, barrier_reduction_timeout_msec);
+    } else if (!flux_treeroot (ctx->h) && !ctx->timer_armed) {
+        if (flux_tmouthandler_add (h, barrier_reduction_timeout_msec,
+                                   true, timeout_cb, ctx) < 0) {
+            flux_log (h, LOG_ERR, "flux_tmouthandler_add: %s",strerror (errno));
+            goto done;
+        }
+        ctx->timer_armed = true;
+    }
 done:
     if (o)
         json_object_put (o);
@@ -288,9 +296,9 @@ static int timeout_cb (flux_t h, void *arg)
     ctx_t *ctx = arg;
 
     assert (!flux_treeroot (h));
+    ctx->timer_armed = false; /* one shot */
 
     zhash_foreach (ctx->barriers, timeout_reduction, ctx);
-    flux_timeout_set (h, 0);
     return 0;
 }
 
@@ -307,10 +315,6 @@ static int barriersrv_main (flux_t h, zhash_t *args)
 
     if (flux_event_subscribe (h, "barrier.") < 0) {
         err ("%s: flux_event_subscribe", __FUNCTION__);
-        return -1;
-    }
-    if (flux_tmouthandler_set (h, timeout_cb, ctx) < 0) {
-        flux_log (h, LOG_ERR, "flux_tmouthandler_set: %s", strerror (errno));
         return -1;
     }
     if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {

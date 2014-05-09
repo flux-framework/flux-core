@@ -65,15 +65,14 @@ int flux_zshandler_add (flux_t h, void *zs, short events,
  */
 void flux_zshandler_remove (flux_t h, void *zs, short events);
 
-/* Register a FluxTmoutHandler callback.  There can be only one.
- * This function internally calls flux_tmouthandler_remove() first
- * to replace existing callback, if any, and disarm timer.
+/* Register a FluxTmoutHandler callback.  Returns timer_id or -1 on error.
  */
-int flux_tmouthandler_set (flux_t h, FluxTmoutHandler cb, void *arg);
+int flux_tmouthandler_add (flux_t h, unsigned long msec, bool oneshot,
+                           FluxTmoutHandler cb, void *arg);
 
-/* Unregister a FluxTmoutHandler callback and disarm timer.
+/* Unregister a FluxTmoutHandler callback.
  */
-void flux_tmouthandler_remove (flux_t h);
+void flux_tmouthandler_remove (flux_t h, int timer_id);
 
 /* Arm the reactor timer such that a FluxTmoutHandler,
  * if registered, will be called every 'msec' milliseconds.

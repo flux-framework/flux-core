@@ -115,7 +115,7 @@ Jtostr (JSON o)
 
 /* Decode string to JSON (caller is given ownership).
  */
-static __inline JSON
+static __inline__ JSON
 Jfromstr (const char *s)
 {
     struct json_tokener *tok;
@@ -126,6 +126,17 @@ Jfromstr (const char *s)
     o = json_tokener_parse_ex (tok, s, strlen (s));
     json_tokener_free (tok);
     return o;
+}
+
+static __inline__ void
+Jmerge (JSON dst, JSON src)
+{
+    json_object_iter iter;
+
+    json_object_object_foreachC (src, iter) {
+        json_object_object_del (dst, iter.key); /* necessary? */
+        json_object_object_add (dst, iter.key, Jget (iter.val));
+    }
 }
 
 #endif

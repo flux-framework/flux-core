@@ -14,6 +14,7 @@ MPIMOD = mvapich2-gnu-psm
 endif
 
 CFLAGS = -Werror -Wall -g -fPIC $(EXTRA_CFLAGS) \
+	-I/usr/include/czmq \
 	-DWITH_LSD_NOMEM_ERROR_FUNC -DWITH_LSD_FATAL_ERROR_FUNC \
 	-DWANT_RECKLESS_HOSTRANGE_EXPANSION \
 	-DPLUGIN_PATH=\"$(TOP)/plugins\" \
@@ -29,7 +30,7 @@ LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lcrypto -luuid -lutil -lm \
 LDADD_SRV = -pthread -rdynamic $(LDADD_CLI) -ldl
 
 COMMON_OBJS = kvscli.o barriercli.o logcli.o cmbdcli.o mrpc.o handle.o \
-	waitqueue.o security.o eventcli.o rankcli.o
+	waitqueue.o security.o eventcli.o rankcli.o reduce.o
 CMBD_OBJS = route.o plugin.o $(COMMON_OBJS) cmbd.o
 
 FLUX_OBJS = flux.o
@@ -43,13 +44,13 @@ PLUGINS = plugins/apisrv.so plugins/hbsrv.so plugins/kvssrv.so \
 	plugins/barriersrv.so plugins/livesrv.so plugins/mechosrv.so \
 	plugins/logsrv.so plugins/echosrv.so plugins/jobsrv.so \
 	plugins/resrcsrv.so plugins/rexecsrv.so plugins/schedsrv.so \
-	plugins/eventsrv.so plugins/ranksrv.so
+	plugins/eventsrv.so plugins/ranksrv.so plugins/monsrv.so
 
 SUBCMDS = libexec/kvs libexec/ping libexec/mecho libexec/route \
 	libexec/stats libexec/barrier libexec/snoop libexec/event \
 	libexec/kvswatch libexec/kvsdir libexec/kvstorture \
 	libexec/logger libexec/log libexec/info libexec/kvscopy \
-	libexec/zio libexec/up libexec/host libexec/keygen
+	libexec/zio libexec/up libexec/host libexec/keygen libexec/mon
 
 BUILD = $(LIBCMB) $(LIBPMI) flux mpi_hello echo cmbd \
 	$(PLUGINS) $(SUBCMDS)
