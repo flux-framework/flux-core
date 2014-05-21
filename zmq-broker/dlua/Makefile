@@ -1,5 +1,5 @@
 
-all: flux.so libdlua.a
+all: flux.so cpuset.so libdlua.a
 
 topdir   = $(shell cd .. && pwd)
 flux_OBJS += flux-lua.o kvs-lua.o json-lua.o zmsg-lua.o lutil.o
@@ -22,6 +22,8 @@ flux.so:$(flux_OBJS)
 	$(CC) -shared -o $*.so $^ $(LDFLAGS) $(LIBS)
 kvs.so:	$(kvs_OBJS)
 	$(CC) -shared -o $*.so $^ $(LDFLAGS) $(LIBS)
+cpuset.so: lua-cpuset.o cpuset-str.o
+	$(CC) -shared -o cpuset.so $^ -llua $(LDFLAGS)
 
 jsontest.so: $(json_test_OBJS)
 	$(CC) -shared -o $*.so $^ $(LDFLAGS) -ljson
