@@ -518,7 +518,7 @@ local function resource_proxy_create (store, res)
                 end
             end
         end
-
+        return true
     end
 
     local function children ()
@@ -565,9 +565,13 @@ local function resource_proxy_create (store, res)
             return resource.type
         elseif index == "uri" then
             return res.hierarchy.name..":"..res.hierarchy.uri
+        elseif index == "hierarchy_name" then
+            return res.hierarchy.name
         elseif index == "path" then
             return res.hierarchy.uri
         elseif index == "id" then
+            return resource.id
+        elseif index == "uuid" then
             return res.id
         end
     end
@@ -584,7 +588,8 @@ local function resource_proxy_create (store, res)
     return setmetatable (proxy,
         { __index = index,
           __newindex = newindex,
-          __tostring = function () return store:resource_name (resource.id) end,
+          __tostring = function ()
+            return store:resource_name (resource.uuid) end,
          })
 end
 
