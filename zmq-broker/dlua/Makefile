@@ -10,7 +10,7 @@ libdlua_SOURCES := json-lua.c zmsg-lua.c lutil.c flux-lua.c kvs-lua.c zmsg-lua.o
 
 LIBS     += -lcmb $(topdir)/zutil/libzutil.a $(topdir)/util/libutil.a
 LDFLAGS  += -L $(topdir)/lib -Wl,-rpath=$(topdir)/lib
-CFLAGS   += -I$(topdir) -I$(topdir)/include
+CFLAGS   += -I/usr/include/czmq -I$(topdir) -I$(topdir)/include
 
 
 .SUFFIXES: .c .o .so
