@@ -71,6 +71,20 @@ local function rdl_parse_environment ()
         end
     end
 
+    ---
+    -- Load extra functions defined in RDL/lib/?.lua
+    ---
+    local glob = require 'posix'.glob
+    for _,path in pairs (glob (basepath .. "RDL/lib/*.lua")) do
+        local f = assert (loadfile (path))
+        local name = path:match("([^/]+)%.lua")
+        local rc, r = pcall (f)
+        if not rc then
+            error ("Failed to load "..path..": "..r)
+        end
+        env[name] = r
+    end
+
     env.rdl = rdl
     return env
 end
