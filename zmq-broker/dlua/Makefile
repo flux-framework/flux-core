@@ -36,6 +36,8 @@ libdlua.a : $(libdlua_SOURCES:.c=.o)
 check: jsontest.so zmsgtest.so
 	@(cd tests && LUA_CPATH=../?.so ./lunit json.lua)
 	@(cd tests && LUA_CPATH=../?.so ./lunit test-zmsg.lua)
+	@(cd tests && LUA_CPATH='../?.so;;;' LUA_PATH='../?.lua;;' \
+	  ./lunit test-rdl.lua)
 
 clean:
 	rm -f *.so *.o
