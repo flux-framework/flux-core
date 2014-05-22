@@ -11,6 +11,30 @@ local function deepcopy (t)
     return setmetatable (r, mt)
 end
 
+---
+-- Single level copy of a table from arg[name]
+--
+local function copy_list_from_args (arg, name)
+    local dst = {}
+    if arg[name] then
+        local src = arg[name]
+        if type(src) ~= "table" then
+            error (name.." is not a table")
+        end
+	for k,v in ipairs (src) do
+            dst[v] = 1
+            src[k] = nil
+	end
+        for k,v in pairs (src) do
+            if type(v) == "table" then
+                error ("Augh! Unexpected table!")
+            end
+            dst[k] = v
+        end
+    end
+    return dst
+end
+
 function ResourceData:__tostring()
     local name = rawget (self, "name") or rawget (self, "type")
     local id = rawget (self, "id") or ""
@@ -28,21 +52,13 @@ function ResourceData:create (args)
     -- Type is required, if no resource name, then name = type
     if not t then return nil, "Resource type required" end
 
-    local properties = {}
-
-    if args.properties then
-        if type(args.properties) ~= "table" then
-            return nil, "element properties must be a table"
-        end
-        properties = deepcopy (args.properties)
-    end
-
     local R = {
         type = t,
         uuid = args.uuid or require 'RDL.uuid'(),
         name = name,
         id = args.id or nil,
-        properties = properties,
+        properties = copy_list_from_args (args, "properties"),
+        tags = copy_list_from_args (args, "tags"),
         hierarchy = {},
     }
     setmetatable (R, ResourceData)
