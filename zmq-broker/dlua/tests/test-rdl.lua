@@ -194,4 +194,35 @@ Hierarchy "default" {
 
 end
 
+function test_ListOf()
+    local rdl = assert (RDL.eval ([[
+Hierarchy "default" {
+    Resource{
+        "foo",
+        children = ListOf{ Resource, ids="0-99", args = {"bar"} }
+    }
+}
+]]))
+    assert_not_nil (rdl)
+    assert_true (is_table (rdl))
+    local a = {
+        foo = 1,
+        bar = 100,
+    }
+    local b = rdl:aggregate ('default')
+    local i = require 'inspect'
+    assert (equals (a, b), "Expected ".. i(a) .. " got ".. i(b))
+
+    local r = assert (rdl:resource ("default:/foo/bar99"))
+    assert_not_nil (r)
+    assert_equal ("bar99", r.name)
+    assert_equal ("bar99", tostring (r))
+    assert_equal ("bar",   r.type)
+    assert_equal (99,      r.id)
+    assert_equal ("default:/foo/bar99", r.uri)
+    assert_equal ("/foo/bar99", r.path)
+    assert_equal ("default", r.hierarchy_name)
+
+end
+
 -- vi: ts=4 sw=4 expandtab
