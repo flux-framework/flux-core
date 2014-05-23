@@ -1,19 +1,20 @@
 
-local function ClusterOf (arg)
+local function ListOf (arg)
     local ids = arg.ids or arg.hostids
-    assert (ids, "ClusterOf: Required id list argument missing (ids or hostids)")
+    local T = arg.type or arg[1]
+    assert (ids, "ListOf: Required id list argument missing (ids or hostids)")
 
     if ids:match("^[0-9]") then ids = "["..ids.."]" end
 
     local hl = hostlist.new (ids)
 
-    if type(arg.type) == 'string' then
+    if type(T) == 'string' then
+        -- Lookup type by name in current environment if we were provided
+        --  a string:
         local env = getfenv(1)
-        arg.type = env [arg.type]
+        T = env [T]
     end
-    assert (arg.type, "ClusterOf: Required argument 'type' missing")
-
-    local Constructor = arg.type
+    assert (T, "ListOf: Missing type: ListOf{'type' or type = 'type'}")
 
     local t = {}
 
@@ -25,11 +26,11 @@ local function ClusterOf (arg)
     end
 
     for id in hl:next() do
-        args.id = id
-        table.insert (t, Constructor (args) )
+        args.id = tonumber (id)
+        table.insert (t, T (args) )
     end
 
     return t
 end
 
-return ClusterOf
+return ListOf
