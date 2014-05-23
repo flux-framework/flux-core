@@ -447,6 +447,90 @@ function ResourceAccumulator:add (id)
 end
 
 --
+-- Return true if any k,v pairs in t2 match a k,v pair in t1
+--
+local function tags_match (t1, t2)
+    for k,v in pairs (t1) do
+        if t2[k] and t2[k] == v then
+            return true
+        end
+    end
+    return false
+end
+
+local function default_find (r, args)
+
+    local T = args.type or args[1]
+    if T and T ~= r.type then
+        return false
+    end
+
+    if args.basename and args.basename ~= r.basename then
+        return false
+    end
+
+    if args.hostlist and not args.hostlist:find (r.name) then
+        return false
+    end
+
+    if args.idlist and not (r.id and args.idlist:find (r.id)) then
+        return false
+    end
+
+    if args.tags and not tags_match (r.tags, args.tags) then
+        return false
+    end
+
+    return true
+end
+
+local function do_find (r, dst, args)
+    local T = args.type or args[1]
+    local name = args.name
+    local fn = args.fn or default_find
+
+    if fn (r, args) then
+        dst:add (r.uuid)
+        return -- No need to traverse further...
+    end
+
+    for child in r:children() do
+        do_find (child, dst, args)
+    end
+end
+
+function MemStore:find (arg)
+    local hostlist = require 'hostlist'
+    local a = self:resource_accumulator ()
+
+    if arg.name then
+        -- Always attempt to convert a name to a hostlist:
+        local hl, err = hostlist.new (arg.name)
+        if not hl then return nil, "find: Invalid name: "..err end
+        arg.hostlist = hl
+        arg.name = nil
+    end
+
+    if arg.ids then
+        local ids = arg.ids
+        if ids:match("^[0-9]") then ids = "["..ids.."]" end
+        local hl, err = hostlist.new (ids)
+        if not hl then return nil, "ids: "..err end
+        arg.idlist = hl
+    end
+
+    if arg.uri then
+        do_find (self:resource (arg.uri), a, arg)
+    else
+        for n,_ in pairs (self.__hierarchy) do
+            do_find (self:resource (n), a, arg)
+        end
+    end
+
+    return a.dst
+end
+
+--
 --  Create a proxy for the resource object [res] stored in memory store
 --   [store]
 --
