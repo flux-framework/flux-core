@@ -521,8 +521,15 @@ local function resource_proxy_create (store, res)
         return true
     end
 
-    local function children ()
-        return pairs (res.children)
+    local function child_iterator ()
+        local i = 0
+        local function next_resource (t,index)
+            i = i + 1
+            local c = res.children [children [i]]
+            if not c then return nil end
+            return resource_proxy_create (store, c)
+        end
+        return next_resource, res.children, nil
     end
 
     ---
@@ -577,7 +584,7 @@ local function resource_proxy_create (store, res)
     end
 
     local proxy = {
-        children = children,
+        children = child_iterator,
         next_child = next_child,
         reset = reset,
         tag = tag,
