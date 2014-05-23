@@ -225,4 +225,70 @@ Hierarchy "default" {
 
 end
 
+
+function test_find()
+    local rdl = assert (RDL.eval ([[
+Hierarchy "default" {
+    Resource{
+        "foo",
+        children = ListOf{ Resource, ids="0-99", args = {"bar"} }
+    }
+}
+]]))
+    assert_not_nil (rdl)
+    assert_true (is_table (rdl))
+
+    -- Find by ID:
+    local rdl2 = assert (rdl:find{ type = bar, ids = "1,5,9" })
+
+    local a = {
+        foo = 1,
+        bar = 3
+    }
+    b = rdl2:aggregate('default')
+    local i = require 'inspect'
+    assert (equals (a, b), "Expected ".. i(a) .. " got ".. i(b))
+
+    for _,id in pairs({1,5,9}) do
+        local name = "bar"..id
+        local r = assert (rdl2:resource ("default:/foo/"..name))
+        assert_not_nil (r)
+        assert_equal (name, r.name)
+        assert_equal (name, tostring (r))
+        assert_equal ("bar",   r.type)
+        assert_equal (id,      r.id)
+        assert_equal ("default:/foo/"..name, r.uri)
+        assert_equal ("/foo/"..name, r.path)
+        assert_equal ("default", r.hierarchy_name)
+    end
+
+    -- Find by name
+    rdl2 = assert (rdl:find{ name="bar[5-10]" })
+
+    local a = {
+        foo = 1,
+        bar = 6
+    }
+    b = assert (rdl2:aggregate('default'))
+    assert (equals (a, b), "Expected ".. i(a) .. " got ".. i(b))
+
+    local hl = require 'hostlist'.new ("bar[5-10]")
+
+    for name in hl:next() do
+        local id = tonumber (name:match ("[0-9]+$"))
+        local r = assert (rdl2:resource ("default:/foo/"..name))
+        assert_not_nil (r)
+        assert_equal (name, r.name)
+        assert_equal (name, tostring (r))
+        assert_equal ("bar",   r.type)
+        assert_equal ("bar",   r.basename)
+        assert_equal (id,      r.id)
+        assert_equal ("default:/foo/"..name, r.uri)
+        assert_equal ("/foo/"..name, r.path)
+        assert_equal ("default", r.hierarchy_name)
+
+    end
+
+end
+
 -- vi: ts=4 sw=4 expandtab
