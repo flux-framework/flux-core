@@ -566,6 +566,8 @@ local function resource_proxy_create (store, res)
     local function index (self, index)
         if index == "name" then
             return store:resource_name (res.id)
+        elseif index == "basename" then
+            return resource.name or resource.type
         elseif index == "tags" then
             return deepcopy_no_metatable (resource.tags)
         elseif index == "type" then
