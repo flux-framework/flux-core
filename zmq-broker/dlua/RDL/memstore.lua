@@ -384,6 +384,11 @@ function MemStore:copy (arg)
     return newstore
 end
 
+function MemStore:dup ()
+    local copy = deepcopy_no_metatable (self)
+    return setmetatable (copy, MemStore)
+end
+
 
 ---
 -- ResourceAccumulator

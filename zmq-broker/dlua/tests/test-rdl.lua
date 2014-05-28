@@ -192,6 +192,19 @@ Hierarchy "default" {
     local r = assert (slice:resource ("default:/foo0/socket1"))
     assert_equal ("socket1", r.name)
 
+    -- Test dup()
+    local slice = rdl:dup()
+    assert_not_nil (slice)
+    assert_true (is_table (slice))
+    local a = {
+        node = 1,
+        socket = 2,
+        core = 8
+    }
+    local b = slice:aggregate ('default')
+    local i = require 'inspect'
+    assert (equals (a, b), "Expected ".. i(a) .. " got ".. i(b))
+
 end
 
 function test_ListOf()
