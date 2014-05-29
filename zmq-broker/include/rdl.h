@@ -69,6 +69,23 @@ struct rdl * rdl_loadfile (struct rdllib *l, const char *filename);
 struct rdl * rdl_copy (struct rdl *rdl);
 
 /*
+ *  Return a new RDL handle containing all resources that
+ *   match expression in json_object [args].
+ *
+ *  JSON object supports the following keys, each of which are
+ *   ANDed together
+ *
+ *  {
+ *    'basename' : STRING,   - base name of object
+ *    'name'     : NAMELIST, - match full name in NAMELIST (hostlist format)
+ *    'ids'      : IDLIST,   - match resource "id" in idlist
+ *    'type'     : STRING,   - match resource type name
+ *    'tags'     : [ TAGS ]  - list of tags to match
+ *  }
+ */
+struct rdl * rdl_find (struct rdl *rdl, json_object *args);
+
+/*
  *  Destroy and deallocate an rdl handle
  */
 void rdl_destroy (struct rdl *rdl);
