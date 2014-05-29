@@ -36,6 +36,46 @@ local function deepcopy_no_metatable(o, seen)
     return no
 end
 
+local function deepcompare (t1, t2, seen)
+    seen = seen or {}
+    if seen[t1] and seen[t2] then return true end
+
+    local type1, type2 = type(t1), type(t2)
+    if type1 ~= type2 then
+        return false
+    end
+
+    if type1 ~= "table" then
+        return t1 == t2
+    end
+
+    -- Mark both these tables as visited already to avoid
+    --  recursing back up the tree.
+    --
+    seen [t1] = true
+    seen [t2] = true
+
+    local checked = {}
+    for k,v in pairs (t1) do
+        checked [k] = true
+        -- If this object has not been visited before then
+        --  continue comparison (only tables are recorded in 'seen')
+        --  so normal values will still be compared at each iteration.
+        if not seen [v] and not deepcompare (v, t2[k], seen) then
+            return false
+        end
+    end
+    for k,v in pairs (t2) do
+        -- if we didn't see key 'k' in traversal of t1, then
+        --  these two tables are not equal (extra key in t2)
+        if not checked[k] then
+            return false
+        end
+    end
+
+    return true
+end
+
 function MemStore:addtype (t)
     self.__types [t.name] = deepcopy_no_metatable (t)
 end
@@ -389,6 +429,16 @@ function MemStore:dup ()
     return setmetatable (copy, MemStore)
 end
 
+function MemStore:compare (t2)
+    if getmetatable (t2) ~= MemStore then
+        return false
+    end
+    return deepcompare (self, t2)
+end
+
+function MemStore:__eq (t2)
+    return self:compare (t2)
+end
 
 ---
 -- ResourceAccumulator

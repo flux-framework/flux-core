@@ -205,6 +205,13 @@ Hierarchy "default" {
     local i = require 'inspect'
     assert (equals (a, b), "Expected ".. i(a) .. " got ".. i(b))
 
+
+    -- test equals
+    assert_equal (slice, rdl, "Failed equality")
+    assert (rdl:compare (slice), "failed compare")
+
+    local new = assert (slice:copy ("default:/foo0/socket1"))
+    assert_false (slice == new, "Objects should not be equal but were")
 end
 
 function test_ListOf()
