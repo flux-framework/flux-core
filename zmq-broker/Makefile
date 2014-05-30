@@ -30,7 +30,7 @@ LDADD_SRV = -pthread -rdynamic $(LDADD_CLI) -ldl
 
 COMMON_OBJS = kvscli.o barriercli.o logcli.o cmbdcli.o mrpc.o handle.o \
 	waitqueue.o security.o eventcli.o rankcli.o reduce.o
-CMBD_OBJS = route.o plugin.o $(COMMON_OBJS) cmbd.o
+CMBD_OBJS = plugin.o $(COMMON_OBJS) cmbd.o
 
 FLUX_OBJS = flux.o
 LIBPMI_OBJS = pmi.o
@@ -45,7 +45,7 @@ PLUGINS = plugins/apisrv.so plugins/hbsrv.so plugins/kvssrv.so \
 	plugins/resrcsrv.so plugins/rexecsrv.so plugins/schedsrv.so \
 	plugins/eventsrv.so plugins/ranksrv.so plugins/monsrv.so
 
-SUBCMDS = libexec/kvs libexec/ping libexec/mecho libexec/route \
+SUBCMDS = libexec/kvs libexec/ping libexec/mecho \
 	libexec/stats libexec/barrier libexec/snoop libexec/event \
 	libexec/kvswatch libexec/kvsdir libexec/kvstorture \
 	libexec/logger libexec/log libexec/info libexec/kvscopy \

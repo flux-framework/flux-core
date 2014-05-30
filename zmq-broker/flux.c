@@ -51,7 +51,6 @@ static void help (void)
 "   kvstorture Torture-test the Flux key-value store\n"
 "   ping       Time round-trip RPC to a Flux plugin\n"
 "   mecho      Time round-trip group RPC to the mecho plugin\n"
-"   route      Manipulate routing tables in the Flux message broker\n"
 "   stats      Obtain message counts from a Flux plugin\n"
 "   barrier    Execute a Flux barrier\n"
 "   snoop      Snoop on local Flux message broker traffic\n"

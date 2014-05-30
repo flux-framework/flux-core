@@ -27,7 +27,6 @@
 
 #include "log.h"
 #include "zmsg.h"
-#include "route.h"
 #include "util.h"
 #include "plugin.h"
 #include "hljson.h"
