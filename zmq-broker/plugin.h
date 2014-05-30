@@ -5,7 +5,7 @@
 
 /* Plugins will be connected to these well-known shared memory zmq sockets.
  */
-#define UPREQ_URI           "inproc://upreq"
+#define REQUEST_URI         "inproc://request"
 #define DNREQ_URI           "inproc://dnreq"
 #define EVENT_URI           "inproc://event"
 

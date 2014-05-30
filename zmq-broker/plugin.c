@@ -30,8 +30,8 @@
 #include "handle.h"
 
 typedef struct {
-    int upreq_tx;
-    int upreq_rx;
+    int request_tx;
+    int request_rx;
     int dnreq_tx;
     int dnreq_rx;
     int event_tx;
@@ -41,7 +41,7 @@ typedef struct {
 #define PLUGIN_MAGIC    0xfeefbe01
 struct plugin_ctx_struct {
     int magic;
-    void *zs_upreq; /* for making requests */
+    void *zs_request;
     void *zs_dnreq; /* for handling requests (reverse message flow) */
     void *zs_evin;
     char *id;
@@ -81,8 +81,8 @@ static int plugin_request_sendmsg (void *impl, zmsg_t **zmsg)
     int rc;
 
     assert (p->magic == PLUGIN_MAGIC);
-    rc = zmsg_send (zmsg, p->zs_upreq);
-    p->stats.upreq_tx++;
+    rc = zmsg_send (zmsg, p->zs_request);
+    p->stats.request_tx++;
     return rc;
 }
 
@@ -109,7 +109,7 @@ static zmsg_t *plugin_response_recvmsg (void *impl, bool nb)
 {
     plugin_ctx_t p = impl;
     assert (p->magic == PLUGIN_MAGIC);
-    return zmsg_recv (p->zs_upreq); /* FIXME: ignores nb flag */
+    return zmsg_recv (p->zs_request); /* FIXME: ignores nb flag */
 }
 
 static int plugin_response_putmsg (void *impl, zmsg_t **zmsg)
@@ -302,8 +302,8 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         goto done;
     }
     if (fnmatch ("*.get", tag, 0) == 0) {
-        util_json_object_add_int (o, "#upreq (tx)", p->stats.upreq_tx);
-        util_json_object_add_int (o, "#upreq (rx)", p->stats.upreq_rx);
+        util_json_object_add_int (o, "#request (tx)", p->stats.request_tx);
+        util_json_object_add_int (o, "#request (rx)", p->stats.request_rx);
         util_json_object_add_int (o, "#dnreq (tx)", p->stats.dnreq_tx);
         util_json_object_add_int (o, "#dnreq (rx)", p->stats.dnreq_rx);
         util_json_object_add_int (o, "#event (tx)", p->stats.event_tx);
@@ -373,7 +373,7 @@ done:
 
 static void plugin_handle_response (plugin_ctx_t p, zmsg_t *zmsg)
 {
-    p->stats.upreq_rx++;
+    p->stats.request_rx++;
 
     if (zmsg) {
         if (handle_event_msg (p->h, FLUX_MSGTYPE_RESPONSE, &zmsg) < 0) {
@@ -400,9 +400,9 @@ static void plugin_handle_deferred_responses (plugin_ctx_t p)
 
 /* Handle a response.
  */
-static int upreq_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
+static int request_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 {
-    zmsg_t *zmsg = zmsg_recv (p->zs_upreq);
+    zmsg_t *zmsg = zmsg_recv (p->zs_request);
 
     plugin_handle_response (p, zmsg);
     plugin_handle_deferred_responses (p);
@@ -464,8 +464,8 @@ static zloop_t * plugin_zloop_create (plugin_ctx_t p)
     if (!(zl = zloop_new ()))
         err_exit ("zloop_new");
 
-    zp.socket = p->zs_upreq;
-    if ((rc = zloop_poller (zl, &zp, (zloop_fn *) upreq_cb, (void *) p)) != 0)
+    zp.socket = p->zs_request;
+    if ((rc = zloop_poller (zl, &zp, (zloop_fn *) request_cb, (void *) p)) != 0)
         err_exit ("zloop_poller: rc=%d", rc);
     zp.socket = p->zs_dnreq;
     if ((rc = zloop_poller (zl, &zp, (zloop_fn *) dnreq_cb, (void *) p)) != 0)
@@ -567,7 +567,7 @@ void plugin_unload (plugin_ctx_t p)
 
     zsocket_destroy (p->zctx, p->zs_evin);
     zsocket_destroy (p->zctx, p->zs_dnreq);
-    zsocket_destroy (p->zctx, p->zs_upreq);
+    zsocket_destroy (p->zctx, p->zs_request);
 
     while ((zmsg = zlist_pop (p->deferred_responses)))
         zmsg_destroy (&zmsg);
@@ -640,7 +640,7 @@ plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
     flux_log_set_facility (p->h, name);
 
     /* connect sockets in the parent, then use them in the thread */
-    zconnect (p->zctx, &p->zs_upreq, ZMQ_DEALER, UPREQ_URI, -1, id);
+    zconnect (p->zctx, &p->zs_request, ZMQ_DEALER, REQUEST_URI, -1, id);
     zconnect (p->zctx, &p->zs_dnreq, ZMQ_DEALER, DNREQ_URI, -1, id);
     zconnect (p->zctx, &p->zs_evin,  ZMQ_SUB, EVENT_URI, 0, NULL);
 

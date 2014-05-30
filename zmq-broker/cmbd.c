@@ -59,8 +59,8 @@ typedef struct {
     void *zs_parent;            /* DEALER - requests to parent */
     zlist_t *uri_parent;
 
-    void *zs_child;             /* ROUTER - requests from plugins/downstream */
-    zlist_t *uri_child;
+    void *zs_request;           /* ROUTER - requests from plugins/downstream */
+    zlist_t *uri_request;
 
     void *zs_plugins;           /* rROUTER - requests to plugins */
 
@@ -98,7 +98,7 @@ static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg);
 static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
-static int child_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
+static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 
 static void cmb_event_geturi_request (ctx_t *ctx);
@@ -157,9 +157,9 @@ int main (int argc, char *argv[])
     ctx.size = 1;
     if (!(ctx.plugin_args = zhash_new ()))
         oom ();
-    if (!(ctx.uri_child = zlist_new ()))
+    if (!(ctx.uri_request = zlist_new ()))
         oom ();
-    zlist_autofree (ctx.uri_child);
+    zlist_autofree (ctx.uri_request);
     if (!(ctx.uri_parent = zlist_new ()))
         oom ();
     zlist_autofree (ctx.uri_parent);
@@ -183,7 +183,7 @@ int main (int argc, char *argv[])
                 ctx.security_set |= FLUX_SEC_TYPE_PLAIN;
                 break;
             case 't':   /* --child-uri URI[,URI,...] */
-                if (zlist_append (ctx.uri_child, xstrdup (optarg)) < 0)
+                if (zlist_append (ctx.uri_request, xstrdup (optarg)) < 0)
                     oom ();
                 break;
             case 'p':   /* --parent-uri URI */
@@ -261,8 +261,8 @@ int main (int argc, char *argv[])
         free (ctx.rankstr);
     if (ctx.plugin_args)
         zhash_destroy (&ctx.plugin_args);
-    if (ctx.uri_child)
-        zlist_destroy (&ctx.uri_child);
+    if (ctx.uri_request)
+        zlist_destroy (&ctx.uri_request);
     if (ctx.uri_parent)
         zlist_destroy (&ctx.uri_parent);
     return 0;
@@ -327,7 +327,7 @@ void unload_plugins (ctx_t *ctx)
     zlist_destroy (&keys);
 }
 
-static void *cmbd_init_child (ctx_t *ctx)
+static void *cmbd_init_request (ctx_t *ctx)
 {
     void *s;
     char *uri;
@@ -338,15 +338,15 @@ static void *cmbd_init_child (ctx_t *ctx)
     if (flux_sec_ssockinit (ctx->sec, s) < 0)
         msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ctx->sec));
     zsocket_set_hwm (s, 0);
-    if (zsocket_bind (s, "%s", UPREQ_URI) < 0) /* always bind to inproc */
-        err_exit ("%s", UPREQ_URI);
-    uri = zlist_first (ctx->uri_child);
-    for (; uri != NULL; uri = zlist_next (ctx->uri_child)) {
+    if (zsocket_bind (s, "%s", REQUEST_URI) < 0) /* always bind to inproc */
+        err_exit ("%s", REQUEST_URI);
+    uri = zlist_first (ctx->uri_request);
+    for (; uri != NULL; uri = zlist_next (ctx->uri_request)) {
         if (zsocket_bind (s, "%s", uri) < 0)
             err_exit ("%s", uri);
     }
     zp.socket = s;
-    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)child_cb, ctx) < 0)
+    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)request_cb, ctx) < 0)
         err_exit ("zloop_poller");
     return s;
 }
@@ -496,7 +496,7 @@ static void cmbd_init (ctx_t *ctx)
 
     /* Bind to downstream ports.
      */
-    ctx->zs_child = cmbd_init_child (ctx);
+    ctx->zs_request = cmbd_init_request (ctx);
     ctx->zs_plugins = cmbd_init_plugins (ctx);
     ctx->zs_event_out = cmbd_init_event_out (ctx);
     ctx->zs_snoop = cmbd_init_snoop (ctx);
@@ -681,9 +681,9 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         zmsg_destroy (zmsg);
 }
 
-static int child_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
+static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
-    zmsg_t *zmsg = zmsg_recv (ctx->zs_child);
+    zmsg_t *zmsg = zmsg_recv (ctx->zs_request);
 
     if (zmsg) {
         if (flux_request_sendmsg (ctx->h, &zmsg) < 0)
@@ -882,7 +882,7 @@ static int cmbd_response_sendmsg (void *impl, zmsg_t **zmsg)
         rc = cmb_internal_response (ctx, zmsg);
         goto done;
     }
-    if (zmsg_send (zmsg, ctx->zs_child) < 0)
+    if (zmsg_send (zmsg, ctx->zs_request) < 0)
         goto done;
     rc = 0;
 done:
