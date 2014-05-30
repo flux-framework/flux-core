@@ -184,40 +184,6 @@ int zmsg_send_fd (int fd, zmsg_t **msg)
     return zmsg_send_fd_typemask (fd, -1, msg);
 }
 
-int zmsg_send_unrouter (zmsg_t **zmsg, void *sock, const char *id, const char *gw)
-{
-    zframe_t *zf;
-    int rc;
-
-    if (!(zf = zframe_new (id, strlen (id))))
-        oom ();
-    if (zmsg_push (*zmsg, zf) < 0) /* push local id for reply path */
-        oom ();
-    if (!(zf = zframe_new (gw, strlen (gw))))
-        oom ();
-    if (zmsg_push (*zmsg, zf) < 0) /* push gw id for routing socket */
-        oom ();
-    rc = zmsg_send (zmsg, sock);
-    return rc;
-}
-
-zmsg_t *zmsg_recv_unrouter (void *sock)
-{
-    zmsg_t *zmsg;
-    zframe_t *zf;
-
-    zmsg = zmsg_recv (sock);
-    if (zmsg) {     
-        zf = zmsg_pop (zmsg);       /* pop-n-toss */
-        if (zf)
-            zframe_destroy (&zf);
-        zf = zmsg_pop (zmsg);       /* pop-n-toss */
-        if (zf)
-            zframe_destroy (&zf);
-    }
-    return zmsg;
-}
-
 int zmsg_hopcount (zmsg_t *zmsg)
 {
     int count = 0;

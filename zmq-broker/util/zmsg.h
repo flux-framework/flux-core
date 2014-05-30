@@ -26,15 +26,6 @@ int zmsg_send_fd_typemask (int fd, int typemask, zmsg_t **msg);
 void zmsg_dump_compact (zmsg_t *self, const char *prefix);
 char *zmsg_route_str (zmsg_t *zmsg, int skiphops);
 
-/* For "reverse" message flow over dealer-router:
- *   zmsg_send_unrouter() - pushes local adress for reply path, then gw addr
- *                          for routing socket.
- *   zmsg_recv_unrouter() - pops two frames and destroys them.
- * Use both on router socket.  Dealer socket requires no intervention.
- */
-int zmsg_send_unrouter (zmsg_t **zmsg, void *sock, const char *id, const char *gw);
-zmsg_t *zmsg_recv_unrouter (void *sock);
-
 /* Return the number of non-nil routing frames in the message.
  */
 int zmsg_hopcount (zmsg_t *zmsg);
