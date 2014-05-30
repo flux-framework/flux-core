@@ -33,7 +33,7 @@ struct rdl_accumulator;
 /*
  *  Prototype for error processing function
  */
-typedef void (*rdl_err_f) (const char *fmt, ...);
+typedef void (*rdl_err_f) (void *ctx, const char *fmt, ...);
 
 
 /*
@@ -50,6 +50,11 @@ struct rdllib * rdllib_open (void);
  */
 void rdllib_close (struct rdllib *l);
 
+/*
+ *  Set rdllib error handling function to [fn] with context [ctx]
+ *   to be passed to error function at each call.
+ */
+int rdllib_set_errf (struct rdllib *l, void *ctx, rdl_err_f fn);
 
 /*
  *  Load an RDL db into library [l] from string [s] and return
