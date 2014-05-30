@@ -62,8 +62,6 @@ typedef struct {
     void *zs_request;           /* ROUTER - requests from plugins/downstream */
     zlist_t *uri_request;
 
-    void *zs_plugins;           /* rROUTER - requests to plugins */
-
     char *uri_event_in;         /* SUB - to event module's ipc:// socket */
     void *zs_event_in;          /*       (event module takes care of epgm) */
 
@@ -270,21 +268,22 @@ int main (int argc, char *argv[])
 
 static int load_plugin (ctx_t *ctx, char *name)
 {
+    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
     zuuid_t *uuid;
     plugin_ctx_t p;
     int rc = -1;
 
     if (!(uuid = zuuid_new ()))
         oom ();
-
     if ((p = plugin_load (ctx->h, ctx->plugin_path, name, zuuid_str (uuid),
                           ctx->plugin_args))) {
         if (zhash_insert (ctx->loaded_plugins, name, p) < 0) {
             plugin_unload (p);
             goto done;
         }
-        route_add (ctx->rctx, name, zuuid_str (uuid), NULL,
-                   ROUTE_FLAGS_PRIVATE);
+        zp.socket = plugin_sock (p);
+        if (zloop_poller (ctx->zl, &zp, (zloop_fn *)plugins_cb, ctx) < 0)
+            err_exit ("zloop_poller");
         rc = 0;
     }
 done:
@@ -347,22 +346,6 @@ static void *cmbd_init_request (ctx_t *ctx)
     }
     zp.socket = s;
     if (zloop_poller (ctx->zl, &zp, (zloop_fn *)request_cb, ctx) < 0)
-        err_exit ("zloop_poller");
-    return s;
-}
-
-static void *cmbd_init_plugins (ctx_t *ctx)
-{
-    void *s;
-    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
-
-    if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
-        err_exit ("zsocket_new");
-    zsocket_set_hwm (s, 0);
-    if (zsocket_bind (s, "%s", DNREQ_URI) < 0)
-        err_exit ("%s", DNREQ_URI);
-    zp.socket = s;
-    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)plugins_cb, ctx) < 0)
         err_exit ("zloop_poller");
     return s;
 }
@@ -497,7 +480,6 @@ static void cmbd_init (ctx_t *ctx)
     /* Bind to downstream ports.
      */
     ctx->zs_request = cmbd_init_request (ctx);
-    ctx->zs_plugins = cmbd_init_plugins (ctx);
     ctx->zs_event_out = cmbd_init_event_out (ctx);
     ctx->zs_snoop = cmbd_init_snoop (ctx);
 #if 0
@@ -708,7 +690,7 @@ static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 
 static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
-    zmsg_t *zmsg = zmsg_recv_unrouter (ctx->zs_plugins);
+    zmsg_t *zmsg = zmsg_recv (item->socket);
 
     if (zmsg) {
         (void)flux_response_sendmsg (ctx->h, &zmsg);
@@ -823,7 +805,7 @@ static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
     ctx_t *ctx = impl;
     char *service = NULL, *lasthop = NULL;
     int hopcount;
-    const char *gw;
+    plugin_ctx_t p;
     int rc = -1;
 
     errno = 0;
@@ -841,10 +823,11 @@ static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
         } else
             errno = EINVAL;
     } else {
-        if ((gw = route_lookup (ctx->rctx, service))
-                            && (!lasthop || strcmp (lasthop, gw) != 0)) {
-            if (zmsg_send_unrouter (zmsg, ctx->zs_plugins, ctx->rankstr, gw))
-                err ("%s: zs_plugins", __FUNCTION__);
+        if ((p = zhash_lookup (ctx->loaded_plugins, service))
+                     && (!lasthop || strcmp (lasthop, plugin_id (p)) != 0)) {
+            if (zmsg_send (zmsg, plugin_sock (p)) < 0)
+                err ("%s: zs_parent", __FUNCTION__);
+
         } else if (!ctx->treeroot) {
             if (zmsg_send (zmsg, ctx->zs_parent) < 0)
                 err ("%s: zs_parent", __FUNCTION__);

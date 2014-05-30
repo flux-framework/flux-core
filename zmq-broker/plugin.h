@@ -6,7 +6,6 @@
 /* Plugins will be connected to these well-known shared memory zmq sockets.
  */
 #define REQUEST_URI         "inproc://request"
-#define DNREQ_URI           "inproc://dnreq"
 #define EVENT_URI           "inproc://event"
 
 /* A plugin defines 'const struct plugin_ops ops = {...}' containing
@@ -35,10 +34,11 @@ plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
  */
 void plugin_unload (plugin_ctx_t p);
 
-/* Accessors for name and id, so routes cna be removed during unloading.
+/* Accessors.
  */
 const char *plugin_name (plugin_ctx_t p);
 const char *plugin_id (plugin_ctx_t p);
+void *plugin_sock (plugin_ctx_t p);
 
 #endif /* !PLUGIN_H */
 
