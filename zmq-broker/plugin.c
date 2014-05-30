@@ -62,6 +62,8 @@ struct plugin_ctx_struct {
     int reactor_rc;
 };
 
+static void plugin_reactor_stop (void *impl, int rc);
+
 #if CZMQ_VERSION_MAJOR < 2
 #error Need CZMQ v2 timer API
 #endif
@@ -90,8 +92,15 @@ static int plugin_request_sendmsg (void *impl, zmsg_t **zmsg)
 static zmsg_t *plugin_request_recvmsg (void *impl, bool nb)
 {
     plugin_ctx_t p = impl;
+    zmsg_t *zmsg;
+
     assert (p->magic == PLUGIN_MAGIC);
-    return zmsg_recv (p->zs_svc[0]); /* FIXME: ignores nb flag */
+    zmsg = zmsg_recv (p->zs_svc[0]); /* FIXME: ignores nb flag */
+    if (zmsg && zmsg_content_size (zmsg) == 0) { /* EOF */
+        plugin_reactor_stop (p, 0);
+        zmsg_destroy (&zmsg);
+    }
+    return zmsg;
 }
 
 
@@ -418,6 +427,10 @@ static int svc_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 
     p->stats.svc_rx++;
 
+    if (zmsg && zmsg_content_size (zmsg) == 0) { /* EOF */
+        plugin_reactor_stop (p, 0);
+        goto done;
+    }
     if (zmsg) {
         if (handle_event_msg (p->h, FLUX_MSGTYPE_REQUEST, &zmsg) < 0) {
             plugin_reactor_stop (p, -1);
@@ -566,7 +579,7 @@ void plugin_unload (plugin_ctx_t p)
     int errnum;
     zmsg_t *zmsg;
 
-    /* FIXME: no mechanism to tell thread to exit yet */
+    zstr_send (p->zs_svc[1], ""); /* EOF */
     errnum = pthread_join (p->t, NULL);
     if (errnum)
         errn_exit (errnum, "pthread_join");
