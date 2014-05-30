@@ -41,6 +41,11 @@ typedef void (*rdl_err_f) (void *ctx, const char *fmt, ...);
  */
 
 /*
+ *  Set default rdllib error handling function to [fn] and context [ctx].
+ */
+void rdllib_set_default_errf (void *ctx, rdl_err_f fn);
+
+/*
  *  Create a new rdl library handle
  */
 struct rdllib * rdllib_open (void);

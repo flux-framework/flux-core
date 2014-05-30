@@ -14,6 +14,8 @@
 
 #define VERR(r,args...) (*((r)->errf)) ((r)->errctx, args)
 
+static rdl_err_f default_err_f = NULL;
+static void *    default_err_ctx = NULL;
 
 struct rdllib {
     lua_State *L;          /*  Global lua state                        */
@@ -152,8 +154,8 @@ struct rdllib * rdllib_open (void)
     }
 
     luaL_openlibs (rl->L);
-    rl->errf = &verr;
-    rl->errctx = NULL;
+    rl->errf = default_err_f ? default_err_f : &verr;
+    rl->errctx = default_err_ctx;
 
     rl->rdl_list = list_create ((ListDelF) rdl_free);
     if (rl->rdl_list == NULL) {
@@ -172,6 +174,12 @@ int rdllib_set_errf (struct rdllib *l, void *ctx, rdl_err_f fn)
     l->errf = fn;
     l->errctx = ctx;
     return (0);
+}
+
+void rdllib_set_default_errf (void *ctx, rdl_err_f fn)
+{
+    default_err_ctx = ctx;
+    default_err_f = fn;
 }
 
 void rdl_destroy (struct rdl *rdl)
