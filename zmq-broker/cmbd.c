@@ -264,6 +264,15 @@ int main (int argc, char *argv[])
     return 0;
 }
 
+static void unload_plugin (plugin_ctx_t p)
+{
+    ctx_t *ctx = plugin_arg_get (p);
+    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
+    zp.socket = plugin_sock (p);
+    zloop_poller_end (ctx->zl, &zp);
+    plugin_unload (p);
+}
+
 static int load_plugin (ctx_t *ctx, char *name)
 {
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
@@ -275,8 +284,9 @@ static int load_plugin (ctx_t *ctx, char *name)
         oom ();
     if ((p = plugin_load (ctx->h, ctx->plugin_path, name, zuuid_str (uuid),
                           ctx->plugin_args))) {
+        plugin_arg_set (p, ctx);
         zhash_update (ctx->plugin_ctx, name, p);
-        zhash_freefn (ctx->plugin_ctx, name, (zhash_free_fn *)plugin_unload);
+        zhash_freefn (ctx->plugin_ctx, name, (zhash_free_fn *)unload_plugin);
         zp.socket = plugin_sock (p);
         if (zloop_poller (ctx->zl, &zp, (zloop_fn *)plugins_cb, ctx) < 0)
             err_exit ("zloop_poller");

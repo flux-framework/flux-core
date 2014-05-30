@@ -39,6 +39,8 @@ void plugin_unload (plugin_ctx_t p);
 const char *plugin_name (plugin_ctx_t p);
 const char *plugin_id (plugin_ctx_t p);
 void *plugin_sock (plugin_ctx_t p);
+void plugin_arg_set (plugin_ctx_t p, void *arg);
+void *plugin_arg_get (plugin_ctx_t p);
 
 #endif /* !PLUGIN_H */
 
