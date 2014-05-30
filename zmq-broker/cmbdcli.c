@@ -92,6 +92,28 @@ bool flux_treeroot (flux_t h)
     return treeroot;
 }
 
+int flux_rmmod (flux_t h, const char *name)
+{
+    json_object *request = util_json_object_new_object ();
+    json_object *response = NULL;
+    int rc = -1;
+
+    util_json_object_add_string (request, "name", name);
+    if ((response = flux_rpc (h, request, "cmb.rmmod"))) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (errno != 0)
+        goto done;
+    rc = 0;
+done:
+    if (request)
+        json_object_put (request);
+    if (response)
+        json_object_put (response);
+    return rc;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

@@ -266,10 +266,12 @@ int main (int argc, char *argv[])
 
 static void unload_plugin (plugin_ctx_t p)
 {
+    zmq_pollitem_t zp;
     ctx_t *ctx = plugin_arg_get (p);
-    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
+    
     zp.socket = plugin_sock (p);
     zloop_poller_end (ctx->zl, &zp);
+
     plugin_unload (p);
 }
 

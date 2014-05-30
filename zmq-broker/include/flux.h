@@ -93,6 +93,10 @@ int flux_rank (flux_t h);
 int flux_size (flux_t h);
 bool flux_treeroot (flux_t h);
 
+/* Manipulate comms modules.
+ */
+int flux_rmmod (flux_t h, const char *name);
+
 /* Accessor for zeromq context.
  * N.B. The zctx_t is thread-safe but zeromq sockets, and therefore
  * flux_t handle operations are not.
