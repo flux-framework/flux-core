@@ -633,7 +633,7 @@ static void *plugin_dlopen (const char *searchpath, const char *name)
 }
 
 plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
-                          char *name, char *id, zhash_t *args)
+                          const char *name, char *id, zhash_t *args)
 {
     plugin_ctx_t p;
     int errnum;

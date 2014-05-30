@@ -273,7 +273,7 @@ static void unload_plugin (plugin_ctx_t p)
     plugin_unload (p);
 }
 
-static int load_plugin (ctx_t *ctx, char *name)
+static int load_plugin (ctx_t *ctx, const char *name)
 {
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
     zuuid_t *uuid;
@@ -599,6 +599,35 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
                 err_exit ("flux_respond");
             json_object_put (response);
         }
+    } else if (cmb_msg_match (*zmsg, "cmb.rmmod")) {
+        json_object *request = NULL;
+        const char *name;
+        if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+                || util_json_object_get_string (request, "name", &name) < 0) {
+            flux_respond_errnum (ctx->h, zmsg, EPROTO);
+        } else if (!zhash_lookup (ctx->plugin_ctx, name)) {
+            flux_respond_errnum (ctx->h, zmsg, ESRCH);
+        } else {
+            zhash_delete (ctx->plugin_ctx, name);
+            flux_respond_errnum (ctx->h, zmsg, 0);
+        }
+        if (request)
+            json_object_put (request);
+    } else if (cmb_msg_match (*zmsg, "cmb.insmod")) {
+        json_object *request = NULL;
+        const char *name;
+        if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+                || util_json_object_get_string (request, "name", &name) < 0) {
+            flux_respond_errnum (ctx->h, zmsg, EPROTO);
+        } else if (!zhash_lookup (ctx->plugin_ctx, name)) {
+            flux_respond_errnum (ctx->h, zmsg, ESRCH);
+        } else if (load_plugin (ctx, name) < 0) {
+            flux_respond_errnum (ctx->h, zmsg, errno);
+        } else {
+            flux_respond_errnum (ctx->h, zmsg, 0);
+        }
+        if (request)
+            json_object_put (request);
     } else
         handled = false;
 

@@ -27,7 +27,7 @@ typedef struct plugin_ctx_struct *plugin_ctx_t;
  * be used to pass arguments to the plugins's ops->main() function.
  */
 plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
-                          char *name, char *id, zhash_t *args);
+                          const char *name, char *id, zhash_t *args);
 
 /* Unload a plugin by handle.
  * (FIXME: This is not used yet and is a work in progress)
