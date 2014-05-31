@@ -94,13 +94,13 @@ int main (int argc, char *argv[])
         err_exit ("S: zctx_new");
     if (!(zs = zsocket_new (zctx, ZMQ_SUB)))
         err_exit ("S: zsocket_new");
-    if (zsocket_bind (zs, uri) < 0)
+    if (zsocket_bind (zs, "%s", uri) < 0)
         err_exit ("S: zsocket_bind");
     zsocket_set_subscribe (zs, "");
 
     if (!(cs = zsocket_new (zctx, ZMQ_PUB)))
         err_exit ("S: zsocket_new");
-    if (zsocket_connect (cs, uri) < 0)
+    if (zsocket_connect (cs, "%s", uri) < 0)
         err_exit ("S: zsocket_connect");
 
     if ((rc = pthread_attr_init (&attr)))

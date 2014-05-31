@@ -59,9 +59,9 @@ static struct rexec_ctx *getctx (flux_t h)
 static void rexec_session_destroy (struct rexec_session *c)
 {
     if (c->zs_req)
-        zsocket_disconnect (c->zs_req, c->req_uri);
+        zsocket_disconnect (c->zs_req, "%s", c->req_uri);
     if (c->zs_rep)
-        zsocket_disconnect (c->zs_rep, c->rep_uri);
+        zsocket_disconnect (c->zs_rep, "%s", c->rep_uri);
     if (c->jobinfo)
         json_object_put (c->jobinfo);
     free (c);

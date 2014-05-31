@@ -274,7 +274,7 @@ static int eventsrv_main (flux_t h, zhash_t *args)
                   flux_sec_errstr (ctx->sec));
         goto done;
     }
-    if (zsocket_bind (ctx->local_zs_pub, ctx->local_inproc_uri) < 0) {
+    if (zsocket_bind (ctx->local_zs_pub, "%s", ctx->local_inproc_uri) < 0) {
         flux_log (h, LOG_ERR, "zsocket_bind %s: %s", ctx->local_inproc_uri,
                   strerror (errno));
         goto done;

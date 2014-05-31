@@ -110,7 +110,7 @@ void send_czmq (char *buf, int len)
     if (mopt)
         mon = mon_init (zctx, zs, ZMQ_EVENT_CONNECTED);
     //zsocket_set_sndhwm (zs, 0); /* unlimited */
-    if (zsocket_connect (zs, uri) < 0)
+    if (zsocket_connect (zs, "%s", uri) < 0)
         err_exit ("C: zsocket_connect");
     if (mopt)
         mon_waitevent (mon, ZMQ_EVENT_CONNECTED);
@@ -276,7 +276,7 @@ int main (int argc, char *argv[])
     if (!(zs = zsocket_new (zctx, ZMQ_ROUTER)))
         err_exit ("S: zsocket_new");
     zsocket_set_rcvhwm (zs, 0); /* unlimited */
-    if (zsocket_bind (zs, uritmpl) < 0)
+    if (zsocket_bind (zs, "%s", uritmpl) < 0)
         err_exit ("S: zsocket_bind");
     uri = zsocket_last_endpoint (zs);
 

@@ -187,7 +187,7 @@ static void *init_dealer (ctx_t *ctx, const char *id, const char *uri)
                   flux_sec_errstr (ctx->sec));
         goto error;
     }
-    if (zsocket_connect (s, uri) < 0) {
+    if (zsocket_connect (s, "%s", uri) < 0) {
         flux_log (ctx->h, LOG_ERR, "zsocket_connect %s: %s", uri,
                   strerror (errno));
         goto error;
