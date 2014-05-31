@@ -7,7 +7,7 @@ LDFLAGS = -Wl,-rpath,$(LIBDIR)
 
 export CFLAGS LDFLAGS
 
-LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lutil
+LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lutil -lm -lpthread
 
 BUILD = tenc tpmikvs tkvswatch tcommit tasyncsock tmunge
 
@@ -38,7 +38,7 @@ tpmikvs: tpmikvs.o
 	$(CC) $(LDFLAGS) -o $@ $< -L$(LIBDIR) -lpmi
 
 tkvswatch: tkvswatch.o
-	$(CC) $(LDFLAGS) -o $@ $< $(LDADD_CLI) -lcmb -lpthread
+	$(CC) $(LDFLAGS) -o $@ $< $(LDADD_CLI) -lcmb
 
 tcommit: tcommit.o
 	$(CC) $(LDFLAGS) -o $@ $< $(LDADD_CLI) -lcmb

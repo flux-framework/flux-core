@@ -18,7 +18,7 @@ CFLAGS = -Werror -Wall -g -fPIC $(EXTRA_CFLAGS) \
 	-DWITH_LSD_NOMEM_ERROR_FUNC -DWITH_LSD_FATAL_ERROR_FUNC \
 	-DWANT_RECKLESS_HOSTRANGE_EXPANSION \
 	-DPLUGIN_PATH=\"$(TOP)/plugins\" \
-	-DEXEC_PATH=\"$(TOP)/libexec\"
+	-DEXEC_PATH=\"$(TOP)/libexec\" $(shell pkg-config --cflags lua5.1)
 LDFLAGS = -Wl,-rpath,$(LIBDIR)
 
 export CFLAGS LDFLAGS
