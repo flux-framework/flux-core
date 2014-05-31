@@ -420,7 +420,7 @@ static int apisrv_main (flux_t h, zhash_t *args)
     char *sockpath = NULL, *dfltpath = NULL;
     int rc = -1;
 
-    if (!args || !(sockpath = zhash_lookup (args, "api:sockpath"))) {
+    if (!args || !(sockpath = zhash_lookup (args, "sockpath"))) {
         if (asprintf (&dfltpath, CMB_API_PATH_TMPL, geteuid ()) < 0)
             oom ();
         sockpath = dfltpath;

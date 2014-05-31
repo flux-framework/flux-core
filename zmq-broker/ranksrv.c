@@ -214,8 +214,7 @@ static int ranksrv_main (flux_t h, zhash_t *args)
     ctx_t *ctx = getctx (h);
     int rc = -1;
 
-    ctx->right_uri = zhash_lookup (args, "rank:right-uri");
-    if (!ctx->right_uri) {
+    if (!args || !(ctx->right_uri = zhash_lookup (args, "right-uri"))) {
         flux_log (h, LOG_ERR, "no sockets configured");
         goto done;
     }

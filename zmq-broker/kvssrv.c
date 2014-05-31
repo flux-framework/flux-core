@@ -1798,17 +1798,15 @@ static void setargs (ctx_t *ctx, zhash_t *args)
 
     key = zlist_first (keys);
     while (key) {
-        if (!strncmp (key, "kvs:", 4) && strlen (key + 4) > 0) {
-            val = zhash_lookup (args, key);
-            if (!(vo = json_tokener_parse (val)))
-                vo = json_object_new_string (val);
-            if (vo) {
-                if (store_by_reference (vo)) {
-                    store (ctx, vo, ref);
-                    commit_add (c, key + 4, dirent_create ("FILEREF", ref));
-                } else {
-                    commit_add (c, key + 4, dirent_create ("FILEVAL", vo));
-                }
+        val = zhash_lookup (args, key);
+        if (!(vo = json_tokener_parse (val)))
+            vo = json_object_new_string (val);
+        if (vo) {
+            if (store_by_reference (vo)) {
+                store (ctx, vo, ref);
+                commit_add (c, key, dirent_create ("FILEREF", ref));
+            } else {
+                commit_add (c, key, dirent_create ("FILEVAL", vo));
             }
         }
         key = zlist_next (keys);

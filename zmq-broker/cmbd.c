@@ -102,6 +102,9 @@ static void cmb_event_geturi_request (ctx_t *ctx);
 static void cmbd_init (ctx_t *ctx);
 static void cmbd_fini (ctx_t *ctx);
 
+static void hoh_set (zhash_t *hoh, const char *name, const char *key,
+                     const char *val);
+
 #define OPTIONS "t:vR:S:p:P:L:H:N:nci"
 static const struct option longopts[] = {
     {"session-name",    required_argument,  0, 'N'},
@@ -192,9 +195,7 @@ int main (int argc, char *argv[])
             case 'H': { /* --hostlist hostlist */
                 json_object *o = hostlist_to_json (optarg);
                 const char *val = json_object_to_json_string (o);
-
-                zhash_update (ctx.plugin_args, "kvs:hosts", xstrdup (val));
-                zhash_freefn (ctx.plugin_args, "kvs:hosts", free);
+                hoh_set (ctx.plugin_args, "kvs", "hosts", xstrdup (val));
                 json_object_put (o);
                 break;
             }
@@ -218,11 +219,13 @@ int main (int argc, char *argv[])
         }
     }
     for (i = optind; i < argc; i++) {
-        char *p, *cpy = xstrdup (argv[i]);
-        if ((p = strchr (cpy, '='))) {
-            *p++ = '\0';
-            zhash_update (ctx.plugin_args, cpy, xstrdup (p));
-            zhash_freefn (ctx.plugin_args, cpy, free);
+        char *key, *val, *cpy = xstrdup (argv[i]);
+        if ((key = strchr (cpy, ':'))) {
+            *key++ = '\0';
+            if ((val = strchr (key, '='))) {
+                *val++ = '\0'; 
+                hoh_set (ctx.plugin_args, cpy, key, xstrdup (val));
+            }
         }
         free (cpy);
     }
@@ -264,6 +267,30 @@ int main (int argc, char *argv[])
     return 0;
 }
 
+static void zhash_free (zhash_t *zh)
+{
+    zhash_destroy (&zh);
+}
+
+static void hoh_set (zhash_t *hoh, const char *name, const char *key,
+                     const char *val)
+{
+    zhash_t *zh = zhash_lookup (hoh, name);
+    if (!zh) {
+        if (!(zh = zhash_new ()))
+            oom ();
+        zhash_update (hoh, name, zh);
+        zhash_freefn (hoh, name, (zhash_free_fn *)zhash_free);
+    }
+    zhash_update (zh, key, (char *)val);
+    zhash_freefn (zh, key, (zhash_free_fn *)free);
+}
+
+static zhash_t *hoh_hget (zhash_t *hoh, const char *name)
+{
+    return zhash_lookup (hoh, name);
+}
+
 static void unload_plugin (plugin_ctx_t p)
 {
     zmq_pollitem_t zp;
@@ -275,17 +302,18 @@ static void unload_plugin (plugin_ctx_t p)
     plugin_unload (p);
 }
 
-static int load_plugin (ctx_t *ctx, const char *name)
+static int load_plugin (ctx_t *ctx, const char *name, zhash_t *args)
 {
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
     zuuid_t *uuid;
     plugin_ctx_t p;
+    char *id;
     int rc = -1;
 
     if (!(uuid = zuuid_new ()))
         oom ();
-    if ((p = plugin_load (ctx->h, ctx->plugin_path, name, zuuid_str (uuid),
-                          ctx->plugin_args))) {
+    id = zuuid_str (uuid);
+    if ((p = plugin_load (ctx->h, ctx->plugin_path, name, id, args))) {
         plugin_arg_set (p, ctx);
         zhash_update (ctx->plugin_ctx, name, p);
         zhash_freefn (ctx->plugin_ctx, name, (zhash_free_fn *)unload_plugin);
@@ -304,7 +332,7 @@ static void load_plugins (ctx_t *ctx)
     char *name, *saveptr, *a1 = cpy;
 
     while((name = strtok_r (a1, ",", &saveptr))) {
-        if (load_plugin (ctx, name) < 0)
+        if (load_plugin (ctx, name, hoh_hget (ctx->plugin_args, name)) < 0)
             err ("failed to load plugin %s", name);
         a1 = NULL;
     }
@@ -623,7 +651,7 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             flux_respond_errnum (ctx->h, zmsg, EPROTO);
         } else if (!zhash_lookup (ctx->plugin_ctx, name)) {
             flux_respond_errnum (ctx->h, zmsg, ESRCH);
-        } else if (load_plugin (ctx, name) < 0) {
+        } else if (load_plugin (ctx, name, NULL) < 0) {
             flux_respond_errnum (ctx->h, zmsg, errno);
         } else {
             flux_respond_errnum (ctx->h, zmsg, 0);
