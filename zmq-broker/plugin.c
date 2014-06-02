@@ -60,7 +60,6 @@ struct plugin_ctx_struct {
     int rank;
     bool reactor_stop;
     int reactor_rc;
-    void *arg;
 };
 
 static void plugin_reactor_stop (void *impl, int rc);
@@ -556,6 +555,7 @@ static void *plugin_thread (void *arg)
     }
 done:
     zloop_destroy (&p->zloop);
+    zstr_send (p->zs_svc[0], ""); /* EOF */
 
     return NULL;
 }
@@ -575,22 +575,11 @@ void *plugin_sock (plugin_ctx_t p)
     return p->zs_svc[1];
 }
 
-void plugin_arg_set (plugin_ctx_t p, void *arg)
-{
-    p->arg = arg;
-}
-
-void *plugin_arg_get (plugin_ctx_t p)
-{
-    return p->arg;
-}
-
-void plugin_unload (plugin_ctx_t p)
+void plugin_destroy (plugin_ctx_t p)
 {
     int errnum;
     zmsg_t *zmsg;
 
-    zstr_send (p->zs_svc[1], ""); /* EOF */
     errnum = pthread_join (p->t, NULL);
     if (errnum)
         errn_exit (errnum, "pthread_join");
@@ -610,6 +599,11 @@ void plugin_unload (plugin_ctx_t p)
     free (p->svc_uri);
 
     free (p);
+}
+
+void plugin_unload (plugin_ctx_t p)
+{
+    zstr_send (p->zs_svc[1], ""); /* EOF */
 }
 
 static void *plugin_dlopen (const char *searchpath, const char *name)

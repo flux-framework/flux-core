@@ -29,18 +29,23 @@ typedef struct plugin_ctx_struct *plugin_ctx_t;
 plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
                           const char *name, char *id, zhash_t *args);
 
-/* Unload a plugin by handle.
- * (FIXME: This is not used yet and is a work in progress)
+/* Signal plugin to unload by sending it EOF (zero length message).
+ * It will respond with an EOF when it is ready to be destroyed.
  */
 void plugin_unload (plugin_ctx_t p);
+
+/* Destroy plugin.
+ * This function calls pthread_join thus should only be called after
+ * EOF is received as described above or the calling thread may be
+ * blocked.
+ */
+void plugin_destroy (plugin_ctx_t p);
 
 /* Accessors.
  */
 const char *plugin_name (plugin_ctx_t p);
 const char *plugin_id (plugin_ctx_t p);
 void *plugin_sock (plugin_ctx_t p);
-void plugin_arg_set (plugin_ctx_t p, void *arg);
-void *plugin_arg_get (plugin_ctx_t p);
 
 #endif /* !PLUGIN_H */
 
