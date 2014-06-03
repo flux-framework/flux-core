@@ -43,11 +43,11 @@ LIBCMB_OBJS = apicli.o $(COMMON_OBJS)
 LIBPMI = $(LIBDIR)/libpmi.so.0
 LIBCMB = $(LIBDIR)/libcmb.so.0
 
-PLUGINS = plugins/apisrv.so plugins/hbsrv.so plugins/kvssrv.so \
-	plugins/barriersrv.so plugins/livesrv.so plugins/mechosrv.so \
-	plugins/logsrv.so plugins/echosrv.so plugins/jobsrv.so \
-	plugins/resrcsrv.so plugins/rexecsrv.so plugins/schedsrv.so \
-	plugins/eventsrv.so plugins/ranksrv.so plugins/monsrv.so
+PLUGINS = plugins/api.so plugins/hb.so plugins/kvs.so \
+	plugins/barrier.so plugins/live.so plugins/mecho.so \
+	plugins/log.so plugins/echo.so plugins/job.so \
+	plugins/resrc.so plugins/rexec.so plugins/sched.so \
+	plugins/event.so plugins/rank.so plugins/mon.so
 
 SUBCMDS = libexec/kvs libexec/ping libexec/mecho \
 	libexec/stats libexec/barrier libexec/snoop libexec/event \
@@ -61,13 +61,13 @@ BUILD = $(LIBCMB) $(LIBPMI) flux mpi_hello echo cmbd \
 
 all: subdirs $(BUILD) subdirs_post
 
-plugins/%.so: %.c
+plugins/%.so: %srv.c
 	mkdir -p plugins
 	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL)
-plugins/rexecsrv.so: wreck/wrexecsrv.c
+plugins/rexec.so: wreck/wrexecsrv.c
 	mkdir -p plugins
 	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL)
-plugins/%.so: wreck/%.c
+plugins/%.so: wreck/%srv.c
 	mkdir -p plugins
 	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL)
 

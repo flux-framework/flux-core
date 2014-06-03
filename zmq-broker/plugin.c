@@ -613,7 +613,7 @@ static void *plugin_dlopen (const char *searchpath, const char *name)
     void *dso = NULL;
 
     while ((dir = strtok_r (a1, ":", &saveptr))) {
-        if (asprintf (&path, "%s/%ssrv.so", dir, name) < 0)
+        if (asprintf (&path, "%s/%s.so", dir, name) < 0)
             oom ();
         dlerror ();
         dso = dlopen (path, RTLD_NOW | RTLD_LOCAL);
