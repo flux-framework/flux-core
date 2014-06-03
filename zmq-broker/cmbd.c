@@ -651,6 +651,7 @@ static int cmb_rmmod (ctx_t *ctx, const char *name, zmsg_t **zmsg)
         return -1;
     }
     module_unload (mod, zmsg);
+    flux_log (ctx->h, LOG_INFO, "rmmod %s", name);
     return 0;
 }
 
@@ -679,8 +680,31 @@ static json_object *cmb_lsmod (ctx_t *ctx)
 
 static int cmb_insmod (ctx_t *ctx, const char *name, json_object *args)
 {
-    errno = ESRCH;
-    return -1;
+    int rc = -1;
+    module_t *mod;
+    json_object_iter iter;
+
+    if (zhash_lookup (ctx->modules, name)) {
+        errno = EEXIST;
+        goto done;
+    }
+    mod = module_create (ctx, name);
+
+    json_object_object_foreachC (args, iter) {
+        const char *val = json_object_get_string (iter.val);
+        zhash_update (mod->args, iter.key, xstrdup (val));
+        zhash_freefn (mod->args, iter.key, (zhash_free_fn *)free);
+    }
+    zhash_update (ctx->modules, name, mod);
+    zhash_freefn (ctx->modules, name, (zhash_free_fn *)module_destroy);
+
+    if (module_load (ctx, mod) < 0)
+        goto done;
+
+    flux_log (ctx->h, LOG_INFO, "insmod %s", name);
+    rc = 0;
+done:
+    return rc;
 }
 
 static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)

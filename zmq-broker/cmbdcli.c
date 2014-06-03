@@ -125,6 +125,31 @@ json_object *flux_lsmod (flux_t h)
     return response;    
 }
 
+int flux_insmod (flux_t h, const char *name, json_object *args)
+{
+    json_object *request = util_json_object_new_object ();
+    json_object *response = NULL;
+    int rc = -1;
+
+    util_json_object_add_string (request, "name", name);
+    json_object_get_object (args);
+    json_object_object_add (request, "args", args);
+    if ((response = flux_rpc (h, request, "cmb.insmod"))) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (errno != 0)
+        goto done;
+    rc = 0;
+done:
+    if (request)
+        json_object_put (request);
+    if (response)
+        json_object_put (response);
+    return rc;
+}
+
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
