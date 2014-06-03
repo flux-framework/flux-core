@@ -94,10 +94,11 @@ int flux_size (flux_t h);
 bool flux_treeroot (flux_t h);
 
 /* Manipulate comms modules.
+ * Use rank=-1 for local.
  */
-int flux_rmmod (flux_t h, const char *name);
-json_object *flux_lsmod (flux_t h);
-int flux_insmod (flux_t h, const char *name, json_object *args);
+int flux_rmmod (flux_t h, int rank, const char *name);
+json_object *flux_lsmod (flux_t h, int rank);
+int flux_insmod (flux_t h, int rank, const char *name, json_object *args);
 
 /* Accessor for zeromq context.
  * N.B. The zctx_t is thread-safe but zeromq sockets, and therefore

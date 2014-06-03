@@ -92,14 +92,14 @@ bool flux_treeroot (flux_t h)
     return treeroot;
 }
 
-int flux_rmmod (flux_t h, const char *name)
+int flux_rmmod (flux_t h, int rank, const char *name)
 {
     json_object *request = util_json_object_new_object ();
     json_object *response = NULL;
     int rc = -1;
 
     util_json_object_add_string (request, "name", name);
-    if ((response = flux_rpc (h, request, "cmb.rmmod"))) {
+    if ((response = flux_rank_rpc (h, rank, request, "cmb.rmmod"))) {
         errno = EPROTO;
         goto done;
     }
@@ -114,18 +114,18 @@ done:
     return rc;
 }
 
-json_object *flux_lsmod (flux_t h)
+json_object *flux_lsmod (flux_t h, int rank)
 {
     json_object *request = util_json_object_new_object ();
     json_object *response = NULL;
 
-    response = flux_rpc (h, request, "cmb.lsmod");
+    response = flux_rank_rpc (h, rank, request, "cmb.lsmod");
     if (request)
         json_object_put (request);
     return response;    
 }
 
-int flux_insmod (flux_t h, const char *name, json_object *args)
+int flux_insmod (flux_t h, int rank, const char *name, json_object *args)
 {
     json_object *request = util_json_object_new_object ();
     json_object *response = NULL;
@@ -134,7 +134,7 @@ int flux_insmod (flux_t h, const char *name, json_object *args)
     util_json_object_add_string (request, "name", name);
     json_object_get_object (args);
     json_object_object_add (request, "args", args);
-    if ((response = flux_rpc (h, request, "cmb.insmod"))) {
+    if ((response = flux_rank_rpc (h, rank, request, "cmb.insmod"))) {
         errno = EPROTO;
         goto done;
     }

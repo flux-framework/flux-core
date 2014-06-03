@@ -1,4 +1,4 @@
-/* flux-insmod.c - flux insmod subcommand */
+/* flux-insmod.c - insert module subcommand */
 
 #define _GNU_SOURCE
 #include <getopt.h>
@@ -10,16 +10,17 @@
 #include "util.h"
 #include "log.h"
 
-#define OPTIONS "h"
+#define OPTIONS "hr:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
+    {"rank",       required_argument,  0, 'r'},
     { 0, 0, 0, 0 },
 };
 
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-insmod modulename [arg=val ...]\n"
+"Usage: flux-insmod [--rank N] modulename [arg=val ...]\n"
 );
     exit (1);
 }
@@ -31,6 +32,7 @@ int main (int argc, char *argv[])
     int i;
     char *name;
     json_object *args;
+    int rank = -1;
 
     log_init ("flux-insmod");
 
@@ -38,6 +40,9 @@ int main (int argc, char *argv[])
         switch (ch) {
             case 'h': /* --help */
                 usage ();
+                break;
+            case 'r': /* --help */
+                rank = strtoul (optarg, NULL, 10);
                 break;
             default:
                 usage ();
@@ -60,7 +65,7 @@ int main (int argc, char *argv[])
         util_json_object_add_string (args, cpy, val);
         free (cpy);
     }
-    if (flux_insmod (h, name, args) < 0)
+    if (flux_insmod (h, rank, name, args) < 0)
         err_exit ("flux_insmod");
     json_object_put (args);
 

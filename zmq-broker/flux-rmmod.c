@@ -1,4 +1,4 @@
-/* flux-rmmod.c - flux rmmod subcommand */
+/* flux-rmmod.c - remove module subcommand */
 
 #define _GNU_SOURCE
 #include <getopt.h>
@@ -10,16 +10,17 @@
 #include "util.h"
 #include "log.h"
 
-#define OPTIONS "h"
+#define OPTIONS "hr:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
+    {"rank",       required_argument,  0, 'r'},
     { 0, 0, 0, 0 },
 };
 
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-rmmod modulename [modulename ...]\n"
+"Usage: flux-rmmod [--rank N] modulename [modulename ...]\n"
 );
     exit (1);
 }
@@ -29,6 +30,7 @@ int main (int argc, char *argv[])
     flux_t h;
     int ch;
     int i;
+    int rank = -1;
 
     log_init ("flux-rmmod");
 
@@ -36,6 +38,9 @@ int main (int argc, char *argv[])
         switch (ch) {
             case 'h': /* --help */
                 usage ();
+                break;
+            case 'r': /* --rank N */
+                rank = strtoul (optarg, NULL, 10);
                 break;
             default:
                 usage ();
@@ -49,7 +54,7 @@ int main (int argc, char *argv[])
         err_exit ("cmb_init");
 
     for (i = optind; i < argc; i++) {
-        if (flux_rmmod (h, argv[i]) < 0) {
+        if (flux_rmmod (h, rank, argv[i]) < 0) {
             if (errno == ESRCH)
                 msg ("module `%s' is not loaded", argv[i]);
             else

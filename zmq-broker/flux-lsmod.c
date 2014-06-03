@@ -1,4 +1,4 @@
-/* flux-lsmod.c - flux lsmod subcommand */
+/* flux-lsmod.c - list modules subcommand */
 
 #define _GNU_SOURCE
 #include <getopt.h>
@@ -10,10 +10,11 @@
 #include "util.h"
 #include "log.h"
 
-#define OPTIONS "hl"
+#define OPTIONS "hlr:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"long",       no_argument,        0, 'l'},
+    {"rank",       required_argument,  0, 'r'},
     { 0, 0, 0, 0 },
 };
 
@@ -22,7 +23,7 @@ static void list_module (bool lopt, const char *key, json_object *mo);
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-lsmod [--long]\n"
+"Usage: flux-lsmod [--rank N] [--long]\n"
 );
     exit (1);
 }
@@ -34,6 +35,7 @@ int main (int argc, char *argv[])
     json_object *mods;
     json_object_iter iter;
     bool lopt = false;
+    int rank = -1;
 
     log_init ("flux-rmmod");
 
@@ -44,6 +46,9 @@ int main (int argc, char *argv[])
                 break;
             case 'l': /* --long */
                 lopt = true;
+                break;
+            case 'r': /* --rank */
+                rank = strtoul (optarg, NULL, 10);
                 break;
             default:
                 usage ();
@@ -56,7 +61,7 @@ int main (int argc, char *argv[])
     if (!(h = cmb_init ()))
         err_exit ("cmb_init");
 
-    if (!(mods = flux_lsmod (h)))
+    if (!(mods = flux_lsmod (h, rank)))
         err_exit ("flux_lsmod");
 
     json_object_object_foreachC (mods, iter) {
