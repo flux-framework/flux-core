@@ -19,7 +19,7 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-rmmod modulename\n"
+"Usage: flux-rmmod modulename [modulename ...]\n"
 );
     exit (1);
 }
@@ -28,6 +28,7 @@ int main (int argc, char *argv[])
 {
     flux_t h;
     int ch;
+    int i;
 
     log_init ("flux-rmmod");
 
@@ -41,14 +42,21 @@ int main (int argc, char *argv[])
                 break;
         }
     }
-    if (optind != argc - 1)
+    if (optind == argc)
         usage ();
 
     if (!(h = cmb_init ()))
         err_exit ("cmb_init");
 
-    if (flux_rmmod (h, argv[optind]) < 0)
-        err_exit ("flux_rmmod");
+    for (i = optind; i < argc; i++) {
+        if (flux_rmmod (h, argv[i]) < 0) {
+            if (errno == ESRCH)
+                msg ("module `%s' is not loaded", argv[i]);
+            else
+                err ("flux_rmmod `%s' failed", argv[i]);
+        } else
+            msg ("module `%s' successfully unloaded", argv[i]);
+    }
 
     flux_handle_destroy (&h);
     log_fini ();
