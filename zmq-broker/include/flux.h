@@ -96,6 +96,7 @@ bool flux_treeroot (flux_t h);
 /* Manipulate comms modules.
  */
 int flux_rmmod (flux_t h, const char *name);
+json_object *flux_lsmod (flux_t h);
 
 /* Accessor for zeromq context.
  * N.B. The zctx_t is thread-safe but zeromq sockets, and therefore

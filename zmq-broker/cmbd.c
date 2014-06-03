@@ -321,13 +321,13 @@ static void module_destroy (module_t *mod)
 {
     zmsg_t *zmsg;
 
-    if (!mod->eof)
-        module_unload (mod, NULL);
     if (mod->p) {
+        if (!mod->eof)
+            module_unload (mod, NULL);
         zmq_pollitem_t zp;
         zp.socket = plugin_sock (mod->p);
         zloop_poller_end (mod->ctx->zl, &zp);
-        plugin_destroy (mod->p); /* calls pthraed_join */
+        plugin_destroy (mod->p); /* calls pthread_join */
     }
     while ((zmsg = zlist_pop (mod->rmmod_reqs)))
         flux_respond_errnum (mod->ctx->h, &zmsg, 0);
@@ -337,6 +337,24 @@ static void module_destroy (module_t *mod)
     
     free (mod->name);
     free (mod);
+}
+
+static json_object *module_args_json (module_t *mod)
+{
+    json_object *o = util_json_object_new_object ();
+    zlist_t *keys;
+    char *name, *val;
+
+    if (!(keys = zhash_keys (mod->args)))
+        oom ();
+    name = zlist_first (keys);
+    while (name) {
+        val = zhash_lookup (mod->args, name); 
+        assert (val != NULL);
+        util_json_object_add_string (o, name, val);
+        name = zlist_next (keys);
+    }
+    return o;
 }
 
 static void module_unload (module_t *mod, zmsg_t **zmsg)
@@ -625,6 +643,46 @@ static char *cmb_getattr (ctx_t *ctx, const char *name)
     return val;
 }
 
+static int cmb_rmmod (ctx_t *ctx, const char *name, zmsg_t **zmsg)
+{
+    module_t *mod;
+    if (!(mod = zhash_lookup (ctx->modules, name))) {
+        errno = ESRCH;
+        return -1;
+    }
+    module_unload (mod, zmsg);
+    return 0;
+}
+
+static json_object *cmb_lsmod (ctx_t *ctx)
+{
+    json_object *mo, *response = util_json_object_new_object ();
+    zlist_t *keys;
+    char *name;
+    module_t *mod;
+
+    if (!(keys = zhash_keys (ctx->modules)))
+        oom ();
+    name = zlist_first (keys);
+    while (name) {
+        mod = zhash_lookup (ctx->modules, name);
+        assert (mod != NULL);
+        mo = util_json_object_new_object ();
+        util_json_object_add_string (mo, "name", name);
+        json_object_object_add (mo, "args", module_args_json (mod));
+        json_object_object_add (response, name, mo);
+        name = zlist_next (keys);
+    }
+    zlist_destroy (&keys);
+    return response;
+}
+
+static int cmb_insmod (ctx_t *ctx, const char *name, json_object *args)
+{
+    errno = ESRCH;
+    return -1;
+}
+
 static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
 {
     char *arg = NULL;
@@ -674,29 +732,42 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
     } else if (cmb_msg_match (*zmsg, "cmb.rmmod")) {
         json_object *request = NULL;
         const char *name;
-        module_t *mod;
         if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
                 || util_json_object_get_string (request, "name", &name) < 0) {
             flux_respond_errnum (ctx->h, zmsg, EPROTO);
-        } else if (!(mod = zhash_lookup (ctx->modules, name))) {
-            flux_respond_errnum (ctx->h, zmsg, ESRCH);
-        } else {
-            module_unload (mod, zmsg); /* response is deferred */
-        }
+        } else if (cmb_rmmod (ctx, name, zmsg) < 0) {
+            flux_respond_errnum (ctx->h, zmsg, errno);
+        } /* else response is deferred until module returns EOF */
         if (request)
             json_object_put (request);
     } else if (cmb_msg_match (*zmsg, "cmb.insmod")) {
-        json_object *request = NULL;
+        json_object *args, *request = NULL;
         const char *name;
         if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
-                || util_json_object_get_string (request, "name", &name) < 0) {
+                || util_json_object_get_string (request, "name", &name) < 0
+                || !(args = json_object_object_get (request, "args"))) {
             flux_respond_errnum (ctx->h, zmsg, EPROTO);
-        } else if (!zhash_lookup (ctx->modules, name)) {
-            flux_respond_errnum (ctx->h, zmsg, ESRCH);
+        } else if (cmb_insmod (ctx, name, args) < 0) {
+            flux_respond_errnum (ctx->h, zmsg, errno);
+        } else  {
+            flux_respond_errnum (ctx->h, zmsg, 0);
         }
-        /* FIXME */
         if (request)
             json_object_put (request);
+    } else if (cmb_msg_match (*zmsg, "cmb.lsmod")) {
+        json_object *request = NULL;
+        json_object *response = NULL;
+        if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
+            flux_respond_errnum (ctx->h, zmsg, EPROTO);
+        } else if (!(response = cmb_lsmod (ctx))) {
+            flux_respond_errnum (ctx->h, zmsg, errno);
+        } else {
+            flux_respond (ctx->h, zmsg, response);
+        }
+        if (request)
+            json_object_put (request);
+        if (response)
+            json_object_put (response);
     } else
         handled = false;
 

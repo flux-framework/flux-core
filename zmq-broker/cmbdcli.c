@@ -114,6 +114,17 @@ done:
     return rc;
 }
 
+json_object *flux_lsmod (flux_t h)
+{
+    json_object *request = util_json_object_new_object ();
+    json_object *response = NULL;
+
+    response = flux_rpc (h, request, "cmb.lsmod");
+    if (request)
+        json_object_put (request);
+    return response;    
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
