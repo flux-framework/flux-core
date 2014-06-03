@@ -22,7 +22,7 @@ rexec-config.h :
 	@(echo '#define REXECD_LUA_PATTERN  "$(builddir)/lua.d/*.lua"') >> $@
 
 wrexecd : $(wrexecd_SOURCES:.c=.o)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LIBADD) $(topdir)/dlua/libdlua.a -llua
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBADD) $(topdir)/dlua/libdlua.a $(LUA_LIBS) -lm
 
 clean:
 	rm -f *.o $(CLEANFILES) tags
