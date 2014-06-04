@@ -7,11 +7,14 @@ EXTRA_LDFLAGS +=  -L$(TOP)/lib $(TOP)/zutil/libzutil.a $(TOP)/util/libutil.a
 SUBDIRS :=        wreck dlua
 SUBDIRS_POST :=   test
 
-ifeq ($(shell hostname),jimbo.chaos)
+# Uncomment for "native" MPI package
+#  (only needed for PMI tests)
+# Single node standalone
 MPIMOD = mvapich2-gnu-shmem
-else
-MPIMOD = mvapich2-gnu-psm
-endif
+# Hype
+#MPIMOD = mvapich2-gnu-psm
+# IPA
+#MPIMOD = mvapich2-gnu-ofa
 
 LUA_PKG = $(shell pkg-config --exists lua && echo lua || echo lua5.1)
 LUA_CFLAGS = $(shell pkg-config --silence-errors --cflags $(LUA_PKG))

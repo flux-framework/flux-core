@@ -3,19 +3,21 @@
 pepe=../pepe/pepe-launcher
 conf=flat
 nnodes=
+partition="pdebug"
 PTY="--pty"
 
 usage ()
 {
-    echo "launch [-n nnodes] [-c config]" >&2
+    echo "launch [-n nnodes] [-p partition] [-c config]" >&2
     exit 1
 }
 
-while getopts ":hbn:c:" opt; do
+while getopts ":hbn:c:p:" opt; do
     case ${opt} in
         \?) break;;
         h) usage ;;
         n) nnodes=${OPTARG};;
+        p) partition=${OPTARG};;
         c) conf=${OPTARG};;
         b) PTY=;;
     esac
@@ -40,7 +42,7 @@ if [ -n "$SLURM_NNODES" ]; then
     srun --propagate=CORE -N${nnodes:-$SLURM_NNODES} ${PTY} $pepe -c $confpath -- "$@"
 else 
     test -n "$nnodes" || usage
-    salloc -N$nnodes srun --propagate=CORE -N$nnodes ${PTY} $pepe -c $confpath -- "$@"
+    salloc -N$nnodes -p${partition} srun --propagate=CORE -N$nnodes ${PTY} $pepe -c $confpath -- "$@"
 fi
 
 
