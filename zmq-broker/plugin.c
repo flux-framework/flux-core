@@ -606,27 +606,7 @@ void plugin_unload (plugin_ctx_t p)
     zstr_send (p->zs_svc[1], ""); /* EOF */
 }
 
-static void *plugin_dlopen (const char *searchpath, const char *name)
-{
-    char *cpy = xstrdup (searchpath);
-    char *path, *dir, *saveptr, *a1 = cpy;
-    void *dso = NULL;
-
-    while ((dir = strtok_r (a1, ":", &saveptr))) {
-        if (asprintf (&path, "%s/%s.so", dir, name) < 0)
-            oom ();
-        dlerror ();
-        dso = dlopen (path, RTLD_NOW | RTLD_LOCAL);
-        free (path);
-        if (dso)
-            break;
-        a1 = NULL;
-    }
-    free (cpy);
-    return dso;
-}
-
-plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
+plugin_ctx_t plugin_load (flux_t h, const char *path,
                           const char *name, char *id, zhash_t *args)
 {
     plugin_ctx_t p;
@@ -635,10 +615,11 @@ plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
     void *dso;
     char *errstr;
 
-    if (!(dso = plugin_dlopen (searchpath, name))) {
-        msg ("plugin `%s' not found in search path (%s)", name, searchpath);
+    dlerror ();
+    if (!(dso = dlopen (path, RTLD_NOW | RTLD_LOCAL))) {
         if ((errstr = dlerror ()) != NULL)
-            err ("%s: %s", name, errstr);
+            msg ("%s", errstr);
+        errno = ENOENT;
         return NULL;
     }
     dlerror ();
@@ -646,6 +627,7 @@ plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
     if ((errstr = dlerror ()) != NULL) {
         err ("%s", errstr);
         dlclose (dso);
+        errno = ENOENT;
         return NULL;
     }
 
@@ -679,6 +661,7 @@ plugin_ctx_t plugin_load (flux_t h, const char *searchpath,
 
     return p;
 }
+
 
 static const struct flux_handle_ops plugin_handle_ops = {
     .request_sendmsg = plugin_request_sendmsg,

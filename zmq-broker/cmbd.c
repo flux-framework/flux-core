@@ -94,6 +94,7 @@ typedef struct {
     zlist_t *rmmod_reqs;
     ctx_t *ctx;    
     char *name;
+    char *path;
     bool eof;
 } module_t;
 
@@ -111,7 +112,7 @@ static void cmb_event_geturi_request (ctx_t *ctx);
 static void cmbd_init (ctx_t *ctx);
 static void cmbd_fini (ctx_t *ctx);
 
-static module_t *module_create (ctx_t *ctx, const char *name);
+static module_t *module_create (ctx_t *ctx, const char *name, const char *path);
 static void module_destroy (module_t *mod);
 static void module_unload (module_t *mod, zmsg_t **zmsg);
 
@@ -177,6 +178,7 @@ int main (int argc, char *argv[])
     if (gethostname (ctx.hostname, HOST_NAME_MAX) < 0)
         err_exit ("gethostname");
     ctx.pid = getpid();
+    ctx.plugin_path = PLUGIN_PATH;
 
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
@@ -221,7 +223,9 @@ int main (int argc, char *argv[])
                 char *cpy = xstrdup (optarg);
                 char *name, *saveptr, *a1 = cpy;
                 while((name = strtok_r (a1, ",", &saveptr))) {
-                    module_t *mod = module_create (&ctx, name);
+                    module_t *mod = module_create (&ctx, name, NULL);
+                    if (!mod)
+                        err_exit ("module %s", name);
                     zhash_update (ctx.modules, name, mod);
                     zhash_freefn (ctx.modules, name,
                                   (zhash_free_fn *)module_destroy);
@@ -269,8 +273,6 @@ int main (int argc, char *argv[])
         
     if (zhash_size (ctx.modules) == 0)
         usage ();
-    if (!ctx.plugin_path)
-        ctx.plugin_path = PLUGIN_PATH; /* compiled in default */
 
     if (asprintf (&ctx.rankstr, "%d", ctx.rank) < 0)
         oom ();
@@ -303,9 +305,36 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-static module_t *module_create (ctx_t *ctx, const char *name)
+static char *modfind (ctx_t *ctx, const char *name)
+{
+    char *cpy = xstrdup (ctx->plugin_path);
+    char *path = NULL, *dir, *saveptr, *a1 = cpy;
+    char *ret = NULL;
+    
+    while (!ret && (dir = strtok_r (a1, ":", &saveptr))) {
+        if (asprintf (&path, "%s/%s.so", dir, name) < 0)
+            oom ();
+        if (access (path, R_OK|X_OK) < 0)
+            free (path);
+        else
+            ret = path;
+        a1 = NULL;
+    }
+    free (cpy);
+    if (!ret)
+        errno = ENOENT;
+    return ret;
+}
+
+static module_t *module_create (ctx_t *ctx, const char *name, const char *path)
 {
     module_t *mod = xzmalloc (sizeof (*mod));
+
+    mod->path = path ? xstrdup (path) : modfind (ctx, name);
+    if (!mod->path) {
+        free (mod);
+        return NULL;
+    }
     if (!(mod->args = zhash_new ()))
         oom ();
     if (!(mod->rmmod_reqs = zlist_new ()))
@@ -336,6 +365,7 @@ static void module_destroy (module_t *mod)
     zhash_destroy (&mod->args);
     
     free (mod->name);
+    free (mod->path);
     free (mod);
 }
 
@@ -373,7 +403,7 @@ static int module_load (ctx_t *ctx, module_t *mod)
     int rc = -1;
 
     assert (mod->p == NULL);
-    mod->p = plugin_load (ctx->h, ctx->plugin_path, mod->name,
+    mod->p = plugin_load (ctx->h, mod->path, mod->name,
                           zuuid_str (mod->uuid), mod->args);
     if (mod->p) {
         zp.socket = plugin_sock (mod->p);
@@ -647,7 +677,7 @@ static int cmb_rmmod (ctx_t *ctx, const char *name, zmsg_t **zmsg)
 {
     module_t *mod;
     if (!(mod = zhash_lookup (ctx->modules, name))) {
-        errno = ESRCH;
+        errno = ENOENT;
         return -1;
     }
     module_unload (mod, zmsg);
@@ -678,7 +708,8 @@ static json_object *cmb_lsmod (ctx_t *ctx)
     return response;
 }
 
-static int cmb_insmod (ctx_t *ctx, const char *name, json_object *args)
+static int cmb_insmod (ctx_t *ctx, const char *name, const char *path,
+                       json_object *args)
 {
     int rc = -1;
     module_t *mod;
@@ -688,19 +719,19 @@ static int cmb_insmod (ctx_t *ctx, const char *name, json_object *args)
         errno = EEXIST;
         goto done;
     }
-    mod = module_create (ctx, name);
-
+    if (!(mod = module_create (ctx, name, path)))
+        goto done;
     json_object_object_foreachC (args, iter) {
         const char *val = json_object_get_string (iter.val);
         zhash_update (mod->args, iter.key, xstrdup (val));
         zhash_freefn (mod->args, iter.key, (zhash_free_fn *)free);
     }
+    if (module_load (ctx, mod) < 0) {
+        module_destroy (mod);
+        goto done;
+    }
     zhash_update (ctx->modules, name, mod);
     zhash_freefn (ctx->modules, name, (zhash_free_fn *)module_destroy);
-
-    if (module_load (ctx, mod) < 0)
-        goto done;
-
     flux_log (ctx->h, LOG_INFO, "insmod %s", name);
     rc = 0;
 done:
@@ -731,7 +762,7 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
                 || util_json_object_get_string (request, "name", &name) < 0) {
             flux_respond_errnum (ctx->h, zmsg, EPROTO);
         } else if (!(val = cmb_getattr (ctx, name))) {
-            flux_respond_errnum (ctx->h, zmsg, ESRCH);
+            flux_respond_errnum (ctx->h, zmsg, ENOENT);
         } else {
             util_json_object_add_string (response, (char *)name, val);
             flux_respond (ctx->h, zmsg, response);
@@ -766,15 +797,17 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             json_object_put (request);
     } else if (cmb_msg_match (*zmsg, "cmb.insmod")) {
         json_object *args, *request = NULL;
-        const char *name;
+        const char *name, *path = NULL;
         if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
                 || util_json_object_get_string (request, "name", &name) < 0
                 || !(args = json_object_object_get (request, "args"))) {
             flux_respond_errnum (ctx->h, zmsg, EPROTO);
-        } else if (cmb_insmod (ctx, name, args) < 0) {
-            flux_respond_errnum (ctx->h, zmsg, errno);
-        } else  {
-            flux_respond_errnum (ctx->h, zmsg, 0);
+        } else {
+            (void)util_json_object_get_string (request, "path", &path);
+            if (cmb_insmod (ctx, name, path, args) < 0)
+                flux_respond_errnum (ctx->h, zmsg, errno);
+            else
+                flux_respond_errnum (ctx->h, zmsg, 0);
         }
         if (request)
             json_object_put (request);

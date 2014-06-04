@@ -1,4 +1,4 @@
-/* flux-rmmod.c - remove module subcommand */
+/* flux-modprobe.c - insert module (by name) subcommand */
 
 #define _GNU_SOURCE
 #include <getopt.h>
@@ -20,7 +20,7 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-rmmod [--rank N] modulename [modulename ...]\n"
+"Usage: flux-modprobe [--rank N] modulename [arg=val ...]\n"
 );
     exit (1);
 }
@@ -30,16 +30,18 @@ int main (int argc, char *argv[])
     flux_t h;
     int ch;
     int i;
+    char *name;
+    json_object *args;
     int rank = -1;
 
-    log_init ("flux-rmmod");
+    log_init ("flux-modprobe");
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
             case 'h': /* --help */
                 usage ();
                 break;
-            case 'r': /* --rank N */
+            case 'r': /* --help */
                 rank = strtoul (optarg, NULL, 10);
                 break;
             default:
@@ -49,16 +51,24 @@ int main (int argc, char *argv[])
     }
     if (optind == argc)
         usage ();
+    name = argv[optind++];
 
     if (!(h = cmb_init ()))
         err_exit ("cmb_init");
-
+   
+    args = util_json_object_new_object (); 
     for (i = optind; i < argc; i++) {
-        if (flux_rmmod (h, rank, argv[i]) < 0)
-            err ("%s", argv[i]);
-        else
-            msg ("%s: unloaded", argv[i]);
+        char *val, *cpy = xstrdup (argv[i]);
+        if ((val = strchr (cpy, '=')))
+            *val++ = '\0';
+        if (!val)
+            msg_exit ("malformed argument: %s", cpy);
+        util_json_object_add_string (args, cpy, val);
+        free (cpy);
     }
+    if (flux_insmod (h, rank, NULL, name, args) < 0)
+        err_exit ("%s", name);
+    json_object_put (args);
 
     flux_handle_destroy (&h);
     log_fini ();
