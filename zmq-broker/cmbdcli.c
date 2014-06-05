@@ -122,7 +122,7 @@ json_object *flux_lsmod (flux_t h, int rank)
     response = flux_rank_rpc (h, rank, request, "cmb.lsmod");
     if (request)
         json_object_put (request);
-    return response;    
+    return response;
 }
 
 int flux_insmod (flux_t h, int rank, const char *path, const char *name,

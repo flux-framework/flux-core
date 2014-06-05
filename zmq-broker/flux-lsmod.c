@@ -64,6 +64,7 @@ int main (int argc, char *argv[])
     if (!(mods = flux_lsmod (h, rank)))
         err_exit ("flux_lsmod");
 
+    printf ("%-20s %6s %s\n", "Module", "Size", "Digest");
     json_object_object_foreachC (mods, iter) {
         list_module (lopt, iter.key, iter.val);
     }
@@ -76,15 +77,18 @@ int main (int argc, char *argv[])
 
 static void list_module (bool lopt, const char *key, json_object *mo)
 {
-    const char *name;
+    const char *name, *digest;
+    int size;
     json_object *args;
     json_object_iter iter;
 
     if (util_json_object_get_string (mo, "name", &name) < 0
+            || util_json_object_get_string (mo, "digest", &digest) < 0
+            || util_json_object_get_int (mo, "size", &size) < 0
             || !(args = json_object_object_get (mo, "args")))
         msg_exit ("error parsing lsmod response");
 
-    printf ("%-10.10s ", key);
+    printf ("%-20.20s %6d %8.8s  ", key, size, digest);
     if (lopt) {
         printf ("%-10.10s ", name);
         json_object_object_foreachC (args, iter) {

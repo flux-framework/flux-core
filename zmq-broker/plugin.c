@@ -55,6 +55,7 @@ struct plugin_ctx_struct {
     flux_sec_t sec;
     flux_t h;
     char *name;
+    zfile_t *zf;
     void *dso;
     zhash_t *args;
     int rank;
@@ -575,6 +576,16 @@ void *plugin_sock (plugin_ctx_t p)
     return p->zs_svc[1];
 }
 
+const char *plugin_digest (plugin_ctx_t p)
+{
+    return zfile_digest (p->zf);
+}
+
+int plugin_size (plugin_ctx_t p)
+{
+    return (int)zfile_cursize (p->zf);
+}
+
 void plugin_destroy (plugin_ctx_t p)
 {
     int errnum;
@@ -594,6 +605,7 @@ void plugin_destroy (plugin_ctx_t p)
     zlist_destroy (&p->deferred_responses);
 
     dlclose (p->dso);
+    zfile_destroy (&p->zf);
     free (p->name);
     free (p->uuid);
     free (p->svc_uri);
@@ -638,6 +650,7 @@ plugin_ctx_t plugin_load (flux_t h, const char *path,
     p->args = args;
     p->ops = ops;
     p->dso = dso;
+    p->zf = zfile_new (NULL, path);
     p->name = xstrdup (name);
     if (asprintf (&p->svc_uri, "inproc://svc-%s", name) < 0)
         oom ();

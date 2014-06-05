@@ -92,7 +92,7 @@ typedef struct {
     zuuid_t *uuid;
     zhash_t *args;
     zlist_t *rmmod_reqs;
-    ctx_t *ctx;    
+    ctx_t *ctx;
     char *name;
     char *path;
     bool eof;
@@ -270,7 +270,7 @@ int main (int argc, char *argv[])
         zhash_update (mod->args, "hosts", hosts);
         zhash_freefn (mod->args, "hosts", (zhash_free_fn *)free);
     }
-        
+
     if (zhash_size (ctx.modules) == 0)
         usage ();
 
@@ -310,7 +310,7 @@ static char *modfind (ctx_t *ctx, const char *name)
     char *cpy = xstrdup (ctx->plugin_path);
     char *path = NULL, *dir, *saveptr, *a1 = cpy;
     char *ret = NULL;
-    
+
     while (!ret && (dir = strtok_r (a1, ":", &saveptr))) {
         if (asprintf (&path, "%s/%s.so", dir, name) < 0)
             oom ();
@@ -363,7 +363,7 @@ static void module_destroy (module_t *mod)
     zlist_destroy (&mod->rmmod_reqs);
     zuuid_destroy (&mod->uuid);
     zhash_destroy (&mod->args);
-    
+
     free (mod->name);
     free (mod->path);
     free (mod);
@@ -379,7 +379,7 @@ static json_object *module_args_json (module_t *mod)
         oom ();
     name = zlist_first (keys);
     while (name) {
-        val = zhash_lookup (mod->args, name); 
+        val = zhash_lookup (mod->args, name);
         assert (val != NULL);
         util_json_object_add_string (o, name, val);
         name = zlist_next (keys);
@@ -699,7 +699,9 @@ static json_object *cmb_lsmod (ctx_t *ctx)
         mod = zhash_lookup (ctx->modules, name);
         assert (mod != NULL);
         mo = util_json_object_new_object ();
-        util_json_object_add_string (mo, "name", name);
+        util_json_object_add_string (mo, "name", plugin_name (mod->p));
+        util_json_object_add_int (mo, "size", plugin_size (mod->p));
+        util_json_object_add_string (mo, "digest", plugin_digest (mod->p));
         json_object_object_add (mo, "args", module_args_json (mod));
         json_object_object_add (response, name, mo);
         name = zlist_next (keys);

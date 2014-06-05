@@ -37,6 +37,8 @@ void plugin_destroy (plugin_ctx_t p);
  */
 const char *plugin_name (plugin_ctx_t p);
 const char *plugin_uuid (plugin_ctx_t p);
+const char *plugin_digest (plugin_ctx_t p);
+int plugin_size (plugin_ctx_t p);
 void *plugin_sock (plugin_ctx_t p);
 
 #endif /* !PLUGIN_H */
