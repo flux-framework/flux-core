@@ -728,6 +728,14 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
     ZLOOP_RETURN(ctx);
 }
 
+static void reap_all_children (void)
+{
+    pid_t pid;
+    int status;
+    while ((pid = waitpid ((pid_t) -1, &status, WNOHANG)) > (pid_t)0)
+        msg ("child %ld exited status 0x%04x\n", (long)pid, status);
+}
+
 static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
     struct signalfd_siginfo fdsi;
@@ -736,9 +744,12 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
     if ((n = read (item->fd, &fdsi, sizeof (fdsi))) < 0) {
         if (errno != EWOULDBLOCK)
             err_exit ("read");
-    } else if (n == sizeof (fdsi)){    
+    } else if (n == sizeof (fdsi)){
         msg ("signal %d (%s)", fdsi.ssi_signo, strsignal (fdsi.ssi_signo));
-        ctx->reactor_stop = true;
+        if (fdsi.ssi_signo == SIGCHLD)
+            reap_all_children ();
+        else
+            ctx->reactor_stop = true;
     }
     ZLOOP_RETURN(ctx);
 }
