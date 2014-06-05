@@ -25,6 +25,7 @@
 #define HAVE_LOG_H
 
 #include <syslog.h>
+#include <stdarg.h>
 
 void log_init (char *p);
 void log_fini (void);
