@@ -480,7 +480,7 @@ static msghandler_t htab[] = {
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
-static int rexec_main (flux_t h, zhash_t *args)
+int mod_main (flux_t h, zhash_t *args)
 {
     struct rexec_ctx *ctx = getctx (h);
 
@@ -498,10 +498,6 @@ static int rexec_main (flux_t h, zhash_t *args)
     }
     return 0;
 }
-
-const struct plugin_ops ops = {
-    .main = rexec_main,
-};
 
 /*
  * vi: ts=4 sw=4 expandtab

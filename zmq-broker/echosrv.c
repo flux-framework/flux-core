@@ -55,7 +55,7 @@ out:
     return 0;
 }
 
-static int echo_main (flux_t h, zhash_t *args)
+int mod_main (flux_t h, zhash_t *args)
 {
     if (flux_msghandler_add (h, FLUX_MSGTYPE_EVENT, "echo",
                              echo_request_cb, NULL) < 0) {
@@ -68,10 +68,6 @@ static int echo_main (flux_t h, zhash_t *args)
     }
     return 0;
 }
-
-const struct plugin_ops ops = {
-    .main = echo_main,
-};
 
 /*
  * vi: ts=4 sw=4 expandtab

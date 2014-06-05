@@ -469,9 +469,9 @@ static void _new_job (const char *key, kvsdir_t dir, void *arg, int errnum)
 }
 
 /*
- * _sched_main() - plugin entry point
+ * plugin entry point
  */
-static int _sched_main (flux_t p, zhash_t *args)
+int mod_main (flux_t p, zhash_t *args)
 {
     flux_log_set_facility (p, "sched");
     flux_log (p, LOG_INFO, "sched plugin starting");
@@ -493,10 +493,6 @@ static int _sched_main (flux_t p, zhash_t *args)
     }
     return 0;
 }
-
-const struct plugin_ops ops = {
-    .main = _sched_main,
-};
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

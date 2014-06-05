@@ -209,7 +209,7 @@ static msghandler_t htab[] = {
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
-static int ranksrv_main (flux_t h, zhash_t *args)
+int mod_main (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
     int rc = -1;
@@ -237,10 +237,6 @@ static int ranksrv_main (flux_t h, zhash_t *args)
 done:
     return rc;
 }
-
-const struct plugin_ops ops = {
-    .main = ranksrv_main,
-};
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

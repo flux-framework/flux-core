@@ -414,7 +414,7 @@ static msghandler_t htab[] = {
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
-static int apisrv_main (flux_t h, zhash_t *args)
+int mod_main (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
     char *sockpath = NULL, *dfltpath = NULL;
@@ -455,10 +455,6 @@ done:
     }
     return rc;
 }
-
-const struct plugin_ops ops = {
-    .main = apisrv_main,
-};
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

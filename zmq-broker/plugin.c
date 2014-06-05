@@ -47,7 +47,7 @@ struct plugin_ctx_struct {
     char *svc_uri;
     char *uuid;
     pthread_t t;
-    const struct plugin_ops *ops;
+    mod_main_f *main;
     plugin_stats_t stats;
     zloop_t *zloop;
     zlist_t *deferred_responses;
@@ -548,10 +548,8 @@ static void *plugin_thread (void *arg)
     register_request (p, "rusage", rusage_cb);
     register_event   (p, "stats.*", stats_cb);
 
-    if (!p->ops->main)
-        err_exit ("%s: Plugin must define 'main' method", p->name);
-    if (p->ops->main(p->h, p->args) < 0) {
-        err ("%s: main returned error", p->name);
+    if (p->main(p->h, p->args) < 0) {
+        err ("%s: mod_main returned error", p->name);
         goto done;
     }
 done:
@@ -623,8 +621,8 @@ plugin_ctx_t plugin_load (flux_t h, const char *path,
 {
     plugin_ctx_t p;
     int errnum;
-    const struct plugin_ops *ops;
     void *dso;
+    mod_main_f *mod_main;
     char *errstr;
 
     dlerror ();
@@ -635,7 +633,7 @@ plugin_ctx_t plugin_load (flux_t h, const char *path,
         return NULL;
     }
     dlerror ();
-    ops = (const struct plugin_ops *)dlsym (dso, "ops");
+    mod_main = (mod_main_f *)dlsym (dso, "mod_main");
     if ((errstr = dlerror ()) != NULL) {
         err ("%s", errstr);
         dlclose (dso);
@@ -648,7 +646,7 @@ plugin_ctx_t plugin_load (flux_t h, const char *path,
     p->zctx = flux_get_zctx (h);
     p->sec = flux_get_sec (h);
     p->args = args;
-    p->ops = ops;
+    p->main = mod_main;
     p->dso = dso;
     p->zf = zfile_new (NULL, path);
     p->name = xstrdup (name);

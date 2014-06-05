@@ -8,12 +8,10 @@
 #define REQUEST_URI         "inproc://request"
 #define EVENT_URI           "inproc://event"
 
-/* A plugin defines 'const struct plugin_ops ops = {...}' containing
- * its implementations of one or more of the plugin operations.
+/* Plugin must define a mod_main().
  */
-struct plugin_ops {
-    int (*main)(flux_t h, zhash_t *args);
-};
+typedef int (mod_main_f)(flux_t h, zhash_t *args);
+extern mod_main_f mod_main;
 
 typedef struct plugin_ctx_struct *plugin_ctx_t;
 

@@ -81,7 +81,7 @@ done:
         free (key);
 }
 
-static int hbsrv_main (flux_t h, zhash_t *args)
+int mod_main (flux_t h, zhash_t *args)
 {
     if (kvs_watch_dir (h, set_config, h, "conf.hb") < 0) {
         flux_log (h, LOG_ERR, "kvs_watch_dir conf.hb: %s", strerror (errno));
@@ -93,10 +93,6 @@ static int hbsrv_main (flux_t h, zhash_t *args)
     }
     return 0;
 }
-
-const struct plugin_ops ops = {
-    .main    = hbsrv_main,
-};
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

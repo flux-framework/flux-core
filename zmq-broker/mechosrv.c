@@ -50,7 +50,7 @@ done:
     return 0;
 }
 
-static int mechosrv_main (flux_t h, zhash_t *args)
+int mod_main (flux_t h, zhash_t *args)
 {
     if (flux_event_subscribe (h, "mrpc.mecho") < 0) {
         flux_log (h, LOG_ERR, "%s: flux_event_subscribe", __FUNCTION__);
@@ -67,10 +67,6 @@ static int mechosrv_main (flux_t h, zhash_t *args)
     }
     return 0;
 }
-
-const struct plugin_ops ops = {
-    .main = mechosrv_main,
-};
 
 /*
  * vi: ts=4 sw=4 expandtab
