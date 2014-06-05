@@ -1000,7 +1000,7 @@ static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
             errno = EINVAL;
     } else {
         if ((mod = zhash_lookup (ctx->modules, service))
-                 && (!lasthop || strcmp (lasthop, plugin_id (mod->p)) != 0)) {
+                 && (!lasthop || strcmp (lasthop, plugin_uuid (mod->p)) != 0)) {
             if (zmsg_send (zmsg, plugin_sock (mod->p)) < 0)
                 err ("%s: zs_parent", __FUNCTION__);
 

@@ -45,7 +45,7 @@ struct plugin_ctx_struct {
     void *zs_svc[2]; /* for handling requests 0=plugin, 1=cmbd */
     void *zs_evin;
     char *svc_uri;
-    char *id;
+    char *uuid;
     pthread_t t;
     const struct plugin_ops *ops;
     plugin_stats_t stats;
@@ -498,7 +498,7 @@ static void register_event (plugin_ctx_t p, char *name, FluxMsgHandler cb)
     if (asprintf (&s, "%s.%s", p->name, name) < 0)
         oom ();
     if (flux_msghandler_add (p->h, FLUX_MSGTYPE_EVENT, s, cb, p) < 0)
-        err_exit ("%s: flux_msghandler_add", p->id);
+        err_exit ("%s: flux_msghandler_add", p->name);
     /* Trim a glob wildcard off the end to form a subscription string.
      * 0MQ subscriptions are a rooted substring match.
      * Globs in other places are fatal.
@@ -508,7 +508,7 @@ static void register_event (plugin_ctx_t p, char *name, FluxMsgHandler cb)
     if (strchr (s, '*'))
         err_exit ("%s: cant deal with '%s' subscription", __FUNCTION__, name);
     if (flux_event_subscribe (p->h, s) < 0)
-        err_exit ("%s: flux_event_subscribe %s", p->id, s);
+        err_exit ("%s: flux_event_subscribe %s", p->name, s);
     free (s);
 }
 
@@ -519,7 +519,7 @@ static void register_request (plugin_ctx_t p, char *name, FluxMsgHandler cb)
     if (asprintf (&s, "%s.%s", p->name, name) < 0)
         oom ();
     if (flux_msghandler_add (p->h, FLUX_MSGTYPE_REQUEST, s, cb, p) < 0)
-        err_exit ("%s: flux_msghandler_add %s", p->id, s);
+        err_exit ("%s: flux_msghandler_add %s", p->name, s);
     free (s);
 }
 
@@ -537,7 +537,7 @@ static void *plugin_thread (void *arg)
 
     p->zloop = plugin_zloop_create (p);
     if (p->zloop == NULL)
-        err_exit ("%s: plugin_zloop_create", p->id);
+        err_exit ("%s: plugin_zloop_create", p->name);
 
     /* Register callbacks for "internal" methods.
      * These can be overridden in p->ops->main() if desired.
@@ -548,7 +548,7 @@ static void *plugin_thread (void *arg)
     register_event   (p, "stats.*", stats_cb);
 
     if (!p->ops->main)
-        err_exit ("%s: Plugin must define 'main' method", p->id);
+        err_exit ("%s: Plugin must define 'main' method", p->name);
     if (p->ops->main(p->h, p->args) < 0) {
         err ("%s: main returned error", p->name);
         goto done;
@@ -565,9 +565,9 @@ const char *plugin_name (plugin_ctx_t p)
     return p->name;
 }
 
-const char *plugin_id (plugin_ctx_t p)
+const char *plugin_uuid (plugin_ctx_t p)
 {
-    return p->id;
+    return p->uuid;
 }
 
 void *plugin_sock (plugin_ctx_t p)
@@ -595,7 +595,7 @@ void plugin_destroy (plugin_ctx_t p)
 
     dlclose (p->dso);
     free (p->name);
-    free (p->id);
+    free (p->uuid);
     free (p->svc_uri);
 
     free (p);
@@ -607,7 +607,7 @@ void plugin_unload (plugin_ctx_t p)
 }
 
 plugin_ctx_t plugin_load (flux_t h, const char *path,
-                          const char *name, char *id, zhash_t *args)
+                          const char *name, const char *uuid, zhash_t *args)
 {
     plugin_ctx_t p;
     int errnum;
@@ -641,7 +641,7 @@ plugin_ctx_t plugin_load (flux_t h, const char *path,
     p->name = xstrdup (name);
     if (asprintf (&p->svc_uri, "inproc://svc-%s", name) < 0)
         oom ();
-    p->id = xstrdup (id);
+    p->uuid = xstrdup (uuid);
     p->rank = flux_rank (h);
     if (!(p->deferred_responses = zlist_new ()))
         oom ();
@@ -650,7 +650,7 @@ plugin_ctx_t plugin_load (flux_t h, const char *path,
     flux_log_set_facility (p->h, name);
 
     /* connect sockets in the parent, then use them in the thread */
-    zconnect (p->zctx, &p->zs_request, ZMQ_DEALER, REQUEST_URI, -1, id);
+    zconnect (p->zctx, &p->zs_request, ZMQ_DEALER, REQUEST_URI, -1, p->uuid);
     zbind (p->zctx, &p->zs_svc[1], ZMQ_PAIR, p->svc_uri, -1);
     zconnect (p->zctx, &p->zs_svc[0], ZMQ_PAIR, p->svc_uri, -1, NULL);
     zconnect (p->zctx, &p->zs_evin,  ZMQ_SUB, EVENT_URI, 0, NULL);
