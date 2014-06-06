@@ -19,19 +19,9 @@ extern mod_main_f mod_main;
 
 typedef struct plugin_ctx_struct *plugin_ctx_t;
 
-/* Load plugin by path.
- */
-plugin_ctx_t plugin_load (flux_t h, const char *path, zhash_t *args);
-
-/* Signal plugin to unload by sending it EOF (zero length message).
- * It will respond with an EOF when it is ready to be destroyed.
- */
-void plugin_unload (plugin_ctx_t p);
-
-/* Destroy plugin.
- * This function calls pthread_join thus should only be called after
- * EOF is received as described above or the calling thread may be blocked.
- */
+plugin_ctx_t plugin_create (flux_t h, const char *path, zhash_t *args);
+void plugin_start (plugin_ctx_t p);
+void plugin_stop (plugin_ctx_t p);
 void plugin_destroy (plugin_ctx_t p);
 
 /* Accessors.

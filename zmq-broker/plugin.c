@@ -589,9 +589,11 @@ void plugin_destroy (plugin_ctx_t p)
     int errnum;
     zmsg_t *zmsg;
 
-    errnum = pthread_join (p->t, NULL);
-    if (errnum)
-        errn_exit (errnum, "pthread_join");
+    if (p->t) {
+        errnum = pthread_join (p->t, NULL);
+        if (errnum)
+            errn_exit (errnum, "pthread_join");
+    }
 
     flux_handle_destroy (&p->h);
 
@@ -612,15 +614,22 @@ void plugin_destroy (plugin_ctx_t p)
     free (p);
 }
 
-void plugin_unload (plugin_ctx_t p)
+void plugin_stop (plugin_ctx_t p)
 {
     zstr_send (p->zs_svc[1], ""); /* EOF */
 }
 
-plugin_ctx_t plugin_load (flux_t h, const char *path, zhash_t *args)
+void plugin_start (plugin_ctx_t p)
+{
+    int errnum;
+    errnum = pthread_create (&p->t, NULL, plugin_thread, p);
+    if (errnum)
+        errn_exit (errnum, "pthread_create");
+}
+
+plugin_ctx_t plugin_create (flux_t h, const char *path, zhash_t *args)
 {
     plugin_ctx_t p;
-    int errnum;
     void *dso;
     const char **mod_namep;
     mod_main_f *mod_main;
@@ -666,10 +675,6 @@ plugin_ctx_t plugin_load (flux_t h, const char *path, zhash_t *args)
     zbind (p->zctx, &p->zs_svc[1], ZMQ_PAIR, p->svc_uri, -1);
     zconnect (p->zctx, &p->zs_svc[0], ZMQ_PAIR, p->svc_uri, -1, NULL);
     zconnect (p->zctx, &p->zs_evin,  ZMQ_SUB, EVENT_URI, 0, NULL);
-
-    errnum = pthread_create (&p->t, NULL, plugin_thread, p);
-    if (errnum)
-        errn_exit (errnum, "pthread_create");
 
     return p;
 }

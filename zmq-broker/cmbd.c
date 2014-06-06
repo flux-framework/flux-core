@@ -386,7 +386,7 @@ static void module_unload (module_t *mod, zmsg_t **zmsg)
         zlist_push (mod->rmmod_reqs, *zmsg);
         *zmsg = NULL;
     }
-    plugin_unload (mod->p);
+    plugin_stop (mod->p);
     mod->eof = true;
 }
 
@@ -396,11 +396,12 @@ static int module_load (ctx_t *ctx, module_t *mod)
     int rc = -1;
 
     assert (mod->p == NULL);
-    mod->p = plugin_load (ctx->h, mod->path, mod->args);
+    mod->p = plugin_create (ctx->h, mod->path, mod->args);
     if (mod->p) {
         zp.socket = plugin_sock (mod->p);
         if (zloop_poller (ctx->zl, &zp, (zloop_fn *)plugins_cb, mod) < 0)
             err_exit ("zloop_poller");
+        plugin_start (mod->p);
         rc = 0;
     }
     return rc;
