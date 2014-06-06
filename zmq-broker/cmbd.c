@@ -367,24 +367,6 @@ static void module_destroy (module_t *mod)
     free (mod);
 }
 
-static json_object *module_args_json (module_t *mod)
-{
-    json_object *o = util_json_object_new_object ();
-    zlist_t *keys;
-    char *name, *val;
-
-    if (!(keys = zhash_keys (mod->args)))
-        oom ();
-    name = zlist_first (keys);
-    while (name) {
-        val = zhash_lookup (mod->args, name);
-        assert (val != NULL);
-        util_json_object_add_string (o, name, val);
-        name = zlist_next (keys);
-    }
-    return o;
-}
-
 static void module_unload (module_t *mod, zmsg_t **zmsg)
 {
     if (zmsg) {
@@ -699,7 +681,6 @@ static json_object *cmb_lsmod (ctx_t *ctx)
         util_json_object_add_string (mo, "name", plugin_name (mod->p));
         util_json_object_add_int (mo, "size", plugin_size (mod->p));
         util_json_object_add_string (mo, "digest", plugin_digest (mod->p));
-        json_object_object_add (mo, "args", module_args_json (mod));
         json_object_object_add (response, name, mo);
         name = zlist_next (keys);
     }
