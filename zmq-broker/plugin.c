@@ -593,6 +593,8 @@ void plugin_destroy (plugin_ctx_t p)
     if (errnum)
         errn_exit (errnum, "pthread_join");
 
+    flux_handle_destroy (&p->h);
+
     zsocket_destroy (p->zctx, p->zs_evin);
     zsocket_destroy (p->zctx, p->zs_svc[0]);
     zsocket_destroy (p->zctx, p->zs_svc[1]);
