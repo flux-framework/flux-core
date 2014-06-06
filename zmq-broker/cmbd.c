@@ -89,11 +89,9 @@ typedef struct {
 
 typedef struct {
     plugin_ctx_t p;
-    zuuid_t *uuid;
     zhash_t *args;
     zlist_t *rmmod_reqs;
     ctx_t *ctx;
-    char *name;
     char *path;
     bool eof;
 } module_t;
@@ -339,9 +337,6 @@ static module_t *module_create (ctx_t *ctx, const char *name, const char *path)
         oom ();
     if (!(mod->rmmod_reqs = zlist_new ()))
         oom ();
-    if (!(mod->uuid = zuuid_new ()))
-        oom ();
-    mod->name = xstrdup (name);
     mod->ctx = ctx;
     return mod;
 }
@@ -361,10 +356,8 @@ static void module_destroy (module_t *mod)
     while ((zmsg = zlist_pop (mod->rmmod_reqs)))
         flux_respond_errnum (mod->ctx->h, &zmsg, 0);
     zlist_destroy (&mod->rmmod_reqs);
-    zuuid_destroy (&mod->uuid);
     zhash_destroy (&mod->args);
 
-    free (mod->name);
     free (mod->path);
     free (mod);
 }
@@ -403,8 +396,7 @@ static int module_load (ctx_t *ctx, module_t *mod)
     int rc = -1;
 
     assert (mod->p == NULL);
-    mod->p = plugin_load (ctx->h, mod->path,
-                          zuuid_str (mod->uuid), mod->args);
+    mod->p = plugin_load (ctx->h, mod->path, mod->args);
     if (mod->p) {
         zp.socket = plugin_sock (mod->p);
         if (zloop_poller (ctx->zl, &zp, (zloop_fn *)plugins_cb, mod) < 0)
@@ -869,7 +861,7 @@ static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod)
 
     if (zmsg) {
         if (zmsg_content_size (zmsg) == 0) /* EOF */
-            zhash_delete (ctx->modules, mod->name);
+            zhash_delete (ctx->modules, plugin_name (mod->p));
         else
             (void)flux_response_sendmsg (ctx->h, &zmsg);
     }

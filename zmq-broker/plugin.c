@@ -45,7 +45,7 @@ struct plugin_ctx_struct {
     void *zs_svc[2]; /* for handling requests 0=plugin, 1=cmbd */
     void *zs_evin;
     char *svc_uri;
-    char *uuid;
+    zuuid_t *uuid;
     pthread_t t;
     mod_main_f *main;
     plugin_stats_t stats;
@@ -566,7 +566,7 @@ const char *plugin_name (plugin_ctx_t p)
 
 const char *plugin_uuid (plugin_ctx_t p)
 {
-    return p->uuid;
+    return zuuid_str (p->uuid);
 }
 
 void *plugin_sock (plugin_ctx_t p)
@@ -604,7 +604,7 @@ void plugin_destroy (plugin_ctx_t p)
 
     dlclose (p->dso);
     zfile_destroy (&p->zf);
-    free (p->uuid);
+    zuuid_destroy (&p->uuid);
     free (p->svc_uri);
 
     free (p);
@@ -615,8 +615,7 @@ void plugin_unload (plugin_ctx_t p)
     zstr_send (p->zs_svc[1], ""); /* EOF */
 }
 
-plugin_ctx_t plugin_load (flux_t h, const char *path,
-                          const char *uuid, zhash_t *args)
+plugin_ctx_t plugin_load (flux_t h, const char *path, zhash_t *args)
 {
     plugin_ctx_t p;
     int errnum;
@@ -650,7 +649,8 @@ plugin_ctx_t plugin_load (flux_t h, const char *path,
     p->name = *mod_namep;
     if (asprintf (&p->svc_uri, "inproc://svc-%s", p->name) < 0)
         oom ();
-    p->uuid = xstrdup (uuid);
+    if (!(p->uuid = zuuid_new ()))
+        oom ();
     p->rank = flux_rank (h);
     if (!(p->deferred_responses = zlist_new ()))
         oom ();
@@ -659,7 +659,8 @@ plugin_ctx_t plugin_load (flux_t h, const char *path,
     flux_log_set_facility (p->h, p->name);
 
     /* connect sockets in the parent, then use them in the thread */
-    zconnect (p->zctx, &p->zs_request, ZMQ_DEALER, REQUEST_URI, -1, p->uuid);
+    zconnect (p->zctx, &p->zs_request, ZMQ_DEALER, REQUEST_URI, -1,
+              zuuid_str (p->uuid));
     zbind (p->zctx, &p->zs_svc[1], ZMQ_PAIR, p->svc_uri, -1);
     zconnect (p->zctx, &p->zs_svc[0], ZMQ_PAIR, p->svc_uri, -1, NULL);
     zconnect (p->zctx, &p->zs_evin,  ZMQ_SUB, EVENT_URI, 0, NULL);

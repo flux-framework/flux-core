@@ -21,8 +21,7 @@ typedef struct plugin_ctx_struct *plugin_ctx_t;
 
 /* Load plugin by path.
  */
-plugin_ctx_t plugin_load (flux_t h, const char *path,
-                          const char *uuid, zhash_t *args);
+plugin_ctx_t plugin_load (flux_t h, const char *path, zhash_t *args);
 
 /* Signal plugin to unload by sending it EOF (zero length message).
  * It will respond with an EOF when it is ready to be destroyed.
