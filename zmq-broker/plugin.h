@@ -16,13 +16,18 @@ extern mod_main_f mod_main;
 /* Plugin must define its service name.
  */
 #define MOD_NAME(x) const char *mod_name = x
+char *plugin_getstring (const char *path, const char *name);
 
+
+/* Create, start, stop, destroy a plugin.
+ * Termination:  plugin_stop (), read EOF on sock, plugin_destroy ()
+ */
 typedef struct plugin_ctx_struct *plugin_ctx_t;
-
 plugin_ctx_t plugin_create (flux_t h, const char *path, zhash_t *args);
 void plugin_start (plugin_ctx_t p);
 void plugin_stop (plugin_ctx_t p);
 void plugin_destroy (plugin_ctx_t p);
+
 
 /* Accessors.
  */

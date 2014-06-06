@@ -627,6 +627,23 @@ void plugin_start (plugin_ctx_t p)
         errn_exit (errnum, "pthread_create");
 }
 
+char *plugin_getstring (const char *path, const char *name)
+{
+    void *dso;
+    char *s = NULL;
+    const char **np;
+
+    if (!(dso = dlopen (path, RTLD_NOW | RTLD_LOCAL)))
+        goto done;
+    if (!(np = dlsym (dso, name)) || !*np)
+        goto done;
+    s = xstrdup (*np);
+done:
+    if (dso)
+        dlclose (dso);
+    return s;
+}
+
 plugin_ctx_t plugin_create (flux_t h, const char *path, zhash_t *args)
 {
     plugin_ctx_t p;

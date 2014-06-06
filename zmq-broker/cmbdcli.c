@@ -125,16 +125,13 @@ json_object *flux_lsmod (flux_t h, int rank)
     return response;
 }
 
-int flux_insmod (flux_t h, int rank, const char *path, const char *name,
-                 json_object *args)
+int flux_insmod (flux_t h, int rank, const char *path, json_object *args)
 {
     json_object *request = util_json_object_new_object ();
     json_object *response = NULL;
     int rc = -1;
 
-    util_json_object_add_string (request, "name", name);
-    if (path)
-        util_json_object_add_string (request, "path", path);
+    util_json_object_add_string (request, "path", path);
     json_object_get_object (args);
     json_object_object_add (request, "args", args);
     if ((response = flux_rank_rpc (h, rank, request, "cmb.insmod"))) {
