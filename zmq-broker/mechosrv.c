@@ -68,6 +68,8 @@ int mod_main (flux_t h, zhash_t *args)
     return 0;
 }
 
+MOD_NAME ("mecho");
+
 /*
  * vi: ts=4 sw=4 expandtab
  */

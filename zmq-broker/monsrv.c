@@ -290,6 +290,8 @@ int mod_main (flux_t h, zhash_t *args)
     return 0;
 }
 
+MOD_NAME ("mon");
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

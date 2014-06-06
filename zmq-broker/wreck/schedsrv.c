@@ -494,6 +494,8 @@ int mod_main (flux_t p, zhash_t *args)
     return 0;
 }
 
+MOD_NAME ("sched");
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

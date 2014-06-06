@@ -54,7 +54,7 @@ struct plugin_ctx_struct {
     void *zctx;
     flux_sec_t sec;
     flux_t h;
-    char *name;
+    const char *name;
     zfile_t *zf;
     void *dso;
     zhash_t *args;
@@ -604,7 +604,6 @@ void plugin_destroy (plugin_ctx_t p)
 
     dlclose (p->dso);
     zfile_destroy (&p->zf);
-    free (p->name);
     free (p->uuid);
     free (p->svc_uri);
 
@@ -617,25 +616,24 @@ void plugin_unload (plugin_ctx_t p)
 }
 
 plugin_ctx_t plugin_load (flux_t h, const char *path,
-                          const char *name, const char *uuid, zhash_t *args)
+                          const char *uuid, zhash_t *args)
 {
     plugin_ctx_t p;
     int errnum;
     void *dso;
+    const char **mod_namep;
     mod_main_f *mod_main;
-    char *errstr;
 
     dlerror ();
     if (!(dso = dlopen (path, RTLD_NOW | RTLD_LOCAL))) {
-        if ((errstr = dlerror ()) != NULL)
-            msg ("%s", errstr);
+        msg ("%s", dlerror ());
         errno = ENOENT;
         return NULL;
     }
-    dlerror ();
-    mod_main = (mod_main_f *)dlsym (dso, "mod_main");
-    if ((errstr = dlerror ()) != NULL) {
-        err ("%s", errstr);
+    mod_main = dlsym (dso, "mod_main");
+    mod_namep = dlsym (dso, "mod_name");
+    if (!mod_main || !mod_namep || !*mod_namep) {
+        err ("%s: mod_main or mod_name undefined", path);
         dlclose (dso);
         errno = ENOENT;
         return NULL;
@@ -649,8 +647,8 @@ plugin_ctx_t plugin_load (flux_t h, const char *path,
     p->main = mod_main;
     p->dso = dso;
     p->zf = zfile_new (NULL, path);
-    p->name = xstrdup (name);
-    if (asprintf (&p->svc_uri, "inproc://svc-%s", name) < 0)
+    p->name = *mod_namep;
+    if (asprintf (&p->svc_uri, "inproc://svc-%s", p->name) < 0)
         oom ();
     p->uuid = xstrdup (uuid);
     p->rank = flux_rank (h);
@@ -658,7 +656,7 @@ plugin_ctx_t plugin_load (flux_t h, const char *path,
         oom ();
 
     p->h = handle_create (p, &plugin_handle_ops, 0);
-    flux_log_set_facility (p->h, name);
+    flux_log_set_facility (p->h, p->name);
 
     /* connect sockets in the parent, then use them in the thread */
     zconnect (p->zctx, &p->zs_request, ZMQ_DEALER, REQUEST_URI, -1, p->uuid);

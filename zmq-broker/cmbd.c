@@ -403,7 +403,7 @@ static int module_load (ctx_t *ctx, module_t *mod)
     int rc = -1;
 
     assert (mod->p == NULL);
-    mod->p = plugin_load (ctx->h, mod->path, mod->name,
+    mod->p = plugin_load (ctx->h, mod->path,
                           zuuid_str (mod->uuid), mod->args);
     if (mod->p) {
         zp.socket = plugin_sock (mod->p);

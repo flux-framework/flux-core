@@ -456,6 +456,8 @@ done:
     return rc;
 }
 
+MOD_NAME ("api");
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

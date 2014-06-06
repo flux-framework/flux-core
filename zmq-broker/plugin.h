@@ -13,12 +13,16 @@
 typedef int (mod_main_f)(flux_t h, zhash_t *args);
 extern mod_main_f mod_main;
 
+/* Plugin must define its service name.
+ */
+#define MOD_NAME(x) const char *mod_name = x
+
 typedef struct plugin_ctx_struct *plugin_ctx_t;
 
 /* Load plugin by path.
  */
 plugin_ctx_t plugin_load (flux_t h, const char *path,
-                          const char *name, const char *uuid, zhash_t *args);
+                          const char *uuid, zhash_t *args);
 
 /* Signal plugin to unload by sending it EOF (zero length message).
  * It will respond with an EOF when it is ready to be destroyed.
