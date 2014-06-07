@@ -76,15 +76,17 @@ int main (int argc, char *argv[])
 
 static void list_module (const char *key, json_object *mo)
 {
-    const char *name, *digest;
+    const char *name;
+    int flags;
     int size;
 
     if (util_json_object_get_string (mo, "name", &name) < 0
-            || util_json_object_get_string (mo, "digest", &digest) < 0
+            || util_json_object_get_int (mo, "flags", &flags) < 0
             || util_json_object_get_int (mo, "size", &size) < 0)
         msg_exit ("error parsing lsmod response");
 
-    printf ("%-20.20s %6d %8.8s\n", key, size, digest);
+    printf ("%-20.20s %6d %-6s\n", key, size,
+            (flags & FLUX_MOD_FLAGS_MANAGED) ? "m" : "");
 }
 
 static void mod_ls (flux_t h, int rank, int argc, char **argv)
@@ -97,7 +99,7 @@ static void mod_ls (flux_t h, int rank, int argc, char **argv)
 
     if (!(mods = flux_lsmod (h, rank)))
         err_exit ("flux_lsmod");
-    printf ("%-20s %6s %s\n", "Module", "Size", "Digest");
+    printf ("%-20s %6s %s\n", "Module", "Size", "Flags");
     json_object_object_foreachC (mods, iter) {
         list_module (iter.key, iter.val);
     }
@@ -107,11 +109,12 @@ static void mod_ls (flux_t h, int rank, int argc, char **argv)
 static void mod_rm (flux_t h, int rank, int argc, char **argv)
 {
     int i;
+    int flags = 0;
 
     if (argc == 0)
         usage ();
     for (i = 0; i < argc; i++) {
-        if (flux_rmmod (h, rank, argv[i]) < 0)
+        if (flux_rmmod (h, rank, argv[i], flags) < 0)
             err ("%s", argv[i]);
         else
             msg ("%s: unloaded", argv[i]);
@@ -144,6 +147,7 @@ static void mod_ins (flux_t h, int rank, int argc, char **argv)
     json_object *args = util_json_object_new_object ();
     int i;
     char *path, *trypath = NULL;
+    int flags = 0;
 
     if (argc == 0)
         usage ();
@@ -162,7 +166,7 @@ static void mod_ins (flux_t h, int rank, int argc, char **argv)
         util_json_object_add_string (args, cpy, val);
         free (cpy);
     }
-    if (flux_insmod (h, rank, path, args) < 0)
+    if (flux_insmod (h, rank, path, flags, args) < 0)
         err_exit ("%s", path);
     json_object_put (args);
     msg ("module loaded");
