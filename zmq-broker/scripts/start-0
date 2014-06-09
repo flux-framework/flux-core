@@ -11,7 +11,7 @@ ${CMDPREFIX} ${CMBD:-./cmbd} \
   --rank=$rank --size=$size \
   --logdest=cmbd.log \
   --hostlist=localhost,localhost,localhost \
-  --plugins=api,barrier,live,kvs,log,hb,job,rexec,mecho,event,rank,mon \
+  --plugins=modctl,api,barrier,live,kvs,log,hb,job,rexec,event,rank \
   kvs:conf.hb.period-sec=1.5 \
   kvs:conf.live.missed-hb-allow=5 \
   kvs:conf.log.reduction-timeout-msec=100 \

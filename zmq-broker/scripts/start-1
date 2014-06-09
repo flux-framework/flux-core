@@ -10,6 +10,6 @@ ${CMDPREFIX} ${CMBD:-./cmbd} \
   --child-uri=$(rank2uri $rank) \
   --parent-uri=$(rank2uri $(($rank-1))) \
   --rank=$rank --size=$size \
-  --plugins=api,barrier,live,log,kvs,job,rexec,mecho,rank,mon \
+  --plugins=modctl,api,barrier,live,log,kvs,job,rexec,rank \
   api:sockpath=/tmp/rank.$rank \
   rank:right-uri=$(rank2uri $(($rank+1)))

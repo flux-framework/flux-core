@@ -666,7 +666,7 @@ static int cmb_rmmod (ctx_t *ctx, const char *name, int flags, zmsg_t **zmsg)
     }
     if ((mod->flags & FLUX_MOD_FLAGS_MANAGED)
                                     != (flags & FLUX_MOD_FLAGS_MANAGED)) {
-        errno - EINVAL;
+        errno = EINVAL;
         return -1;
     }
     module_unload (mod, zmsg);
