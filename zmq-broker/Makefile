@@ -52,7 +52,8 @@ PLUGINS = plugins/api.so plugins/hb.so plugins/kvs.so \
 	plugins/barrier.so plugins/live.so plugins/mecho.so \
 	plugins/log.so plugins/echo.so plugins/job.so \
 	plugins/resrc.so plugins/rexec.so plugins/sched.so \
-	plugins/event.so plugins/rank.so plugins/mon.so
+	plugins/event.so plugins/rank.so plugins/mon.so \
+	plugins/modctl.so
 
 SUBCMDS = libexec/kvs libexec/ping libexec/mecho \
 	libexec/stats libexec/barrier libexec/snoop libexec/event \
@@ -92,7 +93,7 @@ libexec/rdltool : flux-rdltool.o
 
 libexec/%: flux-%.o
 	mkdir -p $(shell dirname $@)
-	$(CC) $(LDFLAGS) -o $@ $< -L$(LIBDIR) -lcmb $(LDADD_CLI)
+	$(CC) $(LDFLAGS) -o $@ $< -L$(LIBDIR) -lcmb $(LDADD_CLI) -ldl
 
 $(LIBPMI): $(LIBPMI_OBJS) $(LIBCMB)
 	mkdir -p $(shell dirname $@)
