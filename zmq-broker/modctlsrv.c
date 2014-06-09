@@ -38,6 +38,8 @@ typedef struct {
 static void freectx (ctx_t *ctx)
 {
     zhash_destroy (&ctx->modules);
+    (void)rmdir (ctx->tmpdir);
+    free (ctx->tmpdir);
     free (ctx);
 }
 
@@ -73,7 +75,7 @@ static int write_all (int fd, uint8_t *buf, int len)
 
 static void freetemp (char *path)
 {
-    unlink (path);
+    (void)unlink (path);
     free (path);
 }
 
