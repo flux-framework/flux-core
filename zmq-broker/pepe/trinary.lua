@@ -26,7 +26,7 @@ local right_uri = "tcp://" ..  h[right_rank + 1] .. ":5556"
 if pepe.rank == 0 then
     local topology = tree.k_ary_json (3, pepe.nprocs)
     pepe.run ("./cmbd --plugins=hb,sched," .. plugins
-		.. " --child-uri='tcp://*:5556'"
+                .. " --child-uri='tcp://*:5556'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. pepe.nprocs
 		.. " --hostlist=" .. pepe.nodelist
@@ -44,7 +44,7 @@ else
     local parent_rank = tree.k_ary_parent (pepe.rank, 3)
     local parent_uri = "tcp://" ..  h[parent_rank + 1] .. ":5556"
     pepe.run ("./cmbd --plugins=" .. plugins
-		.. " --child-uri='tcp://*:5556'"
+                .. " --child-uri='tcp://*:5556'"
 		.. " --parent-uri='" .. parent_uri .. "'"
 		.. " --rank=" .. pepe.rank
 		.. " --size=" .. pepe.nprocs
