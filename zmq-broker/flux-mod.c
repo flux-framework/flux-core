@@ -12,9 +12,10 @@
 #include "log.h"
 #include "shortjson.h"
 
-#define OPTIONS "+hr:"
+#define OPTIONS "+hr:u"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
+    {"unmanaged",  no_argument,        0, 'u'},
     {"rank",       required_argument,  0, 'r'},
     { 0, 0, 0, 0 },
 };
@@ -23,12 +24,20 @@ static void mod_ls (flux_t h, int rank, int argc, char **argv);
 static void mod_rm (flux_t h, int rank, int argc, char **argv);
 static void mod_ins (flux_t h, int rank, int argc, char **argv);
 
+static void mod_ls_m (flux_t h, int argc, char **argv);
+static void mod_rm_m (flux_t h, int argc, char **argv);
+static void mod_ins_m (flux_t h, int argc, char **argv);
+
 void usage (void)
 {
-    fprintf (stderr, 
-"Usage: flux-mod [--rank N] ls\n"
-"       flux-mod [--rank N] rm module [module...]\n"
-"       flux-mod [--rank N] ins [-m] module [arg=val ...]\n"
+    fprintf (stderr,
+"Usage: flux-mod [OPTIONS] ls\n"
+"       flux-mod [OPTIONS] rm module [module...]\n"
+"       flux-mod [OPTIONS] ins module [arg=val ...]\n"
+"Options:\n"
+"  -u,--unmanaged      act locally, do not set/require 'm' flag\n"
+"  -r,--rank=N         act on specified rank (requires -u)\n"
+
 );
     exit (1);
 }
@@ -38,6 +47,7 @@ int main (int argc, char *argv[])
     flux_t h;
     int ch;
     int rank = -1;
+    bool uopt = false;
     char *cmd;
 
     log_init ("flux-mod");
@@ -50,6 +60,9 @@ int main (int argc, char *argv[])
             case 'r': /* --rank */
                 rank = strtoul (optarg, NULL, 10);
                 break;
+            case 'u': /* --unmanaged */
+                uopt = true;
+                break;
             default:
                 usage ();
                 break;
@@ -57,18 +70,29 @@ int main (int argc, char *argv[])
     }
     if (optind == argc)
         usage ();
-    cmd = argv[optind];
+    cmd = argv[optind++];
 
     if (!(h = cmb_init ()))
         err_exit ("cmb_init");
+    if (rank != -1 && uopt == false)
+        usage ();
 
-    if (!strcmp (cmd, "ls"))
-        mod_ls (h, rank, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "rm"))
-        mod_rm (h, rank, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "ins"))
-        mod_ins (h, rank, argc - optind, argv + optind);
-    else
+    if (!strcmp (cmd, "ls")) {
+        if (uopt)
+            mod_ls (h, rank, argc - optind, argv + optind);
+        else
+            mod_ls_m (h, argc - optind, argv + optind);
+    } else if (!strcmp (cmd, "rm")) {
+        if (uopt)
+            mod_rm (h, rank, argc - optind, argv + optind);
+        else
+            mod_rm_m (h, argc - optind, argv + optind);
+    } else if (!strcmp (cmd, "ins")) {
+        if (uopt)
+            mod_ins (h, rank, argc - optind, argv + optind);
+        else
+            mod_ins_m (h, argc - optind, argv + optind);
+    } else
         usage ();
 
     flux_handle_destroy (&h);
@@ -92,64 +116,62 @@ static void list_module (const char *key, JSON mo)
 
 static void mod_ls (flux_t h, int rank, int argc, char **argv)
 {
-    JSON mods;
+    JSON mods, mod;
     json_object_iter iter;
-
-    if (argc != 1)
-        usage ();
+    int i;
 
     if (!(mods = flux_lsmod (h, rank)))
         err_exit ("flux_lsmod");
     printf ("%-20s %6s %s\n", "Module", "Size", "Flags");
-    json_object_object_foreachC (mods, iter) {
-        list_module (iter.key, iter.val);
+    if (argc == 0) {
+        json_object_object_foreachC (mods, iter) {
+            list_module (iter.key, iter.val);
+        }
+    } else {
+        for (i = 0; i < argc; i++) {
+            if (!Jget_obj (mods, argv[i], &mod))
+                printf ("%s: not loaded\n", argv[i]);
+            else
+                list_module (argv[i], mod);
+        }
     }
     Jput (mods);
 }
 
-#define RM_OPTS "m"
-static const struct option rm_opts[] = {
-    {"managed",       no_argument,        0, 'm'},
-    { 0, 0, 0, 0 },
-};
+static void mod_ls_m (flux_t h, int argc, char **argv)
+{
+}
 
 static void mod_rm (flux_t h, int rank, int argc, char **argv)
 {
     int i;
-    int flags = 0;
-    int ch;
-    bool mflag = false;
 
-    optind = 0;
-    opterr = 0;
-    while ((ch = getopt_long (argc, argv, RM_OPTS, rm_opts, NULL)) != -1) {
-        switch (ch) {
-            case 'm': /* --managed */
-                mflag = true;
-                break;
-            default:
-                usage ();
-        }
-    }
-    if (optind == argc)
+    if (argc == 0)
        usage ();
-    for (i = optind; i < argc; i++) {
-        if (mflag) {
-            char *key;
-            if (asprintf (&key, "conf.modctl.%s", argv[i]) < 0)
-                oom (); 
-            if (kvs_unlink (h, key) < 0)
-                err_exit ("%s", key);
-            if (kvs_commit (h) < 0)
-                err_exit ("kvs_commit");
+    for (i = 0; i < argc; i++) {
+        if (flux_rmmod (h, rank, argv[i], 0) < 0)
+            err ("%s", argv[i]);
+        else
             msg ("%s: unloaded", argv[i]);
-            free (key);
-        } else {
-            if (flux_rmmod (h, rank, argv[i], flags) < 0)
-                err ("%s", argv[i]);
-            else
-                msg ("%s: unloaded", argv[i]);
-        }
+    }
+}
+
+static void mod_rm_m (flux_t h, int argc, char **argv)
+{
+    int i;
+    char *key;
+
+    if (argc == 0)
+       usage ();
+    for (i = 0; i < argc; i++) {
+        if (asprintf (&key, "conf.modctl.%s", argv[i]) < 0)
+            oom ();
+        if (kvs_unlink (h, key) < 0)
+            err_exit ("%s", key);
+        if (kvs_commit (h) < 0)
+            err_exit ("kvs_commit");
+        msg ("%s: unloaded", argv[i]);
+        free (key);
     }
 }
 
@@ -218,41 +240,12 @@ nomem:
     return -1;
 }
 
-#define INS_OPTS "m"
-static const struct option ins_opts[] = {
-    {"managed",       no_argument,        0, 'm'},
-    { 0, 0, 0, 0 },
-};
-
-static void mod_ins (flux_t h, int rank, int argc, char **argv)
+static JSON parse_modargs (int argc, char **argv)
 {
     JSON args = Jnew ();
     int i;
-    char *path, *trypath = NULL;
-    int flags = 0;
-    bool mflag = false;
-    int ch;
 
-    optind = 0;
-    opterr = 0;
-    while ((ch = getopt_long (argc, argv, INS_OPTS, ins_opts, NULL)) != -1) {
-        switch (ch) {
-            case 'm': /* --managed */
-                mflag = true;
-                break;
-            default:
-                usage ();
-        }
-    }
-    if (optind == argc)
-       usage ();
-    path = argv[optind++];
-    if (access (path, R_OK|X_OK) < 0) {
-        if (!(trypath = modfind (PLUGIN_PATH, path)))
-            errn_exit (ENOENT, "%s", path);
-        path = trypath;
-    }
-    for (i = optind; i < argc; i++) {
+    for (i = 0; i < argc; i++) {
         char *val, *cpy = xstrdup (argv[i]);
         if ((val == strchr (cpy, '=')))
             *val++ = '\0';
@@ -261,44 +254,82 @@ static void mod_ins (flux_t h, int rank, int argc, char **argv)
         Jadd_str (args, cpy, val);
         free (cpy);
     }
-    if (mflag) {
-        char *name;
-        JSON mod;
-        int fd, len;
-        uint8_t *buf;
-        char *key;
 
-        if (!(name = modname (path)))
-            msg_exit ("%s: mod_name undefined", path);
-        if (asprintf (&key, "conf.modctl.%s", name) < 0)
-            oom (); 
-        if (kvs_get (h, key, &mod) == 0)
-            errn_exit (EEXIST, "%s", key);
+    return args;
+}
 
-        mod = Jnew ();
-        Jadd_obj (mod, "args", args);
-        if ((fd = open (path, O_RDONLY)) < 0)
-            err_exit ("%s", path);
-        if ((len = read_all (fd, &buf)) < 0)
-            err_exit ("%s", path);
-        (void)close (fd);
-        util_json_object_add_data (mod, "data", buf, len);
+static void mod_ins (flux_t h, int rank, int argc, char **argv)
+{
+    JSON args;
+    char *path, *trypath = NULL;
 
-        if (kvs_put (h, key, mod) < 0)
-            err_exit ("kvs_put %s", key);
-        if (kvs_commit (h) < 0)
-            err_exit ("kvs_commit");
-
-        free (key);
-        free (buf);
-        free (name);
-        Jput (mod); 
-    } else {
-        if (flux_insmod (h, rank, path, flags, args) < 0)
-            err_exit ("%s", path);
+    if (argc == 0)
+       usage ();
+    path = argv[0];
+    if (access (path, R_OK|X_OK) < 0) {
+        if (!(trypath = modfind (PLUGIN_PATH, path)))
+            errn_exit (ENOENT, "%s", path);
+        path = trypath;
     }
-    Jput (args);
+    args = parse_modargs (argc - 1, argv + 1);
+    if (flux_insmod (h, rank, path, 0, args) < 0)
+        err_exit ("%s", path);
     msg ("module loaded");
+
+    Jput (args);
+    if (trypath)
+        free (trypath);
+}
+
+static void mod_ins_m (flux_t h, int argc, char **argv)
+{
+    JSON args;
+    char *path, *trypath = NULL;
+    char *name;
+    JSON mod;
+    int fd, len;
+    uint8_t *buf;
+    char *key;
+
+    if (argc == 0)
+       usage ();
+    path = argv[0];
+    if (access (path, R_OK|X_OK) < 0) {
+        if (!(trypath = modfind (PLUGIN_PATH, path)))
+            errn_exit (ENOENT, "%s", path);
+        path = trypath;
+    }
+    args = parse_modargs (argc - 1, argv + 1);
+
+    if (!(name = modname (path)))
+        msg_exit ("%s: mod_name undefined", path);
+    if (asprintf (&key, "conf.modctl.%s", name) < 0)
+        oom ();
+    if (kvs_get (h, key, &mod) == 0)
+        errn_exit (EEXIST, "%s", key);
+
+    mod = Jnew ();
+    Jadd_obj (mod, "args", args);
+    if ((fd = open (path, O_RDONLY)) < 0)
+        err_exit ("%s", path);
+    if ((len = read_all (fd, &buf)) < 0)
+        err_exit ("%s", path);
+    (void)close (fd);
+    util_json_object_add_data (mod, "data", buf, len);
+
+    if (kvs_put (h, key, mod) < 0)
+        err_exit ("kvs_put %s", key);
+    if (kvs_commit (h) < 0)
+        err_exit ("kvs_commit");
+    msg ("module loaded");
+
+    free (key);
+    free (buf);
+    free (name);
+    Jput (mod);
+    Jput (args);
+    if (trypath)
+        free (trypath);
 }
 
 /*
