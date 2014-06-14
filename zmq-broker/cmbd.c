@@ -692,6 +692,7 @@ static json_object *cmb_lsmod (ctx_t *ctx)
         util_json_object_add_int (mo, "size", plugin_size (mod->p));
         util_json_object_add_string (mo, "digest", plugin_digest (mod->p));
         util_json_object_add_int (mo, "flags", mod->flags);
+        util_json_object_add_string (mo, "nodelist", ctx->rankstr);
         json_object_object_add (response, name, mo);
         name = zlist_next (keys);
     }

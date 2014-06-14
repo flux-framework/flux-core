@@ -100,20 +100,27 @@ int main (int argc, char *argv[])
     return 0;
 }
 
+static char *flagstr (int flags)
+{
+    char *s = xzmalloc (16);
+    if ((flags & FLUX_MOD_FLAGS_MANAGED))
+        strcat (s, "m");
+    return s;
+}
+
 static void list_module (const char *key, JSON mo)
 {
     const char *name, *nodelist = NULL;
     int flags;
     int size;
+    char *fs;
 
     if (!Jget_str (mo, "name", &name) || !Jget_int (mo, "flags", &flags)
-                                      || !Jget_int (mo, "size", &size))
+     || !Jget_int (mo, "size", &size) || !Jget_str (mo, "nodelist", &nodelist))
         msg_exit ("error parsing lsmod response");
-    (void)Jget_str (mo, "nodelist", &nodelist);
-
-    printf ("%-20.20s %6d %-6s %s\n", key, size,
-            (flags & FLUX_MOD_FLAGS_MANAGED) ? "m" : "",
-            nodelist ? nodelist : "");
+    fs = flagstr (flags);
+    printf ("%-20.20s %6d %-6s %s\n", key, size, fs, nodelist);
+    free (fs);
 }
 
 static void mod_ls (flux_t h, int rank, int argc, char **argv)
@@ -124,7 +131,7 @@ static void mod_ls (flux_t h, int rank, int argc, char **argv)
 
     if (!(mods = flux_lsmod (h, rank)))
         err_exit ("flux_lsmod");
-    printf ("%-20s %6s %s\n", "Module", "Size", "Flags");
+    printf ("%-20s %6s %-6s %s\n", "Module", "Size", "Flags", "Nodelist");
     if (argc == 0) {
         json_object_object_foreachC (mods, iter) {
             list_module (iter.key, iter.val);
