@@ -102,16 +102,18 @@ int main (int argc, char *argv[])
 
 static void list_module (const char *key, JSON mo)
 {
-    const char *name;
+    const char *name, *nodelist = NULL;
     int flags;
     int size;
 
     if (!Jget_str (mo, "name", &name) || !Jget_int (mo, "flags", &flags)
                                       || !Jget_int (mo, "size", &size))
         msg_exit ("error parsing lsmod response");
+    (void)Jget_str (mo, "nodelist", &nodelist);
 
-    printf ("%-20.20s %6d %-6s\n", key, size,
-            (flags & FLUX_MOD_FLAGS_MANAGED) ? "m" : "");
+    printf ("%-20.20s %6d %-6s %s\n", key, size,
+            (flags & FLUX_MOD_FLAGS_MANAGED) ? "m" : "",
+            nodelist ? nodelist : "");
 }
 
 static void mod_ls (flux_t h, int rank, int argc, char **argv)
@@ -140,6 +142,16 @@ static void mod_ls (flux_t h, int rank, int argc, char **argv)
 
 static void mod_ls_m (flux_t h, int argc, char **argv)
 {
+    JSON mods;
+    json_object_iter iter;
+        
+    printf ("%-20s %6s %-6s %s\n", "Module", "Size", "Flags", "Nodelist");
+    if (kvs_get (h, "modctl.lsmod", &mods) == 0) {
+        json_object_object_foreachC (mods, iter) {
+            list_module (iter.key, iter.val);
+        }
+        Jput (mods);
+    }
 }
 
 static void mod_rm (flux_t h, int rank, int argc, char **argv)
