@@ -147,13 +147,21 @@ static void mod_ls (flux_t h, int rank, int argc, char **argv)
     Jput (mods);
 }
 
+static void incr_seq (flux_t h)
+{
+    int seq = 0;
+    (void)kvs_get_int (h, "conf.modctl.seq", &seq);
+    if (kvs_put_int (h, "conf.modctl.seq", ++seq) < 0)
+        err_exit ("conf.modctl.seq");
+}
+
 static void mod_ls_m (flux_t h, int argc, char **argv)
 {
     JSON mods;
     json_object_iter iter;
         
     printf ("%-20s %6s %-6s %s\n", "Module", "Size", "Flags", "Nodelist");
-    if (kvs_get (h, "modctl.lsmod", &mods) == 0) {
+    if (kvs_get (h, "conf.modctl.lsmod", &mods) == 0) {
         json_object_object_foreachC (mods, iter) {
             list_module (iter.key, iter.val);
         }
@@ -183,10 +191,11 @@ static void mod_rm_m (flux_t h, int argc, char **argv)
     if (argc == 0)
        usage ();
     for (i = 0; i < argc; i++) {
-        if (asprintf (&key, "conf.modctl.%s", argv[i]) < 0)
+        if (asprintf (&key, "conf.modctl.modules.%s", argv[i]) < 0)
             oom ();
         if (kvs_unlink (h, key) < 0)
             err_exit ("%s", key);
+        incr_seq (h);
         if (kvs_commit (h) < 0)
             err_exit ("kvs_commit");
         msg ("%s: unloaded", argv[i]);
@@ -300,15 +309,38 @@ static void mod_ins (flux_t h, int rank, int argc, char **argv)
         free (trypath);
 }
 
+/* Copy mod to KVS (without commit).
+ */
+static void copymod (flux_t h, const char *name, const char *path, JSON args)
+{
+    JSON mod = Jnew ();
+    char *key;
+    int fd, len;
+    uint8_t *buf;
+
+    if (asprintf (&key, "conf.modctl.modules.%s", name) < 0)
+        oom ();
+    if (kvs_get (h, key, &mod) == 0)
+        errn_exit (EEXIST, "%s", key);
+    Jadd_obj (mod, "args", args);
+    if ((fd = open (path, O_RDONLY)) < 0)
+        err_exit ("%s", path);
+    if ((len = read_all (fd, &buf)) < 0)
+        err_exit ("%s", path);
+    (void)close (fd);
+    util_json_object_add_data (mod, "data", buf, len);
+    if (kvs_put (h, key, mod) < 0)
+        err_exit ("kvs_put %s", key);
+    free (key);
+    free (buf);
+    Jput (mod);
+}
+
 static void mod_ins_m (flux_t h, int argc, char **argv)
 {
     JSON args;
     char *path, *trypath = NULL;
     char *name;
-    JSON mod;
-    int fd, len;
-    uint8_t *buf;
-    char *key;
 
     if (argc == 0)
        usage ();
@@ -318,34 +350,16 @@ static void mod_ins_m (flux_t h, int argc, char **argv)
             errn_exit (ENOENT, "%s", path);
         path = trypath;
     }
-    args = parse_modargs (argc - 1, argv + 1);
-
     if (!(name = modname (path)))
         msg_exit ("%s: mod_name undefined", path);
-    if (asprintf (&key, "conf.modctl.%s", name) < 0)
-        oom ();
-    if (kvs_get (h, key, &mod) == 0)
-        errn_exit (EEXIST, "%s", key);
-
-    mod = Jnew ();
-    Jadd_obj (mod, "args", args);
-    if ((fd = open (path, O_RDONLY)) < 0)
-        err_exit ("%s", path);
-    if ((len = read_all (fd, &buf)) < 0)
-        err_exit ("%s", path);
-    (void)close (fd);
-    util_json_object_add_data (mod, "data", buf, len);
-
-    if (kvs_put (h, key, mod) < 0)
-        err_exit ("kvs_put %s", key);
+    args = parse_modargs (argc - 1, argv + 1);
+    copymod (h, name, path, args);
+    incr_seq (h);
     if (kvs_commit (h) < 0)
         err_exit ("kvs_commit");
     msg ("module loaded");
 
-    free (key);
-    free (buf);
     free (name);
-    Jput (mod);
     Jput (args);
     if (trypath)
         free (trypath);
