@@ -26,9 +26,6 @@
 #include "plugin.h"
 #include "shortjson.h"
 
-static const char *conf_dir = "conf.modctl";
-const int red_timeout_msec = 2;
-
 typedef struct {
     flux_t h;
     zhash_t *modules;
@@ -79,12 +76,21 @@ static void freetemp (char *path)
     free (path);
 }
 
-static void installmod (ctx_t *ctx, const char *name, uint8_t *buf, int len,
-                        JSON args)
+/* Install module out of KVS.
+ */
+static void installmod (ctx_t *ctx, const char *name)
 {
+    char *key = NULL;
     char *path = NULL;
-    int fd;
+    JSON mod = NULL, args;
+    uint8_t *buf = NULL;
+    int fd, len;
 
+    if (asprintf (&key, "conf.modctl.modules.%s", name) < 0)
+        oom ();
+    if (kvs_get (ctx->h, key, &mod) < 0 || !Jget_obj (mod, "args", &args)
+            || util_json_object_get_data (mod, "data", &buf, &len) < 0)
+        goto done; /* kvs/parse error */
     if (asprintf (&path, "%s/%s.so", ctx->tmpdir, name) < 0)
         oom ();
     if ((fd = open (path, O_WRONLY | O_TRUNC | O_CREAT, 0600)) < 0)
@@ -96,20 +102,24 @@ static void installmod (ctx_t *ctx, const char *name, uint8_t *buf, int len,
     if (flux_insmod (ctx->h, -1, path, FLUX_MOD_FLAGS_MANAGED, args) < 0) {
         flux_log (ctx->h, LOG_ERR, "flux_insmod %s", name);
         freetemp (path);
-        return;
+    } else {
+        zhash_update (ctx->modules, name, path);
+        zhash_freefn (ctx->modules, name, (zhash_free_fn *)freetemp);
     }
-    zhash_update (ctx->modules, name, path);
-    zhash_freefn (ctx->modules, name, (zhash_free_fn *)freetemp);
+done:
+    if (key)
+        free (key);
+    if (buf)
+        free (buf);
+    Jput (mod);
 }
 
 static void conf_cb (const char *path, kvsdir_t dir, void *arg, int errnum)
 {
     ctx_t *ctx = arg;
     kvsitr_t itr;
-    JSON mod, args;
+    JSON mod;
     const char *name;
-    uint8_t *buf;
-    int len;
     zlist_t *keys;
     char *key;
 
@@ -119,17 +129,8 @@ static void conf_cb (const char *path, kvsdir_t dir, void *arg, int errnum)
         if (!(itr = kvsitr_create (dir)))
             oom ();
         while ((name = kvsitr_next (itr))) {
-            if (zhash_lookup (ctx->modules, name)) /* already loaded */
-                continue;
-            if (kvsdir_get (dir, name, &mod) < 0)
-                continue;
-            if (Jget_obj (mod, "args", &args) < 0)
-                continue;
-            if (util_json_object_get_data (mod, "data", &buf, &len) < 0)
-                continue;
-            installmod (ctx, name, buf, len, args);
-            free (buf);
-            Jput (mod);
+            if (!zhash_lookup (ctx->modules, name))
+                installmod (ctx, name);
         }
         kvsitr_destroy (itr);
     }
@@ -140,7 +141,7 @@ static void conf_cb (const char *path, kvsdir_t dir, void *arg, int errnum)
         oom ();
     name = zlist_first (keys);
     while (name) {
-        if (asprintf (&key, "conf.modctl.%s", name) < 0)
+        if (asprintf (&key, "conf.modctl.modules.%s", name) < 0)
             oom ();
         if (kvs_get (ctx->h, key, &mod) < 0) {
             if (flux_rmmod (ctx->h, -1, name, FLUX_MOD_FLAGS_MANAGED) < 0)
@@ -159,7 +160,7 @@ int mod_main (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
 
-    if (kvs_watch_dir (h, conf_cb, ctx, conf_dir) < 0) {
+    if (kvs_watch_dir (h, conf_cb, ctx, "conf.modctl.modules") < 0) {
         flux_log (ctx->h, LOG_ERR, "kvs_watch_dir: %s", strerror (errno));
         return -1;
     }
