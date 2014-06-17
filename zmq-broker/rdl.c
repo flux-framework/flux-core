@@ -776,7 +776,7 @@ int rdl_accumulator_add (struct rdl_accumulator *a, struct resource *r)
     lua_State *L = a->rdl->L;
 
     lua_rdl_accumulator_method_push (a, "add");
-    if (lua_rdl_resource_getfield (r, "id") < 0)
+    if (lua_rdl_resource_getfield (r, "uuid") < 0)
         return (-1);
 
     /* Stack: [ Method, Object, arg ] */
