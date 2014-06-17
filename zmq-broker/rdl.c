@@ -760,12 +760,13 @@ static int lua_rdl_accumulator_method_push (struct rdl_accumulator *a,
     lua_State *L = a->rdl->L;
     if (lua_rdl_accumulator_push (a) < 0)
         return (-1);
-    lua_pushstring (L, name);
-    lua_rawget (L, -2);
+    lua_getfield (L, -1, name);
+    lua_replace (L, -2); /* remove accumulator object, replace with method */
 
     if (lua_type (L, -1) != LUA_TFUNCTION) {
         lua_pushnil (L);
         lua_pushstring (L, "not a method");
+        return (-1);
     }
 
     return (lua_rdl_accumulator_push (a));
