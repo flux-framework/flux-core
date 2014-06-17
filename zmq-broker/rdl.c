@@ -586,6 +586,7 @@ static int lua_rdl_resource_getfield (struct resource *r, const char *x)
     lua_getfield (L, -1, x);
     if (lua_isnoneornil (L, -1))
         return (-1);
+    lua_replace (L, -2);
     return (0);
 }
 
