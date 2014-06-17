@@ -481,6 +481,12 @@ function MemStore:resource_accumulator ()
 end
 
 function ResourceAccumulator:add (id)
+
+    -- Did we pass in a resource proxy?
+    if type(id) == "table" and id.uuid ~= nil then
+        id = id.uuid
+    end
+
     local r = self.src:get (id)
     if not r then return nil, "Resource "..id.." not found" end
     --
