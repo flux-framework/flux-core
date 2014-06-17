@@ -496,7 +496,7 @@ struct rdl * rdl_find (struct rdl *rdl, json_object *args)
     lua_rdl_method_push (rdl, "find");
 
     if (json_object_to_lua (rdl->L, args) < 0) {
-        VERR (rdl->rl, "Failed to convert JSON to Lua");
+        VERR (rdl->rl, "Failed to convert JSON to Lua\n");
         return (NULL);
     }
     /*
@@ -783,7 +783,7 @@ int rdl_accumulator_add (struct rdl_accumulator *a, struct resource *r)
 
     /* Stack: [ Method, Object, arg ] */
     if (lua_pcall (L, 2, LUA_MULTRET, 0) || lua_isnoneornil (L, 1)) {
-        VERR (a->rdl->rl, "accumulator_add: %s", lua_tostring (L, -1));
+        VERR (a->rdl->rl, "accumulator_add: %s\n", lua_tostring (L, -1));
         rc = -1;
     }
     lua_settop (L, 0);
@@ -796,7 +796,7 @@ char * rdl_accumulator_serialize (struct rdl_accumulator *a)
     lua_State *L = a->rdl->L;
     lua_rdl_accumulator_method_push (a, "serialize");
     if (lua_pcall (L, 1, LUA_MULTRET, 0)) {
-        VERR (a->rdl->rl, "accumulator:serialize: %s", lua_tostring (L, -1));
+        VERR (a->rdl->rl, "accumulator:serialize: %s\n", lua_tostring (L, -1));
         return (NULL);
     }
     asprintf (&s, "-- RDL v1.0\n%s", lua_tostring (L, -1));
@@ -813,7 +813,7 @@ struct rdl * rdl_accumulator_copy (struct rdl_accumulator *a)
         return (NULL);
 
     if ((s = rdl_accumulator_serialize (a)) == NULL) {
-        VERR (a->rdl->rl, "serialization failure");
+        VERR (a->rdl->rl, "serialization failure\n");
         return (NULL);
     }
     rdl = rdl_load (a->rdl->rl, s);
