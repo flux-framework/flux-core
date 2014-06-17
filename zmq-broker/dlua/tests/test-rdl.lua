@@ -311,4 +311,51 @@ Hierarchy "default" {
 
 end
 
+function test_accumulator()
+    local rdl = assert (RDL.eval ([[
+Hierarchy "default" {
+    Resource{
+        "foo",
+        children = ListOf{ Resource, ids="0-99", args = {"bar"} }
+    }
+}
+]]))
+    assert_not_nil (rdl)
+    assert_true (is_table (rdl))
+
+    local a = rdl:resource_accumulator ()
+    assert_not_nil (a)
+
+    local r = rdl:resource ("default:/foo/bar10")
+    assert_not_nil (r)
+
+    -- check by resource:
+    assert (a:add (r))
+    assert (a:add (r.uuid))
+
+    local rdl2 = a:dup ()
+    assert_not_nil (rdl2)
+
+    local y = rdl2:aggregate ("default")
+    local c = {
+        foo = 1,
+        bar = 1,
+    }
+
+    local b = rdl2:aggregate ('default')
+    local i = require 'inspect'
+    assert (equals (c, b), "Expected ".. i(a) .. " got ".. i(b))
+    assert (rdl2:find ("default:/foo/bar10"))
+
+    local s = a:serialize()
+    local rdl3 = RDL.eval (s)
+
+    assert_not_nil (s)
+    assert_not_nil (rdl3)
+    local b = rdl2:aggregate ('default')
+    assert (equals (c, b), "Expected ".. i(a) .. " got ".. i(b))
+    assert (rdl2:find ("default:/foo/bar10"))
+
+end
+
 -- vi: ts=4 sw=4 expandtab
