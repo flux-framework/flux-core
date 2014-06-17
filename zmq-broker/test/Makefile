@@ -9,7 +9,7 @@ export CFLAGS LDFLAGS
 
 LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lutil -lm -lpthread
 
-BUILD = tenc tkvswatch tcommit tasyncsock tmunge
+BUILD = tenc tkvswatch tcommit tasyncsock tmunge trdl
 
 all: $(BUILD)
 
@@ -21,7 +21,9 @@ check2:
 check3: check check1 check2
 
 check:
-	@for tst in $${TESTS:-t[0-9][0-9]}; do \
+	@export LUA_CPATH=";;$(TOP)/dlua/?.so"; \
+	export LUA_PATH=";;$(TOP)/dlua/?.lua"; \
+	for tst in $${TESTS:-t[0-9][0-9]}; do \
 		./$$tst; \
 		if [ $$? -eq 0 ]; then \
 		  echo PASS: $$tst; \
@@ -46,6 +48,8 @@ tasyncsock: tasyncsock.o
 tmunge: tmunge.o
 	$(CC) $(LDFLAGS) -o $@ $< $(LDADD_CLI) -lcmb
 
+trdl: trdl.o
+	$(CC) $(LDFLAGS) -o $@ $< $(LDADD_CLI) -lrdl
 clean:
 	rm -f *.o a.out
 	rm -f $(BUILD)
