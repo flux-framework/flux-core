@@ -729,7 +729,7 @@ static int cmb_insmod (ctx_t *ctx, const char *path, int flags,
     }
     zhash_update (ctx->modules, name, mod);
     zhash_freefn (ctx->modules, name, (zhash_free_fn *)module_destroy);
-    flux_log (ctx->h, LOG_INFO, "insmod %s", name);
+    flux_log (ctx->h, LOG_INFO, "insmod %s %s", name, path);
     rc = 0;
 done:
     if (name)

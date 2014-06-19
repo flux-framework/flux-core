@@ -29,7 +29,6 @@
 
 typedef struct {
     flux_t h;
-    char *tmpdir;
     red_t r;
     bool master;
 } ctx_t;
@@ -42,9 +41,7 @@ static void modctl_sink (flux_t h, void *item, void *arg);
 
 static void freectx (ctx_t *ctx)
 {
-    (void)rmdir (ctx->tmpdir);
     flux_red_destroy (ctx->r);
-    free (ctx->tmpdir);
     free (ctx);
 }
 
@@ -56,10 +53,6 @@ static ctx_t *getctx (flux_t h)
         ctx = xzmalloc (sizeof (*ctx));
         ctx->h = h;
         ctx->master = flux_treeroot (h);
-        if (asprintf (&ctx->tmpdir, "/tmp/flux-modctl.XXXXXX") < 0)
-            oom ();
-        if (!mkdtemp (ctx->tmpdir))
-            err_exit ("mkdtemp");
         ctx->r = flux_red_create (h, modctl_sink, modctl_reduce,
                                   FLUX_RED_TIMEDFLUSH, ctx);
         flux_red_set_timeout_msec (ctx->r, ctx->master ? red_timeout_msec_master
@@ -180,37 +173,33 @@ static int write_all (int fd, uint8_t *buf, int len)
 }
 
 /* Install module out of KVS.
+ * KVS content is copied to a tmp file, dlopened, and immediately unlinked.
  */
 static void installmod (ctx_t *ctx, const char *name)
 {
     char *key = NULL;
-    char *path = NULL;
     JSON mod = NULL, args;
     uint8_t *buf = NULL;
     int fd, len;
+    char tmpfile[] = "/tmp/flux-modctl-XXXXXX"; /* FIXME: consider TMPDIR */
 
     if (asprintf (&key, "conf.modctl.modules.%s", name) < 0)
         oom ();
     if (kvs_get (ctx->h, key, &mod) < 0 || !Jget_obj (mod, "args", &args)
             || util_json_object_get_data (mod, "data", &buf, &len) < 0)
         goto done; /* kvs/parse error */
-    if (asprintf (&path, "%s/%s.so", ctx->tmpdir, name) < 0)
-        oom ();
-    if ((fd = open (path, O_WRONLY | O_TRUNC | O_CREAT, 0600)) < 0)
-        err_exit ("%s", path);
+    if ((fd = mkstemp (tmpfile)) < 0)
+        err_exit ("%s", tmpfile);
     if (write_all (fd, buf, len) < 0)
-        err_exit ("%s", path);
+        err_exit ("%s", tmpfile);
     if (close (fd) < 0)
-        err_exit ("%s", path);
-    if (flux_insmod (ctx->h, -1, path, FLUX_MOD_FLAGS_MANAGED, args) < 0) {
-        flux_log (ctx->h, LOG_ERR, "flux_insmod %s", name);
+        err_exit ("%s", tmpfile);
+    if (flux_insmod (ctx->h, -1, tmpfile, FLUX_MOD_FLAGS_MANAGED, args) < 0) {
+        flux_log (ctx->h, LOG_ERR, "flux_insmod %s", tmpfile);
         goto done;
     }
 done:
-    if (path) {
-        (void)unlink (path);
-        free (path);
-    }
+    (void)unlink (tmpfile);
     if (key)
         free (key);
     if (buf)
