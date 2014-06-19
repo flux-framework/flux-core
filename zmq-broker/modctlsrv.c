@@ -34,7 +34,7 @@ typedef struct {
 } ctx_t;
 
 static const int red_timeout_msec_master = 20;
-static const int red_timeout_msec = 2;
+static const int red_timeout_msec_slave = 2;
 
 static void modctl_reduce (flux_t h, zlist_t *items, void *arg);
 static void modctl_sink (flux_t h, void *item, void *arg);
@@ -55,11 +55,10 @@ static ctx_t *getctx (flux_t h)
         ctx->master = flux_treeroot (h);
         ctx->r = flux_red_create (h, modctl_sink, modctl_reduce,
                                   FLUX_RED_TIMEDFLUSH, ctx);
-        flux_red_set_timeout_msec (ctx->r, ctx->master ? red_timeout_msec_master
-                                                       : red_timeout_msec);
+        flux_red_set_timeout_msec (ctx->r,
+            ctx->master ? red_timeout_msec_master : red_timeout_msec_slave);
         flux_aux_set (h, "modctlsrv", ctx, (FluxFreeFn)freectx);
     }
-
     return ctx;
 }
 
@@ -131,8 +130,13 @@ static void modctl_sink (flux_t h, void *item, void *arg)
     ctx_t *ctx = arg;
     JSON o = item;
 
-    if (!ctx->master)
+    if (ctx->master) {  /* sink to KVS */
+        if (kvs_put (h, "conf.modctl.lsmod", o) < 0 || kvs_commit (h) < 0) {
+            flux_log (ctx->h, LOG_ERR, "%s: %s", __FUNCTION__,strerror (errno));
+        }
+    } else {            /* push pustream */
         flux_request_send (h, o, "modctl.push");
+    }
     Jput (o);
 }
 
@@ -153,7 +157,7 @@ done:
     return 0;
 }
 
-static int push_lsmod (ctx_t *ctx, int seq)
+static int lsmod_reduce (ctx_t *ctx, int seq)
 {
     JSON o = NULL;
     JSON lsmod = NULL;
@@ -236,6 +240,7 @@ done:
 }
 
 /* This function is called whenver conf.modctl.seq is updated by master.
+ * It syncs the set of loaded modules with the KVS.
  */
 static void conf_cb (const char *path, int seq, void *arg, int errnum)
 {
@@ -253,11 +258,8 @@ static void conf_cb (const char *path, int seq, void *arg, int errnum)
         goto done;
     }
     if (ctx->master) { /* master already loaded/unloaded module */
-        push_lsmod (ctx, seq);
-        goto done;
+        goto done_lsmod;
     }
-    /* Fetch the list of installed modules.
-     */
     if (!(lsmod = flux_lsmod (ctx->h, -1))) {
         flux_log (ctx->h, LOG_ERR, "flux_lsmod: %s", strerror (errno));
         goto done;
@@ -294,10 +296,11 @@ static void conf_cb (const char *path, int seq, void *arg, int errnum)
             Jput (mod);
         free (key);
     }
+done_lsmod:
     /* Fetch (now modified) list of installed modules.
-     * Push it through the reduction network (ultimately to the kvs).
+     * Push it through the reduction network (ultimately to the KVS on master).
      */
-    push_lsmod (ctx, seq);
+    lsmod_reduce (ctx, seq);
 done:
     Jput (lsmod);
 }

@@ -149,15 +149,17 @@ static void mod_ls (flux_t h, int rank, int argc, char **argv)
 
 static void mod_ls_m (flux_t h, int argc, char **argv)
 {
-    JSON mods;
+    JSON lsmod, mods;
     json_object_iter iter;
 
     printf ("%-20s %6s %-6s %s\n", "Module", "Size", "Flags", "Nodelist");
-    if (kvs_get (h, "conf.modctl.lsmod", &mods) == 0) {
+    if (kvs_get (h, "conf.modctl.lsmod", &lsmod) == 0) {
+        if (!Jget_obj (lsmod, "mods", &mods))
+            msg_exit ("error parsing lsmod KVS object");
         json_object_object_foreachC (mods, iter) {
             list_module (iter.key, iter.val);
         }
-        Jput (mods);
+        Jput (lsmod);
     }
 }
 
