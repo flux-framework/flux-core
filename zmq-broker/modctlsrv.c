@@ -29,7 +29,6 @@
 
 typedef struct {
     flux_t h;
-    zhash_t *modules;
     char *tmpdir;
     red_t r;
     bool master;
@@ -43,7 +42,6 @@ static void modctl_sink (flux_t h, void *item, void *arg);
 
 static void freectx (ctx_t *ctx)
 {
-    zhash_destroy (&ctx->modules);
     (void)rmdir (ctx->tmpdir);
     flux_red_destroy (ctx->r);
     free (ctx->tmpdir);
@@ -56,8 +54,6 @@ static ctx_t *getctx (flux_t h)
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
-        if (!(ctx->modules = zhash_new ()))
-            oom ();
         ctx->h = h;
         ctx->master = flux_treeroot (h);
         if (asprintf (&ctx->tmpdir, "/tmp/flux-modctl.XXXXXX") < 0)
@@ -147,7 +143,7 @@ static void modctl_sink (flux_t h, void *item, void *arg)
     Jput (o);
 }
 
-static int push_request (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static int push_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     JSON request = NULL;
@@ -164,6 +160,14 @@ done:
     return 0;
 }
 
+static void push_lsmod (ctx_t *ctx, int seq, JSON lsmod)
+{
+    JSON o = Jnew ();
+    Jadd_int (o, "seq", seq);
+    Jadd_obj (o, "mods", lsmod);
+    flux_red_append (ctx->r, o, seq);
+}
+
 static int write_all (int fd, uint8_t *buf, int len)
 {
     int n, count = 0;
@@ -173,12 +177,6 @@ static int write_all (int fd, uint8_t *buf, int len)
         count += n;
     }
     return count;
-}
-
-static void freetemp (char *path)
-{
-    (void)unlink (path);
-    free (path);
 }
 
 /* Install module out of KVS.
@@ -206,12 +204,13 @@ static void installmod (ctx_t *ctx, const char *name)
         err_exit ("%s", path);
     if (flux_insmod (ctx->h, -1, path, FLUX_MOD_FLAGS_MANAGED, args) < 0) {
         flux_log (ctx->h, LOG_ERR, "flux_insmod %s", name);
-        freetemp (path);
-    } else {
-        zhash_update (ctx->modules, name, path);
-        zhash_freefn (ctx->modules, name, (zhash_free_fn *)freetemp);
+        goto done;
     }
 done:
+    if (path) {
+        (void)unlink (path);
+        free (path);
+    }
     if (key)
         free (key);
     if (buf)
@@ -219,64 +218,69 @@ done:
     Jput (mod);
 }
 
+/* This function is called whenver conf.modctl.seq changes.
+ */
 static void conf_cb (const char *path, int seq, void *arg, int errnum)
 {
     ctx_t *ctx = arg;
     kvsitr_t itr;
-    JSON mod;
+    JSON mod, lsmod;
+    json_object_iter iter;
     const char *name;
-    zlist_t *keys;
     char *key;
     kvsdir_t dir;
 
-    if (errnum != 0)
-        seq = 0;
-    /* Install managed modules listed in kvs.
+    if (errnum == ENOENT)
+        return; /* not initialized */
+    if (errnum != 0) {
+        flux_log (ctx->h, LOG_ERR, "%s", "conf.modctl.seq");
+        return;
+    }
+    /* Fetch the list of installed modules.
+     */
+    if (!(lsmod = flux_lsmod (ctx->h, -1))) {
+        flux_log (ctx->h, LOG_ERR, "flux_lsmod");
+        return;
+    }
+    /* Walk through list of modules that should be installed (from kvs),
+     * insmod-ing any that are not not.
      */
     if (kvs_get_dir (ctx->h, &dir, "conf.modctl.modules") == 0) {
         if (!(itr = kvsitr_create (dir)))
             oom ();
         while ((name = kvsitr_next (itr))) {
-            if (!zhash_lookup (ctx->modules, name))
+            if (!Jget_obj (lsmod, name, &mod))
                 installmod (ctx, name);
         }
         kvsitr_destroy (itr);
     }
-
-    /* Remove managed modules not listed in kvs.
+    /* Walk through the list of modules that are installed (from lsmod),
+     * rmmod-ing any that should not be.
      */
-    if (!(keys = zhash_keys (ctx->modules)))
-        oom ();
-    name = zlist_first (keys);
-    while (name) {
-        if (asprintf (&key, "conf.modctl.modules.%s", name) < 0)
+    json_object_object_foreachC (lsmod, iter) {
+        if (asprintf (&key, "conf.modctl.modules.%s", iter.key) < 0)
             oom ();
         if (kvs_get (ctx->h, key, &mod) < 0) {
-            if (flux_rmmod (ctx->h, -1, name, FLUX_MOD_FLAGS_MANAGED) < 0)
-                flux_log (ctx->h, LOG_ERR, "flux_rmmod %s", name);
-            zhash_delete (ctx->modules, name);
-        } else {
+            if (flux_rmmod (ctx->h, -1, iter.key, FLUX_MOD_FLAGS_MANAGED) < 0)
+                flux_log (ctx->h, LOG_ERR, "flux_rmmod %s", iter.key);
+        } else
             Jput (mod);
-        }
         free (key);
-        name = zlist_next (keys);
     }
-    zlist_destroy (&keys);
-
-    /* Reduce module list into KVS.
+    /* Fetch (now modified) list of installed modules.
+     * Push it through the reduction network (ultimately to the kvs).
      */
-    JSON mods;
-    if ((mods = flux_lsmod (ctx->h, -1))) {
-        JSON o = Jnew ();
-        Jadd_int (o, "seq", seq);
-        Jadd_obj (o, "mods", mods);
-        flux_red_append (ctx->r, o, seq);
-        Jput (mods);
+    Jput (lsmod);
+    if (!(lsmod = flux_lsmod (ctx->h, -1))) {
+        flux_log (ctx->h, LOG_ERR, "flux_lsmod");
+        return;
     }
+    push_lsmod (ctx, seq, lsmod);
+    Jput (lsmod);
 }
 
 static msghandler_t htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "modctl.push",              push_request },
+    { FLUX_MSGTYPE_REQUEST, "modctl.push",              push_request_cb },
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
