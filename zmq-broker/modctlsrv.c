@@ -239,7 +239,7 @@ static void conf_cb (const char *path, int seq, void *arg, int errnum)
     /* Fetch the list of installed modules.
      */
     if (!(lsmod = flux_lsmod (ctx->h, -1))) {
-        flux_log (ctx->h, LOG_ERR, "flux_lsmod");
+        flux_log (ctx->h, LOG_ERR, "flux_lsmod: %s", strerror (errno));
         return;
     }
     /* Walk through list of modules that should be installed (from kvs),
@@ -262,7 +262,8 @@ static void conf_cb (const char *path, int seq, void *arg, int errnum)
             oom ();
         if (kvs_get (ctx->h, key, &mod) < 0) {
             if (flux_rmmod (ctx->h, -1, iter.key, FLUX_MOD_FLAGS_MANAGED) < 0)
-                flux_log (ctx->h, LOG_ERR, "flux_rmmod %s", iter.key);
+                flux_log (ctx->h, LOG_ERR, "flux_rmmod %s: %s", iter.key,
+                          strerror (errno));
         } else
             Jput (mod);
         free (key);
@@ -272,7 +273,7 @@ static void conf_cb (const char *path, int seq, void *arg, int errnum)
      */
     Jput (lsmod);
     if (!(lsmod = flux_lsmod (ctx->h, -1))) {
-        flux_log (ctx->h, LOG_ERR, "flux_lsmod");
+        flux_log (ctx->h, LOG_ERR, "flux_lsmod: %s", strerror (errno));
         return;
     }
     push_lsmod (ctx, seq, lsmod);
