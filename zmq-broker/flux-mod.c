@@ -147,19 +147,11 @@ static void mod_ls (flux_t h, int rank, int argc, char **argv)
     Jput (mods);
 }
 
-static void incr_seq (flux_t h)
-{
-    int seq = 0;
-    (void)kvs_get_int (h, "conf.modctl.seq", &seq);
-    if (kvs_put_int (h, "conf.modctl.seq", ++seq) < 0)
-        err_exit ("conf.modctl.seq");
-}
-
 static void mod_ls_m (flux_t h, int argc, char **argv)
 {
     JSON mods;
     json_object_iter iter;
-        
+
     printf ("%-20s %6s %-6s %s\n", "Module", "Size", "Flags", "Nodelist");
     if (kvs_get (h, "conf.modctl.lsmod", &mods) == 0) {
         json_object_object_foreachC (mods, iter) {
@@ -195,9 +187,10 @@ static void mod_rm_m (flux_t h, int argc, char **argv)
             oom ();
         if (kvs_unlink (h, key) < 0)
             err_exit ("%s", key);
-        incr_seq (h);
         if (kvs_commit (h) < 0)
             err_exit ("kvs_commit");
+        if (flux_modctl_rm (h, argv[i]) < 0)
+            err_exit ("%s", argv[i]);
         msg ("%s: unloaded", argv[i]);
         free (key);
     }
@@ -354,9 +347,10 @@ static void mod_ins_m (flux_t h, int argc, char **argv)
         msg_exit ("%s: mod_name undefined", path);
     args = parse_modargs (argc - 1, argv + 1);
     copymod (h, name, path, args);
-    incr_seq (h);
     if (kvs_commit (h) < 0)
         err_exit ("kvs_commit");
+    if (flux_modctl_ins (h, name) < 0)
+        err_exit ("flux_modctl_ins %s", name);
     msg ("module loaded");
 
     free (name);

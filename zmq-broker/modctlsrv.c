@@ -153,12 +153,21 @@ done:
     return 0;
 }
 
-static void push_lsmod (ctx_t *ctx, int seq, JSON lsmod)
+static int push_lsmod (ctx_t *ctx, int seq)
 {
-    JSON o = Jnew ();
+    JSON o = NULL;
+    JSON lsmod = NULL;
+    int rc = -1;
+
+    if (!(lsmod = flux_lsmod (ctx->h, -1)))
+        goto done;
+    o = Jnew ();
     Jadd_int (o, "seq", seq);
     Jadd_obj (o, "mods", lsmod);
-    flux_red_append (ctx->r, o, seq);
+    flux_red_append (ctx->r, o, seq); /* takes ownership of 'o' */
+done:
+    Jput (lsmod);
+    return rc;
 }
 
 static int write_all (int fd, uint8_t *buf, int len)
@@ -175,60 +184,83 @@ static int write_all (int fd, uint8_t *buf, int len)
 /* Install module out of KVS.
  * KVS content is copied to a tmp file, dlopened, and immediately unlinked.
  */
-static void installmod (ctx_t *ctx, const char *name)
+static int installmod (ctx_t *ctx, const char *name)
 {
     char *key = NULL;
     JSON mod = NULL, args;
     uint8_t *buf = NULL;
-    int fd, len;
+    int fd = -1, len;
     char tmpfile[] = "/tmp/flux-modctl-XXXXXX"; /* FIXME: consider TMPDIR */
+    int n, rc = -1;
+    int errnum = 0;
 
     if (asprintf (&key, "conf.modctl.modules.%s", name) < 0)
         oom ();
     if (kvs_get (ctx->h, key, &mod) < 0 || !Jget_obj (mod, "args", &args)
-            || util_json_object_get_data (mod, "data", &buf, &len) < 0)
+            || util_json_object_get_data (mod, "data", &buf, &len) < 0) {
+        errnum = EPROTO;
         goto done; /* kvs/parse error */
-    if ((fd = mkstemp (tmpfile)) < 0)
-        err_exit ("%s", tmpfile);
-    if (write_all (fd, buf, len) < 0)
-        err_exit ("%s", tmpfile);
-    if (close (fd) < 0)
-        err_exit ("%s", tmpfile);
-    if (flux_insmod (ctx->h, -1, tmpfile, FLUX_MOD_FLAGS_MANAGED, args) < 0) {
-        flux_log (ctx->h, LOG_ERR, "flux_insmod %s", tmpfile);
+    }
+    if ((fd = mkstemp (tmpfile)) < 0) {
+        errnum = errno;
         goto done;
     }
-done:
+    if (write_all (fd, buf, len) < 0) {
+        errnum = errno;
+        goto done;
+    }
+    n = close (fd);
+    fd = -1;
+    if (n < 0) {
+        errnum = errno;
+        goto done;
+    }
+    if (flux_insmod (ctx->h, -1, tmpfile, FLUX_MOD_FLAGS_MANAGED, args) < 0) {
+        errnum = errno;
+        goto done_unlink;
+    }
+    rc = 0;
+done_unlink:
     (void)unlink (tmpfile);
+done:
+    if (fd != -1)
+        (void)close (fd);
     if (key)
         free (key);
     if (buf)
         free (buf);
     Jput (mod);
+    if (errnum != 0)
+        errno = errnum;
+    return rc;
 }
 
-/* This function is called whenver conf.modctl.seq changes.
+/* This function is called whenver conf.modctl.seq is updated by master.
  */
 static void conf_cb (const char *path, int seq, void *arg, int errnum)
 {
     ctx_t *ctx = arg;
     kvsitr_t itr;
-    JSON mod, lsmod;
+    JSON mod, lsmod = NULL;
     json_object_iter iter;
     const char *name;
     kvsdir_t dir;
 
     if (errnum == ENOENT)
-        return; /* not initialized */
+        goto done; /* not initialized */
     if (errnum != 0) {
         flux_log (ctx->h, LOG_ERR, "%s", "conf.modctl.seq");
-        return;
+        goto done;
+    }
+    if (ctx->master) { /* master already loaded/unloaded module */
+        push_lsmod (ctx, seq);
+        goto done;
     }
     /* Fetch the list of installed modules.
      */
     if (!(lsmod = flux_lsmod (ctx->h, -1))) {
         flux_log (ctx->h, LOG_ERR, "flux_lsmod: %s", strerror (errno));
-        return;
+        goto done;
     }
     /* Walk through list of modules that should be installed (from kvs),
      * insmod-ing any that are not not.
@@ -238,7 +270,9 @@ static void conf_cb (const char *path, int seq, void *arg, int errnum)
             oom ();
         while ((name = kvsitr_next (itr))) {
             if (!Jget_obj (lsmod, name, &mod))
-                installmod (ctx, name);
+                if (installmod (ctx, name) < 0)
+                    flux_log (ctx->h, LOG_ERR, "installmod %s: %s", name,
+                              strerror (errno));
         }
         kvsitr_destroy (itr);
     }
@@ -248,7 +282,7 @@ static void conf_cb (const char *path, int seq, void *arg, int errnum)
     json_object_object_foreachC (lsmod, iter) {
         int fl;
         char *key;
-        if (!Jget_int (lsmod, iter.key, &fl) || !(fl & FLUX_MOD_FLAGS_MANAGED))
+        if (!Jget_int (iter.val, "flags",&fl) || !(fl & FLUX_MOD_FLAGS_MANAGED))
             continue;
         if (asprintf (&key, "conf.modctl.modules.%s", iter.key) < 0)
             oom ();
@@ -263,17 +297,79 @@ static void conf_cb (const char *path, int seq, void *arg, int errnum)
     /* Fetch (now modified) list of installed modules.
      * Push it through the reduction network (ultimately to the kvs).
      */
+    push_lsmod (ctx, seq);
+done:
     Jput (lsmod);
-    if (!(lsmod = flux_lsmod (ctx->h, -1))) {
-        flux_log (ctx->h, LOG_ERR, "flux_lsmod: %s", strerror (errno));
-        return;
+}
+
+static int seq_incr (flux_t h)
+{
+    int seq = 0;
+    const char *key = "conf.modctl.seq";
+
+    (void)kvs_get_int (h, key, &seq);
+    if (kvs_put_int (h, key, ++seq) < 0 || kvs_commit (h) < 0)
+        return -1;
+    return 0;
+}
+
+static int ins_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    JSON request = NULL;
+    const char *name;
+    int rc = 0;
+
+    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+            || !Jget_str (request, "name", &name)) {
+        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
     }
-    push_lsmod (ctx, seq, lsmod);
-    Jput (lsmod);
+    if (ctx->master) {
+        if (installmod (ctx, name) < 0 || seq_incr (h) < 0) {
+            flux_respond_errnum (h, zmsg, errno);
+            goto done;
+        }
+        flux_respond_errnum (h, zmsg, 0);
+    } else {
+        flux_request_sendmsg (h, zmsg);
+    }
+done:
+    Jput (request);
+    return rc;
+}
+
+static int rm_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    JSON request = NULL;
+    const char *name;
+    int fl = FLUX_MOD_FLAGS_MANAGED;
+    int rc = 0;
+
+    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+            || !Jget_str (request, "name", &name)) {
+        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
+    }
+    if (ctx->master) {
+        if (flux_rmmod (ctx->h, -1, name, fl) < 0 || seq_incr (h) < 0) {
+            flux_respond_errnum (h, zmsg, errno);
+            goto done;
+        }
+        flux_respond_errnum (h, zmsg, 0);
+    } else {
+        flux_request_sendmsg (h, zmsg);
+    }
+done:
+    Jput (request);
+    return rc;
 }
 
 static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST, "modctl.push",              push_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "modctl.ins",               ins_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "modctl.rm",                rm_request_cb },
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
