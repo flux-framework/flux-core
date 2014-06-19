@@ -227,7 +227,6 @@ static void conf_cb (const char *path, int seq, void *arg, int errnum)
     JSON mod, lsmod;
     json_object_iter iter;
     const char *name;
-    char *key;
     kvsdir_t dir;
 
     if (errnum == ENOENT)
@@ -258,6 +257,10 @@ static void conf_cb (const char *path, int seq, void *arg, int errnum)
      * rmmod-ing any that should not be.
      */
     json_object_object_foreachC (lsmod, iter) {
+        int fl;
+        char *key;
+        if (!Jget_int (lsmod, iter.key, &fl) || !(fl & FLUX_MOD_FLAGS_MANAGED))
+            continue;
         if (asprintf (&key, "conf.modctl.modules.%s", iter.key) < 0)
             oom ();
         if (kvs_get (ctx->h, key, &mod) < 0) {
