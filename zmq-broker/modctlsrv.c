@@ -275,6 +275,11 @@ static void conf_cb (const char *path, int seq, void *arg, int errnum)
     }
 }
 
+static msghandler_t htab[] = {
+    { FLUX_MSGTYPE_REQUEST, "modctl.push",              push_request },
+};
+const int htablen = sizeof (htab) / sizeof (htab[0]);
+
 int mod_main (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
@@ -283,10 +288,8 @@ int mod_main (flux_t h, zhash_t *args)
         flux_log (ctx->h, LOG_ERR, "kvs_watch_int: %s", strerror (errno));
         return -1;
     }
-    if (flux_msghandler_append (h, FLUX_MSGTYPE_REQUEST, "modctl.push",
-                                push_request, ctx) < 0) {
-        flux_log (ctx->h, LOG_ERR, "kvs_msghandler_append: %s",
-                                   strerror (errno));
+    if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
+        flux_log (h, LOG_ERR, "flux_msghandler_add: %s", strerror (errno));
         return -1;
     }
     if (flux_reactor_start (h) < 0) {
