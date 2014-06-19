@@ -55,8 +55,9 @@ struct plugin_ctx_struct {
     flux_sec_t sec;
     flux_t h;
     const char *name;
-    zfile_t *zf;
     void *dso;
+    int size;
+    char *digest;
     zhash_t *args;
     int rank;
     bool reactor_stop;
@@ -576,12 +577,12 @@ void *plugin_sock (plugin_ctx_t p)
 
 const char *plugin_digest (plugin_ctx_t p)
 {
-    return zfile_digest (p->zf);
+    return p->digest;
 }
 
 int plugin_size (plugin_ctx_t p)
 {
-    return (int)zfile_cursize (p->zf);
+    return p->size;
 }
 
 void plugin_destroy (plugin_ctx_t p)
@@ -607,9 +608,9 @@ void plugin_destroy (plugin_ctx_t p)
     zlist_destroy (&p->deferred_responses);
 
     dlclose (p->dso);
-    zfile_destroy (&p->zf);
     zuuid_destroy (&p->uuid);
     free (p->svc_uri);
+    free (p->digest);
 
     free (p);
 }
@@ -650,6 +651,7 @@ plugin_ctx_t plugin_create (flux_t h, const char *path, zhash_t *args)
     void *dso;
     const char **mod_namep;
     mod_main_f *mod_main;
+    zfile_t *zf;
 
     dlerror ();
     if (!(dso = dlopen (path, RTLD_NOW | RTLD_LOCAL))) {
@@ -673,7 +675,10 @@ plugin_ctx_t plugin_create (flux_t h, const char *path, zhash_t *args)
     p->args = args;
     p->main = mod_main;
     p->dso = dso;
-    p->zf = zfile_new (NULL, path);
+    zf = zfile_new (NULL, path);
+    p->digest = xstrdup (zfile_digest (zf));
+    p->size = (int)zfile_cursize (zf);
+    zfile_destroy (&zf);
     p->name = *mod_namep;
     if (asprintf (&p->svc_uri, "inproc://svc-%s", p->name) < 0)
         oom ();
