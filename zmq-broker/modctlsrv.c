@@ -26,6 +26,7 @@
 #include "plugin.h"
 #include "shortjson.h"
 #include "reduce.h"
+#include "hostlist.h"
 
 typedef struct {
     flux_t h;
@@ -62,12 +63,26 @@ static ctx_t *getctx (flux_t h)
     return ctx;
 }
 
-/* FIXME: use hostlist */
 char *nl_merge (const char *a, const char *b)
 {
-    char *s;
-    if (asprintf (&s, "%s,%s", a, b) < 0)
-        oom ();
+    char *s = NULL;
+    char buf[256];
+    hostlist_t hl;
+    int len;
+
+    if (!(hl = hostlist_create (a)))
+        goto done;
+    if (!hostlist_push (hl, b))
+        goto done;
+    if (hostlist_ranged_string (hl, sizeof (buf), buf) < 0)
+        goto done;
+    s = xstrdup (buf[0] == '[' ? &buf[1] : &buf[0]);
+    len = strlen (s);
+    if (s[len - 1] == ']')
+        s[len - 1] = '\0';
+done:
+    if (hl)
+        hostlist_destroy (hl);
     return s;
 }
 
@@ -251,8 +266,10 @@ static void conf_cb (const char *path, int seq, void *arg, int errnum)
     const char *name;
     kvsdir_t dir;
 
-    if (errnum == ENOENT)
-        goto done; /* not initialized */
+    if (errnum == ENOENT) {
+        seq = 0;
+        goto done_lsmod; /* not initialized */
+    }
     if (errnum != 0) {
         flux_log (ctx->h, LOG_ERR, "%s", "conf.modctl.seq");
         goto done;
