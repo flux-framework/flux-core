@@ -14,7 +14,7 @@ typedef void   (*FluxSinkFn)(flux_t h, void *item, int batchnum, void *arg);
 /* Create/destroy a reduction handle.
  * The sink function will be called every time the handle is flushed.
  * Flush occurs according to reduction flags (see defs above).
- * If no flags, sink is only called manually via flux_red_flush().
+ * If no flags, flush will be called after every flux_red_append().
  */
 red_t flux_red_create (flux_t h, FluxSinkFn sinkfn, void *arg);
 void flux_red_destroy (red_t r);

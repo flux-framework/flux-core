@@ -142,6 +142,8 @@ int flux_red_append (red_t r, void *item, int batchnum)
         if (zlist_size (r->items) > 0)
             timer_enable (r);
     }
+    if (r->flags == 0)
+        flux_red_flush (r);
     return rc;
 }
 
