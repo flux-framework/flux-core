@@ -101,7 +101,7 @@ done:
 
 /* Merge b into a.
  */
-static void merge_mods (flux_t h, JSON a, JSON b)
+static void merge_mods (JSON a, JSON b)
 {
     json_object_iter iter;
     JSON am;
@@ -130,7 +130,7 @@ static void modctl_reduce (flux_t h, zlist_t *items, int batchnum, void *arg)
     if ((a = zlist_pop (items))) {
         while ((b = zlist_pop (items))) {
             if (Jget_obj (a, "mods", &amods) && Jget_obj (b, "mods", &bmods))
-                merge_mods (h, amods, bmods);
+                merge_mods (amods, bmods);
             Jput (b);
         }
         zlist_append (items, a);
@@ -140,16 +140,25 @@ static void modctl_reduce (flux_t h, zlist_t *items, int batchnum, void *arg)
 static void modctl_sink (flux_t h, void *item, int batchnum, void *arg)
 {
     ctx_t *ctx = arg;
-    JSON o = item;
+    JSON a = item;
+    JSON b = NULL, amods, bmods;
+    int seq;
 
     if (ctx->master) {  /* sink to KVS */
-        if (kvs_put (h, "conf.modctl.lsmod", o) < 0 || kvs_commit (h) < 0) {
+        if (kvs_get (h, "conf.modctl.lsmod", &b) == 0) {
+            if (Jget_int (b, "seq", &seq) && seq == batchnum
+                                          && Jget_obj (a, "mods", &amods)
+                                          && Jget_obj (b, "mods", &bmods))
+                merge_mods (amods, bmods);
+            Jput (b);
+        }
+        if (kvs_put (h, "conf.modctl.lsmod", a) < 0 || kvs_commit (h) < 0) {
             flux_log (ctx->h, LOG_ERR, "%s: %s", __FUNCTION__,strerror (errno));
         }
     } else {            /* push pustream */
-        flux_request_send (h, o, "modctl.push");
+        flux_request_send (h, a, "modctl.push");
     }
-    Jput (o);
+    Jput (a);
 }
 
 static int push_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
