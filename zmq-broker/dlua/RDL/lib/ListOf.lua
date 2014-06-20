@@ -30,7 +30,7 @@ local function ListOf (arg)
         table.insert (t, T (args) )
     end
 
-    return t
+    return unpack(t)
 end
 
 return ListOf
