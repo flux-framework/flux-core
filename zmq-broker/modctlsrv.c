@@ -66,12 +66,16 @@ static ctx_t *getctx (flux_t h)
     return ctx;
 }
 
-char *nl_merge (const char *a, const char *b)
+/* Combine a and b into a new string (returned, caller must free).
+ */
+char *merge_nodelist (const char *a, const char *b)
 {
     char *s = NULL;
     char buf[256];
     hostlist_t hl;
     int len;
+
+    fprintf (stderr, "XXX Merge %s %s\n", a, b);
 
     if (!(hl = hostlist_create (a)))
         goto done;
@@ -89,58 +93,53 @@ done:
     return s;
 }
 
+/* Merge b into a.
+ */
+static void merge_mods (JSON a, JSON b)
+{
+    json_object_iter iter;
+    JSON am;
+    char *s;
+    const char *anl, *bnl;
+
+    json_object_object_foreachC (b, iter) {
+        if (!Jget_obj (a, iter.key, &am)) {
+            Jadd_obj (a, iter.key, iter.val);
+            continue;
+        }
+        if (!Jget_str (iter.val, "nodelist", &bnl)
+                                        || !Jget_str (am, "nodelist", &anl))
+            continue;
+        s = merge_nodelist (anl, bnl);
+        json_object_object_del (am, "nodelist");
+        Jadd_str (am, "nodelist", s);
+        free (s);
+    }
+}
+
 static void modctl_reduce (flux_t h, zlist_t *items, int batchnum, void *arg)
 {
     //ctx_t *ctx = arg;
-    JSON o, a;
-    json_object_iter iter;
-    JSON mods, amods = NULL;
-    int seq, aseq = -1;
+    JSON o, amods = Jnew ();
+    int seq, count = 0;
 
-    o = zlist_first (items);
-    while (o) {
-        /* Ignore malformed and old requests.
-         */
-        if (!Jget_int (o, "seq", &seq) || seq < aseq
-                                       || !Jget_obj (o, "mods", &mods))
-            goto next;
-        /* If request is newer than aggregate, dump old and start over.
-         */
-        if (seq > aseq) {
-            if (amods)
-                Jput (amods);
-            amods = Jget (mods);
-            aseq = seq;
-            goto next;
+    while ((o = zlist_pop (items))) {
+        JSON mods;
+        if (Jget_int (o, "seq", &seq) && seq == batchnum
+                                      && Jget_obj (o, "mods", &mods)) {
+            merge_mods (amods, mods);
+            count++;
         }
-        /* Walk through list of loaded modules, accumulating a union list
-         * in the aggregate, and combining nodelists.
-         * FIXME: ignoring mismatched size/digest.
-         */
-        json_object_object_foreachC (mods, iter) {
-            JSON amod;
-            if (!Jget_obj (amods, iter.key, &amod)) {
-                Jadd_obj (amods, iter.key, iter.val);
-            } else {
-                const char *nl = "", *anl = "";
-                (void)Jget_str (iter.val, "nodelist", &nl);
-                (void)Jget_str (amod, "nodelist", &anl);
-                char *s = nl_merge (anl, nl);
-                json_object_object_del (amod, "nodelist");
-                Jadd_str (amod, "nodelist", s);
-                free (s);
-            }
-        }
-next:
-        o = zlist_next (items);
-    }
-    while ((o = zlist_pop (items)))
         Jput (o);
-    a = Jnew ();
-    Jadd_int (a, "seq", aseq);
-    Jadd_obj (a, "mods", amods);
-    Jput (amods);
-    zlist_append (items, a);
+    }
+    if (count > 0) {
+        JSON a = Jnew ();
+        Jadd_int (a, "seq", batchnum);
+        Jadd_obj (a, "mods", amods);
+        Jput (amods);
+        zlist_append (items, a);
+    } else
+        Jput (amods);
 }
 
 static void modctl_sink (flux_t h, void *item, int batchnum, void *arg)
