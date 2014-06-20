@@ -37,8 +37,8 @@ typedef struct {
 static const int red_timeout_msec_master = 20;
 static const int red_timeout_msec_slave = 2;
 
-static void modctl_reduce (flux_t h, zlist_t *items, void *arg);
-static void modctl_sink (flux_t h, void *item, void *arg);
+static void modctl_reduce (flux_t h, zlist_t *items, int batchnum, void *arg);
+static void modctl_sink (flux_t h, void *item, int batchnum, void *arg);
 
 static void freectx (ctx_t *ctx)
 {
@@ -89,7 +89,7 @@ done:
     return s;
 }
 
-static void modctl_reduce (flux_t h, zlist_t *items, void *arg)
+static void modctl_reduce (flux_t h, zlist_t *items, int batchnum, void *arg)
 {
     //ctx_t *ctx = arg;
     JSON o, a;
@@ -143,7 +143,7 @@ next:
     zlist_append (items, a);
 }
 
-static void modctl_sink (flux_t h, void *item, void *arg)
+static void modctl_sink (flux_t h, void *item, int batchnum, void *arg)
 {
     ctx_t *ctx = arg;
     JSON o = item;

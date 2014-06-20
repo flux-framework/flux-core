@@ -91,7 +91,7 @@ void flux_red_flush (red_t r)
     void *item;
 
     while ((item = zlist_pop (r->items)))
-        r->sinkfn (r->h, item, r->arg);
+        r->sinkfn (r->h, item, r->cur_batchnum, r->arg);
     timer_disable (r); /* no-op if not armed */
 }
 
@@ -105,9 +105,9 @@ static int append_late_item (red_t r, void *item, int batchnum)
     if (zlist_append (items, item) < 0)
         oom ();
     if (r->redfn)
-        r->redfn (r->h, items, r->arg);
+        r->redfn (r->h, items, batchnum, r->arg);
     while ((i = zlist_pop (items)))
-        r->sinkfn (r->h, i, r->arg);
+        r->sinkfn (r->h, i, batchnum, r->arg);
     zlist_destroy (&items);
     return 0;
 }
@@ -126,14 +126,13 @@ int flux_red_append (red_t r, void *item, int batchnum)
         r->last_hwm = r->cur_hwm;
         r->cur_hwm = 1;
         r->cur_batchnum = batchnum;
-    } else {
-        assert (batchnum == r->cur_batchnum);
+    } else
         r->cur_hwm++;
-    }
+    assert (batchnum == r->cur_batchnum);
     if (zlist_append (r->items, item) < 0)
         oom ();
     if (r->redfn)
-        r->redfn (r->h, r->items, r->arg);
+        r->redfn (r->h, r->items, r->cur_batchnum, r->arg);
 
     if ((r->flags & FLUX_RED_HWMFLUSH)) {
         if (!hwm_valid (r) || hwm_flushable (r))

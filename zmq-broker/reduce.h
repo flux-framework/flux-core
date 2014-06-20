@@ -8,8 +8,8 @@ enum {
                             //   from previous batch and next flush is at hwm
 };
 
-typedef void   (*FluxRedFn)(flux_t h, zlist_t *items, void *arg);
-typedef void   (*FluxSinkFn)(flux_t h, void *item, void *arg);
+typedef void   (*FluxRedFn)(flux_t h, zlist_t *items, int batchnum, void *arg);
+typedef void   (*FluxSinkFn)(flux_t h, void *item, int batchnum, void *arg);
 
 /* Create/destroy a reduction handle.
  * The sink function will be called every time the handle is flushed.
@@ -39,7 +39,7 @@ void flux_red_flush (red_t r);
 /* Append an item to the reduction handle.
  * The reduction function is immediately called (if defined).
  * The sink function is called according to flags.
- * Returns the number of items queued in the handle (after reduction).
+ * Returns 0 on success, -1 on failure.
  */
 int flux_red_append (red_t r, void *item, int batchnum);
 

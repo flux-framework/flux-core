@@ -39,8 +39,8 @@ typedef struct {
     zhash_t *rcache;    /* hash of red_t by name */
 } ctx_t;
 
-static void mon_sink (flux_t h, void *item, void *arg);
-static void mon_reduce (flux_t h, zlist_t *items, void *arg);
+static void mon_sink (flux_t h, void *item, int batchnum, void *arg);
+static void mon_reduce (flux_t h, zlist_t *items, int batchnum, void *arg);
 
 static void freectx (ctx_t *ctx)
 {
@@ -203,7 +203,7 @@ static void conf_cb (const char *path, kvsdir_t dir, void *arg, int errnum)
     }
 }
 
-static void mon_sink (flux_t h, void *item, void *arg)
+static void mon_sink (flux_t h, void *item, int batchnum, void *arg)
 {
     ctx_t *ctx = arg;
     JSON o = item;
@@ -232,7 +232,7 @@ static void mon_sink (flux_t h, void *item, void *arg)
     Jput (o);
 }
 
-static void mon_reduce (flux_t h, zlist_t *items, void *arg)
+static void mon_reduce (flux_t h, zlist_t *items, int batchnum, void *arg)
 {
     zlist_t *tmp; 
     int e1, e2;
