@@ -54,10 +54,13 @@ static ctx_t *getctx (flux_t h)
         ctx = xzmalloc (sizeof (*ctx));
         ctx->h = h;
         ctx->master = flux_treeroot (h);
-        ctx->r = flux_red_create (h, modctl_sink, modctl_reduce,
-                                  FLUX_RED_TIMEDFLUSH, ctx);
-        flux_red_set_timeout_msec (ctx->r,
-            ctx->master ? red_timeout_msec_master : red_timeout_msec_slave);
+        ctx->r = flux_red_create (h, modctl_sink, ctx);
+        flux_red_set_reduce_fn (ctx->r, modctl_reduce);
+        flux_red_set_flags (ctx->r, FLUX_RED_TIMEDFLUSH);
+        if (ctx->master)
+            flux_red_set_timeout_msec (ctx->r, red_timeout_msec_master);
+        else
+            flux_red_set_timeout_msec (ctx->r, red_timeout_msec_slave);
         flux_aux_set (h, "modctlsrv", ctx, (FluxFreeFn)freectx);
     }
     return ctx;

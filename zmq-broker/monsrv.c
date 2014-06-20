@@ -76,13 +76,14 @@ static red_t rcache_lookup (ctx_t *ctx, const char *name)
 static red_t rcache_add (ctx_t *ctx, const char *name)
 {
     flux_t h = ctx->h;
-    red_t r;
+    red_t r = flux_red_create (h, mon_sink, ctx);
 
+    flux_red_set_reduce_fn (r, mon_reduce);
     if (ctx->master) {
-        r = flux_red_create (h, mon_sink, mon_reduce, FLUX_RED_TIMEDFLUSH, ctx);
+        flux_red_set_flags (r, FLUX_RED_TIMEDFLUSH);
         flux_red_set_timeout_msec (r, red_timeout_msec);
     } else {
-        r = flux_red_create (h, mon_sink, mon_reduce, FLUX_RED_HWMFLUSH, ctx);
+        flux_red_set_flags (r, FLUX_RED_HWMFLUSH);
     }
     zhash_insert (ctx->rcache, name, r);
     zhash_freefn (ctx->rcache, name, (zhash_free_fn *)flux_red_destroy);

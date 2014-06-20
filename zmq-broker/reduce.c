@@ -34,7 +34,7 @@ struct red_struct {
     FluxSinkFn  sinkfn;
     FluxRedFn   redfn;
     void *arg;
-    zlist_t *items;    
+    zlist_t *items;
     flux_t h;
     int flags;
     int timeout; /* in msec */
@@ -52,15 +52,12 @@ static void hwm_acct (hwm_t h, int count, int batchnum);
 static bool hwm_flushable (hwm_t h);
 static bool hwm_valid (hwm_t h);
 
-red_t flux_red_create (flux_t h, FluxSinkFn sinkfn, FluxRedFn redfn,
-                       int flags, void *arg)
+red_t flux_red_create (flux_t h, FluxSinkFn sinkfn, void *arg)
 {
     red_t r = xzmalloc (sizeof (*r));
-    r->sinkfn = sinkfn;
-    r->redfn = redfn;
     r->arg = arg;
-    r->flags = flags;
     r->h = h;
+    r->sinkfn = sinkfn;
     if (!(r->items = zlist_new ()))
         oom ();
     if ((r->flags & FLUX_RED_HWMFLUSH))
@@ -78,6 +75,30 @@ void flux_red_destroy (red_t r)
     free (r);
 }
 
+void flux_red_set_timeout_msec (red_t r, int msec)
+{
+    r->timeout = msec;
+}
+
+void flux_red_set_reduce_fn (red_t r, FluxRedFn redfn)
+{
+    r->redfn = redfn;
+}
+
+void flux_red_set_flags (red_t r, int flags)
+{
+    r->flags = flags;
+    if ((r->flags & FLUX_RED_HWMFLUSH)) {
+        if (r->hwm == NULL)
+            r->hwm = hwm_create ();
+    } else {
+        if (r->hwm != NULL) {
+            hwm_destroy (r->hwm);
+            r->hwm = NULL;
+        }
+    }
+}
+
 void flux_red_flush (red_t r)
 {
     void *item;
@@ -88,8 +109,7 @@ void flux_red_flush (red_t r)
         else
             ; /* presumably we don't own the items - otherwise mem leak! */
     }
-    if ((r->flags & FLUX_RED_TIMEDFLUSH))
-        timer_disable (r);
+    timer_disable (r);
 }
 
 int flux_red_append (red_t r, void *item, int batchnum)
@@ -110,11 +130,6 @@ int flux_red_append (red_t r, void *item, int batchnum)
         timer_enable (r);
 
     return count;
-}
-
-void flux_red_set_timeout_msec (red_t r, int msec)
-{
-    r->timeout = msec;
 }
 
 static int timer_cb (flux_t h, void *arg)
