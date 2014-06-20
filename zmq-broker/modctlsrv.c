@@ -55,12 +55,12 @@ static ctx_t *getctx (flux_t h)
         ctx->h = h;
         ctx->master = flux_treeroot (h);
         ctx->r = flux_red_create (h, modctl_sink, ctx);
-        flux_red_set_reduce_fn (ctx->r, modctl_reduce);
-        flux_red_set_flags (ctx->r, FLUX_RED_TIMEDFLUSH);
         if (ctx->master)
             flux_red_set_timeout_msec (ctx->r, red_timeout_msec_master);
         else
             flux_red_set_timeout_msec (ctx->r, red_timeout_msec_slave);
+        flux_red_set_reduce_fn (ctx->r, modctl_reduce);
+        flux_red_set_flags (ctx->r, FLUX_RED_TIMEDFLUSH);
         flux_aux_set (h, "modctlsrv", ctx, (FluxFreeFn)freectx);
     }
     return ctx;
@@ -70,23 +70,20 @@ static ctx_t *getctx (flux_t h)
  */
 char *merge_nodelist (const char *a, const char *b)
 {
-    char *s = NULL;
+    char *p, *s = NULL;
     char buf[256];
     hostlist_t hl;
-    int len;
-
-    fprintf (stderr, "XXX Merge %s %s\n", a, b);
 
     if (!(hl = hostlist_create (a)))
         goto done;
     if (!hostlist_push (hl, b))
         goto done;
-    if (hostlist_ranged_string (hl, sizeof (buf), buf) < 0)
-        goto done;
-    s = xstrdup (buf[0] == '[' ? &buf[1] : &buf[0]);
-    len = strlen (s);
-    if (s[len - 1] == ']')
-        s[len - 1] = '\0';
+    (void)hostlist_ranged_string (hl, sizeof (buf), buf);
+    if ((p = strrchr (buf, ']')))
+        *p = '\0';
+    if ((p = strchr (buf, '[')))
+        p++;
+    s = xstrdup (p ? p : buf);
 done:
     if (hl)
         hostlist_destroy (hl);
@@ -95,7 +92,7 @@ done:
 
 /* Merge b into a.
  */
-static void merge_mods (JSON a, JSON b)
+static void merge_mods (flux_t h, JSON a, JSON b)
 {
     json_object_iter iter;
     JSON am;
@@ -119,27 +116,16 @@ static void merge_mods (JSON a, JSON b)
 
 static void modctl_reduce (flux_t h, zlist_t *items, int batchnum, void *arg)
 {
-    //ctx_t *ctx = arg;
-    JSON o, amods = Jnew ();
-    int seq, count = 0;
+    JSON a, b, amods, bmods;
 
-    while ((o = zlist_pop (items))) {
-        JSON mods;
-        if (Jget_int (o, "seq", &seq) && seq == batchnum
-                                      && Jget_obj (o, "mods", &mods)) {
-            merge_mods (amods, mods);
-            count++;
+    if ((a = zlist_pop (items))) {
+        while ((b = zlist_pop (items))) {
+            if (Jget_obj (a, "mods", &amods) && Jget_obj (b, "mods", &bmods))
+                merge_mods (h, amods, bmods);
+            Jput (b);
         }
-        Jput (o);
-    }
-    if (count > 0) {
-        JSON a = Jnew ();
-        Jadd_int (a, "seq", batchnum);
-        Jadd_obj (a, "mods", amods);
-        Jput (amods);
         zlist_append (items, a);
-    } else
-        Jput (amods);
+    }
 }
 
 static void modctl_sink (flux_t h, void *item, int batchnum, void *arg)
