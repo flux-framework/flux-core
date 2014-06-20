@@ -705,6 +705,13 @@ local function resource_proxy_create (store, res)
         return store:tag (res.id, t, v)
     end
 
+    local function get_tag (self, t)
+        if not resource.tags[t] then
+            return nil
+        end
+        return deepcopy_no_metatable (resource.tags [t])
+    end
+
     ---
     -- Various value accessor functions:
     --
@@ -735,6 +742,7 @@ local function resource_proxy_create (store, res)
         next_child = next_child,
         reset = reset,
         tag = tag,
+        get = get_tag,
         tabulate = tabulate,
         aggregate = aggregate,
         unlink = unlink
