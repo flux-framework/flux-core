@@ -157,6 +157,7 @@ static int push_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     flux_red_append (ctx->r, Jget (request), seq);
 done:
     Jput (request);
+    zmsg_destroy (zmsg);
     return 0;
 }
 
