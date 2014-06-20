@@ -66,24 +66,33 @@ static ctx_t *getctx (flux_t h)
     return ctx;
 }
 
+char *hl_string (hostlist_t hl)
+{
+    int len = 64;
+    char *s = xzmalloc (len);
+
+    hostlist_sort (hl);
+    while (hostlist_ranged_string (hl, len, s) < 0)
+        if (!(s = realloc (s, len *= 2)))
+            oom ();
+    len = strlen (s);
+    if (s[len - 1] == ']')
+        s[len - 1] = '\0';
+    if (*s == '[')
+        memmove (s, s + 1, len);
+    return s;
+}
+
 /* Combine a and b into a new string (returned, caller must free).
  */
 char *merge_nodelist (const char *a, const char *b)
 {
-    char *p, *s = NULL;
-    char buf[256];
+    char *s = NULL;
     hostlist_t hl;
 
-    if (!(hl = hostlist_create (a)))
+    if (!(hl = hostlist_create (a)) || !hostlist_push (hl, b))
         goto done;
-    if (!hostlist_push (hl, b))
-        goto done;
-    (void)hostlist_ranged_string (hl, sizeof (buf), buf);
-    if ((p = strrchr (buf, ']')))
-        *p = '\0';
-    if ((p = strchr (buf, '[')))
-        p++;
-    s = xstrdup (p ? p : buf);
+    s = hl_string (hl);
 done:
     if (hl)
         hostlist_destroy (hl);
