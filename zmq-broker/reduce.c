@@ -49,7 +49,6 @@ struct red_struct {
 static void timer_enable (red_t r);
 static void timer_disable (red_t r);
 
-static void hwm_acct (red_t r, int batchnum);
 static bool hwm_flushable (red_t r);
 static bool hwm_valid (red_t r);
 
@@ -58,6 +57,7 @@ red_t flux_red_create (flux_t h, FluxSinkFn sinkfn, void *arg)
     red_t r = xzmalloc (sizeof (*r));
     r->arg = arg;
     r->h = h;
+    assert (sinkfn != NULL); /* FIXME */
     r->sinkfn = sinkfn;
     if (!(r->items = zlist_new ()))
         oom ();
@@ -90,33 +90,60 @@ void flux_red_flush (red_t r)
 {
     void *item;
 
-    while ((item = zlist_pop (r->items))) {
-        if (r->sinkfn)
-            r->sinkfn (r->h, item, r->arg);
-        else
-            ; /* presumably we don't own the items - otherwise mem leak! */
-    }
-    timer_disable (r);
+    while ((item = zlist_pop (r->items)))
+        r->sinkfn (r->h, item, r->arg);
+    timer_disable (r); /* no-op if not armed */
+}
+
+static int append_late_item (red_t r, void *item, int batchnum)
+{
+    zlist_t *items;
+    void *i;
+
+    if (!(items = zlist_new()))
+        oom ();
+    if (zlist_append (items, item) < 0)
+        oom ();
+    if (r->redfn)
+        r->redfn (r->h, items, r->arg);
+    while ((i = zlist_pop (items)))
+        r->sinkfn (r->h, i, r->arg);
+    zlist_destroy (&items);
+    return 0;
 }
 
 int flux_red_append (red_t r, void *item, int batchnum)
 {
-    int count;
+    int rc = 0;
 
+    if (batchnum < r->cur_batchnum) {
+        if (batchnum == r->cur_batchnum - 1)
+            r->last_hwm++;
+        return append_late_item (r, item, batchnum);
+    }
+    if (batchnum > r->cur_batchnum) {
+        flux_red_flush (r);
+        r->last_hwm = r->cur_hwm;
+        r->cur_hwm = 1;
+        r->cur_batchnum = batchnum;
+    } else {
+        assert (batchnum == r->cur_batchnum);
+        r->cur_hwm++;
+    }
     if (zlist_append (r->items, item) < 0)
         oom ();
     if (r->redfn)
         r->redfn (r->h, r->items, r->arg);
-    hwm_acct (r, batchnum);
+
     if ((r->flags & FLUX_RED_HWMFLUSH)) {
         if (!hwm_valid (r) || hwm_flushable (r))
             flux_red_flush (r);
     }
-    count = zlist_size (r->items);
-    if ((r->flags & FLUX_RED_TIMEDFLUSH) && count > 0)
-        timer_enable (r);
-
-    return count;
+    if ((r->flags & FLUX_RED_TIMEDFLUSH)) {
+        if (zlist_size (r->items) > 0)
+            timer_enable (r);
+    }
+    return rc;
 }
 
 static int timer_cb (flux_t h, void *arg)
@@ -154,19 +181,6 @@ static bool hwm_flushable (red_t r)
 static bool hwm_valid (red_t r)
 {
     return (r->last_hwm > 0);
-}
-
-static void hwm_acct (red_t r, int batchnum)
-{
-    if (batchnum == r->cur_batchnum - 1)
-        r->last_hwm++;
-    else if (batchnum == r->cur_batchnum)
-        r->cur_hwm++;
-    else if (batchnum > r->cur_batchnum) {
-        r->last_hwm = r->cur_hwm;
-        r->cur_hwm = 1;
-        r->cur_batchnum = batchnum;
-    }
 }
 
 /*
