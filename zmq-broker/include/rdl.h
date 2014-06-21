@@ -136,10 +136,15 @@ const char *rdl_resource_path (struct resource *r);
 const char *rdl_resource_name (struct resource *r);
 
 /*
- *  Tag a resource with [tag]
+ *  Tag a resource with [tag] (tag only)
  */
 void rdl_resource_tag (struct resource *r, const char *tag);
 
+/*
+ *  Set or get an arbitrary [tag] to an integer value [val]
+ */
+int rdl_resource_set_int (struct resource *r, const char *tag, int64_t val);
+int rdl_resource_get_int (struct resource *r, const char *tag, int64_t *valp);
 
 
 /*

@@ -627,7 +627,7 @@ const char * rdl_resource_path (struct resource *r)
     return (r->path);
 }
 
-int rdl_resource_method_call1 (struct resource *r,
+static int rdl_resource_method_call1_keepstack (struct resource *r,
     const char *method, const char *arg)
 {
     int rc = 0;
@@ -639,15 +639,50 @@ int rdl_resource_method_call1 (struct resource *r,
      */
     if (lua_pcall (L, 2, LUA_MULTRET, 0) || lua_isnoneornil (L, 1)) {
         VERR (r->rdl->rl, "%s(%s): %s\n", method, arg, lua_tostring (L, -1));
+        lua_settop (L, 0);
         rc = -1;
     }
-    lua_settop (L, 0);
+    return (rc);
+}
+
+static int rdl_resource_method_call1 (struct resource *r,
+    const char *method, const char *arg)
+{
+    int rc = rdl_resource_method_call1_keepstack (r, method, arg);
+    lua_settop (r->rdl->L, 0);
     return (rc);
 }
 
 void rdl_resource_tag (struct resource *r, const char *tag)
 {
     rdl_resource_method_call1 (r, "tag", tag);
+}
+
+int rdl_resource_set_int (struct resource *r, const char *tag, int64_t val)
+{
+    int rc = 0;
+    lua_State *L = r->rdl->L;
+
+    if (lua_rdl_resource_method_push (r, "tag") < 0)
+        return (-1);
+    lua_pushstring (L, tag);
+    lua_pushnumber (L, val);
+    if (lua_pcall (L, 3, LUA_MULTRET, 0) || lua_isnoneornil (L, 1)) {
+        VERR (r->rdl->rl, "%s(%s): %s\n", "tag", tag, lua_tostring (L, -1));
+        rc = -1;
+    }
+    lua_settop (L, 0);
+    return (rc);
+}
+
+int rdl_resource_get_int (struct resource *r, const char *tag, int64_t *valp)
+{
+    lua_State *L = r->rdl->L;
+    if (rdl_resource_method_call1_keepstack (r, "get", tag)  < 0)
+        return (-1);
+    *valp = (int64_t) lua_tointeger (L, -1);
+    lua_settop (L, 0);
+    return (0);
 }
 
 int rdl_resource_unlink_child (struct resource *r, const char *name)
