@@ -3,9 +3,11 @@ LIBDIR =          $(TOP)/lib
 EXTRA_CFLAGS +=   -I$(TOP)/include -I$(TOP)/util
 EXTRA_LDFLAGS +=  -L$(TOP)/lib $(TOP)/util/libutil.a
 
+TESTRDL_INPUT_FILE := $(TOP)/conf/hype.lua
+
 LDFLAGS = -Wl,-rpath,$(LIBDIR)
 
-export CFLAGS LDFLAGS
+export CFLAGS LDFLAGS TESTRDL_INPUT_FILE
 
 LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lutil -lm -lpthread
 
