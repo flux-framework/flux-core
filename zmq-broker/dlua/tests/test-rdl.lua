@@ -219,7 +219,7 @@ function test_ListOf()
 Hierarchy "default" {
     Resource{
         "foo",
-        children = ListOf{ Resource, ids="0-99", args = {"bar"} }
+        children = { ListOf{ Resource, ids="0-99", args = {"bar"} } }
     }
 }
 ]]))
@@ -251,7 +251,7 @@ function test_find()
 Hierarchy "default" {
     Resource{
         "foo",
-        children = ListOf{ Resource, ids="0-99", args = {"bar"} }
+        children = { ListOf{ Resource, ids="0-99", args = {"bar"} } }
     }
 }
 ]]))
@@ -316,7 +316,7 @@ function test_accumulator()
 Hierarchy "default" {
     Resource{
         "foo",
-        children = ListOf{ Resource, ids="0-99", args = {"bar"} }
+        children = { ListOf{ Resource, ids="0-99", args = {"bar"} } }
     }
 }
 ]]))
