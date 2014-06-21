@@ -36,6 +36,7 @@ int main (int argc, char *argv[])
     struct rdl *rdl1, *rdl2;
     struct rdl_accumulator *a;
     struct resource *r, *c;
+    int64_t val;
 
     log_init (basename (argv[0]));
     rdllib_set_default_errf (NULL, &perr);
@@ -50,6 +51,12 @@ int main (int argc, char *argv[])
         err_exit ("copy");
 
     r = rdl_resource_get (rdl1, "default");
+    if (rdl_resource_set_int (r, "test-tag", 5959) < 0)
+        exit (1);
+    rdl_resource_get_int (r, "test-tag", &val);
+    if (val != 5959)
+        exit (1);
+
     c = rdl_resource_next_child (r);
 
     a = rdl_accumulator_create (rdl1);
