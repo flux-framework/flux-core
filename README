@@ -3,8 +3,18 @@ Flux
 
 0. Building the code
 
-  # Uncomment the appropriate MPIMOD setting in zmq-broker/Makefile
-  # for your system
+Ensure that prerequisites are installed:
+
+  libsodium
+  zeromq 4.0.4 built --with-libsodium
+  czmq 2.2.0
+  lua 5.1
+  munge
+  json-c
+
+Uncomment the appropriate MPIMOD setting in zmq-broker/Makefile and build:
+
+  vi zmq-broker/Makefile
   make
 
 1. Launching the framework on Hype or IPA
