@@ -49,6 +49,9 @@ DEPFIG = \
 	reflux_kvs_merkel.eps \
 	reflux_generic.eps \
 	reflux_dealer_router.eps \
+	kvs_update_1.eps \
+	kvs_update_2.eps \
+	kvs_update_3.eps \
 
 all: $(DEPFIG)
 
