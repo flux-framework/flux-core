@@ -13,10 +13,11 @@ The largest allocation our batch system allows for our tests is
 512 nodes (8,192 cores).
 
 We ran KAP with varying arguments to its parameters
-in batch mode and collect various 
+in batch mode and collect 
+%various 
 performance metrics. 
-Given huge space, however, we limited our experiments to
-only a subset of the parameter set and of sampling points.
+Due to the huge parameter space, however, we limited our experiments to
+only a subset of the parameter set by using a sampling strategy.
 
 Specifically, we ran our KAP tests at 64, 128, 256 and 512
 compute nodes, and always fully populated each node with
@@ -36,4 +37,4 @@ Finally, we studied the performance implications of
 redundancy in values by either configuring producers to generate
 unique or redundant values across them.
 For simplicity, we fixed the comms session topology as a binary tree
-and and use only {\tt kvs\_fence} for synchronization.
+and used only {\tt kvs\_fence} for synchronization.

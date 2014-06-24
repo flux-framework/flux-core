@@ -1,35 +1,38 @@
 \begin{abstract}
-Resource management (RM) software is crucial to HPC
-for efficient application execution. %on a set of resources.
+Resource and job management software is crucial 
+to High Performance Computing (HPC) for efficient application execution. 
+However, current systems and approaches can no longer keep up with the challenges 
+HPC centers are facing
+%centers are faced with major 
+%resource and job management challenges that stem from 
+due to
+ever-increasing system scales, resource and workload 
+diversity, interplays between various resources 
+(e.g., between compute clusters and a global 
+file system), and complexity of resource constraints 
+such as strict power budgeting. 
+%In this paper, we 
+%argue for a new resource and job management paradigm 
+%that can effectively address these emerging challenges
+%under one common software framework.
+To address this gap,
+we propose \flux, an extensible job and resource management framework 
+specifically designed to deal with the requirements of next-generation HPC centers.
 %
-However, growing numbers and types of compute resources
-and a greater interplay among various resources 
-(e.g., between compute clusters and a shared I/O cluster) 
-%across the entire HPC center can render even 
-can render even
-the best-in-breed RM software increasingly ineffective.
-HPC centers are at a junction where they require
-a new paradigm for resource management
-to meet the challenges of extreme scalability,
-resource diversity, and increasing complexity of job and resource
-constraints such as power budgeting.
-Our response to this critical need is \flux, an RM software
-framework that can solve the key RM challenges
-in a simple, extensible, distributed, and autonomous fashion.
-Its design targets a computing facility as one common pool
-of diverse sets of resources to provide
-efficient and informed scheduling decisions and flexible accommodation
-of site-wide constraints.
-
-Further, \flux\ employs a framework approach to facilitate 
-the seamless integration of system monitoring and administration,
-lightweight virtualization, and  parallel programming and tools
-run-time systems.
-In this paper, we discuss our vision for \flux, identify key design challenges
-and concepts, and report our progress prototyping
-key components.
-We report preliminary results that show our run-time prototype
-provides requisite properties such as high scalability
-and easy integration, as well as interoperability among essential
-run-time software programs. %elements such as MPI, run-time tools and middleware.
+%that can embody this new paradigm
+%in a simple, extensible, distributed, and autonomous fashion.
+\flux targets an entire computing facility as one common pool
+of diverse sets of resources enabling the facility to accommodate
+site-wide constraints (e.g., for power limits). Yet, its scalable
+and distributed design still  
+offers scalable and effective scheduling strategies. 
+%as well as flexible accommodation of site-wide constraints.
+%Further, its run-time system is designed to support the 
+%new paradigm, providing high scalability and user 
+%productivity. 
+This paper details the design of \flux and describes and evaluates
+our initial 
+prototyping effort of the key run-time components. 
+Our results show that our run-time prototype 
+provides strong and predictable scalability. 
 \end{abstract}

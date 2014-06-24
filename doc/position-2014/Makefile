@@ -47,20 +47,20 @@ epsfigs = ../fig/kvs_update_1.eps \
 
 pdffigs = $(epsfigs:.eps=.pdf) 
 
-styles = llncs.cls splncs.bst splncs03.bst splncs_srt.bst
+styles = IEEEtran.cls 
 
 ########################################################################
 
-all: Flux-JSSPP.pdf 
+all: Flux-SRMPDS.pdf 
 
-Flux-JSSPP.pdf: $(texs) $(bibs) $(pdffigs) $(txts) $(styles)
+Flux-SRMPDS.pdf: $(texs) $(bibs) $(pdffigs) $(txts) $(styles)
 	$(pdflatex) Main
 	bibtex Main
 	$(pdflatex) Main
 	$(pdflatex) Main
 	mv Main.pdf $@
 
-Flux-JSSPP.ps: %.ps: %.dvi $(epsfigs)
+Flux-SRMPD.ps: %.ps: %.dvi $(epsfigs)
 	$(dvips)
 
 Flux-JSSPP.dvi: $(texs) $(bibs) $(epsfigs) $(txts) $(styles)
@@ -78,10 +78,10 @@ $(pdffigs): %.pdf: %.eps
 clean:
 	rm -f Main.aux Main.bib Main.dvi Main.log Main.blg Main.bbl Main.cb Main.cb2 Main.out
 	rm -f $(pdffigs)
-	rm -rf Flux-JSSPP.pdf Main.pdf
+	rm -rf Flux-SRMPDS.pdf Main.pdf
 
 clobber: clean	
-	rm -f Flux-JSSPP.pdf
+	rm -f Flux-SRMPDS.pdf
 
-view: Flux-JSSPP.pdf
+view: Flux-SRMPDS.pdf
 	evince $<

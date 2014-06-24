@@ -1,5 +1,11 @@
-\documentclass{llncs}
-\usepackage{makeidx}  % allows for indexgeneration
+\documentclass[conference]{IEEEtran}
+
+\sloppy
+
+%\pdfpagewidth=8.5in
+%\pdfpageheight=11in
+
+
 \usepackage{graphicx}
 \usepackage{epstopdf}
 \usepackage{subfigure}
@@ -8,36 +14,38 @@
 %\usepackage{subcaption}
 %\usepackage{subfig}
 \usepackage{amsmath}
+\usepackage{xspace}
+\usepackage{authblk}
+\usepackage{url}
 
 \graphicspath{ {../fig/} }
 
 % enable/disable margin comments
 \newif\ifcomments
-\commentsfalse
-%\commentstrue
+%\commentsfalse
+\commentstrue
 
-\pagestyle{headings} 
-
+%\pagestyle{headings}
 
 \begin{document}
 
-\title{\flux: A Next-Generation Resource Management Framework for Large HPC Centers}
-%\titlerunning{\flux}
+\title{FLUX: A Next-Generation Resource Management Framework for Large HPC Centers}
+\author{Dong H. Ahn, Jim Garlick, Mark Grondona, Don Lipari, Becky Springmeyer, 
+        Martin Schulz\\        \{ahn1,garlick,grondona1,lipari1,springme,schulzm\}@llnl.gov}
+\affil{Lawrence Livermore National Laboratory, Computation Directorate, 
+        Livermore, CA 94550}
 
-\author{Dong H. Ahn \and Jim Garlick \and Mark Grondona \and Don Lipari \and Becky Springmeyer\\
-\email{\{ahn1,garlick,mgrondona,lipari1,springme\}@llnl.gov}
-}
-\institute{Lawrence Livermore National Laboratory, Livermore, CA 94550, USA}
-\authorrunning{Ahn, Garlick, Grondona, Lipari, Springmeyer}
-
-\newcommand{\flux}{Flux}
-\newcommand{\zMQ}{\O{}MQ}
-
+\date{}
 \maketitle
 
+
+\newcommand{\flux}{Flux\xspace}
+\newcommand{\zMQ}{\O{}MQ}
+
+
 \input{Abstract}
-\keywords{resource management, communication framework, run-time,
-key value store, scalable process management services.}
+%\keywords{{resource management, communication framework, run-time,
+%key value store, scalable process management services.}}
 \input{Introduction}
 \input{Paradigm}
 \input{Conceptual}
@@ -45,14 +53,14 @@ key value store, scalable process management services.}
 \input{FLUX-Overview}
 \input{FLUX-CMB}
 \input{FLUX-KVS}
-\input{FLUX-LWJ}
+%\input{FLUX-LWJ}
 \input{Results-Perf}
-\input{Results-Case}
+%\input{Results-Case}
 \input{Related}
 \input{Discussions}
 \input{Conclusion}
 
-\bibliographystyle{splncs}
+\bibliographystyle{IEEEtran}
 \bibliography{../bib/project.bib,../bib/rfc.bib}
 
 \end{document}

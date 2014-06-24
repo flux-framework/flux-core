@@ -1,112 +1,56 @@
 \section{Conclusion}
 Large HPC centers are increasingly facing 
-multifaceted resource management challenges
+multifaceted resource and job management challenges
 that if not properly met, will result 
 in significant losses.  
-\flux\ is our response to these challenges
-so as to improve operational efficiency 
-and user productivity by changing 
-the fundamental way in which large
-centers are managed.
-Our run-time infrastructure such as CMB and KVS
-is a significant first step to this rather long
-journey.
+We present a new management paradigm and its incarnation, \flux, that can effectively
+address these challenges in a single software framework,
+%\flux is our response to embody this paradigm 
+%so as to improve operational efficiency 
+%and user productivity and to change
+%the fundamental 
+while making site-wide operations more tractable.
+%and help change the way in which large centers are managed.
+%Our run-time infrastructure such as CMB and KVS
+%is a significant first step to this rather long
+%journey.
 
-We have validated key aspects of these
-components to guide our future efforts systematically. 
-Our study suggests that our run-time 
+We have validated two of the key run-time components responsible for communication,
+% aspects of these
+%components to guide our future efforts systematically. 
+and our results show that our run-time 
 infrastructure is most scalable when information 
-exchange patterns themselves are also scalable.
-And this suggests two significant directions. 
+exchange patterns themselves are also scalable, which suggests two significant directions. 
 For one, we must carefully design the data exchange patterns
 among distributed components of run-time elements. 
-To achieve extreme scalability, each component 
+In particular, to achieve extreme scalability, each component 
 must avoid accessing a global view.
 Secondly, we must also continue to push the 
-scalability envelope of our infrastructure. 
-For the latter, we will soon investigate a way to 
-shard KVS masters into multiple nodes
-and to distribute access patterns to further improve scalability.
-
-Besides scalability, we must also address KVS persistency.
-Specifically, we plan to explore a scheme
-thereby putting on-disk cache behind the KVS master,
-and then temporally expire the master's cache.
-In fact, we will investigate ways to link
-this scheme to the sharding scheme such a way
-that a single on-disk cache can service the value
-objects to all of the KVS masters.
-
-There are other deficiencies we must address as well.
-These include network security and
-comprehensive fault tolerance. 
-As we continue to implement these building blocks 
-to further our framework, we will be evaluating 
-whether the framework can meet our goal for \flux's 
-flexibility, scalability, and extensibility. 
-Ultimately, it is our hope that \flux\ will 
-enable developers at the operating system and
-run-time levels to leverage the RM data stores and services in
-unprecedented ways, and that it will position HPC centers to cope
-with diverse, extreme-scale resources.
-
-
-%Interestingly, if KVS persistence were implemented using an on-disk
-%object directory structured like the git's~\cite{Chacon:2009:PG:1618548},
-%which uses SHA1 digests as file names, it could be shared across multiple
-%masters using a network file system like NFS with close-to-open cache
-%coherency, since file names will always refer to the same content and
-%published references could be guaranteed coherent.
-%Such a scheme could be used to build a clustered KVS master with each
-%node in the cluster servicing disjoint shards of the key space but
-%sharing a common object store.
-
-
-
-
-
-%The original \flux\ design described a job and hence a comms session
-%as having an owner with the ability to control what other users could
-%execute within the job, including the ability to launch new jobs and
-%launch LWJ's within the current job.  In addition, the job would launch
-%work in lightweight, virtualized containers that prevented LWJs from
-%exceeding their resource allocation.  Finally, a job could span any set
-%of resources across a data center, meaning comms session overlays must
-%be capable of spanning multiple, possibly disjoint IP networks.
-%These features will require the \flux\ communications framework to
-%support message intergrity and privacy so that users cannot interfere
-%with one another or attain inappropriate privileges, and to integrate with
-%enterprise authentication services such as Kerberos.
+scalability envelope of our infrastructure, in particular in the
+KVS. We plan to address the latter by 
+distributing the KVS master itself.
+%For the latter, we will soon investigate a way to 
+%shard KVS masters into multiple nodes
+%and to distribute access patterns to further improve scalability.
 %
+%Besides scalability, we must also address KVS persistency.
+%Specifically, we plan to explore a scheme
+%thereby putting on-disk cache behind the KVS master,
+%and then temporally expire the master's cache.
+%In fact, we will investigate ways to link
+%this scheme to the sharding scheme such a way
+%that a single on-disk cache can service the value
+%objects to all of the KVS masters.
 
-%The current KVS object cache is stored in memory.
-%On slave caches, objects are expired after a period of disuse.
-%On the master, however, objects must remain in memory forever.
-%Over time, the cache will become filled with old values that may never
-%be used again.  One solution to this problem is to add a level of
-%on-disk cache behind the master, and then temporally expire the master's
-%cache in a manner similar to the slave caches.  This would allow data from
-%the KVS belonging to a job to be {\em reaped} at job termination and
-%incorporated in some reduced form into the KVS of the parent job.
-%
-%Interestingly, if KVS persistence were implemented using an on-disk
-%object directory structured like the git's~\cite{Chacon:2009:PG:1618548},
-%which uses SHA1 digests as file names, it could be shared across multiple
-%masters using a network file system like NFS with close-to-open cache
-%coherency, since file names will always refer to the same content and
-%published references could be guaranteed coherent.
-%Such a scheme could be used to build a clustered KVS master with each
-%node in the cluster servicing disjoint shards of the key space but
-%sharing a common object store.
-%
 %There are other deficiencies we must address as well.
-%These include network security, comprehensive fault tolerance,
-%KVS persistance, and KVS clustering.
-
-%The \flux\ CMB detects non-responsive nodes, evicts them from
-%the session, and alters its topology to work around them.
-%There is not a comprehensive strategy for ensuring that all in-flight
-%RPC's complete or are restarted across one of these fail-over events,
-%and that state from the evicted node is recoverable.
-%
-
+%These include network security and
+%comprehensive fault tolerance. 
+%As we continue to implement these building blocks 
+%to further our framework, we will be evaluating 
+%whether the framework can meet our goal for \flux's 
+%flexibility, scalability, and extensibility. 
+Ultimately, we are designing \flux to  
+enable developers at the operating system and
+run-time levels to leverage the RJMS data stores and services in
+new and powerful ways, and we expect that it will position HPC centers to cope
+with diverse, extreme-scale resources.
