@@ -1,30 +1,35 @@
 \begin{abstract}
-Resource management (RM) software is crucial to HPC. 
+Resource management (RM) software is crucial to HPC
+for efficient application execution. %on a set of resources.
 %
 However, growing numbers and types of compute resources
 and a greater interplay among various resources 
 (e.g., between compute clusters and a shared I/O cluster) 
-across the entire HPC center makes even 
+%across the entire HPC center can render even 
+can render even
 the best-in-breed RM software increasingly ineffective.
-In fact, HPC centers are at a junction where they require
-a paradigm shift in managing their resources. 
-Our response to this critical need is FLUX, an RM software
+HPC centers are at a junction where they require
+a new paradigm for resource management
+to meet the challenges of extreme scalability,
+resource diversity, and increasing complexity of job and resource
+constraints such as power budgeting.
+Our response to this critical need is \flux, an RM software
 framework that can solve the key RM challenges
-in a simple, extensible, distributed and autonomous fashion.
-It aims at managing the entire computing facility as one common pool
+in a simple, extensible, distributed, and autonomous fashion.
+Its design targets a computing facility as one common pool
 of diverse sets of resources to provide
-efficient scheduling decisions and easy accommodation
-of emerging site-wide constraints such as increasingly 
-stricter power bounds.
-Further, FLUX employs a framework approach to facilitate 
+efficient and informed scheduling decisions and flexible accommodation
+of site-wide constraints.
+
+Further, \flux\ employs a framework approach to facilitate 
 the seamless integration of system monitoring and administration,
-lightweight virtualization, and parallel programming and tools
+lightweight virtualization, and  parallel programming and tools
 run-time systems.
-In this paper, we discuss FLUX's vision, design challenges
-and concepts, and then report our progress on building
-its run-time system.
-Our preliminary results show that the run-time  
+In this paper, we discuss our vision for \flux, identify key design challenges
+and concepts, and report our progress prototyping
+key components.
+We report preliminary results that show our run-time prototype
 provides requisite properties such as high scalability
-and easy integration and interoperability among essential
-run-time elements such as MPI, run-time tools and middleware.
+and easy integration, as well as interoperability among essential
+run-time software programs. %elements such as MPI, run-time tools and middleware.
 \end{abstract}

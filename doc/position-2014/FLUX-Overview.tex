@@ -1,1 +1,37 @@
-\subsection{Approach}
+It is a serious undertaking 
+to design the production version of a new 
+RM framework that can realize our proposed conceptual models.
+Thus, \flux\ team has charted its course through a series of steps
+meant to inform our design process. 
+We began with a functional design that includes an
+internal review with various stakeholders including 
+developers at the operating systems level
+as well as run-time and applications level.
+Then, our initial research thrust was the run-time system of \flux.
+
+%Then, this notion provided us with a concise 
+%mechanism by which we can relate groups of processes
+%to underlying resources (e.g., containing certain processes 
+%to a set of resesources) as well as relate groups
+%one another (e.g., synchronizing tool processes to 
+%MPI processes). 
+%
+For our run-time, we have developed prototypes of our communication framework 
+called Communication Message Broker (CMB) 
+and a scalable key value store (KVS) service.
+They comprise essential scalable building blocks of our run-time system, 
+and we have begun to build various run-time services and also 
+to port user-level run-time software programs to them.
+Further, we introduced the notion of lightweight 
+job (LWJ) as a new way to organize distributed or parallel processes.
+Using this notion, a wide range of run-time software
+programs such as parallel programming models,
+tools and middleware can all leverage our run-time services 
+to build on the strength of one another 
+
+\ifcomments
+\marginpar{\tiny BS: Do you want to now make a case for why KVS is going
+to be an important building block?  Or just launch into the next
+two sections on CMB and V'S?}
+\marginpar{\tiny DA: I think I made a case. Let me know if not}
+\fi

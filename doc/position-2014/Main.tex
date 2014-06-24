@@ -1,38 +1,51 @@
 \documentclass{llncs}
 \usepackage{makeidx}  % allows for indexgeneration
+\usepackage{graphicx}
+\usepackage{epstopdf}
+\usepackage{subfigure}
+\usepackage{wrapfig}
+\usepackage{caption}
+%\usepackage{subcaption}
+%\usepackage{subfig}
+\usepackage{amsmath}
+
+\graphicspath{ {../fig/} }
 
 % enable/disable margin comments
 \newif\ifcomments
-%\commentsfalse
-\commentstrue
+\commentsfalse
+%\commentstrue
 
 \pagestyle{headings} 
 
 
 \begin{document}
 
-\title{FLUX: A Next-Generation Resource Management Framework for Large HPC Centers}
-%\titlerunning{FLUX}
+\title{\flux: A Next-Generation Resource Management Framework for Large HPC Centers}
+%\titlerunning{\flux}
 
-\author{Dong H. Ahn \and Jim Garlick \and Mark Grondona \and Don Lipari \and Becky Springmeyer}
-\institute{Lawrence Livermore National Laboratory, Livermore, CA 94550, USA, \\
-\email{\{ahn1,garlick,grondona1,lipari1,springme\}@llnl.gov}
+\author{Dong H. Ahn \and Jim Garlick \and Mark Grondona \and Don Lipari \and Becky Springmeyer\\
+\email{\{ahn1,garlick,mgrondona,lipari1,springme\}@llnl.gov}
 }
+\institute{Lawrence Livermore National Laboratory, Livermore, CA 94550, USA}
 \authorrunning{Ahn, Garlick, Grondona, Lipari, Springmeyer}
+
+\newcommand{\flux}{Flux}
+\newcommand{\zMQ}{\O{}MQ}
 
 \maketitle
 
 \input{Abstract}
+\keywords{resource management, communication framework, run-time,
+key value store, scalable process management services.}
 \input{Introduction}
 \input{Paradigm}
-\input{Design}
 \input{Conceptual}
 \input{FLUX}
 \input{FLUX-Overview}
-\input{FLUX-Runtime}
-\input{FLUX-LWJ}
 \input{FLUX-CMB}
 \input{FLUX-KVS}
+\input{FLUX-LWJ}
 \input{Results-Perf}
 \input{Results-Case}
 \input{Related}
@@ -40,6 +53,6 @@
 \input{Conclusion}
 
 \bibliographystyle{splncs}
-\bibliography{project}
+\bibliography{../bib/project.bib,../bib/rfc.bib}
 
 \end{document}

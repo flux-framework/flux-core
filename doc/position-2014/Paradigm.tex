@@ -1,62 +1,89 @@
-\section{Paradigm Shift in HPC Resource Management}
-The vision of FLUX is to create a scalable RM
+\section{A New Paradigm for HPC Resource Management}
+The vision of \flux\ is to create a scalable RM
 software system that significantly improves
 operational efficiency and user productivity
-for the workloads spanning across the entire
+for resources spanning an entire
 computing facility.
-With a trend towards ever-growing numbers and
-types of compute cores, however, almost all of 
-the systems sited at the facility are increasingly
-becoming subject to the challenges
-that today's capability-class machines face.
-\ifcomments
-\marginpar{\tiny DA: do we have some stats to back this up?}
-
-The challenges include having to provide extreme
-scalability, low noise, fault tolerance, 
-and heterogeneity management while under a strict power budget.
-Worse, the workloads themselves are also becoming
+Our challenges include providing extreme
+scalability, low noise, and fault tolerance while
+managing arbitrarily complex aggregations of generic resources
+which may be subject to multiple dimensions of constraints
+such as power budgets, IO throughput bounds, and other site-specific
+policy.
+Worse, the workloads themselves continue to become
 increasingly diverse, dynamic, and large.
 Thus, fully realizing our vision through
-these challenges requires a paradigm shift
-in how the RM must manage, model, schedule, 
+these challenges requires a new paradigm as to 
+of how the RM must manage, model, schedule,
 and allocate its resources.
 
-In the new paradigm, the RM must be capable of
+\subsection{Design Challenges}
+\label{sect:challenges}
+
+The first requirement in designing \flux\ to 
+embody the new paradigm is to take a center-wide, or global,
+resource view.  The RM must be capable of
 imposing highly complex resource bounds
 to guarantee the highest operational efficiency
 at any level across the computing facility, 
-while at the same time enabling most efficient
+while at the same time enabling the most efficient
 execution and scheduling of the workloads
 within these bounds.
-This requires the RM to have a purview over 
+This requires the RM to have purview over 
 the entire computing facility. 
 The RM must manage the resources at the center
 as one common pool of resources, and the ability
 to see a broader spectrum of resources
-and their various constraints can then lead to
-most efficient scheduling strategies
+and their various constraints can then enable
+more efficient scheduling strategies
 and execution environments. 
 
-The same ability will ease efforts to diagnose errors
-for both end users and support staff by associating jobs
-with other facility-wide events. The new paradigm 
-also demands that the RM model various types of
-resources and their relationships beyond the traditional
-resource representation: i.e., a simple collection
-of compute nodes. The rich resource model will allow
-the RM to allocate computing resources tailored
-to the disparate limiting factors
-of our applications: e.g., an application
-may be compute bound while others are I/O bound 
-or power bound.
+We characterize this design challenge as the {\em multidimensional
+scale} challenge.  Simply stated, the challenges include
+supporting extreme scalability, addressing noise as concurrency
+increases, and managing a drastically increased amount of
+run-time information that must be monitored, traced, and stored.
+The requirement is that our RM shall handle increased scale in
+numbers of resources as well as jobs and other dimensions of RM data.
 
-Under the new paradigm, the resource allocations
+A second requirement for \flux\ is to include a rich resource model.
+This includes a generalized model of diverse types of resources,
+such as file systems, visualization systems, and serial batch systems,
+in addition to traditional clusters.   With a richer resource model,
+the RM will be capable of imposing complex resource bounds,
+as opposed to the traditional view of CPUs, memory, and time limits.
+With \flux\ that has the ability to model general resource
+relationships, as opposed to flat lists of nodes, we will be able
+to allocate computing resources tailored to the disparate limiting
+factors of our applications.  For example, an application may be
+compute bound while others are I/O bound or power bound.
+This approach will enable stronger efforts to diagnose errors
+for both end users and support staff by associating jobs
+with other facility-wide events.
+
+We chacterize this design challenge as the {\em diverse workload
+challenge}.   As one specific example of emerging resource types,
+power is becoming a critical factor. When the computing facility
+becomes power bound instead of compute-node bound, the RM design
+must enable the scheduling of workloads based upon the maximum
+power limit at any level of the facility. Thus the resource
+representation must be generalized enough to model consumable
+resources like power, as well as the diversity of hardware.
+
+A third requirement is that resource allocations
 must also be elastic. An application may have different
 phases with disparate performance-limiting factors;
 it must be able to grow and shrink its resource allocation
-dynamically.
+dynamically.  This is in contrast to traditional methods with
+static time-limit-bounded allocations.
 
+We characterize this design challenge as the {\em dynamic workload
+challenge}.  
+Not only must the paradigm support disparate performance limiters
+across different applications, but it must also suit varying
+performance limiters within a single application. Our applications
+and their programming paradigm are becoming increasingly dynamic with
+different resource requirements at different phases.
 
 Finally, the new paradigm must meet the greater difficulties
 in code development by facilitating the integration 
@@ -70,11 +97,25 @@ and this will lead to significantly higher productivity
 for both end users and system administrators.
 These capabilities are currently provided
 through disjoint and often overlapping software,
-the integration will substantially reduce the costs
-needed for providing them under the new paradigm. 
+the integration of which can provide a richer, stronger environment
+and may reduce development costs through the ability to leverage
+the \flux\ framework.
+We characterize this design challenge as the {\em productivity challenge}.
 
-In summary, the global resource view, rich resource model,
-elasticity, and seamless integration of other software 
-represent the fundamental characteristics of the new
- resource management paradigm.  
+We have considered additional challenges that we
+have yet to explore fully. For example,
+another challenge that we considered was 
+the risk of higher downtime costs in a more global model.
+If the RM is not designed adequately, a downtime could negatively
+impact the availability of a large portion of the center's
+resources. Thus our RM must be tolerant of hardware and software
+faults and failures with no single point of failure and must
+also support live software upgrades. This and other challenges,
+including security, integration risk, and backwards compatibility 
+will be addressed in our future work.
 
+%In summary, the global resource view, rich resource model,
+%elasticity, and seamless integration of other software 
+%represent the fundamental characteristics of the new
+%resource management paradigm.  
+%

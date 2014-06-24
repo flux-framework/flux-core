@@ -10,21 +10,34 @@ texs =  Main.tex	 \
 	Abstract.tex	 \
 	Introduction.tex \
 	Paradigm.tex     \
-        Design.tex       \
         Conceptual.tex   \
 	FLUX.tex         \
 	FLUX-Overview.tex \
-	FLUX-Runtime.tex \
-	FLUX-CMB.tex     \
+	FLUX-CMB.tex \
+	FLUX-LWJ.tex \
 	FLUX-KVS.tex     \
 	Results-Perf.tex \
+	Results-KAP.tex \
+	Results-Setup.tex \
+	Results-Analysis.tex \
 	Results-Case.tex \
 	Related.tex      \
+	Discussions.tex \
 	Conclusion.tex        
 
 #txts = fig/mpa-code-frag.txt fig/Challenges.pdf
 
-bibs = project.bib
+bibs = ../bib/project.bib  ../bib/rfc.bib
+
+epsfigs = ../fig/kvs_update_1.eps \
+	../fig/kvs_update_2.eps \
+	../fig/kvs_update_3.eps \
+	../fig/tree-binary.eps \
+	../fig/tree-degenerate.eps \
+	../fig/tree-trinary.eps \
+	../fig/tree-binomial.eps \
+	../fig/tree-flat.eps
+
 
 #epsfigs = fig/fgfs_mpi_perf.eps \
 	  fig/fgfs_mpi_sync_perf.eps \
@@ -64,11 +77,11 @@ $(pdffigs): %.pdf: %.eps
 
 clean:
 	rm -f Main.aux Main.bib Main.dvi Main.log Main.blg Main.bbl Main.cb Main.cb2 Main.out
-	rm -f $(epsfigs)
 	rm -f $(pdffigs)
 	rm -rf Flux-JSSPP.pdf Main.pdf
 
 clobber: clean	
 	rm -f Flux-JSSPP.pdf
 
-
+view: Flux-JSSPP.pdf
+	evince $<
