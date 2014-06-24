@@ -5,17 +5,18 @@ platforms on which scientific applications perform
 computations.
 The RJMS system is responsible for efficiently delivering 
 compute cycles of these platforms
-to multiple users submitting jobs to run their applications. 
-To enable this, the RJMS matches users' job request with the available 
+to multiple users who must submit jobs to run their applications. 
+Thus, the RJMS matches the users' job request with the available 
 resources and provides efficient functions 
-for building, submitting, launching and executing, 
+for building, submitting, launching, 
 and monitoring jobs~\cite{GeorgiouThesis}. 
 Typically, an HPC center runs an RJMS instance~\cite{Jette02slurm} 
-to manage an individual system (e.g., cluster) and 
-grid software often ties these instances together. 
+to manage and schedule an individual system (e.g., cluster) and 
+additionally employs separate grid software to tie 
+these instances together. 
 
 However, several growing trends present major challenges 
-to the current management paradigm. 
+to this current management paradigm. 
 First, systems sited at one center are growing larger 
 and types of resources are becoming increasingly diverse~\cite{GeorgiouThesis}. 
 %The RJMS must now provide  
@@ -27,26 +28,30 @@ various classes of resources
 (e.g., between compute clusters and a global file system)
 are becoming more complicated and disruptive~\cite{SCR,SPINDLE}. 
 Third, resource constraints are also becoming increasingly
-complex in a multidimensional and hierarchical fashion~\cite{power-overprovision}
+complex in a multidimensional, dynamic, and hierarchical fashion~\cite{power-overprovision}
 (e.g., dynamic power capping at the level of systems, compute racks, and/or nodes).
-Further, the need for code development tools and their requirements on tool launching and job access
+Further, the need for code-development tools and their requirements on tool launching and job access
 impose challenging requirements on the RJMS~\cite{STAT,SPINDLE,PRUNER,SCR,launchmon}.
 Finally, the workloads themselves are becoming 
-diverse, dynamic, and large, and are moving away from individual monolithic jobs. Instead
+diverse, dynamic, and large, and are moving away from individual monolithic jobs. Instead,
 ensembles of jobs, e.g., for Uncertainty Quantification 
 %DONG: We need a refernece to use Scalebriging Application
 or Scalebriding Applications, are becoming increasingly commonplace.
 
 To address the issues effectively,
 large HPC centers demand a new resource and job management paradigm.
-The new paradigm must increase its purview
-to manage resources across the entire center
-{\bf under one common RJMS framework}. Only this allows
-%This would allow the 
-centers to (co-)schedule jobs 
-to various types of resources and to
+The new paradigm must increase its purview and 
+scalably manage resources across the entire center.
+Perhaps more importantly, it must be implemented under one common 
+RJMS framework so that its schedulers can make use of
+its full resource representations.
+Only this allows centers to (co-)schedule jobs 
+effectively to various types of resources and to
 provide much richer provenance on jobs (e.g., correlation between
-a user-level error and other system activities). The new paradigm, however,
+a user-level error and other system activities). 
+%A divide-and-conquer approach will enable the RJMS 
+%to scale to the entire center. 
+The new paradigm, however,
 creates a series of challenges a new RJMS must overcome:
 
 %It is important to note that all of these must 
@@ -96,7 +101,7 @@ hardware, and heterogeneous compute engines.
 With a richer resource model, the RJMS will be capable of imposing
 complex, multidimensional resource bounds, as opposed to the
 simplistic traditional resource model that is fundamentally based on a
-flat list of nodes, allowing it to 
+flat list of nodes, and allowing it to 
 %With the ability to model sophisticated resource relationships,
 %the new paradigm will be able to schedule and
 allocate resources tailored to the disparate limiting
@@ -114,11 +119,11 @@ restricting decision points and allocation granularity.
 %HPC applications and their programming models are
 %becoming increasingly dynamic with different multi-resource requirements
 %at different phases. 
-One consequence of this its that the RJMS must 
-support multiple levels of elasticity~\cite{Convergence} 
+One consequence of this is that the RJMS must 
+support multiple levels of elasticity 
 as a function of dynamically changing performance limiters
 as well as their limiting resource types---e.g., 
-rigid vs. moldable vs. malleable scheduling 
+rigid vs. moldable vs. malleable scheduling~\cite{Convergence} 
 against different workload and resource types.
 
 \noindent{\em Challenge 4: Productivity --- }
@@ -154,19 +159,28 @@ and backwards compatibility.
 
 %
 
-To address these challenges, %Undoubtedly, such a new paradigm will face unprecedented scaling challenges.
+This series of challenges strongly motivates 
+a specific management and scheduling scheme:
+the new RJMS must hierarchically and dynamically
+manage and schedule the resources under one
+common software framework. The divide-and-conquer
+approach will then allow the RJMS to scale to massive
+amounts of resources sited at a large center.  
+%Undoubtedly, such a new paradigm will face unprecedented scaling challenges.
 %in job scheduling. a RJMS 
 %Thus, it 
-the new RJMS must facilitate scheduler
-parallelism~\cite{Omega,Mesos} through hierarchical,
-multilevel resource management and job scheduling.
+Further, the hierarchical, multilevel job scheduling
+will then facilitate scheduler parallelism~\cite{Omega,Mesos},
+and this will allow the RJMS to scale to massive numbers
+of jobs scheduled across the center.
 In this scheme, higher-level schedulers
-should allow a site to impose site-wide policies, contracts,
+must allow a site to impose site-wide policies, contracts,
 and constraints while lower-level schedulers should allow
 efficient use of any subsets of resources in accordance with
 workload types.
-The new paradigm must dynamically support arbitrary levels in
-such a resource and job hierarchy with an ability to impose
+Finally, the RJMS must be capable of dynamically supporting
+arbitrarily deep levels in this management and scheduler 
+hierarchy with an ability to impose
 different constraints at each level.
 
 

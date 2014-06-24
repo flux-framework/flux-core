@@ -1,7 +1,7 @@
 \section{Conceptual design of \flux}
 \label{models}
 
-In this paper we present \flux, a novel open-source RJMS framework that
+In this section, we present \flux, a novel open-source RJMS framework that
 targets the paradigm discussed above. In the following
 we will describe its
 %
@@ -16,14 +16,14 @@ concepts.
 \noindent{\em Unified Job Model: } In the traditional paradigm, 
 a job is simply defined to be a resource allocation. 
 \flux, however, abstracts this notion to an independent 
-RJMS instance that can either be used to run a single job
+RJMS instance that can either be used to run a single application
 or that can 
 %. This treats any \flux job has 
 %an independent resource and allows it to 
 run its own job management services,
-which then can recursively accept and schedule jobs and provide its own 
+which then can recursively accept and schedule (sub-)jobs and provide its own 
 services to them. 
-In the following we will refer to this simply as a \flux job or just job.
+In the following we will refer to this simply as a \flux job or just a job.
 To provide the necessary flexibility,
 %The 
 each RJMS instance 
@@ -31,7 +31,7 @@ each RJMS instance
 %the main responsibility of managing the resources allocated
 %to its job. But it 
 allows specialized service
-plug-ins to be instantiated so that the resources managed by the job
+plugins to be instantiated so that the resources managed by the \flux job
 can be used differently than other resources (in terms of security, scheduling policy, or resource constraints).
 This model forms 
 the foundation for hierarchical,
@@ -45,7 +45,7 @@ Instead, \flux exploits the hierarchical resource management
 and job scheduling discussed above and organizes itself in a tree-based hierarchy of \flux jobs. 
 Several guiding principles throughout the job hierarchy strike 
 a balance between the management responsibility 
-of a parent job and delegation and empowerment of a child job:
+of a parent job and the delegation and empowerment of a child job:
 
 \begin{itemize}
 \item{Parent bounding rule: the parent job grants 
@@ -101,7 +101,7 @@ beyond floating point computation.
 Further, computing centers are increasingly concerned 
 about managing new resource types such as power 
 and shared persistent storage. \flux therefore introduces a generalized resource
-model that it is extensible and covers any kind of resource and its relationships. This enables scheduling
+model that is extensible and covers any kind of resource and its relationships. This enables scheduling
 decisions based on many types of resources.
 
 %addresses this need by providing an extensible
@@ -120,8 +120,8 @@ framework above: a child job sends a grow or shrink request
 to its parent, which can be aggregated up the job hierarchy 
 until all requisite constraints are known for this request. 
 Also, combining this with the generalized resource model, 
-the elasticity can be expressed for any resource including 
-power. 
+the elasticity can be expressed for many resources such
+as power and file I/O bandwidth. 
 
 %Our elasticity model addresses 
 %the {\em dynamic workload} challenge.
@@ -132,7 +132,7 @@ To maintain scalability both within and across jobs, \flux
 %Our scalability strategy with respect to a large number 
 %of compute nodes is to 
 provides a common scalable communication 
-framework within each job. When a job is created, a secure, scalable 
+framework within each job. When a \flux job is created, a secure, scalable 
 overlay network with common communication service is established 
 across its allocated nodes. Except for the root-level job, 
 the existing communication session of the parent job assists 
@@ -141,7 +141,8 @@ the child job with rapid creation of its own session.
 A communication session is only aware of its parent 
 and child and passes the limited set of control information 
 through its communication channel. Thus, this model 
-enables highly scalable communication within a job, while 
+provides highly scalable communication to management
+services within a Flux job, while 
 limiting communications between jobs, addressing 
 both the multidimensional scale as well as security issues.
 Further, this per-job backbone communication network 

@@ -17,6 +17,7 @@
 \usepackage{xspace}
 \usepackage{authblk}
 \usepackage{url}
+\usepackage{flushend}
 
 \graphicspath{ {../fig/} }
 
@@ -30,10 +31,11 @@
 \begin{document}
 
 \title{FLUX: A Next-Generation Resource Management Framework for Large HPC Centers}
-\author{Dong H. Ahn, Jim Garlick, Mark Grondona, Don Lipari, Becky Springmeyer, 
-        Martin Schulz\\        \{ahn1,garlick,grondona1,lipari1,springme,schulzm\}@llnl.gov}
-\affil{Lawrence Livermore National Laboratory, Computation Directorate, 
-        Livermore, CA 94550}
+\author{Dong H. Ahn, Jim Garlick, Mark Grondona, Don Lipari, Becky Springmeyer, Martin Schulz}
+\affil{Lawrence Livermore National Laboratory, \\
+       Computation Directorate, \\ 
+       Livermore, CA 94550 \\
+       \{ahn1,garlick,grondona1,lipari1,springme,schulzm\}@llnl.gov}
 
 \date{}
 \maketitle
@@ -44,8 +46,10 @@
 
 
 \input{Abstract}
-%\keywords{{resource management, communication framework, run-time,
-%key value store, scalable process management services.}}
+\begin{IEEEkeywords}
+resource management, communication framework, run-time, key value store, 
+scalable process management services.
+\end{IEEEkeywords}
 \input{Introduction}
 \input{Paradigm}
 \input{Conceptual}

@@ -80,16 +80,20 @@
     Year = {2010},
 }
 
-@article{Mesos,
-    Title = {Mesos: A Platform for Fine-Grained Resource Sharing in the
-		Data Center},
-    Author = {Benjamin Hindman and Andy Konwinski and Matei Zaharia and
-		Ali Ghodsi and Anthony D. Joseph and Randy Katz and
-		Scott Shenker and Ion Stoica},
-    Journal = {8th USENIX Symposium on Networked Systems Design and
-		Implementation},
-    Year = {2011},
-}
+@inproceedings{Mesos,
+ author = {Hindman, Benjamin and Konwinski, Andy and Zaharia, Matei and Ghodsi, Ali and Joseph, Anthony D. and Katz, Randy and Shenker, Scott and Stoica, Ion},
+ title = {Mesos: A Platform for Fine-grained Resource Sharing in the Data Center},
+ booktitle = {Proceedings of the 8th USENIX Conference on Networked Systems Design and Implementation},
+ series = {NSDI'11},
+ year = {2011},
+ location = {Boston, MA},
+ pages = {22--22},
+ numpages = {1},
+ url = {http://dl.acm.org/citation.cfm?id=1972457.1972488},
+ acmid = {1972488},
+ publisher = {USENIX Association},
+ address = {Berkeley, CA, USA},
+} 
 
 @article{SlurmScale,
     Title = {Evaluating scalability and efficiency of the Resource
@@ -227,7 +231,7 @@
 
 @inproceedings{Litzkow88,
     author={Litzkow, M.J. and Livny, M. and Mutka, M.W.},
-    booktitle={Distributed Computing Systems, 1988., 8th International Conference on},
+    booktitle={Proceedings of the 8th International Conference on Distributed Computing Systems},
     title={Condor-a hunter of idle workstations},
     year={1988},
     pages={104-111},
@@ -654,8 +658,6 @@ ISSN={1550-1329},
   bibsource = {DBLP, http://dblp.uni-trier.de}
 }
 
-
-
 %
 % Workload Runtime
 %
@@ -669,13 +671,16 @@ ISSN={1550-1329},
     Year = {2010},
 } 
 
-@article{STAT,
+@inproceedings{STAT,
     Author    = {Dorian C. Arnold and Dong H. Ahn and Bronis R. de Supinski and
 		 Gregory L. Lee and Barton P. Miller and Martin Schulz},
     Title     = {Stack Trace Analysis for Large Scale Debugging},
-    Journal   = {21st International Parallel and Distributed Processing
+    booktitle = {Proceedings of the 21st International Parallel and Distributed Processing
 		Symposium (IPDPS 2007)},
     Year      = {2007},
+    month     ={March}, 
+    pages     ={1-10}, 
+    doi       ={10.1109/IPDPS.2007.370254}
 }
 
 @article{GroupFile,
@@ -711,82 +716,58 @@ ISSN={1550-1329},
                Barton P. Miller and
                Martin Schulz},
   title     = {Overcoming Scalability Challenges for Tool Daemon Launching},
-  booktitle = {ICPP},
+  booktitle = {Proceedings of the 37th International Conference on Parallel Processing},
   year      = {2008},
   pages     = {578-585},
   ee        = {http://dx.doi.org/10.1109/ICPP.2008.63},
-  crossref  = {DBLP:conf/icpp/2008},
-  bibsource = {DBLP, http://dblp.uni-trier.de}
 }
 
-@proceedings{DBLP:conf/icpp/2008,
-  title     = {2008 International Conference on Parallel Processing, ICPP
-               2008, September 8-12, 2008, Portland, Oregon, USA},
-  booktitle = {ICPP},
-  publisher = {IEEE Computer Society},
-  year      = {2008},
-  bibsource = {DBLP, http://dblp.uni-trier.de}
-}
-
-@inproceedings{libi,
-  author    = {Joshua D. Goehner and
-               Dorian C. Arnold and
-               Dong H. Ahn and
-               Gregory L. Lee and
-               Bronis R. de Supinski and
-               Matthew P. LeGendre and
-               Martin Schulz and
-               Barton P. Miller},
-  title     = {A Framework for Bootstrapping Extreme Scale Software Systems},
-  booktitle = {First International Workshop on High-performance Infrastructure for Scalable Tools (WHIST)},
-  year      = {2011},
-  address   = {Tucson, AZ}
+@article{libi,
+ author = {Goehner, J. D. and Arnold, D. C. and Ahn, D. H. and Lee, G. L. and De Supinski, B. R. and Legendre, M. P. and Miller, B. P. and Schulz, M.},
+ title = {{LIBI}: A Framework for Bootstrapping Extreme Scale Software Systems},
+ journal = {Parallel Comput.},
+ issue_date = {March, 2013},
+ volume = {39},
+ number = {3},
+ month = mar,
+ year = {2013},
+ issn = {0167-8191},
+ pages = {167--176},
+ numpages = {10},
+ url = {http://dx.doi.org/10.1016/j.parco.2012.09.003},
+ doi = {10.1016/j.parco.2012.09.003},
+ acmid = {2452159},
+ publisher = {Elsevier Science Publishers B. V.},
+ address = {Amsterdam, The Netherlands, The Netherlands},
+ keywords = {Infrastructure bootstrapping, Job launching, System software},
 } 
+
 
 @INPROCEEDINGS{Jette02slurm,
     author = {Morris A. Jette and Andy B. Yoo and Mark Grondona},
     title = {{SLURM}: Simple Linux Utility for Resource Management},
-    booktitle = {In Lecture Notes in Computer Science: Proceedings of Job Scheduling Strategies for Parallel Processing (JSSPP) 2003},
+    booktitle = {Lecture Notes in Computer Science: Proceedings of Job Scheduling Strategies for Parallel Processing (JSSPP) 2003},
     year = {2002},
     pages = {44--60},
     publisher = {Springer-Verlag}
 }
 
-@inproceedings{PMI2,
-  author    = {Pavan Balaji and
-               Darius Buntinas and
-               David Goodell and
-               William Gropp and
-               Jayesh Krishna and
-               Ewing L. Lusk and
-               Rajeev Thakur},
-  title     = {{PMI}: A Scalable Parallel Process-Management Interface for
-               Extreme-Scale Systems},
-  booktitle = {EuroMPI},
-  year      = {2010},
-  pages     = {31-41},
-  ee        = {http://dx.doi.org/10.1007/978-3-642-15646-5_4},
-  crossref  = {DBLP:conf/pvm/2010},
-  bibsource = {DBLP, http://dblp.uni-trier.de}
-}
 
-@proceedings{DBLP:conf/pvm/2010,
-  editor    = {Rainer Keller and
-               Edgar Gabriel and
-               Michael M. Resch and
-               Jack Dongarra},
-  title     = {Recent Advances in the Message Passing Interface - 17th
-               European MPI Users' Group Meeting, EuroMPI 2010, Stuttgart,
-               Germany, September 12-15, 2010. Proceedings},
-  booktitle = {EuroMPI},
-  publisher = {Springer},
-  series    = {Lecture Notes in Computer Science},
-  volume    = {6305},
-  year      = {2010},
-  isbn      = {978-3-642-15645-8},
-  ee        = {http://dx.doi.org/10.1007/978-3-642-15646-5},
-  bibsource = {DBLP, http://dblp.uni-trier.de}
-}
+@inproceedings{PMI2,
+ author = {Balaji, Pavan and Buntinas, Darius and Goodell, David and Gropp, William and Krishna, Jayesh and Lusk, Ewing and Thakur, Rajeev},
+ title = {{PMI}: A Scalable Parallel Process-management Interface for Extreme-scale Systems},
+ booktitle = {Proceedings of the 17th European MPI Users' Group Meeting Conference on Recent Advances in the Message Passing Interface},
+ series = {EuroMPI'10},
+ year = {2010},
+ isbn = {3-642-15645-2, 978-3-642-15645-8},
+ location = {Stuttgart, Germany},
+ pages = {31--41},
+ numpages = {11},
+ url = {http://dl.acm.org/citation.cfm?id=1894122.1894127},
+ acmid = {1894127},
+ publisher = {Springer-Verlag},
+ address = {Berlin, Heidelberg},
+} 
 
 @INPROCEEDINGS{Castain05theopen,
     author = {R. H. Castain and T. S. Woodall and D. J. Daniel and J. M. Squyres and B. Barrett and G. E. Fagg},
@@ -825,34 +806,22 @@ ISSN={1550-1329},
 }
 
 @inproceedings{SPINDLE,
-  author    = {Wolfgang Frings and
-               Dong H. Ahn and
-               Matthew P. LeGendre and
-               Todd Gamblin and
-               Bronis R. de Supinski and
-               Felix Wolf},
-  title     = {Massively parallel loading},
-  booktitle = {ICS},
-  year      = {2013},
-  pages     = {389-398},
-  ee        = {http://doi.acm.org/10.1145/2464996.2465020},
-  crossref  = {DBLP:conf/ics/2013},
-  bibsource = {DBLP, http://dblp.uni-trier.de}
-}
-
-@proceedings{DBLP:conf/ics/2013,
-  editor    = {Allen D. Malony and
-               Mario Nemirovsky and
-               Samuel P. Midkiff},
-  title     = {International Conference on Supercomputing, ICS'13, Eugene,
-               OR, USA - June 10 - 14, 2013},
-  booktitle = {ICS},
-  publisher = {ACM},
-  year      = {2013},
-  isbn      = {978-1-4503-2130-3},
-  ee        = {http://dl.acm.org/citation.cfm?id=2464996},
-  bibsource = {DBLP, http://dblp.uni-trier.de}
-}
+ author     = {Frings, Wolfgang and Ahn, Dong H. and LeGendre, Matthew and Gamblin, Todd and de Supinski, Bronis R. and Wolf, Felix},
+ title      = {Massively Parallel Loading},
+ booktitle  = {Proceedings of the 27th International ACM Conference on International Conference on Supercomputing},
+ series     = {ICS '13},
+ year       = {2013},
+ isbn       = {978-1-4503-2130-3},
+ location   = {Eugene, Oregon, USA},
+ pages      = {389--398},
+ numpages   = {10},
+ url        = {http://doi.acm.org/10.1145/2464996.2465020},
+ doi        = {10.1145/2464996.2465020},
+ acmid      = {2465020},
+ publisher  = {ACM},
+ address    = {New York, NY, USA},
+ keywords   = {hpc, os/runtime service, scalability},
+} 
 
 @techreport{MPIRInterface,
   Title = {The {MPIR} Process Acquisition Interface Version 1.0},
@@ -1050,12 +1019,22 @@ ISSN={1550-1329},
 % Framework
 %
 
-@article{MrNet,
-    Title = {{MRNet}: A Software-Based Multicast/Reduction Network for Scalable Tools},
-    Author = {Philip C. Roth and Dorian C. Arnold and Barton P. Miller},
-    Journal = {Proceedings of the ACM/IEEE SC2003 Conference (SC'03)},
-    Year = {2003},
-}
+@inproceedings{MrNet,
+ author = {Roth, Philip C. and Arnold, Dorian C. and Miller, Barton P.},
+ title = {{MRNet}: A Software-Based Multicast/Reduction Network for Scalable Tools},
+ booktitle = {Proceedings of the 2003 ACM/IEEE Conference on Supercomputing},
+ series = {SC '03},
+ year = {2003},
+ isbn = {1-58113-695-1},
+ location = {Phoenix, AZ, USA},
+ pages = {21--},
+ url = {http://doi.acm.org/10.1145/1048935.1050172},
+ doi = {10.1145/1048935.1050172},
+ acmid = {1050172},
+ publisher = {ACM},
+ address = {New York, NY, USA},
+ keywords = {Scalability, tools, multicast, reduction,aggregation},
+} 
 
 @techreport{MRNetAPI,
     Title = {{MRNet} {API} Programmer's Guide, Release 4.0.0},
@@ -1326,16 +1305,20 @@ ISSN={1550-1329},
 %
 
 @inproceedings{SCR,
-  author    = {Adam Moody and
-               Greg Bronevetsky and
-               Kathryn Mohror and
-               Bronis R. de Supinski},
-  title     = {Design, Modeling, and Evaluation of a Scalable Multi-level
-               Checkpointing System},
-  booktitle = {SC},
-  year      = {2010},
-  pages     = {1-11},
-}
+ author = {Moody, Adam and Bronevetsky, Greg and Mohror, Kathryn and Supinski, Bronis R.  de},
+ title = {Design, Modeling, and Evaluation of a Scalable Multi-level Checkpointing System},
+ booktitle = {Proceedings of the 2010 ACM/IEEE International Conference for High Performance Computing, Networking, Storage and Analysis},
+ series = {SC '10},
+ year = {2010},
+ isbn = {978-1-4244-7559-9},
+ pages = {1--11},
+ numpages = {11},
+ url = {http://dx.doi.org/10.1109/SC.2010.18},
+ doi = {10.1109/SC.2010.18},
+ acmid = {1884666},
+ publisher = {IEEE Computer Society},
+ address = {Washington, DC, USA},
+} 
 
 @inproceedings{Omega,
  author = {Schwarzkopf, Malte and Konwinski, Andy and Abd-El-Malek, Michael and Wilkes, John},
@@ -1389,20 +1372,22 @@ ISSN={1550-1329},
 } 
 
 @inproceedings{power-overprovision,
-  author    = {Tapasya Patki and
-               David K. Lowenthal and
-               Barry Rountree and
-               Martin Schulz and
-               Bronis R. de Supinski},
-  title     = {Exploring hardware overprovisioning in power-constrained,
-               high performance computing},
-  booktitle = {ICS},
-  year      = {2013},
-  pages     = {173-182},
-  ee        = {http://doi.acm.org/10.1145/2464996.2465009},
-  crossref  = {DBLP:conf/ics/2013},
-  bibsource = {DBLP, http://dblp.uni-trier.de}
-}
+ author = {Patki, Tapasya and Lowenthal, David K. and Rountree, Barry and Schulz, Martin and de Supinski, Bronis R.},
+ title = {Exploring Hardware Overprovisioning in Power-constrained, High Performance Computing},
+ booktitle = {Proceedings of the 27th International ACM Conference on International Conference on Supercomputing},
+ series = {ICS '13},
+ year = {2013},
+ isbn = {978-1-4503-2130-3},
+ location = {Eugene, Oregon, USA},
+ pages = {173--182},
+ numpages = {10},
+ url = {http://doi.acm.org/10.1145/2464996.2465009},
+ doi = {10.1145/2464996.2465009},
+ acmid = {2465009},
+ publisher = {ACM},
+ address = {New York, NY, USA},
+ keywords = {high-performance computing, overprovisioned, power, rapl},
+} 
 
 @PhdThesis{GeorgiouThesis,
   title = "Contributions for Resource and Job Management in High Performance Computing",

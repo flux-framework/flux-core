@@ -4,17 +4,18 @@ A communication framework supports our hierarchical job model
 by establishing a {\em comms session} to contain each \flux instance
 and provide a foundation for the distributed components upon which
 \flux\ is built.
-This framework enables secure, scalable communication
+As this framework must follow our common communication infrastructure
+model, it enables secure, scalable communication
 within a comms session, limits communication between sessions,
 and allows new comms sessions to be created, resized, destroyed,
 and monitored by existing ones in a parent-child relationship.
-The framework is persistent for the life of a job and is anticipated to be
-shared among \flux\ services, tools, and application runtimes.
+The framework is persistent for the life of a \flux job and is 
+shared among \flux\ services, tools, and application run-times.
 
 \begin{figure}
 \centering
-\includegraphics[trim=5.0cm 8.0cm 5.0cm 8.0cm,scale=0.45]{B_Tree_4Layer_BW}
-\vspace{-.3cm}
+\includegraphics[trim=5.0cm 8.0cm 5.0cm 8.0cm,scale=0.12]{B_Tree_4Layer_BW2}
+\vspace{.8cm}
 \caption{A comms session} 
 \vspace{-.5cm}
 \label{fig:commswireup}
@@ -35,7 +36,7 @@ Our prototype consists of a distributed Comms Message Broker (CMB)
 daemon that runs on each node of a comms session, interconnected using
 three persistent overlay network planes:
 a PGM {\em publish-subscribe} bus for events and synchronization heartbeats;
-a TCP {\em request-response} tree for RPCs and reductions; and
+a TCP {\em request-response} tree for scalable RPCs, barriers, and reductions; and
 %similar to those enabled by MRNet~\cite{mrnet}; and
 a secondary TCP {\em request-response} overlay with configurable topology
 for rank-addressed RPCs.
@@ -60,7 +61,8 @@ A design for comprehensive fault tolerance, including root node failure,
 is a near-term project activity.
 
 The CMB allows us to experiment with loosely coupled distributed services
-that share this message routing framework. Various \flux\ components have
+that share this message routing framework. The various service components
+of \flux\ have
 been implemented as {\em comms modules}, plugins which are loaded into the
 CMB address space and pass messages over shared memory.
 Comms modules currently exist for the components listed
@@ -71,7 +73,7 @@ Each embodies an active topic for study and experimentation.
 In addition to comms modules, external programs communicate with the CMB
 over a UNIX domain socket.  A {\tt flux} utility wraps command line access
 to about two dozen modular \flux\ sub-commands, and a custom PMI~\cite{PMI2}
-library allows MPI runtimes to access the \flux\ KVS and collective barrier
+library allows MPI run-times to access the \flux\ KVS and collective barrier
 modules over this transport.
 
 \begin{table}
@@ -103,14 +105,14 @@ group & \flux groups define and manage collection of processes that can
 \hline
 barrier & Collective barriers provide synchronization across \flux groups. \\
 \hline
-kvs & A distributed key-value store provides a scalable scratchpad
+kvs & A distributed key-value store provides a scalable multi-purpose data store
 	for \flux and other tools operating within the comms session.\\
 \hline
 wrexec & Remote processes can be launched in bulk, monitored,
 	receive signals, and have standard I/O captured in the KVS.\\
 \hline
 resrc & Resources are enumerated in the KVS and allocated
-	when the scheduler runs a lightweight job. \\
+	when the scheduler runs an application. \\
 % LWJ is not introduced
 %\hline
 %sched & Lightweight job requests are queued in the KVS, assigned
@@ -130,16 +132,16 @@ is routed to the {\em kvs} comms module, and internally to its handler
 for {\em put}.  The free-form JSON frame contains payload parsed by
 the addressed comms module.
 
-RPC requests are routed ``upstream'' to the first comms module that matches
+RPC requests are routed ``upstream'' in the tree network to the first comms module that matches
 it, possibly traversing CMB nodes.  RPC responses are routed back through
 the same set of hops, in reverse.  A comms module may thus be loaded
 at a configurable tree depth to tune its level of distribution
 or to conserve node resources for application workloads toward the leaves.
-The tree topology of the RPC overlay permits data reductions to be performed by
+The tree topology of the RPC overlay network permits data reductions to be performed by
 aggregating and retransmitting upstream requests between instances of
 a comms module.
 
-Alternatively, RPC's may be addressed to a specific CMB rank using a
+Alternatively, an RPC may be addressed to a specific CMB rank using a
 separate overlay, currently utilizing a ring topology which allows
 ranks to be trivially reached without routing tables.  The main use
 of this addressing mode is in tools for debugging the system,

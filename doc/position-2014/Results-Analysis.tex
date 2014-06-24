@@ -27,7 +27,7 @@ different value sizes---e.g., {\tt vsize-8} refers to value size being
 8 bytes. As shown in this graph, the {\tt kvs\_put} simply performs and
 scales well. This matches our expectations because objects
 are cached in write-back mode at {\tt kvs\_put} time and flushed to the
-server at the next consistency event. 
+master at the next consistency event. 
 
 %\ifcomments
 %\marginpar{\tiny JG: The vsize-32768 requires some explanation}
@@ -70,18 +70,18 @@ fence scalability depends on the level of
 redundancy in key-value objects that had previously 
 been put in. Figure~\ref{fig:sync} 
 shows the improvements made when redundant values are used. 
-Label {\tt red-vsize-k} is the maximum latency metric
+Label {\tt red-vsize-k} is the same maximum latency metric
 as {\tt vsize-k} except that 
 redundant values had been used.
 
-We theorize that in the unique-value case, fence performs 
+We theorize that in the unique-value case, fence would perform 
 linearly with respect to the number of
 producers because these values are simply being {\em concatenated} while
-being sent up the tree, and that it performs logarithmically for the
+being sent up the tree, and that it would perform logarithmically for the
 redundant-value case
 because redundant values are {\em reduced} while being sent 
 up the tree. However, our data shows that the redundant-value case
-falls short of logarithmic scaling, and we believe this is
+falls short of logarithmic scaling, and we find that this is
 because while values are reduced, the {\em (key, SHA1)} tuples
 referring to them are still concatenated.
 
@@ -179,7 +179,7 @@ greater as we increase the scale and our measurements agree with this.
 
 While these results suggest a promising avenue for reworking the KVS internal
 object layout for performance, we note that such a scheme alone
-would fall short of reaching extreme scale.
+would fall short of reaching an extremely large scale.
 Our model suggests that the latency will grow linearly when $G$ grows
 with the scale. For example, if $G$ doubles every time the number of
 consumers is doubled, our geometric series model predicts the latency will

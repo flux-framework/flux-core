@@ -4,12 +4,11 @@ Key-Value Stores (KVS) have become ubiquitous building blocks in large-scale
 Internet services but have been underutilized in HPC~\cite{Wang:2013:USE:2503210.2503239}.
 We determined that a KVS would be a
 essential building block for our new system.
-After evaluating several prototypes, our current KVS is designed
-to exploit our persistent CMB networks so as to 
-support various HPC access patterns such as
-MPI bootstrapping through well-known interfaces (e.g., PMI),
-process monitoring, standard I/O streams, resource descriptions and
-configurations. 
+The \flux KVS is implemented as a comms module that utilizes the
+request-response and event overlay networks.  It provides a general
+purpose data store used by other \flux components, and supports
+the distributed caching and synchronization needed for parallel
+data exchanges, such as required for MPI bootstrap.
 
 %
 %Early \flux KVS's were based on Redis~\cite{Redis} and Twitter's
@@ -36,7 +35,7 @@ value for an object, any subsequent accesses will never return previous values.}
 
 We achieve these properties with a simple design based on hash trees
 and content-addressable storage, borrowing ideas from
-ZFS~\cite{Bonwick03thezettabyte} and git.%~\cite{Chacon:2009:PG:1618548}.
+ZFS~\cite{Bonwick03thezettabyte} and git. %~\cite{Chacon:2009:PG:1618548}.
 %, and
 %Venti~\cite{Quinlan:2002:VNA:645371.651321}.
 JSON objects are placed in a content-addressable

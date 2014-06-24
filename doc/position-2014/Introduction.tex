@@ -15,12 +15,13 @@ resources are no longer limited to
 %As numbers and types of compute resources
 %continue to grow, the key management challenges 
 %traditionally associated with only 
-a few individual 
-extreme-scale machines like Sequoia (LLNL)~\cite{sequoia}, % or Titan (ORNL)~\cite{titan}, 
+a few extremely large individual machines 
+like Sequoia (LLNL)~\cite{sequoia}, % or Titan (ORNL)~\cite{titan}, 
 %quickly 
 but are becoming commonplace through all computing resources sited at a center, including
 commodity Linux clusters.
-A modern RJMS must provide access to all of the resources at the center,
+A modern RJMS must provide management services 
+to all of the resources at the center,
 while maintaining
 scalability, low noise, fault tolerance, and enforcing global constraints.
 %and heterogeneity management delivered 
@@ -44,32 +45,36 @@ and system-level events.
 These tools
 require adequate RJMS support~\cite{STAT,SPINDLE,PRUNER,SCR,launchmon}
 for launching of daemons, allocation of analysis resources, or the ability
-for secure third party access to running jobs.
+for secure third-party access to running jobs.
 %,
 %and facilitate integration and development 
 %of a rich set of scalable tools.
 Unless the RJMS can effectively
-address these requirements, HPC centers and their users 
-may suffer significant productivity losses.
+address these requirements, HPC users 
+may suffer significant productivity losses
+across the full application development life-cycle. 
 
 The traditional resource and job management paradigm
 for large HPC centers organizes the resources sited
 at a center in a static and flat hierarchy. Typically, it 
-runs an RJMS instance, like SLURM~\cite{Jette02slurm}, to manage an individual cluster
-and those instances are often connected together by 
-other job management software, like MOAB~\cite{MOAB}, PBS Pro~\cite{PSBPro} and LSF~\cite{LSF}.
+runs an RJMS instance such as SLURM~\cite{Jette02slurm}
+to manage and to schedule an individual cluster,
+and those instances are often connected
+together by {\em separate} job management software, 
+like MOAB~\cite{MOAB}, PBS Pro~\cite{PSBPro}, and LSF~\cite{LSF}.
 While simple, the increasing interplay 
-between various compute resources across the center
-are already making this paradigm increasingly 
+between various classes of compute resources 
+across the center renders this paradigm often
 inflexible and ineffective. 
 For example, this paradigm cannot effectively
 schedule applications that utilize site-wide shared 
 resources such as file systems. 
-Without scheduling a file I/O-intensive job 
+Without scheduling file I/O-intensive jobs 
 to both compute resources and file systems, 
-overlapping I/O bursts coming from only a few
-unrelated jobs can randomly disrupt the entire center~\cite{SCR,SPINDLE}. 
-In addition, with a flat hierarchy, imposing complex 
+overlapping I/O bursts coming from only a handful of 
+unrelated jobs can disrupt the entire center~\cite{SCR,SPINDLE}. 
+In addition, with such an inflexible and shallow hierarchy, 
+dynamically imposing complex 
 resource constraints at various levels at the center
 is becoming increasingly intractable. 
 %Avoiding any significant site-wide bottleneck
@@ -77,12 +82,13 @@ is becoming increasingly intractable.
 %resources that often span the boundaries 
 %of a single cluster.
 
-To address these challenges we need 
+To address these challenges, we need 
 %In this paper, we argue for 
-a new paradigm for RJMS that enables centers to manage
-all compute, storage, and visualization resources together, 
-that is capable of enforcing global and local resource constraints,
-and that
+a new management paradigm that is capable of scalably managing 
+all of the resources (e.g., compute, storage, and visualization)
+at a center together {\bf under one common RJMS framework},
+(co-)scheduling jobs to these various types of resources, and 
+dynamically enforcing global and local resource constraints. 
 % that can
 %effectively address the resource and job management 
 %challenges that large HPC centers are increasingly facing.
@@ -91,21 +97,20 @@ and that
 %to manage resources across the entire center under
 %one common RJMS framework, and 
 %be able to 
-is capable of 
-(co-)scheduling jobs to various types of resources.
 The only way to achieve this with scalability in terms of the total number 
-of resources and jobs is that the RJMS system must 
+of resources as well as jobs is that the RJMS system must
 %Further it mustWe argue that the new paradigm must 
-facilitate scheduler parallelism~\cite{Omega,Mesos}. Further, it must
-provide the parallelism through hierarchical, multilevel 
-scheduling schemes with support for arbitrary numbers of levels.
+facilitate management and scheduler parallelism~\cite{Omega,Mesos}
+and further provide this parallelism through hierarchical, multilevel 
+management and scheduling schemes with support for arbitrary numbers of levels.
 The latter also requires capabilities for customization or specialization (in terms
-of policy, access control, etc) at any level of the hierarchy based on user requests.
+of policy, access control, etc) at any level of this dynamic hierarchy 
+based on user requests.
 %, and 
 %be capable of specializing each level.
 
-In this paper, we describe \flux, a new open-source RJMS framework that implements
-this new paradigm. We will present
+In this paper, we present \flux, a new open-source RJMS framework that implements 
+this new paradigm. We will describe
 its design and run-time architecture and show how it will be capable of providing
 the necessary RJMS capabilities for next-generation systems and centers. To
 demonstrate its feasibility, we have prototyped and evaluated two of its core run-time components:
