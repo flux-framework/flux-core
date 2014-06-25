@@ -442,6 +442,7 @@ optparse_t optparse_create (const char *prog)
         free (p);
         return NULL;
     }
+    p->usage = NULL;
     p->option_list = list_create ((ListDelF) option_info_destroy);
     if (!p->option_list) {
         free (p);
