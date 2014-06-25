@@ -111,5 +111,6 @@ clean:
 
 # subdir dependencies
 wreck: util zutil $(LIBCMB)
+test:  util $(LIBCMB) $(LIBRDL)
 
 .PHONY: $(SUBDIRS) all clean
