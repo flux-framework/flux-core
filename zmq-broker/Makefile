@@ -6,15 +6,6 @@ EXTRA_LDFLAGS +=  -L$(TOP)/lib $(TOP)/zutil/libzutil.a $(TOP)/util/libutil.a
 
 SUBDIRS :=        wreck dlua test util zutil
 
-# Uncomment for "native" MPI package
-#  (only needed for PMI tests)
-# Single node standalone
-MPIMOD = mvapich2-gnu-shmem
-# Hype
-#MPIMOD = mvapich2-gnu-psm
-# IPA
-#MPIMOD = mvapich2-gnu-ofa
-
 LUA_PKG = $(shell pkg-config --exists lua && echo lua || echo lua5.1)
 LUA_CFLAGS = $(shell pkg-config --silence-errors --cflags $(LUA_PKG))
 LUA_LIBS = $(shell pkg-config --silence-errors --libs $(LUA_PKG))
@@ -61,7 +52,7 @@ SUBCMDS = libexec/kvs libexec/ping libexec/mecho \
 	libexec/zio libexec/up libexec/host libexec/keygen libexec/mon \
 	libexec/rdltool libexec/mod
 
-BUILD = $(LIBCMB) $(LIBPMI) $(LIBRDL) flux mpi_hello echo cmbd \
+BUILD = $(LIBCMB) $(LIBPMI) $(LIBRDL) flux echo cmbd \
 	$(PLUGINS) $(SUBCMDS)
 
 all: $(SUBDIRS) $(BUILD)
@@ -110,11 +101,6 @@ $(LIBRDL): $(LIBRDL_OBJS)
 		-o $@ $(LIBRDL_OBJS) -llua -ljson
 	ln -sf $(shell basename $@) $(@:.0=)
 
-mpi_hello: mpi_hello.c
-	(source /etc/profile.d/modules.sh;\
-		module load $(MPIMOD);\
-		mpicc $(LDFLAGS) -o $@ $<)
-
 echo: echo.o
 	$(CC) $(LDFLAGS) -o $@ $< -L$(LIBDIR) -lcmb $(LDADD_CLI)
 
@@ -130,24 +116,7 @@ OBJS = $(CMBD_OBJS) $(FLUX_OBJS) $(LIBPMI_OBJS) $(LIBCMB_OBJS)
 INCLUDES = $(wildcard *.h */*.h)
 $(OBJS): $(INCLUDES)
 
-##
-## test targets
-##
-
-NTASKS = $(SLURM_JOB_NUM_NODES)  # override me
-SRUN = srun --overcommit -n$(NTASKS)
-
-hello: mpi_hello
-	time -p (source /etc/profile.d/modules.sh;\
-		module load $(MPIMOD);\
-		$(SRUN) ./mpi_hello)
-
-dokvstest: test/tpmikvs
-	export PMI_TRACE=0xff;\
-	$(SRUN) $<
-dokvstest_nsquared: test/tpmikvs
-	$(SRUN) $< --n-squared
-
+# subdir dependencies
 wreck: util zutil $(LIBCMB)
 
 .PHONY: $(SUBDIRS) all clean
