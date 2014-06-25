@@ -40,4 +40,4 @@ check: jsontest.so zmsgtest.so
 	  ./lunit test-rdl.lua)
 
 clean:
-	rm -f *.so *.o
+	rm -f *.so *.o *.a
