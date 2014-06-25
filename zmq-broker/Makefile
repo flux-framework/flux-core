@@ -4,8 +4,7 @@ LIBDIR =          $(TOP)/lib
 EXTRA_CFLAGS +=   -I$(TOP) -I$(TOP)/include -I$(TOP)/util -I$(TOP)/zutil
 EXTRA_LDFLAGS +=  -L$(TOP)/lib $(TOP)/zutil/libzutil.a $(TOP)/util/libutil.a
 
-SUBDIRS :=        wreck dlua
-SUBDIRS_POST :=   test
+SUBDIRS :=        wreck dlua test util zutil
 
 # Uncomment for "native" MPI package
 #  (only needed for PMI tests)
@@ -65,7 +64,7 @@ SUBCMDS = libexec/kvs libexec/ping libexec/mecho \
 BUILD = $(LIBCMB) $(LIBPMI) $(LIBRDL) flux mpi_hello echo cmbd \
 	$(PLUGINS) $(SUBCMDS)
 
-all: subdirs $(BUILD) subdirs_post
+all: $(SUBDIRS) $(BUILD)
 
 plugins/%.so: %srv.c
 	mkdir -p plugins
@@ -77,10 +76,8 @@ plugins/%.so: wreck/%srv.c
 	mkdir -p plugins
 	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL)
 
-subdirs: $(LIBUTIL) $(LIBZUTIL) $(LIBCMB)
-	@for f in $(SUBDIRS); do make -C $$f; done
-subdirs_post:
-	@for f in $(SUBDIRS_POST); do make -C $$f; done
+$(SUBDIRS):
+	make -C $@ all
 
 cmbd: $(CMBD_OBJS)
 	$(CC) -o $@ $(CMBD_OBJS) $(LDADD_SRV)
@@ -95,28 +92,23 @@ libexec/%: flux-%.o
 	mkdir -p $(shell dirname $@)
 	$(CC) $(LDFLAGS) -o $@ $< -L$(LIBDIR) -lcmb $(LDADD_CLI) -ldl
 
-$(LIBPMI): $(LIBPMI_OBJS) $(LIBCMB)
+$(LIBPMI): $(LIBPMI_OBJS)
 	mkdir -p $(shell dirname $@)
 	$(CC) -shared -Wl,--version-script=pmi_version.map \
 		-o $@ $(LIBPMI_OBJS) -L$(LIBDIR) -lcmb $(LDADD_CLI)
 	ln -sf $(shell basename $@) $(@:.0=)
 
-$(LIBCMB): $(LIBCMB_OBJS) $(LIBUTIL)
+$(LIBCMB): $(LIBCMB_OBJS)
 	mkdir -p $(shell dirname $@)
 	$(CC) -shared -Wl,--version-script=cmb_version.map \
 		-o $@ $(LIBCMB_OBJS) $(LDADD_CLI)
 	ln -sf $(shell basename $@) $(@:.0=)
 
-$(LIBRDL): $(LIBRDL_OBJS) $(LIBUTIL)
+$(LIBRDL): $(LIBRDL_OBJS)
 	mkdir -p $(shell dirname $@)
 	$(CC) -shared -Wl,--version-script=rdl_version.map \
 		-o $@ $(LIBRDL_OBJS) -llua -ljson
 	ln -sf $(shell basename $@) $(@:.0=)
-
-$(LIBUTIL):
-	@make -C util
-$(LIBZUTIL):
-	@make -C zutil
 
 mpi_hello: mpi_hello.c
 	(source /etc/profile.d/modules.sh;\
@@ -131,13 +123,11 @@ clean:
 	rm -rf $(LIBDIR)/
 	rm -rf plugins/
 	rm -rf libexec
-	@make -C util clean
-	@make -C zutil clean
-	@for f in $(SUBDIRS) $(SUBDIRS_POST); do make -C $$f clean; done
+	@for f in $(SUBDIRS); do make -C $$f clean; done
 
 # header dependencies
 OBJS = $(CMBD_OBJS) $(FLUX_OBJS) $(LIBPMI_OBJS) $(LIBCMB_OBJS)
-INCLUDES = $(wildcard *.h include/*.h)
+INCLUDES = $(wildcard *.h */*.h)
 $(OBJS): $(INCLUDES)
 
 ##
@@ -157,3 +147,7 @@ dokvstest: test/tpmikvs
 	$(SRUN) $<
 dokvstest_nsquared: test/tpmikvs
 	$(SRUN) $< --n-squared
+
+wreck: util zutil $(LIBCMB)
+
+.PHONY: $(SUBDIRS) all clean

@@ -1,4 +1,11 @@
-SUBDIRS=pmgr_collective
+SUBDIRS = pmgr_collective
 
-all clean:
+all: $(SUBDIRS)
+
+$(SUBDIRS):
+	make -C $@ all
+
+clean:
 	for f in $(SUBDIRS); do make -C $$f $@; done
+
+.PHONY: all clean $(SUBDIRS)
