@@ -55,39 +55,40 @@ BUILD = $(LIBCMB) $(LIBPMI) $(LIBRDL) flux echo cmbd \
 
 all: $(SUBDIRS) $(BUILD)
 
-plugins/%.so: %srv.c
+plugins/%.so: $(LIBUTIL) %srv.c
 	mkdir -p plugins
 	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL)
-plugins/rexec.so: wreck/wrexecsrv.c
+plugins/rexec.so: $(LIBUTIL) wreck/wrexecsrv.c
 	mkdir -p plugins
 	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL)
-plugins/%.so: wreck/%srv.c
+plugins/%.so: $(LIBUTIL) wreck/%srv.c
 	mkdir -p plugins
 	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL)
 
 $(SUBDIRS):
 	make -C $@ all
 
-cmbd: $(CMBD_OBJS)
+cmbd: $(CMBD_OBJS) $(LIBUTIL) $(LIBZUTIL)
 	$(CC) -o $@ $(CMBD_OBJS) $(LDADD_SRV)
 
 flux: $(FLUX_OBJS) $(LIBCMB)
 	$(CC) $(LDFLAGS) -o $@ $(FLUX_OBJS) $(LDADD_CLI)
 
-libexec/rdltool : flux-rdltool.o
+libexec/rdltool : flux-rdltool.o $(LIBRDL) $(LIBUTIL)
+	mkdir -p $(shell dirname $@)
 	$(CC) $(LDFLAGS) -o $@ $< -L$(LIBDIR) -lrdl -lzmq -lczmq util/libutil.a
 
-libexec/%: flux-%.o
+libexec/%: flux-%.o $(LIBZUTIL) $(LIBUTIL) $(LIBCMB)
 	mkdir -p $(shell dirname $@)
 	$(CC) $(LDFLAGS) -o $@ $< -L$(LIBDIR) -lcmb $(LDADD_CLI) -ldl
 
-$(LIBPMI): $(LIBPMI_OBJS)
+$(LIBPMI): $(LIBPMI_OBJS) $(LIBCMB)
 	mkdir -p $(shell dirname $@)
 	$(CC) -shared -Wl,--version-script=pmi_version.map \
 		-o $@ $(LIBPMI_OBJS) -L$(LIBDIR) -lcmb $(LDADD_CLI)
 	ln -sf $(shell basename $@) $(@:.0=)
 
-$(LIBCMB): $(LIBCMB_OBJS)
+$(LIBCMB): $(LIBCMB_OBJS) $(LIBUTIL) $(LIBZUTIL)
 	mkdir -p $(shell dirname $@)
 	$(CC) -shared -Wl,--version-script=cmb_version.map \
 		-o $@ $(LIBCMB_OBJS) $(LDADD_CLI)
@@ -99,7 +100,10 @@ $(LIBRDL): $(LIBRDL_OBJS)
 		-o $@ $(LIBRDL_OBJS) -llua -ljson
 	ln -sf $(shell basename $@) $(@:.0=)
 
-echo: echo.o
+$(LIBUTIL): util
+$(LIBZUTIL): zutil
+
+echo: echo.o $(LIBUTIL) $(LIBZUTIL) $(LIBCMB)
 	$(CC) $(LDFLAGS) -o $@ $< -L$(LIBDIR) -lcmb $(LDADD_CLI)
 
 clean:
@@ -112,5 +116,7 @@ clean:
 # subdir dependencies
 wreck: util zutil $(LIBCMB)
 test:  util $(LIBCMB) $(LIBRDL)
+dlua:  util $(LIBCMB)
+zutil: util
 
 .PHONY: $(SUBDIRS) all clean
