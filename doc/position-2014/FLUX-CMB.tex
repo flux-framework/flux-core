@@ -3,14 +3,14 @@
 A communication framework supports our hierarchical job model
 by establishing a {\em comms session} to contain each \flux instance
 and provide a foundation for the distributed components upon which
-\flux\ is built.
+\flux is built.
 As this framework must follow our common communication infrastructure
 model, it enables secure, scalable communication
 within a comms session, limits communication between sessions,
 and allows new comms sessions to be created, resized, destroyed,
 and monitored by existing ones in a parent-child relationship.
 The framework is persistent for the life of a \flux job and is 
-shared among \flux\ services, tools, and application run-times.
+shared among \flux services, tools, and application run-times.
 
 \begin{figure}
 \centering
@@ -62,7 +62,7 @@ is a near-term project activity.
 
 The CMB allows us to experiment with loosely coupled distributed services
 that share this message routing framework. The various service components
-of \flux\ have
+of \flux have
 been implemented as {\em comms modules}, plugins which are loaded into the
 CMB address space and pass messages over shared memory.
 Comms modules currently exist for the components listed
@@ -145,7 +145,7 @@ Alternatively, an RPC may be addressed to a specific CMB rank using a
 separate overlay, currently utilizing a ring topology which allows
 ranks to be trivially reached without routing tables.  The main use
 of this addressing mode is in tools for debugging the system,
-where the high latency of a ring is preferable to additional complexity.
+where the high latency of a ring is manageable and preferable over additional complexity.
 
 %This can only raise questions and we need to cut.
 %As our designs and prototypes for basic \flux building blocks evolve,
