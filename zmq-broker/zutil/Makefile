@@ -1,8 +1,10 @@
 topdir :=     $(shell cd .. && pwd)
 builddir :=   $(shell pwd)
 
-CFLAGS += -I$(topdir) -I$(topdir)/include -I$(topdir)/util
+CFLAGS += -I$(topdir) -I$(topdir)/include -I$(topdir)/util \
+          -DWITH_LSD_NOMEM_ERROR_FUNC -DWITH_LSD_FATAL_ERROR_FUNC
 LDFLAGS += -L$(topdir)/lib -Wl,-rpath $(topdir)/lib
+
 
 LIBZUTIL_SOURCES := zio.c cbuf.c forkzio.c kz.c
 

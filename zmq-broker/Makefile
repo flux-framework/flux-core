@@ -12,8 +12,6 @@ LUA_LIBS = $(shell pkg-config --silence-errors --libs $(LUA_PKG))
 
 CFLAGS = -Werror -Wall -g -fPIC $(EXTRA_CFLAGS) \
 	-I/usr/include/czmq \
-	-DWITH_LSD_NOMEM_ERROR_FUNC -DWITH_LSD_FATAL_ERROR_FUNC \
-	-DWANT_RECKLESS_HOSTRANGE_EXPANSION \
 	-DPLUGIN_PATH=\"$(TOP)/plugins\" \
 	-DEXEC_PATH=\"$(TOP)/libexec\" $(LUA_CFLAGS)
 LDFLAGS = -Wl,-rpath,$(LIBDIR)
