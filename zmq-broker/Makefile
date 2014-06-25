@@ -114,7 +114,7 @@ clean:
 	@for f in $(SUBDIRS); do make -C $$f clean; done
 
 # subdir dependencies
-wreck: util zutil $(LIBCMB)
+wreck: util zutil dlua $(LIBCMB)
 test:  util $(LIBCMB) $(LIBRDL)
 dlua:  util $(LIBCMB)
 zutil: util
