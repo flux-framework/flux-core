@@ -1,10 +1,12 @@
-TARBALL=pmgr_collective-1.0_7.tgz
+NAME=pmgr_collective-1.0_7
 
-all: build
+all: .built
 
-build: unpack
-	make -C pmgr_collective-1.0_7 all
-unpack:
-	tar xzf $(TARBALL)
+.built: $(NAME).tgz
+	tar xzf $(NAME).tgz
+	make -C $(NAME) all
+	touch $@
+
 clean:
-	rm -rf pmgr_collective-1.0_7
+	rm -rf $(NAME)
+	rm -f .built
