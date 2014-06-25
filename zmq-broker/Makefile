@@ -109,11 +109,6 @@ clean:
 	rm -rf libexec
 	@for f in $(SUBDIRS); do make -C $$f clean; done
 
-# header dependencies
-OBJS = $(CMBD_OBJS) $(FLUX_OBJS) $(LIBPMI_OBJS) $(LIBCMB_OBJS)
-INCLUDES = $(wildcard *.h */*.h)
-$(OBJS): $(INCLUDES)
-
 # subdir dependencies
 wreck: util zutil $(LIBCMB)
 
