@@ -1,4 +1,5 @@
 NAME=pmgr_collective-1.0_7
+export OPT=-g -O0 -Wall -DHAVE_PMI
 
 all: .built
 
