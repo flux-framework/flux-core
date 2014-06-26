@@ -12,9 +12,9 @@ Ensure that prerequisites are installed:
   munge
   json-c
 
-Uncomment the appropriate MPIMOD setting in zmq-broker/Makefile and build:
+Uncomment the appropriate MPIMOD setting in pmi-test/Makefile and build:
 
-  vi zmq-broker/Makefile
+  vi pmi-test/Makefile
   make
 
 1. Launching the framework on Hype or IPA
@@ -64,6 +64,7 @@ To verify that your nodes are up, run
 To run an MPI job launched with Slurm but using our KVS for MPI bootstrapping,
 you can run
 
+  cd ../pmi-test
   make hello
 
 If you get a bunch of MPI errors, perhaps you uncommented the wrong MPIMOD
@@ -77,6 +78,7 @@ To ping the kvs service on rank 60
 
 An alternate way to launch a 3 node session on a single node is:
 
+  cd zmq-broker
   ./scripts/screen-3
 
 You can run some KVS unit tests against this environment with
