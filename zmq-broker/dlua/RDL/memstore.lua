@@ -767,15 +767,16 @@ end
 --
 -- Increment the value of table[key] or set to one if currently nil
 --
-local function increment (table, key)
-    table[key] = (table[key] or 0) + 1
+local function increment (table, key, v)
+    local n = tonumber(v) or 1
+    table[key] = (table[key] or 0) + n
     return table[key]
 end
 
 local function aggregate_tags (resource, result)
     local r = result or {}
     for k,v in pairs (resource.tags) do
-        increment (r, k)
+        increment (r, k, v)
     end
     return r
 end
