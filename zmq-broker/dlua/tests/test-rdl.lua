@@ -358,4 +358,22 @@ Hierarchy "default" {
 
 end
 
+function test_aggregate()
+    local rdl = assert (RDL.eval ([[
+Hierarchy "default" {
+    Resource{
+        "foo",
+        children = { ListOf{ Resource, ids="0-99",
+                     args = {"bar", tags = { count = 5 } } } }
+    }
+}
+]]))
+    local expected = { bar = 100, foo = 1, count = 500 }
+
+    assert_true (is_table (rdl))
+    local a = rdl:aggregate ("default")
+    local i  = require 'inspect'
+    assert (equals (a, expected), 'Expected '..i(expected) .. ' Got ' .. i(a))
+end
+
 -- vi: ts=4 sw=4 expandtab
