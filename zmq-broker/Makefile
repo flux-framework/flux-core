@@ -55,13 +55,13 @@ BUILD = $(LIBCMB) $(LIBPMI) $(LIBRDL) flux echo cmbd \
 
 all: $(SUBDIRS) $(BUILD)
 
-plugins/%.so: $(LIBUTIL) %srv.c
+plugins/%.so: %srv.c $(LIBUTIL)
 	mkdir -p plugins
 	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL)
-plugins/rexec.so: $(LIBUTIL) wreck/wrexecsrv.c
+plugins/rexec.so: wreck/wrexecsrv.c $(LIBUTIL)
 	mkdir -p plugins
 	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL)
-plugins/%.so: $(LIBUTIL) wreck/%srv.c
+plugins/%.so: wreck/%srv.c $(LIBUTIL)
 	mkdir -p plugins
 	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL)
 
