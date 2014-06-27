@@ -1,41 +1,372 @@
-/* schedsrv.c - scheduling service */
+/*
+ *-------------------------------------------------------------------------------
+ * Copyright and authorship blurb here
+ *-------------------------------------------------------------------------------
+ * schedsrv.h - common scheduler services
+ *
+ * Update Log:
+ *       May 24 2012 DHA: File created.
+ */
 
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <libgen.h>
 #include <czmq.h>
 #include <json/json.h>
+#include <dlfcn.h>
 
-#include "zmsg.h"
-#include "log.h"
 #include "util.h"
+#include "log.h"
+#include "shortjson.h"
 #include "plugin.h"
+#include "rdl.h"
+#include "scheduler.h"
 
-/*
- * A basic scheduling service plugin that schedules jobs to resources.
- * It waits for the resource service plugin to populate the kvs (under
- * the resrc.rank hierarchy) with the discoved resources.  Then it
- * attempts to schedule every new job submitted to the lwj kvs tree.
- *
- * Only cores are supported at this time.  Cores from more than one
- * node are grabbed if needed.  Node count requests are not supported at
- * this point.
- *
- * As jobs are submitted, the sched plugin looks for available cores
- * from the registered resources.  It then allocates what cores it
- * finds to the lwj's.  The existing wreck infrastructure is used to
- * launch the jobs.
- *
- * The sched plugin increases the associated resource's allocated core
- * count when a job begins.  When the job terminates, the allocated
- * core count is debited.
+#define LS_NULL      "null"
+#define LS_RESERVED  "reserved"
+#define LS_SUBMITTED "submitted"
+#define LS_UNSCHED   "unsched"
+#define LS_PENDING   "pending"
+#define LS_RUNREQ    "runrequest"
+#define LS_ALLOCATED "allocated"
+#define LS_STARTING  "starting"
+#define LS_RUNNING   "running"
+#define LS_CANCELLED "cancelled"
+#define LS_COMPLETE  "complete"
+#define LS_REAPED    "reaped"
+#define MAX_STR_LEN 128
 
- * Jobs remain queued in the "reserved" state until they can run.
- * There is no priority.  Jobs are scheduled in order of arrival.
- * Completed jobs remain in the lwj kvs tree in the "completed" state.
+/****************************************************************
+ *
+ *                 INTERNAL DATA STRUCTURE
+ *
+ ****************************************************************/
+
+/**
+ *  Enumerate different queue types
  */
+typedef enum {
+    p_queue,
+    r_queue,
+    c_queue,
+    ev_queue
+} queue_e;
+
+
+/**
+ *  Define a queue
+ */
+typedef struct {
+    zlist_t *queue;
+    int rewind;
+} queue_t;
+
+
+/****************************************************************
+ *
+ *                 STATIC DATA
+ *
+ ****************************************************************/
+static queue_t *lwj_p = NULL;
+static queue_t *lwj_r = NULL;
+static queue_t *lwj_c = NULL;
+static queue_t *event = NULL;
+static flux_t h = NULL;
+static long event_count;
+static struct rdllib *l = NULL;
+static struct rdl *rdl = NULL;;
+
+
+/****************************************************************
+ *
+ *         Resource Description Library Setup
+ *
+ ****************************************************************/
+static void f_err (flux_t h, const char *msg, ...)
+{
+    va_list ap;
+    va_start (ap, msg);
+    flux_vlog (h, LOG_ERR, msg, ap);
+    va_end (ap);
+}
+
+/* XXX: Borrowed from flux.c and subject to change... */
+static void setup_rdl_lua (void)
+{
+    char *s;
+    char  exe_path [MAXPATHLEN];
+    char *exe_dir;
+    char *rdllib;
+
+    memset (exe_path, 0, MAXPATHLEN);
+    if (readlink ("/proc/self/exe", exe_path, MAXPATHLEN - 1) < 0)
+        err_exit ("readlink (/proc/self/exe)");
+    exe_dir = dirname (exe_path);
+
+    s = getenv ("LUA_CPATH");
+    setenvf ("LUA_CPATH", 1, "%s/dlua/?.so;%s", exe_dir, s ? s : ";");
+    s = getenv ("LUA_PATH");
+    setenvf ("LUA_PATH", 1, "%s/dlua/?.lua;%s", exe_dir, s ? s : ";");
+
+    flux_log (h, LOG_DEBUG, "LUA_PATH %s", getenv ("LUA_PATH"));
+    flux_log (h, LOG_DEBUG, "LUA_CPATH %s", getenv ("LUA_CPATH"));
+
+    asprintf (&rdllib, "%s/lib/librdl.so", exe_dir);
+    if (!dlopen (rdllib, RTLD_NOW | RTLD_GLOBAL)) {
+        flux_log (h, LOG_ERR, "dlopen %s failed", rdllib);
+        return;
+    }
+    free(rdllib);
+
+    rdllib_set_default_errf (h, (rdl_err_f)(&f_err));
+}
+
+/****************************************************************
+ *
+ *              Queue Abstraction on Top of zlist
+ *
+ ****************************************************************/
+static int
+init_internal_queues ()
+{
+    int rc = 0;
+
+    if (lwj_p || lwj_r || lwj_c || event) {
+        rc = -1;
+        goto ret;
+    }
+
+    lwj_p = (queue_t *) xzmalloc (sizeof (queue_t));
+    lwj_r = (queue_t *) xzmalloc (sizeof (queue_t));
+    lwj_c = (queue_t *) xzmalloc (sizeof (queue_t));
+    event = (queue_t *) xzmalloc (sizeof (queue_t));
+
+    lwj_p->queue = zlist_new ();
+    lwj_r->queue = zlist_new ();
+    lwj_c->queue = zlist_new ();
+    event->queue = zlist_new ();
+
+    if (!lwj_p->queue || !lwj_r->queue || !lwj_c->queue || !event->queue) {
+        rc = -1;
+        goto ret;
+    }
+    lwj_p->rewind = 0;
+    lwj_r->rewind = 0;
+    lwj_c->rewind = 0;
+    event->rewind = 0;
+
+ret:
+    return rc;
+}
+
+
+static void
+destroy_internal_queues (void)
+{
+    if (lwj_p->queue) {
+        zlist_destroy (&lwj_p->queue);
+        lwj_p->queue = NULL;
+    }
+    if (lwj_r->queue) {
+        zlist_destroy (&lwj_r->queue);
+        lwj_r->queue = NULL;
+    }
+    if (lwj_c->queue) {
+        zlist_destroy (&lwj_c->queue);
+        lwj_c->queue = NULL;
+    }
+    if (event->queue) {
+        zlist_destroy (&event->queue);
+        event->queue = NULL;
+    }
+}
+
+
+static queue_t *
+return_queue (queue_e t)
+{
+    queue_t *rq = NULL;
+
+    switch (t) {
+    case p_queue:
+        rq = lwj_p;
+        break;
+
+    case r_queue:
+        rq = lwj_r;
+        break;
+
+    case c_queue:
+        rq = lwj_c;
+        break;
+
+    case ev_queue:
+        rq = event;
+        break;
+
+    default:
+        flux_log (h, LOG_ERR, "unknown queue!");
+
+        break;
+    }
+
+    return rq;
+}
+
+
+static int
+enqueue (queue_e t, void * item)
+{
+    int rc = 0;
+    queue_t *q = return_queue (t);
+
+    if (!q) {
+        flux_log (h, LOG_ERR, "null queue!");
+        rc = -1;
+        goto ret;
+    }
+    if (zlist_append (q->queue, item) == -1) {
+        flux_log (h, LOG_ERR, "failed to enqueu!");
+        rc = -1;
+    }
+
+ret:
+    return rc;
+}
+
+
+static void *
+dequeue (queue_e t)
+{
+    void *item = NULL;
+    queue_t *q = return_queue (t);
+
+    if (!q) {
+        flux_log (h, LOG_ERR, "null queue!");
+        goto ret;
+    }
+
+    item = zlist_pop (q->queue);
+
+ret:
+    return item;
+}
+
+
+static int
+queue_iterator_reset (queue_e t)
+{
+    int rc = 0;
+    queue_t *q = return_queue (t);
+
+    if (!q) {
+        flux_log (h, LOG_ERR, "null queue!");
+        rc = -1;
+        goto ret;
+    }
+
+    q->rewind = 0;
+
+ret:
+    return rc;
+}
+
+
+static void *
+queue_next (queue_e t)
+{
+    void *item = NULL;
+    queue_t *q = return_queue (t);
+
+    if (!q) {
+        flux_log (h, LOG_ERR, "null queue!");
+        goto ret;
+    }
+
+    if (q->rewind == 0) {
+        item = zlist_first (q->queue);
+        q->rewind = 1;
+    }
+    else {
+        item = zlist_next (q->queue);
+    }
+
+ret:
+    return item;
+}
+
+
+static void
+queue_remove (queue_e t, void *item)
+{
+    queue_t *q = return_queue (t);
+
+    if (!q) {
+        flux_log (h, LOG_ERR, "null queue!");
+        goto ret;
+    }
+
+    zlist_remove (q->queue, item);
+
+ret:
+    return;
+}
+
+
+static int
+signal_event ( )
+{
+    int rc = 0;
+
+    if (kvs_put_int64 (h, "event-counter", ++event_count) < 0 ) {
+        flux_log (h, LOG_ERR,
+                  "error kvs_put_int64 event-counter: %s",
+                  strerror (errno));
+        rc = -1;
+        goto ret;
+    }
+    if (kvs_commit (h) < 0) {
+        flux_log (h, LOG_ERR, "kvs_commit error!");
+        rc = -1;
+        goto ret;
+    }
+
+ret:
+    return rc;
+}
+
+
+static flux_lwj_t *
+find_lwj (int64_t id)
+{
+    flux_lwj_t *j = NULL;
+
+    queue_iterator_reset (p_queue);
+    while ( (j = queue_next (p_queue)) != NULL) {
+        if (j->lwj_id == id)
+            break;
+    }
+    if (j)
+        return j;
+
+    queue_iterator_reset (r_queue);
+    while ( (j = queue_next (r_queue)) != NULL) {
+        if (j->lwj_id == id)
+            break;
+    }
+
+    return j;
+}
+
+
+/****************************************************************
+ *
+ *              Utility Functions
+ *
+ ****************************************************************/
 
 static char * ctime_iso8601_now (char *buf, size_t sz)
 {
@@ -48,450 +379,1024 @@ static char * ctime_iso8601_now (char *buf, size_t sz)
         err_exit ("localtime");
     strftime (buf, sz, "%FT%T", &tm);
 
-    return (buf);
-}
-
-static void _wait_for_new_dir(flux_t p, char *name)
-{
-    kvsdir_t dir = NULL;
-
-    if (kvs_watch_once_dir (p, &dir, name) < 0) {
-        flux_log (p, LOG_ERR, "wait_for_new_dir: %s", strerror (errno));
-    } else {
-        flux_log (p, LOG_INFO, "wait_for_new_dir %s", kvsdir_key(dir));
-        if (dir)
-            kvsdir_destroy (dir);
-    }
+    return buf;
 }
 
 /*
- * _pending_job() - determine whether a job is pending.
- * IN:  path - the kvs job
- * Returns: true if the job is pending
- *          false otherwise
+ * Update the job's kvs entry for state and mark the time.
+ * Intended to be part of a series of changes, so the caller must
+ * invoke the kvs_commit at some future point.
  */
-static bool _pending_job (flux_t p, const char *path)
+int update_job_state (flux_lwj_t *job, const char *state)
 {
-    bool rval = false;
-    char *key = NULL;
-    char *job_state = NULL;
-
-
-    if (asprintf (&key, "%s.state", path) < 0) {
-        flux_log (p, LOG_ERR, "pending_job key create failed");
-    } else if (kvs_get_string (p, key, &job_state) < 0) {
-        flux_log (p, LOG_ERR, "pending_job get job_state: %s",
-                  strerror (errno));
-    } else if (!strncmp (job_state, "pending", 8)) {
-        flux_log (p, LOG_INFO, "pending_job %s", path);
-        rval = true;
-    }
-    free (key);
-    free (job_state);
-
-    return rval;
-}
-
-/*
- * _read_alloc_cores() - Read a resource's idle cores or allocate some
- * cores
- * IN:  path - the kvs resource
- * IN:  alloc - if zero, just read the idle cores
- *              if non-zero, allocate requested cores
- * Returns:  the number of idle cores when alloc is zero
- *           the number of cores allocated when alloc is non-zero
- */
-static long _read_alloc_cores (flux_t p, const char *path, long alloc)
-{
-    char *key = NULL;
-    long alloc_cores = 0;
-    long idle_cores = 0;
-
-    if (asprintf (&key, "%s.cores", path) < 0) {
-        flux_log (p, LOG_ERR, "read_alloc_cores key create failed");
-    } else if (kvs_get_int64 (p, key, &idle_cores) < 0) {
-        flux_log (p, LOG_ERR, "read_alloc_cores get %s: %s", key,
-                  strerror (errno));
-    } else {
-        flux_log (p, LOG_INFO, "read_alloc_cores %s = %ld", key, idle_cores);
-        free (key);
-
-        if (asprintf (&key, "%s.alloc.cores", path) < 0) {
-            flux_log (p, LOG_ERR, "read_alloc_cores key create failed");
-        } else if (kvs_get_int64 (p, key, &alloc_cores) < 0) {
-            flux_log (p, LOG_ERR, "read_alloc_cores get %s: %s", key,
-                      strerror (errno));
-        } else {
-            flux_log (p, LOG_INFO, "read_alloc_cores %s = %ld", key,
-                      alloc_cores);
-            idle_cores -= alloc_cores;
-        }
-    }
-
-    if (alloc && idle_cores) {
-        if (alloc > idle_cores)
-            alloc = idle_cores;
-        if (kvs_put_int64 (p, key, alloc_cores + alloc) < 0) {
-            flux_log (p, LOG_ERR, "read_alloc_cores put %ld alloc.cores failed",
-                      alloc_cores + alloc);
-        } else {
-            kvs_commit(p);
-            flux_log (p, LOG_INFO, "read_alloc_cores put %s = %ld", key,
-                      alloc_cores + alloc);
-            /* when alloc is requested, return the number allocated */
-            idle_cores = alloc;
-        }
-    }
-    free (key);
-
-    return idle_cores;
-}
-
-/*
- * _store_cores() - write a job's allocated cores to the lwj kvs
- * IN: job - path to the lwj
- *     path - path to the allocated resource
- * Results in an entry of the form:  lwj.3.rank.2.cores = 4
- */
-static void _store_cores(flux_t p, const char *job, const char *path, long alloc)
-{
-    char *key = NULL;
-
-    if (asprintf (&key, "%s.rank.%s.cores", job, path) < 0) {
-        flux_log (p, LOG_ERR, "store_cores key create failed");
-    } else if (kvs_put_int64 (p, key, alloc) < 0) {
-        flux_log (p, LOG_ERR, "store_cores put %ld cores failed", alloc);
-    } else {
-        kvs_commit(p);
-        flux_log (p, LOG_INFO, "store_cores put %s = %ld", key, alloc);
-    }
-    free (key);
-}
-
-/*
- * _alloc_resrcs - allocate resources to a job
- * This includes cores from multiple ranks if needed to satisfy request.
- * IN:  job - path to the lwj in the kvs
- * IN:  cores - number of cores to allocate
- * Returns: true if all requested cores were allocated.
- */
-static bool _alloc_resrcs (flux_t p, const char *job, long cores)
-{
-    bool rval = false;
-    char *key = NULL;
-    const char *name;
-    kvsdir_t dir;
-    kvsitr_t itr;
-    long alloc_cores = 0;
-    long reqd_cores = cores;
-
-    if (kvs_get_dir (p, &dir, "resrc.rank") < 0) {
-        flux_log (p, LOG_ERR, "alloc_resrcs get resrc.rank dir: %s",
-                  strerror (errno));
-        return false;
-    }
-
-    itr = kvsitr_create (dir);
-    while ((name = kvsitr_next (itr))) {
-        key = kvsdir_key_at (dir, name);
-        if (kvsdir_isdir (dir, name)) {
-            reqd_cores -= _read_alloc_cores (p, key, 0);
-            if (reqd_cores <= 0) {
-                rval = true;
-                break;
-            }
-        }
-        free (key);
-    }
-
-    if (rval) {
-        reqd_cores = cores;
-        kvsitr_rewind (itr);
-        while ((name = kvsitr_next (itr))) {
-            key = kvsdir_key_at (dir, name);
-            if (kvsdir_isdir (dir, name)) {
-                alloc_cores = _read_alloc_cores (p, key, reqd_cores);
-                if (alloc_cores) {
-                    _store_cores(p, job, name, alloc_cores);
-                    reqd_cores -= alloc_cores;
-                    if (reqd_cores == 0) {
-                        break;
-                    }
-                }
-            }
-            free (key);
-        }
-    }
-
-    kvsitr_destroy (itr);
-    kvsdir_destroy (dir);
-    return rval;
-}
-
-/*
- * _allocate_job() - updates the state of a job's kvs entry to
- * indicate launch readiness.
- * IN: path - the job id
- * Returns true on success
- */
-static bool _allocate_job (flux_t p, const char *path)
-{
-    bool rval = false;
-    char *jobid = NULL;
+    char buf [64];
     char *key = NULL;
     char *key2 = NULL;
-    char buf [64];
+    int rc = -1;
 
     ctime_iso8601_now (buf, sizeof (buf));
-    if ((jobid = strstr(path, "lwj.")))
-        jobid += 4;
 
-    if (asprintf (&key, "%s.state", path) < 0) {
-        flux_log (p, LOG_ERR, "allocate_job key create failed");
-    } else if (flux_event_send (p, NULL, "event.rexec.run.%s", jobid) < 0) {
-        flux_log (p, LOG_ERR, "allocate_job event send failed: %s",
-                  strerror (errno));
-    } else if (kvs_put_string (p, key, "runrequest") < 0) {
-        flux_log (p, LOG_ERR, "allocate_job %s state update failed: %s",
-                  jobid, strerror (errno));
-    } else if (asprintf (&key2, "%s.runrequest-time", path) < 0) {
-        flux_log (p, LOG_ERR, "allocate_job key2 create failed");
-    } else if (kvs_put_string (p, key2, buf) < 0) {
-        flux_log (p, LOG_ERR, "allocate_job %s runrequest-time failed: %s",
-                  jobid, strerror (errno));
+    if (asprintf (&key, "lwj.%ld.state", job->lwj_id) < 0) {
+        flux_log (h, LOG_ERR, "update_job_state key create failed");
+    } else if (kvs_put_string (h, key, state) < 0) {
+        flux_log (h, LOG_ERR, "update_job_state %ld state update failed: %s",
+                  job->lwj_id, strerror (errno));
+    } else if (asprintf (&key2, "lwj.%ld.%s-time", job->lwj_id, state) < 0) {
+        flux_log (h, LOG_ERR, "update_job_state key2 create failed");
+    } else if (kvs_put_string (h, key2, buf) < 0) {
+        flux_log (h, LOG_ERR, "update_job_state %ld %s-time failed: %s",
+                  job->lwj_id, state, strerror (errno));
     } else {
-        kvs_commit(p);
-        flux_log (p, LOG_INFO, "job %s runrequest", jobid);
-        rval = true;
+        rc = 0;
+        flux_log (h, LOG_DEBUG, "updating job %ld state to %s",
+                  job->lwj_id, state);
     }
+
     free (key);
     free (key2);
 
-    return rval;
+    return rc;
+}
+
+static inline void
+set_event (flux_event_t *e,
+           event_class_e c, int ei, flux_lwj_t *j)
+{
+    e->t = c;
+    e->lwj = j;
+    switch (c) {
+    case lwj_event:
+        e->ev.je = (lwj_event_e) ei;
+        break;
+    case res_event:
+        e->ev.re = (res_event_e) ei;
+        break;
+    default:
+        flux_log (h, LOG_ERR, "unknown ev class");
+        break;
+    }
+    return;
+}
+
+
+static int
+extract_lwjid (const char *k, int64_t *i)
+{
+    int rc = 0;
+    char *kcopy = NULL;
+    char *lwj = NULL;
+    char *id = NULL;
+
+    if (!k) {
+        rc = -1;
+        goto ret;
+    }
+
+    kcopy = strdup (k);
+    lwj = strtok (kcopy, ".");
+    if (strncmp(lwj, "lwj", 3) != 0) {
+        rc = -1;
+        goto ret;
+    }
+    id = strtok (NULL, ".");
+    *i = strtoul(id, (char **) NULL, 10);
+
+ret:
+    return rc;
+}
+
+
+static lwj_state_e
+translate_state (const char *s)
+{
+    lwj_state_e re = j_for_rent;
+
+    if (strcmp (s, LS_NULL) == 0) {
+        re = j_null;
+    }
+    else if (strcmp (s, LS_RESERVED) == 0) {
+        re = j_reserved;
+    }
+    else if (strcmp (s, LS_SUBMITTED) == 0) {
+        re = j_submitted;
+    }
+    else if (strcmp (s, LS_UNSCHED) == 0) {
+        re = j_unsched;
+    }
+    else if (strcmp (s, LS_PENDING) == 0) {
+        re = j_pending;
+    }
+    else if (strcmp (s, LS_RUNREQ) == 0) {
+        re = j_runrequest;
+    }
+    else if (strcmp (s, LS_ALLOCATED) == 0) {
+        re = j_allocated;
+    }
+    else if (strcmp (s, LS_STARTING) == 0) {
+        re = j_starting;
+    }
+    else if (strcmp (s, LS_RUNNING) == 0) {
+        re = j_running;
+    }
+    else if (strcmp (s, LS_CANCELLED) == 0) {
+        re = j_cancelled;
+    }
+    else if (strcmp (s, LS_COMPLETE) == 0) {
+        re = j_complete;
+    }
+    else if (strcmp (s, LS_REAPED) == 0) {
+        re = j_reaped;
+    }
+    else {
+        flux_log (h, LOG_ERR, "Unknown state %s", s);
+    }
+
+    return re;
+}
+
+
+static int
+extract_lwjinfo (flux_lwj_t *j)
+{
+    char *key = NULL;
+    char *state;
+    int64_t reqnodes = 0;
+    int64_t reqtasks = 0;
+    int rc = -1;
+
+    if (asprintf (&key, "lwj.%ld.state", j->lwj_id) < 0) {
+        flux_log (h, LOG_ERR, "extract_lwjinfo state key create failed");
+        goto ret;
+    } else if (kvs_get_string (h, key, &state) < 0) {
+        flux_log (h, LOG_ERR, "extract_lwjinfo %s: %s", key, strerror (errno));
+        goto ret;
+    } else {
+        j->state = translate_state(state);
+        flux_log (h, LOG_DEBUG, "extract_lwjinfo got %s: %s", key, state);
+        free(key);
+    }
+
+    if (asprintf (&key, "lwj.%ld.nnodes", j->lwj_id) < 0) {
+        flux_log (h, LOG_ERR, "extract_lwjinfo nnodes key create failed");
+        goto ret;
+    } else if (kvs_get_int64 (h, key, &reqnodes) < 0) {
+        flux_log (h, LOG_ERR, "extract_lwjinfo get %s: %s",
+                  key, strerror (errno));
+        goto ret;
+    } else {
+        j->req.nnodes = reqnodes;
+        flux_log (h, LOG_DEBUG, "extract_lwjinfo got %s: %ld", key, reqnodes);
+        free(key);
+    }
+
+    if (asprintf (&key, "lwj.%ld.ntasks", j->lwj_id) < 0) {
+        flux_log (h, LOG_ERR, "extract_lwjinfo ntasks key create failed");
+        goto ret;
+    } else if (kvs_get_int64 (h, key, &reqtasks) < 0) {
+        flux_log (h, LOG_ERR, "extract_lwjinfo get %s: %s",
+                  key, strerror (errno));
+        goto ret;
+    } else {
+        /* Assuming a 1:1 relationship right now between cores and tasks */
+        j->req.ncores = reqtasks;
+        flux_log (h, LOG_DEBUG, "extract_lwjinfo got %s: %ld", key, reqtasks);
+        free(key);
+        j->alloc.nnodes = 0;
+        j->alloc.ncores = 0;
+        j->rdl = NULL;
+        rc = 0;
+    }
+
+ret:
+    return rc;
+}
+
+
+static void
+issue_lwj_event (lwj_event_e e, flux_lwj_t *j)
+{
+    flux_event_t *ev
+        = (flux_event_t *) xzmalloc (sizeof (flux_event_t));
+    ev->t = lwj_event;
+    ev->ev.je = e;
+    ev->lwj = j;
+
+    if (enqueue (ev_queue, (void *) ev) == -1) {
+        flux_log (h, LOG_ERR,
+                  "enqueuing an event failed");
+        goto ret;
+    }
+    if (signal_event () == -1) {
+        flux_log (h, LOG_ERR,
+                  "signaling an event failed");
+        goto ret;
+    }
+
+ret:
+    return;
+}
+
+/****************************************************************
+ *
+ *         Scheduler Activities
+ *
+ ****************************************************************/
+static int
+load_resources()
+{
+    int rc = -1;
+
+    setup_rdl_lua ();
+
+    if ((l = rdllib_open ())) {
+        if ((rdl = rdl_loadfile (l, "conf/ipa.lua"))) {
+            rc = 0;
+        } else {
+            flux_log (h, LOG_ERR, "failed to load rdl file");
+        }
+    } else {
+        flux_log (h, LOG_ERR, "failed to open rdl lib");
+    }
+
+    return rc;
 }
 
 /*
- * _sched_job() - Find the resources for a job and run it if possible
- * IN:  path - path to the lwj
- * Returns true on success
+ * Walk the tree, find the required resources and tag with the lwj_id
+ * to which it is allocated.
  */
-static bool _sched_job (flux_t p, const char *path)
+static bool
+allocate_resources (struct resource *r, struct rdl_accumulator *a,
+                    flux_lwj_t *job)
 {
-    bool rval = false;
-    char *key = NULL;
-    long reqd_tasks = 0;
+    char *lwjtag = NULL;
+    const char *type;
+    json_object *o;
+    struct resource *c;
+    bool found = false;
 
-    flux_log (p, LOG_INFO, "sched_job %s", path);
+    o = rdl_resource_json (r);
+    flux_log (h, LOG_DEBUG, "considering resource: %s",
+              json_object_to_json_string (o));
 
-    if (asprintf (&key, "%s.ntasks", path) < 0) {
-        flux_log (p, LOG_ERR, "sched_job key create failed");
-    } else if (kvs_get_int64 (p, key, &reqd_tasks) < 0) {
-        flux_log (p, LOG_ERR, "sched_job get %s: %s", key, strerror (errno));
-    } else if (_alloc_resrcs (p, path, reqd_tasks)) {
-        flux_log (p, LOG_INFO, "sched_job %s requests %ld tasks", path,
-                  reqd_tasks);
-        rval = _allocate_job (p, path);
+    Jget_str (o, "type", &type);
+    asprintf (&lwjtag, "lwj.%ld", job->lwj_id);
+    if (job->req.nnodes && (strcmp (type, "node") == 0)) {
+        job->req.nnodes--;
+        job->alloc.nnodes++;
+        rdl_resource_tag (r, lwjtag);
+        rdl_accumulator_add (a, r);
+        flux_log (h, LOG_DEBUG, "allocated node: %s",
+                  json_object_to_json_string (o));
+    } else if (job->req.ncores && (strcmp (type, "core")) == 0) {
+        job->req.ncores--;
+        job->alloc.ncores++;
+        rdl_resource_tag (r, lwjtag);
+        rdl_accumulator_add (a, r);
+        flux_log (h, LOG_DEBUG, "allocated core: %s",
+                  json_object_to_json_string (o));
     }
-    free (key);
+    free (lwjtag);
+    json_object_put (o);
 
-    return rval;
+    found = !(job->req.nnodes || job->req.ncores);
+
+    while (!found && (c = rdl_resource_next_child (r))) {
+        found = allocate_resources (c, a, job);
+        rdl_resource_destroy (c);
+    }
+
+    return found;
 }
 
 /*
- * _sched_loop() - loop through the pending jobs and schedule what we can.
- * IN:  p - flux handle
+ * Recursively search the resource r and update this job's lwj key
+ * with the core count per rank (i.e., node for the time being)
  */
-static void _sched_loop (flux_t p)
+static int
+update_job_cores (struct resource *r, flux_lwj_t *job,
+                  uint64_t *pnode, uint32_t *pcores)
 {
+    bool imanode = false;
     char *key = NULL;
-    const char *name;
-    kvsdir_t dir;
-    kvsitr_t itr;
+    char *lwjtag = NULL;
+    const char *type;
+    json_object *o = NULL;
+    json_object *o2 = NULL;
+    json_object *o3 = NULL;
+    struct resource *c;
+    int rc = 0;
 
-    if (kvs_get_dir (p, &dir, "lwj") < 0) {
-        flux_log (p, LOG_ERR, "sched_loop get lwj dir: %s", strerror (errno));
-        return;
+    if (r) {
+        o = rdl_resource_json (r);
+        if (o) {
+            flux_log (h, LOG_DEBUG, "considering: %s",
+                      json_object_to_json_string (o));
+        } else {
+            flux_log (h, LOG_ERR, "update_job_cores invalid resource");
+            rc = -1;
+            goto ret;
+        }
+    } else {
+        flux_log (h, LOG_ERR, "update_job_cores passed a null resource");
+        rc = -1;
+        goto ret;
     }
-    itr = kvsitr_create (dir);
-    while ((name = kvsitr_next (itr))) {
-        key = kvsdir_key_at (dir, name);
-        if (kvsdir_isdir (dir, name)) {
-            if (_pending_job (p, key)) {
-                if (!_sched_job(p, key)) {
-                    /* There was a problem.  Let's stop for now */
-                    break;
-                }
-            }
+
+    Jget_str (o, "type", &type);
+    if (strcmp (type, "node") == 0) {
+        *pcores = 0;
+        imanode = true;
+    } else if (strcmp (type, "core") == 0) {
+        /* we need to limit our allocation to just the tagged cores */
+        asprintf (&lwjtag, "lwj.%ld", job->lwj_id);
+        Jget_obj (o, "tags", &o2);
+        Jget_obj (o2, lwjtag, &o3);
+        if (o3) {
+            (*pcores)++;
+        }
+        free (lwjtag);
+    }
+    json_object_put (o);
+
+    while ((rc == 0) && (c = rdl_resource_next_child (r))) {
+        rc = update_job_cores (c, job, pnode, pcores);
+        rdl_resource_destroy (c);
+    }
+
+    if (imanode) {
+        if (asprintf (&key, "lwj.%ld.rank.%ld.cores", job->lwj_id,
+                      *pnode) < 0) {
+            flux_log (h, LOG_ERR, "update_job_cores key create failed");
+            rc = -1;
+            goto ret;
+        } else if (kvs_put_int64 (h, key, *pcores) < 0) {
+            flux_log (h, LOG_ERR, "update_job_cores %ld node failed: %s",
+                      job->lwj_id, strerror (errno));
+            rc = -1;
+            goto ret;
         }
         free (key);
+        (*pnode)++;
     }
-    kvsitr_destroy (itr);
-    kvsdir_destroy (dir);
+
+ret:
+    return rc;
 }
 
 /*
- * _reclaim_resrcs() - increase the idle core count of each of a job's
- * resources following the termination of a running job.
- * IN: job - the job that just terminated
+ * Create lwj entries to tell wrexecd how many tasks to launch per
+ * node.
+ * The key has the form:  lwj.<jobID>.rank.<nodeID>.cores
+ * The value will be the number of tasks to launch on that node.
  */
-static void _reclaim_resrcs(flux_t p, char *job)
+static int
+update_job_resources (flux_lwj_t *job)
 {
-    char *key = NULL;
-    char *key1 = NULL;
-    char *key2 = NULL;
-    const char *name;
-    kvsdir_t dir;
-    kvsitr_t itr;
-    long alloc_cores = 0;
-    long job_cores = 0;
+    uint64_t node = 0;
+    uint32_t cores = 0;
+    struct resource *r = rdl_resource_get (job->rdl, "default");
+    int rc = -1;
 
-    flux_log (p, LOG_INFO, "reclaim_resrcs %s", job);
+    rc = update_job_cores (r, job, &node, &cores);
 
-    if (kvs_get_dir (p, &dir, "%s.rank", job) < 0) {
-        flux_log (p, LOG_ERR, "reclaim_resrcs get lwj dir: %s",
+    return rc;
+}
+
+/*
+ * Add the allocated resources to the job, and
+ * change its state to "allocated".
+ */
+static int
+update_job (flux_lwj_t *job)
+{
+    int rc = -1;
+
+    if (update_job_state (job, LS_ALLOCATED)) {
+        flux_log (h, LOG_ERR, "update_job failed to update job %ld to %s",
+                  job->lwj_id, LS_ALLOCATED);
+    } else if (update_job_resources(job)) {
+        flux_log (h, LOG_ERR, "update_job %ld resrc update failed", job->lwj_id);
+    } else if (kvs_commit (h) < 0) {
+        flux_log (h, LOG_ERR, "kvs_commit error!");
+    } else {
+        rc = 0;
+    }
+
+    return rc;
+}
+
+int schedule_job (struct rdl *rdl, const char *uri, flux_lwj_t *job)
+{
+    int64_t nodes;
+    int rc = -1;
+    json_object *o;
+    uint64_t reqnodes = 0;
+    struct rdl_accumulator *a = NULL;
+    struct resource *r = rdl_resource_get (rdl, uri);
+
+    if (r == NULL) {
+        flux_log (h, LOG_ERR, "Failed to get resource %s", uri);
+        return rc;
+    }
+
+    o = rdl_resource_aggregate_json (r);
+    if (o) {
+        rc = util_json_object_get_int64 (o, "node", &nodes);
+        if (rc) {
+            flux_log (h, LOG_ERR, "schedule_job failed to get nodes: %d", rc);
+        } else {
+            flux_log (h, LOG_DEBUG, "schedule_job found %ld nodes", nodes);
+        }
+        json_object_put (o);
+    }
+
+    if (job) {
+        reqnodes = job->req.nnodes;
+        if (nodes >= reqnodes) {
+            a = rdl_accumulator_create (rdl);
+            if (allocate_resources (r, a, job)) {
+                job->rdl = rdl_accumulator_copy (a);
+                rc = update_job(job);
+            }
+        }
+    } else {
+        flux_log (h, LOG_ERR, "schedule_job passed a null job");
+    }
+
+    return rc;
+}
+
+int schedule_jobs (struct rdl *rdl, const char *uri, queue_t *jobs)
+{
+    flux_lwj_t *job = NULL;
+    int rc = -1;
+
+    job = (flux_lwj_t *)zlist_first (jobs->queue);
+    jobs->rewind = 1;
+
+    if (job)
+        schedule_job(rdl, uri, job);
+
+    while ( (job = zlist_next (jobs->queue)) != NULL) {
+        schedule_job(rdl, uri, job);
+    }
+
+    return rc;
+}
+
+
+/****************************************************************
+ *
+ *         Actions Led by Current State + an Event
+ *
+ ****************************************************************/
+
+static int
+request_run (flux_lwj_t *job)
+{
+    int rc = -1;
+
+    if (update_job_state (job, LS_RUNREQ) < 0) {
+        flux_log (h, LOG_ERR, "request_run failed to update job %ld to %s",
+                  job->lwj_id, LS_RUNREQ);
+    } else if (kvs_commit (h) < 0) {
+        flux_log (h, LOG_ERR, "kvs_commit error!");
+    } else if (flux_event_send (h, NULL, "rexec.run.%ld", job->lwj_id) < 0) {
+        flux_log (h, LOG_ERR, "request_run event send failed: %s",
                   strerror (errno));
-        return;
-    }
-
-    itr = kvsitr_create (dir);
-    while ((name = kvsitr_next (itr))) {
-        key = kvsdir_key_at (dir, name);
-        if (kvsdir_isdir (dir, name)) {
-            if (asprintf (&key1, "%s.cores", key) < 0) {
-                flux_log (p, LOG_ERR, "reclaim_resrcs key1 create failed");
-            } else if (kvs_get_int64 (p, key1, &job_cores) < 0) {
-                flux_log (p, LOG_ERR, "reclaim_resrcs get %s: %s", key1,
-                          strerror (errno));
-            } else if (asprintf (&key2, "resrc.rank.%s.alloc.cores", name) < 0) {
-                flux_log (p, LOG_ERR, "reclaim_resrcs key2 create failed");
-            } else if (kvs_get_int64 (p, key2, &alloc_cores) < 0) {
-                flux_log (p, LOG_ERR, "reclaim_resrcs get %s: %s", key2,
-                          strerror (errno));
-            } else {
-                alloc_cores -= job_cores;
-                if (kvs_put_int64 (p, key2, alloc_cores) < 0) {
-                    flux_log (p, LOG_ERR,
-                              "reclaim_resrcs put %ld alloc.cores failed",
-                              alloc_cores);
-                } else {
-                    kvs_commit(p);
-                    flux_log (p, LOG_INFO, "reclaim_resrcs put %s = %ld", key2,
-                              alloc_cores);
-                }
-            }
-            free (key2);
-            free (key1);
-        }
-        free (key);
-    }
-
-    kvsitr_destroy (itr);
-    kvsdir_destroy (dir);
-}
-
-/*
- * _new_job_state() - callback for when a job state change is detected
- * If the job just became pending, try to schedule it
- * If the job just terminated, reclaim its resources and kick off a
- * scheduling loop
- * IN:  key - key to the new job state
- * IN:  dir - kvsdir handle
- * IN:  arg - flux handle
- * IN:  errnum - error number
- */
-static void _new_job_state (const char *key, kvsdir_t dir, void *arg, int errnum)
-{
-    char *job_state = NULL;
-    char *key2 = NULL;
-    char *req_time = NULL;
-    flux_t p = (flux_t)arg;
-
-    if (errnum > 0) {
-        flux_log (p, LOG_ERR, "new_job_state %s: %s", key, strerror (errnum));
-    } else if (kvs_get_string (p, key, &job_state) < 0) {
-        flux_log (p, LOG_ERR, "new_job_state %s: %s", key, strerror (errno));
-    } else if (!strncmp (job_state, "pending", 7)) {
-        flux_log (p, LOG_INFO, "new_job_state %s: %s", key, job_state);
-        _sched_loop (p);
-    } else if (!strncmp (job_state, "complete", 8)) {
-        char *job = strdup(key);
-        char *ptr = strstr(job, ".state");
-
-        if (ptr) {
-            *ptr = '\0';
-            if (asprintf (&key2, "%s.runrequest-time", job) < 0) {
-                flux_log (p, LOG_ERR, "new_job_state key2 create failed");
-            } else if (kvs_get_string (p, key2, &req_time) == 0) {
-                _reclaim_resrcs(p, job);
-                if (kvs_put_string (p, key, "reaped") < 0) {
-                    flux_log (p, LOG_ERR,
-                              "new_job_state %s state update failed: %s", job,
-                              strerror (errno));
-                } else {
-                    kvs_commit(p);
-                    flux_log (p, LOG_INFO, "job %s reaped", job);
-                    _sched_loop (p);
-                }
-            } else {
-                flux_log (p, LOG_INFO, "new_job_state ignored %s", job);
-            }
-            free (key2);
-        }
-        free (job);
-    }
-}
-
-/*
- * _new_job() - callback for when a new job is submitted to the lwj kvs
- * IN:  key - key to the new job id
- * IN:  dir - kvsdir handle
- * IN:  arg - flux handle
- * IN:  errnum - error number
- */
-static void _new_job (const char *key, kvsdir_t dir, void *arg, int errnum)
-{
-    char *key2;
-    flux_t p = (flux_t)arg;
-    long jobid;
-
-    if (errnum > 0) {
-        flux_log (p, LOG_ERR, "%s: %s", key, strerror (errnum));
-    } else if (kvs_get_int64 (p, key, &jobid) < 0) {
-        flux_log (p, LOG_ERR, "new_job get %s: %s", key, strerror (errno));
-    } else if (asprintf (&key2, "lwj.%lu.state", jobid - 1) < 0) {
-        flux_log (p, LOG_ERR, "new_job key create failed");
-    } else if (kvs_watch_string (p, key2, (KVSSetStringF*)_new_job_state, p)
-               < 0) {
-        flux_log (p, LOG_ERR, "watch lwj state: %s", strerror (errno));
     } else {
-        flux_log (p, LOG_INFO, "job ID %ld submitted", jobid - 1);
+        flux_log (h, LOG_DEBUG, "job %ld runrequest", job->lwj_id);
+        rc = 0;
     }
+
+    return rc;
+}
+
+
+static int
+issue_res_event (flux_lwj_t *lwj)
+{
+    int rc = 0;
+    flux_event_t *newev
+        = (flux_event_t *) xzmalloc (sizeof (flux_event_t));
+
+    // TODO: how to update the status of each entry as "free"
+    // then destroy zlist_t without having to destroy
+    // the elements
+    // release lwj->resource
+
+    newev->t = res_event;
+    newev->ev.re = r_released;
+    newev->lwj = lwj;
+
+    if (enqueue (ev_queue, (void *) newev) == -1) {
+        flux_log (h, LOG_ERR,
+                  "enqueuing an event failed");
+        rc = -1;
+        goto ret;
+    }
+    if (signal_event () == -1) {
+        flux_log (h, LOG_ERR,
+                  "signal the event-enqueued event ");
+        rc = -1;
+        goto ret;
+    }
+
+ret:
+    return rc;
+}
+
+static int
+release_lwj_resource (struct resource *r, int64_t lwj_id)
+{
+    char *lwjtag = NULL;
+    int rc = -1;
+    json_object *o = NULL;
+    json_object *o2 = NULL;
+    json_object *o3 = NULL;
+    struct resource *c;
+
+    asprintf (&lwjtag, "lwj.%ld", lwj_id);
+    o = rdl_resource_json (r);
+    Jget_obj (o, "tags", &o2);
+    Jget_obj (o2, lwjtag, &o3);
+    if (o3) {
+        json_object_object_del(o2, lwjtag);
+        flux_log (h, LOG_DEBUG, "resource released: %s",
+                  json_object_to_json_string (o));
+        json_object_put (o3);
+    }
+    json_object_put (o);
+    json_object_put (o2);
+    free (lwjtag);
+
+    while ((c = rdl_resource_next_child (r))) {
+        release_lwj_resource (c, lwj_id);
+        rdl_resource_destroy (c);
+    }
+    return rc;
 }
 
 /*
- * plugin entry point
+ * Find resources allocated to this job, and remove the lwj tag.
  */
-int mod_main (flux_t p, zhash_t *args)
+int release_resources (struct rdl *rdl, const char *uri, flux_lwj_t *job)
 {
-    flux_log_set_facility (p, "sched");
-    flux_log (p, LOG_INFO, "sched plugin starting");
+    int rc = -1;
+    struct resource *r = rdl_resource_get (rdl, uri);
 
-    /* Wait for resource info to appear */
-    _wait_for_new_dir(p, "resrc.rank");
-
-    /* Resister for job info */
-    _wait_for_new_dir(p, "lwj");
-
-    if (kvs_watch_int64 (p, "lwj.next-id", (KVSSetInt64F*)_new_job, p) < 0) {
-        flux_log (p, LOG_ERR, "watch lwj.next-id: %s", strerror (errno));
+    if (r) {
+        rc = release_lwj_resource (r, job->lwj_id);
     } else {
-        flux_log (p, LOG_INFO, "sched plugin initialized");
+        flux_log (h, LOG_ERR, "release_resources failed to get resources: %s",
+                  strerror (errno));
     }
-    if (flux_reactor_start (p) < 0) {
-        flux_log (p, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
+
+    return rc;
+}
+
+static int
+move_to_r_queue (flux_lwj_t *lwj)
+{
+    queue_remove (p_queue, (void *) lwj);
+    return enqueue (r_queue, (void *) lwj);
+}
+
+static int
+move_to_c_queue (flux_lwj_t *lwj)
+{
+    queue_remove (r_queue, (void *) lwj);
+    return enqueue (c_queue, (void *) lwj);
+}
+
+
+static int
+action_j_event (flux_event_t *e)
+{
+    /* e->lwj->state is the current state
+     * e->ev.je      is the new state
+     */
+    flux_log (h, LOG_DEBUG, "attempting job %ld state change from %d to %d",
+              e->lwj->lwj_id, e->lwj->state, e->ev.je);
+
+    switch (e->lwj->state) {
+    case j_null:
+        if (e->ev.je != j_reserved) {
+            goto bad_transition;
+        }
+        e->lwj->state = j_reserved;
+        break;
+
+    case j_reserved:
+        if (e->ev.je != j_submitted) {
+            goto bad_transition;
+        }
+        extract_lwjinfo (e->lwj);
+        if (e->lwj->state != j_submitted) {
+            flux_log (h, LOG_ERR,
+                      "job %ld read state mismatch ", e->lwj->lwj_id);
+            goto bad_transition;
+        }
+        flux_log (h, LOG_DEBUG, "setting %ld to submitted state",
+                  e->lwj->lwj_id);
+        schedule_jobs (rdl, "default", return_queue (p_queue));
+        break;
+
+    case j_submitted:
+        if (e->ev.je != j_allocated) {
+            goto bad_transition;
+        }
+        e->lwj->state = j_allocated;
+        request_run(e->lwj);
+        break;
+
+    case j_unsched:
+        /* TODO */
+        goto bad_transition;
+        break;
+
+    case j_pending:
+        /* TODO */
+        goto bad_transition;
+        break;
+
+    case j_allocated:
+        if (e->ev.je != j_runrequest) {
+            goto bad_transition;
+        }
+        e->lwj->state = j_runrequest;
+        break;
+
+    case j_runrequest:
+        if (e->ev.je != j_starting) {
+            goto bad_transition;
+        }
+        e->lwj->state = j_starting;
+        break;
+
+    case j_starting:
+        if (e->ev.je != j_running) {
+            goto bad_transition;
+        }
+        e->lwj->state = j_running;
+        move_to_r_queue (e->lwj);
+        break;
+
+    case j_running:
+        if (e->ev.je != j_complete) {
+            goto bad_transition;
+        }
+        /* TODO move this to j_complete case once reaped is implemented */
+        move_to_c_queue (e->lwj);
+        issue_res_event (e->lwj);
+        break;
+
+    case j_cancelled:
+        /* TODO */
+        goto bad_transition;
+        break;
+
+    case j_complete:
+        if (e->ev.je != j_reaped) {
+            goto bad_transition;
+        }
+//        move_to_c_queue (e->lwj);
+        break;
+
+    case j_reaped:
+        if (e->ev.je != j_complete) {
+            goto bad_transition;
+        }
+        e->lwj->state = j_reaped;
+        break;
+
+    default:
+        flux_log (h, LOG_ERR, "job %ld unknown state %d",
+                  e->lwj->lwj_id, e->lwj->state);
+        break;
+    }
+
+    return 0;
+
+bad_transition:
+    flux_log (h, LOG_ERR, "job %ld bad state transition from %u to %u",
+              e->lwj->lwj_id, e->lwj->state, e->ev.je);
+    return -1;
+}
+
+
+static int
+action_r_event (flux_event_t *e)
+{
+    int rc = -1;
+
+    if ((e->ev.je == r_released) || (e->ev.re == r_attempt)) {
+        release_resources (rdl, "default", e->lwj);
+        schedule_jobs (rdl, "default", return_queue (p_queue));
+        rc = 0;
+    }
+
+    return rc;
+}
+
+
+static int
+action (flux_event_t *e)
+{
+    int rc = 0;
+
+    switch (e->t) {
+    case lwj_event:
+        rc = action_j_event (e);
+        break;
+
+    case res_event:
+        rc = action_r_event (e);
+        break;
+
+    default:
+        flux_log (h, LOG_ERR, "unknown event type");
+        break;
+    }
+
+    return rc;
+}
+
+
+/****************************************************************
+ *
+ *         Abstractions for KVS Callback Registeration
+ *
+ ****************************************************************/
+static int
+wait_for_lwj_init ()
+{
+    int rc = 0;
+    kvsdir_t dir = NULL;
+
+    if (kvs_watch_once_dir (h, &dir, "lwj") < 0) {
+        flux_log (h, LOG_ERR, "wait_for_lwj_init: %s",
+                  strerror (errno));
+        rc = -1;
+        goto ret;
+    }
+
+    flux_log (h, LOG_INFO, "wait_for_lwj_init %s",
+              kvsdir_key(dir));
+
+ret:
+    if (dir)
+        kvsdir_destroy (dir);
+    return rc;
+}
+
+
+static int
+reg_event_hdlr (KVSSetInt64F *func)
+{
+    int rc = 0;
+
+    event_count = 0;
+    if (kvs_put_int64 (h, "event-counter", event_count) < 0 ) {
+        flux_log (h, LOG_ERR,
+                  "error kvs_put_int64 event-counter: %s",
+                  strerror (errno));
+        rc = -1;
+        goto ret;
+    }
+    if (kvs_commit (h) < 0) {
+        flux_log (h, LOG_ERR, "kvs_commit error!");
+        rc = -1;
+        goto ret;
+    }
+    if (kvs_watch_int64 (h, "event-counter", func, (void *) h) < 0) {
+        flux_log (h, LOG_ERR, "watch event-counter: %s",
+                  strerror (errno));
+        rc = -1;
+        goto ret;
+    }
+    flux_log (h, LOG_DEBUG, "registered event callback");
+
+ret:
+    return rc;
+}
+
+
+static int
+reg_newlwj_hdlr (KVSSetInt64F *func)
+{
+    if (kvs_watch_int64 (h,"lwj.next-id", func, (void *) h) < 0) {
+        flux_log (h, LOG_ERR, "watch lwj.next-id: %s",
+                  strerror (errno));
         return -1;
     }
+    flux_log (h, LOG_DEBUG, "registered lwj creation callback");
+
     return 0;
+}
+
+
+static int
+reg_lwj_state_hdlr (const char *path, KVSSetStringF *func)
+{
+    int rc = 0;
+    char *k = NULL;
+
+    asprintf (&k, "%s.state", path);
+    if (kvs_watch_string (h, k, func, (void *)h) < 0) {
+        flux_log (h, LOG_ERR,
+                  "watch a lwj state in %s: %s.",
+                  k, strerror (errno));
+        rc = -1;
+        goto ret;
+    }
+    flux_log (h, LOG_DEBUG, "registered lwj %s.state change callback", path);
+
+ret:
+    free (k);
+    return rc;
+}
+
+
+/****************************************************************
+ *                KVS Watch Callback Functions
+ ****************************************************************/
+static void
+lwjstate_cb (const char *key, const char *val, void *arg, int errnum)
+{
+    int64_t lwj_id;
+    flux_lwj_t *j = NULL;
+    lwj_event_e e;
+
+    if (errnum > 0) {
+        /* Ignore ENOENT.  It is expected when this cb is called right
+         * after registration.
+         */
+        if (errnum != ENOENT) {
+            flux_log (h, LOG_ERR, "lwjstate_cb key(%s), val(%s): %s",
+                      key, val, strerror (errnum));
+        }
+        goto ret;
+    }
+
+    if (extract_lwjid (key, &lwj_id) == -1) {
+        flux_log (h, LOG_ERR, "ill-formed key");
+        goto ret;
+    }
+    flux_log (h, LOG_DEBUG, "lwjstate_cb: %ld, %s", lwj_id, val);
+
+    j = find_lwj (lwj_id);
+    if (j) {
+        e = translate_state (val);
+        issue_lwj_event (e, j);
+    }
+
+ret:
+    return;
+}
+
+/* The val argument is for the *next* job id.  Hence, the job id of
+ * the new job will be (val - 1).
+ */
+static void
+newlwj_cb (const char *key, int64_t val, void *arg, int errnum)
+{
+    char path[MAX_STR_LEN];
+    flux_lwj_t *j = NULL;
+
+    if (errnum > 0) {
+        /* Ignore ENOENT.  It is expected when this cb is called right
+         * after registration.
+         */
+        if (errnum != ENOENT) {
+            flux_log (h, LOG_ERR, "newlwj_cb key(%s), val(%ld): %s",
+                      key, val, strerror (errnum));
+            goto error;
+        }
+        goto ret;
+    } else if (val < 0) {
+        flux_log (h, LOG_ERR, "newlwj_cb key(%s), val(%ld)", key, val);
+        goto error;
+    } else {
+        flux_log (h, LOG_DEBUG, "newlwj_cb key(%s), val(%ld)", key, val);
+    }
+
+    if ( !(j = (flux_lwj_t *) xzmalloc (sizeof (flux_lwj_t))) ) {
+        flux_log (h, LOG_ERR, "oom");
+        goto error;
+    }
+    j->lwj_id = val - 1;
+    j->state = j_null;
+    snprintf (path, MAX_STR_LEN, "lwj.%ld", j->lwj_id);
+    if (reg_lwj_state_hdlr (path, (KVSSetStringF *) lwjstate_cb) == -1) {
+        flux_log (h, LOG_ERR,
+                  "register lwj state change "
+                  "handling callback: %s",
+                  strerror (errno));
+        goto error;
+    }
+    if (enqueue (p_queue, (void *) j) == -1) {
+        flux_log (h, LOG_ERR,
+                  "appending a job to pending queue failed");
+        goto error;
+    }
+ret:
+    return;
+
+error:
+    if (j)
+        free (j);
+
+    return;
+}
+
+
+static void
+event_cb (const char *key, int64_t val, void *arg, int errnum)
+{
+    flux_event_t *e = NULL;
+
+    if (errnum > 0) {
+        /* Ignore ENOENT.  It is expected when this cb is called right
+         * after registration.
+         */
+        if (errnum != ENOENT) {
+            flux_log (h, LOG_ERR, "event_cb key(%s), val(%ld): %s",
+                      key, val, strerror (errnum));
+        }
+        goto ret;
+    }
+
+    while ( (e = dequeue (ev_queue)) != NULL) {
+        action (e);
+        free (e);
+    }
+ret:
+    return;
+}
+
+
+/****************************************************************
+ *
+ *        High Level Job and Resource Event Handlers
+ *
+ ****************************************************************/
+int mod_main (flux_t p, zhash_t *args)
+{
+    /* TODO: MAKE SURE THIS IS ONLY ACTIVATED IN ONE CMB RANK */
+    int rc = 0;
+
+    h = p;
+    flux_log_set_facility (h, "sched");
+    flux_log (h, LOG_INFO, "sched comms module starting");
+
+    if (load_resources () == -1) {
+        flux_log (h, LOG_ERR, "failed to load resources: %s",
+                  strerror (errno));
+        rc = -1;
+        goto ret;
+    }
+    if (init_internal_queues () == -1) {
+        flux_log (h, LOG_ERR,
+                  "init for queues failed: %s",
+                  strerror (errno));
+        rc = -1;
+        goto ret;
+    }
+    if (reg_event_hdlr ((KVSSetInt64F*) event_cb) == -1) {
+        flux_log (h, LOG_ERR,
+                  "register event handling callback: %s",
+                  strerror (errno));
+        rc = -1;
+        goto ret;
+    }
+    if (wait_for_lwj_init () == -1) {
+        flux_log (h, LOG_ERR, "wait for lwj failed: %s",
+                  strerror (errno));
+        rc = -1;
+        goto ret;
+    }
+    if (reg_newlwj_hdlr ((KVSSetInt64F*) newlwj_cb) == -1) {
+        flux_log (h, LOG_ERR,
+                  "register new lwj handling "
+                  "callback: %s",
+                  strerror (errno));
+        rc = -1;
+        goto ret;
+    }
+    if (flux_reactor_start (h) < 0) {
+        flux_log (h, LOG_ERR,
+                  "flux_reactor_start: %s",
+                  strerror (errno));
+        rc =  -1;
+        goto ret;
+    }
+
+    rdllib_close(l);
+    destroy_internal_queues ();
+ret:
+    return rc;
 }
 
 MOD_NAME ("sched");
