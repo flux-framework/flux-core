@@ -968,7 +968,8 @@ lwjstate_cb (const char *key, const char *val, void *arg, int errnum)
     if (j) {
         e = stab_lookup (jobstate_tab, val);
         issue_lwj_event (e, j);
-    }
+    } else
+        flux_log (h, LOG_ERR, "lwjstate_cb: find_lwj %ld failed", lwj_id);
 
 ret:
     return;
@@ -1007,16 +1008,16 @@ newlwj_cb (const char *key, int64_t val, void *arg, int errnum)
     j->lwj_id = val - 1;
     j->state = j_null;
     snprintf (path, MAX_STR_LEN, "lwj.%ld", j->lwj_id);
+    if (zlist_append (p_queue, j) == -1) {
+        flux_log (h, LOG_ERR,
+                  "appending a job to pending queue failed");
+        goto error;
+    }
     if (reg_lwj_state_hdlr (path, (KVSSetStringF *) lwjstate_cb) == -1) {
         flux_log (h, LOG_ERR,
                   "register lwj state change "
                   "handling callback: %s",
                   strerror (errno));
-        goto error;
-    }
-    if (zlist_append (p_queue, j) == -1) {
-        flux_log (h, LOG_ERR,
-                  "appending a job to pending queue failed");
         goto error;
     }
 ret:
