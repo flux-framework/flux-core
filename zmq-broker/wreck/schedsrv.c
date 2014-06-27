@@ -1114,12 +1114,16 @@ ret:
  ****************************************************************/
 int mod_main (flux_t p, zhash_t *args)
 {
-    /* TODO: MAKE SURE THIS IS ONLY ACTIVATED IN ONE CMB RANK */
     int rc = 0;
     char *path;
     struct rdllib *l = NULL;
 
     h = p;
+    if (flux_rank (h) != 0) {
+        flux_log (h, LOG_ERR, "sched module must only run on rank 0");
+        rc = -1;
+        goto ret;
+    }
     flux_log (h, LOG_INFO, "sched comms module starting");
 
     if (!(path = zhash_lookup (args, "rdl-conf"))) {
