@@ -76,7 +76,6 @@ static queue_t *lwj_c = NULL;
 static queue_t *event = NULL;
 static flux_t h = NULL;
 static long event_count;
-static struct rdllib *l = NULL;
 static struct rdl *rdl = NULL;;
 
 
@@ -601,25 +600,6 @@ ret:
  *         Scheduler Activities
  *
  ****************************************************************/
-static int
-load_resources()
-{
-    int rc = -1;
-
-    setup_rdl_lua ();
-
-    if ((l = rdllib_open ())) {
-        if ((rdl = rdl_loadfile (l, "conf/ipa.lua"))) {
-            rc = 0;
-        } else {
-            flux_log (h, LOG_ERR, "failed to load rdl file");
-        }
-    } else {
-        flux_log (h, LOG_ERR, "failed to open rdl lib");
-    }
-
-    return rc;
-}
 
 /*
  * Walk the tree, find the required resources and tag with the lwj_id
@@ -1346,14 +1326,22 @@ int mod_main (flux_t p, zhash_t *args)
 {
     /* TODO: MAKE SURE THIS IS ONLY ACTIVATED IN ONE CMB RANK */
     int rc = 0;
+    char *path;
+    struct rdllib *l = NULL;
 
     h = p;
     flux_log_set_facility (h, "sched");
     flux_log (h, LOG_INFO, "sched comms module starting");
 
-    if (load_resources () == -1) {
-        flux_log (h, LOG_ERR, "failed to load resources: %s",
-                  strerror (errno));
+    if (!(path = zhash_lookup (args, "rdl-conf"))) {
+        flux_log (h, LOG_ERR, "rdl-conf argument is not set");
+        rc = -1;
+        goto ret;
+    }
+    setup_rdl_lua ();
+    if (!(l = rdllib_open ()) || !(rdl = rdl_loadfile (l, path))) {
+        flux_log (h, LOG_ERR, "failed to load resources from %s: %s",
+                  path, strerror (errno));
         rc = -1;
         goto ret;
     }
