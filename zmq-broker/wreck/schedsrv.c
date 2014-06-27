@@ -45,38 +45,18 @@
  *
  ****************************************************************/
 
-/**
- *  Enumerate different queue types
- */
-typedef enum {
-    p_queue,
-    r_queue,
-    c_queue,
-    ev_queue
-} queue_e;
-
-
-/**
- *  Define a queue
- */
-typedef struct {
-    zlist_t *queue;
-    int rewind;
-} queue_t;
-
-
 /****************************************************************
  *
  *                 STATIC DATA
  *
  ****************************************************************/
-static queue_t *lwj_p = NULL;
-static queue_t *lwj_r = NULL;
-static queue_t *lwj_c = NULL;
-static queue_t *event = NULL;
+static zlist_t *p_queue = NULL;
+static zlist_t *r_queue = NULL;
+static zlist_t *c_queue = NULL;
+static zlist_t *ev_queue = NULL;
 static flux_t h = NULL;
 static long event_count;
-static struct rdl *rdl = NULL;;
+static struct rdl *rdl = NULL;
 
 
 /****************************************************************
@@ -123,198 +103,6 @@ static void setup_rdl_lua (void)
     rdllib_set_default_errf (h, (rdl_err_f)(&f_err));
 }
 
-/****************************************************************
- *
- *              Queue Abstraction on Top of zlist
- *
- ****************************************************************/
-static int
-init_internal_queues ()
-{
-    int rc = 0;
-
-    if (lwj_p || lwj_r || lwj_c || event) {
-        rc = -1;
-        goto ret;
-    }
-
-    lwj_p = (queue_t *) xzmalloc (sizeof (queue_t));
-    lwj_r = (queue_t *) xzmalloc (sizeof (queue_t));
-    lwj_c = (queue_t *) xzmalloc (sizeof (queue_t));
-    event = (queue_t *) xzmalloc (sizeof (queue_t));
-
-    lwj_p->queue = zlist_new ();
-    lwj_r->queue = zlist_new ();
-    lwj_c->queue = zlist_new ();
-    event->queue = zlist_new ();
-
-    if (!lwj_p->queue || !lwj_r->queue || !lwj_c->queue || !event->queue) {
-        rc = -1;
-        goto ret;
-    }
-    lwj_p->rewind = 0;
-    lwj_r->rewind = 0;
-    lwj_c->rewind = 0;
-    event->rewind = 0;
-
-ret:
-    return rc;
-}
-
-
-static void
-destroy_internal_queues (void)
-{
-    if (lwj_p->queue) {
-        zlist_destroy (&lwj_p->queue);
-        lwj_p->queue = NULL;
-    }
-    if (lwj_r->queue) {
-        zlist_destroy (&lwj_r->queue);
-        lwj_r->queue = NULL;
-    }
-    if (lwj_c->queue) {
-        zlist_destroy (&lwj_c->queue);
-        lwj_c->queue = NULL;
-    }
-    if (event->queue) {
-        zlist_destroy (&event->queue);
-        event->queue = NULL;
-    }
-}
-
-
-static queue_t *
-return_queue (queue_e t)
-{
-    queue_t *rq = NULL;
-
-    switch (t) {
-    case p_queue:
-        rq = lwj_p;
-        break;
-
-    case r_queue:
-        rq = lwj_r;
-        break;
-
-    case c_queue:
-        rq = lwj_c;
-        break;
-
-    case ev_queue:
-        rq = event;
-        break;
-
-    default:
-        flux_log (h, LOG_ERR, "unknown queue!");
-
-        break;
-    }
-
-    return rq;
-}
-
-
-static int
-enqueue (queue_e t, void * item)
-{
-    int rc = 0;
-    queue_t *q = return_queue (t);
-
-    if (!q) {
-        flux_log (h, LOG_ERR, "null queue!");
-        rc = -1;
-        goto ret;
-    }
-    if (zlist_append (q->queue, item) == -1) {
-        flux_log (h, LOG_ERR, "failed to enqueu!");
-        rc = -1;
-    }
-
-ret:
-    return rc;
-}
-
-
-static void *
-dequeue (queue_e t)
-{
-    void *item = NULL;
-    queue_t *q = return_queue (t);
-
-    if (!q) {
-        flux_log (h, LOG_ERR, "null queue!");
-        goto ret;
-    }
-
-    item = zlist_pop (q->queue);
-
-ret:
-    return item;
-}
-
-
-static int
-queue_iterator_reset (queue_e t)
-{
-    int rc = 0;
-    queue_t *q = return_queue (t);
-
-    if (!q) {
-        flux_log (h, LOG_ERR, "null queue!");
-        rc = -1;
-        goto ret;
-    }
-
-    q->rewind = 0;
-
-ret:
-    return rc;
-}
-
-
-static void *
-queue_next (queue_e t)
-{
-    void *item = NULL;
-    queue_t *q = return_queue (t);
-
-    if (!q) {
-        flux_log (h, LOG_ERR, "null queue!");
-        goto ret;
-    }
-
-    if (q->rewind == 0) {
-        item = zlist_first (q->queue);
-        q->rewind = 1;
-    }
-    else {
-        item = zlist_next (q->queue);
-    }
-
-ret:
-    return item;
-}
-
-
-static void
-queue_remove (queue_e t, void *item)
-{
-    queue_t *q = return_queue (t);
-
-    if (!q) {
-        flux_log (h, LOG_ERR, "null queue!");
-        goto ret;
-    }
-
-    zlist_remove (q->queue, item);
-
-ret:
-    return;
-}
-
-
 static int
 signal_event ( )
 {
@@ -343,18 +131,20 @@ find_lwj (int64_t id)
 {
     flux_lwj_t *j = NULL;
 
-    queue_iterator_reset (p_queue);
-    while ( (j = queue_next (p_queue)) != NULL) {
+    j = zlist_first (p_queue);
+    while (j) {
         if (j->lwj_id == id)
             break;
+        j = zlist_next (p_queue);
     }
     if (j)
         return j;
 
-    queue_iterator_reset (r_queue);
-    while ( (j = queue_next (r_queue)) != NULL) {
+    j = zlist_first (r_queue);
+    while (j) {
         if (j->lwj_id == id)
             break;
+        j = zlist_next (r_queue);
     }
 
     return j;
@@ -580,7 +370,7 @@ issue_lwj_event (lwj_event_e e, flux_lwj_t *j)
     ev->ev.je = e;
     ev->lwj = j;
 
-    if (enqueue (ev_queue, (void *) ev) == -1) {
+    if (zlist_append (ev_queue, ev) == -1) {
         flux_log (h, LOG_ERR,
                   "enqueuing an event failed");
         goto ret;
@@ -807,19 +597,19 @@ int schedule_job (struct rdl *rdl, const char *uri, flux_lwj_t *job)
     return rc;
 }
 
-int schedule_jobs (struct rdl *rdl, const char *uri, queue_t *jobs)
+int schedule_jobs (struct rdl *rdl, const char *uri, zlist_t *jobs)
 {
     flux_lwj_t *job = NULL;
     int rc = -1;
 
-    job = (flux_lwj_t *)zlist_first (jobs->queue);
-    jobs->rewind = 1;
-
+    job = zlist_first (jobs); /* XXX jg why do the first job twice ? */
     if (job)
         schedule_job(rdl, uri, job);
 
-    while ( (job = zlist_next (jobs->queue)) != NULL) {
+    job = zlist_first (jobs);
+    while (job) {
         schedule_job(rdl, uri, job);
+        job = zlist_next (jobs);
     }
 
     return rc;
@@ -870,7 +660,7 @@ issue_res_event (flux_lwj_t *lwj)
     newev->ev.re = r_released;
     newev->lwj = lwj;
 
-    if (enqueue (ev_queue, (void *) newev) == -1) {
+    if (zlist_append (ev_queue, newev) == -1) {
         flux_log (h, LOG_ERR,
                   "enqueuing an event failed");
         rc = -1;
@@ -939,15 +729,15 @@ int release_resources (struct rdl *rdl, const char *uri, flux_lwj_t *job)
 static int
 move_to_r_queue (flux_lwj_t *lwj)
 {
-    queue_remove (p_queue, (void *) lwj);
-    return enqueue (r_queue, (void *) lwj);
+    zlist_remove (p_queue, lwj);
+    return zlist_append (r_queue, lwj);
 }
 
 static int
 move_to_c_queue (flux_lwj_t *lwj)
 {
-    queue_remove (r_queue, (void *) lwj);
-    return enqueue (c_queue, (void *) lwj);
+    zlist_remove (r_queue, lwj);
+    return zlist_append (c_queue, lwj);
 }
 
 
@@ -980,7 +770,7 @@ action_j_event (flux_event_t *e)
         }
         flux_log (h, LOG_DEBUG, "setting %ld to submitted state",
                   e->lwj->lwj_id);
-        schedule_jobs (rdl, "default", return_queue (p_queue));
+        schedule_jobs (rdl, "default", p_queue);
         break;
 
     case j_submitted:
@@ -1073,7 +863,7 @@ action_r_event (flux_event_t *e)
 
     if ((e->ev.je == r_released) || (e->ev.re == r_attempt)) {
         release_resources (rdl, "default", e->lwj);
-        schedule_jobs (rdl, "default", return_queue (p_queue));
+        schedule_jobs (rdl, "default", p_queue);
         rc = 0;
     }
 
@@ -1276,7 +1066,7 @@ newlwj_cb (const char *key, int64_t val, void *arg, int errnum)
                   strerror (errno));
         goto error;
     }
-    if (enqueue (p_queue, (void *) j) == -1) {
+    if (zlist_append (p_queue, j) == -1) {
         flux_log (h, LOG_ERR,
                   "appending a job to pending queue failed");
         goto error;
@@ -1308,7 +1098,7 @@ event_cb (const char *key, int64_t val, void *arg, int errnum)
         goto ret;
     }
 
-    while ( (e = dequeue (ev_queue)) != NULL) {
+    while ( (e = zlist_pop (ev_queue)) != NULL) {
         action (e);
         free (e);
     }
@@ -1344,7 +1134,12 @@ int mod_main (flux_t p, zhash_t *args)
         rc = -1;
         goto ret;
     }
-    if (init_internal_queues () == -1) {
+
+    p_queue = zlist_new ();
+    r_queue = zlist_new ();
+    c_queue = zlist_new ();
+    ev_queue = zlist_new ();
+    if (!p_queue || !r_queue || !c_queue || !ev_queue) {
         flux_log (h, LOG_ERR,
                   "init for queues failed: %s",
                   strerror (errno));
@@ -1380,8 +1175,13 @@ int mod_main (flux_t p, zhash_t *args)
         goto ret;
     }
 
+    zlist_destroy (&p_queue);
+    zlist_destroy (&r_queue);
+    zlist_destroy (&c_queue);
+    zlist_destroy (&ev_queue);
+
     rdllib_close(l);
-    destroy_internal_queues ();
+
 ret:
     return rc;
 }
