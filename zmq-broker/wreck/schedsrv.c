@@ -1330,7 +1330,6 @@ int mod_main (flux_t p, zhash_t *args)
     struct rdllib *l = NULL;
 
     h = p;
-    flux_log_set_facility (h, "sched");
     flux_log (h, LOG_INFO, "sched comms module starting");
 
     if (!(path = zhash_lookup (args, "rdl-conf"))) {
