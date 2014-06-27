@@ -25,18 +25,6 @@
 #include "rdl.h"
 #include "scheduler.h"
 
-#define LS_NULL      "null"
-#define LS_RESERVED  "reserved"
-#define LS_SUBMITTED "submitted"
-#define LS_UNSCHED   "unsched"
-#define LS_PENDING   "pending"
-#define LS_RUNREQ    "runrequest"
-#define LS_ALLOCATED "allocated"
-#define LS_STARTING  "starting"
-#define LS_RUNNING   "running"
-#define LS_CANCELLED "cancelled"
-#define LS_COMPLETE  "complete"
-#define LS_REAPED    "reaped"
 #define MAX_STR_LEN 128
 
 /****************************************************************
@@ -44,6 +32,11 @@
  *                 INTERNAL DATA STRUCTURE
  *
  ****************************************************************/
+
+struct stab_struct {
+    int i;
+    const char *s;
+};
 
 /****************************************************************
  *
@@ -57,6 +50,21 @@ static zlist_t *ev_queue = NULL;
 static flux_t h = NULL;
 static struct rdl *rdl = NULL;
 
+static struct stab_struct jobstate_tab[] = {
+    { j_null,      "null" },
+    { j_reserved,  "reserved" },
+    { j_submitted, "submitted" },
+    { j_unsched,   "unsched" },
+    { j_pending,   "pending" },
+    { j_runrequest,"runrequest" },
+    { j_allocated, "allocated" },
+    { j_starting,  "starting" },
+    { j_running,   "running" },
+    { j_cancelled, "cancelled" },
+    { j_complete,  "complete" },
+    { j_reaped,    "reaped" },
+    { -1, NULL },
+};
 
 /****************************************************************
  *
@@ -164,21 +172,47 @@ static char * ctime_iso8601_now (char *buf, size_t sz)
     return buf;
 }
 
+static int
+stab_lookup (struct stab_struct *ss, const char *s)
+{
+    while (ss->s != NULL) {
+        if (!strcmp (ss->s, s))
+            return ss->i;
+        ss++;
+    }
+    return -1;
+}
+
+static const char *
+stab_rlookup (struct stab_struct *ss, int i)
+{
+    while (ss->s != NULL) {
+        if (ss->i == i)
+            return ss->s;
+        ss++;
+    }
+    return "unknown";
+}
+
 /*
  * Update the job's kvs entry for state and mark the time.
  * Intended to be part of a series of changes, so the caller must
  * invoke the kvs_commit at some future point.
  */
-int update_job_state (flux_lwj_t *job, const char *state)
+int update_job_state (flux_lwj_t *job, lwj_event_e e)
 {
     char buf [64];
     char *key = NULL;
     char *key2 = NULL;
     int rc = -1;
+    const char *state;
 
     ctime_iso8601_now (buf, sizeof (buf));
 
-    if (asprintf (&key, "lwj.%ld.state", job->lwj_id) < 0) {
+    state = stab_rlookup (jobstate_tab, e);
+    if (!strcmp (state, "unknown")) {
+        flux_log (h, LOG_ERR, "unknown job state %d", e);
+    } else if (asprintf (&key, "lwj.%ld.state", job->lwj_id) < 0) {
         flux_log (h, LOG_ERR, "update_job_state key create failed");
     } else if (kvs_put_string (h, key, state) < 0) {
         flux_log (h, LOG_ERR, "update_job_state %ld state update failed: %s",
@@ -247,56 +281,6 @@ ret:
     return rc;
 }
 
-
-static lwj_state_e
-translate_state (const char *s)
-{
-    lwj_state_e re = j_for_rent;
-
-    if (strcmp (s, LS_NULL) == 0) {
-        re = j_null;
-    }
-    else if (strcmp (s, LS_RESERVED) == 0) {
-        re = j_reserved;
-    }
-    else if (strcmp (s, LS_SUBMITTED) == 0) {
-        re = j_submitted;
-    }
-    else if (strcmp (s, LS_UNSCHED) == 0) {
-        re = j_unsched;
-    }
-    else if (strcmp (s, LS_PENDING) == 0) {
-        re = j_pending;
-    }
-    else if (strcmp (s, LS_RUNREQ) == 0) {
-        re = j_runrequest;
-    }
-    else if (strcmp (s, LS_ALLOCATED) == 0) {
-        re = j_allocated;
-    }
-    else if (strcmp (s, LS_STARTING) == 0) {
-        re = j_starting;
-    }
-    else if (strcmp (s, LS_RUNNING) == 0) {
-        re = j_running;
-    }
-    else if (strcmp (s, LS_CANCELLED) == 0) {
-        re = j_cancelled;
-    }
-    else if (strcmp (s, LS_COMPLETE) == 0) {
-        re = j_complete;
-    }
-    else if (strcmp (s, LS_REAPED) == 0) {
-        re = j_reaped;
-    }
-    else {
-        flux_log (h, LOG_ERR, "Unknown state %s", s);
-    }
-
-    return re;
-}
-
-
 static int
 extract_lwjinfo (flux_lwj_t *j)
 {
@@ -313,7 +297,7 @@ extract_lwjinfo (flux_lwj_t *j)
         flux_log (h, LOG_ERR, "extract_lwjinfo %s: %s", key, strerror (errno));
         goto ret;
     } else {
-        j->state = translate_state(state);
+        j->state = stab_lookup (jobstate_tab, state);
         flux_log (h, LOG_DEBUG, "extract_lwjinfo got %s: %s", key, state);
         free(key);
     }
@@ -535,9 +519,9 @@ update_job (flux_lwj_t *job)
 {
     int rc = -1;
 
-    if (update_job_state (job, LS_ALLOCATED)) {
+    if (update_job_state (job, j_allocated)) {
         flux_log (h, LOG_ERR, "update_job failed to update job %ld to %s",
-                  job->lwj_id, LS_ALLOCATED);
+                  job->lwj_id, stab_rlookup (jobstate_tab, j_allocated));
     } else if (update_job_resources(job)) {
         flux_log (h, LOG_ERR, "update_job %ld resrc update failed", job->lwj_id);
     } else if (kvs_commit (h) < 0) {
@@ -620,9 +604,9 @@ request_run (flux_lwj_t *job)
 {
     int rc = -1;
 
-    if (update_job_state (job, LS_RUNREQ) < 0) {
+    if (update_job_state (job, j_runrequest) < 0) {
         flux_log (h, LOG_ERR, "request_run failed to update job %ld to %s",
-                  job->lwj_id, LS_RUNREQ);
+                  job->lwj_id, stab_rlookup (jobstate_tab, j_runrequest));
     } else if (kvs_commit (h) < 0) {
         flux_log (h, LOG_ERR, "kvs_commit error!");
     } else if (flux_event_send (h, NULL, "rexec.run.%ld", job->lwj_id) < 0) {
@@ -740,8 +724,9 @@ action_j_event (flux_event_t *e)
     /* e->lwj->state is the current state
      * e->ev.je      is the new state
      */
-    flux_log (h, LOG_DEBUG, "attempting job %ld state change from %d to %d",
-              e->lwj->lwj_id, e->lwj->state, e->ev.je);
+    flux_log (h, LOG_DEBUG, "attempting job %ld state change from %s to %s",
+              e->lwj->lwj_id, stab_rlookup (jobstate_tab, e->lwj->state),
+                              stab_rlookup (jobstate_tab, e->ev.je));
 
     switch (e->lwj->state) {
     case j_null:
@@ -843,8 +828,9 @@ action_j_event (flux_event_t *e)
     return 0;
 
 bad_transition:
-    flux_log (h, LOG_ERR, "job %ld bad state transition from %u to %u",
-              e->lwj->lwj_id, e->lwj->state, e->ev.je);
+    flux_log (h, LOG_ERR, "job %ld bad state transition from %s to %s",
+              e->lwj->lwj_id, stab_rlookup (jobstate_tab, e->lwj->state),
+                              stab_rlookup (jobstate_tab, e->ev.je));
     return -1;
 }
 
@@ -980,7 +966,7 @@ lwjstate_cb (const char *key, const char *val, void *arg, int errnum)
 
     j = find_lwj (lwj_id);
     if (j) {
-        e = translate_state (val);
+        e = stab_lookup (jobstate_tab, val);
         issue_lwj_event (e, j);
     }
 
