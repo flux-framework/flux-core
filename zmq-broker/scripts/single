@@ -15,4 +15,5 @@ ${CMDPREFIX} ./cmbd \
   kvs:conf.hb.period-sec=1.5 \
   kvs:conf.log.reduction-timeout-msec=100 \
   kvs:conf.log.circular-buffer-entries=100000 \
-  kvs:conf.log.persist-level=debug
+  kvs:conf.log.persist-level=debug \
+  sched:rdl-conf=conf/hype.lua
