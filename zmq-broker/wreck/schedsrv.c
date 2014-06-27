@@ -55,7 +55,6 @@ static zlist_t *r_queue = NULL;
 static zlist_t *c_queue = NULL;
 static zlist_t *ev_queue = NULL;
 static flux_t h = NULL;
-static long event_count;
 static struct rdl *rdl = NULL;
 
 
@@ -108,15 +107,9 @@ signal_event ( )
 {
     int rc = 0;
 
-    if (kvs_put_int64 (h, "event-counter", ++event_count) < 0 ) {
+    if (flux_event_send (h, NULL, "sched.event") < 0) {
         flux_log (h, LOG_ERR,
-                  "error kvs_put_int64 event-counter: %s",
-                  strerror (errno));
-        rc = -1;
-        goto ret;
-    }
-    if (kvs_commit (h) < 0) {
-        flux_log (h, LOG_ERR, "kvs_commit error!");
+                 "flux_event_send: %s", strerror (errno));
         rc = -1;
         goto ret;
     }
@@ -923,37 +916,6 @@ ret:
 
 
 static int
-reg_event_hdlr (KVSSetInt64F *func)
-{
-    int rc = 0;
-
-    event_count = 0;
-    if (kvs_put_int64 (h, "event-counter", event_count) < 0 ) {
-        flux_log (h, LOG_ERR,
-                  "error kvs_put_int64 event-counter: %s",
-                  strerror (errno));
-        rc = -1;
-        goto ret;
-    }
-    if (kvs_commit (h) < 0) {
-        flux_log (h, LOG_ERR, "kvs_commit error!");
-        rc = -1;
-        goto ret;
-    }
-    if (kvs_watch_int64 (h, "event-counter", func, (void *) h) < 0) {
-        flux_log (h, LOG_ERR, "watch event-counter: %s",
-                  strerror (errno));
-        rc = -1;
-        goto ret;
-    }
-    flux_log (h, LOG_DEBUG, "registered event callback");
-
-ret:
-    return rc;
-}
-
-
-static int
 reg_newlwj_hdlr (KVSSetInt64F *func)
 {
     if (kvs_watch_int64 (h,"lwj.next-id", func, (void *) h) < 0) {
@@ -1082,28 +1044,19 @@ error:
 }
 
 
-static void
-event_cb (const char *key, int64_t val, void *arg, int errnum)
+static int
+event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     flux_event_t *e = NULL;
-
-    if (errnum > 0) {
-        /* Ignore ENOENT.  It is expected when this cb is called right
-         * after registration.
-         */
-        if (errnum != ENOENT) {
-            flux_log (h, LOG_ERR, "event_cb key(%s), val(%ld): %s",
-                      key, val, strerror (errnum));
-        }
-        goto ret;
-    }
 
     while ( (e = zlist_pop (ev_queue)) != NULL) {
         action (e);
         free (e);
     }
-ret:
-    return;
+
+    zmsg_destroy (zmsg);
+
+    return 0;
 }
 
 
@@ -1150,7 +1103,15 @@ int mod_main (flux_t p, zhash_t *args)
         rc = -1;
         goto ret;
     }
-    if (reg_event_hdlr ((KVSSetInt64F*) event_cb) == -1) {
+    if (flux_event_subscribe (h, "sched.event") < 0) {
+        flux_log (h, LOG_ERR,
+                  "subscribing to event: %s",
+                  strerror (errno));
+        rc = -1;
+        goto ret;
+    }
+    if (flux_msghandler_add (h, FLUX_MSGTYPE_EVENT, "sched.event",
+                             event_cb, NULL) < 0) {
         flux_log (h, LOG_ERR,
                   "register event handling callback: %s",
                   strerror (errno));
