@@ -53,6 +53,8 @@ SUBCMDS = libexec/kvs libexec/ping libexec/mecho \
 BUILD = $(LIBCMB) $(LIBPMI) $(LIBRDL) flux echo cmbd \
 	$(PLUGINS) $(SUBCMDS)
 
+VPATH = $(TOP):wreck
+
 all: $(SUBDIRS) $(BUILD)
 
 plugins/%.so: %srv.c $(LIBUTIL)
@@ -61,9 +63,9 @@ plugins/%.so: %srv.c $(LIBUTIL)
 plugins/rexec.so: wreck/wrexecsrv.c $(LIBUTIL)
 	mkdir -p plugins
 	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL)
-plugins/%.so: wreck/%srv.c $(LIBUTIL)
+plugins/sched.so: wreck/schedsrv.c $(LIBUTIL) $(LIBRDL)
 	mkdir -p plugins
-	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL)
+	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL) -L$(LIBDIR) -lrdl
 
 $(SUBDIRS):
 	make -C $@ all
