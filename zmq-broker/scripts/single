@@ -1,0 +1,18 @@
+#!/bin/bash
+
+while getopts "g" opt; do
+    case ${opt} in
+        \?) break;;
+        g) CMDPREFIX="gdb -ex run --args";;
+    esac
+done
+
+${CMDPREFIX} ./cmbd \
+  --verbose \
+  --rank=0 --size=1 \
+  --hostlist=localhost \
+  --plugins=modctl,api,barrier,kvs,log,hb,job,rexec,event,sched \
+  kvs:conf.hb.period-sec=1.5 \
+  kvs:conf.log.reduction-timeout-msec=100 \
+  kvs:conf.log.circular-buffer-entries=100000 \
+  kvs:conf.log.persist-level=debug
