@@ -123,6 +123,7 @@ function wreck:parse_cmdline (arg)
         os.exit (1)
     end
 
+    self.nnodes = tonumber (self.opts.N) or 1
     self.ntasks = tonumber (self.opts.n) or 1
 
     self.cmdline = {}
@@ -135,8 +136,10 @@ end
 
 function wreck:jobreq ()
     if not self.opts then return nil, "Error: cmdline not parsed" end
+    local nnodes = tonumber (self.opts.N)
     local ntasks = tonumber (self.opts.n)
     local jobreq = {
+        nnodes =  tonumber (self.opts.N) or 1,
         ntasks =  tonumber (self.opts.n) or 1,
         cmdline = self.cmdline,
         environ = get_filtered_env (),
