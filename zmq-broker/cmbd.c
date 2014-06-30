@@ -86,6 +86,7 @@ typedef struct {
     pid_t pid;
     char hostname[HOST_NAME_MAX + 1];
     int hb_epoch;
+    zhash_t *peer_idle;         /* peer (hopcount=1) hb idle time, by uuid */
 } ctx_t;
 
 typedef struct {
@@ -97,6 +98,9 @@ typedef struct {
     int flags;
 } module_t;
 
+typedef struct {
+    int hb_lastseen;
+} peer_t;
 
 static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg);
 
@@ -137,7 +141,7 @@ static const struct flux_handle_ops cmbd_handle_ops;
 
 static void usage (void)
 {
-    fprintf (stderr, 
+    fprintf (stderr,
 "Usage: cmbd OPTIONS --plugins name[,name,...] [plugin:key=val ...]\n"
 " -t,--child-uri URI           Set child URI to bind and receive requests\n"
 " -p,--parent-uri URI          Set parent URI to connect and send requests\n"
@@ -167,6 +171,8 @@ int main (int argc, char *argv[])
 
     ctx.size = 1;
     if (!(ctx.modules = zhash_new ()))
+        oom ();
+    if (!(ctx.peer_idle = zhash_new ()))
         oom ();
     if (!(ctx.uri_request = zlist_new ()))
         oom ();
@@ -305,6 +311,7 @@ int main (int argc, char *argv[])
         zlist_destroy (&ctx.uri_request);
     if (ctx.uri_parent)
         zlist_destroy (&ctx.uri_parent);
+    zhash_destroy (&ctx.peer_idle);
     return 0;
 }
 
@@ -738,6 +745,18 @@ done:
     return rc;
 }
 
+static void peer_update (ctx_t *ctx, const char *uuid)
+{
+    peer_t *p;
+
+    if (!(p = zhash_lookup (ctx->peer_idle, uuid))) {
+        p = xzmalloc (sizeof (*p));
+        zhash_update (ctx->peer_idle, uuid, p);
+        zhash_freefn (ctx->peer_idle, uuid, free);
+    }
+    p->hb_lastseen = ctx->hb_epoch;
+}
+
 /* Store current heartbeat epoch in cmbd's context.
  */
 static void hb_cb (ctx_t *ctx, zmsg_t *zmsg)
@@ -890,6 +909,7 @@ static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod)
             zhash_delete (ctx->modules, plugin_name (mod->p));
         else
             (void)flux_response_sendmsg (ctx->h, &zmsg);
+        peer_update (ctx, plugin_uuid (mod->p));
     }
     if (zmsg)
         zmsg_destroy (&zmsg);
@@ -977,7 +997,7 @@ static int parse_request (zmsg_t *zmsg, char **servicep, char **lasthopp)
     }
     if (!(service = zframe_strdup (zf)))
         goto error;
-    if (hopcount > 0 && !(lasthop = zframe_strdup (zf0)))   
+    if (hopcount > 0 && !(lasthop = zframe_strdup (zf0)))
         goto error;
     if ((p = strchr (service, '.')))
         *p = '\0';
@@ -1031,6 +1051,8 @@ static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
         } else
             errno = ENOSYS;
     }
+    if (hopcount > 0)
+        peer_update (ctx, lasthop);
 done:
     if (*zmsg == NULL) {
         rc = 0;
@@ -1051,7 +1073,7 @@ static int cmbd_response_sendmsg (void *impl, zmsg_t **zmsg)
 {
     ctx_t *ctx = impl;
     int rc = -1;
-    char *sender;
+    char *sender; /* sender of the original _request_ */
 
     snoop_cc (ctx, FLUX_MSGTYPE_RESPONSE, *zmsg);
     if (!(sender = cmb_msg_nexthop (*zmsg))) {
