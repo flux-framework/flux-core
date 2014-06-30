@@ -85,6 +85,7 @@ typedef struct {
     flux_t h;
     pid_t pid;
     char hostname[HOST_NAME_MAX + 1];
+    int hb_epoch;
 } ctx_t;
 
 typedef struct {
@@ -737,6 +738,24 @@ done:
     return rc;
 }
 
+/* Store current heartbeat epoch in cmbd's context.
+ */
+static void hb_cb (ctx_t *ctx, zmsg_t *zmsg)
+{
+    json_object *event = NULL;
+    if (cmb_msg_decode (zmsg, NULL, &event) < 0 || event == NULL
+           || util_json_object_get_int (event, "epoch", &ctx->hb_epoch) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: bad hb message", __FUNCTION__);
+        return;
+    }
+}
+
+static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
+{
+    if (cmb_msg_match (zmsg, "hb"))
+        hb_cb (ctx, zmsg);
+}
+
 static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
 {
     char *arg = NULL;
@@ -882,6 +901,7 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
     zmsg_t *zmsg = zmsg_recv (ctx->zs_event_in);
     if (zmsg) {
         snoop_cc (ctx, FLUX_MSGTYPE_EVENT, zmsg);
+        cmb_internal_event (ctx, zmsg);
         zmsg_send (&zmsg, ctx->zs_event_out);
     }
     ZLOOP_RETURN(ctx);
