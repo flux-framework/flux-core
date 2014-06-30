@@ -120,6 +120,9 @@ static void module_destroy (module_t *mod);
 static void module_unload (module_t *mod, zmsg_t **zmsg);
 static char *modfind (const char *modpath, const char *name);
 
+static int peer_idle (ctx_t *ctx, const char *uuid);
+static void peer_update (ctx_t *ctx, const char *uuid);
+
 #define OPTIONS "t:vR:S:p:P:L:H:N:nci"
 static const struct option longopts[] = {
     {"session-name",    required_argument,  0, 'N'},
@@ -700,6 +703,8 @@ static json_object *cmb_lsmod (ctx_t *ctx)
         util_json_object_add_int (mo, "size", plugin_size (mod->p));
         util_json_object_add_string (mo, "digest", plugin_digest (mod->p));
         util_json_object_add_int (mo, "flags", mod->flags);
+        util_json_object_add_int (mo, "idle",
+                                    peer_idle (ctx, plugin_uuid (mod->p)));
         util_json_object_add_string (mo, "nodelist", ctx->rankstr);
         json_object_object_add (response, name, mo);
         name = zlist_next (keys);
@@ -755,6 +760,15 @@ static void peer_update (ctx_t *ctx, const char *uuid)
         zhash_freefn (ctx->peer_idle, uuid, free);
     }
     p->hb_lastseen = ctx->hb_epoch;
+}
+
+static int peer_idle (ctx_t *ctx, const char *uuid)
+{
+    peer_t *p;
+
+    if (!(p = zhash_lookup (ctx->peer_idle, uuid)))
+        return ctx->hb_epoch;
+    return ctx->hb_epoch - p->hb_lastseen;
 }
 
 /* Store current heartbeat epoch in cmbd's context.
