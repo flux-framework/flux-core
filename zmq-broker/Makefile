@@ -48,7 +48,7 @@ SUBCMDS = libexec/kvs libexec/ping libexec/mecho \
 	libexec/kvswatch libexec/kvsdir libexec/kvstorture \
 	libexec/logger libexec/log libexec/info libexec/kvscopy \
 	libexec/zio libexec/up libexec/host libexec/keygen libexec/mon \
-	libexec/rdltool libexec/mod
+	libexec/rdltool libexec/mod libexec/peer
 
 BUILD = $(LIBCMB) $(LIBPMI) $(LIBRDL) flux echo cmbd \
 	$(PLUGINS) $(SUBCMDS)

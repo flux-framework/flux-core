@@ -152,6 +152,16 @@ done:
     return rc;
 }
 
+json_object *flux_lspeer (flux_t h, int rank)
+{
+    json_object *request = util_json_object_new_object ();
+    json_object *response = NULL;
+
+    response = flux_rank_rpc (h, rank, request, "cmb.lspeer");
+    if (request)
+        json_object_put (request);
+    return response;
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

@@ -100,6 +100,7 @@ typedef struct {
 
 typedef struct {
     int hb_lastseen;
+    bool modflag;
 } peer_t;
 
 static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg);
@@ -122,6 +123,7 @@ static char *modfind (const char *modpath, const char *name);
 
 static int peer_idle (ctx_t *ctx, const char *uuid);
 static void peer_update (ctx_t *ctx, const char *uuid);
+static void peer_modcreate (ctx_t *ctx, const char *uuid);
 
 #define OPTIONS "t:vR:S:p:P:L:H:N:nci"
 static const struct option longopts[] = {
@@ -398,6 +400,7 @@ static int module_load (ctx_t *ctx, module_t *mod)
     assert (mod->p == NULL);
     mod->p = plugin_create (ctx->h, mod->path, mod->args);
     if (mod->p) {
+        peer_modcreate (ctx, plugin_uuid (mod->p));
         zp.socket = plugin_sock (mod->p);
         if (zloop_poller (ctx->zl, &zp, (zloop_fn *)plugins_cb, mod) < 0)
             err_exit ("zloop_poller");
@@ -750,6 +753,39 @@ done:
     return rc;
 }
 
+static json_object *peer_ls (ctx_t *ctx)
+{
+    json_object *po, *response = util_json_object_new_object ();
+    zlist_t *keys;
+    char *key;
+    peer_t *p;
+
+    if (!(keys = zhash_keys (ctx->peer_idle)))
+        oom ();
+    key = zlist_first (keys);
+    while (key) {
+        p = zhash_lookup (ctx->peer_idle, key);
+        assert (p != NULL);
+        if (!p->modflag) {
+            po = util_json_object_new_object ();
+            util_json_object_add_int (po, "idle", peer_idle (ctx, key));
+            json_object_object_add (response, key, po);
+        }
+        key = zlist_next (keys);
+    }
+    zlist_destroy (&keys);
+    return response;
+}
+
+static void peer_modcreate (ctx_t *ctx, const char *uuid)
+{
+    peer_t *p = xzmalloc (sizeof (*p));
+
+    p->modflag = true;
+    zhash_update (ctx->peer_idle, uuid, p);
+    zhash_freefn (ctx->peer_idle, uuid, free);
+}
+
 static void peer_update (ctx_t *ctx, const char *uuid)
 {
     peer_t *p;
@@ -870,6 +906,20 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
             flux_respond_errnum (ctx->h, zmsg, EPROTO);
         } else if (!(response = cmb_lsmod (ctx))) {
+            flux_respond_errnum (ctx->h, zmsg, errno);
+        } else {
+            flux_respond (ctx->h, zmsg, response);
+        }
+        if (request)
+            json_object_put (request);
+        if (response)
+            json_object_put (response);
+    } else if (cmb_msg_match (*zmsg, "cmb.lspeer")) {
+        json_object *request = NULL;
+        json_object *response = NULL;
+        if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
+            flux_respond_errnum (ctx->h, zmsg, EPROTO);
+        } else if (!(response = peer_ls (ctx))) {
             flux_respond_errnum (ctx->h, zmsg, errno);
         } else {
             flux_respond (ctx->h, zmsg, response);
