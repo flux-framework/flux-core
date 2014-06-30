@@ -395,7 +395,11 @@ allocate_resources (struct resource *r, struct rdl_accumulator *a,
         rdl_accumulator_add (a, r);
         flux_log (h, LOG_DEBUG, "allocated node: %s",
                   json_object_to_json_string (o));
-    } else if (job->req.ncores && (strcmp (type, "core")) == 0) {
+    } else if (job->req.ncores && (strcmp (type, "core") == 0) &&
+               (job->req.ncores > job->req.nnodes)) {
+               /* We put the (job->req.ncores > job->req.nnodes)
+                * requirement here to guarantee at least one core per
+                * node. */
         job->req.ncores--;
         job->alloc.ncores++;
         rdl_resource_tag (r, lwjtag);
@@ -577,15 +581,11 @@ int schedule_job (struct rdl *rdl, const char *uri, flux_lwj_t *job)
 int schedule_jobs (struct rdl *rdl, const char *uri, zlist_t *jobs)
 {
     flux_lwj_t *job = NULL;
-    int rc = -1;
-
-    job = zlist_first (jobs); /* XXX jg why do the first job twice ? */
-    if (job)
-        schedule_job(rdl, uri, job);
+    int rc = 0;
 
     job = zlist_first (jobs);
-    while (job) {
-        schedule_job(rdl, uri, job);
+    while (!rc && job) {
+        rc = schedule_job(rdl, uri, job);
         job = zlist_next (jobs);
     }
 
@@ -674,8 +674,8 @@ release_lwj_resource (struct resource *r, int64_t lwj_id)
                   json_object_to_json_string (o));
         json_object_put (o3);
     }
-    json_object_put (o);
     json_object_put (o2);
+    json_object_put (o);
     free (lwjtag);
 
     while ((c = rdl_resource_next_child (r))) {
