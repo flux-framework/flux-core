@@ -107,6 +107,7 @@ int flux_insmod (flux_t h, int rank, const char *path, int flags,
 
 int flux_modctl_rm (flux_t h, const char *name);
 int flux_modctl_ins (flux_t h, const char *name);
+int flux_modctl_update (flux_t h);
 
 /* Accessor for zeromq context.
  * N.B. The zctx_t is thread-safe but zeromq sockets, and therefore

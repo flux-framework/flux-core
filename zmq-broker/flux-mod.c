@@ -28,12 +28,15 @@ static void mod_ls_m (flux_t h, int argc, char **argv);
 static void mod_rm_m (flux_t h, int argc, char **argv);
 static void mod_ins_m (flux_t h, int argc, char **argv);
 
+static void mod_update (flux_t h);
+
 void usage (void)
 {
     fprintf (stderr,
 "Usage: flux-mod [OPTIONS] ls\n"
 "       flux-mod [OPTIONS] rm module [module...]\n"
 "       flux-mod [OPTIONS] ins module [arg=val ...]\n"
+"       flux-mod update\n"
 "Options:\n"
 "  -u,--unmanaged      act locally, do not set/require 'm' flag\n"
 "  -r,--rank=N         act on specified rank (requires -u)\n"
@@ -92,6 +95,8 @@ int main (int argc, char *argv[])
             mod_ins (h, rank, argc - optind, argv + optind);
         else
             mod_ins_m (h, argc - optind, argv + optind);
+    } else if (!strcmp (cmd, "update")) {
+        mod_update (h);
     } else
         usage ();
 
@@ -373,6 +378,12 @@ static void mod_ins_m (flux_t h, int argc, char **argv)
     Jput (args);
     if (trypath)
         free (trypath);
+}
+
+static void mod_update (flux_t h)
+{
+    if (flux_modctl_update (h) < 0)
+        err_exit ("flux_modctl_update");
 }
 
 /*

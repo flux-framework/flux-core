@@ -65,6 +65,22 @@ done:
     return rc;
 }
 
+int flux_modctl_update (flux_t h)
+{
+    JSON response = NULL;
+    int rc = -1;
+
+    if ((response = flux_rpc (h, NULL, "modctl.update"))) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (errno != 0)
+        goto done;
+    rc = 0;
+done:
+    Jput (response);
+    return rc;
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

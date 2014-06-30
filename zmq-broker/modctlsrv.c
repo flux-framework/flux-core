@@ -410,10 +410,35 @@ done:
     return rc;
 }
 
+static int update_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    JSON request = NULL;
+    int rc = 0;
+
+    if (cmb_msg_decode (*zmsg, NULL, &request) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
+    }
+    if (ctx->master) {
+        if (seq_incr (h) < 0) {
+            flux_respond_errnum (h, zmsg, errno);
+            goto done;
+        }
+        flux_respond_errnum (h, zmsg, 0);
+    } else {
+        flux_request_sendmsg (h, zmsg);
+    }
+done:
+    Jput (request);
+    return rc;
+}
+
 static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST, "modctl.push",              push_request_cb },
     { FLUX_MSGTYPE_REQUEST, "modctl.ins",               ins_request_cb },
     { FLUX_MSGTYPE_REQUEST, "modctl.rm",                rm_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "modctl.update",            update_request_cb },
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
