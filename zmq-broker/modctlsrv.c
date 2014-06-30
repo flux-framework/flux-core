@@ -99,6 +99,11 @@ done:
     return s;
 }
 
+int merge_idle (int a, int b)
+{
+    return (a < b ? a : b);
+}
+
 /* Merge b into a.
  */
 static void merge_mods (JSON a, JSON b)
@@ -107,12 +112,17 @@ static void merge_mods (JSON a, JSON b)
     JSON am;
     char *s;
     const char *anl, *bnl;
+    int ai, bi, i;
 
     json_object_object_foreachC (b, iter) {
+
+        /* module in b is new to a */
         if (!Jget_obj (a, iter.key, &am)) {
             Jadd_obj (a, iter.key, iter.val);
             continue;
         }
+
+        /* merge nodelists */
         if (!Jget_str (iter.val, "nodelist", &bnl)
                                         || !Jget_str (am, "nodelist", &anl))
             continue;
@@ -120,6 +130,13 @@ static void merge_mods (JSON a, JSON b)
         json_object_object_del (am, "nodelist");
         Jadd_str (am, "nodelist", s);
         free (s);
+
+        /* merge idle time */
+        if (!Jget_int (iter.val, "idle", &bi) || !Jget_int (am, "idle", &ai))
+            continue;
+        i = merge_idle (ai, bi);
+        json_object_object_del (am, "idle");
+        Jadd_int (am, "idle", i);
     }
 }
 
