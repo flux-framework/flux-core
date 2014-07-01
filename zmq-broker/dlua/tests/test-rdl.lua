@@ -57,6 +57,16 @@ Hierarchy "default" { Resource {"node", name="foo", id=0, tags = { "bar" } }}
     local uuid = r.uuid
     assert_equal (36, uuid:len())
     assert_equal (nil, uuid:find ("'[^a-f0-9-]"))
+
+    r:delete_tag ("bar")
+    assert (equals ({node = 1}, r.tags))
+
+    r:tag ("baz", 100)
+    local i = require 'inspect'
+    assert (equals ({node = 1, baz = 100}, r.tags), "got:".. i(r.tags))
+
+    r:delete_tag ("baz")
+    assert (equals ({node = 1}, r.tags))
 end
 
 function test_has_socket()

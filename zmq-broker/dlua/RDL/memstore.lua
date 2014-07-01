@@ -154,6 +154,13 @@ function MemStore:tag (id, tag, value)
     return true
 end
 
+function MemStore:delete_tag (id, tag)
+    local r = self:get (id)
+    if not r then return r, "not found" end
+    r.tags[tag] = nil
+    return true
+end
+
 function MemStore:resource_name (id)
     local r = self:get (id)
     if not r then return nil end
@@ -712,6 +719,10 @@ local function resource_proxy_create (store, res)
         return deepcopy_no_metatable (resource.tags [t])
     end
 
+    local function delete_tag (self, t)
+        return store:delete_tag (res.id, t)
+    end
+
     ---
     -- Various value accessor functions:
     --
@@ -743,6 +754,7 @@ local function resource_proxy_create (store, res)
         reset = reset,
         tag = tag,
         get = get_tag,
+        delete_tag = delete_tag,
         tabulate = tabulate,
         aggregate = aggregate,
         unlink = unlink
