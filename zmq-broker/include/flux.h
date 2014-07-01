@@ -143,6 +143,7 @@ char *flux_log_decode (zmsg_t *zmsg, int *lp, char **fp, int *cp,
  * The caller must dispose of the returned string with free ().
  * The following attributes are valid:
  *    cmbd-snoop-uri   The name of the socket to be used by flux-snoop.
+ *    cmbd-parent-uri  The name of parent socket.
  */
 char *flux_getattr (flux_t h, const char *name);
 
