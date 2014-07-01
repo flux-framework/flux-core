@@ -87,6 +87,7 @@ typedef struct {
     char hostname[HOST_NAME_MAX + 1];
     int hb_epoch;
     zhash_t *peer_idle;         /* peer (hopcount=1) hb idle time, by uuid */
+    int hb_lastreq;             /* hb epoch of last upstream request */
 } ctx_t;
 
 typedef struct {
@@ -654,6 +655,9 @@ static int cmb_internal_response (ctx_t *ctx, zmsg_t **zmsg)
         //flux_log (ctx->h, LOG_INFO, "subscribed to %s", ctx->uri_event_in);
         zmsg_destroy (zmsg);
         rc = 0;
+    } else if (cmb_msg_match (*zmsg, "cmb.ping")) { /* ignore ping response */
+        zmsg_destroy (zmsg);
+        rc = 0;
     }
 done:
     if (response)
@@ -807,11 +811,27 @@ static int peer_idle (ctx_t *ctx, const char *uuid)
     return ctx->hb_epoch - p->hb_lastseen;
 }
 
-/* Store current heartbeat epoch in cmbd's context.
- */
+static void self_update (ctx_t *ctx)
+{
+    ctx->hb_lastreq = ctx->hb_epoch;
+}
+
+static int self_idle (ctx_t *ctx)
+{
+    return ctx->hb_epoch - ctx->hb_lastreq;
+}
+
 static void hb_cb (ctx_t *ctx, zmsg_t *zmsg)
 {
     json_object *event = NULL;
+
+    if (!ctx->treeroot && self_idle (ctx) > 0) {
+        json_object *request = util_json_object_new_object ();
+        util_json_object_add_int (request, "seq", ctx->hb_epoch);
+        flux_request_send (ctx->h, request, "cmb.ping");
+        json_object_put (request);
+    }
+
     if (cmb_msg_decode (zmsg, NULL, &event) < 0 || event == NULL
            || util_json_object_get_int (event, "epoch", &ctx->hb_epoch) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: bad hb message", __FUNCTION__);
@@ -931,9 +951,9 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
     } else if (cmb_msg_match (*zmsg, "cmb.ping")) {
         json_object *request = NULL;
         char *s = NULL;
-        if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL)
+        if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
             flux_respond_errnum (ctx->h, zmsg, EPROTO);
-        else {
+        } else {
             s = zmsg_route_str (*zmsg, 1);
             util_json_object_add_string (request, "route", s);
             flux_respond (ctx->h, zmsg, request);
@@ -1115,17 +1135,19 @@ static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
         } else if (!ctx->treeroot) { /* we're sending so route upstream */
             if (zmsg_send (zmsg, ctx->zs_parent) < 0)
                 err ("%s: zs_parent", __FUNCTION__);
+            self_update (ctx);
         } else
             errno = EINVAL;
     } else {
         if ((mod = zhash_lookup (ctx->modules, service))
                  && (!lasthop || strcmp (lasthop, plugin_uuid (mod->p)) != 0)) {
             if (zmsg_send (zmsg, plugin_sock (mod->p)) < 0)
-                err ("%s: zs_parent", __FUNCTION__);
+                err ("%s: %s", __FUNCTION__, service);
 
         } else if (!ctx->treeroot) {
             if (zmsg_send (zmsg, ctx->zs_parent) < 0)
                 err ("%s: zs_parent", __FUNCTION__);
+            self_update (ctx);
         } else
             errno = ENOSYS;
     }
