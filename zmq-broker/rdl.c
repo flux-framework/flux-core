@@ -632,7 +632,8 @@ static int rdl_resource_method_call1_keepstack (struct resource *r,
 {
     int rc = 0;
     lua_State *L = r->rdl->L;
-    lua_rdl_resource_method_push (r, method);
+    if (lua_rdl_resource_method_push (r, method) < 0)
+        return (-1);
     lua_pushstring (L, arg);
     /*
      *  stack: [ Method, object, arg ]
