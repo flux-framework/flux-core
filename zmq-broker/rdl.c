@@ -563,10 +563,10 @@ static int lua_rdl_resource_method_push (struct resource *r, const char *name)
      *  First push rdl resource proxy object onto stack
      */
     lua_rdl_resource_push (r);
-    lua_pushstring (L, name);
-    lua_rawget (L, -2);
+    lua_getfield (L, -1, name);
 
     if (lua_type (L, -1) != LUA_TFUNCTION) {
+        lua_pop (L, 1);
         lua_pushnil (L);
         lua_pushstring (L, "not a method");
         return (-1);
