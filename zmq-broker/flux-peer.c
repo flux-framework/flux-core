@@ -84,7 +84,7 @@ int main (int argc, char *argv[])
         if (optind != argc)
             usage ();
         char *s;
-        if (!(s = flux_getattr (h, "cmbd-parent-uri")))
+        if (!(s = flux_getattr (h, rank, "cmbd-parent-uri")))
             err_exit ("flux_getattr cmbd-parent-uri");
         printf ("%s\n", s);
         free (s);

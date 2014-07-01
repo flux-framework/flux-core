@@ -24,7 +24,7 @@
 #include "util.h"
 #include "flux.h"
 
-char *flux_getattr (flux_t h, const char *name)
+char *flux_getattr (flux_t h, int rank, const char *name)
 {
     json_object *request = util_json_object_new_object ();
     json_object *response = NULL;
@@ -32,7 +32,7 @@ char *flux_getattr (flux_t h, const char *name)
     const char *val;
 
     util_json_object_add_string (request, "name", name);
-    if (!(response = flux_rpc (h, request, "cmb.getattr")))
+    if (!(response = flux_rank_rpc (h, rank, request, "cmb.getattr")))
         goto done;
     if (util_json_object_get_string (response, (char *)name, &val) < 0) {
         errno = EPROTO;

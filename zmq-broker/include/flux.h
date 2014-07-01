@@ -145,7 +145,7 @@ char *flux_log_decode (zmsg_t *zmsg, int *lp, char **fp, int *cp,
  *    cmbd-snoop-uri   The name of the socket to be used by flux-snoop.
  *    cmbd-parent-uri  The name of parent socket.
  */
-char *flux_getattr (flux_t h, const char *name);
+char *flux_getattr (flux_t h, int rank, const char *name);
 
 /* Cmbd failover functions
  */

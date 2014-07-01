@@ -67,6 +67,7 @@ int main (int argc, char *argv[])
     zloop_t *zloop;
     zmq_pollitem_t zp;
     flux_sec_t sec;
+    int rank = -1;
 
     log_init ("flux-snoop");
 
@@ -110,7 +111,7 @@ int main (int argc, char *argv[])
         if (flux_event_geturi (h, &uri) < 0)
             err_exit ("flux_event_geturi");
     } else {
-        if (!(uri = flux_getattr (h, "cmbd-snoop-uri")))
+        if (!(uri = flux_getattr (h, rank, "cmbd-snoop-uri")))
             err_exit ("cmbd-snoop-uri");
     }
 
