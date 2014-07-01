@@ -928,6 +928,20 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             json_object_put (request);
         if (response)
             json_object_put (response);
+    } else if (cmb_msg_match (*zmsg, "cmb.ping")) {
+        json_object *request = NULL;
+        char *s = NULL;
+        if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL)
+            flux_respond_errnum (ctx->h, zmsg, EPROTO);
+        else {
+            s = zmsg_route_str (*zmsg, 1);
+            util_json_object_add_string (request, "route", s);
+            flux_respond (ctx->h, zmsg, request);
+        }
+        if (request)
+            json_object_put (request);
+        if (s)
+            free (s);
     } else
         handled = false;
 
