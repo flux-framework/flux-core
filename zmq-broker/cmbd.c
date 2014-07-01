@@ -57,6 +57,9 @@ typedef struct {
      */
     void *zs_parent;            /* DEALER - requests to parent */
     char *uri_parent;
+    void *zs_altparent;
+    char *uri_altparent;
+    bool failover_active;
 
     void *zs_request;           /* ROUTER - requests from plugins/downstream */
     zlist_t *uri_request;
@@ -495,23 +498,21 @@ static void *cmbd_init_event_in (ctx_t *ctx)
     return s;
 }
 
-static void *cmbd_init_parent (ctx_t *ctx) {
+static void *cmbd_init_parent (ctx_t *ctx, const char *uri) {
     void *s = NULL;
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
-    if (ctx->uri_parent) {
-        if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
-            err_exit ("zsocket_new");
-        if (flux_sec_csockinit (ctx->sec, s) < 0)
-            msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
-        zsocket_set_hwm (s, 0);
-        zsocket_set_identity (s, ctx->rankstr);
-        if (zsocket_connect (s, "%s", ctx->uri_parent) < 0)
-            err_exit ("%s", ctx->uri_parent);
-        zp.socket = s;
-        if (zloop_poller (ctx->zl, &zp, (zloop_fn *)parent_cb, ctx) < 0)
-            err_exit ("zloop_poller");
-    }
+    if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
+        err_exit ("zsocket_new");
+    if (flux_sec_csockinit (ctx->sec, s) < 0)
+        msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
+    zsocket_set_hwm (s, 0);
+    zsocket_set_identity (s, ctx->rankstr);
+    if (zsocket_connect (s, "%s", uri) < 0)
+        err_exit ("%s", uri);
+    zp.socket = s;
+    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)parent_cb, ctx) < 0)
+        err_exit ("zloop_poller");
     return s;
 }
 
@@ -586,7 +587,8 @@ static void cmbd_init (ctx_t *ctx)
 #endif
     /* Connect to upstream ports, if any
      */
-    ctx->zs_parent = cmbd_init_parent (ctx);
+    if (ctx->uri_parent)
+        ctx->zs_parent = cmbd_init_parent (ctx, ctx->uri_parent);
 
     /* create flux_t handle */
     ctx->h = handle_create (ctx, &cmbd_handle_ops, 0);
@@ -664,7 +666,7 @@ static char *cmb_getattr (ctx_t *ctx, const char *name)
     if (!strcmp (name, "cmbd-snoop-uri"))
         val = ctx->uri_snoop;
     else if (!strcmp (name, "cmbd-parent-uri"))
-        val = ctx->uri_parent;
+        val = ctx->failover_active ? ctx->uri_altparent : ctx->uri_parent;
     return val;
 }
 
@@ -834,6 +836,57 @@ static void hb_cb (ctx_t *ctx, zmsg_t *zmsg)
     }
 }
 
+/* Initiate a failover connection to an alternate parent.
+ * Leave the primary socket wired in, but set the failover_active
+ * flag so new requests use the alternate parent.
+ */
+static int cmb_failover (ctx_t *ctx, const char *uri)
+{
+    if (!ctx->zs_parent) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (ctx->failover_active) {
+        errno = EEXIST;
+        return -1;
+    }
+    if (ctx->zs_altparent) {
+        zmq_pollitem_t zp;
+        zp.socket = ctx->zs_altparent;
+        zloop_poller_end (ctx->zl, &zp);
+        zsocket_destroy (ctx->zctx, ctx->zs_altparent);
+        free (ctx->uri_altparent);
+    }
+    ctx->zs_altparent = cmbd_init_parent (ctx, uri);
+    ctx->uri_altparent = xstrdup (uri);
+    ctx->failover_active = true;
+
+    flux_log (ctx->h, LOG_INFO, "failover %s => %s",
+              ctx->uri_parent, ctx->uri_altparent);
+    return 0;
+}
+
+/* Resume the use of primary parent after failover.
+ * Leave the alternate socket wired in, but clear the failover_active
+ * flag so new requests use the primary parent.
+ * FIXME clean up zs_altparent after a recovery period.
+ */
+static int cmb_recover (ctx_t *ctx)
+{
+    if (!ctx->zs_parent) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!ctx->failover_active) {
+        errno = EEXIST;
+        return -1;
+    }
+    ctx->failover_active = false;
+    flux_log (ctx->h, LOG_INFO, "recover %s => %s",
+              ctx->uri_altparent, ctx->uri_parent);
+    return 0;
+}
+
 static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
 {
     if (cmb_msg_match (zmsg, "hb"))
@@ -957,6 +1010,30 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             json_object_put (request);
         if (s)
             free (s);
+    } else if (cmb_msg_match (*zmsg, "cmb.failover")) {
+        json_object *request = NULL;
+        const char *uri;
+        if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+                || util_json_object_get_string (request, "uri", &uri) < 0) {
+            flux_respond_errnum (ctx->h, zmsg, EPROTO);
+        } else if (cmb_failover (ctx, uri) < 0) {
+            flux_respond_errnum (ctx->h, zmsg, errno);
+        } else {
+            flux_respond_errnum (ctx->h, zmsg, 0);
+        }
+        if (request)
+            json_object_put (request);
+    } else if (cmb_msg_match (*zmsg, "cmb.recover")) {
+        json_object *request = NULL;
+        if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
+            flux_respond_errnum (ctx->h, zmsg, EPROTO);
+        } else if (cmb_recover (ctx) < 0) {
+            flux_respond_errnum (ctx->h, zmsg, errno);
+        } else {
+            flux_respond_errnum (ctx->h, zmsg, 0);
+        }
+        if (request)
+            json_object_put (request);
     } else
         handled = false;
 
@@ -982,7 +1059,7 @@ static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 
 static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
-    zmsg_t *zmsg = zmsg_recv (ctx->zs_parent);
+    zmsg_t *zmsg = zmsg_recv (item->socket);
 
     if (zmsg) {
         (void)flux_response_sendmsg (ctx->h, &zmsg);
@@ -1069,6 +1146,20 @@ static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg)
     return zmsg_send (&cpy, ctx->zs_snoop);
 }
 
+static int parent_send (ctx_t *ctx, zmsg_t **zmsg)
+{
+    void *zs = ctx->failover_active ? ctx->zs_altparent : ctx->zs_parent;
+
+    if (zmsg_send (zmsg, zs) < 0) {
+        err ("%s: %s: %s", __FUNCTION__,
+             ctx->failover_active ? ctx->uri_altparent : ctx->uri_parent,
+             strerror (errno));
+        return -1;
+    }
+    self_update (ctx);
+    return 0;
+}
+
 /* Helper for cmbd_request_sendmsg
  */
 static int parse_request (zmsg_t *zmsg, char **servicep, char **lasthopp)
@@ -1128,9 +1219,7 @@ static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
         if (hopcount > 0) {
             cmb_internal_request (ctx, zmsg);
         } else if (!ctx->treeroot) { /* we're sending so route upstream */
-            if (zmsg_send (zmsg, ctx->zs_parent) < 0)
-                err ("%s: zs_parent", __FUNCTION__);
-            self_update (ctx);
+            parent_send (ctx, zmsg);
         } else
             errno = EINVAL;
     } else {
@@ -1140,9 +1229,7 @@ static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
                 err ("%s: %s", __FUNCTION__, service);
 
         } else if (!ctx->treeroot) {
-            if (zmsg_send (zmsg, ctx->zs_parent) < 0)
-                err ("%s: zs_parent", __FUNCTION__);
-            self_update (ctx);
+            parent_send (ctx, zmsg);
         } else
             errno = ENOSYS;
     }

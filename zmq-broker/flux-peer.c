@@ -11,16 +11,24 @@
 #include "log.h"
 #include "shortjson.h"
 
-#define OPTIONS "h"
+#define OPTIONS "+hr:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
+    {"rank",       required_argument,  0, 'r'},
+    {"idle",       no_argument,        0, 'i'},
+    {"get-parent-uri", no_argument,    0, 'p'},
+    {"recover",    no_argument,        0, 'R'},
+    {"failover",   required_argument,  0, 'F'},
     { 0, 0, 0, 0 },
 };
 
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-peer\n"
+"Usage: flux-peer [--rank N] failover new-parent-uri\n"
+"       flux-peer [--rank N] recover\n"
+"       flux-peer [--rank N] idle\n"
+"       flux-peer [--rank N] get-parent-uri\n"
 );
     exit (1);
 }
@@ -29,7 +37,8 @@ int main (int argc, char *argv[])
 {
     flux_t h;
     int ch;
-    JSON peers;
+    int rank = -1; /* local */
+    char *cmd;
 
     log_init ("flux-peer");
 
@@ -38,23 +47,48 @@ int main (int argc, char *argv[])
             case 'h': /* --help */
                 usage ();
                 break;
+            case 'r': /* --rank N */
+                rank = strtoul (optarg, NULL, 10);
+                break;
             default:
                 usage ();
                 break;
         }
     }
-    if (optind != argc)
+    if (optind == argc)
         usage ();
+    cmd = argv[optind++];
 
     if (!(h = cmb_init ()))
         err_exit ("cmb_init");
 
-    if (!(peers = flux_lspeer (h, -1)))
-        err_exit ("flux_peer");
-
-    printf ("%s\n", Jtostr (peers));
-
-    Jput (peers);
+    if (!strcmp (cmd, "failover")) {
+        if (optind != argc - 1)
+            usage ();
+        if (flux_failover (h, rank, argv[optind]) < 0)
+            err_exit ("flux_failover");
+    } else if (!strcmp (cmd, "recover")) {
+        if (optind != argc)
+            usage ();
+        if (flux_recover (h, rank) < 0)
+            err_exit ("flux_recover");
+    } else if (!strcmp (cmd, "idle")) {
+        if (optind != argc)
+            usage ();
+        JSON peers;
+        if (!(peers = flux_lspeer (h, rank)))
+            err_exit ("flux_peer");
+        printf ("%s\n", Jtostr (peers));
+        Jput (peers);
+    } else if (!strcmp (cmd, "get-parent-uri")) {
+        if (optind != argc)
+            usage ();
+        char *s;
+        if (!(s = flux_getattr (h, "cmbd-parent-uri")))
+            err_exit ("flux_getattr cmbd-parent-uri");
+        printf ("%s\n", s);
+        free (s);
+    }
 
     flux_handle_destroy (&h);
     log_fini ();

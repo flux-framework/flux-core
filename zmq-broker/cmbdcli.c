@@ -163,6 +163,46 @@ json_object *flux_lspeer (flux_t h, int rank)
     return response;
 }
 
+int flux_failover (flux_t h, int rank, const char *uri)
+{
+    json_object *request = util_json_object_new_object ();
+    json_object *response = NULL;
+    int rc = -1;
+
+    util_json_object_add_string (request, "uri", uri);
+    if ((response = flux_rank_rpc (h, rank, request, "cmb.failover"))) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (errno != 0)
+        goto done;
+    rc = 0;
+done:
+    if (request)
+        json_object_put (request);
+    if (response)
+        json_object_put (response);
+    return rc;
+}
+
+int flux_recover (flux_t h, int rank)
+{
+    json_object *response = NULL;
+    int rc = -1;
+
+    if ((response = flux_rank_rpc (h, rank, NULL, "cmb.recover"))) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (errno != 0)
+        goto done;
+    rc = 0;
+done:
+    if (response)
+        json_object_put (response);
+    return rc;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
