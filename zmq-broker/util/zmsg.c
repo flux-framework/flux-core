@@ -436,14 +436,14 @@ void zmsg_dump_compact (zmsg_t *self, const char *prefix)
 
 char *zmsg_route_str (zmsg_t *self, int skiphops)
 {
-    int len = 0, hops = zmsg_hopcount (self) - skiphops;
+    int len = 1, hops = zmsg_hopcount (self) - skiphops;
     zframe_t *zf = zmsg_first (self);
     char *buf;
     zlist_t *ids;
     char *s;
 
     if (!(ids = zlist_new ()))
-        oom (); 
+        oom ();
     while (hops-- > 0) {
         if (!(s = zframe_strdup (zf)))
             oom ();
