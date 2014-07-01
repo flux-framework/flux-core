@@ -509,6 +509,7 @@ update_job_resources (flux_lwj_t *job)
     struct resource *r = rdl_resource_get (job->rdl, "default");
     int rc = -1;
 
+    rdl_resource_iterator_reset (r);
     rc = update_job_cores (r, job, &node, &cores);
 
     return rc;
@@ -565,10 +566,11 @@ int schedule_job (struct rdl *rdl, const char *uri, flux_lwj_t *job)
     if (job) {
         reqnodes = job->req.nnodes;
         if (nodes >= reqnodes) {
+            rdl_resource_iterator_reset (r);
             a = rdl_accumulator_create (rdl);
             if (allocate_resources (r, a, job)) {
                 job->rdl = rdl_accumulator_copy (a);
-                rc = update_job(job);
+                rc = update_job (job);
             }
         }
     } else {
@@ -655,33 +657,38 @@ ret:
 }
 
 static int
-release_lwj_resource (struct resource *r, int64_t lwj_id)
+release_lwj_resource (struct rdl *rdl, struct resource *jr, int64_t lwj_id)
 {
     char *lwjtag = NULL;
-    int rc = -1;
+    char *uri = NULL;
+    int rc = 0;
     json_object *o = NULL;
-    json_object *o2 = NULL;
-    json_object *o3 = NULL;
     struct resource *c;
+    struct resource *r;
 
-    asprintf (&lwjtag, "lwj.%ld", lwj_id);
-    o = rdl_resource_json (r);
-    Jget_obj (o, "tags", &o2);
-    Jget_obj (o2, lwjtag, &o3);
-    if (o3) {
-        json_object_object_del(o2, lwjtag);
+    asprintf (&uri, "default:%s", rdl_resource_path (jr));
+    r = rdl_resource_get (rdl, uri);
+
+    if (r) {
+        asprintf (&lwjtag, "lwj.%ld", lwj_id);
+        rdl_resource_delete_tag (r, lwjtag);
+
+        o = rdl_resource_json (r);
         flux_log (h, LOG_DEBUG, "resource released: %s",
-                  json_object_to_json_string (o));
-        json_object_put (o3);
-    }
-    json_object_put (o2);
-    json_object_put (o);
-    free (lwjtag);
+                      json_object_to_json_string (o));
+        json_object_put (o);
+        free (lwjtag);
 
-    while ((c = rdl_resource_next_child (r))) {
-        release_lwj_resource (c, lwj_id);
-        rdl_resource_destroy (c);
+        while (!rc && (c = rdl_resource_next_child (jr))) {
+            rc = release_lwj_resource (rdl, c, lwj_id);
+            rdl_resource_destroy (c);
+        }
+    } else {
+        flux_log (h, LOG_ERR, "release_lwj_resource failed to get %s", uri);
+        rc = -1;
     }
+    free (uri);
+
     return rc;
 }
 
@@ -691,10 +698,11 @@ release_lwj_resource (struct resource *r, int64_t lwj_id)
 int release_resources (struct rdl *rdl, const char *uri, flux_lwj_t *job)
 {
     int rc = -1;
-    struct resource *r = rdl_resource_get (rdl, uri);
+    struct resource *jr = rdl_resource_get (job->rdl, uri);
 
-    if (r) {
-        rc = release_lwj_resource (r, job->lwj_id);
+    if (jr) {
+        rdl_resource_iterator_reset (jr);
+        rc = release_lwj_resource (rdl, jr, job->lwj_id);
     } else {
         flux_log (h, LOG_ERR, "release_resources failed to get resources: %s",
                   strerror (errno));
