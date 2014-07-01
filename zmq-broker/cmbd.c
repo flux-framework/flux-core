@@ -56,7 +56,7 @@ typedef struct {
     /* Sockets.
      */
     void *zs_parent;            /* DEALER - requests to parent */
-    zlist_t *uri_parent;
+    char *uri_parent;
 
     void *zs_request;           /* ROUTER - requests from plugins/downstream */
     zlist_t *uri_request;
@@ -183,9 +183,6 @@ int main (int argc, char *argv[])
     if (!(ctx.uri_request = zlist_new ()))
         oom ();
     zlist_autofree (ctx.uri_request);
-    if (!(ctx.uri_parent = zlist_new ()))
-        oom ();
-    zlist_autofree (ctx.uri_parent);
     ctx.session_name = "flux";
     if (gethostname (ctx.hostname, HOST_NAME_MAX) < 0)
         err_exit ("gethostname");
@@ -211,8 +208,7 @@ int main (int argc, char *argv[])
                     oom ();
                 break;
             case 'p':   /* --parent-uri URI */
-                if (zlist_append (ctx.uri_parent, xstrdup (optarg)) < 0)
-                    oom ();
+                ctx.uri_parent = xstrdup (optarg);
                 break;
             case 'v':   /* --verbose */
                 ctx.verbose = true;
@@ -293,9 +289,9 @@ int main (int argc, char *argv[])
         oom ();
     if (ctx.rank == 0)
         ctx.treeroot = true;
-    if (ctx.treeroot && zlist_size (ctx.uri_parent) > 0)
-        msg_exit ("treeroot must NOT have parents");
-    if (!ctx.treeroot && zlist_size (ctx.uri_parent) == 0)
+    if (ctx.treeroot && ctx.uri_parent)
+        msg_exit ("treeroot must NOT have parent");
+    if (!ctx.treeroot && !ctx.uri_parent)
         msg_exit ("non-treeroot must have parents");
 
     char *proctitle;
@@ -315,8 +311,6 @@ int main (int argc, char *argv[])
         free (ctx.rankstr);
     if (ctx.uri_request)
         zlist_destroy (&ctx.uri_request);
-    if (ctx.uri_parent)
-        zlist_destroy (&ctx.uri_parent);
     zhash_destroy (&ctx.peer_idle);
     return 0;
 }
@@ -503,18 +497,17 @@ static void *cmbd_init_event_in (ctx_t *ctx)
 
 static void *cmbd_init_parent (ctx_t *ctx) {
     void *s = NULL;
-    char *uri = zlist_first (ctx->uri_parent);
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
-    if (uri) {
+    if (ctx->uri_parent) {
         if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
             err_exit ("zsocket_new");
         if (flux_sec_csockinit (ctx->sec, s) < 0)
             msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
         zsocket_set_hwm (s, 0);
-        zsocket_set_identity (s, ctx->rankstr); 
-        if (zsocket_connect (s, "%s", uri) < 0)
-            err_exit ("%s", uri);
+        zsocket_set_identity (s, ctx->rankstr);
+        if (zsocket_connect (s, "%s", ctx->uri_parent) < 0)
+            err_exit ("%s", ctx->uri_parent);
         zp.socket = s;
         if (zloop_poller (ctx->zl, &zp, (zloop_fn *)parent_cb, ctx) < 0)
             err_exit ("zloop_poller");
@@ -552,7 +545,7 @@ static int cmbd_init_signalfd (ctx_t *ctx)
 
 static void cmbd_init (ctx_t *ctx)
 {
-    //(void)umask (077); 
+    //(void)umask (077);
 
     ctx->zctx = zctx_new ();
     if (!ctx->zctx)
