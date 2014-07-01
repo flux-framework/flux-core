@@ -49,6 +49,7 @@ static zlist_t *c_queue = NULL;
 static zlist_t *ev_queue = NULL;
 static flux_t h = NULL;
 static struct rdl *rdl = NULL;
+static char* resource = NULL;
 
 static struct stab_struct jobstate_tab[] = {
     { j_null,      "null" },
@@ -506,7 +507,7 @@ update_job_resources (flux_lwj_t *job)
 {
     uint64_t node = 0;
     uint32_t cores = 0;
-    struct resource *r = rdl_resource_get (job->rdl, "default");
+    struct resource *r = rdl_resource_get (job->rdl, resource);
     int rc = -1;
 
     rdl_resource_iterator_reset (r);
@@ -666,7 +667,7 @@ release_lwj_resource (struct rdl *rdl, struct resource *jr, int64_t lwj_id)
     struct resource *c;
     struct resource *r;
 
-    asprintf (&uri, "default:%s", rdl_resource_path (jr));
+    asprintf (&uri, "%s:%s", resource, rdl_resource_path (jr));
     r = rdl_resource_get (rdl, uri);
 
     if (r) {
@@ -756,7 +757,7 @@ action_j_event (flux_event_t *e)
         }
         flux_log (h, LOG_DEBUG, "setting %ld to submitted state",
                   e->lwj->lwj_id);
-        schedule_jobs (rdl, "default", p_queue);
+        schedule_jobs (rdl, resource, p_queue);
         break;
 
     case j_submitted:
@@ -849,8 +850,8 @@ action_r_event (flux_event_t *e)
     int rc = -1;
 
     if ((e->ev.je == r_released) || (e->ev.re == r_attempt)) {
-        release_resources (rdl, "default", e->lwj);
-        schedule_jobs (rdl, "default", p_queue);
+        release_resources (rdl, resource, e->lwj);
+        schedule_jobs (rdl, resource, p_queue);
         rc = 0;
     }
 
@@ -1085,6 +1086,10 @@ int mod_main (flux_t p, zhash_t *args)
                   path, strerror (errno));
         rc = -1;
         goto ret;
+    }
+    if (!(resource = zhash_lookup (args, "rdl-resource"))) {
+        flux_log (h, LOG_INFO, "using default rdl resource");
+        resource = "default";
     }
 
     p_queue = zlist_new ();
