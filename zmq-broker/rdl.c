@@ -540,6 +540,7 @@ static struct resource * create_resource_ref (struct rdl *rdl, int index)
 
 struct resource * rdl_resource_get (struct rdl *rdl, const char *uri)
 {
+    struct resource *r;
     if (uri == NULL)
         uri = "default";
     rdl_dostringf (rdl, "return rdl:resource ('%s')", uri);
@@ -547,7 +548,9 @@ struct resource * rdl_resource_get (struct rdl *rdl, const char *uri)
         VERR (rdl->rl, "resource (%s): %s\n", uri, lua_tostring (rdl->L, -1));
         return (NULL);
     }
-    return (create_resource_ref (rdl, -1));
+    r = create_resource_ref (rdl, -1);
+    lua_settop (rdl->L, 0);
+    return (r);
 }
 
 static int lua_rdl_resource_push (struct resource *r)
@@ -740,6 +743,7 @@ json_object * rdl_resource_aggregate_json (struct resource *r)
 
 struct resource * rdl_resource_next_child (struct resource *r)
 {
+    struct resource *c;
     if (lua_rdl_resource_method_call (r, "next_child")) {
         VERR (r->rdl->rl, "next child: %s\n", lua_tostring (r->rdl->L, -1));
         return NULL;
@@ -748,7 +752,9 @@ struct resource * rdl_resource_next_child (struct resource *r)
         /* End of child list is indicated by nil return */
         return (NULL);
     }
-    return (create_resource_ref (r->rdl, -1));
+    c = create_resource_ref (r->rdl, -1);
+    lua_settop (r->rdl->L, 0);
+    return (c);
 }
 
 
@@ -785,6 +791,7 @@ struct rdl_accumulator * rdl_accumulator_create (struct rdl *rdl)
     a = malloc (sizeof (*a));
     a->lua_ref = luaL_ref (rdl->L, LUA_GLOBALSINDEX);
     a->rdl = rdl;
+    lua_settop (rdl->L, 0);
     return (a);
 }
 
