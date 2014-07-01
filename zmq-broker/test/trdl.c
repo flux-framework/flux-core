@@ -62,6 +62,8 @@ int main (int argc, char *argv[])
     if (val != 5959)
         exit (1);
 
+    rdl_resource_delete_tag (r, "test-tag");
+
     c = rdl_resource_next_child (r);
 
     a = rdl_accumulator_create (rdl1);

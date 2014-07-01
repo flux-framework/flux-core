@@ -146,6 +146,10 @@ void rdl_resource_tag (struct resource *r, const char *tag);
 int rdl_resource_set_int (struct resource *r, const char *tag, int64_t val);
 int rdl_resource_get_int (struct resource *r, const char *tag, int64_t *valp);
 
+/*
+ *  Remove a tag [tag] from resource object [r]
+ */
+void rdl_resource_delete_tag (struct resource *r, const char *tag);
 
 /*
  *  Get representation of resource object [r] in json form

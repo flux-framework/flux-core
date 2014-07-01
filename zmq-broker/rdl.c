@@ -659,6 +659,14 @@ void rdl_resource_tag (struct resource *r, const char *tag)
     rdl_resource_method_call1 (r, "tag", tag);
 }
 
+void rdl_resource_delete_tag (struct resource *r, const char *tag)
+{
+    if (rdl_resource_method_call1 (r, "delete_tag", tag) < 0) {
+        VERR (r->rdl->rl, "delete_tag (%s): %s\n", tag,
+              lua_tostring (r->rdl->L, -1));
+    }
+}
+
 int rdl_resource_set_int (struct resource *r, const char *tag, int64_t val)
 {
     int rc = 0;
