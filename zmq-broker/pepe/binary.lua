@@ -32,6 +32,7 @@ if pepe.rank == 0 then
 		.. " --hostlist=" .. pepe.nodelist
 		.. " --logdest=cmbd.log"
 		.. " rank:right-uri=" .. right_uri
+		.. " sched:rdl-conf=conf/hype.lua"
                 .. " kvs:conf.event.mcast-uri='" .. eventuri .. "'"
                 .. " kvs:conf.event.mcast-all-publish=false"
 		.. " kvs:conf.hb.period-sec=1.5"
