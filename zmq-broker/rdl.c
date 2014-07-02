@@ -464,7 +464,8 @@ struct rdl * rdl_copy (struct rdl *rdl)
 
 static int lua_rdl_push (struct rdl *rdl)
 {
-    lua_rawgeti (rdl->L, LUA_GLOBALSINDEX, rdl->lua_ref);
+    //lua_rawgeti (rdl->L, LUA_GLOBALSINDEX, rdl->lua_ref);
+    rdl_dostringf (rdl, "return rdl");
     return (1);
 }
 
@@ -472,12 +473,10 @@ static int lua_rdl_method_push (struct rdl *rdl, const char *name)
 {
     lua_State *L = rdl->L;
     /*
-     *  First push rdl resource proxy object onto stack
+     *  First push rdl object onto stack
      */
     lua_rdl_push (rdl);
-    lua_pushstring (L, name);
-    lua_rawget (L, -2);
-
+    lua_getfield (L, -1, name);
     if (lua_type (L, -1) != LUA_TFUNCTION) {
         lua_pushnil (L);
         lua_pushstring (L, "not a method");
