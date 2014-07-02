@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 #include "log.h"
+#include "util.h"
 #include "rdl.h"
 
 static void perr (void *ctx, const char *fmt, ...)
@@ -61,6 +62,13 @@ int main (int argc, char *argv[])
     rdl_resource_get_int (r, "test-tag", &val);
     if (val != 5959)
         exit (1);
+
+    /*
+     *  Test find
+     */
+    json_object *args = util_json_object_new_object ();
+    util_json_object_add_string (args, "type", "core");
+    rdl2 = rdl_find (rdl1, args);
 
     rdl_resource_delete_tag (r, "test-tag");
 
