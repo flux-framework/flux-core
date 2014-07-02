@@ -105,6 +105,47 @@ Jget_bool (JSON o, const char *name, bool *bp)
     return (n != NULL);
 }
 
+/* Get JSON array length.
+ */
+static __inline__ bool
+Jget_ar_len (JSON o, int *ip)
+{
+    if (json_object_get_type (o) != json_type_array)
+        return false;
+    *ip = json_object_array_length (o);
+    return true;
+}
+
+/* Get JSON object at index 'n' array.
+ */
+static __inline__ bool
+Jget_ar_obj (JSON o, int n, JSON *op)
+{
+    if (json_object_get_type (o) != json_type_array)
+        return false;
+    if (n < 0 || n > json_object_array_length (o))
+        return false;
+    *op = json_object_array_get_idx (o, n);
+    return true;
+}
+
+/* Get integer at index 'n' of array.
+ */
+static __inline__ bool
+Jget_ar_int (JSON o, int n, int *ip)
+{
+    JSON m;
+
+    if (json_object_get_type (o) != json_type_array)
+        return false;
+    if (n < 0 || n > json_object_array_length (o))
+        return false;
+    if (!(m = json_object_array_get_idx (o, n)))
+        return false;
+    *ip = json_object_get_int (m);
+    return true;
+}
+
 /* Encode JSON to string (owned by JSON, do not free)
  */
 static __inline__ const char *
