@@ -1,6 +1,10 @@
 #ifndef _HAVE_CMB_UTIL_H
 #define _HAVE_CMB_UTIL_H
 
+#include <time.h>
+#include <stdbool.h>
+#include <json/json.h>
+
 /* 's' contains a comma-delimited list of integers.
  * Parse and return ints in an array (iap), and its length in lenp.
  * Caller must free.
