@@ -62,7 +62,7 @@ typedef struct {
     bool failover_active;
 
     void *zs_request;           /* ROUTER - requests from plugins/downstream */
-    zlist_t *uri_request;
+    char *uri_request;
 
     char *uri_event_in;         /* SUB - to event module's ipc:// socket */
     void *zs_event_in;          /*       (event module takes care of epgm) */
@@ -183,9 +183,6 @@ int main (int argc, char *argv[])
         oom ();
     if (!(ctx.peer_idle = zhash_new ()))
         oom ();
-    if (!(ctx.uri_request = zlist_new ()))
-        oom ();
-    zlist_autofree (ctx.uri_request);
     ctx.session_name = "flux";
     if (gethostname (ctx.hostname, HOST_NAME_MAX) < 0)
         err_exit ("gethostname");
@@ -207,8 +204,7 @@ int main (int argc, char *argv[])
                 ctx.security_set |= FLUX_SEC_TYPE_PLAIN;
                 break;
             case 't':   /* --child-uri URI[,URI,...] */
-                if (zlist_append (ctx.uri_request, xstrdup (optarg)) < 0)
-                    oom ();
+                ctx.uri_request = xstrdup (optarg);
                 break;
             case 'p':   /* --parent-uri URI */
                 ctx.uri_parent = xstrdup (optarg);
@@ -310,10 +306,12 @@ int main (int argc, char *argv[])
 
     cmbd_fini (&ctx);
 
+    if (ctx.uri_parent)
+        free (ctx.uri_parent);
+    if (ctx.uri_request)
+        free (ctx.uri_request);
     if (ctx.rankstr)
         free (ctx.rankstr);
-    if (ctx.uri_request)
-        zlist_destroy (&ctx.uri_request);
     zhash_destroy (&ctx.peer_idle);
     return 0;
 }
@@ -428,7 +426,6 @@ static void load_modules (ctx_t *ctx)
 static void *cmbd_init_request (ctx_t *ctx)
 {
     void *s;
-    char *uri;
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
@@ -438,10 +435,9 @@ static void *cmbd_init_request (ctx_t *ctx)
     zsocket_set_hwm (s, 0);
     if (zsocket_bind (s, "%s", REQUEST_URI) < 0) /* always bind to inproc */
         err_exit ("%s", REQUEST_URI);
-    uri = zlist_first (ctx->uri_request);
-    for (; uri != NULL; uri = zlist_next (ctx->uri_request)) {
-        if (zsocket_bind (s, "%s", uri) < 0)
-            err_exit ("%s", uri);
+    if (ctx->uri_request) {
+        if (zsocket_bind (s, "%s", ctx->uri_request) < 0)
+            err_exit ("%s", ctx->uri_request);
     }
     zp.socket = s;
     if (zloop_poller (ctx->zl, &zp, (zloop_fn *)request_cb, ctx) < 0)
