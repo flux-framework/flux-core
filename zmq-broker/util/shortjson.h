@@ -200,6 +200,12 @@ Jmerge (JSON dst, JSON src)
     }
 }
 
+static __inline__ JSON
+Jdup (JSON o)
+{
+    return o ? Jfromstr (Jtostr (o)) : NULL;
+}
+
 #endif
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
