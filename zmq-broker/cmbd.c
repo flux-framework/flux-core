@@ -663,6 +663,8 @@ static char *cmb_getattr (ctx_t *ctx, const char *name)
         val = ctx->uri_snoop;
     else if (!strcmp (name, "cmbd-parent-uri"))
         val = ctx->failover_active ? ctx->uri_altparent : ctx->uri_parent;
+    else if (!strcmp (name, "cmbd-request-uri"))
+        val = ctx->uri_request;
     return val;
 }
 

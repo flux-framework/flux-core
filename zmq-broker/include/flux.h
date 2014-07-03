@@ -144,6 +144,7 @@ char *flux_log_decode (zmsg_t *zmsg, int *lp, char **fp, int *cp,
  * The following attributes are valid:
  *    cmbd-snoop-uri   The name of the socket to be used by flux-snoop.
  *    cmbd-parent-uri  The name of parent socket.
+ *    cmbd-request-uri The name of request socket.
  */
 char *flux_getattr (flux_t h, int rank, const char *name);
 
