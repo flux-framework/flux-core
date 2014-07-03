@@ -50,6 +50,8 @@ static zlist_t *ev_queue = NULL;
 static flux_t h = NULL;
 static struct rdl *rdl = NULL;
 static char* resource = NULL;
+static const char* IDLETAG = "idle";
+static const char* CORETYPE = "core";
 
 static struct stab_struct jobstate_tab[] = {
     { j_null,      "null" },
@@ -370,6 +372,30 @@ ret:
  ****************************************************************/
 
 /*
+ * Initialize the rdl resources with "idle" tags on each core
+ */
+static int
+idlize_resources (struct resource *r)
+{
+    int rc = 0;
+    struct resource *c;
+
+    if (r) {
+        rdl_resource_tag (r, IDLETAG);
+        while (!rc && (c = rdl_resource_next_child (r))) {
+            rc = idlize_resources (c);
+            rdl_resource_destroy (c);
+        }
+    } else {
+        flux_log (h, LOG_ERR, "idlize_resources passed a null resource");
+        rc = -1;
+    }
+
+    return rc;
+}
+
+
+/*
  * Walk the tree, find the required resources and tag with the lwj_id
  * to which it is allocated.
  */
@@ -396,7 +422,7 @@ allocate_resources (struct resource *r, struct rdl_accumulator *a,
         rdl_accumulator_add (a, r);
         flux_log (h, LOG_DEBUG, "allocated node: %s",
                   json_object_to_json_string (o));
-    } else if (job->req.ncores && (strcmp (type, "core") == 0) &&
+    } else if (job->req.ncores && (strcmp (type, CORETYPE) == 0) &&
                (job->req.ncores > job->req.nnodes)) {
                /* We put the (job->req.ncores > job->req.nnodes)
                 * requirement here to guarantee at least one core per
@@ -404,6 +430,7 @@ allocate_resources (struct resource *r, struct rdl_accumulator *a,
         job->req.ncores--;
         job->alloc.ncores++;
         rdl_resource_tag (r, lwjtag);
+        rdl_resource_delete_tag (r, IDLETAG);
         rdl_accumulator_add (a, r);
         flux_log (h, LOG_DEBUG, "allocated core: %s",
                   json_object_to_json_string (o));
@@ -459,7 +486,7 @@ update_job_cores (struct resource *r, flux_lwj_t *job,
     if (strcmp (type, "node") == 0) {
         *pcores = 0;
         imanode = true;
-    } else if (strcmp (type, "core") == 0) {
+    } else if (strcmp (type, CORETYPE) == 0) {
         /* we need to limit our allocation to just the tagged cores */
         asprintf (&lwjtag, "lwj.%ld", job->lwj_id);
         Jget_obj (o, "tags", &o2);
@@ -539,45 +566,62 @@ update_job (flux_lwj_t *job)
     return rc;
 }
 
+/*
+ * schedule_job() searches through all of the idle resources (cores
+ * right now) to satisfy a job's requirements.  If enough resources
+ * are found, it proceeds to allocate those resources and update the
+ * kvs's lwj entry in preparation for job execution.
+ */
+
 int schedule_job (struct rdl *rdl, const char *uri, flux_lwj_t *job)
 {
     int64_t nodes;
     int rc = -1;
+    json_object *args = util_json_object_new_object ();
     json_object *o;
     uint64_t reqnodes = 0;
     struct rdl_accumulator *a = NULL;
-    struct resource *r = rdl_resource_get (rdl, uri);
+    struct resource *fr = NULL;         /* found resource */
+    struct rdl *frdl = NULL;            /* found rdl */
 
-    if (r == NULL) {
-        flux_log (h, LOG_ERR, "Failed to get resource %s", uri);
-        return rc;
+    if (!job || !rdl || !uri) {
+        flux_log (h, LOG_ERR, "schedule_job invalid arguments");
+        goto ret;
     }
 
-    o = rdl_resource_aggregate_json (r);
-    if (o) {
-        rc = util_json_object_get_int64 (o, "node", &nodes);
-        if (rc) {
-            flux_log (h, LOG_ERR, "schedule_job failed to get nodes: %d", rc);
-        } else {
-            flux_log (h, LOG_DEBUG, "schedule_job found %ld nodes", nodes);
+    util_json_object_add_string (args, "tag", IDLETAG);
+    frdl = rdl_find (rdl, args);
+
+    if (frdl) {
+        if ((fr = rdl_resource_get (frdl, uri)) == NULL) {
+            flux_log (h, LOG_ERR, "failed to get found resources: %s", uri);
+            goto ret;
         }
-        json_object_put (o);
-    }
 
-    if (job) {
+        o = rdl_resource_aggregate_json (fr);
+        if (o) {
+            rc = util_json_object_get_int64 (o, "node", &nodes);
+            if (rc) {
+                flux_log (h, LOG_ERR, "schedule_job failed to get nodes: %d",
+                          rc);
+                goto ret;
+            } else {
+                flux_log (h, LOG_DEBUG, "schedule_job found %ld nodes", nodes);
+            }
+            json_object_put (o);
+        }
+
         reqnodes = job->req.nnodes;
         if (nodes >= reqnodes) {
-            rdl_resource_iterator_reset (r);
-            a = rdl_accumulator_create (rdl);
-            if (allocate_resources (r, a, job)) {
+            rdl_resource_iterator_reset (fr);
+            a = rdl_accumulator_create (frdl);
+            if (allocate_resources (fr, a, job)) {
                 job->rdl = rdl_accumulator_copy (a);
                 rc = update_job (job);
             }
         }
-    } else {
-        flux_log (h, LOG_ERR, "schedule_job passed a null job");
     }
-
+ret:
     return rc;
 }
 
@@ -662,6 +706,7 @@ release_lwj_resource (struct rdl *rdl, struct resource *jr, int64_t lwj_id)
 {
     char *lwjtag = NULL;
     char *uri = NULL;
+    const char *type;
     int rc = 0;
     json_object *o = NULL;
     struct resource *c;
@@ -675,8 +720,11 @@ release_lwj_resource (struct rdl *rdl, struct resource *jr, int64_t lwj_id)
         rdl_resource_delete_tag (r, lwjtag);
 
         o = rdl_resource_json (r);
+        Jget_str (o, "type", &type);
+        if (strcmp (type, CORETYPE) == 0)
+            rdl_resource_tag (r, IDLETAG);
         flux_log (h, LOG_DEBUG, "resource released: %s",
-                      json_object_to_json_string (o));
+                  json_object_to_json_string (o));
         json_object_put (o);
         free (lwjtag);
 
@@ -900,7 +948,7 @@ wait_for_lwj_init ()
         goto ret;
     }
 
-    flux_log (h, LOG_INFO, "wait_for_lwj_init %s",
+    flux_log (h, LOG_DEBUG, "wait_for_lwj_init %s",
               kvsdir_key(dir));
 
 ret:
@@ -1066,6 +1114,7 @@ int mod_main (flux_t p, zhash_t *args)
     int rc = 0;
     char *path;
     struct rdllib *l = NULL;
+    struct resource *r = NULL;
 
     h = p;
     if (flux_rank (h) != 0) {
@@ -1090,6 +1139,20 @@ int mod_main (flux_t p, zhash_t *args)
     if (!(resource = zhash_lookup (args, "rdl-resource"))) {
         flux_log (h, LOG_INFO, "using default rdl resource");
         resource = "default";
+    }
+
+    if ((r = rdl_resource_get (rdl, resource))) {
+        if (idlize_resources (r)) {
+            flux_log (h, LOG_ERR, "failed to idlize %s: %s", resource,
+                      strerror (errno));
+            rc = -1;
+            goto ret;
+        }
+    } else {
+        flux_log (h, LOG_ERR, "failed to get %s: %s", resource,
+                  strerror (errno));
+        rc = -1;
+        goto ret;
     }
 
     p_queue = zlist_new ();
