@@ -105,6 +105,26 @@ Jget_bool (JSON o, const char *name, bool *bp)
     return (n != NULL);
 }
 
+/* Create new JSON array.
+ */
+static __inline__ JSON
+Jnew_ar (void)
+{
+    JSON a = json_object_new_array ();
+    if (!a)
+        oom ();
+    return a;
+}
+
+/* Add object to JSON array (caller retains ownership of original).
+ */
+static __inline__ void
+Jadd_ar_obj (JSON o, JSON obj)
+{
+    //assert (json_object_get_type (o) == json_type_array)
+    json_object_array_add (o, Jget (obj));
+}
+
 /* Get JSON array length.
  */
 static __inline__ bool
