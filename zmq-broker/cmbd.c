@@ -1075,9 +1075,10 @@ static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod)
     if (zmsg) {
         if (zmsg_content_size (zmsg) == 0) /* EOF */
             zhash_delete (ctx->modules, plugin_name (mod->p));
-        else
+        else {
             (void)flux_response_sendmsg (ctx->h, &zmsg);
-        peer_update (ctx, plugin_uuid (mod->p));
+            peer_update (ctx, plugin_uuid (mod->p));
+        }
     }
     if (zmsg)
         zmsg_destroy (&zmsg);
