@@ -579,8 +579,8 @@ function MemStore:find (arg)
         arg.name = nil
     end
 
-    if arg.ids then
-        local ids = arg.ids
+    if arg.ids or arg.id then
+        local ids = arg.ids or tostring(arg.id)
         if ids:match("^[0-9]") then ids = "["..ids.."]" end
         local hl, err = hostlist.new (ids)
         if not hl then return nil, "ids: "..err end
