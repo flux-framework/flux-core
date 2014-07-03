@@ -62,15 +62,7 @@ int main (int argc, char *argv[])
     rdl_resource_get_int (r, "test-tag", &val);
     if (val != 5959)
         exit (1);
-
-    /*
-     *  Test find
-     */
-    json_object *args = util_json_object_new_object ();
-    util_json_object_add_string (args, "type", "core");
-    rdl2 = rdl_find (rdl1, args);
-
-    rdl_resource_delete_tag (r, "test-tag");
+     rdl_resource_delete_tag (r, "test-tag");
 
     c = rdl_resource_next_child (r);
 
@@ -81,6 +73,20 @@ int main (int argc, char *argv[])
     rdl2 = rdl_accumulator_copy (a);
 
     print_resource (rdl_resource_get (rdl2, "default"), 0);
+
+    /*
+     *  Test find
+     */
+    json_object *args = util_json_object_new_object ();
+    util_json_object_add_string (args, "type", "node");
+    util_json_object_add_int (args, "id", 300);
+    rdl2 = rdl_find (rdl1, args);
+    r = rdl_resource_get (rdl2, "default");
+    if (r == NULL)
+        exit (1);
+
+    c = rdl_resource_next_child (r);
+    printf ("found %s\n", rdl_resource_name (c));
 
     rdllib_close (l);
 
