@@ -391,7 +391,7 @@ static struct rdl * lua_pop_new_rdl (struct rdl *from)
      */
     to = rdl_new (from->rl);
 
-    lua_xmove (from->L, to->L, -1);
+    lua_xmove (from->L, to->L, 1);
     lua_setglobal (to->L, "rdl");
     return (to);
 }
