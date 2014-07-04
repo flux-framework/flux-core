@@ -321,6 +321,30 @@ Hierarchy "default" {
 
 end
 
+function test_find_time ()
+    local rdl = assert (RDL.eval ([[
+uses "Node"
+Hierarchy "default" {
+    Resource{
+        "foo",
+        children = { ListOf{ Node, ids="0-10",
+                             args = { name="bar",
+                                      sockets = { "0-7", "8-16"}
+                                    }
+                           }
+                   }
+    }
+}
+]]))
+    assert_not_nil (rdl)
+    assert_true (is_table (rdl))
+
+    local t0 = require 'timer'.new()
+    local r = assert (rdl:find{ type = "core" })
+    local delta = t0:get0()
+    assert_true (delta < 0.001, "rdl_find took "..delta.." seconds")
+end
+
 function test_accumulator()
     local rdl = assert (RDL.eval ([[
 Hierarchy "default" {
