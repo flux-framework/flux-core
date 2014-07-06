@@ -26,6 +26,8 @@
 #include "plugin.h"
 #include "shortjson.h"
 
+typedef enum { CS_OK, CS_SLOW, CS_FAIL } cstate_t;
+
 typedef struct {
     int rank;
     char *uri;
@@ -34,15 +36,17 @@ typedef struct {
 typedef struct {
     int rank;
     char *rankstr;
+    cstate_t state;
 } child_t;
 
 typedef struct {
     int max_idle;
+    int slow;
     int epoch;
     int rank;
     bool master;
     zlist_t *parents;
-    zlist_t *children;
+    zhash_t *children;
     flux_t h;
 } ctx_t;
 
@@ -50,18 +54,16 @@ static void parent_destroy (parent_t *p);
 static void child_destroy (child_t *c);
 
 static const int default_max_idle = 5;
+static const int default_slow = 3;
 
 static void freectx (ctx_t *ctx)
 {
     parent_t *p;
-    child_t *c;
 
     while ((p = zlist_pop (ctx->parents)))
         parent_destroy (p);
     zlist_destroy (&ctx->parents);
-    while ((c = zlist_pop (ctx->children)))
-        child_destroy (c);
-    zlist_destroy (&ctx->children);
+    zhash_destroy (&ctx->children);
     free (ctx);
 }
 
@@ -72,11 +74,12 @@ static ctx_t *getctx (flux_t h)
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
         ctx->max_idle = default_max_idle;
+        ctx->slow = default_slow;
         ctx->rank = flux_rank (h);
         ctx->master = flux_treeroot (h);
         if (!(ctx->parents = zlist_new ()))
             oom ();
-        if (!(ctx->children = zlist_new ()))
+        if (!(ctx->children = zhash_new ()))
             oom ();
         ctx->h = h;
         flux_aux_set (h, "livesrv", ctx, (FluxFreeFn)freectx);
@@ -173,6 +176,20 @@ static void parents_fromjson (ctx_t *ctx, JSON ar)
     }
 }
 
+static void cstate_change (ctx_t *ctx, child_t *c, cstate_t newstate)
+{
+    JSON ev = Jnew ();
+
+    Jadd_int (ev, "rank", c->rank);
+    Jadd_int (ev, "ostate", c->state);
+    c->state = newstate;
+    Jadd_int (ev, "nstate", c->state);
+    Jadd_int (ev, "parent", ctx->rank);
+    Jadd_int (ev, "epoch", ctx->epoch);
+    flux_event_send (ctx->h, ev, "live.cstate");
+    Jput (ev);
+}
+
 /* On each heartbeat, check idle for downstream peers.
  * Note: lspeer returns a JSON object indexed by peer socket id.
  * The socket id is the stringified rank for cmbds.
@@ -182,7 +199,8 @@ static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     JSON event = NULL;
     JSON peers = NULL;
-    child_t *c;
+    zlist_t *keys = NULL;
+    char *key;
 
     if (cmb_msg_decode (*zmsg, NULL, &event) < 0 || event == NULL
             || !Jget_int (event, "epoch", &ctx->epoch)) {
@@ -194,19 +212,43 @@ static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         goto done;
     }
 
-    c = zlist_first (ctx->children);
-    while (c) {
+    /* FIXME: avoid "flapping" between fail/recover for slow node
+     */
+    if (!(keys = zhash_keys (ctx->children)))
+        oom ();
+    key = zlist_first (keys);
+    while (key) {
         JSON co;
         int idle = ctx->epoch;
+        child_t *c = zhash_lookup (ctx->children, key);
+        assert (c != NULL);
         if (Jget_obj (peers, c->rankstr, &co))
             Jget_int (co, "idle", &idle);
-        if (idle > ctx->max_idle) {
-            /* FIXME: generate node down event */
+        switch (c->state) {
+            case CS_OK:
+                if (idle > ctx->max_idle)
+                    cstate_change (ctx, c, CS_FAIL);
+                else if (idle > ctx->slow)
+                    cstate_change (ctx, c, CS_SLOW);
+                break;
+            case CS_SLOW:
+                if (idle <= ctx->slow)
+                    cstate_change (ctx, c, CS_OK);
+                else if (idle > ctx->max_idle)
+                    cstate_change (ctx, c, CS_FAIL);
+                break;
+            case CS_FAIL:
+                if (idle <= ctx->slow)
+                    cstate_change (ctx, c, CS_OK);
+                else if (idle <= ctx->max_idle)
+                    cstate_change (ctx, c, CS_SLOW);
+                break;
         }
-        c = zlist_next (ctx->children);
+        key = zlist_next (keys);
     }
-
 done:
+    if (keys)
+        zlist_destroy (&keys);
     Jput (event);
     Jput (peers);
     if (*zmsg)
@@ -243,9 +285,23 @@ static int hello_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
+    /* Subscribe to heartbeat event only when children are present.
+     */
+    if (zhash_size (ctx->children) == 0) {
+        if (flux_event_subscribe (h, "hb") < 0) {
+            flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
+        }
+    }
+
+    /* Create a record for this child, unless already seen.
+     */
     c = child_create (rank);
-    if (zlist_append (ctx->children, c) < 0)
-        oom ();
+    if (zhash_insert (ctx->children, c->rankstr, c) < 0) {
+        child_destroy (c);
+    } else {
+        zhash_freefn (ctx->children, c->rankstr,
+                      (zhash_free_fn *)child_destroy);
+    }
 
     /* Write a little cookie to the kvs indicating that this child has
      * checked in.  This may need to be reduced in the future to avoid
