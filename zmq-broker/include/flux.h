@@ -153,6 +153,8 @@ char *flux_getattr (flux_t h, int rank, const char *name);
 int flux_failover (flux_t h, int rank, const char *uri);
 int flux_recover (flux_t h, int rank);
 
+int flux_panic (flux_t h, int rnak, const char *msg);
+
 /* Message manipulation utility functions
  */
 enum {

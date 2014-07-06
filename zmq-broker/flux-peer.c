@@ -15,19 +15,16 @@
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"rank",       required_argument,  0, 'r'},
-    {"idle",       no_argument,        0, 'i'},
-    {"get-parent-uri", no_argument,    0, 'p'},
-    {"recover",    no_argument,        0, 'R'},
-    {"failover",   required_argument,  0, 'F'},
     { 0, 0, 0, 0 },
 };
 
 void usage (void)
 {
-    fprintf (stderr, 
+    fprintf (stderr,
 "Usage: flux-peer [--rank N] failover new-parent-uri\n"
 "       flux-peer [--rank N] recover\n"
 "       flux-peer [--rank N] idle\n"
+"       flux-peer [--rank N] panic msg\n"
 "       flux-peer [--rank N] get-parent-uri\n"
 );
     exit (1);
@@ -88,6 +85,10 @@ int main (int argc, char *argv[])
             err_exit ("flux_getattr cmbd-parent-uri");
         printf ("%s\n", s);
         free (s);
+    } else if (!strcmp (cmd, "panic")) {
+        if (optind != argc - 1)
+            usage ();
+        flux_panic (h, rank, argv[optind]);
     }
 
     flux_handle_destroy (&h);

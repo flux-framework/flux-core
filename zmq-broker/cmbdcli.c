@@ -203,6 +203,22 @@ done:
     return rc;
 }
 
+int flux_panic (flux_t h, int rank, const char *msg)
+{
+    json_object *request = util_json_object_new_object ();
+    int rc = -1;
+
+    util_json_object_add_string (request, "msg", msg);
+    if (flux_rank_request_send (h, rank, request, "cmb.panic") < 0)
+        goto done;
+    /* No reply */
+    rc = 0;
+done:
+    if (request)
+        json_object_put (request);
+    return rc;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
