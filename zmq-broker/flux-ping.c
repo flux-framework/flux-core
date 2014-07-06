@@ -10,9 +10,10 @@
 #include "util.h"
 #include "log.h"
 
-#define OPTIONS "hp:d:"
+#define OPTIONS "hp:d:r:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
+    {"rank",       required_argument,  0, 'r'},
     {"pad-bytes",  required_argument,  0, 'p'},
     {"delay-msec", required_argument,  0, 'd'},
     { 0, 0, 0, 0 },
@@ -21,7 +22,7 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-ping [--pad-bytes N] [--delay-msec N] [node!]tag\n"
+"Usage: flux-ping [--rank N] [--pad-bytes N] [--delay-msec N] [node!]tag\n"
 );
     exit (1);
 }
@@ -33,7 +34,7 @@ int main (int argc, char *argv[])
 {
     flux_t h;
     int ch, seq, bytes = 0, msec = 1000, rank = -1;
-    char *rankstr = NULL, *p, *route, *target, *pad = NULL;
+    char *rankstr = NULL, *route, *target, *pad = NULL;
     struct timespec t0;
 
     log_init ("flux-ping");
@@ -51,6 +52,9 @@ int main (int argc, char *argv[])
             case 'd': /* --delay-msec N */
                 msec = strtoul (optarg, NULL, 10);
                 break;
+            case 'r': /* --rank N */
+                rank = strtoul (optarg, NULL, 10);
+                break;
             default:
                 usage ();
                 break;
@@ -58,12 +62,23 @@ int main (int argc, char *argv[])
     }
     if (optind != argc - 1)
         usage ();
-    target = argv[optind];
-    if ((p = strchr (target, '!'))) {
-        rankstr = target;
-        *p++ = '\0';
-        rank = strtoul (rankstr, NULL, 10);
-        target = p;
+    target = argv[optind++];
+
+    if (rank == -1) {
+        char *endptr;
+        int n = strtoul (target, &endptr, 10);
+        if (endptr != target)
+            rank = n;
+        if (*endptr == '!')
+            target = endptr + 1;
+        else
+            target = endptr;
+    }
+    if (*target == '\0')
+        target = "cmb";
+    if (rank != -1) {
+        if (asprintf (&rankstr, "%d", rank) < 0)
+            oom ();
     }
 
     if (!(h = cmb_init ()))
@@ -72,7 +87,8 @@ int main (int argc, char *argv[])
     for (seq = 0; ; seq++) {
         monotime (&t0);
         if (!(route = ping (h, rank, target, pad, seq)))
-            err_exit ("%s.ping", target);
+            err_exit ("%s%s%s.ping", rank == -1 ? "" : rankstr,
+                                     rank == -1 ? "" : "!", target);
         printf ("%s%s%s.ping pad=%d seq=%d time=%0.3f ms (%s)\n",
                 rankstr ? rankstr : "",
                 rankstr ? "!" : "",

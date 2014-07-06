@@ -70,9 +70,9 @@ you can run
 If you get a bunch of MPI errors, perhaps you uncommented the wrong MPIMOD
 above?
 
-To ping the kvs service on rank 60
+To ping rank 60
 
-  ./flux ping '60!kvs'
+  ./flux ping 60
 
 3. Alternate single-node environment
 
