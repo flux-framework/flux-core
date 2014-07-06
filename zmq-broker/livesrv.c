@@ -1,5 +1,38 @@
 /* livesrv.c - node liveness service */
 
+/* This module builds on the following services in the cmbd:
+ * cmb.peers - get idle time (in heartbeats) for non-module peers
+ * cmb.failover , cmb.recover - switch parent
+ * The cmbd expects failover/recovery to be driven externally (e.g. by us).
+ * The cmbd maintains a hash of peers and their idle time, and also sends
+ * a cmb.ping upstream on the heartbeat if nothing else has been sent in the
+ * previous epoch, as a keep-alive.  So if the idle time for a child is > 1,
+ * something is probably wrong.
+ *
+ * In this module, parents monitor their children on the heartbeat.  That is,
+ * we call cmb.peers (locally) and check the idle time of our children.
+ * If a child changes state, we publish a live.cstate event, intended to
+ * reach grandchildren so they can find a better parent without relying on
+ * upstream services which would be unavailable to them for the moment.
+ *
+ * Monitoring does not begin until children check in the first time
+ * with a live.hello.  Parents discover their children via the live.hello
+ * request, and children discover their (grand-)parents via the response.
+ *
+ * We listen for live.cstate events involving our (grand-)parents.
+ * If our current parent goes down, we failover to a new one.
+ * If our primary parent comes back, we recover (fail back to it).
+ *
+ * Notes:
+ * 1) Since montoring begins only after a good connection is established,
+ * this module won't detect nodes that die during initial wireup.
+ * 2) If a live.cstate change to CS_FAIL is received for _me_, drop all
+ * children.
+ * 3) Befoere failover/recovery, send a live.goodbye to tell the old parent
+ * to forget about the child.  #2 and #3 are unlikely to be helpful if parent
+ * is really dead, but if it's not quite dead...
+ */
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <assert.h>
@@ -50,12 +83,14 @@ typedef struct {
     bool master;
     zlist_t *parents;
     zhash_t *children;
+    cstate_t mystate;
     flux_t h;
 } ctx_t;
 
 static void parent_destroy (parent_t *p);
 static void child_destroy (child_t *c);
 static int hello (ctx_t *ctx);
+static int goodbye (ctx_t *ctx, int parent_rank);
 
 static const int default_max_idle = 5;
 static const int default_slow = 3;
@@ -180,24 +215,34 @@ static void parents_fromjson (ctx_t *ctx, JSON ar)
     }
 }
 
-static void recover (ctx_t *ctx, parent_t *old)
+static void recover (ctx_t *ctx)
 {
     parent_t *new = zlist_first (ctx->parents);
+    parent_t *old;
 
     assert (new != NULL);
     assert (new->state == CS_OK);
     assert (new->pri == true);
 
+    old = zlist_next (ctx->parents);
+    while (old) {
+        if (old->cur == true)
+            break;
+        old = zlist_next (ctx->parents);
+    }
+    assert (old != NULL);
     old->cur = false;
     new->cur = true;
+    goodbye (ctx, old->rank);
     if (flux_recover (ctx->h, -1) < 0)
         flux_log (ctx->h, LOG_ERR, "%s: %s", __FUNCTION__, strerror (errno));
     hello (ctx);
 }
 
-static void failover (ctx_t *ctx, parent_t *old)
+static void failover (ctx_t *ctx)
 {
     parent_t *new;
+    parent_t *old;
 
     new = zlist_first (ctx->parents);
     while (new) {
@@ -205,10 +250,23 @@ static void failover (ctx_t *ctx, parent_t *old)
             break;
         new = zlist_next (ctx->parents);
     }
+    if (!new)           /* no failover options */
+        return;
+    if (new->pri) {     /* recovery appropriate here */
+        recover (ctx);
+        return;
+    }
+    old = zlist_first (ctx->parents);
+    while (old) {
+        if (old->cur == true)
+            break;
+        old = zlist_next (ctx->parents);
+    }
+    assert (old != NULL);
     if (new) {
         old->cur = false;
         new->cur = true;
-        assert (new->pri == false);
+        goodbye (ctx, old->rank);
         if (flux_failover (ctx->h, -1, new->uri) < 0)
             flux_log (ctx->h, LOG_ERR, "%s: %s", __FUNCTION__,strerror (errno));
         hello (ctx);
@@ -233,14 +291,18 @@ static int cstate_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
+    if (rank == ctx->rank) {
+        ctx->mystate = nstate;
+        goto done;
+    }
     p = zlist_first (ctx->parents);
     while (p) {
         if (p->rank == rank) {
             p->state = nstate;
             if (p->cur && p->state == CS_FAIL)
-                failover (ctx, p);
+                failover (ctx);
             else if (!p->cur && p->pri && p->state == CS_OK)
-                recover (ctx, p);
+                recover (ctx);
             break;
         }
         p = zlist_next (ctx->parents);
@@ -281,13 +343,24 @@ static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
+    /* If we are alive enough to receive a live.cstate change to CS_FAIL
+     * for ourselves, drop all child monitoring state and unsubscribe to
+     * the heartbeat.  Children will say hello again if they recover.
+     */
+    if (ctx->mystate == CS_FAIL) {
+        zhash_destroy (&ctx->children);
+        if (!(ctx->children = zhash_new ()))
+            oom ();
+        (void)flux_event_unsubscribe (h, "hb");
+        goto done;
+    }
+    /* Check each child's idle state and publish live.cstate events
+     * if there are any changes.
+     */
     if (!(peers = flux_lspeer (h, -1))) {
         flux_log (h, LOG_ERR, "flux_lspeer: %s", strerror (errno));
         goto done;
     }
-
-    /* FIXME: avoid "flapping" between fail/recover for slow node
-     */
     if (!(keys = zhash_keys (ctx->children)))
         oom ();
     key = zlist_first (keys);
@@ -341,6 +414,62 @@ static void max_idle_cb (const char *key, int val, void *arg, int errnum)
     ctx->max_idle = val;
 }
 
+static int goodbye_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    JSON request = NULL;
+    int rank, prank;
+    char *rankstr = NULL;
+
+    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+                            || !Jget_int (request, "parent-rank", &prank)
+                            || !Jget_int (request, "rank", &rank)) {
+        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
+    }
+    if (prank != ctx->rank) { /* in case misdirected to new parent */
+        flux_respond_errnum (h, zmsg, EINVAL);
+        goto done;
+    }
+    if (asprintf (&rankstr, "%d", rank) < 0)
+        oom ();
+    zhash_delete (ctx->children, rankstr);
+    flux_respond_errnum (h, zmsg, 0);
+done:
+    if (rankstr)
+        free (rankstr);
+    Jput (request);
+    return 0;
+}
+
+static int goodbye (ctx_t *ctx, int parent_rank)
+{
+    JSON request = Jnew ();
+    int rc = -1;
+
+    Jadd_int (request, "rank", ctx->rank);
+    Jadd_int (request, "parent-rank", parent_rank);
+    if (flux_request_send (ctx->h, request, "live.goodbye") < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: flux_request_send %s", __FUNCTION__,
+                  strerror (errno));
+        goto done;
+    }
+    rc = 0;
+done:
+    Jput (request);
+    return rc;
+}
+
+static void up_kvs (ctx_t *ctx, int rank)
+{
+    char *key;
+    if (asprintf (&key, "conf.live.hello.%d", rank) < 0)
+        oom ();
+    (void)kvs_put_int (ctx->h, key, 1);
+    (void)kvs_commit (ctx->h);
+    free (key);
+}
+
 /* hello: parents discover their children, and children discover their
  * grandparents which are potential failover candidates.
  */
@@ -352,7 +481,6 @@ static int hello_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     int rank;
     parent_t *p;
     child_t *c;
-    char *key;
 
     if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
                             || !Jget_int (request, "rank", &rank)) {
@@ -373,16 +501,16 @@ static int hello_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         child_destroy (c);
     else
         zhash_freefn (ctx->children, c->rankstr,(zhash_free_fn *)child_destroy);
-
-    /* Write a little cookie to the kvs indicating that this child has
-     * checked in.  This may need to be reduced in the future to avoid
-     * N kvs commits, where N is very large.
+    /* Note to kvs that child reported in.
+     * FIXME: reduce
      */
-    if (asprintf (&key, "conf.live.hello.%d", rank) < 0)
-        oom ();
-    (void)kvs_put_int (h, key, ctx->epoch);
-    (void)kvs_commit (h);
-    free (key);
+    up_kvs (ctx, c->rank);
+
+    if (kvs_watch_int (h, "conf.live.max-idle", max_idle_cb, ctx) < 0) {
+        flux_log (h, LOG_ERR, "kvs_watch_int %s: %s", "conf.live.max-idle",
+                  strerror (errno));
+        return -1;
+    }
 
     if ((p = parent_fromctx (ctx))) {   /* temporarily add "me" at pos 0 */
         if (zlist_push (ctx->parents, p) < 0)
@@ -434,6 +562,7 @@ static msghandler_t htab[] = {
     { FLUX_MSGTYPE_EVENT,       "hb",                  hb_cb },
     { FLUX_MSGTYPE_EVENT,       "live.cstate",         cstate_cb },
     { FLUX_MSGTYPE_REQUEST,     "live.hello",          hello_request_cb },
+    { FLUX_MSGTYPE_REQUEST,     "live.goodbye",        goodbye_request_cb },
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
@@ -441,15 +570,11 @@ int mod_main (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
 
-    if (!ctx->master) {
-        if (hello (ctx) < 0)
-            return -1;
-    }
-    if (kvs_watch_int (h, "conf.live.max-idle", max_idle_cb, ctx) < 0) {
-        flux_log (h, LOG_ERR, "kvs_watch_int %s: %s", "conf.live.max-idle",
-                  strerror (errno));
+    if (ctx->master)
+        up_kvs (ctx, ctx->rank);
+    else if (hello (ctx) < 0)
         return -1;
-    }
+
     if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
         flux_log (h, LOG_ERR, "flux_msghandler_addvec: %s", strerror (errno));
         return -1;
