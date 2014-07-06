@@ -31,6 +31,9 @@ typedef enum { CS_OK, CS_SLOW, CS_FAIL } cstate_t;
 typedef struct {
     int rank;
     char *uri;
+    cstate_t state;
+    bool cur;
+    bool pri;
 } parent_t;
 
 typedef struct {
@@ -52,6 +55,7 @@ typedef struct {
 
 static void parent_destroy (parent_t *p);
 static void child_destroy (child_t *c);
+static int hello (ctx_t *ctx);
 
 static const int default_max_idle = 5;
 static const int default_slow = 3;
@@ -176,18 +180,88 @@ static void parents_fromjson (ctx_t *ctx, JSON ar)
     }
 }
 
+static void recover (ctx_t *ctx, parent_t *old)
+{
+    parent_t *new = zlist_first (ctx->parents);
+
+    assert (new != NULL);
+    assert (new->state == CS_OK);
+    assert (new->pri == true);
+
+    old->cur = false;
+    new->cur = true;
+    if (flux_recover (ctx->h, -1) < 0)
+        flux_log (ctx->h, LOG_ERR, "%s: %s", __FUNCTION__, strerror (errno));
+    hello (ctx);
+}
+
+static void failover (ctx_t *ctx, parent_t *old)
+{
+    parent_t *new;
+
+    new = zlist_first (ctx->parents);
+    while (new) {
+        if (new->state == CS_OK)
+            break;
+        new = zlist_next (ctx->parents);
+    }
+    if (new) {
+        old->cur = false;
+        new->cur = true;
+        assert (new->pri == false);
+        if (flux_failover (ctx->h, -1, new->uri) < 0)
+            flux_log (ctx->h, LOG_ERR, "%s: %s", __FUNCTION__,strerror (errno));
+        hello (ctx);
+    }
+}
+
+static int cstate_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    JSON event = NULL;
+    int epoch, parent, rank;
+    cstate_t ostate, nstate;
+    parent_t *p;
+    int rc = 0;
+
+    if (cmb_msg_decode (*zmsg, NULL, &event) < 0 || event == NULL
+            || !Jget_int (event, "epoch", &epoch)
+            || !Jget_int (event, "parent", &parent)
+            || !Jget_int (event, "rank", &rank)
+            || !Jget_int (event, "ostate", (int *)&ostate)
+            || !Jget_int (event, "nstate", (int *)&nstate)) {
+        flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
+    }
+    p = zlist_first (ctx->parents);
+    while (p) {
+        if (p->rank == rank) {
+            p->state = nstate;
+            if (p->cur && p->state == CS_FAIL)
+                failover (ctx, p);
+            else if (!p->cur && p->pri && p->state == CS_OK)
+                recover (ctx, p);
+            break;
+        }
+        p = zlist_next (ctx->parents);
+    }
+done:
+    Jput (event);
+    return rc;
+}
+
 static void cstate_change (ctx_t *ctx, child_t *c, cstate_t newstate)
 {
-    JSON ev = Jnew ();
+    JSON event = Jnew ();
 
-    Jadd_int (ev, "rank", c->rank);
-    Jadd_int (ev, "ostate", c->state);
+    Jadd_int (event, "rank", c->rank);
+    Jadd_int (event, "ostate", c->state);
     c->state = newstate;
-    Jadd_int (ev, "nstate", c->state);
-    Jadd_int (ev, "parent", ctx->rank);
-    Jadd_int (ev, "epoch", ctx->epoch);
-    flux_event_send (ctx->h, ev, "live.cstate");
-    Jput (ev);
+    Jadd_int (event, "nstate", c->state);
+    Jadd_int (event, "parent", ctx->rank);
+    Jadd_int (event, "epoch", ctx->epoch);
+    flux_event_send (ctx->h, event, "live.cstate");
+    Jput (event);
 }
 
 /* On each heartbeat, check idle for downstream peers.
@@ -292,16 +366,13 @@ static int hello_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
         }
     }
-
     /* Create a record for this child, unless already seen.
      */
     c = child_create (rank);
-    if (zhash_insert (ctx->children, c->rankstr, c) < 0) {
+    if (zhash_insert (ctx->children, c->rankstr, c) < 0)
         child_destroy (c);
-    } else {
-        zhash_freefn (ctx->children, c->rankstr,
-                      (zhash_free_fn *)child_destroy);
-    }
+    else
+        zhash_freefn (ctx->children, c->rankstr,(zhash_free_fn *)child_destroy);
 
     /* Write a little cookie to the kvs indicating that this child has
      * checked in.  This may need to be reduced in the future to avoid
@@ -333,6 +404,7 @@ static int hello (ctx_t *ctx)
 {
     JSON request = Jnew ();
     JSON response = NULL;
+    parent_t *p;
     int rc;
 
     Jadd_int (request, "rank", ctx->rank);
@@ -340,7 +412,17 @@ static int hello (ctx_t *ctx)
         flux_log (ctx->h, LOG_ERR, "flux_rpc: %s", strerror (errno));
         goto done;
     }
-    parents_fromjson (ctx, response);
+    if (zlist_size (ctx->parents) == 0) {
+        parents_fromjson (ctx, response);
+        if ((p = zlist_first (ctx->parents)))
+            p->cur = p->pri = true;
+        if (zlist_size (ctx->parents) > 1) {
+            if (flux_event_subscribe (ctx->h, "live.cstate") < 0) {
+                flux_log (ctx->h, LOG_ERR, "flux_event_subscribe: %s",
+                          strerror (errno));
+            }
+        }
+    }
     rc = 0;
 done:
     Jput (request);
@@ -350,6 +432,7 @@ done:
 
 static msghandler_t htab[] = {
     { FLUX_MSGTYPE_EVENT,       "hb",                  hb_cb },
+    { FLUX_MSGTYPE_EVENT,       "live.cstate",         cstate_cb },
     { FLUX_MSGTYPE_REQUEST,     "live.hello",          hello_request_cb },
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
@@ -362,7 +445,6 @@ int mod_main (flux_t h, zhash_t *args)
         if (hello (ctx) < 0)
             return -1;
     }
-
     if (kvs_watch_int (h, "conf.live.max-idle", max_idle_cb, ctx) < 0) {
         flux_log (h, LOG_ERR, "kvs_watch_int %s: %s", "conf.live.max-idle",
                   strerror (errno));
