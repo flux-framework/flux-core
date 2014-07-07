@@ -450,16 +450,6 @@ done:
     return rc;
 }
 
-static void up_kvs (ctx_t *ctx, int rank)
-{
-    char *key;
-    if (asprintf (&key, "conf.live.hello.%d", rank) < 0)
-        oom ();
-    (void)kvs_put_int (ctx->h, key, 1);
-    (void)kvs_commit (ctx->h);
-    free (key);
-}
-
 /* hello: parents discover their children, and children discover their
  * grandparents which are potential failover candidates.
  */
@@ -491,10 +481,6 @@ static int hello_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         child_destroy (c);
     else
         zhash_freefn (ctx->children, c->rankstr,(zhash_free_fn *)child_destroy);
-    /* Note to kvs that child reported in.
-     * FIXME: reduce
-     */
-    up_kvs (ctx, c->rank);
 
     if (kvs_watch_int (h, "conf.live.max-idle", max_idle_cb, ctx) < 0) {
         flux_log (h, LOG_ERR, "kvs_watch_int %s: %s", "conf.live.max-idle",
@@ -560,9 +546,7 @@ int mod_main (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
 
-    if (ctx->master)
-        up_kvs (ctx, ctx->rank);
-    else if (hello (ctx) < 0)
+    if (!ctx->master && hello (ctx) < 0)
         return -1;
 
     if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
