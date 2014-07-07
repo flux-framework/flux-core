@@ -1034,10 +1034,10 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             json_object_put (request);
     } else if (cmb_msg_match (*zmsg, "cmb.panic")) {
         json_object *request = NULL;
-        const char *s;
-        if (cmb_msg_decode (*zmsg, NULL, &request) == 0 && request != NULL
-                && util_json_object_get_string (request, "msg", &s) == 0) {
-            msg ("PANIC: %s", s);
+        const char *s = NULL;
+        if (cmb_msg_decode (*zmsg, NULL, &request) == 0 && request != NULL) {
+            (void)util_json_object_get_string (request, "msg", &s);
+            msg ("PANIC: %s", s ? s : "no reason");
             exit (1);
         }
         if (request)
