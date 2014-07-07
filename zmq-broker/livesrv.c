@@ -77,7 +77,7 @@ typedef struct {
 
 typedef struct {
     int max_idle;
-    int slow;
+    int slow_idle;
     int epoch;
     int rank;
     bool master;
@@ -92,7 +92,7 @@ static int hello (ctx_t *ctx);
 static int goodbye (ctx_t *ctx, int parent_rank);
 
 static const int default_max_idle = 5;
-static const int default_slow = 3;
+static const int default_slow_idle = 3;
 
 static void freectx (ctx_t *ctx)
 {
@@ -112,7 +112,7 @@ static ctx_t *getctx (flux_t h)
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
         ctx->max_idle = default_max_idle;
-        ctx->slow = default_slow;
+        ctx->slow_idle = default_slow_idle;
         ctx->rank = flux_rank (h);
         ctx->master = flux_treeroot (h);
         if (!(ctx->parents = zlist_new ()))
@@ -366,17 +366,17 @@ static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             case CS_OK:
                 if (idle > ctx->max_idle)
                     cstate_change (ctx, c, CS_FAIL);
-                else if (idle > ctx->slow)
+                else if (idle > ctx->slow_idle)
                     cstate_change (ctx, c, CS_SLOW);
                 break;
             case CS_SLOW:
-                if (idle <= ctx->slow)
+                if (idle <= ctx->slow_idle)
                     cstate_change (ctx, c, CS_OK);
                 else if (idle > ctx->max_idle)
                     cstate_change (ctx, c, CS_FAIL);
                 break;
             case CS_FAIL:
-                if (idle <= ctx->slow)
+                if (idle <= ctx->slow_idle)
                     cstate_change (ctx, c, CS_OK);
                 else if (idle <= ctx->max_idle)
                     cstate_change (ctx, c, CS_SLOW);
@@ -403,6 +403,17 @@ static void max_idle_cb (const char *key, int val, void *arg, int errnum)
     if (errnum == ENOENT)
         val = default_max_idle;
     ctx->max_idle = val;
+}
+
+static void slow_idle_cb (const char *key, int val, void *arg, int errnum)
+{
+    ctx_t *ctx = arg;
+
+    if (errnum != ENOENT && errnum != 0)
+        return;
+    if (errnum == ENOENT)
+        val = default_slow_idle;
+    ctx->slow_idle = val;
 }
 
 static int goodbye_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
@@ -483,12 +494,6 @@ static int hello_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     else
         zhash_freefn (ctx->children, c->rankstr,(zhash_free_fn *)child_destroy);
 
-    if (kvs_watch_int (h, "conf.live.max-idle", max_idle_cb, ctx) < 0) {
-        flux_log (h, LOG_ERR, "kvs_watch_int %s: %s", "conf.live.max-idle",
-                  strerror (errno));
-        return -1;
-    }
-
     if ((p = parent_fromctx (ctx))) {   /* temporarily add "me" at pos 0 */
         if (zlist_push (ctx->parents, p) < 0)
             oom ();
@@ -550,6 +555,16 @@ int mod_main (flux_t h, zhash_t *args)
     if (!ctx->master && hello (ctx) < 0)
         return -1;
 
+    if (kvs_watch_int (h, "conf.live.max-idle", max_idle_cb, ctx) < 0) {
+        flux_log (h, LOG_ERR, "kvs_watch_int %s: %s", "conf.live.max-idle",
+                  strerror (errno));
+        return -1;
+    }
+    if (kvs_watch_int (h, "conf.live.slow-idle", slow_idle_cb, ctx) < 0) {
+        flux_log (h, LOG_ERR, "kvs_watch_int %s: %s", "conf.live.slow-idle",
+                  strerror (errno));
+        return -1;
+    }
     if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
         flux_log (h, LOG_ERR, "flux_msghandler_addvec: %s", strerror (errno));
         return -1;
