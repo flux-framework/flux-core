@@ -209,7 +209,8 @@ static void parents_fromjson (ctx_t *ctx, JSON ar)
     if (Jget_ar_len (ar, &len)) {
         for (i = 0; i < len; i++) {
             if (Jget_ar_obj (ar, i, &el) && (p = parent_fromjson (el)))
-                zlist_append (ctx->parents, p);
+                if (zlist_append (ctx->parents, p) < 0)
+                    oom ();
         }
     }
 }
