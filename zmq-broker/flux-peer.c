@@ -89,7 +89,8 @@ int main (int argc, char *argv[])
         if (optind != argc - 1)
             usage ();
         flux_panic (h, rank, argv[optind]);
-    }
+    } else
+        usage ();
 
     flux_handle_destroy (&h);
     log_fini ();
