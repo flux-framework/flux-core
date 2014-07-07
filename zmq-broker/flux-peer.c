@@ -21,11 +21,12 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr,
-"Usage: flux-peer [--rank N] failover new-parent-uri\n"
+"Usage: flux-peer [--rank N] idle\n"
+"       flux-peer [--rank N] parent-uri\n"
+"       flux-peer [--rank N] request-uri\n"
+"       flux-peer [--rank N] failover new-parent-uri\n"
 "       flux-peer [--rank N] recover\n"
-"       flux-peer [--rank N] idle\n"
 "       flux-peer [--rank N] panic [msg ...]\n"
-"       flux-peer [--rank N] get-parent-uri\n"
 );
     exit (1);
 }
@@ -77,12 +78,20 @@ int main (int argc, char *argv[])
             err_exit ("flux_peer");
         printf ("%s\n", Jtostr (peers));
         Jput (peers);
-    } else if (!strcmp (cmd, "get-parent-uri")) {
+    } else if (!strcmp (cmd, "parent-uri")) {
         if (optind != argc)
             usage ();
         char *s;
         if (!(s = flux_getattr (h, rank, "cmbd-parent-uri")))
             err_exit ("flux_getattr cmbd-parent-uri");
+        printf ("%s\n", s);
+        free (s);
+    } else if (!strcmp (cmd, "request-uri")) {
+        if (optind != argc)
+            usage ();
+        char *s;
+        if (!(s = flux_getattr (h, rank, "cmbd-request-uri")))
+            err_exit ("flux_getattr cmbd-request-uri");
         printf ("%s\n", s);
         free (s);
     } else if (!strcmp (cmd, "panic")) {
