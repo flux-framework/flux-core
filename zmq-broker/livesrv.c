@@ -83,7 +83,6 @@ typedef struct {
     bool master;
     zlist_t *parents;
     zhash_t *children;
-    cstate_t mystate;
     flux_t h;
 } ctx_t;
 
@@ -279,7 +278,6 @@ static int cstate_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     JSON event = NULL;
     int epoch, parent, rank;
     cstate_t ostate, nstate;
-    parent_t *p;
     int rc = 0;
 
     if (cmb_msg_decode (*zmsg, NULL, &event) < 0 || event == NULL
@@ -292,20 +290,26 @@ static int cstate_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         goto done;
     }
     if (rank == ctx->rank) {
-        ctx->mystate = nstate;
-        goto done;
-    }
-    p = zlist_first (ctx->parents);
-    while (p) {
-        if (p->rank == rank) {
-            p->state = nstate;
-            if (p->cur && p->state == CS_FAIL)
-                failover (ctx);
-            else if (!p->cur && p->pri && p->state == CS_OK)
-                recover (ctx);
-            break;
+        if (nstate == CS_FAIL) {        /* I'm dead - stop watching children */
+            zhash_destroy (&ctx->children);
+            if (!(ctx->children = zhash_new ()))
+                oom ();
+            (void)flux_event_unsubscribe (h, "hb");
         }
-        p = zlist_next (ctx->parents);
+    } else {
+        parent_t *p = zlist_first (ctx->parents);
+
+        while (p) {
+            if (p->rank == rank) {
+                p->state = nstate;
+                if (p->cur && p->state == CS_FAIL)
+                    failover (ctx);
+                else if (!p->cur && p->pri && p->state == CS_OK)
+                    recover (ctx);
+                break;
+            }
+            p = zlist_next (ctx->parents);
+        }
     }
 done:
     Jput (event);
@@ -343,20 +347,6 @@ static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    /* If we are alive enough to receive a live.cstate change to CS_FAIL
-     * for ourselves, drop all child monitoring state and unsubscribe to
-     * the heartbeat.  Children will say hello again if they recover.
-     */
-    if (ctx->mystate == CS_FAIL) {
-        zhash_destroy (&ctx->children);
-        if (!(ctx->children = zhash_new ()))
-            oom ();
-        (void)flux_event_unsubscribe (h, "hb");
-        goto done;
-    }
-    /* Check each child's idle state and publish live.cstate events
-     * if there are any changes.
-     */
     if (!(peers = flux_lspeer (h, -1))) {
         flux_log (h, LOG_ERR, "flux_lspeer: %s", strerror (errno));
         goto done;
