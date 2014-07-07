@@ -497,19 +497,31 @@ static void *cmbd_init_event_in (ctx_t *ctx)
 static void *cmbd_init_parent (ctx_t *ctx, const char *uri) {
     void *s = NULL;
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
+    int savederr;
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
-        err_exit ("zsocket_new");
-    if (flux_sec_csockinit (ctx->sec, s) < 0)
-        msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
+        goto error;
+    if (flux_sec_csockinit (ctx->sec, s) < 0) {
+        savederr = errno;
+        msg ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
+        errno = savederr;
+        goto error;
+    }
     zsocket_set_hwm (s, 0);
     zsocket_set_identity (s, ctx->rankstr);
     if (zsocket_connect (s, "%s", uri) < 0)
-        err_exit ("%s", uri);
+        goto error;
     zp.socket = s;
     if (zloop_poller (ctx->zl, &zp, (zloop_fn *)parent_cb, ctx) < 0)
-        err_exit ("zloop_poller");
+        goto error;
     return s;
+error:
+    if (s) {
+        savederr = errno;
+        zsocket_destroy (ctx->zctx, s);
+        errno = savederr;
+    }
+    return NULL;
 }
 
 /* signalfd + zloop example: https://gist.github.com/mhaberler/8426050
@@ -583,8 +595,10 @@ static void cmbd_init (ctx_t *ctx)
 #endif
     /* Connect to upstream ports, if any
      */
-    if (ctx->uri_parent)
-        ctx->zs_parent = cmbd_init_parent (ctx, ctx->uri_parent);
+    if (ctx->uri_parent) {
+        if (!(ctx->zs_parent = cmbd_init_parent (ctx, ctx->uri_parent)))
+            err_exit ("%s", ctx->uri_parent);
+    }
 
     /* create flux_t handle */
     ctx->h = handle_create (ctx, &cmbd_handle_ops, 0);
@@ -855,7 +869,8 @@ static int cmb_failover (ctx_t *ctx, const char *uri)
         zsocket_destroy (ctx->zctx, ctx->zs_altparent);
         free (ctx->uri_altparent);
     }
-    ctx->zs_altparent = cmbd_init_parent (ctx, uri);
+    if (!(ctx->zs_altparent = cmbd_init_parent (ctx, uri)))
+        return -1;
     ctx->uri_altparent = xstrdup (uri);
     ctx->failover_active = true;
 
