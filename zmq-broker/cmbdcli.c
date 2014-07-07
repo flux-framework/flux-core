@@ -169,6 +169,10 @@ int flux_failover (flux_t h, int rank, const char *uri)
     json_object *response = NULL;
     int rc = -1;
 
+    if (!uri) {
+        errno = EINVAL;
+        goto done;
+    }
     util_json_object_add_string (request, "uri", uri);
     if ((response = flux_rank_rpc (h, rank, request, "cmb.failover"))) {
         errno = EPROTO;

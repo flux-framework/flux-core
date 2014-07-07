@@ -840,7 +840,7 @@ static void hb_cb (ctx_t *ctx, zmsg_t *zmsg)
  */
 static int cmb_failover (ctx_t *ctx, const char *uri)
 {
-    if (!ctx->zs_parent) {
+    if (!ctx->zs_parent || uri == NULL || !strstr (uri, "://")) {
         errno = EINVAL;
         return -1;
     }
