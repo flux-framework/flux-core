@@ -83,6 +83,7 @@ typedef struct {
     bool master;
     zlist_t *parents;
     zhash_t *children;
+    bool hb_subscribed;
     flux_t h;
 } ctx_t;
 
@@ -90,6 +91,7 @@ static void parent_destroy (parent_t *p);
 static void child_destroy (child_t *c);
 static int hello (ctx_t *ctx);
 static int goodbye (ctx_t *ctx, int parent_rank);
+static void manage_subscriptions (ctx_t *ctx);
 
 static const int default_max_idle = 5;
 static const int default_slow_idle = 3;
@@ -142,7 +144,8 @@ static child_t *child_create (int rank)
 
 static void parent_destroy (parent_t *p)
 {
-    free (p->uri);
+    if (p->uri)
+        free (p->uri);
     free (p);
 }
 
@@ -150,29 +153,19 @@ static parent_t *parent_create (int rank, const char *uri)
 {
     parent_t *p = xzmalloc (sizeof (*p));
     p->rank = rank;
-    p->uri = xstrdup (uri);
+    if (uri)
+        p->uri = xstrdup (uri);
     return p;
 }
 
 static parent_t *parent_fromjson (JSON o)
 {
     int rank;
-    const char *uri;
-    if (!Jget_int (o, "rank", &rank) || !Jget_str (o, "uri", &uri))
+    const char *uri = NULL;
+    if (!Jget_int (o, "rank", &rank))
         return NULL;
+    (void)Jget_str (o, "uri", &uri); /* optional */
     return parent_create (rank, uri);
-}
-
-static parent_t *parent_fromctx (ctx_t *ctx)
-{
-    char *uri;
-    parent_t *p;
-
-    if (!(uri = flux_getattr (ctx->h, -1, "cmbd-request-uri")))
-        return NULL;
-    p = parent_create (ctx->rank, uri);
-    free (uri);
-    return p;
 }
 
 static JSON parent_tojson (parent_t *p)
@@ -180,7 +173,8 @@ static JSON parent_tojson (parent_t *p)
     JSON o = Jnew ();
 
     Jadd_int (o, "rank", p->rank);
-    Jadd_str (o, "uri", p->uri);
+    if (p->uri)
+        Jadd_str (o, "uri", p->uri);
     return o;
 }
 
@@ -200,6 +194,12 @@ static JSON parents_tojson (ctx_t *ctx)
     return ar;
 }
 
+/* Build ctx->parents from JSON array received in hello response.
+ * Fix up first entry, which is the primary (and current) parent.
+ * Set its URI here where we have access to one that is suitable for
+ * zmq_connect(), as opposed to the parent which has a zmq_bind() URI
+ * that could be a wildcard.
+ */
 static void parents_fromjson (ctx_t *ctx, JSON ar)
 {
     int i, len;
@@ -208,9 +208,17 @@ static void parents_fromjson (ctx_t *ctx, JSON ar)
 
     if (Jget_ar_len (ar, &len)) {
         for (i = 0; i < len; i++) {
-            if (Jget_ar_obj (ar, i, &el) && (p = parent_fromjson (el)))
+            if (Jget_ar_obj (ar, i, &el) && (p = parent_fromjson (el))) {
+                if (i == 0) {
+                    p->cur = true;
+                    p->pri = true;
+                    if (p->uri) /* unlikely */
+                        free (p->uri);
+                    p->uri = flux_getattr (ctx->h, -1, "cmbd-parent-uri");
+                }
                 if (zlist_append (ctx->parents, p) < 0)
                     oom ();
+            }
         }
     }
 }
@@ -295,7 +303,7 @@ static int cstate_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             zhash_destroy (&ctx->children);
             if (!(ctx->children = zhash_new ()))
                 oom ();
-            (void)flux_event_unsubscribe (h, "hb");
+            manage_subscriptions (ctx);
         }
     } else {
         parent_t *p = zlist_first (ctx->parents);
@@ -394,6 +402,23 @@ done:
     return 0;
 }
 
+static void manage_subscriptions (ctx_t *ctx)
+{
+    if (ctx->hb_subscribed && zhash_size (ctx->children) == 0) {
+        if (flux_event_unsubscribe (ctx->h, "hb") < 0)
+            flux_log (ctx->h, LOG_ERR, "%s: flux_event_unsubscribe hb: %s",
+                      __FUNCTION__, strerror (errno));
+        else
+            ctx->hb_subscribed = false;
+    } else if (!ctx->hb_subscribed && zhash_size (ctx->children) > 0) {
+        if (flux_event_subscribe (ctx->h, "hb") < 0)
+            flux_log (ctx->h, LOG_ERR, "%s: flux_event_subscribe hb: %s",
+                      __FUNCTION__, strerror (errno));
+        else
+            ctx->hb_subscribed = true;
+    }
+}
+
 static void max_idle_cb (const char *key, int val, void *arg, int errnum)
 {
     ctx_t *ctx = arg;
@@ -436,6 +461,7 @@ static int goodbye_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     if (asprintf (&rankstr, "%d", rank) < 0)
         oom ();
     zhash_delete (ctx->children, rankstr);
+    manage_subscriptions (ctx);
     flux_respond_errnum (h, zmsg, 0);
 done:
     if (rankstr)
@@ -471,20 +497,12 @@ static int hello_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     JSON request = NULL;
     JSON response = NULL;
     int rank;
-    parent_t *p;
     child_t *c;
 
     if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
                             || !Jget_int (request, "rank", &rank)) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
-    }
-    /* Subscribe to heartbeat event only when children are present.
-     */
-    if (zhash_size (ctx->children) == 0) {
-        if (flux_event_subscribe (h, "hb") < 0) {
-            flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
-        }
     }
     /* Create a record for this child, unless already seen.
      */
@@ -493,16 +511,15 @@ static int hello_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         child_destroy (c);
     else
         zhash_freefn (ctx->children, c->rankstr,(zhash_free_fn *)child_destroy);
-
-    if ((p = parent_fromctx (ctx))) {   /* temporarily add "me" at pos 0 */
-        if (zlist_push (ctx->parents, p) < 0)
-            oom ();
-    }
+    manage_subscriptions (ctx);
+    /* Construct response - built from our own hello response, if any.
+     * We add ourselves temporarily, sans URI (see parents_fromjson()).
+     */
+    if (zlist_push (ctx->parents, parent_create (ctx->rank, NULL)) < 0)
+        oom ();
     response = parents_tojson (ctx);
-    if (p) {                            /* remove me */
-        zlist_pop (ctx->parents);
-        parent_destroy (p);
-    }
+    parent_destroy (zlist_pop (ctx->parents));
+
     flux_respond (h, zmsg, response);
 done:
     Jput (request);
@@ -514,7 +531,6 @@ static int hello (ctx_t *ctx)
 {
     JSON request = Jnew ();
     JSON response = NULL;
-    parent_t *p;
     int rc;
 
     Jadd_int (request, "rank", ctx->rank);
@@ -522,17 +538,8 @@ static int hello (ctx_t *ctx)
         flux_log (ctx->h, LOG_ERR, "flux_rpc: %s", strerror (errno));
         goto done;
     }
-    if (zlist_size (ctx->parents) == 0) {
+    if (zlist_size (ctx->parents) == 0) /* don't redo on failover/recovery */
         parents_fromjson (ctx, response);
-        if ((p = zlist_first (ctx->parents)))
-            p->cur = p->pri = true;
-        if (zlist_size (ctx->parents) > 1) {
-            if (flux_event_subscribe (ctx->h, "live.cstate") < 0) {
-                flux_log (ctx->h, LOG_ERR, "flux_event_subscribe: %s",
-                          strerror (errno));
-            }
-        }
-    }
     rc = 0;
 done:
     Jput (request);
@@ -552,9 +559,10 @@ int mod_main (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
 
-    if (!ctx->master && hello (ctx) < 0)
-        return -1;
-
+    if (!ctx->master) {
+        if (hello (ctx) < 0)
+            return -1;
+    }
     if (kvs_watch_int (h, "conf.live.max-idle", max_idle_cb, ctx) < 0) {
         flux_log (h, LOG_ERR, "kvs_watch_int %s: %s", "conf.live.max-idle",
                   strerror (errno));
@@ -564,6 +572,13 @@ int mod_main (flux_t h, zhash_t *args)
         flux_log (h, LOG_ERR, "kvs_watch_int %s: %s", "conf.live.slow-idle",
                   strerror (errno));
         return -1;
+    }
+    if (zlist_size (ctx->parents) > 1) {
+        if (flux_event_subscribe (h, "live.cstate") < 0) {
+            flux_log (ctx->h, LOG_ERR, "flux_event_subscribe: %s",
+                      strerror (errno));
+            return -1;
+        }
     }
     if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
         flux_log (h, LOG_ERR, "flux_msghandler_addvec: %s", strerror (errno));
