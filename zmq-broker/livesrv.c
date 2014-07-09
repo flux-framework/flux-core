@@ -524,15 +524,13 @@ static char *hl_string (hostlist_t hl)
 static void hello_sink (flux_t h, void *item, int batchnum, void *arg)
 {
     ctx_t *ctx = arg;
-    hostlist_t b, a = item;
+    hostlist_t a = item;
     char *s;
 
     if (ctx->master) { /* sink to KVS */
         if (kvs_get_string (h, "conf.live.hello", &s) == 0) {
-            b = hostlist_create (s);
+            hostlist_push (a, s);
             free (s);
-            hostlist_push_list (a, b);
-            hostlist_destroy (b);
         }
         s = hl_string (a);
         if (kvs_put_string (h, "conf.live.hello", s) < 0 || kvs_commit (h) < 0)
@@ -548,6 +546,7 @@ static void hello_sink (flux_t h, void *item, int batchnum, void *arg)
         Jput (o);
         free (s);
     }
+    hostlist_destroy (a);
 }
 
 static void hello_reduce (flux_t h, zlist_t *items, int batchnum, void *arg)
@@ -559,8 +558,17 @@ static void hello_reduce (flux_t h, zlist_t *items, int batchnum, void *arg)
             hostlist_push_list (a, b);
             hostlist_destroy (b);
         }
-        zlist_append (items, a);
+        if (zlist_append (items, a) < 0)
+            oom ();
     }
+}
+
+static void hello_source (ctx_t *ctx, const char *rankstr)
+{
+    hostlist_t a;
+
+    if ((a = hostlist_create (rankstr)))
+        flux_red_append (ctx->r, a, 0);
 }
 
 static int push_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
@@ -568,35 +576,17 @@ static int push_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     JSON request = NULL;
     const char *s;
-    hostlist_t a;
 
     if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
-             || !(s = json_object_get_string (request))
-             || !(a = hostlist_create (s))) {
+             || !(s = json_object_get_string (request))) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    if (flux_red_append (ctx->r, a, 0) < 0) {
-        flux_log (ctx->h, LOG_ERR, "%s: flux_red_append: %s",
-                  __FUNCTION__, strerror (errno));
-        hostlist_destroy (a);
-    }
+    hello_source (ctx, s);
 done:
     Jput (request);
+    zmsg_destroy (zmsg);
     return 0;
-}
-
-static void hello_source (ctx_t *ctx, const char *rankstr)
-{
-    hostlist_t a;
-
-    if ((a = hostlist_create (rankstr))) {
-        if (flux_red_append (ctx->r, a, 0) < 0) {
-            flux_log (ctx->h, LOG_ERR, "%s: flux_red_append: %s",
-                      __FUNCTION__, strerror (errno));
-            hostlist_destroy (a);
-        }
-    }
 }
 
 /* hello: parents discover their children, and children discover their
