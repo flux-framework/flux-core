@@ -340,6 +340,21 @@ local function hierarchy_node_copy (n)
     }
 end
 
+--
+--  Copy hierarchy node and children
+--
+local function hierarchy_node_copy_recursive (n)
+    local copy = hierarchy_node_copy (n)
+    copy.parent = nil
+
+    for k,v in pairs (n.children) do
+        local child = hierarchy_node_copy_recursive (v)
+        child.parent = copy
+        copy.children [k] = child
+    end
+    return copy
+end
+
 local function hierarchy_validate (t, parent)
     local msg = "hierarchy invalid: "
     local function failure (msg) return nil, "Hierarchy invalid: "..msg end
