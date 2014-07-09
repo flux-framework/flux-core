@@ -872,7 +872,6 @@ static endpt_t *endpt_create (const char *uri)
 
 static void endpt_destroy (endpt_t *ep)
 {
-    assert (ep->zs == NULL);
     free (ep->uri);
     free (ep);
 }
