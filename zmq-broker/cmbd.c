@@ -44,6 +44,11 @@
     return ((ctx)->reactor_stop ? (-1) : (0))
 
 typedef struct {
+    void *zs;
+    char *uri;
+} endpt_t;
+
+typedef struct {
     /* 0MQ
      */
     zctx_t *zctx;               /* zeromq context (MT-safe) */
@@ -55,12 +60,8 @@ typedef struct {
     bool security_set;
     /* Sockets.
      */
-    void *zs_parent;            /* DEALER - requests to parent */
-    char *uri_parent;
-    void *zs_altparent;
-    char *uri_altparent;
-    bool failover_active;
-
+    zlist_t *parents;           /* DEALER - requests to parent */
+                                /*   (failover pushes new parent on head) */
     void *zs_request;           /* ROUTER - requests from plugins/downstream */
     char *uri_request;
 
@@ -129,6 +130,9 @@ static int peer_idle (ctx_t *ctx, const char *uuid);
 static void peer_update (ctx_t *ctx, const char *uuid);
 static void peer_modcreate (ctx_t *ctx, const char *uuid);
 
+static endpt_t *endpt_create (const char *uri);
+static void endpt_destroy (endpt_t *ep);
+
 #define OPTIONS "t:vR:S:p:P:L:H:N:nci"
 static const struct option longopts[] = {
     {"session-name",    required_argument,  0, 'N'},
@@ -174,6 +178,7 @@ int main (int argc, char *argv[])
     int c, i;
     ctx_t ctx;
     char *hosts = NULL;
+    endpt_t *ep;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (basename (argv[0]));
@@ -182,6 +187,8 @@ int main (int argc, char *argv[])
     if (!(ctx.modules = zhash_new ()))
         oom ();
     if (!(ctx.peer_idle = zhash_new ()))
+        oom ();
+    if (!(ctx.parents = zlist_new ()))
         oom ();
     ctx.session_name = "flux";
     if (gethostname (ctx.hostname, HOST_NAME_MAX) < 0)
@@ -206,9 +213,12 @@ int main (int argc, char *argv[])
             case 't':   /* --child-uri URI[,URI,...] */
                 ctx.uri_request = xstrdup (optarg);
                 break;
-            case 'p':   /* --parent-uri URI */
-                ctx.uri_parent = xstrdup (optarg);
+            case 'p': { /* --parent-uri URI */
+                endpt_t *ep = endpt_create (optarg);
+                if (zlist_push (ctx.parents, ep) < 0)
+                    oom ();
                 break;
+            }
             case 'v':   /* --verbose */
                 ctx.verbose = true;
                 break;
@@ -288,9 +298,9 @@ int main (int argc, char *argv[])
         oom ();
     if (ctx.rank == 0)
         ctx.treeroot = true;
-    if (ctx.treeroot && ctx.uri_parent)
+    if (ctx.treeroot && zlist_size (ctx.parents) > 0)
         msg_exit ("treeroot must NOT have parent");
-    if (!ctx.treeroot && !ctx.uri_parent)
+    if (!ctx.treeroot && zlist_size (ctx.parents) == 0)
         msg_exit ("non-treeroot must have parents");
 
     char *proctitle;
@@ -306,8 +316,9 @@ int main (int argc, char *argv[])
 
     cmbd_fini (&ctx);
 
-    if (ctx.uri_parent)
-        free (ctx.uri_parent);
+    while ((ep = zlist_pop (ctx.parents)))
+        endpt_destroy (ep);
+    zlist_destroy (&ctx.parents);
     if (ctx.uri_request)
         free (ctx.uri_request);
     if (ctx.rankstr)
@@ -554,6 +565,7 @@ static int cmbd_init_signalfd (ctx_t *ctx)
 
 static void cmbd_init (ctx_t *ctx)
 {
+    endpt_t *ep;
     //(void)umask (077);
 
     ctx->zctx = zctx_new ();
@@ -595,9 +607,9 @@ static void cmbd_init (ctx_t *ctx)
 #endif
     /* Connect to upstream ports, if any
      */
-    if (ctx->uri_parent) {
-        if (!(ctx->zs_parent = cmbd_init_parent (ctx, ctx->uri_parent)))
-            err_exit ("%s", ctx->uri_parent);
+    if ((ep = zlist_first (ctx->parents))) {
+        if (!(ep->zs = cmbd_init_parent (ctx, ep->uri)))
+            err_exit ("%s", ep->uri);
     }
 
     /* create flux_t handle */
@@ -673,12 +685,15 @@ done:
 static char *cmb_getattr (ctx_t *ctx, const char *name)
 {
     char *val = NULL;
-    if (!strcmp (name, "cmbd-snoop-uri"))
+    if (!strcmp (name, "cmbd-snoop-uri")) {
         val = ctx->uri_snoop;
-    else if (!strcmp (name, "cmbd-parent-uri"))
-        val = ctx->failover_active ? ctx->uri_altparent : ctx->uri_parent;
-    else if (!strcmp (name, "cmbd-request-uri"))
+    } else if (!strcmp (name, "cmbd-parent-uri")) {
+        endpt_t *ep = zlist_first (ctx->parents);
+        if (ep)
+            val = ep->uri;
+    } else if (!strcmp (name, "cmbd-request-uri")) {
         val = ctx->uri_request;
+    }
     return val;
 }
 
@@ -848,55 +863,40 @@ static void hb_cb (ctx_t *ctx, zmsg_t *zmsg)
     }
 }
 
-/* Initiate a failover connection to an alternate parent.
- * Leave the primary socket wired in, but set the failover_active
- * flag so new requests use the alternate parent.
+static endpt_t *endpt_create (const char *uri)
+{
+    endpt_t *ep = xzmalloc (sizeof (*ep));
+    ep->uri = xstrdup (uri);
+    return ep;
+}
+
+static void endpt_destroy (endpt_t *ep)
+{
+    assert (ep->zs == NULL);
+    free (ep->uri);
+    free (ep);
+}
+
+/* Establish connection with a new parent and begin using it for all
+ * upstream requests.  Leave old parent(s) wired in to zloop to make
+ * it possible to transition off a healthy node without losing replies.
  */
 static int cmb_failover (ctx_t *ctx, const char *uri)
 {
-    if (!ctx->zs_parent || uri == NULL || !strstr (uri, "://")) {
+    endpt_t *ep;
+
+    if (uri == NULL || !strstr (uri, "://")) {
         errno = EINVAL;
         return -1;
     }
-    if (ctx->failover_active) {
-        errno = EEXIST;
+    ep = endpt_create (uri);
+    if (!(ep->zs = cmbd_init_parent (ctx, ep->uri))) {
+        endpt_destroy (ep);
         return -1;
     }
-    if (ctx->zs_altparent) {
-        zmq_pollitem_t zp;
-        zp.socket = ctx->zs_altparent;
-        zloop_poller_end (ctx->zl, &zp);
-        zsocket_destroy (ctx->zctx, ctx->zs_altparent);
-        free (ctx->uri_altparent);
-    }
-    if (!(ctx->zs_altparent = cmbd_init_parent (ctx, uri)))
-        return -1;
-    ctx->uri_altparent = xstrdup (uri);
-    ctx->failover_active = true;
-
-    flux_log (ctx->h, LOG_INFO, "failover %s => %s",
-              ctx->uri_parent, ctx->uri_altparent);
-    return 0;
-}
-
-/* Resume the use of primary parent after failover.
- * Leave the alternate socket wired in, but clear the failover_active
- * flag so new requests use the primary parent.
- * FIXME clean up zs_altparent after a recovery period.
- */
-static int cmb_recover (ctx_t *ctx)
-{
-    if (!ctx->zs_parent) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (!ctx->failover_active) {
-        errno = EEXIST;
-        return -1;
-    }
-    ctx->failover_active = false;
-    flux_log (ctx->h, LOG_INFO, "recover %s => %s",
-              ctx->uri_altparent, ctx->uri_parent);
+    if (zlist_push (ctx->parents, ep) < 0)
+        oom ();
+    flux_log (ctx->h, LOG_INFO, "failover to %s", ep->uri);
     return 0;
 }
 
@@ -1036,17 +1036,6 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         }
         if (request)
             json_object_put (request);
-    } else if (cmb_msg_match (*zmsg, "cmb.recover")) {
-        json_object *request = NULL;
-        if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
-            flux_respond_errnum (ctx->h, zmsg, EPROTO);
-        } else if (cmb_recover (ctx) < 0) {
-            flux_respond_errnum (ctx->h, zmsg, errno);
-        } else {
-            flux_respond_errnum (ctx->h, zmsg, 0);
-        }
-        if (request)
-            json_object_put (request);
     } else if (cmb_msg_match (*zmsg, "cmb.panic")) {
         json_object *request = NULL;
         const char *s = NULL;
@@ -1172,12 +1161,12 @@ static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg)
 
 static int parent_send (ctx_t *ctx, zmsg_t **zmsg)
 {
-    void *zs = ctx->failover_active ? ctx->zs_altparent : ctx->zs_parent;
+    endpt_t *ep = zlist_first (ctx->parents);
 
-    if (zmsg_send (zmsg, zs) < 0) {
-        err ("%s: %s: %s", __FUNCTION__,
-             ctx->failover_active ? ctx->uri_altparent : ctx->uri_parent,
-             strerror (errno));
+    assert (ep != NULL);
+    assert (ep->zs != NULL);
+    if (zmsg_send (zmsg, ep->zs) < 0) {
+        err ("%s: %s: %s", __FUNCTION__, ep->uri, strerror (errno));
         return -1;
     }
     self_update (ctx);

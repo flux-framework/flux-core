@@ -189,24 +189,6 @@ done:
     return rc;
 }
 
-int flux_recover (flux_t h, int rank)
-{
-    json_object *response = NULL;
-    int rc = -1;
-
-    if ((response = flux_rank_rpc (h, rank, NULL, "cmb.recover"))) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (errno != 0)
-        goto done;
-    rc = 0;
-done:
-    if (response)
-        json_object_put (response);
-    return rc;
-}
-
 int flux_panic (flux_t h, int rank, const char *msg)
 {
     json_object *request = util_json_object_new_object ();
