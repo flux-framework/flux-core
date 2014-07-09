@@ -378,7 +378,7 @@ Hierarchy "default" {
 
     local b = rdl2:aggregate ('default')
     local i = require 'inspect'
-    assert (equals (c, b), "Expected ".. i(a) .. " got ".. i(b))
+    assert (equals (c, b), "Expected ".. i(c) .. " got ".. i(b))
     assert (rdl2:find ("default:/foo/bar10"))
 
     local s = a:serialize()
