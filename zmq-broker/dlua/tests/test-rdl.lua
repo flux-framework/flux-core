@@ -342,7 +342,7 @@ Hierarchy "default" {
     local t0 = require 'timer'.new()
     local r = assert (rdl:find{ type = "core" })
     local delta = t0:get0()
-    assert_true (delta < 0.001, "rdl_find took "..delta.." seconds")
+    assert_true (delta < 0.02, "rdl_find took "..delta.." seconds")
 end
 
 function test_accumulator()
