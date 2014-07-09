@@ -604,13 +604,10 @@ function ResourceAccumulator:add (id)
     --
     for name,path in pairs (r.hierarchy) do
         local uri = name..":"..path
-        local h = hierarchy_export (self.src, uri)
-
-        local rc, err = self.dst:merge_exported (name, h)
-        if not rc then return nil, err end
-
-        local rc, err = dup_resources (self.src, self.dst, h)
-        if not rc then return nil, err end
+        local rc, err = self.src:copyto (uri, self.dst)
+        if not rc then
+            return nil, err
+        end
     end
     return true
 end
