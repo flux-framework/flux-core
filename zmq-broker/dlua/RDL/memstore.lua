@@ -486,7 +486,7 @@ function MemStore:copyto (s, dst)
         local h = hierarchy_export (self, s)
         dst:merge_exported (uri.name, h)
         dup_resources (self, dst, h)
-        return
+        return true
     end
 
     -- Reverse up tree until we find an existing parent in dst:
