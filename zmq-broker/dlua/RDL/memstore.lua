@@ -256,7 +256,7 @@ function MemStore:hierarchy_put (uri, hnode)
     --  attach the new object to the parent.
     --
     if uri.path then
-        local parent = self:hierarchy_get (tostring (uri.parent))
+        local parent = self:get_hierarchy (tostring (uri.parent))
         if not parent then
             return ret_error ("URI: %s: not found", uri)
         end
