@@ -406,13 +406,21 @@ local function hierarchy_export (self, arg)
     return t
 end
 
+local function copy_resource (source, dest, id)
+    local r = source:get (id)
+    if not r then return nil, "copy: Resource "..id.." not found" end
+    if not dest:get (id) then
+        dest.__resources [id] = deepcopy_no_metatable (r)
+    end
+    return true
+end
+
 -- Copy any missing resourcedata from source to dest objects starting with node
 local function dup_resources (source, dest, node)
-    local r = source:get (node.id)
-    if not r then return nil, "Resource "..node.id .." not found" end
-    dest.__resources [node.id] = deepcopy_no_metatable (r)
+    local rc, err = copy_resource (source, dest, node.id)
+    if not rc then return nil, err end
 
-    if not node.children then error ("node "..source:resource_name (node.id) .. " doesn't have children array") end
+    assert (node.children)
     for _,child in pairs (node.children) do
         dup_resources (source, dest, child)
     end
