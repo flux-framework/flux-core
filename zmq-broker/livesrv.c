@@ -469,6 +469,7 @@ static char *hl_string (hostlist_t hl)
     char *s = xzmalloc (len);
 
     hostlist_sort (hl);
+    hostlist_uniq (hl);
     while (hostlist_ranged_string (hl, len, s) < 0)
         if (!(s = realloc (s, len *= 2)))
             oom ();
