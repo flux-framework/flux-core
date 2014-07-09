@@ -275,6 +275,25 @@ function MemStore:hierarchy_put (uri, hnode)
     return new
 end
 
+local function find_nearest_parent (store, arg)
+    local  uri, err = URI.new (arg)
+    if not uri then return nil, err end
+
+    local t = store.__hierarchy [uri.name]
+    if not t then return nil, uri.name..": doesn't exist" end
+
+    if not uri.path then return t end
+
+    for k,v in uri.path:gmatch("/([^/]+)") do
+        local parent = t
+        t = t.children[k]
+        if not t then
+            return parent
+        end
+    end
+    return parent
+end
+
 function MemStore:get_hierarchy (s)
     local  uri, err = URI.new (s)
     if not uri then return nil, err end
