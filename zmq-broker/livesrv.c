@@ -2,8 +2,8 @@
 
 /* This module builds on the following services in the cmbd:
  *   cmb.peers - get idle time (in heartbeats) for non-module peers
- *   cmb.failover , cmb.recover - switch parent
- * The cmbd expects failover/recovery to be driven externally (e.g. by us).
+ *   cmb.failover - switch to new parent
+ * The cmbd expects failover to be driven externally (e.g. by us).
  * The cmbd maintains a hash of peers and their idle time, and also sends
  * a cmb.ping upstream on the heartbeat if nothing else has been sent in the
  * previous epoch, as a keep-alive.  So if the idle time for a child is > 1,
@@ -12,7 +12,7 @@
  * In this module, parents monitor their children on the heartbeat.  That is,
  * we call cmb.peers (locally) and check the idle time of our children.
  * If a child changes state, we publish a live.cstate event, intended to
- * reach grandchildren so they can find a better parent without relying on
+ * reach grandchildren so they can failover to new parent without relying on
  * upstream services which would be unavailable to them for the moment.
  *
  * Monitoring does not begin until children check in the first time
@@ -21,16 +21,15 @@
  *
  * We listen for live.cstate events involving our (grand-)parents.
  * If our current parent goes down, we failover to a new one.
- * If our primary parent comes back, we recover (fail back to it).
+ * We do not attempt to restore the original toplogy - that would be
+ * unnecessarily disruptive and should be done manually if at all.
  *
  * Notes:
  * 1) Since montoring begins only after a good connection is established,
  * this module won't detect nodes that die during initial wireup.
  * 2) If a live.cstate change to CS_FAIL is received for _me_, drop all
- * children.
- * 3) Befoere failover/recovery, send a live.goodbye to tell the old parent
- * to forget about the child.  #2 and #3 are unlikely to be helpful if parent
- * is really dead, but if it's not quite dead...
+ * children.  Similarly a child that sends live.goodbye message causes
+ * parent to forget about that child.
  */
 
 #define _GNU_SOURCE
@@ -67,8 +66,6 @@ typedef struct {
     int rank;
     char *uri;
     cstate_t state;
-    bool cur;
-    bool pri;
 } parent_t;
 
 typedef struct {
@@ -83,7 +80,7 @@ typedef struct {
     int epoch;
     int rank;
     bool master;
-    zlist_t *parents;
+    zlist_t *parents;   /* current parent is first in list */
     zhash_t *children;
     bool hb_subscribed;
     red_t r;
@@ -226,8 +223,6 @@ static void parents_fromjson (ctx_t *ctx, JSON ar)
         for (i = 0; i < len; i++) {
             if (Jget_ar_obj (ar, i, &el) && (p = parent_fromjson (el))) {
                 if (i == 0) {
-                    p->cur = true;
-                    p->pri = true;
                     if (p->uri) /* unlikely */
                         free (p->uri);
                     p->uri = flux_getattr (ctx->h, -1, "cmbd-parent-uri");
@@ -239,62 +234,29 @@ static void parents_fromjson (ctx_t *ctx, JSON ar)
     }
 }
 
-static void recover (ctx_t *ctx)
-{
-    parent_t *new = zlist_first (ctx->parents);
-    parent_t *old;
-
-    assert (new != NULL);
-    assert (new->state == CS_OK);
-    assert (new->pri == true);
-
-    old = zlist_next (ctx->parents);
-    while (old) {
-        if (old->cur == true)
-            break;
-        old = zlist_next (ctx->parents);
-    }
-    assert (old != NULL);
-    old->cur = false;
-    new->cur = true;
-    goodbye (ctx, old->rank);
-    if (flux_recover (ctx->h, -1) < 0)
-        flux_log (ctx->h, LOG_ERR, "%s: %s", __FUNCTION__, strerror (errno));
-    hello (ctx);
-}
-
 static void failover (ctx_t *ctx)
 {
-    parent_t *new;
-    parent_t *old;
+    parent_t *p;
+    int oldrank;
 
-    new = zlist_first (ctx->parents);
-    while (new) {
-        if (new->state == CS_OK)
-            break;
-        new = zlist_next (ctx->parents);
-    }
-    if (!new)           /* no failover options */
-        return;
-    if (new->pri) {     /* recovery appropriate here */
-        recover (ctx);
-        return;
-    }
-    old = zlist_first (ctx->parents);
-    while (old) {
-        if (old->cur == true)
-            break;
-        old = zlist_next (ctx->parents);
-    }
-    assert (old != NULL);
-    if (new) {
-        old->cur = false;
-        new->cur = true;
-        goodbye (ctx, old->rank);
-        if (flux_failover (ctx->h, -1, new->uri) < 0)
-            flux_log (ctx->h, LOG_ERR, "%s: %s", __FUNCTION__,strerror (errno));
+    p = zlist_first (ctx->parents);
+    assert (p != NULL);
+    oldrank = p->rank;
+
+    p = zlist_next (ctx->parents);
+    while (p && p->state == CS_FAIL)
+        p = zlist_next (ctx->parents);
+    if (p) {
+        zlist_remove (ctx->parents, p); /* move p to head of parents list */
+        if (zlist_push (ctx->parents, p) < 0)
+            oom ();
+        goodbye (ctx, oldrank);
+        if (flux_failover (ctx->h, -1, p->uri) < 0)
+            flux_log (ctx->h, LOG_ERR, "%s %s: %s",
+                      __FUNCTION__, p->uri, strerror (errno));
         hello (ctx);
-    }
+    } else
+        flux_log (ctx->h, LOG_ERR, "%s: no failover candidates", __FUNCTION__);
 }
 
 static int cstate_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
@@ -323,18 +285,15 @@ static int cstate_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         }
     } else {
         parent_t *p = zlist_first (ctx->parents);
-
         while (p) {
             if (p->rank == rank) {
                 p->state = nstate;
-                if (p->cur && p->state == CS_FAIL)
-                    failover (ctx);
-                else if (!p->cur && p->pri && p->state == CS_OK)
-                    recover (ctx);
                 break;
             }
             p = zlist_next (ctx->parents);
         }
+        if ((p = zlist_first (ctx->parents)) && p->state == CS_FAIL)
+            failover (ctx);
     }
 done:
     Jput (event);
@@ -641,7 +600,7 @@ static int hello (ctx_t *ctx)
         flux_log (ctx->h, LOG_ERR, "flux_rpc: %s", strerror (errno));
         goto done;
     }
-    if (zlist_size (ctx->parents) == 0) /* don't redo on failover/recovery */
+    if (zlist_size (ctx->parents) == 0) /* don't redo on failover */
         parents_fromjson (ctx, response);
     rc = 0;
 done:
