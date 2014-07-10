@@ -12,19 +12,27 @@
 #include "hostlist.h"
 #include "shortjson.h"
 
-#define OPTIONS "hHcn"
+#define OPTIONS "hHcnud"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"hostname",   no_argument,        0, 'H'},
     {"comma",      no_argument,        0, 'c'},
     {"newline",    no_argument,        0, 'n'},
+    {"up",         no_argument,        0, 'u'},
+    {"down",       no_argument,        0, 'd'},
     { 0, 0, 0, 0 },
 };
 
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-up [--hostname] [--comma | --newline]\n"
+"Usage: flux-up [OPTIONS]\n"
+"where options are:\n"
+"  -H,--hostname    print hostnames instead of ranks\n"
+"  -c,--comma       print commas instead of ranges\n"
+"  -n,--newline     print newlines instead of ranges\n"
+"  -u,--up          print only nodes in ok or slow state\n"
+"  -d,--down        print only nodes in fail state\n"
 );
     exit (1);
 }
@@ -50,12 +58,16 @@ static ns_t *ns_fromkvs (flux_t h);
 static void ns_tohost (ns_t *ns, JSON hosts);
 static void ns_print (ns_t *ns, hlstr_type_t fmt);
 static void ns_destroy (ns_t *ns);
+static void ns_print_down (ns_t *ns, hlstr_type_t fmt);
+static void ns_print_up (ns_t *ns, hlstr_type_t fmt);
 
 int main (int argc, char *argv[])
 {
     flux_t h;
     int ch;
     bool Hopt = false;
+    bool uopt = false;
+    bool dopt = false;
     hlstr_type_t fmt = HLSTR_RANGED;
     ns_t *ns;
 
@@ -71,6 +83,12 @@ int main (int argc, char *argv[])
                 break;
             case 'n': /* --newline */
                 fmt = HLSTR_NEWLINE;
+                break;
+            case 'u': /* --up */
+                uopt = true;
+                break;
+            case 'd': /* --down */
+                dopt = true;
                 break;
             default:
                 usage ();
@@ -92,7 +110,12 @@ int main (int argc, char *argv[])
         ns_tohost (ns, hosts);
         Jput (hosts);
     }
-    ns_print (ns, fmt);
+    if (dopt)
+        ns_print_down (ns, fmt);
+    else if (uopt)
+        ns_print_up (ns, fmt);
+    else
+        ns_print (ns, fmt);
     ns_destroy (ns);
 
     flux_handle_destroy (&h);
@@ -229,7 +252,17 @@ static void nl_print (hostlist_t hl, const char *label, hlstr_type_t fmt)
 {
     char *s = hostlist_tostring (hl, fmt);
 
-    printf ("%-8s%s\n", label, s);
+    if (label) {
+        if (fmt == HLSTR_NEWLINE)
+            printf ("%-8s\n%s%s", label, s, strlen (s) > 0 ? "\n" : "");
+        else
+            printf ("%-8s%s\n", label, s);
+    } else {
+        if (fmt == HLSTR_NEWLINE)
+            printf ("%s%s", s, strlen (s) > 0 ? "\n" : "");
+        else
+            printf ("%s\n", s);
+    }
     free (s);
 }
 
@@ -239,6 +272,21 @@ static void ns_print (ns_t *ns, hlstr_type_t fmt)
     nl_print (ns->slow, "slow:", fmt);
     nl_print (ns->fail, "fail:", fmt);
     nl_print (ns->unknown, "unknown:", fmt);
+}
+
+static void ns_print_up (ns_t *ns, hlstr_type_t fmt)
+{
+    hostlist_t hl = hostlist_copy (ns->ok);
+    if (!hl)
+        oom ();
+    (void)hostlist_push_list (hl, ns->slow);
+    nl_print (hl, NULL, fmt);
+    hostlist_destroy (hl);
+}
+
+static void ns_print_down (ns_t *ns, hlstr_type_t fmt)
+{
+    nl_print (ns->fail, NULL, fmt);
 }
 
 /*
