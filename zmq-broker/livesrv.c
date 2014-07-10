@@ -32,6 +32,14 @@
  * parent to forget about that child.
  */
 
+/* Regarding conf.live.status:
+ * It's created by the master (rank=0) node with the master "ok", and
+ * all other nodes "unknown".  When a parent gets a hello from a child,
+ * this is reported (through a reduction sieve) to the master, which
+ * transitions those nodes to "ok".  Finally, the master listens for
+ * live.cstate events and transitions nodes accordingly.
+ */
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <assert.h>
@@ -60,7 +68,14 @@
 #include "reduce.h"
 #include "hostlist.h"
 
-typedef enum { CS_OK, CS_SLOW, CS_FAIL } cstate_t;
+typedef enum { CS_OK, CS_SLOW, CS_FAIL, CS_UNKNOWN } cstate_t;
+
+typedef struct {
+    hostlist_t ok;
+    hostlist_t fail;
+    hostlist_t slow;
+    hostlist_t unknown;
+} ns_t;
 
 typedef struct {
     int rank;
@@ -79,11 +94,13 @@ typedef struct {
     int slow_idle;
     int epoch;
     int rank;
+    char *rankstr;
     bool master;
     zlist_t *parents;   /* current parent is first in list */
     zhash_t *children;
     bool hb_subscribed;
     red_t r;
+    ns_t *ns;           /* master only */
     flux_t h;
 } ctx_t;
 
@@ -101,6 +118,9 @@ static const int default_slow_idle = 3;
 static const int reduce_timeout_master_msec = 100;
 static const int reduce_timeout_slave_msec = 10;
 
+static void ns_chg_one (ctx_t *ctx, const char *s, cstate_t from, cstate_t to);
+static int ns_sync (ctx_t *ctx);
+
 static void freectx (ctx_t *ctx)
 {
     parent_t *p;
@@ -110,6 +130,7 @@ static void freectx (ctx_t *ctx)
     zlist_destroy (&ctx->parents);
     zhash_destroy (&ctx->children);
     flux_red_destroy (ctx->r);
+    free (ctx->rankstr);
     free (ctx);
 }
 
@@ -122,6 +143,8 @@ static ctx_t *getctx (flux_t h)
         ctx->max_idle = default_max_idle;
         ctx->slow_idle = default_slow_idle;
         ctx->rank = flux_rank (h);
+        if (asprintf (&ctx->rankstr, "%d", ctx->rank) < 0)
+            oom ();
         ctx->master = flux_treeroot (h);
         if (!(ctx->parents = zlist_new ()))
             oom ();
@@ -295,6 +318,16 @@ static int cstate_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         if ((p = zlist_first (ctx->parents)) && p->state == CS_FAIL)
             failover (ctx);
     }
+    if (ctx->master) {
+        char *rankstr;
+        if (asprintf (&rankstr, "%d", rank) < 0)
+            oom ();
+        ns_chg_one (ctx, rankstr, ostate, nstate);
+        if (ns_sync (ctx) < 0)
+            flux_log (h, LOG_ERR, "%s: ns_sync: %s",
+                      __FUNCTION__, strerror (errno));
+        free (rankstr);
+    }
 done:
     Jput (event);
     return rc;
@@ -363,6 +396,9 @@ static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
                     cstate_change (ctx, c, CS_OK);
                 else if (idle <= ctx->max_idle)
                     cstate_change (ctx, c, CS_SLOW);
+                break;
+            case CS_UNKNOWN: /* can't happen */
+                assert (c->state != CS_UNKNOWN);
                 break;
         }
         key = zlist_next (keys);
@@ -481,23 +517,190 @@ static char *hl_string (hostlist_t hl)
     return s;
 }
 
+static void Jadd_hl (JSON o, const char *name, hostlist_t hl)
+{
+    char *s = hl_string (hl);
+    Jadd_str (o, name, s);
+    free (s);
+}
+
+static bool Jget_hl (JSON o, const char *name, hostlist_t *hp)
+{
+    hostlist_t hl;
+    const char *s;
+
+    if (!Jget_str (o, name, &s) || !(hl = hostlist_create (s)))
+        return false;
+    *hp = hl;
+    return true;
+}
+
+static void ns_destroy (ns_t *ns)
+{
+    if (ns->ok)
+        hostlist_destroy (ns->ok);
+    if (ns->fail)
+        hostlist_destroy (ns->fail);
+    if (ns->slow)
+        hostlist_destroy (ns->slow);
+    if (ns->unknown)
+        hostlist_destroy (ns->unknown);
+    free (ns);
+}
+
+static ns_t *ns_create (const char *ok, const char *fail,
+                        const char *slow, const char *unknown)
+{
+    ns_t *ns = xzmalloc (sizeof (*ns));
+
+    ns->ok = hostlist_create (ok);
+    ns->fail = hostlist_create (fail);
+    ns->slow = hostlist_create (slow);
+    ns->unknown = hostlist_create (unknown);
+    if (!ns->ok || !ns->fail|| !ns->slow || !ns->unknown)
+        oom ();
+    return ns;
+}
+
+
+static JSON ns_tojson (ns_t *ns)
+{
+    JSON o = Jnew ();
+    Jadd_hl (o, "ok", ns->ok);
+    Jadd_hl (o, "fail", ns->fail);
+    Jadd_hl (o, "slow", ns->slow);
+    Jadd_hl (o, "unknown", ns->unknown);
+    return o;
+}
+
+static ns_t *ns_fromjson (JSON o)
+{
+    ns_t *ns = xzmalloc (sizeof (*ns));
+
+    if (!Jget_hl (o, "ok", &ns->ok) || !Jget_hl (o, "unknown", &ns->unknown)
+     || !Jget_hl (o, "slow", &ns->slow) || !Jget_hl (o, "fail", &ns->fail)) {
+        ns_destroy (ns);
+        return NULL;
+    }
+    return ns;
+}
+
+static int ns_tokvs (ctx_t *ctx)
+{
+    JSON o = ns_tojson (ctx->ns);
+    int rc = -1;
+
+    if (kvs_put (ctx->h, "conf.live.status", o) < 0)
+        goto done;
+    if (kvs_commit (ctx->h) < 0)
+        goto done;
+    rc = 0;
+done:
+    Jput (o);
+    return rc;
+}
+
+static int ns_fromkvs (ctx_t *ctx)
+{
+    JSON o = NULL;
+    int rc = -1;
+
+    if (kvs_get (ctx->h, "conf.live.status", &o) < 0)
+        goto done;
+    ctx->ns = ns_fromjson (o);
+    rc = 0;
+done:
+    Jput (o);
+    return rc;
+}
+
+/* If ctx->ns is uninitialized, initialize it, using kvs data if any.
+ * If ctx->ns is initialized, write it to kvs.
+ */
+static int ns_sync (ctx_t *ctx)
+{
+    int rc = -1;
+    bool writekvs = false;
+
+    if (ctx->ns) {
+        writekvs = true;
+    } else if (ns_fromkvs (ctx) < 0) {
+        char *ok = ctx->rankstr, *fail = "", *slow = "", *unknown;
+        if (asprintf (&unknown, "1-%d", flux_size (ctx->h) - 1) < 0)
+            oom ();
+        ctx->ns = ns_create (ok, fail, slow, unknown);
+        free (unknown);
+        writekvs = true;
+    }
+    if (writekvs) {
+        if (ns_tokvs (ctx) < 0)
+            goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+/* N.B. from=CS_UNKNOWN is treated as "from any other state".
+ */
+static void ns_chg_one (ctx_t *ctx, const char *s, cstate_t from, cstate_t to)
+{
+    if (from == CS_UNKNOWN)
+        (void)hostlist_delete_host (ctx->ns->unknown, s);
+    if (from == CS_UNKNOWN || from == CS_FAIL)
+        (void)hostlist_delete_host (ctx->ns->fail, s);
+    if (from == CS_UNKNOWN || from == CS_SLOW)
+        (void)hostlist_delete_host (ctx->ns->slow, s);
+    if (from == CS_UNKNOWN || from == CS_OK)
+        (void)hostlist_delete_host (ctx->ns->ok, s);
+
+    switch (to) {
+        case CS_OK:
+            if (!hostlist_push_host (ctx->ns->ok, s))
+                oom ();
+            break;
+        case CS_SLOW:
+            if (!hostlist_push_host (ctx->ns->slow, s))
+                oom ();
+            break;
+        case CS_FAIL:
+            if (!hostlist_push_host (ctx->ns->fail, s))
+                oom ();
+            break;
+        case CS_UNKNOWN:
+            if (!hostlist_push_host (ctx->ns->fail, s))
+                oom ();
+            break;
+    }
+}
+
+static void ns_chg (ctx_t *ctx, hostlist_t hl, cstate_t from, cstate_t to)
+{
+    hostlist_iterator_t itr;
+    char *s;
+
+    if (!(itr = hostlist_iterator_create (hl)))
+        oom ();
+    while ((s = hostlist_next (itr)))
+        ns_chg_one (ctx, s, from, to);
+    hostlist_iterator_destroy (itr);
+}
+
 static void hello_sink (flux_t h, void *item, int batchnum, void *arg)
 {
     ctx_t *ctx = arg;
     hostlist_t a = item;
     char *s;
 
-    if (ctx->master) { /* sink to KVS */
-        if (kvs_get_string (h, "conf.live.hello", &s) == 0) {
-            hostlist_push (a, s);
-            free (s);
-        }
-        s = hl_string (a);
-        if (kvs_put_string (h, "conf.live.hello", s) < 0 || kvs_commit (h) < 0)
-            flux_log (h, LOG_ERR, "%s: kvs_put_string: %s",
+    if (ctx->master) {
+        /* FIXME: should we generate a live.cstate event if state is
+         * transitioning from CS_SLOW or CS_FAIL e.g. after reparenting?
+         */
+        ns_chg (ctx, a, CS_UNKNOWN, CS_OK);
+        if (ns_sync (ctx) < 0)
+            flux_log (h, LOG_ERR, "%s: ns_sync: %s",
                       __FUNCTION__, strerror (errno));
-        free (s);
-    } else {           /* push upstream */
+    } else {
         s = hl_string (a);
         JSON o = json_object_new_string (s);
         if (flux_request_send (h, o, "live.push") < 0)
@@ -566,7 +769,7 @@ static int hello_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         goto done;
     }
     /* Create a record for this child, unless already seen.
-     * Also send rank upstream to be written (reduced) to conf.live.hello.
+     * Also send rank upstream (reduced) to update conf.live.state.
      */
     c = child_create (rank);
     if (zhash_insert (ctx->children, c->rankstr, c) == 0) {
@@ -623,15 +826,14 @@ int mod_main (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
 
-    if (!ctx->master) {
+    if (ctx->master) {
+        if (ns_sync (ctx) < 0) {
+            flux_log (h, LOG_ERR, "ns_sync: %s", strerror (errno));
+            return -1;
+        }
+    } else {
         if (hello (ctx) < 0)
             return -1;
-    } else {
-        char *rankstr;
-        if (asprintf (&rankstr, "%d", ctx->rank) < 0)
-            oom ();
-        hello_source (ctx, rankstr);
-        free (rankstr);
     }
     if (kvs_watch_int (h, "conf.live.max-idle", max_idle_cb, ctx) < 0) {
         flux_log (h, LOG_ERR, "kvs_watch_int %s: %s", "conf.live.max-idle",
@@ -643,12 +845,10 @@ int mod_main (flux_t h, zhash_t *args)
                   strerror (errno));
         return -1;
     }
-    if (zlist_size (ctx->parents) > 1) {
-        if (flux_event_subscribe (h, "live.cstate") < 0) {
-            flux_log (ctx->h, LOG_ERR, "flux_event_subscribe: %s",
-                      strerror (errno));
-            return -1;
-        }
+    if (flux_event_subscribe (h, "live.cstate") < 0) {
+        flux_log (ctx->h, LOG_ERR, "flux_event_subscribe: %s",
+                  strerror (errno));
+        return -1;
     }
     if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
         flux_log (h, LOG_ERR, "flux_msghandler_addvec: %s", strerror (errno));
