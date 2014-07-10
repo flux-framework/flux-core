@@ -10,12 +10,11 @@
 #include "util.h"
 #include "log.h"
 #include "hostlist.h"
+#include "shortjson.h"
 
-#define OPTIONS "hduHcn"
+#define OPTIONS "hHcn"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
-    {"down",       no_argument,        0, 'd'},
-    {"up",         no_argument,        0, 'u'},
     {"hostname",   no_argument,        0, 'H'},
     {"comma",      no_argument,        0, 'c'},
     {"newline",    no_argument,        0, 'n'},
@@ -25,7 +24,7 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-up [--up|--down] [--hostname] [--comma|--newline] [nodelist]\n"
+"Usage: flux-up [--hostname] [--comma | --newline]\n"
 );
     exit (1);
 }
@@ -37,24 +36,28 @@ typedef enum {
     HLSTR_RANGED,
 } hlstr_type_t;
 
-static char *rank2str (int rank);
-static char *rank2host (json_object *hosts, int rank);
+typedef struct {
+    hostlist_t ok;
+    hostlist_t fail;
+    hostlist_t slow;
+    hostlist_t unknown;
+} ns_t;
+
+static char *rank2host (JSON hosts, const char *rankstr);
 static char *hostlist_tostring (hostlist_t hl, hlstr_type_t type);
+
+static ns_t *ns_fromkvs (flux_t h);
+static void ns_tohost (ns_t *ns, JSON hosts);
+static void ns_print (ns_t *ns, hlstr_type_t fmt);
+static void ns_destroy (ns_t *ns);
 
 int main (int argc, char *argv[])
 {
     flux_t h;
     int ch;
-    json_object *o, *dn = NULL;
-    json_object *hosts;
-    hostlist_t dnhl, uphl;
-    char *s;
-    int i, len;
-    bool dopt = false;
-    bool uopt = false;
     bool Hopt = false;
-    bool copt = false;
-    bool nopt = false;
+    hlstr_type_t fmt = HLSTR_RANGED;
+    ns_t *ns;
 
     log_init ("flux-up");
 
@@ -63,17 +66,11 @@ int main (int argc, char *argv[])
             case 'H': /* --hostname */
                 Hopt = true;
                 break;
-            case 'd': /* --down */
-                dopt = true;
-                break;
-            case 'u': /* --up */
-                uopt = true;
-                break;
             case 'c': /* --comma */
-                copt = true;
+                fmt = HLSTR_COMMA;
                 break;
             case 'n': /* --newline */
-                nopt = true;
+                fmt = HLSTR_NEWLINE;
                 break;
             default:
                 usage ();
@@ -86,73 +83,18 @@ int main (int argc, char *argv[])
     if (!(h = cmb_init ()))
         err_exit ("cmb_init");
 
+    if (!(ns = ns_fromkvs (h)))
+        err_exit ("conf.live.status");
     if (Hopt) {
+        JSON hosts;
         if (kvs_get (h, "hosts", &hosts) < 0)
             err_exit ("kvs_get hosts");
+        ns_tohost (ns, hosts);
+        Jput (hosts);
     }
+    ns_print (ns, fmt);
+    ns_destroy (ns);
 
-    /* Convert json array in KVS to hostlist for DOWN nodes.
-     */
-    if (!(dnhl = hostlist_create ("")))
-        oom ();
-    if (kvs_get (h, "conf.live.down", &dn) < 0 && errno != ENOENT)
-        err_exit ("kvs_get");
-    if (dn) {
-        len = json_object_array_length (dn);
-        for (i = 0; i < len; i++) {
-            o = json_object_array_get_idx (dn, i);
-            if (Hopt)
-                s = rank2host (hosts, json_object_get_int (o));
-            else
-                s = rank2str (json_object_get_int (o));
-            hostlist_push_host (dnhl, s);
-            free (s);
-            json_object_put (o);
-        }
-        json_object_put (dn);
-    }
-
-    /* Create hostlist for UP nodes from session size and dnhl.
-     */
-    if (uopt || !dopt) {
-        if (!(uphl = hostlist_create ("")))
-            oom ();
-        if (flux_info (h, NULL, &len, NULL) < 0)
-            err_exit ("flux_info");
-        for (i = 0; i < len; i++) {
-            if (Hopt)
-                s = rank2host (hosts, i);
-            else
-                s = rank2str (i);
-            if (hostlist_find (dnhl, s) == -1)
-                hostlist_push_host (uphl, s); 
-            free (s);
-        }
-        if (nopt)
-            s = hostlist_tostring (uphl, HLSTR_NEWLINE);
-        else if (copt)
-            s = hostlist_tostring (uphl, HLSTR_COMMA);
-        else
-            s = hostlist_tostring (uphl, HLSTR_RANGED);
-        printf ("%s%s%s", uopt ? "" : "up:\t", s,
-                uopt && strlen (s) == 0 ? "" : "\n");
-        hostlist_destroy (uphl);
-        free (s);
-    }
-
-    if (dopt || !uopt) {
-        if (nopt)
-            s = hostlist_tostring (dnhl, HLSTR_NEWLINE);
-        else if (copt)
-            s = hostlist_tostring (dnhl, HLSTR_COMMA);
-        else
-            s = hostlist_tostring (dnhl, HLSTR_RANGED);
-        printf ("%s%s%s", dopt ? "" : "down:\t", s,
-                dopt && strlen (s) == 0 ? "" : "\n");
-        free (s);
-    }
-
-    hostlist_destroy (dnhl);
     flux_handle_destroy (&h);
     log_fini ();
     return 0;
@@ -199,25 +141,106 @@ static char *hostlist_tostring (hostlist_t hl, hlstr_type_t type)
     return buf;
 }
 
-static char *rank2host (json_object *hosts, int rank)
+static char *rank2host (JSON hosts, const char *rankstr)
 {
-    json_object *o;
+    JSON o;
     const char *name;
+    int rank = strtoul (rankstr, NULL, 10);
 
-    if (!(o = json_object_array_get_idx (hosts, rank)))
-        msg_exit ("%s: rank %d not found", __FUNCTION__, rank);
-    if (util_json_object_get_string (o, "name", &name) < 0)
+    if (!Jget_ar_obj (hosts, rank, &o))
+        msg_exit ("%s: rank %d not found in hosts", __FUNCTION__, rank);
+    if (!Jget_str (o, "name", &name))
         msg_exit ("%s: rank %d malformed hosts entry", __FUNCTION__, rank);
     return xstrdup (name);
 }
 
-static char *rank2str (int rank)
+static bool Jget_hl (JSON o, const char *name, hostlist_t *hp)
 {
-    char *s;
-    if (asprintf (&s, "%d", rank) < 0)
-        oom ();
-    return s;
+    hostlist_t hl;
+    const char *s;
+
+    if (!Jget_str (o, name, &s) || !(hl = hostlist_create (s)))
+        return false;
+    *hp = hl;
+    return true;
 }
+
+static ns_t *ns_fromjson (JSON o)
+{
+    ns_t *ns = xzmalloc (sizeof (*ns));
+
+    if (!Jget_hl (o, "ok", &ns->ok) || !Jget_hl (o, "unknown", &ns->unknown)
+     || !Jget_hl (o, "slow", &ns->slow) || !Jget_hl (o, "fail", &ns->fail)) {
+        ns_destroy (ns);
+        return NULL;
+    }
+    return ns;
+}
+
+static ns_t *ns_fromkvs (flux_t h)
+{
+    JSON o = NULL;
+    ns_t *ns = NULL;
+
+    if (kvs_get (h, "conf.live.status", &o) < 0)
+        goto done;
+    ns = ns_fromjson (o);
+done:
+    Jput (o);
+    return ns;
+}
+
+static void ns_destroy (ns_t *ns)
+{
+    hostlist_destroy (ns->ok);
+    hostlist_destroy (ns->slow);
+    hostlist_destroy (ns->unknown);
+    hostlist_destroy (ns->fail);
+    free (ns);
+}
+
+static hostlist_t nl_tohost (hostlist_t hl, JSON hosts)
+{
+    hostlist_t nhl = hostlist_create ("");
+    hostlist_iterator_t itr;
+    char *s;
+
+    if (!(itr = hostlist_iterator_create (hl)))
+        oom ();
+    while ((s = hostlist_next (itr))) {
+        char *h = rank2host (hosts, s);
+        hostlist_push_host (nhl, h);
+        free (h);
+    }
+    hostlist_iterator_destroy (itr);
+    hostlist_destroy (hl);
+    return nhl;
+}
+
+static void ns_tohost (ns_t *ns, JSON hosts)
+{
+    ns->ok = nl_tohost (ns->ok, hosts);
+    ns->slow = nl_tohost (ns->slow, hosts);
+    ns->fail = nl_tohost (ns->fail, hosts);
+    ns->unknown = nl_tohost (ns->unknown, hosts);
+}
+
+static void nl_print (hostlist_t hl, const char *label, hlstr_type_t fmt)
+{
+    char *s = hostlist_tostring (hl, fmt);
+
+    printf ("%-8s%s\n", label, s);
+    free (s);
+}
+
+static void ns_print (ns_t *ns, hlstr_type_t fmt)
+{
+    nl_print (ns->ok, "ok:", fmt);
+    nl_print (ns->slow, "slow:", fmt);
+    nl_print (ns->fail, "fail:", fmt);
+    nl_print (ns->unknown, "unknown:", fmt);
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
