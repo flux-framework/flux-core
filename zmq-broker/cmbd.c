@@ -62,8 +62,10 @@ typedef struct {
      */
     zlist_t *parents;           /* DEALER - requests to parent */
                                 /*   (failover pushes new parent on head) */
-    void *zs_request;           /* ROUTER - requests from plugins/downstream */
-    char *uri_request;
+
+    endpt_t *child;             /* ROUTER - requests from children */
+
+    void *zs_request;           /* ROUTER - requests from plugins */
 
     char *uri_event_in;         /* SUB - to event module's ipc:// socket */
     void *zs_event_in;          /*       (event module takes care of epgm) */
@@ -211,7 +213,9 @@ int main (int argc, char *argv[])
                 ctx.security_set |= FLUX_SEC_TYPE_PLAIN;
                 break;
             case 't':   /* --child-uri URI[,URI,...] */
-                ctx.uri_request = xstrdup (optarg);
+                if (ctx.child)
+                    endpt_destroy (ctx.child);
+                ctx.child = endpt_create (optarg);
                 break;
             case 'p': { /* --parent-uri URI */
                 endpt_t *ep = endpt_create (optarg);
@@ -319,8 +323,8 @@ int main (int argc, char *argv[])
     while ((ep = zlist_pop (ctx.parents)))
         endpt_destroy (ep);
     zlist_destroy (&ctx.parents);
-    if (ctx.uri_request)
-        free (ctx.uri_request);
+    if (ctx.child)
+        endpt_destroy (ctx.child);
     if (ctx.rankstr)
         free (ctx.rankstr);
     zhash_destroy (&ctx.peer_idle);
@@ -441,15 +445,27 @@ static void *cmbd_init_request (ctx_t *ctx)
 
     if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
         err_exit ("zsocket_new");
-    if (flux_sec_ssockinit (ctx->sec, s) < 0)
-        msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ctx->sec));
     zsocket_set_hwm (s, 0);
     if (zsocket_bind (s, "%s", REQUEST_URI) < 0) /* always bind to inproc */
         err_exit ("%s", REQUEST_URI);
-    if (ctx->uri_request) {
-        if (zsocket_bind (s, "%s", ctx->uri_request) < 0)
-            err_exit ("%s", ctx->uri_request);
-    }
+    zp.socket = s;
+    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)request_cb, ctx) < 0)
+        err_exit ("zloop_poller");
+    return s;
+}
+
+static void *cmbd_init_child (ctx_t *ctx, const char *uri)
+{
+    void *s;
+    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
+
+    if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
+        err_exit ("zsocket_new");
+    if (flux_sec_ssockinit (ctx->sec, s) < 0)
+        msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ctx->sec));
+    zsocket_set_hwm (s, 0);
+    if (zsocket_bind (s, "%s", uri) < 0)
+        err_exit ("%s", uri);
     zp.socket = s;
     if (zloop_poller (ctx->zl, &zp, (zloop_fn *)request_cb, ctx) < 0)
         err_exit ("zloop_poller");
@@ -596,6 +612,8 @@ static void cmbd_init (ctx_t *ctx)
     ctx->zs_request = cmbd_init_request (ctx);
     ctx->zs_event_out = cmbd_init_event_out (ctx);
     ctx->zs_snoop = cmbd_init_snoop (ctx);
+    if (ctx->child)
+        ctx->child->zs = cmbd_init_child (ctx, ctx->child->uri);
 #if 0
     /* Increase max number of sockets and number of I/O thraeds.
      * (N.B. must call zctx_underlying () only after first socket is created)
@@ -692,7 +710,8 @@ static char *cmb_getattr (ctx_t *ctx, const char *name)
         if (ep)
             val = ep->uri;
     } else if (!strcmp (name, "cmbd-request-uri")) {
-        val = ctx->uri_request;
+        if (ctx->child)
+            val = ctx->child->uri;
     }
     return val;
 }
@@ -833,6 +852,15 @@ static int peer_idle (ctx_t *ctx, const char *uuid)
     if (!(p = zhash_lookup (ctx->peer_idle, uuid)))
         return ctx->hb_epoch;
     return ctx->hb_epoch - p->hb_lastseen;
+}
+
+static bool peer_ismodule (ctx_t *ctx, const char *uuid)
+{
+    peer_t *p;
+
+    if (!(p = zhash_lookup (ctx->peer_idle, uuid)))
+        return false;
+    return p->modflag;
 }
 
 static void self_update (ctx_t *ctx)
@@ -1057,7 +1085,7 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
 
 static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
-    zmsg_t *zmsg = zmsg_recv (ctx->zs_request);
+    zmsg_t *zmsg = zmsg_recv (item->socket);
 
     if (zmsg) {
         if (flux_request_sendmsg (ctx->h, &zmsg) < 0)
@@ -1267,23 +1295,24 @@ static int cmbd_response_sendmsg (void *impl, zmsg_t **zmsg)
 {
     ctx_t *ctx = impl;
     int rc = -1;
-    char *sender; /* sender of the original _request_ */
+    zframe_t *zf;
+    char *uuid = NULL;
 
-    snoop_cc (ctx, FLUX_MSGTYPE_RESPONSE, *zmsg);
-    if (!(sender = cmb_msg_nexthop (*zmsg))) {
+    if (!(zf = zmsg_first (*zmsg))) {
         errno = EINVAL;
-        goto done;
+        goto done; /* drop message with no frames */
     }
-    if (strlen (sender) == 0) { /* empty sender - must be me */
+    snoop_cc (ctx, FLUX_MSGTYPE_RESPONSE, *zmsg);
+    if (zframe_size (zf) == 0) {
         rc = cmb_internal_response (ctx, zmsg);
-        goto done;
+    } else if ((uuid = zframe_strdup (zf)) && peer_ismodule (ctx, uuid)) {
+        rc = zmsg_send (zmsg, ctx->zs_request);
+    } else if (ctx->child) {
+        rc = zmsg_send (zmsg, ctx->child->zs);
     }
-    if (zmsg_send (zmsg, ctx->zs_request) < 0)
-        goto done;
-    rc = 0;
 done:
-    if (sender)
-        free (sender);
+    if (uuid)
+        free (uuid);
     if (*zmsg)
         zmsg_destroy (zmsg);
     return rc;
