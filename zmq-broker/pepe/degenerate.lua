@@ -38,7 +38,6 @@ if pepe.rank == 0 then
 		.. " kvs:conf.log.reduction-timeout-msec=100"
 		.. " kvs:conf.log.circular-buffer-entries=100000"
 		.. " kvs:conf.log.persist-level=debug"
-		.. " kvs:conf.live.missed-hb-allow=5"
 		.. " kvs:conf.live.topology='" .. topology .. "'")
 else
     local parent_rank = pepe.rank - 1
