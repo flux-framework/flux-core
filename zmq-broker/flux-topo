@@ -3,6 +3,7 @@
 -- flux-topo - emit graphviz representation of Flux session topology
 
 local flux = require 'flux'
+local hostlist = require ("hostlist")
 local getopt = require 'alt_getopt'.get_opts
 
 local prog = string.match (arg[0], "([^/]+)$")
@@ -14,6 +15,10 @@ end
 
 function dot_hostlabel (rank, hosts)
     print (rank.." [label=\""..rank..":"..hosts[rank + 1]['name'].."\"]")
+end
+
+function dot_red (rank)
+    print (rank.." [style=filled,fillcolor=red]")
 end
 
 function dot_edge (parent, child)
@@ -40,6 +45,10 @@ if not kvs.conf.live.topology then
     die ("conf.live.topology: not found\n")
 end
 
+if not kvs.conf.live.status then
+    die ("conf.live.status: not found\n")
+end
+
 if opts.H then
     if not kvs.hosts then
         die ("hosts not found\n")
@@ -49,6 +58,12 @@ end
 print ("graph flux {")
 if opts.H then
     dot_hostlabel (0, kvs.hosts)
+end
+
+-- turn failed nodes red
+local failed = hostlist.new (kvs.conf.live.status["fail"])
+for rank in failed:next() do
+    dot_red (rank)
 end
 
 for i,ca in ipairs(kvs.conf.live.topology) do
