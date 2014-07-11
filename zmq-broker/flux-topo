@@ -17,12 +17,19 @@ function dot_hostlabel (rank, hosts)
     print (rank.." [label=\""..rank..":"..hosts[rank + 1]['name'].."\"]")
 end
 
-function dot_red (rank)
-    print (rank.." [style=filled,fillcolor=red]")
+function dot_color (rank, color)
+    print (rank.." [style=filled,fillcolor=" .. color .. "]")
 end
 
 function dot_edge (parent, child)
     print (parent.." -- "..child)
+end
+
+function dot_color_status (nodelist, color)
+    local hl = hostlist.new (nodelist)
+    for rank in hl:next() do
+        dot_color (rank, color)
+    end
 end
 
 local opts, optind = getopt (arg, "Hh", { })
@@ -60,11 +67,10 @@ if opts.H then
     dot_hostlabel (0, kvs.hosts)
 end
 
--- turn failed nodes red
-local failed = hostlist.new (kvs.conf.live.status["fail"])
-for rank in failed:next() do
-    dot_red (rank)
-end
+dot_color_status (kvs.conf.live.status["ok"], "green")
+dot_color_status (kvs.conf.live.status["fail"], "red")
+dot_color_status (kvs.conf.live.status["slow"], "yellow")
+dot_color_status (kvs.conf.live.status["unknown"], "gray")
 
 for i,ca in ipairs(kvs.conf.live.topology) do
     for j,child in ipairs(ca) do
