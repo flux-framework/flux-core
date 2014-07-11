@@ -700,6 +700,77 @@ static void ns_chg_hello (ctx_t *ctx, JSON a)
     }
 }
 
+static int topo_fromkvs (ctx_t *ctx)
+{
+    JSON car, ar = NULL, topo = NULL;
+    int rc = -1;
+    int len, i;
+    char *prank;
+
+    if (kvs_get (ctx->h, "conf.live.topo", &ar) < 0)
+        goto done;
+    if (!Jget_ar_len (ar, &len))
+        goto done;
+    topo = Jnew ();
+    for (i = 0; i < len; i++) {
+        if (Jget_ar_obj (ar, i, &car)) {
+            if (asprintf (&prank, "%d", i) < 0)
+                oom ();
+            Jadd_obj (topo, prank, car);
+            free (prank);
+        }
+    }
+    ctx->topo = Jget (topo);
+    rc = 0;
+done:
+    Jput (ar);
+    Jput (topo);
+    return rc;
+}
+
+static int topo_tokvs (ctx_t *ctx)
+{
+    json_object_iter iter;
+    JSON ar = Jnew_ar ();
+    int rc = -1;
+
+    json_object_object_foreachC (ctx->topo, iter) {
+        int prank = strtoul (iter.key, NULL, 10);
+        Jput_ar_obj (ar, prank, iter.val);
+    }
+    if (kvs_put (ctx->h, "conf.live.topo", ar) < 0)
+        goto done;
+    if (kvs_commit (ctx->h) < 0)
+        goto done;
+    rc = 0;
+done:
+    Jput (ar);
+    return rc;
+}
+
+/* If ctx->topo is uninitialized, initialize it, using kvs data if any.
+ * If ctx->topo is initialized, write it to kvs.
+ */
+static int topo_sync (ctx_t *ctx)
+{
+    int rc = -1;
+    bool writekvs = false;
+
+    if (ctx->topo) {
+        writekvs = true;
+    } else if (topo_fromkvs (ctx) < 0) {
+        ctx->topo = Jnew ();
+        writekvs = true;
+    }
+    if (writekvs) {
+        if (topo_tokvs (ctx) < 0)
+            goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
 /* Reduce b into a, where a and b look like:
  *    { "p1":[c1,c2,...], "p2":[c1,c2,...], ... }
  */
@@ -718,30 +789,6 @@ static void hello_merge (JSON a, JSON b)
         } else
             Jadd_obj (a, iter.key, iter.val);
     }
-}
-
-/* If ctx->topo is uninitialized, initialize it, using kvs data if any.
- * If ctx->topo is initialized, write it to kvs.
- */
-static int topo_sync (ctx_t *ctx)
-{
-    int rc = -1;
-    bool writekvs = false;
-
-    if (ctx->topo) {
-        writekvs = true;
-    } else if (kvs_get (ctx->h, "conf.live.top", &ctx->topo) < 0) {
-        ctx->topo = Jnew ();
-        writekvs = true;
-    }
-    if (writekvs) {
-        if (kvs_put (ctx->h, "conf.live.topo", ctx->topo) < 0
-                || kvs_commit (ctx->h) < 0)
-            goto done;
-    }
-    rc = 0;
-done:
-    return rc;
 }
 
 static void hello_sink (flux_t h, void *item, int batchnum, void *arg)
