@@ -16,5 +16,4 @@ ${CMDPREFIX} ${CMBD:-./cmbd} \
   kvs:conf.log.reduction-timeout-msec=100 \
   kvs:conf.log.circular-buffer-entries=100000 \
   kvs:conf.log.persist-level=debug \
-  kvs:conf.live.topology='[[1],[2]]' \
   rank:right-uri=$(rank2uri $(($rank+1)))

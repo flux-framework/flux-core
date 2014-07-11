@@ -24,7 +24,6 @@ local right_rank = (pepe.rank + 1) % pepe.nprocs
 local right_uri = "tcp://" ..  h[right_rank + 1] .. ":5556"
 
 if pepe.rank == 0 then
-    local topology = tree.k_ary_json (1, pepe.nprocs)
     pepe.run ("./cmbd --plugins=hb,sched," .. plugins
 		.. " --child-uri='tcp://*:5556'"
 		.. " --rank=" .. pepe.rank
@@ -37,8 +36,7 @@ if pepe.rank == 0 then
 		.. " kvs:conf.hb.period-sec=1.5"
 		.. " kvs:conf.log.reduction-timeout-msec=100"
 		.. " kvs:conf.log.circular-buffer-entries=100000"
-		.. " kvs:conf.log.persist-level=debug"
-		.. " kvs:conf.live.topology='" .. topology .. "'")
+		.. " kvs:conf.log.persist-level=debug")
 else
     local parent_rank = pepe.rank - 1
     local parent_uri = "tcp://" ..  h[parent_rank + 1] .. ":5556"

@@ -707,7 +707,7 @@ static int topo_fromkvs (ctx_t *ctx)
     int len, i;
     char *prank;
 
-    if (kvs_get (ctx->h, "conf.live.topo", &ar) < 0)
+    if (kvs_get (ctx->h, "conf.live.topology", &ar) < 0)
         goto done;
     if (!Jget_ar_len (ar, &len))
         goto done;
@@ -738,7 +738,7 @@ static int topo_tokvs (ctx_t *ctx)
         int prank = strtoul (iter.key, NULL, 10);
         Jput_ar_obj (ar, prank, iter.val);
     }
-    if (kvs_put (ctx->h, "conf.live.topo", ar) < 0)
+    if (kvs_put (ctx->h, "conf.live.topology", ar) < 0)
         goto done;
     if (kvs_commit (ctx->h) < 0)
         goto done;
