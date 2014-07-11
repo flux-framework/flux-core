@@ -512,10 +512,6 @@ static char *hl_string (hostlist_t hl)
         if (!(s = realloc (s, len *= 2)))
             oom ();
     len = strlen (s);
-    if (s[len - 1] == ']')
-        s[len - 1] = '\0';
-    if (*s == '[')
-        memmove (s, s + 1, len);
     return s;
 }
 
