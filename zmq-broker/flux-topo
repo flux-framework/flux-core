@@ -27,18 +27,35 @@ if opts.h then
 end
 
 local f, err = flux.new()
-if not f then die ("flux.new: %s\n", err) end
+if not f then
+    die ("flux.new: %s\n", err)
+end
 
 local kvs, err = f:kvsdir (".");
-if not kvs then die ("kvsdir . %s\n", err) end
-if not kvs.conf.live.topology then die ("conf.live.topology: not found\n") end
-if opts.H then if not kvs.hosts then die ("hosts not found\n") end end
+if not kvs then
+    die ("kvsdir . %s\n", err)
+end
+
+if not kvs.conf.live.topology then
+    die ("conf.live.topology: not found\n")
+end
+
+if opts.H then
+    if not kvs.hosts then
+        die ("hosts not found\n")
+    end
+end
 
 print ("graph flux {")
-if opts.H then dot_hostlabel (0, kvs.hosts) end
+if opts.H then
+    dot_hostlabel (0, kvs.hosts)
+end
+
 for i,ca in ipairs(kvs.conf.live.topology) do
     for j,child in ipairs(ca) do
-        if opts.H then dot_hostlabel (child, kvs.hosts) end
+        if opts.H then
+            dot_hostlabel (child, kvs.hosts)
+        end
         dot_edge (i - 1, child)
     end
 end
