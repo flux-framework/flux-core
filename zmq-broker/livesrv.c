@@ -101,6 +101,7 @@ typedef struct {
     bool hb_subscribed;
     red_t r;
     ns_t *ns;           /* master only */
+    JSON topo;          /* master only */
     flux_t h;
 } ctx_t;
 
@@ -130,6 +131,7 @@ static void freectx (ctx_t *ctx)
     zlist_destroy (&ctx->parents);
     zhash_destroy (&ctx->children);
     flux_red_destroy (ctx->r);
+    Jput (ctx->topo);
     free (ctx->rankstr);
     free (ctx);
 }
@@ -674,78 +676,134 @@ static void ns_chg_one (ctx_t *ctx, const char *s, cstate_t from, cstate_t to)
     }
 }
 
-static void ns_chg (ctx_t *ctx, hostlist_t hl, cstate_t from, cstate_t to)
+/* Iterate through all children in JSON topology object resulting from
+ * hello reduction, and transition them all to CS_OK.
+ * FIXME: should we generate a live.cstate event if state is
+ * transitioning from CS_SLOW or CS_FAIL e.g. after reparenting?
+ */
+static void ns_chg_hello (ctx_t *ctx, JSON a)
 {
-    hostlist_iterator_t itr;
+    json_object_iter iter;
+    int i, len, crank;
     char *s;
 
-    if (!(itr = hostlist_iterator_create (hl)))
-        oom ();
-    while ((s = hostlist_next (itr)))
-        ns_chg_one (ctx, s, from, to);
-    hostlist_iterator_destroy (itr);
+    json_object_object_foreachC (a, iter) {
+        if (Jget_ar_len (iter.val, &len))
+            for (i = 0; i < len; i++) {
+                if (Jget_ar_int (iter.val, i, &crank)) {
+                    if (asprintf (&s, "%d", crank) < 0)
+                        oom ();
+                    ns_chg_one (ctx, s, CS_UNKNOWN, CS_OK);
+                    free (s);
+                }
+            }
+    }
+}
+
+/* Reduce b into a, where a and b look like:
+ *    { "p1":[c1,c2,...], "p2":[c1,c2,...], ... }
+ */
+static void hello_merge (JSON a, JSON b)
+{
+    JSON ar;
+    json_object_iter iter;
+    int i, len, crank;
+
+    json_object_object_foreachC (b, iter) {
+        if (Jget_obj (a, iter.key, &ar) && Jget_ar_len (iter.val, &len)) {
+            for (i = 0; i < len; i++) {
+                if (Jget_ar_int (iter.val, i, &crank))
+                    Jadd_ar_int (ar, crank);
+            }
+        } else
+            Jadd_obj (a, iter.key, iter.val);
+    }
+}
+
+/* If ctx->topo is uninitialized, initialize it, using kvs data if any.
+ * If ctx->topo is initialized, write it to kvs.
+ */
+static int topo_sync (ctx_t *ctx)
+{
+    int rc = -1;
+    bool writekvs = false;
+
+    if (ctx->topo) {
+        writekvs = true;
+    } else if (kvs_get (ctx->h, "conf.live.top", &ctx->topo) < 0) {
+        ctx->topo = Jnew ();
+        writekvs = true;
+    }
+    if (writekvs) {
+        if (kvs_put (ctx->h, "conf.live.topo", ctx->topo) < 0
+                || kvs_commit (ctx->h) < 0)
+            goto done;
+    }
+    rc = 0;
+done:
+    return rc;
 }
 
 static void hello_sink (flux_t h, void *item, int batchnum, void *arg)
 {
     ctx_t *ctx = arg;
-    hostlist_t a = item;
-    char *s;
+    JSON a = item;
 
     if (ctx->master) {
-        /* FIXME: should we generate a live.cstate event if state is
-         * transitioning from CS_SLOW or CS_FAIL e.g. after reparenting?
-         */
-        ns_chg (ctx, a, CS_UNKNOWN, CS_OK);
+        ns_chg_hello (ctx, a);
+        hello_merge (ctx->topo, a);
         if (ns_sync (ctx) < 0)
             flux_log (h, LOG_ERR, "%s: ns_sync: %s",
                       __FUNCTION__, strerror (errno));
+        if (topo_sync (ctx) < 0)
+            flux_log (h, LOG_ERR, "%s: topo_sync: %s",
+                      __FUNCTION__, strerror (errno));
     } else {
-        s = hl_string (a);
-        JSON o = json_object_new_string (s);
-        if (flux_request_send (h, o, "live.push") < 0)
+        if (flux_request_send (h, a, "live.push") < 0)
             flux_log (h, LOG_ERR, "%s: flux_request_send: %s",
                       __FUNCTION__, strerror (errno));
-        Jput (o);
-        free (s);
     }
-    hostlist_destroy (a);
+    Jput (a);
 }
 
 static void hello_reduce (flux_t h, zlist_t *items, int batchnum, void *arg)
 {
-    hostlist_t a, b;
+    JSON a, b;
 
     if ((a = zlist_pop (items))) {
         while ((b = zlist_pop (items))) {
-            hostlist_push_list (a, b);
-            hostlist_destroy (b);
+            hello_merge (a, b);
+            Jput (b);
         }
         if (zlist_append (items, a) < 0)
             oom ();
     }
 }
 
-static void hello_source (ctx_t *ctx, const char *rankstr)
+/* Source:  { "prank":[crank] }
+ */
+static void hello_source (ctx_t *ctx, const char *prank, int crank)
 {
-    hostlist_t a;
+    JSON a = Jnew ();
+    JSON c = Jnew_ar ();
 
-    if ((a = hostlist_create (rankstr)))
-        flux_red_append (ctx->r, a, 0);
+    Jadd_ar_int (c, crank);
+    Jadd_obj (a, prank, c);
+    Jput (c);
+
+    flux_red_append (ctx->r, a, 0);
 }
 
 static int push_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     JSON request = NULL;
-    const char *s;
 
-    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
-             || !(s = json_object_get_string (request))) {
+    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    hello_source (ctx, s);
+    flux_red_append (ctx->r, Jget (request), 0);
 done:
     Jput (request);
     zmsg_destroy (zmsg);
@@ -775,7 +833,7 @@ static int hello_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     if (zhash_insert (ctx->children, c->rankstr, c) == 0) {
         zhash_freefn (ctx->children, c->rankstr,(zhash_free_fn *)child_destroy);
         manage_subscriptions (ctx);
-        hello_source (ctx, c->rankstr);
+        hello_source (ctx, ctx->rankstr, rank);
     } else
         child_destroy (c);
     /* Construct response - built from our own hello response, if any.
@@ -829,6 +887,10 @@ int mod_main (flux_t h, zhash_t *args)
     if (ctx->master) {
         if (ns_sync (ctx) < 0) {
             flux_log (h, LOG_ERR, "ns_sync: %s", strerror (errno));
+            return -1;
+        }
+        if (topo_sync (ctx) < 0) {
+            flux_log (h, LOG_ERR, "topo_sync: %s", strerror (errno));
             return -1;
         }
     } else {
