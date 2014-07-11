@@ -125,6 +125,22 @@ Jadd_ar_obj (JSON o, JSON obj)
     json_object_array_add (o, Jget (obj));
 }
 
+static __inline__ void
+Jput_ar_obj (JSON o, int n, JSON obj)
+{
+    //assert (json_object_get_type (o) == json_type_array)
+    json_object_array_put_idx (o, n, Jget (obj));
+}
+
+static __inline__ void
+Jadd_ar_int (JSON o, int i)
+{
+    JSON p = json_object_new_int (i);
+    if (!p)
+        oom ();
+    json_object_array_add (o, p);
+}
+
 /* Get JSON array length.
  */
 static __inline__ bool
