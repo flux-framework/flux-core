@@ -1,4 +1,4 @@
-/* handle.c - core flux_t handle operations */ 
+/* handle.c - core flux_t handle operations */
 
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -431,7 +431,7 @@ int handle_event_fd (flux_t h, int fd, short events)
 {
     dispatch_t *d;
     int rc = 0;
-    
+
     d = zlist_first (h->reactor->dsp);
     while (d) {
         if (d->type == DSP_TYPE_FD && d->fd.fd == fd
@@ -448,7 +448,7 @@ int handle_event_zs (flux_t h, void *zs, short events)
 {
     dispatch_t *d;
     int rc = 0;
-    
+
     d = zlist_first (h->reactor->dsp);
     while (d) {
         if (d->type == DSP_TYPE_ZS && d->zs.zs == zs
@@ -465,7 +465,7 @@ int handle_event_tmout (flux_t h, int timer_id)
 {
     dispatch_t *d;
     int rc = 0;
-    
+
     d = zlist_first (h->reactor->dsp);
     while (d) {
         if (d->type == DSP_TYPE_TMOUT && d->tmout.fn != NULL
@@ -509,7 +509,7 @@ int flux_msghandler_addvec (flux_t h, msghandler_t *handlers, int len,
         if (flux_msghandler_add (h, handlers[i].typemask, handlers[i].pattern,
                                     handlers[i].cb, arg) < 0)
             return -1;
-    return 0;        
+    return 0;
 }
 
 int flux_msghandler_append (flux_t h, int typemask, const char *pattern,
@@ -776,7 +776,7 @@ zmsg_t *flux_response_matched_recvmsg (flux_t h, const char *match, bool nb)
         }
     } while (!response);
 done:
-    if (nomatch) { 
+    if (nomatch) {
         while ((zmsg = zlist_pop (nomatch))) {
             if (flux_response_putmsg (h, &zmsg) < 0)
                 zmsg_destroy (&zmsg);
