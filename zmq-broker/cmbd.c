@@ -1180,7 +1180,7 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg)
 {
     zmsg_t *cpy;
-    char *typestr, *tag, *tagp;
+    char *typestr, *tag;
 
     if (!zmsg)
         return 0;
@@ -1192,8 +1192,7 @@ static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg)
         oom ();
     free (typestr);
     tag = cmb_msg_tag (zmsg, false);
-    tagp = strchr (tag, '!');
-    if (zmsg_pushstr (cpy, tagp ? tagp + 1 : tag) < 0)
+    if (zmsg_pushstr (cpy, tag) < 0)
         oom ();
     free (tag);
 

@@ -379,18 +379,12 @@ static void reactor_destroy (reactor_t r)
 
 static bool dispatch_msg_match (dispatch_t *d, const char *tag, int typemask)
 {
-    const char *baretag;
-
     if (d->type == DSP_TYPE_MSG) {
         if (!(d->msg.typemask & (typemask & FLUX_MSGTYPE_MASK)))
             return false;
         if (!d->msg.pattern)
             return true;
-        if ((baretag = strchr (tag, '!')))
-            baretag++;
-        else
-            baretag = tag;
-        if (fnmatch (d->msg.pattern, baretag, 0) == 0)
+        if (fnmatch (d->msg.pattern, tag, 0) == 0)
             return true;
     }
     return false;
