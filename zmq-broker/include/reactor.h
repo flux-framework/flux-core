@@ -18,9 +18,7 @@ typedef struct {
 
 /* Register a FluxMsgHandler callback to be called whenever a message
  * matching typemask and pattern (glob) is received.  The callback is
- * added to the beginning of the msghandler list.  If the callback
- * destroys the message, it is "consumed"; otherwise it falls through to
- * the next possible match.
+ * added to the beginning of the msghandler list.
  */
 int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
                          FluxMsgHandler cb, void *arg);
@@ -29,12 +27,6 @@ int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
  */
 int flux_msghandler_addvec (flux_t h, msghandler_t *handlers, int len,
                             void *arg);
-
-/* Register a FluxMsgHandler callback as above, except the callback is
- * added to the end of the msghandler list.
- */
-int flux_msghandler_append (flux_t h, int typemask, const char *pattern,
-                            FluxMsgHandler cb, void *arg);
 
 /* Unregister a FluxMsgHandler callback.  Only the first callback with
  * identical typemask and pattern is removed.
