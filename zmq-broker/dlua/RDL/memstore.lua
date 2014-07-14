@@ -76,6 +76,22 @@ local function deepcompare (t1, t2, seen)
     return true
 end
 
+--
+-- Convert tags table given as
+--
+--  { "tag1", "tag2", tag3 = 100 }
+-- to
+--  { tag1 = true, tag2 = true, tag3 = 100 }
+--
+local function convert_tags_table (t)
+    local result = deepcopy_no_metatable (t)
+    for i,v in ipairs (result) do
+        result [v] = true
+        result [i] = nil
+    end
+    return result
+end
+
 function MemStore:addtype (t)
     self.__types [t.name] = deepcopy_no_metatable (t)
 end
@@ -144,15 +160,25 @@ function MemStore:unlink (arg)
     return unlink_child (self, parent, res)
 end
 
+local function resource_tag (r, tag, value)
+    r.tags [tag] = (value or true)
+    return true
+end
+
 function MemStore:tag (id, tag, value)
     local r = self:get (id)
     if not r then return r, "not found" end
-    if not value then
-        value = true
+
+    if type (tag) == "string" then
+        return resource_tag (r, tag, value)
     end
-    r.tags[tag] = value
+
+    for k,v in pairs (convert_tags_table (tag)) do
+        resource_tag (r, k, v)
+    end
     return true
 end
+
 
 function MemStore:delete_tag (id, tag)
     local r = self:get (id)
