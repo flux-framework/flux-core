@@ -406,9 +406,7 @@ int handle_event_msg (flux_t h, int typemask, zmsg_t **zmsg)
     while (d) {
         if (dispatch_msg_match (d, tag, typemask) && d->msg.fn != NULL) {
             rc = d->msg.fn (h, typemask, zmsg, d->msg.arg);
-            if (!*zmsg)
-                break;
-            /* fall through to next match if zmsg uncomsumed */
+            break;
         }
         d = zlist_next (h->reactor->dsp);
     }
