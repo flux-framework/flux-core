@@ -107,6 +107,18 @@ function MemStore:store (r)
     return new
 end
 
+local function print_resource (r, pad)
+    local p = pad or ""
+    io.stderr:write (string.format ("%s%s\n", p, r.name))
+    for c in r:children () do
+        print_resource (c, p.." ")
+    end
+end
+
+function MemStore:print ()
+    print_resource (self:resource ("default"))
+end
+
 -- Return a reference to a single resource data table
 function MemStore:get (id)
     return self.__resources [id]
