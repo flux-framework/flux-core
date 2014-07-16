@@ -317,16 +317,36 @@ local function find_nearest_parent (store, arg)
     local  uri, err = URI.new (arg)
     if not uri then return nil, err end
 
+
+    -- Get a reference to the hierarchy by name given by this URI
     local t = store.__hierarchy [uri.name]
     if not t then return nil, uri.name..": doesn't exist" end
 
+    -- If no path component, then return immediately, the top level is
+    --  the nearest parent:
     if not uri.path then return t end
 
-    for k,v in uri.path:gmatch("/([^/]+)") do
-        local parent = t
-        t = t.children[k]
-        if not t then
-            return parent
+    -- Now check each path element in uri until we find a child that
+    --  doesn't exist in "store".
+    --
+    local parent
+    for k in uri.path:gmatch("/([^/]+)") do
+        -- First iteration we are at top level, e.g. resource
+        --  "foo" in default:/foo, just assign parent to to
+        --  `t' which points to this resource and continue the loop.
+        --
+        if not parent then
+            parent = t
+        else
+            -- Otherwise, if the previous parent has no child with
+            --  this name, then break and return parent as the
+            --  "nearest" parent in this URI:
+            --
+            if not parent.children[k] then
+                break
+            end
+            -- Update parent to next child and continue
+            parent = parent.children[k]
         end
     end
     return parent
