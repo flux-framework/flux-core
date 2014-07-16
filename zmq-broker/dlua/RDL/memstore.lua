@@ -547,6 +547,13 @@ function MemStore:copyto (s, dst)
         return true
     end
 
+    -- if a resource exists already in the dst repo, then
+    --  only update the resource and return
+    if (node_uri (dstparent) == s) then
+        copy_resource (self, dst, dstparent.id)
+        return true
+    end
+
     -- Reverse up tree until we find an existing parent in dst:
     -- Start by copying current node recursively, then we'll add each
     --  parent as we go up the tree...
