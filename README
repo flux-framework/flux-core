@@ -11,6 +11,7 @@ Ensure that prerequisites are installed:
   lua 5.1
   munge
   json-c
+  lua-hostlist
 
 Uncomment the appropriate MPIMOD setting in pmi-test/Makefile and build:
 
