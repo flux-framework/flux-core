@@ -1,8 +1,7 @@
 LIBUTIL_SOURCES := log.c hostlist.c util.c zmsg.c hljson.c lsdfatal.c \
 		   optparse.c list.c tstat.c
 
-CFLAGS += -DWITH_LSD_NOMEM_ERROR_FUNC -DWITH_LSD_FATAL_ERROR_FUNC \
-          -DWANT_RECKLESS_HOSTRANGE_EXPANSION
+CFLAGS += -DWITH_LSD_NOMEM_ERROR_FUNC -DWITH_LSD_FATAL_ERROR_FUNC
 
 all: libutil.a
 
