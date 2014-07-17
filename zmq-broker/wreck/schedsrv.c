@@ -916,7 +916,7 @@ action_r_event (flux_event_t *e)
 {
     int rc = -1;
 
-    if ((e->ev.je == r_released) || (e->ev.re == r_attempt)) {
+    if ((e->ev.re == r_released) || (e->ev.re == r_attempt)) {
         release_resources (rdl, resource, e->lwj);
         schedule_jobs (rdl, resource, p_queue);
         rc = 0;
