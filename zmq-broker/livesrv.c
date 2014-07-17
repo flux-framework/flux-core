@@ -276,7 +276,7 @@ static void failover (ctx_t *ctx)
         if (zlist_push (ctx->parents, p) < 0)
             oom ();
         goodbye (ctx, oldrank);
-        if (flux_failover (ctx->h, -1, p->uri) < 0)
+        if (flux_reparent (ctx->h, -1, p->uri) < 0)
             flux_log (ctx->h, LOG_ERR, "%s %s: %s",
                       __FUNCTION__, p->uri, strerror (errno));
         hello (ctx);

@@ -148,11 +148,9 @@ char *flux_log_decode (zmsg_t *zmsg, int *lp, char **fp, int *cp,
  */
 char *flux_getattr (flux_t h, int rank, const char *name);
 
-/* Cmbd failover functions
- */
-int flux_failover (flux_t h, int rank, const char *uri);
+int flux_reparent (flux_t h, int rank, const char *uri);
 
-int flux_panic (flux_t h, int rnak, const char *msg);
+int flux_panic (flux_t h, int rank, const char *msg);
 
 /* Message manipulation utility functions
  */
@@ -176,7 +174,7 @@ char *flux_zmsg_tag (zmsg_t *zmsg);
 
 /* Get json object from a zmsg. Caller must call json_object_put().
  */
-json_object *flux_zmsg_json(zmsg_t *zmsg);
+json_object *flux_zmsg_json (zmsg_t *zmsg);
 
 void flux_assfail (flux_t h, char *ass, char *file, int line);
 #define FASSERT(h, exp) if ((exp)); \

@@ -163,7 +163,7 @@ json_object *flux_lspeer (flux_t h, int rank)
     return response;
 }
 
-int flux_failover (flux_t h, int rank, const char *uri)
+int flux_reparent (flux_t h, int rank, const char *uri)
 {
     json_object *request = util_json_object_new_object ();
     json_object *response = NULL;
@@ -174,7 +174,7 @@ int flux_failover (flux_t h, int rank, const char *uri)
         goto done;
     }
     util_json_object_add_string (request, "uri", uri);
-    if ((response = flux_rank_rpc (h, rank, request, "cmb.failover"))) {
+    if ((response = flux_rank_rpc (h, rank, request, "cmb.reparent"))) {
         errno = EPROTO;
         goto done;
     }

@@ -61,7 +61,7 @@ typedef struct {
     /* Sockets.
      */
     zlist_t *parents;           /* DEALER - requests to parent */
-                                /*   (failover pushes new parent on head) */
+                                /*   (reparent pushes new parent on head) */
 
     endpt_t *child;             /* ROUTER - requests from children */
 
@@ -908,7 +908,7 @@ static void endpt_destroy (endpt_t *ep)
  * upstream requests.  Leave old parent(s) wired in to zloop to make
  * it possible to transition off a healthy node without losing replies.
  */
-static int cmb_failover (ctx_t *ctx, const char *uri)
+static int cmb_reparent (ctx_t *ctx, const char *uri)
 {
     endpt_t *ep;
 
@@ -923,7 +923,7 @@ static int cmb_failover (ctx_t *ctx, const char *uri)
     }
     if (zlist_push (ctx->parents, ep) < 0)
         oom ();
-    flux_log (ctx->h, LOG_INFO, "failover to %s", ep->uri);
+    flux_log (ctx->h, LOG_INFO, "reparent to %s", ep->uri);
     return 0;
 }
 
@@ -1050,13 +1050,13 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             json_object_put (request);
         if (s)
             free (s);
-    } else if (cmb_msg_match (*zmsg, "cmb.failover")) {
+    } else if (cmb_msg_match (*zmsg, "cmb.reparent")) {
         json_object *request = NULL;
         const char *uri;
         if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
                 || util_json_object_get_string (request, "uri", &uri) < 0) {
             flux_respond_errnum (ctx->h, zmsg, EPROTO);
-        } else if (cmb_failover (ctx, uri) < 0) {
+        } else if (cmb_reparent (ctx, uri) < 0) {
             flux_respond_errnum (ctx->h, zmsg, errno);
         } else {
             flux_respond_errnum (ctx->h, zmsg, 0);

@@ -24,7 +24,7 @@ void usage (void)
 "Usage: flux-peer [--rank N] idle\n"
 "       flux-peer [--rank N] parent-uri\n"
 "       flux-peer [--rank N] request-uri\n"
-"       flux-peer [--rank N] failover new-parent-uri\n"
+"       flux-peer [--rank N] reparent new-parent-uri\n"
 "       flux-peer [--rank N] panic [msg ...]\n"
 );
     exit (1);
@@ -59,11 +59,11 @@ int main (int argc, char *argv[])
     if (!(h = cmb_init ()))
         err_exit ("cmb_init");
 
-    if (!strcmp (cmd, "failover")) {
+    if (!strcmp (cmd, "reparent")) {
         if (optind != argc - 1)
             usage ();
-        if (flux_failover (h, rank, argv[optind]) < 0)
-            err_exit ("flux_failover");
+        if (flux_reparent (h, rank, argv[optind]) < 0)
+            err_exit ("flux_reparent");
     } else if (!strcmp (cmd, "idle")) {
         if (optind != argc)
             usage ();
