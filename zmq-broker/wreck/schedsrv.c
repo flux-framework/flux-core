@@ -197,6 +197,23 @@ stab_rlookup (struct stab_struct *ss, int i)
     return "unknown";
 }
 
+#if 0
+static void print_resource (struct resource *r)
+{
+    json_object *o = rdl_resource_json (r);
+    struct resource *c;
+
+    flux_log (h, LOG_DEBUG, "%s", json_object_to_json_string (o));
+
+    rdl_resource_iterator_reset (r);
+    while ((c = rdl_resource_next_child (r))) {
+        print_resource (c);
+        rdl_resource_destroy (c);
+    }
+    json_object_put (o);
+}
+#endif
+
 /*
  * Update the job's kvs entry for state and mark the time.
  * Intended to be part of a series of changes, so the caller must
@@ -400,47 +417,51 @@ idlize_resources (struct resource *r)
  * to which it is allocated.
  */
 static bool
-allocate_resources (struct resource *r, struct rdl_accumulator *a,
+allocate_resources (struct resource *fr, struct rdl_accumulator *a,
                     flux_lwj_t *job)
 {
     char *lwjtag = NULL;
+    char *uri = NULL;
     const char *type;
-    json_object *o;
+    json_object *o = NULL;
+    json_object *o2 = NULL;
+    json_object *o3 = NULL;
     struct resource *c;
+    struct resource *r;
     bool found = false;
 
-    o = rdl_resource_json (r);
-    flux_log (h, LOG_DEBUG, "considering resource: %s",
-              json_object_to_json_string (o));
+    asprintf (&uri, "%s:%s", resource, rdl_resource_path (fr));
+    r = rdl_resource_get (rdl, uri);
+    free (uri);
 
+    o = rdl_resource_json (r);
     Jget_str (o, "type", &type);
     asprintf (&lwjtag, "lwj.%ld", job->lwj_id);
     if (job->req.nnodes && (strcmp (type, "node") == 0)) {
         job->req.nnodes--;
         job->alloc.nnodes++;
-        rdl_resource_tag (r, lwjtag);
-        rdl_accumulator_add (a, r);
-        flux_log (h, LOG_DEBUG, "allocated node: %s",
-                  json_object_to_json_string (o));
     } else if (job->req.ncores && (strcmp (type, CORETYPE) == 0) &&
                (job->req.ncores > job->req.nnodes)) {
-               /* We put the (job->req.ncores > job->req.nnodes)
-                * requirement here to guarantee at least one core per
-                * node. */
-        job->req.ncores--;
-        job->alloc.ncores++;
-        rdl_resource_tag (r, lwjtag);
-        rdl_resource_delete_tag (r, IDLETAG);
-        rdl_accumulator_add (a, r);
-        flux_log (h, LOG_DEBUG, "allocated core: %s",
-                  json_object_to_json_string (o));
+        /* We put the (job->req.ncores > job->req.nnodes) requirement
+         * here to guarantee at least one core per node. */
+        Jget_obj (o, "tags", &o2);
+        Jget_obj (o2, IDLETAG, &o3);
+        if (o3) {
+            job->req.ncores--;
+            job->alloc.ncores++;
+            rdl_resource_tag (r, lwjtag);
+            rdl_resource_delete_tag (r, IDLETAG);
+            rdl_accumulator_add (a, r);
+            flux_log (h, LOG_DEBUG, "allocated core: %s",
+                      json_object_to_json_string (o));
+        }
     }
     free (lwjtag);
     json_object_put (o);
 
     found = !(job->req.nnodes || job->req.ncores);
 
-    while (!found && (c = rdl_resource_next_child (r))) {
+    while (!found && (c = rdl_resource_next_child (fr))) {
         found = allocate_resources (c, a, job);
         rdl_resource_destroy (c);
     }
@@ -453,7 +474,7 @@ allocate_resources (struct resource *r, struct rdl_accumulator *a,
  * with the core count per rank (i.e., node for the time being)
  */
 static int
-update_job_cores (struct resource *r, flux_lwj_t *job,
+update_job_cores (struct resource *jr, flux_lwj_t *job,
                   uint64_t *pnode, uint32_t *pcores)
 {
     bool imanode = false;
@@ -466,8 +487,8 @@ update_job_cores (struct resource *r, flux_lwj_t *job,
     struct resource *c;
     int rc = 0;
 
-    if (r) {
-        o = rdl_resource_json (r);
+    if (jr) {
+        o = rdl_resource_json (jr);
         if (o) {
             flux_log (h, LOG_DEBUG, "considering: %s",
                       json_object_to_json_string (o));
@@ -498,7 +519,7 @@ update_job_cores (struct resource *r, flux_lwj_t *job,
     }
     json_object_put (o);
 
-    while ((rc == 0) && (c = rdl_resource_next_child (r))) {
+    while ((rc == 0) && (c = rdl_resource_next_child (jr))) {
         rc = update_job_cores (c, job, pnode, pcores);
         rdl_resource_destroy (c);
     }
@@ -534,11 +555,11 @@ update_job_resources (flux_lwj_t *job)
 {
     uint64_t node = 0;
     uint32_t cores = 0;
-    struct resource *r = rdl_resource_get (job->rdl, resource);
+    struct resource *jr = rdl_resource_get (job->rdl, resource);
     int rc = -1;
 
-    rdl_resource_iterator_reset (r);
-    rc = update_job_cores (r, job, &node, &cores);
+    if (jr)
+        rc = update_job_cores (jr, job, &node, &cores);
 
     return rc;
 }
@@ -572,14 +593,12 @@ update_job (flux_lwj_t *job)
  * are found, it proceeds to allocate those resources and update the
  * kvs's lwj entry in preparation for job execution.
  */
-
 int schedule_job (struct rdl *rdl, const char *uri, flux_lwj_t *job)
 {
     int64_t nodes;
     int rc = -1;
     json_object *args = util_json_object_new_object ();
     json_object *o;
-    uint64_t reqnodes = 0;
     struct rdl_accumulator *a = NULL;
     struct resource *fr = NULL;         /* found resource */
     struct rdl *frdl = NULL;            /* found rdl */
@@ -611,15 +630,15 @@ int schedule_job (struct rdl *rdl, const char *uri, flux_lwj_t *job)
             json_object_put (o);
         }
 
-        reqnodes = job->req.nnodes;
-        if (nodes >= reqnodes) {
+        if (nodes >= job->req.nnodes) {
             rdl_resource_iterator_reset (fr);
-            a = rdl_accumulator_create (frdl);
+            a = rdl_accumulator_create (rdl);
             if (allocate_resources (fr, a, job)) {
                 job->rdl = rdl_accumulator_copy (a);
                 rc = update_job (job);
             }
         }
+        rdl_destroy (frdl);
     }
 ret:
     return rc;
@@ -716,17 +735,17 @@ release_lwj_resource (struct rdl *rdl, struct resource *jr, int64_t lwj_id)
     r = rdl_resource_get (rdl, uri);
 
     if (r) {
-        asprintf (&lwjtag, "lwj.%ld", lwj_id);
-        rdl_resource_delete_tag (r, lwjtag);
-
         o = rdl_resource_json (r);
         Jget_str (o, "type", &type);
-        if (strcmp (type, CORETYPE) == 0)
+        if (strcmp (type, CORETYPE) == 0) {
+            asprintf (&lwjtag, "lwj.%ld", lwj_id);
+            rdl_resource_delete_tag (r, lwjtag);
             rdl_resource_tag (r, IDLETAG);
+            free (lwjtag);
+        }
         flux_log (h, LOG_DEBUG, "resource released: %s",
                   json_object_to_json_string (o));
         json_object_put (o);
-        free (lwjtag);
 
         while (!rc && (c = rdl_resource_next_child (jr))) {
             rc = release_lwj_resource (rdl, c, lwj_id);
