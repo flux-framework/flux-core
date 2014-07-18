@@ -26,6 +26,8 @@ void usage (void)
 "       flux-peer [--rank N] request-uri\n"
 "       flux-peer [--rank N] reparent new-parent-uri\n"
 "       flux-peer [--rank N] panic [msg ...]\n"
+"       flux-peer [--rank N] failover\n"
+"       flux-peer [--rank N] recover\n"
 );
     exit (1);
 }
@@ -95,6 +97,16 @@ int main (int argc, char *argv[])
         flux_panic (h, rank, msg);
         if (msg)
             free (msg);
+    } else if (!strcmp (cmd, "failover")) {
+        if (optind != argc)
+            usage ();
+        if (flux_failover (h, rank) < 0)
+            err_exit ("flux_failover");
+    } else if (!strcmp (cmd, "recover")) {
+        if (optind != argc)
+            usage ();
+        if (flux_recover (h, rank) < 0)
+            err_exit ("flux_recover");
     } else
         usage ();
 

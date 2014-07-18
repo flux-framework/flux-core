@@ -259,29 +259,61 @@ static void parents_fromjson (ctx_t *ctx, JSON ar)
     }
 }
 
-static void failover (ctx_t *ctx)
+static int reparent (ctx_t *ctx, int oldrank, parent_t *p)
 {
-    parent_t *p;
-    int oldrank;
+    int rc = 0;
 
-    p = zlist_first (ctx->parents);
-    assert (p != NULL);
-    oldrank = p->rank;
-
-    p = zlist_next (ctx->parents);
-    while (p && p->state == CS_FAIL)
-        p = zlist_next (ctx->parents);
-    if (p) {
+    if (oldrank != p->rank) {
         zlist_remove (ctx->parents, p); /* move p to head of parents list */
         if (zlist_push (ctx->parents, p) < 0)
             oom ();
         goodbye (ctx, oldrank);
-        if (flux_reparent (ctx->h, -1, p->uri) < 0)
+        if ((rc = flux_reparent (ctx->h, -1, p->uri)) < 0)
             flux_log (ctx->h, LOG_ERR, "%s %s: %s",
                       __FUNCTION__, p->uri, strerror (errno));
         hello (ctx);
-    } else
-        flux_log (ctx->h, LOG_ERR, "%s: no failover candidates", __FUNCTION__);
+    }
+    return rc;
+}
+
+static int failover (ctx_t *ctx)
+{
+    parent_t *p;
+    int oldrank;
+
+    if ((p = zlist_first (ctx->parents))) {
+        oldrank = p->rank;
+        p = zlist_next (ctx->parents);
+    }
+    while (p && p->state == CS_FAIL)
+        p = zlist_next (ctx->parents);
+    if (!p) {
+        errno = ESRCH;
+        return -1;
+    }
+    return reparent (ctx, oldrank, p);
+}
+
+static int recover (ctx_t *ctx)
+{
+    parent_t *p;
+    int oldrank, maxrank = -1; /* max rank will be orig. parent */
+    parent_t *newp = NULL;
+
+    if ((p = zlist_first (ctx->parents)))
+        oldrank = p->rank;
+    while (p) {
+        if (p->rank > maxrank) {
+            maxrank = p->rank;
+            newp = p;
+        }
+        p = zlist_next (ctx->parents);
+    }
+    if (!newp) {
+        errno = ESRCH;
+        return -1;
+    }
+    return reparent (ctx, oldrank, newp);
 }
 
 static int cstate_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
@@ -318,7 +350,8 @@ static int cstate_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             p = zlist_next (ctx->parents);
         }
         if ((p = zlist_first (ctx->parents)) && p->state == CS_FAIL)
-            failover (ctx);
+            if (failover (ctx) < 0)
+                flux_log (h, LOG_ERR, "no failover candidates");
     }
     if (ctx->master) {
         char *rankstr;
@@ -914,12 +947,38 @@ done:
     return 0;
 }
 
+static int failover_request_cb (flux_t h, int typemask, zmsg_t **zmsg,void *arg)
+{
+    ctx_t *ctx = arg;
+
+    if (failover (ctx) < 0)
+        flux_respond_errnum (h, zmsg, errno);
+    else
+        flux_respond_errnum (h, zmsg, 0);
+
+    return 0;
+}
+
+static int recover_request_cb (flux_t h, int typemask, zmsg_t **zmsg,void *arg)
+{
+    ctx_t *ctx = arg;
+
+    if (recover (ctx) < 0)
+        flux_respond_errnum (h, zmsg, errno);
+    else
+        flux_respond_errnum (h, zmsg, 0);
+
+    return 0;
+}
+
 static msghandler_t htab[] = {
     { FLUX_MSGTYPE_EVENT,       "hb",                  hb_cb },
     { FLUX_MSGTYPE_EVENT,       "live.cstate",         cstate_cb },
     { FLUX_MSGTYPE_REQUEST,     "live.hello",          hello_request_cb },
     { FLUX_MSGTYPE_REQUEST,     "live.goodbye",        goodbye_request_cb },
     { FLUX_MSGTYPE_REQUEST,     "live.push",           push_request_cb },
+    { FLUX_MSGTYPE_REQUEST,     "live.failover",       failover_request_cb },
+    { FLUX_MSGTYPE_REQUEST,     "live.recover",        recover_request_cb},
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 

@@ -148,7 +148,11 @@ char *flux_log_decode (zmsg_t *zmsg, int *lp, char **fp, int *cp,
  */
 char *flux_getattr (flux_t h, int rank, const char *name);
 
+/* Reparenting functions.
+ */
 int flux_reparent (flux_t h, int rank, const char *uri);
+int flux_failover (flux_t h, int rank);
+int flux_recover (flux_t h, int rank);
 
 int flux_panic (flux_t h, int rank, const char *msg);
 
