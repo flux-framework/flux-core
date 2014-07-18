@@ -911,19 +911,33 @@ static void endpt_destroy (endpt_t *ep)
 static int cmb_reparent (ctx_t *ctx, const char *uri)
 {
     endpt_t *ep;
+    const char *comment = "";
 
     if (uri == NULL || !strstr (uri, "://")) {
         errno = EINVAL;
         return -1;
     }
-    ep = endpt_create (uri);
-    if (!(ep->zs = cmbd_init_parent (ctx, ep->uri))) {
-        endpt_destroy (ep);
-        return -1;
+    ep = zlist_first (ctx->parents);
+    while (ep) {
+        if (!strcmp (ep->uri, uri))
+            break;
+        ep = zlist_next (ctx->parents);
+    }
+    if (ep) {
+        zlist_remove (ctx->parents, ep);
+        comment = "restored";
+    } else {
+        ep = endpt_create (uri);
+        if (!(ep->zs = cmbd_init_parent (ctx, ep->uri))) {
+            endpt_destroy (ep);
+            return -1;
+        }
+        comment = "new";
     }
     if (zlist_push (ctx->parents, ep) < 0)
         oom ();
-    flux_log (ctx->h, LOG_INFO, "reparent to %s", ep->uri);
+    /* log after reparenting, not before */
+    flux_log (ctx->h, LOG_INFO, "reparent %s (%s)", uri, comment);
     return 0;
 }
 
