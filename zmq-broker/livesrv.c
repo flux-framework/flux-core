@@ -800,6 +800,17 @@ done:
     return rc;
 }
 
+static bool inarray (JSON ar, int n)
+{
+    int i, len, val;
+
+    if (Jget_ar_len (ar, &len))
+        for (i = 0; i < len; i++)
+            if (Jget_ar_int (ar, i, &val) && val == n)
+                return true;
+    return false;
+}
+
 /* Reduce b into a, where a and b look like:
  *    { "p1":[c1,c2,...], "p2":[c1,c2,...], ... }
  */
@@ -809,11 +820,16 @@ static void hello_merge (JSON a, JSON b)
     json_object_iter iter;
     int i, len, crank;
 
+    /* Iterate thru parents in 'b'.  If parent exists in 'a', merge children,
+     * else insert the whole parent from 'b' into 'a', with its children.
+     */
     json_object_object_foreachC (b, iter) {
         if (Jget_obj (a, iter.key, &ar) && Jget_ar_len (iter.val, &len)) {
             for (i = 0; i < len; i++) {
-                if (Jget_ar_int (iter.val, i, &crank))
-                    Jadd_ar_int (ar, crank);
+                if (Jget_ar_int (iter.val, i, &crank)) {
+                    if (!inarray (ar, crank))
+                        Jadd_ar_int (ar, crank);
+                }
             }
         } else
             Jadd_obj (a, iter.key, iter.val);
