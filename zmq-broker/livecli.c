@@ -59,6 +59,12 @@ done:
     return rc;
 }
 
+int flux_recover_all (flux_t h)
+{
+    return flux_event_send (h, NULL, "live.recover");
+}
+
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

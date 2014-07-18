@@ -740,6 +740,10 @@ static void ns_chg_hello (ctx_t *ctx, JSON a)
     }
 }
 
+/* Read ctx->topo from KVS.
+ * Topology in the kvs is a JSON array of arrays.
+ * Topology in ctx->topo is a JSON hash of arrays, for ease of merging.
+ */
 static int topo_fromkvs (ctx_t *ctx)
 {
     JSON car, ar = NULL, topo = NULL;
@@ -998,9 +1002,24 @@ static int recover_request_cb (flux_t h, int typemask, zmsg_t **zmsg,void *arg)
     return 0;
 }
 
+static int recover_event_cb (flux_t h, int typemask, zmsg_t **zmsg,void *arg)
+{
+    ctx_t *ctx = arg;
+
+    if (zlist_size (ctx->parents) > 0 && recover (ctx) < 0) {
+        if (errno == EINVAL)
+            flux_log (h, LOG_ERR, "recovery: parent is still in FAIL state");
+        else
+            flux_log (h, LOG_ERR, "recover: %s", strerror (errno));
+    }
+    zmsg_destroy (zmsg);
+    return 0;
+}
+
 static msghandler_t htab[] = {
     { FLUX_MSGTYPE_EVENT,       "hb",                  hb_cb },
     { FLUX_MSGTYPE_EVENT,       "live.cstate",         cstate_cb },
+    { FLUX_MSGTYPE_EVENT,       "live.recover",        recover_event_cb },
     { FLUX_MSGTYPE_REQUEST,     "live.hello",          hello_request_cb },
     { FLUX_MSGTYPE_REQUEST,     "live.goodbye",        goodbye_request_cb },
     { FLUX_MSGTYPE_REQUEST,     "live.push",           push_request_cb },
@@ -1036,7 +1055,7 @@ int mod_main (flux_t h, zhash_t *args)
                   strerror (errno));
         return -1;
     }
-    if (flux_event_subscribe (h, "live.cstate") < 0) {
+    if (flux_event_subscribe (h, "live.") < 0) {
         flux_log (ctx->h, LOG_ERR, "flux_event_subscribe: %s",
                   strerror (errno));
         return -1;

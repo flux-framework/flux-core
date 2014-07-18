@@ -28,6 +28,7 @@ void usage (void)
 "       flux-peer [--rank N] panic [msg ...]\n"
 "       flux-peer [--rank N] failover\n"
 "       flux-peer [--rank N] recover\n"
+"       flux-peer            allrecover\n"
 );
     exit (1);
 }
@@ -107,6 +108,11 @@ int main (int argc, char *argv[])
             usage ();
         if (flux_recover (h, rank) < 0)
             err_exit ("flux_recover");
+    } else if (!strcmp (cmd, "allrecover")) {
+        if (optind != argc)
+            usage ();
+        if (flux_recover_all (h) < 0)
+            err_exit ("flux_recover_all");
     } else
         usage ();
 
