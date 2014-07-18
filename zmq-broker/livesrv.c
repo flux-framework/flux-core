@@ -261,21 +261,30 @@ static void parents_fromjson (ctx_t *ctx, JSON ar)
 
 static int reparent (ctx_t *ctx, int oldrank, parent_t *p)
 {
-    int rc = 0;
+    int rc = -1;
 
-    if (oldrank != p->rank) {
-        zlist_remove (ctx->parents, p); /* move p to head of parents list */
-        if (zlist_push (ctx->parents, p) < 0)
-            oom ();
-        goodbye (ctx, oldrank);
-        if ((rc = flux_reparent (ctx->h, -1, p->uri)) < 0)
-            flux_log (ctx->h, LOG_ERR, "%s %s: %s",
-                      __FUNCTION__, p->uri, strerror (errno));
-        hello (ctx);
+    if (oldrank == p->rank) {
+        rc = 0;
+        goto done;
     }
+    if (p->state == CS_FAIL) {
+        errno = EINVAL;
+        goto done;
+    }
+    zlist_remove (ctx->parents, p); /* move p to head of parents list */
+    if (zlist_push (ctx->parents, p) < 0)
+        oom ();
+    goodbye (ctx, oldrank);
+    if ((rc = flux_reparent (ctx->h, -1, p->uri)) < 0)
+        flux_log (ctx->h, LOG_ERR, "%s %s: %s",
+                  __FUNCTION__, p->uri, strerror (errno));
+    hello (ctx);
+done:
     return rc;
 }
 
+/* Reparent to next alternate parent.
+ */
 static int failover (ctx_t *ctx)
 {
     parent_t *p;
@@ -294,6 +303,8 @@ static int failover (ctx_t *ctx)
     return reparent (ctx, oldrank, p);
 }
 
+/* Reparent to original parent.
+ */
 static int recover (ctx_t *ctx)
 {
     parent_t *p;
