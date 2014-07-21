@@ -156,7 +156,7 @@ void exec_subcommand_dir (const char *dir, char *argv[], const char *prefix)
 void exec_subcommand (const char *searchpath, char *argv[])
 {
     char *cpy = xstrdup (searchpath);
-    char *dir, *saveptr, *a1 = cpy;
+    char *dir, *saveptr = NULL, *a1 = cpy;
 
     while ((dir = strtok_r (a1, ":", &saveptr))) {
         exec_subcommand_dir (dir, argv, NULL);

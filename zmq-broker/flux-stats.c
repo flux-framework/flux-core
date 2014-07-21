@@ -133,7 +133,7 @@ static void parse_json (const char *n, json_object *o, double scale,
 {
     if (n) {
         char *cpy = xstrdup (n);
-        char *name, *saveptr, *a1 = cpy;
+        char *name, *saveptr = NULL, *a1 = cpy;
 
         while ((name = strtok_r (a1, ".", &saveptr))) {
             if (!(o = json_object_object_get (o, name)))

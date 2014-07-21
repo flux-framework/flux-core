@@ -422,7 +422,7 @@ allocate_resources (struct resource *fr, struct rdl_accumulator *a,
 {
     char *lwjtag = NULL;
     char *uri = NULL;
-    const char *type;
+    const char *type = NULL;
     json_object *o = NULL;
     json_object *o2 = NULL;
     json_object *o3 = NULL;
@@ -480,7 +480,7 @@ update_job_cores (struct resource *jr, flux_lwj_t *job,
     bool imanode = false;
     char *key = NULL;
     char *lwjtag = NULL;
-    const char *type;
+    const char *type = NULL;
     json_object *o = NULL;
     json_object *o2 = NULL;
     json_object *o3 = NULL;
@@ -725,7 +725,7 @@ release_lwj_resource (struct rdl *rdl, struct resource *jr, int64_t lwj_id)
 {
     char *lwjtag = NULL;
     char *uri = NULL;
-    const char *type;
+    const char *type = NULL;
     int rc = 0;
     json_object *o = NULL;
     struct resource *c;
