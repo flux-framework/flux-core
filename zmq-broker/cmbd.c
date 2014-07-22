@@ -242,7 +242,7 @@ int main (int argc, char *argv[])
                 break;
             case 'P': { /* --plugins p1,p2,... */
                 char *cpy = xstrdup (optarg);
-                char *path, *name, *saveptr, *a1 = cpy;
+                char *path, *name, *saveptr = NULL, *a1 = cpy;
                 module_t *mod;
                 int flags = 0;
                 while((name = strtok_r (a1, ",", &saveptr))) {

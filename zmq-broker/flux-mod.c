@@ -237,7 +237,7 @@ done:
 static char *modfind (const char *modpath, const char *name)
 {
     char *cpy = xstrdup (modpath);
-    char *path = NULL, *dir, *saveptr, *a1 = cpy;
+    char *path = NULL, *dir, *saveptr = NULL, *a1 = cpy;
     char *ret = NULL;
 
     while (!ret && (dir = strtok_r (a1, ":", &saveptr))) {
@@ -288,7 +288,7 @@ static JSON parse_modargs (int argc, char **argv)
     int i;
 
     for (i = 0; i < argc; i++) {
-        char *val, *cpy = xstrdup (argv[i]);
+        char *val = NULL, *cpy = xstrdup (argv[i]);
         if ((val == strchr (cpy, '=')))
             *val++ = '\0';
         if (!val)

@@ -94,7 +94,7 @@ void mon_waitevent (void *mon, int wevent)
 void send_czmq (char *buf, int len)
 {
     zctx_t *zctx;
-    void *zs, *mon;
+    void *zs, *mon = NULL;
     zmsg_t *zmsg;
 
     if (!(zctx = zctx_new ()))
