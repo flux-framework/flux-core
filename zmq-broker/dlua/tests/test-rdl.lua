@@ -466,4 +466,23 @@ Hierarchy "default" {
     assert (equals (a, expected), 'Expected '..i(expected) .. ' Got ' .. i(a))
 end
 
+
+function test_conf()
+    local rdl = assert (RDL.eval ([[
+uses "Node"
+Hierarchy "default" {
+    Resource{ "foo", children = { Node{ name="bar", id=0, sockets={ "0-1" }}}}
+}
+
+Hierarchy "default:/foo" {
+    Node{ name="bar", id=1, sockets={ "0-1" }}
+}
+Hierarchy "default:/foo/bar0" { Resource{ "gpu", id=0 } }
+]]))
+
+    assert_aggregate (rdl, { foo=1, node=2, socket=2, core=4, gpu=1 })
+    assert (rdl:resource ("default:/foo/bar0/gpu0"))
+
+end
+
 -- vi: ts=4 sw=4 expandtab
