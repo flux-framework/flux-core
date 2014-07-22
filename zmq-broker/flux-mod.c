@@ -289,7 +289,7 @@ static JSON parse_modargs (int argc, char **argv)
 
     for (i = 0; i < argc; i++) {
         char *val = NULL, *cpy = xstrdup (argv[i]);
-        if ((val == strchr (cpy, '=')))
+        if ((val = strchr (cpy, '=')))
             *val++ = '\0';
         if (!val)
             msg_exit ("malformed argument: %s", cpy);
