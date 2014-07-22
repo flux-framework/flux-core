@@ -109,7 +109,13 @@ end
 
 local function print_resource (r, pad)
     local p = pad or ""
-    io.stderr:write (string.format ("%s%s\n", p, r.name))
+    io.stderr:write (string.format ("%s%s (", p, r.name))
+    local t = {}
+    for k,v in pairs (r.tags) do
+        table.insert (t, k)
+    end
+    io.stderr:write (table.concat(t, ", "))
+    io.stderr:write (")\n")
     for c in r:children () do
         print_resource (c, p.." ")
     end
