@@ -15,7 +15,7 @@ end
 
 function URI.__index (uri, key)
     if key == "parent" then
-        local path =  uri.path:match ("(%S+)/[^/]+")
+        local path =  uri.path:match ("(%S+)/[^/]+") or "/"
         return uri_create (uri.name..":"..path)
     elseif key == "basename" then
         local b = uri.path:match ("/([^/]+)$")
@@ -25,7 +25,7 @@ function URI.__index (uri, key)
 end
 
 function URI:__tostring ()
-    return self.name..":"..self.path
+    return self.name..":"..(self.path or "/")
 end
 
 return { new = uri_create }
