@@ -289,16 +289,18 @@ function MemStore:hierarchy_put (uri, hnode)
     local uri = URI.new (uri)
 
     --
-    -- If a path to a resource was specified then try to get the
-    --  new object's parent. If this fails, error, otherwise
-    --  attach the new object to the parent.
+    -- If a path to a resource was specified then we attach the
+    --  new hierarchy as a child of the existing resource.
     --
     if uri.path then
-        local parent = self:get_hierarchy (tostring (uri.parent))
-        if not parent then
-            return ret_error ("URI: %s: not found", uri)
+        local h = self:get_hierarchy (uri.name..":"..uri.path)
+        if not h then
+            return ret_error ("URI: %s: not found", uri.path)
         end
-        return self:hierarchy_create (parent.hierarchy, hnode)
+        local childname = tostring(hnode.resource)
+        local info = { uri = uri.path, name = uri.name} 
+        h.children[childname] = self:hierarchy_create (info, hnode)
+        return
     end
 
     --
