@@ -553,6 +553,8 @@ ret:
 static int
 update_job_resources (flux_lwj_t *job)
 {
+    char *key = NULL;
+    char *rdlstr = NULL;
     uint64_t node = 0;
     uint32_t cores = 0;
     struct resource *jr = rdl_resource_get (job->rdl, resource);
@@ -560,6 +562,23 @@ update_job_resources (flux_lwj_t *job)
 
     if (jr)
         rc = update_job_cores (jr, job, &node, &cores);
+
+    if (rc == 0) {
+        rc = -1;
+        rdlstr = rdl_serialize (job->rdl);
+        if (!rdlstr) {
+            flux_log (h, LOG_ERR, "%ld rdl_serialize failed: %s",
+                      job->lwj_id, strerror (errno));
+        } else if (asprintf (&key, "lwj.%ld.rdl", job->lwj_id) < 0) {
+            flux_log (h, LOG_ERR, "update_job_resources key create failed");
+        } else if (kvs_put_string (h, key, rdlstr) < 0) {
+            flux_log (h, LOG_ERR,
+                      "update_job_resources %ld rdl write failed: %s",
+                      job->lwj_id, strerror (errno));
+        } else {
+            rc = 0;
+        }
+    }
 
     return rc;
 }
