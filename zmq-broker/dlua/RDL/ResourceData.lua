@@ -59,6 +59,12 @@ function ResourceData:create (args)
         id = args.id or nil,
         properties = copy_list_from_args (args, "properties"),
         tags = copy_list_from_args (args, "tags"),
+
+        -- Initialize total size of this resource and set
+        --  currently allocated to 0. The default size for all resource
+        --  is 1.
+        size = args.size or args.count or 1,
+        allocated = 0,
         hierarchy = {},
     }
     setmetatable (R, ResourceData)

@@ -102,7 +102,6 @@ function MemStore:store (r)
     if not new.tags then
         new.tags = {}
     end
-    new.tags [r.type] = 1
     self.__resources [r.uuid] = new
     return new
 end
