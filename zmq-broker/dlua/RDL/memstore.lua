@@ -993,11 +993,18 @@ local function get_aggregate (store, node, result)
         result = {}
     end
 
+    -- First, check to see if there are no available resources for this
+    --  node. If so, then this implies children resources are not available
+    --  either, so we return immediately, pruning the remainder of the
+    --  hierarchy.
+    local r = store:get (node.id)
+    if r.allocated == r.size then
+        return result
+    end
+
     for _,c in pairs (node.children) do
         get_aggregate (store, c, result)
     end
-
-    local r = store:get (node.id)
 
     local v = r.type
     result [v] = (result [v] or 0) + (r.size - r.allocated)
