@@ -44,8 +44,8 @@ Hierarchy "default" { Resource {"node", name="foo", id=0, tags = { "bar" } }}
     assert_equal ("/foo0", r.path)
     assert_equal ("default", r.hierarchy_name)
     assert(is_table(r.tags), "r.tags is "..type(r.tags))
-    assert (equals ({node = 1, bar = 1}, r.tags))
-    assert (equals ({node = 1, bar = 1}, r:aggregate()))
+    assert (equals ({ bar = 1}, r.tags))
+    assert (equals ({node = 1}, r:aggregate()))
 
     local t = r:tabulate()
     --print (require 'inspect' (t))
@@ -59,14 +59,14 @@ Hierarchy "default" { Resource {"node", name="foo", id=0, tags = { "bar" } }}
     assert_equal (nil, uuid:find ("'[^a-f0-9-]"))
 
     r:delete_tag ("bar")
-    assert (equals ({node = 1}, r.tags))
+    assert (equals ({}, r.tags))
 
     r:tag ("baz", 100)
     local i = require 'inspect'
-    assert (equals ({node = 1, baz = 100}, r.tags), "got:".. i(r.tags))
+    assert (equals ({ baz = 100}, r.tags), "got:".. i(r.tags))
 
     r:delete_tag ("baz")
-    assert (equals ({node = 1}, r.tags))
+    assert (equals ({}, r.tags))
 end
 
 function test_has_socket()
@@ -458,12 +458,9 @@ Hierarchy "default" {
     }
 }
 ]]))
-    local expected = { bar = 100, foo = 1, count = 500 }
 
     assert_true (is_table (rdl))
-    local a = rdl:aggregate ("default")
-    local i  = require 'inspect'
-    assert (equals (a, expected), 'Expected '..i(expected) .. ' Got ' .. i(a))
+    assert_aggregate (rdl, {bar = 100, foo = 1})
 end
 
 
@@ -482,6 +479,43 @@ Hierarchy "default:/foo/bar0" { Resource{ "gpu", id=0 } }
 
     assert_aggregate (rdl, { foo=1, node=2, socket=2, core=4, gpu=1 })
     assert (rdl:resource ("default:/foo/bar0/gpu0"))
+
+end
+
+function test_pool ()
+    local rdl = assert (RDL.eval ([[
+uses "Node"
+Hierarchy "default" {
+    Resource{ "foo",
+        children = { Node{ name="bar", id=0, sockets={ "0-1", "2-3" } } }
+    }
+}
+Hierarchy "default:/foo/bar0/socket0" { Resource{ "memory", count = 1024}}
+Hierarchy "default:/foo/bar0/socket1" { Resource{ "memory", count = 1024}}
+]]))
+
+    assert_aggregate (rdl, {foo = 1, node=1, socket=2, core=4, memory = 2048})
+
+    local r = assert (rdl:resource ("default:/foo/bar0/socket0/memory"))
+    assert (r.size == 1024, "Expected size 1024 got "..r.size)
+    assert (r.allocated == 0)
+    assert (r.available == 1024)
+    assert (r:alloc(512))
+    assert (r.available == 512, "Expected available 512 got "..r.available)
+    assert (r.allocated == 512, "Expected allocated 512 got "..r.allocated)
+
+    assert_aggregate (rdl, {foo = 1, node=1, socket=2, core=4, memory = 1536})
+
+    assert (r:free(512))
+    assert (r.allocated == 0)
+    assert (r.available == 1024)
+
+    -- Now allocate one socket and ensure cores and memory are not
+    -- included in aggregate:
+    --
+    local r = assert (rdl:resource ("default:/foo/bar0/socket0"))
+    r:alloc()
+    assert_aggregate (rdl, {foo=1, node=1, socket=1, core=2, memory=1024})
 
 end
 
