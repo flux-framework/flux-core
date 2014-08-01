@@ -807,7 +807,7 @@ local function resource_proxy_create (store, res)
     local sort_by_id = function (a,b)
         local r1 = store:get (res.children[a].id)
         local r2 = store:get (res.children[b].id)
-        return r1.id < r2.id
+        return (r1.id or 0) < (r2.id or 0)
     end
 
     --  Create table for iterating over named children:
