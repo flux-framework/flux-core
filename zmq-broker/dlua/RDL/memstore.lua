@@ -768,6 +768,32 @@ function MemStore:find (arg)
     return a.dst
 end
 
+
+function MemStore:alloc (id, n)
+    local r, err = self:get (id)
+    if not r then return nil, "Failed to find resource "..id end
+
+    if not n then n = 1 end
+    if (r.allocated + n) > r.size then
+        return nil, self:resource_name (id) ": Insufficient capacity"
+    end
+    r.allocated = r.allocated + n
+    return n
+end
+
+function MemStore:free (id, n)
+    local r, err = self:get (id)
+    if not r then return nil, "Failed to find resource "..id end
+
+    if not n then n = 1 end
+    if r.allocated < n then
+        return nil,
+          self:resource_name (id) ": Request to free greater than allocated"
+    end
+    r.allocated = r.allocated - n
+    return n
+end
+
 --
 --  Create a proxy for the resource object [res] stored in memory store
 --   [store]
@@ -893,6 +919,14 @@ local function resource_proxy_create (store, res)
         return store:delete_tag (res.id, t)
     end
 
+    local function alloc (self, n)
+        return store:alloc (res.id, n)
+    end
+
+    local function free (self, n)
+        return store:free (res.id, n)
+    end
+
     ---
     -- Various value accessor functions:
     --
@@ -915,6 +949,12 @@ local function resource_proxy_create (store, res)
             return resource.id
         elseif index == "uuid" then
             return res.id
+        elseif index == "size" then
+            return resource.size
+        elseif index == "allocated" then
+            return resource.allocated
+        elseif index == "available" then
+            return resource.size - resource.allocated
         end
     end
 
@@ -927,7 +967,9 @@ local function resource_proxy_create (store, res)
         delete_tag = delete_tag,
         tabulate = tabulate,
         aggregate = aggregate,
-        unlink = unlink
+        unlink = unlink,
+        alloc = alloc,
+        free = free,
     }
     return setmetatable (proxy,
         { __index = index,
