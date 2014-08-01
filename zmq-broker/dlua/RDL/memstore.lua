@@ -988,30 +988,19 @@ function MemStore:resource (arg)
     return resource_proxy_create (self, ref)
 end
 
---
--- Increment the value of table[key] or set to one if currently nil
---
-local function increment (table, key, v)
-    local n = tonumber(v) or 1
-    table[key] = (table[key] or 0) + n
-    return table[key]
-end
-
-local function aggregate_tags (resource, result)
-    local r = result or {}
-    for k,v in pairs (resource.tags) do
-        increment (r, k, v)
+local function get_aggregate (store, node, result)
+    if not result then
+        result = {}
     end
-    return r
-end
 
-local function aggregate (store, node, result)
-    local resource = store:get (node.id)
-    if not resource then return nil, "Resource "..node.id.." not found" end
-    local result = aggregate_tags (resource, result)
-    for _,child in pairs (node.children) do
-        aggregate (store, child, result)
+    for _,c in pairs (node.children) do
+        get_aggregate (store, c, result)
     end
+
+    local r = store:get (node.id)
+
+    local v = r.type
+    result [v] = (result [v] or 0) + (r.size - r.allocated)
     return result
 end
 
@@ -1019,7 +1008,7 @@ function MemStore:aggregate (uri)
     local t,err = self:get_hierarchy (uri)
     if not t then return nil, err end
 
-    return aggregate (self, t)
+    return get_aggregate (self, t)
 end
 
 function MemStore:serialize ()
