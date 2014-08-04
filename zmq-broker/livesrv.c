@@ -66,15 +66,15 @@
 #include "plugin.h"
 #include "shortjson.h"
 #include "reduce.h"
-#include "hostlist.h"
+#include "nodeset.h"
 
 typedef enum { CS_OK, CS_SLOW, CS_FAIL, CS_UNKNOWN } cstate_t;
 
 typedef struct {
-    hostlist_t ok;
-    hostlist_t fail;
-    hostlist_t slow;
-    hostlist_t unknown;
+    nodeset_t ok;
+    nodeset_t fail;
+    nodeset_t slow;
+    nodeset_t unknown;
 } ns_t;
 
 typedef struct {
@@ -119,7 +119,7 @@ static const int default_slow_idle = 3;
 static const int reduce_timeout_master_msec = 100;
 static const int reduce_timeout_slave_msec = 10;
 
-static void ns_chg_one (ctx_t *ctx, const char *s, cstate_t from, cstate_t to);
+static void ns_chg_one (ctx_t *ctx, uint32_t r, cstate_t from, cstate_t to);
 static int ns_sync (ctx_t *ctx);
 
 static void freectx (ctx_t *ctx)
@@ -365,14 +365,10 @@ static int cstate_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
                 flux_log (h, LOG_ERR, "no failover candidates");
     }
     if (ctx->master) {
-        char *rankstr;
-        if (asprintf (&rankstr, "%d", rank) < 0)
-            oom ();
-        ns_chg_one (ctx, rankstr, ostate, nstate);
+        ns_chg_one (ctx, rank, ostate, nstate);
         if (ns_sync (ctx) < 0)
             flux_log (h, LOG_ERR, "%s: ns_sync: %s",
                       __FUNCTION__, strerror (errno));
-        free (rankstr);
     }
 done:
     Jput (event);
@@ -545,48 +541,16 @@ done:
     return rc;
 }
 
-static char *hl_string (hostlist_t hl)
-{
-    int len = 64;
-    char *s = xzmalloc (len);
-
-    hostlist_sort (hl);
-    hostlist_uniq (hl);
-    while (hostlist_ranged_string (hl, len, s) < 0)
-        if (!(s = realloc (s, len *= 2)))
-            oom ();
-    len = strlen (s);
-    return s;
-}
-
-static void Jadd_hl (JSON o, const char *name, hostlist_t hl)
-{
-    char *s = hl_string (hl);
-    Jadd_str (o, name, s);
-    free (s);
-}
-
-static bool Jget_hl (JSON o, const char *name, hostlist_t *hp)
-{
-    hostlist_t hl;
-    const char *s;
-
-    if (!Jget_str (o, name, &s) || !(hl = hostlist_create (s)))
-        return false;
-    *hp = hl;
-    return true;
-}
-
 static void ns_destroy (ns_t *ns)
 {
     if (ns->ok)
-        hostlist_destroy (ns->ok);
+        nodeset_destroy (ns->ok);
     if (ns->fail)
-        hostlist_destroy (ns->fail);
+        nodeset_destroy (ns->fail);
     if (ns->slow)
-        hostlist_destroy (ns->slow);
+        nodeset_destroy (ns->slow);
     if (ns->unknown)
-        hostlist_destroy (ns->unknown);
+        nodeset_destroy (ns->unknown);
     free (ns);
 }
 
@@ -595,10 +559,10 @@ static ns_t *ns_create (const char *ok, const char *fail,
 {
     ns_t *ns = xzmalloc (sizeof (*ns));
 
-    ns->ok = hostlist_create (ok);
-    ns->fail = hostlist_create (fail);
-    ns->slow = hostlist_create (slow);
-    ns->unknown = hostlist_create (unknown);
+    ns->ok = nodeset_new_str (ok);
+    ns->fail = nodeset_new_str (fail);
+    ns->slow = nodeset_new_str (slow);
+    ns->unknown = nodeset_new_str (unknown);
     if (!ns->ok || !ns->fail|| !ns->slow || !ns->unknown)
         oom ();
     return ns;
@@ -608,19 +572,22 @@ static ns_t *ns_create (const char *ok, const char *fail,
 static JSON ns_tojson (ns_t *ns)
 {
     JSON o = Jnew ();
-    Jadd_hl (o, "ok", ns->ok);
-    Jadd_hl (o, "fail", ns->fail);
-    Jadd_hl (o, "slow", ns->slow);
-    Jadd_hl (o, "unknown", ns->unknown);
+    Jadd_str (o, "ok", nodeset_str (ns->ok));
+    Jadd_str (o, "fail", nodeset_str (ns->fail));
+    Jadd_str (o, "slow", nodeset_str (ns->slow));
+    Jadd_str (o, "unknown", nodeset_str (ns->unknown));
     return o;
 }
 
 static ns_t *ns_fromjson (JSON o)
 {
     ns_t *ns = xzmalloc (sizeof (*ns));
+    const char *s;
 
-    if (!Jget_hl (o, "ok", &ns->ok) || !Jget_hl (o, "unknown", &ns->unknown)
-     || !Jget_hl (o, "slow", &ns->slow) || !Jget_hl (o, "fail", &ns->fail)) {
+    if (!Jget_str (o, "ok", &s)      || !(ns->ok      = nodeset_new_str (s))
+     || !Jget_str (o, "unknown", &s) || !(ns->unknown = nodeset_new_str (s))
+     || !Jget_str (o, "slow", &s)    || !(ns->slow    = nodeset_new_str (s))
+     || !Jget_str (o, "fail", &s)    || !(ns->fail    = nodeset_new_str (s))) {
         ns_destroy (ns);
         return NULL;
     }
@@ -685,33 +652,29 @@ done:
 
 /* N.B. from=CS_UNKNOWN is treated as "from any other state".
  */
-static void ns_chg_one (ctx_t *ctx, const char *s, cstate_t from, cstate_t to)
+static void ns_chg_one (ctx_t *ctx, uint32_t r, cstate_t from, cstate_t to)
 {
     if (from == CS_UNKNOWN)
-        (void)hostlist_delete_host (ctx->ns->unknown, s);
+        nodeset_del_rank (ctx->ns->unknown, r);
     if (from == CS_UNKNOWN || from == CS_FAIL)
-        (void)hostlist_delete_host (ctx->ns->fail, s);
+        nodeset_del_rank (ctx->ns->fail, r);
     if (from == CS_UNKNOWN || from == CS_SLOW)
-        (void)hostlist_delete_host (ctx->ns->slow, s);
+        nodeset_del_rank (ctx->ns->slow, r);
     if (from == CS_UNKNOWN || from == CS_OK)
-        (void)hostlist_delete_host (ctx->ns->ok, s);
+        nodeset_del_rank (ctx->ns->ok, r);
 
     switch (to) {
         case CS_OK:
-            if (!hostlist_push_host (ctx->ns->ok, s))
-                oom ();
+            nodeset_add_rank (ctx->ns->ok, r);
             break;
         case CS_SLOW:
-            if (!hostlist_push_host (ctx->ns->slow, s))
-                oom ();
+            nodeset_add_rank (ctx->ns->slow, r);
             break;
         case CS_FAIL:
-            if (!hostlist_push_host (ctx->ns->fail, s))
-                oom ();
+            nodeset_add_rank (ctx->ns->fail, r);
             break;
         case CS_UNKNOWN:
-            if (!hostlist_push_host (ctx->ns->fail, s))
-                oom ();
+            nodeset_add_rank (ctx->ns->fail, r);
             break;
     }
 }
@@ -725,17 +688,12 @@ static void ns_chg_hello (ctx_t *ctx, JSON a)
 {
     json_object_iter iter;
     int i, len, crank;
-    char *s;
 
     json_object_object_foreachC (a, iter) {
         if (Jget_ar_len (iter.val, &len))
             for (i = 0; i < len; i++) {
-                if (Jget_ar_int (iter.val, i, &crank)) {
-                    if (asprintf (&s, "%d", crank) < 0)
-                        oom ();
-                    ns_chg_one (ctx, s, CS_UNKNOWN, CS_OK);
-                    free (s);
-                }
+                if (Jget_ar_int (iter.val, i, &crank))
+                    ns_chg_one (ctx, crank, CS_UNKNOWN, CS_OK);
             }
     }
 }
@@ -962,7 +920,7 @@ static int hello (ctx_t *ctx)
 {
     JSON request = Jnew ();
     JSON response = NULL;
-    int rc;
+    int rc = -1;
 
     Jadd_int (request, "rank", ctx->rank);
     if (!(response = flux_rpc (ctx->h, request, "live.hello"))) {
@@ -975,7 +933,7 @@ static int hello (ctx_t *ctx)
 done:
     Jput (request);
     Jput (response);
-    return 0;
+    return rc;
 }
 
 static int failover_request_cb (flux_t h, int typemask, zmsg_t **zmsg,void *arg)
