@@ -3,7 +3,7 @@
 /* Group RPC event format:
  *    tag:  mrpc.<plugin>.<method>[.<method>]...
  *    JSON: path="mrpc.<uuid>"
- *          dest="nodelist"
+ *          dest="nodeset"
  *          vers=N
  *          sender=N
  */
@@ -27,10 +27,10 @@
 #include <json/json.h>
 #include <czmq.h>
 
-#include "hostlist.h"
 #include "log.h"
 #include "zmsg.h"
 #include "util.h"
+#include "nodeset.h"
 #include "flux.h"
 #include "kvs.h"
 
@@ -44,39 +44,23 @@ struct flux_mrpc_struct {
     int nprocs;
     int sender;
     int vers;
-    hostlist_t hl;
-    hostlist_iterator_t itr;
+    nodeset_t ns;
+    nodeset_itr_t ns_itr;
     bool client;
 };
 
-static bool dest_valid (hostlist_t hl, int maxid)
+static bool dest_valid (flux_mrpc_t f, int maxid)
 {
-    hostlist_iterator_t itr = NULL;
-    char *node;
-    int nodeid;
-    bool valid = false;
+    uint32_t r;
+    int count = 0;
 
-    hostlist_uniq (hl);
-    if (hostlist_count (hl) < 1)
-        goto done;
-    itr = hostlist_iterator_create (hl);
-    while ((node = hostlist_next (itr))) {
-        nodeid = strtoul (node, NULL, 10);
-        if (nodeid < 0 || nodeid > maxid)
-            goto done;
+    nodeset_itr_rewind (f->ns_itr);
+    while ((r = nodeset_next (f->ns_itr)) != NODESET_EOF) {
+        count++;
+        if (r > maxid)
+            break;
     }
-    valid = true;
-done:
-    if (itr)
-        hostlist_iterator_destroy (itr);
-    return valid;
-}
-
-static bool dest_member (hostlist_t hl, int node)
-{
-    char s[16];
-    snprintf (s, sizeof (s), "%d", node);
-    if (hostlist_find (hl, s) < 0)
+    if (count < 1 || r != NODESET_EOF)
         return false;
     return true;
 }
@@ -90,11 +74,12 @@ flux_mrpc_t flux_mrpc_create (flux_t h, const char *dest)
     f->client = true;
     f->sender = flux_rank (h);
     f->dest = xstrdup (dest);
-    if (!(f->hl = hostlist_create (dest)) || !dest_valid (f->hl, maxid)) {
+    if (!(f->ns = nodeset_new_str (dest))
+        || !(f->ns_itr = nodeset_itr_new (f->ns)) || !dest_valid (f, maxid)) {
         errno = EINVAL;
         goto error;
     }
-    f->nprocs = hostlist_count (f->hl);
+    f->nprocs = nodeset_count (f->ns);
     if (!(f->uuid = zuuid_new ()))
         oom ();
     if (asprintf (&f->path, "mrpc.%s", zuuid_str (f->uuid)) < 0)
@@ -121,10 +106,10 @@ void flux_mrpc_destroy (flux_mrpc_t f)
     }
     if (f->uuid)
         zuuid_destroy (&f->uuid);
-    if (f->itr)
-        hostlist_iterator_destroy (f->itr);
-    if (f->hl)
-        hostlist_destroy (f->hl);
+    if (f->ns_itr)
+        nodeset_itr_destroy (f->ns_itr);
+    if (f->ns)
+        nodeset_destroy (f->ns);
     if (f->dest)
         free (f->dest);
     free (f);
@@ -182,19 +167,13 @@ done:
 
 int flux_mrpc_next_outarg (flux_mrpc_t f)
 {
-    char *node;
-
-    if (!f->itr)
-        f->itr = hostlist_iterator_create (f->hl);
-    if ((node = hostlist_next (f->itr)))
-        return strtoul (node, NULL, 10);
-    return -1;
+    uint32_t r = nodeset_next (f->ns_itr);
+    return (r == NODESET_EOF ? -1 : r);
 }
 
 void flux_mrpc_rewind_outarg (flux_mrpc_t f)
 {
-    if (f->itr)
-        hostlist_iterator_reset (f->itr);
+    nodeset_itr_rewind (f->ns_itr);
 }
 
 int flux_mrpc (flux_mrpc_t f, const char *fmt, ...)
@@ -235,17 +214,17 @@ flux_mrpc_t flux_mrpc_create_fromevent (flux_t h, json_object *request)
     flux_mrpc_t f = NULL;
     const char *dest, *path;
     int sender, vers;
-    hostlist_t hl = NULL;
+    nodeset_t ns = NULL;
 
     if (util_json_object_get_string (request, "dest", &dest) < 0
             || util_json_object_get_string (request, "path", &path) < 0
             || util_json_object_get_int (request, "sender", &sender) < 0
             || util_json_object_get_int (request, "vers", &vers) < 0
-            || !(hl = hostlist_create (dest))) {
+            || !(ns = nodeset_new_str (dest))) {
         errno = EPROTO;
         goto done;
     }
-    if (!dest_member (hl, flux_rank (h))) {
+    if (!nodeset_test_rank (ns, flux_rank (h))) {
         errno = EINVAL;
         goto done;
     }
@@ -255,16 +234,16 @@ flux_mrpc_t flux_mrpc_create_fromevent (flux_t h, json_object *request)
     f = xzmalloc (sizeof (*f));
     f->h = h;
     f->client = false;
-    f->nprocs = hostlist_count (hl);
+    f->nprocs = nodeset_count (ns);
     f->path = xstrdup (path);
     f->sender = sender;
     f->dest = xstrdup (dest);
     f->vers = vers;
-    f->hl = hl;
-    hl = NULL;
+    f->ns = ns;
+    ns = NULL;
 done:
-    if (hl)
-        hostlist_destroy (hl);
+    if (ns)
+        nodeset_destroy (ns);
     return f;
 }
 
