@@ -1,5 +1,5 @@
 LIBUTIL_SOURCES := log.c hostlist.c util.c zmsg.c hljson.c lsdfatal.c \
-		   optparse.c list.c tstat.c veb.c
+		   optparse.c list.c tstat.c veb.c nodeset.c
 
 CFLAGS += -DWITH_LSD_NOMEM_ERROR_FUNC -DWITH_LSD_FATAL_ERROR_FUNC
 
