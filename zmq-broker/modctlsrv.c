@@ -26,7 +26,7 @@
 #include "plugin.h"
 #include "shortjson.h"
 #include "reduce.h"
-#include "hostlist.h"
+#include "nodeset.h"
 
 typedef struct {
     flux_t h;
@@ -66,32 +66,19 @@ static ctx_t *getctx (flux_t h)
     return ctx;
 }
 
-char *hl_string (hostlist_t hl)
-{
-    int len = 64;
-    char *s = xzmalloc (len);
-
-    hostlist_sort (hl);
-    while (hostlist_ranged_string (hl, len, s) < 0)
-        if (!(s = realloc (s, len *= 2)))
-            oom ();
-    len = strlen (s);
-    return s;
-}
-
-/* Combine a and b into a new string (returned, caller must free).
- */
 char *merge_nodelist (const char *a, const char *b)
 {
     char *s = NULL;
-    hostlist_t hl;
+    nodeset_t ns;
 
-    if (!(hl = hostlist_create (a)) || !hostlist_push (hl, b))
+    if (!(ns = nodeset_new_str (a)))
         goto done;
-    s = hl_string (hl);
+    if (!nodeset_add_str (ns, b))
+        goto done;
+    s = xstrdup (nodeset_str (ns));
 done:
-    if (hl)
-        hostlist_destroy (hl);
+    if (ns)
+        nodeset_destroy (ns);
     return s;
 }
 
