@@ -539,8 +539,14 @@ local function printf (...)
     io.stdout:write (string.format (...))
 end
 
+local function reset_resource_size (store, uuid, n)
+    local r= store:get (uuid)
+    if n then r.size = n end
+    r.allocated = 0
+end
+
 --  Copy hierarchy at uri [s] to destination [dst]
-function MemStore:copyto (s, dst)
+function MemStore:copyto (s, dst, n)
     local uri = URI.new (s)
     if not uri then
         return nil, "bad URI: "..arg
@@ -548,6 +554,7 @@ function MemStore:copyto (s, dst)
 
     -- Get a reference to the hierarchy node at uri in this repo
     local h = self:get_hierarchy (s)
+    local uuid = h.id
 
     -- Find nearest parent in dst repo to uri.
     local dstparent = find_nearest_parent (dst, s)
@@ -558,6 +565,8 @@ function MemStore:copyto (s, dst)
         local h = hierarchy_export (self, s)
         dst:merge_exported (uri.name, h)
         dup_resources (self, dst, h)
+        -- Now adjust size of resource at uri to n and reset allocated:
+        reset_resource_size (dst, uuid, n)
         return true
     end
 
@@ -565,6 +574,7 @@ function MemStore:copyto (s, dst)
     --  only update the resource and return
     if (node_uri (dstparent) == s) then
         copy_resource (self, dst, dstparent.id)
+        reset_resource_size (dst, uuid, n)
         return true
     end
 
@@ -594,6 +604,7 @@ function MemStore:copyto (s, dst)
 
     hierarchy_validate (dstparent)
 
+    reset_resource_size (dst, uuid, n)
     return true
 end
 
@@ -667,7 +678,7 @@ function MemStore:resource_accumulator ()
     return (setmetatable (ra, ResourceAccumulator))
 end
 
-function ResourceAccumulator:add (id)
+function ResourceAccumulator:add (id, n)
 
     -- Did we pass in a resource proxy?
     if type(id) == "table" and id.uuid ~= nil then
@@ -683,7 +694,7 @@ function ResourceAccumulator:add (id)
     --
     for name,path in pairs (r.hierarchy) do
         local uri = name..":"..path
-        local rc, err = self.src:copyto (uri, self.dst)
+        local rc, err = self.src:copyto (uri, self.dst, n)
         if not rc then
             return nil, err
         end
@@ -1004,7 +1015,8 @@ local function get_aggregate (store, node, result)
     --  node. If so, then this implies children resources are not available
     --  either, so we return immediately, pruning the remainder of the
     --  hierarchy.
-    local r = store:get (node.id)
+    local r = assert (store:get (node.id))
+    assert (r.size, "no size for "..require 'inspect'(r))
     if r.allocated == r.size then
         return result
     end
