@@ -16,7 +16,6 @@
 #include <libgen.h>
 #include <czmq.h>
 #include <json/json.h>
-#include <dlfcn.h>
 
 #include "util.h"
 #include "log.h"
@@ -88,7 +87,6 @@ static void setup_rdl_lua (void)
     char *s;
     char  exe_path [MAXPATHLEN];
     char *exe_dir;
-    char *rdllib;
 
     memset (exe_path, 0, MAXPATHLEN);
     if (readlink ("/proc/self/exe", exe_path, MAXPATHLEN - 1) < 0)
@@ -102,13 +100,6 @@ static void setup_rdl_lua (void)
 
     flux_log (h, LOG_DEBUG, "LUA_PATH %s", getenv ("LUA_PATH"));
     flux_log (h, LOG_DEBUG, "LUA_CPATH %s", getenv ("LUA_CPATH"));
-
-    asprintf (&rdllib, "%s/lib/librdl.so", exe_dir);
-    if (!dlopen (rdllib, RTLD_NOW | RTLD_GLOBAL)) {
-        flux_log (h, LOG_ERR, "dlopen %s failed", rdllib);
-        return;
-    }
-    free(rdllib);
 
     rdllib_set_default_errf (h, (rdl_err_f)(&f_err));
 }
@@ -562,6 +553,8 @@ update_job_resources (flux_lwj_t *job)
 
     if (jr)
         rc = update_job_cores (jr, job, &node, &cores);
+    else
+        flux_log (h, LOG_ERR, "update_job_resources passed a null resource");
 
     if (rc == 0) {
         rc = -1;
@@ -654,6 +647,9 @@ int schedule_job (struct rdl *rdl, const char *uri, flux_lwj_t *job)
             a = rdl_accumulator_create (rdl);
             if (allocate_resources (fr, a, job)) {
                 job->rdl = rdl_accumulator_copy (a);
+                /* Transition the job back to submitted to prevent the
+                 * scheduler from trying to schedule it again */
+                job->state = j_submitted;
                 rc = update_job (job);
             }
         }
@@ -670,7 +666,9 @@ int schedule_jobs (struct rdl *rdl, const char *uri, zlist_t *jobs)
 
     job = zlist_first (jobs);
     while (!rc && job) {
-        rc = schedule_job(rdl, uri, job);
+        if (job->state == j_unsched) {
+            rc = schedule_job(rdl, uri, job);
+        }
         job = zlist_next (jobs);
     }
 
@@ -841,8 +839,11 @@ action_j_event (flux_event_t *e)
                       "job %ld read state mismatch ", e->lwj->lwj_id);
             goto bad_transition;
         }
-        flux_log (h, LOG_DEBUG, "setting %ld to submitted state",
+        /* Transition the job temporarily to unscheduled to flag it as
+         * a candidate to be scheduled */
+        flux_log (h, LOG_DEBUG, "setting %ld to unscheduled state",
                   e->lwj->lwj_id);
+        e->lwj->state = j_unsched;
         schedule_jobs (rdl, resource, p_queue);
         break;
 

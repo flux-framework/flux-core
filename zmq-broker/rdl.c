@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <dlfcn.h>
 
 #include <lua.h>
 #include <lualib.h>
@@ -90,6 +91,16 @@ void rdllib_close (struct rdllib *rl)
 
 static int rdllib_init (struct rdllib *rl)
 {
+    char *error = NULL;
+
+    /* dlopen liblua.so to pickup symbols that will be referenced by
+     * "require" */
+    dlopen ("liblua.so", RTLD_NOW | RTLD_GLOBAL);
+    if ((error = dlerror()) != NULL)  {
+        VERR (rl, "dlopen(liblua.so) failed: %s\n", error);
+        return (-1);
+    }
+
     /* XXX: Is there no equivalent from C? */
     lua_getglobal (rl->L, "require");
     lua_pushstring (rl->L, "RDL");
