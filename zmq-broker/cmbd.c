@@ -135,7 +135,7 @@ static void peer_modcreate (ctx_t *ctx, const char *uuid);
 static endpt_t *endpt_create (const char *uri);
 static void endpt_destroy (endpt_t *ep);
 
-#define OPTIONS "t:vR:S:p:P:L:H:N:nci"
+#define OPTIONS "t:vR:S:p:M:X:L:H:N:nci"
 static const struct option longopts[] = {
     {"session-name",    required_argument,  0, 'N'},
     {"no-security",     no_argument,        0, 'n'},
@@ -146,7 +146,8 @@ static const struct option longopts[] = {
     {"curve-security",  no_argument,        0, 'c'},
     {"rank",            required_argument,  0, 'R'},
     {"size",            required_argument,  0, 'S'},
-    {"plugins",         required_argument,  0, 'P'},
+    {"plugins",         required_argument,  0, 'M'},
+    {"module-path",     required_argument,  0, 'X'},
     {"logdest",         required_argument,  0, 'L'},
     {"hostlist",        required_argument,  0, 'H'},
     {0, 0, 0, 0},
@@ -157,7 +158,7 @@ static const struct flux_handle_ops cmbd_handle_ops;
 static void usage (void)
 {
     fprintf (stderr,
-"Usage: cmbd OPTIONS --plugins name[,name,...] [plugin:key=val ...]\n"
+"Usage: cmbd OPTIONS [module:key=val ...]\n"
 " -t,--child-uri URI           Set child URI to bind and receive requests\n"
 " -p,--parent-uri URI          Set parent URI to connect and send requests\n"
 " -v,--verbose                 Be chatty\n"
@@ -165,8 +166,8 @@ static void usage (void)
 " -R,--rank N                  Set cmbd rank (0...size-1)\n"
 " -S,--size N                  Set number of ranks in session\n"
 " -N,--session-name NAME       Set session name (default: flux)\n"
-" -P,--plugins name[,name,...] Load the named plugins (comma separated)\n"
-" -X,--plugin-path PATH        Set plugin search path (colon separated)\n"
+" -M,--plugins name[,name,...] Load the named modules (comma separated)\n"
+" -X,--module-path PATH        Set module search path (colon separated)\n"
 " -L,--logdest DEST            Log to DEST, can  be syslog, stderr, or file\n"
 " -c,--curve-security          Use CURVE security (default)\n"
 " -i,--plain-insecurity        Use PLAIN security instead of CURVE\n"
@@ -240,7 +241,7 @@ int main (int argc, char *argv[])
             case 'S':   /* --size N */
                 ctx.size = strtoul (optarg, NULL, 10);
                 break;
-            case 'P': { /* --plugins p1,p2,... */
+            case 'M': { /* --plugins p1,p2,... */
                 char *cpy = xstrdup (optarg);
                 char *path, *name, *saveptr = NULL, *a1 = cpy;
                 module_t *mod;
@@ -258,7 +259,7 @@ int main (int argc, char *argv[])
                 free (cpy);
                 break;
             }
-            case 'X':   /* --plugin-path PATH */
+            case 'X':   /* --module-path PATH */
                 ctx.plugin_path = optarg;
                 break;
             case 'L':   /* --logdest DEST */
