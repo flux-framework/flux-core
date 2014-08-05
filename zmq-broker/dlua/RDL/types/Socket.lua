@@ -23,6 +23,12 @@ function Socket:initialize (arg)
         )
         id = id + 1
     end
+
+    if arg.memory and tonumber (arg.memory) then
+        self:add_child (
+            Resource{ "memory", size = arg.memory }
+        )
+    end
 end
 
 return Socket

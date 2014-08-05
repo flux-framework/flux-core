@@ -19,7 +19,8 @@ function Node:initialize (arg)
     )
     local sockid = 0
     for _,c in pairs (arg.sockets) do
-        self:add_child (Socket{ id = sockid, cpus = c })
+        self:add_child (Socket{ id = sockid, cpus = c,
+                                memory = arg.memory_per_socket })
         sockid = sockid + 1
     end
 end
