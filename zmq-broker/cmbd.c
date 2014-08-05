@@ -16,10 +16,12 @@
 #include <unistd.h>
 #include <sys/param.h>
 #include <stdbool.h>
-#include <sys/socket.h>
+//#include <sys/socket.h>
 #include <sys/time.h>
-#include <sys/resource.h>
-#include <pwd.h>
+//#include <sys/resource.h>
+//#include <pwd.h>
+#include <dlfcn.h>
+#include <pmi.h>
 
 #include <json/json.h>
 #include <zmq.h>
@@ -47,6 +49,18 @@ typedef struct {
     void *zs;
     char *uri;
 } endpt_t;
+
+struct pmi_struct {
+    int (*init)(int *);
+    int (*get_size)(int *);
+    int (*get_rank)(int *);
+    int (*kvs_get_my_name)(char *, int);
+    int (*kvs_put)(const char *, const char *, const char *);
+    int (*kvs_commit)(const char *);
+    int (*barrier)(void);
+    int (*kvs_get)(const char *, const char *, char *, int);
+    int (*finalize)(void);
+};
 
 typedef struct {
     /* 0MQ
@@ -91,9 +105,15 @@ typedef struct {
     flux_t h;
     pid_t pid;
     char hostname[HOST_NAME_MAX + 1];
+    char ipaddr[32];
     int hb_epoch;
     zhash_t *peer_idle;         /* peer (hopcount=1) hb idle time, by uuid */
     int hb_lastreq;             /* hb epoch of last upstream request */
+    char *proctitle;
+    /* PMI bootstrap
+     */
+    char *pmi_libname;
+    int pmi_k_ary;
 } ctx_t;
 
 typedef struct {
@@ -126,7 +146,7 @@ static void cmbd_fini (ctx_t *ctx);
 static module_t *module_create (ctx_t *ctx, const char *path, int flags);
 static void module_destroy (module_t *mod);
 static void module_unload (module_t *mod, zmsg_t **zmsg);
-static char *modfind (const char *modpath, const char *name);
+static void module_prepare (ctx_t *ctx, const char *name);
 
 static int peer_idle (ctx_t *ctx, const char *uuid);
 static void peer_update (ctx_t *ctx, const char *uuid);
@@ -135,7 +155,10 @@ static void peer_modcreate (ctx_t *ctx, const char *uuid);
 static endpt_t *endpt_create (const char *uri);
 static void endpt_destroy (endpt_t *ep);
 
-#define OPTIONS "t:vR:S:p:M:X:L:H:N:nci"
+static void update_proctitle (ctx_t *ctx);
+static void boot_pmi (ctx_t *ctx);
+
+#define OPTIONS "t:vR:S:p:M:X:L:H:N:nciPk"
 static const struct option longopts[] = {
     {"session-name",    required_argument,  0, 'N'},
     {"no-security",     no_argument,        0, 'n'},
@@ -150,6 +173,8 @@ static const struct option longopts[] = {
     {"module-path",     required_argument,  0, 'X'},
     {"logdest",         required_argument,  0, 'L'},
     {"hostlist",        required_argument,  0, 'H'},
+    {"pmi-boot",        no_argument,        0, 'P'},
+    {"k-ary",           required_argument,  0, 'k'},
     {0, 0, 0, 0},
 };
 
@@ -172,19 +197,22 @@ static void usage (void)
 " -c,--curve-security          Use CURVE security (default)\n"
 " -i,--plain-insecurity        Use PLAIN security instead of CURVE\n"
 " -n,--no-security             Disable session security\n"
+" -P,--pmi-boot                Bootstrap via PMI\n"
+" -k,--k-ary K                 Wire up in a k-ary tree\n"
 );
     exit (1);
 }
 
 int main (int argc, char *argv[])
 {
-    int c, i;
+    int c, i, e;
     ctx_t ctx;
     char *hosts = NULL;
     endpt_t *ep;
+    struct addrinfo hints, *res = NULL;
 
     memset (&ctx, 0, sizeof (ctx));
-    log_init (basename (argv[0]));
+    log_init (argv[0]);
 
     ctx.size = 1;
     if (!(ctx.modules = zhash_new ()))
@@ -194,8 +222,22 @@ int main (int argc, char *argv[])
     if (!(ctx.parents = zlist_new ()))
         oom ();
     ctx.session_name = "flux";
+    ctx.pmi_k_ary = 2; /* binary TBON is default */
+
+    /* FIXME: lots of corner cases glossed over here, ipv6, multihomed,
+     * selection of alternate network, etc.
+     */
     if (gethostname (ctx.hostname, HOST_NAME_MAX) < 0)
         err_exit ("gethostname");
+    memset (&hints, 0, sizeof (hints));
+    hints.ai_family = PF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    if ((e = getaddrinfo (ctx.hostname, NULL, &hints, &res)) || res == NULL)
+        msg_exit ("getaddrinfo %s: %s", ctx.hostname, gai_strerror (e));
+    if ((e = getnameinfo (res->ai_addr, res->ai_addrlen, ctx.ipaddr,
+                          sizeof (ctx.ipaddr), NULL, 0, NI_NUMERICHOST)))
+        msg_exit ("getnameinfo %s: %s", ctx.hostname, gai_strerror (e));
+
     ctx.pid = getpid();
     ctx.plugin_path = PLUGIN_PATH;
 
@@ -243,17 +285,9 @@ int main (int argc, char *argv[])
                 break;
             case 'M': { /* --plugins p1,p2,... */
                 char *cpy = xstrdup (optarg);
-                char *path, *name, *saveptr = NULL, *a1 = cpy;
-                module_t *mod;
-                int flags = 0;
-                while((name = strtok_r (a1, ",", &saveptr))) {
-                    if (!(path = modfind (ctx.plugin_path, name)))
-                        err_exit ("module %s", name);
-                    if (!(mod = module_create (&ctx, path, flags)))
-                        err_exit ("module %s", name);
-                    zhash_update (ctx.modules, name, mod);
-                    zhash_freefn (ctx.modules, name,
-                                  (zhash_free_fn *)module_destroy);
+                char *name, *saveptr = NULL, *a1 = cpy;
+                while ((name = strtok_r (a1, ",", &saveptr))) {
+                    module_prepare (&ctx, name);
                     a1 = NULL;
                 }
                 free (cpy);
@@ -265,10 +299,22 @@ int main (int argc, char *argv[])
             case 'L':   /* --logdest DEST */
                 log_set_dest (optarg);
                 break;
+            case 'P':   /* --pmi-boot */
+                ctx.pmi_libname = "/usr/lib64/libpmi.so"; /* FIXME - config */
+                break;
+            case 'k':   /* --k-ary k */
+                ctx.pmi_k_ary = strtoul (optarg, NULL, 10);
+                if (ctx.pmi_k_ary < 0)
+                    usage ();
+                break;
             default:
                 usage ();
         }
     }
+    update_proctitle (&ctx);
+    if (ctx.pmi_libname)
+        boot_pmi (&ctx);
+
     /* Remaining arguments are for modules: module:key=val
      */
     for (i = optind; i < argc; i++) {
@@ -286,6 +332,17 @@ int main (int argc, char *argv[])
         }
         free (cpy);
     }
+    /* Ensure a minimal set of modules will be loaded.
+     */
+    if (ctx.rank == 0) {
+        module_prepare (&ctx, "hb");
+        module_prepare (&ctx, "event");
+        module_prepare (&ctx, "kvs");
+        module_prepare (&ctx, "api");
+    }
+    module_prepare (&ctx, "modctl");
+    module_prepare (&ctx, "live");
+
     /* Special -H is really kvs:hosts=...
      */
     if (hosts) {
@@ -296,9 +353,6 @@ int main (int argc, char *argv[])
         zhash_freefn (mod->args, "hosts", (zhash_free_fn *)free);
     }
 
-    if (zhash_size (ctx.modules) == 0)
-        usage ();
-
     if (asprintf (&ctx.rankstr, "%d", ctx.rank) < 0)
         oom ();
     if (ctx.rank == 0)
@@ -307,12 +361,6 @@ int main (int argc, char *argv[])
         msg_exit ("treeroot must NOT have parent");
     if (!ctx.treeroot && zlist_size (ctx.parents) == 0)
         msg_exit ("non-treeroot must have parents");
-
-    char *proctitle;
-    if (asprintf (&proctitle, "cmbd-%d", ctx.rank) < 0)
-        oom ();
-    (void)prctl (PR_SET_NAME, proctitle, 0, 0, 0);
-    free (proctitle);
 
     cmbd_init (&ctx);
 
@@ -330,6 +378,92 @@ int main (int argc, char *argv[])
         free (ctx.rankstr);
     zhash_destroy (&ctx.peer_idle);
     return 0;
+}
+
+static void update_proctitle (ctx_t *ctx)
+{
+    char *s;
+    if (asprintf (&s, "cmbd-%d", ctx->rank) < 0)
+        oom ();
+    (void)prctl (PR_SET_NAME, s, 0, 0, 0);
+    if (ctx->proctitle)
+        free (ctx->proctitle);
+    ctx->proctitle = s;
+}
+
+static void *load_pmi (const char *libname, struct pmi_struct *pmi)
+{
+    void *dso;
+
+    dlerror ();
+    dso = dlopen (libname, RTLD_NOW | RTLD_GLOBAL);
+    if (!dso || !(pmi->init = dlsym (dso, "PMI_Init"))
+                || !(pmi->get_size = dlsym (dso, "PMI_Get_size"))
+                || !(pmi->get_rank = dlsym (dso, "PMI_Get_rank"))
+                || !(pmi->kvs_get_my_name = dlsym (dso, "PMI_KVS_Get_my_name"))
+                || !(pmi->kvs_put = dlsym (dso, "PMI_KVS_Put"))
+                || !(pmi->kvs_commit = dlsym (dso, "PMI_KVS_Commit"))
+                || !(pmi->barrier = dlsym (dso, "PMI_Barrier"))
+                || !(pmi->kvs_get = dlsym (dso, "PMI_KVS_Get"))
+                || !(pmi->finalize = dlsym (dso, "PMI_Finalize")))
+        msg_exit ("%s: %s", libname, dlerror ());
+    return dso;
+}
+
+static void boot_pmi (ctx_t *ctx)
+{
+    struct pmi_struct pmi;
+    void *dso = load_pmi (ctx->pmi_libname, &pmi);
+    int spawned;
+    char kvsname[128], *s, *key;
+    char val[128];
+
+    if (pmi.init (&spawned) != PMI_SUCCESS)
+        msg_exit ("PMI_Init failed");
+
+    if (pmi.get_size (&ctx->size) != PMI_SUCCESS)
+        msg_exit ("PMI_Get_size failed");
+    if (pmi.get_rank (&ctx->rank) != PMI_SUCCESS)
+        msg_exit ("PMI_Get_rank failed");
+
+    update_proctitle (ctx);
+
+    if (pmi.kvs_get_my_name (kvsname, sizeof (kvsname)) != PMI_SUCCESS)
+        msg_exit ("PMI_KVS_Get_my_name failed");
+
+    if (!ctx->child) {
+        if (asprintf (&s, "tcp://%s:%d", ctx->ipaddr, 5556+ctx->rank) < 0)
+            oom ();
+        ctx->child = endpt_create (s);
+        free (s);
+    }
+    if (asprintf (&key, "cmbd.%d.uri", ctx->rank) < 0)
+        oom ();
+    if (pmi.kvs_put (kvsname, key, ctx->child->uri) != PMI_SUCCESS)
+        msg_exit ("PMI_KVS_Put %s=%s failed", key, ctx->child->uri);
+    //msg ("PMI wrote %s=%s", key, ctx->child->uri);
+    free (key);
+
+    if (pmi.kvs_commit (kvsname) != PMI_SUCCESS)
+        msg_exit ("PMI_KVS_Commit failed");
+    if (pmi.barrier () != PMI_SUCCESS)
+        msg_exit ("PMI_Barrier failed");
+
+    if (ctx->rank != 0) {
+        if (asprintf (&key, "cmbd.%d.uri", ctx->pmi_k_ary == 0 ? 0
+                                        : (ctx->rank - 1) / ctx->pmi_k_ary) < 0)
+            oom ();
+        if (pmi.kvs_get (kvsname, key, val, sizeof (val)) != PMI_SUCCESS)
+            msg_exit ("PMI_KVS_Get %s failed", key);
+        if (zlist_push (ctx->parents, endpt_create (val)) < 0)
+            oom ();
+        free (key);
+    }
+
+    if (pmi.finalize () != PMI_SUCCESS)
+        msg_exit ("PMI_Finalize failed");
+
+    dlclose (dso);
 }
 
 static bool checkpath (const char *path, const char *name)
@@ -437,6 +571,22 @@ static void load_modules (ctx_t *ctx)
         name = zlist_next (keys);
     }
     zlist_destroy (&keys);
+}
+
+static void module_prepare (ctx_t *ctx, const char *name)
+{
+    char *path;
+    int flags = 0;
+    module_t *mod;
+
+    if (!zhash_lookup (ctx->modules, name)) {
+        if (!(path = modfind (ctx->plugin_path, name)))
+            err_exit ("module %s", name);
+        if (!(mod = module_create (ctx, path, flags)))
+           err_exit ("module %s", name);
+        zhash_update (ctx->modules, name, mod);
+        zhash_freefn (ctx->modules, name, (zhash_free_fn *)module_destroy);
+    }
 }
 
 static void *cmbd_init_request (ctx_t *ctx)
