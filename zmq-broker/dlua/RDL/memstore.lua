@@ -304,7 +304,10 @@ function MemStore:hierarchy_put (uri, hnode)
         end
         local childname = tostring(hnode.resource)
         local info = { uri = uri.path, name = uri.name} 
+
+        -- Link child to parent and parent to child:
         h.children[childname] = self:hierarchy_create (info, hnode)
+        h.children[childname].parent = h
         return
     end
 
