@@ -665,8 +665,10 @@ int schedule_jobs (struct rdl *rdl, const char *uri, zlist_t *jobs)
     int rc = 0;
 
     job = zlist_first (jobs);
-    while (!rc && job && job->state == j_unsched) {
-        rc = schedule_job(rdl, uri, job);
+    while (!rc && job) {
+        if (job->state == j_unsched) {
+            rc = schedule_job(rdl, uri, job);
+        }
         job = zlist_next (jobs);
     }
 
