@@ -107,8 +107,12 @@ function MemStore:store (r)
 end
 
 local function print_resource (r, pad)
+    local write = function (...) io.stderr:write (string.format (...)) end
     local p = pad or ""
-    io.stderr:write (string.format ("%s%s (", p, r.name))
+    write ("%s%s (", p, r.name)
+    if r.size > 1 then
+        write ("[%d/%d]", r.size - r.allocated, r.size)
+    end
     local t = {}
     for k,v in pairs (r.tags) do
         table.insert (t, k)
