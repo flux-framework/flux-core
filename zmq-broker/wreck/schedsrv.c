@@ -16,7 +16,6 @@
 #include <libgen.h>
 #include <czmq.h>
 #include <json/json.h>
-#include <dlfcn.h>
 
 #include "util.h"
 #include "log.h"
@@ -88,7 +87,6 @@ static void setup_rdl_lua (void)
     char *s;
     char  exe_path [MAXPATHLEN];
     char *exe_dir;
-    char *rdllib;
 
     memset (exe_path, 0, MAXPATHLEN);
     if (readlink ("/proc/self/exe", exe_path, MAXPATHLEN - 1) < 0)
@@ -102,13 +100,6 @@ static void setup_rdl_lua (void)
 
     flux_log (h, LOG_DEBUG, "LUA_PATH %s", getenv ("LUA_PATH"));
     flux_log (h, LOG_DEBUG, "LUA_CPATH %s", getenv ("LUA_CPATH"));
-
-    asprintf (&rdllib, "%s/lib/librdl.so", exe_dir);
-    if (!dlopen (rdllib, RTLD_NOW | RTLD_GLOBAL)) {
-        flux_log (h, LOG_ERR, "dlopen %s failed", rdllib);
-        return;
-    }
-    free(rdllib);
 
     rdllib_set_default_errf (h, (rdl_err_f)(&f_err));
 }
