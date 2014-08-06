@@ -54,6 +54,8 @@ struct pmi_struct {
     int (*init)(int *);
     int (*get_size)(int *);
     int (*get_rank)(int *);
+    int (*get_clique_size)(int *);
+    int (*get_clique_ranks)(int *, int);
     int (*kvs_get_my_name)(char *, int);
     int (*kvs_put)(const char *, const char *, const char *);
     int (*kvs_commit)(const char *);
@@ -311,9 +313,10 @@ int main (int argc, char *argv[])
                 usage ();
         }
     }
-    update_proctitle (&ctx);
     if (ctx.pmi_libname)
         boot_pmi (&ctx);
+
+    update_proctitle (&ctx);
 
     /* Remaining arguments are for modules: module:key=val
      */
@@ -400,6 +403,8 @@ static void *load_pmi (const char *libname, struct pmi_struct *pmi)
     if (!dso || !(pmi->init = dlsym (dso, "PMI_Init"))
                 || !(pmi->get_size = dlsym (dso, "PMI_Get_size"))
                 || !(pmi->get_rank = dlsym (dso, "PMI_Get_rank"))
+                || !(pmi->get_clique_size = dlsym (dso, "PMI_Get_clique_size"))
+                || !(pmi->get_clique_ranks = dlsym (dso,"PMI_Get_clique_ranks"))
                 || !(pmi->kvs_get_my_name = dlsym (dso, "PMI_KVS_Get_my_name"))
                 || !(pmi->kvs_put = dlsym (dso, "PMI_KVS_Put"))
                 || !(pmi->kvs_commit = dlsym (dso, "PMI_KVS_Commit"))
@@ -417,6 +422,7 @@ static void boot_pmi (ctx_t *ctx)
     int spawned;
     char kvsname[128], *s, *key;
     char val[128];
+    int i, clique_len, *clique;
 
     if (pmi.init (&spawned) != PMI_SUCCESS)
         msg_exit ("PMI_Init failed");
@@ -426,13 +432,20 @@ static void boot_pmi (ctx_t *ctx)
     if (pmi.get_rank (&ctx->rank) != PMI_SUCCESS)
         msg_exit ("PMI_Get_rank failed");
 
-    update_proctitle (ctx);
+    if (pmi.get_clique_size (&clique_len) != PMI_SUCCESS)
+        msg_exit ("PMI_Get_clique_size");
+    clique = xzmalloc (sizeof (clique[0]) * clique_len);
+    if (pmi.get_clique_ranks (clique, clique_len) != PMI_SUCCESS)
+        msg_exit ("PMI_Get_clique_size");
 
     if (pmi.kvs_get_my_name (kvsname, sizeof (kvsname)) != PMI_SUCCESS)
         msg_exit ("PMI_KVS_Get_my_name failed");
 
     if (!ctx->child) {
-        if (asprintf (&s, "tcp://%s:%d", ctx->ipaddr, 5556+ctx->rank) < 0)
+        for (i = 0; i < clique_len; i++)
+            if (clique[i] == ctx->rank)
+                break;
+        if (asprintf (&s, "tcp://%s:%d", ctx->ipaddr, 5556 + i) < 0)
             oom ();
         ctx->child = endpt_create (s);
         free (s);
@@ -463,6 +476,7 @@ static void boot_pmi (ctx_t *ctx)
     if (pmi.finalize () != PMI_SUCCESS)
         msg_exit ("PMI_Finalize failed");
 
+    free (clique);
     dlclose (dso);
 }
 
