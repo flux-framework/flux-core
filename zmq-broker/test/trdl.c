@@ -21,7 +21,8 @@ void print_resource (struct resource *r, int pad)
 {
     struct resource *c;
 
-    fprintf (stdout, "%*s/%s\n", pad, "", rdl_resource_name (r));
+    fprintf (stdout, "%*s/%s=%d\n", pad, "", rdl_resource_name (r),
+            (int) rdl_resource_size (r));
 
     rdl_resource_iterator_reset (r);
     while ((c = rdl_resource_next_child (r))) {
