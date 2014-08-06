@@ -289,6 +289,8 @@ extract_lwjid (const char *k, int64_t *i)
     *i = strtoul(id, (char **) NULL, 10);
 
 ret:
+    free (kcopy);
+
     return rc;
 }
 
@@ -311,6 +313,7 @@ extract_lwjinfo (flux_lwj_t *j)
         j->state = stab_lookup (jobstate_tab, state);
         flux_log (h, LOG_DEBUG, "extract_lwjinfo got %s: %s", key, state);
         free(key);
+        free(state);
     }
 
     if (asprintf (&key, "lwj.%ld.nnodes", j->lwj_id) < 0) {
@@ -572,6 +575,8 @@ update_job_resources (flux_lwj_t *job)
             rc = 0;
         }
     }
+    free (key);
+    free (rdlstr);
 
     return rc;
 }
