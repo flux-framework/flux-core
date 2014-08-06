@@ -72,6 +72,7 @@ int main (int argc, char *argv[])
         exit (1);
 
     rdl2 = rdl_accumulator_copy (a);
+    rdl_accumulator_destroy (a);
 
     print_resource (rdl_resource_get (rdl2, "default"), 0);
 
