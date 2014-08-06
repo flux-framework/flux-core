@@ -136,6 +136,13 @@ const char *rdl_resource_path (struct resource *r);
 const char *rdl_resource_name (struct resource *r);
 
 /*
+ *  Return resource 'size', 'available', and 'allocated' counts.
+ */
+size_t rdl_resource_size (struct resource *r);
+size_t rdl_resource_available (struct resource *r);
+size_t rdl_resource_allocated (struct resource *r);
+
+/*
  *  Tag a resource with [tag] (tag only)
  */
 void rdl_resource_tag (struct resource *r, const char *tag);
@@ -202,6 +209,14 @@ void rdl_accumulator_destroy (struct rdl_accumulator *a);
  *  Add hierarchy rooted at resource [r] to accumulator.
  */
 int rdl_accumulator_add (struct rdl_accumulator *a, struct resource *r);
+
+/*
+ *  Add [n] units from resource [r] to accumulator [a]. The value
+ *   [n] must be less than or equal to the available units from resource
+ *   [r], i.e. as returned by rdl_resource_available (r);
+ */
+int rdl_accumulator_add_n (struct rdl_accumulator *a, struct resource *r,
+                           size_t n);
 
 /*
  *  Serialize the RDL represented by accumulator [a]

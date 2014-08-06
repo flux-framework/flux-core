@@ -640,6 +640,32 @@ const char * rdl_resource_path (struct resource *r)
     return (r->path);
 }
 
+static size_t rdl_resource_get_value (struct resource *r, const char *name)
+{
+    size_t sz;
+    lua_State *L = r->rdl->L;
+    if (lua_rdl_resource_getfield (r, name) < 0)
+        return (-1);
+    sz = (size_t) lua_tointeger (L, -1);
+    lua_pop (L, 1);
+    return (sz);
+}
+
+size_t rdl_resource_size (struct resource *r)
+{
+    return rdl_resource_get_value (r, "size");
+}
+
+size_t rdl_resource_available (struct resource *r)
+{
+    return rdl_resource_get_value (r, "available");
+}
+
+size_t rdl_resource_allocated (struct resource *r)
+{
+    return rdl_resource_get_value (r, "available");
+}
+
 static int rdl_resource_method_call1_keepstack (struct resource *r,
     const char *method, const char *arg)
 {
@@ -833,7 +859,9 @@ static int lua_rdl_accumulator_method_push (struct rdl_accumulator *a,
     return (lua_rdl_accumulator_push (a));
 }
 
-int rdl_accumulator_add (struct rdl_accumulator *a, struct resource *r)
+
+int rdl_accumulator_add_n (struct rdl_accumulator *a, struct resource *r,
+                           size_t n)
 {
     int rc = 0;
     lua_State *L = a->rdl->L;
@@ -842,13 +870,25 @@ int rdl_accumulator_add (struct rdl_accumulator *a, struct resource *r)
     if (lua_rdl_resource_getfield (r, "uuid") < 0)
         return (-1);
 
-    /* Stack: [ Method, Object, arg ] */
-    if (lua_pcall (L, 2, LUA_MULTRET, 0) || lua_isnoneornil (L, 1)) {
+    lua_pushnumber (L, n);
+
+    /* Stack: [ Method, Object, arg1, arg2 ] */
+    if (lua_pcall (L, 3, LUA_MULTRET, 0) || lua_isnoneornil (L, 1)) {
         VERR (a->rdl->rl, "accumulator_add: %s\n", lua_tostring (L, -1));
         rc = -1;
     }
     lua_settop (L, 0);
     return rc;
+}
+
+int rdl_accumulator_add (struct rdl_accumulator *a, struct resource *r)
+{
+    size_t n = rdl_resource_available (r);
+    if (n <= 0) {
+        VERR (a->rdl->rl, "accumulator_add: Insufficient capacity in resource");
+        return (-1);
+    }
+    return rdl_accumulator_add_n (a, r, n);
 }
 
 char * rdl_accumulator_serialize (struct rdl_accumulator *a)
