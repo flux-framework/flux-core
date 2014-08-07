@@ -142,13 +142,17 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 
 static void cmb_event_geturi_request (ctx_t *ctx);
 
-static void cmbd_init (ctx_t *ctx);
 static void cmbd_fini (ctx_t *ctx);
+
+static void cmbd_init_comms (ctx_t *ctx);
+static void cmbd_init_socks (ctx_t *ctx);
+static int cmbd_init_child (ctx_t *ctx, endpt_t *ep);
 
 static module_t *module_create (ctx_t *ctx, const char *path, int flags);
 static void module_destroy (module_t *mod);
 static void module_unload (module_t *mod, zmsg_t **zmsg);
 static void module_prepare (ctx_t *ctx, const char *name);
+static void module_loadall (ctx_t *ctx);
 
 static int peer_idle (ctx_t *ctx, const char *uuid);
 static void peer_update (ctx_t *ctx, const char *uuid);
@@ -313,10 +317,21 @@ int main (int argc, char *argv[])
                 usage ();
         }
     }
-    if (ctx.pmi_libname)
-        boot_pmi (&ctx);
 
-    update_proctitle (&ctx);
+    /* Create zeromq context, security context, zloop, etc.
+     */
+    cmbd_init_comms (&ctx);
+
+    /* Sets rank, size, parent URI.
+     * Initialize child socket.
+     */
+    if (ctx.pmi_libname) {
+        if (ctx.child)
+            msg_exit ("--child-uri should not be specified with --pmi-boot");
+        if (zlist_size (ctx.parents) > 0)
+            msg_exit ("--parent-uri should not be specified with --pmi-boot");
+        boot_pmi (&ctx);
+    }
 
     /* Remaining arguments are for modules: module:key=val
      */
@@ -365,7 +380,16 @@ int main (int argc, char *argv[])
     if (!ctx.treeroot && zlist_size (ctx.parents) == 0)
         msg_exit ("non-treeroot must have parents");
 
-    cmbd_init (&ctx);
+    update_proctitle (&ctx);
+
+    cmbd_init_socks (&ctx);
+
+    module_loadall (&ctx);
+
+    /* Send request for event URI (maybe upstream, maybe plugin)
+     * When the response is received we will subscribe to it.
+     */
+    cmb_event_geturi_request (&ctx);
 
     zloop_start (ctx.zl);
     msg ("zloop reactor stopped");
@@ -441,12 +465,12 @@ static void boot_pmi (ctx_t *ctx)
     if (pmi.kvs_get_my_name (kvsname, sizeof (kvsname)) != PMI_SUCCESS)
         msg_exit ("PMI_KVS_Get_my_name failed");
 
-    if (!ctx->child) {
-        if (asprintf (&s, "tcp://%s:*", ctx->ipaddr) < 0)
-            oom ();
-        ctx->child = endpt_create (s);
-        free (s);
-    }
+    if (asprintf (&s, "tcp://%s:*", ctx->ipaddr) < 0)
+        oom ();
+    ctx->child = endpt_create (s);
+    free (s);
+    cmbd_init_child (ctx, ctx->child);
+
     if (asprintf (&key, "cmbd.%d.uri", ctx->rank) < 0)
         oom ();
     if (pmi.kvs_put (kvsname, key, ctx->child->uri) != PMI_SUCCESS)
@@ -567,7 +591,7 @@ static int module_load (ctx_t *ctx, module_t *mod)
     return rc;
 }
 
-static void load_modules (ctx_t *ctx)
+static void module_loadall (ctx_t *ctx)
 {
     zlist_t *keys = zhash_keys (ctx->modules);
     char *name;
@@ -616,22 +640,25 @@ static void *cmbd_init_request (ctx_t *ctx)
     return s;
 }
 
-static void *cmbd_init_child (ctx_t *ctx, const char *uri)
+static int cmbd_init_child (ctx_t *ctx, endpt_t *ep)
 {
-    void *s;
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
-    if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
+    if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
         err_exit ("zsocket_new");
-    if (flux_sec_ssockinit (ctx->sec, s) < 0)
+    if (flux_sec_ssockinit (ctx->sec, ep->zs) < 0)
         msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ctx->sec));
-    zsocket_set_hwm (s, 0);
-    if (zsocket_bind (s, "%s", uri) < 0)
-        err_exit ("%s", uri);
-    zp.socket = s;
+    zsocket_set_hwm (ep->zs, 0);
+    if (zsocket_bind (ep->zs, "%s", ep->uri) < 0)
+        err_exit ("%s", ep->uri);
+    if (strchr (ep->uri, '*')) { /* capture dynamically assigned port */
+        free (ep->uri);
+        ep->uri = zsocket_last_endpoint (ep->zs);
+    }
+    zp.socket = ep->zs;
     if (zloop_poller (ctx->zl, &zp, (zloop_fn *)request_cb, ctx) < 0)
         err_exit ("zloop_poller");
-    return s;
+    return 0;
 }
 
 static void *cmbd_init_event_out (ctx_t *ctx)
@@ -688,7 +715,6 @@ static int cmbd_init_parent (ctx_t *ctx, endpt_t *ep)
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
     int savederr;
 
-    assert (ep->zs == NULL);
     if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_DEALER)))
         goto error;
     if (flux_sec_csockinit (ctx->sec, ep->zs) < 0) {
@@ -743,9 +769,8 @@ static int cmbd_init_signalfd (ctx_t *ctx)
     return zp.fd;
 }
 
-static void cmbd_init (ctx_t *ctx)
+static void cmbd_init_comms (ctx_t *ctx)
 {
-    endpt_t *ep;
     //(void)umask (077);
 
     ctx->zctx = zctx_new ();
@@ -770,14 +795,17 @@ static void cmbd_init (ctx_t *ctx)
         msg_exit ("flux_sec_zauth_init: %s", flux_sec_errstr (ctx->sec));
     if (flux_sec_munge_init (ctx->sec) < 0)
         msg_exit ("flux_sec_munge_init: %s", flux_sec_errstr (ctx->sec));
+}
 
+static void cmbd_init_socks (ctx_t *ctx)
+{
     /* Bind to downstream ports.
      */
     ctx->zs_request = cmbd_init_request (ctx);
     ctx->zs_event_out = cmbd_init_event_out (ctx);
     ctx->zs_snoop = cmbd_init_snoop (ctx);
-    if (ctx->child)
-        ctx->child->zs = cmbd_init_child (ctx, ctx->child->uri);
+    if (ctx->child && !ctx->child->zs) /* boot_pmi may have already done this */
+        cmbd_init_child (ctx, ctx->child);
 #if 0
     /* Increase max number of sockets and number of I/O thraeds.
      * (N.B. must call zctx_underlying () only after first socket is created)
@@ -789,6 +817,7 @@ static void cmbd_init (ctx_t *ctx)
 #endif
     /* Connect to upstream ports, if any
      */
+    endpt_t *ep;
     if ((ep = zlist_first (ctx->parents))) {
         if (cmbd_init_parent (ctx, ep) < 0)
             err_exit ("%s", ep->uri);
@@ -797,15 +826,6 @@ static void cmbd_init (ctx_t *ctx)
     /* create flux_t handle */
     ctx->h = handle_create (ctx, &cmbd_handle_ops, 0);
     flux_log_set_facility (ctx->h, "cmbd");
-
-    load_modules (ctx);
-
-    flux_log (ctx->h, LOG_INFO, "%s", flux_sec_confstr (ctx->sec));
-
-    /* Send request for event URI (maybe upstream, maybe plugin)
-     * When the response is received we will subscribe to it.
-     */
-    cmb_event_geturi_request (ctx);
 }
 
 static void cmbd_fini (ctx_t *ctx)
