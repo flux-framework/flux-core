@@ -666,41 +666,63 @@ size_t rdl_resource_allocated (struct resource *r)
     return rdl_resource_get_value (r, "available");
 }
 
+enum method_arg_type {
+    M_ARG_TYPE_INTEGER,
+    M_ARG_TYPE_STRING
+};
+
 static int rdl_resource_method_call1_keepstack (struct resource *r,
-    const char *method, const char *arg)
+    const char *method, enum method_arg_type mtype, void *argptr)
 {
     int rc = 0;
     lua_State *L = r->rdl->L;
     if (lua_rdl_resource_method_push (r, method) < 0)
         return (-1);
-    lua_pushstring (L, arg);
+
+    if (mtype == M_ARG_TYPE_STRING)
+        lua_pushstring (L, *(char **)argptr);
+    else if (mtype == M_ARG_TYPE_INTEGER)
+        lua_pushinteger (L, (lua_Integer) *(size_t *)argptr);
+
     /*
      *  stack: [ Method, object, arg ]
      */
     if (lua_pcall (L, 2, LUA_MULTRET, 0) || lua_isnoneornil (L, 1)) {
-        VERR (r->rdl->rl, "%s(%s): %s\n", method, arg, lua_tostring (L, -1));
+        VERR (r->rdl->rl, "%s(): %s\n", method, lua_tostring (L, -1));
         lua_settop (L, 0);
         rc = -1;
     }
     return (rc);
 }
 
-static int rdl_resource_method_call1 (struct resource *r,
+static int rdl_resource_method_call1_string (struct resource *r,
     const char *method, const char *arg)
 {
-    int rc = rdl_resource_method_call1_keepstack (r, method, arg);
+    enum method_arg_type mt = M_ARG_TYPE_STRING;
+
+    int rc = rdl_resource_method_call1_keepstack (r, method, mt, &arg);
+    lua_settop (r->rdl->L, 0);
+    return (rc);
+}
+
+static int rdl_resource_method_call1_int (struct resource *r,
+    const char *method, size_t n)
+{
+    enum method_arg_type mt = M_ARG_TYPE_INTEGER;
+
+    int rc = rdl_resource_method_call1_keepstack (r, method, mt, &n);
     lua_settop (r->rdl->L, 0);
     return (rc);
 }
 
 void rdl_resource_tag (struct resource *r, const char *tag)
 {
-    rdl_resource_method_call1 (r, "tag", tag);
+    rdl_resource_method_call1_string (r, "tag", tag);
 }
 
 void rdl_resource_delete_tag (struct resource *r, const char *tag)
 {
-    if (rdl_resource_method_call1 (r, "delete_tag", tag) < 0) {
+    if (rdl_resource_method_call1_string (r, "delete_tag", tag) < 0) {
         VERR (r->rdl->rl, "delete_tag (%s): %s\n", tag,
               lua_tostring (r->rdl->L, -1));
     }
@@ -725,17 +747,29 @@ int rdl_resource_set_int (struct resource *r, const char *tag, int64_t val)
 
 int rdl_resource_get_int (struct resource *r, const char *tag, int64_t *valp)
 {
+    enum method_arg_type mt = M_ARG_TYPE_STRING;
     lua_State *L = r->rdl->L;
-    if (rdl_resource_method_call1_keepstack (r, "get", tag)  < 0)
+    if (rdl_resource_method_call1_keepstack (r, "get", mt, &tag)  < 0)
         return (-1);
     *valp = (int64_t) lua_tointeger (L, -1);
     lua_settop (L, 0);
     return (0);
 }
 
+
+int rdl_resource_alloc (struct resource *r, size_t n)
+{
+    return rdl_resource_method_call1_int (r, "alloc", n);
+}
+
+int rdl_resource_free (struct resource *r, size_t n)
+{
+    return rdl_resource_method_call1_int (r, "free", n);
+}
+
 int rdl_resource_unlink_child (struct resource *r, const char *name)
 {
-    return rdl_resource_method_call1 (r, "unlink", name);
+    return rdl_resource_method_call1_string (r, "unlink", name);
 }
 
 /*

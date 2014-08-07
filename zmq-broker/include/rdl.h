@@ -142,6 +142,13 @@ size_t rdl_resource_size (struct resource *r);
 size_t rdl_resource_available (struct resource *r);
 size_t rdl_resource_allocated (struct resource *r);
 
+
+/*
+ *  Allocate/free [n] items from resource [r].
+ */
+int rdl_resource_alloc (struct resource *r, size_t n);
+int rdl_resource_free (struct resource *r, size_t n);
+
 /*
  *  Tag a resource with [tag] (tag only)
  */
