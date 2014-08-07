@@ -338,7 +338,7 @@ static void rdl_resource_delete (struct rdl *rdl, struct resource *r)
     list_delete_all (rdl->resource_list, (ListFindF) ptrcmp, r);
 }
 
-static void rdl_resource_free (struct resource *r)
+static void rdl_resource_destroy_nolist (struct resource *r)
 {
     if (r->rdl->L) {
         luaL_unref (r->rdl->L, LUA_GLOBALSINDEX, r->lua_ref);
@@ -354,7 +354,7 @@ void rdl_resource_destroy (struct resource *r)
     if (r->rdl && r->rdl->resource_list)
         rdl_resource_delete (r->rdl, r);
     else
-        rdl_resource_free (r);
+        rdl_resource_destroy_nolist (r);
 }
 
 /*
@@ -378,7 +378,7 @@ static struct rdl * rdl_new (struct rdllib *rl)
 
     /* Pointer back to 'library'instance */
     rdl->rl = rl;
-    rdl->resource_list = list_create ((ListDelF) rdl_resource_free);
+    rdl->resource_list = list_create ((ListDelF) rdl_resource_destroy_nolist);
 
     /* Leave rdl instance on top of stack */
     return (rdl);
