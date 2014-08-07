@@ -422,7 +422,7 @@ static void boot_pmi (ctx_t *ctx)
     int spawned;
     char kvsname[128], *s, *key;
     char val[128];
-    int i, clique_len, *clique;
+    int clique_len, *clique;
 
     if (pmi.init (&spawned) != PMI_SUCCESS)
         msg_exit ("PMI_Init failed");
@@ -442,10 +442,7 @@ static void boot_pmi (ctx_t *ctx)
         msg_exit ("PMI_KVS_Get_my_name failed");
 
     if (!ctx->child) {
-        for (i = 0; i < clique_len; i++)
-            if (clique[i] == ctx->rank)
-                break;
-        if (asprintf (&s, "tcp://%s:%d", ctx->ipaddr, 5556 + i) < 0)
+        if (asprintf (&s, "tcp://%s:*", ctx->ipaddr) < 0)
             oom ();
         ctx->child = endpt_create (s);
         free (s);
@@ -686,34 +683,36 @@ static void *cmbd_init_event_in (ctx_t *ctx)
     return s;
 }
 
-static void *cmbd_init_parent (ctx_t *ctx, const char *uri) {
-    void *s = NULL;
+static int cmbd_init_parent (ctx_t *ctx, endpt_t *ep)
+{
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
     int savederr;
 
-    if (!(s = zsocket_new (ctx->zctx, ZMQ_DEALER)))
+    assert (ep->zs == NULL);
+    if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_DEALER)))
         goto error;
-    if (flux_sec_csockinit (ctx->sec, s) < 0) {
+    if (flux_sec_csockinit (ctx->sec, ep->zs) < 0) {
         savederr = errno;
         msg ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
         errno = savederr;
         goto error;
     }
-    zsocket_set_hwm (s, 0);
-    zsocket_set_identity (s, ctx->rankstr);
-    if (zsocket_connect (s, "%s", uri) < 0)
+    zsocket_set_hwm (ep->zs, 0);
+    zsocket_set_identity (ep->zs, ctx->rankstr);
+    if (zsocket_connect (ep->zs, "%s", ep->uri) < 0)
         goto error;
-    zp.socket = s;
+    zp.socket = ep->zs;
     if (zloop_poller (ctx->zl, &zp, (zloop_fn *)parent_cb, ctx) < 0)
         goto error;
-    return s;
+    return 0;
 error:
-    if (s) {
+    if (ep->zs) {
         savederr = errno;
-        zsocket_destroy (ctx->zctx, s);
+        zsocket_destroy (ctx->zctx, ep->zs);
+        ep->zs = NULL;
         errno = savederr;
     }
-    return NULL;
+    return -1;
 }
 
 /* signalfd + zloop example: https://gist.github.com/mhaberler/8426050
@@ -791,7 +790,7 @@ static void cmbd_init (ctx_t *ctx)
     /* Connect to upstream ports, if any
      */
     if ((ep = zlist_first (ctx->parents))) {
-        if (!(ep->zs = cmbd_init_parent (ctx, ep->uri)))
+        if (cmbd_init_parent (ctx, ep) < 0)
             err_exit ("%s", ep->uri);
     }
 
@@ -1093,7 +1092,7 @@ static int cmb_reparent (ctx_t *ctx, const char *uri)
         comment = "restored";
     } else {
         ep = endpt_create (uri);
-        if (!(ep->zs = cmbd_init_parent (ctx, ep->uri))) {
+        if (cmbd_init_parent (ctx, ep) < 0) {
             endpt_destroy (ep);
             return -1;
         }
