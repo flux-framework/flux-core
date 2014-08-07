@@ -21,7 +21,8 @@ void print_resource (struct resource *r, int pad)
 {
     struct resource *c;
 
-    fprintf (stdout, "%*s/%s=%d\n", pad, "", rdl_resource_name (r),
+    fprintf (stdout, "%*s/%s=%d/%d\n", pad, "", rdl_resource_name (r),
+            (int) rdl_resource_available (r),
             (int) rdl_resource_size (r));
 
     rdl_resource_iterator_reset (r);
@@ -83,12 +84,29 @@ int main (int argc, char *argv[])
     util_json_object_add_string (args, "type", "node");
     util_json_object_add_int (args, "id", 300);
     rdl2 = rdl_find (rdl1, args);
+    json_object_put (args);
     r = rdl_resource_get (rdl2, "default");
     if (r == NULL)
         exit (1);
 
+
     c = rdl_resource_next_child (r);
     printf ("found %s\n", rdl_resource_name (c));
+
+    rdl_resource_destroy (r);
+    rdl_destroy (rdl2);
+
+    r = rdl_resource_get (rdl1, "default:/hype/hype300/socket0/memory");
+    if (r == NULL)
+        exit (1);
+
+    print_resource (r, 0);
+    rdl_resource_alloc (r, 1024);
+    printf ("After alloc:\n");
+    print_resource (r, 0);
+    rdl_resource_free (r, 1024);
+    printf ("After free:\n");
+    print_resource (r, 0);
 
     rdllib_close (l);
 
