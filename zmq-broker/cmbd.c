@@ -58,11 +58,22 @@ struct pmi_struct {
     int (*get_clique_size)(int *);
     int (*get_clique_ranks)(int *, int);
     int (*kvs_get_my_name)(char *, int);
+    int (*kvs_get_name_length_max)(int *);
+    int (*kvs_get_key_length_max)(int *);
+    int (*kvs_get_value_length_max)(int *);
     int (*kvs_put)(const char *, const char *, const char *);
     int (*kvs_commit)(const char *);
     int (*barrier)(void);
     int (*kvs_get)(const char *, const char *, char *, int);
     int (*finalize)(void);
+    void *dso;
+    int size, rank, spawned, appnum;
+    int name_length_max, key_length_max, value_length_max;
+    int *clique;
+    int clique_size;
+    char *kname;
+    char *key;
+    char *val;
 };
 
 typedef struct {
@@ -86,6 +97,7 @@ typedef struct {
 
     void *zs_event_out;         /* PUB - to plugins */
     endpt_t *gevent;            /* PUB for rank = 0, SUB for rank > 0 */
+    endpt_t *gevent_relay;      /* PUB event relay for multiple cmbds/node */
 
     char *uri_snoop;            /* PUB - to flux-snoop (uri is generated) */
     void *zs_snoop;
@@ -132,6 +144,7 @@ typedef struct {
 } peer_t;
 
 static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg);
+static int relay_cc (ctx_t *ctx, zmsg_t *zmsg);
 
 static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod);
@@ -156,7 +169,7 @@ static int peer_idle (ctx_t *ctx, const char *uuid);
 static void peer_update (ctx_t *ctx, const char *uuid);
 static void peer_modcreate (ctx_t *ctx, const char *uuid);
 
-static endpt_t *endpt_create (const char *uri);
+static endpt_t *endpt_create (const char *fmt, ...);
 static void endpt_destroy (endpt_t *ep);
 
 static void update_proctitle (ctx_t *ctx);
@@ -333,10 +346,10 @@ int main (int argc, char *argv[])
     if (ctx.pmi_libname) {
         if (ctx.child)
             msg_exit ("--child-uri should not be specified with --pmi-boot");
-        if (ctx.gevent)
-            msg_exit ("--event-uri should not be specified with --pmi-boot");
         if (zlist_size (ctx.parents) > 0)
             msg_exit ("--parent-uri should not be specified with --pmi-boot");
+        if (ctx.gevent)
+            msg_exit ("--event-uri should not be specified with --pmi-boot");
         boot_pmi (&ctx);
     }
     if (asprintf (&ctx.rankstr, "%d", ctx.rank) < 0)
@@ -420,89 +433,166 @@ static void update_proctitle (ctx_t *ctx)
     ctx->proctitle = s;
 }
 
-static void *load_pmi (const char *libname, struct pmi_struct *pmi)
+static struct pmi_struct *pmi_init (const char *libname)
 {
-    void *dso;
+    struct pmi_struct *pmi = xzmalloc (sizeof (*pmi));
 
     dlerror ();
-    dso = dlopen (libname, RTLD_NOW | RTLD_GLOBAL);
-    if (!dso || !(pmi->init = dlsym (dso, "PMI_Init"))
-                || !(pmi->get_size = dlsym (dso, "PMI_Get_size"))
-                || !(pmi->get_rank = dlsym (dso, "PMI_Get_rank"))
-                || !(pmi->get_appnum = dlsym (dso, "PMI_Get_appnum"))
-                || !(pmi->get_clique_size = dlsym (dso, "PMI_Get_clique_size"))
-                || !(pmi->get_clique_ranks = dlsym (dso,"PMI_Get_clique_ranks"))
-                || !(pmi->kvs_get_my_name = dlsym (dso, "PMI_KVS_Get_my_name"))
-                || !(pmi->kvs_put = dlsym (dso, "PMI_KVS_Put"))
-                || !(pmi->kvs_commit = dlsym (dso, "PMI_KVS_Commit"))
-                || !(pmi->barrier = dlsym (dso, "PMI_Barrier"))
-                || !(pmi->kvs_get = dlsym (dso, "PMI_KVS_Get"))
-                || !(pmi->finalize = dlsym (dso, "PMI_Finalize")))
+    pmi->dso = dlopen (libname, RTLD_NOW | RTLD_GLOBAL);
+    if (!pmi->dso || !(pmi->init = dlsym (pmi->dso, "PMI_Init"))
+                  || !(pmi->get_size = dlsym (pmi->dso, "PMI_Get_size"))
+                  || !(pmi->get_rank = dlsym (pmi->dso, "PMI_Get_rank"))
+                  || !(pmi->get_appnum = dlsym (pmi->dso, "PMI_Get_appnum"))
+                  || !(pmi->get_clique_size = dlsym (pmi->dso,
+                                                "PMI_Get_clique_size"))
+                  || !(pmi->get_clique_ranks = dlsym (pmi->dso,
+                                                "PMI_Get_clique_ranks"))
+                  || !(pmi->kvs_get_my_name = dlsym (pmi->dso,
+                                                "PMI_KVS_Get_my_name"))
+                  || !(pmi->kvs_get_name_length_max = dlsym (pmi->dso,
+                                                "PMI_KVS_Get_name_length_max"))
+                  || !(pmi->kvs_get_key_length_max = dlsym (pmi->dso,
+                                                "PMI_KVS_Get_key_length_max"))
+                  || !(pmi->kvs_get_value_length_max = dlsym (pmi->dso,
+                                                "PMI_KVS_Get_value_length_max"))
+                  || !(pmi->kvs_put = dlsym (pmi->dso, "PMI_KVS_Put"))
+                  || !(pmi->kvs_commit = dlsym (pmi->dso, "PMI_KVS_Commit"))
+                  || !(pmi->barrier = dlsym (pmi->dso, "PMI_Barrier"))
+                  || !(pmi->kvs_get = dlsym (pmi->dso, "PMI_KVS_Get"))
+                  || !(pmi->finalize = dlsym (pmi->dso, "PMI_Finalize")))
         msg_exit ("%s: %s", libname, dlerror ());
-    return dso;
-}
-
-static void boot_pmi (ctx_t *ctx)
-{
-    struct pmi_struct pmi;
-    void *dso = load_pmi (ctx->pmi_libname, &pmi);
-    int spawned;
-    char kvsname[128], *s, *key;
-    char val[128];
-    int appnum;
-
-    if (pmi.init (&spawned) != PMI_SUCCESS)
+    if (pmi->init (&pmi->spawned) != PMI_SUCCESS)
         msg_exit ("PMI_Init failed");
-
-    if (pmi.get_size (&ctx->size) != PMI_SUCCESS)
+    if (pmi->get_size (&pmi->size) != PMI_SUCCESS)
         msg_exit ("PMI_Get_size failed");
-    if (pmi.get_rank (&ctx->rank) != PMI_SUCCESS)
+    if (pmi->get_rank (&pmi->rank) != PMI_SUCCESS)
         msg_exit ("PMI_Get_rank failed");
-    if (pmi.get_appnum (&appnum) != PMI_SUCCESS)
+    if (pmi->get_appnum (&pmi->appnum) != PMI_SUCCESS)
         msg_exit ("PMI_Get_appnum failed");
 
-    int mcast_port = 5000 + appnum % 1024;
-    if (asprintf (&s, "epgm://%s;239.192.1.1:%d", ctx->ipaddr, mcast_port) < 0)
-        oom ();
-    ctx->gevent = endpt_create (s);
-    free (s);
+    if (pmi->get_clique_size (&pmi->clique_size) != PMI_SUCCESS)
+        msg_exit ("PMI_Get_clique_size");
+    pmi->clique = xzmalloc (sizeof (pmi->clique[0]) * pmi->clique_size);
+    if (pmi->get_clique_ranks (pmi->clique, pmi->clique_size) != PMI_SUCCESS)
+        msg_exit ("PMI_Get_clique_size");
 
-    if (pmi.kvs_get_my_name (kvsname, sizeof (kvsname)) != PMI_SUCCESS)
+    if (pmi->kvs_get_name_length_max (&pmi->name_length_max) != PMI_SUCCESS)
+        msg_exit ("PMI_KVS_Get_name_length_max");
+    pmi->kname = xzmalloc (pmi->name_length_max);
+    if (pmi->kvs_get_my_name (pmi->kname, pmi->name_length_max) != PMI_SUCCESS)
         msg_exit ("PMI_KVS_Get_my_name failed");
 
-    if (asprintf (&s, "tcp://%s:*", ctx->ipaddr) < 0)
-        oom ();
-    ctx->child = endpt_create (s);
-    free (s);
-    cmbd_init_child (ctx, ctx->child);
+    if (pmi->kvs_get_key_length_max (&pmi->key_length_max) != PMI_SUCCESS)
+        msg_exit ("PMI_KVS_Get_key_length_max");
+    pmi->key = xzmalloc (pmi->key_length_max);
 
-    if (asprintf (&key, "cmbd.%d.uri", ctx->rank) < 0)
-        oom ();
-    if (pmi.kvs_put (kvsname, key, ctx->child->uri) != PMI_SUCCESS)
-        msg_exit ("PMI_KVS_Put %s=%s failed", key, ctx->child->uri);
-    //msg ("PMI wrote %s=%s", key, ctx->child->uri);
-    free (key);
+    if (pmi->kvs_get_value_length_max (&pmi->value_length_max) != PMI_SUCCESS)
+        msg_exit ("PMI_KVS_Get_value_length_max");
+    pmi->val = xzmalloc (pmi->value_length_max);
 
-    if (pmi.kvs_commit (kvsname) != PMI_SUCCESS)
+    return pmi;
+}
+
+static void pmi_finalize (struct pmi_struct *pmi)
+{
+    if (pmi->finalize () != PMI_SUCCESS)
+        msg_exit ("PMI_Finalize failed");
+    free (pmi->clique);
+    free (pmi->kname);
+    free (pmi->key);
+    free (pmi->val);
+    dlclose (pmi->dso);
+    free (pmi);
+}
+
+static int pmi_clique_minrank (struct pmi_struct *pmi)
+{
+    int i, min = -1;
+    for (i = 0; i < pmi->clique_size; i++)
+        if (min == -1 || pmi->clique[i] < min)
+            min = pmi->clique[i];
+    return min;
+}
+
+static void pmi_kvs_put (struct pmi_struct *pmi, const char *val,
+                         const char *fmt, ...)
+{
+    va_list ap;
+    int klen = pmi->key_length_max;
+
+    va_start (ap, fmt);
+    if (vsnprintf (pmi->key, klen, fmt, ap) >= klen)
+        msg_exit ("%s: key longer than %d", __FUNCTION__, klen);
+    va_end (ap);
+    if (pmi->kvs_put (pmi->kname, pmi->key, val) != PMI_SUCCESS)
+        msg_exit ("PMI_KVS_Put %s=%s failed", pmi->key, val);
+}
+
+static char *pmi_kvs_get (struct pmi_struct *pmi, const char *fmt, ...)
+{
+    va_list ap;
+    int klen = pmi->key_length_max;
+    int vlen = pmi->value_length_max;
+
+    va_start (ap, fmt);
+    if (vsnprintf (pmi->key, klen, fmt, ap) >= klen)
+        msg_exit ("%s: key longer than %d", __FUNCTION__, klen);
+    va_end (ap);
+    if (pmi->kvs_get (pmi->kname, pmi->key, pmi->val, vlen) != PMI_SUCCESS)
+        msg_exit ("PMI_KVS_Get %s failed", pmi->key);
+    return pmi->val;
+}
+
+static void pmi_kvs_fence (struct pmi_struct *pmi)
+{
+    if (pmi->kvs_commit (pmi->kname) != PMI_SUCCESS)
         msg_exit ("PMI_KVS_Commit failed");
-    if (pmi.barrier () != PMI_SUCCESS)
+    if (pmi->barrier () != PMI_SUCCESS)
         msg_exit ("PMI_Barrier failed");
+}
 
-    if (ctx->rank > 0) {
-        if (asprintf (&key, "cmbd.%d.uri", ctx->pmi_k_ary == 0 ? 0
-                                        : (ctx->rank - 1) / ctx->pmi_k_ary) < 0)
-            oom ();
-        if (pmi.kvs_get (kvsname, key, val, sizeof (val)) != PMI_SUCCESS)
-            msg_exit ("PMI_KVS_Get %s failed", key);
-        if (zlist_push (ctx->parents, endpt_create (val)) < 0)
-            oom ();
-        free (key);
+/* N.B. If there are multiple nodes and multiple cmbds per node, the
+ * lowest rank in each clique will subscribe to the epgm:// socket
+ * and relay events to an ipc:// socket for the other ranks in the
+ * clique.  This is required due to a limitation of epgm.
+ */
+static void boot_pmi (ctx_t *ctx)
+{
+    struct pmi_struct *pmi = pmi_init (ctx->pmi_libname);
+    bool relay_needed = (pmi->clique_size > 1);
+    int relay_rank = pmi_clique_minrank (pmi);
+
+    ctx->size = pmi->size;
+    ctx->rank = pmi->rank;
+
+    ctx->child = endpt_create ("tcp://%s:*", ctx->ipaddr);
+    cmbd_init_child (ctx, ctx->child); /* obtain dyn port */
+    pmi_kvs_put (pmi, ctx->child->uri, "cmbd.%d.uri", ctx->rank);
+
+    if (relay_needed && ctx->rank == relay_rank) {
+        ctx->gevent_relay = endpt_create ("ipc://*");
+        cmbd_init_gevent_pub (ctx, ctx->gevent_relay); /* obtain dyn port */
+        pmi_kvs_put (pmi, ctx->gevent_relay->uri, "cmbd.%d.relay", ctx->rank);
     }
 
-    if (pmi.finalize () != PMI_SUCCESS)
-        msg_exit ("PMI_Finalize failed");
+    pmi_kvs_fence (pmi);
 
-    dlclose (dso);
+    if (ctx->rank > 0) {
+        int prank = ctx->pmi_k_ary == 0 ? 0 : (ctx->rank - 1) / ctx->pmi_k_ary;
+        endpt_t *ep = endpt_create (pmi_kvs_get (pmi, "cmbd.%d.uri", prank));
+        if (zlist_push (ctx->parents, ep) < 0)
+            oom ();
+    }
+
+    if (relay_needed && ctx->rank != relay_rank) {
+        char *uri = pmi_kvs_get (pmi, "cmbd.%d.relay", relay_rank);
+        ctx->gevent = endpt_create (uri);
+    } else {
+        int p = 5000 + pmi->appnum % 1024;
+        ctx->gevent = endpt_create ("epgm://%s;239.192.1.1:%d", ctx->ipaddr, p);
+    }
+
+    pmi_finalize (pmi);
 }
 
 static bool checkpath (const char *path, const char *name)
@@ -672,12 +762,11 @@ static int cmbd_init_gevent_pub (ctx_t *ctx, endpt_t *ep)
     if (flux_sec_ssockinit (ctx->sec, ep->zs) < 0) /* no-op for epgm */
         msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ctx->sec));
     zsocket_set_sndhwm (ep->zs, 0);
-    if (zsocket_bind (ep->zs, "%s", ep->uri) < 0) /* fails on ipc:// */
+    if (zsocket_bind (ep->zs, "%s", ep->uri) < 0)
         err_exit ("%s: %s", __FUNCTION__, ep->uri);
     if (strchr (ep->uri, '*')) { /* capture dynamically assigned port */
         free (ep->uri);
         ep->uri = zsocket_last_endpoint (ep->zs);
-        msg ("Event URI is %s", ep->uri);
     }
     return 0;
 }
@@ -828,6 +917,7 @@ static void cmbd_init_socks (ctx_t *ctx)
         cmbd_init_gevent_sub (ctx, ctx->gevent);
     if (ctx->child && !ctx->child->zs)      /* boot_pmi may have done this */
         cmbd_init_child (ctx, ctx->child);
+    /* N.B. boot_pmi may have created a gevent relay too - no work to do here */
 #if 0
     /* Increase max number of sockets and number of I/O thraeds.
      * (N.B. must call zctx_underlying () only after first socket is created)
@@ -1061,10 +1151,14 @@ static void hb_cb (ctx_t *ctx, zmsg_t *zmsg)
     }
 }
 
-static endpt_t *endpt_create (const char *uri)
+static endpt_t *endpt_create (const char *fmt, ...)
 {
     endpt_t *ep = xzmalloc (sizeof (*ep));
-    ep->uri = xstrdup (uri);
+    va_list ap;
+    va_start (ap, fmt);
+    if (vasprintf (&ep->uri, fmt, ap) < 0)
+        oom ();
+    va_end (ap);
     return ep;
 }
 
@@ -1161,6 +1255,7 @@ static int pub_gevent (ctx_t *ctx, zmsg_t **zmsg)
     /* Publish event locally.
     */
     snoop_cc (ctx, FLUX_MSGTYPE_EVENT, event);
+    relay_cc (ctx, event);
     cmb_internal_event (ctx, event);
     if (zmsg_send (&event, ctx->zs_event_out) < 0) {
         flux_respond_errnum (ctx->h, zmsg, errno ? errno : EIO);
@@ -1389,6 +1484,7 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
                 goto done;
             }
         }
+        relay_cc (ctx, zmsg);
         snoop_cc (ctx, FLUX_MSGTYPE_EVENT, zmsg);
         cmb_internal_event (ctx, zmsg);
         zmsg_send (&zmsg, ctx->zs_event_out);
@@ -1421,6 +1517,16 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
             ctx->reactor_stop = true;
     }
     ZLOOP_RETURN(ctx);
+}
+
+static int relay_cc (ctx_t *ctx, zmsg_t *zmsg)
+{
+    zmsg_t *cpy;
+    if (!zmsg || !ctx->gevent_relay)
+        return 0;
+    if (!(cpy = zmsg_dup (zmsg)))
+        err_exit ("zmsg_dup");
+    return zmsg_send (&cpy, ctx->gevent_relay->zs);
 }
 
 static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg)
