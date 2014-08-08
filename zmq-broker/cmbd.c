@@ -93,6 +93,8 @@ typedef struct {
 
     endpt_t *child;             /* ROUTER - requests from children */
 
+    endpt_t *right;             /* DEALER - requests to rank overlay */
+
     void *zs_request;           /* ROUTER - requests from plugins */
 
     void *zs_event_out;         /* PUB - to plugins */
@@ -107,6 +109,7 @@ typedef struct {
     int size;                   /* session size */
     int rank;                   /* our rank in session */
     char *rankstr;              /*   string version of above */
+    char *rankstr_right;        /*   with "r" tacked on the end */
     char *session_name;         /* Zauth "domain" (default "flux") */
     /* Plugins
      */
@@ -175,12 +178,13 @@ static void endpt_destroy (endpt_t *ep);
 static void update_proctitle (ctx_t *ctx);
 static void boot_pmi (ctx_t *ctx);
 
-#define OPTIONS "t:vR:S:p:M:X:L:H:N:nciPke:"
+#define OPTIONS "t:vR:S:p:M:X:L:H:N:nciPke:r:"
 static const struct option longopts[] = {
     {"session-name",    required_argument,  0, 'N'},
     {"no-security",     no_argument,        0, 'n'},
     {"child-uri",       required_argument,  0, 't'},
     {"parent-uri",      required_argument,  0, 'p'},
+    {"right-uri",       required_argument,  0, 'r'},
     {"verbose",         no_argument,        0, 'v'},
     {"plain-insecurity",no_argument,        0, 'i'},
     {"curve-security",  no_argument,        0, 'c'},
@@ -205,6 +209,7 @@ static void usage (void)
 " -t,--child-uri URI           Set child URI to bind and receive requests\n"
 " -p,--parent-uri URI          Set parent URI to connect and send requests\n"
 " -e,--event-uri               Set event URI (pub: rank 0, sub: rank > 0)\n"
+" -r,--right-uri               Set right (rank-request) URI\n"
 " -v,--verbose                 Be chatty\n"
 " -H,--hostlist HOSTLIST       Set session hostlist (sets 'hosts' in the KVS)\n"
 " -R,--rank N                  Set cmbd rank (0...size-1)\n"
@@ -331,6 +336,11 @@ int main (int argc, char *argv[])
                     endpt_destroy (ctx.gevent);
                 ctx.gevent = endpt_create (optarg);
                 break;
+            case 'r':   /* --right-uri */
+                if (ctx.right)
+                    endpt_destroy (ctx.right);
+                ctx.right = endpt_create (optarg);
+                break;
             default:
                 usage ();
         }
@@ -353,6 +363,8 @@ int main (int argc, char *argv[])
         boot_pmi (&ctx);
     }
     if (asprintf (&ctx.rankstr, "%d", ctx.rank) < 0)
+        oom ();
+    if (asprintf (&ctx.rankstr_right, "%dr", ctx.rank) < 0)
         oom ();
     if (ctx.rank == 0)
         ctx.treeroot = true;
@@ -418,6 +430,8 @@ int main (int argc, char *argv[])
         endpt_destroy (ctx.child);
     if (ctx.rankstr)
         free (ctx.rankstr);
+    if (ctx.rankstr_right)
+        free (ctx.rankstr_right);
     zhash_destroy (&ctx.peer_idle);
     return 0;
 }
@@ -561,6 +575,7 @@ static void boot_pmi (ctx_t *ctx)
     struct pmi_struct *pmi = pmi_init (ctx->pmi_libname);
     bool relay_needed = (pmi->clique_size > 1);
     int relay_rank = pmi_clique_minrank (pmi);
+    int right_rank = pmi->rank == 0 ? pmi->size - 1 : pmi->rank - 1;
 
     ctx->size = pmi->size;
     ctx->rank = pmi->rank;
@@ -583,6 +598,8 @@ static void boot_pmi (ctx_t *ctx)
         if (zlist_push (ctx->parents, ep) < 0)
             oom ();
     }
+
+    ctx->right = endpt_create (pmi_kvs_get (pmi, "cmbd.%d.uri", right_rank));
 
     if (relay_needed && ctx->rank != relay_rank) {
         char *uri = pmi_kvs_get (pmi, "cmbd.%d.relay", relay_rank);
@@ -847,6 +864,25 @@ error:
     return -1;
 }
 
+static int cmbd_init_right (ctx_t *ctx, endpt_t *ep)
+{
+    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
+
+    if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_DEALER)))
+        err_exit ("zsocket_new");
+    if (flux_sec_csockinit (ctx->sec, ep->zs) < 0)
+        msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
+    zsocket_set_hwm (ep->zs, 0);
+    zsocket_set_identity (ep->zs, ctx->rankstr_right);
+    if (zsocket_connect (ep->zs, "%s", ep->uri) < 0)
+        err_exit ("%s", ep->uri);
+    zp.socket = ep->zs;
+    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)parent_cb, ctx) < 0)
+        err_exit ("zloop_poller");
+    return 0;
+}
+
+
 /* signalfd + zloop example: https://gist.github.com/mhaberler/8426050
  */
 static int cmbd_init_signalfd (ctx_t *ctx)
@@ -917,6 +953,8 @@ static void cmbd_init_socks (ctx_t *ctx)
         cmbd_init_gevent_sub (ctx, ctx->gevent);
     if (ctx->child && !ctx->child->zs)      /* boot_pmi may have done this */
         cmbd_init_child (ctx, ctx->child);
+    if (ctx->right)
+        cmbd_init_right (ctx, ctx->right);
     /* N.B. boot_pmi may have created a gevent relay too - no work to do here */
 #if 0
     /* Increase max number of sockets and number of I/O thraeds.
@@ -1273,6 +1311,41 @@ done:
     return rc;
 }
 
+static void rankfwd_rewrap (zmsg_t **zmsg, const char **tp, json_object **pp)
+{
+    zframe_t *zf[2];
+    const char *s;
+    int i;
+
+    for (i = 0; i < 2; i++) {
+        zf[i] = zmsg_last (*zmsg);
+        assert (zf[i] != NULL);
+        zmsg_remove (*zmsg, zf[i]);
+    }
+    if (zmsg_addstr (*zmsg, *tp) < 0)
+        oom ();
+    if (*pp && (s = json_object_to_json_string (*pp)))
+        if (zmsg_addstr (*zmsg, s) < 0)
+            oom ();
+    for (i = 0; i < 2; i++) /* destroys *tp and *pp */
+        zframe_destroy (&zf[i]);
+    *pp = NULL;
+    *tp = NULL;
+}
+
+static bool rankfwd_looped (ctx_t *ctx, zmsg_t *zmsg)
+{
+    zframe_t *zf;
+
+    zf = zmsg_first (zmsg);
+    while (zf && zframe_size (zf) > 0) {
+        if (zframe_streq (zf, ctx->rankstr_right))
+            return true;
+        zf = zmsg_next (zmsg);
+    }
+    return false;
+}
+
 static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
 {
     char *arg = NULL;
@@ -1420,6 +1493,35 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         } else {
             if (pub_gevent (ctx, zmsg) < 0)
                 flux_respond_errnum (ctx->h, zmsg, errno);
+        }
+    } else if (cmb_msg_match (*zmsg, "cmb.rankfwd")) {
+        json_object *payload, *request = NULL;
+        int rank;
+        const char *topic;
+        if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+                || util_json_object_get_int (request, "rank", &rank) < 0
+                || util_json_object_get_string (request, "topic", &topic) < 0
+                || !(payload = json_object_object_get (request, "payload"))) {
+            flux_respond_errnum (ctx->h, zmsg, EPROTO);
+        } else if (rank == ctx->rank) {
+            char *p, *service = xstrdup (topic);
+            module_t *mod;
+            if ((p = strchr (service, '.')))
+                *p = '\0'; 
+            rankfwd_rewrap (zmsg, &topic, &payload);
+            if (!strcmp (service, "cmb")) {
+                cmb_internal_request (ctx, zmsg);
+            } else if ((mod = zhash_lookup (ctx->modules, service))) {
+                if (zmsg_send (zmsg, plugin_sock (mod->p)) < 0)
+                    flux_respond_errnum (ctx->h, zmsg, errno);
+            } else
+                flux_respond_errnum (ctx->h, zmsg, EHOSTUNREACH);
+            free (service);
+        } else if (!ctx->right || rankfwd_looped (ctx, *zmsg)) {
+            rankfwd_rewrap (zmsg, &topic, &payload);
+            flux_respond_errnum (ctx->h, zmsg, EHOSTUNREACH);
+        } else if (zmsg_send (zmsg, ctx->right->zs) < 0) {
+            flux_respond_errnum (ctx->h, zmsg, errno);
         }
     } else
         handled = false;

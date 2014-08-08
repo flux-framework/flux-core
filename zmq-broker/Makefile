@@ -24,7 +24,7 @@ LDADD_CLI = $(EXTRA_LDFLAGS) -ljson -lzmq -lczmq -lutil -lm -lmunge
 LDADD_SRV = -pthread -rdynamic $(LDADD_CLI) -ldl
 
 COMMON_OBJS = kvscli.o barriercli.o logcli.o cmbdcli.o mrpc.o handle.o \
-	waitqueue.o security.o rankcli.o reduce.o modctlcli.o \
+	waitqueue.o security.o reduce.o modctlcli.o \
 	livecli.o
 CMBD_OBJS = plugin.o $(COMMON_OBJS) cmbd.o
 
@@ -41,7 +41,7 @@ PLUGINS = plugins/api.so plugins/hb.so plugins/kvs.so \
 	plugins/barrier.so plugins/live.so plugins/mecho.so \
 	plugins/log.so plugins/echo.so plugins/job.so \
 	plugins/resrc.so plugins/rexec.so plugins/sched.so \
-	plugins/rank.so plugins/mon.so \
+	plugins/mon.so \
 	plugins/modctl.so plugins/schedplugin1.so
 
 SUBCMDS = libexec/kvs libexec/ping libexec/mecho \
