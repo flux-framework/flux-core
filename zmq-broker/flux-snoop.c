@@ -16,14 +16,13 @@
 #include "security.h"
 #include "event.h"
 
-#define OPTIONS "hanN:vle"
+#define OPTIONS "hanN:vl"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"all",        no_argument,        0, 'a'},
     {"no-security",no_argument,        0, 'n'},
     {"verbose",    no_argument,        0, 'v'},
     {"long",       no_argument,        0, 'l'},
-    {"event-socket",no_argument,       0, 'e'},
     {"session-name",required_argument, 0, 'N'},
     { 0, 0, 0, 0 },
 };
@@ -39,14 +38,12 @@ void usage (void)
 "  -v,--verbose           Verbose connect output\n"
 "  -l,--long              Display long message format\n"
 "  -N,--session-name NAME Set session name (default flux)\n"
-"  -e,--event-socket      Connect directly to event socket\n"
 );
     exit (1);
 }
 
 static void *connect_snoop (zctx_t *zctx, flux_sec_t sec, const char *uri);
 static int snoop_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg);
-static int event_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg);
 static int zmon_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg);
 
 static bool aopt = false;
@@ -58,7 +55,6 @@ int main (int argc, char *argv[])
     int ch;
     char *uri = NULL;
     bool vopt = false;
-    bool eopt = false;
     bool nopt = false;
     char *session = "flux";
     zctx_t *zctx;
@@ -80,9 +76,6 @@ int main (int argc, char *argv[])
                 break;
             case 'a': /* --all */
                 aopt = true;
-                break;
-            case 'e': /* --event-socket */
-                eopt = true;
                 break;
             case 'l': /* --long */
                 lopt = true;
@@ -107,13 +100,8 @@ int main (int argc, char *argv[])
     }
     if (!(h = cmb_init ()))
         err_exit ("cmb_init");
-    if (eopt) {
-        if (flux_event_geturi (h, &uri) < 0)
-            err_exit ("flux_event_geturi");
-    } else {
-        if (!(uri = flux_getattr (h, rank, "cmbd-snoop-uri")))
-            err_exit ("cmbd-snoop-uri");
-    }
+    if (!(uri = flux_getattr (h, rank, "cmbd-snoop-uri")))
+        err_exit ("cmbd-snoop-uri");
 
     /* N.B. flux_get_zctx () is not implemented for the API socket since
      * it has no internal zctx (despite supporting the flux reactor).
@@ -151,7 +139,7 @@ int main (int argc, char *argv[])
         err_exit ("%s", uri);
     zp.socket = s;
     zp.events = ZMQ_POLLIN;
-    if (zloop_poller (zloop, &zp, eopt ? event_cb : snoop_cb, NULL) < 0)
+    if (zloop_poller (zloop, &zp, snoop_cb, NULL) < 0)
         err_exit ("zloop_poller");
 
     if (zlist_size (subs) == 0)
@@ -213,25 +201,6 @@ static void *connect_snoop (zctx_t *zctx, flux_sec_t sec, const char *uri)
         err_exit ("%s", uri);
 
     return s;
-}
-
-/* Just raw flux events here.
- */
-static int event_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
-{
-    void *zs = item->socket;
-    zmsg_t *zmsg;
-    int type = FLUX_MSGTYPE_EVENT;
-
-    if ((zmsg = zmsg_recv (zs))) {
-        if (lopt) {
-            zmsg_dump (zmsg);
-        } else {
-            zmsg_dump_compact (zmsg, flux_msgtype_shortstr (type));
-        }
-        zmsg_destroy (&zmsg);
-    }
-    return 0;
 }
 
 static bool suppress (const char *tag)

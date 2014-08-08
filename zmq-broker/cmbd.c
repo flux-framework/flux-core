@@ -54,6 +54,7 @@ struct pmi_struct {
     int (*init)(int *);
     int (*get_size)(int *);
     int (*get_rank)(int *);
+    int (*get_appnum)(int *);
     int (*get_clique_size)(int *);
     int (*get_clique_ranks)(int *, int);
     int (*kvs_get_my_name)(char *, int);
@@ -83,10 +84,8 @@ typedef struct {
 
     void *zs_request;           /* ROUTER - requests from plugins */
 
-    char *uri_event_in;         /* SUB - to event module's ipc:// socket */
-    void *zs_event_in;          /*       (event module takes care of epgm) */
-
     void *zs_event_out;         /* PUB - to plugins */
+    endpt_t *gevent;            /* PUB for rank = 0, SUB for rank > 0 */
 
     char *uri_snoop;            /* PUB - to flux-snoop (uri is generated) */
     void *zs_snoop;
@@ -140,13 +139,12 @@ static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 
-static void cmb_event_geturi_request (ctx_t *ctx);
-
 static void cmbd_fini (ctx_t *ctx);
 
 static void cmbd_init_comms (ctx_t *ctx);
 static void cmbd_init_socks (ctx_t *ctx);
 static int cmbd_init_child (ctx_t *ctx, endpt_t *ep);
+static int cmbd_init_gevent_pub (ctx_t *ctx, endpt_t *ep);
 
 static module_t *module_create (ctx_t *ctx, const char *path, int flags);
 static void module_destroy (module_t *mod);
@@ -164,7 +162,7 @@ static void endpt_destroy (endpt_t *ep);
 static void update_proctitle (ctx_t *ctx);
 static void boot_pmi (ctx_t *ctx);
 
-#define OPTIONS "t:vR:S:p:M:X:L:H:N:nciPk"
+#define OPTIONS "t:vR:S:p:M:X:L:H:N:nciPke:"
 static const struct option longopts[] = {
     {"session-name",    required_argument,  0, 'N'},
     {"no-security",     no_argument,        0, 'n'},
@@ -181,6 +179,7 @@ static const struct option longopts[] = {
     {"hostlist",        required_argument,  0, 'H'},
     {"pmi-boot",        no_argument,        0, 'P'},
     {"k-ary",           required_argument,  0, 'k'},
+    {"event-uri",       required_argument,  0, 'e'},
     {0, 0, 0, 0},
 };
 
@@ -192,6 +191,7 @@ static void usage (void)
 "Usage: cmbd OPTIONS [module:key=val ...]\n"
 " -t,--child-uri URI           Set child URI to bind and receive requests\n"
 " -p,--parent-uri URI          Set parent URI to connect and send requests\n"
+" -e,--event-uri               Set event URI (pub: rank 0, sub: rank > 0)\n"
 " -v,--verbose                 Be chatty\n"
 " -H,--hostlist HOSTLIST       Set session hostlist (sets 'hosts' in the KVS)\n"
 " -R,--rank N                  Set cmbd rank (0...size-1)\n"
@@ -313,6 +313,11 @@ int main (int argc, char *argv[])
                 if (ctx.pmi_k_ary < 0)
                     usage ();
                 break;
+            case 'e':   /* --event-uri */
+                if (ctx.gevent)
+                    endpt_destroy (ctx.gevent);
+                ctx.gevent = endpt_create (optarg);
+                break;
             default:
                 usage ();
         }
@@ -328,10 +333,22 @@ int main (int argc, char *argv[])
     if (ctx.pmi_libname) {
         if (ctx.child)
             msg_exit ("--child-uri should not be specified with --pmi-boot");
+        if (ctx.gevent)
+            msg_exit ("--event-uri should not be specified with --pmi-boot");
         if (zlist_size (ctx.parents) > 0)
             msg_exit ("--parent-uri should not be specified with --pmi-boot");
         boot_pmi (&ctx);
     }
+    if (asprintf (&ctx.rankstr, "%d", ctx.rank) < 0)
+        oom ();
+    if (ctx.rank == 0)
+        ctx.treeroot = true;
+    if (ctx.treeroot && zlist_size (ctx.parents) > 0)
+        msg_exit ("treeroot must NOT have parent");
+    if (!ctx.treeroot && zlist_size (ctx.parents) == 0)
+        msg_exit ("non-treeroot must have parents");
+    if (ctx.size > 1 && !ctx.gevent)
+        msg_exit ("--event-uri is required for size > 1");
 
     /* Remaining arguments are for modules: module:key=val
      */
@@ -354,10 +371,9 @@ int main (int argc, char *argv[])
      */
     if (ctx.rank == 0) {
         module_prepare (&ctx, "hb");
-        module_prepare (&ctx, "event");
-        module_prepare (&ctx, "kvs");
         module_prepare (&ctx, "api");
     }
+    module_prepare (&ctx, "kvs");
     module_prepare (&ctx, "modctl");
     module_prepare (&ctx, "live");
 
@@ -371,25 +387,11 @@ int main (int argc, char *argv[])
         zhash_freefn (mod->args, "hosts", (zhash_free_fn *)free);
     }
 
-    if (asprintf (&ctx.rankstr, "%d", ctx.rank) < 0)
-        oom ();
-    if (ctx.rank == 0)
-        ctx.treeroot = true;
-    if (ctx.treeroot && zlist_size (ctx.parents) > 0)
-        msg_exit ("treeroot must NOT have parent");
-    if (!ctx.treeroot && zlist_size (ctx.parents) == 0)
-        msg_exit ("non-treeroot must have parents");
-
     update_proctitle (&ctx);
 
     cmbd_init_socks (&ctx);
 
     module_loadall (&ctx);
-
-    /* Send request for event URI (maybe upstream, maybe plugin)
-     * When the response is received we will subscribe to it.
-     */
-    cmb_event_geturi_request (&ctx);
 
     zloop_start (ctx.zl);
     msg ("zloop reactor stopped");
@@ -427,6 +429,7 @@ static void *load_pmi (const char *libname, struct pmi_struct *pmi)
     if (!dso || !(pmi->init = dlsym (dso, "PMI_Init"))
                 || !(pmi->get_size = dlsym (dso, "PMI_Get_size"))
                 || !(pmi->get_rank = dlsym (dso, "PMI_Get_rank"))
+                || !(pmi->get_appnum = dlsym (dso, "PMI_Get_appnum"))
                 || !(pmi->get_clique_size = dlsym (dso, "PMI_Get_clique_size"))
                 || !(pmi->get_clique_ranks = dlsym (dso,"PMI_Get_clique_ranks"))
                 || !(pmi->kvs_get_my_name = dlsym (dso, "PMI_KVS_Get_my_name"))
@@ -446,7 +449,7 @@ static void boot_pmi (ctx_t *ctx)
     int spawned;
     char kvsname[128], *s, *key;
     char val[128];
-    int clique_len, *clique;
+    int appnum;
 
     if (pmi.init (&spawned) != PMI_SUCCESS)
         msg_exit ("PMI_Init failed");
@@ -455,12 +458,14 @@ static void boot_pmi (ctx_t *ctx)
         msg_exit ("PMI_Get_size failed");
     if (pmi.get_rank (&ctx->rank) != PMI_SUCCESS)
         msg_exit ("PMI_Get_rank failed");
+    if (pmi.get_appnum (&appnum) != PMI_SUCCESS)
+        msg_exit ("PMI_Get_appnum failed");
 
-    if (pmi.get_clique_size (&clique_len) != PMI_SUCCESS)
-        msg_exit ("PMI_Get_clique_size");
-    clique = xzmalloc (sizeof (clique[0]) * clique_len);
-    if (pmi.get_clique_ranks (clique, clique_len) != PMI_SUCCESS)
-        msg_exit ("PMI_Get_clique_size");
+    int mcast_port = 5000 + appnum % 1024;
+    if (asprintf (&s, "epgm://%s;239.192.1.1:%d", ctx->ipaddr, mcast_port) < 0)
+        oom ();
+    ctx->gevent = endpt_create (s);
+    free (s);
 
     if (pmi.kvs_get_my_name (kvsname, sizeof (kvsname)) != PMI_SUCCESS)
         msg_exit ("PMI_KVS_Get_my_name failed");
@@ -483,7 +488,7 @@ static void boot_pmi (ctx_t *ctx)
     if (pmi.barrier () != PMI_SUCCESS)
         msg_exit ("PMI_Barrier failed");
 
-    if (ctx->rank != 0) {
+    if (ctx->rank > 0) {
         if (asprintf (&key, "cmbd.%d.uri", ctx->pmi_k_ary == 0 ? 0
                                         : (ctx->rank - 1) / ctx->pmi_k_ary) < 0)
             oom ();
@@ -497,7 +502,6 @@ static void boot_pmi (ctx_t *ctx)
     if (pmi.finalize () != PMI_SUCCESS)
         msg_exit ("PMI_Finalize failed");
 
-    free (clique);
     dlclose (dso);
 }
 
@@ -661,6 +665,41 @@ static int cmbd_init_child (ctx_t *ctx, endpt_t *ep)
     return 0;
 }
 
+static int cmbd_init_gevent_pub (ctx_t *ctx, endpt_t *ep)
+{
+    if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_PUB)))
+        err_exit ("zsocket_new");
+    if (flux_sec_ssockinit (ctx->sec, ep->zs) < 0) /* no-op for epgm */
+        msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ctx->sec));
+    zsocket_set_sndhwm (ep->zs, 0);
+    if (zsocket_bind (ep->zs, "%s", ep->uri) < 0) /* fails on ipc:// */
+        err_exit ("%s: %s", __FUNCTION__, ep->uri);
+    if (strchr (ep->uri, '*')) { /* capture dynamically assigned port */
+        free (ep->uri);
+        ep->uri = zsocket_last_endpoint (ep->zs);
+        msg ("Event URI is %s", ep->uri);
+    }
+    return 0;
+}
+
+static int cmbd_init_gevent_sub (ctx_t *ctx, endpt_t *ep)
+{
+    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
+
+    if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_SUB)))
+        err_exit ("zsocket_new");
+    if (flux_sec_csockinit (ctx->sec, ep->zs) < 0) /* no-op for epgm */
+        msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
+    zsocket_set_rcvhwm (ep->zs, 0);
+    if (zsocket_connect (ep->zs, "%s", ep->uri) < 0)
+        err_exit ("%s", ep->uri);
+    zsocket_set_subscribe (ep->zs, "");
+    zp.socket = ep->zs;
+    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)event_cb, ctx) < 0)
+        err_exit ("zloop_poller");
+    return 0;
+}
+
 static void *cmbd_init_event_out (ctx_t *ctx)
 {
     void *s;
@@ -685,28 +724,6 @@ static void *cmbd_init_snoop (ctx_t *ctx)
     if (zsocket_bind (s, "%s", "ipc://*") < 0)
         err_exit ("%s", "ipc://*");
     ctx->uri_snoop = zsocket_last_endpoint (s);
-    return s;
-}
-
-/* This isn't called until we have a response to event.geturi request,
- * which fills in ctx->uri_event_in.
- */
-static void *cmbd_init_event_in (ctx_t *ctx)
-{
-    void *s;
-    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
-
-    if (!(s = zsocket_new (ctx->zctx, ZMQ_SUB)))
-        err_exit ("zsocket_new");
-    if (flux_sec_csockinit (ctx->sec, s) < 0)
-        msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
-    zsocket_set_hwm (s, 0);
-    if (zsocket_connect (s, "%s", ctx->uri_event_in) < 0)
-        err_exit ("%s", ctx->uri_event_in);
-    zsocket_set_subscribe (s, "");
-    zp.socket = s;
-    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)event_cb, ctx) < 0)
-        err_exit ("zloop_poller");
     return s;
 }
 
@@ -804,7 +821,12 @@ static void cmbd_init_socks (ctx_t *ctx)
     ctx->zs_request = cmbd_init_request (ctx);
     ctx->zs_event_out = cmbd_init_event_out (ctx);
     ctx->zs_snoop = cmbd_init_snoop (ctx);
-    if (ctx->child && !ctx->child->zs) /* boot_pmi may have already done this */
+
+    if (ctx->rank == 0 && ctx->size > 1)
+        cmbd_init_gevent_pub (ctx, ctx->gevent);
+    if (ctx->rank > 0)
+        cmbd_init_gevent_sub (ctx, ctx->gevent);
+    if (ctx->child && !ctx->child->zs)      /* boot_pmi may have done this */
         cmbd_init_child (ctx, ctx->child);
 #if 0
     /* Increase max number of sockets and number of I/O thraeds.
@@ -837,50 +859,14 @@ static void cmbd_fini (ctx_t *ctx)
     zctx_destroy (&ctx->zctx); /* destorys all sockets created in ctx */
 }
 
-/* Send a request to event module for uri to subscribe to.
- * The request will go to local plugin if loaded, else upstream.
- */
-static void cmb_event_geturi_request (ctx_t *ctx)
-{
-    json_object *request = util_json_object_new_object ();
-
-    util_json_object_add_int (request, "pid", ctx->pid);
-    util_json_object_add_string (request, "hostname", ctx->hostname);
-    if (flux_request_send (ctx->h, request, "event.geturi") < 0)
-        err_exit ("%s: flux_request_send", __FUNCTION__);
-    json_object_put (request);
-}
-
 static int cmb_internal_response (ctx_t *ctx, zmsg_t **zmsg)
 {
-    json_object *response = NULL;
     int rc = -1;
 
-    if (cmb_msg_match (*zmsg, "event.geturi")) {
-        const char *uri;
-        if (cmb_msg_decode (*zmsg, NULL, &response) < 0 || !response
-                || util_json_object_get_string (response, "uri", &uri) < 0) {
-            flux_log (ctx->h, LOG_ERR, "mangled event.geturi response");
-            errno = EPROTO;
-            goto done;
-        }
-        if (ctx->uri_event_in != NULL) {
-            flux_log (ctx->h, LOG_ERR, "unexpected event.geturi response");
-            errno = EINVAL;
-            goto done;
-        }
-        ctx->uri_event_in = xstrdup (uri);
-        ctx->zs_event_in = cmbd_init_event_in (ctx);
-        //flux_log (ctx->h, LOG_INFO, "subscribed to %s", ctx->uri_event_in);
-        zmsg_destroy (zmsg);
-        rc = 0;
-    } else if (cmb_msg_match (*zmsg, "cmb.ping")) { /* ignore ping response */
+    if (cmb_msg_match (*zmsg, "cmb.ping")) { /* ignore ping response */
         zmsg_destroy (zmsg);
         rc = 0;
     }
-done:
-    if (response)
-        json_object_put (response);
     return rc;
 }
 
@@ -1131,6 +1117,67 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
         hb_cb (ctx, zmsg);
 }
 
+static int pub_gevent (ctx_t *ctx, zmsg_t **zmsg)
+{
+    json_object *payload, *request = NULL;
+    const char *topic;
+    zmsg_t *cpy = NULL, *event = NULL;
+    int rc = -1;
+
+    assert (ctx->rank == 0);
+    assert (ctx->zs_event_out != NULL);
+
+    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || !request) {
+        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
+        goto done;
+    }
+    if (util_json_object_get_string (request, "topic", &topic) < 0
+            || !(payload = json_object_object_get (request, "payload"))) {
+        flux_respond_errnum (ctx->h, zmsg, EINVAL);
+        goto done;
+    }
+    if (!(event = cmb_msg_encode ((char *)topic, payload))) {
+        flux_respond_errnum (ctx->h, zmsg, EINVAL);
+        goto done;
+    }
+    /* Publish event globally (if configured)
+    */
+    if (ctx->gevent) {
+        if (!(cpy = zmsg_dup (event)))
+            oom ();
+        if (strstr (ctx->gevent->uri, "pgm://")) {
+            if (flux_sec_munge_zmsg (ctx->sec, &cpy) < 0) {
+                flux_respond_errnum (ctx->h, zmsg, errno);
+                flux_log (ctx->h, LOG_ERR, "%s: discarding message: %s",
+                          __FUNCTION__, flux_sec_errstr (ctx->sec));
+                goto done;
+            }
+        }
+        if (zmsg_send (&cpy, ctx->gevent->zs) < 0) {
+            flux_respond_errnum (ctx->h, zmsg, errno ? errno : EIO);
+            goto done;
+        }
+    }
+    /* Publish event locally.
+    */
+    snoop_cc (ctx, FLUX_MSGTYPE_EVENT, event);
+    cmb_internal_event (ctx, event);
+    if (zmsg_send (&event, ctx->zs_event_out) < 0) {
+        flux_respond_errnum (ctx->h, zmsg, errno ? errno : EIO);
+        goto done;
+    }
+    flux_respond_errnum (ctx->h, zmsg, 0);
+    rc = 0;
+done:
+    if (request)
+        json_object_put (request);
+    if (event)
+        zmsg_destroy (&event);
+    if (*zmsg)
+        zmsg_destroy (zmsg);
+    return rc;
+}
+
 static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
 {
     char *arg = NULL;
@@ -1271,6 +1318,14 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         }
         if (request)
             json_object_put (request);
+    } else if (cmb_msg_match (*zmsg, "cmb.pub")) {
+        if (ctx->rank > 0) {
+            if (flux_request_sendmsg (ctx->h, zmsg) < 0)
+                flux_respond_errnum (ctx->h, zmsg, errno);
+        } else {
+            if (pub_gevent (ctx, zmsg) < 0)
+                flux_respond_errnum (ctx->h, zmsg, errno);
+        }
     } else
         handled = false;
 
@@ -1326,12 +1381,19 @@ static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod)
 
 static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
-    zmsg_t *zmsg = zmsg_recv (ctx->zs_event_in);
+    zmsg_t *zmsg = zmsg_recv (item->socket);
     if (zmsg) {
+        if (strstr (ctx->gevent->uri, "pgm://")) {
+            if (flux_sec_unmunge_zmsg (ctx->sec, &zmsg) < 0) {
+                zmsg_destroy (&zmsg);
+                goto done;
+            }
+        }
         snoop_cc (ctx, FLUX_MSGTYPE_EVENT, zmsg);
         cmb_internal_event (ctx, zmsg);
         zmsg_send (&zmsg, ctx->zs_event_out);
     }
+done:
     ZLOOP_RETURN(ctx);
 }
 
