@@ -27,13 +27,13 @@ static const struct option longopts[] = {
     { 0, 0, 0, 0 },
 };
 
-static char *suppressed[] = { "cmb.info", "log.msg", "event.pub" };
+static char *suppressed[] = { "cmb.info", "log.msg", "cmb.pub" };
 
 void usage (void)
 {
     fprintf (stderr, 
 "Usage: flux-snoop OPTIONS [topic [topic...]]\n"
-"  -a,--all               Do not suppress cmb.info, log.msg, event.pub\n"
+"  -a,--all               Do not suppress cmb.info, log.msg, cmb.pub\n"
 "  -n,--no-security       Try to connect without CURVE security\n"
 "  -v,--verbose           Verbose connect output\n"
 "  -l,--long              Display long message format\n"

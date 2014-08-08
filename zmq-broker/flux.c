@@ -81,8 +81,8 @@ int main (int argc, char *argv[])
     int ch;
     char *exec_path;
     bool hopt = false;
-    
-    log_init ("flux-kvs");
+
+    log_init ("flux");
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
