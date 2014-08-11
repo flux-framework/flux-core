@@ -30,7 +30,6 @@
 #include "plugin.h"
 #include "flux.h"
 #include "handle.h"
-#include "cmb_socket.h"
 #include "security.h"
 
 #ifndef ZMQ_IMMEDIATE
@@ -51,6 +50,8 @@ struct pmi_struct {
     int (*get_size)(int *);
     int (*get_rank)(int *);
     int (*get_appnum)(int *);
+    int (*get_id_length_max)(int *);
+    int (*get_id)(char *, int);
     int (*get_clique_size)(int *);
     int (*get_clique_ranks)(int *, int);
     int (*kvs_get_my_name)(char *, int);
@@ -63,8 +64,10 @@ struct pmi_struct {
     int (*kvs_get)(const char *, const char *, char *, int);
     int (*finalize)(void);
     void *dso;
-    int size, rank, spawned, appnum;
-    int name_length_max, key_length_max, value_length_max;
+    int size, rank, spawned;
+    int appnum;                 /* SLURM jobid */
+    int name_length_max, key_length_max, value_length_max, id_length_max;
+    char *id;                   /* SLURM jobid.stepid */
     int *clique;
     int clique_size;
     char *kname;
@@ -106,7 +109,7 @@ typedef struct {
     int rank;                   /* our rank in session */
     char *rankstr;              /*   string version of above */
     char *rankstr_right;        /*   with "r" tacked on the end */
-    char *session_name;         /* Zauth "domain" (default "flux") */
+    char *sid;                  /* session id */
     /* Plugins
      */
     char *plugin_path;          /* colon-separated list of directories */
@@ -170,11 +173,12 @@ static endpt_t *endpt_create (const char *fmt, ...);
 static void endpt_destroy (endpt_t *ep);
 
 static void update_proctitle (ctx_t *ctx);
+static void update_environment (ctx_t *ctx);
 static void boot_pmi (ctx_t *ctx);
 
 #define OPTIONS "t:vR:S:p:M:X:L:N:nciPke:r:"
 static const struct option longopts[] = {
-    {"session-name",    required_argument,  0, 'N'},
+    {"sid",             required_argument,  0, 'N'},
     {"no-security",     no_argument,        0, 'n'},
     {"child-uri",       required_argument,  0, 't'},
     {"parent-uri",      required_argument,  0, 'p'},
@@ -206,7 +210,7 @@ static void usage (void)
 " -v,--verbose                 Be chatty\n"
 " -R,--rank N                  Set cmbd rank (0...size-1)\n"
 " -S,--size N                  Set number of ranks in session\n"
-" -N,--session-name NAME       Set session name (default: flux)\n"
+" -N,--sid NAME                Set session id\n"
 " -M,--plugins name[,name,...] Load the named modules (comma separated)\n"
 " -X,--module-path PATH        Set module search path (colon separated)\n"
 " -L,--logdest DEST            Log to DEST, can  be syslog, stderr, or file\n"
@@ -235,7 +239,6 @@ int main (int argc, char *argv[])
         oom ();
     if (!(ctx.parents = zlist_new ()))
         oom ();
-    ctx.session_name = "flux";
     ctx.pmi_k_ary = 2; /* binary TBON is default */
 
     ctx.pid = getpid();
@@ -243,8 +246,10 @@ int main (int argc, char *argv[])
 
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
-            case 'N':   /* --session-name NAME */
-                ctx.session_name = optarg;
+            case 'N':   /* --sid NAME */
+                if (ctx.sid)
+                    free (ctx.sid);
+                ctx.sid = xstrdup (optarg);
                 break;
             case 'n':   /* --no-security */
                 ctx.security_clr = FLUX_SEC_TYPE_ALL;
@@ -328,8 +333,12 @@ int main (int argc, char *argv[])
             msg_exit ("--parent-uri should not be specified with --pmi-boot");
         if (ctx.gevent)
             msg_exit ("--event-uri should not be specified with --pmi-boot");
+        if (ctx.sid)
+            msg_exit ("--session-id should not be specified with --pmi-boot");
         boot_pmi (&ctx);
     }
+    if (!ctx.sid)
+        ctx.sid = xstrdup ("0");
     if (asprintf (&ctx.rankstr, "%d", ctx.rank) < 0)
         oom ();
     if (asprintf (&ctx.rankstr_right, "%dr", ctx.rank) < 0)
@@ -364,13 +373,14 @@ int main (int argc, char *argv[])
      */
     if (ctx.rank == 0) {
         module_prepare (&ctx, "hb");
-        module_prepare (&ctx, "api");
     }
+    module_prepare (&ctx, "api");
     module_prepare (&ctx, "kvs");
     module_prepare (&ctx, "modctl");
     module_prepare (&ctx, "live");
 
     update_proctitle (&ctx);
+    update_environment (&ctx);
 
     cmbd_init_socks (&ctx);
 
@@ -405,6 +415,19 @@ static void update_proctitle (ctx_t *ctx)
     ctx->proctitle = s;
 }
 
+static void update_environment (ctx_t *ctx)
+{
+    const char *oldtmp = getenv ("TMPDIR");
+    static char tmpdir[PATH_MAX + 1];
+
+    (void)snprintf (tmpdir, sizeof (tmpdir), "%s/flux-%s-%d",
+                    oldtmp ? oldtmp : "/tmp", ctx->sid, ctx->rank);
+    if (mkdir (tmpdir, 0700) < 0 && errno != EEXIST)
+        err_exit ("mkdir %s", tmpdir);
+    if (setenv ("TMPDIR", tmpdir, 1) < 0)
+        err_exit ("setenv TMPDIR");
+}
+
 static struct pmi_struct *pmi_init (const char *libname)
 {
     struct pmi_struct *pmi = xzmalloc (sizeof (*pmi));
@@ -415,6 +438,9 @@ static struct pmi_struct *pmi_init (const char *libname)
                   || !(pmi->get_size = dlsym (pmi->dso, "PMI_Get_size"))
                   || !(pmi->get_rank = dlsym (pmi->dso, "PMI_Get_rank"))
                   || !(pmi->get_appnum = dlsym (pmi->dso, "PMI_Get_appnum"))
+                  || !(pmi->get_id_length_max = dlsym (pmi->dso,
+                                                "PMI_Get_id_length_max"))
+                  || !(pmi->get_id = dlsym (pmi->dso, "PMI_Get_id"))
                   || !(pmi->get_clique_size = dlsym (pmi->dso,
                                                 "PMI_Get_clique_size"))
                   || !(pmi->get_clique_ranks = dlsym (pmi->dso,
@@ -441,6 +467,12 @@ static struct pmi_struct *pmi_init (const char *libname)
         msg_exit ("PMI_Get_rank failed");
     if (pmi->get_appnum (&pmi->appnum) != PMI_SUCCESS)
         msg_exit ("PMI_Get_appnum failed");
+
+    if (pmi->get_id_length_max (&pmi->id_length_max) != PMI_SUCCESS)
+        msg_exit ("PMI_Get_id_length_max");
+    pmi->id = xzmalloc (pmi->id_length_max);
+    if (pmi->get_id (pmi->id, pmi->id_length_max) != PMI_SUCCESS)
+        msg_exit ("PMI_Get_id");
 
     if (pmi->get_clique_size (&pmi->clique_size) != PMI_SUCCESS)
         msg_exit ("PMI_Get_clique_size");
@@ -559,6 +591,7 @@ static void boot_pmi (ctx_t *ctx)
 
     ctx->size = pmi->size;
     ctx->rank = pmi->rank;
+    ctx->sid = xstrdup (pmi->id);
 
     get_ipaddr (ipaddr, sizeof (ipaddr));
     ctx->child = endpt_create ("tcp://%s:*", ipaddr);
@@ -914,7 +947,7 @@ static void cmbd_init_comms (ctx_t *ctx)
         err_exit ("flux_sec_disable");
     if (ctx->security_set && flux_sec_enable (ctx->sec, ctx->security_set) < 0)
         err_exit ("flux_sec_enable");
-    if (flux_sec_zauth_init (ctx->sec, ctx->zctx, ctx->session_name) < 0)
+    if (flux_sec_zauth_init (ctx->sec, ctx->zctx, "flux") < 0)
         msg_exit ("flux_sec_zauth_init: %s", flux_sec_errstr (ctx->sec));
     if (flux_sec_munge_init (ctx->sec) < 0)
         msg_exit ("flux_sec_munge_init: %s", flux_sec_errstr (ctx->sec));

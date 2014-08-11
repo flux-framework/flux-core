@@ -356,15 +356,16 @@ flux_t cmb_init (void)
     char path[PATH_MAX + 1];
     int flags = 0;
 
-    if ((val = getenv ("CMB_API_PATH")) || (val = getenv ("FLUX_API_PATH"))) {
+    if ((val = getenv ("FLUX_API_PATH"))) {
         if (strlen (val) > PATH_MAX) {
-            err ("Crazy value for CMB_API_PATH!");
+            err ("Crazy value for FLUX_API_PATH!");
             return (NULL);
         }
-        strcpy(path, val);
+        snprintf (path, sizeof (path), "%s", val);
+    } else {
+        val = getenv ("TMPDIR");
+        snprintf (path, sizeof (path), "%s/flux-api", val ? val : "/tmp");
     }
-    else
-        snprintf (path, sizeof (path), CMB_API_PATH_TMPL, getuid ());
 
     if ((val = getenv ("FLUX_TRACE_APISOCK")) && !strcmp (val, "1"))
         flags = FLUX_FLAGS_TRACE;

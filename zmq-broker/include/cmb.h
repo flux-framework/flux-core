@@ -1,7 +1,6 @@
 #ifndef FLUX_CMB_H
 #define FLUX_CMB_H
 
-#include "cmb_socket.h"
 #include "flux.h"
 
 /* Create/destroy flux_t handle for the API environment.

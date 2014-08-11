@@ -24,7 +24,6 @@
 #include "plugin.h"
 #include "util.h"
 #include "log.h"
-#include "cmb_socket.h"
 
 #define LISTEN_BACKLOG      5
 
@@ -399,8 +398,6 @@ static int listener_init (ctx_t *ctx, char *sockpath)
         flux_log (ctx->h, LOG_ERR, "listen: %s", strerror (errno));
         goto error_close;
     }
-    if (setenv ("CMB_API_PATH", sockpath, 1) < 0)
-        err_exit ("setenv (CMB_API_PATH=%s)", sockpath);
 done:
     return fd;
 error_close:
@@ -421,7 +418,8 @@ int mod_main (flux_t h, zhash_t *args)
     int rc = -1;
 
     if (!args || !(sockpath = zhash_lookup (args, "sockpath"))) {
-        if (asprintf (&dfltpath, CMB_API_PATH_TMPL, geteuid ()) < 0)
+        const char *tmpdir = getenv ("TMPDIR");
+        if (asprintf (&dfltpath, "%s/flux-api", tmpdir ? tmpdir : "/tmp") < 0)
             oom ();
         sockpath = dfltpath;
     }
