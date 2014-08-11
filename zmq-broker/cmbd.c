@@ -16,10 +16,7 @@
 #include <unistd.h>
 #include <sys/param.h>
 #include <stdbool.h>
-//#include <sys/socket.h>
 #include <sys/time.h>
-//#include <sys/resource.h>
-//#include <pwd.h>
 #include <dlfcn.h>
 #include <pmi.h>
 
@@ -119,8 +116,6 @@ typedef struct {
     bool verbose;               /* enable debug to stderr */
     flux_t h;
     pid_t pid;
-    char hostname[HOST_NAME_MAX + 1];
-    char ipaddr[32];
     int hb_epoch;
     zhash_t *peer_idle;         /* peer (hopcount=1) hb idle time, by uuid */
     int hb_lastreq;             /* hb epoch of last upstream request */
@@ -226,10 +221,9 @@ static void usage (void)
 
 int main (int argc, char *argv[])
 {
-    int c, i, e;
+    int c, i;
     ctx_t ctx;
     endpt_t *ep;
-    struct addrinfo hints, *res = NULL;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -243,20 +237,6 @@ int main (int argc, char *argv[])
         oom ();
     ctx.session_name = "flux";
     ctx.pmi_k_ary = 2; /* binary TBON is default */
-
-    /* FIXME: lots of corner cases glossed over here, ipv6, multihomed,
-     * selection of alternate network, etc.
-     */
-    if (gethostname (ctx.hostname, HOST_NAME_MAX) < 0)
-        err_exit ("gethostname");
-    memset (&hints, 0, sizeof (hints));
-    hints.ai_family = PF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    if ((e = getaddrinfo (ctx.hostname, NULL, &hints, &res)) || res == NULL)
-        msg_exit ("getaddrinfo %s: %s", ctx.hostname, gai_strerror (e));
-    if ((e = getnameinfo (res->ai_addr, res->ai_addrlen, ctx.ipaddr,
-                          sizeof (ctx.ipaddr), NULL, 0, NI_NUMERICHOST)))
-        msg_exit ("getnameinfo %s: %s", ctx.hostname, gai_strerror (e));
 
     ctx.pid = getpid();
     ctx.plugin_path = PLUGIN_PATH;
@@ -543,6 +523,27 @@ static void pmi_kvs_fence (struct pmi_struct *pmi)
         msg_exit ("PMI_Barrier failed");
 }
 
+/* Get IP address to use for communication.
+ * FIXME: add option to override this via commandline, e.g. --iface=eth0
+ */
+static void get_ipaddr (char *ipaddr, int len)
+{
+    char hostname[HOST_NAME_MAX + 1];
+    struct addrinfo hints, *res = NULL;
+    int e;
+
+    if (gethostname (hostname, sizeof (hostname)) < 0)
+        err_exit ("gethostname");
+    memset (&hints, 0, sizeof (hints));
+    hints.ai_family = PF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    if ((e = getaddrinfo (hostname, NULL, &hints, &res)) || res == NULL)
+        msg_exit ("getaddrinfo %s: %s", hostname, gai_strerror (e));
+    if ((e = getnameinfo (res->ai_addr, res->ai_addrlen, ipaddr, len,
+                          NULL, 0, NI_NUMERICHOST)))
+        msg_exit ("getnameinfo %s: %s", hostname, gai_strerror (e));
+}
+
 /* N.B. If there are multiple nodes and multiple cmbds per node, the
  * lowest rank in each clique will subscribe to the epgm:// socket
  * and relay events to an ipc:// socket for the other ranks in the
@@ -554,11 +555,13 @@ static void boot_pmi (ctx_t *ctx)
     bool relay_needed = (pmi->clique_size > 1);
     int relay_rank = pmi_clique_minrank (pmi);
     int right_rank = pmi->rank == 0 ? pmi->size - 1 : pmi->rank - 1;
+    char ipaddr[HOST_NAME_MAX + 1];
 
     ctx->size = pmi->size;
     ctx->rank = pmi->rank;
 
-    ctx->child = endpt_create ("tcp://%s:*", ctx->ipaddr);
+    get_ipaddr (ipaddr, sizeof (ipaddr));
+    ctx->child = endpt_create ("tcp://%s:*", ipaddr);
     cmbd_init_child (ctx, ctx->child); /* obtain dyn port */
     pmi_kvs_put (pmi, ctx->child->uri, "cmbd.%d.uri", ctx->rank);
 
@@ -584,7 +587,7 @@ static void boot_pmi (ctx_t *ctx)
         ctx->gevent = endpt_create (uri);
     } else {
         int p = 5000 + pmi->appnum % 1024;
-        ctx->gevent = endpt_create ("epgm://%s;239.192.1.1:%d", ctx->ipaddr, p);
+        ctx->gevent = endpt_create ("epgm://%s;239.192.1.1:%d", ipaddr, p);
     }
 
     pmi_finalize (pmi);
