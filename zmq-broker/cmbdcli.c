@@ -27,40 +27,38 @@
 
 char *flux_getattr (flux_t h, int rank, const char *name)
 {
-    json_object *request = util_json_object_new_object ();
-    json_object *response = NULL;
+    JSON request = Jnew ();
+    JSON response = NULL;
     char *ret = NULL;
     const char *val;
 
-    util_json_object_add_string (request, "name", name);
+    Jadd_str (request, "name", name);
     if (!(response = flux_rank_rpc (h, rank, request, "cmb.getattr")))
         goto done;
-    if (util_json_object_get_string (response, (char *)name, &val) < 0) {
+    if (!Jget_str (response, (char *)name, &val)) {
         errno = EPROTO;
         goto done;
     }
     ret = xstrdup (val);
 done:
-    if (request)
-        json_object_put (request);
-    if (response)
-        json_object_put (response);
+    Jput (request);
+    Jput (response);
     return ret;
 }
 
 int flux_info (flux_t h, int *rankp, int *sizep, bool *treerootp)
 {
-    json_object *request = util_json_object_new_object ();
-    json_object *response = NULL;
+    JSON request = Jnew ();
+    JSON response = NULL;
     int rank, size;
     bool treeroot;
     int ret = -1;
 
     if (!(response = flux_rpc (h, request, "cmb.info")))
         goto done;
-    if (util_json_object_get_boolean (response, "treeroot", &treeroot) < 0
-            || util_json_object_get_int (response, "rank", &rank) < 0
-            || util_json_object_get_int (response, "size", &size) < 0) {
+    if (!Jget_bool (response, "treeroot", &treeroot)
+            || !Jget_int (response, "rank", &rank)
+            || !Jget_int (response, "size", &size)) {
         errno = EPROTO;
         goto done;
     }
@@ -72,10 +70,8 @@ int flux_info (flux_t h, int *rankp, int *sizep, bool *treerootp)
         *treerootp = treeroot;
     ret = 0;
 done:
-    if (request)
-        json_object_put (request);
-    if (response)
-        json_object_put (response);
+    Jput (request);
+    Jput (response);
     return ret;
 }
 
@@ -95,12 +91,12 @@ bool flux_treeroot (flux_t h)
 
 int flux_rmmod (flux_t h, int rank, const char *name, int flags)
 {
-    json_object *request = util_json_object_new_object ();
-    json_object *response = NULL;
+    JSON request = Jnew ();
+    JSON response = NULL;
     int rc = -1;
 
-    util_json_object_add_string (request, "name", name);
-    util_json_object_add_int (request, "flags", flags);
+    Jadd_str (request, "name", name);
+    Jadd_int (request, "flags", flags);
     if ((response = flux_rank_rpc (h, rank, request, "cmb.rmmod"))) {
         errno = EPROTO;
         goto done;
@@ -109,35 +105,30 @@ int flux_rmmod (flux_t h, int rank, const char *name, int flags)
         goto done;
     rc = 0;
 done:
-    if (request)
-        json_object_put (request);
-    if (response)
-        json_object_put (response);
+    Jput (request);
+    Jput (response);
     return rc;
 }
 
-json_object *flux_lsmod (flux_t h, int rank)
+JSON flux_lsmod (flux_t h, int rank)
 {
-    json_object *request = util_json_object_new_object ();
-    json_object *response = NULL;
+    JSON request = Jnew ();
+    JSON response = NULL;
 
     response = flux_rank_rpc (h, rank, request, "cmb.lsmod");
-    if (request)
-        json_object_put (request);
+    Jput (request);
     return response;
 }
 
-int flux_insmod (flux_t h, int rank, const char *path, int flags,
-                 json_object *args)
+int flux_insmod (flux_t h, int rank, const char *path, int flags, JSON args)
 {
-    json_object *request = util_json_object_new_object ();
-    json_object *response = NULL;
+    JSON request = Jnew ();
+    JSON response = NULL;
     int rc = -1;
 
-    util_json_object_add_string (request, "path", path);
-    util_json_object_add_int (request, "flags", flags);
-    json_object_get_object (args);
-    json_object_object_add (request, "args", args);
+    Jadd_str (request, "path", path);
+    Jadd_int (request, "flags", flags);
+    Jadd_obj (request, "args", args);
     if ((response = flux_rank_rpc (h, rank, request, "cmb.insmod"))) {
         errno = EPROTO;
         goto done;
@@ -146,35 +137,32 @@ int flux_insmod (flux_t h, int rank, const char *path, int flags,
         goto done;
     rc = 0;
 done:
-    if (request)
-        json_object_put (request);
-    if (response)
-        json_object_put (response);
+    Jput (request);
+    Jput (response);
     return rc;
 }
 
-json_object *flux_lspeer (flux_t h, int rank)
+JSON flux_lspeer (flux_t h, int rank)
 {
-    json_object *request = util_json_object_new_object ();
-    json_object *response = NULL;
+    JSON request = Jnew ();
+    JSON response = NULL;
 
     response = flux_rank_rpc (h, rank, request, "cmb.lspeer");
-    if (request)
-        json_object_put (request);
+    Jput (request);
     return response;
 }
 
 int flux_reparent (flux_t h, int rank, const char *uri)
 {
-    json_object *request = util_json_object_new_object ();
-    json_object *response = NULL;
+    JSON request = Jnew ();
+    JSON response = NULL;
     int rc = -1;
 
     if (!uri) {
         errno = EINVAL;
         goto done;
     }
-    util_json_object_add_string (request, "uri", uri);
+    Jadd_str (request, "uri", uri);
     if ((response = flux_rank_rpc (h, rank, request, "cmb.reparent"))) {
         errno = EPROTO;
         goto done;
@@ -183,41 +171,38 @@ int flux_reparent (flux_t h, int rank, const char *uri)
         goto done;
     rc = 0;
 done:
-    if (request)
-        json_object_put (request);
-    if (response)
-        json_object_put (response);
+    Jput (request);
+    Jput (response);
     return rc;
 }
 
 int flux_panic (flux_t h, int rank, const char *msg)
 {
-    json_object *request = util_json_object_new_object ();
+    JSON request = Jnew ();
     int rc = -1;
 
     if (msg)
-        util_json_object_add_string (request, "msg", msg);
+        Jadd_str (request, "msg", msg);
     if (flux_rank_request_send (h, rank, request, "cmb.panic") < 0)
         goto done;
     /* No reply */
     rc = 0;
 done:
-    if (request)
-        json_object_put (request);
+    Jput (request);
     return rc;
 }
 
-int flux_event_pub (flux_t h, const char *topic, json_object *payload)
+int flux_event_pub (flux_t h, const char *topic, JSON payload)
 {
-    json_object *request = util_json_object_new_object ();
-    json_object *response = NULL;
+    JSON request = Jnew ();
+    JSON response = NULL;
+    JSON empty_payload = NULL;
     int ret = -1;
 
-    util_json_object_add_string (request, "topic", topic);
-    if (payload)
-        json_object_get (payload);
-    json_object_object_add (request, "payload", payload ? payload 
-                                    : util_json_object_new_object ());
+    Jadd_str (request, "topic", topic);
+    if (!payload)
+        payload = empty_payload = Jnew ();
+    Jadd_obj (request, "payload", payload);
     errno = 0;
     response = flux_rpc (h, request, "cmb.pub");
     if (response) {
@@ -228,10 +213,9 @@ int flux_event_pub (flux_t h, const char *topic, json_object *payload)
         goto done;
     ret = 0;
 done:
-    if (request)
-        json_object_put (request);
-    if (response)
-        json_object_put (response);
+    Jput (request);
+    Jput (response);
+    Jput (empty_payload);
     return ret;
 }
 
@@ -241,7 +225,7 @@ done:
 int flux_event_sendmsg (flux_t h, zmsg_t **zmsg)
 {
     char *topic = NULL;
-    json_object *payload = NULL;
+    JSON payload = NULL;
     int rc = -1;
 
     if (!*zmsg || cmb_msg_decode (*zmsg, &topic, &payload) < 0) {
@@ -256,12 +240,11 @@ int flux_event_sendmsg (flux_t h, zmsg_t **zmsg)
 done:
     if (topic)
         free (topic);
-    if (payload)
-        json_object_put (payload);
+    Jput (payload);
     return rc;
 }
 
-int flux_event_send (flux_t h, json_object *request, const char *fmt, ...)
+int flux_event_send (flux_t h, JSON request, const char *fmt, ...)
 {
     char *topic;
     int rc;
