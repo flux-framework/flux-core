@@ -31,7 +31,6 @@
 #include "zmsg.h"
 #include "util.h"
 #include "plugin.h"
-#include "hljson.h"
 #include "flux.h"
 #include "handle.h"
 #include "cmb_socket.h"
@@ -178,7 +177,7 @@ static void endpt_destroy (endpt_t *ep);
 static void update_proctitle (ctx_t *ctx);
 static void boot_pmi (ctx_t *ctx);
 
-#define OPTIONS "t:vR:S:p:M:X:L:H:N:nciPke:r:"
+#define OPTIONS "t:vR:S:p:M:X:L:N:nciPke:r:"
 static const struct option longopts[] = {
     {"session-name",    required_argument,  0, 'N'},
     {"no-security",     no_argument,        0, 'n'},
@@ -193,7 +192,6 @@ static const struct option longopts[] = {
     {"plugins",         required_argument,  0, 'M'},
     {"module-path",     required_argument,  0, 'X'},
     {"logdest",         required_argument,  0, 'L'},
-    {"hostlist",        required_argument,  0, 'H'},
     {"pmi-boot",        no_argument,        0, 'P'},
     {"k-ary",           required_argument,  0, 'k'},
     {"event-uri",       required_argument,  0, 'e'},
@@ -211,7 +209,6 @@ static void usage (void)
 " -e,--event-uri               Set event URI (pub: rank 0, sub: rank > 0)\n"
 " -r,--right-uri               Set right (rank-request) URI\n"
 " -v,--verbose                 Be chatty\n"
-" -H,--hostlist HOSTLIST       Set session hostlist (sets 'hosts' in the KVS)\n"
 " -R,--rank N                  Set cmbd rank (0...size-1)\n"
 " -S,--size N                  Set number of ranks in session\n"
 " -N,--session-name NAME       Set session name (default: flux)\n"
@@ -231,7 +228,6 @@ int main (int argc, char *argv[])
 {
     int c, i, e;
     ctx_t ctx;
-    char *hosts = NULL;
     endpt_t *ep;
     struct addrinfo hints, *res = NULL;
 
@@ -293,14 +289,6 @@ int main (int argc, char *argv[])
             case 'v':   /* --verbose */
                 ctx.verbose = true;
                 break;
-            case 'H': { /* --hostlist hostlist */
-                json_object *o = hostlist_to_json (optarg);
-                if (hosts)
-                    free (hosts);
-                hosts = xstrdup (json_object_to_json_string (o));
-                json_object_put (o);
-                break;
-            }
             case 'R':   /* --rank N */
                 ctx.rank = strtoul (optarg, NULL, 10);
                 break;
@@ -401,16 +389,6 @@ int main (int argc, char *argv[])
     module_prepare (&ctx, "kvs");
     module_prepare (&ctx, "modctl");
     module_prepare (&ctx, "live");
-
-    /* Special -H is really kvs:hosts=...
-     */
-    if (hosts) {
-        module_t *mod;
-        if (!(mod = zhash_lookup (ctx.modules, "kvs")))
-            msg_exit ("kvs:hosts argument but kvs module not loaded");
-        zhash_update (mod->args, "hosts", hosts);
-        zhash_freefn (mod->args, "hosts", (zhash_free_fn *)free);
-    }
 
     update_proctitle (&ctx);
 
