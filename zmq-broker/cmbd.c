@@ -123,7 +123,8 @@ typedef struct {
     zhash_t *peer_idle;         /* peer (hopcount=1) hb idle time, by uuid */
     int hb_lastreq;             /* hb epoch of last upstream request */
     char *proctitle;
-    pid_t interactive_pid;
+    pid_t shell_pid;
+    char *shell_cmd;
     sigset_t default_sigset;
     /* PMI bootstrap
      */
@@ -179,10 +180,11 @@ static int cmb_pub_event (ctx_t *ctx, zmsg_t **event);
 static void update_proctitle (ctx_t *ctx);
 static void update_environment (ctx_t *ctx);
 static void interactive_shell (ctx_t *ctx);
+static void command_shell (ctx_t *ctx);
 static void terminate_session (ctx_t *ctx);
 static void boot_pmi (ctx_t *ctx);
 
-#define OPTIONS "t:vR:S:p:M:X:L:N:Pke:r:s:"
+#define OPTIONS "t:vR:S:p:M:X:L:N:Pke:r:s:c:"
 static const struct option longopts[] = {
     {"sid",             required_argument,  0, 'N'},
     {"child-uri",       required_argument,  0, 't'},
@@ -198,6 +200,7 @@ static const struct option longopts[] = {
     {"pmi-boot",        no_argument,        0, 'P'},
     {"k-ary",           required_argument,  0, 'k'},
     {"event-uri",       required_argument,  0, 'e'},
+    {"command",         required_argument,  0, 'c'},
     {0, 0, 0, 0},
 };
 
@@ -221,6 +224,7 @@ static void usage (void)
 " -s,--security=plain|curve|none    Select security mode (default: curve)\n"
 " -P,--pmi-boot                Bootstrap via PMI\n"
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
+" -c,--command string          Run command on rank 0\n"
 );
     exit (1);
 }
@@ -317,6 +321,11 @@ int main (int argc, char *argv[])
                     endpt_destroy (ctx.right);
                 ctx.right = endpt_create (optarg);
                 break;
+            case 'c':   /* --command CMD */
+                if (ctx.shell_cmd)
+                    free (ctx.shell_cmd);
+                ctx.shell_cmd = xstrdup (optarg);
+                break;
             default:
                 usage ();
         }
@@ -384,20 +393,20 @@ int main (int argc, char *argv[])
     update_proctitle (&ctx);
     update_environment (&ctx);
 
-    if (isatty (0) && ctx.rank == 0)
-        interactive_shell (&ctx);
+    if (ctx.rank == 0) {
+        if (ctx.shell_cmd)
+            command_shell (&ctx);
+        else if (isatty (0))
+            interactive_shell (&ctx);
+    }
 
     cmbd_init_socks (&ctx);
 
     module_loadall (&ctx);
 
     zloop_start (ctx.zl);
-    //msg ("zloop reactor stopped");
-
-    /* If we are rank 0, possibly we stopped because our interactive
-     * shell exited or some other legit reason.  Tell the session to stop.
-     */
-    terminate_session (&ctx);
+    if (ctx.rank == 0)
+        terminate_session (&ctx);
 
     cmbd_fini (&ctx);
 
@@ -447,7 +456,7 @@ static void interactive_shell (ctx_t *ctx)
 
     msg ("%s-0: starting %s", ctx->sid, shell);
 
-    switch ((ctx->interactive_pid = fork ())) {
+    switch ((ctx->shell_pid = fork ())) {
         case -1:
             err_exit ("fork");
         case 0: /* child */
@@ -455,6 +464,32 @@ static void interactive_shell (ctx_t *ctx)
                 err_exit ("sigprocmask");
             if (execl (shell, shell, NULL) < 0)
                 err_exit ("execl %s", shell);
+            break;
+        default: /* parent */
+            //close (2);
+            close (1);
+            close (0);
+            break;
+    }
+}
+
+static void command_shell (ctx_t *ctx)
+{
+    char *av[] = { getenv ("SHELL"), "-c", ctx->shell_cmd, NULL };
+
+    if (!av[0])
+        av[0] = "/bin/bash";
+
+    msg ("%s-0: running %s %s \"%s\"", ctx->sid, av[0], av[1], av[2]);
+
+    switch ((ctx->shell_pid = fork ())) {
+        case -1:
+            err_exit ("fork");
+        case 0: /* child */
+            if (sigprocmask (SIG_SETMASK, &ctx->default_sigset, NULL) < 0)
+                err_exit ("sigprocmask");
+            if (execv (av[0], av) < 0)
+                err_exit ("execv %s", av[0]);
             break;
         default: /* parent */
             //close (2);
@@ -1682,8 +1717,8 @@ static void reap_all_children (ctx_t *ctx)
     pid_t pid;
     int status;
     while ((pid = waitpid ((pid_t) -1, &status, WNOHANG)) > (pid_t)0) {
-        if (pid == ctx->interactive_pid) {
-            msg ("%s-0: terminating session", ctx->sid);
+        if (pid == ctx->shell_pid) {
+            msg ("%s-0: shell exited", ctx->sid);
             ctx->reactor_stop = true;
         } else
             msg ("child %ld exited status 0x%04x\n", (long)pid, status);
