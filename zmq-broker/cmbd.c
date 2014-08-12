@@ -182,16 +182,14 @@ static void interactive_shell (ctx_t *ctx);
 static void terminate_session (ctx_t *ctx);
 static void boot_pmi (ctx_t *ctx);
 
-#define OPTIONS "t:vR:S:p:M:X:L:N:nciPke:r:"
+#define OPTIONS "t:vR:S:p:M:X:L:N:Pke:r:s:"
 static const struct option longopts[] = {
     {"sid",             required_argument,  0, 'N'},
-    {"no-security",     no_argument,        0, 'n'},
     {"child-uri",       required_argument,  0, 't'},
     {"parent-uri",      required_argument,  0, 'p'},
     {"right-uri",       required_argument,  0, 'r'},
     {"verbose",         no_argument,        0, 'v'},
-    {"plain-insecurity",no_argument,        0, 'i'},
-    {"curve-security",  no_argument,        0, 'c'},
+    {"security",        required_argument,  0, 's'},
     {"rank",            required_argument,  0, 'R'},
     {"size",            required_argument,  0, 'S'},
     {"plugins",         required_argument,  0, 'M'},
@@ -220,9 +218,7 @@ static void usage (void)
 " -M,--plugins name[,name,...] Load the named modules (comma separated)\n"
 " -X,--module-path PATH        Set module search path (colon separated)\n"
 " -L,--logdest DEST            Log to DEST, can  be syslog, stderr, or file\n"
-" -c,--curve-security          Use CURVE security (default)\n"
-" -i,--plain-insecurity        Use PLAIN security instead of CURVE\n"
-" -n,--no-security             Disable session security\n"
+" -s,--security=plain|curve|none    Select security mode (default: curve)\n"
 " -P,--pmi-boot                Bootstrap via PMI\n"
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
 );
@@ -257,14 +253,15 @@ int main (int argc, char *argv[])
                     free (ctx.sid);
                 ctx.sid = xstrdup (optarg);
                 break;
-            case 'n':   /* --no-security */
-                ctx.security_clr = FLUX_SEC_TYPE_ALL;
-                break;
-            case 'c':   /* --curve-security */
-                ctx.security_set |= FLUX_SEC_TYPE_CURVE;
-                break;
-            case 'i':   /* --plain-insecurity */
-                ctx.security_set |= FLUX_SEC_TYPE_PLAIN;
+            case 's':   /* --security=MODE */
+                if (!strcmp (optarg, "none"))
+                    ctx.security_clr = FLUX_SEC_TYPE_ALL;
+                else if (!strcmp (optarg, "plain"))
+                    ctx.security_set |= FLUX_SEC_TYPE_PLAIN;
+                else if (!strcmp (optarg, "curve"))
+                    ctx.security_set |= FLUX_SEC_TYPE_CURVE;
+                else
+                    msg_exit ("--security argument must be none|plain|curve");
                 break;
             case 't':   /* --child-uri URI[,URI,...] */
                 if (ctx.child)
