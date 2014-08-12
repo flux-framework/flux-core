@@ -123,6 +123,8 @@ typedef struct {
     zhash_t *peer_idle;         /* peer (hopcount=1) hb idle time, by uuid */
     int hb_lastreq;             /* hb epoch of last upstream request */
     char *proctitle;
+    pid_t interactive_pid;
+    sigset_t default_sigset;
     /* PMI bootstrap
      */
     char *pmi_libname;
@@ -172,8 +174,12 @@ static void peer_modcreate (ctx_t *ctx, const char *uuid);
 static endpt_t *endpt_create (const char *fmt, ...);
 static void endpt_destroy (endpt_t *ep);
 
+static int cmb_pub_event (ctx_t *ctx, zmsg_t **event);
+
 static void update_proctitle (ctx_t *ctx);
 static void update_environment (ctx_t *ctx);
+static void interactive_shell (ctx_t *ctx);
+static void terminate_session (ctx_t *ctx);
 static void boot_pmi (ctx_t *ctx);
 
 #define OPTIONS "t:vR:S:p:M:X:L:N:nciPke:r:"
@@ -318,7 +324,6 @@ int main (int argc, char *argv[])
                 usage ();
         }
     }
-
     /* Create zeromq context, security context, zloop, etc.
      */
     cmbd_init_comms (&ctx);
@@ -382,12 +387,20 @@ int main (int argc, char *argv[])
     update_proctitle (&ctx);
     update_environment (&ctx);
 
+    if (isatty (0) && ctx.rank == 0)
+        interactive_shell (&ctx);
+
     cmbd_init_socks (&ctx);
 
     module_loadall (&ctx);
 
     zloop_start (ctx.zl);
-    msg ("zloop reactor stopped");
+    //msg ("zloop reactor stopped");
+
+    /* If we are rank 0, possibly we stopped because our interactive
+     * shell exited or some other legit reason.  Tell the session to stop.
+     */
+    terminate_session (&ctx);
 
     cmbd_fini (&ctx);
 
@@ -426,6 +439,43 @@ static void update_environment (ctx_t *ctx)
         err_exit ("mkdir %s", tmpdir);
     if (setenv ("TMPDIR", tmpdir, 1) < 0)
         err_exit ("setenv TMPDIR");
+}
+
+static void interactive_shell (ctx_t *ctx)
+{
+    const char *shell = getenv ("SHELL");
+
+    if (!shell)
+        shell = "/bin/bash";
+
+    msg ("%s-0: starting %s", ctx->sid, shell);
+
+    switch ((ctx->interactive_pid = fork ())) {
+        case -1:
+            err_exit ("fork");
+        case 0: /* child */
+            if (sigprocmask (SIG_SETMASK, &ctx->default_sigset, NULL) < 0)
+                err_exit ("sigprocmask");
+            if (execl (shell, shell, NULL) < 0)
+                err_exit ("execl %s", shell);
+            break;
+        default: /* parent */
+            //close (2);
+            close (1);
+            close (0);
+            break;
+    }
+}
+
+static void terminate_session (ctx_t *ctx)
+{
+    zmsg_t *event = NULL;
+
+    if (!(event = cmb_msg_encode ("terminate", NULL)))
+        oom ();
+    (void)cmb_pub_event (ctx, &event);
+    if (event)
+        zmsg_destroy (&event);
 }
 
 static struct pmi_struct *pmi_init (const char *libname)
@@ -907,7 +957,7 @@ static int cmbd_init_signalfd (ctx_t *ctx)
     zsys_handler_set (NULL);
     sigemptyset(&sigmask);
     sigfillset(&sigmask);
-    if (sigprocmask (SIG_SETMASK, &sigmask, NULL) < 0)
+    if (sigprocmask (SIG_SETMASK, &sigmask, &ctx->default_sigset) < 0)
         err_exit ("sigprocmask");
     sigemptyset(&sigmask);
     sigaddset(&sigmask, SIGHUP);
@@ -1261,13 +1311,57 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
 {
     if (cmb_msg_match (zmsg, "hb"))
         hb_cb (ctx, zmsg);
+    else if (cmb_msg_match (zmsg, "terminate"))
+        ctx->reactor_stop = true;
 }
 
-static int pub_gevent (ctx_t *ctx, zmsg_t **zmsg)
+static int cmb_pub_event (ctx_t *ctx, zmsg_t **event)
+{
+    int rc = -1;
+    zmsg_t *cpy = NULL;
+
+    /* Publish event globally (if configured)
+    */
+    if (ctx->gevent) {
+        if (!(cpy = zmsg_dup (*event)))
+            oom ();
+        if (strstr (ctx->gevent->uri, "pgm://")) {
+            if (flux_sec_munge_zmsg (ctx->sec, &cpy) < 0) {
+                if (errno == 0)
+                    errno = EIO;
+                goto done;
+            }
+        }
+        if (zmsg_send (&cpy, ctx->gevent->zs) < 0) {
+            if (errno == 0)
+                errno = EIO;
+            goto done;
+        }
+    }
+    /* Publish event locally.
+    */
+    snoop_cc (ctx, FLUX_MSGTYPE_EVENT, *event);
+    relay_cc (ctx, *event);
+    cmb_internal_event (ctx, *event);
+    if (zmsg_send (event, ctx->zs_event_out) < 0) {
+        if (errno == 0)
+            errno = EIO;
+        goto done;
+    }
+    rc = 0;
+done:
+    if (cpy)
+        zmsg_destroy (&cpy);
+    return rc;
+}
+
+/* Unwrap event from cmb.pub request and publish.
+ */
+static int cmb_pub (ctx_t *ctx, zmsg_t **zmsg)
 {
     json_object *payload, *request = NULL;
     const char *topic;
-    zmsg_t *cpy = NULL, *event = NULL;
+    zmsg_t *event = NULL;
     int rc = -1;
 
     assert (ctx->rank == 0);
@@ -1286,31 +1380,8 @@ static int pub_gevent (ctx_t *ctx, zmsg_t **zmsg)
         flux_respond_errnum (ctx->h, zmsg, EINVAL);
         goto done;
     }
-    /* Publish event globally (if configured)
-    */
-    if (ctx->gevent) {
-        if (!(cpy = zmsg_dup (event)))
-            oom ();
-        if (strstr (ctx->gevent->uri, "pgm://")) {
-            if (flux_sec_munge_zmsg (ctx->sec, &cpy) < 0) {
-                flux_respond_errnum (ctx->h, zmsg, errno);
-                flux_log (ctx->h, LOG_ERR, "%s: discarding message: %s",
-                          __FUNCTION__, flux_sec_errstr (ctx->sec));
-                goto done;
-            }
-        }
-        if (zmsg_send (&cpy, ctx->gevent->zs) < 0) {
-            flux_respond_errnum (ctx->h, zmsg, errno ? errno : EIO);
-            goto done;
-        }
-    }
-    /* Publish event locally.
-    */
-    snoop_cc (ctx, FLUX_MSGTYPE_EVENT, event);
-    relay_cc (ctx, event);
-    cmb_internal_event (ctx, event);
-    if (zmsg_send (&event, ctx->zs_event_out) < 0) {
-        flux_respond_errnum (ctx->h, zmsg, errno ? errno : EIO);
+    if (cmb_pub_event (ctx, &event) < 0) {
+        flux_respond_errnum (ctx->h, zmsg, errno);
         goto done;
     }
     flux_respond_errnum (ctx->h, zmsg, 0);
@@ -1505,7 +1576,7 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             if (flux_request_sendmsg (ctx->h, zmsg) < 0)
                 flux_respond_errnum (ctx->h, zmsg, errno);
         } else {
-            if (pub_gevent (ctx, zmsg) < 0)
+            if (cmb_pub (ctx, zmsg) < 0)
                 flux_respond_errnum (ctx->h, zmsg, errno);
         }
     } else if (cmb_msg_match (*zmsg, "cmb.rankfwd")) {
@@ -1609,12 +1680,17 @@ done:
     ZLOOP_RETURN(ctx);
 }
 
-static void reap_all_children (void)
+static void reap_all_children (ctx_t *ctx)
 {
     pid_t pid;
     int status;
-    while ((pid = waitpid ((pid_t) -1, &status, WNOHANG)) > (pid_t)0)
-        msg ("child %ld exited status 0x%04x\n", (long)pid, status);
+    while ((pid = waitpid ((pid_t) -1, &status, WNOHANG)) > (pid_t)0) {
+        if (pid == ctx->interactive_pid) {
+            msg ("%s-0: terminating session", ctx->sid);
+            ctx->reactor_stop = true;
+        } else
+            msg ("child %ld exited status 0x%04x\n", (long)pid, status);
+    }
 }
 
 static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
@@ -1625,12 +1701,13 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
     if ((n = read (item->fd, &fdsi, sizeof (fdsi))) < 0) {
         if (errno != EWOULDBLOCK)
             err_exit ("read");
-    } else if (n == sizeof (fdsi)){
-        msg ("signal %d (%s)", fdsi.ssi_signo, strsignal (fdsi.ssi_signo));
+    } else if (n == sizeof (fdsi)) {
         if (fdsi.ssi_signo == SIGCHLD)
-            reap_all_children ();
-        else
+            reap_all_children (ctx);
+        else {
+            msg ("signal %d (%s)", fdsi.ssi_signo, strsignal (fdsi.ssi_signo));
             ctx->reactor_stop = true;
+        }
     }
     ZLOOP_RETURN(ctx);
 }
