@@ -634,11 +634,14 @@ static int ns_sync (ctx_t *ctx)
     if (ctx->ns) {
         writekvs = true;
     } else if (ns_fromkvs (ctx) < 0) {
-        char *ok = ctx->rankstr, *fail = "", *slow = "", *unknown;
-        if (asprintf (&unknown, "1-%d", flux_size (ctx->h) - 1) < 0)
-            oom ();
+        char *ok = ctx->rankstr, *fail = "", *slow = "", *unknown = "";
+        int size = flux_size (ctx->h);
+        if (size > 1)
+            if (asprintf (&unknown, "1-%d", flux_size (ctx->h) - 1) < 0)
+                oom ();
         ctx->ns = ns_create (ok, fail, slow, unknown);
-        free (unknown);
+        if (size > 1)
+            free (unknown);
         writekvs = true;
     }
     if (writekvs) {
