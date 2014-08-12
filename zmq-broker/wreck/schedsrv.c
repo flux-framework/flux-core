@@ -49,7 +49,7 @@ static zlist_t *ev_queue = NULL;
 static flux_t h = NULL;
 static struct rdl *rdl = NULL;
 static char* resource = NULL;
-static const char* IDLETAG = "idle";
+static char* IDLETAG = "idle";
 static const char* CORETYPE = "core";
 
 static struct stab_struct jobstate_tab[] = {
@@ -612,9 +612,10 @@ update_job (flux_lwj_t *job)
  */
 int schedule_job (struct rdl *rdl, const char *uri, flux_lwj_t *job)
 {
-    int64_t nodes;
+    int64_t cores;
     int rc = -1;
     json_object *args = util_json_object_new_object ();
+    json_object *tags = util_json_object_new_object ();
     json_object *o;
     struct rdl_accumulator *a = NULL;
     struct resource *fr = NULL;         /* found resource */
@@ -625,29 +626,32 @@ int schedule_job (struct rdl *rdl, const char *uri, flux_lwj_t *job)
         goto ret;
     }
 
-    util_json_object_add_string (args, "tag", IDLETAG);
+    util_json_object_add_string (args, "type", "core");
+    util_json_object_add_boolean (tags, IDLETAG, true);
+    json_object_object_add (args, "tags", tags);
     frdl = rdl_find (rdl, args);
 
     if (frdl) {
         if ((fr = rdl_resource_get (frdl, uri)) == NULL) {
-            flux_log (h, LOG_ERR, "failed to get found resources: %s", uri);
+            flux_log (h, LOG_ERR, "failed to find %s resources for job %ld", uri,
+                      job->lwj_id);
             goto ret;
         }
 
         o = rdl_resource_aggregate_json (fr);
         if (o) {
-            rc = util_json_object_get_int64 (o, "node", &nodes);
+            rc = util_json_object_get_int64 (o, "core", &cores);
             if (rc) {
-                flux_log (h, LOG_ERR, "schedule_job failed to get nodes: %d",
+                flux_log (h, LOG_ERR, "schedule_job failed to get cores: %d",
                           rc);
                 goto ret;
             } else {
-                flux_log (h, LOG_DEBUG, "schedule_job found %ld nodes", nodes);
+                flux_log (h, LOG_DEBUG, "schedule_job found %ld cores", cores);
             }
             json_object_put (o);
         }
 
-        if (nodes >= job->req.nnodes) {
+        if (cores >= job->req.ncores) {
             rdl_resource_iterator_reset (fr);
             a = rdl_accumulator_create (rdl);
             if (allocate_resources (fr, a, job)) {
