@@ -49,7 +49,6 @@ static zlist_t *ev_queue = NULL;
 static flux_t h = NULL;
 static struct rdl *rdl = NULL;
 static char* resource = NULL;
-static char* IDLETAG = "idle";
 static const char* CORETYPE = "core";
 
 static struct stab_struct jobstate_tab[] = {
@@ -383,30 +382,6 @@ ret:
  ****************************************************************/
 
 /*
- * Initialize the rdl resources with "idle" tags on each core
- */
-static int
-idlize_resources (struct resource *r)
-{
-    int rc = 0;
-    struct resource *c;
-
-    if (r) {
-        rdl_resource_tag (r, IDLETAG);
-        while (!rc && (c = rdl_resource_next_child (r))) {
-            rc = idlize_resources (c);
-            rdl_resource_destroy (c);
-        }
-    } else {
-        flux_log (h, LOG_ERR, "idlize_resources passed a null resource");
-        rc = -1;
-    }
-
-    return rc;
-}
-
-
-/*
  * Walk the tree, find the required resources and tag with the lwj_id
  * to which it is allocated.
  */
@@ -418,8 +393,6 @@ allocate_resources (struct resource *fr, struct rdl_accumulator *a,
     char *uri = NULL;
     const char *type = NULL;
     json_object *o = NULL;
-    json_object *o2 = NULL;
-    json_object *o3 = NULL;
     struct resource *c;
     struct resource *r;
     bool found = false;
@@ -428,36 +401,38 @@ allocate_resources (struct resource *fr, struct rdl_accumulator *a,
     r = rdl_resource_get (rdl, uri);
     free (uri);
 
-    o = rdl_resource_json (r);
-    Jget_str (o, "type", &type);
-    asprintf (&lwjtag, "lwj.%ld", job->lwj_id);
-    if (job->req.nnodes && (strcmp (type, "node") == 0)) {
-        job->req.nnodes--;
-        job->alloc.nnodes++;
-    } else if (job->req.ncores && (strcmp (type, CORETYPE) == 0) &&
-               (job->req.ncores > job->req.nnodes)) {
-        /* We put the (job->req.ncores > job->req.nnodes) requirement
-         * here to guarantee at least one core per node. */
-        Jget_obj (o, "tags", &o2);
-        Jget_obj (o2, IDLETAG, &o3);
-        if (o3) {
-            job->req.ncores--;
-            job->alloc.ncores++;
+    if (rdl_resource_available (r)) {
+        o = rdl_resource_json (r);
+        Jget_str (o, "type", &type);
+        asprintf (&lwjtag, "lwj.%ld", job->lwj_id);
+        if (job->req.nnodes && (strcmp (type, "node") == 0)) {
+            job->req.nnodes--;
+            job->alloc.nnodes++;
+        } else if (job->req.ncores && (strcmp (type, CORETYPE) == 0) &&
+                   (job->req.ncores > job->req.nnodes)) {
+            /* The (job->req.ncores > job->req.nnodes) requirement
+             * guarantees at least one core per node. */
             rdl_resource_tag (r, lwjtag);
-            rdl_resource_delete_tag (r, IDLETAG);
             rdl_accumulator_add (a, r);
-            flux_log (h, LOG_DEBUG, "allocated core: %s",
-                      json_object_to_json_string (o));
+            if (!rdl_resource_alloc (r, 1)) {
+                job->req.ncores--;
+                job->alloc.ncores++;
+                flux_log (h, LOG_DEBUG, "allocated core: %s",
+                          json_object_to_json_string (o));
+            } else {
+                flux_log (h, LOG_ERR, "failed to allocate %s",
+                          json_object_to_json_string (o));
+            }
         }
-    }
-    free (lwjtag);
-    json_object_put (o);
+        free (lwjtag);
+        json_object_put (o);
 
-    found = !(job->req.nnodes || job->req.ncores);
+        found = !(job->req.nnodes || job->req.ncores);
 
-    while (!found && (c = rdl_resource_next_child (fr))) {
-        found = allocate_resources (c, a, job);
-        rdl_resource_destroy (c);
+        while (!found && (c = rdl_resource_next_child (fr))) {
+            found = allocate_resources (c, a, job);
+            rdl_resource_destroy (c);
+        }
     }
 
     return found;
@@ -615,7 +590,6 @@ int schedule_job (struct rdl *rdl, const char *uri, flux_lwj_t *job)
     int64_t cores;
     int rc = -1;
     json_object *args = util_json_object_new_object ();
-    json_object *tags = util_json_object_new_object ();
     json_object *o;
     struct rdl_accumulator *a = NULL;
     struct resource *fr = NULL;         /* found resource */
@@ -627,8 +601,6 @@ int schedule_job (struct rdl *rdl, const char *uri, flux_lwj_t *job)
     }
 
     util_json_object_add_string (args, "type", "core");
-    util_json_object_add_boolean (tags, IDLETAG, true);
-    json_object_object_add (args, "tags", tags);
     frdl = rdl_find (rdl, args);
 
     if (frdl) {
@@ -654,6 +626,8 @@ int schedule_job (struct rdl *rdl, const char *uri, flux_lwj_t *job)
         if (cores >= job->req.ncores) {
             rdl_resource_iterator_reset (fr);
             a = rdl_accumulator_create (rdl);
+            job->alloc.nnodes = 0;
+            job->alloc.ncores = 0;
             if (allocate_resources (fr, a, job)) {
                 job->rdl = rdl_accumulator_copy (a);
                 /* Transition the job back to submitted to prevent the
@@ -766,11 +740,11 @@ release_lwj_resource (struct rdl *rdl, struct resource *jr, int64_t lwj_id)
         if (strcmp (type, CORETYPE) == 0) {
             asprintf (&lwjtag, "lwj.%ld", lwj_id);
             rdl_resource_delete_tag (r, lwjtag);
-            rdl_resource_tag (r, IDLETAG);
+            rdl_resource_free (r, 1);
+            flux_log (h, LOG_DEBUG, "%s released: %ld now available",
+                      rdl_resource_path (r), rdl_resource_available (r));
             free (lwjtag);
         }
-        flux_log (h, LOG_DEBUG, "resource released: %s",
-                  json_object_to_json_string (o));
         json_object_put (o);
 
         while (!rc && (c = rdl_resource_next_child (jr))) {
@@ -1189,14 +1163,7 @@ int mod_main (flux_t p, zhash_t *args)
         resource = "default";
     }
 
-    if ((r = rdl_resource_get (rdl, resource))) {
-        if (idlize_resources (r)) {
-            flux_log (h, LOG_ERR, "failed to idlize %s: %s", resource,
-                      strerror (errno));
-            rc = -1;
-            goto ret;
-        }
-    } else {
+    if (!(r = rdl_resource_get (rdl, resource))) {
         flux_log (h, LOG_ERR, "failed to get %s: %s", resource,
                   strerror (errno));
         rc = -1;
