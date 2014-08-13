@@ -179,6 +179,7 @@ static int cmb_pub_event (ctx_t *ctx, zmsg_t **event);
 
 static void update_proctitle (ctx_t *ctx);
 static void update_environment (ctx_t *ctx);
+static void update_pidfile (ctx_t *ctx);
 static void interactive_shell (ctx_t *ctx);
 static void command_shell (ctx_t *ctx);
 static void terminate_session (ctx_t *ctx);
@@ -392,6 +393,7 @@ int main (int argc, char *argv[])
 
     update_proctitle (&ctx);
     update_environment (&ctx);
+    update_pidfile (&ctx);
 
     if (ctx.rank == 0) {
         if (ctx.shell_cmd)
@@ -445,6 +447,29 @@ static void update_environment (ctx_t *ctx)
         err_exit ("mkdir %s", tmpdir);
     if (setenv ("TMPDIR", tmpdir, 1) < 0)
         err_exit ("setenv TMPDIR");
+}
+
+static void update_pidfile (ctx_t *ctx)
+{
+    const char *tmpdir = getenv ("TMPDIR");
+    char *pidfile;
+    pid_t pid;
+    FILE *f;
+
+    if (asprintf (&pidfile, "%s/cmbd.pid", tmpdir ? tmpdir : "/tmp") < 0)
+        oom ();
+    if ((f = fopen (pidfile, "r"))) {
+        if (fscanf (f, "%u", &pid) == 1 && kill (pid, 0) == 0)
+            msg_exit ("cmbd is already running in %s, pid %d", tmpdir, pid);
+        fclose (f);
+    }
+    if (!(f = fopen (pidfile, "w+")))
+        err_exit ("%s", pidfile);
+    if (fprintf (f, "%u", getpid ()) < 0)
+        err_exit ("%s", pidfile);
+    if (fclose(f) < 0)
+        err_exit ("%s", pidfile);
+    free (pidfile);
 }
 
 static void interactive_shell (ctx_t *ctx)
