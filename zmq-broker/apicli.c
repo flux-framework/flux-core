@@ -310,11 +310,30 @@ static void cmb_fini (void *impl)
     free (c);
 }
 
+static bool pidcheck (const char *pidfile)
+{
+    pid_t pid;
+    FILE *f = NULL;
+    bool running = false;
+
+    if (!(f = fopen (pidfile, "r")))
+        goto done;
+    if (fscanf (f, "%u", &pid) != 1 || kill (pid, 0) < 0)
+        goto done;
+    running = true;
+done:
+    if (f)
+        (void)fclose (f);
+    return running;
+}
+
 flux_t cmb_init_full (const char *path, int flags)
 {
     cmb_t *c = NULL;
     struct sockaddr_un addr;
     zmq_pollitem_t zp;
+    char *cpy = xstrdup (path);
+    char *pidfile = NULL;
 
     c = xzmalloc (sizeof (*c));
     if (!(c->resp = zlist_new ()))
@@ -339,14 +358,26 @@ flux_t cmb_init_full (const char *path, int flags)
     addr.sun_family = AF_UNIX;
     strncpy (addr.sun_path, path, sizeof (addr.sun_path) - 1);
 
-    if (connect (c->fd, (struct sockaddr *)&addr,
-                         sizeof (struct sockaddr_un)) < 0)
-        goto error;
+    if (asprintf (&pidfile, "%s/cmbd.pid", dirname (cpy)) < 0)
+        oom ();
+
+    for (;;) {
+        if (!pidcheck (pidfile))
+            goto error;
+        if (connect (c->fd, (struct sockaddr *)&addr,
+                                   sizeof (struct sockaddr_un)) == 0)
+            break;
+        usleep (100*1000);
+    }
     c->h = handle_create (c, &cmb_ops, flags);
     return c->h;
 error:
     if (c)
         cmb_fini (c);
+    if (cpy)
+        free (cpy);
+    if (pidfile)
+        free (pidfile);
     return NULL;
 }
 
