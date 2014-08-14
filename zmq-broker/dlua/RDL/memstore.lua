@@ -457,13 +457,40 @@ local function hierarchy_validate (t, parent)
     return true
 end
 
+local function  h_copy_available (store, hnode)
+    if hnode == nil then return nil end
+    local r = store:get (hnode.id)
+    if r.size == r.allocated then
+        return nil
+    end
 
-local function hierarchy_export (self, arg)
+    local new = { children = {} }
+
+    for k,v in pairs (hnode) do
+        if k == "children" then
+            --
+            -- Only copy children with available resources to new node:
+            --
+            for name,child in pairs (hnode.children) do
+                local c = h_copy_available (store, child)
+                new.children [name] = c
+                if c then c.parent = new end
+            end
+        else
+            new[k] = deepcopy_no_metatable (v)
+        end
+    end
+    return new
+end
+
+
+local function hierarchy_export (self, arg, opts)
+    local opts = opts or {}
     local h, err = self:get_hierarchy (arg)
     if not h then return nil, err end
 
     -- First copy hierarchy at this uri:
-    local t = deepcopy_no_metatable (h)
+    local t = opts.available and h_copy_available (self, h) or deepcopy_no_metatable (h)
 
     -- Now, traverse up the hierarchy and copy all parents to root
     while t.parent do
@@ -540,13 +567,13 @@ local function printf (...)
 end
 
 local function reset_resource_size (store, uuid, n)
-    local r= store:get (uuid)
+    local r = store:get (uuid)
     if n then r.size = n end
     r.allocated = 0
 end
 
 --  Copy hierarchy at uri [s] to destination [dst]
-function MemStore:copyto (s, dst, n)
+function MemStore:copyto (s, dst, n, opts)
     local uri = URI.new (s)
     if not uri then
         return nil, "bad URI: "..arg
@@ -562,7 +589,7 @@ function MemStore:copyto (s, dst, n)
     --  If hierarchy doesn't even exist, dstparent is nil. In that
     --   case we copy the entire hierarchy at uri to dst
     if dstparent == nil then
-        local h = hierarchy_export (self, s)
+        local h = hierarchy_export (self, s, opts)
         dst:merge_exported (uri.name, h)
         dup_resources (self, dst, h)
         -- Now adjust size of resource at uri to n and reset allocated:
@@ -678,7 +705,7 @@ function MemStore:resource_accumulator ()
     return (setmetatable (ra, ResourceAccumulator))
 end
 
-function ResourceAccumulator:add (id, n)
+function ResourceAccumulator:add (id, n, args)
 
     -- Did we pass in a resource proxy?
     if type(id) == "table" and id.uuid ~= nil then
@@ -694,7 +721,7 @@ function ResourceAccumulator:add (id, n)
     --
     for name,path in pairs (r.hierarchy) do
         local uri = name..":"..path
-        local rc, err = self.src:copyto (uri, self.dst, n)
+        local rc, err = self.src:copyto (uri, self.dst, n, args)
         if not rc then
             return nil, err
         end
@@ -750,7 +777,7 @@ local function do_find (r, dst, args)
     local fn = args.fn or default_find
 
     if fn (r, args) then
-        dst:add (r.uuid)
+        dst:add (r.uuid, nil, args)
         return -- No need to traverse further...
     end
 
