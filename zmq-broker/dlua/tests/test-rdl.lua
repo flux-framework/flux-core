@@ -523,6 +523,15 @@ Hierarchy "default:/foo/bar0/socket1" { Resource{ "memory", count = 1024}}
     r:free()
     assert (aggregate (rdl, {foo=1, node=1, socket=2, core=4, memory=2048}))
 
+    --
+    -- Now ensure this socket is not found with rdl_find("available")
+    r:alloc()
+    assert (r.available == 0)
+    
+    local rdl2 = assert (rdl:find{ available=true })
+    assert (nil == rdl2:resource ("default:/foo/bar0/socket0"))
+    r:free()
+
     local a = assert (rdl:resource_accumulator ())
 
     local r = assert (rdl:resource ("default:/foo/bar0/socket0/memory"))
@@ -530,6 +539,7 @@ Hierarchy "default:/foo/bar0/socket1" { Resource{ "memory", count = 1024}}
 
     local rdl2 = a:dup()
     assert (aggregate (rdl2, {foo=1, node=1, socket=1, memory=1024}))
+
 
 end
 
