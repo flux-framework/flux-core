@@ -716,6 +716,10 @@ end
 
 local function default_find (r, args)
 
+    if args["available"] and r.available == 0 then
+        return false
+    end
+
     local T = args.type or args[1]
     if T and T ~= r.type then
         return false
