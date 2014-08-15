@@ -62,6 +62,7 @@ struct pmi_struct {
     int (*kvs_commit)(const char *);
     int (*barrier)(void);
     int (*kvs_get)(const char *, const char *, char *, int);
+    int (*abort)(int, const char *);
     int (*finalize)(void);
     void *dso;
     int size, rank, spawned;
@@ -130,6 +131,7 @@ typedef struct {
      */
     char *pmi_libname;
     int pmi_k_ary;
+    struct pmi_struct *pmi;
 } ctx_t;
 
 typedef struct {
@@ -183,6 +185,8 @@ static void update_pidfile (ctx_t *ctx, bool force);
 static void rank0_shell (ctx_t *ctx);
 static void terminate_session (ctx_t *ctx);
 static void boot_pmi (ctx_t *ctx);
+static struct pmi_struct *pmi_init (const char *libname);
+static void pmi_fini (struct pmi_struct *pmi);
 
 #define OPTIONS "t:vR:S:p:M:X:L:N:Pke:r:s:c:f"
 static const struct option longopts[] = {
@@ -351,6 +355,7 @@ int main (int argc, char *argv[])
             msg_exit ("--event-uri should not be specified with --pmi-boot");
         if (ctx.sid)
             msg_exit ("--session-id should not be specified with --pmi-boot");
+        ctx.pmi = pmi_init (ctx.pmi_libname);
         boot_pmi (&ctx);
     }
     if (!ctx.sid)
@@ -411,6 +416,9 @@ int main (int argc, char *argv[])
         terminate_session (&ctx);
 
     cmbd_fini (&ctx);
+
+    if (ctx.pmi)
+        pmi_fini (ctx.pmi);
 
     while ((ep = zlist_pop (ctx.parents)))
         endpt_destroy (ep);
@@ -546,6 +554,7 @@ static struct pmi_struct *pmi_init (const char *libname)
                   || !(pmi->kvs_commit = dlsym (pmi->dso, "PMI_KVS_Commit"))
                   || !(pmi->barrier = dlsym (pmi->dso, "PMI_Barrier"))
                   || !(pmi->kvs_get = dlsym (pmi->dso, "PMI_KVS_Get"))
+                  || !(pmi->abort = dlsym (pmi->dso, "PMI_Abort"))
                   || !(pmi->finalize = dlsym (pmi->dso, "PMI_Finalize")))
         msg_exit ("%s: %s", libname, dlerror ());
     if (pmi->init (&pmi->spawned) != PMI_SUCCESS)
@@ -586,7 +595,7 @@ static struct pmi_struct *pmi_init (const char *libname)
     return pmi;
 }
 
-static void pmi_finalize (struct pmi_struct *pmi)
+static void pmi_fini (struct pmi_struct *pmi)
 {
     if (pmi->finalize () != PMI_SUCCESS)
         msg_exit ("PMI_Finalize failed");
@@ -672,7 +681,7 @@ static void get_ipaddr (char *ipaddr, int len)
  */
 static void boot_pmi (ctx_t *ctx)
 {
-    struct pmi_struct *pmi = pmi_init (ctx->pmi_libname);
+    struct pmi_struct *pmi = ctx->pmi;
     bool relay_needed = (pmi->clique_size > 1);
     int relay_rank = pmi_clique_minrank (pmi);
     int right_rank = pmi->rank == 0 ? pmi->size - 1 : pmi->rank - 1;
@@ -711,8 +720,6 @@ static void boot_pmi (ctx_t *ctx)
         int p = 5000 + pmi->appnum % 1024;
         ctx->gevent = endpt_create ("epgm://%s;239.192.1.1:%d", ipaddr, p);
     }
-
-    pmi_finalize (pmi);
 }
 
 static bool checkpath (const char *path, const char *name)
