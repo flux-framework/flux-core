@@ -183,7 +183,6 @@ static void update_proctitle (ctx_t *ctx);
 static void update_environment (ctx_t *ctx);
 static void update_pidfile (ctx_t *ctx, bool force);
 static void rank0_shell (ctx_t *ctx);
-static void terminate_session (ctx_t *ctx);
 static void boot_pmi (ctx_t *ctx);
 static struct pmi_struct *pmi_init (const char *libname);
 static void pmi_fini (struct pmi_struct *pmi);
@@ -412,8 +411,6 @@ int main (int argc, char *argv[])
     module_loadall (&ctx);
 
     zloop_start (ctx.zl);
-    if (ctx.rank == 0)
-        terminate_session (&ctx);
 
     cmbd_fini (&ctx);
 
@@ -512,17 +509,6 @@ static void rank0_shell (ctx_t *ctx)
             close (0);
             break;
     }
-}
-
-static void terminate_session (ctx_t *ctx)
-{
-    zmsg_t *event = NULL;
-
-    if (!(event = cmb_msg_encode ("terminate", NULL)))
-        oom ();
-    (void)cmb_pub_event (ctx, &event);
-    if (event)
-        zmsg_destroy (&event);
 }
 
 static struct pmi_struct *pmi_init (const char *libname)
@@ -1357,8 +1343,6 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
 {
     if (cmb_msg_match (zmsg, "hb"))
         hb_cb (ctx, zmsg);
-    else if (cmb_msg_match (zmsg, "terminate"))
-        ctx->reactor_stop = true;
 }
 
 static int cmb_pub_event (ctx_t *ctx, zmsg_t **event)
@@ -1733,7 +1717,10 @@ static void reap_all_children (ctx_t *ctx)
     while ((pid = waitpid ((pid_t) -1, &status, WNOHANG)) > (pid_t)0) {
         if (pid == ctx->shell_pid) {
             msg ("%s-0: shell exited", ctx->sid);
-            ctx->reactor_stop = true;
+            if (ctx->pmi)
+                ctx->pmi->abort (0, "shell exited");
+            else
+                exit (0);
         } else
             msg ("child %ld exited status 0x%04x\n", (long)pid, status);
     }
