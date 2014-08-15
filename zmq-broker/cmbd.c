@@ -180,8 +180,7 @@ static int cmb_pub_event (ctx_t *ctx, zmsg_t **event);
 static void update_proctitle (ctx_t *ctx);
 static void update_environment (ctx_t *ctx);
 static void update_pidfile (ctx_t *ctx, bool force);
-static void interactive_shell (ctx_t *ctx);
-static void command_shell (ctx_t *ctx);
+static void rank0_shell (ctx_t *ctx);
 static void terminate_session (ctx_t *ctx);
 static void boot_pmi (ctx_t *ctx);
 
@@ -400,12 +399,8 @@ int main (int argc, char *argv[])
     update_environment (&ctx);
     update_pidfile (&ctx, fopt);
 
-    if (ctx.rank == 0) {
-        if (ctx.shell_cmd)
-            command_shell (&ctx);
-        else if (isatty (0))
-            interactive_shell (&ctx);
-    }
+    if (ctx.rank == 0 && (isatty (0) || ctx.shell_cmd))
+        rank0_shell (&ctx);
 
     cmbd_init_socks (&ctx);
 
@@ -483,40 +478,16 @@ static void update_pidfile (ctx_t *ctx, bool force)
     free (pidfile);
 }
 
-static void interactive_shell (ctx_t *ctx)
-{
-    const char *shell = getenv ("SHELL");
-
-    if (!shell)
-        shell = "/bin/bash";
-
-    msg ("%s-0: starting %s", ctx->sid, shell);
-
-    switch ((ctx->shell_pid = fork ())) {
-        case -1:
-            err_exit ("fork");
-        case 0: /* child */
-            if (sigprocmask (SIG_SETMASK, &ctx->default_sigset, NULL) < 0)
-                err_exit ("sigprocmask");
-            if (execl (shell, shell, NULL) < 0)
-                err_exit ("execl %s", shell);
-            break;
-        default: /* parent */
-            //close (2);
-            close (1);
-            close (0);
-            break;
-    }
-}
-
-static void command_shell (ctx_t *ctx)
+static void rank0_shell (ctx_t *ctx)
 {
     char *av[] = { getenv ("SHELL"), "-c", ctx->shell_cmd, NULL };
 
     if (!av[0])
         av[0] = "/bin/bash";
+    if (!av[2])
+        av[1] = NULL;
 
-    msg ("%s-0: running %s %s \"%s\"", ctx->sid, av[0], av[1], av[2]);
+    msg ("%s-0: starting shell", ctx->sid);
 
     switch ((ctx->shell_pid = fork ())) {
         case -1:
