@@ -179,13 +179,13 @@ static int cmb_pub_event (ctx_t *ctx, zmsg_t **event);
 
 static void update_proctitle (ctx_t *ctx);
 static void update_environment (ctx_t *ctx);
-static void update_pidfile (ctx_t *ctx);
+static void update_pidfile (ctx_t *ctx, bool force);
 static void interactive_shell (ctx_t *ctx);
 static void command_shell (ctx_t *ctx);
 static void terminate_session (ctx_t *ctx);
 static void boot_pmi (ctx_t *ctx);
 
-#define OPTIONS "t:vR:S:p:M:X:L:N:Pke:r:s:c:"
+#define OPTIONS "t:vR:S:p:M:X:L:N:Pke:r:s:c:f"
 static const struct option longopts[] = {
     {"sid",             required_argument,  0, 'N'},
     {"child-uri",       required_argument,  0, 't'},
@@ -226,6 +226,7 @@ static void usage (void)
 " -P,--pmi-boot                Bootstrap via PMI\n"
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
 " -c,--command string          Run command on rank 0\n"
+" -f,--force                   Kill rival cmbd and start\n"
 );
     exit (1);
 }
@@ -235,6 +236,7 @@ int main (int argc, char *argv[])
     int c, i;
     ctx_t ctx;
     endpt_t *ep;
+    bool fopt = false;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -327,6 +329,9 @@ int main (int argc, char *argv[])
                     free (ctx.shell_cmd);
                 ctx.shell_cmd = xstrdup (optarg);
                 break;
+            case 'f':   /* --force */
+                fopt = true;
+                break;
             default:
                 usage ();
         }
@@ -393,7 +398,7 @@ int main (int argc, char *argv[])
 
     update_proctitle (&ctx);
     update_environment (&ctx);
-    update_pidfile (&ctx);
+    update_pidfile (&ctx, fopt);
 
     if (ctx.rank == 0) {
         if (ctx.shell_cmd)
@@ -449,7 +454,7 @@ static void update_environment (ctx_t *ctx)
         err_exit ("setenv TMPDIR");
 }
 
-static void update_pidfile (ctx_t *ctx)
+static void update_pidfile (ctx_t *ctx, bool force)
 {
     const char *tmpdir = getenv ("TMPDIR");
     char *pidfile;
@@ -459,9 +464,15 @@ static void update_pidfile (ctx_t *ctx)
     if (asprintf (&pidfile, "%s/cmbd.pid", tmpdir ? tmpdir : "/tmp") < 0)
         oom ();
     if ((f = fopen (pidfile, "r"))) {
-        if (fscanf (f, "%u", &pid) == 1 && kill (pid, 0) == 0)
-            msg_exit ("cmbd is already running in %s, pid %d", tmpdir, pid);
-        fclose (f);
+        if (fscanf (f, "%u", &pid) == 1 && kill (pid, 0) == 0) {
+            if (force) {
+                if (kill (pid, SIGKILL) < 0)
+                    err_exit ("kill %d", pid);
+                msg ("killed cmbd with pid %d", pid);
+            } else
+                msg_exit ("cmbd is already running in %s, pid %d", tmpdir, pid);
+        }
+        (void)fclose (f);
     }
     if (!(f = fopen (pidfile, "w+")))
         err_exit ("%s", pidfile);
