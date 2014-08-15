@@ -1043,9 +1043,9 @@ static void cmbd_init_socks (ctx_t *ctx)
     ctx->zs_event_out = cmbd_init_event_out (ctx);
     ctx->zs_snoop = cmbd_init_snoop (ctx);
 
-    if (ctx->rank == 0 && ctx->size > 1)
+    if (ctx->rank == 0 && ctx->gevent)
         cmbd_init_gevent_pub (ctx, ctx->gevent);
-    if (ctx->rank > 0)
+    if (ctx->rank > 0 && ctx->gevent)
         cmbd_init_gevent_sub (ctx, ctx->gevent);
     if (ctx->child && !ctx->child->zs)      /* boot_pmi may have done this */
         cmbd_init_child (ctx, ctx->child);
