@@ -1710,19 +1710,41 @@ done:
     ZLOOP_RETURN(ctx);
 }
 
+static int decode_status (ctx_t *ctx, const char *name, pid_t pid, int status)
+{
+    int rc = 0;
+
+    if (WIFEXITED (status)) {
+        rc = WEXITSTATUS (status);
+        msg ("%s: %s (pid %d) exited with rc=%d", ctx->sid, name, pid, rc);
+    } else if (WIFSIGNALED (status)) {
+        msg ("%s: %s (pid %d) terminated by %s", ctx->sid, name, pid,
+             strsignal (WTERMSIG (status)));
+        rc = 128 + WTERMSIG (status); /* POSIX 2008, Vol. 3, p 74314 */
+    } else if (WIFSTOPPED (status)) {
+        msg ("%s-0: %s (pid %d) stopped by %s", ctx->sid, name, pid,
+             strsignal (WSTOPSIG (status)));
+        rc = 128 + WSTOPSIG (status);
+    } else if (WIFCONTINUED (status)) {
+        msg ("%s-0: %s (pid %d) continued", ctx->sid, name, pid);
+    }
+    return rc;
+}
+
 static void reap_all_children (ctx_t *ctx)
 {
     pid_t pid;
     int status;
+    int rc;
     while ((pid = waitpid ((pid_t) -1, &status, WNOHANG)) > (pid_t)0) {
         if (pid == ctx->shell_pid) {
-            msg ("%s-0: shell exited", ctx->sid);
+            rc = decode_status (ctx, "shell", pid, status);
             if (ctx->pmi)
-                ctx->pmi->abort (0, "shell exited");
+                ctx->pmi->abort (rc, "shell complete");
             else
-                exit (0);
+                exit (rc);
         } else
-            msg ("child %ld exited status 0x%04x\n", (long)pid, status);
+            (void)decode_status (ctx, "child", pid, status);
     }
 }
 
