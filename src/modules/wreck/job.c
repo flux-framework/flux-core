@@ -97,6 +97,7 @@ static int kvs_job_new (flux_t h, unsigned long jobid)
     if (asprintf (&key, "lwj.%lu.state", jobid) < 0)
         return (-1);
 
+    flux_log (h, LOG_INFO, "Setting job %ld to reserved", jobid);
     rc = kvs_put_string (h, key, "reserved");
     kvs_commit (h);
 
@@ -197,6 +198,24 @@ static void add_jobinfo (flux_t h, int64_t id, json_object *req)
     kvsdir_destroy (dir);
 }
 
+#if SIMULATOR_RACE_WORKAROUND
+static int wait_for_lwj_watch_init (flux_t h, int64_t id)
+{
+    int rc;
+    json_object *rpc_o;
+    json_object *rpc_resp;
+
+    rpc_o = util_json_object_new_object ();
+    util_json_object_add_string (rpc_o, "key", "lwj.next-id");
+    util_json_object_add_int64 (rpc_o, "val", id);
+    rpc_resp = flux_rpc (h, rpc_o, "sim_sched.lwj-watch");
+    util_json_object_get_int (rpc_resp, "rc", &rc);
+    json_object_put (rpc_resp);
+    json_object_put (rpc_o);
+    return rc;
+}
+#endif
+
 static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     json_object *o = NULL;
@@ -218,6 +237,13 @@ static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         if (strcmp (tag, "job.create") == 0) {
             json_object *jobinfo = NULL;
             unsigned long id = lwj_next_id (h);
+#if SIMULATOR_RACE_WORKAROUND
+            //"Fix" for Race Condition
+            if (wait_for_lwj_watch_init (h, id) < 0) {
+                flux_respond_errnum (h, zmsg, errno);
+                goto out;
+            }
+#endif
             int rc = kvs_job_new (h, id);
             if (rc < 0) {
                 flux_respond_errnum (h, zmsg, errno);
