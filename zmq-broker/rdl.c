@@ -669,7 +669,7 @@ size_t rdl_resource_available (struct resource *r)
 
 size_t rdl_resource_allocated (struct resource *r)
 {
-    return rdl_resource_get_value (r, "available");
+    return rdl_resource_get_value (r, "allocated");
 }
 
 enum method_arg_type {
