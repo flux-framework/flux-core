@@ -807,12 +807,11 @@ action_j_event (flux_event_t *e)
 
     switch (e->lwj->state) {
     case j_null:
-        if (e->ev.je != j_reserved) {
-            goto bad_transition;
+        if (e->ev.je == j_reserved) {
+            e->lwj->state = j_reserved;
+            break;
         }
-        e->lwj->state = j_reserved;
-        break;
-
+        /* deliberate fall-through */
     case j_reserved:
         if (e->ev.je != j_submitted) {
             goto bad_transition;
