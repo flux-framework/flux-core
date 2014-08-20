@@ -601,6 +601,7 @@ int schedule_job (struct rdl *rdl, const char *uri, flux_lwj_t *job)
     }
 
     util_json_object_add_string (args, "type", "core");
+    util_json_object_add_boolean (args, "available", true);
     frdl = rdl_find (rdl, args);
 
     if (frdl) {
