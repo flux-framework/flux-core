@@ -42,7 +42,7 @@ PLUGINS = plugins/api.so plugins/hb.so plugins/kvs.so \
 	plugins/log.so plugins/echo.so plugins/job.so \
 	plugins/resrc.so plugins/rexec.so plugins/sched.so \
 	plugins/event.so plugins/rank.so plugins/mon.so \
-	plugins/modctl.so
+	plugins/modctl.so plugins/schedplugin1.so
 
 SUBCMDS = libexec/kvs libexec/ping libexec/mecho \
 	libexec/stats libexec/barrier libexec/snoop libexec/event \
@@ -65,6 +65,9 @@ plugins/rexec.so: wreck/wrexecsrv.c $(LIBUTIL)
 	mkdir -p plugins
 	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL)
 plugins/sched.so: wreck/schedsrv.c $(LIBUTIL) $(LIBRDL)
+	mkdir -p plugins
+	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL) -L$(LIBDIR) -lrdl
+plugins/schedplugin1.so: wreck/schedplugin1.c $(LIBUTIL) $(LIBRDL)
 	mkdir -p plugins
 	$(CC) -shared $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBUTIL) -L$(LIBDIR) -lrdl
 

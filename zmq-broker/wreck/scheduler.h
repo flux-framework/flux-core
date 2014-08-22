@@ -60,24 +60,14 @@ typedef enum {
     res_event,   /*!< is a resource event */
 } event_class_e;
 
-
-/**
- *  Defines resources as provided by RDL.
- *  This is mostly a placeholder
- */
-typedef struct {
-    void *resource;
-} flux_res_t;
-
-
 /**
  *  Defines resource request info block.
  *  This needs to be expanded as RDL evolves.
  */
-typedef struct {
+typedef struct flux_resources {
     uint64_t nnodes; /*!< num of nodes requested by a job */
     uint32_t ncores; /*!< num of cores requested by a job */
-} flux_req_t;
+} flux_res_t;
 
 
 /**
@@ -86,8 +76,8 @@ typedef struct {
 typedef struct {
     int64_t lwj_id; /*!< LWJ id */
     lwj_state_e state;
-    flux_req_t req;   /*!< count of resources requested by this LWJ */
-    flux_req_t alloc; /*!< count of resources allocated to this LWJ */
+    bool reserve;
+    flux_res_t *req;   /*!< resources requested by this LWJ */
     struct rdl *rdl;  /*!< resources allocated to this LWJ */
 } flux_lwj_t;
 

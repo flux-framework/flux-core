@@ -1,7 +1,7 @@
 topdir  :=          $(shell cd .. && pwd)
 builddir  :=        $(shell pwd)
 programs =          wrexecd
-plugins  =          jobsrv.o resrcsrv.o schedsrv.o wrexecsrv.o
+plugins  =          jobsrv.o resrcsrv.o schedsrv.o schedplugin1.o wrexecsrv.o
 
 CFLAGS +=           -ggdb -Wall -Werror \
                     -I$(topdir) -I$(topdir)/include -I$(topdir)/util
