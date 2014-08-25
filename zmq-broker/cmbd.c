@@ -1133,17 +1133,6 @@ static void cmbd_fini (ctx_t *ctx)
     zctx_destroy (&ctx->zctx); /* destorys all sockets created in ctx */
 }
 
-static int cmb_internal_response (ctx_t *ctx, zmsg_t **zmsg)
-{
-    int rc = -1;
-
-    if (cmb_msg_match (*zmsg, "cmb.ping")) { /* ignore ping response */
-        zmsg_destroy (zmsg);
-        rc = 0;
-    }
-    return rc;
-}
-
 static char *cmb_getattr (ctx_t *ctx, const char *name)
 {
     char *val = NULL;
@@ -1323,18 +1312,16 @@ static void cmb_heartbeat (ctx_t *ctx, zmsg_t *zmsg)
 
     assert (ctx->rank > 0);
 
-    if (self_idle (ctx) > 0) {
-        json_object *request = util_json_object_new_object ();
-        util_json_object_add_int (request, "seq", ctx->hb_epoch);
-        flux_request_send (ctx->h, request, "cmb.ping");
-        json_object_put (request);
-    }
-
     if (cmb_msg_decode (zmsg, NULL, &event) < 0 || event == NULL
            || util_json_object_get_int (event, "epoch", &ctx->hb_epoch) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: bad hb message", __FUNCTION__);
-        return;
     }
+
+    /* If we've not sent anything to our parent, send a cmb.hb
+     * to update our idle time.
+     */
+    if (self_idle (ctx) > 0)
+        flux_request_send (ctx->h, NULL, "cmb.hb");
 }
 
 static endpt_t *endpt_create (const char *fmt, ...)
@@ -1629,6 +1616,8 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             json_object_put (request);
         if (s)
             free (s);
+    } else if (cmb_msg_match (*zmsg, "cmb.hb")) {
+        /* no-op used to update peer idle time - no response */
     } else if (cmb_msg_match (*zmsg, "cmb.reparent")) {
         json_object *request = NULL;
         const char *uri;
@@ -1993,8 +1982,8 @@ static int cmbd_response_sendmsg (void *impl, zmsg_t **zmsg)
         goto done; /* drop message with no frames */
     }
     snoop_cc (ctx, FLUX_MSGTYPE_RESPONSE, *zmsg);
-    if (zframe_size (zf) == 0) {
-        rc = cmb_internal_response (ctx, zmsg);
+    if (zframe_size (zf) == 0) { /* response addressed to me */
+        rc = -1;                 /*   add hook here if we need it */
     } else if ((uuid = zframe_strdup (zf)) && peer_ismodule (ctx, uuid)) {
         rc = zmsg_send (zmsg, ctx->zs_request);
     } else if (ctx->child) {
