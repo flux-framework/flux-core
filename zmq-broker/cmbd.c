@@ -41,7 +41,7 @@
 #endif
 
 #define ZLOOP_RETURN(p) \
-    return ((ctx)->reactor_stop ? (-1) : (0))
+    return ((p)->reactor_stop ? (-1) : (0))
 
 typedef struct {
     void *zs;
