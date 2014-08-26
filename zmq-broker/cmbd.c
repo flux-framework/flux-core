@@ -31,6 +31,7 @@
 #include "flux.h"
 #include "handle.h"
 #include "security.h"
+#include "nodeset.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
@@ -145,6 +146,7 @@ typedef struct {
     ctx_t *ctx;
     char *path;
     int flags;
+    nodeset_t ns;
 } module_t;
 
 typedef struct {
@@ -172,7 +174,9 @@ static int cmbd_init_gevent_pub (ctx_t *ctx, endpt_t *ep);
 static module_t *module_create (ctx_t *ctx, const char *path, int flags);
 static void module_destroy (module_t *mod);
 static void module_unload (module_t *mod, zmsg_t **zmsg);
-static void module_prepare (ctx_t *ctx, const char *name);
+static bool module_select (module_t *mod, const char *nstr);
+static module_t *module_prepare (ctx_t *ctx, const char *name);
+static void module_prepare_list (ctx_t *ctx, const char *optarg);
 static void module_loadall (ctx_t *ctx);
 
 static int peer_idle (ctx_t *ctx, const char *uuid);
@@ -307,16 +311,9 @@ int main (int argc, char *argv[])
             case 'S':   /* --size N */
                 ctx.size = strtoul (optarg, NULL, 10);
                 break;
-            case 'M': { /* --plugins p1,p2,... */
-                char *cpy = xstrdup (optarg);
-                char *name, *saveptr = NULL, *a1 = cpy;
-                while ((name = strtok_r (a1, ",", &saveptr))) {
-                    module_prepare (&ctx, name);
-                    a1 = NULL;
-                }
-                free (cpy);
+            case 'M':   /* --plugins p1,p2,...,p3[nodeset],... */
+                module_prepare_list (&ctx, optarg);
                 break;
-            }
             case 'X':   /* --module-path PATH */
                 ctx.plugin_path = optarg;
                 break;
@@ -817,6 +814,8 @@ static void module_destroy (module_t *mod)
     zlist_destroy (&mod->rmmod_reqs);
     zhash_destroy (&mod->args);
 
+    if (mod->ns)
+        nodeset_destroy (mod->ns);
     free (mod->path);
     free (mod);
 }
@@ -858,20 +857,33 @@ static void module_loadall (ctx_t *ctx)
     while (name) {
         mod = zhash_lookup (ctx->modules, name);
         assert (mod != NULL);
-        if (module_load (ctx, mod) < 0)
-            err_exit ("failed to load module %s", name);
+        if (!mod->ns || nodeset_test_rank (mod->ns, ctx->rank)) {
+            if (module_load (ctx, mod) < 0)
+                err_exit ("failed to load module %s", name);
+        } else {
+            zhash_delete (ctx->modules, name);
+        }
         name = zlist_next (keys);
     }
     zlist_destroy (&keys);
 }
 
-static void module_prepare (ctx_t *ctx, const char *name)
+static bool module_select (module_t *mod, const char *nstr)
+{
+    if (!mod->ns)
+        mod->ns = nodeset_new ();
+    if (!mod->ns)
+        oom ();
+    return nodeset_add_str (mod->ns, nstr);
+}
+
+static module_t *module_prepare (ctx_t *ctx, const char *name)
 {
     char *path;
     int flags = 0;
     module_t *mod;
 
-    if (!zhash_lookup (ctx->modules, name)) {
+    if (!(mod = zhash_lookup (ctx->modules, name))) {
         if (!(path = modfind (ctx->plugin_path, name)))
             err_exit ("module %s", name);
         if (!(mod = module_create (ctx, path, flags)))
@@ -879,6 +891,47 @@ static void module_prepare (ctx_t *ctx, const char *name)
         zhash_update (ctx->modules, name, mod);
         zhash_freefn (ctx->modules, name, (zhash_free_fn *)module_destroy);
     }
+    return mod;
+}
+
+static void module_xsep (char *s, char oldsep, char newsep)
+{
+    bool inparen = false;
+    char *p;
+
+    for (p = s; *p != '\0'; p++) {
+        if (*p == '[')
+            inparen = true;
+        else if (*p == ']')
+            inparen = false;
+        else if (inparen && *p == oldsep)
+            *p = newsep;
+    }
+}
+
+static void module_prepare_list (ctx_t *ctx, const char *optarg)
+{
+    char *cpy = xstrdup (optarg);
+    char *name, *saveptr = NULL, *a1 = cpy;
+    module_t *mod;
+
+    module_xsep (cpy, ',', ';');
+    while ((name = strtok_r (a1, ",", &saveptr))) {
+        char *p, *nstr = NULL;
+        if ((p = strchr (name, '['))) {
+            nstr = xstrdup (p);
+            *p = '\0';
+        }
+        mod = module_prepare (ctx, name);
+        if (nstr) {
+            module_xsep (nstr, ';', ',');
+            if (!module_select (mod, nstr))
+                msg_exit ("malformed module argument: %s%s", name, nstr);
+            free (nstr);
+        }
+        a1 = NULL;
+    }
+    free (cpy);
 }
 
 static void *cmbd_init_request (ctx_t *ctx)
