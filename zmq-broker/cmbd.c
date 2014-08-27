@@ -127,11 +127,11 @@ typedef struct {
     pid_t shell_pid;
     char *shell_cmd;
     sigset_t default_sigset;
-    /* PMI bootstrap
+    /* Bootstrap
      */
     char *pmi_libname;
-    int pmi_k_ary;
     struct pmi_struct *pmi;
+    int k_ary;
     /* Heartbeat
      */
     double heartrate;
@@ -193,6 +193,7 @@ static void update_environment (ctx_t *ctx);
 static void update_pidfile (ctx_t *ctx, bool force);
 static void rank0_shell (ctx_t *ctx);
 static void boot_pmi (ctx_t *ctx);
+static void boot_local (ctx_t *ctx);
 static struct pmi_struct *pmi_init (const char *libname);
 static void pmi_fini (struct pmi_struct *pmi);
 
@@ -268,7 +269,7 @@ int main (int argc, char *argv[])
         oom ();
     if (!(ctx.parents = zlist_new ()))
         oom ();
-    ctx.pmi_k_ary = 2; /* binary TBON is default */
+    ctx.k_ary = 2; /* binary TBON is default */
 
     ctx.pid = getpid();
     ctx.plugin_path = PLUGIN_PATH;
@@ -324,8 +325,8 @@ int main (int argc, char *argv[])
                 ctx.pmi_libname = "/usr/lib64/libpmi.so"; /* FIXME - config */
                 break;
             case 'k':   /* --k-ary k */
-                ctx.pmi_k_ary = strtoul (optarg, NULL, 10);
-                if (ctx.pmi_k_ary < 0)
+                ctx.k_ary = strtoul (optarg, NULL, 10);
+                if (ctx.k_ary < 0)
                     usage ();
                 break;
             case 'e':   /* --event-uri */
@@ -399,6 +400,13 @@ int main (int argc, char *argv[])
         oom ();
     if (ctx.rank == 0)
         ctx.treeroot = true;
+    /* If we're missing the wiring, presume that the session is to be
+     * started on a single node and compute appropriate ipc:/// sockets.
+     */
+    if (ctx.size > 1 && !ctx.gevent && !ctx.child
+                                    && zlist_size (ctx.parents) == 0) {
+        boot_local (&ctx);
+    }
     if (ctx.treeroot && zlist_size (ctx.parents) > 0)
         msg_exit ("treeroot must NOT have parent");
     if (!ctx.treeroot && zlist_size (ctx.parents) == 0)
@@ -738,7 +746,7 @@ static void boot_pmi (ctx_t *ctx)
     pmi_kvs_fence (pmi);
 
     if (ctx->rank > 0) {
-        int prank = ctx->pmi_k_ary == 0 ? 0 : (ctx->rank - 1) / ctx->pmi_k_ary;
+        int prank = ctx->k_ary == 0 ? 0 : (ctx->rank - 1) / ctx->k_ary;
         endpt_t *ep = endpt_create (pmi_kvs_get (pmi, "cmbd.%d.uri", prank));
         if (zlist_push (ctx->parents, ep) < 0)
             oom ();
@@ -753,6 +761,26 @@ static void boot_pmi (ctx_t *ctx)
         int p = 5000 + pmi->appnum % 1024;
         ctx->gevent = endpt_create ("epgm://%s;239.192.1.1:%d", ipaddr, p);
     }
+}
+
+static void boot_local (ctx_t *ctx)
+{
+    const char *tmpdir = getenv ("TMPDIR");
+    int rrank = ctx->rank == 0 ? ctx->size - 1 : ctx->rank - 1;
+
+    ctx->child = endpt_create ("ipc://%s/flux-%s-%d-req",
+                               tmpdir ? tmpdir : "/tmp", ctx->sid, ctx->rank);
+    if (ctx->rank > 0) {
+        int prank = ctx->k_ary == 0 ? 0 : (ctx->rank - 1) / ctx->k_ary;
+        endpt_t *ep = endpt_create ("ipc://%s/flux-%s-%d-req",
+                                    tmpdir ? tmpdir : "/tmp", ctx->sid, prank);
+        if (zlist_push (ctx->parents, ep) < 0)
+            oom ();
+    }
+    ctx->gevent = endpt_create ("ipc://%s/flux-%s-event",
+                                tmpdir ? tmpdir : "/tmp", ctx->sid);
+    ctx->right = endpt_create ("ipc://%s/flux-%s-%d-req",
+                               tmpdir ? tmpdir : "/tmp", ctx->sid, rrank);
 }
 
 static bool checkpath (const char *path, const char *name)
