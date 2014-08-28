@@ -26,7 +26,7 @@ LDADD_SRV = -pthread -rdynamic $(LDADD_CLI) -ldl
 COMMON_OBJS = kvscli.o barriercli.o logcli.o cmbdcli.o mrpc.o handle.o \
 	waitqueue.o security.o reduce.o modctlcli.o \
 	livecli.o
-CMBD_OBJS = plugin.o $(COMMON_OBJS) cmbd.o
+CMBD_OBJS = plugin.o $(COMMON_OBJS) pmiwrap.o cmbd.o
 
 FLUX_OBJS = flux.o
 LIBPMI_OBJS = pmi.o
