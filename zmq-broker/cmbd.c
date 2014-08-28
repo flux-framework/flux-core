@@ -105,6 +105,10 @@ typedef struct {
     double heartrate;
     int heartbeat_tid;
     int hb_epoch;
+    /* Shutdown
+     */
+    int shutdown_tid;
+    int shutdown_exitcode;
 } ctx_t;
 
 typedef struct {
@@ -240,6 +244,7 @@ int main (int argc, char *argv[])
     ctx.pid = getpid();
     ctx.plugin_path = PLUGIN_PATH;
     ctx.heartrate = dfl_heartrate;
+    ctx.shutdown_tid = -1;
 
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
@@ -1206,7 +1211,8 @@ static void cmb_heartbeat (ctx_t *ctx, zmsg_t *zmsg)
 {
     json_object *event = NULL;
 
-    assert (ctx->rank > 0);
+    if (ctx->rank == 0)
+        return;
 
     if (cmb_msg_decode (zmsg, NULL, &event) < 0 || event == NULL
            || util_json_object_get_int (event, "epoch", &ctx->hb_epoch) < 0) {
@@ -1274,10 +1280,63 @@ static int cmb_reparent (ctx_t *ctx, const char *uri)
     return 0;
 }
 
+static int shutdown_cb (zloop_t *zl, int timer_id, ctx_t *ctx)
+{
+    exit (ctx->shutdown_exitcode);
+}
+
+static void shutdown_recv (ctx_t *ctx, zmsg_t *zmsg)
+{
+    json_object *o = NULL;
+    const char *reason;
+    int grace, rank, exitcode;
+
+    if (cmb_msg_decode (zmsg, NULL, &o) < 0 || o == NULL
+            || util_json_object_get_string (o, "reason", &reason) < 0
+            || util_json_object_get_int (o, "grace", &grace) < 0
+            || util_json_object_get_int (o, "exitcode", &exitcode) < 0
+            || util_json_object_get_int (o, "rank", &rank) < 0) {
+        msg ("ignoring mangled shutdown message");
+    } else if (ctx->shutdown_tid == -1) {
+        ctx->shutdown_tid = zloop_timer (ctx->zl, grace * 1000, 1,
+                                        (zloop_timer_fn *)shutdown_cb, ctx);
+        if (ctx->shutdown_tid == -1)
+            err_exit ("zloop_timer");
+        ctx->shutdown_exitcode = exitcode;
+        if (ctx->rank == 0)
+            msg ("%d: shutdown in %ds: %s", rank, grace, reason);
+    }
+    if (o)
+        json_object_put (o);
+}
+
+static void shutdown_send (ctx_t *ctx, int grace, int rc, const char *fmt, ...)
+{
+    zmsg_t *event;
+    json_object *o = util_json_object_new_object ();
+    va_list ap;
+    char *reason;
+
+    va_start (ap, fmt);
+    if (vasprintf (&reason, fmt, ap) < 0)
+        oom ();
+    va_end (ap);
+    util_json_object_add_string (o, "reason", reason);
+    util_json_object_add_int (o, "grace", grace);
+    util_json_object_add_int (o, "rank", ctx->rank);
+    util_json_object_add_int (o, "exitcode", rc);
+    if (!(event = cmb_msg_encode ("shutdown", o)))
+        oom ();
+    (void)cmb_pub_event (ctx, &event);
+    free (reason);
+}
+
 static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
 {
     if (cmb_msg_match (zmsg, "hb"))
         cmb_heartbeat (ctx, zmsg);
+    else if (cmb_msg_match (zmsg, "shutdown"))
+        shutdown_recv (ctx, zmsg);
 }
 
 static int cmb_pub_event (ctx_t *ctx, zmsg_t **event)
@@ -1303,9 +1362,10 @@ static int cmb_pub_event (ctx_t *ctx, zmsg_t **event)
             goto done;
         }
     }
-    /* Publish event locally (not to cmbd self though)
+    /* Publish event locally
     */
     snoop_cc (ctx, FLUX_MSGTYPE_EVENT, *event);
+    cmb_internal_event (ctx, *event);
     relay_cc (ctx, *event);
     if (zmsg_send (event, ctx->zs_event_out) < 0) {
         if (errno == 0)
@@ -1672,41 +1732,43 @@ done:
     ZLOOP_RETURN(ctx);
 }
 
-static int decode_status (ctx_t *ctx, const char *name, pid_t pid, int status)
+static char *decode_status (ctx_t *ctx, const char *name, pid_t pid,
+                            int status, int *rcp)
 {
     int rc = 0;
+    char *s;
 
     if (WIFEXITED (status)) {
         rc = WEXITSTATUS (status);
-        msg ("%s: %s (pid %d) exited with rc=%d", ctx->sid, name, pid, rc);
+        if (asprintf (&s, "%s (pid %d) exited with rc=%d", name, pid, rc) < 0)
+            oom ();
     } else if (WIFSIGNALED (status)) {
-        msg ("%s: %s (pid %d) terminated by %s", ctx->sid, name, pid,
-             strsignal (WTERMSIG (status)));
+        if (asprintf (&s, "%s (pid %d) terminated by %s",
+                      name, pid, strsignal (WTERMSIG (status))) < 0)
+            oom ();
         rc = 128 + WTERMSIG (status); /* POSIX 2008, Vol. 3, p 74314 */
-    } else if (WIFSTOPPED (status)) {
-        msg ("%s-0: %s (pid %d) stopped by %s", ctx->sid, name, pid,
-             strsignal (WSTOPSIG (status)));
-        rc = 128 + WSTOPSIG (status);
-    } else if (WIFCONTINUED (status)) {
-        msg ("%s-0: %s (pid %d) continued", ctx->sid, name, pid);
+    } else {
+        if (asprintf (&s, "%s (pid %d) wait status=%d", name, pid, status) < 0)
+            oom ();
     }
-    return rc;
+    *rcp = rc;
+    return s;
 }
 
 static void reap_all_children (ctx_t *ctx)
 {
     pid_t pid;
-    int status;
-    int rc;
+    int status, rc;
+    char *s;
     while ((pid = waitpid ((pid_t) -1, &status, WNOHANG)) > (pid_t)0) {
         if (pid == ctx->shell_pid) {
-            rc = decode_status (ctx, "shell", pid, status);
-            if (ctx->pmi)
-                ctx->pmi->abort (rc, "shell complete");
-            else
-                exit (rc);
-        } else
-            (void)decode_status (ctx, "child", pid, status);
+            s = decode_status (ctx, "shell", pid, status, &rc);
+            shutdown_send (ctx, 2, rc, "%s", s);
+        } else {
+            s = decode_status (ctx, "child", pid, status, &rc);
+            msg ("%s", s);
+        }
+        free (s);
     }
 }
 
@@ -1722,8 +1784,8 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
         if (fdsi.ssi_signo == SIGCHLD)
             reap_all_children (ctx);
         else {
-            msg ("signal %d (%s)", fdsi.ssi_signo, strsignal (fdsi.ssi_signo));
-            ctx->reactor_stop = true;
+            shutdown_send (ctx, 2, 0, "signal %d (%s) %d",
+                           fdsi.ssi_signo, strsignal (fdsi.ssi_signo));
         }
     }
     ZLOOP_RETURN(ctx);
