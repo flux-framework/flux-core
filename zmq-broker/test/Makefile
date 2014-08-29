@@ -15,25 +15,31 @@ BUILD = tenc tkvswatch tcommit tasyncsock tmunge trdl
 
 all: $(BUILD)
 
-# for screen3
-check1:
-	export FLUX_API_PATH=/tmp/rank.1; make check
-check2:
-	export FLUX_API_PATH=/tmp/rank.2; make check
-check3: check check1 check2
-
 check:
+	$(TOP)/cmbd -c "make xcheck"
+
+screencheck:
+	@test -n "$$SIZE" || echo "Usage: make screencheck SIZE=N [SID=name]"
+	@for rank in `seq 0 $$(($$SIZE - 1))`; do \
+		$(TOP)/flux screen --sid=$${SID:-screen} \ --run $$rank \
+			 make xcheck; \
+	done	
+
+xcheck:
 	@export LUA_CPATH=";;$(TOP)/dlua/?.so"; \
 	export LUA_PATH=";;$(TOP)/dlua/?.lua"; \
+	rc=0; \
+	if test -n "$$TMPDIR"; then echo TMPDIR=$$TMPDIR; fi; \
 	for tst in $${TESTS:-t[0-9][0-9]}; do \
 		./$$tst; \
 		if [ $$? -eq 0 ]; then \
 		  echo PASS: $$tst; \
 		else \
 		  echo FAIL: $$tst; \
-		  exit 1; \
+		  rc=1; \
 		fi \
-	done
+	done; \
+	exit $$rc
 
 tenc: tenc.o
 	$(CC) $(LDFLAGS) -o $@ $< $(LDADD_CLI)
