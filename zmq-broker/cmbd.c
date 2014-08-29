@@ -120,7 +120,6 @@ typedef struct {
     bool verbose;               /* enable debug to stderr */
     flux_t h;
     pid_t pid;
-    int hb_epoch;
     zhash_t *peer_idle;         /* peer (hopcount=1) hb idle time, by uuid */
     int hb_lastreq;             /* hb epoch of last upstream request */
     char *proctitle;
@@ -132,6 +131,11 @@ typedef struct {
     char *pmi_libname;
     int pmi_k_ary;
     struct pmi_struct *pmi;
+    /* Heartbeat
+     */
+    double heartrate;
+    int heartbeat_tid;
+    int hb_epoch;
 } ctx_t;
 
 typedef struct {
@@ -155,6 +159,7 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod);
 static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
+static int hb_cb (zloop_t *zl, int timer_id, ctx_t *ctx);
 static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 
 static void cmbd_fini (ctx_t *ctx);
@@ -187,7 +192,13 @@ static void boot_pmi (ctx_t *ctx);
 static struct pmi_struct *pmi_init (const char *libname);
 static void pmi_fini (struct pmi_struct *pmi);
 
-#define OPTIONS "t:vR:S:p:M:X:L:N:Pke:r:s:c:f"
+static const double min_heartrate = 0.01;   /* min seconds */
+static const double max_heartrate = 30;     /* max seconds */
+static const double dfl_heartrate = 2;
+
+static const struct flux_handle_ops cmbd_handle_ops;
+
+#define OPTIONS "t:vR:S:p:M:X:L:N:Pke:r:s:c:fH:"
 static const struct option longopts[] = {
     {"sid",             required_argument,  0, 'N'},
     {"child-uri",       required_argument,  0, 't'},
@@ -204,10 +215,9 @@ static const struct option longopts[] = {
     {"k-ary",           required_argument,  0, 'k'},
     {"event-uri",       required_argument,  0, 'e'},
     {"command",         required_argument,  0, 'c'},
+    {"heartrate",       required_argument,  0, 'H'},
     {0, 0, 0, 0},
 };
-
-static const struct flux_handle_ops cmbd_handle_ops;
 
 static void usage (void)
 {
@@ -229,6 +239,7 @@ static void usage (void)
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
 " -c,--command string          Run command on rank 0\n"
 " -f,--force                   Kill rival cmbd and start\n"
+" -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
 );
     exit (1);
 }
@@ -254,6 +265,7 @@ int main (int argc, char *argv[])
 
     ctx.pid = getpid();
     ctx.plugin_path = PLUGIN_PATH;
+    ctx.heartrate = dfl_heartrate;
 
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
@@ -334,10 +346,29 @@ int main (int argc, char *argv[])
             case 'f':   /* --force */
                 fopt = true;
                 break;
+            case 'H': { /* --heartrate SECS */
+                char *endptr;
+                ctx.heartrate = strtod (optarg, &endptr);
+                if (ctx.heartrate == HUGE_VAL || endptr == optarg)
+                    msg_exit ("error parsing heartrate");
+                if (!strcasecmp (endptr, "s") || *endptr == '\0')
+                    ;
+                else if (!strcasecmp (endptr, "ms"))
+                    ctx.heartrate /= 1000.0;
+                else
+                    msg_exit ("bad heartrate units: use s or ms");
+                if (ctx.heartrate < min_heartrate
+                                            || ctx.heartrate > max_heartrate)
+                    msg_exit ("valid heartrate is %.0fms <= N <= %.0fs",
+                              min_heartrate*1000, max_heartrate);
+                break;
+            }
             default:
                 usage ();
         }
     }
+    msg ("Heartrate: %0.1fs", ctx.heartrate);
+
     /* Create zeromq context, security context, zloop, etc.
      */
     cmbd_init_comms (&ctx);
@@ -391,13 +422,10 @@ int main (int argc, char *argv[])
     }
     /* Ensure a minimal set of modules will be loaded.
      */
-    if (ctx.rank == 0) {
-        module_prepare (&ctx, "hb");
-    }
     module_prepare (&ctx, "api");
     module_prepare (&ctx, "kvs");
     module_prepare (&ctx, "modctl");
-    module_prepare (&ctx, "live");
+    //module_prepare (&ctx, "live");
 
     update_proctitle (&ctx);
     update_environment (&ctx);
@@ -410,8 +438,24 @@ int main (int argc, char *argv[])
 
     module_loadall (&ctx);
 
+    /* install heartbeat timer
+     */
+    if (ctx.rank == 0) {
+        unsigned long msec = ctx.heartrate * 1000;
+        ctx.heartbeat_tid = zloop_timer (ctx.zl, msec, 0,
+                                         (zloop_timer_fn *)hb_cb, &ctx);
+        if (ctx.heartbeat_tid == -1)
+            err_exit ("zloop_timer");
+        msg ("Heartrate: T=%0.1fs", ctx.heartrate);
+    }
+
     zloop_start (ctx.zl);
 
+    /* remove heartbeat timer
+     */
+    if (ctx.rank == 0) {
+        zloop_timer_end (ctx.zl, ctx.heartbeat_tid);
+    }
     cmbd_fini (&ctx);
 
     if (ctx.pmi)
@@ -1267,11 +1311,13 @@ static int self_idle (ctx_t *ctx)
     return ctx->hb_epoch - ctx->hb_lastreq;
 }
 
-static void hb_cb (ctx_t *ctx, zmsg_t *zmsg)
+static void cmb_heartbeat (ctx_t *ctx, zmsg_t *zmsg)
 {
     json_object *event = NULL;
 
-    if (!ctx->treeroot && self_idle (ctx) > 0) {
+    assert (ctx->rank > 0);
+
+    if (self_idle (ctx) > 0) {
         json_object *request = util_json_object_new_object ();
         util_json_object_add_int (request, "seq", ctx->hb_epoch);
         flux_request_send (ctx->h, request, "cmb.ping");
@@ -1342,7 +1388,7 @@ static int cmb_reparent (ctx_t *ctx, const char *uri)
 static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
 {
     if (cmb_msg_match (zmsg, "hb"))
-        hb_cb (ctx, zmsg);
+        cmb_heartbeat (ctx, zmsg);
 }
 
 static int cmb_pub_event (ctx_t *ctx, zmsg_t **event)
@@ -1368,11 +1414,10 @@ static int cmb_pub_event (ctx_t *ctx, zmsg_t **event)
             goto done;
         }
     }
-    /* Publish event locally.
+    /* Publish event locally (not to cmbd self though)
     */
     snoop_cc (ctx, FLUX_MSGTYPE_EVENT, *event);
     relay_cc (ctx, *event);
-    cmb_internal_event (ctx, *event);
     if (zmsg_send (event, ctx->zs_event_out) < 0) {
         if (errno == 0)
             errno = EIO;
@@ -1707,6 +1752,32 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
         zmsg_send (&zmsg, ctx->zs_event_out);
     }
 done:
+    ZLOOP_RETURN(ctx);
+}
+
+static int hb_cb (zloop_t *zl, int timer_id, ctx_t *ctx)
+{
+    zmsg_t *zmsg = NULL;
+    json_object *o = NULL;
+
+    assert (ctx->rank == 0);
+    assert (timer_id == ctx->heartbeat_tid);
+
+    o = util_json_object_new_object ();
+    util_json_object_add_int (o, "epoch", ++ctx->hb_epoch);
+    if (!(zmsg = cmb_msg_encode ("hb", o))) {
+        err ("cmb_msg_encode failed");
+        goto done;
+    }
+    if (cmb_pub_event (ctx, &zmsg) < 0) {
+        err ("cmb_pub_event failed");
+        goto done;
+    }
+done:
+    if (o)
+        json_object_put (o);
+    if (zmsg)
+        zmsg_destroy (&zmsg);
     ZLOOP_RETURN(ctx);
 }
 

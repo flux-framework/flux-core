@@ -37,7 +37,7 @@ LIBPMI = $(LIBDIR)/libpmi.so.0
 LIBCMB = $(LIBDIR)/libcmb.so.0
 LIBRDL = $(LIBDIR)/librdl.so.0
 
-PLUGINS = plugins/api.so plugins/hb.so plugins/kvs.so \
+PLUGINS = plugins/api.so plugins/kvs.so \
 	plugins/barrier.so plugins/live.so plugins/mecho.so \
 	plugins/log.so plugins/echo.so plugins/job.so \
 	plugins/resrc.so plugins/rexec.so plugins/sched.so \
