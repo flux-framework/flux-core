@@ -13,20 +13,23 @@ Ensure that prerequisites are installed:
   json-c
   lua-hostlist
 
-Uncomment the appropriate MPIMOD setting in pmi-test/Makefile and build:
+Uncomment the appropriate MPIMOD setting in pmi-test/Makefile:
 
   vi pmi-test/Makefile
+
+Build the project
+
   make
 
 1. Launching the framework on Hype or IPA
 
-Generate some CURVE keys for yourself (they go in your ~/.flux directory):
+Generate some CURVE keys for yourself (they will be written to ~/.flux/)
 
   cd zmq-broker
   ./flux keygen
 
-Use ./flux srun utility to start the framework in a slurm job.
-It will work with or without a pre-existing slurm allocation.
+Start the framework as a slurm job, or within a slurm allocation
+with flux-srun:
 
 Usage: flux-srun OPTIONS [command [args...]]
    -N,--nnodes N               srun: set number of nodes
@@ -38,10 +41,10 @@ Usage: flux-srun OPTIONS [command [args...]]
    -k,--k-ary N                set reduction tree fanout
    -X,--noexec                 print command line without running it
 
-If you do not specify a [command [args...]] then you will be interacting
+If you do not specify [command [args...]] then you will be interacting
 with a shell spawned on rank 0, using srun's --pty facility.
 By default, the reduction network is launched in a binary (k=2) tree
-topology is launched.
+topology.
 
 Ex: ipa:
   ./flux srun -p pall
@@ -71,7 +74,7 @@ To ping rank 60
 
 3. Alternate single-node environment
 
-Alternatively, ./flux screen can launch a single-node session:
+Alternatively, flux-screen can launch a single-node session:
 
 Usage: flux-screen OPTIONS [command [args...]]
    -N,--nnodes N               set size of session
