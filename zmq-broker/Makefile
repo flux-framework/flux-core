@@ -10,7 +10,8 @@ LUA_PKG = $(shell pkg-config --exists lua && echo lua || echo lua5.1)
 LUA_CFLAGS = $(shell pkg-config --silence-errors --cflags $(LUA_PKG))
 LUA_LIBS = $(shell pkg-config --silence-errors --libs $(LUA_PKG))
 
-CFLAGS = -Werror -Wall -g -fPIC $(EXTRA_CFLAGS) \
+CFLAGS = -DHAVE_CONFIG_H -I$(TOP)/config \
+	-Werror -Wall -g -fPIC $(EXTRA_CFLAGS) \
 	-I/usr/include/czmq \
 	-DPLUGIN_PATH=\"$(TOP)/plugins\" \
 	-DEXEC_PATH=\"$(TOP)/libexec\" $(LUA_CFLAGS)
