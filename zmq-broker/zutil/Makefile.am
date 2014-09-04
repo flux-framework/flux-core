@@ -3,9 +3,9 @@ AM_CFLAGS = @GCCWARN@
 AM_CPPFLAGS = \
 	-I../util -I../include -I..
 
-noinst_LIBRARIES = libzutil.a
+noinst_LTLIBRARIES = libzutil.la
 
-libzutil_a_SOURCES = \
+libzutil_la_SOURCES = \
 	zio.c \
 	cbuf.c \
 	forkzio.c \

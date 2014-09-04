@@ -1,0 +1,7 @@
+{
+  global:
+    mod_main;
+    mod_name;
+  local:
+    *;
+};

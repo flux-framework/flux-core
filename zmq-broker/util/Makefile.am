@@ -2,9 +2,9 @@ AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS =
 
-noinst_LIBRARIES = libutil.a
+noinst_LTLIBRARIES = libutil.la
 
-libutil_a_SOURCES = \
+libutil_la_SOURCES = \
 	log.c \
 	hostlist.c \
 	util.c \
