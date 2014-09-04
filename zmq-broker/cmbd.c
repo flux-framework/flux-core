@@ -465,25 +465,34 @@ static void update_proctitle (ctx_t *ctx)
 
 static void update_environment (ctx_t *ctx)
 {
-    const char *oldtmp = getenv ("TMPDIR");
+    const char *oldtmp = getenv ("FLUX_TMPDIR");
     static char tmpdir[PATH_MAX + 1];
 
+    if (!oldtmp)
+        oldtmp = getenv ("TMPDIR");
+    if (!oldtmp)
+        oldtmp = "/tmp";
     (void)snprintf (tmpdir, sizeof (tmpdir), "%s/flux-%s-%d",
-                    oldtmp ? oldtmp : "/tmp", ctx->sid, ctx->rank);
+                    oldtmp, ctx->sid, ctx->rank);
     if (mkdir (tmpdir, 0700) < 0 && errno != EEXIST)
         err_exit ("mkdir %s", tmpdir);
-    if (setenv ("TMPDIR", tmpdir, 1) < 0)
-        err_exit ("setenv TMPDIR");
+    if (setenv ("FLUX_TMPDIR", tmpdir, 1) < 0)
+        err_exit ("setenv FLUX_TMPDIR");
 }
 
 static void update_pidfile (ctx_t *ctx, bool force)
 {
-    const char *tmpdir = getenv ("TMPDIR");
+    const char *tmpdir = getenv ("FLUX_TMPDIR");
     char *pidfile;
     pid_t pid;
     FILE *f;
 
-    if (asprintf (&pidfile, "%s/cmbd.pid", tmpdir ? tmpdir : "/tmp") < 0)
+    if (!tmpdir)
+        tmpdir = getenv ("TMPDIR");
+    if (!tmpdir)
+        tmpdir = "/tmp";
+
+    if (asprintf (&pidfile, "%s/cmbd.pid", tmpdir) < 0)
         oom ();
     if ((f = fopen (pidfile, "r"))) {
         if (fscanf (f, "%u", &pid) == 1 && kill (pid, 0) == 0) {
@@ -585,22 +594,27 @@ static void pmi_boot (ctx_t *ctx)
 
 static void local_boot (ctx_t *ctx)
 {
-    const char *tmpdir = getenv ("TMPDIR");
+    const char *tmpdir = getenv ("FLUX_TMPDIR");
     int rrank = ctx->rank == 0 ? ctx->size - 1 : ctx->rank - 1;
 
+    if (!tmpdir)
+        tmpdir = getenv ("TMPDIR");
+    if (!tmpdir)
+        tmpdir = "/tmp";
+
     ctx->child = endpt_create ("ipc://%s/flux-%s-%d-req",
-                               tmpdir ? tmpdir : "/tmp", ctx->sid, ctx->rank);
+                               tmpdir, ctx->sid, ctx->rank);
     if (ctx->rank > 0) {
         int prank = ctx->k_ary == 0 ? 0 : (ctx->rank - 1) / ctx->k_ary;
         endpt_t *ep = endpt_create ("ipc://%s/flux-%s-%d-req",
-                                    tmpdir ? tmpdir : "/tmp", ctx->sid, prank);
+                                    tmpdir, ctx->sid, prank);
         if (zlist_push (ctx->parents, ep) < 0)
             oom ();
     }
     ctx->gevent = endpt_create ("ipc://%s/flux-%s-event",
-                                tmpdir ? tmpdir : "/tmp", ctx->sid);
+                                tmpdir, ctx->sid);
     ctx->right = endpt_create ("ipc://%s/flux-%s-%d-req",
-                               tmpdir ? tmpdir : "/tmp", ctx->sid, rrank);
+                               tmpdir, ctx->sid, rrank);
 }
 
 static bool checkpath (const char *path, const char *name)

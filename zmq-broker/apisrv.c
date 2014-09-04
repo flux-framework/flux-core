@@ -30,12 +30,12 @@
 typedef struct {
     int listen_fd;
     zlist_t *clients;
-    flux_t h;   
+    flux_t h;
     uid_t session_owner;
 } ctx_t;
 
 typedef struct {
-    int type; 
+    int type;
     char *topic;
 } subscription_t;
 
@@ -418,8 +418,12 @@ int mod_main (flux_t h, zhash_t *args)
     int rc = -1;
 
     if (!args || !(sockpath = zhash_lookup (args, "sockpath"))) {
-        const char *tmpdir = getenv ("TMPDIR");
-        if (asprintf (&dfltpath, "%s/flux-api", tmpdir ? tmpdir : "/tmp") < 0)
+        const char *tmpdir = getenv ("FLUX_TMPDIR");
+        if (!tmpdir)
+            tmpdir = getenv ("TMPDIR");
+        if (!tmpdir)
+            tmpdir = "/tmp";
+        if (asprintf (&dfltpath, "%s/flux-api", tmpdir) < 0)
             oom ();
         sockpath = dfltpath;
     }

@@ -44,7 +44,7 @@ Usage: $prog OPTIONS [command [args...]]\n\
    -k,--k-ary N                set reduction tree fanout\n\
    -X,--noexec                 print command lines without running them
    -a,--attach N               attach to rank N
-   -r,--run N                  run command with TMPDIR set for rank N
+   -r,--run N                  run command with FLUX_TMPDIR set for rank N
    -L,--list                   list sessions
    -S,--shutdown               shutdown session"
 
@@ -54,7 +54,7 @@ die()      { log_msg "Fatal: $@"; exit 1; }
 
 pidcheck() {
     local sid=$1
-    local oldpid=$(cat ${TMPDIR:-/tmp}/flux-${sid}-0/cmbd.pid 2>/dev/null)
+    local oldpid=$(cat ${FLUX_TMPDIR:-${TMPDIR:-/tmp}}/flux-${sid}-0/cmbd.pid 2>/dev/null)
     if test -n "$oldpid" && kill -0 $oldpid 2>/dev/null; then
         die "rank 0 of session ${sid} is still running"
     fi
@@ -116,7 +116,7 @@ elif test -n "$shutdown"; then
 elif test -n "$listscreens"; then
     exec screen -list
 elif test -n "$run_rank"; then
-    export TMPDIR=${TMPDIR:-/tmp}/flux-${cmbd_sid}-${run_rank}
+    export FLUX_TMPDIR=${FLUX_TMPDIR:-${TMPDIR:-/tmp}}/flux-${cmbd_sid}-${run_rank}
     exec "$@"
 fi    
 

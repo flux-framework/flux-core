@@ -394,8 +394,12 @@ flux_t cmb_init (void)
         }
         snprintf (path, sizeof (path), "%s", val);
     } else {
-        val = getenv ("TMPDIR");
-        snprintf (path, sizeof (path), "%s/flux-api", val ? val : "/tmp");
+        const char *tmpdir = getenv ("FLUX_TMPDIR");
+        if (!tmpdir)
+            tmpdir = getenv ("TMPDIR");
+        if (!tmpdir)
+            tmpdir = "/tmp";
+        snprintf (path, sizeof (path), "%s/flux-api", tmpdir);
     }
 
     if ((val = getenv ("FLUX_TRACE_APISOCK")) && !strcmp (val, "1"))
