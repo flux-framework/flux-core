@@ -92,6 +92,7 @@ static void verr (void *ctx, const char *fmt, ...)
     va_end (ap);
 }
 
+#if 0
 void lsd_fatal_error (char *file, int line, char *msg)
 {
     verr (NULL, msg);
@@ -103,6 +104,7 @@ void * lsd_nomem_error (char *file, int line, char *msg)
     verr (NULL, "Out of memory: %s: %s:%d\n", msg, file, line);
     return NULL;
 }
+#endif
 
 void rdllib_close (struct rdllib *rl)
 {

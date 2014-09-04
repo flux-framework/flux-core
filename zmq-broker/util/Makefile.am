@@ -7,6 +7,8 @@ noinst_LTLIBRARIES = libutil.la
 libutil_la_SOURCES = \
 	log.c \
 	hostlist.c \
+	json.c \
+	time.c \
 	util.c \
 	zmsg.c \
 	lsdfatal.c \
