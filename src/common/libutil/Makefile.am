@@ -16,4 +16,5 @@ libutil_la_SOURCES = \
 	list.c \
 	tstat.c \
 	veb.c \
-	nodeset.c
+	nodeset.c \
+	cbuf.c

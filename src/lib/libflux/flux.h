@@ -13,8 +13,8 @@ typedef struct flux_handle_struct *flux_t;
 
 #include <czmq.h>
 
-#include "kvs.h"
-#include "mrpc.h"
+//#include "kvs.h"
+//#include "mrpc.h"
 #include "reactor.h"
 #include "security.h"
 
@@ -184,6 +184,14 @@ json_object *flux_zmsg_json (zmsg_t *zmsg);
 void flux_assfail (flux_t h, char *ass, char *file, int line);
 #define FASSERT(h, exp) if ((exp)); \
                         else flux_assfail(h, #exp, __FILE__, __LINE__)
+
+typedef int (mod_main_f)(flux_t h, zhash_t *args);
+extern mod_main_f mod_main;
+
+/* Plugin must define its service name.
+ *  */
+#define MOD_NAME(x) const char *mod_name = x
+
 
 #endif /* !FLUX_H */
 

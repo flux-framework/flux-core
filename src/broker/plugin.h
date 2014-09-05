@@ -8,16 +8,7 @@
 #define REQUEST_URI         "inproc://request"
 #define EVENT_URI           "inproc://event"
 
-/* Plugin must define a mod_main().
- */
-typedef int (mod_main_f)(flux_t h, zhash_t *args);
-extern mod_main_f mod_main;
-
-/* Plugin must define its service name.
- */
-#define MOD_NAME(x) const char *mod_name = x
 char *plugin_getstring (const char *path, const char *name);
-
 
 /* Create, start, stop, destroy a plugin.
  * Termination:  plugin_stop (), read EOF on sock, plugin_destroy ()

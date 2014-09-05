@@ -88,9 +88,12 @@ AC_SYS_LARGEFILE
 AC_CONFIG_FILES( \
   Makefile \
   flux-core.spec \
-  zmq-broker/Makefile \
-  zmq-broker/util/Makefile \
-  zmq-broker/zutil/Makefile \
+  src/Makefile \
+  src/common/Makefile \
+  src/common/libutil/Makefile \
+  src/lib/Makefile \
+  src/lib/libflux/Makefile \
+  src/broker/Makefile \
 )
 
 AC_OUTPUT

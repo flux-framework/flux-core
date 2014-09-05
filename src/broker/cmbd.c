@@ -57,7 +57,7 @@
 #include "handle.h"
 #include "security.h"
 #include "nodeset.h"
-#include "pmiwrap.h"
+#include "pmi.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT

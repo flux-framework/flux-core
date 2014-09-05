@@ -1,1 +1,1 @@
-SUBDIRS = zmq-broker
+SUBDIRS = src

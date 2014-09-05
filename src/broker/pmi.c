@@ -41,11 +41,11 @@
 #include <stdbool.h>
 #include <sys/time.h>
 #include <dlfcn.h>
-#include <pmi.h>
+#include <slurm/pmi.h>
 
 #include "log.h"
 #include "util.h"
-#include "pmiwrap.h"
+#include "pmi.h"
 
 struct pmi_struct {
     int (*init)(int *);
