@@ -31,3 +31,5 @@ libflux_la_LIBADD = \
 	$(top_builddir)/src/common/libutil/libutil.la
 
 libflux_la_LDFLAGS = -Wl,--version-script=flux_version.map
+
+EXTRA_DIST = flux_version.map

@@ -27,3 +27,5 @@ libutil_la_SOURCES = \
 
 libutil_la_LIBADD = \
 	$(top_builddir)/src/common/liblsd/liblsd.la
+
+EXTRA_DIST = veb_mach.c

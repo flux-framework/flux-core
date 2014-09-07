@@ -29,7 +29,7 @@ flux_LDADD = \
 # Flux subcommands
 #
 
-fluxbin_SCRIPTS = \
+dist_fluxbin_SCRIPTS = \
 	srun \
 	screen
 

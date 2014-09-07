@@ -418,7 +418,7 @@ const char *nodeset_str (nodeset_t n)
 
     const char *sep = "";
     int used = 0;
-    uint32_t r, lo, hi;
+    uint32_t r, lo = 0, hi = 0;
     bool inrange = false;
     char tmp[128];
 

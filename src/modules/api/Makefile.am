@@ -20,7 +20,8 @@ fluxmod_libadd = \
 	$(top_builddir)/src/lib/libflux/libflux.la \
 	$(LIBJSON) $(LIBZMQ) $(LIBCZMQ)
 
-fluxmod_ldflags = -module -avoid-version -Wl,--version-script=../module.map
+fluxmod_ldflags = \
+	-module -avoid-version -Wl,--version-script=../module_version.map
 
 api_la_SOURCES = api.c
 api_la_LDFLAGS = $(fluxmod_ldflags)
@@ -43,3 +44,5 @@ libflux_api_la_LIBADD = \
 	$(LIBJSON) $(LIBZMQ) $(LIBCZMQ)
 
 libflux_api_la_LDFLAGS = -Wl,--version-script=flux_api_version.map
+
+EXTRA_DIST = flux_api_version.map

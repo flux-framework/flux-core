@@ -20,7 +20,13 @@ AM_CPPFLAGS = \
 
 bin_PROGRAMS = cmbd
 
-cmbd_SOURCES = cmbd.c plugin.c pmi.c
+cmbd_SOURCES = \
+	cmbd.c \
+	plugin.c \
+	plugin.h \
+	pmi.c \
+	pmi.h
+
 cmbd_LDADD = \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/lib/libflux/libflux.la \
