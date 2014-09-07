@@ -1,4 +1,4 @@
-#!/usr/bin/lua 
+#!/usr/bin/lua
 
 -- flux-topo - emit graphviz representation of Flux session topology
 

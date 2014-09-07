@@ -35,6 +35,7 @@
 #include "cmb.h"
 #include "util.h"
 #include "log.h"
+#include "kvs.h"
 
 #define OPTIONS "hc:s:p:qv"
 static const struct option longopts[] = {

@@ -37,6 +37,8 @@
 #include "util.h"
 #include "log.h"
 #include "shortjson.h"
+#include "kvs.h"
+#include "modctl.h"
 
 #define OPTIONS "+hr:u"
 static const struct option longopts[] = {

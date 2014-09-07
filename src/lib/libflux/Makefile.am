@@ -3,7 +3,9 @@ AM_CFLAGS = @GCCWARN@
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/common/libutil
 
-lib_LTLIBRARIES = \
+libfluxdir=$(libdir)/flux
+
+libflux_LTLIBRARIES = \
 	libflux.la
 
 libflux_la_SOURCES = \

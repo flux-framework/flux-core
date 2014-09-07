@@ -1,0 +1,5 @@
+{ global:
+    flux_*;
+    local: *;
+};
+

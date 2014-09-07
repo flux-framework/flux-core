@@ -89,7 +89,7 @@
 #include "zmsg.h"
 #include "util.h"
 #include "log.h"
-#include "plugin.h"
+#include "flux.h"
 #include "shortjson.h"
 #include "reduce.h"
 #include "nodeset.h"

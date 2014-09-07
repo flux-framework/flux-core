@@ -1,107 +1,101 @@
+AM_CFLAGS = @GCCWARN@
+
+fluxbindir = $(libexecdir)/flux
+fluxlibdir = $(libdir)/flux
+fluxmoddir = $(fluxlibdir)/modules
+
 AM_CPPFLAGS = \
-	-DEXEC_PATH=\"$(top_builddir)/src/cmd:$(libexecdir)/flux\" \
-	-I../common/libutil -I../lib/libflux
+	-DPLUGIN_PATH=\"$(fluxmoddir)\" \
+	-DEXEC_PATH=\"$(top_builddir)/src/cmd:$(fluxbindir)\" \
+	-I$(top_srcdir)/src/common/libutil \
+	-I$(top_srcdir)/src/lib/libflux \
+	-I$(top_srcdir)/src/modules/api \
+	-I$(top_srcdir)/src/modules/kvs \
+	-I$(top_srcdir)/src/modules/modctl \
+	-I$(top_srcdir)/src/modules/live
 
 bin_PROGRAMS = flux
 
 flux_SOURCES = flux.c
-flux_LDADD = libflux.la $(LIBZMQ)
+flux_LDADD = \
+	$(top_builddir)/src/common/libutil/libutil.la \
+	$(LIBZMQ)
 
-fluxbindir = $(libexecdir)/flux
+#
+# Flux subcommands
+#
+
 fluxbin_SCRIPTS = \
-	flux-topo \
-	flux-srun \
-	flux-screen \
-	flux-submit \
-	flux-wreckrun
+	srun \
+	screen
 
 fluxbin_PROGRAMS = \
-	flux-barrier \
-	flux-event \
-	flux-host \
-	flux-info \
-	flux-keygen \
-	flux-kvs \
-	flux-kvscopy \
-	flux-kvsdir \
-	flux-kvstorture \
-	flux-kvswatch \
-	flux-log \
-	flux-logger \
-	flux-mecho \
-	flux-mod \
-	flux-mon \
-	flux-peer \
-	flux-ping \
-	flux-snoop \
-	flux-stats \
-	flux-up \
-	flux-zio
+	event \
+	xinfo \
+	keygen \
+	kvs \
+	kvscopy \
+	kvsdir \
+	kvstorture \
+	kvswatch \
+	logger \
+	mod \
+	peer \
+	ping \
+	snoop \
+	stats \
+	up
 
 fluxbin_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/lib/libflux/libflux.la \
-	$(LIBJSON) $(LIBZMQ) $(LIBCZMQ)
+	$(top_builddir)/src/modules/api/libflux-api.la \
+	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
+	$(top_builddir)/src/modules/modctl/libflux-modctl.la \
+	$(top_builddir)/src/modules/live/libflux-live.la \
+	$(LIBJSON) $(LIBZMQ) $(LIBCZMQ) $(LIBMUNGE)
 
-flux_barrier_SOURCES = flux-barrier.c
-flux_barrier_LDADD = $(fluxbin_ldadd)
+event_SOURCES = event.c
+event_LDADD = $(fluxbin_ldadd)
 
-flux_event_SOURCES = flux-event.c
-flux_event_LDADD = $(fluxbin_ldadd)
+xinfo_SOURCES = info.c
+xinfo_LDADD = $(fluxbin_ldadd)
 
-flux_host_SOURCES = flux-host.c
-flux_host_LDADD = $(fluxbin_ldadd)
+keygen_SOURCES = keygen.c
+keygen_LDADD = $(fluxbin_ldadd)
 
-flux_info_SOURCES = flux-info.c
-flux_info_LDADD = $(fluxbin_ldadd)
+kvs_SOURCES = kvs.c
+kvs_LDADD = $(fluxbin_ldadd)
 
-flux_keygen_SOURCES = flux-keygen.c
-flux_keygen_LDADD = $(fluxbin_ldadd) $(LIBMUNGE)
+kvscopy_SOURCES = kvscopy.c
+kvscopy_LDADD = $(fluxbin_ldadd)
 
-flux_kvs_SOURCES = flux-kvs.c
-flux_kvs_LDADD = $(fluxbin_ldadd)
+kvsdir_SOURCES = kvsdir.c
+kvsdir_LDADD = $(fluxbin_ldadd)
 
-flux_kvscopy_SOURCES = flux-kvscopy.c
-flux_kvscopy_LDADD = $(fluxbin_ldadd)
+kvstorture_SOURCES = kvstorture.c
+kvstorture_LDADD = $(fluxbin_ldadd)
 
-flux_kvsdir_SOURCES = flux-kvsdir.c
-flux_kvsdir_LDADD = $(fluxbin_ldadd)
+kvswatch_SOURCES = kvswatch.c
+kvswatch_LDADD = $(fluxbin_ldadd)
 
-flux_kvstorture_SOURCES = flux-kvstorture.c
-flux_kvstorture_LDADD = $(fluxbin_ldadd)
+logger_SOURCES = logger.c
+logger_LDADD = $(fluxbin_ldadd)
 
-flux_kvswatch_SOURCES = flux-kvswatch.c
-flux_kvswatch_LDADD = $(fluxbin_ldadd)
+mod_SOURCES = mod.c
+mod_LDADD = $(fluxbin_ldadd)
 
-flux_log_SOURCES = flux-log.c
-flux_log_LDADD = $(fluxbin_ldadd)
+peer_SOURCES = peer.c
+peer_LDADD = $(fluxbin_ldadd)
 
-flux_logger_SOURCES = flux-logger.c
-flux_logger_LDADD = $(fluxbin_ldadd)
+ping_SOURCES = ping.c
+ping_LDADD = $(fluxbin_ldadd)
 
-flux_mecho_SOURCES = flux-mecho.c
-flux_mecho_LDADD = $(fluxbin_ldadd)
+snoop_SOURCES = snoop.c
+snoop_LDADD = $(fluxbin_ldadd)
 
-flux_mod_SOURCES = flux-mod.c
-flux_mod_LDADD = $(fluxbin_ldadd)
+stats_SOURCES = stats.c
+stats_LDADD = $(fluxbin_ldadd)
 
-flux_mon_SOURCES = flux-mon.c
-flux_mon_LDADD = $(fluxbin_ldadd)
-
-flux_peer_SOURCES = flux-peer.c
-flux_peer_LDADD = $(fluxbin_ldadd)
-
-flux_ping_SOURCES = flux-ping.c
-flux_ping_LDADD = $(fluxbin_ldadd)
-
-flux_snoop_SOURCES = flux-snoop.c
-flux_snoop_LDADD = $(fluxbin_ldadd) $(LIBMUNGE)
-
-flux_stats_SOURCES = flux-stats.c
-flux_stats_LDADD = $(fluxbin_ldadd)
-
-flux_up_SOURCES = flux-up.c
-flux_up_LDADD = $(fluxbin_ldadd)
-
-flux_zio_SOURCES = flux-zio.c
-flux_zio_LDADD = $(fluxbin_ldadd) $(LIBUTIL)
+up_SOURCES = up.c
+up_LDADD = $(fluxbin_ldadd)

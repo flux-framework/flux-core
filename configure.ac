@@ -99,6 +99,7 @@ AC_CONFIG_FILES( \
   src/modules/api/Makefile \
   src/modules/kvs/Makefile \
   src/modules/modctl/Makefile \
+  src/modules/live/Makefile \
 )
 
 AC_OUTPUT

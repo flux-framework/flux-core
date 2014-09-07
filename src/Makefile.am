@@ -1,1 +1,1 @@
-SUBDIRS = common lib broker
+SUBDIRS = common lib broker modules cmd

@@ -35,6 +35,7 @@
 #include "cmb.h"
 #include "util.h"
 #include "log.h"
+#include "kvs.h"
 
 #define OPTIONS "hdCDNqm:s:r:vV:"
 static const struct option longopts[] = {

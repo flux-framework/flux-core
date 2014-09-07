@@ -662,11 +662,11 @@ char *plugin_getstring (const char *path, const char *name)
 
     dlerror ();
     if (!(dso = dlopen (path, RTLD_NOW | RTLD_LOCAL))) {
-        msg ("%s", dlerror ());
+        //msg ("%s", dlerror ());
         goto done;
     }
     if (!(np = dlsym (dso, name)) || !*np) {
-        msg ("%s", dlerror ());
+        //msg ("%s", dlerror ());
         goto done;
     }
     s = xstrdup (*np);

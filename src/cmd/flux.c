@@ -40,10 +40,8 @@
 #include <json/json.h>
 #include <sys/param.h>
 
-#include "cmb.h"
 #include "log.h"
 #include "util.h"
-#include "zmsg.h"
 
 static char  flux_exe_path [MAXPATHLEN];
 static char *flux_exe_dir;

@@ -3,10 +3,12 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/lib/libflux \
 	-I$(top_srcdir)/src/modules/kvs
 
+libfluxdir = $(libdir)/flux
+fluxmoddir = $(libfluxdir)/modules
+
 #
 # Comms module
 #
-fluxmoddir = $(libdir)/flux-modules
 fluxmod_LTLIBRARIES = modctl.la
 
 fluxmod_libadd = \
@@ -24,7 +26,7 @@ modctl_la_LIBADD = $(fluxmod_libadd)
 #
 # API for module
 #
-lib_LTLIBRARIES = \
+libflux_LTLIBRARIES = \
 	libflux-modctl.la
 
 libflux_modctl_la_SOURCES = \
