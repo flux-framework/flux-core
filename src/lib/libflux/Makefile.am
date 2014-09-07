@@ -7,6 +7,7 @@ noinst_LTLIBRARIES = \
 	libflux.la
 
 libflux_la_SOURCES = \
+	log.c \
 	api.c \
 	broker.c \
 	handle.c \

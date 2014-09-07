@@ -368,7 +368,6 @@ int main (int argc, char *argv[])
                 usage ();
         }
     }
-    msg ("Heartrate: %0.1fs", ctx.heartrate);
 
     /* Create zeromq context, security context, zloop, etc.
      */
@@ -441,7 +440,7 @@ int main (int argc, char *argv[])
     if (!nopt && ctx.rank == 0 && (isatty (0) || ctx.shell_cmd))
         rank0_shell (&ctx);
 
-    cmbd_init_socks (&ctx);
+    cmbd_init_socks (&ctx); /* Note: OK to call flux_log after this */
 
     module_loadall (&ctx);
 
@@ -453,7 +452,7 @@ int main (int argc, char *argv[])
                                          (zloop_timer_fn *)hb_cb, &ctx);
         if (ctx.heartbeat_tid == -1)
             err_exit ("zloop_timer");
-        msg ("Heartrate: T=%0.1fs", ctx.heartrate);
+        flux_log (ctx.h, LOG_INFO, "heartrate T=%0.1fs", ctx.heartrate);
     }
 
     zloop_start (ctx.zl);
@@ -1637,6 +1636,29 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         }
         if (request)
             json_object_put (request);
+    } else if (cmb_msg_match (*zmsg, "cmb.log")) {
+        json_object *request = NULL;
+        const char *s, *src, *fac;
+        struct timeval ts;
+        int lev;
+        if (ctx->rank > 0)
+            (void)flux_request_sendmsg (ctx->h, zmsg);
+        else {
+            if (cmb_msg_decode (*zmsg, NULL, &request) == 0 && request
+                && util_json_object_get_int (request, "level", &lev) == 0
+                && util_json_object_get_timeval (request, "timestamp", &ts) == 0
+                && util_json_object_get_string (request, "message", &s) == 0
+                && util_json_object_get_string (request, "facility", &fac) == 0
+                && util_json_object_get_string (request, "source", &src) == 0) {
+                const char *levstr = log_leveltostr (lev);
+                if (!levstr)
+                    levstr = "unknown";
+                msg ("[%-.6lu.%-.6lu] %s.%s[%s] %s",
+                     ts.tv_sec, ts.tv_usec, fac, levstr, src, s);
+            }
+        }
+        if (request)
+            json_object_put (request);
     } else if (cmb_msg_match (*zmsg, "cmb.pub")) {
         if (ctx->rank > 0) {
             if (flux_request_sendmsg (ctx->h, zmsg) < 0)
@@ -1933,12 +1955,11 @@ static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
     }
     snoop_cc (ctx, FLUX_MSGTYPE_REQUEST, *zmsg);
     if (!strcmp (service, "cmb")) {
-        if (hopcount > 0) {
+        if (hopcount > 0 || ctx->treeroot) {
             cmb_internal_request (ctx, zmsg);
-        } else if (!ctx->treeroot) { /* we're sending so route upstream */
+        } else {
             parent_send (ctx, zmsg);
-        } else
-            errno = EINVAL;
+        }
     } else {
         if ((mod = zhash_lookup (ctx->modules, service))
                  && (!lasthop || strcmp (lasthop, plugin_uuid (mod->p)) != 0)) {
