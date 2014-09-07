@@ -14,7 +14,7 @@ typedef struct {
     int typemask;
     const char *pattern;
     FluxMsgHandler cb;
-} msghandler_t; 
+} msghandler_t;
 
 /* Register a FluxMsgHandler callback to be called whenever a message
  * matching typemask and pattern (glob) is received.  The callback is

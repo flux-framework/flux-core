@@ -32,7 +32,7 @@
 #include <assert.h>
 #include <libgen.h>
 
-#include "cmb.h"
+#include "flux.h"
 #include "util.h"
 #include "log.h"
 #include "nodeset.h"

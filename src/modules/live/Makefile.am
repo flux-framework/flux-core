@@ -1,10 +1,13 @@
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/common/libutil \
 	-I$(top_srcdir)/src/lib/libflux \
-	-I$(top_srcdir)/src/modules/kvs
+	-I$(top_srcdir)/src/modules/kvs \
+	-I$(top_srcdir)/src/modules/api \
+	-I$(top_srcdir)/src/modules/modctl
 
 libfluxdir = $(libdir)/flux
 fluxmoddir = $(libfluxdir)/modules
+includefluxdir = $(includedir)/flux
 
 #
 # Comms module
@@ -28,6 +31,9 @@ live_la_LIBADD = $(fluxmod_libadd)
 #
 libflux_LTLIBRARIES = \
 	libflux-live.la
+
+includeflux_HEADERS = \
+	live.h
 
 libflux_live_la_SOURCES = \
 	liblive.c

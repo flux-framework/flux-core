@@ -1,7 +1,5 @@
-#ifndef FLUX_API_H
-#define FLUX_API_H
-
-#include "flux.h"
+#ifndef FLUX_CMB_H
+#define FLUX_CMB_H
 
 flux_t cmb_init (void);
 flux_t cmb_init_full (const char *path, int flags);

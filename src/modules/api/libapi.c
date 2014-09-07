@@ -47,6 +47,7 @@
 
 #include "log.h"
 #include "zmsg.h"
+#include "flux.h"
 #include "cmb.h"
 #include "util.h"
 #include "flux.h"

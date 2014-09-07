@@ -1,16 +1,28 @@
 AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = \
-	-I$(top_srcdir)/src/common/libutil
+	-I$(top_srcdir)/src/common/libutil \
+	-I$(top_srcdir)/src/modules/api \
+	-I$(top_srcdir)/src/modules/kvs \
+	-I$(top_srcdir)/src/modules/live \
+	-I$(top_srcdir)/src/modules/modctl
 
 libfluxdir=$(libdir)/flux
+includefluxdir=$(includedir)/flux
+
+includeflux_HEADERS = \
+	flux.h \
+	handle.h \
+	reactor.h \
+	reduce.h \
+	security.h
 
 libflux_LTLIBRARIES = \
 	libflux.la
 
 libflux_la_SOURCES = \
 	log.c \
-	broker.c \
+	brokerops.c \
 	handle.c \
 	reduce.c \
 	security.c

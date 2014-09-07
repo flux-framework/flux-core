@@ -37,7 +37,7 @@
 #include <zmq.h>
 #include <czmq.h>
 
-#include "cmb.h"
+#include "flux.h"
 #include "util.h"
 #include "log.h"
 #include "security.h"

@@ -4,15 +4,18 @@ fluxbindir = $(libexecdir)/flux
 fluxlibdir = $(libdir)/flux
 fluxmoddir = $(fluxlibdir)/modules
 
+plugin_path = $(top_builddir)/src/modules/api/.libs:$(top_builddir)/src/modules/kvs/.libs:$(top_builddir)/src/modules/modctl/.libs:$(fluxmoddir)
+
+exec_path = $(top_builddir)/src/cmd:$(fluxbindir)
+
 AM_CPPFLAGS = \
-	-DPLUGIN_PATH=\"$(fluxmoddir)\" \
-	-DEXEC_PATH=\"$(top_builddir)/src/cmd:$(fluxbindir)\" \
+        -DPLUGIN_PATH=\"$(plugin_path)\" -DEXEC_PATH=\"$(exec_path)\" \
 	-I$(top_srcdir)/src/common/libutil \
 	-I$(top_srcdir)/src/lib/libflux \
 	-I$(top_srcdir)/src/modules/api \
 	-I$(top_srcdir)/src/modules/kvs \
-	-I$(top_srcdir)/src/modules/modctl \
-	-I$(top_srcdir)/src/modules/live
+	-I$(top_srcdir)/src/modules/live \
+	-I$(top_srcdir)/src/modules/modctl
 
 bin_PROGRAMS = flux
 

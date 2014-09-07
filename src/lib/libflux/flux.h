@@ -13,10 +13,13 @@ typedef struct flux_handle_struct *flux_t;
 
 #include <czmq.h>
 
-//#include "kvs.h"
-//#include "mrpc.h"
 #include "reactor.h"
 #include "security.h"
+
+#include "cmb.h"
+#include "kvs.h"
+#include "live.h"
+#include "modctl.h"
 
 /* Flags for handle creation and flux_flags_set()/flux_flags_unset.
  */
@@ -148,8 +151,6 @@ char *flux_getattr (flux_t h, int rank, const char *name);
  */
 int flux_reparent (flux_t h, int rank, const char *uri);
 int flux_failover (flux_t h, int rank);
-int flux_recover (flux_t h, int rank);
-int flux_recover_all (flux_t h);
 
 int flux_panic (flux_t h, int rank, const char *msg);
 
@@ -181,11 +182,10 @@ void flux_assfail (flux_t h, char *ass, char *file, int line);
 #define FASSERT(h, exp) if ((exp)); \
                         else flux_assfail(h, #exp, __FILE__, __LINE__)
 
+/* Comms modules must define  MOD_NAME and mod_main().
+ */
 typedef int (mod_main_f)(flux_t h, zhash_t *args);
 extern mod_main_f mod_main;
-
-/* Plugin must define its service name.
- *  */
 #define MOD_NAME(x) const char *mod_name = x
 
 

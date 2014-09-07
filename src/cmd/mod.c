@@ -33,7 +33,7 @@
 #include <libgen.h>
 #include <dlfcn.h>
 
-#include "cmb.h"
+#include "flux.h"
 #include "util.h"
 #include "log.h"
 #include "shortjson.h"

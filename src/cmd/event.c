@@ -32,7 +32,7 @@
 #include <assert.h>
 #include <libgen.h>
 
-#include "cmb.h"
+#include "flux.h"
 #include "util.h"
 #include "zmsg.h"
 #include "log.h"
@@ -47,7 +47,7 @@ static const struct option longopts[] = {
 
 void usage (void)
 {
-    fprintf (stderr, 
+    fprintf (stderr,
 "Usage: flux-event --pub message [json]\n"
 "       flux-event --sub [topic]\n"
 );
