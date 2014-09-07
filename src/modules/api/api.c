@@ -47,9 +47,12 @@
 #include <json/json.h>
 
 #include "zmsg.h"
-#include "flux.h"
-#include "util.h"
+#include "xzmalloc.h"
+#include "jsonutil.h"
 #include "log.h"
+#include "zfd.h"
+
+#include "flux.h"
 
 #define LISTEN_BACKLOG      5
 
@@ -239,7 +242,7 @@ static int client_read (ctx_t *ctx, client_t *c)
     int typemask;
     subscription_t *sub;
 
-    zmsg = zmsg_recv_fd_typemask (c->fd, &typemask, true);
+    zmsg = zfd_recv_typemask (c->fd, &typemask, true);
     if (!zmsg) {
         if (errno != ECONNRESET && errno != EWOULDBLOCK && errno != EPROTO)
             flux_log (ctx->h, LOG_ERR, "API read: %s", strerror (errno));
@@ -247,7 +250,7 @@ static int client_read (ctx_t *ctx, client_t *c)
     }
     if (!(typemask & FLUX_MSGTYPE_REQUEST))
         goto done; /* DROP */
-        
+
     if (cmb_msg_match_substr (zmsg, "api.event.subscribe.", &name)) {
         sub = subscription_create (ctx->h, FLUX_MSGTYPE_EVENT, name);
         if (zlist_append (c->subscriptions, sub) < 0)
@@ -325,7 +328,7 @@ static int response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     c = zlist_first (ctx->clients);
     while (c && *zmsg) {
         if (!strcmp (uuid, zuuid_str (c->uuid))) {
-            if (zmsg_send_fd_typemask (c->fd, FLUX_MSGTYPE_RESPONSE, zmsg) < 0)
+            if (zfd_send_typemask (c->fd, FLUX_MSGTYPE_RESPONSE, zmsg) < 0)
                 zmsg_destroy (zmsg);
             break;
         }
@@ -354,7 +357,7 @@ static int event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             if (subscription_match (c, FLUX_MSGTYPE_EVENT, tag)) {
                 if (!(cpy = zmsg_dup (*zmsg)))
                     oom ();
-                if (zmsg_send_fd_typemask (c->fd, FLUX_MSGTYPE_EVENT, &cpy) < 0)
+                if (zfd_send_typemask (c->fd, FLUX_MSGTYPE_EVENT, &cpy) < 0)
                     zmsg_destroy (&cpy);
             }
             c = zlist_next (ctx->clients);

@@ -42,8 +42,9 @@
 #include <assert.h>
 #include <zmq.h>
 
-#include "util.h"
 #include "log.h"
+#include "xzmalloc.h"
+#include "jsonutil.h"
 
 int util_json_size (json_object *o)
 {

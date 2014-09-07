@@ -34,10 +34,11 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "util.h"
 #include "veb.h"
-#include "nodeset.h"
 #include "log.h"
+#include "monotime.h"
+
+#include "nodeset.h"
 
 static const int string_initsize = 4096;
 static const uint32_t veb_minsize = 1<<10;

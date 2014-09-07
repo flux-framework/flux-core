@@ -48,7 +48,9 @@
 
 #include "log.h"
 #include "zmsg.h"
-#include "util.h"
+#include "zdump.h"
+#include "jsonutil.h"
+#include "xzmalloc.h"
 
 #include "flux.h"
 #include "handle.h"
@@ -122,7 +124,7 @@ int flux_request_sendmsg (flux_t h, zmsg_t **zmsg)
         return -1;
     }
     if (h->flags & FLUX_FLAGS_TRACE)
-        zmsg_dump_compact (*zmsg, flux_msgtype_shortstr (FLUX_MSGTYPE_REQUEST));
+        zdump_fprint (stderr, *zmsg, flux_msgtype_shortstr (FLUX_MSGTYPE_REQUEST));
 
     return h->ops->request_sendmsg (h->impl, zmsg);
 }
@@ -137,7 +139,7 @@ zmsg_t *flux_request_recvmsg (flux_t h, bool nonblock)
     }
     zmsg = h->ops->request_recvmsg (h->impl, nonblock);
     if (zmsg && h->flags & FLUX_FLAGS_TRACE)
-        zmsg_dump_compact (zmsg, flux_msgtype_shortstr (FLUX_MSGTYPE_REQUEST));
+        zdump_fprint (stderr, zmsg, flux_msgtype_shortstr (FLUX_MSGTYPE_REQUEST));
 
     return zmsg;
 }
@@ -149,7 +151,7 @@ int flux_response_sendmsg (flux_t h, zmsg_t **zmsg)
         return -1;
     }
     if (h->flags & FLUX_FLAGS_TRACE)
-        zmsg_dump_compact (*zmsg, flux_msgtype_shortstr(FLUX_MSGTYPE_RESPONSE));
+        zdump_fprint (stderr, *zmsg, flux_msgtype_shortstr(FLUX_MSGTYPE_RESPONSE));
 
     return h->ops->response_sendmsg (h->impl, zmsg);
 }
@@ -164,7 +166,7 @@ zmsg_t *flux_response_recvmsg (flux_t h, bool nonblock)
     }
     zmsg = h->ops->response_recvmsg (h->impl, nonblock);
     if (zmsg && h->flags & FLUX_FLAGS_TRACE)
-        zmsg_dump_compact (zmsg, flux_msgtype_shortstr (FLUX_MSGTYPE_RESPONSE));
+        zdump_fprint (stderr, zmsg, flux_msgtype_shortstr (FLUX_MSGTYPE_RESPONSE));
 
     return zmsg;
 }
@@ -189,7 +191,7 @@ zmsg_t *flux_event_recvmsg (flux_t h, bool nonblock)
     }
     zmsg = h->ops->event_recvmsg (h->impl, nonblock);
     if (zmsg && h->flags & FLUX_FLAGS_TRACE)
-        zmsg_dump_compact (zmsg, flux_msgtype_shortstr (FLUX_MSGTYPE_EVENT));
+        zdump_fprint (stderr, zmsg, flux_msgtype_shortstr (FLUX_MSGTYPE_EVENT));
 
     return zmsg;
 }

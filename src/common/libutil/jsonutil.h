@@ -1,36 +1,7 @@
-#ifndef _HAVE_CMB_UTIL_H
-#define _HAVE_CMB_UTIL_H
+#ifndef _UTIL_JSONUTIL_H
+#define _UTIL_JSONUTIL_H
 
-#include <time.h>
-#include <stdbool.h>
 #include <json/json.h>
-
-/* 's' contains a comma-delimited list of integers.
- * Parse and return ints in an array (iap), and its length in lenp.
- * Caller must free.
- */
-int getints (char *s, int **iap, int *lenp);
-
-/* Memory allocation functions that call oom() on allocation error.
- */
-void *xzmalloc (size_t size);
-char *xstrdup (const char *s);
-
-double monotime_since (struct timespec t0); /* milliseconds */
-void monotime (struct timespec *tp);
-bool monotime_isset (struct timespec t);
-
-/* Get integer, string, or comma delimited array of ints from the environment
- * by name, or if not set, return (copy in string/int* case) of default arg.
- */
-int env_getint (char *name, int dflt);
-char *env_getstr (char *name, char *dflt);
-int env_getints (char *name, int **iap, int *lenp, int dflt_ia[], int dflt_len);
-int setenvf (const char *name, int overwrite, const char *fmt, ...);
-
-/* Return a string with argcv elements space-delimited.  Caller must free.
- */
-char *argv_concat (int argc, char *argv[]);
 
 /* Calculate encoded size of JSON object.
  */
@@ -69,8 +40,7 @@ bool util_json_match (json_object *o1, json_object *o2);
 struct rusage;
 json_object *rusage_to_json (struct rusage *ru);
 
-
-#endif /* !_HAVE_CMB_UTIL_H */
+#endif /* !UTIL_JSONUTIL_H */
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

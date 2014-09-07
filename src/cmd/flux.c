@@ -41,7 +41,8 @@
 #include <sys/param.h>
 
 #include "log.h"
-#include "util.h"
+#include "xzmalloc.h"
+#include "setenvf.h"
 
 static char  flux_exe_path [MAXPATHLEN];
 static char *flux_exe_dir;

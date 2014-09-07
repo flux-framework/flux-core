@@ -36,8 +36,8 @@
 #include <czmq.h>
 
 #include "flux.h"
-#include "util.h"
 #include "zmsg.h"
+#include "zdump.h"
 #include "log.h"
 #include "security.h"
 #include "event.h"
@@ -259,7 +259,7 @@ static int snoop_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
                     zmsg_dump (zmsg);
                 } else {
                     type = strtoul (typestr, NULL, 10);
-                    zmsg_dump_compact (zmsg, flux_msgtype_shortstr (type));
+                    zdump_fprint (stderr, zmsg, flux_msgtype_shortstr (type));
                 }
             }
         }

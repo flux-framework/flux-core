@@ -22,67 +22,33 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* flux-info.c - flux info subcommand */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <getopt.h>
-#include <json/json.h>
-#include <assert.h>
-#include <libgen.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <string.h>
 
-#include "flux.h"
 #include "log.h"
+#include "xzmalloc.h"
 
-#define OPTIONS "h"
-static const struct option longopts[] = {
-    {"help",       no_argument,        0, 'h'},
-    { 0, 0, 0, 0 },
-};
-
-void usage (void)
+void *xzmalloc (size_t size)
 {
-    fprintf (stderr, 
-"Usage: flux-info\n"
-);
-    exit (1);
+    void *new;
+
+    new = malloc (size);
+    if (!new)
+        oom ();
+    memset (new, 0, size);
+    return new;
 }
 
-int main (int argc, char *argv[])
+char *xstrdup (const char *s)
 {
-    flux_t h;
-    int ch;
-    int rank, size;
-    bool treeroot;
-
-    log_init ("flux-info");
-
-    while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
-        switch (ch) {
-            case 'h': /* --help */
-                usage ();
-                break;
-            default:
-                usage ();
-                break;
-        }
-    }
-    if (optind != argc)
-        usage ();
-
-    if (!(h = cmb_init ()))
-        err_exit ("cmb_init");
-
-    if (flux_info (h, &rank, &size, &treeroot) < 0)
-        err_exit ("flux_info");
-    printf ("rank=%d\n", rank);
-    printf ("size=%d\n", size);
-    printf ("treeroot=%s\n", treeroot ? "true" : "false");
-
-    flux_handle_destroy (&h);
-    log_fini ();
-    return 0;
+    char *cpy = strdup (s);
+    if (!cpy)
+        oom ();
+    return cpy;
 }
 
 /*

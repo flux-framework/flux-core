@@ -33,7 +33,6 @@
 #include <libgen.h>
 
 #include "flux.h"
-#include "util.h"
 #include "zmsg.h"
 #include "log.h"
 

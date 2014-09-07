@@ -47,7 +47,6 @@
 
 #include "log.h"
 #include "zmsg.h"
-#include "util.h"
 #include "flux.h"
 #include "shortjson.h"
 

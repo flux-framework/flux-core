@@ -22,67 +22,44 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* flux-info.c - flux info subcommand */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <getopt.h>
-#include <json/json.h>
-#include <assert.h>
-#include <libgen.h>
+#include <time.h>
 
-#include "flux.h"
-#include "log.h"
+#include "monotime.h"
 
-#define OPTIONS "h"
-static const struct option longopts[] = {
-    {"help",       no_argument,        0, 'h'},
-    { 0, 0, 0, 0 },
-};
-
-void usage (void)
+static struct timespec ts_diff (struct timespec start, struct timespec end)
 {
-    fprintf (stderr, 
-"Usage: flux-info\n"
-);
-    exit (1);
+        struct timespec temp;
+        if ((end.tv_nsec-start.tv_nsec)<0) {
+                temp.tv_sec = end.tv_sec-start.tv_sec-1;
+                temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+        } else {
+                temp.tv_sec = end.tv_sec-start.tv_sec;
+                temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+        }
+        return temp;
 }
 
-int main (int argc, char *argv[])
+double monotime_since (struct timespec t0)
 {
-    flux_t h;
-    int ch;
-    int rank, size;
-    bool treeroot;
+    struct timespec ts, d;
+    clock_gettime (CLOCK_MONOTONIC, &ts);
 
-    log_init ("flux-info");
+    d = ts_diff (t0, ts);
 
-    while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
-        switch (ch) {
-            case 'h': /* --help */
-                usage ();
-                break;
-            default:
-                usage ();
-                break;
-        }
-    }
-    if (optind != argc)
-        usage ();
+    return ((double) d.tv_sec * 1000 + (double) d.tv_nsec / 1000000);
+}
 
-    if (!(h = cmb_init ()))
-        err_exit ("cmb_init");
+void monotime (struct timespec *tp)
+{
+    clock_gettime (CLOCK_MONOTONIC, tp);
+}
 
-    if (flux_info (h, &rank, &size, &treeroot) < 0)
-        err_exit ("flux_info");
-    printf ("rank=%d\n", rank);
-    printf ("size=%d\n", size);
-    printf ("treeroot=%s\n", treeroot ? "true" : "false");
-
-    flux_handle_destroy (&h);
-    log_fini ();
-    return 0;
+bool monotime_isset (struct timespec t)
+{
+    return (t.tv_sec || t.tv_nsec);
 }
 
 /*

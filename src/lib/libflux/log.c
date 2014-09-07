@@ -45,7 +45,8 @@
 
 #include "log.h"
 #include "zmsg.h"
-#include "util.h"
+#include "jsonutil.h"
+#include "xzmalloc.h"
 #include "flux.h"
 
 typedef struct {

@@ -33,7 +33,7 @@
 #include <libgen.h>
 
 #include "flux.h"
-#include "util.h"
+#include "xzmalloc.h"
 #include "log.h"
 #include "nodeset.h"
 #include "shortjson.h"

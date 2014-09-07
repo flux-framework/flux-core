@@ -8,12 +8,26 @@ noinst_LTLIBRARIES = libutil.la
 libutil_la_SOURCES = \
 	log.c \
 	log.h \
-	json.c \
-	time.c \
-	util.c \
-	util.h \
+	xzmalloc.c \
+	xzmalloc.h \
+	jsonutil.c \
+	jsonutil.h \
+	monotime.c \
+	monotime.h \
+	setenvf.c \
+	setenvf.h \
+	argv.c \
+	argv.h \
+	env.c \
+	env.h \
 	zmsg.c \
 	zmsg.h \
+	zdump.c \
+	zdump.h \
+	zconnect.c \
+	zconnect.h \
+	zfd.c \
+	zfd.h \
 	lsdfatal.c \
 	optparse.c \
 	optparse.h \

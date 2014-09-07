@@ -47,13 +47,12 @@
 #include <json/json.h>
 
 #include "zmsg.h"
-#include "util.h"
 #include "log.h"
-//#include "plugin.h"
 #include "flux.h"
 #include "shortjson.h"
-
+#include "xzmalloc.h"
 #include "reduce.h"
+
 
 typedef struct hwm_struct *hwm_t;
 

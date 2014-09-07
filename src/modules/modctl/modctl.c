@@ -47,13 +47,15 @@
 #include <json/json.h>
 
 #include "zmsg.h"
-#include "util.h"
+#include "xzmalloc.h"
 #include "log.h"
-#include "flux.h"
-#include "kvs.h"
 #include "shortjson.h"
-#include "reduce.h"
 #include "nodeset.h"
+
+#include "flux.h"
+
+#include "reduce.h"
+#include "kvs.h"
 
 typedef struct {
     flux_t h;

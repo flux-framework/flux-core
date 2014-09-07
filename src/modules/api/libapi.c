@@ -47,9 +47,10 @@
 
 #include "log.h"
 #include "zmsg.h"
-#include "flux.h"
-#include "cmb.h"
-#include "util.h"
+#include "jsonutil.h"
+#include "xzmalloc.h"
+#include "zfd.h"
+
 #include "flux.h"
 #include "handle.h"
 
@@ -86,7 +87,7 @@ static int cmb_request_sendmsg (void *impl, zmsg_t **zmsg)
 {
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
-    return zmsg_send_fd_typemask (c->fd, FLUX_MSGTYPE_REQUEST, zmsg);
+    return zfd_send_typemask (c->fd, FLUX_MSGTYPE_REQUEST, zmsg);
 }
 
 static void append_deferred (cmb_t *c, zmsg_t **zmsg, int typemask)
@@ -131,7 +132,7 @@ static zmsg_t *cmb_response_recvmsg (void *impl, bool nonblock)
 
     assert (c->magic == CMB_CTX_MAGIC);
     if (!(z = zlist_pop (c->resp))) {
-        while ((z = zmsg_recv_fd_typemask (c->fd, &typemask, nonblock)) 
+        while ((z = zfd_recv_typemask (c->fd, &typemask, nonblock)) 
                                         && !(typemask & FLUX_MSGTYPE_RESPONSE))
             append_deferred (c, &z, typemask);
     }
@@ -170,7 +171,7 @@ static zmsg_t *cmb_event_recvmsg (void *impl, bool nonblock)
 
     assert (c->magic == CMB_CTX_MAGIC);
     if (!(z = zlist_pop (c->event))) {
-        while ((z = zmsg_recv_fd_typemask (c->fd, &typemask, nonblock))
+        while ((z = zfd_recv_typemask (c->fd, &typemask, nonblock))
                                         && !(typemask & FLUX_MSGTYPE_EVENT))
             append_deferred (c, &z, typemask);
     }
@@ -210,7 +211,7 @@ static int unix_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
     zmsg_t *z;
 
     if (item->revents & ZMQ_POLLIN) {
-        if ((z = zmsg_recv_fd_typemask (c->fd, &typemask, nonblock))) {
+        if ((z = zfd_recv_typemask (c->fd, &typemask, nonblock))) {
             if (flux_handle_event_msg (c->h, typemask, &z) < 0) {
                 cmb_reactor_stop (c, -1);
                 goto done;

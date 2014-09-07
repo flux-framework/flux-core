@@ -43,7 +43,7 @@
 #include <dlfcn.h>
 
 #include "log.h"
-#include "util.h"
+#include "xzmalloc.h"
 #include "pmi.h"
 
 #define PMI_SUCCESS                  0

@@ -51,12 +51,17 @@
 
 #include "log.h"
 #include "zmsg.h"
-#include "util.h"
-#include "plugin.h"
+#include "zdump.h"
+#include "xzmalloc.h"
+#include "nodeset.h"
+#include "jsonutil.h"
+
 #include "flux.h"
+
 #include "handle.h"
 #include "security.h"
-#include "nodeset.h"
+
+#include "plugin.h"
 #include "pmi.h"
 
 #ifndef ZMQ_IMMEDIATE
@@ -1603,7 +1608,7 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
             flux_respond_errnum (ctx->h, zmsg, EPROTO);
         } else {
-            s = zmsg_route_str (*zmsg, 1);
+            s = zdump_routestr (*zmsg, 1);
             util_json_object_add_string (request, "route", s);
             flux_respond (ctx->h, zmsg, request);
         }

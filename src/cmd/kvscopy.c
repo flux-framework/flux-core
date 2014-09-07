@@ -33,7 +33,8 @@
 #include <libgen.h>
 
 #include "flux.h"
-#include "util.h"
+#include "xzmalloc.h"
+#include "jsonutil.h"
 #include "log.h"
 #include "kvs.h"
 

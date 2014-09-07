@@ -22,62 +22,38 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
+/* zmq.c - wrapper functions for zmq prototyping */
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <stdlib.h>
 #include <stdio.h>
-#include <errno.h>
-#include <string.h>
-#include <time.h>
-#include <sys/resource.h>
-#include <json/json.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <math.h>
-#include <limits.h>
-#include <assert.h>
 #include <zmq.h>
+#include <czmq.h>
 
-#include "util.h"
 #include "log.h"
+#include "zconnect.h"
 
-static struct timespec ts_diff (struct timespec start, struct timespec end)
+void zconnect (zctx_t *zctx, void **sp, int type, char *uri, int hwm, char *id)
 {
-        struct timespec temp;
-        if ((end.tv_nsec-start.tv_nsec)<0) {
-                temp.tv_sec = end.tv_sec-start.tv_sec-1;
-                temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
-        } else {
-                temp.tv_sec = end.tv_sec-start.tv_sec;
-                temp.tv_nsec = end.tv_nsec-start.tv_nsec;
-        }
-        return temp;
+    *sp = zsocket_new (zctx, type);
+    if (hwm != -1)
+        zsocket_set_hwm (*sp, hwm);
+    if (id != NULL)
+        zsocket_set_identity (*sp, id);
+    if (zsocket_connect (*sp, "%s", uri) < 0)
+        err_exit ("zsocket_connect: %s", uri);
 }
 
-double monotime_since (struct timespec t0)
+void zbind (zctx_t *zctx, void **sp, int type, char *uri, int hwm)
 {
-    struct timespec ts, d;
-    clock_gettime (CLOCK_MONOTONIC, &ts);
-
-    d = ts_diff (t0, ts);
-
-    return ((double) d.tv_sec * 1000 + (double) d.tv_nsec / 1000000);
+    *sp = zsocket_new (zctx, type);
+    if (hwm != -1)
+        zsocket_set_hwm (*sp, hwm);
+    if (zsocket_bind (*sp, "%s", uri) < 0)
+        err_exit ("zsocket_bind: %s", uri);
 }
-
-void monotime (struct timespec *tp)
-{
-    clock_gettime (CLOCK_MONOTONIC, tp);
-}
-
-bool monotime_isset (struct timespec t)
-{
-    return (t.tv_sec || t.tv_nsec);
-}
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
+

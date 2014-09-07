@@ -82,10 +82,14 @@
 #include <fnmatch.h>
 
 #include "zmsg.h"
-#include "flux.h"
-#include "util.h"
+#include "jsonutil.h"
+#include "xzmalloc.h"
+#include "monotime.h"
 #include "tstat.h"
 #include "log.h"
+
+#include "flux.h"
+
 #include "waitqueue.h"
 
 typedef char href_t[41];

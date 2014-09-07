@@ -38,8 +38,9 @@
 #include <uuid/uuid.h>
 #include <assert.h>
 
-#include "util.h"
 #include "log.h"
+#include "jsonutil.h"
+
 #include "tstat.h"
 
 

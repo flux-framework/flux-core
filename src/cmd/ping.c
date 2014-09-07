@@ -33,7 +33,9 @@
 #include <libgen.h>
 
 #include "flux.h"
-#include "util.h"
+#include "xzmalloc.h"
+#include "jsonutil.h"
+#include "monotime.h"
 #include "log.h"
 
 #define OPTIONS "hp:d:r:"

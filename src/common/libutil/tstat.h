@@ -1,5 +1,5 @@
-#ifndef _HAVE_CMB_TSTAT_H
-#define _HAVE_CMB_TSTAT_H
+#ifndef _UTIL_TSTAT_H
+#define _UTIL_TSTAT_H
 
 typedef struct {
     double min, max;
@@ -18,7 +18,8 @@ int tstat_count (tstat_t *ts);
 void util_json_object_add_tstat (json_object *o, const char *name,
                                  tstat_t *ts, double scale);
 
-#endif /* !_HAVE_CMB_TSTAT_H */
+
+#endif /* !_UTIL_TSTAT_H */
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

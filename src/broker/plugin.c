@@ -49,11 +49,16 @@
 
 #include "log.h"
 #include "zmsg.h"
-#include "util.h"
-#include "plugin.h"
+#include "zdump.h"
+#include "zconnect.h"
+#include "jsonutil.h"
+#include "xzmalloc.h"
 
 #include "flux.h"
 #include "handle.h"
+
+#include "plugin.h"
+
 
 typedef struct {
     int request_tx;
@@ -309,9 +314,9 @@ static int ping_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     }
     /* Route string will not include the endpoints.
      * On arrival here, uuid of dst plugin has been stripped.
-     * The '1' arg to zmsg_route_str strips the uuid of the sender.
+     * The '1' arg to zdump_routestr strips the uuid of the sender.
      */
-    s = zmsg_route_str (*zmsg, 1);
+    s = zdump_routestr (*zmsg, 1);
     util_json_object_add_string (o, "route", s);
     if (flux_respond (h, zmsg, o) < 0) {
         err ("%s: flux_respond", __FUNCTION__);

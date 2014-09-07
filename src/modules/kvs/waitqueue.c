@@ -34,10 +34,12 @@
 #include <czmq.h>
 #include <json/json.h>
 
-#include "flux.h"
 #include "zmsg.h"
 #include "log.h"
-#include "util.h"
+#include "xzmalloc.h"
+
+#include "flux.h"
+
 #include "waitqueue.h"
 
 struct cb_args {

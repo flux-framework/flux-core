@@ -129,9 +129,9 @@
 #include <munge.h>
 
 #include "flux.h"
-#include "util.h"
 #include "log.h"
 #include "security.h"
+#include "xzmalloc.h"
 
 #if ZMQ_VERSION_MAJOR >= 4
 #define HAVE_ZAUTH 1

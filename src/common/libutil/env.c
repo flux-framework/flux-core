@@ -26,60 +26,10 @@
 #include "config.h"
 #endif
 #include <stdlib.h>
-#include <stdio.h>
-#include <errno.h>
-#include <string.h>
-#include <time.h>
-#include <sys/resource.h>
-#include <json/json.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <math.h>
-#include <limits.h>
-#include <assert.h>
-#include <zmq.h>
 
-#include "util.h"
+#include "env.h"
 #include "log.h"
-
-void *xzmalloc (size_t size)
-{
-    void *new;
-
-    new = malloc (size);
-    if (!new)
-        oom ();
-    memset (new, 0, size);
-    return new;
-}
-
-char *xstrdup (const char *s)
-{
-    char *cpy = strdup (s);
-    if (!cpy)
-        oom ();
-    return cpy;
-}
-
-int setenvf (const char *name, int overwrite, const char *fmt, ...)
-{
-    va_list ap;
-    char *val;
-    int rc;
-
-    va_start (ap, fmt);
-    rc = vasprintf (&val, fmt, ap);
-    va_end (ap);
-    if (rc < 0)
-        return (rc);
-
-    rc = setenv (name, val, overwrite);
-    free (val);
-    return (rc);
-}
+#include "xzmalloc.h"
 
 int env_getint (char *name, int dflt)
 {
@@ -111,7 +61,7 @@ static int _strtoia (char *s, int *ia, int ia_len)
     return len;
 }
 
-int getints (char *s, int **iap, int *lenp)
+static int getints (char *s, int **iap, int *lenp)
 {
     int len = _strtoia (s, NULL, 0);
     int *ia = malloc (len * sizeof (int));
@@ -145,23 +95,6 @@ int env_getints (char *name, int **iap, int *lenp, int dflt_ia[], int dflt_len)
     *iap = ia;
     return 0;
 }
-
-char *argv_concat (int argc, char *argv[])
-{
-    int i, len = 0;
-    char *s;
-
-    for (i = 0; i < argc; i++)
-        len += strlen (argv[i]) + 1;
-    s = xzmalloc (len + 1);
-    for (i = 0; i < argc; i++) {
-        strcat (s, argv[i]);
-        if (i < argc - 1)
-            strcat (s, " ");
-    }
-    return s;
-}
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

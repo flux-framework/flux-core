@@ -32,9 +32,10 @@
 #include <assert.h>
 #include <libgen.h>
 
-#include "flux.h"
-#include "util.h"
+#include "xzmalloc.h"
 #include "log.h"
+
+#include "flux.h"
 #include "kvs.h"
 
 #define OPTIONS "hdCDNqm:s:r:vV:"

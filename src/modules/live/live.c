@@ -87,7 +87,7 @@
 #include <json/json.h>
 
 #include "zmsg.h"
-#include "util.h"
+#include "xzmalloc.h"
 #include "log.h"
 #include "flux.h"
 #include "shortjson.h"

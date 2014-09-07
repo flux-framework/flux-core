@@ -1,7 +1,11 @@
 /* nodeset_t - set of unsigned integer ranks */
 
-#ifndef NODESET_H
-#define NODESET_H
+#ifndef _UTIL_NODESET_H
+#define _UTIL_NODESET_H
+
+#include <stdint.h>
+#include <stdbool.h>
+
 typedef struct nodeset_struct *nodeset_t;
 typedef struct nodeset_itr_struct *nodeset_itr_t;
 
@@ -95,7 +99,7 @@ void nodeset_itr_rewind (nodeset_itr_t itr);
 /* Self-test of this class.
  */
 void nodeset_selftest (void);
-#endif /* !NODESET_H */
+#endif /* !_UTIL_NODESET_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
