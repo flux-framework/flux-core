@@ -13,6 +13,8 @@ declare attach_rank=
 declare run_rank=
 declare shutdown=
 
+declare path_cmbd="/usr/bin/cmbd"
+
 declare cmd_wrapper=
 declare cmd_prefix=
 
@@ -20,18 +22,14 @@ declare cmbd_opts="--logdest=cmbd.log"
 declare cmbd_size=
 declare cmbd_sid="screen"
 declare cmbd_kary=
-declare cmbd_modules="modctl,api,barrier,live,log,kvs,job,rexec,resrc,sched[0]"
-declare cmbd_modopts="\
-  sched:rdl-conf=conf/hype.lua\
-  kvs:conf.log.reduction-timeout-msec=100\
-  kvs:conf.log.circular-buffer-entries=100000\
-  kvs:conf.log.persist-level=debug"
+declare cmbd_modules="api,kvs,modctl,live"
+declare cmbd_modopts=
 
 declare -r path_getopt="/usr/bin/getopt"
-declare -r short_opts="hN:gVs:M:O:k:Xa:r:SL"
+declare -r short_opts="hN:gVs:M:O:k:Xa:r:SLp:"
 declare -r long_opts="\
 help,nnodes:,gdb,valgrind,sid:,module:,modopt:,k-ary:,noexec,attach:,run:,\
-shutdown,list"
+shutdown,list,path-cmbd:"
 
 declare -r usage="\
 Usage: $prog OPTIONS [command [args...]]\n\
@@ -42,10 +40,11 @@ Usage: $prog OPTIONS [command [args...]]\n\
    -M,--module NAME            load additional module\n\
    -O,--modopt NAME:var=val    set additional module option\n\
    -k,--k-ary N                set reduction tree fanout\n\
-   -X,--noexec                 print command lines without running them
-   -a,--attach N               attach to rank N
-   -r,--run N                  run command with FLUX_TMPDIR set for rank N
-   -L,--list                   list sessions
+   -X,--noexec                 print command lines without running them\n\
+   -p,--path-cmbd PATH         run a cmbd from non-default location\n\
+   -a,--attach N               attach to rank N\n\
+   -r,--run N                  run command with FLUX_TMPDIR set for rank N\n\
+   -L,--list                   list sessions\n\
    -S,--shutdown               shutdown session"
 
 usage()    { echo -e "$usage" >&2; }
@@ -82,6 +81,7 @@ while true; do
         -r|--run)        run_rank=$2;                        shift 2 ;;
         -S|--shutdown)   shutdown=1;                         shift 1 ;;
         -L|--list)       listscreens=1;                      shift 1 ;;
+        -p|--path-cmbd)   path_cmbd="$2";                     shift 2 ;;
         --)              shift; break                                ;;
         *)               usage; exit 1                               ;;
     esac
@@ -122,6 +122,8 @@ fi
 
 #test -n "$cmd_wrapper" || set -x
 
+test -x $path_cmbd || die "$path_cmbd not found or not executable"
+
 $cmd_wrapper pidcheck ${cmbd_sid}
 
 $cmd_wrapper ulimit -c unlimited
@@ -138,7 +140,7 @@ for rank in `seq 0 $(($cmbd_size - 1))`; do
         screen_exec_opts="-X screen"
     fi
     $cmd_wrapper $path_screen -S ${cmbd_sid} ${screen_exec_opts} \
-        ${cmd_prefix} ./cmbd ${cmbd_opts} \
+        ${cmd_prefix} ${path_cmbd} ${cmbd_opts} \
         --rank ${rank} \
         --size ${cmbd_size} \
         ${cmbd_sid:+--sid=${cmbd_sid}} \
