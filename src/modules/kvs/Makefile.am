@@ -1,4 +1,5 @@
 AM_CPPFLAGS = \
+	-I$(top_srcdir)/src/common/liblsd \
 	-I$(top_srcdir)/src/common/libutil \
 	-I$(top_srcdir)/src/lib/libflux \
 	-I$(top_srcdir)/src/modules/api \

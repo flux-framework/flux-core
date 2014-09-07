@@ -10,6 +10,7 @@ exec_path = $(top_builddir)/src/cmd:$(fluxbindir)
 
 AM_CPPFLAGS = \
         -DPLUGIN_PATH=\"$(plugin_path)\" -DEXEC_PATH=\"$(exec_path)\" \
+	-I$(top_srcdir)/src/common/liblsd \
 	-I$(top_srcdir)/src/common/libutil \
 	-I$(top_srcdir)/src/lib/libflux \
 	-I$(top_srcdir)/src/modules/api \

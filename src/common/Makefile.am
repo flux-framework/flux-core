@@ -1,1 +1,1 @@
-SUBDIRS = libutil
+SUBDIRS = liblsd libutil

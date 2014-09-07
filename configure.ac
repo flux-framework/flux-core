@@ -90,6 +90,7 @@ AC_CONFIG_FILES( \
   flux-core.spec \
   src/Makefile \
   src/common/Makefile \
+  src/common/liblsd/Makefile \
   src/common/libutil/Makefile \
   src/lib/Makefile \
   src/lib/libflux/Makefile \

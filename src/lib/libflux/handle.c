@@ -46,7 +46,6 @@
 #include <czmq.h>
 #include <fnmatch.h>
 
-#include "hostlist.h"
 #include "log.h"
 #include "zmsg.h"
 #include "util.h"
