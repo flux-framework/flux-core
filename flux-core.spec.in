@@ -5,9 +5,12 @@ Release: @META_RELEASE@%{?dist}
 Summary: Flux Resource Manager Framework
 License: GPL
 Group: System Environment/Base
-Url: https://code.google.com/p/diskscrub/
+Url: https://github.com/flux-framework/flux-core
 Source0: %{name}-%{version}.tar.gz
 BuildRoot: %{_tmppath}/%{name}-%{version}-root-%(%{__id_u} -n)
+BuildRequires: zeromq4-devel czmq-devel >= 2.2.0
+BuildRequires: munge-devel
+BuildRequires: json-c-devel
 
 %description
 
