@@ -1060,7 +1060,7 @@ static void cmbd_init_socks (ctx_t *ctx)
     }
 
     /* create flux_t handle */
-    ctx->h = handle_create (ctx, &cmbd_handle_ops, 0);
+    ctx->h = flux_handle_create (ctx, &cmbd_handle_ops, 0);
     flux_log_set_facility (ctx->h, "cmbd");
 }
 

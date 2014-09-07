@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* modctlcli.c - client code for modctl */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -50,6 +48,7 @@
 #include "util.h"
 #include "flux.h"
 #include "shortjson.h"
+#include "modctl.h"
 
 int flux_modctl_rm (flux_t h, const char *name)
 {

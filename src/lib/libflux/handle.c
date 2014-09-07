@@ -67,7 +67,7 @@ struct flux_handle_struct {
     zhash_t         *aux;
 };
 
-flux_t handle_create (void *impl, const struct flux_handle_ops *ops, int flags)
+flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags)
 {
     flux_t h = xzmalloc (sizeof (*h));
 
@@ -416,7 +416,7 @@ static bool dispatch_msg_match (dispatch_t *d, const char *tag, int typemask)
     return false;
 }
 
-int handle_event_msg (flux_t h, int typemask, zmsg_t **zmsg)
+int flux_handle_event_msg (flux_t h, int typemask, zmsg_t **zmsg)
 {
     dispatch_t *d;
     char *tag;
@@ -445,7 +445,7 @@ done:
     return rc;
 }
 
-int handle_event_fd (flux_t h, int fd, short events)
+int flux_handle_event_fd (flux_t h, int fd, short events)
 {
     dispatch_t *d;
     int rc = 0;
@@ -462,7 +462,7 @@ int handle_event_fd (flux_t h, int fd, short events)
     return rc;
 }
 
-int handle_event_zs (flux_t h, void *zs, short events)
+int flux_handle_event_zs (flux_t h, void *zs, short events)
 {
     dispatch_t *d;
     int rc = 0;
@@ -479,7 +479,7 @@ int handle_event_zs (flux_t h, void *zs, short events)
     return rc;
 }
 
-int handle_event_tmout (flux_t h, int timer_id)
+int flux_handle_event_tmout (flux_t h, int timer_id)
 {
     dispatch_t *d;
     int rc = 0;

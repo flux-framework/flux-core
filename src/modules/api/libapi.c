@@ -102,18 +102,18 @@ static void append_deferred (cmb_t *c, zmsg_t **zmsg, int typemask)
     *zmsg = NULL;
 }
 
-static int handle_deferred (cmb_t *c)
+static int process_deferred (cmb_t *c)
 {
     zmsg_t *zmsg;
 
     while ((zmsg = zlist_pop (c->event))) {
-        if (handle_event_msg (c->h, FLUX_MSGTYPE_EVENT, &zmsg) < 0) {
+        if (flux_handle_event_msg (c->h, FLUX_MSGTYPE_EVENT, &zmsg) < 0) {
             cmb_reactor_stop (c, -1);
             goto done;
         }
     }
     while ((zmsg = zlist_pop (c->resp))) {
-        if (handle_event_msg (c->h, FLUX_MSGTYPE_RESPONSE, &zmsg) < 0) {
+        if (flux_handle_event_msg (c->h, FLUX_MSGTYPE_RESPONSE, &zmsg) < 0) {
             cmb_reactor_stop (c, -1);
             goto done;
         }
@@ -210,7 +210,7 @@ static int unix_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
 
     if (item->revents & ZMQ_POLLIN) {
         if ((z = zmsg_recv_fd_typemask (c->fd, &typemask, nonblock))) {
-            if (handle_event_msg (c->h, typemask, &z) < 0) {
+            if (flux_handle_event_msg (c->h, typemask, &z) < 0) {
                 cmb_reactor_stop (c, -1);
                 goto done;
             }
@@ -220,7 +220,7 @@ static int unix_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
         cmb_reactor_stop (c, -1);
         goto done;
     }
-    if (handle_deferred (c) < 0)
+    if (process_deferred (c) < 0)
         goto done;
 done:
     ZLOOP_RETURN(c);
@@ -229,10 +229,10 @@ done:
 static int fd_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
 {
     cmb_t *c = arg;
-    if (handle_event_fd (c->h, item->fd, item->revents) < 0)
+    if (flux_handle_event_fd (c->h, item->fd, item->revents) < 0)
         cmb_reactor_stop (c, -1);
     else
-        handle_deferred (c);
+        process_deferred (c);
     ZLOOP_RETURN(c);
 }
 
@@ -263,10 +263,10 @@ static void cmb_reactor_fd_remove (void *impl, int fd, short events)
 static int zs_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
 {
     cmb_t *c = arg;
-    if (handle_event_zs (c->h, item->socket, item->revents) < 0)
+    if (flux_handle_event_zs (c->h, item->socket, item->revents) < 0)
         cmb_reactor_stop (c, -1);
     else
-        handle_deferred (c);
+        process_deferred (c);
     ZLOOP_RETURN(c);
 }
 
@@ -295,10 +295,10 @@ static int tmout_cb (zloop_t *zl, int timer_id, void *arg)
     timeout_t t = arg;
     cmb_t *c = t->c;
 
-    if (handle_event_tmout (c->h, timer_id) < 0)
+    if (flux_handle_event_tmout (c->h, timer_id) < 0)
         cmb_reactor_stop (c, -1);
     else
-        handle_deferred (c);
+        process_deferred (c);
     ZLOOP_RETURN(c);
 }
 
@@ -395,7 +395,7 @@ flux_t cmb_init_full (const char *path, int flags)
             break;
         usleep (100*1000);
     }
-    c->h = handle_create (c, &cmb_ops, flags);
+    c->h = flux_handle_create (c, &cmb_ops, flags);
     return c->h;
 error:
     if (c)

@@ -220,7 +220,7 @@ static void plugin_reactor_stop (void *impl, int rc)
 
 static int fd_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 {
-    if (handle_event_fd (p->h, item->fd, item->revents) < 0)
+    if (flux_handle_event_fd (p->h, item->fd, item->revents) < 0)
         plugin_reactor_stop (p, -1);
     ZLOOP_RETURN(p);
 }
@@ -250,7 +250,7 @@ static void plugin_reactor_fd_remove (void *impl, int fd, short events)
 
 static int zs_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
 {
-    if (handle_event_zs (p->h, item->socket, item->revents) < 0)
+    if (flux_handle_event_zs (p->h, item->socket, item->revents) < 0)
         plugin_reactor_stop (p, -1);
     ZLOOP_RETURN(p);
 }
@@ -273,7 +273,7 @@ static void plugin_reactor_zs_remove (void *impl, void *zs, short events)
 
 static int tmout_cb (zloop_t *zl, int timer_id, plugin_ctx_t p)
 {
-    if (handle_event_tmout (p->h, timer_id) < 0)
+    if (flux_handle_event_tmout (p->h, timer_id) < 0)
         plugin_reactor_stop (p, -1);
     ZLOOP_RETURN(p);
 }
@@ -414,7 +414,7 @@ static void plugin_handle_response (plugin_ctx_t p, zmsg_t *zmsg)
     p->stats.request_rx++;
 
     if (zmsg) {
-        if (handle_event_msg (p->h, FLUX_MSGTYPE_RESPONSE, &zmsg) < 0) {
+        if (flux_handle_event_msg (p->h, FLUX_MSGTYPE_RESPONSE, &zmsg) < 0) {
             plugin_reactor_stop (p, -1);
             goto done;
         }
@@ -460,7 +460,7 @@ static int svc_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
         goto done;
     }
     if (zmsg) {
-        if (handle_event_msg (p->h, FLUX_MSGTYPE_REQUEST, &zmsg) < 0) {
+        if (flux_handle_event_msg (p->h, FLUX_MSGTYPE_REQUEST, &zmsg) < 0) {
             plugin_reactor_stop (p, -1);
             goto done;
         }
@@ -485,7 +485,7 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
     p->stats.event_rx++;
 
     if (zmsg) {
-        if (handle_event_msg (p->h, FLUX_MSGTYPE_EVENT, &zmsg) < 0) {
+        if (flux_handle_event_msg (p->h, FLUX_MSGTYPE_EVENT, &zmsg) < 0) {
             plugin_reactor_stop (p, -1);
             goto done;
         }
@@ -719,7 +719,7 @@ plugin_ctx_t plugin_create (flux_t h, const char *path, zhash_t *args)
     if (!(p->deferred_responses = zlist_new ()))
         oom ();
 
-    p->h = handle_create (p, &plugin_handle_ops, 0);
+    p->h = flux_handle_create (p, &plugin_handle_ops, 0);
     flux_log_set_facility (p->h, p->name);
 
     /* connect sockets in the parent, then use them in the thread */

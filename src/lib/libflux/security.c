@@ -128,7 +128,7 @@
 #include <czmq.h>
 #include <munge.h>
 
-#include "cmb.h"
+#include "flux.h"
 #include "util.h"
 #include "log.h"
 #include "security.h"

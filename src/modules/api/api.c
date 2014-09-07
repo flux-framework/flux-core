@@ -47,7 +47,7 @@
 #include <json/json.h>
 
 #include "zmsg.h"
-#include "plugin.h"
+#include "flux.h"
 #include "util.h"
 #include "log.h"
 

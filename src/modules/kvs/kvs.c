@@ -82,7 +82,7 @@
 #include <fnmatch.h>
 
 #include "zmsg.h"
-#include "plugin.h"
+#include "flux.h"
 #include "util.h"
 #include "tstat.h"
 #include "log.h"

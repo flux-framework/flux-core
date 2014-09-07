@@ -94,6 +94,11 @@ AC_CONFIG_FILES( \
   src/lib/Makefile \
   src/lib/libflux/Makefile \
   src/broker/Makefile \
+  src/cmd/Makefile \
+  src/modules/Makefile \
+  src/modules/api/Makefile \
+  src/modules/kvs/Makefile \
+  src/modules/modctl/Makefile \
 )
 
 AC_OUTPUT

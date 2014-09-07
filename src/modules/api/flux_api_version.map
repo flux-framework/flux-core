@@ -1,5 +1,5 @@
 { global:
-    flux_*;
+    cmb_*;
     local: *;
 };
 

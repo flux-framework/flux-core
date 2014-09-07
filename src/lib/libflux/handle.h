@@ -36,11 +36,11 @@ struct flux_handle_ops {
 
 /* These functions should only be called from handle implementations.
  */
-flux_t handle_create (void *impl, const struct flux_handle_ops *ops, int flags);
-int handle_event_msg (flux_t h, int typemask, zmsg_t **zmsg);
-int handle_event_fd (flux_t h, int fd, short revents);
-int handle_event_zs (flux_t h, void *zs, short revents);
-int handle_event_tmout (flux_t h, int timer_id);
+flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags);
+int flux_handle_event_msg (flux_t h, int typemask, zmsg_t **zmsg);
+int flux_handle_event_fd (flux_t h, int fd, short revents);
+int flux_handle_event_zs (flux_t h, void *zs, short revents);
+int flux_handle_event_tmout (flux_t h, int timer_id);
 
 #endif /* !HAVE_FLUX_HANDLE_H */
 

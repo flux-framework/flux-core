@@ -104,10 +104,6 @@ json_object *flux_lsmod (flux_t h, int rank);
 int flux_insmod (flux_t h, int rank, const char *path, int flags,
                  json_object *args);
 
-int flux_modctl_rm (flux_t h, const char *name);
-int flux_modctl_ins (flux_t h, const char *name);
-int flux_modctl_update (flux_t h);
-
 json_object *flux_lspeer (flux_t h, int rank);
 
 /* Accessor for zeromq context.

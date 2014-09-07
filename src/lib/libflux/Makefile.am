@@ -1,14 +1,13 @@
 AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = \
-	-I../../common/libutil
+	-I$(top_srcdir)/src/common/libutil
 
-noinst_LTLIBRARIES = \
+lib_LTLIBRARIES = \
 	libflux.la
 
 libflux_la_SOURCES = \
 	log.c \
-	api.c \
 	broker.c \
 	handle.c \
 	reduce.c \
@@ -16,3 +15,5 @@ libflux_la_SOURCES = \
 
 libflux_la_LIBADD = \
 	$(top_builddir)/src/common/libutil/libutil.la
+
+libflux_la_LDFLAGS = -Wl,--version-script=flux_version.map
