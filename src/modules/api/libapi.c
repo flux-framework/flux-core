@@ -52,7 +52,6 @@
 #include "zfd.h"
 
 #include "flux.h"
-#include "handle.h"
 
 typedef struct timeout_struct *timeout_t;
 

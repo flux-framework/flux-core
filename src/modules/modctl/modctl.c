@@ -196,7 +196,7 @@ static int push_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     JSON request = NULL;
     int seq;
 
-    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+    if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
             || !Jget_int (request, "seq", &seq)) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
@@ -376,7 +376,7 @@ static int ins_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     const char *name;
     int rc = 0;
 
-    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+    if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
             || !Jget_str (request, "name", &name)) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
@@ -403,7 +403,7 @@ static int rm_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     int fl = FLUX_MOD_FLAGS_MANAGED;
     int rc = 0;
 
-    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+    if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
             || !Jget_str (request, "name", &name)) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
@@ -428,7 +428,7 @@ static int update_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     JSON request = NULL;
     int rc = 0;
 
-    if (cmb_msg_decode (*zmsg, NULL, &request) < 0) {
+    if (flux_msg_decode (*zmsg, NULL, &request) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }

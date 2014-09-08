@@ -33,6 +33,8 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
 
 #include "veb.h"
 #include "log.h"

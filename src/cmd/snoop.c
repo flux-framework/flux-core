@@ -35,12 +35,10 @@
 #include <zmq.h>
 #include <czmq.h>
 
-#include "flux.h"
-#include "zmsg.h"
 #include "zdump.h"
 #include "log.h"
-#include "security.h"
-#include "event.h"
+
+#include "flux.h"
 
 #define OPTIONS "hanN:vl"
 static const struct option longopts[] = {

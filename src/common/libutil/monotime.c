@@ -26,6 +26,7 @@
 #include "config.h"
 #endif
 #include <time.h>
+#include <stdbool.h>
 
 #include "monotime.h"
 

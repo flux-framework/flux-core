@@ -27,19 +27,23 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <stdio.h>
 #include <getopt.h>
 #include <json/json.h>
 #include <assert.h>
 #include <libgen.h>
 #include <dlfcn.h>
+#include <zmq.h>
+#include <czmq.h>
+#include <stdarg.h>
+#include <stdbool.h>
 
-#include "flux.h"
 #include "xzmalloc.h"
 #include "jsonutil.h"
 #include "log.h"
 #include "shortjson.h"
-#include "kvs.h"
-#include "modctl.h"
+
+#include "flux.h"
 
 #define OPTIONS "+hr:u"
 static const struct option longopts[] = {

@@ -11,10 +11,11 @@ typedef void (*FluxFreeFn)(void *arg);
 
 typedef struct flux_handle_struct *flux_t;
 
-#include <czmq.h>
-
 #include "reactor.h"
 #include "security.h"
+#include "reduce.h"
+#include "message.h"
+#include "handle.h"
 
 #include "cmb.h"
 #include "kvs.h"

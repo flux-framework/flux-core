@@ -41,6 +41,7 @@
 #include <stdbool.h>
 #include <sys/time.h>
 #include <dlfcn.h>
+#include <stdarg.h>
 
 #include "log.h"
 #include "xzmalloc.h"

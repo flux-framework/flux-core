@@ -24,9 +24,6 @@
 #ifndef HAVE_LOG_H
 #define HAVE_LOG_H
 
-#include <syslog.h>
-#include <stdarg.h>
-
 void log_init (char *p);
 void log_fini (void);
 void log_set_dest (char *dest);

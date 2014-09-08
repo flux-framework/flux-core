@@ -251,17 +251,17 @@ static int client_read (ctx_t *ctx, client_t *c)
     if (!(typemask & FLUX_MSGTYPE_REQUEST))
         goto done; /* DROP */
 
-    if (cmb_msg_match_substr (zmsg, "api.event.subscribe.", &name)) {
+    if (flux_msg_match_substr (zmsg, "api.event.subscribe.", &name)) {
         sub = subscription_create (ctx->h, FLUX_MSGTYPE_EVENT, name);
         if (zlist_append (c->subscriptions, sub) < 0)
             oom ();
-    } else if (cmb_msg_match_substr (zmsg, "api.event.unsubscribe.", &name)) {
+    } else if (flux_msg_match_substr (zmsg, "api.event.unsubscribe.", &name)) {
         if ((sub = subscription_lookup (c, FLUX_MSGTYPE_EVENT, name)))
             zlist_remove (c->subscriptions, sub);
     } else {
         /* insert disconnect notifier before forwarding request */
         if (c->disconnect_notify) {
-            char *tag = cmb_msg_tag (zmsg, true); /* first component only */
+            char *tag = flux_msg_tag (zmsg, true); /* first component only */
             if (!tag)
                 goto done;
             if (zhash_lookup (c->disconnect_notify, tag) == NULL) {

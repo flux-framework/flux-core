@@ -15,7 +15,8 @@ includeflux_HEADERS = \
 	handle.h \
 	reactor.h \
 	reduce.h \
-	security.h
+	security.h \
+	message.h
 
 libflux_LTLIBRARIES = \
 	libflux.la
@@ -25,7 +26,8 @@ libflux_la_SOURCES = \
 	brokerops.c \
 	handle.c \
 	reduce.c \
-	security.c
+	security.c \
+	message.c
 
 libflux_la_LIBADD = \
 	$(top_builddir)/src/common/libutil/libutil.la

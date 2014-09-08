@@ -1,8 +1,6 @@
 #ifndef PLUGIN_H
 #define PLUGIN_H
 
-#include "flux.h"
-
 /* Plugins will be connected to these well-known shared memory zmq sockets.
  */
 #define REQUEST_URI         "inproc://request"

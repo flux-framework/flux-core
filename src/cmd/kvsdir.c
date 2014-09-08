@@ -31,10 +31,14 @@
 #include <json/json.h>
 #include <assert.h>
 #include <libgen.h>
+#include <zmq.h>
+#include <czmq.h>
+#include <stdint.h>
+#include <stdarg.h>
+
+#include "log.h"
 
 #include "flux.h"
-#include "log.h"
-#include "kvs.h"
 
 #define OPTIONS "hvRF"
 static const struct option longopts[] = {

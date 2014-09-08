@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* zmq.c - wrapper functions for zmq prototyping */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -40,12 +38,12 @@
 #include <json/json.h>
 #include <assert.h>
 
-#include "zmsg.h"
+#include "message.h"
 #include "log.h"
 #include "jsonutil.h"
 #include "xzmalloc.h"
 
-int zmsg_hopcount (zmsg_t *zmsg)
+int flux_msg_hopcount (zmsg_t *zmsg)
 {
     int count = 0;
     zframe_t *zf;
@@ -93,7 +91,7 @@ static zframe_t *_sender_frame (zmsg_t *zmsg)
     return (zf ? prev : NULL);
 }
 
-int cmb_msg_decode (zmsg_t *zmsg, char **tagp, json_object **op)
+int flux_msg_decode (zmsg_t *zmsg, char **tagp, json_object **op)
 {
     zframe_t *tag = _tag_frame (zmsg);
     zframe_t *json = zmsg_next (zmsg);
@@ -115,7 +113,7 @@ eproto:
     return -1;
 }
 
-zmsg_t *cmb_msg_encode (char *tag, json_object *o)
+zmsg_t *flux_msg_encode (char *tag, json_object *o)
 {
     zmsg_t *zmsg = NULL;
     unsigned int zlen;
@@ -151,7 +149,7 @@ static char *_ztag_noaddr (zmsg_t *zmsg)
     return ztag;
 }
 
-bool cmb_msg_match (zmsg_t *zmsg, const char *tag)
+bool flux_msg_match (zmsg_t *zmsg, const char *tag)
 {
     char *ztag = _ztag_noaddr (zmsg);
     const char *tag_noaddr;
@@ -167,7 +165,7 @@ bool cmb_msg_match (zmsg_t *zmsg, const char *tag)
     return match;
 }
 
-bool cmb_msg_match_substr (zmsg_t *zmsg, const char *tag, char **restp)
+bool flux_msg_match_substr (zmsg_t *zmsg, const char *tag, char **restp)
 {
     char *ztag = _ztag_noaddr (zmsg);
     int taglen = strlen (tag);
@@ -185,7 +183,7 @@ bool cmb_msg_match_substr (zmsg_t *zmsg, const char *tag, char **restp)
     return false;
 }
 
-char *cmb_msg_sender (zmsg_t *zmsg)
+char *flux_msg_sender (zmsg_t *zmsg)
 {
     zframe_t *zf = _sender_frame (zmsg);
     if (!zf) {
@@ -195,7 +193,7 @@ char *cmb_msg_sender (zmsg_t *zmsg)
     return zframe_strdup (zf); /* caller must free */
 }
 
-char *cmb_msg_nexthop (zmsg_t *zmsg)
+char *flux_msg_nexthop (zmsg_t *zmsg)
 {
     zframe_t *zf = zmsg_first (zmsg);
     if (!zf) {
@@ -205,7 +203,7 @@ char *cmb_msg_nexthop (zmsg_t *zmsg)
     return zframe_strdup (zf); /* caller must free */
 }
 
-char *cmb_msg_tag (zmsg_t *zmsg, bool shorten)
+char *flux_msg_tag (zmsg_t *zmsg, bool shorten)
 {
     zframe_t *zf = _tag_frame (zmsg);
     char *tag;
@@ -222,7 +220,7 @@ char *cmb_msg_tag (zmsg_t *zmsg, bool shorten)
     return tag;
 }
 
-int cmb_msg_replace_json (zmsg_t *zmsg, json_object *o)
+int flux_msg_replace_json (zmsg_t *zmsg, json_object *o)
 {
     zframe_t *zf = _json_frame (zmsg);
     char *zbuf;
@@ -244,7 +242,7 @@ int cmb_msg_replace_json (zmsg_t *zmsg, json_object *o)
     return 0;
 }
 
-int cmb_msg_replace_json_errnum (zmsg_t *zmsg, int errnum)
+int flux_msg_replace_json_errnum (zmsg_t *zmsg, int errnum)
 {
     json_object *no, *o = NULL;
 
@@ -253,7 +251,7 @@ int cmb_msg_replace_json_errnum (zmsg_t *zmsg, int errnum)
     if (!(no = json_object_new_int (errnum)))
         goto nomem;
     json_object_object_add (o, "errnum", no);
-    if (cmb_msg_replace_json (zmsg, o) < 0)
+    if (flux_msg_replace_json (zmsg, o) < 0)
         goto error;
     json_object_put (o);
     return 0;

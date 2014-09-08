@@ -27,7 +27,6 @@
 #endif
 #include <string.h>
 
-#include "log.h"
 #include "xzmalloc.h"
 #include "argv.h"
 

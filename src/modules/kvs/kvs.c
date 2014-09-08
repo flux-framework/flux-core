@@ -761,7 +761,7 @@ static int load_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     wait_t w = NULL;
     bool stall = false;
 
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
+    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
@@ -794,8 +794,8 @@ static int load_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     json_object *o = NULL;
     json_object_iter iter;
-    
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
+
+    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
@@ -818,7 +818,7 @@ static int store_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     json_object_iter iter;
     href_t href;
 
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
+    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
@@ -846,8 +846,8 @@ static int store_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     json_object *o = NULL;
     json_object_iter iter;
-    
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
+
+    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
@@ -916,7 +916,7 @@ static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     json_object *event = NULL;
 
-    if (cmb_msg_decode (*zmsg, NULL, &event) < 0 || event == NULL
+    if (flux_msg_decode (*zmsg, NULL, &event) < 0 || event == NULL
                 || util_json_object_get_int (event, "epoch", &ctx->epoch) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
@@ -1097,11 +1097,11 @@ static int get_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     char *sender = NULL;
     get_t *g;
 
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
+    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    if (!(sender = cmb_msg_sender (*zmsg))) {
+    if (!(sender = flux_msg_sender (*zmsg))) {
         flux_log (h, LOG_ERR, "%s: could not determine message sender",
                   __FUNCTION__);
         goto done;
@@ -1142,7 +1142,7 @@ static int get_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         flux_respond_errnum (ctx->h, zmsg, errnum);
     } else if (!stall) {
         wait_destroy (w, zmsg); /* get back *zmsg */
-        (void)cmb_msg_replace_json (*zmsg, reply);
+        (void)flux_msg_replace_json (*zmsg, reply);
         flux_response_sendmsg (ctx->h, zmsg);
     }
     tstat_push (&ctx->stats.get_time, monotime_since (g->t0));
@@ -1162,7 +1162,7 @@ done:
 static int watch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    char *sender = cmb_msg_sender (*zmsg);
+    char *sender = flux_msg_sender (*zmsg);
     json_object *root, *reply = NULL, *o = NULL;
     json_object_iter iter;
     wait_t w = NULL;
@@ -1171,7 +1171,7 @@ static int watch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     bool flag_readlink = false, flag_once = false;
     int errnum = 0;
 
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
+    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
@@ -1212,7 +1212,7 @@ static int watch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         flux_respond_errnum (ctx->h, zmsg, errnum);
     } else if (!stall) {
         wait_destroy (w, zmsg); /* get back *zmsg */
-        (void)cmb_msg_replace_json (*zmsg, reply);
+        (void)flux_msg_replace_json (*zmsg, reply);
 
         /* Reply to the watch request.
          * flag_first is generally true on first call, false thereafter
@@ -1224,13 +1224,13 @@ static int watch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             flux_response_sendmsg (ctx->h, &zcpy);
             reply_sent = true;
         }
-   
+
         /* Resubmit the watch request (clear flag_first) */
         if (!reply_sent || !flag_once) {
             util_json_object_add_boolean (reply, ".flag_directory", flag_directory);
             util_json_object_add_boolean (reply, ".flag_readlink", flag_readlink);
             util_json_object_add_boolean (reply, ".flag_once", flag_once);
-            (void)cmb_msg_replace_json (*zmsg, reply);
+            (void)flux_msg_replace_json (*zmsg, reply);
 
             /* On every commit, __FUNCTION__ (zcpy) will be called.
              * No reply will be generated unless a value has changed.
@@ -1265,11 +1265,11 @@ static int put_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     commit_t *c;
 
     monotime (&t0);
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
+    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    if (!(sender = cmb_msg_sender (*zmsg))) {
+    if (!(sender = flux_msg_sender (*zmsg))) {
         flux_log (h, LOG_ERR, "%s: could not determine message sender",
                   __FUNCTION__);
         goto done;
@@ -1404,17 +1404,17 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     const char *fence = NULL;
     bool internal = false;
 
-    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
+    if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    if (!(sender = cmb_msg_sender (*zmsg))) {
+    if (!(sender = flux_msg_sender (*zmsg))) {
         flux_log (h, LOG_ERR, "%s: could not determine message sender",
                   __FUNCTION__);
         goto done;
     }
     /* Get optional fence arguments.
-     */ 
+     */
     if (util_json_object_get_string (request, ".arg_fence", &fence) == 0) {
         if (util_json_object_get_int (request, ".arg_nprocs", &nprocs) < 0) {
             flux_log (h, LOG_ERR, "%s: fence with no nprocs", __FUNCTION__);
@@ -1540,7 +1540,7 @@ static int commit_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     int rootseq;
     commit_t *c;
 
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
+    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
             || util_json_object_get_int (o, "rootseq", &rootseq) < 0
             || util_json_object_get_string (o, "rootdir", &rootdir) < 0
             || util_json_object_get_string (o, "sender", &sender) < 0) {
@@ -1580,9 +1580,9 @@ static int sync_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     char *sender = NULL;
     int rootseq;
 
-    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+    if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
                 || util_json_object_get_int (request, "rootseq", &rootseq) < 0
-                || !(sender = cmb_msg_sender (*zmsg))) {
+                || !(sender = flux_msg_sender (*zmsg))) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
@@ -1647,7 +1647,7 @@ static int setroot_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     json_object *o = NULL;
     json_object *root = NULL;
 
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
+    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
                 || util_json_object_get_int (o, "rootseq", &rootseq) < 0
                 || util_json_object_get_string (o, "rootdir", &rootdir) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
@@ -1700,7 +1700,7 @@ static int disconnect_request_cb (flux_t h, int typemask, zmsg_t **zmsg,
                                   void *arg)
 {
     ctx_t *ctx = arg;
-    char *sender = cmb_msg_sender (*zmsg);
+    char *sender = flux_msg_sender (*zmsg);
 
     if (sender) {
         wait_destroy_byid (ctx->watchlist, sender);
@@ -1747,7 +1747,7 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     char *tag = NULL;
     int rc = -1;
 
-    if (cmb_msg_decode (*zmsg, &tag, &o) < 0) {
+    if (flux_msg_decode (*zmsg, &tag, &o) < 0) {
         flux_log (h, LOG_ERR, "%s: error decoding message", __FUNCTION__);
         goto done;
     }

@@ -308,7 +308,7 @@ static int ping_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     char *s = NULL;
     int rc = 0;
 
-    if (cmb_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
+    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
         err ("%s: protocol error", __FUNCTION__);
         goto done; /* reactor continues */
     }
@@ -340,7 +340,7 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     int rc = 0;
     char *tag = NULL;
 
-    if (cmb_msg_decode (*zmsg, &tag, &o) < 0) {
+    if (flux_msg_decode (*zmsg, &tag, &o) < 0) {
         flux_log (p->h, LOG_ERR, "%s: error decoding message", __FUNCTION__);
         goto done;
     }
@@ -374,7 +374,7 @@ done:
     if (o)
         json_object_put (o);
     if (*zmsg)
-        zmsg_destroy (zmsg);    
+        zmsg_destroy (zmsg);
     return rc;
 }
 
@@ -386,7 +386,7 @@ static int rusage_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     int rc = 0;
     struct rusage usage;
 
-    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
+    if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
         flux_log (p->h, LOG_ERR, "%s: error decoding message", __FUNCTION__);
         goto done;
     }
@@ -410,7 +410,7 @@ done:
     if (response)
         json_object_put (response);
     if (*zmsg)
-        zmsg_destroy (zmsg);    
+        zmsg_destroy (zmsg);
     return rc;
 }
 

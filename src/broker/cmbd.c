@@ -50,16 +50,12 @@
 #include <czmq.h>
 
 #include "log.h"
-#include "zmsg.h"
 #include "zdump.h"
 #include "xzmalloc.h"
 #include "nodeset.h"
 #include "jsonutil.h"
 
 #include "flux.h"
-
-#include "handle.h"
-#include "security.h"
 
 #include "plugin.h"
 #include "pmi.h"
@@ -1258,7 +1254,7 @@ static void cmb_heartbeat (ctx_t *ctx, zmsg_t *zmsg)
     if (ctx->rank == 0)
         return;
 
-    if (cmb_msg_decode (zmsg, NULL, &event) < 0 || event == NULL
+    if (flux_msg_decode (zmsg, NULL, &event) < 0 || event == NULL
            || util_json_object_get_int (event, "epoch", &ctx->hb_epoch) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: bad hb message", __FUNCTION__);
     }
@@ -1335,7 +1331,7 @@ static void shutdown_recv (ctx_t *ctx, zmsg_t *zmsg)
     const char *reason;
     int grace, rank, exitcode;
 
-    if (cmb_msg_decode (zmsg, NULL, &o) < 0 || o == NULL
+    if (flux_msg_decode (zmsg, NULL, &o) < 0 || o == NULL
             || util_json_object_get_string (o, "reason", &reason) < 0
             || util_json_object_get_int (o, "grace", &grace) < 0
             || util_json_object_get_int (o, "exitcode", &exitcode) < 0
@@ -1369,7 +1365,7 @@ static void shutdown_send (ctx_t *ctx, int grace, int rc, const char *fmt, ...)
     util_json_object_add_int (o, "grace", grace);
     util_json_object_add_int (o, "rank", ctx->rank);
     util_json_object_add_int (o, "exitcode", rc);
-    if (!(event = cmb_msg_encode ("shutdown", o)))
+    if (!(event = flux_msg_encode ("shutdown", o)))
         oom ();
     (void)cmb_pub_event (ctx, &event);
     free (reason);
@@ -1377,9 +1373,9 @@ static void shutdown_send (ctx_t *ctx, int grace, int rc, const char *fmt, ...)
 
 static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
 {
-    if (cmb_msg_match (zmsg, "hb"))
+    if (flux_msg_match (zmsg, "hb"))
         cmb_heartbeat (ctx, zmsg);
-    else if (cmb_msg_match (zmsg, "shutdown"))
+    else if (flux_msg_match (zmsg, "shutdown"))
         shutdown_recv (ctx, zmsg);
 }
 
@@ -1435,7 +1431,7 @@ static int cmb_pub (ctx_t *ctx, zmsg_t **zmsg)
     assert (ctx->rank == 0);
     assert (ctx->zs_event_out != NULL);
 
-    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || !request) {
+    if (flux_msg_decode (*zmsg, NULL, &request) < 0 || !request) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
@@ -1444,7 +1440,7 @@ static int cmb_pub (ctx_t *ctx, zmsg_t **zmsg)
         flux_respond_errnum (ctx->h, zmsg, EINVAL);
         goto done;
     }
-    if (!(event = cmb_msg_encode ((char *)topic, payload))) {
+    if (!(event = flux_msg_encode ((char *)topic, payload))) {
         flux_respond_errnum (ctx->h, zmsg, EINVAL);
         goto done;
     }
@@ -1504,7 +1500,7 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
     char *arg = NULL;
     bool handled = true;
 
-    if (cmb_msg_match (*zmsg, "cmb.info")) {
+    if (flux_msg_match (*zmsg, "cmb.info")) {
         json_object *response = util_json_object_new_object ();
 
         util_json_object_add_int (response, "rank", ctx->rank);
@@ -1514,12 +1510,12 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         if (flux_respond (ctx->h, zmsg, response) < 0)
             err_exit ("flux_respond");
         json_object_put (response);
-    } else if (cmb_msg_match (*zmsg, "cmb.getattr")) {
+    } else if (flux_msg_match (*zmsg, "cmb.getattr")) {
         json_object *request = NULL;
         json_object *response = util_json_object_new_object ();
         const char *name = NULL;
         char *val = NULL;
-        if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+        if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
                 || util_json_object_get_string (request, "name", &name) < 0) {
             flux_respond_errnum (ctx->h, zmsg, EPROTO);
         } else if (!(val = cmb_getattr (ctx, name))) {
@@ -1532,7 +1528,7 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             json_object_put (request);
         if (response)
             json_object_put (response);
-    } else if (cmb_msg_match (*zmsg, "cmb.rusage")) {
+    } else if (flux_msg_match (*zmsg, "cmb.rusage")) {
         json_object *response;
         struct rusage usage;
 
@@ -1545,11 +1541,11 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
                 err_exit ("flux_respond");
             json_object_put (response);
         }
-    } else if (cmb_msg_match (*zmsg, "cmb.rmmod")) {
+    } else if (flux_msg_match (*zmsg, "cmb.rmmod")) {
         json_object *request = NULL;
         const char *name;
         int flags;
-        if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+        if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
                 || util_json_object_get_string (request, "name", &name) < 0
                 || util_json_object_get_int (request, "flags", &flags) < 0) {
             flux_respond_errnum (ctx->h, zmsg, EPROTO);
@@ -1558,11 +1554,11 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         } /* else response is deferred until module returns EOF */
         if (request)
             json_object_put (request);
-    } else if (cmb_msg_match (*zmsg, "cmb.insmod")) {
+    } else if (flux_msg_match (*zmsg, "cmb.insmod")) {
         json_object *args, *request = NULL;
         const char *path;
         int flags;
-        if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+        if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
                 || util_json_object_get_string (request, "path", &path) < 0
                 || util_json_object_get_int (request, "flags", &flags) < 0
                 || !(args = json_object_object_get (request, "args"))) {
@@ -1574,10 +1570,10 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         }
         if (request)
             json_object_put (request);
-    } else if (cmb_msg_match (*zmsg, "cmb.lsmod")) {
+    } else if (flux_msg_match (*zmsg, "cmb.lsmod")) {
         json_object *request = NULL;
         json_object *response = NULL;
-        if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
+        if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
             flux_respond_errnum (ctx->h, zmsg, EPROTO);
         } else if (!(response = cmb_lsmod (ctx))) {
             flux_respond_errnum (ctx->h, zmsg, errno);
@@ -1588,10 +1584,10 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             json_object_put (request);
         if (response)
             json_object_put (response);
-    } else if (cmb_msg_match (*zmsg, "cmb.lspeer")) {
+    } else if (flux_msg_match (*zmsg, "cmb.lspeer")) {
         json_object *request = NULL;
         json_object *response = NULL;
-        if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
+        if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
             flux_respond_errnum (ctx->h, zmsg, EPROTO);
         } else if (!(response = peer_ls (ctx))) {
             flux_respond_errnum (ctx->h, zmsg, errno);
@@ -1602,10 +1598,10 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             json_object_put (request);
         if (response)
             json_object_put (response);
-    } else if (cmb_msg_match (*zmsg, "cmb.ping")) {
+    } else if (flux_msg_match (*zmsg, "cmb.ping")) {
         json_object *request = NULL;
         char *s = NULL;
-        if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
+        if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
             flux_respond_errnum (ctx->h, zmsg, EPROTO);
         } else {
             s = zdump_routestr (*zmsg, 1);
@@ -1616,12 +1612,12 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             json_object_put (request);
         if (s)
             free (s);
-    } else if (cmb_msg_match (*zmsg, "cmb.hb")) {
+    } else if (flux_msg_match (*zmsg, "cmb.hb")) {
         /* no-op used to update peer idle time - no response */
-    } else if (cmb_msg_match (*zmsg, "cmb.reparent")) {
+    } else if (flux_msg_match (*zmsg, "cmb.reparent")) {
         json_object *request = NULL;
         const char *uri;
-        if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+        if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
                 || util_json_object_get_string (request, "uri", &uri) < 0) {
             flux_respond_errnum (ctx->h, zmsg, EPROTO);
         } else if (cmb_reparent (ctx, uri) < 0) {
@@ -1631,17 +1627,17 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         }
         if (request)
             json_object_put (request);
-    } else if (cmb_msg_match (*zmsg, "cmb.panic")) {
+    } else if (flux_msg_match (*zmsg, "cmb.panic")) {
         json_object *request = NULL;
         const char *s = NULL;
-        if (cmb_msg_decode (*zmsg, NULL, &request) == 0 && request != NULL) {
+        if (flux_msg_decode (*zmsg, NULL, &request) == 0 && request != NULL) {
             (void)util_json_object_get_string (request, "msg", &s);
             msg ("PANIC: %s", s ? s : "no reason");
             exit (1);
         }
         if (request)
             json_object_put (request);
-    } else if (cmb_msg_match (*zmsg, "cmb.log")) {
+    } else if (flux_msg_match (*zmsg, "cmb.log")) {
         json_object *request = NULL;
         const char *s, *src, *fac;
         struct timeval ts;
@@ -1649,7 +1645,7 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         if (ctx->rank > 0)
             (void)flux_request_sendmsg (ctx->h, zmsg);
         else {
-            if (cmb_msg_decode (*zmsg, NULL, &request) == 0 && request
+            if (flux_msg_decode (*zmsg, NULL, &request) == 0 && request
                 && util_json_object_get_int (request, "level", &lev) == 0
                 && util_json_object_get_timeval (request, "timestamp", &ts) == 0
                 && util_json_object_get_string (request, "message", &s) == 0
@@ -1664,7 +1660,7 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         }
         if (request)
             json_object_put (request);
-    } else if (cmb_msg_match (*zmsg, "cmb.pub")) {
+    } else if (flux_msg_match (*zmsg, "cmb.pub")) {
         if (ctx->rank > 0) {
             if (flux_request_sendmsg (ctx->h, zmsg) < 0)
                 flux_respond_errnum (ctx->h, zmsg, errno);
@@ -1672,11 +1668,11 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             if (cmb_pub (ctx, zmsg) < 0)
                 flux_respond_errnum (ctx->h, zmsg, errno);
         }
-    } else if (cmb_msg_match (*zmsg, "cmb.rankfwd")) {
+    } else if (flux_msg_match (*zmsg, "cmb.rankfwd")) {
         json_object *payload, *request = NULL;
         int rank;
         const char *topic;
-        if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+        if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
                 || util_json_object_get_int (request, "rank", &rank) < 0
                 || util_json_object_get_string (request, "topic", &topic) < 0
                 || !(payload = json_object_object_get (request, "payload"))) {
@@ -1783,8 +1779,8 @@ static int hb_cb (zloop_t *zl, int timer_id, ctx_t *ctx)
 
     o = util_json_object_new_object ();
     util_json_object_add_int (o, "epoch", ++ctx->hb_epoch);
-    if (!(zmsg = cmb_msg_encode ("hb", o))) {
-        err ("cmb_msg_encode failed");
+    if (!(zmsg = flux_msg_encode ("hb", o))) {
+        err ("flux_msg_encode failed");
         goto done;
     }
     if (cmb_pub_event (ctx, &zmsg) < 0) {
@@ -1882,7 +1878,7 @@ static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg)
     if (zmsg_pushstr (cpy, typestr) < 0)
         oom ();
     free (typestr);
-    tag = cmb_msg_tag (zmsg, false);
+    tag = flux_msg_tag (zmsg, false);
     if (zmsg_pushstr (cpy, tag) < 0)
         oom ();
     free (tag);

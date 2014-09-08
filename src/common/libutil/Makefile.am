@@ -20,8 +20,6 @@ libutil_la_SOURCES = \
 	argv.h \
 	env.c \
 	env.h \
-	zmsg.c \
-	zmsg.h \
 	zdump.c \
 	zdump.h \
 	zconnect.c \

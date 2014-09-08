@@ -554,8 +554,8 @@ static int watch_rep_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     json_object_iter iter;
     kvs_watcher_t *wp;
     bool match = false;
-    
-    if (cmb_msg_decode (*zmsg, NULL, &reply) == 0 && reply != NULL) {
+
+    if (flux_msg_decode (*zmsg, NULL, &reply) == 0 && reply != NULL) {
         json_object_object_foreachC (reply, iter) {
             if ((wp = zhash_lookup (ctx->watchers, iter.key))) {
                 dispatch_watch (h, wp, iter.key, iter.val);

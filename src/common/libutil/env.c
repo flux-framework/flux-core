@@ -28,7 +28,6 @@
 #include <stdlib.h>
 
 #include "env.h"
-#include "log.h"
 #include "xzmalloc.h"
 
 int env_getint (char *name, int dflt)

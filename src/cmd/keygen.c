@@ -37,9 +37,9 @@
 #include <zmq.h>
 #include <czmq.h>
 
-#include "flux.h"
 #include "log.h"
-#include "security.h"
+
+#include "flux.h"
 
 #define OPTIONS "hfp"
 static const struct option longopts[] = {

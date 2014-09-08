@@ -44,9 +44,9 @@
 #include <czmq.h>
 
 #include "log.h"
-#include "zmsg.h"
 #include "jsonutil.h"
 #include "xzmalloc.h"
+
 #include "flux.h"
 
 typedef struct {

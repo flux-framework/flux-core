@@ -27,14 +27,19 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <stdio.h>
 #include <getopt.h>
 #include <json/json.h>
 #include <assert.h>
 #include <libgen.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <zmq.h>
+#include <czmq.h>
+
+#include "log.h"
 
 #include "flux.h"
-#include "zmsg.h"
-#include "log.h"
 
 #define OPTIONS "hp:s"
 static const struct option longopts[] = {

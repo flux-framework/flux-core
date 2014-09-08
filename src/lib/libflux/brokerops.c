@@ -46,9 +46,9 @@
 #include <czmq.h>
 
 #include "log.h"
-#include "zmsg.h"
 #include "xzmalloc.h"
 #include "shortjson.h"
+
 #include "flux.h"
 
 char *flux_getattr (flux_t h, int rank, const char *name)
@@ -254,7 +254,7 @@ int flux_event_sendmsg (flux_t h, zmsg_t **zmsg)
     JSON payload = NULL;
     int rc = -1;
 
-    if (!*zmsg || cmb_msg_decode (*zmsg, &topic, &payload) < 0) {
+    if (!*zmsg || flux_msg_decode (*zmsg, &topic, &payload) < 0) {
         errno = EINVAL;
         goto done;
     }
@@ -314,7 +314,7 @@ int flux_rank_request_sendmsg (flux_t h, int rank, zmsg_t **zmsg)
         goto done;
     }
 
-    if (!*zmsg || cmb_msg_decode (*zmsg, &topic, &payload) < 0) {
+    if (!*zmsg || flux_msg_decode (*zmsg, &topic, &payload) < 0) {
         errno = EINVAL;
         goto done;
     }
@@ -365,7 +365,7 @@ JSON flux_rank_rpc (flux_t h, int rank, JSON request, const char *fmt, ...)
 
     if (!request)
         request = empty = Jnew ();
-    zmsg = cmb_msg_encode (tag, request);
+    zmsg = flux_msg_encode (tag, request);
 
     if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* add route delimiter */
         err_exit ("zmsg_pushmem");
@@ -373,7 +373,7 @@ JSON flux_rank_rpc (flux_t h, int rank, JSON request, const char *fmt, ...)
         goto done;
     if (!(zmsg = flux_response_matched_recvmsg (h, tag, false)))
         goto done;
-    if (cmb_msg_decode (zmsg, NULL, &response) < 0 || !response)
+    if (flux_msg_decode (zmsg, NULL, &response) < 0 || !response)
         goto done;
     if (Jget_int (response, "errnum", &errno)) {
         Jput (response);

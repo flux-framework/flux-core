@@ -47,13 +47,11 @@
 #include <fnmatch.h>
 
 #include "log.h"
-#include "zmsg.h"
 #include "zdump.h"
 #include "jsonutil.h"
 #include "xzmalloc.h"
 
 #include "flux.h"
-#include "handle.h"
 
 typedef struct reactor_struct *reactor_t;
 
@@ -705,7 +703,7 @@ int flux_event_recv (flux_t h, json_object **respp, char **tagp, bool nb)
 
     if (!(zmsg = flux_event_recvmsg (h, nb)))
         goto done;
-    if (cmb_msg_decode (zmsg, tagp, respp) < 0)
+    if (flux_msg_decode (zmsg, tagp, respp) < 0)
         goto done;
     rc = 0;
 done:
@@ -729,7 +727,7 @@ int flux_request_send (flux_t h, json_object *request, const char *fmt, ...)
 
     if (!request)
         request = empty = util_json_object_new_object ();
-    zmsg = cmb_msg_encode (tag, request);
+    zmsg = flux_msg_encode (tag, request);
     free (tag);
     if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* add route delimiter */
         err_exit ("zmsg_pushmem");
@@ -747,7 +745,7 @@ int flux_response_recv (flux_t h, json_object **respp, char **tagp, bool nb)
 
     if (!(zmsg = flux_response_recvmsg (h, nb)))
         goto done;
-    if (cmb_msg_decode (zmsg, tagp, respp) < 0)
+    if (flux_msg_decode (zmsg, tagp, respp) < 0)
         goto done;
     rc = 0;
 done:
@@ -766,7 +764,7 @@ zmsg_t *flux_response_matched_recvmsg (flux_t h, const char *match, bool nb)
     do {
         if (!(response = flux_response_recvmsg (h, nb)))
             goto done;
-        if (!cmb_msg_match (response, match)) {
+        if (!flux_msg_match (response, match)) {
             if (zlist_append (nomatch, response) < 0)
                 oom ();
             response = NULL;
@@ -798,7 +796,7 @@ json_object *flux_rpc (flux_t h, json_object *request, const char *fmt, ...)
 
     if (!request)
         request = empty = util_json_object_new_object ();
-    zmsg = cmb_msg_encode (tag, request);
+    zmsg = flux_msg_encode (tag, request);
 
     if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* add route delimiter */
         err_exit ("zmsg_pushmem");
@@ -806,7 +804,7 @@ json_object *flux_rpc (flux_t h, json_object *request, const char *fmt, ...)
         goto done;
     if (!(zmsg = flux_response_matched_recvmsg (h, tag, false)))
         goto done;
-    if (cmb_msg_decode (zmsg, NULL, &response) < 0 || !response)
+    if (flux_msg_decode (zmsg, NULL, &response) < 0 || !response)
         goto done;
     if (util_json_object_get_int (response, "errnum", &errno) == 0) {
         json_object_put (response);
@@ -825,14 +823,14 @@ done:
 
 int flux_respond (flux_t h, zmsg_t **reqmsg, json_object *response)
 {
-    if (cmb_msg_replace_json (*reqmsg, response) < 0)
+    if (flux_msg_replace_json (*reqmsg, response) < 0)
         return -1;
     return flux_response_sendmsg (h, reqmsg);
 }
 
 int flux_respond_errnum (flux_t h, zmsg_t **reqmsg, int errnum)
 {
-    if (cmb_msg_replace_json_errnum (*reqmsg, errnum) < 0)
+    if (flux_msg_replace_json_errnum (*reqmsg, errnum) < 0)
         return -1;
     return flux_response_sendmsg (h, reqmsg);
 }

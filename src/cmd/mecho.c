@@ -32,9 +32,10 @@
 #include <assert.h>
 #include <libgen.h>
 
-#include "flux.h"
 #include "util.h"
 #include "log.h"
+
+#include "flux.h"
 
 #define OPTIONS "hp:d:"
 static const struct option longopts[] = {

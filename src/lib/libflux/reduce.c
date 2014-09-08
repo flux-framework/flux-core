@@ -46,13 +46,11 @@
 #include <czmq.h>
 #include <json/json.h>
 
-#include "zmsg.h"
 #include "log.h"
-#include "flux.h"
 #include "shortjson.h"
 #include "xzmalloc.h"
-#include "reduce.h"
 
+#include "flux.h"
 
 typedef struct hwm_struct *hwm_t;
 

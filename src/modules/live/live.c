@@ -86,13 +86,12 @@
 #include <czmq.h>
 #include <json/json.h>
 
-#include "zmsg.h"
 #include "xzmalloc.h"
 #include "log.h"
-#include "flux.h"
 #include "shortjson.h"
-#include "reduce.h"
 #include "nodeset.h"
+
+#include "flux.h"
 
 typedef enum { CS_OK, CS_SLOW, CS_FAIL, CS_UNKNOWN } cstate_t;
 
@@ -361,7 +360,7 @@ static int cstate_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     cstate_t ostate, nstate;
     int rc = 0;
 
-    if (cmb_msg_decode (*zmsg, NULL, &event) < 0 || event == NULL
+    if (flux_msg_decode (*zmsg, NULL, &event) < 0 || event == NULL
             || !Jget_int (event, "epoch", &epoch)
             || !Jget_int (event, "parent", &parent)
             || !Jget_int (event, "rank", &rank)
@@ -427,7 +426,7 @@ static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     zlist_t *keys = NULL;
     char *key;
 
-    if (cmb_msg_decode (*zmsg, NULL, &event) < 0 || event == NULL
+    if (flux_msg_decode (*zmsg, NULL, &event) < 0 || event == NULL
             || !Jget_int (event, "epoch", &ctx->epoch)) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
@@ -527,7 +526,7 @@ static int goodbye_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     int rank, prank;
     char *rankstr = NULL;
 
-    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+    if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
                             || !Jget_int (request, "parent-rank", &prank)
                             || !Jget_int (request, "rank", &rank)) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
@@ -893,7 +892,7 @@ static int push_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     JSON request = NULL;
 
-    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
+    if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
@@ -915,7 +914,7 @@ static int hello_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     int rank;
     child_t *c;
 
-    if (cmb_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+    if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
                             || !Jget_int (request, "rank", &rank)) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
