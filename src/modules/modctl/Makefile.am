@@ -23,7 +23,7 @@ fluxmod_libadd = \
 	$(LIBJSON) $(LIBZMQ) $(LIBCZMQ)
 
 fluxmod_ldflags = \
-	-module -avoid-version -Wl,--version-script=../module_version.map
+	-module -avoid-version -Wl,--version-script=$(srcdir)/../module_version.map
 
 modctl_la_SOURCES = modctl.c
 modctl_la_LDFLAGS = $(fluxmod_ldflags)
@@ -48,6 +48,6 @@ libflux_modctl_la_LIBADD = \
 	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(LIBJSON) $(LIBZMQ) $(LIBCZMQ)
 
-libflux_modctl_la_LDFLAGS = -Wl,--version-script=flux_modctl_version.map
+libflux_modctl_la_LDFLAGS = -Wl,--version-script=$(srcdir)/flux_modctl_version.map
 
 EXTRA_DIST = flux_modctl_version.map

@@ -47,6 +47,6 @@ libflux_la_LIBADD = \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(LIBMUNGE) $(LIBJSON) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)
 
-libflux_la_LDFLAGS = -Wl,--version-script=flux_version.map
+libflux_la_LDFLAGS = -Wl,--version-script=$(srcdir)/flux_version.map
 
 EXTRA_DIST = flux_version.map
