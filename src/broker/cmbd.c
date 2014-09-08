@@ -1878,7 +1878,7 @@ static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg)
     if (zmsg_pushstr (cpy, typestr) < 0)
         oom ();
     free (typestr);
-    tag = flux_msg_tag (zmsg, false);
+    tag = flux_msg_tag (zmsg);
     if (zmsg_pushstr (cpy, tag) < 0)
         oom ();
     free (tag);

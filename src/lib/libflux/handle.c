@@ -242,88 +242,6 @@ flux_sec_t flux_get_sec (flux_t h)
 }
 
 /**
- ** Utility
- **/
-
-struct map_struct {
-    const char *name;
-    const char *sname;
-    int typemask;
-};
-
-static struct map_struct msgtype_map[] = {
-    { "request", ">", FLUX_MSGTYPE_REQUEST },
-    { "response", "<", FLUX_MSGTYPE_RESPONSE},
-    { "event", "e", FLUX_MSGTYPE_EVENT},
-};
-static const int msgtype_map_len = 
-                            sizeof (msgtype_map) / sizeof (msgtype_map[0]);
-
-const char *flux_msgtype_string (int typemask)
-{
-    int i;
-
-    for (i = 0; i < msgtype_map_len; i++)
-        if ((typemask & msgtype_map[i].typemask))
-            return msgtype_map[i].name;
-    return "unknown";
-}
-
-const char *flux_msgtype_shortstr (int typemask)
-{
-    int i;
-
-    for (i = 0; i < msgtype_map_len; i++)
-        if ((typemask & msgtype_map[i].typemask))
-            return msgtype_map[i].sname;
-    return "?";
-}
-
-static zframe_t *unwrap_zmsg (zmsg_t *zmsg, int frameno)
-{
-    zframe_t *zf = zmsg_first (zmsg);
-
-    while (zf && zframe_size (zf) != 0)
-        zf = zmsg_next (zmsg); /* skip non-empty routing envelope frames */
-    if (zf)
-        zf = zmsg_next (zmsg); /* skip empty routing envelope delimiter */
-    if (!zf)
-        zf = zmsg_first (zmsg); /* rewind - there was no routing envelope */
-    while (zf && frameno-- > 0) /* frame 0=tag, 1=json */
-        zf = zmsg_next (zmsg);
-    return zf;
-}
-
-char *flux_zmsg_tag (zmsg_t *zmsg)
-{
-    zframe_t *zf = unwrap_zmsg (zmsg, 0);
-    char *tag = NULL;
-
-    if (zf && !(tag = zframe_strdup (zf)))
-        oom ();
-    return tag;
-}
-
-json_object *flux_zmsg_json (zmsg_t *zmsg)
-{
-    zframe_t *zf = unwrap_zmsg (zmsg, 1);
-    json_object *o = NULL;
-
-    if (zf) {
-        json_tokener *tok;
-        if (!(tok = json_tokener_new ()))
-            oom ();
-        o = json_tokener_parse_ex (tok,  (const char *)zframe_data (zf),
-                                                       zframe_size (zf));
-        json_tokener_free (tok);
-    } else {
-        if (!(o = json_object_new_object ()))
-            oom ();
-    }
-    return o;
-}
-
-/**
  ** Reactor
  **/
 
@@ -422,7 +340,7 @@ int flux_handle_event_msg (flux_t h, int typemask, zmsg_t **zmsg)
     int rc = 0;
 
     assert (*zmsg != NULL);
-    if (!(tag = flux_zmsg_tag (*zmsg))) {
+    if (!(tag = flux_msg_tag (*zmsg))) {
         rc = -1;
         errno = EPROTO;
         goto done;

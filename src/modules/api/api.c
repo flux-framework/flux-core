@@ -261,7 +261,7 @@ static int client_read (ctx_t *ctx, client_t *c)
     } else {
         /* insert disconnect notifier before forwarding request */
         if (c->disconnect_notify) {
-            char *tag = flux_msg_tag (zmsg, true); /* first component only */
+            char *tag = flux_msg_tag_short (zmsg);
             if (!tag)
                 goto done;
             if (zhash_lookup (c->disconnect_notify, tag) == NULL) {
@@ -315,7 +315,7 @@ static int response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     zframe_t *zf = NULL;
     client_t *c;
 
-    if (zmsg_hopcount (*zmsg) != 1) {
+    if (flux_msg_hopcount (*zmsg) != 1) {
         flux_log (ctx->h, LOG_ERR, "dropping response with bad envelope");
         goto done;
     }
@@ -348,7 +348,7 @@ static int event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     client_t *c;
-    char *tag = flux_zmsg_tag (*zmsg);
+    char *tag = flux_msg_tag (*zmsg);
     zmsg_t *cpy;
 
     if (tag) {

@@ -155,30 +155,6 @@ int flux_failover (flux_t h, int rank);
 
 int flux_panic (flux_t h, int rank, const char *msg);
 
-/* Message manipulation utility functions
- */
-enum {
-    FLUX_MSGTYPE_REQUEST = 1,
-    FLUX_MSGTYPE_RESPONSE = 2,
-    FLUX_MSGTYPE_EVENT = 4,
-    FLUX_MSGTYPE_ANY = 7,
-    FLUX_MSGTYPE_MASK = 7,
-    /* leave open possiblity of adding 'flags' bits here */
-};
-
-/* Return string representation of message type.
- */
-const char *flux_msgtype_string (int typemask);
-const char *flux_msgtype_shortstr (int typemask);
-
-/* Return copy of zmsg tag. Caller must free.
- */
-char *flux_zmsg_tag (zmsg_t *zmsg);
-
-/* Get json object from a zmsg. Caller must call json_object_put().
- */
-json_object *flux_zmsg_json (zmsg_t *zmsg);
-
 void flux_assfail (flux_t h, char *ass, char *file, int line);
 #define FASSERT(h, exp) if ((exp)); \
                         else flux_assfail(h, #exp, __FILE__, __LINE__)

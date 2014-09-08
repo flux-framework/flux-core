@@ -24,13 +24,30 @@ bool flux_msg_match_substr (zmsg_t *msg, const char *tag, char **restp);
  */
 char *flux_msg_nexthop (zmsg_t *zmsg);
 char *flux_msg_sender (zmsg_t *zmsg);
-char *flux_msg_tag (zmsg_t *zmsg, bool shorten);
+char *flux_msg_tag (zmsg_t *zmsg);
+char *flux_msg_tag_short (zmsg_t *zmsg);
 
 /* Replace the json frame in a message with a new json frame,
  * or a json frame containing only an errnum value.
  */
 int flux_msg_replace_json (zmsg_t *zmsg, json_object *o);
 int flux_msg_replace_json_errnum (zmsg_t *zmsg, int errnum);
+
+/* Message manipulation utility functions
+ */
+enum {
+    FLUX_MSGTYPE_REQUEST = 1,
+    FLUX_MSGTYPE_RESPONSE = 2,
+    FLUX_MSGTYPE_EVENT = 4,
+    FLUX_MSGTYPE_ANY = 7,
+    FLUX_MSGTYPE_MASK = 7,
+    /* leave open possiblity of adding 'flags' bits here */
+};
+
+/* Return string representation of message type.
+ */
+const char *flux_msgtype_string (int typemask);
+const char *flux_msgtype_shortstr (int typemask);
 
 
 #endif /* !_FLUX_MESSAGE_H */
