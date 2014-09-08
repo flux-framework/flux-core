@@ -29,10 +29,16 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include <string.h>
+#include <json/json.h>
+
+#include "cbuf.h"
+
+#include "xzmalloc.h"
+#include "jsonutil.h"
+
+#include "flux.h"
 
 #include "zio.h"
-#include "util/util.h"
-#include "cbuf.h"
 
 #ifndef NDEBUG
 #  define ZIO_MAGIC         0x510015

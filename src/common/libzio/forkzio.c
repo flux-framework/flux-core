@@ -32,10 +32,14 @@
 #include <sys/wait.h>
 #include <termios.h>
 #include <pty.h>
+#include <czmq.h>
+#include <json/json.h>
 
-#include "cmb.h"
-#include "util.h"
 #include "log.h"
+#include "xzmalloc.h"
+
+#include "flux.h"
+
 #include "zio.h"
 #include "forkzio.h"
 

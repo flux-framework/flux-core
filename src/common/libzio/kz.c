@@ -58,10 +58,13 @@
 #include <libgen.h>
 #include <sys/wait.h>
 #include <termios.h>
+#include <czmq.h>
 
-#include "cmb.h"
-#include "util.h"
+#include "xzmalloc.h"
 #include "log.h"
+
+#include "flux.h"
+
 #include "zio.h"
 #include "kz.h"
 

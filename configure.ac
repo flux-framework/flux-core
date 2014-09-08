@@ -92,6 +92,7 @@ AC_CONFIG_FILES( \
   src/common/Makefile \
   src/common/liblsd/Makefile \
   src/common/libutil/Makefile \
+  src/common/libzio/Makefile \
   src/lib/Makefile \
   src/lib/libflux/Makefile \
   src/broker/Makefile \
