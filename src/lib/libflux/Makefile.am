@@ -1,7 +1,6 @@
 AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = \
-	-I$(top_srcdir)/src/common/liblsd \
 	-I$(top_srcdir)/src/common/libutil \
 	-I$(top_srcdir)/src/modules/api \
 	-I$(top_srcdir)/src/modules/kvs \

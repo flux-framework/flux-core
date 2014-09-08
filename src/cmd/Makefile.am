@@ -10,7 +10,6 @@ exec_path = $(top_builddir)/src/cmd:$(fluxbindir)
 
 AM_CPPFLAGS = \
         -DPLUGIN_PATH=\"$(plugin_path)\" -DEXEC_PATH=\"$(exec_path)\" \
-	-I$(top_srcdir)/src/common/liblsd \
 	-I$(top_srcdir)/src/common/libutil \
 	-I$(top_srcdir)/src/lib/libflux \
 	-I$(top_srcdir)/src/modules/api \
@@ -48,16 +47,16 @@ fluxbin_PROGRAMS = \
 	ping \
 	snoop \
 	stats \
-	up
+	up \
+	zio
 
 fluxbin_ldadd = \
-	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
-	$(top_builddir)/src/lib/libflux/libflux.la \
-	$(top_builddir)/src/modules/api/libflux-api.la \
-	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
-	$(top_builddir)/src/modules/modctl/libflux-modctl.la \
 	$(top_builddir)/src/modules/live/libflux-live.la \
+	$(top_builddir)/src/modules/modctl/libflux-modctl.la \
+	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
+	$(top_builddir)/src/modules/api/libflux-api.la \
+	$(top_builddir)/src/lib/libflux/libflux.la \
 	$(LIBJSON) $(LIBZMQ) $(LIBCZMQ) $(LIBMUNGE) $(LIBPTHREAD)
 
 event_SOURCES = event.c
@@ -104,3 +103,13 @@ stats_LDADD = $(fluxbin_ldadd)
 
 up_SOURCES = up.c
 up_LDADD = $(fluxbin_ldadd)
+
+zio_SOURCES = zio.c
+zio_LDADD = \
+	$(top_builddir)/src/common/libzio/libzio.la \
+	$(top_builddir)/src/common/liblsd/liblsd.la \
+	$(fluxbin_ldadd) \
+	$(LIBUTIL)
+zio_CPPFLAGS = \
+	-I$(top_srcdir)/src/common/libzio \
+	$(AM_CPPFLAGS)

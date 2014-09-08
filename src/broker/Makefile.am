@@ -10,7 +10,6 @@ exec_path = $(top_builddir)/src/cmd:$(fluxbindir)
 
 AM_CPPFLAGS = \
 	-DPLUGIN_PATH=\"$(plugin_path)\" -DEXEC_PATH=\"$(exec_path)\" \
-	-I$(top_srcdir)/src/common/liblsd \
 	-I$(top_srcdir)/src/common/libutil \
 	-I$(top_srcdir)/src/lib/libflux \
 	-I$(top_srcdir)/src/modules/api \
@@ -28,7 +27,6 @@ cmbd_SOURCES = \
 	pmi.h
 
 cmbd_LDADD = \
-	$(top_builddir)/src/common/liblsd/liblsd.la \
-	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/lib/libflux/libflux.la \
+	$(top_builddir)/src/common/libutil/libutil.la \
 	$(LIBMUNGE) $(LIBJSON) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)

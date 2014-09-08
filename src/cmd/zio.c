@@ -33,10 +33,15 @@
 #include <libgen.h>
 #include <sys/wait.h>
 #include <termios.h>
+#include <stdbool.h>
+#include <stdarg.h>
+#include <czmq.h>
 
-#include "cmb.h"
-#include "util.h"
 #include "log.h"
+#include "xzmalloc.h"
+
+#include "flux.h"
+
 #include "zio.h"
 #include "forkzio.h"
 #include "kz.h"
@@ -152,7 +157,7 @@ int main (int argc, char *argv[])
             usage ();
     }
 
-    if (!(h = cmb_init ()))
+    if (!(h = flux_api_open ()))
         err_exit ("cmb_init");
 
     if ((aopt || ropt) && !key) {
@@ -168,7 +173,7 @@ int main (int argc, char *argv[])
         copy (h, argv[0], argv[1], fopt, lopt, blocksize);
     }
 
-    flux_handle_destroy (&h);
+    flux_api_close (h);
 
     free (key);
     log_fini ();

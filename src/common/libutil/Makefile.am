@@ -26,7 +26,6 @@ libutil_la_SOURCES = \
 	zconnect.h \
 	zfd.c \
 	zfd.h \
-	lsdfatal.c \
 	optparse.c \
 	optparse.h \
 	tstat.c \
