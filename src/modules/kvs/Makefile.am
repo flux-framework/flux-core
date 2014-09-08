@@ -16,6 +16,7 @@ includefluxdir = $(includedir)/flux
 fluxmod_LTLIBRARIES = kvs.la
 
 fluxmod_libadd = \
+	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/lib/libflux/libflux.la \
 	$(LIBJSON) $(LIBZMQ) $(LIBCZMQ)
@@ -44,6 +45,7 @@ libflux_kvs_la_SOURCES = \
 	libkvs.c
 
 libflux_kvs_la_LIBADD = \
+	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/lib/libflux/libflux.la \
 	$(LIBJSON) $(LIBZMQ) $(LIBCZMQ)

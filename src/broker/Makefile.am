@@ -28,6 +28,7 @@ cmbd_SOURCES = \
 	pmi.h
 
 cmbd_LDADD = \
+	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/lib/libflux/libflux.la \
-	$(LIBMUNGE) $(LIBJSON) $(LIBZMQ) $(LIBCZMQ) -ldl
+	$(LIBMUNGE) $(LIBJSON) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)

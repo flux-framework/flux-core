@@ -51,13 +51,14 @@ fluxbin_PROGRAMS = \
 	up
 
 fluxbin_ldadd = \
+	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/lib/libflux/libflux.la \
 	$(top_builddir)/src/modules/api/libflux-api.la \
 	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(top_builddir)/src/modules/modctl/libflux-modctl.la \
 	$(top_builddir)/src/modules/live/libflux-live.la \
-	$(LIBJSON) $(LIBZMQ) $(LIBCZMQ) $(LIBMUNGE)
+	$(LIBJSON) $(LIBZMQ) $(LIBCZMQ) $(LIBMUNGE) $(LIBPTHREAD)
 
 event_SOURCES = event.c
 event_LDADD = $(fluxbin_ldadd)

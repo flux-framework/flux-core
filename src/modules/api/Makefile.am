@@ -16,6 +16,7 @@ includefluxdir = $(includedir)/flux
 fluxmod_LTLIBRARIES = api.la
 
 fluxmod_libadd = \
+	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/lib/libflux/libflux.la \
 	$(LIBJSON) $(LIBZMQ) $(LIBCZMQ)
@@ -39,6 +40,7 @@ libflux_api_la_SOURCES = \
 	libapi.c
 
 libflux_api_la_LIBADD = \
+	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/lib/libflux/libflux.la \
 	$(LIBJSON) $(LIBZMQ) $(LIBCZMQ)

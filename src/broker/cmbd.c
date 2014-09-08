@@ -43,6 +43,7 @@
 #include <sys/param.h>
 #include <stdbool.h>
 #include <sys/time.h>
+#include <sys/resource.h>
 #include <dlfcn.h>
 
 #include <json/json.h>

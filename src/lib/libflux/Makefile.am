@@ -43,7 +43,9 @@ libflux_la_SOURCES = \
 	reparent.c
 
 libflux_la_LIBADD = \
-	$(top_builddir)/src/common/libutil/libutil.la
+	$(top_builddir)/src/common/liblsd/liblsd.la \
+	$(top_builddir)/src/common/libutil/libutil.la \
+	$(LIBMUNGE) $(LIBJSON) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)
 
 libflux_la_LDFLAGS = -Wl,--version-script=flux_version.map
 

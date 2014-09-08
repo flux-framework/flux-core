@@ -37,7 +37,4 @@ libutil_la_SOURCES = \
 	nodeset.h \
 	shortjson.h
 
-libutil_la_LIBADD = \
-	$(top_builddir)/src/common/liblsd/liblsd.la
-
 EXTRA_DIST = veb_mach.c
