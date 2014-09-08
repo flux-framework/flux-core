@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* cmbdcli.c - client code for built-in cmbd queries */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -34,13 +32,7 @@
 #include <errno.h>
 #include <getopt.h>
 #include <libgen.h>
-#include <pthread.h>
-#include <unistd.h>
-#include <sys/param.h>
 #include <stdbool.h>
-#include <sys/un.h>
-#include <sys/socket.h>
-#include <ctype.h>
 #include <stdarg.h>
 #include <json/json.h>
 #include <czmq.h>
@@ -51,92 +43,47 @@
 
 #include "flux.h"
 
-char *flux_getattr (flux_t h, int rank, const char *name)
-{
-    JSON request = Jnew ();
-    JSON response = NULL;
-    char *ret = NULL;
-    const char *val;
-
-    Jadd_str (request, "name", name);
-    if (!(response = flux_rank_rpc (h, rank, request, "cmb.getattr")))
-        goto done;
-    if (!Jget_str (response, (char *)name, &val)) {
-        errno = EPROTO;
-        goto done;
-    }
-    ret = xstrdup (val);
-done:
-    Jput (request);
-    Jput (response);
-    return ret;
-}
-
-int flux_info (flux_t h, int *rankp, int *sizep, bool *treerootp)
-{
-    JSON request = Jnew ();
-    JSON response = NULL;
-    int rank, size;
-    bool treeroot;
-    int ret = -1;
-
-    if (!(response = flux_rpc (h, request, "cmb.info")))
-        goto done;
-    if (!Jget_bool (response, "treeroot", &treeroot)
-            || !Jget_int (response, "rank", &rank)
-            || !Jget_int (response, "size", &size)) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (rankp)
-        *rankp = rank;
-    if (sizep)
-        *sizep = size;
-    if (treerootp)
-        *treerootp = treeroot;
-    ret = 0;
-done:
-    Jput (request);
-    Jput (response);
-    return ret;
-}
-
-int flux_size (flux_t h)
-{
-    int size = -1;
-    flux_info (h, NULL, &size, NULL);
-    return size;
-}
-
-bool flux_treeroot (flux_t h)
-{
-    bool treeroot = false;
-    flux_info (h, NULL, NULL, &treeroot);
-    return treeroot;
-}
-
-JSON flux_lspeer (flux_t h, int rank)
-{
-    JSON request = Jnew ();
-    JSON response = NULL;
-
-    response = flux_rank_rpc (h, rank, request, "cmb.lspeer");
-    Jput (request);
-    return response;
-}
-
-int flux_reparent (flux_t h, int rank, const char *uri)
+int flux_rmmod (flux_t h, int rank, const char *name, int flags)
 {
     JSON request = Jnew ();
     JSON response = NULL;
     int rc = -1;
 
-    if (!uri) {
-        errno = EINVAL;
+    Jadd_str (request, "name", name);
+    Jadd_int (request, "flags", flags);
+    if ((response = flux_rank_rpc (h, rank, request, "cmb.rmmod"))) {
+        errno = EPROTO;
         goto done;
     }
-    Jadd_str (request, "uri", uri);
-    if ((response = flux_rank_rpc (h, rank, request, "cmb.reparent"))) {
+    if (errno != 0)
+        goto done;
+    rc = 0;
+done:
+    Jput (request);
+    Jput (response);
+    return rc;
+}
+
+JSON flux_lsmod (flux_t h, int rank)
+{
+    JSON request = Jnew ();
+    JSON response = NULL;
+
+    response = flux_rank_rpc (h, rank, request, "cmb.lsmod");
+    Jput (request);
+    return response;
+}
+
+int flux_insmod (flux_t h, int rank, const char *path, int flags, JSON args)
+{
+    JSON request = Jnew ();
+    JSON response = NULL;
+    int rc = -1;
+
+    Jadd_str (request, "path", path);
+    Jadd_int (request, "flags", flags);
+    Jadd_obj (request, "args", args);
+    if ((response = flux_rank_rpc (h, rank, request, "cmb.insmod"))) {
         errno = EPROTO;
         goto done;
     }

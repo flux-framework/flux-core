@@ -1,5 +1,42 @@
-#ifndef HAVE_FLUX_HANDLE_H
-#define HAVE_FLUX_HANDLE_H
+#ifndef _FLUX_HANDLE_H
+#define _FLUX_HANDLE_H
+
+/* Flags for handle creation and flux_flags_set()/flux_flags_unset.
+ */
+enum {
+    FLUX_FLAGS_TRACE = 1,   /* print 0MQ messages sent over the flux_t */
+                            /*   handle on stdout. */
+};
+
+/* A mechanism is provide for users to attach auxiliary state to the flux_t
+ * handle by name.  The FluxFreeFn, if non-NULL, will be called
+ * to destroy this state when the handle is destroyed.
+ */
+typedef void (*FluxFreeFn)(void *arg);
+void *flux_aux_get (flux_t h, const char *name);
+void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn destroy);
+
+/* Set/clear FLUX_FLAGS_* on a flux_t handle.
+ * Flags can also be set when the handle is created, e.g. flux_api_openpath().
+ */
+void flux_flags_set (flux_t h, int flags);
+void flux_flags_unset (flux_t h, int flags);
+
+/* Accessor for zeromq context.
+ * N.B. The zctx_t is thread-safe but zeromq sockets, and therefore
+ * flux_t handle operations are not.
+ */
+zctx_t *flux_get_zctx (flux_t h);
+
+/* Accessor for security context.  Same comments on thread safety apply.
+ */
+flux_sec_t flux_get_sec (flux_t h);
+
+
+/**
+ ** Only handle implementation stuff below.
+ ** Flux_t handle users should not use these interfaces.
+ */
 
 struct flux_handle_ops {
     int         (*request_sendmsg)(void *impl, zmsg_t **zmsg);
@@ -34,8 +71,6 @@ struct flux_handle_ops {
     void        (*impl_destroy)(void *impl);
 };
 
-/* These functions should only be called from handle implementations.
- */
 flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags);
 void flux_handle_destroy (flux_t *hp);
 int flux_handle_event_msg (flux_t h, int typemask, zmsg_t **zmsg);
@@ -43,7 +78,7 @@ int flux_handle_event_fd (flux_t h, int fd, short revents);
 int flux_handle_event_zs (flux_t h, void *zs, short revents);
 int flux_handle_event_tmout (flux_t h, int timer_id);
 
-#endif /* !HAVE_FLUX_HANDLE_H */
+#endif /* !_FLUX_HANDLE_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

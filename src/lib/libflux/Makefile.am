@@ -19,7 +19,8 @@ includeflux_HEADERS = \
 	message.h \
 	panic.h \
 	event.h \
-	request.h
+	request.h \
+	module.h
 
 libflux_LTLIBRARIES = \
 	libflux.la
@@ -33,7 +34,8 @@ libflux_la_SOURCES = \
 	message.c \
 	panic.c \
 	event.c \
-	request.c
+	request.c \
+	module.c
 
 libflux_la_LIBADD = \
 	$(top_builddir)/src/common/libutil/libutil.la
