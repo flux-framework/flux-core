@@ -21,8 +21,8 @@
  *  <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#ifndef HAVE_LOG_H
-#define HAVE_LOG_H
+#ifndef _UTIL_LOG_H
+#define _UTIL_LOG_H
 
 void log_init (char *p);
 void log_fini (void);
@@ -50,7 +50,7 @@ void msg (const char *fmt, ...)
 const char *log_leveltostr (int level);
 int log_strtolevel (const char *s);
 
-#endif /* !HAVE_LOG_H */
+#endif /* !_UTIL_LOG_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

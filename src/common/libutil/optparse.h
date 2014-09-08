@@ -1,6 +1,5 @@
-
-#ifndef _HAVE_OPTPARSE_H
-#define _HAVE_OPTPARSE_H
+#ifndef _UTIL_OPTPARSE_H
+#define _UTIL_OPTPARSE_H
 
 /******************************************************************************
  *  Datatypes:
@@ -139,4 +138,4 @@ int optparse_parse_args (optparse_t p, int argc, char *argv[]);
  */
 int optparse_getopt (optparse_t p, const char *name, const char **optargp);
 
-#endif /* _HAVE_OPTPARSE_H */
+#endif /* _UTIL_OPTPARSE_H */

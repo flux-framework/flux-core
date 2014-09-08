@@ -1,5 +1,5 @@
-#ifndef _HAVE_UTIL_SHORTJSON_H
-#define _HAVE_UTIL_SHORTJSON_H
+#ifndef _UTIL_SHORTJSON_H
+#define _UTIL_SHORTJSON_H
 
 typedef json_object *JSON;
 
@@ -222,7 +222,7 @@ Jdup (JSON o)
     return o ? Jfromstr (Jtostr (o)) : NULL;
 }
 
-#endif
+#endif /* _UTIL_SHORTJSON_H */
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

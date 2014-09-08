@@ -1,5 +1,5 @@
-#ifndef LIBVEB_H
-#define LIBVEB_H
+#ifndef _UTIL_LIBVEB_H
+#define _UTIL_LIBVEB_H
 /*
 Copyright (c) 2010 Jani Lahtinen <jani.lahtinen8@gmail.com>
 
@@ -40,4 +40,4 @@ void vebput(Veb, uint);
 uint vebsucc(Veb, uint);
 uint vebpred(Veb, uint);
 
-#endif
+#endif /* _UTIL_LIBVEB_H */

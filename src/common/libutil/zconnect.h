@@ -7,4 +7,4 @@
 void zconnect (zctx_t *zctx, void **sp, int type, char *uri, int hwm, char *id);
 void zbind (zctx_t *zctx, void **sp, int type, char *uri, int hwm);
 
-#endif /* !_HAVE_ZCONNECT_H */
+#endif /* !_UTIL_ZCONNECT_H */
