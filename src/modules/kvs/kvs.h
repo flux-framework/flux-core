@@ -1,5 +1,5 @@
-#ifndef FLUX_KVS_H
-#define FLUX_KVS_H
+#ifndef _FLUX_KVS_H
+#define _FLUX_KVS_H
 
 typedef struct kvsdir_struct *kvsdir_t;
 
@@ -174,7 +174,7 @@ int kvsdir_unlink (kvsdir_t dir, const char *key);
 int kvsdir_symlink (kvsdir_t dir, const char *key, const char *target);
 int kvsdir_mkdir (kvsdir_t dir, const char *key);
 
-#endif /* !FLUX_KVS_H */
+#endif /* !_FLUX_KVS_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
