@@ -665,6 +665,8 @@ char *plugin_getstring (const char *path, const char *name)
     char *s = NULL;
     const char **np;
 
+    if (access (path, F_OK) < 0)
+        return NULL;
     dlerror ();
     if (!(dso = dlopen (path, RTLD_NOW | RTLD_LOCAL))) {
         msg ("%s", dlerror ());
