@@ -128,10 +128,10 @@
 #include <czmq.h>
 #include <munge.h>
 
-#include "flux.h"
 #include "log.h"
-#include "security.h"
 #include "xzmalloc.h"
+
+#include "flux.h"
 
 #if ZMQ_VERSION_MAJOR >= 4
 #define HAVE_ZAUTH 1

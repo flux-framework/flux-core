@@ -38,10 +38,11 @@
 #include <json/json.h>
 #include <assert.h>
 
-#include "message.h"
 #include "log.h"
 #include "jsonutil.h"
 #include "xzmalloc.h"
+
+#include "message.h"
 
 int flux_msg_hopcount (zmsg_t *zmsg)
 {

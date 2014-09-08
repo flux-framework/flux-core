@@ -1,6 +1,7 @@
 AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = \
+	-I$(top_srcdir)/src/common/liblsd \
 	-I$(top_srcdir)/src/common/libutil \
 	-I$(top_srcdir)/src/modules/api \
 	-I$(top_srcdir)/src/modules/kvs \
@@ -20,14 +21,17 @@ includeflux_HEADERS = \
 	panic.h \
 	event.h \
 	request.h \
-	module.h
+	module.h \
+	reparent.h \
+	info.h \
+	flog.h
 
 libflux_LTLIBRARIES = \
 	libflux.la
 
 libflux_la_SOURCES = \
-	log.c \
-	brokerops.c \
+	flog.c \
+	info.c \
 	handle.c \
 	reduce.c \
 	security.c \
@@ -35,7 +39,8 @@ libflux_la_SOURCES = \
 	panic.c \
 	event.c \
 	request.c \
-	module.c
+	module.c \
+	reparent.c
 
 libflux_la_LIBADD = \
 	$(top_builddir)/src/common/libutil/libutil.la

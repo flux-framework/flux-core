@@ -29,41 +29,59 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdarg.h>
+#include <errno.h>
+#include <getopt.h>
+#include <libgen.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <sys/param.h>
 #include <stdbool.h>
+#include <sys/un.h>
+#include <sys/socket.h>
+#include <ctype.h>
+#include <stdarg.h>
 #include <json/json.h>
 #include <czmq.h>
-#include <signal.h>
 
 #include "log.h"
+#include "xzmalloc.h"
 #include "shortjson.h"
 
 #include "flux.h"
 
-int flux_panic (flux_t h, int rank, const char *msg)
+JSON flux_lspeer (flux_t h, int rank)
 {
     JSON request = Jnew ();
+    JSON response = NULL;
+
+    response = flux_rank_rpc (h, rank, request, "cmb.lspeer");
+    Jput (request);
+    return response;
+}
+
+int flux_reparent (flux_t h, int rank, const char *uri)
+{
+    JSON request = Jnew ();
+    JSON response = NULL;
     int rc = -1;
 
-    if (msg)
-        Jadd_str (request, "msg", msg);
-    if (flux_rank_request_send (h, rank, request, "cmb.panic") < 0)
+    if (!uri) {
+        errno = EINVAL;
         goto done;
-    /* No reply */
+    }
+    Jadd_str (request, "uri", uri);
+    if ((response = flux_rank_rpc (h, rank, request, "cmb.reparent"))) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (errno != 0)
+        goto done;
     rc = 0;
 done:
     Jput (request);
+    Jput (response);
     return rc;
 }
-
-void flux_assfail (flux_t h, char *ass, char *file, int line)
-{
-    flux_log (h, LOG_CRIT, "assertion failure: %s:%d: %s", file, line, ass);
-    sleep (5);
-    if (raise (SIGABRT) < 0)
-        exit (1);
-}
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

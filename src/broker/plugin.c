@@ -55,7 +55,6 @@
 #include "xzmalloc.h"
 
 #include "flux.h"
-#include "handle.h"
 
 #include "plugin.h"
 

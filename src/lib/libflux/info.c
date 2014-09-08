@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* cmbdcli.c - client code for built-in cmbd queries */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -34,13 +32,7 @@
 #include <errno.h>
 #include <getopt.h>
 #include <libgen.h>
-#include <pthread.h>
-#include <unistd.h>
-#include <sys/param.h>
 #include <stdbool.h>
-#include <sys/un.h>
-#include <sys/socket.h>
-#include <ctype.h>
 #include <stdarg.h>
 #include <json/json.h>
 #include <czmq.h>
@@ -113,40 +105,6 @@ bool flux_treeroot (flux_t h)
     bool treeroot = false;
     flux_info (h, NULL, NULL, &treeroot);
     return treeroot;
-}
-
-JSON flux_lspeer (flux_t h, int rank)
-{
-    JSON request = Jnew ();
-    JSON response = NULL;
-
-    response = flux_rank_rpc (h, rank, request, "cmb.lspeer");
-    Jput (request);
-    return response;
-}
-
-int flux_reparent (flux_t h, int rank, const char *uri)
-{
-    JSON request = Jnew ();
-    JSON response = NULL;
-    int rc = -1;
-
-    if (!uri) {
-        errno = EINVAL;
-        goto done;
-    }
-    Jadd_str (request, "uri", uri);
-    if ((response = flux_rank_rpc (h, rank, request, "cmb.reparent"))) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (errno != 0)
-        goto done;
-    rc = 0;
-done:
-    Jput (request);
-    Jput (response);
-    return rc;
 }
 
 /*
