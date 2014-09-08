@@ -88,8 +88,8 @@ int main (int argc, char *argv[])
     src = argv[optind++];
     dst = argv[optind++];
 
-    if (!(h = cmb_init ()))
-        err_exit ("cmb_init");
+    if (!(h = flux_api_open ()))
+        err_exit ("flux_api_open");
 
     /* Read src into memory.
      */
@@ -103,7 +103,7 @@ int main (int argc, char *argv[])
     } else if (!strcmp (src, "-")) {
         if ((len = read_all (STDIN_FILENO, &buf)) < 0)
             err_exit ("read %s", src);
-    } else { 
+    } else {
         json_object *o;
         if (kvs_get (h, src, &o) < 0)
             err_exit ("kvs_get %s", src);
@@ -136,7 +136,7 @@ int main (int argc, char *argv[])
 
     free (buf);
 
-    flux_handle_destroy (&h);
+    flux_api_close (h);
     log_fini ();
     return 0;
 }

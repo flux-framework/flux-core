@@ -147,8 +147,8 @@ int main (int argc, char *argv[])
     if (optind == argc && !(dopt || Dopt || mkdir_name || symlink_name || readlink_name || vopt || Vopt))
         usage ();
 
-    if (!(h = cmb_init ()))
-        err_exit ("cmb_init");
+    if (!(h = flux_api_open ()))
+        err_exit ("flux_api_open");
 
     if (dopt) {
         if (kvs_dropcache (h) < 0)
@@ -219,7 +219,7 @@ int main (int argc, char *argv[])
     if (need_commit)
         commit (h);
 
-    flux_handle_destroy (&h);
+    flux_api_close (h);
     log_fini ();
     return 0;
 }

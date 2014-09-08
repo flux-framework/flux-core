@@ -91,8 +91,8 @@ int main (int argc, char *argv[])
     if (!pub && !sub)
         usage ();
 
-    if (!(h = cmb_init ()))
-        err_exit ("cmb_init");
+    if (!(h = flux_api_open  ()))
+        err_exit ("flux_api_open");
 
     if (pub) {
         json_object *o = NULL;
@@ -130,7 +130,7 @@ int main (int argc, char *argv[])
             err_exit ("flux_event_unsubscribe");
     }
 
-    flux_handle_destroy (&h);
+    flux_api_close (h);
     log_fini ();
     return 0;
 }

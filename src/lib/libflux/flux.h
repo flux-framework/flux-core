@@ -17,7 +17,7 @@ typedef struct flux_handle_struct *flux_t;
 #include "message.h"
 #include "handle.h"
 
-#include "cmb.h"
+#include "api.h"
 #include "kvs.h"
 #include "live.h"
 #include "modctl.h"
@@ -28,11 +28,6 @@ enum {
     FLUX_FLAGS_TRACE = 1,   /* print 0MQ messages sent over the flux_t */
                             /*   handle on stdout. */
 };
-
-/* API users: create a flux_t handle using cmb_init().
- * Destroy it with flux_handle_destroy().
- */
-void flux_handle_destroy (flux_t *hp);
 
 /* A mechanism is provide for other modules to attach auxiliary state to
  * the flux_t handle by name.  The FluxFreeFn, if non-NULL, will be called
@@ -119,11 +114,6 @@ zctx_t *flux_get_zctx (flux_t h);
 /* Accessor for security context.  Same comments on thread safety apply.
  */
 flux_sec_t flux_get_sec (flux_t h);
-
-/* Execute a barrier across 'nprocs' processes.
- * The 'name' must be unique across the comms session.
- */
-int flux_barrier (flux_t h, const char *name, int nprocs);
 
 /* Interface for logging via the comms' reduction network.
  */

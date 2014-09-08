@@ -115,8 +115,8 @@ int main (int argc, char *argv[])
             oom ();
     }
 
-    if (!(h = cmb_init ()))
-        err_exit ("cmb_init");
+    if (!(h = flux_api_open ()))
+        err_exit ("flux_api_open");
 
     for (seq = 0; ; seq++) {
         monotime (&t0);
@@ -131,7 +131,7 @@ int main (int argc, char *argv[])
         usleep (msec * 1000);
     }
 
-    flux_handle_destroy (&h);
+    flux_api_close (h);
     log_fini ();
     return 0;
 }

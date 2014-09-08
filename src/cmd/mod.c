@@ -108,8 +108,8 @@ int main (int argc, char *argv[])
         usage ();
     cmd = argv[optind++];
 
-    if (!(h = cmb_init ()))
-        err_exit ("cmb_init");
+    if (!(h = flux_api_open ()))
+        err_exit ("flux_api_open");
     if (rank != -1 && uopt == false)
         usage ();
 
@@ -133,7 +133,7 @@ int main (int argc, char *argv[])
     } else
         usage ();
 
-    flux_handle_destroy (&h);
+    flux_api_close (h);
     log_fini ();
     return 0;
 }

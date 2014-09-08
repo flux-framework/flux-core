@@ -33,7 +33,7 @@ api_la_LIBADD = $(fluxmod_libadd)
 libflux_LTLIBRARIES = \
 	libflux-api.la
 
-includeflux_HEADERS = cmb.h
+includeflux_HEADERS = api.h
 
 libflux_api_la_SOURCES = \
 	libapi.c

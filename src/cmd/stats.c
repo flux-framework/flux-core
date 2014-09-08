@@ -133,8 +133,8 @@ int main (int argc, char *argv[])
     if (Copt && rankstr)
         msg_exit ("Use --clear not --clear-all to clear a single node.");
 
-    if (!(h = cmb_init ()))
-        err_exit ("cmb_init");
+    if (!(h = flux_api_open ()))
+        err_exit ("flux_api_open");
 
     if (copt) {
         if ((response = flux_rank_rpc (h, rank, NULL, "%s.stats.clear",target)))
@@ -155,7 +155,7 @@ int main (int argc, char *argv[])
         parse_json (objname, response, scale, type);
         json_object_put (response);
     }
-    flux_handle_destroy (&h);
+    flux_api_close (h);
     log_fini ();
     return 0;
 }

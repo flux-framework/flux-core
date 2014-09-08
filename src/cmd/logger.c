@@ -87,8 +87,8 @@ int main (int argc, char *argv[])
         usage ();
     message = argv_concat (argc - optind, argv + optind);
 
-    if (!(h = cmb_init ()))
-        err_exit ("cmb_init");
+    if (!(h = flux_api_open ()))
+        err_exit ("flux_api_open");
 
     if (parse_logstr (priority, &level, &facility) < 0)
         msg_exit ("bad priority argument");
@@ -96,7 +96,7 @@ int main (int argc, char *argv[])
     if (flux_log (h, level, "%s", message) < 0)
         err_exit ("cmb_log");
 
-    flux_handle_destroy (&h);
+    flux_api_close (h);
 
     free (message);
     free (facility);

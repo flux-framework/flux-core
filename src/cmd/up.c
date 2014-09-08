@@ -121,8 +121,8 @@ int main (int argc, char *argv[])
     if (optind != argc)
         usage ();
 
-    if (!(h = cmb_init ()))
-        err_exit ("cmb_init");
+    if (!(h = flux_api_open ()))
+        err_exit ("flux_api_open");
 
     if (!(ns = ns_fromkvs (h)))
         ns = ns_guess (h);

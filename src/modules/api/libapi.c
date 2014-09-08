@@ -22,7 +22,7 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* apicli.c - flux_t implementation for UNIX domain socket */
+/* libapi.c - flux_t implementation for UNIX domain socket */
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -354,7 +354,7 @@ done:
     return running;
 }
 
-flux_t cmb_init_full (const char *path, int flags)
+flux_t flux_api_openpath (const char *path, int flags)
 {
     cmb_t *c = NULL;
     struct sockaddr_un addr;
@@ -408,7 +408,7 @@ error:
     return NULL;
 }
 
-flux_t cmb_init (void)
+flux_t flux_api_open (void)
 {
     const char *val;
     char path[PATH_MAX + 1];
@@ -432,7 +432,12 @@ flux_t cmb_init (void)
     if ((val = getenv ("FLUX_TRACE_APISOCK")) && !strcmp (val, "1"))
         flags = FLUX_FLAGS_TRACE;
 
-    return cmb_init_full (path, flags);
+    return flux_api_openpath (path, flags);
+}
+
+void flux_api_close (flux_t h)
+{
+    flux_handle_destroy (&h);
 }
 
 static const struct flux_handle_ops cmb_ops = {

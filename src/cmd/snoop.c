@@ -122,8 +122,8 @@ int main (int argc, char *argv[])
         if (zlist_append (subs, argv[optind++]) < 0)
             oom ();
     }
-    if (!(h = cmb_init ()))
-        err_exit ("cmb_init");
+    if (!(h = flux_api_open ()))
+        err_exit ("flux_api_open");
     if (!(uri = flux_getattr (h, rank, "cmbd-snoop-uri")))
         err_exit ("cmbd-snoop-uri");
 
@@ -208,7 +208,7 @@ int main (int argc, char *argv[])
 
     zlist_destroy (&subs);
     free (uri);
-    flux_handle_destroy (&h);
+    flux_api_close (h);
     log_fini ();
     return 0;
 }

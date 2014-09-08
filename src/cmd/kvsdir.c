@@ -95,12 +95,12 @@ int main (int argc, char *argv[])
     if (optind == argc - 1)
         key = argv[optind];
 
-    if (!(h = cmb_init ()))
-        err_exit ("cmb_init");
+    if (!(h = flux_api_open ()))
+        err_exit ("flux_api_open");
 
     dump_kvs_dir (h, key ? key : ".", vopt, Ropt, Fopt);
 
-    flux_handle_destroy (&h);
+    flux_api_close (h);
     log_fini ();
     return 0;
 }

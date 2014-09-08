@@ -109,16 +109,16 @@ int main (int argc, char *argv[])
     if (size < 1 || count < 1)
         usage ();
 
-    if (!(h = cmb_init ()))
-        err_exit ("cmb_init");
+    if (!(h = flux_api_open ()))
+        err_exit ("flux_api_open");
 
     if (kvs_unlink (h, prefix) < 0)
         err_exit ("kvs_unlink %s", prefix);
     if (kvs_commit (h) < 0)
         err_exit ("kvs_commit");
-    
+
     val = xzmalloc (size);
-    
+
     monotime (&t0);
     for (i = 0; i < count; i++) {
         if (asprintf (&key, "%s.key%d", prefix, i) < 0)
@@ -164,7 +164,7 @@ int main (int argc, char *argv[])
         msg ("kvs_get:    time=%0.3f s (%d keys of size %d)",
              monotime_since (t0)/1000, count, size);
 
-    flux_handle_destroy (&h);
+    flux_api_close (h);
     log_fini ();
     return 0;
 }

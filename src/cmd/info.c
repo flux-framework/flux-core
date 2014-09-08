@@ -76,8 +76,8 @@ int main (int argc, char *argv[])
     if (optind != argc)
         usage ();
 
-    if (!(h = cmb_init ()))
-        err_exit ("cmb_init");
+    if (!(h = flux_api_open ()))
+        err_exit ("flux_api_open");
 
     if (flux_info (h, &rank, &size, &treeroot) < 0)
         err_exit ("flux_info");
@@ -85,7 +85,7 @@ int main (int argc, char *argv[])
     printf ("size=%d\n", size);
     printf ("treeroot=%s\n", treeroot ? "true" : "false");
 
-    flux_handle_destroy (&h);
+    flux_api_close (h);
     log_fini ();
     return 0;
 }
