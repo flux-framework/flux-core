@@ -16,6 +16,9 @@ typedef struct flux_handle_struct *flux_t;
 #include "reduce.h"
 #include "message.h"
 #include "handle.h"
+#include "panic.h"
+#include "event.h"
+#include "request.h"
 
 #include "api.h"
 #include "kvs.h"
@@ -142,12 +145,6 @@ char *flux_getattr (flux_t h, int rank, const char *name);
  */
 int flux_reparent (flux_t h, int rank, const char *uri);
 int flux_failover (flux_t h, int rank);
-
-int flux_panic (flux_t h, int rank, const char *msg);
-
-void flux_assfail (flux_t h, char *ass, char *file, int line);
-#define FASSERT(h, exp) if ((exp)); \
-                        else flux_assfail(h, #exp, __FILE__, __LINE__)
 
 /* Comms modules must define  MOD_NAME and mod_main().
  */
