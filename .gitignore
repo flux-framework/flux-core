@@ -17,8 +17,11 @@ config.log
 config.status
 config.h
 config.h.in
+config.h.in~
 libtool
 .deps/
+.libs/
+libltdl/
 
 # Object files
 *.o
@@ -57,3 +60,5 @@ Makefile
 *.diff
 core.*
 *.tar.gz
+
+cmbd.log
