@@ -3,6 +3,9 @@
     kvs_*;
     kvsitr_*;
     kvsdir_*;
+    zio_*;
+    kz_*;
+    forkzio_*;
     local: *;
 };
 
