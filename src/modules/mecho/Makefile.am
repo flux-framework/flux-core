@@ -17,13 +17,14 @@ fluxmod_LTLIBRARIES = mecho.la
 
 fluxmod_libadd = \
 	$(top_builddir)/src/common/libmrpc/libmrpc.la \
+	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 
 fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
-	-export-symbols-regex '(^mod)_(main|name)$$'
+	-export-symbols-regex '^mod_(main|name)$$'
 
 mecho_la_SOURCES = mecho.c
 mecho_la_LDFLAGS = $(fluxmod_ldflags)
