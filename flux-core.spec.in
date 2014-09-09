@@ -37,6 +37,7 @@ rm -rf $RPM_BUILD_ROOT
 %doc ChangeLog NEWS DISCLAIMER.LLNS COPYING INSTALL README AUTHORS
 %{_libdir}/flux
 %{_libdir}/pkgconfig/*
+/etc/ld.so.conf.d/libflux.conf
 %{_libexecdir}/flux
 %{_includedir}/flux
 %{_bindir}/cmbd

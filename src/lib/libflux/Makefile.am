@@ -10,6 +10,7 @@ AM_CPPFLAGS = \
 
 libfluxdir=$(libdir)/flux
 includefluxdir=$(includedir)/flux
+ldconfdir=/etc/ld.so.conf.d
 
 includeflux_HEADERS = \
 	flux.h \
@@ -52,5 +53,7 @@ libflux_la_LDFLAGS = -Wl,--version-script=$(srcdir)/flux_version.map
 if WITH_PKG_CONFIG
 pkgconfig_DATA = libflux.pc
 endif
+
+ldconf_DATA = libflux.conf
 
 EXTRA_DIST = flux_version.map

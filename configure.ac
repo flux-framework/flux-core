@@ -94,6 +94,7 @@ AC_CONFIG_FILES( \
   src/lib/Makefile \
   src/lib/libflux/Makefile \
   src/lib/libflux/libflux.pc \
+  src/lib/libflux/libflux.conf \
   src/broker/Makefile \
   src/cmd/Makefile \
   src/modules/Makefile \
