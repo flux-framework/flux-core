@@ -13,8 +13,9 @@ includefluxcoredir = $(includedir)/flux/core
 fluxmod_LTLIBRARIES = api.la
 
 fluxmod_libadd = \
-	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/libflux/libflux.la \
+	$(top_builddir)/src/common/libutil/libutil.la \
+	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 
 fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \

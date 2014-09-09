@@ -13,6 +13,7 @@ AM_CPPFLAGS = \
         -DPLUGIN_PATH=\"$(plugin_path)\" -DEXEC_PATH=\"$(exec_path)\" \
 	-I$(top_srcdir)/src/common/libutil \
 	-I$(top_srcdir)/src/common/libflux \
+	-I$(top_srcdir)/src/common/liblsd \
 	-I$(top_srcdir)/src/modules/api \
 	-I$(top_srcdir)/src/modules/kvs \
 	-I$(top_srcdir)/src/modules/live \
@@ -58,6 +59,7 @@ fluxbin_ldadd = \
 	$(top_builddir)/src/modules/api/libapi.la \
 	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
+	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBMUNGE) $(LIBPTHREAD)
 
 event_SOURCES = event.c
