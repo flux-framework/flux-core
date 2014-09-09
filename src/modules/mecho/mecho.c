@@ -25,14 +25,16 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <zmq.h>
 #include <czmq.h>
-#include <json/json.h>
+#include <json.h>
+#include <stdarg.h>
+#include <stdbool.h>
 
-#include "zmsg.h"
 #include "log.h"
-#include "util.h"
-#include "plugin.h"
+
+#include "flux.h"
+
+#include "mrpc.h"
 
 /* Copy input arguments to output arguments and respond to RPC.
  */
@@ -42,8 +44,8 @@ static int mecho_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     json_object *inarg = NULL;
     flux_mrpc_t f = NULL;
 
-    if (cmb_msg_decode (*zmsg, NULL, &request) < 0) {
-        flux_log (h, LOG_ERR, "cmb_msg_decode: %s", strerror (errno));
+    if (flux_msg_decode (*zmsg, NULL, &request) < 0) {
+        flux_log (h, LOG_ERR, "flux_msg_decode: %s", strerror (errno));
         goto done;
     }
     if (!request) {

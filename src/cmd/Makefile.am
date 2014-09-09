@@ -50,7 +50,8 @@ fluxbin_PROGRAMS = \
 	snoop \
 	stats \
 	up \
-	zio
+	zio \
+	mping
 
 fluxbin_ldadd = \
 	$(top_builddir)/src/modules/live/liblive.la \
@@ -115,4 +116,13 @@ zio_LDADD = \
 	$(LIBUTIL)
 zio_CPPFLAGS = \
 	-I$(top_srcdir)/src/common/libzio \
+	$(AM_CPPFLAGS)
+mping_SOURCES = mping.c
+mping_LDADD = \
+	$(top_builddir)/src/common/libmrpc/libmrpc.la \
+	$(top_builddir)/src/common/liblsd/liblsd.la \
+	$(fluxbin_ldadd) \
+	$(LIBUTIL)
+mping_CPPFLAGS = \
+	-I$(top_srcdir)/src/common/libmrpc \
 	$(AM_CPPFLAGS)

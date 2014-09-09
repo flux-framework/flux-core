@@ -22,19 +22,27 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* flux-mecho.c - flux mecho subcommand */
+/* flux-mping.c - ping using mrpc */
 
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <getopt.h>
-#include <json/json.h>
+#include <stdio.h>
 #include <assert.h>
-#include <libgen.h>
+#include <getopt.h>
+#include <string.h>
+#include <czmq.h>
+#include <json.h>
 
-#include "cmb.h"
-#include "util.h"
 #include "log.h"
+#include "xzmalloc.h"
+#include "jsonutil.h"
+#include "monotime.h"
+
+#include "flux.h"
+#include "api.h"
+
+#include "mrpc.h"
 
 #define OPTIONS "hp:d:"
 static const struct option longopts[] = {
@@ -46,8 +54,8 @@ static const struct option longopts[] = {
 
 void usage (void)
 {
-    fprintf (stderr, 
-"Usage: flux-mecho [--pad-bytes N] [--delay-msec N] nodelist\n"
+    fprintf (stderr,
+"Usage: flux-mping [--pad-bytes N] [--delay-msec N] nodelist\n"
 );
     exit (1);
 }
@@ -66,7 +74,7 @@ int main (int argc, char *argv[])
     int id;
     flux_mrpc_t f;
 
-    log_init ("flux-mecho");
+    log_init ("flux-mping");
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
@@ -90,8 +98,8 @@ int main (int argc, char *argv[])
         usage ();
     nodelist = argv[optind];
 
-    if (!(h = cmb_init ()))
-        err_exit ("cmb_init");
+    if (!(h = flux_api_open ()))
+        err_exit ("flux_api_open");
 
     for (seq = 0; ; seq++) {
         monotime (&t0);
@@ -120,7 +128,7 @@ int main (int argc, char *argv[])
         usleep (msec * 1000);
     }
 
-    flux_handle_destroy (&h);
+    flux_api_close (h);
     log_fini ();
     return 0;
 }

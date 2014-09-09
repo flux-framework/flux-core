@@ -1,3 +1,5 @@
+AM_CFLAGS = @GCCWARN@
+
 AM_CPPFLAGS = \
 	$(JSON_CFLAGS) \
 	-I$(top_srcdir)/src/common/libutil \
