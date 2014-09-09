@@ -23,8 +23,8 @@ fluxmod_libadd = \
 	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 
-fluxmod_ldflags = \
-	-module -avoid-version -Wl,--version-script=$(srcdir)/../module_version.map
+fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
+        -export-symbols-regex '(^mod)_(main|name)$$'
 
 modctl_la_SOURCES = modctl.c
 modctl_la_LDFLAGS = $(fluxmod_ldflags)

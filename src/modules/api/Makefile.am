@@ -22,8 +22,8 @@ fluxmod_libadd = \
 	$(top_builddir)/src/lib/libflux/libflux.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 
-fluxmod_ldflags = \
-	-module -avoid-version -Wl,--version-script=$(srcdir)/../module_version.map
+fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
+	-export-symbols-regex '(^mod)_(main|name)$$'
 
 api_la_SOURCES = api.c
 api_la_LDFLAGS = $(fluxmod_ldflags)
