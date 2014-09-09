@@ -50,6 +50,7 @@
 #include "xzmalloc.h"
 #include "log.h"
 #include "shortjson.h"
+#include "jsonutil.h"
 #include "nodeset.h"
 
 #include "flux.h"

@@ -92,6 +92,7 @@
 #include "nodeset.h"
 
 #include "flux.h"
+#include "kvs.h"
 
 typedef enum { CS_OK, CS_SLOW, CS_FAIL, CS_UNKNOWN } cstate_t;
 
