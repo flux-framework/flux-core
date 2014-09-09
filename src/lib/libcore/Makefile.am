@@ -19,7 +19,7 @@ libflux_core_la_LIBADD = \
 	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
-	$(LIBMUNGE) $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)
+	$(LIBMUNGE) $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD) $(LIBUTIL)
 
 libflux_core_la_LDFLAGS = -Wl,--version-script=$(srcdir)/version.map
 
