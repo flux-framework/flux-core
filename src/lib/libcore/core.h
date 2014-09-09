@@ -7,6 +7,8 @@
 #include "core/kz.h"
 #include "core/forkzio.h"
 
+#include "core/mrpc.h"
+
 #include "core/api.h"
 #include "core/kvs.h"
 #include "core/live.h"

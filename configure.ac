@@ -92,6 +92,7 @@ AC_CONFIG_FILES( \
   src/common/libutil/Makefile \
   src/common/libzio/Makefile \
   src/common/libflux/Makefile \
+  src/common/libmrpc/Makefile \
   src/lib/Makefile \
   src/lib/libcore/Makefile \
   src/lib/libcore/flux-core.pc \
