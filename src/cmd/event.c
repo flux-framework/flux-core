@@ -29,12 +29,11 @@
 #endif
 #include <stdio.h>
 #include <getopt.h>
-#include <json/json.h>
 #include <assert.h>
 #include <libgen.h>
 #include <stdarg.h>
 #include <stdbool.h>
-#include <zmq.h>
+#include <json.h>
 #include <czmq.h>
 
 #include "log.h"

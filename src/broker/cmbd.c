@@ -45,8 +45,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <dlfcn.h>
-
-#include <json/json.h>
+#include <json.h>
 #include <zmq.h>
 #include <czmq.h>
 

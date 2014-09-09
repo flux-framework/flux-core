@@ -31,7 +31,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <stdbool.h>
-#include <json/json.h>
+#include <json.h>
 #include <czmq.h>
 #include <signal.h>
 

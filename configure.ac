@@ -65,13 +65,13 @@ AC_CHECK_FUNCS( \
 )
 X_AC_CHECK_PTHREADS
 X_AC_CHECK_COND_LIB(munge, munge_ctx_create)
-X_AC_CHECK_COND_LIB(json, json_object_get)
 X_AC_CHECK_COND_LIB(util, forkpty)
 X_AC_CHECK_COND_LIB(rt, clock_gettime)
 AX_LUA_HEADERS
 AX_LUA_HEADERS(501)
 AX_LUA_LIBS
 X_AC_ZEROMQ
+PKG_CHECK_MODULES(JSON, json);
 
 ##
 # For list.c, hostlist.c, hash.c

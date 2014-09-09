@@ -27,7 +27,7 @@
 #endif
 #include <stdio.h>
 #include <czmq.h>
-#include <json/json.h>
+#include <json.h>
 
 #include "zio.h"
 

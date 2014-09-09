@@ -1,4 +1,5 @@
 AM_CPPFLAGS = \
+	$(JSON_CFLAGS) \
 	-I$(top_srcdir)/src/common/liblsd \
 	-I$(top_srcdir)/src/common/libutil \
 	-I$(top_srcdir)/src/lib/libflux \
@@ -19,7 +20,7 @@ fluxmod_libadd = \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/lib/libflux/libflux.la \
-	$(LIBJSON) $(LIBZMQ) $(LIBCZMQ)
+	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 
 fluxmod_ldflags = \
 	-module -avoid-version -Wl,--version-script=$(srcdir)/../module_version.map
@@ -48,7 +49,7 @@ libflux_kvs_la_LIBADD = \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/lib/libflux/libflux.la \
-	$(LIBJSON) $(LIBZMQ) $(LIBCZMQ)
+	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 
 libflux_kvs_la_LDFLAGS = -Wl,--version-script=$(srcdir)/flux_kvs_version.map
 

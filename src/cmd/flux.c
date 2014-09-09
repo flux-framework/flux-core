@@ -37,8 +37,8 @@
 #include <sys/time.h>
 #include <libgen.h>
 #include <stdbool.h>
-#include <json/json.h>
 #include <sys/param.h>
+#include <json.h>
 
 #include "log.h"
 #include "xzmalloc.h"

@@ -35,7 +35,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <sys/time.h>
-#include <json/json.h>
+#include <json.h>
 #include <assert.h>
 
 #include "log.h"

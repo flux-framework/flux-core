@@ -29,7 +29,6 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
-#include <json/json.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <sys/types.h>
@@ -37,6 +36,7 @@
 #include <limits.h>
 #include <uuid/uuid.h>
 #include <assert.h>
+#include <json.h>
 
 #include "log.h"
 #include "jsonutil.h"

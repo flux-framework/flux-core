@@ -34,17 +34,11 @@
 #include <errno.h>
 #include <getopt.h>
 #include <libgen.h>
-#include <pthread.h>
-#include <unistd.h>
-#include <sys/param.h>
 #include <stdbool.h>
-#include <sys/un.h>
-#include <sys/socket.h>
 #include <sys/time.h>
 #include <ctype.h>
-#include <zmq.h>
 #include <czmq.h>
-#include <json/json.h>
+#include <json.h>
 
 #include "log.h"
 #include "shortjson.h"

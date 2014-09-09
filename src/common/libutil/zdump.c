@@ -26,9 +26,8 @@
 #include "config.h"
 #endif
 
-#include <zmq.h>
 #include <czmq.h>
-#include <json/json.h>
+#include <json.h>
 
 #include "zmsg.h"
 #include "log.h"

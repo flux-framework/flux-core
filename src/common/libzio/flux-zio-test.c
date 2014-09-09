@@ -29,7 +29,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <czmq.h>
-#include <json/json.h>
+#include <json.h>
 
 #include "cmb.h"
 #include "zio.h"

@@ -42,8 +42,8 @@
 #include <sys/socket.h>
 #include <ctype.h>
 #include <stdarg.h>
-#include <json/json.h>
 #include <czmq.h>
+#include <json.h>
 
 #include "log.h"
 #include "zmsg.h"

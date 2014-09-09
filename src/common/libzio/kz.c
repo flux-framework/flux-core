@@ -53,12 +53,12 @@
 #include "config.h"
 #endif
 #include <getopt.h>
-#include <json/json.h>
 #include <assert.h>
 #include <libgen.h>
 #include <sys/wait.h>
 #include <termios.h>
 #include <czmq.h>
+#include <json.h>
 
 #include "xzmalloc.h"
 #include "log.h"

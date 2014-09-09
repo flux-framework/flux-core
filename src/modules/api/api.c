@@ -42,9 +42,8 @@
 #include <sys/socket.h>
 #include <ctype.h>
 #include <fcntl.h>
-#include <zmq.h>
 #include <czmq.h>
-#include <json/json.h>
+#include <json.h>
 
 #include "zmsg.h"
 #include "xzmalloc.h"

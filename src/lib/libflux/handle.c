@@ -36,7 +36,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <stdarg.h>
-#include <json/json.h>
+#include <json.h>
 #include <czmq.h>
 #include <fnmatch.h>
 

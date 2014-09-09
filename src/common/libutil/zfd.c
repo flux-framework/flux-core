@@ -26,8 +26,6 @@
 #include "config.h"
 #endif
 #include <stdio.h>
-#include <zmq.h>
-#include <czmq.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -35,8 +33,9 @@
 #include <stdarg.h>
 #include <string.h>
 #include <sys/time.h>
-#include <json/json.h>
 #include <assert.h>
+#include <czmq.h>
+#include <json.h>
 
 #include "log.h"
 #include "xzmalloc.h"

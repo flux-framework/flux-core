@@ -40,7 +40,7 @@
 #include <sys/socket.h>
 #include <ctype.h>
 #include <stdarg.h>
-#include <json/json.h>
+#include <json.h>
 #include <czmq.h>
 
 #include "log.h"

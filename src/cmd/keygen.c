@@ -31,10 +31,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <getopt.h>
-#include <json/json.h>
 #include <assert.h>
 #include <libgen.h>
-#include <zmq.h>
+#include <json.h>
 #include <czmq.h>
 
 #include "log.h"

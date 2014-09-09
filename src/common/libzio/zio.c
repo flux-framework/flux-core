@@ -25,11 +25,11 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <string.h>
-#include <json/json.h>
+#include <czmq.h>
+#include <json.h>
 
 #include "cbuf.h"
 

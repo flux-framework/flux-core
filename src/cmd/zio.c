@@ -28,7 +28,6 @@
 #include "config.h"
 #endif
 #include <getopt.h>
-#include <json/json.h>
 #include <assert.h>
 #include <libgen.h>
 #include <sys/wait.h>
@@ -36,6 +35,7 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <czmq.h>
+#include <json.h>
 
 #include "log.h"
 #include "xzmalloc.h"

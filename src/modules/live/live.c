@@ -84,7 +84,7 @@
 #include <ctype.h>
 #include <zmq.h>
 #include <czmq.h>
-#include <json/json.h>
+#include <json.h>
 
 #include "xzmalloc.h"
 #include "log.h"

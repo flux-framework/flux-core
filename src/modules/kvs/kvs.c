@@ -76,9 +76,8 @@
 #include <sys/socket.h>
 #include <ctype.h>
 #include <sys/time.h>
-#include <zmq.h>
 #include <czmq.h>
-#include <json/json.h>
+#include <json.h>
 #include <fnmatch.h>
 
 #include "zmsg.h"

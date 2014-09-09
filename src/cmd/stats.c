@@ -29,13 +29,13 @@
 #endif
 #include <stdio.h>
 #include <getopt.h>
-#include <json/json.h>
 #include <assert.h>
 #include <libgen.h>
 #include <zmq.h>
 #include <czmq.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <json.h>
 
 #include "xzmalloc.h"
 #include "log.h"

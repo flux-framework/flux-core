@@ -9,6 +9,7 @@ plugin_path = $(top_builddir)/src/modules/api/.libs:$(top_builddir)/src/modules/
 exec_path = $(top_builddir)/src/cmd:$(fluxbindir)
 
 AM_CPPFLAGS = \
+	$(JSON_CFLAGS) \
         -DPLUGIN_PATH=\"$(plugin_path)\" -DEXEC_PATH=\"$(exec_path)\" \
 	-I$(top_srcdir)/src/common/libutil \
 	-I$(top_srcdir)/src/lib/libflux \
@@ -57,7 +58,7 @@ fluxbin_ldadd = \
 	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
 	$(top_builddir)/src/modules/api/libflux-api.la \
 	$(top_builddir)/src/lib/libflux/libflux.la \
-	$(LIBJSON) $(LIBZMQ) $(LIBCZMQ) $(LIBMUNGE) $(LIBPTHREAD)
+	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBMUNGE) $(LIBPTHREAD)
 
 event_SOURCES = event.c
 event_LDADD = $(fluxbin_ldadd)

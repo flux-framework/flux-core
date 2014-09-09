@@ -28,9 +28,9 @@
 #include "config.h"
 #endif
 #include <getopt.h>
-#include <json/json.h>
 #include <assert.h>
 #include <libgen.h>
+#include <json.h>
 
 #include <zmq.h>
 #include <czmq.h>

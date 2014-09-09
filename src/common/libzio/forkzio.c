@@ -27,13 +27,12 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <json/json.h>
 #include <assert.h>
 #include <sys/wait.h>
 #include <termios.h>
 #include <pty.h>
 #include <czmq.h>
-#include <json/json.h>
+#include <json.h>
 
 #include "log.h"
 #include "xzmalloc.h"
