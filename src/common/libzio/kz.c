@@ -64,6 +64,7 @@
 #include "log.h"
 
 #include "flux.h"
+#include "kvs.h"
 
 #include "zio.h"
 #include "kz.h"

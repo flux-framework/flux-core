@@ -12,7 +12,7 @@ AM_CPPFLAGS = \
 	$(JSON_CFLAGS) \
         -DPLUGIN_PATH=\"$(plugin_path)\" -DEXEC_PATH=\"$(exec_path)\" \
 	-I$(top_srcdir)/src/common/libutil \
-	-I$(top_srcdir)/src/lib/libflux \
+	-I$(top_srcdir)/src/common/libflux \
 	-I$(top_srcdir)/src/modules/api \
 	-I$(top_srcdir)/src/modules/kvs \
 	-I$(top_srcdir)/src/modules/live \
@@ -52,12 +52,12 @@ fluxbin_PROGRAMS = \
 	zio
 
 fluxbin_ldadd = \
+	$(top_builddir)/src/modules/live/liblive.la \
+	$(top_builddir)/src/modules/modctl/libmodctl.la \
+	$(top_builddir)/src/modules/kvs/libkvs.la \
+	$(top_builddir)/src/modules/api/libapi.la \
+	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
-	$(top_builddir)/src/modules/live/libflux-live.la \
-	$(top_builddir)/src/modules/modctl/libflux-modctl.la \
-	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
-	$(top_builddir)/src/modules/api/libflux-api.la \
-	$(top_builddir)/src/lib/libflux/libflux.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBMUNGE) $(LIBPTHREAD)
 
 event_SOURCES = event.c

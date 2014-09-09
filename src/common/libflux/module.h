@@ -1,5 +1,5 @@
-#ifndef _FLUX_MODULE_H
-#define _FLUX_MODULE_H
+#ifndef _FLUX_CORE_MODULE_H
+#define _FLUX_CORE_MODULE_H
 
 /* Manipulate comms modules.
  * Use rank=-1 for local.
@@ -18,7 +18,7 @@ typedef int (mod_main_f)(flux_t h, zhash_t *args);
 extern mod_main_f mod_main;
 #define MOD_NAME(x) const char *mod_name = x
 
-#endif /* !FLUX_H */
+#endif /* !FLUX_CORE_MODULE_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

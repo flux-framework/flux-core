@@ -91,10 +91,11 @@ AC_CONFIG_FILES( \
   src/common/liblsd/Makefile \
   src/common/libutil/Makefile \
   src/common/libzio/Makefile \
+  src/common/libflux/Makefile \
   src/lib/Makefile \
-  src/lib/libflux/Makefile \
-  src/lib/libflux/libflux.pc \
-  src/lib/libflux/libflux.conf \
+  src/lib/libcore/Makefile \
+  src/lib/libcore/flux-core.pc \
+  src/lib/libcore/flux-libs.conf \
   src/broker/Makefile \
   src/cmd/Makefile \
   src/modules/Makefile \

@@ -41,6 +41,7 @@
 #include "log.h"
 
 #include "flux.h"
+#include "api.h"
 
 #define OPTIONS "hcCp:s:t:r"
 static const struct option longopts[] = {

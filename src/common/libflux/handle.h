@@ -1,5 +1,5 @@
-#ifndef _FLUX_HANDLE_H
-#define _FLUX_HANDLE_H
+#ifndef _FLUX_CORE_HANDLE_H
+#define _FLUX_CORE_HANDLE_H
 
 /* Flags for handle creation and flux_flags_set()/flux_flags_unset.
  */
@@ -78,7 +78,7 @@ int flux_handle_event_fd (flux_t h, int fd, short revents);
 int flux_handle_event_zs (flux_t h, void *zs, short revents);
 int flux_handle_event_tmout (flux_t h, int timer_id);
 
-#endif /* !_FLUX_HANDLE_H */
+#endif /* !_FLUX_CORE_HANDLE_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

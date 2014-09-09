@@ -39,6 +39,7 @@
 #include "log.h"
 
 #include "flux.h"
+#include "api.h"
 
 #define OPTIONS "hanN:vl"
 static const struct option longopts[] = {

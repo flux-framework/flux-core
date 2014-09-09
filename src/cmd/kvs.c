@@ -39,6 +39,8 @@
 #include "log.h"
 
 #include "flux.h"
+#include "kvs.h"
+#include "api.h"
 
 #define OPTIONS "hdCDNqm:s:r:vV:"
 static const struct option longopts[] = {

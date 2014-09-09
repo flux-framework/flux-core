@@ -1,9 +1,9 @@
 prefix=@exec_prefix@/flux
 libdir=@libdir@/flux
-includedir=@includedir@/flux
+includedir=@includedir@
 
-Name: libflux
+Name: flux-core
 Description: Flux Resource Manager Framework Core
 Version: @PACKAGE_VERSION@
-Libs: -L${libdir} -lflux-api -lflux-kvs -lflux-live -lflux-modctl -lflux
+Libs: -L${libdir} -lflux-core
 Cflags: -I${includedir}

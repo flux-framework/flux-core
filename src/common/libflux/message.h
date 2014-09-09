@@ -1,5 +1,5 @@
-#ifndef _FLUX_MESSAGE_H
-#define _FLUX_MESSAGE_H
+#ifndef _FLUX_CORE_MESSAGE_H
+#define _FLUX_CORE_MESSAGE_H
 
 /* Return the number of non-nil routing frames in the message.
  */
@@ -50,4 +50,4 @@ const char *flux_msgtype_string (int typemask);
 const char *flux_msgtype_shortstr (int typemask);
 
 
-#endif /* !_FLUX_MESSAGE_H */
+#endif /* !_FLUX_CORE_MESSAGE_H */

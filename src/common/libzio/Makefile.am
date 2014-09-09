@@ -4,11 +4,8 @@ AM_CPPFLAGS = \
 	$(JSON_CFLAGS) \
 	-I$(top_srcdir)/src/common/liblsd \
 	-I$(top_srcdir)/src/common/libutil \
-	-I$(top_srcdir)/src/lib/libflux \
-	-I$(top_srcdir)/src/modules/api \
-	-I$(top_srcdir)/src/modules/kvs \
-	-I$(top_srcdir)/src/modules/live \
-	-I$(top_srcdir)/src/modules/modctl
+	-I$(top_srcdir)/src/common/libflux \
+	-I$(top_srcdir)/src/modules/kvs
 
 noinst_LTLIBRARIES = libzio.la
 

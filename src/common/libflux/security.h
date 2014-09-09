@@ -1,5 +1,5 @@
-#ifndef FLUX_SECURITY_H
-#define FLUX_SECURITY_H 1
+#ifndef _FLUX_CORE_SECURITY_H
+#define _FLUX_CORE_SECURITY_H
 
 #define DEFAULT_ZAP_DOMAIN      "flux"
 #define FLUX_DIRECTORY          ".flux"
@@ -62,7 +62,7 @@ const char *flux_sec_errstr (flux_sec_t c);
  */
 const char *flux_sec_confstr (flux_sec_t c);
 
-#endif /* FLUX_SECURITY_H */
+#endif /* _FLUX_CORE_SECURITY_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

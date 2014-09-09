@@ -1,5 +1,5 @@
-#ifndef FLUX_REACTOR_H
-#define FLUX_REACTOR_H
+#ifndef _FLUX_CORE_REACTOR_H
+#define _FLUX_CORE_REACTOR_H
 
 /* FluxMsgHandler indicates zmsg is "consumed" by destroying it.
  * Callbacks return 0 on success, -1 on error and set errno.
@@ -86,7 +86,7 @@ int flux_reactor_start (flux_t h);
  */
 void flux_reactor_stop (flux_t h);
 
-#endif /* !FLUX_REACTOR_H */
+#endif /* !_FLUX_CORE_REACTOR_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

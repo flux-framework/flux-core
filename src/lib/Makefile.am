@@ -1,1 +1,1 @@
-SUBDIRS = libflux
+SUBDIRS = libcore

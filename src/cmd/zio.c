@@ -41,6 +41,7 @@
 #include "xzmalloc.h"
 
 #include "flux.h"
+#include "api.h"
 
 #include "zio.h"
 #include "forkzio.h"

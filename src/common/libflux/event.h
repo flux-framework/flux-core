@@ -1,5 +1,5 @@
-#ifndef _FLUX_EVENT_H
-#define _FLUX_EVENT_H
+#ifndef _FLUX_CORE_EVENT_H
+#define _FLUX_CORE_EVENT_H
 
 /* Send/receive events
  * - an event consists of a tag frame and an optional JSON frame
@@ -15,7 +15,7 @@ int flux_event_recv (flux_t h, json_object **respp, char **tagp, bool nb);
 int flux_event_subscribe (flux_t h, const char *topic);
 int flux_event_unsubscribe (flux_t h, const char *topic);
 
-#endif /* !FLUX_EVENT_H */
+#endif /* !FLUX_CORE_EVENT_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

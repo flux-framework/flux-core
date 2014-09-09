@@ -40,6 +40,8 @@
 #include "log.h"
 
 #include "flux.h"
+#include "kvs.h"
+#include "api.h"
 
 #define OPTIONS "hc:s:p:qv"
 static const struct option longopts[] = {

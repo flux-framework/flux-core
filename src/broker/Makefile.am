@@ -12,11 +12,7 @@ AM_CPPFLAGS = \
 	$(JSON_CFLAGS) \
 	-DPLUGIN_PATH=\"$(plugin_path)\" -DEXEC_PATH=\"$(exec_path)\" \
 	-I$(top_srcdir)/src/common/libutil \
-	-I$(top_srcdir)/src/lib/libflux \
-	-I$(top_srcdir)/src/modules/api \
-	-I$(top_srcdir)/src/modules/kvs \
-	-I$(top_srcdir)/src/modules/live \
-	-I$(top_srcdir)/src/modules/modctl
+	-I$(top_srcdir)/src/common/libflux
 
 bin_PROGRAMS = cmbd
 
@@ -28,6 +24,6 @@ cmbd_SOURCES = \
 	pmi.h
 
 cmbd_LDADD = \
-	$(top_builddir)/src/lib/libflux/libflux.la \
+	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(LIBMUNGE) $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)

@@ -38,6 +38,8 @@
 #include "log.h"
 
 #include "flux.h"
+#include "kvs.h"
+#include "api.h"
 
 #define OPTIONS "hvRF"
 static const struct option longopts[] = {

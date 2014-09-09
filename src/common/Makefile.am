@@ -1,1 +1,1 @@
-SUBDIRS = liblsd libutil libzio
+SUBDIRS = liblsd libutil libflux libzio

@@ -41,6 +41,8 @@
 #include "shortjson.h"
 
 #include "flux.h"
+#include "api.h"
+#include "live.h"
 
 #define OPTIONS "+hr:"
 static const struct option longopts[] = {

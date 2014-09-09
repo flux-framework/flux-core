@@ -1,5 +1,5 @@
-#ifndef _FLUX_REDUCE_H
-#define _FLUX_REDUCE_H
+#ifndef _FLUX_CORE_REDUCE_H
+#define _FLUX_CORE_REDUCE_H
 
 typedef struct red_struct *red_t;
 
@@ -46,7 +46,7 @@ void flux_red_flush (red_t r);
  */
 int flux_red_append (red_t r, void *item, int batchnum);
 
-#endif /* _FLUX_REDUCE_H */
+#endif /* _FLUX_CORE_REDUCE_H */
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

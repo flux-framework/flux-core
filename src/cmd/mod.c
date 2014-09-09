@@ -43,6 +43,9 @@
 #include "shortjson.h"
 
 #include "flux.h"
+#include "kvs.h"
+#include "api.h"
+#include "modctl.h"
 
 #define OPTIONS "+hr:u"
 static const struct option longopts[] = {

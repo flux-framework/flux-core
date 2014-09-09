@@ -1,5 +1,5 @@
-#ifndef _FLUX_INFO_H
-#define _FLUX_INFO_H
+#ifndef _FLUX_CORE_INFO_H
+#define _FLUX_CORE_INFO_H
 
 int flux_info (flux_t h, int *rankp, int *sizep, bool *treerootp);
 int flux_rank (flux_t h);
@@ -15,7 +15,7 @@ bool flux_treeroot (flux_t h);
  */
 char *flux_getattr (flux_t h, int rank, const char *name);
 
-#endif /* !_FLUX_INFO_H */
+#endif /* !_FLUX_CORE_INFO_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

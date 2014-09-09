@@ -1,15 +1,12 @@
 AM_CPPFLAGS = \
 	$(JSON_CFLAGS) \
-	-I$(top_srcdir)/src/common/liblsd \
 	-I$(top_srcdir)/src/common/libutil \
-	-I$(top_srcdir)/src/lib/libflux \
-	-I$(top_srcdir)/src/modules/kvs \
-	-I$(top_srcdir)/src/modules/api \
-	-I$(top_srcdir)/src/modules/modctl
+	-I$(top_srcdir)/src/common/libflux \
+	-I$(top_srcdir)/src/modules/kvs
 
 libfluxdir = $(libdir)/flux
 fluxmoddir = $(libfluxdir)/modules
-includefluxdir = $(includedir)/flux
+includefluxcoredir = $(includedir)/flux/core
 
 #
 # Comms module
@@ -17,10 +14,9 @@ includefluxdir = $(includedir)/flux
 fluxmod_LTLIBRARIES = live.la
 
 fluxmod_libadd = \
-	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
-	$(top_builddir)/src/lib/libflux/libflux.la \
-	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
+	$(top_builddir)/src/common/libflux/libflux.la \
+	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 
 fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
@@ -33,22 +29,6 @@ live_la_LIBADD = $(fluxmod_libadd)
 #
 # API for module
 #
-libflux_LTLIBRARIES = \
-	libflux-live.la
-
-includeflux_HEADERS = \
-	live.h
-
-libflux_live_la_SOURCES = \
-	liblive.c
-
-libflux_live_la_LIBADD = \
-	$(top_builddir)/src/common/liblsd/liblsd.la \
-	$(top_builddir)/src/common/libutil/libutil.la \
-	$(top_builddir)/src/lib/libflux/libflux.la \
-	$(top_builddir)/src/modules/kvs/libflux-kvs.la \
-	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
-
-libflux_live_la_LDFLAGS = -Wl,--version-script=$(srcdir)/flux_live_version.map
-
-EXTRA_DIST = flux_live_version.map
+includefluxcore_HEADERS = live.h
+noinst_LTLIBRARIES = liblive.la
+liblive_la_SOURCES = liblive.c

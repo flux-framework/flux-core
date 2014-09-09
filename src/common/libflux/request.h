@@ -1,5 +1,5 @@
-#ifndef _FLUX_REQUEST_H
-#define _FLUX_REQUEST_H
+#ifndef _FLUX_CORE_REQUEST_H
+#define _FLUX_CORE_REQUEST_H
 
 /* Send/receive requests and responses.
  * - flux_request_sendmsg() expects a route delimiter (request envelope)
@@ -29,7 +29,7 @@ int flux_rank_request_send (flux_t h, int rank,
 json_object *flux_rank_rpc (flux_t h, int rank,
                             json_object *in, const char *fmt, ...);
 
-#endif /* !FLUX_REQUEST_H */
+#endif /* !_FLUX_CORE_REQUEST_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

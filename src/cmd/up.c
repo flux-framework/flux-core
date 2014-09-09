@@ -42,6 +42,8 @@
 #include "shortjson.h"
 
 #include "flux.h"
+#include "api.h"
+#include "kvs.h"
 
 #define OPTIONS "hcnud"
 static const struct option longopts[] = {

@@ -1,7 +1,0 @@
-{ global:
-    kvs_*;
-    kvsitr_*;
-    kvsdir_*;
-    local: *;
-};
-
