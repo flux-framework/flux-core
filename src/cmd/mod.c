@@ -258,10 +258,15 @@ static char *modname (const char *path)
     char *s = NULL;
     const char **np;
 
-    if (!(dso = dlopen (path, RTLD_NOW | RTLD_LOCAL)))
+    dlerror ();
+    if (!(dso = dlopen (path, RTLD_NOW | RTLD_LOCAL))) {
+        msg ("%s", dlerror ());
         goto done;
-    if (!(np = dlsym (dso, "mod_name")) || !*np)
+    }
+    if (!(np = dlsym (dso, "mod_name")) || !*np) {
+        msg ("%s: mod_name undefined", path);
         goto done;
+    }
     s = xstrdup (*np);
 done:
     if (dso)
@@ -400,7 +405,7 @@ static void mod_ins_m (flux_t h, int argc, char **argv)
         path = trypath;
     }
     if (!(name = modname (path)))
-        msg_exit ("%s: mod_name undefined", path);
+        exit (1);
     args = parse_modargs (argc - 1, argv + 1);
     copymod (h, name, path, args);
     if (kvs_commit (h) < 0)
