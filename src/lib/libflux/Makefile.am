@@ -48,4 +48,8 @@ libflux_la_LIBADD = \
 
 libflux_la_LDFLAGS = -Wl,--version-script=$(srcdir)/flux_version.map
 
+if WITH_PKG_CONFIG
+pkgconfig_DATA = libflux.pc
+endif
+
 EXTRA_DIST = flux_version.map

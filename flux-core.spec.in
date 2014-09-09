@@ -36,10 +36,17 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-,root,root)
 %doc ChangeLog NEWS DISCLAIMER.LLNS COPYING INSTALL README AUTHORS
 %{_libdir}/flux
+%{_libdir}/pkgconfig/*
 %{_libexecdir}/flux
 %{_includedir}/flux
 %{_bindir}/cmbd
 %{_bindir}/flux
+
+%post
+if [ -x /sbin/ldconfig ]; then /sbin/ldconfig %{_libdir}/flux; fi
+
+%postun
+if [ -x /sbin/ldconfig ]; then /sbin/ldconfig %{_libdir}/flux; fi
 
 %changelog
 * Tue Sep 2 2014 Jim Garlick <garlick@llnl.gov> 0.1.0-1

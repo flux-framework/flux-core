@@ -78,7 +78,7 @@ X_AC_ZEROMQ
 ##
 AC_DEFINE(WITH_PTHREADS, 1, [Make liblsd thread safe])
 
-AC_SYS_LARGEFILE
+AC_PKGCONFIG
 
 ##
 # Epilogue
@@ -93,6 +93,7 @@ AC_CONFIG_FILES( \
   src/common/libzio/Makefile \
   src/lib/Makefile \
   src/lib/libflux/Makefile \
+  src/lib/libflux/libflux.pc \
   src/broker/Makefile \
   src/cmd/Makefile \
   src/modules/Makefile \
