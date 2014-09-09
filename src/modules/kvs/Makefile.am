@@ -21,7 +21,7 @@ fluxmod_libadd = \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 
 fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
-        -export-symbols-regex '(^mod)_(main|name)$$'
+        -export-symbols-regex '^mod_(main|name)$$'
 
 kvs_la_SOURCES = \
 	kvs.c \

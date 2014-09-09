@@ -23,7 +23,7 @@ fluxmod_libadd = \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 
 fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
-        -export-symbols-regex '(^mod)_(main|name)$$'
+        -export-symbols-regex '^mod_(main|name)$$'
 
 modctl_la_SOURCES = modctl.c
 modctl_la_LDFLAGS = $(fluxmod_ldflags)
