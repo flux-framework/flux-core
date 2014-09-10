@@ -16,6 +16,7 @@ const char *pmi_id (pmi_t pmi);
 int pmi_appnum (pmi_t pmi);
 
 int pmi_relay_rank (pmi_t pmi);
+int pmi_right_rank (pmi_t);
 
 void pmi_kvs_put (pmi_t pmi, const char *val, const char *fmt, ...);
 const char *pmi_kvs_get (pmi_t pmi, const char *fmt, ...);

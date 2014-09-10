@@ -255,6 +255,12 @@ int pmi_relay_rank (pmi_t pmi)
     return -1;
 }
 
+int pmi_right_rank (pmi_t pmi)
+{
+    int r = pmi_rank (pmi);
+    return r == 0 ? pmi_size (pmi) - 1 : r - 1;
+}
+
 const char *pmi_id (pmi_t pmi)
 {
     int e, len;

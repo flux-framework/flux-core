@@ -578,8 +578,7 @@ static void pmi_boot (ctx_t *ctx)
 {
     pmi_t pmi = pmi_init ("libpmi.so");
     int relay_rank = pmi_relay_rank (pmi);
-    int right_rank = pmi_rank (pmi) == 0 ? pmi_size (pmi) - 1
-                                         : pmi_rank (pmi) - 1;
+    int right_rank = pmi_right_rank (pmi);
     char ipaddr[HOST_NAME_MAX + 1];
 
     ctx->size = pmi_size (pmi);
