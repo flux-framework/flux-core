@@ -144,6 +144,8 @@ pmi_t pmi_init (const char *libname)
     pmi_t pmi = xzmalloc (sizeof (*pmi));
     int spawned;
 
+    if (!libname)
+        libname = "libpmi.so";
     dlerror ();
     pmi->dso = dlopen (libname, RTLD_NOW | RTLD_GLOBAL);
     if (!pmi->dso || !(pmi->init = dlsym (pmi->dso, "PMI_Init"))

@@ -126,7 +126,7 @@ typedef struct {
     sigset_t default_sigset;
     /* Bootstrap
      */
-    bool pmi_boot;
+    bool boot_pmi;
     int k_ary;
     /* Heartbeat
      */
@@ -192,8 +192,8 @@ static void update_proctitle (ctx_t *ctx);
 static void update_environment (ctx_t *ctx);
 static void update_pidfile (ctx_t *ctx, bool force);
 static void rank0_shell (ctx_t *ctx);
-static void pmi_boot (ctx_t *ctx);
-static void local_boot (ctx_t *ctx);
+static void boot_pmi (ctx_t *ctx);
+static void boot_local (ctx_t *ctx);
 
 static const double min_heartrate = 0.01;   /* min seconds */
 static const double max_heartrate = 30;     /* max seconds */
@@ -321,7 +321,7 @@ int main (int argc, char *argv[])
                 log_set_dest (optarg);
                 break;
             case 'P':   /* --pmi-boot */
-                ctx.pmi_boot = true;
+                ctx.boot_pmi = true;
                 break;
             case 'k':   /* --k-ary k */
                 ctx.k_ary = strtoul (optarg, NULL, 10);
@@ -378,7 +378,7 @@ int main (int argc, char *argv[])
     /* Sets rank, size, parent URI.
      * Initialize child socket.
      */
-    if (ctx.pmi_boot) {
+    if (ctx.boot_pmi) {
         if (ctx.child)
             msg_exit ("--child-uri should not be specified with --pmi-boot");
         if (zlist_size (ctx.parents) > 0)
@@ -387,7 +387,7 @@ int main (int argc, char *argv[])
             msg_exit ("--event-uri should not be specified with --pmi-boot");
         if (ctx.sid)
             msg_exit ("--session-id should not be specified with --pmi-boot");
-        pmi_boot (&ctx);
+        boot_pmi (&ctx);
     }
     if (!ctx.sid)
         ctx.sid = xstrdup ("0");
@@ -402,7 +402,7 @@ int main (int argc, char *argv[])
      */
     if (ctx.size > 1 && !ctx.gevent && !ctx.child
                                     && zlist_size (ctx.parents) == 0) {
-        local_boot (&ctx);
+        boot_local (&ctx);
     }
     if (ctx.treeroot && zlist_size (ctx.parents) > 0)
         msg_exit ("treeroot must NOT have parent");
@@ -574,9 +574,9 @@ static void rank0_shell (ctx_t *ctx)
  * and relay events to an ipc:// socket for the other ranks in the
  * clique.  This is required due to a limitation of epgm.
  */
-static void pmi_boot (ctx_t *ctx)
+static void boot_pmi (ctx_t *ctx)
 {
-    pmi_t pmi = pmi_init ("libpmi.so");
+    pmi_t pmi = pmi_init (NULL);
     int relay_rank = pmi_relay_rank (pmi);
     int right_rank = pmi_right_rank (pmi);
     char ipaddr[HOST_NAME_MAX + 1];
@@ -616,7 +616,7 @@ static void pmi_boot (ctx_t *ctx)
     pmi_fini (pmi);
 }
 
-static void local_boot (ctx_t *ctx)
+static void boot_local (ctx_t *ctx)
 {
     const char *tmpdir = getenv ("FLUX_TMPDIR");
     int rrank = ctx->rank == 0 ? ctx->size - 1 : ctx->rank - 1;
@@ -1036,11 +1036,11 @@ static void cmbd_init_socks (ctx_t *ctx)
         cmbd_init_gevent_pub (ctx, ctx->gevent);
     if (ctx->rank > 0 && ctx->gevent)
         cmbd_init_gevent_sub (ctx, ctx->gevent);
-    if (ctx->child && !ctx->child->zs)      /* pmi_boot may have done this */
+    if (ctx->child && !ctx->child->zs)      /* boot_pmi may have done this */
         cmbd_init_child (ctx, ctx->child);
     if (ctx->right)
         cmbd_init_right (ctx, ctx->right);
-    /* N.B. pmi_boot may have created a gevent relay too - no work to do here */
+    /* N.B. boot_pmi may have created a gevent relay too - no work to do here */
 #if 0
     /* Increase max number of sockets and number of I/O thraeds.
      * (N.B. must call zctx_underlying () only after first socket is created)

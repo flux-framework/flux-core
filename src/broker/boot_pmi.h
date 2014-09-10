@@ -1,10 +1,5 @@
-/* pmiwrap.h - convenience wrappers for PMI API for flux internal use */
-
-/* On error, pmi_init() calls msg_exit().
- * All other functions call PMI_Abort ().
- * pmi_kvs_get() of an unknown key is considered fatal (PMI_Abort)
+/* Use PMI to bootstrap a Flux comms session.
  */
-
 typedef struct pmi_struct *pmi_t;
 
 pmi_t pmi_init (const char *libname);
