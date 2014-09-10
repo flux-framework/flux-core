@@ -54,6 +54,7 @@
 #include "xzmalloc.h"
 #include "nodeset.h"
 #include "jsonutil.h"
+#include "ipaddr.h"
 
 #include "flux.h"
 
@@ -586,7 +587,7 @@ static void pmi_boot (ctx_t *ctx)
     ctx->rank = pmi_rank (pmi);
     ctx->sid = xstrdup (pmi_id (pmi));
 
-    pmi_getip (pmi, ipaddr, sizeof (ipaddr));
+    ipaddr_getprimary (ipaddr, sizeof (ipaddr));
     ctx->child = endpt_create ("tcp://%s:*", ipaddr);
     cmbd_init_child (ctx, ctx->child); /* obtain dyn port */
     pmi_kvs_put (pmi, ctx->child->uri, "cmbd.%d.uri", ctx->rank);

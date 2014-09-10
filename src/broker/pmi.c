@@ -355,27 +355,6 @@ void pmi_kvs_fence (pmi_t pmi)
         pmi_abort (pmi, 1, "PMI_Barrier: %s", pmi_strerror (e));
 }
 
-/* Get IP address to use for communication.
- * FIXME: add option to override this via commandline, e.g. --iface=eth0
- */
-void pmi_getip (pmi_t pmi, char *ipaddr, int len)
-{
-    char hostname[HOST_NAME_MAX + 1];
-    struct addrinfo hints, *res = NULL;
-    int e;
-
-    if (gethostname (hostname, sizeof (hostname)) < 0)
-        pmi_abort (pmi, 1, "gethostname: %s", strerror (errno));
-    memset (&hints, 0, sizeof (hints));
-    hints.ai_family = PF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    if ((e = getaddrinfo (hostname, NULL, &hints, &res)) || res == NULL)
-        pmi_abort (pmi, 1, "getaddrinfo %s: %s", hostname, gai_strerror (e));
-    if ((e = getnameinfo (res->ai_addr, res->ai_addrlen, ipaddr, len,
-                          NULL, 0, NI_NUMERICHOST)))
-        pmi_abort (pmi, 1, "getnameinfo %s: %s", hostname, gai_strerror (e));
-}
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
