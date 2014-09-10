@@ -214,7 +214,7 @@ int pmi_size (pmi_t pmi)
     return size;
 }
 
-int pmi_clique_size (pmi_t pmi)
+static int pmi_clique_size (pmi_t pmi)
 {
     int e, size;
     if ((e = pmi->get_clique_size (&size)) != PMI_SUCCESS)
@@ -230,13 +230,13 @@ static int pmi_clique (pmi_t pmi, const int **cliquep)
         pmi->clen = pmi_clique_size (pmi);
         pmi->clique = xzmalloc (sizeof (pmi->clique[0]) * pmi->clen);
         if ((e = pmi->get_clique_ranks (pmi->clique, pmi->clen)) != PMI_SUCCESS)
-            pmi_abort (pmi, 1, "PMI_Get_clique_size: %s", pmi_strerror (e));
+            pmi_abort (pmi, 1, "PMI_Get_clique_ranks: %s", pmi_strerror (e));
     }
     *cliquep = pmi->clique;
     return pmi->clen;
 }
 
-int pmi_clique_minrank (pmi_t pmi)
+static int clique_minrank (pmi_t pmi)
 {
     int i, min;
     const int *clique;
@@ -246,6 +246,13 @@ int pmi_clique_minrank (pmi_t pmi)
         if (min == -1 || clique[i] < min)
             min = clique[i];
     return min;
+}
+
+int pmi_relay_rank (pmi_t pmi)
+{
+    if (pmi_clique_size (pmi) > 1)
+        return clique_minrank (pmi);
+    return -1;
 }
 
 const char *pmi_id (pmi_t pmi)

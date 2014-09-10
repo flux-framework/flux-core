@@ -577,8 +577,7 @@ static void rank0_shell (ctx_t *ctx)
 static void pmi_boot (ctx_t *ctx)
 {
     pmi_t pmi = pmi_init ("libpmi.so");
-    bool relay_needed = (pmi_clique_size (pmi) > 1);
-    int relay_rank = pmi_clique_minrank (pmi);
+    int relay_rank = pmi_relay_rank (pmi);
     int right_rank = pmi_rank (pmi) == 0 ? pmi_size (pmi) - 1
                                          : pmi_rank (pmi) - 1;
     char ipaddr[HOST_NAME_MAX + 1];
@@ -592,7 +591,7 @@ static void pmi_boot (ctx_t *ctx)
     cmbd_init_child (ctx, ctx->child); /* obtain dyn port */
     pmi_kvs_put (pmi, ctx->child->uri, "cmbd.%d.uri", ctx->rank);
 
-    if (relay_needed && ctx->rank == relay_rank) {
+    if (relay_rank >= 0 && ctx->rank == relay_rank) {
         ctx->gevent_relay = endpt_create ("ipc://*");
         cmbd_init_gevent_pub (ctx, ctx->gevent_relay); /* obtain dyn port */
         pmi_kvs_put (pmi, ctx->gevent_relay->uri, "cmbd.%d.relay", ctx->rank);
@@ -609,7 +608,7 @@ static void pmi_boot (ctx_t *ctx)
 
     ctx->right = endpt_create (pmi_kvs_get (pmi, "cmbd.%d.uri", right_rank));
 
-    if (relay_needed && ctx->rank != relay_rank) {
+    if (relay_rank >= 0 && ctx->rank != relay_rank) {
         const char *uri = pmi_kvs_get (pmi, "cmbd.%d.relay", relay_rank);
         ctx->gevent = endpt_create (uri);
     } else {
