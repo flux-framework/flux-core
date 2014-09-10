@@ -583,35 +583,34 @@ static void pmi_boot (ctx_t *ctx)
 
     ctx->size = pmi_size (pmi);
     ctx->rank = pmi_rank (pmi);
-    ctx->sid = xstrdup (pmi_id (pmi));
+    ctx->sid = xstrdup (pmi_sid (pmi));
 
     ipaddr_getprimary (ipaddr, sizeof (ipaddr));
     ctx->child = endpt_create ("tcp://%s:*", ipaddr);
     cmbd_init_child (ctx, ctx->child); /* obtain dyn port */
-    pmi_kvs_put (pmi, ctx->child->uri, "cmbd.%d.uri", ctx->rank);
+    pmi_put_uri (pmi, ctx->rank, ctx->child->uri);
 
     if (relay_rank >= 0 && ctx->rank == relay_rank) {
         ctx->gevent_relay = endpt_create ("ipc://*");
         cmbd_init_gevent_pub (ctx, ctx->gevent_relay); /* obtain dyn port */
-        pmi_kvs_put (pmi, ctx->gevent_relay->uri, "cmbd.%d.relay", ctx->rank);
+        pmi_put_relay (pmi, ctx->rank, ctx->gevent_relay->uri);
     }
 
-    pmi_kvs_fence (pmi);
+    pmi_fence (pmi);
 
     if (ctx->rank > 0) {
         int prank = ctx->k_ary == 0 ? 0 : (ctx->rank - 1) / ctx->k_ary;
-        endpt_t *ep = endpt_create (pmi_kvs_get (pmi, "cmbd.%d.uri", prank));
+        endpt_t *ep = endpt_create (pmi_get_uri (pmi, prank));
         if (zlist_push (ctx->parents, ep) < 0)
             oom ();
     }
 
-    ctx->right = endpt_create (pmi_kvs_get (pmi, "cmbd.%d.uri", right_rank));
+    ctx->right = endpt_create (pmi_get_uri (pmi, right_rank));
 
     if (relay_rank >= 0 && ctx->rank != relay_rank) {
-        const char *uri = pmi_kvs_get (pmi, "cmbd.%d.relay", relay_rank);
-        ctx->gevent = endpt_create (uri);
+        ctx->gevent = endpt_create (pmi_get_relay (pmi, relay_rank));
     } else {
-        int p = 5000 + pmi_appnum (pmi) % 1024;
+        int p = 5000 + pmi_jobid (pmi) % 1024;
         ctx->gevent = endpt_create ("epgm://%s;239.192.1.1:%d", ipaddr, p);
     }
     pmi_fini (pmi);
