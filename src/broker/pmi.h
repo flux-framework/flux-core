@@ -9,7 +9,6 @@ typedef struct pmi_struct *pmi_t;
 
 pmi_t pmi_init (const char *libname);
 void pmi_fini (pmi_t pmi);
-void pmi_abort (pmi_t pmi, int rc, const char *fmt, ...);
 
 int pmi_rank (pmi_t pmi);
 int pmi_size (pmi_t pmi);

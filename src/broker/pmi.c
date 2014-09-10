@@ -125,7 +125,7 @@ static const char *pmi_strerror (int rc)
     return unknown;
 }
 
-void pmi_abort (pmi_t pmi, int rc, const char *fmt, ...)
+static void pmi_abort (pmi_t pmi, int rc, const char *fmt, ...)
 {
     va_list ap;
     char *s;
