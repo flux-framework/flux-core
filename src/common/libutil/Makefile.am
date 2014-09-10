@@ -7,6 +7,8 @@ AM_CPPFLAGS = \
 noinst_LTLIBRARIES = libutil.la
 
 libutil_la_SOURCES = \
+	ipaddr.c \
+	ipaddr.h \
 	log.c \
 	log.h \
 	xzmalloc.c \
