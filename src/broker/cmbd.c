@@ -59,7 +59,7 @@
 #include "flux.h"
 
 #include "plugin.h"
-#include "pmi.h"
+#include "boot_pmi.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT

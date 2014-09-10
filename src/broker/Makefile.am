@@ -20,8 +20,8 @@ cmbd_SOURCES = \
 	cmbd.c \
 	plugin.c \
 	plugin.h \
-	pmi.c \
-	pmi.h
+	boot_pmi.c \
+	boot_pmi.h
 
 cmbd_LDADD = \
 	$(top_builddir)/src/common/libflux/libflux.la \

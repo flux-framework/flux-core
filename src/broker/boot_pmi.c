@@ -46,7 +46,7 @@
 #include "log.h"
 #include "xzmalloc.h"
 
-#include "pmi.h"
+#include "boot_pmi.h"
 
 #define PMI_SUCCESS                  0
 #define PMI_FAIL                    -1
