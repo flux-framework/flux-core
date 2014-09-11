@@ -99,8 +99,6 @@ AC_CONFIG_FILES( \
   src/lib/libcore/flux-libs.conf \
   src/broker/Makefile \
   src/cmd/Makefile \
-  src/cmd/srun \
-  src/cmd/screen \
   src/modules/Makefile \
   src/modules/api/Makefile \
   src/modules/kvs/Makefile \
@@ -108,5 +106,7 @@ AC_CONFIG_FILES( \
   src/modules/live/Makefile \
   src/modules/mecho/Makefile \
 )
+AC_CONFIG_FILES([src/cmd/srun], [chmod +x src/cmd/srun])
+AC_CONFIG_FILES([src/cmd/screen], [chmod +x src/cmd/screen])
 
 AC_OUTPUT
