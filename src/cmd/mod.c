@@ -349,7 +349,7 @@ static void mod_ins (flux_t h, int rank, int argc, char **argv)
        usage ();
     path = argv[0];
     if (access (path, R_OK|X_OK) < 0) {
-        if (!(trypath = modfind (PLUGIN_PATH, path)))
+        if (!(trypath = modfind (MODULE_PATH, path)))
             errn_exit (ENOENT, "%s", path);
         path = trypath;
     }
@@ -400,7 +400,7 @@ static void mod_ins_m (flux_t h, int argc, char **argv)
        usage ();
     path = argv[0];
     if (access (path, R_OK|X_OK) < 0) {
-        if (!(trypath = modfind (PLUGIN_PATH, path)))
+        if (!(trypath = modfind (MODULE_PATH, path)))
             errn_exit (ENOENT, "%s", path);
         path = trypath;
     }

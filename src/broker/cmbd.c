@@ -111,7 +111,7 @@ typedef struct {
     char *sid;                  /* session id */
     /* Plugins
      */
-    char *plugin_path;          /* colon-separated list of directories */
+    char *module_path;          /* colon-separated list of directories */
     zhash_t *modules;           /* hash of module_t's by name */
     /* Misc
      */
@@ -271,7 +271,9 @@ int main (int argc, char *argv[])
     ctx.k_ary = 2; /* binary TBON is default */
 
     ctx.pid = getpid();
-    ctx.plugin_path = PLUGIN_PATH;
+    ctx.module_path = getenv ("FLUX_MODULE_PATH");
+    if (!ctx.module_path)
+        ctx.module_path = MODULE_PATH;
     ctx.heartrate = dfl_heartrate;
     ctx.shutdown_tid = -1;
 
@@ -316,7 +318,7 @@ int main (int argc, char *argv[])
                 module_prepare_list (&ctx, optarg);
                 break;
             case 'X':   /* --module-path PATH */
-                ctx.plugin_path = optarg;
+                ctx.module_path = optarg;
                 break;
             case 'L':   /* --logdest DEST */
                 log_set_dest (optarg);
@@ -443,6 +445,8 @@ int main (int argc, char *argv[])
     }
     /* Ensure a minimal set of modules will be loaded.
      */
+    if (ctx.verbose)
+        msg ("module-path: %s", ctx.module_path);
     module_prepare (&ctx, "api");
     module_prepare (&ctx, "kvs");
     module_prepare (&ctx, "modctl");
@@ -800,7 +804,7 @@ static module_t *module_prepare (ctx_t *ctx, const char *name)
     module_t *mod;
 
     if (!(mod = zhash_lookup (ctx->modules, name))) {
-        if (!(path = modfind (ctx->plugin_path, name)))
+        if (!(path = modfind (ctx->module_path, name)))
             err_exit ("module %s", name);
         if (!(mod = module_create (ctx, path, flags)))
            err_exit ("module %s", name);
