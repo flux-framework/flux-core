@@ -1,6 +1,11 @@
 #ifndef _FLUX_CORE_FLOG_H
 #define _FLUX_CORE_FLOG_H
 
+/* FIXME: redirect flag causes redirection to syslog if logging
+ * is so configured, but facility and level are not passed to msg/err()
+ * (see libutil/log.c)
+ */
+
 void flux_log_set_facility (flux_t h, const char *facility);
 int flux_vlog (flux_t h, int lev, const char *fmt, va_list ap);
 int flux_log (flux_t h, int lev, const char *fmt, ...)

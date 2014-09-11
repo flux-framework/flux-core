@@ -36,7 +36,7 @@
 #include <czmq.h>
 
 #include "log.h"
-#include "jsonutil.h"
+#include "shortjson.h"
 #include "xzmalloc.h"
 
 #include "flux.h"
@@ -74,30 +74,36 @@ static logctx_t *getctx (flux_t h)
     return ctx;
 }
 
-static json_object *flog_encode (flog_t *f)
+static JSON flog_encode (flog_t *f)
 {
-    json_object *o = util_json_object_new_object ();
+    JSON o = Jnew ();
 
-    util_json_object_add_string (o, "facility", f->facility);
-    util_json_object_add_int (o, "level", f->level);
-    util_json_object_add_int (o, "rank", f->rank);
-    util_json_object_add_timeval (o, "timestamp", &f->tv);
-    util_json_object_add_string (o, "message", f->msg);
+    Jadd_str (o, "facility", f->facility);
+    Jadd_int (o, "level", f->level);
+    Jadd_int (o, "rank", f->rank);
+    Jadd_int (o, "timestamp_usec", (int)f->tv.tv_usec);
+    Jadd_int (o, "timestamp_sec", (int)f->tv.tv_sec);
+    Jadd_str (o, "message", f->msg);
     return o;
 }
 
-static int flog_decode (json_object *o, flog_t *f)
+static int flog_decode (JSON o, flog_t *f)
 {
     int rc = -1;
-    if (util_json_object_get_string (o, "facility", &f->facility) < 0)
+    int sec, usec;
+    if (!Jget_str (o, "facility", &f->facility))
         goto done;
-    if (util_json_object_get_int (o, "level", &f->level) < 0)
+    if (!Jget_int (o, "level", &f->level))
         goto done;
-    if (util_json_object_get_int (o, "rank", &f->rank) < 0)
+    if (!Jget_int (o, "rank", &f->rank))
         goto done;
-    if (util_json_object_get_timeval (o, "timestamp", &f->tv) < 0)
+    if (!Jget_int (o, "timestamp_usec", &usec))
         goto done;
-    if (util_json_object_get_string (o, "message", &f->msg) < 0)
+    if (!Jget_int (o, "timestamp_sec", &sec))
+        goto done;
+    f->tv.tv_sec = sec;
+    f->tv.tv_usec = usec;
+    if (!Jget_str (o, "message", &f->msg))
         goto done;
     rc = 0;
 done:
@@ -132,7 +138,7 @@ void flux_log_set_redirect (flux_t h, bool flag)
 int flux_vlog (flux_t h, int lev, const char *fmt, va_list ap)
 {
     logctx_t *ctx = getctx (h);
-    json_object *o = NULL;
+    JSON o = NULL;
     char *s = NULL;
     flog_t flog;
     int rc = -1;
@@ -157,8 +163,7 @@ int flux_vlog (flux_t h, int lev, const char *fmt, va_list ap)
 done:
     if (s)
         free (s);
-    if (o)
-        json_object_put (o);
+    Jput (o);
     return rc;
 }
 
@@ -176,7 +181,7 @@ int flux_log (flux_t h, int lev, const char *fmt, ...)
 int flux_log_zmsg (flux_t h, zmsg_t **zmsg)
 {
     logctx_t *ctx = getctx (h);
-    json_object *o = NULL;
+    JSON o = NULL;
     flog_t f;
     int rc = -1;
 
@@ -190,8 +195,7 @@ int flux_log_zmsg (flux_t h, zmsg_t **zmsg)
     flog_msg (&f);
     rc = 0;
 done:
-    if (o)
-        json_object_put (o);
+    Jput (o);
     return rc;
 }
 
