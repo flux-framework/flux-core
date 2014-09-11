@@ -49,9 +49,9 @@ static char *flux_exe_dir;
 
 void exec_subcommand (const char *exec_path, char *argv[]);
 
-#define OPTIONS "+s:tx:hM:"
+#define OPTIONS "+T:tx:hM:"
 static const struct option longopts[] = {
-    {"socket-path",     required_argument,  0, 's'},
+    {"tmpdir",          required_argument,  0, 'T'},
     {"trace-apisocket", no_argument,        0, 't'},
     {"exec-path",       required_argument,  0, 'x'},
     {"module-path",     required_argument,  0, 'M'},
@@ -62,8 +62,11 @@ static const struct option longopts[] = {
 static void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux [--socket-path PATH] [--exec-path PATH] [--module-path PATH]\n"
-"            [--trace-apisock] [--help] COMMAND ARGS\n"
+"Usage: flux [OPTIONS] COMMAND ARGS\n"
+"    -x,--exec-path PATH      set FLUX_EXEC_PATH\n"
+"    -M,--module-path PATH    set FLUX_MODULE_PATH\n"
+"    -T,--tmpdir PATH         set FLUX_TMPDIR\n"
+"    -t,--trace-apisock       set FLUX_TRACE_APISOCK=1\n"
 );
 }
 
@@ -74,16 +77,14 @@ static void help (void)
 "   kvs        Get and put simple values in the Flux key-value store\n"
 "   kvswatch   Watch values in the Flux key-value store\n"
 "   kvsdir     List key-value pairs in the Flux key-value store\n"
-"   kvstorture Torture-test the Flux key-value store\n"
 "   ping       Time round-trip RPC to a Flux plugin\n"
-"   mecho      Time round-trip group RPC to the mecho plugin\n"
+"   mping      Time round-trip group RPC to the mecho plugin\n"
 "   stats      Obtain message counts from a Flux plugin\n"
-"   barrier    Execute a Flux barrier\n"
 "   snoop      Snoop on local Flux message broker traffic\n"
 "   event      Send and receive Flux events\n"
 "   logger     Log a message to Flux logging system\n"
 "   log        Manipulate flux logs\n"
-"   info       Display local rank, session size, and treeroot status\n"
+"   xinfo      Display info about Flux comms session\n"
 );
 }
 
@@ -112,9 +113,9 @@ int main (int argc, char *argv[])
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
-            case 's': /* --socket-path PATH */
-                if (setenv ("FLUX_API_PATH", optarg, 1) < 0)
-                    err_exit ("setenv FLUX_API_PATH=%s", optarg);
+            case 'T': /* --tmpdir PATH */
+                if (setenv ("FLUX_TMPDIR", optarg, 1) < 0)
+                    err_exit ("setenv FLUX_TMPDIR=%s", optarg);
                 break;
             case 't': /* --trace-apisock */
                 if (setenv ("FLUX_TRACE_APISOCK", "1", 1) < 0)
