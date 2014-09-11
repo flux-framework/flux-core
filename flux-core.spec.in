@@ -40,7 +40,6 @@ rm -rf $RPM_BUILD_ROOT
 /etc/ld.so.conf.d/*
 %{_libexecdir}/flux
 %{_includedir}/flux
-%{_bindir}/cmbd
 %{_bindir}/flux
 
 %post

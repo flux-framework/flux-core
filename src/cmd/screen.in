@@ -13,7 +13,7 @@ declare attach_rank=
 declare run_rank=
 declare shutdown=
 
-declare path_cmbd="/usr/bin/cmbd"
+declare path_cmbd="${FLUX_EXEC_PATH:-@X_LIBEXECDIR@/flux}/cmbd"
 
 declare cmd_wrapper=
 declare cmd_prefix=

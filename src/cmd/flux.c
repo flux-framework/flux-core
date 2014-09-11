@@ -49,11 +49,12 @@ static char *flux_exe_dir;
 
 void exec_subcommand (const char *exec_path, char *argv[]);
 
-#define OPTIONS "+s:tx:h"
+#define OPTIONS "+s:tx:hM:"
 static const struct option longopts[] = {
     {"socket-path",     required_argument,  0, 's'},
     {"trace-apisocket", no_argument,        0, 't'},
     {"exec-path",       required_argument,  0, 'x'},
+    {"module-path",     required_argument,  0, 'M'},
     {"help",            no_argument,        0, 'h'},
     {0, 0, 0, 0},
 };
@@ -61,7 +62,7 @@ static const struct option longopts[] = {
 static void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux [--socket-path PATH] [--exec-path PATH]\n"
+"Usage: flux [--socket-path PATH] [--exec-path PATH] [--module-path PATH]\n"
 "            [--trace-apisock] [--help] COMMAND ARGS\n"
 );
 }
@@ -118,6 +119,10 @@ int main (int argc, char *argv[])
             case 't': /* --trace-apisock */
                 if (setenv ("FLUX_TRACE_APISOCK", "1", 1) < 0)
                     err_exit ("setenv FLUX_TRACE_APISOCK=1");
+                break;
+            case 'M': /* --module-path */
+                if (setenv ("FLUX_MODULE_PATH", optarg, 1) < 0)
+                    err_exit ("setenv FLUX_MODULE_PATH=%s", optarg);
                 break;
             case 'x': /* --exec-path */
                 if (setenv ("FLUX_EXEC_PATH", optarg, 1) < 0)

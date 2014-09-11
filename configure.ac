@@ -99,6 +99,8 @@ AC_CONFIG_FILES( \
   src/lib/libcore/flux-libs.conf \
   src/broker/Makefile \
   src/cmd/Makefile \
+  src/cmd/srun \
+  src/cmd/screen \
   src/modules/Makefile \
   src/modules/api/Makefile \
   src/modules/kvs/Makefile \

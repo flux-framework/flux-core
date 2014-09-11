@@ -13,7 +13,7 @@ declare srun_opts="--propagate=CORE"
 declare srun_nnodes=${SLURM_NNODES}
 declare srun_ntasks=
 
-declare path_cmbd="/usr/bin/cmbd"
+declare path_cmbd="${FLUX_EXEC_PATH:-@X_LIBEXECDIR@/flux}/cmbd"
 
 declare cmbd_kary=
 declare cmbd_modules="api,modctl,kvs,live"
@@ -23,7 +23,7 @@ declare cmbd_modopts=
 declare -r path_getopt="/usr/bin/getopt"
 declare -r short_opts="hN:n:op:M:O:k:Xp:"
 declare -r long_opts="\
-help,nnodes:,ntasks:,overcommit,partition:,module:,modopt:,k-ary:,noexec,path-cmbd:"
+help,nnodes:,ntasks:,overcommit,partition:,module:,modopt:,k-ary:,noexec"
 
 declare -r usage="\
 Usage: $prog OPTIONS [command [args...]]\n\
@@ -34,8 +34,7 @@ Usage: $prog OPTIONS [command [args...]]\n\
    -M,--module NAME            load additional module\n\
    -O,--modopt NAME:var=val    set additional module option\n\
    -k,--k-ary N                set reduction tree fanout\n\
-   -X,--noexec                 print command line without running it\n\
-   -p,--path-cmbd PATH         run cmbd from non-default location"
+   -X,--noexec                 print command line without running it"
 
 usage()    { echo -e "$usage" >&2; }
 log_msg()  { echo -e "$prog: $@";  }
@@ -58,7 +57,6 @@ while true; do
         -O|--modopt)     cmbd_modopts="${cmbd_modopts} $2";  shift 2 ;;
         -k|--k-ary)      cmbd_kary=$2;                       shift 2 ;;
         -X|--noexec)     cmd_wrapper=echo;                   shift 1 ;;
-        -p|--path-cmbd)  path_cmbd="$2";                     shift 2 ;;
         --)              shift; break                                ;;
         *)               usage; exit 1                               ;;
     esac
