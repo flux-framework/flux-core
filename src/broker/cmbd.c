@@ -1671,7 +1671,7 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         if (ctx->rank > 0)
             (void)parent_send (ctx, zmsg);
         else
-            flux_log_zmsg (ctx->h, *zmsg);
+            flux_log_zmsg (*zmsg);
     } else if (flux_msg_match (*zmsg, "cmb.pub")) {
         if (ctx->rank > 0) {
             if (parent_send (ctx, zmsg) < 0)

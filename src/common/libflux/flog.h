@@ -17,10 +17,10 @@ int flux_log (flux_t h, int lev, const char *fmt, ...)
  */
 void flux_log_set_redirect (flux_t h, bool flag);
 
-/* Forward or log (depending on redirect setting) a log request message.
- * The message is destroyed if successful.
+/* Log a cmb.log message to libutil/log.c.
+ * The message is not destroyed.
  */
-int flux_log_zmsg (flux_t h, zmsg_t **zmsg);
+int flux_log_zmsg (zmsg_t *zmsg);
 
 #endif /* !_FLUX_CORE_FLOG_H */
 

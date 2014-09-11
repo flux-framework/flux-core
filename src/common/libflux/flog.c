@@ -178,17 +178,13 @@ int flux_log (flux_t h, int lev, const char *fmt, ...)
     return rc;
 }
 
-int flux_log_zmsg (flux_t h, zmsg_t **zmsg)
+int flux_log_zmsg (zmsg_t *zmsg)
 {
-    logctx_t *ctx = getctx (h);
     JSON o = NULL;
     flog_t f;
     int rc = -1;
 
-    if (!ctx->redirect)
-        return flux_request_sendmsg (h, zmsg);
-
-    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || !o || flog_decode (o, &f) < 0){
+    if (flux_msg_decode (zmsg, NULL, &o) < 0 || !o || flog_decode (o, &f) < 0){
         errno = EPROTO;
         goto done;
     }
