@@ -411,6 +411,18 @@ int main (int argc, char *argv[])
     if (ctx.size > 1 && !ctx.gevent)
         msg_exit ("--event-uri is required for size > 1");
 
+    if (ctx.verbose) {
+        endpt_t *ep = zlist_first (ctx.parents);
+        if (ep)
+            msg ("parent: %s", ep->uri);
+        if (ctx.child)
+            msg ("child: %s", ctx.child->uri);
+        if (ctx.gevent)
+            msg ("gevent: %s", ctx.gevent->uri);
+        if (ctx.gevent_relay)
+            msg ("gevent-relay: %s", ctx.gevent_relay->uri);
+    }
+
     /* Remaining arguments are for modules: module:key=val
      */
     for (i = optind; i < argc; i++) {
@@ -442,8 +454,12 @@ int main (int argc, char *argv[])
     if (!nopt && ctx.rank == 0 && (isatty (0) || ctx.shell_cmd))
         rank0_shell (&ctx);
 
+    if (ctx.verbose)
+        msg ("initializing sockets");
     cmbd_init_socks (&ctx); /* Note: OK to call flux_log after this */
 
+    if (ctx.verbose)
+        msg ("loading modules");
     module_loadall (&ctx);
 
     /* install heartbeat timer
@@ -454,18 +470,27 @@ int main (int argc, char *argv[])
                                          (zloop_timer_fn *)hb_cb, &ctx);
         if (ctx.heartbeat_tid == -1)
             err_exit ("zloop_timer");
-        flux_log (ctx.h, LOG_INFO, "heartrate T=%0.1fs", ctx.heartrate);
+        if (ctx.verbose)
+            msg ("installing session heartbeat: T=%0.1fs", ctx.heartrate);
     }
 
+    if (ctx.verbose)
+        msg ("entering event loop");
     zloop_start (ctx.zl);
+    if (ctx.verbose)
+        msg ("exited event loop");
 
     /* remove heartbeat timer
      */
     if (ctx.rank == 0) {
         zloop_timer_end (ctx.zl, ctx.heartbeat_tid);
     }
+    if (ctx.verbose)
+        msg ("unloading modules");
     cmbd_fini (&ctx);
 
+    if (ctx.verbose)
+        msg ("cleaning up");
     while ((ep = zlist_pop (ctx.parents)))
         endpt_destroy (ep);
     zlist_destroy (&ctx.parents);
@@ -503,6 +528,8 @@ static void update_environment (ctx_t *ctx)
                     oldtmp, ctx->sid, ctx->rank);
     if (mkdir (tmpdir, 0700) < 0 && errno != EEXIST)
         err_exit ("mkdir %s", tmpdir);
+    if (ctx->verbose)
+        msg ("FLUX_TMPDIR: %s", tmpdir);
     if (setenv ("FLUX_TMPDIR", tmpdir, 1) < 0)
         err_exit ("setenv FLUX_TMPDIR");
 }
@@ -538,6 +565,8 @@ static void update_pidfile (ctx_t *ctx, bool force)
         err_exit ("%s", pidfile);
     if (fclose(f) < 0)
         err_exit ("%s", pidfile);
+    if (ctx->verbose)
+        msg ("pidfile: %s", pidfile);
     free (pidfile);
 }
 
@@ -1006,8 +1035,6 @@ static void cmbd_init_comms (ctx_t *ctx)
     zctx_set_linger (ctx->zctx, 5);
     if (!(ctx->zl = zloop_new ()))
         err_exit ("zloop_new");
-    //if (ctx->verbose)
-    //    zloop_set_verbose (ctx->zl, true);
     ctx->sigfd = cmbd_init_signalfd (ctx);
 
     /* Initialize security.
@@ -1320,6 +1347,8 @@ static int cmb_reparent (ctx_t *ctx, const char *uri)
 
 static int shutdown_cb (zloop_t *zl, int timer_id, ctx_t *ctx)
 {
+    if (ctx->verbose)
+        msg ("shutdown timer expired: exiting");
     exit (ctx->shutdown_exitcode);
 }
 
@@ -1341,7 +1370,7 @@ static void shutdown_recv (ctx_t *ctx, zmsg_t *zmsg)
         if (ctx->shutdown_tid == -1)
             err_exit ("zloop_timer");
         ctx->shutdown_exitcode = exitcode;
-        if (ctx->rank == 0)
+        if (ctx->rank == 0 || ctx->verbose)
             msg ("%d: shutdown in %ds: %s", rank, grace, reason);
     }
     if (o)
@@ -1956,7 +1985,7 @@ static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
     if (!strcmp (service, "cmb")) {
         if (hopcount > 0) {
             cmb_internal_request (ctx, zmsg);
-        } else if (!ctx->treeroot) { /* we're sending so route upstream */
+        } else if (!ctx->treeroot) {
             parent_send (ctx, zmsg);
         } else
             errno = EINVAL;
