@@ -456,7 +456,7 @@ int main (int argc, char *argv[])
 
     if (ctx.verbose)
         msg ("initializing sockets");
-    cmbd_init_socks (&ctx); /* Note: OK to call flux_log after this */
+    cmbd_init_socks (&ctx); /* NOTE: ctx->h handle is now initialized. */
 
     if (ctx.verbose)
         msg ("loading modules");
@@ -1088,6 +1088,8 @@ static void cmbd_init_socks (ctx_t *ctx)
     /* create flux_t handle */
     ctx->h = flux_handle_create (ctx, &cmbd_handle_ops, 0);
     flux_log_set_facility (ctx->h, "cmbd");
+    if (ctx->rank == 0)
+        flux_log_set_redirect (ctx->h, true);
 }
 
 static void cmbd_fini (ctx_t *ctx)
@@ -1665,28 +1667,7 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         if (request)
             json_object_put (request);
     } else if (flux_msg_match (*zmsg, "cmb.log")) {
-        json_object *request = NULL;
-        const char *s, *src, *fac;
-        struct timeval ts;
-        int lev;
-        if (ctx->rank > 0)
-            (void)flux_request_sendmsg (ctx->h, zmsg);
-        else {
-            if (flux_msg_decode (*zmsg, NULL, &request) == 0 && request
-                && util_json_object_get_int (request, "level", &lev) == 0
-                && util_json_object_get_timeval (request, "timestamp", &ts) == 0
-                && util_json_object_get_string (request, "message", &s) == 0
-                && util_json_object_get_string (request, "facility", &fac) == 0
-                && util_json_object_get_string (request, "source", &src) == 0) {
-                const char *levstr = log_leveltostr (lev);
-                if (!levstr)
-                    levstr = "unknown";
-                msg ("[%-.6lu.%-.6lu] %s.%s[%s] %s",
-                     ts.tv_sec, ts.tv_usec, fac, levstr, src, s);
-            }
-        }
-        if (request)
-            json_object_put (request);
+        flux_log_zmsg (ctx->h, zmsg);
     } else if (flux_msg_match (*zmsg, "cmb.pub")) {
         if (ctx->rank > 0) {
             if (flux_request_sendmsg (ctx->h, zmsg) < 0)
@@ -1708,7 +1689,7 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             char *p, *service = xstrdup (topic);
             module_t *mod;
             if ((p = strchr (service, '.')))
-                *p = '\0'; 
+                *p = '\0';
             rankfwd_rewrap (zmsg, &topic, &payload);
             if (!strcmp (service, "cmb")) {
                 cmb_internal_request (ctx, zmsg);

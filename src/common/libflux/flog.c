@@ -43,7 +43,17 @@
 
 typedef struct {
     char *facility;
+    bool redirect;
 } logctx_t;
+
+typedef struct {
+    int level;
+    const char *facility;
+    int rank;
+    const char *msg;
+    struct timeval tv;
+} flog_t;
+
 
 static void freectx (logctx_t *ctx)
 {
@@ -64,35 +74,44 @@ static logctx_t *getctx (flux_t h)
     return ctx;
 }
 
-static json_object *log_create (int level, const char *fac, const char *src,
-                                const char *fmt, va_list ap)
+static json_object *flog_encode (flog_t *f)
 {
     json_object *o = util_json_object_new_object ();
-    char *str = NULL;
-    struct timeval tv;
 
-    if (gettimeofday (&tv, NULL) < 0)
-        err_exit ("gettimeofday");
-
-    if (vasprintf (&str, fmt, ap) < 0)
-        oom ();
-    if (strlen (str) == 0) {
-        errno = EINVAL;
-        goto error;
-    }
-    util_json_object_add_int (o, "count", 1);
-    util_json_object_add_string (o, "facility", fac);
-    util_json_object_add_int (o, "level", level);
-    util_json_object_add_string (o, "source", src);
-    util_json_object_add_timeval (o, "timestamp", &tv);
-    util_json_object_add_string (o, "message", str);
-    free (str);
+    util_json_object_add_string (o, "facility", f->facility);
+    util_json_object_add_int (o, "level", f->level);
+    util_json_object_add_int (o, "rank", f->rank);
+    util_json_object_add_timeval (o, "timestamp", &f->tv);
+    util_json_object_add_string (o, "message", f->msg);
     return o;
-error:
-    if (str)
-        free (str);
-    json_object_put (o);
-    return NULL;
+}
+
+static int flog_decode (json_object *o, flog_t *f)
+{
+    int rc = -1;
+    if (util_json_object_get_string (o, "facility", &f->facility) < 0)
+        goto done;
+    if (util_json_object_get_int (o, "level", &f->level) < 0)
+        goto done;
+    if (util_json_object_get_int (o, "rank", &f->rank) < 0)
+        goto done;
+    if (util_json_object_get_timeval (o, "timestamp", &f->tv) < 0)
+        goto done;
+    if (util_json_object_get_string (o, "message", &f->msg) < 0)
+        goto done;
+    rc = 0;
+done:
+    return rc;
+}
+
+static void flog_msg (flog_t *flog)
+{
+    const char *levstr = log_leveltostr (flog->level);
+    if (!levstr)
+        levstr = "unknown";
+    msg ("[%-.6lu.%-.6lu] %s.%s[%d] %s",
+         flog->tv.tv_sec, flog->tv.tv_usec, flog->facility, levstr,
+         flog->rank, flog->msg);
 }
 
 void flux_log_set_facility (flux_t h, const char *facility)
@@ -104,22 +123,42 @@ void flux_log_set_facility (flux_t h, const char *facility)
     ctx->facility = xstrdup (facility);
 }
 
+void flux_log_set_redirect (flux_t h, bool flag)
+{
+    logctx_t *ctx = getctx (h);
+    ctx->redirect = flag;
+}
+
 int flux_vlog (flux_t h, int lev, const char *fmt, va_list ap)
 {
     logctx_t *ctx = getctx (h);
-    json_object *request = NULL;
-    char src[8];
+    json_object *o = NULL;
+    char *s = NULL;
+    flog_t flog;
     int rc = -1;
 
-    snprintf (src, sizeof (src), "%d", flux_rank (h));
-    if (!(request = log_create (lev, ctx->facility, src, fmt, ap)))
-        goto done;
-    if (flux_request_send (h, request, "cmb.log") < 0)
-        goto done;
-    rc = 0;
+    flog.facility = ctx->facility;
+    flog.level = lev;
+    flog.rank = flux_rank (h);
+    if (gettimeofday (&flog.tv, NULL) < 0)
+        err_exit ("gettimeofday");
+    if (vasprintf (&s, fmt, ap) < 0)
+        oom ();
+    flog.msg = s;
+
+    if (ctx->redirect) {
+        flog_msg (&flog);
+        rc = 0;
+    } else {
+        if (!(o = flog_encode (&flog)))
+            goto done;
+        rc = flux_request_send (h, o, "cmb.log");
+    }
 done:
-    if (request)
-        json_object_put (request);
+    if (s)
+        free (s);
+    if (o)
+        json_object_put (o);
     return rc;
 }
 
@@ -131,6 +170,28 @@ int flux_log (flux_t h, int lev, const char *fmt, ...)
     va_start (ap, fmt);
     rc = flux_vlog (h, lev, fmt, ap);
     va_end (ap);
+    return rc;
+}
+
+int flux_log_zmsg (flux_t h, zmsg_t **zmsg)
+{
+    logctx_t *ctx = getctx (h);
+    json_object *o = NULL;
+    flog_t f;
+    int rc = -1;
+
+    if (!ctx->redirect)
+        return flux_request_sendmsg (h, zmsg);
+
+    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || !o || flog_decode (o, &f) < 0){
+        errno = EPROTO;
+        goto done;
+    }
+    flog_msg (&f);
+    rc = 0;
+done:
+    if (o)
+        json_object_put (o);
     return rc;
 }
 
