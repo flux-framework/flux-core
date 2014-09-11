@@ -1,9 +1,9 @@
 #ifndef _UTIL_ARGV_H
 #define _UTIL_ARGV_H
 
-/* Return a string with argcv elements space-delimited.  Caller must free.
+/* Return a string with argcv elements delimited by 'sep'.  Caller must free.
  */
-char *argv_concat (int argc, char *argv[]);
+char *argv_concat (int argc, char *argv[], const char *sep);
 
 #endif /* !_UTIL_ARGV_H */
 /*

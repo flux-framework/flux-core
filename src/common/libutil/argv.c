@@ -30,18 +30,19 @@
 #include "xzmalloc.h"
 #include "argv.h"
 
-char *argv_concat (int argc, char *argv[])
+char *argv_concat (int argc, char *argv[], const char *sep)
 {
+    int seplen = strlen (sep);
     int i, len = 0;
     char *s;
 
     for (i = 0; i < argc; i++)
-        len += strlen (argv[i]) + 1;
+        len += strlen (argv[i]) + seplen;
     s = xzmalloc (len + 1);
     for (i = 0; i < argc; i++) {
         strcat (s, argv[i]);
         if (i < argc - 1)
-            strcat (s, " ");
+            strcat (s, sep);
     }
     return s;
 }
