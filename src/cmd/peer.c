@@ -127,7 +127,7 @@ int main (int argc, char *argv[])
     } else if (!strcmp (cmd, "panic")) {
         char *msg = NULL;
         if (optind < argc)
-            msg = argv_concat (argc - optind, argv + optind);
+            msg = argv_concat (argc - optind, argv + optind, " ");
         flux_panic (h, rank, msg);
         if (msg)
             free (msg);

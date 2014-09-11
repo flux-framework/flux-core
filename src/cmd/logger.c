@@ -85,7 +85,7 @@ int main (int argc, char *argv[])
     }
     if (optind == argc)
         usage ();
-    message = argv_concat (argc - optind, argv + optind);
+    message = argv_concat (argc - optind, argv + optind, " ");
 
     if (!(h = flux_api_open ()))
         err_exit ("flux_api_open");
