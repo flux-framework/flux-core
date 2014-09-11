@@ -187,6 +187,7 @@ static endpt_t *endpt_create (const char *fmt, ...);
 static void endpt_destroy (endpt_t *ep);
 
 static int cmb_pub_event (ctx_t *ctx, zmsg_t **event);
+static int parent_send (ctx_t *ctx, zmsg_t **zmsg);
 
 static void update_proctitle (ctx_t *ctx);
 static void update_environment (ctx_t *ctx);
@@ -1667,10 +1668,13 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         if (request)
             json_object_put (request);
     } else if (flux_msg_match (*zmsg, "cmb.log")) {
-        flux_log_zmsg (ctx->h, zmsg);
+        if (ctx->rank > 0)
+            (void)parent_send (ctx, zmsg);
+        else
+            flux_log_zmsg (ctx->h, *zmsg);
     } else if (flux_msg_match (*zmsg, "cmb.pub")) {
         if (ctx->rank > 0) {
-            if (flux_request_sendmsg (ctx->h, zmsg) < 0)
+            if (parent_send (ctx, zmsg) < 0)
                 flux_respond_errnum (ctx->h, zmsg, errno);
         } else {
             if (cmb_pub (ctx, zmsg) < 0)
