@@ -175,8 +175,7 @@ static module_t *module_create (ctx_t *ctx, const char *path, int flags);
 static void module_destroy (module_t *mod);
 static void module_unload (module_t *mod, zmsg_t **zmsg);
 static bool module_select (module_t *mod, const char *nstr);
-static module_t *module_prepare (ctx_t *ctx, const char *name);
-static void module_prepare_list (ctx_t *ctx, const char *optarg);
+static void module_prepare (ctx_t *ctx, const char *optarg);
 static void module_loadall (ctx_t *ctx);
 
 static int peer_idle (ctx_t *ctx, const char *uuid);
@@ -257,6 +256,7 @@ int main (int argc, char *argv[])
     endpt_t *ep;
     bool fopt = false;
     bool nopt = false;
+    char *Mopt = NULL;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -315,7 +315,7 @@ int main (int argc, char *argv[])
                 ctx.size = strtoul (optarg, NULL, 10);
                 break;
             case 'M':   /* --modules p1,p2,...,p3[nodeset],... */
-                module_prepare_list (&ctx, optarg);
+                Mopt = optarg;
                 break;
             case 'X':   /* --module-path PATH */
                 ctx.module_path = optarg;
@@ -426,6 +426,14 @@ int main (int argc, char *argv[])
             msg ("gevent-relay: %s", ctx.gevent_relay->uri);
     }
 
+    /* Prepare to load modues.
+     */
+    if (ctx.verbose)
+        msg ("module-path: %s", ctx.module_path);
+    module_prepare (&ctx, "api,modctl,kvs[0]");
+    if (Mopt)
+        module_prepare (&ctx, Mopt);
+
     /* Remaining arguments are for modules: module:key=val
      */
     for (i = optind; i < argc; i++) {
@@ -443,14 +451,6 @@ int main (int argc, char *argv[])
         }
         free (cpy);
     }
-    /* Ensure a minimal set of modules will be loaded.
-     */
-    if (ctx.verbose)
-        msg ("module-path: %s", ctx.module_path);
-    module_prepare (&ctx, "api");
-    module_prepare (&ctx, "kvs");
-    module_prepare (&ctx, "modctl");
-    //module_prepare (&ctx, "live");
 
     update_proctitle (&ctx);
     update_environment (&ctx);
@@ -797,7 +797,7 @@ static bool module_select (module_t *mod, const char *nstr)
     return nodeset_add_str (mod->ns, nstr);
 }
 
-static module_t *module_prepare (ctx_t *ctx, const char *name)
+static module_t *module_prepare_one (ctx_t *ctx, const char *name)
 {
     char *path;
     int flags = 0;
@@ -829,7 +829,7 @@ static void module_xsep (char *s, char oldsep, char newsep)
     }
 }
 
-static void module_prepare_list (ctx_t *ctx, const char *optarg)
+static void module_prepare (ctx_t *ctx, const char *optarg)
 {
     char *cpy = xstrdup (optarg);
     char *name, *saveptr = NULL, *a1 = cpy;
@@ -842,11 +842,11 @@ static void module_prepare_list (ctx_t *ctx, const char *optarg)
             nstr = xstrdup (p);
             *p = '\0';
         }
-        mod = module_prepare (ctx, name);
+        mod = module_prepare_one (ctx, name);
         if (nstr) {
             module_xsep (nstr, ';', ',');
             if (!module_select (mod, nstr))
-                msg_exit ("malformed module argument: %s%s", name, nstr);
+                msg_exit ("malformed module name: %s%s", name, nstr);
             free (nstr);
         }
         a1 = NULL;
