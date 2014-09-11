@@ -1954,11 +1954,12 @@ static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
     }
     snoop_cc (ctx, FLUX_MSGTYPE_REQUEST, *zmsg);
     if (!strcmp (service, "cmb")) {
-        if (hopcount > 0 || ctx->treeroot) {
+        if (hopcount > 0) {
             cmb_internal_request (ctx, zmsg);
-        } else {
+        } else if (!ctx->treeroot) { /* we're sending so route upstream */
             parent_send (ctx, zmsg);
-        }
+        } else
+            errno = EINVAL;
     } else {
         if ((mod = zhash_lookup (ctx->modules, service))
                  && (!lasthop || strcmp (lasthop, plugin_uuid (mod->p)) != 0)) {
