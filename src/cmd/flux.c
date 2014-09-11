@@ -39,15 +39,15 @@
 #include <stdbool.h>
 #include <sys/param.h>
 #include <json.h>
+#include <glob.h>
 
 #include "log.h"
 #include "xzmalloc.h"
 #include "setenvf.h"
-
-static char  flux_exe_path [MAXPATHLEN];
-static char *flux_exe_dir;
+#include "argv.h"
 
 void exec_subcommand (const char *exec_path, char *argv[]);
+char *dir_self (void);
 
 #define OPTIONS "+T:tx:hM:"
 static const struct option longopts[] = {
@@ -108,6 +108,7 @@ int main (int argc, char *argv[])
     int ch;
     char *exec_path;
     bool hopt = false;
+    char *flux_exe_dir = dir_self ();
 
     log_init ("flux");
 
@@ -140,15 +141,26 @@ int main (int argc, char *argv[])
     argc -= optind;
     argv += optind;
 
-    /*  Set global execpath to path to this executable.
-     *   (using non-portable /proc/self/exe support for now)
+    /* We are executing 'flux' from a path that is not the installed path.
+     * Presume we are in $top_builddir/src/cmd and set up environment
+     * accordingly.
      */
-    memset (flux_exe_path, 0, MAXPATHLEN);
-    if (readlink ("/proc/self/exe", flux_exe_path, MAXPATHLEN - 1) < 0)
-        err_exit ("readlink (/proc/self/exe)");
-    flux_exe_dir = dirname (flux_exe_path);
+    if (strcmp (flux_exe_dir, X_BINDIR) != 0) {
+        msg ("Configuring for execution from source tree");
+        glob_t gl;
+        char *modpath;
+        if (!getenv ("FLUX_EXEC_PATH"))
+            setenv ("FLUX_EXEC_PATH", ".:../broker", 1);
+        if (!getenv ("FLUX_MODULE_PATH") && glob ("../modules/*/.libs",
+                GLOB_ONLYDIR, NULL, &gl) == 0) {
+            modpath = argv_concat (gl.gl_pathc, gl.gl_pathv, ":");
+            globfree (&gl);
+            setenv ("FLUX_MODULE_PATH", modpath, 1);
+            free (modpath);
+        }
+    }
 
-    setup_lua_env (flux_exe_dir);
+    //setup_lua_env (flux_exe_dir);
 
     if (!(exec_path = getenv ("FLUX_EXEC_PATH"))) {
         exec_path = EXEC_PATH;
@@ -170,9 +182,26 @@ int main (int argc, char *argv[])
 
     exec_subcommand (exec_path, argv);
 
+    free (flux_exe_dir);
+
     log_fini ();
 
     return 0;
+}
+
+/*  Return directory containing this executable.  Caller must free.
+ *   (using non-portable /proc/self/exe support for now)
+ */
+char *dir_self (void)
+{
+    char  flux_exe_path [MAXPATHLEN];
+    char *flux_exe_dir;
+
+    memset (flux_exe_path, 0, MAXPATHLEN);
+    if (readlink ("/proc/self/exe", flux_exe_path, MAXPATHLEN - 1) < 0)
+        err_exit ("readlink (/proc/self/exe)");
+    flux_exe_dir = dirname (flux_exe_path);
+    return xstrdup (flux_exe_dir);
 }
 
 void exec_subcommand_dir (const char *dir, char *argv[], const char *prefix)
@@ -194,7 +223,7 @@ void exec_subcommand (const char *searchpath, char *argv[])
         a1 = NULL;
     }
     /* Also try flux_exe_path with flux- prepended */
-    exec_subcommand_dir (flux_exe_dir, argv, "flux-");
+    //exec_subcommand_dir (flux_exe_dir, argv, "flux-");
     free (cpy);
     msg_exit ("`%s' is not a flux command.  See 'flux --help'", argv[0]);
 }

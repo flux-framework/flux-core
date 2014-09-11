@@ -13,7 +13,12 @@ declare attach_rank=
 declare run_rank=
 declare shutdown=
 
-declare path_cmbd="${FLUX_EXEC_PATH:-@X_LIBEXECDIR@/flux}/cmbd"
+find_cmbd() {
+    test -n "$FLUX_EXEC_PATH" && PATH=$FLUX_EXEC_PATH:$PATH
+    which cmbd 2>/dev/null
+}
+declare path_cmbd=$(find_cmbd)
+test -n "$path_cmbd" || path_cmbd="@X_LIBEXECDIR@/flux/cmbd"
 
 declare cmd_wrapper=
 declare cmd_prefix=
@@ -28,8 +33,7 @@ declare cmbd_modopts=
 declare -r path_getopt="/usr/bin/getopt"
 declare -r short_opts="hN:gVs:M:O:k:Xa:r:SLp:"
 declare -r long_opts="\
-help,nnodes:,gdb,valgrind,sid:,module:,modopt:,k-ary:,noexec,attach:,run:,\
-shutdown,list,path-cmbd:"
+help,nnodes:,gdb,valgrind,sid:,module:,modopt:,k-ary:,noexec,attach:,run:,shutdown,list:"
 
 declare -r usage="\
 Usage: $prog OPTIONS [command [args...]]\n\
@@ -41,7 +45,6 @@ Usage: $prog OPTIONS [command [args...]]\n\
    -O,--modopt NAME:var=val    set additional module option\n\
    -k,--k-ary N                set reduction tree fanout\n\
    -X,--noexec                 print command lines without running them\n\
-   -p,--path-cmbd PATH         run a cmbd from non-default location\n\
    -a,--attach N               attach to rank N\n\
    -r,--run N                  run command with FLUX_TMPDIR set for rank N\n\
    -L,--list                   list sessions\n\
@@ -81,7 +84,6 @@ while true; do
         -r|--run)        run_rank=$2;                        shift 2 ;;
         -S|--shutdown)   shutdown=1;                         shift 1 ;;
         -L|--list)       listscreens=1;                      shift 1 ;;
-        -p|--path-cmbd)   path_cmbd="$2";                     shift 2 ;;
         --)              shift; break                                ;;
         *)               usage; exit 1                               ;;
     esac
