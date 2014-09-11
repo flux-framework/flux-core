@@ -145,7 +145,7 @@ for rank in `seq 0 $(($cmbd_size - 1))`; do
         --size ${cmbd_size} \
         ${cmbd_sid:+--sid=${cmbd_sid}} \
         ${cmbd_kary:+--k-ary=${cmbd_kary}} \
-        ${cmbd_modules:+--plugins=${cmbd_modules}} \
+        ${cmbd_modules:+--modules=${cmbd_modules}} \
         ${@:+--command=\"$@\"} \
         ${cmbd_modopts}
 done

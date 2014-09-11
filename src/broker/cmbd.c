@@ -212,7 +212,7 @@ static const struct option longopts[] = {
     {"security",        required_argument,  0, 's'},
     {"rank",            required_argument,  0, 'R'},
     {"size",            required_argument,  0, 'S'},
-    {"plugins",         required_argument,  0, 'M'},
+    {"modules",         required_argument,  0, 'M'},
     {"module-path",     required_argument,  0, 'X'},
     {"logdest",         required_argument,  0, 'L'},
     {"pmi-boot",        no_argument,        0, 'P'},
@@ -236,7 +236,7 @@ static void usage (void)
 " -R,--rank N                  Set cmbd rank (0...size-1)\n"
 " -S,--size N                  Set number of ranks in session\n"
 " -N,--sid NAME                Set session id\n"
-" -M,--plugins name[,name,...] Load the named modules (comma separated)\n"
+" -M,--modules name[,name,...] Load the named modules (comma separated)\n"
 " -X,--module-path PATH        Set module search path (colon separated)\n"
 " -L,--logdest DEST            Log to DEST, can  be syslog, stderr, or file\n"
 " -s,--security=plain|curve|none    Select security mode (default: curve)\n"
@@ -312,7 +312,7 @@ int main (int argc, char *argv[])
             case 'S':   /* --size N */
                 ctx.size = strtoul (optarg, NULL, 10);
                 break;
-            case 'M':   /* --plugins p1,p2,...,p3[nodeset],... */
+            case 'M':   /* --modules p1,p2,...,p3[nodeset],... */
                 module_prepare_list (&ctx, optarg);
                 break;
             case 'X':   /* --module-path PATH */

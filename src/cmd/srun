@@ -86,7 +86,7 @@ $cmd_wrapper ${path_srun} ${srun_opts} \
     ${srun_partition:+--partition=${srun_partition}} \
     ${path_cmbd} ${cmbd_opts} \
     ${cmbd_kary:+--k-ary=${cmbd_kary}} \
-    ${cmbd_modules:+--plugins=${cmbd_modules}} \
+    ${cmbd_modules:+--modules=${cmbd_modules}} \
     ${@:+--command=\"$@\"} \
     ${cmbd_modopts}
 
