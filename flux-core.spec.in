@@ -27,7 +27,7 @@ Manager Framework.
 
 %build
 %configure --program-prefix=%{?_program_prefix:%{_program_prefix}}
-make 
+make %{?_smp_mflags}
 
 %check
 make check
