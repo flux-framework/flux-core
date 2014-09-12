@@ -14,6 +14,14 @@ BuildRequires: json-c-devel
 
 %description
 
+%package devel
+Summary: Headers and libraries for the Flux Resource Manager Framework
+Group: Development/System
+Requires: %{name}%{?_isa} = %{version}-%{release}
+%description devel
+Headers and libraries for developing software with the Flux Resource
+Manager Framework.
+
 %prep
 %setup
 
@@ -35,12 +43,21 @@ rm -rf $RPM_BUILD_ROOT
 %files
 %defattr(-,root,root)
 %doc ChangeLog NEWS DISCLAIMER.LLNS COPYING INSTALL README AUTHORS
-%{_libdir}/flux
-%{_libdir}/pkgconfig/*
+%dir %{_libdir}/flux
+%{_libdir}/flux/*.so.*
+%{_libdir}/flux/modules
+%{_libdir}/flux/modules/*
 /etc/ld.so.conf.d/*
 %{_libexecdir}/flux
-%{_includedir}/flux
 %{_bindir}/flux
+
+%files devel
+%defattr(-,root,root)
+%{_includedir}/flux
+%{_libdir}/flux/*.a
+%{_libdir}/flux/*.la
+%{_libdir}/flux/*.so
+%{_libdir}/pkgconfig/*
 
 %post
 if [ -x /sbin/ldconfig ]; then /sbin/ldconfig %{_libdir}/flux; fi
