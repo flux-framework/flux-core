@@ -66,5 +66,10 @@ if [ -x /sbin/ldconfig ]; then /sbin/ldconfig %{_libdir}/flux; fi
 if [ -x /sbin/ldconfig ]; then /sbin/ldconfig %{_libdir}/flux; fi
 
 %changelog
+* Fri Sep 12 2014 Mark A. Grondona <mgrondona@llnl.gov> 0.1.0-1
+- Update License tag to GPLv2+
+- Add _smp_mflags macro to make line
+- Repackage libs and headers in devel package
+
 * Tue Sep 2 2014 Jim Garlick <garlick@llnl.gov> 0.1.0-1
 - initial spec file created
