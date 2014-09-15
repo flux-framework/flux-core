@@ -219,11 +219,10 @@ void exec_subcommand (const char *searchpath, char *argv[])
     char *dir, *saveptr = NULL, *a1 = cpy;
 
     while ((dir = strtok_r (a1, ":", &saveptr))) {
-        exec_subcommand_dir (dir, argv, NULL);
+        exec_subcommand_dir (dir, argv, "flux-");
+        exec_subcommand_dir (dir, argv, NULL); /* deprecated */
         a1 = NULL;
     }
-    /* Also try flux_exe_path with flux- prepended */
-    //exec_subcommand_dir (flux_exe_dir, argv, "flux-");
     free (cpy);
     msg_exit ("`%s' is not a flux command.  See 'flux --help'", argv[0]);
 }
