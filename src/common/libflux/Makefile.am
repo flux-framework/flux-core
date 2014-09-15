@@ -4,9 +4,7 @@ AM_CPPFLAGS = \
 	$(JSON_CFLAGS) \
 	-I$(top_srcdir)/src/common/libutil
 
-includefluxcoredir=$(includedir)/flux/core
-
-includefluxcore_HEADERS = \
+fluxcoreinclude_HEADERS = \
 	flux.h \
 	handle.h \
 	reactor.h \

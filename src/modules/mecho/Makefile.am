@@ -6,10 +6,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/common/libflux \
 	-I$(top_srcdir)/src/common/libmrpc
 
-libfluxdir = $(libdir)/flux
-fluxmoddir = $(libfluxdir)/modules
-includefluxcoredir = $(includedir)/flux/core
-
 #
 # Comms module
 #

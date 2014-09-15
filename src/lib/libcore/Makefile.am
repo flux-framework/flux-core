@@ -2,12 +2,10 @@ AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = 
 
-libfluxdir=$(libdir)/flux
-includefluxdir=$(includedir)/flux
 ldconfdir=/etc/ld.so.conf.d
 
-includeflux_HEADERS = core.h
-libflux_LTLIBRARIES = libflux-core.la
+fluxinclude_HEADERS = core.h
+fluxlib_LTLIBRARIES = libflux-core.la
 libflux_core_la_SOURCES = 
 libflux_core_la_LIBADD = \
 	$(top_builddir)/src/common/libzio/libzio.la \

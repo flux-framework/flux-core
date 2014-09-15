@@ -81,6 +81,24 @@ AC_DEFINE(WITH_PTHREADS, 1, [Make liblsd thread safe])
 AC_PKGCONFIG
 
 ##
+# Project directories
+##
+AS_VAR_SET(fluxbindir, $libexecdir/flux/core)
+AC_SUBST(fluxbindir)
+
+AS_VAR_SET(fluxlibdir, $libdir/flux)
+AC_SUBST(fluxlibdir)
+
+AS_VAR_SET(fluxmoddir, $libdir/flux/modules)
+AC_SUBST(fluxmoddir)
+
+AS_VAR_SET(fluxincludedir, $includedir/flux)
+AC_SUBST(fluxincludedir)
+
+AS_VAR_SET(fluxcoreincludedir, $includedir/flux/core)
+AC_SUBST(fluxcoreincludedir)
+
+##
 # Epilogue
 ##
 AC_CONFIG_FILES( \

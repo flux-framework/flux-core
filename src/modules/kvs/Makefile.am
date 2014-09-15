@@ -5,10 +5,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/common/libutil \
 	-I$(top_srcdir)/src/common/libflux
 
-libfluxdir = $(libdir)/flux
-fluxmoddir = $(libfluxdir)/modules
-includefluxcoredir = $(includedir)/flux/core
-
 #
 # Comms module
 #
@@ -35,5 +31,5 @@ kvs_la_LIBADD = $(fluxmod_libadd)
 # API for module
 #
 noinst_LTLIBRARIES = libkvs.la
-includefluxcore_HEADERS = kvs.h
+fluxcoreinclude_HEADERS = kvs.h
 libkvs_la_SOURCES = libkvs.c

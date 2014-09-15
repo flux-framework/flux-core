@@ -6,8 +6,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/common/libflux \
 	-I$(top_srcdir)/src/modules/kvs
 
-includefluxcoredir=$(includedir)/flux/core
-
 noinst_LTLIBRARIES = libmrpc.la
-includefluxcore_HEADERS = mrpc.h
+fluxcoreinclude_HEADERS = mrpc.h
 libmrpc_la_SOURCES = mrpc.c

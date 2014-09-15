@@ -7,8 +7,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/common/libflux \
 	-I$(top_srcdir)/src/modules/kvs
 
-includefluxcoredir=$(includedir)/flux/core
-
-includefluxcore_HEADERS = forkzio.h kz.h zio.h
+fluxcoreinclude_HEADERS = forkzio.h kz.h zio.h
 noinst_LTLIBRARIES = libzio.la
 libzio_la_SOURCES = zio.c forkzio.c kz.c

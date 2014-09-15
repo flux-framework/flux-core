@@ -1,9 +1,5 @@
 AM_CFLAGS = @GCCWARN@
 
-libfluxdir = $(libdir)/flux
-fluxmoddir = $(libfluxdir)/modules
-fluxbindir = $(libexecdir)/flux
-
 AM_CPPFLAGS = \
 	$(JSON_CFLAGS) \
 	-DMODULE_PATH=\"$(fluxmoddir)\" \
