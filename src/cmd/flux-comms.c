@@ -54,14 +54,14 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr,
-"Usage: flux-peer [--rank N] idle\n"
-"       flux-peer [--rank N] parent-uri\n"
-"       flux-peer [--rank N] request-uri\n"
-"       flux-peer [--rank N] reparent new-parent-uri\n"
-"       flux-peer [--rank N] panic [msg ...]\n"
-"       flux-peer [--rank N] failover\n"
-"       flux-peer [--rank N] recover\n"
-"       flux-peer            allrecover\n"
+"Usage: flux-comms [-r N] idle\n"
+"       flux-comms [-r N] getattr attr\n"
+"       flux-comms        info\n"
+"       flux-comms [-r N] reparent new-parent-uri\n"
+"       flux-comms [-r N] panic [msg ...]\n"
+"       flux-comms [-r N] failover\n"
+"       flux-comms [-r N] recover\n"
+"       flux-comms        recover-all\n"
 );
     exit (1);
 }
@@ -73,7 +73,7 @@ int main (int argc, char *argv[])
     int rank = -1; /* local */
     char *cmd;
 
-    log_init ("flux-peer");
+    log_init ("flux-comms");
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
@@ -91,6 +91,8 @@ int main (int argc, char *argv[])
     if (optind == argc)
         usage ();
     cmd = argv[optind++];
+    if (rank != -1 && (!strcmp (cmd, "recover-all") || !strcmp (cmd, "info")))
+        usage ();
 
     if (!(h = flux_api_open ()))
         err_exit ("flux_api_open");
@@ -108,20 +110,12 @@ int main (int argc, char *argv[])
             err_exit ("flux_peer");
         printf ("%s\n", Jtostr (peers));
         Jput (peers);
-    } else if (!strcmp (cmd, "parent-uri")) {
-        if (optind != argc)
-            usage ();
+    } else if (!strcmp (cmd, "getattr")) {
         char *s;
-        if (!(s = flux_getattr (h, rank, "cmbd-parent-uri")))
-            err_exit ("flux_getattr cmbd-parent-uri");
-        printf ("%s\n", s);
-        free (s);
-    } else if (!strcmp (cmd, "request-uri")) {
-        if (optind != argc)
-            usage ();
-        char *s;
-        if (!(s = flux_getattr (h, rank, "cmbd-request-uri")))
-            err_exit ("flux_getattr cmbd-request-uri");
+        if (optind != argc - 1)
+            msg_exit ("getattr cmbd-snoop-uri, cmbd-parent-uri, or cmbd-request-uri");
+        if (!(s = flux_getattr (h, rank, argv[optind])))
+            err_exit ("%s", argv[optind]);
         printf ("%s\n", s);
         free (s);
     } else if (!strcmp (cmd, "panic")) {
@@ -146,6 +140,14 @@ int main (int argc, char *argv[])
             usage ();
         if (flux_recover_all (h) < 0)
             err_exit ("flux_recover_all");
+    } else if (!strcmp (cmd, "info")) {
+        int rank, size;
+        bool treeroot;
+        if (flux_info (h, &rank, &size, &treeroot) < 0)
+            err_exit ("flux_info");
+        printf ("rank=%d\n", rank);
+        printf ("size=%d\n", size);
+        printf ("treeroot=%s\n", treeroot ? "true" : "false");
     } else
         usage ();
 

@@ -54,9 +54,7 @@ fluxcmd_PROGRAMS = \
 	flux-event \
 	flux-zio \
 	flux-module \
-	flux-info \
-	flux-peer \
-	flux-stats \
+	flux-comms \
 	flux-kvs
 
 flux_zio_LDADD = \
