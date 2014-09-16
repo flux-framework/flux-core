@@ -37,23 +37,25 @@
 #include <czmq.h>
 
 #include "log.h"
+#include "argv.h"
 
 #include "flux.h"
 #include "api.h"
 
-#define OPTIONS "hp:s"
+static void event_pub (flux_t h, int argc, char **argv);
+static void event_sub (flux_t h, int argc, char **argv);
+
+#define OPTIONS "h"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
-    {"publish",    required_argument,  0, 'p'},
-    {"subscribe",  no_argument,        0, 's'},
     { 0, 0, 0, 0 },
 };
 
 void usage (void)
 {
     fprintf (stderr,
-"Usage: flux-event --pub message [json]\n"
-"       flux-event --sub [topic]\n"
+"Usage: flux-event pub topic [json]\n"
+"       flux-event sub [topic...]\n"
 );
     exit (1);
 }
@@ -62,9 +64,7 @@ int main (int argc, char *argv[])
 {
     flux_t h;
     int ch;
-    char *arg = NULL;
-    char *pub = NULL;
-    bool sub = false;
+    char *cmd;
 
     log_init ("flux-event");
 
@@ -73,67 +73,101 @@ int main (int argc, char *argv[])
             case 'h': /* --help */
                 usage ();
                 break;
-            case 'p': /* --publish message [json] */
-                pub = optarg;
-                break;
-            case 's': /* --subscribe [topic] */
-                sub = true;
-                break;
             default:
                 usage ();
                 break;
         }
     }
-    if (optind != argc && optind != argc - 1)
+    if (optind == argc)
         usage ();
-    if (optind == argc - 1)
-        arg = argv[optind];
-    if (!pub && !sub)
-        usage ();
+    cmd = argv[optind++];
 
     if (!(h = flux_api_open  ()))
         err_exit ("flux_api_open");
 
-    if (pub) {
-        json_object *o = NULL;
-        enum json_tokener_error e;
-        if (arg && !(o = json_tokener_parse_verbose (arg, &e)))
-            msg_exit ("json parse error: %s", json_tokener_error_desc (e));
-        if (flux_event_send (h, o, "%s", pub) < 0 )
-            err_exit ("flux_event_send");
-        if (o)
-            json_object_put (o);
-    }
-    if (sub) {
-        json_object *o = NULL;
-        const char *s;
-        char *tag = NULL;
-        if (flux_event_subscribe (h, arg) < 0)
-            err_exit ("flux_event_subscribe");
-        while (flux_event_recv (h, &o, &tag, false) == 0) {
-            printf ("--------------------------------------\n");
-            if (tag) {
-                printf ("%s\n", tag);
-                free (tag);
-                tag = NULL;
-            } else
-                printf ("<empty tag>\n"); 
-            if (o) {
-                s = json_object_to_json_string_ext (o, JSON_C_TO_STRING_PLAIN);
-                printf ("%s\n", s);
-                json_object_put (o);
-                o = NULL;
-            } else
-                printf ("<empty paylod>\n");
-        }
-        if (flux_event_unsubscribe (h, arg) < 0)
-            err_exit ("flux_event_unsubscribe");
-    }
+    if (!strcmp (cmd, "pub"))
+        event_pub (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "sub"))
+        event_sub (h, argc - optind, argv + optind);
+    else
+        usage ();
 
     flux_api_close (h);
     log_fini ();
     return 0;
 }
+
+static void event_pub (flux_t h, int argc, char **argv)
+{
+    char *topic = argv[0];
+    json_object *o = NULL;
+
+    if (argc > 1) {
+        enum json_tokener_error e;
+        char *s = argv_concat (argc - 1, argv + 1, " ");
+        if (!(o = json_tokener_parse_verbose (s, &e)))
+            msg_exit ("json parse error: %s", json_tokener_error_desc (e));
+        free (s);
+    }
+    if (flux_event_send (h, o, "%s", topic) < 0 )
+        err_exit ("flux_event_send");
+    if (o)
+        json_object_put (o);
+}
+
+static void subscribe_all (flux_t h, int tc, char **tv)
+{
+    int i;
+    for (i = 0; i < tc; i++) {
+        if (flux_event_subscribe (h, tv[i]) < 0)
+            err_exit ("flux_event_subscribe");
+    }
+}
+
+static void unsubscribe_all (flux_t h, int tc, char **tv)
+{
+    int i;
+    for (i = 0; i < tc; i++) {
+        if (flux_event_unsubscribe (h, tv[i]) < 0)
+            err_exit ("flux_event_unsubscribe");
+    }
+}
+
+static void event_sub (flux_t h, int argc, char **argv)
+{
+    json_object *o = NULL;
+    const char *s;
+    char *topic = NULL;
+
+    if (argc > 0)
+        subscribe_all (h, argc, argv);
+    else if (flux_event_subscribe (h, "") < 0)
+        err_exit ("flux_event_subscribe");
+
+    while (flux_event_recv (h, &o, &topic, false) == 0) {
+        if (topic) {
+            printf ("%s\t", topic);
+            free (topic);
+            topic = NULL;
+        } else
+            printf ("\t\t"); 
+        if (o) {
+            s = json_object_to_json_string_ext (o, JSON_C_TO_STRING_PLAIN);
+            printf ("%s\n", s);
+            json_object_put (o);
+            o = NULL;
+        } else
+            printf ("\n");
+    }
+    /* FIXME: add SIGINT handler to exit above loop and clean up.
+     */
+    if (argc > 0)
+        unsubscribe_all (h, argc, argv);
+    else if (flux_event_unsubscribe (h, "") < 0)
+        err_exit ("flux_event_subscribe");
+}
+
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
