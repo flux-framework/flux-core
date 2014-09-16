@@ -59,8 +59,7 @@ fluxcmd_PROGRAMS = \
 	flux-stats \
 	flux-kvs \
 	flux-kvsdir \
-	flux-kvstorture \
-	flux-kvswatch
+	flux-kvstorture
 
 flux_zio_LDADD = \
 	$(top_builddir)/src/common/libzio/libzio.la \

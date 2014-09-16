@@ -59,6 +59,7 @@ void cmd_mkdir (flux_t h, int argc, char **argv);
 void cmd_version (flux_t h, int argc, char **argv);
 void cmd_wait (flux_t h, int argc, char **argv);
 void cmd_watch (flux_t h, int argc, char **argv);
+void cmd_watch_dir (flux_t h, int argc, char **argv);
 void cmd_dropcache (flux_t h, int argc, char **argv);
 void cmd_dropcache_all (flux_t h, int argc, char **argv);
 void cmd_copy_tokvs (flux_t h, int argc, char **argv);
@@ -75,6 +76,7 @@ void usage (void)
 "       flux-kvs readlink      key\n"
 "       flux-kvs mkdir         key [key...]\n"
 "       flux-kvs watch         key\n"
+"       flux-kvs watch-dir     key\n"
 "       flux-kvs copy-tokvs    key file\n"
 "       flux-kvs copy-fromkvs  key file\n"
 "       flux-kvs version\n"
@@ -128,6 +130,8 @@ int main (int argc, char *argv[])
         cmd_wait (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "watch"))
         cmd_watch (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "watch-dir"))
+        cmd_watch_dir (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "dropcache"))
         cmd_dropcache (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "dropcache-all"))
@@ -267,19 +271,20 @@ void cmd_wait (flux_t h, int argc, char **argv)
 void cmd_watch (flux_t h, int argc, char **argv)
 {
     JSON o = NULL;
+    char *key;
 
     if (argc != 1)
         msg_exit ("watch: specify one key");
-    if (kvs_get (h, argv[0], &o) < 0 && errno != ENOENT) 
-        err_exit ("%s", argv[0]);
+    key = argv[0];
+    if (kvs_get (h, key, &o) < 0 && errno != ENOENT) 
+        err_exit ("%s", key);
     do {
         printf ("%s\n", o ? Jtostr (o) : "NULL");
         Jput (o);
+        o = NULL;
         if (kvs_watch_once (h, argv[0], &o) < 0 && errno != ENOENT)
             err_exit ("%s", argv[0]);
     } while (true);
-    /* FIXME: handle SIGINT? */
-    /* FIXME: handle directory */
 }
 
 void cmd_dropcache (flux_t h, int argc, char **argv)
@@ -398,6 +403,85 @@ void cmd_copy_fromkvs (flux_t h, int argc, char **argv)
     Jput (o);
     free (buf);
 }
+
+static void dump_kvs_dir (flux_t h, const char *path)
+{
+    kvsdir_t dir;
+    kvsitr_t itr;
+    const char *name, *js;
+    char *key;
+
+    if (kvs_get_dir (h, &dir, "%s", path) < 0) {
+        printf ("%s: %s\n", path, strerror (errno));
+        return;
+    }
+
+    itr = kvsitr_create (dir);
+    while ((name = kvsitr_next (itr))) {
+        key = kvsdir_key_at (dir, name);
+        if (kvsdir_issymlink (dir, name)) {
+            char *link;
+
+            if (kvs_get_symlink (h, key, &link) < 0) {
+                printf ("%s: %s\n", key, strerror (errno));
+                continue;
+            }
+            printf ("%s -> %s\n", key, link);
+            free (link);
+
+        } else if (kvsdir_isdir (dir, name)) {
+            dump_kvs_dir (h, key);
+
+        } else {
+            json_object *o;
+            int len, max;
+
+            if (kvs_get (h, key, &o) < 0) {
+                printf ("%s: %s\n", key, strerror (errno));
+                continue;
+            }
+            js = json_object_to_json_string_ext (o, JSON_C_TO_STRING_PLAIN);
+            len = strlen (js);
+            max = 80 - strlen (key) - 4;
+            if (len > max)
+                printf ("%s = %.*s ...\n", key, max - 4, js);
+            else
+                printf ("%s = %s\n", key, js);
+            json_object_put (o);
+        }
+        free (key);
+    }
+    kvsitr_destroy (itr);
+    kvsdir_destroy (dir);
+}
+
+void cmd_watch_dir (flux_t h, int argc, char **argv)
+{
+    char *key;
+    kvsdir_t dir = NULL;
+    int rc;
+
+    if (argc != 1)
+        msg_exit ("watchdir: specify one directory");
+    key = argv[0];
+
+    rc = kvs_get_dir (h, &dir, "%s", key);
+    while (rc == 0 || (rc < 0 && errno == ENOENT)) {
+        if (rc < 0) {
+            printf ("%s: %s\n", key, strerror (errno));
+            if (dir)
+                kvsdir_destroy (dir);
+            dir = NULL;
+        } else {
+            dump_kvs_dir (h, key);
+            printf ("======================\n");
+        }
+        rc = kvs_watch_once_dir (h, &dir, "%s", key);
+    }
+    err_exit ("%s", key);
+
+}
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
