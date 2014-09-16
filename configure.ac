@@ -124,7 +124,7 @@ AC_CONFIG_FILES( \
   src/modules/live/Makefile \
   src/modules/mecho/Makefile \
 )
-AC_CONFIG_FILES([src/cmd/flux-srun], [chmod +x src/cmd/flux-srun])
-AC_CONFIG_FILES([src/cmd/flux-screen], [chmod +x src/cmd/flux-screen])
+AC_CONFIG_FILES([src/cmd/flux-start-srun], [chmod +x src/cmd/flux-start-srun])
+AC_CONFIG_FILES([src/cmd/flux-start-screen], [chmod +x src/cmd/flux-start-screen])
 
 AC_OUTPUT
