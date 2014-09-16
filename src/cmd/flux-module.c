@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* flux-mod.c - module subcommand */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -47,35 +45,22 @@
 #include "api.h"
 #include "modctl.h"
 
-#define OPTIONS "+hr:u"
+#define OPTIONS "+h"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
-    {"unmanaged",  no_argument,        0, 'u'},
-    {"rank",       required_argument,  0, 'r'},
     { 0, 0, 0, 0 },
 };
 
-static void mod_ls (flux_t h, int rank, int argc, char **argv);
-static void mod_rm (flux_t h, int rank, int argc, char **argv);
-static void mod_ins (flux_t h, int rank, int argc, char **argv);
-
-static void mod_ls_m (flux_t h, int argc, char **argv);
-static void mod_rm_m (flux_t h, int argc, char **argv);
-static void mod_ins_m (flux_t h, int argc, char **argv);
-
-static void mod_update (flux_t h);
+static void module_list (flux_t h, int argc, char **argv);
+static void module_remove (flux_t h, int argc, char **argv);
+static void module_load (flux_t h, int argc, char **argv);
 
 void usage (void)
 {
     fprintf (stderr,
-"Usage: flux-mod [OPTIONS] ls\n"
-"       flux-mod [OPTIONS] rm module [module...]\n"
-"       flux-mod [OPTIONS] ins module [arg=val ...]\n"
-"       flux-mod update\n"
-"Options:\n"
-"  -u,--unmanaged      act locally, do not set/require 'm' flag\n"
-"  -r,--rank=N         act on specified rank (requires -u)\n"
-
+"Usage: flux-module list\n"
+"       flux-module remove|rm module [module...]\n"
+"       flux-module load module [arg=val...]\n"
 );
     exit (1);
 }
@@ -84,22 +69,14 @@ int main (int argc, char *argv[])
 {
     flux_t h;
     int ch;
-    int rank = -1;
-    bool uopt = false;
     char *cmd;
 
-    log_init ("flux-mod");
+    log_init ("flux-module");
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
             case 'h': /* --help */
                 usage ();
-                break;
-            case 'r': /* --rank */
-                rank = strtoul (optarg, NULL, 10);
-                break;
-            case 'u': /* --unmanaged */
-                uopt = true;
                 break;
             default:
                 usage ();
@@ -112,27 +89,14 @@ int main (int argc, char *argv[])
 
     if (!(h = flux_api_open ()))
         err_exit ("flux_api_open");
-    if (rank != -1 && uopt == false)
-        usage ();
 
-    if (!strcmp (cmd, "ls")) {
-        if (uopt)
-            mod_ls (h, rank, argc - optind, argv + optind);
-        else
-            mod_ls_m (h, argc - optind, argv + optind);
-    } else if (!strcmp (cmd, "rm")) {
-        if (uopt)
-            mod_rm (h, rank, argc - optind, argv + optind);
-        else
-            mod_rm_m (h, argc - optind, argv + optind);
-    } else if (!strcmp (cmd, "ins")) {
-        if (uopt)
-            mod_ins (h, rank, argc - optind, argv + optind);
-        else
-            mod_ins_m (h, argc - optind, argv + optind);
-    } else if (!strcmp (cmd, "update")) {
-        mod_update (h);
-    } else
+    if (!strcmp (cmd, "list"))
+        module_list (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "rm") || !strcmp (cmd, "remove"))
+        module_remove (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "load"))
+        module_load (h, argc - optind, argv + optind);
+    else
         usage ();
 
     flux_api_close (h);
@@ -158,7 +122,7 @@ static char *idlestr (int idle)
     return s;
 }
 
-static void list_module (const char *key, JSON mo)
+static void module_list_one (const char *key, JSON mo)
 {
     const char *name, *nodelist = NULL;
     int flags, idle, size;
@@ -175,63 +139,28 @@ static void list_module (const char *key, JSON mo)
     free (is);
 }
 
-static void mod_ls (flux_t h, int rank, int argc, char **argv)
-{
-    JSON mods, mod;
-    json_object_iter iter;
-    int i;
-
-    if (!(mods = flux_lsmod (h, rank)))
-        err_exit ("flux_lsmod");
-    printf ("%-20s %6s %-6s %4s %s\n",
-            "Module", "Size", "Flags", "Idle", "Nodelist");
-    if (argc == 0) {
-        json_object_object_foreachC (mods, iter) {
-            list_module (iter.key, iter.val);
-        }
-    } else {
-        for (i = 0; i < argc; i++) {
-            if (!Jget_obj (mods, argv[i], &mod))
-                printf ("%s: not loaded\n", argv[i]);
-            else
-                list_module (argv[i], mod);
-        }
-    }
-    Jput (mods);
-}
-
-static void mod_ls_m (flux_t h, int argc, char **argv)
+static void module_list (flux_t h, int argc, char **argv)
 {
     JSON lsmod, mods;
     json_object_iter iter;
 
+    if (argc > 0)
+        usage ();
+    if (flux_modctl_update (h) < 0)
+        err_exit ("flux_modctl_update");
     printf ("%-20s %6s %-6s %4s %s\n",
             "Module", "Size", "Flags", "Idle", "Nodelist");
     if (kvs_get (h, "conf.modctl.lsmod", &lsmod) == 0) {
         if (!Jget_obj (lsmod, "mods", &mods))
             msg_exit ("error parsing lsmod KVS object");
         json_object_object_foreachC (mods, iter) {
-            list_module (iter.key, iter.val);
+            module_list_one (iter.key, iter.val);
         }
         Jput (lsmod);
     }
 }
 
-static void mod_rm (flux_t h, int rank, int argc, char **argv)
-{
-    int i;
-
-    if (argc == 0)
-       usage ();
-    for (i = 0; i < argc; i++) {
-        if (flux_rmmod (h, rank, argv[i], 0) < 0)
-            err ("%s", argv[i]);
-        else
-            msg ("%s: unloaded", argv[i]);
-    }
-}
-
-static void mod_rm_m (flux_t h, int argc, char **argv)
+static void module_remove (flux_t h, int argc, char **argv)
 {
     int i;
     char *key;
@@ -340,29 +269,6 @@ static JSON parse_modargs (int argc, char **argv)
     return args;
 }
 
-static void mod_ins (flux_t h, int rank, int argc, char **argv)
-{
-    JSON args;
-    char *path, *trypath = NULL;
-
-    if (argc == 0)
-       usage ();
-    path = argv[0];
-    if (access (path, R_OK|X_OK) < 0) {
-        if (!(trypath = modfind (MODULE_PATH, path)))
-            errn_exit (ENOENT, "%s", path);
-        path = trypath;
-    }
-    args = parse_modargs (argc - 1, argv + 1);
-    if (flux_insmod (h, rank, path, 0, args) < 0)
-        err_exit ("%s", path);
-    msg ("module loaded");
-
-    Jput (args);
-    if (trypath)
-        free (trypath);
-}
-
 /* Copy mod to KVS (without commit).
  */
 static void copymod (flux_t h, const char *name, const char *path, JSON args)
@@ -390,17 +296,18 @@ static void copymod (flux_t h, const char *name, const char *path, JSON args)
     Jput (mod);
 }
 
-static void mod_ins_m (flux_t h, int argc, char **argv)
+static void module_load (flux_t h, int argc, char **argv)
 {
     JSON args;
     char *path, *trypath = NULL;
     char *name;
+    char *modpath = getenv ("FLUX_MODULE_PATH");
 
     if (argc == 0)
        usage ();
     path = argv[0];
     if (access (path, R_OK|X_OK) < 0) {
-        if (!(trypath = modfind (MODULE_PATH, path)))
+        if (!(trypath = modfind (modpath ? modpath : MODULE_PATH, path)))
             errn_exit (ENOENT, "%s", path);
         path = trypath;
     }
@@ -418,12 +325,6 @@ static void mod_ins_m (flux_t h, int argc, char **argv)
     Jput (args);
     if (trypath)
         free (trypath);
-}
-
-static void mod_update (flux_t h)
-{
-    if (flux_modctl_update (h) < 0)
-        err_exit ("flux_modctl_update");
 }
 
 /*

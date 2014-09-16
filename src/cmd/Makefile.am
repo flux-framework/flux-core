@@ -42,23 +42,23 @@ dist_fluxbin_SCRIPTS = \
 	flux-screen
 
 fluxbin_PROGRAMS = \
-	flux-event \
-	flux-info \
+	flux-ping \
+	flux-mping \
+	flux-up \
 	flux-keygen \
+	flux-logger \
+	flux-snoop \
+	flux-event \
+	flux-zio \
+	flux-module \
+	flux-info \
+	flux-peer \
+	flux-stats \
 	flux-kvs \
 	flux-kvscopy \
 	flux-kvsdir \
 	flux-kvstorture \
-	flux-kvswatch \
-	flux-logger \
-	flux-mod \
-	flux-peer \
-	flux-ping \
-	flux-snoop \
-	flux-stats \
-	flux-up \
-	flux-zio \
-	flux-mping
+	flux-kvswatch
 
 flux_zio_LDADD = \
 	$(top_builddir)/src/common/libzio/libzio.la \

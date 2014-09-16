@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* flux-event.c - flux event subcommand */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
