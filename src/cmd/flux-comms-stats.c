@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* flux-stats.c - flux stats subcommand */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -43,15 +41,16 @@
 #include "flux.h"
 #include "api.h"
 
-#define OPTIONS "hcCp:s:t:r"
+#define OPTIONS "hcCp:s:t:r:R"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"clear",      no_argument,        0, 'c'},
     {"clear-all",  no_argument,        0, 'C'},
-    {"rusage",     no_argument,        0, 'r'},
+    {"rusage",     no_argument,        0, 'R'},
     {"parse",      required_argument,  0, 'p'},
     {"scale",      required_argument,  0, 's'},
     {"type",       required_argument,  0, 't'},
+    {"rank",       required_argument,  0, 'r'},
     { 0, 0, 0, 0 },
 };
 
@@ -61,9 +60,9 @@ static void parse_json (const char *n, json_object *o, double scale,
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-stats [--scale N] [--type int|double] --parse a[.b]... [node!]name\n"
-"       flux-stats --clear-all name\n"
-"       flux-stats --clear [node!]name\n"
+"Usage: flux-comms-stats [--scale N] [--type int|double] --parse a[.b]... name\n"
+"       flux-comms-stats --clear-all name\n"
+"       flux-comms-stats --clear name\n"
 );
     exit (1);
 }
@@ -72,11 +71,11 @@ int main (int argc, char *argv[])
 {
     flux_t h;
     int ch, rank = -1;
-    char *p, *target, *rankstr = NULL;
+    char *target;
     char *objname = NULL;
     bool copt = false;
     bool Copt = false;
-    bool ropt = false;
+    bool Ropt = false;
     double scale = 1.0;
     json_type type = json_type_object;
     json_object *response;
@@ -88,14 +87,17 @@ int main (int argc, char *argv[])
             case 'h': /* --help */
                 usage ();
                 break;
+            case 'r': /* --rank */
+                rank= strtoul (optarg, NULL, 10);
+                break;
             case 'c': /* --clear */
                 copt = true;
                 break;
             case 'C': /* --clear-all */
                 Copt = true;
                 break;
-            case 'r': /* --rusage */
-                ropt = true;
+            case 'R': /* --rusage */
+                Ropt = true;
                 break;
             case 'p': /* --parse objname */
                 objname = optarg;
@@ -123,15 +125,9 @@ int main (int argc, char *argv[])
         usage ();
     if (scale != 1.0 && type != json_type_int && type != json_type_double)
         msg_exit ("Use --scale only with --type int or --type double");
-    target = argv[optind];
-    if ((p = strchr (target, '!'))) {
-        rankstr = target;
-        *p++ = '\0';
-        rank = strtoul (rankstr, NULL, 10);
-        target = p;
-    }
+    target = argv[optind++];
 
-    if (Copt && rankstr)
+    if (Copt && rank != -1)
         msg_exit ("Use --clear not --clear-all to clear a single node.");
 
     if (!(h = flux_api_open ()))
@@ -139,20 +135,20 @@ int main (int argc, char *argv[])
 
     if (copt) {
         if ((response = flux_rank_rpc (h, rank, NULL, "%s.stats.clear",target)))
-            errn_exit (EPROTO, "unexpected response to %s.clearstats", target);
+            errn_exit (EPROTO, "unexpected response to %s.stats.clear", target);
         if (errno != 0)
-            err_exit ("flux_rank_rpc %s.clearstats", target);
+            err_exit ("flux_rank_rpc %s.stats.clear", target);
     } else if (Copt) {
         if (flux_event_send (h, NULL, "%s.stats.clear", target) < 0)
             err_exit ("flux_event_send %s.stats.clear", target);
-    } else if (ropt) {
+    } else if (Ropt) {
         if (!(response = flux_rank_rpc (h, rank, NULL, "%s.rusage", target)))
             errn_exit (EPROTO, "flux_rank_rpc %s.rusage", target);
         parse_json (objname, response, scale, type);
         json_object_put (response);
     } else {
         if (!(response = flux_rank_rpc (h, rank, NULL, "%s.stats.get", target)))
-            err_exit ("flux_rank_rpc %s.stats", target);
+            err_exit ("flux_rank_rpc %s.stats.get", target);
         parse_json (objname, response, scale, type);
         json_object_put (response);
     }
@@ -184,7 +180,7 @@ static void parse_json (const char *n, json_object *o, double scale,
                 err_exit ("couldn't convert value to double");
             printf ("%lf\n", d * scale);
             break;
-        } 
+        }
         case json_type_int: {
             double d;
             errno = 0;
