@@ -1,0 +1,94 @@
+#!/bin/bash
+
+# Launch a single instance of flux
+
+declare -r prog=${0##*/}
+
+declare vg_opts="--tool=memcheck --leak-check=full -v"
+declare gdb_opts="-ex run --args"
+
+find_cmbd() {
+    test -n "$FLUX_EXEC_PATH" && PATH=$FLUX_EXEC_PATH:$PATH
+    which cmbd 2>/dev/null
+}
+declare path_cmbd=$(find_cmbd)
+test -n "$path_cmbd" || path_cmbd="@X_LIBEXECDIR@/flux/cmbd"
+
+declare cmd_wrapper=
+declare cmd_prefix=
+
+declare cmbd_opts=
+declare cmbd_sid="single"
+declare cmbd_modules="api,kvs,modctl,live"
+declare cmbd_modopts=
+
+declare -r path_getopt="/usr/bin/getopt"
+declare -r short_opts="hgVs:M:O:X"
+declare -r long_opts="\
+help,gdb,valgrind,sid:,module:,modopt:,noexec:"
+
+declare -r usage="\
+Usage: $prog OPTIONS [command [args...]]\n\
+   -g,--gdb                    run cmbd processes under gdb\n\
+   -V,--valgrind               run cmbd processes under valgrind\n\
+   -s,--sid NAME               set session name\n\
+   -M,--module NAME            load additional module\n\
+   -O,--modopt NAME:var=val    set additional module option\n\
+   -X,--noexec                 print command lines without running them\n"
+
+usage()    { echo -e "$usage" >&2; }
+log_msg()  { echo -e "$prog: $@";  }
+die()      { log_msg "Fatal: $@"; exit 1; }
+
+pidcheck() {
+    local sid=$1
+    local oldpid=$(cat ${FLUX_TMPDIR:-${TMPDIR:-/tmp}}/flux-${sid}-0/cmbd.pid 2>/dev/null)
+    if test -n "$oldpid" && kill -0 $oldpid 2>/dev/null; then
+        die "rank 0 of session ${sid} is still running"
+    fi
+}
+
+
+GETOPT=$($path_getopt -o $short_opts -l $long_opts -n $prog -- $@)
+if [ $? != 0 ]; then
+    usage
+    exit 1
+fi
+eval set -- "$GETOPT"
+while true; do
+    case $1 in
+        -h|--help)       usage; exit 0                               ;;
+        -g|--gdb)        cmd_prefix="gdb ${gdb_opts}";       shift 1 ;;
+        -V|--valgrind)   cmd_prefix="valgrind ${vg_opts}";   shift 1 ;;
+        -s|--sid)        cmbd_sid=$2;                        shift 2 ;;
+        -M|--module)     cmbd_modules="${cmbd_modules},$2";  shift 2 ;;
+        -O|--modopt)     cmbd_modopts="${cmbd_modopts} $2";  shift 2 ;;
+        -X|--noexec)     cmd_wrapper=echo;                   shift 1 ;;
+        --)              shift; break                                ;;
+        *)               usage; exit 1                               ;;
+    esac
+done
+# leftover arguments are assumed to be --command to execute
+ARGS=( ${@:$OPTIND} )
+if test ${#ARGS[@]} -eq 0; then
+    set ""
+else
+    set "${ARGS[@]}"
+fi
+
+#test -n "$cmd_wrapper" || set -x
+
+test -x $path_cmbd || die "$path_cmbd not found or not executable"
+
+$cmd_wrapper pidcheck ${cmbd_sid}
+
+$cmd_wrapper ulimit -c unlimited
+
+$cmd_wrapper ${cmd_prefix} ${path_cmbd} ${cmbd_opts} \
+        --rank 0 --size 1 \
+        ${cmbd_sid:+--sid=${cmbd_sid}} \
+        ${cmbd_modules:+--modules=${cmbd_modules}} \
+        ${@:+--command=\"$@\"} \
+        ${cmbd_modopts}
+
+# vi:tabstop=4 shiftwidth=4 expandtab
