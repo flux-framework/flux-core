@@ -11,8 +11,8 @@ find_cmbd() {
     test -n "$FLUX_EXEC_PATH" && PATH=$FLUX_EXEC_PATH:$PATH
     which cmbd 2>/dev/null
 }
-declare path_cmbd=$(find_cmbd)
-test -n "$path_cmbd" || path_cmbd="@X_LIBEXECDIR@/flux/cmbd"
+
+declare path_cmbd=${FLUX_CMBD_PATH:-@X_LIBEXECDIR@/flux/cmbd}
 
 declare cmd_wrapper=
 declare cmd_prefix=

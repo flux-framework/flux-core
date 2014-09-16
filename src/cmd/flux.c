@@ -50,12 +50,13 @@ void dump_environment (void);
 void exec_subcommand (bool vopt, char *argv[]);
 char *dir_self (void);
 
-#define OPTIONS "+T:tx:hM:v"
+#define OPTIONS "+T:tx:hM:B:v"
 static const struct option longopts[] = {
     {"tmpdir",          required_argument,  0, 'T'},
     {"trace-apisocket", no_argument,        0, 't'},
     {"exec-path",       required_argument,  0, 'x'},
     {"module-path",     required_argument,  0, 'M'},
+    {"cmbd-path",       required_argument,  0, 'B'},
     {"verbose",         no_argument,        0, 'v'},
     {"help",            no_argument,        0, 'h'},
     {0, 0, 0, 0},
@@ -68,7 +69,9 @@ static void usage (void)
 "    -x,--exec-path PATH      set FLUX_EXEC_PATH\n"
 "    -M,--module-path PATH    set FLUX_MODULE_PATH\n"
 "    -T,--tmpdir PATH         set FLUX_TMPDIR\n"
+"    -B,--trace-apisock       set FLUX_TRACE_APISOCK=1\n"
 "    -t,--trace-apisock       set FLUX_TRACE_APISOCK=1\n"
+"    -B,--cmbd-path           set FLUX_CMBD_PATH\n"
 "    -v,--verbose             show environment\n"
 );
 }
@@ -133,7 +136,11 @@ int main (int argc, char *argv[])
                 if (setenv ("FLUX_EXEC_PATH", optarg, 1) < 0)
                     err_exit ("setenv FLUX_EXEC_PATH=%s", optarg);
                 break;
-            case 'v': /* --exec-path */
+            case 'B': /* --cmbd-path */
+                if (setenv ("FLUX_CMBD_PATH", optarg, 1) < 0)
+                    err_exit ("setenv FLUX_CMBD_PATH=%s", optarg);
+                break;
+            case 'v': /* --verbose */
                 vopt = true;
                 break;
             case 'h': /* --help  */
@@ -154,23 +161,24 @@ int main (int argc, char *argv[])
     if (strcmp (flux_exe_dir, X_BINDIR) != 0) {
         glob_t gl;
         char *modpath;
-        if (!getenv ("FLUX_EXEC_PATH"))
-            setenv ("FLUX_EXEC_PATH", ".:../broker", 1);
-        if (!getenv ("FLUX_MODULE_PATH") && glob ("../modules/*/.libs",
-                GLOB_ONLYDIR, NULL, &gl) == 0) {
+        if (setenv ("FLUX_EXEC_PATH", ".", 0) < 0)
+            err_exit ("setenv");
+        if (glob ("../modules/*/.libs", GLOB_ONLYDIR, NULL, &gl) == 0) {
             modpath = argv_concat (gl.gl_pathc, gl.gl_pathv, ":");
             globfree (&gl);
-            setenv ("FLUX_MODULE_PATH", modpath, 1);
+            if (setenv ("FLUX_MODULE_PATH", modpath, 0) < 0)
+                err_exit ("setenv");
             free (modpath);
         }
+        if (setenv ("FLUX_CMBD_PATH", "../broker/cmbd", 0) < 0)
+            err_exit ("setenv");
+    } else {
+        if (setenv ("FLUX_EXEC_PATH", EXEC_PATH, 0) < 0)
+            err_exit ("setenv");
+        if (setenv ("FLUX_CMBD_PATH", CMBD_PATH, 0) < 0)
+            err_exit ("setenv");
     }
 
-    //setup_lua_env (flux_exe_dir);
-
-    if (!getenv ("FLUX_EXEC_PATH")) {
-        if (setenv ("FLUX_EXEC_PATH", EXEC_PATH, 1) < 0)
-            err_exit ("setenv FLUX_EXEC_PATH=%s", optarg);
-    }
     if (hopt) {
         if (argc > 0) {
             char *av[] = { argv[0], "--help", NULL };
@@ -197,13 +205,14 @@ int main (int argc, char *argv[])
 void dump_environment_one (const char *name)
 {
     char *s = getenv (name);
-    msg ("%20s=%s", name, s ? s : "<unset>");
+    printf ("%20s=%s\n", name, s ? s : "<unset>");
 }
 
 void dump_environment (void)
 {
     dump_environment_one ("FLUX_EXEC_PATH");
     dump_environment_one ("FLUX_MODULE_PATH");
+    dump_environment_one ("FLUX_CMBD_PATH");
     dump_environment_one ("FLUX_TMPDIR");
     dump_environment_one ("FLUX_TRACE_APISOCK");
 }
@@ -243,7 +252,7 @@ void exec_subcommand (bool vopt, char *argv[])
 
     while ((dir = strtok_r (a1, ":", &saveptr))) {
         exec_subcommand_dir (vopt, dir, argv, "flux-");
-        exec_subcommand_dir (vopt, dir, argv, NULL); /* deprecated */
+        //exec_subcommand_dir (vopt, dir, argv, NULL); /* deprecated */
         a1 = NULL;
     }
     free (cpy);

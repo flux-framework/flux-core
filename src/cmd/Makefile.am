@@ -2,7 +2,9 @@ AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = \
 	$(JSON_CFLAGS) \
-        -DMODULE_PATH=\"$(fluxmoddir)\" -DEXEC_PATH=\"$(fluxbindir)\" \
+        -DMODULE_PATH=\"$(fluxmoddir)\" \
+	-DEXEC_PATH=\"$(fluxcmddir)\" \
+	-DCMBD_PATH=\"$(fluxlibexecdir)/cmbd\" \
 	-I$(top_srcdir)/src/common/libutil \
 	-I$(top_srcdir)/src/common/libflux \
 	-I$(top_srcdir)/src/common/liblsd \
@@ -13,7 +15,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/common/libzio \
 	-I$(top_srcdir)/src/common/libmrpc
 
-fluxbin_ldadd = \
+fluxcmd_ldadd = \
 	$(top_builddir)/src/modules/live/liblive.la \
 	$(top_builddir)/src/modules/modctl/libmodctl.la \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
@@ -23,7 +25,7 @@ fluxbin_ldadd = \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBMUNGE) $(LIBPTHREAD)
 
-LDADD = $(fluxbin_ldadd)
+LDADD = $(fluxcmd_ldadd)
 
 
 bin_PROGRAMS = flux
@@ -37,12 +39,12 @@ flux_LDADD = \
 # Flux subcommands
 #
 
-dist_fluxbin_SCRIPTS = \
+dist_fluxcmd_SCRIPTS = \
 	flux-start-srun \
 	flux-start-screen \
 	flux-start-single
 
-fluxbin_PROGRAMS = \
+fluxcmd_PROGRAMS = \
 	flux-ping \
 	flux-mping \
 	flux-up \
@@ -64,10 +66,10 @@ fluxbin_PROGRAMS = \
 flux_zio_LDADD = \
 	$(top_builddir)/src/common/libzio/libzio.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
-	$(fluxbin_ldadd) \
+	$(fluxcmd_ldadd) \
 	$(LIBUTIL)
 flux_mping_LDADD = \
 	$(top_builddir)/src/common/libmrpc/libmrpc.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
-	$(fluxbin_ldadd) \
+	$(fluxcmd_ldadd) \
 	$(LIBUTIL)

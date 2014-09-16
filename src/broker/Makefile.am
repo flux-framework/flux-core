@@ -6,7 +6,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/common/libutil \
 	-I$(top_srcdir)/src/common/libflux
 
-fluxbin_PROGRAMS = cmbd
+fluxlibexec_PROGRAMS = cmbd
 
 cmbd_SOURCES = \
 	cmbd.c \
