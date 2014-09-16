@@ -38,6 +38,7 @@
 #include "xzmalloc.h"
 #include "log.h"
 #include "shortjson.h"
+#include "jsonutil.h"
 
 #include "flux.h"
 #include "kvs.h"
@@ -60,20 +61,24 @@ void cmd_wait (flux_t h, int argc, char **argv);
 void cmd_watch (flux_t h, int argc, char **argv);
 void cmd_dropcache (flux_t h, int argc, char **argv);
 void cmd_dropcache_all (flux_t h, int argc, char **argv);
+void cmd_copy_tokvs (flux_t h, int argc, char **argv);
+void cmd_copy_fromkvs (flux_t h, int argc, char **argv);
 
 
 void usage (void)
 {
     fprintf (stderr,
-"Usage: flux-kvs get         key [key...]\n"
-"       flux-kvs put         key=val [key=val...]\n"
-"       flux-kvs unlink      key [key...]\n"
-"       flux-kvs link        target link_name\n"
-"       flux-kvs readlink    key\n"
-"       flux-kvs mkdir       key [key...]\n"
-"       flux-kvs watch       key\n"
+"Usage: flux-kvs get           key [key...]\n"
+"       flux-kvs put           key=val [key=val...]\n"
+"       flux-kvs unlink        key [key...]\n"
+"       flux-kvs link          target link_name\n"
+"       flux-kvs readlink      key\n"
+"       flux-kvs mkdir         key [key...]\n"
+"       flux-kvs watch         key\n"
+"       flux-kvs copy-tokvs    key file\n"
+"       flux-kvs copy-fromkvs  key file\n"
 "       flux-kvs version\n"
-"       flux-kvs wait N\n"
+"       flux-kvs wait          version\n"
 "       flux-kvs dropcache\n"
 "       flux-kvs dropcache-all\n"
 );
@@ -127,6 +132,10 @@ int main (int argc, char *argv[])
         cmd_dropcache (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "dropcache-all"))
         cmd_dropcache_all (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "copy-tokvs"))
+        cmd_copy_tokvs (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "copy-fromkvs"))
+        cmd_copy_fromkvs (h, argc - optind, argv + optind);
     else
         usage ();
 
@@ -263,15 +272,14 @@ void cmd_watch (flux_t h, int argc, char **argv)
         msg_exit ("watch: specify one key");
     if (kvs_get (h, argv[0], &o) < 0 && errno != ENOENT) 
         err_exit ("%s", argv[0]);
-    printf ("%s\n", o ? Jtostr (o) : "NULL");
-    for (;;) {
+    do {
+        printf ("%s\n", o ? Jtostr (o) : "NULL");
+        Jput (o);
         if (kvs_watch_once (h, argv[0], &o) < 0 && errno != ENOENT)
             err_exit ("%s", argv[0]);
-        printf ("%s\n", o ? Jtostr (o) : "NULL");
-    }
+    } while (true);
     /* FIXME: handle SIGINT? */
     /* FIXME: handle directory */
-    Jput (o);
 }
 
 void cmd_dropcache (flux_t h, int argc, char **argv)
@@ -288,6 +296,107 @@ void cmd_dropcache_all (flux_t h, int argc, char **argv)
         msg_exit ("dropcache-all: takes no arguments");
     if (flux_event_send (h, NULL, "kvs.dropcache") < 0)
         err_exit ("flux_event_send");
+}
+
+static int write_all (int fd, uint8_t *buf, int len)
+{
+    int n;
+    int count = 0;
+
+    while (count < len) {
+        if ((n = write (fd, buf + count, len - count)) < 0)
+            return n;
+        count += n;
+    }
+    return count;
+}
+
+static int read_all (int fd, uint8_t **bufp)
+{
+    const int chunksize = 4096;
+    int len = 0;
+    uint8_t *buf = NULL;
+    int n;
+    int count = 0;
+
+    do {
+        if (len - count == 0) {
+            len += chunksize;
+            if (!(buf = buf ? realloc (buf, len) : malloc (len)))
+                goto nomem;
+        }
+        if ((n = read (fd, buf + count, len - count)) < 0) {
+            free (buf);
+            return n;
+        }
+        count += n;
+    } while (n != 0);
+    *bufp = buf;
+    return count;
+nomem:
+    errno = ENOMEM;
+    return -1;
+}
+
+void cmd_copy_tokvs (flux_t h, int argc, char **argv)
+{
+    char *file, *key;
+    int fd, len;
+    uint8_t *buf;
+    JSON o;
+
+    if (argc != 2)
+        msg_exit ("copy-tokvs: specify key and filename");
+    key = argv[0];
+    file = argv[1];
+    if (!strcmp (file, "-")) {
+        if ((len = read_all (STDIN_FILENO, &buf)) < 0)
+            err_exit ("stdin");
+    } else {
+        if ((fd = open (file, O_RDONLY)) < 0)
+            err_exit ("%s", file);
+        if ((len = read_all (fd, &buf)) < 0)
+            err_exit ("%s", file);
+        (void)close (fd);
+    }
+    o = Jnew ();
+    util_json_object_add_data (o, "data", buf, len);
+    if (kvs_put (h, key, o) < 0)
+        err_exit ("%s", key);
+    if (kvs_commit (h) < 0)
+        err_exit ("kvs_commit");
+    Jput (o);
+    free (buf);
+}
+
+void cmd_copy_fromkvs (flux_t h, int argc, char **argv)
+{
+    char *file, *key;
+    int fd, len;
+    uint8_t *buf;
+    JSON o;
+
+    if (argc != 2)
+        msg_exit ("copy-fromkvs: specify key and filename");
+    key = argv[0];
+    file = argv[1];
+    if (kvs_get (h, key, &o) < 0)
+        err_exit ("%s", key);
+    if (util_json_object_get_data (o, "data", &buf, &len) < 0)
+        err_exit ("%s: decode error", key);
+    if (!strcmp (file, "-")) {
+        if (write_all (STDOUT_FILENO, buf, len) < 0)
+            err_exit ("stdout");
+    } else {
+        if ((fd = creat (file, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) < 0)
+            err_exit ("%s", file);
+        if (write_all (fd, buf, len) < 0)
+            err_exit ("%s", file);
+        if (close (fd) < 0)
+            err_exit ("%s", file);
+    }
+    Jput (o);
+    free (buf);
 }
 
 /*

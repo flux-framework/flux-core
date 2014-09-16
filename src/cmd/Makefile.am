@@ -58,7 +58,6 @@ fluxcmd_PROGRAMS = \
 	flux-peer \
 	flux-stats \
 	flux-kvs \
-	flux-kvscopy \
 	flux-kvsdir \
 	flux-kvstorture \
 	flux-kvswatch
