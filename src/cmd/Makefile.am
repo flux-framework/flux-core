@@ -58,7 +58,6 @@ fluxcmd_PROGRAMS = \
 	flux-peer \
 	flux-stats \
 	flux-kvs \
-	flux-kvsdir \
 	flux-kvstorture
 
 flux_zio_LDADD = \
