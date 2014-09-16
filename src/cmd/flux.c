@@ -72,25 +72,29 @@ static void usage (void)
 "    -B,--trace-apisock       set FLUX_TRACE_APISOCK=1\n"
 "    -t,--trace-apisock       set FLUX_TRACE_APISOCK=1\n"
 "    -B,--cmbd-path           set FLUX_CMBD_PATH\n"
-"    -v,--verbose             show environment\n"
+"    -v,--verbose             show environment before executing command\n"
 );
 }
 
 static void help (void)
 {
     usage ();
-    fprintf (stderr, "\nThe most commonly used flux commands are:\n"
-"   kvs        Get and put simple values in the Flux key-value store\n"
-"   kvswatch   Watch values in the Flux key-value store\n"
-"   kvsdir     List key-value pairs in the Flux key-value store\n"
-"   ping       Time round-trip RPC to a Flux plugin\n"
-"   mping      Time round-trip group RPC to the mecho plugin\n"
-"   stats      Obtain message counts from a Flux plugin\n"
-"   snoop      Snoop on local Flux message broker traffic\n"
-"   event      Send and receive Flux events\n"
-"   logger     Log a message to Flux logging system\n"
-"   log        Manipulate flux logs\n"
-"   xinfo      Display info about Flux comms session\n"
+    fprintf (stderr, "\nThe flux-core commands are:\n"
+"   keygen        Generate CURVE keypairs for session security\n"
+"   kvs           Access the Flux the key-value store\n"
+"   module        Load/unload comms modules\n"
+"   start-single  Start a single-rank comms session interactively\n"
+"   start-screen  Start a single-node comms session under screen\n"
+"   start-srun    Start a multi-node comms session under SLURM\n"
+"   up            Show state of all broker ranks\n"
+"   ping          Time round-trip RPC on the comms rank-request network\n"
+"   mping         Time round-trip group RPC to the mecho comms module\n"
+"   snoop         Snoop on local Flux message broker traffic\n"
+"   event         Publish and subscribe to Flux events\n"
+"   logger        Log a message to Flux logging system\n"
+"   comms         Misc Flux comms session operations\n"
+"   comms-stats   Display comms message counters, etc.\n"
+"   zio           Manipulate KVS streams\n"
 );
 }
 
