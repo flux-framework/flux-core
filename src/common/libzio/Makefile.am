@@ -7,3 +7,15 @@ AM_CPPFLAGS = \
 fluxcoreinclude_HEADERS = forkzio.h kz.h zio.h
 noinst_LTLIBRARIES = libzio.la
 libzio_la_SOURCES = zio.c forkzio.c kz.c
+
+check_PROGRAMS = \
+	zio-test \
+	flux-zio-test
+
+LDADD = $(top_builddir)/src/common/libzio/libzio.la \
+	$(top_builddir)/src/modules/kvs/libkvs.la \
+	$(top_builddir)/src/modules/api/libapi.la \
+	$(top_builddir)/src/common/libflux/libflux.la \
+	$(top_builddir)/src/common/libutil/libutil.la \
+	$(top_builddir)/src/common/liblsd/liblsd.la \
+	$(JSON_LIBS) $(LIBCZMQ) $(LIBZMQ) $(LIBMUNGE) $(LIBPTHREAD)

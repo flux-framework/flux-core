@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <czmq.h>
 #include <json.h>
+#include <flux/core.h>
 
 #include "zio.h"
 

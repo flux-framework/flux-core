@@ -71,11 +71,11 @@ int close_cb_main (zio_t zio, void *pipe)
 
 void othr (void *args, zctx_t *zctx, void *pipe)
 {
-	flux_t f = cmb_init ();
+	flux_t f = flux_api_open ();
 	zio_t out = zio_writer_create ("stdout", STDOUT_FILENO, pipe);
-	zmq_pollitem_t zp = {   .fd = -1,
-				.socket = pipe,
-				.events = ZMQ_POLLIN|ZMQ_POLLERR };
+	//zmq_pollitem_t zp = {   .fd = -1,
+	//			.socket = pipe,
+	//			.events = ZMQ_POLLIN|ZMQ_POLLERR };
 
 	flux_zshandler_add (f, pipe,
 		ZMQ_POLLIN|ZMQ_POLLERR,
@@ -89,7 +89,7 @@ void othr (void *args, zctx_t *zctx, void *pipe)
 	flux_reactor_start (f);
 	fprintf (stderr, "Done with thread, signaling parent...\n");
 	zstr_send (pipe, "");
-	flux_handle_destroy (&f);
+	flux_api_close (f);
 	return;
 }
 
@@ -100,9 +100,9 @@ int main (int ac, char ** av)
 	void *zs;
 	zio_t in;
 	zctx_t *zctx = zctx_new ();
-	flux_t f = cmb_init ();
+	flux_t f = flux_api_open ();
 	if (!f) {
-		fprintf (stderr, "cmb_init: %s\n", strerror (errno));
+		fprintf (stderr, "flux_api_open: %s\n", strerror (errno));
 		exit (1);
 	}
 
@@ -121,6 +121,6 @@ int main (int ac, char ** av)
 	s = zstr_recv (zs);
 	fprintf (stderr, "child thread complete\n");
 	zmq_close (zs);
-	flux_handle_destroy (&f);
+	flux_api_close (f);
 	return (0);
 }
