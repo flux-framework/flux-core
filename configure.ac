@@ -30,7 +30,6 @@ if test "$GCC" = yes; then
 fi
 AC_PROG_RANLIB
 AC_PROG_LIBTOOL
-AC_LIB_LTDL
 
 ##
 # Checks for header files.
@@ -67,6 +66,7 @@ X_AC_CHECK_PTHREADS
 X_AC_CHECK_COND_LIB(munge, munge_ctx_create)
 X_AC_CHECK_COND_LIB(util, forkpty)
 X_AC_CHECK_COND_LIB(rt, clock_gettime)
+X_AC_CHECK_COND_LIB(dl, dlerror)
 AX_LUA_HEADERS
 AX_LUA_HEADERS(501)
 AX_LUA_LIBS
