@@ -72,6 +72,8 @@ AX_LUA_HEADERS(501)
 AX_LUA_LIBS
 X_AC_ZEROMQ
 PKG_CHECK_MODULES(JSON, json);
+LX_FIND_MPI
+AM_CONDITIONAL([HAVE_MPI], [test "$have_C_mpi" = yes])
 
 ##
 # For list.c, hostlist.c, hash.c

@@ -10,7 +10,12 @@ check_PROGRAMS = \
 	tenc \
 	tkvstorture \
 	tkvswatch \
-	tmunge
+	tmunge \
+	tpmikvs
+
+if HAVE_MPI
+check_PROGRAMS += mpi_hello
+endif
 
 LDADD = $(top_builddir)/src/common/libzio/libzio.la \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
@@ -19,3 +24,23 @@ LDADD = $(top_builddir)/src/common/libzio/libzio.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(JSON_LIBS) $(LIBCZMQ) $(LIBZMQ) $(LIBMUNGE) $(LIBPTHREAD)
+
+tpmikvs_SOURCES = \
+	tpmikvs.c
+
+tpmikvs_CPPFLAGS = \
+	-I$(top_srcdir)/src/lib/libpmi \
+	$(AM_CPPFLAGS)
+
+tpmikvs_LDADD = \
+	$(top_builddir)/src/lib/libpmi/libpmi.la \
+	$(top_builddir)/src/common/libutil/libutil.la \
+	$(top_builddir)/src/common/liblsd/liblsd.la \
+	$(JSON_LIBS) $(LIBCZMQ) $(LIBZMQ) $(LIBMUNGE) $(LIBPTHREAD)
+
+mpi_hello_SOURCES = \
+	mpi_hello.c
+mpi_hello_CPPFLAGS = \
+	$(MPI_CFLAGS)
+mpi_hello_LDADD = \
+	$(MPI_CLDFLAGS) $(top_builddir)/src/lib/libpmi/libpmi.la

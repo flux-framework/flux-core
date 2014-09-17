@@ -106,7 +106,6 @@ int PMI_Init (int *spawned)
     int dflt_clique_ranks[] = { 0 };
     int dflt_clique_size = 1;
 
-    ctx->trace = env_getint ("PMI_TRACE", 0);
     log_init ("cmb-pmi");
     if (spawned == NULL)
         return PMI_ERR_INVALID_ARG;
@@ -119,10 +118,10 @@ int PMI_Init (int *spawned)
 
     ctx->trace = env_getint ("PMI_TRACE", 0);
 
-    ctx->size = env_getint ("CMB_LWJ_NTASKS", 1);
-    ctx->rank = env_getint ("CMB_LWJ_TASK_ID", 0);
-    ctx->appnum = env_getint ("CMB_LWJ_ID", 1);
-    if (env_getints ("CMB_LWJ_GTIDS", &ctx->clique_ranks, &ctx->clique_size,
+    ctx->size = env_getint ("FLUX_LWJ_NTASKS", 1);
+    ctx->rank = env_getint ("FLUX_LWJ_TASK_ID", 0);
+    ctx->appnum = env_getint ("FLUX_LWJ_ID", 1);
+    if (env_getints ("FLUX_LWJ_GTIDS", &ctx->clique_ranks, &ctx->clique_size,
                      dflt_clique_ranks, dflt_clique_size) < 0)
         goto fail;
 

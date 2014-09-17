@@ -49,7 +49,7 @@ static void _fatal (int rank, int rc, const char *s)
     }
     if (i == pmi_errors_len)
         fprintf (stderr, "%d: %s: rc=%d\n", rank, s, rc);
-    exit (1); 
+    exit (1);
 }
 
 static void *xzmalloc (int rank, size_t size)
@@ -72,7 +72,6 @@ static void xgettimeofday (int rank, struct timeval *tv, struct timezone *tz)
         exit (1);
     }
 }
-    
 
 static void timesince (int rank,  struct timeval *start, const char *s)
 {
@@ -173,7 +172,7 @@ int main(int argc, char *argv[])
                 rc = PMI_KVS_Get (kvsname, key, val, val_len);
                 if (rc != PMI_SUCCESS)
                     _fatal (id, rc, "PMI_KVS_Get");
-            
+
                 snprintf (val2, val_len, "sandwich.%d.%d", j, i);
                 if (strcmp (val, val2) != 0) {
                     fprintf (stderr, "%d: PMI_KVS_Get: exp %s got %s\n",
@@ -187,7 +186,7 @@ int main(int argc, char *argv[])
             rc = PMI_KVS_Get (kvsname, key, val, val_len);
             if (rc != PMI_SUCCESS)
                 _fatal (id, rc, "PMI_KVS_Get");
-            
+
             snprintf (val2, val_len, "sandwich.%d.%d",
                       id > 0 ? id - 1 : ntasks - 1, i);
             if (strcmp (val, val2) != 0) {

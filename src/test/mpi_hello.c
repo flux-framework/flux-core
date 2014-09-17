@@ -32,7 +32,7 @@ main(int argc, char *argv[])
 {
         int id, ntasks;
 	struct timespec ts0;
-        char hostname[64];
+        //char hostname[64];
 
 	clock_gettime (CLOCK_MONOTONIC, &ts0);
 
