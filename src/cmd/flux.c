@@ -68,7 +68,6 @@ static void usage (void)
 "    -x,--exec-path PATH      set FLUX_EXEC_PATH\n"
 "    -M,--module-path PATH    set FLUX_MODULE_PATH\n"
 "    -T,--tmpdir PATH         set FLUX_TMPDIR\n"
-"    -B,--trace-apisock       set FLUX_TRACE_APISOCK=1\n"
 "    -t,--trace-apisock       set FLUX_TRACE_APISOCK=1\n"
 "    -B,--cmbd-path           set FLUX_CMBD_PATH\n"
 "    -v,--verbose             show environment before executing command\n"
