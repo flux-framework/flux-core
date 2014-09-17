@@ -8,7 +8,7 @@ Group: System Environment/Base
 Url: https://github.com/flux-framework/flux-core
 Source0: %{name}-%{version}.tar.gz
 BuildRoot: %{_tmppath}/%{name}-%{version}-root-%(%{__id_u} -n)
-BuildRequires: zeromq4-devel czmq-devel >= 2.2.0
+BuildRequires: zeromq4-devel >= 4.04 czmq-devel >= 2.2.0
 BuildRequires: munge-devel
 BuildRequires: json-c-devel
 
