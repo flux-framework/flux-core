@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* flux-keygen.c - flux key management subcommand */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -35,11 +33,10 @@
 #include <libgen.h>
 #include <json.h>
 #include <czmq.h>
+#include <flux/core.h>
 
-#include "log.h"
+#include "src/common/libutil/log.h"
 
-#include "flux.h"
-#include "api.h"
 
 #define OPTIONS "hfp"
 static const struct option longopts[] = {

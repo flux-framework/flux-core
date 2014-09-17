@@ -85,14 +85,13 @@
 #include <zmq.h>
 #include <czmq.h>
 #include <json.h>
+#include <flux/core.h>
 
-#include "xzmalloc.h"
-#include "log.h"
-#include "shortjson.h"
-#include "nodeset.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/nodeset.h"
 
-#include "flux.h"
-#include "kvs.h"
 
 typedef enum { CS_OK, CS_SLOW, CS_FAIL, CS_UNKNOWN } cstate_t;
 

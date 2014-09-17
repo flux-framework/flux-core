@@ -2,11 +2,9 @@
 #define _FLUX_CORE_H
 
 #include "core/flux.h"
-
 #include "core/zio.h"
 #include "core/kz.h"
 #include "core/forkzio.h"
-
 #include "core/mrpc.h"
 
 #include "core/api.h"

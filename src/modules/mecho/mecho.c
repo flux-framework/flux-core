@@ -29,12 +29,9 @@
 #include <json.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <flux/core.h>
 
-#include "log.h"
-
-#include "flux.h"
-
-#include "mrpc.h"
+#include "src/common/libutil/log.h"
 
 /* Copy input arguments to output arguments and respond to RPC.
  */

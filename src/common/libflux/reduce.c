@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* reduce.c - reduction pattern for cmb */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -39,12 +37,12 @@
 #include <ctype.h>
 #include <czmq.h>
 #include <json.h>
+#include <flux/core.h>
 
-#include "log.h"
-#include "shortjson.h"
-#include "xzmalloc.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/xzmalloc.h"
 
-#include "flux.h"
 
 typedef struct hwm_struct *hwm_t;
 

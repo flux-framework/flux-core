@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* libapi.c - flux_t implementation for UNIX domain socket */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -44,14 +42,13 @@
 #include <stdarg.h>
 #include <czmq.h>
 #include <json.h>
+#include <flux/core.h>
 
-#include "log.h"
-#include "zmsg.h"
-#include "jsonutil.h"
-#include "xzmalloc.h"
-#include "zfd.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/zfd.h"
 
-#include "flux.h"
 
 typedef struct timeout_struct *timeout_t;
 

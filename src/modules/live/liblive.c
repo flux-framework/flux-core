@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* livecli.c - client code for live mdoule */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -44,11 +42,10 @@
 #include <stdarg.h>
 #include <json.h>
 #include <czmq.h>
+#include <flux/core.h>
 
-#include "log.h"
-#include "zmsg.h"
-#include "flux.h"
-#include "shortjson.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/shortjson.h"
 
 int flux_failover (flux_t h, int rank)
 {

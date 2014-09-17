@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* flux-snoop.c - flux snoop subcommand */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -31,15 +29,13 @@
 #include <assert.h>
 #include <libgen.h>
 #include <json.h>
-
 #include <zmq.h>
 #include <czmq.h>
+#include <flux/core.h>
 
-#include "zdump.h"
-#include "log.h"
+#include "src/common/libutil/zdump.h"
+#include "src/common/libutil/log.h"
 
-#include "flux.h"
-#include "api.h"
 
 #define OPTIONS "hanN:vl"
 static const struct option longopts[] = {

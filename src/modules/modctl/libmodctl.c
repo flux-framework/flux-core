@@ -42,12 +42,10 @@
 #include <stdarg.h>
 #include <json.h>
 #include <czmq.h>
+#include <flux/core.h>
 
-#include "log.h"
-#include "zmsg.h"
-#include "flux.h"
-#include "shortjson.h"
-#include "modctl.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/shortjson.h"
 
 int flux_modctl_rm (flux_t h, const char *name)
 {

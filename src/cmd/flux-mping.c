@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* flux-mping.c - ping using mrpc */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -33,16 +31,13 @@
 #include <string.h>
 #include <czmq.h>
 #include <json.h>
+#include <flux/core.h>
 
-#include "log.h"
-#include "xzmalloc.h"
-#include "jsonutil.h"
-#include "monotime.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/monotime.h"
 
-#include "flux.h"
-#include "api.h"
-
-#include "mrpc.h"
 
 #define OPTIONS "hp:d:"
 static const struct option longopts[] = {

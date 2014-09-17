@@ -30,9 +30,7 @@
 #include <stdio.h>
 #include <czmq.h>
 #include <json.h>
-
-#include "cmb.h"
-#include "zio.h"
+#include <flux/core.h>
 
 int output_thread_cb (flux_t f, void *zs, short revents, zio_t z)
 {

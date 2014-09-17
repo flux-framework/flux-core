@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* flux-kvs.c - flux kvs subcommand */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -34,15 +32,13 @@
 #include <stdarg.h>
 #include <json.h>
 #include <czmq.h>
+#include <flux/core.h>
 
-#include "xzmalloc.h"
-#include "log.h"
-#include "shortjson.h"
-#include "jsonutil.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/jsonutil.h"
 
-#include "flux.h"
-#include "kvs.h"
-#include "api.h"
 
 #define OPTIONS "h"
 static const struct option longopts[] = {

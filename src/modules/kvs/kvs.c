@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* kvssrv.c - distributed key-value store based on hash tree */
-
 /* JSON directory object:
  * list of key-value pairs where key is a name, value is a dirent
  *
@@ -79,15 +77,13 @@
 #include <czmq.h>
 #include <json.h>
 #include <fnmatch.h>
+#include <flux/core.h>
 
-#include "zmsg.h"
-#include "jsonutil.h"
-#include "xzmalloc.h"
-#include "monotime.h"
-#include "tstat.h"
-#include "log.h"
-
-#include "flux.h"
+#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/monotime.h"
+#include "src/common/libutil/tstat.h"
+#include "src/common/libutil/log.h"
 
 #include "waitqueue.h"
 

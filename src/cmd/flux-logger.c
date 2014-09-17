@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* flux-logger.c - flux logger subcommand */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -35,13 +33,12 @@
 #include <stdarg.h>
 #include <czmq.h>
 #include <json.h>
+#include <flux/core.h>
 
-#include "xzmalloc.h"
-#include "argv.h"
-#include "log.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/argv.h"
+#include "src/common/libutil/log.h"
 
-#include "flux.h"
-#include "api.h"
 
 #define OPTIONS "hp:"
 static const struct option longopts[] = {

@@ -35,14 +35,14 @@
 #include <stdarg.h>
 #include <czmq.h>
 #include <json.h>
+#include <flux/core.h>
 
-#include "log.h"
-#include "shortjson.h"
-#include "zdump.h"
-#include "jsonutil.h"
-#include "xzmalloc.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/zdump.h"
+#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/xzmalloc.h"
 
-#include "flux.h"
 
 int flux_request_send (flux_t h, json_object *request, const char *fmt, ...)
 {

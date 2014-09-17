@@ -30,15 +30,12 @@
 #include <string.h>
 #include <czmq.h>
 #include <json.h>
+#include <flux/core.h>
 
-#include "cbuf.h"
+#include "src/common/liblsd/cbuf.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/jsonutil.h"
 
-#include "xzmalloc.h"
-#include "jsonutil.h"
-
-#include "flux.h"
-
-#include "zio.h"
 
 #ifndef NDEBUG
 #  define ZIO_MAGIC         0x510015

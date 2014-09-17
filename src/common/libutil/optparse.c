@@ -33,7 +33,7 @@
 #include <getopt.h>
 #include <stdarg.h>
 
-#include "list.h"
+#include "src/common/liblsd/list.h"
 #include "optparse.h"
 
 /******************************************************************************

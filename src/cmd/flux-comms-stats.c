@@ -34,12 +34,11 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <json.h>
+#include <flux/core.h>
 
-#include "xzmalloc.h"
-#include "log.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/log.h"
 
-#include "flux.h"
-#include "api.h"
 
 #define OPTIONS "hcCp:s:t:r:R"
 static const struct option longopts[] = {

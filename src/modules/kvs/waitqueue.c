@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* waitqueue.c - simple wait queues for message handlers */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -31,12 +29,10 @@
 #include <czmq.h>
 #include <czmq.h>
 #include <json.h>
+#include <flux/core.h>
 
-#include "zmsg.h"
-#include "log.h"
-#include "xzmalloc.h"
-
-#include "flux.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/xzmalloc.h"
 
 #include "waitqueue.h"
 

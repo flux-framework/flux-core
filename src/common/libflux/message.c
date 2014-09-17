@@ -37,12 +37,12 @@
 #include <sys/time.h>
 #include <json.h>
 #include <assert.h>
+#include <flux/core.h>
 
-#include "log.h"
-#include "jsonutil.h"
-#include "xzmalloc.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/xzmalloc.h"
 
-#include "message.h"
 
 int flux_msg_hopcount (zmsg_t *zmsg)
 {

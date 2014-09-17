@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* kvscli.c - kvs client code used in plugin and api context */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -44,14 +42,11 @@
 #include <stdarg.h>
 #include <czmq.h>
 #include <json.h>
+#include <flux/core.h>
 
-#include "log.h"
-#include "zmsg.h"
-#include "jsonutil.h"
-#include "xzmalloc.h"
-#include "flux.h"
-
-#include "kvs.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/xzmalloc.h"
 
 struct kvsdir_struct {
     flux_t handle;

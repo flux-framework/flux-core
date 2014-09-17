@@ -33,12 +33,11 @@
 #include <stdbool.h>
 #include <json.h>
 #include <czmq.h>
+#include <flux/core.h>
 
-#include "log.h"
-#include "argv.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/argv.h"
 
-#include "flux.h"
-#include "api.h"
 
 static void event_pub (flux_t h, int argc, char **argv);
 static void event_sub (flux_t h, int argc, char **argv);

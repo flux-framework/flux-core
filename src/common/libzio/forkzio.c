@@ -33,14 +33,11 @@
 #include <pty.h>
 #include <czmq.h>
 #include <json.h>
+#include <flux/core.h>
 
-#include "log.h"
-#include "xzmalloc.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/xzmalloc.h"
 
-#include "flux.h"
-
-#include "zio.h"
-#include "forkzio.h"
 
 struct forkzio_handle_struct {
     int ac;

@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* mrpc.c - group rpc implementatino */
-
 /* Group RPC event format:
  *    tag:  mrpc.<plugin>.<method>[.<method>]...
  *    JSON: path="mrpc.<uuid>"
@@ -52,16 +50,13 @@
 #include <stdarg.h>
 #include <json.h>
 #include <czmq.h>
+#include <flux/core.h>
 
-#include "log.h"
-#include "jsonutil.h"
-#include "xzmalloc.h"
-#include "nodeset.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/nodeset.h"
 
-#include "flux.h"
-#include "kvs.h"
-
-#include "mrpc.h"
 
 #define KVS_CLEANUP 1
 

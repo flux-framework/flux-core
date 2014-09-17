@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* flux-up.c - list node status */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -35,15 +33,13 @@
 #include <stdbool.h>
 #include <czmq.h>
 #include <json.h>
+#include <flux/core.h>
 
-#include "xzmalloc.h"
-#include "log.h"
-#include "nodeset.h"
-#include "shortjson.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/nodeset.h"
+#include "src/common/libutil/shortjson.h"
 
-#include "flux.h"
-#include "api.h"
-#include "kvs.h"
 
 #define OPTIONS "hcnud"
 static const struct option longopts[] = {

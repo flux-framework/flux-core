@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* modctlsrv.c - bulk module loading */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -45,18 +43,13 @@
 #include <zmq.h>
 #include <czmq.h>
 #include <json.h>
+#include <flux/core.h>
 
-#include "zmsg.h"
-#include "xzmalloc.h"
-#include "log.h"
-#include "shortjson.h"
-#include "jsonutil.h"
-#include "nodeset.h"
-
-#include "flux.h"
-
-#include "reduce.h"
-#include "kvs.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/nodeset.h"
 
 typedef struct {
     flux_t h;

@@ -126,11 +126,11 @@
 #include <munge.h>
 #include <json.h>
 #include <czmq.h>
+#include <flux/core.h>
 
-#include "log.h"
-#include "xzmalloc.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/xzmalloc.h"
 
-#include "flux.h"
 
 #if ZMQ_VERSION_MAJOR >= 4
 #define HAVE_ZAUTH 1

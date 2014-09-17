@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* flux.c - Flux command front-end */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -41,10 +39,11 @@
 #include <json.h>
 #include <glob.h>
 
-#include "log.h"
-#include "xzmalloc.h"
-#include "setenvf.h"
-#include "argv.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/setenvf.h"
+#include "src/common/libutil/argv.h"
+
 
 void dump_environment (void);
 void exec_subcommand (bool vopt, char *argv[]);

@@ -34,11 +34,11 @@
 #include <json.h>
 #include <czmq.h>
 #include <signal.h>
+#include <flux/core.h>
 
-#include "log.h"
-#include "shortjson.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/shortjson.h"
 
-#include "flux.h"
 
 int flux_panic (flux_t h, int rank, const char *msg)
 {

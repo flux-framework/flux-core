@@ -34,12 +34,12 @@
 #include <stdarg.h>
 #include <json.h>
 #include <czmq.h>
+#include <flux/core.h>
 
-#include "log.h"
-#include "shortjson.h"
-#include "xzmalloc.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/xzmalloc.h"
 
-#include "flux.h"
 
 typedef struct {
     char *facility;

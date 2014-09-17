@@ -36,14 +36,13 @@
 #include <stdarg.h>
 #include <json.h>
 #include <czmq.h>
+#include <flux/core.h>
 
-#include "log.h"
-#include "shortjson.h"
-#include "zdump.h"
-#include "jsonutil.h"
-#include "xzmalloc.h"
-
-#include "flux.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/zdump.h"
+#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/xzmalloc.h"
 
 int flux_event_recv (flux_t h, json_object **respp, char **tagp, bool nb)
 {

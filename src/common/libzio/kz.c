@@ -59,15 +59,10 @@
 #include <termios.h>
 #include <czmq.h>
 #include <json.h>
+#include <flux/core.h>
 
-#include "xzmalloc.h"
-#include "log.h"
-
-#include "flux.h"
-#include "kvs.h"
-
-#include "zio.h"
-#include "kz.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/log.h"
 
 struct kz_struct {
     int flags;

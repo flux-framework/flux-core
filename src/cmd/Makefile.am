@@ -5,15 +5,7 @@ AM_CPPFLAGS = \
         -DMODULE_PATH=\"$(fluxmoddir)\" \
 	-DEXEC_PATH=\"$(fluxcmddir)\" \
 	-DCMBD_PATH=\"$(fluxlibexecdir)/cmbd\" \
-	-I$(top_srcdir)/src/common/libutil \
-	-I$(top_srcdir)/src/common/libflux \
-	-I$(top_srcdir)/src/common/liblsd \
-	-I$(top_srcdir)/src/modules/api \
-	-I$(top_srcdir)/src/modules/kvs \
-	-I$(top_srcdir)/src/modules/live \
-	-I$(top_srcdir)/src/modules/modctl \
-	-I$(top_srcdir)/src/common/libzio \
-	-I$(top_srcdir)/src/common/libmrpc
+	-I$(top_srcdir)
 
 fluxcmd_ldadd = \
 	$(top_builddir)/src/modules/live/liblive.la \

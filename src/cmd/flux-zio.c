@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* flux-zio.c - copy stdio in/out of the KVS */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -36,16 +34,11 @@
 #include <stdarg.h>
 #include <czmq.h>
 #include <json.h>
+#include <flux/core.h>
 
-#include "log.h"
-#include "xzmalloc.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/xzmalloc.h"
 
-#include "flux.h"
-#include "api.h"
-
-#include "zio.h"
-#include "forkzio.h"
-#include "kz.h"
 
 typedef struct {
     flux_t h;

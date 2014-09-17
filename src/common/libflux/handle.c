@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* handle.c - core flux_t handle operations */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -39,13 +37,13 @@
 #include <json.h>
 #include <czmq.h>
 #include <fnmatch.h>
+#include <flux/core.h>
 
-#include "log.h"
-#include "zdump.h"
-#include "jsonutil.h"
-#include "xzmalloc.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/zdump.h"
+#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/xzmalloc.h"
 
-#include "flux.h"
 
 typedef struct reactor_struct *reactor_t;
 

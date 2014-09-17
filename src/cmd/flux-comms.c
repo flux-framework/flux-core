@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* flux-peer.c - flux peer subcommand */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -35,14 +33,12 @@
 #include <stdbool.h>
 #include <czmq.h>
 #include <json.h>
+#include <flux/core.h>
 
-#include "argv.h"
-#include "log.h"
-#include "shortjson.h"
+#include "src/common/libutil/argv.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/shortjson.h"
 
-#include "flux.h"
-#include "api.h"
-#include "live.h"
 
 #define OPTIONS "+hr:"
 static const struct option longopts[] = {
