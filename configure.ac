@@ -118,6 +118,7 @@ AC_CONFIG_FILES( \
   src/lib/libcore/Makefile \
   src/lib/libcore/flux-core.pc \
   src/lib/libcore/flux-libs.conf \
+  src/lib/libpmi/Makefile \
   src/broker/Makefile \
   src/cmd/Makefile \
   src/modules/Makefile \

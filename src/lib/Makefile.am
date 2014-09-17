@@ -1,1 +1,1 @@
-SUBDIRS = libcore
+SUBDIRS = libcore libpmi
