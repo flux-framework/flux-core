@@ -1,3 +1,6 @@
+#ifndef _BROKER_PMI_BOOT_H
+#define _BROKER_PMI_BOOT_H
+
 /* Use PMI to bootstrap a Flux comms session.
  */
 typedef struct pmi_struct *pmi_t;
@@ -20,6 +23,8 @@ void pmi_fence (pmi_t pmi);
 
 const char *pmi_get_uri (pmi_t pmi, int rank);
 const char *pmi_get_relay (pmi_t pmi, int rank);
+
+#endif /* !_BROKER_PMI_BOOT_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

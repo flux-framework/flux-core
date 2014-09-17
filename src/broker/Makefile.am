@@ -2,16 +2,15 @@ AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = \
 	$(JSON_CFLAGS) \
-	-DMODULE_PATH=\"$(fluxmoddir)\" \
-	-I$(top_srcdir)/src/common/libutil \
-	-I$(top_srcdir)/src/common/libflux
+	-I$(top_srcdir) -I$(top_srcdir)/src/include \
+	-DMODULE_PATH=\"$(fluxmoddir)\"
 
 fluxlibexec_PROGRAMS = cmbd
 
 cmbd_SOURCES = \
 	cmbd.c \
-	plugin.c \
-	plugin.h \
+	module.c \
+	module.h \
 	boot_pmi.c \
 	boot_pmi.h
 

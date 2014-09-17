@@ -22,29 +22,18 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* pmiwrap.c - wrappers for subset of PMI API
- */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
 #include <stdio.h>
-#include <assert.h>
 #include <stdlib.h>
-#include <string.h>
 #include <errno.h>
 #include <sys/types.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <sys/param.h>
-#include <stdbool.h>
-#include <sys/time.h>
 #include <dlfcn.h>
 #include <stdarg.h>
 
-#include "log.h"
-#include "xzmalloc.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/xzmalloc.h"
 
 #include "boot_pmi.h"
 

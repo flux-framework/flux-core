@@ -22,8 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* cmbd.c - simple zmq message broker, to run on each node of a job */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -48,17 +46,16 @@
 #include <json.h>
 #include <zmq.h>
 #include <czmq.h>
+#include <flux/core.h>
 
-#include "log.h"
-#include "zdump.h"
-#include "xzmalloc.h"
-#include "nodeset.h"
-#include "jsonutil.h"
-#include "ipaddr.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/zdump.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/nodeset.h"
+#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/ipaddr.h"
 
-#include "flux.h"
-
-#include "plugin.h"
+#include "module.h"
 #include "boot_pmi.h"
 
 #ifndef ZMQ_IMMEDIATE

@@ -1,5 +1,5 @@
-#ifndef PLUGIN_H
-#define PLUGIN_H
+#ifndef _BROKER_MODULE_H
+#define _BROKER_MODULE_H
 
 /* Plugins will be connected to these well-known shared memory zmq sockets.
  */
@@ -26,7 +26,7 @@ const char *plugin_digest (plugin_ctx_t p);
 int plugin_size (plugin_ctx_t p);
 void *plugin_sock (plugin_ctx_t p);
 
-#endif /* !PLUGIN_H */
+#endif /* !_BROKER_MODULE_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

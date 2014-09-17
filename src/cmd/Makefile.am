@@ -2,10 +2,10 @@ AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = \
 	$(JSON_CFLAGS) \
+	-I$(top_srcdir) -I$(top_srcdir)/src/include \
         -DMODULE_PATH=\"$(fluxmoddir)\" \
 	-DEXEC_PATH=\"$(fluxcmddir)\" \
-	-DCMBD_PATH=\"$(fluxlibexecdir)/cmbd\" \
-	-I$(top_srcdir)
+	-DCMBD_PATH=\"$(fluxlibexecdir)/cmbd\"
 
 fluxcmd_ldadd = \
 	$(top_builddir)/src/modules/live/liblive.la \
