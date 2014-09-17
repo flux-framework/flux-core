@@ -71,13 +71,8 @@ static void usage (void)
 "    -t,--trace-apisock       set FLUX_TRACE_APISOCK=1\n"
 "    -B,--cmbd-path           set FLUX_CMBD_PATH\n"
 "    -v,--verbose             show environment before executing command\n"
-);
-}
-
-static void help (void)
-{
-    usage ();
-    fprintf (stderr, "\nThe flux-core commands are:\n"
+"\n"
+"The flux-core commands are:\n"
 "   keygen        Generate CURVE keypairs for session security\n"
 "   kvs           Access the Flux the key-value store\n"
 "   module        Load/unload comms modules\n"
@@ -186,7 +181,7 @@ int main (int argc, char *argv[])
             char *av[] = { argv[0], "--help", NULL };
             exec_subcommand (vopt, av);
         } else
-            help ();
+            usage ();
         exit (0);
     }
     if (argc == 0) {
