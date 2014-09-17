@@ -27,17 +27,19 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <json/json.h>
 #include <assert.h>
 #include <libgen.h>
 #include <pthread.h>
 #include <getopt.h>
 #include <czmq.h>
+#include <json.h>
+#include <flux/core.h>
 
-#include "cmb.h"
-#include "util.h"
-#include "log.h"
-#include "tstat.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/tstat.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/monotime.h"
+#include "src/common/libutil/jsonutil.h"
 
 typedef struct {
     pthread_t t;
@@ -80,8 +82,8 @@ void *thread (void *arg)
     int i;
     struct timespec t0;
 
-    if (!(t->h = cmb_init ())) {
-        err ("%d: cmb_init", t->n);
+    if (!(t->h = flux_api_open ())) {
+        err ("%d: flux_api_init", t->n);
         goto done;
     }
     for (i = 0; i < count; i++) {
@@ -108,7 +110,7 @@ void *thread (void *arg)
     }
 done:
     if (t->h)
-        flux_handle_destroy (&t->h);
+        flux_api_close (t->h);
   return NULL;
 }
 

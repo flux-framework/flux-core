@@ -35,7 +35,6 @@
 #endif
 #include <sys/types.h>
 #include <sys/time.h>
-#include <json/json.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -48,11 +47,11 @@
 #include <czmq.h>
 #include <libgen.h>
 #include <pthread.h>
+#include <json.h>
+#include <flux/core.h>
 
-#include "cmb.h"
-#include "util.h"
-#include "log.h"
-#include "zmsg.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/xzmalloc.h"
 
 #define USE_REACTOR 1
 
@@ -114,7 +113,7 @@ void *thread (void *arg)
 {
     thd_t *t = arg;
 
-    if (!(t->h = cmb_init ())) {
+    if (!(t->h = flux_api_open ())) {
         err ("%d: cmb_init", t->n);
         goto done;
     }
@@ -132,7 +131,7 @@ void *thread (void *arg)
     }
 done:
     if (t->h)
-        flux_handle_destroy (&t->h);
+        flux_api_close (t->h);
 
     return NULL;
 }
@@ -154,8 +153,8 @@ int main (int argc, char *argv[])
     key = argv[3];
 
     thd = xzmalloc (sizeof (*thd) * nthreads);
-    
-    if (!(h = cmb_init ()))
+
+    if (!(h = flux_api_open ()))
         err_exit ("cmb_init");
 
     if (kvs_put_int (h, key, -1) < 0)
@@ -178,7 +177,7 @@ int main (int argc, char *argv[])
         if (kvs_commit (h) < 0)
             err_exit ("kvs_commit");
     }
-    
+
     for (i = 0; i < nthreads; i++) {
         if ((rc = pthread_join (thd[i].tid, NULL)))
             errn (rc, "pthread_join");
@@ -186,7 +185,7 @@ int main (int argc, char *argv[])
 
     free (thd);
 
-    flux_handle_destroy (&h);
+    flux_api_close (h);
 
     log_fini ();
 

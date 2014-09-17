@@ -51,7 +51,6 @@
 #endif
 #include <sys/types.h>
 #include <sys/time.h>
-#include <json/json.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -64,11 +63,11 @@
 #include <czmq.h>
 #include <libgen.h>
 #include <pthread.h>
+#include <json.h>
+#include <flux/core.h>
 
-#include "flux.h"
-#include "util.h"
-#include "log.h"
-#include "zmsg.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/xzmalloc.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT

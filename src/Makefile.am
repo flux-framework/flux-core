@@ -1,1 +1,1 @@
-SUBDIRS = common broker modules lib cmd
+SUBDIRS = common broker modules lib cmd test

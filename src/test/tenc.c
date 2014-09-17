@@ -29,7 +29,6 @@
 #endif
 #include <sys/types.h>
 #include <sys/time.h>
-#include <json/json.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -41,11 +40,12 @@
 #include <zmq.h>
 #include <czmq.h>
 #include <libgen.h>
+#include <json.h>
+#include <flux/core.h>
 
-#include "cmb.h"
-#include "util.h"
-#include "log.h"
-#include "zmsg.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/zfd.h"
 
 #define OPTIONS "dZJB"
 static const struct option longopts[] = {
@@ -151,8 +151,8 @@ void encode (void)
         o = buf_to_json (seq, buf, n);
         assert (o != NULL);
         zmsg = json_to_zmsg (o);
-        if (zmsg_send_fd (STDOUT_FILENO, &zmsg) < 0) {
-            perror ("zmsg_send_fd");
+        if (zfd_send (STDOUT_FILENO, &zmsg) < 0) {
+            perror ("zfd_send");
             exit (1);
         }
         json_object_put (o);
@@ -172,7 +172,7 @@ void decode (bool Zopt, bool Jopt, bool Bopt)
     uint8_t *rbuf;
     int rlen, rseq;
 
-    while ((zmsg = zmsg_recv_fd (STDIN_FILENO, false))) {
+    while ((zmsg = zfd_recv (STDIN_FILENO, false))) {
         if (Zopt) {
             zmsg_dump (zmsg);
         } else {

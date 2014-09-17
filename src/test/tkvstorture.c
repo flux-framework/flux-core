@@ -34,14 +34,12 @@
 #include <stdarg.h>
 #include <czmq.h>
 #include <json.h>
+#include <flux/core.h>
 
-#include "xzmalloc.h"
-#include "monotime.h"
-#include "log.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/monotime.h"
+#include "src/common/libutil/log.h"
 
-#include "flux.h"
-#include "kvs.h"
-#include "api.h"
 
 #define OPTIONS "hc:s:p:qv"
 static const struct option longopts[] = {
