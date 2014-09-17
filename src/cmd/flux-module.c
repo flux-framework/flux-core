@@ -145,6 +145,11 @@ static void module_list (flux_t h, int argc, char **argv)
         usage ();
     if (flux_modctl_update (h) < 0)
         err_exit ("flux_modctl_update");
+    /* FIXME: flux_modctl_update doesn't wait for KVS to be updated,
+     * so there is a race here.  The following usleep should be removed
+     * once this is addressed.
+     */
+    usleep (1000*100);
     printf ("%-20s %6s %-6s %4s %s\n",
             "Module", "Size", "Flags", "Idle", "Nodelist");
     if (kvs_get (h, "conf.modctl.lsmod", &lsmod) == 0) {
