@@ -58,7 +58,5 @@ Makefile
 # misc
 *.swp
 *.diff
-core
 *.tar.gz
 
-cmbd.log
