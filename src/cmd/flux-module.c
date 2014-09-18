@@ -35,6 +35,7 @@
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/readall.h"
 
 
 #define OPTIONS "+h"
@@ -219,33 +220,6 @@ static char *modfind (const char *modpath, const char *name)
     if (!ret)
         errno = ENOENT;
     return ret;
-}
-
-static int read_all (int fd, uint8_t **bufp)
-{
-    const int chunksize = 4096;
-    int len = 0;
-    uint8_t *buf = NULL;
-    int n;
-    int count = 0;
-
-    do {
-        if (len - count == 0) {
-            len += chunksize;
-            if (!(buf = buf ? realloc (buf, len) : malloc (len)))
-                goto nomem;
-        }
-        if ((n = read (fd, buf + count, len - count)) < 0) {
-            free (buf);
-            return n;
-        }
-        count += n;
-    } while (n != 0);
-    *bufp = buf;
-    return count;
-nomem:
-    errno = ENOMEM;
-    return -1;
 }
 
 static JSON parse_modargs (int argc, char **argv)

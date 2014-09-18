@@ -42,6 +42,7 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/nodeset.h"
+#include "src/common/libutil/readall.h"
 
 typedef struct {
     flux_t h;
@@ -209,17 +210,6 @@ static int lsmod_reduce (ctx_t *ctx, int seq)
 done:
     Jput (lsmod);
     return rc;
-}
-
-static int write_all (int fd, uint8_t *buf, int len)
-{
-    int n, count = 0;
-    while (count < len) {
-        if ((n = write (fd, buf + count, len - count)) < 0)
-            return n;
-        count += n;
-    }
-    return count;
 }
 
 /* Install module out of KVS.

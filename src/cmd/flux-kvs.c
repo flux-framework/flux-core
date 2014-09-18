@@ -33,6 +33,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/readall.h"
 
 
 #define OPTIONS "h"
@@ -296,46 +297,6 @@ void cmd_dropcache_all (flux_t h, int argc, char **argv)
         msg_exit ("dropcache-all: takes no arguments");
     if (flux_event_send (h, NULL, "kvs.dropcache") < 0)
         err_exit ("flux_event_send");
-}
-
-static int write_all (int fd, uint8_t *buf, int len)
-{
-    int n;
-    int count = 0;
-
-    while (count < len) {
-        if ((n = write (fd, buf + count, len - count)) < 0)
-            return n;
-        count += n;
-    }
-    return count;
-}
-
-static int read_all (int fd, uint8_t **bufp)
-{
-    const int chunksize = 4096;
-    int len = 0;
-    uint8_t *buf = NULL;
-    int n;
-    int count = 0;
-
-    do {
-        if (len - count == 0) {
-            len += chunksize;
-            if (!(buf = buf ? realloc (buf, len) : malloc (len)))
-                goto nomem;
-        }
-        if ((n = read (fd, buf + count, len - count)) < 0) {
-            free (buf);
-            return n;
-        }
-        count += n;
-    } while (n != 0);
-    *bufp = buf;
-    return count;
-nomem:
-    errno = ENOMEM;
-    return -1;
 }
 
 void cmd_copy_tokvs (flux_t h, int argc, char **argv)

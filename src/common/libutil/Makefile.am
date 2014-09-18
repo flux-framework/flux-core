@@ -37,6 +37,8 @@ libutil_la_SOURCES = \
 	veb.h \
 	nodeset.c \
 	nodeset.h \
-	shortjson.h
+	shortjson.h \
+	readall.c \
+	readall.h
 
 EXTRA_DIST = veb_mach.c
