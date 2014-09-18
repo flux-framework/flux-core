@@ -110,6 +110,7 @@ int main (int ac, char ** av)
 	zloop_start (zloop);
 	fprintf (stderr, "zloop complete\n");
 	s = zstr_recv (zs);
+	zstr_free (&s);
 	fprintf (stderr, "child thread complete\n");
 	zmq_close (zs);
 	zmq_term (zctx);

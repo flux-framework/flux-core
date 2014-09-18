@@ -119,6 +119,7 @@ int main (int ac, char ** av)
 	flux_reactor_start (f);
 	fprintf (stderr, "zloop complete\n");
 	s = zstr_recv (zs);
+	zstr_free (&s);
 	fprintf (stderr, "child thread complete\n");
 	zmq_close (zs);
 	flux_api_close (f);
