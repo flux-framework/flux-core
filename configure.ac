@@ -67,6 +67,7 @@ X_AC_CHECK_COND_LIB(munge, munge_ctx_create)
 X_AC_CHECK_COND_LIB(util, forkpty)
 X_AC_CHECK_COND_LIB(rt, clock_gettime)
 X_AC_CHECK_COND_LIB(dl, dlerror)
+X_AC_CHECK_COND_LIB(m, sqrt)
 AX_LUA_HEADERS
 AX_LUA_HEADERS(501)
 AX_LUA_LIBS
