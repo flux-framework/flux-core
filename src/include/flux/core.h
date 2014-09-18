@@ -10,5 +10,6 @@
 #include "src/modules/kvs/kvs.h"
 #include "src/modules/live/live.h"
 #include "src/modules/modctl/modctl.h"
+#include "src/modules/barrier/barrier.h"
 
 #endif /* FLUX_CORE_H */

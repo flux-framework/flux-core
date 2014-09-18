@@ -1,1 +1,1 @@
-SUBDIRS = api kvs modctl live mecho
+SUBDIRS = api kvs modctl live mecho barrier
