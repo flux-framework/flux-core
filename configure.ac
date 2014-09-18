@@ -39,14 +39,6 @@ AC_CHECK_HEADERS( \
   pthread.h \
   getopt.h \
 )
-# czmq headers might be in /usr/include/czmq subdir, or not
-AC_CHECK_HEADERS( \
-  czmq.h \
-  czmq/czmq.h \
-)
-AC_CHECK_HEADERS( \
-  slurm/pmi.h \
-)
 
 ##
 # Checks for typedefs, structures, and compiler characteristics
