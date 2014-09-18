@@ -7,10 +7,10 @@
  *
  */
 
-#include <json/json.h>
+#include <json.h>
 #include <mpi.h>
+#include <flux/core.h>
 
-#include "cmb.h"
 #include "kap.h"
 
 
@@ -324,11 +324,11 @@ kap_commfab_init (int *argc, char ***argv)
             &_tester_size) != MPI_SUCCESS )
         return -1;
 
-    if ( (_hndl = cmb_init ()) == NULL ) {
+    if ( (_hndl = flux_api_open ()) == NULL ) {
 
         for (ntries = 0; ntries < 4; ++ntries) {
             sleep (5);
-            if ( (_hndl = cmb_init ()) != NULL ) {
+            if ( (_hndl = flux_api_open ()) != NULL ) {
                 break;
             }
         }

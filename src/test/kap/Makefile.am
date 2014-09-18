@@ -7,12 +7,12 @@ AM_CPPFLAGS = \
 LDADD = \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(top_builddir)/src/modules/api/libapi.la \
+	$(top_builddir)/src/modules/barrier/libbarrier.la \
         $(top_builddir)/src/common/libflux/libflux.la \
         $(top_builddir)/src/common/libutil/libutil.la \
         $(top_builddir)/src/common/liblsd/liblsd.la \
-        $(JSON_LIBS) $(LIBCZMQ) $(LIBZMQ) $(LIBMUNGE) $(LIBPTHREAD) $(LIBM)
+        $(JSON_LIBS) $(LIBCZMQ) $(LIBZMQ) $(LIBMUNGE) $(LIBPTHREAD) $(LIBM) \
 	$(MPI_CLDFLAGS)
-		
 
 check_PROGRAMS = kap
 

@@ -2,9 +2,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <json/json.h>
-#include "cmb.h"
-#include "util.h"
+#include <json.h>
+#include <flux/core.h>
+#include "src/common/libutil/jsonutil.h"
 #include "kap.h"
 
 #define VAL_UNIT_SIZE    8 
@@ -186,7 +186,7 @@ fetch_kv_tuple (kap_params_t *param, int fet_i,
     }
     End = now ();
     update_metric (&Gets, Begin, End);
-    if ( util_json_object_get_base64 (o,
+    if ( util_json_object_get_data (o,
             KAP_VAL_NAME, (uint8_t **) b, b_len) < 0 ) {
         fprintf (stderr, "get JSON failed.\n");
         goto error;
@@ -257,20 +257,20 @@ static int
 put_test_obj (kap_params_t *param)
 {
     int len = 0;
-    uint8_t *dat = NULL;
+    uint64_t *dat = NULL;
     json_object *o = NULL;
     char k[KAP_MAX_STR];
 
     if ( (gen_fqkey (param, k, KAP_MAX_STR) == 0)
-        && (gen_val (param, (uint64_t**)&dat, &len) == 0)) {
+        && (gen_val (param, &dat, &len) == 0)) {
             if (!(o = json_object_new_object ())) {
                 fprintf (stderr, 
                     "OOM: json_object_new_object\n");
                 goto error;
             }
 
-            util_json_object_add_base64 (o, 
-                KAP_VAL_NAME, dat, sizeof(uint64_t)*len);
+            util_json_object_add_data (o, 
+                KAP_VAL_NAME, (uint8_t *)dat, sizeof(uint64_t)*len);
         
             /***********************************************
              *        MEASURE PUT LATENCY                  *
@@ -375,19 +375,14 @@ enforce_c_consistency (kap_params_t *param)
             "Failed to recv an event msg.\n");
         goto error;
     }
-    if ( !(tag = flux_zmsg_tag (msg))) {
+    if (flux_msg_decode (msg, &tag, &o) < 0) {
         fprintf (stderr,
-            "fetching the tag of zmsg failed.\n");
+            "event decode failed.\n");
         goto error;
     }
     if ( strcmp (tag, KAP_CAUSAL_CONS_EV) != 0) {
         fprintf (stderr,
             "Unexpected tag.\n");
-        goto error;
-    }
-    if ( !(o = flux_zmsg_json (msg))) {
-        fprintf (stderr,
-        "fetching JSON object failed.\n");
         goto error;
     }
     if ( util_json_object_get_int (o, KAP_KVSVER_NAME, &v)) {

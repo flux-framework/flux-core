@@ -8,8 +8,8 @@
 #ifndef KAP_PERSONALITY_H
 #define KAP_PERSONALITY_H 1
 
-#include <json/json.h>
-#include "cmb.h"
+#include <json.h>
+#include <flux/core.h>
 #include "kap_opts.h"
 
 typedef enum _kap_role_e {
