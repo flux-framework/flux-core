@@ -64,6 +64,9 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 
+#include "kz.h"
+#include "zio.h"
+
 struct kz_struct {
     int flags;
     char *name;
@@ -220,7 +223,7 @@ static json_object *getnext (kz_t kz)
 {
     json_object *val = NULL;
     char *key = NULL;
-    
+
     if (!(kz->flags & KZ_FLAGS_READ)) {
         errno = EINVAL;
         goto done;
@@ -236,7 +239,7 @@ static json_object *getnext (kz_t kz)
 done:
     if (key)
         free (key);
-    return val;    
+    return val;
 }
 
 static json_object *getnext_blocking (kz_t kz)

@@ -5,10 +5,6 @@
 #define FLUX_CORE_H
 
 #include "src/common/libflux/flux.h"
-#include "src/common/libzio/zio.h"
-#include "src/common/libzio/kz.h"
-#include "src/common/libzio/forkzio.h"
-#include "src/common/libmrpc/mrpc.h"
 
 #include "src/modules/api/api.h"
 #include "src/modules/kvs/kvs.h"

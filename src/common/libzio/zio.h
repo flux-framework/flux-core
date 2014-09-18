@@ -3,6 +3,7 @@
 
 #include <json.h>
 #include <czmq.h>
+#include <flux/core.h>
 
 typedef struct zio_ctx * zio_t;
 

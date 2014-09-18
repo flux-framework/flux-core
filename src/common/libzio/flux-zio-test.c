@@ -32,6 +32,8 @@
 #include <json.h>
 #include <flux/core.h>
 
+#include "zio.h"
+
 int output_thread_cb (flux_t f, void *zs, short revents, zio_t z)
 {
 	zmsg_t *zmsg;

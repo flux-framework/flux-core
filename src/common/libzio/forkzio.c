@@ -38,6 +38,8 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 
+#include "zio.h"
+#include "forkzio.h"
 
 struct forkzio_handle_struct {
     int ac;

@@ -57,6 +57,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
 
+#include "mrpc.h"
 
 #define KVS_CLEANUP 1
 

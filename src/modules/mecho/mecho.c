@@ -28,6 +28,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libmrpc/mrpc.h"
 
 /* Copy input arguments to output arguments and respond to RPC.
  */

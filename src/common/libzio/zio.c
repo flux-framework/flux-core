@@ -36,6 +36,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/jsonutil.h"
 
+#include "zio.h"
 
 #ifndef NDEBUG
 #  define ZIO_MAGIC         0x510015
