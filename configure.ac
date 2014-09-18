@@ -125,6 +125,7 @@ AC_CONFIG_FILES( \
   src/modules/mecho/Makefile \
   src/modules/barrier/Makefile \
   src/test/Makefile \
+  src/test/kap/Makefile \
 )
 AC_CONFIG_FILES([src/cmd/flux-start-srun], [chmod +x src/cmd/flux-start-srun])
 AC_CONFIG_FILES([src/cmd/flux-start-screen], [chmod +x src/cmd/flux-start-screen])

@@ -15,6 +15,7 @@ check_PROGRAMS = \
 
 if HAVE_MPI
 check_PROGRAMS += mpi_hello
+SUBDIRS = kap
 endif
 
 LDADD = $(top_builddir)/src/common/libzio/libzio.la \
