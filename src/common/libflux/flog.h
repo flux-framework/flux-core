@@ -1,6 +1,12 @@
 #ifndef _FLUX_CORE_FLOG_H
 #define _FLUX_CORE_FLOG_H
 
+#include <stdarg.h>
+#include <stdbool.h>
+#include <czmq.h>
+
+#include "handle.h"
+
 /* FIXME: redirect flag causes redirection to syslog if logging
  * is so configured, but facility and level are not passed to msg/err()
  * (see libutil/log.c)

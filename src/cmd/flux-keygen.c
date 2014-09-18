@@ -25,14 +25,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include <getopt.h>
-#include <assert.h>
-#include <libgen.h>
-#include <json.h>
-#include <czmq.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"

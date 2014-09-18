@@ -1,5 +1,8 @@
-#ifndef HAVE_FLUX_KZ_H
-#define HAVE_FLUX_KZ_H
+#ifndef _FLUX_CORE_KZ_H
+#define _FLUX_CORE_KZ_H
+
+#include <json.h>
+#include <flux/core.h>
 
 typedef struct kz_struct *kz_t;
 
@@ -81,7 +84,7 @@ int kz_put_json (kz_t kz, json_object *o);
  */
 json_object *kz_get_json (kz_t kz);
 
-#endif /* !HAVE_FLUX_KZ_H */
+#endif /* !FLUX_CORE_KZ_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

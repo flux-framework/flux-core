@@ -27,11 +27,8 @@
 #endif
 #include <stdio.h>
 #include <getopt.h>
-#include <assert.h>
-#include <libgen.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <czmq.h>
+#include <unistd.h>
+#include <string.h>
 #include <json.h>
 #include <flux/core.h>
 

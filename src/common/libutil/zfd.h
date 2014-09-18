@@ -1,6 +1,9 @@
 #ifndef _UTIL_ZFD_H
 #define _UTIL_ZFD_H
 
+#include <stdbool.h>
+#include <czmq.h>
+
 /* Send/recv zmq messages over a file descriptor.
  * Utilizes zmsg_encode/zmsg_decode() functions from czmq.
  * N.B. The nonblock flag doesn't completely eliminate blocking.

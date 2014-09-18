@@ -68,14 +68,10 @@
 #include <libgen.h>
 #include <pthread.h>
 #include <unistd.h>
-#include <sys/param.h>
 #include <stdbool.h>
-#include <sys/un.h>
-#include <sys/socket.h>
 #include <ctype.h>
 #include <sys/time.h>
 #include <czmq.h>
-#include <json.h>
 #include <fnmatch.h>
 #include <flux/core.h>
 
@@ -1785,7 +1781,7 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         util_json_object_add_int (o, "#faults", ctx->stats.faults);
 
         util_json_object_add_int (o, "store revision", ctx->rootseq);
- 
+
         if (flux_respond (h, zmsg, o) < 0) {
             err ("%s: flux_respond", __FUNCTION__);
             goto done_stop;

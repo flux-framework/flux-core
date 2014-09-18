@@ -1,6 +1,8 @@
 #ifndef _UTIL_XZMALLOC_H
 #define _UTIL_XZMALLOC_H
 
+#include <sys/types.h>
+
 /* Memory allocation functions that call oom() on allocation error.
  */
 void *xzmalloc (size_t size);

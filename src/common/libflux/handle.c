@@ -37,7 +37,10 @@
 #include <json.h>
 #include <czmq.h>
 #include <fnmatch.h>
-#include <flux/core.h>
+
+#include "handle_impl.h"
+#include "message.h"
+#include "reactor.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/zdump.h"
@@ -222,15 +225,6 @@ zctx_t *flux_get_zctx (flux_t h)
         return NULL;
     }
     return h->ops->get_zctx (h->impl);
-}
-
-flux_sec_t flux_get_sec (flux_t h)
-{
-    if (!h->ops->get_sec) {
-        errno = ENOSYS;
-        return NULL;
-    }
-    return h->ops->get_sec (h->impl);
 }
 
 /**

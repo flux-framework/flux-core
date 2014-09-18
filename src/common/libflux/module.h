@@ -1,6 +1,11 @@
 #ifndef _FLUX_CORE_MODULE_H
 #define _FLUX_CORE_MODULE_H
 
+#include <json.h>
+#include <czmq.h>
+
+#include "handle.h"
+
 /* Manipulate comms modules.
  * Use rank=-1 for local.
  */

@@ -1,6 +1,8 @@
 #ifndef _UTIL_JSONUTIL_H
 #define _UTIL_JSONUTIL_H
 
+#include <json.h>
+
 /* Calculate encoded size of JSON object.
  */
 int util_json_size (json_object *o);

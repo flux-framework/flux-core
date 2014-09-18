@@ -30,13 +30,9 @@
 #include <getopt.h>
 #include <unistd.h>
 #include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <sys/time.h>
 #include <libgen.h>
 #include <stdbool.h>
 #include <sys/param.h>
-#include <json.h>
 #include <glob.h>
 
 #include "src/common/libutil/log.h"

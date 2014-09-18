@@ -1,3 +1,9 @@
+#ifndef _FLUX_CORE_WAITQUEUE_H
+#define _FLUX_CORE_WAITQUEUE_H
+
+#include <czmq.h>
+#include <flux/core.h>
+
 /* Waitqueues can be used to stall and restart a message handler.
  * The wait_t contains the message that is being worked on and the
  * message handler callback arguments needed to start the handler over.
@@ -71,6 +77,8 @@ void wait_set_id (wait_t w, const char *id);
 /* Find all the wait_t's on a queue that match 'id' and destroy them.
  */
 void wait_destroy_byid (waitqueue_t q, const char *id);
+
+#endif /* !_FLUX_CORE_WAITQUEUE_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

@@ -1,6 +1,9 @@
 #ifndef FLUX_MRPC_H
 #define FLUX_MRPC_H
 
+#include <json.h>
+#include <flux/core.h>
+
 typedef struct flux_mrpc_struct *flux_mrpc_t;
 
 /* Group RPC

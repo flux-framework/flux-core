@@ -1,5 +1,8 @@
-#ifndef _UTIL_ZIO_H
-#define _UTIL_ZIO_H 1
+#ifndef _FLUX_CORE_ZIO_H
+#define _FLUX_CORE_ZIO_H 1
+
+#include <json.h>
+#include <czmq.h>
 
 typedef struct zio_ctx * zio_t;
 
@@ -137,4 +140,4 @@ json_object *zio_json_encode (void *p, int len, bool eof);
  */
 bool zio_json_eof (json_object *o);
 
-#endif /* !_UTIL_ZIO_H */
+#endif /* !_FLUX_CORE_ZIO_H */

@@ -1,6 +1,8 @@
 #ifndef _UTIL_ZCONNECT_H
 #define _UTIL_ZCONNECT_H
 
+#include <czmq.h>
+
 /* Create socket, set hwm, set identity, connect/bind all in one go.
  * All errors are fatal.
  */

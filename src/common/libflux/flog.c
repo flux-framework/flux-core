@@ -34,7 +34,11 @@
 #include <stdarg.h>
 #include <json.h>
 #include <czmq.h>
-#include <flux/core.h>
+
+#include "flog.h"
+#include "info.h"
+#include "request.h"
+#include "message.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"

@@ -1,6 +1,8 @@
 #ifndef _FLUX_CORE_PANIC_H
 #define _FLUX_CORE_PANIC_H
 
+#include "handle.h"
+
 int flux_panic (flux_t h, int rank, const char *msg);
 
 void flux_assfail (flux_t h, char *ass, char *file, int line);

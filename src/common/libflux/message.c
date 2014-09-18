@@ -37,7 +37,8 @@
 #include <sys/time.h>
 #include <json.h>
 #include <assert.h>
-#include <flux/core.h>
+
+#include "message.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/jsonutil.h"

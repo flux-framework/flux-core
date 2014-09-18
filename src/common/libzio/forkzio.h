@@ -1,3 +1,8 @@
+#ifndef _FLUX_CORE_FORKZIO_H
+#define _FLUX_CORE_FORKZIO_H
+
+#include <czmq.h>
+
 typedef struct forkzio_handle_struct *forkzio_t;
 
 enum {
@@ -20,6 +25,8 @@ void      forkzio_close (forkzio_t fh);
 /* Retrieve the "parent" end of the PAIR socket.
  */
 void     *forkzio_get_zsocket (forkzio_t fh);
+
+#endif /* !_FLUX_CORE_FORKZIO_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

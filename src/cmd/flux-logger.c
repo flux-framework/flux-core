@@ -27,12 +27,6 @@
 #endif
 #include <stdio.h>
 #include <getopt.h>
-#include <assert.h>
-#include <libgen.h>
-#include <stdint.h>
-#include <stdarg.h>
-#include <czmq.h>
-#include <json.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"

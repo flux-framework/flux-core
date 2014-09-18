@@ -1,6 +1,8 @@
 #ifndef _FLUX_CORE_API_H
 #define _FLUX_CORE_API_H
 
+#include <flux/core.h>
+
 flux_t flux_api_open (void);
 flux_t flux_api_openpath (const char *path, int flags);
 

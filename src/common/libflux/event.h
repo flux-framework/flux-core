@@ -1,6 +1,12 @@
 #ifndef _FLUX_CORE_EVENT_H
 #define _FLUX_CORE_EVENT_H
 
+#include <json.h>
+#include <stdbool.h>
+#include <czmq.h>
+
+#include "handle.h"
+
 /* Send/receive events
  * - an event consists of a tag frame and an optional JSON frame
  * - flux_event_sendmsg() frees '*zmsg' and sets it to NULL on success.

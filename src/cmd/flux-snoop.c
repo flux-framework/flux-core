@@ -26,10 +26,6 @@
 #include "config.h"
 #endif
 #include <getopt.h>
-#include <assert.h>
-#include <libgen.h>
-#include <json.h>
-#include <zmq.h>
 #include <czmq.h>
 #include <flux/core.h>
 

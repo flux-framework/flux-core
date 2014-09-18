@@ -1,6 +1,9 @@
 #ifndef _FLUX_CORE_REPARENT_H
 #define _FLUX_CORE_REPARENT_H
 
+#include <json.h>
+#include "handle.h"
+
 json_object *flux_lspeer (flux_t h, int rank);
 
 int flux_reparent (flux_t h, int rank, const char *uri);

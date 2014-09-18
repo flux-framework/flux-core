@@ -3,6 +3,9 @@
 #ifndef _UTIL_NODESET_H
 #define _UTIL_NODESET_H
 
+#include <stdint.h>
+#include <stdbool.h>
+
 typedef struct nodeset_struct *nodeset_t;
 typedef struct nodeset_itr_struct *nodeset_itr_t;
 

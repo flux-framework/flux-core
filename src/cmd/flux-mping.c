@@ -26,10 +26,8 @@
 #include "config.h"
 #endif
 #include <stdio.h>
-#include <assert.h>
 #include <getopt.h>
 #include <string.h>
-#include <czmq.h>
 #include <json.h>
 #include <flux/core.h>
 

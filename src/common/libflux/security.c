@@ -126,7 +126,8 @@
 #include <munge.h>
 #include <json.h>
 #include <czmq.h>
-#include <flux/core.h>
+
+#include "security.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"

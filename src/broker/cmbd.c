@@ -37,15 +37,11 @@
 #include <sys/prctl.h>
 #include <sys/signalfd.h>
 #include <unistd.h>
-#include <unistd.h>
 #include <sys/param.h>
 #include <stdbool.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <dlfcn.h>
-#include <json.h>
-#include <zmq.h>
-#include <czmq.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
@@ -2044,18 +2040,11 @@ static zctx_t *cmbd_get_zctx (void *impl)
     return ctx->zctx;
 }
 
-static flux_sec_t cmbd_get_sec (void *impl)
-{
-    ctx_t *ctx = impl;
-    return ctx->sec;
-}
-
 static const struct flux_handle_ops cmbd_handle_ops = {
     .request_sendmsg = cmbd_request_sendmsg,
     .response_sendmsg = cmbd_response_sendmsg,
     .rank = cmbd_rank,
     .get_zctx = cmbd_get_zctx,
-    .get_sec = cmbd_get_sec,
 };
 
 /*

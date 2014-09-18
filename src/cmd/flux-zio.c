@@ -27,11 +27,9 @@
 #endif
 #include <getopt.h>
 #include <assert.h>
-#include <libgen.h>
 #include <sys/wait.h>
 #include <termios.h>
 #include <stdbool.h>
-#include <stdarg.h>
 #include <czmq.h>
 #include <json.h>
 #include <flux/core.h>
@@ -240,10 +238,10 @@ static int run_zs_ready_cb (flux_t h, void *zs, short revents, void *arg)
     }
     if (!strcmp (stream, "stdout")) {
         if (run_send_kz (&ctx->kz[1], data, len, eof) < 0)
-            goto done;        
+            goto done;
     } else if (!strcmp (stream, "stderr")) {
         if (run_send_kz (&ctx->kz[2], data, len, eof) < 0)
-            goto done;        
+            goto done;
     } else {
         errno = EPROTO;
         goto done;
@@ -252,8 +250,8 @@ static int run_zs_ready_cb (flux_t h, void *zs, short revents, void *arg)
 done:
     if (data)
         free (data);
-    if (stream)   
-        free (stream); 
+    if (stream)
+        free (stream);
     if (o)
         json_object_put (o);
     return rc;
@@ -498,7 +496,7 @@ static void attach (flux_t h, const char *key, int flags, bool trunc,
         kzoutflags |= KZ_FLAGS_DELAYCOMMIT;
 
     msg ("process attached to %s", key);
-    
+
     ctx->h = h;
     ctx->blocksize = blocksize;
 

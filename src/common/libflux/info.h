@@ -1,6 +1,10 @@
 #ifndef _FLUX_CORE_INFO_H
 #define _FLUX_CORE_INFO_H
 
+#include <stdbool.h>
+
+#include "handle.h"
+
 int flux_info (flux_t h, int *rankp, int *sizep, bool *treerootp);
 int flux_rank (flux_t h);
 int flux_size (flux_t h);

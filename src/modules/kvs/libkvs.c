@@ -40,8 +40,6 @@
 #include <sys/socket.h>
 #include <ctype.h>
 #include <stdarg.h>
-#include <czmq.h>
-#include <json.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"

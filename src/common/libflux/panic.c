@@ -25,16 +25,10 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <stdio.h>
-#include <assert.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <json.h>
-#include <czmq.h>
-#include <signal.h>
-#include <flux/core.h>
+
+#include "panic.h"
+#include "request.h"
+#include "flog.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"

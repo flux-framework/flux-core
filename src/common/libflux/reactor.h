@@ -1,6 +1,11 @@
 #ifndef _FLUX_CORE_REACTOR_H
 #define _FLUX_CORE_REACTOR_H
 
+#include <stdbool.h>
+#include <czmq.h>
+
+#include "handle.h"
+
 /* FluxMsgHandler indicates zmsg is "consumed" by destroying it.
  * Callbacks return 0 on success, -1 on error and set errno.
  * Error terminates reactor, and flux_reactor_start() returns -1.

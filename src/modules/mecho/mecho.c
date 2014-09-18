@@ -25,10 +25,6 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
-#include <json.h>
-#include <stdarg.h>
-#include <stdbool.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"

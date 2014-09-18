@@ -1,6 +1,11 @@
 #ifndef _FLUX_CORE_KVS_H
 #define _FLUX_CORE_KVS_H
 
+#include <json.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <flux/core.h>
+
 typedef struct kvsdir_struct *kvsdir_t;
 
 typedef void (KVSSetF(const char *key, json_object *val, void *arg,int errnum));

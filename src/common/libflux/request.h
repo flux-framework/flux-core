@@ -1,6 +1,13 @@
 #ifndef _FLUX_CORE_REQUEST_H
 #define _FLUX_CORE_REQUEST_H
 
+#include <json.h>
+#include <stdbool.h>
+#include <stdarg.h>
+#include <czmq.h>
+
+#include "handle.h"
+
 /* Send/receive requests and responses.
  * - flux_request_sendmsg() expects a route delimiter (request envelope)
  * - flux_request_sendmsg()/flux_response_sendmsg() free '*zmsg' and set it

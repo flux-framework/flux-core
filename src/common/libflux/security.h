@@ -1,6 +1,9 @@
 #ifndef _FLUX_CORE_SECURITY_H
 #define _FLUX_CORE_SECURITY_H
 
+#include <czmq.h>
+#include <stdbool.h>
+
 #define DEFAULT_ZAP_DOMAIN      "flux"
 #define FLUX_DIRECTORY          ".flux"
 

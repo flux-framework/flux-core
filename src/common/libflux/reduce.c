@@ -37,7 +37,9 @@
 #include <ctype.h>
 #include <czmq.h>
 #include <json.h>
-#include <flux/core.h>
+
+#include "reduce.h"
+#include "reactor.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"

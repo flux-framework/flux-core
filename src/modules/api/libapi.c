@@ -39,13 +39,9 @@
 #include <sys/un.h>
 #include <sys/socket.h>
 #include <ctype.h>
-#include <stdarg.h>
-#include <czmq.h>
-#include <json.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/zfd.h"
 

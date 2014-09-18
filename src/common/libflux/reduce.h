@@ -1,6 +1,10 @@
 #ifndef _FLUX_CORE_REDUCE_H
 #define _FLUX_CORE_REDUCE_H
 
+#include <czmq.h>
+
+#include "handle.h"
+
 typedef struct red_struct *red_t;
 
 enum {

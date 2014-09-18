@@ -1,6 +1,9 @@
 #ifndef _UTIL_ZDUMP_H
 #define _UTIL_ZDUMP_H
 
+#include <stdio.h>
+#include <czmq.h>
+
 /* Format message frames as text.  The first prints entire message on stdout.
  * The second returns a string representing only routing frames that the
  * caller must free.

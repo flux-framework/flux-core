@@ -1,6 +1,10 @@
 #ifndef _FLUX_CORE_MESSAGE_H
 #define _FLUX_CORE_MESSAGE_H
 
+#include <json.h>
+#include <stdbool.h>
+#include <czmq.h>
+
 /* Return the number of non-nil routing frames in the message.
  */
 int flux_msg_hopcount (zmsg_t *zmsg);

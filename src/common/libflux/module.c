@@ -36,7 +36,9 @@
 #include <stdarg.h>
 #include <json.h>
 #include <czmq.h>
-#include <flux/core.h>
+
+#include "module.h"
+#include "request.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"

@@ -26,23 +26,15 @@
 #include "config.h"
 #endif
 #include <stdio.h>
-#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <getopt.h>
 #include <libgen.h>
 #include <pthread.h>
 #include <unistd.h>
 #include <sys/param.h>
-#include <stdbool.h>
-#include <sys/un.h>
-#include <sys/socket.h>
 #include <sys/time.h>
 #include <ctype.h>
-#include <zmq.h>
-#include <czmq.h>
-#include <json.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"
