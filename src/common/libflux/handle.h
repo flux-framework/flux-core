@@ -1,8 +1,6 @@
 #ifndef _FLUX_CORE_HANDLE_H
 #define _FLUX_CORE_HANDLE_H
 
-#include <czmq.h>
-
 typedef struct flux_handle_struct *flux_t;
 
 /* Flags for handle creation and flux_flags_set()/flux_flags_unset.
