@@ -207,7 +207,7 @@ static char ** rexec_session_args_create (struct rexec_session *s)
     args = xzmalloc ((nargs + 1) * sizeof (char **));
     snprintf (buf, sizeof (buf) - 1, "--lwj-id=%lu", s->id);
 
-    args [0] = strdup (REXECD_PATH);
+    args [0] = strdup (WREXECD_PATH);
     args [1] = strdup (buf);
     args [2] = strdup ("--parent-fd=3");
     args [3] = NULL;

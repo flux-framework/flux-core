@@ -10,8 +10,9 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/modules/broker \
 	-I$(top_srcdir)/src/modules/kvs \
 	-I$(top_srcdir)/src/broker \
-	-DREXECD_PATH=\"$(abs_builddir)/wrexecd\" \
-	-DREXECD_LUA_PATTERN=\"$(abs_builddir)/lua.d/*.lua\"
+	-DWREXECD_BINDIR=\"$(sbindir)\" \
+	-DWREXECD_PATH=\"$(abs_builddir)/wrexecd\" \
+	-DWRECK_LUA_PATTERN=\"$(sysconfdir)/wreck/lua.d/*.lua\"
 
 libfluxdir = $(libdir)/flux
 fluxmoddir = $(libfluxdir)/modules

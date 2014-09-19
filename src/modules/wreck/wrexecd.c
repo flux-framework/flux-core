@@ -43,7 +43,6 @@
 
 #include <flux/core.h>
 
-
 #include "src/common/libutil/optparse.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
@@ -102,6 +101,8 @@ struct prog_ctx {
     char *envz;
     size_t envz_len;
 
+    char exedir[MAXPATHLEN]; /* Directory from which this executable is run */
+
     zctx_t *zctx;
     void *zs_req;
     void *zs_rep;
@@ -115,6 +116,7 @@ struct prog_ctx {
     int in_task;            /* Non-zero if currently in task ctx  */
     int taskid;             /* Current taskid executing lua_stack */
 
+    char *lua_pattern;      /* Glob for lua plugins */
     lua_stack_t lua_stack;
     int envref;             /* Global reference to Lua env obj    */
 };
@@ -398,6 +400,23 @@ int rexec_send_msg (struct prog_ctx *ctx, char *tag, json_object *o)
     return zmsg_send (&zmsg, ctx->zs_req);
 }
 
+static int get_executable_path (char *buf, size_t len)
+{
+    char *p;
+    if (readlink ("/proc/self/exe", buf, len) < 0)
+        return (-1);
+
+    p = buf + strlen (buf) - 1;
+    while (*p == '/')
+        p--;
+    while (*p != '/')
+        p--;
+    if (p && *p == '/')
+        *p = '\0';
+
+    return (0);
+}
+
 void prog_ctx_destroy (struct prog_ctx *ctx)
 {
     int i;
@@ -444,7 +463,19 @@ struct prog_ctx * prog_ctx_create (void)
     ctx->taskid = -1;
 
     ctx->envref = -1;
+
+    if (get_executable_path (ctx->exedir, sizeof (ctx->exedir)) < 0)
+        log_fatal (ctx, 1, "get_executable_path");
+
     ctx->lua_stack = lua_stack_create ();
+    if (strcmp (ctx->exedir, WREXECD_BINDIR) != 0) {
+        /* We are presumed to be executing out of builddir */
+        if (asprintf (&ctx->lua_pattern, "%s/lua.d/*.lua", ctx->exedir) < 0)
+            log_fatal (ctx, 1, "asprintf");
+    }
+    else {
+        ctx->lua_pattern = xstrdup (WRECK_LUA_PATTERN);
+    }
 
     return (ctx);
 }
@@ -1244,7 +1275,8 @@ static int wreck_lua_init (struct prog_ctx *ctx)
     luaL_register (L, NULL, environ_methods);
     l_push_prog_ctx (L, ctx);
     lua_setglobal (L, "wreck");
-    lua_stack_append_file (ctx->lua_stack, REXECD_LUA_PATTERN);
+    log_msg (ctx, "reading lua files from %s\n", ctx->lua_pattern);
+    lua_stack_append_file (ctx->lua_stack, ctx->lua_pattern);
     return (0);
 }
 
