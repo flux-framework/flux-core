@@ -106,7 +106,7 @@ int PMI_Init (int *spawned)
     int dflt_clique_ranks[] = { 0 };
     int dflt_clique_size = 1;
 
-    log_init ("cmb-pmi");
+    log_init ("flux-pmi");
     if (spawned == NULL)
         return PMI_ERR_INVALID_ARG;
     if (ctx)
@@ -134,7 +134,7 @@ int PMI_Init (int *spawned)
         err ("flux_api_open");
         goto fail;
     }
-    flux_log_set_facility (ctx->fctx, "PMI");
+    flux_log_set_facility (ctx->fctx, "pmi");
     ctx->cmb_rank = flux_rank (ctx->fctx);
     trace_simple (PMI_TRACE_INIT);
     *spawned = ctx->spawned;
