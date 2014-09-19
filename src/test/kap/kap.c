@@ -20,40 +20,40 @@
  *                  GLOBAL DATA                          *
  *                                                       *
  *********************************************************/
-perf_metric_t Puts = { 
-    .op_base    = { .max = 0.0f, 
-                    .min = DBL_MAX, 
-                    .std = 0.0f, 
-                    .accum = 0.0f, 
-                    .op_count = 0}, 
-    .throughput = 0.0f, 
+perf_metric_t Puts = {
+    .op_base    = { .max = 0.0f,
+                    .min = DBL_MAX,
+                    .std = 0.0f,
+                    .accum = 0.0f,
+                    .op_count = 0},
+    .throughput = 0.0f,
     .bandwidth  = 0.0f};
 
 perf_metric_t Commit_bn_Puts = {
-    .op_base    = { .max = 0.0f, 
-                    .min = DBL_MAX, 
-                    .std = 0.0f, 
-                    .accum = 0.0f, 
-                    .op_count = 0}, 
-    .throughput = 0.0f, 
+    .op_base    = { .max = 0.0f,
+                    .min = DBL_MAX,
+                    .std = 0.0f,
+                    .accum = 0.0f,
+                    .op_count = 0},
+    .throughput = 0.0f,
     .bandwidth  = 0.0f};
 
 perf_metric_t Sync_bn_Puts_Gets = {
-    .op_base    = { .max = 0.0f, 
-                    .min = DBL_MAX, 
-                    .std = 0.0f, 
-                    .accum = 0.0f, 
-                    .op_count = 0}, 
-    .throughput = 0.0f, 
+    .op_base    = { .max = 0.0f,
+                    .min = DBL_MAX,
+                    .std = 0.0f,
+                    .accum = 0.0f,
+                    .op_count = 0},
+    .throughput = 0.0f,
     .bandwidth  = 0.0f};
 
 perf_metric_t Gets = {
-    .op_base    = { .max = 0.0f, 
-                    .min = DBL_MAX, 
-                    .std = 0.0f, 
-                    .accum = 0.0f, 
-                    .op_count = 0}, 
-    .throughput = 0.0f, 
+    .op_base    = { .max = 0.0f,
+                    .min = DBL_MAX,
+                    .std = 0.0f,
+                    .accum = 0.0f,
+                    .op_count = 0},
+    .throughput = 0.0f,
     .bandwidth  = 0.0f};
 
 double Begin_All = 0.0f;
@@ -72,15 +72,16 @@ double End = 0.0f;
  *                  STATIC FUNCTIONS                     *
  *                                                       *
  *********************************************************/
-static int 
-kap_init (int *argc, char ***argv, 
+static int
+kap_init (int *argc, char ***argv,
                 kap_personality_t *p, kap_config_t *kc)
 {
-    if ( kap_commfab_init (argc, argv) < 0 ) {
-        fprintf (stderr, 
-            "kap_tester_init failed.\n");
+    int err = kap_commfab_init (argc, argv);
+    if ( err < 0 ) {
+        fprintf (stderr,
+            "kap_tester_init failed with code %d.\n", err);
         return -1;
-    } 
+    }
 
     return 0;
 }
@@ -90,18 +91,18 @@ static void
 fatal ()
 {
     kap_abort ();
-    kap_commfab_fini (); 
+    kap_commfab_fini ();
     exit (1);
 }
 
 
-static void 
+static void
 summarize (kap_params_t *params, perf_metric_t *m, int ao)
 {
     m->throughput = ((double) m->op_base.op_count)
                     / (m->op_base.accum / 1000000.0);
     if (ao) {
-        m->bandwidth = ((double)(m->op_base.op_count) 
+        m->bandwidth = ((double)(m->op_base.op_count)
                          * (double) params->config.value_size)
                     / (m->op_base.accum / 1000000.0);
     }
@@ -112,7 +113,7 @@ summarize (kap_params_t *params, perf_metric_t *m, int ao)
  *                  PUBLIC FUNCTIONS                     *
  *                                                       *
  *********************************************************/
-double 
+double
 now ()
 {
     struct timeval ts;
@@ -124,7 +125,7 @@ now ()
 }
 
 
-void 
+void
 update_metric (perf_metric_t *m, double b, double e)
 {
     double elapse = e - b;
@@ -137,30 +138,30 @@ update_metric (perf_metric_t *m, double b, double e)
     else {
         /*
          * Running std algorithm using Welford's method.
-         */ 
-        double old_M; 
+         */
+        double old_M;
         double old_S;
         m->op_base.op_count++;
         old_M = m->op_base.M;
         old_S = m->op_base.S;
-        m->op_base.M = old_M 
+        m->op_base.M = old_M
             + ((elapse - old_M)/m->op_base.op_count);
-        m->op_base.S = old_S 
+        m->op_base.S = old_S
             + ((elapse - old_M)*(elapse - m->op_base.M));
-        m->op_base.std = sqrt ((m->op_base.S) 
+        m->op_base.std = sqrt ((m->op_base.S)
             / (m->op_base.op_count - 1));
     }
 
     m->op_base.accum += elapse;
-    
-    if (elapse > m->op_base.max) 
-        m->op_base.max = elapse; 
-    if (elapse < m->op_base.min) 
-        m->op_base.min = elapse; 
+
+    if (elapse > m->op_base.max)
+        m->op_base.max = elapse;
+    if (elapse < m->op_base.min)
+        m->op_base.min = elapse;
 }
 
 
-int 
+int
 main (int argc, char *argv[])
 {
     kap_params_t param;
@@ -169,7 +170,7 @@ main (int argc, char *argv[])
         fprintf (stderr, "Failed to parse optionsp.\n");
         goto error;
     }
-    if ( kap_init (&argc, &argv, 
+    if ( kap_init (&argc, &argv,
                     &(param.pers), &(param.config)) < 0 ) {
         fprintf (stderr, "Failed to init KAP.\n");
         goto error;
@@ -202,7 +203,7 @@ main (int argc, char *argv[])
     if (param.pers.role != k_none) {
         Begin_Sync_Phase = now ();
         if ( sync_prod_and_cons (&param) < 0 ) {
-            fprintf (stderr, 
+            fprintf (stderr,
                 "Failed to synchronize between producers "
                 "and consumers.\n");
             goto error;
@@ -211,8 +212,8 @@ main (int argc, char *argv[])
     }
     if ( IS_CONSUMER(param.pers.role) ) {
         Begin_Cons_Phase = now ();
-        if ( (run_consumer (&param) < 0) ) { 
-            fprintf (stderr, 
+        if ( (run_consumer (&param) < 0) ) {
+            fprintf (stderr,
                 "Failed to run consumers\n");
             goto error;
         }
@@ -230,9 +231,9 @@ main (int argc, char *argv[])
     summarize (&param, &Commit_bn_Puts, 0);
     summarize (&param, &Sync_bn_Puts_Gets, 0);
     summarize (&param, &Gets, 1);
-    
+
     kap_commfab_perf_summary (&(param.config),
-                              &(param.pers)); 
+                              &(param.pers));
 
     return EXIT_SUCCESS;
 error:

@@ -319,10 +319,10 @@ kap_commfab_init (int *argc, char ***argv)
         return -1;
     if ( MPI_Comm_rank (MPI_COMM_WORLD, 
             &_tester_rank) != MPI_SUCCESS ) 
-        return -1;
+        return -2;
     if ( MPI_Comm_size (MPI_COMM_WORLD, 
             &_tester_size) != MPI_SUCCESS )
-        return -1;
+        return -3;
 
     if ( (_hndl = flux_api_open ()) == NULL ) {
 
@@ -333,7 +333,7 @@ kap_commfab_init (int *argc, char ***argv)
             }
         }
         if (!_hndl) 
-            return -1;
+            return -4;
     } 
 
     return 0;

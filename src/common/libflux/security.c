@@ -103,7 +103,7 @@
  *
  * Initially we locate .flux in your home directory and load certificates
  * out of it presuming it is pre-shared and trusted.  Of course if it's
- * on NFS it just works, but unless NFS security is used, your private keys 
+ * on NFS it just works, but unless NFS security is used, your private keys
  * are hanging out there for anybody to see, and "trust" may be a little
  * misplaced.
  *
@@ -247,10 +247,10 @@ flux_sec_t flux_sec_create (void)
     int e;
 
     if ((e = pthread_mutex_init (&c->lock, NULL)))
-        errn_exit (e, "pthread_mutex_init"); 
+        errn_exit (e, "pthread_mutex_init");
     c->uid = getuid ();
     c->gid = getgid ();
-    if (getsecdirs (c) < 0) 
+    if (getsecdirs (c) < 0)
         goto error;
     c->typemask = FLUX_SEC_TYPE_MUNGE;
 #if HAVE_ZAUTH
@@ -471,7 +471,11 @@ static int checksecdir (flux_sec_t c, const char *path, bool create)
         }
     }
     if (lstat (path, &sb) < 0) {
-        seterrstr (c, "lstat %s: %s", path, strerror (errno));
+        if (errno == ENOENT) {
+            seterrstr (c, "The directory '%s' does not exist. Have you run `flux keygen`?", path);
+        }else{
+            seterrstr (c, "lstat %s: %s", path, strerror (errno));
+        }
         goto done;
     }
     if (!S_ISDIR (sb.st_mode)) {
