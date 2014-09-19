@@ -96,9 +96,9 @@ int setup_lua_env (const char *exedir)
      *  paths configurable on installation.
      */
     s = getenv ("LUA_CPATH");
-    setenvf ("LUA_CPATH", 1, "%s/dlua/?.so;%s", exedir, s ? s : ";;");
+    setenvf ("LUA_CPATH", 1, "%s/../bindings/lua/.libs/?.so;%s", exedir, s ? s : ";;");
     s = getenv ("LUA_PATH");
-    setenvf ("LUA_PATH", 1, "%s/dlua/?.lua;%s", exedir, s ? s : ";;");
+    setenvf ("LUA_PATH", 1, "%s/../bindings/lua/?.lua;%s", exedir, s ? s : ";;");
     return (0);
 }
 
@@ -110,6 +110,8 @@ int main (int argc, char *argv[])
     char *flux_exe_dir = dir_self ();
 
     log_init ("flux");
+
+    setup_lua_env (flux_exe_dir);
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
