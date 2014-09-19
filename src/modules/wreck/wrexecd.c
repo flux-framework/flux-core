@@ -276,7 +276,9 @@ kz_t task_kz_open (struct task_info *t, int type)
     else
         flags |= KZ_FLAGS_WRITE;
 
-    asprintf (&key, "lwj.%ld.%d.%s", ctx->id, t->globalid, ioname (type));
+    if (asprintf (&key, "lwj.%ld.%d.%s",
+        ctx->id, t->globalid, ioname (type)) < 0)
+        log_fatal (ctx, 1, "task_kz_open: asprintf: %s", strerror (errno));
     if ((kz = kz_open (ctx->flux, key, flags)) == NULL)
         log_fatal (ctx, 1, "kz_open (%s): %s", key, strerror (errno));
     free (key);
@@ -809,12 +811,15 @@ int update_job_state (struct prog_ctx *ctx, const char *state)
 
 int rexec_state_change (struct prog_ctx *ctx, const char *state)
 {
+    int rc;
     char *name;
 
     if (strcmp (state, "running") == 0)
-        asprintf (&name, "lwj.%lu.startup", ctx->id);
+        rc = asprintf (&name, "lwj.%lu.startup", ctx->id);
     else
-        asprintf (&name, "lwj.%lu.shutdown", ctx->id);
+        rc = asprintf (&name, "lwj.%lu.shutdown", ctx->id);
+    if (rc < 0)
+        log_fatal (ctx, 1, "rexec_state_change: asprintf: %s", strerror (errno));
 
     /* Wait for all wrexecds to finish and commit */
     if (kvs_fence (ctx->flux, name, ctx->nnodes) < 0)
@@ -850,7 +855,9 @@ int rexec_taskinfo_put (struct prog_ctx *ctx, int localid)
 
     o = json_task_info_object_create (ctx, ctx->argv [0], t->pid);
 
-    asprintf (&key, "%d.procdesc", t->globalid);
+    if (asprintf (&key, "%d.procdesc", t->globalid) < 0)
+        log_fatal (ctx, 1, "rexec_taskinfo_put: asprintf: %s",
+                    strerror (errno));
 
     rc = kvsdir_put (ctx->kvs, key, o);
     free (key);
