@@ -10,7 +10,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/modules/broker \
 	-I$(top_srcdir)/src/modules/kvs \
 	-I$(top_srcdir)/src/broker \
-	-DWREXECD_BINDIR=\"$(sbindir)\" \
+	-DWREXECD_BINDIR=\"$(libexecdir)/flux\" \
 	-DWRECK_LUA_PATTERN=\"$(sysconfdir)/wreck/lua.d/*.lua\"
 
 libfluxdir = $(libdir)/flux
@@ -29,7 +29,7 @@ fluxmod_LTLIBRARIES = \
 noinst_LTLIBRARIES = \
 	wrexec.la
 
-sbin_PROGRAMS = \
+fluxbin_PROGRAMS = \
 	wrexecd
 
 fluxmod_libadd = \
@@ -55,7 +55,7 @@ wrexec_la_CPPFLAGS = $(AM_CPPFLAGS) -DWREXECD_PATH=\"$(abs_builddir)/wrexecd\"
 wrexecinst_la_SOURCES = wrexec.c
 wrexecinst_la_LDFLAGS = $(fluxmod_ldflags)
 wrexecinst_la_LIBADD = $(fluxmod_libadd)
-wrexecinst_la_CPPFLAGS = $(AM_CPPFLAGS) -DWREXECD_PATH=\"$(sbindir)/wrexecd\"
+wrexecinst_la_CPPFLAGS = $(AM_CPPFLAGS) -DWREXECD_PATH=\"$(fluxbindir)/wrexecd\"
 
 resrc_la_SOURCES = resrc.c
 resrc_la_LDFLAGS = $(fluxmod_ldflags)
