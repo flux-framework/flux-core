@@ -34,7 +34,8 @@ flux_LDADD = \
 dist_fluxcmd_SCRIPTS = \
 	flux-start-srun \
 	flux-start-screen \
-	flux-start-single
+	flux-start-single \
+	flux-wreckrun
 
 fluxcmd_PROGRAMS = \
 	flux-ping \
