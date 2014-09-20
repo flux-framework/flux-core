@@ -26,7 +26,8 @@ Manager Framework.
 %setup
 
 %build
-%configure --program-prefix=%{?_program_prefix:%{_program_prefix}}
+%configure --program-prefix=%{?_program_prefix:%{_program_prefix}} \
+	--disable-static
 make %{?_smp_mflags}
 
 %check
@@ -36,6 +37,8 @@ make check
 rm -rf $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT
 make install DESTDIR=$RPM_BUILD_ROOT
+rm -f $RPM_BUILD_ROOT%{_libdir}/flux/*.la
+rm -f $RPM_BUILD_ROOT%{_libdir}/flux/modules/*.la
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -45,8 +48,8 @@ rm -rf $RPM_BUILD_ROOT
 %doc ChangeLog NEWS DISCLAIMER.LLNS COPYING INSTALL README AUTHORS
 %dir %{_libdir}/flux
 %{_libdir}/flux/*.so.*
-%{_libdir}/flux/modules
-%{_libdir}/flux/modules/*
+%dir %{_libdir}/flux/modules
+%{_libdir}/flux/modules/*.so
 /etc/ld.so.conf.d/*
 %{_libexecdir}/flux
 %{_bindir}/flux
@@ -54,8 +57,6 @@ rm -rf $RPM_BUILD_ROOT
 %files devel
 %defattr(-,root,root)
 %{_includedir}/flux
-%{_libdir}/flux/*.a
-%{_libdir}/flux/*.la
 %{_libdir}/flux/*.so
 %{_libdir}/pkgconfig/*
 
@@ -66,6 +67,9 @@ if [ -x /sbin/ldconfig ]; then /sbin/ldconfig %{_libdir}/flux; fi
 if [ -x /sbin/ldconfig ]; then /sbin/ldconfig %{_libdir}/flux; fi
 
 %changelog
+* Fri Sep 19 2014 Jim Garlick <garlick@llnl.gov> 0.1.0-1
+- Don't package .a and .la files per Fedora guidelines
+
 * Fri Sep 12 2014 Mark A. Grondona <mgrondona@llnl.gov> 0.1.0-1
 - Update License tag to GPLv2+
 - Add _smp_mflags macro to make line
