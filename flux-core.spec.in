@@ -11,6 +11,7 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-root-%(%{__id_u} -n)
 BuildRequires: zeromq4-devel >= 4.0.4 czmq-devel >= 2.2.0
 BuildRequires: munge-devel
 BuildRequires: json-c-devel
+BuildRequires: lua-devel >= 5.1
 
 %description
 
@@ -37,8 +38,7 @@ make check
 rm -rf $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT
 make install DESTDIR=$RPM_BUILD_ROOT
-rm -f $RPM_BUILD_ROOT%{_libdir}/flux/*.la
-rm -f $RPM_BUILD_ROOT%{_libdir}/flux/modules/*.la
+find ${RPM_BUILD_ROOT} -name *.la | while read f; do rm -f $f; done
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -50,6 +50,8 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/flux/*.so.*
 %dir %{_libdir}/flux/modules
 %{_libdir}/flux/modules/*.so
+%{_libdir}/lua/*/*.so
+%{_prefix}/share/lua/*/*.lua
 /etc/ld.so.conf.d/*
 %{_libexecdir}/flux
 %{_bindir}/flux
@@ -67,6 +69,10 @@ if [ -x /sbin/ldconfig ]; then /sbin/ldconfig %{_libdir}/flux; fi
 if [ -x /sbin/ldconfig ]; then /sbin/ldconfig %{_libdir}/flux; fi
 
 %changelog
+* Sat Sep 20 2014 Mark A. Grondona <mgrondona@llnl.gov> 0.1.0-1
+- Package lua modules and scripts
+- Package wreck components: flux-wreckrun, wrexecd, and assoc. modules
+
 * Fri Sep 19 2014 Jim Garlick <garlick@llnl.gov> 0.1.0-1
 - Don't package .a and .la files per Fedora guidelines
 
