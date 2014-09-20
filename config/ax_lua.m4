@@ -313,7 +313,7 @@ AC_DEFUN([AX_PROG_LUA],
           [ax_lua_exec_prefix=$exec_prefix])
 
         dnl Initialize to the default path.
-        ax_cv_lua_luaexecdir="$LUA_EXEC_PREFIX/lib/lua/$LUA_VERSION"
+        ax_cv_lua_luaexecdir="$LUA_EXEC_PREFIX/lib64/lua/$LUA_VERSION"
 
         dnl Try to find a path with the prefix.
         _AX_LUA_FND_PRFX_PTH([$LUA],
