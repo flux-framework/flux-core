@@ -524,7 +524,7 @@ static void commit_unroll (ctx_t *ctx, json_object *dir)
         free (refcpy);
         free (key);
     }
-    zlist_destroy (&keys); 
+    zlist_destroy (&keys);
     zhash_destroy (&new);
 }
 
@@ -976,7 +976,7 @@ static bool walk (ctx_t *ctx, json_object *root, const char *path,
         }
     }
     free (cpy);
-    *direntp = dirent;    
+    *direntp = dirent;
     return true;
 error:
     free (cpy);
@@ -1366,7 +1366,7 @@ static void commit_respond (ctx_t *ctx, zmsg_t **zmsg, const char *sender,
     json_object *response = util_json_object_new_object ();
 
     FASSERT (ctx->h, *zmsg != NULL);
-    
+
     util_json_object_add_string (response, "sender", sender);
     if (rootdir) {
         util_json_object_add_int (response, "rootseq", rootseq);
