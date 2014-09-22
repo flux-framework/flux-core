@@ -25,24 +25,14 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <stdio.h>
-#include <assert.h>
-#include <stdlib.h>
-#include <string.h>
 #include <errno.h>
-#include <getopt.h>
-#include <libgen.h>
 #include <stdbool.h>
-#include <stdarg.h>
-#include <json.h>
-#include <czmq.h>
 
 #include "info.h"
 #include "request.h"
 
-#include "src/common/libutil/log.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/xzmalloc.h"
 
 char *flux_getattr (flux_t h, int rank, const char *name)
 {

@@ -25,7 +25,6 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-
 #include "panic.h"
 #include "request.h"
 #include "flog.h"

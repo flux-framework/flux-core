@@ -121,7 +121,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <getopt.h>
-#include <assert.h>
 #include <libgen.h>
 #include <munge.h>
 #include <json.h>

@@ -25,15 +25,11 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-
 #include "request.h"
 #include "message.h"
 
-#include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/zdump.h"
 #include "src/common/libutil/jsonutil.h"
-#include "src/common/libutil/xzmalloc.h"
 
 
 int flux_request_send (flux_t h, json_object *request, const char *fmt, ...)

@@ -25,17 +25,10 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <stdio.h>
 #include <assert.h>
-#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <libgen.h>
-#include <unistd.h>
 #include <stdbool.h>
-#include <stdarg.h>
-#include <json.h>
-#include <czmq.h>
 #include <fnmatch.h>
 
 #include "handle_impl.h"
@@ -44,7 +37,6 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/zdump.h"
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
 
 

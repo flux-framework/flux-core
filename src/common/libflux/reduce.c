@@ -25,19 +25,6 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <stdio.h>
-#include <assert.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <getopt.h>
-#include <libgen.h>
-#include <stdbool.h>
-#include <sys/time.h>
-#include <ctype.h>
-#include <czmq.h>
-#include <json.h>
-
 #include "reduce.h"
 #include "reactor.h"
 

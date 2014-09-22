@@ -25,24 +25,14 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <stdio.h>
-#include <zmq.h>
-#include <czmq.h>
 #include <errno.h>
-#include <stdlib.h>
-#include <stdint.h>
 #include <stdbool.h>
-#include <stdarg.h>
 #include <string.h>
-#include <sys/time.h>
-#include <json.h>
-#include <assert.h>
 
 #include "message.h"
 
-#include "src/common/libutil/log.h"
 #include "src/common/libutil/jsonutil.h"
-#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/log.h"
 
 
 int flux_msg_hopcount (zmsg_t *zmsg)
