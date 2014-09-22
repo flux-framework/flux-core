@@ -35,7 +35,8 @@ A Flux comms session can be started for testing as follows.
 First, ensure that your MUNGE deamon is running, and
 generate a set of (personal) CURVE keys for session security:
 ```
-flux keygen
+cd src/cmd
+./flux keygen
 Saving $HOME/.flux/curve/client
 Saving $HOME/.flux/curve/client_private
 Saving $HOME/.flux/curve/server
@@ -84,6 +85,7 @@ Log output will be written to the file `cmbd.log`.
 
 To start a Flux comms session (size = 64) on a cluster using SLURM:
 ```
+cd src/cmd
 ./flux start-srun -N 64
 ```
 The srun --pty option is used to connect to the rank 0 shell.
@@ -94,5 +96,6 @@ Log output will be written to the file `cmbd.log`.
 
 To view the available Flux commands:
 ```
-flux -h
+cd src/cmd
+./flux -h
 ```
