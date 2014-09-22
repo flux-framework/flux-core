@@ -25,27 +25,14 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <stdio.h>
-#include <assert.h>
-#include <stdlib.h>
-#include <string.h>
 #include <errno.h>
-#include <getopt.h>
-#include <libgen.h>
 #include <stdbool.h>
-#include <stdarg.h>
-#include <json.h>
-#include <czmq.h>
 
 #include "event.h"
 #include "message.h"
 #include "request.h"
 
-#include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/zdump.h"
-#include "src/common/libutil/jsonutil.h"
-#include "src/common/libutil/xzmalloc.h"
 
 int flux_event_recv (flux_t h, json_object **respp, char **tagp, bool nb)
 {

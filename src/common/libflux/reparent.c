@@ -29,8 +29,6 @@
 #include "reparent.h"
 #include "request.h"
 
-#include "src/common/libutil/log.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shortjson.h"
 
 
