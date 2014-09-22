@@ -199,14 +199,7 @@ Jtostr (JSON o)
 static __inline__ JSON
 Jfromstr (const char *s)
 {
-    struct json_tokener *tok;
-    JSON o = NULL;
-
-    if (!(tok = json_tokener_new ()))
-        oom ();
-    o = json_tokener_parse_ex (tok, s, strlen (s));
-    json_tokener_free (tok);
-    return o;
+    return json_tokener_parse (s);
 }
 
 static __inline__ void
