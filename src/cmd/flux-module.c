@@ -52,7 +52,7 @@ void usage (void)
 {
     fprintf (stderr,
 "Usage: flux-module list\n"
-"       flux-module remove|rm module [module...]\n"
+"       flux-module remove module\n"
 "       flux-module load module [arg=val...]\n"
 );
     exit (1);
@@ -83,9 +83,9 @@ int main (int argc, char *argv[])
     if (!(h = flux_api_open ()))
         err_exit ("flux_api_open");
 
-    if (!strcmp (cmd, "list"))
+    if (!strcmp (cmd, "list") || !strcmp (cmd, "ls"))
         module_list (h, argc - optind, argv + optind);
-    else if (!strcmp (cmd, "rm") || !strcmp (cmd, "remove"))
+    else if (!strcmp (cmd, "remove") || !strcmp (cmd, "rm"))
         module_remove (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "load"))
         module_load (h, argc - optind, argv + optind);
@@ -160,23 +160,21 @@ static void module_list (flux_t h, int argc, char **argv)
 
 static void module_remove (flux_t h, int argc, char **argv)
 {
-    int i;
-    char *key;
+    char *key, *mod;
 
-    if (argc == 0)
+    if (argc != 1)
        usage ();
-    for (i = 0; i < argc; i++) {
-        if (asprintf (&key, "conf.modctl.modules.%s", argv[i]) < 0)
-            oom ();
-        if (kvs_unlink (h, key) < 0)
-            err_exit ("%s", key);
-        if (kvs_commit (h) < 0)
-            err_exit ("kvs_commit");
-        if (flux_modctl_rm (h, argv[i]) < 0)
-            err_exit ("%s", argv[i]);
-        msg ("%s: unloaded", argv[i]);
-        free (key);
-    }
+    mod = argv[0];
+    if (asprintf (&key, "conf.modctl.modules.%s", mod) < 0)
+        oom ();
+    if (kvs_unlink (h, key) < 0)
+        err_exit ("%s", key);
+    if (kvs_commit (h) < 0)
+        err_exit ("kvs_commit");
+    if (flux_modctl_rm (h, mod) < 0)
+        err_exit ("%s", mod);
+    msg ("%s: unloaded", mod);
+    free (key);
 }
 
 static JSON parse_modargs (int argc, char **argv)
