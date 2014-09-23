@@ -20,8 +20,7 @@
 -- WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 local type, pairs, ipairs, io, os = type, pairs, ipairs, io, os
-
-module ("alt_getopt")
+local M = {}
 
 local function convert_short2long (opts)
    local i = 1
@@ -61,7 +60,7 @@ local function canonize (options, opt)
    return opt
 end
 
-function get_ordered_opts (arg, sh_opts, long_opts)
+local function get_ordered_opts (arg, sh_opts, long_opts)
    local i      = 1
    local count  = 1
    local opts   = {}
@@ -150,7 +149,7 @@ function get_ordered_opts (arg, sh_opts, long_opts)
    return opts,i,optarg
 end
 
-function get_opts (arg, sh_opts, long_opts)
+function M.get_opts (arg, sh_opts, long_opts)
    local ret = {}
 
    local opts,optind,optarg = get_ordered_opts (arg, sh_opts, long_opts)
@@ -164,3 +163,5 @@ function get_opts (arg, sh_opts, long_opts)
 
    return ret,optind
 end
+
+return M
