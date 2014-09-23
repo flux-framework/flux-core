@@ -11,7 +11,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/modules/kvs \
 	-I$(top_srcdir)/src/broker \
 	-DWREXECD_BINDIR=\"$(sbindir)\" \
-	-DWREXECD_PATH=\"$(abs_builddir)/wrexecd\" \
 	-DWRECK_LUA_PATTERN=\"$(sysconfdir)/wreck/lua.d/*.lua\"
 
 libfluxdir = $(libdir)/flux
@@ -23,11 +22,14 @@ includefluxcoredir = $(includedir)/flux/core
 # Comms module
 #
 fluxmod_LTLIBRARIES = \
-	wrexec.la \
 	job.la \
-	resrc.la
+	resrc.la \
+	wrexecinst.la
 
-fluxbin_PROGRAMS = \
+noinst_LTLIBRARIES = \
+	wrexec.la
+
+sbin_PROGRAMS = \
 	wrexecd
 
 fluxmod_libadd = \
@@ -39,7 +41,7 @@ fluxmod_libadd = \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 
 fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
-	-export-symbols-regex '^mod_(main|name)$$'
+	-export-symbols-regex '^mod_(main|name)$$' -rpath  /dev/null
 
 job_la_SOURCES = job.c
 job_la_LDFLAGS = $(fluxmod_ldflags)
@@ -48,6 +50,12 @@ job_la_LIBADD = $(fluxmod_libadd)
 wrexec_la_SOURCES = wrexec.c
 wrexec_la_LDFLAGS = $(fluxmod_ldflags)
 wrexec_la_LIBADD = $(fluxmod_libadd)
+wrexec_la_CPPFLAGS = $(AM_CPPFLAGS) -DWREXECD_PATH=\"$(abs_builddir)/wrexecd\"
+
+wrexecinst_la_SOURCES = wrexec.c
+wrexecinst_la_LDFLAGS = $(fluxmod_ldflags)
+wrexecinst_la_LIBADD = $(fluxmod_libadd)
+wrexecinst_la_CPPFLAGS = $(AM_CPPFLAGS) -DWREXECD_PATH=\"$(sbindir)/wrexecd\"
 
 resrc_la_SOURCES = resrc.c
 resrc_la_LDFLAGS = $(fluxmod_ldflags)
@@ -68,3 +76,14 @@ wrexecd_LDADD = \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LUA_LIB)
+
+install-data-hook:
+	-(cd $(DESTDIR)$(fluxmoddir) && \
+	  for f in wrexecinst*; do \
+	    mv $$f `echo $$f | sed 's/inst//'`; \
+	  done;)
+
+# XXX: Hack below to force rebuild of unbuilt wrexecd dependencies
+#
+$(wrexecd_LDADD):
+	@cd `dirname $@` && $(MAKE) `basename $@`
