@@ -179,49 +179,6 @@ static void module_remove (flux_t h, int argc, char **argv)
     }
 }
 
-static char *modname (const char *path)
-{
-    void *dso;
-    char *s = NULL;
-    const char **np;
-
-    dlerror ();
-    if (!(dso = dlopen (path, RTLD_NOW | RTLD_LOCAL))) {
-        msg ("%s", dlerror ());
-        goto done;
-    }
-    if (!(np = dlsym (dso, "mod_name")) || !*np) {
-        msg ("%s: mod_name undefined", path);
-        goto done;
-    }
-    s = xstrdup (*np);
-done:
-    if (dso)
-        dlclose (dso);
-    return s;
-}
-
-static char *modfind (const char *modpath, const char *name)
-{
-    char *cpy = xstrdup (modpath);
-    char *path = NULL, *dir, *saveptr = NULL, *a1 = cpy;
-    char *ret = NULL;
-
-    while (!ret && (dir = strtok_r (a1, ":", &saveptr))) {
-        if (asprintf (&path, "%s/%s.so", dir, name) < 0)
-            oom ();
-        if (access (path, R_OK|X_OK) < 0)
-            free (path);
-        else
-            ret = path;
-        a1 = NULL;
-    }
-    free (cpy);
-    if (!ret)
-        errno = ENOENT;
-    return ret;
-}
-
 static JSON parse_modargs (int argc, char **argv)
 {
     JSON args = Jnew ();
@@ -270,21 +227,27 @@ static void copymod (flux_t h, const char *name, const char *path, JSON args)
 static void module_load (flux_t h, int argc, char **argv)
 {
     JSON args;
-    char *path, *trypath = NULL;
-    char *name;
-    char *modpath = getenv ("FLUX_MODULE_PATH");
+    char *path, *name;
+    char *searchpath = getenv ("FLUX_MODULE_PATH");
+
+    if (!searchpath)
+        searchpath = MODULE_PATH;
 
     if (argc == 0)
        usage ();
-    path = argv[0];
-    if (access (path, R_OK|X_OK) < 0) {
-        if (!(trypath = modfind (modpath ? modpath : MODULE_PATH, path)))
-            errn_exit (ENOENT, "%s", path);
-        path = trypath;
+    if (access (argv[0], R_OK | X_OK) == 0) {   /* path name given */
+        path = xstrdup (argv[0]);
+        if (!(name = flux_modname (path)))
+            exit (1);
+    } else {                                    /* module name given */
+        name = xstrdup (argv[0]);
+        if (!(path = flux_modfind (searchpath, name)))
+            errn_exit (ENOENT, "%s", name);
     }
-    if (!(name = modname (path)))
-        exit (1);
-    args = parse_modargs (argc - 1, argv + 1);
+    argc--;
+    argv++;
+
+    args = parse_modargs (argc, argv);
     copymod (h, name, path, args);
     if (kvs_commit (h) < 0)
         err_exit ("kvs_commit");
@@ -292,10 +255,9 @@ static void module_load (flux_t h, int argc, char **argv)
         err_exit ("flux_modctl_ins %s", name);
     msg ("module loaded");
 
-    free (name);
     Jput (args);
-    if (trypath)
-        free (trypath);
+    free (name);
+    free (path);
 }
 
 /*
