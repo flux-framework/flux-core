@@ -47,10 +47,11 @@
 #include <czmq.h>
 #include <json/json.h>
 
-#include "zmsg.h"
-#include "log.h"
-#include "util.h"
-#include "plugin.h"
+#include <flux/core.h>
+
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/jsonutil.h"
+#include "src/modules/kvs/kvs.h"
 
 static void _store_hosts (flux_t h)
 {

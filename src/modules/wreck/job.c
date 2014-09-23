@@ -31,10 +31,10 @@
 #include <inttypes.h>
 #include <json/json.h>
 
-#include "zmsg.h"
-#include "log.h"
-#include "util.h"
-#include "plugin.h"
+#include <flux/core.h>
+
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/jsonutil.h"
 
 #if 0
 zlist_t * kvs_jobid_list (plugin_ctx_t *p)
@@ -203,7 +203,7 @@ static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     json_object *o = NULL;
     char *tag;
 
-    if (cmb_msg_decode (*zmsg, &tag, &o) >= 0) {
+    if (flux_msg_decode (*zmsg, &tag, &o) >= 0) {
         if (strcmp (tag, "job.next-id") == 0) {
             if (flux_treeroot (h)) {
                 unsigned long id = lwj_next_id (h);

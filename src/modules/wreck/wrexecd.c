@@ -41,19 +41,22 @@
 #include <lua.h>
 #include <lauxlib.h>
 
+#include <flux/core.h>
 
-#include "rexec-config.h"   /* For REXECD_LUA */
-#include "util/optparse.h"
-#include "util/util.h"
-#include "util/zmsg.h"
-#include "cmb.h"
+
+#include "src/common/libutil/optparse.h"
+#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/zconnect.h"
+#include "src/modules/kvs/kvs.h"
+#include "src/modules/api/api.h"
 
 #include "luastack.h"
-#include "dlua/lutil.h"
-#include "dlua/kvs-lua.h"
-#include "dlua/flux-lua.h"
-#include "zutil/zio.h"
-#include "zutil/kz.h"
+#include "src/bindings/lua/lutil.h"
+#include "src/bindings/lua/kvs-lua.h"
+#include "src/bindings/lua/flux-lua.h"
+#include "src/common/libzio/zio.h"
+#include "src/common/libzio/kz.h"
 
 enum { IN=0, OUT, ERR, NR_IO };
 const char *ionames [] = { "stdin", "stdout", "stderr" };
@@ -138,7 +141,7 @@ static flux_t prog_ctx_flux_handle (struct prog_ctx *ctx)
     t = prog_ctx_current_task (ctx);
     if (!t->f) {
         char name [128];
-        t->f = cmb_init ();
+        t->f = flux_api_open ();
         snprintf (name, sizeof (name) - 1, "lwj.%ld.%d", ctx->id, t->globalid);
         flux_log_set_facility (t->f, name);
     }
@@ -388,7 +391,7 @@ static char * ctime_iso8601_now (char *buf, size_t sz)
  */
 int rexec_send_msg (struct prog_ctx *ctx, char *tag, json_object *o)
 {
-    zmsg_t *zmsg = cmb_msg_encode (tag, o);
+    zmsg_t *zmsg = flux_msg_encode (tag, o);
     if (!zmsg)
         return (-1);
     zmsg_dump (zmsg);
@@ -667,7 +670,7 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
     /*
      * Connect to CMB over api socket
      */
-    if (!(ctx->flux = cmb_init ()))
+    if (!(ctx->flux = flux_api_open ()))
         log_fatal (ctx, 1, "cmb_init");
 
     snprintf (name, sizeof (name) - 1, "lwj.%ld", ctx->id);
@@ -1422,7 +1425,7 @@ int cmb_cb (flux_t f, void *zs, short revents, struct prog_ctx *ctx)
     }
     free (zmsg_popstr (zmsg)); /* Destroy dealer id */
 
-    if (cmb_msg_decode (zmsg, &tag, &o) < 0) {
+    if (flux_msg_decode (zmsg, &tag, &o) < 0) {
         log_err (ctx, "cmb_msg_decode");
         return (0);
     }

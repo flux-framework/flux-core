@@ -32,12 +32,14 @@
 #include <json/arraylist.h>
 #include <uuid/uuid.h>
 
-#include "util/zmsg.h"
-#include "util/log.h"
-#include "util/util.h"
-#include "plugin.h"
+#include <flux/core.h>
 
-#include "rexec-config.h"  /* For REXECD_PATH */
+#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/zconnect.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libmrpc/mrpc.h"
+
 
 struct rexec_ctx {
     int nodeid;
@@ -348,7 +350,8 @@ static int rexec_session_kill (struct rexec_session *s, int sig)
 {
     int rc;
     json_object *o = json_object_new_int (sig);
-    zmsg_t * zmsg = cmb_msg_encode ("rexec.kill", o);
+    zmsg_t * zmsg = flux_msg_encode ("rexec.kill", o);
+
     zmsg_dump (zmsg);
 
     rc = zmsg_send (&zmsg, s->zs_req);
@@ -386,7 +389,7 @@ static int mrpc_handler (struct rexec_ctx *ctx, zmsg_t *zmsg)
     flux_t f = ctx->h;
     flux_mrpc_t mrpc;
 
-    cmb_msg_decode (zmsg, NULL, &request);
+    flux_msg_decode (zmsg, NULL, &request);
 
     mrpc = flux_mrpc_create_fromevent (f, request);
     if (mrpc == NULL) {
@@ -460,7 +463,7 @@ int lwj_targets_this_node (struct rexec_ctx *ctx, int64_t id)
 static int event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     struct rexec_ctx *ctx = arg;
-    char *tag = cmb_msg_tag (*zmsg, false);
+    char *tag = flux_msg_tag (*zmsg);
     if (strncmp (tag, "rexec.run", 9) == 0) {
         int64_t id = id_from_tag (tag + 10, NULL);
         if (id < 0)
@@ -491,7 +494,7 @@ static int request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     json_object *o;
     char *tag;
 
-    if (cmb_msg_decode (*zmsg, &tag, &o) >= 0) {
+    if (flux_msg_decode (*zmsg, &tag, &o) >= 0) {
         msg ("forwarding %s to session", tag);
         fwd_to_session (ctx, zmsg, o);
     }

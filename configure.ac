@@ -126,6 +126,7 @@ AC_CONFIG_FILES( \
   src/modules/live/Makefile \
   src/modules/mecho/Makefile \
   src/modules/barrier/Makefile \
+  src/modules/wreck/Makefile \
   src/test/Makefile \
   src/test/kap/Makefile \
 )
