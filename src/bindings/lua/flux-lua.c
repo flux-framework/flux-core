@@ -35,18 +35,17 @@
 
 #include <json/json.h>
 
-#include "cmb.h"
-#include "flux.h"
-#include "mrpc.h"
-#include "reactor.h"
+#include "flux/core.h"
+
+#include "src/common/libutil/jsonutil.h"
+#include "src/common/libmrpc/mrpc.h"
+#include "src/common/libzio/zio.h"
+#include "src/common/libzio/kz.h"
 
 #include "json-lua.h"
 #include "kvs-lua.h"
 #include "zmsg-lua.h"
 #include "lutil.h"
-#include "util/util.h"
-#include "zutil/zio.h"
-#include "zutil/kz.h"
 
 /*
  *  Create a table in the registry referencing the flux userdata
@@ -212,7 +211,7 @@ static int l_flux_destroy (lua_State *L)
 
 static int l_flux_new (lua_State *L)
 {
-    flux_t f = cmb_init ();
+    flux_t f = flux_api_open ();
     if (f == NULL)
         return lua_pusherror (L, strerror (errno));
     return (lua_push_flux_handle (L, f));
@@ -238,6 +237,7 @@ static int l_flux_kvsdir_new (lua_State *L)
     return l_push_kvsdir (L, dir);
 }
 
+#if 0
 static int l_flux_barrier (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
@@ -245,6 +245,7 @@ static int l_flux_barrier (lua_State *L)
     int nprocs = luaL_checkinteger (L, 3);
     return (l_pushresult (L, flux_barrier (f, name, nprocs)));
 }
+#endif
 
 static int l_flux_rank (lua_State *L)
 {
@@ -1225,7 +1226,7 @@ static const struct luaL_Reg flux_methods [] = {
     { "__gc",            l_flux_destroy     },
     { "__index",         l_flux_index       },
     { "kvsdir",          l_flux_kvsdir_new  },
-    { "barrier",         l_flux_barrier     },
+//    { "barrier",         l_flux_barrier     },
     { "send",            l_flux_send        },
     { "recv",            l_flux_recv        },
     { "rpc",             l_flux_rpc         },

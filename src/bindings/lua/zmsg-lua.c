@@ -32,8 +32,8 @@
 
 #include <json/json.h>
 
-#include "util/util.h"
-#include "util/zmsg.h"
+#include "flux/core.h"
+#include "src/common/libutil/jsonutil.h"
 #include "lutil.h"
 #include "json-lua.h"
 #include "zmsg-lua.h"
@@ -60,7 +60,7 @@ struct zmsg_info * zmsg_info_create (zmsg_t **zmsg, int typemask)
     if (zi == NULL)
         return (NULL);
 
-    if (cmb_msg_decode (*zmsg, &zi->tag, &zi->o) < 0) {
+    if (flux_msg_decode (*zmsg, &zi->tag, &zi->o) < 0) {
         free (zi);
         return (NULL);
     }

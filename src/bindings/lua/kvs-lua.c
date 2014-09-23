@@ -35,7 +35,7 @@
 
 #include <json/json.h>
 
-#include "cmb.h"
+#include "flux/core.h"
 
 #include "json-lua.h"
 #include "lutil.h"

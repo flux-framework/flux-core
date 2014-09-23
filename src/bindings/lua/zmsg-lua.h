@@ -5,7 +5,7 @@
 #include <zmq.h>
 #include <json/json.h>
 
-#include "flux.h"
+#include "flux/core.h"
 
 struct zmsg_info;
 

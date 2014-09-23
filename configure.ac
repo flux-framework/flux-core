@@ -114,6 +114,8 @@ AC_CONFIG_FILES( \
   src/lib/libcore/flux-core.pc \
   src/lib/libcore/flux-libs.conf \
   src/lib/libpmi/Makefile \
+  src/bindings/Makefile \
+  src/bindings/lua/Makefile \
   src/broker/Makefile \
   src/cmd/Makefile \
   src/include/flux/Makefile \

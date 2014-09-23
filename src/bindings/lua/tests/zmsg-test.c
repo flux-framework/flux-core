@@ -34,8 +34,7 @@
 
 #include <json/json.h>
 
-#include "util/util.h"
-#include "util/zmsg.h"
+#include "flux/core.h"
 #include "json-lua.h"
 #include "zmsg-lua.h"
 #include "lutil.h"
@@ -50,7 +49,7 @@ zmsg_t *l_cmb_zmsg_encode (lua_State *L)
 	if ((o == NULL) || (tag == NULL))
 		return NULL;
 
-    return (cmb_msg_encode ((char *)tag, o));
+    return (flux_msg_encode ((char *)tag, o));
 }
 
 static int l_zi_resp_cb (lua_State *L,
@@ -60,7 +59,7 @@ static int l_zi_resp_cb (lua_State *L,
     zmsg_t **zmsg = malloc (sizeof (*zmsg));
     *zmsg = zmsg_dup (*old);
 
-    if (cmb_msg_replace_json (*zmsg, resp) < 0)
+    if (flux_msg_replace_json (*zmsg, resp) < 0)
         return lua_pusherror (L, "cmb_msg_replace_json: %s", strerror (errno));
 
     return lua_push_zmsg_info (L, zmsg_info_create (zmsg, FLUX_MSGTYPE_RESPONSE));

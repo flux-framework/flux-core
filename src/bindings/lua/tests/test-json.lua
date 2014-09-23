@@ -2,7 +2,6 @@
 
 require 'lunit'
 
-package.cpath = "../?.so"
 local j = require 'jsontest'
 
 module ("TestJsonLua", lunit.testcase, package.seeall)

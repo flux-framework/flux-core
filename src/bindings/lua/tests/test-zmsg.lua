@@ -2,7 +2,6 @@
 
 require 'lunit'
 
-package.cpath = "../?.so"
 local z = require 'zmsgtest'
 
 module ("TestZMSGLua", lunit.testcase, package.seeall)
