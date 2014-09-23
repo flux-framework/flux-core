@@ -73,8 +73,8 @@ local function fake_resource_array (wreck, nnodes)
     local total = 0
     local ppn = wreck.tasks_per_node or (wreck.ntasks / nnodes)
     for i = 0, nnodes - 1 do
-        local n = ppn
-        if (total + ppn) > wreck.ntasks then
+        local n = tonumber (ppn)
+        if (total + ppn) > tonumber (wreck.ntasks) then
             n = wreck.ntasks - total
         end
         res[i] = { cores = n }
@@ -109,12 +109,13 @@ local function alloc_tasks_hack (f, wreck, lwj)
         end
     end
 
+    wreck.ntasks = tonumber (wreck.ntasks)
     wreck:say ("Allocating %d tasks across %d available nodes..\n",
                 wreck.ntasks, size)
 
     for i = 0, size-1 do
         local key = "rank."..i..".cores"
-        local n = res[i].cores
+        local n = tonumber (res[i].cores)
         if (total + n) > wreck.ntasks then
            n = wreck.ntasks - total
         end
