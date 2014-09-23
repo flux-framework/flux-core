@@ -3,7 +3,9 @@ AM_CPPFLAGS =	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 		$(LUA_INCLUDE) $(JSON_CFLAGS)
 
 lua_SCRIPTS = \
-	wreck.lua
+	wreck.lua \
+	timer.lua \
+	alt_getopt.lua
 
 luaexec_LTLIBRARIES = \
 	flux.la
