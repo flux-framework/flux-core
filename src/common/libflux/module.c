@@ -43,6 +43,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/xzmalloc.h"
 
 
 int flux_rmmod (flux_t h, int rank, const char *name, int flags)
@@ -96,6 +97,63 @@ done:
     Jput (request);
     Jput (response);
     return rc;
+}
+
+#include <glob.h>
+#include <dlfcn.h>
+
+char *flux_modname(const char *path)
+{
+    void *dso;
+    const char **np;
+    char *name = NULL;
+
+    dlerror ();
+    if ((dso = dlopen (path, RTLD_NOW | RTLD_LOCAL))) {
+        if ((np = dlsym (dso, "mod_name")) && *np)
+            name = xstrdup (*np);
+        dlclose (dso);
+    }
+    return name;
+}
+
+static char *modfind (const char *dirpath, const char *modname)
+{
+    glob_t gl;
+    char *globstr;
+    int i;
+    char *modpath = NULL;
+
+    if (asprintf (&globstr, "%s/*.so", dirpath) < 0)
+        oom ();
+    if (glob (globstr, 0, NULL, &gl) == 0) {
+        for (i = 0; i < gl.gl_pathc && !modpath; i++) {
+            char *name = flux_modname (gl.gl_pathv[i]);
+            if (!strcmp (name, modname))
+                modpath = xstrdup (gl.gl_pathv[i]);
+            free (name);
+        }
+        globfree (&gl);
+    }
+    free (globstr);
+    return modpath;
+}
+
+char *flux_modfind (const char *searchpath, const char *modname)
+{
+    char *cpy = xstrdup (searchpath);
+    char *dirpath, *saveptr = NULL, *a1 = cpy;
+    char *modpath = NULL;
+
+    while ((dirpath = strtok_r (a1, ":", &saveptr))) {
+        if ((modpath = modfind (dirpath, modname)))
+            break;
+        a1 = NULL;
+    }
+    free (cpy);
+    if (!modpath)
+        errno = ENOENT;
+    return modpath;
 }
 
 /*
