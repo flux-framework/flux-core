@@ -122,7 +122,7 @@ function wreck:getopt (opt)
 end
 
 function wreck:parse_cmdline (arg)
-    local getopt = require 'alt_getopt' .get_opts
+    local getopt = require 'flux-lua.alt_getopt' .get_opts
     local s = short_opts (self)
     local v = opt_table (self)
     self.opts, self.optind = getopt (arg, s, v)

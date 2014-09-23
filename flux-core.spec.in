@@ -52,6 +52,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/flux/modules/*.so
 %{_libdir}/lua/*/*.so
 %{_prefix}/share/lua/*/*.lua
+%{_prefix}/share/lua/*/flux-lua/*.lua
 /etc/ld.so.conf.d/*
 %{_libexecdir}/flux
 %{_bindir}/flux

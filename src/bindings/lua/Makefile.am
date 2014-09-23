@@ -2,10 +2,14 @@ AM_CFLAGS =	@GCCWARN@
 AM_CPPFLAGS =	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 		$(LUA_INCLUDE) $(JSON_CFLAGS)
 
+fluxluadir = $(luadir)/flux-lua
+
 lua_SCRIPTS = \
-	wreck.lua \
-	timer.lua \
-	alt_getopt.lua
+	wreck.lua
+
+fluxlua_SCRIPTS = \
+	flux-lua/timer.lua \
+	flux-lua/alt_getopt.lua
 
 luaexec_LTLIBRARIES = \
 	flux.la

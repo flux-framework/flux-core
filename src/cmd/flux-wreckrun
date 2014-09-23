@@ -4,7 +4,7 @@
 -- Modules:
 ------------------------------------------------------------------------------- local posix = require 'posix'
 local flux = require 'flux'
-local timer = require 'timer'
+local timer = require 'flux-lua.timer'
 
 local prog = string.match (arg[0], "([^/]+)$")
 local shortprog = prog:match ("flux%-(.+)$")
