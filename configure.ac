@@ -118,7 +118,6 @@ AC_CONFIG_FILES( \
   src/bindings/lua/Makefile \
   src/broker/Makefile \
   src/cmd/Makefile \
-  src/include/flux/Makefile \
   src/modules/Makefile \
   src/modules/api/Makefile \
   src/modules/kvs/Makefile \
