@@ -1,6 +1,0 @@
-{ global:
-    rdllib_*;
-    rdl_*;
-    local: *;
-};
-
