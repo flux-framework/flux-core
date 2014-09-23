@@ -6,8 +6,6 @@
 #define REQUEST_URI         "inproc://request"
 #define EVENT_URI           "inproc://event"
 
-char *plugin_getstring (const char *path, const char *name);
-
 /* Create, start, stop, destroy a plugin.
  * Termination:  plugin_stop (), read EOF on sock, plugin_destroy ()
  */

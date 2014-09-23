@@ -104,7 +104,7 @@ typedef struct {
     char *sid;                  /* session id */
     /* Plugins
      */
-    char *module_path;          /* colon-separated list of directories */
+    char *module_searchpath;    /* colon-separated list of directories */
     zhash_t *modules;           /* hash of module_t's by name */
     /* Misc
      */
@@ -264,9 +264,9 @@ int main (int argc, char *argv[])
     ctx.k_ary = 2; /* binary TBON is default */
 
     ctx.pid = getpid();
-    ctx.module_path = getenv ("FLUX_MODULE_PATH");
-    if (!ctx.module_path)
-        ctx.module_path = MODULE_PATH;
+    ctx.module_searchpath = getenv ("FLUX_MODULE_PATH");
+    if (!ctx.module_searchpath)
+        ctx.module_searchpath = MODULE_PATH;
     ctx.heartrate = dfl_heartrate;
     ctx.shutdown_tid = -1;
 
@@ -311,7 +311,7 @@ int main (int argc, char *argv[])
                 Mopt = optarg;
                 break;
             case 'X':   /* --module-path PATH */
-                ctx.module_path = optarg;
+                ctx.module_searchpath = optarg;
                 break;
             case 'L':   /* --logdest DEST */
                 log_set_dest (optarg);
@@ -422,7 +422,7 @@ int main (int argc, char *argv[])
     /* Prepare to load modues.
      */
     if (ctx.verbose)
-        msg ("module-path: %s", ctx.module_path);
+        msg ("module-path: %s", ctx.module_searchpath);
     //module_prepare (&ctx, "api,modctl,kvs[0]");
     module_prepare (&ctx, "api,modctl,kvs,live");
     if (Mopt)
@@ -669,35 +669,6 @@ static void boot_local (ctx_t *ctx)
                                tmpdir, ctx->sid, rrank);
 }
 
-static bool checkpath (const char *path, const char *name)
-{
-    char *pname = plugin_getstring (path, "mod_name");
-    bool res = (pname && !strcmp (name, pname));
-    free (pname);
-    return res;
-}
-
-static char *modfind (const char *modpath, const char *name)
-{
-    char *cpy = xstrdup (modpath);
-    char *path = NULL, *dir, *saveptr, *a1 = cpy;
-    char *ret = NULL;
-
-    while (!ret && (dir = strtok_r (a1, ":", &saveptr))) {
-        if (asprintf (&path, "%s/%s.so", dir, name) < 0)
-            oom ();
-        if (!checkpath (path, name))
-            free (path);
-        else
-            ret = path;
-        a1 = NULL;
-    }
-    free (cpy);
-    if (!ret)
-        errno = ENOENT;
-    return ret;
-}
-
 static module_t *module_create (ctx_t *ctx, const char *path, int flags)
 {
     module_t *mod = xzmalloc (sizeof (*mod));
@@ -791,20 +762,30 @@ static bool module_select (module_t *mod, const char *nstr)
     return nodeset_add_str (mod->ns, nstr);
 }
 
-static module_t *module_prepare_one (ctx_t *ctx, const char *name)
+static module_t *module_prepare_one (ctx_t *ctx, const char *arg)
 {
-    char *path;
+    char *path, *name;
     int flags = 0;
     module_t *mod;
 
+   if (access (arg, R_OK | X_OK) == 0) {        /* path name given */
+        path = xstrdup (arg);
+        if (!(name = flux_modname (path)))
+            msg_exit ("%s: %s", path, dlerror ());
+    } else {                                    /* module name given */
+        name = xstrdup (arg);
+        if (!(path = flux_modfind (ctx->module_searchpath, name)))
+            errn_exit (ENOENT, "%s", name);
+    }
+
     if (!(mod = zhash_lookup (ctx->modules, name))) {
-        if (!(path = modfind (ctx->module_path, name)))
-            err_exit ("module %s", name);
         if (!(mod = module_create (ctx, path, flags)))
            err_exit ("module %s", name);
         zhash_update (ctx->modules, name, mod);
         zhash_freefn (ctx->modules, name, (zhash_free_fn *)module_destroy);
     }
+    free (path);
+    free (name);
     return mod;
 }
 
@@ -1171,7 +1152,7 @@ static int cmb_insmod (ctx_t *ctx, const char *path, int flags,
     json_object_iter iter;
     char *name = NULL;
 
-    if (!(name = plugin_getstring (path, "mod_name"))) {
+    if (!(name = flux_modname (path))) {
         errno = ENOENT;
         goto done;
     }
