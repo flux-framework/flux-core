@@ -1489,7 +1489,7 @@ int task_info_io_setup (struct task_info *t)
 
     for (i = 0; i < NR_IO; i++) {
         zio_flux_attach (t->zio [i], f);
-        zio_set_debug (t->zio [i], NULL, NULL);
+        //zio_set_debug (t->zio [i], NULL, NULL);
     }
     return (0);
 }
