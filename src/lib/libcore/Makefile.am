@@ -2,7 +2,7 @@ AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = 
 
-ldconfdir=/etc/ld.so.conf.d
+ldconfdir=$(sysconfdir)/ld.so.conf.d
 
 fluxinclude_HEADERS = core.h
 fluxlib_LTLIBRARIES = libflux-core.la
