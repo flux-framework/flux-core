@@ -17,8 +17,11 @@ LDADD = \
 check_PROGRAMS = kap
 
 kap_SOURCES = \
+	kap.h \
 	kap.c \
+	kap_opts.h \
 	kap_opts.c \
+	kap_personality.h \
 	kap_personality.c \
 	kap_roles.c
 
