@@ -4,10 +4,10 @@ AM_CPPFLAGS =	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 
 fluxluadir = $(luadir)/flux-lua
 
-lua_SCRIPTS = \
+dist_lua_SCRIPTS = \
 	wreck.lua
 
-fluxlua_SCRIPTS = \
+dist_fluxlua_SCRIPTS = \
 	flux-lua/timer.lua \
 	flux-lua/alt_getopt.lua
 
@@ -39,9 +39,13 @@ flux_la_LIBADD = \
 
 flux_la_SOURCES = \
 	flux-lua.c \
+	flux-lua.h \
 	kvs-lua.c \
+	kvs-lua.h \
 	json-lua.c \
+	json-lua.h \
 	zmsg-lua.c \
+	zmsg-lua.h \
 	lutil.c \
 	lutil.h
 
@@ -77,7 +81,7 @@ tests_zmsgtest_la_LIBADD = \
 	$(LIBCZMQ) \
 	$(LUA_LIB)
 
-TESTS = \
+dist_TESTS = \
 	tests/test-json.lua \
 	tests/test-zmsg.lua
 
