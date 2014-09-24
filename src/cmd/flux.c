@@ -83,7 +83,9 @@ static void usage (void)
 "   logger        Log a message to Flux logging system\n"
 "   comms         Misc Flux comms session operations\n"
 "   comms-stats   Display comms message counters, etc.\n"
-"   zio           Manipulate KVS streams\n"
+"   topo          Display current comms topology using graphviz\n"
+"   wreckrun      Execute a Flux lightweight job (LWJ)\n"
+"   zio           Manipulate KVS streams (including LWJ stdio)\n"
 );
 }
 
