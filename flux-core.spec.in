@@ -57,6 +57,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_libexecdir}/flux
 %{_bindir}/flux
 %{_sysconfdir}/wreck/lua.d
+%{_mandir}/man1/*
 
 %files devel
 %defattr(-,root,root)
