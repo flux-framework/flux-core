@@ -236,7 +236,7 @@ static void exec_handler (struct rexec_session *s, int *pfds)
     //dup2 (pfds[0], STDIN_FILENO);
     dup2 (pfds[0], 3);
     closeall (4);
-    msg ("running %s %s %s", args[0], args[1], args[2]);
+    flux_log (s->ctx->h, LOG_DEBUG, "running %s %s %s", args[0], args[1], args[2]);
     if (execvp (args[0], args) < 0) {
         close (3);
         err_exit ("execvp");
