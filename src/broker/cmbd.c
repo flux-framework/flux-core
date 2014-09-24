@@ -423,8 +423,7 @@ int main (int argc, char *argv[])
      */
     if (ctx.verbose)
         msg ("module-path: %s", ctx.module_searchpath);
-    //module_prepare (&ctx, "api,modctl,kvs[0]");
-    module_prepare (&ctx, "api,modctl,kvs,live");
+    module_prepare (&ctx, "api,modctl,kvs,live,mecho,job[0],wrexec,resrc");
     if (Mopt)
         module_prepare (&ctx, Mopt);
 
