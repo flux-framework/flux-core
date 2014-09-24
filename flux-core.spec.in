@@ -56,6 +56,7 @@ rm -rf $RPM_BUILD_ROOT
 /etc/ld.so.conf.d/*
 %{_libexecdir}/flux
 %{_bindir}/flux
+%{_sysconfdir}/wreck/lua.d
 
 %files devel
 %defattr(-,root,root)
@@ -70,6 +71,9 @@ if [ -x /sbin/ldconfig ]; then /sbin/ldconfig %{_libdir}/flux; fi
 if [ -x /sbin/ldconfig ]; then /sbin/ldconfig %{_libdir}/flux; fi
 
 %changelog
+* Wed Sep 24 2014 Mark A. Grondona <mgrondona@llnl.gov> 0.1.0-1
+- Package wreck lua extensions
+
 * Sat Sep 20 2014 Mark A. Grondona <mgrondona@llnl.gov> 0.1.0-1
 - Package lua modules and scripts
 - Package wreck components: flux-wreckrun, wrexecd, and assoc. modules

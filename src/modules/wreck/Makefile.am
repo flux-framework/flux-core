@@ -17,6 +17,7 @@ libfluxdir = $(libdir)/flux
 fluxmoddir = $(libfluxdir)/modules
 fluxbindir = $(libexecdir)/flux
 includefluxcoredir = $(includedir)/flux/core
+wreckscriptsdir = $(sysconfdir)/wreck/lua.d
 
 #
 # Comms module
@@ -76,6 +77,9 @@ wrexecd_LDADD = \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LUA_LIB)
+
+dist_wreckscripts_SCRIPTS = \
+	lua.d/01-env.lua
 
 install-data-hook:
 	-(cd $(DESTDIR)$(fluxmoddir) && \
