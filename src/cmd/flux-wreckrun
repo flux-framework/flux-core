@@ -105,7 +105,7 @@ local function alloc_tasks_hack (f, wreck, lwj)
     else
         res, err = f:kvsdir ("resrc.rank")
         if not res then
-            wreck:die ("Failed to get resrc.rank")
+            wreck:die ("Failed to get resrc.rank. Load the `resrc' module?\n")
         end
     end
 
@@ -178,7 +178,9 @@ wreck:say ("%4.03fs: Sending LWJ request for %d tasks (cmdline \"%s\")\n",
 --  Send job request message with tag="job.create"
 --
 local resp, err = f:rpc ('job.create', jobreq)
-if not resp then wreck:die ("flux.rpc: %s\n", err) end
+if not resp then
+    wreck:die ("job.create: %s. Is the `job' module loaded?\n", err)
+end
 
 if resp.errnum then
     wreck:die ("job.create message failed with errnum=%d\n", resp.errnum)
