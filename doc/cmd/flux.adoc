@@ -5,7 +5,7 @@ FLUX(1)
 
 NAME
 ----
-flux - the Flux resource managemnt framework
+flux - the Flux resource management framework
 
 
 SYNOPSIS
@@ -47,6 +47,7 @@ Override the compiled-in default path to the Flux message broker.
 
 *-v,--verbose*::
 Display Flux environment variable settings before execing 'CMD'.
+
 
 AUTHOR
 ------
