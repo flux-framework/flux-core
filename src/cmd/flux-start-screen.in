@@ -22,7 +22,7 @@ declare cmbd_opts="--logdest=cmbd.log"
 declare cmbd_size=
 declare cmbd_sid="screen"
 declare cmbd_kary=
-declare cmbd_modules="api,kvs,modctl,live"
+declare cmbd_modules=
 declare cmbd_modopts=
 
 declare -r path_getopt="/usr/bin/getopt"

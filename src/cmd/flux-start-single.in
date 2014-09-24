@@ -19,7 +19,7 @@ declare cmd_prefix=
 
 declare cmbd_opts=
 declare cmbd_sid="single"
-declare cmbd_modules="api,kvs,modctl,live"
+declare cmbd_modules=
 declare cmbd_modopts=
 
 declare -r path_getopt="/usr/bin/getopt"

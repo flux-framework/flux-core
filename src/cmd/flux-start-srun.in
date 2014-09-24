@@ -16,7 +16,7 @@ declare srun_ntasks=
 declare path_cmbd=${FLUX_CMBD_PATH:-@X_LIBEXECDIR@/flux/cmbd}
 
 declare cmbd_kary=
-declare cmbd_modules="api,modctl,kvs,live"
+declare cmbd_modules=
 declare cmbd_opts="--pmi-boot --logdest=cmbd.log"
 declare cmbd_modopts=
 
