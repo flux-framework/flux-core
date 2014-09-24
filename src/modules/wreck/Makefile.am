@@ -83,6 +83,11 @@ install-data-hook:
 	    mv $$f `echo $$f | sed 's/inst//'`; \
 	  done;)
 
+uninstall-hook:
+	-(cd $(DESTDIR)$(fluxmoddir) && \
+	  rm -f wrexec.so wrexec.la )
+	
+
 # XXX: Hack below to force rebuild of unbuilt wrexecd dependencies
 #
 $(wrexecd_LDADD):
