@@ -998,6 +998,7 @@ int exec_command (struct prog_ctx *ctx, int i)
         ctx->in_task = 1;
         lua_stack_call (ctx->lua_stack, "rexecd_task_init");
 
+        prog_ctx_setenv  (ctx, "FLUX_TMPDIR", getenv ("FLUX_TMPDIR"));
         prog_ctx_setenvf (ctx, "MPIRUN_RANK",     1, "%d", t->globalid);
         prog_ctx_setenvf (ctx, "PMI_RANK", 1, "%d", t->globalid);
         prog_ctx_setenvf (ctx, "FLUX_LWJ_TASK_ID", 1, "%d", t->globalid);

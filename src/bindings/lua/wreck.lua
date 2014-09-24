@@ -96,6 +96,8 @@ local function get_filtered_env ()
     env.ENVIRONMENT = nil
     for k,v in pairs (env) do
         if k:match ("SLURM_") then env[k] = nil end
+        if k:match ("FLUX_API") then env[k] = nil end
+        if k:match ("FLUX_TMPDIR") then env[k] = nil end
     end
     -- XXX: MVAPICH2 at least requires MPIRUN_RSH_LAUNCH to be set
     --  in the environment or PMI doesn't work (for unknown reason)
