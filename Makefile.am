@@ -1,1 +1,6 @@
 SUBDIRS = src doc
+
+EXTRA_DIST = \
+	META \
+	DISCLAIMER.LLNS \
+	README.md

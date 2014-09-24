@@ -4,6 +4,9 @@ AM_CPPFLAGS =	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 
 fluxluadir = $(luadir)/flux-lua
 
+EXTRA_DIST = \
+	README
+
 dist_lua_SCRIPTS = \
 	wreck.lua
 
