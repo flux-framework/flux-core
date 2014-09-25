@@ -23,7 +23,7 @@ SUFFIXES = .adoc .1
 	    --attribute manmanual="Flux Manual" \
 	    --doctype manpage --format manpage $<
 
-EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc
+EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc spellcheck spell.en.pws
 
 CLEANFILES = $(MAN1_FILES) $(XML_FILES)
 
