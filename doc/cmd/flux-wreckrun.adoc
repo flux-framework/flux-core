@@ -1,0 +1,262 @@
+FLUX-WRECKRUN(1)
+================
+:doctype: manpage
+
+
+NAME
+----
+flux-wreckrun - Flux utility for remote execution
+
+
+SYNOPSIS
+--------
+[verse]
+'flux wreckrun' [-n <ntasks>] [-N <nnodes>] [-t <tasks-per-node>]
+                [-l|--label-io] [-o|--options='OPTIONS'] ['COMMANDS'...]
+
+
+DESCRIPTION
+-----------
+
+'flux wreckrun' is the front-end command for launching tasks within
+a Flux comms session using the WRECK remote execution prototype.
+
+WRECK (Worthless Remote Execution using CMB KVS) is a prototype
+implementation of remote execution for Flux which demonstrates
+the usage of the Flux key-value store as the vehicle for transmitting
+and storing information about lightweight jobs (LWJs). The basic
+mode of operation is described in xref:wreck-operation[].
+
+OPTIONS
+-------
+
+--ntasks='ntasks'::
+-n 'ntasks'::
+	Request to run a total of 'ntasks' tasks. If '--ntasks' is used alone,
+	i.e. without '--nnodes', then 'flux wreckrun' will attempt to
+	distribute the 'ntasks' tasks across all nodes of the Flux comms
+	session.
+
+--nnodes='nnodes'::
+-N 'nnodes'::
+	Request to run across 'nnodes' nodes in the current comms session.
+	
+--tasks-per-node='tpn'::
+-t 'tpn'::
+	Set the number of tasks to run per node to 'tpn'. The default is
+	--tasks-per-node=1. This value is overridden by '--ntasks' if used.
+
+--labelio::
+-l::
+	Prepend stdout and stderr output lines with the task id to which
+	the output belongs.
+
+--options='options,...'::
+-o 'options,...'::
+	Apply extended job options to the current execution. Examples of
+	these options are described in the xref:extra-options[].
+
+EXTRA OPTIONS
+-------------
+[[extra-options]]
+
+Extra options can be supplied on the `flux wreckrun` command via the
+'--options' command line option. Multiple options should be separated
+via commas. Currently available options include:
+
+'stdio-commit-on-open'::
+	Commit to kvs on stdio open in each task. The default is to
+	delay commit. Without this option, stdio files for jobs will
+	not appear in KVS on all nodes until the next KVS commit.
+	The default behavior avoids a kvs commit storm as stdout and
+	stderr files are opened for every task.
+
+'stdio-commit-on-close'::
+	Commit to kvs for each stdio stream as it gets EOF. The default
+	is to delay the commit. Without this option, stdio files for
+	jobs will not appear to close until after the next natural
+	KVS commit. The default behavior avoids a kvs commit storm
+	as stdout and stderr files are closed from many tasks. This
+	option may need to be enabled if you need to detect immediately
+	when a stdout or stderr stream is closed from a task.
+
+'stdio-delay-commit'::
+	Disable commit to kvs for each line of output. The default
+	behavior is to call kvs_commit() after each line of output
+	from every task. If many tasks are writing multiple lines
+	of output and it is not necessary to see lines of output
+	as they are generated, it will speed up job execution to
+	enable this option.
+
+'commit-on-task-exit'::
+	Commit to the kvs for each task exit event. The default behavior
+	is to write the task exit status to the kvs as each task in
+	a lightweight job exits, but delay kvs commit. This avoids
+	a kvs commit storm when many tasks are exiting simultaneously.
+	This option may need to be enabled if knowlege of exit status or
+	fact that tasks have exited is required in real time.
+
+'stop-children-in-exec'::
+	Start tasks in a STOPPED state waiting for attach from a
+	debugger. This option is provided for use with parallel
+	debuggers such as TotalView.
+
+OPERATION
+----------
+[[wreck-operation]]
+
+Briefly, the method of operation for remote execution via WRECK
+consists of the following steps:
+
+. The front-end command ('wreckrun') allocates a new job directory
+  entry in the kvs under the 'lwj' key. This operation is performed
+  as a 'job.create' request, which results in a new directory in
+  the kvs as 'lwj.<jobid>'. Initially, a job state is stored in
+  'lwj.<jobid>.state' as 'reserved'.
+. The front-end command now fills in requisite and optional job
+  information under the 'lwj.<jobid>' hierarchy such as the
+  command-line to run, how many tasks to run on each rank, the
+  job environment, etc. 
+. The front-end command then issues a 'wrexec.run' event, which
+  is handled by the 'wrexec' module. The 'wrexec' module spawns
+  a daemon to handle the request for the jobid in question. The
+  'wrexecd' daemon pulls information for the job in question
+  directly from the local kvs cache and spawns required tasks.
+. Once the first task is started by rank 0, the job state is updated
+  to 'starting'.
+. After starting tasks, all 'wrexecd' daemons synchronize on a
+  barrier, and the job state is updated to 'running'.
+. As the tasks run, stdio is stored in the KVS and is (optionally)
+  available immediately for 'flux wreckrun' to display on the
+  user's console.
+. As tasks exit, their exit status is recorded in the kvs.
+. After all tasks have exited, 'wrexecd' daemons synchronize again
+  and rank 0 updates the job state to 'completed'.
+
+This simple scheme offers a scalable and semi-flexible method
+for launching tasks within a Flux comms session. In conjunction
+with the Flux PMI library, even MPI applications may be launched
+at scale via 'flux wreckrun'. See xref:wreckrun-examples[] for
+examples.
+
+
+EXAMPLES
+--------
+[[wreckrun-examples]]
+
+Once a Flux comms session is running, ensure the required modules
+for 'wreck' are loaded:
+
+------------------------------
+$ flux module list | egrep 'resrc|job|wrexec'
+wrexec               686108          83 [0-3]
+resrc                667324          83 [0-3]
+job                  666696          83 0
+$
+------------------------------
+
+To ensure wrexec is working properly, run hostname across
+4 nodes of the Flux comms session:
+
+------------------------------
+$ flux wreckrun -l -N4 hostname
+wreckrun: 0.000s: Sending LWJ request for 1 tasks (cmdline "hostname")
+wreckrun: 0.007s: Registered jobid 1
+wreckrun: Allocating 4 tasks across 4 available nodes..
+wreckrun: tasks per node: node[0-3]: 1
+wreckrun: 0.009s: Sending run event
+wreckrun: 0.012s: State = reserved
+wreckrun: 0.020s: State = starting
+wreckrun: 0.082s: State = running
+0: hype349
+2: hype351
+3: hype352
+1: hype350
+wreckrun: 0.140s: State = complete
+wreckrun: All tasks completed successfully.
+------------------------------
+
+'flux wreckrun' uses the Flux kvs for most of its functionality,
+and thus information about lightweight jobs (LWJs) that are
+executed will be stored in the 'lwj.<jobid>' directory in the kvs.
+To see what kind of information is stored there, use the
+'flux kvs' utility:
+
+------------------------------
+$ flux kvs dir lwj.1
+------------------------------
+
+.Running an MPI application with 'flux wreckrun'
+
+Launching an MPI application with 'flux wreckrun' requires that your
+version of MPI supports PMI. In this example, MVAPICH2 is used:
+
+------------------------------
+$ mpicc -v 2>&1 | head -1
+mpicc for MVAPICH2 version 1.7
+$ mpicc -o mpi_hello mpi_hello.c
+------------------------------
+
+In order to run using the Flux PMI library, 'LD_LIBRARY_PATH' may need
+to be adjusted at runtime. For example, to use Flux's libpmi.so 
+from the build directory:
+
+------------------------------
+$ export LD_LIBRARY_PATH=${flux_builddir}/src/lib/libpmi/.libs${LD_LIBRARY_PATH}
+------------------------------
+
+where '${flux_builddir}' is the path to the root of the flux-core
+build directory.
+
+Now the MPI application should run via 'flux wreckrun':
+
+------------------------------
+$ flux wreckrun -N4 ./mpi_hello
+wreckrun: 0.000s: Sending LWJ request for 1 tasks (cmdline "./mpi_hello")      
+wreckrun: 0.007s: Registered jobid 5                                           
+wreckrun: Allocating 4 tasks across 4 available nodes..                        
+wreckrun: tasks per node: node[0-3]: 1                                         
+wreckrun: 0.009s: Sending run event                                            
+wreckrun: 0.011s: State = reserved                                             
+wreckrun: 0.018s: State = starting                                             
+wreckrun: 0.028s: State = running                                              
+0: completed first barrier                                                     
+0: completed MPI_Init in 0.039s.  There are 4 tasks                            
+0: completed MPI_Finalize                                                      
+wreckrun: 2.182s: State = complete                                             
+wreckrun: All tasks completed successfully.                                    
+------------------------------
+
+The use of Flux PMI can be verified by checking the KVS 'pmi' directory
+for the LWJ in question:
+
+------------------------------
+$ flux kvs dir pmi.5                                                         
+pmi.5.hostname[2] = "-1463773063"                                              
+pmi.5.hostname[0] = "-1463773575"                                              
+pmi.5.hostname[1] = "-1463773319"                                              
+pmi.5.hostname[3] = "-1463772807"                                              
+pmi.5.uuid_2_5 = "dummy-entry"                                                 
+pmi.5.uuid_0_5 = "8hiWSLCPRzqFYHNubktbCQ=="                                    
+pmi.5.uuid_1_5 = "dummy-entry"                                                 
+pmi.5.uuid_3_5 = "dummy-entry"                                                 
+pmi.5.pmi_epidkey_2 = "1901059"                                                
+pmi.5.pmi_epidkey_0 = "7209475"                                                
+pmi.5.pmi_epidkey_1 = "6816259"                                                
+pmi.5.pmi_epidkey_3 = "6750723"             
+------------------------------
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
