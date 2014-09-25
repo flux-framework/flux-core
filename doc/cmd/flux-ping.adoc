@@ -1,0 +1,90 @@
+FLUX-PING(1)
+============
+:doctype: manpage
+
+
+NAME
+----
+flux-ping - measure round-trip latency to Flux services
+
+
+SYNOPSIS
+--------
+*flux-ping* ['--pad-bytes=N'] ['--delay-msec=N'] ['--rank=N'] target
+
+
+DESCRIPTION
+-----------
+flux-ping(1) measures round-trip latency to a Flux service in a
+manner analagous to ping(8).
+
+Flux comms modules and broker instances have a built-in 'ping' operation
+that echoes the request payload back in a response.   One can ping a comms
+module, for example "flux ping kvs" and get back:
+
+  kvs.ping pad=0 seq=0 time=0.535 ms (99E61)
+  kvs.ping pad=0 seq=1 time=0.573 ms (99E61)
+  ...
+
+This tells you that the local "kvs" comms module is alive and the
+round-trip latency is about half a millisecond.
+
+It is possible to direct a ping request over the rank-request overlay
+to a specific node.  For example "flux ping --rank 6 cmb":
+
+  6!cmb.ping pad=0 seq=0 time=1.685 ms (99E61!0r!7r)
+  6!cmb.ping pad=0 seq=1 time=1.768 ms (99E61!0r!7r)
+  ...
+
+This tells you that the message broker on rank 6 is responsive and
+reachable through the rank-request ring.  It also shows you the route
+taken to get there.
+
+'target' may be the name of a comms module service, e.g. "kvs" or "live".
+flux-ping(1) will send a request to "kvs.ping" or "live.ping".
+
+As a shorthand, 'target' can include a rank prefix delimited by an
+exclamation point.  "flux ping 4!kvs" is equivalent to
+"flux ping --rank 4 kvs" (see --rank option below).
+Don't forget to quote the exclamation point if it is interpreted by your shell.
+
+As a shorthand, 'target' can simply be a rank by itself indicating 
+that the broker on that rank, rather than a comms module, is to be pinged.
+"flux ping 4" is equivalent to "flux ping --rank 4 cmb".
+
+
+OPTIONS
+-------
+*-r, --rank*'=N'::
+Use the rank-request ring topology overlay to reach a specific rank node.
+Default: use the tree based overlay network to find the first node
+that will answer the request.
+
+*-p, --pad-bytes*'=N'::
+Include in the payload a string of length 'N' containing the character "p",
+repeated.  The payload will be echoed back in the response.  Default:
+no padding.
+
+*-d, --delay-msec*'=N'::
+Specify the delay, in milliesconds, between successive requests.
+Default: 1000 milliseconds (1 second).
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+--------
+flux-topo(1)
