@@ -60,8 +60,12 @@ a payload.  Events use the ZeroMQ PUB - SUB message flow.
 
 OPTIONS
 -------
-*-p ,--priority*='facility'['.level']::
-Specify the 'facility', and optionally the 'level'.
+*-a ,--all*::
+Do not suppress 'cmb.info', 'cmb.log', and 'cmb.pub' messages.
+
+*-l ,--long*::
+Display long fromat of message dumps.  Do not truncate at 80 colums.
+Do not compress DEALER - ROUTER routing frames into a single line.
 
 AUTHOR
 ------
