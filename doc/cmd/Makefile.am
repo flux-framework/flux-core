@@ -4,7 +4,8 @@ MAN1 = 	flux.1 \
 	flux-logger.1 \
 	flux-up.1 \
 	flux-topo.1 \
-	flux-snoop.1
+	flux-snoop.1 \
+	flux-ping.1
 
 ADOC_FILES  = $(MAN1:%.1=%.adoc)
 XML_FILES   = $(MAN1:%.1=%.xml)
