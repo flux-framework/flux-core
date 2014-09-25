@@ -13,7 +13,7 @@ if ! test -r $dict; then
 fi
 
 tmpfile=$(mktemp)
-rc=$(cat $file | aspell -p $dict list | sort | uniq | tee $tmpfile | wc -l)
+rc=$(cat $file | aspell -p $dict -n list | sort | uniq | tee $tmpfile | wc -l)
 cat $tmpfile
 rm -f $tmpfile
 exit $rc
