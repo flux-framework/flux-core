@@ -12,6 +12,7 @@ BuildRequires: zeromq4-devel >= 4.0.4 czmq-devel >= 2.2.0
 BuildRequires: munge-devel
 BuildRequires: json-c-devel
 BuildRequires: lua-devel >= 5.1
+BuildRequires: asciidoc aspell
 
 %description
 
