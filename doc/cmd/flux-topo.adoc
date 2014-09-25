@@ -19,15 +19,15 @@ flux-topo(1) reads the topology of the Flux comms session tree-based
 overlay network from the KVS key 'conf.live.topology' and converts it
 to graphviz format on stdout.
 
-Nodes are colored according to their state:  green for 'ok',
-yellow for 'slow', red 'fail', and gray for 'unknown'.  See flux-up(1)
-for a description of these states.  Graph edges represent communication
+Nodes are colored according to their state:  green for 'ok', yellow for
+'slow', red for 'fail', and gray for 'unknown'.  See flux-up(1) for a
+description of these states.  Graph edges represent communication
 channels between nodes.
 
-The topology can be altered at runtime when interior nodes transition
-to 'fail' state.  When this happens new ZeroMQ connections are established
-but old connections are not dropped, and both will show as edges in
-the graph.
+The topology can be altered at runtime in response to interior nodes
+that transition to 'fail' state.  When this happens new ZeroMQ connections
+are established but old connections are not dropped, and both will show as
+edges in the graph.
 
 OPTIONS
 -------
