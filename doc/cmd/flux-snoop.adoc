@@ -60,10 +60,10 @@ a payload.  Events use the ZeroMQ PUB - SUB message flow.
 
 OPTIONS
 -------
-*-a ,--all*::
+*-a, --all*::
 Do not suppress 'cmb.info', 'cmb.log', and 'cmb.pub' messages.
 
-*-l ,--long*::
+*-l, --long*::
 Display long format of message dumps.  Do not truncate at 80 columns.
 Do not compress DEALER - ROUTER routing frames into a single line.
 

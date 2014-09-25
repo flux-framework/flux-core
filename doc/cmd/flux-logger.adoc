@@ -37,7 +37,7 @@ the rank of the communications broker originating the message.
 
 OPTIONS
 -------
-*-p ,--priority*='facility'['.level']::
+*-p, --priority*='facility'['.level']::
 Specify the 'facility', and optionally the 'level'.
 
 AUTHOR

@@ -51,7 +51,7 @@ Generate new keys, even if they already exist.
 *-p, --plain*::
 Generate only PLAIN keys.
 
-*-c,--curve*::
+*-c, --curve*::
 Generate only CURVE keys.
 
 
