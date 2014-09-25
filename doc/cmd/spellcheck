@@ -1,0 +1,16 @@
+#!/bin/bash
+
+declare -r dict="./spell.en.pws"
+
+declare count=0
+
+if test $# != 1; then
+    echo Usage: spellcheck file >&2
+    exit 1
+fi
+
+tmpfile=$(mktemp)
+rc=$(cat $1 | aspell -p $dict list | sort | uniq | tee $tmpfile | wc -l)
+cat $tmpfile
+rm -f $tmpfile
+exit $rc

@@ -16,7 +16,7 @@ SYNOPSIS
 DESCRIPTION
 -----------
 flux-keygen(1) generates long-term keys for Flux security.
-Keys are written to a '.flux' subdirectory in your home directory.
+Keys are written to a '.flux' sub-directory in your home directory.
 
 Flux comms sessions implement cryptographic privacy and data integrity
 when data is sent over a network.  Point to point ZeroMQ TCP connections
@@ -30,7 +30,7 @@ It is possible to start a Flux comms session with security
 disabled or using the toy PLAIN ZeroMQ security mechanism.
 This is intended for testing performance overhead of security only.
 By default, *flux-keygen* generates both CURVE and PLAIN keys.
-PLAIN keys are merely RFC 4122 uuid's stored in the clear that are
+PLAIN keys are merely RFC 4122 uuids stored in the clear that are
 used as passwords.
 
 All instances of Flux message brokers launched in a comms session
@@ -78,7 +78,7 @@ CurveZMQ: <http://curvezmq.org/page:read-the-docs>
 
 ZMTP/3.0: <http://rfc.zeromq.org/spec:23>
 
-Using ZeromQ Security:
+Using ZeroMQ Security:
 <http://hintjens.com/blog:48> and
 <http://hintjens.com/blog:49>
 

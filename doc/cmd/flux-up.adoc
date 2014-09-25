@@ -24,7 +24,7 @@ rank 0 assigned to the root of the tree-based overlay network.
 
 Each message broker maintains an idle time for its direct overlay children,
 reset to zero on any received message, including keepalives generated to
-ensure a message rate no less than the session heartrate.  If idle time for
+ensure a message rate no less than the session heart rate.  If idle time for
 a child reaches a first threshold (default 3 session heartbeats), its state
 is changed to 'slow'.  If idle time then progresses to a second threshold
 (default 5 session heartbeats), its state is changed to 'fail'.

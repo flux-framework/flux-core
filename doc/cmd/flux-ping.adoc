@@ -16,7 +16,7 @@ SYNOPSIS
 DESCRIPTION
 -----------
 flux-ping(1) measures round-trip latency to a Flux service in a
-manner analagous to ping(8).
+manner analogous to ping(8).
 
 Flux comms modules and broker instances have a built-in 'ping' operation
 that echoes the request payload back in a response.   One can ping a comms
@@ -66,7 +66,7 @@ repeated.  The payload will be echoed back in the response.  Default:
 no padding.
 
 *-d, --delay-msec*'=N'::
-Specify the delay, in milliesconds, between successive requests.
+Specify the delay, in milliseconds, between successive requests.
 Default: 1000 milliseconds (1 second).
 
 

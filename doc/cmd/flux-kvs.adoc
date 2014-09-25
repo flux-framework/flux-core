@@ -21,7 +21,7 @@ flux-kvs(1) is a command line utility that operates on the KVS.
 It is a very thin layer on top of a C API.
 
 The Flux KVS stores JSON values under string keys.  The keys are
-hierarchical, using "." as a path separator, analagous to "/" separated
+hierarchical, using "." as a path separator, analogous to "/" separated
 UNIX file paths.  A single "." represents the root directory of
 the KVS.
 

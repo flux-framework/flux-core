@@ -1,16 +1,17 @@
-MAN1 = 	flux.1 \
-	flux-kvs.1 \
-	flux-keygen.1 \
-	flux-logger.1 \
-	flux-up.1 \
-	flux-topo.1 \
-	flux-snoop.1 \
-	flux-ping.1
+ADOC_FILES = \
+	flux.adoc \
+	flux-kvs.adoc \
+	flux-keygen.adoc \
+	flux-logger.adoc \
+	flux-up.adoc \
+	flux-topo.adoc \
+	flux-snoop.adoc \
+	flux-ping.adoc
 
-ADOC_FILES  = $(MAN1:%.1=%.adoc)
-XML_FILES   = $(MAN1:%.1=%.xml)
+MAN1_FILES  = $(ADOC_FILES:%.adoc=%.1)
+XML_FILES   = $(ADOC_FILES:%.adoc=%.xml)
 
-dist_man_MANS = $(MAN1)
+dist_man_MANS = $(MAN1_FILES)
 
 $(MAN1): COPYRIGHT.adoc
 
@@ -24,4 +25,8 @@ SUFFIXES = .adoc .1
 
 EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc
 
-CLEANFILES = $(MAN1) $(XML_FILES)
+CLEANFILES = $(MAN1_FILES) $(XML_FILES)
+
+TESTS_ENVIRONMENT = ./spellcheck
+
+TESTS = $(ADOC_FILES)

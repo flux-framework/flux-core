@@ -16,17 +16,17 @@ SYNOPSIS
 DESCRIPTION
 -----------
 Flux is a modular framework for resource management.
-flux(1) is a front end for Flux subcommands.
+flux(1) is a front end for Flux sub-commands.
 flux(1) itself has some general 'OPTIONS', described below.
 
 
 OPTIONS
 -------
 *-h, --help*::
-Display help on options, and a list of the core Flux subcommands.
+Display help on options, and a list of the core Flux sub-commands.
 
 *-x, --exec-path*='PATH'::
-Override the compiled-in search path for subcommands.
+Override the compiled-in search path for sub-commands.
 Multiple directories are separated by colons.
 
 *-M,--module-path*='PATH'::
@@ -46,7 +46,7 @@ API socket.  Trace output appears on stderr.
 Override the compiled-in default path to the Flux message broker.
 
 *-v,--verbose*::
-Display Flux environment variable settings before execing 'CMD'.
+Display Flux environment variable settings before 'CMD' is executed.
 
 
 AUTHOR

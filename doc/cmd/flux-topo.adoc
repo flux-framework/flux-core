@@ -24,7 +24,7 @@ Nodes are colored according to their state:  green for 'ok', yellow for
 description of these states.  Graph edges represent communication
 channels between nodes.
 
-The topology can be altered at runtime in response to interior nodes
+The topology can be altered at run-time in response to interior nodes
 that transition to 'fail' state.  When this happens new ZeroMQ connections
 are established but old connections are not dropped, and both will show as
 edges in the graph.

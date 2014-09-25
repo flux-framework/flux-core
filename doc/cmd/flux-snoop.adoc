@@ -18,7 +18,7 @@ DESCRIPTION
 flux-snoop(1) is a debugging tool that captures and displays
 messages routed through a Flux comms message broker instance.
 
-Multi-part ZeroMQ messages are displayed separated by a horizontal
+Multipart ZeroMQ messages are displayed separated by a horizontal
 bar.  Within that, each message part occupies one line, beginning
 with a single character denoting the message type: event 'e', request '>',
 or response '<'.  Next, the size of the message part in bytes (decimal)
@@ -45,11 +45,11 @@ While a heartbeat event looks like this:
 
 Flux requests consist of a string message part denoting the service
 and operation, followed by a payload message part.  Since requests utilize
-the ZeroMQ DEALDER - ROUTER flow, socket identites of each hop in
-the request's route are prepended as it is routed "upstream" towards
+the ZeroMQ DEALER - ROUTER flow, socket identities of each hop in
+the request message's route are prepended as it is routed "upstream" towards
 the root of the tree based overlay network.  In flux-snoop(1) output,
 these routing frames are compressed into what looks like one message part,
-with abbrevieated addresses separated by exclamation points, and the number
+with abbreviated addresses separated by exclamation points, and the number
 of hops shown in brackets, not the size.  Flux responses utilize the
 reverse flow, where routing frames are stripped of and used to select
 the next peer, but otherwise have the same structure as requests.
@@ -64,7 +64,7 @@ OPTIONS
 Do not suppress 'cmb.info', 'cmb.log', and 'cmb.pub' messages.
 
 *-l ,--long*::
-Display long fromat of message dumps.  Do not truncate at 80 colums.
+Display long format of message dumps.  Do not truncate at 80 columns.
 Do not compress DEALER - ROUTER routing frames into a single line.
 
 AUTHOR
