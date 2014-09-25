@@ -51,10 +51,12 @@ void usage (void)
     fprintf (stderr, 
 "Usage: flux-snoop OPTIONS [topic [topic...]]\n"
 "  -a,--all               Do not suppress cmb.info, cmb.log, cmb.pub\n"
+"  -l,--long              Display long message format\n"
+#if 0 /* These options are for debugging, not generally useful */
 "  -n,--no-security       Try to connect without CURVE security\n"
 "  -v,--verbose           Verbose connect output\n"
-"  -l,--long              Display long message format\n"
 "  -N,--session-name NAME Set session name (default flux)\n"
+#endif
 );
     exit (1);
 }
