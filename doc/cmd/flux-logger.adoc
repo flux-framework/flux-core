@@ -1,0 +1,60 @@
+FLUX-LOGGER(1)
+==============
+:doctype: manpage
+
+
+NAME
+----
+flux-logger - create a Flux log entry 
+
+
+SYNOPSIS
+--------
+*flux-logger* ['--priority=facility'['.level']] 'msg' '...'
+
+
+DESCRIPTION
+-----------
+flux-logger(1) creates Flux log entries.  Log entries are sent to
+the local Flux communications broker, then forwarded to the
+root of the overlay network, where they are disposed of according
+to the logging configuration of the communications session
+(e.g. file, stderr, or syslog).
+
+Log entries are associated with a syslog(3) style 'facility.level',
+by default 'user.notice'.
+
+Valid facility names are: 'daemon', 'local0', 'local1', 'local2',
+'local3', 'local4', 'local5', 'local6', 'local7', and 'user'.
+
+Valid level names are 'emerg', 'alert', 'crit', 'err', 'warning',
+'notice', 'info', 'debug'.
+
+Log entries are also timestamped with the wall clock time, as
+reported by gettimeofday(2) at the point of origin, and with
+the rank of the communications broker originating the message.
+
+
+OPTIONS
+-------
+*-p ,--priority*='facility'['.level']::
+Specify the 'facility', and optionally the 'level'.
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+--------
+syslog(3)
