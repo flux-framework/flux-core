@@ -1,16 +1,19 @@
 #!/bin/bash
 
-declare -r dict="./spell.en.pws"
-
-declare count=0
-
-if test $# != 1; then
-    echo Usage: spellcheck file >&2
+if test $# != 2; then
+    echo Usage: spellcheck pws-dict file >&2
     exit 1
+fi
+declare dict=$1
+declare file=$2
+
+if ! test -r $dict; then
+   echo Dictionary $dict not found >&2
+   exit 1
 fi
 
 tmpfile=$(mktemp)
-rc=$(cat $1 | aspell -p $dict list | sort | uniq | tee $tmpfile | wc -l)
+rc=$(cat $file | aspell -p $dict list | sort | uniq | tee $tmpfile | wc -l)
 cat $tmpfile
 rm -f $tmpfile
 exit $rc

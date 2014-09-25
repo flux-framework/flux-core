@@ -27,6 +27,6 @@ EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc spellcheck spell.en.pws
 
 CLEANFILES = $(MAN1_FILES) $(XML_FILES)
 
-TESTS_ENVIRONMENT = ./spellcheck
+TESTS_ENVIRONMENT = $(srcdir)/spellcheck $(abs_srcdir)/spell.en.pws
 
 TESTS = $(ADOC_FILES)
