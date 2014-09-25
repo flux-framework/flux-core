@@ -50,7 +50,7 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-ping [--rank N] [--pad-bytes N] [--delay-msec N] [node!]tag\n"
+"Usage: flux-ping [--rank N] [--pad-bytes N] [--delay-msec N] target\n"
 );
     exit (1);
 }
