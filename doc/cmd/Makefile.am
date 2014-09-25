@@ -1,4 +1,6 @@
-MAN1 = flux.1
+MAN1 = \
+	flux.1 \
+	flux-kvs.1
 
 ADOC_FILES  = $(MAN1:%.1=%.adoc)
 XML_FILES   = $(MAN1:%.1=%.xml)

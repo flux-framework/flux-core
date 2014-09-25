@@ -1,0 +1,98 @@
+FLUX-KVS(1)
+===========
+:doctype: manpage
+
+
+NAME
+----
+flux-kvs - Flux key-value store utility
+
+
+SYNOPSIS
+--------
+*flux-kvs* 'COMMAND' ['OPTIONS']
+
+
+DESCRIPTION
+-----------
+The Flux key-value store (KVS) is a simple, distributed data storage
+service used a building block by other framework components.
+flux-kvs(1) is a command line utility that operates on the KVS.
+It is a thin layer on top of the C API for the Flux KVS.
+
+The Flux KVS stores JSON values under string keys.  The keys are
+hierarchical, using "." as a path separator analagous to "/" separated
+UNIX file paths.  A single "." represents the root directory of
+the KVS.
+
+flux-kvs(1) runs a KVS 'COMMAND'.  The possible commands and their
+arguments are described below.
+
+COMMANDS
+--------
+*get* 'key' ['key...']::
+Retrieve the value stored under 'key'.  If nothing has been stored under
+'key', display an error message.
+
+*put* 'key=value' ['key=value...']::
+Store 'value' under 'key' and commit it.  If it already has a value,
+overwrite it.
+
+*dir* 'key'::
+Display all keys and their values under the directory 'key'.
+If 'key' does not exist or is not a directory, display an error message.
+If 'key' is ".", the entire KVS namespace is dumped.
+
+*unlink* 'key' ['key...']::
+Remove 'key' from the KVS and commit the change.  If 'key' represents
+a directory, remove all keys underneath it.  If nothing has been stored
+under 'key', do nothing (it is not an error).
+
+*link* 'target' 'linkname'::
+Create a new name for 'target', similar to a symbolic link, and commit
+the change.  'target' does not have to exist.  If 'linkname' exists,
+it is overwritten.
+
+*readlink* 'key'::
+Retrieve the key a link refers to rather than its value, as would be
+returned by *get*.
+
+*mkdir* 'key'::
+Create an empty directory and commit the change.  If 'key' exists,
+it is overwritten.
+
+*watch* 'key'::
+Watch 'key', displaying each change on a line of output.
+If the key is not set, display "NULL".  This command runs forever.
+
+*copy-tokvs* 'key' 'file'::
+Copy data from 'file' to 'key', encoding to Z85 format and committing
+the change.  'file' may be a UNIX file name or "-" indicating standard
+input.
+
+*copy-fromkvs* 'key' 'file'::
+Copy data from 'key' to 'file', decoding from Z85 format.
+'file' may be a UNIX file name or "-" indicating standard output.
+
+*version*::
+Display the current KVS version, an integer value.  The version starts
+at zero and is incremented on each KVS commit.  Note that some commits
+may be aggregated for performance and the version will be incremented
+once for the aggregation, so it cannot be used as a direct count of
+commit requests.
+
+*wait* 'version'::
+Block until the KVS version reaches 'version' or greater.  A simple form
+of synchronization is:  node A puts a value, reads version, send version
+to node B.  Node B waits for version, gets value.
+
+*dropcache*::
+Tell the local KVS to drop any cache it is holding.
+
+*dropcache-all*::
+Send an event across the comms session instructing all KVS instances
+to drop their caches.
+
+AUTHOR
+------
+include::FOOTER.adoc[]
