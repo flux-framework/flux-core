@@ -13,10 +13,6 @@ function die (...)
     os.exit (1)
 end
 
-function dot_hostlabel (rank, hosts)
-    print (rank.." [label=\""..rank..":"..hosts[rank + 1]['name'].."\"]")
-end
-
 function dot_color (rank, color)
     print (rank.." [style=filled,fillcolor=" .. color .. "]")
 end
@@ -32,9 +28,9 @@ function dot_color_status (nodelist, color)
     end
 end
 
-local opts, optind = getopt (arg, "Hh", { })
+local opts, optind = getopt (arg, "h", { })
 if opts.h then
-    print ("Usage: flux-topo [-H] | dot -Tpng | display")
+    print ("Usage: flux-topo | dot -Tpng | display")
     os.exit (0)
 end
 
@@ -57,16 +53,7 @@ if not kvs.conf.live.status then
     die ("conf.live.status: not found\n")
 end
 
-if opts.H then
-    if not kvs.hosts then
-        die ("hosts not found\n")
-    end
-end
-
 print ("graph flux {")
-if opts.H then
-    dot_hostlabel (0, kvs.hosts)
-end
 
 dot_color_status (kvs.conf.live.status["ok"], "green")
 dot_color_status (kvs.conf.live.status["fail"], "red")
@@ -75,9 +62,6 @@ dot_color_status (kvs.conf.live.status["unknown"], "gray")
 
 for i,ca in ipairs(kvs.conf.live.topology) do
     for j,child in ipairs(ca) do
-        if opts.H then
-            dot_hostlabel (child, kvs.hosts)
-        end
         dot_edge (i - 1, child)
     end
 end
