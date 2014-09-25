@@ -49,7 +49,7 @@ the ZeroMQ DEALDER - ROUTER flow, socket identites of each hop in
 the request's route are prepended as it is routed "upstream" towards
 the root of the tree based overlay network.  In flux-snoop(1) output,
 these routing frames are compressed into what looks like one message part,
-with abbrevieated addresses separated by exclaimation points, and the number
+with abbrevieated addresses separated by exclamation points, and the number
 of hops shown in brackets, not the size.  Flux responses utilize the
 reverse flow, where routing frames are stripped of and used to select
 the next peer, but otherwise have the same structure as requests.
