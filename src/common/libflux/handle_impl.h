@@ -23,10 +23,6 @@ struct flux_handle_ops {
     int         (*event_subscribe)(void *impl, const char *topic);
     int         (*event_unsubscribe)(void *impl, const char *topic);
 
-    zmsg_t *    (*snoop_recvmsg)(void *impl, bool nonblock);
-    int         (*snoop_subscribe)(void *impl, const char *topic);
-    int         (*snoop_unsubscribe)(void *impl, const char *topic);
-
     int         (*rank)(void *impl);
 
     zctx_t *    (*get_zctx)(void *impl);
