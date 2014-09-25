@@ -51,4 +51,14 @@ Display Flux environment variable settings before execing 'CMD'.
 
 AUTHOR
 ------
-include::FOOTER.adoc[]
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]

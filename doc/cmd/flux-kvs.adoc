@@ -16,14 +16,25 @@ SYNOPSIS
 DESCRIPTION
 -----------
 The Flux key-value store (KVS) is a simple, distributed data storage
-service used a building block by other framework components.
+service used a building block by other Flux components.
 flux-kvs(1) is a command line utility that operates on the KVS.
-It is a thin layer on top of the C API for the Flux KVS.
+It is a very thin layer on top of a C API.
 
 The Flux KVS stores JSON values under string keys.  The keys are
-hierarchical, using "." as a path separator analagous to "/" separated
+hierarchical, using "." as a path separator, analagous to "/" separated
 UNIX file paths.  A single "." represents the root directory of
 the KVS.
+
+The KVS is distributed among the ranks of a comms session.  Rank 0
+is the master, and other ranks are caching slaves.  All writes are flushed
+to the master during a commit operation.  Data is stored in a hash tree
+such that every commit results in a new root hash.  Each new root hash
+is multicast across the session.  When slaves update their root hash,
+they atomically update their view to match the master.  There may be a
+delay after a commit while old data is served on a slave that has not yet
+updated its root hash, thus the Flux KVS consistency model is "eventually
+consistent".  Slaves cache data temporally and fault in new data through
+their parent in the overlay network.
 
 flux-kvs(1) runs a KVS 'COMMAND'.  The possible commands and their
 arguments are described below.
@@ -83,8 +94,9 @@ commit requests.
 
 *wait* 'version'::
 Block until the KVS version reaches 'version' or greater.  A simple form
-of synchronization is:  node A puts a value, reads version, send version
-to node B.  Node B waits for version, gets value.
+of synchronization between peers is:  node A puts a value, commits it,
+reads version, sends version to node B.  Node B waits for version, gets
+value.
 
 *dropcache*::
 Tell the local KVS to drop any cache it is holding.
@@ -93,6 +105,17 @@ Tell the local KVS to drop any cache it is holding.
 Send an event across the comms session instructing all KVS instances
 to drop their caches.
 
+
 AUTHOR
 ------
-include::FOOTER.adoc[]
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
