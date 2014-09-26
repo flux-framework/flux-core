@@ -47,3 +47,5 @@ mpi_hello_CPPFLAGS = \
 	$(MPI_CFLAGS)
 mpi_hello_LDADD = \
 	$(MPI_CLDFLAGS) $(top_builddir)/src/lib/libpmi/libpmi.la
+
+EXTRA_DIST = valgrind.supp
