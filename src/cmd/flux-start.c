@@ -37,10 +37,11 @@ typedef enum { START_DIRECT, START_SLURM, START_SCREEN } method_t;
 
 void start_direct (int size, const char *cmd);
 
-#define OPTIONS "hsS"
+#define OPTIONS "hm:s:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"method",     required_argument,  0, 'm'},
+    {"size",       required_argument,  0, 's'},
     { 0, 0, 0, 0 },
 };
 
@@ -48,8 +49,8 @@ void usage (void)
 {
     fprintf (stderr, "Usage: flux-start [OPTIONS] command ...\n"
 "where options are:\n"
-"  -m,--method slurm | screen | direct    choose method (default direct)\n"
-
+"  -m,--method METHOD    start with slurm, screen, or direct (default direct)\n"
+"  -s,--size N           start N ranks\n"
 );
     exit (1);
 }
@@ -108,33 +109,41 @@ int main (int argc, char *argv[])
 
 void start_direct (int size, const char *cmd)
 {
-    pid_t pid;
     char *cmbd_path = getenv ("FLUX_CMBD_PATH");
-    int ac;
-    char **av;
-    int status;
+    int status, rank;
+    pid_t pid;
 
-    argv_create (&ac, &av);
-    argv_push (&ac, &av, "%s", cmbd_path ? cmbd_path : CMBD_PATH);
-    argv_push (&ac, &av, "--size=%d", size);
-    argv_push (&ac, &av, "--rank=%d", 0);
+    for (rank = 0; rank < size; rank++) {
+        int ac;
+        char **av;
 
-    switch ((pid = fork ())) {
-        case -1:
-            err_exit ("fork");
-        case 0: /* child */
-            if (execv (av[0], av) < 0)
-                err_exit ("execv %s", av[0]);
-            break;
-        default: /* parent */
-            (void)close (STDIN_FILENO);
+        argv_create (&ac, &av);
+        argv_push (&ac, &av, "%s", cmbd_path ? cmbd_path : CMBD_PATH);
+        argv_push (&ac, &av, "--size=%d", size);
+        argv_push (&ac, &av, "--rank=%d", rank);
+        if (rank == 0 && cmd)
+            argv_push (&ac, &av, "--command=%s", cmd);
+
+        switch ((pid = fork ())) {
+            case -1:
+                err_exit ("fork");
+            case 0: /* child */
+                if (execv (av[0], av) < 0)
+                    err_exit ("execv %s", av[0]);
+                break;
+            default: /* parent */
+                break;
+        }
+        argv_destroy (ac, av);
+    }
+    (void)close (STDIN_FILENO);
+
+    while (size > 0) {
+        if (wait (&status) == 0)
+            size--;
+        else if (errno == ECHILD)
             break;
     }
-
-    if (waitpid (pid, &status, 0) < 0)
-        err_exit ("waitpid");
-
-    argv_destroy (ac, av);
 }
 
 /*
