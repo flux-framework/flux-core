@@ -35,7 +35,7 @@
 
 typedef enum { START_DIRECT, START_SLURM, START_SCREEN } method_t;
 
-void start_direct (int size, const char *cmd, bool verbose);
+void start_direct (int size, int kary, const char *cmd, bool verbose);
 
 /* For START_DIRECT:  wait this long after exit of first cmbd before
  * sending signals to those that remain.  This is a temporary work-around
@@ -43,12 +43,13 @@ void start_direct (int size, const char *cmd, bool verbose);
  */
 const int child_wait_seconds = 1;
 
-#define OPTIONS "hm:s:v"
+#define OPTIONS "hvm:s:k:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"verbose",    no_argument,        0, 'v'},
     {"method",     required_argument,  0, 'm'},
     {"size",       required_argument,  0, 's'},
+    {"k-ary",      required_argument,  0, 'k'},
     { 0, 0, 0, 0 },
 };
 
@@ -58,6 +59,7 @@ void usage (void)
 "where options are:\n"
 "  -m,--method METHOD    start with slurm, screen, or direct (default direct)\n"
 "  -s,--size N           start N ranks\n"
+"  -k,--k-ary N          set cmbd --k-ary N\n"
 "  -v,--verbose          be chatty\n"
 );
     exit (1);
@@ -70,6 +72,7 @@ int main (int argc, char *argv[])
     method_t method = START_DIRECT;
     int size = 1;
     bool vopt = false;
+    int kary = -1;
 
     log_init ("flux-start");
 
@@ -94,6 +97,9 @@ int main (int argc, char *argv[])
             case 's': /* --size N */
                 size = strtoul (optarg, NULL, 10);
                 break;
+            case 'k': /* --k-ary-N */
+                kary = strtoul (optarg, NULL, 10);
+                break;
             default:
                 usage ();
                 break;
@@ -104,7 +110,7 @@ int main (int argc, char *argv[])
 
     switch (method) {
         case START_DIRECT:
-            start_direct (size, command, vopt);
+            start_direct (size, kary, command, vopt);
             break;
         case START_SLURM:
         case START_SCREEN:
@@ -167,7 +173,7 @@ void child_killer (pid_t *pids, int size, bool verbose)
     }
 }
 
-void start_direct (int size, const char *cmd, bool verbose)
+void start_direct (int size, int kary, const char *cmd, bool verbose)
 {
     bool child_killer_armed = false;;
     char *cmbd_path = getenv ("FLUX_CMBD_PATH");
@@ -184,6 +190,8 @@ void start_direct (int size, const char *cmd, bool verbose)
         argv_push (&ac, &av, "%s", cmbd_path ? cmbd_path : CMBD_PATH);
         argv_push (&ac, &av, "--size=%d", size);
         argv_push (&ac, &av, "--rank=%d", rank);
+        if (kary != -1)
+            argv_push (&ac, &av, "--k-ary=%d", kary);
         if (rank == 0 && cmd)
             argv_push (&ac, &av, "--command=%s", cmd);
         if (verbose) {
