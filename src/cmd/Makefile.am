@@ -50,7 +50,8 @@ fluxcmd_PROGRAMS = \
 	flux-module \
 	flux-comms \
 	flux-comms-stats \
-	flux-kvs
+	flux-kvs \
+	flux-start
 
 flux_zio_LDADD = \
 	$(top_builddir)/src/common/libzio/libzio.la \
