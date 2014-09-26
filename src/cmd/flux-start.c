@@ -35,8 +35,8 @@
 
 typedef enum { START_DIRECT, START_SLURM, START_SCREEN } method_t;
 
-void start_direct (int size, int kary, const char *modules,
-                   const char *cmd, bool verbose);
+void start_direct (int size, int kary, const char *modules, const char *modopt,
+                   const char *cmd, bool verbose, bool noexec);
 
 /* For START_DIRECT:  wait this long after exit of first cmbd before
  * sending signals to those that remain.  This is a temporary work-around
@@ -44,14 +44,16 @@ void start_direct (int size, int kary, const char *modules,
  */
 const int child_wait_seconds = 1;
 
-#define OPTIONS "hvm:s:k:M:"
+#define OPTIONS "hvm:s:k:M:O:X"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"verbose",    no_argument,        0, 'v'},
+    {"noexec",     no_argument,        0, 'X'},
     {"method",     required_argument,  0, 'm'},
     {"size",       required_argument,  0, 's'},
     {"k-ary",      required_argument,  0, 'k'},
-    {"modules",    required_argument,  0, 'm'},
+    {"modules",    required_argument,  0, 'M'},
+    {"modopt",     required_argument,  0, 'O'},
     { 0, 0, 0, 0 },
 };
 
@@ -59,11 +61,13 @@ void usage (void)
 {
     fprintf (stderr, "Usage: flux-start [OPTIONS] command ...\n"
 "where options are:\n"
-"  -m,--method METHOD            use slurm/screen/direct (default: direct)\n"
-"  -s,--size N                   set number of ranks in session\n"
-"  -k,--k-ary N                  wire up in k-ary tree\n"
-"  -m,--modules name[,name,...]  load the named modules\n"
-"  -v,--verbose          be chatty\n"
+"  -m,--method METHOD      use slurm/screen/direct (default: direct)\n"
+"  -s,--size N             set number of ranks in session\n"
+"  -k,--k-ary N            wire up in k-ary tree\n"
+"  -M,--modules modules    load the named modules\n"
+"  -O,--modopt options     set module options\n"
+"  -X,--noexec             don't execute (useful with -v)\n"
+"  -v,--verbose            be annoyingly informative\n"
 );
     exit (1);
 }
@@ -75,8 +79,10 @@ int main (int argc, char *argv[])
     method_t method = START_DIRECT;
     int size = 1;
     bool vopt = false;
+    bool Xopt = false;
     int kary = -1;
     char *modules = NULL;
+    char *modopt = NULL;
 
     log_init ("flux-start");
 
@@ -87,6 +93,9 @@ int main (int argc, char *argv[])
                 break;
             case 'v': /* --verbose */
                 vopt = true;
+                break;
+            case 'X': /* --noexec */
+                Xopt = true;
                 break;
             case 'm': /* --method METHOD */
                 if (!strcmp (optarg, "slurm"))
@@ -107,6 +116,9 @@ int main (int argc, char *argv[])
             case 'M': /* --modules name[,name] */
                 modules = optarg;
                 break;
+            case 'O': /* --modopt "mod:key=val [mod:key=val...]" */
+                modopt = optarg;
+                break;
             default:
                 usage ();
                 break;
@@ -117,7 +129,7 @@ int main (int argc, char *argv[])
 
     switch (method) {
         case START_DIRECT:
-            start_direct (size, kary, modules, command, vopt);
+            start_direct (size, kary, modules, modopt, command, vopt, Xopt);
             break;
         case START_SLURM:
         case START_SCREEN:
@@ -180,8 +192,8 @@ void child_killer (pid_t *pids, int size, bool verbose)
     }
 }
 
-void start_direct (int size, int kary, const char *modules,
-                   const char *cmd, bool verbose)
+void start_direct (int size, int kary, const char *modules, const char *modopt,
+                   const char *cmd, bool verbose, bool noexec)
 {
     bool child_killer_armed = false;;
     char *cmbd_path = getenv ("FLUX_CMBD_PATH");
@@ -204,46 +216,52 @@ void start_direct (int size, int kary, const char *modules,
             argv_push (&ac, &av, "--modules=%s", modules);
         if (rank == 0 && cmd)
             argv_push (&ac, &av, "--command=%s", cmd);
+        if (modopt)
+            argv_push_cmdline (&ac, &av, modopt);
         if (verbose) {
             char *s = argv_concat (ac, av, " ");
             msg ("%d: %s", rank, s);
             free (s);
         }
-        switch ((pids[rank] = fork ())) {
-            case -1:
-                err_exit ("fork");
-            case 0: /* child */
-                if (execv (av[0], av) < 0)
-                    err_exit ("execv %s", av[0]);
-                break;
-            default: /* parent */
-                break;
+        if (!noexec) {
+            switch ((pids[rank] = fork ())) {
+                case -1:
+                    err_exit ("fork");
+                case 0: /* child */
+                    if (execv (av[0], av) < 0)
+                        err_exit ("execv %s", av[0]);
+                    break;
+                default: /* parent */
+                    break;
+            }
         }
         argv_destroy (ac, av);
     }
-    (void)close (STDIN_FILENO);
-    while (reaped < size) {
-        int status;
-        pid_t pid;
+    if (!noexec) {
+        (void)close (STDIN_FILENO);
+        while (reaped < size) {
+            int status;
+            pid_t pid;
 
-        if ((pid = wait (&status)) < 0) {
-            if (errno == EINTR) {
-                if (child_killer_armed)
-                    child_killer (pids, size, verbose);
-                continue;
-            }
-            err_exit ("wait");
-        }
-        for (rank = 0; rank < size; rank++) {
-            if (pids[rank] == pid) {
-                pids[rank] = -1;
-                child_report (pid, rank, status, verbose);
-                if (!child_killer_armed) {
-                    child_killer_arm ();
-                    child_killer_armed = true;
+            if ((pid = wait (&status)) < 0) {
+                if (errno == EINTR) {
+                    if (child_killer_armed)
+                        child_killer (pids, size, verbose);
+                    continue;
                 }
-                reaped++;
-                break;
+                err_exit ("wait");
+            }
+            for (rank = 0; rank < size; rank++) {
+                if (pids[rank] == pid) {
+                    pids[rank] = -1;
+                    child_report (pid, rank, status, verbose);
+                    if (!child_killer_armed) {
+                        child_killer_arm ();
+                        child_killer_armed = true;
+                    }
+                    reaped++;
+                    break;
+                }
             }
         }
     }
