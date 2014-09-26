@@ -38,13 +38,17 @@ typedef enum { START_DIRECT, START_SLURM, START_SCREEN } method_t;
 void start_direct (int size, int kary, const char *modules, const char *modopt,
                    const char *cmd, bool verbose, bool noexec);
 
+void start_slurm (int size, int kary, const char *modules, const char *modopt,
+                  const char *cmd, bool verbose, bool noexec,
+                  int nnodes, char *partition);
+
 /* For START_DIRECT:  wait this long after exit of first cmbd before
  * sending signals to those that remain.  This is a temporary work-around
  * for unreliable shutdown in fast cycling comms sessions.
  */
 const int child_wait_seconds = 1;
 
-#define OPTIONS "hvm:s:k:M:O:X"
+#define OPTIONS "hvm:s:k:M:O:XN:p:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"verbose",    no_argument,        0, 'v'},
@@ -54,6 +58,8 @@ static const struct option longopts[] = {
     {"k-ary",      required_argument,  0, 'k'},
     {"modules",    required_argument,  0, 'M'},
     {"modopt",     required_argument,  0, 'O'},
+    {"nnodes",     required_argument,  0, 'N'},
+    {"partition",  required_argument,  0, 'p'},
     { 0, 0, 0, 0 },
 };
 
@@ -64,6 +70,8 @@ void usage (void)
 "  -m,--method METHOD      use slurm/screen/direct (default: direct)\n"
 "  -s,--size N             set number of ranks in session\n"
 "  -k,--k-ary N            wire up in k-ary tree\n"
+"  -N,--nnodes N           set number of nodes (slurm only)\n"
+"  -p,--partition NAME     set partition (slurm only)\n"
 "  -M,--modules modules    load the named modules\n"
 "  -O,--modopt options     set module options\n"
 "  -X,--noexec             don't execute (useful with -v)\n"
@@ -83,6 +91,8 @@ int main (int argc, char *argv[])
     int kary = -1;
     char *modules = NULL;
     char *modopt = NULL;
+    int slurm_nnodes = -1;
+    char *slurm_partition = NULL;
 
     log_init ("flux-start");
 
@@ -110,7 +120,7 @@ int main (int argc, char *argv[])
             case 's': /* --size N */
                 size = strtoul (optarg, NULL, 10);
                 break;
-            case 'k': /* --k-ary-N */
+            case 'k': /* --k-ary N */
                 kary = strtoul (optarg, NULL, 10);
                 break;
             case 'M': /* --modules name[,name] */
@@ -118,6 +128,12 @@ int main (int argc, char *argv[])
                 break;
             case 'O': /* --modopt "mod:key=val [mod:key=val...]" */
                 modopt = optarg;
+                break;
+            case 'N': /* --nnodes N */
+                slurm_nnodes = strtoul (optarg, NULL, 10);
+                break;
+            case 'p': /* --partition NAME  */
+                slurm_partition = optarg;
                 break;
             default:
                 usage ();
@@ -132,6 +148,9 @@ int main (int argc, char *argv[])
             start_direct (size, kary, modules, modopt, command, vopt, Xopt);
             break;
         case START_SLURM:
+            start_slurm (size, kary, modules, modopt, command, vopt, Xopt,
+                         slurm_nnodes, slurm_partition);
+            break;
         case START_SCREEN:
             msg_exit ("not implemented yet");
     }
@@ -160,8 +179,6 @@ static void child_report (pid_t pid, int rank, int status, bool verbose)
         msg ("%d (pid %d) wait status=%d", rank, pid, status);
 }
 
-/* XXX See note above child_wait_seconds at top of program.
- */
 static volatile sig_atomic_t child_killer_timeout;
 void alarm_handler (int a)
 {
@@ -267,6 +284,47 @@ void start_direct (int size, int kary, const char *modules, const char *modopt,
     }
 
     free (pids);
+}
+
+void start_slurm (int size, int kary, const char *modules, const char *modopt,
+                  const char *cmd, bool verbose, bool noexec,
+                  int nnodes, char *partition)
+{
+    char *cmbd_path = getenv ("FLUX_CMBD_PATH");
+    int ac;
+    char **av;
+
+    argv_create (&ac, &av);
+    argv_push (&ac, &av, "srun");
+    argv_push (&ac, &av, "--nnodes=%d", nnodes > 0 ? nnodes : size);
+    argv_push (&ac, &av, "--ntasks=%d", size);
+    //argv_push (&ac, &av, "--overcommit");
+    argv_push (&ac, &av, "--propagate=CORE");
+    if (partition)
+        argv_push (&ac, &av, "--partition=%s", partition);
+
+    argv_push (&ac, &av, "%s", cmbd_path ? cmbd_path : CMBD_PATH);
+    argv_push (&ac, &av, "--pmi-boot");
+    argv_push (&ac, &av, "--logdest=%s", "cmbd.log");
+    if (kary != -1)
+        argv_push (&ac, &av, "--k-ary=%d", kary);
+    if (modules)
+        argv_push (&ac, &av, "--modules=%s", modules);
+    if (cmd)
+        argv_push (&ac, &av, "--command=%s", cmd);
+    if (modopt)
+        argv_push_cmdline (&ac, &av, modopt);
+
+    if (verbose) {
+        char *s = argv_concat (ac, av, " ");
+        msg ("%s", s);
+        free (s);
+    }
+    if (!noexec) {
+        if (execv (av[0], av) < 0)
+            err_exit ("execv %s", av[0]);
+    }
+    argv_destroy (ac, av);
 }
 
 /*
