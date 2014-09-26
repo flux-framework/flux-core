@@ -22,6 +22,10 @@ void argv_destroy (int argc, char *argv[]);
  */
 void argv_push (int *argcp, char ***argvp, const char *fmt, ...);
 
+/* Push space-delimited args onto argv array, making a copy of the args.
+ */
+void argv_push_cmdline (int *argcp, char ***argvp, const char *s);
+
 #endif /* !_UTIL_ARGV_H */
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

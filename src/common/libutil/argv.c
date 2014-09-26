@@ -82,6 +82,18 @@ void argv_push (int *argcp, char ***argvp, const char *fmt, ...)
     *argvp = av;
 }
 
+void argv_push_cmdline (int *argcp, char ***argvp, const char *s)
+{
+    char *cpy = xstrdup (s);
+    char *arg, *saveptr = NULL, *a1 = cpy;
+
+    while ((arg = strtok_r (a1, " \t", &saveptr))) {
+        argv_push (argcp, argvp, "%s", arg);
+        a1 = NULL;
+    }
+    free (cpy);
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
