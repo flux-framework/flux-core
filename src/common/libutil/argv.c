@@ -26,6 +26,7 @@
 #include "config.h"
 #endif
 #include <string.h>
+#include <stdlib.h>
 
 #include "xzmalloc.h"
 #include "argv.h"
@@ -45,6 +46,36 @@ char *argv_concat (int argc, char *argv[], const char *sep)
             strcat (s, sep);
     }
     return s;
+}
+
+void argv_create (int *argcp, char ***argvp)
+{
+    int ac = 0;
+    char **av = xzmalloc (1 * sizeof (av[0])); /* NULL term for execv() */
+
+    *argcp = ac;
+    *argvp = av;
+}
+
+void argv_destroy (int argc, char *argv[])
+{
+    int i;
+    for (i = 0; i < argc; i++)
+        if (argv[i])
+            free (argv[i]);
+    free (argv);
+}
+
+void argv_push (int *argcp, char ***argvp, const char *arg)
+{
+    int ac = *argcp;
+    char **av = xrealloc (*argvp, (ac + 1) * sizeof (av[0]));
+
+    av[ac++] = xstrdup (arg);
+    av[ac] = NULL;
+
+    *argcp = ac;
+    *argvp = av;
 }
 
 /*
