@@ -35,11 +35,12 @@
 
 typedef enum { START_DIRECT, START_SLURM, START_SCREEN } method_t;
 
-void start_direct (int size, const char *cmd);
+void start_direct (int size, const char *cmd, bool verbose);
 
-#define OPTIONS "hm:s:"
+#define OPTIONS "hm:s:v"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
+    {"verbose",    no_argument,        0, 'v'},
     {"method",     required_argument,  0, 'm'},
     {"size",       required_argument,  0, 's'},
     { 0, 0, 0, 0 },
@@ -51,6 +52,7 @@ void usage (void)
 "where options are:\n"
 "  -m,--method METHOD    start with slurm, screen, or direct (default direct)\n"
 "  -s,--size N           start N ranks\n"
+"  -v,--verbose          be chatty\n"
 );
     exit (1);
 }
@@ -61,6 +63,7 @@ int main (int argc, char *argv[])
     char *command = NULL;
     method_t method = START_DIRECT;
     int size = 1;
+    bool vopt = false;
 
     log_init ("flux-start");
 
@@ -68,6 +71,9 @@ int main (int argc, char *argv[])
         switch (ch) {
             case 'h': /* --help */
                 usage ();
+                break;
+            case 'v': /* --verbose */
+                vopt = true;
                 break;
             case 'm': /* --method METHOD */
                 if (!strcmp (optarg, "slurm"))
@@ -92,7 +98,7 @@ int main (int argc, char *argv[])
 
     switch (method) {
         case START_DIRECT:
-            start_direct (size, command);
+            start_direct (size, command, vopt);
             break;
         case START_SLURM:
         case START_SCREEN:
@@ -107,12 +113,13 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-void start_direct (int size, const char *cmd)
+void start_direct (int size, const char *cmd, bool verbose)
 {
     char *cmbd_path = getenv ("FLUX_CMBD_PATH");
-    int status, rank;
-    pid_t pid;
+    int rank;
+    pid_t *pids;
 
+    pids = xzmalloc (size * sizeof (pids[0]));
     for (rank = 0; rank < size; rank++) {
         int ac;
         char **av;
@@ -124,7 +131,13 @@ void start_direct (int size, const char *cmd)
         if (rank == 0 && cmd)
             argv_push (&ac, &av, "--command=%s", cmd);
 
-        switch ((pid = fork ())) {
+        if (verbose) {
+            char *s = argv_concat (ac, av, " ");
+            msg ("%d: %s", rank, s);
+            free (s);
+        }
+
+        switch ((pids[rank] = fork ())) {
             case -1:
                 err_exit ("fork");
             case 0: /* child */
@@ -138,12 +151,25 @@ void start_direct (int size, const char *cmd)
     }
     (void)close (STDIN_FILENO);
 
-    while (size > 0) {
-        if (wait (&status) == 0)
-            size--;
-        else if (errno == ECHILD)
-            break;
+    for (rank = 0; rank < size; rank++) {
+        int status, rc;
+        if (waitpid (pids[rank], &status, 0) < 0)
+            err_exit ("waitpid %u (rank %d)", pids[rank], rank);
+        if (WIFEXITED (status)) {
+            rc = WEXITSTATUS (status);
+            if (rc == 0) {
+                if (verbose)
+                    msg ("%d (pid %d) exited normally", rank, pids[rank]);
+            } else
+                msg ("%d (pid %d) exited with rc=%d", rank, pids[rank], rc);
+        } else if (WIFSIGNALED (status)) {
+            msg ("%d (pid %d) %s", rank, pids[rank],
+                 strsignal (WTERMSIG (status)));
+        } else {
+            msg ("%d (pid %d) wait status=%d", rank, pids[rank], status);
+        }
     }
+    free (pids);
 }
 
 /*
