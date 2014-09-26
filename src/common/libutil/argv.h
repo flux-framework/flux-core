@@ -1,6 +1,8 @@
 #ifndef _UTIL_ARGV_H
 #define _UTIL_ARGV_H
 
+#include <stdarg.h>
+
 /* Return a string with argcv elements delimited by 'sep'.  Caller must free.
  */
 char *argv_concat (int argc, char *argv[], const char *sep);
@@ -18,7 +20,7 @@ void argv_destroy (int argc, char *argv[]);
 
 /* Push arg onto argv array, making a copy of arg.
  */
-void argv_push (int *argcp, char ***argvp, const char *arg);
+void argv_push (int *argcp, char ***argvp, const char *fmt, ...);
 
 #endif /* !_UTIL_ARGV_H */
 /*

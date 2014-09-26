@@ -25,6 +25,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -66,12 +67,15 @@ void argv_destroy (int argc, char *argv[])
     free (argv);
 }
 
-void argv_push (int *argcp, char ***argvp, const char *arg)
+void argv_push (int *argcp, char ***argvp, const char *fmt, ...)
 {
+    va_list ap;
     int ac = *argcp;
-    char **av = xrealloc (*argvp, (ac + 1) * sizeof (av[0]));
+    char **av = xrealloc (*argvp, (ac + 2) * sizeof (av[0]));
 
-    av[ac++] = xstrdup (arg);
+    va_start (ap, fmt);
+    av[ac++] = xvasprintf (fmt, ap);
+    va_end (ap);
     av[ac] = NULL;
 
     *argcp = ac;
