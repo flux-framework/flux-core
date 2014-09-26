@@ -44,6 +44,14 @@ void *xzmalloc (size_t size)
     return new;
 }
 
+void *xrealloc (void *ptr, size_t size)
+{
+    void *new = realloc (ptr, size);
+    if (!new)
+        oom ();
+    return new;
+}
+
 char *xstrdup (const char *s)
 {
     char *cpy = strdup (s);
