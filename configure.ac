@@ -131,8 +131,6 @@ AC_CONFIG_FILES( \
   doc/Makefile \
   doc/cmd/Makefile \
 )
-AC_CONFIG_FILES([src/cmd/flux-start-srun], [chmod +x src/cmd/flux-start-srun])
-AC_CONFIG_FILES([src/cmd/flux-start-screen], [chmod +x src/cmd/flux-start-screen])
-AC_CONFIG_FILES([src/cmd/flux-start-single], [chmod +x src/cmd/flux-start-single])
+AC_CONFIG_FILES([src/cmd/flux-screen], [chmod +x src/cmd/flux-screen])
 
 AC_OUTPUT
