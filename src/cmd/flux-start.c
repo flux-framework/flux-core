@@ -33,33 +33,32 @@
 #include "src/common/libutil/argv.h"
 #include "src/common/libutil/log.h"
 
-typedef enum { START_DIRECT, START_SLURM, START_SCREEN } method_t;
-
-void start_direct (int size, int kary, const char *modules, const char *modopt,
+void start_direct (int size, int kary, const char *modules, const char *modopts,
                    const char *cmd, bool verbose, bool noexec);
 
-void start_slurm (int size, int kary, const char *modules, const char *modopt,
+void start_slurm (int size, int kary, const char *modules, const char *modopts,
                   const char *cmd, bool verbose, bool noexec,
                   int nnodes, char *partition);
 
-/* For START_DIRECT:  wait this long after exit of first cmbd before
- * sending signals to those that remain.  This is a temporary work-around
- * for unreliable shutdown in fast cycling comms sessions.
+/* Workaround for shutdown bug:
+ * Wait this many seconds after exit of first cmbd before kill -9 of
+ * those that remain.  This is a temporary work-around for unreliable
+ * shutdown in fast cycling comms sessions.
  */
 const int child_wait_seconds = 1;
 
-#define OPTIONS "hvm:s:k:M:O:XN:p:"
+#define OPTIONS "hvs:k:M:O:XN:p:S"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"verbose",    no_argument,        0, 'v'},
     {"noexec",     no_argument,        0, 'X'},
-    {"method",     required_argument,  0, 'm'},
     {"size",       required_argument,  0, 's'},
     {"k-ary",      required_argument,  0, 'k'},
     {"modules",    required_argument,  0, 'M'},
-    {"modopt",     required_argument,  0, 'O'},
+    {"modopts",    required_argument,  0, 'O'},
     {"nnodes",     required_argument,  0, 'N'},
     {"partition",  required_argument,  0, 'p'},
+    {"slurm",      no_argument,        0, 'S'},
     { 0, 0, 0, 0 },
 };
 
@@ -67,13 +66,13 @@ void usage (void)
 {
     fprintf (stderr, "Usage: flux-start [OPTIONS] command ...\n"
 "where options are:\n"
-"  -m,--method METHOD      use slurm/screen/direct (default: direct)\n"
 "  -s,--size N             set number of ranks in session\n"
 "  -k,--k-ary N            wire up in k-ary tree\n"
-"  -N,--nnodes N           set number of nodes (slurm only)\n"
-"  -p,--partition NAME     set partition (slurm only)\n"
+"  -N,--nnodes N           set number of nodes (implies slurm)\n"
+"  -p,--partition NAME     set partition (implies slurm)\n"
+"  -S,--slurm              launch with slurm\n"
 "  -M,--modules modules    load the named modules\n"
-"  -O,--modopt options     set module options\n"
+"  -O,--modopts options    set module options\n"
 "  -X,--noexec             don't execute (useful with -v)\n"
 "  -v,--verbose            be annoyingly informative\n"
 );
@@ -84,15 +83,15 @@ int main (int argc, char *argv[])
 {
     int ch;
     char *command = NULL;
-    method_t method = START_DIRECT;
     int size = 1;
     bool vopt = false;
     bool Xopt = false;
     int kary = -1;
     char *modules = NULL;
-    char *modopt = NULL;
+    char *modopts = NULL;
     int slurm_nnodes = -1;
     char *slurm_partition = NULL;
+    bool slurm = false;
 
     log_init ("flux-start");
 
@@ -107,15 +106,8 @@ int main (int argc, char *argv[])
             case 'X': /* --noexec */
                 Xopt = true;
                 break;
-            case 'm': /* --method METHOD */
-                if (!strcmp (optarg, "slurm"))
-                    method = START_SLURM;
-                else if (!strcmp (optarg, "screen"))
-                    method = START_SCREEN;
-                else if (!strcmp (optarg, "direct"))
-                    method = START_DIRECT;
-                else
-                    usage ();
+            case 'S': /* --slurm */
+                slurm = true;
                 break;
             case 's': /* --size N */
                 size = strtoul (optarg, NULL, 10);
@@ -126,14 +118,16 @@ int main (int argc, char *argv[])
             case 'M': /* --modules name[,name] */
                 modules = optarg;
                 break;
-            case 'O': /* --modopt "mod:key=val [mod:key=val...]" */
-                modopt = optarg;
+            case 'O': /* --modopts "mod:key=val [mod:key=val...]" */
+                modopts = optarg;
                 break;
             case 'N': /* --nnodes N */
                 slurm_nnodes = strtoul (optarg, NULL, 10);
+                slurm = true;
                 break;
             case 'p': /* --partition NAME  */
                 slurm_partition = optarg;
+                slurm = true;
                 break;
             default:
                 usage ();
@@ -143,24 +137,21 @@ int main (int argc, char *argv[])
     if (optind < argc)
         command = argv_concat (argc - optind, argv + optind, " ");
 
+    if (slurm_nnodes > size)
+        size = slurm_nnodes;
+
     struct rlimit rl;
     rl.rlim_cur = RLIM_INFINITY;
     rl.rlim_max = RLIM_INFINITY;
     if (setrlimit (RLIMIT_CORE, &rl) < 0)
         err ("setrlimit: could not remove core file size limit");
 
-    switch (method) {
-        case START_DIRECT:
-            start_direct (size, kary, modules, modopt, command, vopt, Xopt);
-            break;
-        case START_SLURM:
-            start_slurm (size, kary, modules, modopt, command, vopt, Xopt,
-                         slurm_nnodes, slurm_partition);
-            break;
-        case START_SCREEN:
-            msg_exit ("not implemented yet");
+    if (slurm) {
+        start_slurm (size, kary, modules, modopts, command, vopt, Xopt,
+                     slurm_nnodes, slurm_partition);
+    } else {
+        start_direct (size, kary, modules, modopts, command, vopt, Xopt);
     }
-
 
     if (command)
         free (command);
@@ -215,7 +206,7 @@ void child_killer (pid_t *pids, int size, bool verbose)
     }
 }
 
-void start_direct (int size, int kary, const char *modules, const char *modopt,
+void start_direct (int size, int kary, const char *modules, const char *modopts,
                    const char *cmd, bool verbose, bool noexec)
 {
     bool child_killer_armed = false;;
@@ -239,8 +230,8 @@ void start_direct (int size, int kary, const char *modules, const char *modopt,
             argv_push (&ac, &av, "--modules=%s", modules);
         if (rank == 0 && cmd)
             argv_push (&ac, &av, "--command=%s", cmd);
-        if (modopt)
-            argv_push_cmdline (&ac, &av, modopt);
+        if (modopts)
+            argv_push_cmdline (&ac, &av, modopts);
         if (verbose) {
             char *s = argv_concat (ac, av, " ");
             msg ("%d: %s", rank, s);
@@ -292,20 +283,24 @@ void start_direct (int size, int kary, const char *modules, const char *modopt,
     free (pids);
 }
 
-void start_slurm (int size, int kary, const char *modules, const char *modopt,
+void start_slurm (int size, int kary, const char *modules, const char *modopts,
                   const char *cmd, bool verbose, bool noexec,
                   int nnodes, char *partition)
 {
+    char *srun_path = "/usr/bin/srun";
     char *cmbd_path = getenv ("FLUX_CMBD_PATH");
     int ac;
     char **av;
 
     argv_create (&ac, &av);
-    argv_push (&ac, &av, "srun");
-    argv_push (&ac, &av, "--nnodes=%d", nnodes > 0 ? nnodes : size);
+    argv_push (&ac, &av, "%s", srun_path);
+    argv_push (&ac, &av, "--nodes=%d", nnodes > 0 ? nnodes : size);
     argv_push (&ac, &av, "--ntasks=%d", size);
     //argv_push (&ac, &av, "--overcommit");
     argv_push (&ac, &av, "--propagate=CORE");
+    if (!cmd)
+        argv_push (&ac, &av, "--pty");
+    argv_push (&ac, &av, "--jobname=%s", "flux");
     if (partition)
         argv_push (&ac, &av, "--partition=%s", partition);
 
@@ -318,8 +313,8 @@ void start_slurm (int size, int kary, const char *modules, const char *modopt,
         argv_push (&ac, &av, "--modules=%s", modules);
     if (cmd)
         argv_push (&ac, &av, "--command=%s", cmd);
-    if (modopt)
-        argv_push_cmdline (&ac, &av, modopt);
+    if (modopts)
+        argv_push_cmdline (&ac, &av, modopts);
 
     if (verbose) {
         char *s = argv_concat (ac, av, " ");
