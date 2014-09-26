@@ -37,6 +37,12 @@ typedef enum { START_DIRECT, START_SLURM, START_SCREEN } method_t;
 
 void start_direct (int size, const char *cmd, bool verbose);
 
+/* For START_DIRECT:  wait this long after exit of first cmbd before
+ * sending signals to those that remain.  This is a temporary work-around
+ * for unreliable shutdown in fast cycling comms sessions.
+ */
+const int child_wait_seconds = 1;
+
 #define OPTIONS "hm:s:v"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
@@ -113,11 +119,61 @@ int main (int argc, char *argv[])
     return 0;
 }
 
+static void child_report (pid_t pid, int rank, int status, bool verbose)
+{
+    int rc;
+    if (WIFEXITED (status)) {
+        rc = WEXITSTATUS (status);
+        if (rc == 0) {
+            if (verbose)
+                msg ("%d (pid %d) exited normally", rank, pid);
+        } else
+            msg ("%d (pid %d) exited with rc=%d", rank, pid, rc);
+    } else if (WIFSIGNALED (status))
+        msg ("%d (pid %d) %s", rank, pid, strsignal (WTERMSIG (status)));
+    else
+        msg ("%d (pid %d) wait status=%d", rank, pid, status);
+}
+
+/* XXX See note above child_wait_seconds at top of program.
+ */
+static volatile sig_atomic_t child_killer_timeout;
+void alarm_handler (int a)
+{
+    child_killer_timeout = 1;
+}
+
+void child_killer_arm (void)
+{
+    struct sigaction sa;
+    memset (&sa, 0, sizeof (sa));
+    sa.sa_handler = alarm_handler;
+    sigaction (SIGALRM, &sa, NULL);
+    alarm (child_wait_seconds);
+    child_killer_timeout = 0;
+}
+
+void child_killer (pid_t *pids, int size, bool verbose)
+{
+    int rank;
+    if (child_killer_timeout) {
+        for (rank = 0; rank < size; rank++) {
+            if (pids[rank] > 0) {
+                if (verbose)
+                    msg ("%d: kill -9 %u", rank, pids[rank]);
+                (void)kill (pids[rank], SIGKILL);
+            }
+        }
+    }
+}
+
 void start_direct (int size, const char *cmd, bool verbose)
 {
+    bool child_killer_armed = false;;
     char *cmbd_path = getenv ("FLUX_CMBD_PATH");
     int rank;
     pid_t *pids;
+    int reaped = 0;
 
     pids = xzmalloc (size * sizeof (pids[0]));
     for (rank = 0; rank < size; rank++) {
@@ -130,13 +186,11 @@ void start_direct (int size, const char *cmd, bool verbose)
         argv_push (&ac, &av, "--rank=%d", rank);
         if (rank == 0 && cmd)
             argv_push (&ac, &av, "--command=%s", cmd);
-
         if (verbose) {
             char *s = argv_concat (ac, av, " ");
             msg ("%d: %s", rank, s);
             free (s);
         }
-
         switch ((pids[rank] = fork ())) {
             case -1:
                 err_exit ("fork");
@@ -150,25 +204,32 @@ void start_direct (int size, const char *cmd, bool verbose)
         argv_destroy (ac, av);
     }
     (void)close (STDIN_FILENO);
+    while (reaped < size) {
+        int status;
+        pid_t pid;
 
-    for (rank = 0; rank < size; rank++) {
-        int status, rc;
-        if (waitpid (pids[rank], &status, 0) < 0)
-            err_exit ("waitpid %u (rank %d)", pids[rank], rank);
-        if (WIFEXITED (status)) {
-            rc = WEXITSTATUS (status);
-            if (rc == 0) {
-                if (verbose)
-                    msg ("%d (pid %d) exited normally", rank, pids[rank]);
-            } else
-                msg ("%d (pid %d) exited with rc=%d", rank, pids[rank], rc);
-        } else if (WIFSIGNALED (status)) {
-            msg ("%d (pid %d) %s", rank, pids[rank],
-                 strsignal (WTERMSIG (status)));
-        } else {
-            msg ("%d (pid %d) wait status=%d", rank, pids[rank], status);
+        if ((pid = wait (&status)) < 0) {
+            if (errno == EINTR) {
+                if (child_killer_armed)
+                    child_killer (pids, size, verbose);
+                continue;
+            }
+            err_exit ("wait");
+        }
+        for (rank = 0; rank < size; rank++) {
+            if (pids[rank] == pid) {
+                pids[rank] = -1;
+                child_report (pid, rank, status, verbose);
+                if (!child_killer_armed) {
+                    child_killer_arm ();
+                    child_killer_armed = true;
+                }
+                reaped++;
+                break;
+            }
         }
     }
+
     free (pids);
 }
 
