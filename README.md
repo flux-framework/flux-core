@@ -45,48 +45,23 @@ Saving $HOME/.flux/curve/server_private
 No administrator privilege is required to start a Flux comms
 session as described below.
 
-##### Single rank session
+##### Single node session
 
-To start a single-rank (size = 1) Flux comms session:
+To start a Flux comms session (size = 8) on the local node:
 ```
 cd src/cmd
-./flux start-single
+./flux start --size 8
 ```
 A shell is spawned that has its environment set up so that Flux
 commands can find the message broker socket.  When the shell exits,
-the session exits.  Log output will be written to stderr.
-
-##### Screen session
-
-To start a Flux comms session (size = 8) using screen:
-```
-cd src/cmd
-./flux start-screen -N8
-```
-Each broker instance runs in its own screen window.
-Rank 0 will spawn a shell.   Connect to it by attaching
-to window 0 of the screen session:
-```
-./flux start-screen --attach 0
-```
-or detach with
-```
-ctrl-a d
-```
-Exiting the rank 0 shell will terminate the session, but will
-leave screen running.  To terminate the screen session and the Flux
-session if it is still running:
-```
-./flux start-screen --shutdown
-```
-Log output will be written to the file `cmbd.log`.
+the session exits.  Log output will be written to the file `cmbd.log`.
 
 ##### SLURM session
 
 To start a Flux comms session (size = 64) on a cluster using SLURM:
 ```
 cd src/cmd
-./flux start-srun -N 64
+./flux start -N 64
 ```
 The srun --pty option is used to connect to the rank 0 shell.
 When you exit this shell, the session terminates.
