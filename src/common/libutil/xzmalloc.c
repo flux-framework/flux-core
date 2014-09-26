@@ -25,10 +25,9 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdarg.h>
 
 #include "log.h"
 #include "xzmalloc.h"
@@ -59,6 +58,28 @@ char *xstrdup (const char *s)
         oom ();
     return cpy;
 }
+
+
+char *xvasprintf(const char *fmt, va_list ap)
+{
+    char *s;
+
+    if (vasprintf (&s, fmt, ap) < 0)
+        oom ();
+    return s;
+}
+
+char *xasprintf (const char *fmt, ...)
+{
+    va_list ap;
+    char *s;
+
+    va_start (ap, fmt);
+    s = xvasprintf (fmt, ap);
+    va_end (ap);
+    return s;
+}
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
