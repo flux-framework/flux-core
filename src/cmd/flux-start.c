@@ -143,6 +143,12 @@ int main (int argc, char *argv[])
     if (optind < argc)
         command = argv_concat (argc - optind, argv + optind, " ");
 
+    struct rlimit rl;
+    rl.rlim_cur = RLIM_INFINITY;
+    rl.rlim_max = RLIM_INFINITY;
+    if (setrlimit (RLIMIT_CORE, &rl) < 0)
+        err ("setrlimit: could not remove core file size limit");
+
     switch (method) {
         case START_DIRECT:
             start_direct (size, kary, modules, modopt, command, vopt, Xopt);
