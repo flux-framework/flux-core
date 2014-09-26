@@ -1,0 +1,96 @@
+FLUX-START(1)
+=============
+:doctype: manpage
+
+
+NAME
+----
+flux-start - bootstrap a Flux comms session
+
+
+SYNOPSIS
+--------
+*flux-start* ['OPTIONS'] [command ...]
+
+
+DESCRIPTION
+-----------
+flux-start(1) launches a Flux comms session using SLURM or by executing
+Flux message brokers directly.  If a command is specified, the rank 0
+broker will execute it, then the session terminates.  Otherwise, rank 0
+will spawn an interactive shell where flux commands can be issued, and
+when the shell exits, the session terminates.
+
+In direct mode, all the message brokers are launched on the same node,
+as children of flux-start(1).  The brokers use UNIX domain sockets
+to communicate.
+
+In SLURM mode, message brokers use PMI to exchange socket info.
+TCP and EPGM are used to communicate between nodes.  If multiple brokers
+per node are spawned, UNIX domain sockets will be used to communicate
+within nodes.
+
+Note: in order to launch a Flux comms session, you must have generated
+long-term CURVE keys using *flux-keygen*.
+
+OPTIONS
+-------
+*-s, --size*='N'::
+Set the size of the comms session (number of message brokers).
+The default is 1.
+
+*-k, --k-ary*='N'::
+Set the fanout of the tree-based-overlay network.  This option is passed
+directly to the Flux message broker, where the default is 2.
+
+*-M, --modules*='modules'::
+Load the specified comms modules in addition to the default core modules.
+Modules are specified by name in a comma-separated list.  To limit a module
+to a subset of the session's ranks, you may append a nodeset in square
+brackes.  For example: "foo[0],bar,baz" would load the foo module on
+rank 0 only, and the bar and baz modules on all ranks.
+This option is passed directly to the Flux message broker.
+
+*-O, --modopts*='options'::
+Set module options.  Module options are specified in a space-separated list.
+Each option has the form 'name:key=val' where 'name' is the module name,
+'key' is the option name, and 'val' is the option value.  For example:
+"kvs:a.b.c=42 kvs:a.b.g=foo" would pre-load two values into the KVS.
+This option is passed directly to the Flux message broker.
+
+*-v, --verbose*::
+Display commands before executing them.
+
+*-X, --noexec*::
+Don't execute anything.  This option is most useful with -v.
+
+*-S, --slurm*::
+Launch with SLURM.  The default is to launch directly.
+This option is implied if either "--partition" or "--nnodes" is used.
+
+*-p, --partition*='name'::
+Set the SLURM partition.  This option translates directly to the srun
+"--partition=name" option.  It is unnecessary if SLURM is configured
+with a default partition and you want to use that.
+
+*-N, --nnodes*='N'::
+Set the number of nodes to allocate in SLURM.  If 'N' is greater
+than the Flux comms session size, the session size is increased to 'N'
+so that one message broker is launched per node.  If 'N' is less
+than the Flux comms session size, multiple message brokers will be
+launched per node.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]

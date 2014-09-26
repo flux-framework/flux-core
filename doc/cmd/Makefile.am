@@ -7,7 +7,8 @@ MAN1_FILES = \
 	flux-topo.1 \
 	flux-snoop.1 \
 	flux-ping.1 \
-	flux-wreckrun.1
+	flux-wreckrun.1 \
+	flux-start.1
 
 ADOC_FILES  = $(MAN1_FILES:%.1=%.adoc)
 XML_FILES   = $(MAN1_FILES:%.1=%.xml)
