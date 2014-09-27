@@ -300,7 +300,7 @@ void start_slurm (int size, int kary, const char *modules, const char *modopts,
     argv_push (&ac, &av, "--propagate=CORE");
     if (!cmd)
         argv_push (&ac, &av, "--pty");
-    argv_push (&ac, &av, "--jobname=%s", "flux");
+    argv_push (&ac, &av, "--job-name=%s", "flux");
     if (partition)
         argv_push (&ac, &av, "--partition=%s", partition);
 
