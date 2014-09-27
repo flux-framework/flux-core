@@ -1,6 +1,7 @@
 AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = \
+	$(LUA_INCLUDE) \
 	$(JSON_CFLAGS) \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
