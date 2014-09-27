@@ -38,7 +38,8 @@ flux_la_LIBADD = \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(JSON_LIBS) \
 	$(LIBZMQ) \
-	$(LIBCZMQ)
+	$(LIBCZMQ) \
+	$(LIBUTIL)
 
 flux_la_SOURCES = \
 	flux-lua.c \
