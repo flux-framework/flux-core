@@ -16,6 +16,7 @@ czmq-devel >= 2.2.0
 munge-devel
 json-c-devel
 lua-5.1-devel
+asciidoc
 ```
 Spec files for building zeromq4 and czmq packages on a RHEL 6 based
 system are provided for your convenience in foreign/rpm.
