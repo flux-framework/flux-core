@@ -47,7 +47,7 @@ void start_slurm (int size, int kary, const char *modules, const char *modopts,
  */
 const int child_wait_seconds = 1;
 
-#define OPTIONS "hvs:k:M:O:XN:p:S"
+#define OPTIONS "+hvs:k:M:O:XN:p:S"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"verbose",    no_argument,        0, 'v'},
