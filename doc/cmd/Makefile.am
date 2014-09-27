@@ -25,10 +25,14 @@ SUFFIXES = .adoc .1
 	    --attribute manmanual="Flux Manual" \
 	    --doctype manpage --format manpage $<
 
-EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc spellcheck spell.en.pws
+EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc spell.en.pws
 
 CLEANFILES = $(MAN1_FILES) $(XML_FILES)
 
-TESTS_ENVIRONMENT = $(srcdir)/spellcheck $(abs_srcdir)/spell.en.pws
+noinst_SCRIPTS = spellcheck
 
-TESTS = $(MAN1_FILES)
+TESTS_ENVIRONMENT = \
+	pws_dict=$(abs_srcdir)/spell.en.pws \
+	man_dir=$(abs_builddir)
+
+TESTS = spellcheck

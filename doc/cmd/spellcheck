@@ -1,19 +1,26 @@
 #!/bin/bash
 
-if test $# != 2; then
-    echo Usage: spellcheck pws-dict file >&2
+if test $man_dir; then
+    set ${man_dir}/*.[1-9]
+fi
+
+if test $# == 0; then
+    echo "Usage: spellcheck file [file...]" >&2
     exit 1
 fi
-declare dict=$1
-declare file=$2
 
+dict=${pws_dict:-./spell.en.pws}
 if ! test -r $dict; then
    echo Dictionary $dict not found >&2
    exit 1
 fi
 
-tmpfile=$(mktemp)
-rc=$(cat $file | aspell -p $dict -n list | sort | uniq | tee $tmpfile | wc -l)
-cat $tmpfile
-rm -f $tmpfile
-exit $rc
+exit_val=0
+for f in $*; do
+    tmpfile=$(mktemp)
+    rc=$(cat $f | aspell -p $dict -n list | sort | uniq | tee $tmpfile | wc -l)
+    test $rc == 0 || exit_val=$rc
+    cat $tmpfile | sed -e "s!^!$(basename $f): !"
+    rm -f $tmpfile
+done
+exit $exit_val
