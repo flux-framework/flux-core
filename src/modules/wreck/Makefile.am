@@ -77,7 +77,7 @@ wrexecd_LDADD = \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
-	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LUA_LIB)
+	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LUA_LIB) $(LIBPTHREAD)
 
 dist_wreckscripts_SCRIPTS = \
 	lua.d/01-env.lua
