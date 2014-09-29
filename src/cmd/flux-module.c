@@ -236,7 +236,7 @@ static void module_load (flux_t h, int argc, char **argv)
     if (access (argv[0], R_OK | X_OK) == 0) {   /* path name given */
         path = xstrdup (argv[0]);
         if (!(name = flux_modname (path)))
-            exit (1);
+            msg_exit ("%s", dlerror ());
     } else {                                    /* module name given */
         name = xstrdup (argv[0]);
         if (!(path = flux_modfind (searchpath, name)))
