@@ -1,4 +1,5 @@
-prefix=@exec_prefix@/flux
+prefix=@prefix@
+exec_prefix=@exec_prefix@
 libdir=@libdir@/flux
 includedir=@includedir@
 
