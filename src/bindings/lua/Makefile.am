@@ -12,7 +12,8 @@ dist_lua_SCRIPTS = \
 
 dist_fluxlua_SCRIPTS = \
 	flux-lua/timer.lua \
-	flux-lua/alt_getopt.lua
+	flux-lua/alt_getopt.lua \
+	flux-lua/posix.lua
 
 luaexec_LTLIBRARIES = \
 	flux.la
