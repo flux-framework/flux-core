@@ -528,6 +528,8 @@ static zcert_t *zcert_curve_new (flux_sec_t c)
     zcert_t *new;
     char sec[41];
     char pub[41];
+    uint8_t s[32];
+    uint8_t p[32];
 
     if (zmq_curve_keypair (pub, sec) < 0) {
         if (errno == ENOTSUP)
@@ -539,7 +541,12 @@ static zcert_t *zcert_curve_new (flux_sec_t c)
         return NULL;
     }
 
-    if (!(new = zcert_new_from ((byte *)pub, (byte *)sec)))
+    if (!zmq_z85_decode (s, sec) || !zmq_z85_decode (p, pub)) {
+        seterrstr (c, "zcert_curve_new: Failed to decode keys");
+        return NULL;
+    }
+
+    if (!(new = zcert_new_from (p, s)))
         oom ();
 
     return new;
@@ -672,8 +679,6 @@ static int genpasswd (flux_sec_t c, const char *user, bool force, bool verbose)
 done:
     if (passwds)
         zhash_destroy (&passwds);
-    if (passwd)
-        free (passwd);
     if (uuid)
         zuuid_destroy (&uuid);
     return rc;
