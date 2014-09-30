@@ -523,6 +523,28 @@ static char * ctime_iso8601_now (char *buf, size_t sz)
     return (buf);
 }
 
+static zcert_t *zcert_curve_new (flux_sec_t c)
+{
+    zcert_t *new;
+    char sec[41];
+    char pub[41];
+
+    if (zmq_curve_keypair (pub, sec) < 0) {
+        if (errno == ENOTSUP)
+            seterrstr (c,
+                "No CURVE support in libzmq (not compiled with libsodium?)");
+        else
+            seterrstr (c,
+                "Unknown error generating CURVE keypair");
+        return NULL;
+    }
+
+    if (!(new = zcert_new_from ((byte *)pub, (byte *)sec)))
+        oom ();
+
+    return new;
+}
+
 static int gencurve (flux_sec_t c, const char *role, bool force, bool verbose)
 {
     char *path = NULL, *priv = NULL;;
@@ -551,8 +573,10 @@ static int gencurve (flux_sec_t c, const char *role, bool force, bool verbose)
         errno = EEXIST;
         goto done;
     }
-    if (!(cert = zcert_new ()))
-        oom ();
+
+    if (!(cert = zcert_curve_new (c)))
+        goto done; /* error message set in zcert_curve_new() */
+
     zcert_set_meta (cert, "time", "%s", ctime_iso8601_now (buf, sizeof (buf)));
     zcert_set_meta (cert, "role", (char *)role);
     if (verbose) {

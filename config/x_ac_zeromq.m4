@@ -12,5 +12,33 @@ AC_DEFUN([X_AC_ZEROMQ], [
     AS_VAR_IF([ac_cv_lib_czmq_zhash_new],[yes],,[
         AC_MSG_ERROR([no suitable czmq library found])
     ])
+    ac_save_LIBS="$LIBS"
+    LIBS="$LIBS $LIBZMQ $LIBCZMQ"
+    AC_MSG_CHECKING([For CURVE encryption support in libzmq])
+    AC_CACHE_VAL(ac_cv_curve_support,
+      [AC_RUN_IFELSE([[
+#include <zmq.h>
+#include <zmq_utils.h>
+  main()
+  {
+    char x[41], y[41];
+    /*
+     * Check for CURVE support in current version of libzmq
+     */
+    int rc = zmq_curve_keypair (x, y);
+    exit (rc >= 0 ? 0 : 1);
+  }
+]],
+    ac_cv_curve_support=yes,
+    ac_cv_curve_support=no,
+    ac_cv_curve_support=no)])
+
+    AC_MSG_RESULT($ac_cv_curve_support)
+    if test "x$ac_cv_curve_support" = "xno"; then
+      AC_MSG_ERROR([
+ Failed to detect CURVE support in libzmq!
+ Perhaps you need to compile with libsodium?])
+    fi
+    LIBS="$ac_save_LIBS"
   ]
 )
