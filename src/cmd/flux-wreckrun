@@ -2,8 +2,9 @@
 
 -------------------------------------------------------------------------------
 -- Modules:
-------------------------------------------------------------------------------- local posix = require 'posix'
+-------------------------------------------------------------------------------
 local flux = require 'flux'
+local posix = require 'flux-lua.posix'
 local timer = require 'flux-lua.timer'
 
 local prog = string.match (arg[0], "([^/]+)$")

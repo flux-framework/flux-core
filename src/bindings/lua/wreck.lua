@@ -21,7 +21,7 @@
  *  59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
  *  See also:  http://www.gnu.org/licenses/
  ---------------------------------------------------------------------------]]
-local posix = require 'posix'
+local posix = require 'flux-lua.posix'
 
 local wreck = {}
 wreck.__index = wreck;
