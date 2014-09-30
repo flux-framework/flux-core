@@ -679,8 +679,6 @@ static int genpasswd (flux_sec_t c, const char *user, bool force, bool verbose)
 done:
     if (passwds)
         zhash_destroy (&passwds);
-    if (passwd)
-        free (passwd);
     if (uuid)
         zuuid_destroy (&uuid);
     return rc;
