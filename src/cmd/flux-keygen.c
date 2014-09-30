@@ -42,7 +42,7 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-keygen [--force] [--plain|--curve]\n"
+"Usage: flux-keygen [--force] [--plain]\n"
 );
     exit (1);
 }
@@ -53,7 +53,6 @@ int main (int argc, char *argv[])
     flux_sec_t sec;
     bool force = false;
     bool plain = false;
-    bool curve = false;
 
     log_init ("flux-keygen");
 
@@ -68,9 +67,6 @@ int main (int argc, char *argv[])
             case 'p': /* --plain */
                 plain = true;
                 break;
-            case 'c': /* --curve */
-                curve = true;
-                break;
             default:
                 usage ();
                 break;
@@ -78,14 +74,10 @@ int main (int argc, char *argv[])
     }
     if (optind < argc)
         usage ();
-    if (plain && curve)
-        usage ();
     if (!(sec = flux_sec_create ()))
         err_exit ("flux_sec_create");
     if (plain && flux_sec_enable (sec, FLUX_SEC_TYPE_PLAIN) < 0)
         msg_exit ("PLAIN security is not available");
-    if (curve && flux_sec_enable (sec, FLUX_SEC_TYPE_CURVE) < 0)
-        msg_exit ("CURVE security is not available");
     if (flux_sec_keygen (sec, force, true) < 0)
         msg_exit ("%s", flux_sec_errstr (sec));
     flux_sec_destroy (sec);
