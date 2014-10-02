@@ -19,11 +19,15 @@ $(MAN1_FILES): COPYRIGHT.adoc
 
 SUFFIXES = .adoc .1
 
+STDERR_DEVNULL = $(stderr_devnull_$(V))
+stderr_devnull_ =  $(stderr_devnull_$(AM_DEFAULT_VERBOSITY))
+stderr_devnull_0 = 2>/dev/null
+
 .adoc.1:
-	a2x --attribute mansource=$(META_NAME) \
+	$(AM_V_GEN)a2x --attribute mansource=$(META_NAME) \
 	    --attribute manversion=$(META_VERSION) \
 	    --attribute manmanual="Flux Manual" \
-	    --doctype manpage --format manpage $<
+	    --doctype manpage --format manpage $< $(STDERR_DEVNULL)
 
 EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc spell.en.pws
 
