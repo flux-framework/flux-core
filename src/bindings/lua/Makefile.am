@@ -4,9 +4,6 @@ AM_CPPFLAGS =	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 
 fluxluadir = $(luadir)/flux-lua
 
-EXTRA_DIST = \
-	README
-
 dist_lua_SCRIPTS = \
 	wreck.lua
 
@@ -86,8 +83,16 @@ tests_zmsgtest_la_LIBADD = \
 	$(LIBCZMQ) \
 	$(LUA_LIB)
 
-dist_TESTS = \
+TESTS = \
 	tests/test-json.lua \
 	tests/test-zmsg.lua
 
-TESTS_ENVIRONMENT = LUA_CPATH="$(abs_builddir)/tests/.libs/?.so;;;" tests/lunit
+EXTRA_DIST = \
+	README \
+	$(TESTS) \
+	tests/lunit \
+	tests/lunit.lua \
+	tests/lunit-console.lua
+
+TESTS_ENVIRONMENT = \
+	LUA_CPATH="$(abs_builddir)/tests/.libs/?.so;;;" $(srcdir)/tests/lunit
