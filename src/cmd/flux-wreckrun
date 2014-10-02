@@ -2,13 +2,19 @@
 
 -------------------------------------------------------------------------------
 -- Modules:
-------------------------------------------------------------------------------- local posix = require 'posix'
+-------------------------------------------------------------------------------
 local flux = require 'flux'
+local posix = require 'flux-lua.posix'
 local timer = require 'flux-lua.timer'
 
 local prog = string.match (arg[0], "([^/]+)$")
 local shortprog = prog:match ("flux%-(.+)$")
 
+--
+-- Termination state needs to remain a global for access from
+--  signal handler functions. See setup_signal_handlers() below.
+--
+terminate = false
 
 -------------------------------------------------------------------------------
 -- Local functions:
@@ -128,13 +134,30 @@ local function alloc_tasks_hack (f, wreck, lwj)
     wreck:say ("tasks per node: %s\n", summarize_tasks_per_node (r))
 end
 
+local function setup_signal_handlers()
+    local signal = posix.signal
+    local fn = function() terminate = true end
+    --
+    --  Support both old-style lua-posix signal-as-a-table interface,
+    --   and newer signal-as-a-function api:
+    --
+    if type (signal) == "table" then
+        signal[posix.SIGINT] = fn
+        signal[posix.SIGTERM] = signal[posix.SIGINT]
+        return true
+    end
+
+    signal (posix.SIGINT, fn)
+    signal (posix.SIGTERM, fn)
+    return true
+end
+
 -------------------------------------------------------------------------------
 -- Main program:
 -------------------------------------------------------------------------------
 --  Parse cmdline args:
 --
 local wreck = require 'wreck' .new (shortprog)
-local terminate = false
 local sigtimer
 local nio = 0
 local state = ""
@@ -155,8 +178,7 @@ if not wreck:parse_cmdline (arg) then
 end
 
 -- Set signal handlers
-posix.signal[posix.SIGINT] = function () terminate = true end
-posix.signal[posix.SIGTERM] = posix.signal[posix.SIGINT]
+setup_signal_handlers()
 
 -- Start in-program timer:
 local tt = timer.new()

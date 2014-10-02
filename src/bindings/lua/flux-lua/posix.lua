@@ -21,37 +21,15 @@
  *  59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
  *  See also:  http://www.gnu.org/licenses/
  ---------------------------------------------------------------------------]]
---
--- Simple timer implementation
---  Returns time in seconds since timer was created, or since last get/set
---
-local T = {}
-T.__index = T
-local clock_gettime = require 'flux-lua.posix'.clock_gettime
-
-local getsec = function ()
-    local s,ns = clock_gettime()
-    return (s + (ns / 1000000000))
+ --
+ -- flux-lua.posix: wrapper to check for existing of system 'posix'
+ --  module and return user friendly error instead lua stack dump
+ --
+local status, rc = pcall (require, 'posix')
+if not status then
+    io.stderr:write ("Required Lua 'posix' module not found."..
+                    " Please check LUA_PATH or install package\n")
+    os.exit (1)
 end
-
-function T.new()
-    local new = { s0 = getsec () }
-    return setmetatable (new, T)
-end
-
-function T.set (self)
-   self.t0 = getsec()
-   return self.t0
-end
-
-function T.get (self)
-    local x = self.t0
-    return (self:set() - (x or 0))
-end
-
-function T.get0 (self)
-    return (getsec() - self.s0)
-end
-
-return T
+return rc
 -- vi: ts=4 sw=4 expandtab
