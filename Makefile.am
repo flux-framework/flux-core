@@ -3,7 +3,7 @@ SUBDIRS = src doc
 sysconf_DATA = flux.conf
 
 flux.conf: $(srcdir)/flux.conf.in
-	sed -e 's![@]abs_top_srcdir[@]!$(abs_top_srcdir)!g' \
+	$(AM_V_GEN)sed -e 's![@]abs_top_srcdir[@]!$(abs_top_srcdir)!g' \
 	    -e 's![@]abs_top_builddir[@]!$(abs_top_builddir)!g' \
 	    $(srcdir)/flux.conf.in > $@
 
