@@ -36,7 +36,6 @@
 #include <errno.h>
 #include <libgen.h>
 #include <czmq.h>
-#include <json/json.h>
 #include <dlfcn.h>
 
 #include "util.h"

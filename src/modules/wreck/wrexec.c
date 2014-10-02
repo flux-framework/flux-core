@@ -28,8 +28,7 @@
 #include <sys/socket.h>
 #include <zmq.h>
 #include <czmq.h>
-#include <json/json.h>
-#include <json/arraylist.h>
+#include <arraylist.h>
 #include <uuid/uuid.h>
 
 #include <flux/core.h>

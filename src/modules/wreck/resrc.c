@@ -45,7 +45,6 @@
 #include <ctype.h>
 #include <zmq.h>
 #include <czmq.h>
-#include <json/json.h>
 
 #include <flux/core.h>
 
