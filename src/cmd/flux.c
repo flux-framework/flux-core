@@ -347,12 +347,13 @@ void dump_environment (void)
     dump_environment_one ("LUA_CPATH");
 }
 
-void exec_subcommand_dir (bool vopt, const char *dir,char *argv[],
+void exec_subcommand_dir (bool vopt, const char *dir, char *argv[],
                           const char *prefix)
 {
-    char *path;
-    if (asprintf (&path, "%s/%s%s", dir, prefix ? prefix : "", argv[0]) < 0)
-        oom ();
+    char *path = xasprintf ("%s%s%s%s",
+                            dir ? dir : "",
+                            dir ? "/" : "",
+                            prefix ? prefix : "", argv[0]);
     if (vopt)
         msg ("trying to exec %s", path);
     execvp (path, argv); /* no return if successful */
@@ -361,16 +362,20 @@ void exec_subcommand_dir (bool vopt, const char *dir,char *argv[],
 
 void exec_subcommand (const char *searchpath, bool vopt, char *argv[])
 {
-    char *cpy = xstrdup (searchpath);
-    char *dir, *saveptr = NULL, *a1 = cpy;
+    if (strchr (argv[0], '/')) {
+        exec_subcommand_dir (vopt, NULL, argv, NULL);
+        err_exit ("%s", argv[0]);
+    } else {
+        char *cpy = xstrdup (searchpath);
+        char *dir, *saveptr = NULL, *a1 = cpy;
 
-    while ((dir = strtok_r (a1, ":", &saveptr))) {
-        exec_subcommand_dir (vopt, dir, argv, "flux-");
-        //exec_subcommand_dir (vopt, dir, argv, NULL); /* deprecated */
-        a1 = NULL;
+        while ((dir = strtok_r (a1, ":", &saveptr))) {
+            exec_subcommand_dir (vopt, dir, argv, "flux-");
+            a1 = NULL;
+        }
+        free (cpy);
+        msg_exit ("`%s' is not a flux command.  See 'flux --help'", argv[0]);
     }
-    free (cpy);
-    msg_exit ("`%s' is not a flux command.  See 'flux --help'", argv[0]);
 }
 
 /*
