@@ -59,7 +59,7 @@ void usage (void)
 int main (int argc, char *argv[])
 {
     int ch;
-    char *config_file = NULL;
+    char *config_file = getenv ("FLUX_CONFIG");
     char *cmd;
 
     log_init ("flux-config");
