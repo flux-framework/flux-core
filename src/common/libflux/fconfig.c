@@ -84,7 +84,7 @@ void flux_config_save (const char *path, zconfig_t *z)
     if (!path)
         path = default_path = flux_config_default_path (true);
     if (zconfig_save (z, path) < 0)
-        err_exit (path);
+        err_exit ("%s", path);
     if (default_path)
         free (default_path);
 }
