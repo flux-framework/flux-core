@@ -32,8 +32,6 @@
 #include <errno.h>
 #include <string.h>
 
-#include <json/json.h>
-
 #include "flux/core.h"
 #include "json-lua.h"
 #include "zmsg-lua.h"

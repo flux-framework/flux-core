@@ -29,7 +29,6 @@
 #include <zmq.h>
 #include <czmq.h>
 #include <inttypes.h>
-#include <json/json.h>
 
 #include <flux/core.h>
 

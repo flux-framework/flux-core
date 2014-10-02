@@ -33,8 +33,6 @@
 #include <lua.h>
 #include <lauxlib.h>
 
-#include <json/json.h>
-
 #include "flux/core.h"
 
 #include "json-lua.h"

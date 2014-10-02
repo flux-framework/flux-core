@@ -37,7 +37,6 @@
 #include <errno.h>
 #include <libgen.h>
 #include <czmq.h>
-#include <json/json.h>
 
 #include "util.h"
 #include "log.h"

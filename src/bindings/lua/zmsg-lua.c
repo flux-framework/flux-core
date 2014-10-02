@@ -30,8 +30,6 @@
 #include <zmq.h>
 #include <czmq.h>
 
-#include <json/json.h>
-
 #include "flux/core.h"
 #include "src/common/libutil/jsonutil.h"
 #include "lutil.h"
