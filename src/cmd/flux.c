@@ -50,6 +50,7 @@ void setup_lua_env (zconfig_t *cf, const char *cpath_add, const char *path_add);
 char *setup_exec_searchpath (zconfig_t *cf, const char *path_add);
 void setup_module_env (zconfig_t *cf, const char *path_add);
 void setup_cmbd_env (zconfig_t *cf, const char *path_override);
+void setup_config_env (const char *config_file);
 
 #define OPTIONS "+T:tx:hM:B:vc:L:C:"
 static const struct option longopts[] = {
@@ -165,6 +166,7 @@ int main (int argc, char *argv[])
     setup_lua_env (config, Lopt, Copt);
     setup_module_env (config, Mopt);
     setup_cmbd_env (config, Bopt);
+    setup_config_env (config_file);
 
     searchpath = setup_exec_searchpath (config, xopt);
 
@@ -330,6 +332,12 @@ void setup_cmbd_env (zconfig_t *cf, const char *path_override)
         err_exit ("%s", path);
 }
 
+void setup_config_env (const char *path)
+{
+    if (path && setenv ("FLUX_CONFIG", path, 1) < 0)
+        err_exit ("%s", path);
+}
+
 void dump_environment_one (const char *name)
 {
     char *s = getenv (name);
@@ -342,6 +350,7 @@ void dump_environment (void)
     dump_environment_one ("FLUX_MODULE_PATH");
     dump_environment_one ("FLUX_CMBD_PATH");
     dump_environment_one ("FLUX_TMPDIR");
+    dump_environment_one ("FLUX_CONFIG");
     dump_environment_one ("FLUX_TRACE_APISOCK");
     dump_environment_one ("LUA_PATH");
     dump_environment_one ("LUA_CPATH");
