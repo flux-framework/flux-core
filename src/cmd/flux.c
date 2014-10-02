@@ -34,6 +34,7 @@
 #include <stdbool.h>
 #include <sys/param.h>
 #include <glob.h>
+#include <flux/core.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
@@ -42,16 +43,25 @@
 
 
 void dump_environment (void);
-void exec_subcommand (bool vopt, char *argv[]);
-char *dir_self (void);
+void exec_subcommand (const char *searchpath, bool vopt, char *argv[]);
+char *intree_config (void);
 
-#define OPTIONS "+T:tx:hM:B:v"
+void setup_lua_env (zconfig_t *cf, const char *cpath_add, const char *path_add);
+char *setup_exec_searchpath (zconfig_t *cf, const char *path_add);
+void setup_module_env (zconfig_t *cf, const char *path_add);
+void setup_cmbd_env (zconfig_t *cf, const char *path_override);
+void setup_config_env (const char *config_file);
+
+#define OPTIONS "+T:tx:hM:B:vc:L:C:"
 static const struct option longopts[] = {
     {"tmpdir",          required_argument,  0, 'T'},
     {"trace-apisocket", no_argument,        0, 't'},
     {"exec-path",       required_argument,  0, 'x'},
     {"module-path",     required_argument,  0, 'M'},
     {"cmbd-path",       required_argument,  0, 'B'},
+    {"lua-path",        required_argument,  0, 'L'},
+    {"lua-cpath",       required_argument,  0, 'C'},
+    {"config",          required_argument,  0, 'c'},
     {"verbose",         no_argument,        0, 'v'},
     {"help",            no_argument,        0, 'h'},
     {0, 0, 0, 0},
@@ -61,12 +71,15 @@ static void usage (void)
 {
     fprintf (stderr, 
 "Usage: flux [OPTIONS] COMMAND ARGS\n"
-"    -x,--exec-path PATH      set FLUX_EXEC_PATH\n"
-"    -M,--module-path PATH    set FLUX_MODULE_PATH\n"
+"    -x,--exec-path PATH      prepend PATH to command search path\n"
+"    -M,--module-path PATH    prepend PATH to module search path\n"
+"    -L,--lua-path PATH       prepend PATH to LUA_PATH\n"
+"    -C,--lua-cpath PATH      prepend PATH to LUA_CPATH\n"
 "    -T,--tmpdir PATH         set FLUX_TMPDIR\n"
 "    -t,--trace-apisock       set FLUX_TRACE_APISOCK=1\n"
-"    -B,--cmbd-path           set FLUX_CMBD_PATH\n"
-"    -v,--verbose             show environment before executing command\n"
+"    -B,--cmbd-path           override path to comms message broker\n"
+"    -c,--config-file         set path to config file\n"
+"    -v,--verbose             show FLUX_* environment and command search\n"
 "\n"
 "The flux-core commands are:\n"
 "   keygen        Generate CURVE keypairs for session security\n"
@@ -87,34 +100,28 @@ static void usage (void)
 );
 }
 
-int setup_lua_env (const char *exedir)
-{
-    char *s;
-
-    /* XXX: For now Lua paths are set relative to path of the executable.
-     *  Once we know where these things will be installed we can make these
-     *  paths configurable on installation.
-     */
-    s = getenv ("LUA_CPATH");
-    setenvf ("LUA_CPATH", 1, "%s/../bindings/lua/.libs/?.so;%s", exedir, s ? s : ";;");
-    s = getenv ("LUA_PATH");
-    setenvf ("LUA_PATH", 1, "%s/../bindings/lua/?.lua;%s", exedir, s ? s : ";;");
-    return (0);
-}
 
 int main (int argc, char *argv[])
 {
     int ch;
     bool hopt = false;
     bool vopt = false;
-    char *flux_exe_dir = dir_self ();
+    char *xopt = NULL;
+    char *Mopt = NULL;
+    char *Bopt = NULL;
+    char *Lopt = NULL;
+    char *Copt = NULL;
+    char *config_file = NULL;
+    zconfig_t *config;
+    char *searchpath;
 
     log_init ("flux");
 
-    setup_lua_env (flux_exe_dir);
-
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
+            case 'c': /* --config FILE */
+                config_file = xstrdup (optarg);
+                break;
             case 'T': /* --tmpdir PATH */
                 if (setenv ("FLUX_TMPDIR", optarg, 1) < 0)
                     err_exit ("setenv FLUX_TMPDIR=%s", optarg);
@@ -123,20 +130,23 @@ int main (int argc, char *argv[])
                 if (setenv ("FLUX_TRACE_APISOCK", "1", 1) < 0)
                     err_exit ("setenv FLUX_TRACE_APISOCK=1");
                 break;
-            case 'M': /* --module-path */
-                if (setenv ("FLUX_MODULE_PATH", optarg, 1) < 0)
-                    err_exit ("setenv FLUX_MODULE_PATH=%s", optarg);
+            case 'M': /* --module-path PATH */
+                Mopt = optarg;
                 break;
-            case 'x': /* --exec-path */
-                if (setenv ("FLUX_EXEC_PATH", optarg, 1) < 0)
-                    err_exit ("setenv FLUX_EXEC_PATH=%s", optarg);
+            case 'x': /* --exec-path PATH */
+                xopt = optarg;
                 break;
-            case 'B': /* --cmbd-path */
-                if (setenv ("FLUX_CMBD_PATH", optarg, 1) < 0)
-                    err_exit ("setenv FLUX_CMBD_PATH=%s", optarg);
+            case 'B': /* --cmbd-path PATH */
+                Bopt = optarg;
                 break;
             case 'v': /* --verbose */
                 vopt = true;
+                break;
+            case 'L': /* --lua-path PATH */
+                Lopt = optarg;
+                break;
+            case 'C': /* --lua-cpath PATH */
+                Copt = optarg;
                 break;
             case 'h': /* --help  */
                 hopt = true;
@@ -149,35 +159,21 @@ int main (int argc, char *argv[])
     argc -= optind;
     argv += optind;
 
-    /* We are executing 'flux' from a path that is not the installed path.
-     * Presume we are in $top_builddir/src/cmd and set up environment
-     * accordingly.
-     */
-    if (strcmp (flux_exe_dir, X_BINDIR) != 0) {
-        glob_t gl;
-        char *modpath;
-        if (setenv ("FLUX_EXEC_PATH", ".", 0) < 0)
-            err_exit ("setenv");
-        if (glob ("../modules/*/.libs", GLOB_ONLYDIR, NULL, &gl) == 0) {
-            modpath = argv_concat (gl.gl_pathc, gl.gl_pathv, ":");
-            globfree (&gl);
-            if (setenv ("FLUX_MODULE_PATH", modpath, 0) < 0)
-                err_exit ("setenv");
-            free (modpath);
-        }
-        if (setenv ("FLUX_CMBD_PATH", "../broker/cmbd", 0) < 0)
-            err_exit ("setenv");
-    } else {
-        if (setenv ("FLUX_EXEC_PATH", EXEC_PATH, 0) < 0)
-            err_exit ("setenv");
-        if (setenv ("FLUX_CMBD_PATH", CMBD_PATH, 0) < 0)
-            err_exit ("setenv");
-    }
+    if (!config_file)
+        config_file = intree_config ();
+    config = flux_config_load (config_file, false);
+
+    setup_lua_env (config, Lopt, Copt);
+    setup_module_env (config, Mopt);
+    setup_cmbd_env (config, Bopt);
+    setup_config_env (config_file);
+
+    searchpath = setup_exec_searchpath (config, xopt);
 
     if (hopt) {
         if (argc > 0) {
             char *av[] = { argv[0], "--help", NULL };
-            exec_subcommand (vopt, av);
+            exec_subcommand (searchpath, vopt, av);
         } else
             usage ();
         exit (0);
@@ -186,30 +182,20 @@ int main (int argc, char *argv[])
         usage ();
         exit (1);
     }
-    if (vopt)
+    if (vopt) {
         dump_environment ();
-    exec_subcommand (vopt, argv);
+        printf ("subcommand search path: %s", searchpath);
+    }
+    exec_subcommand (searchpath, vopt, argv);
 
-    free (flux_exe_dir);
+    zconfig_destroy (&config);
+    if (config_file)
+        free (config_file);
 
+    free (searchpath);
     log_fini ();
 
     return 0;
-}
-
-void dump_environment_one (const char *name)
-{
-    char *s = getenv (name);
-    printf ("%20s=%s\n", name, s ? s : "<unset>");
-}
-
-void dump_environment (void)
-{
-    dump_environment_one ("FLUX_EXEC_PATH");
-    dump_environment_one ("FLUX_MODULE_PATH");
-    dump_environment_one ("FLUX_CMBD_PATH");
-    dump_environment_one ("FLUX_TMPDIR");
-    dump_environment_one ("FLUX_TRACE_APISOCK");
 }
 
 /*  Return directory containing this executable.  Caller must free.
@@ -227,31 +213,178 @@ char *dir_self (void)
     return xstrdup (flux_exe_dir);
 }
 
-void exec_subcommand_dir (bool vopt, const char *dir,char *argv[],
+char *intree_config (void)
+{
+    char *config_file = NULL;
+    char *selfdir = dir_self ();
+
+    if (strcmp (selfdir, X_BINDIR) != 0)
+        config_file = xasprintf ("%s/../../flux.conf", selfdir);
+    free (selfdir);
+    return config_file;
+}
+
+static void path_push (char **path, const char *add, const char *sep)
+{
+    char *new = xasprintf ("%s%s%s", add, *path ? sep : "",
+                                          *path ? *path : "");
+    free (*path);
+    *path = new;
+}
+
+void setup_lua_env (zconfig_t *cf, const char *cpath_add, const char *path_add)
+{
+    char *path = NULL, *cpath = NULL;;
+    zconfig_t *z;
+
+    path_push (&path, ";;", ";"); /* Lua replaces ;; with the default path */
+    path_push (&cpath, ";;", ";");
+
+    /* FIXME: push installed paths (needed if side-installed)
+     */
+
+    if ((z = zconfig_locate (cf, "general/lua_path"))) {
+        char *val = zconfig_value (z);
+        if (val && strlen (val) > 0)
+            path_push (&path, val, ";");
+    }
+    if ((z = zconfig_locate (cf, "general/lua_cpath"))) {
+        char *val = zconfig_value (z);
+        if (val && strlen (val) > 0)
+            path_push (&cpath, val, ";");
+    }
+
+    if (path_add)
+        path_push (&path, path_add, ";");
+    if (cpath_add)
+        path_push (&cpath, cpath_add, ";");
+
+    if (setenv ("LUA_CPATH", cpath, 1) < 0)
+        err_exit ("%s", cpath);
+    if (setenv ("LUA_PATH", path, 1) < 0)
+        err_exit ("%s", path);
+
+    free (path);
+    free (cpath);
+}
+
+char *setup_exec_searchpath (zconfig_t *cf, const char *path_add)
+{
+    char *path = NULL;
+    zconfig_t *z;
+
+    path_push (&path, EXEC_PATH, ":");
+
+    if ((z = zconfig_locate (cf, "general/exec_path"))) {
+        char *val = zconfig_value (z);
+        if (val && strlen (val) > 0)
+            path_push (&path, val, ":");
+    }
+
+    if (path_add)
+        path_push (&path, path_add, ":");
+
+    return path;
+}
+
+void setup_module_env (zconfig_t *cf, const char *path_add)
+{
+    char *path = NULL;
+    zconfig_t *z;
+
+    path_push (&path, MODULE_PATH, ":");
+
+    if ((z = zconfig_locate (cf, "general/module_path"))) {
+        char *val = zconfig_value (z);
+        if (val && strlen (val) > 0)
+            path_push (&path, val, ":");
+    }
+
+    if (path_add)
+        path_push (&path, path_add, ":");
+
+    if (setenv ("FLUX_MODULE_PATH", path, 1) < 0)
+        err_exit ("%s", path);
+
+    free (path);
+}
+
+void setup_cmbd_env (zconfig_t *cf, const char *path_override)
+{
+    const char *path = NULL;
+    zconfig_t *z;
+
+    if (path_override)
+        path = path_override;
+
+    if (!path) {
+        if ((z = zconfig_locate (cf, "general/cmbd_path"))) {
+            char *val = zconfig_value (z);
+            if (val && strlen (val) > 0)
+                path = val;
+        }
+    }
+
+    if (!path)
+        path = CMBD_PATH;
+
+    if (setenv ("FLUX_CMBD_PATH", path, 1) < 0)
+        err_exit ("%s", path);
+}
+
+void setup_config_env (const char *path)
+{
+    if (path && setenv ("FLUX_CONFIG", path, 1) < 0)
+        err_exit ("%s", path);
+}
+
+void dump_environment_one (const char *name)
+{
+    char *s = getenv (name);
+    printf ("%20s%s%s\n", name, s ? "=" : "",
+                                s ? s : " is not set");
+}
+
+void dump_environment (void)
+{
+    dump_environment_one ("FLUX_MODULE_PATH");
+    dump_environment_one ("FLUX_CMBD_PATH");
+    dump_environment_one ("FLUX_TMPDIR");
+    dump_environment_one ("FLUX_CONFIG");
+    dump_environment_one ("FLUX_TRACE_APISOCK");
+    dump_environment_one ("LUA_PATH");
+    dump_environment_one ("LUA_CPATH");
+}
+
+void exec_subcommand_dir (bool vopt, const char *dir, char *argv[],
                           const char *prefix)
 {
-    char *path;
-    if (asprintf (&path, "%s/%s%s", dir, prefix ? prefix : "", argv[0]) < 0)
-        oom ();
+    char *path = xasprintf ("%s%s%s%s",
+                            dir ? dir : "",
+                            dir ? "/" : "",
+                            prefix ? prefix : "", argv[0]);
     if (vopt)
         msg ("trying to exec %s", path);
     execvp (path, argv); /* no return if successful */
     free (path);
 }
 
-void exec_subcommand (bool vopt, char *argv[])
+void exec_subcommand (const char *searchpath, bool vopt, char *argv[])
 {
-    char *searchpath = getenv ("FLUX_EXEC_PATH"); // assert != NULL
-    char *cpy = xstrdup (searchpath);
-    char *dir, *saveptr = NULL, *a1 = cpy;
+    if (strchr (argv[0], '/')) {
+        exec_subcommand_dir (vopt, NULL, argv, NULL);
+        err_exit ("%s", argv[0]);
+    } else {
+        char *cpy = xstrdup (searchpath);
+        char *dir, *saveptr = NULL, *a1 = cpy;
 
-    while ((dir = strtok_r (a1, ":", &saveptr))) {
-        exec_subcommand_dir (vopt, dir, argv, "flux-");
-        //exec_subcommand_dir (vopt, dir, argv, NULL); /* deprecated */
-        a1 = NULL;
+        while ((dir = strtok_r (a1, ":", &saveptr))) {
+            exec_subcommand_dir (vopt, dir, argv, "flux-");
+            a1 = NULL;
+        }
+        free (cpy);
+        msg_exit ("`%s' is not a flux command.  See 'flux --help'", argv[0]);
     }
-    free (cpy);
-    msg_exit ("`%s' is not a flux command.  See 'flux --help'", argv[0]);
 }
 
 /*

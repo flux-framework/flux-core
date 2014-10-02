@@ -33,7 +33,7 @@ EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc spell.en.pws
 
 CLEANFILES = $(MAN1_FILES) $(XML_FILES)
 
-noinst_SCRIPTS = spellcheck
+dist_noinst_SCRIPTS = spellcheck
 
 TESTS_ENVIRONMENT = \
 	pws_dict=$(abs_srcdir)/spell.en.pws \
