@@ -1,3 +1,4 @@
+[![Stories in Ready](https://badge.waffle.io/flux-framework/flux-core.png?label=ready&title=Ready)](https://waffle.io/flux-framework/flux-core)
 _NOTE: This project is currently EXPERIMENTAL (as indicated by its
 0.x.x version) and is being actively developed.  We offer no guarantee
 of API stablility from release to release at this time._
