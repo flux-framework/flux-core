@@ -767,14 +767,14 @@ static module_t *module_prepare_one (ctx_t *ctx, const char *arg)
     int flags = 0;
     module_t *mod;
 
-   if (access (arg, R_OK | X_OK) == 0) {        /* path name given */
+   if (strchr (arg, '/')) {                     /* path name given */
         path = xstrdup (arg);
         if (!(name = flux_modname (path)))
-            msg_exit ("%s: %s", path, dlerror ());
+            msg_exit ("%s", dlerror ());
     } else {                                    /* module name given */
         name = xstrdup (arg);
         if (!(path = flux_modfind (ctx->module_searchpath, name)))
-            errn_exit (ENOENT, "%s", name);
+            msg_exit ("%s: not found in module search path", name);
     }
 
     if (!(mod = zhash_lookup (ctx->modules, name))) {

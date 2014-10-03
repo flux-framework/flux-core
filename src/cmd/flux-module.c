@@ -233,14 +233,14 @@ static void module_load (flux_t h, int argc, char **argv)
 
     if (argc == 0)
        usage ();
-    if (access (argv[0], R_OK | X_OK) == 0) {   /* path name given */
+    if (strchr (argv[0], '/')) {                /* path name given */
         path = xstrdup (argv[0]);
         if (!(name = flux_modname (path)))
             msg_exit ("%s", dlerror ());
     } else {                                    /* module name given */
         name = xstrdup (argv[0]);
         if (!(path = flux_modfind (searchpath, name)))
-            errn_exit (ENOENT, "%s", name);
+            msg_exit ("%s: not found in module search path", name);
     }
     argc--;
     argv++;

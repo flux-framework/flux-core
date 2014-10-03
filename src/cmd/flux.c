@@ -240,8 +240,8 @@ void setup_lua_env (zconfig_t *cf, const char *cpath_add, const char *path_add)
     path_push (&path, ";;", ";"); /* Lua replaces ;; with the default path */
     path_push (&cpath, ";;", ";");
 
-    /* FIXME: push installed paths (needed if side-installed)
-     */
+    path_push (&path, LUA_PATH_ADD, ";");
+    path_push (&cpath, LUA_CPATH_ADD, ";");
 
     if ((z = zconfig_locate (cf, "general/lua_path"))) {
         char *val = zconfig_value (z);
