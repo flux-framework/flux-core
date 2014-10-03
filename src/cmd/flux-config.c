@@ -50,7 +50,7 @@ void usage (void)
 {
     fprintf (stderr,
 "Usage: flux-config [-c FILE] dump [key]\n"
-"       flux-config [-c FILE] get [key]\n"
+"       flux-config [-c FILE] get key\n"
 "       flux-config [-c FILE] put key=val\n"
 );
     exit (1);
