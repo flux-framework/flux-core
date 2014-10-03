@@ -1,0 +1,74 @@
+FLUX-CONFIG(1)
+==============
+:doctype: manpage
+
+
+NAME
+----
+flux-config - manipulate Flux config file
+
+
+SYNOPSIS
+--------
+*flux-config* ['--config file'] COMMAND ['OPTIONS']
+
+
+DESCRIPTION
+-----------
+A Flux configuration file is used by the flux(1) command driver
+to determine various search paths.  This file currently has limited
+usage in the Flux framework source trees, as a mechanism for configuring
+in-tree unit test execution.  It should be considered EXPERIMENTAL
+and its content subject to change.
+
+The config file uses the hierarchical ZPL format (see below).
+All keys and values are strings.  Hierarchy is expressed with
+4-character indentation.
+
+A particular key down in the hierarchy may be specified as a path.
+For example "flux-config get /general/exec_path" would print "xyz":
+
+  general:
+      exec_path = xyz
+      cmbd_path = abc 
+
+
+OPTIONS
+-------
+*-c, --config*='FILE'::
+Override the default config file path, $HOME/.flux/config.
+
+COMMANDS
+--------
+*dump* ['path']::
+Parse the config file and dump its contents, either the entire file,
+or from 'path' on down.
+
+*get* 'path'::
+Print the value for 'path'.  Return an error if 'path' does not exist.
+
+*put* 'path=val':
+Assign the value 'val' to 'path'.  Any existing value is overwritten.
+The config file is created if it does not exist.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+--------
+flux(1)
+
+http://rfc.zeromq.org/spec:4/ZPL
