@@ -83,6 +83,7 @@ static void usage (void)
 "    -v,--verbose             show FLUX_* environment and command search\n"
 "\n"
 "The flux-core commands are:\n"
+"   help          Display manual for a subcommand\n"
 "   keygen        Generate CURVE keypairs for session security\n"
 "   start         Bootstrap a comms session interactively\n"
 "   kvs           Access the Flux the key-value store\n"

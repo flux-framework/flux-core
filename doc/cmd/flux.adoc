@@ -18,13 +18,11 @@ DESCRIPTION
 Flux is a modular framework for resource management.
 
 flux(1) is a front end for Flux sub-commands.
-"flux -h" summarizes the available flux-core commands.
+"flux -h" summarizes the core Flux commands.
+"flux help 'CMD'" displays a manual page, if any, for 'CMD'.
 
-If 'CMD' contains a slash "/" character, it is assumed to be
-a sub-command in development and is executed directly, bypassing
-the sub-command search path.
-
-"flux -h CMD" is equivalent to "flux CMD -h".
+If 'CMD' contains a slash "/" character, it is executed directly,
+bypassing the sub-command search path.
 
 
 OPTIONS
