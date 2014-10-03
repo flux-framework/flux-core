@@ -44,7 +44,7 @@ which API socket to connect to.
 Trace API socket traffic to 'stderr'.
 
 *-x, --exec-path*='PATH'::
-Prepend 'PATH' to subcommand executable search path.
+Prepend 'PATH' to sub-command executable search path.
 Multiple directories may be specified, separated by colons.
 
 *-M, --module-path*='PATH'::
@@ -93,7 +93,7 @@ Set Lua binary module search path:
 
 setenv FLUX_CMBD_PATH::
 Set the path to the broker executable.  This environment variable is
-used by flux-start(1) and related subcommands to launch the broker.
+used by flux-start(1) and related sub-commands to launch the broker.
 The path may be set by any of the following methods, in decreasing precedence:
 - [--cmbd-path FILE]
 - [config-file cmbd_path]
@@ -101,7 +101,7 @@ The path may be set by any of the following methods, in decreasing precedence:
 
 setenv FLUX_CONFIG::
 Set the path to the config file.  The config file location is used by flux(1),
-and the environment variable may be used by subcommands.
+and the environment variable may be used by sub-commands.
 The path may be set by any of the following methods, in descending precedence:
 - [--config FILE]
 - [top of build tree, if being run from flux-core repo]
@@ -115,8 +115,8 @@ setenv FLUX_TMPDIR::
 Set if "--tmpdir" was specified.  The broker sets FLUX_TMPDIR when it
 spawns child processes.  It specifies the directory where the API
 socket for that broker can be found, among other things.  If running a
-Flux subcommand from "outside" of a comms session, e.g. not as a process
-descendent of the broker, you may need to set this to find the correct
+Flux sub-command from "outside" of a comms session, e.g. not as a process
+descendant of the broker, you may need to set this to find the correct
 API socket.
 
 

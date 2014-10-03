@@ -110,3 +110,13 @@ unlink
 timestamped
 libs
 scalable
+config
+sbin
+zpl
+libexec
+usr
+setenv
+getenv
+repo
+lua
+cpath
