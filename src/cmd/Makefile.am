@@ -7,7 +7,8 @@ AM_CPPFLAGS = \
 	-DEXEC_PATH=\"$(fluxcmddir)\" \
 	-DCMBD_PATH=\"$(fluxlibexecdir)/cmbd\" \
 	-DLUA_PATH_ADD=\"$(luadir)/?.lua\" \
-	-DLUA_CPATH_ADD=\"$(luaexecdir)/?.so\"
+	-DLUA_CPATH_ADD=\"$(luaexecdir)/?.so\" \
+	-DMANDIR=\"$(mandir)\"
 
 fluxcmd_ldadd = \
 	$(top_builddir)/src/modules/live/liblive.la \

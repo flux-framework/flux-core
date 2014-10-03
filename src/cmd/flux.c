@@ -42,6 +42,7 @@
 #include "src/common/libutil/argv.h"
 
 
+bool handle_internal (zconfig_t *cf, int ac, char *av[]);
 void dump_environment (void);
 void exec_subcommand (const char *searchpath, bool vopt, char *argv[]);
 char *intree_config (void);
@@ -82,6 +83,7 @@ static void usage (void)
 "    -v,--verbose             show FLUX_* environment and command search\n"
 "\n"
 "The flux-core commands are:\n"
+"   help          Display manual for a subcommand\n"
 "   keygen        Generate CURVE keypairs for session security\n"
 "   start         Bootstrap a comms session interactively\n"
 "   kvs           Access the Flux the key-value store\n"
@@ -97,6 +99,7 @@ static void usage (void)
 "   topo          Display current comms topology using graphviz\n"
 "   wreckrun      Execute a Flux lightweight job (LWJ)\n"
 "   zio           Manipulate KVS streams (including LWJ stdio)\n"
+"   config        Manipulate a Flux config file\n"
 );
 }
 
@@ -104,7 +107,6 @@ static void usage (void)
 int main (int argc, char *argv[])
 {
     int ch;
-    bool hopt = false;
     bool vopt = false;
     char *xopt = NULL;
     char *Mopt = NULL;
@@ -149,7 +151,8 @@ int main (int argc, char *argv[])
                 Copt = optarg;
                 break;
             case 'h': /* --help  */
-                hopt = true;
+                usage ();
+                exit (0);
                 break;
             default:
                 usage ();
@@ -170,23 +173,18 @@ int main (int argc, char *argv[])
 
     searchpath = setup_exec_searchpath (config, xopt);
 
-    if (hopt) {
-        if (argc > 0) {
-            char *av[] = { argv[0], "--help", NULL };
-            exec_subcommand (searchpath, vopt, av);
-        } else
-            usage ();
-        exit (0);
-    }
+
     if (argc == 0) {
         usage ();
         exit (1);
     }
-    if (vopt) {
+    if (vopt)
         dump_environment ();
-        printf ("subcommand search path: %s", searchpath);
+    if (!handle_internal (config, argc, argv)) {
+        if (vopt)
+            printf ("subcommand search path: %s", searchpath);
+        exec_subcommand (searchpath, vopt, argv);
     }
-    exec_subcommand (searchpath, vopt, argv);
 
     zconfig_destroy (&config);
     if (config_file)
@@ -385,6 +383,37 @@ void exec_subcommand (const char *searchpath, bool vopt, char *argv[])
         free (cpy);
         msg_exit ("`%s' is not a flux command.  See 'flux --help'", argv[0]);
     }
+}
+
+void internal_help (zconfig_t *cf, const char *topic)
+{
+    char *val = NULL, *cmd;
+    zconfig_t *z;
+
+    if (topic) {
+        if ((z = zconfig_locate (cf, "general/man_path")))
+            val = zconfig_value (z);
+        if (val && strlen (val) > 0)
+            setenvf ("MANPATH", 1, "%s:%s", val, MANDIR);
+        else
+            setenv ("MANPATH", MANDIR, 1);
+        cmd = xasprintf ("man flux-%s %s", topic, topic);
+        system (cmd);
+        free (cmd);
+    } else
+        usage ();
+}
+
+bool handle_internal (zconfig_t *cf, int ac, char *av[])
+{
+    bool handled = true;
+
+    if (!strcmp (av[0], "help")) {
+        internal_help (cf, ac > 1 ? av[1] : NULL);
+    } else
+        handled = false;
+
+    return handled;
 }
 
 /*
