@@ -16,8 +16,15 @@ SYNOPSIS
 DESCRIPTION
 -----------
 Flux is a modular framework for resource management.
+
 flux(1) is a front end for Flux sub-commands.
-flux(1) itself has some general 'OPTIONS', described below.
+"flux -h" summarizes the available flux-core commands.
+
+If 'CMD' contains a slash "/" character, it is assumed to be
+a sub-command in development and is executed directly, bypassing
+the sub-command search path.
+
+"flux -h CMD" is equivalent to "flux CMD -h".
 
 
 OPTIONS
@@ -25,13 +32,8 @@ OPTIONS
 *-h, --help*::
 Display help on options, and a list of the core Flux sub-commands.
 
-*-x, --exec-path*='PATH'::
-Override the compiled-in search path for sub-commands.
-Multiple directories are separated by colons.
-
-*-M, --module-path*='PATH'::
-Override the compiled-in search path for comms modules.
-Multiple directories are separated by colons.
+*-v, --verbose*::
+Display command environment and the path search for 'CMD'.
 
 *-T, --tmpdir*='PATH'::
 Run commands with 'FLUX_TMPDIR' set to 'PATH'.
@@ -39,14 +41,83 @@ When there are multiple message brokers on a node, this selects
 which API socket to connect to.
 
 *-t, --trace-apisock*::
-Trace message sent back and forth to the message broker over the
-API socket.  Trace output appears on stderr.
+Trace API socket traffic to 'stderr'.
+
+*-x, --exec-path*='PATH'::
+Prepend 'PATH' to subcommand executable search path.
+Multiple directories may be specified, separated by colons.
+
+*-M, --module-path*='PATH'::
+Prepend 'PATH' to the comms module search path.
+Multiple directories may be specified, separated by colons.
+
+*-L, --lua-path*='PATH'::
+Prepend 'PATH' to the Lua module search path (LUA_PATH).
+Multiple paths may be specified, separated by semicolon.
+
+*-C, --lua-cpath*='PATH'::
+Prepend 'PATH' to the Lua binary module search path (LUA_CPATH).
+Multiple paths may be specified, separated by semicolon.
 
 *-B, --cmbd-path*::
-Override the compiled-in default path to the Flux message broker.
+Override the path to the Flux communications broker daemon.
 
-*-v, --verbose*::
-Display Flux environment variable settings before 'CMD' is executed.
+
+SUB-COMMAND ENVIRONMENT
+-----------------------
+flux(1) uses compiled-in install paths, a config file, the environment,
+and its command line arguments to up the environment for sub-commands.
+
+Sub-command search path::
+Look for "flux-'CMD'" executable by searching a path constructed
+with the following prototype:
+
+  [--exec-path PATH]:[config-file exec_path]:install-path
+
+setenv FLUX_MODULE_PATH::
+Set up broker comms module search path according to:
+
+  [--module-path PATH]:[config-file module_path]:install-path
+
+setenv LUA_PATH::
+Set Lua module search path:
+
+  [--lua-path PATH];[config-file lua_path];[getenv LUA_PATH]; \
+    install-path;;;
+
+setenv LUA_CPATH::
+Set Lua binary module search path:
+
+  [--lua-cpath PATH];[config-file lua_cpath];[getenv LUA_CPATH]; \
+    install-path;;;
+
+setenv FLUX_CMBD_PATH::
+Set the path to the broker executable.  This environment variable is
+used by flux-start(1) and related subcommands to launch the broker.
+The path may be set by any of the following methods, in decreasing precedence:
+- [--cmbd-path FILE]
+- [config-file cmbd_path]
+- install-path
+
+setenv FLUX_CONFIG::
+Set the path to the config file.  The config file location is used by flux(1),
+and the environment variable may be used by subcommands.
+The path may be set by any of the following methods, in descending precedence:
+- [--config FILE]
+- [top of build tree, if being run from flux-core repo]
+- [$HOME/.flux/config]
+
+setenv FLUX_TRACE_APISOCK::
+Set to "1" if --trace-apisock was specified.  This causes the FLUX_FLAGS_TRACE
+flag to be set when an API socket is established by a sub-command.
+
+setenv FLUX_TMPDIR::
+Set if "--tmpdir" was specified.  The broker sets FLUX_TMPDIR when it
+spawns child processes.  It specifies the directory where the API
+socket for that broker can be found, among other things.  If running a
+Flux subcommand from "outside" of a comms session, e.g. not as a process
+descendent of the broker, you may need to set this to find the correct
+API socket.
 
 
 AUTHOR
