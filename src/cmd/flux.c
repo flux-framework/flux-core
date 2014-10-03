@@ -97,6 +97,7 @@ static void usage (void)
 "   topo          Display current comms topology using graphviz\n"
 "   wreckrun      Execute a Flux lightweight job (LWJ)\n"
 "   zio           Manipulate KVS streams (including LWJ stdio)\n"
+"   config        Manipulate a Flux config file\n"
 );
 }
 
