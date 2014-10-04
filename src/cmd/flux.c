@@ -398,7 +398,8 @@ void internal_help (zconfig_t *cf, const char *topic)
         else
             setenv ("MANPATH", MANDIR, 1);
         cmd = xasprintf ("man flux-%s %s", topic, topic);
-        system (cmd);
+        if (system (cmd) < 0)
+            err_exit ("man");
         free (cmd);
     } else
         usage ();
