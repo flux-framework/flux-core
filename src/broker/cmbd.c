@@ -116,6 +116,7 @@ typedef struct {
     char *proctitle;
     pid_t shell_pid;
     char *shell_cmd;
+    bool shell_armed;
     sigset_t default_sigset;
     /* Bootstrap
      */
@@ -449,8 +450,8 @@ int main (int argc, char *argv[])
     update_environment (&ctx);
     update_pidfile (&ctx, fopt);
 
-    if (!nopt && ctx.rank == 0 && (isatty (0) || ctx.shell_cmd))
-        rank0_shell (&ctx);
+    if (!nopt && ctx.rank == 0 && (isatty (STDIN_FILENO) || ctx.shell_cmd))
+        ctx.shell_armed = true;
 
     if (ctx.verbose)
         msg ("initializing sockets");
@@ -568,6 +569,18 @@ static void update_pidfile (ctx_t *ctx, bool force)
     free (pidfile);
 }
 
+/* If fd 0 gets recycled and used in a zloop, zmq 4.0.4 will assert
+ */
+void work_around_zmq_poll_bug (void)
+{
+    int fd = open ("/dev/null", O_RDONLY);
+    if (fd < 0)
+        err_exit ("/dev/null");
+    if (fd != 0 && dup2 (fd, 0) < 0)
+        msg ("failed to re-acquire stdin fileno - zmq_poll may be sad!");
+    /* leak fd on purpose */
+}
+
 static void rank0_shell (ctx_t *ctx)
 {
     char *av[] = { getenv ("SHELL"), "-c", ctx->shell_cmd, NULL };
@@ -589,9 +602,10 @@ static void rank0_shell (ctx_t *ctx)
                 err_exit ("execv %s", av[0]);
             break;
         default: /* parent */
-            //close (2);
-            close (1);
-            close (0);
+            //close (STDERR_FILENO);
+            close (STDOUT_FILENO);
+            close (STDIN_FILENO);
+            work_around_zmq_poll_bug ();
             break;
     }
 }
@@ -1385,6 +1399,10 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
         cmb_heartbeat (ctx, zmsg);
     else if (flux_msg_match (zmsg, "shutdown"))
         shutdown_recv (ctx, zmsg);
+    else if (flux_msg_match (zmsg, "live.ready")) {
+        if (ctx->shell_armed)
+            rank0_shell (ctx);
+    }
 }
 
 static int cmb_pub_event (ctx_t *ctx, zmsg_t **event)
