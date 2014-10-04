@@ -10,13 +10,13 @@ flux-keygen - generate keys for Flux security
 
 SYNOPSIS
 --------
-*flux-keygen* ['--force'] ['--plain'|'--curve']
+*flux-keygen* ['--force'] ['--plain']
 
 
 DESCRIPTION
 -----------
 flux-keygen(1) generates long-term keys for Flux security.
-Keys are written to a '.flux' sub-directory in your home directory.
+Keys are written to files in '$HOME/.flux'.
 
 Flux comms sessions implement cryptographic privacy and data integrity
 when data is sent over a network.  Point to point ZeroMQ TCP connections
@@ -49,11 +49,7 @@ OPTIONS
 Generate new keys, even if they already exist.
 
 *-p, --plain*::
-Generate only PLAIN keys.
-
-*-c, --curve*::
-Generate only CURVE keys.
-
+Generate PLAIN key.
 
 AUTHOR
 ------

@@ -50,11 +50,13 @@ the request message's route are prepended as it is routed "upstream" towards
 the root of the tree based overlay network.  In flux-snoop(1) output,
 these routing frames are compressed into what looks like one message part,
 with abbreviated addresses separated by exclamation points, and the number
-of hops shown in brackets, not the size.  Flux responses utilize the
-reverse flow, where routing frames are stripped of and used to select
-the next peer, but otherwise have the same structure as requests.
+of hops shown in brackets, not the size.
 
-Events consist of a string message part (the topic name) followed by
+Flux responses utilize the reverse flow, where routing frames are stripped
+off and used to select the next peer, but otherwise have the same structure
+as requests.
+
+Flux fvents consist of a string message part (the topic name) followed by
 a payload.  Events use the ZeroMQ PUB - SUB message flow.
 
 
