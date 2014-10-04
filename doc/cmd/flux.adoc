@@ -19,7 +19,7 @@ Flux is a modular framework for resource management.
 
 flux(1) is a front end for Flux sub-commands.
 "flux -h" summarizes the core Flux commands.
-"flux help 'CMD'" displays a manual page, if any, for 'CMD'.
+"flux help 'CMD'" displays the manual page for 'CMD'.
 
 If 'CMD' contains a slash "/" character, it is executed directly,
 bypassing the sub-command search path.
@@ -31,7 +31,7 @@ OPTIONS
 Display help on options, and a list of the core Flux sub-commands.
 
 *-v, --verbose*::
-Display command environment and the path search for 'CMD'.
+Display command environment, and the path search for 'CMD'.
 
 *-T, --tmpdir*='PATH'::
 Run commands with 'FLUX_TMPDIR' set to 'PATH'.
@@ -64,7 +64,7 @@ Override the path to the Flux communications broker daemon.
 SUB-COMMAND ENVIRONMENT
 -----------------------
 flux(1) uses compiled-in install paths, a config file, the environment,
-and its command line arguments to up the environment for sub-commands.
+and its command line arguments to construct the environment for sub-commands.
 
 Sub-command search path::
 Look for "flux-'CMD'" executable by searching a path constructed

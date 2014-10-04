@@ -15,15 +15,12 @@ SYNOPSIS
 
 DESCRIPTION
 -----------
-A Flux configuration file is used by the flux(1) command driver
-to determine various search paths.  This file currently has limited
-usage in the Flux framework source trees, as a mechanism for configuring
-in-tree unit test execution.  It should be considered EXPERIMENTAL
-and its content subject to change.
+A configuration file is used by the flux(1) command driver
+to determine various search paths.
 
 The config file uses the hierarchical ZPL format (see below).
 All keys and values are strings.  Hierarchy is expressed with
-4-character indentation.
+4-character indentation.  Comments are lines that begin with a "#".
 
 A particular key down in the hierarchy may be specified as a path.
 For example "flux-config get /general/exec_path" would print
@@ -32,6 +29,10 @@ For example "flux-config get /general/exec_path" would print
   general:
       exec_path = "/usr/libexec/flux"
       cmbd_path = "/usr/bin:/usr/sbin"
+
+This file currently has limited usage in the Flux framework source
+trees, as a mechanism for configuring in-tree unit test execution.
+It should be considered EXPERIMENTAL and its content subject to change.
 
 
 OPTIONS
