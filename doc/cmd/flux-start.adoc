@@ -39,24 +39,12 @@ OPTIONS
 Set the size of the comms session (number of message brokers).
 The default is 1.
 
-*-k, --k-ary*='N'::
-Set the branching factor of the tree-based-overlay network.  This option
-is passed directly to the Flux message broker, where the default is 2.
+*-o, --cmbd-opts*='option_string'::
+Add options to the message broker daemon, separated by commas.
+For example, to set the branching factor of the tree-based-overlay
+network to 8 and enable verbose mode:
 
-*-M, --modules*='modules'::
-Load the specified comms modules in addition to the default core modules.
-Modules are specified by name in a comma-separated list.  To limit a module
-to a subset of the session's ranks, you may append a nodeset in square
-brackets.  For example: "foo[0],bar,baz" would load the foo module on
-rank 0 only, and the bar and baz modules on all ranks.
-This option is passed directly to the Flux message broker.
-
-*-O, --modopts*='options'::
-Set module options.  Module options are specified in a space-separated list.
-Each option has the form 'name:key=val' where 'name' is the module name,
-'key' is the option name, and 'val' is the option value.  For example:
-"kvs:a.b.c=42 kvs:a.b.g=foo" would pre-load two values into the KVS.
-This option is passed directly to the Flux message broker.
+  flux start -o"-v,--k-ary=8"
 
 *-v, --verbose*::
 Display commands before executing them.
