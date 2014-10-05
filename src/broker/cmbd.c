@@ -169,7 +169,7 @@ static module_t *module_create (ctx_t *ctx, const char *path, int flags);
 static void module_destroy (module_t *mod);
 static void module_unload (module_t *mod, zmsg_t **zmsg);
 static bool module_select (module_t *mod, const char *nstr);
-static void module_prepare (ctx_t *ctx, const char *optarg);
+static void module_prepare (ctx_t *ctx, zlist_t *modules, zlist_t *modopts);
 static void module_loadall (ctx_t *ctx);
 
 static int peer_idle (ctx_t *ctx, const char *uuid);
@@ -195,7 +195,7 @@ static const double dfl_heartrate = 2;
 
 static const struct flux_handle_ops cmbd_handle_ops;
 
-#define OPTIONS "t:vR:S:p:M:X:L:N:Pk:e:r:s:c:fnH:"
+#define OPTIONS "t:vR:S:p:M:X:L:N:Pk:e:r:s:c:fnH:O:"
 static const struct option longopts[] = {
     {"sid",             required_argument,  0, 'N'},
     {"child-uri",       required_argument,  0, 't'},
@@ -205,7 +205,8 @@ static const struct option longopts[] = {
     {"security",        required_argument,  0, 's'},
     {"rank",            required_argument,  0, 'R'},
     {"size",            required_argument,  0, 'S'},
-    {"modules",         required_argument,  0, 'M'},
+    {"module",          required_argument,  0, 'M'},
+    {"modopt",          required_argument,  0, 'O'},
     {"module-path",     required_argument,  0, 'X'},
     {"logdest",         required_argument,  0, 'L'},
     {"pmi-boot",        no_argument,        0, 'P'},
@@ -229,7 +230,8 @@ static void usage (void)
 " -R,--rank N                  Set cmbd rank (0...size-1)\n"
 " -S,--size N                  Set number of ranks in session\n"
 " -N,--sid NAME                Set session id\n"
-" -M,--modules name[,name,...] Load the named modules (comma separated)\n"
+" -M,--module NAME             Load module NAME (may be repeated)\n"
+" -O,--modopt NAME:key=val     Set option for module NAME (may be repeated)\n"
 " -X,--module-path PATH        Set module search path (colon separated)\n"
 " -L,--logdest DEST            Log to DEST, can  be syslog, stderr, or file\n"
 " -s,--security=plain|curve|none    Select security mode (default: curve)\n"
@@ -245,15 +247,22 @@ static void usage (void)
 
 int main (int argc, char *argv[])
 {
-    int c, i;
+    int c;
     ctx_t ctx;
     endpt_t *ep;
     bool fopt = false;
     bool nopt = false;
-    char *Mopt = NULL;
+    zlist_t *modules, *modopts;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
+
+    if (!(modules = zlist_new ()))
+        oom ();
+    zlist_autofree (modules);
+    if (!(modopts = zlist_new ()))
+        oom ();
+    zlist_autofree (modopts);
 
     ctx.size = 1;
     if (!(ctx.modules = zhash_new ()))
@@ -308,8 +317,13 @@ int main (int argc, char *argv[])
             case 'S':   /* --size N */
                 ctx.size = strtoul (optarg, NULL, 10);
                 break;
-            case 'M':   /* --modules p1,p2,...,p3[nodeset],... */
-                Mopt = optarg;
+            case 'M':   /* --module NAME[nodeset] */
+                if (zlist_push (modules, optarg) < 0 )
+                    oom ();
+                break;
+            case 'O':   /* --modopt NAME:key=val */
+                if (zlist_push (modopts, optarg) < 0)
+                    oom ();
                 break;
             case 'X':   /* --module-path PATH */
                 ctx.module_searchpath = optarg;
@@ -367,6 +381,8 @@ int main (int argc, char *argv[])
                 usage ();
         }
     }
+    if (argc != optind)
+        usage ();
 
     /* Create zeromq context, security context, zloop, etc.
      */
@@ -424,27 +440,17 @@ int main (int argc, char *argv[])
      */
     if (ctx.verbose)
         msg ("module-path: %s", ctx.module_searchpath);
-    module_prepare (&ctx, "api,modctl,kvs,live,mecho,job[0],wrexec,resrc,barrier");
-    if (Mopt)
-        module_prepare (&ctx, Mopt);
-
-    /* Remaining arguments are for modules: module:key=val
-     */
-    for (i = optind; i < argc; i++) {
-        char *key, *val, *cpy = xstrdup (argv[i]);
-        module_t *mod;
-        if ((key = strchr (cpy, ':'))) {
-            *key++ = '\0';
-            if (!(mod = zhash_lookup (ctx.modules, cpy)))
-                msg_exit ("module argument for unknown module: %s", cpy);
-            if ((val = strchr (key, '='))) {
-                *val++ = '\0';
-                zhash_update (mod->args, key, xstrdup (val));
-                zhash_freefn (mod->args, key, (zhash_free_fn *)free);
-            }
-        }
-        free (cpy);
-    }
+    if (zlist_push (modules, "api") < 0
+        || zlist_push (modules, "modctl") < 0
+        || zlist_push (modules, "kvs") < 0
+        || zlist_push (modules, "live") < 0
+        || zlist_push (modules, "mecho") < 0
+        || zlist_push (modules, "job[0]") < 0
+        || zlist_push (modules, "wrexec") < 0
+        || zlist_push (modules, "resrc") < 0
+        || zlist_push (modules, "barrier") < 0)
+        oom ();
+    module_prepare (&ctx, modules, modopts);
 
     update_proctitle (&ctx);
     update_environment (&ctx);
@@ -500,6 +506,8 @@ int main (int argc, char *argv[])
     if (ctx.rankstr_right)
         free (ctx.rankstr_right);
     zhash_destroy (&ctx.peer_idle);
+    zlist_destroy (&modules);
+    zlist_destroy (&modopts);
     return 0;
 }
 
@@ -802,44 +810,43 @@ static module_t *module_prepare_one (ctx_t *ctx, const char *arg)
     return mod;
 }
 
-static void module_xsep (char *s, char oldsep, char newsep)
+static void module_prepare (ctx_t *ctx, zlist_t *modules, zlist_t *modopts)
 {
-    bool inparen = false;
-    char *p;
+    char *name;
 
-    for (p = s; *p != '\0'; p++) {
-        if (*p == '[')
-            inparen = true;
-        else if (*p == ']')
-            inparen = false;
-        else if (inparen && *p == oldsep)
-            *p = newsep;
-    }
-}
-
-static void module_prepare (ctx_t *ctx, const char *optarg)
-{
-    char *cpy = xstrdup (optarg);
-    char *name, *saveptr = NULL, *a1 = cpy;
-    module_t *mod;
-
-    module_xsep (cpy, ',', ';');
-    while ((name = strtok_r (a1, ",", &saveptr))) {
+    name = zlist_first (modules);
+    while (name) {
         char *p, *nstr = NULL;
         if ((p = strchr (name, '['))) {
             nstr = xstrdup (p);
             *p = '\0';
         }
-        mod = module_prepare_one (ctx, name);
+        module_t *mod = module_prepare_one (ctx, name);
         if (nstr) {
-            module_xsep (nstr, ';', ',');
             if (!module_select (mod, nstr))
                 msg_exit ("malformed module name: %s%s", name, nstr);
             free (nstr);
         }
-        a1 = NULL;
+        name = zlist_next (modules);
     }
-    free (cpy);
+
+    name = zlist_first (modopts);
+    while (name) {
+        char *key = strchr (name, ':');
+        if (!key)
+            msg_exit ("malformed module option: %s", name);
+        *key++ = '\0';
+        char *val = strchr (key, '=');
+        if (!val || strlen (val) == 0)
+            msg_exit ("module option has no value: %s:%s", name, key);
+        *val++ = '\0';
+        module_t *mod = zhash_lookup (ctx->modules, name);
+        if (!mod)
+            msg_exit ("module argument for unknown module: %s", name);
+        zhash_update (mod->args, key, xstrdup (val));
+        zhash_freefn (mod->args, key, (zhash_free_fn *)free);
+        name = zlist_next (modopts);
+    }
 }
 
 static void *cmbd_init_request (ctx_t *ctx)
