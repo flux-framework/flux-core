@@ -35,14 +35,11 @@
 #include "src/common/libutil/argv.h"
 #include "src/common/libutil/log.h"
 
-void start_direct (int size, const char *modules, const char *modopts,
-                   const char *cmd, bool verbose, bool noexec,
+void start_direct (int size, const char *cmd, bool verbose, bool noexec,
                    const char *cmbd_opts);
 
-void start_slurm (int size, const char *modules, const char *modopts,
-                  const char *cmd, bool verbose, bool noexec,
-                  const char *cmbd_opts,
-                  int nnodes, char *partition);
+void start_slurm (int size, const char *cmd, bool verbose, bool noexec,
+                  const char *cmbd_opts, int nnodes, char *partition);
 
 /* Workaround for shutdown bug:
  * Wait this many seconds after exit of first cmbd before kill -9 of
@@ -51,14 +48,12 @@ void start_slurm (int size, const char *modules, const char *modopts,
  */
 const int child_wait_seconds = 1;
 
-#define OPTIONS "+hvs:M:O:XN:p:So:"
+#define OPTIONS "+hvs:XN:p:So:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"verbose",    no_argument,        0, 'v'},
     {"noexec",     no_argument,        0, 'X'},
     {"size",       required_argument,  0, 's'},
-    {"modules",    required_argument,  0, 'M'},
-    {"modopts",    required_argument,  0, 'O'},
     {"nnodes",     required_argument,  0, 'N'},
     {"partition",  required_argument,  0, 'p'},
     {"cmbd-opts",  required_argument,  0, 'o'},
@@ -75,8 +70,6 @@ void usage (void)
 "  -N,--nnodes N           set number of nodes (implies slurm)\n"
 "  -p,--partition NAME     set partition (implies slurm)\n"
 "  -S,--slurm              launch with slurm\n"
-"  -M,--modules modules    load the named modules\n"
-"  -O,--modopts options    set module options\n"
 "  -X,--noexec             don't execute (useful with -v)\n"
 "  -v,--verbose            be annoyingly informative\n"
 );
@@ -90,8 +83,6 @@ int main (int argc, char *argv[])
     int size = 1;
     bool vopt = false;
     bool Xopt = false;
-    char *modules = NULL;
-    char *modopts = NULL;
     char *cmbd_opts = NULL;
     int slurm_nnodes = -1;
     char *slurm_partition = NULL;
@@ -115,12 +106,6 @@ int main (int argc, char *argv[])
                 break;
             case 's': /* --size N */
                 size = strtoul (optarg, NULL, 10);
-                break;
-            case 'M': /* --modules name[,name] */
-                modules = optarg;
-                break;
-            case 'O': /* --modopts "mod:key=val [mod:key=val...]" */
-                modopts = optarg;
                 break;
             case 'N': /* --nnodes N */
                 slurm_nnodes = strtoul (optarg, NULL, 10);
@@ -151,11 +136,10 @@ int main (int argc, char *argv[])
         err ("setrlimit: could not remove core file size limit");
 
     if (slurm) {
-        start_slurm (size, modules, modopts, command, vopt, Xopt,
-                     cmbd_opts, slurm_nnodes, slurm_partition);
+        start_slurm (size, command, vopt, Xopt, cmbd_opts,
+                     slurm_nnodes, slurm_partition);
     } else {
-        start_direct (size, modules, modopts, command, vopt, Xopt,
-                      cmbd_opts);
+        start_direct (size, command, vopt, Xopt, cmbd_opts);
     }
 
     if (command)
@@ -222,8 +206,7 @@ void push_extra_args (int *ac, char ***av, const char *opts)
     free (cpy);
 }
 
-void start_direct (int size, const char *modules, const char *modopts,
-                   const char *cmd, bool verbose, bool noexec,
+void start_direct (int size, const char *cmd, bool verbose, bool noexec,
                    const char *cmbd_opts)
 {
     bool child_killer_armed = false;;
@@ -243,12 +226,8 @@ void start_direct (int size, const char *modules, const char *modopts,
         argv_push (&ac, &av, "--rank=%d", rank);
         if (cmbd_opts)
             push_extra_args (&ac, &av, cmbd_opts);
-        if (modules)
-            argv_push (&ac, &av, "--modules=%s", modules);
         if (rank == 0 && cmd)
             argv_push (&ac, &av, "--command=%s", cmd);
-        if (modopts)
-            argv_push_cmdline (&ac, &av, modopts);
         if (verbose) {
             char *s = argv_concat (ac, av, " ");
             msg ("%d: %s", rank, s);
@@ -300,8 +279,7 @@ void start_direct (int size, const char *modules, const char *modopts,
     free (pids);
 }
 
-void start_slurm (int size, const char *modules, const char *modopts,
-                  const char *cmd, bool verbose, bool noexec,
+void start_slurm (int size, const char *cmd, bool verbose, bool noexec,
                   const char *cmbd_opts, int nnodes, char *partition)
 {
     char *srun_path = "/usr/bin/srun";
@@ -326,12 +304,8 @@ void start_slurm (int size, const char *modules, const char *modopts,
     argv_push (&ac, &av, "--logdest=%s", "cmbd.log");
     if (cmbd_opts)
         push_extra_args (&ac, &av, cmbd_opts);
-    if (modules)
-        argv_push (&ac, &av, "--modules=%s", modules);
     if (cmd)
         argv_push (&ac, &av, "--command=%s", cmd);
-    if (modopts)
-        argv_push_cmdline (&ac, &av, modopts);
 
     if (verbose) {
         char *s = argv_concat (ac, av, " ");
