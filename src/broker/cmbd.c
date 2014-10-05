@@ -195,7 +195,7 @@ static const double dfl_heartrate = 2;
 
 static const struct flux_handle_ops cmbd_handle_ops;
 
-#define OPTIONS "t:vR:S:p:M:X:L:N:Pke:r:s:c:fnH:"
+#define OPTIONS "t:vR:S:p:M:X:L:N:Pk:e:r:s:c:fnH:"
 static const struct option longopts[] = {
     {"sid",             required_argument,  0, 'N'},
     {"child-uri",       required_argument,  0, 't'},
