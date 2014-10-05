@@ -35,11 +35,13 @@
 #include "src/common/libutil/argv.h"
 #include "src/common/libutil/log.h"
 
-void start_direct (int size, int kary, const char *modules, const char *modopts,
-                   const char *cmd, bool verbose, bool noexec);
+void start_direct (int size, const char *modules, const char *modopts,
+                   const char *cmd, bool verbose, bool noexec,
+                   const char *cmbd_opts);
 
-void start_slurm (int size, int kary, const char *modules, const char *modopts,
+void start_slurm (int size, const char *modules, const char *modopts,
                   const char *cmd, bool verbose, bool noexec,
+                  const char *cmbd_opts,
                   int nnodes, char *partition);
 
 /* Workaround for shutdown bug:
@@ -49,17 +51,17 @@ void start_slurm (int size, int kary, const char *modules, const char *modopts,
  */
 const int child_wait_seconds = 1;
 
-#define OPTIONS "+hvs:k:M:O:XN:p:S"
+#define OPTIONS "+hvs:M:O:XN:p:So:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"verbose",    no_argument,        0, 'v'},
     {"noexec",     no_argument,        0, 'X'},
     {"size",       required_argument,  0, 's'},
-    {"k-ary",      required_argument,  0, 'k'},
     {"modules",    required_argument,  0, 'M'},
     {"modopts",    required_argument,  0, 'O'},
     {"nnodes",     required_argument,  0, 'N'},
     {"partition",  required_argument,  0, 'p'},
+    {"cmbd-opts",  required_argument,  0, 'o'},
     {"slurm",      no_argument,        0, 'S'},
     { 0, 0, 0, 0 },
 };
@@ -69,7 +71,7 @@ void usage (void)
     fprintf (stderr, "Usage: flux-start [OPTIONS] command ...\n"
 "where options are:\n"
 "  -s,--size N             set number of ranks in session\n"
-"  -k,--k-ary N            wire up in k-ary tree\n"
+"  -o,--cmbd-opts OPTS     add cmbd opts, e.g. -o\"-v,-k4\"\n"
 "  -N,--nnodes N           set number of nodes (implies slurm)\n"
 "  -p,--partition NAME     set partition (implies slurm)\n"
 "  -S,--slurm              launch with slurm\n"
@@ -88,9 +90,9 @@ int main (int argc, char *argv[])
     int size = 1;
     bool vopt = false;
     bool Xopt = false;
-    int kary = -1;
     char *modules = NULL;
     char *modopts = NULL;
+    char *cmbd_opts = NULL;
     int slurm_nnodes = -1;
     char *slurm_partition = NULL;
     bool slurm = false;
@@ -114,9 +116,6 @@ int main (int argc, char *argv[])
             case 's': /* --size N */
                 size = strtoul (optarg, NULL, 10);
                 break;
-            case 'k': /* --k-ary N */
-                kary = strtoul (optarg, NULL, 10);
-                break;
             case 'M': /* --modules name[,name] */
                 modules = optarg;
                 break;
@@ -130,6 +129,9 @@ int main (int argc, char *argv[])
             case 'p': /* --partition NAME  */
                 slurm_partition = optarg;
                 slurm = true;
+                break;
+            case 'o': /* --cmbd-opts OPTIONS */
+                cmbd_opts = optarg;
                 break;
             default:
                 usage ();
@@ -149,10 +151,11 @@ int main (int argc, char *argv[])
         err ("setrlimit: could not remove core file size limit");
 
     if (slurm) {
-        start_slurm (size, kary, modules, modopts, command, vopt, Xopt,
-                     slurm_nnodes, slurm_partition);
+        start_slurm (size, modules, modopts, command, vopt, Xopt,
+                     cmbd_opts, slurm_nnodes, slurm_partition);
     } else {
-        start_direct (size, kary, modules, modopts, command, vopt, Xopt);
+        start_direct (size, modules, modopts, command, vopt, Xopt,
+                      cmbd_opts);
     }
 
     if (command)
@@ -208,8 +211,20 @@ void child_killer (pid_t *pids, int size, bool verbose)
     }
 }
 
-void start_direct (int size, int kary, const char *modules, const char *modopts,
-                   const char *cmd, bool verbose, bool noexec)
+void push_extra_args (int *ac, char ***av, const char *opts)
+{
+    char *cpy = xstrdup (opts);
+    char *opt, *saveptr = NULL, *a1 = cpy;
+    while ((opt = strtok_r (a1, ",", &saveptr))) {
+        argv_push (ac, av, "%s", opt);
+        a1 = NULL;
+    }
+    free (cpy);
+}
+
+void start_direct (int size, const char *modules, const char *modopts,
+                   const char *cmd, bool verbose, bool noexec,
+                   const char *cmbd_opts)
 {
     bool child_killer_armed = false;;
     char *cmbd_path = getenv ("FLUX_CMBD_PATH");
@@ -226,8 +241,8 @@ void start_direct (int size, int kary, const char *modules, const char *modopts,
         argv_push (&ac, &av, "%s", cmbd_path ? cmbd_path : CMBD_PATH);
         argv_push (&ac, &av, "--size=%d", size);
         argv_push (&ac, &av, "--rank=%d", rank);
-        if (kary != -1)
-            argv_push (&ac, &av, "--k-ary=%d", kary);
+        if (cmbd_opts)
+            push_extra_args (&ac, &av, cmbd_opts);
         if (modules)
             argv_push (&ac, &av, "--modules=%s", modules);
         if (rank == 0 && cmd)
@@ -285,9 +300,9 @@ void start_direct (int size, int kary, const char *modules, const char *modopts,
     free (pids);
 }
 
-void start_slurm (int size, int kary, const char *modules, const char *modopts,
+void start_slurm (int size, const char *modules, const char *modopts,
                   const char *cmd, bool verbose, bool noexec,
-                  int nnodes, char *partition)
+                  const char *cmbd_opts, int nnodes, char *partition)
 {
     char *srun_path = "/usr/bin/srun";
     char *cmbd_path = getenv ("FLUX_CMBD_PATH");
@@ -309,8 +324,8 @@ void start_slurm (int size, int kary, const char *modules, const char *modopts,
     argv_push (&ac, &av, "%s", cmbd_path ? cmbd_path : CMBD_PATH);
     argv_push (&ac, &av, "--pmi-boot");
     argv_push (&ac, &av, "--logdest=%s", "cmbd.log");
-    if (kary != -1)
-        argv_push (&ac, &av, "--k-ary=%d", kary);
+    if (cmbd_opts)
+        push_extra_args (&ac, &av, cmbd_opts);
     if (modules)
         argv_push (&ac, &av, "--modules=%s", modules);
     if (cmd)
