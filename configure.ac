@@ -29,6 +29,11 @@ if test "$GCC" = yes; then
   GCCWARN="-Wall -Werror"
   AC_SUBST([GCCWARN])
 fi
+AC_PROG_CXX
+if test "$GXX" = yes; then
+  GXXWARN="-Wall -Werror"
+  AC_SUBST([GXXWARN])
+fi
 AC_PROG_RANLIB
 AC_PROG_LIBTOOL
 AC_CHECK_PROG(A2X,[a2x],[a2x])
