@@ -115,9 +115,11 @@ static char *modfind (const char *dirpath, const char *modname)
     if (glob (globstr, 0, NULL, &gl) == 0) {
         for (i = 0; i < gl.gl_pathc && !modpath; i++) {
             char *name = flux_modname (gl.gl_pathv[i]);
-            if (!strcmp (name, modname))
-                modpath = xstrdup (gl.gl_pathv[i]);
-            free (name);
+            if (name) {
+                if (!strcmp (name, modname))
+                    modpath = xstrdup (gl.gl_pathv[i]);
+                free (name);
+            }
         }
         globfree (&gl);
     }
