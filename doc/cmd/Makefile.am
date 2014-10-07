@@ -28,6 +28,7 @@ stderr_devnull_0 = 2>/dev/null
 	$(AM_V_GEN)$(A2X) --attribute mansource=$(META_NAME) \
 	    --attribute manversion=$(META_VERSION) \
 	    --attribute manmanual="Flux Manual" \
+	    --destination-dir=$(builddir) \
 	    --doctype manpage --format manpage $< $(STDERR_DEVNULL)
 
 EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc spell.en.pws
