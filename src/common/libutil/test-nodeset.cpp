@@ -333,7 +333,9 @@ TEST_CASE ("5E5 non-consecutive singletons", "[nodeset]") {
     nodeset_destroy (n);
 }
 
-TEST_CASE ("edge: resize largest ranks", "[nodeset]") {
+// This test case may fail on low-memory systems,
+// for example a build farm VM, so don't run them by default
+TEST_CASE ("edge: resize largest ranks", "[hide]") {
 
     const uint32_t ABS_MAX_SIZE = (~(uint32_t)0);
     const uint32_t ABS_MAX_RANK = (~(uint32_t)0 - 1);
