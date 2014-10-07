@@ -1,7 +1,6 @@
 #include "catch.hpp"
 
 extern "C" {
-#include <string.h>
 #include "nodeset.h"
 #include "xzmalloc.h"
 #include "monotime.h"
