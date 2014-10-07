@@ -229,11 +229,13 @@ vebnew(uint M, int full)
 	Veb T;
 	T.k = fls(M-1);
 	T.D = malloc(vebsize(M));
-	T.M = M;
-	if (full)
-		mkfull(T);
-	else
-		mkempty(T);
+	if (T.D) {
+		T.M = M;
+		if (full)
+			mkfull(T);
+		else
+			mkempty(T);
+	}
 	return T;
 }
 
