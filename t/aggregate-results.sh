@@ -22,7 +22,7 @@ failed=0
 broken=0
 total=0
 
-while read file; do
+for file; do
 	while read type value; do
 		case $type in
 		'')
