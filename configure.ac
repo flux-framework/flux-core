@@ -137,6 +137,7 @@ AC_CONFIG_FILES( \
   src/test/kap/Makefile \
   doc/Makefile \
   doc/cmd/Makefile \
+  t/Makefile \
 )
 AC_CONFIG_FILES([src/cmd/flux-screen], [chmod +x src/cmd/flux-screen])
 

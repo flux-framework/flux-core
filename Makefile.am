@@ -1,4 +1,4 @@
-SUBDIRS = src doc
+SUBDIRS = src doc t
 
 sysconf_DATA = flux.conf
 
