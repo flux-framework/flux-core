@@ -203,6 +203,7 @@ static const struct option longopts[] = {
     {"parent-uri",      required_argument,  0, 'p'},
     {"right-uri",       required_argument,  0, 'r'},
     {"verbose",         no_argument,        0, 'v'},
+    {"quiet",           no_argument,        0, 'q'},
     {"security",        required_argument,  0, 's'},
     {"rank",            required_argument,  0, 'R'},
     {"size",            required_argument,  0, 'S'},
