@@ -108,7 +108,8 @@ typedef struct {
     zhash_t *modules;           /* hash of module_t's by name */
     /* Misc
      */
-    bool verbose;               /* enable debug to stderr */
+    bool verbose;
+    bool quiet;
     flux_t h;
     pid_t pid;
     zhash_t *peer_idle;         /* peer (hopcount=1) hb idle time, by uuid */
@@ -195,7 +196,7 @@ static const double dfl_heartrate = 2;
 
 static const struct flux_handle_ops cmbd_handle_ops;
 
-#define OPTIONS "t:vR:S:p:M:X:L:N:Pk:e:r:s:c:fnH:O:"
+#define OPTIONS "t:vqR:S:p:M:X:L:N:Pk:e:r:s:c:fnH:O:"
 static const struct option longopts[] = {
     {"sid",             required_argument,  0, 'N'},
     {"child-uri",       required_argument,  0, 't'},
@@ -224,9 +225,10 @@ static void usage (void)
 "Usage: cmbd OPTIONS [module:key=val ...]\n"
 " -t,--child-uri URI           Set child URI to bind and receive requests\n"
 " -p,--parent-uri URI          Set parent URI to connect and send requests\n"
-" -e,--event-uri               Set event URI (pub: rank 0, sub: rank > 0)\n"
-" -r,--right-uri               Set right (rank-request) URI\n"
-" -v,--verbose                 Be chatty\n"
+" -e,--event-uri URI           Set event URI (pub: rank 0, sub: rank > 0)\n"
+" -r,--right-uri URI           Set right (rank-request) URI\n"
+" -v,--verbose                 Be annoyingly verbose\n"
+" -q,--quiet                   Be mysteriously taciturn\n"
 " -R,--rank N                  Set cmbd rank (0...size-1)\n"
 " -S,--size N                  Set number of ranks in session\n"
 " -N,--sid NAME                Set session id\n"
@@ -311,6 +313,9 @@ int main (int argc, char *argv[])
             case 'v':   /* --verbose */
                 ctx.verbose = true;
                 break;
+            case 'q':   /* --quiet */
+                ctx.quiet = true;
+                break;
             case 'R':   /* --rank N */
                 ctx.rank = strtoul (optarg, NULL, 10);
                 break;
@@ -339,7 +344,7 @@ int main (int argc, char *argv[])
                 if (ctx.k_ary < 0)
                     usage ();
                 break;
-            case 'e':   /* --event-uri */
+            case 'e':   /* --event-uri URI */
                 if (ctx.gevent)
                     endpt_destroy (ctx.gevent);
                 ctx.gevent = endpt_create (optarg);
@@ -598,7 +603,8 @@ static void rank0_shell (ctx_t *ctx)
     if (!av[2])
         av[1] = NULL;
 
-    msg ("%s-0: starting shell", ctx->sid);
+    if (!ctx->quiet)
+        msg ("%s-0: starting shell", ctx->sid);
 
     switch ((ctx->shell_pid = fork ())) {
         case -1:
@@ -1372,7 +1378,7 @@ static void shutdown_recv (ctx_t *ctx, zmsg_t *zmsg)
         if (ctx->shutdown_tid == -1)
             err_exit ("zloop_timer");
         ctx->shutdown_exitcode = exitcode;
-        if (ctx->rank == 0 || ctx->verbose)
+        if ((ctx->rank == 0 && !ctx->quiet) || ctx->verbose)
             msg ("%d: shutdown in %ds: %s", rank, grace, reason);
     }
     if (o)
