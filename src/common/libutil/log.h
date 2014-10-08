@@ -2,6 +2,7 @@
 #define _UTIL_LOG_H
 
 #include <errno.h>
+#include <stdarg.h>
 
 void log_init (char *p);
 void log_fini (void);
