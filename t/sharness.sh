@@ -700,7 +700,7 @@ SHARNESS_TEST_NAME=${SHARNESS_TEST_FILE##*/}
 SHARNESS_TEST_NAME=${SHARNESS_TEST_NAME%.${SHARNESS_TEST_EXTENSION}}
 
 # Prepare test area.
-test_dir="trash directory.$SHARNESS_TEST_NAME"
+test_dir="trash-directory.$SHARNESS_TEST_NAME"
 test -n "$root" && test_dir="$root/$test_dir"
 case "$test_dir" in
 /*) SHARNESS_TRASH_DIRECTORY="$test_dir" ;;
