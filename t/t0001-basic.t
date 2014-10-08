@@ -35,4 +35,28 @@ test_expect_success 'path to cmbd is sane' '
 test_expect_success 'flux-start works' "
 	flux start --size=2 'flux up' | grep '^ok: *\[0-1\]'
 "
+
+test_expect_success 'test_under_flux works' '
+	echo >&2 "$(pwd)" &&
+	mkdir -p test-under-flux && (
+		cd test-under-flux &&
+		cat >.test.t <<-EOF &&
+		#!$SHELL_PATH
+		pwd
+		test_description="test_under_flux (in sub sharness)"
+		. "\$SHARNESS_TEST_SRCDIR"/sharness.sh
+		test_under_flux 2
+		test_expect_success "flux up" "
+			flux up
+		"
+		test_done
+		EOF
+	chmod +x .test.t &&
+	SHARNESS_TEST_DIRECTORY=`pwd` &&
+	export SHARNESS_TEST_SRCDIR SHARNESS_TEST_DIRECTORY FLUX_BUILD_DIR debug &&
+	./.test.t --verbose --debug >out 2>err
+	) &&
+	grep "ok: *\[0-1\]" test-under-flux/out
+'
+
 test_done
