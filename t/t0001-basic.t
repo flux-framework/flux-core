@@ -16,6 +16,9 @@ test_expect_success 'TEST_NAME is set' '
 test_expect_success 'run_timeout works' '
 	test_expect_code 142 run_timeout 1 sleep 2
 '
+test_expect_success 'test run_timeout with success' '
+	run_timeout 1 /bin/true
+'
 test_expect_success 'we can find a flux binary' '
 	flux --help >/dev/null
 '
