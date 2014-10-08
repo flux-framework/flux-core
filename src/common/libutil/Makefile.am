@@ -1,4 +1,5 @@
 AM_CFLAGS = @GCCWARN@
+AM_CXXFLAGS = @GXXWARN@
 
 AM_CPPFLAGS = \
 	$(JSON_CFLAGS) \
@@ -42,3 +43,16 @@ libutil_la_SOURCES = \
 	readall.h
 
 EXTRA_DIST = veb_mach.c
+
+check_PROGRAMS = runtests
+
+runtests_SOURCES = \
+	runtests.cpp \
+	test-nodeset.cpp
+
+runtests_LDADD = \
+	$(top_builddir)/src/common/libutil/libutil.la \
+	$(top_builddir)/src/common/liblsd/liblsd.la \
+	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)
+
+TESTS = runtests
