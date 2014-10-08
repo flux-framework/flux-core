@@ -684,7 +684,7 @@ export SHARNESS_TEST_DIRECTORY
 # Public: Source directory of test code and sharness library.
 #  This directory may be different from the directory in which tests are
 #  being run.
-SHARNESS_TEST_SRCDIR=$(cd `dirname $0` && pwd)
+: ${SHARNESS_TEST_SRCDIR:=$(cd `dirname $0` && pwd)}
 
 # Public: Build directory that will be added to PATH. By default, it is set to
 # the parent directory of SHARNESS_TEST_DIRECTORY.
@@ -700,7 +700,7 @@ SHARNESS_TEST_NAME=${SHARNESS_TEST_FILE##*/}
 SHARNESS_TEST_NAME=${SHARNESS_TEST_NAME%.${SHARNESS_TEST_EXTENSION}}
 
 # Prepare test area.
-test_dir="trash directory.$SHARNESS_TEST_NAME"
+test_dir="trash-directory.$SHARNESS_TEST_NAME"
 test -n "$root" && test_dir="$root/$test_dir"
 case "$test_dir" in
 /*) SHARNESS_TRASH_DIRECTORY="$test_dir" ;;

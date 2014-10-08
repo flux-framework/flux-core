@@ -47,6 +47,7 @@ run_timeout() {
 #  Usage: test_under_flux <size>
 #
 test_under_flux() {
+    size=${1:-1}
     if test -n "$TEST_UNDER_FLUX_ACTIVE" ; then
         unset TEST_UNDER_FLUX_ACTIVE
         return
@@ -63,7 +64,7 @@ test_under_flux() {
 
     TEST_UNDER_FLUX_ACTIVE=t \
     TERM=${ORIGINAL_TERM} \
-      exec flux start --size=${1} ${quiet} "sh $0 ${flags}"
+      exec flux start --size=${size} ${quiet} "sh $0 ${flags}"
 }
 
 
