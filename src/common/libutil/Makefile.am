@@ -42,3 +42,21 @@ libutil_la_SOURCES = \
 	readall.h
 
 EXTRA_DIST = veb_mach.c
+
+TESTS = test_nodeset
+
+test_ldadd = \
+	$(top_builddir)/src/common/libutil/libutil.la \
+	$(top_builddir)/src/common/libtap/libtap.la \
+	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
+
+test_cppflags = \
+	-DTEST_MAIN \
+	-I$(top_srcdir)/src/common/libtap \
+	$(AM_CPPFLAGS)
+
+check_PROGRAMS = test_nodeset
+
+test_nodeset_SOURCES = nodeset.c
+test_nodeset_CPPFLAGS = $(test_cppflags)
+test_nodeset_LDADD = $(test_ldadd)

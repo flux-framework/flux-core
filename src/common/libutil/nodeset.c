@@ -321,12 +321,6 @@ void nodeset_itr_rewind (nodeset_itr_t itr)
     itr->started = false;
 }
 
-static uint32_t nodeset_bytes (nodeset_t n)
-{
-    assert (n->magic == NS_MAGIC);
-    return vebsize (n->T.M) + n->s_size + sizeof (*n);
-}
-
 bool nodeset_add_rank (nodeset_t n, uint32_t r)
 {
     assert (n->magic == NS_MAGIC);
@@ -602,7 +596,18 @@ static bool nodeset_single (nodeset_t n)
     return (len < 2);
 }
 
-void nodeset_selftest (void)
+#ifdef TEST_MAIN
+
+static uint32_t nodeset_bytes (nodeset_t n)
+{
+    assert (n->magic == NS_MAGIC);
+    return vebsize (n->T.M) + n->s_size + sizeof (*n);
+}
+
+#include "src/common/libtap/tap.h"
+#include "xzmalloc.h"
+
+int main (int argc, char *argv[])
 {
     nodeset_t n, n2;
     nodeset_itr_t itr;
@@ -611,176 +616,143 @@ void nodeset_selftest (void)
     uint32_t r, bigset = 1E6;
     char *tmp;
 
+    plan (111);
+
     n = nodeset_new ();
-    assert (n != NULL);
+    ok (n != NULL);
     nodeset_conf_brackets (n, false);
 
-    /* Add three consecutive ranks.
-     * 1 list entry, 3 ranks
-     */
     nodeset_add_rank (n, 8);
-    nodeset_add_rank (n, 7); /* add before */
-    nodeset_add_rank (n, 9); /* add after */
-    assert (!strcmp (nodeset_str (n), "7-9"));
-    assert (nodeset_count (n) == 3);
+    nodeset_add_rank (n, 7);
+    nodeset_add_rank (n, 9);
+    like (nodeset_str (n), "7-9", "consecutive adds become range");
+    ok (nodeset_count (n) == 3);
 
-    /* Add one disjoint rank before.
-     *  2 list entries, 4 ranks
-     */
     nodeset_add_rank (n, 1);
-    assert (!strcmp (nodeset_str (n), "1,7-9"));
-    assert (nodeset_count (n) == 4);
+    like (nodeset_str (n), "1,7-9", "singleton prepended to range");
+    ok (nodeset_count (n) == 4);
 
-    /* Add one disjoint rank after.
-     * 3 list entries, 5 ranks
-     */
     nodeset_add_rank (n, 16);
-    assert (!strcmp (nodeset_str (n), "1,7-9,16"));
-    assert (nodeset_count (n) == 5);
+    like (nodeset_str (n), "1,7-9,16", "singleton appended to range");
+    ok (nodeset_count (n) == 5);
 
-    /* Insert one disjoint rank in the middle.
-     * 4 list entries, 6 ranks
-     */
     nodeset_add_rank (n, 14);
-    assert (!strcmp (nodeset_str (n), "1,7-9,14,16"));
-    assert (nodeset_count (n) == 6);
+    like (nodeset_str (n), "1,7-9,14,16", "singleton embedded in range");
+    ok (nodeset_count (n) == 6);
 
-    /* Insert one disjoint rank in the middle.
-     * 5 list entries, 7 ranks
-     */
     nodeset_add_rank (n, 3);
-    assert (!strcmp (nodeset_str (n), "1,3,7-9,14,16"));
-    assert (nodeset_count (n) == 7);
+    like (nodeset_str (n), "1,3,7-9,14,16", "singleton embedded in range 2");
+    ok (nodeset_count (n) == 7);
 
-    /* Insert range that contains two singletons.
-     * 4 list entries, 8 ranks
-     */
     nodeset_add_range (n, 1, 3);
-    assert (!strcmp (nodeset_str (n), "1-3,7-9,14,16"));
-    assert (nodeset_count (n) == 8);
+    like (nodeset_str (n), "1-3,7-9,14,16", "overlapping range");
+    ok (nodeset_count (n) == 8);
 
-    /* Insert range overlapping range on low side
-     * 4 list entries, 10 ranks
-     */
     nodeset_add_range (n, 5, 8);
-    assert (!strcmp (nodeset_str (n), "1-3,5-9,14,16"));
-    assert (nodeset_count (n) == 10);
+    like (nodeset_str (n), "1-3,5-9,14,16", "overlapping range 2");
+    ok (nodeset_count (n) == 10);
 
-    /* Insert range overlapping range on high side
-     * 4 list entries, 12 ranks
-     */
     nodeset_add_range (n, 8, 11);
-    assert (!strcmp (nodeset_str (n), "1-3,5-11,14,16"));
-    assert (nodeset_count (n) == 12);
+    like (nodeset_str (n), "1-3,5-11,14,16", "overlapping range 3");
+    ok (nodeset_count (n) == 12);
 
-    /* Add range that contains several singletons and ranges.
-     * 1 list entries, 16 ranks
-     */
     nodeset_add_range (n, 1, 16);
-    assert (!strcmp (nodeset_str (n), "1-16"));
-    assert (nodeset_count (n) == 16);
+    like (nodeset_str (n), "1-16", "add range that contains existing");
+    ok (nodeset_count (n) == 16);
 
-    /* Add a range contained in existing range.
-     * No change.
-     */
     nodeset_add_range (n, 4, 8);
-    assert (!strcmp (nodeset_str (n), "1-16"));
-    assert (nodeset_count (n) == 16);
+    like (nodeset_str (n), "1-16", "add range contained by existing");
+    ok (nodeset_count (n) == 16);
 
     nodeset_destroy (n);
 
 /********************************************/
 
-    /* Add 0,1,2 to see if 1 is mergeable with 0 (edge case).
-     */
     n = nodeset_new ();
+    ok (n != NULL);
     nodeset_add_rank (n, 0);
     nodeset_add_rank (n, 1);
     nodeset_add_rank (n, 2);
-    assert (!strcmp (nodeset_str (n), "[0-2]"));
-    assert (nodeset_count (n) == 3);
+    like (nodeset_str (n), "\\[0-2\\]", "edge case 1 merges with 0");
+    ok (nodeset_count (n) == 3);
     nodeset_conf_ranges (n, false);
-    assert (!strcmp (nodeset_str (n), "[0,1,2]"));
+    like (nodeset_str (n), "\\[0,1,2\\]");
     nodeset_destroy (n);
 
 /********************************************/
 
-    /* Add 2,1,0 to test the reverse edge case
-     */
     n = nodeset_new ();
+    ok (n != NULL);
     nodeset_add_rank (n, 2);
     nodeset_add_rank (n, 1);
     nodeset_add_rank (n, 0);
-    assert (!strcmp (nodeset_str (n), "[0-2]"));
-    assert (nodeset_count (n) == 3);
+    like (nodeset_str (n), "\\[0-2\\]", "reverse merge works");
+    ok (nodeset_count (n) == 3);
     nodeset_destroy (n);
 
 /********************************************/
-
-    /* Exercise nodeset_new_str.
-     */
 
     n = nodeset_new_str ("[1,3,5,6-100]");
-    assert (n != NULL);
-    assert (!strcmp (nodeset_str (n), "[1,3,5-100]"));
-    assert (nodeset_count (n) == 98);
+    ok (n != NULL);
+    like (nodeset_str (n), "\\[1,3,5-100\\]", "mundane range string works");
+    ok (nodeset_count (n) == 98);
     nodeset_destroy (n);
 
     n = nodeset_new_str ("2-1");
-    assert (n != NULL);
-    assert (!strcmp (nodeset_str (n), "[1-2]"));
-    assert (nodeset_count (n) == 2);
+    ok (n != NULL);
+    like (nodeset_str (n), "\\[1-2\\]", "numerically reversed range handled");
+    ok (nodeset_count (n) == 2);
     nodeset_destroy (n);
 
     n = nodeset_new_str ("");
-    assert (n != NULL);
-    assert (nodeset_count (n) == 0);
-    assert (!strcmp (nodeset_str (n), ""));
+    ok (n != NULL);
+    ok (nodeset_count (n) == 0);
+    like (nodeset_str (n), "", "empty string produces empty range");
     nodeset_destroy (n);
 
     n = nodeset_new_str (",");
-    assert (n == NULL);
+    ok (n == NULL, "comma by itself produces error");
 
     n = nodeset_new_str ("-1");
-    assert (n == NULL);
+    ok (n == NULL, "range missing start produces error");
 
     n = nodeset_new_str ("1-");
-    assert (n == NULL);
+    ok (n == NULL, "range missing end produces error");
 
     n = nodeset_new_str ("foo1");
-    assert (n == NULL);
+    ok (n == NULL, "alpha with numerical suffix produces error");
 
     n = nodeset_new_str ("[1-2]");
-    assert (n != NULL);
-    assert (nodeset_count (n) == 2);
+    ok (n != NULL);
+    like (nodeset_str (n), "\\[1-2\\]", "bracketed range works");
+    ok (nodeset_count (n) == 2);
     nodeset_destroy (n);
 
     n = nodeset_new_str ("xyz");
-    assert (n == NULL);
+    ok (n == NULL, "alpha by itself produces error");
 
 /********************************************/
 
-    /* Exercise nodeset_del() / nodeset_test()
-     */
     n = nodeset_new_str ("0-2");
-    assert (n != NULL);
-    assert (!strcmp (nodeset_str (n), "[0-2]"));
-    assert (nodeset_test_range (n, 0, 2));
+    ok (n != NULL);
+    nodeset_conf_brackets (n, false);
+    like (nodeset_str (n), "0-2");
+    ok (nodeset_test_range (n, 0, 2), "nodeset_test_range works");
     nodeset_del_rank (n, 0);
-    assert (!nodeset_test_rank (n, 0));
-    assert (nodeset_test_range (n, 1, 2));
-    assert (!strcmp (nodeset_str (n), "[1-2]"));
+    like (nodeset_str (n), "1-2", "nodeset_del_rank works");
+    ok (!nodeset_test_rank (n, 0), "nodeset_test_rank works");
+    ok (nodeset_test_range (n, 1, 2));
     nodeset_del_rank (n, 1);
-    assert (!nodeset_test_rank (n, 0));
-    assert (!nodeset_test_rank (n, 1));
-    assert (nodeset_test_rank (n, 2));
-    assert (!strcmp (nodeset_str (n), "2"));
+    ok (!nodeset_test_rank (n, 0));
+    ok (!nodeset_test_rank (n, 1));
+    ok (nodeset_test_rank (n, 2));
+    ok (!strcmp (nodeset_str (n), "2"));
     nodeset_del_rank (n, 2);
-    assert (!n->s_valid);
-    assert (!nodeset_test_rank (n, 0));
-    assert (!nodeset_test_rank (n, 1));
-    assert (!nodeset_test_rank (n, 2));
-    assert (!strcmp (nodeset_str (n), ""));
+    ok (!n->s_valid, "cached string is invalidated");
+    ok (!nodeset_test_rank (n, 0));
+    ok (!nodeset_test_rank (n, 1));
+    ok (!nodeset_test_rank (n, 2));
+    like (nodeset_str (n), "");
     nodeset_destroy (n);
 
 /********************************************/
@@ -788,14 +760,14 @@ void nodeset_selftest (void)
     /* Exercise iteration
      */
     n = nodeset_new_str ("0-2");
-    assert (n != NULL);
+    ok (n != NULL);
     itr = nodeset_itr_new (n);
-    assert (nodeset_next (itr) == 0);
-    assert (nodeset_next (itr) == 1);
-    assert (nodeset_next (itr) == 2);
-    assert (nodeset_next (itr) == NODESET_EOF);
+    ok (nodeset_next (itr) == 0, "iterator_next works on first element");
+    ok (nodeset_next (itr) == 1, "iterator_next works on next element");
+    ok (nodeset_next (itr) == 2, "iterator_next works on last element");
+    ok (nodeset_next (itr) == NODESET_EOF, "iterator_next returns EOF");
     nodeset_itr_rewind (itr);
-    assert (nodeset_next (itr) == 0);
+    ok (nodeset_next (itr) == 0, "iterator rewind works");
     nodeset_itr_destroy (itr);
     nodeset_destroy (n);
 
@@ -804,15 +776,16 @@ void nodeset_selftest (void)
     /* Exercise nodeset_dup
      */
     n = nodeset_new_str ("0-2");
-    assert (n != NULL);
-    assert (!strcmp (nodeset_str (n), "[0-2]"));
+    ok (n != NULL);
+    nodeset_conf_brackets (n, false);
+    like (nodeset_str (n), "0-2");
     n2 = nodeset_dup (n);
-    assert (n2 != NULL);
-    assert (!strcmp (nodeset_str (n2), "[0-2]"));
+    ok (n2 != NULL, "nodeset_dup says it worked");
+    like (nodeset_str (n2), "0-2", "nodeset_dup returned identical nodeset");
     nodeset_add_rank (n, 4);
     nodeset_add_rank (n2, 5);
-    assert (!strcmp (nodeset_str (n), "[0-2,4]"));
-    assert (!strcmp (nodeset_str (n2), "[0-2,5]"));
+    like (nodeset_str (n), "0-2,4", "orig unaffected by changes in dup");
+    like (nodeset_str (n2), "0-2,5", "dup unaffected by changes in orig");
     nodeset_destroy (n);
     nodeset_destroy (n2);
 
@@ -821,38 +794,42 @@ void nodeset_selftest (void)
     /* Try zero padding.
      */
     n = nodeset_new_str ("[1,3,5,6-100]");
-    assert (!strcmp (nodeset_str (n), "[1,3,5-100]"));
+    ok (n != NULL);
+    nodeset_conf_brackets (n, false);
+    like (nodeset_str (n), "1,3,5-100", "results not zero padded by default");
     //nodeset_conf_padding (n, log10 (nodeset_max (n)) + 1);
     nodeset_conf_padding (n, 3);
-    assert (!strcmp (nodeset_str (n), "[001,003,005-100]"));
+    like (nodeset_str (n), "001,003,005-100", "padding 3 on all all works");
     nodeset_conf_padding (n, 2);
-    assert (!strcmp (nodeset_str (n), "[01,03,05-100]"));
+    like (nodeset_str (n), "01,03,05-100", "padding 2 on subset works");
     nodeset_conf_padding (n, 4);
-    assert (!strcmp (nodeset_str (n), "[0001,0003,0005-0100]"));
+    like (nodeset_str (n), "0001,0003,0005-0100", "padding 4 on all works");
     nodeset_destroy (n);
 
 /********************************************/
 
     /* Add 'bigset' consecutive singletons.
      */
-    monotime (&ts);
     n = nodeset_new ();
-    nodeset_resize (n, bigset);
-    for (i = 0; i < bigset; i++)
-        nodeset_add_rank (n, i);
-    msg ("add %u consecutive: %.2fs (%u Kbytes)", bigset,
-         monotime_since (ts)/1000, nodeset_bytes (n)/1024);
+    ok (n != NULL);
+    nodeset_conf_brackets (n, false);
+
+    ok (nodeset_resize (n, bigset), "explicitly resize to %u", bigset);
 
     monotime (&ts);
-    (void)nodeset_str (n); /* time the work */
-    msg ("tostr %u consecutive: %.2fs (%u Kbytes)", bigset,
-         monotime_since (ts)/1000, nodeset_bytes (n)/1024);
+    for (i = 0; i < bigset; i++)
+        if (!nodeset_add_rank (n, i))
+            break;
+    ok (i == bigset, "added %u consecutive ranks [%.2fs %u Mbytes]", bigset,
+        monotime_since (ts)/1000, nodeset_bytes (n)/1024);
 
-    if (asprintf (&tmp, "[0-%u]", bigset - 1) < 0)
-        oom ();
-    assert (!strcmp (nodeset_str (n), tmp));
+    monotime (&ts);
+    tmp = xasprintf ("0-%u", bigset - 1);
+    like (nodeset_str (n), tmp, "string conversion %s [%.2fs %u Mbytes]", tmp,
+          monotime_since (ts)/1000, nodeset_bytes (n)/1024);
     free (tmp);
-    assert (nodeset_count (n) == bigset);
+
+    ok (nodeset_count (n) == bigset, "large nodeset count is sane");
 
     nodeset_destroy (n);
 
@@ -860,20 +837,25 @@ void nodeset_selftest (void)
 
     /* Add 'bigset'/2 non-consecutive singletons.
      */
-    monotime (&ts);
     n = nodeset_new ();
-    nodeset_resize (n, bigset);
-    for (i = 0; i < bigset; i += 2)
-        nodeset_add_rank (n, i);
-    msg ("add %u non-consecutive: %.2fs (%u Kbytes)", bigset/2,
-         monotime_since (ts)/1000, nodeset_bytes (n)/1024);
+    ok (n != NULL);
+    nodeset_conf_brackets (n, false);
+
+    ok (nodeset_resize (n, bigset), "explicitly resize to %u", bigset);
 
     monotime (&ts);
-    (void)nodeset_str (n); /* time the work */
-    msg ("tostr %u non-consecutive: %.2fs (%u Kbytes)", bigset/2,
-         monotime_since (ts)/1000, nodeset_bytes (n)/1024);
+    for (i = 0; i < bigset; i += 2)
+        if (!nodeset_add_rank (n, i))
+            break;
+    ok (i == bigset,
+        "added %u non-consecutive ranks [%.2fs %u Mbytes]", bigset/2,
+        monotime_since (ts)/1000, nodeset_bytes (n)/1024);
 
-    assert (nodeset_count (n)  == bigset/2);
+    monotime (&ts);
+    ok (nodeset_str (n) != NULL, "string conversion [%.2fs %u Mbytes]",
+        monotime_since (ts)/1000, nodeset_bytes (n)/1024);
+
+    ok (nodeset_count (n)  == bigset/2, "large nodeset count is sane");
 
     nodeset_destroy (n);
 
@@ -881,56 +863,84 @@ void nodeset_selftest (void)
 
     /* Check edge cases with very big ranks and resize.
      */
+    bool skip_huge = true;
 
     r = ABS_MAX_RANK;
 
-    monotime (&ts);
     n = nodeset_new ();
-    assert (NS_SIZE (n) == veb_minsize);
-
-    assert (nodeset_add_rank (n, r + 1) == false);
-    assert (nodeset_add_rank (n, r) == true);
-    assert (NS_SIZE (n) == ABS_MAX_SIZE); // should have triggered expansion
-    assert (nodeset_add_rank (n, r - 1) == true);
-    msg ("set rank %u,%u,%u: %.2fs (%u Mbytes)", r-1, r, r+1,
-         monotime_since (ts)/1000, nodeset_bytes (n)/(1024*1024));
-
-    assert (nodeset_test_rank (n, r - 1));
-    assert (nodeset_test_rank (n, r));
-    assert (!nodeset_test_rank (n, r + 1));
-    assert (nodeset_count (n) == 2);
+    nodeset_conf_brackets (n, false);
+    ok (NS_SIZE (n) == veb_minsize,
+        "veb size is the minimum %u", veb_minsize);
 
     monotime (&ts);
-    msg ("tostr %s: %.2fs (%u Mbytes)", nodeset_str (n),
-         monotime_since (ts)/1000, nodeset_bytes (n)/(1024*1024));
-    if (asprintf (&tmp, "[%u-%u]", r-1, r) < 0)
-        oom ();
-    assert (!strcmp (nodeset_str (n), tmp));
-    free (tmp);
+    ok (!nodeset_add_rank (n, r + 1),
+        "adding max+1 %u rank fails [%.2fs %u Mbytes]", r + 1,
+        monotime_since (ts)/1000, nodeset_bytes (n)/(1024*1024));
+    ok (NS_SIZE (n) == veb_minsize,
+        "veb size is the minimum %u", veb_minsize);
 
-    assert (nodeset_resize (n, 0) == true); // should have no effect
-    assert (NS_SIZE (n) == ABS_MAX_SIZE);
+    skip (skip_huge, 16, "too slow");
+
+    monotime (&ts);
+    ok (nodeset_add_rank (n, r),
+        "add max rank %u [%.2fs %u Mbytes]", r,
+        monotime_since (ts)/1000, nodeset_bytes (n)/(1024*1024));
+    ok (NS_SIZE (n) == ABS_MAX_SIZE,
+        "veb size is the maximum %u", ABS_MAX_SIZE);
+    /* 2 */
+
+    monotime (&ts);
+    ok (nodeset_add_rank (n, r - 1),
+        "add max-1 %u [%.2fs %u Mbytes]", r - 1,
+        monotime_since (ts)/1000, nodeset_bytes (n)/(1024*1024));
+
+    ok (nodeset_test_rank (n, r - 1), "test rank max - 1");
+    ok (nodeset_test_rank (n, r), "test rank max");
+    ok (!nodeset_test_rank (n, r + 1), "test rank max + 1");
+    ok (nodeset_count (n) == 2, "nodeset count is sane");
+    /* 7 */
+
+    tmp = xasprintf ("%u-%u", r-1, r);
+    monotime (&ts);
+    like (nodeset_str (n), tmp, "convert to string %s [%.2fs %u Mbytes]", tmp,
+          monotime_since (ts)/1000, nodeset_bytes (n)/(1024*1024));
+    free (tmp);
+    /* 8 */
+
+    ok (nodeset_resize (n, 0), "resize to 0 returns success");
+    ok (NS_SIZE (n) == ABS_MAX_SIZE,
+        "nodeset size remains max %u", ABS_MAX_SIZE);
+    /* 10 */
 
     nodeset_del_rank (n, r - 1);
-    assert (!nodeset_test_rank (n, r - 1));
-    assert (nodeset_test_rank (n, r));
-    assert (!nodeset_test_rank (n, r + 1));
+    ok (!nodeset_test_rank (n, r - 1), "nodeset_del max - 1 works");
+    ok (nodeset_test_rank (n, r));
+    ok (!nodeset_test_rank (n, r + 1));
+    /* 13 */
 
     nodeset_del_rank (n, r + 1);
-    assert (!nodeset_test_rank (n, r - 1));
-    assert (nodeset_test_rank (n, r));
-    assert (!nodeset_test_rank (n, r + 1));
+    ok (!nodeset_test_rank (n, r - 1), "nodeset_del max + 1 has no effect");
+    ok (nodeset_test_rank (n, r));
+    ok (!nodeset_test_rank (n, r + 1));
+    /* 16 */
+
+    end_skip;
 
     nodeset_del_rank (n, r);
-    assert (!nodeset_test_rank (n, r - 1));
-    assert (!nodeset_test_rank (n, r));
-    assert (!nodeset_test_rank (n, r + 1));
+    ok (!nodeset_test_rank (n, r - 1), "nodeset_del max works");
+    ok (!nodeset_test_rank (n, r));
+    ok (!nodeset_test_rank (n, r + 1));
+    /* 19 */
 
-    assert (nodeset_resize (n, 0) == true); // this should shrink it
-    assert (NS_SIZE (n) == veb_minsize);
+    ok (nodeset_resize (n, 0), "resize to zero returns success");
+    ok (NS_SIZE (n) == veb_minsize,
+        "nodeset size is the minimum %u", veb_minsize);
 
     nodeset_destroy (n);
+
+    done_testing ();
 }
+#endif
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

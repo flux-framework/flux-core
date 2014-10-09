@@ -111,6 +111,7 @@ AC_CONFIG_FILES( \
   flux-core.spec \
   src/Makefile \
   src/common/Makefile \
+  src/common/libtap/Makefile \
   src/common/liblsd/Makefile \
   src/common/libutil/Makefile \
   src/common/libzio/Makefile \
