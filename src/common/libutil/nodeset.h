@@ -96,9 +96,6 @@ void nodeset_itr_destroy (nodeset_itr_t itr);
 uint32_t nodeset_next (nodeset_itr_t itr);
 void nodeset_itr_rewind (nodeset_itr_t itr);
 
-/* Self-test of this class.
- */
-void nodeset_selftest (void);
 #endif /* !_UTIL_NODESET_H */
 
 /*
