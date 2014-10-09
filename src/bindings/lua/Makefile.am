@@ -84,8 +84,8 @@ tests_zmsgtest_la_LIBADD = \
 	$(LUA_LIB)
 
 TESTS = \
-	tests/test-json.lua \
-	tests/test-zmsg.lua
+	tests/t0000-json.t \
+	tests/t0001-zmsg.t
 
 EXTRA_DIST = \
 	README \
@@ -95,4 +95,5 @@ EXTRA_DIST = \
 	tests/lunit-console.lua
 
 TESTS_ENVIRONMENT = \
-	LUA_CPATH="$(abs_builddir)/tests/.libs/?.so;;;" $(srcdir)/tests/lunit
+	LUA_PATH="$(abs_srcdir)/?.lua;;" \
+	LUA_CPATH="$(abs_builddir)/tests/.libs/?.so;;;"
