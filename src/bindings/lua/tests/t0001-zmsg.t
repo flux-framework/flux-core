@@ -1,10 +1,8 @@
 #!/usr/bin/lua
 
-require 'lunit'
+require 'Test.More'
 
 local z = require 'zmsgtest'
-
-module ("TestZMSGLua", lunit.testcase, package.seeall)
 
 local function equals(t1, t2)
    if t1 == t2 then
@@ -28,20 +26,20 @@ local function equals(t1, t2)
    return true
 end
 
-function test_equals()
-	assert_true (equals({},{}), "equals works on empty tables" )
-	assert_false (equals({}, {"foo"}, "equals detects unequal tables"))
-end
+
+plan 'no_plan'
+ok (equals({},{}), "equals works on empty tables" )
+nok (equals({}, {"foo"}), "equals detects unequal tables")
 
 
-function test_zmsg()
+subtest ('Test zmsg basics', function ()
 	local data = { one = "foo", two = "bar" }
 	local msg = z.req ("test.tag", data)
-	assert_userdata (msg)
-	assert_equal ("test.tag", msg.tag)
-	assert_equal ("request",  msg.type)
-	assert_true  (equals (data, msg.data))
-end
+	type_ok (msg, 'userdata', 'returned message is userdata')
+	is (msg.tag, "test.tag",  'returned message tag is correct')
+	is (msg.type, "request",  'returned message type is correct')
+	ok  (equals (data, msg.data), 'returned message data is preserved')
+end)
 
 local ftypes = {
 	request = z.req,
@@ -50,32 +48,36 @@ local ftypes = {
 	snoop = z.snoop
 }
 
-function test_types()
+subtest ('Test zmsg types', function ()
 	local data = {}
 	for t,f in pairs (ftypes) do
 		local msg,err = f ("test.tag", data)
-		if not msg then fail (err) end
-		assert_userdata (msg)
-		assert_equal ("test.tag", msg.tag)
-		assert_equal (t, msg.type)
-		assert_true (equals (data, msg.data))
-	end
-end
+		if not msg then fail ('function failed! ' ..err) end
 
-function test_respond()
+		type_ok (msg,    'userdata', 'returned message type')
+		is (msg.tag,     "test.tag", 'msg tag is "msg.tag"')
+		is (msg.type, t, "msg.type is "..t)
+
+		ok (equals (data, msg.data), 'msg.data preserved')
+	end
+end)
+
+subtest ('Test zmsg response', function ()
 	local msg = z.req ("test.response", {t = "this is the request"})
 
-	assert_userdata (msg)
-	assert_equal ("test.response", msg.tag)
-	assert_equal ("request", msg.type)
-	assert_equal ("this is the request", msg.data.t)
+	type_ok (msg,   'userdata',            'type is userdata')
+	is (msg.tag,    "test.response",       'msg.tag is correct')
+	is (msg.type,   "request",             'msg.type is request')
+	is (msg.data.t, "this is the request", 'msg.data is correct')
 
 	local resp,err = msg:respond ({t = "this is the response"})
 	if not resp then fail (err) end
 
-	assert_userdata (resp)
-	assert_equal ("test.response", resp.tag)
-	assert_equal ("response", resp.type)
+	type_ok (resp,   'userdata',             'type is userdata')
+	is (resp.tag,    "test.response",        'msg.tag is correct')
+	is (resp.type,   "response",             'msg.type is response')
+	is (resp.data.t, "this is the response", 'msg.data is correct')
 
-	assert_equal ("this is the response", resp.data.t)
-end
+end)
+
+done_testing()

@@ -1,10 +1,7 @@
 #!/usr/bin/lua
 
-require 'lunit'
-
-local j = require 'jsontest'
-
-module ("TestJsonLua", lunit.testcase, package.seeall)
+require 'Test.More'
+j = require 'jsontest'
 
 local function equals(t1, t2)
    if t1 == t2 then
@@ -71,27 +68,31 @@ local tests = {
 	  value = { one = {}, two = "two", three = "three" }},
 }
 
+plan 'no_plan'
 
-function test_equals()
-	assert_true (equals({},{}), "equals works on empty tables" )
-	assert_false (equals({}, {"foo"}, "equals detects unequal tables"))
+-- Test equals
+ok (equals({},{}), "equals works on empty tables" )
+nok (equals({}, {"foo"}), "equals detects unequal tables")
+
+-- Tests
+for _,t in pairs (tests) do
+  local r,err = j.runtest (t.value)
+  type_ok (r, 'table', t.name .. ": result is a table")
+  ok (equals (t.value, r),  t.name .. ": result is expected")
 end
 
-function test_tables()
-	for _,t in pairs (tests) do
-          local r,err = j.runtest (t.value)
-	  assert_true (is_table (r))
-	  assert_true (equals (t.value, r))
-	end
-end
+is (j.runtest ("x"), "x",     "string returns unharmed")
+is (j.runtest (true), true,   "`true' value returns unharmed")
+is (j.runtest (false),false,  "`false' value returns unharmed")
+is (j.runtest (1), 1,         "number 1 returns unharmed")
+is (j.runtest (0), 0,         "number 0 returns unharmed")
+is (j.runtest (1.0), 1.0,     "float value returns unharmed")
 
-function test_values()
-	assert_equal ("x", j.runtest ("x"))
-        assert_equal (true, j.runtest (true))
-        assert_equal (false, j.runtest (false))
-        assert_equal (1, j.runtest (1))
-        assert_equal (0, j.runtest (0))
-        assert_equal (1.0, j.runtest (1.0))
-        assert_equal (1024000000, j.runtest (1024000000))
-        assert_equal (nil, j.runtest (nil))
-end
+todo ( "Need to investigate", 1)
+is (j.runtest (1.01), 1.01,   "float value returns unharmed (more precision)")
+
+is (j.runtest (1024000000), 1024000000,
+			      "large value returns unharmed")
+is (nil, j.runtest (nil),     "nil works")
+
+done_testing ()

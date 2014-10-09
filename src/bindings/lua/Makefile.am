@@ -95,4 +95,5 @@ EXTRA_DIST = \
 	tests/lunit-console.lua
 
 TESTS_ENVIRONMENT = \
-	LUA_CPATH="$(abs_builddir)/tests/.libs/?.so;;;" $(srcdir)/tests/lunit
+	LUA_PATH="$(abs_srcdir)/?.lua;;" \
+	LUA_CPATH="$(abs_builddir)/tests/.libs/?.so;;;"
