@@ -84,8 +84,8 @@ tests_zmsgtest_la_LIBADD = \
 	$(LUA_LIB)
 
 TESTS = \
-	tests/test-json.lua \
-	tests/test-zmsg.lua
+	tests/t0000-json.t \
+	tests/t0001-zmsg.t
 
 EXTRA_DIST = \
 	README \
