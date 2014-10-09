@@ -43,6 +43,8 @@ libutil_la_SOURCES = \
 
 EXTRA_DIST = veb_mach.c
 
+TESTS = test_nodeset
+
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
