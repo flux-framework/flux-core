@@ -15,12 +15,28 @@ if ! test -r $dict; then
    exit 1
 fi
 
+if test  -z "$ASPELL"; then
+   echo "1..$# # skip because aspell is not installed"
+   exit 0
+fi
+
 exit_val=0
+echo "1..$#"
+count=1
 for f in $*; do
+    filename=$(basename $f)
     tmpfile=$(mktemp)
     rc=$(cat $f | aspell -p $dict -n list | sort | uniq | tee $tmpfile | wc -l)
-    test $rc == 0 || exit_val=$rc
+    if test $rc == 0; then
+        echo "ok $count - spell check $filename"
+    else
+	echo "not ok $count - spell check $filename failed"
+        echo "---"
+	exit_val=1
+    fi
     cat $tmpfile | sed -e "s!^!$(basename $f): !"
     rm -f $tmpfile
+    ((count++))
 done
+
 exit $exit_val

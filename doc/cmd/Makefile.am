@@ -39,6 +39,7 @@ CLEANFILES = $(MAN1_FILES) $(XML_FILES)
 dist_noinst_SCRIPTS = spellcheck
 
 TESTS_ENVIRONMENT = \
+	ASPELL=$(ASPELL) \
 	pws_dict=$(abs_srcdir)/spell.en.pws \
 	man_dir=$(abs_builddir)
 
