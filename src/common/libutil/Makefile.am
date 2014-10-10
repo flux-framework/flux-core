@@ -43,19 +43,24 @@ libutil_la_SOURCES = \
 
 EXTRA_DIST = veb_mach.c
 
-TESTS = test_nodeset.t
+TESTS = test_nodeset.t \
+	test_optparse.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
-	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
+	$(top_builddir)/src/common/liblsd/liblsd.la \
+	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)
 
 test_cppflags = \
 	-DTEST_MAIN \
 	-I$(top_srcdir)/src/common/libtap \
 	$(AM_CPPFLAGS)
 
-check_PROGRAMS = test_nodeset.t
+check_PROGRAMS = \
+	test_nodeset.t \
+	test_optparse.t
+
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
        $(top_srcdir)/config/tap-driver.sh
@@ -63,3 +68,7 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 test_nodeset_t_SOURCES = nodeset.c
 test_nodeset_t_CPPFLAGS = $(test_cppflags)
 test_nodeset_t_LDADD = $(test_ldadd)
+
+test_optparse_t_SOURCES = optparse.c
+test_optparse_t_CPPFLAGS = $(test_cppflags)
+test_optparse_t_LDADD = $(test_ldadd)
