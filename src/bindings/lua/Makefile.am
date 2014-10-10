@@ -90,9 +90,7 @@ TESTS = \
 EXTRA_DIST = \
 	README \
 	$(TESTS) \
-	tests/lunit \
-	tests/lunit.lua \
-	tests/lunit-console.lua
+	Test
 
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
