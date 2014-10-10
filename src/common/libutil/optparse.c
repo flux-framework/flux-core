@@ -483,7 +483,7 @@ optparse_t optparse_create (const char *prog)
      *  Register -h, --help
      */
     help.arg = (void *) p;
-    if (optparse_add_option (p, &help) < 0) {
+    if (optparse_add_option (p, &help) != OPTPARSE_SUCCESS) {
         fprintf (stderr, "failed to register --help option: %s\n", strerror (errno));
         optparse_destroy (p);
         return (NULL);
