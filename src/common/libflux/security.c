@@ -702,10 +702,10 @@ int flux_sec_munge_zmsg (flux_sec_t c, zmsg_t **zmsg)
         errno = EINVAL;
         goto done_unlock;
     }
-    if ((len  = zmsg_encode (*zmsg, (byte **)&buf)) < 0) {
+    if ((len  = zmsg_encode (*zmsg, (byte **)&buf)) == 0) {
         if (errno == 0)
             errno = EINVAL;
-        seterrstr (c, "zmsg_encode: %s", strerror (errno));
+        seterrstr (c, "zmsg_encode: Unexpectedly got length == 0!");
         goto done_unlock;
     }
     if ((e = munge_encode (&cr, c->mctx, buf, len)) != EMUNGE_SUCCESS) {
