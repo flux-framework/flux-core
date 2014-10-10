@@ -6,6 +6,7 @@ AC_INIT(m4_esyscmd([awk '/Name:/ {printf "%s",$2; exit}' META]),
 AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_SRCDIR([NEWS])
 AC_CANONICAL_SYSTEM
+AC_REQUIRE_AUX_FILE([tap-driver.sh])
 X_AC_META
 X_AC_EXPAND_INSTALL_DIRS
 
@@ -31,6 +32,7 @@ if test "$GCC" = yes; then
 fi
 AC_PROG_RANLIB
 AC_PROG_LIBTOOL
+AC_PROG_AWK
 AC_CHECK_PROG(A2X,[a2x],[a2x])
 if test "$A2X" != "a2x"; then
   AC_MSG_ERROR([Please install asciidoc to get a2x utility.])

@@ -43,7 +43,7 @@ libutil_la_SOURCES = \
 
 EXTRA_DIST = veb_mach.c
 
-TESTS = test_nodeset
+TESTS = test_nodeset.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -55,8 +55,11 @@ test_cppflags = \
 	-I$(top_srcdir)/src/common/libtap \
 	$(AM_CPPFLAGS)
 
-check_PROGRAMS = test_nodeset
+check_PROGRAMS = test_nodeset.t
+TEST_EXTENSIONS = .t
+T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
+       $(top_srcdir)/config/tap-driver.sh
 
-test_nodeset_SOURCES = nodeset.c
-test_nodeset_CPPFLAGS = $(test_cppflags)
-test_nodeset_LDADD = $(test_ldadd)
+test_nodeset_t_SOURCES = nodeset.c
+test_nodeset_t_CPPFLAGS = $(test_cppflags)
+test_nodeset_t_LDADD = $(test_ldadd)
