@@ -15,6 +15,11 @@ if ! test -r $dict; then
    exit 1
 fi
 
+if test  -z "$ASPELL"; then
+   echo "1..$# # skip because aspell is not installed"
+   exit 0
+fi
+
 exit_val=0
 echo "1..$#"
 count=1
