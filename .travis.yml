@@ -1,0 +1,31 @@
+language: c
+
+compiler:
+  - gcc
+
+install:
+  - sudo sh -c 'echo "/usr/local/lib" >/etc/ld.so.conf.d/build'
+  - sudo apt-get update -q
+  - sudo apt-get install -y lua5.1 liblua5.1-0-dev luarocks munge libmunge-dev asciidoc uuid-dev
+  - sudo luarocks install luaposix
+  - wget http://download.zeromq.org/zeromq-4.0.4.tar.gz
+  - tar -xvf zeromq-4.0.4.tar.gz
+  - wget http://download.zeromq.org/czmq-2.2.0.tar.gz
+  - tar -xvf czmq-2.2.0.tar.gz
+  - wget https://download.libsodium.org/libsodium/releases/libsodium-1.0.0.tar.gz
+  - tar -xvf libsodium-1.0.0.tar.gz
+  - wget https://s3.amazonaws.com/json-c_releases/releases/json-c-0.11.tar.gz
+  - tar -xvf  json-c-0.11.tar.gz
+  - cd json-c-0.11 && ./configure && make && sudo make install
+  - cd ..
+  - cd libsodium-1.0.0 && ./configure && make -j2 && sudo make install 
+  - cd ..
+  - cd zeromq-4.0.4 && ./configure --with-libsodium && make -j2 && sudo make install
+  - cd ..
+  - cd czmq-2.2.0 && ./configure && make -j2 && sudo make install
+  - cd ..
+  - sudo ldconfig
+
+script: ./autogen.sh && ./configure  && make -j2 && make check
+
+
