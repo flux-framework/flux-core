@@ -1,6 +1,8 @@
 #ifndef _UTIL_OPTPARSE_H
 #define _UTIL_OPTPARSE_H
 
+#include <stdbool.h>
+
 /******************************************************************************
  *  Datatypes:
  *****************************************************************************/
@@ -11,6 +13,11 @@ typedef struct opt_parser * optparse_t;
  *  prototype for output function used by optparser
  */
 typedef int (*opt_log_f) (const char *fmt, ...);
+
+/*
+ *  prototype for fatal error function
+ */
+typedef void (*opt_fatalerr_f) (void *h, int exit_code, const char *fmt, ...);
 
 /*
  *  prototype for option callback hook
@@ -35,6 +42,8 @@ typedef enum {
 typedef enum {
     OPTPARSE_USAGE,        /* Set usage message in --help output (char *)   */
     OPTPARSE_LOG_FN,       /* Set log function (default fprintf(stderr,..)) */
+    OPTPARSE_FATALERR_FN,  /* Set fatal err function (default stderr, exit))*/
+    OPTPARSE_FATALERR_HANDLE,  /* Set handle passed to fatalerr function    */
     OPTPARSE_OPTION_WIDTH, /* Width allotted to options in --help output    */
     OPTPARSE_LEFT_MARGIN,  /* Left pad for option output (default = 2)      */
 } optparse_item_t;
@@ -137,5 +146,25 @@ int optparse_parse_args (optparse_t p, int argc, char *argv[]);
  *    an argument, then that argument is passed back in [optargp].
  */
 int optparse_getopt (optparse_t p, const char *name, const char **optargp);
+
+/*
+ *   Return true if the option 'name' was used, false if not.
+ *    If the option is unknown, log an error and call exit (1).
+ */
+bool optparse_hasopt (optparse_t p, const char *name);
+
+/*
+ *   Return the option argument as an integer if 'name' was used,
+ *    'default_value' if not.  If the option is unknown, or the argument
+ *    could not be converted to an integer, call the fatal error function.
+ */
+int optparse_get_int (optparse_t p, const char *name, int default_value);
+
+/*
+ *   Return the option argument as a string if 'name' was used, 'default_value'
+ *    if not.  If the option is unknown, call the fatal error function.
+ */
+const char *optparse_get_str (optparse_t p, const char *name,
+                              const char *default_value);
 
 #endif /* _UTIL_OPTPARSE_H */

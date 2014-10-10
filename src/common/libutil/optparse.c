@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/param.h>
 #include <ctype.h>
 #include <getopt.h>
 #include <stdarg.h>
@@ -46,7 +47,11 @@
 struct opt_parser {
     char *         program_name;
     char *         usage;
+
     opt_log_f      log_fn;
+
+    opt_fatalerr_f fatalerr_fn;
+    void *         fatalerr_handle;
 
     int            left_margin;     /* Size of --help output left margin    */
     int            option_width;    /* Width of --help output for optiion   */
@@ -199,6 +204,19 @@ static optparse_err_t optparse_set_log_fn (optparse_t p, opt_log_f fn)
     return (0);
 }
 
+static optparse_err_t optparse_set_fatalerr_fn (optparse_t p, opt_fatalerr_f fn)
+{
+    p->fatalerr_fn = fn;
+    return (0);
+}
+
+static optparse_err_t optparse_set_fatalerr_handle (optparse_t p, void *handle)
+{
+    p->fatalerr_handle = handle;
+    return (0);
+}
+
+
 /*
  *  Generic function that prints a message to stderr. Default logging function.
  */
@@ -210,6 +228,18 @@ static int log_stderr (const char *fmt, ...)
     rc = vfprintf (stderr, fmt, ap);
     va_end (ap);
     return (rc);
+}
+
+/*
+ * Default fatalerr funciton.
+ */
+static void log_stderr_exit (void *h, int exit_code, const char *fmt, ...)
+{
+    va_list ap;
+    va_start (ap, fmt);
+    (void)vfprintf (stderr, fmt, ap);
+    va_end (ap);
+    exit (exit_code);
 }
 
 static int opt_init (struct option *opt, struct optparse_option *o)
@@ -476,6 +506,8 @@ optparse_t optparse_create (const char *prog)
     }
 
     p->log_fn = &log_stderr;
+    p->fatalerr_fn = &log_stderr_exit;
+    p->fatalerr_handle = NULL;
     p->left_margin = 2;
     p->option_width = 25;
 
@@ -510,6 +542,63 @@ int optparse_getopt (optparse_t p, const char *name, const char **optargp)
         return (1);
     }
     return (0);
+}
+
+bool optparse_hasopt (optparse_t p, const char *name)
+{
+    int n;
+    if ((n = optparse_getopt (p, name, NULL)) < 0) {
+        (*p->fatalerr_fn) (p->fatalerr_handle, 1,
+                           "%s: optparse error: no such argument '%s'\n",
+                           p->program_name, name);
+        return false;
+    }
+    return (n > 0);
+}
+
+int optparse_get_int (optparse_t p, const char *name, int default_value)
+{
+    int n;
+    long l;
+    const char *s;
+    char *endptr;
+
+    if ((n = optparse_getopt (p, name, &s)) < 0) {
+        (*p->fatalerr_fn) (p->fatalerr_handle, 1,
+                           "%s: optparse error: no such argument '%s'\n",
+                           p->program_name, name);
+        return -1;
+    }
+    if (n == 0)
+        return default_value;
+    if (s == NULL || strlen (s) == 0)
+        goto badarg;
+    l = strtol (s, &endptr, 10);
+    if (*endptr != '\0' ||  l < 0 || l > INT_MAX)
+        goto badarg;
+    return l;
+badarg:
+    (*p->fatalerr_fn) (p->fatalerr_handle, 1,
+                       "%s: Option '%s' requires an integer argument\n",
+                       p->program_name, name);
+    return -1;
+}
+
+const char *optparse_get_str (optparse_t p, const char *name,
+                              const char *default_value)
+{
+    int n;
+    const char *s;
+
+    if ((n = optparse_getopt (p, name, &s)) < 0) {
+        (*p->fatalerr_fn) (p->fatalerr_handle, 1,
+                           "%s: optparse error: no such argument '%s'\n",
+                           p->program_name, name);
+        return NULL;
+    }
+    if (n == 0)
+        return default_value;
+    return s;
 }
 
 optparse_err_t optparse_add_option (optparse_t p,
@@ -591,6 +680,12 @@ optparse_err_t optparse_set (optparse_t p, optparse_item_t item, ...)
         break;
     case OPTPARSE_LOG_FN:
         e = optparse_set_log_fn (p, va_arg (vargs, void *));
+        break;
+    case OPTPARSE_FATALERR_FN:
+        e = optparse_set_fatalerr_fn (p, va_arg (vargs, void *));
+        break;
+    case OPTPARSE_FATALERR_HANDLE:
+        e = optparse_set_fatalerr_handle (p, va_arg (vargs, void *));
         break;
     case OPTPARSE_LEFT_MARGIN:
         n = va_arg (vargs, int);
