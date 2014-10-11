@@ -25,12 +25,6 @@ LDADD = $(fluxcmd_ldadd)
 
 bin_PROGRAMS = flux
 
-flux_SOURCES = flux.c
-flux_LDADD = \
-	$(top_builddir)/src/common/libflux/libflux.la \
-	$(top_builddir)/src/common/libutil/libutil.la \
-	$(LIBZMQ) $(LIBCZMQ)
-
 #
 # Flux subcommands
 #
@@ -53,8 +47,7 @@ fluxcmd_PROGRAMS = \
 	flux-comms \
 	flux-comms-stats \
 	flux-kvs \
-	flux-start \
-	flux-config
+	flux-start
 
 flux_zio_LDADD = \
 	$(top_builddir)/src/common/libzio/libzio.la \
