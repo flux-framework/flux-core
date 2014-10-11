@@ -1539,21 +1539,6 @@ static void daemonize ()
     }
 }
 
-int optparse_get_int (optparse_t p, char *name)
-{
-    long l;
-    char *end;
-    const char *s;
-
-    if (!optparse_getopt (p, name, &s))
-        return (-1);
-
-    l = strtol (s, &end, 10);
-    if ((end == s) || (*end != '\0') || (l < 0) || (l > INT_MAX))
-        log_fatal (NULL, 1, "--%s=%s invalid", name, s);
-    return ((int) l);
-}
-
 int prog_ctx_get_id (struct prog_ctx *ctx, optparse_t p)
 {
     const char *id;
@@ -1594,6 +1579,10 @@ int main (int ac, char **av)
     };
 
     p = optparse_create (av[0]);
+    if (optparse_set (p, OPTPARSE_FATALERR_FN, log_fatal) != OPTPARSE_SUCCESS)
+        log_fatal (ctx, 1, "optparse_set FATALERR_FN");
+    if (optparse_set (p, OPTPARSE_FATALERR_HANDLE, ctx) != OPTPARSE_SUCCESS)
+        log_fatal (ctx, 1, "optparse_set FATALERR_HANDLE");
     if (optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS)
         log_fatal (ctx, 1, "optparse_add_option_table");
     if (optparse_parse_args (p, ac, av) < 0)
@@ -1615,7 +1604,7 @@ int main (int ac, char **av)
     if ((ctx->nodeid == 0) && update_job_state (ctx, "starting") < 0)
         log_fatal (ctx, 1, "update_job_state");
 
-    if ((parent_fd = optparse_get_int (p, "parent-fd")) >= 0)
+    if ((parent_fd = optparse_get_int (p, "parent-fd", -1)) >= 0)
         prog_ctx_signal_parent (parent_fd);
     prog_ctx_reactor_init (ctx);
     exec_commands (ctx);

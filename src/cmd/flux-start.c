@@ -26,7 +26,6 @@
 #include "config.h"
 #endif
 #include <stdio.h>
-#include <getopt.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <flux/core.h>
@@ -34,12 +33,12 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/argv.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/optparse.h"
 
-void start_direct (int size, const char *cmd, bool verbose, bool noexec,
-                   const char *cmbd_opts);
+void start_direct (optparse_t p, const char *cmd);
+void start_slurm (optparse_t p, const char *cmd);
 
-void start_slurm (int size, const char *cmd, bool verbose, bool noexec,
-                  const char *cmbd_opts, int nnodes, char *partition);
+const int default_size = 1;
 
 /* Workaround for shutdown bug:
  * Wait this many seconds after exit of first cmbd before kill -9 of
@@ -48,114 +47,71 @@ void start_slurm (int size, const char *cmd, bool verbose, bool noexec,
  */
 const int child_wait_seconds = 1;
 
-#define OPTIONS "+hvs:XN:p:So:"
-static const struct option longopts[] = {
-    {"help",       no_argument,        0, 'h'},
-    {"verbose",    no_argument,        0, 'v'},
-    {"noexec",     no_argument,        0, 'X'},
-    {"size",       required_argument,  0, 's'},
-    {"nnodes",     required_argument,  0, 'N'},
-    {"partition",  required_argument,  0, 'p'},
-    {"cmbd-opts",  required_argument,  0, 'o'},
-    {"slurm",      no_argument,        0, 'S'},
-    { 0, 0, 0, 0 },
+const char *usage_msg = "[OPTIONS] command ...";
+static struct optparse_option opts[] = {
+    { .name = "verbose",    .key = 'v', .has_arg = 0,
+      .usage = "Be annoyingly informative", },
+    { .name = "noexec",     .key = 'X', .has_arg = 0,
+      .usage = "Don't execute (useful with -v, --verbose)", },
+    { .name = "size",       .key = 's', .has_arg = 1, .arginfo = "N",
+      .usage = "Set number of ranks in session", },
+    { .name = "cmbd-opts",  .key = 'o', .has_arg = 1, .arginfo = "OPTS",
+      .usage = "Add comma-separated cmbd options, e.g. \"-o,-q\"", },
+    { .name = "nnodes",     .key = 'N', .has_arg = 1, .arginfo = "N",
+      .usage = "Set number of nodes (implies SLURM)", },
+    { .name = "partition",  .key = 'p', .has_arg = 1, .arginfo = "NAME",
+      .usage = "Select partition (implies SLURM)", },
+    { .name = "slurm",      .key = 'S', .has_arg = 0,
+      .usage = "Launch with SLURM", },
+    OPTPARSE_TABLE_END,
 };
-
-void usage (void)
-{
-    fprintf (stderr, "Usage: flux-start [OPTIONS] command ...\n"
-"where options are:\n"
-"  -s,--size N             set number of ranks in session\n"
-"  -o,--cmbd-opts OPTS     add cmbd opts, e.g. -o\"-v,-k4\"\n"
-"  -N,--nnodes N           set number of nodes (implies slurm)\n"
-"  -p,--partition NAME     set partition (implies slurm)\n"
-"  -S,--slurm              launch with slurm\n"
-"  -X,--noexec             don't execute (useful with -v)\n"
-"  -v,--verbose            be annoyingly informative\n"
-);
-    exit (1);
-}
 
 int main (int argc, char *argv[])
 {
-    int ch;
     char *command = NULL;
-    int size = 1;
-    bool vopt = false;
-    bool Xopt = false;
-    char *cmbd_opts = NULL;
-    int slurm_nnodes = -1;
-    char *slurm_partition = NULL;
-    bool slurm = false;
+    optparse_t p;
 
     log_init ("flux-start");
 
-    while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
-        switch (ch) {
-            case 'h': /* --help */
-                usage ();
-                break;
-            case 'v': /* --verbose */
-                vopt = true;
-                break;
-            case 'X': /* --noexec */
-                Xopt = true;
-                break;
-            case 'S': /* --slurm */
-                slurm = true;
-                break;
-            case 's': /* --size N */
-                size = strtoul (optarg, NULL, 10);
-                break;
-            case 'N': /* --nnodes N */
-                slurm_nnodes = strtoul (optarg, NULL, 10);
-                slurm = true;
-                break;
-            case 'p': /* --partition NAME  */
-                slurm_partition = optarg;
-                slurm = true;
-                break;
-            case 'o': /* --cmbd-opts OPTIONS */
-                cmbd_opts = optarg;
-                break;
-            default:
-                usage ();
-                break;
-        }
-    }
+    p = optparse_create ("flux-start");
+    if (optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS)
+        msg_exit ("optparse_add_option_table");
+    if (optparse_set (p, OPTPARSE_USAGE, usage_msg) != OPTPARSE_SUCCESS)
+        msg_exit ("optparse_set usage");
+    if ((optind = optparse_parse_args (p, argc, argv)) < 0)
+        exit (1);
     if (optind < argc)
         command = argv_concat (argc - optind, argv + optind, " ");
 
-    if (slurm_nnodes > size)
-        size = slurm_nnodes;
-
+    /* Allow unlimited core dumps.
+     */
     struct rlimit rl;
     rl.rlim_cur = RLIM_INFINITY;
     rl.rlim_max = RLIM_INFINITY;
     if (setrlimit (RLIMIT_CORE, &rl) < 0)
         err ("setrlimit: could not remove core file size limit");
 
-    if (slurm) {
-        start_slurm (size, command, vopt, Xopt, cmbd_opts,
-                     slurm_nnodes, slurm_partition);
-    } else {
-        start_direct (size, command, vopt, Xopt, cmbd_opts);
-    }
+    if (optparse_hasopt (p, "slurm") || optparse_hasopt (p, "nnodes")
+                                     || optparse_hasopt (p, "partition"))
+        start_slurm (p, command);
+    else
+        start_direct (p, command);
 
     if (command)
         free (command);
 
+    optparse_destroy (p);
     log_fini ();
     return 0;
 }
 
-static void child_report (pid_t pid, int rank, int status, bool verbose)
+static void child_report (optparse_t p, pid_t pid, int rank, int status)
 {
     int rc;
     if (WIFEXITED (status)) {
         rc = WEXITSTATUS (status);
         if (rc == 0) {
-            if (verbose)
+            if (optparse_hasopt (p, "verbose"))
                 msg ("%d (pid %d) exited normally", rank, pid);
         } else
             msg ("%d (pid %d) exited with rc=%d", rank, pid, rc);
@@ -181,13 +137,13 @@ void child_killer_arm (void)
     child_killer_timeout = 0;
 }
 
-void child_killer (pid_t *pids, int size, bool verbose)
+void child_killer (optparse_t p, pid_t *pids, int size)
 {
     int rank;
     if (child_killer_timeout) {
         for (rank = 0; rank < size; rank++) {
             if (pids[rank] > 0) {
-                if (verbose)
+                if (optparse_hasopt (p, "verbose"))
                     msg ("%d: kill -9 %u", rank, pids[rank]);
                 (void)kill (pids[rank], SIGKILL);
             }
@@ -206,14 +162,18 @@ void push_extra_args (int *ac, char ***av, const char *opts)
     free (cpy);
 }
 
-void start_direct (int size, const char *cmd, bool verbose, bool noexec,
-                   const char *cmbd_opts)
+void start_direct (optparse_t p, const char *cmd)
 {
-    bool child_killer_armed = false;;
+    int size = optparse_get_int (p, "size", default_size);
+    const char *cmbd_opts = optparse_get_str (p, "cmbd-opts", NULL);
     char *cmbd_path = getenv ("FLUX_CMBD_PATH");
+    bool child_killer_armed = false;;
     int rank;
     pid_t *pids;
     int reaped = 0;
+
+    if (!cmbd_path)
+        msg_exit ("FLUX_CMBD_PATH is not set");
 
     pids = xzmalloc (size * sizeof (pids[0]));
     for (rank = 0; rank < size; rank++) {
@@ -221,19 +181,19 @@ void start_direct (int size, const char *cmd, bool verbose, bool noexec,
         char **av;
 
         argv_create (&ac, &av);
-        argv_push (&ac, &av, "%s", cmbd_path ? cmbd_path : CMBD_PATH);
+        argv_push (&ac, &av, "%s", cmbd_path);
         argv_push (&ac, &av, "--size=%d", size);
         argv_push (&ac, &av, "--rank=%d", rank);
         if (cmbd_opts)
             push_extra_args (&ac, &av, cmbd_opts);
         if (rank == 0 && cmd)
             argv_push (&ac, &av, "--command=%s", cmd);
-        if (verbose) {
+        if (optparse_hasopt (p, "verbose")) {
             char *s = argv_concat (ac, av, " ");
             msg ("%d: %s", rank, s);
             free (s);
         }
-        if (!noexec) {
+        if (!optparse_hasopt (p, "noexec")) {
             switch ((pids[rank] = fork ())) {
                 case -1:
                     err_exit ("fork");
@@ -247,7 +207,7 @@ void start_direct (int size, const char *cmd, bool verbose, bool noexec,
         }
         argv_destroy (ac, av);
     }
-    if (!noexec) {
+    if (!optparse_hasopt (p, "noexec")) {
         (void)close (STDIN_FILENO);
         while (reaped < size) {
             int status;
@@ -256,7 +216,7 @@ void start_direct (int size, const char *cmd, bool verbose, bool noexec,
             if ((pid = wait (&status)) < 0) {
                 if (errno == EINTR) {
                     if (child_killer_armed)
-                        child_killer (pids, size, verbose);
+                        child_killer (p, pids, size);
                     continue;
                 }
                 err_exit ("wait");
@@ -264,7 +224,7 @@ void start_direct (int size, const char *cmd, bool verbose, bool noexec,
             for (rank = 0; rank < size; rank++) {
                 if (pids[rank] == pid) {
                     pids[rank] = -1;
-                    child_report (pid, rank, status, verbose);
+                    child_report (p, pid, rank, status);
                     if (!child_killer_armed) {
                         child_killer_arm ();
                         child_killer_armed = true;
@@ -279,17 +239,25 @@ void start_direct (int size, const char *cmd, bool verbose, bool noexec,
     free (pids);
 }
 
-void start_slurm (int size, const char *cmd, bool verbose, bool noexec,
-                  const char *cmbd_opts, int nnodes, char *partition)
+void start_slurm (optparse_t p, const char *cmd)
 {
-    char *srun_path = "/usr/bin/srun";
+    int size = optparse_get_int (p, "size", default_size);
+    const char *cmbd_opts = optparse_get_str (p, "cmbd-opts", NULL);
+    int nnodes = optparse_get_int (p, "nnodes", size);
+    const char *partition = optparse_get_str (p, "partition", NULL);
     char *cmbd_path = getenv ("FLUX_CMBD_PATH");
+    char *srun_path = "/usr/bin/srun";
     int ac;
     char **av;
 
+    if (nnodes > size)
+        size = nnodes;
+    if (!cmbd_path)
+        msg_exit ("FLUX_CMBD_PATH is not set");
+
     argv_create (&ac, &av);
     argv_push (&ac, &av, "%s", srun_path);
-    argv_push (&ac, &av, "--nodes=%d", nnodes > 0 ? nnodes : size);
+    argv_push (&ac, &av, "--nodes=%d", nnodes);
     argv_push (&ac, &av, "--ntasks=%d", size);
     //argv_push (&ac, &av, "--overcommit");
     argv_push (&ac, &av, "--propagate=CORE");
@@ -299,7 +267,7 @@ void start_slurm (int size, const char *cmd, bool verbose, bool noexec,
     if (partition)
         argv_push (&ac, &av, "--partition=%s", partition);
 
-    argv_push (&ac, &av, "%s", cmbd_path ? cmbd_path : CMBD_PATH);
+    argv_push (&ac, &av, "%s", cmbd_path);
     argv_push (&ac, &av, "--pmi-boot");
     argv_push (&ac, &av, "--logdest=%s", "cmbd.log");
     if (cmbd_opts)
@@ -307,12 +275,12 @@ void start_slurm (int size, const char *cmd, bool verbose, bool noexec,
     if (cmd)
         argv_push (&ac, &av, "--command=%s", cmd);
 
-    if (verbose) {
+    if (optparse_hasopt (p, "verbose")) {
         char *s = argv_concat (ac, av, " ");
         msg ("%s", s);
         free (s);
     }
-    if (!noexec) {
+    if (!optparse_hasopt (p, "noexec")) {
         if (execv (av[0], av) < 0)
             err_exit ("execv %s", av[0]);
     }
