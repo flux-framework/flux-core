@@ -31,4 +31,6 @@ kvs_la_LIBADD = $(fluxmod_libadd)
 #
 noinst_LTLIBRARIES = libkvs.la
 fluxcoreinclude_HEADERS = kvs.h
-libkvs_la_SOURCES = libkvs.c
+libkvs_la_SOURCES = \
+	libkvs.c \
+	conf.c
