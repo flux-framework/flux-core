@@ -15,6 +15,8 @@ cmbd_SOURCES = \
 	boot_pmi.h
 
 cmbd_LDADD = \
+	$(top_builddir)/src/modules/kvs/libkvs.la \
+	$(top_builddir)/src/modules/api/libapi.la \
 	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(LIBMUNGE) $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD) $(LIBDL)

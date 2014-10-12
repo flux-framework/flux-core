@@ -119,6 +119,8 @@ typedef struct {
     char *shell_cmd;
     bool shell_armed;
     sigset_t default_sigset;
+    flux_conf_t cf;
+    const char *confdir;
     /* Bootstrap
      */
     bool boot_pmi;
@@ -389,6 +391,40 @@ int main (int argc, char *argv[])
     }
     if (argc != optind)
         usage ();
+
+    /* Process config from the KVS if running in a session and not
+     * forced to use a config file by the command line.
+     */
+    ctx.cf = flux_conf_create ();
+    if ((ctx.confdir = getenv ("FLUX_CONF_DIRECTORY")))
+        flux_conf_set_directory (ctx.cf, ctx.confdir);
+    ctx.confdir = flux_conf_get_directory (ctx.cf);
+    if (getenv ("FLUX_TMPDIR") && !getenv ("FLUX_CONF_USEFILE")) {
+        flux_t h;
+        if (ctx.verbose)
+            msg ("Loading config from KVS");
+        if (!(h = flux_api_open ()))
+            err_exit ("flux_api_open");
+        if (kvs_conf_load (h, ctx.cf) < 0)
+            err_exit ("could not load config from KVS");
+        flux_api_close (h);
+    } else {
+        if (ctx.verbose)
+            msg ("Loading config from %s", ctx.confdir);
+        if (flux_conf_load (ctx.cf) < 0)
+            msg ("could not load config from file (continuing)");
+    }
+    /* Arrange to load config entries into kvs config.*
+     */
+    flux_conf_itr_t itr = flux_conf_itr_create (ctx.cf);
+    const char *key;
+    while ((key = flux_conf_next (itr))) {
+        char *opt = xasprintf ("kvs:config.%s=%s",
+                               key, flux_conf_get (ctx.cf, key));
+        zlist_push (modopts, opt);
+        free (opt);
+    }
+    flux_conf_itr_destroy (itr);
 
     /* Create zeromq context, security context, zloop, etc.
      */
@@ -1048,6 +1084,7 @@ static void cmbd_init_comms (ctx_t *ctx)
      */
     if (!(ctx->sec = flux_sec_create ()))
         err_exit ("flux_sec_create");
+    flux_sec_set_directory (ctx->sec, ctx->confdir);
     if (ctx->security_clr && flux_sec_disable (ctx->sec, ctx->security_clr) < 0)
         err_exit ("flux_sec_disable");
     if (ctx->security_set && flux_sec_enable (ctx->sec, ctx->security_set) < 0)
