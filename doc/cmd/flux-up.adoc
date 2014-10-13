@@ -10,7 +10,7 @@ flux-up - report status of Flux comms broker nodes
 
 SYNOPSIS
 --------
-*flux-up* ['--up' | '--down'] ['--comma' | '--newline']
+*flux* *up* ['--up' | '--down'] ['--comma' | '--newline']
 
 
 DESCRIPTION

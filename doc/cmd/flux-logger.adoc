@@ -10,7 +10,7 @@ flux-logger - create a Flux log entry
 
 SYNOPSIS
 --------
-*flux-logger* ['--priority=facility'['.level']] 'message' '...'
+*flux* *logger* ['--priority=facility'['.level']] 'message' '...'
 
 
 DESCRIPTION

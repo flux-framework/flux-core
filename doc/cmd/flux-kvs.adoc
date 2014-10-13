@@ -10,7 +10,7 @@ flux-kvs - Flux key-value store utility
 
 SYNOPSIS
 --------
-*flux-kvs* 'COMMAND' ['OPTIONS']
+*flux* *kvs* 'COMMAND' ['OPTIONS']
 
 
 DESCRIPTION

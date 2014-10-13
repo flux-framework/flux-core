@@ -10,7 +10,7 @@ flux-snoop - watch Flux comms message broker traffic
 
 SYNOPSIS
 --------
-*flux-snoop* ['OPTIONS']
+*flux* *snoop* ['OPTIONS']
 
 
 DESCRIPTION

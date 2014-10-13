@@ -10,7 +10,7 @@ flux-keygen - generate keys for Flux security
 
 SYNOPSIS
 --------
-*flux-keygen* ['--force'] ['--plain']
+*flux* *keygen* ['--force'] ['--plain']
 
 
 DESCRIPTION

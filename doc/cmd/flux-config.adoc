@@ -5,54 +5,73 @@ FLUX-CONFIG(1)
 
 NAME
 ----
-flux-config - manipulate Flux config file
+flux-config - manipulate the Flux configuration
 
 
 SYNOPSIS
 --------
-*flux-config* ['--config file'] COMMAND ['OPTIONS']
+*flux* *config* COMMAND ['OPTIONS']
 
 
 DESCRIPTION
 -----------
-A configuration file is used by the flux(1) command driver
-to determine various search paths.
+Flux configuration is stored in the KVS under the 'config.*' name space.
 
-The config file uses the hierarchical ZPL format (see below).
-All keys and values are strings.  Hierarchy is expressed with
-4-character indentation.  Comments are lines that begin with a "#".
+A comms session initializes its KVS config space either by cloning that
+of its parent, or from a static config file.  flux-config(1) can operate
+directly on either; use flux(1) options to select which.
 
-A particular key down in the hierarchy may be specified as a path.
-For example "flux-config get /general/exec_path" would print
-"/usr/libexec/flux":
-
-  general:
-      exec_path = "/usr/libexec/flux"
-      cmbd_path = "/usr/bin:/usr/sbin"
-
-This file currently has limited usage in the Flux framework source
-trees, as a mechanism for configuring in-tree unit test execution.
-It should be considered EXPERIMENTAL and its content subject to change.
-
+Keys are hierarchical, and use a period "." as path separator.
+Values are always strings.
 
 OPTIONS
 -------
-*-c, --config*='FILE'::
-Override the default config file path, $HOME/.flux/config.
+*-v, --verbose*::
+Note where the config source or destination as it is read or written.
 
 COMMANDS
 --------
-*dump* ['path']::
+*dump*::
 Parse the config file and dump its contents, either the entire file,
 or from 'path' on down.
 
-*get* 'path'::
-Print the value for 'path'.  Return an error if 'path' does not exist.
+*get* 'key'::
+Print the value for 'key'.  Return an error if 'key' does not exist
+in the configuration.
 
-*put* 'path=val':
+*put* 'key=val'::
 Assign the value 'val' to 'path'.  Any existing value is overwritten.
 The config file is created if it does not exist.
 
+*save* ['directory']::
+Save the configuration to a new place.  If a directory is not specified,
+the directory configured by flux(1) is be used.
+
+
+CONFIG FILE
+-----------
+The config file uses the hierarchical ZPL format (see below).
+All keys and values are strings.  Hierarchy is expressed in the file
+with 4-character indentation.  Comments are lines that begin with a "#".
+For example:
+
+  general
+      exec_path = "/tmp/flux/src/cmd:/tmp/flux-core/src/cmd"
+      cmbd_path = "/tmp/flux/src/broker/cmbd"
+      lua_cpath = "/tmp/flux/src/bindings/lua/.libs/?.so"
+      lua_path = "/tmp/flux/src/bindings/lua/?.lua"
+      module_path = "/tmp/flux/src/modules/api/.libs:/t..."
+      man_path = "/tmp/flux/doc"
+
+Translated to the KVS 'config.*' space:
+
+  config.general.exec_path = "/tmp/flux/src/cmd:/tmp/flux-core/src/cmd"
+  config.general.cmbd_path = "/tmp/flux/src/broker/cmbd"
+  config.general.lua_cpath = "/tmp/flux/src/bindings/lua/.libs/?.so"
+  config.general.lua_path = "/tmp/flux/src/bindings/lua/?.lua"
+  config.general.module_path = "/tmp/flux/src/modules/api/.libs:/t..."
+  config.general.man_path =  "/tmp/flux/doc"
+  
 
 AUTHOR
 ------
