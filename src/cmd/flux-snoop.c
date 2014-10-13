@@ -83,6 +83,7 @@ int main (int argc, char *argv[])
     zmq_pollitem_t zp;
     flux_sec_t sec;
     int rank = -1;
+    const char *confdir;
 
     log_init ("flux-snoop");
 
@@ -117,6 +118,9 @@ int main (int argc, char *argv[])
         if (zlist_append (subs, argv[optind++]) < 0)
             oom ();
     }
+    if (!(confdir = getenv ("FLUX_CONF_DIRECTORY")))
+        msg_exit ("FLUX_CONF_DIRECTORY is not set");
+
     if (!(h = flux_api_open ()))
         err_exit ("flux_api_open");
     if (!(uri = flux_getattr (h, rank, "cmbd-snoop-uri")))
@@ -141,6 +145,7 @@ int main (int argc, char *argv[])
      */
     if (!(sec = flux_sec_create ()))
         err_exit ("flux_sec_create");
+    flux_sec_set_directory (sec, confdir);
     if (nopt) {
         if (flux_sec_disable (sec, FLUX_SEC_TYPE_ALL) < 0)
             err_exit ("flux_sec_disable");
