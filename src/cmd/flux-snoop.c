@@ -169,22 +169,12 @@ int main (int argc, char *argv[])
             zsocket_set_subscribe (s, sub);
     }
 
-#if CZMQ_VERSION_MAJOR >= 2 && ZMQ_VERSION_MAJOR >= 4
     zmonitor_t *zmon;
     if (!(zmon = zmonitor_new (zctx, s, ZMQ_EVENT_DISCONNECTED)))
         err_exit ("zmonitor_new");
     if (vopt)
         zmonitor_set_verbose (zmon, true);
     zp.socket = zmonitor_socket (zmon);
-#else
-#define DEFAULT_ZMON_URI    "inproc://monitor.snoop"
-    if (zmq_socket_monitor (s, DEFAULT_ZMON_URI, ZMQ_EVENT_DISCONNECTED) < 0)
-        err_exit ("zmq_socket_monitor");
-    if (!(zp.socket = zsocket_new  (zctx, ZMQ_PAIR)))
-        err_exit ("zsocket_new");
-    if (zsocket_connect (zp.socket, DEFAULT_ZMON_URI) < 0)
-        err_exit ("zsocket_connect %s", DEFAULT_ZMON_URI);
-#endif
     zp.events = ZMQ_POLLIN;
     if (zloop_poller (zloop, &zp, zmon_cb, NULL) < 0)
         err_exit ("zloop_poller");
@@ -194,9 +184,7 @@ int main (int argc, char *argv[])
     if (vopt)
         msg ("disconnecting");
 
-#if CZMQ_VERSION_MAJOR >= 2 && ZMQ_VERSION_MAJOR >= 4
     zmonitor_destroy (&zmon);
-#endif
 
     zloop_destroy (&zloop);
     zctx_destroy (&zctx); /* destroys 's' and 'zp.socket' */
@@ -271,20 +259,11 @@ static int zmon_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
     int event = 0;
 
     if ((zmsg = zmsg_recv (item->socket))) {
-#if ZMQ_VERSION_MAJOR >= 4
         char *s = zmsg_popstr (zmsg);
         if (s) {
             event = strtoul (s, NULL, 10);
             free (s);
         }
-#else
-        zmq_event_t ev;
-        zframe_t *zf = zmsg_first (zmsg);
-        if (zf && zframe_size (zf) == sizeof (ev)) {
-            memcpy (&ev, zframe_data (zf), zframe_size (zf));
-            event = ev.event;
-        }
-#endif
         if (event == ZMQ_EVENT_DISCONNECTED)
             msg_exit ("lost connection");
         zmsg_destroy (&zmsg);
