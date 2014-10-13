@@ -146,7 +146,7 @@ struct flux_sec_struct {
     zcert_t *cli_cert;
 #endif
     munge_ctx_t mctx;
-    char *dir;
+    char *conf_dir;
     char *curve_dir;
     char *passwd_file;
     char *errstr;
@@ -156,7 +156,6 @@ struct flux_sec_struct {
     pthread_mutex_t lock;
 };
 
-static int getsecdirs (flux_sec_t c);
 static int checksecdirs (flux_sec_t c, bool create);
 #if HAVE_ZAUTH
 static zcert_t *getcurve (flux_sec_t c, const char *role);
@@ -216,8 +215,8 @@ void flux_sec_destroy (flux_sec_t c)
 {
     if (c->domain)
         free (c->domain);
-    if (c->dir)
-        free (c->dir);
+    if (c->conf_dir)
+        free (c->conf_dir);
     if (c->curve_dir)
         free (c->curve_dir);
     if (c->passwd_file)
@@ -249,16 +248,11 @@ flux_sec_t flux_sec_create (void)
         errn_exit (e, "pthread_mutex_init");
     c->uid = getuid ();
     c->gid = getgid ();
-    if (getsecdirs (c) < 0)
-        goto error;
     c->typemask = FLUX_SEC_TYPE_MUNGE;
 #if HAVE_ZAUTH
     c->typemask |= FLUX_SEC_TYPE_CURVE;
 #endif
     return c;
-error:
-    flux_sec_destroy (c);
-    return NULL;
 }
 
 static int validate_type (int tm)
@@ -275,6 +269,18 @@ static int validate_type (int tm)
 einval:
     errno = EINVAL;
     return -1;
+}
+
+void flux_sec_set_directory (flux_sec_t c, const char *confdir)
+{
+    if (c->conf_dir)
+        free (c->conf_dir);
+    c->conf_dir = xstrdup (confdir);
+}
+
+const char *flux_sec_get_directory (flux_sec_t c)
+{
+    return c->conf_dir;
 }
 
 int flux_sec_disable (flux_sec_t c, int tm)
@@ -433,29 +439,6 @@ int flux_sec_ssockinit (flux_sec_t c, void *sock)
     return 0;
 }
 
-static int getsecdirs (flux_sec_t c)
-{
-    struct passwd *pw = getpwuid (c->uid);
-    int rc = -1;
-
-    /* XXX c->lock held (except in flux_sec_create) */
-
-	if (!pw || !pw->pw_dir || strlen (pw->pw_dir) == 0) {
-        seterrstr (c, "who are you?");
-        errno = EINVAL;
-        goto done;
-    }
-    if (asprintf (&c->dir, "%s/%s", pw->pw_dir, FLUX_DIRECTORY) < 0)
-        oom ();
-    if (asprintf (&c->curve_dir, "%s/curve", c->dir) < 0)
-        oom ();
-    if (asprintf (&c->passwd_file, "%s/passwd", c->dir) < 0)
-        oom ();
-    rc = 0;
-done:
-    return rc;
-}
-
 static int checksecdir (flux_sec_t c, const char *path, bool create)
 {
     struct stat sb;
@@ -501,7 +484,20 @@ static int checksecdirs (flux_sec_t c, bool create)
 {
     /* XXX c->lock held */
 
-    if (checksecdir (c, c->dir, create) < 0)
+    if (!c->conf_dir) {
+        seterrstr (c, "config directory is not set");
+        errno = EINVAL;
+        return -1;
+    }
+    if (!c->curve_dir) {
+        if (asprintf (&c->curve_dir, "%s/curve", c->conf_dir) < 0)
+            oom ();
+    }
+    if (!c->passwd_file) {
+        if (asprintf (&c->passwd_file, "%s/passwd", c->conf_dir) < 0)
+            oom ();
+    }
+    if (checksecdir (c, c->conf_dir, create) < 0)
         return -1;
     if (checksecdir (c, c->curve_dir, create) < 0)
         return -1;
