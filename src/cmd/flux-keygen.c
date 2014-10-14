@@ -41,7 +41,7 @@ static const struct option longopts[] = {
 
 void usage (void)
 {
-    fprintf (stderr, 
+    fprintf (stderr,
 "Usage: flux-keygen [--force] [--plain]\n"
 );
     exit (1);
@@ -53,7 +53,7 @@ int main (int argc, char *argv[])
     flux_sec_t sec;
     bool force = false;
     bool plain = false;
-    char *confdir;
+    char *secdir;
 
     log_init ("flux-keygen");
 
@@ -77,9 +77,9 @@ int main (int argc, char *argv[])
         usage ();
     if (!(sec = flux_sec_create ()))
         err_exit ("flux_sec_create");
-    if (!(confdir = getenv ("FLUX_CONF_DIRECTORY")))
-        msg_exit ("FLUX_CONF_DIRECTORY is not set");
-    flux_sec_set_directory (sec, confdir);
+    if (!(secdir = getenv ("FLUX_SEC_DIRECTORY")))
+        msg_exit ("FLUX_SEC_DIRECTORY is not set");
+    flux_sec_set_directory (sec, secdir);
     if (plain && flux_sec_enable (sec, FLUX_SEC_TYPE_PLAIN) < 0)
         msg_exit ("PLAIN security is not available");
     if (flux_sec_keygen (sec, force, true) < 0)
