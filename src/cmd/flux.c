@@ -53,7 +53,7 @@ char *setup_exec_searchpath (flux_conf_t cf, const char *path_add);
 void setup_module_env (flux_conf_t cf, const char *path_add);
 void setup_cmbd_env (flux_conf_t cf, const char *path_override);
 
-#define OPTIONS "+T:tx:hM:B:vc:L:C:F"
+#define OPTIONS "+T:tx:hM:B:vc:L:C:FS:"
 static const struct option longopts[] = {
     {"tmpdir",          required_argument,  0, 'T'},
     {"trace-apisocket", no_argument,        0, 't'},
@@ -63,6 +63,7 @@ static const struct option longopts[] = {
     {"lua-path",        required_argument,  0, 'L'},
     {"lua-cpath",       required_argument,  0, 'C'},
     {"config",          required_argument,  0, 'c'},
+    {"secdir",          required_argument,  0, 'S'},
     {"verbose",         no_argument,        0, 'v'},
     {"file-config",     no_argument,        0, 'F'},
     {"help",            no_argument,        0, 'h'},
@@ -73,16 +74,17 @@ static void usage (void)
 {
     fprintf (stderr, 
 "Usage: flux [OPTIONS] COMMAND ARGS\n"
-"    -x,--exec-path PATH      prepend PATH to command search path\n"
-"    -M,--module-path PATH    prepend PATH to module search path\n"
-"    -L,--lua-path PATH       prepend PATH to LUA_PATH\n"
-"    -C,--lua-cpath PATH      prepend PATH to LUA_CPATH\n"
-"    -T,--tmpdir PATH         set FLUX_TMPDIR\n"
-"    -t,--trace-apisock       set FLUX_TRACE_APISOCK=1\n"
-"    -B,--cmbd-path FILE      override path to comms message broker\n"
-"    -c,--config DIR          set path to config directory\n"
-"    -F,--file-config         force use of config file, even if FLUX_TMPDIR set\n"
-"    -v,--verbose             show FLUX_* environment and command search\n"
+"    -x,--exec-path PATH   prepend PATH to command search path\n"
+"    -M,--module-path PATH prepend PATH to module search path\n"
+"    -L,--lua-path PATH    prepend PATH to LUA_PATH\n"
+"    -C,--lua-cpath PATH   prepend PATH to LUA_CPATH\n"
+"    -T,--tmpdir PATH      set FLUX_TMPDIR\n"
+"    -t,--trace-apisock    set FLUX_TRACE_APISOCK=1\n"
+"    -B,--cmbd-path FILE   override path to comms message broker\n"
+"    -c,--config DIR       set path to config directory\n"
+"    -F,--file-config      force use of config file, even if FLUX_TMPDIR set\n"
+"    -S,--secdir DIR       set the directory where CURVE keys will be stored\n"
+"    -v,--verbose          show FLUX_* environment and command search\n"
 "\n"
 "The flux-core commands are:\n"
 "   help          Display manual for a sub-command\n"
@@ -117,6 +119,7 @@ int main (int argc, char *argv[])
     char *Copt = NULL;
     bool Fopt = false;
     char *confdir = NULL;
+    char *secdir = NULL;
     flux_conf_t cf;
     char *searchpath;
 
@@ -126,6 +129,9 @@ int main (int argc, char *argv[])
         switch (ch) {
             case 'c': /* --config DIR */
                 confdir = xstrdup (optarg);
+                break;
+            case 'S': /* --secdir DIR */
+                secdir = optarg;
                 break;
             case 'F': /* --file-config */
                 Fopt = true;
@@ -174,6 +180,9 @@ int main (int argc, char *argv[])
     if (confdir || (confdir = intree_confdir ()))
         flux_conf_set_directory (cf, confdir);
     if (setenv ("FLUX_CONF_DIRECTORY", flux_conf_get_directory (cf), 1) < 0)
+        err_exit ("setenv");
+    if (setenv ("FLUX_SEC_DIRECTORY",
+                secdir ? secdir : flux_conf_get_directory (cf), 1) < 0)
         err_exit ("setenv");
     if (unsetenv ("FLUX_CONF_USEFILE") < 0)
         err_exit ("setenv");
@@ -351,6 +360,7 @@ void dump_environment (void)
     dump_environment_one ("FLUX_TMPDIR");
     dump_environment_one ("FLUX_CONF_DIRECTORY");
     dump_environment_one ("FLUX_CONF_USEFILE");
+    dump_environment_one ("FLUX_SEC_DIRECTORY");
     dump_environment_one ("FLUX_TRACE_APISOCK");
     dump_environment_one ("LUA_PATH");
     dump_environment_one ("LUA_CPATH");
