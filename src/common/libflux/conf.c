@@ -151,7 +151,7 @@ const char *flux_conf_get (flux_conf_t cf, const char *key)
     char *nkey = NULL;
     zconfig_t *z;
 
-    if (!key) {
+    if (!key || strchr (key, '/')) {
         errno = EINVAL;
         goto done;
     }
@@ -176,7 +176,7 @@ int flux_conf_put (flux_conf_t cf, const char *key, const char *fmt, ...)
     zconfig_t *z;
     int rc = -1;
 
-    if (!key) {
+    if (!key || strchr (key, '/')) {
         errno = EINVAL;
         goto done;
     }
@@ -292,8 +292,8 @@ void test_getput (void)
 
     ok ((flux_conf_get (cf, ".") == NULL && errno == ENOENT),
         "get of . returns NULL (errno = ENOENT)");
-    ok ((flux_conf_get (cf, "/") == NULL && errno == ENOENT),
-        "get of / returns NULL (errno = ENOENT)");
+    ok ((flux_conf_get (cf, "/") == NULL && errno == EINVAL),
+        "get of / returns NULL (errno = EINVAL)");
     ok ((flux_conf_get (cf, "root") == NULL && errno == ENOENT),
         "get of 'root' returns NULL (errno = ENOENT)");
     ok ((flux_conf_get (cf, "") == NULL && errno == ENOENT),
