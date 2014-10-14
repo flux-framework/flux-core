@@ -89,18 +89,18 @@ int main (int argc, char *argv[])
     cf = flux_conf_create ();
     if ((confdir = getenv ("FLUX_CONF_DIRECTORY")))
         flux_conf_set_directory (cf, confdir);
-    if (getenv ("FLUX_TMPDIR") && !getenv ("FLUX_CONF_USEFILE")) {
+    if (getenv ("FLUX_CONF_USEFILE")) {
+        if (vopt)
+            msg ("Loading config from %s", flux_conf_get_directory (cf));
+        if (flux_conf_load (cf) < 0)
+            err_exit ("%s", flux_conf_get_directory (cf));
+    } else if (getenv ("FLUX_TMPDIR")) {
         if (vopt)
             msg ("Loading config from KVS");
         if (!(h = flux_api_open ()))
             err_exit ("flux_api_open");
         if (kvs_conf_load (h, cf) < 0)
             err_exit ("could not load config from KVS");
-    } else {
-        if (vopt)
-            msg ("Loading config from %s", flux_conf_get_directory (cf));
-        if (flux_conf_load (cf) < 0)
-            err_exit ("%s", flux_conf_get_directory (cf));
     }
 
     if (!strcmp (cmd, "get"))
@@ -113,7 +113,6 @@ int main (int argc, char *argv[])
         config_save (cf, vopt, argc - optind, argv + optind);
     else
         usage ();
-
 
     if (h)
         flux_api_close (h);
