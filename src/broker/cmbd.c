@@ -399,7 +399,12 @@ int main (int argc, char *argv[])
     if ((ctx.confdir = getenv ("FLUX_CONF_DIRECTORY")))
         flux_conf_set_directory (ctx.cf, ctx.confdir);
     ctx.confdir = flux_conf_get_directory (ctx.cf);
-    if (getenv ("FLUX_TMPDIR") && !getenv ("FLUX_CONF_USEFILE")) {
+    if (getenv ("FLUX_CONF_USEFILE")) {
+        if (ctx.verbose)
+            msg ("Loading config from %s", ctx.confdir);
+        if (flux_conf_load (ctx.cf) < 0)
+            msg ("could not load config from file (continuing)");
+    } else if (getenv ("FLUX_TMPDIR")) {
         flux_t h;
         if (ctx.verbose)
             msg ("Loading config from KVS");
@@ -408,12 +413,8 @@ int main (int argc, char *argv[])
         if (kvs_conf_load (h, ctx.cf) < 0)
             err_exit ("could not load config from KVS");
         flux_api_close (h);
-    } else {
-        if (ctx.verbose)
-            msg ("Loading config from %s", ctx.confdir);
-        if (flux_conf_load (ctx.cf) < 0)
-            msg ("could not load config from file (continuing)");
     }
+
     /* Arrange to load config entries into kvs config.*
      */
     flux_conf_itr_t itr = flux_conf_itr_create (ctx.cf);
