@@ -120,7 +120,7 @@ typedef struct {
     bool shell_armed;
     sigset_t default_sigset;
     flux_conf_t cf;
-    const char *confdir;
+    const char *secdir;
     /* Bootstrap
      */
     bool boot_pmi;
@@ -258,6 +258,7 @@ int main (int argc, char *argv[])
     bool fopt = false;
     bool nopt = false;
     zlist_t *modules, *modopts;
+    const char *confdir;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -392,18 +393,23 @@ int main (int argc, char *argv[])
     if (argc != optind)
         usage ();
 
+    /* Get the directory for CURVE keys.
+     */
+    if (!(ctx.secdir = getenv ("FLUX_SEC_DIRECTORY")))
+        msg_exit ("FLUX_SEC_DIRECTORY is not set"); 
+
     /* Process config from the KVS if running in a session and not
      * forced to use a config file by the command line.
      */
     ctx.cf = flux_conf_create ();
-    if ((ctx.confdir = getenv ("FLUX_CONF_DIRECTORY")))
-        flux_conf_set_directory (ctx.cf, ctx.confdir);
-    ctx.confdir = flux_conf_get_directory (ctx.cf);
+    if (!(confdir = getenv ("FLUX_CONF_DIRECTORY")))
+        msg_exit ("FLUX_CONF_DIRECTORY is not set");
+    flux_conf_set_directory (ctx.cf, confdir);
     if (getenv ("FLUX_CONF_USEFILE")) {
         if (ctx.verbose)
-            msg ("Loading config from %s", ctx.confdir);
-        if (flux_conf_load (ctx.cf) < 0)
-            msg ("could not load config from file (continuing)");
+            msg ("Loading config from %s", confdir);
+        if (flux_conf_load (ctx.cf) < 0 && errno != ESRCH)
+            err_exit ("%s", confdir);
     } else if (getenv ("FLUX_TMPDIR")) {
         flux_t h;
         if (ctx.verbose)
@@ -1085,7 +1091,7 @@ static void cmbd_init_comms (ctx_t *ctx)
      */
     if (!(ctx->sec = flux_sec_create ()))
         err_exit ("flux_sec_create");
-    flux_sec_set_directory (ctx->sec, ctx->confdir);
+    flux_sec_set_directory (ctx->sec, ctx->secdir);
     if (ctx->security_clr && flux_sec_disable (ctx->sec, ctx->security_clr) < 0)
         err_exit ("flux_sec_disable");
     if (ctx->security_set && flux_sec_enable (ctx->sec, ctx->security_set) < 0)
