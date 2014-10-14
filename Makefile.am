@@ -14,6 +14,7 @@ etc/flux/curve: etc/flux/config
 	$(AM_V_GEN)$(top_builddir)/src/cmd/flux keygen
 
 EXTRA_DIST = \
+	config/tap-driver.sh \
 	META \
 	DISCLAIMER.LLNS \
 	README.md \
