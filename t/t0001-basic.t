@@ -22,9 +22,11 @@ test_expect_success 'test run_timeout with success' '
 test_expect_success 'we can find a flux binary' '
 	flux --help >/dev/null
 '
-test_expect_success 'flux-keygen works' "
-	flux keygen --force
-"
+test_expect_success 'flux-keygen works' '
+	umask 077 && tmpkeydir=`mktemp -d` &&
+	flux --secdir $tmpkeydir keygen --force &&
+	rm -rf $tmpkeydir
+'
 test_expect_success 'flux-config works' '
 	flux config get general.cmbd_path
 '
