@@ -26,7 +26,7 @@ test_expect_success 'flux-keygen works' "
 	flux keygen --force
 "
 test_expect_success 'flux-config works' '
-	flux config get general/cmbd_path
+	flux config get general.cmbd_path
 '
 test_expect_success 'path to cmbd is sane' '
 	cmbd_path=$(flux config get general.cmbd_path)
