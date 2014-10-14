@@ -175,6 +175,8 @@ int main (int argc, char *argv[])
         flux_conf_set_directory (cf, confdir);
     if (setenv ("FLUX_CONF_DIRECTORY", flux_conf_get_directory (cf), 1) < 0)
         err_exit ("setenv");
+    if (unsetenv ("FLUX_CONF_USEFILE") < 0)
+        err_exit ("setenv");
     /* Process config from the KVS if running in a session and not
      * forced to use a config file by the command line.
      */
@@ -185,13 +187,12 @@ int main (int argc, char *argv[])
         if (kvs_conf_load (h, cf) < 0)
             err_exit ("could not load config from KVS");
         flux_api_close (h);
-        if (unsetenv ("FLUX_CONF_USEFILE") < 0)
-            err_exit ("setenv");
     } else {
-        if (flux_conf_load (cf) < 0)
+        if (flux_conf_load (cf) == 0) {
+            if (setenv ("FLUX_CONF_USEFILE", "1", 1) < 0)
+                err_exit ("setenv");
+        } else if (errno != ENOENT || Fopt)
             err_exit ("%s", flux_conf_get_directory (cf));
-        if (setenv ("FLUX_CONF_USEFILE", "1", 1) < 0)
-            err_exit ("setenv");
     }
 
     /* We share a few environment variables with sub-commands, so
