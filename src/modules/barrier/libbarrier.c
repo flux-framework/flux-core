@@ -27,31 +27,65 @@
 #endif
 #include <flux/core.h>
 
-#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/shortjson.h"
+
+typedef struct {
+    const char *id;
+    int seq;
+} ctx_t;
+
+static void freectx (ctx_t *ctx)
+{
+    free (ctx);
+}
+
+static ctx_t *getctx (flux_t h)
+{
+    ctx_t *ctx = flux_aux_get (h, "barriercli");
+    if (!ctx) {
+        const char *id = getenv ("FLUX_LWJ_ID");
+        if (!id && !(id = getenv ("SLURM_STEPID")))
+            return NULL;
+        ctx = xzmalloc (sizeof (*ctx));
+        ctx->id = id;
+        flux_aux_set (h, "barriercli", ctx, (FluxFreeFn)freectx);
+    }
+    return ctx;
+}
 
 int flux_barrier (flux_t h, const char *name, int nprocs)
 {
-    json_object *request = util_json_object_new_object ();
-    json_object *reply = NULL;
+    JSON request = Jnew ();
+    JSON response = NULL;
     int ret = -1;
+    char *s = NULL;
 
-    util_json_object_add_string (request, "name", name);
-    util_json_object_add_int (request, "count", 1);
-    util_json_object_add_int (request, "nprocs", nprocs);
+    if (!name) {
+        ctx_t *ctx = getctx (h);
+        if (!ctx) {
+            errno = EINVAL;
+            goto done;
+        }
+        name = s = xasprintf ("%s%d", ctx->id, ctx->seq++);
+    }
+    Jadd_str (request, "name", name);
+    Jadd_int (request, "count", 1);
+    Jadd_int (request, "nprocs", nprocs);
 
-    reply = flux_rpc (h, request, "barrier.enter");
-    if (!reply && errno > 0)
+    response = flux_rpc (h, request, "barrier.enter");
+    if (!response && errno > 0)
         goto done;
-    if (reply) {
+    if (response) {
         errno = EPROTO;
         goto done;
     }
     ret = 0;
 done:
-    if (request)
-        json_object_put (request);
-    if (reply)
-        json_object_put (reply);
+    if (s)
+        free (s);
+    Jput (request);
+    Jput (response);
     return ret;
 }
 
