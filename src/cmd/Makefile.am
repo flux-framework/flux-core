@@ -25,12 +25,6 @@ LDADD = $(fluxcmd_ldadd)
 
 bin_PROGRAMS = flux
 
-flux_SOURCES = flux.c
-flux_LDADD = \
-	$(top_builddir)/src/common/libflux/libflux.la \
-	$(top_builddir)/src/common/libutil/libutil.la \
-	$(LIBZMQ) $(LIBCZMQ)
-
 #
 # Flux subcommands
 #

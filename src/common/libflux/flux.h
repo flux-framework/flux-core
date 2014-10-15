@@ -14,7 +14,7 @@
 #include "reparent.h"
 #include "info.h"
 #include "flog.h"
-#include "fconfig.h"
+#include "conf.h"
 
 #endif /* !_FLUX_CORE_FLUX_H */
 

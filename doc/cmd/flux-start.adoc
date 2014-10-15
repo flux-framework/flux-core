@@ -10,7 +10,7 @@ flux-start - bootstrap a Flux comms session
 
 SYNOPSIS
 --------
-*flux-start* ['OPTIONS'] [command ...]
+*flux* *start* ['OPTIONS'] [command ...]
 
 
 DESCRIPTION

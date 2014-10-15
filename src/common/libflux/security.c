@@ -132,21 +132,19 @@
 #include "src/common/libutil/xzmalloc.h"
 
 
-#if ZMQ_VERSION_MAJOR >= 4
-#define HAVE_ZAUTH 1
+#if ZMQ_VERSION_MAJOR < 4
+#error CURVE was introduced in zeromq v4
 #endif
 
 struct flux_sec_struct {
     zctx_t *zctx;
     char *domain;
     int typemask;
-#if HAVE_ZAUTH
     zauth_t *zauth;
     zcert_t *srv_cert;
     zcert_t *cli_cert;
-#endif
     munge_ctx_t mctx;
-    char *dir;
+    char *conf_dir;
     char *curve_dir;
     char *passwd_file;
     char *errstr;
@@ -156,14 +154,11 @@ struct flux_sec_struct {
     pthread_mutex_t lock;
 };
 
-static int getsecdirs (flux_sec_t c);
 static int checksecdirs (flux_sec_t c, bool create);
-#if HAVE_ZAUTH
 static zcert_t *getcurve (flux_sec_t c, const char *role);
 static int gencurve (flux_sec_t c, const char *role, bool force, bool verbose);
 static char *getpasswd (flux_sec_t c, const char *user);
 static int genpasswd (flux_sec_t c, const char *user, bool force, bool verbose);
-#endif
 
 static void lock_sec (flux_sec_t c)
 {
@@ -216,20 +211,18 @@ void flux_sec_destroy (flux_sec_t c)
 {
     if (c->domain)
         free (c->domain);
-    if (c->dir)
-        free (c->dir);
+    if (c->conf_dir)
+        free (c->conf_dir);
     if (c->curve_dir)
         free (c->curve_dir);
     if (c->passwd_file)
         free (c->passwd_file);
-#if HAVE_ZAUTH
     if (c->cli_cert)
         zcert_destroy (&c->cli_cert);
     if (c->srv_cert)
         zcert_destroy (&c->srv_cert);
     if (c->zauth)
         zauth_destroy (&c->zauth);
-#endif
     if (c->mctx)
         munge_ctx_destroy (c->mctx);
     if (c->errstr)
@@ -249,32 +242,32 @@ flux_sec_t flux_sec_create (void)
         errn_exit (e, "pthread_mutex_init");
     c->uid = getuid ();
     c->gid = getgid ();
-    if (getsecdirs (c) < 0)
-        goto error;
-    c->typemask = FLUX_SEC_TYPE_MUNGE;
-#if HAVE_ZAUTH
-    c->typemask |= FLUX_SEC_TYPE_CURVE;
-#endif
+    c->typemask = FLUX_SEC_TYPE_MUNGE | FLUX_SEC_TYPE_CURVE;
     return c;
-error:
-    flux_sec_destroy (c);
-    return NULL;
 }
 
 static int validate_type (int tm)
 {
     /* XXX c->lock held */
-#if HAVE_ZAUTH
+
     if ((tm & FLUX_SEC_TYPE_CURVE) && (tm & FLUX_SEC_TYPE_PLAIN))
         goto einval; /* both can't be enabled */
-#else
-    if ((tm & (FLUX_SEC_TYPE_CURVE | FLUX_SEC_TYPE_PLAIN)))
-        goto einval; /* neither supported if !HAVE_ZAUTH */
-#endif
     return 0;
 einval:
     errno = EINVAL;
     return -1;
+}
+
+void flux_sec_set_directory (flux_sec_t c, const char *confdir)
+{
+    if (c->conf_dir)
+        free (c->conf_dir);
+    c->conf_dir = xstrdup (confdir);
+}
+
+const char *flux_sec_get_directory (flux_sec_t c)
+{
+    return c->conf_dir;
 }
 
 int flux_sec_disable (flux_sec_t c, int tm)
@@ -316,7 +309,6 @@ int flux_sec_keygen (flux_sec_t c, bool force, bool verbose)
     lock_sec (c);
     if (checksecdirs (c, true) < 0)
         goto done_unlock;
-#if HAVE_ZAUTH
     if ((c->typemask & FLUX_SEC_TYPE_CURVE)) {
         if (gencurve (c, "client", force, verbose) < 0)
             goto done_unlock;
@@ -327,7 +319,6 @@ int flux_sec_keygen (flux_sec_t c, bool force, bool verbose)
         if (genpasswd (c, "client", force, verbose) < 0)
             goto done_unlock;
     }
-#endif
     rc = 0;
 done_unlock:
     unlock_sec (c);
@@ -336,7 +327,6 @@ done_unlock:
 
 int flux_sec_zauth_init (flux_sec_t c, zctx_t *zctx, const char *domain)
 {
-#if HAVE_ZAUTH
     int rc = -1;
     lock_sec (c);
     if (checksecdirs (c, false) < 0)
@@ -362,9 +352,6 @@ int flux_sec_zauth_init (flux_sec_t c, zctx_t *zctx, const char *domain)
 done_unlock:
     unlock_sec (c);
     return rc;
-#else
-    return 0;
-#endif
 }
 
 int flux_sec_munge_init (flux_sec_t c)
@@ -390,7 +377,6 @@ done_unlock:
 
 int flux_sec_csockinit (flux_sec_t c, void *sock)
 {
-#if HAVE_ZAUTH
     int rc = -1;
     lock_sec (c);
     if ((c->typemask & FLUX_SEC_TYPE_CURVE)) {
@@ -412,14 +398,10 @@ int flux_sec_csockinit (flux_sec_t c, void *sock)
 done_unlock:
     unlock_sec (c);
     return rc;
-#else
-    return 0;
-#endif
 }
 
 int flux_sec_ssockinit (flux_sec_t c, void *sock)
 {
-#if HAVE_ZAUTH
     lock_sec (c);
     if ((c->typemask & (FLUX_SEC_TYPE_CURVE))) {
         zsocket_set_zap_domain (sock, DEFAULT_ZAP_DOMAIN);
@@ -429,31 +411,7 @@ int flux_sec_ssockinit (flux_sec_t c, void *sock)
         zsocket_set_plain_server (sock, 1);
     }
     unlock_sec (c);
-#endif
     return 0;
-}
-
-static int getsecdirs (flux_sec_t c)
-{
-    struct passwd *pw = getpwuid (c->uid);
-    int rc = -1;
-
-    /* XXX c->lock held (except in flux_sec_create) */
-
-	if (!pw || !pw->pw_dir || strlen (pw->pw_dir) == 0) {
-        seterrstr (c, "who are you?");
-        errno = EINVAL;
-        goto done;
-    }
-    if (asprintf (&c->dir, "%s/%s", pw->pw_dir, FLUX_DIRECTORY) < 0)
-        oom ();
-    if (asprintf (&c->curve_dir, "%s/curve", c->dir) < 0)
-        oom ();
-    if (asprintf (&c->passwd_file, "%s/passwd", c->dir) < 0)
-        oom ();
-    rc = 0;
-done:
-    return rc;
 }
 
 static int checksecdir (flux_sec_t c, const char *path, bool create)
@@ -501,14 +459,26 @@ static int checksecdirs (flux_sec_t c, bool create)
 {
     /* XXX c->lock held */
 
-    if (checksecdir (c, c->dir, create) < 0)
+    if (!c->conf_dir) {
+        seterrstr (c, "config directory is not set");
+        errno = EINVAL;
+        return -1;
+    }
+    if (!c->curve_dir) {
+        if (asprintf (&c->curve_dir, "%s/curve", c->conf_dir) < 0)
+            oom ();
+    }
+    if (!c->passwd_file) {
+        if (asprintf (&c->passwd_file, "%s/passwd", c->conf_dir) < 0)
+            oom ();
+    }
+    if (checksecdir (c, c->conf_dir, create) < 0)
         return -1;
     if (checksecdir (c, c->curve_dir, create) < 0)
         return -1;
     return 0;
 }
 
-#if HAVE_ZAUTH
 static char * ctime_iso8601_now (char *buf, size_t sz)
 {
     struct tm tm;
@@ -683,7 +653,6 @@ done:
         zuuid_destroy (&uuid);
     return rc;
 }
-#endif
 
 int flux_sec_munge_zmsg (flux_sec_t c, zmsg_t **zmsg)
 {

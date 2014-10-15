@@ -33,6 +33,16 @@ Display help on options, and a list of the core Flux sub-commands.
 *-v, --verbose*::
 Display command environment, and the path search for 'CMD'.
 
+*-c, --config*='DIR'::
+Set the directory to be used for configuration.  The default is $HOME/.flux.
+
+*-F, --file-config*::
+Force configuration from file instead of KVS.
+
+*-S, --secdir*='DIR'::
+Set the directory to be used long-term keys.
+The default is to use the config directory.
+
 *-T, --tmpdir*='PATH'::
 Run commands with 'FLUX_TMPDIR' set to 'PATH'.
 When there are multiple message brokers on a node, this selects
@@ -57,53 +67,57 @@ Multiple paths may be specified, separated by semicolon.
 Prepend 'PATH' to the Lua binary module search path (LUA_CPATH).
 Multiple paths may be specified, separated by semicolon.
 
-*-B, --cmbd-path*::
+*-B, --cmbd-path*='FILE'::
 Override the path to the Flux communications broker daemon.
 
 
 SUB-COMMAND ENVIRONMENT
 -----------------------
-flux(1) uses compiled-in install paths, a config file, the environment,
-and its command line arguments to construct the environment for sub-commands.
+flux(1) uses compiled-in install paths, configuration derived from a file
+or the KVS, the environment, and its command line arguments to construct
+the environment for sub-commands.
 
 Sub-command search path::
 Look for "flux-'CMD'" executable by searching a path constructed
 with the following prototype:
 
-  [--exec-path PATH]:[config-file exec_path]:install-path
+  [--exec-path PATH]:[config.general.exec_path]:install-path
 
 setenv FLUX_MODULE_PATH::
 Set up broker comms module search path according to:
 
-  [--module-path PATH]:[config-file module_path]:install-path
+  [--module-path PATH]:[config.general.module_path]:install-path
 
 setenv LUA_PATH::
 Set Lua module search path:
 
-  [--lua-path PATH];[config-file lua_path];[getenv LUA_PATH]; \
-    install-path;;;
+  [--lua-path PATH];[config.general.lua_path]; \
+    [getenv LUA_PATH];install-path;;;
 
 setenv LUA_CPATH::
 Set Lua binary module search path:
 
-  [--lua-cpath PATH];[config-file lua_cpath];[getenv LUA_CPATH]; \
-    install-path;;;
+  [--lua-cpath PATH];[config.general.lua_cpath]; \
+    [getenv LUA_CPATH];install-path;;;
 
 setenv FLUX_CMBD_PATH::
 Set the path to the broker executable.  This environment variable is
 used by flux-start(1) and related sub-commands to launch the broker.
 The path may be set by any of the following methods, in decreasing precedence:
 - [--cmbd-path FILE]
-- [config-file cmbd_path]
+- [config.general.cmbd_path]
 - install-path
 
-setenv FLUX_CONFIG::
-Set the path to the config file.  The config file location is used by flux(1),
-and the environment variable may be used by sub-commands.
-The path may be set by any of the following methods, in descending precedence:
-- [--config FILE]
-- [top of build tree, if being run from flux-core repo]
+setenv FLUX_CONF_DIRECTORY::
+Set the path to the Flux config directory, which contains a config
+file and long term keys.  The path may be set by any of the following
+methods, in descending precedence:
+- [--config DIR]
+- [$(top_builddir)/etc/flux, if being run from flux-core repo]
 - [$HOME/.flux/config]
+
+setenv FLUX_CONF_USEFILE::
+Set to 1 if configuration was obtained from a file.
 
 setenv FLUX_TRACE_APISOCK::
 Set to "1" if --trace-apisock was specified.  This causes the FLUX_FLAGS_TRACE

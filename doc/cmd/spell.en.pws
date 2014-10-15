@@ -1,7 +1,7 @@
 personal_ws-1.1 en 0
 KVS
 kvs
-API
+api
 comms
 dir
 doctype
@@ -19,7 +19,7 @@ tokvs
 adoc
 apisock
 cmbd
-CMD
+cmd
 ZMTP
 stderr
 stdout
@@ -52,6 +52,7 @@ keepalives
 emerg
 gettimeofday
 tmpdir
+tmp
 DocBook
 Livermore
 LLC
@@ -130,3 +131,5 @@ sid
 SIGKILL
 tty
 uri
+usefile
+secdir

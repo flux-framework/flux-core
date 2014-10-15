@@ -10,7 +10,7 @@ flux-ping - measure round-trip latency to Flux services
 
 SYNOPSIS
 --------
-*flux-ping* ['--pad-bytes=N'] ['--delay-msec=N'] ['--rank=N'] target
+*flux* *ping* ['--pad-bytes=N'] ['--delay-msec=N'] ['--rank=N'] target
 
 
 DESCRIPTION

@@ -10,7 +10,7 @@ flux-topo - generate graphviz topology for Flux comms session
 
 SYNOPSIS
 --------
-*flux-topo* | dot -Tpng | display
+*flux* *topo* | dot -Tpng | display
 
 
 DESCRIPTION

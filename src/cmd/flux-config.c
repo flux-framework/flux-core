@@ -35,23 +35,25 @@
 #include "src/common/libutil/argv.h"
 #include "src/common/libutil/log.h"
 
-void config_dump (const char *config_file, int ac, char **av);
-void config_get (const char *config_file, int ac, char **av);
-void config_put (const char *config_file, int ac, char **av);
+void config_dump (flux_conf_t cf, int ac, char **av);
+void config_get (flux_conf_t cf, int ac, char **av);
+void config_put (flux_conf_t cf, flux_t h, bool vopt, int ac, char **av);
+void config_save (flux_conf_t cf, bool vopt, int ac, char **av);
 
-#define OPTIONS "hc:"
+#define OPTIONS "hv"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
-    {"config",     required_argument,  0, 'c'},
+    {"verbose",    no_argument,        0, 'v'},
     { 0, 0, 0, 0 },
 };
 
 void usage (void)
 {
     fprintf (stderr,
-"Usage: flux-config [-c FILE] dump [key]\n"
-"       flux-config [-c FILE] get key\n"
-"       flux-config [-c FILE] put key=val\n"
+"Usage: flux-config [OPTIONS] dump\n"
+"       flux-config [OPTIONS] get key\n"
+"       flux-config [OPTIONS] put key=val\n"
+"       flux-config [OPTIONS] save [directory]\n"
 );
     exit (1);
 }
@@ -59,18 +61,18 @@ void usage (void)
 int main (int argc, char *argv[])
 {
     int ch;
-    char *config_file = getenv ("FLUX_CONFIG");
+    flux_conf_t cf;
     char *cmd;
+    bool vopt = false;
+    flux_t h = NULL;
+    char *confdir = NULL;
 
     log_init ("flux-config");
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
-            case 'h': /* --help */
-                usage ();
-                break;
-            case 'c': /* --config FILE */
-                config_file = optarg;
+            case 'v': /* --verbose */
+                vopt=  true;
                 break;
             default:
                 usage ();
@@ -80,90 +82,73 @@ int main (int argc, char *argv[])
     if (optind == argc)
         usage ();
     cmd = argv[optind++];
+
+    /* Process config from the KVS if running in a session and not
+     * forced to use a config file by the command line.
+     */
+    cf = flux_conf_create ();
+    if ((confdir = getenv ("FLUX_CONF_DIRECTORY")))
+        flux_conf_set_directory (cf, confdir);
+    if (getenv ("FLUX_CONF_USEFILE")) {
+        if (vopt)
+            msg ("Loading config from %s", flux_conf_get_directory (cf));
+        if (flux_conf_load (cf) < 0)
+            err_exit ("%s", flux_conf_get_directory (cf));
+    } else if (getenv ("FLUX_TMPDIR")) {
+        if (vopt)
+            msg ("Loading config from KVS");
+        if (!(h = flux_api_open ()))
+            err_exit ("flux_api_open");
+        if (kvs_conf_load (h, cf) < 0)
+            err_exit ("could not load config from KVS");
+    }
+
     if (!strcmp (cmd, "get"))
-        config_get (config_file, argc - optind, argv + optind);
+        config_get (cf, argc - optind, argv + optind);
     else if (!strcmp (cmd, "dump"))
-        config_dump (config_file, argc - optind, argv + optind);
+        config_dump (cf, argc - optind, argv + optind);
     else if (!strcmp (cmd, "put"))
-        config_put (config_file, argc - optind, argv + optind);
+        config_put (cf, h, vopt, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "save"))
+        config_save (cf, vopt, argc - optind, argv + optind);
     else
         usage ();
 
+    if (h)
+        flux_api_close (h);
+    flux_conf_destroy (cf);
+    log_fini();
     exit (0);
 }
 
-static char *mktab (int level)
+void config_dump (flux_conf_t cf, int ac, char **av)
 {
-    const int tabspace = 4;
-    char *tab = xzmalloc (level*tabspace + 1);
-    memset (tab, ' ', level*tabspace);
-    return tab;
-}
-
-void zdump (zconfig_t *z, int level)
-{
-    char *tab = mktab (level);
-    char *key = zconfig_name (z);
-    char *val = zconfig_value (z);
-    zconfig_t *child = zconfig_child (z);
-
-    if (child) {
-        printf ("%s%s:\n", tab, key);
-        do {
-            zdump (child, level + 1);
-            child = zconfig_next (child);
-        } while (child);
-    } else if (val)
-        printf ("%s%s = \"%s\"\n", tab, key, val);
-    else
-        printf ("%s%s = nil\n", tab, key);
-
-    free (tab);
-}
-
-void config_dump (const char *config_file, int ac, char **av)
-{
-    zconfig_t *root, *z;
-    char *key = "/";
-
-    if (ac > 1)
-        msg_exit ("dump accepts zero or one argument");
-    if (ac == 1)
-        key = av[0];
-    root = flux_config_load (config_file, true);
-    if (!strcmp (key, "/") || !strcmp (key, "root")) {
-        z = zconfig_child (root);
-        while (z) {
-            zdump (z, 0);
-            z = zconfig_next (z);
-        }
-    } else {
-        if (!(z = zconfig_locate (root, key)))
-            errn_exit (ENOENT, "%s", key);
-        zdump (z, 0);
+    flux_conf_itr_t itr;
+    const char *key, *val;
+    if (ac > 0)
+        msg_exit ("dump accepts no arguments");
+    itr = flux_conf_itr_create (cf);
+    while ((key = flux_conf_next (itr))) {
+        if (!(val = flux_conf_get (cf, key)))
+            err_exit ("%s", key);
+        printf("%s=%s\n", key, val);
     }
-    zconfig_destroy (&root);
+    flux_conf_itr_destroy (itr);
 }
 
-void config_get (const char *config_file, int ac, char **av)
+void config_get (flux_conf_t cf, int ac, char **av)
 {
-    zconfig_t *root, *z;
-    char *key, *val;
-
+    const char *val;
     if (ac != 1)
         msg_exit ("get accepts one argument");
-    key = av[0];
-    root = flux_config_load (config_file, true);
-    if (!(z = zconfig_locate (root, key)) || !(val = zconfig_value (z))
-                                          || strlen (val) == 0)
-        errn_exit (ENOENT, "%s", key);
+    val = flux_conf_get (cf, av[0]);
+    if (!val)
+        err_exit ("%s", av[0]);
     printf ("%s\n", val);
-    zconfig_destroy (&root);
 }
 
-void config_put (const char *config_file, int ac, char **av)
+void config_put (flux_conf_t cf, flux_t h, bool vopt, int ac, char **av)
 {
-    zconfig_t *root;
     char *key, *val;
 
     if (ac != 1)
@@ -171,11 +156,33 @@ void config_put (const char *config_file, int ac, char **av)
     key = xstrdup (av[0]);
     if ((val = strchr (key, '=')))
         *val++ = '\0';
-    root = flux_config_load (config_file, false);
-    zconfig_put (root, key, val);
-    flux_config_save (config_file, root);
-    zconfig_destroy (&root);
+    if (flux_conf_put (cf, key, val) < 0)
+        err_exit ("flux_conf_put");
     free (key);
+
+    if (h) {
+        if (vopt)
+            msg ("Saving config to KVS");
+        if (kvs_conf_save (h, cf) < 0)
+            err_exit ("could not save config to KVS");
+    } else {
+        if (vopt)
+            msg ("Saving config to %s", flux_conf_get_directory (cf));
+        if (flux_conf_save (cf) < 0)
+            err_exit ("%s", flux_conf_get_directory (cf));
+    }
+}
+
+void config_save (flux_conf_t cf, bool vopt, int ac, char **av)
+{
+    if (ac > 1)
+        msg_exit ("save accepts one optional argument");
+    if (ac == 1)
+        flux_conf_set_directory (cf, av[0]);
+    if (vopt)
+        msg ("Saving config to %s", flux_conf_get_directory (cf));
+    if (flux_conf_save (cf) < 0)
+        err_exit ("%s", flux_conf_get_directory (cf));
 }
 
 /*
