@@ -5,7 +5,8 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 TESTS = \
 	t0000-sharness.t \
 	t0001-basic.t \
-	t1000-kvs-basic.t
+	t1000-kvs-basic.t \
+	t1001-barrier-basic.t
 
 EXTRA_DIST= \
 	$(TESTS) \
