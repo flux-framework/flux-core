@@ -10,7 +10,7 @@ etc/flux/config: $(srcdir)/flux.conf.in
 	    -e 's![@]abs_top_builddir[@]!$(abs_top_builddir)!g' \
 	    $(srcdir)/flux.conf.in > $@
 
-etc/flux/curve:
+etc/flux/curve: etc/flux/config
 	$(AM_V_GEN)$(top_builddir)/src/cmd/flux keygen
 
 EXTRA_DIST = \
