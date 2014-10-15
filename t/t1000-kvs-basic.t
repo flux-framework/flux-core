@@ -84,7 +84,7 @@ test_expect_success 'kvs: put double' '
 test_expect_success 'kvs: get double' '
 	test_kvs_key $KEY 3.141590
 '
-test_expect_failure 'kvs: try to retrieve key as directory should fail' '
+test_expect_success 'kvs: try to retrieve key as directory should fail' '
 	test_must_fail flux kvs dir $KEY
 '
 test_expect_success 'kvs: try to retrieve a directory as key should fail' '
