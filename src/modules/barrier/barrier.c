@@ -82,10 +82,6 @@ static void barrier_destroy (void *arg)
 {
     barrier_t *b = arg;
 
-    flux_log (b->ctx->h, LOG_DEBUG,
-              "destroy %s nprocs %d count %d errnum %d clients %d",
-              b->name, b->nprocs, b->count, b->errnum,
-              (int)zhash_size (b->clients));
     zhash_destroy (&b->clients);
     free (b->name);
     free (b);
@@ -104,7 +100,6 @@ static barrier_t *barrier_create (ctx_t *ctx, const char *name, int nprocs)
     b->ctx = ctx;
     zhash_insert (ctx->barriers, b->name, b);
     zhash_freefn (ctx->barriers, b->name, barrier_destroy);
-    flux_log (ctx->h, LOG_DEBUG, "create %s nprocs %d", name, nprocs);
 
     return b;
 }
@@ -229,9 +224,6 @@ static int disconnect (const char *key, void *item, void *arg)
     char *sender = arg;
 
     if (zhash_lookup (b->clients, sender)) {
-        flux_log (ctx->h, LOG_INFO,
-                    "abort %s due to premature disconnect by client %s",
-                    b->name, sender);
         if (exit_event_send (ctx->h, b->name, ECONNABORTED) < 0)
             flux_log (ctx->h, LOG_ERR, "exit_event_send: %s", strerror (errno));
     }
