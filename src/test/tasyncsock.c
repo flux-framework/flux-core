@@ -83,45 +83,12 @@ static int imm = 0;
 static int iter = 0;
 static bool vopt = false;
 static int bufsize = 0;
-static bool mopt = false;
 static int sleep_usec = 0;
-
-void *mon_init (void *zctx, void *zs, int events)
-{
-    void *mon;
-    if (zmq_socket_monitor (zs, "inproc://mon", ZMQ_EVENT_ALL) < 0)
-        err_exit ("zmq_socket_monitor");
-    if (!(mon = zsocket_new  (zctx, ZMQ_PAIR)))
-        err_exit ("zsocket_new");
-    if (zsocket_connect (mon, "inproc://mon") < 0)
-        err_exit ("zsocket_connect inproc://mon");
-    return mon;
-}
-
-void mon_waitevent (void *mon, int wevent)
-{
-    int event = 0;
-    zmsg_t *zmsg;
-    zmq_event_t ev;
-    zframe_t *zf;
-
-    while (event != wevent) {
-        if (!(zmsg = zmsg_recv (mon))) 
-            err_exit ("zmsg_recv mon");
-        memset (&ev, 0, sizeof (ev));
-        if ((zf = zmsg_first (zmsg)) && zframe_size (zf) <= sizeof (ev)) {
-            memcpy (&ev, zframe_data (zf), zframe_size (zf));
-            event = ev.event;
-            //msg ("event=%d", event);
-        }
-        zmsg_destroy (&zmsg);
-    }
-}
 
 void send_czmq (char *buf, int len)
 {
     zctx_t *zctx;
-    void *zs, *mon = NULL;
+    void *zs;
     zmsg_t *zmsg;
 
     if (!(zctx = zctx_new ()))
@@ -134,13 +101,9 @@ void send_czmq (char *buf, int len)
     //    zsocket_set_linger (zs, linger); 
     if (iopt)
         zsocket_set_immediate (zs, imm);
-    if (mopt)
-        mon = mon_init (zctx, zs, ZMQ_EVENT_CONNECTED);
     //zsocket_set_sndhwm (zs, 0); /* unlimited */
     if (zsocket_connect (zs, "%s", uri) < 0)
         err_exit ("C: zsocket_connect");
-    if (mopt)
-        mon_waitevent (mon, ZMQ_EVENT_CONNECTED);
     if (!(zmsg = zmsg_new ()))
         oom ();
     if (zmsg_pushmem (zmsg, buf, bufsize) < 0)
@@ -278,9 +241,6 @@ int main (int argc, char *argv[])
             case 'v':
                 vopt = true;
                 break;
-            case 'm':
-                mopt = true;
-                break;
             case 'S':
                 sleep_usec = strtoul (optarg, NULL, 10);;
                 break;
@@ -291,8 +251,6 @@ int main (int argc, char *argv[])
     }
     if (optind != argc - 1)
         usage ();
-    if (mopt && raw)
-        msg_exit ("--monitor is not implemented for raw mode");
     iter = strtoul (argv[optind++], NULL, 10);
 
     /* Create socket and bind to it.
