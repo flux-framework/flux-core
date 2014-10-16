@@ -197,8 +197,28 @@ void cmd_get (flux_t h, int argc, char **argv)
     for (i = 0; i < argc; i++) {
         if (kvs_get (h, argv[i], &o) < 0)
             err_exit ("%s", argv[i]);
-        else
-            printf ("%s\n", Jtostr (o));
+        switch (json_object_get_type (o)) {
+            case json_type_null:
+                printf ("NULL\n");
+                break;
+            case json_type_boolean:
+                printf ("%s\n", json_object_get_boolean (o) ? "true" : "false");
+                break;
+            case json_type_double:
+                printf ("%f\n", json_object_get_double (o));
+                break;
+            case json_type_int:
+                printf ("%d\n", json_object_get_int (o));
+                break;
+            case json_type_string:
+                printf ("%s\n", json_object_get_string (o));
+                break;
+            case json_type_array:
+            case json_type_object:
+            default:
+                printf ("%s\n", Jtostr (o));
+                break;
+        }
         Jput (o);
     }
 }
