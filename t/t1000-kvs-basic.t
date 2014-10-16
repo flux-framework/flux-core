@@ -27,6 +27,12 @@ test_kvs_key() {
 	#fi
 }
 
+test_kvs_type () {
+	flux kvs type "$1" >output
+	echo "$2" >expected
+	test_cmp output expected
+}
+
 test_expect_success 'kvs: get a nonexistent key' '
 	test_must_fail flux kvs get NOT.A.KEY
 '
@@ -34,6 +40,9 @@ test_expect_success 'kvs: get a nonexistent key' '
 
 test_expect_success 'kvs: integer put' '
 	flux kvs put $KEY=42 
+'
+test_expect_success 'kvs: integer type' '
+	test_kvs_type $KEY int
 '
 test_expect_success 'kvs: integer get' '
 	test_kvs_key $KEY 42
@@ -44,45 +53,64 @@ test_expect_success 'kvs: unlink works' '
 '
 test_expect_success 'kvs: value can be empty' '
 	flux kvs put $KEY= &&
-		test_kvs_key $KEY "\"\""
+	  test_kvs_key $KEY "" &&
+	  test_kvs_type $KEY string
 '
 KEY=$TEST.b.c.d
 DIR=$TEST.b.c
 test_expect_success 'kvs: string put' '
 	flux kvs put $KEY="Hello world"
 '
-test_expect_success 'kvs: string get' '
-	test_kvs_key $KEY "\"Hello world\""
+test_expect_success 'kvs: string type' '
+	test_kvs_type $KEY string
 '
-test_expect_success 'kvs: unlink works' '
-	flux kvs unlink $KEY &&
-	  test_must_fail flux kvs get $KEY
+test_expect_success 'kvs: string get' '
+	test_kvs_key $KEY "Hello world"
 '
 test_expect_success 'kvs: boolean put (true)' '
 	flux kvs put $KEY=true
 '
+test_expect_success 'kvs: boolean type' '
+	test_kvs_type $KEY boolean
+'
 test_expect_success 'kvs: boolean get (true)' '
 	test_kvs_key $KEY true
-'
-test_expect_success 'kvs: unlink works' '
-	flux kvs unlink $KEY &&
-	  test_must_fail flux kvs get $KEY
 '
 test_expect_success 'kvs: boolean put (false)' '
 	flux kvs put $KEY=false
 '
+test_expect_success 'kvs: boolean type' '
+	test_kvs_type $KEY boolean
+'
 test_expect_success 'kvs: boolean get (false)' '
 	test_kvs_key $KEY false
-'
-test_expect_success 'kvs: unlink works' '
-	flux kvs unlink $KEY &&
-	  test_must_fail flux kvs get $KEY
 '
 test_expect_success 'kvs: put double' '
 	flux kvs put $KEY=3.14159
 '
+test_expect_success 'kvs: double type' '
+	test_kvs_type $KEY double
+'
 test_expect_success 'kvs: get double' '
 	test_kvs_key $KEY 3.141590
+'
+test_expect_success 'kvs: array put' '
+	flux kvs put $KEY="[1,3,5,7]"
+'
+test_expect_success 'kvs: array type' '
+	test_kvs_type $KEY array
+'
+test_expect_success 'kvs: array get' '
+	test_kvs_key $KEY "[ 1, 3, 5, 7 ]"
+'
+test_expect_success 'kvs: object put' '
+	flux kvs put $KEY="{\"a\":42}"
+'
+test_expect_success 'kvs: object type' '
+	test_kvs_type $KEY object
+'
+test_expect_success 'kvs: object get' '
+	test_kvs_key $KEY "{ \"a\": 42 }"
 '
 test_expect_success 'kvs: try to retrieve key as directory should fail' '
 	test_must_fail flux kvs dir $KEY
@@ -113,7 +141,7 @@ test_expect_success 'kvs: put values in a directory then retrieve them' '
 $DIR.a = 69
 $DIR.b = 70
 $DIR.c = 3.140000
-$DIR.d = "snerg"
+$DIR.d = snerg
 $DIR.e = true
 EOF
 	test_cmp expected output
@@ -126,7 +154,7 @@ test_expect_success 'kvs: create a dir with keys and subdir' '
 $DIR.a = 69
 $DIR.b = 70
 $DIR.c.d.e.f.g = 3.140000
-$DIR.d = "snerg"
+$DIR.d = snerg
 $DIR.e = true
 EOF
 	test_cmp expected output
@@ -140,7 +168,7 @@ test_expect_success 'kvs: directory with multiple subdirs' '
 $DIR.a = 69
 $DIR.b.c.d.e.f.g = 70
 $DIR.c.a.b = 3.140000
-$DIR.d = "snerg"
+$DIR.d = snerg
 $DIR.e = true
 EOF
 	test_cmp expected output
@@ -154,7 +182,7 @@ test_expect_success 'kvs: symlink: works' '
 	flux kvs put $TARGET=\"foo\" &&
 	flux kvs link $TARGET $TEST.Q &&
 	OUTPUT=$(flux kvs get $TEST.Q) &&
-	test "$OUTPUT" = "\"foo\""
+	test "$OUTPUT" = "foo"
 '
 test_expect_success 'kvs: symlink: path resolution when intermediate component is a symlink' '
 	flux kvs unlink $TEST &&

@@ -43,6 +43,7 @@ static const struct option longopts[] = {
 };
 
 void cmd_get (flux_t h, int argc, char **argv);
+void cmd_type (flux_t h, int argc, char **argv);
 void cmd_put (flux_t h, int argc, char **argv);
 void cmd_unlink (flux_t h, int argc, char **argv);
 void cmd_link (flux_t h, int argc, char **argv);
@@ -63,6 +64,7 @@ void usage (void)
 {
     fprintf (stderr,
 "Usage: flux-kvs get           key [key...]\n"
+"       flux-kvs type          key [key...]\n"
 "       flux-kvs put           key=val [key=val...]\n"
 "       flux-kvs unlink        key [key...]\n"
 "       flux-kvs link          target link_name\n"
@@ -72,7 +74,7 @@ void usage (void)
 "       flux-kvs watch-dir     key\n"
 "       flux-kvs copy-tokvs    key file\n"
 "       flux-kvs copy-fromkvs  key file\n"
-"       flux-kvs dir           key\n"
+"       flux-kvs dir           [key]\n"
 "       flux-kvs version\n"
 "       flux-kvs wait          version\n"
 "       flux-kvs dropcache\n"
@@ -108,6 +110,8 @@ int main (int argc, char *argv[])
 
     if (!strcmp (cmd, "get"))
         cmd_get (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "type"))
+        cmd_type (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "put"))
         cmd_put (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "unlink"))
@@ -144,6 +148,45 @@ int main (int argc, char *argv[])
     return 0;
 }
 
+void cmd_type (flux_t h, int argc, char **argv)
+{
+    JSON o;
+    int i;
+
+    if (argc == 0)
+        msg_exit ("get-type: specify one or more keys");
+    for (i = 0; i < argc; i++) {
+        if (kvs_get (h, argv[i], &o) < 0)
+            err_exit ("%s", argv[i]);
+        const char *type = "unknown";
+        switch (json_object_get_type (o)) {
+            case json_type_null:
+                type = "null";
+                break;
+            case json_type_boolean:
+                type = "boolean";
+                break;
+            case json_type_double:
+                type = "double";
+                break;
+            case json_type_int:
+                type = "int";
+                break;
+            case json_type_object:
+                type = "object";
+                break;
+            case json_type_array:
+                type = "array";
+                break;
+            case json_type_string:
+                type = "string";
+                break;
+        }
+        printf ("%s\n", type);
+        Jput (o);
+    }
+}
+
 void cmd_get (flux_t h, int argc, char **argv)
 {
     JSON o;
@@ -154,8 +197,28 @@ void cmd_get (flux_t h, int argc, char **argv)
     for (i = 0; i < argc; i++) {
         if (kvs_get (h, argv[i], &o) < 0)
             err_exit ("%s", argv[i]);
-        else
-            printf ("%s\n", Jtostr (o));
+        switch (json_object_get_type (o)) {
+            case json_type_null:
+                printf ("nil\n");
+                break;
+            case json_type_boolean:
+                printf ("%s\n", json_object_get_boolean (o) ? "true" : "false");
+                break;
+            case json_type_double:
+                printf ("%f\n", json_object_get_double (o));
+                break;
+            case json_type_int:
+                printf ("%d\n", json_object_get_int (o));
+                break;
+            case json_type_string:
+                printf ("%s\n", json_object_get_string (o));
+                break;
+            case json_type_array:
+            case json_type_object:
+            default:
+                printf ("%s\n", Jtostr (o));
+                break;
+        }
         Jput (o);
     }
 }
@@ -360,11 +423,39 @@ void cmd_copy_fromkvs (flux_t h, int argc, char **argv)
     free (buf);
 }
 
+
+static void dump_kvs_val (const char *key, JSON o)
+{
+    switch (json_object_get_type (o)) {
+        case json_type_null:
+            printf ("%s = nil\n", key);
+            break;
+        case json_type_boolean:
+            printf ("%s = %s\n", key, json_object_get_boolean (o)
+                                      ? "true" : "false");
+            break;
+        case json_type_double:
+            printf ("%s = %f\n", key, json_object_get_double (o));
+            break;
+        case json_type_int:
+            printf ("%s = %d\n", key, json_object_get_int (o));
+            break;
+        case json_type_string:
+            printf ("%s = %s\n", key, json_object_get_string (o));
+            break;
+        case json_type_array:
+        case json_type_object:
+        default:
+            printf ("%s = %s\n", key, Jtostr (o));
+            break;
+    }
+}
+
 static void dump_kvs_dir (flux_t h, const char *path)
 {
     kvsdir_t dir;
     kvsitr_t itr;
-    const char *name, *js;
+    const char *name;
     char *key;
 
     if (kvs_get_dir (h, &dir, "%s", path) < 0)
@@ -375,7 +466,6 @@ static void dump_kvs_dir (flux_t h, const char *path)
         key = kvsdir_key_at (dir, name);
         if (kvsdir_issymlink (dir, name)) {
             char *link;
-
             if (kvs_get_symlink (h, key, &link) < 0)
                 err_exit ("%s", key);
             printf ("%s -> %s\n", key, link);
@@ -383,21 +473,12 @@ static void dump_kvs_dir (flux_t h, const char *path)
 
         } else if (kvsdir_isdir (dir, name)) {
             dump_kvs_dir (h, key);
-
         } else {
-            json_object *o;
-            int len, max;
-
+            JSON o;
             if (kvs_get (h, key, &o) < 0)
                 err_exit ("%s", key);
-            js = json_object_to_json_string_ext (o, JSON_C_TO_STRING_PLAIN);
-            len = strlen (js);
-            max = 80 - strlen (key) - 4;
-            if (len > max)
-                printf ("%s = %.*s ...\n", key, max - 4, js);
-            else
-                printf ("%s = %s\n", key, js);
-            json_object_put (o);
+            dump_kvs_val (key, o);
+            Jput (o);
         }
         free (key);
     }
@@ -434,9 +515,12 @@ void cmd_watch_dir (flux_t h, int argc, char **argv)
 
 void cmd_dir (flux_t h, int argc, char **argv)
 {
-    if (argc != 1)
-        msg_exit ("dir: specify one directory");
-    dump_kvs_dir (h, argv[0]);
+    if (argc == 0)
+        dump_kvs_dir (h, ".");
+    else if (argc == 1)
+        dump_kvs_dir (h, argv[0]);
+    else
+        msg_exit ("dir: specify zero or one directory");
 }
 
 /*
