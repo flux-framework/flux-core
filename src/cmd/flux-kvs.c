@@ -199,7 +199,7 @@ void cmd_get (flux_t h, int argc, char **argv)
             err_exit ("%s", argv[i]);
         switch (json_object_get_type (o)) {
             case json_type_null:
-                printf ("NULL\n");
+                printf ("nil\n");
                 break;
             case json_type_boolean:
                 printf ("%s\n", json_object_get_boolean (o) ? "true" : "false");
@@ -423,11 +423,39 @@ void cmd_copy_fromkvs (flux_t h, int argc, char **argv)
     free (buf);
 }
 
+
+static void dump_kvs_val (const char *key, JSON o)
+{
+    switch (json_object_get_type (o)) {
+        case json_type_null:
+            printf ("%s = nil\n", key);
+            break;
+        case json_type_boolean:
+            printf ("%s = %s\n", key, json_object_get_boolean (o)
+                                      ? "true" : "false");
+            break;
+        case json_type_double:
+            printf ("%s = %f\n", key, json_object_get_double (o));
+            break;
+        case json_type_int:
+            printf ("%s = %d\n", key, json_object_get_int (o));
+            break;
+        case json_type_string:
+            printf ("%s = %s\n", key, json_object_get_string (o));
+            break;
+        case json_type_array:
+        case json_type_object:
+        default:
+            printf ("%s = %s\n", key, Jtostr (o));
+            break;
+    }
+}
+
 static void dump_kvs_dir (flux_t h, const char *path)
 {
     kvsdir_t dir;
     kvsitr_t itr;
-    const char *name, *js;
+    const char *name;
     char *key;
 
     if (kvs_get_dir (h, &dir, "%s", path) < 0)
@@ -438,7 +466,6 @@ static void dump_kvs_dir (flux_t h, const char *path)
         key = kvsdir_key_at (dir, name);
         if (kvsdir_issymlink (dir, name)) {
             char *link;
-
             if (kvs_get_symlink (h, key, &link) < 0)
                 err_exit ("%s", key);
             printf ("%s -> %s\n", key, link);
@@ -446,21 +473,12 @@ static void dump_kvs_dir (flux_t h, const char *path)
 
         } else if (kvsdir_isdir (dir, name)) {
             dump_kvs_dir (h, key);
-
         } else {
-            json_object *o;
-            int len, max;
-
+            JSON o;
             if (kvs_get (h, key, &o) < 0)
                 err_exit ("%s", key);
-            js = json_object_to_json_string_ext (o, JSON_C_TO_STRING_PLAIN);
-            len = strlen (js);
-            max = 80 - strlen (key) - 4;
-            if (len > max)
-                printf ("%s = %.*s ...\n", key, max - 4, js);
-            else
-                printf ("%s = %s\n", key, js);
-            json_object_put (o);
+            dump_kvs_val (key, o);
+            Jput (o);
         }
         free (key);
     }
