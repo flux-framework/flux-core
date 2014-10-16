@@ -43,6 +43,7 @@ static const struct option longopts[] = {
 };
 
 void cmd_get (flux_t h, int argc, char **argv);
+void cmd_type (flux_t h, int argc, char **argv);
 void cmd_put (flux_t h, int argc, char **argv);
 void cmd_unlink (flux_t h, int argc, char **argv);
 void cmd_link (flux_t h, int argc, char **argv);
@@ -63,6 +64,7 @@ void usage (void)
 {
     fprintf (stderr,
 "Usage: flux-kvs get           key [key...]\n"
+"       flux-kvs type          key [key...]\n"
 "       flux-kvs put           key=val [key=val...]\n"
 "       flux-kvs unlink        key [key...]\n"
 "       flux-kvs link          target link_name\n"
@@ -108,6 +110,8 @@ int main (int argc, char *argv[])
 
     if (!strcmp (cmd, "get"))
         cmd_get (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "type"))
+        cmd_type (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "put"))
         cmd_put (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "unlink"))
@@ -142,6 +146,45 @@ int main (int argc, char *argv[])
     flux_api_close (h);
     log_fini ();
     return 0;
+}
+
+void cmd_type (flux_t h, int argc, char **argv)
+{
+    JSON o;
+    int i;
+
+    if (argc == 0)
+        msg_exit ("get-type: specify one or more keys");
+    for (i = 0; i < argc; i++) {
+        if (kvs_get (h, argv[i], &o) < 0)
+            err_exit ("%s", argv[i]);
+        const char *type = "unknown";
+        switch (json_object_get_type (o)) {
+            case json_type_null:
+                type = "null";
+                break;
+            case json_type_boolean:
+                type = "boolean";
+                break;
+            case json_type_double:
+                type = "double";
+                break;
+            case json_type_int:
+                type = "int";
+                break;
+            case json_type_object:
+                type = "object";
+                break;
+            case json_type_array:
+                type = "array";
+                break;
+            case json_type_string:
+                type = "string";
+                break;
+        }
+        printf ("%s\n", type);
+        Jput (o);
+    }
 }
 
 void cmd_get (flux_t h, int argc, char **argv)
