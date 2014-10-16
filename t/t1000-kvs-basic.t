@@ -67,10 +67,6 @@ test_expect_success 'kvs: string type' '
 test_expect_success 'kvs: string get' '
 	test_kvs_key $KEY "Hello world"
 '
-test_expect_success 'kvs: unlink works' '
-	flux kvs unlink $KEY &&
-	  test_must_fail flux kvs get $KEY
-'
 test_expect_success 'kvs: boolean put (true)' '
 	flux kvs put $KEY=true
 '
@@ -89,10 +85,6 @@ test_expect_success 'kvs: boolean type' '
 test_expect_success 'kvs: boolean get (false)' '
 	test_kvs_key $KEY false
 '
-test_expect_success 'kvs: unlink works' '
-	flux kvs unlink $KEY &&
-	  test_must_fail flux kvs get $KEY
-'
 test_expect_success 'kvs: put double' '
 	flux kvs put $KEY=3.14159
 '
@@ -102,10 +94,6 @@ test_expect_success 'kvs: double type' '
 test_expect_success 'kvs: get double' '
 	test_kvs_key $KEY 3.141590
 '
-test_expect_success 'kvs: unlink works' '
-	flux kvs unlink $KEY &&
-	  test_must_fail flux kvs get $KEY
-'
 test_expect_success 'kvs: array put' '
 	flux kvs put $KEY="[1,3,5,7]"
 '
@@ -114,10 +102,6 @@ test_expect_success 'kvs: array type' '
 '
 test_expect_success 'kvs: array get' '
 	test_kvs_key $KEY "[ 1, 3, 5, 7 ]"
-'
-test_expect_success 'kvs: unlink works' '
-	flux kvs unlink $KEY &&
-	  test_must_fail flux kvs get $KEY
 '
 test_expect_success 'kvs: object put' '
 	flux kvs put $KEY="{\"a\":42}"
