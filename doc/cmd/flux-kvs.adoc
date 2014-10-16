@@ -45,14 +45,19 @@ COMMANDS
 Retrieve the value stored under 'key'.  If nothing has been stored under
 'key', display an error message.
 
+*type* 'key' ['key...']::
+Display the JSON type of the value under key: 'null', 'boolean', 'double',
+'int', 'object', 'array', or 'string'.  If nothing has been stored under
+'key', display an error message.
+
 *put* 'key=value' ['key=value...']::
 Store 'value' under 'key' and commit it.  If it already has a value,
 overwrite it.
 
-*dir* 'key'::
+*dir* ['key']::
 Display all keys and their values under the directory 'key'.
 If 'key' does not exist or is not a directory, display an error message.
-If 'key' is ".", the entire KVS namespace is dumped.
+If 'key' is not provided, "." (root of the namespace) is assumed.
 
 *unlink* 'key' ['key...']::
 Remove 'key' from the KVS and commit the change.  If 'key' represents
