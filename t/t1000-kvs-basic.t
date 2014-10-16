@@ -80,10 +80,6 @@ test_expect_success 'kvs: boolean type' '
 test_expect_success 'kvs: boolean get (true)' '
 	test_kvs_key $KEY true
 '
-test_expect_success 'kvs: unlink works' '
-	flux kvs unlink $KEY &&
-	  test_must_fail flux kvs get $KEY
-'
 test_expect_success 'kvs: boolean put (false)' '
 	flux kvs put $KEY=false
 '
@@ -105,6 +101,32 @@ test_expect_success 'kvs: double type' '
 '
 test_expect_success 'kvs: get double' '
 	test_kvs_key $KEY 3.141590
+'
+test_expect_success 'kvs: unlink works' '
+	flux kvs unlink $KEY &&
+	  test_must_fail flux kvs get $KEY
+'
+test_expect_success 'kvs: array put' '
+	flux kvs put $KEY="[1,3,5,7]"
+'
+test_expect_success 'kvs: array type' '
+	test_kvs_type $KEY array
+'
+test_expect_success 'kvs: array get' '
+	test_kvs_key $KEY "[ 1, 3, 5, 7 ]"
+'
+test_expect_success 'kvs: unlink works' '
+	flux kvs unlink $KEY &&
+	  test_must_fail flux kvs get $KEY
+'
+test_expect_success 'kvs: object put' '
+	flux kvs put $KEY="{\"a\":42}"
+'
+test_expect_success 'kvs: object type' '
+	test_kvs_type $KEY object
+'
+test_expect_success 'kvs: object get' '
+	test_kvs_key $KEY "{ \"a\": 42 }"
 '
 test_expect_success 'kvs: try to retrieve key as directory should fail' '
 	test_must_fail flux kvs dir $KEY
