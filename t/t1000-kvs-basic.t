@@ -44,7 +44,7 @@ test_expect_success 'kvs: unlink works' '
 '
 test_expect_success 'kvs: value can be empty' '
 	flux kvs put $KEY= &&
-		test_kvs_key $KEY "\"\""
+		test_kvs_key $KEY ""
 '
 KEY=$TEST.b.c.d
 DIR=$TEST.b.c
@@ -52,7 +52,7 @@ test_expect_success 'kvs: string put' '
 	flux kvs put $KEY="Hello world"
 '
 test_expect_success 'kvs: string get' '
-	test_kvs_key $KEY "\"Hello world\""
+	test_kvs_key $KEY "Hello world"
 '
 test_expect_success 'kvs: unlink works' '
 	flux kvs unlink $KEY &&
@@ -113,7 +113,7 @@ test_expect_success 'kvs: put values in a directory then retrieve them' '
 $DIR.a = 69
 $DIR.b = 70
 $DIR.c = 3.140000
-$DIR.d = "snerg"
+$DIR.d = snerg
 $DIR.e = true
 EOF
 	test_cmp expected output
@@ -126,7 +126,7 @@ test_expect_success 'kvs: create a dir with keys and subdir' '
 $DIR.a = 69
 $DIR.b = 70
 $DIR.c.d.e.f.g = 3.140000
-$DIR.d = "snerg"
+$DIR.d = snerg
 $DIR.e = true
 EOF
 	test_cmp expected output
@@ -140,7 +140,7 @@ test_expect_success 'kvs: directory with multiple subdirs' '
 $DIR.a = 69
 $DIR.b.c.d.e.f.g = 70
 $DIR.c.a.b = 3.140000
-$DIR.d = "snerg"
+$DIR.d = snerg
 $DIR.e = true
 EOF
 	test_cmp expected output
@@ -154,7 +154,7 @@ test_expect_success 'kvs: symlink: works' '
 	flux kvs put $TARGET=\"foo\" &&
 	flux kvs link $TARGET $TEST.Q &&
 	OUTPUT=$(flux kvs get $TEST.Q) &&
-	test "$OUTPUT" = "\"foo\""
+	test "$OUTPUT" = "foo"
 '
 test_expect_success 'kvs: symlink: path resolution when intermediate component is a symlink' '
 	flux kvs unlink $TEST &&
