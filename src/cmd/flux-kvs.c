@@ -74,7 +74,7 @@ void usage (void)
 "       flux-kvs watch-dir     key\n"
 "       flux-kvs copy-tokvs    key file\n"
 "       flux-kvs copy-fromkvs  key file\n"
-"       flux-kvs dir           key\n"
+"       flux-kvs dir           [key]\n"
 "       flux-kvs version\n"
 "       flux-kvs wait          version\n"
 "       flux-kvs dropcache\n"
@@ -515,9 +515,12 @@ void cmd_watch_dir (flux_t h, int argc, char **argv)
 
 void cmd_dir (flux_t h, int argc, char **argv)
 {
-    if (argc != 1)
-        msg_exit ("dir: specify one directory");
-    dump_kvs_dir (h, argv[0]);
+    if (argc == 0)
+        dump_kvs_dir (h, ".");
+    else if (argc == 1)
+        dump_kvs_dir (h, argv[0]);
+    else
+        msg_exit ("dir: specify zero or one directory");
 }
 
 /*
