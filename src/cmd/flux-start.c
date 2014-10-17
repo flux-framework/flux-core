@@ -171,6 +171,7 @@ void start_direct (optparse_t p, const char *cmd)
     int rank;
     pid_t *pids;
     int reaped = 0;
+    pid_t start_pid = getpid (); /* use as session id */
 
     if (!cmbd_path)
         msg_exit ("FLUX_CMBD_PATH is not set");
@@ -184,6 +185,7 @@ void start_direct (optparse_t p, const char *cmd)
         argv_push (&ac, &av, "%s", cmbd_path);
         argv_push (&ac, &av, "--size=%d", size);
         argv_push (&ac, &av, "--rank=%d", rank);
+        argv_push (&ac, &av, "--sid=%d", start_pid);
         if (cmbd_opts)
             push_extra_args (&ac, &av, cmbd_opts);
         if (rank == 0 && cmd)
