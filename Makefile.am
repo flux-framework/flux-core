@@ -1,8 +1,7 @@
 SUBDIRS = src doc t
 
-sysconf_DATA = \
-	etc/flux/config
 noinst_DATA = \
+	etc/flux/config \
 	etc/flux/curve
 
 etc/flux/config: $(srcdir)/flux.conf.in

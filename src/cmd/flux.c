@@ -188,12 +188,14 @@ int main (int argc, char *argv[])
         err_exit ("setenv");
     /* Process config from the KVS if running in a session and not
      * forced to use a config file by the command line.
+     * It is not an error if config is not foud in either place, we will
+     * try to make do with compiled-in defaults.
      */
     if (getenv ("FLUX_TMPDIR") && !Fopt) {
         flux_t h;
         if (!(h = flux_api_open ()))
             err_exit ("flux_api_open");
-        if (kvs_conf_load (h, cf) < 0)
+        if (kvs_conf_load (h, cf) < 0 && errno != ENOENT)
             err_exit ("could not load config from KVS");
         flux_api_close (h);
     } else {
