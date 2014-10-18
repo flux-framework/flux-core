@@ -209,7 +209,7 @@ int main (int argc, char *argv[])
     /* We share a few environment variables with sub-commands, so
      * that they don't have to reprocess the config.
      */
-    setup_lua_env (cf, Lopt, Copt); /* sets LUA_PATH, LUA_CPATH */
+    setup_lua_env (cf, Copt, Lopt); /* sets LUA_CPATH, LUA_PATH */
     setup_module_env (cf, Mopt);    /* sets FLUX_MODULE_PATH */
     setup_cmbd_env (cf, Bopt);      /* sets FLUX_CMBD_PATH */
 
