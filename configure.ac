@@ -121,8 +121,6 @@ AC_CONFIG_FILES( \
   src/common/libmrpc/Makefile \
   src/lib/Makefile \
   src/lib/libcore/Makefile \
-  src/lib/libcore/flux-core.pc \
-  src/lib/libcore/flux-libs.conf \
   src/lib/libpmi/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
@@ -139,6 +137,8 @@ AC_CONFIG_FILES( \
   src/test/Makefile \
   src/test/kap/Makefile \
   etc/Makefile \
+  etc/flux-core.pc \
+  etc/flux-libs.conf \
   doc/Makefile \
   doc/cmd/Makefile \
   t/Makefile \

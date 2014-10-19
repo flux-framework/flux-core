@@ -2,8 +2,6 @@ AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = 
 
-ldconfdir=$(sysconfdir)/ld.so.conf.d
-
 fluxinclude_HEADERS = core.h
 fluxlib_LTLIBRARIES = libflux-core.la
 libflux_core_la_SOURCES = 
@@ -20,11 +18,5 @@ libflux_core_la_LIBADD = \
 	$(LIBDL)
 
 libflux_core_la_LDFLAGS = -Wl,--version-script=$(srcdir)/version.map
-
-if WITH_PKG_CONFIG
-pkgconfig_DATA = flux-core.pc
-endif
-
-ldconf_DATA = flux-libs.conf
 
 EXTRA_DIST = version.map
