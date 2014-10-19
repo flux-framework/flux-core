@@ -138,6 +138,7 @@ AC_CONFIG_FILES( \
   src/modules/wreck/Makefile \
   src/test/Makefile \
   src/test/kap/Makefile \
+  etc/Makefile \
   doc/Makefile \
   doc/cmd/Makefile \
   t/Makefile \
