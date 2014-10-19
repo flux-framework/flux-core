@@ -489,55 +489,57 @@ done:
  ** WATCH
  **/
 
-static void dispatch_watch (flux_t h, kvs_watcher_t *wp, const char *key,
+static int dispatch_watch (flux_t h, kvs_watcher_t *wp, const char *key,
                             json_object *val)
 {
     int errnum = val ? 0 : ENOENT;
+    int rc = -1;
 
     switch (wp->type) {
         case WATCH_STRING: {
             KVSSetStringF *set = (KVSSetStringF *)wp->set; 
             const char *s = val ? json_object_get_string (val) : NULL;
-            set (key, s, wp->arg, errnum);
+            rc = set (key, s, wp->arg, errnum);
             break;
         }
         case WATCH_INT: {
             KVSSetIntF *set = (KVSSetIntF *)wp->set; 
             int i = val ? json_object_get_int (val) : 0;
-            set (key, i, wp->arg, errnum);
+            rc = set (key, i, wp->arg, errnum);
             break;
         }
         case WATCH_INT64: {
             KVSSetInt64F *set = (KVSSetInt64F *)wp->set; 
             int64_t i = val ? json_object_get_int64 (val) : 0;
-            set (key, i, wp->arg, errnum);
+            rc = set (key, i, wp->arg, errnum);
             break;
         }
         case WATCH_DOUBLE: {
             KVSSetDoubleF *set = (KVSSetDoubleF *)wp->set; 
             double d = val ? json_object_get_double (val) : 0;
-            set (key, d, wp->arg, errnum);
+            rc = set (key, d, wp->arg, errnum);
             break;
         }
         case WATCH_BOOLEAN: {
             KVSSetBooleanF *set = (KVSSetBooleanF *)wp->set; 
             bool b = val ? json_object_get_boolean (val) : false;
-            set (key, b, wp->arg, errnum);
+            rc = set (key, b, wp->arg, errnum);
             break;
         }
         case WATCH_DIR: {
             KVSSetDirF *set = (KVSSetDirF *)wp->set;
             kvsdir_t dir = val ? kvsdir_alloc (h, key, val) : NULL;
-            set (key, dir, wp->arg, errnum);
+            rc = set (key, dir, wp->arg, errnum);
             if (dir)
                 kvsdir_destroy (dir);
             break;
         }
         case WATCH_OBJECT: {
-            wp->set (key, val, wp->arg, errnum);
+            rc = wp->set (key, val, wp->arg, errnum);
             break;
         }
     }
+    return rc;
 }
 
 static int watch_rep_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
@@ -547,12 +549,15 @@ static int watch_rep_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     json_object_iter iter;
     kvs_watcher_t *wp;
     bool match = false;
+    int rc = 0;
 
     if (flux_msg_decode (*zmsg, NULL, &reply) == 0 && reply != NULL) {
         json_object_object_foreachC (reply, iter) {
             if ((wp = zhash_lookup (ctx->watchers, iter.key))) {
-                dispatch_watch (h, wp, iter.key, iter.val);
+                rc = dispatch_watch (h, wp, iter.key, iter.val);
                 match = true;
+                if (rc < 0)
+                    break;
             }
         }
     }
@@ -560,7 +565,7 @@ static int watch_rep_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         json_object_put (reply);
     if (match)
         zmsg_destroy (zmsg);
-    return 0;
+    return rc;
 }
 
 static kvs_watcher_t *add_watcher (flux_t h, const char *key, watch_type_t type,

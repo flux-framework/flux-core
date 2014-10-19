@@ -8,13 +8,13 @@
 
 typedef struct kvsdir_struct *kvsdir_t;
 
-typedef void (KVSSetF(const char *key, json_object *val, void *arg,int errnum));
-typedef void (KVSSetDirF(const char *key, kvsdir_t dir, void *arg, int errnum));
-typedef void (KVSSetStringF(const char *key, const char *val, void *arg, int errnum));
-typedef void (KVSSetIntF(const char *key, int val, void *arg, int errnum));
-typedef void (KVSSetInt64F(const char *key, int64_t val, void *arg,int errnum));
-typedef void (KVSSetDoubleF(const char *key, double val, void *arg,int errnum));
-typedef void (KVSSetBooleanF(const char *key, bool val, void *arg, int errnum));
+typedef int (KVSSetF(const char *key, json_object *val, void *arg,int errnum));
+typedef int (KVSSetDirF(const char *key, kvsdir_t dir, void *arg, int errnum));
+typedef int (KVSSetStringF(const char *key, const char *val, void *arg, int errnum));
+typedef int (KVSSetIntF(const char *key, int val, void *arg, int errnum));
+typedef int (KVSSetInt64F(const char *key, int64_t val, void *arg,int errnum));
+typedef int (KVSSetDoubleF(const char *key, double val, void *arg,int errnum));
+typedef int (KVSSetBooleanF(const char *key, bool val, void *arg, int errnum));
 
 /* Destroy a kvsdir object returned from kvs_get_dir() or kvsdir_get_dir()
  */
