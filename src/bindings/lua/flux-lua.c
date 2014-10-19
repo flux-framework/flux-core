@@ -760,8 +760,6 @@ static int msghandler (flux_t f, int typemask, zmsg_t **zmsg, void *arg)
         return luaL_error (L, "pcall: %s", lua_tostring (L, -1));
     }
 
-    zmsg = NULL;
-
     rc = lua_tonumber (L, -1);
 
     /* Reset Lua stack */
