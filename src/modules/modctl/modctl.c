@@ -269,7 +269,7 @@ done:
 /* This function is called whenver conf.modctl.seq is updated by master.
  * It syncs the set of loaded modules with the KVS.
  */
-static void conf_cb (const char *path, int seq, void *arg, int errnum)
+static int conf_cb (const char *path, int seq, void *arg, int errnum)
 {
     ctx_t *ctx = arg;
     kvsitr_t itr;
@@ -332,6 +332,7 @@ done_lsmod:
     lsmod_reduce (ctx, seq);
 done:
     Jput (lsmod);
+    return 0;
 }
 
 static int seq_incr (flux_t h)
