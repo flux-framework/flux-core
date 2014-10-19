@@ -869,7 +869,7 @@ static int l_msghandler_newindex (lua_State *L)
     return (0);
 }
 
-static void l_kvswatcher (const char *key, json_object *val, void *arg, int errnum)
+static int l_kvswatcher (const char *key, json_object *val, void *arg, int errnum)
 {
     int rc;
     int t;
@@ -903,6 +903,7 @@ static void l_kvswatcher (const char *key, json_object *val, void *arg, int errn
     }
     /* Reset stack */
     lua_settop (L, 0);
+    return 0;
 }
 
 static int l_kvswatcher_remove (lua_State *L)
