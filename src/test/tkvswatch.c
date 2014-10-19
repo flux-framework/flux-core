@@ -101,12 +101,11 @@ static void wait_ready (void)
 /* expect val: {-1,0,1,...,(changes - 1)}
  * count will therefore run 0...changes.
  */
-static void watch_cb (const char *k, int val, void *arg, int errnum)
+static int watch_cb (const char *k, int val, void *arg, int errnum)
 {
-    thd_t *t = arg;
-
     if (errnum == 0 && val + 1 == changes)
-        flux_reactor_stop (t->h);
+        return -1;
+    return 0;
 }
 
 void *thread (void *arg)
