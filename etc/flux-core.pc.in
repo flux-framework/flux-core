@@ -6,5 +6,5 @@ includedir=@includedir@
 Name: flux-core
 Description: Flux Resource Manager Framework Core
 Version: @PACKAGE_VERSION@
-Libs: -L${libdir} -lflux-core
-Cflags: -I${includedir}
+Libs: -L${libdir} -lflux-core @LIBZMQ@ @LIBCZMQ@ @JSON_LIBS@ @LUA_LIB@
+Cflags: -I${includedir} -I/usr/include/czmq @JSON_CFLAGS@ @LUA_INCLUDE@

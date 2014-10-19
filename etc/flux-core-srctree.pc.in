@@ -1,0 +1,5 @@
+Name: flux-core-srctree
+Description: Flux Resource Manager Framework Core
+Version: @PACKAGE_VERSION@
+Libs: -Wl,-rpath,@abs_top_builddir@/src/lib/libcore/.libs -L@abs_top_builddir@/src/lib/libcore/.libs -lflux-core @LIBZMQ@ @LIBCZMQ@ @JSON_LIBS@ @LUA_LIB@
+Cflags: -I@abs_top_srcdir@ -I@abs_top_srcdir@/src/include -I/usr/include/czmq @JSON_CFLAGS@ @LUA_INCLUDE@
