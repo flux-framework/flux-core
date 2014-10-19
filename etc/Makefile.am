@@ -1,6 +1,7 @@
 noinst_DATA = \
 	flux/config \
-	flux/curve
+	flux/curve \
+	flux-core-srctree.pc
 
 flux/config: $(srcdir)/flux.conf.in
 	$(AM_V_GEN)umask 077; $(MKDIR_P) flux; \
