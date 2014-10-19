@@ -492,26 +492,28 @@ static void manage_subscriptions (ctx_t *ctx)
     }
 }
 
-static void max_idle_cb (const char *key, int val, void *arg, int errnum)
+static int max_idle_cb (const char *key, int val, void *arg, int errnum)
 {
     ctx_t *ctx = arg;
 
     if (errnum != ENOENT && errnum != 0)
-        return;
+        return 0;
     if (errnum == ENOENT)
         val = default_max_idle;
     ctx->max_idle = val;
+    return 0;
 }
 
-static void slow_idle_cb (const char *key, int val, void *arg, int errnum)
+static int slow_idle_cb (const char *key, int val, void *arg, int errnum)
 {
     ctx_t *ctx = arg;
 
     if (errnum != ENOENT && errnum != 0)
-        return;
+        return 0;
     if (errnum == ENOENT)
         val = default_slow_idle;
     ctx->slow_idle = val;
+    return 0;
 }
 
 static int goodbye_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
