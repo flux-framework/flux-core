@@ -348,14 +348,15 @@ done:
     return rc;
 }
 
-void kvswatch_cb (const char *key, kvsdir_t dir, void *arg, int errnum)
+int kvswatch_cb (const char *key, kvsdir_t dir, void *arg, int errnum)
 {
     kz_t kz = arg;
 
     if (errnum != 0 && errnum != ENOENT)
-        flux_reactor_stop (kz->h);
+        return -1;
     else if (errnum == 0 && kz->ready_cb)
         kz->ready_cb (kz, kz->ready_arg);
+    return 0;
 }
 
 int kz_set_ready_cb (kz_t kz, kz_ready_f ready_cb, void *arg)
