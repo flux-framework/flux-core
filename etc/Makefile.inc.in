@@ -1,0 +1,12 @@
+FLUX_LIBS = \
+	-Wl,-rpath,@abs_top_builddir@/src/lib/libcore/.libs \
+	-L@abs_top_builddir@/src/lib/libcore/.libs -lflux-core \
+	@LIBZMQ@ @LIBCZMQ@ @JSON_LIBS@ @LUA_LIB@
+
+FLUX_CFLAGS = \
+	-I@abs_top_srcdir@ \
+	-I@abs_top_srcdir@/src/include \
+	-I/usr/include/czmq \
+	@JSON_CFLAGS@ @LUA_INCLUDE@
+
+FLUX_SRCDIR = @abs_top_srcdir@

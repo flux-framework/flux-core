@@ -23,5 +23,5 @@ ldconfdir=$(sysconfdir)/ld.so.conf.d
 ldconf_DATA = flux-libs.conf
 
 EXTRA_DIST = \
-	flux.conf.in
-
+	flux.conf.in \
+	Makefile.inc.in
