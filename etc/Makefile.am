@@ -1,7 +1,6 @@
 noinst_DATA = \
 	flux/config \
-	flux/curve \
-	flux-core-srctree.pc
+	flux/curve
 
 flux/config: $(srcdir)/flux.conf.in
 	$(AM_V_GEN)umask 077; $(MKDIR_P) flux; \
@@ -23,5 +22,5 @@ ldconfdir=$(sysconfdir)/ld.so.conf.d
 ldconf_DATA = flux-libs.conf
 
 EXTRA_DIST = \
-	flux.conf.in
-
+	flux.conf.in \
+	Makefile.inc.in
