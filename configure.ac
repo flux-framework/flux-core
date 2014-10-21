@@ -138,7 +138,6 @@ AC_CONFIG_FILES( \
   src/test/kap/Makefile \
   etc/Makefile \
   etc/flux-core.pc \
-  etc/flux-core-srctree.pc \
   etc/Makefile.inc \
   etc/flux-libs.conf \
   doc/Makefile \
