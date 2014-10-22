@@ -1145,6 +1145,12 @@ static int l_flux_reactor_start (lua_State *L)
     return l_pushresult (L, flux_reactor_start (lua_get_flux (L, 1)));
 }
 
+static int l_flux_reactor_stop (lua_State *L)
+{
+    flux_reactor_stop (lua_get_flux (L, 1));
+    return 0;
+}
+
 static int lua_push_kz (lua_State *L, kz_t kz)
 {
     kz_t *kzp = lua_newuserdata (L, sizeof (*kzp));
@@ -1237,6 +1243,7 @@ static const struct luaL_Reg flux_methods [] = {
     { "kvswatcher",      l_kvswatcher_add    },
     { "iowatcher",       l_iowatcher_add     },
     { "reactor",         l_flux_reactor_start },
+    { "reactor_stop",    l_flux_reactor_stop },
     { NULL,              NULL               }
 };
 
