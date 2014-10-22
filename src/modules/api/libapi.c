@@ -46,8 +46,6 @@
 #include "src/common/libutil/zfd.h"
 
 
-typedef struct timeout_struct *timeout_t;
-
 #define CMB_CTX_MAGIC   0xf434aaab
 typedef struct {
     int magic;
@@ -56,17 +54,10 @@ typedef struct {
     zlist_t *resp;      /* deferred */
     zlist_t *event;     /* deferred */
     flux_t h;
-    timeout_t timeout;
     zloop_t *zloop;
     bool reactor_stop;
     int reactor_rc;
 } cmb_t;
-
-struct timeout_struct {
-    cmb_t *c;
-    unsigned long msec;
-    int id;
-};
 
 static void cmb_reactor_stop (void *impl, int rc);
 
@@ -280,14 +271,9 @@ static void cmb_reactor_zs_remove (void *impl, void *zs, short events)
     zloop_poller_end (c->zloop, &item); /* FIXME: 'events' are ignored */
 }
 
-#if CZMQ_VERSION_MAJOR < 2
-#error I broke timeouts for old czmq -jg
-#endif
-
 static int tmout_cb (zloop_t *zl, int timer_id, void *arg)
 {
-    timeout_t t = arg;
-    cmb_t *c = t->c;
+    cmb_t *c = arg;
 
     if (flux_handle_event_tmout (c->h, timer_id) < 0)
         cmb_reactor_stop (c, -1);
