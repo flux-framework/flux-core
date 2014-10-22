@@ -393,6 +393,24 @@ static int l_flux_send_event (lua_State *L)
     return l_pushresult (L, rc);
 }
 
+static int l_flux_recv_event (lua_State *L)
+{
+    flux_t f = lua_get_flux (L, 1);
+    json_object *o;
+    char *tag;
+
+    if (flux_event_recv (f, &o, &tag, 0))
+        return lua_pusherror (L, strerror (errno));
+
+    json_object_to_lua (L, o);
+    json_object_put (o);
+
+    if (tag == NULL)
+        return (1);
+    lua_pushstring (L, tag);
+    return (2);
+}
+
 /*
  *  mrpc
  */
@@ -1236,6 +1254,7 @@ static const struct luaL_Reg flux_methods [] = {
     { "rpc",             l_flux_rpc         },
     { "mrpc",            l_flux_mrpc_new    },
     { "sendevent",       l_flux_send_event  },
+    { "recv_event",      l_flux_recv_event },
     { "subscribe",       l_flux_subscribe   },
     { "unsubscribe",     l_flux_unsubscribe },
     { "kz_open",         l_flux_kz_open     },
