@@ -250,6 +250,7 @@ typedef struct {
         } zs;
         struct {
             int timer_id;
+            bool oneshot;
             FluxTmoutHandler fn;
             void *arg;
         } tmout;
@@ -388,6 +389,8 @@ int flux_handle_event_tmout (flux_t h, int timer_id)
         }
         d = zlist_next (h->reactor->dsp);
     }
+    if (d && d->tmout.oneshot)
+        flux_tmouthandler_remove (h, d->tmout.timer_id);
     return rc;
 }
 
@@ -549,6 +552,7 @@ int flux_tmouthandler_add (flux_t h, unsigned long msec, bool oneshot,
     d->tmout.fn = cb;
     d->tmout.arg = arg;
     d->tmout.timer_id = id;
+    d->tmout.oneshot = oneshot;
     if (zlist_append (h->reactor->dsp, d) < 0)
         oom ();
     return id;
