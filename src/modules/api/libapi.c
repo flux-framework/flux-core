@@ -110,8 +110,8 @@ done:
 
 static dq_t *dq_create (cmb_t *c)
 {
-    char *resp_uri = "inproc://flux-api-dq-resp";
-    char *event_uri = "inproc://flux-api-dq-event";
+    char *resp_uri = xasprintf ("inproc://dq-resp-%p", c);
+    char *event_uri = xasprintf ("inproc://dq-event-%p", c);
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .fd = -1 };
     dq_t *dq = xzmalloc (sizeof (*dq));
 
@@ -127,6 +127,8 @@ static dq_t *dq_create (cmb_t *c)
     if (zloop_poller (c->zloop, &zp, dq_event_cb, c) < 0)
         oom ();
 
+    free (resp_uri);
+    free (event_uri);
     return dq;
 }
 
