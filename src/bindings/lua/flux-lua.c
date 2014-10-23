@@ -678,9 +678,10 @@ struct l_flux_ref *l_flux_ref_create (lua_State *L, flux_t f,
      *  Should have copy of reftable[type] here, o/w create a new table:
      */
     if (lua_isnil (L, -1)) {
-        lua_newtable (L);
-        lua_setfield (L, -2, type);
-        lua_getfield (L, -1, type);
+        lua_pop (L, 1);             /* pop nil                          */
+        lua_newtable (L);           /* new table on top of stack        */
+        lua_setfield (L, -2, type); /* set reftable[type] to new table  */
+        lua_getfield (L, -1, type); /* put new reftable on top of stack */
     }
 
     /*  Copy the value at index and return a reference in the retable[type]
