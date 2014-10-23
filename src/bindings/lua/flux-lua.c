@@ -917,9 +917,11 @@ static int l_kvswatcher (const char *key, json_object *val, void *arg, int errnu
     if ((rc = lua_pcall (L, 3, 1, 0))) {
         luaL_error (L, "pcall: %s", lua_tostring (L, -1));
     }
+    rc = lua_tonumber (L, -1);
+
     /* Reset stack */
     lua_settop (L, 0);
-    return 0;
+    return rc;
 }
 
 static int l_kvswatcher_remove (lua_State *L)
