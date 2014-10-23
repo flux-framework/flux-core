@@ -1161,6 +1161,148 @@ static int l_iowatcher_newindex (lua_State *L)
     return (0);
 }
 
+static int timeout_handler (flux_t f, void *arg)
+{
+    int rc;
+    int t;
+    struct l_flux_ref *to = arg;
+    lua_State *L = to->L;
+
+    assert (L != NULL);
+
+    l_flux_ref_gettable (to, "timeout_handler");
+    t = lua_gettop (L);
+
+    lua_getfield (L, t, "handler");
+    assert (lua_isfunction (L, -1));
+
+    lua_push_flux_handle (L, f);
+    assert (lua_isuserdata (L, -1));
+
+    lua_getfield (L, t, "userdata");
+    assert (lua_isuserdata (L, -1));
+
+    if ((rc = lua_pcall (L, 2, 1, 0))) {
+        return luaL_error (L, "pcall: %s", lua_tostring (L, -1));
+    }
+
+    rc = lua_tonumber (L, -1);
+
+    /* Reset Lua stack */
+    lua_settop (L, 0);
+
+    return (rc);
+}
+
+static int l_timeout_handler_add (lua_State *L)
+{
+    int id;
+    unsigned long ms;
+    bool oneshot = true;
+    struct l_flux_ref *to = NULL;
+    flux_t f = lua_get_flux (L, 1);
+
+    if (!lua_istable (L, 2))
+        return lua_pusherror (L, "Expected table as 2nd argument");
+
+    /*
+     *  Check table for mandatory arguments
+     */
+    lua_getfield (L, 2, "timeout");
+    if (lua_isnil (L, -1))
+        return lua_pusherror (L, "Mandatory table argument 'timeout' missing");
+    ms = lua_tointeger (L, -1);
+    lua_pop (L, 1);
+
+    lua_getfield (L, 2, "handler");
+    if (lua_isnil (L, -1))
+        return lua_pusherror (L, "Mandatory table argument 'handler' missing");
+    lua_pop (L, 1);
+
+    lua_getfield (L, 2, "oneshot");
+    if (!lua_isnil (L, -1))
+        oneshot = lua_toboolean (L, -1);
+    lua_pop (L, 1);
+
+    to = l_flux_ref_create (L, f, 2, "timeout_handler");
+    id = flux_tmouthandler_add (f, ms, oneshot, timeout_handler, (void *) to);
+    if (id < 0) {
+        l_flux_ref_destroy (to, "timeout_handler");
+        return lua_pusherror (L, "flux_tmouthandler_add: %s", strerror (errno));
+    }
+
+    /*
+     *  Get a copy of the underlying timeout reftable on the stack
+     *   and set table.id to the new timer id. This will make the
+     *   id available for later callbacks and from lua:
+     */
+    l_flux_ref_gettable (to, "timeout_handler");
+    lua_pushstring (L, "id");
+    lua_pushnumber (L, id);
+    lua_rawset (L, -3);
+
+    /*
+     *  Pop reftable table and leave ref userdata on stack as return value:
+     */
+    lua_pop (L, 1);
+
+    return (1);
+}
+
+static int l_timeout_handler_remove (lua_State *L)
+{
+    int t;
+    int id;
+    struct l_flux_ref *to = luaL_checkudata (L, 1, "FLUX.timeout_handler");
+
+    l_flux_ref_gettable (to, "timeout_handler");
+    t = lua_gettop (L);
+
+    lua_getfield (L, t, "id");
+    id = lua_tointeger (L, -1);
+    /*
+     *  Drop reference to the table and allow garbage collection
+     */
+    flux_tmouthandler_remove (to->flux, id);
+    l_flux_ref_destroy (to, "timeout_handler");
+    return (0);
+}
+
+static int l_timeout_handler_index (lua_State *L)
+{
+    struct l_flux_ref *to = luaL_checkudata (L, 1, "FLUX.timeout_handler");
+    const char *key = lua_tostring (L, 2);
+
+    /*
+     *  Check for method names
+     */
+    if (strcmp (key, "remove") == 0) {
+        lua_getmetatable (L, 1);
+        lua_getfield (L, -1, "remove");
+        return (1);
+    }
+
+    /*  Get a copy of the underlying timeout handler Lua table and pass-through
+     *   the index:
+     */
+    l_flux_ref_gettable (to, "timeout_handler");
+    lua_getfield (L, -1, key);
+    return (1);
+}
+
+static int l_timeout_handler_newindex (lua_State *L)
+{
+    struct l_flux_ref *to = luaL_checkudata (L, 1, "FLUX.timeout_handler");
+
+    /*  Set value in the underlying msghandler table:
+     */
+    l_flux_ref_gettable (to, "timeout_handler");
+    lua_pushvalue (L, 2); /* Key   */
+    lua_pushvalue (L, 3); /* Value */
+    lua_rawset (L, -3);
+    return (0);
+}
+
 static int l_flux_reactor_start (lua_State *L)
 {
     return l_pushresult (L, flux_reactor_start (lua_get_flux (L, 1)));
@@ -1264,6 +1406,7 @@ static const struct luaL_Reg flux_methods [] = {
     { "msghandler",      l_msghandler_add    },
     { "kvswatcher",      l_kvswatcher_add    },
     { "iowatcher",       l_iowatcher_add     },
+    { "timer",           l_timeout_handler_add },
     { "reactor",         l_flux_reactor_start },
     { "reactor_stop",    l_flux_reactor_stop },
     { NULL,              NULL               }
@@ -1313,6 +1456,13 @@ static const struct luaL_Reg kz_methods [] = {
     { NULL,              NULL                 }
 };
 
+static const struct luaL_Reg timeout_handler_methods [] = {
+    { "__index",         l_timeout_handler_index    },
+    { "__newindex",      l_timeout_handler_newindex },
+    { "remove",          l_timeout_handler_remove   },
+    { NULL,              NULL                  }
+};
+
 #define MSGTYPE_SET(L, name) do { \
   lua_pushlstring(L, #name, sizeof(#name)-1); \
   lua_pushnumber(L, FLUX_ ## name); \
@@ -1334,6 +1484,8 @@ int luaopen_flux (lua_State *L)
     luaL_register (L, NULL, iowatcher_methods);
     luaL_newmetatable (L, "FLUX.kz");
     luaL_register (L, NULL, kz_methods);
+    luaL_newmetatable (L, "FLUX.timeout_handler");
+    luaL_register (L, NULL, timeout_handler_methods);
 
     luaL_newmetatable (L, "FLUX.handle");
     luaL_register (L, NULL, flux_methods);
