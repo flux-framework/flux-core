@@ -9,7 +9,7 @@ flux/config: $(srcdir)/flux.conf.in
 	    $(srcdir)/flux.conf.in > $@
 
 flux/curve: flux/config
-	$(AM_V_GEN)$(top_builddir)/src/cmd/flux keygen
+	$(AM_V_GEN)$(top_builddir)/src/cmd/flux keygen --force
 
 clean-local:
 	-rm -rf flux
