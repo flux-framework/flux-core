@@ -230,6 +230,8 @@ static int cmb_rank (void *impl)
 static int cmb_reactor_start (void *impl)
 {
     cmb_t *c = impl;
+    c->reactor_stop = false;
+    c->reactor_rc = 0;
     zloop_start (c->zloop);
     return c->reactor_rc;
 }
