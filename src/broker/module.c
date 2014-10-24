@@ -243,6 +243,8 @@ static zctx_t *plugin_get_zctx (void *impl)
 static int plugin_reactor_start (void *impl)
 {
     plugin_ctx_t p = impl;
+    p->reactor_stop = false;
+    p->reactor_rc = 0;
     zloop_start (p->zloop);
     return p->reactor_rc;
 };
