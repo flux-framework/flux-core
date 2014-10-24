@@ -229,8 +229,13 @@ test_expect_success 'kvs: tcommit: start 100 API threads each doing 50 put,fence
 	${FLUX_BUILD_DIR}/src/test/tcommit --fence 100 50 \
 		$(basename ${SHARNESS_TEST_FILE})
 '
-test_expect_success 'kvs: tkvswatch: multi-threaded kvs watch program' '
-	${FLUX_BUILD_DIR}/src/test/tkvswatch 100 100 TEST.a &&
+test_expect_success 'kvs: tkvswatch-mt: multi-threaded kvs watch program' '
+	${FLUX_BUILD_DIR}/src/test/tkvswatch mt 100 100 TEST.a &&
+	flux kvs unlink TEST.a
+'
+
+test_expect_success 'kvs: tkvswatch-selfmod: watch callback modifies watched key' '
+	${FLUX_BUILD_DIR}/src/test/tkvswatch selfmod TEST.a &&
 	flux kvs unlink TEST.a
 '
 
