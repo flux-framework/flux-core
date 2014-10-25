@@ -20,7 +20,8 @@ check_LTLIBRARIES = \
 	tests/zmsgtest.la
 
 noinst_LTLIBRARIES = \
-	libfluxlua.la
+	libfluxlua.la \
+	lalarm.la
 
 luamod_ldflags = \
 	-avoid-version -module
@@ -57,6 +58,11 @@ libfluxlua_la_SOURCES = \
 	json-lua.c \
 	zmsg-lua.c \
 	lutil.c
+
+lalarm_la_SOURCES = \
+	lalarm.c
+lalarm_la_LDFLAGS = \
+	$(luamod_ldflags) -rpath /dev/null
 
 tests_jsontest_la_LDFLAGS = \
 	$(luamod_ldflags) -rpath /dev/null
