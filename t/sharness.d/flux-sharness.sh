@@ -9,8 +9,6 @@
 unset FLUX_CONFIG
 unset FLUX_MODULE_PATH
 unset FLUX_CMBD_PATH
-unset LUA_PATH
-unset LUA_CPATH
 
 #
 #  FLUX_BUILD_DIR and FLUX_SOURCE_DIR are set to build and source paths
@@ -60,7 +58,9 @@ test_under_flux() {
     if test "$debug" = "t"; then
         flags="${flags} --debug"
     fi
-    cd $SHARNESS_TEST_DIRECTORY
+    if test -n "$SHARNESS_TEST_DIRECTORY"; then
+        cd $SHARNESS_TEST_DIRECTORY
+    fi
 
     TEST_UNDER_FLUX_ACTIVE=t \
     TERM=${ORIGINAL_TERM} \
