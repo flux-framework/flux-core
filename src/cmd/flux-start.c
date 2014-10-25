@@ -35,7 +35,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/optparse.h"
 
-void start_direct (optparse_t p, const char *cmd);
+int start_direct (optparse_t p, const char *cmd);
 void start_slurm (optparse_t p, const char *cmd);
 
 const int default_size = 1;
@@ -68,6 +68,7 @@ static struct optparse_option opts[] = {
 
 int main (int argc, char *argv[])
 {
+    int status = 0;
     char *command = NULL;
     optparse_t p;
 
@@ -95,19 +96,19 @@ int main (int argc, char *argv[])
                                      || optparse_hasopt (p, "partition"))
         start_slurm (p, command);
     else
-        start_direct (p, command);
+        status = start_direct (p, command);
 
     if (command)
         free (command);
 
     optparse_destroy (p);
     log_fini ();
-    return 0;
+    return status;
 }
 
-static void child_report (optparse_t p, pid_t pid, int rank, int status)
+static int child_report (optparse_t p, pid_t pid, int rank, int status)
 {
-    int rc;
+    int rc = 0;
     if (WIFEXITED (status)) {
         rc = WEXITSTATUS (status);
         if (rc == 0) {
@@ -115,10 +116,22 @@ static void child_report (optparse_t p, pid_t pid, int rank, int status)
                 msg ("%d (pid %d) exited normally", rank, pid);
         } else
             msg ("%d (pid %d) exited with rc=%d", rank, pid, rc);
-    } else if (WIFSIGNALED (status))
-        msg ("%d (pid %d) %s", rank, pid, strsignal (WTERMSIG (status)));
-    else
+    } else if (WIFSIGNALED (status)) {
+        int sig = WTERMSIG (status);
+        /*
+         *  Set exit code to 128 + signal number, but ignore SIGKILL
+         *   because that signal is used by flux-start itself, and
+         *   may not indicate failure:
+         */
+        if (sig != 9)
+            rc = 128 + sig;
+        msg ("%d (pid %d) %s", rank, pid, strsignal (sig));
+    } else {
         msg ("%d (pid %d) wait status=%d", rank, pid, status);
+        if (status < 256)
+            rc = status;
+    }
+    return rc;
 }
 
 static volatile sig_atomic_t child_killer_timeout;
@@ -162,7 +175,7 @@ void push_extra_args (int *ac, char ***av, const char *opts)
     free (cpy);
 }
 
-void start_direct (optparse_t p, const char *cmd)
+int start_direct (optparse_t p, const char *cmd)
 {
     int size = optparse_get_int (p, "size", default_size);
     const char *cmbd_opts = optparse_get_str (p, "cmbd-opts", NULL);
@@ -171,6 +184,7 @@ void start_direct (optparse_t p, const char *cmd)
     int rank;
     pid_t *pids;
     int reaped = 0;
+    int rc = 0;
     pid_t start_pid = getpid (); /* use as session id */
 
     if (!cmbd_path)
@@ -225,8 +239,10 @@ void start_direct (optparse_t p, const char *cmd)
             }
             for (rank = 0; rank < size; rank++) {
                 if (pids[rank] == pid) {
+                    int code = child_report (p, pid, rank, status);
+                    if (rc < code)
+                        rc = code;
                     pids[rank] = -1;
-                    child_report (p, pid, rank, status);
                     if (!child_killer_armed) {
                         child_killer_arm ();
                         child_killer_armed = true;
@@ -239,6 +255,7 @@ void start_direct (optparse_t p, const char *cmd)
     }
 
     free (pids);
+    return (rc);
 }
 
 void start_slurm (optparse_t p, const char *cmd)

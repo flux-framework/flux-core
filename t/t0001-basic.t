@@ -37,7 +37,12 @@ test_expect_success 'path to cmbd is sane' '
 test_expect_success 'flux-start works' "
 	flux start --size=2 'flux up' | grep '^ok: *\[0-1\]'
 "
-
+test_expect_success 'flux-start passes through errors from command' "
+	test_must_fail flux start --size=1 /bin/false
+"
+test_expect_success 'flux-start passes exit code due to signal' "
+	test_expect_code 130 flux start --size=1 'kill -INT \$\$'
+"
 test_expect_success 'test_under_flux works' '
 	echo >&2 "$(pwd)" &&
 	mkdir -p test-under-flux && (
