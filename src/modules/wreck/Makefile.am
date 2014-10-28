@@ -14,10 +14,6 @@ AM_CPPFLAGS = \
 	-DWREXECD_BINDIR=\"$(libexecdir)/flux\" \
 	-DWRECK_LUA_PATTERN=\"$(sysconfdir)/wreck/lua.d/*.lua\"
 
-libfluxdir = $(libdir)/flux
-fluxmoddir = $(libfluxdir)/modules
-fluxbindir = $(libexecdir)/flux
-includefluxcoredir = $(includedir)/flux/core
 wreckscriptsdir = $(sysconfdir)/wreck/lua.d
 
 #
@@ -31,7 +27,7 @@ fluxmod_LTLIBRARIES = \
 noinst_LTLIBRARIES = \
 	wrexec.la
 
-fluxbin_PROGRAMS = \
+fluxlibexec_PROGRAMS = \
 	wrexecd
 
 fluxmod_libadd = \
@@ -57,7 +53,7 @@ wrexec_la_CPPFLAGS = $(AM_CPPFLAGS) -DWREXECD_PATH=\"$(abs_builddir)/wrexecd\"
 wrexecinst_la_SOURCES = wrexec.c
 wrexecinst_la_LDFLAGS = $(fluxmod_ldflags)
 wrexecinst_la_LIBADD = $(fluxmod_libadd)
-wrexecinst_la_CPPFLAGS = $(AM_CPPFLAGS) -DWREXECD_PATH=\"$(fluxbindir)/wrexecd\"
+wrexecinst_la_CPPFLAGS = $(AM_CPPFLAGS) -DWREXECD_PATH=\"$(fluxlibexecdir)/wrexecd\"
 
 resrc_la_SOURCES = resrc.c
 resrc_la_LDFLAGS = $(fluxmod_ldflags)

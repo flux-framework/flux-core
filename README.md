@@ -1,11 +1,60 @@
-_NOTE: This project is currently EXPERIMENTAL (as indicated by its
-0.x.x version) and is being actively developed.  We offer no guarantee
-of API stablility from release to release at this time._
+_NOTE: The interfaces of flux-core are being actively developed
+and are not yet stable._ The github issue tracker is the primary
+way to communicate with the developers.
 
 ### flux-core
 
 flux-core implements the communication layer, lowest level
 services and interfaces for the Flux resource manager framework.
+It consists of a distributed message broker and plug-in _comms modules_
+that implement various distributed services.
+
+#### Overview
+
+A set of message broker instances are launched as a _comms session_.
+Each instance has a rank numbered 0 to (size - 1).
+Instances are interconnected with three overlay networks:
+a k-ary tree rooted at rank 0 that is used for request/response
+messages and data reductions, an event overlay that is used for
+session-wide broadcasts, and a ring network that is used for debugging
+requests.  Overlay networks are implemented using [ZeroMQ](http://zeromq.org).
+
+The message broker natively supports the following services:
+_logging_, which aggregates syslog-like log messages at rank 0;
+_heartbeat_, which broadcasts a periodic event to synchronize
+housekeeping tasks; _module loader_, which loads and unloads
+comms modules; and _reparent_, which allows overlay networks to be
+rewired on the fly.
+
+flux-core also includes the following services implemented as 
+comms modules: _kvs_, a distributed key-value store;  _live_,
+a service that monitors overlay network health and can rewire around
+failed broker instances; _modctl_, a distributed module control service;
+_barrier_, a MPI-like barrier implementation; _api_, a routing service
+for clients connecting to a broker instance via a UNIX domain socket;
+and _wreck_ a remote execution service.
+
+A number of utilities are provided for accessing these services,
+accessible via the `flux` command front-end (see below),
+
+Experimental programming abstractions are provided for various recurring
+needs such as data reduction, multicast RPC, streaming I/O, and others.
+A PMI implementation built on the Flux KVS facilitates scalable MPI launch.
+A set of Lua bindings permits rapid development of Flux utilities and test
+drivers.
+
+flux-core is intended to be the first building block used in the
+construction of a site-composed Flux resource manager.  Other building
+blocks are being worked on and will appear in the
+[flux-framework github organization](http://github.com/flux-framework)
+as they get going.
+
+Framework projects use the C4 development model pioneered in
+the ZeroMQ project and forked as
+[Flux RFC 1](http://github.com/flux-framework/rfc/blob/master/spec_1.adoc).
+Flux licensing and collaboration plans are described in
+[Flux RFC 2](http://github.com/flux-framework/rfc/blob/master/spec_2.adoc).
+Protocols and API's used in Flux will be documented as Flux RFC's.
 
 #### Building flux-core
 
@@ -34,8 +83,7 @@ make check
 #### Bootstrapping a Flux comms session
 
 A Flux comms session can be started for testing as follows.
-First, ensure that your MUNGE deamon is running, and
-generate a set of (personal) CURVE keys for session security:
+First, generate a set of (personal) CURVE keys for session security:
 ```
 cd src/cmd
 ./flux keygen
@@ -60,7 +108,8 @@ the session exits.  Log output will be written to the file `cmbd.log`.
 
 ##### SLURM session
 
-To start a Flux comms session (size = 64) on a cluster using SLURM:
+To start a Flux comms session (size = 64) on a cluster using SLURM,
+first ensure that MUNGE is set up on your cluster, then:
 ```
 cd src/cmd
 ./flux start -N 64
@@ -76,3 +125,5 @@ To view the available Flux commands:
 cd src/cmd
 ./flux -h
 ```
+Most of these have UNIX manual pages as `flux-<sub-command>(1)`,
+which can also be accessed using `./flux help <sub-command>`.
