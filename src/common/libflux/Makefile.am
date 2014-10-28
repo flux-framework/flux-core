@@ -38,7 +38,8 @@ libflux_la_SOURCES = \
 	reparent.c \
 	conf.c
 
-TESTS = test_conf.t
+TESTS = test_conf.t \
+	test_module.t
 
 test_ldadd = \
         $(top_builddir)/src/common/libutil/libutil.la \
@@ -48,11 +49,11 @@ test_ldadd = \
 
 test_cppflags = \
         -DTEST_MAIN \
+	-DMODULE_PATH=\"$(top_builddir)/src/modules\" \
         -I$(top_srcdir)/src/common/libtap \
         $(AM_CPPFLAGS)
 
-check_PROGRAMS = \
-        test_conf.t
+check_PROGRAMS = $(TESTS)
 
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
@@ -62,3 +63,6 @@ test_conf_t_SOURCES = conf.c
 test_conf_t_CPPFLAGS = $(test_cppflags)
 test_conf_t_LDADD = $(test_ldadd)
 
+test_module_t_SOURCES = module.c
+test_module_t_CPPFLAGS = $(test_cppflags)
+test_module_t_LDADD = $(test_ldadd) $(LIBDL)

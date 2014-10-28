@@ -45,6 +45,8 @@ static char *mod_target (const char *modname)
     return target;
 }
 
+#ifndef TEST_MAIN /* Not testing this section */
+
 int flux_rmmod (flux_t h, int rank, const char *name, int flags)
 {
     JSON request = Jnew ();
@@ -111,6 +113,8 @@ done:
     return rc;
 }
 
+#endif /* !TEST_MAIN */
+
 #include <glob.h>
 #include <dlfcn.h>
 
@@ -121,7 +125,7 @@ char *flux_modname(const char *path)
     char *name = NULL;
 
     dlerror ();
-    if ((dso = dlopen (path, RTLD_NOW | RTLD_LOCAL))) {
+    if ((dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL))) {
         if ((np = dlsym (dso, "mod_name")) && *np)
             name = xstrdup (*np);
         dlclose (dso);
@@ -136,7 +140,7 @@ static int flux_modname_cmp(const char *path, const char *name)
     int rc = -1;
 
     dlerror ();
-    if ((dso = dlopen (path, RTLD_NOW | RTLD_LOCAL))) {
+    if ((dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL))) {
         if ((np = dlsym (dso, "mod_name")) && *np)
             rc = strcmp (*np, name);
         dlclose (dso);
@@ -177,7 +181,6 @@ static char *modfind (const char *dirpath, const char *modname)
             if (S_ISDIR (sb.st_mode))
                 modpath = modfind (path, modname);
             else if (!strcmpend (path, ".so")) {
-                fprintf (stderr, "Checking %s\n", path);
                 if (!flux_modname_cmp (path, modname))
                     modpath = xstrdup (path);
             }
@@ -204,6 +207,96 @@ char *flux_modfind (const char *searchpath, const char *modname)
         errno = ENOENT;
     return modpath;
 }
+
+#ifdef TEST_MAIN
+
+#include "src/common/libtap/tap.h"
+
+int main (int argc, char *argv[])
+{
+    char *name, *path;
+
+    plan (16);
+
+    ok ((strcmpend ("foo.so", ".so") == 0),
+        "strcmpend matches .so");
+    ok ((strcmpend ("", ".so") != 0),
+        "strcmpend doesn't match empty string");
+
+    name = mod_target ("kvs");
+    like (name, "^cmb$",
+        "mod_target of kvs is cmb");
+    if (name)
+        free (name);
+
+    name = mod_target ("sched.backfill");
+    like (name, "^sched$",
+        "mod_target of sched.backfill is sched");
+    if (name)
+        free (name);
+
+    name = mod_target ("sched.backfill.priority");
+    like (name, "^sched.backfill$",
+        "mod_target of sched.backfill.priority is sched.backfill");
+    if (name)
+        free (name);
+
+    path = xasprintf ("%s/kvs/.libs/kvs.so", MODULE_PATH);
+    ok (access (path, F_OK) == 0,
+        "built kvs module is located");
+    name = flux_modname (path);
+    ok ((name != NULL),
+        "flux_modname on kvs should find a name");
+    skip (name == NULL, 1,
+        "skip next test because kvs.so name is NULL");
+    like (name, "^kvs$",
+        "flux_modname says kvs module is named kvs");
+    end_skip;
+    if (name)
+        free (name);
+    ok (flux_modname_cmp (name, "kvs"),
+        "flux_modname_cmp also says kvs module is named kvs");
+    free (path);
+
+    ok (!modfind ("nowhere", "foo"),
+        "modfind fails with nonexistent directory");
+    ok (!modfind (".", "foo"),
+        "modfind fails in current directory");
+    ok (!modfind (MODULE_PATH, "foo"),
+        "modfind fails to find unknown module in moduledir");
+
+    path = xasprintf ("%s/kvs/.libs", MODULE_PATH);
+    name = modfind (path, "kvs");
+    ok ((name != NULL),
+        "modfind finds kvs in flat directory");
+    if (name)
+        free (name);
+    free (path);
+
+    name = modfind (MODULE_PATH, "kvs");
+    ok ((name != NULL),
+        "modfind finds kvs in deep moduledir");
+    if (name)
+        free (name);
+
+    name = flux_modfind (MODULE_PATH, "kvs");
+    ok ((name != NULL),
+        "flux_modfind also finds kvs in moduledir");
+    if (name)
+        free (name);
+
+    path = xasprintf ("foo:bar:xyz:%s:zzz", MODULE_PATH);
+    name = flux_modfind (path, "kvs");
+    ok ((name != NULL),
+        "flux_modfind also finds kvs in search path");
+    if (name)
+        free (name);
+    free (path);
+
+    done_testing ();
+}
+
+#endif
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
