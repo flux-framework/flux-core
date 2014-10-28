@@ -6,5 +6,5 @@ general
     cmbd_path = @abs_top_builddir@/src/broker/cmbd
     lua_cpath = @abs_top_builddir@/src/bindings/lua/.libs/?.so
     lua_path = @abs_top_srcdir@/src/bindings/lua/?.lua
-    module_path = @abs_top_builddir@/src/modules/api/.libs:@abs_top_builddir@/src/modules/barrier/.libs:@abs_top_builddir@/src/modules/kvs/.libs:@abs_top_builddir@/src/modules/live/.libs:@abs_top_builddir@/src/modules/mecho/.libs:@abs_top_builddir@/src/modules/modctl/.libs:@abs_top_builddir@/src/modules/wreck/.libs
+    module_path = @abs_top_builddir@/src/modules
     man_path = @abs_top_builddir@/doc
