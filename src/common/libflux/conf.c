@@ -133,18 +133,6 @@ int flux_conf_save (flux_conf_t cf)
     return 0;
 }
 
-static char *xstrsub (const char *str, char a, char b)
-{
-    char *cpy = xstrdup (str);
-    char *s = cpy;
-    while (*s) {
-        if (*s == a)
-            *s = b;
-        s++;
-    }
-    return cpy;
-}
-
 const char *flux_conf_get (flux_conf_t cf, const char *key)
 {
     char *val = NULL;

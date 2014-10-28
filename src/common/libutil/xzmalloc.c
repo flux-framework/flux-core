@@ -80,6 +80,17 @@ char *xasprintf (const char *fmt, ...)
     return s;
 }
 
+char *xstrsub (const char *str, char a, char b)
+{
+    char *cpy = xstrdup (str);
+    char *s = cpy;
+    while (*s) {
+        if (*s == a)
+            *s = b;
+        s++;
+    }
+    return cpy;
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
