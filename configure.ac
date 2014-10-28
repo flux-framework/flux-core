@@ -96,7 +96,7 @@ AC_SUBST(fluxcmddir)
 AS_VAR_SET(fluxlibdir, $libdir/flux)
 AC_SUBST(fluxlibdir)
 
-AS_VAR_SET(fluxmoddir, $libdir/flux/modules/cmb)
+AS_VAR_SET(fluxmoddir, $libdir/flux/modules)
 AC_SUBST(fluxmoddir)
 
 AS_VAR_SET(fluxincludedir, $includedir/flux)
