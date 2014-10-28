@@ -103,27 +103,62 @@ char *flux_modname(const char *path)
     return name;
 }
 
+static int flux_modname_cmp(const char *path, const char *name)
+{
+    void *dso;
+    const char **np;
+    int rc = -1;
+
+    dlerror ();
+    if ((dso = dlopen (path, RTLD_NOW | RTLD_LOCAL))) {
+        if ((np = dlsym (dso, "mod_name")) && *np)
+            rc = strcmp (*np, name);
+        dlclose (dso);
+    }
+    return rc;
+}
+
+#undef  MAX
+#define MAX(a,b)    ((a)>(b)?(a):(b))
+
+static int strcmpend (const char *s1, const char *s2)
+{
+    int skip = MAX (strlen (s1) - strlen (s2), 0);
+    return strcmp (s1 + skip, s2);
+}
+
 static char *modfind (const char *dirpath, const char *modname)
 {
-    glob_t gl;
-    char *globstr;
-    int i;
+    DIR *dir;
+    struct dirent entry, *dent;
     char *modpath = NULL;
+    struct stat sb;
+    char path[PATH_MAX];
+    size_t len = sizeof (path);
 
-    if (asprintf (&globstr, "%s/*.so", dirpath) < 0)
-        oom ();
-    if (glob (globstr, 0, NULL, &gl) == 0) {
-        for (i = 0; i < gl.gl_pathc && !modpath; i++) {
-            char *name = flux_modname (gl.gl_pathv[i]);
-            if (name) {
-                if (!strcmp (name, modname))
-                    modpath = xstrdup (gl.gl_pathv[i]);
-                free (name);
+    if (!(dir = opendir (dirpath)))
+        goto done;
+    while (!modpath) {
+        if ((errno = readdir_r (dir, &entry, &dent)) > 0 || dent == NULL)
+            break;
+        if (!strcmp (dent->d_name, ".") || !strcmp (dent->d_name, ".."))
+            continue;
+        if (snprintf (path, len, "%s/%s", dirpath, dent->d_name) >= len) {
+            errno = EINVAL;
+            break;
+        }
+        if (stat (path, &sb) == 0) {
+            if (S_ISDIR (sb.st_mode))
+                modpath = modfind (path, modname);
+            else if (!strcmpend (path, ".so")) {
+                fprintf (stderr, "Checking %s\n", path);
+                if (!flux_modname_cmp (path, modname))
+                    modpath = xstrdup (path);
             }
         }
-        globfree (&gl);
     }
-    free (globstr);
+    closedir (dir);
+done:
     return modpath;
 }
 
