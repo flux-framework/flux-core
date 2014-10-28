@@ -1,4 +1,4 @@
-/*****************************************************************************\
+/****************************************************************************\
  *  Copyright (c) 2014 Lawrence Livermore National Security, LLC.  Produced at
  *  the Lawrence Livermore National Laboratory (cf, AUTHORS, DISCLAIMER.LLNS).
  *  LLNL-CODE-658032 All rights reserved.
@@ -201,7 +201,7 @@ static int lsmod_reduce (ctx_t *ctx, int seq)
     JSON lsmod = NULL;
     int rc = -1;
 
-    if (!(lsmod = flux_lsmod (ctx->h, -1)))
+    if (!(lsmod = flux_lsmod (ctx->h, -1, "cmb")))
         goto done;
     o = Jnew ();
     Jadd_int (o, "seq", seq);
@@ -289,7 +289,7 @@ static int conf_cb (const char *path, int seq, void *arg, int errnum)
     if (ctx->master) { /* master already loaded/unloaded module */
         goto done_lsmod;
     }
-    if (!(lsmod = flux_lsmod (ctx->h, -1))) {
+    if (!(lsmod = flux_lsmod (ctx->h, -1, "cmb"))) {
         flux_log (ctx->h, LOG_ERR, "flux_lsmod: %s", strerror (errno));
         goto done;
     }
