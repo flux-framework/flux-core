@@ -25,6 +25,8 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <dlfcn.h>
+
 #include "module.h"
 #include "request.h"
 
@@ -114,9 +116,6 @@ done:
 }
 
 #endif /* !TEST_MAIN */
-
-#include <glob.h>
-#include <dlfcn.h>
 
 char *flux_modname(const char *path)
 {
