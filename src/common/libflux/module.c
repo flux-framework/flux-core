@@ -31,16 +31,30 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 
+/* Who will load modname?
+ */
+static char *mod_target (const char *modname)
+{
+    char *target = NULL;
+    if (strchr (modname, '.')) {
+        target = xstrdup (modname);
+        char *p = strrchr (target, '.');
+        *p = '\0';
+    } else
+        target = xstrdup ("cmb");
+    return target;
+}
 
 int flux_rmmod (flux_t h, int rank, const char *name, int flags)
 {
     JSON request = Jnew ();
     JSON response = NULL;
+    char *target = mod_target (name);
     int rc = -1;
 
     Jadd_str (request, "name", name);
     Jadd_int (request, "flags", flags);
-    if ((response = flux_rank_rpc (h, rank, request, "cmb.rmmod"))) {
+    if ((response = flux_rank_rpc (h, rank, request, "%s.rmmod", target))) {
         errno = EPROTO;
         goto done;
     }
@@ -48,17 +62,20 @@ int flux_rmmod (flux_t h, int rank, const char *name, int flags)
         goto done;
     rc = 0;
 done:
+    free (target);
     Jput (request);
     Jput (response);
     return rc;
 }
 
-JSON flux_lsmod (flux_t h, int rank)
+JSON flux_lsmod (flux_t h, int rank, const char *target)
 {
     JSON request = Jnew ();
     JSON response = NULL;
 
-    response = flux_rank_rpc (h, rank, request, "cmb.lsmod");
+    if (target == NULL)
+        target = "cmb";
+    response = flux_rank_rpc (h, rank, request, "%s.lsmod", target);
     Jput (request);
     return response;
 }
@@ -67,12 +84,19 @@ int flux_insmod (flux_t h, int rank, const char *path, int flags, JSON args)
 {
     JSON request = Jnew ();
     JSON response = NULL;
+    char *name = NULL;
+    char *target = NULL;
     int rc = -1;
 
+    if (!(name = flux_modname (path))) {
+        errno = EINVAL;
+        goto done;
+    }
+    target = mod_target (name);
     Jadd_str (request, "path", path);
     Jadd_int (request, "flags", flags);
     Jadd_obj (request, "args", args);
-    if ((response = flux_rank_rpc (h, rank, request, "cmb.insmod"))) {
+    if ((response = flux_rank_rpc (h, rank, request, "%s.insmod", target))) {
         errno = EPROTO;
         goto done;
     }
@@ -80,6 +104,8 @@ int flux_insmod (flux_t h, int rank, const char *path, int flags, JSON args)
         goto done;
     rc = 0;
 done:
+    if (target)
+        free (target);
     Jput (request);
     Jput (response);
     return rc;

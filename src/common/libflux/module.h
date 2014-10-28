@@ -13,7 +13,7 @@ enum {
     FLUX_MOD_FLAGS_MANAGED = 1,
 };
 int flux_rmmod (flux_t h, int rank, const char *name, int flags);
-json_object *flux_lsmod (flux_t h, int rank);
+json_object *flux_lsmod (flux_t h, int rank, const char *target);
 int flux_insmod (flux_t h, int rank, const char *path, int flags,
                  json_object *args);
 
