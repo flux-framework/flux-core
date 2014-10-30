@@ -72,6 +72,7 @@ tests_jsontest_la_LIBADD = \
 	$(LUA_LIB)
 
 tests_jsontest_la_SOURCES = \
+	lutil.c \
 	json-lua.c \
 	tests/json-test.c
 

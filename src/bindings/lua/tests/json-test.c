@@ -29,6 +29,7 @@
 #include <lauxlib.h>
 
 #include "json-lua.h"
+#include "lutil.h"
 
 static int l_json_test (lua_State *L)
 {
@@ -52,6 +53,7 @@ static const struct luaL_Reg json_test_functions [] = {
 
 int luaopen_jsontest (lua_State *L)
 {
-	luaL_register (L, "jsontest", json_test_functions);
+	lua_newtable (L);
+	luaL_setfuncs (L, json_test_functions, 0);
 	return (1);
 }

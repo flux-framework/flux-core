@@ -1473,28 +1473,29 @@ static const struct luaL_Reg timeout_handler_methods [] = {
 int luaopen_flux (lua_State *L)
 {
     luaL_newmetatable (L, "FLUX.mrpc");
-    luaL_register (L, NULL, mrpc_methods);
+    luaL_setfuncs (L, mrpc_methods, 0);
     luaL_newmetatable (L, "FLUX.mrpc_outarg");
-    luaL_register (L, NULL, mrpc_outargs_methods);
+    luaL_setfuncs (L, mrpc_outargs_methods, 0);
     luaL_newmetatable (L, "FLUX.msghandler");
-    luaL_register (L, NULL, msghandler_methods);
+    luaL_setfuncs (L, msghandler_methods, 0);
     luaL_newmetatable (L, "FLUX.kvswatcher");
-    luaL_register (L, NULL, kvswatcher_methods);
+    luaL_setfuncs (L, kvswatcher_methods, 0);
     luaL_newmetatable (L, "FLUX.iowatcher");
-    luaL_register (L, NULL, iowatcher_methods);
+    luaL_setfuncs (L, iowatcher_methods, 0);
     luaL_newmetatable (L, "FLUX.kz");
-    luaL_register (L, NULL, kz_methods);
+    luaL_setfuncs (L, kz_methods, 0);
     luaL_newmetatable (L, "FLUX.timeout_handler");
-    luaL_register (L, NULL, timeout_handler_methods);
+    luaL_setfuncs (L, timeout_handler_methods, 0);
 
     luaL_newmetatable (L, "FLUX.handle");
-    luaL_register (L, NULL, flux_methods);
+    luaL_setfuncs (L, flux_methods, 0);
     /*
      * Load required kvs library
      */
     luaopen_kvs (L);
     l_zmsg_info_register_metatable (L);
-    luaL_register (L, "flux", flux_functions);
+    lua_newtable (L);
+    luaL_setfuncs (L, flux_functions, 0);
 
     MSGTYPE_SET (L, MSGTYPE_REQUEST);
     MSGTYPE_SET (L, MSGTYPE_RESPONSE);

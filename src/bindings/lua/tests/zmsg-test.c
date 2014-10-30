@@ -100,7 +100,8 @@ static const struct luaL_Reg zmsg_info_test_functions [] = {
 int luaopen_zmsgtest (lua_State *L)
 {
     l_zmsg_info_register_metatable (L);
-	luaL_register (L, "zmsgtest", zmsg_info_test_functions);
+    lua_newtable (L);
+    luaL_setfuncs (L, zmsg_info_test_functions, 0);
 	return (1);
 }
 

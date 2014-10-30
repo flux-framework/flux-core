@@ -1271,9 +1271,9 @@ static int wreck_lua_init (struct prog_ctx *ctx)
     luaopen_flux (L); /* Also loads kvs metatable */
 
     luaL_newmetatable (L, "WRECK.ctx");
-    luaL_register (L, NULL, wreck_methods);
+    luaL_setfuncs (L, wreck_methods, 0);
     luaL_newmetatable (L, "WRECK.environ");
-    luaL_register (L, NULL, environ_methods);
+    luaL_setfuncs (L, environ_methods, 0);
     l_push_prog_ctx (L, ctx);
     lua_setglobal (L, "wreck");
     log_msg (ctx, "reading lua files from %s\n", ctx->lua_pattern);

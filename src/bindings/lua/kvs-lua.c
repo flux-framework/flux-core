@@ -314,16 +314,17 @@ static const struct luaL_Reg kvsdir_methods [] = {
 int l_kvsdir_register_metatable (lua_State *L)
 {
     luaL_newmetatable (L, "CMB.kvsitr");
-    luaL_register (L, NULL, kvsitr_methods);
+    luaL_setfuncs (L, kvsitr_methods, 0);
     luaL_newmetatable (L, "CMB.kvsdir");
-    luaL_register (L, NULL, kvsdir_methods);
+    luaL_setfuncs (L, kvsdir_methods, 0);
     return (1);
 }
 
 int luaopen_kvs (lua_State *L)
 {
     l_kvsdir_register_metatable (L);
-    //luaL_register (L, "kvsdir", kvsdir_functions);
+    //lua_newtable (L);
+    //luaL_setfuncs (L, kvsdir_functions, 0);
     return (1);
 }
 

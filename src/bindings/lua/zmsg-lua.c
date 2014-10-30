@@ -184,7 +184,7 @@ static const struct luaL_Reg zmsg_methods [] = {
 int l_zmsg_info_register_metatable (lua_State *L)
 {
     luaL_newmetatable (L, "CMB.zmsgi");
-    luaL_register (L, NULL, zmsg_methods);
+    luaL_setfuncs (L, zmsg_methods, 0);
     return (1);
 }
 
