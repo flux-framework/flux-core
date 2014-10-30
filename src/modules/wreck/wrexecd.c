@@ -469,15 +469,7 @@ struct prog_ctx * prog_ctx_create (void)
         log_fatal (ctx, 1, "get_executable_path");
 
     ctx->lua_stack = lua_stack_create ();
-    if (strcmp (ctx->exedir, WREXECD_BINDIR) != 0) {
-        /* We are presumed to be executing out of builddir */
-        if (asprintf (&ctx->lua_pattern, "%s/lua.d/*.lua", ctx->exedir) < 0)
-            log_fatal (ctx, 1, "asprintf");
-    }
-    else {
-        ctx->lua_pattern = xstrdup (WRECK_LUA_PATTERN);
-    }
-
+    ctx->lua_pattern = xstrdup (WRECK_LUA_PATTERN);
     return (ctx);
 }
 
@@ -737,6 +729,8 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
                         ctx->id, ctx->noderank, strerror (errno));
         }
     }
+
+    kvs_get_string (ctx->flux, "config.wrexec.lua_pattern", &ctx->lua_pattern);
 
     log_msg (ctx, "initializing from CMB: rank=%d", ctx->noderank);
     if (prog_ctx_load_lwj_info (ctx, ctx->id) < 0)
