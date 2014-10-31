@@ -22,9 +22,6 @@ wreckscriptsdir = $(sysconfdir)/wreck/lua.d
 fluxmod_LTLIBRARIES = \
 	job.la \
 	resrc.la \
-	wrexecinst.la
-
-noinst_LTLIBRARIES = \
 	wrexec.la
 
 fluxlibexec_PROGRAMS = \
@@ -48,12 +45,7 @@ job_la_LIBADD = $(fluxmod_libadd)
 wrexec_la_SOURCES = wrexec.c
 wrexec_la_LDFLAGS = $(fluxmod_ldflags)
 wrexec_la_LIBADD = $(fluxmod_libadd)
-wrexec_la_CPPFLAGS = $(AM_CPPFLAGS) -DWREXECD_PATH=\"$(abs_builddir)/wrexecd\"
-
-wrexecinst_la_SOURCES = wrexec.c
-wrexecinst_la_LDFLAGS = $(fluxmod_ldflags)
-wrexecinst_la_LIBADD = $(fluxmod_libadd)
-wrexecinst_la_CPPFLAGS = $(AM_CPPFLAGS) -DWREXECD_PATH=\"$(fluxlibexecdir)/wrexecd\"
+wrexec_la_CPPFLAGS = $(AM_CPPFLAGS) -DWREXECD_PATH=\"$(fluxlibexecdir)/wrexecd\"
 
 resrc_la_SOURCES = resrc.c
 resrc_la_LDFLAGS = $(fluxmod_ldflags)
@@ -77,17 +69,6 @@ wrexecd_LDADD = \
 
 dist_wreckscripts_SCRIPTS = \
 	lua.d/01-env.lua
-
-install-data-hook:
-	-(cd $(DESTDIR)$(fluxmoddir) && \
-	  for f in wrexecinst*; do \
-	    mv $$f `echo $$f | sed 's/inst//'`; \
-	  done;)
-
-uninstall-hook:
-	-(cd $(DESTDIR)$(fluxmoddir) && \
-	  rm -f wrexec.so wrexec.la )
-	
 
 # XXX: Hack below to force rebuild of unbuilt wrexecd dependencies
 #

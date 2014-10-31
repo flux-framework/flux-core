@@ -997,11 +997,12 @@ static int iowatcher_zio_cb (zio_t zio, json_object *o, void *arg)
     lua_getfield (L, t, "userdata");
     assert (lua_isuserdata (L, -1));
 
+
     if (o) {
         int len;
-        uint8_t *pp;
+        uint8_t *pp = NULL;
         util_json_object_get_data (o, "data", &pp, &len);
-        if (len > 0) {
+        if (pp && len > 0) {
             json_object *s = json_object_new_string ((char *)pp);
             json_object_object_add (o, "data", s);
         }

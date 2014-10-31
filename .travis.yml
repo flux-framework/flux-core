@@ -9,6 +9,8 @@ install:
   - sudo apt-get update -q
   - sudo apt-get install -y lua5.1 liblua5.1-0-dev luarocks munge libmunge-dev asciidoc uuid-dev aspell
   - sudo luarocks install luaposix
+  - git clone https://github.com/grondo/lua-hostlist
+  - (export CC=gcc; cd lua-hostlist && make LUA_VER=5.1 && sudo make install LUA_VER=5.1)
   - wget http://download.zeromq.org/zeromq-4.0.4.tar.gz
   - tar -xvf zeromq-4.0.4.tar.gz
   - wget http://download.zeromq.org/czmq-2.2.0.tar.gz

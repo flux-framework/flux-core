@@ -44,6 +44,7 @@ struct rexec_ctx {
     int nodeid;
     zlist_t *session_list;
     flux_t h;
+    char *wrexecd_path;
 };
 
 struct rexec_session {
@@ -67,6 +68,19 @@ static void freectx (struct rexec_ctx *ctx)
     free (ctx);
 }
 
+static int wrexec_path_set (const char *key,
+    const char *val, void *arg, int err)
+{
+    struct rexec_ctx *ctx = (struct rexec_ctx *) arg;
+    if (ctx->wrexecd_path)
+        free (ctx->wrexecd_path);
+    if (err == ENOENT)
+        ctx->wrexecd_path = strdup (WREXECD_PATH);
+    else
+        ctx->wrexecd_path = strdup (val);
+    return (0);
+}
+
 static struct rexec_ctx *getctx (flux_t h)
 {
     struct rexec_ctx *ctx = (struct rexec_ctx *)flux_aux_get (h, "wrexec");
@@ -78,6 +92,8 @@ static struct rexec_ctx *getctx (flux_t h)
         ctx->h = h;
         ctx->nodeid = flux_rank (h);
         flux_aux_set (h, "wrexec", ctx, (FluxFreeFn)freectx);
+        kvs_watch_string (h, "config.wrexec.wrexecd_path",
+            wrexec_path_set, (void *) ctx);
     }
 
     return ctx;
@@ -206,7 +222,7 @@ static char ** rexec_session_args_create (struct rexec_session *s)
     args = xzmalloc ((nargs + 1) * sizeof (char **));
     snprintf (buf, sizeof (buf) - 1, "--lwj-id=%lu", s->id);
 
-    args [0] = strdup (WREXECD_PATH);
+    args [0] = strdup (s->ctx->wrexecd_path);
     args [1] = strdup (buf);
     args [2] = strdup ("--parent-fd=3");
     args [3] = NULL;

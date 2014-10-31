@@ -8,3 +8,6 @@ general
     lua_path = @abs_top_srcdir@/src/bindings/lua/?.lua
     module_path = @abs_top_builddir@/src/modules
     man_path = @abs_top_builddir@/doc
+wrexec
+    wrexecd_path = @abs_top_builddir@/src/modules/wreck/wrexecd
+    lua_pattern = @abs_top_srcdir@/src/modules/wreck/lua.d/*.lua
