@@ -143,6 +143,7 @@ AC_CONFIG_FILES( \
   doc/Makefile \
   doc/cmd/Makefile \
   t/Makefile \
+  t/fluxometer.lua \
 )
 AC_CONFIG_FILES([src/cmd/flux-screen], [chmod +x src/cmd/flux-screen])
 
