@@ -1,0 +1,149 @@
+--[[--------------------------------------------------------------------------
+ *  Copyright (c) 2014 Lawrence Livermore National Security, LLC.  Produced at
+ *  the Lawrence Livermore National Laboratory (cf, AUTHORS, DISCLAIMER.LLNS).
+ *  LLNL-CODE-658032 All rights reserved.
+ *
+ *  This file is part of the Flux resource manager framework.
+ *  For details, see https://github.com/flux-framework.
+ *
+ *  This program is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU General Public License as published by the Free
+ *  Software Foundation; either version 2 of the license, or (at your option)
+ *  any later version.
+ *
+ *  Flux is distributed in the hope that it will be useful, but WITHOUT
+ *  ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or
+ *  FITNESS FOR A PARTICULAR PURPOSE.  See the terms and conditions of the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
+ *  See also:  http://www.gnu.org/licenses/
+ ---------------------------------------------------------------------------]]
+ --
+ --  Convenience module for running Flux lua bindings tests. Use as:
+ --
+ --  local test = require 'fluxometer'.init (...)
+ --  test:start_session { size = 2 }
+ --
+ --  The second line is optional if a test does not require a flux
+ --   session in order to run.
+ --
+ --  Other convenience methods in the test object include
+ --
+ --  test:say ()  -- Issue debug output as diagnostics
+ --  test:die ()  -- bail out of tests
+ --
+ ---------------------------------------------------------------------------
+ --
+---------------------------------------------------------------------------
+--
+--  Test harness configuration:
+--
+local top_srcdir = "@abs_top_srcdir@"
+local top_builddir = "@abs_top_builddir@"
+
+--
+-- Append explicit path to lua bindings to package.path and package.cpath
+--  to hand down to test scripts
+--
+--
+package.path = package.path ..  ';' .. top_srcdir ..
+    "/src/bindings/lua/?.lua"
+package.cpath = package.cpath .. ';' .. top_builddir ..
+    "/src/bindings/lua/.libs/?.so"
+
+---------------------------------------------------------------------------
+local getopt = require 'flux-lua.alt_getopt'.get_opts
+local posix = require 'flux-lua.posix'
+require 'Test.More'
+
+---------------------------------------------------------------------------
+local fluxTest = {}
+fluxTest.__index = fluxTest
+
+--  Options:
+local cmdline_opts = {
+    help =     { char = 'h' },
+    verbose =  { char = 'v' }
+}
+
+---
+--  Append path p to PATH environment variable:
+--
+local function do_path_append (p)
+    posix.setenv ("PATH", os.getenv ("PATH") .. ":" .. p)
+end
+
+---
+--  Reinvoke "current" test script under a flux session using flux-start
+--
+function fluxTest:start_session (t)
+    -- Avoid flux-in-flux for now:
+    if os.getenv ("FLUX_TMPDIR") then return end
+
+    local size = t.size or 1
+    local extra_args = t.args or {}
+    local cmd = { self.flux_path, "start",
+                  unpack (self.start_args),
+                  string.format ("--size=%d", size) }
+
+    if t.args then
+        for _,v in pairs (t.args) do
+            table.insert (cmd, v)
+        end
+    end
+
+    table.insert (cmd, self.arg0)
+
+    -- reexec script under flux-start if necessary:
+    --  (does not return)
+    local r, err = posix.exec (unpack (cmd))
+    error (err)
+end
+
+
+function fluxTest:say (...)
+    diag (self.prog..": "..string.format (...))
+end
+
+
+function fluxTest:die (...)
+    bail_out (self.prog..": "..string.format (...))
+end
+
+---
+--   Create fluxometer test object
+--
+function fluxTest.init (...)
+    local debug = require 'debug'
+    local test = setmetatable ({}, fluxTest)
+
+    test.start_args = { "-o,-q" }
+
+    -- Get path to current test script using debug.getinfo:
+	test.arg0 = debug.getinfo (2).source:sub (2)
+    test.prog = test.arg0:match ("/*([^/.]+)%.")
+
+    -- If arg0 doesn't contain relative or absolute path, then assume
+    --  local directory and prepend './'
+    if not test.arg0:match ('^[/.]') then
+        test.arg0 = './'..test.arg0
+    end
+
+    local dir = top_builddir.."/src/cmd"
+    local path = dir.."/flux"
+    local mode = posix.stat (path, 'mode')
+    if mode and mode:match('^rwx') then
+        do_path_append (dir)
+        test.flux_path = path
+    else
+        test:die ("Failed to find flux path")
+    end
+
+    return test
+end
+
+return fluxTest
+-- vi: ts=4 sw=4 expandtab
