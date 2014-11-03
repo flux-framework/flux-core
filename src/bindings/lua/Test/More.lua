@@ -142,10 +142,10 @@ function m.fail (name)
 end
 
 function m.require_ok (mod)
-    local r, msg = pcall(require, mod)
-    tb:ok(r, "require '" .. tostring(mod) .. "'")
-    if not r then
-        tb:diag("    " .. msg)
+    local status, r = pcall(require, mod)
+    tb:ok(status, "require '" .. tostring(mod) .. "'")
+    if not status then
+        tb:diag("    " .. r)
     end
     return r
 end

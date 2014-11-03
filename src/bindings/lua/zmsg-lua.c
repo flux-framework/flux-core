@@ -42,7 +42,7 @@
 
 struct zmsg_info {
     int     typemask;
-    zmsg_t **zmsg;
+    zmsg_t *zmsg;
     char *tag;
     json_object *o;
 
@@ -63,7 +63,7 @@ struct zmsg_info * zmsg_info_create (zmsg_t **zmsg, int typemask)
         return (NULL);
     }
 
-    zi->zmsg = zmsg;
+    zi->zmsg = zmsg_dup (*zmsg);
     zi->typemask = typemask;
 
     zi->resp = NULL;
@@ -74,8 +74,8 @@ struct zmsg_info * zmsg_info_create (zmsg_t **zmsg, int typemask)
 
 static void zmsg_info_destroy (struct zmsg_info *zi)
 {
-    if (zi->zmsg && *zi->zmsg)
-        zmsg_destroy (zi->zmsg);
+    if (zi->zmsg)
+        zmsg_destroy (&zi->zmsg);
     if (zi->o)
         json_object_put (zi->o);
     if (zi->tag)
@@ -90,7 +90,7 @@ const json_object *zmsg_info_json (struct zmsg_info *zi)
 
 zmsg_t **zmsg_info_zmsg (struct zmsg_info *zi)
 {
-    return (zi->zmsg);
+    return (&zi->zmsg);
 }
 
 int zmsg_info_register_resp_cb (struct zmsg_info *zi, zi_resp_f f, void *arg)
@@ -184,7 +184,7 @@ static const struct luaL_Reg zmsg_methods [] = {
 int l_zmsg_info_register_metatable (lua_State *L)
 {
     luaL_newmetatable (L, "CMB.zmsgi");
-    luaL_register (L, NULL, zmsg_methods);
+    luaL_setfuncs (L, zmsg_methods, 0);
     return (1);
 }
 

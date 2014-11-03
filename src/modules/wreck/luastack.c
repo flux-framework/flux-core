@@ -153,7 +153,7 @@ lua_script_t lua_script_create (lua_stack_t st, int type, const char *data)
      *   table.
      */
     lua_pushstring (script->L, "__index");
-    lua_pushvalue (script->L, LUA_GLOBALSINDEX);
+    lua_getglobal (script->L, "_G");
     lua_settable (script->L, -3);
 
     /*  Now set metatable for the new globals table */
@@ -162,7 +162,7 @@ lua_script_t lua_script_create (lua_stack_t st, int type, const char *data)
     /*  And finally replace the globals table with the (empty)  table
      *   now at top of the stack
      */
-    lua_replace (script->L, LUA_GLOBALSINDEX);
+    lua_setglobal (script->L, "_G");
 
     return (script);
 }

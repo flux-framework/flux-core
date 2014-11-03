@@ -3,9 +3,19 @@ Core Flux Tests
 
 This directory contains many basic functionality and
 regression test scripts for flux-core commands and utilities.
-The test framework for running these tests is built using a
+The main test framework for running these tests is built using a
 slightly modified version of the [sharness] project, which itself
 is derived from the Git project's testsuite.
+
+Writing tests using sharness is described immediately below.
+
+Tests may also be written in Lua using a small Lua module
+`fluxometer.lua` which enables tests to rerun themselves under
+flux session, and have access to the [lua-TestMore] TAP framework.
+This module is documented below in the section Lua Tests.
+
+Shell-based Scripts
+===================
 
 Tests are written as small shell scripts that assert behavior
 of flux core commands using the functions found in `sharness.sh`.
@@ -188,8 +198,45 @@ following extra functions:
 
 ```
 
+Lua Tests
+=========
+
+Lua tests should be bootstrapped by loading the `fluxometer` module
+as the first line of the script, and initializing a test object
+with the `init` function. For example:
+
+```
+local t = require 'fluxometer'.init (...)
+```
+
+If the test should be run within a flux instance, then the
+`start_session` method of the test object can be called, with
+a table as the only parameter.
+
+```
+t:start_session {}
+```
+
+The table argument to `start_session` has the optional parameters:
+
+ * `size`:    size of flux session to start
+ * `args`:    table of extra arguments to pass to `flux-start`
+
+Example:
+
+```
+local t = require 'fluxometer'.init (...)
+t:start_session { size = 4 }
+```
+
+Once `fluxometer` is loaded, the script will have access to Lua
+`Test.More` functions. The script can also make use of the test
+object methods `say()` to print diagnostics, and `die()` to
+terminate the tests with failure.
+
 --
 [sharness]: https://github.com/mlafeldt/sharness
 [API]: https://github.com/mlafeldt/sharness/blob/master/API.md
 [TAP]: http://testanything.org
 [prove]: http://linux.die.net/man/1/prove
+[lua-TestMore]: http://fperrad.github.io/lua-TestMore/

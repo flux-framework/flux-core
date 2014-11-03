@@ -66,7 +66,7 @@ X_AC_CHECK_COND_LIB(util, forkpty)
 X_AC_CHECK_COND_LIB(rt, clock_gettime)
 X_AC_CHECK_COND_LIB(dl, dlerror)
 X_AC_CHECK_COND_LIB(m, sqrt)
-AX_PROG_LUA([5.1],[5.2])
+AX_PROG_LUA([5.1],[5.3])
 AX_LUA_HEADERS
 AX_LUA_LIBS
 X_AC_ZEROMQ
@@ -143,6 +143,7 @@ AC_CONFIG_FILES( \
   doc/Makefile \
   doc/cmd/Makefile \
   t/Makefile \
+  t/fluxometer.lua \
 )
 AC_CONFIG_FILES([src/cmd/flux-screen], [chmod +x src/cmd/flux-screen])
 
