@@ -528,6 +528,13 @@ int main (int argc, char *argv[])
             msg ("installing session heartbeat: T=%0.1fs", ctx.heartrate);
     }
 
+    /* XXX 250ms delay to work around async event connect - see issue 38
+     */
+    if (ctx.rank > 0)
+        usleep (250*1000);
+
+    /* Event loop
+     */
     if (ctx.verbose)
         msg ("entering event loop");
     zloop_start (ctx.zl);
