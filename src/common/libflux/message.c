@@ -292,6 +292,147 @@ const char *flux_msgtype_shortstr (int typemask)
     return "?";
 }
 
+#ifdef TEST_MAIN
+#include "src/common/libtap/tap.h"
+#include "src/common/libutil/shortjson.h"
+int main (int argc, char *argv[])
+{
+    zmsg_t *zmsg;
+    //zframe_t *zf;
+    json_object *o = NULL;
+    char *s = NULL;
+    int rc, i;
+
+    plan (24);
+
+    /* flux_msg_encode, flux_msg_decode, flux_msg_match, flux_msg_match_substr
+     *   on message with no JSON frame
+     */
+    zmsg = flux_msg_encode (NULL, NULL);
+    ok (zmsg == NULL,
+        "flux_msg_encode with NULL topic string fails with errno == EINVAL");
+    zmsg_destroy (&zmsg); // ok with NULL zmsg
+
+    zmsg = flux_msg_encode ("foo", NULL);
+    ok (zmsg != NULL,
+        "flux_msg_encode with NULL json works");
+
+    ok ((!flux_msg_match (zmsg, "f")
+            && flux_msg_match (zmsg, "foo")
+            && !flux_msg_match (zmsg, "foobar")),
+        "flux_msg_match works");
+
+    ok ((flux_msg_match_substr (zmsg, "f", NULL)
+            && flux_msg_match_substr (zmsg, "foo", NULL)
+            && !flux_msg_match_substr (zmsg, "foobar", NULL)),
+        "flux_msg_match_substr works");
+
+    o = (json_object *)&o; // make it non-NULL
+    rc = flux_msg_decode (zmsg, &s, &o);
+    ok ((rc == 0 && s && !strcmp (s, "foo") && o == NULL),
+        "flux_msg_decode returned what we encoded");
+    free (s);
+    zmsg_destroy (&zmsg);
+
+
+    /* flux_msg_encode, flux_msg_decode, flux_msg_tag, flux_msg_tag_short
+     *   on message with JSON
+     */
+    o = Jnew ();
+    Jadd_int (o, "x", 42);
+    zmsg = flux_msg_encode ("a.b.c.d", o);
+    Jput (o);
+    ok (zmsg != NULL,
+        "flux_msg_encode with json works");
+    rc = flux_msg_decode (zmsg, &s, &o);
+    ok ((rc == 0 && Jget_int (o, "x",&i) && i == 42),
+        "flux_msg_decode returned JSON that we encoded");
+    Jput (o);
+    ok (!strcmp (s, "a.b.c.d"),
+        "flux_msg_decode returned topic string");
+    free (s);
+    s = flux_msg_tag (zmsg);
+    ok (!strcmp (s, "a.b.c.d"),
+        "flux_msg_tag returned topic string");
+    free (s);
+    s = flux_msg_tag_short (zmsg);
+    ok (!strcmp (s, "a"),
+        "flux_msg_tag_short returned first word of topic string");
+    free (s);
+    zmsg_destroy (&zmsg);
+
+    /* flux_msg_sender, flux_msg_hopcount, flux_msg_nexthop
+     *   on message with variable number of routing frames
+     */
+    zmsg = flux_msg_encode ("foo", NULL);
+    ok ((zmsg && flux_msg_hopcount (zmsg) == 0),
+        "flux_msg_hopcount on message with no delim is 0");
+    ok ((!flux_msg_sender (zmsg) && !flux_msg_nexthop (zmsg)),
+        "flux_msg_sender, flux_msg_nexthop return NULL on msg w/no delim");
+    if (zmsg)
+        zmsg_pushmem (zmsg, NULL, 0); /* push nil delimiter frame */
+    ok ((zmsg && flux_msg_hopcount (zmsg) == 0),
+        "flux_msg_hopcount on message with delim is 0");
+    ok ((!flux_msg_sender (zmsg) && !flux_msg_nexthop (zmsg)),
+        "flux_msg_sender, flux_msg_nexthop return NULL on msg w/delim, no id");
+    zmsg_pushstrf (zmsg, "%s", "sender");
+    ok ((zmsg && flux_msg_hopcount (zmsg) == 1),
+        "flux_msg_hopcount on message with delim+id is 1");
+    s = flux_msg_sender (zmsg);
+    ok ((s && !strcmp (s, "sender")),
+        "flux_msg_sender returns id on message with delim+id");
+    free (s);
+    s = flux_msg_nexthop (zmsg);
+    ok ((s && !strcmp (s, "sender")),
+        "flux_msg_nexthop returns id on message with delim+id");
+    free (s);
+    zmsg_pushstrf (zmsg, "%s", "router");
+    s = flux_msg_sender (zmsg);
+    ok ((s && !strcmp (s, "sender")),
+        "flux_msg_sender returns id on message with delim+id1+id2");
+    free (s);
+    s = flux_msg_nexthop (zmsg);
+    ok ((s && !strcmp (s, "router")),
+        "flux_msg_nexthop returns id2 on message with delim+id1+id2");
+    free (s);
+    zmsg_destroy (&zmsg);
+
+    /* flux_msg_replace_json, flux_msg_replace_json_errnum
+     *   on message with and without JSON frame
+     */
+    zmsg = flux_msg_encode ("baz", NULL);
+    o = Jnew ();
+    Jadd_int (o, "x", 2);
+    rc = flux_msg_replace_json (zmsg, o);
+    ok ((rc == -1 && errno == EPROTO),
+        "flux_msg_replace_json fails with EPROTO on json-less message");
+    zmsg_destroy (&zmsg);
+    zmsg = flux_msg_encode ("baz", o);
+    Jput (o);
+    o = Jnew ();
+    Jadd_int (o, "y", 3);
+    rc = flux_msg_replace_json (zmsg, o);
+    Jput (o);
+    ok ((rc == 0),
+        "flux_msg_replace_json works json-ful message");
+    rc = flux_msg_decode (zmsg, NULL, &o);
+    ok ((rc == 0 && Jget_int (o, "y", &i) && i == 3),
+        "flux_msg_decode returned replaced json");
+    Jput (o);
+    rc = flux_msg_replace_json_errnum (zmsg, ESRCH);
+    ok ((rc == 0),
+        "flux_msg_replace_json_errnum worked");
+    rc = flux_msg_decode (zmsg, NULL, &o);
+    ok ((rc == 0 && Jget_int (o, "errnum", &i) && i == ESRCH),
+        "flux_msg_decode returned errnum with correct value");
+    Jput (o);
+    zmsg_destroy (&zmsg);
+
+    done_testing();
+    return (0);
+}
+#endif
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
