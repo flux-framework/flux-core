@@ -229,6 +229,24 @@ static void client_destroy (client_t *c)
     free (c);
 }
 
+static bool flux_msg_match_substr (zmsg_t *zmsg, const char *tag, char **restp)
+{
+    char *ztag = flux_msg_tag (zmsg);
+    int taglen = strlen (tag);
+    int ztaglen = ztag ? strlen (ztag) : 0;
+
+    if (ztaglen >= taglen && strncmp (tag, ztag, taglen) == 0) {
+        if (restp) {
+            memmove (ztag, ztag + taglen, ztaglen - taglen + 1);
+            *restp = ztag;
+        } else
+            free (ztag);
+        return true;
+    }
+    free (ztag);
+    return false;
+}
+
 static int client_read (ctx_t *ctx, client_t *c)
 {
     zmsg_t *zmsg = NULL;
