@@ -109,6 +109,10 @@ zmsg_t *flux_msg_encode (char *tag, json_object *o)
     char *zbuf;
     zframe_t *zf;
 
+    if (!tag || strlen (tag) == 0) {
+        errno = EINVAL;
+        return NULL;
+    }
     if (!(zmsg = zmsg_new ()))
         err_exit ("zmsg_new");
     if (zmsg_addmem (zmsg, tag, strlen (tag)) < 0)
