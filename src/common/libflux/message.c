@@ -92,10 +92,16 @@ int flux_msg_decode (zmsg_t *zmsg, char **tagp, json_object **op)
     zframe_t *tag = unwrap_zmsg (zmsg, 0);
     zframe_t *json = unwrap_zmsg (zmsg, 1);
 
-    if (!tag)
-        goto eproto;
-    if (tagp)
-        *tagp = zframe_strdup (tag);
+    if (!tag) {
+        errno = EPROTO;
+        return -1;
+    }
+    if (tagp) {
+        if (!(*tagp = zframe_strdup (tag))) {
+            errno = ENOMEM;
+            return -1;
+        }
+    }
     if (op) {
         if (json)
             util_json_decode (op, (char *)zframe_data (json),
@@ -104,9 +110,6 @@ int flux_msg_decode (zmsg_t *zmsg, char **tagp, json_object **op)
             *op = NULL;
     }
     return 0;
-eproto:
-    errno = EPROTO;
-    return -1;
 }
 
 zmsg_t *flux_msg_encode (char *tag, json_object *o)
