@@ -724,6 +724,12 @@ plugin_ctx_t plugin_create (flux_t h, const char *path, zhash_t *args)
     zconnect (p->zctx, &p->zs_svc[0], ZMQ_PAIR, p->svc_uri, -1, NULL);
     zconnect (p->zctx, &p->zs_evin,  ZMQ_SUB, EVENT_URI, 0, NULL);
 
+    if (zmq_setsockopt (p->zs_evin, ZMQ_SUBSCRIBE, "", 0) < 0) {
+        err ("failed to subscribe to events");
+        plugin_destroy (p);
+        p = NULL;
+    }
+
     return p;
 }
 
