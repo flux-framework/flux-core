@@ -50,6 +50,9 @@ int flux_msg_hopcount (zmsg_t *zmsg)
     return count;
 }
 
+/* Return a non-routing frame by number, zero origin
+ * 0=tag/topic, 1=json
+ */
 static zframe_t *unwrap_zmsg (zmsg_t *zmsg, int frameno)
 {
     zframe_t *zf = zmsg_first (zmsg);
@@ -60,11 +63,15 @@ static zframe_t *unwrap_zmsg (zmsg_t *zmsg, int frameno)
         zf = zmsg_next (zmsg); /* skip empty routing envelope delimiter */
     if (!zf)
         zf = zmsg_first (zmsg); /* rewind - there was no routing envelope */
-    while (zf && frameno-- > 0) /* frame 0=tag, 1=json */
+    while (zf && frameno-- > 0)
         zf = zmsg_next (zmsg);
     return zf;
 }
 
+/* Return routing frame by hop, not including delimiter.
+ * -1=sender (frame closest to delim),
+ *  0=next hop (frame furthest from delim)
+ */
 static zframe_t *unwrap_zmsg_rte (zmsg_t *zmsg, int hopcount)
 {
     int maxhop = flux_msg_hopcount (zmsg);
