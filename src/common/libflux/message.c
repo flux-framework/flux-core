@@ -61,7 +61,7 @@ static zframe_t *flux_zmsg_nth (zmsg_t *zmsg, int frameno)
         zf = zmsg_next (zmsg); /* skip non-empty routing envelope frames */
     if (zf)
         zf = zmsg_next (zmsg); /* skip empty routing envelope delimiter */
-    if (!zf)
+    else
         zf = zmsg_first (zmsg); /* rewind - there was no routing envelope */
     while (zf && frameno-- > 0)
         zf = zmsg_next (zmsg);
