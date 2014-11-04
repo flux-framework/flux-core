@@ -135,42 +135,10 @@ zmsg_t *flux_msg_encode (char *tag, json_object *o)
     return zmsg;
 }
 
-static char *_ztag_noaddr (zmsg_t *zmsg)
-{
-    zframe_t *zf = unwrap_zmsg (zmsg, 0);
-    char *p, *ztag;
-
-    if (!zf)
-        msg_exit ("_ztag_noaddr: no tag in message");
-    if (!(ztag = zframe_strdup (zf)))
-        oom ();
-    if ((p = strchr (ztag, '!')))
-        memmove (ztag, p + 1, strlen (ztag) - (p - ztag)); /* N.B. include \0 */
-    return ztag;
-}
-
 bool flux_msg_match (zmsg_t *zmsg, const char *s)
 {
     zframe_t *zf = unwrap_zmsg (zmsg, 0); /* tag/topic frame */
     return zf ? zframe_streq (zf, s) : false;
-}
-
-bool flux_msg_match_substr (zmsg_t *zmsg, const char *tag, char **restp)
-{
-    char *ztag = _ztag_noaddr (zmsg);
-    int taglen = strlen (tag);
-    int ztaglen = strlen (ztag);
-
-    if (ztaglen >= taglen && strncmp (tag, ztag, taglen) == 0) {
-        if (restp) {
-            memmove (ztag, ztag + taglen, ztaglen - taglen + 1);
-            *restp = ztag;
-        } else
-            free (ztag);
-        return true;
-    }
-    free (ztag);
-    return false;
 }
 
 char *flux_msg_sender (zmsg_t *zmsg)
@@ -304,9 +272,9 @@ int main (int argc, char *argv[])
     char *s = NULL;
     int rc, i;
 
-    plan (24);
+    plan (23);
 
-    /* flux_msg_encode, flux_msg_decode, flux_msg_match, flux_msg_match_substr
+    /* flux_msg_encode, flux_msg_decode, flux_msg_match
      *   on message with no JSON frame
      */
     zmsg = flux_msg_encode (NULL, NULL);
@@ -322,11 +290,6 @@ int main (int argc, char *argv[])
             && flux_msg_match (zmsg, "foo")
             && !flux_msg_match (zmsg, "foobar")),
         "flux_msg_match works");
-
-    ok ((flux_msg_match_substr (zmsg, "f", NULL)
-            && flux_msg_match_substr (zmsg, "foo", NULL)
-            && !flux_msg_match_substr (zmsg, "foobar", NULL)),
-        "flux_msg_match_substr works");
 
     o = (json_object *)&o; // make it non-NULL
     rc = flux_msg_decode (zmsg, &s, &o);
