@@ -34,6 +34,17 @@
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/log.h"
 
+/* For now, proto frame is hidden here
+ */
+typedef uint8_t flux_proto_t[4];
+
+static void flux_proto_init (flux_proto_t proto)
+{
+    proto[0] = 0xF1;
+    proto[1] = 0xC0;
+    proto[2] = 0x00;
+    proto[3] = 0x00;
+}
 
 int flux_msg_hopcount (zmsg_t *zmsg)
 {
@@ -51,7 +62,7 @@ int flux_msg_hopcount (zmsg_t *zmsg)
 }
 
 /* Return a non-routing frame by number, zero origin
- * 0=tag/topic, 1=json
+ * 0=proto, 1=tag/topic, 2=json
  */
 static zframe_t *flux_zmsg_nth (zmsg_t *zmsg, int frameno)
 {
@@ -70,8 +81,8 @@ static zframe_t *flux_zmsg_nth (zmsg_t *zmsg, int frameno)
 
 int flux_msg_decode (zmsg_t *zmsg, char **tagp, json_object **op)
 {
-    zframe_t *tag = flux_zmsg_nth (zmsg, 0);
-    zframe_t *json = flux_zmsg_nth (zmsg, 1);
+    zframe_t *tag = flux_zmsg_nth (zmsg, 1);
+    zframe_t *json = flux_zmsg_nth (zmsg, 2);
 
     if (!tag) {
         errno = EPROTO;
@@ -99,6 +110,7 @@ zmsg_t *flux_msg_encode (char *tag, json_object *o)
     unsigned int zlen;
     char *zbuf;
     zframe_t *zf;
+    flux_proto_t proto;
 
     if (!tag || strlen (tag) == 0) {
         errno = EINVAL;
@@ -106,9 +118,12 @@ zmsg_t *flux_msg_encode (char *tag, json_object *o)
     }
     if (!(zmsg = zmsg_new ()))
         err_exit ("zmsg_new");
-    if (zmsg_addmem (zmsg, tag, strlen (tag)) < 0)
+    flux_proto_init (proto);
+    if (zmsg_addmem (zmsg, proto, sizeof (proto)) < 0)  /* 0: proto */
         err_exit ("zmsg_addmem");
-    if (o) {
+    if (zmsg_addmem (zmsg, tag, strlen (tag)) < 0)      /* 1: tag */
+        err_exit ("zmsg_addmem");
+    if (o) {                                            /* 2: json */
         util_json_encode (o, &zbuf, &zlen);
         if (!(zf = zframe_new (zbuf, zlen)))
             oom ();
@@ -121,7 +136,7 @@ zmsg_t *flux_msg_encode (char *tag, json_object *o)
 
 bool flux_msg_match (zmsg_t *zmsg, const char *s)
 {
-    zframe_t *zf = flux_zmsg_nth (zmsg, 0); /* tag/topic frame */
+    zframe_t *zf = flux_zmsg_nth (zmsg, 1); /* tag/topic frame */
     return zf ? zframe_streq (zf, s) : false;
 }
 
@@ -173,7 +188,7 @@ done:
 
 char *flux_msg_tag (zmsg_t *zmsg)
 {
-    zframe_t *zf = flux_zmsg_nth (zmsg, 0);
+    zframe_t *zf = flux_zmsg_nth (zmsg, 1);
     char *s;
     if (!zf) {
         errno = EPROTO;
@@ -194,7 +209,7 @@ char *flux_msg_tag_short (zmsg_t *zmsg)
 
 int flux_msg_replace_json (zmsg_t *zmsg, json_object *o)
 {
-    zframe_t *zf = flux_zmsg_nth (zmsg, 1);
+    zframe_t *zf = flux_zmsg_nth (zmsg, 2);
     char *zbuf;
     unsigned int zlen;
 
