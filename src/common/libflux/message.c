@@ -149,20 +149,10 @@ static char *_ztag_noaddr (zmsg_t *zmsg)
     return ztag;
 }
 
-bool flux_msg_match (zmsg_t *zmsg, const char *tag)
+bool flux_msg_match (zmsg_t *zmsg, const char *s)
 {
-    char *ztag = _ztag_noaddr (zmsg);
-    const char *tag_noaddr;
-    bool match;
-
-    if ((tag_noaddr = strchr (tag, '!')))
-        tag_noaddr++;
-    else
-        tag_noaddr = tag;
-    match = !strcmp (ztag, tag_noaddr);
-    free (ztag);
-
-    return match;
+    zframe_t *zf = unwrap_zmsg (zmsg, 0); /* tag/topic frame */
+    return zf ? zframe_streq (zf, s) : false;
 }
 
 bool flux_msg_match_substr (zmsg_t *zmsg, const char *tag, char **restp)
