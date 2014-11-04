@@ -1973,42 +1973,6 @@ static int parent_send (ctx_t *ctx, zmsg_t **zmsg)
     return 0;
 }
 
-/* Helper for cmbd_request_sendmsg
- */
-static int parse_request (zmsg_t *zmsg, char **servicep, char **lasthopp)
-{
-    char *p, *service = NULL, *lasthop = NULL;
-    int nf = zmsg_size (zmsg);
-    zframe_t *zf, *zf0 = zmsg_first (zmsg);
-    int i, hopcount = 0;
-
-    if (nf < 2)
-        goto error;
-    for (i = 0, zf = zf0; i < nf - 2; i++) {
-        if (zframe_size (zf) == 0) { /* delimiter, if any */
-            if (i != nf - 3)         /* expected position: zmsg[nf - 3] */
-                goto error;
-            hopcount = i;
-        }
-        zf = zmsg_next (zmsg);
-    }
-    if (!(service = zframe_strdup (zf)))
-        goto error;
-    if (hopcount > 0 && !(lasthop = zframe_strdup (zf0)))
-        goto error;
-    if ((p = strchr (service, '.')))
-        *p = '\0';
-    *servicep = service;
-    *lasthopp = lasthop;
-    return hopcount;
-error:
-    if (service)
-        free (service);
-    if (lasthop)
-        free (lasthop);
-    return -1;
-}
-
 /**
  ** Cmbd's internal flux_t implementation.
  **    a bit limited, by design
@@ -2017,13 +1981,13 @@ error:
 static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
 {
     ctx_t *ctx = impl;
-    char *service = NULL, *lasthop = NULL;
-    int hopcount;
+    char *service = flux_msg_tag_short (*zmsg);
+    char *lasthop = flux_msg_nexthop (*zmsg);
+    int hopcount = flux_msg_hopcount (*zmsg);
     module_t *mod;
     int rc = -1;
 
-    errno = 0;
-    if ((hopcount = parse_request (*zmsg, &service, &lasthop)) < 0) {
+    if (!service) {
         errno = EPROTO;
         goto done;
     }
@@ -2067,25 +2031,21 @@ done:
 static int cmbd_response_sendmsg (void *impl, zmsg_t **zmsg)
 {
     ctx_t *ctx = impl;
+    char *nexthop = flux_msg_nexthop (*zmsg);
     int rc = -1;
-    zframe_t *zf;
-    char *uuid = NULL;
 
-    if (!(zf = zmsg_first (*zmsg))) {
-        errno = EINVAL;
-        goto done; /* drop message with no frames */
-    }
     snoop_cc (ctx, FLUX_MSGTYPE_RESPONSE, *zmsg);
-    if (zframe_size (zf) == 0) { /* response addressed to me */
-        rc = -1;                 /*   add hook here if we need it */
-    } else if ((uuid = zframe_strdup (zf)) && peer_ismodule (ctx, uuid)) {
+
+    /* No more routing frames
+     */
+    if (!nexthop)                             /* local: reply to ourselves? */
+        rc = -1;
+    else if (peer_ismodule (ctx, nexthop))    /* send to a module */
         rc = zmsg_send (zmsg, ctx->zs_request);
-    } else if (ctx->child) {
+    else if (ctx->child)                      /* send to downstream peer */
         rc = zmsg_send (zmsg, ctx->child->zs);
-    }
-done:
-    if (uuid)
-        free (uuid);
+    if (nexthop)
+        free (nexthop);
     if (*zmsg)
         zmsg_destroy (zmsg);
     return rc;
