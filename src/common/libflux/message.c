@@ -53,7 +53,7 @@ int flux_msg_hopcount (zmsg_t *zmsg)
 /* Return a non-routing frame by number, zero origin
  * 0=tag/topic, 1=json
  */
-static zframe_t *unwrap_zmsg (zmsg_t *zmsg, int frameno)
+static zframe_t *flux_zmsg_nth (zmsg_t *zmsg, int frameno)
 {
     zframe_t *zf = zmsg_first (zmsg);
 
@@ -68,29 +68,10 @@ static zframe_t *unwrap_zmsg (zmsg_t *zmsg, int frameno)
     return zf;
 }
 
-/* Return routing frame by hop, not including delimiter.
- * -1=sender (frame closest to delim),
- *  0=next hop (frame furthest from delim)
- */
-static zframe_t *unwrap_zmsg_rte (zmsg_t *zmsg, int hopcount)
-{
-    int maxhop = flux_msg_hopcount (zmsg);
-    zframe_t *zf;
-
-    if (maxhop == 0 || hopcount >= maxhop)
-        return NULL;
-    if (hopcount == -1) /* -1 means sender frame */
-        hopcount = maxhop - 1;
-    zf = zmsg_first (zmsg);
-    while (zf && hopcount-- > 0)
-        zf = zmsg_next (zmsg);
-    return zf;
-}
-
 int flux_msg_decode (zmsg_t *zmsg, char **tagp, json_object **op)
 {
-    zframe_t *tag = unwrap_zmsg (zmsg, 0);
-    zframe_t *json = unwrap_zmsg (zmsg, 1);
+    zframe_t *tag = flux_zmsg_nth (zmsg, 0);
+    zframe_t *json = flux_zmsg_nth (zmsg, 1);
 
     if (!tag) {
         errno = EPROTO;
@@ -140,39 +121,59 @@ zmsg_t *flux_msg_encode (char *tag, json_object *o)
 
 bool flux_msg_match (zmsg_t *zmsg, const char *s)
 {
-    zframe_t *zf = unwrap_zmsg (zmsg, 0); /* tag/topic frame */
+    zframe_t *zf = flux_zmsg_nth (zmsg, 0); /* tag/topic frame */
     return zf ? zframe_streq (zf, s) : false;
 }
 
+/* Return routing frame closest to the delimiter, the request sender.
+ * Caller must free result.  On error return NULL with errno set.
+ */
 char *flux_msg_sender (zmsg_t *zmsg)
 {
-    zframe_t *zf = unwrap_zmsg_rte (zmsg, -1);
-    char *s;
-    if (!zf) {
+    int hops = flux_msg_hopcount (zmsg);
+    zframe_t *zf;
+    char *uuid = NULL;
+
+    if (hops == 0) {
         errno = EPROTO;
-        return NULL;
+        goto done;
     }
-    if (!(s = zframe_strdup (zf)))
-        oom ();
-    return s;
+    zf = zmsg_first (zmsg);
+    while (--hops > 0)
+        zf = zmsg_next (zmsg);
+    if (!(uuid = zframe_strdup (zf))) {
+        errno = ENOMEM;
+        goto done;
+    }
+done:
+    return uuid;
 }
 
+/* Return routing frame at the top of the stack, the next hop in a response.
+ * Caller must free result. On error, return NULL with errno set.
+ */
 char *flux_msg_nexthop (zmsg_t *zmsg)
 {
-    zframe_t *zf = unwrap_zmsg_rte (zmsg, 0);
-    char *s;
-    if (!zf) {
+    int hops = flux_msg_hopcount (zmsg);
+    zframe_t *zf;
+    char *uuid = NULL;
+
+    if (hops == 0) {
         errno = EPROTO;
-        return NULL;
+        goto done;
     }
-    if (!(s = zframe_strdup (zf)))
-        oom ();
-    return s;
+    zf = zmsg_first (zmsg);
+    if (!(uuid = zframe_strdup (zf))) {
+        errno = ENOMEM;
+        goto done;
+    }
+done:
+    return uuid;
 }
 
 char *flux_msg_tag (zmsg_t *zmsg)
 {
-    zframe_t *zf = unwrap_zmsg (zmsg, 0);
+    zframe_t *zf = flux_zmsg_nth (zmsg, 0);
     char *s;
     if (!zf) {
         errno = EPROTO;
@@ -193,7 +194,7 @@ char *flux_msg_tag_short (zmsg_t *zmsg)
 
 int flux_msg_replace_json (zmsg_t *zmsg, json_object *o)
 {
-    zframe_t *zf = unwrap_zmsg (zmsg, 1);
+    zframe_t *zf = flux_zmsg_nth (zmsg, 1);
     char *zbuf;
     unsigned int zlen;
 
