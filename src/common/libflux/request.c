@@ -30,35 +30,40 @@
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/shortjson.h"
 
 
-int flux_request_send (flux_t h, json_object *request, const char *fmt, ...)
+int flux_request_send (flux_t h, JSON request, const char *fmt, ...)
 {
     zmsg_t *zmsg;
     char *tag;
-    int rc;
+    int rc = -1;
     va_list ap;
-    json_object *empty = NULL;
+    JSON empty = NULL;
 
     va_start (ap, fmt);
-    if (vasprintf (&tag, fmt, ap) < 0)
-        oom ();
+    tag = xvasprintf (fmt, ap);
     va_end (ap);
 
     if (!request)
-        request = empty = util_json_object_new_object ();
-    zmsg = flux_msg_encode (tag, request);
-    free (tag);
+        request = empty = Jnew ();
+    if (!(zmsg = flux_msg_encode (tag, request)))
+        goto done;
+    if (flux_msg_set_type (zmsg, FLUX_MSGTYPE_REQUEST) < 0)
+        goto done;
     if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* add route delimiter */
-        err_exit ("zmsg_pushmem");
-    if ((rc = flux_request_sendmsg (h, &zmsg)) < 0)
+        oom ();
+    rc = flux_request_sendmsg (h, &zmsg);
+done:
+    if (zmsg)
         zmsg_destroy (&zmsg);
-    if (empty)
-        json_object_put (empty);
+    Jput (empty);
+    free (tag);
     return rc;
 }
 
-int flux_response_recv (flux_t h, json_object **respp, char **tagp, bool nb)
+int flux_response_recv (flux_t h, JSON *respp, char **tagp, bool nb)
 {
     zmsg_t *zmsg;
     int rc = -1;
@@ -101,58 +106,52 @@ done:
     return response;
 }
 
-json_object *flux_rpc (flux_t h, json_object *request, const char *fmt, ...)
+JSON flux_rpc (flux_t h, JSON request, const char *fmt, ...)
 {
     char *tag = NULL;
-    json_object *response = NULL;
-    zmsg_t *zmsg = NULL;
+    JSON response = NULL;
     va_list ap;
-    json_object *empty = NULL;
+    zmsg_t *zmsg;
 
     va_start (ap, fmt);
-    if (vasprintf (&tag, fmt, ap) < 0)
-        oom ();
+    tag = xvasprintf (fmt, ap);
     va_end (ap);
 
-    if (!request)
-        request = empty = util_json_object_new_object ();
-    zmsg = flux_msg_encode (tag, request);
-
-    if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* add route delimiter */
-        err_exit ("zmsg_pushmem");
-    if (flux_request_sendmsg (h, &zmsg) < 0)
+    if (flux_request_send (h, request, "%s", tag) < 0)
         goto done;
     if (!(zmsg = flux_response_matched_recvmsg (h, tag, false)))
         goto done;
     if (flux_msg_decode (zmsg, NULL, &response) < 0 || !response)
         goto done;
-    if (util_json_object_get_int (response, "errnum", &errno) == 0) {
-        json_object_put (response);
+    if (Jget_int (response, "errnum", &errno)) {
+        Jput (response);
         response = NULL;
         goto done;
     }
 done:
-    if (tag)
-        free (tag);
     if (zmsg)
         zmsg_destroy (&zmsg);
-    if (empty)
-        json_object_put (empty);
+    if (tag)
+        free (tag);
     return response;
 }
 
-int flux_respond (flux_t h, zmsg_t **reqmsg, json_object *response)
+int flux_respond (flux_t h, zmsg_t **zmsg, JSON o)
 {
-    if (flux_msg_replace_json (*reqmsg, response) < 0)
+    if (flux_msg_replace_json (*zmsg, o) < 0)
         return -1;
-    return flux_response_sendmsg (h, reqmsg);
+    if (flux_msg_set_type (*zmsg, FLUX_MSGTYPE_RESPONSE) < 0)
+        return -1;
+    return flux_response_sendmsg (h, zmsg);
 }
 
-int flux_respond_errnum (flux_t h, zmsg_t **reqmsg, int errnum)
+int flux_respond_errnum (flux_t h, zmsg_t **zmsg, int errnum)
 {
-    if (flux_msg_replace_json_errnum (*reqmsg, errnum) < 0)
+    if (flux_msg_replace_json_errnum (*zmsg, errnum) < 0)
         return -1;
-    return flux_response_sendmsg (h, reqmsg);
+    if (flux_msg_set_type (*zmsg, FLUX_MSGTYPE_RESPONSE) < 0)
+        return -1;
+    return flux_response_sendmsg (h, zmsg);
 }
 
 static int flux_rank_fwd (flux_t h, int rank, const char *topic, JSON payload)
@@ -224,20 +223,12 @@ JSON flux_rank_rpc (flux_t h, int rank, JSON request, const char *fmt, ...)
     JSON response = NULL;
     zmsg_t *zmsg = NULL;
     va_list ap;
-    JSON empty = NULL;
 
     va_start (ap, fmt);
-    if (vasprintf (&tag, fmt, ap) < 0)
-        oom ();
+    tag = xvasprintf (fmt, ap);
     va_end (ap);
 
-    if (!request)
-        request = empty = Jnew ();
-    zmsg = flux_msg_encode (tag, request);
-
-    if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* add route delimiter */
-        err_exit ("zmsg_pushmem");
-    if (flux_rank_request_sendmsg (h, rank, &zmsg) < 0)
+    if (flux_rank_request_send (h, rank, request, "%s", tag) < 0)
         goto done;
     if (!(zmsg = flux_response_matched_recvmsg (h, tag, false)))
         goto done;
@@ -253,7 +244,6 @@ done:
         free (tag);
     if (zmsg)
         zmsg_destroy (&zmsg);
-    Jput (empty);
     return response;
 }
 
