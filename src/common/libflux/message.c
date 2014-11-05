@@ -28,22 +28,37 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <string.h>
+#include <arpa/inet.h>
 
 #include "message.h"
 
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/log.h"
 
-/* For now, proto frame is hidden here
+/* FIXME: need alternative to manual codec
  */
-typedef uint8_t flux_proto_t[4];
 
-static void flux_proto_init (flux_proto_t proto)
+#define PROTO_MAGIC 0x8e
+#define PROTO_SIZE 8
+
+static void proto_init (uint8_t *data, int len)
 {
-    proto[0] = 0xF1;
-    proto[1] = 0xC0;
-    proto[2] = 0x00;
-    proto[3] = 0x00;
+    memset (data, 0, len);
+    data[0] = PROTO_MAGIC;
+}
+static int proto_set_type (uint8_t *data, int len, int type)
+{
+    if (len != PROTO_SIZE || data[0] != PROTO_MAGIC)
+        return -1;
+    data[1] = type;
+    return 0;
+}
+static int proto_get_type (uint8_t *data, int len, int *type)
+{
+    if (len != PROTO_SIZE || data[0] != PROTO_MAGIC)
+        return -1;
+    *type = data[1];
+    return 0;
 }
 
 int flux_msg_hopcount (zmsg_t *zmsg)
@@ -110,7 +125,7 @@ zmsg_t *flux_msg_encode (char *tag, json_object *o)
     unsigned int zlen;
     char *zbuf;
     zframe_t *zf;
-    flux_proto_t proto;
+    uint8_t proto[PROTO_SIZE];
 
     if (!tag || strlen (tag) == 0) {
         errno = EINVAL;
@@ -118,8 +133,8 @@ zmsg_t *flux_msg_encode (char *tag, json_object *o)
     }
     if (!(zmsg = zmsg_new ()))
         err_exit ("zmsg_new");
-    flux_proto_init (proto);
-    if (zmsg_addmem (zmsg, proto, sizeof (proto)) < 0)  /* 0: proto */
+    proto_init (proto, PROTO_SIZE);
+    if (zmsg_addmem (zmsg, proto, PROTO_SIZE) < 0)      /* 0: proto */
         err_exit ("zmsg_addmem");
     if (zmsg_addmem (zmsg, tag, strlen (tag)) < 0)      /* 1: tag */
         err_exit ("zmsg_addmem");
@@ -132,6 +147,23 @@ zmsg_t *flux_msg_encode (char *tag, json_object *o)
             oom ();
     }
     return zmsg;
+}
+
+int flux_msg_set_type (zmsg_t *zmsg, int type)
+{
+    zframe_t *zf = flux_zmsg_nth (zmsg, 0);
+    if (!zf || proto_set_type (zframe_data (zf), zframe_size (zf), type) < 0)
+        return -1;
+    return 0;
+}
+
+int flux_msg_get_type (zmsg_t *zmsg, int *type)
+{
+    zframe_t *zf = flux_zmsg_nth (zmsg, 0);
+
+    if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), type) < 0)
+        return -1;
+    return 0;
 }
 
 bool flux_msg_match (zmsg_t *zmsg, const char *s)

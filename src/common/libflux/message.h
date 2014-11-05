@@ -4,6 +4,7 @@
 #include <json.h>
 #include <stdbool.h>
 #include <czmq.h>
+#include <stdint.h>
 
 /* Return the number of non-nil routing frames in the message.
  */
@@ -32,6 +33,11 @@ char *flux_msg_tag_short (zmsg_t *zmsg);
  */
 int flux_msg_replace_json (zmsg_t *zmsg, json_object *o);
 int flux_msg_replace_json_errnum (zmsg_t *zmsg, int errnum);
+
+/* Get/set message type
+ */
+int flux_msg_set_type (zmsg_t *zmsg, int type);
+int flux_msg_get_type (zmsg_t *zmsg, int *type);
 
 /* Message manipulation utility functions
  */
