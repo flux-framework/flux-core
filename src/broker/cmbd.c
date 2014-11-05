@@ -1940,21 +1940,12 @@ static int relay_cc (ctx_t *ctx, zmsg_t *zmsg)
 static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg)
 {
     zmsg_t *cpy;
-    char *typestr, *tag;
 
     if (!zmsg)
         return 0;
     if (!(cpy = zmsg_dup (zmsg)))
         err_exit ("zmsg_dup");
-    if (asprintf (&typestr, "%d", type) < 0)
-        oom ();
-    if (zmsg_pushstr (cpy, typestr) < 0)
-        oom ();
-    free (typestr);
-    tag = flux_msg_tag (zmsg);
-    if (zmsg_pushstr (cpy, tag) < 0)
-        oom ();
-    free (tag);
+    flux_msg_set_type (cpy, type); /* FIXME later */
 
     return zmsg_send (&cpy, ctx->zs_snoop);
 }
