@@ -50,6 +50,7 @@
 #include "src/common/libutil/nodeset.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/ipaddr.h"
+#include "src/common/libutil/shortjson.h"
 
 #include "module.h"
 #include "boot_pmi.h"
@@ -182,7 +183,7 @@ static void peer_modcreate (ctx_t *ctx, const char *uuid);
 static endpt_t *endpt_create (const char *fmt, ...);
 static void endpt_destroy (endpt_t *ep);
 
-static int cmb_pub_event (ctx_t *ctx, zmsg_t **event);
+static int cmb_event_send (ctx_t *ctx, JSON o, const char *topic);
 static int parent_send (ctx_t *ctx, zmsg_t **zmsg);
 
 static void update_proctitle (ctx_t *ctx);
@@ -1437,25 +1438,26 @@ static void shutdown_recv (ctx_t *ctx, zmsg_t *zmsg)
         json_object_put (o);
 }
 
-static void shutdown_send (ctx_t *ctx, int grace, int rc, const char *fmt, ...)
+static int shutdown_send (ctx_t *ctx, int grace, int rc, const char *fmt, ...)
 {
-    zmsg_t *event;
-    json_object *o = util_json_object_new_object ();
+    JSON o = Jnew ();
     va_list ap;
     char *reason;
+    int ret;
 
     va_start (ap, fmt);
-    if (vasprintf (&reason, fmt, ap) < 0)
-        oom ();
+    reason = xvasprintf (fmt, ap);
     va_end (ap);
+
     util_json_object_add_string (o, "reason", reason);
     util_json_object_add_int (o, "grace", grace);
     util_json_object_add_int (o, "rank", ctx->rank);
     util_json_object_add_int (o, "exitcode", rc);
-    if (!(event = flux_msg_encode ("shutdown", o)))
-        oom ();
-    (void)cmb_pub_event (ctx, &event);
-    free (reason);
+    ret = cmb_event_send (ctx, o, "shutdown");
+    Jput (o);
+    if (reason)
+        free (reason);
+    return ret;
 }
 
 static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
@@ -1470,7 +1472,7 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
     }
 }
 
-static int cmb_pub_event (ctx_t *ctx, zmsg_t **event)
+static int cmb_event_sendmsg (ctx_t *ctx, zmsg_t **event)
 {
     int rc = -1;
     zmsg_t *cpy = NULL;
@@ -1510,42 +1512,53 @@ done:
     return rc;
 }
 
+static int cmb_event_send (ctx_t *ctx, JSON o, const char *topic)
+{
+    int rc = -1;
+    zmsg_t *zmsg;
+
+    if (!(zmsg = flux_msg_encode ((char *)topic, o))) {
+        errno = EIO;
+        goto done;
+    }
+    if (flux_msg_set_type (zmsg, FLUX_MSGTYPE_EVENT) < 0) {
+        errno = EIO;
+        goto done;
+    }
+    if (cmb_event_sendmsg (ctx, &zmsg) < 0)
+        goto done;
+    rc = 0;
+done:
+    return rc;
+}
+
 /* Unwrap event from cmb.pub request and publish.
  */
 static int cmb_pub (ctx_t *ctx, zmsg_t **zmsg)
 {
-    json_object *payload, *request = NULL;
+    JSON payload, o = NULL;
     const char *topic;
-    zmsg_t *event = NULL;
     int rc = -1;
 
     assert (ctx->rank == 0);
     assert (ctx->zs_event_out != NULL);
 
-    if (flux_msg_decode (*zmsg, NULL, &request) < 0 || !request) {
+    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || !o) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    if (util_json_object_get_string (request, "topic", &topic) < 0
-            || !(payload = json_object_object_get (request, "payload"))) {
+    if (!Jget_str (o, "topic", &topic) || !Jget_obj (o, "payload", &payload)) {
         flux_respond_errnum (ctx->h, zmsg, EINVAL);
         goto done;
     }
-    if (!(event = flux_msg_encode ((char *)topic, payload))) {
-        flux_respond_errnum (ctx->h, zmsg, EINVAL);
-        goto done;
-    }
-    if (cmb_pub_event (ctx, &event) < 0) {
+    if (cmb_event_send (ctx, payload, topic) < 0) {
         flux_respond_errnum (ctx->h, zmsg, errno);
         goto done;
     }
     flux_respond_errnum (ctx->h, zmsg, 0);
     rc = 0;
 done:
-    if (request)
-        json_object_put (request);
-    if (event)
-        zmsg_destroy (&event);
+    Jput (o);
     if (*zmsg)
         zmsg_destroy (zmsg);
     return rc;
@@ -1844,27 +1857,15 @@ done:
 
 static int hb_cb (zloop_t *zl, int timer_id, ctx_t *ctx)
 {
-    zmsg_t *zmsg = NULL;
-    json_object *o = NULL;
+    JSON o = Jnew ();
 
     assert (ctx->rank == 0);
     assert (timer_id == ctx->heartbeat_tid);
 
-    o = util_json_object_new_object ();
-    util_json_object_add_int (o, "epoch", ++ctx->hb_epoch);
-    if (!(zmsg = flux_msg_encode ("hb", o))) {
-        err ("flux_msg_encode failed");
-        goto done;
-    }
-    if (cmb_pub_event (ctx, &zmsg) < 0) {
-        err ("cmb_pub_event failed");
-        goto done;
-    }
-done:
-    if (o)
-        json_object_put (o);
-    if (zmsg)
-        zmsg_destroy (&zmsg);
+    Jadd_int (o, "epoch", ++ctx->hb_epoch);
+    if (cmb_event_send (ctx, o, "hb") < 0)
+        err ("cmb_event_send failed");
+    Jput (o);
     ZLOOP_RETURN(ctx);
 }
 
@@ -1899,7 +1900,7 @@ static void reap_all_children (ctx_t *ctx)
     while ((pid = waitpid ((pid_t) -1, &status, WNOHANG)) > (pid_t)0) {
         if (pid == ctx->shell_pid) {
             s = decode_status (ctx, "shell", pid, status, &rc);
-            shutdown_send (ctx, 2, rc, "%s", s);
+            (void)shutdown_send (ctx, 2, rc, "%s", s);
         } else {
             s = decode_status (ctx, "child", pid, status, &rc);
             msg ("%s", s);
@@ -1920,8 +1921,8 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
         if (fdsi.ssi_signo == SIGCHLD)
             reap_all_children (ctx);
         else {
-            shutdown_send (ctx, 2, 0, "signal %d (%s) %d",
-                           fdsi.ssi_signo, strsignal (fdsi.ssi_signo));
+            (void)shutdown_send (ctx, 2, 0, "signal %d (%s) %d",
+                                 fdsi.ssi_signo, strsignal (fdsi.ssi_signo));
         }
     }
     ZLOOP_RETURN(ctx);
@@ -1945,7 +1946,7 @@ static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg)
         return 0;
     if (!(cpy = zmsg_dup (zmsg)))
         err_exit ("zmsg_dup");
-    flux_msg_set_type (cpy, type); /* FIXME later */
+    //flux_msg_set_type (cpy, type); /* FIXME later */
 
     return zmsg_send (&cpy, ctx->zs_snoop);
 }
