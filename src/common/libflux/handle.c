@@ -104,12 +104,18 @@ void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn destroy)
 
 int flux_request_sendmsg (flux_t h, zmsg_t **zmsg)
 {
+    int type;
+
     if (!h->ops->request_sendmsg) {
         errno = ENOSYS;
         return -1;
     }
+    if (flux_msg_get_type (*zmsg, &type) < 0 || type != FLUX_MSGTYPE_REQUEST) {
+        errno = EINVAL;
+        return -1;
+    }
     if (h->flags & FLUX_FLAGS_TRACE)
-        zdump_fprint (stderr, *zmsg, flux_msgtype_shortstr (FLUX_MSGTYPE_REQUEST));
+        zdump_fprint (stderr, *zmsg, flux_msgtype_shortstr (type));
 
     return h->ops->request_sendmsg (h->impl, zmsg);
 }
@@ -117,26 +123,35 @@ int flux_request_sendmsg (flux_t h, zmsg_t **zmsg)
 zmsg_t *flux_request_recvmsg (flux_t h, bool nonblock)
 {
     zmsg_t *zmsg;
+    int type = 0;
 
     if (!h->ops->request_recvmsg) {
         errno = ENOSYS;
         return NULL;
     }
     zmsg = h->ops->request_recvmsg (h->impl, nonblock);
-    if (zmsg && h->flags & FLUX_FLAGS_TRACE)
-        zdump_fprint (stderr, zmsg, flux_msgtype_shortstr (FLUX_MSGTYPE_REQUEST));
-
+    if (zmsg) {
+        (void)flux_msg_get_type (zmsg, &type);
+        if (h->flags & FLUX_FLAGS_TRACE)
+            zdump_fprint (stderr, zmsg, flux_msgtype_shortstr (type));
+    }
     return zmsg;
 }
 
 int flux_response_sendmsg (flux_t h, zmsg_t **zmsg)
 {
+    int type;
+
     if (!h->ops->response_sendmsg) {
         errno = ENOSYS;
         return -1;
     }
+    if (flux_msg_get_type (*zmsg, &type) < 0 || type != FLUX_MSGTYPE_RESPONSE) {
+        errno = EINVAL;
+        return -1;
+    }
     if (h->flags & FLUX_FLAGS_TRACE)
-        zdump_fprint (stderr, *zmsg, flux_msgtype_shortstr(FLUX_MSGTYPE_RESPONSE));
+        zdump_fprint (stderr, *zmsg, flux_msgtype_shortstr (type));
 
     return h->ops->response_sendmsg (h->impl, zmsg);
 }
@@ -144,40 +159,51 @@ int flux_response_sendmsg (flux_t h, zmsg_t **zmsg)
 zmsg_t *flux_response_recvmsg (flux_t h, bool nonblock)
 {
     zmsg_t *zmsg;
+    int type;
 
     if (!h->ops->response_recvmsg) {
         errno = ENOSYS;
         return NULL;
     }
     zmsg = h->ops->response_recvmsg (h->impl, nonblock);
-    if (zmsg && h->flags & FLUX_FLAGS_TRACE)
-        zdump_fprint (stderr, zmsg, flux_msgtype_shortstr (FLUX_MSGTYPE_RESPONSE));
-
+    if (zmsg) {
+        (void)flux_msg_get_type (zmsg, &type);
+        if (h->flags & FLUX_FLAGS_TRACE)
+            zdump_fprint (stderr, zmsg, flux_msgtype_shortstr (type));
+    }
     return zmsg;
 }
 
 int flux_response_putmsg (flux_t h, zmsg_t **zmsg)
 {
+    int type;
+
     if (!h->ops->response_putmsg) {
         errno = ENOSYS;
         return -1;
     }
-
+    if (flux_msg_get_type (*zmsg, &type) < 0 || type != FLUX_MSGTYPE_RESPONSE) {
+        errno = EINVAL;
+        return -1;
+    }
     return h->ops->response_putmsg (h->impl, zmsg);
 }
 
 zmsg_t *flux_event_recvmsg (flux_t h, bool nonblock)
 {
     zmsg_t *zmsg;
+    int type;
 
     if (!h->ops->event_recvmsg) {
         errno = ENOSYS;
         return NULL;
     }
     zmsg = h->ops->event_recvmsg (h->impl, nonblock);
-    if (zmsg && h->flags & FLUX_FLAGS_TRACE)
-        zdump_fprint (stderr, zmsg, flux_msgtype_shortstr (FLUX_MSGTYPE_EVENT));
-
+    if (zmsg) {
+        (void)flux_msg_get_type (zmsg, &type);
+        if (h->flags & FLUX_FLAGS_TRACE)
+            zdump_fprint (stderr, zmsg, flux_msgtype_shortstr (type));
+    }
     return zmsg;
 }
 
