@@ -251,16 +251,16 @@ static int client_read (ctx_t *ctx, client_t *c)
 {
     zmsg_t *zmsg = NULL;
     char *name = NULL;
-    int typemask;
     subscription_t *sub;
+    int type;
 
-    zmsg = zfd_recv_typemask (c->fd, &typemask, true);
+    zmsg = zfd_recv (c->fd, true);
     if (!zmsg) {
         if (errno != ECONNRESET && errno != EWOULDBLOCK && errno != EPROTO)
             flux_log (ctx->h, LOG_ERR, "API read: %s", strerror (errno));
         return -1;
     }
-    if (!(typemask & FLUX_MSGTYPE_REQUEST))
+    if (flux_msg_get_type (zmsg, &type) < 0 || type != FLUX_MSGTYPE_REQUEST)
         goto done; /* DROP */
 
     if (flux_msg_match_substr (zmsg, "api.event.subscribe.", &name)) {
@@ -340,7 +340,7 @@ static int response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     c = zlist_first (ctx->clients);
     while (c && *zmsg) {
         if (!strcmp (uuid, zuuid_str (c->uuid))) {
-            if (zfd_send_typemask (c->fd, FLUX_MSGTYPE_RESPONSE, zmsg) < 0)
+            if (zfd_send (c->fd, zmsg) < 0)
                 zmsg_destroy (zmsg);
             break;
         }
@@ -369,7 +369,7 @@ static int event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             if (subscription_match (c, FLUX_MSGTYPE_EVENT, tag)) {
                 if (!(cpy = zmsg_dup (*zmsg)))
                     oom ();
-                if (zfd_send_typemask (c->fd, FLUX_MSGTYPE_EVENT, &cpy) < 0)
+                if (zfd_send (c->fd, &cpy) < 0)
                     zmsg_destroy (&cpy);
             }
             c = zlist_next (ctx->clients);

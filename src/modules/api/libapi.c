@@ -77,7 +77,7 @@ static int cmb_request_sendmsg (void *impl, zmsg_t **zmsg)
 {
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
-    return zfd_send_typemask (c->fd, FLUX_MSGTYPE_REQUEST, zmsg);
+    return zfd_send (c->fd, zmsg);
 }
 
 static int dq_resp_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
@@ -167,16 +167,19 @@ static bool dq_get (dq_t *dq, zmsg_t **zmsg, int typemask)
 static zmsg_t *cmb_response_recvmsg (void *impl, bool nonblock)
 {
     cmb_t *c = impl;
-    zmsg_t *z;
-    int typemask;
+    zmsg_t *z = NULL;
+    int type;
 
     assert (c->magic == CMB_CTX_MAGIC);
-    if (!dq_get (c->dq, &z, FLUX_MSGTYPE_RESPONSE)) {
-        while ((z = zfd_recv_typemask (c->fd, &typemask, nonblock))
-                                        && !(typemask & FLUX_MSGTYPE_RESPONSE))
-            if (dq_put (c->dq, &z, typemask) < 0)
-                oom ();
+    if (dq_get (c->dq, &z, FLUX_MSGTYPE_RESPONSE)) /* use deferred */
+        goto done;
+    while ((z = zfd_recv (c->fd, nonblock))) {
+        if (flux_msg_get_type (z, &type) == 0 && type == FLUX_MSGTYPE_RESPONSE)
+            break;
+        if (dq_put (c->dq, &z, type) < 0)
+            oom ();
     }
+done:
     return z;
 }
 
@@ -205,14 +208,18 @@ static zmsg_t *cmb_event_recvmsg (void *impl, bool nonblock)
 {
     cmb_t *c = impl;
     zmsg_t *z;
-    int typemask;
+    int type;
 
     assert (c->magic == CMB_CTX_MAGIC);
-    if (!dq_get (c->dq, &z, FLUX_MSGTYPE_EVENT)) {
-        while ((z = zfd_recv_typemask (c->fd, &typemask, nonblock))
-                                        && !(typemask & FLUX_MSGTYPE_EVENT))
-            dq_put (c->dq, &z, typemask);
+    if (dq_get (c->dq, &z, FLUX_MSGTYPE_EVENT)) /* use deferred */
+        goto done;
+    while ((z = zfd_recv (c->fd, nonblock))) {
+        if (flux_msg_get_type (z, &type) == 0 && type == FLUX_MSGTYPE_EVENT)
+            break;
+        if (dq_put (c->dq, &z, type) < 0)
+            oom ();
     }
+done:
     return z;
 }
 
@@ -247,12 +254,14 @@ static int unix_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
 {
     cmb_t *c = arg;
     bool nonblock = false;
-    int typemask;
     zmsg_t *z;
+    int type;
 
     if (item->revents & ZMQ_POLLIN) {
-        if ((z = zfd_recv_typemask (c->fd, &typemask, nonblock))) {
-            if (flux_handle_event_msg (c->h, typemask, &z) < 0) {
+        if ((z = zfd_recv (c->fd, nonblock))) {
+            if (flux_msg_get_type (z, &type) < 0)
+                goto done; /* drop malformed */
+            if (flux_handle_event_msg (c->h, type, &z) < 0) {
                 cmb_reactor_stop (c, -1);
                 goto done;
             }
