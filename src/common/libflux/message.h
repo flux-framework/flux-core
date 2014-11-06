@@ -39,6 +39,12 @@ int flux_msg_replace_json_errnum (zmsg_t *zmsg, int errnum);
 int flux_msg_set_type (zmsg_t *zmsg, int type);
 int flux_msg_get_type (zmsg_t *zmsg, int *type);
 
+/* Get/set nodeid
+ */
+#define FLUX_NODEID_ANY	(~(uint32_t)0)
+int flux_msg_set_nodeid (zmsg_t *zmsg, uint32_t nodeid);
+int flux_msg_get_nodeid (zmsg_t *zmsg, uint32_t *nodeid);
+
 /* Message manipulation utility functions
  */
 enum {

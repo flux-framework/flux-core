@@ -41,11 +41,6 @@
 #define PROTO_MAGIC 0x8e
 #define PROTO_SIZE 8
 
-static void proto_init (uint8_t *data, int len)
-{
-    memset (data, 0, len);
-    data[0] = PROTO_MAGIC;
-}
 static int proto_set_type (uint8_t *data, int len, int type)
 {
     if (len != PROTO_SIZE || data[0] != PROTO_MAGIC)
@@ -59,6 +54,26 @@ static int proto_get_type (uint8_t *data, int len, int *type)
         return -1;
     *type = data[1];
     return 0;
+}
+static int proto_set_nodeid (uint8_t *data, int len, uint32_t nodeid)
+{
+    if (len != PROTO_SIZE || data[0] != PROTO_MAGIC)
+        return -1;
+    *(uint32_t *)&data[4] = htonl (nodeid);
+    return 0;
+}
+static int proto_get_nodeid (uint8_t *data, int len, uint32_t *nodeid)
+{
+    if (len != PROTO_SIZE || data[0] != PROTO_MAGIC)
+        return -1;
+    *nodeid = ntohl (*(uint32_t *)&data[4]);
+    return 0;
+}
+static void proto_init (uint8_t *data, int len)
+{
+    memset (data, 0, len);
+    data[0] = PROTO_MAGIC;
+    proto_set_nodeid (data, len, FLUX_NODEID_ANY);
 }
 
 int flux_msg_hopcount (zmsg_t *zmsg)
@@ -162,6 +177,23 @@ int flux_msg_get_type (zmsg_t *zmsg, int *type)
     zframe_t *zf = flux_zmsg_nth (zmsg, 0);
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), type) < 0)
+        return -1;
+    return 0;
+}
+
+int flux_msg_set_nodeid (zmsg_t *zmsg, uint32_t nodeid)
+{
+    zframe_t *zf = flux_zmsg_nth (zmsg, 0);
+    if (!zf || proto_set_nodeid (zframe_data (zf), zframe_size (zf), nodeid)<0)
+        return -1;
+    return 0;
+}
+
+int flux_msg_get_nodeid (zmsg_t *zmsg, uint32_t *nodeid)
+{
+    zframe_t *zf = flux_zmsg_nth (zmsg, 0);
+
+    if (!zf || proto_get_nodeid (zframe_data (zf), zframe_size (zf), nodeid)<0)
         return -1;
     return 0;
 }
