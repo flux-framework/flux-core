@@ -93,8 +93,7 @@ typedef struct {
     endpt_t *gevent;            /* PUB for rank = 0, SUB for rank > 0 */
     endpt_t *gevent_relay;      /* PUB event relay for multiple cmbds/node */
 
-    char *uri_snoop;            /* PUB - to flux-snoop (uri is generated) */
-    void *zs_snoop;
+    endpt_t *snoop;             /* PUB - to flux-snoop (uri is generated) */
     /* Session parameters
      */
     bool treeroot;              /* true if we are the root of reduction tree */
@@ -152,9 +151,6 @@ typedef struct {
     bool modflag;
 } peer_t;
 
-static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg);
-static int relay_cc (ctx_t *ctx, zmsg_t *zmsg);
-
 static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod);
 static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
@@ -182,6 +178,7 @@ static void peer_modcreate (ctx_t *ctx, const char *uuid);
 
 static endpt_t *endpt_create (const char *fmt, ...);
 static void endpt_destroy (endpt_t *ep);
+static int endpt_cc (zmsg_t *zmsg, endpt_t *ep);
 
 static int cmb_event_send (ctx_t *ctx, JSON o, const char *topic);
 static int parent_send (ctx_t *ctx, zmsg_t **zmsg);
@@ -307,10 +304,10 @@ int main (int argc, char *argv[])
             case 't':   /* --child-uri URI[,URI,...] */
                 if (ctx.child)
                     endpt_destroy (ctx.child);
-                ctx.child = endpt_create (optarg);
+                ctx.child = endpt_create ("%s", optarg);
                 break;
             case 'p': { /* --parent-uri URI */
-                endpt_t *ep = endpt_create (optarg);
+                endpt_t *ep = endpt_create ("%s", optarg);
                 if (zlist_push (ctx.parents, ep) < 0)
                     oom ();
                 break;
@@ -352,12 +349,12 @@ int main (int argc, char *argv[])
             case 'e':   /* --event-uri URI */
                 if (ctx.gevent)
                     endpt_destroy (ctx.gevent);
-                ctx.gevent = endpt_create (optarg);
+                ctx.gevent = endpt_create ("%s", optarg);
                 break;
             case 'r':   /* --right-uri */
                 if (ctx.right)
                     endpt_destroy (ctx.right);
-                ctx.right = endpt_create (optarg);
+                ctx.right = endpt_create ("%s", optarg);
                 break;
             case 'c':   /* --command CMD */
                 if (ctx.shell_cmd)
@@ -562,6 +559,8 @@ int main (int argc, char *argv[])
         free (ctx.rankstr);
     if (ctx.rankstr_right)
         free (ctx.rankstr_right);
+    if (ctx.snoop)
+        endpt_destroy (ctx.snoop);
     zhash_destroy (&ctx.peer_idle);
     zlist_destroy (&modules);
     zlist_destroy (&modopts);
@@ -707,15 +706,15 @@ static void boot_pmi (ctx_t *ctx)
 
     if (ctx->rank > 0) {
         int prank = ctx->k_ary == 0 ? 0 : (ctx->rank - 1) / ctx->k_ary;
-        endpt_t *ep = endpt_create (pmi_get_uri (pmi, prank));
+        endpt_t *ep = endpt_create ("%s", pmi_get_uri (pmi, prank));
         if (zlist_push (ctx->parents, ep) < 0)
             oom ();
     }
 
-    ctx->right = endpt_create (pmi_get_uri (pmi, right_rank));
+    ctx->right = endpt_create ("%s", pmi_get_uri (pmi, right_rank));
 
     if (relay_rank >= 0 && ctx->rank != relay_rank) {
-        ctx->gevent = endpt_create (pmi_get_relay (pmi, relay_rank));
+        ctx->gevent = endpt_create ("%s", pmi_get_relay (pmi, relay_rank));
     } else {
         int p = 5000 + pmi_jobid (pmi) % 1024;
         ctx->gevent = endpt_create ("epgm://%s;239.192.1.1:%d", ipaddr, p);
@@ -992,17 +991,20 @@ static void *cmbd_init_event_out (ctx_t *ctx)
 
 static void *cmbd_init_snoop (ctx_t *ctx)
 {
-    void *s;
+    char *uri;
+    endpt_t *ep = endpt_create ("ipc://*");
 
-    if (!(s = zsocket_new (ctx->zctx, ZMQ_PUB)))
+    if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_PUB)))
         err_exit ("zsocket_new");
-    if (flux_sec_ssockinit (ctx->sec, s) < 0)
+    if (flux_sec_ssockinit (ctx->sec, ep->zs) < 0)
         msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ctx->sec));
-    assert (ctx->uri_snoop == NULL);
-    if (zsocket_bind (s, "%s", "ipc://*") < 0)
+    if (zsocket_bind (ep->zs, "%s", ep->uri) < 0)
         err_exit ("%s", "ipc://*");
-    ctx->uri_snoop = zsocket_last_endpoint (s);
-    return s;
+    if ((uri = zsocket_last_endpoint (ep->zs))) {
+        free (ep->uri);
+        ep->uri = xstrdup (uri);
+    }
+    return ep;
 }
 
 static int cmbd_init_parent (ctx_t *ctx, endpt_t *ep)
@@ -1116,7 +1118,7 @@ static void cmbd_init_socks (ctx_t *ctx)
      */
     ctx->zs_request = cmbd_init_request (ctx);
     ctx->zs_event_out = cmbd_init_event_out (ctx);
-    ctx->zs_snoop = cmbd_init_snoop (ctx);
+    ctx->snoop = cmbd_init_snoop (ctx);
 
     if (ctx->rank == 0 && ctx->gevent)
         cmbd_init_gevent_pub (ctx, ctx->gevent);
@@ -1164,7 +1166,8 @@ static char *cmb_getattr (ctx_t *ctx, const char *name)
 {
     char *val = NULL;
     if (!strcmp (name, "cmbd-snoop-uri")) {
-        val = ctx->uri_snoop;
+        if (ctx->snoop)
+            val = ctx->snoop->uri;
     } else if (!strcmp (name, "cmbd-parent-uri")) {
         endpt_t *ep = zlist_first (ctx->parents);
         if (ep)
@@ -1356,9 +1359,9 @@ static endpt_t *endpt_create (const char *fmt, ...)
 {
     endpt_t *ep = xzmalloc (sizeof (*ep));
     va_list ap;
+
     va_start (ap, fmt);
-    if (vasprintf (&ep->uri, fmt, ap) < 0)
-        oom ();
+    ep->uri = xvasprintf (fmt, ap);
     va_end (ap);
     return ep;
 }
@@ -1368,6 +1371,18 @@ static void endpt_destroy (endpt_t *ep)
     free (ep->uri);
     free (ep);
 }
+
+static int endpt_cc (zmsg_t *zmsg, endpt_t *ep)
+{
+    zmsg_t *cpy;
+
+    if (!zmsg || !ep || !ep->zs)
+        return 0;
+    if (!(cpy = zmsg_dup (zmsg)))
+        err_exit ("zmsg_dup");
+    return zmsg_send (&cpy, ep->zs);
+}
+
 
 /* Establish connection with a new parent and begin using it for all
  * upstream requests.  Leave old parent(s) wired in to zloop to make
@@ -1392,7 +1407,7 @@ static int cmb_reparent (ctx_t *ctx, const char *uri)
         zlist_remove (ctx->parents, ep);
         comment = "restored";
     } else {
-        ep = endpt_create (uri);
+        ep = endpt_create ("%s", uri);
         if (cmbd_init_parent (ctx, ep) < 0) {
             endpt_destroy (ep);
             return -1;
@@ -1497,9 +1512,9 @@ static int cmb_event_sendmsg (ctx_t *ctx, zmsg_t **event)
     }
     /* Publish event locally
     */
-    snoop_cc (ctx, FLUX_MSGTYPE_EVENT, *event);
+    endpt_cc (*event, ctx->snoop);
     cmb_internal_event (ctx, *event);
-    relay_cc (ctx, *event);
+    endpt_cc (*event, ctx->gevent_relay);
     if (zmsg_send (event, ctx->zs_event_out) < 0) {
         if (errno == 0)
             errno = EIO;
@@ -1846,8 +1861,8 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
                 goto done;
             }
         }
-        relay_cc (ctx, zmsg);
-        snoop_cc (ctx, FLUX_MSGTYPE_EVENT, zmsg);
+        endpt_cc (zmsg, ctx->gevent_relay);
+        endpt_cc (zmsg, ctx->snoop);
         cmb_internal_event (ctx, zmsg);
         zmsg_send (&zmsg, ctx->zs_event_out);
     }
@@ -1928,29 +1943,6 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
     ZLOOP_RETURN(ctx);
 }
 
-static int relay_cc (ctx_t *ctx, zmsg_t *zmsg)
-{
-    zmsg_t *cpy;
-    if (!zmsg || !ctx->gevent_relay)
-        return 0;
-    if (!(cpy = zmsg_dup (zmsg)))
-        err_exit ("zmsg_dup");
-    return zmsg_send (&cpy, ctx->gevent_relay->zs);
-}
-
-static int snoop_cc (ctx_t *ctx, int type, zmsg_t *zmsg)
-{
-    zmsg_t *cpy;
-
-    if (!zmsg)
-        return 0;
-    if (!(cpy = zmsg_dup (zmsg)))
-        err_exit ("zmsg_dup");
-    //flux_msg_set_type (cpy, type); /* FIXME later */
-
-    return zmsg_send (&cpy, ctx->zs_snoop);
-}
-
 static int parent_send (ctx_t *ctx, zmsg_t **zmsg)
 {
     endpt_t *ep = zlist_first (ctx->parents);
@@ -1983,7 +1975,7 @@ static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
         errno = EPROTO;
         goto done;
     }
-    snoop_cc (ctx, FLUX_MSGTYPE_REQUEST, *zmsg);
+    endpt_cc (*zmsg, ctx->snoop);
     if (!strcmp (service, "cmb")) {
         if (hopcount > 0) {
             cmb_internal_request (ctx, zmsg);
@@ -2026,7 +2018,7 @@ static int cmbd_response_sendmsg (void *impl, zmsg_t **zmsg)
     char *nexthop = flux_msg_nexthop (*zmsg);
     int rc = -1;
 
-    snoop_cc (ctx, FLUX_MSGTYPE_RESPONSE, *zmsg);
+    endpt_cc (*zmsg, ctx->snoop);
 
     /* No more routing frames
      */
