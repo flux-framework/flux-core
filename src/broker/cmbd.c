@@ -1614,10 +1614,9 @@ static bool rankfwd_looped (ctx_t *ctx, zmsg_t *zmsg)
     return false;
 }
 
-static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
+static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
 {
-    char *arg = NULL;
-    bool handled = true;
+    int rc = 0;
 
     if (flux_msg_match (*zmsg, "cmb.info")) {
         json_object *response = util_json_object_new_object ();
@@ -1798,14 +1797,11 @@ static void cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         } else if (zmsg_send (zmsg, ctx->right->zs) < 0) {
             flux_respond_errnum (ctx->h, zmsg, errno);
         }
-    } else
-        handled = false;
-
-    if (arg)
-        free (arg);
-    /* If zmsg is not destroyed, route_request() will respond with ENOSYS */
-    if (handled && *zmsg)
-        zmsg_destroy (zmsg);
+    } else {
+        rc = -1;
+        errno = ENOSYS;
+    }
+    return rc;
 }
 
 static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
@@ -1946,15 +1942,71 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 static int parent_send (ctx_t *ctx, zmsg_t **zmsg)
 {
     endpt_t *ep = zlist_first (ctx->parents);
+    int rc = -1;
 
-    assert (ep != NULL);
-    assert (ep->zs != NULL);
-    if (zmsg_send (zmsg, ep->zs) < 0) {
-        err ("%s: %s: %s", __FUNCTION__, ep->uri, strerror (errno));
-        return -1;
+    if (!ep || !ep->zs) {
+        errno = ctx->treeroot ? ENOSYS : EHOSTUNREACH;
+        goto done;
     }
     self_update (ctx);
-    return 0;
+    rc = zmsg_send (zmsg, ep->zs);
+done:
+    return rc;
+}
+
+static int rank_send (ctx_t *ctx, zmsg_t **zmsg)
+{
+    zframe_t *zf;
+
+    if (!ctx->right || !ctx->right->zs)
+        goto unreach;
+    zf = zmsg_first (*zmsg);
+    while (zf && zframe_size (zf) > 0) {
+        if (zframe_streq (zf, ctx->rankstr_right)) /* cycle detected! */
+            goto unreach;
+        zf = zmsg_next (*zmsg);
+    }
+    return zmsg_send (zmsg, ctx->right->zs);
+
+unreach:
+    errno = EHOSTUNREACH;
+    return -1;
+}
+
+/* Try to dispatch message to a local service: built-in broker service,
+ * or loaded comms module.
+ */
+static int service_send (ctx_t *ctx, zmsg_t **zmsg, char *lasthop, int hopcount)
+{
+    char *service = flux_msg_tag_short (*zmsg);
+    int rc = -1;
+    module_t *mod;
+
+    if (!service) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (!strcmp (service, "cmb")) {
+        if (hopcount == 0) { /* loopback */
+            errno = ENOSYS;
+            goto done;
+        }
+        rc = cmb_internal_request (ctx, zmsg);
+    } else {
+        if (!(mod = zhash_lookup (ctx->modules, service))) {
+            errno = ENOSYS;
+            goto done;
+        }
+        if (lasthop && !strcmp (lasthop, plugin_uuid (mod->p))) { /* loopback */
+            errno = ENOSYS;
+            goto done;
+        }
+        rc = zmsg_send (zmsg, plugin_sock (mod->p));
+    }
+done:
+    if (service)
+        free (service);
+    return rc;
 }
 
 /**
@@ -1965,48 +2017,31 @@ static int parent_send (ctx_t *ctx, zmsg_t **zmsg)
 static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
 {
     ctx_t *ctx = impl;
-    char *service = flux_msg_tag_short (*zmsg);
     char *lasthop = flux_msg_nexthop (*zmsg);
     int hopcount = flux_msg_hopcount (*zmsg);
-    module_t *mod;
+    uint32_t nodeid;
     int rc = -1;
 
-    if (!service) {
+    if (flux_msg_get_nodeid (*zmsg, &nodeid) < 0) {
         errno = EPROTO;
         goto done;
     }
     endpt_cc (*zmsg, ctx->snoop);
-    if (!strcmp (service, "cmb")) {
-        if (hopcount > 0) {
-            cmb_internal_request (ctx, zmsg);
-        } else if (!ctx->treeroot) {
-            parent_send (ctx, zmsg);
-        } else
-            errno = EINVAL;
-    } else {
-        if ((mod = zhash_lookup (ctx->modules, service))
-                 && (!lasthop || strcmp (lasthop, plugin_uuid (mod->p)) != 0)) {
-            if (zmsg_send (zmsg, plugin_sock (mod->p)) < 0)
-                err ("%s: %s", __FUNCTION__, service);
-
-        } else if (!ctx->treeroot) {
-            parent_send (ctx, zmsg);
-        } else
-            errno = ENOSYS;
-    }
-    if (hopcount > 0)
+    if (hopcount > 0 && lasthop)
         peer_update (ctx, lasthop);
-done:
-    if (*zmsg == NULL) {
-        rc = 0;
+
+    if (nodeid == FLUX_NODEID_ANY) {
+        rc = service_send (ctx, zmsg, lasthop, hopcount);
+        if (rc < 0 && errno == ENOSYS)
+            rc = parent_send (ctx, zmsg);
+    } else if (nodeid == ctx->rank) {
+        rc = service_send (ctx, zmsg, lasthop, hopcount);
     } else {
-        if (errno == 0)
-            errno = ENOSYS;
+        rc = rank_send (ctx, zmsg);
     }
+done:
     /* N.B. don't destroy zmsg on error as we use it to send errnum reply.
      */
-    if (service)
-        free (service);
     if (lasthop)
         free (lasthop);
     return rc;
