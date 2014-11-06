@@ -85,23 +85,14 @@ static int _write_all (int fd, uint8_t *buf, size_t len)
     return count;
 }
 
-zmsg_t *zfd_recv_typemask (int fd, int *typemask, bool nonblock)
+zmsg_t *zfd_recv (int fd, bool nonblock)
 {
     uint8_t *buf = NULL;
-    uint32_t len, mask;
+    uint32_t len;
     int n;
     zmsg_t *msg;
 
-    if (typemask) {
-        n = _read_all (fd, (uint8_t *)&mask, sizeof (mask), nonblock);
-        if (n < 0)
-            goto error;
-        if (n == 0)
-            goto eproto;
-        mask = ntohl (mask);
-    }
-
-    n = _read_all (fd, (uint8_t *)&len, sizeof (len), 0);
+    n = _read_all (fd, (uint8_t *)&len, sizeof (len), nonblock);
     if (n < 0)
         goto error;
     if (n == 0)
@@ -117,8 +108,6 @@ zmsg_t *zfd_recv_typemask (int fd, int *typemask, bool nonblock)
 
     msg = zmsg_decode ((byte *)buf, len);
     free (buf);
-    if (typemask)
-        *typemask = mask;
     return msg;
 eproto:
     errno = EPROTO;
@@ -128,30 +117,17 @@ error:
     return NULL;
 }
 
-zmsg_t *zfd_recv (int fd, bool nonblock)
-{
-    return zfd_recv_typemask (fd, NULL, nonblock);
-}
-
-int zfd_send_typemask (int fd, int typemask, zmsg_t **msg)
+int zfd_send (int fd, zmsg_t **msg)
 {
     uint8_t *buf = NULL;
     int n, len;
-    uint32_t nlen, mask;
+    uint32_t nlen;
 
     len = zmsg_encode (*msg, &buf);
     if (len < 0) {
         errno = EPROTO;
         goto error;
     }
-
-    if (typemask != -1) {
-        mask = htonl ((uint32_t)typemask);
-        n = _write_all (fd, (uint8_t *)&mask, sizeof (mask));
-        if (n < 0)
-            goto error;
-    }
-
     nlen = htonl ((uint32_t)len);
     n = _write_all (fd, (uint8_t *)&nlen, sizeof (nlen));
     if (n < 0)
@@ -168,11 +144,6 @@ error:
     if (buf)
         free (buf);
     return -1;
-}
-
-int zfd_send (int fd, zmsg_t **msg)
-{
-    return zfd_send_typemask (fd, -1, msg);
 }
 
 /*
