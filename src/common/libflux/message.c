@@ -39,41 +39,71 @@
  */
 
 #define PROTO_MAGIC 0x8e
-#define PROTO_SIZE 8
+#define PROTO_SIZE 6
+
+static int proto_set_nodeid (uint8_t *data, int len, uint32_t nodeid);
+static int proto_set_errnum (uint8_t *data, int len, uint32_t errnum);
 
 static int proto_set_type (uint8_t *data, int len, int type)
 {
-    if (len != PROTO_SIZE || data[0] != PROTO_MAGIC)
+    if (len < 2 || data[0] != PROTO_MAGIC)
         return -1;
     data[1] = type;
+    switch (type) {
+        case FLUX_MSGTYPE_REQUEST:
+            proto_set_nodeid (data, len, FLUX_NODEID_ANY);
+            break;
+        case FLUX_MSGTYPE_RESPONSE:
+            proto_set_errnum (data, len, 0);
+            break;
+    }
     return 0;
 }
 static int proto_get_type (uint8_t *data, int len, int *type)
 {
-    if (len != PROTO_SIZE || data[0] != PROTO_MAGIC)
+    if (len < 2 || data[0] != PROTO_MAGIC)
         return -1;
     *type = data[1];
     return 0;
 }
 static int proto_set_nodeid (uint8_t *data, int len, uint32_t nodeid)
 {
-    if (len != PROTO_SIZE || data[0] != PROTO_MAGIC)
+    uint32_t x = htonl (nodeid);
+    if (len < 6 || data[0] != PROTO_MAGIC || data[1] != FLUX_MSGTYPE_REQUEST)
         return -1;
-    *(uint32_t *)&data[4] = htonl (nodeid);
+    memcpy (&data[2], &x, sizeof (x));
     return 0;
 }
 static int proto_get_nodeid (uint8_t *data, int len, uint32_t *nodeid)
 {
-    if (len != PROTO_SIZE || data[0] != PROTO_MAGIC)
+    uint32_t x;
+    if (len < 6 || data[0] != PROTO_MAGIC || data[1] != FLUX_MSGTYPE_REQUEST)
         return -1;
-    *nodeid = ntohl (*(uint32_t *)&data[4]);
+    memcpy (&x, &data[2], sizeof (x));
+    *nodeid = ntohl (x);
+    return 0;
+}
+static int proto_set_errnum (uint8_t *data, int len, uint32_t errnum)
+{
+    uint32_t x = htonl (errnum);
+    if (len < 6 || data[0] != PROTO_MAGIC || data[1] != FLUX_MSGTYPE_RESPONSE)
+        return -1;
+    memcpy (&data[2], &x, sizeof (x));
+    return 0;
+}
+static int proto_get_errnum (uint8_t *data, int len, uint32_t *errnum)
+{
+    uint32_t x;
+    if (len < 6 || data[0] != PROTO_MAGIC || data[1] != FLUX_MSGTYPE_RESPONSE)
+        return -1;
+    memcpy (&x, &data[2], sizeof (x));
+    *errnum = ntohl (x);
     return 0;
 }
 static void proto_init (uint8_t *data, int len)
 {
     memset (data, 0, len);
     data[0] = PROTO_MAGIC;
-    proto_set_nodeid (data, len, FLUX_NODEID_ANY);
 }
 
 int flux_msg_hopcount (zmsg_t *zmsg)
@@ -167,8 +197,10 @@ zmsg_t *flux_msg_encode (char *tag, json_object *o)
 int flux_msg_set_type (zmsg_t *zmsg, int type)
 {
     zframe_t *zf = flux_zmsg_nth (zmsg, 0);
-    if (!zf || proto_set_type (zframe_data (zf), zframe_size (zf), type) < 0)
+    if (!zf || proto_set_type (zframe_data (zf), zframe_size (zf), type) < 0) {
+        errno = EINVAL;
         return -1;
+    }
     return 0;
 }
 
@@ -176,25 +208,54 @@ int flux_msg_get_type (zmsg_t *zmsg, int *type)
 {
     zframe_t *zf = flux_zmsg_nth (zmsg, 0);
 
-    if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), type) < 0)
+    if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), type) < 0) {
+        errno = EPROTO;
         return -1;
+    }
     return 0;
 }
 
-int flux_msg_set_nodeid (zmsg_t *zmsg, uint32_t nodeid)
+int flux_msg_set_nodeid (zmsg_t *zmsg, uint32_t nid)
 {
     zframe_t *zf = flux_zmsg_nth (zmsg, 0);
-    if (!zf || proto_set_nodeid (zframe_data (zf), zframe_size (zf), nodeid)<0)
+    if (!zf || proto_set_nodeid (zframe_data (zf), zframe_size (zf), nid) < 0) {
+        errno = EINVAL;
         return -1;
+    }
     return 0;
 }
 
-int flux_msg_get_nodeid (zmsg_t *zmsg, uint32_t *nodeid)
+int flux_msg_get_nodeid (zmsg_t *zmsg, uint32_t *nid)
 {
     zframe_t *zf = flux_zmsg_nth (zmsg, 0);
 
-    if (!zf || proto_get_nodeid (zframe_data (zf), zframe_size (zf), nodeid)<0)
+    if (!zf || proto_get_nodeid (zframe_data (zf), zframe_size (zf), nid) < 0) {
+        errno = EPROTO;
         return -1;
+    }
+    return 0;
+}
+
+int flux_msg_set_errnum (zmsg_t *zmsg, int e)
+{
+    zframe_t *zf = flux_zmsg_nth (zmsg, 0);
+    if (!zf || proto_set_errnum (zframe_data (zf), zframe_size (zf), e) < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
+int flux_msg_get_errnum (zmsg_t *zmsg, int *e)
+{
+    zframe_t *zf = flux_zmsg_nth (zmsg, 0);
+    uint32_t xe;
+
+    if (!zf || proto_get_errnum (zframe_data (zf), zframe_size (zf), &xe) < 0) {
+        errno = EPROTO;
+        return -1;
+    }
+    *e = xe;
     return 0;
 }
 
@@ -354,8 +415,10 @@ int main (int argc, char *argv[])
     json_object *o = NULL;
     char *s = NULL;
     int rc, i;
+    int type, errnum;
+    uint32_t nodeid;
 
-    plan (23);
+    plan (32);
 
     /* flux_msg_encode, flux_msg_decode, flux_msg_match
      *   on message with no JSON frame
@@ -444,7 +507,7 @@ int main (int argc, char *argv[])
     free (s);
     zmsg_destroy (&zmsg);
 
-    /* flux_msg_replace_json, flux_msg_replace_json_errnum
+    /* flux_msg_replace_json
      *   on message with and without JSON frame
      */
     zmsg = flux_msg_encode ("baz", NULL);
@@ -466,13 +529,47 @@ int main (int argc, char *argv[])
     ok ((rc == 0 && Jget_int (o, "y", &i) && i == 3),
         "flux_msg_decode returned replaced json");
     Jput (o);
-    rc = flux_msg_replace_json_errnum (zmsg, ESRCH);
+    zmsg_destroy (&zmsg);
+
+    /* flux_msg_set_type, flux_msg_get_type
+     * flux_msg_set_nodeid, flux_msg_get_nodeid
+     * flux_msg_set_errnum, flux_msg_get_errnum
+     */
+    zmsg = flux_msg_encode ("rat", NULL);
+    rc = flux_msg_set_type (zmsg, FLUX_MSGTYPE_REQUEST);
     ok ((rc == 0),
-        "flux_msg_replace_json_errnum worked");
-    rc = flux_msg_decode (zmsg, NULL, &o);
-    ok ((rc == 0 && Jget_int (o, "errnum", &i) && i == ESRCH),
-        "flux_msg_decode returned errnum with correct value");
-    Jput (o);
+        "flux_msg_set_type works");
+    rc = flux_msg_get_type (zmsg, &type);
+    ok ((rc == 0 && type == FLUX_MSGTYPE_REQUEST),
+        "flux_msg_get_type works and returns what we set");
+    rc = flux_msg_get_nodeid (zmsg, &nodeid);
+    ok ((rc == 0 && nodeid == FLUX_NODEID_ANY),
+        "flux_msg_get_nodeid works and default is sane");
+    nodeid = 42;
+    rc = flux_msg_set_nodeid (zmsg, nodeid);
+    ok ((rc == 0),
+        "flux_msg_set_nodeid works");
+    rc = flux_msg_get_nodeid (zmsg, &nodeid);
+    ok ((rc == 0 && nodeid == 42),
+        "flux_msg_get_nodeid works and returns what we set");
+    rc = flux_msg_set_errnum (zmsg, 42);
+    ok ((rc < 0 && errno == EINVAL),
+        "flux_msg_set_errnum on non-response fails with errno == EINVAL");
+    rc = flux_msg_set_type (zmsg, FLUX_MSGTYPE_RESPONSE);
+    ok ((rc == 0),
+        "flux_msg_set_type works");
+    rc = flux_msg_get_type (zmsg, &type);
+    ok ((rc == 0 && type == FLUX_MSGTYPE_RESPONSE),
+        "flux_msg_get_type works and returns what we set");
+    rc = flux_msg_set_nodeid (zmsg, 0);
+    ok ((rc < 0 && errno == EINVAL),
+        "flux_msg_set_nodeid on non-request fails with errno == EINVAL");
+    rc = flux_msg_set_errnum (zmsg, 43);
+    ok ((rc == 0),
+        "flux_msg_set_errnum works");
+    rc = flux_msg_get_errnum (zmsg, &errnum);
+    ok ((rc == 0 && errnum == 43),
+        "flux_msg_get_errnum works and returns what we set");
     zmsg_destroy (&zmsg);
 
     done_testing();

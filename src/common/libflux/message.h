@@ -35,15 +35,22 @@ int flux_msg_replace_json (zmsg_t *zmsg, json_object *o);
 int flux_msg_replace_json_errnum (zmsg_t *zmsg, int errnum);
 
 /* Get/set message type
+ * For FLUX_MSGTYPE_REQUEST: set_type initializes nodeid to FLUX_NODEID_ANY
+ * For FLUX_MSGTYPE_RESPONSE: set_type initializes errnum to 0
  */
 int flux_msg_set_type (zmsg_t *zmsg, int type);
 int flux_msg_get_type (zmsg_t *zmsg, int *type);
 
-/* Get/set nodeid
+/* Get/set nodeid (request only)
  */
 #define FLUX_NODEID_ANY	(~(uint32_t)0)
 int flux_msg_set_nodeid (zmsg_t *zmsg, uint32_t nodeid);
 int flux_msg_get_nodeid (zmsg_t *zmsg, uint32_t *nodeid);
+
+/* Get/set errnum (response only)
+ */
+int flux_msg_set_errnum (zmsg_t *zmsg, int errnum);
+int flux_msg_get_errnum (zmsg_t *zmsg, int *errnum);
 
 /* Message manipulation utility functions
  */
