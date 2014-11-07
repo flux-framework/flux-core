@@ -1579,41 +1579,6 @@ done:
     return rc;
 }
 
-static void rankfwd_rewrap (zmsg_t **zmsg, const char **tp, json_object **pp)
-{
-    zframe_t *zf[2];
-    const char *s;
-    int i;
-
-    for (i = 0; i < 2; i++) {
-        zf[i] = zmsg_last (*zmsg);
-        assert (zf[i] != NULL);
-        zmsg_remove (*zmsg, zf[i]);
-    }
-    if (zmsg_addstr (*zmsg, *tp) < 0)
-        oom ();
-    if (*pp && (s = json_object_to_json_string (*pp)))
-        if (zmsg_addstr (*zmsg, s) < 0)
-            oom ();
-    for (i = 0; i < 2; i++) /* destroys *tp and *pp */
-        zframe_destroy (&zf[i]);
-    *pp = NULL;
-    *tp = NULL;
-}
-
-static bool rankfwd_looped (ctx_t *ctx, zmsg_t *zmsg)
-{
-    zframe_t *zf;
-
-    zf = zmsg_first (zmsg);
-    while (zf && zframe_size (zf) > 0) {
-        if (zframe_streq (zf, ctx->rankstr_right))
-            return true;
-        zf = zmsg_next (zmsg);
-    }
-    return false;
-}
-
 static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
 {
     int rc = 0;
@@ -1767,35 +1732,6 @@ static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         } else {
             if (cmb_pub (ctx, zmsg) < 0)
                 flux_respond_errnum (ctx->h, zmsg, errno);
-        }
-    } else if (flux_msg_match (*zmsg, "cmb.rankfwd")) {
-        json_object *payload, *request = NULL;
-        int rank;
-        const char *topic;
-        if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
-                || util_json_object_get_int (request, "rank", &rank) < 0
-                || util_json_object_get_string (request, "topic", &topic) < 0
-                || !(payload = json_object_object_get (request, "payload"))) {
-            flux_respond_errnum (ctx->h, zmsg, EPROTO);
-        } else if (rank == ctx->rank) {
-            char *p, *service = xstrdup (topic);
-            module_t *mod;
-            if ((p = strchr (service, '.')))
-                *p = '\0';
-            rankfwd_rewrap (zmsg, &topic, &payload);
-            if (!strcmp (service, "cmb")) {
-                cmb_internal_request (ctx, zmsg);
-            } else if ((mod = zhash_lookup (ctx->modules, service))) {
-                if (zmsg_send (zmsg, plugin_sock (mod->p)) < 0)
-                    flux_respond_errnum (ctx->h, zmsg, errno);
-            } else
-                flux_respond_errnum (ctx->h, zmsg, EHOSTUNREACH);
-            free (service);
-        } else if (!ctx->right || rankfwd_looped (ctx, *zmsg)) {
-            rankfwd_rewrap (zmsg, &topic, &payload);
-            flux_respond_errnum (ctx->h, zmsg, EHOSTUNREACH);
-        } else if (zmsg_send (zmsg, ctx->right->zs) < 0) {
-            flux_respond_errnum (ctx->h, zmsg, errno);
         }
     } else {
         rc = -1;
