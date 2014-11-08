@@ -74,13 +74,11 @@ done:
 
 JSON flux_lsmod (flux_t h, int rank, const char *target)
 {
-    JSON request = Jnew ();
     JSON response = NULL;
 
     if (target == NULL)
         target = "cmb";
-    response = flux_rank_rpc (h, rank, request, "%s.lsmod", target);
-    Jput (request);
+    response = flux_rank_rpc (h, rank, NULL, "%s.lsmod", target);
     return response;
 }
 

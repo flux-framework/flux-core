@@ -1654,17 +1654,12 @@ static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         if (request)
             json_object_put (request);
     } else if (flux_msg_match (*zmsg, "cmb.lsmod")) {
-        json_object *request = NULL;
         json_object *response = NULL;
-        if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
-            flux_respond_errnum (ctx->h, zmsg, EPROTO);
-        } else if (!(response = cmb_lsmod (ctx))) {
+        if (!(response = cmb_lsmod (ctx))) {
             flux_respond_errnum (ctx->h, zmsg, errno);
         } else {
             flux_respond (ctx->h, zmsg, response);
         }
-        if (request)
-            json_object_put (request);
         if (response)
             json_object_put (response);
     } else if (flux_msg_match (*zmsg, "cmb.lspeer")) {
