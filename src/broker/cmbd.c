@@ -121,6 +121,7 @@ typedef struct {
     sigset_t default_sigset;
     flux_conf_t cf;
     const char *secdir;
+    int event_seq;
     /* Bootstrap
      */
     bool boot_pmi;
@@ -1536,10 +1537,10 @@ static int cmb_event_send (ctx_t *ctx, JSON o, const char *topic)
         errno = EIO;
         goto done;
     }
-    if (flux_msg_set_type (zmsg, FLUX_MSGTYPE_EVENT) < 0) {
-        errno = EIO;
+    if (flux_msg_set_type (zmsg, FLUX_MSGTYPE_EVENT) < 0)
         goto done;
-    }
+    if (flux_msg_set_seq (zmsg, ctx->event_seq++) < 0)
+        goto done;
     if (cmb_event_sendmsg (ctx, &zmsg) < 0)
         goto done;
     rc = 0;
