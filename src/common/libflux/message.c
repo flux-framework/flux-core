@@ -43,6 +43,7 @@
 
 static int proto_set_nodeid (uint8_t *data, int len, uint32_t nodeid);
 static int proto_set_errnum (uint8_t *data, int len, uint32_t errnum);
+static int proto_set_seq (uint8_t *data, int len, uint32_t seq);
 
 static int proto_set_type (uint8_t *data, int len, int type)
 {
@@ -55,6 +56,9 @@ static int proto_set_type (uint8_t *data, int len, int type)
             break;
         case FLUX_MSGTYPE_RESPONSE:
             proto_set_errnum (data, len, 0);
+            break;
+        case FLUX_MSGTYPE_EVENT:
+            proto_set_seq (data, len, 0);
             break;
     }
     return 0;
@@ -98,6 +102,23 @@ static int proto_get_errnum (uint8_t *data, int len, uint32_t *errnum)
         return -1;
     memcpy (&x, &data[2], sizeof (x));
     *errnum = ntohl (x);
+    return 0;
+}
+static int proto_set_seq (uint8_t *data, int len, uint32_t seq)
+{
+    uint32_t x = htonl (seq);
+    if (len < 6 || data[0] != PROTO_MAGIC || data[1] != FLUX_MSGTYPE_EVENT)
+        return -1;
+    memcpy (&data[2], &x, sizeof (x));
+    return 0;
+}
+static int proto_get_seq (uint8_t *data, int len, uint32_t *seq)
+{
+    uint32_t x;
+    if (len < 6 || data[0] != PROTO_MAGIC || data[1] != FLUX_MSGTYPE_EVENT)
+        return -1;
+    memcpy (&x, &data[2], sizeof (x));
+    *seq = ntohl (x);
     return 0;
 }
 static void proto_init (uint8_t *data, int len)
@@ -256,6 +277,27 @@ int flux_msg_get_errnum (zmsg_t *zmsg, int *e)
         return -1;
     }
     *e = xe;
+    return 0;
+}
+
+int flux_msg_set_seq (zmsg_t *zmsg, uint32_t seq)
+{
+    zframe_t *zf = flux_zmsg_nth (zmsg, 0);
+    if (!zf || proto_set_seq (zframe_data (zf), zframe_size (zf), seq) < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
+int flux_msg_get_seq (zmsg_t *zmsg, uint32_t *seq)
+{
+    zframe_t *zf = flux_zmsg_nth (zmsg, 0);
+
+    if (!zf || proto_get_seq (zframe_data (zf), zframe_size (zf), seq) < 0) {
+        errno = EPROTO;
+        return -1;
+    }
     return 0;
 }
 

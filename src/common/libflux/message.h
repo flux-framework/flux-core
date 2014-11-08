@@ -68,6 +68,11 @@ int flux_msg_get_nodeid (zmsg_t *zmsg, uint32_t *nodeid);
 int flux_msg_set_errnum (zmsg_t *zmsg, int errnum);
 int flux_msg_get_errnum (zmsg_t *zmsg, int *errnum);
 
+/* Get/set sequence number (event only)
+ */
+int flux_msg_set_seq (zmsg_t *zmsg, uint32_t seq);
+int flux_msg_get_seq (zmsg_t *zmsg, uint32_t *seq);
+
 /* Message manipulation utility functions
  */
 enum {
