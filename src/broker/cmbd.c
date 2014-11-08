@@ -1539,7 +1539,7 @@ static int cmb_event_send (ctx_t *ctx, JSON o, const char *topic)
     }
     if (flux_msg_set_type (zmsg, FLUX_MSGTYPE_EVENT) < 0)
         goto done;
-    if (flux_msg_set_seq (zmsg, ctx->event_seq++) < 0)
+    if (flux_msg_set_seq (zmsg, ++ctx->event_seq) < 0) /* start with seq=1 */
         goto done;
     if (cmb_event_sendmsg (ctx, &zmsg) < 0)
         goto done;
@@ -1774,22 +1774,47 @@ static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod)
     ZLOOP_RETURN(ctx);
 }
 
+static int recv_event (ctx_t *ctx, zmsg_t **zmsg)
+{
+    int i;
+    uint32_t seq;
+
+    if (flux_msg_get_seq (*zmsg, &seq) < 0) {
+        flux_log (ctx->h, LOG_ERR, "dropping malformed event");
+        return -1;
+    }
+    if (seq <= ctx->event_seq) { /* drop duplicate */
+        flux_log (ctx->h, LOG_INFO, "dropping dup event %d", seq);
+        return -1;
+    }
+    for (i = ctx->event_seq + 1; i < seq; i++)
+        flux_log (ctx->h, LOG_ERR, "lost event %d", i);
+
+    ctx->event_seq = seq;
+    endpt_cc (*zmsg, ctx->gevent_relay);
+    endpt_cc (*zmsg, ctx->snoop);
+    cmb_internal_event (ctx, *zmsg);
+    return zmsg_send (zmsg, ctx->zs_event_out); /* to plugins */
+}
+
 static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
     zmsg_t *zmsg = zmsg_recv (item->socket);
+
     if (zmsg) {
         if (strstr (ctx->gevent->uri, "pgm://")) {
             if (flux_sec_unmunge_zmsg (ctx->sec, &zmsg) < 0) {
-                zmsg_destroy (&zmsg);
+                flux_log (ctx->h, LOG_ERR, "dropping malformed event: %s",
+                          flux_sec_errstr (ctx->sec));
                 goto done;
             }
         }
-        endpt_cc (zmsg, ctx->gevent_relay);
-        endpt_cc (zmsg, ctx->snoop);
-        cmb_internal_event (ctx, zmsg);
-        zmsg_send (&zmsg, ctx->zs_event_out);
+        if (recv_event (ctx, &zmsg) < 0)
+            goto done;
     }
 done:
+    if (zmsg)
+        zmsg_destroy (&zmsg);
     ZLOOP_RETURN(ctx);
 }
 
@@ -1982,8 +2007,6 @@ static int cmbd_response_sendmsg (void *impl, zmsg_t **zmsg)
 
     endpt_cc (*zmsg, ctx->snoop);
 
-    /* No more routing frames
-     */
     if (!nexthop)                             /* local: reply to ourselves? */
         rc = -1;
     else if (peer_ismodule (ctx, nexthop))    /* send to a module */
