@@ -1668,17 +1668,12 @@ static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         if (response)
             json_object_put (response);
     } else if (flux_msg_match (*zmsg, "cmb.lspeer")) {
-        json_object *request = NULL;
         json_object *response = NULL;
-        if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
-            flux_respond_errnum (ctx->h, zmsg, EPROTO);
-        } else if (!(response = peer_ls (ctx))) {
+        if (!(response = peer_ls (ctx))) {
             flux_respond_errnum (ctx->h, zmsg, errno);
         } else {
             flux_respond (ctx->h, zmsg, response);
         }
-        if (request)
-            json_object_put (request);
         if (response)
             json_object_put (response);
     } else if (flux_msg_match (*zmsg, "cmb.ping")) {
