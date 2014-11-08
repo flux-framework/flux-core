@@ -41,6 +41,8 @@ int flux_response_recv (flux_t h, JSON *respp, char **tagp, bool nb)
 
     if (!(zmsg = flux_response_recvmsg (h, nb)))
         goto done;
+    if (flux_msg_get_errnum (zmsg, &errno) < 0 || errno != 0)
+        goto done;
     if (flux_msg_decode (zmsg, tagp, respp) < 0)
         goto done;
     rc = 0;
@@ -88,9 +90,11 @@ int flux_respond (flux_t h, zmsg_t **zmsg, JSON o)
 
 int flux_respond_errnum (flux_t h, zmsg_t **zmsg, int errnum)
 {
-    if (flux_msg_replace_json_errnum (*zmsg, errnum) < 0)
+    if (flux_msg_replace_json (*zmsg, NULL) < 0)
         return -1;
     if (flux_msg_set_type (*zmsg, FLUX_MSGTYPE_RESPONSE) < 0)
+        return -1;
+    if (flux_msg_set_errnum (*zmsg, errnum) < 0)
         return -1;
     return flux_response_sendmsg (h, zmsg);
 }
@@ -104,10 +108,7 @@ static int flux_vrequestf (flux_t h, uint32_t nodeid, json_object *o,
     char *topic = xvasprintf (fmt, ap);
     zmsg_t *zmsg;
     int rc = -1;
-    JSON empty = NULL;
 
-    if (!o)
-        o = empty = Jnew ();
     if (!(zmsg = flux_msg_encode (topic, o)))
         goto done;
     if (flux_msg_set_type (zmsg, FLUX_MSGTYPE_REQUEST) < 0)
@@ -120,7 +121,6 @@ static int flux_vrequestf (flux_t h, uint32_t nodeid, json_object *o,
 done:
     if (zmsg)
         zmsg_destroy (&zmsg);
-    Jput (empty);
     free (topic);
     return rc;
 }
@@ -147,13 +147,9 @@ static JSON flux_vrpcf (flux_t h, uint32_t nodeid, JSON o,
         goto done;
     if (!(zmsg = flux_response_matched_recvmsg (h, topic, false)))
         goto done;
-    if (flux_msg_decode (zmsg, NULL, &r) < 0 || r == NULL)
+    if (flux_msg_get_errnum (zmsg, &errno) < 0 || errno != 0)
         goto done;
-    if (Jget_int (r, "errnum", &errno)) {
-        Jput (r);
-        r = NULL;
-        goto done;
-    }
+    (void)flux_msg_decode (zmsg, NULL, &r);
 done:
     if (zmsg)
         zmsg_destroy (&zmsg);

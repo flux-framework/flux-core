@@ -338,37 +338,19 @@ int flux_msg_replace_json (zmsg_t *zmsg, json_object *o)
     char *zbuf;
     unsigned int zlen;
 
-    if (!zf) {
-        errno = EPROTO;
-        return -1;
+    if (zf) {
+        zmsg_remove (zmsg, zf);
+        zframe_destroy (&zf);
     }
-    zmsg_remove (zmsg, zf);
-    zframe_destroy (&zf);
-    util_json_encode (o, &zbuf, &zlen);
-    if (!(zf = zframe_new (zbuf, zlen)))
-        oom ();
-    free (zbuf);
-    if (zmsg_add (zmsg, zf) < 0)
-        oom ();
+    if (o) {
+        util_json_encode (o, &zbuf, &zlen);
+        if (!(zf = zframe_new (zbuf, zlen)))
+            oom ();
+        free (zbuf);
+        if (zmsg_add (zmsg, zf) < 0)
+            oom ();
+    }
     return 0;
-}
-
-int flux_msg_replace_json_errnum (zmsg_t *zmsg, int errnum)
-{
-    json_object *no, *o = NULL;
-    int ret = -1;
-
-    if (!(o = json_object_new_object ()))
-        oom ();
-    if (!(no = json_object_new_int (errnum)))
-        oom ();
-    json_object_object_add (o, "errnum", no);
-    if (flux_msg_replace_json (zmsg, o) < 0)
-        goto done;
-    ret = 0;
-done:
-    json_object_put (o);
-    return ret;
 }
 
 struct map_struct {
@@ -514,8 +496,8 @@ int main (int argc, char *argv[])
     o = Jnew ();
     Jadd_int (o, "x", 2);
     rc = flux_msg_replace_json (zmsg, o);
-    ok ((rc == -1 && errno == EPROTO),
-        "flux_msg_replace_json fails with EPROTO on json-less message");
+    ok ((rc == 0),
+        "flux_msg_replace_json works on json-less message");
     zmsg_destroy (&zmsg);
     zmsg = flux_msg_encode ("baz", o);
     Jput (o);
