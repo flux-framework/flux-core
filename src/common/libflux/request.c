@@ -136,36 +136,38 @@ int flux_requestf (flux_t h, uint32_t nodeid, JSON o, const char *fmt, ...)
     return rc;
 }
 
-static JSON flux_vrpcf (flux_t h, uint32_t nodeid, JSON o,
+static int flux_vrpcf (flux_t h, uint32_t nodeid, JSON in, JSON *out,
                         const char *fmt, va_list ap)
 {
     char *topic = xvasprintf (fmt, ap);
-    JSON r = NULL;
     zmsg_t *zmsg = NULL;
+    int rc = -1;
 
-    if (flux_requestf (h, nodeid, o, "%s", topic) < 0)
+    if (flux_requestf (h, nodeid, in, "%s", topic) < 0)
         goto done;
     if (!(zmsg = flux_response_matched_recvmsg (h, topic, false)))
         goto done;
     if (flux_msg_get_errnum (zmsg, &errno) < 0 || errno != 0)
         goto done;
-    (void)flux_msg_decode (zmsg, NULL, &r);
+    if (flux_msg_decode (zmsg, NULL, out) < 0)
+        goto done;
+    rc = 0;
 done:
     if (zmsg)
         zmsg_destroy (&zmsg);
     free (topic);
-    return r;
+    return rc;
 }
 
-JSON flux_rpcf (flux_t h, uint32_t nodeid, JSON o, const char *fmt, ...)
+int flux_rpcf (flux_t h, uint32_t nodeid, JSON in, JSON *out, const char *fmt, ...)
 {
     va_list ap;
-    JSON r;
+    int rc;
 
     va_start (ap, fmt);
-    r = flux_vrpcf (h, nodeid, o, fmt, ap);
+    rc = flux_vrpcf (h, nodeid, in, out, fmt, ap);
     va_end (ap);
-    return r;
+    return rc;
 }
 
 /* Old request/rpc functions implemented in terms of new.
@@ -173,13 +175,15 @@ JSON flux_rpcf (flux_t h, uint32_t nodeid, JSON o, const char *fmt, ...)
 
 JSON flux_rank_rpc (flux_t h, int rank, JSON o, const char *fmt, ...)
 {
+    uint32_t nodeid = rank == -1 ? FLUX_NODEID_ANY : rank;
     va_list ap;
-    JSON r;
+    JSON out;
+    int rc;
 
     va_start (ap, fmt);
-    r = flux_vrpcf (h, rank == -1 ? FLUX_NODEID_ANY : rank, o, fmt, ap);
+    rc = flux_vrpcf (h, nodeid, o, &out, fmt, ap);
     va_end (ap);
-    return r;
+    return rc < 0 ? NULL : out;
 }
 
 int flux_rank_request_send (flux_t h, int rank, JSON o, const char *fmt, ...)
@@ -196,12 +200,13 @@ int flux_rank_request_send (flux_t h, int rank, JSON o, const char *fmt, ...)
 JSON flux_rpc (flux_t h, JSON o, const char *fmt, ...)
 {
     va_list ap;
-    JSON r;
+    JSON out;
+    int rc;
 
     va_start (ap, fmt);
-    r = flux_vrpcf (h, FLUX_NODEID_ANY, o, fmt, ap);
+    rc = flux_vrpcf (h, FLUX_NODEID_ANY, o, &out, fmt, ap);
     va_end (ap);
-    return r;
+    return rc < 0 ? NULL : out;
 }
 
 int flux_request_send (flux_t h, JSON o, const char *fmt, ...)
