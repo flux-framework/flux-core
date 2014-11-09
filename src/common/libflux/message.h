@@ -6,6 +6,14 @@
 #include <czmq.h>
 #include <stdint.h>
 
+/* Create a new Flux message of the specified type.
+ * If non-null, set topic.
+ * If non-null and non-zero len, set payload.
+ * Returns new message or null on failure, with errno set (e.g. ENOMEM)
+ * Caller must destroy message with zmsg_destroy() or equivalent.
+ */
+zmsg_t *flux_msg_create (int type, const char *topic, void *buf, int len);
+
 /* Return the number of non-nil routing frames in a Flux message.
  */
 int flux_msg_hopcount (zmsg_t *zmsg);
@@ -57,6 +65,11 @@ int flux_msg_replace_json (zmsg_t *zmsg, json_object *o);
 int flux_msg_set_type (zmsg_t *zmsg, int type);
 int flux_msg_get_type (zmsg_t *zmsg, int *type);
 
+/* Get/set message flags
+ */
+int flux_msg_set_flags (zmsg_t *zmsg, uint8_t flags);
+int flux_msg_get_flags (zmsg_t *zmsg, uint8_t *flags);
+
 /* Get/set nodeid (request only)
  */
 #define FLUX_NODEID_ANY	(~(uint32_t)0)
@@ -76,12 +89,18 @@ int flux_msg_get_seq (zmsg_t *zmsg, uint32_t *seq);
 /* Message manipulation utility functions
  */
 enum {
-    FLUX_MSGTYPE_REQUEST = 1,
-    FLUX_MSGTYPE_RESPONSE = 2,
-    FLUX_MSGTYPE_EVENT = 4,
-    FLUX_MSGTYPE_ANY = 7,
-    FLUX_MSGTYPE_MASK = 7,
-    /* leave open possiblity of adding 'flags' bits here */
+    FLUX_MSGTYPE_REQUEST    = 0x01,
+    FLUX_MSGTYPE_RESPONSE   = 0x02,
+    FLUX_MSGTYPE_EVENT      = 0x04,
+    FLUX_MSGTYPE_KEEPALIVE  = 0x08,
+    FLUX_MSGTYPE_ANY        = 0x0f,
+    FLUX_MSGTYPE_MASK       = 0x0f,
+};
+
+enum {
+    FLUX_MSGFLAG_TOPIC      = 0x01,
+    FLUX_MSGFLAG_PAYLOAD    = 0x02,
+    FLUX_MSGFLAG_JSON       = 0x04,
 };
 
 /* Return string representation of message type.  Do not free.

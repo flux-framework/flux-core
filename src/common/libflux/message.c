@@ -29,18 +29,19 @@
 #include <stdbool.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include <assert.h>
 
 #include "message.h"
 
 #include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/log.h"
 
-/* FIXME: need alternative to manual codec
- */
-
 #define PROTO_MAGIC 0x8e
-#define PROTO_SIZE 6
+#define PROTO_SIZE 7
 
+/* Begin manual codec
+ */
 static int proto_set_nodeid (uint8_t *data, int len, uint32_t nodeid);
 static int proto_set_errnum (uint8_t *data, int len, uint32_t errnum);
 static int proto_set_seq (uint8_t *data, int len, uint32_t seq);
@@ -70,62 +71,87 @@ static int proto_get_type (uint8_t *data, int len, int *type)
     *type = data[1];
     return 0;
 }
+static int proto_set_flags (uint8_t *data, int len, uint8_t flags)
+{
+    if (len < 2 || data[0] != PROTO_MAGIC)
+        return -1;
+    data[2] = flags;
+    return 0;
+}
+static int proto_get_flags (uint8_t *data, int len, uint8_t *val)
+{
+    if (len < 2 || data[0] != PROTO_MAGIC)
+        return -1;
+    *val = data[2];
+    return 0;
+}
 static int proto_set_nodeid (uint8_t *data, int len, uint32_t nodeid)
 {
     uint32_t x = htonl (nodeid);
+
     if (len < 6 || data[0] != PROTO_MAGIC || data[1] != FLUX_MSGTYPE_REQUEST)
         return -1;
-    memcpy (&data[2], &x, sizeof (x));
+    memcpy (&data[3], &x, sizeof (x));
     return 0;
 }
 static int proto_get_nodeid (uint8_t *data, int len, uint32_t *nodeid)
 {
     uint32_t x;
+
     if (len < 6 || data[0] != PROTO_MAGIC || data[1] != FLUX_MSGTYPE_REQUEST)
         return -1;
-    memcpy (&x, &data[2], sizeof (x));
+    memcpy (&x, &data[3], sizeof (x));
     *nodeid = ntohl (x);
     return 0;
 }
 static int proto_set_errnum (uint8_t *data, int len, uint32_t errnum)
 {
     uint32_t x = htonl (errnum);
+
     if (len < 6 || data[0] != PROTO_MAGIC || data[1] != FLUX_MSGTYPE_RESPONSE)
         return -1;
-    memcpy (&data[2], &x, sizeof (x));
+    memcpy (&data[3], &x, sizeof (x));
     return 0;
 }
 static int proto_get_errnum (uint8_t *data, int len, uint32_t *errnum)
 {
     uint32_t x;
+
     if (len < 6 || data[0] != PROTO_MAGIC || data[1] != FLUX_MSGTYPE_RESPONSE)
         return -1;
-    memcpy (&x, &data[2], sizeof (x));
+    memcpy (&x, &data[3], sizeof (x));
     *errnum = ntohl (x);
     return 0;
 }
 static int proto_set_seq (uint8_t *data, int len, uint32_t seq)
 {
     uint32_t x = htonl (seq);
+
     if (len < 6 || data[0] != PROTO_MAGIC || data[1] != FLUX_MSGTYPE_EVENT)
         return -1;
-    memcpy (&data[2], &x, sizeof (x));
+    memcpy (&data[3], &x, sizeof (x));
     return 0;
 }
 static int proto_get_seq (uint8_t *data, int len, uint32_t *seq)
 {
     uint32_t x;
+
     if (len < 6 || data[0] != PROTO_MAGIC || data[1] != FLUX_MSGTYPE_EVENT)
         return -1;
-    memcpy (&x, &data[2], sizeof (x));
+    memcpy (&x, &data[3], sizeof (x));
     *seq = ntohl (x);
     return 0;
 }
-static void proto_init (uint8_t *data, int len)
+static void proto_init (uint8_t *data, int len, uint8_t flags)
 {
+    assert (len >= 3);
     memset (data, 0, len);
     data[0] = PROTO_MAGIC;
+    data[2] = flags;
 }
+
+/* End manual codec
+ */
 
 int flux_msg_hopcount (zmsg_t *zmsg)
 {
@@ -142,82 +168,120 @@ int flux_msg_hopcount (zmsg_t *zmsg)
     return count;
 }
 
-/* Return a non-routing frame by number, zero origin
- * 0=proto, 1=tag/topic, 2=json
- */
-static zframe_t *flux_zmsg_nth (zmsg_t *zmsg, int frameno)
+static zframe_t *flux_msg_skip_routing (zmsg_t *zmsg)
 {
     zframe_t *zf = zmsg_first (zmsg);
-
     while (zf && zframe_size (zf) != 0)
         zf = zmsg_next (zmsg); /* skip non-empty routing envelope frames */
     if (zf)
         zf = zmsg_next (zmsg); /* skip empty routing envelope delimiter */
     else
         zf = zmsg_first (zmsg); /* rewind - there was no routing envelope */
-    while (zf && frameno-- > 0)
+    return zf;
+}
+
+static zframe_t *flux_msg_get_topic (zmsg_t *zmsg)
+{
+    uint8_t fl;
+    if (flux_msg_get_flags (zmsg, &fl) < 0 || !(fl & FLUX_MSGFLAG_TOPIC))
+        return NULL;
+    return flux_msg_skip_routing (zmsg);
+}
+
+static zframe_t *flux_msg_get_payload (zmsg_t *zmsg)
+{
+    zframe_t *zf;
+    uint8_t fl;
+
+    if (flux_msg_get_flags (zmsg, &fl) < 0 || !(fl & FLUX_MSGFLAG_PAYLOAD))
+        return NULL;
+    if (!(zf = flux_msg_skip_routing (zmsg)))
+        return NULL;
+    if ((fl & FLUX_MSGFLAG_TOPIC))
         zf = zmsg_next (zmsg);
     return zf;
 }
 
-int flux_msg_decode (zmsg_t *zmsg, char **tagp, json_object **op)
+static zframe_t *flux_msg_get_json (zmsg_t *zmsg)
 {
-    zframe_t *tag = flux_zmsg_nth (zmsg, 1);
-    zframe_t *json = flux_zmsg_nth (zmsg, 2);
-
-    if (!tag) {
-        errno = EPROTO;
-        return -1;
-    }
-    if (tagp) {
-        if (!(*tagp = zframe_strdup (tag))) {
-            errno = ENOMEM;
-            return -1;
-        }
-    }
-    if (op) {
-        if (json)
-            util_json_decode (op, (char *)zframe_data (json),
-                                          zframe_size (json));
-        else
-            *op = NULL;
-    }
-    return 0;
+    uint8_t fl;
+    if (flux_msg_get_flags (zmsg, &fl) < 0 || !(fl & FLUX_MSGFLAG_JSON))
+        return NULL;
+    return flux_msg_get_payload (zmsg);
 }
 
-zmsg_t *flux_msg_encode (char *tag, json_object *o)
+int flux_msg_decode (zmsg_t *zmsg, char **topic, JSON *o)
 {
-    zmsg_t *zmsg = NULL;
-    unsigned int zlen;
-    char *zbuf;
     zframe_t *zf;
-    uint8_t proto[PROTO_SIZE];
+    int rc = -1;
+    if (topic) {
+        if ((zf = flux_msg_get_topic (zmsg))) {
+            if (!(*topic = zframe_strdup (zf)))
+                oom ();
+        } else
+            *topic = NULL;
+    }
+    if (o) {
+        if ((zf = flux_msg_get_json (zmsg)))
+            util_json_decode (o, (char *)zframe_data (zf), zframe_size (zf));
+        else
+            *o = NULL;
+    }
+    rc = 0;
+    return rc;
+}
 
-    if (!tag || strlen (tag) == 0) {
-        errno = EINVAL;
-        return NULL;
-    }
+zmsg_t *flux_msg_create (int type, const char *topic, void *buf, int len)
+{
+    uint8_t proto[PROTO_SIZE];
+    uint8_t fl = 0;
+    zmsg_t *zmsg;
+    int rc;
+
     if (!(zmsg = zmsg_new ()))
-        err_exit ("zmsg_new");
-    proto_init (proto, PROTO_SIZE);
-    if (zmsg_addmem (zmsg, proto, PROTO_SIZE) < 0)      /* 0: proto */
-        err_exit ("zmsg_addmem");
-    if (zmsg_addmem (zmsg, tag, strlen (tag)) < 0)      /* 1: tag */
-        err_exit ("zmsg_addmem");
-    if (o) {                                            /* 2: json */
-        util_json_encode (o, &zbuf, &zlen);
-        if (!(zf = zframe_new (zbuf, zlen)))
+        oom ();
+    if (topic) {
+        if (zmsg_addmem (zmsg, topic, strlen (topic)) < 0)
             oom ();
-        free (zbuf);
-        if (zmsg_add (zmsg, zf) < 0)
-            oom ();
+        fl |= FLUX_MSGFLAG_TOPIC;
     }
+    if (buf && len > 0) {
+        if (zmsg_addmem (zmsg, buf, len) < 0)
+            oom ();
+        fl |= FLUX_MSGFLAG_PAYLOAD;
+    }
+    proto_init (proto, PROTO_SIZE, fl);
+    rc = proto_set_type (proto, PROTO_SIZE, type);
+    assert (rc == 0);
+    if (zmsg_addmem (zmsg, proto, PROTO_SIZE) < 0)
+        oom ();
+    return zmsg;
+}
+
+zmsg_t *flux_msg_encode (char *topic, JSON o)
+{
+    int rc;
+    zmsg_t *zmsg;
+    unsigned int zlen = 0;
+    char *zbuf = NULL;
+    uint8_t fl;
+
+    if (o) {
+        util_json_encode (o, &zbuf, &zlen);
+        if ((zmsg = flux_msg_create (0, topic, zbuf, zlen))) {
+            rc = flux_msg_get_flags (zmsg, &fl);
+            assert (rc == 0);
+            rc = flux_msg_set_flags (zmsg, fl | FLUX_MSGFLAG_JSON);
+            assert (rc == 0);
+        }
+    } else
+        zmsg = flux_msg_create (0, topic, NULL, 0);
     return zmsg;
 }
 
 int flux_msg_set_type (zmsg_t *zmsg, int type)
 {
-    zframe_t *zf = flux_zmsg_nth (zmsg, 0);
+    zframe_t *zf = zmsg_last (zmsg);
     if (!zf || proto_set_type (zframe_data (zf), zframe_size (zf), type) < 0) {
         errno = EINVAL;
         return -1;
@@ -227,9 +291,28 @@ int flux_msg_set_type (zmsg_t *zmsg, int type)
 
 int flux_msg_get_type (zmsg_t *zmsg, int *type)
 {
-    zframe_t *zf = flux_zmsg_nth (zmsg, 0);
-
+    zframe_t *zf = zmsg_last (zmsg);
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), type) < 0) {
+        errno = EPROTO;
+        return -1;
+    }
+    return 0;
+}
+
+int flux_msg_set_flags (zmsg_t *zmsg, uint8_t fl)
+{
+    zframe_t *zf = zmsg_last (zmsg);
+    if (!zf || proto_set_flags (zframe_data (zf), zframe_size (zf), fl) < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
+int flux_msg_get_flags (zmsg_t *zmsg, uint8_t *fl)
+{
+    zframe_t *zf = zmsg_last (zmsg);
+    if (!zf || proto_get_flags (zframe_data (zf), zframe_size (zf), fl) < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -238,7 +321,7 @@ int flux_msg_get_type (zmsg_t *zmsg, int *type)
 
 int flux_msg_set_nodeid (zmsg_t *zmsg, uint32_t nid)
 {
-    zframe_t *zf = flux_zmsg_nth (zmsg, 0);
+    zframe_t *zf = zmsg_last (zmsg);
     if (!zf || proto_set_nodeid (zframe_data (zf), zframe_size (zf), nid) < 0) {
         errno = EINVAL;
         return -1;
@@ -248,8 +331,7 @@ int flux_msg_set_nodeid (zmsg_t *zmsg, uint32_t nid)
 
 int flux_msg_get_nodeid (zmsg_t *zmsg, uint32_t *nid)
 {
-    zframe_t *zf = flux_zmsg_nth (zmsg, 0);
-
+    zframe_t *zf = zmsg_last (zmsg);
     if (!zf || proto_get_nodeid (zframe_data (zf), zframe_size (zf), nid) < 0) {
         errno = EPROTO;
         return -1;
@@ -259,7 +341,7 @@ int flux_msg_get_nodeid (zmsg_t *zmsg, uint32_t *nid)
 
 int flux_msg_set_errnum (zmsg_t *zmsg, int e)
 {
-    zframe_t *zf = flux_zmsg_nth (zmsg, 0);
+    zframe_t *zf = zmsg_last (zmsg);
     if (!zf || proto_set_errnum (zframe_data (zf), zframe_size (zf), e) < 0) {
         errno = EINVAL;
         return -1;
@@ -269,7 +351,7 @@ int flux_msg_set_errnum (zmsg_t *zmsg, int e)
 
 int flux_msg_get_errnum (zmsg_t *zmsg, int *e)
 {
-    zframe_t *zf = flux_zmsg_nth (zmsg, 0);
+    zframe_t *zf = zmsg_last (zmsg);
     uint32_t xe;
 
     if (!zf || proto_get_errnum (zframe_data (zf), zframe_size (zf), &xe) < 0) {
@@ -282,7 +364,7 @@ int flux_msg_get_errnum (zmsg_t *zmsg, int *e)
 
 int flux_msg_set_seq (zmsg_t *zmsg, uint32_t seq)
 {
-    zframe_t *zf = flux_zmsg_nth (zmsg, 0);
+    zframe_t *zf = zmsg_last (zmsg);
     if (!zf || proto_set_seq (zframe_data (zf), zframe_size (zf), seq) < 0) {
         errno = EINVAL;
         return -1;
@@ -292,8 +374,7 @@ int flux_msg_set_seq (zmsg_t *zmsg, uint32_t seq)
 
 int flux_msg_get_seq (zmsg_t *zmsg, uint32_t *seq)
 {
-    zframe_t *zf = flux_zmsg_nth (zmsg, 0);
-
+    zframe_t *zf = zmsg_last (zmsg);
     if (!zf || proto_get_seq (zframe_data (zf), zframe_size (zf), seq) < 0) {
         errno = EPROTO;
         return -1;
@@ -301,10 +382,10 @@ int flux_msg_get_seq (zmsg_t *zmsg, uint32_t *seq)
     return 0;
 }
 
-bool flux_msg_match (zmsg_t *zmsg, const char *s)
+bool flux_msg_match (zmsg_t *zmsg, const char *topic)
 {
-    zframe_t *zf = flux_zmsg_nth (zmsg, 1); /* tag/topic frame */
-    return zf ? zframe_streq (zf, s) : false;
+    zframe_t *zf = flux_msg_get_topic (zmsg);
+    return zf ? zframe_streq (zf, topic) : false;
 }
 
 /* Return routing frame closest to the delimiter, the request sender.
@@ -355,7 +436,7 @@ done:
 
 char *flux_msg_tag (zmsg_t *zmsg)
 {
-    zframe_t *zf = flux_zmsg_nth (zmsg, 1);
+    zframe_t *zf = flux_msg_get_topic (zmsg);
     char *s;
     if (!zf) {
         errno = EPROTO;
@@ -374,25 +455,45 @@ char *flux_msg_tag_short (zmsg_t *zmsg)
     return s;
 }
 
-int flux_msg_replace_json (zmsg_t *zmsg, json_object *o)
+int flux_msg_replace_json (zmsg_t *zmsg, JSON o)
 {
-    zframe_t *zf = flux_zmsg_nth (zmsg, 2);
+    zframe_t *zf;
     char *zbuf;
     unsigned int zlen;
+    int rc = -1;
+    uint8_t fl;
 
-    if (zf) {
+    if (flux_msg_get_flags (zmsg, &fl) < 0) {
+        errno = EPROTO;
+        goto done;
+    }
+    if ((zf = flux_msg_get_json (zmsg)) && o != NULL) {
+        util_json_encode (o, &zbuf, &zlen);
+        zframe_reset (zf, zbuf, zlen);
+        free (zbuf);
+    } else if (zf && o == NULL) {
         zmsg_remove (zmsg, zf);
         zframe_destroy (&zf);
-    }
-    if (o) {
+        fl &= ~(uint8_t)(FLUX_MSGFLAG_PAYLOAD | FLUX_MSGFLAG_JSON);
+    } else if (!zf && o != NULL) {
+        if (!(zf = zmsg_last (zmsg))) {
+            errno = EPROTO;
+            goto done;
+        }
+        zmsg_remove (zmsg, zf);
         util_json_encode (o, &zbuf, &zlen);
-        if (!(zf = zframe_new (zbuf, zlen)))
+        if (zmsg_addmem (zmsg, zbuf, zlen) < 0 || zmsg_append (zmsg, &zf) < 0)
             oom ();
         free (zbuf);
-        if (zmsg_add (zmsg, zf) < 0)
-            oom ();
+        fl |= (FLUX_MSGFLAG_PAYLOAD | FLUX_MSGFLAG_JSON);
     }
-    return 0;
+    if (flux_msg_set_flags (zmsg, fl) < 0) {
+        errno = EPROTO;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
 }
 
 struct map_struct {
@@ -405,6 +506,7 @@ static struct map_struct msgtype_map[] = {
     { "request", ">", FLUX_MSGTYPE_REQUEST },
     { "response", "<", FLUX_MSGTYPE_RESPONSE},
     { "event", "e", FLUX_MSGTYPE_EVENT},
+    { "keepalive", "k", FLUX_MSGTYPE_KEEPALIVE},
 };
 static const int msgtype_map_len = 
                             sizeof (msgtype_map) / sizeof (msgtype_map[0]);
@@ -436,7 +538,7 @@ int main (int argc, char *argv[])
 {
     zmsg_t *zmsg;
     //zframe_t *zf;
-    json_object *o = NULL;
+    JSON o = NULL;
     char *s = NULL;
     int rc, i;
     int type, errnum;
@@ -448,9 +550,9 @@ int main (int argc, char *argv[])
      *   on message with no JSON frame
      */
     zmsg = flux_msg_encode (NULL, NULL);
-    ok (zmsg == NULL,
-        "flux_msg_encode with NULL topic string fails with errno == EINVAL");
-    zmsg_destroy (&zmsg); // ok with NULL zmsg
+    ok ((zmsg != NULL),
+        "flux_msg_encode with NULL topic and json works");
+    zmsg_destroy (&zmsg);
 
     zmsg = flux_msg_encode ("foo", NULL);
     ok (zmsg != NULL,
@@ -461,13 +563,13 @@ int main (int argc, char *argv[])
             && !flux_msg_match (zmsg, "foobar")),
         "flux_msg_match works");
 
-    o = (json_object *)&o; // make it non-NULL
+    o = (JSON)&o; // make it non-NULL
     rc = flux_msg_decode (zmsg, &s, &o);
+
     ok ((rc == 0 && s && !strcmp (s, "foo") && o == NULL),
         "flux_msg_decode returned what we encoded");
     free (s);
     zmsg_destroy (&zmsg);
-
 
     /* flux_msg_encode, flux_msg_decode, flux_msg_tag, flux_msg_tag_short
      *   on message with JSON
@@ -482,9 +584,10 @@ int main (int argc, char *argv[])
     ok ((rc == 0 && Jget_int (o, "x",&i) && i == 42),
         "flux_msg_decode returned JSON that we encoded");
     Jput (o);
-    ok (!strcmp (s, "a.b.c.d"),
+    ok (s != NULL && !strcmp (s, "a.b.c.d"),
         "flux_msg_decode returned topic string");
-    free (s);
+    if (s)
+        free (s);
     s = flux_msg_tag (zmsg);
     ok (!strcmp (s, "a.b.c.d"),
         "flux_msg_tag returned topic string");
