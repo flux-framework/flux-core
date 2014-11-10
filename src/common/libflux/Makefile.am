@@ -39,7 +39,8 @@ libflux_la_SOURCES = \
 	conf.c
 
 TESTS = test_conf.t \
-	test_module.t
+	test_module.t \
+	test_message.t
 
 test_ldadd = \
         $(top_builddir)/src/common/libutil/libutil.la \
@@ -66,3 +67,7 @@ test_conf_t_LDADD = $(test_ldadd)
 test_module_t_SOURCES = module.c
 test_module_t_CPPFLAGS = $(test_cppflags)
 test_module_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_message_t_SOURCES = message.c
+test_message_t_CPPFLAGS = $(test_cppflags)
+test_message_t_LDADD = $(test_ldadd) $(LIBDL)

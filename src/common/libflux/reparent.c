@@ -33,12 +33,7 @@
 
 JSON flux_lspeer (flux_t h, int rank)
 {
-    JSON request = Jnew ();
-    JSON response = NULL;
-
-    response = flux_rank_rpc (h, rank, request, "cmb.lspeer");
-    Jput (request);
-    return response;
+    return flux_rank_rpc (h, rank, NULL, "cmb.lspeer");
 }
 
 int flux_reparent (flux_t h, int rank, const char *uri)

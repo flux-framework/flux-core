@@ -67,6 +67,7 @@ static int zmon_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg);
 
 static bool aopt = false;
 static bool lopt = false;
+zlist_t *subscriptions = NULL;
 
 int main (int argc, char *argv[])
 {
@@ -77,7 +78,6 @@ int main (int argc, char *argv[])
     bool nopt = false;
     char *session = "flux";
     zctx_t *zctx;
-    zlist_t *subs;
     void *s;
     zloop_t *zloop;
     zmq_pollitem_t zp;
@@ -87,7 +87,7 @@ int main (int argc, char *argv[])
 
     log_init ("flux-snoop");
 
-    if (!(subs = zlist_new ()))
+    if (!(subscriptions = zlist_new ()))
         oom ();
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
@@ -115,7 +115,7 @@ int main (int argc, char *argv[])
         }
     }
     while (optind < argc) {
-        if (zlist_append (subs, argv[optind++]) < 0)
+        if (zlist_append (subscriptions, argv[optind++]) < 0)
             oom ();
     }
     if (!(secdir = getenv ("FLUX_SEC_DIRECTORY")))
@@ -154,7 +154,7 @@ int main (int argc, char *argv[])
     if (flux_sec_zauth_init (sec, zctx, session) < 0)
         msg_exit ("flux_sec_zinit: %s", flux_sec_errstr (sec));
 
-    /* Connect to the snoop socket and subscribe to topics of interest.
+    /* Connect to the snoop socket
      */
     if (vopt)
         msg ("connecting to %s...", uri);
@@ -165,14 +165,7 @@ int main (int argc, char *argv[])
     zp.events = ZMQ_POLLIN;
     if (zloop_poller (zloop, &zp, snoop_cb, NULL) < 0)
         err_exit ("zloop_poller");
-
-    if (zlist_size (subs) == 0)
-        zsocket_set_subscribe (s, "");
-    else {
-        char *sub; /* actual argv element, do not free */
-        while ((sub = zlist_pop (subs)))
-            zsocket_set_subscribe (s, sub);
-    }
+    zsocket_set_subscribe (s, "");
 
     zmonitor_t *zmon;
     if (!(zmon = zmonitor_new (zctx, s, ZMQ_EVENT_DISCONNECTED)))
@@ -194,7 +187,7 @@ int main (int argc, char *argv[])
     zloop_destroy (&zloop);
     zctx_destroy (&zctx); /* destroys 's' and 'zp.socket' */
 
-    zlist_destroy (&subs);
+    zlist_destroy (&subscriptions);
     free (uri);
     flux_api_close (h);
     log_fini ();
@@ -225,34 +218,42 @@ static bool suppress (const char *tag)
     return false;
 }
 
-/* The snoop socket includes two extra header frames:
- * First the tag frame, stripped of any node! prefix so subscriptions work.
- * Second, the message type as a stringified integer.
- */
+static bool subscribed (const char *tag)
+{
+    char *sub;
+
+    if (!(sub = zlist_first (subscriptions)))
+        return true;
+    while (sub != NULL) {
+        int len = strlen (sub);
+        if (strlen (tag) >= len && !strncmp (tag, sub, len))
+            return true;
+        sub = zlist_next (subscriptions);
+    }
+    return false;
+}
+
 static int snoop_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
 {
     void *zs = item->socket;
     zmsg_t *zmsg;
 
     if ((zmsg = zmsg_recv (zs))) {
-        char *tag = zmsg_popstr (zmsg);
-        char *typestr = zmsg_popstr (zmsg);
-        int type;
+        char *tag = flux_msg_tag (zmsg);
 
-        if (tag && typestr) {
-            if (aopt || !suppress (tag)) {
-                if (lopt) {
-                    zmsg_dump (zmsg);
-                } else {
-                    type = strtoul (typestr, NULL, 10);
-                    zdump_fprint (stderr, zmsg, flux_msgtype_shortstr (type));
-                }
+        if (!tag || (subscribed (tag) && (aopt || !suppress (tag)))) {
+            if (lopt) {
+                zmsg_dump (zmsg);
+            } else {
+                const char *pfx = "?";
+                int type;
+                if (flux_msg_get_type (zmsg, &type) == 0)
+                    pfx = flux_msgtype_shortstr (type);
+                zdump_fprint (stderr, zmsg, pfx);
             }
         }
         if (tag)
             free (tag);
-        if (typestr)
-            free (typestr);
         zmsg_destroy (&zmsg);
     }
     return 0;

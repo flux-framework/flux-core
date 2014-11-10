@@ -57,13 +57,12 @@ done:
 
 int flux_info (flux_t h, int *rankp, int *sizep, bool *treerootp)
 {
-    JSON request = Jnew ();
     JSON response = NULL;
     int rank, size;
     bool treeroot;
     int ret = -1;
 
-    if (!(response = flux_rpc (h, request, "cmb.info")))
+    if (!(response = flux_rpc (h, NULL, "cmb.info")))
         goto done;
     if (!Jget_bool (response, "treeroot", &treeroot)
             || !Jget_int (response, "rank", &rank)
@@ -79,7 +78,6 @@ int flux_info (flux_t h, int *rankp, int *sizep, bool *treerootp)
         *treerootp = treeroot;
     ret = 0;
 done:
-    Jput (request);
     Jput (response);
     return ret;
 }

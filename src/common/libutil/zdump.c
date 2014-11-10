@@ -25,13 +25,9 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-
 #include <czmq.h>
-#include <json.h>
 
-#include "zmsg.h"
 #include "log.h"
-#include "jsonutil.h"
 #include "xzmalloc.h"
 
 static int hopcount (zmsg_t *zmsg)

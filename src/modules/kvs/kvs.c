@@ -1130,11 +1130,18 @@ static int get_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     /* N.B. unset values are returned as NULL and are not an error */
     if (errnum != 0) {
         wait_destroy (w, zmsg); /* get back *zmsg */
-        flux_respond_errnum (ctx->h, zmsg, errnum);
+        if (flux_respond_errnum (ctx->h, zmsg, errnum) < 0) {
+            flux_log (ctx->h, LOG_ERR, "%s: flux_respond_errnum: %s",
+                      __FUNCTION__, strerror (errno));
+            zmsg_destroy (zmsg);
+        }
     } else if (!stall) {
         wait_destroy (w, zmsg); /* get back *zmsg */
-        (void)flux_msg_replace_json (*zmsg, reply);
-        flux_response_sendmsg (ctx->h, zmsg);
+        if (flux_respond (ctx->h, zmsg, reply) < 0) {
+            flux_log (ctx->h, LOG_ERR, "%s: flux_respond: %s",
+                     __FUNCTION__, strerror (errno));
+            zmsg_destroy (zmsg);
+        }
     }
     tstat_push (&ctx->stats.get_time, monotime_since (g->t0));
     zhash_delete (ctx->gets, sender);
@@ -1203,7 +1210,6 @@ static int watch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         flux_respond_errnum (ctx->h, zmsg, errnum);
     } else if (!stall) {
         wait_destroy (w, zmsg); /* get back *zmsg */
-        (void)flux_msg_replace_json (*zmsg, reply);
 
         /* Reply to the watch request.
          * flag_first is generally true on first call, false thereafter
@@ -1212,7 +1218,11 @@ static int watch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             zmsg_t *zcpy;
             if (!(zcpy = zmsg_dup (*zmsg)))
                 oom ();
-            flux_response_sendmsg (ctx->h, &zcpy);
+            if (flux_respond (ctx->h, &zcpy, reply) < 0) {
+                flux_log (ctx->h, LOG_ERR, "%s: flux_respond: %s",
+                         __FUNCTION__, strerror (errno));
+                zmsg_destroy (&zcpy);
+            }
             reply_sent = true;
         }
 
@@ -1223,7 +1233,7 @@ static int watch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             util_json_object_add_boolean (reply, ".flag_once", flag_once);
             (void)flux_msg_replace_json (*zmsg, reply);
 
-            /* On every commit, __FUNCTION__ (zcpy) will be called.
+            /* On every commit, __FUNCTION__ (zmsg) will be called.
              * No reply will be generated unless a value has changed.
              */
             w = wait_create (h, typemask, zmsg, watch_request_cb, arg);

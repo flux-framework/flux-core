@@ -30,7 +30,6 @@ int flux_respond_errnum (flux_t h, zmsg_t **request, int errnum);
 /* Send a request to a particular cmb rank
  *   otherwise identical to flux_request_sendmsg()/flux_request_send()
  */
-int flux_rank_request_sendmsg (flux_t h, int rank, zmsg_t **zmsg);
 int flux_rank_request_send (flux_t h, int rank,
                             json_object *request, const char *fmt, ...);
 json_object *flux_rank_rpc (flux_t h, int rank,
