@@ -1337,6 +1337,21 @@ static int self_idle (ctx_t *ctx)
     return ctx->hb_epoch - ctx->hb_lastreq;
 }
 
+void send_keepalive (ctx_t *ctx)
+{
+    zmsg_t *zmsg = NULL;
+
+    zmsg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE, NULL, NULL, 0);
+    if (!zmsg)
+        goto done;
+    if (zmsg_pushmem (zmsg, NULL, 0) < 0)
+        goto done;
+    if (parent_send (ctx, &zmsg) < 0)
+        goto done;
+done:
+    zmsg_destroy (&zmsg);
+}
+
 static void cmb_heartbeat (ctx_t *ctx, zmsg_t *zmsg)
 {
     json_object *event = NULL;
@@ -1349,11 +1364,11 @@ static void cmb_heartbeat (ctx_t *ctx, zmsg_t *zmsg)
         flux_log (ctx->h, LOG_ERR, "%s: bad hb message", __FUNCTION__);
     }
 
-    /* If we've not sent anything to our parent, send a cmb.hb
+    /* If we've not sent anything to our parent, send a keepalive
      * to update our idle time.
      */
     if (self_idle (ctx) > 0)
-        flux_request_send (ctx->h, NULL, "cmb.hb");
+        send_keepalive (ctx);
 }
 
 static endpt_t *endpt_create (const char *fmt, ...)
@@ -1686,8 +1701,6 @@ static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             json_object_put (request);
         if (s)
             free (s);
-    } else if (flux_msg_match (*zmsg, "cmb.hb")) {
-        /* no-op used to update peer idle time - no response */
     } else if (flux_msg_match (*zmsg, "cmb.reparent")) {
         json_object *request = NULL;
         const char *uri;
@@ -1734,13 +1747,26 @@ static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
 static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
     zmsg_t *zmsg = zmsg_recv (item->socket);
+    int type;
+    char *id;
 
-    if (zmsg) {
+    if (!zmsg)
+        goto done;
+    if (flux_msg_get_type (zmsg, &type) < 0)
+        goto done;
+    if (type == FLUX_MSGTYPE_KEEPALIVE) {
+        if ((id  = flux_msg_nexthop (zmsg))) {
+            endpt_cc (zmsg, ctx->snoop);
+            peer_update (ctx, id);
+            free (id);
+        }
+    } else { /* FLUX_MSGTYPE_REQUEST */
         if (flux_request_sendmsg (ctx->h, &zmsg) < 0)
-            (void)flux_respond_errnum (ctx->h, &zmsg, errno);
+            if (flux_respond_errnum (ctx->h, &zmsg, errno) < 0)
+                goto done;
     }
-    if (zmsg)
-        zmsg_destroy (&zmsg);
+done:
+    zmsg_destroy (&zmsg);
     ZLOOP_RETURN(ctx);
 }
 
@@ -1981,7 +2007,6 @@ static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
     endpt_cc (*zmsg, ctx->snoop);
     if (hopcount > 0 && lasthop)
         peer_update (ctx, lasthop);
-
     if (nodeid == FLUX_NODEID_ANY) {
         rc = service_send (ctx, zmsg, lasthop, hopcount);
         if (rc < 0 && errno == ENOSYS)
