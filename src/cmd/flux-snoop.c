@@ -240,18 +240,18 @@ static int snoop_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
 
     if ((zmsg = zmsg_recv (zs))) {
         char *tag = flux_msg_tag (zmsg);
-        int type;
 
-        if (tag && flux_msg_get_type (zmsg, &type) == 0) {
-            if (subscribed (tag) && (aopt || !suppress (tag))) {
-                if (lopt) {
-                    zmsg_dump (zmsg);
-                } else {
-                    zdump_fprint (stderr, zmsg, flux_msgtype_shortstr (type));
-                }
+        if (!tag || (subscribed (tag) && (aopt || !suppress (tag)))) {
+            if (lopt) {
+                zmsg_dump (zmsg);
+            } else {
+                const char *pfx = "?";
+                int type;
+                if (flux_msg_get_type (zmsg, &type) == 0)
+                    pfx = flux_msgtype_shortstr (type);
+                zdump_fprint (stderr, zmsg, pfx);
             }
-        } else
-            msg ("Ignoring malformed message");
+        }
         if (tag)
             free (tag);
         zmsg_destroy (&zmsg);
