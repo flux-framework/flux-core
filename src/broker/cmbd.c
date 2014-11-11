@@ -1867,9 +1867,10 @@ static int recv_event (ctx_t *ctx, zmsg_t **zmsg)
         flux_log (ctx->h, LOG_INFO, "dropping dup event %d", seq);
         return -1;
     }
-    for (i = ctx->event_seq + 1; i < seq; i++)
-        flux_log (ctx->h, LOG_ERR, "lost event %d", i);
-
+    if (ctx->event_seq > 0) {
+        for (i = ctx->event_seq + 1; i < seq; i++)
+            flux_log (ctx->h, LOG_ERR, "lost event %d", i);
+    }
     ctx->event_seq = seq;
     endpt_cc (*zmsg, ctx->gevent_relay);
     endpt_cc (*zmsg, ctx->snoop);
