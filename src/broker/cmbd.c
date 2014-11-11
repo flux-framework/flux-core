@@ -527,11 +527,6 @@ int main (int argc, char *argv[])
             msg ("installing session heartbeat: T=%0.1fs", ctx.heartrate);
     }
 
-    /* XXX 250ms delay to work around async event connect - see issue 38
-     */
-    if (ctx.rank > 0)
-        usleep (250*1000);
-
     /* Event loop
      */
     if (ctx.verbose)
@@ -963,14 +958,26 @@ static int cmbd_init_gevent_pub (ctx_t *ctx, endpt_t *ep)
 static int cmbd_init_gevent_sub (ctx_t *ctx, endpt_t *ep)
 {
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
+    zmonitor_t *zmon = NULL;
 
     if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_SUB)))
         err_exit ("zsocket_new");
     if (flux_sec_csockinit (ctx->sec, ep->zs) < 0) /* no-op for epgm */
         msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
     zsocket_set_rcvhwm (ep->zs, 0);
+    if (!strstr (ep->uri, "ipc://") || !strstr (ep->uri, "tcp://")) {
+        if (!(zmon = zmonitor_new (ctx->zctx, ep->zs, ZMQ_EVENT_CONNECTED)))
+            err_exit ("zmonitor_new");
+    }
     if (zsocket_connect (ep->zs, "%s", ep->uri) < 0)
         err_exit ("%s", ep->uri);
+    if (zmon) {
+        zmsg_t *zmsg = zmsg_recv (zmonitor_socket (zmon));
+        if (!zmsg)
+            err_exit ("zmsg_recv returned NULL on monitor socket");
+        zmsg_destroy (&zmsg);
+        zmonitor_destroy (&zmon);
+    }
     zsocket_set_subscribe (ep->zs, "");
     zp.socket = ep->zs;
     if (zloop_poller (ctx->zl, &zp, (zloop_fn *)event_cb, ctx) < 0)
