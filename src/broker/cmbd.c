@@ -963,7 +963,7 @@ static int cmbd_init_gevent_sub (ctx_t *ctx, endpt_t *ep)
     if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_SUB)))
         err_exit ("zsocket_new");
     if (strstr (ep->uri, "ipc://") || strstr (ep->uri, "tcp://")) {
-        if (!(zmon = zmonitor_new (ctx->zctx, ep->zs, ZMQ_EVENT_CONNECTED)))
+        if (!(zmon = zmonitor_new (ctx->zctx, ep->zs, ZMQ_EVENT_ALL)))
             err_exit ("zmonitor_new");
     }
     if (flux_sec_csockinit (ctx->sec, ep->zs) < 0) /* no-op for epgm */
@@ -971,18 +971,22 @@ static int cmbd_init_gevent_sub (ctx_t *ctx, endpt_t *ep)
     zsocket_set_rcvhwm (ep->zs, 0);
     if (zsocket_connect (ep->zs, "%s", ep->uri) < 0)
         err_exit ("%s", ep->uri);
+    zsocket_set_subscribe (ep->zs, "");
     if (zmon) {
-        zmsg_t *zmsg = zmsg_recv (zmonitor_socket (zmon));
-        if (!zmsg)
-            err_exit ("zmsg_recv returned NULL on monitor socket");
-        char *s = zmsg_popstr (zmsg);
-        if (!s || strtoul (s, NULL, 10) != ZMQ_EVENT_CONNECTED)
-            err_exit ("mangled monitor event");
-        free (s);
-        zmsg_destroy (&zmsg);
+        zmsg_t *zmsg;
+        while ((zmsg = zmsg_recv (zmonitor_socket (zmon)))) {
+            int zevent = 0;
+            char *s = zmsg_popstr (zmsg);
+            if (s) {
+                zevent = strtoul (s, NULL, 10);
+                free (s);
+            }
+            zmsg_destroy (&zmsg);
+            if (zevent & ZMQ_EVENT_CONNECTED)
+                break;
+        }
         zmonitor_destroy (&zmon);
     }
-    zsocket_set_subscribe (ep->zs, "");
     zp.socket = ep->zs;
     if (zloop_poller (ctx->zl, &zp, (zloop_fn *)event_cb, ctx) < 0)
         err_exit ("zloop_poller");
