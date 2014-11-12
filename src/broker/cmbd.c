@@ -962,13 +962,13 @@ static int cmbd_init_gevent_sub (ctx_t *ctx, endpt_t *ep)
 
     if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_SUB)))
         err_exit ("zsocket_new");
-    if (flux_sec_csockinit (ctx->sec, ep->zs) < 0) /* no-op for epgm */
-        msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
-    zsocket_set_rcvhwm (ep->zs, 0);
     if (strstr (ep->uri, "ipc://") || strstr (ep->uri, "tcp://")) {
         if (!(zmon = zmonitor_new (ctx->zctx, ep->zs, ZMQ_EVENT_CONNECTED)))
             err_exit ("zmonitor_new");
     }
+    if (flux_sec_csockinit (ctx->sec, ep->zs) < 0) /* no-op for epgm */
+        msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
+    zsocket_set_rcvhwm (ep->zs, 0);
     if (zsocket_connect (ep->zs, "%s", ep->uri) < 0)
         err_exit ("%s", ep->uri);
     if (zmon) {
