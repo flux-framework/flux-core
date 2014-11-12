@@ -975,6 +975,10 @@ static int cmbd_init_gevent_sub (ctx_t *ctx, endpt_t *ep)
         zmsg_t *zmsg = zmsg_recv (zmonitor_socket (zmon));
         if (!zmsg)
             err_exit ("zmsg_recv returned NULL on monitor socket");
+        char *s = zmsg_popstr (zmsg);
+        if (!s || strtoul (s, NULL, 10) != ZMQ_EVENT_CONNECTED)
+            err_exit ("mangled monitor event");
+        free (s);
         zmsg_destroy (&zmsg);
         zmonitor_destroy (&zmon);
     }
