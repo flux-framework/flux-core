@@ -527,11 +527,6 @@ int main (int argc, char *argv[])
             msg ("installing session heartbeat: T=%0.1fs", ctx.heartrate);
     }
 
-    /* XXX 250ms delay to work around async event connect - see issue 38
-     */
-    if (ctx.rank > 0)
-        usleep (250*1000);
-
     /* Event loop
      */
     if (ctx.verbose)
@@ -963,15 +958,35 @@ static int cmbd_init_gevent_pub (ctx_t *ctx, endpt_t *ep)
 static int cmbd_init_gevent_sub (ctx_t *ctx, endpt_t *ep)
 {
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
+    zmonitor_t *zmon = NULL;
 
     if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_SUB)))
         err_exit ("zsocket_new");
+    if (strstr (ep->uri, "ipc://") || strstr (ep->uri, "tcp://")) {
+        if (!(zmon = zmonitor_new (ctx->zctx, ep->zs, ZMQ_EVENT_ALL)))
+            err_exit ("zmonitor_new");
+    }
     if (flux_sec_csockinit (ctx->sec, ep->zs) < 0) /* no-op for epgm */
         msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
     zsocket_set_rcvhwm (ep->zs, 0);
     if (zsocket_connect (ep->zs, "%s", ep->uri) < 0)
         err_exit ("%s", ep->uri);
     zsocket_set_subscribe (ep->zs, "");
+    if (zmon) {
+        zmsg_t *zmsg;
+        while ((zmsg = zmsg_recv (zmonitor_socket (zmon)))) {
+            int zevent = 0;
+            char *s = zmsg_popstr (zmsg);
+            if (s) {
+                zevent = strtoul (s, NULL, 10);
+                free (s);
+            }
+            zmsg_destroy (&zmsg);
+            if (zevent & ZMQ_EVENT_CONNECTED)
+                break;
+        }
+        zmonitor_destroy (&zmon);
+    }
     zp.socket = ep->zs;
     if (zloop_poller (ctx->zl, &zp, (zloop_fn *)event_cb, ctx) < 0)
         err_exit ("zloop_poller");
@@ -1748,24 +1763,39 @@ static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
     zmsg_t *zmsg = zmsg_recv (item->socket);
     int type;
-    char *id;
+    char *id = NULL;
 
     if (!zmsg)
         goto done;
-    if (flux_msg_get_type (zmsg, &type) < 0)
+    if (flux_msg_get_type (zmsg, &type) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: dropping malformed message",
+                 __FUNCTION__);
         goto done;
-    if (type == FLUX_MSGTYPE_KEEPALIVE) {
-        if ((id  = flux_msg_nexthop (zmsg))) {
+    }
+    switch (type) {
+        case FLUX_MSGTYPE_KEEPALIVE:
+            if (!(id  = flux_msg_nexthop (zmsg))) {
+                flux_log (ctx->h, LOG_ERR, "%s: discarding bad keepalive",
+                          __FUNCTION__);
+                goto done;
+            }
             endpt_cc (zmsg, ctx->snoop);
             peer_update (ctx, id);
-            free (id);
-        }
-    } else { /* FLUX_MSGTYPE_REQUEST */
-        if (flux_request_sendmsg (ctx->h, &zmsg) < 0)
-            if (flux_respond_errnum (ctx->h, &zmsg, errno) < 0)
-                goto done;
+            break;
+        case FLUX_MSGTYPE_REQUEST:
+            if (flux_request_sendmsg (ctx->h, &zmsg) < 0)
+                if (flux_respond_errnum (ctx->h, &zmsg, errno) < 0)
+                    flux_log (ctx->h, LOG_ERR, "%s: responding: %s",
+                              __FUNCTION__, strerror (errno));
+            break;
+        default:
+            flux_log (ctx->h, LOG_ERR, "%s: dropping %s message",
+                     __FUNCTION__, flux_msgtype_string (type));
+            break;
     }
 done:
+    if (id)
+        free (id);
     zmsg_destroy (&zmsg);
     ZLOOP_RETURN(ctx);
 }
@@ -1773,12 +1803,28 @@ done:
 static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
     zmsg_t *zmsg = zmsg_recv (item->socket);
+    int type;
 
-    if (zmsg) {
-        (void)flux_response_sendmsg (ctx->h, &zmsg);
+    if (!zmsg)
+        goto done;
+    if (flux_msg_get_type (zmsg, &type) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: dropping malformed message",
+                 __FUNCTION__);
+        goto done;
     }
-    if (zmsg)
-        zmsg_destroy (&zmsg);
+    switch (type) {
+        case FLUX_MSGTYPE_RESPONSE:
+            if (flux_response_sendmsg (ctx->h, &zmsg) < 0)
+                flux_log (ctx->h, LOG_ERR, "%s: handling peer response: %s",
+                          __FUNCTION__, strerror (errno));
+            break;
+        default:
+            flux_log (ctx->h, LOG_ERR, "%s: dropping %s message",
+                     __FUNCTION__, flux_msgtype_string (type));
+            break;
+    }
+done:
+    zmsg_destroy (&zmsg);
     ZLOOP_RETURN(ctx);
 }
 
@@ -1786,17 +1832,33 @@ static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod)
 {
     ctx_t *ctx = mod->ctx;
     zmsg_t *zmsg = zmsg_recv (item->socket);
+    int type;
 
-    if (zmsg) {
-        if (zmsg_content_size (zmsg) == 0) /* EOF */
-            zhash_delete (ctx->modules, plugin_name (mod->p));
-        else {
-            (void)flux_response_sendmsg (ctx->h, &zmsg);
-            peer_update (ctx, plugin_uuid (mod->p));
-        }
+    if (!zmsg)
+        goto done;
+    if (zmsg_content_size (zmsg) == 0) { /* EOF */
+        zhash_delete (ctx->modules, plugin_name (mod->p));
+        goto done;
     }
-    if (zmsg)
-        zmsg_destroy (&zmsg);
+    if (flux_msg_get_type (zmsg, &type) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: dropping malformed message",
+                 __FUNCTION__);
+        goto done;
+    }
+    switch (type) {
+        case FLUX_MSGTYPE_RESPONSE:
+            if (flux_response_sendmsg (ctx->h, &zmsg) < 0)
+                flux_log (ctx->h, LOG_ERR, "%s: handling %s response: %s",
+                          __FUNCTION__, plugin_name (mod->p), strerror (errno));
+            break;
+        default:
+            flux_log (ctx->h, LOG_ERR, "%s: dropping %s message",
+                     __FUNCTION__, flux_msgtype_string (type));
+            break;
+    }
+    peer_update (ctx, plugin_uuid (mod->p));
+done:
+    zmsg_destroy (&zmsg);
     ZLOOP_RETURN(ctx);
 }
 
@@ -1813,9 +1875,10 @@ static int recv_event (ctx_t *ctx, zmsg_t **zmsg)
         flux_log (ctx->h, LOG_INFO, "dropping dup event %d", seq);
         return -1;
     }
-    for (i = ctx->event_seq + 1; i < seq; i++)
-        flux_log (ctx->h, LOG_ERR, "lost event %d", i);
-
+    if (ctx->event_seq > 0) {
+        for (i = ctx->event_seq + 1; i < seq; i++)
+            flux_log (ctx->h, LOG_ERR, "lost event %d", i);
+    }
     ctx->event_seq = seq;
     endpt_cc (*zmsg, ctx->gevent_relay);
     endpt_cc (*zmsg, ctx->snoop);
@@ -1826,21 +1889,33 @@ static int recv_event (ctx_t *ctx, zmsg_t **zmsg)
 static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
     zmsg_t *zmsg = zmsg_recv (item->socket);
+    int type;
 
-    if (zmsg) {
-        if (strstr (ctx->gevent->uri, "pgm://")) {
-            if (flux_sec_unmunge_zmsg (ctx->sec, &zmsg) < 0) {
-                flux_log (ctx->h, LOG_ERR, "dropping malformed event: %s",
-                          flux_sec_errstr (ctx->sec));
-                goto done;
-            }
-        }
-        if (recv_event (ctx, &zmsg) < 0)
+    if (!zmsg)
+        goto done;
+    if (strstr (ctx->gevent->uri, "pgm://")) {
+        if (flux_sec_unmunge_zmsg (ctx->sec, &zmsg) < 0) {
+            flux_log (ctx->h, LOG_ERR, "unmunge [e]pgm event: %s",
+                      flux_sec_errstr (ctx->sec));
             goto done;
+        }
+    }
+    if (flux_msg_get_type (zmsg, &type) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: dropping malformed message",
+                 __FUNCTION__);
+        goto done;
+    }
+    switch (type) {
+        case FLUX_MSGTYPE_EVENT:
+            recv_event (ctx, &zmsg);
+            break;
+        default:
+            flux_log (ctx->h, LOG_ERR, "%s: dropping %s message",
+                     __FUNCTION__, flux_msgtype_string (type));
+            break;
     }
 done:
-    if (zmsg)
-        zmsg_destroy (&zmsg);
+    zmsg_destroy (&zmsg);
     ZLOOP_RETURN(ctx);
 }
 
