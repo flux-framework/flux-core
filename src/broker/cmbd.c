@@ -965,7 +965,7 @@ static int cmbd_init_gevent_sub (ctx_t *ctx, endpt_t *ep)
     if (flux_sec_csockinit (ctx->sec, ep->zs) < 0) /* no-op for epgm */
         msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
     zsocket_set_rcvhwm (ep->zs, 0);
-    if (!strstr (ep->uri, "ipc://") || !strstr (ep->uri, "tcp://")) {
+    if (strstr (ep->uri, "ipc://") || strstr (ep->uri, "tcp://")) {
         if (!(zmon = zmonitor_new (ctx->zctx, ep->zs, ZMQ_EVENT_CONNECTED)))
             err_exit ("zmonitor_new");
     }
