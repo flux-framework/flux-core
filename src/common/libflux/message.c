@@ -37,119 +37,81 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/log.h"
 
-#define PROTO_MAGIC 0x8e
-#define PROTO_SIZE 7
-
 /* Begin manual codec
+ *  We have 4 byte values followed by a 32 bit int (network order).
  */
-static int proto_set_nodeid (uint8_t *data, int len, uint32_t nodeid);
-static int proto_set_errnum (uint8_t *data, int len, uint32_t errnum);
-static int proto_set_seq (uint8_t *data, int len, uint32_t seq);
+#define PROTO_MAGIC         0x8e
+#define PROTO_VERSION       1
+#define PROTO_SIZE          8
+#define PROTO_OFF_MAGIC     0
+#define PROTO_OFF_VERSION   1
+#define PROTO_OFF_TYPE      2
+#define PROTO_OFF_FLAGS     3
+#define PROTO_OFF_BIGINT    4
+static int proto_set_bigint (uint8_t *data, int len, uint32_t bigint);
 
 static int proto_set_type (uint8_t *data, int len, int type)
 {
-    if (len < 2 || data[0] != PROTO_MAGIC)
+    if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
+                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
         return -1;
-    data[1] = type;
-    switch (type) {
-        case FLUX_MSGTYPE_REQUEST:
-            proto_set_nodeid (data, len, FLUX_NODEID_ANY);
-            break;
-        case FLUX_MSGTYPE_RESPONSE:
-            proto_set_errnum (data, len, 0);
-            break;
-        case FLUX_MSGTYPE_EVENT:
-            proto_set_seq (data, len, 0);
-            break;
-    }
-    return 0;
+    data[PROTO_OFF_TYPE] = type;
+    return proto_set_bigint (data, len, type == FLUX_MSGTYPE_REQUEST
+                                              ? FLUX_NODEID_ANY : 0);
 }
 static int proto_get_type (uint8_t *data, int len, int *type)
 {
-    if (len < 2 || data[0] != PROTO_MAGIC)
+    if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
+                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
         return -1;
-    *type = data[1];
+    *type = data[PROTO_OFF_TYPE];
     return 0;
 }
 static int proto_set_flags (uint8_t *data, int len, uint8_t flags)
 {
-    if (len < 2 || data[0] != PROTO_MAGIC)
+    if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
+                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
         return -1;
-    data[2] = flags;
+    data[PROTO_OFF_FLAGS] = flags;
     return 0;
 }
 static int proto_get_flags (uint8_t *data, int len, uint8_t *val)
 {
-    if (len < 2 || data[0] != PROTO_MAGIC)
+    if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
+                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
         return -1;
-    *val = data[2];
+    *val = data[PROTO_OFF_FLAGS];
     return 0;
 }
-static int proto_set_nodeid (uint8_t *data, int len, uint32_t nodeid)
+static int proto_set_bigint (uint8_t *data, int len, uint32_t bigint)
 {
-    uint32_t x = htonl (nodeid);
+    uint32_t x = htonl (bigint);
 
-    if (len < 6 || data[0] != PROTO_MAGIC || data[1] != FLUX_MSGTYPE_REQUEST)
+    if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
+                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
         return -1;
-    memcpy (&data[3], &x, sizeof (x));
+    memcpy (&data[PROTO_OFF_BIGINT], &x, sizeof (x));
     return 0;
 }
-static int proto_get_nodeid (uint8_t *data, int len, uint32_t *nodeid)
-{
-    uint32_t x;
-
-    if (len < 6 || data[0] != PROTO_MAGIC || data[1] != FLUX_MSGTYPE_REQUEST)
-        return -1;
-    memcpy (&x, &data[3], sizeof (x));
-    *nodeid = ntohl (x);
-    return 0;
-}
-static int proto_set_errnum (uint8_t *data, int len, uint32_t errnum)
-{
-    uint32_t x = htonl (errnum);
-
-    if (len < 6 || data[0] != PROTO_MAGIC || data[1] != FLUX_MSGTYPE_RESPONSE)
-        return -1;
-    memcpy (&data[3], &x, sizeof (x));
-    return 0;
-}
-static int proto_get_errnum (uint8_t *data, int len, uint32_t *errnum)
+static int proto_get_bigint (uint8_t *data, int len, uint32_t *bigint)
 {
     uint32_t x;
 
-    if (len < 6 || data[0] != PROTO_MAGIC || data[1] != FLUX_MSGTYPE_RESPONSE)
+    if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
+                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
         return -1;
-    memcpy (&x, &data[3], sizeof (x));
-    *errnum = ntohl (x);
-    return 0;
-}
-static int proto_set_seq (uint8_t *data, int len, uint32_t seq)
-{
-    uint32_t x = htonl (seq);
-
-    if (len < 6 || data[0] != PROTO_MAGIC || data[1] != FLUX_MSGTYPE_EVENT)
-        return -1;
-    memcpy (&data[3], &x, sizeof (x));
-    return 0;
-}
-static int proto_get_seq (uint8_t *data, int len, uint32_t *seq)
-{
-    uint32_t x;
-
-    if (len < 6 || data[0] != PROTO_MAGIC || data[1] != FLUX_MSGTYPE_EVENT)
-        return -1;
-    memcpy (&x, &data[3], sizeof (x));
-    *seq = ntohl (x);
+    memcpy (&x, &data[PROTO_OFF_BIGINT], sizeof (x));
+    *bigint = ntohl (x);
     return 0;
 }
 static void proto_init (uint8_t *data, int len, uint8_t flags)
 {
-    assert (len >= 3);
+    assert (len >= PROTO_SIZE);
     memset (data, 0, len);
-    data[0] = PROTO_MAGIC;
-    data[2] = flags;
+    data[PROTO_OFF_MAGIC] = PROTO_MAGIC;
+    data[PROTO_OFF_VERSION] = PROTO_VERSION;
+    data[PROTO_OFF_FLAGS] = flags;
 }
-
 /* End manual codec
  */
 
@@ -322,7 +284,11 @@ int flux_msg_get_flags (zmsg_t *zmsg, uint8_t *fl)
 int flux_msg_set_nodeid (zmsg_t *zmsg, uint32_t nid)
 {
     zframe_t *zf = zmsg_last (zmsg);
-    if (!zf || proto_set_nodeid (zframe_data (zf), zframe_size (zf), nid) < 0) {
+    int type;
+
+    if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
+            || type != FLUX_MSGTYPE_REQUEST
+            || proto_set_bigint (zframe_data (zf), zframe_size (zf), nid) < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -332,7 +298,11 @@ int flux_msg_set_nodeid (zmsg_t *zmsg, uint32_t nid)
 int flux_msg_get_nodeid (zmsg_t *zmsg, uint32_t *nid)
 {
     zframe_t *zf = zmsg_last (zmsg);
-    if (!zf || proto_get_nodeid (zframe_data (zf), zframe_size (zf), nid) < 0) {
+    int type;
+
+    if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
+            || type != FLUX_MSGTYPE_REQUEST
+            || proto_get_bigint (zframe_data (zf), zframe_size (zf), nid) < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -342,7 +312,11 @@ int flux_msg_get_nodeid (zmsg_t *zmsg, uint32_t *nid)
 int flux_msg_set_errnum (zmsg_t *zmsg, int e)
 {
     zframe_t *zf = zmsg_last (zmsg);
-    if (!zf || proto_set_errnum (zframe_data (zf), zframe_size (zf), e) < 0) {
+    int type;
+
+    if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
+            || type != FLUX_MSGTYPE_RESPONSE
+            || proto_set_bigint (zframe_data (zf), zframe_size (zf), e) < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -352,9 +326,12 @@ int flux_msg_set_errnum (zmsg_t *zmsg, int e)
 int flux_msg_get_errnum (zmsg_t *zmsg, int *e)
 {
     zframe_t *zf = zmsg_last (zmsg);
+    int type;
     uint32_t xe;
 
-    if (!zf || proto_get_errnum (zframe_data (zf), zframe_size (zf), &xe) < 0) {
+    if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
+            || type != FLUX_MSGTYPE_RESPONSE
+            || proto_get_bigint (zframe_data (zf), zframe_size (zf), &xe) < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -365,7 +342,11 @@ int flux_msg_get_errnum (zmsg_t *zmsg, int *e)
 int flux_msg_set_seq (zmsg_t *zmsg, uint32_t seq)
 {
     zframe_t *zf = zmsg_last (zmsg);
-    if (!zf || proto_set_seq (zframe_data (zf), zframe_size (zf), seq) < 0) {
+    int type;
+
+    if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
+            || type != FLUX_MSGTYPE_EVENT
+            || proto_set_bigint (zframe_data (zf), zframe_size (zf), seq) < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -375,7 +356,11 @@ int flux_msg_set_seq (zmsg_t *zmsg, uint32_t seq)
 int flux_msg_get_seq (zmsg_t *zmsg, uint32_t *seq)
 {
     zframe_t *zf = zmsg_last (zmsg);
-    if (!zf || proto_get_seq (zframe_data (zf), zframe_size (zf), seq) < 0) {
+    int type;
+
+    if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
+            || type != FLUX_MSGTYPE_EVENT
+            || proto_get_bigint (zframe_data (zf), zframe_size (zf), seq) < 0) {
         errno = EPROTO;
         return -1;
     }
