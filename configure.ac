@@ -34,8 +34,9 @@ AC_PROG_LIBTOOL
 AC_PROG_AWK
 AC_CHECK_PROG(A2X,[a2x],[a2x])
 if test "$A2X" != "a2x"; then
-  AC_MSG_ERROR([Please install asciidoc to get a2x utility.])
+  AC_MSG_WARN([No a2x utility found. Manual pages will not be generated.])
 fi
+AM_CONDITIONAL([HAVE_A2X], [test "$A2X" = "a2x" ])
 AC_CHECK_PROG(ASPELL,[aspell],[aspell])
 
 ##

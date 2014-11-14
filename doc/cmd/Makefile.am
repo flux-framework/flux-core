@@ -15,9 +15,10 @@ MAN1_FILES = \
 ADOC_FILES  = $(MAN1_FILES:%.1=%.adoc)
 XML_FILES   = $(MAN1_FILES:%.1=%.xml)
 
+if HAVE_A2X
 dist_man_MANS = $(MAN1_FILES)
-
 $(MAN1_FILES): COPYRIGHT.adoc
+endif
 
 SUFFIXES = .adoc .1
 
