@@ -1341,10 +1341,9 @@ void send_keepalive (ctx_t *ctx)
 {
     zmsg_t *zmsg = NULL;
 
-    zmsg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE, NULL, NULL, 0);
-    if (!zmsg)
+    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)))
         goto done;
-    if (zmsg_pushmem (zmsg, NULL, 0) < 0)
+    if (flux_msg_set_rte (zmsg, true) < 0)
         goto done;
     if (parent_send (ctx, &zmsg) < 0)
         goto done;
@@ -1548,11 +1547,11 @@ static int cmb_event_send (ctx_t *ctx, JSON o, const char *topic)
     int rc = -1;
     zmsg_t *zmsg;
 
-    if (!(zmsg = flux_msg_encode ((char *)topic, o))) {
-        errno = EIO;
+    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_EVENT)))
+        oom ();
+    if (flux_msg_set_topic (zmsg, topic) < 0)
         goto done;
-    }
-    if (flux_msg_set_type (zmsg, FLUX_MSGTYPE_EVENT) < 0)
+    if (o && flux_msg_set_payload_json (zmsg, o) < 0)
         goto done;
     if (flux_msg_set_seq (zmsg, ++ctx->event_seq) < 0) /* start with seq=1 */
         goto done;
