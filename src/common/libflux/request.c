@@ -55,14 +55,14 @@ done:
 zmsg_t *flux_response_matched_recvmsg (flux_t h, const char *match, bool nb)
 {
     zmsg_t *zmsg, *response = NULL;
-    zlist_t *nomatch;
+    zlist_t *nomatch = NULL;
 
-    if (!(nomatch = zlist_new ()))
-        oom ();
     do {
         if (!(response = flux_response_recvmsg (h, nb)))
             goto done;
-        if (!flux_msg_match (response, match)) {
+        if (!flux_msg_streq_topic (response, match)) {
+            if (!nomatch && !(nomatch = zlist_new ()))
+                oom ();
             if (zlist_append (nomatch, response) < 0)
                 oom ();
             response = NULL;
@@ -81,18 +81,18 @@ done:
 
 int flux_respond (flux_t h, zmsg_t **zmsg, JSON o)
 {
-    if (flux_msg_replace_json (*zmsg, o) < 0)
-        return -1;
     if (flux_msg_set_type (*zmsg, FLUX_MSGTYPE_RESPONSE) < 0)
+        return -1;
+    if (flux_msg_set_payload_json (*zmsg, o) < 0)
         return -1;
     return flux_response_sendmsg (h, zmsg);
 }
 
 int flux_respond_errnum (flux_t h, zmsg_t **zmsg, int errnum)
 {
-    if (flux_msg_replace_json (*zmsg, NULL) < 0)
-        return -1;
     if (flux_msg_set_type (*zmsg, FLUX_MSGTYPE_RESPONSE) < 0)
+        return -1;
+    if (flux_msg_set_payload (*zmsg, NULL, 0) < 0)
         return -1;
     if (flux_msg_set_errnum (*zmsg, errnum) < 0)
         return -1;
@@ -109,14 +109,16 @@ static int flux_vrequestf (flux_t h, uint32_t nodeid, json_object *o,
     zmsg_t *zmsg;
     int rc = -1;
 
-    if (!(zmsg = flux_msg_encode (topic, o)))
+    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
         goto done;
-    if (flux_msg_set_type (zmsg, FLUX_MSGTYPE_REQUEST) < 0)
+    if (flux_msg_set_topic (zmsg, topic) < 0)
+        goto done;
+    if (o && flux_msg_set_payload_json (zmsg, o) < 0)
         goto done;
     if (flux_msg_set_nodeid (zmsg, nodeid) < 0)
         goto done;
-    if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* add route delimiter */
-        oom ();
+    if (flux_msg_enable_route (zmsg) < 0)
+        goto done;
     rc = flux_request_sendmsg (h, &zmsg);
 done:
     if (zmsg)

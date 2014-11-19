@@ -164,14 +164,14 @@ static subscription_t *subscription_lookup (client_t *c, int type, char *topic)
     return NULL;
 }
 
-static bool subscription_match (client_t *c, int type, char *topic)
+static bool subscription_match (client_t *c, int type, zmsg_t *zmsg)
 {
     subscription_t *sub;
 
     sub = zlist_first (c->subscriptions);
     while (sub) {
-        if (sub->type == type && !strncmp (sub->topic, topic,
-                                           strlen (sub->topic)))
+        if (sub->type == type && flux_msg_strneq_topic (zmsg, sub->topic,
+                                                        strlen (sub->topic)))
             return true;
         sub = zlist_next (c->subscriptions);
     }
@@ -181,29 +181,21 @@ static bool subscription_match (client_t *c, int type, char *topic)
 static int notify_srv (const char *key, void *item, void *arg)
 {
     client_t *c = arg;
-    zmsg_t *zmsg; 
-    json_object *o;
+    char *topic = xasprintf ("%s.disconnect", key);
+    zmsg_t *zmsg;
 
-    if (!(zmsg = zmsg_new ()))
-        oom ();
-    o = util_json_object_new_object ();
-    if (zmsg_pushstr (zmsg, json_object_to_json_string (o)) < 0)
-        oom ();
-    json_object_put (o);
-#if CZMQ_VERSION_MAJOR < 2
-    if (zmsg_pushstr (zmsg, "%s.disconnect", key) < 0)
-        oom ();
-#else
-    if (zmsg_pushstrf (zmsg, "%s.disconnect", key) < 0)
-        oom ();
-#endif
-    if (zmsg_pushmem (zmsg, NULL, 0) < 0) /* delimiter frame */
-        oom ();
-    if (zmsg_pushstr (zmsg, zuuid_str (c->uuid)) < 0)
-        oom ();
-
+    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
+        goto done;
+    if (flux_msg_set_topic (zmsg, topic) < 0)
+        goto done;
+    if (flux_msg_enable_route (zmsg) < 0)
+        goto done;
+    if (flux_msg_push_route (zmsg, zuuid_str (c->uuid)) < 0)
+        goto done;
     flux_request_sendmsg (c->ctx->h, &zmsg);
-
+done:
+    zmsg_destroy (&zmsg);
+    free (topic);
     return 0;
 }
 
@@ -229,22 +221,20 @@ static void client_destroy (client_t *c)
     free (c);
 }
 
-static bool flux_msg_match_substr (zmsg_t *zmsg, const char *tag, char **restp)
+static bool flux_msg_match_substr (zmsg_t *zmsg, const char *topic, char **rest)
 {
-    char *ztag = flux_msg_tag (zmsg);
-    int taglen = strlen (tag);
-    int ztaglen = ztag ? strlen (ztag) : 0;
-
-    if (ztaglen >= taglen && strncmp (tag, ztag, taglen) == 0) {
-        if (restp) {
-            memmove (ztag, ztag + taglen, ztaglen - taglen + 1);
-            *restp = ztag;
-        } else
-            free (ztag);
-        return true;
+    if (!flux_msg_strneq_topic (zmsg, topic, strlen (topic)))
+        return false;
+    if (rest) {
+        char *s = NULL;
+        if (flux_msg_get_topic (zmsg, &s) < 0)
+            *rest = NULL;
+        else {
+            memmove (s, s + strlen (topic), strlen (s) - strlen (topic) + 1);
+            *rest = s;
+        }
     }
-    free (ztag);
-    return false;
+    return true;
 }
 
 static int client_read (ctx_t *ctx, client_t *c)
@@ -273,18 +263,20 @@ static int client_read (ctx_t *ctx, client_t *c)
     } else {
         /* insert disconnect notifier before forwarding request */
         if (c->disconnect_notify) {
-            char *tag = flux_msg_tag_short (zmsg);
-            if (!tag)
+            char *topic = NULL, *p;
+            if (flux_msg_get_topic (zmsg, &topic) < 0)
                 goto done;
-            if (zhash_lookup (c->disconnect_notify, tag) == NULL) {
-                if (zhash_insert (c->disconnect_notify, tag, tag) < 0)
+            if ((p = strchr (topic, '.')))
+                *p = '\0';
+            if (zhash_lookup (c->disconnect_notify, topic) == NULL) {
+                if (zhash_insert (c->disconnect_notify, topic, topic) < 0)
                     oom ();
-                zhash_freefn (c->disconnect_notify, tag, free);
+                zhash_freefn (c->disconnect_notify, topic, free);
             } else
-                free (tag);
+                free (topic);
         }
-        if (zmsg_pushstr (zmsg, zuuid_str (c->uuid)) < 0)
-            oom ();
+        if (flux_msg_push_route (zmsg, zuuid_str (c->uuid)) < 0)
+            oom (); /* FIXME */
         flux_request_sendmsg (ctx->h, &zmsg);
     }
 done:
@@ -324,19 +316,18 @@ static int response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     char *uuid = NULL;
-    zframe_t *zf = NULL;
     client_t *c;
 
-    if (flux_msg_hopcount (*zmsg) != 1) {
-        flux_log (ctx->h, LOG_ERR, "dropping response with bad envelope");
+    if (flux_msg_pop_route (*zmsg, &uuid) < 0) {
+        err ("dropping mangled response (no routes)");
+        zmsg_destroy (zmsg);
         goto done;
     }
-    uuid = zmsg_popstr (*zmsg);
-    assert (uuid != NULL);
-    zf = zmsg_pop (*zmsg);
-    assert (zf != NULL);
-    assert (zframe_size (zf) == 0);
-
+    if (flux_msg_clear_route (*zmsg) < 0) {
+        err ("dropping mangled response");
+        zmsg_destroy (zmsg);
+        goto done;
+    }
     c = zlist_first (ctx->clients);
     while (c && *zmsg) {
         if (!strcmp (uuid, zuuid_str (c->uuid))) {
@@ -348,8 +339,6 @@ static int response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     }
     if (*zmsg)
         zmsg_destroy (zmsg); /* discard response for unknown uuid */
-    if (zf)
-        zframe_destroy (&zf);
     if (uuid)
         free (uuid);
 done:
@@ -360,13 +349,12 @@ static int event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     client_t *c;
-    char *tag = flux_msg_tag (*zmsg);
     zmsg_t *cpy;
 
-    if (tag) {
+    if (*zmsg) {
         c = zlist_first (ctx->clients);
         while (c) {
-            if (subscription_match (c, FLUX_MSGTYPE_EVENT, tag)) {
+            if (subscription_match (c, FLUX_MSGTYPE_EVENT, *zmsg)) {
                 if (!(cpy = zmsg_dup (*zmsg)))
                     oom ();
                 if (zfd_send (c->fd, &cpy) < 0)
@@ -374,7 +362,6 @@ static int event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             }
             c = zlist_next (ctx->clients);
         }
-        free (tag);
     }
     return 0;
 }
