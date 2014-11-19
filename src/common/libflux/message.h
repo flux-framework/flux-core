@@ -41,7 +41,9 @@ bool flux_msg_streq_topic (zmsg_t *zmsg, const char *topic);
 bool flux_msg_strneq_topic (zmsg_t *zmsg, const char *topic, size_t n);
 
 /* Get/set payload.
- * Set function adds/deletes payload frame as needed (caller retains ownership)
+ * Set function adds/deletes/replaces payload frame as needed.
+ * The new payload will be copied (caller retains ownership).
+ * Any old payload is deleted.
  * Get_payload returns pointer to zmsg-owned buf.
  * Get_json returns JSON object that caller must free.
  */
