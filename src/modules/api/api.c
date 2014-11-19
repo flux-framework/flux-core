@@ -188,7 +188,7 @@ static int notify_srv (const char *key, void *item, void *arg)
         goto done;
     if (flux_msg_set_topic (zmsg, topic) < 0)
         goto done;
-    if (flux_msg_set_rte (zmsg, true) < 0)
+    if (flux_msg_enable_route (zmsg) < 0)
         goto done;
     if (flux_msg_push_route (zmsg, zuuid_str (c->uuid)) < 0)
         goto done;
@@ -323,7 +323,7 @@ static int response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         zmsg_destroy (zmsg);
         goto done;
     }
-    if (flux_msg_set_rte (*zmsg, false) < 0) {
+    if (flux_msg_clear_route (*zmsg) < 0) {
         err ("dropping mangled response");
         zmsg_destroy (zmsg);
         goto done;
