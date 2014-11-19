@@ -276,7 +276,23 @@ int flux_msg_get_seq (zmsg_t *zmsg, uint32_t *seq)
     return 0;
 }
 
-int flux_msg_set_rte (zmsg_t *zmsg, bool rte)
+int flux_msg_enable_route (zmsg_t *zmsg)
+{
+    uint8_t flags;
+
+    if (flux_msg_get_flags (zmsg, &flags) < 0)
+        return -1;
+    if ((flags & FLUX_MSGFLAG_ROUTE))
+        return 0;
+    if (zmsg_pushmem (zmsg, NULL, 0) < 0) {
+        errno = ENOMEM;
+        return -1;
+    }
+    flags |= FLUX_MSGFLAG_ROUTE;
+    return flux_msg_set_flags (zmsg, flags);
+}
+
+int flux_msg_clear_route (zmsg_t *zmsg)
 {
     uint8_t flags;
     zframe_t *zf;
@@ -284,35 +300,16 @@ int flux_msg_set_rte (zmsg_t *zmsg, bool rte)
 
     if (flux_msg_get_flags (zmsg, &flags) < 0)
         return -1;
-    if (rte && (flags & FLUX_MSGFLAG_RTE))
+    if (!(flags & FLUX_MSGFLAG_ROUTE))
         return 0;
-    if (!rte && !(flags & FLUX_MSGFLAG_RTE))
-        return 0;
-    if (rte) {
-        if (zmsg_pushmem (zmsg, NULL, 0) < 0) {
-            errno = ENOMEM;
-            return -1;
-        }
-        flags |= FLUX_MSGFLAG_RTE;
-    } else {
-        while ((zf = zmsg_pop (zmsg))) {
-            size = zframe_size (zf);
-            zframe_destroy (&zf);
-            if (size == 0)
-                break;
-        }
-        flags &= ~(uint8_t)FLUX_MSGFLAG_RTE;
+    while ((zf = zmsg_pop (zmsg))) {
+        size = zframe_size (zf);
+        zframe_destroy (&zf);
+        if (size == 0)
+            break;
     }
+    flags &= ~(uint8_t)FLUX_MSGFLAG_ROUTE;
     return flux_msg_set_flags (zmsg, flags);
-}
-
-int flux_msg_get_rte (zmsg_t *zmsg, bool *rte)
-{
-    uint8_t flags;
-    if (flux_msg_get_flags (zmsg, &flags) < 0)
-        return -1;
-    *rte = (flags & FLUX_MSGFLAG_RTE) ? true : false;
-    return 0;
 }
 
 int flux_msg_push_route (zmsg_t *zmsg, const char *id)
@@ -321,7 +318,7 @@ int flux_msg_push_route (zmsg_t *zmsg, const char *id)
 
     if (flux_msg_get_flags (zmsg, &flags) < 0)
         return -1;
-    if (!(flags & FLUX_MSGFLAG_RTE)) {
+    if (!(flags & FLUX_MSGFLAG_ROUTE)) {
         errno = EPROTO;
         return -1;
     }
@@ -340,11 +337,12 @@ int flux_msg_pop_route (zmsg_t *zmsg, char **id)
 
     if (flux_msg_get_flags (zmsg, &flags) < 0)
         return -1;
-    if (!(flags & FLUX_MSGFLAG_RTE)) {
+    if (!(flags & FLUX_MSGFLAG_ROUTE) || !(zf = zmsg_first (zmsg))) {
         errno = EPROTO;
         return -1;
     }
-    if ((zf = zmsg_pop (zmsg)) && !(s = zframe_strdup (zf))) {
+    if (zframe_size (zf) > 0 && (zf = zmsg_pop (zmsg))
+                             && !(s = zframe_strdup (zf))) {
         errno = ENOMEM;
         return -1;
     }
@@ -361,12 +359,11 @@ int flux_msg_get_route_last (zmsg_t *zmsg, char **id)
 
     if (flux_msg_get_flags (zmsg, &flags) < 0)
         return -1;
-    if (!(flags & FLUX_MSGFLAG_RTE)) {
+    if (!(flags & FLUX_MSGFLAG_ROUTE) || !(zf = zmsg_first (zmsg))) {
         errno = EPROTO;
         return -1;
     }
-    if ((zf = zmsg_first (zmsg)) && zframe_size (zf) > 0
-                                 && !(s = zframe_strdup (zf))) {
+    if (zframe_size (zf) > 0 && !(s = zframe_strdup (zf))) {
         errno = ENOMEM;
         return -1;
     }
@@ -383,7 +380,7 @@ int flux_msg_get_route_first (zmsg_t *zmsg, char **id)
 
     if (flux_msg_get_flags (zmsg, &flags) < 0)
         return -1;
-    if (!(flags & FLUX_MSGFLAG_RTE)) {
+    if (!(flags & FLUX_MSGFLAG_ROUTE)) {
         errno = EPROTO;
         return -1;
     }
@@ -394,7 +391,11 @@ int flux_msg_get_route_first (zmsg_t *zmsg, char **id)
             break;
         zf = zf_next;
     }
-    if (zf && zframe_size (zf) > 0 && !(s = zframe_strdup (zf))) {
+    if (!zf) {
+        errno = EPROTO;
+        return -1;
+    }
+    if (zframe_size (zf) > 0 && !(s = zframe_strdup (zf))) {
         errno = ENOMEM;
         return -1;
     }
@@ -410,7 +411,7 @@ int flux_msg_get_route_count (zmsg_t *zmsg)
 
     if (flux_msg_get_flags (zmsg, &flags) < 0)
         return -1;
-    if (!(flags & FLUX_MSGFLAG_RTE)) {
+    if (!(flags & FLUX_MSGFLAG_ROUTE)) {
         errno = EPROTO;
         return -1;
     }
@@ -431,7 +432,7 @@ int flux_msg_set_payload (zmsg_t *zmsg, void *buf, int size)
     if (flux_msg_get_flags (zmsg, &flags) < 0)
         goto done;
     zf = zmsg_first (zmsg);
-    if ((flags & FLUX_MSGFLAG_RTE)) {   /* skip over routing frames, if any */
+    if ((flags & FLUX_MSGFLAG_ROUTE)) {   /* skip over routing frames, if any */
         while (zf && zframe_size (zf) > 0)
             zf = zmsg_next (zmsg);
         if (zf)
@@ -480,7 +481,7 @@ int flux_msg_get_payload (zmsg_t *zmsg, void **buf, int *size)
         return -1;
     }
     zf = zmsg_first (zmsg);
-    if ((flags & FLUX_MSGFLAG_RTE)) {
+    if ((flags & FLUX_MSGFLAG_ROUTE)) {
         while (zf && zframe_size (zf) > 0)
             zf = zmsg_next (zmsg);
         if (zf)
@@ -549,7 +550,7 @@ int flux_msg_set_topic (zmsg_t *zmsg, const char *topic)
     if (flux_msg_get_flags (zmsg, &flags) < 0)
         goto done;
     zf = zmsg_first (zmsg);
-    if ((flags & FLUX_MSGFLAG_RTE)) {   /* skip over routing frames, if any */
+    if ((flags & FLUX_MSGFLAG_ROUTE)) {   /* skip over routing frames, if any */
         while (zf && zframe_size (zf) > 0)
             zf = zmsg_next (zmsg);
         if (zf)
@@ -597,7 +598,7 @@ static int zf_topic (zmsg_t *zmsg, zframe_t **zfp)
         goto done;
     }
     zf = zmsg_first (zmsg);
-    if ((flags & FLUX_MSGFLAG_RTE)) {
+    if ((flags & FLUX_MSGFLAG_ROUTE)) {
         while (zf && zframe_size (zf) > 0)
             zf = zmsg_next (zmsg);
         if (zf)
@@ -867,7 +868,6 @@ void check_routes (void)
 {
     zmsg_t *zmsg;
     char *s;
-    bool flag;
 
     ok ((zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL
         && zmsg_size (zmsg) == 1,
@@ -881,18 +881,17 @@ void check_routes (void)
     errno = 0;
     ok ((flux_msg_get_route_last (zmsg, &s) == -1 && errno == EPROTO),
         "flux_msg_get_route_last returns -1 errno EPROTO on msg w/o delim");
+    ok ((flux_msg_pop_route (zmsg, &s) == -1 && errno == EPROTO),
+        "flux_msg_pop_route returns -1 errno EPROTO on msg w/o delim");
 
-    ok (flux_msg_set_rte (zmsg, false) == 0 && zmsg_size (zmsg) == 1,
-        "flux_msg_set_rte(false) works, is no-op on msg w/o delim");
-    ok (flux_msg_get_rte (zmsg, &flag) == 0 && flag == false,
-        "flux_msg_get_rte works, and returns false on msg w/o delim");
-
-    ok (flux_msg_set_rte (zmsg, true) == 0 && zmsg_size (zmsg) == 2,
-        "flux_msg_set_rte(true) works, adds one frame on msg w/o delim");
-    ok (flux_msg_get_rte (zmsg, &flag) == 0 && flag == true,
-        "flux_msg_get_rte works, and returns true on msg w/delim");
+    ok (flux_msg_clear_route (zmsg) == 0 && zmsg_size (zmsg) == 1,
+        "flux_msg_clear_route works, is no-op on msg w/o delim");
+    ok (flux_msg_enable_route (zmsg) == 0 && zmsg_size (zmsg) == 2,
+        "flux_msg_enable_route works, adds one frame on msg w/o delim");
     ok ((flux_msg_get_route_count (zmsg) == 0),
         "flux_msg_get_route_count returns 0 on msg w/delim");
+    ok (flux_msg_pop_route (zmsg, &s) == 0 && s == NULL,
+        "flux_msg_pop_route works and sets id to NULL on msg w/o routes");
 
     ok (flux_msg_get_route_first (zmsg, &s) == 0 && s == NULL,
         "flux_msg_get_route_first returns 0, id=NULL on msg w/delim");
@@ -932,8 +931,15 @@ void check_routes (void)
         "flux_msg_get_route_last returns id2 on message with delim+id1+id2");
     free (s);
 
-    ok (flux_msg_set_rte (zmsg, false) == 0 && zmsg_size (zmsg) == 1,
-        "flux_msg_set_rte(false) strips routing frames and delim");
+    s = NULL;
+    ok (flux_msg_pop_route (zmsg, &s) == 0 && s != NULL,
+        "flux_msg_pop_route works on msg w/routes");
+    like (s, "router",
+        "flux_msg_pop_routet returns id2 on message with delim+id1+id2");
+    free (s);
+
+    ok (flux_msg_clear_route (zmsg) == 0 && zmsg_size (zmsg) == 1,
+        "flux_msg_clear_route strips routing frames and delim");
     zmsg_destroy (&zmsg);
 }
 
@@ -944,7 +950,6 @@ void check_topic (void)
 {
     zmsg_t *zmsg;
     char *s;
-    bool flag;
 
     ok ((zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
        "zmsg_create works");
@@ -959,10 +964,8 @@ void check_topic (void)
        "and we got back the topic string we set");
     free (s);
 
-    ok (flux_msg_set_rte (zmsg, true) == 0,
-        "flux_msg_set_rte works");
-    ok (flux_msg_get_rte (zmsg, &flag) == 0 && flag == true,
-        "flux_msg_set_rte works and returned value we set");
+    ok (flux_msg_enable_route (zmsg) == 0,
+        "flux_msg_enable_route works");
     ok (flux_msg_push_route (zmsg, "id1") == 0,
         "flux_msg_push_route works");
     ok (flux_msg_get_topic (zmsg, &s) == 0,
@@ -993,7 +996,6 @@ void check_payload (void)
     zmsg_t *zmsg;
     void *pay[1024], *buf;
     int plen = sizeof (pay), len;
-    bool flag;
 
     ok ((zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
        "zmsg_create works");
@@ -1020,10 +1022,8 @@ void check_payload (void)
     ok (flux_msg_set_topic (zmsg, NULL) == 0 && zmsg_size (zmsg) == 2,
        "flux_msg_set_topic NULL works");
 
-    ok (flux_msg_set_rte (zmsg, true) == 0 && zmsg_size (zmsg) == 3,
-        "flux_msg_set_rte works");
-    ok (flux_msg_get_rte (zmsg, &flag) == 0 && flag == true,
-        "flux_msg_set_rte works and returned value we set");
+    ok (flux_msg_enable_route (zmsg) == 0 && zmsg_size (zmsg) == 3,
+        "flux_msg_enable_route works");
     ok (flux_msg_push_route (zmsg, "id1") == 0 && zmsg_size (zmsg) == 4,
         "flux_msg_push_route works");
 
@@ -1135,9 +1135,9 @@ int main (int argc, char *argv[])
         "zmsg_test doesn't assert");
 
     check_proto ();                 // 13
-    check_routes ();                // 24
-    check_topic ();                 // 12
-    check_payload ();               // 17
+    check_routes ();                // 26
+    check_topic ();                 // 11
+    check_payload ();               // 16
 
     check_legacy_encode ();         // 5
     check_legacy_encode_json ();    // 8

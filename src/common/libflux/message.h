@@ -21,7 +21,7 @@ enum {
     FLUX_MSGFLAG_TOPIC      = 0x01,	/* message has topic string */
     FLUX_MSGFLAG_PAYLOAD    = 0x02,	/* message has payload */
     FLUX_MSGFLAG_JSON       = 0x04,	/* message payload is JSON */
-    FLUX_MSGFLAG_RTE        = 0x08,	/* message has routing delimiter */
+    FLUX_MSGFLAG_ROUTE      = 0x08,	/* message is routable */
 };
 
 /* Create a new Flux message.
@@ -30,9 +30,10 @@ enum {
  */
 zmsg_t *flux_msg_create (int type);
 
-/* Get/set/cmp message topic string.
- * Set function adds/deletes topic frame as needed.
- * cmp_topic returns true if message topic string and provided are identical
+/* Get/set/compare message topic string.
+ * set adds/deletes/replaces topic frame as needed.
+ * streq returns true if message topic string and 'topic' are identical.
+ * strneq is the same, except only the first n chars of 'topic' are compared.
  */
 int flux_msg_set_topic (zmsg_t *zmsg, const char *topic);
 int flux_msg_get_topic (zmsg_t *zmsg, char **topic);
@@ -65,25 +66,55 @@ int flux_msg_get_errnum (zmsg_t *zmsg, int *errnum);
 int flux_msg_set_seq (zmsg_t *zmsg, uint32_t seq);
 int flux_msg_get_seq (zmsg_t *zmsg, uint32_t *seq);
 
-/* Get/set presence of routing delimiter.
- * This is a no-op if message is already in the desired state.
- * Any routing identity frames are discarded if the flag is being cleared.
- * Only the delimiter is added if the flag is being set.
+/* NOTE: routing frames are pushed on a message traveling dealer
+ * to router, and popped off a message traveling router to dealer.
+ * A message intended for dealer-router sockets must first be enabled for
+ * routing.
  */
-int flux_msg_set_rte (zmsg_t *zmsg, bool flag);
-int flux_msg_get_rte (zmsg_t *zmsg, bool *flag);
 
-/* Push/pop/get identity to/from routing frame stack.
- * Returned identity must be freed by caller.
- * Pushed identity is copied (caller retains ownership).
- * If message has no routing delimiter, return -1 with errno == EPROTO.
- * If routing frame stack is empty, push/get returns 0 with id set to NULL.
+/* Prepare a message for routing, which consists of pushing a nil delimiter
+ * frame and setting FLUX_MSGFLAG_ROUTE.  This function is a no-op if the
+ * flag is already set.
+ * Returns 0 on success, -1 with errno set on failure.
+ */
+int flux_msg_enable_route (zmsg_t *zmsg);
+
+/* Strip route frames, nil delimiter, and clear FLUX_MSGFLAG_ROUTE flag.
+ * This function is a no-op if the flag is already clear.
+ * Returns 0 on success, -1 with errno set on failure.
+ */
+int flux_msg_clear_route (zmsg_t *zmsg);
+
+/* Push a route frame onto the message (mimic what dealer socket does).
+ * 'id' is copied internally.
+ * Returns 0 on success, -1 with errno set (e.g. EINVAL) on failure.
  */
 int flux_msg_push_route (zmsg_t *zmsg, const char *id);
+
+/* Pop a route frame off the message and return identity (or NULL) in 'id'.
+ * Caller must free 'id'.
+ * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
+ */
 int flux_msg_pop_route (zmsg_t *zmsg, char **id);
+
+/* Copy the first routing frame (closest to delimiter) contents (or NULL)
+ * to 'id'.  Caller must free 'id'.
+ * For requests, this is the sender; for responses, this is the recipient.
+ * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
+ */
 int flux_msg_get_route_first (zmsg_t *zmsg, char **id); /* closest to delim */
+
+/* Copy the last routing frame (farthest from delimiter) contents (or NULL)
+ * to 'id'.  Caller must free 'id'.
+ * For requests, this is the last hop; for responses: this is the next hop.
+ * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
+ */
 int flux_msg_get_route_last (zmsg_t *zmsg, char **id); /* farthest from delim */
-int flux_msg_get_route_count (zmsg_t *zmsg); /* -1 if no delim */
+
+/* Return the number of route frames in the message.
+ * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
+ */
+int flux_msg_get_route_count (zmsg_t *zmsg);
 
 /* Get/set message type
  * For FLUX_MSGTYPE_REQUEST: set_type initializes nodeid to FLUX_NODEID_ANY
