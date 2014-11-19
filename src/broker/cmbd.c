@@ -1343,7 +1343,7 @@ void send_keepalive (ctx_t *ctx)
 
     if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)))
         goto done;
-    if (flux_msg_set_rte (zmsg, true) < 0)
+    if (flux_msg_enable_route (zmsg) < 0)
         goto done;
     if (parent_send (ctx, &zmsg) < 0)
         goto done;
