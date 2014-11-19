@@ -117,7 +117,7 @@ static int flux_vrequestf (flux_t h, uint32_t nodeid, json_object *o,
         goto done;
     if (flux_msg_set_nodeid (zmsg, nodeid) < 0)
         goto done;
-    if (flux_msg_set_rte (zmsg, true) < 0)
+    if (flux_msg_enable_route (zmsg) < 0)
         goto done;
     rc = flux_request_sendmsg (h, &zmsg);
 done:
