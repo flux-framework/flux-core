@@ -775,8 +775,12 @@ zmsg_t *flux_msg_encode (const char *topic, json_object *o)
 {
     zmsg_t *zmsg;
 
+    if (!topic) {
+        errno = EINVAL;
+        return NULL;
+    }
     if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST))
-            || (topic && flux_msg_set_topic (zmsg, topic) < 0)
+            || (flux_msg_set_topic (zmsg, topic) < 0)
             || (o && flux_msg_set_payload_json (zmsg, o) < 0)) {
         zmsg_destroy (&zmsg);
         return NULL;
@@ -802,20 +806,26 @@ void check_legacy_encode (void)
     JSON o = NULL;
     char *s = NULL;
 
-    ok ((zmsg = flux_msg_encode (NULL, NULL)) && zmsg_size (zmsg) == 1,
-        "flux_msg_encode with NULL topic and json works");
+    errno = 0;
+    ok (!(zmsg = flux_msg_encode (NULL, NULL)) && errno == EINVAL,
+        "flux_msg_encode with NULL topic fails with errno == EINVAL");
     zmsg_destroy (&zmsg);
 
-    ok ((zmsg = flux_msg_encode ("foo", NULL)) && zmsg_size (zmsg) == 2,
+    errno = 0;
+    ok ((zmsg = flux_msg_encode ("foo", NULL)) && errno == 0
+                                               && zmsg_size (zmsg) == 2,
         "flux_msg_encode with NULL json works");
 
-    ok ((!flux_msg_match (zmsg, "f")
-            && flux_msg_match (zmsg, "foo")
-            && !flux_msg_match (zmsg, "foobar")),
+    errno = 0;
+    ok ((   !flux_msg_match (zmsg, "f") && errno == 0
+            && flux_msg_match (zmsg, "foo") && errno == 0
+            && !flux_msg_match (zmsg, "foobar") && errno == 0),
         "flux_msg_match works");
 
     o = (JSON)&o; // make it non-NULL
-    ok ((flux_msg_decode (zmsg, &s, &o) == 0 && s != NULL && o == NULL),
+    errno = 0;
+    ok ((flux_msg_decode (zmsg, &s, &o) == 0 && errno == 0
+                                             && s != NULL && o == NULL),
         "flux_msg_decode works");
     like (s, "foo",
         "and returned topic we encoded");
@@ -835,10 +845,16 @@ void check_legacy_encode_json (void)
 
     o = Jnew ();
     Jadd_int (o, "x", 42);
-    ok ((zmsg = flux_msg_encode ("a.b.c.d", o)) && zmsg_size (zmsg) == 3,
+    errno = 0;
+    ok ((zmsg = flux_msg_encode ("a.b.c.d", o)) && errno == 0
+                                                && zmsg_size (zmsg) == 3,
         "flux_msg_encode with JSON works");
     Jput (o);
-    ok (flux_msg_decode (zmsg, &s, &o) == 0 && o && s,
+
+    s = NULL;
+    o = NULL;
+    errno = 0;
+    ok (flux_msg_decode (zmsg, &s, &o) == 0 && errno == 0 && o && s,
         "flux_msg_decode works");
     ok (Jget_int (o, "x", &i) && i == 42,
         "flux_msg_decode returned JSON we encoded");
@@ -847,13 +863,15 @@ void check_legacy_encode_json (void)
         "flux_msg_decode returned topic string we encoded");
     free (s);
 
-    ok ((s = flux_msg_tag (zmsg)) != NULL,
+    errno = 0;
+    ok ((s = flux_msg_tag (zmsg)) != NULL && errno == 0,
         "flux_msg_tag works");
     like (s, "a.b.c.d",
         "flux_msg_tag returned topic string we encoded");
     free (s);
 
-    ok ((s = flux_msg_tag_short (zmsg)) != NULL,
+    errno = 0;
+    ok ((s = flux_msg_tag_short (zmsg)) != NULL && errno == 0,
         "flux_msg_tag_short works");
     like (s, "a",
         "flux_msg_tag_short returned first word of topic string");
