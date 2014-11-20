@@ -423,71 +423,82 @@ int flux_msg_get_route_count (zmsg_t *zmsg)
     return count;
 }
 
-int flux_msg_set_payload (zmsg_t *zmsg, void *buf, int size)
+int flux_msg_set_payload (zmsg_t *zmsg, int flags, void *buf, int size)
 {
     zframe_t *zf;
-    uint8_t flags;
+    uint8_t msgflags;
     int rc = -1;
 
-    if (flux_msg_get_flags (zmsg, &flags) < 0)
+    if (flags != 0 && flags != FLUX_MSGFLAG_JSON) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (flux_msg_get_flags (zmsg, &msgflags) < 0)
         goto done;
     zf = zmsg_first (zmsg);
-    if ((flags & FLUX_MSGFLAG_ROUTE)) {   /* skip over routing frames, if any */
+    if ((msgflags & FLUX_MSGFLAG_ROUTE)) {
         while (zf && zframe_size (zf) > 0)
-            zf = zmsg_next (zmsg);
+            zf = zmsg_next (zmsg);      /* skip route frame */
         if (zf)
-            zf = zmsg_next (zmsg);
+            zf = zmsg_next (zmsg);      /* skip route delim */
     }
-    if ((flags & FLUX_MSGFLAG_TOPIC)) { /* skip over topic frame, if any */
+    if ((msgflags & FLUX_MSGFLAG_TOPIC)) {
         if (zf)
-            zf = zmsg_next (zmsg);
+            zf = zmsg_next (zmsg);      /* skip topic frame */
     }
     if (!zf) {                          /* must at least have proto frame */
         errno = EPROTO;
         goto done;
     }
-    if ((flags & FLUX_MSGFLAG_PAYLOAD) && (buf != NULL && size > 0)) {
-        zframe_reset (zf, buf, size);   /* case 1: replace payload */
-    } else if (!(flags & FLUX_MSGFLAG_PAYLOAD) && (buf != NULL && size > 0)) {
-        zmsg_remove (zmsg, zf);         /* case 2: add payload */
+    /* Case #1: replace existing payload.
+     */
+    if ((msgflags & FLUX_MSGFLAG_PAYLOAD) && (buf != NULL && size > 0)) {
+        zframe_reset (zf, buf, size);
+        msgflags &= ~(uint8_t)FLUX_MSGFLAG_JSON;
+        msgflags |= flags;
+    /* Case #2: add payload.
+     */
+    } else if (!(msgflags & FLUX_MSGFLAG_PAYLOAD) && (buf != NULL && size > 0)){
+        zmsg_remove (zmsg, zf);
         if (zmsg_addmem (zmsg, buf, size) < 0 || zmsg_append (zmsg, &zf) < 0) {
             errno = ENOMEM;
             goto done;
         }
-        flags |= FLUX_MSGFLAG_PAYLOAD;
-        if (flux_msg_set_flags (zmsg, flags) < 0)
-            goto done;
-    } else if ((flags & FLUX_MSGFLAG_PAYLOAD) && (buf == NULL || size == 0)) {
-        zmsg_remove (zmsg, zf);         /* case 3: remove payload */
+        msgflags &= ~(uint8_t)FLUX_MSGFLAG_JSON;
+        msgflags |= FLUX_MSGFLAG_PAYLOAD | flags;
+    /* Case #3: remove payload.
+     */
+    } else if ((msgflags & FLUX_MSGFLAG_PAYLOAD) && (buf == NULL || size == 0)){
+        zmsg_remove (zmsg, zf);
         zframe_destroy (&zf);
-        flags &= ~(uint8_t)FLUX_MSGFLAG_PAYLOAD;
-        if (flux_msg_set_flags (zmsg, flags) < 0)
-            goto done;
+        msgflags &= ~(uint8_t)(FLUX_MSGFLAG_PAYLOAD | FLUX_MSGFLAG_JSON);
     }
+    if (flux_msg_set_flags (zmsg, msgflags) < 0)
+        goto done;
     rc = 0;
 done:
     return rc;
 }
 
-int flux_msg_get_payload (zmsg_t *zmsg, void **buf, int *size)
+int flux_msg_get_payload (zmsg_t *zmsg, int *flags, void **buf, int *size)
 {
     zframe_t *zf;
-    uint8_t flags;
+    uint8_t msgflags;
 
-    if (flux_msg_get_flags (zmsg, &flags) < 0)
+    if (flux_msg_get_flags (zmsg, &msgflags) < 0)
         return -1;
-    if (!(flags & FLUX_MSGFLAG_PAYLOAD)) {
+    if (!(msgflags & FLUX_MSGFLAG_PAYLOAD)) {
         errno = EPROTO;
         return -1;
     }
     zf = zmsg_first (zmsg);
-    if ((flags & FLUX_MSGFLAG_ROUTE)) {
+    if ((msgflags & FLUX_MSGFLAG_ROUTE)) {
         while (zf && zframe_size (zf) > 0)
             zf = zmsg_next (zmsg);
         if (zf)
             zf = zmsg_next (zmsg);
     }
-    if ((flags & FLUX_MSGFLAG_TOPIC)) {
+    if ((msgflags & FLUX_MSGFLAG_TOPIC)) {
         if (zf)
             zf = zmsg_next (zmsg);
     }
@@ -495,49 +506,9 @@ int flux_msg_get_payload (zmsg_t *zmsg, void **buf, int *size)
         errno = EPROTO;
         return -1;
     }
+    *flags = msgflags & FLUX_MSGFLAG_JSON;
     *buf = zframe_data (zf);
     *size = zframe_size (zf);
-    return 0;
-}
-
-int flux_msg_set_payload_json (zmsg_t *zmsg, JSON o)
-{
-    uint8_t flags;
-    unsigned int size = 0;
-    char *buf = NULL;
-    int rc = -1;
-
-    if (o)
-        util_json_encode (o, &buf, &size);
-    if (flux_msg_set_payload (zmsg, buf, size) < 0)
-        goto done;
-    if (flux_msg_get_flags (zmsg, &flags) < 0)
-        goto done;
-    flags |= FLUX_MSGFLAG_JSON;
-    if (flux_msg_set_flags (zmsg, flags) < 0)
-        goto done;
-    rc = 0;
-done:
-    if (buf)
-        free (buf);
-    return rc;
-}
-
-int flux_msg_get_payload_json (zmsg_t *zmsg, JSON *o)
-{
-    void *buf;
-    int size;
-    uint8_t flags;
-
-    if (flux_msg_get_flags (zmsg, &flags) < 0)
-        return -1;
-    if (!(flags & FLUX_MSGFLAG_JSON)) {
-        errno = EPROTO;
-        return -1;
-    }
-    if (flux_msg_get_payload (zmsg, &buf, &size) < 0)
-        return -1;
-    util_json_decode (o, buf, size);
     return 0;
 }
 
@@ -733,14 +704,34 @@ int flux_msg_hopcount (zmsg_t *zmsg)
 
 int flux_msg_decode (zmsg_t *zmsg, char **topic, json_object **o)
 {
+    struct json_tokener *tok = NULL;
+;
     if (topic && flux_msg_get_topic (zmsg, topic) < 0) {
         errno = 0;
         *topic = NULL;
     }
-    if (o && flux_msg_get_payload_json (zmsg, o) < 0) {
-        errno = 0;
-        *o = NULL;
+    if (o) {
+        int size = 0;
+        char *buf = NULL;
+        int flags;
+        if (flux_msg_get_payload (zmsg, &flags, (void **)&buf, &size) < 0
+                || buf == NULL || size == 0 || !(flags & FLUX_MSGFLAG_JSON)) {
+            errno = 0;
+            *o = NULL;
+        } else {
+            if (!(tok = json_tokener_new ())) {
+                errno = ENOMEM;
+                goto done;
+            }
+            if (!(*o = json_tokener_parse_ex (tok, buf, size))) {
+                errno = EPROTO;
+                goto done;
+            }
+        }
     }
+done:
+    if (tok)
+        json_tokener_free (tok);
     return 0;
 }
 
@@ -768,7 +759,17 @@ char *flux_msg_tag_short (zmsg_t *zmsg)
 
 int flux_msg_replace_json (zmsg_t *zmsg, json_object *o)
 {
-    return flux_msg_set_payload_json (zmsg, o);
+    const char *s = NULL;
+    int flags = 0;
+
+    if (o) {
+        if (!(s = json_object_to_json_string (o))) {
+            errno = EINVAL; /* not really sure if this can happen */
+            return -1;
+        }
+        flags |= FLUX_MSGFLAG_JSON;
+    }
+    return flux_msg_set_payload (zmsg, flags, (char *)s, strlen (s));
 }
 
 zmsg_t *flux_msg_encode (const char *topic, json_object *o)
@@ -781,7 +782,7 @@ zmsg_t *flux_msg_encode (const char *topic, json_object *o)
     }
     if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST))
             || (flux_msg_set_topic (zmsg, topic) < 0)
-            || (o && flux_msg_set_payload_json (zmsg, o) < 0)) {
+            || (o && flux_msg_replace_json (zmsg, o) < 0)) {
         zmsg_destroy (&zmsg);
         return NULL;
     }
@@ -1014,26 +1015,30 @@ void check_payload (void)
     zmsg_t *zmsg;
     void *pay[1024], *buf;
     int plen = sizeof (pay), len;
+    int flags;
 
     ok ((zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
        "zmsg_create works");
     errno = 0;
-    ok (flux_msg_get_payload (zmsg, &buf, &len) < 0 && errno == EPROTO,
+    ok (flux_msg_get_payload (zmsg, &flags, &buf, &len) < 0 && errno == EPROTO,
        "flux_msg_get_payload fails with EPROTO on msg w/o topic");
     memset (pay, 42, plen);
-    ok (flux_msg_set_payload (zmsg, pay, plen) == 0 && zmsg_size (zmsg) == 2,
+    ok (flux_msg_set_payload (zmsg, 0, pay, plen) == 0
+        && zmsg_size (zmsg) == 2,
        "flux_msg_set_payload works");
 
-    len = 0; buf = NULL;
-    ok (flux_msg_get_payload (zmsg, &buf, &len) == 0 && buf && len == plen,
+    len = 0; buf = NULL; flags =0; errno = 0;
+    ok (flux_msg_get_payload (zmsg, &flags, &buf, &len) == 0
+        && buf && len == plen && flags == 0 && errno == 0,
        "flux_msg_get_payload works");
     cmp_mem (buf, pay, len,
        "and we got back the payload we set");
 
     ok (flux_msg_set_topic (zmsg, "blorg") == 0 && zmsg_size (zmsg) == 3,
        "flux_msg_set_topic works");
-    len = 0; buf = NULL;
-    ok (flux_msg_get_payload (zmsg, &buf, &len) == 0 && buf && len == plen,
+    len = 0; buf = NULL; flags = 0; errno = 0;
+    ok (flux_msg_get_payload (zmsg, &flags, &buf, &len) == 0
+        && buf && len == plen && flags == 0 && errno == 0,
        "flux_msg_get_payload works with topic");
     cmp_mem (buf, pay, len,
        "and we got back the payload we set");
@@ -1045,16 +1050,18 @@ void check_payload (void)
     ok (flux_msg_push_route (zmsg, "id1") == 0 && zmsg_size (zmsg) == 4,
         "flux_msg_push_route works");
 
-    len = 0; buf = NULL;
-    ok (flux_msg_get_payload (zmsg, &buf, &len) == 0 && buf && len == plen,
+    len = 0; buf = NULL; flags =0; errno = 0;
+    ok (flux_msg_get_payload (zmsg, &flags, &buf, &len) == 0
+        && buf && len == plen && flags == 0 && errno == 0,
        "flux_msg_get_payload still works, with routes");
     cmp_mem (buf, pay, len,
        "and we got back the payload we set");
 
     ok (flux_msg_set_topic (zmsg, "blorg") == 0 && zmsg_size (zmsg) == 5,
        "flux_msg_set_topic works");
-    len = 0; buf = NULL;
-    ok (flux_msg_get_payload (zmsg, &buf, &len) == 0 && buf && len == plen,
+    len = 0; buf = NULL; flags = 0; errno = 0;
+    ok (flux_msg_get_payload (zmsg, &flags, &buf, &len) == 0
+        && buf && len == plen && flags == 0 && errno == 0,
        "flux_msg_get_payload works, with topic and routes");
     cmp_mem (buf, pay, len,
        "and we got back the payload we set");

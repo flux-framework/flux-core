@@ -52,7 +52,7 @@ done:
     return rc;
 }
 
-zmsg_t *flux_response_matched_recvmsg (flux_t h, const char *match, bool nb)
+static zmsg_t *response_matched_recvmsg (flux_t h, const char *match, bool nb)
 {
     zmsg_t *zmsg, *response = NULL;
     zlist_t *nomatch = NULL;
@@ -79,11 +79,26 @@ done:
     return response;
 }
 
+static int msg_set_payload_json (zmsg_t *zmsg, JSON o)
+{
+    const char *s = NULL;
+    int flags = 0;
+
+    if (o) {
+        if (!(s = json_object_to_json_string (o))) {
+            errno = EINVAL; /* not really sure if this can happen */
+            return -1;
+        }
+        flags |= FLUX_MSGFLAG_JSON;
+    }
+    return flux_msg_set_payload (zmsg, flags, (char *)s, strlen (s));
+}
+
 int flux_respond (flux_t h, zmsg_t **zmsg, JSON o)
 {
     if (flux_msg_set_type (*zmsg, FLUX_MSGTYPE_RESPONSE) < 0)
         return -1;
-    if (flux_msg_set_payload_json (*zmsg, o) < 0)
+    if (msg_set_payload_json (*zmsg, o) < 0)
         return -1;
     return flux_response_sendmsg (h, zmsg);
 }
@@ -92,7 +107,7 @@ int flux_respond_errnum (flux_t h, zmsg_t **zmsg, int errnum)
 {
     if (flux_msg_set_type (*zmsg, FLUX_MSGTYPE_RESPONSE) < 0)
         return -1;
-    if (flux_msg_set_payload (*zmsg, NULL, 0) < 0)
+    if (flux_msg_set_payload (*zmsg, 0, NULL, 0) < 0)
         return -1;
     if (flux_msg_set_errnum (*zmsg, errnum) < 0)
         return -1;
@@ -113,7 +128,7 @@ static int flux_vrequestf (flux_t h, uint32_t nodeid, json_object *o,
         goto done;
     if (flux_msg_set_topic (zmsg, topic) < 0)
         goto done;
-    if (o && flux_msg_set_payload_json (zmsg, o) < 0)
+    if (o && msg_set_payload_json (zmsg, o) < 0)
         goto done;
     if (flux_msg_set_nodeid (zmsg, nodeid) < 0)
         goto done;
@@ -147,7 +162,7 @@ static int flux_vrpcf (flux_t h, uint32_t nodeid, JSON in, JSON *out,
 
     if (flux_requestf (h, nodeid, in, "%s", topic) < 0)
         goto done;
-    if (!(zmsg = flux_response_matched_recvmsg (h, topic, false)))
+    if (!(zmsg = response_matched_recvmsg (h, topic, false)))
         goto done;
     if (flux_msg_get_errnum (zmsg, &errno) < 0 || errno != 0)
         goto done;
