@@ -59,32 +59,6 @@ bool util_json_match (json_object *o1, json_object *o2)
     return !strcmp (s1, s2);
 }
 
-void util_json_encode (json_object *o, char **zbufp, unsigned int *zlenp)
-{
-    const char *s = json_object_to_json_string (o);
-    unsigned int s_len = strlen (s);
-
-    *zbufp = xstrdup (s);
-    *zlenp = s_len;
-}
-
-void util_json_decode (json_object **op, char *zbuf, unsigned int zlen)
-{
-    json_object *o;
-    struct json_tokener *tok;
-    char *s;
-    int s_len;
-
-    s_len = zlen;
-    s = zbuf;
-
-    if (!(tok = json_tokener_new ()))
-        oom ();
-    o = json_tokener_parse_ex (tok, s, s_len);
-    json_tokener_free (tok);
-    *op = o;
-}
-
 void util_json_object_add_boolean (json_object *o, char *name, bool val)
 {
     json_object *no;

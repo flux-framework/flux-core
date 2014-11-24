@@ -21,7 +21,6 @@ int flux_response_sendmsg (flux_t h, zmsg_t **zmsg);
 zmsg_t *flux_response_recvmsg (flux_t h, bool nb);
 int flux_response_putmsg (flux_t h, zmsg_t **zmsg);
 int flux_request_send (flux_t h, json_object *request, const char *fmt, ...);
-zmsg_t *flux_response_matched_recvmsg (flux_t h, const char *match, bool nb);
 json_object *flux_rpc (flux_t h, json_object *in, const char *fmt, ...);
 int flux_response_recv (flux_t h, json_object **respp, char **tagp, bool nb);
 int flux_respond (flux_t h, zmsg_t **request, json_object *response);

@@ -15,8 +15,6 @@ enum {
     FLUX_MSGTYPE_MASK       = 0x0f,
 };
 
-/* These are used internally.
- */
 enum {
     FLUX_MSGFLAG_TOPIC      = 0x01,	/* message has topic string */
     FLUX_MSGFLAG_PAYLOAD    = 0x02,	/* message has payload */
@@ -45,12 +43,10 @@ bool flux_msg_strneq_topic (zmsg_t *zmsg, const char *topic, size_t n);
  * The new payload will be copied (caller retains ownership).
  * Any old payload is deleted.
  * Get_payload returns pointer to zmsg-owned buf.
- * Get_json returns JSON object that caller must free.
+ * Flags can be 0 or FLUX_MSGFLAG_JSON (hint for decoding).
  */
-int flux_msg_set_payload (zmsg_t *zmsg, void *buf, int size);
-int flux_msg_get_payload (zmsg_t *zmsg, void **buf, int *size);
-int flux_msg_set_payload_json (zmsg_t *zmsg, json_object *o);
-int flux_msg_get_payload_json (zmsg_t *zmsg, json_object **o);
+int flux_msg_set_payload (zmsg_t *zmsg, int flags, void *buf, int size);
+int flux_msg_get_payload (zmsg_t *zmsg, int *flags, void **buf, int *size);
 
 /* Get/set nodeid (request only)
  */
