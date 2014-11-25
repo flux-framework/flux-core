@@ -150,7 +150,7 @@ typedef struct {
 typedef struct {
     int hb_lastseen;            /* epoch peer was last heard from */
     bool modflag;               /* true if this peer is a comms module */
-    uint32_t event_seq;         /* event sequence no. last sent to this peer */
+    bool event_mute;            /* stop CC'ing events over this connection */
 } peer_t;
 
 static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
@@ -1349,6 +1349,9 @@ done:
     return rc;
 }
 
+/* Cc events to downstream peers, until they have their primary event
+ * source wired.  This works around the race described in issue 38.
+ */
 static void child_cc_all (ctx_t *ctx, zmsg_t *zmsg)
 {
     zlist_t *keys;
@@ -1361,11 +1364,22 @@ static void child_cc_all (ctx_t *ctx, zmsg_t *zmsg)
         oom ();
     key = zlist_first (keys);
     while (key) {
-        if ((p = zhash_lookup (ctx->peer_idle, key)) && !p->modflag)
-            child_cc (ctx->child->zs, key, zmsg);
+        if ((p = zhash_lookup (ctx->peer_idle, key))) {
+            if (!p->modflag && !p->event_mute)
+                child_cc (ctx->child->zs, key, zmsg);
+        }
         key = zlist_next (keys);
     }
     zlist_destroy (&keys);
+}
+
+static int peer_mute (ctx_t *ctx, const char *id)
+{
+    peer_t *p;
+    if (!(p = zhash_lookup (ctx->peer_idle, id)))
+        return -1;
+    p->event_mute = true;
+    return 0;
 }
 
 static void self_update (ctx_t *ctx)
@@ -1568,8 +1582,8 @@ static int cmb_event_sendmsg (ctx_t *ctx, zmsg_t **event)
             goto done;
         }
     }
-    /* Publish event to children (duplicates above)
-    */
+    /* Publish event to downstream peers.
+     */
     child_cc_all (ctx, *event);
     /* Publish event locally
     */
@@ -1786,6 +1800,12 @@ static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             if (cmb_pub (ctx, zmsg) < 0)
                 flux_respond_errnum (ctx->h, zmsg, errno);
         }
+    } else if (flux_msg_match (*zmsg, "cmb.event-mute")) {
+        char *id = NULL;
+        if (flux_msg_get_route_last (*zmsg, &id) == 0)
+            peer_mute (ctx, id);
+        if (id)
+            free (id);
     } else {
         rc = -1;
         errno = ENOSYS;
@@ -1869,6 +1889,12 @@ static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod)
     ZLOOP_RETURN(ctx);
 }
 
+static void mute_request (ctx_t *ctx)
+{
+    if (flux_request_send (ctx->h, NULL, "cmb.event-mute") < 0)
+        flux_log (ctx->h, LOG_ERR, "error sending cmb.event-mute request");
+}
+
 static int recv_event (ctx_t *ctx, zmsg_t **zmsg)
 {
     int i;
@@ -1878,8 +1904,14 @@ static int recv_event (ctx_t *ctx, zmsg_t **zmsg)
         flux_log (ctx->h, LOG_ERR, "dropping malformed event");
         return -1;
     }
-    if (seq <= ctx->event_seq)
-        return -1;                      /* duplicate */
+    /* We receive early events via the parent, but once we have
+     * our primary event source wired, the parent is muted.
+     */
+    if (seq <= ctx->event_seq) {
+        //flux_log (ctx->h, LOG_INFO, "duplicate event, muting parent");
+        mute_request (ctx);
+        return -1;
+    }
     if (ctx->event_seq > 0) {
         for (i = ctx->event_seq + 1; i < seq; i++)
             flux_log (ctx->h, LOG_ERR, "lost event %d", i);
