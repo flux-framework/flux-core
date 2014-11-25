@@ -535,11 +535,6 @@ int main (int argc, char *argv[])
     if (ctx.rank > 0)
         send_keepalive (&ctx);
 
-    /* XXX 250ms delay to work around async event connect - see issue 38
-     */
-    if (ctx.rank > 0)
-        usleep (250*1000);
-
     /* Event loop
      */
     if (ctx.verbose)
