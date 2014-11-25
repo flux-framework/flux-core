@@ -182,6 +182,7 @@ static endpt_t *endpt_create (const char *fmt, ...);
 static void endpt_destroy (endpt_t *ep);
 static int endpt_cc (zmsg_t *zmsg, endpt_t *ep);
 
+static int recv_event (ctx_t *ctx, zmsg_t **zmsg);
 static int cmb_event_send (ctx_t *ctx, JSON o, const char *topic);
 static int parent_send (ctx_t *ctx, zmsg_t **zmsg);
 static void send_keepalive (ctx_t *ctx);
@@ -1336,6 +1337,42 @@ static bool peer_ismodule (ctx_t *ctx, const char *uuid)
     return p->modflag;
 }
 
+static int child_cc (void *sock, const char *id, zmsg_t *zmsg)
+{
+    zmsg_t *cpy;
+    int rc = -1;
+
+    if (!(cpy = zmsg_dup (zmsg)))
+        oom ();
+    if (flux_msg_enable_route (cpy) < 0)
+        goto done;
+    if (flux_msg_push_route (cpy, id) < 0)
+        goto done;
+    rc = zmsg_send (&cpy, sock);
+done:
+    zmsg_destroy (&cpy);
+    return rc;
+}
+
+static void child_cc_all (ctx_t *ctx, zmsg_t *zmsg)
+{
+    zlist_t *keys;
+    char *key;
+    peer_t *p;
+
+    if (!ctx->child || !ctx->child->zs)
+        return;
+    if (!(keys = zhash_keys (ctx->peer_idle)))
+        oom ();
+    key = zlist_first (keys);
+    while (key) {
+        if ((p = zhash_lookup (ctx->peer_idle, key)) && !p->modflag)
+            child_cc (ctx->child->zs, key, zmsg);
+        key = zlist_next (keys);
+    }
+    zlist_destroy (&keys);
+}
+
 static void self_update (ctx_t *ctx)
 {
     ctx->hb_lastreq = ctx->hb_epoch;
@@ -1516,6 +1553,8 @@ static int cmb_event_sendmsg (ctx_t *ctx, zmsg_t **event)
     int rc = -1;
     zmsg_t *cpy = NULL;
 
+    assert (ctx->rank == 0);
+
     /* Publish event globally (if configured)
     */
     if (ctx->gevent) {
@@ -1534,6 +1573,9 @@ static int cmb_event_sendmsg (ctx_t *ctx, zmsg_t **event)
             goto done;
         }
     }
+    /* Publish event to children (duplicates above)
+    */
+    child_cc_all (ctx, *event);
     /* Publish event locally
     */
     endpt_cc (*event, ctx->snoop);
@@ -1766,16 +1808,20 @@ static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
         goto done;
     if (flux_msg_get_type (zmsg, &type) < 0)
         goto done;
-    if (type == FLUX_MSGTYPE_KEEPALIVE) {
-        if ((id  = flux_msg_nexthop (zmsg))) {
+    switch (type) {
+        case FLUX_MSGTYPE_KEEPALIVE:
+            if (flux_msg_get_route_last (zmsg, &id) < 0)
+                goto done;
             endpt_cc (zmsg, ctx->snoop);
             peer_update (ctx, id);
             free (id);
-        }
-    } else { /* FLUX_MSGTYPE_REQUEST */
-        if (flux_request_sendmsg (ctx->h, &zmsg) < 0)
-            if (flux_respond_errnum (ctx->h, &zmsg, errno) < 0)
-                goto done;
+            break;
+        case FLUX_MSGTYPE_REQUEST:
+            if (flux_request_sendmsg (ctx->h, &zmsg) < 0) {
+                if (flux_respond_errnum (ctx->h, &zmsg, errno) < 0)
+                    goto done;
+            }
+            break;
     }
 done:
     zmsg_destroy (&zmsg);
@@ -1785,12 +1831,28 @@ done:
 static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
     zmsg_t *zmsg = zmsg_recv (item->socket);
+    int type;
 
-    if (zmsg) {
-        (void)flux_response_sendmsg (ctx->h, &zmsg);
+    if (!zmsg)
+        goto done;
+    if (flux_msg_get_type (zmsg, &type) < 0)
+        goto done;
+    switch (type) {
+        case FLUX_MSGTYPE_RESPONSE:
+            if (flux_response_sendmsg (ctx->h, &zmsg) < 0)
+                goto done;
+            break;
+        case FLUX_MSGTYPE_EVENT:
+            if (flux_msg_clear_route (zmsg) < 0) {
+                err ("%s: malformed event", __FUNCTION__);
+                goto done;
+            }
+            if (recv_event (ctx, &zmsg) < 0)
+                goto done;
+            break;
     }
-    if (zmsg)
-        zmsg_destroy (&zmsg);
+done:
+    zmsg_destroy (&zmsg);
     ZLOOP_RETURN(ctx);
 }
 
@@ -1821,17 +1883,17 @@ static int recv_event (ctx_t *ctx, zmsg_t **zmsg)
         flux_log (ctx->h, LOG_ERR, "dropping malformed event");
         return -1;
     }
-    if (seq <= ctx->event_seq) { /* drop duplicate */
-        flux_log (ctx->h, LOG_INFO, "dropping dup event %d", seq);
-        return -1;
+    if (seq <= ctx->event_seq)
+        return -1;                      /* duplicate */
+    if (ctx->event_seq > 0) {
+        for (i = ctx->event_seq + 1; i < seq; i++)
+            flux_log (ctx->h, LOG_ERR, "lost event %d", i);
     }
-    for (i = ctx->event_seq + 1; i < seq; i++)
-        flux_log (ctx->h, LOG_ERR, "lost event %d", i);
-
     ctx->event_seq = seq;
     endpt_cc (*zmsg, ctx->gevent_relay);
     endpt_cc (*zmsg, ctx->snoop);
     cmb_internal_event (ctx, *zmsg);
+    child_cc_all (ctx, *zmsg); /* to downstream peers */
     return zmsg_send (zmsg, ctx->zs_event_out); /* to plugins */
 }
 
