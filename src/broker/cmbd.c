@@ -183,6 +183,7 @@ static int endpt_cc (zmsg_t *zmsg, endpt_t *ep);
 
 static int cmb_event_send (ctx_t *ctx, JSON o, const char *topic);
 static int parent_send (ctx_t *ctx, zmsg_t **zmsg);
+static void send_keepalive (ctx_t *ctx);
 
 static void update_proctitle (ctx_t *ctx);
 static void update_environment (ctx_t *ctx);
@@ -526,6 +527,11 @@ int main (int argc, char *argv[])
         if (ctx.verbose)
             msg ("installing session heartbeat: T=%0.1fs", ctx.heartrate);
     }
+
+    /* Send an initial keepalive message to parent, if any.
+     */
+    if (ctx.rank > 0)
+        send_keepalive (&ctx);
 
     /* XXX 250ms delay to work around async event connect - see issue 38
      */
@@ -1337,7 +1343,7 @@ static int self_idle (ctx_t *ctx)
     return ctx->hb_epoch - ctx->hb_lastreq;
 }
 
-void send_keepalive (ctx_t *ctx)
+static void send_keepalive (ctx_t *ctx)
 {
     zmsg_t *zmsg = NULL;
 
