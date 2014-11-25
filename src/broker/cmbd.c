@@ -1551,21 +1551,6 @@ done:
     return rc;
 }
 
-static int msg_set_payload_json (zmsg_t *zmsg, JSON o)
-{
-    const char *s = NULL;
-    int flags = 0;
-
-    if (o) {
-        if (!(s = json_object_to_json_string (o))) {
-            errno = EINVAL; /* not really sure if this can happen */
-            return -1;
-        }
-        flags |= FLUX_MSGFLAG_JSON;
-    }
-    return flux_msg_set_payload (zmsg, flags, (char *)s, strlen (s));
-}
-
 static int cmb_event_send (ctx_t *ctx, JSON o, const char *topic)
 {
     int rc = -1;
@@ -1575,8 +1560,12 @@ static int cmb_event_send (ctx_t *ctx, JSON o, const char *topic)
         oom ();
     if (flux_msg_set_topic (zmsg, topic) < 0)
         goto done;
-    if (o && msg_set_payload_json (zmsg, o) < 0)
-        goto done;
+    if (o) {
+        const char *s = json_object_to_json_string (o);
+        int len = strlen (s);
+        if (flux_msg_set_payload (zmsg, FLUX_MSGFLAG_JSON, (char *)s, len) < 0)
+            goto done;
+    }
     if (flux_msg_set_seq (zmsg, ++ctx->event_seq) < 0) /* start with seq=1 */
         goto done;
     if (cmb_event_sendmsg (ctx, &zmsg) < 0)
