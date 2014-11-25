@@ -148,8 +148,9 @@ typedef struct {
 } module_t;
 
 typedef struct {
-    int hb_lastseen;
-    bool modflag;
+    int hb_lastseen;            /* epoch peer was last heard from */
+    bool modflag;               /* true if this peer is a comms module */
+    uint32_t event_seq;         /* event sequence no. last sent to this peer */
 } peer_t;
 
 static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
@@ -175,7 +176,7 @@ static void module_loadall (ctx_t *ctx);
 
 static int peer_idle (ctx_t *ctx, const char *uuid);
 static void peer_update (ctx_t *ctx, const char *uuid);
-static void peer_modcreate (ctx_t *ctx, const char *uuid);
+static peer_t *peer_create (ctx_t *ctx, const char *uuid, bool modflag);
 
 static endpt_t *endpt_create (const char *fmt, ...);
 static void endpt_destroy (endpt_t *ep);
@@ -807,7 +808,7 @@ static int module_load (ctx_t *ctx, module_t *mod)
     assert (mod->p == NULL);
     mod->p = plugin_create (ctx->h, mod->path, mod->args);
     if (mod->p) {
-        peer_modcreate (ctx, plugin_uuid (mod->p));
+        peer_create (ctx, plugin_uuid (mod->p), true);
         zp.socket = plugin_sock (mod->p);
         if (zloop_poller (ctx->zl, &zp, (zloop_fn *)plugins_cb, mod) < 0)
             err_exit ("zloop_poller");
@@ -1294,24 +1295,26 @@ static json_object *peer_ls (ctx_t *ctx)
     return response;
 }
 
-static void peer_modcreate (ctx_t *ctx, const char *uuid)
+static void peer_destroy (peer_t *p)
+{
+    free (p);
+}
+
+static peer_t *peer_create (ctx_t *ctx, const char *uuid, bool modflag)
 {
     peer_t *p = xzmalloc (sizeof (*p));
-
-    p->modflag = true;
+    p->modflag = modflag;
     zhash_update (ctx->peer_idle, uuid, p);
-    zhash_freefn (ctx->peer_idle, uuid, free);
+    zhash_freefn (ctx->peer_idle, uuid, (zhash_free_fn *)peer_destroy);
+    return p;
 }
 
 static void peer_update (ctx_t *ctx, const char *uuid)
 {
     peer_t *p;
 
-    if (!(p = zhash_lookup (ctx->peer_idle, uuid))) {
-        p = xzmalloc (sizeof (*p));
-        zhash_update (ctx->peer_idle, uuid, p);
-        zhash_freefn (ctx->peer_idle, uuid, free);
-    }
+    if (!(p = zhash_lookup (ctx->peer_idle, uuid)))
+        p = peer_create (ctx, uuid, false);
     p->hb_lastseen = ctx->hb_epoch;
 }
 
@@ -1320,7 +1323,7 @@ static int peer_idle (ctx_t *ctx, const char *uuid)
     peer_t *p;
 
     if (!(p = zhash_lookup (ctx->peer_idle, uuid)))
-        return ctx->hb_epoch;
+        return ctx->hb_epoch; /* nonexistent: maximum idle */
     return ctx->hb_epoch - p->hb_lastseen;
 }
 
