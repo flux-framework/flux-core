@@ -122,6 +122,7 @@ typedef struct {
     flux_conf_t cf;
     const char *secdir;
     int event_seq;
+    bool event_active;          /* primary event source is active */
     /* Bootstrap
      */
     bool boot_pmi;
@@ -148,8 +149,9 @@ typedef struct {
 } module_t;
 
 typedef struct {
-    int hb_lastseen;
-    bool modflag;
+    int hb_lastseen;            /* epoch peer was last heard from */
+    bool modflag;               /* true if this peer is a comms module */
+    bool event_mute;            /* stop CC'ing events over this connection */
 } peer_t;
 
 static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
@@ -175,14 +177,16 @@ static void module_loadall (ctx_t *ctx);
 
 static int peer_idle (ctx_t *ctx, const char *uuid);
 static void peer_update (ctx_t *ctx, const char *uuid);
-static void peer_modcreate (ctx_t *ctx, const char *uuid);
+static peer_t *peer_create (ctx_t *ctx, const char *uuid, bool modflag);
 
 static endpt_t *endpt_create (const char *fmt, ...);
 static void endpt_destroy (endpt_t *ep);
 static int endpt_cc (zmsg_t *zmsg, endpt_t *ep);
 
+static int recv_event (ctx_t *ctx, zmsg_t **zmsg);
 static int cmb_event_send (ctx_t *ctx, JSON o, const char *topic);
 static int parent_send (ctx_t *ctx, zmsg_t **zmsg);
+static void send_keepalive (ctx_t *ctx);
 
 static void update_proctitle (ctx_t *ctx);
 static void update_environment (ctx_t *ctx);
@@ -527,10 +531,10 @@ int main (int argc, char *argv[])
             msg ("installing session heartbeat: T=%0.1fs", ctx.heartrate);
     }
 
-    /* XXX 250ms delay to work around async event connect - see issue 38
+    /* Send an initial keepalive message to parent, if any.
      */
     if (ctx.rank > 0)
-        usleep (250*1000);
+        send_keepalive (&ctx);
 
     /* Event loop
      */
@@ -801,7 +805,7 @@ static int module_load (ctx_t *ctx, module_t *mod)
     assert (mod->p == NULL);
     mod->p = plugin_create (ctx->h, mod->path, mod->args);
     if (mod->p) {
-        peer_modcreate (ctx, plugin_uuid (mod->p));
+        peer_create (ctx, plugin_uuid (mod->p), true);
         zp.socket = plugin_sock (mod->p);
         if (zloop_poller (ctx->zl, &zp, (zloop_fn *)plugins_cb, mod) < 0)
             err_exit ("zloop_poller");
@@ -1121,8 +1125,10 @@ static void cmbd_init_socks (ctx_t *ctx)
     ctx->zs_event_out = cmbd_init_event_out (ctx);
     ctx->snoop = cmbd_init_snoop (ctx);
 
-    if (ctx->rank == 0 && ctx->gevent)
+    if (ctx->rank == 0 && ctx->gevent) {
         cmbd_init_gevent_pub (ctx, ctx->gevent);
+        ctx->event_active = true;
+    }
     if (ctx->rank > 0 && ctx->gevent)
         cmbd_init_gevent_sub (ctx, ctx->gevent);
     if (ctx->child && !ctx->child->zs)      /* boot_pmi may have done this */
@@ -1288,24 +1294,26 @@ static json_object *peer_ls (ctx_t *ctx)
     return response;
 }
 
-static void peer_modcreate (ctx_t *ctx, const char *uuid)
+static void peer_destroy (peer_t *p)
+{
+    free (p);
+}
+
+static peer_t *peer_create (ctx_t *ctx, const char *uuid, bool modflag)
 {
     peer_t *p = xzmalloc (sizeof (*p));
-
-    p->modflag = true;
+    p->modflag = modflag;
     zhash_update (ctx->peer_idle, uuid, p);
-    zhash_freefn (ctx->peer_idle, uuid, free);
+    zhash_freefn (ctx->peer_idle, uuid, (zhash_free_fn *)peer_destroy);
+    return p;
 }
 
 static void peer_update (ctx_t *ctx, const char *uuid)
 {
     peer_t *p;
 
-    if (!(p = zhash_lookup (ctx->peer_idle, uuid))) {
-        p = xzmalloc (sizeof (*p));
-        zhash_update (ctx->peer_idle, uuid, p);
-        zhash_freefn (ctx->peer_idle, uuid, free);
-    }
+    if (!(p = zhash_lookup (ctx->peer_idle, uuid)))
+        p = peer_create (ctx, uuid, false);
     p->hb_lastseen = ctx->hb_epoch;
 }
 
@@ -1314,7 +1322,7 @@ static int peer_idle (ctx_t *ctx, const char *uuid)
     peer_t *p;
 
     if (!(p = zhash_lookup (ctx->peer_idle, uuid)))
-        return ctx->hb_epoch;
+        return ctx->hb_epoch; /* nonexistent: maximum idle */
     return ctx->hb_epoch - p->hb_lastseen;
 }
 
@@ -1327,6 +1335,56 @@ static bool peer_ismodule (ctx_t *ctx, const char *uuid)
     return p->modflag;
 }
 
+static int child_cc (void *sock, const char *id, zmsg_t *zmsg)
+{
+    zmsg_t *cpy;
+    int rc = -1;
+
+    if (!(cpy = zmsg_dup (zmsg)))
+        oom ();
+    if (flux_msg_enable_route (cpy) < 0)
+        goto done;
+    if (flux_msg_push_route (cpy, id) < 0)
+        goto done;
+    rc = zmsg_send (&cpy, sock);
+done:
+    zmsg_destroy (&cpy);
+    return rc;
+}
+
+/* Cc events to downstream peers, until they have their primary event
+ * source wired.  This works around the race described in issue 38.
+ */
+static void child_cc_all (ctx_t *ctx, zmsg_t *zmsg)
+{
+    zlist_t *keys;
+    char *key;
+    peer_t *p;
+
+    if (!ctx->child || !ctx->child->zs)
+        return;
+    if (!(keys = zhash_keys (ctx->peer_idle)))
+        oom ();
+    key = zlist_first (keys);
+    while (key) {
+        if ((p = zhash_lookup (ctx->peer_idle, key))) {
+            if (!p->modflag && !p->event_mute)
+                child_cc (ctx->child->zs, key, zmsg);
+        }
+        key = zlist_next (keys);
+    }
+    zlist_destroy (&keys);
+}
+
+static int peer_mute (ctx_t *ctx, const char *id)
+{
+    peer_t *p;
+    if (!(p = zhash_lookup (ctx->peer_idle, id)))
+        return -1;
+    p->event_mute = true;
+    return 0;
+}
+
 static void self_update (ctx_t *ctx)
 {
     ctx->hb_lastreq = ctx->hb_epoch;
@@ -1337,7 +1395,7 @@ static int self_idle (ctx_t *ctx)
     return ctx->hb_epoch - ctx->hb_lastreq;
 }
 
-void send_keepalive (ctx_t *ctx)
+static void send_keepalive (ctx_t *ctx)
 {
     zmsg_t *zmsg = NULL;
 
@@ -1507,6 +1565,8 @@ static int cmb_event_sendmsg (ctx_t *ctx, zmsg_t **event)
     int rc = -1;
     zmsg_t *cpy = NULL;
 
+    assert (ctx->rank == 0);
+
     /* Publish event globally (if configured)
     */
     if (ctx->gevent) {
@@ -1525,6 +1585,9 @@ static int cmb_event_sendmsg (ctx_t *ctx, zmsg_t **event)
             goto done;
         }
     }
+    /* Publish event to downstream peers.
+     */
+    child_cc_all (ctx, *event);
     /* Publish event locally
     */
     endpt_cc (*event, ctx->snoop);
@@ -1542,21 +1605,6 @@ done:
     return rc;
 }
 
-static int msg_set_payload_json (zmsg_t *zmsg, JSON o)
-{
-    const char *s = NULL;
-    int flags = 0;
-
-    if (o) {
-        if (!(s = json_object_to_json_string (o))) {
-            errno = EINVAL; /* not really sure if this can happen */
-            return -1;
-        }
-        flags |= FLUX_MSGFLAG_JSON;
-    }
-    return flux_msg_set_payload (zmsg, flags, (char *)s, strlen (s));
-}
-
 static int cmb_event_send (ctx_t *ctx, JSON o, const char *topic)
 {
     int rc = -1;
@@ -1566,8 +1614,12 @@ static int cmb_event_send (ctx_t *ctx, JSON o, const char *topic)
         oom ();
     if (flux_msg_set_topic (zmsg, topic) < 0)
         goto done;
-    if (o && msg_set_payload_json (zmsg, o) < 0)
-        goto done;
+    if (o) {
+        const char *s = json_object_to_json_string (o);
+        int len = strlen (s);
+        if (flux_msg_set_payload (zmsg, FLUX_MSGFLAG_JSON, (char *)s, len) < 0)
+            goto done;
+    }
     if (flux_msg_set_seq (zmsg, ++ctx->event_seq) < 0) /* start with seq=1 */
         goto done;
     if (cmb_event_sendmsg (ctx, &zmsg) < 0)
@@ -1751,6 +1803,12 @@ static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             if (cmb_pub (ctx, zmsg) < 0)
                 flux_respond_errnum (ctx->h, zmsg, errno);
         }
+    } else if (flux_msg_match (*zmsg, "cmb.event-mute")) {
+        char *id = NULL;
+        if (flux_msg_get_route_last (*zmsg, &id) == 0)
+            peer_mute (ctx, id);
+        if (id)
+            free (id);
     } else {
         rc = -1;
         errno = ENOSYS;
@@ -1768,31 +1826,73 @@ static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
         goto done;
     if (flux_msg_get_type (zmsg, &type) < 0)
         goto done;
-    if (type == FLUX_MSGTYPE_KEEPALIVE) {
-        if ((id  = flux_msg_nexthop (zmsg))) {
+    switch (type) {
+        case FLUX_MSGTYPE_KEEPALIVE:
+            if (flux_msg_get_route_last (zmsg, &id) < 0)
+                goto done;
             endpt_cc (zmsg, ctx->snoop);
             peer_update (ctx, id);
             free (id);
-        }
-    } else { /* FLUX_MSGTYPE_REQUEST */
-        if (flux_request_sendmsg (ctx->h, &zmsg) < 0)
-            if (flux_respond_errnum (ctx->h, &zmsg, errno) < 0)
-                goto done;
+            break;
+        case FLUX_MSGTYPE_REQUEST:
+            if (flux_request_sendmsg (ctx->h, &zmsg) < 0) {
+                if (flux_respond_errnum (ctx->h, &zmsg, errno) < 0)
+                    goto done;
+            }
+            break;
     }
 done:
     zmsg_destroy (&zmsg);
     ZLOOP_RETURN(ctx);
 }
 
+static void send_mute_request (ctx_t *ctx, void *sock)
+{
+    zmsg_t *zmsg;
+
+    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
+        goto done;
+    if (flux_msg_set_topic (zmsg, "cmb.event-mute") < 0)
+        goto done;
+    if (flux_msg_enable_route (zmsg))
+        goto done;
+    if (zmsg_send (&zmsg, sock) < 0)
+        flux_log (ctx->h, LOG_ERR, "failed to send mute request: %s",
+                  strerror (errno));
+    /* No response will be sent */
+done:
+    zmsg_destroy (&zmsg);
+}
+
 static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
     zmsg_t *zmsg = zmsg_recv (item->socket);
+    int type;
 
-    if (zmsg) {
-        (void)flux_response_sendmsg (ctx->h, &zmsg);
+    if (!zmsg)
+        goto done;
+    if (flux_msg_get_type (zmsg, &type) < 0)
+        goto done;
+    switch (type) {
+        case FLUX_MSGTYPE_RESPONSE:
+            if (flux_response_sendmsg (ctx->h, &zmsg) < 0)
+                goto done;
+            break;
+        case FLUX_MSGTYPE_EVENT:
+            if (ctx->event_active) {
+                send_mute_request (ctx, item->socket);
+                goto done;
+            }
+            if (flux_msg_clear_route (zmsg) < 0) {
+                flux_log (ctx->h, LOG_ERR, "dropping malformed event");
+                goto done;
+            }
+            if (recv_event (ctx, &zmsg) < 0)
+                goto done;
+            break;
     }
-    if (zmsg)
-        zmsg_destroy (&zmsg);
+done:
+    zmsg_destroy (&zmsg);
     ZLOOP_RETURN(ctx);
 }
 
@@ -1823,16 +1923,18 @@ static int recv_event (ctx_t *ctx, zmsg_t **zmsg)
         flux_log (ctx->h, LOG_ERR, "dropping malformed event");
         return -1;
     }
-    if (seq <= ctx->event_seq) { /* drop duplicate */
-        flux_log (ctx->h, LOG_INFO, "dropping dup event %d", seq);
+    if (seq <= ctx->event_seq) {
+        //flux_log (ctx->h, LOG_INFO, "duplicate event");
         return -1;
     }
-    for (i = ctx->event_seq + 1; i < seq; i++)
-        flux_log (ctx->h, LOG_ERR, "lost event %d", i);
-
+    if (ctx->event_seq > 0) { /* don't log initial missed evnets */
+        for (i = ctx->event_seq + 1; i < seq; i++)
+            flux_log (ctx->h, LOG_ERR, "lost event %d", i);
+    }
     ctx->event_seq = seq;
     endpt_cc (*zmsg, ctx->gevent_relay);
     endpt_cc (*zmsg, ctx->snoop);
+    child_cc_all (ctx, *zmsg); /* to downstream peers */
     cmb_internal_event (ctx, *zmsg);
     return zmsg_send (zmsg, ctx->zs_event_out); /* to plugins */
 }
@@ -1849,6 +1951,7 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
                 goto done;
             }
         }
+        ctx->event_active = true;
         if (recv_event (ctx, &zmsg) < 0)
             goto done;
     }
