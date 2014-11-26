@@ -1026,6 +1026,14 @@ void check_payload (void)
     errno = 0;
     ok (flux_msg_get_payload (zmsg, &flags, &buf, &len) < 0 && errno == EPROTO,
        "flux_msg_get_payload fails with EPROTO on msg w/o topic");
+    errno = 0;
+    ok (flux_msg_set_payload (zmsg, 0, NULL, 0) == 0 && errno == 0,
+        "flux_msg_set_payload NULL works with no payload");
+    errno = 0;
+    ok (flux_msg_get_payload (zmsg, &flags, &buf, &len) < 0 && errno == EPROTO,
+       "flux_msg_get_payload still fails");
+
+    errno = 0;
     memset (pay, 42, plen);
     ok (flux_msg_set_payload (zmsg, 0, pay, plen) == 0
         && zmsg_size (zmsg) == 2,
@@ -1069,6 +1077,13 @@ void check_payload (void)
        "flux_msg_get_payload works, with topic and routes");
     cmp_mem (buf, pay, len,
        "and we got back the payload we set");
+
+    errno = 0;
+    ok (flux_msg_set_payload (zmsg, 0, NULL, 0) == 0 && errno == 0,
+        "flux_msg_set_payload NULL works");
+    errno = 0;
+    ok (flux_msg_get_payload (zmsg, &flags, &buf, &len) < 0 && errno == EPROTO,
+       "flux_msg_get_payload now fails with EPROTO");
 
     zmsg_destroy (&zmsg);
 }
@@ -1158,7 +1173,7 @@ void check_proto (void)
 
 int main (int argc, char *argv[])
 {
-    plan (86);
+    plan (90);
 
     lives_ok ({zmsg_test (false);}, // 1
         "zmsg_test doesn't assert");
@@ -1166,7 +1181,7 @@ int main (int argc, char *argv[])
     check_proto ();                 // 13
     check_routes ();                // 26
     check_topic ();                 // 11
-    check_payload ();               // 16
+    check_payload ();               // 20
 
     check_legacy_encode ();         // 5
     check_legacy_encode_json ();    // 8
