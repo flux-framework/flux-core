@@ -435,6 +435,10 @@ int flux_msg_set_payload (zmsg_t *zmsg, int flags, void *buf, int size)
     }
     if (flux_msg_get_flags (zmsg, &msgflags) < 0)
         goto done;
+    if (!(msgflags & FLUX_MSGFLAG_PAYLOAD) && (buf == NULL || size == 0)) {
+        rc = 0;
+        goto done;
+    }
     zf = zmsg_first (zmsg);
     if ((msgflags & FLUX_MSGFLAG_ROUTE)) {
         while (zf && zframe_size (zf) > 0)
