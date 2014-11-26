@@ -178,7 +178,16 @@ int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
     }
     if (msg_get_payload_json (zmsg, &o) < 0)
         goto done;
-    if ((!o && out) || (o && !out)) {
+    /* In order to support flux_rpc(), which in turn must support no-payload
+     * responses, this cannot be an error yet.
+     */
+    if ((!o && out)) {
+        *out = NULL;
+        //errno = EPROTO;
+        //goto done;
+    }
+    if ((o && !out)) {
+        Jput (o);
         errno = EPROTO;
         goto done;
     }
@@ -220,97 +229,36 @@ int flux_respond_errnum (flux_t h, zmsg_t **zmsg, int errnum)
     return flux_json_respond (h, errnum, NULL, zmsg);
 }
 
-static int flux_vrequestf (flux_t h, uint32_t nodeid, json_object *o,
-                           const char *fmt, va_list ap)
-{
-    char *topic = xvasprintf (fmt, ap);
-    zmsg_t *zmsg;
-    int rc = -1;
-
-    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
-        goto done;
-    if (flux_msg_set_topic (zmsg, topic) < 0)
-        goto done;
-    if (o && msg_set_payload_json (zmsg, o) < 0)
-        goto done;
-    if (flux_msg_set_nodeid (zmsg, nodeid) < 0)
-        goto done;
-    if (flux_msg_enable_route (zmsg) < 0)
-        goto done;
-    rc = flux_request_sendmsg (h, &zmsg);
-done:
-    if (zmsg)
-        zmsg_destroy (&zmsg);
-    free (topic);
-    return rc;
-}
-
-int flux_requestf (flux_t h, uint32_t nodeid, JSON o, const char *fmt, ...)
-{
-    va_list ap;
-    int rc;
-
-    va_start (ap, fmt);
-    rc = flux_vrequestf (h, nodeid, o, fmt, ap);
-    va_end (ap);
-    return rc;
-}
-
-static int flux_vrpcf (flux_t h, uint32_t nodeid, JSON in, JSON *out,
-                        const char *fmt, va_list ap)
-{
-    char *topic = xvasprintf (fmt, ap);
-    zmsg_t *zmsg = NULL;
-    int rc = -1;
-
-    if (flux_requestf (h, nodeid, in, "%s", topic) < 0)
-        goto done;
-    if (!(zmsg = response_matched_recvmsg (h, topic, false)))
-        goto done;
-    if (flux_msg_get_errnum (zmsg, &errno) < 0 || errno != 0)
-        goto done;
-    if (flux_msg_decode (zmsg, NULL, out) < 0)
-        goto done;
-    rc = 0;
-done:
-    if (zmsg)
-        zmsg_destroy (&zmsg);
-    free (topic);
-    return rc;
-}
-
-int flux_rpcf (flux_t h, uint32_t nodeid, JSON in, JSON *out, const char *fmt, ...)
-{
-    va_list ap;
-    int rc;
-
-    va_start (ap, fmt);
-    rc = flux_vrpcf (h, nodeid, in, out, fmt, ap);
-    va_end (ap);
-    return rc;
-}
-
 JSON flux_rank_rpc (flux_t h, int rank, JSON o, const char *fmt, ...)
 {
     uint32_t nodeid = rank == -1 ? FLUX_NODEID_ANY : rank;
     va_list ap;
+    char *topic;
     JSON out;
     int rc;
 
     va_start (ap, fmt);
-    rc = flux_vrpcf (h, nodeid, o, &out, fmt, ap);
+    topic = xvasprintf (fmt, ap);
     va_end (ap);
+
+    rc = flux_json_rpc (h, nodeid, topic, o, &out);
+    free (topic);
     return rc < 0 ? NULL : out;
 }
 
 int flux_rank_request_send (flux_t h, int rank, JSON o, const char *fmt, ...)
 {
+    uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
     va_list ap;
+    char *topic;
     int rc;
 
     va_start (ap, fmt);
-    rc = flux_vrequestf (h, rank == -1 ? FLUX_NODEID_ANY : rank, o, fmt, ap);
+    topic = xvasprintf (fmt, ap);
     va_end (ap);
+
+    rc = flux_json_request (h, nodeid, topic, o);
+    free (topic);
     return rc;
 }
 
@@ -318,22 +266,30 @@ JSON flux_rpc (flux_t h, JSON o, const char *fmt, ...)
 {
     va_list ap;
     JSON out;
+    char *topic;
     int rc;
 
     va_start (ap, fmt);
-    rc = flux_vrpcf (h, FLUX_NODEID_ANY, o, &out, fmt, ap);
+    topic = xvasprintf (fmt, ap);
     va_end (ap);
+
+    rc = flux_json_rpc (h, FLUX_NODEID_ANY, topic, o, &out);
+    free (topic);
     return rc < 0 ? NULL : out;
 }
 
 int flux_request_send (flux_t h, JSON o, const char *fmt, ...)
 {
     va_list ap;
+    char *topic;
     int rc;
 
     va_start (ap, fmt);
-    rc = flux_vrequestf (h, FLUX_NODEID_ANY, o, fmt, ap);
+    topic = xvasprintf (fmt, ap);
     va_end (ap);
+
+    rc = flux_json_request (h, FLUX_NODEID_ANY, topic, o);
+    free (topic);
     return rc;
 }
 
