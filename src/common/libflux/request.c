@@ -85,17 +85,14 @@ done:
  */
 static int msg_set_payload_json (zmsg_t *zmsg, JSON o)
 {
-    const char *s = NULL;
-    int flags = 0;
-
+    int rc;
     if (o) {
-        if (!(s = json_object_to_json_string (o))) {
-            errno = EINVAL; /* not really sure if this can happen */
-            return -1;
-        }
-        flags |= FLUX_MSGFLAG_JSON;
-    }
-    return flux_msg_set_payload (zmsg, flags, (char *)s, strlen (s));
+        const char *s = json_object_to_json_string (o);
+        int len = strlen (s);
+        rc = flux_msg_set_payload (zmsg, FLUX_MSGFLAG_JSON, (char *)s, len);
+    } else
+        rc = flux_msg_set_payload (zmsg, 0, NULL, 0);
+    return rc;
 }
 
 /* If 'zmsg' contains payload, return it in 'o', else set 'o' to NULL.
@@ -200,7 +197,9 @@ int flux_json_respond (flux_t h, int errnum, JSON out, zmsg_t **zmsg)
         goto done;
     if (flux_msg_set_errnum (*zmsg, errnum) < 0)
         goto done;
-    if (msg_set_payload_json (*zmsg, errnum == 0 ? out : NULL) < 0)
+    if (errnum)
+        out = NULL; /* clear payload */
+    if (msg_set_payload_json (*zmsg, out) < 0)
         goto done;
     rc = flux_response_sendmsg (h, zmsg);
 done:
@@ -213,22 +212,12 @@ done:
 
 int flux_respond (flux_t h, zmsg_t **zmsg, JSON o)
 {
-    if (flux_msg_set_type (*zmsg, FLUX_MSGTYPE_RESPONSE) < 0)
-        return -1;
-    if (msg_set_payload_json (*zmsg, o) < 0)
-        return -1;
-    return flux_response_sendmsg (h, zmsg);
+    return flux_json_respond (h, 0, o, zmsg);
 }
 
 int flux_respond_errnum (flux_t h, zmsg_t **zmsg, int errnum)
 {
-    if (flux_msg_set_type (*zmsg, FLUX_MSGTYPE_RESPONSE) < 0)
-        return -1;
-    if (flux_msg_set_payload (*zmsg, 0, NULL, 0) < 0)
-        return -1;
-    if (flux_msg_set_errnum (*zmsg, errnum) < 0)
-        return -1;
-    return flux_response_sendmsg (h, zmsg);
+    return flux_json_respond (h, errnum, NULL, zmsg);
 }
 
 static int flux_vrequestf (flux_t h, uint32_t nodeid, json_object *o,
