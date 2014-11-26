@@ -122,6 +122,7 @@ typedef struct {
     flux_conf_t cf;
     const char *secdir;
     int event_seq;
+    bool event_active;          /* primary event source is active */
     /* Bootstrap
      */
     bool boot_pmi;
@@ -1124,8 +1125,10 @@ static void cmbd_init_socks (ctx_t *ctx)
     ctx->zs_event_out = cmbd_init_event_out (ctx);
     ctx->snoop = cmbd_init_snoop (ctx);
 
-    if (ctx->rank == 0 && ctx->gevent)
+    if (ctx->rank == 0 && ctx->gevent) {
         cmbd_init_gevent_pub (ctx, ctx->gevent);
+        ctx->event_active = true;
+    }
     if (ctx->rank > 0 && ctx->gevent)
         cmbd_init_gevent_sub (ctx, ctx->gevent);
     if (ctx->child && !ctx->child->zs)      /* boot_pmi may have done this */
@@ -1843,6 +1846,24 @@ done:
     ZLOOP_RETURN(ctx);
 }
 
+static void send_mute_request (ctx_t *ctx, void *sock)
+{
+    zmsg_t *zmsg;
+
+    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
+        goto done;
+    if (flux_msg_set_topic (zmsg, "cmb.event-mute") < 0)
+        goto done;
+    if (flux_msg_enable_route (zmsg))
+        goto done;
+    if (zmsg_send (&zmsg, sock) < 0)
+        flux_log (ctx->h, LOG_ERR, "failed to send mute request: %s",
+                  strerror (errno));
+    /* No response will be sent */
+done:
+    zmsg_destroy (&zmsg);
+}
+
 static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
     zmsg_t *zmsg = zmsg_recv (item->socket);
@@ -1858,8 +1879,12 @@ static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
                 goto done;
             break;
         case FLUX_MSGTYPE_EVENT:
+            if (ctx->event_active) {
+                send_mute_request (ctx, item->socket);
+                goto done;
+            }
             if (flux_msg_clear_route (zmsg) < 0) {
-                err ("%s: malformed event", __FUNCTION__);
+                flux_log (ctx->h, LOG_ERR, "dropping malformed event");
                 goto done;
             }
             if (recv_event (ctx, &zmsg) < 0)
@@ -1889,12 +1914,6 @@ static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod)
     ZLOOP_RETURN(ctx);
 }
 
-static void mute_request (ctx_t *ctx)
-{
-    if (flux_request_send (ctx->h, NULL, "cmb.event-mute") < 0)
-        flux_log (ctx->h, LOG_ERR, "error sending cmb.event-mute request");
-}
-
 static int recv_event (ctx_t *ctx, zmsg_t **zmsg)
 {
     int i;
@@ -1904,23 +1923,19 @@ static int recv_event (ctx_t *ctx, zmsg_t **zmsg)
         flux_log (ctx->h, LOG_ERR, "dropping malformed event");
         return -1;
     }
-    /* We receive early events via the parent, but once we have
-     * our primary event source wired, the parent is muted.
-     */
     if (seq <= ctx->event_seq) {
-        //flux_log (ctx->h, LOG_INFO, "duplicate event, muting parent");
-        mute_request (ctx);
+        //flux_log (ctx->h, LOG_INFO, "duplicate event");
         return -1;
     }
-    if (ctx->event_seq > 0) {
+    if (ctx->event_seq > 0) { /* don't log initial missed evnets */
         for (i = ctx->event_seq + 1; i < seq; i++)
             flux_log (ctx->h, LOG_ERR, "lost event %d", i);
     }
     ctx->event_seq = seq;
     endpt_cc (*zmsg, ctx->gevent_relay);
     endpt_cc (*zmsg, ctx->snoop);
-    cmb_internal_event (ctx, *zmsg);
     child_cc_all (ctx, *zmsg); /* to downstream peers */
+    cmb_internal_event (ctx, *zmsg);
     return zmsg_send (zmsg, ctx->zs_event_out); /* to plugins */
 }
 
@@ -1936,6 +1951,7 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
                 goto done;
             }
         }
+        ctx->event_active = true;
         if (recv_event (ctx, &zmsg) < 0)
             goto done;
     }
