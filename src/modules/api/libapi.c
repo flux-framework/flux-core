@@ -398,6 +398,7 @@ flux_t flux_api_openpath (const char *path, int flags)
     c = xzmalloc (sizeof (*c));
     c->magic = CMB_CTX_MAGIC;
     c->rank = -1;
+    zsys_handler_set (NULL);
     if (!(c->zctx = zctx_new ()))
         err_exit ("zctx_new");
     zctx_set_iothreads (c->zctx, 0);
