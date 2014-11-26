@@ -19,9 +19,9 @@
  */
 int flux_request_sendmsg (flux_t h, zmsg_t **zmsg);
 
-/* Receive a request message, blocking until one is available.  If 'nonblock'
- * is true and no request is available, return NULL with errno == EAGAIN.
- * Returns request message on success, or NULL on failure with errno set.
+/* Receive a request message, blocking until one is available.
+ * If 'nonblock' and none is available, return NULL with errno == EAGAIN.
+ * Returns message on success, or NULL on failure with errno set.
  */
 zmsg_t *flux_request_recvmsg (flux_t h, bool nonblock);
 
@@ -31,9 +31,9 @@ zmsg_t *flux_request_recvmsg (flux_t h, bool nonblock);
  */
 int flux_response_sendmsg (flux_t h, zmsg_t **zmsg);
 
-/* Receive a response message, blocking until one is available.  If 'nonblock'
- * is true and no request is available, return NULL with errno == EAGAIN.
- * Returns request message on success, or NULL on failure with errno set.
+/* Receive a response message, blocking until one is available.
+ * If 'nonblock' and none is available, return NULL with errno == EAGAIN.
+ * Returns message on success, or NULL on failure with errno set.
  */
 zmsg_t *flux_response_recvmsg (flux_t h, bool nonblock);
 
@@ -45,11 +45,41 @@ zmsg_t *flux_response_recvmsg (flux_t h, bool nonblock);
  */
 int flux_response_putmsg (flux_t h, zmsg_t **zmsg);
 
+/* Send a request to 'nodeid' (may be FLUX_NODEID_ANY) addressed to 'topic'.
+ * If 'in' is non-NULL, attach JSON payload, caller retains ownership.
+ * Do not wait for a response.
+ * Returns 0 on success, or -1 on failure with errno set.
+ */
+int flux_json_request (flux_t h, uint32_t nodeid, const char *topic,
+                       json_object *in);
+
+/* Send a request to 'nodeid' (may be FLUX_NODEID_ANY) addressed to 'topic'.
+ * If 'in' is non-NULL, attach JSON payload, caller retains ownership.
+ * Wait for a response.  If response has non-zero errnum, set errno to that
+ * value and return -1.  If 'out' is non-NULL, set to JSON payload in response,
+ * which caller must free.  It is considered a protocol error if 'out' is
+ * set and there is no JSON payload, or 'out' is not set and there is.
+ * Returns 0 on success, or -1 on failure with errno set.
+ */
+int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
+                   json_object *in, json_object **out);
+
+/* Convert 'zmsg' request into a response and send it.  'zmsg' is destroyed
+ * on success.  If errnum is nonzero, 'out' is ignored; otherwise,
+ * if 'out' is non-NULL, attach JSON payload (caller retains owenrship).
+ * Regardless of 'out' or 'errnum', the original payload in the request,
+ * if any, is destroyed.
+ * Returns 0 on success, or -1 on failure with errno set.
+ */
+int flux_json_respond (flux_t h, int errnum, json_object *out, zmsg_t **zmsg);
+
+/* FIXME:  rework?
+ */
+int flux_response_recv (flux_t h, json_object **respp, char **tagp, bool nb);
 
 /* Deprecated interfaces.
  */
 
-int flux_response_recv (flux_t h, json_object **respp, char **tagp, bool nb);
 int flux_respond (flux_t h, zmsg_t **request, json_object *response);
 int flux_respond_errnum (flux_t h, zmsg_t **request, int errnum);
 

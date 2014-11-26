@@ -79,6 +79,10 @@ done:
     return response;
 }
 
+/* If 'o' is non-NULL, encode to string and set as payload in 'zmsg'.
+ * Otherwise, clear payload in 'zmsg', if any.
+ * Return 0 on success, -1 on failure with errno set.
+ */
 static int msg_set_payload_json (zmsg_t *zmsg, JSON o)
 {
     const char *s = NULL;
@@ -93,6 +97,119 @@ static int msg_set_payload_json (zmsg_t *zmsg, JSON o)
     }
     return flux_msg_set_payload (zmsg, flags, (char *)s, strlen (s));
 }
+
+/* If 'zmsg' contains payload, return it in 'o', else set 'o' to NULL.
+ * Return 0 on success, -1 on failure with errno set.
+ */
+static int msg_get_payload_json (zmsg_t *zmsg, JSON *o)
+{
+    struct json_tokener *tok = NULL;
+    int flags;
+    char *buf;
+    int size;
+    int rc = -1;
+
+    assert (o != NULL);
+
+    if (flux_msg_get_payload (zmsg, &flags, (void **)&buf, &size) < 0) {
+        errno = 0;
+        *o = NULL;
+    } else {
+        if (!buf || size == 0 || !(flags & FLUX_MSGFLAG_JSON)) {
+            errno = EPROTO;
+            goto done;
+        }
+        if (!(tok = json_tokener_new ())) {
+            errno = ENOMEM;
+            goto done;
+        }
+        if (!(*o = json_tokener_parse_ex (tok, buf, size))) {
+            errno = EPROTO;
+            goto done;
+        }
+    }
+    rc = 0;
+done:
+    if (tok)
+        json_tokener_free (tok);
+    return rc;
+}
+
+int flux_json_request (flux_t h, uint32_t nodeid, const char *topic, JSON in)
+{
+    zmsg_t *zmsg;
+    int rc = -1;
+
+    if (!topic) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
+        goto done;
+    if (flux_msg_set_nodeid (zmsg, nodeid) < 0)
+        goto done;
+    if (flux_msg_set_topic (zmsg, topic) < 0)
+        goto done;
+    if (msg_set_payload_json (zmsg, in) < 0)
+        goto done;
+    if (flux_msg_enable_route (zmsg) < 0)
+        goto done;
+    rc = flux_request_sendmsg (h, &zmsg);
+done:
+    zmsg_destroy (&zmsg);
+    return rc;
+}
+
+
+int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
+                   JSON in, JSON *out)
+{
+    zmsg_t *zmsg = NULL;
+    int rc = -1;
+    int errnum;
+    JSON o;
+
+    if (flux_json_request (h, nodeid, topic, in) < 0)
+        goto done;
+    if (!(zmsg = response_matched_recvmsg (h, topic, false)))
+        goto done;
+    if (flux_msg_get_errnum (zmsg, &errnum) < 0)
+        goto done;
+    if (errnum != 0) {
+        errno = errnum;
+        goto done;
+    }
+    if (msg_get_payload_json (zmsg, &o) < 0)
+        goto done;
+    if ((!o && out) || (o && !out)) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (out)
+        *out = o;
+    rc = 0;
+done:
+    return rc;
+}
+
+int flux_json_respond (flux_t h, int errnum, JSON out, zmsg_t **zmsg)
+{
+    int rc = -1;
+
+    if (flux_msg_set_type (*zmsg, FLUX_MSGTYPE_RESPONSE) < 0)
+        goto done;
+    if (flux_msg_set_errnum (*zmsg, errnum) < 0)
+        goto done;
+    if (msg_set_payload_json (*zmsg, errnum == 0 ? out : NULL) < 0)
+        goto done;
+    rc = flux_response_sendmsg (h, zmsg);
+done:
+    return rc;
+}
+
+/**
+ ** Deprecated functions.
+ */
 
 int flux_respond (flux_t h, zmsg_t **zmsg, JSON o)
 {
@@ -113,9 +230,6 @@ int flux_respond_errnum (flux_t h, zmsg_t **zmsg, int errnum)
         return -1;
     return flux_response_sendmsg (h, zmsg);
 }
-
-/* New general request/rpc functions - not yet exposed.
- */
 
 static int flux_vrequestf (flux_t h, uint32_t nodeid, json_object *o,
                            const char *fmt, va_list ap)
@@ -186,9 +300,6 @@ int flux_rpcf (flux_t h, uint32_t nodeid, JSON in, JSON *out, const char *fmt, .
     va_end (ap);
     return rc;
 }
-
-/* Old request/rpc functions implemented in terms of new.
- */
 
 JSON flux_rank_rpc (flux_t h, int rank, JSON o, const char *fmt, ...)
 {
