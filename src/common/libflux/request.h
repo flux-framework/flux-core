@@ -65,13 +65,31 @@ int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
                    json_object *in, json_object **out);
 
 /* Convert 'zmsg' request into a response and send it.  'zmsg' is destroyed
- * on success.  If errnum is nonzero, 'out' is ignored; otherwise,
- * if 'out' is non-NULL, attach JSON payload (caller retains owenrship).
- * Regardless of 'out' or 'errnum', the original payload in the request,
- * if any, is destroyed.
+ * on success.  Attach JSON payload 'out' (caller retains owenrship).
+ * The original payload in the request, if any, is destroyed.
  * Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_json_respond (flux_t h, int errnum, json_object *out, zmsg_t **zmsg);
+int flux_json_respond (flux_t h, json_object *out, zmsg_t **zmsg);
+
+/* Convert 'zmsg' request into a response and send it.  'zmsg' is destroyed
+ * on success.  Set errnum in response to 'errnum' (may be zero).
+ * The original payload in the request, if any, is destroyed.
+ * Returns 0 on success, or -1 on failure with errno set.
+ */
+int flux_err_respond (flux_t h, int errnum, zmsg_t **zmsg);
+
+/* Decode request message, setting 'in' to JSON payload.
+ * If payload is missing, fail with errno == EPROTO.
+ * Returns 0 on success, or -1 on failure with errno set.
+ */
+int flux_json_request_decode (zmsg_t *zmsg, json_object **in);
+
+/* Decode response message, setting 'out' to JSON payload.
+ * If payload is missing, fail with errno == EPROTO.
+ * If errnum is nonzero in response, fail with errno == errnum.
+ * Returns 0 on success, or -1 on failure with errno set.
+ */
+int flux_json_response_decode (zmsg_t *zmsg, json_object **out);
 
 /* FIXME:  rework?
  */

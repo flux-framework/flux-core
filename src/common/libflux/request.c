@@ -132,6 +132,62 @@ done:
     return rc;
 }
 
+int flux_json_request_decode (zmsg_t *zmsg, json_object **in)
+{
+    int type;
+    int rc = -1;
+    JSON o;
+
+    if (in == NULL || zmsg == NULL) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (flux_msg_get_type (zmsg, &type) < 0)
+        goto done;
+    if (type != FLUX_MSGTYPE_REQUEST) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (msg_get_payload_json (zmsg, &o) < 0)
+        goto done;
+    if (o == NULL) {
+        errno = EPROTO;
+        goto done;
+    }
+    *in = o;
+    rc = 0;
+done:
+    return rc;
+}
+
+int flux_json_response_decode (zmsg_t *zmsg, json_object **out)
+{
+    int errnum;
+    JSON o;
+    int rc = -1;
+
+    if (out == NULL || zmsg == NULL) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (flux_msg_get_errnum (zmsg, &errnum) < 0)
+        goto done;
+    if (errnum != 0) {
+        errno = errnum;
+        goto done;
+    }
+    if (msg_get_payload_json (zmsg, &o) < 0)
+        goto done;
+    if (o == NULL) {
+        errno = EPROTO;
+        goto done;
+    }
+    *out = o;
+    rc = 0;
+done:
+    return rc;
+}
+
 int flux_json_request (flux_t h, uint32_t nodeid, const char *topic, JSON in)
 {
     zmsg_t *zmsg;
@@ -198,17 +254,27 @@ done:
     return rc;
 }
 
-int flux_json_respond (flux_t h, int errnum, JSON out, zmsg_t **zmsg)
+int flux_json_respond (flux_t h, JSON out, zmsg_t **zmsg)
 {
     int rc = -1;
 
     if (flux_msg_set_type (*zmsg, FLUX_MSGTYPE_RESPONSE) < 0)
         goto done;
+    if (msg_set_payload_json (*zmsg, out) < 0)
+        goto done;
+    rc = flux_response_sendmsg (h, zmsg);
+done:
+    return rc;
+}
+
+int flux_err_respond (flux_t h, int errnum, zmsg_t **zmsg)
+{
+    int rc = -1;
+    if (flux_msg_set_type (*zmsg, FLUX_MSGTYPE_RESPONSE) < 0)
+        goto done;
     if (flux_msg_set_errnum (*zmsg, errnum) < 0)
         goto done;
-    if (errnum)
-        out = NULL; /* clear payload */
-    if (msg_set_payload_json (*zmsg, out) < 0)
+    if (msg_set_payload_json (*zmsg, NULL) < 0)
         goto done;
     rc = flux_response_sendmsg (h, zmsg);
 done:
@@ -221,12 +287,12 @@ done:
 
 int flux_respond (flux_t h, zmsg_t **zmsg, JSON o)
 {
-    return flux_json_respond (h, 0, o, zmsg);
+    return flux_json_respond (h, o, zmsg);
 }
 
 int flux_respond_errnum (flux_t h, zmsg_t **zmsg, int errnum)
 {
-    return flux_json_respond (h, errnum, NULL, zmsg);
+    return flux_err_respond (h, errnum, zmsg);
 }
 
 JSON flux_rank_rpc (flux_t h, int rank, JSON o, const char *fmt, ...)

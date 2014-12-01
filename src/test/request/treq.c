@@ -35,6 +35,33 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/shortjson.h"
+
+void test_null (flux_t h, uint32_t nodeid);
+void test_echo (flux_t h, uint32_t nodeid);
+void test_err (flux_t h, uint32_t nodeid);
+void test_src (flux_t h, uint32_t nodeid);
+
+typedef struct {
+    const char *name;
+    void (*fun)(flux_t h, uint32_t nodeid);
+} test_t;
+
+static test_t tests[] = {
+    { "null", &test_null },
+    { "echo", &test_echo },
+    { "err", &test_err},
+    { "src", &test_src},
+};
+
+test_t *test_lookup (const char *name)
+{
+    int i;
+    for (i = 0; i < sizeof (tests) / sizeof (tests[0]); i++)
+        if (!strcmp (tests[i].name, name))
+            return &tests[i];
+    return NULL;
+}
 
 #define OPTIONS "hr:"
 static const struct option longopts[] = {
@@ -43,12 +70,10 @@ static const struct option longopts[] = {
     { 0, 0, 0, 0 },
 };
 
-void test_null (flux_t h);
-
 void usage (void)
 {
     fprintf (stderr,
-"Usage: treq [--rank N]\n"
+"Usage: treq [--rank N] {null | echo | err | src}\n"
 );
     exit (1);
 }
@@ -58,6 +83,7 @@ int main (int argc, char *argv[])
     flux_t h;
     int ch;
     uint32_t nodeid = FLUX_NODEID_ANY;
+    test_t *t;
 
     log_init ("treq");
 
@@ -74,13 +100,15 @@ int main (int argc, char *argv[])
                 break;
         }
     }
-    if (optind != argc)
+    if (optind == argc)
+        usage ();
+    if (!(t = test_lookup (argv[optind])))
         usage ();
 
     if (!(h = flux_api_open ()))
         err_exit ("flux_api_open");
 
-    test_null (h);
+    t->fun (h, nodeid);
 
     flux_api_close (h);
 
@@ -88,11 +116,50 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-void test_null (flux_t h)
+void test_null (flux_t h, uint32_t nodeid)
 {
-    if (flux_json_rpc (h, FLUX_NODEID_ANY, "req.null", NULL, NULL) < 0)
+    if (flux_json_rpc (h, nodeid, "req.null", NULL, NULL) < 0)
         err_exit ("req.null");
 }
+
+void test_echo (flux_t h, uint32_t nodeid)
+{
+    JSON in = Jnew ();
+    JSON out = NULL;
+    const char *s;
+
+    Jadd_str (in, "mumble", "burble");
+    if (flux_json_rpc (h, nodeid, "req.echo", in, &out) < 0)
+        err_exit ("%s", __FUNCTION__);
+    if (!out)
+        msg_exit ("%s: no JSON returned", __FUNCTION__);
+    if (!Jget_str (out, "mumble", &s) || strcmp (s, "burble") != 0)
+        msg_exit ("%s: returned JSON wasn't an echo", __FUNCTION__);
+    Jput (in);
+    Jput (out);
+}
+
+void test_err (flux_t h, uint32_t nodeid)
+{
+    if (flux_json_rpc (h, nodeid, "req.err", NULL, NULL) == 0)
+        msg_exit ("%s: succeeded when should've failed", __FUNCTION__);
+    if (errno != 42)
+        msg_exit ("%s: got errno %d instead of 42", __FUNCTION__, errno);
+}
+
+void test_src (flux_t h, uint32_t nodeid)
+{
+    JSON out = NULL;
+    int i;
+    if (flux_json_rpc (h, nodeid, "req.src", NULL, &out) < 0)
+        err_exit ("%s", __FUNCTION__);
+    if (!out)
+        msg_exit ("%s: no JSON returned", __FUNCTION__);
+    if (!Jget_int (out, "wormz", &i) || i != 42)
+        msg_exit ("%s: didn't get expected JSON", __FUNCTION__);
+    Jput (out);
+}
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
