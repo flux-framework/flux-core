@@ -14,9 +14,10 @@ check_PROGRAMS = \
 	tpmikvs \
 	tbarrier
 
+SUBDIRS = request
 if HAVE_MPI
 check_PROGRAMS += mpi_hello
-SUBDIRS = kap
+SUBDIRS += kap
 endif
 
 LDADD = $(top_builddir)/src/common/libzio/libzio.la \

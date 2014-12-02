@@ -423,6 +423,12 @@ int flux_msg_get_route_count (zmsg_t *zmsg)
     return count;
 }
 
+static bool zframe_allocated (void *b, zframe_t *zf)
+{
+    return ((char *)b >= (char *)zframe_data (zf)
+         && (char *)b <  (char *)zframe_data (zf) + zframe_size (zf));
+}
+
 int flux_msg_set_payload (zmsg_t *zmsg, int flags, void *buf, int size)
 {
     zframe_t *zf;
@@ -435,6 +441,10 @@ int flux_msg_set_payload (zmsg_t *zmsg, int flags, void *buf, int size)
     }
     if (flux_msg_get_flags (zmsg, &msgflags) < 0)
         goto done;
+    if (!(msgflags & FLUX_MSGFLAG_PAYLOAD) && (buf == NULL || size == 0)) {
+        rc = 0;
+        goto done;
+    }
     zf = zmsg_first (zmsg);
     if ((msgflags & FLUX_MSGFLAG_ROUTE)) {
         while (zf && zframe_size (zf) > 0)
@@ -453,6 +463,10 @@ int flux_msg_set_payload (zmsg_t *zmsg, int flags, void *buf, int size)
     /* Case #1: replace existing payload.
      */
     if ((msgflags & FLUX_MSGFLAG_PAYLOAD) && (buf != NULL && size > 0)) {
+        if (zframe_allocated (buf, zf)) {
+            errno = EINVAL;
+            goto done;
+        }
         zframe_reset (zf, buf, size);
         msgflags &= ~(uint8_t)FLUX_MSGFLAG_JSON;
         msgflags |= flags;
@@ -1022,6 +1036,14 @@ void check_payload (void)
     errno = 0;
     ok (flux_msg_get_payload (zmsg, &flags, &buf, &len) < 0 && errno == EPROTO,
        "flux_msg_get_payload fails with EPROTO on msg w/o topic");
+    errno = 0;
+    ok (flux_msg_set_payload (zmsg, 0, NULL, 0) == 0 && errno == 0,
+        "flux_msg_set_payload NULL works with no payload");
+    errno = 0;
+    ok (flux_msg_get_payload (zmsg, &flags, &buf, &len) < 0 && errno == EPROTO,
+       "flux_msg_get_payload still fails");
+
+    errno = 0;
     memset (pay, 42, plen);
     ok (flux_msg_set_payload (zmsg, 0, pay, plen) == 0
         && zmsg_size (zmsg) == 2,
@@ -1065,6 +1087,17 @@ void check_payload (void)
        "flux_msg_get_payload works, with topic and routes");
     cmp_mem (buf, pay, len,
        "and we got back the payload we set");
+
+    errno = 0;
+    ok (flux_msg_set_payload (zmsg, 0, buf, len) < 0 && errno == EINVAL,
+        "flux_msg_set_payload detects reuse of payload and fails with EINVAL");
+
+    errno = 0;
+    ok (flux_msg_set_payload (zmsg, 0, NULL, 0) == 0 && errno == 0,
+        "flux_msg_set_payload NULL works");
+    errno = 0;
+    ok (flux_msg_get_payload (zmsg, &flags, &buf, &len) < 0 && errno == EPROTO,
+       "flux_msg_get_payload now fails with EPROTO");
 
     zmsg_destroy (&zmsg);
 }
@@ -1154,7 +1187,7 @@ void check_proto (void)
 
 int main (int argc, char *argv[])
 {
-    plan (86);
+    plan (91);
 
     lives_ok ({zmsg_test (false);}, // 1
         "zmsg_test doesn't assert");
@@ -1162,7 +1195,7 @@ int main (int argc, char *argv[])
     check_proto ();                 // 13
     check_routes ();                // 26
     check_topic ();                 // 11
-    check_payload ();               // 16
+    check_payload ();               // 21
 
     check_legacy_encode ();         // 5
     check_legacy_encode_json ();    // 8
