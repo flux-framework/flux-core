@@ -526,6 +526,16 @@ int flux_msg_get_payload (zmsg_t *zmsg, int *flags, void **buf, int *size)
     return 0;
 }
 
+bool flux_msg_has_payload (zmsg_t *zmsg)
+{
+    uint8_t flags;
+    if (flux_msg_get_flags (zmsg, &flags) < 0) {
+        errno = 0;
+        return false;
+    }
+    return ((flags & FLUX_MSGFLAG_PAYLOAD));
+}
+
 int flux_msg_set_topic (zmsg_t *zmsg, const char *topic)
 {
     zframe_t *zf, *zf2 = NULL;
