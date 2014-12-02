@@ -188,6 +188,30 @@ done:
     return rc;
 }
 
+int flux_response_decode (zmsg_t *zmsg)
+{
+    int rc = -1;
+    int errnum;
+
+    if (zmsg == NULL) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (flux_msg_get_errnum (zmsg, &errnum) < 0)
+        goto done;
+    if (errnum != 0) {
+        errno = errnum;
+        goto done;
+    }
+    if (flux_msg_has_payload (zmsg)) {
+        errno = EPROTO;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
 int flux_json_request (flux_t h, uint32_t nodeid, const char *topic, JSON in)
 {
     zmsg_t *zmsg;
