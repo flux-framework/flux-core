@@ -34,24 +34,6 @@
 #include "src/common/libutil/shortjson.h"
 
 
-int flux_response_recv (flux_t h, JSON *respp, char **tagp, bool nb)
-{
-    zmsg_t *zmsg;
-    int rc = -1;
-
-    if (!(zmsg = flux_response_recvmsg (h, nb)))
-        goto done;
-    if (flux_msg_get_errnum (zmsg, &errno) < 0 || errno != 0)
-        goto done;
-    if (flux_msg_decode (zmsg, tagp, respp) < 0)
-        goto done;
-    rc = 0;
-done:
-    if (zmsg)
-        zmsg_destroy (&zmsg);
-    return rc;
-}
-
 static zmsg_t *response_matched_recvmsg (flux_t h, const char *match, bool nb)
 {
     zmsg_t *zmsg, *response = NULL;
@@ -380,6 +362,24 @@ int flux_request_send (flux_t h, JSON o, const char *fmt, ...)
 
     rc = flux_json_request (h, FLUX_NODEID_ANY, topic, o);
     free (topic);
+    return rc;
+}
+
+int flux_response_recv (flux_t h, JSON *respp, char **tagp, bool nb)
+{
+    zmsg_t *zmsg;
+    int rc = -1;
+
+    if (!(zmsg = flux_response_recvmsg (h, nb)))
+        goto done;
+    if (flux_msg_get_errnum (zmsg, &errno) < 0 || errno != 0)
+        goto done;
+    if (flux_msg_decode (zmsg, tagp, respp) < 0)
+        goto done;
+    rc = 0;
+done:
+    if (zmsg)
+        zmsg_destroy (&zmsg);
     return rc;
 }
 

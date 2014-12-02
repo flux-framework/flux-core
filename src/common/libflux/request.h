@@ -99,12 +99,9 @@ int flux_json_response_decode (zmsg_t *zmsg, json_object **out);
  */
 int flux_response_decode (zmsg_t *zmsg);
 
-/* FIXME:  rework?
- */
-int flux_response_recv (flux_t h, json_object **respp, char **tagp, bool nb);
-
-/* Deprecated interfaces.
- */
+/**
+ ** Deprecated interfaces.
+ **/
 
 int flux_respond (flux_t h, zmsg_t **request, json_object *response);
 int flux_respond_errnum (flux_t h, zmsg_t **request, int errnum);
@@ -115,6 +112,8 @@ int flux_rank_request_send (flux_t h, int rank,
 json_object *flux_rpc (flux_t h, json_object *in, const char *fmt, ...);
 json_object *flux_rank_rpc (flux_t h, int rank,
                             json_object *in, const char *fmt, ...);
+
+int flux_response_recv (flux_t h, json_object **respp, char **tagp, bool nb);
 
 #endif /* !_FLUX_CORE_REQUEST_H */
 
