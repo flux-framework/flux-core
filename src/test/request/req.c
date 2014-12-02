@@ -28,6 +28,34 @@ static ctx_t *getctx (flux_t h)
     return ctx;
 }
 
+/* Accept a json payload, verify it and return error if it doesn't
+ * match expected.
+ */
+static int sink_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    JSON o = NULL;
+    double d;
+
+    if (flux_json_request_decode (*zmsg, &o) < 0) {
+        if (flux_err_respond (h, errno, zmsg) < 0)
+            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
+                      strerror (errno));
+        goto done;
+    }
+    if (!Jget_double (o, "pi", &d) || d != 3.14) {
+        if (flux_err_respond (h, EPROTO, zmsg) < 0)
+            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
+                      strerror (errno));
+        goto done;
+    }
+    if (flux_err_respond (h, 0, zmsg) < 0)
+        flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
+                  strerror (errno));
+done:
+    Jput (o);
+    return 0;
+}
+
 /* Return a fixed json payload
  */
 static int src_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
@@ -42,6 +70,40 @@ static int src_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     return 0;
 }
 
+/* Return 'n' sequenced responses.
+ */
+static int nsrc_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    JSON o = Jnew ();
+    int i, count;
+
+    if (flux_json_request_decode (*zmsg, &o) < 0) {
+        if (flux_err_respond (h, errno, zmsg) < 0)
+            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
+                      strerror (errno));
+        goto done;
+    }
+    if (!Jget_int (o, "count", &count)) {
+        if (flux_err_respond (h, EPROTO, zmsg) < 0)
+            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
+                      strerror (errno));
+        goto done;
+    }
+    for (i = 0; i < count; i++) {
+        zmsg_t *cpy = zmsg_dup (*zmsg);
+        if (!cpy)
+            oom ();
+        Jadd_int (o, "seq", i);
+        if (flux_json_respond (h, o, &cpy) < 0)
+            flux_log (h, LOG_ERR, "%s: flux_json_respond: %s", __FUNCTION__,
+                      strerror (errno));
+        zmsg_destroy (&cpy);
+    }
+    zmsg_destroy (zmsg);
+done:
+    Jput (o);
+    return 0;
+}
 
 /* Always return an error 42
  */
@@ -147,6 +209,8 @@ static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST, "req.echo",              echo_request_cb },
     { FLUX_MSGTYPE_REQUEST, "req.err",               err_request_cb },
     { FLUX_MSGTYPE_REQUEST, "req.src",               src_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "req.nsrc",              nsrc_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "req.sink",              sink_request_cb },
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 

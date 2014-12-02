@@ -47,6 +47,7 @@ bool flux_msg_strneq_topic (zmsg_t *zmsg, const char *topic, size_t n);
  */
 int flux_msg_set_payload (zmsg_t *zmsg, int flags, void *buf, int size);
 int flux_msg_get_payload (zmsg_t *zmsg, int *flags, void **buf, int *size);
+bool flux_msg_has_payload (zmsg_t *zmsg);
 
 /* Get/set nodeid (request only)
  */

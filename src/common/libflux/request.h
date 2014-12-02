@@ -37,10 +37,11 @@ int flux_response_sendmsg (flux_t h, zmsg_t **zmsg);
  */
 zmsg_t *flux_response_recvmsg (flux_t h, bool nonblock);
 
-/* Give a response message back to the handle.  Responses put back in this
- * way are processed in FIFO order (via flux_response_recvmsg(), reactor
- * callbacks, or rpc calls)  before other incoming messages.  On success,
- * ownership of 'zmsg' is transferred to the handle.
+/* Put a response message in the handle's inbound message queue for processing
+ * in FIFO order, before other unprocessed messages.  The handle will become
+ * ready and the response will be returned by a call to flux_response_recvmsg()
+ * or similar.
+ * On success, ownership of 'zmsg' is transferred to the handle.
  * Returns 0 on success, or -1 on failure with errno set.
  */
 int flux_response_putmsg (flux_t h, zmsg_t **zmsg);
@@ -91,12 +92,16 @@ int flux_json_request_decode (zmsg_t *zmsg, json_object **in);
  */
 int flux_json_response_decode (zmsg_t *zmsg, json_object **out);
 
-/* FIXME:  rework?
+/* Decode response message with no payload.
+ * If there is a payload, fail with errno == EPROTO.
+ * If errnum is nonzero in response, fail with errno == errnum.
+ * Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_response_recv (flux_t h, json_object **respp, char **tagp, bool nb);
+int flux_response_decode (zmsg_t *zmsg);
 
-/* Deprecated interfaces.
- */
+/**
+ ** Deprecated interfaces.
+ **/
 
 int flux_respond (flux_t h, zmsg_t **request, json_object *response);
 int flux_respond_errnum (flux_t h, zmsg_t **request, int errnum);
@@ -107,6 +112,8 @@ int flux_rank_request_send (flux_t h, int rank,
 json_object *flux_rpc (flux_t h, json_object *in, const char *fmt, ...);
 json_object *flux_rank_rpc (flux_t h, int rank,
                             json_object *in, const char *fmt, ...);
+
+int flux_response_recv (flux_t h, json_object **respp, char **tagp, bool nb);
 
 #endif /* !_FLUX_CORE_REQUEST_H */
 

@@ -41,6 +41,9 @@ void test_null (flux_t h, uint32_t nodeid);
 void test_echo (flux_t h, uint32_t nodeid);
 void test_err (flux_t h, uint32_t nodeid);
 void test_src (flux_t h, uint32_t nodeid);
+void test_sink (flux_t h, uint32_t nodeid);
+void test_nsrc (flux_t h, uint32_t nodeid);
+void test_putmsg (flux_t h, uint32_t nodeid);
 
 typedef struct {
     const char *name;
@@ -48,10 +51,13 @@ typedef struct {
 } test_t;
 
 static test_t tests[] = {
-    { "null", &test_null },
-    { "echo", &test_echo },
-    { "err", &test_err},
-    { "src", &test_src},
+    { "null",   &test_null },
+    { "echo",   &test_echo },
+    { "err",    &test_err },
+    { "src",    &test_src },
+    { "sink",   &test_sink },
+    { "nsrc",   &test_nsrc },
+    { "putmsg", &test_putmsg },
 };
 
 test_t *test_lookup (const char *name)
@@ -73,7 +79,7 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr,
-"Usage: treq [--rank N] {null | echo | err | src}\n"
+"Usage: treq [--rank N] {null | echo | err | src | sink | nsrc | putmsg}\n"
 );
     exit (1);
 }
@@ -160,6 +166,91 @@ void test_src (flux_t h, uint32_t nodeid)
     Jput (out);
 }
 
+void test_sink (flux_t h, uint32_t nodeid)
+{
+    JSON in = Jnew();
+    Jadd_double (in, "pi", 3.14);
+    if (flux_json_rpc (h, nodeid, "req.sink", in, NULL) < 0)
+        err_exit ("%s", __FUNCTION__);
+    Jput (in);
+}
+
+void test_nsrc (flux_t h, uint32_t nodeid)
+{
+    const int count = 10000;
+    JSON in = Jnew ();
+    JSON out = NULL;
+    int i, seq;
+
+    Jadd_int (in, "count", count);
+    if (flux_json_request (h, nodeid, "req.nsrc", in) < 0)
+        err_exit ("%s", __FUNCTION__);
+
+    for (i = 0; i < count; i++) {
+        zmsg_t *zmsg = flux_response_recvmsg (h, false);
+        if (!zmsg)
+            err_exit ("%s", __FUNCTION__);
+        if (flux_json_response_decode (zmsg, &out) < 0)
+            msg_exit ("%s: decode %d", __FUNCTION__, i);
+        if (!Jget_int (out, "seq", &seq))
+            msg_exit ("%s: decode %d - no seq", __FUNCTION__, i);
+        if (seq != i)
+            msg_exit ("%s: decode %d - seq mismatch %d", __FUNCTION__, i, seq);
+        Jput (out);
+    }
+}
+
+/* This test is to make sure that deferred responses are handled in order.
+ * Arrange for module to source 10K sequenced responses.  Messages 5000-5499
+ * are "put back" on the handle using flux_response_putmsg().  We ensure that
+ * the 10K messages are nonetheless received in order.
+ */
+void test_putmsg (flux_t h, uint32_t nodeid)
+{
+    const int count = 10000;
+    const int defer_start = 5000;
+    const int defer_count = 500;
+    JSON in = Jnew ();
+    JSON out = NULL;
+    int seq, myseq = 0;
+    zlist_t *defer = zlist_new ();
+    bool popped = false;
+    zmsg_t *z;
+
+    if (!defer)
+        oom ();
+
+    Jadd_int (in, "count", count);
+    if (flux_json_request (h, nodeid, "req.nsrc", in) < 0)
+        err_exit ("%s", __FUNCTION__);
+    do {
+        zmsg_t *zmsg = flux_response_recvmsg (h, false);
+        if (!zmsg)
+            err_exit ("%s", __FUNCTION__);
+        if (flux_json_response_decode (zmsg, &out) < 0)
+            msg_exit ("%s: decode", __FUNCTION__);
+        if (!Jget_int (out, "seq", &seq))
+            msg_exit ("%s: decode - no seq", __FUNCTION__);
+        Jput (out);
+        if (seq >= defer_start && seq < defer_start + defer_count && !popped) {
+            if (zlist_append (defer, zmsg) < 0)
+                oom ();
+            if (seq == defer_start + defer_count - 1) {
+                while ((z = zlist_pop (defer))) {
+                    if (flux_response_putmsg (h, &z) < 0)
+                        err_exit ("%s: flux_response_putmsg", __FUNCTION__);
+                }
+                popped = true;
+            }
+            continue;
+        }
+        if (seq != myseq)
+            msg_exit ("%s: expected %d got %d", __FUNCTION__, myseq, seq);
+        myseq++;
+        zmsg_destroy (&zmsg);
+    } while (myseq < count);
+    zlist_destroy (&defer);
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

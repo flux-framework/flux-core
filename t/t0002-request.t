@@ -39,6 +39,18 @@ test_expect_success 'request: rpc returns expected json' '
 	${FLUX_BUILD_DIR}/src/test/request/treq src 
 '
 
+test_expect_success 'request: rpc accepts expected json' '
+	${FLUX_BUILD_DIR}/src/test/request/treq sink
+'
+
+test_expect_success 'request: 10K responses received in order' '
+	${FLUX_BUILD_DIR}/src/test/request/treq nsrc
+'
+
+test_expect_success 'request: 10K responses received in order, with deferrals' '
+	${FLUX_BUILD_DIR}/src/test/request/treq putmsg 
+'
+
 test_expect_success 'request: unloaded req module' '
 	flux module remove req
 '
