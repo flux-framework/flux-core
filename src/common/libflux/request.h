@@ -9,7 +9,7 @@
 #include "handle.h"
 
 /* Request and response messages are constructed according to Flux RFC 3.
- * https://github.com/garlick/rfc/blob/master/spec_3.adoc
+ * https://github.com/flux-framework/rfc/blob/master/spec_3.adoc
  * See also message.h.
  */
 
