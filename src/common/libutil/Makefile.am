@@ -39,7 +39,9 @@ libutil_la_SOURCES = \
 	nodeset.h \
 	shortjson.h \
 	readall.c \
-	readall.h
+	readall.h \
+	subprocess.c \
+	subprocess.h
 
 EXTRA_DIST = veb_mach.c
 
