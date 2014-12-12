@@ -46,7 +46,8 @@ libutil_la_SOURCES = \
 EXTRA_DIST = veb_mach.c
 
 TESTS = test_nodeset.t \
-	test_optparse.t
+	test_optparse.t \
+	test_subprocess.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -61,7 +62,8 @@ test_cppflags = \
 
 check_PROGRAMS = \
 	test_nodeset.t \
-	test_optparse.t
+	test_optparse.t \
+	test_subprocess.t
 
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
@@ -74,3 +76,7 @@ test_nodeset_t_LDADD = $(test_ldadd)
 test_optparse_t_SOURCES = optparse.c
 test_optparse_t_CPPFLAGS = $(test_cppflags)
 test_optparse_t_LDADD = $(test_ldadd)
+
+test_subprocess_t_SOURCES = test/subprocess.c
+test_subprocess_t_CPPFLAGS = $(test_cppflags)
+test_subprocess_t_LDADD = $(test_ldadd)
