@@ -2130,6 +2130,8 @@ static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
             rc = parent_send (ctx, zmsg);
     } else if (nodeid == ctx->rank) {
         rc = service_send (ctx, zmsg, lasthop, hopcount);
+    } else if (nodeid == 0) {
+        rc = parent_send (ctx, zmsg);
     } else {
         rc = rank_send (ctx, zmsg);
     }
