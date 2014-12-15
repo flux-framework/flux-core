@@ -51,6 +51,27 @@ test_expect_success 'request: 10K responses received in order, with deferrals' '
 	${FLUX_BUILD_DIR}/src/test/request/treq putmsg 
 '
 
+test_expect_success 'request: proxy ping 0 from 1 is one hop' '
+	${FLUX_BUILD_DIR}/src/test/request/treq --rank 1 pingzero | grep hops=1
+'
+
+test_expect_success 'request: proxy ping 0 from 0 is zero hops' '
+	${FLUX_BUILD_DIR}/src/test/request/treq --rank 0 pingzero | grep hops=0
+'
+
+test_expect_success 'request: proxy ping 1 from 1 is zero hops' '
+	${FLUX_BUILD_DIR}/src/test/request/treq --rank 1 pingself | grep hops=0
+'
+
+test_expect_success 'request: proxy ping any from 1 is one hop' '
+	${FLUX_BUILD_DIR}/src/test/request/treq --rank 1 pingany | grep hops=1
+'
+
+# FIXME: test doesn't handle this and leaves RPC unanswered
+#test_expect_success 'request: proxy ping any from 0 is ENOSYS' '
+#	${FLUX_BUILD_DIR}/src/test/request/treq --rank 0 pingany
+#'
+
 test_expect_success 'request: unloaded req module' '
 	flux module remove req
 '
