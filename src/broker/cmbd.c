@@ -2070,8 +2070,13 @@ unreach:
 
 /* Try to dispatch message to a local service: built-in broker service,
  * or loaded comms module.
+ * If 'loopback_ok' is true, allow a service other than 'cmb' to loop a
+ * request message back to itself on the same rank.  Otherwise we return
+ * ENOSYS in this case as an indication to caller that request should be
+ * routed to parent.
  */
-static int service_send (ctx_t *ctx, zmsg_t **zmsg, char *lasthop, int hopcount)
+static int service_send (ctx_t *ctx, zmsg_t **zmsg, char *lasthop, int hopcount,
+                         bool loopback_ok)
 {
     char *service = flux_msg_tag_short (*zmsg);
     int rc = -1;
@@ -2082,7 +2087,7 @@ static int service_send (ctx_t *ctx, zmsg_t **zmsg, char *lasthop, int hopcount)
         goto done;
     }
     if (!strcmp (service, "cmb")) {
-        if (hopcount == 0) { /* loopback */
+        if (hopcount == 0) { /* no cmb-cmb loopback (ignore loopback_ok) */
             errno = ENOSYS;
             goto done;
         }
@@ -2092,9 +2097,11 @@ static int service_send (ctx_t *ctx, zmsg_t **zmsg, char *lasthop, int hopcount)
             errno = ENOSYS;
             goto done;
         }
-        if (lasthop && !strcmp (lasthop, plugin_uuid (mod->p))) { /* loopback */
-            errno = ENOSYS;
-            goto done;
+        if (!loopback_ok) {
+            if (lasthop && !strcmp (lasthop, plugin_uuid (mod->p))) {
+                errno = ENOSYS;
+                goto done;
+            }
         }
         rc = zmsg_send (zmsg, plugin_sock (mod->p));
     }
@@ -2125,11 +2132,13 @@ static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
     if (hopcount > 0 && lasthop)
         peer_update (ctx, lasthop);
     if (nodeid == FLUX_NODEID_ANY) {
-        rc = service_send (ctx, zmsg, lasthop, hopcount);
+        rc = service_send (ctx, zmsg, lasthop, hopcount, false);
         if (rc < 0 && errno == ENOSYS)
             rc = parent_send (ctx, zmsg);
     } else if (nodeid == ctx->rank) {
-        rc = service_send (ctx, zmsg, lasthop, hopcount);
+        rc = service_send (ctx, zmsg, lasthop, hopcount, true);
+    } else if (nodeid == 0) {
+        rc = parent_send (ctx, zmsg);
     } else {
         rc = rank_send (ctx, zmsg);
     }

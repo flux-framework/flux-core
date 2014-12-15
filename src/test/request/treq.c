@@ -44,6 +44,9 @@ void test_src (flux_t h, uint32_t nodeid);
 void test_sink (flux_t h, uint32_t nodeid);
 void test_nsrc (flux_t h, uint32_t nodeid);
 void test_putmsg (flux_t h, uint32_t nodeid);
+void test_pingzero (flux_t h, uint32_t nodeid);
+void test_pingself (flux_t h, uint32_t nodeid);
+void test_pingany (flux_t h, uint32_t nodeid);
 
 typedef struct {
     const char *name;
@@ -58,6 +61,9 @@ static test_t tests[] = {
     { "sink",   &test_sink },
     { "nsrc",   &test_nsrc },
     { "putmsg", &test_putmsg },
+    { "pingzero", &test_pingzero},
+    { "pingself", &test_pingself},
+    { "pingany", &test_pingany},
 };
 
 test_t *test_lookup (const char *name)
@@ -79,7 +85,7 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr,
-"Usage: treq [--rank N] {null | echo | err | src | sink | nsrc | putmsg}\n"
+"Usage: treq [--rank N] {null | echo | err | src | sink | nsrc | putmsg | pingzero | pingself | pingany}\n"
 );
     exit (1);
 }
@@ -250,6 +256,51 @@ void test_putmsg (flux_t h, uint32_t nodeid)
         zmsg_destroy (&zmsg);
     } while (myseq < count);
     zlist_destroy (&defer);
+}
+
+static int count_hops (const char *s)
+{
+    const char *p = s;
+    int count = 0;
+    if (strlen (p) > 0)
+        count++;
+    while ((p = strchr (p, '!'))) {
+        p++;
+        count++;
+    }
+    return count;
+}
+
+static void xping (flux_t h, uint32_t nodeid, uint32_t xnodeid, const char *svc)
+{
+    JSON in = Jnew ();
+    JSON out = NULL;
+    const char *route;
+
+    Jadd_int (in, "rank", xnodeid);
+    Jadd_str (in, "service", svc);
+    if (flux_json_rpc (h, nodeid, "req.xping", in, &out) < 0)
+        err_exit ("req.xping");
+    if (!Jget_str (out, "route", &route))
+        errn_exit (EPROTO, "req.xping");
+    printf ("hops=%d\n", count_hops (route));
+    Jput (out);
+    Jput (in);
+}
+
+void test_pingzero (flux_t h, uint32_t nodeid)
+{
+    xping (h, nodeid, 0, "req.ping");
+}
+
+void test_pingany (flux_t h, uint32_t nodeid)
+{
+    xping (h, nodeid, FLUX_NODEID_ANY, "req.ping");
+}
+
+void test_pingself (flux_t h, uint32_t nodeid)
+{
+    xping (h, nodeid, nodeid, "req.ping");
 }
 
 /*

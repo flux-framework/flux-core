@@ -9,10 +9,21 @@
 
 typedef struct {
     flux_t h;
+    zhash_t *ping_requests;
+    int ping_seq;
 } ctx_t;
 
 static void freectx (ctx_t *ctx)
 {
+    zlist_t *keys = zhash_keys (ctx->ping_requests);
+    char *key = zlist_first (keys);
+    while (key) {
+        zmsg_t *zmsg = zhash_lookup (ctx->ping_requests, key);
+        zmsg_destroy (&zmsg);
+        key = zlist_next (keys);
+    }
+    zlist_destroy (&keys);
+    zhash_destroy (&ctx->ping_requests);
     free (ctx);
 }
 
@@ -23,6 +34,8 @@ static ctx_t *getctx (flux_t h)
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
         ctx->h = h;
+        if (!(ctx->ping_requests = zhash_new ()))
+            oom ();
         flux_aux_set (h, "req", ctx, (FluxFreeFn)freectx);
     }
     return ctx;
@@ -137,6 +150,96 @@ done:
     return 0;
 }
 
+/* Proxy ping.
+ */
+static int xping_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    int rank, seq = ctx->ping_seq++;
+    const char *service;
+    char *hashkey = NULL;
+    JSON in = Jnew ();
+    JSON o = NULL;
+
+    if (flux_json_request_decode (*zmsg, &o) < 0) {
+        if (flux_err_respond (h, errno, zmsg) < 0)
+            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
+                      strerror (errno));
+        goto done;
+    }
+    if (!Jget_int (o, "rank", &rank) || !Jget_str (o, "service", &service)) {
+        if (flux_err_respond (h, EPROTO, zmsg) < 0)
+            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
+                      strerror (errno));
+        goto done;
+    }
+    flux_log (h, LOG_DEBUG, "Rxping rank=%d service=%s", rank, service);
+
+    Jadd_int (in, "seq", seq);
+    flux_log (h, LOG_DEBUG, "Tping seq=%d %d!%s", seq, rank, service);
+    if (flux_json_request (h, rank, service, in) < 0) {
+        if (flux_err_respond (h, errno, zmsg) < 0)
+            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
+                      strerror (errno));
+        goto done;
+    }
+    hashkey = xasprintf ("%d", seq);
+    zhash_update (ctx->ping_requests, hashkey, *zmsg);
+    *zmsg = NULL;
+done:
+    Jput (o);
+    Jput (in);
+    if (hashkey)
+        free (hashkey);
+    return 0;
+}
+
+/* Handle ping response for proxy ping.
+ */
+static int ping_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    JSON o = NULL;
+    JSON out = Jnew ();;
+    int seq;
+    const char *route;
+    zmsg_t *zreq = NULL;
+    char *hashkey = NULL;
+
+    if (flux_json_response_decode (*zmsg, &o) < 0) {
+        flux_log (h, LOG_ERR, "%s: flux_json_response_decode: %s",
+                  __FUNCTION__, strerror (errno));
+        goto done;
+    }
+    if (!Jget_int (o, "seq", &seq) || !Jget_str (o, "route", &route)) {
+        flux_log (h, LOG_ERR, "%s: protocol error", __FUNCTION__);
+        goto done;
+    }
+    flux_log (h, LOG_DEBUG, "Rping seq=%d %s", seq, route);
+    hashkey = xasprintf ("%d", seq);
+    if (!(zreq = zhash_lookup (ctx->ping_requests, hashkey))) {
+        flux_log (h, LOG_ERR, "%s: unsolicited ping response: %s",
+                  __FUNCTION__, hashkey);
+        goto done;
+    }
+    zhash_delete (ctx->ping_requests, hashkey);
+    flux_log (h, LOG_DEBUG, "Txping seq=%d %s", seq, route);
+    Jadd_str (out, "route", route);
+    if (flux_json_respond (h, out, &zreq) < 0) {
+        flux_log (h, LOG_ERR, "%s: flux_json_respond: %s",
+                  __FUNCTION__, strerror (errno));
+        goto done;
+    }
+done:
+    if (hashkey)
+        free (hashkey);
+    Jput (o);
+    Jput (out);
+    //zmsg_destroy (zmsg);
+    zmsg_destroy (&zreq);
+    return 0;
+}
+
 /* Handle the simplest possible request.
  * Verify that everything is as expected; log it and stop the reactor if not.
  */
@@ -211,6 +314,8 @@ static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST, "req.src",               src_request_cb },
     { FLUX_MSGTYPE_REQUEST, "req.nsrc",              nsrc_request_cb },
     { FLUX_MSGTYPE_REQUEST, "req.sink",              sink_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "req.xping",             xping_request_cb },
+    { FLUX_MSGTYPE_RESPONSE, "req.ping",             ping_response_cb },
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
