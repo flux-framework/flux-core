@@ -17,7 +17,7 @@ typedef struct flux_mrpc_struct *flux_mrpc_t;
  *                                      (do some work)
  *                                      flux_mrpc_put_outarg()
  *   (returns) <----------------------- flux_mrpc_respond()
- * - flux_mrpc_get_outarg() ...         flux_mrpc_destroy() 
+ * - flux_mrpc_get_outarg() ...         flux_mrpc_destroy()
  * - flux_mrpc_destroy()              }
  */
 

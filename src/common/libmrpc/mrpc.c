@@ -74,22 +74,6 @@ struct flux_mrpc_struct {
     bool client;
 };
 
-static bool dest_valid (flux_mrpc_t f, int maxid)
-{
-    uint32_t r;
-    int count = 0;
-
-    nodeset_itr_rewind (f->ns_itr);
-    while ((r = nodeset_next (f->ns_itr)) != NODESET_EOF) {
-        count++;
-        if (r > maxid)
-            break;
-    }
-    if (count < 1 || r != NODESET_EOF)
-        return false;
-    return true;
-}
-
 flux_mrpc_t flux_mrpc_create (flux_t h, const char *dest)
 {
     flux_mrpc_t f = xzmalloc (sizeof (*f));
@@ -99,8 +83,8 @@ flux_mrpc_t flux_mrpc_create (flux_t h, const char *dest)
     f->client = true;
     f->sender = flux_rank (h);
     f->dest = xstrdup (dest);
-    if (!(f->ns = nodeset_new_str (dest))
-        || !(f->ns_itr = nodeset_itr_new (f->ns)) || !dest_valid (f, maxid)) {
+    if (!(f->ns = nodeset_new_str (dest)) || nodeset_count (f->ns) == 0
+                                          || nodeset_max (f->ns) > maxid) {
         errno = EINVAL;
         goto error;
     }
@@ -192,13 +176,23 @@ done:
 
 int flux_mrpc_next_outarg (flux_mrpc_t f)
 {
-    uint32_t r = nodeset_next (f->ns_itr);
-    return (r == NODESET_EOF ? -1 : r);
+    uint32_t r = -1;
+
+    if (!f->ns_itr)
+        f->ns_itr = nodeset_itr_new (f->ns);
+    if (f->ns_itr)
+        r = nodeset_next (f->ns_itr);
+    if (r == NODESET_EOF)
+        r = -1;
+    return r;
 }
 
 void flux_mrpc_rewind_outarg (flux_mrpc_t f)
 {
-    nodeset_itr_rewind (f->ns_itr);
+    if (!f->ns_itr)
+        f->ns_itr = nodeset_itr_new (f->ns);
+    else
+        nodeset_itr_rewind (f->ns_itr);
 }
 
 int flux_mrpc (flux_mrpc_t f, const char *fmt, ...)
