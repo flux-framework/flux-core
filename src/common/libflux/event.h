@@ -7,6 +7,12 @@
 
 #include "handle.h"
 
+/* Decode event message, setting 'in' to JSON payload.
+ * If payload is missing, fail with errno == EPROTO.
+ * Returns 0 on success, or -1 on failure with errno set.
+ */
+int flux_json_event_decode (zmsg_t *zmsg, json_object **in);
+
 /* Send/receive events
  * - an event consists of a tag frame and an optional JSON frame
  * - flux_event_sendmsg() frees '*zmsg' and sets it to NULL on success.
