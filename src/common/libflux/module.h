@@ -1,44 +1,64 @@
 #ifndef _FLUX_CORE_MODULE_H
 #define _FLUX_CORE_MODULE_H
 
+/* Module management messages are constructed according to Flux RFC 5.
+ * https://github.com/flux-framework/rfc/blob/master/spec_5.adoc
+ */
+
+#include <stdint.h>
 #include <json.h>
 #include <czmq.h>
 
 #include "handle.h"
 
-/* Flags for module load/unload
- */
-enum {
-    FLUX_MOD_FLAGS_MANAGED = 1, /* XXX used by modctl, may go away soon */
-};
+/**
+ ** High level module management functions
+ **/
 
-/* Send a request to load/unload a module (use rank = -1 for local).
- * These go to the broker unless the module name is hierarchical, e.g.
- * flux_insmod() of kvs would generate a "cmb.insmod" message, while
- * flux_rmmod() of sched.backfill would generate a "sched.rmmod" message.
+/* lsmod callback - return 0 on success, -1 to stop iteration and
+ * have flux_lsmod() return error.
+ * Note: 'nodeset' will be NULL when called from flux_lsmod().
  */
-int flux_rmmod (flux_t h, int rank, const char *name, int flags);
-int flux_insmod (flux_t h, int rank, const char *path, int flags,
-                 json_object *args);
+typedef int (flux_lsmod_f)(const char *name, int size, const char *digest,
+                           int idle, const char *nodeset, void *arg);
 
-/* While the target of an insmod/rmmod message can be determined by
- * parsing the module name, lsmod requires it to be explicity specified
- * in 'target'.
+/* Send a request to 'service' to list loaded modules (null for comms mods).
+ * On success, the 'cb' function is called for each module with 'arg'.
+ * Returns 0 on success, -1 with errno set on failure.
  */
-json_object *flux_lsmod (flux_t h, int rank, const char *target);
+int flux_lsmod (flux_t h, uint32_t nodeid, const char *service,
+                flux_lsmod_f cb, void *arg);
 
-/* All flux modules must define the "mod_name" symbol with this macro.
+/* Send a request to remove a module 'name'.
+ * The request is sent to a service determined by parsing 'name'.
+ * Returns 0 on success, -1 with errno set on failure.
  */
+int flux_rmmod (flux_t h, uint32_t nodeid, const char *name);
+
+/* Send a request to insert a module 'path'.
+ * The request is sent to a service determined by parsing the module's name,
+ * as defined by its symbol 'mod_name' (found by opening 'path').  Pass args
+ * described by 'argc' and 'argv' to the module's 'mod_main' function.
+ * Returns 0 on success, -1 with errno set on failure.
+ */
+int flux_insmod (flux_t h, uint32_t nodeid, const char *path,
+                int argc, char **argv);
+
+
+/**
+ ** Mandatory symbols for modules
+ **/
+
 #define MOD_NAME(x) const char *mod_name = x
+typedef int (mod_main_f)(flux_t h, int argc, char *argv[]);
 
-/* Comms modules (loaded by the broker) must define mod_main().
- * (Other types of modules will have their own requirements).
- */
-typedef int (mod_main_f)(flux_t h, zhash_t *args);
-extern mod_main_f mod_main;
 
-/* Read 'mod_name' from the specified module filename.
- * Caller must free the returned name.
+/**
+ ** Convenience functions for services implementing module extensions
+ **/
+
+/* Read the value of 'mod_name' from the specified module filename.
+ * Caller must free the returned name.  Returns NULL on failure.
  */
 char *flux_modname (const char *filename);
 
@@ -48,6 +68,41 @@ char *flux_modname (const char *filename);
  */
 char *flux_modfind (const char *searchpath, const char *modname);
 
+/* Codecs for module control payloads
+ */
+json_object *flux_lsmod_json_create (void);
+int flux_lsmod_json_append (json_object *a, const char *name, int size,
+                            const char *digest, int idle);
+int flux_lsmod_json_decode (json_object *a, int *len);
+int flux_lsmod_json_decode_nth (json_object *a, int n, const char **name,
+                                int *size, const char **digest, int *idle);
+
+json_object *flux_rmmod_json_encode (const char *name);
+int flux_rmmod_json_decode (json_object *o, char **name);
+
+json_object *flux_insmod_json_encode (const char *path,
+                                      int argc, char **argv);
+int flux_insmod_json_decode (json_object *o, char **path,
+                             int *argc, char ***argv);
+
+/* Decode an insmod request message.
+ * The 'path' returned on success must be freed by the caller.
+ * The 'argv' returned on success must be freed, including 'argc' elements
+ * Returns 0 on success, -1 with errno set on failure.
+ */
+int flux_insmod_request_decode (zmsg_t *zmsg, char **path,
+                                int *argc, char ***argv);
+
+/* Decode an rmmod request message.
+ * The 'name' returned on success must be freed by the caller.
+ * Returns 0 on success, -1 with errno set on failure.
+ */
+int flux_rmmod_request_decode (zmsg_t *zmsg, char **name);
+
+/* Decode an lsmod request message.
+ * Returns 0 on success, -1 with errno set on failure.
+ */
+int flux_lsmod_request_decode (zmsg_t *zmsg);
 
 #endif /* !FLUX_CORE_MODULE_H */
 

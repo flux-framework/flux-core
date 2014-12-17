@@ -37,6 +37,8 @@
 #include <ctype.h>
 #include <flux/core.h>
 
+#if 0
+
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
@@ -431,8 +433,11 @@ static msghandler_t htab[] = {
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
+#endif
+
 int mod_main (flux_t h, zhash_t *args)
 {
+#if 0
     ctx_t *ctx = getctx (h);
 
     if (kvs_watch_int (h, "conf.modctl.seq", conf_cb, ctx) < 0) {
@@ -443,6 +448,7 @@ int mod_main (flux_t h, zhash_t *args)
         flux_log (h, LOG_ERR, "flux_msghandler_add: %s", strerror (errno));
         return -1;
     }
+#endif
     if (flux_reactor_start (h) < 0) {
         flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
         return -1;

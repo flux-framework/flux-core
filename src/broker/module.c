@@ -53,6 +53,11 @@
 
 #include "module.h"
 
+/* While transitioning to argc, argv - style args per RFC 5,
+ * we have our own mod_main prototype.
+ */
+typedef int (mod_main_comms_f)(flux_t h, zhash_t *args);
+
 
 typedef struct {
     int request_tx;
@@ -77,7 +82,7 @@ struct plugin_ctx_struct {
     char *svc_uri;
     zuuid_t *uuid;
     pthread_t t;
-    mod_main_f *main;
+    mod_main_comms_f *main;
     plugin_stats_t stats;
     zloop_t *zloop;
     dq_t *dq;
@@ -679,7 +684,7 @@ plugin_ctx_t plugin_create (flux_t h, const char *path, zhash_t *args)
     plugin_ctx_t p;
     void *dso;
     const char **mod_namep;
-    mod_main_f *mod_main;
+    mod_main_comms_f *mod_main;
     zfile_t *zf;
 
     dlerror ();
