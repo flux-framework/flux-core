@@ -6,8 +6,10 @@ TESTS = \
 	t0000-sharness.t \
 	t0001-basic.t \
 	t0002-request.t \
+	t0003-module.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
+	t1002-modctl.t \
 	t2000-wreck.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \

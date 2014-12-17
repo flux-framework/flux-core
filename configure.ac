@@ -138,6 +138,7 @@ AC_CONFIG_FILES( \
   src/test/Makefile \
   src/test/kap/Makefile \
   src/test/request/Makefile \
+  src/test/module/Makefile \
   etc/Makefile \
   etc/flux-core.pc \
   etc/Makefile.inc \
