@@ -12,7 +12,6 @@ AM_CPPFLAGS = \
 
 fluxcmd_ldadd = \
 	$(top_builddir)/src/modules/live/liblive.la \
-	$(top_builddir)/src/modules/modctl/libmodctl.la \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(top_builddir)/src/modules/api/libapi.la \
 	$(top_builddir)/src/common/libflux/libflux.la \
@@ -58,5 +57,10 @@ flux_zio_LDADD = \
 flux_mping_LDADD = \
 	$(top_builddir)/src/common/libmrpc/libmrpc.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
+	$(fluxcmd_ldadd) \
+	$(LIBUTIL)
+flux_module_LDADD = \
+	$(top_builddir)/src/modules/modctl/libmodctl.la \
+	$(top_builddir)/src/common/libmrpc/libmrpc.la \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)

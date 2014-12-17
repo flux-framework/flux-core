@@ -31,27 +31,32 @@
 #include <json.h>
 #include <flux/core.h>
 
+#include "src/modules/modctl/modctl.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/readall.h"
 
+const int max_idle = 99;
 
-#define OPTIONS "+hr:"
+
+#define OPTIONS "+hr:an:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"rank",       required_argument,  0, 'r'},
+    {"all",        no_argument,        0, 'a'},
+    {"nodeset",    required_argument,  0, 'n'},
     { 0, 0, 0, 0 },
 };
 
-void mod_lsmod (flux_t h, uint32_t nodeid, int ac, char **av);
-void mod_rmmod (flux_t h, uint32_t nodeid, int ac, char **av);
-void mod_insmod (flux_t h, uint32_t nodeid, int ac, char **av);
+void mod_lsmod (flux_t h, uint32_t nodeid, const char *ns, int ac, char **av);
+void mod_rmmod (flux_t h, uint32_t nodeid, const char *ns, int ac, char **av);
+void mod_insmod (flux_t h, uint32_t nodeid, const char *ns, int ac, char **av);
 
 typedef struct {
     const char *name;
-    void (*fun)(flux_t h, uint32_t nodeid, int ac, char **av);
+    void (*fun)(flux_t h, uint32_t nodeid, const char *ns, int ac, char **av);
 } func_t;
 
 static func_t funcs[] = {
@@ -76,7 +81,9 @@ void usage (void)
 "       flux-module [OPTIONS] remove module\n"
 "       flux-module [OPTIONS] load module [arg ...]\n"
 "where OPTIONS are:\n"
-"       -r,--rank N    specify nodeid to send request\n"
+"       -r,--rank N      specify nodeid to send request\n"
+"       -n,--nodeset NS  use modctl to distribute request to NS\n"
+"       -a,--all         use modctl to distribute request to entire session\n"
 );
     exit (1);
 }
@@ -88,6 +95,8 @@ int main (int argc, char *argv[])
     char *cmd;
     func_t *f;
     uint32_t nodeid = FLUX_NODEID_ANY;
+    char *nodeset = NULL;
+    bool aopt = false;
 
     log_init ("flux-module");
 
@@ -98,6 +107,12 @@ int main (int argc, char *argv[])
                 break;
             case 'r': /* --rank N */
                 nodeid = strtoul (optarg, NULL, 10);
+                break;
+            case 'a': /* --all */
+                aopt = true;
+                break;
+            case 'n': /* --nodeset NS */
+                nodeset = xstrdup (optarg);
                 break;
             default:
                 usage ();
@@ -112,14 +127,20 @@ int main (int argc, char *argv[])
 
     if (!(h = flux_api_open ()))
         err_exit ("flux_api_open");
-    f->fun (h, nodeid, argc - optind, argv + optind);
+    if (!nodeset && aopt) {
+        int size = flux_size (h);
+        nodeset = size > 1 ? xasprintf ("[0-%d]", size - 1) : xstrdup ("0");
+    }
+    f->fun (h, nodeid, nodeset, argc - optind, argv + optind);
     flux_api_close (h);
 
+    if (nodeset)
+        free (nodeset);
     log_fini ();
     return 0;
 }
 
-void mod_insmod (flux_t h, uint32_t nodeid, int ac, char **av)
+void mod_insmod (flux_t h, uint32_t nodeid, const char *ns, int ac, char **av)
 {
     char *modpath = NULL;
     char *modname = NULL;
@@ -138,20 +159,33 @@ void mod_insmod (flux_t h, uint32_t nodeid, int ac, char **av)
         if (!(modpath = flux_modfind (searchpath, modname)))
             msg_exit ("%s: not found in module search path", modname);
     }
-    if (flux_insmod (h, nodeid, modpath, ac - 1, av + 1) < 0)
-        err_exit ("%s", av[0]);
+    if (ns) {
+        if (flux_modctl_load (h, ns, modpath, ac - 1, av + 1) < 0)
+            err_exit ("%s", av[0]);
+    } else {
+        if (flux_insmod (h, nodeid, modpath, ac - 1, av + 1) < 0)
+            err_exit ("%s", av[0]);
+    }
     if (modpath)
         free (modpath);
     if (modname)
         free (modname);
 }
 
-void mod_rmmod (flux_t h, uint32_t nodeid, int ac, char **av)
+void mod_rmmod (flux_t h, uint32_t nodeid, const char *ns, int ac, char **av)
 {
+    char *modname = NULL;
+
     if (ac != 1)
         usage ();
-    if (flux_rmmod (h, nodeid, av[0]) < 0)
-        err_exit ("%s", av[0]);
+    modname = av[0];
+    if (ns) {
+        if (flux_modctl_unload (h, ns, modname) < 0)
+            err_exit ("modctl_unload %s", modname);
+    } else {
+        if (flux_rmmod (h, nodeid, modname) < 0)
+            err_exit ("%s", av[0]);
+    }
 }
 
 const char *snip (const char *s, int n)
@@ -179,7 +213,7 @@ static int lsmod_cb (const char *name, int size, const char *digest, int idle,
     return 0;
 }
 
-void mod_lsmod (flux_t h, uint32_t nodeid, int ac, char **av)
+void mod_lsmod (flux_t h, uint32_t nodeid, const char *ns, int ac, char **av)
 {
     char *svc = "cmb";
 
@@ -189,8 +223,13 @@ void mod_lsmod (flux_t h, uint32_t nodeid, int ac, char **av)
         svc = av[0];
     printf ("%-20s %6s %7s %4s %s\n",
             "Module", "Size", "Digest", "Idle", "Nodeset");
-    if (flux_lsmod (h, nodeid, svc, lsmod_cb, NULL) < 0)
-        err_exit ("%s", svc);
+    if (ns) {
+        if (flux_modctl_list (h, svc, ns, lsmod_cb, NULL) < 0)
+            err_exit ("modctl_list");
+    } else {
+        if (flux_lsmod (h, nodeid, svc, lsmod_cb, NULL) < 0)
+            err_exit ("%s", svc);
+    }
 }
 
 

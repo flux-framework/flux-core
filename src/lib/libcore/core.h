@@ -34,7 +34,6 @@
 #include "core/api.h"
 #include "core/kvs.h"
 #include "core/live.h"
-#include "core/modctl.h"
 #include "core/barrier.h"
 
 #endif /* !_FLUX_CORE_H */
