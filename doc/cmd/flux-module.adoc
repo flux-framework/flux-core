@@ -1,0 +1,89 @@
+FLUX-MODULE(1)
+==============
+:doctype: manpage
+
+
+NAME
+----
+flux-module - manage Flux extension modules
+
+
+SYNOPSIS
+--------
+*flux* *module* ['OPTIONS'] 'COMMAND' ['COMMAND-OPTIONS']
+
+
+DESCRIPTION
+-----------
+flux-module(1) manages dynamically loadable Flux modules.
+It can load/remove/list modules for the cmbd(1), and for other
+Flux services that support dynamic module extensions.
+
+Operating in conjunction with the 'modctl' comms module, flux-module(1)
+performs module operations in parallel across a comms session,
+targeting all or a subset of session ranks according to OPTIONS.
+
+All Flux modules define the following global symbols:
+
+*const char *mod_name;*::
+A null-terminated string defining the module name.
+Module names are words delimited by periods, with the service that
+will load the module indicated by the words that prefix the final one.
+If there is no prefix, the module is loaded by cmbd(1).
+
+*int mod_main (void *context, int argc, char **argv);*::
+An entry function.
+
+
+OPTIONS
+-------
+*-r, --rank*='N'::
+Apply CMD to the specified rank.
+The default is the "local" rank, as determined by FLUX_TMPDIR.
+
+*-a, --all*::
+Apply CMD to all ranks.
+
+*-n, --nodeset*='NODESET'::
+Apply CMD to the specified nodeset.
+
+COMMANDS
+--------
+
+*load* 'name' ['arguments']::
+Load module 'name'.   If 'name' includes a slash '/' character,
+it is interpreted as a file path, and the module name is then determined
+by reading the 'mod_name' symbol.  Otherwise, FLUX_MODPATH is searched
+for a module with 'mod_name' equal to 'name'.  The service that will
+load the module is inferred from the module name, as described above.
+When the load command completes successfully, the new module is ready to
+accept messages on all targeted ranks.
+
+*remove* 'name'::
+Remove module 'name'.  The service that will unload the module is
+inferred from the name specified on the command line.
+
+*list* ['service']::
+List modules loaded by 'service', or the broker if unspecified.
+Modules of the same name but different SHA1 digests are listed separately.
+For the 'cmb' service, idle times are reported in heartbeats, and are
+reset when the module sends a request or response message.
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+--------
+syslog(3)
