@@ -10,7 +10,7 @@ flux-module - manage Flux extension modules
 
 SYNOPSIS
 --------
-*flux* *module* ['OPTIONS'] 'COMMAND' ['COMMAND-OPTIONS']
+*flux* *module* 'COMMAND' ['OPTIONS']
 
 
 DESCRIPTION
@@ -19,10 +19,71 @@ flux-module(1) manages dynamically loadable Flux modules.
 It can load/remove/list modules for the cmbd(1), and for other
 Flux services that support dynamic module extensions.
 
-Operating in conjunction with the 'modctl' comms module, flux-module(1)
-performs module operations in parallel across a comms session,
-targeting all or a subset of session ranks according to OPTIONS.
+When operating in conjunction with the 'modctl' comms module,
+flux-module(1) performs module operations in parallel across a
+comms session, targeting all or a subset of session ranks
+according to OPTIONS.
 
+
+COMMANDS
+--------
+
+*load* ['OPTIONS'] 'name' ['module-arguments' ...]::
+Load module 'name'.   If 'name' includes a slash '/' character,
+it is interpreted as a file path, and the module name is then determined
+by reading the *mod_name* symbol.  Otherwise, FLUX_MODPATH is searched
+for a module with *mod_name* equal to 'name'.  The service that will
+load the module is inferred from the module name, as described in
+*MODULE SYMBOLS* below.  When the load command completes successfully,
+the new module is ready to accept messages on all targeted ranks.
+
+*remove* ['OPTIONS'] 'name'::
+Remove module 'name'.  The service that will unload the module is
+inferred from the name specified on the command line.
+
+*list* ['OPTIONS'] ['service']::
+List modules loaded by 'service', or by cmbd(1) if 'service' is unspecified.
+
+
+OPTIONS
+-------
+*-r, --rank*=['all'|'nodeset']::
+Specify which ranks to apply the command to.
+
+*-d, --direct*::
+Bypass 'modctl' and contact 'service' directly, iterating over multiple
+ranks serially if specified.
+
+
+LIST OUTPUT
+-----------
+
+The 'list' command displays one line for each unique (as determined by
+SHA1 hash) module loaded by a service.
+
+*Module*::
+The value of the *mod_name* symbol for this module.
+
+*Size*::
+The size in bytes of the module .so file.
+
+*Digest*::
+The last 7 characters of the SHA1 digest of the contents of
+the module .so file.
+
+*Idle*::
+Idle times are defined for cmbd(1) comms modules as the number of
+heartbeats since the module last sent a request or response message.
+The idle time may be defined differently for other services, or have no
+meaning.  When a set of results from multiple ranks is reduced to one
+line, the lowest idle time in the set is reported.
+
+*Nodeset*::
+The set of ranks that this line applies to.
+
+
+MODULE SYMBOLS
+--------------
 All Flux modules define the following global symbols:
 
 *const char *mod_name;*::
@@ -34,40 +95,6 @@ If there is no prefix, the module is loaded by cmbd(1).
 *int mod_main (void *context, int argc, char **argv);*::
 An entry function.
 
-
-OPTIONS
--------
-*-r, --rank*='N'::
-Apply CMD to the specified rank.
-The default is the "local" rank, as determined by FLUX_TMPDIR.
-
-*-a, --all*::
-Apply CMD to all ranks.
-
-*-n, --nodeset*='NODESET'::
-Apply CMD to the specified nodeset.
-
-COMMANDS
---------
-
-*load* 'name' ['arguments']::
-Load module 'name'.   If 'name' includes a slash '/' character,
-it is interpreted as a file path, and the module name is then determined
-by reading the 'mod_name' symbol.  Otherwise, FLUX_MODPATH is searched
-for a module with 'mod_name' equal to 'name'.  The service that will
-load the module is inferred from the module name, as described above.
-When the load command completes successfully, the new module is ready to
-accept messages on all targeted ranks.
-
-*remove* 'name'::
-Remove module 'name'.  The service that will unload the module is
-inferred from the name specified on the command line.
-
-*list* ['service']::
-List modules loaded by 'service', or the broker if unspecified.
-Modules of the same name but different SHA1 digests are listed separately.
-For the 'cmb' service, idle times are reported in heartbeats, and are
-reset when the module sends a request or response message.
 
 AUTHOR
 ------

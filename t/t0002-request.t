@@ -11,13 +11,14 @@ Verify basic request/response/rpc handling.
 test_under_flux 2
 
 test_expect_success 'request: load req module on rank 0' '
-	flux module load ${FLUX_BUILD_DIR}/src/test/request/.libs/req.so
+	flux module load -d --rank=0 \
+		${FLUX_BUILD_DIR}/src/test/request/.libs/req.so
 '
 
 # FIXME: uses rank-addressed requests which we test below
 test_expect_success 'request: load req module on rank 1' '
-	flux module --rank 1 \
-		load ${FLUX_BUILD_DIR}/src/test/request/.libs/req.so
+	flux module load -d --rank=1 \
+		${FLUX_BUILD_DIR}/src/test/request/.libs/req.so
 '
 
 test_expect_success 'request: simple rpc with no payload' '
@@ -78,11 +79,11 @@ test_expect_success 'request: proxy ping any from 1 is one hop' '
 #'
 
 test_expect_success 'request: unloaded req module on rank 1' '
-	flux module --rank 1 remove req
+	flux module remove -d --rank=1 req
 '
 
 test_expect_success 'request: unloaded req module on rank 0' '
-	flux module remove req
+	flux module remove -d --rank=0 req
 '
 
 test_done
