@@ -134,3 +134,9 @@ uri
 usefile
 secdir
 boolean
+argc
+argv
+const
+modctl
+MODPATH
+SHA

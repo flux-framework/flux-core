@@ -29,91 +29,136 @@
 
 #include "module.h"
 #include "request.h"
+#include "message.h"
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/argv.h"
 
-/* Who will load modname?
+/* Get service name from module name string.
  */
-static char *mod_target (const char *modname)
+static char *mod_service (const char *modname)
 {
-    char *target = NULL;
+    char *service = NULL;
     if (strchr (modname, '.')) {
-        target = xstrdup (modname);
-        char *p = strrchr (target, '.');
+        service = xstrdup (modname);
+        char *p = strrchr (service, '.');
         *p = '\0';
     } else
-        target = xstrdup ("cmb");
-    return target;
+        service = xstrdup ("cmb");
+    return service;
 }
 
-#ifndef TEST_MAIN /* Not testing this section */
+/**
+ ** JSON encode/decode functions
+ **/
 
-int flux_rmmod (flux_t h, int rank, const char *name, int flags)
+int flux_insmod_json_decode (JSON o, char **path, int *argc, char ***argv)
 {
-    JSON request = Jnew ();
-    JSON response = NULL;
-    char *target = mod_target (name);
+    JSON args = NULL;
+    const char *s;
+    int i, ac;
     int rc = -1;
 
-    Jadd_str (request, "name", name);
-    Jadd_int (request, "flags", flags);
-    if ((response = flux_rank_rpc (h, rank, request, "%s.rmmod", target))) {
+    if (!Jget_str (o, "path", &s) || !Jget_obj (o, "args", &args)
+                                  || !Jget_ar_len (args, &ac)) {
         errno = EPROTO;
         goto done;
     }
-    if (errno != 0)
-        goto done;
+    *path = xstrdup (s);
+    argv_create (argc, argv);
+    for (i = 0; i < ac; i++) {
+        (void)Jget_ar_str (args, i, &s); /* can't fail? */
+        argv_push (argc, argv, "%s", s);
+    }
     rc = 0;
 done:
-    free (target);
-    Jput (request);
-    Jput (response);
+    Jput (args);
     return rc;
 }
 
-JSON flux_lsmod (flux_t h, int rank, const char *target)
+JSON flux_insmod_json_encode (const char *path, int argc, char **argv)
 {
-    JSON response = NULL;
+    JSON o = Jnew ();
+    JSON args = Jnew_ar ();
+    int i;
 
-    if (target == NULL)
-        target = "cmb";
-    response = flux_rank_rpc (h, rank, NULL, "%s.lsmod", target);
-    return response;
+    Jadd_str (o, "path", path);
+    for (i = 0; i < argc; i++)
+        Jadd_ar_str (args, argv[i]);
+    Jadd_obj (o, "args", args);
+    return o;
 }
 
-int flux_insmod (flux_t h, int rank, const char *path, int flags, JSON args)
+int flux_rmmod_json_decode (JSON o, char **name)
 {
-    JSON request = Jnew ();
-    JSON response = NULL;
-    char *name = NULL;
-    char *target = NULL;
+    const char *s;
     int rc = -1;
-
-    if (!(name = flux_modname (path))) {
-        errno = EINVAL;
-        goto done;
-    }
-    target = mod_target (name);
-    Jadd_str (request, "path", path);
-    Jadd_int (request, "flags", flags);
-    Jadd_obj (request, "args", args);
-    if ((response = flux_rank_rpc (h, rank, request, "%s.insmod", target))) {
+    if (!Jget_str (o, "name", &s)) {
         errno = EPROTO;
         goto done;
     }
-    if (errno != 0)
-        goto done;
+    *name = xstrdup (s);
     rc = 0;
 done:
-    if (target)
-        free (target);
-    Jput (request);
-    Jput (response);
     return rc;
 }
 
-#endif /* !TEST_MAIN */
+JSON flux_rmmod_json_encode (const char *name)
+{
+    JSON o = Jnew ();
+    Jadd_str (o, "name", name);
+    return o;
+}
+
+int flux_lsmod_json_decode_nth (JSON a, int n, const char **name, int *size,
+                                const char **digest, int *idle)
+{
+    JSON o;
+    int rc = -1;
+
+    if (!Jget_ar_obj (a, n, &o) || !Jget_str (o, "name", name)
+                                || !Jget_int (o, "size", size)
+                                || !Jget_str (o, "digest", digest)
+                                || !Jget_int (o, "idle", idle)) {
+        errno = EPROTO;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+int flux_lsmod_json_decode (JSON a, int *len)
+{
+    int rc = -1;
+
+    if (!Jget_ar_len (a, len)) {
+        errno = EPROTO;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+int flux_lsmod_json_append (JSON a, const char *name, int size,
+                            const char *digest, int idle)
+{
+    JSON o = Jnew ();
+    Jadd_str (o, "name", name);
+    Jadd_int (o, "size", size);
+    Jadd_str (o, "digest", digest);
+    Jadd_int (o, "idle", idle);
+    Jadd_ar_obj (a, o); /* takes a ref on o */
+    Jput (o);
+    return 0;
+}
+
+JSON flux_lsmod_json_create (void)
+{
+    return Jnew_ar ();
+}
 
 char *flux_modname(const char *path)
 {
@@ -130,6 +175,7 @@ char *flux_modname(const char *path)
     return name;
 }
 
+/* helper for flux_modfind() */
 static int flux_modname_cmp(const char *path, const char *name)
 {
     void *dso;
@@ -145,15 +191,18 @@ static int flux_modname_cmp(const char *path, const char *name)
     return rc;
 }
 
-#undef  MAX
+#ifndef MAX
 #define MAX(a,b)    ((a)>(b)?(a):(b))
+#endif
 
+/* helper for flux_modfind() */
 static int strcmpend (const char *s1, const char *s2)
 {
     int skip = MAX (strlen (s1) - strlen (s2), 0);
     return strcmp (s1 + skip, s2);
 }
 
+/* helper for flux_modfind() */
 static char *modfind (const char *dirpath, const char *modname)
 {
     DIR *dir;
@@ -179,7 +228,9 @@ static char *modfind (const char *dirpath, const char *modname)
                 modpath = modfind (path, modname);
             else if (!strcmpend (path, ".so")) {
                 if (!flux_modname_cmp (path, modname))
-                    modpath = xstrdup (path);
+                    if (!(modpath = realpath (path, NULL)))
+                        oom ();
+
             }
         }
     }
@@ -205,36 +256,160 @@ char *flux_modfind (const char *searchpath, const char *modname)
     return modpath;
 }
 
+/* It is not convenient to test these directly here.
+ */
+#ifndef TEST_MAIN
+int flux_insmod_request_decode (zmsg_t *zmsg, char **path,
+                                int *argc, char ***argv)
+{
+    JSON in = NULL;
+    int rc = -1;
+
+    if (flux_json_request_decode (zmsg, &in) < 0)
+        goto done;
+    if (flux_insmod_json_decode (in, path, argc, argv) < 0)
+        goto done;
+    rc = 0;
+done:
+    Jput (in);
+    return rc;
+}
+
+int flux_rmmod_request_decode (zmsg_t *zmsg, char **name)
+{
+    JSON in = NULL;
+    int rc = -1;
+
+    if (flux_json_request_decode (zmsg, &in) < 0)
+        goto done;
+    if (flux_rmmod_json_decode (in, name) < 0)
+        goto done;
+    rc = 0;
+done:
+    Jput (in);
+    return rc;
+}
+
+int flux_lsmod_request_decode (zmsg_t *zmsg)
+{
+    int type;
+    int rc = -1;
+
+    if (flux_msg_get_type (zmsg, &type) < 0)
+        goto done;
+    if (type != FLUX_MSGTYPE_REQUEST || flux_msg_has_payload (zmsg)) {
+        errno = EPROTO;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+int flux_rmmod (flux_t h, uint32_t nodeid, const char *name)
+{
+    JSON in = NULL;
+    char *service = mod_service (name);
+    char *topic = xasprintf ("%s.rmmod", service);
+    int rc = -1;
+
+    in = flux_rmmod_json_encode (name);
+    Jadd_str (in, "name", name);
+    if (flux_json_rpc (h, nodeid, topic, in, NULL) < 0)
+        goto done;
+    rc = 0;
+done:
+    free (service);
+    free (topic);
+    Jput (in);
+    return rc;
+}
+
+int flux_lsmod (flux_t h, uint32_t nodeid, const char *service,
+                flux_lsmod_f cb, void *arg)
+{
+    JSON out = NULL;
+    char *topic = xasprintf ("%s.lsmod", service ? service : "cmb");
+    int rc = -1;
+    int i, len;
+
+    if (flux_json_rpc (h, nodeid, topic, NULL, &out) < 0)
+        goto done;
+    if (flux_lsmod_json_decode (out, &len) < 0)
+        goto done;
+    for (i = 0; i < len; i++) {
+        const char *name, *digest;
+        int size, idle;
+        if (flux_lsmod_json_decode_nth (out, i, &name, &size, &digest, &idle) < 0)
+            goto done;
+        if (cb (name, size, digest, idle, NULL, arg) < 0)
+            goto done;
+    }
+    rc = 0;
+done:
+    free (topic);
+    return rc;
+}
+
+int flux_insmod (flux_t h, uint32_t nodeid, const char *path,
+                 int argc, char **argv)
+{
+    JSON in = Jnew ();
+    char *name = NULL;
+    char *service = NULL;
+    char *topic = NULL;
+    int rc = -1;
+
+    if (!(name = flux_modname (path))) {
+        errno = EINVAL;
+        goto done;
+    }
+    service = mod_service (name);
+    topic = xasprintf ("%s.insmod", service);
+
+    in = flux_insmod_json_encode (path, argc, argv);
+    if (flux_json_rpc (h, nodeid, topic, in, NULL) < 0)
+        goto done;
+    rc = 0;
+done:
+    if (service)
+        free (service);
+    if (topic)
+        free (topic);
+    Jput (in);
+    return rc;
+}
+#endif /* !TEST_MAIN */
+
+
 #ifdef TEST_MAIN
 
 #include "src/common/libtap/tap.h"
 
-int main (int argc, char *argv[])
+void test_helpers (void)
 {
     char *name, *path;
-
-    plan (16);
 
     ok ((strcmpend ("foo.so", ".so") == 0),
         "strcmpend matches .so");
     ok ((strcmpend ("", ".so") != 0),
         "strcmpend doesn't match empty string");
 
-    name = mod_target ("kvs");
+    name = mod_service ("kvs");
     like (name, "^cmb$",
-        "mod_target of kvs is cmb");
+        "mod_service of kvs is cmb");
     if (name)
         free (name);
 
-    name = mod_target ("sched.backfill");
+    name = mod_service ("sched.backfill");
     like (name, "^sched$",
-        "mod_target of sched.backfill is sched");
+        "mod_service of sched.backfill is sched");
     if (name)
         free (name);
 
-    name = mod_target ("sched.backfill.priority");
+    name = mod_service ("sched.backfill.priority");
     like (name, "^sched.backfill$",
-        "mod_target of sched.backfill.priority is sched.backfill");
+        "mod_service of sched.backfill.priority is sched.backfill");
     if (name)
         free (name);
 
@@ -289,9 +464,82 @@ int main (int argc, char *argv[])
     if (name)
         free (name);
     free (path);
+}
+
+void test_lsmod_codec (void)
+{
+    JSON o;
+    int len;
+    int idle, size;
+    const char *name, *digest;
+
+    o = flux_lsmod_json_create ();
+    ok (o != NULL,
+        "flux_lsmod_json_create works");
+    ok (flux_lsmod_json_append (o, "foo", 42, "aa", 3) == 0,
+        "first flux_lsmod_json_append works");
+    ok (flux_lsmod_json_append (o, "bar", 43, "bb", 2) == 0,
+        "second flux_lsmod_json_append works");
+    ok (flux_lsmod_json_decode (o, &len) == 0 && len == 2,
+        "flux_lsmod_json_decode works");
+    ok (flux_lsmod_json_decode_nth (o, 0, &name, &size, &digest, &idle) == 0
+        && name && size == 42 && digest && idle == 3
+        && !strcmp (name, "foo") && !strcmp (digest, "aa"),
+        "flux_lsmod_json_decode_nth(0) works");
+    ok (flux_lsmod_json_decode_nth (o, 1, &name, &size, &digest, &idle) == 0
+        && name && size == 43 && digest && idle == 2
+        && !strcmp (name, "bar") && !strcmp (digest, "bb"),
+        "flux_lsmod_json_decode_nth(1) works");
+
+    Jput (o);
+}
+
+void test_rmmod_codec (void)
+{
+    JSON o;
+    char *s = NULL;
+
+    o = flux_rmmod_json_encode ("xyz");
+    ok (o != NULL,
+        "flux_rmmod_json_encode works");
+    ok (flux_rmmod_json_decode (o, &s) == 0 && s != NULL && !strcmp (s, "xyz"),
+        "flux_rmmod_json_decode works");
+    free (s);
+    Jput (o);
+}
+
+void test_insmod_codec (void)
+{
+    int ac, argc = 2;
+    char *argv[] = { "foo", "bar" };
+    char **av;
+    JSON o;
+    char *s;
+
+    o = flux_insmod_json_encode ("/foo/bar", argc, argv);
+    ok (o != NULL,
+        "flux_insmod_json_encode works");
+    ok (flux_insmod_json_decode (o, &s, &ac, &av) == 0
+        && s != NULL && !strcmp (s, "/foo/bar")
+        && ac == 2 && !strcmp (av[0], "foo") && !strcmp (av[1], "bar"),
+        "flux_insmod_json_decode works");
+    argv_destroy (ac, av);
+    free (s);
+    Jput (o);
+}
+
+int main (int argc, char *argv[])
+{
+    plan (26);
+
+    test_helpers (); // 16
+    test_lsmod_codec (); // 6
+    test_rmmod_codec (); // 2
+    test_insmod_codec (); // 2
 
     done_testing ();
 }
+
 
 #endif
 

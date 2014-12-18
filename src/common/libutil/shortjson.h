@@ -189,6 +189,15 @@ Jadd_ar_int (JSON o, int i)
     json_object_array_add (o, p);
 }
 
+static __inline__ void
+Jadd_ar_str (JSON o, const char *s)
+{
+    JSON p = json_object_new_string (s);
+    if (!p)
+        oom ();
+    json_object_array_add (o, p);
+}
+
 /* Get JSON array length.
  */
 static __inline__ bool
@@ -227,6 +236,23 @@ Jget_ar_int (JSON o, int n, int *ip)
     if (!(m = json_object_array_get_idx (o, n)))
         return false;
     *ip = json_object_get_int (m);
+    return true;
+}
+
+/* Get string at index 'n' of array.
+ */
+static __inline__ bool
+Jget_ar_str (JSON o, int n, const char **sp)
+{
+    JSON m;
+
+    if (json_object_get_type (o) != json_type_array)
+        return false;
+    if (n < 0 || n > json_object_array_length (o))
+        return false;
+    if (!(m = json_object_array_get_idx (o, n)))
+        return false;
+    *sp = json_object_get_string (m);
     return true;
 }
 

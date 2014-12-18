@@ -34,6 +34,71 @@
 
 #include "src/common/libutil/shortjson.h"
 
+/* If 'zmsg' contains payload, return it in 'o', else set 'o' to NULL.
+ * Return 0 on success, -1 on failure with errno set.
+ */
+static int msg_get_payload_json (zmsg_t *zmsg, JSON *o)
+{
+    struct json_tokener *tok = NULL;
+    int flags;
+    char *buf;
+    int size;
+    int rc = -1;
+
+    assert (o != NULL);
+
+    if (flux_msg_get_payload (zmsg, &flags, (void **)&buf, &size) < 0) {
+        errno = 0;
+        *o = NULL;
+    } else {
+        if (!buf || size == 0 || !(flags & FLUX_MSGFLAG_JSON)) {
+            errno = EPROTO;
+            goto done;
+        }
+        if (!(tok = json_tokener_new ())) {
+            errno = ENOMEM;
+            goto done;
+        }
+        if (!(*o = json_tokener_parse_ex (tok, buf, size))) {
+            errno = EPROTO;
+            goto done;
+        }
+    }
+    rc = 0;
+done:
+    if (tok)
+        json_tokener_free (tok);
+    return rc;
+}
+
+int flux_json_event_decode (zmsg_t *zmsg, json_object **in)
+{
+    int type;
+    int rc = -1;
+    JSON o;
+
+    if (in == NULL || zmsg == NULL) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (flux_msg_get_type (zmsg, &type) < 0)
+        goto done;
+    if (type != FLUX_MSGTYPE_EVENT) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (msg_get_payload_json (zmsg, &o) < 0)
+        goto done;
+    if (o == NULL) {
+        errno = EPROTO;
+        goto done;
+    }
+    *in = o;
+    rc = 0;
+done:
+    return rc;
+}
+
 int flux_event_recv (flux_t h, json_object **respp, char **tagp, bool nb)
 {
     zmsg_t *zmsg;

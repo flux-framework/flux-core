@@ -14,7 +14,7 @@ check_PROGRAMS = \
 	tpmikvs \
 	tbarrier
 
-SUBDIRS = request
+SUBDIRS = request module
 if HAVE_MPI
 check_PROGRAMS += mpi_hello
 SUBDIRS += kap

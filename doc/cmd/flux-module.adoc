@@ -1,0 +1,119 @@
+FLUX-MODULE(1)
+==============
+:doctype: manpage
+
+
+NAME
+----
+flux-module - manage Flux extension modules
+
+
+SYNOPSIS
+--------
+*flux* *module* 'COMMAND' ['OPTIONS']
+
+
+DESCRIPTION
+-----------
+flux-module(1) manages dynamically loadable Flux modules.
+It can load/remove/list modules for the cmbd(1), and for other
+Flux services that support dynamic module extensions.
+
+When operating in conjunction with the 'modctl' comms module,
+flux-module(1) performs module operations in parallel across a
+comms session, targeting all or a subset of session ranks
+according to OPTIONS.
+
+
+COMMANDS
+--------
+
+*info* ['OPTIONS'] ['name']::
+Display information about module 'name'.
+If 'name' includes a slash '/' character, it is interpreted as a
+file path, and the module name is then determined by reading the
+*mod_name* symbol.  Otherwise, FLUX_MODPATH is searched for a module
+with *mod_name* equal to 'name'.
+
+*load* ['OPTIONS'] 'name' ['module-arguments' ...]::
+Load module 'name',  interpreted as described above.
+The service that will load the module is inferred
+from the module name.  When the load command completes successfully,
+the new module is ready to accept messages on all targeted ranks.
+
+*remove* ['OPTIONS'] 'name'::
+Remove module 'name'.  The service that will unload the module is
+inferred from the name specified on the command line.
+
+*list* ['OPTIONS'] ['service']::
+List modules loaded by 'service', or by cmbd(1) if 'service' is unspecified.
+
+OPTIONS
+-------
+*-r, --rank*=['all'|'nodeset']::
+Specify which ranks to apply the command to.
+
+*-d, --direct*::
+Bypass 'modctl' and contact 'service' directly, iterating over multiple
+ranks serially if specified.
+
+
+LIST OUTPUT
+-----------
+
+The 'list' command displays one line for each unique (as determined by
+SHA1 hash) module loaded by a service.
+
+*Module*::
+The value of the *mod_name* symbol for this module.
+
+*Size*::
+The size in bytes of the module .so file.
+
+*Digest*::
+The last 7 characters of the SHA1 digest of the contents of
+the module .so file.
+
+*Idle*::
+Idle times are defined for cmbd(1) comms modules as the number of
+heartbeats since the module last sent a request or response message.
+The idle time may be defined differently for other services, or have no
+meaning.  When a set of results from multiple ranks is reduced to one
+line, the lowest idle time in the set is reported.
+
+*Nodeset*::
+The set of ranks that this line applies to.
+
+
+MODULE SYMBOLS
+--------------
+All Flux modules define the following global symbols:
+
+*const char *mod_name;*::
+A null-terminated string defining the module name.
+Module names are words delimited by periods, with the service that
+will load the module indicated by the words that prefix the final one.
+If there is no prefix, the module is loaded by cmbd(1).
+
+*int mod_main (void *context, int argc, char **argv);*::
+An entry function.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+--------
+syslog(3)

@@ -3,14 +3,22 @@
 
 test_description='Test basic request/response handling
 
+
 Verify basic request/response/rpc handling.
 '
 
 . `dirname $0`/sharness.sh
 test_under_flux 2
 
-test_expect_success 'request: load req module' '
-	flux module load ${FLUX_BUILD_DIR}/src/test/request/.libs/req.so
+test_expect_success 'request: load req module on rank 0' '
+	flux module load -d --rank=0 \
+		${FLUX_BUILD_DIR}/src/test/request/.libs/req.so
+'
+
+# FIXME: uses rank-addressed requests which we test below
+test_expect_success 'request: load req module on rank 1' '
+	flux module load -d --rank=1 \
+		${FLUX_BUILD_DIR}/src/test/request/.libs/req.so
 '
 
 test_expect_success 'request: simple rpc with no payload' '
@@ -21,9 +29,7 @@ test_expect_success 'request: simple rpc to rank 0' '
 	${FLUX_BUILD_DIR}/src/test/request/treq --rank 0 null
 '
 
-# sleep temporarily required - see issue #118
 test_expect_success 'request: simple rpc to rank 1' '
-	sleep 1 &&
 	${FLUX_BUILD_DIR}/src/test/request/treq --rank 1 null
 '
 
@@ -72,8 +78,12 @@ test_expect_success 'request: proxy ping any from 1 is one hop' '
 #	${FLUX_BUILD_DIR}/src/test/request/treq --rank 0 pingany
 #'
 
-test_expect_success 'request: unloaded req module' '
-	flux module remove req
+test_expect_success 'request: unloaded req module on rank 1' '
+	flux module remove -d --rank=1 req
+'
+
+test_expect_success 'request: unloaded req module on rank 0' '
+	flux module remove -d --rank=0 req
 '
 
 test_done

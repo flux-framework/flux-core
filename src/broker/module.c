@@ -53,6 +53,11 @@
 
 #include "module.h"
 
+/* While transitioning to argc, argv - style args per RFC 5,
+ * we have our own mod_main prototype.
+ */
+typedef int (mod_main_comms_f)(flux_t h, zhash_t *args);
+
 
 typedef struct {
     int request_tx;
@@ -77,7 +82,7 @@ struct plugin_ctx_struct {
     char *svc_uri;
     zuuid_t *uuid;
     pthread_t t;
-    mod_main_f *main;
+    mod_main_comms_f *main;
     plugin_stats_t stats;
     zloop_t *zloop;
     dq_t *dq;
@@ -124,6 +129,7 @@ static dq_t *dq_create (plugin_ctx_t p)
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .fd = -1 };
     dq_t *dq = xzmalloc (sizeof (*dq));
 
+    //flux_log (p->h, LOG_DEBUG, "%s: %s", __FUNCTION__, resp_uri);
     zbind (p->zctx, &dq->zs_resp[1], ZMQ_PAIR, resp_uri, -1);
     zconnect (p->zctx, &dq->zs_resp[0], ZMQ_PAIR, resp_uri, -1, NULL);
     zp.socket = dq->zs_resp[0];
@@ -134,9 +140,10 @@ static dq_t *dq_create (plugin_ctx_t p)
     return dq;
 }
 
-static void dq_destroy (dq_t *dq)
+static void dq_destroy (zctx_t *zctx, dq_t *dq)
 {
-    /* N.B. zctx destroy takes care of PAIR sockets */
+    zsocket_destroy (zctx, dq->zs_resp[0]);
+    zsocket_destroy (zctx, dq->zs_resp[1]);
     free (dq);
 }
 
@@ -604,7 +611,7 @@ static void *plugin_thread (void *arg)
         goto done;
     }
 done:
-    dq_destroy (p->dq);
+    dq_destroy (p->zctx, p->dq);
     zloop_destroy (&p->zloop);
     zstr_send (p->zs_svc[0], ""); /* EOF */
 
@@ -679,7 +686,7 @@ plugin_ctx_t plugin_create (flux_t h, const char *path, zhash_t *args)
     plugin_ctx_t p;
     void *dso;
     const char **mod_namep;
-    mod_main_f *mod_main;
+    mod_main_comms_f *mod_main;
     zfile_t *zf;
 
     dlerror ();
