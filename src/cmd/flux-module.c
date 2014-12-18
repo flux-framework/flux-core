@@ -54,6 +54,7 @@ static const struct option longopts[] = {
 void mod_lsmod (flux_t h, bool direct, const char *rankopt, int ac, char **av);
 void mod_rmmod (flux_t h, bool direct, const char *rankopt, int ac, char **av);
 void mod_insmod (flux_t h, bool direct, const char *rankopt, int ac, char **av);
+void mod_info (flux_t h, bool direct, const char *rankopt, int ac, char **av);
 
 typedef struct {
     const char *name;
@@ -64,6 +65,7 @@ static func_t funcs[] = {
     { "list",   &mod_lsmod},
     { "remove", &mod_rmmod},
     { "load",   &mod_insmod},
+    { "info",   &mod_info},
 };
 
 func_t *func_lookup (const char *name)
@@ -79,6 +81,7 @@ void usage (void)
 {
     fprintf (stderr,
 "Usage: flux-module list   [OPTIONS]\n"
+"       flux-module info   [OPTIONS] module\n"
 "       flux-module load   [OPTIONS] module [arg ...]\n"
 "       flux-module unload [OPTIONS] module\n"
 "where OPTIONS are:\n"
@@ -90,7 +93,7 @@ void usage (void)
 
 int main (int argc, char *argv[])
 {
-    flux_t h;
+    flux_t h = NULL;
     int ch;
     char *cmd;
     func_t *f;
@@ -123,28 +126,82 @@ int main (int argc, char *argv[])
     }
     if (!(f = func_lookup (cmd)))
         msg_exit ("unknown function '%s'", cmd);
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
 
-    if (!rankopt) {
-        rankopt = xasprintf ("%d", flux_rank (h));
-    } else if (!strcmp (rankopt, "all") && flux_size (h) == 1) {
-        free (rankopt);
-        rankopt = xasprintf ("%d", flux_rank (h));
-    } else if (!strcmp (rankopt, "all")) {
-        free (rankopt);
-        rankopt = xasprintf ("[0-%d]", flux_size (h) - 1);
+    if (strcmp (cmd, "info") != 0) {
+        if (!(h = flux_api_open ()))
+            err_exit ("flux_api_open");
+        if (!rankopt) {
+            rankopt = xasprintf ("%d", flux_rank (h));
+        } else if (!strcmp (rankopt, "all") && flux_size (h) == 1) {
+            free (rankopt);
+            rankopt = xasprintf ("%d", flux_rank (h));
+        } else if (!strcmp (rankopt, "all")) {
+            free (rankopt);
+            rankopt = xasprintf ("[0-%d]", flux_size (h) - 1);
+        }
     }
 
     f->fun (h, direct, rankopt, argc - optind, argv + optind);
 
     if (rankopt)
         free (rankopt);
-
-    flux_api_close (h);
+    if (h)
+        flux_api_close (h);
 
     log_fini ();
     return 0;
+}
+
+char *sha1 (const char *path)
+{
+    zfile_t *zf = zfile_new (NULL, path);
+    char *digest = NULL;
+    if (zf)
+        digest = xstrdup (zfile_digest (zf));
+    zfile_destroy (&zf);
+    return digest;
+}
+
+int filesize (const char *path)
+{
+    struct stat sb;
+    if (stat (path, &sb) < 0)
+        return 0;
+    return sb.st_size;
+}
+
+void mod_info (flux_t h, bool direct, const char *rankopt, int ac, char **av)
+{
+    char *modpath = NULL;
+    char *modname = NULL;
+    char *digest = NULL;
+
+    if (ac < 1)
+        usage ();
+    if (strchr (av[0], '/')) {                /* path name given */
+        modpath = xstrdup (av[0]);
+        if (!(modname = flux_modname (modpath)))
+            msg_exit ("%s", dlerror ());
+    } else {
+        char *searchpath = getenv ("FLUX_MODULE_PATH");
+        if (!searchpath)
+            searchpath = MODULE_PATH;
+        modname = xstrdup (av[0]);
+        if (!(modpath = flux_modfind (searchpath, modname)))
+            msg_exit ("%s: not found in module search path", modname);
+    }
+    digest = sha1 (modpath);
+    printf ("Module name:  %s\n", modname);
+    printf ("Module path:  %s\n", modpath);
+    printf ("SHA1 Digest:  %s\n", digest);
+    printf ("Size:         %d bytes\n", filesize (modpath));
+
+    if (modpath)
+        free (modpath);
+    if (modname)
+        free (modname);
+    if (digest)
+        free (digest);
 }
 
 /* Iteratively call flux_insmod().

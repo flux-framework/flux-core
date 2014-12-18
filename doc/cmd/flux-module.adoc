@@ -28,13 +28,17 @@ according to OPTIONS.
 COMMANDS
 --------
 
+*info* ['OPTIONS'] ['name']::
+Display information about module 'name'.
+If 'name' includes a slash '/' character, it is interpreted as a
+file path, and the module name is then determined by reading the
+*mod_name* symbol.  Otherwise, FLUX_MODPATH is searched for a module
+with *mod_name* equal to 'name'.
+
 *load* ['OPTIONS'] 'name' ['module-arguments' ...]::
-Load module 'name'.   If 'name' includes a slash '/' character,
-it is interpreted as a file path, and the module name is then determined
-by reading the *mod_name* symbol.  Otherwise, FLUX_MODPATH is searched
-for a module with *mod_name* equal to 'name'.  The service that will
-load the module is inferred from the module name, as described in
-*MODULE SYMBOLS* below.  When the load command completes successfully,
+Load module 'name',  interpreted as described above.
+The service that will load the module is inferred
+from the module name.  When the load command completes successfully,
 the new module is ready to accept messages on all targeted ranks.
 
 *remove* ['OPTIONS'] 'name'::
@@ -43,7 +47,6 @@ inferred from the name specified on the command line.
 
 *list* ['OPTIONS'] ['service']::
 List modules loaded by 'service', or by cmbd(1) if 'service' is unspecified.
-
 
 OPTIONS
 -------
