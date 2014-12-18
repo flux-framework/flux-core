@@ -228,7 +228,9 @@ static char *modfind (const char *dirpath, const char *modname)
                 modpath = modfind (path, modname);
             else if (!strcmpend (path, ".so")) {
                 if (!flux_modname_cmp (path, modname))
-                    modpath = xstrdup (path);
+                    if (!(modpath = realpath (path, NULL)))
+                        oom ();
+
             }
         }
     }

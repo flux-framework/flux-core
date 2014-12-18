@@ -176,10 +176,11 @@ void mod_info (flux_t h, bool direct, const char *rankopt, int ac, char **av)
     char *modname = NULL;
     char *digest = NULL;
 
-    if (ac < 1)
+    if (ac != 1)
         usage ();
     if (strchr (av[0], '/')) {                /* path name given */
-        modpath = xstrdup (av[0]);
+        if (!(modpath = realpath (av[0], NULL)))
+            oom ();
         if (!(modname = flux_modname (modpath)))
             msg_exit ("%s", dlerror ());
     } else {
@@ -240,7 +241,8 @@ void mod_insmod (flux_t h, bool direct, const char *ns, int ac, char **av)
     if (ac < 1)
         usage ();
     if (strchr (av[0], '/')) {                /* path name given */
-        modpath = xstrdup (av[0]);
+        if (!(modpath = realpath (av[0], NULL)))
+            oom ();
         if (!(modname = flux_modname (modpath)))
             msg_exit ("%s", dlerror ());
     } else {
