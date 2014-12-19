@@ -1,6 +1,8 @@
 #ifndef _FLUX_CORE_HANDLE_H
 #define _FLUX_CORE_HANDLE_H
 
+#include <stdint.h>
+
 typedef struct flux_handle_struct *flux_t;
 
 /* Flags for handle creation and flux_flags_set()/flux_flags_unset.
@@ -22,6 +24,11 @@ void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn destroy);
  */
 void flux_flags_set (flux_t h, int flags);
 void flux_flags_unset (flux_t h, int flags);
+
+/* Alloc/free a matchtag for matched requests.
+ */
+uint8_t flux_matchtag_alloc (flux_t h);
+void flux_matchtag_free (flux_t h, uint8_t t);
 
 #endif /* !_FLUX_CORE_HANDLE_H */
 

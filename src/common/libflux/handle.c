@@ -51,6 +51,7 @@ struct flux_handle_struct {
     void            *impl;
     reactor_t       reactor;
     zhash_t         *aux;
+    bool            matchtag_pool[256];
 };
 
 flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags)
@@ -100,6 +101,23 @@ void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn destroy)
 {
     zhash_update (h->aux, name, aux);
     zhash_freefn (h->aux, name, destroy);
+}
+
+uint8_t flux_matchtag_alloc (flux_t h)
+{
+    uint8_t t;
+    for (t = 1; t > 0; t++) {
+        if (!h->matchtag_pool[t]) {
+            h->matchtag_pool[t] = true;
+            break;
+        }
+    }
+    return t;
+}
+
+void flux_matchtag_free (flux_t h, uint8_t t)
+{
+    h->matchtag_pool[t] = false;
 }
 
 int flux_request_sendmsg (flux_t h, zmsg_t **zmsg)
