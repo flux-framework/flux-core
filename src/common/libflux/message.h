@@ -65,6 +65,12 @@ int flux_msg_get_errnum (zmsg_t *zmsg, int *errnum);
 int flux_msg_set_seq (zmsg_t *zmsg, uint32_t seq);
 int flux_msg_get_seq (zmsg_t *zmsg, uint32_t *seq);
 
+/* Get/set/compare match tag (request/response only)
+ */
+int flux_msg_set_matchtag (zmsg_t *zmsg, uint8_t matchtag);
+int flux_msg_get_matchtag (zmsg_t *zmsg, uint8_t *matchtag);
+bool flux_msg_cmp_matchtag (zmsg_t *zmsg, uint8_t matchtag);
+
 /* NOTE: routing frames are pushed on a message traveling dealer
  * to router, and popped off a message traveling router to dealer.
  * A message intended for dealer-router sockets must first be enabled for

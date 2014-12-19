@@ -586,6 +586,32 @@ static kvs_watcher_t *add_watcher (flux_t h, const char *key, watch_type_t type,
     return wp;
 }
 
+/* N.B. flux_json_rpc() allocates and retires a match tag.  Since a
+ * kvs.watch can receive multiple replies, we cannot call flux_rpc() here.
+ * FIXME: leaks matchtag (but there is no unwatch).
+ */
+static json_object *watch_rpc (flux_t h, json_object *request)
+{
+    uint8_t matchtag = 0;
+    zmsg_t *zmsg = NULL;
+    json_object *reply = NULL;
+
+    if (!(matchtag = flux_matchtag_alloc (h))) {
+        errno = EAGAIN;
+        goto done;
+    }
+    if (flux_json_request (h, FLUX_NODEID_ANY, matchtag, "kvs.watch",
+                                                            request) < 0)
+        goto done;
+    if (!(zmsg = flux_response_recvmsg (h, matchtag, false)))
+        goto done;
+    if (flux_json_response_decode (zmsg, &reply) < 0)
+        goto done;
+done:
+    zmsg_destroy (&zmsg);
+    return reply;
+}
+
 /* The "callback" idiom vs the "once" idiom handle a NULL value differently,
  * so don't convert to ENOENT here.  NULL is a valid value for *valp.
  */
@@ -606,7 +632,7 @@ static int send_kvs_watch (flux_t h, const char *key, json_object **valp,
     }
     if (directory)
         util_json_object_add_boolean (request, ".flag_directory", true);
-    reply = flux_rpc (h, request, "kvs.watch");
+    reply = watch_rpc (h, request);
     if (!reply)
         goto done;
     if ((val = json_object_object_get (reply, key)))

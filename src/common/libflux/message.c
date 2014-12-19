@@ -38,16 +38,17 @@
 #include "src/common/libutil/log.h"
 
 /* Begin manual codec
- *  We have 4 byte values followed by a 32 bit int (network order).
  */
 #define PROTO_MAGIC         0x8e
 #define PROTO_VERSION       1
-#define PROTO_SIZE          8
-#define PROTO_OFF_MAGIC     0
-#define PROTO_OFF_VERSION   1
-#define PROTO_OFF_TYPE      2
-#define PROTO_OFF_FLAGS     3
-#define PROTO_OFF_BIGINT    4
+#define PROTO_SIZE          9
+#define PROTO_OFF_MAGIC     0 /* 1 byte */
+#define PROTO_OFF_VERSION   1 /* 1 byte */
+#define PROTO_OFF_TYPE      2 /* 1 byte */
+#define PROTO_OFF_FLAGS     3 /* 1 byte */
+#define PROTO_OFF_BIGINT    4 /* 4 bytes */
+#define PROTO_OFF_MATCHTAG  8 /* 1 byte */
+
 static int proto_set_bigint (uint8_t *data, int len, uint32_t bigint);
 
 static int proto_set_type (uint8_t *data, int len, int type)
@@ -111,6 +112,22 @@ static int proto_get_bigint (uint8_t *data, int len, uint32_t *bigint)
         return -1;
     memcpy (&x, &data[PROTO_OFF_BIGINT], sizeof (x));
     *bigint = ntohl (x);
+    return 0;
+}
+static int proto_set_matchtag (uint8_t *data, int len, uint8_t matchtag)
+{
+    if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
+                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
+        return -1;
+    data[PROTO_OFF_MATCHTAG] = matchtag;
+    return 0;
+}
+static int proto_get_matchtag (uint8_t *data, int len, uint8_t *val)
+{
+    if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
+                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
+        return -1;
+    *val = data[PROTO_OFF_MATCHTAG];
     return 0;
 }
 static void proto_init (uint8_t *data, int len, uint8_t flags)
@@ -274,6 +291,44 @@ int flux_msg_get_seq (zmsg_t *zmsg, uint32_t *seq)
         return -1;
     }
     return 0;
+}
+
+int flux_msg_set_matchtag (zmsg_t *zmsg, uint8_t t)
+{
+    zframe_t *zf = zmsg_last (zmsg);
+    int type;
+
+    if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
+            || (type != FLUX_MSGTYPE_REQUEST && type != FLUX_MSGTYPE_RESPONSE)
+            || proto_set_matchtag (zframe_data (zf), zframe_size (zf), t) < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
+int flux_msg_get_matchtag (zmsg_t *zmsg, uint8_t *t)
+{
+    zframe_t *zf = zmsg_last (zmsg);
+    int type;
+
+    if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
+            || (type != FLUX_MSGTYPE_REQUEST && type != FLUX_MSGTYPE_RESPONSE)
+            || proto_get_matchtag (zframe_data (zf), zframe_size (zf), t) < 0) {
+        errno = EPROTO;
+        return -1;
+    }
+    return 0;
+}
+
+bool flux_msg_cmp_matchtag (zmsg_t *zmsg, uint8_t t)
+{
+    uint8_t q;
+    if (flux_msg_get_matchtag (zmsg, &q) < 0)
+        return false;
+    if (q != t)
+        return false;
+    return true;
 }
 
 int flux_msg_enable_route (zmsg_t *zmsg)
@@ -1195,9 +1250,27 @@ void check_proto (void)
     zmsg_destroy (&zmsg);
 }
 
+void check_matchtag (void)
+{
+    zmsg_t *zmsg;
+    uint8_t t;
+
+    ok ((zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+        "flux_msg_create works");
+    ok (flux_msg_get_matchtag (zmsg, &t) == 0 && t == 0,
+        "flux_msg_get_matchtag returns 0 when uninitialized");
+    ok (flux_msg_set_matchtag (zmsg, 42) == 0,
+        "flux_msg_set_matchtag works");
+    ok (flux_msg_get_matchtag (zmsg, &t) == 0 && t == 42,
+        "flux_msg_get_matchtag returns set value");
+    ok (flux_msg_cmp_matchtag (zmsg, 42) && !flux_msg_cmp_matchtag (zmsg, 0),
+        "flux_msg_cmp_matchtag works");
+    zmsg_destroy (&zmsg);
+}
+
 int main (int argc, char *argv[])
 {
-    plan (91);
+    plan (96);
 
     lives_ok ({zmsg_test (false);}, // 1
         "zmsg_test doesn't assert");
@@ -1206,6 +1279,7 @@ int main (int argc, char *argv[])
     check_routes ();                // 26
     check_topic ();                 // 11
     check_payload ();               // 21
+    check_matchtag ();              // 5
 
     check_legacy_encode ();         // 5
     check_legacy_encode_json ();    // 8

@@ -177,7 +177,7 @@ static int xping_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 
     Jadd_int (in, "seq", seq);
     flux_log (h, LOG_DEBUG, "Tping seq=%d %d!%s", seq, rank, service);
-    if (flux_json_request (h, rank, service, in) < 0) {
+    if (flux_json_request (h, rank, 0, service, in) < 0) {
         if (flux_err_respond (h, errno, zmsg) < 0)
             flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
                       strerror (errno));
