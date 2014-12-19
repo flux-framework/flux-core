@@ -31,11 +31,12 @@ zmsg_t *flux_request_recvmsg (flux_t h, bool nonblock);
  */
 int flux_response_sendmsg (flux_t h, zmsg_t **zmsg);
 
-/* Receive a response message, blocking until one is available.
- * If 'nonblock' and none is available, return NULL with errno == EAGAIN.
+/* Receive a response message matching 'matchtag', blocking until one is
+ * available.  If 'nonblock' and none is * available, return NULL
+ * with errno == EAGAIN.  If 'matchtag' is 0, match any message.
  * Returns message on success, or NULL on failure with errno set.
  */
-zmsg_t *flux_response_recvmsg (flux_t h, bool nonblock);
+zmsg_t *flux_response_recvmsg (flux_t h, uint8_t matchtag, bool nonblock);
 
 /* Put a response message in the handle's inbound message queue for processing
  * in FIFO order, before other unprocessed messages.  The handle will become
@@ -48,11 +49,13 @@ int flux_response_putmsg (flux_t h, zmsg_t **zmsg);
 
 /* Send a request to 'nodeid' (may be FLUX_NODEID_ANY) addressed to 'topic'.
  * If 'in' is non-NULL, attach JSON payload, caller retains ownership.
- * Do not wait for a response.
+ * Set 'matchtag' to zero to disable tag matching, or allocate/free one
+ * from the handle with flux_matchtag_alloc()/flux_matchtag_free().
+ * This function does not wait for a response message.
  * Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_json_request (flux_t h, uint32_t nodeid, const char *topic,
-                       json_object *in);
+int flux_json_request (flux_t h, uint32_t nodeid, uint8_t matchtag,
+                       const char *topic, json_object *in);
 
 /* Send a request to 'nodeid' (may be FLUX_NODEID_ANY) addressed to 'topic'.
  * If 'in' is non-NULL, attach JSON payload, caller retains ownership.
@@ -98,6 +101,7 @@ int flux_json_response_decode (zmsg_t *zmsg, json_object **out);
  * Returns 0 on success, or -1 on failure with errno set.
  */
 int flux_response_decode (zmsg_t *zmsg);
+
 
 /**
  ** Deprecated interfaces.

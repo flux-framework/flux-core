@@ -174,7 +174,7 @@ int flux_response_sendmsg (flux_t h, zmsg_t **zmsg)
     return h->ops->response_sendmsg (h->impl, zmsg);
 }
 
-zmsg_t *flux_response_recvmsg (flux_t h, bool nonblock)
+static zmsg_t *flux_response_recvmsg_any (flux_t h, bool nonblock)
 {
     zmsg_t *zmsg;
     int type;
@@ -205,6 +205,36 @@ int flux_response_putmsg (flux_t h, zmsg_t **zmsg)
         return -1;
     }
     return h->ops->response_putmsg (h->impl, zmsg);
+}
+
+zmsg_t *flux_response_recvmsg (flux_t h, uint8_t matchtag, bool nonblock)
+{
+    zmsg_t *zmsg = NULL;
+    zlist_t *nomatch = NULL;
+
+    do {
+        if (!(zmsg = flux_response_recvmsg_any (h, nonblock)))
+            goto done;
+        if (matchtag != 0 && !flux_msg_cmp_matchtag (zmsg, matchtag)) {
+            if (!nomatch && !(nomatch = zlist_new ()))
+                oom ();
+            if (h->flags & FLUX_FLAGS_TRACE)
+                fprintf (stderr, "[deferred: matchtag != %d]\n", matchtag);
+            if (zlist_append (nomatch, zmsg) < 0)
+                oom ();
+            zmsg = NULL;
+        }
+    } while (!zmsg);
+done:
+    if (nomatch) {
+        zmsg_t *z;
+        while ((z = zlist_pop (nomatch))) {
+            if (flux_response_putmsg (h, &z) < 0)
+                zmsg_destroy (&z);
+        }
+        zlist_destroy (&nomatch);
+    }
+    return zmsg;
 }
 
 zmsg_t *flux_event_recvmsg (flux_t h, bool nonblock)
