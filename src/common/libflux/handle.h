@@ -25,10 +25,10 @@ void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn destroy);
 void flux_flags_set (flux_t h, int flags);
 void flux_flags_unset (flux_t h, int flags);
 
-/* Alloc/free a matchtag for matched requests.
+/* Alloc/free a matchtag block for matched requests.
  */
-uint8_t flux_matchtag_alloc (flux_t h);
-void flux_matchtag_free (flux_t h, uint8_t t);
+uint32_t flux_matchtag_alloc (flux_t h, int size);
+void flux_matchtag_free (flux_t h, uint32_t t, int size);
 
 #endif /* !_FLUX_CORE_HANDLE_H */
 

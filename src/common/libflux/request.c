@@ -167,7 +167,7 @@ done:
     return rc;
 }
 
-int flux_json_request (flux_t h, uint32_t nodeid, uint8_t matchtag,
+int flux_json_request (flux_t h, uint32_t nodeid, uint32_t matchtag,
                        const char *topic, JSON in)
 {
     zmsg_t *zmsg;
@@ -202,9 +202,9 @@ int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
     int rc = -1;
     int errnum;
     JSON o;
-    uint8_t matchtag;
+    uint32_t matchtag = flux_matchtag_alloc (h, 1);
 
-    if (!(matchtag = flux_matchtag_alloc (h))) {
+    if (matchtag == FLUX_MATCHTAG_NONE) {
         errno = EAGAIN;
         goto done;
     }
@@ -237,7 +237,7 @@ int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
         *out = o;
     rc = 0;
 done:
-    flux_matchtag_free (h, matchtag);
+    flux_matchtag_free (h, matchtag, 1);
     return rc;
 }
 
@@ -310,7 +310,7 @@ int flux_rank_request_send (flux_t h, int rank, JSON o, const char *fmt, ...)
     topic = xvasprintf (fmt, ap);
     va_end (ap);
 
-    rc = flux_json_request (h, nodeid, 0, topic, o);
+    rc = flux_json_request (h, nodeid, FLUX_MATCHTAG_NONE, topic, o);
     free (topic);
     return rc;
 }
@@ -341,7 +341,7 @@ int flux_request_send (flux_t h, JSON o, const char *fmt, ...)
     topic = xvasprintf (fmt, ap);
     va_end (ap);
 
-    rc = flux_json_request (h, FLUX_NODEID_ANY, 0, topic, o);
+    rc = flux_json_request (h, FLUX_NODEID_ANY, FLUX_MATCHTAG_NONE, topic, o);
     free (topic);
     return rc;
 }
@@ -351,7 +351,7 @@ int flux_response_recv (flux_t h, JSON *respp, char **tagp, bool nb)
     zmsg_t *zmsg;
     int rc = -1;
 
-    if (!(zmsg = flux_response_recvmsg (h, 0, nb)))
+    if (!(zmsg = flux_response_recvmsg (h, FLUX_MATCHTAG_NONE, nb)))
         goto done;
     if (flux_msg_get_errnum (zmsg, &errno) < 0 || errno != 0)
         goto done;

@@ -588,15 +588,14 @@ static kvs_watcher_t *add_watcher (flux_t h, const char *key, watch_type_t type,
 
 /* N.B. flux_json_rpc() allocates and retires a match tag.  Since a
  * kvs.watch can receive multiple replies, we cannot call flux_rpc() here.
- * FIXME: leaks matchtag (but there is no unwatch).
  */
 static json_object *watch_rpc (flux_t h, json_object *request)
 {
-    uint8_t matchtag = 0;
     zmsg_t *zmsg = NULL;
     json_object *reply = NULL;
+    uint32_t matchtag = flux_matchtag_alloc (h, 1);
 
-    if (!(matchtag = flux_matchtag_alloc (h))) {
+    if (matchtag == FLUX_MATCHTAG_NONE) {
         errno = EAGAIN;
         goto done;
     }
@@ -609,6 +608,7 @@ static json_object *watch_rpc (flux_t h, json_object *request)
         goto done;
 done:
     zmsg_destroy (&zmsg);
+    /* FIXME: matchtag is leaked */
     return reply;
 }
 

@@ -67,9 +67,10 @@ int flux_msg_get_seq (zmsg_t *zmsg, uint32_t *seq);
 
 /* Get/set/compare match tag (request/response only)
  */
-int flux_msg_set_matchtag (zmsg_t *zmsg, uint8_t matchtag);
-int flux_msg_get_matchtag (zmsg_t *zmsg, uint8_t *matchtag);
-bool flux_msg_cmp_matchtag (zmsg_t *zmsg, uint8_t matchtag);
+#define FLUX_MATCHTAG_NONE (0)
+int flux_msg_set_matchtag (zmsg_t *zmsg, uint32_t matchtag);
+int flux_msg_get_matchtag (zmsg_t *zmsg, uint32_t *matchtag);
+bool flux_msg_cmp_matchtag (zmsg_t *zmsg, uint32_t matchtag);
 
 /* NOTE: routing frames are pushed on a message traveling dealer
  * to router, and popped off a message traveling router to dealer.
