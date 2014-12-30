@@ -27,7 +27,6 @@ according to OPTIONS.
 
 COMMANDS
 --------
-
 *info* ['OPTIONS'] ['name']::
 Display information about module 'name'.
 If 'name' includes a slash '/' character, it is interpreted as a
@@ -48,14 +47,17 @@ inferred from the name specified on the command line.
 *list* ['OPTIONS'] ['service']::
 List modules loaded by 'service', or by cmbd(1) if 'service' is unspecified.
 
+
 OPTIONS
 -------
 *-r, --rank*=['all'|'nodeset']::
 Specify which ranks to apply the command to.
 
 *-d, --direct*::
-Bypass 'modctl' and contact 'service' directly, iterating over multiple
-ranks serially if specified.
+Bypass 'modctl' and contact 'service' directly.
+
+*-f, --fanout='N'*::
+Specify the maximum concurrency in direct mode (default 1024).
 
 
 LIST OUTPUT
