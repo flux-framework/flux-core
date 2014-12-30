@@ -1662,6 +1662,126 @@ done:
     return rc;
 }
 
+static json_object *
+subprocess_json_resp (ctx_t *ctx, struct subprocess *p)
+{
+    json_object *resp = util_json_object_new_object ();
+
+    assert (ctx != NULL);
+    assert (resp != NULL);
+
+    util_json_object_add_int (resp, "rank", ctx->rank);
+    util_json_object_add_int (resp, "pid", subprocess_pid (p));
+    util_json_object_add_string (resp, "state", subprocess_state_string (p));
+    return (resp);
+}
+
+static int child_exit_handler (struct subprocess *p, void *arg)
+{
+    int n;
+
+    ctx_t *ctx = (ctx_t *) arg;
+    zmsg_t *zmsg = (zmsg_t *) subprocess_get_context (p);
+    json_object *resp;
+
+    assert (ctx != NULL);
+    assert (zmsg != NULL);
+
+    resp = subprocess_json_resp (ctx, p);
+    util_json_object_add_int (resp, "status", subprocess_exit_status (p));
+    util_json_object_add_int (resp, "code", subprocess_exit_code (p));
+    if ((n = subprocess_signaled (p)))
+        util_json_object_add_int (resp, "signal", n);
+
+    flux_json_respond (ctx->h, resp, &zmsg);
+    json_object_put (resp);
+    return (0);
+}
+
+/*
+ *  Create a subprocess described in the zmsg argument.
+ */
+static int cmb_create_subprocess (ctx_t *ctx, zmsg_t **zmsg)
+{
+    json_object *request = NULL;
+    json_object *response = NULL;
+    json_object *o;
+    struct subprocess *p;
+    zmsg_t *copy;
+    int i, argc;
+    int rc = -1;
+
+    if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
+        errno = EPROTO;
+        return -1;
+    }
+
+    if (!json_object_object_get_ex (request, "cmdline", &o)
+        || o == NULL
+        || (json_object_get_type (o) != json_type_array)) {
+        errno = EPROTO;
+        goto out_free;
+    }
+
+    if ((argc = json_object_array_length (o)) < 0) {
+        errno = EPROTO;
+        goto out_free;
+    }
+
+    p = subprocess_create (ctx->sm);
+    subprocess_set_callback (p, child_exit_handler, ctx);
+
+    for (i = 0; i < argc; i++) {
+        json_object *ox = json_object_array_get_idx (o, i);
+        if (json_object_get_type (ox) == json_type_string)
+            subprocess_argv_append (p, json_object_get_string (ox));
+    }
+
+    if (json_object_object_get_ex (request, "env", &o) && o != NULL) {
+        json_object_iter iter;
+        json_object_object_foreachC (o, iter) {
+            const char *val = json_object_get_string (iter.val);
+            if (val != NULL)
+                subprocess_setenv (p, iter.key, val, 1);
+        }
+        /*
+         *  Override key FLUX environment variables in env array
+         */
+        subprocess_setenv (p, "FLUX_TMPDIR", getenv ("FLUX_TMPDIR"), 1);
+    }
+    else
+        subprocess_set_environ (p, environ);
+
+    if (json_object_object_get_ex (request, "cwd", &o) && o != NULL) {
+        const char *dir = json_object_get_string (o);
+        if (dir != NULL)
+            subprocess_set_cwd (p, dir);
+    }
+
+    if ((rc = subprocess_run (p)) < 0) {
+        subprocess_destroy (p);
+        goto out_free;
+    }
+
+    /*
+     * Save a copy of zmsg for future messages
+     */
+    copy = zmsg_dup (*zmsg);
+    subprocess_set_context (p, (void *) copy);
+
+    /*
+     *  Send response, destroys original zmsg.
+     */
+    response = subprocess_json_resp (ctx, p);
+    flux_json_respond (ctx->h, response, zmsg);
+out_free:
+    if (request)
+        json_object_put (request);
+    if (response)
+        json_object_put (response);
+    return (rc);
+}
+
 static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
 {
     int rc = 0;
@@ -1818,6 +1938,9 @@ static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             peer_mute (ctx, id);
         if (id)
             free (id);
+    } else if (flux_msg_match (*zmsg, "cmb.exec")) {
+        if (cmb_create_subprocess (ctx, zmsg) < 0)
+            flux_respond_errnum (ctx->h, zmsg, errno);
     } else {
         rc = -1;
         errno = ENOSYS;
@@ -1844,7 +1967,9 @@ static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
             free (id);
             break;
         case FLUX_MSGTYPE_REQUEST:
+            assert (zmsg != NULL);
             if (flux_sendmsg (ctx->h, &zmsg) < 0) {
+                assert (zmsg != NULL);
                 if (flux_respond_errnum (ctx->h, &zmsg, errno) < 0)
                     goto done;
             }
