@@ -45,13 +45,16 @@ typedef struct reactor_struct *reactor_t;
 static void reactor_destroy (reactor_t r);
 static reactor_t reactor_create (void);
 
+#define TAGPOOL_BSIZE   (1<<24)
+#define TAGPOOL_LENGTH  (1<<8)
+
 struct flux_handle_struct {
     const struct flux_handle_ops *ops;
     int             flags;
     void            *impl;
     reactor_t       reactor;
     zhash_t         *aux;
-    bool            matchtag_pool[256];
+    int             matchtag_pool[TAGPOOL_LENGTH];
 };
 
 flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags)
@@ -103,21 +106,35 @@ void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn destroy)
     zhash_freefn (h->aux, name, destroy);
 }
 
-uint8_t flux_matchtag_alloc (flux_t h)
+/* Allocate a block of matchtags.
+ * N.B. matchtag_block[0] is reserved as it contains FLUX_MATCTAG_NONE (0).
+ * We could use the matchtag space much more efficiently with small effort.
+ */
+uint32_t flux_matchtag_alloc (flux_t h, int len)
 {
-    uint8_t t;
-    for (t = 1; t > 0; t++) {
-        if (!h->matchtag_pool[t]) {
-            h->matchtag_pool[t] = true;
-            break;
+    int i;
+
+    if (len < TAGPOOL_BSIZE && len > 0) {
+        for (i = 1; i < TAGPOOL_LENGTH; i++) {
+            if (h->matchtag_pool[i] == 0) {
+                h->matchtag_pool[i] = len;
+                return (uint32_t)i<<24;
+            }
         }
     }
-    return t;
+    return FLUX_MATCHTAG_NONE;
 }
 
-void flux_matchtag_free (flux_t h, uint8_t t)
+/* Free block of matchtags.
+ * In this simple implementation, we do not manage partial blocks.
+ * Len has to match what was allocated or the block isn't freed.
+ */
+void flux_matchtag_free (flux_t h, uint32_t matchtag, int len)
 {
-    h->matchtag_pool[t] = false;
+    int i = matchtag>>24;
+
+    if (i < TAGPOOL_LENGTH && h->matchtag_pool[i] == len)
+        h->matchtag_pool[i] = 0;
 }
 
 int flux_request_sendmsg (flux_t h, zmsg_t **zmsg)
@@ -207,7 +224,7 @@ int flux_response_putmsg (flux_t h, zmsg_t **zmsg)
     return h->ops->response_putmsg (h->impl, zmsg);
 }
 
-zmsg_t *flux_response_recvmsg (flux_t h, uint8_t matchtag, bool nonblock)
+zmsg_t *flux_response_recvmsg (flux_t h, uint32_t matchtag, bool nonblock)
 {
     zmsg_t *zmsg = NULL;
     zlist_t *nomatch = NULL;
@@ -215,11 +232,12 @@ zmsg_t *flux_response_recvmsg (flux_t h, uint8_t matchtag, bool nonblock)
     do {
         if (!(zmsg = flux_response_recvmsg_any (h, nonblock)))
             goto done;
-        if (matchtag != 0 && !flux_msg_cmp_matchtag (zmsg, matchtag)) {
+        if (matchtag != FLUX_MATCHTAG_NONE
+                            && !flux_msg_cmp_matchtag (zmsg, matchtag)) {
             if (!nomatch && !(nomatch = zlist_new ()))
                 oom ();
             if (h->flags & FLUX_FLAGS_TRACE)
-                fprintf (stderr, "[deferred: matchtag != %d]\n", matchtag);
+                fprintf (stderr, "[deferred: matchtag != %u]\n", matchtag);
             if (zlist_append (nomatch, zmsg) < 0)
                 oom ();
             zmsg = NULL;

@@ -41,15 +41,16 @@
  */
 #define PROTO_MAGIC         0x8e
 #define PROTO_VERSION       1
-#define PROTO_SIZE          9
+#define PROTO_SIZE          12
 #define PROTO_OFF_MAGIC     0 /* 1 byte */
 #define PROTO_OFF_VERSION   1 /* 1 byte */
 #define PROTO_OFF_TYPE      2 /* 1 byte */
 #define PROTO_OFF_FLAGS     3 /* 1 byte */
 #define PROTO_OFF_BIGINT    4 /* 4 bytes */
-#define PROTO_OFF_MATCHTAG  8 /* 1 byte */
+#define PROTO_OFF_BIGINT2   8 /* 4 bytes */
 
 static int proto_set_bigint (uint8_t *data, int len, uint32_t bigint);
+static int proto_set_bigint2 (uint8_t *data, int len, uint32_t bigint);
 
 static int proto_set_type (uint8_t *data, int len, int type)
 {
@@ -58,16 +59,32 @@ static int proto_set_type (uint8_t *data, int len, int type)
         return -1;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
+            if (proto_set_bigint (data, len, FLUX_NODEID_ANY) < 0)
+                return -1;
+            if (proto_set_bigint2 (data, len, FLUX_MATCHTAG_NONE) < 0)
+                return -1;
+            break;
         case FLUX_MSGTYPE_RESPONSE:
+            if (proto_set_bigint (data, len, 0) < 0)
+                return -1;
+            break;
         case FLUX_MSGTYPE_EVENT:
+            if (proto_set_bigint (data, len, 0) < 0)
+                return -1;
+            if (proto_set_bigint2 (data, len, 0) < 0)
+                return -1;
+            break;
         case FLUX_MSGTYPE_KEEPALIVE:
+            if (proto_set_bigint (data, len, 0) < 0)
+                return -1;
+            if (proto_set_bigint2 (data, len, 0) < 0)
+                return -1;
             break;
         default:
             return -1;
     }
     data[PROTO_OFF_TYPE] = type;
-    return proto_set_bigint (data, len, type == FLUX_MSGTYPE_REQUEST
-                                              ? FLUX_NODEID_ANY : 0);
+    return 0;
 }
 static int proto_get_type (uint8_t *data, int len, int *type)
 {
@@ -114,20 +131,25 @@ static int proto_get_bigint (uint8_t *data, int len, uint32_t *bigint)
     *bigint = ntohl (x);
     return 0;
 }
-static int proto_set_matchtag (uint8_t *data, int len, uint8_t matchtag)
+static int proto_set_bigint2 (uint8_t *data, int len, uint32_t bigint)
 {
+    uint32_t x = htonl (bigint);
+
     if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
                          || data[PROTO_OFF_VERSION] != PROTO_VERSION)
         return -1;
-    data[PROTO_OFF_MATCHTAG] = matchtag;
+    memcpy (&data[PROTO_OFF_BIGINT2], &x, sizeof (x));
     return 0;
 }
-static int proto_get_matchtag (uint8_t *data, int len, uint8_t *val)
+static int proto_get_bigint2 (uint8_t *data, int len, uint32_t *bigint)
 {
+    uint32_t x;
+
     if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
                          || data[PROTO_OFF_VERSION] != PROTO_VERSION)
         return -1;
-    *val = data[PROTO_OFF_MATCHTAG];
+    memcpy (&x, &data[PROTO_OFF_BIGINT2], sizeof (x));
+    *bigint = ntohl (x);
     return 0;
 }
 static void proto_init (uint8_t *data, int len, uint8_t flags)
@@ -293,40 +315,40 @@ int flux_msg_get_seq (zmsg_t *zmsg, uint32_t *seq)
     return 0;
 }
 
-int flux_msg_set_matchtag (zmsg_t *zmsg, uint8_t t)
+int flux_msg_set_matchtag (zmsg_t *zmsg, uint32_t t)
 {
     zframe_t *zf = zmsg_last (zmsg);
     int type;
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || (type != FLUX_MSGTYPE_REQUEST && type != FLUX_MSGTYPE_RESPONSE)
-            || proto_set_matchtag (zframe_data (zf), zframe_size (zf), t) < 0) {
+            || proto_set_bigint2 (zframe_data (zf), zframe_size (zf), t) < 0) {
         errno = EINVAL;
         return -1;
     }
     return 0;
 }
 
-int flux_msg_get_matchtag (zmsg_t *zmsg, uint8_t *t)
+int flux_msg_get_matchtag (zmsg_t *zmsg, uint32_t *t)
 {
     zframe_t *zf = zmsg_last (zmsg);
     int type;
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || (type != FLUX_MSGTYPE_REQUEST && type != FLUX_MSGTYPE_RESPONSE)
-            || proto_get_matchtag (zframe_data (zf), zframe_size (zf), t) < 0) {
+            || proto_get_bigint2 (zframe_data (zf), zframe_size (zf), t) < 0) {
         errno = EPROTO;
         return -1;
     }
     return 0;
 }
 
-bool flux_msg_cmp_matchtag (zmsg_t *zmsg, uint8_t t)
+bool flux_msg_cmp_matchtag (zmsg_t *zmsg, uint32_t matchtag)
 {
-    uint8_t q;
-    if (flux_msg_get_matchtag (zmsg, &q) < 0)
+    uint32_t t;
+    if (flux_msg_get_matchtag (zmsg, &t) < 0)
         return false;
-    if (q != t)
+    if (t != matchtag)
         return false;
     return true;
 }
@@ -1253,15 +1275,17 @@ void check_proto (void)
 void check_matchtag (void)
 {
     zmsg_t *zmsg;
-    uint8_t t;
+    uint32_t t;
 
     ok ((zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
         "flux_msg_create works");
-    ok (flux_msg_get_matchtag (zmsg, &t) == 0 && t == 0,
-        "flux_msg_get_matchtag returns 0 when uninitialized");
+    ok (flux_msg_get_matchtag (zmsg, &t) == 0 && t == FLUX_MATCHTAG_NONE,
+        "flux_msg_get_matchtag returns FLUX_MATCHTAG_NONE  when uninitialized");
     ok (flux_msg_set_matchtag (zmsg, 42) == 0,
         "flux_msg_set_matchtag works");
-    ok (flux_msg_get_matchtag (zmsg, &t) == 0 && t == 42,
+    ok (flux_msg_get_matchtag (zmsg, &t) == 0,
+        "flux_msg_get_matchtag works");
+    ok (t == 42,
         "flux_msg_get_matchtag returns set value");
     ok (flux_msg_cmp_matchtag (zmsg, 42) && !flux_msg_cmp_matchtag (zmsg, 0),
         "flux_msg_cmp_matchtag works");
@@ -1270,7 +1294,7 @@ void check_matchtag (void)
 
 int main (int argc, char *argv[])
 {
-    plan (96);
+    plan (97);
 
     lives_ok ({zmsg_test (false);}, // 1
         "zmsg_test doesn't assert");
@@ -1279,7 +1303,7 @@ int main (int argc, char *argv[])
     check_routes ();                // 26
     check_topic ();                 // 11
     check_payload ();               // 21
-    check_matchtag ();              // 5
+    check_matchtag ();              // 6
 
     check_legacy_encode ();         // 5
     check_legacy_encode_json ();    // 8

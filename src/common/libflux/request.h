@@ -32,11 +32,11 @@ zmsg_t *flux_request_recvmsg (flux_t h, bool nonblock);
 int flux_response_sendmsg (flux_t h, zmsg_t **zmsg);
 
 /* Receive a response message matching 'matchtag', blocking until one is
- * available.  If 'nonblock' and none is * available, return NULL
- * with errno == EAGAIN.  If 'matchtag' is 0, match any message.
+ * available.  If 'nonblock' and none is available, return NULL with
+ * errno == EAGAIN.  If 'matchtag' is FLUX_MATCHTAG_NONE, match any message.
  * Returns message on success, or NULL on failure with errno set.
  */
-zmsg_t *flux_response_recvmsg (flux_t h, uint8_t matchtag, bool nonblock);
+zmsg_t *flux_response_recvmsg (flux_t h, uint32_t matchtag, bool nonblock);
 
 /* Put a response message in the handle's inbound message queue for processing
  * in FIFO order, before other unprocessed messages.  The handle will become
@@ -49,12 +49,12 @@ int flux_response_putmsg (flux_t h, zmsg_t **zmsg);
 
 /* Send a request to 'nodeid' (may be FLUX_NODEID_ANY) addressed to 'topic'.
  * If 'in' is non-NULL, attach JSON payload, caller retains ownership.
- * Set 'matchtag' to zero to disable tag matching, or allocate/free one
- * from the handle with flux_matchtag_alloc()/flux_matchtag_free().
+ * Set 'matchtag' to FLUX_MATCHTAG_NONE to disable tag matching, or
+ * allocate/free one from the handle with flux_matchtag_alloc()/_free().
  * This function does not wait for a response message.
  * Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_json_request (flux_t h, uint32_t nodeid, uint8_t matchtag,
+int flux_json_request (flux_t h, uint32_t nodeid, uint32_t matchtag,
                        const char *topic, json_object *in);
 
 /* Send a request to 'nodeid' (may be FLUX_NODEID_ANY) addressed to 'topic'.
@@ -67,6 +67,17 @@ int flux_json_request (flux_t h, uint32_t nodeid, uint8_t matchtag,
  */
 int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
                    json_object *in, json_object **out);
+
+/* Send a request to each node in 'nodeset', then collect responses,
+ * calling 'cb' for each one (if 'cb' is non-NULL).
+ * Returns 0 on success, -1 on failure with errno set.
+ * If there are multiple failures, their greatest errno is returned.
+ */
+typedef int (flux_multrpc_f)(uint32_t nodeid, uint32_t errnum,
+                             json_object *out, void *arg);
+int flux_json_multrpc (flux_t h, const char *nodeset, int fanout,
+                       const char *topic, json_object *in,
+                       flux_multrpc_f cb, void *arg);
 
 /* Convert 'zmsg' request into a response and send it.  'zmsg' is destroyed
  * on success.  Attach JSON payload 'out' (caller retains owenrship).
