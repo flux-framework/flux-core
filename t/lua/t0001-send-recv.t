@@ -3,10 +3,10 @@
 --  Basic flux reactor testing using ping interface to kvs
 --
 local t = require 'fluxometer'.init (...)
-t:start_session { size = 1}
+t:start_session { size = 2}
 t:say ("starting send/recv tests")
 
-plan (8)
+plan (13)
 
 local flux = require_ok ('flux')
 local f, err = flux.new()
@@ -29,6 +29,18 @@ is (msg.pad, "xxxxxx", "recv: got expected ping pad")
 is (tag, "live.ping", "recv: got expected tag on ping response")
 
 for k,v in pairs(msg) do note ("msg."..k.."="..v) end
+
+--
+--  Test f:send() with rank argument
+--
+local rc, err = f:send ("live.ping", packet, 0)
+is (rc, 1, "send to rank 0: rc is 1")
+is (err, nil, "send to rank 0: err is nil")
+
+local msg, tag = f:recv ()
+is (msg.seq, "1", "recv: got expected ping sequence")
+is (msg.pad, "xxxxxx", "recv: got expected ping pad")
+is (tag, "live.ping", "recv: got expected tag on ping response")
 
 done_testing ()
 
