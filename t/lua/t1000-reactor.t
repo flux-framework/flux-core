@@ -24,7 +24,7 @@ local mh, err = f:msghandler {
 
     handler = function (f, zmsg, mh)
         local resp = zmsg.data
-        is (resp.errnum, nil, "ping: no error in response msg")
+        is (zmsg.errnum, 0, "ping: no error in response msg")
         is (zmsg.tag, "kvs.ping", "ping: got correct tag")
         is (resp.seq, "1", "ping: got first sequence number")
         is (resp.pad, "TestPAD", "ping: got correct pad")
