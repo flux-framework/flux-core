@@ -80,4 +80,14 @@ subtest ('Test zmsg response', function ()
 
 end)
 
+subtest ('Test zmsg errnum', function ()
+	local resp = z.resp_err ("test.resp_err", 255)
+
+	type_ok (resp,    'userdata',             'type is userdata')
+	is (resp.tag,     "test.resp_err",        'msg.tag is correct')
+	is (resp.type,    "response",             'msg.type is response')
+	is (resp.data,    nil,                    'msg.data is nil')
+	is (resp.errnum,  255,                    'msg.errnum is non-nil')
+end)
+
 done_testing()

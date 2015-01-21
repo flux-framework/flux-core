@@ -47,6 +47,8 @@ int lua_is_json_null (lua_State *L, int index)
 
 int json_object_to_lua (lua_State *L, json_object *o)
 {
+        if (o == NULL)
+            lua_pushnil (L);
         switch (json_object_get_type (o)) {
         case json_type_object:
             json_object_to_lua_table (L, o);

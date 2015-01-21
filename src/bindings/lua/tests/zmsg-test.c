@@ -80,6 +80,34 @@ static int l_cmb_zmsg_create_response (lua_State *L)
     return l_cmb_zmsg_create_type (L, FLUX_MSGTYPE_RESPONSE);
 }
 
+/*
+ *  Send new-API-style response with errnum.
+ */
+static int l_cmb_zmsg_create_response_with_error (lua_State *L)
+{
+    struct zmsg_info *zi;
+    int errnum;
+    const char *tag;
+    zmsg_t *zmsg = flux_msg_create (FLUX_MSGTYPE_RESPONSE);
+    if (!zmsg)
+        return lua_pusherror (L, "flux_msg_create: %s", strerror (errno));
+
+    tag = lua_tostring (L, 1);
+    errnum = lua_tointeger (L, 2);
+
+    if (flux_msg_set_topic (zmsg, tag) < 0)
+        return lua_pusherror (L, "flux_msg_set_topic: %s", strerror (errno));
+    if (flux_msg_set_errnum (zmsg, errnum) < 0)
+        return lua_pusherror (L, "flux_msg_set_errnum: %s", strerror (errno));
+    if (flux_msg_set_payload (zmsg, 0, NULL, 0))
+        return lua_pusherror (L, "flux_msg_set_payload: %s", strerror (errno));
+
+    zi = zmsg_info_create (&zmsg, FLUX_MSGTYPE_RESPONSE);
+    zmsg_destroy (&zmsg);
+
+    return lua_push_zmsg_info (L, zi);
+}
+
 static int l_cmb_zmsg_create_request (lua_State *L)
 {
     return l_cmb_zmsg_create_type (L, FLUX_MSGTYPE_REQUEST);
@@ -93,6 +121,7 @@ static int l_cmb_zmsg_create_event (lua_State *L)
 static const struct luaL_Reg zmsg_info_test_functions [] = {
 	{ "req",       l_cmb_zmsg_create_request   },
 	{ "resp",      l_cmb_zmsg_create_response  },
+	{ "resp_err",  l_cmb_zmsg_create_response_with_error },
 	{ "event",     l_cmb_zmsg_create_event     },
 	{ NULL,        NULL              }
 };

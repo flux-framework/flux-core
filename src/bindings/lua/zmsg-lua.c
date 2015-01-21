@@ -148,6 +148,15 @@ static int l_zmsg_info_index (lua_State *L)
     if (strcmp (key, "data") == 0) {
         return json_object_to_lua (L, zi->o);
     }
+    if (strcmp (key, "errnum") == 0) {
+        int errnum;
+        if (!(zi->typemask & FLUX_MSGTYPE_RESPONSE))
+            return lua_pusherror (L,
+                "zmsg: errnum requested for non-respose msg");
+        flux_msg_get_errnum (zi->zmsg, &errnum);
+        lua_pushnumber (L, errnum);
+        return (1);
+    }
 
     /* Push metatable value onto stack */
     lua_getmetatable (L, 1);

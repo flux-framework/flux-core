@@ -286,9 +286,11 @@ static int l_flux_index (lua_State *L)
 static int l_flux_send (lua_State *L)
 {
     int rc;
+    int nargs = lua_gettop (L) - 1;
     flux_t f = lua_get_flux (L, 1);
     const char *tag = luaL_checkstring (L, 2);
     json_object *o;
+    uint32_t nodeid = FLUX_NODEID_ANY;
 
     if (lua_value_to_json (L, 3, &o) < 0)
         return lua_pusherror (L, "JSON conversion error");
@@ -296,7 +298,10 @@ static int l_flux_send (lua_State *L)
     if (tag == NULL)
         return lua_pusherror (L, "Invalid args");
 
-    rc = flux_request_send (f, o, tag);
+    if (nargs >= 3)
+        nodeid = lua_tointeger (L, 4);
+
+    rc = flux_json_request (f, nodeid, 0, tag, o);
     json_object_put (o);
     if (rc < 0)
         return lua_pusherror (L, strerror (errno));
