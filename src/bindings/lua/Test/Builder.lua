@@ -219,6 +219,7 @@ function m:done_testing (num_tests)
     if self.curr_test == 0 then
         self.is_passing = false
     end
+    if not self.is_passing then os.exit (1) end
 end
 
 function m:has_plan ()
