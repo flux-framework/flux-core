@@ -73,7 +73,7 @@ static void cmb_reactor_stop (void *impl, int rc);
 
 static const struct flux_handle_ops cmb_ops;
 
-static int cmb_request_sendmsg (void *impl, zmsg_t **zmsg)
+static int cmb_sendmsg (void *impl, zmsg_t **zmsg)
 {
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
@@ -474,7 +474,7 @@ void flux_api_close (flux_t h)
 }
 
 static const struct flux_handle_ops cmb_ops = {
-    .request_sendmsg = cmb_request_sendmsg,
+    .sendmsg = cmb_sendmsg,
     .response_recvmsg = cmb_response_recvmsg,
     .response_putmsg = cmb_response_putmsg,
     .event_recvmsg = cmb_event_recvmsg,

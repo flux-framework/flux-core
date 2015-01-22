@@ -13,9 +13,8 @@
  */
 
 struct flux_handle_ops {
-    int         (*request_sendmsg)(void *impl, zmsg_t **zmsg);
+    int         (*sendmsg)(void *impl, zmsg_t **zmsg);
     zmsg_t *    (*request_recvmsg)(void *impl, bool nonblock);
-    int         (*response_sendmsg)(void *impl, zmsg_t **zmsg);
     zmsg_t *    (*response_recvmsg)(void *impl, bool nonblock);
     int         (*response_putmsg)(void *impl, zmsg_t **zmsg);
 

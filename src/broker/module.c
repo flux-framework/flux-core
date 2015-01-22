@@ -156,14 +156,24 @@ static int dq_put (dq_t *dq, zmsg_t **zmsg)
  ** flux_t implementation
  **/
 
-static int plugin_request_sendmsg (void *impl, zmsg_t **zmsg)
+static int plugin_sendmsg (void *impl, zmsg_t **zmsg)
 {
     plugin_ctx_t p = impl;
-    int rc;
-
     assert (p->magic == PLUGIN_MAGIC);
-    rc = zmsg_send (zmsg, p->zs_request);
-    p->stats.request_tx++;
+    int type;
+    int rc = -1;
+
+    if (flux_msg_get_type (*zmsg, &type) < 0)
+        goto done;
+    if (type == FLUX_MSGTYPE_REQUEST) {
+        rc = zmsg_send (zmsg, p->zs_request);
+        p->stats.request_tx++;
+    } else if (type == FLUX_MSGTYPE_RESPONSE) {
+        rc = zmsg_send (zmsg, p->zs_svc[0]);
+        p->stats.svc_tx++;
+    } else
+        errno = EINVAL;
+done:
     return rc;
 }
 
@@ -179,18 +189,6 @@ static zmsg_t *plugin_request_recvmsg (void *impl, bool nb)
         zmsg_destroy (&zmsg);
     }
     return zmsg;
-}
-
-
-static int plugin_response_sendmsg (void *impl, zmsg_t **zmsg)
-{
-    int rc;
-    plugin_ctx_t p = impl;
-
-    assert (p->magic == PLUGIN_MAGIC);
-    rc = zmsg_send (zmsg, p->zs_svc[0]);
-    p->stats.svc_tx++;
-    return rc;
 }
 
 static zmsg_t *plugin_response_recvmsg (void *impl, bool nb)
@@ -738,9 +736,8 @@ plugin_ctx_t plugin_create (flux_t h, const char *path, zhash_t *args)
 
 
 static const struct flux_handle_ops plugin_handle_ops = {
-    .request_sendmsg = plugin_request_sendmsg,
+    .sendmsg = plugin_sendmsg,
     .request_recvmsg = plugin_request_recvmsg,
-    .response_sendmsg = plugin_response_sendmsg,
     .response_recvmsg = plugin_response_recvmsg,
     .response_putmsg = plugin_response_putmsg,
     .event_recvmsg = plugin_event_recvmsg,

@@ -34,9 +34,8 @@ void flux_matchtag_free (flux_t h, uint32_t t, int size);
 
 /* Low level message send/recv functions.
  */
-int flux_request_sendmsg (flux_t h, zmsg_t **zmsg);
+int flux_sendmsg (flux_t h, zmsg_t **zmsg);
 zmsg_t *flux_request_recvmsg (flux_t h, bool nonblock);
-int flux_response_sendmsg (flux_t h, zmsg_t **zmsg);
 zmsg_t *flux_response_recvmsg (flux_t h, uint32_t matchtag, bool nonblock);
 int flux_response_putmsg (flux_t h, zmsg_t **zmsg);
 zmsg_t *flux_event_recvmsg (flux_t h, bool nonblock);

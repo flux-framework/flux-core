@@ -192,7 +192,7 @@ static int notify_srv (const char *key, void *item, void *arg)
         goto done;
     if (flux_msg_push_route (zmsg, zuuid_str (c->uuid)) < 0)
         goto done;
-    flux_request_sendmsg (c->ctx->h, &zmsg);
+    flux_sendmsg (c->ctx->h, &zmsg);
 done:
     zmsg_destroy (&zmsg);
     free (topic);
@@ -277,7 +277,7 @@ static int client_read (ctx_t *ctx, client_t *c)
         }
         if (flux_msg_push_route (zmsg, zuuid_str (c->uuid)) < 0)
             oom (); /* FIXME */
-        flux_request_sendmsg (ctx->h, &zmsg);
+        flux_sendmsg (ctx->h, &zmsg);
     }
 done:
     if (zmsg)

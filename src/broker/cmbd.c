@@ -1842,7 +1842,7 @@ static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
             free (id);
             break;
         case FLUX_MSGTYPE_REQUEST:
-            if (flux_request_sendmsg (ctx->h, &zmsg) < 0) {
+            if (flux_sendmsg (ctx->h, &zmsg) < 0) {
                 if (flux_respond_errnum (ctx->h, &zmsg, errno) < 0)
                     goto done;
             }
@@ -1882,7 +1882,7 @@ static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_RESPONSE:
-            if (flux_response_sendmsg (ctx->h, &zmsg) < 0)
+            if (flux_sendmsg (ctx->h, &zmsg) < 0)
                 goto done;
             break;
         case FLUX_MSGTYPE_EVENT:
@@ -1912,7 +1912,7 @@ static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod)
         if (zmsg_content_size (zmsg) == 0) /* EOF */
             zhash_delete (ctx->modules, plugin_name (mod->p));
         else {
-            (void)flux_response_sendmsg (ctx->h, &zmsg);
+            (void)flux_sendmsg (ctx->h, &zmsg);
             peer_update (ctx, plugin_uuid (mod->p));
         }
     }
@@ -2123,9 +2123,8 @@ done:
  **    a bit limited, by design
  **/
 
-static int cmbd_request_sendmsg (void *impl, zmsg_t **zmsg)
+static int cmbd_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
 {
-    ctx_t *ctx = impl;
     char *lasthop = flux_msg_nexthop (*zmsg);
     int hopcount = flux_msg_hopcount (*zmsg);
     uint32_t nodeid;
@@ -2157,9 +2156,8 @@ done:
     return rc;
 }
 
-static int cmbd_response_sendmsg (void *impl, zmsg_t **zmsg)
+static int cmbd_response_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
 {
-    ctx_t *ctx = impl;
     char *nexthop = flux_msg_nexthop (*zmsg);
     int rc = -1;
 
@@ -2178,6 +2176,23 @@ static int cmbd_response_sendmsg (void *impl, zmsg_t **zmsg)
     return rc;
 }
 
+static int cmbd_sendmsg (void *impl, zmsg_t **zmsg)
+{
+    ctx_t *ctx = impl;
+    int type;
+    int rc = -1;
+    if (flux_msg_get_type (*zmsg, &type) < 0)
+        goto done;
+    if (type == FLUX_MSGTYPE_REQUEST)
+        rc = cmbd_request_sendmsg (ctx, zmsg);
+    else if (type == FLUX_MSGTYPE_RESPONSE)
+        rc = cmbd_response_sendmsg (ctx, zmsg);
+    else
+        errno = EINVAL;
+done:
+    return rc;
+}
+
 static int cmbd_rank (void *impl)
 {
     ctx_t *ctx = impl;
@@ -2191,8 +2206,7 @@ static zctx_t *cmbd_get_zctx (void *impl)
 }
 
 static const struct flux_handle_ops cmbd_handle_ops = {
-    .request_sendmsg = cmbd_request_sendmsg,
-    .response_sendmsg = cmbd_response_sendmsg,
+    .sendmsg = cmbd_sendmsg,
     .rank = cmbd_rank,
     .get_zctx = cmbd_get_zctx,
 };
