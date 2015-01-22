@@ -13,40 +13,6 @@
  * See also message.h.
  */
 
-/* Send a request message.  This function internally calls zmsg_send(),
- * destroying 'zmsg' on success.
- * Returns 0 on success, or -1 on failure with errno set.
- */
-int flux_request_sendmsg (flux_t h, zmsg_t **zmsg);
-
-/* Receive a request message, blocking until one is available.
- * If 'nonblock' and none is available, return NULL with errno == EAGAIN.
- * Returns message on success, or NULL on failure with errno set.
- */
-zmsg_t *flux_request_recvmsg (flux_t h, bool nonblock);
-
-/* Send a response message.  This function internally calls zmsg_send(),
- * destroying 'zmsg' on success.
- * Returns 0 on success, or -1 on failure with errno set.
- */
-int flux_response_sendmsg (flux_t h, zmsg_t **zmsg);
-
-/* Receive a response message matching 'matchtag', blocking until one is
- * available.  If 'nonblock' and none is available, return NULL with
- * errno == EAGAIN.  If 'matchtag' is FLUX_MATCHTAG_NONE, match any message.
- * Returns message on success, or NULL on failure with errno set.
- */
-zmsg_t *flux_response_recvmsg (flux_t h, uint32_t matchtag, bool nonblock);
-
-/* Put a response message in the handle's inbound message queue for processing
- * in FIFO order, before other unprocessed messages.  The handle will become
- * ready and the response will be returned by a call to flux_response_recvmsg()
- * or similar.
- * On success, ownership of 'zmsg' is transferred to the handle.
- * Returns 0 on success, or -1 on failure with errno set.
- */
-int flux_response_putmsg (flux_t h, zmsg_t **zmsg);
-
 /* Send a request to 'nodeid' (may be FLUX_NODEID_ANY) addressed to 'topic'.
  * If 'in' is non-NULL, attach JSON payload, caller retains ownership.
  * Set 'matchtag' to FLUX_MATCHTAG_NONE to disable tag matching, or

@@ -2,6 +2,8 @@
 #define _FLUX_CORE_HANDLE_H
 
 #include <stdint.h>
+#include <stdbool.h>
+#include <czmq.h>
 
 typedef struct flux_handle_struct *flux_t;
 
@@ -29,6 +31,15 @@ void flux_flags_unset (flux_t h, int flags);
  */
 uint32_t flux_matchtag_alloc (flux_t h, int size);
 void flux_matchtag_free (flux_t h, uint32_t t, int size);
+
+/* Low level message send/recv functions.
+ */
+int flux_request_sendmsg (flux_t h, zmsg_t **zmsg);
+zmsg_t *flux_request_recvmsg (flux_t h, bool nonblock);
+int flux_response_sendmsg (flux_t h, zmsg_t **zmsg);
+zmsg_t *flux_response_recvmsg (flux_t h, uint32_t matchtag, bool nonblock);
+int flux_response_putmsg (flux_t h, zmsg_t **zmsg);
+zmsg_t *flux_event_recvmsg (flux_t h, bool nonblock);
 
 #endif /* !_FLUX_CORE_HANDLE_H */
 
