@@ -30,6 +30,7 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <assert.h>
+#include <fnmatch.h>
 
 #include "message.h"
 
@@ -350,6 +351,50 @@ bool flux_msg_cmp_matchtag (zmsg_t *zmsg, uint32_t matchtag)
         return false;
     if (t != matchtag)
         return false;
+    return true;
+}
+
+static bool isa_glob (const char *s)
+{
+    if (strchr (s, '*') || strchr (s, '?'))
+        return true;
+    return false;
+}
+
+bool flux_msg_cmp (zmsg_t *zmsg, flux_match_t match)
+{
+    if (match.typemask != 0) {
+        int type;
+        if (flux_msg_get_type (zmsg, &type) < 0)
+            return false;
+        if ((type & match.typemask) == 0)
+            return false;
+    }
+    if (match.matchtag != FLUX_MATCHTAG_NONE) {
+        uint32_t matchtag;
+        uint32_t lo = match.matchtag;
+        uint32_t hi = match.bsize > 1 ? match.matchtag + match.bsize
+                                      : match.matchtag;
+        if (flux_msg_get_matchtag (zmsg, &matchtag) < 0)
+            return false;
+        if (matchtag < lo || matchtag > hi)
+            return false;
+    }
+    if (match.topic_glob && strlen (match.topic_glob) > 0
+                         && strcmp (match.topic_glob, "*") != 0) {
+        if (isa_glob (match.topic_glob)) {
+            char *topic = NULL;
+            if (flux_msg_get_topic (zmsg, &topic) < 0)
+                return false;
+            int rc = fnmatch (match.topic_glob, topic, 0);
+            free (topic);
+            if (rc != 0)
+                return false;
+        } else {
+            if (!flux_msg_streq_topic (zmsg, match.topic_glob))
+                return false;
+        }
+    }
     return true;
 }
 
@@ -1340,9 +1385,48 @@ void check_matchtag (void)
     zmsg_destroy (&zmsg);
 }
 
+void check_cmp (void)
+{
+    flux_match_t match = {
+        .typemask = 0,
+        .matchtag = FLUX_MATCHTAG_NONE,
+        .bsize = 0,
+        .topic_glob = NULL,
+    };
+    zmsg_t *zmsg;
+    ok ((zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+        "flux_msg_create works");
+
+    ok (flux_msg_cmp (zmsg, match),
+        "flux_msg_cmp all-match works");
+
+    match.typemask = FLUX_MSGTYPE_RESPONSE;
+    ok (!flux_msg_cmp (zmsg, match),
+        "flux_msg_cmp with request type not in mask works");
+
+    match.typemask |= FLUX_MSGTYPE_REQUEST;
+    ok (flux_msg_cmp (zmsg, match),
+        "flux_msg_cmp with request type in mask works");
+
+    ok (flux_msg_set_topic (zmsg, "hello.foo") == 0,
+        "flux_msg_set_topic works");
+    match.topic_glob = "hello.foobar";
+    ok (!flux_msg_cmp (zmsg, match),
+        "flux_msg_cmp with unmatched topic works");
+
+    match.topic_glob = "hello.foo";
+    ok (flux_msg_cmp (zmsg, match),
+        "flux_msg_cmp with exact topic works");
+
+    match.topic_glob = "hello.*";
+    ok (flux_msg_cmp (zmsg, match),
+        "flux_msg_cmp with globbed topic works");
+    zmsg_destroy (&zmsg);
+}
+
 int main (int argc, char *argv[])
 {
-    plan (97);
+    plan (105);
 
     lives_ok ({zmsg_test (false);}, // 1
         "zmsg_test doesn't assert");
@@ -1356,6 +1440,8 @@ int main (int argc, char *argv[])
     check_legacy_encode ();         // 5
     check_legacy_encode_json ();    // 8
     check_legacy_replace_json ();   // 6
+
+    check_cmp ();                   // 8
 
     done_testing();
     return (0);
