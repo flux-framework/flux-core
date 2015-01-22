@@ -613,6 +613,54 @@ bool flux_msg_has_payload (zmsg_t *zmsg)
     return ((flags & FLUX_MSGFLAG_PAYLOAD));
 }
 
+int flux_msg_set_payload_json (zmsg_t *zmsg, json_object *o)
+{
+    int rc;
+    if (o) {
+        const char *s = json_object_to_json_string (o);
+        int len = strlen (s);
+        rc = flux_msg_set_payload (zmsg, FLUX_MSGFLAG_JSON, (char *)s, len);
+    } else
+        rc = flux_msg_set_payload (zmsg, 0, NULL, 0);
+    return rc;
+}
+
+int flux_msg_get_payload_json (zmsg_t *zmsg, json_object **o)
+{
+    struct json_tokener *tok = NULL;
+    int flags;
+    char *buf;
+    int size;
+    int rc = -1;
+
+    if (!o) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (flux_msg_get_payload (zmsg, &flags, (void **)&buf, &size) < 0) {
+        errno = 0;
+        *o = NULL;
+    } else {
+        if (!buf || size == 0 || !(flags & FLUX_MSGFLAG_JSON)) {
+            errno = EPROTO;
+            goto done;
+        }
+        if (!(tok = json_tokener_new ())) {
+            errno = ENOMEM;
+            goto done;
+        }
+        if (!(*o = json_tokener_parse_ex (tok, buf, size))) {
+            errno = EPROTO;
+            goto done;
+        }
+    }
+    rc = 0;
+done:
+    if (tok)
+        json_tokener_free (tok);
+    return rc;
+}
+
 int flux_msg_set_topic (zmsg_t *zmsg, const char *topic)
 {
     zframe_t *zf, *zf2 = NULL;

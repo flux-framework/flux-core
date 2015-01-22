@@ -49,6 +49,13 @@ int flux_msg_set_payload (zmsg_t *zmsg, int flags, void *buf, int size);
 int flux_msg_get_payload (zmsg_t *zmsg, int *flags, void **buf, int *size);
 bool flux_msg_has_payload (zmsg_t *zmsg);
 
+/* Get/set json payload.
+ * set allows o to be NULL
+ * get will set *o to NULL and return success if there is no payload.
+ */
+int flux_msg_set_payload_json (zmsg_t *zmsg, json_object *o);
+int flux_msg_get_payload_json (zmsg_t *zmsg, json_object **o);
+
 /* Get/set nodeid (request only)
  */
 #define FLUX_NODEID_ANY	(~(uint32_t)0)
