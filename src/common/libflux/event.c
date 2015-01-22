@@ -30,7 +30,7 @@
 
 #include "event.h"
 #include "message.h"
-#include "request.h"
+#include "rpc.h"
 
 #include "src/common/libutil/shortjson.h"
 

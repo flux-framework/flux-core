@@ -29,6 +29,7 @@
 
 #include "module.h"
 #include "request.h"
+#include "rpc.h"
 #include "message.h"
 
 #include "src/common/libutil/shortjson.h"

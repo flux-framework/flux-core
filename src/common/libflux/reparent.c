@@ -26,7 +26,7 @@
 #include "config.h"
 #endif
 #include "reparent.h"
-#include "request.h"
+#include "rpc.h"
 
 #include "src/common/libutil/shortjson.h"
 

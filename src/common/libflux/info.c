@@ -29,7 +29,7 @@
 #include <stdbool.h>
 
 #include "info.h"
-#include "request.h"
+#include "rpc.h"
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"

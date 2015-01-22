@@ -19,7 +19,8 @@ fluxcoreinclude_HEADERS = \
 	reparent.h \
 	info.h \
 	flog.h \
-	conf.h
+	conf.h \
+	rpc.h
 
 noinst_LTLIBRARIES = \
 	libflux.la
@@ -36,7 +37,8 @@ libflux_la_SOURCES = \
 	request.c \
 	module.c \
 	reparent.c \
-	conf.c
+	conf.c \
+	rpc.c
 
 TESTS = test_conf.t \
 	test_module.t \
