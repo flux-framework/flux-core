@@ -34,60 +34,6 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
 
-
-/* If 'o' is non-NULL, encode to string and set as payload in 'zmsg'.
- * Otherwise, clear payload in 'zmsg', if any.
- * Return 0 on success, -1 on failure with errno set.
- */
-static int msg_set_payload_json (zmsg_t *zmsg, JSON o)
-{
-    int rc;
-    if (o) {
-        const char *s = json_object_to_json_string (o);
-        int len = strlen (s);
-        rc = flux_msg_set_payload (zmsg, FLUX_MSGFLAG_JSON, (char *)s, len);
-    } else
-        rc = flux_msg_set_payload (zmsg, 0, NULL, 0);
-    return rc;
-}
-
-/* If 'zmsg' contains payload, return it in 'o', else set 'o' to NULL.
- * Return 0 on success, -1 on failure with errno set.
- */
-static int msg_get_payload_json (zmsg_t *zmsg, JSON *o)
-{
-    struct json_tokener *tok = NULL;
-    int flags;
-    char *buf;
-    int size;
-    int rc = -1;
-
-    assert (o != NULL);
-
-    if (flux_msg_get_payload (zmsg, &flags, (void **)&buf, &size) < 0) {
-        errno = 0;
-        *o = NULL;
-    } else {
-        if (!buf || size == 0 || !(flags & FLUX_MSGFLAG_JSON)) {
-            errno = EPROTO;
-            goto done;
-        }
-        if (!(tok = json_tokener_new ())) {
-            errno = ENOMEM;
-            goto done;
-        }
-        if (!(*o = json_tokener_parse_ex (tok, buf, size))) {
-            errno = EPROTO;
-            goto done;
-        }
-    }
-    rc = 0;
-done:
-    if (tok)
-        json_tokener_free (tok);
-    return rc;
-}
-
 int flux_json_request_decode (zmsg_t *zmsg, json_object **in)
 {
     int type;
@@ -104,7 +50,7 @@ int flux_json_request_decode (zmsg_t *zmsg, json_object **in)
         errno = EPROTO;
         goto done;
     }
-    if (msg_get_payload_json (zmsg, &o) < 0)
+    if (flux_msg_get_payload_json (zmsg, &o) < 0)
         goto done;
     if (o == NULL) {
         errno = EPROTO;
@@ -132,7 +78,7 @@ int flux_json_response_decode (zmsg_t *zmsg, json_object **out)
         errno = errnum;
         goto done;
     }
-    if (msg_get_payload_json (zmsg, &o) < 0)
+    if (flux_msg_get_payload_json (zmsg, &o) < 0)
         goto done;
     if (o == NULL) {
         errno = EPROTO;
@@ -186,7 +132,7 @@ int flux_json_request (flux_t h, uint32_t nodeid, uint32_t matchtag,
         goto done;
     if (flux_msg_set_topic (zmsg, topic) < 0)
         goto done;
-    if (msg_set_payload_json (zmsg, in) < 0)
+    if (flux_msg_set_payload_json (zmsg, in) < 0)
         goto done;
     if (flux_msg_enable_route (zmsg) < 0)
         goto done;
@@ -205,7 +151,7 @@ static int multrpc_cb (zmsg_t *zmsg, uint32_t nodeid,
 
     if (flux_msg_get_errnum (zmsg, &errnum) < 0)
         errnum = errno;
-    if (errnum == 0 && msg_get_payload_json (zmsg, &out) < 0)
+    if (errnum == 0 && flux_msg_get_payload_json (zmsg, &out) < 0)
         errnum = errno;
     if (cb && cb (nodeid, errnum, out, arg) < 0)
         errnum = errno;
@@ -343,7 +289,7 @@ int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
         errno = errnum;
         goto done;
     }
-    if (msg_get_payload_json (zmsg, &o) < 0)
+    if (flux_msg_get_payload_json (zmsg, &o) < 0)
         goto done;
     /* In order to support flux_rpc(), which in turn must support no-payload
      * responses, this cannot be an error yet.
@@ -372,7 +318,7 @@ int flux_json_respond (flux_t h, JSON out, zmsg_t **zmsg)
 
     if (flux_msg_set_type (*zmsg, FLUX_MSGTYPE_RESPONSE) < 0)
         goto done;
-    if (msg_set_payload_json (*zmsg, out) < 0)
+    if (flux_msg_set_payload_json (*zmsg, out) < 0)
         goto done;
     rc = flux_response_sendmsg (h, zmsg);
 done:
@@ -386,7 +332,7 @@ int flux_err_respond (flux_t h, int errnum, zmsg_t **zmsg)
         goto done;
     if (flux_msg_set_errnum (*zmsg, errnum) < 0)
         goto done;
-    if (msg_set_payload_json (*zmsg, NULL) < 0)
+    if (flux_msg_set_payload_json (*zmsg, NULL) < 0)
         goto done;
     rc = flux_response_sendmsg (h, zmsg);
 done:
