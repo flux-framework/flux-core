@@ -18,8 +18,8 @@ is (err, nil, "error is nil")
 --
 
 local packet = { seq = "1", pad = "xxxxxx" }
-local rc, err = f:send ("live.ping", packet)
-is (rc, 1, "send: rc is 1")
+local matchtag, err = f:send ("live.ping", packet)
+isnt (rc, 0, "send: rc is not 0")
 is (err, nil, "send: err is nil")
 
 
@@ -34,7 +34,7 @@ for k,v in pairs(msg) do note ("msg."..k.."="..v) end
 --  Test f:send() with rank argument
 --
 local rc, err = f:send ("live.ping", packet, 0)
-is (rc, 1, "send to rank 0: rc is 1")
+isnt (rc, 0, "send to rank 0: rc is not nil or zero")
 is (err, nil, "send to rank 0: err is nil")
 
 local msg, tag = f:recv ()

@@ -291,6 +291,7 @@ static int l_flux_send (lua_State *L)
     const char *tag = luaL_checkstring (L, 2);
     json_object *o;
     uint32_t nodeid = FLUX_NODEID_ANY;
+    uint32_t matchtag;
 
     if (lua_value_to_json (L, 3, &o) < 0)
         return lua_pusherror (L, "JSON conversion error");
@@ -301,11 +302,14 @@ static int l_flux_send (lua_State *L)
     if (nargs >= 3)
         nodeid = lua_tointeger (L, 4);
 
-    rc = flux_json_request (f, nodeid, 0, tag, o);
+    matchtag = flux_matchtag_alloc (f, 1);
+
+    rc = flux_json_request (f, nodeid, matchtag, tag, o);
     json_object_put (o);
     if (rc < 0)
         return lua_pusherror (L, strerror (errno));
-    return l_pushresult (L, 1);
+
+    return l_pushresult (L, matchtag);
 }
 
 static int l_flux_recv (lua_State *L)
