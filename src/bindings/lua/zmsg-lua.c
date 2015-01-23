@@ -157,6 +157,13 @@ static int l_zmsg_info_index (lua_State *L)
         lua_pushnumber (L, errnum);
         return (1);
     }
+    if (strcmp (key, "matchtag") == 0) {
+        uint32_t matchtag;
+        if (flux_msg_get_matchtag (zi->zmsg, &matchtag) < 0)
+            return lua_pusherror (L, "zmsg: matchtag: %s", strerror (errno));
+        lua_pushnumber (L, matchtag);
+        return (1);
+    }
 
     /* Push metatable value onto stack */
     lua_getmetatable (L, 1);
