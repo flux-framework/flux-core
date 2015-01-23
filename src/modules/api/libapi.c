@@ -85,7 +85,7 @@ static int dq_resp_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
     cmb_t *c = arg;
     zmsg_t *z = zmsg_recv_nowait (item->socket);
     if (z) {
-        if (flux_handle_event_msg (c->h, FLUX_MSGTYPE_RESPONSE, &z) < 0) {
+        if (flux_handle_event_msg (c->h, &z) < 0) {
             cmb_reactor_stop (c, -1);
             goto done;
         }
@@ -97,9 +97,9 @@ done:
 static int dq_event_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
 {
     cmb_t *c = arg;
-    zmsg_t *z = zmsg_recv_nowait (item->socket);
-    if (z) {
-        if (flux_handle_event_msg (c->h, FLUX_MSGTYPE_EVENT, &z) < 0) {
+    zmsg_t *zmsg = zmsg_recv_nowait (item->socket);
+    if (zmsg) {
+        if (flux_handle_event_msg (c->h, &zmsg) < 0) {
             cmb_reactor_stop (c, -1);
             goto done;
         }
@@ -254,14 +254,11 @@ static int unix_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
 {
     cmb_t *c = arg;
     bool nonblock = false;
-    zmsg_t *z;
-    int type;
+    zmsg_t *zmsg = NULL;
 
     if (item->revents & ZMQ_POLLIN) {
-        if ((z = zfd_recv (c->fd, nonblock))) {
-            if (flux_msg_get_type (z, &type) < 0)
-                goto done; /* drop malformed */
-            if (flux_handle_event_msg (c->h, type, &z) < 0) {
+        if ((zmsg = zfd_recv (c->fd, nonblock))) {
+            if (flux_handle_event_msg (c->h, &zmsg) < 0) {
                 cmb_reactor_stop (c, -1);
                 goto done;
             }
@@ -272,6 +269,7 @@ static int unix_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
         goto done;
     }
 done:
+    zmsg_destroy (&zmsg);
     ZLOOP_RETURN(c);
 }
 

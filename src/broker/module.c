@@ -114,7 +114,7 @@ static int dq_resp_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
     plugin_ctx_t p = arg;
     zmsg_t *z = zmsg_recv_nowait (item->socket);
     if (z) {
-        if (flux_handle_event_msg (p->h, FLUX_MSGTYPE_RESPONSE, &z) < 0) {
+        if (flux_handle_event_msg (p->h, &z) < 0) {
             plugin_reactor_stop (p, -1);
             goto done;
         }
@@ -461,7 +461,7 @@ static void plugin_handle_response (plugin_ctx_t p, zmsg_t *zmsg)
     p->stats.request_rx++;
 
     if (zmsg) {
-        if (flux_handle_event_msg (p->h, FLUX_MSGTYPE_RESPONSE, &zmsg) < 0) {
+        if (flux_handle_event_msg (p->h, &zmsg) < 0) {
             plugin_reactor_stop (p, -1);
             goto done;
         }
@@ -494,7 +494,7 @@ static int svc_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
         goto done;
     }
     if (zmsg) {
-        if (flux_handle_event_msg (p->h, FLUX_MSGTYPE_REQUEST, &zmsg) < 0) {
+        if (flux_handle_event_msg (p->h, &zmsg) < 0) {
             plugin_reactor_stop (p, -1);
             goto done;
         }
@@ -518,7 +518,7 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, plugin_ctx_t p)
     p->stats.event_rx++;
 
     if (zmsg) {
-        if (flux_handle_event_msg (p->h, FLUX_MSGTYPE_EVENT, &zmsg) < 0) {
+        if (flux_handle_event_msg (p->h, &zmsg) < 0) {
             plugin_reactor_stop (p, -1);
             goto done;
         }

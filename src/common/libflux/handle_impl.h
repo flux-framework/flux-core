@@ -42,7 +42,7 @@ struct flux_handle_ops {
 
 flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags);
 void flux_handle_destroy (flux_t *hp);
-int flux_handle_event_msg (flux_t h, int typemask, zmsg_t **zmsg);
+int flux_handle_event_msg (flux_t h, zmsg_t **zmsg);
 int flux_handle_event_fd (flux_t h, int fd, short revents);
 int flux_handle_event_zs (flux_t h, void *zs, short revents);
 int flux_handle_event_tmout (flux_t h, int timer_id);

@@ -404,32 +404,31 @@ static bool dispatch_msg_match (dispatch_t *d, const char *tag, int typemask)
     return false;
 }
 
-int flux_handle_event_msg (flux_t h, int typemask, zmsg_t **zmsg)
+int flux_handle_event_msg (flux_t h, zmsg_t **zmsg)
 {
     dispatch_t *d;
-    char *tag;
+    char *topic = NULL;
+    int type;
     int rc = 0;
 
+    assert (zmsg != NULL);
     assert (*zmsg != NULL);
-    if (!(tag = flux_msg_tag (*zmsg))) {
-        rc = -1;
-        errno = EPROTO;
+
+    if (flux_msg_get_type (*zmsg, &type) < 0)
         goto done;
-    }
+    if (flux_msg_get_topic (*zmsg, &topic) < 0)
+        goto done;
     d = zlist_first (h->reactor->dsp);
     while (d) {
-        if (dispatch_msg_match (d, tag, typemask) && d->msg.fn != NULL) {
-            rc = d->msg.fn (h, typemask, zmsg, d->msg.arg);
+        if (dispatch_msg_match (d, topic, type) && d->msg.fn != NULL) {
+            rc = d->msg.fn (h, type, zmsg, d->msg.arg);
             break;
         }
         d = zlist_next (h->reactor->dsp);
     }
 done:
-    if (tag)
-        free (tag);
-    /* If we return with zmsg unconsumed, the impl's reactor will
-     * dispose of it.
-     */
+    if (topic)
+        free (topic);
     return rc;
 }
 
