@@ -317,12 +317,39 @@ static int l_flux_recv (lua_State *L)
     flux_t f = lua_get_flux (L, 1);
     char *tag;
     json_object *o;
+    uint32_t matchtag;
+    int errnum;
+    zmsg_t *zmsg;
 
-    if (flux_response_recv (f, &o, &tag, 0))
+    if (lua_gettop (L) > 1)
+        matchtag = lua_tointeger (L, 2);
+    else
+        matchtag = FLUX_MATCHTAG_NONE;
+
+    if (!(zmsg = flux_response_recvmsg (f, matchtag, 0)))
         return lua_pusherror (L, strerror (errno));
 
-    json_object_to_lua (L, o);
-    json_object_put (o);
+    if (flux_msg_get_errnum (zmsg, &errnum) < 0)
+        return lua_pusherror (L, "flux_msg_get_errnum: %s", strerror (errno));
+
+    if (errnum == 0 && flux_msg_decode (zmsg, &tag, &o) < 0)
+        return lua_pusherror (L, strerror (errno));
+
+    if (o != NULL) {
+        json_object_to_lua (L, o);
+        json_object_put (o);
+    }
+    else {
+        lua_newtable (L);
+    }
+
+    /* XXX: Backwards compat code, remove someday:
+     *  Promote errnum, if nonzero, into table on stack
+     */
+    if (errnum != 0) {
+        lua_pushnumber (L, errnum);
+        lua_setfield (L, -1, "errnum");
+    }
 
     if (tag == NULL)
         return (1);
