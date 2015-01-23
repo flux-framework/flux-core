@@ -29,7 +29,6 @@
 #include <string.h>
 #include <errno.h>
 #include <stdbool.h>
-#include <fnmatch.h>
 
 #include "handle_impl.h"
 #include "message.h"
@@ -323,8 +322,7 @@ typedef struct {
     dispatch_type_t type;
     union {
         struct {
-            int typemask;
-            char *pattern;
+            flux_match_t match;
             FluxMsgHandler fn;
             void *arg;
         } msg;
@@ -368,8 +366,8 @@ static dispatch_t *dispatch_create (dispatch_type_t type)
 
 static void dispatch_destroy (dispatch_t *d)
 {
-    if (d->type == DSP_TYPE_MSG && d->msg.pattern)
-        free (d->msg.pattern);
+    if (d && d->type == DSP_TYPE_MSG && d->msg.match.topic_glob)
+        free (d->msg.match.topic_glob);
     free (d);
 }
 
@@ -391,44 +389,35 @@ static void reactor_destroy (reactor_t r)
     free (r);
 }
 
-static bool dispatch_msg_match (dispatch_t *d, const char *tag, int typemask)
-{
-    if (d->type == DSP_TYPE_MSG) {
-        if (!(d->msg.typemask & (typemask & FLUX_MSGTYPE_MASK)))
-            return false;
-        if (!d->msg.pattern)
-            return true;
-        if (fnmatch (d->msg.pattern, tag, 0) == 0)
-            return true;
-    }
-    return false;
-}
-
 int flux_handle_event_msg (flux_t h, zmsg_t **zmsg)
 {
     dispatch_t *d;
-    char *topic = NULL;
-    int type;
+    int type = 0;
     int rc = 0;
+    bool match = false;
 
     assert (zmsg != NULL);
     assert (*zmsg != NULL);
 
     if (flux_msg_get_type (*zmsg, &type) < 0)
         goto done;
-    if (flux_msg_get_topic (*zmsg, &topic) < 0)
-        goto done;
     d = zlist_first (h->reactor->dsp);
     while (d) {
-        if (dispatch_msg_match (d, topic, type) && d->msg.fn != NULL) {
-            rc = d->msg.fn (h, type, zmsg, d->msg.arg);
+        if (d->type == DSP_TYPE_MSG && flux_msg_cmp (*zmsg, d->msg.match)) {
+            if (d->msg.fn)
+                rc = d->msg.fn (h, type, zmsg, d->msg.arg);
+            match = true;
             break;
         }
         d = zlist_next (h->reactor->dsp);
     }
 done:
-    if (topic)
-        free (topic);
+    if (!match && *zmsg) {
+        char *topic = NULL;
+        (void)flux_msg_get_topic (*zmsg, &topic);
+        msg ("nomatch: %s '%s'", flux_msgtype_string (type),
+            topic ? topic : "");
+    }
     return rc;
 }
 
@@ -496,8 +485,10 @@ int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
         goto done;
     }
     d = dispatch_create (DSP_TYPE_MSG);
-    d->msg.typemask = typemask;
-    d->msg.pattern = xstrdup (pattern);
+    d->msg.match.typemask = typemask;
+    d->msg.match.matchtag = FLUX_MATCHTAG_NONE;
+    d->msg.match.bsize = 0;
+    d->msg.match.topic_glob = xstrdup (pattern);
     d->msg.fn = cb;
     d->msg.arg = arg;
     if (zlist_push (h->reactor->dsp, d) < 0)
@@ -525,8 +516,8 @@ void flux_msghandler_remove (flux_t h, int typemask, const char *pattern)
 
     d = zlist_first (h->reactor->dsp);
     while (d) {
-        if (d->type == DSP_TYPE_MSG && d->msg.typemask == typemask
-                                    && !strcmp (d->msg.pattern, pattern)) {
+        if (d->type == DSP_TYPE_MSG && d->msg.match.typemask == typemask
+                             && !strcmp (d->msg.match.topic_glob, pattern)) {
             zlist_remove (h->reactor->dsp, d);
             dispatch_destroy (d);
             if (reactor_empty (h->reactor))
