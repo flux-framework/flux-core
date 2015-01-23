@@ -787,6 +787,29 @@ static int create_and_push_zmsg_info (lua_State *L,
     return lua_push_zmsg_info (L, zi);
 }
 
+static int l_flux_recvmsg (lua_State *L)
+{
+    flux_t f = lua_get_flux (L, 1);
+    uint32_t matchtag;
+    zmsg_t *zmsg;
+    int type;
+
+    if (lua_gettop (L) > 1)
+        matchtag = lua_tointeger (L, 2);
+    else
+        matchtag = FLUX_MATCHTAG_NONE;
+
+    if (!(zmsg = flux_response_recvmsg (f, matchtag, 0)))
+        return lua_pusherror (L, strerror (errno));
+
+    if (flux_msg_get_type (zmsg, &type) < 0)
+        type = FLUX_MSGTYPE_ANY;
+
+    create_and_push_zmsg_info (L, f, type, &zmsg);
+    zmsg_destroy (&zmsg);
+    return (1);
+}
+
 static int msghandler (flux_t f, int typemask, zmsg_t **zmsg, void *arg)
 {
     int rc;
@@ -1432,6 +1455,7 @@ static const struct luaL_Reg flux_methods [] = {
 //    { "barrier",         l_flux_barrier     },
     { "send",            l_flux_send        },
     { "recv",            l_flux_recv        },
+    { "recvmsg",         l_flux_recvmsg     },
     { "rpc",             l_flux_rpc         },
     { "mrpc",            l_flux_mrpc_new    },
     { "sendevent",       l_flux_send_event  },
