@@ -315,8 +315,8 @@ static int l_flux_send (lua_State *L)
 static int l_flux_recv (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
-    char *tag;
-    json_object *o;
+    char *tag = NULL;
+    json_object *o = NULL;
     uint32_t matchtag;
     int errnum;
     zmsg_t *zmsg;
