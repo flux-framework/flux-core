@@ -208,7 +208,7 @@ void test_nsrc (flux_t h, uint32_t nodeid)
 
 /* This test is to make sure that deferred responses are handled in order.
  * Arrange for module to source 10K sequenced responses.  Messages 5000-5499
- * are "put back" on the handle using flux_response_putmsg().  We ensure that
+ * are "put back" on the handle using flux_putmsg().  We ensure that
  * the 10K messages are nonetheless received in order.
  */
 void test_putmsg (flux_t h, uint32_t nodeid)
@@ -243,7 +243,7 @@ void test_putmsg (flux_t h, uint32_t nodeid)
                 oom ();
             if (seq == defer_start + defer_count - 1) {
                 while ((z = zlist_pop (defer))) {
-                    if (flux_response_putmsg (h, &z) < 0)
+                    if (flux_putmsg (h, &z) < 0)
                         err_exit ("%s: flux_response_putmsg", __FUNCTION__);
                 }
                 popped = true;
