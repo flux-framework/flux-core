@@ -348,10 +348,12 @@ static int ping_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     char *s = NULL;
     int rc = 0;
 
-    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
-        err ("%s: protocol error", __FUNCTION__);
+    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL ||
+        !json_object_is_type (o, json_type_object)) {
+        flux_err_respond (h, EPROTO, zmsg);
         goto done; /* reactor continues */
     }
+
     /* Route string will not include the endpoints.
      * On arrival here, uuid of dst plugin has been stripped.
      * The '1' arg to zdump_routestr strips the uuid of the sender.
