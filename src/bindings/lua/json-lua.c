@@ -160,8 +160,10 @@ static int lua_is_integer (lua_State *L, int index)
 
 static int lua_table_is_array (lua_State *L, int index)
 {
+    int haskeys = 0;
     lua_pushnil (L);
     while (lua_next (L, index)) {
+        haskeys = 1;
         /* If key is not a number abort */
         if (!lua_is_integer (L, -2)) {
             lua_pop (L, 2); /* pop key and value */
@@ -169,7 +171,7 @@ static int lua_table_is_array (lua_State *L, int index)
         }
         lua_pop (L, 1);
     }
-    return (1);
+    return (haskeys);
 }
 
 static json_object * lua_table_to_json_array (lua_State *L, int index)

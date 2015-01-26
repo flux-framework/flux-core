@@ -315,8 +315,8 @@ static int l_flux_send (lua_State *L)
 static int l_flux_recv (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
-    char *tag;
-    json_object *o;
+    char *tag = NULL;
+    json_object *o = NULL;
     uint32_t matchtag;
     int errnum;
     zmsg_t *zmsg;
@@ -361,20 +361,26 @@ static int l_flux_rpc (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
     const char *tag = luaL_checkstring (L, 2);
-    json_object *o;
-    json_object *resp;
+    json_object *o = NULL;
+    json_object *resp = NULL;
+    int nodeid;
 
     if (lua_value_to_json (L, 3, &o) < 0)
         return lua_pusherror (L, "JSON conversion error");
 
+    if (lua_gettop (L) > 3)
+        nodeid = lua_tonumber (L, 4);
+    else
+        nodeid = FLUX_NODEID_ANY;
+
     if (tag == NULL || o == NULL)
         return lua_pusherror (L, "Invalid args");
 
-    resp = flux_rpc (f, o, tag);
-    json_object_put (o);
-    if (resp == NULL)
+    if (flux_json_rpc (f, nodeid, tag, o, &resp) < 0) {
+        json_object_put (o);
         return lua_pusherror (L, strerror (errno));
-
+    }
+    json_object_put (o);
     json_object_to_lua (L, resp);
     json_object_put (resp);
     return (1);

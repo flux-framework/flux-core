@@ -3,9 +3,9 @@
 --  Basic flux reactor testing using ping interface to kvs
 --
 local test = require 'fluxometer'.init (...)
-test:start_session { size=1 }
+test:start_session { size=2 }
 
-plan (9)
+plan (16)
 
 local flux = require_ok ('flux')
 local f, err = flux.new()
@@ -29,5 +29,25 @@ local packet = { 1, 2, 3 }  -- Force encoding to be 'array'
 local msg, err = f:rpc ("live.ping", packet)
 is (msg, nil, "rpc: invalid packet: nil response indicates error")
 is (err, "Protocol error", "rpc: invalid packet: err is 'Protocol error'")
+
+--
+-- 'ping' to specfic rank
+--
+local packet = { seq = "1", pad = "xxxxxx" }
+local msg, err = f:rpc ("live.ping", packet, 1)
+type_ok (msg, 'table', "rpc: return type is table")
+is (err, nil, "rpc: err is nil")
+is (msg.seq, "1", "recv: got expected ping sequence")
+is (msg.pad, "xxxxxx", "recv: got expected ping pad")
+is (msg.errnum, nil, "recv: errnum is zero")
+
+--
+-- 'ping' to non-existent rank, check error return
+--
+note ("ping to non-existent rank")
+local packet = { seq = "1", pad = "xxxxxx" }
+local msg, err = f:rpc ("live.ping", packet, 99)
+is (msg, nil, "rpc: nil return indicates error")
+is (err, "No route to host", "rpc: err is 'No route to host'")
 
 done_testing ()
