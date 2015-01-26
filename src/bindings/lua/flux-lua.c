@@ -291,6 +291,7 @@ static int l_flux_send (lua_State *L)
     const char *tag = luaL_checkstring (L, 2);
     json_object *o;
     uint32_t nodeid = FLUX_NODEID_ANY;
+    uint32_t matchtag;
 
     if (lua_value_to_json (L, 3, &o) < 0)
         return lua_pusherror (L, "JSON conversion error");
@@ -301,11 +302,14 @@ static int l_flux_send (lua_State *L)
     if (nargs >= 3)
         nodeid = lua_tointeger (L, 4);
 
-    rc = flux_json_request (f, nodeid, 0, tag, o);
+    matchtag = flux_matchtag_alloc (f, 1);
+
+    rc = flux_json_request (f, nodeid, matchtag, tag, o);
     json_object_put (o);
     if (rc < 0)
         return lua_pusherror (L, strerror (errno));
-    return l_pushresult (L, 1);
+
+    return l_pushresult (L, matchtag);
 }
 
 static int l_flux_recv (lua_State *L)
@@ -313,12 +317,39 @@ static int l_flux_recv (lua_State *L)
     flux_t f = lua_get_flux (L, 1);
     char *tag;
     json_object *o;
+    uint32_t matchtag;
+    int errnum;
+    zmsg_t *zmsg;
 
-    if (flux_response_recv (f, &o, &tag, 0))
+    if (lua_gettop (L) > 1)
+        matchtag = lua_tointeger (L, 2);
+    else
+        matchtag = FLUX_MATCHTAG_NONE;
+
+    if (!(zmsg = flux_response_recvmsg (f, matchtag, 0)))
         return lua_pusherror (L, strerror (errno));
 
-    json_object_to_lua (L, o);
-    json_object_put (o);
+    if (flux_msg_get_errnum (zmsg, &errnum) < 0)
+        return lua_pusherror (L, "flux_msg_get_errnum: %s", strerror (errno));
+
+    if (errnum == 0 && flux_msg_decode (zmsg, &tag, &o) < 0)
+        return lua_pusherror (L, strerror (errno));
+
+    if (o != NULL) {
+        json_object_to_lua (L, o);
+        json_object_put (o);
+    }
+    else {
+        lua_newtable (L);
+    }
+
+    /* XXX: Backwards compat code, remove someday:
+     *  Promote errnum, if nonzero, into table on stack
+     */
+    if (errnum != 0) {
+        lua_pushnumber (L, errnum);
+        lua_setfield (L, -1, "errnum");
+    }
 
     if (tag == NULL)
         return (1);
@@ -754,6 +785,29 @@ static int create_and_push_zmsg_info (lua_State *L,
     struct zmsg_info * zi = zmsg_info_create (zmsg, typemask);
     zmsg_info_register_resp_cb (zi, (zi_resp_f) l_f_zi_resp_cb, (void *) f);
     return lua_push_zmsg_info (L, zi);
+}
+
+static int l_flux_recvmsg (lua_State *L)
+{
+    flux_t f = lua_get_flux (L, 1);
+    uint32_t matchtag;
+    zmsg_t *zmsg;
+    int type;
+
+    if (lua_gettop (L) > 1)
+        matchtag = lua_tointeger (L, 2);
+    else
+        matchtag = FLUX_MATCHTAG_NONE;
+
+    if (!(zmsg = flux_response_recvmsg (f, matchtag, 0)))
+        return lua_pusherror (L, strerror (errno));
+
+    if (flux_msg_get_type (zmsg, &type) < 0)
+        type = FLUX_MSGTYPE_ANY;
+
+    create_and_push_zmsg_info (L, f, type, &zmsg);
+    zmsg_destroy (&zmsg);
+    return (1);
 }
 
 static int msghandler (flux_t f, int typemask, zmsg_t **zmsg, void *arg)
@@ -1401,6 +1455,7 @@ static const struct luaL_Reg flux_methods [] = {
 //    { "barrier",         l_flux_barrier     },
     { "send",            l_flux_send        },
     { "recv",            l_flux_recv        },
+    { "recvmsg",         l_flux_recvmsg     },
     { "rpc",             l_flux_rpc         },
     { "mrpc",            l_flux_mrpc_new    },
     { "sendevent",       l_flux_send_event  },
