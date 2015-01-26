@@ -46,27 +46,27 @@
 #include "src/common/libutil/zfd.h"
 #include "src/common/libutil/zconnect.h"
 
-/* deferred message queue */
-typedef struct {
-    void *zs_resp[2]; /* [0]=read, [1]=write */
-    void *zs_event[2];
-} dq_t;
-
-
 #define CMB_CTX_MAGIC   0xf434aaab
 typedef struct {
     int magic;
     int fd;
     int rank;
-    dq_t *dq;
     flux_t h;
     zloop_t *zloop;
     zctx_t *zctx;
+    void *zs_putmsg[2];
+    int putmsg;
+
+    zmq_pollitem_t zp_unix;
+    zmq_pollitem_t zp_putmsg;
+
     bool reactor_stop;
     int reactor_rc;
 } cmb_t;
 
 static void cmb_reactor_stop (void *impl, int rc);
+static void cmb_poll_main (cmb_t *c);
+static void cmb_poll_putmsg (cmb_t *c);
 
 #define ZLOOP_RETURN(c) \
     return ((c)->reactor_stop ? (-1) : (0))
@@ -80,114 +80,30 @@ static int cmb_sendmsg (void *impl, zmsg_t **zmsg)
     return zfd_send (c->fd, zmsg);
 }
 
-static int dq_resp_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
-{
-    cmb_t *c = arg;
-    zmsg_t *z = zmsg_recv_nowait (item->socket);
-    if (z) {
-        if (flux_handle_event_msg (c->h, &z) < 0) {
-            cmb_reactor_stop (c, -1);
-            goto done;
-        }
-    }
-done:
-    ZLOOP_RETURN(c);
-}
-
-static int dq_event_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
-{
-    cmb_t *c = arg;
-    zmsg_t *zmsg = zmsg_recv_nowait (item->socket);
-    if (zmsg) {
-        if (flux_handle_event_msg (c->h, &zmsg) < 0) {
-            cmb_reactor_stop (c, -1);
-            goto done;
-        }
-    }
-done:
-    ZLOOP_RETURN(c);
-}
-
-static dq_t *dq_create (cmb_t *c)
-{
-    char *resp_uri = xasprintf ("inproc://dq-resp-%p", c);
-    char *event_uri = xasprintf ("inproc://dq-event-%p", c);
-    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .fd = -1 };
-    dq_t *dq = xzmalloc (sizeof (*dq));
-
-    zbind (c->zctx, &dq->zs_resp[1], ZMQ_PAIR, resp_uri, -1);
-    zconnect (c->zctx, &dq->zs_resp[0], ZMQ_PAIR, resp_uri, -1, NULL);
-    zp.socket = dq->zs_resp[0];
-    if (zloop_poller (c->zloop, &zp, dq_resp_cb, c) < 0)
-        oom ();
-
-    zbind (c->zctx, &dq->zs_event[1], ZMQ_PAIR, event_uri, -1);
-    zconnect (c->zctx, &dq->zs_event[0], ZMQ_PAIR, event_uri, -1, NULL);
-    zp.socket = dq->zs_event[0];
-    if (zloop_poller (c->zloop, &zp, dq_event_cb, c) < 0)
-        oom ();
-
-    free (resp_uri);
-    free (event_uri);
-    return dq;
-}
-
-static void dq_destroy (dq_t *dq)
-{
-    /* N.B. zctx destroy takes care of PAIR sockets */
-    free (dq);
-}
-
-static int dq_put (dq_t *dq, zmsg_t **zmsg, int typemask)
-{
-    int rc = 0;
-    if ((typemask & FLUX_MSGTYPE_EVENT))
-        rc = zmsg_send (zmsg, dq->zs_event[1]);
-    else if ((typemask & FLUX_MSGTYPE_RESPONSE))
-        rc = zmsg_send (zmsg, dq->zs_resp[1]);
-    else
-        zmsg_destroy (zmsg);
-    if (rc == 0)
-        *zmsg = NULL;
-    return rc;
-}
-
-static bool dq_get (dq_t *dq, zmsg_t **zmsg, int typemask)
-{
-    zmsg_t *z = NULL;
-    if ((typemask & FLUX_MSGTYPE_EVENT))
-        z = zmsg_recv_nowait (dq->zs_event[0]);
-    else if ((typemask & FLUX_MSGTYPE_RESPONSE))
-        z = zmsg_recv_nowait (dq->zs_resp[0]);
-    if (z)
-        *zmsg = z;
-    return (z != NULL);
-}
-
-static zmsg_t *cmb_response_recvmsg (void *impl, bool nonblock)
-{
-    cmb_t *c = impl;
-    zmsg_t *z = NULL;
-    int type;
-
-    assert (c->magic == CMB_CTX_MAGIC);
-    if (dq_get (c->dq, &z, FLUX_MSGTYPE_RESPONSE)) /* use deferred */
-        goto done;
-    while ((z = zfd_recv (c->fd, nonblock))) {
-        if (flux_msg_get_type (z, &type) == 0 && type == FLUX_MSGTYPE_RESPONSE)
-            break;
-        if (dq_put (c->dq, &z, type) < 0)
-            oom ();
-    }
-done:
-    return z;
-}
-
-static int cmb_response_putmsg (void *impl, zmsg_t **zmsg)
+static zmsg_t *cmb_recvmsg (void *impl, bool nonblock)
 {
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
-    return dq_put (c->dq, zmsg, FLUX_MSGTYPE_RESPONSE);
+    zmsg_t *zmsg = NULL;
+
+    if (c->putmsg > 0) {
+        zmsg = zmsg_recv (c->zs_putmsg[0]);
+        if (zmsg && --c->putmsg == 0)
+            cmb_poll_main (c);
+    } else
+        zmsg = zfd_recv (c->fd, nonblock);
+    return zmsg;
+}
+
+static int cmb_putmsg (void *impl, zmsg_t **zmsg)
+{
+    cmb_t *c = impl;
+    assert (c->magic == CMB_CTX_MAGIC);
+    if (zmsg_send (zmsg, c->zs_putmsg[1]) < 0)
+        return -1;
+    if (c->putmsg++ == 0)
+        cmb_poll_putmsg (c);
+    return 0;
 }
 
 static int cmb_event_subscribe (void *impl, const char *s)
@@ -202,25 +118,6 @@ static int cmb_event_unsubscribe (void *impl, const char *s)
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
     return flux_request_send (c->h, NULL, "api.event.unsubscribe.%s", s ? s: "");
-}
-
-static zmsg_t *cmb_event_recvmsg (void *impl, bool nonblock)
-{
-    cmb_t *c = impl;
-    zmsg_t *z;
-    int type;
-
-    assert (c->magic == CMB_CTX_MAGIC);
-    if (dq_get (c->dq, &z, FLUX_MSGTYPE_EVENT)) /* use deferred */
-        goto done;
-    while ((z = zfd_recv (c->fd, nonblock))) {
-        if (flux_msg_get_type (z, &type) == 0 && type == FLUX_MSGTYPE_EVENT)
-            break;
-        if (dq_put (c->dq, &z, type) < 0)
-            oom ();
-    }
-done:
-    return z;
 }
 
 static int cmb_rank (void *impl)
@@ -248,6 +145,23 @@ static void cmb_reactor_stop (void *impl, int rc)
     cmb_t *c = impl;
     c->reactor_stop = true;
     c->reactor_rc = rc;
+}
+
+static int putmsg_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
+{
+    cmb_t *c = arg;
+    zmsg_t *zmsg = zmsg_recv (item->socket);
+    if (zmsg) {
+        if (--c->putmsg == 0)
+            cmb_poll_main (c); 
+        if (flux_handle_event_msg (c->h, &zmsg) < 0) {
+            cmb_reactor_stop (c, -1);
+            goto done;
+        }
+    }
+done:
+    zmsg_destroy (&zmsg);
+    ZLOOP_RETURN(c);
 }
 
 static int unix_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
@@ -360,7 +274,6 @@ static void cmb_fini (void *impl)
     assert (c->magic == CMB_CTX_MAGIC);
     if (c->fd >= 0)
         (void)close (c->fd);
-    dq_destroy (c->dq);
     if (c->zctx)
         zctx_destroy (&c->zctx); /* destroys all sockets created in zctx */
     if (c->zloop)
@@ -385,11 +298,24 @@ done:
     return running;
 }
 
+static void cmb_poll_putmsg (cmb_t *c)
+{
+    if (zloop_poller (c->zloop, &c->zp_putmsg, putmsg_cb, c) < 0)
+        err_exit ("zloop_poller");
+    zloop_poller_end (c->zloop, &c->zp_unix);
+}
+
+static void cmb_poll_main (cmb_t *c)
+{
+    if (zloop_poller (c->zloop, &c->zp_unix, unix_cb, c) < 0)
+        err_exit ("zloop_poller");
+    zloop_poller_end (c->zloop, &c->zp_putmsg);
+}
+
 flux_t flux_api_openpath (const char *path, int flags)
 {
     cmb_t *c = NULL;
     struct sockaddr_un addr;
-    zmq_pollitem_t zp;
     char *cpy = xstrdup (path);
     char *pidfile = NULL;
 
@@ -403,27 +329,28 @@ flux_t flux_api_openpath (const char *path, int flags)
 
     if (!(c->zloop = zloop_new ()))
         oom ();
-    c->dq = dq_create (c);
+    char *uri = xasprintf ("inproc://putmsg-%p", c);
+    zbind (c->zctx, &c->zs_putmsg[1], ZMQ_PAIR, uri, -1);
+    zconnect (c->zctx, &c->zs_putmsg[0], ZMQ_PAIR, uri, -1, NULL);
+    c->zp_putmsg.socket = c->zs_putmsg[0];
+    c->zp_putmsg.events = ZMQ_POLLIN;
+    free (uri);
 
     c->fd = socket (AF_UNIX, SOCK_STREAM, 0);
     if (c->fd < 0)
         goto error;
-    zp.socket = NULL;
-    zp.fd = c->fd;
-    zp.events = ZMQ_POLLIN | ZMQ_POLLERR;
-    if (zloop_poller (c->zloop, &zp, unix_cb, c) < 0)
-        oom ();
+    c->zp_unix.socket = NULL;
+    c->zp_unix.fd = c->fd;
+    c->zp_unix.events = ZMQ_POLLIN | ZMQ_POLLERR;
+    cmb_poll_main (c);
 
-    memset (&addr, 0, sizeof (struct sockaddr_un));
-    addr.sun_family = AF_UNIX;
-    strncpy (addr.sun_path, path, sizeof (addr.sun_path) - 1);
-
-    if (asprintf (&pidfile, "%s/cmbd.pid", dirname (cpy)) < 0)
-        oom ();
-
+    pidfile = xasprintf ("%s/cmbd.pid", dirname (cpy));
     for (;;) {
         if (!pidcheck (pidfile))
             goto error;
+        memset (&addr, 0, sizeof (struct sockaddr_un));
+        addr.sun_family = AF_UNIX;
+        strncpy (addr.sun_path, path, sizeof (addr.sun_path) - 1);
         if (connect (c->fd, (struct sockaddr *)&addr,
                                    sizeof (struct sockaddr_un)) == 0)
             break;
@@ -475,9 +402,8 @@ void flux_api_close (flux_t h)
 
 static const struct flux_handle_ops cmb_ops = {
     .sendmsg = cmb_sendmsg,
-    .response_recvmsg = cmb_response_recvmsg,
-    .response_putmsg = cmb_response_putmsg,
-    .event_recvmsg = cmb_event_recvmsg,
+    .recvmsg = cmb_recvmsg,
+    .putmsg = cmb_putmsg,
     .event_subscribe = cmb_event_subscribe,
     .event_unsubscribe = cmb_event_unsubscribe,
     .rank = cmb_rank,
