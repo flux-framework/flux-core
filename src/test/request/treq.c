@@ -193,7 +193,7 @@ void test_nsrc (flux_t h, uint32_t nodeid)
         err_exit ("%s", __FUNCTION__);
 
     for (i = 0; i < count; i++) {
-        zmsg_t *zmsg = flux_response_recvmsg (h, FLUX_MATCHTAG_NONE, false);
+        zmsg_t *zmsg = flux_recvmsg (h, false);
         if (!zmsg)
             err_exit ("%s", __FUNCTION__);
         if (flux_json_response_decode (zmsg, &out) < 0)
@@ -203,6 +203,7 @@ void test_nsrc (flux_t h, uint32_t nodeid)
         if (seq != i)
             msg_exit ("%s: decode %d - seq mismatch %d", __FUNCTION__, i, seq);
         Jput (out);
+        zmsg_destroy (&zmsg);
     }
 }
 
@@ -230,7 +231,7 @@ void test_putmsg (flux_t h, uint32_t nodeid)
     if (flux_json_request (h, nodeid, FLUX_MATCHTAG_NONE, "req.nsrc", in) < 0)
         err_exit ("%s", __FUNCTION__);
     do {
-        zmsg_t *zmsg = flux_response_recvmsg (h, FLUX_MATCHTAG_NONE, false);
+        zmsg_t *zmsg = flux_recvmsg (h, false);
         if (!zmsg)
             err_exit ("%s", __FUNCTION__);
         if (flux_json_response_decode (zmsg, &out) < 0)

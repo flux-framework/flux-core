@@ -317,16 +317,19 @@ static int l_flux_recv (lua_State *L)
     flux_t f = lua_get_flux (L, 1);
     char *tag = NULL;
     json_object *o = NULL;
-    uint32_t matchtag;
     int errnum;
     zmsg_t *zmsg;
+    flux_match_t match = {
+        .typemask = FLUX_MSGTYPE_RESPONSE,
+        .matchtag = FLUX_MATCHTAG_NONE,
+        .bsize = 0,
+        .topic_glob = NULL,
+    };
 
     if (lua_gettop (L) > 1)
-        matchtag = lua_tointeger (L, 2);
-    else
-        matchtag = FLUX_MATCHTAG_NONE;
+        match.matchtag = lua_tointeger (L, 2);
 
-    if (!(zmsg = flux_response_recvmsg (f, matchtag, 0)))
+    if (!(zmsg = flux_recvmsg_match (f, match, NULL, false)))
         return lua_pusherror (L, strerror (errno));
 
     if (flux_msg_get_errnum (zmsg, &errnum) < 0)
@@ -796,16 +799,19 @@ static int create_and_push_zmsg_info (lua_State *L,
 static int l_flux_recvmsg (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
-    uint32_t matchtag;
     zmsg_t *zmsg;
     int type;
+    flux_match_t match = {
+        .typemask = FLUX_MSGTYPE_RESPONSE,
+        .matchtag = FLUX_MATCHTAG_NONE,
+        .bsize = 0,
+        .topic_glob = NULL,
+    };
 
     if (lua_gettop (L) > 1)
-        matchtag = lua_tointeger (L, 2);
-    else
-        matchtag = FLUX_MATCHTAG_NONE;
+        match.matchtag = lua_tointeger (L, 2);
 
-    if (!(zmsg = flux_response_recvmsg (f, matchtag, 0)))
+    if (!(zmsg = flux_recvmsg_match (f, match, NULL, false)))
         return lua_pusherror (L, strerror (errno));
 
     if (flux_msg_get_type (zmsg, &type) < 0)

@@ -39,10 +39,6 @@ int flux_sendmsg (flux_t h, zmsg_t **zmsg);
 zmsg_t *flux_recvmsg (flux_t h, bool nonblock);
 int flux_putmsg (flux_t h, zmsg_t **zmsg);
 
-/* deprecated */
-zmsg_t *flux_response_recvmsg (flux_t h, uint32_t matchtag, bool nonblock);
-/* end deprecated */
-
 zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, zlist_t **nomatch,
                             bool nonblock);
 int flux_putmsg_nomatch (flux_t h, zlist_t **nomatch);

@@ -218,8 +218,14 @@ int flux_response_recv (flux_t h, JSON *respp, char **tagp, bool nb)
 {
     zmsg_t *zmsg;
     int rc = -1;
+    flux_match_t match = {
+        .typemask = FLUX_MSGTYPE_RESPONSE,
+        .matchtag = FLUX_MATCHTAG_NONE,
+        .bsize = 0,
+        .topic_glob = NULL,
+    };
 
-    if (!(zmsg = flux_response_recvmsg (h, FLUX_MATCHTAG_NONE, nb)))
+    if (!(zmsg = flux_recvmsg_match (h, match, NULL, nb)))
         goto done;
     if (flux_msg_get_errnum (zmsg, &errno) < 0 || errno != 0)
         goto done;
@@ -227,8 +233,7 @@ int flux_response_recv (flux_t h, JSON *respp, char **tagp, bool nb)
         goto done;
     rc = 0;
 done:
-    if (zmsg)
-        zmsg_destroy (&zmsg);
+    zmsg_destroy (&zmsg);
     return rc;
 }
 
