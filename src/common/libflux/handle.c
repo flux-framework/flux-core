@@ -229,12 +229,6 @@ int flux_putmsg_nomatch (flux_t h, zlist_t **nomatch)
     return rc;
 }
 
-/* deprecated */
-int flux_response_putmsg (flux_t h, zmsg_t **zmsg)
-{
-    return flux_putmsg (h, zmsg);
-}
-
 /* FIXME: FLUX_FLAGS_TRACE will show these messages being received again
  */
 int flux_putmsg (flux_t h, zmsg_t **zmsg)
