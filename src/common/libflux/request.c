@@ -214,29 +214,6 @@ int flux_request_send (flux_t h, JSON o, const char *fmt, ...)
     return rc;
 }
 
-int flux_response_recv (flux_t h, JSON *respp, char **tagp, bool nb)
-{
-    zmsg_t *zmsg;
-    int rc = -1;
-    flux_match_t match = {
-        .typemask = FLUX_MSGTYPE_RESPONSE,
-        .matchtag = FLUX_MATCHTAG_NONE,
-        .bsize = 0,
-        .topic_glob = NULL,
-    };
-
-    if (!(zmsg = flux_recvmsg_match (h, match, NULL, nb)))
-        goto done;
-    if (flux_msg_get_errnum (zmsg, &errno) < 0 || errno != 0)
-        goto done;
-    if (flux_msg_decode (zmsg, tagp, respp) < 0)
-        goto done;
-    rc = 0;
-done:
-    zmsg_destroy (&zmsg);
-    return rc;
-}
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

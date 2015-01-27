@@ -69,8 +69,6 @@ int flux_request_send (flux_t h, json_object *request, const char *fmt, ...);
 int flux_rank_request_send (flux_t h, int rank,
                             json_object *request, const char *fmt, ...);
 
-int flux_response_recv (flux_t h, json_object **respp, char **tagp, bool nb);
-
 #endif /* !_FLUX_CORE_REQUEST_H */
 
 /*
