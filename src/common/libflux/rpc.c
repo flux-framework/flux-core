@@ -63,13 +63,15 @@ int flux_json_multrpc (flux_t h, const char *nodeset, int fanout,
                        flux_multrpc_f cb, void *arg)
 {
     nodeset_t ns = nodeset_new_str (nodeset);
-    uint32_t maxtag, mintag = FLUX_MATCHTAG_NONE;
     nodeset_itr_t itr;
     int errnum = 0;
-    int count = 0;
     uint32_t *nodeids = NULL;
     zlist_t *nomatch = NULL;
     int ntx, nrx, i;
+    flux_match_t match = {
+        .typemask = FLUX_MSGTYPE_RESPONSE,
+        .topic_glob = NULL,
+    };
 
     if (!(nomatch = zlist_new ()))
         oom ();
@@ -77,35 +79,34 @@ int flux_json_multrpc (flux_t h, const char *nodeset, int fanout,
         errnum = EINVAL;
         goto done;
     }
-    count = nodeset_count (ns);
 
     /* Allocate block of matchtags.
      */
-    mintag = flux_matchtag_alloc (h, count);
-    if (mintag == FLUX_MATCHTAG_NONE) {
+    match.bsize = nodeset_count (ns);
+    match.matchtag = flux_matchtag_alloc (h, match.bsize);
+    if (match.matchtag == FLUX_MATCHTAG_NONE) {
         errnum = EAGAIN;
         goto done;
     }
-    maxtag = mintag + count - 1;
 
     /* Build map of matchtag -> nodeid
      */
-    nodeids = xzmalloc (count * sizeof (nodeids[0]));
+    nodeids = xzmalloc (match.bsize * sizeof (nodeids[0]));
     if (!(itr = nodeset_itr_new (ns)))
         oom ();
-    for (i = 0; i < count; i++)
+    for (i = 0; i < match.bsize; i++)
         nodeids[i] = nodeset_next (itr);
     nodeset_itr_destroy (itr);
 
     /* Keep 'fanout' requests active concurrently
      */
     ntx = nrx = 0;
-    while (ntx < count || nrx < count) {
-        while (ntx < count && ntx - nrx < fanout) {
-            uint32_t tag = mintag + ntx;
+    while (ntx < match.bsize || nrx < match.bsize) {
+        while (ntx < match.bsize && ntx - nrx < fanout) {
+            uint32_t matchtag = match.matchtag + ntx;
             uint32_t nodeid = nodeids[ntx++];
 
-            if (flux_json_request (h, nodeid, tag, topic, in) < 0) {
+            if (flux_json_request (h, nodeid, matchtag, topic, in) < 0) {
                 if (errnum < errno)
                     errnum = errno;
                 if (cb)
@@ -113,22 +114,18 @@ int flux_json_multrpc (flux_t h, const char *nodeset, int fanout,
                 nrx++;
             }
         }
-        while (nrx < count && (ntx - nrx == fanout || ntx == count)) {
-            uint32_t tag;
+        while (nrx < match.bsize && (ntx - nrx == fanout || ntx == match.bsize)) {
+            uint32_t matchtag;
             uint32_t nodeid;
             zmsg_t *zmsg;
 
-            if (!(zmsg = flux_response_recvmsg (h, FLUX_MATCHTAG_NONE, false))
-                    || flux_msg_get_matchtag (zmsg, &tag) < 0) {
+            if (!(zmsg = flux_recvmsg_match (h, match, &nomatch, false)))
+                continue;
+            if (flux_msg_get_matchtag (zmsg, &matchtag) < 0) {
                 zmsg_destroy (&zmsg);
                 continue;
             }
-            if (tag < mintag || tag > maxtag) {
-                if (zlist_append (nomatch, zmsg) < 0)
-                    oom ();
-                continue;
-            }
-            nodeid = nodeids[tag - mintag];
+            nodeid = nodeids[matchtag - match.matchtag];
             if (multrpc_cb (zmsg, nodeid, cb, arg) < 0) {
                 if (errnum < errno)
                     errnum = errno;
@@ -137,25 +134,17 @@ int flux_json_multrpc (flux_t h, const char *nodeset, int fanout,
             nrx++;
         }
     }
-
-    /* Return alien responses to handle.
-     */
-    if (zlist_size (nomatch) > 0) {
-        zmsg_t *zmsg;
-        while ((zmsg = zlist_pop (nomatch))) {
-            if (flux_response_putmsg (h, &zmsg) < 0)
-                zmsg_destroy (&zmsg);
-        }
+    if (flux_putmsg_nomatch (h, &nomatch) < 0) {
+        if (errnum < errno)
+            errnum = errno;
     }
 done:
     if (nodeids)
         free (nodeids);
-    if (mintag != FLUX_MATCHTAG_NONE)
-        flux_matchtag_free (h, mintag, count);
+    if (match.matchtag != FLUX_MATCHTAG_NONE)
+        flux_matchtag_free (h, match.matchtag, match.bsize);
     if (ns)
         nodeset_destroy (ns);
-    if (nomatch)
-        zlist_destroy (&nomatch);
     if (errnum)
         errno = errnum;
     return errnum ? -1 : 0;
@@ -165,18 +154,23 @@ int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
                    JSON in, JSON *out)
 {
     zmsg_t *zmsg = NULL;
+    flux_match_t match = {
+        .typemask = FLUX_MSGTYPE_RESPONSE,
+        .matchtag = flux_matchtag_alloc (h, 1),
+        .bsize = 1,
+        .topic_glob = NULL,
+    };
     int rc = -1;
     int errnum;
     JSON o;
-    uint32_t matchtag = flux_matchtag_alloc (h, 1);
 
-    if (matchtag == FLUX_MATCHTAG_NONE) {
+    if (match.matchtag == FLUX_MATCHTAG_NONE) {
         errno = EAGAIN;
         goto done;
     }
-    if (flux_json_request (h, nodeid, matchtag, topic, in) < 0)
+    if (flux_json_request (h, nodeid, match.matchtag, topic, in) < 0)
         goto done;
-    if (!(zmsg = flux_response_recvmsg (h, matchtag, false)))
+    if (!(zmsg = flux_recvmsg_match (h, match, NULL, false)))
         goto done;
     if (flux_msg_get_errnum (zmsg, &errnum) < 0)
         goto done;
@@ -203,7 +197,8 @@ int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
         *out = o;
     rc = 0;
 done:
-    flux_matchtag_free (h, matchtag, 1);
+    if (match.matchtag != FLUX_MATCHTAG_NONE)
+        flux_matchtag_free (h, match.matchtag, match.bsize);
     return rc;
 }
 
