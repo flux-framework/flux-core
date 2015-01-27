@@ -183,22 +183,6 @@ int flux_respond_errnum (flux_t h, zmsg_t **zmsg, int errnum)
     return flux_err_respond (h, errnum, zmsg);
 }
 
-int flux_rank_request_send (flux_t h, int rank, JSON o, const char *fmt, ...)
-{
-    uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
-    va_list ap;
-    char *topic;
-    int rc;
-
-    va_start (ap, fmt);
-    topic = xvasprintf (fmt, ap);
-    va_end (ap);
-
-    rc = flux_json_request (h, nodeid, FLUX_MATCHTAG_NONE, topic, o);
-    free (topic);
-    return rc;
-}
-
 int flux_request_send (flux_t h, JSON o, const char *fmt, ...)
 {
     va_list ap;

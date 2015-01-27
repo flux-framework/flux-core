@@ -66,8 +66,6 @@ int flux_respond (flux_t h, zmsg_t **request, json_object *response);
 int flux_respond_errnum (flux_t h, zmsg_t **request, int errnum);
 
 int flux_request_send (flux_t h, json_object *request, const char *fmt, ...);
-int flux_rank_request_send (flux_t h, int rank,
-                            json_object *request, const char *fmt, ...);
 
 #endif /* !_FLUX_CORE_REQUEST_H */
 

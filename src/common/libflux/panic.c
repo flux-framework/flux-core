@@ -35,17 +35,17 @@
 
 int flux_panic (flux_t h, int rank, const char *msg)
 {
-    JSON request = Jnew ();
+    uint32_t nodeid = rank < 0 ? FLUX_NODEID_ANY : rank;
+    JSON in = Jnew ();
     int rc = -1;
 
-    if (msg)
-        Jadd_str (request, "msg", msg);
-    if (flux_rank_request_send (h, rank, request, "cmb.panic") < 0)
+    Jadd_str (in, "msg", msg ? msg : "");
+    if (flux_json_request (h, nodeid, FLUX_MATCHTAG_NONE, "cmb.panic", in) < 0)
         goto done;
     /* No reply */
     rc = 0;
 done:
-    Jput (request);
+    Jput (in);
     return rc;
 }
 
