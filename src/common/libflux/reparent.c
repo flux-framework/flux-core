@@ -33,30 +33,30 @@
 
 JSON flux_lspeer (flux_t h, int rank)
 {
-    return flux_rank_rpc (h, rank, NULL, "cmb.lspeer");
+    uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
+    JSON out = NULL;
+
+    if (flux_json_rpc (h, nodeid, "cmb.lspeer", NULL, &out) < 0)
+        return NULL;
+    return out;
 }
 
 int flux_reparent (flux_t h, int rank, const char *uri)
 {
-    JSON request = Jnew ();
-    JSON response = NULL;
+    uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
+    JSON in = Jnew ();
     int rc = -1;
 
     if (!uri) {
         errno = EINVAL;
         goto done;
     }
-    Jadd_str (request, "uri", uri);
-    if ((response = flux_rank_rpc (h, rank, request, "cmb.reparent"))) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (errno != 0)
+    Jadd_str (in, "uri", uri);
+    if (flux_json_rpc (h, nodeid, "cmb.reparent", in, NULL) < 0)
         goto done;
     rc = 0;
 done:
-    Jput (request);
-    Jput (response);
+    Jput (in);
     return rc;
 }
 

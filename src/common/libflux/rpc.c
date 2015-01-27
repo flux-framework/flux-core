@@ -206,23 +206,6 @@ done:
  ** Deprecated functions.
  */
 
-JSON flux_rank_rpc (flux_t h, int rank, JSON o, const char *fmt, ...)
-{
-    uint32_t nodeid = rank == -1 ? FLUX_NODEID_ANY : rank;
-    va_list ap;
-    char *topic;
-    JSON out;
-    int rc;
-
-    va_start (ap, fmt);
-    topic = xvasprintf (fmt, ap);
-    va_end (ap);
-
-    rc = flux_json_rpc (h, nodeid, topic, o, &out);
-    free (topic);
-    return rc < 0 ? NULL : out;
-}
-
 JSON flux_rpc (flux_t h, JSON o, const char *fmt, ...)
 {
     va_list ap;

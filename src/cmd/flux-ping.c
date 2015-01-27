@@ -55,13 +55,14 @@ void usage (void)
     exit (1);
 }
 
-static char *ping (flux_t h, int rank, const char *name, const char *pad,
+static char *ping (flux_t h, uint32_t nodeid, const char *name, const char *pad,
                    int seq);
 
 int main (int argc, char *argv[])
 {
     flux_t h;
-    int ch, seq, bytes = 0, msec = 1000, rank = -1;
+    int ch, seq, bytes = 0, msec = 1000;
+    uint32_t nodeid = FLUX_NODEID_ANY;
     char *rankstr = NULL, *route, *target, *pad = NULL;
     struct timespec t0;
 
@@ -81,7 +82,7 @@ int main (int argc, char *argv[])
                 msec = strtoul (optarg, NULL, 10);
                 break;
             case 'r': /* --rank N */
-                rank = strtoul (optarg, NULL, 10);
+                nodeid = strtoul (optarg, NULL, 10);
                 break;
             default:
                 usage ();
@@ -92,11 +93,11 @@ int main (int argc, char *argv[])
         usage ();
     target = argv[optind++];
 
-    if (rank == -1) {
+    if (nodeid == FLUX_NODEID_ANY) {
         char *endptr;
-        int n = strtoul (target, &endptr, 10);
+        uint32_t n = strtoul (target, &endptr, 10);
         if (endptr != target)
-            rank = n;
+            nodeid = n;
         if (*endptr == '!')
             target = endptr + 1;
         else
@@ -104,19 +105,18 @@ int main (int argc, char *argv[])
     }
     if (*target == '\0')
         target = "cmb";
-    if (rank != -1) {
-        if (asprintf (&rankstr, "%d", rank) < 0)
-            oom ();
-    }
+    if (nodeid != FLUX_NODEID_ANY)
+        rankstr = xasprintf ("%u", nodeid);
 
     if (!(h = flux_api_open ()))
         err_exit ("flux_api_open");
 
     for (seq = 0; ; seq++) {
         monotime (&t0);
-        if (!(route = ping (h, rank, target, pad, seq)))
-            err_exit ("%s%s%s.ping", rank == -1 ? "" : rankstr,
-                                     rank == -1 ? "" : "!", target);
+        if (!(route = ping (h, nodeid, target, pad, seq)))
+            err_exit ("%s%s%s.ping", rankstr ? rankstr : "",
+                                     rankstr ? "!" : "",
+                                     target);
         printf ("%s%s%s.ping pad=%d seq=%d time=%0.3f ms (%s)\n",
                 rankstr ? rankstr : "",
                 rankstr ? "!" : "",
@@ -139,20 +139,21 @@ int main (int argc, char *argv[])
  * A string representation of the route taken is the return value on success
  * (caller must free).  On error, return NULL with errno set.
  */
-static char *ping (flux_t h, int rank, const char *name, const char *pad,
-                        int seq)
+static char *ping (flux_t h, uint32_t nodeid, const char *name, const char *pad,
+                   int seq)
 {
     json_object *request = util_json_object_new_object ();
     json_object *response = NULL;
     int rseq;
     const char *route, *rpad;
     char *ret = NULL;
+    char *topic = xasprintf ("%s.ping", name);
 
     if (pad)
         util_json_object_add_string (request, "pad", pad);
     util_json_object_add_int (request, "seq", seq);
 
-    if (!(response = flux_rank_rpc (h, rank, request, "%s.ping", name)))
+    if (flux_json_rpc (h, nodeid, topic, request, &response) < 0)
         goto done;
     if (util_json_object_get_int (response, "seq", &rseq) < 0
             || util_json_object_get_string (response, "route", &route) < 0) {
@@ -178,6 +179,7 @@ done:
         json_object_put (response);
     if (request)
         json_object_put (request);
+    free (topic);
     return ret;
 }
 

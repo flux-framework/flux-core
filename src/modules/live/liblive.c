@@ -31,14 +31,11 @@
 
 int flux_failover (flux_t h, int rank)
 {
+    uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
     JSON response = NULL;
     int rc = -1;
 
-    if ((response = flux_rank_rpc (h, rank, NULL, "live.failover"))) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (errno != 0)
+    if (flux_json_rpc (h, nodeid, "live.failover", NULL, &response) < 0)
         goto done;
     rc = 0;
 done:
@@ -48,14 +45,11 @@ done:
 
 int flux_recover (flux_t h, int rank)
 {
+    uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
     JSON response = NULL;
     int rc = -1;
 
-    if ((response = flux_rank_rpc (h, rank, NULL, "live.recover"))) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (errno != 0)
+    if (flux_json_rpc (h, nodeid, "live.recover", NULL, &response) < 0)
         goto done;
     rc = 0;
 done:

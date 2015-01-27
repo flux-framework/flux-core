@@ -36,8 +36,6 @@ int flux_json_multrpc (flux_t h, const char *nodeset, int fanout,
  **/
 
 json_object *flux_rpc (flux_t h, json_object *in, const char *fmt, ...);
-json_object *flux_rank_rpc (flux_t h, int rank,
-                            json_object *in, const char *fmt, ...);
 
 #endif /* !_FLUX_CORE_REQUEST_H */
 

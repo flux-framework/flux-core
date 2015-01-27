@@ -65,7 +65,8 @@ void usage (void)
 int main (int argc, char *argv[])
 {
     flux_t h;
-    int ch, rank = -1;
+    int ch;
+    uint32_t nodeid = FLUX_NODEID_ANY;
     char *target;
     char *objname = NULL;
     bool copt = false;
@@ -83,7 +84,7 @@ int main (int argc, char *argv[])
                 usage ();
                 break;
             case 'r': /* --rank */
-                rank= strtoul (optarg, NULL, 10);
+                nodeid = strtoul (optarg, NULL, 10);
                 break;
             case 'c': /* --clear */
                 copt = true;
@@ -122,30 +123,34 @@ int main (int argc, char *argv[])
         msg_exit ("Use --scale only with --type int or --type double");
     target = argv[optind++];
 
-    if (Copt && rank != -1)
+    if (Copt && nodeid != FLUX_NODEID_ANY)
         msg_exit ("Use --clear not --clear-all to clear a single node.");
 
     if (!(h = flux_api_open ()))
         err_exit ("flux_api_open");
 
     if (copt) {
-        if ((response = flux_rank_rpc (h, rank, NULL, "%s.stats.clear",target)))
-            errn_exit (EPROTO, "unexpected response to %s.stats.clear", target);
-        if (errno != 0)
-            err_exit ("flux_rank_rpc %s.stats.clear", target);
+        char *topic = xasprintf ("%s.stats.clear", target);
+        if (flux_json_rpc (h, nodeid, topic, NULL, NULL) < 0)
+            err_exit ("%s", topic);
+        free (topic);
     } else if (Copt) {
         if (flux_event_send (h, NULL, "%s.stats.clear", target) < 0)
             err_exit ("flux_event_send %s.stats.clear", target);
     } else if (Ropt) {
-        if (!(response = flux_rank_rpc (h, rank, NULL, "%s.rusage", target)))
-            errn_exit (EPROTO, "flux_rank_rpc %s.rusage", target);
+        char *topic = xasprintf ("%s.rusage", target);
+        if (flux_json_rpc (h, nodeid, topic, NULL, &response) < 0)
+            err_exit ("%s", topic);
         parse_json (objname, response, scale, type);
         json_object_put (response);
+        free (topic);
     } else {
-        if (!(response = flux_rank_rpc (h, rank, NULL, "%s.stats.get", target)))
-            err_exit ("flux_rank_rpc %s.stats.get", target);
+        char *topic = xasprintf ("%s.stats.get", target);
+        if (flux_json_rpc (h, nodeid, topic, NULL, &response) < 0)
+            err_exit ("%s", topic);
         parse_json (objname, response, scale, type);
         json_object_put (response);
+        free (topic);
     }
     flux_api_close (h);
     log_fini ();
