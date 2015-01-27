@@ -150,18 +150,6 @@ int flux_sendmsg (flux_t h, zmsg_t **zmsg)
     return h->ops->sendmsg (h->impl, zmsg);
 }
 
-/* deprecated */
-zmsg_t *flux_request_recvmsg (flux_t h, bool nonblock)
-{
-    flux_match_t match = {
-        .typemask = FLUX_MSGTYPE_REQUEST,
-        .matchtag = FLUX_MATCHTAG_NONE,
-        .bsize = 0,
-        .topic_glob = NULL,
-    };
-    return flux_recvmsg_match (h, match, NULL, nonblock);
-}
-
 zmsg_t *flux_recvmsg (flux_t h, bool nonblock)
 {
     zmsg_t *zmsg;
