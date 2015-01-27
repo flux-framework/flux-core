@@ -150,104 +150,136 @@ int flux_sendmsg (flux_t h, zmsg_t **zmsg)
     return h->ops->sendmsg (h->impl, zmsg);
 }
 
+/* deprecated */
 zmsg_t *flux_request_recvmsg (flux_t h, bool nonblock)
 {
-    zmsg_t *zmsg;
-    int type = 0;
+    flux_match_t match = {
+        .typemask = FLUX_MSGTYPE_REQUEST,
+        .matchtag = FLUX_MATCHTAG_NONE,
+        .bsize = 0,
+        .topic_glob = NULL,
+    };
+    return flux_recvmsg_match (h, match, NULL, nonblock);
+}
 
-    if (!h->ops->request_recvmsg) {
+zmsg_t *flux_recvmsg (flux_t h, bool nonblock)
+{
+    zmsg_t *zmsg;
+
+    if (!h->ops->recvmsg) {
         errno = ENOSYS;
         return NULL;
     }
-    zmsg = h->ops->request_recvmsg (h->impl, nonblock);
-    if (zmsg) {
+    zmsg = h->ops->recvmsg (h->impl, nonblock);
+    if (zmsg && (h->flags & FLUX_FLAGS_TRACE)) {
+        int type = 0;
         (void)flux_msg_get_type (zmsg, &type);
-        if (h->flags & FLUX_FLAGS_TRACE)
-            zdump_fprint (stderr, zmsg, flux_msgtype_shortstr (type));
+        zdump_fprint (stderr, zmsg, flux_msgtype_shortstr (type));
     }
     return zmsg;
 }
 
-static zmsg_t *flux_response_recvmsg_any (flux_t h, bool nonblock)
-{
-    zmsg_t *zmsg;
-    int type;
-
-    if (!h->ops->response_recvmsg) {
-        errno = ENOSYS;
-        return NULL;
-    }
-    zmsg = h->ops->response_recvmsg (h->impl, nonblock);
-    if (zmsg) {
-        (void)flux_msg_get_type (zmsg, &type);
-        if (h->flags & FLUX_FLAGS_TRACE)
-            zdump_fprint (stderr, zmsg, flux_msgtype_shortstr (type));
-    }
-    return zmsg;
-}
-
-int flux_response_putmsg (flux_t h, zmsg_t **zmsg)
-{
-    int type;
-
-    if (!h->ops->response_putmsg) {
-        errno = ENOSYS;
-        return -1;
-    }
-    if (flux_msg_get_type (*zmsg, &type) < 0 || type != FLUX_MSGTYPE_RESPONSE) {
-        errno = EINVAL;
-        return -1;
-    }
-    return h->ops->response_putmsg (h->impl, zmsg);
-}
-
-zmsg_t *flux_response_recvmsg (flux_t h, uint32_t matchtag, bool nonblock)
+zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, zlist_t **nomatch,
+                            bool nonblock)
 {
     zmsg_t *zmsg = NULL;
-    zlist_t *nomatch = NULL;
+    zlist_t *putmsg = NULL;
 
-    do {
-        if (!(zmsg = flux_response_recvmsg_any (h, nonblock)))
+    if (nomatch)
+        putmsg = *nomatch;
+
+    while (!zmsg) {
+        if (!(zmsg = flux_recvmsg (h, nonblock)))
             goto done;
-        if (matchtag != FLUX_MATCHTAG_NONE
-                            && !flux_msg_cmp_matchtag (zmsg, matchtag)) {
-            if (!nomatch && !(nomatch = zlist_new ()))
-                oom ();
-            if (h->flags & FLUX_FLAGS_TRACE)
-                fprintf (stderr, "[deferred: matchtag != %u]\n", matchtag);
-            if (zlist_append (nomatch, zmsg) < 0)
-                oom ();
+        if (!flux_msg_cmp (zmsg, match)) {
+            if (!putmsg && !(putmsg = zlist_new ())) {
+                zmsg_destroy (&zmsg);
+                errno = ENOMEM;
+                goto done;
+            }
+            if (zlist_append (putmsg, zmsg) < 0) {
+                zmsg_destroy (&zmsg);
+                errno = ENOMEM;
+                goto done;
+            }
             zmsg = NULL;
         }
-    } while (!zmsg);
+    }
 done:
-    if (nomatch) {
-        zmsg_t *z;
-        while ((z = zlist_pop (nomatch))) {
-            if (flux_response_putmsg (h, &z) < 0)
-                zmsg_destroy (&z);
+    if (putmsg) {
+        if (nomatch)
+            *nomatch = putmsg;
+        else if (flux_putmsg_nomatch (h, &putmsg) < 0) {
+            int errnum = errno;
+            zmsg_destroy (&zmsg);
+            errno = errnum;
         }
-        zlist_destroy (&nomatch);
     }
     return zmsg;
 }
 
+int flux_putmsg_nomatch (flux_t h, zlist_t **nomatch)
+{
+    int errnum = 0;
+    int rc = 0;
+
+    if (*nomatch) {
+        zmsg_t *zmsg;
+        while ((zmsg = zlist_pop (*nomatch))) {
+            if (flux_putmsg (h, &zmsg) < 0) {
+                if (errnum < errno) {
+                    errnum = errno;
+                    rc = -1;
+                }
+                zmsg_destroy (&zmsg);
+            }
+        }
+        zlist_destroy (nomatch);
+    }
+    if (errnum > 0)
+        errno = errnum;
+    return rc;
+}
+
+/* deprecated */
+int flux_response_putmsg (flux_t h, zmsg_t **zmsg)
+{
+    return flux_putmsg (h, zmsg);
+}
+
+/* FIXME: FLUX_FLAGS_TRACE will show these messages being received again
+ */
+int flux_putmsg (flux_t h, zmsg_t **zmsg)
+{
+    if (!h->ops->putmsg) {
+        errno = ENOSYS;
+        return -1;
+    }
+    return h->ops->putmsg (h->impl, zmsg);
+}
+
+/* deprecated */
+zmsg_t *flux_response_recvmsg (flux_t h, uint32_t matchtag, bool nonblock)
+{
+    flux_match_t match = {
+        .typemask = FLUX_MSGTYPE_RESPONSE,
+        .matchtag = matchtag,
+        .bsize = 0,
+        .topic_glob = NULL,
+    };
+    return flux_recvmsg_match (h, match, NULL, nonblock);
+}
+
+/* deprecated */
 zmsg_t *flux_event_recvmsg (flux_t h, bool nonblock)
 {
-    zmsg_t *zmsg;
-    int type;
-
-    if (!h->ops->event_recvmsg) {
-        errno = ENOSYS;
-        return NULL;
-    }
-    zmsg = h->ops->event_recvmsg (h->impl, nonblock);
-    if (zmsg) {
-        (void)flux_msg_get_type (zmsg, &type);
-        if (h->flags & FLUX_FLAGS_TRACE)
-            zdump_fprint (stderr, zmsg, flux_msgtype_shortstr (type));
-    }
-    return zmsg;
+    flux_match_t match = {
+        .typemask = FLUX_MSGTYPE_EVENT,
+        .matchtag = FLUX_MATCHTAG_NONE,
+        .bsize = 0,
+        .topic_glob = NULL,
+    };
+    return flux_recvmsg_match (h, match, NULL, nonblock);
 }
 
 int flux_event_subscribe (flux_t h, const char *topic)
@@ -390,11 +422,13 @@ int flux_handle_event_msg (flux_t h, zmsg_t **zmsg)
         d = zlist_next (h->reactor->dsp);
     }
 done:
-    if (!match && *zmsg) {
-        char *topic = NULL;
-        (void)flux_msg_get_topic (*zmsg, &topic);
-        msg ("nomatch: %s '%s'", flux_msgtype_string (type),
-            topic ? topic : "");
+    if (h->flags & FLUX_FLAGS_TRACE) {
+        if (!match && *zmsg) {
+            char *topic = NULL;
+            (void)flux_msg_get_topic (*zmsg, &topic);
+            fprintf (stderr, "nomatch: %s '%s'\n", flux_msgtype_string (type),
+                     topic ? topic : "");
+        }
     }
     return rc;
 }
