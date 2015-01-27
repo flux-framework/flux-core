@@ -353,7 +353,7 @@ static void plugin_reactor_tmout_remove (void *impl, int timer_id)
 
 static int ping_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
-    json_object *o;
+    json_object *o = NULL;
     char *s = NULL;
     int rc = 0;
 
@@ -391,11 +391,12 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     int rc = 0;
     char *tag = NULL;
 
-    if (flux_msg_decode (*zmsg, &tag, &o) < 0 || o == NULL) {
+    if (flux_msg_decode (*zmsg, &tag, NULL) < 0) {
         flux_log (p->h, LOG_ERR, "%s: error decoding message", __FUNCTION__);
         goto done;
     }
     if (fnmatch ("*.get", tag, 0) == 0) {
+        o = util_json_object_new_object ();
         util_json_object_add_int (o, "#request (tx)", p->stats.request_tx);
         util_json_object_add_int (o, "#request (rx)", p->stats.request_rx);
         util_json_object_add_int (o, "#svc (tx)",     p->stats.svc_tx);
@@ -432,12 +433,11 @@ done:
 static int rusage_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     plugin_ctx_t p = arg;
-    json_object *request = NULL;
     json_object *response = NULL;
     int rc = 0;
     struct rusage usage;
 
-    if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
+    if (flux_msg_decode (*zmsg, NULL, NULL) < 0) {
         flux_log (p->h, LOG_ERR, "%s: error decoding message", __FUNCTION__);
         goto done;
     }
@@ -456,8 +456,6 @@ static int rusage_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         goto done;
     }
 done:
-    if (request)
-        json_object_put (request);
     if (response)
         json_object_put (response);
     if (*zmsg)
