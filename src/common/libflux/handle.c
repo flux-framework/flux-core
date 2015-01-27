@@ -252,18 +252,6 @@ zmsg_t *flux_response_recvmsg (flux_t h, uint32_t matchtag, bool nonblock)
     return flux_recvmsg_match (h, match, NULL, nonblock);
 }
 
-/* deprecated */
-zmsg_t *flux_event_recvmsg (flux_t h, bool nonblock)
-{
-    flux_match_t match = {
-        .typemask = FLUX_MSGTYPE_EVENT,
-        .matchtag = FLUX_MATCHTAG_NONE,
-        .bsize = 0,
-        .topic_glob = NULL,
-    };
-    return flux_recvmsg_match (h, match, NULL, nonblock);
-}
-
 int flux_event_subscribe (flux_t h, const char *topic)
 {
     if (!h->ops->event_subscribe) {
