@@ -593,16 +593,21 @@ static json_object *watch_rpc (flux_t h, json_object *request)
 {
     zmsg_t *zmsg = NULL;
     json_object *reply = NULL;
-    uint32_t matchtag = flux_matchtag_alloc (h, 1);
+    flux_match_t match = {
+        .typemask = FLUX_MSGTYPE_RESPONSE,
+        .matchtag = flux_matchtag_alloc (h, 1),
+        .bsize = 0,
+        .topic_glob = NULL,
+    };
 
-    if (matchtag == FLUX_MATCHTAG_NONE) {
+    if (match.matchtag == FLUX_MATCHTAG_NONE) {
         errno = EAGAIN;
         goto done;
     }
-    if (flux_json_request (h, FLUX_NODEID_ANY, matchtag, "kvs.watch",
+    if (flux_json_request (h, FLUX_NODEID_ANY, match.matchtag, "kvs.watch",
                                                             request) < 0)
         goto done;
-    if (!(zmsg = flux_response_recvmsg (h, matchtag, false)))
+    if (!(zmsg = flux_recvmsg_match (h, match, NULL, false)))
         goto done;
     if (flux_json_response_decode (zmsg, &reply) < 0)
         goto done;

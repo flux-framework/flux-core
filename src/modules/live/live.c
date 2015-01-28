@@ -1043,7 +1043,8 @@ int mod_main (flux_t h, zhash_t *args)
                   strerror (errno));
         return -1;
     }
-    if (flux_event_subscribe (h, "live.") < 0) {
+    if (flux_event_subscribe (h, "live.cstate") < 0
+     || flux_event_subscribe (h, "live.recover") < 0) {
         flux_log (ctx->h, LOG_ERR, "flux_event_subscribe: %s",
                   strerror (errno));
         return -1;

@@ -21,7 +21,6 @@ int flux_json_event_decode (zmsg_t *zmsg, json_object **in);
  * - topics are period-delimited strings following 0MQ subscription semantics
  */
 int flux_event_sendmsg (flux_t h, zmsg_t **zmsg);
-zmsg_t *flux_event_recvmsg (flux_t h, bool nonblock);
 int flux_event_send (flux_t h, json_object *request, const char *fmt, ...);
 int flux_event_recv (flux_t h, json_object **respp, char **tagp, bool nb);
 int flux_event_subscribe (flux_t h, const char *topic);

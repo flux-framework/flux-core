@@ -365,19 +365,12 @@ static int
 enforce_c_consistency (kap_params_t *param)
 {
     char *tag = NULL;
-    zmsg_t *msg = NULL;
     int v = 0;
     json_object *o = NULL;
 
-    msg = flux_event_recvmsg (param->pers.handle, false);
-    if ( !msg ) {        
+    if ( flux_event_recv (param->pers.handle, &o, &tag, false) < 0) {
         fprintf (stderr,
-            "Failed to recv an event msg.\n");
-        goto error;
-    }
-    if (flux_msg_decode (msg, &tag, &o) < 0) {
-        fprintf (stderr,
-            "event decode failed.\n");
+            "event recv failed: %s\n", strerror (errno));
         goto error;
     }
     if ( strcmp (tag, KAP_CAUSAL_CONS_EV) != 0) {
@@ -397,7 +390,6 @@ enforce_c_consistency (kap_params_t *param)
     }
 
     free (tag);
-    free (msg);
     json_object_put (o);
 
     return 0;

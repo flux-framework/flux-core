@@ -49,6 +49,13 @@ int flux_msg_set_payload (zmsg_t *zmsg, int flags, void *buf, int size);
 int flux_msg_get_payload (zmsg_t *zmsg, int *flags, void **buf, int *size);
 bool flux_msg_has_payload (zmsg_t *zmsg);
 
+/* Get/set json payload.
+ * set allows o to be NULL
+ * get will set *o to NULL and return success if there is no payload.
+ */
+int flux_msg_set_payload_json (zmsg_t *zmsg, json_object *o);
+int flux_msg_get_payload_json (zmsg_t *zmsg, json_object **o);
+
 /* Get/set nodeid (request only)
  */
 #define FLUX_NODEID_ANY	(~(uint32_t)0)
@@ -71,6 +78,17 @@ int flux_msg_get_seq (zmsg_t *zmsg, uint32_t *seq);
 int flux_msg_set_matchtag (zmsg_t *zmsg, uint32_t matchtag);
 int flux_msg_get_matchtag (zmsg_t *zmsg, uint32_t *matchtag);
 bool flux_msg_cmp_matchtag (zmsg_t *zmsg, uint32_t matchtag);
+
+/* Match a message.
+ */
+typedef struct {
+    int typemask;           /* bitmask of matching message types (or 0) */
+    uint32_t matchtag;      /* matchtag block begin (or FLUX_MATCHTAG_NONE) */
+    int bsize;              /* size of matchtag block (or 0) */
+    char *topic_glob;       /* glob matching topic string (or NULL) */
+} flux_match_t;
+
+bool flux_msg_cmp (zmsg_t *zmsg, flux_match_t match);
 
 /* NOTE: routing frames are pushed on a message traveling dealer
  * to router, and popped off a message traveling router to dealer.

@@ -29,29 +29,30 @@
 #include <stdbool.h>
 
 #include "info.h"
-#include "request.h"
+#include "rpc.h"
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 
 char *flux_getattr (flux_t h, int rank, const char *name)
 {
-    JSON request = Jnew ();
-    JSON response = NULL;
+    uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
+    JSON in = Jnew ();
+    JSON out = NULL;
     char *ret = NULL;
     const char *val;
 
-    Jadd_str (request, "name", name);
-    if (!(response = flux_rank_rpc (h, rank, request, "cmb.getattr")))
+    Jadd_str (in, "name", name);
+    if (flux_json_rpc (h, nodeid, "cmb.getattr", in, &out) < 0)
         goto done;
-    if (!Jget_str (response, (char *)name, &val)) {
+    if (!out || !Jget_str (out, (char *)name, &val)) {
         errno = EPROTO;
         goto done;
     }
     ret = xstrdup (val);
 done:
-    Jput (request);
-    Jput (response);
+    Jput (in);
+    Jput (out);
     return ret;
 }
 

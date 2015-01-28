@@ -1748,7 +1748,7 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     char *tag = NULL;
     int rc = -1;
 
-    if (flux_msg_decode (*zmsg, &tag, &o) < 0) {
+    if (flux_msg_decode (*zmsg, &tag, NULL) < 0) {
         flux_log (h, LOG_ERR, "%s: error decoding message", __FUNCTION__);
         goto done;
     }
@@ -1758,6 +1758,7 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 
         memset (&ts, 0, sizeof (ts));
         stats_cache_objects (ctx, &ts, &size, &incomplete, &dirty);
+        o = util_json_object_new_object ();
         util_json_object_add_double (o, "obj size total (MiB)",
                                      (double)size/1048576);
         util_json_object_add_tstat (o, "obj size (KiB)", &ts, 1E-3);
