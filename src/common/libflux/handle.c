@@ -167,14 +167,11 @@ zmsg_t *flux_recvmsg (flux_t h, bool nonblock)
     return zmsg;
 }
 
-zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, zlist_t **nomatch,
+zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, zlist_t *nomatch,
                             bool nonblock)
 {
     zmsg_t *zmsg = NULL;
-    zlist_t *putmsg = NULL;
-
-    if (nomatch)
-        putmsg = *nomatch;
+    zlist_t *putmsg = nomatch;
 
     while (!zmsg) {
         if (!(zmsg = flux_recvmsg (h, nonblock)))
@@ -194,26 +191,25 @@ zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, zlist_t **nomatch,
         }
     }
 done:
-    if (putmsg) {
-        if (nomatch)
-            *nomatch = putmsg;
-        else if (flux_putmsg_nomatch (h, &putmsg) < 0) {
+    if (putmsg && !nomatch) {
+        if (flux_putmsg_list (h, putmsg) < 0) {
             int errnum = errno;
             zmsg_destroy (&zmsg);
             errno = errnum;
         }
+        zlist_destroy (&putmsg);
     }
     return zmsg;
 }
 
-int flux_putmsg_nomatch (flux_t h, zlist_t **nomatch)
+int flux_putmsg_list (flux_t h, zlist_t *l)
 {
     int errnum = 0;
     int rc = 0;
 
-    if (*nomatch) {
+    if (l) {
         zmsg_t *zmsg;
-        while ((zmsg = zlist_pop (*nomatch))) {
+        while ((zmsg = zlist_pop (l))) {
             if (flux_putmsg (h, &zmsg) < 0) {
                 if (errnum < errno) {
                     errnum = errno;
@@ -222,7 +218,6 @@ int flux_putmsg_nomatch (flux_t h, zlist_t **nomatch)
                 zmsg_destroy (&zmsg);
             }
         }
-        zlist_destroy (nomatch);
     }
     if (errnum > 0)
         errno = errnum;

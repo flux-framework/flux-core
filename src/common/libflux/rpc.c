@@ -119,7 +119,7 @@ int flux_json_multrpc (flux_t h, const char *nodeset, int fanout,
             uint32_t nodeid;
             zmsg_t *zmsg;
 
-            if (!(zmsg = flux_recvmsg_match (h, match, &nomatch, false)))
+            if (!(zmsg = flux_recvmsg_match (h, match, nomatch, false)))
                 continue;
             if (flux_msg_get_matchtag (zmsg, &matchtag) < 0) {
                 zmsg_destroy (&zmsg);
@@ -134,7 +134,7 @@ int flux_json_multrpc (flux_t h, const char *nodeset, int fanout,
             nrx++;
         }
     }
-    if (flux_putmsg_nomatch (h, &nomatch) < 0) {
+    if (flux_putmsg_list (h, nomatch) < 0) {
         if (errnum < errno)
             errnum = errno;
     }
@@ -143,6 +143,8 @@ done:
         free (nodeids);
     if (match.matchtag != FLUX_MATCHTAG_NONE)
         flux_matchtag_free (h, match.matchtag, match.bsize);
+    if (nomatch)
+        zlist_destroy (&nomatch);
     if (ns)
         nodeset_destroy (ns);
     if (errnum)
