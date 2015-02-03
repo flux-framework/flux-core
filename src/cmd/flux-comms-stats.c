@@ -165,7 +165,7 @@ static void parse_json (const char *n, json_object *o, double scale,
         char *name, *saveptr = NULL, *a1 = cpy;
 
         while ((name = strtok_r (a1, ".", &saveptr))) {
-            if (!(o = json_object_object_get (o, name)))
+            if (!json_object_object_get_ex (o, name, &o) || o == NULL)
                 err_exit ("`%s' not found in response", n);
             a1 = NULL;
         }

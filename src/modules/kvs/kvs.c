@@ -506,7 +506,7 @@ static void commit_unroll (ctx_t *ctx, json_object *dir)
     if (!(new = zhash_new ()))
         oom ();
     json_object_object_foreachC (dir, iter) {
-        if ((subdir = json_object_object_get (iter.val, "DIRVAL"))) {
+        if (json_object_object_get_ex (iter.val, "DIRVAL", &subdir)) {
             commit_unroll (ctx, subdir); /* depth first */
             json_object_get (subdir);
             store (ctx, subdir, ref);
@@ -542,16 +542,16 @@ static void commit_link_dirent (ctx_t *ctx, json_object *dir,
      */
     if ((next = strchr (name, '.'))) {
         *next++ = '\0';
-        if (!(subdirent = json_object_object_get (dir, name))) {
+        if (!json_object_object_get_ex (dir, name, &subdirent)) {
             if (!dirent) /* key deletion - it doesn't exist so return */
                 goto done;
             if (!(subdir = json_object_new_object ()))
                 oom ();
             json_object_object_add (dir, name, dirent_create ("DIRVAL",subdir));
             json_object_put (subdir);
-        } else if ((o = json_object_object_get (subdirent, "DIRVAL"))) {
+        } else if (json_object_object_get_ex (subdirent, "DIRVAL", &o)) {
             subdir = o;
-        } else if ((o = json_object_object_get (subdirent, "DIRREF"))) {
+        } else if (json_object_object_get_ex (subdirent, "DIRREF", &o)) {
             bool stall = !load (ctx, json_object_get_string (o), NULL, &subdir);
             FASSERT (ctx->h, stall == false);
             json_object_object_del (dir, name);
@@ -948,7 +948,7 @@ static bool walk (ctx_t *ctx, json_object *root, const char *path,
     /* walk directories */
     while ((next = strchr (name, '.'))) {
         *next++ = '\0';
-        if (!(dirent = json_object_object_get (dir, name)))
+        if (!json_object_object_get_ex (dir, name, &dirent))
             goto error;
         if (util_json_object_get_string (dirent, "LINKVAL", &link) == 0) {
             if (depth == SYMLINK_CYCLE_LIMIT)
@@ -966,8 +966,8 @@ static bool walk (ctx_t *ctx, json_object *root, const char *path,
         name = next;
     }
     /* now terminal path component */
-    dirent = json_object_object_get (dir, name);
-    if (dirent && util_json_object_get_string (dirent, "LINKVAL", &link) == 0) {
+    if (json_object_object_get_ex (dir, name, &dirent) &&
+        util_json_object_get_string (dirent, "LINKVAL", &link) == 0) {
         if (!readlink) {
             if (depth == SYMLINK_CYCLE_LIMIT)
                 goto error; /* FIXME: get ELOOP back to kvs_get */
@@ -1033,7 +1033,7 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t w,
             }
             if (!load (ctx, ref, w, &val))
                 goto stall;
-        } else if ((vp = json_object_object_get (dirent, "DIRVAL"))) {
+        } else if (json_object_object_get_ex (dirent, "DIRVAL", &vp)) {
             if (readlink) {
                 errnum = EINVAL;
                 goto done;
@@ -1044,7 +1044,7 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t w,
             }
             val = vp;
             isdir = true;
-        } else if ((vp = json_object_object_get (dirent, "FILEVAL"))) {
+        } else if (json_object_object_get_ex (dirent, "FILEVAL", &vp)) {
             if (readlink) {
                 errnum = EINVAL;
                 goto done;
@@ -1054,7 +1054,7 @@ static bool lookup (ctx_t *ctx, json_object *root, wait_t w,
                 goto done;
             }
             val = vp;
-        } else if ((vp = json_object_object_get (dirent, "LINKVAL"))) {
+        } else if (json_object_object_get_ex (dirent, "LINKVAL", &vp)) {
             FASSERT (ctx->h, readlink == true); /* walk() ensures this */
             FASSERT (ctx->h, dir == false); /* dir && readlink should never happen */
             val = vp;
@@ -1654,7 +1654,7 @@ static int setroot_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    if ((root = json_object_object_get (o, "rootdirval"))) {
+    if (json_object_object_get_ex (o, "rootdirval", &root)) {
         href_t ref;
         json_object_get (root);
         store (ctx, root, ref);
