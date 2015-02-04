@@ -87,12 +87,22 @@ Jadd_obj (JSON o, const char *name, JSON obj)
     json_object_object_add (o, (char *)name, Jget (obj));
 }
 
+/* Wrapper for json_object_object_get_ex()
+ */
+static __inline__ JSON
+Jobj_get (JSON o, const char *name)
+{
+    JSON n = NULL;
+    json_object_object_get_ex (o, (char *)name, &n);
+    return (n);
+}
+
 /* Get integer from JSON.
  */
 static __inline__ bool
 Jget_int (JSON o, const char *name, int *ip)
 {
-    JSON n = json_object_object_get (o, (char *)name);
+    JSON n = Jobj_get (o, name);
     if (n)
         *ip = json_object_get_int (n);
     return (n != NULL);
@@ -103,7 +113,7 @@ Jget_int (JSON o, const char *name, int *ip)
 static __inline__ bool
 Jget_double (JSON o, const char *name, double *dp)
 {
-    JSON n = json_object_object_get (o, (char *)name);
+    JSON n = Jobj_get (o, name);
     if (n)
         *dp = json_object_get_double (n);
     return (n != NULL);
@@ -114,7 +124,7 @@ Jget_double (JSON o, const char *name, double *dp)
 static __inline__ bool
 Jget_int64 (JSON o, const char *name, int64_t *ip)
 {
-    JSON n = json_object_object_get (o, (char *)name);
+    JSON n = Jobj_get (o, name);
     if (n)
         *ip = json_object_get_int64 (n);
     return (n != NULL);
@@ -125,7 +135,7 @@ Jget_int64 (JSON o, const char *name, int64_t *ip)
 static __inline__ bool
 Jget_str (JSON o, const char *name, const char **sp)
 {
-    JSON n = json_object_object_get (o, (char *)name);
+    JSON n = Jobj_get (o, name);
     if (n)
         *sp = json_object_get_string (n);
     return (n != NULL);
@@ -136,7 +146,7 @@ Jget_str (JSON o, const char *name, const char **sp)
 static __inline__ bool
 Jget_obj (JSON o, const char *name, JSON *op)
 {
-    JSON n = json_object_object_get (o, (char *)name);
+    JSON n = Jobj_get (o, name);
     if (n)
         *op = n;
     return (n != NULL);
@@ -147,7 +157,7 @@ Jget_obj (JSON o, const char *name, JSON *op)
 static __inline__ bool
 Jget_bool (JSON o, const char *name, bool *bp)
 {
-    JSON n = json_object_object_get (o, (char *)name);
+    JSON n = Jobj_get (o, name);
     if (n)
         *bp = json_object_get_boolean (n);
     return (n != NULL);

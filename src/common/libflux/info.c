@@ -40,7 +40,7 @@ char *flux_getattr (flux_t h, int rank, const char *name)
     JSON in = Jnew ();
     JSON out = NULL;
     char *ret = NULL;
-    const char *val;
+    const char *val = NULL;
 
     Jadd_str (in, "name", name);
     if (flux_json_rpc (h, nodeid, "cmb.getattr", in, &out) < 0)

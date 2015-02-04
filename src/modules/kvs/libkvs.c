@@ -238,24 +238,26 @@ const char *kvsitr_next (kvsitr_t itr)
 
 bool kvsdir_exists (kvsdir_t dir, const char *name)
 {
-    json_object *dirent = json_object_object_get (dir->o, name);
-
-    return (dirent != NULL);
+    json_object *dirent;
+    return (json_object_object_get_ex (dir->o, name, &dirent) && dirent);
 }
 
 bool kvsdir_isdir (kvsdir_t dir, const char *name)
 {
-    json_object *dirent = json_object_object_get (dir->o, name);
-
-    return (dirent && (json_object_object_get (dirent, "DIRREF") != NULL
-                    || json_object_object_get (dirent, "DIRVAL") != NULL));
+    json_object *dirent;
+    return (json_object_object_get_ex (dir->o, name, &dirent)
+        && dirent
+        && (json_object_object_get_ex (dirent, "DIRREF", NULL)
+         || json_object_object_get_ex (dirent, "DIRVAL", NULL))
+    );
 }
 
 bool kvsdir_issymlink (kvsdir_t dir, const char *name)
 {
-    json_object *dirent = json_object_object_get (dir->o, name);
-
-    return (dirent && json_object_object_get (dirent, "LINKVAL") != NULL);
+    json_object *dirent;
+    return (json_object_object_get_ex (dir->o, name, &dirent)
+        && dirent
+        && json_object_object_get_ex (dirent, "LINKVAL", NULL));
 }
 
 
@@ -286,7 +288,7 @@ int kvs_get (flux_t h, const char *key, json_object **valp)
     reply = flux_rpc (h, request, "kvs.get");
     if (!reply)
         goto done;
-    if (!(val = json_object_object_get (reply, path))) {
+    if (!json_object_object_get_ex (reply, path, &val) || val == NULL) {
         errno = ENOENT;
         goto done;
     }
@@ -325,7 +327,7 @@ int kvs_get_dir (flux_t h, kvsdir_t *dirp, const char *fmt, ...)
     reply = flux_rpc (h, request, "kvs.get");
     if (!reply)
         goto done;
-    if (!(val = json_object_object_get (reply, path))) {
+    if (!json_object_object_get_ex (reply, path, &val) || val == NULL) {
         errno = ENOENT;
         goto done;
     }
@@ -358,7 +360,7 @@ int kvs_get_symlink (flux_t h, const char *key, char **valp)
     reply = flux_rpc (h, request, "kvs.get");
     if (!reply)
         goto done;
-    if (!(val = json_object_object_get (reply, path))) {
+    if (!json_object_object_get_ex (reply, path, &val) || val == NULL) {
         errno = ENOENT;
         goto done;
     }
@@ -640,7 +642,7 @@ static int send_kvs_watch (flux_t h, const char *key, json_object **valp,
     reply = watch_rpc (h, request);
     if (!reply)
         goto done;
-    if ((val = json_object_object_get (reply, key)))
+    if (json_object_object_get_ex (reply, key, &val) && val)
         json_object_get (val);
     *valp = val;
     ret = 0;

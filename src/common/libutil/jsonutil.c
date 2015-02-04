@@ -138,9 +138,16 @@ void util_json_object_add_timeval (json_object *o, char *name,
     json_object_object_add (o, name, no);
 }
 
+static json_object *util_json_object_object_get (json_object *o, char *name)
+{
+    json_object *ret = NULL;
+    json_object_object_get_ex (o, name, &ret);
+    return (ret);
+}
+
 int util_json_object_get_boolean (json_object *o, char *name, bool *vp)
 {
-    json_object *no = json_object_object_get (o, name);
+    json_object *no = util_json_object_object_get (o, name);
     if (!no)
         return -1;
     *vp = json_object_get_boolean (no);
@@ -149,7 +156,7 @@ int util_json_object_get_boolean (json_object *o, char *name, bool *vp)
 
 int util_json_object_get_double (json_object *o, char *name, double *dp)
 {
-    json_object *no = json_object_object_get (o, name);
+    json_object *no = util_json_object_object_get (o, name);
     if (!no)
         return -1;
     *dp = json_object_get_double (no);
@@ -158,7 +165,7 @@ int util_json_object_get_double (json_object *o, char *name, double *dp)
 
 int util_json_object_get_int (json_object *o, char *name, int *ip)
 {
-    json_object *no = json_object_object_get (o, name);
+    json_object *no = util_json_object_object_get (o, name);
     if (!no)
         return -1;
     *ip = json_object_get_int (no);
@@ -167,7 +174,7 @@ int util_json_object_get_int (json_object *o, char *name, int *ip)
 
 int util_json_object_get_int64 (json_object *o, char *name, int64_t *ip)
 {
-    json_object *no = json_object_object_get (o, name);
+    json_object *no = util_json_object_object_get (o, name);
     if (!no)
         return -1;
     *ip = json_object_get_int64 (no);
@@ -176,7 +183,7 @@ int util_json_object_get_int64 (json_object *o, char *name, int64_t *ip)
 
 int util_json_object_get_string (json_object *o, char *name, const char **sp)
 {
-    json_object *no = json_object_object_get (o, name);
+    json_object *no = util_json_object_object_get (o, name);
     if (!no)
         return -1;
     *sp = json_object_get_string (no);
@@ -210,7 +217,7 @@ int util_json_object_get_timeval (json_object *o, char *name,
 {
     struct timeval tv;
     char *endptr;
-    json_object *no = json_object_object_get (o, name);
+    json_object *no = util_json_object_object_get (o, name);
     if (!no)
         return -1;
     tv.tv_sec = strtoul (json_object_get_string (no), &endptr, 10);
@@ -222,7 +229,7 @@ int util_json_object_get_timeval (json_object *o, char *name,
 int util_json_object_get_int_array (json_object *o, char *name,
                                     int **ap, int *lp)
 {
-    json_object *no = json_object_object_get (o, name);
+    json_object *no = util_json_object_object_get (o, name);
     json_object *vo;
     int i, len, *arr = NULL;
 
