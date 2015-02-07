@@ -47,7 +47,6 @@ run_timeout() {
 test_under_flux() {
     size=${1:-1}
     if test -n "$TEST_UNDER_FLUX_ACTIVE" ; then
-        unset TEST_UNDER_FLUX_ACTIVE
         return
     fi
     quiet="-o -q"
