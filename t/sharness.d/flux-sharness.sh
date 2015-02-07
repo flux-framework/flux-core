@@ -66,6 +66,20 @@ test_under_flux() {
       exec flux start --size=${size} ${quiet} "sh $0 ${flags}"
 }
 
+#
+#  Execute arguments $2-N on rank or ranks specified in arg $1
+#   using the flux-exec utility
+#
+test_on_rank() {
+    test "$#" -ge 2 ||
+        error "test_on_rank expects at least two parameters"
+    test -n "$TEST_UNDER_FLUX_ACTIVE"  ||
+        error "test_on_rank: test_under_flux not active ($TEST_UNDER_FLUX_ACTIVE)"
+
+    ranks=$1; shift;
+    flux exec --rank=${ranks} "$@"
+}
+
 
 #
 #  Export some extra variables to test scripts specific to Flux
