@@ -470,6 +470,22 @@ static int handle_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
     zmsg_t *zmsg = NULL;
     int type;
 
+    /* issue 135: zloop called us after poller was cancelled
+     */
+    if (p->putmsg > 0 && item->socket != p->zs_putmsg[0])
+        goto done;
+    if (p->putmsg == 0 && item->socket == p->zs_putmsg[0])
+        goto done;
+
+    /* issue 135: zloop called us with socket no longer ready
+     */
+    if (zmq_poll (item, 1, 0) < 0) {
+        plugin_reactor_stop (p, -1);
+        goto done;
+    }
+    if (!(item->revents & ZMQ_POLLIN))
+        goto done;
+
     zmsg = zmsg_recv (item->socket);
     if (!zmsg)
         goto done;
