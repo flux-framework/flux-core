@@ -150,10 +150,16 @@ static void cmb_reactor_stop (void *impl, int rc)
 static int putmsg_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
 {
     cmb_t *c = arg;
+
+    /* issue 135: zloop called us after the poller was cancelled
+     */
+    if (c->putmsg == 0)
+        goto done;
+
     zmsg_t *zmsg = zmsg_recv (item->socket);
     if (zmsg) {
         if (--c->putmsg == 0)
-            cmb_poll_main (c); 
+            cmb_poll_main (c);
         if (flux_handle_event_msg (c->h, &zmsg) < 0) {
             cmb_reactor_stop (c, -1);
             goto done;
@@ -167,8 +173,13 @@ done:
 static int unix_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
 {
     cmb_t *c = arg;
-    bool nonblock = false;
+    bool nonblock = true; /* issue 135: socket may not be ready */
     zmsg_t *zmsg = NULL;
+
+    /* issue 135: zloop called us after the poller was cancelled
+     */
+    if (c->putmsg > 0)
+        goto done;
 
     if (item->revents & ZMQ_POLLIN) {
         if ((zmsg = zfd_recv (c->fd, nonblock))) {
