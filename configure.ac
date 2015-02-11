@@ -66,7 +66,6 @@ X_AC_CHECK_PTHREADS
 X_AC_CHECK_COND_LIB(util, forkpty)
 X_AC_CHECK_COND_LIB(rt, clock_gettime)
 X_AC_CHECK_COND_LIB(dl, dlerror)
-X_AC_CHECK_COND_LIB(m, sqrt)
 AX_PROG_LUA([5.1],[5.3])
 AX_LUA_HEADERS
 AX_LUA_LIBS
@@ -82,6 +81,11 @@ AM_CONDITIONAL([HAVE_MPI], [test "$have_C_mpi" = yes])
 # For list.c, hostlist.c, hash.c
 ##
 AC_DEFINE(WITH_PTHREADS, 1, [Make liblsd thread safe])
+
+##
+# Embedded libev
+##
+m4_include([src/common/libev/libev.m4])
 
 AC_PKGCONFIG
 
@@ -117,6 +121,7 @@ AC_CONFIG_FILES( \
   src/common/libtap/Makefile \
   src/common/liblsd/Makefile \
   src/common/libutil/Makefile \
+  src/common/libev/Makefile \
   src/common/libzio/Makefile \
   src/common/libflux/Makefile \
   src/common/libmrpc/Makefile \

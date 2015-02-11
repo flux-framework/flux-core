@@ -11,7 +11,8 @@ LDADD = \
         $(top_builddir)/src/common/libflux/libflux.la \
         $(top_builddir)/src/common/libutil/libutil.la \
         $(top_builddir)/src/common/liblsd/liblsd.la \
-        $(JSON_LIBS) $(LIBCZMQ) $(LIBZMQ) $(LIBMUNGE) $(LIBPTHREAD) $(LIBM) \
+        $(top_builddir)/src/common/libev/libev.la \
+        $(JSON_LIBS) $(LIBCZMQ) $(LIBZMQ) $(LIBMUNGE) $(LIBPTHREAD) \
 	$(MPI_CLDFLAGS)
 
 check_PROGRAMS = kap
