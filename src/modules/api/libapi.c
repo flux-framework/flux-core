@@ -46,30 +46,41 @@
 #include "src/common/libutil/zfd.h"
 #include "src/common/libutil/zconnect.h"
 
+#include "src/common/libev/ev.h"
+#include "src/common/libutil/ev_zmq.h"
+#include "src/common/libutil/ev_zlist.h"
+
 #define CMB_CTX_MAGIC   0xf434aaab
 typedef struct {
     int magic;
     int fd;
     int rank;
     flux_t h;
-    zloop_t *zloop;
-    zctx_t *zctx;
-    void *zs_putmsg[2];
-    int putmsg;
+    zlist_t *putmsg;
 
-    zmq_pollitem_t zp_unix;
-    zmq_pollitem_t zp_putmsg;
+    /* Event loop machinery.
+     * main/putmsg pollers are turned off and on to give putmsg priority
+     */
+    struct ev_loop *loop;
+    ev_io unix_w;
+    ev_zlist putmsg_w;
 
-    bool reactor_stop;
-    int reactor_rc;
+    int loop_rc;
+
+    int timer_seq;
+
+    zhash_t *watchers;
 } cmb_t;
+
+typedef struct {
+    ev_timer w;
+    int id;
+} cmb_timer_t;
 
 static void cmb_reactor_stop (void *impl, int rc);
 static void cmb_poll_main (cmb_t *c);
 static void cmb_poll_putmsg (cmb_t *c);
 
-#define ZLOOP_RETURN(c) \
-    return ((c)->reactor_stop ? (-1) : (0))
 
 static const struct flux_handle_ops cmb_ops;
 
@@ -80,17 +91,23 @@ static int cmb_sendmsg (void *impl, zmsg_t **zmsg)
     return zfd_send (c->fd, zmsg);
 }
 
+static zmsg_t *cmb_recvmsg_putmsg (cmb_t *c)
+{
+    zmsg_t *zmsg = zlist_pop (c->putmsg);
+    if (zmsg) {
+        if (zlist_size (c->putmsg) == 0)
+            cmb_poll_main (c);
+    }
+    return zmsg;
+}
+
 static zmsg_t *cmb_recvmsg (void *impl, bool nonblock)
 {
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
     zmsg_t *zmsg = NULL;
 
-    if (c->putmsg > 0) {
-        zmsg = zmsg_recv (c->zs_putmsg[0]);
-        if (zmsg && --c->putmsg == 0)
-            cmb_poll_main (c);
-    } else
+    if (!(zmsg = cmb_recvmsg_putmsg (c)))
         zmsg = zfd_recv (c->fd, nonblock);
     return zmsg;
 }
@@ -99,9 +116,12 @@ static int cmb_putmsg (void *impl, zmsg_t **zmsg)
 {
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
-    if (zmsg_send (zmsg, c->zs_putmsg[1]) < 0)
-        return -1;
-    if (c->putmsg++ == 0)
+    int oldcount = zlist_size (c->putmsg);
+
+    if (zlist_append (c->putmsg, *zmsg) < 0)
+        oom ();
+    *zmsg = NULL;
+    if (oldcount == 0)
         cmb_poll_putmsg (c);
     return 0;
 }
@@ -110,14 +130,16 @@ static int cmb_event_subscribe (void *impl, const char *s)
 {
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
-    return flux_request_send (c->h, NULL, "api.event.subscribe.%s", s ? s: "");
+    flux_t h = c->h;
+    return flux_request_send (h, NULL, "api.event.subscribe.%s", s ? s : "");
 }
 
 static int cmb_event_unsubscribe (void *impl, const char *s)
 {
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
-    return flux_request_send (c->h, NULL, "api.event.unsubscribe.%s", s ? s: "");
+    flux_t h = c->h;
+    return flux_request_send (h, NULL, "api.event.unsubscribe.%s", s ? s : "");
 }
 
 static int cmb_rank (void *impl)
@@ -134,148 +156,190 @@ static int cmb_rank (void *impl)
 static int cmb_reactor_start (void *impl)
 {
     cmb_t *c = impl;
-    c->reactor_stop = false;
-    c->reactor_rc = 0;
-    zloop_start (c->zloop);
-    return c->reactor_rc;
+    assert (c->magic == CMB_CTX_MAGIC);
+
+    c->loop_rc = 0;
+    ev_run (c->loop, 0);
+    return c->loop_rc;
 }
 
 static void cmb_reactor_stop (void *impl, int rc)
 {
     cmb_t *c = impl;
-    c->reactor_stop = true;
-    c->reactor_rc = rc;
+    assert (c->magic == CMB_CTX_MAGIC);
+
+    c->loop_rc = rc;
+    ev_break (c->loop, EVBREAK_ALL);
 }
 
-static int putmsg_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
+static void putmsg_cb (struct ev_loop *loop, ev_zlist *w, int revents)
 {
-    cmb_t *c = arg;
+    cmb_t *c = (cmb_t *)((char *)w - offsetof (cmb_t, putmsg_w));
+    assert (c->magic == CMB_CTX_MAGIC);
+    zmsg_t *zmsg = NULL;
 
-    /* issue 135: zloop called us after the poller was cancelled
-     */
-    if (c->putmsg == 0)
+    assert (zlist_size (c->putmsg) > 0);
+    if (!(zmsg = cmb_recvmsg_putmsg (c)))
         goto done;
-
-    zmsg_t *zmsg = zmsg_recv (item->socket);
-    if (zmsg) {
-        if (--c->putmsg == 0)
-            cmb_poll_main (c);
-        if (flux_handle_event_msg (c->h, &zmsg) < 0) {
-            cmb_reactor_stop (c, -1);
-            goto done;
-        }
+    if (flux_handle_event_msg (c->h, &zmsg) < 0) {
+        cmb_reactor_stop (c, -1);
+        goto done;
     }
 done:
     zmsg_destroy (&zmsg);
-    ZLOOP_RETURN(c);
 }
 
-static int unix_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
+static void unix_cb (struct ev_loop *loop, ev_io *w, int revents)
 {
-    cmb_t *c = arg;
-    bool nonblock = true; /* issue 135: socket may not be ready */
+    cmb_t *c = (cmb_t *)((char *)w - offsetof (cmb_t, unix_w));
+    assert (c->magic == CMB_CTX_MAGIC);
     zmsg_t *zmsg = NULL;
 
-    /* issue 135: zloop called us after the poller was cancelled
-     */
-    if (c->putmsg > 0)
-        goto done;
-
-    if (item->revents & ZMQ_POLLIN) {
-        if ((zmsg = zfd_recv (c->fd, nonblock))) {
+    assert (zlist_size (c->putmsg) == 0);
+    if (revents & EV_READ) {
+        if ((zmsg = zfd_recv (w->fd, true))) {
             if (flux_handle_event_msg (c->h, &zmsg) < 0) {
                 cmb_reactor_stop (c, -1);
                 goto done;
             }
         }
     }
-    if (item->revents & ZMQ_POLLERR) {
+    if (revents & EV_ERROR) {
         cmb_reactor_stop (c, -1);
         goto done;
     }
 done:
     zmsg_destroy (&zmsg);
-    ZLOOP_RETURN(c);
 }
 
-static int fd_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
+static void fd_cb (struct ev_loop *loop, ev_io *w, int revents)
 {
-    cmb_t *c = arg;
-    if (flux_handle_event_fd (c->h, item->fd, item->revents) < 0)
+    cmb_t *c = w->data;
+    assert (c->magic == CMB_CTX_MAGIC);
+
+    if (flux_handle_event_fd (c->h, w->fd, etoz (revents)) < 0)
         cmb_reactor_stop (c, -1);
-    ZLOOP_RETURN(c);
 }
 
 static int cmb_reactor_fd_add (void *impl, int fd, short events)
 {
     cmb_t *c = impl;
-    zmq_pollitem_t item = { .fd = fd, .events = events };
+    assert (c->magic == CMB_CTX_MAGIC);
 
-#ifdef ZMQ_IGNERR
-    item.events |= ZMQ_IGNERR;
-#endif
-    if (zloop_poller (c->zloop, &item, (zloop_fn *)fd_cb, c) < 0)
-        return -1;
-#ifndef ZMQ_IGNERR
-    zloop_set_tolerant (c->zloop, &item);
-#endif
+    ev_io *w = xzmalloc (sizeof (*w));
+    ev_io_init (w, fd_cb, fd, ztoe (events));
+    w->data = c;
+
+    char *hashkey = xasprintf ("fd:%d:%d", fd, events);
+    zhash_update (c->watchers, hashkey, w);
+    zhash_freefn (c->watchers, hashkey, free);
+    free (hashkey);
+
+    ev_io_start (c->loop, w);
+
     return 0;
 }
 
 static void cmb_reactor_fd_remove (void *impl, int fd, short events)
 {
     cmb_t *c = impl;
-    zmq_pollitem_t item = { .fd = fd, .events = events };
+    assert (c->magic == CMB_CTX_MAGIC);
 
-    zloop_poller_end (c->zloop, &item); /* FIXME: 'events' are ignored */
+    char *hashkey = xasprintf ("fd:%d:%d", fd, events);
+    ev_io *w = zhash_lookup (c->watchers, hashkey);
+    if (w) {
+        ev_io_stop (c->loop, w);
+        zhash_delete (c->watchers, hashkey);
+    }
+    free (hashkey);
 }
 
-static int zs_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
+static void zs_cb (struct ev_loop *loop, ev_zmq *w, int revents)
 {
-    cmb_t *c = arg;
-    if (flux_handle_event_zs (c->h, item->socket, item->revents) < 0)
+    cmb_t *c = w->data;
+    assert (c->magic == CMB_CTX_MAGIC);
+
+    if (flux_handle_event_zs (c->h, w->zsock, etoz (revents)) < 0)
         cmb_reactor_stop (c, -1);
-    ZLOOP_RETURN(c);
 }
 
 static int cmb_reactor_zs_add (void *impl, void *zs, short events)
 {
     cmb_t *c = impl;
-    zmq_pollitem_t item = { .socket = zs, .events = events };
+    assert (c->magic == CMB_CTX_MAGIC);
 
-    return zloop_poller (c->zloop, &item, (zloop_fn *)zs_cb, c);
+    ev_zmq *w = xzmalloc (sizeof (*w));
+    ev_zmq_init (w, zs_cb, zs, ztoe (events));
+    w->data = c;
+
+    char *hashkey = xasprintf ("zsock:%p:%d", zs, events);
+    zhash_update (c->watchers, hashkey, w);
+    zhash_freefn (c->watchers, hashkey, free);
+    free (hashkey);
+
+    ev_zmq_start (c->loop, w);
+
+    return 0;
 }
 
 static void cmb_reactor_zs_remove (void *impl, void *zs, short events)
 {
     cmb_t *c = impl;
-    zmq_pollitem_t item = { .socket = zs, .events = events };
+    assert (c->magic == CMB_CTX_MAGIC);
 
-    zloop_poller_end (c->zloop, &item); /* FIXME: 'events' are ignored */
+    char *hashkey = xasprintf ("zsock:%p:%d", zs, events);
+    ev_zmq *w = zhash_lookup (c->watchers, hashkey);
+    if (w) {
+        ev_zmq_stop (c->loop, w);
+        zhash_delete (c->watchers, hashkey);
+    }
+    free (hashkey);
 }
 
-static int tmout_cb (zloop_t *zl, int timer_id, void *arg)
+static void timer_cb (struct ev_loop *loop, ev_timer *w, int revents)
 {
-    cmb_t *c = arg;
+    cmb_timer_t *ct = (cmb_timer_t *)((char *)w - offsetof (cmb_timer_t, w));
+    cmb_t *c = w->data;
+    assert (c->magic == CMB_CTX_MAGIC);
 
-    if (flux_handle_event_tmout (c->h, timer_id) < 0)
-        cmb_reactor_stop (c, -1);
-    ZLOOP_RETURN(c);
+    if (flux_handle_event_tmout (c->h, ct->id) < 0)
+         cmb_reactor_stop (c, -1);
 }
 
 static int cmb_reactor_tmout_add (void *impl, unsigned long msec, bool oneshot)
 {
     cmb_t *c = impl;
-    int times = oneshot ? 1 : 0;
+    assert (c->magic == CMB_CTX_MAGIC);
+    double after = (double)msec / 1000.0;
+    double repeat = oneshot ? 0 : after;
 
-    return zloop_timer (c->zloop, msec, times, tmout_cb, c);
+    cmb_timer_t *ct = xzmalloc (sizeof (*ct));
+    ct->id = c->timer_seq++;
+    ct->w.data = c;
+    ev_timer_init (&ct->w, timer_cb, after, repeat);
+
+    char *hashkey = xasprintf ("timer:%d", ct->id);
+    zhash_update (c->watchers, hashkey, ct);
+    zhash_freefn (c->watchers, hashkey, free);
+    free (hashkey);
+
+    ev_timer_start (c->loop, &ct->w);
+
+    return ct->id;
 }
 
 static void cmb_reactor_tmout_remove (void *impl, int timer_id)
 {
     cmb_t *c = impl;
+    assert (c->magic == CMB_CTX_MAGIC);
 
-    zloop_timer_end (c->zloop, timer_id);
+    char *hashkey = xasprintf ("timer:%d", timer_id);
+    cmb_timer_t *ct = zhash_lookup (c->watchers, hashkey);
+    if (ct) {
+        ev_timer_stop (c->loop, &ct->w);
+        zhash_delete (c->watchers, hashkey);
+    }
+    free (hashkey);
 }
 
 static void cmb_fini (void *impl)
@@ -285,10 +349,15 @@ static void cmb_fini (void *impl)
     assert (c->magic == CMB_CTX_MAGIC);
     if (c->fd >= 0)
         (void)close (c->fd);
-    if (c->zctx)
-        zctx_destroy (&c->zctx); /* destroys all sockets created in zctx */
-    if (c->zloop)
-        zloop_destroy (&c->zloop);
+    if (c->loop)
+        ev_loop_destroy (c->loop);
+    if (c->putmsg) {
+        zmsg_t *zmsg;
+        while ((zmsg = zlist_pop (c->putmsg)))
+            zmsg_destroy (&zmsg);
+        zlist_destroy (&c->putmsg);
+    }
+    zhash_destroy (&c->watchers);
     free (c);
 }
 
@@ -311,16 +380,16 @@ done:
 
 static void cmb_poll_putmsg (cmb_t *c)
 {
-    if (zloop_poller (c->zloop, &c->zp_putmsg, putmsg_cb, c) < 0)
-        err_exit ("zloop_poller");
-    zloop_poller_end (c->zloop, &c->zp_unix);
+    assert (zlist_size (c->putmsg) > 0);
+    ev_io_stop (c->loop, &c->unix_w);
+    ev_zlist_start (c->loop, &c->putmsg_w);
 }
 
 static void cmb_poll_main (cmb_t *c)
 {
-    if (zloop_poller (c->zloop, &c->zp_unix, unix_cb, c) < 0)
-        err_exit ("zloop_poller");
-    zloop_poller_end (c->zloop, &c->zp_putmsg);
+    assert (zlist_size (c->putmsg) == 0);
+    ev_zlist_stop (c->loop, &c->putmsg_w);
+    ev_io_start (c->loop, &c->unix_w);
 }
 
 flux_t flux_api_openpath (const char *path, int flags)
@@ -333,27 +402,21 @@ flux_t flux_api_openpath (const char *path, int flags)
     c = xzmalloc (sizeof (*c));
     c->magic = CMB_CTX_MAGIC;
     c->rank = -1;
-    zsys_handler_set (NULL);
-    if (!(c->zctx = zctx_new ()))
-        err_exit ("zctx_new");
-    zctx_set_iothreads (c->zctx, 0);
 
-    if (!(c->zloop = zloop_new ()))
+    if (!(c->loop = ev_loop_new (EVFLAG_AUTO)))
         oom ();
-    char *uri = xasprintf ("inproc://putmsg-%p", c);
-    zbind (c->zctx, &c->zs_putmsg[1], ZMQ_PAIR, uri, -1);
-    zconnect (c->zctx, &c->zs_putmsg[0], ZMQ_PAIR, uri, -1, NULL);
-    c->zp_putmsg.socket = c->zs_putmsg[0];
-    c->zp_putmsg.events = ZMQ_POLLIN;
-    free (uri);
+    if (!(c->watchers = zhash_new ()))
+        oom ();
 
     c->fd = socket (AF_UNIX, SOCK_STREAM, 0);
     if (c->fd < 0)
         goto error;
-    c->zp_unix.socket = NULL;
-    c->zp_unix.fd = c->fd;
-    c->zp_unix.events = ZMQ_POLLIN | ZMQ_POLLERR;
-    cmb_poll_main (c);
+    ev_io_init (&c->unix_w, unix_cb, c->fd, EV_READ);
+    ev_io_start (c->loop, &c->unix_w);
+
+    if (!(c->putmsg = zlist_new ()))
+        oom ();
+    ev_zlist_init (&c->putmsg_w, putmsg_cb, c->putmsg, EV_READ);
 
     pidfile = xasprintf ("%s/cmbd.pid", dirname (cpy));
     for (;;) {
