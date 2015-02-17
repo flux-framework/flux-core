@@ -153,19 +153,12 @@ void wait_runqueue (waitqueue_t q)
     zlist_destroy (&cpy);
 }
 
-void wait_set_id (wait_t w, const char *id)
-{
-    assert (w->magic == WAIT_MAGIC);
-    if (w->id)
-        free (w->id);
-    w->id = xstrdup (id);
-}
-
-void wait_destroy_byid (waitqueue_t q, const char *id)
+int wait_destroy_match (waitqueue_t q, WaitCompareFn cb, void *arg)
 {
     zlist_t *tmp;
     wait_t w;
     zmsg_t *zmsg;
+    int rc = -1;
 
     assert (q->magic == WAITQUEUE_MAGIC);
     if (!(tmp = zlist_new ()))
@@ -173,18 +166,25 @@ void wait_destroy_byid (waitqueue_t q, const char *id)
 
     w = zlist_first (q->q);
     while (w) {
-        if (w->id && strcmp (w->id, id) == 0)
+        if (w->cb_args.zmsg && cb != NULL && cb (w->cb_args.zmsg, arg)) {
             if (zlist_append (tmp, w) < 0)
                 oom ();
+        }
         w = zlist_next (q->q);
     }
-
+    if (zlist_size (tmp) == 0) {
+        errno = ENOENT;
+        goto done;
+    }
     while ((w = zlist_pop (tmp))) {
         zlist_remove (q->q, w);
         wait_destroy (w, &zmsg);
         zmsg_destroy (&zmsg);
     }
+    rc = 0;
+done:
     zlist_destroy (&tmp);
+    return rc;
 }
 
 /*

@@ -39,8 +39,8 @@ int kvs_get_symlink (flux_t h, const char *key, char **valp);
 
 /* kvs_watch* is like kvs_get* except the registered callback is called
  * to set the value.  It will be called immediately to set the initial
- * value and again each time the value changes.  There is currently no
- * "unwatch" function.  Any storage associated with the value given the
+ * value and again each time the value changes.
+ * Any storage associated with the value given the
  * callback is freed when the callback returns.  If a value is unset, the
  * callback gets errnum = ENOENT.
  */
@@ -51,6 +51,11 @@ int kvs_watch_int (flux_t h, const char *key, KVSSetIntF *set, void *arg);
 int kvs_watch_int64 (flux_t h, const char *key, KVSSetInt64F *set, void *arg);
 int kvs_watch_double (flux_t h, const char *key, KVSSetDoubleF *set, void *arg);
 int kvs_watch_boolean (flux_t h, const char *key, KVSSetBooleanF *set,void *arg);
+
+/* Cancel a kvs_watch, freeing server-side state, and unregistering any
+ * callback.  Returns 0 on success, or -1 with errno set on error.
+ */
+int kvs_unwatch (flux_t h, const char *key);
 
 /* While the above callback interface makes sense in plugin context,
  * the following is better for API context.  'valp' is an IN/OUT parameter.

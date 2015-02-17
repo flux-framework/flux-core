@@ -42,6 +42,7 @@
 #include <stdarg.h>
 #include <flux/core.h>
 
+#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
@@ -490,6 +491,23 @@ done:
 /**
  ** WATCH
  **/
+
+int kvs_unwatch (flux_t h, const char *key)
+{
+    kvsctx_t *ctx = getctx (h);
+    JSON o = Jnew ();
+    int rc = -1;
+
+    Jadd_str (o, "key", key);
+    if (flux_json_rpc (h, FLUX_NODEID_ANY, "kvs.unwatch", o, NULL) < 0)
+        goto done;
+    if (ctx)
+        zhash_delete (ctx->watchers, key);
+    rc = 0;
+done:
+    Jput (o);
+    return rc;
+}
 
 static int dispatch_watch (flux_t h, kvs_watcher_t *wp, const char *key,
                             json_object *val)

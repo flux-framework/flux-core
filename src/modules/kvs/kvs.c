@@ -75,6 +75,7 @@
 #include <fnmatch.h>
 #include <flux/core.h>
 
+#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/monotime.h"
@@ -1160,7 +1161,6 @@ done:
 static int watch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    char *sender = flux_msg_sender (*zmsg);
     json_object *root, *reply = NULL, *o = NULL;
     json_object_iter iter;
     wait_t w = NULL;
@@ -1237,7 +1237,6 @@ static int watch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
              * No reply will be generated unless a value has changed.
              */
             w = wait_create (h, typemask, zmsg, watch_request_cb, arg);
-            wait_set_id (w, sender);
             wait_addqueue (ctx->watchlist, w);
         }
     }
@@ -1248,8 +1247,81 @@ done:
         json_object_put (reply);
     if (*zmsg)
         zmsg_destroy (zmsg);
+    return 0;
+}
+
+typedef struct {
+    const char *key;
+    char *sender;
+} unwatch_param_t;
+
+static bool got_key (JSON o, const char *key)
+{
+    json_object_iter iter;
+    json_object_object_foreachC (o, iter) {
+        if (!strcmp (iter.key, key))
+            return true;
+    }
+    return false;
+}
+
+static bool unwatch_cmp (zmsg_t *zmsg, void *arg)
+{
+    unwatch_param_t *p = arg;
+    char *sender = NULL;
+    JSON o = NULL;
+    bool match = false;
+
+    if (!flux_msg_streq_topic (zmsg, "kvs.watch"))
+        goto done;
+    if (flux_msg_get_route_first (zmsg, &sender) < 0
+                                        || strcmp (sender, p->sender) != 0)
+        goto done;
+    if (flux_json_request_decode (zmsg, &o) < 0 || !got_key (o, p->key))
+        goto done;
+    match = true;
+done:
     if (sender)
         free (sender);
+    Jput (o);
+    return match;
+}
+
+static int unwatch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    JSON o = NULL;
+    unwatch_param_t p = { NULL, NULL };
+
+    if (flux_json_request_decode (*zmsg, &o) < 0
+               || flux_msg_get_route_first (*zmsg, &p.sender) < 0) {
+        if (flux_err_respond (h, errno, zmsg) < 0)
+            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
+                      strerror (errno));
+        goto done;
+    }
+    if (!o || !Jget_str (o, "key", &p.key)) {
+        if (flux_err_respond (h, EPROTO, zmsg) < 0)
+            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
+                      strerror (errno));
+        goto done;
+    }
+    if (wait_destroy_match (ctx->watchlist, unwatch_cmp, &p) < 0) {
+        if (flux_err_respond (h, errno, zmsg) < 0)
+            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
+                      strerror (errno));
+        goto done;
+    }
+    if (flux_err_respond (h, 0, zmsg) < 0) {
+        flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
+                  strerror (errno));
+        goto done;
+    }
+done:
+    Jput (o);
+    if (p.sender)
+        free (p.sender);
+    zmsg_destroy (zmsg);
     return 0;
 }
 
@@ -1578,18 +1650,15 @@ static int sync_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     json_object *request = NULL;
     json_object *response = NULL;
-    char *sender = NULL;
     int rootseq;
 
     if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
-                || util_json_object_get_int (request, "rootseq", &rootseq) < 0
-                || !(sender = flux_msg_sender (*zmsg))) {
+                || util_json_object_get_int (request, "rootseq", &rootseq) < 0){
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
     if (ctx->rootseq < rootseq) {
         wait_t w = wait_create (h, typemask, zmsg, sync_request_cb, arg);
-        wait_set_id (w, sender);
         wait_addqueue (ctx->watchlist, w);
         goto done; /* stall */
     }
@@ -1598,8 +1667,6 @@ static int sync_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     util_json_object_add_string (response, "rootdir", ctx->rootdir);
     flux_respond (h, zmsg, response);
 done:
-    if (sender)
-        free (sender);
     if (request)
         json_object_put (request);
     if (response)
@@ -1697,14 +1764,27 @@ done:
     return rc;
 }
 
+static bool disconnect_cmp (zmsg_t *zmsg, void *arg)
+{
+    char *sender = arg;
+    char *s = NULL;
+    bool match = false;
+
+    if (flux_msg_get_route_first (zmsg, &s) == 0 && !strcmp (s, sender))
+        match = true;
+    if (s)
+        free (s);
+    return match;
+}
+
 static int disconnect_request_cb (flux_t h, int typemask, zmsg_t **zmsg,
                                   void *arg)
 {
     ctx_t *ctx = arg;
-    char *sender = flux_msg_sender (*zmsg);
+    char *sender = NULL;
 
-    if (sender) {
-        wait_destroy_byid (ctx->watchlist, sender);
+    if (flux_msg_get_route_first (*zmsg, &sender) == 0) {
+        wait_destroy_match (ctx->watchlist, disconnect_cmp, sender);
         zhash_delete (ctx->commits, sender);
         zhash_delete (ctx->gets, sender);
         free (sender);
@@ -1857,6 +1937,7 @@ static msghandler_t htab[] = {
     { FLUX_MSGTYPE_EVENT,   "hb",                   hb_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.get",              get_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.watch",            watch_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "kvs.unwatch",          unwatch_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.put",              put_request_cb },
     { FLUX_MSGTYPE_REQUEST, "kvs.disconnect",       disconnect_request_cb },
 

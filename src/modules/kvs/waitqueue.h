@@ -2,6 +2,7 @@
 #define _FLUX_CORE_WAITQUEUE_H
 
 #include <czmq.h>
+#include <stdbool.h>
 #include <flux/core.h>
 
 /* Waitqueues can be used to stall and restart a message handler.
@@ -18,18 +19,12 @@
  * When conditions are such that the waiters on a waitqueue_t should
  * try again, run wait_runqueue ().  Once a wait_t is no longer threaded
  * on any waitqueue_t's (its usecount == 0), the handler is restarted.
- *
- * Disconnect handling:  when a client that has one or more requests
- * pending on waitqueues disconnects, you may wish to find its wait_t's
- * and destroy them.  Use wait_set_id() in combination with cmb_msg_sender()
- * to associate a wait_t with the unique sender id, and in the disconnect
- * handler, call wait_destroy_byid ().
  */
 
 typedef struct wait_struct *wait_t;
 typedef struct waitqueue_struct *waitqueue_t;
 
-typedef void (*WaitDestroyCb)(wait_t w, void *arg);
+typedef bool (*WaitCompareFn)(zmsg_t *zmsg, void *arg);
 
 /* Create a wait_t.
  * The wait_t takes ownership of zmsg (orig copy will be set to NULL).
@@ -70,13 +65,10 @@ void wait_runone (wait_t w);
  */
 void wait_runqueue (waitqueue_t q);
 
-/* Associated an id string with a wait_t.
+/* Destroy all wait_t's on 'q' containing messages that 'cb' returns true on.
+ * Return 0 if at least one wait_t is destroyed, or -1 on error.
  */
-void wait_set_id (wait_t w, const char *id);
-
-/* Find all the wait_t's on a queue that match 'id' and destroy them.
- */
-void wait_destroy_byid (waitqueue_t q, const char *id);
+int wait_destroy_match (waitqueue_t q, WaitCompareFn cb, void *arg);
 
 #endif /* !_FLUX_CORE_WAITQUEUE_H */
 
