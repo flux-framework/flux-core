@@ -244,4 +244,10 @@ test_expect_success 'kvs: tkvswatch-unwatch unwatch works' '
 	flux kvs unlink $TEST.a
 '
 
+test_expect_success 'kvs: tkvswatch-unwatchloop 1000 watch/unwatch ok' '
+	${FLUX_BUILD_DIR}/src/test/tkvswatch unwatchloop $TEST.a &&
+	flux kvs unlink $TEST.a
+'
+
+
 test_done

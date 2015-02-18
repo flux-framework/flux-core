@@ -129,6 +129,7 @@ void usage (void)
 "Usage: tkvswatch  mt         nthreads changes key\n"
 "                  selfmod    key\n"
 "                  unwatch    key\n"
+"                  unwatchloop key\n"
 );
     exit (1);
 
@@ -275,6 +276,41 @@ void test_unwatch (int argc, char **argv)
     flux_api_close (h);
 }
 
+static int unwatchloop_cb (const char *key, int val, void *arg, int errnum)
+{
+    return 0;
+}
+
+/* This is a sanity check that watch/unwatch in a loop doesn't
+ * leak matchtags.
+ */
+void test_unwatchloop (int argc, char **argv)
+{
+    int i;
+    flux_t h;
+    char *key;
+
+    if (argc != 1) {
+        fprintf (stderr, "Usage: unwatch key\n");
+        exit (1);
+    }
+    key = argv[0];
+    if (!(h = flux_api_open ()))
+        err_exit ("flux_api_open");
+    uint32_t avail = flux_matchtag_avail (h);
+    for (i = 0; i < 1000; i++) {
+        if (kvs_watch_int (h, key, unwatchloop_cb, NULL) < 0)
+            err_exit ("kvs_watch_int[%d] %s", i, key);
+        if (kvs_unwatch (h, key) < 0)
+            err_exit ("kvs_unwatch[%d] %s", i, key);
+    }
+    uint32_t leaked = avail - flux_matchtag_avail (h);
+    if (leaked > 0)
+        msg_exit ("leaked %u matchtags", leaked);
+
+    flux_api_close (h);
+}
+
 int main (int argc, char *argv[])
 {
     char *cmd;
@@ -291,6 +327,8 @@ int main (int argc, char *argv[])
         test_selfmod (argc - 2, argv + 2);
     else if (!strcmp (cmd, "unwatch"))
         test_unwatch (argc - 2, argv + 2);
+    else if (!strcmp (cmd, "unwatchloop"))
+        test_unwatchloop (argc - 2, argv + 2);
     else
         usage ();
 
