@@ -68,6 +68,8 @@ typedef struct {
     watch_type_t type;
     KVSSetF *set;
     void *arg;
+    flux_t h;
+    uint32_t matchtag;
 } kvs_watcher_t;
 
 typedef struct {
@@ -588,12 +590,22 @@ static int watch_rep_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     return rc;
 }
 
+static void destroy_watcher (void *arg)
+{
+    kvs_watcher_t *wp = arg;
+    flux_matchtag_free (wp->h, wp->matchtag, 1);
+    free (wp);
+}
+
 static kvs_watcher_t *add_watcher (flux_t h, const char *key, watch_type_t type,
-                                   KVSSetF *fun, void *arg)
+                                   uint32_t matchtag, KVSSetF *fun, void *arg)
 {
     kvsctx_t *ctx = getctx (h);
     kvs_watcher_t *wp = xzmalloc (sizeof (*wp));
 
+    assert (matchtag != FLUX_MATCHTAG_NONE);
+    wp->h = h;
+    wp->matchtag = matchtag;
     wp->set = fun;
     wp->type = type;
     wp->arg = arg;
@@ -601,74 +613,68 @@ static kvs_watcher_t *add_watcher (flux_t h, const char *key, watch_type_t type,
     /* If key is already being watched, the new watcher replaces the old.
      */
     zhash_update (ctx->watchers, key, wp);
-    zhash_freefn (ctx->watchers, key, free);
+    zhash_freefn (ctx->watchers, key, destroy_watcher);
 
     return wp;
 }
 
-/* N.B. flux_json_rpc() allocates and retires a match tag.  Since a
- * kvs.watch can receive multiple replies, we cannot call flux_rpc() here.
+/* Not strictly an RPC since multiple replies are possible.
+ * Send the kvs.watch request and receive the first reply, synchronously.
+ * If 'matchtag' is non-NULL return the request's matchtag in it for
+ * adding to the watcher state; else retire the matchtag.
  */
-static json_object *watch_rpc (flux_t h, json_object *request)
+static int watch_rpc (flux_t h, const char *key, JSON *valp,
+                      bool once, bool directory, uint32_t *matchtag)
 {
+    flux_match_t match = { .typemask = FLUX_MSGTYPE_RESPONSE, .bsize = 0,
+                           .topic_glob = NULL };
+    JSON val = NULL;
+    JSON in = Jnew ();
+    JSON out = NULL;
     zmsg_t *zmsg = NULL;
-    json_object *reply = NULL;
-    flux_match_t match = {
-        .typemask = FLUX_MSGTYPE_RESPONSE,
-        .matchtag = flux_matchtag_alloc (h, 1),
-        .bsize = 0,
-        .topic_glob = NULL,
-    };
+    int ret = -1;
 
+    /* Send the request.
+     */
+    assert (once || matchtag != NULL);
+    match.matchtag = flux_matchtag_alloc (h, 1);
     if (match.matchtag == FLUX_MATCHTAG_NONE) {
         errno = EAGAIN;
         goto done;
     }
-    if (flux_json_request (h, FLUX_NODEID_ANY, match.matchtag, "kvs.watch",
-                                                            request) < 0)
+    if (once) {
+        json_object_object_add (in, key, *valp); /* *valp ownership -> 'in' */
+        Jadd_bool (in, ".flag_once", true);
+    } else {
+        json_object_object_add (in, key, NULL);
+        Jadd_bool (in, ".flag_first", true);
+    }
+    if (directory)
+        Jadd_bool (in, ".flag_directory", true);
+
+    /* Receive the (first) response.
+     */
+    if (flux_json_request (h, FLUX_NODEID_ANY, match.matchtag,
+                                                    "kvs.watch", in) < 0)
         goto done;
     if (!(zmsg = flux_recvmsg_match (h, match, NULL, false)))
         goto done;
-    if (flux_json_response_decode (zmsg, &reply) < 0)
+    if (flux_json_response_decode (zmsg, &out) < 0)
         goto done;
-done:
-    zmsg_destroy (&zmsg);
-    /* FIXME: matchtag is leaked */
-    return reply;
-}
 
-/* The "callback" idiom vs the "once" idiom handle a NULL value differently,
- * so don't convert to ENOENT here.  NULL is a valid value for *valp.
- */
-static int send_kvs_watch (flux_t h, const char *key, json_object **valp,
-                           bool once, bool directory)
-{
-    json_object *val = NULL;
-    json_object *request = util_json_object_new_object ();
-    json_object *reply = NULL;
-    int ret = -1;
-
-    if (once) {
-        json_object_object_add (request, key, *valp);
-        util_json_object_add_boolean (request, ".flag_once", true);
-    } else {
-        json_object_object_add (request, key, NULL);
-        util_json_object_add_boolean (request, ".flag_first", true);
-    }
-    if (directory)
-        util_json_object_add_boolean (request, ".flag_directory", true);
-    reply = watch_rpc (h, request);
-    if (!reply)
-        goto done;
-    if (json_object_object_get_ex (reply, key, &val) && val)
-        json_object_get (val);
-    *valp = val;
+    (void)Jget_obj (out, key, &val); /* don't translate NULL to ENOENT here */
+    *valp = Jget (val);
+    if (matchtag)
+        *matchtag = match.matchtag;
     ret = 0;
 done:
-    if (request)
-        json_object_put (request);
-    if (reply)
-        json_object_put (reply);
+    if (match.matchtag != FLUX_MATCHTAG_NONE) {
+        if (!matchtag || ret == -1)
+            flux_matchtag_free (h, match.matchtag, 1);
+    }
+    Jput (in);
+    Jput (out);
+    zmsg_destroy (&zmsg);
     return ret;
 }
 
@@ -679,7 +685,7 @@ int kvs_watch_once (flux_t h, const char *key, json_object **valp)
 {
     int rc = -1;
 
-    if (send_kvs_watch (h, key, valp, true, false) < 0)
+    if (watch_rpc (h, key, valp, true, false, NULL) < 0)
         goto done;
     if (*valp == NULL) {
         errno = ENOENT;
@@ -697,7 +703,7 @@ int kvs_watch_once_int (flux_t h, const char *key, int *valp)
 
     if (!(val = json_object_new_int (*valp)))
         oom ();
-    if (send_kvs_watch (h, key, &val, true, false) < 0)
+    if (watch_rpc (h, key, &val, true, false, NULL) < 0)
         goto done;
     if (!val) {
         errno = ENOENT;
@@ -727,7 +733,7 @@ int kvs_watch_once_dir (flux_t h, kvsdir_t *dirp, const char *fmt, ...)
         val = (*dirp)->o;
         json_object_get (val);
     }
-    if (send_kvs_watch (h, key, &val, true, true) < 0)
+    if (watch_rpc (h, key, &val, true, true, NULL) < 0)
         goto done;
     if (val == NULL) {
         errno = ENOENT;
@@ -747,13 +753,14 @@ done:
 
 int kvs_watch (flux_t h, const char *key, KVSSetF *set, void *arg)
 {
+    uint32_t matchtag;
     kvs_watcher_t *wp;
     json_object *val = NULL;
     int rc = -1;
 
-    if (send_kvs_watch (h, key, &val, false, false) < 0)
+    if (watch_rpc (h, key, &val, false, false, &matchtag) < 0)
         goto done;
-    wp = add_watcher (h, key, WATCH_OBJECT, set, arg);
+    wp = add_watcher (h, key, WATCH_OBJECT, matchtag, set, arg);
     dispatch_watch (h, wp, key, val);
     rc = 0;
 done:
@@ -764,6 +771,7 @@ done:
 
 int kvs_watch_dir (flux_t h, KVSSetDirF *set, void *arg, const char *fmt, ...)
 {
+    uint32_t matchtag;
     kvs_watcher_t *wp;
     json_object *val = NULL;
     char *key;
@@ -775,9 +783,9 @@ int kvs_watch_dir (flux_t h, KVSSetDirF *set, void *arg, const char *fmt, ...)
         oom ();
     va_end (ap);
 
-    if (send_kvs_watch (h, key, &val, false, true) < 0)
+    if (watch_rpc (h, key, &val, false, true, &matchtag) < 0)
         goto done;
-    wp = add_watcher (h, key, WATCH_DIR, (KVSSetF *)set, arg);
+    wp = add_watcher (h, key, WATCH_DIR, matchtag, (KVSSetF *)set, arg);
     dispatch_watch (h, wp, key, val);
     rc = 0;
 done:
@@ -790,13 +798,14 @@ done:
 
 int kvs_watch_string (flux_t h, const char *key, KVSSetStringF *set, void *arg)
 {
+    uint32_t matchtag;
     kvs_watcher_t *wp;
     json_object *val = NULL;
     int rc = -1;
 
-    if (send_kvs_watch (h, key, &val, false, false) < 0)
+    if (watch_rpc (h, key, &val, false, false, &matchtag) < 0)
         goto done;
-    wp = add_watcher (h, key, WATCH_STRING, (KVSSetF *)set, arg);
+    wp = add_watcher (h, key, WATCH_STRING, matchtag, (KVSSetF *)set, arg);
     dispatch_watch (h, wp, key, val);
     rc = 0;
 done:
@@ -807,13 +816,14 @@ done:
 
 int kvs_watch_int (flux_t h, const char *key, KVSSetIntF *set, void *arg)
 {
+    uint32_t matchtag;
     kvs_watcher_t *wp;
     json_object *val = NULL;
     int rc = -1;
 
-    if (send_kvs_watch (h, key, &val, false, false) < 0)
+    if (watch_rpc (h, key, &val, false, false, &matchtag) < 0)
         goto done;
-    wp = add_watcher (h, key, WATCH_INT, (KVSSetF *)set, arg);
+    wp = add_watcher (h, key, WATCH_INT, matchtag, (KVSSetF *)set, arg);
     dispatch_watch (h, wp, key, val);
     rc = 0;
 done:
@@ -824,13 +834,14 @@ done:
 
 int kvs_watch_int64 (flux_t h, const char *key, KVSSetInt64F *set, void *arg)
 {
+    uint32_t matchtag;
     kvs_watcher_t *wp;
     json_object *val = NULL;
     int rc = -1;
 
-    if (send_kvs_watch (h, key, &val, false, false) < 0)
+    if (watch_rpc (h, key, &val, false, false, &matchtag) < 0)
         goto done;
-    wp = add_watcher (h, key, WATCH_INT64, (KVSSetF *)set, arg);
+    wp = add_watcher (h, key, WATCH_INT64, matchtag, (KVSSetF *)set, arg);
     dispatch_watch (h, wp, key, val);
     rc = 0;
 done:
@@ -841,13 +852,14 @@ done:
 
 int kvs_watch_double (flux_t h, const char *key, KVSSetDoubleF *set, void *arg)
 {
+    uint32_t matchtag;
     kvs_watcher_t *wp;
     json_object *val = NULL;
     int rc = -1;
 
-    if (send_kvs_watch (h, key, &val, false, false) < 0)
+    if (watch_rpc (h, key, &val, false, false, &matchtag) < 0)
         goto done;
-    wp = add_watcher (h, key, WATCH_DOUBLE, (KVSSetF *)set, arg);
+    wp = add_watcher (h, key, WATCH_DOUBLE, matchtag, (KVSSetF *)set, arg);
     dispatch_watch (h, wp, key, val);
     rc = 0;
 done:
@@ -858,13 +870,14 @@ done:
 
 int kvs_watch_boolean (flux_t h, const char *key, KVSSetBooleanF *set, void *arg)
 {
+    uint32_t matchtag;
     kvs_watcher_t *wp;
     json_object *val = NULL;
     int rc = -1;
 
-    if (send_kvs_watch (h, key, &val, false, false) < 0)
+    if (watch_rpc (h, key, &val, false, false, &matchtag) < 0)
         goto done;
-    wp = add_watcher (h, key, WATCH_BOOLEAN, (KVSSetF *)set, arg);
+    wp = add_watcher (h, key, WATCH_BOOLEAN, matchtag, (KVSSetF *)set, arg);
     dispatch_watch (h, wp, key, val);
     rc = 0;
 done:
