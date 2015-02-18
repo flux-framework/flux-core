@@ -37,6 +37,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/zdump.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/veb.h"
 
 
 typedef struct reactor_struct *reactor_t;
@@ -47,6 +48,8 @@ static reactor_t reactor_create (void);
 #define TAGPOOL_BSIZE   (1<<24)
 #define TAGPOOL_LENGTH  (1<<8)
 
+#define TAGPOOL_VEBSIZE (1<<16)    /* uses 9K for 1<<16 */
+
 struct flux_handle_struct {
     const struct flux_handle_ops *ops;
     int             flags;
@@ -54,6 +57,8 @@ struct flux_handle_struct {
     reactor_t       reactor;
     zhash_t         *aux;
     int             matchtag_pool[TAGPOOL_LENGTH];
+    Veb             matchtag_veb;
+    uint32_t        matchtag_alloc;
 };
 
 flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags)
@@ -66,7 +71,9 @@ flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int fl
     h->reactor = reactor_create ();
     h->ops = ops;
     h->impl = impl;
-
+    h->matchtag_veb = vebnew (TAGPOOL_VEBSIZE, 1); /* FIXME make dynamic */
+    if (!h->matchtag_veb.D)
+        oom ();
     return h;
 }
 
@@ -79,6 +86,8 @@ void flux_handle_destroy (flux_t *hp)
             h->ops->impl_destroy (h->impl);
         zhash_destroy (&h->aux);
         reactor_destroy (h->reactor);
+        if (h->matchtag_veb.D)
+            free (h->matchtag_veb.D);
         free (h);
         *hp = NULL;
     }
@@ -105,35 +114,60 @@ void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn destroy)
     zhash_freefn (h->aux, name, destroy);
 }
 
-/* Allocate a block of matchtags.
- * N.B. matchtag_block[0] is reserved as it contains FLUX_MATCTAG_NONE (0).
- * We could use the matchtag space much more efficiently with small effort.
+/* If asking for one tag, allocate from the veb pool convering block 0.
+ * If asking for >1, grab a whole block of 1<<24.
  */
 uint32_t flux_matchtag_alloc (flux_t h, int len)
 {
     int i;
+    uint32_t matchtag = FLUX_MATCHTAG_NONE;
 
-    if (len < TAGPOOL_BSIZE && len > 0) {
-        for (i = 1; i < TAGPOOL_LENGTH; i++) {
-            if (h->matchtag_pool[i] == 0) {
-                h->matchtag_pool[i] = len;
-                return (uint32_t)i<<24;
+    if (len == 1) {
+        Veb *T = &h->matchtag_veb;
+        uint32_t t = vebsucc (*T, 0); /* first from free set */
+        if ((t) != T->M) {
+            vebdel (*T, t);
+            matchtag = t + 1;
+            h->matchtag_alloc++;
+            assert (matchtag < TAGPOOL_BSIZE);
+        }
+    } else {
+        if (len < TAGPOOL_BSIZE && len > 0) {
+            for (i = 1; i < TAGPOOL_LENGTH; i++) {
+                if (h->matchtag_pool[i] == 0) {
+                    h->matchtag_pool[i] = len;
+                    matchtag = (uint32_t)i<<24;
+                    h->matchtag_alloc += TAGPOOL_BSIZE;
+                    break;
+                }
             }
         }
     }
-    return FLUX_MATCHTAG_NONE;
+    return matchtag;
 }
 
-/* Free block of matchtags.
- * In this simple implementation, we do not manage partial blocks.
- * Len has to match what was allocated or the block isn't freed.
+/* If freeing one tag, add back to the veb pool.
+ * If freeing >1, free block of 1<<24 (but len must match).
  */
 void flux_matchtag_free (flux_t h, uint32_t matchtag, int len)
 {
-    int i = matchtag>>24;
+    if (matchtag == FLUX_MATCHTAG_NONE)
+        return;
+    if (len == 1) {
+        Veb *T = &h->matchtag_veb;
+        vebput (*T, matchtag - 1); /* return to free set */
+        h->matchtag_alloc--;
+    } else {
+        int i = matchtag>>24;
+        if (i < TAGPOOL_LENGTH && h->matchtag_pool[i] == len)
+            h->matchtag_pool[i] = 0;
+        h->matchtag_alloc -= TAGPOOL_BSIZE;
+    }
+}
 
-    if (i < TAGPOOL_LENGTH && h->matchtag_pool[i] == len)
-        h->matchtag_pool[i] = 0;
+uint32_t flux_matchtag_avail (flux_t h)
+{
+    return ~(uint32_t)0 - 1 - h->matchtag_alloc;
 }
 
 int flux_sendmsg (flux_t h, zmsg_t **zmsg)

@@ -32,6 +32,7 @@ void flux_flags_unset (flux_t h, int flags);
  */
 uint32_t flux_matchtag_alloc (flux_t h, int size);
 void flux_matchtag_free (flux_t h, uint32_t t, int size);
+uint32_t flux_matchtag_avail (flux_t h);
 
 /* Low level message send/recv functions.
  */
