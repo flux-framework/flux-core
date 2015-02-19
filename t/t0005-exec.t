@@ -38,8 +38,10 @@ test_expect_success 'test_on_rank works with test_must_fail' '
 
 test_expect_success 'flux exec passes environment variables' '
 	test_must_fail flux exec -r 0 sh -c "test \"\$FOOTEST\" = \"t\"" &&
-	FOOTEST=t flux exec -r 0 sh -c "test \"\$FOOTEST\" = \"t\"" &&
-	FOOTEST=t test_on_rank 0 sh -c "test \"\$FOOTEST\" = \"t\""
+	FOOTEST=t &&
+	export FOOTEST &&
+	flux exec -r 0 sh -c "test \"\$FOOTEST\" = \"t\"" &&
+	test_on_rank 0 sh -c "test \"\$FOOTEST\" = \"t\""
 '
 
 test_expect_success 'flux exec does not pass FLUX_TMPDIR' '

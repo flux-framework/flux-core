@@ -7,6 +7,7 @@ TESTS = \
 	t0001-basic.t \
 	t0002-request.t \
 	t0003-module.t \
+	t0005-exec.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1002-modctl.t \
