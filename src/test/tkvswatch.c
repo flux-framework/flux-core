@@ -36,6 +36,7 @@
 #include <json.h>
 #include <flux/core.h>
 
+#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 
@@ -127,6 +128,8 @@ void usage (void)
     fprintf (stderr,
 "Usage: tkvswatch  mt         nthreads changes key\n"
 "                  selfmod    key\n"
+"                  unwatch    key\n"
+"                  unwatchloop key\n"
 );
     exit (1);
 
@@ -221,6 +224,93 @@ void test_selfmod (int argc, char **argv)
     flux_api_close (h);
 }
 
+static int unwatch_watch_cb (const char *key, int val, void *arg, int errnum)
+{
+    int *count = arg;
+    (*count)++;
+    return 0;
+}
+
+static int unwatch_timer_cb (flux_t h, void *arg)
+{
+    static int count = 0;
+    const char *key = arg;
+    if (kvs_put_int (h, key, count++) < 0)
+        err_exit ("%s: kvs_put_int", __FUNCTION__);
+    if (kvs_commit (h) < 0)
+        err_exit ("%s: kvs_commit", __FUNCTION__);
+    if (count == 10) {
+        if (kvs_unwatch (h, key) < 0)
+            err_exit ("%s: kvs_unwatch", __FUNCTION__);
+    } else if (count == 20)
+        flux_reactor_stop (h);
+    return 0;
+}
+
+/* Timer pops every 1 ms, writing a new value to key.
+ * After 10 calls, it calls kvs_unwatch().
+ * After 20 calls, it calls flux_reactor_stop().
+ * The kvs_unwatch_cb() counts the number of times it is called, should be 10.
+ */
+void test_unwatch (int argc, char **argv)
+{
+    flux_t h;
+    char *key;
+    int count = 0;
+
+    if (argc != 1) {
+        fprintf (stderr, "Usage: unwatch key\n");
+        exit (1);
+    }
+    key = argv[0];
+    if (!(h = flux_api_open ()))
+        err_exit ("flux_api_open");
+    if (kvs_watch_int (h, key, unwatch_watch_cb, &count) < 0)
+        err_exit ("kvs_watch_int %s", key);
+    if (flux_tmouthandler_add (h, 1, false, unwatch_timer_cb, key) < 0)
+        err_exit ("flux_tmouthandler_add");
+    if (flux_reactor_start (h) < 0)
+        err_exit ("flux_reactor_start");
+    if (count != 10)
+        msg_exit ("watch called %d times (should be 10)", count);
+    flux_api_close (h);
+}
+
+static int unwatchloop_cb (const char *key, int val, void *arg, int errnum)
+{
+    return 0;
+}
+
+/* This is a sanity check that watch/unwatch in a loop doesn't
+ * leak matchtags.
+ */
+void test_unwatchloop (int argc, char **argv)
+{
+    int i;
+    flux_t h;
+    char *key;
+
+    if (argc != 1) {
+        fprintf (stderr, "Usage: unwatch key\n");
+        exit (1);
+    }
+    key = argv[0];
+    if (!(h = flux_api_open ()))
+        err_exit ("flux_api_open");
+    uint32_t avail = flux_matchtag_avail (h);
+    for (i = 0; i < 1000; i++) {
+        if (kvs_watch_int (h, key, unwatchloop_cb, NULL) < 0)
+            err_exit ("kvs_watch_int[%d] %s", i, key);
+        if (kvs_unwatch (h, key) < 0)
+            err_exit ("kvs_unwatch[%d] %s", i, key);
+    }
+    uint32_t leaked = avail - flux_matchtag_avail (h);
+    if (leaked > 0)
+        msg_exit ("leaked %u matchtags", leaked);
+
+    flux_api_close (h);
+}
+
 int main (int argc, char *argv[])
 {
     char *cmd;
@@ -235,6 +325,10 @@ int main (int argc, char *argv[])
         test_mt (argc - 2, argv + 2);
     else if (!strcmp (cmd, "selfmod"))
         test_selfmod (argc - 2, argv + 2);
+    else if (!strcmp (cmd, "unwatch"))
+        test_unwatch (argc - 2, argv + 2);
+    else if (!strcmp (cmd, "unwatchloop"))
+        test_unwatchloop (argc - 2, argv + 2);
     else
         usage ();
 

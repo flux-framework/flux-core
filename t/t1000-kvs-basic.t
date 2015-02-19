@@ -230,13 +230,24 @@ test_expect_success 'kvs: tcommit: start 100 API threads each doing 50 put,fence
 		$(basename ${SHARNESS_TEST_FILE})
 '
 test_expect_success 'kvs: tkvswatch-mt: multi-threaded kvs watch program' '
-	${FLUX_BUILD_DIR}/src/test/tkvswatch mt 100 100 TEST.a &&
-	flux kvs unlink TEST.a
+	${FLUX_BUILD_DIR}/src/test/tkvswatch mt 100 100 $TEST.a &&
+	flux kvs unlink $TEST.a
 '
 
 test_expect_success 'kvs: tkvswatch-selfmod: watch callback modifies watched key' '
-	${FLUX_BUILD_DIR}/src/test/tkvswatch selfmod TEST.a &&
-	flux kvs unlink TEST.a
+	${FLUX_BUILD_DIR}/src/test/tkvswatch selfmod $TEST.a &&
+	flux kvs unlink $TEST.a
 '
+
+test_expect_success 'kvs: tkvswatch-unwatch unwatch works' '
+	${FLUX_BUILD_DIR}/src/test/tkvswatch unwatch $TEST.a &&
+	flux kvs unlink $TEST.a
+'
+
+test_expect_success 'kvs: tkvswatch-unwatchloop 1000 watch/unwatch ok' '
+	${FLUX_BUILD_DIR}/src/test/tkvswatch unwatchloop $TEST.a &&
+	flux kvs unlink $TEST.a
+'
+
 
 test_done
