@@ -141,3 +141,5 @@ modctl
 MODPATH
 SHA
 fanout
+NOHOST
+sysexits
