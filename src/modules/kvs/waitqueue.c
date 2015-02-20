@@ -29,6 +29,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/monotime.h"
 
 #include "waitqueue.h"
 
@@ -46,6 +47,7 @@ struct wait_struct {
     int usecount;
     FluxMsgHandler cb;
     struct cb_args cb_args;
+    struct timespec t0;
 };
 
 #define WAITQUEUE_MAGIC 0xafad7778
@@ -65,14 +67,17 @@ wait_t wait_create (flux_t h, int typemask, zmsg_t **zmsg,
     *zmsg = NULL;                   /* we take over ownership */
     w->cb_args.arg = arg; 
     w->cb = cb;
+    monotime (&w->t0);
 
     return w;
 }
 
-void wait_destroy (wait_t w, zmsg_t **zmsg)
+void wait_destroy (wait_t w, zmsg_t **zmsg, double *msec)
 {
     assert (w->magic == WAIT_MAGIC);
     assert (zmsg != NULL || w->cb_args.zmsg == NULL);
+    if (msec)
+        *msec = monotime_since (w->t0);
     if (zmsg) {
         *zmsg = w->cb_args.zmsg;    /* we give back ownership */
         w->cb_args.zmsg = NULL;
@@ -101,7 +106,7 @@ void wait_queue_destroy (waitqueue_t q)
 
     assert (q->magic == WAITQUEUE_MAGIC);
     while ((w = zlist_pop (q->q))) {
-        wait_destroy (w, &zmsg);
+        wait_destroy (w, &zmsg, NULL);
         zmsg_destroy (&zmsg);
     }
     zlist_destroy (&q->q);
@@ -132,7 +137,7 @@ void wait_runone (wait_t w)
         w->cb (w->cb_args.h, w->cb_args.typemask, &w->cb_args.zmsg,
                w->cb_args.arg);
         w->cb_args.zmsg = NULL; /* ownership transferred to callback */
-        wait_destroy (w, NULL);
+        wait_destroy (w, NULL, NULL);
     }
 }
 
@@ -178,7 +183,7 @@ int wait_destroy_match (waitqueue_t q, WaitCompareFn cb, void *arg)
     }
     while ((w = zlist_pop (tmp))) {
         zlist_remove (q->q, w);
-        wait_destroy (w, &zmsg);
+        wait_destroy (w, &zmsg, NULL);
         zmsg_destroy (&zmsg);
     }
     rc = 0;

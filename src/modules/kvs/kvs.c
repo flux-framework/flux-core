@@ -141,13 +141,6 @@ typedef struct {
     int count;
 } fence_t;
 
-/* A get_t is created to time kvs_get.
- * Only needed for tracking the total time servicing a get including stalls.
- */
-typedef struct {
-    struct timespec t0;
-} get_t;
-
 /* Statistics gathered for kvs.stats.get, etc.
  */
 typedef struct {
@@ -166,7 +159,6 @@ typedef struct {
     int rootseq;            /* current root version (for ordering) */
     zhash_t *commits;       /* hash of pending put/commits by sender name */
     zhash_t *fences;        /* hash of pending fences by name (master only) */
-    zhash_t *gets;          /* hash of pending get requests by sender name */
     waitqueue_t watchlist;
     int watchlist_lastrun_epoch;
     stats_t stats;
@@ -194,8 +186,6 @@ static void freectx (ctx_t *ctx)
         zhash_destroy (&ctx->commits);
     if (ctx->fences)
         zhash_destroy (&ctx->fences);
-    if (ctx->gets)
-        zhash_destroy (&ctx->gets);
     if (ctx->watchlist)
         wait_queue_destroy (ctx->watchlist);
     free (ctx);
@@ -212,8 +202,6 @@ static ctx_t *getctx (flux_t h)
         if (!(ctx->commits = zhash_new ()))
             oom ();
         if (!(ctx->fences = zhash_new ()))
-            oom ();
-        if (!(ctx->gets = zhash_new ()))
             oom ();
         ctx->watchlist = wait_queue_create ();
         ctx->h = h;
@@ -291,18 +279,6 @@ static fence_t *fence_create (int nprocs)
 static void fence_destroy (fence_t *f)
 {
     free (f); 
-}
-
-static get_t *get_create (void)
-{
-    get_t *g = xzmalloc (sizeof (*g));
-    monotime (&g->t0);
-    return g;
-}
-
-static void get_destroy (get_t *g)
-{
-    free (g);
 }
 
 static bool hobj_update (ctx_t *ctx, hobj_t *hp, json_object *o)
@@ -769,7 +745,7 @@ static int load_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         }
     }
     if (!stall) {
-        wait_destroy (w, zmsg);
+        wait_destroy (w, zmsg, NULL);
         flux_respond (ctx->h, zmsg, cpy);
     }
 done:
@@ -1089,18 +1065,12 @@ static int get_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     JSON root, val;
     bool stall = false;
     int errnum = 0;
-    get_t *g;
 
     if (flux_json_request_decode (*zmsg, &in) < 0
                 || flux_msg_get_route_first (*zmsg, &sender) < 0
                 || kp_tget_dec (in, &key, &dir, &link) < 0) {
         errnum = errno;
         goto done;
-    }
-    if (!(g = zhash_lookup (ctx->gets, sender))) {
-        g = get_create ();
-        zhash_insert (ctx->gets, sender, g);
-        zhash_freefn (ctx->gets, sender, (zhash_free_fn *)get_destroy);
     }
     /* Deref the object store, potentially stalling on a cache fill.
      */
@@ -1115,7 +1085,10 @@ static int get_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     }
     /* If we got this far we are not stalling.
      */
-    wait_destroy (w, zmsg); /* get back *zmsg */
+    double msec;
+    wait_destroy (w, zmsg, &msec); /* get back *zmsg */
+    tstat_push (&ctx->stats.get_time, msec);
+
     if (errnum)
         goto done;
     if (!(out = kp_rget_enc (key, val))) {
@@ -1127,8 +1100,6 @@ static int get_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
                   __FUNCTION__, strerror (errno));
         goto done;
     }
-    tstat_push (&ctx->stats.get_time, monotime_since (g->t0));
-    zhash_delete (ctx->gets, sender);
 done:
     if (!stall && errnum && flux_err_respond (ctx->h, errnum, zmsg) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: flux_err_respond: %s",
@@ -1172,7 +1143,7 @@ static int watch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     }
     /* If we got this far we are not stalling.
      */
-    wait_destroy (w, zmsg);
+    wait_destroy (w, zmsg, NULL);
     if (errnum)
         goto done;
     /* Key changed or this is the initial request.  Send a reply.
@@ -1513,7 +1484,7 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         w = wait_create (h, typemask, zmsg, commit_request_cb, arg);
         if (commit_dirty (ctx, c, w))
             goto done; /* stall */
-        wait_destroy (w, zmsg); /* get back *zmsg */
+        wait_destroy (w, zmsg, NULL); /* get back *zmsg */
         c->state = COMMIT_UPSTREAM;
         send_upstream_commit (ctx, c, sender, fence, nprocs);
         if (!(fence && internal)) {
@@ -1711,7 +1682,6 @@ static int disconnect_request_cb (flux_t h, int typemask, zmsg_t **zmsg,
     if (flux_msg_get_route_first (*zmsg, &sender) == 0) {
         wait_destroy_match (ctx->watchlist, disconnect_cmp, sender);
         zhash_delete (ctx->commits, sender);
-        zhash_delete (ctx->gets, sender);
         free (sender);
     }
     zmsg_destroy (zmsg);
@@ -1773,8 +1743,6 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
                                   zhash_size (ctx->commits));
         util_json_object_add_int (o, "#pending fences",
                                   zhash_size (ctx->fences));
-        util_json_object_add_int (o, "#pending gets",
-                                  zhash_size (ctx->gets));
         util_json_object_add_int (o, "#watchers",
                                   wait_queue_length (ctx->watchlist));
 
