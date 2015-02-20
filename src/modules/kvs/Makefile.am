@@ -21,7 +21,9 @@ fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
 kvs_la_SOURCES = \
 	kvs.c \
 	waitqueue.c \
-	waitqueue.h
+	waitqueue.h \
+	proto.c \
+	proto.h
 
 kvs_la_LDFLAGS = $(fluxmod_ldflags)
 kvs_la_LIBADD = $(fluxmod_libadd)
@@ -33,9 +35,12 @@ noinst_LTLIBRARIES = libkvs.la
 fluxcoreinclude_HEADERS = kvs.h
 libkvs_la_SOURCES = \
 	libkvs.c \
-	conf.c
+	conf.c \
+	proto.c
 
-TESTS = test_waitqueue.t
+TESTS = \
+	test_waitqueue.t \
+	test_proto.t
 
 test_ldadd = \
         $(top_builddir)/src/modules/kvs/waitqueue.o \
@@ -47,7 +52,6 @@ test_ldadd = \
         $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)
 
 test_cppflags = \
-        -DTEST_MAIN \
         -DMODULE_PATH=\"$(top_builddir)/src/modules\" \
         -I$(top_srcdir)/src/common/libtap \
         $(AM_CPPFLAGS)
@@ -62,3 +66,6 @@ test_waitqueue_t_SOURCES = test/waitqueue.c
 test_waitqueue_t_CPPFLAGS = $(test_cppflags)
 test_waitqueue_t_LDADD = $(test_ldadd)
 
+test_proto_t_SOURCES = test/proto.c
+test_proto_t_CPPFLAGS = $(test_cppflags)
+test_proto_t_LDADD = $(test_ldadd)

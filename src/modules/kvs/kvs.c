@@ -83,6 +83,7 @@
 #include "src/common/libutil/log.h"
 
 #include "waitqueue.h"
+#include "proto.h"
 
 typedef char href_t[41];
 
@@ -656,7 +657,7 @@ static void commit_apply_all (ctx_t *ctx)
     }
 
     if (commit_apply_finish (ctx, rootcpy))
-        setroot_event_send (ctx, NULL); 
+        setroot_event_send (ctx, NULL);
 
     while ((key = zlist_pop (keys))) {
         if ((c = zhash_lookup (ctx->commits, key))
@@ -696,7 +697,7 @@ static void commit_apply_fence (ctx_t *ctx, const char *name)
     }
 
     (void)commit_apply_finish (ctx, rootcpy);
-    setroot_event_send (ctx, name); 
+    setroot_event_send (ctx, name);
 
     while ((key = zlist_pop (keys))) {
         if ((c = zhash_lookup (ctx->commits, key))
@@ -1079,23 +1080,21 @@ stall:
 static int get_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    json_object *root, *reply = NULL, *o = NULL;
-    json_object_iter iter;
-    wait_t w = NULL;
-    bool stall = false;
-    bool flag_directory = false;
-    bool flag_readlink = false;
-    int errnum = 0;
+    JSON in = NULL;
+    JSON out = NULL;
+    bool dir = false;
+    bool link = false;
+    const char *key;
     char *sender = NULL;
+    JSON root, val;
+    bool stall = false;
+    int errnum = 0;
     get_t *g;
 
-    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
-        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
-        goto done;
-    }
-    if (!(sender = flux_msg_sender (*zmsg))) {
-        flux_log (h, LOG_ERR, "%s: could not determine message sender",
-                  __FUNCTION__);
+    if (flux_json_request_decode (*zmsg, &in) < 0
+                || flux_msg_get_route_first (*zmsg, &sender) < 0
+                || kp_tget_dec (in, &key, &dir, &link) < 0) {
+        errnum = errno;
         goto done;
     }
     if (!(g = zhash_lookup (ctx->gets, sender))) {
@@ -1103,150 +1102,116 @@ static int get_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         zhash_insert (ctx->gets, sender, g);
         zhash_freefn (ctx->gets, sender, (zhash_free_fn *)get_destroy);
     }
-    w = wait_create (h, typemask, zmsg, get_request_cb, arg);
+    /* Deref the object store, potentially stalling on a cache fill.
+     */
+    wait_t w = wait_create (h, typemask, zmsg, get_request_cb, arg);
     if (!load (ctx, ctx->rootdir, w, &root)) {
         stall = true;
         goto done;
     }
-    /* handle flags - they apply to all keys in the request */
-    (void)util_json_object_get_boolean (o, ".flag_directory", &flag_directory);
-    (void)util_json_object_get_boolean (o, ".flag_readlink", &flag_readlink);
-
-    reply = util_json_object_new_object ();
-    json_object_object_foreachC (o, iter) {
-        if (!strncmp (iter.key, ".flag_", 6)) /* ignore flags */
-            continue;
-        json_object *val = NULL;
-        if (!lookup (ctx, root, w, flag_directory, flag_readlink,
-                     iter.key, &val, &errnum))
-            stall = true; /* keep going to maximize readahead */
-        if (stall) {
-            if (val)
-                json_object_put (val);
-            continue;
-        }
-        json_object_object_add (reply, iter.key, val);
+    if (!lookup (ctx, root, w, dir, link, key, &val, &errnum)) {
+        stall = true;
+        goto done;
     }
-    /* if any key encountered an error, the whole request fails */
-    /* N.B. unset values are returned as NULL and are not an error */
-    if (errnum != 0) {
-        wait_destroy (w, zmsg); /* get back *zmsg */
-        if (flux_respond_errnum (ctx->h, zmsg, errnum) < 0) {
-            flux_log (ctx->h, LOG_ERR, "%s: flux_respond_errnum: %s",
-                      __FUNCTION__, strerror (errno));
-            zmsg_destroy (zmsg);
-        }
-    } else if (!stall) {
-        wait_destroy (w, zmsg); /* get back *zmsg */
-        if (flux_respond (ctx->h, zmsg, reply) < 0) {
-            flux_log (ctx->h, LOG_ERR, "%s: flux_respond: %s",
-                     __FUNCTION__, strerror (errno));
-            zmsg_destroy (zmsg);
-        }
+    /* If we got this far we are not stalling.
+     */
+    wait_destroy (w, zmsg); /* get back *zmsg */
+    if (errnum)
+        goto done;
+    if (!(out = kp_rget_enc (key, val))) {
+        errnum = errno;
+        goto done;
+    }
+    if (flux_json_respond (ctx->h, out, zmsg) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: flux_json_respond: %s",
+                  __FUNCTION__, strerror (errno));
+        goto done;
     }
     tstat_push (&ctx->stats.get_time, monotime_since (g->t0));
     zhash_delete (ctx->gets, sender);
 done:
-    if (o)
-        json_object_put (o);
-    if (reply)
-        json_object_put (reply);
-    if (*zmsg)
-        zmsg_destroy (zmsg);
+    if (!stall && errnum && flux_err_respond (ctx->h, errnum, zmsg) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: flux_err_respond: %s",
+                  __FUNCTION__, strerror (errno));
+    }
+    Jput (in);
+    Jput (out);
     if (sender)
         free (sender);
+    zmsg_destroy (zmsg);
     return 0;
 }
 
 static int watch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    json_object *root, *reply = NULL, *o = NULL;
-    json_object_iter iter;
-    wait_t w = NULL;
-    bool stall = false, changed = false, reply_sent = false;
-    bool flag_directory = false, flag_first = false;
-    bool flag_readlink = false, flag_once = false;
+    JSON in = NULL;
+    JSON out = NULL;
+    JSON root;
+    JSON oval, val = NULL;
+    const char *key;
+    bool stall = false;
+    bool reply_sent = false;
+    bool dir = false, first = false;
+    bool link = false, once = false;
     int errnum = 0;
 
-    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
-        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
+    if (flux_json_request_decode (*zmsg, &in) < 0
+          || kp_twatch_dec (in, &key, &oval, &once, &first, &dir, &link) < 0) {
+        errnum = errno;
         goto done;
     }
-    w = wait_create (h, typemask, zmsg, watch_request_cb, arg);
+    wait_t w = wait_create (h, typemask, zmsg, watch_request_cb, arg);
     if (!load (ctx, ctx->rootdir, w, &root)) {
         stall = true;
         goto done;
     }
-    /* handle flags - they apply to all keys in the request */
-    (void)util_json_object_get_boolean (o, ".flag_directory", &flag_directory);
-    (void)util_json_object_get_boolean (o, ".flag_readlink", &flag_readlink);
-    (void)util_json_object_get_boolean (o, ".flag_once", &flag_once);
-    (void)util_json_object_get_boolean (o, ".flag_first", &flag_first);
-
-    reply = util_json_object_new_object ();
-    json_object_object_foreachC (o, iter) {
-        if (!strncmp (iter.key, ".flag_", 6) || !strncmp (iter.key, ".arg_", 5))
-            continue;
-        json_object *val = NULL;
-        if (!lookup (ctx, root, w, flag_directory, flag_readlink,
-                     iter.key, &val, &errnum))
-            stall = true; /* keep going to maximize readahead */
-        if (stall) {
-            if (val)
-                json_object_put (val);
-            continue;
-        }
-        if (!util_json_match (iter.val, val))
-            changed = true;
-        json_object_object_add (reply, iter.key, val);
+    if (!lookup (ctx, root, w, dir, link, key, &val, &errnum)) {
+        stall = true;
+        goto done;
     }
-    /* If any key encountered an error, the whole request fails.
-     * Unset values are returned as NULL and are not an error.
-     * After an error is returned, the key is no longer watched.
+    /* If we got this far we are not stalling.
      */
-    if (errnum != 0) {
-        wait_destroy (w, zmsg); /* get back *zmsg */
-        flux_respond_errnum (ctx->h, zmsg, errnum);
-    } else if (!stall) {
-        wait_destroy (w, zmsg); /* get back *zmsg */
-
-        /* Reply to the watch request.
-         * flag_first is generally true on first call, false thereafter
-         */
-        if (changed || flag_first) {
-            zmsg_t *zcpy;
-            if (!(zcpy = zmsg_dup (*zmsg)))
-                oom ();
-            if (flux_respond (ctx->h, &zcpy, reply) < 0) {
-                flux_log (ctx->h, LOG_ERR, "%s: flux_respond: %s",
-                         __FUNCTION__, strerror (errno));
-                zmsg_destroy (&zcpy);
+    wait_destroy (w, zmsg);
+    if (errnum)
+        goto done;
+    /* Key changed or this is the initial request.  Send a reply.
+     */
+    if (first || !util_json_match (val, oval)) {
+        zmsg_t *zcpy;
+        JSON out = NULL;
+        if (!(zcpy = zmsg_dup (*zmsg)))
+            oom ();
+        out = kp_rwatch_enc (key, val);
+        if (flux_json_respond (ctx->h, out, &zcpy) < 0)
+            flux_log (ctx->h, LOG_ERR, "%s: flux_respond: %s",
+                     __FUNCTION__, strerror (errno));
+        zmsg_destroy (&zcpy);
+        reply_sent = true;
+    }
+    /* No reply sent or this is an ongoing request.
+     * Arrange to wait on ctx->watchlist for each new commit.
+     * Clear the 'first' flag, if set.
+     */
+    if (!reply_sent || !once) {
+        if (first) {
+            json_object_object_del (in, ".flag_first");
+            if (flux_msg_set_payload_json (*zmsg, in) < 0) {
+                errnum = errno;
+                goto done;
             }
-            reply_sent = true;
         }
-
-        /* Resubmit the watch request (clear flag_first) */
-        if (!reply_sent || !flag_once) {
-            util_json_object_add_boolean (reply, ".flag_directory", flag_directory);
-            util_json_object_add_boolean (reply, ".flag_readlink", flag_readlink);
-            util_json_object_add_boolean (reply, ".flag_once", flag_once);
-            (void)flux_msg_replace_json (*zmsg, reply);
-
-            /* On every commit, __FUNCTION__ (zmsg) will be called.
-             * No reply will be generated unless a value has changed.
-             */
-            w = wait_create (h, typemask, zmsg, watch_request_cb, arg);
-            wait_addqueue (ctx->watchlist, w);
-        }
+        w = wait_create (h, typemask, zmsg, watch_request_cb, arg);
+        wait_addqueue (ctx->watchlist, w);
     }
 done:
-    if (o)
-        json_object_put (o);
-    if (reply)
-        json_object_put (reply);
-    if (*zmsg)
-        zmsg_destroy (zmsg);
+    if (!stall && errnum && flux_err_respond (ctx->h, errnum, zmsg) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: flux_err_respond: %s",
+                  __FUNCTION__, strerror (errno));
+    }
+    Jput (in);
+    Jput (out);
+    zmsg_destroy (zmsg);
     return 0;
 }
 
@@ -1290,61 +1255,50 @@ done:
 static int unwatch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    JSON o = NULL;
+    JSON in = NULL;
     unwatch_param_t p = { NULL, NULL };
+    int errnum = 0;
 
-    if (flux_json_request_decode (*zmsg, &o) < 0
+    if (flux_json_request_decode (*zmsg, &in) < 0
+               || kp_tunwatch_dec (in, &p.key) < 0
                || flux_msg_get_route_first (*zmsg, &p.sender) < 0) {
-        if (flux_err_respond (h, errno, zmsg) < 0)
-            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                      strerror (errno));
-        goto done;
-    }
-    if (!o || !Jget_str (o, "key", &p.key)) {
-        if (flux_err_respond (h, EPROTO, zmsg) < 0)
-            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                      strerror (errno));
+        errnum = errno;
         goto done;
     }
     if (wait_destroy_match (ctx->watchlist, unwatch_cmp, &p) < 0) {
-        if (flux_err_respond (h, errno, zmsg) < 0)
-            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                      strerror (errno));
-        goto done;
-    }
-    if (flux_err_respond (h, 0, zmsg) < 0) {
-        flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                  strerror (errno));
+        errnum = errno;
         goto done;
     }
 done:
-    Jput (o);
+    if (flux_err_respond (h, errnum, zmsg) < 0)
+        flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
+                  strerror (errno));
+    zmsg_destroy (zmsg);
+    Jput (in);
     if (p.sender)
         free (p.sender);
-    zmsg_destroy (zmsg);
     return 0;
 }
 
 static int put_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    json_object *o = NULL;
-    json_object_iter iter;
+    JSON in = NULL;
     href_t ref;
-    bool flag_mkdir = false;
-    bool flag_symlink = false;
+    const char *key;
+    JSON val = NULL;
+    bool dir = false;
+    bool link = false;
     struct timespec t0;
     char *sender = NULL;
     commit_t *c;
+    int errnum = 0;
 
     monotime (&t0);
-    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
-        flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
-        goto done;
-    }
-    if (!(sender = flux_msg_sender (*zmsg))) {
-        flux_log (h, LOG_ERR, "%s: could not determine message sender",
-                  __FUNCTION__);
+    if (flux_json_request_decode (*zmsg, &in) < 0
+                || flux_msg_get_route_first (*zmsg, &sender) < 0
+                || kp_tput_dec (in, &key, &val, &link, &dir) < 0) {
+        errnum = errno;
         goto done;
     }
     if (!(c = zhash_lookup (ctx->commits, sender))) {
@@ -1353,41 +1307,32 @@ static int put_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         zhash_insert (ctx->commits, sender, c);
         zhash_freefn (ctx->commits, sender, (zhash_free_fn *)commit_destroy);
     }
-    /* Handle commit already in progress.
-     */
-    if (c->state != COMMIT_PUT) {
-        flux_respond_errnum (h, zmsg, EINVAL);
+    if (c->state != COMMIT_PUT) { /* commit already in progress */
+        errnum = EINVAL;
         goto done;
     }
-    (void)util_json_object_get_boolean (o, ".flag_mkdir", &flag_mkdir);
-    (void)util_json_object_get_boolean (o, ".flag_symlink", &flag_symlink);
-    json_object_object_foreachC (o, iter) {
-        if (!strncmp (iter.key, ".flag_", 6)) /* ignore flags */
-            continue;
-        if (json_object_get_type (iter.val) == json_type_null) {
-            if (flag_mkdir) {
-                json_object *empty_dir = util_json_object_new_object ();
-                store (ctx, empty_dir, ref);
-                commit_add (c, iter.key, dirent_create ("DIRREF", ref));
-            } else
-                commit_add (c, iter.key, NULL);
-        } else if (flag_symlink) {
-            commit_add (c, iter.key, dirent_create ("LINKVAL", iter.val));
-        } else if (store_by_reference (iter.val)) {
-            json_object_get (iter.val);
-            store (ctx, iter.val, ref);
-            commit_add (c, iter.key, dirent_create ("FILEREF", ref));
-        } else {
-            commit_add (c, iter.key, dirent_create ("FILEVAL", iter.val));
-        }
+    if (json_object_get_type (val) == json_type_null) {
+        if (dir) {
+            JSON empty_dir = Jnew ();
+            store (ctx, empty_dir, ref);
+            commit_add (c, key, dirent_create ("DIRREF", ref));
+        } else
+            commit_add (c, key, NULL);
+    } else if (link) {
+        commit_add (c, key, dirent_create ("LINKVAL", val));
+    } else if (store_by_reference (val)) {
+        store (ctx, Jget (val), ref);
+        commit_add (c, key, dirent_create ("FILEREF", ref));
+    } else {
+        commit_add (c, key, dirent_create ("FILEVAL", val));
     }
-    flux_respond_errnum (h, zmsg, 0); /* success */
     tstat_push (&ctx->stats.put_time, monotime_since (t0));
 done:
-    if (o)
-        json_object_put (o);
-    if (*zmsg)
-        zmsg_destroy (zmsg);
+    if (flux_err_respond (h, errnum, zmsg) < 0)
+        flux_log (ctx->h, LOG_ERR, "%s: flux_err_respond: %s",
+                  __FUNCTION__, strerror (errno));
+    Jput (in);
+    zmsg_destroy (zmsg);
     if (sender)
         free (sender);
     return 0;
@@ -1400,21 +1345,16 @@ done:
 static void send_upstream_commit (ctx_t *ctx, commit_t *c, const char *sender,
                                   const char *fence, int nprocs)
 {
-    json_object *o;
-
-    if (c->dirents) {
-        o = c->dirents;
+    JSON in = NULL;
+    if ((in = kp_tcommit_enc (sender, c->dirents, fence, nprocs))) {
+        Jput (c->dirents);
         c->dirents = NULL;
-    } else
-        o = util_json_object_new_object ();
-
-    if (fence) {
-        util_json_object_add_string (o, ".arg_fence", fence);
-        util_json_object_add_int (o, ".arg_nprocs", nprocs);
+        if (flux_json_request (ctx->h, FLUX_NODEID_ANY,
+                               FLUX_MATCHTAG_NONE, "kvs.commit", in) < 0)
+            flux_log (ctx->h, LOG_ERR, "%s: flux_json_reqwuest: %s",
+                      __FUNCTION__, strerror (errno));
     }
-    util_json_object_add_string (o, ".arg_sender", sender);
-    flux_request_send (ctx->h, o, "kvs.commit");
-    json_object_put (o);
+    Jput (in);
 }
 
 /* If commit contains references to dirty hash entries (store in progress),
@@ -1445,60 +1385,55 @@ static bool commit_dirty (ctx_t *ctx, commit_t *c, wait_t w)
 static void commit_respond (ctx_t *ctx, zmsg_t **zmsg, const char *sender,
                             const char *rootdir, int rootseq)
 {
-    json_object *response = util_json_object_new_object ();
+    JSON out = NULL;
 
     FASSERT (ctx->h, *zmsg != NULL);
 
-    util_json_object_add_string (response, "sender", sender);
-    if (rootdir) {
-        util_json_object_add_int (response, "rootseq", rootseq);
-        util_json_object_add_string (response, "rootdir", rootdir);
-    } else {
-        util_json_object_add_int (response, "rootseq", ctx->rootseq);
-        util_json_object_add_string (response, "rootdir", ctx->rootdir);
+    if (!rootdir) {
+        rootdir = ctx->rootdir;
+        rootseq = ctx->rootseq;
     }
-    if (flux_respond (ctx->h, zmsg, response) < 0) {
-        flux_log (ctx->h, LOG_ERR, "%s: flux_respond: %s", __FUNCTION__,
-                  strerror (errno));
+    if (!(out = kp_rcommit_enc (rootseq, rootdir, sender))) {
+        if (flux_err_respond (ctx->h, errno, zmsg) < 0)
+            flux_log (ctx->h, LOG_ERR, "%s: flux_err_respond: %s",
+                      __FUNCTION__, strerror (errno));
+        goto done;
     }
-    json_object_put (response);
+    if (flux_json_respond (ctx->h, out, zmsg) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: flux_json_respond: %s",
+                  __FUNCTION__, strerror (errno));
+    }
+done:
+    Jput (out);
 }
 
 static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    json_object *request = NULL;
+    JSON in = NULL;
+    JSON dirents = NULL;
     commit_t *c = NULL;
     wait_t w;
     char *sender = NULL;
     const char *arg_sender;
-    json_object_iter iter;
     int nprocs;
     const char *fence = NULL;
     bool internal = false;
 
-    if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
-        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
-        goto done;
-    }
-    if (!(sender = flux_msg_sender (*zmsg))) {
-        flux_log (h, LOG_ERR, "%s: could not determine message sender",
-                  __FUNCTION__);
-        goto done;
-    }
-    /* Get optional fence arguments.
-     */
-    if (util_json_object_get_string (request, ".arg_fence", &fence) == 0) {
-        if (util_json_object_get_int (request, ".arg_nprocs", &nprocs) < 0) {
-            flux_log (h, LOG_ERR, "%s: fence with no nprocs", __FUNCTION__);
-            goto done;
+    if (flux_json_request_decode (*zmsg, &in) < 0
+          || flux_msg_get_route_first (*zmsg, &sender) < 0
+          || kp_tcommit_dec (in, &arg_sender, &dirents, &fence, &nprocs) < 0) {
+        if (flux_err_respond (h, errno, zmsg) < 0) {
+            flux_log (ctx->h, LOG_ERR, "%s: flux_err_respond: %s",
+                  __FUNCTION__, strerror (errno));
         }
+        goto done;
     }
 
     /* Commits generated internally will contain .arg_sender.  If present,
      * we should ignore the true sender and use it to hash the commit.
      */
-    if (util_json_object_get_string (request, ".arg_sender", &arg_sender)==0) {
+    if (arg_sender) {
         free (sender);
         sender = xstrdup (arg_sender);
         internal = true;
@@ -1506,13 +1441,8 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     if (!(c = zhash_lookup (ctx->commits, sender))) {
         c = commit_create ();
         c->state = COMMIT_STORE;
-        json_object_object_foreachC (request, iter) {
-            if (!strncmp (iter.key, ".arg_", 5))
-                continue;
-            if (iter.val)
-                json_object_get (iter.val);
-            commit_add (c, iter.key, iter.val);
-        }
+        c->dirents = dirents;
+        dirents = NULL;
         zhash_insert (ctx->commits, sender, c);
         zhash_freefn (ctx->commits, sender, (zhash_free_fn *)commit_destroy);
     } else if (c->state == COMMIT_PUT) {
@@ -1594,10 +1524,9 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         goto done;
     }
 done:
-    if (request)
-        json_object_put (request);
-    if (*zmsg)
-        zmsg_destroy (zmsg);
+    Jput (in);
+    Jput (dirents);
+    zmsg_destroy (zmsg);
     if (sender)
         free (sender);
     return 0;
@@ -1608,16 +1537,14 @@ done:
 static int commit_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    json_object *o = NULL;
+    JSON in = NULL;
     const char *rootdir, *sender;
     int rootseq;
     commit_t *c;
 
-    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
-            || util_json_object_get_int (o, "rootseq", &rootseq) < 0
-            || util_json_object_get_string (o, "rootdir", &rootdir) < 0
-            || util_json_object_get_string (o, "sender", &sender) < 0) {
-        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
+    if (flux_json_response_decode (*zmsg, &in) < 0
+          || kp_rcommit_dec (in, &rootseq, &rootdir, &sender) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: %s", __FUNCTION__, strerror (errno));
         goto done;
     }
     /* Update the cache on this node.
@@ -1636,10 +1563,8 @@ static int commit_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         zhash_delete (ctx->commits, sender);
     }
 done:
-    if (o)
-        json_object_put (o);
-    if (*zmsg)
-        zmsg_destroy (zmsg);
+    Jput (in);
+    zmsg_destroy (zmsg);
     return 0;
 }
 
@@ -1677,90 +1602,90 @@ done:
 static int getroot_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    json_object *o = util_json_object_new_object ();
+    JSON out = NULL;
 
-    util_json_object_add_int (o, "rootseq", ctx->rootseq);
-    util_json_object_add_string (o, "rootdir", ctx->rootdir);
-    flux_respond (h, zmsg, o);
-    json_object_put (o);
+    if (!(out = kp_rgetroot_enc (ctx->rootseq, ctx->rootdir))) {
+        flux_log (h, LOG_ERR, "%s: kp_rgetroot_enc: %s", __FUNCTION__,
+                  strerror (errno));
+        goto done;
+    }
+    if (flux_json_respond (h, out, zmsg) < 0) {
+        flux_log (h, LOG_ERR, "%s: flux_json_respond: %s", __FUNCTION__,
+                  strerror (errno));
+        goto done;
+    }
+done:
+    Jput (out);
+    zmsg_destroy (zmsg);
     return 0;
 }
 
-static int getroot_request_send (ctx_t *ctx)
+static int getroot_rpc (ctx_t *ctx, int *rootseq, href_t rootdir)
 {
-    json_object *reply = flux_rpc (ctx->h, NULL, "kvs.getroot");
-    int rootseq;
-    const char *rootdir;
+    JSON out = NULL;
+    const char *s;
     int rc = -1;
 
-    if (!reply || util_json_object_get_int (reply, "rootseq", &rootseq) < 0
-            || util_json_object_get_string (reply, "rootdir", &rootdir) < 0) {
-        flux_log (ctx->h, LOG_ERR, "%s: bad response", __FUNCTION__);
+    if (flux_json_rpc (ctx->h, FLUX_NODEID_ANY, "kvs.getroot", NULL, &out) < 0)
+        goto done;
+    if (kp_rgetroot_dec (out, rootseq, &s) < 0)
+        goto done;
+    if (strlen (s) > sizeof (href_t) - 1) {
+        errno = EPROTO;
         goto done;
     }
-    setroot (ctx, rootdir, rootseq);
+    memcpy (rootdir, s, strlen (s) + 1);
     rc = 0;
 done:
-    if (reply)
-        json_object_put (reply);
+    Jput (out);
     return rc;
 }
 
 static int setroot_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
+    JSON out = NULL;
     int rootseq;
     const char *rootdir;
     const char *fence = NULL;
-    json_object *o = NULL;
-    json_object *root = NULL;
+    JSON root = NULL;
 
-    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
-                || util_json_object_get_int (o, "rootseq", &rootseq) < 0
-                || util_json_object_get_string (o, "rootdir", &rootdir) < 0) {
-        flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
+    if (flux_json_event_decode (*zmsg, &out) < 0
+            || kp_tsetroot_dec (out, &rootseq, &rootdir, &root, &fence) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: %s", __FUNCTION__, strerror (errno));
         goto done;
     }
-    if (json_object_object_get_ex (o, "rootdirval", &root)) {
+    if (root) {
         href_t ref;
-        json_object_get (root);
+        Jget (root);
         store (ctx, root, ref);
     }
     setroot (ctx, rootdir, rootseq);
-    (void)util_json_object_get_string (o, "fence", &fence);
     if (fence)
         commit_complete_fence (ctx, fence, rootdir, rootseq);
 done:
-    if (o)
-        json_object_put (o);
-    if (*zmsg)
-        zmsg_destroy (zmsg);
+    Jput (out);
+    zmsg_destroy (zmsg);
     return 0;
 }
 
 static int setroot_event_send (ctx_t *ctx, const char *fence)
 {
-    json_object *o = util_json_object_new_object ();
+    JSON in = NULL;
+    JSON root = NULL;
     int rc = -1;
 
-    util_json_object_add_int (o, "rootseq", ctx->rootseq);
-    util_json_object_add_string (o, "rootdir", ctx->rootdir);
-    if (fence)
-        util_json_object_add_string (o, "fence", fence);
     if (event_includes_rootdir) {
-        json_object *root;
-        bool stall;
-
-        stall = !load (ctx, ctx->rootdir, NULL, &root);
+        bool stall = !load (ctx, ctx->rootdir, NULL, &root);
         FASSERT (ctx->h, stall == false);
-        json_object_get (root);
-        json_object_object_add (o, "rootdirval", root);
     }
-    if (flux_event_send (ctx->h, o, "kvs.setroot") < 0)
+    if (!(in = kp_tsetroot_enc (ctx->rootseq, ctx->rootdir, root, fence)))
         goto done;
-    json_object_put (o);
+    if (flux_event_send (ctx->h, in, "kvs.setroot") < 0)
+        goto done;
     rc = 0;
 done:
+    Jput (in);
     return rc;
 }
 
@@ -1985,8 +1910,13 @@ int mod_main (flux_t h, zhash_t *args)
         setroot (ctx, href, 0);
         setargs (ctx, args);
     } else {
-        if (getroot_request_send (ctx) < 0)
+        href_t href;
+        int rootseq;
+        if (getroot_rpc (ctx, &rootseq, href) < 0) {
+            flux_log (h, LOG_ERR, "getroot_rpc: %s", strerror (errno));
             return -1;
+        }
+        setroot (ctx, href, rootseq);
     }
     if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
         flux_log (h, LOG_ERR, "flux_msghandler_add: %s", strerror (errno));
