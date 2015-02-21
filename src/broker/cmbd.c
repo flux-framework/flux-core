@@ -52,6 +52,7 @@
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/argv.h"
+#include "src/common/libutil/subprocess.h"
 
 #include "module.h"
 #include "boot_pmi.h"
@@ -116,9 +117,6 @@ typedef struct {
     zhash_t *peer_idle;         /* peer (hopcount=1) hb idle time, by uuid */
     int hb_lastreq;             /* hb epoch of last upstream request */
     char *proctitle;
-    pid_t shell_pid;
-    char *shell_cmd;
-    bool shell_armed;
     sigset_t default_sigset;
     flux_conf_t cf;
     const char *secdir;
@@ -137,6 +135,13 @@ typedef struct {
      */
     int shutdown_tid;
     int shutdown_exitcode;
+
+    /* Subprocess management
+     */
+    struct subprocess_manager *sm;
+
+    char *shell_cmd;
+    struct subprocess *shell;
 } ctx_t;
 
 typedef struct {
@@ -194,6 +199,7 @@ static void update_pidfile (ctx_t *ctx, bool force);
 static void rank0_shell (ctx_t *ctx);
 static void boot_pmi (ctx_t *ctx);
 static void boot_local (ctx_t *ctx);
+static int shell_exit_handler (struct subprocess *p, void *arg);
 
 static const double min_heartrate = 0.01;   /* min seconds */
 static const double max_heartrate = 30;     /* max seconds */
@@ -288,6 +294,10 @@ int main (int argc, char *argv[])
         ctx.module_searchpath = MODULE_PATH;
     ctx.heartrate = dfl_heartrate;
     ctx.shutdown_tid = -1;
+
+    if (!(ctx.sm = subprocess_manager_create ()))
+        oom ();
+    subprocess_manager_set (ctx.sm, SM_WAIT_FLAGS, WNOHANG);
 
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
@@ -508,8 +518,10 @@ int main (int argc, char *argv[])
     update_environment (&ctx);
     update_pidfile (&ctx, fopt);
 
-    if (!nopt && ctx.rank == 0 && (isatty (STDIN_FILENO) || ctx.shell_cmd))
-        ctx.shell_armed = true;
+    if (!nopt && ctx.rank == 0 && (isatty (STDIN_FILENO) || ctx.shell_cmd)) {
+        ctx.shell = subprocess_create (ctx.sm);
+        subprocess_set_callback (ctx.shell, shell_exit_handler, &ctx);
+    }
 
     if (ctx.verbose)
         msg ("initializing sockets");
@@ -652,32 +664,22 @@ void work_around_zmq_poll_bug (void)
 
 static void rank0_shell (ctx_t *ctx)
 {
-    char *av[] = { getenv ("SHELL"), "-c", ctx->shell_cmd, NULL };
+    const char *shell = getenv ("SHELL");
 
-    if (!av[0])
-        av[0] = "/bin/bash";
-    if (!av[2])
-        av[1] = NULL;
+    if (!shell)
+        shell = "/bin/bash";
+
+    subprocess_argv_append (ctx->shell, shell);
+    if (ctx->shell_cmd) {
+        subprocess_argv_append (ctx->shell, "-c");
+        subprocess_argv_append (ctx->shell, ctx->shell_cmd);
+    }
+    subprocess_set_environ (ctx->shell, environ);
 
     if (!ctx->quiet)
         msg ("%s-0: starting shell", ctx->sid);
 
-    switch ((ctx->shell_pid = fork ())) {
-        case -1:
-            err_exit ("fork");
-        case 0: /* child */
-            if (sigprocmask (SIG_SETMASK, &ctx->default_sigset, NULL) < 0)
-                err_exit ("sigprocmask");
-            if (execv (av[0], av) < 0)
-                err_exit ("execv %s", av[0]);
-            break;
-        default: /* parent */
-            //close (STDERR_FILENO);
-            close (STDOUT_FILENO);
-            close (STDIN_FILENO);
-            work_around_zmq_poll_bug ();
-            break;
-    }
+    subprocess_run (ctx->shell);
 }
 
 /* N.B. If there are multiple nodes and multiple cmbds per node, the
@@ -1554,7 +1556,7 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
     else if (flux_msg_match (zmsg, "shutdown"))
         shutdown_recv (ctx, zmsg);
     else if (flux_msg_match (zmsg, "live.ready")) {
-        if (ctx->shell_armed)
+        if (ctx->shell)
             rank0_shell (ctx);
     }
 }
@@ -1658,6 +1660,126 @@ done:
     if (*zmsg)
         zmsg_destroy (zmsg);
     return rc;
+}
+
+static json_object *
+subprocess_json_resp (ctx_t *ctx, struct subprocess *p)
+{
+    json_object *resp = util_json_object_new_object ();
+
+    assert (ctx != NULL);
+    assert (resp != NULL);
+
+    util_json_object_add_int (resp, "rank", ctx->rank);
+    util_json_object_add_int (resp, "pid", subprocess_pid (p));
+    util_json_object_add_string (resp, "state", subprocess_state_string (p));
+    return (resp);
+}
+
+static int child_exit_handler (struct subprocess *p, void *arg)
+{
+    int n;
+
+    ctx_t *ctx = (ctx_t *) arg;
+    zmsg_t *zmsg = (zmsg_t *) subprocess_get_context (p);
+    json_object *resp;
+
+    assert (ctx != NULL);
+    assert (zmsg != NULL);
+
+    resp = subprocess_json_resp (ctx, p);
+    util_json_object_add_int (resp, "status", subprocess_exit_status (p));
+    util_json_object_add_int (resp, "code", subprocess_exit_code (p));
+    if ((n = subprocess_signaled (p)))
+        util_json_object_add_int (resp, "signal", n);
+
+    flux_json_respond (ctx->h, resp, &zmsg);
+    json_object_put (resp);
+    return (0);
+}
+
+/*
+ *  Create a subprocess described in the zmsg argument.
+ */
+static int cmb_create_subprocess (ctx_t *ctx, zmsg_t **zmsg)
+{
+    json_object *request = NULL;
+    json_object *response = NULL;
+    json_object *o;
+    struct subprocess *p;
+    zmsg_t *copy;
+    int i, argc;
+    int rc = -1;
+
+    if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
+        errno = EPROTO;
+        return -1;
+    }
+
+    if (!json_object_object_get_ex (request, "cmdline", &o)
+        || o == NULL
+        || (json_object_get_type (o) != json_type_array)) {
+        errno = EPROTO;
+        goto out_free;
+    }
+
+    if ((argc = json_object_array_length (o)) < 0) {
+        errno = EPROTO;
+        goto out_free;
+    }
+
+    p = subprocess_create (ctx->sm);
+    subprocess_set_callback (p, child_exit_handler, ctx);
+
+    for (i = 0; i < argc; i++) {
+        json_object *ox = json_object_array_get_idx (o, i);
+        if (json_object_get_type (ox) == json_type_string)
+            subprocess_argv_append (p, json_object_get_string (ox));
+    }
+
+    if (json_object_object_get_ex (request, "env", &o) && o != NULL) {
+        json_object_iter iter;
+        json_object_object_foreachC (o, iter) {
+            const char *val = json_object_get_string (iter.val);
+            if (val != NULL)
+                subprocess_setenv (p, iter.key, val, 1);
+        }
+        /*
+         *  Override key FLUX environment variables in env array
+         */
+        subprocess_setenv (p, "FLUX_TMPDIR", getenv ("FLUX_TMPDIR"), 1);
+    }
+    else
+        subprocess_set_environ (p, environ);
+
+    if (json_object_object_get_ex (request, "cwd", &o) && o != NULL) {
+        const char *dir = json_object_get_string (o);
+        if (dir != NULL)
+            subprocess_set_cwd (p, dir);
+    }
+
+    if ((rc = subprocess_run (p)) < 0) {
+        subprocess_destroy (p);
+        goto out_free;
+    }
+
+    /*
+     * Save a copy of zmsg for future messages
+     */
+    copy = zmsg_dup (*zmsg);
+    subprocess_set_context (p, (void *) copy);
+
+    /*
+     *  Send response, destroys original zmsg.
+     */
+    response = subprocess_json_resp (ctx, p);
+    flux_json_respond (ctx->h, response, zmsg);
+out_free:
+    if (request)
+        json_object_put (request);
+    if (response)
+        json_object_put (response);
+    return (rc);
 }
 
 static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
@@ -1816,6 +1938,9 @@ static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             peer_mute (ctx, id);
         if (id)
             free (id);
+    } else if (flux_msg_match (*zmsg, "cmb.exec")) {
+        if (cmb_create_subprocess (ctx, zmsg) < 0)
+            flux_respond_errnum (ctx->h, zmsg, errno);
     } else {
         rc = -1;
         errno = ENOSYS;
@@ -1842,7 +1967,9 @@ static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
             free (id);
             break;
         case FLUX_MSGTYPE_REQUEST:
+            assert (zmsg != NULL);
             if (flux_sendmsg (ctx->h, &zmsg) < 0) {
+                assert (zmsg != NULL);
                 if (flux_respond_errnum (ctx->h, &zmsg, errno) < 0)
                     goto done;
             }
@@ -1982,44 +2109,17 @@ static int hb_cb (zloop_t *zl, int timer_id, ctx_t *ctx)
     ZLOOP_RETURN(ctx);
 }
 
-static char *decode_status (ctx_t *ctx, const char *name, pid_t pid,
-                            int status, int *rcp)
+static int shell_exit_handler (struct subprocess *p, void *arg)
 {
-    int rc = 0;
-    char *s;
+    int rc;
+    ctx_t *ctx = (ctx_t *) arg;
+    assert (ctx != NULL);
 
-    if (WIFEXITED (status)) {
-        rc = WEXITSTATUS (status);
-        if (asprintf (&s, "%s (pid %d) exited with rc=%d", name, pid, rc) < 0)
-            oom ();
-    } else if (WIFSIGNALED (status)) {
-        if (asprintf (&s, "%s (pid %d) terminated by %s",
-                      name, pid, strsignal (WTERMSIG (status))) < 0)
-            oom ();
-        rc = 128 + WTERMSIG (status); /* POSIX 2008, Vol. 3, p 74314 */
-    } else {
-        if (asprintf (&s, "%s (pid %d) wait status=%d", name, pid, status) < 0)
-            oom ();
-    }
-    *rcp = rc;
-    return s;
-}
-
-static void reap_all_children (ctx_t *ctx)
-{
-    pid_t pid;
-    int status, rc;
-    char *s;
-    while ((pid = waitpid ((pid_t) -1, &status, WNOHANG)) > (pid_t)0) {
-        if (pid == ctx->shell_pid) {
-            s = decode_status (ctx, "shell", pid, status, &rc);
-            (void)shutdown_send (ctx, 2, rc, "%s", s);
-        } else {
-            s = decode_status (ctx, "child", pid, status, &rc);
-            msg ("%s", s);
-        }
-        free (s);
-    }
+    if (subprocess_signaled (p))
+        rc = 128 + subprocess_signaled (p); /* POSIX 2008, Vol. 3, p 74314 */
+    else
+        rc = subprocess_exit_code (p);
+    return shutdown_send (ctx, 2, rc, subprocess_state_string (p));
 }
 
 static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
@@ -2032,7 +2132,7 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
             err_exit ("read");
     } else if (n == sizeof (fdsi)) {
         if (fdsi.ssi_signo == SIGCHLD)
-            reap_all_children (ctx);
+            subprocess_manager_reap_all (ctx->sm);
         else {
             (void)shutdown_send (ctx, 2, 0, "signal %d (%s) %d",
                                  fdsi.ssi_signo, strsignal (fdsi.ssi_signo));

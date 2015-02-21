@@ -1,0 +1,234 @@
+#!/usr/bin/lua
+
+-------------------------------------------------------------------------------
+-- Modules:
+-------------------------------------------------------------------------------
+local flux = require 'flux'
+local posix = require 'flux-lua.posix'
+local timer = require 'flux-lua.timer'
+local hostlist = require 'hostlist'
+
+local prog = string.match (arg[0], "([^/]+)$")
+local shortprog = prog:match ("flux%-(.+)$")
+local verbose = false
+
+
+--
+-- Termination state needs to remain a global for access from
+--  signal handler functions. See setup_signal_handlers() below.
+--
+terminate = false
+
+-------------------------------------------------------------------------------
+-- Local functions:
+-------------------------------------------------------------------------------
+--
+--
+local function setup_signal_handlers()
+    local signal = posix.signal
+    local fn = function() terminate = true end
+    --
+    --  Support both old-style lua-posix signal-as-a-table interface,
+    --   and newer signal-as-a-function api:
+    --
+    if type (signal) == "table" then
+        signal[posix.SIGINT] = fn
+        signal[posix.SIGTERM] = signal[posix.SIGINT]
+        return true
+    end
+
+    signal (posix.SIGINT, fn)
+    signal (posix.SIGTERM, fn)
+    return true
+end
+
+local function say (fmt, ...)
+    if not verbose then return end
+    io.stderr:write (string.format ("%s: "..fmt, shortprog, ...))
+end
+
+local function warn (fmt, ...)
+    io.stderr:write (string.format ("%s: "..fmt, shortprog, ...))
+end
+
+local function die (fmt, ...)
+    io.stderr:write (string.format ("%s: "..fmt, shortprog, ...))
+    os.exit (1)
+end
+
+local function program_state_create (n)
+    local s = {
+        size = n or 1,
+        nexited = 0,
+        nstarted = 0,
+        running = {},
+        status = {},
+        code = {},
+        matchtag = {},
+    }
+    local T = {}
+    function T.size (n)
+        if n then s.size = n end
+        return s.size
+    end
+    function T.matchtag (mt, rank)
+        if rank then
+            s.matchtag [mt] = rank
+            return rank
+        else
+            return s.matchtag [mt]
+        end
+    end
+    function T.exited (resp)
+        s.nexited = s.nexited + 1
+        s.code [resp.rank] = resp.code
+        s.status [resp.rank] = resp.status
+    end
+    function T.started (rank, pid)
+        s.nstarted = s.nstarted + 1
+        s.running [rank] = pid
+    end
+    function T.failed (rank, errnum)
+        s.nstarted = s.nstarted + 1
+        s.nexited = s.nexited + 1
+        s.code [rank] = 68 -- EX_NOHOST
+        s.status [rank] = 68
+    end
+    function T.complete ()
+        if s.nexited == s.size then return true end
+        return false
+    end
+    function T.status (rank)
+        if rank then return s.status [rank] end
+        local rv = 0
+        for k,v in pairs (s.status) do
+            if v > rv then rv = v end
+        end
+        return rv
+    end
+    function T.exit_code (rank)
+        if rank then return s.code [rank] end
+        local rv = 0
+        for k,v in pairs (s.code) do
+            if v > rv then rv = v end
+        end
+        return rv
+    end
+    return T
+end
+
+local function get_ranklist (f, r)
+    if not r then r = '0-'..f.size-1 end
+    return hostlist.new ('['..r..']')
+end
+
+-------------------------------------------------------------------------------
+-- Main program:
+-------------------------------------------------------------------------------
+--  Parse cmdline args:
+--
+local getopt = require 'flux-lua.alt_getopt' .get_opts
+local opts, optind = getopt (arg, "d:r:v",
+                        { rank = "r", verbose = "v", dir = "d" })
+
+if opts.v then verbose = true end
+if not arg[optind] then die ("Command to run required\n") end
+local cmdline = {}
+for i = optind, #arg do
+    table.insert (cmdline, arg[i])
+end
+
+local sigtimer
+
+-- Set signal handlers
+setup_signal_handlers()
+
+-- Start in-program timer:
+local tt = timer.new()
+local t = timer.new()
+
+--  Create new connection to local cmbd:
+--
+local f, err = flux.new()
+if not f then die ("Connecting to flux failed: %s\n", err) end
+
+local ranks = get_ranklist (f, opts.r)
+local state = program_state_create (#ranks)
+
+--  Set up msghandler for exec responses
+--
+local mh, err = f:msghandler {
+    pattern = "*.exec",
+    msgtypes = { flux.MSGTYPE_RESPONSE },
+
+    handler = function (f, zmsg, mh)
+        if zmsg.errnum ~= 0 then
+            local rank = state.matchtag (zmsg.matchtag)
+            warn ("Error: rank %d: %s\n", rank, posix.errno (zmsg.errnum))
+            state.failed (rank, zmsg.errnum)
+            if state.complete() then
+                f:reactor_stop ()
+            end
+            return
+        end
+
+        local resp = zmsg.data
+        --say ("%03fms: rank %d %s\n", t:get0() * 1000, resp.rank or -1, resp.state or "error")
+        if resp.state == "Running" then
+            state.started (resp.rank, resp.pid)
+        elseif resp.state == "Exited" then
+            state.exited (resp)
+            if state.complete() then
+                f:reactor_stop ()
+            end
+        end
+    end
+
+}
+
+
+--  Begin reactor loop:
+--
+local sigtimer = nil
+
+t:set()
+say ("%03fms: Starting %s on %s\n", t:get0() * 1000, cmdline[1], tostring(ranks))
+
+local env = posix.getenv()
+
+local cwd = opts.d or posix.getcwd()
+
+local msg = {
+    cmdline = cmdline,
+    env = env,
+    cwd = cwd
+}
+
+for i in ranks:next() do
+    local matchtag, err = f:send ("cmb.exec", msg, i )
+    if not matchtag then error (err) end
+    state.matchtag (matchtag, i)
+end
+say ("%03fms: Sent all requests\n", t:get0() * 1000)
+
+repeat
+    local r = f:reactor()
+    if not terminate then break end
+    --
+    --  If we catch a signal then lwj:watch() will be interrupted.
+    --   Check to see if we should terminate the job now:
+    --
+    if not sigtimer then
+        sigtimer = timer.new()
+        sigtimer:get()
+    elseif sigtimer:get() < 1.0 then
+        say ("Detaching from job. Processes may still be running\n");
+        os.exit (0);
+    end
+    terminate = false
+until false
+
+say ("%03fms: %d tasks complete with code %d\n", t:get0() * 1000, state.size(), state.exit_code())
+os.exit (state.exit_code())
+
+-- vi: ts=4 sw=4 expandtab
