@@ -360,6 +360,13 @@ static void subprocess_child (struct subprocess *p)
     environ = subprocess_env_expand (p);
     argv = subprocess_argv_expand (p);
     execvp (argv[0], argv);
+    /*
+     * XXX: close stdout and stderr here to avoid flushing buffers at exit.
+     *  This can cause duplicate output if parent was running in fully
+     *  bufferred mode, and there was buffered output.
+     */
+    close (STDOUT_FILENO);
+    close (STDERR_FILENO);
     sp_barrier_write_error (p->childfd, errno);
     exit (127);
 }
