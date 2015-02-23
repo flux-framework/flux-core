@@ -9,7 +9,12 @@ before other tests that depend on kvs.
 '
 
 . `dirname $0`/sharness.sh
-test_under_flux 4
+
+# Size the session to one more than the number of cores, minimum of 4
+SIZE=$(($(grep processor /proc/cpuinfo | wc -l)+1))
+test ${SIZE} -lt 4 && SIZE=4
+test_under_flux ${SIZE}
+echo "$0: flux session size will be ${SIZE}"
 
 TEST=$TEST_NAME
 KEY=test.a.b.c
@@ -221,14 +226,39 @@ test_expect_success 'kvs: symlink: readlink works on non-dangling link' '
 	test "$OUTPUT" = "$TEST.a.b.c"
 '
 
-test_expect_success 'kvs: tcommit: start 100 API threads each doing 50 put,commits in a loop' '
-	${FLUX_BUILD_DIR}/src/test/tcommit 100 50 \
+# test synchronization based on commit sequence no.
+
+test_expect_success 'kvs: put on rank 0, exists on all ranks' '
+	flux kvs put $TEST.xxx=99 &&
+	VERS=$(flux kvs version) &&
+	flux exec sh -c "flux kvs wait ${VERS} && flux kvs exists $TEST.xxx"
+'
+
+test_expect_success 'kvs: unlink on rank 0, does not exist all ranks' '
+	flux kvs unlink $TEST.xxx &&
+	VERS=$(flux kvs version) &&
+	flux exec sh -c "flux kvs wait ${VERS} && ! flux kvs exists $TEST.xxx"
+'
+
+# commit test
+
+test_expect_success 'kvs: 8 threads/rank each doing 100 put,commits in a loop' '
+	THREADS=8 &&
+	flux exec ${FLUX_BUILD_DIR}/src/test/tcommit ${THREADS} 100 \
 		$(basename ${SHARNESS_TEST_FILE})
 '
-test_expect_success 'kvs: tcommit: start 100 API threads each doing 50 put,fence in a loop' '
-	${FLUX_BUILD_DIR}/src/test/tcommit --fence 100 50 \
+
+# fence test
+
+test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop' '
+	THREADS=8 &&
+	flux exec ${FLUX_BUILD_DIR}/src/test/tcommit \
+		--fence $((${SIZE}*${THREADS})) ${THREADS} 100 \
 		$(basename ${SHARNESS_TEST_FILE})
 '
+
+# watch tests
+
 test_expect_success 'kvs: tkvswatch-mt: multi-threaded kvs watch program' '
 	${FLUX_BUILD_DIR}/src/test/tkvswatch mt 100 100 $TEST.a &&
 	flux kvs unlink $TEST.a
