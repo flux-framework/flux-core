@@ -54,17 +54,18 @@ static int nthreads = -1;
 static char *prefix = NULL;
 static bool fopt = false;
 static bool sopt = false;
+static int fence_nprocs;
 
-#define OPTIONS "fs"
+#define OPTIONS "f:s"
 static const struct option longopts[] = {
-   {"fence",   no_argument,         0, 'f'},
+   {"fence",   required_argument,   0, 'f'},
    {"stats",   no_argument,         0, 's'},
    {0, 0, 0, 0},
 };
 
 static void usage (void)
 {
-    fprintf (stderr, "Usage: tcommit [--fence] [--stats] nthreads count prefix\n");
+    fprintf (stderr, "Usage: tcommit [--fence N] [--stats] nthreads count prefix\n");
     exit (1);
 }
 
@@ -72,7 +73,7 @@ double *ddup (double d)
 {
     double *dcpy = xzmalloc (sizeof (double));
     *dcpy = d;
-    return dcpy; 
+    return dcpy;
 }
 
 void *thread (void *arg)
@@ -81,23 +82,24 @@ void *thread (void *arg)
     char *key, *fence = NULL;
     int i;
     struct timespec t0;
+    uint32_t rank;
 
     if (!(t->h = flux_api_open ())) {
         err ("%d: flux_api_init", t->n);
         goto done;
     }
+    rank = flux_rank (t->h);
     for (i = 0; i < count; i++) {
-        if (asprintf (&key, "%s.%d.%d", prefix, t->n, i) < 0)
-            oom ();
-        if (fopt && asprintf (&fence, "%s-%d", prefix, i) < 0)
-            oom ();
+        key = xasprintf ("%s.%u.%d.%d", prefix, rank, t->n, i);
+        if (fopt)
+            fence = xasprintf ("%s-%d", prefix, i);
         if (sopt)
             monotime (&t0);
         if (kvs_put_int (t->h, key, 42) < 0)
             err_exit ("%s", key);
         if (fopt) {
-            if (kvs_fence (t->h, fence, nthreads) < 0)
-                err_exit ("kvs_commit");
+            if (kvs_fence (t->h, fence, fence_nprocs) < 0)
+                err_exit ("kvs_fence");
         } else {
             if (kvs_commit (t->h) < 0)
                 err_exit ("kvs_commit");
@@ -128,6 +130,7 @@ int main (int argc, char *argv[])
         switch (ch) {
             case 'f':
                 fopt = true;
+                fence_nprocs = strtoul (optarg, NULL, 10);
                 break;
             case 's':
                 sopt = true;
