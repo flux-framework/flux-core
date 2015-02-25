@@ -1409,6 +1409,15 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         sender = xstrdup (arg_sender);
         internal = true;
     }
+    /* issue 109:  fence is terminated by an event that may allow a client
+     * to send a new commit/fence before internal state of old fence is
+     * cleared from upstream ranks.
+     */
+    if ((c = zhash_lookup (ctx->commits, sender))
+                    && c->state == COMMIT_UPSTREAM
+                    && c->fence && (!fence || strcmp (c->fence, fence) != 0)) {
+        zhash_delete (ctx->commits, sender);
+    }
     if (!(c = zhash_lookup (ctx->commits, sender))) {
         c = commit_create ();
         c->state = COMMIT_STORE;
