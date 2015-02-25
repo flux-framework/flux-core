@@ -51,7 +51,6 @@ test_ldadd = \
         $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)
 
 test_cppflags = \
-        -DTEST_MAIN \
 	-DMODULE_PATH=\"$(top_builddir)/src/modules\" \
         -I$(top_srcdir)/src/common/libtap \
         $(AM_CPPFLAGS)
@@ -62,14 +61,14 @@ TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
        $(top_srcdir)/config/tap-driver.sh
 
-test_conf_t_SOURCES = conf.c
+test_conf_t_SOURCES = test/conf.c
 test_conf_t_CPPFLAGS = $(test_cppflags)
 test_conf_t_LDADD = $(test_ldadd)
 
-test_module_t_SOURCES = module.c
+test_module_t_SOURCES = test/module.c
 test_module_t_CPPFLAGS = $(test_cppflags)
 test_module_t_LDADD = $(test_ldadd) $(LIBDL)
 
-test_message_t_SOURCES = message.c
+test_message_t_SOURCES = test/message.c
 test_message_t_CPPFLAGS = $(test_cppflags)
 test_message_t_LDADD = $(test_ldadd) $(LIBDL)
