@@ -36,7 +36,7 @@ wait_t wait_create (flux_t h, int typemask, zmsg_t **zmsg,
  * If zmsg is non-NULL, it is assigned the wait_t's zmsg, if any.
  * Otherwise the zmsg is destroyed.
  */
-void wait_destroy (wait_t w, zmsg_t **zmsg);
+void wait_destroy (wait_t w, zmsg_t **zmsg, double *msec);
 
 /* Create/destroy/get length of a waitqueue_t.
  */

@@ -49,6 +49,7 @@ void cmd_unlink (flux_t h, int argc, char **argv);
 void cmd_link (flux_t h, int argc, char **argv);
 void cmd_readlink (flux_t h, int argc, char **argv);
 void cmd_mkdir (flux_t h, int argc, char **argv);
+void cmd_exists (flux_t h, int argc, char **argv);
 void cmd_version (flux_t h, int argc, char **argv);
 void cmd_wait (flux_t h, int argc, char **argv);
 void cmd_watch (flux_t h, int argc, char **argv);
@@ -70,6 +71,7 @@ void usage (void)
 "       flux-kvs link          target link_name\n"
 "       flux-kvs readlink      key\n"
 "       flux-kvs mkdir         key [key...]\n"
+"       flux-kvs exists        key\n"
 "       flux-kvs watch         key\n"
 "       flux-kvs watch-dir     key\n"
 "       flux-kvs copy-tokvs    key file\n"
@@ -122,6 +124,8 @@ int main (int argc, char *argv[])
         cmd_readlink (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "mkdir"))
         cmd_mkdir (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "exists"))
+        cmd_exists (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "version"))
         cmd_version (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "wait"))
@@ -306,6 +310,33 @@ void cmd_mkdir (flux_t h, int argc, char **argv)
         err_exit ("kvs_commit");
 }
 
+bool key_exists (flux_t h, const char *key)
+{
+    JSON o = NULL;
+    kvsdir_t dir = NULL;
+
+    if (kvs_get (h, key, &o) == 0) {
+        Jput (o);
+        return true;
+    }
+    if (errno == EISDIR && kvs_get_dir (h, &dir, "%s", key) == 0) {
+        kvsdir_destroy (dir);
+        return true;
+    }
+    return false;
+}
+
+void cmd_exists (flux_t h, int argc, char **argv)
+{
+    int i;
+    if (argc == 0)
+        msg_exit ("exist: specify one or more keys");
+    for (i = 0; i < argc; i++) {
+        if (!key_exists (h, argv[i]))
+            exit (1);
+    }
+}
+
 void cmd_version (flux_t h, int argc, char **argv)
 {
     int vers;
@@ -324,7 +355,7 @@ void cmd_wait (flux_t h, int argc, char **argv)
     vers = strtoul (argv[0], NULL, 10);
     if (kvs_wait_version (h, vers) < 0)
         err_exit ("kvs_get_version");
-    printf ("%d\n", vers);
+    //printf ("%d\n", vers);
 }
 
 void cmd_watch (flux_t h, int argc, char **argv)

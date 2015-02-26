@@ -72,7 +72,7 @@ int main (int argc, char *argv[])
     bool quiet = false;
     struct timespec t0;
     json_object *vo = NULL;
-    char *prefix = "kvstorture";
+    char *prefix = NULL;
     bool verbose = false;
     const char *s;
 
@@ -90,7 +90,7 @@ int main (int argc, char *argv[])
                 count = strtoul (optarg, NULL, 10);
                 break;
             case 'p': /* --prefix NAME */
-                prefix = optarg;
+                prefix = xstrdup (optarg);
                 break;
             case 'v': /* --verbose */
                 verbose = true;
@@ -110,6 +110,10 @@ int main (int argc, char *argv[])
 
     if (!(h = flux_api_open ()))
         err_exit ("flux_api_open");
+    if (!prefix) {
+        uint32_t rank = flux_rank (h);
+        prefix = xasprintf ("kvstorture-%u", rank);
+    }
 
     if (kvs_unlink (h, prefix) < 0)
         err_exit ("kvs_unlink %s", prefix);
@@ -163,6 +167,8 @@ int main (int argc, char *argv[])
         msg ("kvs_get:    time=%0.3f s (%d keys of size %d)",
              monotime_since (t0)/1000, count, size);
 
+    if (prefix)
+        free (prefix);
     flux_api_close (h);
     log_fini ();
     return 0;

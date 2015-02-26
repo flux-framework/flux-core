@@ -96,6 +96,17 @@ void nodeset_itr_destroy (nodeset_itr_t itr);
 uint32_t nodeset_next (nodeset_itr_t itr);
 void nodeset_itr_rewind (nodeset_itr_t itr);
 
+/* Query internal nodeset attributes (mainly for testing)
+ */
+enum {
+    NODESET_ATTR_BYTES,     /* current internal size of nodeset in bytes */
+    NODESET_ATTR_SIZE,      /* current veb set size */
+    NODESET_ATTR_MINSIZE,   /* minimum veb set size (a constant) */
+    NODESET_ATTR_MAXSIZE,   /* maximum possible veb set size (a constant) */
+    NODESET_ATTR_MAXRANK,   /* maximum possible rank (a constant ) */
+};
+uint32_t nodeset_getattr (nodeset_t n, int attr);
+
 #endif /* !_UTIL_NODESET_H */
 
 /*

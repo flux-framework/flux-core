@@ -41,13 +41,13 @@ TESTS = \
 	test_proto.t
 
 test_ldadd = \
+        $(top_builddir)/src/modules/modctl/libmodctl.la \
         $(top_builddir)/src/common/libutil/libutil.la \
         $(top_builddir)/src/common/libtap/libtap.la \
         $(top_builddir)/src/common/liblsd/liblsd.la \
         $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)
 
 test_cppflags = \
-        -DTEST_MAIN \
         -I$(top_srcdir)/src/common/libtap \
         $(AM_CPPFLAGS)
 
@@ -57,6 +57,6 @@ TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
        $(top_srcdir)/config/tap-driver.sh
 
-test_proto_t_SOURCES = proto.c
+test_proto_t_SOURCES = test/proto.c
 test_proto_t_CPPFLAGS = $(test_cppflags)
 test_proto_t_LDADD = $(test_ldadd)
