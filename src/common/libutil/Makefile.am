@@ -41,7 +41,11 @@ libutil_la_SOURCES = \
 	readall.c \
 	readall.h \
 	subprocess.c \
-	subprocess.h
+	subprocess.h \
+	ev_zmq.c \
+	ev_zmq.h \
+	ev_zlist.c \
+	ev_zlist.h
 
 EXTRA_DIST = veb_mach.c
 
