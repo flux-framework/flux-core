@@ -2,8 +2,8 @@
 #define _FLUX_CORE_FLUX_H
 
 #include "handle.h"
-#include "handle_impl.h"
 #include "reactor.h"
+#include "handle_impl.h"
 #include "security.h"
 #include "reduce.h"
 #include "message.h"

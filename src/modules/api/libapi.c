@@ -64,22 +64,38 @@ typedef struct {
     struct ev_loop *loop;
     ev_io unix_w;
     ev_zlist putmsg_w;
-
     int loop_rc;
 
-    int timer_seq;
+    FluxMsgHandler msg_cb;
+    void *msg_cb_arg;
 
     zhash_t *watchers;
+    int timer_seq;
 } cmb_t;
+
+#define HASHKEY_LEN 80
 
 typedef struct {
     ev_timer w;
+    FluxTmoutHandler cb;
+    void *arg;
     int id;
 } cmb_timer_t;
 
+typedef struct {
+    ev_zmq w;
+    FluxZsHandler cb;
+    void *arg;
+} cmb_zs_t;
+
+typedef struct {
+    ev_io w;
+    FluxFdHandler cb;
+    void *arg;
+} cmb_fd_t;
+
 static void cmb_reactor_stop (void *impl, int rc);
-static void cmb_poll_main (cmb_t *c);
-static void cmb_poll_putmsg (cmb_t *c);
+static void sync_msg_watchers  (cmb_t *c);
 
 
 static const struct flux_handle_ops cmb_ops;
@@ -96,7 +112,7 @@ static zmsg_t *cmb_recvmsg_putmsg (cmb_t *c)
     zmsg_t *zmsg = zlist_pop (c->putmsg);
     if (zmsg) {
         if (zlist_size (c->putmsg) == 0)
-            cmb_poll_main (c);
+            sync_msg_watchers (c);
     }
     return zmsg;
 }
@@ -122,7 +138,7 @@ static int cmb_putmsg (void *impl, zmsg_t **zmsg)
         oom ();
     *zmsg = NULL;
     if (oldcount == 0)
-        cmb_poll_putmsg (c);
+        sync_msg_watchers (c);
     return 0;
 }
 
@@ -177,13 +193,18 @@ static void putmsg_cb (struct ev_loop *loop, ev_zlist *w, int revents)
     cmb_t *c = (cmb_t *)((char *)w - offsetof (cmb_t, putmsg_w));
     assert (c->magic == CMB_CTX_MAGIC);
     zmsg_t *zmsg = NULL;
+    int type;
 
     assert (zlist_size (c->putmsg) > 0);
-    if (!(zmsg = cmb_recvmsg_putmsg (c)))
-        goto done;
-    if (flux_handle_event_msg (c->h, &zmsg) < 0) {
-        cmb_reactor_stop (c, -1);
-        goto done;
+    if (c->msg_cb) {
+        if (!(zmsg = cmb_recvmsg_putmsg (c)))
+            goto done;
+        if (flux_msg_get_type (zmsg, &type) < 0)
+            goto done;
+        if (c->msg_cb (c->h, type, &zmsg, c->msg_cb_arg) < 0) {
+            cmb_reactor_stop (c, -1);
+            goto done;
+        }
     }
 done:
     zmsg_destroy (&zmsg);
@@ -194,159 +215,202 @@ static void unix_cb (struct ev_loop *loop, ev_io *w, int revents)
     cmb_t *c = (cmb_t *)((char *)w - offsetof (cmb_t, unix_w));
     assert (c->magic == CMB_CTX_MAGIC);
     zmsg_t *zmsg = NULL;
+    int type;
 
     assert (zlist_size (c->putmsg) == 0);
-    if (revents & EV_READ) {
-        if ((zmsg = zfd_recv (w->fd, true))) {
-            if (flux_handle_event_msg (c->h, &zmsg) < 0) {
-                cmb_reactor_stop (c, -1);
-                goto done;
+    if (c->msg_cb) {
+        if (revents & EV_READ) {
+            if ((zmsg = zfd_recv (w->fd, true))) {
+                if (flux_msg_get_type (zmsg, &type) < 0)
+                    goto done;
+                if (c->msg_cb (c->h, type, &zmsg, c->msg_cb_arg) < 0) {
+                    cmb_reactor_stop (c, -1);
+                    goto done;
+                }
             }
         }
-    }
-    if (revents & EV_ERROR) {
-        cmb_reactor_stop (c, -1);
-        goto done;
+        if (revents & EV_ERROR) {
+            cmb_reactor_stop (c, -1);
+            goto done;
+        }
     }
 done:
     zmsg_destroy (&zmsg);
 }
 
-static void fd_cb (struct ev_loop *loop, ev_io *w, int revents)
-{
-    cmb_t *c = w->data;
-    assert (c->magic == CMB_CTX_MAGIC);
-
-    if (flux_handle_event_fd (c->h, w->fd, etoz (revents)) < 0)
-        cmb_reactor_stop (c, -1);
-}
-
-static int cmb_reactor_fd_add (void *impl, int fd, short events)
+static int cmb_reactor_msg_add (void *impl, FluxMsgHandler cb, void *arg)
 {
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
+    int rc = -1;
 
-    ev_io *w = xzmalloc (sizeof (*w));
-    ev_io_init (w, fd_cb, fd, ztoe (events));
-    w->data = c;
+    if (c->msg_cb != NULL) {
+        errno = EBUSY;
+        goto done;
+    }
+    c->msg_cb = cb;
+    c->msg_cb_arg = arg;
+    sync_msg_watchers (c);
+    rc = 0;
+done:
+    return rc;
+}
 
-    char *hashkey = xasprintf ("fd:%d:%d", fd, events);
-    zhash_update (c->watchers, hashkey, w);
+static void cmb_reactor_msg_remove (void *impl)
+{
+    cmb_t *c = impl;
+    assert (c->magic == CMB_CTX_MAGIC);
+    c->msg_cb = NULL;
+    c->msg_cb_arg = NULL;
+    sync_msg_watchers (c);
+}
+
+static void fd_cb (struct ev_loop *loop, ev_io *w, int revents)
+{
+    cmb_fd_t *f = (cmb_fd_t *)((char *)w - offsetof (cmb_fd_t, w));
+    cmb_t *c = w->data;
+    assert (c->magic == CMB_CTX_MAGIC);
+
+    if (f->cb (c->h, w->fd, etoz (revents), f->arg) < 0)
+        cmb_reactor_stop (c, -1);
+}
+
+static int cmb_reactor_fd_add (void *impl, int fd, int events,
+                               FluxFdHandler cb, void *arg)
+{
+    cmb_t *c = impl;
+    assert (c->magic == CMB_CTX_MAGIC);
+    char hashkey[HASHKEY_LEN];
+
+    cmb_fd_t *f = xzmalloc (sizeof (*f));
+    ev_io_init (&f->w, fd_cb, fd, ztoe (events));
+    f->w.data = c;
+    f->cb = cb;
+    f->arg = arg;
+
+    snprintf (hashkey, sizeof (hashkey), "fd:%d:%d", fd, events);
+    zhash_update (c->watchers, hashkey, f);
     zhash_freefn (c->watchers, hashkey, free);
-    free (hashkey);
 
-    ev_io_start (c->loop, w);
+    ev_io_start (c->loop, &f->w);
 
     return 0;
 }
 
-static void cmb_reactor_fd_remove (void *impl, int fd, short events)
+static void cmb_reactor_fd_remove (void *impl, int fd, int events)
 {
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
+    char hashkey[HASHKEY_LEN];
 
-    char *hashkey = xasprintf ("fd:%d:%d", fd, events);
-    ev_io *w = zhash_lookup (c->watchers, hashkey);
-    if (w) {
-        ev_io_stop (c->loop, w);
+    snprintf (hashkey, sizeof (hashkey), "fd:%d:%d", fd, events);
+    cmb_fd_t *f = zhash_lookup (c->watchers, hashkey);
+    if (f) {
+        ev_io_stop (c->loop, &f->w);
         zhash_delete (c->watchers, hashkey);
     }
-    free (hashkey);
 }
 
 static void zs_cb (struct ev_loop *loop, ev_zmq *w, int revents)
 {
+    cmb_zs_t *z = (cmb_zs_t *)((char *)w - offsetof (cmb_zs_t, w));
     cmb_t *c = w->data;
     assert (c->magic == CMB_CTX_MAGIC);
 
-    if (flux_handle_event_zs (c->h, w->zsock, etoz (revents)) < 0)
+    int rc = z->cb (c->h, w->zsock, etoz (revents), z->arg);
+    if (rc < 0)
         cmb_reactor_stop (c, -1);
 }
 
-static int cmb_reactor_zs_add (void *impl, void *zs, short events)
+static int cmb_reactor_zs_add (void *impl, void *zs, int events,
+                               FluxZsHandler cb, void *arg)
 {
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
+    char hashkey[HASHKEY_LEN];
 
-    ev_zmq *w = xzmalloc (sizeof (*w));
-    ev_zmq_init (w, zs_cb, zs, ztoe (events));
-    w->data = c;
+    cmb_zs_t *z = xzmalloc (sizeof (*z));
+    ev_zmq_init (&z->w, zs_cb, zs, ztoe (events));
+    z->w.data = c;
+    z->cb = cb;
+    z->arg = arg;
 
-    char *hashkey = xasprintf ("zsock:%p:%d", zs, events);
-    zhash_update (c->watchers, hashkey, w);
+    snprintf (hashkey, sizeof (hashkey), "zsock:%p:%d", zs, events);
+    zhash_update (c->watchers, hashkey, z);
     zhash_freefn (c->watchers, hashkey, free);
-    free (hashkey);
 
-    ev_zmq_start (c->loop, w);
-
+    ev_zmq_start (c->loop, &z->w);
     return 0;
 }
 
-static void cmb_reactor_zs_remove (void *impl, void *zs, short events)
+static void cmb_reactor_zs_remove (void *impl, void *zs, int events)
 {
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
+    char hashkey[HASHKEY_LEN];
 
-    char *hashkey = xasprintf ("zsock:%p:%d", zs, events);
-    ev_zmq *w = zhash_lookup (c->watchers, hashkey);
-    if (w) {
-        ev_zmq_stop (c->loop, w);
+    snprintf (hashkey, sizeof (hashkey), "zsock:%p:%d", zs, events);
+    cmb_zs_t *z = zhash_lookup (c->watchers, hashkey);
+    if (z) {
+        ev_zmq_stop (c->loop, &z->w);
         zhash_delete (c->watchers, hashkey);
     }
-    free (hashkey);
 }
 
 static void timer_cb (struct ev_loop *loop, ev_timer *w, int revents)
 {
-    cmb_timer_t *ct = (cmb_timer_t *)((char *)w - offsetof (cmb_timer_t, w));
+    cmb_timer_t *t = (cmb_timer_t *)((char *)w - offsetof (cmb_timer_t, w));
     cmb_t *c = w->data;
     assert (c->magic == CMB_CTX_MAGIC);
 
-    if (flux_handle_event_tmout (c->h, ct->id) < 0)
+    if (t->cb (c->h, t->arg) < 0)
          cmb_reactor_stop (c, -1);
 }
 
-static int cmb_reactor_tmout_add (void *impl, unsigned long msec, bool oneshot)
+static int cmb_reactor_tmout_add (void *impl, unsigned long msec, bool oneshot,
+                                  FluxTmoutHandler cb, void *arg)
 {
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
     double after = (double)msec / 1000.0;
     double repeat = oneshot ? 0 : after;
+    char hashkey[HASHKEY_LEN];
 
-    cmb_timer_t *ct = xzmalloc (sizeof (*ct));
-    ct->id = c->timer_seq++;
-    ct->w.data = c;
-    ev_timer_init (&ct->w, timer_cb, after, repeat);
+    cmb_timer_t *t = xzmalloc (sizeof (*t));
+    t->id = c->timer_seq++;
+    t->w.data = c;
+    ev_timer_init (&t->w, timer_cb, after, repeat);
+    t->cb = cb;
+    t->arg = arg;
 
-    char *hashkey = xasprintf ("timer:%d", ct->id);
-    zhash_update (c->watchers, hashkey, ct);
+    snprintf (hashkey, sizeof (hashkey), "timer:%d", t->id);
+    zhash_update (c->watchers, hashkey, t);
     zhash_freefn (c->watchers, hashkey, free);
-    free (hashkey);
 
-    ev_timer_start (c->loop, &ct->w);
+    ev_timer_start (c->loop, &t->w);
 
-    return ct->id;
+    return t->id;
 }
 
 static void cmb_reactor_tmout_remove (void *impl, int timer_id)
 {
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);
+    char hashkey[HASHKEY_LEN];
 
-    char *hashkey = xasprintf ("timer:%d", timer_id);
-    cmb_timer_t *ct = zhash_lookup (c->watchers, hashkey);
-    if (ct) {
-        ev_timer_stop (c->loop, &ct->w);
+    snprintf (hashkey, sizeof (hashkey), "timer:%d", timer_id);
+    cmb_timer_t *t = zhash_lookup (c->watchers, hashkey);
+    if (t) {
+        ev_timer_stop (c->loop, &t->w);
         zhash_delete (c->watchers, hashkey);
     }
-    free (hashkey);
 }
 
 static void cmb_fini (void *impl)
 {
     cmb_t *c = impl;
-
     assert (c->magic == CMB_CTX_MAGIC);
+
     if (c->fd >= 0)
         (void)close (c->fd);
     if (c->loop)
@@ -358,6 +422,7 @@ static void cmb_fini (void *impl)
         zlist_destroy (&c->putmsg);
     }
     zhash_destroy (&c->watchers);
+    c->magic = ~CMB_CTX_MAGIC;
     free (c);
 }
 
@@ -378,18 +443,21 @@ done:
     return running;
 }
 
-static void cmb_poll_putmsg (cmb_t *c)
+/* Enable/disable the appropriate watchers to give putmsg priority
+ * over the main unix socket.
+ */
+static void sync_msg_watchers (cmb_t *c)
 {
-    assert (zlist_size (c->putmsg) > 0);
-    ev_io_stop (c->loop, &c->unix_w);
-    ev_zlist_start (c->loop, &c->putmsg_w);
-}
-
-static void cmb_poll_main (cmb_t *c)
-{
-    assert (zlist_size (c->putmsg) == 0);
-    ev_zlist_stop (c->loop, &c->putmsg_w);
-    ev_io_start (c->loop, &c->unix_w);
+    if (c->msg_cb == NULL) {
+        ev_io_stop (c->loop, &c->unix_w);
+        ev_zlist_stop (c->loop, &c->putmsg_w);
+    } else if (zlist_size (c->putmsg) > 0) {
+        ev_io_stop (c->loop, &c->unix_w);
+        ev_zlist_start (c->loop, &c->putmsg_w);
+    } else {
+        ev_zlist_stop (c->loop, &c->putmsg_w);
+        ev_io_start (c->loop, &c->unix_w);
+    }
 }
 
 flux_t flux_api_openpath (const char *path, int flags)
@@ -412,7 +480,6 @@ flux_t flux_api_openpath (const char *path, int flags)
     if (c->fd < 0)
         goto error;
     ev_io_init (&c->unix_w, unix_cb, c->fd, EV_READ);
-    ev_io_start (c->loop, &c->unix_w);
 
     if (!(c->putmsg = zlist_new ()))
         oom ();
@@ -489,6 +556,8 @@ static const struct flux_handle_ops cmb_ops = {
     .reactor_zs_remove = cmb_reactor_zs_remove,
     .reactor_tmout_add = cmb_reactor_tmout_add,
     .reactor_tmout_remove = cmb_reactor_tmout_remove,
+    .reactor_msg_add = cmb_reactor_msg_add,
+    .reactor_msg_remove = cmb_reactor_msg_remove,
     .impl_destroy = cmb_fini,
 };
 

@@ -30,6 +30,8 @@
 #include <errno.h>
 #include <stdbool.h>
 
+#include "handle.h"
+#include "reactor.h"
 #include "handle_impl.h"
 #include "message.h"
 #include "tagpool.h"
@@ -110,7 +112,13 @@ uint32_t flux_matchtag_alloc (flux_t h, int len)
 
 void flux_matchtag_free (flux_t h, uint32_t matchtag, int len)
 {
-    return tagpool_free (h->tagpool, matchtag, len);
+    flux_match_t match = {
+        .typemask = FLUX_MSGTYPE_RESPONSE,
+        .topic_glob = NULL,
+        .matchtag = matchtag,
+        .bsize = len,
+    };
+    tagpool_free (h->tagpool, matchtag, len);
 }
 
 uint32_t flux_matchtag_avail (flux_t h)

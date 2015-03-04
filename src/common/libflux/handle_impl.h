@@ -5,7 +5,6 @@
 #include <czmq.h>
 
 #include "handle.h"
-#include "security.h"
 
 /**
  ** Only handle implementation stuff below.
@@ -28,23 +27,25 @@ struct flux_handle_ops {
 
     int         (*reactor_start)(void *impl);
     void        (*reactor_stop)(void *impl, int rc);
-    int         (*reactor_fd_add)(void *impl, int fd, short events);
-    void        (*reactor_fd_remove)(void *impl, int fd, short events);
-    int         (*reactor_zs_add)(void *impl, void *zs, short events);
-    void        (*reactor_zs_remove)(void *impl, void *zs, short events);
-    int         (*reactor_tmout_add)(void *impl, unsigned long msec,
-                                     bool oneshot);
+    int         (*reactor_fd_add)(void *impl, int fd, int events,
+                                  FluxFdHandler, void *arg);
+    void        (*reactor_fd_remove)(void *impl, int fd, int events);
+    int         (*reactor_zs_add)(void *impl, void *zs, int events,
+                                     FluxZsHandler cb, void *arg);
+    void        (*reactor_zs_remove)(void *impl, void *zs, int events);
+
+    int         (*reactor_tmout_add)(void *impl, unsigned long ms, bool oneshot,
+                                     FluxTmoutHandler cb, void *arg);
     void        (*reactor_tmout_remove)(void *impl, int timer_id);
+    int         (*reactor_msg_add)(void *impl, FluxMsgHandler cb, void *arg);
+    void        (*reactor_msg_remove)(void *impl);
 
     void        (*impl_destroy)(void *impl);
 };
 
 flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags);
 void flux_handle_destroy (flux_t *hp);
-int flux_handle_event_msg (flux_t h, zmsg_t **zmsg);
-int flux_handle_event_fd (flux_t h, int fd, short revents);
-int flux_handle_event_zs (flux_t h, void *zs, short revents);
-int flux_handle_event_tmout (flux_t h, int timer_id);
+
 zctx_t *flux_get_zctx (flux_t h);
 reactor_t flux_get_reactor (flux_t h);
 reactor_t flux_reactor_create (void *impl, const struct flux_handle_ops *ops);

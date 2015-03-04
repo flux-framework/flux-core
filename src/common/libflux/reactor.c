@@ -30,72 +30,45 @@
 #include <errno.h>
 #include <stdbool.h>
 
+#include "handle.h"
+#include "reactor.h"
 #include "handle_impl.h"
 #include "message.h"
-#include "reactor.h"
 #include "tagpool.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/zdump.h"
 #include "src/common/libutil/xzmalloc.h"
 
-typedef enum {
-    DSP_TYPE_MSG, DSP_TYPE_FD, DSP_TYPE_ZS, DSP_TYPE_TMOUT
-} dispatch_type_t;
-
 typedef struct {
-    dispatch_type_t type;
-    union {
-        struct {
-            flux_match_t match;
-            FluxMsgHandler fn;
-            void *arg;
-        } msg;
-        struct {
-            int fd;
-            short events;
-            FluxFdHandler fn;
-            void *arg;
-        } fd;
-        struct {
-            void *zs;
-            short events;
-            FluxZsHandler fn;
-            void *arg;
-        } zs;
-        struct {
-            int timer_id;
-            bool oneshot;
-            FluxTmoutHandler fn;
-            void *arg;
-        } tmout;
-    };
+    flux_match_t match;
+    FluxMsgHandler fn;
+    void *arg;
 } dispatch_t;
 
 struct reactor_struct {
     zlist_t *dsp;
-    bool timeout_set;
     const struct flux_handle_ops *ops;
     void *impl;
 };
 
-static bool reactor_empty (reactor_t r)
-{
-    return ((zlist_size (r->dsp) == 0) && !r->timeout_set);
-}
-
-static dispatch_t *dispatch_create (dispatch_type_t type)
+static dispatch_t *dispatch_create (flux_match_t match,
+                                    FluxMsgHandler cb, void *arg)
 {
     dispatch_t *d = xzmalloc (sizeof (*d));
-    d->type = type;
+    d->match = match;
+    d->fn = cb;
+    d->arg = arg;
     return d;
 }
 
 static void dispatch_destroy (dispatch_t *d)
 {
-    if (d && d->type == DSP_TYPE_MSG && d->msg.match.topic_glob)
-        free (d->msg.match.topic_glob);
-    free (d);
+    if (d) {
+        if (d->match.topic_glob)
+            free (d->match.topic_glob);
+        free (d);
+    }
 }
 
 void flux_reactor_destroy (reactor_t r)
@@ -119,30 +92,25 @@ reactor_t flux_reactor_create (void *impl, const struct flux_handle_ops *ops)
     return r;
 }
 
-int flux_handle_event_msg (flux_t h, zmsg_t **zmsg)
+static int msg_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
 {
     reactor_t r = flux_get_reactor (h);
     dispatch_t *d;
-    int type = 0;
     int rc = 0;
     bool match = false;
 
     assert (zmsg != NULL);
     assert (*zmsg != NULL);
 
-    if (flux_msg_get_type (*zmsg, &type) < 0)
-        goto done;
     d = zlist_first (r->dsp);
     while (d) {
-        if (d->type == DSP_TYPE_MSG && flux_msg_cmp (*zmsg, d->msg.match)) {
-            if (d->msg.fn)
-                rc = d->msg.fn (h, type, zmsg, d->msg.arg);
+        if (flux_msg_cmp (*zmsg, d->match)) {
+            rc = d->fn (h, type, zmsg, d->arg);
             match = true;
             break;
         }
         d = zlist_next (r->dsp);
     }
-done:
     if (flux_flags_get (h) & FLUX_FLAGS_TRACE) {
         if (!match && *zmsg) {
             char *topic = NULL;
@@ -154,82 +122,30 @@ done:
     return rc;
 }
 
-int flux_handle_event_fd (flux_t h, int fd, short events)
-{
-    reactor_t r = flux_get_reactor (h);
-    dispatch_t *d;
-    int rc = 0;
-
-    d = zlist_first (r->dsp);
-    while (d) {
-        if (d->type == DSP_TYPE_FD && d->fd.fd == fd
-                            && (d->fd.events & events) && d->fd.fn != NULL) {
-            rc = d->fd.fn (h, fd, events, d->fd.arg);
-            break;
-        }
-        d = zlist_next (r->dsp);
-    }
-    return rc;
-}
-
-int flux_handle_event_zs (flux_t h, void *zs, short events)
-{
-    reactor_t r = flux_get_reactor (h);
-    dispatch_t *d;
-    int rc = 0;
-
-    d = zlist_first (r->dsp);
-    while (d) {
-        if (d->type == DSP_TYPE_ZS && d->zs.zs == zs
-                                   && (d->zs.events & events)) {
-            rc = d->zs.fn (h, zs, events, d->zs.arg);
-            break;
-        }
-        d = zlist_next (r->dsp);
-    }
-    return rc;
-}
-
-int flux_handle_event_tmout (flux_t h, int timer_id)
-{
-    reactor_t r = flux_get_reactor (h);
-    dispatch_t *d;
-    int rc = 0;
-
-    d = zlist_first (r->dsp);
-    while (d) {
-        if (d->type == DSP_TYPE_TMOUT && d->tmout.fn != NULL
-                                      && d->tmout.timer_id == timer_id) {
-            rc = d->tmout.fn (h, d->tmout.arg);
-            break;
-        }
-        d = zlist_next (r->dsp);
-    }
-    if (d && d->tmout.oneshot)
-        flux_tmouthandler_remove (h, d->tmout.timer_id);
-    return rc;
-}
-
 int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
                          FluxMsgHandler cb, void *arg)
 {
     reactor_t r = flux_get_reactor (h);
     dispatch_t *d;
+    int oldsize = zlist_size (r->dsp);
     int rc = -1;
 
     if (typemask == 0 || !pattern || !cb) {
         errno = EINVAL;
         goto done;
     }
-    d = dispatch_create (DSP_TYPE_MSG);
-    d->msg.match.typemask = typemask;
-    d->msg.match.matchtag = FLUX_MATCHTAG_NONE;
-    d->msg.match.bsize = 0;
-    d->msg.match.topic_glob = xstrdup (pattern);
-    d->msg.fn = cb;
-    d->msg.arg = arg;
+
+    flux_match_t match = {
+        .typemask = typemask,
+        .topic_glob = pattern ? xstrdup (pattern) : NULL,
+        .matchtag = FLUX_MATCHTAG_NONE,
+        .bsize = 1,
+    };
+    d = dispatch_create (match, cb, arg);
     if (zlist_push (r->dsp, d) < 0)
         oom ();
+    if (oldsize == 0 && r->ops->reactor_msg_add)
+        rc = r->ops->reactor_msg_add (r->impl, msg_cb, r);
     rc = 0;
 done:
     return rc;
@@ -254,12 +170,12 @@ void flux_msghandler_remove (flux_t h, int typemask, const char *pattern)
 
     d = zlist_first (r->dsp);
     while (d) {
-        if (d->type == DSP_TYPE_MSG && d->msg.match.typemask == typemask
-                             && !strcmp (d->msg.match.topic_glob, pattern)) {
+        if (d->match.typemask == typemask && !strcmp (d->match.topic_glob,
+                                                        pattern)) {
             zlist_remove (r->dsp, d);
             dispatch_destroy (d);
-            if (reactor_empty (r) && r->ops->reactor_stop)
-                r->ops->reactor_stop (r->impl, 0);
+            if (zlist_size (r->dsp) == 0 && r->ops->reactor_msg_remove)
+                r->ops->reactor_msg_remove (r->impl);
             break;
         }
         d = zlist_next (r->dsp);
@@ -270,7 +186,6 @@ int flux_fdhandler_add (flux_t h, int fd, short events,
                         FluxFdHandler cb, void *arg)
 {
     reactor_t r = flux_get_reactor (h);
-    dispatch_t *d;
     int rc = -1;
 
     if (fd < 0 || events == 0 || !cb) {
@@ -281,17 +196,7 @@ int flux_fdhandler_add (flux_t h, int fd, short events,
         errno = ENOSYS;
         goto done;
     }
-    if (r->ops->reactor_fd_add (r->impl, fd, events) < 0)
-        goto done;
-
-    d = dispatch_create (DSP_TYPE_FD);
-    d->fd.fd = fd;
-    d->fd.events = events;
-    d->fd.fn = cb;
-    d->fd.arg = arg;
-    if (zlist_append (r->dsp, d) < 0)
-        oom ();
-    rc = 0;
+    rc = r->ops->reactor_fd_add (r->impl, fd, events, cb, arg);
 done:
     return rc;
 }
@@ -299,111 +204,63 @@ done:
 void flux_fdhandler_remove (flux_t h, int fd, short events)
 {
     reactor_t r = flux_get_reactor (h);
-    dispatch_t *d;
 
-    if (!r->ops->reactor_fd_remove)
-        return;
-    d = zlist_first (r->dsp);
-    while (d) {
-        if (d->type == DSP_TYPE_FD && d->fd.fd == fd
-                                   && d->fd.events == events) {
-            zlist_remove (r->dsp, d);
-            dispatch_destroy (d);
-            if (reactor_empty (r) && r->ops->reactor_stop)
-                r->ops->reactor_stop (r->impl, 0);
-            break;
-        }
-        d = zlist_next (r->dsp);
-    }
-    r->ops->reactor_fd_remove (r->impl, fd, events);
+    if (r->ops->reactor_fd_remove)
+        r->ops->reactor_fd_remove (r->impl, fd, events);
 }
 
 int flux_zshandler_add (flux_t h, void *zs, short events,
                         FluxZsHandler cb, void *arg)
 {
     reactor_t r = flux_get_reactor (h);
-    dispatch_t *d;
+    int rc = -1;
 
+    if (!zs || events == 0 || !cb) {
+        errno = EINVAL;
+        goto done;
+    }
     if (!r->ops->reactor_zs_add) {
         errno = ENOSYS;
-        return -1;
+        goto done;
     }
-    if (r->ops->reactor_zs_add (r->impl, zs, events) < 0)
-        return -1;
-    d = dispatch_create (DSP_TYPE_ZS);
-    d->zs.zs = zs;
-    d->zs.events = events;
-    d->zs.fn = cb;
-    d->zs.arg = arg;
-    if (zlist_append (r->dsp, d) < 0)
-        oom ();
-    return 0;
+    rc = r->ops->reactor_zs_add (r->impl, zs, events, cb, arg);
+done:
+    return rc;
 }
 
 void flux_zshandler_remove (flux_t h, void *zs, short events)
 {
     reactor_t r = flux_get_reactor (h);
-    dispatch_t *d;
 
-    if (!r->ops->reactor_zs_remove)
-        return;
-    d = zlist_first (r->dsp);
-    while (d) {
-        if (d->type == DSP_TYPE_ZS && d->zs.zs == zs
-                                   && d->zs.events == events) {
-            zlist_remove (r->dsp, d);
-            dispatch_destroy (d);
-            if (reactor_empty (r) && r->ops->reactor_stop)
-                r->ops->reactor_stop (r->impl, 0);
-            break;
-        }
-        d = zlist_next (r->dsp);
-    }
-    r->ops->reactor_zs_remove (r->impl, zs, events);
+    if (r->ops->reactor_zs_remove)
+        r->ops->reactor_zs_remove (r->impl, zs, events);
 }
 
 int flux_tmouthandler_add (flux_t h, unsigned long msec, bool oneshot,
                            FluxTmoutHandler cb, void *arg)
 {
     reactor_t r = flux_get_reactor (h);
-    dispatch_t *d;
-    int id;
+    int rc = -1;
 
+    if (!cb) {
+        errno = EINVAL;
+        goto done;
+    }
     if (!r->ops->reactor_tmout_add) {
         errno = ENOSYS;
-        return -1;
+        goto done;
     }
-    if ((id = r->ops->reactor_tmout_add (r->impl, msec, oneshot)) < 0)
-        return -1;
-    d = dispatch_create (DSP_TYPE_TMOUT);
-    d->tmout.fn = cb;
-    d->tmout.arg = arg;
-    d->tmout.timer_id = id;
-    d->tmout.oneshot = oneshot;
-    if (zlist_append (r->dsp, d) < 0)
-        oom ();
-    return id;
+    rc = r->ops->reactor_tmout_add (r->impl, msec, oneshot, cb, arg);
+done:
+    return rc;
 }
 
 void flux_tmouthandler_remove (flux_t h, int timer_id)
 {
     reactor_t r = flux_get_reactor (h);
-    dispatch_t *d;
 
-    if (!r->ops->reactor_tmout_remove)
-        return;
-    d = zlist_first (r->dsp);
-    while (d) {
-        if (d->type == DSP_TYPE_TMOUT && d->tmout.timer_id == timer_id) {
-            zlist_remove (r->dsp, d);
-            dispatch_destroy (d);
-            if (reactor_empty (r) && r->ops->reactor_stop)
-                r->ops->reactor_stop (r->impl, 0);
-            break;
-        }
-        d = zlist_next (r->dsp);
-    }
-    r->ops->reactor_tmout_remove (r->impl, timer_id);
+    if (r->ops->reactor_tmout_remove)
+        r->ops->reactor_tmout_remove (r->impl, timer_id);
 }
 
 int flux_reactor_start (flux_t h)

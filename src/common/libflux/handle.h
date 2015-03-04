@@ -55,6 +55,10 @@ zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, zlist_t *nomatch,
  */
 int flux_putmsg_list (flux_t h, zlist_t *list);
 
+/* Get handle's zctx (if any).
+ */
+zctx_t *flux_get_zctx (flux_t h);
+
 #endif /* !_FLUX_CORE_HANDLE_H */
 
 /*
