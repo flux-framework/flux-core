@@ -104,8 +104,6 @@ static kvsctx_t *getctx (flux_t h)
         if (!(ctx->cwd = xstrdup (".")))
             oom ();
         flux_aux_set (h, "kvscli", ctx, (FluxFreeFn)freectx);
-        (void)flux_msghandler_add (h, FLUX_MSGTYPE_RESPONSE, "kvs.watch",
-                                                watch_rep_cb, ctx);
     }
     return ctx;
 }
@@ -500,6 +498,7 @@ static kvs_watcher_t *add_watcher (flux_t h, const char *key, watch_type_t type,
 {
     kvsctx_t *ctx = getctx (h);
     kvs_watcher_t *wp = xzmalloc (sizeof (*wp));
+    int lastcount = zhash_size (ctx->watchers);
 
     assert (matchtag != FLUX_MATCHTAG_NONE);
     wp->h = h;
@@ -514,6 +513,9 @@ static kvs_watcher_t *add_watcher (flux_t h, const char *key, watch_type_t type,
     zhash_freefn (ctx->watchers, k, destroy_watcher);
     free (k);
 
+    if (lastcount == 0)
+        (void)flux_msghandler_add (h, FLUX_MSGTYPE_RESPONSE, "kvs.watch",
+                                   watch_rep_cb, ctx);
     return wp;
 }
 
@@ -547,6 +549,8 @@ int kvs_unwatch (flux_t h, const char *key)
         k = zlist_next (hashkeys);
     }
     zlist_destroy (&hashkeys);
+    if (zhash_size (ctx->watchers) == 0)
+        flux_msghandler_remove (h, FLUX_MSGTYPE_RESPONSE, "kvs.watch");
     rc = 0;
 done:
     Jput (in);
