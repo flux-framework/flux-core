@@ -27,6 +27,7 @@ void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn destroy);
  */
 void flux_flags_set (flux_t h, int flags);
 void flux_flags_unset (flux_t h, int flags);
+int flux_flags_get (flux_t h);
 
 /* Alloc/free a matchtag block for matched requests.
  */

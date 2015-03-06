@@ -12,6 +12,8 @@
  ** Flux_t handle users should not use these interfaces.
  */
 
+typedef struct reactor_struct *reactor_t;
+
 struct flux_handle_ops {
     int         (*sendmsg)(void *impl, zmsg_t **zmsg);
     zmsg_t *    (*recvmsg)(void *impl, bool nonblock);
@@ -44,6 +46,9 @@ int flux_handle_event_fd (flux_t h, int fd, short revents);
 int flux_handle_event_zs (flux_t h, void *zs, short revents);
 int flux_handle_event_tmout (flux_t h, int timer_id);
 zctx_t *flux_get_zctx (flux_t h);
+reactor_t flux_get_reactor (flux_t h);
+reactor_t flux_reactor_create (void *impl, const struct flux_handle_ops *ops);
+void flux_reactor_destroy (reactor_t r);
 
 #endif /* !_FLUX_CORE_HANDLE_H */
 

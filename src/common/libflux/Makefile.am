@@ -29,6 +29,7 @@ libflux_la_SOURCES = \
 	flog.c \
 	info.c \
 	handle.c \
+	reactor.c \
 	reduce.c \
 	security.c \
 	message.c \
