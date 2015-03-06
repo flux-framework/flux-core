@@ -260,6 +260,21 @@ static int plugin_putmsg (void *impl, zmsg_t **zmsg)
     return 0;
 }
 
+static void plugin_purge (void *impl, flux_match_t match)
+{
+    plugin_ctx_t p = impl;
+    assert (p->magic == PLUGIN_MAGIC);
+    zmsg_t *zmsg = zlist_first (p->putmsg);
+
+    while (zmsg) {
+        if (flux_msg_cmp (zmsg, match)) {
+            zlist_remove (p->putmsg, zmsg);
+            zmsg_destroy (&zmsg);
+        }
+        zmsg = zlist_next (p->putmsg);
+    }
+}
+
 static int plugin_event_subscribe (void *impl, const char *topic)
 {
     plugin_ctx_t p = impl;
@@ -900,6 +915,7 @@ static const struct flux_handle_ops plugin_handle_ops = {
     .sendmsg = plugin_sendmsg,
     .recvmsg = plugin_recvmsg,
     .putmsg = plugin_putmsg,
+    .purge = plugin_purge,
     .event_subscribe = plugin_event_subscribe,
     .event_unsubscribe = plugin_event_unsubscribe,
     .rank = plugin_rank,

@@ -118,6 +118,8 @@ void flux_matchtag_free (flux_t h, uint32_t matchtag, int len)
         .matchtag = matchtag,
         .bsize = len,
     };
+    if (h->ops->purge)
+        h->ops->purge (h->impl, match);
     tagpool_free (h->tagpool, matchtag, len);
 }
 
