@@ -26,9 +26,9 @@ LDADD = $(top_builddir)/src/common/libzio/libzio.la \
 	$(top_builddir)/src/modules/api/libapi.la \
 	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
+	$(top_builddir)/src/common/libev/libev.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
-	$(JSON_LIBS) $(LIBCZMQ) $(LIBZMQ) $(LIBMUNGE) $(LIBPTHREAD) $(LIBM) \
-	$(LIBDL)
+	$(JSON_LIBS) $(LIBCZMQ) $(LIBZMQ) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
 
 tpmikvs_SOURCES = \
 	tpmikvs.c
@@ -41,8 +41,8 @@ tpmikvs_LDADD = \
 	$(top_builddir)/src/lib/libpmi/libpmi.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
-	$(JSON_LIBS) $(LIBCZMQ) $(LIBZMQ) $(LIBMUNGE) $(LIBPTHREAD) $(LIBM) \
-	$(LIBDL)
+	$(top_builddir)/src/common/libev/libev.la \
+	$(JSON_LIBS) $(LIBCZMQ) $(LIBZMQ) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
 
 mpi_hello_SOURCES = \
 	mpi_hello.c

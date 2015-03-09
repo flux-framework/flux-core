@@ -203,7 +203,7 @@ static int l_flux_destroy (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
     l_flux_reftable_unref (L, f);
-    flux_handle_destroy (&f);
+    flux_api_close (f);
     return (0);
 }
 

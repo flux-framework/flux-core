@@ -346,7 +346,7 @@ void task_info_destroy (struct task_info *t)
     if (t->kvs)
         kvsdir_destroy (t->kvs);
     if (t->f)
-        flux_handle_destroy (&t->f);
+        flux_api_close (t->f);
     free (t);
 }
 
@@ -441,7 +441,7 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
 
     zmq_term (ctx->zctx);
     if (ctx->flux)
-        flux_handle_destroy (&ctx->flux);
+        flux_api_close (ctx->flux);
 
     free (ctx);
 }

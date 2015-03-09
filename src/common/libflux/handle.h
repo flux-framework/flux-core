@@ -27,6 +27,7 @@ void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn destroy);
  */
 void flux_flags_set (flux_t h, int flags);
 void flux_flags_unset (flux_t h, int flags);
+int flux_flags_get (flux_t h);
 
 /* Alloc/free a matchtag block for matched requests.
  */
@@ -53,6 +54,10 @@ zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, zlist_t *nomatch,
  * The list is always returned empty. 
  */
 int flux_putmsg_list (flux_t h, zlist_t *list);
+
+/* Get handle's zctx (if any).
+ */
+zctx_t *flux_get_zctx (flux_t h);
 
 #endif /* !_FLUX_CORE_HANDLE_H */
 

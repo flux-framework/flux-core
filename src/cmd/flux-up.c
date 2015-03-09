@@ -126,7 +126,7 @@ int main (int argc, char *argv[])
         ns_print_all (ns, fmt);
     ns_destroy (ns);
 
-    flux_handle_destroy (&h);
+    flux_api_close (h);
     log_fini ();
     return 0;
 }
