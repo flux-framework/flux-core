@@ -85,10 +85,15 @@ local kw,err = f:kvswatcher {
     end
 }
 
+type_ok (kw, 'userdata', "f:kvswatcher returns kvswatcher object")
+kw.testkey = "foo"
+is (kw.testkey, 'foo', "Can set arbitrary members of kvswatcher object")
+
 os.execute (string.format ("flux kvs put %s=%s", data.key, data.value))
 local r = f:reactor()
 
 is (r, 0, "reactor exited normally")
+
 
 --
 -- Again, but this time ensure callback is not called more than the
