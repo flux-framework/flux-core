@@ -1,7 +1,7 @@
 #!/usr/bin/lua
 
 local test = require 'fluxometer'.init (...)
-test:start_session{}
+test:start_session{ size=4 }
 
 local flux = require_ok ('flux')
 
@@ -71,10 +71,10 @@ local data = { key = "testkey", value = "testvalue" }
 local count = 0
 dir [data.key] = nil -- Unlink current key
 
-local kw = f:kvswatcher {
+local kw,err = f:kvswatcher {
     key = data.key,
     handler = function (kw, result)
-        type_ok (kw, 'userdata', "kvs watch handle returned to handler")
+        type_ok (kw, 'userdata', "kvs watch userdata passed to handler")
         count = count + 1
         if count == 1 then
             is (result, nil, "kvswatcher: initial callback has result == nil")
@@ -89,6 +89,42 @@ os.execute (string.format ("flux kvs put %s=%s", data.key, data.value))
 local r = f:reactor()
 
 is (r, 0, "reactor exited normally")
+
+--
+-- Again, but this time ensure callback is not called more than the
+--  expected number of times.
+--
+local data = { key = "testkey2", value = "testvalue2" }
+
+ncount = 0
+dir [data.key] = nil -- Unlink current key
+dir:commit()
+
+local kw = f:kvswatcher {
+    key = data.key,
+    handler = function (kw, result)
+        type_ok (kw, 'userdata', "kvs watch: userdata passed to handler", data.key)
+        ncount = ncount + 1
+        if ncount == 1 then
+            is (result, nil, "kvswatcher: initial callback has result nil")
+        elseif ncount == 2 then
+            is (result, data.value, "kvswatcher: 2nd callback result="..result)
+        end
+    end
+}
+
+local t, err = f:timer {
+    timeout = 1250,
+    handler = function (f, to) return f:reactor_stop () end
+}
+
+-- Excute on rank 3 via flux-exec:
+os.execute (string.format ("sleep 0.25 && flux exec -r 3 flux kvs put %s=%s", data.key, data.value))
+
+local r = f:reactor()
+is (r, 0, "reactor exited normally")
+is (ncount, 2, "kvswatch callback invoked exactly twice")
+
 
 done_testing ()
 
