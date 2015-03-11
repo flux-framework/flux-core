@@ -94,6 +94,8 @@ local r = f:reactor()
 
 is (r, 0, "reactor exited normally")
 
+ok (kw:remove(), "Can remove kvswatcher without error")
+
 
 --
 -- Again, but this time ensure callback is not called more than the
@@ -119,16 +121,25 @@ local kw = f:kvswatcher {
 }
 
 local t, err = f:timer {
-    timeout = 1250,
+    timeout = 1000,
     handler = function (f, to) return f:reactor_stop () end
 }
 
 -- Excute on rank 3 via flux-exec:
-os.execute (string.format ("sleep 0.25 && flux exec -r 3 flux kvs put %s=%s", data.key, data.value))
-
+os.execute (string.format ("sleep 0.25 && flux exec -r 3 flux kvs put %s=%s",
+    data.key, data.value))
 local r = f:reactor()
 is (r, 0, "reactor exited normally")
 is (ncount, 2, "kvswatch callback invoked exactly twice")
+
+note ("Ensure kvs watch callback not invoked after kvswatcher removal")
+ok (kw:remove(), "Can remove kvswatcher without error")
+os.execute (string.format ("sleep 0.25 && flux exec -r 3 flux kvs put %s=%s",
+    data.key, 'test3'))
+local r = f:reactor()
+is (r, 0, "reactor exited normally")
+is (ncount, 2, "kvswatch callback not invoked after kvs_unwatch")
+is (dir [data.key], "test3", "but key value has been updated")
 
 
 done_testing ()
