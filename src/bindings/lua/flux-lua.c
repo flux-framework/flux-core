@@ -1029,6 +1029,12 @@ static int l_kvswatcher_add (lua_State *L)
     kw = l_flux_ref_create (L, f, 2, "kvswatcher");
     kvs_watch (f, key, l_kvswatcher, (void *) kw);
 
+    /*
+     *  Return kvswatcher object to caller
+     */
+    l_flux_ref_gettable (kw, "kvswatcher");
+    lua_getfield (L, -1, "userdata");
+    assert (lua_isuserdata (L, -1));
     return (1);
 }
 
