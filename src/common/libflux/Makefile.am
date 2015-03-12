@@ -73,6 +73,11 @@ test_conf_t_LDADD = $(test_ldadd)
 test_module_t_SOURCES = test/module.c
 test_module_t_CPPFLAGS = $(test_cppflags)
 test_module_t_LDADD = $(test_ldadd) $(LIBDL)
+test_module_t_DEPENDENCIES = $(top_builddir)/src/modules/kvs/kvs.la
+
+$(test_module_t_DEPENDENCIES):
+	@cd `dirname $@` && $(MAKE)
+
 
 test_message_t_SOURCES = test/message.c
 test_message_t_CPPFLAGS = $(test_cppflags)
@@ -81,3 +86,4 @@ test_message_t_LDADD = $(test_ldadd) $(LIBDL)
 test_tagpool_t_SOURCES = test/tagpool.c
 test_tagpool_t_CPPFLAGS = $(test_cppflags)
 test_tagpool_t_LDADD = $(test_ldadd) $(LIBDL)
+

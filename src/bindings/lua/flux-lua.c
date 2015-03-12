@@ -998,10 +998,16 @@ static int l_kvswatcher (const char *key, json_object *val, void *arg, int errnu
 
 static int l_kvswatcher_remove (lua_State *L)
 {
-    /* No support for removing kvs watchers */
-    lua_pushnil (L);
-    lua_pushliteral (L, "Not implemented");
-    return (2);
+    struct l_flux_ref *kw = luaL_checkudata (L, 1, "FLUX.kvswatcher");
+    l_flux_ref_gettable (kw, "kvswatcher");
+    lua_getfield (L, -1, "key");
+    if (kvs_unwatch (kw->flux, lua_tostring (L, -1)) < 0)
+        return (lua_pusherror (L, "kvs_unwatch: %s", strerror (errno)));
+    /*
+     *  Destroy reftable and allow garbage collection
+     */
+    l_flux_ref_destroy (kw, "kvswatcher");
+    return (1);
 }
 
 static int l_kvswatcher_add (lua_State *L)
@@ -1029,6 +1035,12 @@ static int l_kvswatcher_add (lua_State *L)
     kw = l_flux_ref_create (L, f, 2, "kvswatcher");
     kvs_watch (f, key, l_kvswatcher, (void *) kw);
 
+    /*
+     *  Return kvswatcher object to caller
+     */
+    l_flux_ref_gettable (kw, "kvswatcher");
+    lua_getfield (L, -1, "userdata");
+    assert (lua_isuserdata (L, -1));
     return (1);
 }
 
