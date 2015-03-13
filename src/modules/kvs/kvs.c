@@ -1154,7 +1154,7 @@ static int watch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         JSON out = NULL;
         if (!(zcpy = zmsg_dup (*zmsg)))
             oom ();
-        out = kp_rwatch_enc (key, val);
+        out = kp_rwatch_enc (key, Jget (val));
         if (flux_json_respond (ctx->h, out, &zcpy) < 0)
             flux_log (ctx->h, LOG_ERR, "%s: flux_respond: %s",
                      __FUNCTION__, strerror (errno));
@@ -1167,7 +1167,7 @@ static int watch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
      */
     if (!reply_sent || !once) {
         first = false;
-        if (!(in2 = kp_twatch_enc (key, val, once, first, dir, link))) {
+        if (!(in2 = kp_twatch_enc (key, Jget (val), once, first, dir, link))) {
             errnum = errno;
             goto done;
         }
@@ -1183,6 +1183,7 @@ done:
         flux_log (ctx->h, LOG_ERR, "%s: flux_err_respond: %s",
                   __FUNCTION__, strerror (errno));
     }
+    Jput (val);
     Jput (in);
     Jput (in2);
     Jput (out);
