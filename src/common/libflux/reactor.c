@@ -102,6 +102,10 @@ static int msg_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
     assert (zmsg != NULL);
     assert (*zmsg != NULL);
 
+    if (flux_flags_get (h) & FLUX_FLAGS_TRACE) {
+        zdump_fprint (stderr, *zmsg, flux_msgtype_shortstr (type));
+    }
+
     d = zlist_first (r->dsp);
     while (d) {
         if (flux_msg_cmp (*zmsg, d->match)) {

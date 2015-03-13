@@ -45,6 +45,7 @@
 int changes = -1;
 int nthreads = -1;
 char *key = NULL;
+char *key_stable = NULL;
 
 static pthread_cond_t start_cond = PTHREAD_COND_INITIALIZER;
 static pthread_mutex_t start_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -56,6 +57,10 @@ typedef struct {
     pthread_attr_t attr;
     int n;
     flux_t h;
+    int change_count;
+    int nil_count;
+    int stable_count;
+    int last_val;
 } thd_t;
 
 static void signal_ready (void)
@@ -91,14 +96,56 @@ static void wait_ready (void)
 static int mt_watch_cb (const char *k, int val, void *arg, int errnum)
 {
     thd_t *t = arg;
-    if (errnum == 0 && val + 1 == changes)
+    if (errnum != 0) {
+        errn (errnum, "%d: %s", t->n, __FUNCTION__);
+        return -1;
+    }
+    if (val == t->last_val) {
+        msg ("%d: %s: called with same value as last time: %d", t->n,
+            __FUNCTION__, val);
+        return -1;
+    }
+    t->last_val = val;
+
+    /* normal stop */
+    if (val + 1 == changes)
         flux_reactor_stop (t->h);
+    t->change_count++;
+    return 0;
+}
+
+/* Watch a key that does not exist throughout the test.
+ */
+static int mt_watchnil_cb (const char *k, int val, void *arg, int errnum)
+{
+    thd_t *t = arg;
+    if (errnum != ENOENT) {
+        errn (errnum, "%d: %s", t->n, __FUNCTION__);
+        return -1;
+    }
+    t->nil_count++;
+    return 0;
+}
+
+/* Watch a key that exists but does not change throughout the test.
+ */
+static int mt_watchstable_cb (const char *k, int val, void *arg, int errnum)
+{
+    thd_t *t = arg;
+
+    if (errnum != 0) {
+        errn (errnum, "%d: %s", t->n, __FUNCTION__);
+        return -1;
+    }
+    t->stable_count++;
     return 0;
 }
 
 void *thread (void *arg)
 {
     thd_t *t = arg;
+
+    //setenv ("FLUX_TRACE_APISOCK", "1", 1); // XXX
 
     if (!(t->h = flux_api_open ())) {
         err ("%d: flux_api_open", t->n);
@@ -109,6 +156,14 @@ void *thread (void *arg)
      * replies will arrive asynchronously and be handled by the reactor.
      */
     if (kvs_watch_int (t->h, key, mt_watch_cb, t) < 0) {
+        err ("%d: kvs_watch_int", t->n);
+        goto done;
+    }
+    if (kvs_watch_int (t->h, "nonexistent-key", mt_watchnil_cb, t) < 0) {
+        err ("%d: kvs_watch_int", t->n);
+        goto done;
+    }
+    if (kvs_watch_int (t->h, key_stable, mt_watchstable_cb, t) < 0) {
         err ("%d: kvs_watch_int", t->n);
         goto done;
     }
@@ -140,9 +195,10 @@ void test_mt (int argc, char **argv)
     thd_t *thd;
     int i, rc;
     flux_t h;
+    int errors = 0;
 
     if (argc != 3) {
-        fprintf (stderr, "Usage: tkvswatch nthreads changes key\n");
+        fprintf (stderr, "Usage: mt nthreads changes key\n");
         exit (1);
     }
     nthreads = strtoul (argv[0], NULL, 10);
@@ -154,13 +210,19 @@ void test_mt (int argc, char **argv)
     if (!(h = flux_api_open ()))
         err_exit ("flux_api_open");
 
+    /* Set initial value of 'key' to -1 */
     if (kvs_put_int (h, key, -1) < 0)
         err_exit ("kvs_put_int %s", key);
+    key_stable = xasprintf ("%s-stable", key);
+    if (kvs_put_int (h, key_stable, 0) < 0)
+        err_exit ("kvs_put_int %s", key);
+
     if (kvs_commit (h) < 0)
         err_exit ("kvs_commit");
 
     for (i = 0; i < nthreads; i++) {
         thd[i].n = i;
+        thd[i].last_val = -42;
         if ((rc = pthread_attr_init (&thd[i].attr)))
             errn (rc, "pthread_attr_init");
         if ((rc = pthread_create (&thd[i].tid, &thd[i].attr, thread, &thd[i])))
@@ -175,12 +237,36 @@ void test_mt (int argc, char **argv)
             err_exit ("kvs_commit");
     }
 
+    /* Verify that callbacks were called the correct number of times.
+     * The nil and stable callbacks will be called exactly once before the
+     * reactor is started, then should never be called again.
+     * Due to commit merging on the master, the changing callback may
+     * miss intervening values but it shouldn't be called extra times.
+     */
     for (i = 0; i < nthreads; i++) {
         if ((rc = pthread_join (thd[i].tid, NULL)))
             errn (rc, "pthread_join");
+        if (thd[i].nil_count != 1) {
+            msg ("%d: nil callback called %d times (expected one)",
+                 i, thd[i].nil_count);
+            errors++;
+        }
+        if (thd[i].stable_count != 1) {
+            msg ("%d: stable callback called %d times (expected one)",
+                 i, thd[i].stable_count);
+            errors++;
+        }
+        if (thd[i].change_count > changes + 1) {
+            msg ("%d: changing callback called %d times (expected <= %d)",
+                 i, thd[i].change_count, changes + 1);
+            errors++;
+        }
     }
+    if (errors > 0)
+        exit (1);
 
     free (thd);
+    free (key_stable);
 
     flux_api_close (h);
 }

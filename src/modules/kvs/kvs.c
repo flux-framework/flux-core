@@ -1117,6 +1117,7 @@ static int watch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     JSON in = NULL;
+    JSON in2 = NULL;
     JSON out = NULL;
     JSON root;
     JSON oval, val = NULL;
@@ -1162,15 +1163,17 @@ static int watch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     }
     /* No reply sent or this is an ongoing request.
      * Arrange to wait on ctx->watchlist for each new commit.
-     * Clear the 'first' flag, if set.
+     * Clear the 'first' flag, if set.  Update val.
      */
     if (!reply_sent || !once) {
-        if (first) {
-            json_object_object_del (in, ".flag_first");
-            if (flux_msg_set_payload_json (*zmsg, in) < 0) {
-                errnum = errno;
-                goto done;
-            }
+        first = false;
+        if (!(in2 = kp_twatch_enc (key, val, once, first, dir, link))) {
+            errnum = errno;
+            goto done;
+        }
+        if (flux_msg_set_payload_json (*zmsg, in2) < 0) {
+            errnum = errno;
+            goto done;
         }
         w = wait_create (h, typemask, zmsg, watch_request_cb, arg);
         wait_addqueue (ctx->watchlist, w);
@@ -1181,6 +1184,7 @@ done:
                   __FUNCTION__, strerror (errno));
     }
     Jput (in);
+    Jput (in2);
     Jput (out);
     zmsg_destroy (zmsg);
     return 0;
