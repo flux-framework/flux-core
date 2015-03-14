@@ -194,6 +194,9 @@ done:
 
 void flux_conf_itr_destroy (flux_conf_itr_t itr)
 {
+    char *item;
+    while ((item = zlist_pop (itr->zl)))
+        free (item);
     zlist_destroy (&itr->zl);
     free (itr);
 }
@@ -222,7 +225,6 @@ flux_conf_itr_t flux_conf_itr_create (flux_conf_t cf)
     itr->cf = cf;
     if (!(itr->zl = zlist_new ()))
         oom ();
-    zlist_autofree (itr->zl); 
     zconfig_to_zlist (cf->z, NULL, itr->zl);
     itr->item = zlist_first (itr->zl);
     return itr;

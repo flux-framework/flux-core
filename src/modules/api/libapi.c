@@ -479,8 +479,7 @@ flux_t flux_api_openpath (const char *path, int flags)
 {
     cmb_t *c = NULL;
     struct sockaddr_un addr;
-    char *cpy = xstrdup (path);
-    char *pidfile = NULL;
+    char pidfile[PATH_MAX + 1];
 
     c = xzmalloc (sizeof (*c));
     c->magic = CMB_CTX_MAGIC;
@@ -500,7 +499,9 @@ flux_t flux_api_openpath (const char *path, int flags)
         oom ();
     ev_zlist_init (&c->putmsg_w, putmsg_cb, c->putmsg, EV_READ);
 
-    pidfile = xasprintf ("%s/cmbd.pid", dirname (cpy));
+    char *cpy = xstrdup (path);
+    snprintf (pidfile, sizeof (pidfile), "%s/cmbd.pid", dirname (cpy));
+    free (cpy);
     for (;;) {
         if (!pidcheck (pidfile))
             goto error;
@@ -517,10 +518,6 @@ flux_t flux_api_openpath (const char *path, int flags)
 error:
     if (c)
         cmb_fini (c);
-    if (cpy)
-        free (cpy);
-    if (pidfile)
-        free (pidfile);
     return NULL;
 }
 

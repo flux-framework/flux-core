@@ -201,6 +201,7 @@ int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
 done:
     if (match.matchtag != FLUX_MATCHTAG_NONE)
         flux_matchtag_free (h, match.matchtag, match.bsize);
+    zmsg_destroy (&zmsg);
     return rc;
 }
 
