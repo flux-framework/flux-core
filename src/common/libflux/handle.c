@@ -227,6 +227,15 @@ int flux_putmsg (flux_t h, zmsg_t **zmsg)
     return h->ops->putmsg (h->impl, zmsg);
 }
 
+int flux_pushmsg (flux_t h, zmsg_t **zmsg)
+{
+    if (!h->ops->pushmsg) {
+        errno = ENOSYS;
+        return -1;
+    }
+    return h->ops->pushmsg (h->impl, zmsg);
+}
+
 int flux_event_subscribe (flux_t h, const char *topic)
 {
     if (!h->ops->event_subscribe) {

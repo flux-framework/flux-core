@@ -142,6 +142,20 @@ static int cmb_putmsg (void *impl, zmsg_t **zmsg)
     return 0;
 }
 
+static int cmb_pushmsg (void *impl, zmsg_t **zmsg)
+{
+    cmb_t *c = impl;
+    assert (c->magic == CMB_CTX_MAGIC);
+    int oldcount = zlist_size (c->putmsg);
+
+    if (zlist_push (c->putmsg, *zmsg) < 0)
+        oom ();
+    *zmsg = NULL;
+    if (oldcount == 0)
+        sync_msg_watchers (c);
+    return 0;
+}
+
 static void cmb_purge (void *impl, flux_match_t match)
 {
     cmb_t *c = impl;
@@ -535,6 +549,7 @@ static const struct flux_handle_ops cmb_ops = {
     .sendmsg = cmb_sendmsg,
     .recvmsg = cmb_recvmsg,
     .putmsg = cmb_putmsg,
+    .pushmsg = cmb_pushmsg,
     .purge = cmb_purge,
     .event_subscribe = cmb_event_subscribe,
     .event_unsubscribe = cmb_event_unsubscribe,

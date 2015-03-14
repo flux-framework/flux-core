@@ -40,6 +40,7 @@ uint32_t flux_matchtag_avail (flux_t h);
 int flux_sendmsg (flux_t h, zmsg_t **zmsg);
 zmsg_t *flux_recvmsg (flux_t h, bool nonblock);
 int flux_putmsg (flux_t h, zmsg_t **zmsg);
+int flux_pushmsg (flux_t h, zmsg_t **zmsg);
 
 /* Receive a message matching 'match' (see message.h).
  * Any unmatched messages are returned to the handle with flux_putmsg(),
