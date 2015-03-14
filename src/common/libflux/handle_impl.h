@@ -11,6 +11,8 @@
  ** Flux_t handle users should not use these interfaces.
  */
 
+typedef int (*flux_msg_f)(flux_t h, void *arg);
+
 typedef struct reactor_struct *reactor_t;
 
 struct flux_handle_ops {
@@ -38,7 +40,7 @@ struct flux_handle_ops {
     int         (*reactor_tmout_add)(void *impl, unsigned long ms, bool oneshot,
                                      FluxTmoutHandler cb, void *arg);
     void        (*reactor_tmout_remove)(void *impl, int timer_id);
-    int         (*reactor_msg_add)(void *impl, FluxMsgHandler cb, void *arg);
+    int         (*reactor_msg_add)(void *impl, flux_msg_f cb, void *arg);
     void        (*reactor_msg_remove)(void *impl);
 
     void        (*impl_destroy)(void *impl);

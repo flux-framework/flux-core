@@ -66,7 +66,7 @@ typedef struct {
     ev_zlist putmsg_w;
     int loop_rc;
 
-    FluxMsgHandler msg_cb;
+    flux_msg_f msg_cb;
     void *msg_cb_arg;
 
     zhash_t *watchers;
@@ -207,53 +207,31 @@ static void putmsg_cb (struct ev_loop *loop, ev_zlist *w, int revents)
 {
     cmb_t *c = (cmb_t *)((char *)w - offsetof (cmb_t, putmsg_w));
     assert (c->magic == CMB_CTX_MAGIC);
-    zmsg_t *zmsg = NULL;
-    int type;
 
     assert (zlist_size (c->putmsg) > 0);
     if (c->msg_cb) {
-        if (!(zmsg = cmb_recvmsg_putmsg (c)))
-            goto done;
-        if (flux_msg_get_type (zmsg, &type) < 0)
-            goto done;
-        if (c->msg_cb (c->h, type, &zmsg, c->msg_cb_arg) < 0) {
+        if (c->msg_cb (c->h, c->msg_cb_arg) < 0)
             cmb_reactor_stop (c, -1);
-            goto done;
-        }
     }
-done:
-    zmsg_destroy (&zmsg);
 }
 
 static void unix_cb (struct ev_loop *loop, ev_io *w, int revents)
 {
     cmb_t *c = (cmb_t *)((char *)w - offsetof (cmb_t, unix_w));
     assert (c->magic == CMB_CTX_MAGIC);
-    zmsg_t *zmsg = NULL;
-    int type;
 
-    assert (zlist_size (c->putmsg) == 0);
-    if (c->msg_cb) {
-        if (revents & EV_READ) {
-            if ((zmsg = zfd_recv (w->fd, true))) {
-                if (flux_msg_get_type (zmsg, &type) < 0)
-                    goto done;
-                if (c->msg_cb (c->h, type, &zmsg, c->msg_cb_arg) < 0) {
-                    cmb_reactor_stop (c, -1);
-                    goto done;
-                }
-            }
-        }
-        if (revents & EV_ERROR) {
-            cmb_reactor_stop (c, -1);
-            goto done;
+    if (revents & EV_ERROR) {
+        cmb_reactor_stop (c, -1);
+    } else if (revents & EV_READ) {
+        assert (zlist_size (c->putmsg) == 0);
+        if (c->msg_cb) {
+            if (c->msg_cb (c->h, c->msg_cb_arg) < 0)
+                cmb_reactor_stop (c, -1);
         }
     }
-done:
-    zmsg_destroy (&zmsg);
 }
 
-static int cmb_reactor_msg_add (void *impl, FluxMsgHandler cb, void *arg)
+static int cmb_reactor_msg_add (void *impl, flux_msg_f cb, void *arg)
 {
     cmb_t *c = impl;
     assert (c->magic == CMB_CTX_MAGIC);

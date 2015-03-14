@@ -100,7 +100,7 @@ struct plugin_ctx_struct {
     int loop_rc;
     int timer_seq;
     zhash_t *watchers;
-    FluxMsgHandler msg_cb;
+    flux_msg_f msg_cb;
     void *msg_cb_arg;
 
     /* misc comms module state
@@ -324,7 +324,7 @@ static void plugin_reactor_stop (void *impl, int rc)
     ev_break (p->loop, EVBREAK_ALL);
 }
 
-static int plugin_reactor_msg_add (void *impl, FluxMsgHandler cb, void *arg)
+static int plugin_reactor_msg_add (void *impl, flux_msg_f cb, void *arg)
 {
     plugin_ctx_t p = impl;
     assert (p->magic == PLUGIN_MAGIC);
@@ -608,69 +608,22 @@ done:
     return rc;
 }
 
-static void handle_cb (plugin_ctx_t p, zmsg_t **zmsg)
-{
-    assert (p->msg_cb != NULL);
-
-    int type;
-    if (flux_msg_get_type (*zmsg, &type) < 0)
-        goto done;
-    switch (type) {
-        case FLUX_MSGTYPE_REQUEST:
-            p->stats.svc_rx++;
-            break;
-        case FLUX_MSGTYPE_RESPONSE:
-            p->stats.request_rx++;
-            break;
-        case FLUX_MSGTYPE_EVENT:
-            p->stats.event_rx++;
-            break;
-        case FLUX_MSGTYPE_KEEPALIVE:
-            goto done;
-    }
-    if (p->msg_cb (p->h, type, zmsg, p->msg_cb_arg) < 0) {
-        plugin_reactor_stop (p, -1);
-        goto done;
-    }
-    /* respond to unhandled requests
-     */
-    if (*zmsg && type == FLUX_MSGTYPE_REQUEST) {
-        if (flux_respond_errnum (p->h, zmsg, ENOSYS) < 0) {
-            err ("%s: error sending ENOSYS response", __FUNCTION__);
-            plugin_reactor_stop (p, -1);
-            goto done;
-        }
-    }
-done:
-    return;
-}
-
 static void main_cb (struct ev_loop *loop, ev_zmq *w, int revents)
 {
     plugin_ctx_t p = w->data;
     assert (p->magic == PLUGIN_MAGIC);
-    zmsg_t *zmsg = NULL;
 
     assert (zlist_size (p->putmsg) == 0);
 
-    if (p->msg_cb) {
-        if ((revents & EV_READ)) {
-            zmsg = zmsg_recv (w->zsock);
-            if (!zmsg)
-                goto done;
-            if (zmsg_content_size (zmsg) == 0) { /* EOF */
-                plugin_reactor_stop (p, 0);
-                goto done;
-            }
-            handle_cb (p, &zmsg);
-        }
-        if ((revents & EV_ERROR)) {
-            msg ("%s: error polling inproc socket", p->name);
-            plugin_reactor_stop (p, -1);
+    if ((revents & EV_ERROR)) {
+        msg ("%s: error polling inproc socket", p->name);
+        plugin_reactor_stop (p, -1);
+    } else if ((revents & EV_READ)) {
+        if (p->msg_cb) {
+            if (p->msg_cb (p->h, p->msg_cb_arg) < 0)
+                plugin_reactor_stop (p, -1);
         }
     }
-done:
-    zmsg_destroy (&zmsg);
 }
 
 static void putmsg_cb (struct ev_loop *loop, ev_zlist *w, int revents)
@@ -678,12 +631,10 @@ static void putmsg_cb (struct ev_loop *loop, ev_zlist *w, int revents)
     plugin_ctx_t p = w->data;
     assert (p->magic == PLUGIN_MAGIC);
 
+    assert (zlist_size (p->putmsg) > 0);
     if (p->msg_cb) {
-        zmsg_t *zmsg = NULL;
-        assert (zlist_size (p->putmsg) > 0);
-        if ((zmsg = plugin_recvmsg_putmsg (p)))
-            handle_cb (p, &zmsg);
-        zmsg_destroy (&zmsg);
+        if (p->msg_cb (p->h, p->msg_cb_arg) < 0)
+            plugin_reactor_stop (p, -1);
     }
 }
 
