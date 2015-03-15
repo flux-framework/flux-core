@@ -13,6 +13,7 @@ typedef struct flux_handle_struct *flux_t;
 enum {
     FLUX_FLAGS_TRACE = 1,   /* print 0MQ messages sent over the flux_t */
                             /*   handle on stdout. */
+    FLUX_FLAGS_COPROC = 2,  /* start reactor callbacks as coprocesses */
 };
 
 /* A mechanism is provide for users to attach auxiliary state to the flux_t

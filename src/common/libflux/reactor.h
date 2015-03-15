@@ -91,6 +91,14 @@ int flux_reactor_start (flux_t h);
  */
 void flux_reactor_stop (flux_t h);
 
+/* Give control back to the reactor until a message matching 'match'
+ * is queued in the handle.  This will return -1 with errno = EINVAL
+ * if called from a reactor handler that is not running in as a coprocess.
+ * Currently only message handlers are started as coprocesses, if the
+ * handle has FLUX_FLAGS_COPROC set.
+ */
+int flux_sleep_on (flux_t h, flux_match_t match);
+
 #endif /* !_FLUX_CORE_REACTOR_H */
 
 /*
