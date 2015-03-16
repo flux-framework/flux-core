@@ -80,8 +80,9 @@ end
 --  Reinvoke "current" test script under a flux session using flux-start
 --
 function fluxTest:start_session (t)
-    -- Avoid flux-in-flux for now:
-    if os.getenv ("FLUX_TMPDIR") then return end
+    -- If fluxometer session is already active just return:
+    if os.getenv ("FLUXOMETER_ACTIVE") then return end
+    posix.setenv ("FLUXOMETER_ACTIVE", "t")
 
     local size = t.size or 1
     local extra_args = t.args or {}
