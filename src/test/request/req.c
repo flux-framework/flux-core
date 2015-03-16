@@ -11,6 +11,7 @@ typedef struct {
     flux_t h;
     zhash_t *ping_requests;
     int ping_seq;
+    zlist_t *clog_requests;
 } ctx_t;
 
 static void freectx (ctx_t *ctx)
@@ -24,6 +25,12 @@ static void freectx (ctx_t *ctx)
     }
     zlist_destroy (&keys);
     zhash_destroy (&ctx->ping_requests);
+
+    zmsg_t *zmsg;
+    while ((zmsg = zlist_pop (ctx->clog_requests)))
+        zmsg_destroy (&zmsg);
+    zlist_destroy (&ctx->clog_requests);
+
     free (ctx);
 }
 
@@ -36,9 +43,43 @@ static ctx_t *getctx (flux_t h)
         ctx->h = h;
         if (!(ctx->ping_requests = zhash_new ()))
             oom ();
+        if (!(ctx->clog_requests = zlist_new ()))
+            oom ();
         flux_aux_set (h, "req", ctx, (FluxFreeFn)freectx);
     }
     return ctx;
+}
+
+/* Don't reply to request - just queue it for later.
+ */
+static int clog_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = getctx (h);
+
+    if (zlist_push (ctx->clog_requests, *zmsg) < 0)
+        oom ();
+    *zmsg = NULL;
+    return 0;
+}
+
+/* Reply to all queued requests.
+ */
+static int flush_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = getctx (h);
+    zmsg_t *z;
+
+    while ((z = zlist_pop (ctx->clog_requests))) {
+        /* send clog response */
+        if (flux_err_respond (h, 0, &z) < 0)
+            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
+                          strerror (errno));
+    }
+    /* send flush response */
+    if (flux_err_respond (h, 0, zmsg) < 0)
+        flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
+                      strerror (errno));
+    return 0;
 }
 
 /* Accept a json payload, verify it and return error if it doesn't
@@ -316,6 +357,8 @@ static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST, "req.sink",              sink_request_cb },
     { FLUX_MSGTYPE_REQUEST, "req.xping",             xping_request_cb },
     { FLUX_MSGTYPE_RESPONSE, "req.ping",             ping_response_cb },
+    { FLUX_MSGTYPE_REQUEST, "req.clog",              clog_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "req.flush",             flush_request_cb },
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 

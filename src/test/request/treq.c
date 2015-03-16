@@ -30,6 +30,7 @@
 #include <assert.h>
 #include <libgen.h>
 #include <czmq.h>
+#include <pthread.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
@@ -47,6 +48,9 @@ void test_putmsg (flux_t h, uint32_t nodeid);
 void test_pingzero (flux_t h, uint32_t nodeid);
 void test_pingself (flux_t h, uint32_t nodeid);
 void test_pingany (flux_t h, uint32_t nodeid);
+void test_flush (flux_t h, uint32_t nodeid);
+void test_clog (flux_t h, uint32_t nodeid);
+void test_coproc (flux_t h, uint32_t nodeid);
 
 typedef struct {
     const char *name;
@@ -64,6 +68,9 @@ static test_t tests[] = {
     { "pingzero", &test_pingzero},
     { "pingself", &test_pingself},
     { "pingany", &test_pingany},
+    { "flush", &test_flush},
+    { "clog", &test_clog},
+    { "coproc", &test_coproc},
 };
 
 test_t *test_lookup (const char *name)
@@ -85,7 +92,7 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr,
-"Usage: treq [--rank N] {null | echo | err | src | sink | nsrc | putmsg | pingzero | pingself | pingany}\n"
+"Usage: treq [--rank N] {null | echo | err | src | sink | nsrc | putmsg | pingzero | pingself | pingany | clog | flush | coproc}\n"
 );
     exit (1);
 }
@@ -302,6 +309,70 @@ void test_pingany (flux_t h, uint32_t nodeid)
 void test_pingself (flux_t h, uint32_t nodeid)
 {
     xping (h, nodeid, nodeid, "req.ping");
+}
+
+void test_flush (flux_t h, uint32_t nodeid)
+{
+    if (flux_json_rpc (h, nodeid, "req.flush", NULL, NULL) < 0)
+        err_exit ("req.flush");
+}
+
+void test_clog (flux_t h, uint32_t nodeid)
+{
+    if (flux_json_rpc (h, nodeid, "req.clog", NULL, NULL) < 0)
+        err_exit ("req.clog");
+}
+
+/* Coprocess test: requires 'req' and 'coproc' modules loaded
+ * - make coproc.stuck RPC in first thread
+ * - make coproc.stuck RPC in second thread
+ * - make coproc.hi RPC in main thread (must respond)
+ * - make req.flush RPC in main thread (first thread unblocks)
+ * - make req.flush RPC in main thread (second thread unblocks)
+ */
+
+void *thd (void *arg)
+{
+    uint32_t *nodeid = arg;
+    flux_t h;
+
+    if (!(h = flux_api_open ()))
+        err_exit ("flux_api_open");
+
+    if (flux_json_rpc (h, *nodeid, "coproc.stuck", NULL, NULL) < 0)
+        err_exit ("coproc.stuck");
+
+    flux_api_close (h);
+    return NULL;
+}
+
+void test_coproc (flux_t h, uint32_t nodeid)
+{
+    pthread_t t[2];
+    int rc;
+
+    if ((rc = pthread_create (&t[0], NULL, thd, &nodeid)))
+        errn_exit (rc, "pthread_create");
+    if ((rc = pthread_create (&t[1], NULL, thd, &nodeid)))
+        errn_exit (rc, "pthread_create");
+
+    usleep (1000*200); /* 200ms */
+
+    if (flux_json_rpc (h, nodeid, "coproc.hi", NULL, NULL) < 0)
+        err_exit ("coproc.hi");
+    msg ("hi request was answered");
+
+    if (flux_json_rpc (h, nodeid, "req.flush", NULL, NULL) < 0)
+        err_exit ("req.flush");
+    if (flux_json_rpc (h, nodeid, "req.flush", NULL, NULL) < 0)
+        err_exit ("req.flush");
+
+    if ((rc = pthread_join (t[0], NULL)))
+        errn_exit (rc, "pthread_join");
+    msg ("thread 0 finished");
+    if ((rc = pthread_join (t[1], NULL)))
+        errn_exit (rc, "pthread_join");
+    msg ("thread 1 finished");
 }
 
 /*
