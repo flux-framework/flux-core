@@ -7,7 +7,7 @@ AM_CPPFLAGS = \
 #
 # Comms module
 #
-check_LTLIBRARIES = req.la
+check_LTLIBRARIES = req.la coproc.la
 
 fluxmod_libadd = \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
@@ -24,6 +24,10 @@ req_la_SOURCES = req.c
 # N.B. "-rpath /nowhere" forces .so build, despite noinst/check
 req_la_LDFLAGS = $(fluxmod_ldflags) -rpath /nowhere
 req_la_LIBADD = $(fluxmod_libadd)
+
+coproc_la_SOURCES = coproc.c
+coproc_la_LDFLAGS = $(fluxmod_ldflags) -rpath /nowhere
+coproc_la_LIBADD = $(fluxmod_libadd)
 
 #
 # Test proggie

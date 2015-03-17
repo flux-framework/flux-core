@@ -165,6 +165,11 @@ zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, zlist_t *nomatch,
     zmsg_t *zmsg = NULL;
     zlist_t *putmsg = nomatch;
 
+    if (flux_sleep_on (h, match) < 0) {
+        if (errno != EINVAL)
+            goto done;
+        errno = 0; /* EINVAL: not running in a coprocess */
+    }
     while (!zmsg) {
         if (!(zmsg = flux_recvmsg (h, nonblock)))
             goto done;
@@ -225,6 +230,15 @@ int flux_putmsg (flux_t h, zmsg_t **zmsg)
         return -1;
     }
     return h->ops->putmsg (h->impl, zmsg);
+}
+
+int flux_pushmsg (flux_t h, zmsg_t **zmsg)
+{
+    if (!h->ops->pushmsg) {
+        errno = ENOSYS;
+        return -1;
+    }
+    return h->ops->pushmsg (h->impl, zmsg);
 }
 
 int flux_event_subscribe (flux_t h, const char *topic)
