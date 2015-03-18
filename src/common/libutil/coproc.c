@@ -31,6 +31,8 @@
 #endif
 #include <assert.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <sys/mman.h>
 #include <errno.h>
 #include <ucontext.h>
 #include <stdint.h>
@@ -55,6 +57,7 @@ struct coproc_struct {
     ucontext_t uc;
     coproc_cb_t cb;
     size_t ssize;
+    size_t pagesize;
     uint8_t *stack;
     coproc_state_t state;
     int rc;
@@ -62,8 +65,6 @@ struct coproc_struct {
 };
 
 static const size_t default_stack_size = 2*1024*1024; /* 2mb stack */
-static const size_t redzone = 16;
-static const uint8_t redzone_pattern = 0x66;
 
 void coproc_destroy (coproc_t c)
 {
@@ -87,28 +88,41 @@ static void trampoline (const unsigned int high, const unsigned int low)
     swapcontext (&c->uc, &c->parent);
 }
 
+/* return 'l' rounded up to a multiple of the system page size.
+ */
+static size_t compute_size (size_t l, size_t pagesize)
+{
+    return ((l + pagesize - 1) & ~(pagesize - 1));
+}
+
 coproc_t coproc_create (coproc_cb_t cb)
 {
     coproc_t c = xzmalloc (sizeof (*c));
+    int errnum;
 
     c->magic = COPROC_MAGIC;
-    if (getcontext (&c->uc) < 0) {
-        coproc_destroy (c);
-        return NULL;
-    }
+    if (getcontext (&c->uc) < 0)
+        goto error;
     c->state = CS_INIT;
-    c->ssize = default_stack_size;
-    assert (c->ssize > 2*redzone);
-    if (!(c->stack = malloc (c->ssize)))
-        oom ();
-    memset (c->stack, redzone_pattern, redzone);
-    memset (c->stack + c->ssize - redzone, redzone_pattern, redzone);
-    c->uc.uc_stack.ss_sp = c->stack + redzone;
-    c->uc.uc_stack.ss_size = c->ssize - 2*redzone;
+    c->pagesize = sysconf (_SC_PAGE_SIZE);
+    c->ssize = compute_size (default_stack_size + 2*c->pagesize, c->pagesize);
+    if ((errnum = posix_memalign ((void **)&c->stack, c->pagesize, c->ssize))) {
+        errno = errnum;
+        goto error;
+    }
+    if (mprotect (c->stack, c->pagesize, PROT_NONE) < 0
+                || mprotect (c->stack + c->ssize - c->pagesize,
+                                                   c->pagesize, PROT_NONE < 0))
+        goto error;
+    c->uc.uc_stack.ss_sp = c->stack + c->pagesize;
+    c->uc.uc_stack.ss_size = c->ssize - 2*c->pagesize;
 
     c->cb = cb;
 
     return c;
+error:
+    coproc_destroy (c);
+    return NULL;
 }
 
 int coproc_yield (coproc_t c)
@@ -123,19 +137,6 @@ int coproc_yield (coproc_t c)
     return 0;
 }
 
-static int verify_redzone (coproc_t c)
-{
-    int i;
-    for (i = 0; i < redzone; i++) {
-        if (c->stack[i] != redzone_pattern
-         || c->stack[c->ssize - 1 - i] != redzone_pattern) {
-            errno = EINVAL; /* FIXME need appropriate errno value */
-            return -1;
-        }
-    }
-    return 0;
-}
-
 int coproc_resume (coproc_t c)
 {
     assert (c->magic == COPROC_MAGIC);
@@ -145,8 +146,6 @@ int coproc_resume (coproc_t c)
     }
     c->state = CS_RUNNING;
     if (swapcontext (&c->parent, &c->uc) < 0)
-        return -1;
-    if (verify_redzone (c) < 0)
         return -1;
     return 0;
 }
@@ -167,8 +166,6 @@ int coproc_start (coproc_t c, void *arg)
     c->arg = arg;
     c->state = CS_RUNNING;
     if (swapcontext (&c->parent, &c->uc) < 0)
-        return -1;
-    if (verify_redzone (c) < 0)
         return -1;
     return 0;
 }
