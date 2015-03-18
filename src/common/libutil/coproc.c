@@ -85,7 +85,7 @@ static void trampoline (const unsigned int high, const unsigned int low)
     c->rc = c->cb (c, c->arg);
     c->state = CS_RETURNED;
 
-    swapcontext (&c->uc, &c->parent);
+    (void)swapcontext (&c->uc, &c->parent);
 }
 
 /* return 'l' rounded up to a multiple of the system page size.
@@ -133,8 +133,7 @@ int coproc_yield (coproc_t c)
         return -1;
     }
     c->state = CS_YIELDED;
-    swapcontext (&c->uc, &c->parent);
-    return 0;
+    return swapcontext (&c->uc, &c->parent);
 }
 
 int coproc_resume (coproc_t c)
@@ -145,9 +144,7 @@ int coproc_resume (coproc_t c)
         return -1;
     }
     c->state = CS_RUNNING;
-    if (swapcontext (&c->parent, &c->uc) < 0)
-        return -1;
-    return 0;
+    return swapcontext (&c->parent, &c->uc);
 }
 
 int coproc_start (coproc_t c, void *arg)
@@ -165,17 +162,13 @@ int coproc_start (coproc_t c, void *arg)
 
     c->arg = arg;
     c->state = CS_RUNNING;
-    if (swapcontext (&c->parent, &c->uc) < 0)
-        return -1;
-    return 0;
+    return swapcontext (&c->parent, &c->uc);
 }
 
 bool coproc_started (coproc_t c)
 {
     assert (c->magic == COPROC_MAGIC);
-    if (c->state == CS_RUNNING || c->state == CS_YIELDED)
-        return true;
-    return false;
+    return (c->state == CS_RUNNING || c->state == CS_YIELDED);
 }
 
 bool coproc_returned (coproc_t c, int *rc)
