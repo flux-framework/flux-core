@@ -61,7 +61,7 @@ struct coproc_struct {
     void *arg;
 };
 
-static const size_t default_stack_size = SIGSTKSZ*2;
+static const size_t default_stack_size = 2*1024*1024; /* 2mb stack */
 static const size_t redzone = 16;
 static const uint8_t redzone_pattern = 0x66;
 
@@ -101,7 +101,8 @@ coproc_t coproc_create (coproc_cb_t cb)
     assert (c->ssize > 2*redzone);
     if (!(c->stack = malloc (c->ssize)))
         oom ();
-    memset (c->stack, redzone_pattern, c->ssize);
+    memset (c->stack, redzone_pattern, redzone);
+    memset (c->stack + c->ssize - redzone, redzone_pattern, redzone);
     c->uc.uc_stack.ss_sp = c->stack + redzone;
     c->uc.uc_stack.ss_size = c->ssize - 2*redzone;
 
