@@ -39,6 +39,10 @@ bool coproc_returned (coproc_t c, int *rc);
  */
 bool coproc_started (coproc_t c);
 
+/* Get the size of the coproc stack in bytes.
+ */
+size_t coproc_get_stacksize (coproc_t c);
+
 #endif /* !_UTIL_COPROC_H */
 
 /*
