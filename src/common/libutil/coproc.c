@@ -179,6 +179,11 @@ bool coproc_returned (coproc_t c, int *rc)
     return (c->state == CS_RETURNED);
 }
 
+size_t coproc_get_stacksize (coproc_t c)
+{
+    return c->ssize - 2*c->pagesize;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

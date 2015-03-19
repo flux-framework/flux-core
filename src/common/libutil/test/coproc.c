@@ -1,10 +1,56 @@
 #include <pthread.h>
 #include <errno.h>
+#include <string.h>
+#include <signal.h>
+#include <alloca.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/coproc.h"
+#include "src/common/libutil/xzmalloc.h"
 
 static bool death = false;
+
+coproc_t co;
+
+/* Handler will yield if it segfaulted; return if not.
+ */
+void sigsegv_handler (int sig)
+{
+    coproc_yield (co);
+}
+
+/* Handling SIGSEGV is tricky.
+ * If we've blown the stack, we need to call the handler in its own stack.
+ */
+int signal_setup (void)
+{
+    struct sigaction act;
+    stack_t ss;
+
+    ss.ss_sp = xzmalloc (SIGSTKSZ);
+    ss.ss_flags = 0;
+    ss.ss_size = SIGSTKSZ;
+    if (sigaltstack (&ss, NULL) < 0)
+        return -1;
+
+    memset (&act, 0, sizeof (act));
+    sigemptyset (&act.sa_mask);
+    act.sa_handler = sigsegv_handler;
+    act.sa_flags = SA_ONSTACK;
+
+    return sigaction (SIGSEGV, &act, NULL);
+}
+
+/* Touch the stack.  If we touch guard page, we should get a SIGSEGV.
+ */
+int stack_cb (coproc_t c, void *arg)
+{
+    size_t *ssize = arg;
+    void *ptr = alloca (*ssize);
+    ok (ptr != NULL, "alloca %d works", *ssize);
+    memset (ptr, 0x66, *ssize);
+    return 0;
+}
 
 int bar_cb (coproc_t c, void *arg)
 {
@@ -51,7 +97,7 @@ int main (int argc, char *argv[])
     int i;
     int rc;
 
-    plan (22);
+    plan (30);
 
     ok ((c = coproc_create (foo_cb)) != NULL,
         "coproc_create works");
@@ -123,6 +169,36 @@ int main (int argc, char *argv[])
     for (i = 0; i < 10000; i++)
         coproc_destroy (cps[i]);
 
+    /* Test stack guard page(s)
+     */
+    ok (signal_setup () == 0,
+        "installed SIGSEGV handler with sigaltstack");
+    ok ((co = coproc_create (stack_cb)) != NULL,
+        "coproc_create works");
+    size_t ssize = coproc_get_stacksize (co);
+    ok (ssize > 0,
+        "coproc_get_stacksize returned %d", ssize);
+
+    /* We can't use all of the stack and get away with it.
+     * FIXME: it is unclaer why this number must be so large.
+     * I found it experimentally; maybe it is non-portable and that
+     * will make this test fragile?
+     */
+    const size_t stack_reserve = 2560; // XXX 2540 is too small
+
+    /* should be OK */
+    ssize -= stack_reserve;
+    ok (coproc_start (co, &ssize) == 0,
+        "coproc_start works");
+    ok (coproc_returned (co, NULL),
+        "coproc returned with no segfaults");
+
+    /* should fail */
+    ssize += stack_reserve + 8;
+    ok (coproc_start (co, &ssize) == 0,
+        "coproc_start works");
+    ok (!coproc_returned (co, NULL),
+        "coproc segfaulted");
 
     done_testing ();
 
