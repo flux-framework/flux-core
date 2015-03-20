@@ -24,24 +24,6 @@ terminate = false
 -------------------------------------------------------------------------------
 --
 --
-local function setup_signal_handlers()
-    local signal = posix.signal
-    local fn = function() terminate = true end
-    --
-    --  Support both old-style lua-posix signal-as-a-table interface,
-    --   and newer signal-as-a-function api:
-    --
-    if type (signal) == "table" then
-        signal[posix.SIGINT] = fn
-        signal[posix.SIGTERM] = signal[posix.SIGINT]
-        return true
-    end
-
-    signal (posix.SIGINT, fn)
-    signal (posix.SIGTERM, fn)
-    return true
-end
-
 local function say (fmt, ...)
     if not verbose then return end
     io.stderr:write (string.format ("%s: "..fmt, shortprog, ...))
@@ -140,9 +122,6 @@ end
 
 local sigtimer
 
--- Set signal handlers
-setup_signal_handlers()
-
 -- Start in-program timer:
 local tt = timer.new()
 local t = timer.new()
@@ -184,6 +163,14 @@ local mh, err = f:msghandler {
         end
     end
 
+}
+
+local s, err = f:sighandler {
+    sigmask = { posix.SIGINT, posix.SIGTERM },
+    handler = function (f, s, sig)
+        terminate = true
+        f:reactor_stop()
+    end
 }
 
 
