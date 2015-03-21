@@ -134,24 +134,6 @@ local function alloc_tasks_hack (f, wreck, lwj)
     wreck:say ("tasks per node: %s\n", summarize_tasks_per_node (r))
 end
 
-local function setup_signal_handlers()
-    local signal = posix.signal
-    local fn = function() terminate = true end
-    --
-    --  Support both old-style lua-posix signal-as-a-table interface,
-    --   and newer signal-as-a-function api:
-    --
-    if type (signal) == "table" then
-        signal[posix.SIGINT] = fn
-        signal[posix.SIGTERM] = signal[posix.SIGINT]
-        return true
-    end
-
-    signal (posix.SIGINT, fn)
-    signal (posix.SIGTERM, fn)
-    return true
-end
-
 -------------------------------------------------------------------------------
 -- Main program:
 -------------------------------------------------------------------------------
@@ -176,9 +158,6 @@ wreck:add_options ({
 if not wreck:parse_cmdline (arg) then
     wreck:die ("Failed to process cmdline args\n")
 end
-
--- Set signal handlers
-setup_signal_handlers()
 
 -- Start in-program timer:
 local tt = timer.new()
@@ -309,6 +288,14 @@ local kw, err = f:kvswatcher  {
             wreck:say ("%-4.03fs: State = %s\n", tt:get0(), result)
             check_job_completed ()
         end
+    end
+}
+
+local s, err = f:sighandler {
+    sigmask = { posix.SIGINT, posix.SIGTERM },
+    handler = function (f, s, sig)
+        terminate = true
+        f:reactor_stop ()
     end
 }
 
