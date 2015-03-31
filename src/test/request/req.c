@@ -50,6 +50,21 @@ static ctx_t *getctx (flux_t h)
     return ctx;
 }
 
+/* Return number of queued clog requests
+ */
+static int count_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = getctx (h);
+    JSON o = Jnew ();
+
+    Jadd_int (o, "count", zlist_size (ctx->clog_requests));
+    if (flux_json_respond (h, o, zmsg) < 0)
+        flux_log (h, LOG_ERR, "%s: flux_json_respond: %s", __FUNCTION__,
+                  strerror (errno));
+    Jput (o);
+    return 0;
+}
+
 /* Don't reply to request - just queue it for later.
  */
 static int clog_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
@@ -359,6 +374,7 @@ static msghandler_t htab[] = {
     { FLUX_MSGTYPE_RESPONSE, "req.ping",             ping_response_cb },
     { FLUX_MSGTYPE_REQUEST, "req.clog",              clog_request_cb },
     { FLUX_MSGTYPE_REQUEST, "req.flush",             flush_request_cb },
+    { FLUX_MSGTYPE_REQUEST, "req.count",             count_request_cb },
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
