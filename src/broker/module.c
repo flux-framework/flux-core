@@ -221,12 +221,6 @@ static zmsg_t *plugin_recvmsg (void *impl, bool nonblock)
         zmsg = plugin_recvmsg_main (p, nonblock);
     if (!zmsg)
         goto done;
-    if (zmsg_content_size (zmsg) == 0) { /* EOF */
-        zmsg_destroy (&zmsg);
-        plugin_reactor_stop (p, 0);
-        errno = ECONNRESET;
-        goto done;
-    }
     if (flux_msg_get_type (zmsg, &type) < 0) {
         zmsg_destroy (&zmsg);
         goto done;
@@ -622,6 +616,14 @@ done:
     return rc;
 }
 
+static int shutdown_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+{
+    plugin_ctx_t p = arg;
+    plugin_reactor_stop (p, 0);
+    zmsg_destroy (zmsg);
+    return 0;
+}
+
 static void main_cb (struct ev_loop *loop, ev_zmq *w, int revents)
 {
     plugin_ctx_t p = w->data;
@@ -727,6 +729,7 @@ static void *plugin_thread (void *arg)
     /* Register callbacks for "internal" methods.
      * These can be overridden in p->ops->main() if desired.
      */
+    register_request (p, "shutdown",shutdown_cb);
     register_request (p, "ping",    ping_req_cb);
     register_request (p, "stats.*", stats_cb);
     register_request (p, "rusage", rusage_cb);
@@ -798,10 +801,21 @@ void plugin_destroy (plugin_ctx_t p)
     free (p);
 }
 
+/* Send shutdown request, broker to plugin.
+ */
 void plugin_stop (plugin_ctx_t p)
 {
-    if (zstr_send (p->zs_svc[1], "") < 0) /* EOF */
-        err ("zstr_send EOF failed");
+    char *topic = xasprintf ("%s.shutdown", p->name);
+    zmsg_t *zmsg;
+    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
+        goto done;
+    if (flux_msg_set_topic (zmsg, topic) < 0)
+        goto done;
+    if (zmsg_send (&zmsg, p->zs_svc[1]) < 0)
+        goto done;
+done:
+    free (topic);
+    zmsg_destroy (&zmsg);
 }
 
 void plugin_start (plugin_ctx_t p)
