@@ -145,7 +145,7 @@ typedef struct {
 } ctx_t;
 
 typedef struct {
-    plugin_ctx_t p;
+    mod_ctx_t p;
     zhash_t *args;
     zlist_t *rmmod_reqs;
     ctx_t *ctx;
@@ -772,11 +772,11 @@ static void module_destroy (module_t *mod)
     zmsg_t *zmsg;
 
     if (mod->p) {
-        plugin_stop (mod->p);
+        mod_stop (mod->p);
         zmq_pollitem_t zp;
-        zp.socket = plugin_sock (mod->p);
+        zp.socket = mod_sock (mod->p);
         zloop_poller_end (mod->ctx->zl, &zp);
-        plugin_destroy (mod->p); /* calls pthread_join */
+        mod_destroy (mod->p); /* calls pthread_join */
     }
     while ((zmsg = zlist_pop (mod->rmmod_reqs)))
         flux_respond_errnum (mod->ctx->h, &zmsg, 0);
@@ -795,7 +795,7 @@ static void module_unload (module_t *mod, zmsg_t **zmsg)
         zlist_push (mod->rmmod_reqs, *zmsg);
         *zmsg = NULL;
     }
-    plugin_stop (mod->p);
+    mod_stop (mod->p);
 }
 
 static int module_load (ctx_t *ctx, module_t *mod)
@@ -804,13 +804,13 @@ static int module_load (ctx_t *ctx, module_t *mod)
     int rc = -1;
 
     assert (mod->p == NULL);
-    mod->p = plugin_create (ctx->h, mod->path, mod->args);
+    mod->p = mod_create (ctx->h, mod->path, mod->args);
     if (mod->p) {
-        peer_create (ctx, plugin_uuid (mod->p), true);
-        zp.socket = plugin_sock (mod->p);
+        peer_create (ctx, mod_uuid (mod->p), true);
+        zp.socket = mod_sock (mod->p);
         if (zloop_poller (ctx->zl, &zp, (zloop_fn *)plugins_cb, mod) < 0)
             err_exit ("zloop_poller");
-        plugin_start (mod->p);
+        mod_start (mod->p);
         rc = 0;
     }
     return rc;
@@ -1213,10 +1213,10 @@ static JSON cmb_lsmod (ctx_t *ctx)
     while (name) {
         mod = zhash_lookup (ctx->modules, name);
         assert (mod != NULL);
-        if (mod && flux_lsmod_json_append (o, plugin_name (mod->p),
-                                plugin_size (mod->p),
-                                plugin_digest (mod->p),
-                                peer_idle (ctx, plugin_uuid (mod->p))) < 0) {
+        if (mod && flux_lsmod_json_append (o, mod_name (mod->p),
+                                mod_size (mod->p),
+                                mod_digest (mod->p),
+                                peer_idle (ctx, mod_uuid (mod->p))) < 0) {
             Jput (o);
             o = NULL;
             goto done;
@@ -2037,10 +2037,10 @@ static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod)
 
     if (zmsg) {
         if (zmsg_content_size (zmsg) == 0) /* EOF */
-            zhash_delete (ctx->modules, plugin_name (mod->p));
+            zhash_delete (ctx->modules, mod_name (mod->p));
         else {
             (void)flux_sendmsg (ctx->h, &zmsg);
-            peer_update (ctx, plugin_uuid (mod->p));
+            peer_update (ctx, mod_uuid (mod->p));
         }
     }
     if (zmsg)
@@ -2205,12 +2205,12 @@ static int service_send (ctx_t *ctx, zmsg_t **zmsg, char *lasthop, int hopcount,
             goto done;
         }
         if (!loopback_ok) {
-            if (lasthop && !strcmp (lasthop, plugin_uuid (mod->p))) {
+            if (lasthop && !strcmp (lasthop, mod_uuid (mod->p))) {
                 errno = ENOSYS;
                 goto done;
             }
         }
-        rc = zmsg_send (zmsg, plugin_sock (mod->p));
+        rc = zmsg_send (zmsg, mod_sock (mod->p));
     }
 done:
     if (service)

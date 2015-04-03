@@ -6,23 +6,23 @@
 #define REQUEST_URI         "inproc://request"
 #define EVENT_URI           "inproc://event"
 
-/* Create, start, stop, destroy a plugin.
- * Termination:  plugin_stop (), read EOF on sock, plugin_destroy ()
+/* Create, start, stop, destroy a module.
+ * Termination:  mod_stop (), read EOF on sock, mod_destroy ()
  */
-typedef struct plugin_ctx_struct *plugin_ctx_t;
-plugin_ctx_t plugin_create (flux_t h, const char *path, zhash_t *args);
-void plugin_start (plugin_ctx_t p);
-void plugin_stop (plugin_ctx_t p);
-void plugin_destroy (plugin_ctx_t p);
+typedef struct mod_ctx_struct *mod_ctx_t;
+mod_ctx_t mod_create (flux_t h, const char *path, zhash_t *args);
+void mod_start (mod_ctx_t p);
+void mod_stop (mod_ctx_t p);
+void mod_destroy (mod_ctx_t p);
 
 
 /* Accessors.
  */
-const char *plugin_name (plugin_ctx_t p);
-const char *plugin_uuid (plugin_ctx_t p);
-const char *plugin_digest (plugin_ctx_t p);
-int plugin_size (plugin_ctx_t p);
-void *plugin_sock (plugin_ctx_t p);
+const char *mod_name (mod_ctx_t p);
+const char *mod_uuid (mod_ctx_t p);
+const char *mod_digest (mod_ctx_t p);
+int mod_size (mod_ctx_t p);
+void *mod_sock (mod_ctx_t p);
 
 #endif /* !_BROKER_MODULE_H */
 
