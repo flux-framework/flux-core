@@ -620,34 +620,25 @@ static void update_proctitle (ctx_t *ctx)
 
 static void update_environment (ctx_t *ctx)
 {
-    const char *oldtmp = getenv ("FLUX_TMPDIR");
+    const char *oldtmp = flux_get_tmpdir ();
     static char tmpdir[PATH_MAX + 1];
 
-    if (!oldtmp)
-        oldtmp = getenv ("TMPDIR");
-    if (!oldtmp)
-        oldtmp = "/tmp";
     (void)snprintf (tmpdir, sizeof (tmpdir), "%s/flux-%s-%d",
                     oldtmp, ctx->sid, ctx->rank);
     if (mkdir (tmpdir, 0700) < 0 && errno != EEXIST)
         err_exit ("mkdir %s", tmpdir);
     if (ctx->verbose)
         msg ("FLUX_TMPDIR: %s", tmpdir);
-    if (setenv ("FLUX_TMPDIR", tmpdir, 1) < 0)
-        err_exit ("setenv FLUX_TMPDIR");
+    if (flux_set_tmpdir (tmpdir) < 0)
+        err_exit ("flux_set_tmpdir");
 }
 
 static void update_pidfile (ctx_t *ctx, bool force)
 {
-    const char *tmpdir = getenv ("FLUX_TMPDIR");
+    const char *tmpdir = flux_get_tmpdir ();
     char *pidfile;
     pid_t pid;
     FILE *f;
-
-    if (!tmpdir)
-        tmpdir = getenv ("TMPDIR");
-    if (!tmpdir)
-        tmpdir = "/tmp";
 
     if (asprintf (&pidfile, "%s/cmbd.pid", tmpdir) < 0)
         oom ();
@@ -754,13 +745,8 @@ static void boot_pmi (ctx_t *ctx)
 
 static void boot_local (ctx_t *ctx)
 {
-    const char *tmpdir = getenv ("FLUX_TMPDIR");
+    const char *tmpdir = flux_get_tmpdir ();
     int rrank = ctx->rank == 0 ? ctx->size - 1 : ctx->rank - 1;
-
-    if (!tmpdir)
-        tmpdir = getenv ("TMPDIR");
-    if (!tmpdir)
-        tmpdir = "/tmp";
 
     ctx->child = endpt_create ("ipc://%s/flux-%s-%d-req",
                                tmpdir, ctx->sid, ctx->rank);

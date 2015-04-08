@@ -446,12 +446,7 @@ int mod_main (flux_t h, zhash_t *args)
     int rc = -1;
 
     if (!args || !(sockpath = zhash_lookup (args, "sockpath"))) {
-        const char *tmpdir = getenv ("FLUX_TMPDIR");
-        if (!tmpdir)
-            tmpdir = getenv ("TMPDIR");
-        if (!tmpdir)
-            tmpdir = "/tmp";
-        if (asprintf (&dfltpath, "%s/flux-api", tmpdir) < 0)
+        if (asprintf (&dfltpath, "%s/flux-api", flux_get_tmpdir ()) < 0)
             oom ();
         sockpath = dfltpath;
     }

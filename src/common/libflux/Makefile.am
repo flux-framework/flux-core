@@ -20,7 +20,8 @@ fluxcoreinclude_HEADERS = \
 	info.h \
 	flog.h \
 	conf.h \
-	rpc.h
+	rpc.h \
+	tmpdir.h
 
 noinst_LTLIBRARIES = \
 	libflux.la
@@ -41,7 +42,8 @@ libflux_la_SOURCES = \
 	conf.c \
 	rpc.c \
 	tagpool.h \
-	tagpool.c
+	tagpool.c \
+	tmpdir.c
 
 TESTS = test_conf.t \
 	test_module.t \

@@ -16,6 +16,7 @@
 #include "info.h"
 #include "flog.h"
 #include "conf.h"
+#include "tmpdir.h"
 
 #endif /* !_FLUX_CORE_FLUX_H */
 
