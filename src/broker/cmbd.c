@@ -2106,6 +2106,9 @@ static int hb_cb (zloop_t *zl, int timer_id, ctx_t *ctx)
     ZLOOP_RETURN(ctx);
 }
 
+/* See POSIX 2008 Volume 3 Shell and Utilities, Issue 7
+ * Section 2.8.2 Exit status for shell commands (page 2315)
+ */
 static int shell_exit_handler (struct subprocess *p, void *arg)
 {
     int rc;
@@ -2113,7 +2116,7 @@ static int shell_exit_handler (struct subprocess *p, void *arg)
     assert (ctx != NULL);
 
     if (subprocess_signaled (p))
-        rc = 128 + subprocess_signaled (p); /* POSIX 2008, Vol. 3, p 74314 */
+        rc = 128 + subprocess_signaled (p);
     else
         rc = subprocess_exit_code (p);
     return shutdown_send (ctx, 2, rc, subprocess_state_string (p));
