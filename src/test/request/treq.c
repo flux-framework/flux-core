@@ -324,11 +324,11 @@ void test_clog (flux_t h, uint32_t nodeid)
 }
 
 /* Coprocess test: requires 'req' and 'coproc' modules loaded
- * - make coproc.stuck RPC in first thread
- * - make coproc.stuck RPC in second thread
- * - make coproc.hi RPC in main thread (must respond)
- * - make req.flush RPC in main thread (first thread unblocks)
- * - make req.flush RPC in main thread (second thread unblocks)
+ * - aux thread: coproc.stuck RPC which hangs internally
+ *     (coproc reactor should continue though due to COPROC flag)
+ * - main thread: verify coproc.stuck sent req.clog request
+ * - main thread: "ping" coproc.hi (must respond!)
+ * - main thread: allow clog response via req.flush
  */
 
 void *thd (void *arg)
@@ -346,17 +346,42 @@ void *thd (void *arg)
     return NULL;
 }
 
+int req_count (flux_t h, uint32_t nodeid)
+{
+    JSON out = NULL;
+    int rc = -1;
+    int count;
+
+    if (flux_json_rpc (h, nodeid, "req.count", NULL, &out) < 0)
+        goto done;
+    if (!Jget_int (out, "count", &count)) {
+        errno = EPROTO;
+        goto done;
+    }
+    rc = count;
+done:
+    Jput (out);
+    return rc;
+}
+
 void test_coproc (flux_t h, uint32_t nodeid)
 {
-    pthread_t t[2];
+    pthread_t t;
     int rc;
+    int count, count0;
 
-    if ((rc = pthread_create (&t[0], NULL, thd, &nodeid)))
-        errn_exit (rc, "pthread_create");
-    if ((rc = pthread_create (&t[1], NULL, thd, &nodeid)))
+    if ((count0 = req_count (h, nodeid)) < 0)
+        err_exit ("req.count");
+
+    if ((rc = pthread_create (&t, NULL, thd, &nodeid)))
         errn_exit (rc, "pthread_create");
 
-    usleep (1000*200); /* 200ms */
+    do {
+        //usleep (100*1000); /* 100ms */
+        if ((count = req_count (h, nodeid)) < 0)
+            err_exit ("req.count");
+    } while (count - count0 < 1);
+    msg ("%d requests are stuck", count - count0);
 
     if (flux_json_rpc (h, nodeid, "coproc.hi", NULL, NULL) < 0)
         err_exit ("coproc.hi");
@@ -364,15 +389,14 @@ void test_coproc (flux_t h, uint32_t nodeid)
 
     if (flux_json_rpc (h, nodeid, "req.flush", NULL, NULL) < 0)
         err_exit ("req.flush");
-    if (flux_json_rpc (h, nodeid, "req.flush", NULL, NULL) < 0)
-        err_exit ("req.flush");
+    if ((count = req_count (h, nodeid)) < 0)
+        err_exit ("req.count");
+    if (count != 0)
+        msg_exit ("request was not flushed");
 
-    if ((rc = pthread_join (t[0], NULL)))
+    if ((rc = pthread_join (t, NULL)))
         errn_exit (rc, "pthread_join");
-    msg ("thread 0 finished");
-    if ((rc = pthread_join (t[1], NULL)))
-        errn_exit (rc, "pthread_join");
-    msg ("thread 1 finished");
+    msg ("thread finished");
 }
 
 /*

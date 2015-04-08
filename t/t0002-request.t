@@ -73,15 +73,17 @@ test_expect_success 'request: proxy ping any from 1 is one hop' '
 	${FLUX_BUILD_DIR}/src/test/request/treq --rank 1 pingany | grep hops=1
 '
 
-# Coprroc test
+# Coproc test
 
 test_expect_success 'request: load coproc module on rank 0' '
 	flux module load -d --rank=0 \
 		${FLUX_BUILD_DIR}/src/test/request/.libs/coproc.so
 '
+
 test_expect_success 'request: FLUX_FLAGS_COPROC works' '
 	${FLUX_BUILD_DIR}/src/test/request/treq --rank 0 coproc
 '
+
 test_expect_success 'request: unloaded coproc module on rank 0' '
 	flux module remove -d --rank=0 coproc
 '
