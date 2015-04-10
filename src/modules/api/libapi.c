@@ -44,7 +44,6 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/zfd.h"
-#include "src/common/libutil/zconnect.h"
 
 #include "src/common/libev/ev.h"
 #include "src/common/libutil/ev_zmq.h"

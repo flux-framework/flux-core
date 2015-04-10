@@ -34,7 +34,6 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/jsonutil.h"
-#include "src/common/libutil/zconnect.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libmrpc/mrpc.h"
@@ -116,7 +115,11 @@ static int rexec_session_connect_to_helper (struct rexec_session *c)
 
     snprintf (c->req_uri, sizeof (c->req_uri),
              "ipc:///tmp/cmb-%d-%d-rexec-req-%lu", c->rank, c->uid, c->id);
-    zconnect (zctx, &c->zs_req, ZMQ_DEALER, c->req_uri, -1, NULL);
+    if (!(c->zs_req = zsocket_new (zctx, ZMQ_DEALER)))
+        err_exit ("zsocket_new");
+    if (zsocket_connect (c->zs_req, "%s", c->req_uri) < 0)
+        err_exit ("zsocket_connect: %s", c->req_uri);
+
     return (0);
 }
 
@@ -132,7 +135,12 @@ static struct rexec_session * rexec_session_create (struct rexec_ctx *ctx, int64
 
     snprintf (c->rep_uri, sizeof (c->rep_uri),
              "ipc:///tmp/cmb-%d-%d-rexec-rep-%lu", c->rank, c->uid, c->id);
-    zbind (zctx, &c->zs_rep, ZMQ_ROUTER, c->rep_uri, -1);
+
+    if (!(c->zs_rep = zsocket_new (zctx, ZMQ_ROUTER)))
+        err_exit ("zsocket_new");
+    if (zsocket_bind (c->zs_rep, "%s", c->rep_uri) < 0)
+        err_exit ("zsocket_bind: %s", c->rep_uri);
+
 
     return (c);
 }

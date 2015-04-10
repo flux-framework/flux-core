@@ -48,7 +48,6 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/zdump.h"
-#include "src/common/libutil/zconnect.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
 

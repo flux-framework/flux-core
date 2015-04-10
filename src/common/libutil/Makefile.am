@@ -26,8 +26,6 @@ libutil_la_SOURCES = \
 	env.h \
 	zdump.c \
 	zdump.h \
-	zconnect.c \
-	zconnect.h \
 	zfd.c \
 	zfd.h \
 	optparse.c \

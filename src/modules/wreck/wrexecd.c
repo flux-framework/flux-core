@@ -45,7 +45,6 @@
 #include "src/common/libutil/optparse.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/zconnect.h"
 #include "src/modules/kvs/kvs.h"
 #include "src/modules/api/api.h"
 
@@ -483,11 +482,17 @@ static int prog_ctx_zmq_socket_setup (struct prog_ctx *ctx)
 
     snprintf (uri, sizeof (uri), "ipc:///tmp/cmb-%d-%lu-rexec-req-%lu",
                 ctx->nodeid, uid, ctx->id);
-    zbind (ctx->zctx, &ctx->zs_rep, ZMQ_ROUTER, uri, -1);
+    if (!(ctx->zs_rep = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
+        log_fatal (ctx, 1, "zsocket_new: %s", strerror (errno));
+    if (zsocket_bind (ctx->zs_rep, "%s", uri) < 0)
+        log_fatal (ctx, 1, "zsocket_bind %s: %s", uri, strerror (errno));
 
     snprintf (uri, sizeof (uri), "ipc:///tmp/cmb-%d-%lu-rexec-rep-%lu",
                 ctx->nodeid, uid, ctx->id);
-    zconnect (ctx->zctx, &ctx->zs_req, ZMQ_DEALER, uri, -1, NULL);
+    if (!(ctx->zs_req = zsocket_new (ctx->zctx, ZMQ_DEALER)))
+        log_fatal (ctx, 1, "zsocket_new: %s", strerror (errno));
+    if (zsocket_connect (ctx->zs_req, "%s", uri) < 0)
+        log_fatal (ctx, 1, "zsocket_connect %s: %s", uri, strerror (errno));
 
     return (0);
 }
