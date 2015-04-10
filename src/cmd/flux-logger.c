@@ -27,10 +27,10 @@
 #endif
 #include <stdio.h>
 #include <getopt.h>
+#include <argz.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/argv.h"
 #include "src/common/libutil/log.h"
 
 
@@ -55,6 +55,7 @@ int main (int argc, char *argv[])
     flux_t h;
     int ch;
     char *message = NULL;
+    size_t len = 0;
     char *priority = "user.notice";
     int level;
     char *facility;
@@ -76,7 +77,10 @@ int main (int argc, char *argv[])
     }
     if (optind == argc)
         usage ();
-    message = argv_concat (argc - optind, argv + optind, " ");
+
+    if (argz_create (argv + optind, &message, &len) < 0)
+        oom ();
+    argz_stringify (message, len, ' ');
 
     if (!(h = flux_api_open ()))
         err_exit ("flux_api_open");

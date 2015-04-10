@@ -42,6 +42,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <dlfcn.h>
+#include <argz.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
@@ -51,7 +52,6 @@
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/argv.h"
 #include "src/common/libutil/subprocess.h"
 
 #include "module.h"
@@ -1217,10 +1217,11 @@ done:
     return o;
 }
 
-static int cmb_insmod (ctx_t *ctx, char *path, int argc, char **argv)
+static int cmb_insmod (ctx_t *ctx, char *path, char *argz, size_t argz_len)
 {
     module_t *mod;
     char *name = NULL;
+    char *arg;
     int rc = -1;
 
     if (!(name = flux_modname (path))) {
@@ -1233,7 +1234,11 @@ static int cmb_insmod (ctx_t *ctx, char *path, int argc, char **argv)
     }
     if (!(mod = module_create (ctx, path)))
         goto done;
-    mod_set_args (mod->p, argc, argv);
+    arg = argz_next (argz, argz_len, NULL);
+    while (arg) {
+        mod_add_arg (mod->p, arg);
+        arg = argz_next (argz, argz_len, arg);
+    }
     if (module_start (ctx, mod) < 0) {
         module_destroy (mod);
         goto done;
@@ -1821,20 +1826,20 @@ static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             free (name);
     } else if (flux_msg_match (*zmsg, "cmb.insmod")) {
         char *path = NULL;
-        int argc;
-        char **argv = NULL;
+        char *argz = NULL;
+        size_t argz_len = 0;
         int errnum = 0;
-        if (flux_insmod_request_decode (*zmsg, &path, &argc, &argv) < 0)
+        if (flux_insmod_request_decode (*zmsg, &path, &argz, &argz_len) < 0)
             errnum = errno;
-        else if (cmb_insmod (ctx, path, argc, argv) < 0)
+        else if (cmb_insmod (ctx, path, argz, argz_len) < 0)
             errnum = errno;
         if (flux_err_respond (ctx->h, errnum, zmsg) < 0)
             flux_log (ctx->h, LOG_ERR, "%s: flux_err_respond: %s",
                       __FUNCTION__, strerror (errno));
         if (path)
             free (path);
-        if (argv)
-            argv_destroy (argc, argv);
+        if (argz)
+            free (argz);
     } else if (flux_msg_match (*zmsg, "cmb.lsmod")) {
         if (flux_lsmod_request_decode (*zmsg) < 0) {
             if (flux_err_respond (ctx->h, errno, zmsg) < 0)

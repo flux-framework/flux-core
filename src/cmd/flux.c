@@ -39,7 +39,6 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/setenvf.h"
-#include "src/common/libutil/argv.h"
 #include "src/common/libutil/shortjson.h"
 
 

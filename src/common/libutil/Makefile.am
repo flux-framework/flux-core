@@ -20,8 +20,6 @@ libutil_la_SOURCES = \
 	monotime.h \
 	setenvf.c \
 	setenvf.h \
-	argv.c \
-	argv.h \
 	env.c \
 	env.h \
 	zdump.c \

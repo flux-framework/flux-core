@@ -26,6 +26,7 @@
 #include "config.h"
 #endif
 #include <dlfcn.h>
+#include <argz.h>
 
 #include "module.h"
 #include "request.h"
@@ -34,7 +35,6 @@
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/argv.h"
 
 /* Get service name from module name string.
  */
@@ -54,7 +54,7 @@ static char *mod_service (const char *modname)
  ** JSON encode/decode functions
  **/
 
-int flux_insmod_json_decode (JSON o, char **path, int *argc, char ***argv)
+int flux_insmod_json_decode (JSON o, char **path, char **argz, size_t *argz_len)
 {
     JSON args = NULL;
     const char *s;
@@ -67,10 +67,9 @@ int flux_insmod_json_decode (JSON o, char **path, int *argc, char ***argv)
         goto done;
     }
     *path = xstrdup (s);
-    argv_create (argc, argv);
     for (i = 0; i < ac; i++) {
         (void)Jget_ar_str (args, i, &s); /* can't fail? */
-        argv_push (argc, argv, "%s", s);
+        argz_add (argz, argz_len, s);
     }
     rc = 0;
 done:
@@ -258,14 +257,14 @@ char *flux_modfind (const char *searchpath, const char *modname)
 }
 
 int flux_insmod_request_decode (zmsg_t *zmsg, char **path,
-                                int *argc, char ***argv)
+                                char **argz, size_t *argz_len)
 {
     JSON in = NULL;
     int rc = -1;
 
     if (flux_json_request_decode (zmsg, &in) < 0)
         goto done;
-    if (flux_insmod_json_decode (in, path, argc, argv) < 0)
+    if (flux_insmod_json_decode (in, path, argz, argz_len) < 0)
         goto done;
     rc = 0;
 done:

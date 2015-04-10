@@ -6,12 +6,12 @@
 #include <unistd.h>
 #include <libgen.h>
 #include <dlfcn.h>
+#include <argz.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/argv.h"
 
 typedef struct {
     char *name;
@@ -37,19 +37,6 @@ char *digest (const char *path)
     return digest;
 }
 
-/* Free a dynamically allocated argv array,
- * as returned by flux_insmod_request_decode().
- */
-static void free_argv (int argc, char **argv)
-{
-    int i;
-    if (argv) {
-        for (i = 0; i < argc; i++)
-            free (argv[i]);
-        free (argv);
-    }
-}
-
 static void module_destroy (module_t *m)
 {
     if (m->name)
@@ -61,10 +48,11 @@ static void module_destroy (module_t *m)
     free (m);
 }
 
-static module_t *module_create (const char *path, int argc, char **argv)
+static module_t *module_create (const char *path, char *argz, size_t argz_len)
 {
     module_t *m = xzmalloc (sizeof (*m));
     struct stat sb;
+    char **av = NULL;
 
     if (stat (path, &sb) < 0 || !(m->name = flux_modname (path))
                              || !(m->digest = digest (path))) {
@@ -79,7 +67,9 @@ static module_t *module_create (const char *path, int argc, char **argv)
         errno = EINVAL;
         return NULL;
     }
-    if (m->main (NULL, argc, argv) < 0) {
+    av = xzmalloc (sizeof (av[0]) * (argz_count (argz, argz_len) + 1));
+    argz_extract (argz, argz_len, av);
+    if (m->main (NULL, argz_count (argz, argz_len), av) < 0) {
         module_destroy (m);
         errno = EINVAL;
         return NULL;
@@ -91,6 +81,8 @@ static module_t *module_create (const char *path, int argc, char **argv)
     }
     zhash_update (modules, m->name, m);
     zhash_freefn (modules, m->name, (zhash_free_fn *)module_destroy);
+    if (av)
+        free (av);
     return m;
 }
 
@@ -119,14 +111,14 @@ static JSON module_list (void)
 static int insmod_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     char *path = NULL;
-    int argc = 0;
-    char **argv = NULL;
+    char *argz = NULL;
+    size_t argz_len = 0;
     module_t *m = NULL;
     int errnum;
 
-    if (flux_insmod_request_decode (*zmsg, &path, &argc, &argv) < 0)
+    if (flux_insmod_request_decode (*zmsg, &path, &argz, &argz_len) < 0)
         errnum = errno;
-    else if (!(m = module_create (path, argc, argv)))
+    else if (!(m = module_create (path, argz, argz_len)))
         errnum = errno;
     else {
         flux_log (h, LOG_DEBUG, "insmod %s", m->name);
@@ -138,8 +130,8 @@ static int insmod_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     }
     if (path)
         free (path);
-    if (argv)
-        free_argv (argc, argv);
+    if (argz)
+        free (argz);
     zmsg_destroy (zmsg);
     return 0;
 }

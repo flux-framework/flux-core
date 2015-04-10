@@ -29,10 +29,10 @@
 #include <getopt.h>
 #include <libgen.h>
 #include <json.h>
+#include <argz.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/argv.h"
 
 
 static void event_pub (flux_t h, int argc, char **argv);
@@ -97,7 +97,11 @@ static void event_pub (flux_t h, int argc, char **argv)
 
     if (argc > 1) {
         enum json_tokener_error e;
-        char *s = argv_concat (argc - 1, argv + 1, " ");
+        char *s = NULL;
+        size_t len = 0;
+        if (argz_create (argv + 1, &s, &len) < 0)
+            oom ();
+        argz_stringify (s, len, ' ');
         if (!(o = json_tokener_parse_verbose (s, &e)))
             msg_exit ("json parse error: %s", json_tokener_error_desc (e));
         free (s);

@@ -28,9 +28,9 @@
 #include <stdio.h>
 #include <getopt.h>
 #include <stdbool.h>
+#include <argz.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/argv.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 
@@ -111,8 +111,12 @@ int main (int argc, char *argv[])
         free (s);
     } else if (!strcmp (cmd, "panic")) {
         char *msg = NULL;
-        if (optind < argc)
-            msg = argv_concat (argc - optind, argv + optind, " ");
+        size_t len = 0;
+        if (optind < argc) {
+            if (argz_create (argv + optind, &msg, &len) < 0)
+                oom ();
+            argz_stringify (msg, len, ' ');
+        }
         flux_panic (h, rank, msg);
         if (msg)
             free (msg);

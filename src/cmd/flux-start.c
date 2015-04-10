@@ -28,10 +28,10 @@
 #include <stdio.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <argz.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/argv.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/optparse.h"
 
@@ -70,6 +70,7 @@ int main (int argc, char *argv[])
 {
     int status = 0;
     char *command = NULL;
+    size_t len = 0;
     optparse_t p;
 
     log_init ("flux-start");
@@ -81,8 +82,11 @@ int main (int argc, char *argv[])
         msg_exit ("optparse_set usage");
     if ((optind = optparse_parse_args (p, argc, argv)) < 0)
         exit (1);
-    if (optind < argc)
-        command = argv_concat (argc - optind, argv + optind, " ");
+    if (optind < argc) {
+        if (argz_create (argv + optind, &command, &len) < 0)
+            oom ();
+        argz_stringify (command, len, ' ');
+    }
 
     /* Allow unlimited core dumps.
      */
@@ -164,15 +168,36 @@ void child_killer (optparse_t p, pid_t *pids, int size)
     }
 }
 
-void push_extra_args (int *ac, char ***av, const char *opts)
+void add_arg (char **argz, size_t *argz_len, const char *fmt, ...)
 {
-    char *cpy = xstrdup (opts);
-    char *opt, *saveptr = NULL, *a1 = cpy;
-    while ((opt = strtok_r (a1, ",", &saveptr))) {
-        argv_push (ac, av, "%s", opt);
-        a1 = NULL;
-    }
-    free (cpy);
+    va_list ap;
+    char *arg;
+
+    va_start (ap, fmt);
+    arg = xvasprintf (fmt, ap);
+    va_end (ap);
+    if (argz_add (argz, argz_len, arg) < 0)
+        oom ();
+}
+
+void add_args_sep (char **argz, size_t *argz_len, const char *s, int sep)
+{
+    char *az = NULL;
+    size_t az_len = 0;
+    if (argz_create_sep (s, sep, &az, &az_len) < 0)
+        oom ();
+    if (argz_append (argz, argz_len, az, az_len) < 0)
+        oom ();
+    if (az)
+        free (az);
+}
+
+char *args_str (char *argz, size_t argz_len)
+{
+    char *cpy = xzmalloc (argz_len);
+    memcpy (cpy, argz, argz_len);
+    argz_stringify (cpy, argz_len, ' ');
+    return cpy;
 }
 
 int start_direct (optparse_t p, const char *cmd)
@@ -192,23 +217,25 @@ int start_direct (optparse_t p, const char *cmd)
 
     pids = xzmalloc (size * sizeof (pids[0]));
     for (rank = 0; rank < size; rank++) {
-        int ac;
-        char **av;
+        char *argz = NULL;
+        size_t argz_len = 0;
+        char **av = NULL;
 
-        argv_create (&ac, &av);
-        argv_push (&ac, &av, "%s", cmbd_path);
-        argv_push (&ac, &av, "--size=%d", size);
-        argv_push (&ac, &av, "--rank=%d", rank);
-        argv_push (&ac, &av, "--sid=%d", start_pid);
+        add_arg (&argz, &argz_len, "%s", cmbd_path);
+        add_arg (&argz, &argz_len, "--size=%d", size);
+        add_arg (&argz, &argz_len, "--rank=%d", rank);
+        add_arg (&argz, &argz_len, "--sid=%d", start_pid);
         if (cmbd_opts)
-            push_extra_args (&ac, &av, cmbd_opts);
+            add_args_sep (&argz, &argz_len, cmbd_opts, ',');
         if (rank == 0 && cmd)
-            argv_push (&ac, &av, "--command=%s", cmd);
+            add_arg (&argz, &argz_len, "--command=%s", cmd);
         if (optparse_hasopt (p, "verbose")) {
-            char *s = argv_concat (ac, av, " ");
+            char *s = args_str (argz, argz_len);
             msg ("%d: %s", rank, s);
             free (s);
         }
+        av = xzmalloc (sizeof (char *) * (argz_count (argz, argz_len) + 1));
+        argz_extract (argz, argz_len, av);
         if (!optparse_hasopt (p, "noexec")) {
             switch ((pids[rank] = fork ())) {
                 case -1:
@@ -221,7 +248,10 @@ int start_direct (optparse_t p, const char *cmd)
                     break;
             }
         }
-        argv_destroy (ac, av);
+        if (av)
+            free (av);
+        if (argz)
+            free (argz);
     }
     if (!optparse_hasopt (p, "noexec")) {
         (void)close (STDIN_FILENO);
@@ -266,44 +296,49 @@ void start_slurm (optparse_t p, const char *cmd)
     const char *partition = optparse_get_str (p, "partition", NULL);
     char *cmbd_path = getenv ("FLUX_CMBD_PATH");
     char *srun_path = "/usr/bin/srun";
-    int ac;
-    char **av;
+    char *argz = NULL;
+    size_t argz_len = 0;
+    char **av = NULL;
 
     if (nnodes > size)
         size = nnodes;
     if (!cmbd_path)
         msg_exit ("FLUX_CMBD_PATH is not set");
 
-    argv_create (&ac, &av);
-    argv_push (&ac, &av, "%s", srun_path);
-    argv_push (&ac, &av, "--nodes=%d", nnodes);
-    argv_push (&ac, &av, "--ntasks=%d", size);
-    //argv_push (&ac, &av, "--overcommit");
-    argv_push (&ac, &av, "--propagate=CORE");
+    add_arg (&argz, &argz_len, "%s", srun_path);
+    add_arg (&argz, &argz_len, "--nodes=%d", nnodes);
+    add_arg (&argz, &argz_len, "--ntasks=%d", size);
+    //add_arg (&argz, &argz_len, "--overcommit");
+    add_arg (&argz, &argz_len, "--propagate=CORE");
     if (!cmd)
-        argv_push (&ac, &av, "--pty");
-    argv_push (&ac, &av, "--job-name=%s", "flux");
+        add_arg (&argz, &argz_len, "--pty");
+    add_arg (&argz, &argz_len, "--job-name=%s", "flux");
     if (partition)
-        argv_push (&ac, &av, "--partition=%s", partition);
+        add_arg (&argz, &argz_len, "--partition=%s", partition);
 
-    argv_push (&ac, &av, "%s", cmbd_path);
-    argv_push (&ac, &av, "--pmi-boot");
-    argv_push (&ac, &av, "--logdest=%s", "cmbd.log");
+    add_arg (&argz, &argz_len, "%s", cmbd_path);
+    add_arg (&argz, &argz_len, "--pmi-boot");
+    add_arg (&argz, &argz_len, "--logdest=%s", "cmbd.log");
     if (cmbd_opts)
-        push_extra_args (&ac, &av, cmbd_opts);
+        add_args_sep (&argz, &argz_len, cmbd_opts, ',');
     if (cmd)
-        argv_push (&ac, &av, "--command=%s", cmd);
+        add_arg (&argz, &argz_len, "--command=%s", cmd);
 
     if (optparse_hasopt (p, "verbose")) {
-        char *s = argv_concat (ac, av, " ");
+        char *s = args_str (argz, argz_len);
         msg ("%s", s);
         free (s);
     }
+    av = xzmalloc (sizeof (char *) * (argz_count (argz, argz_len) + 1));
+    argz_extract (argz, argz_len, av);
     if (!optparse_hasopt (p, "noexec")) {
         if (execv (av[0], av) < 0)
             err_exit ("execv %s", av[0]);
     }
-    argv_destroy (ac, av);
+    if (av)
+        free (av);
+    if (argz)
+        free (argz);
 }
 
 /*
