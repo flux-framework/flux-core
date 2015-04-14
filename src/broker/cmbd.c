@@ -203,7 +203,7 @@ static const double dfl_heartrate = 2;
 
 static const struct flux_handle_ops cmbd_handle_ops;
 
-#define OPTIONS "t:vqR:S:p:M:X:L:N:Pk:e:r:s:c:fnH:O:"
+#define OPTIONS "t:vqR:S:p:M:X:L:N:Pk:e:r:s:c:fnH:O:x:"
 static const struct option longopts[] = {
     {"sid",             required_argument,  0, 'N'},
     {"child-uri",       required_argument,  0, 't'},
@@ -215,6 +215,7 @@ static const struct option longopts[] = {
     {"rank",            required_argument,  0, 'R'},
     {"size",            required_argument,  0, 'S'},
     {"module",          required_argument,  0, 'M'},
+    {"exclude",         required_argument,  0, 'x'},
     {"modopt",          required_argument,  0, 'O'},
     {"module-path",     required_argument,  0, 'X'},
     {"logdest",         required_argument,  0, 'L'},
@@ -241,6 +242,7 @@ static void usage (void)
 " -S,--size N                  Set number of ranks in session\n"
 " -N,--sid NAME                Set session id\n"
 " -M,--module NAME             Load module NAME (may be repeated)\n"
+" -x,--exclude NAME            Exclude module NAME\n"
 " -O,--modopt NAME:key=val     Set option for module NAME (may be repeated)\n"
 " -X,--module-path PATH        Set module search path (colon separated)\n"
 " -L,--logdest DEST            Log to DEST, can  be syslog, stderr, or file\n"
@@ -263,6 +265,7 @@ int main (int argc, char *argv[])
     bool fopt = false;
     bool nopt = false;
     zlist_t *modules, *modopts;
+    zhash_t *modexclude;
     const char *confdir;
 
     memset (&ctx, 0, sizeof (ctx));
@@ -271,6 +274,8 @@ int main (int argc, char *argv[])
     if (!(modules = zlist_new ()))
         oom ();
     zlist_autofree (modules);
+    if (!(modexclude = zhash_new ()))
+        oom ();
     if (!(modopts = zlist_new ()))
         oom ();
     zlist_autofree (modopts);
@@ -338,6 +343,9 @@ int main (int argc, char *argv[])
             case 'M':   /* --module NAME[nodeset] */
                 if (zlist_push (modules, optarg) < 0 )
                     oom ();
+                break;
+            case 'x':   /* --exclude NAME */
+                zhash_update (modexclude, optarg, (void *)1);
                 break;
             case 'O':   /* --modopt NAME:key=val */
                 if (zlist_push (modopts, optarg) < 0)
@@ -530,7 +538,7 @@ int main (int argc, char *argv[])
         msg ("loading modules");
     if (ctx.verbose)
         msg ("module-path: %s", ctx.module_searchpath);
-    load_modules (&ctx, modules, modopts, NULL);
+    load_modules (&ctx, modules, modopts, modexclude);
 
     /* install heartbeat timer
      */
@@ -593,6 +601,7 @@ int main (int argc, char *argv[])
     zhash_destroy (&ctx.peer_idle);
 
     zlist_destroy (&modules);
+    zhash_destroy (&modexclude);
     zlist_destroy (&modopts);
     return 0;
 }
