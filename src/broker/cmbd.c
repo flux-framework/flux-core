@@ -65,6 +65,9 @@
 #define ZLOOP_RETURN(p) \
     return ((p)->reactor_stop ? (-1) : (0))
 
+const char *default_modules =
+    "api,modctl,kvs,live,mecho,job[0],wrexec,resrc,barrier";
+
 typedef struct {
     void *zs;
     char *uri;
@@ -410,6 +413,19 @@ int main (int argc, char *argv[])
     if (argc != optind)
         usage ();
 
+    /* Add default modules to user-specified module list
+     */
+    if (default_modules) {
+        char *cpy = xstrdup (default_modules);
+        char *name, *saveptr = NULL, *a1 = cpy;
+        while ((name = strtok_r (a1, ",", &saveptr))) {
+            if (zlist_append (modules, xstrdup (name)))
+                oom ();
+            a1 = NULL;
+        }
+        free (cpy);
+    }
+
     /* Get the directory for CURVE keys.
      */
     if (!(ctx.secdir = getenv ("FLUX_SEC_DIRECTORY")))
@@ -501,21 +517,6 @@ int main (int argc, char *argv[])
         if (ctx.gevent_relay)
             msg ("gevent-relay: %s", ctx.gevent_relay->uri);
     }
-
-     /* Prepare to load modues.
-      */
-     if (ctx.verbose)
-         msg ("module-path: %s", ctx.module_searchpath);
-     if (zlist_push (modules, "api") < 0
-         || zlist_push (modules, "modctl") < 0
-         || zlist_push (modules, "kvs") < 0
-         || zlist_push (modules, "live") < 0
-         || zlist_push (modules, "mecho") < 0
-         || zlist_push (modules, "job[0]") < 0
-         || zlist_push (modules, "wrexec") < 0
-         || zlist_push (modules, "resrc") < 0
-         || zlist_push (modules, "barrier") < 0)
-         oom ();
 
     update_proctitle (&ctx);
     update_environment (&ctx);
