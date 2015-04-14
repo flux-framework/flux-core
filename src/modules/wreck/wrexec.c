@@ -173,7 +173,7 @@ static int handle_client_msg (struct rexec_session *c, zmsg_t *zmsg)
     char *tag;
     json_object *o;
 
-    if (cmb_msg_decode (zmsg, &tag, &o) < 0) {
+    if (flux_msg_decode (zmsg, &tag, &o) < 0) {
         err ("bad msg from rexec sesion %lu", c->id);
         return (-1);
     }

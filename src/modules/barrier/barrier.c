@@ -146,7 +146,7 @@ static int timeout_reduction (const char *key, void *item, void *arg)
 }
 
 /* Barrier entry happens in two ways:
- * - client calling cmb_barrier ()
+ * - client calling flux_barrier ()
  * - downstream barrier plugin sending count upstream.
  * In the first case only, we track client uuid to handle disconnect and
  * notification upon barrier termination.

@@ -491,7 +491,7 @@ flux_t flux_api_openpath (const char *path, int flags)
     ev_zlist_init (&c->putmsg_w, putmsg_cb, c->putmsg, EV_READ);
 
     char *cpy = xstrdup (path);
-    snprintf (pidfile, sizeof (pidfile), "%s/cmbd.pid", dirname (cpy));
+    snprintf (pidfile, sizeof (pidfile), "%s/broker.pid", dirname (cpy));
     free (cpy);
     for (;;) {
         if (!pidcheck (pidfile))

@@ -640,16 +640,16 @@ static void update_pidfile (ctx_t *ctx, bool force)
     pid_t pid;
     FILE *f;
 
-    if (asprintf (&pidfile, "%s/cmbd.pid", tmpdir) < 0)
+    if (asprintf (&pidfile, "%s/broker.pid", tmpdir) < 0)
         oom ();
     if ((f = fopen (pidfile, "r"))) {
         if (fscanf (f, "%u", &pid) == 1 && kill (pid, 0) == 0) {
             if (force) {
                 if (kill (pid, SIGKILL) < 0)
                     err_exit ("kill %d", pid);
-                msg ("killed cmbd with pid %d", pid);
+                msg ("killed broker with pid %d", pid);
             } else
-                msg_exit ("cmbd is already running in %s, pid %d", tmpdir, pid);
+                msg_exit ("broker is already running in %s, pid %d", tmpdir, pid);
         }
         (void)fclose (f);
     }
