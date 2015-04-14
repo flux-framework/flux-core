@@ -1161,14 +1161,14 @@ static void broker_init_modsocks (ctx_t *ctx)
 static char *cmb_getattr (ctx_t *ctx, const char *name)
 {
     char *val = NULL;
-    if (!strcmp (name, "cmbd-snoop-uri")) {
+    if (!strcmp (name, "snoop-uri")) {
         if (ctx->snoop)
             val = ctx->snoop->uri;
-    } else if (!strcmp (name, "cmbd-parent-uri")) {
+    } else if (!strcmp (name, "parent-uri")) {
         endpt_t *ep = zlist_first (ctx->parents);
         if (ep)
             val = ep->uri;
-    } else if (!strcmp (name, "cmbd-request-uri")) {
+    } else if (!strcmp (name, "request-uri")) {
         if (ctx->child)
             val = ctx->child->uri;
     }

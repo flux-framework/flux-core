@@ -123,8 +123,8 @@ int main (int argc, char *argv[])
 
     if (!(h = flux_api_open ()))
         err_exit ("flux_api_open");
-    if (!(uri = flux_getattr (h, rank, "cmbd-snoop-uri")))
-        err_exit ("cmbd-snoop-uri");
+    if (!(uri = flux_getattr (h, rank, "snoop-uri")))
+        err_exit ("snoop-uri");
 
     /* N.B. flux_get_zctx () is not implemented for the API socket since
      * it has no internal zctx (despite supporting the flux reactor).

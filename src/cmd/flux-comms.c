@@ -104,7 +104,7 @@ int main (int argc, char *argv[])
     } else if (!strcmp (cmd, "getattr")) {
         char *s;
         if (optind != argc - 1)
-            msg_exit ("getattr cmbd-snoop-uri, cmbd-parent-uri, or cmbd-request-uri");
+            msg_exit ("getattr snoop-uri, parent-uri, or request-uri");
         if (!(s = flux_getattr (h, rank, argv[optind])))
             err_exit ("%s", argv[optind]);
         printf ("%s\n", s);
