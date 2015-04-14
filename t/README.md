@@ -54,7 +54,7 @@ ok 2 - run_timeout works
 ok 3 - we can find a flux binary
 ok 4 - flux-keygen works
 ok 5 - flux-config works
-ok 6 - path to cmbd is sane
+ok 6 - path to broker is sane
 ok 7 - flux-start works
 # passed all 7 test(s)
 1..7

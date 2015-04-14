@@ -5,16 +5,16 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 	-DMODULE_PATH=\"$(fluxmoddir)\"
 
-fluxlibexec_PROGRAMS = cmbd
+fluxlibexec_PROGRAMS = flux-broker
 
-cmbd_SOURCES = \
-	cmbd.c \
+flux_broker_SOURCES = \
+	broker.c \
 	module.c \
 	module.h \
 	boot_pmi.c \
 	boot_pmi.h
 
-cmbd_LDADD = \
+flux_broker_LDADD = \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(top_builddir)/src/modules/api/libapi.la \
 	$(top_builddir)/src/common/libflux/libflux.la \

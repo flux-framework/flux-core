@@ -153,7 +153,7 @@ int main (int argc, char *argv[])
     }
 
     if (!(h = flux_api_open ()))
-        err_exit ("cmb_init");
+        err_exit ("flux_api_open");
 
     if ((aopt || ropt) && !key) {
         if (asprintf (&key, "zio.%d.%d", flux_rank (h), (int)getpid ()) < 0)

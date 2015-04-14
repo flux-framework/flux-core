@@ -135,7 +135,7 @@ int main (int argc, char *argv[])
 
     /* N.B. We use the zloop reactor and handle disconnects via zmonitor.
      * We must handle disconnects, since the default zmq "hidden reconnect"
-     * behavior doesn't work across a cmbd restart, where the dynamically
+     * behavior doesn't work across a broker restart, where the dynamically
      * assigned snoop URI may change.
      */
     if (!(zloop = zloop_new ()))

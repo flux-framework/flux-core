@@ -96,7 +96,7 @@ typedef struct {
     endpt_t *modevent;          /* PUB - events to modules */
 
     endpt_t *gevent;            /* PUB for rank = 0, SUB for rank > 0 */
-    endpt_t *gevent_relay;      /* PUB event relay for multiple cmbds/node */
+    endpt_t *gevent_relay;      /* PUB event relay for multiple brokers/node */
 
     endpt_t *snoop;             /* PUB - to flux-snoop (uri is generated) */
     /* Session parameters
@@ -188,7 +188,7 @@ static void endpt_destroy (endpt_t *ep);
 static int endpt_cc (zmsg_t *zmsg, endpt_t *ep);
 
 static int recv_event (ctx_t *ctx, zmsg_t **zmsg);
-static int cmb_event_send (ctx_t *ctx, JSON o, const char *topic);
+static int send_event (ctx_t *ctx, JSON o, const char *topic);
 static int parent_send (ctx_t *ctx, zmsg_t **zmsg);
 static void send_keepalive (ctx_t *ctx);
 
@@ -234,14 +234,14 @@ static const struct option longopts[] = {
 static void usage (void)
 {
     fprintf (stderr,
-"Usage: cmbd OPTIONS [module:key=val ...]\n"
+"Usage: flux-broker OPTIONS [module:key=val ...]\n"
 " -t,--child-uri URI           Set child URI to bind and receive requests\n"
 " -p,--parent-uri URI          Set parent URI to connect and send requests\n"
 " -e,--event-uri URI           Set event URI (pub: rank 0, sub: rank > 0)\n"
 " -r,--right-uri URI           Set right (rank-request) URI\n"
 " -v,--verbose                 Be annoyingly verbose\n"
 " -q,--quiet                   Be mysteriously taciturn\n"
-" -R,--rank N                  Set cmbd rank (0...size-1)\n"
+" -R,--rank N                  Set broker rank (0...size-1)\n"
 " -S,--size N                  Set number of ranks in session\n"
 " -N,--sid NAME                Set session id\n"
 " -M,--module NAME             Load module NAME (may be repeated)\n"
@@ -254,7 +254,7 @@ static void usage (void)
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
 " -c,--command string          Run command on rank 0\n"
 " -n,--noshell                 Do not spawn a shell even if on a tty\n"
-" -f,--force                   Kill rival cmbd and start\n"
+" -f,--force                   Kill rival broker and start\n"
 " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
 );
     exit (1);
@@ -610,7 +610,7 @@ int main (int argc, char *argv[])
 static void update_proctitle (ctx_t *ctx)
 {
     char *s;
-    if (asprintf (&s, "cmbd-%d", ctx->rank) < 0)
+    if (asprintf (&s, "flux-broker-%d", ctx->rank) < 0)
         oom ();
     (void)prctl (PR_SET_NAME, s, 0, 0, 0);
     if (ctx->proctitle)
@@ -696,7 +696,7 @@ static void rank0_shell (ctx_t *ctx)
     subprocess_run (ctx->shell);
 }
 
-/* N.B. If there are multiple nodes and multiple cmbds per node, the
+/* N.B. If there are multiple nodes and multiple brokers per node, the
  * lowest rank in each clique will subscribe to the epgm:// socket
  * and relay events to an ipc:// socket for the other ranks in the
  * clique.  This is required due to a limitation of epgm.
@@ -1145,7 +1145,7 @@ static void broker_init_overlay (ctx_t *ctx)
     /* Create broker's flux_t handle.
      */
     ctx->h = flux_handle_create (ctx, &broker_handle_ops, 0);
-    flux_log_set_facility (ctx->h, "cmbd");
+    flux_log_set_facility (ctx->h, "broker");
     if (ctx->rank == 0)
         flux_log_set_redirect (ctx->h, true);
 }
@@ -1524,7 +1524,7 @@ static int shutdown_send (ctx_t *ctx, int grace, int rc, const char *fmt, ...)
     util_json_object_add_int (o, "grace", grace);
     util_json_object_add_int (o, "rank", ctx->rank);
     util_json_object_add_int (o, "exitcode", rc);
-    ret = cmb_event_send (ctx, o, "shutdown");
+    ret = send_event (ctx, o, "shutdown");
     Jput (o);
     if (reason)
         free (reason);
@@ -1543,7 +1543,8 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
     }
 }
 
-static int cmb_event_sendmsg (ctx_t *ctx, zmsg_t **event)
+/* helper for send_event() */
+static int send_event_zmsg (ctx_t *ctx, zmsg_t **event)
 {
     int rc = -1;
     zmsg_t *cpy = NULL;
@@ -1590,7 +1591,9 @@ done:
     return rc;
 }
 
-static int cmb_event_send (ctx_t *ctx, JSON o, const char *topic)
+/* Send an event (call on rank 0 only)
+ */
+static int send_event (ctx_t *ctx, JSON o, const char *topic)
 {
     int rc = -1;
     zmsg_t *zmsg;
@@ -1609,7 +1612,7 @@ static int cmb_event_send (ctx_t *ctx, JSON o, const char *topic)
     }
     if (flux_msg_set_seq (zmsg, ++ctx->event_seq) < 0) /* start with seq=1 */
         goto done;
-    if (cmb_event_sendmsg (ctx, &zmsg) < 0)
+    if (send_event_zmsg (ctx, &zmsg) < 0)
         goto done;
     rc = 0;
 done:
@@ -1634,7 +1637,7 @@ static int cmb_pub (ctx_t *ctx, zmsg_t **zmsg)
         flux_respond_errnum (ctx->h, zmsg, EINVAL);
         goto done;
     }
-    if (cmb_event_send (ctx, payload, topic) < 0) {
+    if (send_event (ctx, payload, topic) < 0) {
         flux_respond_errnum (ctx->h, zmsg, errno);
         goto done;
     }
@@ -2091,8 +2094,8 @@ static int hb_cb (zloop_t *zl, int timer_id, ctx_t *ctx)
     assert (timer_id == ctx->heartbeat_tid);
 
     Jadd_int (o, "epoch", ++ctx->hb_epoch);
-    if (cmb_event_send (ctx, o, "hb") < 0)
-        err ("cmb_event_send failed");
+    if (send_event (ctx, o, "hb") < 0)
+        err ("send_event failed");
     Jput (o);
     ZLOOP_RETURN(ctx);
 }

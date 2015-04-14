@@ -89,7 +89,7 @@ int main (int argc, char *argv[])
         msg_exit ("bad priority argument");
     flux_log_set_facility (h, facility);
     if (flux_log (h, level, "%s", message) < 0)
-        err_exit ("cmb_log");
+        err_exit ("flux_log");
 
     flux_api_close (h);
 

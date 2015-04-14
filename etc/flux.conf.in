@@ -3,7 +3,7 @@
 #
 general
     exec_path = @abs_top_builddir@/src/cmd:@abs_top_srcdir@/src/cmd
-    cmbd_path = @abs_top_builddir@/src/broker/cmbd
+    broker_path = @abs_top_builddir@/src/broker/flux-broker
     lua_cpath = @abs_top_builddir@/src/bindings/lua/.libs/?.so
     lua_path = @abs_top_srcdir@/src/bindings/lua/?.lua
     module_path = @abs_top_builddir@/src/modules

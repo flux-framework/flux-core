@@ -13,17 +13,17 @@ declare attach_rank=
 declare run_rank=
 declare shutdown=
 
-declare path_cmbd=${FLUX_CMBD_PATH:-@X_LIBEXECDIR@/flux/cmbd}
+declare path_broker=${FLUX_CMBD_PATH:-@X_LIBEXECDIR@/flux/flux-broker}
 
 declare cmd_wrapper=
 declare cmd_prefix=
 
-declare cmbd_opts="--logdest=cmbd.log"
-declare cmbd_size=
-declare cmbd_sid="screen"
-declare cmbd_kary=
-declare cmbd_modules=
-declare cmbd_modopts=
+declare broker_opts="--logdest=broker.log"
+declare broker_size=
+declare broker_sid="screen"
+declare broker_kary=
+declare broker_modules=
+declare broker_modopts=
 
 declare -r path_getopt="/usr/bin/getopt"
 declare -r short_opts="hN:gVs:M:O:k:Xa:r:SLp:"
@@ -33,8 +33,8 @@ help,nnodes:,gdb,valgrind,sid:,module:,modopt:,k-ary:,noexec,attach:,run:,shutdo
 declare -r usage="\
 Usage: $prog OPTIONS [command [args...]]\n\
    -N,--nnodes N               set size of session\n\
-   -g,--gdb                    run cmbd processes under gdb\n\
-   -V,--valgrind               run cmbd processes under valgrind\n\
+   -g,--gdb                    run broker processes under gdb\n\
+   -V,--valgrind               run broker processes under valgrind\n\
    -s,--sid NAME               set session name\n\
    -M,--module NAME            load additional module\n\
    -O,--modopt NAME:var=val    set additional module option\n\
@@ -51,7 +51,7 @@ die()      { log_msg "Fatal: $@"; exit 1; }
 
 pidcheck() {
     local sid=$1
-    local oldpid=$(cat ${FLUX_TMPDIR:-${TMPDIR:-/tmp}}/flux-${sid}-0/cmbd.pid 2>/dev/null)
+    local oldpid=$(cat ${FLUX_TMPDIR:-${TMPDIR:-/tmp}}/flux-${sid}-0/broker.pid 2>/dev/null)
     if test -n "$oldpid" && kill -0 $oldpid 2>/dev/null; then
         die "rank 0 of session ${sid} is still running"
     fi
@@ -69,11 +69,11 @@ while true; do
         -h|--help)       usage; exit 0                               ;;
         -g|--gdb)        cmd_prefix="gdb ${gdb_opts}";       shift 1 ;;
         -V|--valgrind)   cmd_prefix="valgrind ${vg_opts}";   shift 1 ;;
-        -N|--nnodes)     cmbd_size=$2;                       shift 2 ;;
-        -s|--sid)        cmbd_sid=$2;                        shift 2 ;;
-        -M|--module)     cmbd_modules="${cmbd_modules},$2";  shift 2 ;;
-        -O|--modopt)     cmbd_modopts="${cmbd_modopts} $2";  shift 2 ;;
-        -k|--k-ary)      cmbd_kary=$2;                       shift 2 ;;
+        -N|--nnodes)     broker_size=$2;                       shift 2 ;;
+        -s|--sid)        broker_sid=$2;                        shift 2 ;;
+        -M|--module)     broker_modules="${broker_modules},$2";  shift 2 ;;
+        -O|--modopt)     broker_modopts="${broker_modopts} $2";  shift 2 ;;
+        -k|--k-ary)      broker_kary=$2;                       shift 2 ;;
         -X|--noexec)     cmd_wrapper=echo;                   shift 1 ;;
         -a|--attach)     attach_rank=$2;                     shift 2 ;;
         -r|--run)        run_rank=$2;                        shift 2 ;;
@@ -92,7 +92,7 @@ else
 fi
 
 # find invalid argument combinations
-if test -z "$cmbd_size" -a -z "$attach_rank" -a -z "$shutdown"\
+if test -z "$broker_size" -a -z "$attach_rank" -a -z "$shutdown"\
                         -a -z "$run_rank" -a -z "$listscreens"; then
     usage; exit 1
 fi
@@ -106,45 +106,45 @@ fi
 
 # take care of the arguments that don't invovle starting a session
 if test -n "$attach_rank"; then
-    exec screen -S ${cmbd_sid} -p${attach_rank} -r
+    exec screen -S ${broker_sid} -p${attach_rank} -r
 elif test -n "$shutdown"; then
-    log_msg "telling session \"${cmbd_sid}\" to exit"
-    exec screen -S ${cmbd_sid} -X quit
+    log_msg "telling session \"${broker_sid}\" to exit"
+    exec screen -S ${broker_sid} -X quit
 elif test -n "$listscreens"; then
     exec screen -list
 elif test -n "$run_rank"; then
-    export FLUX_TMPDIR=${FLUX_TMPDIR:-${TMPDIR:-/tmp}}/flux-${cmbd_sid}-${run_rank}
+    export FLUX_TMPDIR=${FLUX_TMPDIR:-${TMPDIR:-/tmp}}/flux-${broker_sid}-${run_rank}
     exec "$@"
 fi    
 
 #test -n "$cmd_wrapper" || set -x
 
-test -x $path_cmbd || die "$path_cmbd not found or not executable"
+test -x $path_broker || die "$path_broker not found or not executable"
 
-$cmd_wrapper pidcheck ${cmbd_sid}
+$cmd_wrapper pidcheck ${broker_sid}
 
 $cmd_wrapper ulimit -c unlimited
 
-$cmd_wrapper $path_screen -d -m -S ${cmbd_sid} \
+$cmd_wrapper $path_screen -d -m -S ${broker_sid} \
     || die "failed to run screen"
 # keep zombie windows
-$cmd_wrapper $path_screen -S ${cmbd_sid} -X zombie kr
+$cmd_wrapper $path_screen -S ${broker_sid} -X zombie kr
 
-for rank in `seq 0 $(($cmbd_size - 1))`; do
+for rank in `seq 0 $(($broker_size - 1))`; do
     if test $rank -eq 0; then
         screen_exec_opts="-p 0 -X exec"
     else
         screen_exec_opts="-X screen"
     fi
-    $cmd_wrapper $path_screen -S ${cmbd_sid} ${screen_exec_opts} \
-        ${cmd_prefix} ${path_cmbd} ${cmbd_opts} \
+    $cmd_wrapper $path_screen -S ${broker_sid} ${screen_exec_opts} \
+        ${cmd_prefix} ${path_broker} ${broker_opts} \
         --rank ${rank} \
-        --size ${cmbd_size} \
-        ${cmbd_sid:+--sid=${cmbd_sid}} \
-        ${cmbd_kary:+--k-ary=${cmbd_kary}} \
-        ${cmbd_modules:+--modules=${cmbd_modules}} \
+        --size ${broker_size} \
+        ${broker_sid:+--sid=${broker_sid}} \
+        ${broker_kary:+--k-ary=${broker_kary}} \
+        ${broker_modules:+--modules=${broker_modules}} \
         ${@:+--command=\"$@\"} \
-        ${cmbd_modopts}
+        ${broker_modopts}
 done
 
 # vi:tabstop=4 shiftwidth=4 expandtab

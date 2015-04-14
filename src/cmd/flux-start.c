@@ -41,7 +41,7 @@ void start_slurm (optparse_t p, const char *cmd);
 const int default_size = 1;
 
 /* Workaround for shutdown bug:
- * Wait this many seconds after exit of first cmbd before kill -9 of
+ * Wait this many seconds after exit of first broker before kill -9 of
  * those that remain.  This is a temporary work-around for unreliable
  * shutdown in fast cycling comms sessions.
  */
@@ -55,8 +55,8 @@ static struct optparse_option opts[] = {
       .usage = "Don't execute (useful with -v, --verbose)", },
     { .name = "size",       .key = 's', .has_arg = 1, .arginfo = "N",
       .usage = "Set number of ranks in session", },
-    { .name = "cmbd-opts",  .key = 'o', .has_arg = 1, .arginfo = "OPTS",
-      .usage = "Add comma-separated cmbd options, e.g. \"-o,-q\"", },
+    { .name = "broker-opts",.key = 'o', .has_arg = 1, .arginfo = "OPTS",
+      .usage = "Add comma-separated broker options, e.g. \"-o,-q\"", },
     { .name = "nnodes",     .key = 'N', .has_arg = 1, .arginfo = "N",
       .usage = "Set number of nodes (implies SLURM)", },
     { .name = "partition",  .key = 'p', .has_arg = 1, .arginfo = "NAME",
@@ -203,8 +203,8 @@ char *args_str (char *argz, size_t argz_len)
 int start_direct (optparse_t p, const char *cmd)
 {
     int size = optparse_get_int (p, "size", default_size);
-    const char *cmbd_opts = optparse_get_str (p, "cmbd-opts", NULL);
-    char *cmbd_path = getenv ("FLUX_CMBD_PATH");
+    const char *broker_opts = optparse_get_str (p, "broker-opts", NULL);
+    char *broker_path = getenv ("FLUX_BROKER_PATH");
     bool child_killer_armed = false;;
     int rank;
     pid_t *pids;
@@ -212,8 +212,8 @@ int start_direct (optparse_t p, const char *cmd)
     int rc = 0;
     pid_t start_pid = getpid (); /* use as session id */
 
-    if (!cmbd_path)
-        msg_exit ("FLUX_CMBD_PATH is not set");
+    if (!broker_path)
+        msg_exit ("FLUX_BROKER_PATH is not set");
 
     pids = xzmalloc (size * sizeof (pids[0]));
     for (rank = 0; rank < size; rank++) {
@@ -221,12 +221,12 @@ int start_direct (optparse_t p, const char *cmd)
         size_t argz_len = 0;
         char **av = NULL;
 
-        add_arg (&argz, &argz_len, "%s", cmbd_path);
+        add_arg (&argz, &argz_len, "%s", broker_path);
         add_arg (&argz, &argz_len, "--size=%d", size);
         add_arg (&argz, &argz_len, "--rank=%d", rank);
         add_arg (&argz, &argz_len, "--sid=%d", start_pid);
-        if (cmbd_opts)
-            add_args_sep (&argz, &argz_len, cmbd_opts, ',');
+        if (broker_opts)
+            add_args_sep (&argz, &argz_len, broker_opts, ',');
         if (rank == 0 && cmd)
             add_arg (&argz, &argz_len, "--command=%s", cmd);
         if (optparse_hasopt (p, "verbose")) {
@@ -291,10 +291,10 @@ int start_direct (optparse_t p, const char *cmd)
 void start_slurm (optparse_t p, const char *cmd)
 {
     int size = optparse_get_int (p, "size", default_size);
-    const char *cmbd_opts = optparse_get_str (p, "cmbd-opts", NULL);
+    const char *broker_opts = optparse_get_str (p, "broker-opts", NULL);
     int nnodes = optparse_get_int (p, "nnodes", size);
     const char *partition = optparse_get_str (p, "partition", NULL);
-    char *cmbd_path = getenv ("FLUX_CMBD_PATH");
+    char *broker_path = getenv ("FLUX_BROKER_PATH");
     char *srun_path = "/usr/bin/srun";
     char *argz = NULL;
     size_t argz_len = 0;
@@ -302,8 +302,8 @@ void start_slurm (optparse_t p, const char *cmd)
 
     if (nnodes > size)
         size = nnodes;
-    if (!cmbd_path)
-        msg_exit ("FLUX_CMBD_PATH is not set");
+    if (!broker_path)
+        msg_exit ("FLUX_BROKER_PATH is not set");
 
     add_arg (&argz, &argz_len, "%s", srun_path);
     add_arg (&argz, &argz_len, "--nodes=%d", nnodes);
@@ -316,11 +316,11 @@ void start_slurm (optparse_t p, const char *cmd)
     if (partition)
         add_arg (&argz, &argz_len, "--partition=%s", partition);
 
-    add_arg (&argz, &argz_len, "%s", cmbd_path);
+    add_arg (&argz, &argz_len, "%s", broker_path);
     add_arg (&argz, &argz_len, "--pmi-boot");
-    add_arg (&argz, &argz_len, "--logdest=%s", "cmbd.log");
-    if (cmbd_opts)
-        add_args_sep (&argz, &argz_len, cmbd_opts, ',');
+    add_arg (&argz, &argz_len, "--logdest=%s", "broker.log");
+    if (broker_opts)
+        add_args_sep (&argz, &argz_len, broker_opts, ',');
     if (cmd)
         add_arg (&argz, &argz_len, "--command=%s", cmd);
 
