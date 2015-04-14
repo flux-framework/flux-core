@@ -1,6 +1,6 @@
 MAN1_FILES = \
 	flux.1 \
-	cmbd.1 \
+	flux-broker.1 \
 	flux-kvs.1 \
 	flux-keygen.1 \
 	flux-logger.1 \

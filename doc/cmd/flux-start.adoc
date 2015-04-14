@@ -39,7 +39,7 @@ OPTIONS
 Set the size of the comms session (number of message brokers).
 The default is 1.
 
-*-o, --cmbd-opts*='option_string'::
+*-o, --broker-opts*='option_string'::
 Add options to the message broker daemon, separated by commas.
 For example, to set the branching factor of the tree-based-overlay
 network to 8 and enable verbose mode:

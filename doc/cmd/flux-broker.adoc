@@ -1,30 +1,30 @@
-CMBD(1)
-=======
+FLUX-BROKER(1)
+==============
 :doctype: manpage
 
 
 NAME
 ----
-cmbd - Flux comms message broker daemon
+flux-broker - Flux comms message broker daemon
 
 
 SYNOPSIS
 --------
-*cmbd* ['OPTIONS']
+*flux-broker* ['OPTIONS']
 
 
 DESCRIPTION
 -----------
-cmbd(1) is usually invoked indirectly, e.g. see flux-start(1).
+flux-broker(1) is usually invoked indirectly, e.g. see flux-start(1).
 
-cmbd(1) is a distributed message broker daemon that provides
+flux-broker(1) is a distributed message broker daemon that provides
 communications services within a Flux comms session.  Flux jobs have
 a dedicated comms session, while Flux light-weight jobs (LWJs) do not.
 
 Resource manager services are implemented as dynamically loadable
-plugins to cmbd(1), termed "comms modules".
+plugins to flux-broker(1), termed "comms modules".
 
-cmbd(1) instances within a comms session are interconnected using
+flux-broker(1) instances within a comms session are interconnected using
 ZeroMQ sockets, and each is assigned a rank from 0 to size - 1.
 The rank 0 node is the root of a tree-based overlay network.
 In addition, there is a multicast pub/sub network for events, and
@@ -37,7 +37,7 @@ resource manager activities across the session.
 A logging service aggregates Flux log messages across the session and
 emits them to a configured destination on rank 0.
 
-If cmbd(1) is executed with stdin attached to a tty, a shell is spawned.
+If flux-broker(1) is executed with stdin attached to a tty, a shell is spawned.
 *FLUX_TMPDIR* is set in the shell's environment so Flux commands run
 by the shell can locate the Flux API socket belonging to rank 0.
 
@@ -53,16 +53,16 @@ Be annoyingly chatty.
 Suppress messages intended for interactive users.
 
 *-t, --child-uri*='URI'::
-Set the ZeroMQ endpoint to which this cmbd(1) instance will bind,
-and tree based overlay network child cmbd(1) instances will connect.
+Set the ZeroMQ endpoint to which this flux-broker(1) instance will bind,
+and tree based overlay network child flux-broker(1) instances will connect.
 In addition, the ring overlay network peers connect to this endpoint.
 
 *-p, --parent-uri*='URI'::
-Set the ZeroMQ endpoint to which this cmbd(1) will connect its
+Set the ZeroMQ endpoint to which this flux-broker(1) will connect its
 tree based overlay network.
 
 *-r, --right-uri*='URI'::
-Set the ZeroMQ endpoint to which this cmbd(1) will connect its
+Set the ZeroMQ endpoint to which this flux-broker(1) will connect its
 ring network.
 
 *-e, --event-uri*='URI'::
@@ -125,7 +125,7 @@ Execute "bash -c 'CMD'" on rank 0.
 Do not execute a shell on rank 0, even if stdin is a tty.
 
 *-f, --force*::
-If another cmbd is running in the same *FLUX_TMPDIR* space,
+If another flux-broker is running in the same *FLUX_TMPDIR* space,
 send it a SIGKILL and continue start-up.
 
 

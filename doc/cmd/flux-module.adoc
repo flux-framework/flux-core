@@ -16,7 +16,7 @@ SYNOPSIS
 DESCRIPTION
 -----------
 flux-module(1) manages dynamically loadable Flux modules.
-It can load/remove/list modules for the cmbd(1), and for other
+It can load/remove/list modules for the flux-broker(1), and for other
 Flux services that support dynamic module extensions.
 
 When operating in conjunction with the 'modctl' comms module,
@@ -45,7 +45,7 @@ Remove module 'name'.  The service that will unload the module is
 inferred from the name specified on the command line.
 
 *list* ['OPTIONS'] ['service']::
-List modules loaded by 'service', or by cmbd(1) if 'service' is unspecified.
+List modules loaded by 'service', or by flux-broker(1) if 'service' is unspecified.
 
 
 OPTIONS
@@ -77,7 +77,7 @@ The last 7 characters of the SHA1 digest of the contents of
 the module .so file.
 
 *Idle*::
-Idle times are defined for cmbd(1) comms modules as the number of
+Idle times are defined for flux-broker(1) comms modules as the number of
 heartbeats since the module last sent a request or response message.
 The idle time may be defined differently for other services, or have no
 meaning.  When a set of results from multiple ranks is reduced to one
@@ -95,7 +95,7 @@ All Flux modules define the following global symbols:
 A null-terminated string defining the module name.
 Module names are words delimited by periods, with the service that
 will load the module indicated by the words that prefix the final one.
-If there is no prefix, the module is loaded by cmbd(1).
+If there is no prefix, the module is loaded by flux-broker(1).
 
 *int mod_main (void *context, int argc, char **argv);*::
 An entry function.
