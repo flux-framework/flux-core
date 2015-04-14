@@ -89,9 +89,9 @@ typedef struct {
 
     endpt_t *right;             /* DEALER - requests to rank overlay */
 
-    void *zs_request;           /* ROUTER - requests from plugins */
+    endpt_t *modrequest;        /* ROUTER - requests from modules */
+    endpt_t *modevent;          /* PUB - events to modules */
 
-    void *zs_event_out;         /* PUB - to plugins */
     endpt_t *gevent;            /* PUB for rank = 0, SUB for rank > 0 */
     endpt_t *gevent_relay;      /* PUB event relay for multiple cmbds/node */
 
@@ -144,13 +144,13 @@ typedef struct {
     struct subprocess *shell;
 } ctx_t;
 
+/* Wrapper object for mod_ctx_t that allows 'rmmod' requests to be
+ * queued up and responded to asynchronously.
+ */
 typedef struct {
     mod_ctx_t p;
-    zhash_t *args;
     zlist_t *rmmod_reqs;
     ctx_t *ctx;
-    char *path;
-    nodeset_t ns;
 } module_t;
 
 typedef struct {
@@ -166,25 +166,21 @@ static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int hb_cb (zloop_t *zl, int timer_id, ctx_t *ctx);
 static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 
-static void cmbd_fini (ctx_t *ctx);
-
 static void cmbd_init_comms (ctx_t *ctx);
-static void cmbd_init_socks (ctx_t *ctx);
+static void cmbd_init_overlay (ctx_t *ctx);
+static void cmbd_init_modsocks (ctx_t *ctx);
 static int cmbd_init_child (ctx_t *ctx, endpt_t *ep);
 static int cmbd_init_gevent_pub (ctx_t *ctx, endpt_t *ep);
 
-static module_t *module_create (ctx_t *ctx, const char *path);
-static void module_destroy (module_t *mod);
-static void module_unload (module_t *mod, zmsg_t **zmsg);
-static bool module_select (module_t *mod, const char *nstr);
-static void module_prepare (ctx_t *ctx, zlist_t *modules, zlist_t *modopts);
-static void module_loadall (ctx_t *ctx);
+static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
+                          zhash_t *modexclude);
 
 static int peer_idle (ctx_t *ctx, const char *uuid);
 static void peer_update (ctx_t *ctx, const char *uuid);
 static peer_t *peer_create (ctx_t *ctx, const char *uuid, bool modflag);
 
-static endpt_t *endpt_create (const char *fmt, ...);
+static endpt_t *endpt_create (const char *fmt, ...)
+                              __attribute__ ((format (printf, 1, 2)));
 static void endpt_destroy (endpt_t *ep);
 static int endpt_cc (zmsg_t *zmsg, endpt_t *ep);
 
@@ -498,21 +494,20 @@ int main (int argc, char *argv[])
             msg ("gevent-relay: %s", ctx.gevent_relay->uri);
     }
 
-    /* Prepare to load modues.
-     */
-    if (ctx.verbose)
-        msg ("module-path: %s", ctx.module_searchpath);
-    if (zlist_push (modules, "api") < 0
-        || zlist_push (modules, "modctl") < 0
-        || zlist_push (modules, "kvs") < 0
-        || zlist_push (modules, "live") < 0
-        || zlist_push (modules, "mecho") < 0
-        || zlist_push (modules, "job[0]") < 0
-        || zlist_push (modules, "wrexec") < 0
-        || zlist_push (modules, "resrc") < 0
-        || zlist_push (modules, "barrier") < 0)
-        oom ();
-    module_prepare (&ctx, modules, modopts);
+     /* Prepare to load modues.
+      */
+     if (ctx.verbose)
+         msg ("module-path: %s", ctx.module_searchpath);
+     if (zlist_push (modules, "api") < 0
+         || zlist_push (modules, "modctl") < 0
+         || zlist_push (modules, "kvs") < 0
+         || zlist_push (modules, "live") < 0
+         || zlist_push (modules, "mecho") < 0
+         || zlist_push (modules, "job[0]") < 0
+         || zlist_push (modules, "wrexec") < 0
+         || zlist_push (modules, "resrc") < 0
+         || zlist_push (modules, "barrier") < 0)
+         oom ();
 
     update_proctitle (&ctx);
     update_environment (&ctx);
@@ -524,12 +519,18 @@ int main (int argc, char *argv[])
     }
 
     if (ctx.verbose)
-        msg ("initializing sockets");
-    cmbd_init_socks (&ctx); /* NOTE: ctx->h handle is now initialized. */
+        msg ("initializing overlay sockets");
+    cmbd_init_overlay (&ctx); /* NOTE: after this, ctx->h is usable */
+
+    if (ctx.verbose)
+        msg ("initializing module sockets");
+    cmbd_init_modsocks (&ctx);
 
     if (ctx.verbose)
         msg ("loading modules");
-    module_loadall (&ctx);
+    if (ctx.verbose)
+        msg ("module-path: %s", ctx.module_searchpath);
+    load_modules (&ctx, modules, modopts, NULL);
 
     /* install heartbeat timer
      */
@@ -558,15 +559,22 @@ int main (int argc, char *argv[])
 
     /* remove heartbeat timer
      */
-    if (ctx.rank == 0) {
+    if (ctx.rank == 0)
         zloop_timer_end (ctx.zl, ctx.heartbeat_tid);
-    }
+
+    /* Unload modules.
+     * FIXME: this will hang in pthread_join unless modules have been stopped.
+     */
     if (ctx.verbose)
         msg ("unloading modules");
-    cmbd_fini (&ctx);
+    zhash_destroy (&ctx.modules);
 
     if (ctx.verbose)
         msg ("cleaning up");
+    if (ctx.sec)
+        flux_sec_destroy (ctx.sec);
+    zloop_destroy (&ctx.zl);
+    zctx_destroy (&ctx.zctx);
     while ((ep = zlist_pop (ctx.parents)))
         endpt_destroy (ep);
     zlist_destroy (&ctx.parents);
@@ -578,7 +586,12 @@ int main (int argc, char *argv[])
         free (ctx.rankstr_right);
     if (ctx.snoop)
         endpt_destroy (ctx.snoop);
+    if (ctx.modrequest)
+        endpt_destroy (ctx.modrequest);
+    if (ctx.modevent)
+        endpt_destroy (ctx.modevent);
     zhash_destroy (&ctx.peer_idle);
+
     zlist_destroy (&modules);
     zlist_destroy (&modopts);
     return 0;
@@ -758,21 +771,23 @@ static module_t *module_create (ctx_t *ctx, const char *path)
 {
     module_t *mod = xzmalloc (sizeof (*mod));
 
-    mod->path = xstrdup (path);
-    if (!(mod->args = zhash_new ()))
-        oom ();
+    if (!(mod->p = mod_create (ctx->zctx, ctx->rank, path)))
+        goto done;
     if (!(mod->rmmod_reqs = zlist_new ()))
         oom ();
     mod->ctx = ctx;
+done:
     return mod;
 }
 
+/* Registered as the zhash_free_fn for ctx->modules.
+ * It will hang in pthread_join unless modules have been stopped.
+ */
 static void module_destroy (module_t *mod)
 {
     zmsg_t *zmsg;
 
     if (mod->p) {
-        mod_stop (mod->p);
         zmq_pollitem_t zp;
         zp.socket = mod_sock (mod->p);
         zloop_poller_end (mod->ctx->zl, &zp);
@@ -781,15 +796,11 @@ static void module_destroy (module_t *mod)
     while ((zmsg = zlist_pop (mod->rmmod_reqs)))
         flux_respond_errnum (mod->ctx->h, &zmsg, 0);
     zlist_destroy (&mod->rmmod_reqs);
-    zhash_destroy (&mod->args);
 
-    if (mod->ns)
-        nodeset_destroy (mod->ns);
-    free (mod->path);
     free (mod);
 }
 
-static void module_unload (module_t *mod, zmsg_t **zmsg)
+static void module_stop (module_t *mod, zmsg_t **zmsg)
 {
     if (zmsg) {
         zlist_push (mod->rmmod_reqs, *zmsg);
@@ -798,133 +809,141 @@ static void module_unload (module_t *mod, zmsg_t **zmsg)
     mod_stop (mod->p);
 }
 
-static int module_load (ctx_t *ctx, module_t *mod)
+static int module_start (ctx_t *ctx, module_t *mod)
 {
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
-    int rc = -1;
 
-    assert (mod->p == NULL);
-    mod->p = mod_create (ctx->h, mod->path, mod->args);
-    if (mod->p) {
-        peer_create (ctx, mod_uuid (mod->p), true);
-        zp.socket = mod_sock (mod->p);
-        if (zloop_poller (ctx->zl, &zp, (zloop_fn *)plugins_cb, mod) < 0)
-            err_exit ("zloop_poller");
-        mod_start (mod->p);
-        rc = 0;
-    }
-    return rc;
+    peer_create (ctx, mod_uuid (mod->p), true);
+    zp.socket = mod_sock (mod->p);
+    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)plugins_cb, mod) < 0)
+        err_exit ("zloop_poller");
+    mod_start (mod->p);
+
+    return 0;
 }
 
-static void module_loadall (ctx_t *ctx)
+static bool nodeset_suffix_member (char *name, uint32_t rank)
 {
-    zlist_t *keys = zhash_keys (ctx->modules);
-    char *name;
+    char *s;
+    nodeset_t ns;
+    bool member = true;
+
+    if ((s = strchr (name, '['))) {
+        if (!(ns = nodeset_new_str (s)))
+            msg_exit ("malformed nodeset suffix in '%s'", name);
+        *s = '\0'; /* side effect: truncate nodeset suffix */
+        if (!nodeset_test_rank (ns, rank))
+            member = false;
+        nodeset_destroy (ns);
+    }
+    return member;
+}
+
+/* Load command line/default comms modules.
+ * Walk through 'modules' list, creating ctx->modules hash entry for
+ * each entry that is not excluded by a nodeset suffix, excluded by
+ * presence in 'modexclude' list, or already in the hash.
+ * Handle either a .so path (contains one or more '/' characters)
+ * or a module name.
+ */
+static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
+                          zhash_t *modexclude)
+{
+    char *s;
     module_t *mod;
 
-    name = zlist_first (keys);
-    while (name) {
-        mod = zhash_lookup (ctx->modules, name);
-        assert (mod != NULL);
-        if (!mod->ns || nodeset_test_rank (mod->ns, ctx->rank)) {
-            if (module_load (ctx, mod) < 0)
-                err_exit ("failed to load module %s", name);
+    /* Create the module hash entries.
+     */
+    s = zlist_first (modules);
+    while (s) {
+        char *name = NULL;
+        char *path = NULL;
+        if (!nodeset_suffix_member (s, ctx->rank))
+            goto next;
+        if (strchr (s, '/')) {
+            if (!(name = flux_modname (s)))
+                msg_exit ("%s", dlerror ());
+            path = s;
         } else {
-            zhash_delete (ctx->modules, name);
+            if (!(path = flux_modfind (ctx->module_searchpath, s)))
+                msg_exit ("%s: not found in module search path", s);
+            name = s;
         }
-        name = zlist_next (keys);
-    }
-    zlist_destroy (&keys);
-}
-
-static bool module_select (module_t *mod, const char *nstr)
-{
-    if (!mod->ns)
-        mod->ns = nodeset_new ();
-    if (!mod->ns)
-        oom ();
-    return nodeset_add_str (mod->ns, nstr);
-}
-
-static module_t *module_prepare_one (ctx_t *ctx, const char *arg)
-{
-    char *path, *name;
-    module_t *mod;
-
-   if (strchr (arg, '/')) {                     /* path name given */
-        path = xstrdup (arg);
-        if (!(name = flux_modname (path)))
-            msg_exit ("%s", dlerror ());
-    } else {                                    /* module name given */
-        name = xstrdup (arg);
-        if (!(path = flux_modfind (ctx->module_searchpath, name)))
-            msg_exit ("%s: not found in module search path", name);
-    }
-
-    if (!(mod = zhash_lookup (ctx->modules, name))) {
+        if (modexclude && zhash_lookup (modexclude, name))
+            goto next;
+        if ((mod = zhash_lookup (ctx->modules, name)))
+            goto next;
         if (!(mod = module_create (ctx, path)))
            err_exit ("module %s", name);
         zhash_update (ctx->modules, name, mod);
         zhash_freefn (ctx->modules, name, (zhash_free_fn *)module_destroy);
-    }
-    free (path);
-    free (name);
-    return mod;
-}
-
-static void module_prepare (ctx_t *ctx, zlist_t *modules, zlist_t *modopts)
-{
-    char *name;
-
-    name = zlist_first (modules);
-    while (name) {
-        char *p, *nstr = NULL;
-        if ((p = strchr (name, '['))) {
-            nstr = xstrdup (p);
-            *p = '\0';
-        }
-        module_t *mod = module_prepare_one (ctx, name);
-        if (nstr) {
-            if (!module_select (mod, nstr))
-                msg_exit ("malformed module name: %s%s", name, nstr);
-            free (nstr);
-        }
-        name = zlist_next (modules);
+next:
+        if (name != s)
+            free (name);
+        if (path != s)
+            free (path);
+        s = zlist_next (modules);
     }
 
-    name = zlist_first (modopts);
-    while (name) {
-        char *key = strchr (name, ':');
-        if (!key)
-            msg_exit ("malformed module option: %s", name);
-        *key++ = '\0';
-        char *val = strchr (key, '=');
-        if (!val || strlen (val) == 0)
-            msg_exit ("module option has no value: %s:%s", name, key);
-        *val++ = '\0';
-        module_t *mod = zhash_lookup (ctx->modules, name);
+    /* Add module options to module hash entries.
+     */
+    s = zlist_first (modopts);
+    while (s) {
+        char *arg = strchr (s, ':');
+        if (!arg)
+            msg_exit ("malformed module option: %s", s);
+        *arg++ = '\0';
+        module_t *mod = zhash_lookup (ctx->modules, s);
         if (!mod)
-            msg_exit ("module argument for unknown module: %s", name);
-        zhash_update (mod->args, key, xstrdup (val));
-        zhash_freefn (mod->args, key, (zhash_free_fn *)free);
-        name = zlist_next (modopts);
+            msg_exit ("module argument for unknown module: %s", s);
+        mod_add_arg (mod->p, arg);
+        s = zlist_next (modopts);
     }
+
+    /* Now start all the modules.
+     */
+    zlist_t *keys = zhash_keys (ctx->modules);
+    s = zlist_first (keys);
+    while (s) {
+        mod = zhash_lookup (ctx->modules, s);
+        assert (mod != NULL);
+        if (module_start (ctx, mod) < 0)
+            err_exit ("failed to start module %s", s);
+        s = zlist_next (keys);
+    }
+    zlist_destroy (&keys);
 }
 
-static void *cmbd_init_request (ctx_t *ctx)
+/* Bind to ROUTER socket used by comms modules to send requests to the broker.
+ */
+static endpt_t *cmbd_init_modrequest (ctx_t *ctx)
 {
-    void *s;
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
+    endpt_t *ep = endpt_create (MODREQUEST_INPROC_URI);
 
-    if (!(s = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
+    if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
         err_exit ("zsocket_new");
-    zsocket_set_hwm (s, 0);
-    if (zsocket_bind (s, "%s", REQUEST_URI) < 0) /* always bind to inproc */
-        err_exit ("%s", REQUEST_URI);
-    zp.socket = s;
+    zsocket_set_hwm (ep->zs, 0);
+    if (zsocket_bind (ep->zs, "%s", ep->uri) < 0)
+        err_exit ("%s", ep->uri);
+    zp.socket = ep->zs;
     if (zloop_poller (ctx->zl, &zp, (zloop_fn *)request_cb, ctx) < 0)
         err_exit ("zloop_poller");
-    return s;
+    return ep;
+}
+
+/* Bind to PUB socket used by comms modules to receive events from broker.
+ */
+static endpt_t *cmbd_init_modevent (ctx_t *ctx)
+{
+    endpt_t *ep = endpt_create (MODEVENT_INPROC_URI);
+
+    if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_PUB)))
+        err_exit ("zsocket_new");
+    zsocket_set_hwm (ep->zs, 0);
+    if (zsocket_bind (ep->zs, "%s", ep->uri) < 0)
+        err_exit ("%s", ep->uri);
+    return ep;
 }
 
 static int cmbd_init_child (ctx_t *ctx, endpt_t *ep)
@@ -982,19 +1001,7 @@ static int cmbd_init_gevent_sub (ctx_t *ctx, endpt_t *ep)
     return 0;
 }
 
-static void *cmbd_init_event_out (ctx_t *ctx)
-{
-    void *s;
-
-    if (!(s = zsocket_new (ctx->zctx, ZMQ_PUB)))
-        err_exit ("zsocket_new");
-    zsocket_set_hwm (s, 0);
-    if (zsocket_bind (s, "%s", EVENT_URI) < 0)
-        err_exit ("%s", EVENT_URI);
-    return s;
-}
-
-static void *cmbd_init_snoop (ctx_t *ctx)
+static endpt_t *cmbd_init_snoop (ctx_t *ctx)
 {
     char *uri;
     endpt_t *ep = endpt_create ("ipc://*");
@@ -1117,35 +1124,21 @@ static void cmbd_init_comms (ctx_t *ctx)
         msg_exit ("flux_sec_munge_init: %s", flux_sec_errstr (ctx->sec));
 }
 
-static void cmbd_init_socks (ctx_t *ctx)
+static void cmbd_init_overlay (ctx_t *ctx)
 {
-    /* Bind to downstream ports.
-     */
-    ctx->zs_request = cmbd_init_request (ctx);
-    ctx->zs_event_out = cmbd_init_event_out (ctx);
-    ctx->snoop = cmbd_init_snoop (ctx);
-
     if (ctx->rank == 0 && ctx->gevent) {
         cmbd_init_gevent_pub (ctx, ctx->gevent);
         ctx->event_active = true;
     }
     if (ctx->rank > 0 && ctx->gevent)
         cmbd_init_gevent_sub (ctx, ctx->gevent);
+
     if (ctx->child && !ctx->child->zs)      /* boot_pmi may have done this */
         cmbd_init_child (ctx, ctx->child);
     if (ctx->right)
         cmbd_init_right (ctx, ctx->right);
-    /* N.B. boot_pmi may have created a gevent relay too - no work to do here */
-#if 0
-    /* Increase max number of sockets and number of I/O thraeds.
-     * (N.B. must call zctx_underlying () only after first socket is created)
-     */
-    if (zmq_ctx_set (zctx_underlying (ctx->zctx), ZMQ_MAX_SOCKETS, 4096) < 0)
-        err_exit ("zmq_ctx_set ZMQ_MAX_SOCKETS");
-    if (zmq_ctx_set (zctx_underlying (ctx->zctx), ZMQ_IO_THREADS, 4) < 0)
-        err_exit ("zmq_ctx_set ZMQ_IO_THREADS");
-#endif
-    /* Connect to upstream ports, if any
+
+    /* Connect to parent(s), if any
      */
     endpt_t *ep;
     if ((ep = zlist_first (ctx->parents))) {
@@ -1153,20 +1146,20 @@ static void cmbd_init_socks (ctx_t *ctx)
             err_exit ("%s", ep->uri);
     }
 
-    /* create flux_t handle */
+    /* Create broker's flux_t handle.
+     */
     ctx->h = flux_handle_create (ctx, &cmbd_handle_ops, 0);
     flux_log_set_facility (ctx->h, "cmbd");
     if (ctx->rank == 0)
         flux_log_set_redirect (ctx->h, true);
 }
 
-static void cmbd_fini (ctx_t *ctx)
+static void cmbd_init_modsocks (ctx_t *ctx)
 {
-    zhash_destroy (&ctx->modules);
-    if (ctx->sec)
-        flux_sec_destroy (ctx->sec);
-    zloop_destroy (&ctx->zl);
-    zctx_destroy (&ctx->zctx); /* destorys all sockets created in ctx */
+    ctx->modrequest = cmbd_init_modrequest (ctx);
+    ctx->modevent = cmbd_init_modevent (ctx);
+
+    ctx->snoop = cmbd_init_snoop (ctx);
 }
 
 static char *cmb_getattr (ctx_t *ctx, const char *name)
@@ -1193,7 +1186,7 @@ static int cmb_rmmod (ctx_t *ctx, const char *name, zmsg_t **zmsg)
         errno = ENOENT;
         return -1;
     }
-    module_unload (mod, zmsg);
+    module_stop (mod, zmsg);
     flux_log (ctx->h, LOG_INFO, "rmmod %s", name);
     return 0;
 }
@@ -1230,9 +1223,9 @@ done:
 
 static int cmb_insmod (ctx_t *ctx, char *path, int argc, char **argv)
 {
-    int i, rc = -1;
     module_t *mod;
     char *name = NULL;
+    int rc = -1;
 
     if (!(name = flux_modname (path))) {
         errno = ENOENT;
@@ -1244,20 +1237,8 @@ static int cmb_insmod (ctx_t *ctx, char *path, int argc, char **argv)
     }
     if (!(mod = module_create (ctx, path)))
         goto done;
-    /* Args are transitioning from zhash to argc, argv.
-     * To avoid too much code perturbation for now we translate here.
-     * Assume args are in key=val format as before.
-     */
-    for (i = 0; i < argc; i++ ) {
-        char *key = xstrdup (argv[i]);
-        char *val = strchr (key, '=');
-        if (val)
-            *val++ = '\0';
-        zhash_update (mod->args, key, xstrdup (val ? val : "1"));
-        zhash_freefn (mod->args, key, (zhash_free_fn *)free);
-        free (key);
-    }
-    if (module_load (ctx, mod) < 0) {
+    mod_set_args (mod->p, argc, argv);
+    if (module_start (ctx, mod) < 0) {
         module_destroy (mod);
         goto done;
     }
@@ -1567,6 +1548,8 @@ static int cmb_event_sendmsg (ctx_t *ctx, zmsg_t **event)
     zmsg_t *cpy = NULL;
 
     assert (ctx->rank == 0);
+    assert (ctx->modevent != NULL);
+    assert (ctx->modevent->zs != NULL);
 
     /* Publish event globally (if configured)
     */
@@ -1594,7 +1577,7 @@ static int cmb_event_sendmsg (ctx_t *ctx, zmsg_t **event)
     endpt_cc (*event, ctx->snoop);
     cmb_internal_event (ctx, *event);
     endpt_cc (*event, ctx->gevent_relay);
-    if (zmsg_send (event, ctx->zs_event_out) < 0) {
+    if (zmsg_send (event, ctx->modevent->zs) < 0) {
         if (errno == 0)
             errno = EIO;
         goto done;
@@ -1610,6 +1593,8 @@ static int cmb_event_send (ctx_t *ctx, JSON o, const char *topic)
 {
     int rc = -1;
     zmsg_t *zmsg;
+
+    assert (ctx->rank == 0);
 
     if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_EVENT)))
         oom ();
@@ -1639,7 +1624,6 @@ static int cmb_pub (ctx_t *ctx, zmsg_t **zmsg)
     int rc = -1;
 
     assert (ctx->rank == 0);
-    assert (ctx->zs_event_out != NULL);
 
     if (flux_msg_decode (*zmsg, NULL, &o) < 0 || !o) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
@@ -2070,7 +2054,10 @@ static int recv_event (ctx_t *ctx, zmsg_t **zmsg)
     endpt_cc (*zmsg, ctx->snoop);
     child_cc_all (ctx, *zmsg); /* to downstream peers */
     cmb_internal_event (ctx, *zmsg);
-    return zmsg_send (zmsg, ctx->zs_event_out); /* to plugins */
+
+    assert (ctx->modevent != NULL);
+    assert (ctx->modevent->zs != NULL);
+    return zmsg_send (zmsg, ctx->modevent->zs);
 }
 
 static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
@@ -2266,7 +2253,7 @@ static int cmbd_response_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
     if (!nexthop)                             /* local: reply to ourselves? */
         rc = -1;
     else if (peer_ismodule (ctx, nexthop))    /* send to a module */
-        rc = zmsg_send (zmsg, ctx->zs_request);
+        rc = zmsg_send (zmsg, ctx->modrequest->zs);
     else if (ctx->child)                      /* send to downstream peer */
         rc = zmsg_send (zmsg, ctx->child->zs);
     if (nexthop)
@@ -2293,22 +2280,8 @@ done:
     return rc;
 }
 
-static int cmbd_rank (void *impl)
-{
-    ctx_t *ctx = impl;
-    return ctx->rank;
-}
-
-static zctx_t *cmbd_get_zctx (void *impl)
-{
-    ctx_t *ctx = impl;
-    return ctx->zctx;
-}
-
 static const struct flux_handle_ops cmbd_handle_ops = {
     .sendmsg = cmbd_sendmsg,
-    .rank = cmbd_rank,
-    .get_zctx = cmbd_get_zctx,
 };
 
 /*

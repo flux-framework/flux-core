@@ -42,6 +42,7 @@
 #include <dlfcn.h>
 #include <fnmatch.h>
 #include <json.h>
+#include <argz.h>
 #include <czmq.h>
 #include <flux/core.h>
 
@@ -76,12 +77,15 @@ typedef struct {
 struct mod_ctx_struct {
     int magic;
 
-    /* inproc:// sockets to broker
-     * Created/destroyed in broker, used in module.
+    /* sockets to broker
      */
     void *zs_request;       /* DEALER for making requests */
     void *zs_svc[2];        /* PAIR for handling requests 0=module, 1=broker */
     void *zs_evin;          /* SUB for handling subscribed-to events */
+
+    char *modrequest_uri;
+    char *modevent_uri;
+    char *svc_uri;
 
     /* putmsg queue - where we put messages that arrive before the one
      * we really want.  Afterwards, this queue must be processed until
@@ -108,14 +112,15 @@ struct mod_ctx_struct {
     zuuid_t *uuid;          /* uuid for unique request sender identity */
     pthread_t t;            /* module thread */
     mod_main_comms_f *main; /* dlopened mod_main() */
-    mod_stats_t stats;   /* module message statistics */
-    void *zctx;             /* broker zctx */
+    mod_stats_t stats;      /* module message statistics */
+    void *zctx;             /* zctx for our sockets */
     flux_t h;               /* a module has a flux handle implicitly created */
     const char *name;       /* MOD_NAME */
     void *dso;              /* reference on dlopened module */
     int size;               /* size of .so file for lsmod */
     char *digest;           /* digest of .so file for lsmod */
-    zhash_t *args;          /* hash of module arguments (FIXME RFC 5) */
+    size_t argz_len;
+    char *argz;
     int rank;               /* broker rank */
 };
 
@@ -709,19 +714,89 @@ static void register_request (mod_ctx_t p, char *name, FluxMsgHandler cb)
     free (s);
 }
 
+/* FIXME: this should go away once module prototypes are updated.
+ */
+static zhash_t *zhash_fromargz (mod_ctx_t p)
+{
+    zhash_t *z;
+    char *arg;
+
+    if (!(z = zhash_new ()))
+        oom ();
+    arg = argz_next (p->argz, p->argz_len, NULL);
+    while (arg != NULL) {
+        char *key = xstrdup (arg);
+        char *val = strchr (key, '=');
+        if (!val || strlen (val) == 0)
+            val = "1";
+        else
+            *val++ = '\0';
+        zhash_update (z, key, xstrdup (val));
+        zhash_freefn (z, key, (zhash_free_fn *)free);
+        free (key);
+        arg = argz_next (p->argz, p->argz_len, arg);
+    }
+    return z;
+}
+
+static void send_eof (void *sock)
+{
+    zmsg_t *zmsg;
+
+    if (!(zmsg = zmsg_new ()) || zmsg_pushmem (zmsg, NULL, 0) < 0)
+        oom ();
+    if (zmsg_send (&zmsg, sock) < 0)
+        err_exit ("error sending EOF");
+    zmsg_destroy (&zmsg);
+}
+
 static void *mod_thread (void *arg)
 {
     mod_ctx_t p = arg;
     sigset_t signal_set;
     int errnum;
+    zhash_t *args = NULL;
 
-    /* block all signals */
+    assert (p->zctx);
+
+    /* Connect to broker sockets
+     */
+    if (!(p->zs_request = zsocket_new (p->zctx, ZMQ_DEALER)))
+        err_exit ("zsocket_new");
+    zsocket_set_hwm (p->zs_request, 0);
+    zsocket_set_identity (p->zs_request, zuuid_str (p->uuid));
+    if (zsocket_connect (p->zs_request, "%s", p->modrequest_uri) < 0)
+        err_exit ("%s", p->modrequest_uri);
+    ev_zmq_init (&p->request_w, main_cb, p->zs_request, EV_READ);
+    p->request_w.data = p;
+
+    if (!(p->zs_evin = zsocket_new (p->zctx, ZMQ_SUB)))
+        err_exit ("zsocket_new");
+    zsocket_set_hwm (p->zs_evin, 0);
+    if (zsocket_connect (p->zs_evin, "%s", p->modevent_uri) < 0)
+        err_exit ("%s", p->modevent_uri);
+    ev_zmq_init (&p->evin_w, main_cb, p->zs_evin, EV_READ);
+    p->evin_w.data = p;
+
+    if (!(p->zs_svc[0]= zsocket_new (p->zctx, ZMQ_PAIR)))
+        err_exit ("zsocket_new");
+    zsocket_set_hwm (p->zs_svc[0], 0);
+    if (zsocket_connect (p->zs_svc[0], "%s", p->svc_uri) < 0)
+        err_exit ("%s", p->svc_uri);
+    ev_zmq_init (&p->svc_w, main_cb, p->zs_svc[0], EV_READ);
+    p->svc_w.data = p;
+
+    ev_zlist_init (&p->putmsg_w, putmsg_cb, p->putmsg, EV_READ);
+    p->putmsg_w.data = p;
+
+    /* Block all signals
+     */
     if (sigfillset (&signal_set) < 0)
         err_exit ("%s: sigfillset", p->name);
     if ((errnum = pthread_sigmask (SIG_BLOCK, &signal_set, NULL)) != 0)
         errn_exit (errnum, "pthread_sigmask");
 
-    /* prep the event loop
+    /* Prep the event loop
      */
     if (!(p->loop = ev_loop_new (EVFLAG_AUTO)))
         err_exit ("%s: ev_loop_new", p->name);
@@ -735,13 +810,22 @@ static void *mod_thread (void *arg)
     register_request (p, "rusage", rusage_cb);
     register_event   (p, "stats.*", stats_cb);
 
-    if (p->main(p->h, p->args) < 0) {
+    /* Run the module's main().
+     */
+    args = zhash_fromargz (p);
+    if (p->main(p->h, args) < 0) {
         err ("%s: mod_main returned error", p->name);
         goto done;
     }
 done:
+    zhash_destroy (&args);
     ev_loop_destroy (p->loop);
-    zstr_send (p->zs_svc[0], ""); /* EOF */
+
+    send_eof (p->zs_svc[0]);
+
+    zsocket_destroy (p->zctx, p->zs_evin);
+    zsocket_destroy (p->zctx, p->zs_svc[0]);
+    zsocket_destroy (p->zctx, p->zs_request);
 
     return NULL;
 }
@@ -783,10 +867,7 @@ void mod_destroy (mod_ctx_t p)
 
     flux_handle_destroy (&p->h);
 
-    zsocket_destroy (p->zctx, p->zs_evin);
-    zsocket_destroy (p->zctx, p->zs_svc[0]);
     zsocket_destroy (p->zctx, p->zs_svc[1]);
-    zsocket_destroy (p->zctx, p->zs_request);
 
     zmsg_t *zmsg;
     while ((zmsg = zlist_pop (p->putmsg)))
@@ -797,6 +878,14 @@ void mod_destroy (mod_ctx_t p)
     dlclose (p->dso);
     zuuid_destroy (&p->uuid);
     free (p->digest);
+    if (p->argz)
+        free (p->argz);
+    if (p->modrequest_uri)
+        free (p->modrequest_uri);
+    if (p->modevent_uri)
+        free (p->modevent_uri);
+    if (p->svc_uri)
+        free (p->svc_uri);
 
     free (p);
 }
@@ -826,7 +915,23 @@ void mod_start (mod_ctx_t p)
         errn_exit (errnum, "pthread_create");
 }
 
-mod_ctx_t mod_create (flux_t h, const char *path, zhash_t *args)
+void mod_set_args (mod_ctx_t p, int argc, char * const argv[])
+{
+    if (p->argz) {
+        free (p->argz);
+        p->argz_len = 0;
+    }
+    if (argv && argz_create (argv, &p->argz, &p->argz_len) < 0)
+        oom ();
+}
+
+void mod_add_arg (mod_ctx_t p, const char *arg)
+{
+    if (argz_add (&p->argz, &p->argz_len, arg) < 0)
+        oom ();
+}
+
+mod_ctx_t mod_create (zctx_t *zctx, uint32_t rank, const char *path)
 {
     mod_ctx_t p;
     void *dso;
@@ -851,8 +956,6 @@ mod_ctx_t mod_create (flux_t h, const char *path, zhash_t *args)
 
     p = xzmalloc (sizeof (*p));
     p->magic = PLUGIN_MAGIC;
-    p->zctx = flux_get_zctx (h);
-    p->args = args;
     p->main = mod_main;
     p->dso = dso;
     zf = zfile_new (NULL, path);
@@ -862,30 +965,29 @@ mod_ctx_t mod_create (flux_t h, const char *path, zhash_t *args)
     p->name = *mod_namep;
     if (!(p->uuid = zuuid_new ()))
         oom ();
-    p->rank = flux_rank (h);
+    p->rank = rank;
 
     p->h = flux_handle_create (p, &mod_handle_ops, 0);
     flux_log_set_facility (p->h, p->name);
 
-    /* connect sockets in the parent, then use them in the thread */
-    zconnect (p->zctx, &p->zs_request, ZMQ_DEALER, REQUEST_URI, -1,
-              zuuid_str (p->uuid));
-    zconnect (p->zctx, &p->zs_evin,  ZMQ_SUB, EVENT_URI, 0, NULL);
+    p->zctx = zctx;
 
-    char *svc_uri = xasprintf ("inproc://svc-%s", p->name);
-    zbind (p->zctx, &p->zs_svc[1], ZMQ_PAIR, svc_uri, -1);
-    zconnect (p->zctx, &p->zs_svc[0], ZMQ_PAIR, svc_uri, -1, NULL);
-    free (svc_uri);
+    p->modrequest_uri = xstrdup (MODREQUEST_INPROC_URI);
+    p->modevent_uri = xstrdup (MODEVENT_INPROC_URI);
+    p->svc_uri = xasprintf (SVC_INPROC_URI_TMPL, p->name);
 
     if (!(p->putmsg = zlist_new ()))
         oom ();
     if (!(p->watchers = zhash_new ()))
         oom ();
-    ev_zmq_init (&p->request_w, main_cb, p->zs_request, EV_READ);
-    ev_zmq_init (&p->svc_w, main_cb, p->zs_svc[0], EV_READ);
-    ev_zmq_init (&p->evin_w, main_cb, p->zs_evin, EV_READ);
-    ev_zlist_init (&p->putmsg_w, putmsg_cb, p->putmsg, EV_READ);
-    p->request_w.data = p->svc_w.data = p->evin_w.data = p->putmsg_w.data = p;
+
+    /* Broker end of service socket pair.
+     */
+    if (!(p->zs_svc[1] = zsocket_new (zctx, ZMQ_PAIR)))
+        err_exit ("zsocket_new");
+    zsocket_set_hwm (p->zs_svc[1], 0);
+    if (zsocket_bind (p->zs_svc[1], "%s", p->svc_uri) < 0)
+        err_exit ("%s", p->svc_uri);
     return p;
 }
 
