@@ -57,6 +57,7 @@
 #include "module.h"
 #include "boot_pmi.h"
 #include "endpt.h"
+#include "peer.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
@@ -113,7 +114,7 @@ typedef struct {
     bool quiet;
     flux_t h;
     pid_t pid;
-    zhash_t *peer_idle;         /* peer (hopcount=1) hb idle time, by uuid */
+    zhash_t *peers;             /* peer (hopcount=1) hb idle time, by uuid */
     int hb_lastreq;             /* hb epoch of last upstream request */
     char *proctitle;
     sigset_t default_sigset;
@@ -152,12 +153,6 @@ typedef struct {
     ctx_t *ctx;
 } module_t;
 
-typedef struct {
-    int hb_lastseen;            /* epoch peer was last heard from */
-    bool modflag;               /* true if this peer is a comms module */
-    bool event_mute;            /* stop CC'ing events over this connection */
-} peer_t;
-
 static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod);
 static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
@@ -173,10 +168,6 @@ static int broker_init_gevent_pub (ctx_t *ctx, endpt_t *ep);
 
 static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
                           zhash_t *modexclude);
-
-static int peer_idle (ctx_t *ctx, const char *uuid);
-static void peer_update (ctx_t *ctx, const char *uuid);
-static peer_t *peer_create (ctx_t *ctx, const char *uuid, bool modflag);
 
 static int recv_event (ctx_t *ctx, zmsg_t **zmsg);
 static int send_event (ctx_t *ctx, JSON o, const char *topic);
@@ -277,7 +268,7 @@ int main (int argc, char *argv[])
     ctx.size = 1;
     if (!(ctx.modules = zhash_new ()))
         oom ();
-    if (!(ctx.peer_idle = zhash_new ()))
+    if (!(ctx.peers = zhash_new ()))
         oom ();
     if (!(ctx.parents = zlist_new ()))
         oom ();
@@ -590,7 +581,7 @@ int main (int argc, char *argv[])
         endpt_destroy (ctx.modrequest);
     if (ctx.modevent)
         endpt_destroy (ctx.modevent);
-    zhash_destroy (&ctx.peer_idle);
+    zhash_destroy (&ctx.peers);
 
     zlist_destroy (&modules);
     zhash_destroy (&modexclude);
@@ -800,7 +791,8 @@ static int module_start (ctx_t *ctx, module_t *mod)
 {
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
-    peer_create (ctx, mod_uuid (mod->p), true);
+    peer_t *p = peer_add (ctx->peers, mod_uuid (mod->p));
+    peer_set_modflag (p, true);
     zp.socket = mod_sock (mod->p);
     if (zloop_poller (ctx->zl, &zp, (zloop_fn *)plugins_cb, mod) < 0)
         err_exit ("zloop_poller");
@@ -1193,10 +1185,11 @@ static JSON cmb_lsmod (ctx_t *ctx)
     while (name) {
         mod = zhash_lookup (ctx->modules, name);
         assert (mod != NULL);
-        if (mod && flux_lsmod_json_append (o, mod_name (mod->p),
-                                mod_size (mod->p),
-                                mod_digest (mod->p),
-                                peer_idle (ctx, mod_uuid (mod->p))) < 0) {
+        if (flux_lsmod_json_append (o, mod_name (mod->p),
+                                    mod_size (mod->p),
+                                    mod_digest (mod->p),
+                                    peer_idle (ctx->peers, mod_uuid (mod->p),
+                                               ctx->hb_epoch)) < 0) {
             Jput (o);
             o = NULL;
             goto done;
@@ -1244,69 +1237,31 @@ done:
     return rc;
 }
 
-static json_object *peer_ls (ctx_t *ctx)
+/* List peers, excluding modules.
+ * FIXME: this should probably be an array not a dictionary
+ */
+static JSON cmb_lspeer (ctx_t *ctx)
 {
-    json_object *po, *response = util_json_object_new_object ();
+    JSON out = Jnew ();
     zlist_t *keys;
     char *key;
     peer_t *p;
 
-    if (!(keys = zhash_keys (ctx->peer_idle)))
+    if (!(keys = zhash_keys (ctx->peers)))
         oom ();
     key = zlist_first (keys);
     while (key) {
-        p = zhash_lookup (ctx->peer_idle, key);
-        assert (p != NULL);
-        if (!p->modflag) {
-            po = util_json_object_new_object ();
-            util_json_object_add_int (po, "idle", peer_idle (ctx, key));
-            json_object_object_add (response, key, po);
+        if ((p = peer_lookup (ctx->peers, key)) && !peer_get_modflag (p)) {
+            int idle = ctx->hb_epoch - peer_get_lastseen (p);
+            JSON o = Jnew ();
+            Jadd_int (o, "idle", idle);
+            Jadd_obj (out, key, o);
+            Jput (o);
         }
         key = zlist_next (keys);
     }
     zlist_destroy (&keys);
-    return response;
-}
-
-static void peer_destroy (peer_t *p)
-{
-    free (p);
-}
-
-static peer_t *peer_create (ctx_t *ctx, const char *uuid, bool modflag)
-{
-    peer_t *p = xzmalloc (sizeof (*p));
-    p->modflag = modflag;
-    zhash_update (ctx->peer_idle, uuid, p);
-    zhash_freefn (ctx->peer_idle, uuid, (zhash_free_fn *)peer_destroy);
-    return p;
-}
-
-static void peer_update (ctx_t *ctx, const char *uuid)
-{
-    peer_t *p;
-
-    if (!(p = zhash_lookup (ctx->peer_idle, uuid)))
-        p = peer_create (ctx, uuid, false);
-    p->hb_lastseen = ctx->hb_epoch;
-}
-
-static int peer_idle (ctx_t *ctx, const char *uuid)
-{
-    peer_t *p;
-
-    if (!(p = zhash_lookup (ctx->peer_idle, uuid)))
-        return ctx->hb_epoch; /* nonexistent: maximum idle */
-    return ctx->hb_epoch - p->hb_lastseen;
-}
-
-static bool peer_ismodule (ctx_t *ctx, const char *uuid)
-{
-    peer_t *p;
-
-    if (!(p = zhash_lookup (ctx->peer_idle, uuid)))
-        return false;
-    return p->modflag;
+    return out ;
 }
 
 static int child_cc (void *sock, const char *id, zmsg_t *zmsg)
@@ -1337,26 +1292,17 @@ static void child_cc_all (ctx_t *ctx, zmsg_t *zmsg)
 
     if (!ctx->child || !ctx->child->zs)
         return;
-    if (!(keys = zhash_keys (ctx->peer_idle)))
+    if (!(keys = zhash_keys (ctx->peers)))
         oom ();
     key = zlist_first (keys);
     while (key) {
-        if ((p = zhash_lookup (ctx->peer_idle, key))) {
-            if (!p->modflag && !p->event_mute)
-                child_cc (ctx->child->zs, key, zmsg);
+        if ((p = peer_lookup (ctx->peers, key)) && !peer_get_modflag (p)
+                                                && !peer_get_mute (p)) {
+            child_cc (ctx->child->zs, key, zmsg);
         }
         key = zlist_next (keys);
     }
     zlist_destroy (&keys);
-}
-
-static int peer_mute (ctx_t *ctx, const char *id)
-{
-    peer_t *p;
-    if (!(p = zhash_lookup (ctx->peer_idle, id)))
-        return -1;
-    p->event_mute = true;
-    return 0;
 }
 
 static void self_update (ctx_t *ctx)
@@ -1824,14 +1770,11 @@ static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             Jput (out);
         }
     } else if (flux_msg_match (*zmsg, "cmb.lspeer")) {
-        json_object *response = NULL;
-        if (!(response = peer_ls (ctx))) {
-            flux_respond_errnum (ctx->h, zmsg, errno);
-        } else {
-            flux_respond (ctx->h, zmsg, response);
-        }
-        if (response)
-            json_object_put (response);
+        JSON out = cmb_lspeer (ctx);
+        if (flux_json_respond (ctx->h, out, zmsg) < 0)
+            flux_log (ctx->h, LOG_ERR, "%s: flux_err_respond: %s",
+                      __FUNCTION__, strerror (errno));
+        Jput (out);
     } else if (flux_msg_match (*zmsg, "cmb.ping")) {
         json_object *request = NULL;
         char *s = NULL;
@@ -1885,7 +1828,7 @@ static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
     } else if (flux_msg_match (*zmsg, "cmb.event-mute")) {
         char *id = NULL;
         if (flux_msg_get_route_last (*zmsg, &id) == 0)
-            peer_mute (ctx, id);
+            peer_mute (ctx->peers, id);
         if (id)
             free (id);
     } else if (flux_msg_match (*zmsg, "cmb.exec")) {
@@ -1902,7 +1845,7 @@ static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
     zmsg_t *zmsg = zmsg_recv (item->socket);
     int type;
-    char *id;
+    char *id = NULL;
 
     if (!zmsg)
         goto done;
@@ -1910,11 +1853,10 @@ static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_KEEPALIVE:
+            endpt_cc (zmsg, ctx->snoop);
             if (flux_msg_get_route_last (zmsg, &id) < 0)
                 goto done;
-            endpt_cc (zmsg, ctx->snoop);
-            peer_update (ctx, id);
-            free (id);
+            peer_checkin (ctx->peers, id, ctx->hb_epoch);
             break;
         case FLUX_MSGTYPE_REQUEST:
             assert (zmsg != NULL);
@@ -1926,6 +1868,8 @@ static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
             break;
     }
 done:
+    if (id)
+        free (id);
     zmsg_destroy (&zmsg);
     ZLOOP_RETURN(ctx);
 }
@@ -1990,7 +1934,7 @@ static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod)
             zhash_delete (ctx->modules, mod_name (mod->p));
         else {
             (void)flux_sendmsg (ctx->h, &zmsg);
-            peer_update (ctx, mod_uuid (mod->p));
+            peer_checkin (ctx->peers, mod_uuid (mod->p), ctx->hb_epoch);
         }
     }
     if (zmsg)
@@ -2192,7 +2136,7 @@ static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
     }
     endpt_cc (*zmsg, ctx->snoop);
     if (hopcount > 0 && lasthop)
-        peer_update (ctx, lasthop);
+        peer_checkin (ctx->peers, lasthop, ctx->hb_epoch);
     if (nodeid == FLUX_NODEID_ANY) {
         rc = service_send (ctx, zmsg, lasthop, hopcount, false);
         if (rc < 0 && errno == ENOSYS)
@@ -2214,6 +2158,7 @@ done:
 
 static int broker_response_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
 {
+    peer_t *p;
     char *nexthop = flux_msg_nexthop (*zmsg);
     int rc = -1;
 
@@ -2221,10 +2166,10 @@ static int broker_response_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
 
     if (!nexthop)                             /* local: reply to ourselves? */
         rc = -1;
-    else if (peer_ismodule (ctx, nexthop))    /* send to a module */
-        rc = zmsg_send (zmsg, ctx->modrequest->zs);
-    else if (ctx->child)                      /* send to downstream peer */
-        rc = zmsg_send (zmsg, ctx->child->zs);
+    else if ((p = peer_lookup (ctx->peers, nexthop)) && peer_get_modflag (p))
+        rc = zmsg_send (zmsg, ctx->modrequest->zs); /* send to module */
+    else if (ctx->child)
+        rc = zmsg_send (zmsg, ctx->child->zs);      /* send to dnstream peer */
     if (nexthop)
         free (nexthop);
     if (*zmsg)
