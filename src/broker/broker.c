@@ -56,6 +56,7 @@
 
 #include "module.h"
 #include "boot_pmi.h"
+#include "endpt.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
@@ -67,11 +68,6 @@
 
 const char *default_modules =
     "api,modctl,kvs,live,mecho,job[0],wrexec,resrc,barrier";
-
-typedef struct {
-    void *zs;
-    char *uri;
-} endpt_t;
 
 typedef struct {
     /* 0MQ
@@ -181,11 +177,6 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
 static int peer_idle (ctx_t *ctx, const char *uuid);
 static void peer_update (ctx_t *ctx, const char *uuid);
 static peer_t *peer_create (ctx_t *ctx, const char *uuid, bool modflag);
-
-static endpt_t *endpt_create (const char *fmt, ...)
-                              __attribute__ ((format (printf, 1, 2)));
-static void endpt_destroy (endpt_t *ep);
-static int endpt_cc (zmsg_t *zmsg, endpt_t *ep);
 
 static int recv_event (ctx_t *ctx, zmsg_t **zmsg);
 static int send_event (ctx_t *ctx, JSON o, const char *topic);
@@ -1410,35 +1401,6 @@ static void cmb_heartbeat (ctx_t *ctx, zmsg_t *zmsg)
     if (self_idle (ctx) > 0)
         send_keepalive (ctx);
 }
-
-static endpt_t *endpt_create (const char *fmt, ...)
-{
-    endpt_t *ep = xzmalloc (sizeof (*ep));
-    va_list ap;
-
-    va_start (ap, fmt);
-    ep->uri = xvasprintf (fmt, ap);
-    va_end (ap);
-    return ep;
-}
-
-static void endpt_destroy (endpt_t *ep)
-{
-    free (ep->uri);
-    free (ep);
-}
-
-static int endpt_cc (zmsg_t *zmsg, endpt_t *ep)
-{
-    zmsg_t *cpy;
-
-    if (!zmsg || !ep || !ep->zs)
-        return 0;
-    if (!(cpy = zmsg_dup (zmsg)))
-        err_exit ("zmsg_dup");
-    return zmsg_send (&cpy, ep->zs);
-}
-
 
 /* Establish connection with a new parent and begin using it for all
  * upstream requests.  Leave old parent(s) wired in to zloop to make
