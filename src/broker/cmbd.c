@@ -169,11 +169,11 @@ static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int hb_cb (zloop_t *zl, int timer_id, ctx_t *ctx);
 static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 
-static void cmbd_init_comms (ctx_t *ctx);
-static void cmbd_init_overlay (ctx_t *ctx);
-static void cmbd_init_modsocks (ctx_t *ctx);
-static int cmbd_init_child (ctx_t *ctx, endpt_t *ep);
-static int cmbd_init_gevent_pub (ctx_t *ctx, endpt_t *ep);
+static void broker_init_comms (ctx_t *ctx);
+static void broker_init_overlay (ctx_t *ctx);
+static void broker_init_modsocks (ctx_t *ctx);
+static int broker_init_child (ctx_t *ctx, endpt_t *ep);
+static int broker_init_gevent_pub (ctx_t *ctx, endpt_t *ep);
 
 static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
                           zhash_t *modexclude);
@@ -204,7 +204,7 @@ static const double min_heartrate = 0.01;   /* min seconds */
 static const double max_heartrate = 30;     /* max seconds */
 static const double dfl_heartrate = 2;
 
-static const struct flux_handle_ops cmbd_handle_ops;
+static const struct flux_handle_ops broker_handle_ops;
 
 #define OPTIONS "t:vqR:S:p:M:X:L:N:Pk:e:r:s:c:fnH:O:x:"
 static const struct option longopts[] = {
@@ -468,7 +468,7 @@ int main (int argc, char *argv[])
 
     /* Create zeromq context, security context, zloop, etc.
      */
-    cmbd_init_comms (&ctx);
+    broker_init_comms (&ctx);
 
     /* Sets rank, size, parent URI.
      * Initialize child socket.
@@ -529,11 +529,11 @@ int main (int argc, char *argv[])
 
     if (ctx.verbose)
         msg ("initializing overlay sockets");
-    cmbd_init_overlay (&ctx); /* NOTE: after this, ctx->h is usable */
+    broker_init_overlay (&ctx); /* NOTE: after this, ctx->h is usable */
 
     if (ctx.verbose)
         msg ("initializing module sockets");
-    cmbd_init_modsocks (&ctx);
+    broker_init_modsocks (&ctx);
 
     if (ctx.verbose)
         msg ("loading modules");
@@ -714,12 +714,12 @@ static void boot_pmi (ctx_t *ctx)
 
     ipaddr_getprimary (ipaddr, sizeof (ipaddr));
     ctx->child = endpt_create ("tcp://%s:*", ipaddr);
-    cmbd_init_child (ctx, ctx->child); /* obtain dyn port */
+    broker_init_child (ctx, ctx->child); /* obtain dyn port */
     pmi_put_uri (pmi, ctx->rank, ctx->child->uri);
 
     if (relay_rank >= 0 && ctx->rank == relay_rank) {
         ctx->gevent_relay = endpt_create ("ipc://*");
-        cmbd_init_gevent_pub (ctx, ctx->gevent_relay); /* obtain dyn port */
+        broker_init_gevent_pub (ctx, ctx->gevent_relay); /* obtain dyn port */
         pmi_put_relay (pmi, ctx->rank, ctx->gevent_relay->uri);
     }
 
@@ -912,7 +912,7 @@ next:
 
 /* Bind to ROUTER socket used by comms modules to send requests to the broker.
  */
-static endpt_t *cmbd_init_modrequest (ctx_t *ctx)
+static endpt_t *broker_init_modrequest (ctx_t *ctx)
 {
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
     endpt_t *ep = endpt_create (MODREQUEST_INPROC_URI);
@@ -930,7 +930,7 @@ static endpt_t *cmbd_init_modrequest (ctx_t *ctx)
 
 /* Bind to PUB socket used by comms modules to receive events from broker.
  */
-static endpt_t *cmbd_init_modevent (ctx_t *ctx)
+static endpt_t *broker_init_modevent (ctx_t *ctx)
 {
     endpt_t *ep = endpt_create (MODEVENT_INPROC_URI);
 
@@ -942,7 +942,7 @@ static endpt_t *cmbd_init_modevent (ctx_t *ctx)
     return ep;
 }
 
-static int cmbd_init_child (ctx_t *ctx, endpt_t *ep)
+static int broker_init_child (ctx_t *ctx, endpt_t *ep)
 {
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
@@ -963,7 +963,7 @@ static int cmbd_init_child (ctx_t *ctx, endpt_t *ep)
     return 0;
 }
 
-static int cmbd_init_gevent_pub (ctx_t *ctx, endpt_t *ep)
+static int broker_init_gevent_pub (ctx_t *ctx, endpt_t *ep)
 {
     if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_PUB)))
         err_exit ("zsocket_new");
@@ -979,7 +979,7 @@ static int cmbd_init_gevent_pub (ctx_t *ctx, endpt_t *ep)
     return 0;
 }
 
-static int cmbd_init_gevent_sub (ctx_t *ctx, endpt_t *ep)
+static int broker_init_gevent_sub (ctx_t *ctx, endpt_t *ep)
 {
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
@@ -997,7 +997,7 @@ static int cmbd_init_gevent_sub (ctx_t *ctx, endpt_t *ep)
     return 0;
 }
 
-static endpt_t *cmbd_init_snoop (ctx_t *ctx)
+static endpt_t *broker_init_snoop (ctx_t *ctx)
 {
     char *uri;
     endpt_t *ep = endpt_create ("ipc://*");
@@ -1015,7 +1015,7 @@ static endpt_t *cmbd_init_snoop (ctx_t *ctx)
     return ep;
 }
 
-static int cmbd_init_parent (ctx_t *ctx, endpt_t *ep)
+static int broker_init_parent (ctx_t *ctx, endpt_t *ep)
 {
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
     int savederr;
@@ -1046,7 +1046,7 @@ error:
     return -1;
 }
 
-static int cmbd_init_right (ctx_t *ctx, endpt_t *ep)
+static int broker_init_right (ctx_t *ctx, endpt_t *ep)
 {
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
@@ -1067,7 +1067,7 @@ static int cmbd_init_right (ctx_t *ctx, endpt_t *ep)
 
 /* signalfd + zloop example: https://gist.github.com/mhaberler/8426050
  */
-static int cmbd_init_signalfd (ctx_t *ctx)
+static int broker_init_signalfd (ctx_t *ctx)
 {
     sigset_t sigmask;
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .socket = NULL };
@@ -1093,7 +1093,7 @@ static int cmbd_init_signalfd (ctx_t *ctx)
     return zp.fd;
 }
 
-static void cmbd_init_comms (ctx_t *ctx)
+static void broker_init_comms (ctx_t *ctx)
 {
     //(void)umask (077);
 
@@ -1103,7 +1103,7 @@ static void cmbd_init_comms (ctx_t *ctx)
     zctx_set_linger (ctx->zctx, 5);
     if (!(ctx->zl = zloop_new ()))
         err_exit ("zloop_new");
-    ctx->sigfd = cmbd_init_signalfd (ctx);
+    ctx->sigfd = broker_init_signalfd (ctx);
 
     /* Initialize security.
      */
@@ -1120,42 +1120,42 @@ static void cmbd_init_comms (ctx_t *ctx)
         msg_exit ("flux_sec_munge_init: %s", flux_sec_errstr (ctx->sec));
 }
 
-static void cmbd_init_overlay (ctx_t *ctx)
+static void broker_init_overlay (ctx_t *ctx)
 {
     if (ctx->rank == 0 && ctx->gevent) {
-        cmbd_init_gevent_pub (ctx, ctx->gevent);
+        broker_init_gevent_pub (ctx, ctx->gevent);
         ctx->event_active = true;
     }
     if (ctx->rank > 0 && ctx->gevent)
-        cmbd_init_gevent_sub (ctx, ctx->gevent);
+        broker_init_gevent_sub (ctx, ctx->gevent);
 
     if (ctx->child && !ctx->child->zs)      /* boot_pmi may have done this */
-        cmbd_init_child (ctx, ctx->child);
+        broker_init_child (ctx, ctx->child);
     if (ctx->right)
-        cmbd_init_right (ctx, ctx->right);
+        broker_init_right (ctx, ctx->right);
 
     /* Connect to parent(s), if any
      */
     endpt_t *ep;
     if ((ep = zlist_first (ctx->parents))) {
-        if (cmbd_init_parent (ctx, ep) < 0)
+        if (broker_init_parent (ctx, ep) < 0)
             err_exit ("%s", ep->uri);
     }
 
     /* Create broker's flux_t handle.
      */
-    ctx->h = flux_handle_create (ctx, &cmbd_handle_ops, 0);
+    ctx->h = flux_handle_create (ctx, &broker_handle_ops, 0);
     flux_log_set_facility (ctx->h, "cmbd");
     if (ctx->rank == 0)
         flux_log_set_redirect (ctx->h, true);
 }
 
-static void cmbd_init_modsocks (ctx_t *ctx)
+static void broker_init_modsocks (ctx_t *ctx)
 {
-    ctx->modrequest = cmbd_init_modrequest (ctx);
-    ctx->modevent = cmbd_init_modevent (ctx);
+    ctx->modrequest = broker_init_modrequest (ctx);
+    ctx->modevent = broker_init_modevent (ctx);
 
-    ctx->snoop = cmbd_init_snoop (ctx);
+    ctx->snoop = broker_init_snoop (ctx);
 }
 
 static char *cmb_getattr (ctx_t *ctx, const char *name)
@@ -1464,7 +1464,7 @@ static int cmb_reparent (ctx_t *ctx, const char *uri)
         comment = "restored";
     } else {
         ep = endpt_create ("%s", uri);
-        if (cmbd_init_parent (ctx, ep) < 0) {
+        if (broker_init_parent (ctx, ep) < 0) {
             endpt_destroy (ep);
             return -1;
         }
@@ -2210,11 +2210,11 @@ done:
 }
 
 /**
- ** Cmbd's internal flux_t implementation.
+ ** Broker's internal flux_t implementation.
  **    a bit limited, by design
  **/
 
-static int cmbd_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
+static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
 {
     char *lasthop = flux_msg_nexthop (*zmsg);
     int hopcount = flux_msg_hopcount (*zmsg);
@@ -2247,7 +2247,7 @@ done:
     return rc;
 }
 
-static int cmbd_response_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
+static int broker_response_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
 {
     char *nexthop = flux_msg_nexthop (*zmsg);
     int rc = -1;
@@ -2267,7 +2267,7 @@ static int cmbd_response_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
     return rc;
 }
 
-static int cmbd_sendmsg (void *impl, zmsg_t **zmsg)
+static int broker_sendmsg (void *impl, zmsg_t **zmsg)
 {
     ctx_t *ctx = impl;
     int type;
@@ -2275,17 +2275,17 @@ static int cmbd_sendmsg (void *impl, zmsg_t **zmsg)
     if (flux_msg_get_type (*zmsg, &type) < 0)
         goto done;
     if (type == FLUX_MSGTYPE_REQUEST)
-        rc = cmbd_request_sendmsg (ctx, zmsg);
+        rc = broker_request_sendmsg (ctx, zmsg);
     else if (type == FLUX_MSGTYPE_RESPONSE)
-        rc = cmbd_response_sendmsg (ctx, zmsg);
+        rc = broker_response_sendmsg (ctx, zmsg);
     else
         errno = EINVAL;
 done:
     return rc;
 }
 
-static const struct flux_handle_ops cmbd_handle_ops = {
-    .sendmsg = cmbd_sendmsg,
+static const struct flux_handle_ops broker_handle_ops = {
+    .sendmsg = broker_sendmsg,
 };
 
 /*
