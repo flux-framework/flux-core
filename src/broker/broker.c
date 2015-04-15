@@ -58,6 +58,7 @@
 #include "boot_pmi.h"
 #include "endpt.h"
 #include "peer.h"
+#include "overlay.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
@@ -80,25 +81,18 @@ typedef struct {
     flux_sec_t sec;             /* security context (MT-safe) */
     bool security_clr;
     bool security_set;
-    /* Sockets.
+
+    /* Overlay sockets.
      */
-    zlist_t *parents;           /* DEALER - requests to parent */
-                                /*   (reparent pushes new parent on head) */
+    overlay_t *overlay;
 
-    endpt_t *child;             /* ROUTER - requests from children */
-
-    endpt_t *right;             /* DEALER - requests to rank overlay */
-
+    /* Other sockets.
+     */
     endpt_t *modrequest;        /* ROUTER - requests from modules */
     endpt_t *modevent;          /* PUB - events to modules */
-
-    endpt_t *gevent;            /* PUB for rank = 0, SUB for rank > 0 */
-    endpt_t *gevent_relay;      /* PUB event relay for multiple brokers/node */
-
     endpt_t *snoop;             /* PUB - to flux-snoop (uri is generated) */
     /* Session parameters
      */
-    bool treeroot;              /* true if we are the root of reduction tree */
     int size;                   /* session size */
     int rank;                   /* our rank in session */
     char *rankstr;              /*   string version of above */
@@ -161,10 +155,7 @@ static int hb_cb (zloop_t *zl, int timer_id, ctx_t *ctx);
 static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 
 static void broker_init_comms (ctx_t *ctx);
-static void broker_init_overlay (ctx_t *ctx);
 static void broker_init_modsocks (ctx_t *ctx);
-static int broker_init_child (ctx_t *ctx, endpt_t *ep);
-static int broker_init_gevent_pub (ctx_t *ctx, endpt_t *ep);
 
 static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
                           zhash_t *modexclude);
@@ -246,7 +237,6 @@ int main (int argc, char *argv[])
 {
     int c;
     ctx_t ctx;
-    endpt_t *ep;
     bool fopt = false;
     bool nopt = false;
     zlist_t *modules, *modopts;
@@ -270,8 +260,7 @@ int main (int argc, char *argv[])
         oom ();
     if (!(ctx.peers = zhash_new ()))
         oom ();
-    if (!(ctx.parents = zlist_new ()))
-        oom ();
+    ctx.overlay = overlay_create ();
     ctx.k_ary = 2; /* binary TBON is default */
 
     ctx.pid = getpid();
@@ -303,14 +292,10 @@ int main (int argc, char *argv[])
                     msg_exit ("--security argument must be none|plain|curve");
                 break;
             case 't':   /* --child-uri URI[,URI,...] */
-                if (ctx.child)
-                    endpt_destroy (ctx.child);
-                ctx.child = endpt_create ("%s", optarg);
+                overlay_set_child (ctx.overlay, "%s", optarg);
                 break;
             case 'p': { /* --parent-uri URI */
-                endpt_t *ep = endpt_create ("%s", optarg);
-                if (zlist_push (ctx.parents, ep) < 0)
-                    oom ();
+                overlay_push_parent (ctx.overlay, "%s", optarg);
                 break;
             }
             case 'v':   /* --verbose */
@@ -351,14 +336,10 @@ int main (int argc, char *argv[])
                     usage ();
                 break;
             case 'e':   /* --event-uri URI */
-                if (ctx.gevent)
-                    endpt_destroy (ctx.gevent);
-                ctx.gevent = endpt_create ("%s", optarg);
+                overlay_set_event (ctx.overlay, "%s", optarg);
                 break;
             case 'r':   /* --right-uri */
-                if (ctx.right)
-                    endpt_destroy (ctx.right);
-                ctx.right = endpt_create ("%s", optarg);
+                overlay_set_right (ctx.overlay, "%s", optarg);
                 break;
             case 'c':   /* --command CMD */
                 if (ctx.shell_cmd)
@@ -452,15 +433,23 @@ int main (int argc, char *argv[])
      */
     broker_init_comms (&ctx);
 
+    overlay_set_zctx (ctx.overlay, ctx.zctx);
+    overlay_set_sec (ctx.overlay, ctx.sec);
+    overlay_set_zloop (ctx.overlay, ctx.zl);
+
+    overlay_set_parent_cb (ctx.overlay, (zloop_fn *)parent_cb, &ctx);
+    overlay_set_child_cb (ctx.overlay, (zloop_fn *)request_cb, &ctx);
+    overlay_set_event_cb (ctx.overlay, (zloop_fn *)event_cb, &ctx);
+
     /* Sets rank, size, parent URI.
      * Initialize child socket.
      */
     if (ctx.boot_pmi) {
-        if (ctx.child)
+        if (overlay_get_child (ctx.overlay))
             msg_exit ("--child-uri should not be specified with --pmi-boot");
-        if (zlist_size (ctx.parents) > 0)
+        if (overlay_get_parent (ctx.overlay))
             msg_exit ("--parent-uri should not be specified with --pmi-boot");
-        if (ctx.gevent)
+        if (overlay_get_event (ctx.overlay))
             msg_exit ("--event-uri should not be specified with --pmi-boot");
         if (ctx.sid)
             msg_exit ("--session-id should not be specified with --pmi-boot");
@@ -472,32 +461,32 @@ int main (int argc, char *argv[])
         oom ();
     if (asprintf (&ctx.rankstr_right, "%dr", ctx.rank) < 0)
         oom ();
-    if (ctx.rank == 0)
-        ctx.treeroot = true;
     /* If we're missing the wiring, presume that the session is to be
      * started on a single node and compute appropriate ipc:/// sockets.
      */
-    if (ctx.size > 1 && !ctx.gevent && !ctx.child
-                                    && zlist_size (ctx.parents) == 0) {
+    if (ctx.size > 1 && !overlay_get_event (ctx.overlay)
+                     && !overlay_get_child (ctx.overlay)
+                     && !overlay_get_parent (ctx.overlay)) {
         boot_local (&ctx);
     }
-    if (ctx.treeroot && zlist_size (ctx.parents) > 0)
-        msg_exit ("treeroot must NOT have parent");
-    if (!ctx.treeroot && zlist_size (ctx.parents) == 0)
-        msg_exit ("non-treeroot must have parents");
-    if (ctx.size > 1 && !ctx.gevent)
+    if (ctx.rank == 0 && overlay_get_parent (ctx.overlay))
+        msg_exit ("rank 0 must NOT have parent");
+    if (ctx.rank > 0 && !overlay_get_parent (ctx.overlay))
+        msg_exit ("rank > 0 must have parents");
+    if (ctx.size > 1 && !overlay_get_event (ctx.overlay))
         msg_exit ("--event-uri is required for size > 1");
 
+    overlay_set_rank (ctx.overlay, ctx.rank);
+
     if (ctx.verbose) {
-        endpt_t *ep = zlist_first (ctx.parents);
-        if (ep)
-            msg ("parent: %s", ep->uri);
-        if (ctx.child)
-            msg ("child: %s", ctx.child->uri);
-        if (ctx.gevent)
-            msg ("gevent: %s", ctx.gevent->uri);
-        if (ctx.gevent_relay)
-            msg ("gevent-relay: %s", ctx.gevent_relay->uri);
+        const char *parent = overlay_get_parent (ctx.overlay);
+        const char *child = overlay_get_child (ctx.overlay);
+        const char *event = overlay_get_event (ctx.overlay);
+        const char *relay = overlay_get_relay (ctx.overlay);
+        msg ("parent: %s", parent ? parent : "none");
+        msg ("child: %s", child ? child : "none");
+        msg ("event: %s", event ? event : "none");
+        msg ("relay: %s", relay ? relay : "none");
     }
 
     update_proctitle (&ctx);
@@ -509,9 +498,21 @@ int main (int argc, char *argv[])
         subprocess_set_callback (ctx.shell, shell_exit_handler, &ctx);
     }
 
+    /* Wire up the overlay.
+     */
     if (ctx.verbose)
         msg ("initializing overlay sockets");
-    broker_init_overlay (&ctx); /* NOTE: after this, ctx->h is usable */
+    if (overlay_bind (ctx.overlay) < 0) /* idempotent */
+        err_exit ("overlay_bind");
+    if (overlay_connect (ctx.overlay) < 0)
+        err_exit ("overlay_connect");
+
+    /* Create our flux_t handle.
+     */
+    ctx.h = flux_handle_create (&ctx, &broker_handle_ops, 0);
+    flux_log_set_facility (ctx.h, "broker");
+    if (ctx.rank == 0)
+        flux_log_set_redirect (ctx.h, true);
 
     if (ctx.verbose)
         msg ("initializing module sockets");
@@ -566,11 +567,7 @@ int main (int argc, char *argv[])
         flux_sec_destroy (ctx.sec);
     zloop_destroy (&ctx.zl);
     zctx_destroy (&ctx.zctx);
-    while ((ep = zlist_pop (ctx.parents)))
-        endpt_destroy (ep);
-    zlist_destroy (&ctx.parents);
-    if (ctx.child)
-        endpt_destroy (ctx.child);
+    overlay_destroy (ctx.overlay);
     if (ctx.rankstr)
         free (ctx.rankstr);
     if (ctx.rankstr_right)
@@ -694,34 +691,42 @@ static void boot_pmi (ctx_t *ctx)
     ctx->rank = pmi_rank (pmi);
     ctx->sid = xstrdup (pmi_sid (pmi));
 
+    overlay_set_rank (ctx->overlay, ctx->rank);
+
     ipaddr_getprimary (ipaddr, sizeof (ipaddr));
-    ctx->child = endpt_create ("tcp://%s:*", ipaddr);
-    broker_init_child (ctx, ctx->child); /* obtain dyn port */
-    pmi_put_uri (pmi, ctx->rank, ctx->child->uri);
+    overlay_set_child (ctx->overlay, "tcp://%s:*", ipaddr);
 
-    if (relay_rank >= 0 && ctx->rank == relay_rank) {
-        ctx->gevent_relay = endpt_create ("ipc://*");
-        broker_init_gevent_pub (ctx, ctx->gevent_relay); /* obtain dyn port */
-        pmi_put_relay (pmi, ctx->rank, ctx->gevent_relay->uri);
-    }
+    if (relay_rank >= 0 && ctx->rank == relay_rank)
+        overlay_set_relay (ctx->overlay, "ipc://*");
 
+    if (overlay_bind (ctx->overlay) < 0) /* expand URI wildcards */
+        err_exit ("overlay_bind failed");   /* function is idempotent */
+
+    const char *child_uri = overlay_get_child (ctx->overlay);
+    const char *relay_uri = overlay_get_relay (ctx->overlay);
+
+    if (child_uri)
+        pmi_put_uri (pmi, ctx->rank, child_uri);
+    if (relay_uri)
+        pmi_put_relay (pmi, ctx->rank, relay_uri);
+
+    /* Puts are complete, now we synchronize and begin our gets.
+     */
     pmi_fence (pmi);
 
     if (ctx->rank > 0) {
         int prank = ctx->k_ary == 0 ? 0 : (ctx->rank - 1) / ctx->k_ary;
-        endpt_t *ep = endpt_create ("%s", pmi_get_uri (pmi, prank));
-        if (zlist_push (ctx->parents, ep) < 0)
-            oom ();
+        overlay_push_parent (ctx->overlay, "%s", pmi_get_uri (pmi, prank));
     }
-
-    ctx->right = endpt_create ("%s", pmi_get_uri (pmi, right_rank));
+    overlay_set_right (ctx->overlay, "%s", pmi_get_uri (pmi, right_rank));
 
     if (relay_rank >= 0 && ctx->rank != relay_rank) {
-        ctx->gevent = endpt_create ("%s", pmi_get_relay (pmi, relay_rank));
+        overlay_set_event (ctx->overlay, "%s", pmi_get_relay (pmi, relay_rank));
     } else {
         int p = 5000 + pmi_jobid (pmi) % 1024;
-        ctx->gevent = endpt_create ("epgm://%s;239.192.1.1:%d", ipaddr, p);
+        overlay_set_event (ctx->overlay, "epgm://%s;239.192.1.1:%d", ipaddr, p);
     }
+
     pmi_fini (pmi);
 }
 
@@ -730,19 +735,17 @@ static void boot_local (ctx_t *ctx)
     const char *tmpdir = flux_get_tmpdir ();
     int rrank = ctx->rank == 0 ? ctx->size - 1 : ctx->rank - 1;
 
-    ctx->child = endpt_create ("ipc://%s/flux-%s-%d-req",
-                               tmpdir, ctx->sid, ctx->rank);
+    overlay_set_child (ctx->overlay, "ipc://%s/flux-%s-%d-req",
+                       tmpdir, ctx->sid, ctx->rank);
     if (ctx->rank > 0) {
         int prank = ctx->k_ary == 0 ? 0 : (ctx->rank - 1) / ctx->k_ary;
-        endpt_t *ep = endpt_create ("ipc://%s/flux-%s-%d-req",
-                                    tmpdir, ctx->sid, prank);
-        if (zlist_push (ctx->parents, ep) < 0)
-            oom ();
+        overlay_push_parent (ctx->overlay, "ipc://%s/flux-%s-%d-req",
+                             tmpdir, ctx->sid, prank);
     }
-    ctx->gevent = endpt_create ("ipc://%s/flux-%s-event",
-                                tmpdir, ctx->sid);
-    ctx->right = endpt_create ("ipc://%s/flux-%s-%d-req",
-                               tmpdir, ctx->sid, rrank);
+    overlay_set_event (ctx->overlay, "ipc://%s/flux-%s-event",
+                       tmpdir, ctx->sid);
+    overlay_set_right (ctx->overlay, "ipc://%s/flux-%s-%d-req",
+                       tmpdir, ctx->sid, rrank);
 }
 
 static module_t *module_create (ctx_t *ctx, const char *path)
@@ -925,61 +928,6 @@ static endpt_t *broker_init_modevent (ctx_t *ctx)
     return ep;
 }
 
-static int broker_init_child (ctx_t *ctx, endpt_t *ep)
-{
-    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
-
-    if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
-        err_exit ("zsocket_new");
-    if (flux_sec_ssockinit (ctx->sec, ep->zs) < 0)
-        msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ctx->sec));
-    zsocket_set_hwm (ep->zs, 0);
-    if (zsocket_bind (ep->zs, "%s", ep->uri) < 0)
-        err_exit ("%s", ep->uri);
-    if (strchr (ep->uri, '*')) { /* capture dynamically assigned port */
-        free (ep->uri);
-        ep->uri = zsocket_last_endpoint (ep->zs);
-    }
-    zp.socket = ep->zs;
-    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)request_cb, ctx) < 0)
-        err_exit ("zloop_poller");
-    return 0;
-}
-
-static int broker_init_gevent_pub (ctx_t *ctx, endpt_t *ep)
-{
-    if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_PUB)))
-        err_exit ("zsocket_new");
-    if (flux_sec_ssockinit (ctx->sec, ep->zs) < 0) /* no-op for epgm */
-        msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ctx->sec));
-    zsocket_set_sndhwm (ep->zs, 0);
-    if (zsocket_bind (ep->zs, "%s", ep->uri) < 0)
-        err_exit ("%s: %s", __FUNCTION__, ep->uri);
-    if (strchr (ep->uri, '*')) { /* capture dynamically assigned port */
-        free (ep->uri);
-        ep->uri = zsocket_last_endpoint (ep->zs);
-    }
-    return 0;
-}
-
-static int broker_init_gevent_sub (ctx_t *ctx, endpt_t *ep)
-{
-    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
-
-    if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_SUB)))
-        err_exit ("zsocket_new");
-    if (flux_sec_csockinit (ctx->sec, ep->zs) < 0) /* no-op for epgm */
-        msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
-    zsocket_set_rcvhwm (ep->zs, 0);
-    if (zsocket_connect (ep->zs, "%s", ep->uri) < 0)
-        err_exit ("%s", ep->uri);
-    zsocket_set_subscribe (ep->zs, "");
-    zp.socket = ep->zs;
-    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)event_cb, ctx) < 0)
-        err_exit ("zloop_poller");
-    return 0;
-}
-
 static endpt_t *broker_init_snoop (ctx_t *ctx)
 {
     char *uri;
@@ -998,55 +946,14 @@ static endpt_t *broker_init_snoop (ctx_t *ctx)
     return ep;
 }
 
-static int broker_init_parent (ctx_t *ctx, endpt_t *ep)
+static void snoop_cc (ctx_t *ctx, zmsg_t *zmsg)
 {
-    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
-    int savederr;
-
-    if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_DEALER)))
-        goto error;
-    if (flux_sec_csockinit (ctx->sec, ep->zs) < 0) {
-        savederr = errno;
-        msg ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
-        errno = savederr;
-        goto error;
+    if (ctx->snoop && ctx->snoop->zs) {
+        zmsg_t *cpy = zmsg_dup (zmsg);
+        (void)zmsg_send (&cpy, ctx->snoop->zs);
+        zmsg_destroy (&cpy);
     }
-    zsocket_set_hwm (ep->zs, 0);
-    zsocket_set_identity (ep->zs, ctx->rankstr);
-    if (zsocket_connect (ep->zs, "%s", ep->uri) < 0)
-        goto error;
-    zp.socket = ep->zs;
-    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)parent_cb, ctx) < 0)
-        goto error;
-    return 0;
-error:
-    if (ep->zs) {
-        savederr = errno;
-        zsocket_destroy (ctx->zctx, ep->zs);
-        ep->zs = NULL;
-        errno = savederr;
-    }
-    return -1;
 }
-
-static int broker_init_right (ctx_t *ctx, endpt_t *ep)
-{
-    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
-
-    if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_DEALER)))
-        err_exit ("zsocket_new");
-    if (flux_sec_csockinit (ctx->sec, ep->zs) < 0)
-        msg_exit ("flux_sec_csockinit: %s", flux_sec_errstr (ctx->sec));
-    zsocket_set_hwm (ep->zs, 0);
-    zsocket_set_identity (ep->zs, ctx->rankstr_right);
-    if (zsocket_connect (ep->zs, "%s", ep->uri) < 0)
-        err_exit ("%s", ep->uri);
-    zp.socket = ep->zs;
-    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)parent_cb, ctx) < 0)
-        err_exit ("zloop_poller");
-    return 0;
-}
-
 
 /* signalfd + zloop example: https://gist.github.com/mhaberler/8426050
  */
@@ -1103,36 +1010,6 @@ static void broker_init_comms (ctx_t *ctx)
         msg_exit ("flux_sec_munge_init: %s", flux_sec_errstr (ctx->sec));
 }
 
-static void broker_init_overlay (ctx_t *ctx)
-{
-    if (ctx->rank == 0 && ctx->gevent) {
-        broker_init_gevent_pub (ctx, ctx->gevent);
-        ctx->event_active = true;
-    }
-    if (ctx->rank > 0 && ctx->gevent)
-        broker_init_gevent_sub (ctx, ctx->gevent);
-
-    if (ctx->child && !ctx->child->zs)      /* boot_pmi may have done this */
-        broker_init_child (ctx, ctx->child);
-    if (ctx->right)
-        broker_init_right (ctx, ctx->right);
-
-    /* Connect to parent(s), if any
-     */
-    endpt_t *ep;
-    if ((ep = zlist_first (ctx->parents))) {
-        if (broker_init_parent (ctx, ep) < 0)
-            err_exit ("%s", ep->uri);
-    }
-
-    /* Create broker's flux_t handle.
-     */
-    ctx->h = flux_handle_create (ctx, &broker_handle_ops, 0);
-    flux_log_set_facility (ctx->h, "broker");
-    if (ctx->rank == 0)
-        flux_log_set_redirect (ctx->h, true);
-}
-
 static void broker_init_modsocks (ctx_t *ctx)
 {
     ctx->modrequest = broker_init_modrequest (ctx);
@@ -1141,19 +1018,16 @@ static void broker_init_modsocks (ctx_t *ctx)
     ctx->snoop = broker_init_snoop (ctx);
 }
 
-static char *cmb_getattr (ctx_t *ctx, const char *name)
+static const char *cmb_getattr (ctx_t *ctx, const char *name)
 {
-    char *val = NULL;
+    const char *val = NULL;
     if (!strcmp (name, "snoop-uri")) {
         if (ctx->snoop)
             val = ctx->snoop->uri;
     } else if (!strcmp (name, "parent-uri")) {
-        endpt_t *ep = zlist_first (ctx->parents);
-        if (ep)
-            val = ep->uri;
+        val = overlay_get_parent (ctx->overlay);
     } else if (!strcmp (name, "request-uri")) {
-        if (ctx->child)
-            val = ctx->child->uri;
+        val = overlay_get_child (ctx->overlay);
     }
     return val;
 }
@@ -1286,11 +1160,12 @@ done:
  */
 static void child_cc_all (ctx_t *ctx, zmsg_t *zmsg)
 {
+    void *sock = overlay_get_child_sock (ctx->overlay);
     zlist_t *keys;
     char *key;
     peer_t *p;
 
-    if (!ctx->child || !ctx->child->zs)
+    if (!sock)
         return;
     if (!(keys = zhash_keys (ctx->peers)))
         oom ();
@@ -1298,7 +1173,7 @@ static void child_cc_all (ctx_t *ctx, zmsg_t *zmsg)
     while (key) {
         if ((p = peer_lookup (ctx->peers, key)) && !peer_get_modflag (p)
                                                 && !peer_get_mute (p)) {
-            child_cc (ctx->child->zs, key, zmsg);
+            child_cc (sock, key, zmsg);
         }
         key = zlist_next (keys);
     }
@@ -1346,43 +1221,6 @@ static void cmb_heartbeat (ctx_t *ctx, zmsg_t *zmsg)
      */
     if (self_idle (ctx) > 0)
         send_keepalive (ctx);
-}
-
-/* Establish connection with a new parent and begin using it for all
- * upstream requests.  Leave old parent(s) wired in to zloop to make
- * it possible to transition off a healthy node without losing replies.
- */
-static int cmb_reparent (ctx_t *ctx, const char *uri)
-{
-    endpt_t *ep;
-    const char *comment = "";
-
-    if (uri == NULL || !strstr (uri, "://")) {
-        errno = EINVAL;
-        return -1;
-    }
-    ep = zlist_first (ctx->parents);
-    while (ep) {
-        if (!strcmp (ep->uri, uri))
-            break;
-        ep = zlist_next (ctx->parents);
-    }
-    if (ep) {
-        zlist_remove (ctx->parents, ep);
-        comment = "restored";
-    } else {
-        ep = endpt_create ("%s", uri);
-        if (broker_init_parent (ctx, ep) < 0) {
-            endpt_destroy (ep);
-            return -1;
-        }
-        comment = "new";
-    }
-    if (zlist_push (ctx->parents, ep) < 0)
-        oom ();
-    /* log after reparenting, not before */
-    flux_log (ctx->h, LOG_INFO, "reparent %s (%s)", uri, comment);
-    return 0;
 }
 
 static int shutdown_cb (zloop_t *zl, int timer_id, ctx_t *ctx)
@@ -1451,6 +1289,16 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
     }
 }
 
+static void relay_cc (ctx_t *ctx, zmsg_t *zmsg)
+{
+    void *sock = overlay_get_relay_sock (ctx->overlay);
+    if (sock) {
+        zmsg_t *cpy = zmsg_dup (zmsg);
+        (void)zmsg_send (&cpy, sock);
+        zmsg_destroy (&cpy);
+    }
+}
+
 /* helper for send_event() */
 static int send_event_zmsg (ctx_t *ctx, zmsg_t **event)
 {
@@ -1463,17 +1311,19 @@ static int send_event_zmsg (ctx_t *ctx, zmsg_t **event)
 
     /* Publish event globally (if configured)
     */
-    if (ctx->gevent) {
+    void *sock = overlay_get_event_sock (ctx->overlay);
+    const char *uri = overlay_get_event (ctx->overlay);
+    if (sock) {
         if (!(cpy = zmsg_dup (*event)))
             oom ();
-        if (strstr (ctx->gevent->uri, "pgm://")) {
+        if (strstr (uri, "pgm://")) {
             if (flux_sec_munge_zmsg (ctx->sec, &cpy) < 0) {
                 if (errno == 0)
                     errno = EIO;
                 goto done;
             }
         }
-        if (zmsg_send (&cpy, ctx->gevent->zs) < 0) {
+        if (zmsg_send (&cpy, sock) < 0) {
             if (errno == 0)
                 errno = EIO;
             goto done;
@@ -1484,9 +1334,9 @@ static int send_event_zmsg (ctx_t *ctx, zmsg_t **event)
     child_cc_all (ctx, *event);
     /* Publish event locally
     */
-    endpt_cc (*event, ctx->snoop);
+    snoop_cc (ctx, *event);
     cmb_internal_event (ctx, *event);
-    endpt_cc (*event, ctx->gevent_relay);
+    relay_cc (ctx, *event);
     if (zmsg_send (event, ctx->modevent->zs) < 0) {
         if (errno == 0)
             errno = EIO;
@@ -1687,7 +1537,8 @@ static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
 
         util_json_object_add_int (response, "rank", ctx->rank);
         util_json_object_add_int (response, "size", ctx->size);
-        util_json_object_add_boolean (response, "treeroot", ctx->treeroot);
+        util_json_object_add_boolean (response, "treeroot",
+                                      ctx->rank == 0 ? true : false);
 
         if (flux_respond (ctx->h, zmsg, response) < 0)
             err_exit ("flux_respond");
@@ -1696,7 +1547,7 @@ static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
         json_object *request = NULL;
         json_object *response = util_json_object_new_object ();
         const char *name = NULL;
-        char *val = NULL;
+        const char *val = NULL;
         if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
                 || util_json_object_get_string (request, "name", &name) < 0) {
             flux_respond_errnum (ctx->h, zmsg, EPROTO);
@@ -1792,12 +1643,15 @@ static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
     } else if (flux_msg_match (*zmsg, "cmb.reparent")) {
         json_object *request = NULL;
         const char *uri;
+        bool recycled = false;
         if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
                 || util_json_object_get_string (request, "uri", &uri) < 0) {
             flux_respond_errnum (ctx->h, zmsg, EPROTO);
-        } else if (cmb_reparent (ctx, uri) < 0) {
+        } else if (overlay_reparent (ctx->overlay, uri, &recycled) < 0) {
             flux_respond_errnum (ctx->h, zmsg, errno);
         } else {
+            flux_log (ctx->h, LOG_INFO, "reparent %s (%s)",
+                      uri, recycled ? "restored" : "new");
             flux_respond_errnum (ctx->h, zmsg, 0);
         }
         if (request)
@@ -1853,7 +1707,7 @@ static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_KEEPALIVE:
-            endpt_cc (zmsg, ctx->snoop);
+            snoop_cc (ctx, zmsg);
             if (flux_msg_get_route_last (zmsg, &id) < 0)
                 goto done;
             peer_checkin (ctx->peers, id, ctx->hb_epoch);
@@ -1960,8 +1814,8 @@ static int recv_event (ctx_t *ctx, zmsg_t **zmsg)
             flux_log (ctx->h, LOG_ERR, "lost event %d", i);
     }
     ctx->event_seq = seq;
-    endpt_cc (*zmsg, ctx->gevent_relay);
-    endpt_cc (*zmsg, ctx->snoop);
+    relay_cc (ctx, *zmsg);
+    snoop_cc (ctx, *zmsg);
     child_cc_all (ctx, *zmsg); /* to downstream peers */
     cmb_internal_event (ctx, *zmsg);
 
@@ -1973,9 +1827,10 @@ static int recv_event (ctx_t *ctx, zmsg_t **zmsg)
 static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
     zmsg_t *zmsg = zmsg_recv (item->socket);
+    const char *uri = overlay_get_event (ctx->overlay);
 
     if (zmsg) {
-        if (strstr (ctx->gevent->uri, "pgm://")) {
+        if (strstr (uri, "pgm://")) {
             if (flux_sec_unmunge_zmsg (ctx->sec, &zmsg) < 0) {
                 flux_log (ctx->h, LOG_ERR, "dropping malformed event: %s",
                           flux_sec_errstr (ctx->sec));
@@ -2043,24 +1898,25 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 
 static int parent_send (ctx_t *ctx, zmsg_t **zmsg)
 {
-    endpt_t *ep = zlist_first (ctx->parents);
+    void *sock = overlay_get_parent_sock (ctx->overlay);
     int rc = -1;
 
-    if (!ep || !ep->zs) {
-        errno = ctx->treeroot ? ENOSYS : EHOSTUNREACH;
+    if (!sock) {
+        errno = ctx->rank == 0 ? ENOSYS : EHOSTUNREACH;
         goto done;
     }
     self_update (ctx);
-    rc = zmsg_send (zmsg, ep->zs);
+    rc = zmsg_send (zmsg, sock);
 done:
     return rc;
 }
 
 static int rank_send (ctx_t *ctx, zmsg_t **zmsg)
 {
+    void *sock = overlay_get_right_sock (ctx->overlay);
     zframe_t *zf;
 
-    if (!ctx->right || !ctx->right->zs)
+    if (!sock)
         goto unreach;
     zf = zmsg_first (*zmsg);
     while (zf && zframe_size (zf) > 0) {
@@ -2068,7 +1924,7 @@ static int rank_send (ctx_t *ctx, zmsg_t **zmsg)
             goto unreach;
         zf = zmsg_next (*zmsg);
     }
-    return zmsg_send (zmsg, ctx->right->zs);
+    return zmsg_send (zmsg, sock);
 
 unreach:
     errno = EHOSTUNREACH;
@@ -2134,7 +1990,7 @@ static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
         errno = EPROTO;
         goto done;
     }
-    endpt_cc (*zmsg, ctx->snoop);
+    snoop_cc (ctx, *zmsg);
     if (hopcount > 0 && lasthop)
         peer_checkin (ctx->peers, lasthop, ctx->hb_epoch);
     if (nodeid == FLUX_NODEID_ANY) {
@@ -2161,15 +2017,16 @@ static int broker_response_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
     peer_t *p;
     char *nexthop = flux_msg_nexthop (*zmsg);
     int rc = -1;
+    void *child_sock = overlay_get_child_sock (ctx->overlay);
 
-    endpt_cc (*zmsg, ctx->snoop);
+    snoop_cc (ctx, *zmsg);
 
     if (!nexthop)                             /* local: reply to ourselves? */
         rc = -1;
     else if ((p = peer_lookup (ctx->peers, nexthop)) && peer_get_modflag (p))
         rc = zmsg_send (zmsg, ctx->modrequest->zs); /* send to module */
-    else if (ctx->child)
-        rc = zmsg_send (zmsg, ctx->child->zs);      /* send to dnstream peer */
+    else if (child_sock)
+        rc = zmsg_send (zmsg, child_sock);    /* send to dnstream peer */
     if (nexthop)
         free (nexthop);
     if (*zmsg)

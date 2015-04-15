@@ -8,10 +8,10 @@ typedef struct {
     char *uri;
 } endpt_t;
 
+endpt_t *endpt_vcreate (const char *fmt, va_list ap);
 endpt_t *endpt_create (const char *fmt, ...)
                               __attribute__ ((format (printf, 1, 2)));
 void endpt_destroy (endpt_t *ep);
-int endpt_cc (zmsg_t *zmsg, endpt_t *ep);
 
 #endif /* !_BROKER_ENDPT_H */
 

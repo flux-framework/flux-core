@@ -25,6 +25,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <stdarg.h>
 #include <czmq.h>
 
 #include "src/common/libutil/xzmalloc.h"
@@ -32,13 +33,20 @@
 
 #include "endpt.h"
 
-endpt_t *endpt_create (const char *fmt, ...)
+endpt_t *endpt_vcreate (const char *fmt, va_list ap)
 {
     endpt_t *ep = xzmalloc (sizeof (*ep));
+    ep->uri = xvasprintf (fmt, ap);
+    return ep;
+}
+
+endpt_t *endpt_create (const char *fmt, ...)
+{
     va_list ap;
+    endpt_t *ep;
 
     va_start (ap, fmt);
-    ep->uri = xvasprintf (fmt, ap);
+    ep = endpt_vcreate (fmt, ap);
     va_end (ap);
     return ep;
 }
@@ -47,17 +55,6 @@ void endpt_destroy (endpt_t *ep)
 {
     free (ep->uri);
     free (ep);
-}
-
-int endpt_cc (zmsg_t *zmsg, endpt_t *ep)
-{
-    zmsg_t *cpy;
-
-    if (!zmsg || !ep || !ep->zs)
-        return 0;
-    if (!(cpy = zmsg_dup (zmsg)))
-        oom ();
-    return zmsg_send (&cpy, ep->zs);
 }
 
 /*
