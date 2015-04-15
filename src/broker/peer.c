@@ -29,42 +29,60 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/shortjson.h"
 
+#include "heartbeat.h"
 #include "peer.h"
 
-void peer_destroy (peer_t *p)
+peerhash_t *peerhash_create (void)
+{
+    peerhash_t *ph = xzmalloc (sizeof *ph);
+    if (!(ph->zh = zhash_new ()))
+        oom ();
+    return ph;
+}
+
+void peerhash_destroy (peerhash_t *ph)
+{
+    if (ph) {
+        zhash_destroy (&ph->zh);
+        free (ph);
+    }
+}
+
+zlist_t *peerhash_keys (peerhash_t *ph)
+{
+    return zhash_keys (ph->zh);
+}
+
+void peerhash_set_heartbeat (peerhash_t *ph, heartbeat_t *hb)
+{
+    ph->hb = hb;
+}
+
+static void peer_destroy (peer_t *p)
 {
     free (p);
 }
 
-peer_t *peer_create (void)
+static peer_t *peer_create (void)
 {
     peer_t *p = xzmalloc (sizeof (*p));
     return p;
 }
 
-peer_t *peer_add (zhash_t *zh, const char *uuid)
+peer_t *peer_add (peerhash_t *ph, const char *uuid)
 {
     peer_t *p = peer_create ();
-    zhash_update (zh, uuid, p);
-    zhash_freefn (zh, uuid, (zhash_free_fn *)peer_destroy);
+    zhash_update (ph->zh, uuid, p);
+    zhash_freefn (ph->zh, uuid, (zhash_free_fn *)peer_destroy);
     return p;
 }
 
-peer_t *peer_lookup (zhash_t *zh, const char *uuid)
+peer_t *peer_lookup (peerhash_t *ph, const char *uuid)
 {
-    peer_t *p = zhash_lookup (zh, uuid);
+    peer_t *p = zhash_lookup (ph->zh, uuid);
     return p;
-}
-
-void peer_set_lastseen (peer_t *p, int val)
-{
-    p->lastseen = val;
-}
-
-int peer_get_lastseen (peer_t *p)
-{
-    return p->lastseen;
 }
 
 void peer_set_modflag (peer_t *p, bool val)
@@ -87,28 +105,54 @@ bool peer_get_mute (peer_t *p)
     return p->mute;
 }
 
-void peer_checkin (zhash_t *zh, const char *uuid, int now)
+void peer_checkin (peerhash_t *ph, const char *uuid)
 {
-    peer_t *p = peer_lookup (zh, uuid);
+    int now = heartbeat_get_epoch (ph->hb);
+    peer_t *p = peer_lookup (ph, uuid);
     if (!p)
-        p = peer_add (zh, uuid);
-    peer_set_lastseen (p, now);
+        p = peer_add (ph, uuid);
+    p->lastseen = now;
 }
 
-int peer_idle (zhash_t *zh, const char *uuid, int now)
+int peer_idle (peerhash_t *ph, const char *uuid)
 {
-    peer_t *p = peer_lookup (zh, uuid);
+    int now = heartbeat_get_epoch (ph->hb);
+    peer_t *p = peer_lookup (ph, uuid);
     if (!p)
         return now;
-    return now = peer_get_lastseen (p);
+    return now = p->lastseen;
 }
 
-void peer_mute (zhash_t *zh, const char *uuid)
+void peer_mute (peerhash_t *ph, const char *uuid)
 {
-    peer_t *p = peer_lookup (zh, uuid);
+    peer_t *p = peer_lookup (ph, uuid);
     if (!p)
-        p = peer_add (zh, uuid);
+        p = peer_add (ph, uuid);
     peer_set_mute (p, true);
+}
+
+json_object *peer_list_encode (peerhash_t *ph)
+{
+    int now = heartbeat_get_epoch (ph->hb);
+    JSON out = Jnew ();
+    zlist_t *keys;
+    char *key;
+    peer_t *p;
+
+    if (!(keys = peerhash_keys (ph)))
+        oom ();
+    key = zlist_first (keys);
+    while (key) {
+        if ((p = peer_lookup (ph, key)) && !p->modflag) {
+            JSON o = Jnew ();
+            Jadd_int (o, "idle", now - p->lastseen);
+            Jadd_obj (out, key, o);
+            Jput (o);
+        }
+        key = zlist_next (keys);
+    }
+    zlist_destroy (&keys);
+    return out ;
 }
 
 /*

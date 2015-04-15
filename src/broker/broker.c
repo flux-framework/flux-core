@@ -57,9 +57,9 @@
 #include "module.h"
 #include "boot_pmi.h"
 #include "endpt.h"
+#include "heartbeat.h"
 #include "peer.h"
 #include "overlay.h"
-#include "heartbeat.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
@@ -109,7 +109,7 @@ typedef struct {
     bool quiet;
     flux_t h;
     pid_t pid;
-    zhash_t *peers;             /* peer (hopcount=1) hb idle time, by uuid */
+    peerhash_t *peers;          /* peer (hopcount=1) hb idle time, by uuid */
     int last_request;           /* hb epoch of last upstream request */
     char *proctitle;
     sigset_t default_sigset;
@@ -253,11 +253,11 @@ int main (int argc, char *argv[])
     ctx.size = 1;
     if (!(ctx.modules = zhash_new ()))
         oom ();
-    if (!(ctx.peers = zhash_new ()))
-        oom ();
+    ctx.peers = peerhash_create ();
     ctx.overlay = overlay_create ();
     ctx.k_ary = 2; /* binary TBON is default */
     ctx.heartbeat = heartbeat_create ();
+    peerhash_set_heartbeat (ctx.peers, ctx.heartbeat);
 
     ctx.pid = getpid();
     ctx.module_searchpath = getenv ("FLUX_MODULE_PATH");
@@ -561,7 +561,7 @@ int main (int argc, char *argv[])
         endpt_destroy (ctx.modrequest);
     if (ctx.modevent)
         endpt_destroy (ctx.modevent);
-    zhash_destroy (&ctx.peers);
+    peerhash_destroy (ctx.peers);
 
     zlist_destroy (&modules);
     zhash_destroy (&modexclude);
@@ -1035,7 +1035,6 @@ static JSON cmb_lsmod (ctx_t *ctx)
     zlist_t *keys;
     char *name;
     module_t *mod;
-    int epoch = heartbeat_get_epoch (ctx->heartbeat);
 
     if (!(keys = zhash_keys (ctx->modules)))
         oom ();
@@ -1046,8 +1045,8 @@ static JSON cmb_lsmod (ctx_t *ctx)
         if (flux_lsmod_json_append (o, mod_name (mod->p),
                                     mod_size (mod->p),
                                     mod_digest (mod->p),
-                                    peer_idle (ctx->peers, mod_uuid (mod->p),
-                                               epoch)) < 0) {
+                                    peer_idle (ctx->peers,
+                                               mod_uuid (mod->p))) < 0) {
             Jput (o);
             o = NULL;
             goto done;
@@ -1095,34 +1094,6 @@ done:
     return rc;
 }
 
-/* List peers, excluding modules.
- * FIXME: this should probably be an array not a dictionary
- */
-static JSON cmb_lspeer (ctx_t *ctx)
-{
-    JSON out = Jnew ();
-    zlist_t *keys;
-    char *key;
-    peer_t *p;
-    int epoch = heartbeat_get_epoch (ctx->heartbeat);
-
-    if (!(keys = zhash_keys (ctx->peers)))
-        oom ();
-    key = zlist_first (keys);
-    while (key) {
-        if ((p = peer_lookup (ctx->peers, key)) && !peer_get_modflag (p)) {
-            int idle = epoch - peer_get_lastseen (p);
-            JSON o = Jnew ();
-            Jadd_int (o, "idle", idle);
-            Jadd_obj (out, key, o);
-            Jput (o);
-        }
-        key = zlist_next (keys);
-    }
-    zlist_destroy (&keys);
-    return out ;
-}
-
 static int child_cc (void *sock, const char *id, zmsg_t *zmsg)
 {
     zmsg_t *cpy;
@@ -1152,7 +1123,7 @@ static void child_cc_all (ctx_t *ctx, zmsg_t *zmsg)
 
     if (!sock)
         return;
-    if (!(keys = zhash_keys (ctx->peers)))
+    if (!(keys = peerhash_keys (ctx->peers)))
         oom ();
     key = zlist_first (keys);
     while (key) {
@@ -1595,7 +1566,7 @@ static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             Jput (out);
         }
     } else if (flux_msg_match (*zmsg, "cmb.lspeer")) {
-        JSON out = cmb_lspeer (ctx);
+        JSON out = peer_list_encode (ctx->peers);
         if (flux_json_respond (ctx->h, out, zmsg) < 0)
             flux_log (ctx->h, LOG_ERR, "%s: flux_err_respond: %s",
                       __FUNCTION__, strerror (errno));
@@ -1684,8 +1655,7 @@ static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
             snoop_cc (ctx, zmsg);
             if (flux_msg_get_route_last (zmsg, &id) < 0)
                 goto done;
-            peer_checkin (ctx->peers, id,
-                          heartbeat_get_epoch (ctx->heartbeat));
+            peer_checkin (ctx->peers, id);
             break;
         case FLUX_MSGTYPE_REQUEST:
             assert (zmsg != NULL);
@@ -1763,8 +1733,7 @@ static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod)
             zhash_delete (ctx->modules, mod_name (mod->p));
         else {
             (void)flux_sendmsg (ctx->h, &zmsg);
-            peer_checkin (ctx->peers, mod_uuid (mod->p),
-                          heartbeat_get_epoch (ctx->heartbeat));
+            peer_checkin (ctx->peers, mod_uuid (mod->p));
         }
     }
     if (zmsg)
@@ -1977,8 +1946,7 @@ static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
     }
     snoop_cc (ctx, *zmsg);
     if (hopcount > 0 && lasthop) {
-        peer_checkin (ctx->peers, lasthop,
-                      heartbeat_get_epoch (ctx->heartbeat));
+        peer_checkin (ctx->peers, lasthop);
     }
     if (nodeid == FLUX_NODEID_ANY) {
         rc = service_send (ctx, zmsg, lasthop, hopcount, false);
