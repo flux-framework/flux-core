@@ -32,6 +32,7 @@
 #include "src/common/libutil/log.h"
 
 #include "endpt.h"
+#include "heartbeat.h"
 #include "overlay.h"
 
 void overlay_destroy (overlay_t *ov)
@@ -62,6 +63,7 @@ overlay_t *overlay_create (void)
     if (!(ov->parents = zlist_new ()))
         oom ();
     ov->rank = FLUX_NODEID_ANY;
+    ov->parent_lastsent = -1;
     return ov;
 }
 
@@ -87,6 +89,11 @@ void overlay_set_zloop (overlay_t *ov, zloop_t *zloop)
     ov->zloop = zloop;
 }
 
+void overlay_set_heartbeat (overlay_t *ov, heartbeat_t *hb)
+{
+    ov->hb = hb;
+}
+
 void overlay_push_parent (overlay_t *ov, const char *fmt, ...)
 {
     va_list ap;
@@ -105,12 +112,43 @@ const char *overlay_get_parent (overlay_t *ov)
     return ep->uri;
 }
 
-void *overlay_get_parent_sock (overlay_t *ov)
+int overlay_sendmsg_parent (overlay_t *ov, zmsg_t **zmsg)
 {
     endpt_t *ep = zlist_first (ov->parents);
-    if (!ep)
-        return NULL;
-    return ep->zs;
+    int rc = -1;
+
+    if (!ep || !ep->zs) {
+        if (ov->rank == 0)
+            errno = ENOSYS;
+        else
+            errno = EHOSTUNREACH;
+        goto done;
+    }
+    rc = zmsg_send (zmsg, ep->zs);
+    if (rc == 0)
+        ov->parent_lastsent = heartbeat_get_epoch (ov->hb);
+done:
+    return rc;
+}
+
+int overlay_keepalive_parent (overlay_t *ov)
+{
+    int idle = heartbeat_get_epoch (ov->hb) - ov->parent_lastsent;
+    zmsg_t *zmsg = NULL;
+    int rc = -1;
+
+    if (idle <= 0) { /* FIXME: won't this always be true if called on hb? */
+        rc = 0;
+        goto done;
+    }
+    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)))
+        goto done;
+    if (flux_msg_enable_route (zmsg) < 0)
+        goto done;
+    rc = overlay_sendmsg_parent (ov, &zmsg);
+done:
+    zmsg_destroy (&zmsg);
+    return rc;
 }
 
 void overlay_set_right (overlay_t *ov, const char *fmt, ...)
@@ -123,11 +161,30 @@ void overlay_set_right (overlay_t *ov, const char *fmt, ...)
     va_end (ap);
 }
 
-void *overlay_get_right_sock (overlay_t *ov)
+static bool ring_wrap (overlay_t *ov, zmsg_t *zmsg)
 {
-    if (!ov->right)
-        return NULL;
-    return ov->right->zs;
+    zframe_t *zf;
+
+    zf = zmsg_first (zmsg);
+    while (zf && zframe_size (zf) > 0) {
+        if (zframe_streq (zf, ov->rankstr_right)) /* cycle detected! */
+            return true;
+        zf = zmsg_next (zmsg);
+    }
+    return false;
+}
+
+int overlay_sendmsg_right (overlay_t *ov, zmsg_t **zmsg)
+{
+    int rc = -1;
+
+    if (!ov->right || !ov->right->zs || ring_wrap (ov, *zmsg)) {
+        errno = EHOSTUNREACH;
+        goto done;
+    }
+    rc = zmsg_send (zmsg, ov->right->zs);
+done:
+    return rc;
 }
 
 void overlay_set_parent_cb (overlay_t *ov, zloop_fn *cb, void *arg)
@@ -153,17 +210,23 @@ const char *overlay_get_child (overlay_t *ov)
     return ov->child->uri;
 }
 
-void *overlay_get_child_sock (overlay_t *ov)
-{
-    if (!ov->child)
-        return NULL;
-    return ov->child->zs;
-}
-
 void overlay_set_child_cb (overlay_t *ov, zloop_fn *cb, void *arg)
 {
     ov->child_cb = cb;
     ov->child_arg = arg;
+}
+
+int overlay_sendmsg_child (overlay_t *ov, zmsg_t **zmsg)
+{
+    int rc = -1;
+
+    if (!ov->child || !ov->child->zs) {
+        errno = EINVAL;
+        goto done;
+    }
+    rc = zmsg_send (zmsg, ov->child->zs);
+done:
+    return rc;
 }
 
 void overlay_set_event (overlay_t *ov, const char *fmt, ...)
@@ -174,6 +237,8 @@ void overlay_set_event (overlay_t *ov, const char *fmt, ...)
     va_start (ap, fmt);
     ov->event = endpt_vcreate (fmt, ap);
     va_end (ap);
+
+    ov->event_munge = strstr (ov->event->uri, "pgm://") ? true : false;
 }
 
 const char *overlay_get_event (overlay_t *ov)
@@ -183,11 +248,50 @@ const char *overlay_get_event (overlay_t *ov)
     return ov->event->uri;
 }
 
-void *overlay_get_event_sock (overlay_t *ov)
+void overlay_set_event_cb (overlay_t *ov, zloop_fn *cb, void *arg)
 {
-    if (!ov->event)
-        return NULL;
-    return ov->event->zs;
+    ov->event_cb = cb;
+    ov->event_arg = arg;
+}
+
+int overlay_sendmsg_event (overlay_t *ov, zmsg_t **zmsg)
+{
+    int rc = -1;
+
+    if (!ov->event || !ov->event->zs) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (ov->event_munge) {
+        if (flux_sec_munge_zmsg (ov->sec, zmsg) < 0) {
+            errno = EIO;
+            goto done;
+        }
+    }
+    rc = zmsg_send (zmsg, ov->event->zs);
+done:
+    return rc;
+}
+
+zmsg_t *overlay_recvmsg_event (overlay_t *ov)
+{
+    zmsg_t *zmsg = NULL;
+    if (!ov->event || !ov->event->zs) {
+        errno = EINVAL;
+        goto done;
+    }
+    zmsg = zmsg_recv (ov->event->zs);
+    if (ov->event_munge) {
+        if (flux_sec_unmunge_zmsg (ov->sec, &zmsg) < 0) {
+            //flux_log (ctx->h, LOG_ERR, "dropping malformed event: %s",
+            //          flux_sec_errstr (ctx->sec));
+            zmsg_destroy (&zmsg);
+            errno = EPROTO;
+            goto done;
+        }
+    }
+done:
+    return zmsg;
 }
 
 void overlay_set_relay (overlay_t *ov, const char *fmt, ...)
@@ -207,18 +311,17 @@ const char *overlay_get_relay (overlay_t *ov)
     return ov->relay->uri;
 }
 
-void *overlay_get_relay_sock (overlay_t *ov)
+int overlay_sendmsg_relay (overlay_t *ov, zmsg_t **zmsg)
 {
-    if (!ov->relay)
-        return NULL;
-    return ov->relay->zs;
-}
+    int rc = -1;
 
-
-void overlay_set_event_cb (overlay_t *ov, zloop_fn *cb, void *arg)
-{
-    ov->event_cb = cb;
-    ov->event_arg = arg;
+    if (!ov->relay || !ov->relay->zs) {
+        errno = EINVAL;
+        goto done;
+    }
+    rc = zmsg_send (zmsg, ov->relay->zs);
+done:
+    return rc;
 }
 
 static int bind_child (overlay_t *ov, endpt_t *ep)

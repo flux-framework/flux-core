@@ -110,7 +110,6 @@ typedef struct {
     flux_t h;
     pid_t pid;
     peerhash_t *peers;          /* peer (hopcount=1) hb idle time, by uuid */
-    int last_request;           /* hb epoch of last upstream request */
     char *proctitle;
     sigset_t default_sigset;
     flux_conf_t cf;
@@ -161,8 +160,6 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
 
 static int recv_event (ctx_t *ctx, zmsg_t **zmsg);
 static int send_event (ctx_t *ctx, JSON o, const char *topic);
-static int parent_send (ctx_t *ctx, zmsg_t **zmsg);
-static void send_keepalive (ctx_t *ctx);
 
 static void update_proctitle (ctx_t *ctx);
 static void update_environment (ctx_t *ctx);
@@ -258,6 +255,7 @@ int main (int argc, char *argv[])
     ctx.k_ary = 2; /* binary TBON is default */
     ctx.heartbeat = heartbeat_create ();
     peerhash_set_heartbeat (ctx.peers, ctx.heartbeat);
+    overlay_set_heartbeat (ctx.overlay, ctx.heartbeat);
 
     ctx.pid = getpid();
     ctx.module_searchpath = getenv ("FLUX_MODULE_PATH");
@@ -521,8 +519,7 @@ int main (int argc, char *argv[])
 
     /* Send an initial keepalive message to parent, if any.
      */
-    if (ctx.rank > 0)
-        send_keepalive (&ctx);
+    overlay_keepalive_parent (ctx.overlay);
 
     /* Event loop
      */
@@ -1094,7 +1091,7 @@ done:
     return rc;
 }
 
-static int child_cc (void *sock, const char *id, zmsg_t *zmsg)
+static int child_cc (ctx_t *ctx, const char *id, zmsg_t *zmsg)
 {
     zmsg_t *cpy;
     int rc = -1;
@@ -1105,7 +1102,7 @@ static int child_cc (void *sock, const char *id, zmsg_t *zmsg)
         goto done;
     if (flux_msg_push_route (cpy, id) < 0)
         goto done;
-    rc = zmsg_send (&cpy, sock);
+    rc = overlay_sendmsg_child (ctx->overlay, &cpy);
 done:
     zmsg_destroy (&cpy);
     return rc;
@@ -1116,48 +1113,21 @@ done:
  */
 static void child_cc_all (ctx_t *ctx, zmsg_t *zmsg)
 {
-    void *sock = overlay_get_child_sock (ctx->overlay);
     zlist_t *keys;
     char *key;
     peer_t *p;
 
-    if (!sock)
-        return;
     if (!(keys = peerhash_keys (ctx->peers)))
         oom ();
     key = zlist_first (keys);
     while (key) {
         if ((p = peer_lookup (ctx->peers, key)) && !peer_get_modflag (p)
                                                 && !peer_get_mute (p)) {
-            child_cc (sock, key, zmsg);
+            (void)child_cc (ctx, key, zmsg);
         }
         key = zlist_next (keys);
     }
     zlist_destroy (&keys);
-}
-
-static void self_update (ctx_t *ctx)
-{
-    ctx->last_request = heartbeat_get_epoch (ctx->heartbeat);
-}
-
-static int self_idle (ctx_t *ctx)
-{
-    return heartbeat_get_epoch (ctx->heartbeat) - ctx->last_request;
-}
-
-static void send_keepalive (ctx_t *ctx)
-{
-    zmsg_t *zmsg = NULL;
-
-    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)))
-        goto done;
-    if (flux_msg_enable_route (zmsg) < 0)
-        goto done;
-    if (parent_send (ctx, &zmsg) < 0)
-        goto done;
-done:
-    zmsg_destroy (&zmsg);
 }
 
 static int shutdown_cb (zloop_t *zl, int timer_id, ctx_t *ctx)
@@ -1220,8 +1190,7 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
         if (ctx->rank > 0) {
             if (heartbeat_event_decode (ctx->heartbeat, zmsg) < 0)
                 err ("heartbeat_event_decode");
-            if (self_idle (ctx) > 0)
-                send_keepalive (ctx);
+            (void) overlay_keepalive_parent (ctx->overlay);
         }
     } else if (flux_msg_match (zmsg, "shutdown")) {
         shutdown_recv (ctx, zmsg);
@@ -1233,10 +1202,9 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
 
 static void relay_cc (ctx_t *ctx, zmsg_t *zmsg)
 {
-    void *sock = overlay_get_relay_sock (ctx->overlay);
-    if (sock) {
+    if (overlay_get_relay (ctx->overlay)) {
         zmsg_t *cpy = zmsg_dup (zmsg);
-        (void)zmsg_send (&cpy, sock);
+        (void)overlay_sendmsg_relay (ctx->overlay, &cpy);
         zmsg_destroy (&cpy);
     }
 }
@@ -1245,7 +1213,6 @@ static void relay_cc (ctx_t *ctx, zmsg_t *zmsg)
 static int send_event_zmsg (ctx_t *ctx, zmsg_t **event)
 {
     int rc = -1;
-    zmsg_t *cpy = NULL;
 
     assert (ctx->rank == 0);
     assert (ctx->modevent != NULL);
@@ -1258,23 +1225,14 @@ static int send_event_zmsg (ctx_t *ctx, zmsg_t **event)
 
     /* Publish event globally (if configured)
     */
-    void *sock = overlay_get_event_sock (ctx->overlay);
-    const char *uri = overlay_get_event (ctx->overlay);
-    if (sock) {
+    if (overlay_get_event (ctx->overlay)) {
+        zmsg_t *cpy;
         if (!(cpy = zmsg_dup (*event)))
             oom ();
-        if (strstr (uri, "pgm://")) {
-            if (flux_sec_munge_zmsg (ctx->sec, &cpy) < 0) {
-                if (errno == 0)
-                    errno = EIO;
-                goto done;
-            }
-        }
-        if (zmsg_send (&cpy, sock) < 0) {
-            if (errno == 0)
-                errno = EIO;
+        rc = overlay_sendmsg_event (ctx->overlay, &cpy);
+        zmsg_destroy (&cpy);
+        if (rc < 0)
             goto done;
-        }
     }
     /* Publish event to downstream peers.
      */
@@ -1291,8 +1249,6 @@ static int send_event_zmsg (ctx_t *ctx, zmsg_t **event)
     }
     rc = 0;
 done:
-    if (cpy)
-        zmsg_destroy (&cpy);
     return rc;
 }
 
@@ -1613,12 +1569,12 @@ static int cmb_internal_request (ctx_t *ctx, zmsg_t **zmsg)
             json_object_put (request);
     } else if (flux_msg_match (*zmsg, "cmb.log")) {
         if (ctx->rank > 0)
-            (void)parent_send (ctx, zmsg);
+            (void)overlay_sendmsg_parent (ctx->overlay, zmsg);
         else
             flux_log_zmsg (*zmsg);
     } else if (flux_msg_match (*zmsg, "cmb.pub")) {
         if (ctx->rank > 0) {
-            if (parent_send (ctx, zmsg) < 0)
+            if (overlay_sendmsg_parent (ctx->overlay, zmsg) < 0)
                 flux_respond_errnum (ctx->h, zmsg, errno);
         } else {
             if (cmb_pub (ctx, zmsg) < 0)
@@ -1771,24 +1727,15 @@ static int recv_event (ctx_t *ctx, zmsg_t **zmsg)
 
 static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
-    zmsg_t *zmsg = zmsg_recv (item->socket);
-    const char *uri = overlay_get_event (ctx->overlay);
+    zmsg_t *zmsg = overlay_recvmsg_event (ctx->overlay);
 
     if (zmsg) {
-        if (strstr (uri, "pgm://")) {
-            if (flux_sec_unmunge_zmsg (ctx->sec, &zmsg) < 0) {
-                flux_log (ctx->h, LOG_ERR, "dropping malformed event: %s",
-                          flux_sec_errstr (ctx->sec));
-                goto done;
-            }
-        }
         ctx->event_active = true;
         if (recv_event (ctx, &zmsg) < 0)
             goto done;
     }
 done:
-    if (zmsg)
-        zmsg_destroy (&zmsg);
+    zmsg_destroy (&zmsg);
     ZLOOP_RETURN(ctx);
 }
 
@@ -1848,41 +1795,6 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
         }
     }
     ZLOOP_RETURN(ctx);
-}
-
-static int parent_send (ctx_t *ctx, zmsg_t **zmsg)
-{
-    void *sock = overlay_get_parent_sock (ctx->overlay);
-    int rc = -1;
-
-    if (!sock) {
-        errno = ctx->rank == 0 ? ENOSYS : EHOSTUNREACH;
-        goto done;
-    }
-    self_update (ctx);
-    rc = zmsg_send (zmsg, sock);
-done:
-    return rc;
-}
-
-static int rank_send (ctx_t *ctx, zmsg_t **zmsg)
-{
-    void *sock = overlay_get_right_sock (ctx->overlay);
-    zframe_t *zf;
-
-    if (!sock)
-        goto unreach;
-    zf = zmsg_first (*zmsg);
-    while (zf && zframe_size (zf) > 0) {
-        if (zframe_streq (zf, ctx->rankstr_right)) /* cycle detected! */
-            goto unreach;
-        zf = zmsg_next (*zmsg);
-    }
-    return zmsg_send (zmsg, sock);
-
-unreach:
-    errno = EHOSTUNREACH;
-    return -1;
 }
 
 /* Try to dispatch message to a local service: built-in broker service,
@@ -1951,13 +1863,13 @@ static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
     if (nodeid == FLUX_NODEID_ANY) {
         rc = service_send (ctx, zmsg, lasthop, hopcount, false);
         if (rc < 0 && errno == ENOSYS)
-            rc = parent_send (ctx, zmsg);
+            rc = overlay_sendmsg_parent (ctx->overlay, zmsg);
     } else if (nodeid == ctx->rank) {
         rc = service_send (ctx, zmsg, lasthop, hopcount, true);
     } else if (nodeid == 0) {
-        rc = parent_send (ctx, zmsg);
+        rc = overlay_sendmsg_parent (ctx->overlay, zmsg);
     } else {
-        rc = rank_send (ctx, zmsg);
+        rc = overlay_sendmsg_right (ctx->overlay, zmsg);
     }
 done:
     /* N.B. don't destroy zmsg on error as we use it to send errnum reply.
@@ -1972,16 +1884,15 @@ static int broker_response_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
     peer_t *p;
     char *nexthop = flux_msg_nexthop (*zmsg);
     int rc = -1;
-    void *child_sock = overlay_get_child_sock (ctx->overlay);
 
     snoop_cc (ctx, *zmsg);
 
     if (!nexthop)                             /* local: reply to ourselves? */
         rc = -1;
     else if ((p = peer_lookup (ctx->peers, nexthop)) && peer_get_modflag (p))
-        rc = zmsg_send (zmsg, ctx->modrequest->zs); /* send to module */
-    else if (child_sock)
-        rc = zmsg_send (zmsg, child_sock);    /* send to dnstream peer */
+        rc = zmsg_send (zmsg, ctx->modrequest->zs);      /* send to module */
+    else
+        rc = overlay_sendmsg_child (ctx->overlay, zmsg); /* downstream peer */
     if (nexthop)
         free (nexthop);
     if (*zmsg)
