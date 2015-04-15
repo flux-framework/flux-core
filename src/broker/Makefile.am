@@ -18,7 +18,9 @@ flux_broker_SOURCES = \
 	peer.h \
 	peer.c \
 	overlay.h \
-	overlay.c
+	overlay.c \
+	heartbeat.h \
+	heartbeat.c
 
 flux_broker_LDADD = \
 	$(top_builddir)/src/modules/kvs/libkvs.la \

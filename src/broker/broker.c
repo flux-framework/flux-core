@@ -59,6 +59,7 @@
 #include "endpt.h"
 #include "peer.h"
 #include "overlay.h"
+#include "heartbeat.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
@@ -109,7 +110,7 @@ typedef struct {
     flux_t h;
     pid_t pid;
     zhash_t *peers;             /* peer (hopcount=1) hb idle time, by uuid */
-    int hb_lastreq;             /* hb epoch of last upstream request */
+    int last_request;           /* hb epoch of last upstream request */
     char *proctitle;
     sigset_t default_sigset;
     flux_conf_t cf;
@@ -122,9 +123,7 @@ typedef struct {
     int k_ary;
     /* Heartbeat
      */
-    double heartrate;
-    int heartbeat_tid;
-    int hb_epoch;
+    heartbeat_t *heartbeat;
     /* Shutdown
      */
     int shutdown_tid;
@@ -151,7 +150,7 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod);
 static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
-static int hb_cb (zloop_t *zl, int timer_id, ctx_t *ctx);
+static int heartbeat_cb (zloop_t *zl, int timer_id, ctx_t *ctx);
 static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 
 static void broker_init_comms (ctx_t *ctx);
@@ -172,10 +171,6 @@ static void rank0_shell (ctx_t *ctx);
 static void boot_pmi (ctx_t *ctx);
 static void boot_local (ctx_t *ctx);
 static int shell_exit_handler (struct subprocess *p, void *arg);
-
-static const double min_heartrate = 0.01;   /* min seconds */
-static const double max_heartrate = 30;     /* max seconds */
-static const double dfl_heartrate = 2;
 
 static const struct flux_handle_ops broker_handle_ops;
 
@@ -262,12 +257,12 @@ int main (int argc, char *argv[])
         oom ();
     ctx.overlay = overlay_create ();
     ctx.k_ary = 2; /* binary TBON is default */
+    ctx.heartbeat = heartbeat_create ();
 
     ctx.pid = getpid();
     ctx.module_searchpath = getenv ("FLUX_MODULE_PATH");
     if (!ctx.module_searchpath)
         ctx.module_searchpath = MODULE_PATH;
-    ctx.heartrate = dfl_heartrate;
     ctx.shutdown_tid = -1;
 
     if (!(ctx.sm = subprocess_manager_create ()))
@@ -353,20 +348,8 @@ int main (int argc, char *argv[])
                 fopt = true;
                 break;
             case 'H': { /* --heartrate SECS */
-                char *endptr;
-                ctx.heartrate = strtod (optarg, &endptr);
-                if (ctx.heartrate == HUGE_VAL || endptr == optarg)
-                    msg_exit ("error parsing heartrate");
-                if (!strcasecmp (endptr, "s") || *endptr == '\0')
-                    ;
-                else if (!strcasecmp (endptr, "ms"))
-                    ctx.heartrate /= 1000.0;
-                else
-                    msg_exit ("bad heartrate units: use s or ms");
-                if (ctx.heartrate < min_heartrate
-                                            || ctx.heartrate > max_heartrate)
-                    msg_exit ("valid heartrate is %.0fms <= N <= %.0fs",
-                              min_heartrate*1000, max_heartrate);
+                if (heartbeat_set_ratestr (ctx.heartbeat, optarg) < 0)
+                    err_exit ("heartrate `%s'", optarg);
                 break;
             }
             default:
@@ -527,13 +510,13 @@ int main (int argc, char *argv[])
     /* install heartbeat timer
      */
     if (ctx.rank == 0) {
-        unsigned long msec = ctx.heartrate * 1000;
-        ctx.heartbeat_tid = zloop_timer (ctx.zl, msec, 0,
-                                         (zloop_timer_fn *)hb_cb, &ctx);
-        if (ctx.heartbeat_tid == -1)
-            err_exit ("zloop_timer");
+        heartbeat_set_zloop (ctx.heartbeat, ctx.zl);
+        heartbeat_set_cb (ctx.heartbeat, (zloop_timer_fn *)heartbeat_cb, &ctx);
+        if (heartbeat_start (ctx.heartbeat) < 0)
+            err_exit ("heartbeat_start");
         if (ctx.verbose)
-            msg ("installing session heartbeat: T=%0.1fs", ctx.heartrate);
+            msg ("installing session heartbeat: T=%0.1fs",
+                  heartbeat_get_rate (ctx.heartbeat));
     }
 
     /* Send an initial keepalive message to parent, if any.
@@ -549,10 +532,9 @@ int main (int argc, char *argv[])
     if (ctx.verbose)
         msg ("exited event loop");
 
-    /* remove heartbeat timer
+    /* remove heartbeat timer, if any
      */
-    if (ctx.rank == 0)
-        zloop_timer_end (ctx.zl, ctx.heartbeat_tid);
+    heartbeat_stop (ctx.heartbeat);
 
     /* Unload modules.
      * FIXME: this will hang in pthread_join unless modules have been stopped.
@@ -568,6 +550,7 @@ int main (int argc, char *argv[])
     zloop_destroy (&ctx.zl);
     zctx_destroy (&ctx.zctx);
     overlay_destroy (ctx.overlay);
+    heartbeat_destroy (ctx.heartbeat);
     if (ctx.rankstr)
         free (ctx.rankstr);
     if (ctx.rankstr_right)
@@ -1052,6 +1035,7 @@ static JSON cmb_lsmod (ctx_t *ctx)
     zlist_t *keys;
     char *name;
     module_t *mod;
+    int epoch = heartbeat_get_epoch (ctx->heartbeat);
 
     if (!(keys = zhash_keys (ctx->modules)))
         oom ();
@@ -1063,7 +1047,7 @@ static JSON cmb_lsmod (ctx_t *ctx)
                                     mod_size (mod->p),
                                     mod_digest (mod->p),
                                     peer_idle (ctx->peers, mod_uuid (mod->p),
-                                               ctx->hb_epoch)) < 0) {
+                                               epoch)) < 0) {
             Jput (o);
             o = NULL;
             goto done;
@@ -1120,13 +1104,14 @@ static JSON cmb_lspeer (ctx_t *ctx)
     zlist_t *keys;
     char *key;
     peer_t *p;
+    int epoch = heartbeat_get_epoch (ctx->heartbeat);
 
     if (!(keys = zhash_keys (ctx->peers)))
         oom ();
     key = zlist_first (keys);
     while (key) {
         if ((p = peer_lookup (ctx->peers, key)) && !peer_get_modflag (p)) {
-            int idle = ctx->hb_epoch - peer_get_lastseen (p);
+            int idle = epoch - peer_get_lastseen (p);
             JSON o = Jnew ();
             Jadd_int (o, "idle", idle);
             Jadd_obj (out, key, o);
@@ -1182,12 +1167,12 @@ static void child_cc_all (ctx_t *ctx, zmsg_t *zmsg)
 
 static void self_update (ctx_t *ctx)
 {
-    ctx->hb_lastreq = ctx->hb_epoch;
+    ctx->last_request = heartbeat_get_epoch (ctx->heartbeat);
 }
 
 static int self_idle (ctx_t *ctx)
 {
-    return ctx->hb_epoch - ctx->hb_lastreq;
+    return heartbeat_get_epoch (ctx->heartbeat) - ctx->last_request;
 }
 
 static void send_keepalive (ctx_t *ctx)
@@ -1202,25 +1187,6 @@ static void send_keepalive (ctx_t *ctx)
         goto done;
 done:
     zmsg_destroy (&zmsg);
-}
-
-static void cmb_heartbeat (ctx_t *ctx, zmsg_t *zmsg)
-{
-    json_object *event = NULL;
-
-    if (ctx->rank == 0)
-        return;
-
-    if (flux_msg_decode (zmsg, NULL, &event) < 0 || event == NULL
-           || util_json_object_get_int (event, "epoch", &ctx->hb_epoch) < 0) {
-        flux_log (ctx->h, LOG_ERR, "%s: bad hb message", __FUNCTION__);
-    }
-
-    /* If we've not sent anything to our parent, send a keepalive
-     * to update our idle time.
-     */
-    if (self_idle (ctx) > 0)
-        send_keepalive (ctx);
 }
 
 static int shutdown_cb (zloop_t *zl, int timer_id, ctx_t *ctx)
@@ -1279,11 +1245,16 @@ static int shutdown_send (ctx_t *ctx, int grace, int rc, const char *fmt, ...)
 
 static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
 {
-    if (flux_msg_match (zmsg, "hb"))
-        cmb_heartbeat (ctx, zmsg);
-    else if (flux_msg_match (zmsg, "shutdown"))
+    if (flux_msg_match (zmsg, "hb")) {
+        if (ctx->rank > 0) {
+            if (heartbeat_event_decode (ctx->heartbeat, zmsg) < 0)
+                err ("heartbeat_event_decode");
+            if (self_idle (ctx) > 0)
+                send_keepalive (ctx);
+        }
+    } else if (flux_msg_match (zmsg, "shutdown")) {
         shutdown_recv (ctx, zmsg);
-    else if (flux_msg_match (zmsg, "live.ready")) {
+    } else if (flux_msg_match (zmsg, "live.ready")) {
         if (ctx->shell)
             rank0_shell (ctx);
     }
@@ -1308,6 +1279,11 @@ static int send_event_zmsg (ctx_t *ctx, zmsg_t **event)
     assert (ctx->rank == 0);
     assert (ctx->modevent != NULL);
     assert (ctx->modevent->zs != NULL);
+
+    /* Assign sequence number (starting with 1)
+     */
+    if (flux_msg_set_seq (*event, ++ctx->event_seq) < 0)
+        goto done;
 
     /* Publish event globally (if configured)
     */
@@ -1368,8 +1344,6 @@ static int send_event (ctx_t *ctx, JSON o, const char *topic)
         if (flux_msg_set_payload (zmsg, FLUX_MSGFLAG_JSON, (char *)s, len) < 0)
             goto done;
     }
-    if (flux_msg_set_seq (zmsg, ++ctx->event_seq) < 0) /* start with seq=1 */
-        goto done;
     if (send_event_zmsg (ctx, &zmsg) < 0)
         goto done;
     rc = 0;
@@ -1710,7 +1684,8 @@ static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
             snoop_cc (ctx, zmsg);
             if (flux_msg_get_route_last (zmsg, &id) < 0)
                 goto done;
-            peer_checkin (ctx->peers, id, ctx->hb_epoch);
+            peer_checkin (ctx->peers, id,
+                          heartbeat_get_epoch (ctx->heartbeat));
             break;
         case FLUX_MSGTYPE_REQUEST:
             assert (zmsg != NULL);
@@ -1788,7 +1763,8 @@ static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod)
             zhash_delete (ctx->modules, mod_name (mod->p));
         else {
             (void)flux_sendmsg (ctx->h, &zmsg);
-            peer_checkin (ctx->peers, mod_uuid (mod->p), ctx->hb_epoch);
+            peer_checkin (ctx->peers, mod_uuid (mod->p),
+                          heartbeat_get_epoch (ctx->heartbeat));
         }
     }
     if (zmsg)
@@ -1847,17 +1823,26 @@ done:
     ZLOOP_RETURN(ctx);
 }
 
-static int hb_cb (zloop_t *zl, int timer_id, ctx_t *ctx)
+/* Heartbeat timer callback on rank 0
+ * Increment epoch and send event.
+ */
+static int heartbeat_cb (zloop_t *zl, int timer_id, ctx_t *ctx)
 {
-    JSON o = Jnew ();
-
+    zmsg_t *zmsg = NULL;
     assert (ctx->rank == 0);
-    assert (timer_id == ctx->heartbeat_tid);
 
-    Jadd_int (o, "epoch", ++ctx->hb_epoch);
-    if (send_event (ctx, o, "hb") < 0)
-        err ("send_event failed");
-    Jput (o);
+    heartbeat_next_epoch (ctx->heartbeat);
+
+    if (!(zmsg = heartbeat_event_encode (ctx->heartbeat))) {
+        err ("heartbeat_event_encode failed");
+        goto done;
+    }
+    if (send_event_zmsg (ctx, &zmsg) < 0) {
+        err ("send_event_zmsg");
+        goto done;
+    }
+done:
+    zmsg_destroy (&zmsg);
     ZLOOP_RETURN(ctx);
 }
 
@@ -1991,8 +1976,10 @@ static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
         goto done;
     }
     snoop_cc (ctx, *zmsg);
-    if (hopcount > 0 && lasthop)
-        peer_checkin (ctx->peers, lasthop, ctx->hb_epoch);
+    if (hopcount > 0 && lasthop) {
+        peer_checkin (ctx->peers, lasthop,
+                      heartbeat_get_epoch (ctx->heartbeat));
+    }
     if (nodeid == FLUX_NODEID_ANY) {
         rc = service_send (ctx, zmsg, lasthop, hopcount, false);
         if (rc < 0 && errno == ENOSYS)
