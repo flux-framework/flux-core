@@ -83,7 +83,7 @@ int overlay_mcast_child (overlay_t *ov, zmsg_t *zmsg);
 void overlay_set_event (overlay_t *ov, const char *fmt, ...);
 const char *overlay_get_event (overlay_t *ov);
 void overlay_set_event_cb (overlay_t *ov, zloop_fn *cb, void *arg);
-int overlay_sendmsg_event (overlay_t *ov, zmsg_t **zmsg);
+int overlay_sendmsg_event (overlay_t *ov, zmsg_t *zmsg);
 zmsg_t *overlay_recvmsg_event (overlay_t *ov);
 
 /* Since an epgm:// endpoint only allows one subscriber per node,

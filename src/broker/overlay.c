@@ -293,22 +293,24 @@ void overlay_set_event_cb (overlay_t *ov, zloop_fn *cb, void *arg)
     ov->event_arg = arg;
 }
 
-int overlay_sendmsg_event (overlay_t *ov, zmsg_t **zmsg)
+int overlay_sendmsg_event (overlay_t *ov, zmsg_t *zmsg)
 {
     int rc = -1;
+    zmsg_t *cpy = NULL;
 
-    if (!ov->event || !ov->event->zs) {
-        errno = EINVAL;
-        goto done;
-    }
+    if (!ov->event || !ov->event->zs)
+        return 0;
+    if (!(cpy = zmsg_dup (zmsg)))
+        oom ();
     if (ov->event_munge) {
-        if (flux_sec_munge_zmsg (ov->sec, zmsg) < 0) {
+        if (flux_sec_munge_zmsg (ov->sec, &cpy) < 0) {
             errno = EIO;
             goto done;
         }
     }
-    rc = zmsg_send (zmsg, ov->event->zs);
+    rc = zmsg_send (&cpy, ov->event->zs);
 done:
+    zmsg_destroy (&cpy);
     return rc;
 }
 

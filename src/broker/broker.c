@@ -1067,15 +1067,8 @@ static int send_event_zmsg (ctx_t *ctx, zmsg_t **event)
 
     /* Publish event globally (if configured)
     */
-    if (overlay_get_event (ctx->overlay)) {
-        zmsg_t *cpy;
-        if (!(cpy = zmsg_dup (*event)))
-            oom ();
-        rc = overlay_sendmsg_event (ctx->overlay, &cpy);
-        zmsg_destroy (&cpy);
-        if (rc < 0)
-            goto done;
-    }
+    if (overlay_sendmsg_event (ctx->overlay, *event) < 0)
+        goto done;
     /* Publish event to downstream peers.
      */
     (void)overlay_mcast_child (ctx->overlay, *event);
