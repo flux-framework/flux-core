@@ -53,8 +53,12 @@ endpt_t *endpt_create (const char *fmt, ...)
 
 void endpt_destroy (endpt_t *ep)
 {
-    free (ep->uri);
-    free (ep);
+    if (ep) {
+        if (!strncmp (ep->uri, "ipc:///", 7))
+            (void)unlink (ep->uri + 6);
+        free (ep->uri);
+        free (ep);
+    }
 }
 
 /*
