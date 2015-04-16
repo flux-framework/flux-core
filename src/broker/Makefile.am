@@ -22,7 +22,9 @@ flux_broker_SOURCES = \
 	heartbeat.h \
 	heartbeat.c \
 	snoop.h \
-	snoop.c
+	snoop.c \
+	service.h \
+	service.c
 
 flux_broker_LDADD = \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
