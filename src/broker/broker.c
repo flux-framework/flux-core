@@ -261,6 +261,7 @@ int main (int argc, char *argv[])
     ctx.heartbeat = heartbeat_create ();
     peerhash_set_heartbeat (ctx.peers, ctx.heartbeat);
     overlay_set_heartbeat (ctx.overlay, ctx.heartbeat);
+    overlay_set_peerhash (ctx.overlay, ctx.peers);
 
     ctx.pid = getpid();
     ctx.module_searchpath = getenv ("FLUX_MODULE_PATH");
@@ -980,45 +981,6 @@ static void broker_init_modsocks (ctx_t *ctx)
     ctx->modevent = broker_init_modevent (ctx);
 }
 
-static int child_cc (ctx_t *ctx, const char *id, zmsg_t *zmsg)
-{
-    zmsg_t *cpy;
-    int rc = -1;
-
-    if (!(cpy = zmsg_dup (zmsg)))
-        oom ();
-    if (flux_msg_enable_route (cpy) < 0)
-        goto done;
-    if (flux_msg_push_route (cpy, id) < 0)
-        goto done;
-    rc = overlay_sendmsg_child (ctx->overlay, &cpy);
-done:
-    zmsg_destroy (&cpy);
-    return rc;
-}
-
-/* Cc events to downstream peers, until they have their primary event
- * source wired.  This works around the race described in issue 38.
- */
-static void child_cc_all (ctx_t *ctx, zmsg_t *zmsg)
-{
-    zlist_t *keys;
-    char *key;
-    peer_t *p;
-
-    if (!(keys = peerhash_keys (ctx->peers)))
-        oom ();
-    key = zlist_first (keys);
-    while (key) {
-        if ((p = peer_lookup (ctx->peers, key)) && !peer_get_modflag (p)
-                                                && !peer_get_mute (p)) {
-            (void)child_cc (ctx, key, zmsg);
-        }
-        key = zlist_next (keys);
-    }
-    zlist_destroy (&keys);
-}
-
 static int shutdown_cb (zloop_t *zl, int timer_id, ctx_t *ctx)
 {
     if (ctx->verbose)
@@ -1116,12 +1078,12 @@ static int send_event_zmsg (ctx_t *ctx, zmsg_t **event)
     }
     /* Publish event to downstream peers.
      */
-    child_cc_all (ctx, *event);
+    (void)overlay_mcast_child (ctx->overlay, *event);
+    (void)overlay_sendmsg_relay (ctx->overlay, *event);
     /* Publish event locally
     */
     (void)snoop_sendmsg (ctx->snoop, *event);
     cmb_internal_event (ctx, *event);
-    (void)overlay_sendmsg_relay (ctx->overlay, *event);
     if (zmsg_send (event, ctx->modevent->zs) < 0) {
         if (errno == 0)
             errno = EIO;
@@ -1653,9 +1615,9 @@ static int handle_event (ctx_t *ctx, zmsg_t **zmsg)
             flux_log (ctx->h, LOG_ERR, "lost event %d", i);
     }
     ctx->event_seq = seq;
+    (void)overlay_mcast_child (ctx->overlay, *zmsg);
     (void)overlay_sendmsg_relay (ctx->overlay, *zmsg);
     (void)snoop_sendmsg (ctx->snoop, *zmsg);
-    child_cc_all (ctx, *zmsg); /* to downstream peers */
     cmb_internal_event (ctx, *zmsg);
 
     assert (ctx->modevent != NULL);

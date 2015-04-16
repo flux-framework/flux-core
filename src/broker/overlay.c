@@ -33,6 +33,7 @@
 
 #include "endpt.h"
 #include "heartbeat.h"
+#include "peer.h"
 #include "overlay.h"
 
 void overlay_destroy (overlay_t *ov)
@@ -92,6 +93,11 @@ void overlay_set_zloop (overlay_t *ov, zloop_t *zloop)
 void overlay_set_heartbeat (overlay_t *ov, heartbeat_t *hb)
 {
     ov->hb = hb;
+}
+
+void overlay_set_peerhash (overlay_t *ov, peerhash_t *ph)
+{
+    ov->peers = ph;
 }
 
 void overlay_push_parent (overlay_t *ov, const char *fmt, ...)
@@ -225,6 +231,40 @@ int overlay_sendmsg_child (overlay_t *ov, zmsg_t **zmsg)
     }
     rc = zmsg_send (zmsg, ov->child->zs);
 done:
+    return rc;
+}
+
+int overlay_mcast_child (overlay_t *ov, zmsg_t *zmsg)
+{
+    zmsg_t *cpy = NULL;
+    zlist_t *uuids = NULL;
+    char *uuid;
+    int rc = -1;
+
+    if (!ov->child || !ov->child->zs || !ov->peers)
+        return 0;
+    if (!(uuids = peerhash_keys (ov->peers)))
+        oom ();
+    uuid = zlist_first (uuids);
+    while (uuid) {
+        peer_t *p = peer_lookup (ov->peers, uuid);
+        if (p && !peer_get_modflag (p) && !peer_get_mute (p)) {
+            if (!(cpy = zmsg_dup (zmsg)))
+                oom ();
+            if (flux_msg_enable_route (cpy) < 0)
+                goto done;
+            if (flux_msg_push_route (cpy, uuid) < 0)
+                goto done;
+            if (zmsg_send (&cpy, ov->child->zs) < 0)
+                goto done;
+            zmsg_destroy (&cpy);
+        }
+        uuid = zlist_next (uuids);
+    }
+    rc = 0;
+done:
+    zlist_destroy (&uuids);
+    zmsg_destroy (&cpy);
     return rc;
 }
 

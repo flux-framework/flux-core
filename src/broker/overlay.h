@@ -6,6 +6,7 @@ typedef struct {
     flux_sec_t sec;
     zloop_t *zloop;
     heartbeat_t *hb;
+    peerhash_t *peers;
 
     uint32_t rank;
     char rankstr[16];
@@ -41,6 +42,7 @@ void overlay_set_zctx (overlay_t *ov, zctx_t *zctx);
 void overlay_set_rank (overlay_t *ov, uint32_t rank);
 void overlay_set_zloop (overlay_t *ov, zloop_t *zloop);
 void overlay_set_heartbeat (overlay_t *ov, heartbeat_t *hb);
+void overlay_set_peerhash (overlay_t *ov, peerhash_t *peerhash);
 
 /* All ranks but rank 0 connect to a parent to form the main TBON.
  * Internally there is a stack of parent URI's, with top as primary.
@@ -67,6 +69,13 @@ void overlay_set_child (overlay_t *ov, const char *fmt, ...);
 const char *overlay_get_child (overlay_t *ov);
 void overlay_set_child_cb (overlay_t *ov, zloop_fn *cb, void *arg);
 int overlay_sendmsg_child (overlay_t *ov, zmsg_t **zmsg);
+/* We can "multicast" events to all child peers using mcast_child().
+ * It walks the 'peer' hash, finding overlay peers that have not
+ * yet been "muted", and routes them a copy of zmsg.  The broker Cc's
+ * events over the TBON using this until peers indicate that they are
+ * receiving duplicate seq numbers through the normal event socket.
+ */
+int overlay_mcast_child (overlay_t *ov, zmsg_t *zmsg);
 
 /* The event socket is SUB for ranks > 0, and PUB for rank 0.
  * Internally, all events are routed to rank 0 before being published.
