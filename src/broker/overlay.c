@@ -310,16 +310,20 @@ const char *overlay_get_relay (overlay_t *ov)
     return ov->relay->uri;
 }
 
-int overlay_sendmsg_relay (overlay_t *ov, zmsg_t **zmsg)
+int overlay_sendmsg_relay (overlay_t *ov, zmsg_t *zmsg)
 {
     int rc = -1;
+    zmsg_t *cpy = NULL;
 
     if (!ov->relay || !ov->relay->zs) {
         errno = EINVAL;
         goto done;
     }
-    rc = zmsg_send (zmsg, ov->relay->zs);
+    if (!(cpy = zmsg_dup (zmsg)))
+        oom ();
+    rc = zmsg_send (&cpy, ov->relay->zs);
 done:
+    zmsg_destroy (&cpy);
     return rc;
 }
 

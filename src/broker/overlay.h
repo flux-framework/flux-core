@@ -85,7 +85,7 @@ zmsg_t *overlay_recvmsg_event (overlay_t *ov);
  */
 void overlay_set_relay (overlay_t *ov, const char *fmt, ...);
 const char *overlay_get_relay (overlay_t *ov);
-int overlay_sendmsg_relay (overlay_t *ov, zmsg_t **zmsg);
+int overlay_sendmsg_relay (overlay_t *ov, zmsg_t *zmsg);
 
 /* Establish connections.
  * These functions are idempotent as the bind may need to be called

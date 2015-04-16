@@ -630,18 +630,6 @@ static void update_pidfile (ctx_t *ctx, bool force)
     free (pidfile);
 }
 
-/* If fd 0 gets recycled and used in a zloop, zmq 4.0.4 will assert
- */
-void work_around_zmq_poll_bug (void)
-{
-    int fd = open ("/dev/null", O_RDONLY);
-    if (fd < 0)
-        err_exit ("/dev/null");
-    if (fd != 0 && dup2 (fd, 0) < 0)
-        msg ("failed to re-acquire stdin fileno - zmq_poll may be sad!");
-    /* leak fd on purpose */
-}
-
 /* See POSIX 2008 Volume 3 Shell and Utilities, Issue 7
  * Section 2.8.2 Exit status for shell commands (page 2315)
  */
@@ -1101,15 +1089,6 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
     }
 }
 
-static void relay_cc (ctx_t *ctx, zmsg_t *zmsg)
-{
-    if (overlay_get_relay (ctx->overlay)) {
-        zmsg_t *cpy = zmsg_dup (zmsg);
-        (void)overlay_sendmsg_relay (ctx->overlay, &cpy);
-        zmsg_destroy (&cpy);
-    }
-}
-
 /* helper for send_event() */
 static int send_event_zmsg (ctx_t *ctx, zmsg_t **event)
 {
@@ -1142,7 +1121,7 @@ static int send_event_zmsg (ctx_t *ctx, zmsg_t **event)
     */
     (void)snoop_sendmsg (ctx->snoop, *event);
     cmb_internal_event (ctx, *event);
-    relay_cc (ctx, *event);
+    (void)overlay_sendmsg_relay (ctx->overlay, *event);
     if (zmsg_send (event, ctx->modevent->zs) < 0) {
         if (errno == 0)
             errno = EIO;
@@ -1674,7 +1653,7 @@ static int handle_event (ctx_t *ctx, zmsg_t **zmsg)
             flux_log (ctx->h, LOG_ERR, "lost event %d", i);
     }
     ctx->event_seq = seq;
-    relay_cc (ctx, *zmsg);
+    (void)overlay_sendmsg_relay (ctx->overlay, *zmsg);
     (void)snoop_sendmsg (ctx->snoop, *zmsg);
     child_cc_all (ctx, *zmsg); /* to downstream peers */
     cmb_internal_event (ctx, *zmsg);
