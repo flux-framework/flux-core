@@ -133,19 +133,18 @@ done:
 
 int overlay_keepalive_parent (overlay_t *ov)
 {
+    endpt_t *ep = zlist_first (ov->parents);
     int idle = heartbeat_get_epoch (ov->hb) - ov->parent_lastsent;
     zmsg_t *zmsg = NULL;
     int rc = -1;
 
-    if (idle <= 0) { /* FIXME: won't this always be true if called on hb? */
-        rc = 0;
-        goto done;
-    }
+    if (!ep || !ep->zs || idle <= 1)
+        return 0;
     if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)))
         goto done;
     if (flux_msg_enable_route (zmsg) < 0)
         goto done;
-    rc = overlay_sendmsg_parent (ov, &zmsg);
+    rc = zmsg_send (&zmsg, ep->zs);
 done:
     zmsg_destroy (&zmsg);
     return rc;
