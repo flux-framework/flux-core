@@ -60,6 +60,7 @@
 #include "heartbeat.h"
 #include "peer.h"
 #include "overlay.h"
+#include "snoop.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
@@ -83,21 +84,17 @@ typedef struct {
     bool security_clr;
     bool security_set;
 
-    /* Overlay sockets.
+    /* Sockets.
      */
     overlay_t *overlay;
-
-    /* Other sockets.
-     */
+    snoop_t *snoop;
     endpt_t *modrequest;        /* ROUTER - requests from modules */
     endpt_t *modevent;          /* PUB - events to modules */
-    endpt_t *snoop;             /* PUB - to flux-snoop (uri is generated) */
+
     /* Session parameters
      */
     int size;                   /* session size */
     int rank;                   /* our rank in session */
-    char *rankstr;              /*   string version of above */
-    char *rankstr_right;        /*   with "r" tacked on the end */
     char *sid;                  /* session id */
     /* Plugins
      */
@@ -252,6 +249,7 @@ int main (int argc, char *argv[])
         oom ();
     ctx.peers = peerhash_create ();
     ctx.overlay = overlay_create ();
+    ctx.snoop = snoop_create ();
     ctx.k_ary = 2; /* binary TBON is default */
     ctx.heartbeat = heartbeat_create ();
     peerhash_set_heartbeat (ctx.peers, ctx.heartbeat);
@@ -438,10 +436,6 @@ int main (int argc, char *argv[])
     }
     if (!ctx.sid)
         ctx.sid = xstrdup ("0");
-    if (asprintf (&ctx.rankstr, "%d", ctx.rank) < 0)
-        oom ();
-    if (asprintf (&ctx.rankstr_right, "%dr", ctx.rank) < 0)
-        oom ();
     /* If we're missing the wiring, presume that the session is to be
      * started on a single node and compute appropriate ipc:/// sockets.
      */
@@ -487,6 +481,12 @@ int main (int argc, char *argv[])
         err_exit ("overlay_bind");
     if (overlay_connect (ctx.overlay) < 0)
         err_exit ("overlay_connect");
+
+    /* Set up snoop socket
+     */
+    snoop_set_zctx (ctx.snoop, ctx.zctx);
+    snoop_set_sec (ctx.snoop, ctx.sec);
+    snoop_set_uri (ctx.snoop, "%s", "ipc://*");
 
     /* Create our flux_t handle.
      */
@@ -548,12 +548,7 @@ int main (int argc, char *argv[])
     zctx_destroy (&ctx.zctx);
     overlay_destroy (ctx.overlay);
     heartbeat_destroy (ctx.heartbeat);
-    if (ctx.rankstr)
-        free (ctx.rankstr);
-    if (ctx.rankstr_right)
-        free (ctx.rankstr_right);
-    if (ctx.snoop)
-        endpt_destroy (ctx.snoop);
+    snoop_destroy (ctx.snoop);
     if (ctx.modrequest)
         endpt_destroy (ctx.modrequest);
     if (ctx.modevent)
@@ -908,33 +903,6 @@ static endpt_t *broker_init_modevent (ctx_t *ctx)
     return ep;
 }
 
-static endpt_t *broker_init_snoop (ctx_t *ctx)
-{
-    char *uri;
-    endpt_t *ep = endpt_create ("ipc://*");
-
-    if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_PUB)))
-        err_exit ("zsocket_new");
-    if (flux_sec_ssockinit (ctx->sec, ep->zs) < 0)
-        msg_exit ("flux_sec_ssockinit: %s", flux_sec_errstr (ctx->sec));
-    if (zsocket_bind (ep->zs, "%s", ep->uri) < 0)
-        err_exit ("%s", "ipc://*");
-    if ((uri = zsocket_last_endpoint (ep->zs))) {
-        free (ep->uri);
-        ep->uri = xstrdup (uri);
-    }
-    return ep;
-}
-
-static void snoop_cc (ctx_t *ctx, zmsg_t *zmsg)
-{
-    if (ctx->snoop && ctx->snoop->zs) {
-        zmsg_t *cpy = zmsg_dup (zmsg);
-        (void)zmsg_send (&cpy, ctx->snoop->zs);
-        zmsg_destroy (&cpy);
-    }
-}
-
 /* signalfd + zloop example: https://gist.github.com/mhaberler/8426050
  */
 static int broker_init_signalfd (ctx_t *ctx)
@@ -994,16 +962,13 @@ static void broker_init_modsocks (ctx_t *ctx)
 {
     ctx->modrequest = broker_init_modrequest (ctx);
     ctx->modevent = broker_init_modevent (ctx);
-
-    ctx->snoop = broker_init_snoop (ctx);
 }
 
 static const char *cmb_getattr (ctx_t *ctx, const char *name)
 {
     const char *val = NULL;
     if (!strcmp (name, "snoop-uri")) {
-        if (ctx->snoop)
-            val = ctx->snoop->uri;
+        val = snoop_get_uri (ctx->snoop);
     } else if (!strcmp (name, "parent-uri")) {
         val = overlay_get_parent (ctx->overlay);
     } else if (!strcmp (name, "request-uri")) {
@@ -1239,7 +1204,7 @@ static int send_event_zmsg (ctx_t *ctx, zmsg_t **event)
     child_cc_all (ctx, *event);
     /* Publish event locally
     */
-    snoop_cc (ctx, *event);
+    (void)snoop_sendmsg (ctx->snoop, *event);
     cmb_internal_event (ctx, *event);
     relay_cc (ctx, *event);
     if (zmsg_send (event, ctx->modevent->zs) < 0) {
@@ -1608,7 +1573,7 @@ static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_KEEPALIVE:
-            snoop_cc (ctx, zmsg);
+            (void)snoop_sendmsg (ctx->snoop, zmsg);
             if (flux_msg_get_route_last (zmsg, &id) < 0)
                 goto done;
             peer_checkin (ctx->peers, id);
@@ -1716,7 +1681,7 @@ static int recv_event (ctx_t *ctx, zmsg_t **zmsg)
     }
     ctx->event_seq = seq;
     relay_cc (ctx, *zmsg);
-    snoop_cc (ctx, *zmsg);
+    (void)snoop_sendmsg (ctx->snoop, *zmsg);
     child_cc_all (ctx, *zmsg); /* to downstream peers */
     cmb_internal_event (ctx, *zmsg);
 
@@ -1856,7 +1821,7 @@ static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
         errno = EPROTO;
         goto done;
     }
-    snoop_cc (ctx, *zmsg);
+    (void)snoop_sendmsg (ctx->snoop, *zmsg);
     if (hopcount > 0 && lasthop) {
         peer_checkin (ctx->peers, lasthop);
     }
@@ -1885,7 +1850,7 @@ static int broker_response_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
     char *nexthop = flux_msg_nexthop (*zmsg);
     int rc = -1;
 
-    snoop_cc (ctx, *zmsg);
+    (void)snoop_sendmsg (ctx->snoop, *zmsg);
 
     if (!nexthop)                             /* local: reply to ourselves? */
         rc = -1;
