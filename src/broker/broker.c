@@ -1051,42 +1051,6 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
     }
 }
 
-/* helper for send_event() */
-static int send_event_zmsg (ctx_t *ctx, zmsg_t **event)
-{
-    int rc = -1;
-
-    assert (ctx->rank == 0);
-    assert (ctx->modevent != NULL);
-    assert (ctx->modevent->zs != NULL);
-
-    /* Assign sequence number (starting with 1)
-     */
-    if (flux_msg_set_seq (*event, ++ctx->event_seq) < 0)
-        goto done;
-
-    /* Publish event globally (if configured)
-    */
-    if (overlay_sendmsg_event (ctx->overlay, *event) < 0)
-        goto done;
-    /* Publish event to downstream peers.
-     */
-    (void)overlay_mcast_child (ctx->overlay, *event);
-    (void)overlay_sendmsg_relay (ctx->overlay, *event);
-    /* Publish event locally
-    */
-    (void)snoop_sendmsg (ctx->snoop, *event);
-    cmb_internal_event (ctx, *event);
-    if (zmsg_send (event, ctx->modevent->zs) < 0) {
-        if (errno == 0)
-            errno = EIO;
-        goto done;
-    }
-    rc = 0;
-done:
-    return rc;
-}
-
 /* Send an event (call on rank 0 only)
  */
 static int send_event (ctx_t *ctx, JSON o, const char *topic)
@@ -1106,7 +1070,7 @@ static int send_event (ctx_t *ctx, JSON o, const char *topic)
         if (flux_msg_set_payload (zmsg, FLUX_MSGFLAG_JSON, (char *)s, len) < 0)
             goto done;
     }
-    if (send_event_zmsg (ctx, &zmsg) < 0)
+    if (flux_sendmsg (ctx->h, &zmsg) < 0)
         goto done;
     rc = 0;
 done:
@@ -1742,11 +1706,11 @@ static int heartbeat_cb (zloop_t *zl, int timer_id, ctx_t *ctx)
     heartbeat_next_epoch (ctx->heartbeat);
 
     if (!(zmsg = heartbeat_event_encode (ctx->heartbeat))) {
-        err ("heartbeat_event_encode failed");
+        err ("%s: heartbeat_event_encode failed", __FUNCTION__);
         goto done;
     }
-    if (send_event_zmsg (ctx, &zmsg) < 0) {
-        err ("send_event_zmsg");
+    if (flux_sendmsg (ctx->h, &zmsg) < 0) {
+        err ("%s: flux_sendmsg", __FUNCTION__);
         goto done;
     }
 done:
@@ -1869,6 +1833,41 @@ static int broker_response_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
     return rc;
 }
 
+static int rank0_event_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
+{
+    int rc = -1;
+
+    assert (ctx->modevent != NULL);
+    assert (ctx->modevent->zs != NULL);
+
+    /* Assign sequence number (starting with 1)
+     */
+    if (flux_msg_set_seq (*zmsg, ++ctx->event_seq) < 0)
+        goto done;
+
+    /* Publish event globally (if configured)
+    */
+    if (overlay_sendmsg_event (ctx->overlay, *zmsg) < 0)
+        goto done;
+    /* Publish event to downstream peers.
+     */
+    (void)overlay_mcast_child (ctx->overlay, *zmsg);
+    (void)overlay_sendmsg_relay (ctx->overlay, *zmsg);
+    /* Publish event locally
+    */
+    (void)snoop_sendmsg (ctx->snoop, *zmsg);
+    cmb_internal_event (ctx, *zmsg);
+
+    if (zmsg_send (zmsg, ctx->modevent->zs) < 0) { /* finally destroy here */
+        if (errno == 0)
+            errno = EIO;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
 static int broker_sendmsg (void *impl, zmsg_t **zmsg)
 {
     ctx_t *ctx = impl;
@@ -1885,6 +1884,10 @@ static int broker_sendmsg (void *impl, zmsg_t **zmsg)
             break;
         case FLUX_MSGTYPE_RESPONSE:
             rc = broker_response_sendmsg (ctx, zmsg);
+            break;
+        case FLUX_MSGTYPE_EVENT:
+            assert (ctx->rank == 0);
+            rc = rank0_event_sendmsg (ctx, zmsg);
             break;
         default:
             errno = EINVAL;
