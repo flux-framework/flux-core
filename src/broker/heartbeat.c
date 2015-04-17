@@ -160,13 +160,11 @@ done:
 static int heartbeat_json_decode (heartbeat_t *hb, JSON out)
 {
     int rc = -1;
-    int epoch;
 
-    if (Jget_int (out, "epoch", &epoch) < 0) {
+    if (Jget_int (out, "epoch", &hb->epoch) < 0) {
         errno = EPROTO;
         goto done;
     }
-    hb->epoch = epoch;
     rc = 0;
 done:
     return rc;

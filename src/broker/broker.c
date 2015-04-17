@@ -159,8 +159,6 @@ static void broker_add_services (ctx_t *ctx);
 static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
                           zhash_t *modexclude);
 
-static int send_event (ctx_t *ctx, JSON o, const char *topic);
-
 static void update_proctitle (ctx_t *ctx);
 static void update_environment (ctx_t *ctx);
 static void update_pidfile (ctx_t *ctx, bool force);
@@ -1013,26 +1011,26 @@ static void shutdown_recv (ctx_t *ctx, zmsg_t *zmsg)
         json_object_put (o);
 }
 
-static int shutdown_send (ctx_t *ctx, int grace, int rc, const char *fmt, ...)
+static int shutdown_send (ctx_t *ctx, int grace, int exit_code,
+                          const char *fmt, ...)
 {
-    JSON o = Jnew ();
+    JSON in = Jnew ();
     va_list ap;
     char *reason;
-    int ret;
+    int rc = -1;
 
     va_start (ap, fmt);
     reason = xvasprintf (fmt, ap);
     va_end (ap);
 
-    util_json_object_add_string (o, "reason", reason);
-    util_json_object_add_int (o, "grace", grace);
-    util_json_object_add_int (o, "rank", ctx->rank);
-    util_json_object_add_int (o, "exitcode", rc);
-    ret = send_event (ctx, o, "shutdown");
-    Jput (o);
-    if (reason)
-        free (reason);
-    return ret;
+    Jadd_str (in, "reason", reason);
+    Jadd_int (in, "grace", grace);
+    Jadd_int (in, "rank", ctx->rank);
+    Jadd_int (in, "exitcode", exit_code);
+    rc = flux_event_send (ctx->h, in, "shutdown");
+    Jput (in);
+    free (reason);
+    return rc;
 }
 
 static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
@@ -1049,32 +1047,6 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
         if (ctx->shell)
             rank0_shell (ctx);
     }
-}
-
-/* Send an event (call on rank 0 only)
- */
-static int send_event (ctx_t *ctx, JSON o, const char *topic)
-{
-    int rc = -1;
-    zmsg_t *zmsg;
-
-    assert (ctx->rank == 0);
-
-    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_EVENT)))
-        oom ();
-    if (flux_msg_set_topic (zmsg, topic) < 0)
-        goto done;
-    if (o) {
-        const char *s = json_object_to_json_string (o);
-        int len = strlen (s);
-        if (flux_msg_set_payload (zmsg, FLUX_MSGFLAG_JSON, (char *)s, len) < 0)
-            goto done;
-    }
-    if (flux_sendmsg (ctx->h, &zmsg) < 0)
-        goto done;
-    rc = 0;
-done:
-    return rc;
 }
 
 /**
@@ -1454,32 +1426,6 @@ static int cmb_log_cb (zmsg_t **zmsg, void *arg)
     return 0;
 }
 
-/* Forward event to rank 0, then publish it with
- * the rank 0 broker's sequence number.
- */
-static int cmb_pub_cb (zmsg_t **zmsg, void *arg)
-{
-    ctx_t *ctx = arg;
-    int rc = -1;
-    const char *topic;
-    JSON out, in = NULL;
-
-    if (ctx->rank > 0) {
-        rc = overlay_sendmsg_parent (ctx->overlay, zmsg);
-        goto done;
-    }
-    if (flux_json_request_decode (*zmsg, &in) < 0)
-        goto done;
-    if (!Jget_str (in, "topic", &topic) || !Jget_obj (in, "payload", &out)) {
-        errno = EPROTO;
-        goto done;
-    }
-    rc = send_event (ctx, out, topic);
-done:
-    Jput (in);
-    return rc;
-}
-
 static int cmb_event_mute_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1506,7 +1452,6 @@ static void broker_add_services (ctx_t *ctx)
           || !svc_add (ctx->services, "cmb.reparent", cmb_reparent_cb, ctx)
           || !svc_add (ctx->services, "cmb.panic", cmb_panic_cb, ctx)
           || !svc_add (ctx->services, "cmb.log", cmb_log_cb, ctx)
-          || !svc_add (ctx->services, "cmb.pub", cmb_pub_cb, ctx)
           || !svc_add (ctx->services, "cmb.event-mute", cmb_event_mute_cb, ctx)
           || !svc_add (ctx->services, "cmb.exec", cmb_exec_cb, ctx))
         err_exit ("can't register internal services");
@@ -1527,6 +1472,7 @@ static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
     zmsg_t *zmsg = zmsg_recv (item->socket);
     int type;
     char *id = NULL;
+    int rc;
 
     if (!zmsg)
         goto done;
@@ -1540,10 +1486,12 @@ static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
             peer_checkin (ctx->peers, id);
             break;
         case FLUX_MSGTYPE_REQUEST:
-            assert (zmsg != NULL);
-            int rc = flux_sendmsg (ctx->h, &zmsg);
+            rc = flux_sendmsg (ctx->h, &zmsg);
             if (zmsg)
                 flux_respond_errnum (ctx->h, &zmsg, rc < 0 ? errno : 0);
+            break;
+        case FLUX_MSGTYPE_EVENT:
+            rc = flux_sendmsg (ctx->h, &zmsg);
             break;
     }
 done:
@@ -1553,28 +1501,29 @@ done:
     ZLOOP_RETURN(ctx);
 }
 
-/* helper for event_cb and parent_cb */
+/* helper for event_cb, parent_cb, broker_event_sendmsg (rank 0 only) */
 static int handle_event (ctx_t *ctx, zmsg_t **zmsg)
 {
-    int i;
-    uint32_t seq;
+    if (ctx->rank > 0) {
+        int i;
+        uint32_t seq;
+        if (flux_msg_get_seq (*zmsg, &seq) < 0) {
+            flux_log (ctx->h, LOG_ERR, "dropping malformed event");
+            return -1;
+        }
+        if (seq <= ctx->event_seq) {
+            //flux_log (ctx->h, LOG_INFO, "duplicate event");
+            return -1;
+        }
+        if (ctx->event_seq > 0) { /* don't log initial missed events */
+            for (i = ctx->event_seq + 1; i < seq; i++)
+                flux_log (ctx->h, LOG_ERR, "lost event %d", i);
+        }
+        ctx->event_seq = seq;
+    }
 
-    if (flux_msg_get_seq (*zmsg, &seq) < 0) {
-        flux_log (ctx->h, LOG_ERR, "dropping malformed event");
-        return -1;
-    }
-    if (seq <= ctx->event_seq) {
-        //flux_log (ctx->h, LOG_INFO, "duplicate event");
-        return -1;
-    }
-    if (ctx->event_seq > 0) { /* don't log initial missed events */
-        for (i = ctx->event_seq + 1; i < seq; i++)
-            flux_log (ctx->h, LOG_ERR, "lost event %d", i);
-    }
-    ctx->event_seq = seq;
     (void)overlay_mcast_child (ctx->overlay, *zmsg);
     (void)overlay_sendmsg_relay (ctx->overlay, *zmsg);
-    (void)snoop_sendmsg (ctx->snoop, *zmsg);
     cmb_internal_event (ctx, *zmsg);
 
     assert (ctx->modevent != NULL);
@@ -1833,38 +1782,29 @@ static int broker_response_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
     return rc;
 }
 
-static int rank0_event_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
+/* Events are forwarded up the TBON to rank 0, then published from there.
+ * Rank 0 doesn't receive the events it transmits so we have to "loop back"
+ * here via handle_event().
+ */
+static int broker_event_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
 {
     int rc = -1;
 
-    assert (ctx->modevent != NULL);
-    assert (ctx->modevent->zs != NULL);
-
-    /* Assign sequence number (starting with 1)
-     */
-    if (flux_msg_set_seq (*zmsg, ++ctx->event_seq) < 0)
-        goto done;
-
-    /* Publish event globally (if configured)
-    */
-    if (overlay_sendmsg_event (ctx->overlay, *zmsg) < 0)
-        goto done;
-    /* Publish event to downstream peers.
-     */
-    (void)overlay_mcast_child (ctx->overlay, *zmsg);
-    (void)overlay_sendmsg_relay (ctx->overlay, *zmsg);
-    /* Publish event locally
-    */
-    (void)snoop_sendmsg (ctx->snoop, *zmsg);
-    cmb_internal_event (ctx, *zmsg);
-
-    if (zmsg_send (zmsg, ctx->modevent->zs) < 0) { /* finally destroy here */
-        if (errno == 0)
-            errno = EIO;
-        goto done;
+    if (ctx->rank > 0) {
+        if (flux_msg_enable_route (*zmsg) < 0)
+            goto done;
+        rc = overlay_sendmsg_parent (ctx->overlay, zmsg);
+    } else {
+        if (flux_msg_clear_route (*zmsg) < 0)
+            goto done;
+        if (flux_msg_set_seq (*zmsg, ++ctx->event_seq) < 0)
+            goto done;
+        if (overlay_sendmsg_event (ctx->overlay, *zmsg) < 0)
+            goto done;
+        rc = handle_event (ctx, zmsg);
     }
-    rc = 0;
 done:
+    zmsg_destroy (zmsg);
     return rc;
 }
 
@@ -1886,8 +1826,7 @@ static int broker_sendmsg (void *impl, zmsg_t **zmsg)
             rc = broker_response_sendmsg (ctx, zmsg);
             break;
         case FLUX_MSGTYPE_EVENT:
-            assert (ctx->rank == 0);
-            rc = rank0_event_sendmsg (ctx, zmsg);
+            rc = broker_event_sendmsg (ctx, zmsg);
             break;
         default:
             errno = EINVAL;

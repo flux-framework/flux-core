@@ -164,14 +164,23 @@ static int mod_sendmsg (void *impl, zmsg_t **zmsg)
 
     if (flux_msg_get_type (*zmsg, &type) < 0)
         goto done;
-    if (type == FLUX_MSGTYPE_REQUEST) {
-        rc = zmsg_send (zmsg, p->zs_request);
-        p->stats.request_tx++;
-    } else if (type == FLUX_MSGTYPE_RESPONSE) {
-        rc = zmsg_send (zmsg, p->zs_svc[0]);
-        p->stats.svc_tx++;
-    } else
-        errno = EINVAL;
+    switch (type) {
+        case FLUX_MSGTYPE_REQUEST:
+            rc = zmsg_send (zmsg, p->zs_request);
+            p->stats.request_tx++;
+            break;
+        case FLUX_MSGTYPE_RESPONSE:
+            rc = zmsg_send (zmsg, p->zs_svc[0]);
+            p->stats.svc_tx++;
+            break;
+        case FLUX_MSGTYPE_EVENT:
+            rc = zmsg_send (zmsg, p->zs_request);
+            p->stats.event_tx++;
+            break;
+        default:
+            errno = EINVAL;
+            break;
+    }
 done:
     return rc;
 }

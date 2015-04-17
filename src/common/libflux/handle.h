@@ -57,6 +57,11 @@ zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, zlist_t *nomatch,
  */
 int flux_putmsg_list (flux_t h, zlist_t *list);
 
+/* Event subscribe/unsubscribe.
+ */
+int flux_event_subscribe (flux_t h, const char *topic);
+int flux_event_unsubscribe (flux_t h, const char *topic);
+
 /* Get handle's zctx (if any).
  */
 zctx_t *flux_get_zctx (flux_t h);
