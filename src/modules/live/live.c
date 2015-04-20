@@ -547,19 +547,20 @@ done:
 
 static int goodbye (ctx_t *ctx, int parent_rank)
 {
-    JSON request = Jnew ();
+    JSON in = Jnew ();
     int rc = -1;
 
-    Jadd_int (request, "rank", ctx->rank);
-    Jadd_int (request, "parent-rank", parent_rank);
-    if (flux_request_send (ctx->h, request, "live.goodbye") < 0) {
-        flux_log (ctx->h, LOG_ERR, "%s: flux_request_send %s", __FUNCTION__,
+    Jadd_int (in, "rank", ctx->rank);
+    Jadd_int (in, "parent-rank", parent_rank);
+    if (flux_json_request (ctx->h, FLUX_NODEID_UPSTREAM,
+                                   FLUX_MATCHTAG_NONE, "live.goodbye", in) < 0){
+        flux_log (ctx->h, LOG_ERR, "%s: flux_json_send %s", __FUNCTION__,
                   strerror (errno));
         goto done;
     }
     rc = 0;
 done:
-    Jput (request);
+    Jput (in);
     return rc;
 }
 
@@ -854,7 +855,8 @@ static void hello_sink (flux_t h, void *item, int batchnum, void *arg)
             flux_log (h, LOG_ERR, "%s: topo_sync: %s",
                       __FUNCTION__, strerror (errno));
     } else {
-        if (flux_request_send (h, a, "live.push") < 0)
+        if (flux_json_request (h, FLUX_NODEID_UPSTREAM,
+                                  FLUX_MATCHTAG_NONE, "live.push", a) < 0)
             flux_log (h, LOG_ERR, "%s: flux_request_send: %s",
                       __FUNCTION__, strerror (errno));
     }
@@ -953,8 +955,9 @@ static int hello (ctx_t *ctx)
     int rc = -1;
 
     Jadd_int (request, "rank", ctx->rank);
-    if (!(response = flux_rpc (ctx->h, request, "live.hello"))) {
-        flux_log (ctx->h, LOG_ERR, "flux_rpc: %s", strerror (errno));
+    if (flux_json_rpc (ctx->h, FLUX_NODEID_UPSTREAM, "live.hello",
+                       request, &response) < 0) {
+        flux_log (ctx->h, LOG_ERR, "flux_json_rpc: %s", strerror (errno));
         goto done;
     }
     if (zlist_size (ctx->parents) == 0) /* don't redo on failover */

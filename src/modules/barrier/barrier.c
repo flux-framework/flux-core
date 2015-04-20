@@ -126,7 +126,10 @@ static void send_enter_request (ctx_t *ctx, barrier_t *b)
     util_json_object_add_int (o, "count", b->count);
     util_json_object_add_int (o, "nprocs", b->nprocs);
     util_json_object_add_int (o, "hopcount", 1);
-    flux_request_send (ctx->h, o, "barrier.enter");
+    if (flux_json_request (ctx->h, FLUX_NODEID_UPSTREAM,
+                                   FLUX_MATCHTAG_NONE, "barrier.enter", o) < 0)
+        flux_log (ctx->h, LOG_ERR, "%s: flux_json_request: %s",
+                  __FUNCTION__, strerror (errno));
     json_object_put (o);
 }
 

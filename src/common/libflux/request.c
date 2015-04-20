@@ -119,6 +119,7 @@ int flux_json_request (flux_t h, uint32_t nodeid, uint32_t matchtag,
 {
     zmsg_t *zmsg;
     int rc = -1;
+    int flags = 0;
 
     if (!topic) {
         errno = EINVAL;
@@ -126,7 +127,11 @@ int flux_json_request (flux_t h, uint32_t nodeid, uint32_t matchtag,
     }
     if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
         goto done;
-    if (flux_msg_set_nodeid (zmsg, nodeid) < 0)
+    if (nodeid == FLUX_NODEID_UPSTREAM) {
+        flags |= FLUX_MSGFLAG_UPSTREAM;
+        nodeid = flux_rank (h);
+    }
+    if (flux_msg_set_nodeid (zmsg, nodeid, flags) < 0)
         goto done;
     if (flux_msg_set_matchtag (zmsg, matchtag) < 0)
         goto done;

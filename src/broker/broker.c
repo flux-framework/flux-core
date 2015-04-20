@@ -1688,13 +1688,8 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 
 /* Try to dispatch message to a local service: built-in broker service,
  * or loaded comms module.
- * If 'loopback_ok' is true, allow a service other than 'cmb' to loop a
- * request message back to itself on the same rank.  Otherwise we return
- * ENOSYS in this case as an indication to caller that request should be
- * routed to parent.
  */
-static int service_send (ctx_t *ctx, zmsg_t **zmsg, char *lasthop,
-                         bool loopback_ok)
+static int service_send (ctx_t *ctx, zmsg_t **zmsg)
 {
     char *service = NULL;
     int rc = -1;
@@ -1710,12 +1705,6 @@ static int service_send (ctx_t *ctx, zmsg_t **zmsg, char *lasthop,
         if (!(mod = zhash_lookup (ctx->modules, service))) {
             errno = ENOSYS;
             goto done;
-        }
-        if (!loopback_ok) {
-            if (lasthop && !strcmp (lasthop, mod_uuid (mod->p))) {
-                errno = ENOSYS;
-                goto done;
-            }
         }
         rc = zmsg_send (zmsg, mod_sock (mod->p));
     }
@@ -1735,21 +1724,26 @@ static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
     char *lasthop = flux_msg_nexthop (*zmsg);
     int hopcount = flux_msg_hopcount (*zmsg);
     uint32_t nodeid;
+    int flags;
     int rc = -1;
 
-    if (flux_msg_get_nodeid (*zmsg, &nodeid) < 0) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (hopcount > 0 && lasthop) {
+    if (hopcount > 0 && lasthop)
         peer_checkin (ctx->peers, lasthop);
-    }
-    if (nodeid == FLUX_NODEID_ANY) {
-        rc = service_send (ctx, zmsg, lasthop, false);
+
+    if (flux_msg_get_nodeid (*zmsg, &nodeid, &flags) < 0)
+        goto done;
+    if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid == ctx->rank) {
+        rc = overlay_sendmsg_parent (ctx->overlay, zmsg);
+    } else if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid != ctx->rank) {
+        rc = service_send (ctx, zmsg);
+        if (rc < 0 && errno == ENOSYS)
+            rc = overlay_sendmsg_parent (ctx->overlay, zmsg);
+    } else if (nodeid == FLUX_NODEID_ANY) {
+        rc = service_send (ctx, zmsg);
         if (rc < 0 && errno == ENOSYS)
             rc = overlay_sendmsg_parent (ctx->overlay, zmsg);
     } else if (nodeid == ctx->rank) {
-        rc = service_send (ctx, zmsg, lasthop, true);
+        rc = service_send (ctx, zmsg);
     } else if (nodeid == 0) {
         rc = overlay_sendmsg_parent (ctx->overlay, zmsg);
     } else {

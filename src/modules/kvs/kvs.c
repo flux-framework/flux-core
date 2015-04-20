@@ -319,9 +319,10 @@ static void load_request_send (ctx_t *ctx, const href_t ref)
     json_object *o = util_json_object_new_object ();
 
     json_object_object_add (o, ref, NULL);
-    flux_request_send (ctx->h, o, "kvs.load");
+    if (flux_json_request (ctx->h, FLUX_NODEID_UPSTREAM,
+                                   FLUX_MATCHTAG_NONE, "kvs.load", o) < 0)
+        flux_log (ctx->h, LOG_ERR, "%s: flux_json_request", __FUNCTION__);
     json_object_put (o);
-
     ctx->stats.faults++;
 }
 
@@ -385,7 +386,9 @@ static void store_request_send (ctx_t *ctx, const href_t ref, json_object *val)
 
     json_object_get (val);
     json_object_object_add (o, ref, val);
-    flux_request_send (ctx->h, o, "kvs.store");
+    if (flux_json_request (ctx->h, FLUX_NODEID_UPSTREAM,
+                                   FLUX_MATCHTAG_NONE, "kvs.store", o) < 0)
+        flux_log (ctx->h, LOG_ERR, "%s: flux_json_request", __FUNCTION__);
     json_object_put (o);
 }
 
@@ -1325,9 +1328,9 @@ static void send_upstream_commit (ctx_t *ctx, commit_t *c, const char *sender,
     if ((in = kp_tcommit_enc (sender, c->dirents, fence, nprocs))) {
         Jput (c->dirents);
         c->dirents = NULL;
-        if (flux_json_request (ctx->h, FLUX_NODEID_ANY,
+        if (flux_json_request (ctx->h, FLUX_NODEID_UPSTREAM,
                                FLUX_MATCHTAG_NONE, "kvs.commit", in) < 0)
-            flux_log (ctx->h, LOG_ERR, "%s: flux_json_reqwuest: %s",
+            flux_log (ctx->h, LOG_ERR, "%s: flux_json_request: %s",
                       __FUNCTION__, strerror (errno));
     }
     Jput (in);
@@ -1611,7 +1614,8 @@ static int getroot_rpc (ctx_t *ctx, int *rootseq, href_t rootdir)
     const char *s;
     int rc = -1;
 
-    if (flux_json_rpc (ctx->h, FLUX_NODEID_ANY, "kvs.getroot", NULL, &out) < 0)
+    if (flux_json_rpc (ctx->h, FLUX_NODEID_UPSTREAM,
+                       "kvs.getroot", NULL, &out) < 0)
         goto done;
     if (kp_rgetroot_dec (out, rootseq, &s) < 0)
         goto done;

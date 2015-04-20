@@ -9,7 +9,7 @@
 #include "handle.h"
 #include "request.h"
 
-/* Send a request to 'nodeid' (may be FLUX_NODEID_ANY) addressed to 'topic'.
+/* Send a request to 'nodeid' addressed to 'topic'.
  * If 'in' is non-NULL, attach JSON payload, caller retains ownership.
  * Wait for a response.  If response has non-zero errnum, set errno to that
  * value and return -1.  If 'out' is non-NULL, set to JSON payload in response,

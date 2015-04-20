@@ -69,8 +69,8 @@ test_expect_success 'request: proxy ping 1 from 1 is zero hops' '
 	${FLUX_BUILD_DIR}/src/test/request/treq --rank 1 pingself | grep hops=0
 '
 
-test_expect_success 'request: proxy ping any from 1 is one hop' '
-	${FLUX_BUILD_DIR}/src/test/request/treq --rank 1 pingany | grep hops=1
+test_expect_success 'request: proxy ping upstream from 1 is one hop' '
+	${FLUX_BUILD_DIR}/src/test/request/treq --rank 1 pingupstream | grep hops=1
 '
 
 # Coproc test

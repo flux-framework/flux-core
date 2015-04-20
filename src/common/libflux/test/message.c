@@ -337,6 +337,7 @@ void check_proto (void)
     uint32_t nodeid;
     int errnum;
     int type;
+    int flags;
 
     ok ((zmsg = flux_msg_create (FLUX_MSGTYPE_RESPONSE)) != NULL,
         "flux_msg_create works");
@@ -347,14 +348,18 @@ void check_proto (void)
         "flux_msg_set_type works");
     ok (flux_msg_get_type (zmsg, &type) == 0 && type == FLUX_MSGTYPE_REQUEST,
         "flux_msg_get_type works and returns what we set");
-    ok (flux_msg_get_nodeid (zmsg, &nodeid) == 0 && nodeid == FLUX_NODEID_ANY,
+    ok (flux_msg_get_nodeid (zmsg, &nodeid, &flags) == 0
+        && nodeid == FLUX_NODEID_ANY
+        && flags == 0,
         "flux_msg_get_nodeid works on request and default is sane");
 
     nodeid = 42;
-    ok (flux_msg_set_nodeid (zmsg, nodeid) == 0,
+    ok (flux_msg_set_nodeid (zmsg, nodeid, 0) == 0,
         "flux_msg_set_nodeid works on request");
     nodeid = 0;
-    ok (flux_msg_get_nodeid (zmsg, &nodeid) == 0 && nodeid == 42,
+    ok (flux_msg_get_nodeid (zmsg, &nodeid, &flags) == 0
+        && nodeid == 42
+        && flags == 0,
         "flux_msg_get_nodeid works and returns what we set");
 
     errno = 0;
@@ -367,11 +372,29 @@ void check_proto (void)
     ok (flux_msg_set_errnum (zmsg, 43) == 0,
         "flux_msg_set_errnum works on response");
     errno = 0;
-    ok (flux_msg_set_nodeid (zmsg, 0) < 0 && errno == EINVAL,
+    ok (flux_msg_set_nodeid (zmsg, 0, 0) < 0 && errno == EINVAL,
         "flux_msg_set_nodeid on non-request fails with errno == EINVAL");
     errnum = 0;
     ok (flux_msg_get_errnum (zmsg, &errnum) == 0 && errnum == 43,
         "flux_msg_get_errnum works and returns what we set");
+
+    ok (flux_msg_set_type (zmsg, FLUX_MSGTYPE_REQUEST) == 0,
+        "flux_msg_set_type works");
+    errno = 0;
+    ok (flux_msg_set_nodeid (zmsg, FLUX_NODEID_ANY, FLUX_MSGFLAG_UPSTREAM) < 0
+        && errno == EINVAL,
+        "flux_msg_set_nodeid ANY + FLUX_MSGFLAG_UPSTREAM fails with EINVAL");
+
+    errno = 0;
+    ok (flux_msg_set_nodeid (zmsg, FLUX_NODEID_UPSTREAM, 0) < 0
+        && errno == EINVAL,
+        "flux_msg_set_nodeid FLUX_NODEID_UPSTREAM fails with EINVAL");
+
+    ok (flux_msg_set_nodeid (zmsg, 42, FLUX_MSGFLAG_UPSTREAM) == 0
+        && flux_msg_get_nodeid (zmsg, &nodeid, &flags) == 0
+        && nodeid == 42 && flags == FLUX_MSGFLAG_UPSTREAM,
+        "flux_msg_set_nodeid with nodeid + FLUX_MSGFLAG_UPSTREAM works");
+
     zmsg_destroy (&zmsg);
 }
 
@@ -436,12 +459,12 @@ void check_cmp (void)
 
 int main (int argc, char *argv[])
 {
-    plan (105);
+    plan (109);
 
     lives_ok ({zmsg_test (false);}, // 1
         "zmsg_test doesn't assert");
 
-    check_proto ();                 // 13
+    check_proto ();                 // 17
     check_routes ();                // 26
     check_topic ();                 // 11
     check_payload ();               // 21
