@@ -48,6 +48,7 @@ struct flux_handle_struct {
     zhash_t         *aux;
     tagpool_t       tagpool;
     reactor_t       reactor;
+    flux_msgcounters_t msgcounters;
 };
 
 flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags)
@@ -105,6 +106,16 @@ void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn destroy)
     zhash_freefn (h->aux, name, destroy);
 }
 
+void flux_get_msgcounters (flux_t h, flux_msgcounters_t *mcs)
+{
+    *mcs = h->msgcounters;
+}
+
+void flux_clr_msgcounters (flux_t h)
+{
+    memset (&h->msgcounters, 0, sizeof (h->msgcounters));
+}
+
 uint32_t flux_matchtag_alloc (flux_t h, int len)
 {
     return tagpool_alloc (h->tagpool, len);
@@ -130,32 +141,66 @@ uint32_t flux_matchtag_avail (flux_t h)
 
 int flux_sendmsg (flux_t h, zmsg_t **zmsg)
 {
+    int type;
+
     if (!h->ops->sendmsg) {
         errno = ENOSYS;
         return -1;
     }
-    if (h->flags & FLUX_FLAGS_TRACE) {
-        int type = 0;
-        (void)flux_msg_get_type (*zmsg, &type);
-        zdump_fprint (stderr, *zmsg, flux_msgtype_shortstr (type));
+    if (flux_msg_get_type (*zmsg, &type) < 0)
+        return -1;
+    switch (type) {
+        case FLUX_MSGTYPE_REQUEST:
+            h->msgcounters.request_tx++;
+            break;
+        case FLUX_MSGTYPE_RESPONSE:
+            h->msgcounters.response_tx++;
+            break;
+        case FLUX_MSGTYPE_EVENT:
+            h->msgcounters.event_tx++;
+            break;
+        case FLUX_MSGTYPE_KEEPALIVE:
+            h->msgcounters.keepalive_tx++;
+            break;
     }
+    if (h->flags & FLUX_FLAGS_TRACE)
+        zdump_fprint (stderr, *zmsg, flux_msgtype_shortstr (type));
     return h->ops->sendmsg (h->impl, zmsg);
 }
 
 zmsg_t *flux_recvmsg (flux_t h, bool nonblock)
 {
-    zmsg_t *zmsg;
+    zmsg_t *zmsg = NULL;
+    int type;
 
     if (!h->ops->recvmsg) {
         errno = ENOSYS;
-        return NULL;
+        goto done;
     }
-    zmsg = h->ops->recvmsg (h->impl, nonblock);
-    if (zmsg && (h->flags & FLUX_FLAGS_TRACE)) {
-        int type = 0;
-        (void)flux_msg_get_type (zmsg, &type);
+    if (!(zmsg = h->ops->recvmsg (h->impl, nonblock)))
+        goto done;
+    if (flux_msg_get_type (zmsg, &type) < 0) {
+        zmsg_destroy (&zmsg);
+        errno = EPROTO;
+        goto done;
+    }
+    switch (type) {
+        case FLUX_MSGTYPE_REQUEST:
+            h->msgcounters.request_rx++;
+            break;
+        case FLUX_MSGTYPE_RESPONSE:
+            h->msgcounters.response_rx++;
+            break;
+        case FLUX_MSGTYPE_EVENT:
+            h->msgcounters.event_rx++;
+            break;
+        case FLUX_MSGTYPE_KEEPALIVE:
+            h->msgcounters.keepalive_rx++;
+            break;
+    }
+    if ((h->flags & FLUX_FLAGS_TRACE))
         zdump_fprint (stderr, zmsg, flux_msgtype_shortstr (type));
-    }
+done:
     return zmsg;
 }
 
