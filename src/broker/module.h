@@ -6,10 +6,11 @@
 #define MODEVENT_INPROC_URI           "inproc://event"
 #define SVC_INPROC_URI_TMPL           "inproc://svc-%s"
 
+typedef struct mod_ctx_struct *mod_ctx_t;
+
 /* Create, start, stop, destroy a module.
  * Termination:  mod_stop (), read EOF on sock, mod_destroy ()
  */
-typedef struct mod_ctx_struct *mod_ctx_t;
 mod_ctx_t mod_create (zctx_t *zctx, uint32_t rank, const char *path);
 void mod_set_args (mod_ctx_t p, int argc, char * const argv[]);
 void mod_add_arg (mod_ctx_t p, const char *arg);
@@ -17,9 +18,6 @@ void mod_start (mod_ctx_t p);
 void mod_stop (mod_ctx_t p);
 void mod_destroy (mod_ctx_t p);
 
-
-/* Accessors.
- */
 const char *mod_name (mod_ctx_t p);
 const char *mod_uuid (mod_ctx_t p);
 const char *mod_digest (mod_ctx_t p);
