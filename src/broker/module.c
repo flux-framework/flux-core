@@ -78,11 +78,9 @@ struct mod_ctx_struct {
 
     /* sockets to broker
      */
-    void *zs_request;       /* DEALER for making requests */
     void *zs_svc[2];        /* PAIR for handling requests 0=module, 1=broker */
     void *zs_evin;          /* SUB for handling subscribed-to events */
 
-    char *modrequest_uri;
     char *modevent_uri;
     char *svc_uri;
 
@@ -97,7 +95,6 @@ struct mod_ctx_struct {
      */
     struct ev_loop *loop;
     ev_zlist putmsg_w;
-    ev_zmq request_w;
     ev_zmq svc_w;
     ev_zmq evin_w;
     int loop_rc;
@@ -166,7 +163,11 @@ static int mod_sendmsg (void *impl, zmsg_t **zmsg)
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
-            rc = zmsg_send (zmsg, p->zs_request);
+            if (flux_msg_enable_route (*zmsg) < 0)
+                goto done;
+            if (flux_msg_push_route (*zmsg, mod_uuid (p)) < 0)
+                goto done;
+            rc = zmsg_send (zmsg, p->zs_svc[0]);
             p->stats.request_tx++;
             break;
         case FLUX_MSGTYPE_RESPONSE:
@@ -174,7 +175,11 @@ static int mod_sendmsg (void *impl, zmsg_t **zmsg)
             p->stats.svc_tx++;
             break;
         case FLUX_MSGTYPE_EVENT:
-            rc = zmsg_send (zmsg, p->zs_request);
+            if (flux_msg_enable_route (*zmsg) < 0)
+                goto done;
+            if (flux_msg_push_route (*zmsg, mod_uuid (p)) < 0)
+                goto done;
+            rc = zmsg_send (zmsg, p->zs_svc[0]);
             p->stats.event_tx++;
             break;
         default:
@@ -189,7 +194,6 @@ static zmsg_t *mod_recvmsg_main (mod_ctx_t p, bool nonblock)
 {
     zmq_pollitem_t items[] = {
         {  .events = ZMQ_POLLIN, .socket = p->zs_evin },
-        {  .events = ZMQ_POLLIN, .socket = p->zs_request },
         {  .events = ZMQ_POLLIN, .socket = p->zs_svc[0] },
     };
     int nitems = sizeof (items) / sizeof (items[0]);
@@ -673,17 +677,14 @@ static void putmsg_cb (struct ev_loop *loop, ev_zlist *w, int revents)
 static void sync_msg_watchers (mod_ctx_t p)
 {
     if (p->msg_cb == NULL) {
-        ev_zmq_stop (p->loop, &p->request_w);
         ev_zmq_stop (p->loop, &p->svc_w);
         ev_zmq_stop (p->loop, &p->evin_w);
         ev_zlist_stop (p->loop, &p->putmsg_w);
     } else if (zlist_size (p->putmsg) == 0) {
-        ev_zmq_start (p->loop, &p->request_w);
         ev_zmq_start (p->loop, &p->svc_w);
         ev_zmq_start (p->loop, &p->evin_w);
         ev_zlist_stop (p->loop, &p->putmsg_w);
     } else {
-        ev_zmq_stop (p->loop, &p->request_w);
         ev_zmq_stop (p->loop, &p->svc_w);
         ev_zmq_stop (p->loop, &p->evin_w);
         ev_zlist_start (p->loop, &p->putmsg_w);
@@ -769,15 +770,6 @@ static void *mod_thread (void *arg)
 
     /* Connect to broker sockets
      */
-    if (!(p->zs_request = zsocket_new (p->zctx, ZMQ_DEALER)))
-        err_exit ("zsocket_new");
-    zsocket_set_hwm (p->zs_request, 0);
-    zsocket_set_identity (p->zs_request, zuuid_str (p->uuid));
-    if (zsocket_connect (p->zs_request, "%s", p->modrequest_uri) < 0)
-        err_exit ("%s", p->modrequest_uri);
-    ev_zmq_init (&p->request_w, main_cb, p->zs_request, EV_READ);
-    p->request_w.data = p;
-
     if (!(p->zs_evin = zsocket_new (p->zctx, ZMQ_SUB)))
         err_exit ("zsocket_new");
     zsocket_set_hwm (p->zs_evin, 0);
@@ -833,7 +825,6 @@ done:
 
     zsocket_destroy (p->zctx, p->zs_evin);
     zsocket_destroy (p->zctx, p->zs_svc[0]);
-    zsocket_destroy (p->zctx, p->zs_request);
 
     return NULL;
 }
@@ -888,8 +879,6 @@ void mod_destroy (mod_ctx_t p)
     free (p->digest);
     if (p->argz)
         free (p->argz);
-    if (p->modrequest_uri)
-        free (p->modrequest_uri);
     if (p->modevent_uri)
         free (p->modevent_uri);
     if (p->svc_uri)
@@ -980,7 +969,6 @@ mod_ctx_t mod_create (zctx_t *zctx, uint32_t rank, const char *path)
 
     p->zctx = zctx;
 
-    p->modrequest_uri = xstrdup (MODREQUEST_INPROC_URI);
     p->modevent_uri = xstrdup (MODEVENT_INPROC_URI);
     p->svc_uri = xasprintf (SVC_INPROC_URI_TMPL, p->name);
 

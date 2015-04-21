@@ -89,7 +89,6 @@ typedef struct {
      */
     overlay_t *overlay;
     snoop_t *snoop;
-    endpt_t *modrequest;        /* ROUTER - requests from modules */
     endpt_t *modevent;          /* PUB - events to modules */
 
     /* Session parameters
@@ -97,17 +96,18 @@ typedef struct {
     int size;                   /* session size */
     int rank;                   /* our rank in session */
     char *sid;                  /* session id */
-    /* Plugins
+    /* Modules
      */
     char *module_searchpath;    /* colon-separated list of directories */
     zhash_t *modules;           /* hash of module_t's by name */
+    peerhash_t *module_peers;   /* module peer hash, by uuid */
     /* Misc
      */
     bool verbose;
     bool quiet;
     flux_t h;
     pid_t pid;
-    peerhash_t *peers;          /* peer (hopcount=1) hb idle time, by uuid */
+    peerhash_t *overlay_peers;  /* overaly peer hash, by uuid */
     char *proctitle;
     sigset_t default_sigset;
     flux_conf_t cf;
@@ -145,14 +145,14 @@ typedef struct {
 } module_t;
 
 static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
-static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod);
+static int module_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod);
 static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
-static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
+static int child_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int heartbeat_cb (zloop_t *zl, int timer_id, ctx_t *ctx);
 static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 
 static void broker_init_comms (ctx_t *ctx);
-static void broker_init_modsocks (ctx_t *ctx);
+static endpt_t *broker_init_modevent (ctx_t *ctx);
 
 static void broker_add_services (ctx_t *ctx);
 
@@ -252,14 +252,16 @@ int main (int argc, char *argv[])
     if (!(ctx.modules = zhash_new ()))
         oom ();
     ctx.services = svchash_create ();
-    ctx.peers = peerhash_create ();
+    ctx.overlay_peers = peerhash_create ();
+    ctx.module_peers = peerhash_create ();
     ctx.overlay = overlay_create ();
     ctx.snoop = snoop_create ();
     ctx.k_ary = 2; /* binary TBON is default */
     ctx.heartbeat = heartbeat_create ();
-    peerhash_set_heartbeat (ctx.peers, ctx.heartbeat);
+    peerhash_set_heartbeat (ctx.overlay_peers, ctx.heartbeat);
+    peerhash_set_heartbeat (ctx.module_peers, ctx.heartbeat);
     overlay_set_heartbeat (ctx.overlay, ctx.heartbeat);
-    overlay_set_peerhash (ctx.overlay, ctx.peers);
+    overlay_set_peerhash (ctx.overlay, ctx.overlay_peers);
 
     ctx.pid = getpid();
     ctx.module_searchpath = getenv ("FLUX_MODULE_PATH");
@@ -423,7 +425,7 @@ int main (int argc, char *argv[])
     overlay_set_zloop (ctx.overlay, ctx.zl);
 
     overlay_set_parent_cb (ctx.overlay, (zloop_fn *)parent_cb, &ctx);
-    overlay_set_child_cb (ctx.overlay, (zloop_fn *)request_cb, &ctx);
+    overlay_set_child_cb (ctx.overlay, (zloop_fn *)child_cb, &ctx);
     overlay_set_event_cb (ctx.overlay, (zloop_fn *)event_cb, &ctx);
 
     /* Sets rank, size, parent URI.
@@ -501,19 +503,19 @@ int main (int argc, char *argv[])
     if (ctx.rank == 0)
         flux_log_set_redirect (ctx.h, true);
 
+    /* Register internal services
+     */
+    broker_add_services (&ctx);
+
     if (ctx.verbose)
         msg ("initializing module sockets");
-    broker_init_modsocks (&ctx);
+    ctx.modevent = broker_init_modevent (&ctx);
 
     if (ctx.verbose)
         msg ("loading modules");
     if (ctx.verbose)
         msg ("module-path: %s", ctx.module_searchpath);
     load_modules (&ctx, modules, modopts, modexclude);
-
-    /* Register internal services
-     */
-    broker_add_services (&ctx);
 
     /* install heartbeat timer
      */
@@ -559,11 +561,10 @@ int main (int argc, char *argv[])
     overlay_destroy (ctx.overlay);
     heartbeat_destroy (ctx.heartbeat);
     snoop_destroy (ctx.snoop);
-    if (ctx.modrequest)
-        endpt_destroy (ctx.modrequest);
     if (ctx.modevent)
         endpt_destroy (ctx.modevent);
-    peerhash_destroy (ctx.peers);
+    peerhash_destroy (ctx.overlay_peers);
+    peerhash_destroy (ctx.module_peers);
     svchash_destroy (ctx.services);
 
     zlist_destroy (&modules);
@@ -747,6 +748,9 @@ static module_t *module_create (ctx_t *ctx, const char *path)
     if (!(mod->rmmod_reqs = zlist_new ()))
         oom ();
     mod->ctx = ctx;
+
+    peer_t *p = peer_add (ctx->module_peers, mod_uuid (mod->p));
+    peer_set_arg (p, mod);
 done:
     return mod;
 }
@@ -757,8 +761,10 @@ done:
 static void module_destroy (module_t *mod)
 {
     zmsg_t *zmsg;
+    char *uuid = NULL;
 
     if (mod->p) {
+        uuid = xstrdup (mod_uuid (mod->p));
         zmq_pollitem_t zp;
         zp.socket = mod_sock (mod->p);
         zloop_poller_end (mod->ctx->zl, &zp);
@@ -767,6 +773,9 @@ static void module_destroy (module_t *mod)
     while ((zmsg = zlist_pop (mod->rmmod_reqs)))
         flux_respond_errnum (mod->ctx->h, &zmsg, 0);
     zlist_destroy (&mod->rmmod_reqs);
+
+    if (uuid)
+        peer_del (mod->ctx->module_peers, uuid);
 
     free (mod);
 }
@@ -784,10 +793,8 @@ static int module_start (ctx_t *ctx, module_t *mod)
 {
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
-    peer_t *p = peer_add (ctx->peers, mod_uuid (mod->p));
-    peer_set_modflag (p, true);
     zp.socket = mod_sock (mod->p);
-    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)plugins_cb, mod) < 0)
+    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)module_cb, mod) < 0)
         err_exit ("zloop_poller");
     mod_start (mod->p);
 
@@ -886,24 +893,6 @@ next:
     zlist_destroy (&keys);
 }
 
-/* Bind to ROUTER socket used by comms modules to send requests to the broker.
- */
-static endpt_t *broker_init_modrequest (ctx_t *ctx)
-{
-    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
-    endpt_t *ep = endpt_create (MODREQUEST_INPROC_URI);
-
-    if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
-        err_exit ("zsocket_new");
-    zsocket_set_hwm (ep->zs, 0);
-    if (zsocket_bind (ep->zs, "%s", ep->uri) < 0)
-        err_exit ("%s", ep->uri);
-    zp.socket = ep->zs;
-    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)request_cb, ctx) < 0)
-        err_exit ("zloop_poller");
-    return ep;
-}
-
 /* Bind to PUB socket used by comms modules to receive events from broker.
  */
 static endpt_t *broker_init_modevent (ctx_t *ctx)
@@ -971,12 +960,6 @@ static void broker_init_comms (ctx_t *ctx)
         msg_exit ("flux_sec_zauth_init: %s", flux_sec_errstr (ctx->sec));
     if (flux_sec_munge_init (ctx->sec) < 0)
         msg_exit ("flux_sec_munge_init: %s", flux_sec_errstr (ctx->sec));
-}
-
-static void broker_init_modsocks (ctx_t *ctx)
-{
-    ctx->modrequest = broker_init_modrequest (ctx);
-    ctx->modevent = broker_init_modevent (ctx);
 }
 
 static int shutdown_cb (zloop_t *zl, int timer_id, ctx_t *ctx)
@@ -1333,7 +1316,7 @@ static int cmb_lsmod_cb (zmsg_t **zmsg, void *arg)
             if (flux_lsmod_json_append (out, mod_name (mod->p),
                                              mod_size (mod->p),
                                              mod_digest (mod->p),
-                                             peer_idle (ctx->peers,
+                                             peer_idle (ctx->module_peers,
                                                         mod_uuid (mod->p))) < 0)
                 goto done;
         }
@@ -1349,7 +1332,7 @@ done:
 static int cmb_lspeer_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    JSON out = peer_list_encode (ctx->peers);
+    JSON out = peer_list_encode (ctx->overlay_peers);
     int rc = flux_json_respond (ctx->h, out, zmsg);
     Jput (out);
     return rc;
@@ -1432,9 +1415,15 @@ static int cmb_event_mute_cb (zmsg_t **zmsg, void *arg)
     char *id = NULL;
 
     if (flux_msg_get_route_last (*zmsg, &id) == 0)
-        peer_mute (ctx->peers, id);
+        peer_mute (ctx->overlay_peers, id);
     if (id)
         free (id);
+    zmsg_destroy (zmsg); /* never a reply */
+    return 0;
+}
+
+static int cmb_disconnect_cb (zmsg_t **zmsg, void *arg)
+{
     zmsg_destroy (zmsg); /* never a reply */
     return 0;
 }
@@ -1453,7 +1442,8 @@ static void broker_add_services (ctx_t *ctx)
           || !svc_add (ctx->services, "cmb.panic", cmb_panic_cb, ctx)
           || !svc_add (ctx->services, "cmb.log", cmb_log_cb, ctx)
           || !svc_add (ctx->services, "cmb.event-mute", cmb_event_mute_cb, ctx)
-          || !svc_add (ctx->services, "cmb.exec", cmb_exec_cb, ctx))
+          || !svc_add (ctx->services, "cmb.exec", cmb_exec_cb, ctx)
+          || !svc_add (ctx->services, "cmb.disconnect", cmb_disconnect_cb, ctx))
         err_exit ("can't register internal services");
 }
 
@@ -1462,12 +1452,12 @@ static void broker_add_services (ctx_t *ctx)
  **/
 
 
-/* Handle requests from both modules and overlay peers.
+/* Handle requests from overlay peers.
  * We pass requests to our own handle 'sendmsg' which dispatches
  * it elsewhere.  If the message was not destroyed by the handler
  * (e.g. by responding to it) generate a response here.
  */
-static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
+static int child_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
 {
     zmsg_t *zmsg = zmsg_recv (item->socket);
     int type;
@@ -1478,12 +1468,12 @@ static int request_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
         goto done;
     if (flux_msg_get_type (zmsg, &type) < 0)
         goto done;
+    if (flux_msg_get_route_last (zmsg, &id) < 0)
+        goto done;
+    peer_checkin (ctx->overlay_peers, id);
     switch (type) {
         case FLUX_MSGTYPE_KEEPALIVE:
             (void)snoop_sendmsg (ctx->snoop, zmsg);
-            if (flux_msg_get_route_last (zmsg, &id) < 0)
-                goto done;
-            peer_checkin (ctx->peers, id);
             break;
         case FLUX_MSGTYPE_REQUEST:
             rc = flux_sendmsg (ctx->h, &zmsg);
@@ -1590,11 +1580,11 @@ done:
 
 /* Handle messages on the service socket of a comms module.
  */
-static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod)
+static int module_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod)
 {
     ctx_t *ctx = mod->ctx;
     zmsg_t *zmsg = zmsg_recv (item->socket);
-    int type;
+    int type, rc;
 
     if (!zmsg)
         goto done;
@@ -1604,13 +1594,26 @@ static int plugins_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod)
     }
     if (flux_msg_get_type (zmsg, &type) < 0)
         goto done;
+    peer_checkin (ctx->module_peers, mod_uuid (mod->p));
     switch (type) {
         case FLUX_MSGTYPE_RESPONSE:
             (void)flux_sendmsg (ctx->h, &zmsg);
-            peer_checkin (ctx->peers, mod_uuid (mod->p));
+            break;
+        case FLUX_MSGTYPE_REQUEST:
+            rc = flux_sendmsg (ctx->h, &zmsg);
+            if (zmsg)
+                flux_respond_errnum (ctx->h, &zmsg, rc < 0 ? errno : 0);
+            break;
+        case FLUX_MSGTYPE_EVENT:
+            if (flux_sendmsg (ctx->h, &zmsg) < 0) {
+                flux_log (ctx->h, LOG_ERR, "%s(%s): flux_sendmsg %s: %s",
+                          __FUNCTION__, mod_name (mod->p),
+                          flux_msgtype_string (type), strerror (errno));
+            }
             break;
         default:
-            flux_log (ctx->h, LOG_ERR, "%s: unexpected %s", __FUNCTION__,
+            flux_log (ctx->h, LOG_ERR, "%s(%s): unexpected %s",
+                      __FUNCTION__, mod_name (mod->p),
                       flux_msgtype_string (type));
             break;
     }
@@ -1721,14 +1724,9 @@ done:
 
 static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
 {
-    char *lasthop = flux_msg_nexthop (*zmsg);
-    int hopcount = flux_msg_hopcount (*zmsg);
     uint32_t nodeid;
     int flags;
     int rc = -1;
-
-    if (hopcount > 0 && lasthop)
-        peer_checkin (ctx->peers, lasthop);
 
     if (flux_msg_get_nodeid (*zmsg, &nodeid, &flags) < 0)
         goto done;
@@ -1752,25 +1750,29 @@ static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
 done:
     /* N.B. don't destroy zmsg on error as we use it to send errnum reply.
      */
-    if (lasthop)
-        free (lasthop);
     return rc;
 }
 
 static int broker_response_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
 {
-    peer_t *p;
-    char *nexthop = flux_msg_nexthop (*zmsg);
+    peer_t *peer;
+    char *id = NULL;
     int rc = -1;
 
-    if (!nexthop)                             /* local: reply to ourselves? */
-        rc = -1;
-    else if ((p = peer_lookup (ctx->peers, nexthop)) && peer_get_modflag (p))
-        rc = zmsg_send (zmsg, ctx->modrequest->zs);      /* send to module */
-    else
+    if (flux_msg_get_route_last (*zmsg, &id) < 0 || id == NULL)
+        goto done;
+    if ((peer = peer_lookup (ctx->module_peers, id))) {
+        module_t *mod = peer_get_arg (peer);
+        assert (mod != NULL);
+        assert (mod->p != NULL);
+        free (id);
+        (void)flux_msg_pop_route (*zmsg, &id);
+        rc = zmsg_send (zmsg, mod_sock (mod->p));        /* send to module */
+    } else
         rc = overlay_sendmsg_child (ctx->overlay, zmsg); /* downstream peer */
-    if (nexthop)
-        free (nexthop);
+done:
+    if (id)
+        free (id);
     if (*zmsg)
         zmsg_destroy (zmsg);
     return rc;

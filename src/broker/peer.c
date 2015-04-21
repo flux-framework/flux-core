@@ -79,20 +79,25 @@ peer_t *peer_add (peerhash_t *ph, const char *uuid)
     return p;
 }
 
+void peer_del (peerhash_t *ph, const char *uuid)
+{
+    zhash_delete (ph->zh, uuid);
+}
+
 peer_t *peer_lookup (peerhash_t *ph, const char *uuid)
 {
     peer_t *p = zhash_lookup (ph->zh, uuid);
     return p;
 }
 
-void peer_set_modflag (peer_t *p, bool val)
+void peer_set_arg (peer_t *p, void *arg)
 {
-    p->modflag = val;
+    p->arg = arg;
 }
 
-bool peer_get_modflag (peer_t *p)
+void *peer_get_arg (peer_t *p)
 {
-    return p->modflag;
+    return p->arg;
 }
 
 void peer_set_mute (peer_t *p, bool val)
@@ -120,7 +125,7 @@ int peer_idle (peerhash_t *ph, const char *uuid)
     peer_t *p = peer_lookup (ph, uuid);
     if (!p)
         return now;
-    return now = p->lastseen;
+    return now - p->lastseen;
 }
 
 void peer_mute (peerhash_t *ph, const char *uuid)
@@ -143,7 +148,7 @@ json_object *peer_list_encode (peerhash_t *ph)
         oom ();
     key = zlist_first (keys);
     while (key) {
-        if ((p = peer_lookup (ph, key)) && !p->modflag) {
+        if ((p = peer_lookup (ph, key))) {
             JSON o = Jnew ();
             Jadd_int (o, "idle", now - p->lastseen);
             Jadd_obj (out, key, o);

@@ -3,7 +3,6 @@
 
 /* Templates used to construct module socket URIs
  */
-#define MODREQUEST_INPROC_URI         "inproc://request"
 #define MODEVENT_INPROC_URI           "inproc://event"
 #define SVC_INPROC_URI_TMPL           "inproc://svc-%s"
 

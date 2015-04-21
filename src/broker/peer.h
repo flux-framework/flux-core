@@ -7,7 +7,7 @@
 
 typedef struct {
     int lastseen;
-    bool modflag;
+    void *arg;
     bool mute;
 } peer_t;
 
@@ -21,6 +21,7 @@ void peerhash_destroy (peerhash_t *ph);
 
 peer_t *peer_add (peerhash_t *ph, const char *uuid);
 peer_t *peer_lookup (peerhash_t *ph, const char *uuid);
+void peer_del (peerhash_t *ph, const char *uuid);
 
 /* Get a list of uuid's represented in the hash.
  * Caller must free with zlist_destroy().
@@ -33,8 +34,8 @@ zlist_t *peerhash_keys (peerhash_t *ph);
  */
 void peerhash_set_heartbeat (peerhash_t *ph, heartbeat_t *hb);
 
-bool peer_get_modflag (peer_t *p);
-void peer_set_modflag (peer_t *p, bool val);
+void *peer_get_arg (peer_t *p);
+void peer_set_arg (peer_t *p, void *arg);
 
 bool peer_get_mute (peer_t *p);
 void peer_set_mute (peer_t *p, bool val);

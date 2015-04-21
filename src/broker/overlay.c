@@ -248,7 +248,7 @@ int overlay_mcast_child (overlay_t *ov, zmsg_t *zmsg)
     uuid = zlist_first (uuids);
     while (uuid) {
         peer_t *p = peer_lookup (ov->peers, uuid);
-        if (p && !peer_get_modflag (p) && !peer_get_mute (p)) {
+        if (p && !peer_get_mute (p)) {
             if (!(cpy = zmsg_dup (zmsg)))
                 oom ();
             if (flux_msg_enable_route (cpy) < 0)
