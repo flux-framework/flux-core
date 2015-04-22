@@ -1,28 +1,28 @@
 #ifndef _BROKER_MODULE_H
 #define _BROKER_MODULE_H
 
-/* Plugins will be connected to these well-known shared memory zmq sockets.
+/* Templates used to construct module socket URIs
  */
-#define REQUEST_URI         "inproc://request"
-#define EVENT_URI           "inproc://event"
+#define MODEVENT_INPROC_URI           "inproc://event"
+#define SVC_INPROC_URI_TMPL           "inproc://svc-%s"
 
-/* Create, start, stop, destroy a plugin.
- * Termination:  plugin_stop (), read EOF on sock, plugin_destroy ()
+typedef struct mod_ctx_struct *mod_ctx_t;
+
+/* Create, start, stop, destroy a module.
+ * Termination:  mod_stop (), read EOF on sock, mod_destroy ()
  */
-typedef struct plugin_ctx_struct *plugin_ctx_t;
-plugin_ctx_t plugin_create (flux_t h, const char *path, zhash_t *args);
-void plugin_start (plugin_ctx_t p);
-void plugin_stop (plugin_ctx_t p);
-void plugin_destroy (plugin_ctx_t p);
+mod_ctx_t mod_create (zctx_t *zctx, uint32_t rank, const char *path);
+void mod_set_args (mod_ctx_t p, int argc, char * const argv[]);
+void mod_add_arg (mod_ctx_t p, const char *arg);
+void mod_start (mod_ctx_t p);
+void mod_stop (mod_ctx_t p);
+void mod_destroy (mod_ctx_t p);
 
-
-/* Accessors.
- */
-const char *plugin_name (plugin_ctx_t p);
-const char *plugin_uuid (plugin_ctx_t p);
-const char *plugin_digest (plugin_ctx_t p);
-int plugin_size (plugin_ctx_t p);
-void *plugin_sock (plugin_ctx_t p);
+const char *mod_name (mod_ctx_t p);
+const char *mod_uuid (mod_ctx_t p);
+const char *mod_digest (mod_ctx_t p);
+int mod_size (mod_ctx_t p);
+void *mod_sock (mod_ctx_t p);
 
 #endif /* !_BROKER_MODULE_H */
 

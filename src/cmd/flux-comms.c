@@ -28,9 +28,9 @@
 #include <stdio.h>
 #include <getopt.h>
 #include <stdbool.h>
+#include <argz.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/argv.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 
@@ -104,15 +104,19 @@ int main (int argc, char *argv[])
     } else if (!strcmp (cmd, "getattr")) {
         char *s;
         if (optind != argc - 1)
-            msg_exit ("getattr cmbd-snoop-uri, cmbd-parent-uri, or cmbd-request-uri");
+            msg_exit ("getattr snoop-uri, parent-uri, or request-uri");
         if (!(s = flux_getattr (h, rank, argv[optind])))
             err_exit ("%s", argv[optind]);
         printf ("%s\n", s);
         free (s);
     } else if (!strcmp (cmd, "panic")) {
         char *msg = NULL;
-        if (optind < argc)
-            msg = argv_concat (argc - optind, argv + optind, " ");
+        size_t len = 0;
+        if (optind < argc) {
+            if (argz_create (argv + optind, &msg, &len) < 0)
+                oom ();
+            argz_stringify (msg, len, ' ');
+        }
         flux_panic (h, rank, msg);
         if (msg)
             free (msg);

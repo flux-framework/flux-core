@@ -28,11 +28,11 @@ test_expect_success 'flux-keygen works' '
 	rm -rf $tmpkeydir
 '
 test_expect_success 'flux-config works' '
-	flux config get general.cmbd_path
+	flux config get general.broker_path
 '
-test_expect_success 'path to cmbd is sane' '
-	cmbd_path=$(flux config get general.cmbd_path)
-	test -x ${cmbd_path}
+test_expect_success 'path to broker is sane' '
+	broker_path=$(flux config get general.broker_path)
+	test -x ${broker_path}
 '
 test_expect_success 'flux-start works' "
 	flux start --size=2 'flux up' | grep '^ok: *\[0-1\]'

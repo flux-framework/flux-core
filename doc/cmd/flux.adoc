@@ -67,7 +67,7 @@ Multiple paths may be specified, separated by semicolon.
 Prepend 'PATH' to the Lua binary module search path (LUA_CPATH).
 Multiple paths may be specified, separated by semicolon.
 
-*-B, --cmbd-path*='FILE'::
+*-B, --broker-path*='FILE'::
 Override the path to the Flux communications broker daemon.
 
 
@@ -100,12 +100,12 @@ Set Lua binary module search path:
   [--lua-cpath PATH];[config.general.lua_cpath]; \
     [getenv LUA_CPATH];install-path;;;
 
-setenv FLUX_CMBD_PATH::
+setenv FLUX_BROKER_PATH::
 Set the path to the broker executable.  This environment variable is
 used by flux-start(1) and related sub-commands to launch the broker.
 The path may be set by any of the following methods, in decreasing precedence:
-- [--cmbd-path FILE]
-- [config.general.cmbd_path]
+- [--broker-path FILE]
+- [config.general.broker_path]
 - install-path
 
 setenv FLUX_CONF_DIRECTORY::

@@ -20,6 +20,7 @@ enum {
     FLUX_MSGFLAG_PAYLOAD    = 0x02,	/* message has payload */
     FLUX_MSGFLAG_JSON       = 0x04,	/* message payload is JSON */
     FLUX_MSGFLAG_ROUTE      = 0x08,	/* message is routable */
+    FLUX_MSGFLAG_UPSTREAM   = 0x10, /* request nodeid is sender (route away) */
 };
 
 /* Create a new Flux message.
@@ -57,10 +58,14 @@ int flux_msg_set_payload_json (zmsg_t *zmsg, json_object *o);
 int flux_msg_get_payload_json (zmsg_t *zmsg, json_object **o);
 
 /* Get/set nodeid (request only)
+ * If flags includes FLUX_NODEID_UPSTREAM, nodeid is the sending rank.
+ * FLUX_NODEID_UPSTREAM is a stand in for this flag + sending rank in
+ * higher level functions (not to be used here).
  */
-#define FLUX_NODEID_ANY	(~(uint32_t)0)
-int flux_msg_set_nodeid (zmsg_t *zmsg, uint32_t nodeid);
-int flux_msg_get_nodeid (zmsg_t *zmsg, uint32_t *nodeid);
+#define FLUX_NODEID_ANY         (~(uint32_t)0)
+#define FLUX_NODEID_UPSTREAM	(~(uint32_t)1)
+int flux_msg_set_nodeid (zmsg_t *zmsg, uint32_t nodeid, int flags);
+int flux_msg_get_nodeid (zmsg_t *zmsg, uint32_t *nodeid, int *flags);
 
 /* Get/set errnum (response only)
  */

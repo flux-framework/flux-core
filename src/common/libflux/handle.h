@@ -8,6 +8,17 @@
 
 typedef struct flux_handle_struct *flux_t;
 
+typedef struct {
+    int request_tx;
+    int request_rx;
+    int response_tx;
+    int response_rx;
+    int event_tx;
+    int event_rx;
+    int keepalive_tx;
+    int keepalive_rx;
+} flux_msgcounters_t;
+
 /* Flags for handle creation and flux_flags_set()/flux_flags_unset.
  */
 enum {
@@ -53,13 +64,23 @@ zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, zlist_t *nomatch,
 
 /* Pop messages off 'list' and call flux_putmsg() on them.
  * If there were any errors, -1 is returned with the greatest errno set.
- * The list is always returned empty. 
+ * The list is always returned empty.
  */
 int flux_putmsg_list (flux_t h, zlist_t *list);
+
+/* Event subscribe/unsubscribe.
+ */
+int flux_event_subscribe (flux_t h, const char *topic);
+int flux_event_unsubscribe (flux_t h, const char *topic);
 
 /* Get handle's zctx (if any).
  */
 zctx_t *flux_get_zctx (flux_t h);
+
+/* Get/clear handle message counters.
+ */
+void flux_get_msgcounters (flux_t h, flux_msgcounters_t *mcs);
+void flux_clr_msgcounters (flux_t h);
 
 #endif /* !_FLUX_CORE_HANDLE_H */
 

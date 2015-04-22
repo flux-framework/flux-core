@@ -111,6 +111,17 @@ static int proto_get_flags (uint8_t *data, int len, uint8_t *val)
     *val = data[PROTO_OFF_FLAGS];
     return 0;
 }
+static int proto_mod_flags (uint8_t *data, int len, uint8_t val, bool clear)
+{
+    if (len < PROTO_SIZE || data[PROTO_OFF_MAGIC] != PROTO_MAGIC
+                         || data[PROTO_OFF_VERSION] != PROTO_VERSION)
+        return -1;
+    if (clear)
+        data[PROTO_OFF_FLAGS] &= ~val;
+    else
+        data[PROTO_OFF_FLAGS] |= val;
+    return 0;
+}
 static int proto_set_bigint (uint8_t *data, int len, uint32_t bigint)
 {
     uint32_t x = htonl (bigint);
@@ -230,31 +241,51 @@ static int flux_msg_get_flags (zmsg_t *zmsg, uint8_t *fl)
     return 0;
 }
 
-int flux_msg_set_nodeid (zmsg_t *zmsg, uint32_t nid)
+int flux_msg_set_nodeid (zmsg_t *zmsg, uint32_t nodeid, int flags)
 {
-    zframe_t *zf = zmsg_last (zmsg);
+    zframe_t *zf;
     int type;
 
-    if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
-            || type != FLUX_MSGTYPE_REQUEST
-            || proto_set_bigint (zframe_data (zf), zframe_size (zf), nid) < 0) {
-        errno = EINVAL;
-        return -1;
-    }
+    if (flags != 0 && flags != FLUX_MSGFLAG_UPSTREAM)
+        goto error;
+    if (nodeid == FLUX_NODEID_UPSTREAM) /* should have been resolved earlier */
+        goto error;
+    if (flags == FLUX_MSGFLAG_UPSTREAM && nodeid == FLUX_NODEID_ANY)
+        goto error;
+    if (!(zf = zmsg_last (zmsg)))
+        goto error;
+    if (proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0)
+        goto error;
+    if (type != FLUX_MSGTYPE_REQUEST)
+        goto error;
+    if (proto_set_bigint (zframe_data (zf), zframe_size (zf), nodeid) < 0)
+        goto error;
+    if (proto_mod_flags (zframe_data (zf), zframe_size (zf), flags, false) < 0)
+        goto error;
     return 0;
+error:
+    errno = EINVAL;
+    return -1;
 }
 
-int flux_msg_get_nodeid (zmsg_t *zmsg, uint32_t *nid)
+int flux_msg_get_nodeid (zmsg_t *zmsg, uint32_t *nodeid, int *flags)
 {
     zframe_t *zf = zmsg_last (zmsg);
     int type;
+    uint8_t fl;
+    uint32_t nid;
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || type != FLUX_MSGTYPE_REQUEST
-            || proto_get_bigint (zframe_data (zf), zframe_size (zf), nid) < 0) {
+            || proto_get_bigint (zframe_data (zf), zframe_size (zf), &nid) < 0
+            || proto_get_flags (zframe_data (zf), zframe_size (zf), &fl) < 0
+            || ((fl & FLUX_MSGFLAG_UPSTREAM) && nid == FLUX_NODEID_ANY)
+            || nid == FLUX_NODEID_UPSTREAM) {
         errno = EPROTO;
         return -1;
     }
+    *nodeid = nid;
+    *flags = (fl & FLUX_MSGFLAG_UPSTREAM);
     return 0;
 }
 

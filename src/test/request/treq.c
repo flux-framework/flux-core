@@ -47,7 +47,7 @@ void test_nsrc (flux_t h, uint32_t nodeid);
 void test_putmsg (flux_t h, uint32_t nodeid);
 void test_pingzero (flux_t h, uint32_t nodeid);
 void test_pingself (flux_t h, uint32_t nodeid);
-void test_pingany (flux_t h, uint32_t nodeid);
+void test_pingupstream (flux_t h, uint32_t nodeid);
 void test_flush (flux_t h, uint32_t nodeid);
 void test_clog (flux_t h, uint32_t nodeid);
 void test_coproc (flux_t h, uint32_t nodeid);
@@ -67,7 +67,7 @@ static test_t tests[] = {
     { "putmsg", &test_putmsg },
     { "pingzero", &test_pingzero},
     { "pingself", &test_pingself},
-    { "pingany", &test_pingany},
+    { "pingupstream", &test_pingupstream},
     { "flush", &test_flush},
     { "clog", &test_clog},
     { "coproc", &test_coproc},
@@ -92,7 +92,7 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr,
-"Usage: treq [--rank N] {null | echo | err | src | sink | nsrc | putmsg | pingzero | pingself | pingany | clog | flush | coproc}\n"
+"Usage: treq [--rank N] {null | echo | err | src | sink | nsrc | putmsg | pingzero | pingself | pingupstream | clog | flush | coproc}\n"
 );
     exit (1);
 }
@@ -301,9 +301,9 @@ void test_pingzero (flux_t h, uint32_t nodeid)
     xping (h, nodeid, 0, "req.ping");
 }
 
-void test_pingany (flux_t h, uint32_t nodeid)
+void test_pingupstream (flux_t h, uint32_t nodeid)
 {
-    xping (h, nodeid, FLUX_NODEID_ANY, "req.ping");
+    xping (h, nodeid, FLUX_NODEID_UPSTREAM, "req.ping");
 }
 
 void test_pingself (flux_t h, uint32_t nodeid)

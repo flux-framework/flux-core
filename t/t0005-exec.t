@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 
-test_description='Test CMB exec functionality, used by later tests
+test_description='Test broker exec functionality, used by later tests
 
 
 Test exec functionality
@@ -60,7 +60,7 @@ test_expect_success 'flux exec -d option works' '
 
 # Run a script on ranks 0-3 simultaneously with each rank writing the
 #  rank id to a file. After successful completion, the contents of the files
-#  are verfied to ensure each rank connected to the right cmbd.
+#  are verfied to ensure each rank connected to the right broker.
 test_expect_success 'test_on_rank works on multiple ranks' '
 	ouput_dir=$(pwd) &&
 	rm -f rank_output.* &&

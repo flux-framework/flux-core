@@ -22,38 +22,45 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* zmq.c - wrapper functions for zmq prototyping */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <stdio.h>
-#include <zmq.h>
+#include <stdarg.h>
 #include <czmq.h>
 
-#include "log.h"
-#include "zconnect.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/log.h"
 
-void zconnect (zctx_t *zctx, void **sp, int type, char *uri, int hwm, char *id)
+#include "endpt.h"
+
+endpt_t *endpt_vcreate (const char *fmt, va_list ap)
 {
-    *sp = zsocket_new (zctx, type);
-    if (hwm != -1)
-        zsocket_set_hwm (*sp, hwm);
-    if (id != NULL)
-        zsocket_set_identity (*sp, id);
-    if (zsocket_connect (*sp, "%s", uri) < 0)
-        err_exit ("zsocket_connect: %s", uri);
+    endpt_t *ep = xzmalloc (sizeof (*ep));
+    ep->uri = xvasprintf (fmt, ap);
+    return ep;
 }
 
-void zbind (zctx_t *zctx, void **sp, int type, char *uri, int hwm)
+endpt_t *endpt_create (const char *fmt, ...)
 {
-    *sp = zsocket_new (zctx, type);
-    if (hwm != -1)
-        zsocket_set_hwm (*sp, hwm);
-    if (zsocket_bind (*sp, "%s", uri) < 0)
-        err_exit ("zsocket_bind: %s", uri);
+    va_list ap;
+    endpt_t *ep;
+
+    va_start (ap, fmt);
+    ep = endpt_vcreate (fmt, ap);
+    va_end (ap);
+    return ep;
 }
+
+void endpt_destroy (endpt_t *ep)
+{
+    if (ep) {
+        if (!strncmp (ep->uri, "ipc:///", 7))
+            (void)unlink (ep->uri + 6);
+        free (ep->uri);
+        free (ep);
+    }
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

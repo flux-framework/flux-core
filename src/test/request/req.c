@@ -322,7 +322,7 @@ static int null_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
                   flux_msgtype_string (type));
         goto done;
     }
-    if (flux_msg_get_nodeid (*zmsg, &nodeid) < 0) {
+    if (flux_msg_get_nodeid (*zmsg, &nodeid, &flags) < 0) {
         flux_log (h, LOG_ERR, "%s: flux_msg_get_nodeid: %s", __FUNCTION__,
                   strerror (errno));
         goto done;

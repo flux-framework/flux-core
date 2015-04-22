@@ -13,7 +13,7 @@
  * See also message.h.
  */
 
-/* Send a request to 'nodeid' (may be FLUX_NODEID_ANY) addressed to 'topic'.
+/* Send a request to 'nodeid' addressed to 'topic'.
  * If 'in' is non-NULL, attach JSON payload, caller retains ownership.
  * Set 'matchtag' to FLUX_MATCHTAG_NONE to disable tag matching, or
  * allocate/free one from the handle with flux_matchtag_alloc()/_free().

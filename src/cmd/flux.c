@@ -39,7 +39,6 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/setenvf.h"
-#include "src/common/libutil/argv.h"
 #include "src/common/libutil/shortjson.h"
 
 
@@ -51,7 +50,7 @@ char *intree_confdir (void);
 void setup_lua_env (flux_conf_t cf, const char *cpath_add, const char *path_add);
 char *setup_exec_searchpath (flux_conf_t cf, const char *path_add);
 void setup_module_env (flux_conf_t cf, const char *path_add);
-void setup_cmbd_env (flux_conf_t cf, const char *path_override);
+void setup_broker_env (flux_conf_t cf, const char *path_override);
 
 #define OPTIONS "+T:tx:hM:B:vc:L:C:FS:"
 static const struct option longopts[] = {
@@ -59,7 +58,7 @@ static const struct option longopts[] = {
     {"trace-apisocket", no_argument,        0, 't'},
     {"exec-path",       required_argument,  0, 'x'},
     {"module-path",     required_argument,  0, 'M'},
-    {"cmbd-path",       required_argument,  0, 'B'},
+    {"broker-path",     required_argument,  0, 'B'},
     {"lua-path",        required_argument,  0, 'L'},
     {"lua-cpath",       required_argument,  0, 'C'},
     {"config",          required_argument,  0, 'c'},
@@ -80,7 +79,7 @@ static void usage (void)
 "    -C,--lua-cpath PATH   prepend PATH to LUA_CPATH\n"
 "    -T,--tmpdir PATH      set FLUX_TMPDIR\n"
 "    -t,--trace-apisock    set FLUX_TRACE_APISOCK=1\n"
-"    -B,--cmbd-path FILE   override path to comms message broker\n"
+"    -B,--broker-path FILE override path to flux broker\n"
 "    -c,--config DIR       set path to config directory\n"
 "    -F,--file-config      force use of config file, even if FLUX_TMPDIR set\n"
 "    -S,--secdir DIR       set the directory where CURVE keys will be stored\n"
@@ -150,7 +149,7 @@ int main (int argc, char *argv[])
             case 'x': /* --exec-path PATH */
                 xopt = optarg;
                 break;
-            case 'B': /* --cmbd-path PATH */
+            case 'B': /* --broker-path PATH */
                 Bopt = optarg;
                 break;
             case 'v': /* --verbose */
@@ -211,7 +210,7 @@ int main (int argc, char *argv[])
      */
     setup_lua_env (cf, Copt, Lopt); /* sets LUA_CPATH, LUA_PATH */
     setup_module_env (cf, Mopt);    /* sets FLUX_MODULE_PATH */
-    setup_cmbd_env (cf, Bopt);      /* sets FLUX_CMBD_PATH */
+    setup_broker_env (cf, Bopt);    /* sets FLUX_BROKER_PATH */
 
     searchpath = setup_exec_searchpath (cf, xopt);
 
@@ -333,9 +332,9 @@ void setup_module_env (flux_conf_t cf, const char *path_add)
     free (path);
 }
 
-void setup_cmbd_env (flux_conf_t cf, const char *path_override)
+void setup_broker_env (flux_conf_t cf, const char *path_override)
 {
-    const char *cf_path = flux_conf_get (cf, "general.cmbd_path");
+    const char *cf_path = flux_conf_get (cf, "general.broker_path");
     const char *path = NULL;
 
     if (path_override)
@@ -343,8 +342,8 @@ void setup_cmbd_env (flux_conf_t cf, const char *path_override)
     if (!path && cf_path)
         path = cf_path;
     if (!path)
-        path = CMBD_PATH;
-    if (setenv ("FLUX_CMBD_PATH", path, 1) < 0)
+        path = BROKER_PATH;
+    if (setenv ("FLUX_BROKER_PATH", path, 1) < 0)
         err_exit ("%s", path);
 }
 
@@ -358,7 +357,7 @@ void dump_environment_one (const char *name)
 void dump_environment (void)
 {
     dump_environment_one ("FLUX_MODULE_PATH");
-    dump_environment_one ("FLUX_CMBD_PATH");
+    dump_environment_one ("FLUX_BROKER_PATH");
     dump_environment_one ("FLUX_TMPDIR");
     dump_environment_one ("FLUX_CONF_DIRECTORY");
     dump_environment_one ("FLUX_CONF_USEFILE");

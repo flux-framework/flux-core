@@ -83,7 +83,7 @@ int flux_rmmod_json_decode (json_object *o, char **name);
 json_object *flux_insmod_json_encode (const char *path,
                                       int argc, char **argv);
 int flux_insmod_json_decode (json_object *o, char **path,
-                             int *argc, char ***argv);
+                             char **argz, size_t *argz_len);
 
 /* Decode an insmod request message.
  * The 'path' returned on success must be freed by the caller.
@@ -91,7 +91,7 @@ int flux_insmod_json_decode (json_object *o, char **path,
  * Returns 0 on success, -1 with errno set on failure.
  */
 int flux_insmod_request_decode (zmsg_t *zmsg, char **path,
-                                int *argc, char ***argv);
+                                char **argz, size_t *argz_len);
 
 /* Decode an rmmod request message.
  * The 'name' returned on success must be freed by the caller.

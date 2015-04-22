@@ -32,7 +32,6 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/argv.h"
 #include "src/common/libutil/log.h"
 
 void config_dump (flux_conf_t cf, int ac, char **av);

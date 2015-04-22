@@ -5,7 +5,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
         -DMODULE_PATH=\"$(fluxmoddir)\" \
 	-DEXEC_PATH=\"$(fluxcmddir)\" \
-	-DCMBD_PATH=\"$(fluxlibexecdir)/cmbd\" \
+	-DBROKER_PATH=\"$(fluxlibexecdir)/flux-broker\" \
 	-DLUA_PATH_ADD=\"$(luadir)/?.lua\" \
 	-DLUA_CPATH_ADD=\"$(luaexecdir)/?.so\" \
 	-DMANDIR=\"$(mandir)\"

@@ -123,8 +123,8 @@ int main (int argc, char *argv[])
 
     if (!(h = flux_api_open ()))
         err_exit ("flux_api_open");
-    if (!(uri = flux_getattr (h, rank, "cmbd-snoop-uri")))
-        err_exit ("cmbd-snoop-uri");
+    if (!(uri = flux_getattr (h, rank, "snoop-uri")))
+        err_exit ("snoop-uri");
 
     /* N.B. flux_get_zctx () is not implemented for the API socket since
      * it has no internal zctx (despite supporting the flux reactor).
@@ -135,7 +135,7 @@ int main (int argc, char *argv[])
 
     /* N.B. We use the zloop reactor and handle disconnects via zmonitor.
      * We must handle disconnects, since the default zmq "hidden reconnect"
-     * behavior doesn't work across a cmbd restart, where the dynamically
+     * behavior doesn't work across a broker restart, where the dynamically
      * assigned snoop URI may change.
      */
     if (!(zloop = zloop_new ()))

@@ -1,7 +1,8 @@
+#include <argz.h>
+
 #include "src/common/libflux/module.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/argv.h"
 #include "src/common/libtap/tap.h"
 
 void test_helpers (void)
@@ -97,20 +98,27 @@ void test_rmmod_codec (void)
 
 void test_insmod_codec (void)
 {
-    int ac, argc = 2;
-    char *argv[] = { "foo", "bar" };
-    char **av;
+    int argc = 2;
+    char *argv[] = { "foo", "bar", NULL };
+    char *argz = NULL;
+    size_t argz_len = 0;
+    char *av[16];
     JSON o;
     char *s;
+    int rc;
 
     o = flux_insmod_json_encode ("/foo/bar", argc, argv);
     ok (o != NULL,
         "flux_insmod_json_encode works");
-    ok (flux_insmod_json_decode (o, &s, &ac, &av) == 0
-        && s != NULL && !strcmp (s, "/foo/bar")
-        && ac == 2 && !strcmp (av[0], "foo") && !strcmp (av[1], "bar"),
+
+    rc = flux_insmod_json_decode (o, &s, &argz, &argz_len);
+    argz_extract (argz, argz_len, av);
+    ok (rc == 0 && s != NULL && !strcmp (s, "/foo/bar")
+        && !strcmp (av[0], "foo") && !strcmp (av[1], "bar") && av[2] == NULL,
         "flux_insmod_json_decode works");
-    argv_destroy (ac, av);
+
+    if (argz)
+        free (argz);
     free (s);
     Jput (o);
 }

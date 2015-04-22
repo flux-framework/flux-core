@@ -221,7 +221,7 @@ static void client_destroy (client_t *c)
     free (c);
 }
 
-static bool flux_msg_match_substr (zmsg_t *zmsg, const char *topic, char **rest)
+static bool match_substr (zmsg_t *zmsg, const char *topic, char **rest)
 {
     if (!flux_msg_strneq_topic (zmsg, topic, strlen (topic)))
         return false;
@@ -247,37 +247,53 @@ static int client_read (ctx_t *ctx, client_t *c)
     zmsg = zfd_recv (c->fd, true);
     if (!zmsg) {
         if (errno != ECONNRESET && errno != EWOULDBLOCK && errno != EPROTO)
-            flux_log (ctx->h, LOG_ERR, "API read: %s", strerror (errno));
+            flux_log (ctx->h, LOG_ERR, "recv: %s", strerror (errno));
         return -1;
     }
-    if (flux_msg_get_type (zmsg, &type) < 0 || type != FLUX_MSGTYPE_REQUEST)
-        goto done; /* DROP */
-
-    if (flux_msg_match_substr (zmsg, "api.event.subscribe.", &name)) {
-        sub = subscription_create (ctx->h, FLUX_MSGTYPE_EVENT, name);
-        if (zlist_append (c->subscriptions, sub) < 0)
-            oom ();
-    } else if (flux_msg_match_substr (zmsg, "api.event.unsubscribe.", &name)) {
-        if ((sub = subscription_lookup (c, FLUX_MSGTYPE_EVENT, name)))
-            zlist_remove (c->subscriptions, sub);
-    } else {
-        /* insert disconnect notifier before forwarding request */
-        if (c->disconnect_notify) {
-            char *topic = NULL, *p;
-            if (flux_msg_get_topic (zmsg, &topic) < 0)
-                goto done;
-            if ((p = strchr (topic, '.')))
-                *p = '\0';
-            if (zhash_lookup (c->disconnect_notify, topic) == NULL) {
-                if (zhash_insert (c->disconnect_notify, topic, topic) < 0)
+    if (flux_msg_get_type (zmsg, &type) < 0) {
+        flux_log (ctx->h, LOG_ERR, "get_type:  %s", strerror (errno));
+        goto done;
+    }
+    switch (type) {
+        case FLUX_MSGTYPE_REQUEST:
+            if (match_substr (zmsg, "api.event.subscribe.", &name)) {
+                sub = subscription_create (ctx->h, FLUX_MSGTYPE_EVENT, name);
+                if (zlist_append (c->subscriptions, sub) < 0)
                     oom ();
-                zhash_freefn (c->disconnect_notify, topic, free);
-            } else
-                free (topic);
-        }
-        if (flux_msg_push_route (zmsg, zuuid_str (c->uuid)) < 0)
-            oom (); /* FIXME */
-        flux_sendmsg (ctx->h, &zmsg);
+                goto done;
+            }
+            if (match_substr (zmsg, "api.event.unsubscribe.", &name)) {
+                if ((sub = subscription_lookup (c, FLUX_MSGTYPE_EVENT, name)))
+                    zlist_remove (c->subscriptions, sub);
+                goto done;
+            }
+            /* insert disconnect notifier before forwarding request */
+            if (c->disconnect_notify) {
+                char *topic = NULL, *p;
+                if (flux_msg_get_topic (zmsg, &topic) < 0)
+                    goto done;
+                if ((p = strchr (topic, '.')))
+                    *p = '\0';
+                if (zhash_lookup (c->disconnect_notify, topic) == NULL) {
+                    if (zhash_insert (c->disconnect_notify, topic, topic) < 0)
+                        oom ();
+                    zhash_freefn (c->disconnect_notify, topic, free);
+                } else
+                    free (topic);
+            }
+            if (flux_msg_push_route (zmsg, zuuid_str (c->uuid)) < 0)
+                oom (); /* FIXME */
+            if (flux_sendmsg (ctx->h, &zmsg) < 0)
+                err ("%s: flux_sendmsg", __FUNCTION__);
+            break;
+        case FLUX_MSGTYPE_EVENT:
+            if (flux_sendmsg (ctx->h, &zmsg) < 0)
+                err ("%s: flux_sendmsg", __FUNCTION__);
+            break;
+        default:
+            flux_log (ctx->h, LOG_ERR, "drop unexpected %s",
+                      flux_msgtype_string (type));
+            break;
     }
 done:
     if (zmsg)
@@ -446,12 +462,7 @@ int mod_main (flux_t h, zhash_t *args)
     int rc = -1;
 
     if (!args || !(sockpath = zhash_lookup (args, "sockpath"))) {
-        const char *tmpdir = getenv ("FLUX_TMPDIR");
-        if (!tmpdir)
-            tmpdir = getenv ("TMPDIR");
-        if (!tmpdir)
-            tmpdir = "/tmp";
-        if (asprintf (&dfltpath, "%s/flux-api", tmpdir) < 0)
+        if (asprintf (&dfltpath, "%s/flux-api", flux_get_tmpdir ()) < 0)
             oom ();
         sockpath = dfltpath;
     }

@@ -25,73 +25,21 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
 
-#include "xzmalloc.h"
-#include "argv.h"
+#include "tmpdir.h"
 
-char *argv_concat (int argc, char *argv[], const char *sep)
+const char *flux_get_tmpdir (void)
 {
-    int seplen = strlen (sep);
-    int i, len = 0;
-    char *s;
-
-    for (i = 0; i < argc; i++)
-        len += strlen (argv[i]) + seplen;
-    s = xzmalloc (len + 1);
-    for (i = 0; i < argc; i++) {
-        strcat (s, argv[i]);
-        if (i < argc - 1)
-            strcat (s, sep);
-    }
-    return s;
+    const char *tmpdir = getenv ("FLUX_TMPDIR");
+    if (!tmpdir)
+        tmpdir = getenv ("TMPDIR");
+    return tmpdir ? tmpdir : "/tmp";
 }
 
-void argv_create (int *argcp, char ***argvp)
+int flux_set_tmpdir (const char *tmpdir)
 {
-    int ac = 0;
-    char **av = xzmalloc (1 * sizeof (av[0])); /* NULL term for execv() */
-
-    *argcp = ac;
-    *argvp = av;
-}
-
-void argv_destroy (int argc, char *argv[])
-{
-    int i;
-    for (i = 0; i < argc; i++)
-        if (argv[i])
-            free (argv[i]);
-    free (argv);
-}
-
-void argv_push (int *argcp, char ***argvp, const char *fmt, ...)
-{
-    va_list ap;
-    int ac = *argcp;
-    char **av = xrealloc (*argvp, (ac + 2) * sizeof (av[0]));
-
-    va_start (ap, fmt);
-    av[ac++] = xvasprintf (fmt, ap);
-    va_end (ap);
-    av[ac] = NULL;
-
-    *argcp = ac;
-    *argvp = av;
-}
-
-void argv_push_cmdline (int *argcp, char ***argvp, const char *s)
-{
-    char *cpy = xstrdup (s);
-    char *arg, *saveptr = NULL, *a1 = cpy;
-
-    while ((arg = strtok_r (a1, " \t", &saveptr))) {
-        argv_push (argcp, argvp, "%s", arg);
-        a1 = NULL;
-    }
-    free (cpy);
+    return setenv ("FLUX_TMPDIR", tmpdir, 1);
 }
 
 /*
