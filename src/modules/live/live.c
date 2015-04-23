@@ -119,7 +119,6 @@ typedef struct {
     zhash_t *children;
     bool hb_subscribed;
     red_t r;
-    bool comms_ready;
     ns_t *ns;           /* master only */
     JSON topo;          /* master only */
     flux_t h;
@@ -648,7 +647,6 @@ done:
 
 /* If ctx->ns is uninitialized, initialize it, using kvs data if any.
  * If ctx->ns is initialized, write it to kvs.
- * If nodeset_count (ctx->ns->unknown) drops to zero, publish "live.ready".
  */
 static int ns_sync (ctx_t *ctx)
 {
@@ -671,10 +669,6 @@ static int ns_sync (ctx_t *ctx)
     if (writekvs) {
         if (ns_tokvs (ctx) < 0)
             goto done;
-    }
-    if (!ctx->comms_ready && nodeset_count (ctx->ns->unknown) == 0) {
-        (void)flux_event_send (ctx->h, NULL, "live.ready");
-        ctx->comms_ready= true;
     }
     rc = 0;
 done:

@@ -62,6 +62,7 @@
 #include "overlay.h"
 #include "snoop.h"
 #include "service.h"
+#include "hello.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
@@ -119,6 +120,8 @@ typedef struct {
      */
     bool boot_pmi;
     int k_ary;
+    hello_t hello;
+    double hello_timeout;
     /* Heartbeat
      */
     heartbeat_t *heartbeat;
@@ -151,6 +154,8 @@ static int child_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int heartbeat_cb (zloop_t *zl, int timer_id, ctx_t *ctx);
 static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 
+static void hello_update_cb (hello_t h, void *arg);
+
 static void broker_init_comms (ctx_t *ctx);
 static endpt_t *broker_init_modevent (ctx_t *ctx);
 
@@ -172,7 +177,7 @@ static int shutdown_send (ctx_t *ctx, int grace, int rc, const char *fmt, ...);
 
 static const struct flux_handle_ops broker_handle_ops;
 
-#define OPTIONS "t:vqR:S:p:M:X:L:N:Pk:e:r:s:c:fnH:O:x:"
+#define OPTIONS "t:vqR:S:p:M:X:L:N:Pk:e:r:s:c:fnH:O:x:T:"
 static const struct option longopts[] = {
     {"sid",             required_argument,  0, 'N'},
     {"child-uri",       required_argument,  0, 't'},
@@ -194,6 +199,7 @@ static const struct option longopts[] = {
     {"command",         required_argument,  0, 'c'},
     {"noshell",         no_argument,        0, 'n'},
     {"heartrate",       required_argument,  0, 'H'},
+    {"timeout",         required_argument,  0, 'T'},
     {0, 0, 0, 0},
 };
 
@@ -222,6 +228,7 @@ static void usage (void)
 " -n,--noshell                 Do not spawn a shell even if on a tty\n"
 " -f,--force                   Kill rival broker and start\n"
 " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
+" -T,--timeout SECS            Set wireup timeout in seconds (rank 0 only)\n"
 );
     exit (1);
 }
@@ -256,6 +263,7 @@ int main (int argc, char *argv[])
     ctx.module_peers = peerhash_create ();
     ctx.overlay = overlay_create ();
     ctx.snoop = snoop_create ();
+    ctx.hello = hello_create ();
     ctx.k_ary = 2; /* binary TBON is default */
     ctx.heartbeat = heartbeat_create ();
     peerhash_set_heartbeat (ctx.overlay_peers, ctx.heartbeat);
@@ -351,11 +359,13 @@ int main (int argc, char *argv[])
             case 'f':   /* --force */
                 fopt = true;
                 break;
-            case 'H': { /* --heartrate SECS */
+            case 'H':   /* --heartrate SECS */
                 if (heartbeat_set_ratestr (ctx.heartbeat, optarg) < 0)
                     err_exit ("heartrate `%s'", optarg);
                 break;
-            }
+            case 'T':   /* --timeout SECS */
+                ctx.hello_timeout = strtod (optarg, NULL);
+                break;
             default:
                 usage ();
         }
@@ -529,9 +539,17 @@ int main (int argc, char *argv[])
                   heartbeat_get_rate (ctx.heartbeat));
     }
 
-    /* Send an initial keepalive message to parent, if any.
+    /* Send hello message to parent.
+     * Report progress every second.
+     * Start init once wireup is complete.
      */
-    overlay_keepalive_parent (ctx.overlay);
+    hello_set_overlay (ctx.hello, ctx.overlay);
+    hello_set_zloop (ctx.hello, ctx.zl);
+    hello_set_size (ctx.hello, ctx.size);
+    hello_set_cb (ctx.hello, hello_update_cb, &ctx);
+    hello_set_timeout (ctx.hello, 1.0);
+    if (hello_start (ctx.hello, ctx.rank) < 0)
+        err_exit ("hello_start");
 
     /* Event loop
      */
@@ -566,11 +584,32 @@ int main (int argc, char *argv[])
     peerhash_destroy (ctx.overlay_peers);
     peerhash_destroy (ctx.module_peers);
     svchash_destroy (ctx.services);
+    hello_destroy (ctx.hello);
 
     zlist_destroy (&modules);
     zhash_destroy (&modexclude);
     zlist_destroy (&modopts);
     return 0;
+}
+
+static void hello_update_cb (hello_t h, void *arg)
+{
+    ctx_t *ctx = arg;
+
+    if (hello_get_count (h) == hello_get_size (h)) {
+        flux_log (ctx->h, LOG_INFO, "nodeset: %s (complete)",
+                  hello_get_nodeset (h));
+        if (ctx->shell)
+            rank0_shell (ctx);
+    } else  {
+        flux_log (ctx->h, LOG_ERR, "nodeset: %s (incomplete)",
+                  hello_get_nodeset (h));
+    }
+    if (ctx->hello_timeout != 0 && hello_get_time (h) >= ctx->hello_timeout) {
+        (void)shutdown_send (ctx, 2, 1, "hello timeout after %.1f sec",
+                             ctx->hello_timeout);
+        hello_set_timeout (h, 0);
+    }
 }
 
 static void update_proctitle (ctx_t *ctx)
@@ -661,7 +700,7 @@ static void rank0_shell (ctx_t *ctx)
     subprocess_set_environ (ctx->shell, environ);
 
     if (!ctx->quiet)
-        msg ("%s-0: starting shell", ctx->sid);
+        flux_log (ctx->h, LOG_INFO, "starting shell");
 
     subprocess_run (ctx->shell);
 }
@@ -1026,9 +1065,6 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
         }
     } else if (flux_msg_match (zmsg, "shutdown")) {
         shutdown_recv (ctx, zmsg);
-    } else if (flux_msg_match (zmsg, "live.ready")) {
-        if (ctx->shell)
-            rank0_shell (ctx);
     }
 }
 
@@ -1405,7 +1441,7 @@ static int cmb_log_cb (zmsg_t **zmsg, void *arg)
         (void)overlay_sendmsg_parent (ctx->overlay, zmsg);
     else
         (void)flux_log_zmsg (*zmsg);
-    zmsg_destroy (zmsg); /* never a reply */
+    zmsg_destroy (zmsg); /* no reply */
     return 0;
 }
 
@@ -1418,13 +1454,22 @@ static int cmb_event_mute_cb (zmsg_t **zmsg, void *arg)
         peer_mute (ctx->overlay_peers, id);
     if (id)
         free (id);
-    zmsg_destroy (zmsg); /* never a reply */
+    zmsg_destroy (zmsg); /* no reply */
     return 0;
 }
 
 static int cmb_disconnect_cb (zmsg_t **zmsg, void *arg)
 {
-    zmsg_destroy (zmsg); /* never a reply */
+    zmsg_destroy (zmsg); /* no reply */
+    return 0;
+}
+
+static int cmb_hello_cb (zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    if (ctx->rank == 0)
+        hello_recv (ctx->hello, zmsg);
+    zmsg_destroy (zmsg); /* no reply */
     return 0;
 }
 
@@ -1443,7 +1488,8 @@ static void broker_add_services (ctx_t *ctx)
           || !svc_add (ctx->services, "cmb.log", cmb_log_cb, ctx)
           || !svc_add (ctx->services, "cmb.event-mute", cmb_event_mute_cb, ctx)
           || !svc_add (ctx->services, "cmb.exec", cmb_exec_cb, ctx)
-          || !svc_add (ctx->services, "cmb.disconnect", cmb_disconnect_cb, ctx))
+          || !svc_add (ctx->services, "cmb.disconnect", cmb_disconnect_cb, ctx)
+          || !svc_add (ctx->services, "cmb.hello", cmb_hello_cb, ctx))
         err_exit ("can't register internal services");
 }
 
