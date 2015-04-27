@@ -124,7 +124,7 @@ typedef struct {
     double hello_timeout;
     /* Heartbeat
      */
-    heartbeat_t *heartbeat;
+    heartbeat_t heartbeat;
     /* Shutdown
      */
     int shutdown_tid;
@@ -151,7 +151,7 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int module_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod);
 static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 static int child_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
-static int heartbeat_cb (zloop_t *zl, int timer_id, ctx_t *ctx);
+static void heartbeat_cb (heartbeat_t h, void *arg);
 static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 
 static void hello_update_cb (hello_t h, void *arg);
@@ -530,8 +530,8 @@ int main (int argc, char *argv[])
     /* install heartbeat timer
      */
     if (ctx.rank == 0) {
-        heartbeat_set_zloop (ctx.heartbeat, ctx.zl);
-        heartbeat_set_cb (ctx.heartbeat, (zloop_timer_fn *)heartbeat_cb, &ctx);
+        heartbeat_set_loop (ctx.heartbeat, ctx.zl);
+        heartbeat_set_cb (ctx.heartbeat, heartbeat_cb, &ctx);
         if (heartbeat_start (ctx.heartbeat) < 0)
             err_exit ("heartbeat_start");
         if (ctx.verbose)
@@ -1696,14 +1696,15 @@ done:
 /* Heartbeat timer callback on rank 0
  * Increment epoch and send event.
  */
-static int heartbeat_cb (zloop_t *zl, int timer_id, ctx_t *ctx)
+static void heartbeat_cb (heartbeat_t h, void *arg)
 {
+    ctx_t *ctx = arg;
     zmsg_t *zmsg = NULL;
     assert (ctx->rank == 0);
 
-    heartbeat_next_epoch (ctx->heartbeat);
+    heartbeat_next_epoch (h);
 
-    if (!(zmsg = heartbeat_event_encode (ctx->heartbeat))) {
+    if (!(zmsg = heartbeat_event_encode (h))) {
         err ("%s: heartbeat_event_encode failed", __FUNCTION__);
         goto done;
     }
@@ -1713,7 +1714,6 @@ static int heartbeat_cb (zloop_t *zl, int timer_id, ctx_t *ctx)
     }
 done:
     zmsg_destroy (&zmsg);
-    ZLOOP_RETURN(ctx);
 }
 
 static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)

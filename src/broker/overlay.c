@@ -90,9 +90,9 @@ void overlay_set_zloop (overlay_t *ov, zloop_t *zloop)
     ov->zloop = zloop;
 }
 
-void overlay_set_heartbeat (overlay_t *ov, heartbeat_t *hb)
+void overlay_set_heartbeat (overlay_t *ov, heartbeat_t h)
 {
-    ov->hb = hb;
+    ov->h = h;
 }
 
 void overlay_set_peerhash (overlay_t *ov, peerhash_t *ph)
@@ -132,7 +132,7 @@ int overlay_sendmsg_parent (overlay_t *ov, zmsg_t **zmsg)
     }
     rc = zmsg_send (zmsg, ep->zs);
     if (rc == 0)
-        ov->parent_lastsent = heartbeat_get_epoch (ov->hb);
+        ov->parent_lastsent = heartbeat_get_epoch (ov->h);
 done:
     return rc;
 }
@@ -140,7 +140,7 @@ done:
 int overlay_keepalive_parent (overlay_t *ov)
 {
     endpt_t *ep = zlist_first (ov->parents);
-    int idle = heartbeat_get_epoch (ov->hb) - ov->parent_lastsent;
+    int idle = heartbeat_get_epoch (ov->h) - ov->parent_lastsent;
     zmsg_t *zmsg = NULL;
     int rc = -1;
 

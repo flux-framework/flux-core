@@ -13,7 +13,7 @@ typedef struct {
 
 typedef struct {
     zhash_t *zh;
-    heartbeat_t *hb;
+    heartbeat_t h;
 } peerhash_t;
 
 peerhash_t *peerhash_create (void);
@@ -32,7 +32,7 @@ zlist_t *peerhash_keys (peerhash_t *ph);
  * This allows peer_idle() and peer_checkin() to query the
  * heartbeat class for the current epoch.
  */
-void peerhash_set_heartbeat (peerhash_t *ph, heartbeat_t *hb);
+void peerhash_set_heartbeat (peerhash_t *ph, heartbeat_t h);
 
 void *peer_get_arg (peer_t *p);
 void peer_set_arg (peer_t *p, void *arg);

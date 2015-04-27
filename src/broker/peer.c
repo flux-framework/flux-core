@@ -55,9 +55,9 @@ zlist_t *peerhash_keys (peerhash_t *ph)
     return zhash_keys (ph->zh);
 }
 
-void peerhash_set_heartbeat (peerhash_t *ph, heartbeat_t *hb)
+void peerhash_set_heartbeat (peerhash_t *ph, heartbeat_t h)
 {
-    ph->hb = hb;
+    ph->h = h;
 }
 
 static void peer_destroy (peer_t *p)
@@ -112,7 +112,7 @@ bool peer_get_mute (peer_t *p)
 
 void peer_checkin (peerhash_t *ph, const char *uuid)
 {
-    int now = heartbeat_get_epoch (ph->hb);
+    int now = heartbeat_get_epoch (ph->h);
     peer_t *p = peer_lookup (ph, uuid);
     if (!p)
         p = peer_add (ph, uuid);
@@ -121,7 +121,7 @@ void peer_checkin (peerhash_t *ph, const char *uuid)
 
 int peer_idle (peerhash_t *ph, const char *uuid)
 {
-    int now = heartbeat_get_epoch (ph->hb);
+    int now = heartbeat_get_epoch (ph->h);
     peer_t *p = peer_lookup (ph, uuid);
     if (!p)
         return now;
@@ -138,7 +138,7 @@ void peer_mute (peerhash_t *ph, const char *uuid)
 
 json_object *peer_list_encode (peerhash_t *ph)
 {
-    int now = heartbeat_get_epoch (ph->hb);
+    int now = heartbeat_get_epoch (ph->h);
     JSON out = Jnew ();
     zlist_t *keys;
     char *key;
