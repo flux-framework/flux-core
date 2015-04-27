@@ -6,23 +6,74 @@
 #define MODEVENT_INPROC_URI           "inproc://event"
 #define SVC_INPROC_URI_TMPL           "inproc://svc-%s"
 
-typedef struct mod_ctx_struct *mod_ctx_t;
+typedef struct module_struct *module_t;
+typedef struct modhash_struct *modhash_t;
+typedef void (*modpoller_cb_f)(module_t p, void *arg);
+typedef void (*rmmod_cb_f)(module_t p, void *arg);
 
-/* Create, start, stop, destroy a module.
- * Termination:  mod_stop (), read EOF on sock, mod_destroy ()
+/* Hash-o-modules, keyed by both uuid and name.
  */
-mod_ctx_t mod_create (zctx_t *zctx, uint32_t rank, const char *path);
-void mod_set_args (mod_ctx_t p, int argc, char * const argv[]);
-void mod_add_arg (mod_ctx_t p, const char *arg);
-void mod_start (mod_ctx_t p);
-void mod_stop (mod_ctx_t p);
-void mod_destroy (mod_ctx_t p);
+modhash_t modhash_create (void);
+void modhash_destroy (modhash_t mh);
 
-const char *mod_name (mod_ctx_t p);
-const char *mod_uuid (mod_ctx_t p);
-const char *mod_digest (mod_ctx_t p);
-int mod_size (mod_ctx_t p);
-void *mod_sock (mod_ctx_t p);
+void modhash_set_zctx (modhash_t mh, zctx_t *zctx);
+void modhash_set_rank (modhash_t mh, uint32_t rank);
+void modhash_set_loop (modhash_t mh, zloop_t *zloop);
+void modhash_set_heartbeat (modhash_t mh, heartbeat_t hb);
+
+/* Prepare module at 'path' for starting.
+ */
+module_t module_add (modhash_t mh, const char *path);
+void module_remove (modhash_t mh, module_t p);
+
+/* Look up module by name.
+ */
+module_t module_lookup (modhash_t mh, const char *name);
+
+/* Set arguments to module main().  Call before module_start().
+ */
+void module_set_args (module_t p, int argc, char * const argv[]);
+void module_add_arg (module_t p, const char *arg);
+
+const char *module_name (module_t p);
+
+/* The poller callback is called when module socket is ready for
+ * reading with module_recvmsg().
+ */
+void module_set_poller_cb (module_t p, modpoller_cb_f cb, void *arg);
+zmsg_t *module_recvmsg (module_t p);
+
+/* The rmmod callback is called as part of module destruction,
+ * after the thread has been joined, so that module_pop_rmmod() can
+ * be called to obtain any queued rmmod requests that now need
+ * their replies.
+ */
+void module_set_rmmod_cb (module_t p, rmmod_cb_f cb, void *arg);
+zmsg_t *module_pop_rmmod (module_t p);
+
+/* Send a request message to the module whose name matches the
+ * (truncated) topic string of the request.
+ */
+int module_request_sendmsg (modhash_t mh, zmsg_t **zmsg);
+
+/* Send a response message to the module whose uuid matches the
+ * next hop in the routing stack.
+ */
+int module_response_sendmsg (modhash_t mh, zmsg_t **zmsg);
+
+/* Start module thread.
+ */
+int module_start (module_t p);
+
+/* Stop module thread by sending a shutdown request.
+ * If stop was instigated by an rmmod request, queue the request here
+ * for reply once the module actually stops.
+ */
+int module_stop (module_t p, zmsg_t **zmsg);
+
+/* Prepare an 'lsmod' response payload.
+ */
+json_object *module_list_encode (modhash_t mh);
 
 #endif /* !_BROKER_MODULE_H */
 
