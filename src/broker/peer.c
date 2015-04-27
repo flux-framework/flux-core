@@ -34,15 +34,26 @@
 #include "heartbeat.h"
 #include "peer.h"
 
-peerhash_t *peerhash_create (void)
+struct peer_struct {
+    int lastseen;
+    void *arg;
+    bool mute;
+};
+
+struct peerhash_struct {
+    zhash_t *zh;
+    heartbeat_t h;
+};
+
+peerhash_t peerhash_create (void)
 {
-    peerhash_t *ph = xzmalloc (sizeof *ph);
+    peerhash_t ph = xzmalloc (sizeof *ph);
     if (!(ph->zh = zhash_new ()))
         oom ();
     return ph;
 }
 
-void peerhash_destroy (peerhash_t *ph)
+void peerhash_destroy (peerhash_t ph)
 {
     if (ph) {
         zhash_destroy (&ph->zh);
@@ -50,99 +61,99 @@ void peerhash_destroy (peerhash_t *ph)
     }
 }
 
-zlist_t *peerhash_keys (peerhash_t *ph)
+zlist_t *peerhash_keys (peerhash_t ph)
 {
     return zhash_keys (ph->zh);
 }
 
-void peerhash_set_heartbeat (peerhash_t *ph, heartbeat_t h)
+void peerhash_set_heartbeat (peerhash_t ph, heartbeat_t h)
 {
     ph->h = h;
 }
 
-static void peer_destroy (peer_t *p)
+static void peer_destroy (peer_t p)
 {
     free (p);
 }
 
-static peer_t *peer_create (void)
+static peer_t peer_create (void)
 {
-    peer_t *p = xzmalloc (sizeof (*p));
+    peer_t p = xzmalloc (sizeof (p));
     return p;
 }
 
-peer_t *peer_add (peerhash_t *ph, const char *uuid)
+peer_t peer_add (peerhash_t ph, const char *uuid)
 {
-    peer_t *p = peer_create ();
+    peer_t p = peer_create ();
     zhash_update (ph->zh, uuid, p);
     zhash_freefn (ph->zh, uuid, (zhash_free_fn *)peer_destroy);
     return p;
 }
 
-void peer_del (peerhash_t *ph, const char *uuid)
+void peer_del (peerhash_t ph, const char *uuid)
 {
     zhash_delete (ph->zh, uuid);
 }
 
-peer_t *peer_lookup (peerhash_t *ph, const char *uuid)
+peer_t peer_lookup (peerhash_t ph, const char *uuid)
 {
-    peer_t *p = zhash_lookup (ph->zh, uuid);
+    peer_t p = zhash_lookup (ph->zh, uuid);
     return p;
 }
 
-void peer_set_arg (peer_t *p, void *arg)
+void peer_set_arg (peer_t p, void *arg)
 {
     p->arg = arg;
 }
 
-void *peer_get_arg (peer_t *p)
+void *peer_get_arg (peer_t p)
 {
     return p->arg;
 }
 
-void peer_set_mute (peer_t *p, bool val)
+void peer_set_mute (peer_t p, bool val)
 {
     p->mute = val;
 }
 
-bool peer_get_mute (peer_t *p)
+bool peer_get_mute (peer_t p)
 {
     return p->mute;
 }
 
-void peer_checkin (peerhash_t *ph, const char *uuid)
+void peer_checkin (peerhash_t ph, const char *uuid)
 {
     int now = heartbeat_get_epoch (ph->h);
-    peer_t *p = peer_lookup (ph, uuid);
+    peer_t p = peer_lookup (ph, uuid);
     if (!p)
         p = peer_add (ph, uuid);
     p->lastseen = now;
 }
 
-int peer_idle (peerhash_t *ph, const char *uuid)
+int peer_idle (peerhash_t ph, const char *uuid)
 {
     int now = heartbeat_get_epoch (ph->h);
-    peer_t *p = peer_lookup (ph, uuid);
+    peer_t p = peer_lookup (ph, uuid);
     if (!p)
         return now;
     return now - p->lastseen;
 }
 
-void peer_mute (peerhash_t *ph, const char *uuid)
+void peer_mute (peerhash_t ph, const char *uuid)
 {
-    peer_t *p = peer_lookup (ph, uuid);
+    peer_t p = peer_lookup (ph, uuid);
     if (!p)
         p = peer_add (ph, uuid);
     peer_set_mute (p, true);
 }
 
-json_object *peer_list_encode (peerhash_t *ph)
+json_object *peer_list_encode (peerhash_t ph)
 {
     int now = heartbeat_get_epoch (ph->h);
     JSON out = Jnew ();
     zlist_t *keys;
     char *key;
-    peer_t *p;
+    peer_t p;
 
     if (!(keys = peerhash_keys (ph)))
         oom ();

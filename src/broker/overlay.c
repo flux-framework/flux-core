@@ -41,7 +41,7 @@ struct overlay_struct {
     flux_sec_t sec;
     zloop_t *zloop;
     heartbeat_t h;
-    peerhash_t *peers;
+    peerhash_t peers;
 
     uint32_t rank;
     char rankstr[16];
@@ -126,7 +126,7 @@ void overlay_set_heartbeat (overlay_t ov, heartbeat_t h)
     ov->h = h;
 }
 
-void overlay_set_peerhash (overlay_t ov, peerhash_t *ph)
+void overlay_set_peerhash (overlay_t ov, peerhash_t ph)
 {
     ov->peers = ph;
 }
@@ -278,7 +278,7 @@ int overlay_mcast_child (overlay_t ov, zmsg_t *zmsg)
         oom ();
     uuid = zlist_first (uuids);
     while (uuid) {
-        peer_t *p = peer_lookup (ov->peers, uuid);
+        peer_t p = peer_lookup (ov->peers, uuid);
         if (p && !peer_get_mute (p)) {
             if (!(cpy = zmsg_dup (zmsg)))
                 oom ();

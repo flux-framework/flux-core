@@ -101,14 +101,14 @@ typedef struct {
      */
     char *module_searchpath;    /* colon-separated list of directories */
     zhash_t *modules;           /* hash of module_t's by name */
-    peerhash_t *module_peers;   /* module peer hash, by uuid */
+    peerhash_t module_peers;    /* module peer hash, by uuid */
     /* Misc
      */
     bool verbose;
     bool quiet;
     flux_t h;
     pid_t pid;
-    peerhash_t *overlay_peers;  /* overaly peer hash, by uuid */
+    peerhash_t overlay_peers;   /* overaly peer hash, by uuid */
     char *proctitle;
     sigset_t default_sigset;
     flux_conf_t cf;
@@ -788,7 +788,7 @@ static module_t *module_create (ctx_t *ctx, const char *path)
         oom ();
     mod->ctx = ctx;
 
-    peer_t *p = peer_add (ctx->module_peers, mod_uuid (mod->p));
+    peer_t p = peer_add (ctx->module_peers, mod_uuid (mod->p));
     peer_set_arg (p, mod);
 done:
     return mod;
@@ -1801,7 +1801,7 @@ done:
 
 static int broker_response_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
 {
-    peer_t *peer;
+    peer_t peer;
     char *id = NULL;
     int rc = -1;
 

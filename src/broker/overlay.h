@@ -14,7 +14,7 @@ void overlay_set_zctx (overlay_t ov, zctx_t *zctx);
 void overlay_set_rank (overlay_t ov, uint32_t rank);
 void overlay_set_loop (overlay_t ov, zloop_t *zloop);
 void overlay_set_heartbeat (overlay_t ov, heartbeat_t h);
-void overlay_set_peerhash (overlay_t ov, peerhash_t *peerhash);
+void overlay_set_peerhash (overlay_t ov, peerhash_t peerhash);
 
 /* All ranks but rank 0 connect to a parent to form the main TBON.
  * Internally there is a stack of parent URI's, with top as primary.
