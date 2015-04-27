@@ -89,7 +89,7 @@ typedef struct {
     /* Sockets.
      */
     overlay_t overlay;
-    snoop_t *snoop;
+    snoop_t snoop;
     endpt_t *modevent;          /* PUB - events to modules */
 
     /* Session parameters
