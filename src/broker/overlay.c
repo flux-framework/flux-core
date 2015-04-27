@@ -36,7 +36,38 @@
 #include "peer.h"
 #include "overlay.h"
 
-void overlay_destroy (overlay_t *ov)
+struct overlay_struct {
+    zctx_t *zctx;
+    flux_sec_t sec;
+    zloop_t *zloop;
+    heartbeat_t h;
+    peerhash_t *peers;
+
+    uint32_t rank;
+    char rankstr[16];
+    char rankstr_right[16];
+
+    zlist_t *parents;           /* DEALER - requests to parent */
+                                /*  (reparent pushes new parent on head) */
+    endpt_t *right;             /* DEALER - requests to rank overlay */
+    overlay_cb_f parent_cb;
+    void *parent_arg;
+    int parent_lastsent;
+
+    endpt_t *child;             /* ROUTER - requests from children */
+    overlay_cb_f child_cb;
+    void *child_arg;
+
+    endpt_t *event;             /* PUB for rank = 0, SUB for rank > 0 */
+    overlay_cb_f event_cb;
+    void *event_arg;
+    bool event_munge;
+
+    endpt_t *relay;
+
+};
+
+void overlay_destroy (overlay_t ov)
 {
     endpt_t *ep;
 
@@ -58,9 +89,9 @@ void overlay_destroy (overlay_t *ov)
     }
 }
 
-overlay_t *overlay_create (void)
+overlay_t overlay_create (void)
 {
-    overlay_t *ov = xzmalloc (sizeof (*ov));
+    overlay_t ov = xzmalloc (sizeof (*ov));
     if (!(ov->parents = zlist_new ()))
         oom ();
     ov->rank = FLUX_NODEID_ANY;
@@ -68,39 +99,39 @@ overlay_t *overlay_create (void)
     return ov;
 }
 
-void overlay_set_zctx (overlay_t *ov, zctx_t *zctx)
+void overlay_set_zctx (overlay_t ov, zctx_t *zctx)
 {
     ov->zctx = zctx;
 }
 
-void overlay_set_sec (overlay_t *ov, flux_sec_t sec)
+void overlay_set_sec (overlay_t ov, flux_sec_t sec)
 {
     ov->sec = sec;
 }
 
-void overlay_set_rank (overlay_t *ov, uint32_t rank)
+void overlay_set_rank (overlay_t ov, uint32_t rank)
 {
     ov->rank = rank;
     snprintf (ov->rankstr, sizeof (ov->rankstr), "%u", rank);
     snprintf (ov->rankstr_right, sizeof (ov->rankstr), "%ur", rank);
 }
 
-void overlay_set_zloop (overlay_t *ov, zloop_t *zloop)
+void overlay_set_loop (overlay_t ov, zloop_t *zloop)
 {
     ov->zloop = zloop;
 }
 
-void overlay_set_heartbeat (overlay_t *ov, heartbeat_t h)
+void overlay_set_heartbeat (overlay_t ov, heartbeat_t h)
 {
     ov->h = h;
 }
 
-void overlay_set_peerhash (overlay_t *ov, peerhash_t *ph)
+void overlay_set_peerhash (overlay_t ov, peerhash_t *ph)
 {
     ov->peers = ph;
 }
 
-void overlay_push_parent (overlay_t *ov, const char *fmt, ...)
+void overlay_push_parent (overlay_t ov, const char *fmt, ...)
 {
     va_list ap;
     va_start (ap, fmt);
@@ -110,7 +141,7 @@ void overlay_push_parent (overlay_t *ov, const char *fmt, ...)
         oom ();
 }
 
-const char *overlay_get_parent (overlay_t *ov)
+const char *overlay_get_parent (overlay_t ov)
 {
     endpt_t *ep = zlist_first (ov->parents);
     if (!ep)
@@ -118,7 +149,7 @@ const char *overlay_get_parent (overlay_t *ov)
     return ep->uri;
 }
 
-int overlay_sendmsg_parent (overlay_t *ov, zmsg_t **zmsg)
+int overlay_sendmsg_parent (overlay_t ov, zmsg_t **zmsg)
 {
     endpt_t *ep = zlist_first (ov->parents);
     int rc = -1;
@@ -137,7 +168,7 @@ done:
     return rc;
 }
 
-int overlay_keepalive_parent (overlay_t *ov)
+int overlay_keepalive_parent (overlay_t ov)
 {
     endpt_t *ep = zlist_first (ov->parents);
     int idle = heartbeat_get_epoch (ov->h) - ov->parent_lastsent;
@@ -156,7 +187,7 @@ done:
     return rc;
 }
 
-void overlay_set_right (overlay_t *ov, const char *fmt, ...)
+void overlay_set_right (overlay_t ov, const char *fmt, ...)
 {
     if (ov->right)
         endpt_destroy (ov->right);
@@ -166,7 +197,7 @@ void overlay_set_right (overlay_t *ov, const char *fmt, ...)
     va_end (ap);
 }
 
-static bool ring_wrap (overlay_t *ov, zmsg_t *zmsg)
+static bool ring_wrap (overlay_t ov, zmsg_t *zmsg)
 {
     zframe_t *zf;
 
@@ -179,7 +210,7 @@ static bool ring_wrap (overlay_t *ov, zmsg_t *zmsg)
     return false;
 }
 
-int overlay_sendmsg_right (overlay_t *ov, zmsg_t **zmsg)
+int overlay_sendmsg_right (overlay_t ov, zmsg_t **zmsg)
 {
     int rc = -1;
 
@@ -192,13 +223,13 @@ done:
     return rc;
 }
 
-void overlay_set_parent_cb (overlay_t *ov, zloop_fn *cb, void *arg)
+void overlay_set_parent_cb (overlay_t ov, overlay_cb_f cb, void *arg)
 {
     ov->parent_cb = cb;
     ov->parent_arg = arg;
 }
 
-void overlay_set_child (overlay_t *ov, const char *fmt, ...)
+void overlay_set_child (overlay_t ov, const char *fmt, ...)
 {
     if (ov->child)
         endpt_destroy (ov->child);
@@ -208,20 +239,20 @@ void overlay_set_child (overlay_t *ov, const char *fmt, ...)
     va_end (ap);
 }
 
-const char *overlay_get_child (overlay_t *ov)
+const char *overlay_get_child (overlay_t ov)
 {
     if (!ov->child)
         return NULL;
     return ov->child->uri;
 }
 
-void overlay_set_child_cb (overlay_t *ov, zloop_fn *cb, void *arg)
+void overlay_set_child_cb (overlay_t ov, overlay_cb_f cb, void *arg)
 {
     ov->child_cb = cb;
     ov->child_arg = arg;
 }
 
-int overlay_sendmsg_child (overlay_t *ov, zmsg_t **zmsg)
+int overlay_sendmsg_child (overlay_t ov, zmsg_t **zmsg)
 {
     int rc = -1;
 
@@ -234,7 +265,7 @@ done:
     return rc;
 }
 
-int overlay_mcast_child (overlay_t *ov, zmsg_t *zmsg)
+int overlay_mcast_child (overlay_t ov, zmsg_t *zmsg)
 {
     zmsg_t *cpy = NULL;
     zlist_t *uuids = NULL;
@@ -268,7 +299,7 @@ done:
     return rc;
 }
 
-void overlay_set_event (overlay_t *ov, const char *fmt, ...)
+void overlay_set_event (overlay_t ov, const char *fmt, ...)
 {
     if (ov->event)
         endpt_destroy (ov->event);
@@ -280,20 +311,20 @@ void overlay_set_event (overlay_t *ov, const char *fmt, ...)
     ov->event_munge = strstr (ov->event->uri, "pgm://") ? true : false;
 }
 
-const char *overlay_get_event (overlay_t *ov)
+const char *overlay_get_event (overlay_t ov)
 {
     if (!ov->event)
         return NULL;
     return ov->event->uri;
 }
 
-void overlay_set_event_cb (overlay_t *ov, zloop_fn *cb, void *arg)
+void overlay_set_event_cb (overlay_t ov, overlay_cb_f cb, void *arg)
 {
     ov->event_cb = cb;
     ov->event_arg = arg;
 }
 
-int overlay_sendmsg_event (overlay_t *ov, zmsg_t *zmsg)
+int overlay_sendmsg_event (overlay_t ov, zmsg_t *zmsg)
 {
     int rc = -1;
     zmsg_t *cpy = NULL;
@@ -314,7 +345,7 @@ done:
     return rc;
 }
 
-zmsg_t *overlay_recvmsg_event (overlay_t *ov)
+zmsg_t *overlay_recvmsg_event (overlay_t ov)
 {
     zmsg_t *zmsg = NULL;
     if (!ov->event || !ov->event->zs) {
@@ -335,7 +366,7 @@ done:
     return zmsg;
 }
 
-void overlay_set_relay (overlay_t *ov, const char *fmt, ...)
+void overlay_set_relay (overlay_t ov, const char *fmt, ...)
 {
     if (ov->relay)
         endpt_destroy (ov->relay);
@@ -345,14 +376,14 @@ void overlay_set_relay (overlay_t *ov, const char *fmt, ...)
     va_end (ap);
 }
 
-const char *overlay_get_relay (overlay_t *ov)
+const char *overlay_get_relay (overlay_t ov)
 {
     if (!ov->relay)
         return NULL;
     return ov->relay->uri;
 }
 
-int overlay_sendmsg_relay (overlay_t *ov, zmsg_t *zmsg)
+int overlay_sendmsg_relay (overlay_t ov, zmsg_t *zmsg)
 {
     int rc = -1;
     zmsg_t *cpy = NULL;
@@ -369,7 +400,15 @@ done:
     return rc;
 }
 
-static int bind_child (overlay_t *ov, endpt_t *ep)
+static int child_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
+{
+    overlay_t ov = arg;
+    if (ov->child_cb)
+        ov->child_cb (ov, item->socket, ov->child_arg);
+    return 0;
+}
+
+static int bind_child (overlay_t ov, endpt_t *ep)
 {
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
@@ -385,12 +424,12 @@ static int bind_child (overlay_t *ov, endpt_t *ep)
         ep->uri = zsocket_last_endpoint (ep->zs);
     }
     zp.socket = ep->zs;
-    if (zloop_poller (ov->zloop, &zp, ov->child_cb, ov->child_arg) < 0)
+    if (zloop_poller (ov->zloop, &zp, child_cb, ov) < 0)
         err_exit ("zloop_poller");
     return 0;
 }
 
-static int bind_event_pub (overlay_t *ov, endpt_t *ep)
+static int bind_event_pub (overlay_t ov, endpt_t *ep)
 {
     if (!(ep->zs = zsocket_new (ov->zctx, ZMQ_PUB)))
         err_exit ("zsocket_new");
@@ -406,7 +445,15 @@ static int bind_event_pub (overlay_t *ov, endpt_t *ep)
     return 0;
 }
 
-static int connect_event_sub (overlay_t *ov, endpt_t *ep)
+static int event_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
+{
+    overlay_t ov = arg;
+    if (ov->event_cb)
+        ov->event_cb (ov, item->socket, ov->event_arg);
+    return 0;
+}
+
+static int connect_event_sub (overlay_t ov, endpt_t *ep)
 {
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
@@ -419,12 +466,20 @@ static int connect_event_sub (overlay_t *ov, endpt_t *ep)
         err_exit ("%s", ep->uri);
     zsocket_set_subscribe (ep->zs, "");
     zp.socket = ep->zs;
-    if (zloop_poller (ov->zloop, &zp, ov->event_cb, ov->event_arg) < 0)
+    if (zloop_poller (ov->zloop, &zp, event_cb, ov) < 0)
         err_exit ("zloop_poller");
     return 0;
 }
 
-static int connect_parent (overlay_t *ov, endpt_t *ep)
+static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
+{
+    overlay_t ov = arg;
+    if (ov->parent_cb)
+        ov->parent_cb (ov, item->socket, ov->parent_arg);
+    return 0;
+}
+
+static int connect_parent (overlay_t ov, endpt_t *ep)
 {
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
     int savederr;
@@ -442,7 +497,7 @@ static int connect_parent (overlay_t *ov, endpt_t *ep)
     if (zsocket_connect (ep->zs, "%s", ep->uri) < 0)
         goto error;
     zp.socket = ep->zs;
-    if (zloop_poller (ov->zloop, &zp, ov->parent_cb, ov->parent_arg) < 0)
+    if (zloop_poller (ov->zloop, &zp, parent_cb, ov) < 0)
         goto error;
     return 0;
 error:
@@ -455,7 +510,7 @@ error:
     return -1;
 }
 
-static int connect_right (overlay_t *ov, endpt_t *ep)
+static int connect_right (overlay_t ov, endpt_t *ep)
 {
     zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .fd = -1 };
 
@@ -468,12 +523,12 @@ static int connect_right (overlay_t *ov, endpt_t *ep)
     if (zsocket_connect (ep->zs, "%s", ep->uri) < 0)
         err_exit ("%s", ep->uri);
     zp.socket = ep->zs;
-    if (zloop_poller (ov->zloop, &zp, ov->parent_cb, ov->parent_arg) < 0)
+    if (zloop_poller (ov->zloop, &zp, parent_cb, ov) < 0)
         err_exit ("zloop_poller");
     return 0;
 }
 
-int overlay_connect (overlay_t *ov)
+int overlay_connect (overlay_t ov)
 {
     int rc = -1;
     endpt_t *ep;
@@ -498,7 +553,7 @@ done:
     return rc;
 }
 
-int overlay_bind (overlay_t *ov)
+int overlay_bind (overlay_t ov)
 {
     int rc = -1;
 
@@ -525,7 +580,7 @@ done:
  * upstream requests.  Leave old parent(s) wired in to zloop to make
  * it possible to transition off a healthy node without losing replies.
  */
-int overlay_reparent (overlay_t *ov, const char *uri, bool *recycled)
+int overlay_reparent (overlay_t ov, const char *uri, bool *recycled)
 {
     endpt_t *ep;
     bool old = false;

@@ -47,7 +47,7 @@ struct hello_struct {
     double timeout;
     hello_cb_f cb;
     void *cb_arg;
-    overlay_t *ov;
+    overlay_t ov;
     zloop_t *zl;
     int tid;
     struct timespec start;
@@ -82,7 +82,7 @@ uint32_t hello_get_size (hello_t h)
     return h->size;
 }
 
-void hello_set_overlay (hello_t h, overlay_t *ov)
+void hello_set_overlay (hello_t h, overlay_t ov)
 {
     h->ov = ov;
 }

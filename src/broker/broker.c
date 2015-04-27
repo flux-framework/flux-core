@@ -88,7 +88,7 @@ typedef struct {
 
     /* Sockets.
      */
-    overlay_t *overlay;
+    overlay_t overlay;
     snoop_t *snoop;
     endpt_t *modevent;          /* PUB - events to modules */
 
@@ -147,10 +147,10 @@ typedef struct {
     ctx_t *ctx;
 } module_t;
 
-static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
+static void event_cb (overlay_t ov, void *sock, void *arg);
 static int module_cb (zloop_t *zl, zmq_pollitem_t *item, module_t *mod);
-static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
-static int child_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
+static void parent_cb (overlay_t ov, void *sock, void *arg);
+static void child_cb (overlay_t ov, void *sock, void *arg);
 static void heartbeat_cb (heartbeat_t h, void *arg);
 static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 
@@ -432,11 +432,11 @@ int main (int argc, char *argv[])
 
     overlay_set_zctx (ctx.overlay, ctx.zctx);
     overlay_set_sec (ctx.overlay, ctx.sec);
-    overlay_set_zloop (ctx.overlay, ctx.zl);
+    overlay_set_loop (ctx.overlay, ctx.zl);
 
-    overlay_set_parent_cb (ctx.overlay, (zloop_fn *)parent_cb, &ctx);
-    overlay_set_child_cb (ctx.overlay, (zloop_fn *)child_cb, &ctx);
-    overlay_set_event_cb (ctx.overlay, (zloop_fn *)event_cb, &ctx);
+    overlay_set_parent_cb (ctx.overlay, parent_cb, &ctx);
+    overlay_set_child_cb (ctx.overlay, child_cb, &ctx);
+    overlay_set_event_cb (ctx.overlay, event_cb, &ctx);
 
     /* Sets rank, size, parent URI.
      * Initialize child socket.
@@ -1503,12 +1503,13 @@ static void broker_add_services (ctx_t *ctx)
  * it elsewhere.  If the message was not destroyed by the handler
  * (e.g. by responding to it) generate a response here.
  */
-static int child_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
+static void child_cb (overlay_t ov, void *sock, void *arg)
 {
-    zmsg_t *zmsg = zmsg_recv (item->socket);
+    ctx_t *ctx = arg;
     int type;
     char *id = NULL;
     int rc;
+    zmsg_t *zmsg = zmsg_recv (sock);
 
     if (!zmsg)
         goto done;
@@ -1534,7 +1535,6 @@ done:
     if (id)
         free (id);
     zmsg_destroy (&zmsg);
-    ZLOOP_RETURN(ctx);
 }
 
 /* helper for event_cb, parent_cb, broker_event_sendmsg (rank 0 only) */
@@ -1588,9 +1588,10 @@ done:
 
 /* Handle messages from one or more parents.
  */
-static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
+static void parent_cb (overlay_t ov, void *sock, void *arg)
 {
-    zmsg_t *zmsg = zmsg_recv (item->socket);
+    ctx_t *ctx = arg;
+    zmsg_t *zmsg = zmsg_recv (sock);
     int type;
 
     if (!zmsg)
@@ -1604,7 +1605,7 @@ static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
             break;
         case FLUX_MSGTYPE_EVENT:
             if (ctx->event_active) {
-                send_mute_request (ctx, item->socket);
+                send_mute_request (ctx, sock);
                 goto done;
             }
             if (flux_msg_clear_route (zmsg) < 0) {
@@ -1621,7 +1622,6 @@ static int parent_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
     }
 done:
     zmsg_destroy (&zmsg);
-    ZLOOP_RETURN(ctx);
 }
 
 /* Handle messages on the service socket of a comms module.
@@ -1669,9 +1669,10 @@ done:
 }
 
 
-static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
+static void event_cb (overlay_t ov, void *sock, void *arg)
 {
-    zmsg_t *zmsg = overlay_recvmsg_event (ctx->overlay);
+    ctx_t *ctx = arg;
+    zmsg_t *zmsg = overlay_recvmsg_event (ov);
     int type;
 
     if (!zmsg)
@@ -1690,7 +1691,6 @@ static int event_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
     }
 done:
     zmsg_destroy (&zmsg);
-    ZLOOP_RETURN(ctx);
 }
 
 /* Heartbeat timer callback on rank 0
