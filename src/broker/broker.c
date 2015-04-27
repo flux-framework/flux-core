@@ -115,7 +115,7 @@ typedef struct {
     const char *secdir;
     int event_seq;
     bool event_active;          /* primary event source is active */
-    svchash_t *services;
+    svchash_t services;
     /* Bootstrap
      */
     bool boot_pmi;
