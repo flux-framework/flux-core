@@ -11,8 +11,6 @@ void svchash_destroy (svchash_t sh);
 void svc_remove (svchash_t sh, const char *name);
 svc_t svc_add (svchash_t sh, const char *name, svc_cb_f cb, void *arg);
 
-svc_t svc_lookup (svchash_t sh, const char *name);
-
 int svc_sendmsg (svchash_t sh, zmsg_t **zmsg);
 
 #endif /* !_BROKER_SERVICE_H */

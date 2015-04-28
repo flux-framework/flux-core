@@ -105,6 +105,7 @@ typedef struct {
     int event_seq;
     bool event_active;          /* primary event source is active */
     svchash_t services;
+    svchash_t eventsvc;
     heartbeat_t heartbeat;
     shutdown_t shutdown;
     /* Bootstrap
@@ -235,6 +236,7 @@ int main (int argc, char *argv[])
     ctx.size = 1;
     ctx.modhash = modhash_create ();
     ctx.services = svchash_create ();
+    ctx.eventsvc = svchash_create ();
     ctx.overlay = overlay_create ();
     ctx.snoop = snoop_create ();
     ctx.hello = hello_create ();
@@ -580,6 +582,7 @@ int main (int argc, char *argv[])
     if (ctx.modevent)
         endpt_destroy (ctx.modevent);
     svchash_destroy (ctx.services);
+    svchash_destroy (ctx.eventsvc);
     hello_destroy (ctx.hello);
 
     zlist_destroy (&modules);       /* autofree set */
@@ -900,19 +903,6 @@ static int broker_init_signalfd (ctx_t *ctx)
     if (zloop_poller (ctx->zloop, &zp, (zloop_fn *)signal_cb, ctx) < 0)
         err_exit ("zloop_poller");
     return zp.fd;
-}
-
-static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
-{
-    if (flux_msg_match (zmsg, "hb")) {
-        if (ctx->rank > 0) {
-            if (heartbeat_event_decode (ctx->heartbeat, zmsg) < 0)
-                err ("heartbeat_event_decode");
-            (void) overlay_keepalive_parent (ctx->overlay);
-        }
-    } else if (flux_msg_match (zmsg, "shutdown")) {
-        shutdown_recvmsg (ctx->shutdown, zmsg);
-    }
 }
 
 /**
@@ -1292,9 +1282,27 @@ static int cmb_hello_cb (zmsg_t **zmsg, void *arg)
     return 0;
 }
 
+static int event_hb_cb (zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    if (ctx->rank > 0) {
+        if (heartbeat_event_decode (ctx->heartbeat, *zmsg) < 0)
+            err ("heartbeat_event_decode");
+        (void) overlay_keepalive_parent (ctx->overlay);
+    }
+    return 0;
+}
+
+static int event_shutdown_cb (zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    shutdown_recvmsg (ctx->shutdown, *zmsg);
+    return 0;
+}
+
 static void broker_add_services (ctx_t *ctx)
 {
-    if (     !svc_add (ctx->services, "cmb.info", cmb_info_cb, ctx)
+    if (!svc_add (ctx->services, "cmb.info", cmb_info_cb, ctx)
           || !svc_add (ctx->services, "cmb.getattr", cmb_getattr_cb, ctx)
           || !svc_add (ctx->services, "cmb.getrusage", cmb_getrusage_cb, ctx)
           || !svc_add (ctx->services, "cmb.rmmod", cmb_rmmod_cb, ctx)
@@ -1308,7 +1316,9 @@ static void broker_add_services (ctx_t *ctx)
           || !svc_add (ctx->services, "cmb.event-mute", cmb_event_mute_cb, ctx)
           || !svc_add (ctx->services, "cmb.exec", cmb_exec_cb, ctx)
           || !svc_add (ctx->services, "cmb.disconnect", cmb_disconnect_cb, ctx)
-          || !svc_add (ctx->services, "cmb.hello", cmb_hello_cb, ctx))
+          || !svc_add (ctx->services, "cmb.hello", cmb_hello_cb, ctx)
+          || !svc_add (ctx->eventsvc, "hb", event_hb_cb, ctx)
+          || !svc_add (ctx->eventsvc, "shutdown", event_shutdown_cb, ctx))
         err_exit ("can't register internal services");
 }
 
@@ -1379,7 +1389,7 @@ static int handle_event (ctx_t *ctx, zmsg_t **zmsg)
 
     (void)overlay_mcast_child (ctx->overlay, *zmsg);
     (void)overlay_sendmsg_relay (ctx->overlay, *zmsg);
-    cmb_internal_event (ctx, *zmsg);
+    (void)svc_sendmsg (ctx->eventsvc, zmsg);
 
     assert (ctx->modevent != NULL);
     assert (ctx->modevent->zs != NULL);

@@ -89,7 +89,7 @@ svc_t svc_add (svchash_t sh, const char *name, svc_cb_f cb, void *arg)
     return svc;
 }
 
-svc_t svc_lookup (svchash_t sh, const char *name)
+static svc_t svc_lookup (svchash_t sh, const char *name)
 {
     svc_t svc = zhash_lookup (sh->zh, name);
     if (!svc && strchr (name, '.')) {
@@ -113,10 +113,6 @@ int svc_sendmsg (svchash_t sh, zmsg_t **zmsg)
 
     if (flux_msg_get_type (*zmsg, &type) < 0)
         goto done;
-    if (type != FLUX_MSGTYPE_REQUEST) {
-        errno = EINVAL;
-        goto done;
-    }
     if (flux_msg_get_topic (*zmsg, &topic) < 0)
         goto done;
     if (!(svc = svc_lookup (sh, topic)) || !svc->cb) {
