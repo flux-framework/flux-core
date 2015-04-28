@@ -1573,19 +1573,6 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
     return 0;
 }
 
-/* Try to dispatch message to a local service: built-in broker service,
- * or loaded comms module.
- */
-static int service_send (ctx_t *ctx, zmsg_t **zmsg)
-{
-    int rc = -1;
-
-    rc = svc_sendmsg (ctx->services, zmsg);
-    if (rc < 0 && errno == ENOSYS)
-        rc = module_request_sendmsg (ctx->modhash, zmsg);
-    return rc;
-}
-
 /**
  ** Broker's internal, minimal flux_t implementation.
  **   to use flux_log() here, we need sendmsg() and rank().
@@ -1602,15 +1589,21 @@ static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
     if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid == ctx->rank) {
         rc = overlay_sendmsg_parent (ctx->overlay, zmsg);
     } else if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid != ctx->rank) {
-        rc = service_send (ctx, zmsg);
+        rc = svc_sendmsg (ctx->services, zmsg);
+        if (rc < 0 && errno == ENOSYS)
+            rc = module_request_sendmsg (ctx->modhash, zmsg);
         if (rc < 0 && errno == ENOSYS)
             rc = overlay_sendmsg_parent (ctx->overlay, zmsg);
     } else if (nodeid == FLUX_NODEID_ANY) {
-        rc = service_send (ctx, zmsg);
+        rc = svc_sendmsg (ctx->services, zmsg);
+        if (rc < 0 && errno == ENOSYS)
+            rc = module_request_sendmsg (ctx->modhash, zmsg);
         if (rc < 0 && errno == ENOSYS)
             rc = overlay_sendmsg_parent (ctx->overlay, zmsg);
     } else if (nodeid == ctx->rank) {
-        rc = service_send (ctx, zmsg);
+        rc = svc_sendmsg (ctx->services, zmsg);
+        if (rc < 0 && errno == ENOSYS)
+            rc = module_request_sendmsg (ctx->modhash, zmsg);
     } else if (nodeid == 0) {
         rc = overlay_sendmsg_parent (ctx->overlay, zmsg);
     } else {
