@@ -36,7 +36,6 @@
 
 #include "endpt.h"
 #include "heartbeat.h"
-#include "peer.h"
 #include "overlay.h"
 #include "hello.h"
 

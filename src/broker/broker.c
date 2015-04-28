@@ -58,7 +58,6 @@
 #include "module.h"
 #include "boot_pmi.h"
 #include "endpt.h"
-#include "peer.h"
 #include "overlay.h"
 #include "snoop.h"
 #include "service.h"
@@ -106,7 +105,6 @@ typedef struct {
     bool quiet;
     flux_t h;
     pid_t pid;
-    peerhash_t overlay_peers;   /* overaly peer hash, by uuid */
     char *proctitle;
     sigset_t default_sigset;
     flux_conf_t cf;
@@ -249,15 +247,12 @@ int main (int argc, char *argv[])
     ctx.size = 1;
     ctx.modhash = modhash_create ();
     ctx.services = svchash_create ();
-    ctx.overlay_peers = peerhash_create ();
     ctx.overlay = overlay_create ();
     ctx.snoop = snoop_create ();
     ctx.hello = hello_create ();
     ctx.k_ary = 2; /* binary TBON is default */
     ctx.heartbeat = heartbeat_create ();
-    peerhash_set_heartbeat (ctx.overlay_peers, ctx.heartbeat);
     overlay_set_heartbeat (ctx.overlay, ctx.heartbeat);
-    overlay_set_peerhash (ctx.overlay, ctx.overlay_peers);
 
     ctx.pid = getpid();
     if (!(modpath = getenv ("FLUX_MODULE_PATH")))
@@ -571,7 +566,6 @@ int main (int argc, char *argv[])
     snoop_destroy (ctx.snoop);
     if (ctx.modevent)
         endpt_destroy (ctx.modevent);
-    peerhash_destroy (ctx.overlay_peers);
     svchash_destroy (ctx.services);
     hello_destroy (ctx.hello);
 
@@ -1260,7 +1254,7 @@ static int cmb_lsmod_cb (zmsg_t **zmsg, void *arg)
 static int cmb_lspeer_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    JSON out = peer_list_encode (ctx->overlay_peers);
+    JSON out = overlay_lspeer_encode (ctx->overlay);
     int rc = flux_json_respond (ctx->h, out, zmsg);
     Jput (out);
     return rc;
@@ -1340,12 +1334,12 @@ static int cmb_log_cb (zmsg_t **zmsg, void *arg)
 static int cmb_event_mute_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    char *id = NULL;
+    char *uuid = NULL;
 
-    if (flux_msg_get_route_last (*zmsg, &id) == 0)
-        peer_mute (ctx->overlay_peers, id);
-    if (id)
-        free (id);
+    if (flux_msg_get_route_last (*zmsg, &uuid) == 0)
+        overlay_mute_child (ctx->overlay, uuid);
+    if (uuid)
+        free (uuid);
     zmsg_destroy (zmsg); /* no reply */
     return 0;
 }
@@ -1399,7 +1393,7 @@ static void child_cb (overlay_t ov, void *sock, void *arg)
 {
     ctx_t *ctx = arg;
     int type;
-    char *id = NULL;
+    char *uuid = NULL;
     int rc;
     zmsg_t *zmsg = zmsg_recv (sock);
 
@@ -1407,9 +1401,9 @@ static void child_cb (overlay_t ov, void *sock, void *arg)
         goto done;
     if (flux_msg_get_type (zmsg, &type) < 0)
         goto done;
-    if (flux_msg_get_route_last (zmsg, &id) < 0)
+    if (flux_msg_get_route_last (zmsg, &uuid) < 0)
         goto done;
-    peer_checkin (ctx->overlay_peers, id);
+    overlay_checkin_child (ctx->overlay, uuid);
     switch (type) {
         case FLUX_MSGTYPE_KEEPALIVE:
             (void)snoop_sendmsg (ctx->snoop, zmsg);
@@ -1424,12 +1418,12 @@ static void child_cb (overlay_t ov, void *sock, void *arg)
             break;
     }
 done:
-    if (id)
-        free (id);
+    if (uuid)
+        free (uuid);
     zmsg_destroy (&zmsg);
 }
 
-/* helper for event_cb, parent_cb, broker_event_sendmsg (rank 0 only) */
+/* helper for euuvent_cb, parent_cb, broker_event_sendmsg (rank 0 only) */
 static int handle_event (ctx_t *ctx, zmsg_t **zmsg)
 {
     if (ctx->rank > 0) {

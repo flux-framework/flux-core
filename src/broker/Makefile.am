@@ -19,8 +19,6 @@ flux_broker_SOURCES = \
 	boot_pmi.h \
 	endpt.h \
 	endpt.c \
-	peer.h \
-	peer.c \
 	overlay.h \
 	overlay.c \
 	heartbeat.h \

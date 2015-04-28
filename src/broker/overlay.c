@@ -30,18 +30,18 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/shortjson.h"
 
 #include "endpt.h"
 #include "heartbeat.h"
-#include "peer.h"
 #include "overlay.h"
 
 struct overlay_struct {
     zctx_t *zctx;
     flux_sec_t sec;
     zloop_t *zloop;
-    heartbeat_t h;
-    peerhash_t peers;
+    heartbeat_t heartbeat;
+    zhash_t *children;          /* child_t - by uuid */
 
     uint32_t rank;
     char rankstr[16];
@@ -64,8 +64,12 @@ struct overlay_struct {
     bool event_munge;
 
     endpt_t *relay;
-
 };
+
+typedef struct {
+    int lastseen;
+    bool mute;
+} child_t;
 
 void overlay_destroy (overlay_t ov)
 {
@@ -85,6 +89,7 @@ void overlay_destroy (overlay_t ov)
             endpt_destroy (ov->event);
         if (ov->relay)
             endpt_destroy (ov->relay);
+        zhash_destroy (&ov->children);
         free (ov);
     }
 }
@@ -96,6 +101,8 @@ overlay_t overlay_create (void)
         oom ();
     ov->rank = FLUX_NODEID_ANY;
     ov->parent_lastsent = -1;
+    if (!(ov->children = zhash_new ()))
+        oom ();
     return ov;
 }
 
@@ -123,12 +130,50 @@ void overlay_set_loop (overlay_t ov, zloop_t *zloop)
 
 void overlay_set_heartbeat (overlay_t ov, heartbeat_t h)
 {
-    ov->h = h;
+    ov->heartbeat = h;
 }
 
-void overlay_set_peerhash (overlay_t ov, peerhash_t ph)
+json_object *overlay_lspeer_encode (overlay_t ov)
 {
-    ov->peers = ph;
+    int now = heartbeat_get_epoch (ov->heartbeat);
+    JSON out = Jnew ();
+    zlist_t *uuids;
+    char *uuid;
+    child_t *child;
+
+    if (!(uuids = zhash_keys (ov->children)))
+        oom ();
+    uuid = zlist_first (uuids);
+    while (uuid) {
+        if ((child = zhash_lookup (ov->children, uuid))) {
+            JSON o = Jnew ();
+            Jadd_int (o, "idle", now - child->lastseen);
+            Jadd_obj (out, uuid, o);
+            Jput (o);
+        }
+        uuid = zlist_next (uuids);
+    }
+    zlist_destroy (&uuids);
+    return out;
+}
+
+void overlay_mute_child (overlay_t ov, const char *uuid)
+{
+    child_t *child = zhash_lookup (ov->children, uuid);
+    if (child)
+        child->mute = true;
+}
+
+void overlay_checkin_child (overlay_t ov, const char *uuid)
+{
+    int now = heartbeat_get_epoch (ov->heartbeat);
+    child_t *child  = zhash_lookup (ov->children, uuid);
+    if (!child) {
+        child = xzmalloc (sizeof (*child));
+        zhash_update (ov->children, uuid, child);
+        zhash_freefn (ov->children, uuid, (zhash_free_fn *)free);
+    }
+    child->lastseen = now;
 }
 
 void overlay_push_parent (overlay_t ov, const char *fmt, ...)
@@ -163,7 +208,7 @@ int overlay_sendmsg_parent (overlay_t ov, zmsg_t **zmsg)
     }
     rc = zmsg_send (zmsg, ep->zs);
     if (rc == 0)
-        ov->parent_lastsent = heartbeat_get_epoch (ov->h);
+        ov->parent_lastsent = heartbeat_get_epoch (ov->heartbeat);
 done:
     return rc;
 }
@@ -171,7 +216,7 @@ done:
 int overlay_keepalive_parent (overlay_t ov)
 {
     endpt_t *ep = zlist_first (ov->parents);
-    int idle = heartbeat_get_epoch (ov->h) - ov->parent_lastsent;
+    int idle = heartbeat_get_epoch (ov->heartbeat) - ov->parent_lastsent;
     zmsg_t *zmsg = NULL;
     int rc = -1;
 
@@ -272,14 +317,14 @@ int overlay_mcast_child (overlay_t ov, zmsg_t *zmsg)
     char *uuid;
     int rc = -1;
 
-    if (!ov->child || !ov->child->zs || !ov->peers)
+    if (!ov->child || !ov->child->zs || !ov->children)
         return 0;
-    if (!(uuids = peerhash_keys (ov->peers)))
+    if (!(uuids = zhash_keys (ov->children)))
         oom ();
     uuid = zlist_first (uuids);
     while (uuid) {
-        peer_t p = peer_lookup (ov->peers, uuid);
-        if (p && !peer_get_mute (p)) {
+        child_t *child = zhash_lookup (ov->children, uuid);
+        if (child && !child->mute) {
             if (!(cpy = zmsg_dup (zmsg)))
                 oom ();
             if (flux_msg_enable_route (cpy) < 0)

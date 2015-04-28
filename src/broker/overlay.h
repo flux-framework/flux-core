@@ -14,7 +14,6 @@ void overlay_set_zctx (overlay_t ov, zctx_t *zctx);
 void overlay_set_rank (overlay_t ov, uint32_t rank);
 void overlay_set_loop (overlay_t ov, zloop_t *zloop);
 void overlay_set_heartbeat (overlay_t ov, heartbeat_t h);
-void overlay_set_peerhash (overlay_t ov, peerhash_t peerhash);
 
 /* All ranks but rank 0 connect to a parent to form the main TBON.
  * Internally there is a stack of parent URI's, with top as primary.
@@ -42,12 +41,21 @@ const char *overlay_get_child (overlay_t ov);
 void overlay_set_child_cb (overlay_t ov, overlay_cb_f cb, void *arg);
 int overlay_sendmsg_child (overlay_t ov, zmsg_t **zmsg);
 /* We can "multicast" events to all child peers using mcast_child().
- * It walks the 'peer' hash, finding overlay peers that have not
+ * It walks the 'children' hash, finding overlay peers that have not
  * yet been "muted", and routes them a copy of zmsg.  The broker Cc's
  * events over the TBON using this until peers indicate that they are
  * receiving duplicate seq numbers through the normal event socket.
  */
 int overlay_mcast_child (overlay_t ov, zmsg_t *zmsg);
+void overlay_mute_child (overlay_t ov, const char *uuid);
+
+/* Call when message is received from child 'uuid'.
+ */
+void overlay_checkin_child (overlay_t ov, const char *uuid);
+
+/* Encode cmb.lspeer response payload.
+ */
+json_object *overlay_lspeer_encode (overlay_t ov);
 
 /* The event socket is SUB for ranks > 0, and PUB for rank 0.
  * Internally, all events are routed to rank 0 before being published.
