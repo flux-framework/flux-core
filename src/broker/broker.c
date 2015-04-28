@@ -62,6 +62,7 @@
 #include "snoop.h"
 #include "service.h"
 #include "hello.h"
+#include "shutdown.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
@@ -104,19 +105,14 @@ typedef struct {
     int event_seq;
     bool event_active;          /* primary event source is active */
     svchash_t services;
+    heartbeat_t heartbeat;
+    shutdown_t shutdown;
     /* Bootstrap
      */
     bool boot_pmi;
     int k_ary;
     hello_t hello;
     double hello_timeout;
-    /* Heartbeat
-     */
-    heartbeat_t heartbeat;
-    /* Shutdown
-     */
-    int shutdown_tid;
-    int shutdown_exitcode;
 
     /* Subprocess management
      */
@@ -151,8 +147,6 @@ static int rank0_shell_exit_handler (struct subprocess *p, void *arg);
 
 static void boot_pmi (ctx_t *ctx);
 static void boot_local (ctx_t *ctx);
-
-static int shutdown_send (ctx_t *ctx, int grace, int rc, const char *fmt, ...);
 
 static const struct flux_handle_ops broker_handle_ops;
 
@@ -246,12 +240,11 @@ int main (int argc, char *argv[])
     ctx.hello = hello_create ();
     ctx.k_ary = 2; /* binary TBON is default */
     ctx.heartbeat = heartbeat_create ();
+    ctx.shutdown = shutdown_create ();
 
     ctx.pid = getpid();
     if (!(modpath = getenv ("FLUX_MODULE_PATH")))
         modpath = MODULE_PATH;
-
-    ctx.shutdown_tid = -1;
 
     if (!(ctx.sm = subprocess_manager_create ()))
         oom ();
@@ -513,6 +506,9 @@ int main (int argc, char *argv[])
     if (ctx.rank == 0)
         flux_log_set_redirect (ctx.h, true);
 
+    shutdown_set_loop (ctx.shutdown, ctx.zloop);
+    shutdown_set_handle (ctx.shutdown, ctx.h);
+
     /* Register internal services
      */
     broker_add_services (&ctx);
@@ -606,8 +602,8 @@ static void hello_update_cb (hello_t h, void *arg)
                   hello_get_nodeset (h));
     }
     if (ctx->hello_timeout != 0 && hello_get_time (h) >= ctx->hello_timeout) {
-        (void)shutdown_send (ctx, 2, 1, "hello timeout after %.1f sec",
-                             ctx->hello_timeout);
+        shutdown_arm (ctx->shutdown, 2, 1, "hello timeout after %.1fs",
+                      ctx->hello_timeout);
         hello_set_timeout (h, 0);
     }
 }
@@ -682,7 +678,8 @@ static int rank0_shell_exit_handler (struct subprocess *p, void *arg)
         rc = 128 + subprocess_signaled (p);
     else
         rc = subprocess_exit_code (p);
-    return shutdown_send (ctx, 2, rc, subprocess_state_string (p));
+    shutdown_arm (ctx->shutdown, 2, rc, "%s", subprocess_state_string (p));
+    return 0;
 }
 
 static void rank0_shell (ctx_t *ctx)
@@ -905,60 +902,6 @@ static int broker_init_signalfd (ctx_t *ctx)
     return zp.fd;
 }
 
-static int shutdown_cb (zloop_t *zl, int timer_id, ctx_t *ctx)
-{
-    if (ctx->verbose)
-        msg ("shutdown timer expired: exiting");
-    exit (ctx->shutdown_exitcode);
-}
-
-static void shutdown_recv (ctx_t *ctx, zmsg_t *zmsg)
-{
-    json_object *o = NULL;
-    const char *reason;
-    int grace, rank, exitcode;
-
-    if (flux_msg_decode (zmsg, NULL, &o) < 0 || o == NULL
-            || util_json_object_get_string (o, "reason", &reason) < 0
-            || util_json_object_get_int (o, "grace", &grace) < 0
-            || util_json_object_get_int (o, "exitcode", &exitcode) < 0
-            || util_json_object_get_int (o, "rank", &rank) < 0) {
-        msg ("ignoring mangled shutdown message");
-    } else if (ctx->shutdown_tid == -1) {
-        ctx->shutdown_tid = zloop_timer (ctx->zloop, grace * 1000, 1,
-                                        (zloop_timer_fn *)shutdown_cb, ctx);
-        if (ctx->shutdown_tid == -1)
-            err_exit ("zloop_timer");
-        ctx->shutdown_exitcode = exitcode;
-        if ((ctx->rank == 0 && !ctx->quiet) || ctx->verbose)
-            msg ("%d: shutdown in %ds: %s", rank, grace, reason);
-    }
-    if (o)
-        json_object_put (o);
-}
-
-static int shutdown_send (ctx_t *ctx, int grace, int exit_code,
-                          const char *fmt, ...)
-{
-    JSON in = Jnew ();
-    va_list ap;
-    char *reason;
-    int rc = -1;
-
-    va_start (ap, fmt);
-    reason = xvasprintf (fmt, ap);
-    va_end (ap);
-
-    Jadd_str (in, "reason", reason);
-    Jadd_int (in, "grace", grace);
-    Jadd_int (in, "rank", ctx->rank);
-    Jadd_int (in, "exitcode", exit_code);
-    rc = flux_event_send (ctx->h, in, "shutdown");
-    Jput (in);
-    free (reason);
-    return rc;
-}
-
 static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
 {
     if (flux_msg_match (zmsg, "hb")) {
@@ -968,7 +911,7 @@ static void cmb_internal_event (ctx_t *ctx, zmsg_t *zmsg)
             (void) overlay_keepalive_parent (ctx->overlay);
         }
     } else if (flux_msg_match (zmsg, "shutdown")) {
-        shutdown_recv (ctx, zmsg);
+        shutdown_recvmsg (ctx->shutdown, zmsg);
     }
 }
 
@@ -1613,8 +1556,8 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
         if (fdsi.ssi_signo == SIGCHLD)
             subprocess_manager_reap_all (ctx->sm);
         else {
-            (void)shutdown_send (ctx, 2, 0, "signal %d (%s) %d",
-                                 fdsi.ssi_signo, strsignal (fdsi.ssi_signo));
+            shutdown_arm (ctx->shutdown, 2, 0, "signal %d (%s) %d",
+                          fdsi.ssi_signo, strsignal (fdsi.ssi_signo));
         }
     }
     return 0;

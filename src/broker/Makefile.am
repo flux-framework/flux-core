@@ -28,7 +28,9 @@ flux_broker_SOURCES = \
 	service.h \
 	service.c \
 	hello.h \
-	hello.c
+	hello.c \
+	shutdown.h \
+	shutdown.c
 
 flux_broker_LDADD = \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
