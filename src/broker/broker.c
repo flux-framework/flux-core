@@ -68,9 +68,6 @@
 #define zsocket_set_immediate   zsocket_set_delay_attach_on_connect
 #endif
 
-#define ZLOOP_RETURN(p) \
-    return ((p)->reactor_stop ? (-1) : (0))
-
 const char *default_modules =
     "api,modctl,kvs,live,mecho,job[0],wrexec,resrc,barrier";
 
@@ -78,12 +75,8 @@ typedef struct {
     /* 0MQ
      */
     zctx_t *zctx;               /* zeromq context (MT-safe) */
-    zloop_t *zl;
-    bool reactor_stop;
-    int sigfd;
+    zloop_t *zloop;
     flux_sec_t sec;             /* security context (MT-safe) */
-    bool security_clr;
-    bool security_set;
 
     /* Sockets.
      */
@@ -108,7 +101,6 @@ typedef struct {
     char *proctitle;
     sigset_t default_sigset;
     flux_conf_t cf;
-    const char *secdir;
     int event_seq;
     bool event_active;          /* primary event source is active */
     svchash_t services;
@@ -140,12 +132,11 @@ static void child_cb (overlay_t ov, void *sock, void *arg);
 static void heartbeat_cb (heartbeat_t h, void *arg);
 static void module_cb (module_t p, void *arg);
 static void rmmod_cb (module_t p, void *arg);
+static void hello_update_cb (hello_t h, void *arg);
 static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 
-static void hello_update_cb (hello_t h, void *arg);
-
-static void broker_init_comms (ctx_t *ctx);
 static endpt_t *broker_init_modevent (ctx_t *ctx);
+static int broker_init_signalfd (ctx_t *ctx);
 
 static void broker_add_services (ctx_t *ctx);
 
@@ -231,6 +222,9 @@ int main (int argc, char *argv[])
     zhash_t *modexclude;
     char *modpath;
     const char *confdir;
+    int security_clr = 0;
+    int security_set = 0;
+    const char *secdir = NULL;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -252,7 +246,6 @@ int main (int argc, char *argv[])
     ctx.hello = hello_create ();
     ctx.k_ary = 2; /* binary TBON is default */
     ctx.heartbeat = heartbeat_create ();
-    overlay_set_heartbeat (ctx.overlay, ctx.heartbeat);
 
     ctx.pid = getpid();
     if (!(modpath = getenv ("FLUX_MODULE_PATH")))
@@ -273,11 +266,11 @@ int main (int argc, char *argv[])
                 break;
             case 's':   /* --security=MODE */
                 if (!strcmp (optarg, "none"))
-                    ctx.security_clr = FLUX_SEC_TYPE_ALL;
+                    security_clr = FLUX_SEC_TYPE_ALL;
                 else if (!strcmp (optarg, "plain"))
-                    ctx.security_set |= FLUX_SEC_TYPE_PLAIN;
+                    security_set |= FLUX_SEC_TYPE_PLAIN;
                 else if (!strcmp (optarg, "curve"))
-                    ctx.security_set |= FLUX_SEC_TYPE_CURVE;
+                    security_set |= FLUX_SEC_TYPE_CURVE;
                 else
                     msg_exit ("--security argument must be none|plain|curve");
                 break;
@@ -371,7 +364,7 @@ int main (int argc, char *argv[])
 
     /* Get the directory for CURVE keys.
      */
-    if (!(ctx.secdir = getenv ("FLUX_SEC_DIRECTORY")))
+    if (!(secdir = getenv ("FLUX_SEC_DIRECTORY")))
         msg_exit ("FLUX_SEC_DIRECTORY is not set"); 
 
     /* Process config from the KVS if running in a session and not
@@ -409,13 +402,37 @@ int main (int argc, char *argv[])
     }
     flux_conf_itr_destroy (itr);
 
-    /* Create zeromq context, security context, zloop, etc.
+    /* Initailize zeromq context
      */
-    broker_init_comms (&ctx);
+    ctx.zctx = zctx_new ();
+    if (!ctx.zctx)
+        err_exit ("zctx_new");
+    zctx_set_linger (ctx.zctx, 5);
+    if (!(ctx.zloop = zloop_new ()))
+        err_exit ("zloop_new");
 
+    /* Prepare signal handling
+     */
+    broker_init_signalfd (&ctx);
+
+    /* Initialize security context.
+     */
+    if (!(ctx.sec = flux_sec_create ()))
+        err_exit ("flux_sec_create");
+    flux_sec_set_directory (ctx.sec, secdir);
+    if (security_clr && flux_sec_disable (ctx.sec, security_clr) < 0)
+        err_exit ("flux_sec_disable");
+    if (security_set && flux_sec_enable (ctx.sec, security_set) < 0)
+        err_exit ("flux_sec_enable");
+    if (flux_sec_zauth_init (ctx.sec, ctx.zctx, "flux") < 0)
+        msg_exit ("flux_sec_zauth_init: %s", flux_sec_errstr (ctx.sec));
+    if (flux_sec_munge_init (ctx.sec) < 0)
+        msg_exit ("flux_sec_munge_init: %s", flux_sec_errstr (ctx.sec));
+
+    overlay_set_heartbeat (ctx.overlay, ctx.heartbeat);
     overlay_set_zctx (ctx.overlay, ctx.zctx);
     overlay_set_sec (ctx.overlay, ctx.sec);
-    overlay_set_loop (ctx.overlay, ctx.zl);
+    overlay_set_loop (ctx.overlay, ctx.zloop);
 
     overlay_set_parent_cb (ctx.overlay, parent_cb, &ctx);
     overlay_set_child_cb (ctx.overlay, child_cb, &ctx);
@@ -508,14 +525,14 @@ int main (int argc, char *argv[])
         msg ("loading modules");
     modhash_set_zctx (ctx.modhash, ctx.zctx);
     modhash_set_rank (ctx.modhash, ctx.rank);
-    modhash_set_loop (ctx.modhash, ctx.zl);
+    modhash_set_loop (ctx.modhash, ctx.zloop);
     modhash_set_heartbeat (ctx.modhash, ctx.heartbeat);
     load_modules (&ctx, modules, modopts, modexclude, modpath);
 
     /* install heartbeat timer
      */
     if (ctx.rank == 0) {
-        heartbeat_set_loop (ctx.heartbeat, ctx.zl);
+        heartbeat_set_loop (ctx.heartbeat, ctx.zloop);
         heartbeat_set_cb (ctx.heartbeat, heartbeat_cb, &ctx);
         if (heartbeat_start (ctx.heartbeat) < 0)
             err_exit ("heartbeat_start");
@@ -529,7 +546,7 @@ int main (int argc, char *argv[])
      * Start init once wireup is complete.
      */
     hello_set_overlay (ctx.hello, ctx.overlay);
-    hello_set_zloop (ctx.hello, ctx.zl);
+    hello_set_zloop (ctx.hello, ctx.zloop);
     hello_set_size (ctx.hello, ctx.size);
     hello_set_cb (ctx.hello, hello_update_cb, &ctx);
     hello_set_timeout (ctx.hello, 1.0);
@@ -540,7 +557,7 @@ int main (int argc, char *argv[])
      */
     if (ctx.verbose)
         msg ("entering event loop");
-    zloop_start (ctx.zl);
+    zloop_start (ctx.zloop);
     if (ctx.verbose)
         msg ("exited event loop");
 
@@ -559,7 +576,7 @@ int main (int argc, char *argv[])
         msg ("cleaning up");
     if (ctx.sec)
         flux_sec_destroy (ctx.sec);
-    zloop_destroy (&ctx.zl);
+    zloop_destroy (&ctx.zloop);
     zctx_destroy (&ctx.zctx);
     overlay_destroy (ctx.overlay);
     heartbeat_destroy (ctx.heartbeat);
@@ -883,36 +900,9 @@ static int broker_init_signalfd (ctx_t *ctx)
 
     if ((zp.fd = signalfd(-1, &sigmask, SFD_NONBLOCK | SFD_CLOEXEC)) < 0)
         err_exit ("signalfd");
-    if (zloop_poller (ctx->zl, &zp, (zloop_fn *)signal_cb, ctx) < 0)
+    if (zloop_poller (ctx->zloop, &zp, (zloop_fn *)signal_cb, ctx) < 0)
         err_exit ("zloop_poller");
     return zp.fd;
-}
-
-static void broker_init_comms (ctx_t *ctx)
-{
-    //(void)umask (077);
-
-    ctx->zctx = zctx_new ();
-    if (!ctx->zctx)
-        err_exit ("zctx_new");
-    zctx_set_linger (ctx->zctx, 5);
-    if (!(ctx->zl = zloop_new ()))
-        err_exit ("zloop_new");
-    ctx->sigfd = broker_init_signalfd (ctx);
-
-    /* Initialize security.
-     */
-    if (!(ctx->sec = flux_sec_create ()))
-        err_exit ("flux_sec_create");
-    flux_sec_set_directory (ctx->sec, ctx->secdir);
-    if (ctx->security_clr && flux_sec_disable (ctx->sec, ctx->security_clr) < 0)
-        err_exit ("flux_sec_disable");
-    if (ctx->security_set && flux_sec_enable (ctx->sec, ctx->security_set) < 0)
-        err_exit ("flux_sec_enable");
-    if (flux_sec_zauth_init (ctx->sec, ctx->zctx, "flux") < 0)
-        msg_exit ("flux_sec_zauth_init: %s", flux_sec_errstr (ctx->sec));
-    if (flux_sec_munge_init (ctx->sec) < 0)
-        msg_exit ("flux_sec_munge_init: %s", flux_sec_errstr (ctx->sec));
 }
 
 static int shutdown_cb (zloop_t *zl, int timer_id, ctx_t *ctx)
@@ -935,7 +925,7 @@ static void shutdown_recv (ctx_t *ctx, zmsg_t *zmsg)
             || util_json_object_get_int (o, "rank", &rank) < 0) {
         msg ("ignoring mangled shutdown message");
     } else if (ctx->shutdown_tid == -1) {
-        ctx->shutdown_tid = zloop_timer (ctx->zl, grace * 1000, 1,
+        ctx->shutdown_tid = zloop_timer (ctx->zloop, grace * 1000, 1,
                                         (zloop_timer_fn *)shutdown_cb, ctx);
         if (ctx->shutdown_tid == -1)
             err_exit ("zloop_timer");
@@ -1627,7 +1617,7 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
                                  fdsi.ssi_signo, strsignal (fdsi.ssi_signo));
         }
     }
-    ZLOOP_RETURN(ctx);
+    return 0;
 }
 
 /* Try to dispatch message to a local service: built-in broker service,
