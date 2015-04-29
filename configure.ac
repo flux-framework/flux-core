@@ -66,6 +66,36 @@ X_AC_CHECK_PTHREADS
 X_AC_CHECK_COND_LIB(util, forkpty)
 X_AC_CHECK_COND_LIB(rt, clock_gettime)
 X_AC_CHECK_COND_LIB(dl, dlerror)
+
+AC_MSG_CHECKING(--enable-python argument)
+AC_ARG_ENABLE(python,
+	[  --enable-python[=OPTS]   Include Python bindings. [default=yes] [OPTS=no/yes]], ,
+	[enable_python="yes"])
+
+AC_MSG_RESULT($enable_python)
+
+if test "$enable_python" = "yes"; then
+  AM_PATH_PYTHON([2.7])
+  if test "X$PYTHON" != "X"; then
+    AX_PYTHON_DEVEL
+    #TODO: write this manually to add a version check
+    AM_CHECK_PYMOD(cffi,,,[AC_MSG_ERROR([could not find python module cffi, version 1.1+ required])])
+    python_ok=yes
+  fi
+  AS_VAR_SET(fluxpydir, $pyexecdir/flux)
+  AC_SUBST(fluxpydir)
+  AS_VAR_SET(fluxpymoddir, $pyexecdir/flux/modules)
+  AC_SUBST(fluxpymoddir)
+
+  # Link necessary files into build directory for distcheck
+  AC_CONFIG_LINKS([src/bindings/python/pycotap/pycotap/__init__.py:src/bindings/python/pycotap/pycotap/__init__.py])
+
+  if test "$python_ok" != "yes"; then
+    AC_MSG_ERROR([could not configure python])
+  fi
+fi
+AM_CONDITIONAL([HAVE_PYTHON], [test "$enable_python" = yes])
+
 AX_PROG_LUA([5.1],[5.3])
 AX_LUA_HEADERS
 AX_LUA_LIBS
@@ -132,6 +162,9 @@ AC_CONFIG_FILES( \
   src/lib/libpmi/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
+  src/bindings/python/Makefile \
+  src/bindings/python/flux/Makefile \
+  src/bindings/python/flux/core/Makefile \
   src/broker/Makefile \
   src/cmd/Makefile \
   src/connectors/Makefile \
@@ -151,6 +184,7 @@ AC_CONFIG_FILES( \
   src/modules/mecho/Makefile \
   src/modules/barrier/Makefile \
   src/modules/wreck/Makefile \
+  src/modules/pymod/Makefile \
   src/test/Makefile \
   src/test/kap/Makefile \
   src/test/request/Makefile \

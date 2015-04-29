@@ -410,6 +410,7 @@ void dump_environment (void)
     dump_environment_one ("FLUX_HANDLE_TRACE");
     dump_environment_one ("LUA_PATH");
     dump_environment_one ("LUA_CPATH");
+    fflush(stdout);
 }
 
 void exec_subcommand_dir (bool vopt, const char *dir, char *argv[],

@@ -50,6 +50,8 @@ libflux_la_SOURCES = \
 	ev_flux.c \
 	tmpdir.c
 
+libflux_la_LDFLAGS = -avoid-version -module -shared -export-dynamic
+
 TESTS = test_conf.t \
 	test_module.t \
 	test_message.t \
