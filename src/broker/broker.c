@@ -803,11 +803,11 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
 {
     char *s;
     module_t p;
-    zlist_t *mods;
+    zhash_t *mods; /* hash by module name */
 
     /* Create modules, adding to 'mods' list
      */
-    if (!(mods = zlist_new ()))
+    if (!(mods = zhash_new ()))
         oom ();
     s = zlist_first (modules);
     while (s) {
@@ -826,10 +826,17 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
         }
         if (modexclude && zhash_lookup (modexclude, name))
             goto next;
-        if (!(p = module_add (ctx->modhash, path)))
+        if (!(p = module_add (ctx->modhash, path))) {
+            err ("%s: module_add %s", name, path);
             goto next;
-        if (zlist_append (mods, p) < 0)
-            oom ();
+        }
+        if (!svc_add (ctx->services, module_get_name (p),
+                      (svc_cb_f)module_sendmsg, p)) {
+            msg ("could not register service %s", module_get_name (p));
+            module_remove (ctx->modhash, p);
+            goto next;
+        }
+        zhash_update (mods, module_get_name (p), p);
         module_set_poller_cb (p, module_cb, ctx);
         module_set_rmmod_cb (p, rmmod_cb, ctx);
 next:
@@ -848,7 +855,7 @@ next:
         if (!arg)
             msg_exit ("malformed module option: %s", s);
         *arg++ = '\0';
-        if (!(p = module_lookup (ctx->modhash, s)))
+        if (!(p = zhash_lookup (mods, s)))
             msg_exit ("module argument for unknown module: %s", s);
         module_add_arg (p, arg);
         s = zlist_next (modopts);
@@ -856,11 +863,9 @@ next:
 
     /* Now start all the modules we just created.
      */
-    while ((p = zlist_pop (mods))) {
-        if (module_start (p) < 0)
-            err_exit ("starting %s:", module_name (p));
-    }
-    zlist_destroy (&mods);
+    module_start_all (ctx->modhash);
+
+    zhash_destroy (&mods);
 }
 
 /* Bind to PUB socket used by comms modules to receive events from broker.
@@ -1112,10 +1117,13 @@ static int cmb_rmmod_cb (zmsg_t **zmsg, void *arg)
 
     if (flux_rmmod_request_decode (*zmsg, &name) < 0)
         goto done;
-    if (!(p = module_lookup (ctx->modhash, name))) {
+    if (!(p = module_lookup_byname (ctx->modhash, name))) {
         errno = ENOENT;
         goto done;
     }
+    /* N.B. can't remove 'service' entry here as distributed
+     * module shutdown may require inter-rank module communication.
+     */
     if (module_stop (p, zmsg) < 0)
         goto done;
     flux_log (ctx->h, LOG_INFO, "rmmod %s", name);
@@ -1144,6 +1152,12 @@ static int cmb_insmod_cb (zmsg_t **zmsg, void *arg)
     }
     if (!(p = module_add (ctx->modhash, path)))
         goto done;
+    if (!svc_add (ctx->services, module_get_name (p),
+                                 (svc_cb_f)module_sendmsg, p)) {
+        module_remove (ctx->modhash, p);
+        errno = EEXIST;
+        goto done;
+    }
     arg = argz_next (argz, argz_len, NULL);
     while (arg) {
         module_add_arg (p, arg);
@@ -1301,8 +1315,8 @@ static int event_shutdown_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     shutdown_recvmsg (ctx->shutdown, *zmsg);
-    if (module_stop_all (ctx->modhash) < 0)
-        flux_log (ctx->h, LOG_ERR, "module_stop_all: %s", strerror (errno));
+    //if (module_stop_all (ctx->modhash) < 0)
+    //    flux_log (ctx->h, LOG_ERR, "module_stop_all: %s", strerror (errno));
     return 0;
 }
 
@@ -1470,6 +1484,7 @@ static void module_cb (module_t p, void *arg)
     if (!zmsg)
         goto done;
     if (zmsg_content_size (zmsg) == 0) { /* EOF - safe to pthread_join */
+        svc_remove (ctx->services, module_get_name (p));
         module_remove (ctx->modhash, p);
         goto done;
     }
@@ -1487,13 +1502,13 @@ static void module_cb (module_t p, void *arg)
         case FLUX_MSGTYPE_EVENT:
             if (flux_sendmsg (ctx->h, &zmsg) < 0) {
                 flux_log (ctx->h, LOG_ERR, "%s(%s): flux_sendmsg %s: %s",
-                          __FUNCTION__, module_name (p),
+                          __FUNCTION__, module_get_name (p),
                           flux_msgtype_string (type), strerror (errno));
             }
             break;
         default:
             flux_log (ctx->h, LOG_ERR, "%s(%s): unexpected %s",
-                      __FUNCTION__, module_name (p),
+                      __FUNCTION__, module_get_name (p),
                       flux_msgtype_string (type));
             break;
     }
@@ -1597,19 +1612,13 @@ static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
     } else if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid != ctx->rank) {
         rc = svc_sendmsg (ctx->services, zmsg);
         if (rc < 0 && errno == ENOSYS)
-            rc = module_request_sendmsg (ctx->modhash, zmsg);
-        if (rc < 0 && errno == ENOSYS)
             rc = overlay_sendmsg_parent (ctx->overlay, zmsg);
     } else if (nodeid == FLUX_NODEID_ANY) {
         rc = svc_sendmsg (ctx->services, zmsg);
         if (rc < 0 && errno == ENOSYS)
-            rc = module_request_sendmsg (ctx->modhash, zmsg);
-        if (rc < 0 && errno == ENOSYS)
             rc = overlay_sendmsg_parent (ctx->overlay, zmsg);
     } else if (nodeid == ctx->rank) {
         rc = svc_sendmsg (ctx->services, zmsg);
-        if (rc < 0 && errno == ENOSYS)
-            rc = module_request_sendmsg (ctx->modhash, zmsg);
     } else if (nodeid == 0) {
         rc = overlay_sendmsg_parent (ctx->overlay, zmsg);
     } else {

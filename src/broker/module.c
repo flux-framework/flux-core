@@ -97,7 +97,6 @@ struct module_struct {
 
 struct modhash_struct {
     zhash_t *zh_byuuid;
-    zhash_t *zh_byname;
     zctx_t *zctx;
     uint32_t rank;
     zloop_t *zloop;
@@ -197,18 +196,26 @@ done:
     return NULL;
 }
 
-const char *module_name (module_t p)
+const char *module_get_name (module_t p)
 {
     assert (p->magic == MODULE_MAGIC);
     return p->name;
 }
 
-static const char *module_uuid (module_t p)
+void module_set_name (module_t p, const char *name)
+{
+    assert (p->magic == MODULE_MAGIC);
+    if (p->name)
+        free (p->name);
+    p->name = xstrdup (name);
+}
+
+static const char *module_get_uuid (module_t p)
 {
     return zuuid_str (p->uuid);
 }
 
-static int module_idle (module_t p)
+static int module_get_idle (module_t p)
 {
     return heartbeat_get_epoch (p->heartbeat) - p->lastseen;
 }
@@ -219,27 +226,11 @@ zmsg_t *module_recvmsg (module_t p)
     return zmsg_recv (p->zs_svc[1]);
 }
 
-int module_request_sendmsg (modhash_t mh, zmsg_t **zmsg)
+int module_sendmsg (zmsg_t **zmsg, module_t p)
 {
-    char *ch, *topic = NULL;
-    module_t p;
-    int rc = -1;
-
     if (!zmsg || !*zmsg)
         return 0;
-    if (flux_msg_get_topic (*zmsg, &topic) < 0)
-        goto done;
-    if ((ch = strchr (topic, '.')))
-        *ch = '\0';
-    if (!(p = zhash_lookup (mh->zh_byname, topic))) {
-        errno = ENOSYS;
-        goto done;
-    }
-    rc = zmsg_send (zmsg, p->zs_svc[1]);
-done:
-    if (topic)
-        free (topic);
-    return rc;
+    return zmsg_send (zmsg, p->zs_svc[1]);
 }
 
 int module_response_sendmsg (modhash_t mh, zmsg_t **zmsg)
@@ -258,7 +249,7 @@ int module_response_sendmsg (modhash_t mh, zmsg_t **zmsg)
     }
     free (uuid);
     (void)flux_msg_pop_route (*zmsg, &uuid);
-    rc = zmsg_send (zmsg, p->zs_svc[1]);
+    rc = module_sendmsg (zmsg, p);
 done:
     if (uuid)
         free (uuid);
@@ -418,11 +409,6 @@ module_t module_add (modhash_t mh, const char *path)
         errno = ENOENT;
         return NULL;
     }
-    if (zhash_lookup (mh->zh_byname, *mod_namep)) {
-        dlclose (dso);
-        errno = EEXIST;
-        return NULL;
-    }
     p = xzmalloc (sizeof (*p));
     p->name = xstrdup (*mod_namep);
     p->magic = MODULE_MAGIC;
@@ -445,7 +431,7 @@ module_t module_add (modhash_t mh, const char *path)
     /* Module end socket will be opened in the module thread.
      */
     p->modevent_uri = xstrdup (MODEVENT_INPROC_URI);
-    p->svc_uri = xasprintf (SVC_INPROC_URI_TMPL, p->name);
+    p->svc_uri = xasprintf ("inproc:///%s", module_get_uuid (p));
 
     /* Broker end socket is opened here.
      */
@@ -458,13 +444,10 @@ module_t module_add (modhash_t mh, const char *path)
     p->zp.socket = p->zs_svc[1];
 
     /* Update the modhash.
-     * mod_byuuid calls the destructor
      */
-    rc = zhash_insert (mh->zh_byname, p->name, p);
-    assert (rc == 0); /* name already checked above */
-    rc = zhash_insert (mh->zh_byuuid, module_uuid (p), p);
+    rc = zhash_insert (mh->zh_byuuid, module_get_uuid (p), p);
     assert (rc == 0); /* uuids are by definition unique */
-    zhash_freefn (mh->zh_byuuid, module_uuid (p),
+    zhash_freefn (mh->zh_byuuid, module_get_uuid (p),
                   (zhash_free_fn *)module_destroy);
     return p;
 }
@@ -472,13 +455,7 @@ module_t module_add (modhash_t mh, const char *path)
 void module_remove (modhash_t mh, module_t p)
 {
     assert (p->magic == MODULE_MAGIC);
-    zhash_delete (mh->zh_byname, module_name (p));
-    zhash_delete (mh->zh_byuuid, module_uuid (p));
-}
-
-module_t module_lookup (modhash_t mh, const char *name)
-{
-    return zhash_lookup (mh->zh_byname, name);
+    zhash_delete (mh->zh_byuuid, module_get_uuid (p));
 }
 
 modhash_t modhash_create (void)
@@ -486,16 +463,13 @@ modhash_t modhash_create (void)
     modhash_t mh = xzmalloc (sizeof (*mh));
     if (!(mh->zh_byuuid = zhash_new ()))
         oom ();
-    if (!(mh->zh_byname = zhash_new ()))
-        oom ();
     return mh;
 }
 
 void modhash_destroy (modhash_t mh)
 {
     if (mh) {
-        zhash_destroy (&mh->zh_byname);
-        zhash_destroy (&mh->zh_byuuid); /* calls mod_destroy */
+        zhash_destroy (&mh->zh_byuuid);
         free (mh);
     }
 }
@@ -523,26 +497,26 @@ void modhash_set_heartbeat (modhash_t mh, heartbeat_t hb)
 JSON module_list_encode (modhash_t mh)
 {
     JSON out = flux_lsmod_json_create ();
-    zlist_t *keys;
-    char *name;
+    zlist_t *uuids;
+    char *uuid;
     module_t p;
 
-    if (!(keys = zhash_keys (mh->zh_byname)))
+    if (!(uuids = zhash_keys (mh->zh_byuuid)))
         oom ();
-    name = zlist_first (keys);
-    while (name) {
-        p = zhash_lookup (mh->zh_byname, name);
+    uuid = zlist_first (uuids);
+    while (uuid) {
+        p = zhash_lookup (mh->zh_byuuid, uuid);
         assert (p != NULL);
-        if (flux_lsmod_json_append (out, module_name (p), p->size,
-                                    p->digest, module_idle (p)) < 0) {
+        if (flux_lsmod_json_append (out, module_get_name (p), p->size,
+                                    p->digest, module_get_idle (p)) < 0) {
             Jput (out);
             out = NULL;
             goto done;
         }
-        name = zlist_next (keys);
+        uuid = zlist_next (uuids);
     }
 done:
-    zlist_destroy (&keys);
+    zlist_destroy (&uuids);
     return out;
 }
 
@@ -566,6 +540,51 @@ int module_stop_all (modhash_t mh)
 done:
     zlist_destroy (&uuids);
     return rc;
+}
+
+int module_start_all (modhash_t mh)
+{
+    zlist_t *uuids;
+    char *uuid;
+    int rc = -1;
+
+    if (!(uuids = zhash_keys (mh->zh_byuuid)))
+        oom ();
+    uuid = zlist_first (uuids);
+    while (uuid) {
+        module_t p = zhash_lookup (mh->zh_byuuid, uuid);
+        assert (p != NULL);
+        if (module_start (p) < 0)
+            goto done;
+        uuid = zlist_next (uuids);
+    }
+    rc = 0;
+done:
+    zlist_destroy (&uuids);
+    return rc;
+}
+
+module_t module_lookup_byname (modhash_t mh, const char *name)
+{
+    zlist_t *uuids;
+    char *uuid;
+    module_t result = NULL;
+
+    if (!(uuids = zhash_keys (mh->zh_byuuid)))
+        oom ();
+    uuid = zlist_first (uuids);
+    while (uuid) {
+        module_t p = zhash_lookup (mh->zh_byuuid, uuid);
+        assert (p != NULL);
+        if (!strcmp (module_get_name (p), name)) {
+            result = p;
+            break;
+        }
+        uuid = zlist_next (uuids);
+        p = NULL;
+    }
+    zlist_destroy (&uuids);
+    return result;
 }
 
 /*
