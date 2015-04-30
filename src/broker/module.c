@@ -70,9 +70,7 @@ struct module_struct {
     heartbeat_t heartbeat;
 
     void *zs_svc[2];        /* PAIR for handling requests 0=module, 1=broker */
-    void *zs_evin;          /* SUB for handling subscribed-to events */
 
-    char *modevent_uri;
     char *svc_uri;
 
     zuuid_t *uuid;          /* uuid for unique request sender identity */
@@ -93,6 +91,8 @@ struct module_struct {
     zlist_t *rmmod;
 
     flux_t h;               /* module's handle */
+
+    zlist_t *subs;          /* subscription strings */
 };
 
 struct modhash_struct {
@@ -150,14 +150,8 @@ static void *module_thread (void *arg)
 
     assert (p->zctx);
 
-    /* Connect to broker sockets
+    /* Connect to broker socket
      */
-    if (!(p->zs_evin = zsocket_new (p->zctx, ZMQ_SUB)))
-        err_exit ("zsocket_new");
-    zsocket_set_hwm (p->zs_evin, 0);
-    if (zsocket_connect (p->zs_evin, "%s", p->modevent_uri) < 0)
-        err_exit ("%s", p->modevent_uri);
-
     if (!(p->zs_svc[0] = zsocket_new (p->zctx, ZMQ_PAIR)))
         err_exit ("zsocket_new");
     zsocket_set_hwm (p->zs_svc[0], 0);
@@ -173,7 +167,7 @@ static void *module_thread (void *arg)
 
     /* Create handle, enable logging, register built-in services
      */
-    p->h = modhandle_create (p->zs_svc[0], p->zs_evin, zuuid_str (p->uuid),
+    p->h = modhandle_create (p->zs_svc[0], zuuid_str (p->uuid),
                              p->rank, p->zctx);
     flux_log_set_facility (p->h, p->name);
     modservice_register (p->h, p->name);
@@ -190,7 +184,6 @@ done:
 
     send_eof (p->zs_svc[0]);
 
-    zsocket_destroy (p->zctx, p->zs_evin);
     zsocket_destroy (p->zctx, p->zs_svc[0]);
 
     return NULL;
@@ -277,8 +270,6 @@ static void module_destroy (module_t p)
     free (p->digest);
     if (p->argz)
         free (p->argz);
-    if (p->modevent_uri)
-        free (p->modevent_uri);
     if (p->svc_uri)
         free (p->svc_uri);
     if (p->name)
@@ -289,6 +280,12 @@ static void module_destroy (module_t p)
         zmsg_t *zmsg;
         while ((zmsg = zlist_pop (p->rmmod)))
             zmsg_destroy (&zmsg);
+    }
+    if (p->subs) {
+        char *s;
+        while ((s = zlist_pop (p->subs)))
+            free (s);
+        zlist_destroy (&p->subs);
     }
     zlist_destroy (&p->rmmod);
     p->magic = ~MODULE_MAGIC;
@@ -422,6 +419,8 @@ module_t module_add (modhash_t mh, const char *path)
         oom ();
     if (!(p->rmmod = zlist_new ()))
         oom ();
+    if (!(p->subs = zlist_new ()))
+        oom ();
 
     p->rank = mh->rank;
     p->zctx = mh->zctx;
@@ -430,7 +429,6 @@ module_t module_add (modhash_t mh, const char *path)
 
     /* Module end socket will be opened in the module thread.
      */
-    p->modevent_uri = xstrdup (MODEVENT_INPROC_URI);
     p->svc_uri = xasprintf ("inproc:///%s", module_get_uuid (p));
 
     /* Broker end socket is opened here.
@@ -585,6 +583,89 @@ module_t module_lookup_byname (modhash_t mh, const char *name)
     }
     zlist_destroy (&uuids);
     return result;
+}
+
+int module_subscribe (modhash_t mh, const char *uuid, const char *topic)
+{
+    module_t p = zhash_lookup (mh->zh_byuuid, uuid);
+    int rc = -1;
+
+    if (!p) {
+        errno = ENOENT;
+        goto done;
+    }
+    if (zlist_push (p->subs, xstrdup (topic)) < 0)
+        oom ();
+    rc = 0;
+done:
+    return rc;
+}
+
+int module_unsubscribe (modhash_t mh, const char *uuid, const char *topic)
+{
+    module_t p = zhash_lookup (mh->zh_byuuid, uuid);
+    char *s;
+    int rc = -1;
+
+    if (!p) {
+        errno = ENOENT;
+        goto done;
+    }
+    s = zlist_first (p->subs);
+    while (s) {
+        if (!strcmp (topic, s)) {
+            zlist_remove (p->subs, s);
+            break;
+        }
+        s = zlist_next (p->subs);
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+static bool match_sub (module_t p, const char *topic)
+{
+    char *s = zlist_first (p->subs);
+
+    while (s) {
+        if (!strncmp (topic, s, strlen (s)))
+            return true;
+        s = zlist_next (p->subs);
+    }
+    return false;
+}
+
+int module_event_mcast (modhash_t mh, zmsg_t *zmsg)
+{
+    char *topic = NULL;
+    zlist_t *uuids;
+    char *uuid;
+    int rc = -1;
+
+    if (flux_msg_get_topic (zmsg, &topic) < 0)
+        goto done;
+    if (!(uuids = zhash_keys (mh->zh_byuuid)))
+        oom ();
+    uuid = zlist_first (uuids);
+    while (uuid) {
+        module_t p = zhash_lookup (mh->zh_byuuid, uuid);
+        assert (p != NULL);
+        if (match_sub (p, topic)) {
+            zmsg_t *cpy = zmsg_dup (zmsg);
+            rc = module_sendmsg (&cpy, p);
+            zmsg_destroy (&cpy);
+            if (rc < 0)
+                goto done;
+        }
+        uuid = zlist_next (uuids);
+    }
+    rc = 0;
+done:
+    if (topic)
+        free (topic);
+    zlist_destroy (&uuids);
+    return rc;
 }
 
 /*

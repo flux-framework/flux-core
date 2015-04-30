@@ -1,10 +1,6 @@
 #ifndef _BROKER_MODULE_H
 #define _BROKER_MODULE_H
 
-/* Templates used to construct module socket URIs
- */
-#define MODEVENT_INPROC_URI           "inproc://event"
-
 typedef struct module_struct *module_t;
 typedef struct modhash_struct *modhash_t;
 typedef void (*modpoller_cb_f)(module_t p, void *arg);
@@ -45,6 +41,15 @@ void module_set_poller_cb (module_t p, modpoller_cb_f cb, void *arg);
  */
 zmsg_t *module_recvmsg (module_t p);
 int module_sendmsg (zmsg_t **zmsg, module_t p);
+
+/* Send an event message to all modules that have matching subscription.
+ */
+int module_event_mcast (modhash_t mh, zmsg_t *zmsg);
+
+/* Subscribe/unsubscribe module by uuid
+ */
+int module_subscribe (modhash_t mh, const char *uuid, const char *topic);
+int module_unsubscribe (modhash_t mh, const char *uuid, const char *topic);
 
 /* The rmmod callback is called as part of module destruction,
  * after the thread has been joined, so that module_pop_rmmod() can

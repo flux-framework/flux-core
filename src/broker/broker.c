@@ -83,7 +83,6 @@ typedef struct {
      */
     overlay_t overlay;
     snoop_t snoop;
-    endpt_t *modevent;          /* PUB - events to modules */
 
     /* Session parameters
      */
@@ -132,7 +131,6 @@ static void rmmod_cb (module_t p, void *arg);
 static void hello_update_cb (hello_t h, void *arg);
 static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
 
-static endpt_t *broker_init_modevent (ctx_t *ctx);
 static int broker_init_signalfd (ctx_t *ctx);
 
 static void broker_add_services (ctx_t *ctx);
@@ -515,10 +513,8 @@ int main (int argc, char *argv[])
      */
     broker_add_services (&ctx);
 
-    if (ctx.verbose)
-        msg ("initializing module sockets");
-    ctx.modevent = broker_init_modevent (&ctx);
-
+    /* Load modules
+     */
     if (ctx.verbose)
         msg ("loading modules");
     modhash_set_zctx (ctx.modhash, ctx.zctx);
@@ -579,8 +575,6 @@ int main (int argc, char *argv[])
     overlay_destroy (ctx.overlay);
     heartbeat_destroy (ctx.heartbeat);
     snoop_destroy (ctx.snoop);
-    if (ctx.modevent)
-        endpt_destroy (ctx.modevent);
     svchash_destroy (ctx.services);
     svchash_destroy (ctx.eventsvc);
     hello_destroy (ctx.hello);
@@ -866,20 +860,6 @@ next:
     module_start_all (ctx->modhash);
 
     zhash_destroy (&mods);
-}
-
-/* Bind to PUB socket used by comms modules to receive events from broker.
- */
-static endpt_t *broker_init_modevent (ctx_t *ctx)
-{
-    endpt_t *ep = endpt_create (MODEVENT_INPROC_URI);
-
-    if (!(ep->zs = zsocket_new (ctx->zctx, ZMQ_PUB)))
-        err_exit ("zsocket_new");
-    zsocket_set_hwm (ep->zs, 0);
-    if (zsocket_bind (ep->zs, "%s", ep->uri) < 0)
-        err_exit ("%s", ep->uri);
-    return ep;
 }
 
 /* signalfd + zloop example: https://gist.github.com/mhaberler/8426050
@@ -1296,6 +1276,50 @@ static int cmb_hello_cb (zmsg_t **zmsg, void *arg)
     return 0;
 }
 
+static int cmb_sub_cb (zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    char *uuid = NULL;
+    JSON in = NULL;
+    const char *topic;
+    int rc = -1;
+
+    if (flux_json_request_decode (*zmsg, &in) < 0)
+        goto done;
+    if (!Jget_str (in, "topic", &topic))
+        goto done;
+    if (flux_msg_get_route_first (*zmsg, &uuid) < 0)
+        goto done;
+    rc = module_subscribe (ctx->modhash, uuid, topic);
+done:
+    if (uuid)
+        free (uuid);
+    Jput (in);
+    return rc;
+}
+
+static int cmb_unsub_cb (zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    char *uuid = NULL;
+    JSON in = NULL;
+    const char *topic;
+    int rc = -1;
+
+    if (flux_json_request_decode (*zmsg, &in) < 0)
+        goto done;
+    if (!Jget_str (in, "topic", &topic))
+        goto done;
+    if (flux_msg_get_route_first (*zmsg, &uuid) < 0)
+        goto done;
+    rc = module_unsubscribe (ctx->modhash, uuid, topic);
+done:
+    if (uuid)
+        free (uuid);
+    Jput (in);
+    return rc;
+}
+
 static int event_hb_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1337,6 +1361,8 @@ static void broker_add_services (ctx_t *ctx)
           || !svc_add (ctx->services, "cmb.exec", cmb_exec_cb, ctx)
           || !svc_add (ctx->services, "cmb.disconnect", cmb_disconnect_cb, ctx)
           || !svc_add (ctx->services, "cmb.hello", cmb_hello_cb, ctx)
+          || !svc_add (ctx->services, "cmb.sub", cmb_sub_cb, ctx)
+          || !svc_add (ctx->services, "cmb.unsub", cmb_unsub_cb, ctx)
           || !svc_add (ctx->eventsvc, "hb", event_hb_cb, ctx)
           || !svc_add (ctx->eventsvc, "shutdown", event_shutdown_cb, ctx))
         err_exit ("can't register internal services");
@@ -1386,7 +1412,7 @@ done:
     zmsg_destroy (&zmsg);
 }
 
-/* helper for euuvent_cb, parent_cb, broker_event_sendmsg (rank 0 only) */
+/* helper for event_cb, parent_cb, broker_event_sendmsg (rank 0 only) */
 static int handle_event (ctx_t *ctx, zmsg_t **zmsg)
 {
     if (ctx->rank > 0) {
@@ -1411,9 +1437,7 @@ static int handle_event (ctx_t *ctx, zmsg_t **zmsg)
     (void)overlay_sendmsg_relay (ctx->overlay, *zmsg);
     (void)svc_sendmsg (ctx->eventsvc, zmsg);
 
-    assert (ctx->modevent != NULL);
-    assert (ctx->modevent->zs != NULL);
-    return zmsg_send (zmsg, ctx->modevent->zs);
+    return module_event_mcast (ctx->modhash, *zmsg);
 }
 
 /* helper for parent_cb */
@@ -1541,7 +1565,8 @@ static void event_cb (overlay_t ov, void *sock, void *arg)
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_EVENT:
-            (void)handle_event (ctx, &zmsg);
+            if (handle_event (ctx, &zmsg) < 0)
+                goto done;
             break;
         default:
             flux_log (ctx->h, LOG_ERR, "%s: unexpected %s", __FUNCTION__,
