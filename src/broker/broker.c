@@ -1293,10 +1293,16 @@ static int event_hb_cb (zmsg_t **zmsg, void *arg)
     return 0;
 }
 
+/* Shutdown:
+ * - start the shutdown timer
+ * - send shutdown message to all modules
+ */
 static int event_shutdown_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     shutdown_recvmsg (ctx->shutdown, *zmsg);
+    if (module_stop_all (ctx->modhash) < 0)
+        flux_log (ctx->h, LOG_ERR, "module_stop_all: %s", strerror (errno));
     return 0;
 }
 

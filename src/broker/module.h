@@ -70,6 +70,7 @@ int module_start (module_t p);
  * for reply once the module actually stops.
  */
 int module_stop (module_t p, zmsg_t **zmsg);
+int module_stop_all (modhash_t mh);
 
 /* Prepare an 'lsmod' response payload.
  */

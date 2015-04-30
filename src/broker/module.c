@@ -319,9 +319,11 @@ int module_stop (module_t p, zmsg_t **rmmod)
         goto done;
     if (zmsg_send (&zmsg, p->zs_svc[1]) < 0)
         goto done;
-    if (zlist_append (p->rmmod, *rmmod) < 0)
-        oom ();
-    *rmmod = NULL;
+    if (rmmod) {
+        if (zlist_append (p->rmmod, *rmmod) < 0)
+            oom ();
+        *rmmod = NULL;
+    }
     rc = 0;
 done:
     free (topic);
@@ -542,6 +544,28 @@ JSON module_list_encode (modhash_t mh)
 done:
     zlist_destroy (&keys);
     return out;
+}
+
+int module_stop_all (modhash_t mh)
+{
+    zlist_t *uuids;
+    char *uuid;
+    int rc = -1;
+
+    if (!(uuids = zhash_keys (mh->zh_byuuid)))
+        oom ();
+    uuid = zlist_first (uuids);
+    while (uuid) {
+        module_t p = zhash_lookup (mh->zh_byuuid, uuid);
+        assert (p != NULL);
+        if (module_stop (p, NULL) < 0)
+            goto done;
+        uuid = zlist_next (uuids);
+    }
+    rc = 0;
+done:
+    zlist_destroy (&uuids);
+    return rc;
 }
 
 /*
