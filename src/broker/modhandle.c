@@ -44,6 +44,7 @@
 #include "src/common/libutil/zdump.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/shortjson.h"
 
 #include "src/common/libev/ev.h"
 #include "src/common/libutil/ev_zmq.h"
@@ -57,18 +58,16 @@ typedef struct {
 
     /* Passed in via modhandle_create.
      */
-    void *zs_svc;
-    void *zs_evin;
+    void *sock;
     void *zctx;
-    int rank;
+    uint32_t rank;
     char *uuid;
 
     struct ev_loop *loop;
     int loop_rc;
     zhash_t *watchers;
 
-    ev_zmq svc_w;
-    ev_zmq evin_w;
+    ev_zmq sock_w;
 
     int timer_seq;
 
@@ -126,14 +125,13 @@ static void modhandle_destroy (void *impl)
     free (ctx);
 }
 
-flux_t modhandle_create (void *zs_svc, void *zs_evin, const char *uuid,
+flux_t modhandle_create (void *sock, const char *uuid,
                          uint32_t rank, zctx_t *zctx)
 {
     ctx_t *ctx = xzmalloc (sizeof (*ctx));
     ctx->magic = MODHANDLE_MAGIC;
 
-    ctx->zs_svc = zs_svc;
-    ctx->zs_evin = zs_evin;
+    ctx->sock = sock;
     ctx->uuid = xstrdup (uuid);
     ctx->rank = rank;
     ctx->zctx = zctx;
@@ -146,11 +144,8 @@ flux_t modhandle_create (void *zs_svc, void *zs_evin, const char *uuid,
     if (!ctx->putmsg || !ctx->watchers)
         oom ();
 
-    ev_zmq_init (&ctx->evin_w, main_cb, ctx->zs_evin, EV_READ);
-    ctx->evin_w.data = ctx;
-
-    ev_zmq_init (&ctx->svc_w, main_cb, ctx->zs_svc, EV_READ);
-    ctx->svc_w.data = ctx;
+    ev_zmq_init (&ctx->sock_w, main_cb, ctx->sock, EV_READ);
+    ctx->sock_w.data = ctx;
 
     ev_zlist_init (&ctx->putmsg_w, putmsg_cb, ctx->putmsg, EV_READ);
     ctx->putmsg_w.data = ctx;
@@ -168,16 +163,13 @@ flux_t modhandle_create (void *zs_svc, void *zs_evin, const char *uuid,
 static void sync_msg_watchers (ctx_t *ctx)
 {
     if (ctx->msg_cb == NULL) {
-        ev_zmq_stop (ctx->loop, &ctx->svc_w);
-        ev_zmq_stop (ctx->loop, &ctx->evin_w);
+        ev_zmq_stop (ctx->loop, &ctx->sock_w);
         ev_zlist_stop (ctx->loop, &ctx->putmsg_w);
     } else if (zlist_size (ctx->putmsg) == 0) {
-        ev_zmq_start (ctx->loop, &ctx->svc_w);
-        ev_zmq_start (ctx->loop, &ctx->evin_w);
+        ev_zmq_start (ctx->loop, &ctx->sock_w);
         ev_zlist_stop (ctx->loop, &ctx->putmsg_w);
     } else {
-        ev_zmq_stop (ctx->loop, &ctx->svc_w);
-        ev_zmq_stop (ctx->loop, &ctx->evin_w);
+        ev_zmq_stop (ctx->loop, &ctx->sock_w);
         ev_zlist_start (ctx->loop, &ctx->putmsg_w);
     }
 }
@@ -197,17 +189,17 @@ static int mod_sendmsg (void *impl, zmsg_t **zmsg)
                 goto done;
             if (flux_msg_push_route (*zmsg, ctx->uuid) < 0)
                 goto done;
-            rc = zmsg_send (zmsg, ctx->zs_svc);
+            rc = zmsg_send (zmsg, ctx->sock);
             break;
         case FLUX_MSGTYPE_RESPONSE:
-            rc = zmsg_send (zmsg, ctx->zs_svc);
+            rc = zmsg_send (zmsg, ctx->sock);
             break;
         case FLUX_MSGTYPE_EVENT:
             if (flux_msg_enable_route (*zmsg) < 0)
                 goto done;
             if (flux_msg_push_route (*zmsg, ctx->uuid) < 0)
                 goto done;
-            rc = zmsg_send (zmsg, ctx->zs_svc);
+            rc = zmsg_send (zmsg, ctx->sock);
             break;
         default:
             errno = EINVAL;
@@ -220,8 +212,7 @@ done:
 static zmsg_t *mod_recvmsg_main (ctx_t *ctx, bool nonblock)
 {
     zmq_pollitem_t items[] = {
-        {  .events = ZMQ_POLLIN, .socket = ctx->zs_evin },
-        {  .events = ZMQ_POLLIN, .socket = ctx->zs_svc },
+        {  .events = ZMQ_POLLIN, .socket = ctx->sock},
     };
     int nitems = sizeof (items) / sizeof (items[0]);
     int rc, i;
@@ -312,16 +303,32 @@ static int mod_event_subscribe (void *impl, const char *topic)
 {
     ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
-    char *s = topic ? (char *)topic : "";
-    return zmq_setsockopt (ctx->zs_evin, ZMQ_SUBSCRIBE, s, strlen (s));
+    JSON in = Jnew ();
+    int rc = -1;
+
+    Jadd_str (in, "topic", topic);
+    if (flux_json_rpc (ctx->h, ctx->rank, "cmb.sub", in, NULL) < 0)
+        goto done;
+    rc = 0;
+done:
+    Jput (in);
+    return rc;
 }
 
 static int mod_event_unsubscribe (void *impl, const char *topic)
 {
     ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
-    char *s = topic ? (char *)topic : "";
-    return zmq_setsockopt (ctx->zs_evin, ZMQ_UNSUBSCRIBE, s, strlen (s));
+    JSON in = Jnew ();
+    int rc = -1;
+
+    Jadd_str (in, "topic", topic);
+    if (flux_json_rpc (ctx->h, ctx->rank, "cmb.unsub", in, NULL) < 0)
+        goto done;
+    rc = 0;
+done:
+    Jput (in);
+    return rc;
 }
 
 static int mod_rank (void *impl)

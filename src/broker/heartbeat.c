@@ -35,44 +35,52 @@
 
 #include "heartbeat.h"
 
+struct heartbeat_struct {
+    zloop_t *zloop;
+    double rate;
+    int timer_id;
+    int epoch;
+    heartbeat_cb_f cb;
+    void *cb_arg;
+};
+
 static const double min_heartrate = 0.01;   /* min seconds */
 static const double max_heartrate = 30;     /* max seconds */
 static const double dfl_heartrate = 2;
 
 
-
-void heartbeat_destroy (heartbeat_t *hb)
+void heartbeat_destroy (heartbeat_t h)
 {
-    if (hb) {
-        free (hb);
+    if (h) {
+        free (h);
     }
 }
 
-heartbeat_t *heartbeat_create (void)
+heartbeat_t heartbeat_create (void)
 {
-    heartbeat_t *hb = xzmalloc (sizeof (*hb));
-    hb->rate = dfl_heartrate;
-    hb->timer_id = -1;
-    return hb;
+    heartbeat_t h = xzmalloc (sizeof (*h));
+    h->rate = dfl_heartrate;
+    h->timer_id = -1;
+    return h;
 }
 
-void heartbeat_set_zloop (heartbeat_t *hb, zloop_t *zloop)
+void heartbeat_set_loop (heartbeat_t h, zloop_t *zloop)
 {
-    hb->zloop = zloop;
+    h->zloop = zloop;
 }
 
-int heartbeat_set_rate (heartbeat_t *hb, double rate)
+int heartbeat_set_rate (heartbeat_t h, double rate)
 {
     if (rate < min_heartrate || rate > max_heartrate)
         goto error;
-    hb->rate = rate;
+    h->rate = rate;
     return 0;
 error:
     errno = EINVAL;
     return -1;
 }
 
-int heartbeat_set_ratestr (heartbeat_t *hb, const char *s)
+int heartbeat_set_ratestr (heartbeat_t h, const char *s)
 {
     char *endptr;
     double rate = strtod (s, &endptr);
@@ -84,63 +92,71 @@ int heartbeat_set_ratestr (heartbeat_t *hb, const char *s)
         rate /= 1000.0;
     else
         goto error;
-    return heartbeat_set_rate (hb, rate);
+    return heartbeat_set_rate (h, rate);
 error:
     errno = EINVAL;
     return -1;
 }
 
-double heartbeat_get_rate (heartbeat_t *hb)
+double heartbeat_get_rate (heartbeat_t h)
 {
-    return hb->rate;
+    return h->rate;
 }
 
-void heartbeat_set_epoch (heartbeat_t *hb, int epoch)
+void heartbeat_set_epoch (heartbeat_t h, int epoch)
 {
-    hb->epoch = epoch;
+    h->epoch = epoch;
 }
 
-int heartbeat_get_epoch (heartbeat_t *hb)
+int heartbeat_get_epoch (heartbeat_t h)
 {
-    return hb->epoch;
+    return h->epoch;
 }
 
-void heartbeat_next_epoch (heartbeat_t *hb)
+void heartbeat_next_epoch (heartbeat_t h)
 {
-    hb->epoch++;
+    h->epoch++;
 }
 
-void heartbeat_set_cb (heartbeat_t *hb, zloop_timer_fn *cb, void *arg)
+void heartbeat_set_cb (heartbeat_t h, heartbeat_cb_f cb, void *arg)
 {
-    hb->cb = cb;
-    hb->cb_arg = arg;
+    h->cb = cb;
+    h->cb_arg = arg;
 }
 
-int heartbeat_start (heartbeat_t *hb)
+static int heartbeat_cb (zloop_t *zl, int timer_id, void *arg)
 {
-    unsigned long msec = hb->rate * 1000;
-
-    hb->timer_id = zloop_timer (hb->zloop, msec, 0, hb->cb, hb->cb_arg);
-
-    return hb->timer_id;
+    heartbeat_t h = arg;
+    if (h->cb)
+        h->cb (h, h->cb_arg);
+    return 0;
 }
 
-void heartbeat_stop (heartbeat_t *hb)
+int heartbeat_start (heartbeat_t h)
 {
-    if (hb->timer_id != -1)
-        zloop_timer_end (hb->zloop, hb->timer_id);
+    unsigned long msec = h->rate * 1000;
+
+    h->timer_id = zloop_timer (h->zloop, msec, 0, heartbeat_cb, h);
+
+    return h->timer_id;
 }
 
-static JSON heartbeat_json_encode (heartbeat_t *hb)
+void heartbeat_stop (heartbeat_t h)
+{
+    if (h->timer_id != -1)
+        zloop_timer_end (h->zloop, h->timer_id);
+}
+
+static JSON heartbeat_json_encode (heartbeat_t h)
 {
     JSON out = Jnew ();
-    Jadd_int (out, "epoch", hb->epoch);
+    Jadd_int (out, "epoch", h->epoch);
     return out;
 }
 
-zmsg_t *heartbeat_event_encode (heartbeat_t *hb)
+zmsg_t *heartbeat_event_encode (heartbeat_t h)
 {
-    JSON out = heartbeat_json_encode (hb);
+    JSON out = heartbeat_json_encode (h);
     zmsg_t *zmsg = flux_msg_create (FLUX_MSGTYPE_EVENT);
     if (!zmsg)
         goto done;
@@ -157,11 +173,11 @@ done:
     return zmsg;
 }
 
-static int heartbeat_json_decode (heartbeat_t *hb, JSON out)
+static int heartbeat_json_decode (heartbeat_t h, JSON out)
 {
     int rc = -1;
 
-    if (Jget_int (out, "epoch", &hb->epoch) < 0) {
+    if (Jget_int (out, "epoch", &h->epoch) < 0) {
         errno = EPROTO;
         goto done;
     }
@@ -170,7 +186,7 @@ done:
     return rc;
 }
 
-int heartbeat_event_decode (heartbeat_t *hb, zmsg_t *zmsg)
+int heartbeat_event_decode (heartbeat_t h, zmsg_t *zmsg)
 {
     int rc = -1;
     int type;
@@ -192,7 +208,7 @@ int heartbeat_event_decode (heartbeat_t *hb, zmsg_t *zmsg)
         errno = EPROTO;
         goto done;
     }
-    rc = heartbeat_json_decode (hb, out);
+    rc = heartbeat_json_decode (h, out);
 done:
     if (out)
         Jput (out);

@@ -222,6 +222,9 @@ static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     char *tag;
 
     if (flux_msg_decode (*zmsg, &tag, &o) >= 0) {
+        if (strcmp (tag, "job.shutdown") == 0) {
+            flux_reactor_stop (h);
+        }
         if (strcmp (tag, "job.next-id") == 0) {
             if (flux_treeroot (h)) {
                 unsigned long id = lwj_next_id (h);

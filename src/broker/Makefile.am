@@ -19,8 +19,6 @@ flux_broker_SOURCES = \
 	boot_pmi.h \
 	endpt.h \
 	endpt.c \
-	peer.h \
-	peer.c \
 	overlay.h \
 	overlay.c \
 	heartbeat.h \
@@ -28,7 +26,11 @@ flux_broker_SOURCES = \
 	snoop.h \
 	snoop.c \
 	service.h \
-	service.c
+	service.c \
+	hello.h \
+	hello.c \
+	shutdown.h \
+	shutdown.c
 
 flux_broker_LDADD = \
 	$(top_builddir)/src/modules/kvs/libkvs.la \

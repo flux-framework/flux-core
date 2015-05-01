@@ -288,21 +288,15 @@ int flux_pushmsg (flux_t h, zmsg_t **zmsg)
 
 int flux_event_subscribe (flux_t h, const char *topic)
 {
-    if (!h->ops->event_subscribe) {
-        errno = ENOSYS;
-        return -1;
-    }
-
+    if (!h->ops->event_subscribe)
+        return 0;
     return h->ops->event_subscribe (h->impl, topic);
 }
 
 int flux_event_unsubscribe (flux_t h, const char *topic)
 {
-    if (!h->ops->event_unsubscribe) {
-        errno = ENOSYS;
-        return -1;
-    }
-
+    if (!h->ops->event_unsubscribe)
+        return 0;
     return h->ops->event_unsubscribe (h->impl, topic);
 }
 

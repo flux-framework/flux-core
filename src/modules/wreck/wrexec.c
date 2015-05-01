@@ -518,6 +518,10 @@ static int request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     char *tag;
 
     if (flux_msg_decode (*zmsg, &tag, &o) >= 0) {
+        if (!strcmp (tag, "wrexec.shutdown")) {
+            flux_reactor_stop (h);
+            return 0;
+        }
         msg ("forwarding %s to session", tag);
         fwd_to_session (ctx, zmsg, o);
     }

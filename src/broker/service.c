@@ -34,15 +34,24 @@
 
 #include "service.h"
 
-svchash_t *svchash_create (void)
+struct svc_struct {
+    svc_cb_f cb;
+    void *cb_arg;
+};
+
+struct svchash_struct {
+    zhash_t *zh;
+};
+
+svchash_t svchash_create (void)
 {
-    svchash_t *sh = xzmalloc (sizeof *sh);
+    svchash_t sh = xzmalloc (sizeof *sh);
     if (!(sh->zh = zhash_new ()))
         oom ();
     return sh;
 }
 
-void svchash_destroy (svchash_t *sh)
+void svchash_destroy (svchash_t sh)
 {
     if (sh) {
         zhash_destroy (&sh->zh);
@@ -50,25 +59,25 @@ void svchash_destroy (svchash_t *sh)
     }
 }
 
-static void svc_destroy (svc_t *svc)
+static void svc_destroy (svc_t svc)
 {
     free (svc);
 }
 
-static svc_t *svc_create (void)
+static svc_t svc_create (void)
 {
-    svc_t *svc = xzmalloc (sizeof (*svc));
+    svc_t svc = xzmalloc (sizeof (*svc));
     return svc;
 }
 
-void svc_remove (svchash_t *sh, const char *name)
+void svc_remove (svchash_t sh, const char *name)
 {
     zhash_delete (sh->zh, name);
 }
 
-svc_t *svc_add (svchash_t *sh, const char *name, svc_cb_t cb, void *arg)
+svc_t svc_add (svchash_t sh, const char *name, svc_cb_f cb, void *arg)
 {
-    svc_t *svc = svc_create ();
+    svc_t svc = svc_create ();
     svc->cb = cb;
     svc->cb_arg = arg;
     if (zhash_insert (sh->zh, name, svc) < 0) {
@@ -80,9 +89,9 @@ svc_t *svc_add (svchash_t *sh, const char *name, svc_cb_t cb, void *arg)
     return svc;
 }
 
-svc_t *svc_lookup (svchash_t *sh, const char *name)
+static svc_t svc_lookup (svchash_t sh, const char *name)
 {
-    svc_t *svc = zhash_lookup (sh->zh, name);
+    svc_t svc = zhash_lookup (sh->zh, name);
     if (!svc && strchr (name, '.')) {
         char *cpy = xstrdup (name);
         char *p = strchr (cpy, '.');
@@ -95,19 +104,15 @@ svc_t *svc_lookup (svchash_t *sh, const char *name)
     return svc;
 }
 
-int svc_sendmsg (svchash_t *sh, zmsg_t **zmsg)
+int svc_sendmsg (svchash_t sh, zmsg_t **zmsg)
 {
     char *topic = NULL;
     int type;
-    svc_t *svc;
+    svc_t svc;
     int rc = -1;
 
     if (flux_msg_get_type (*zmsg, &type) < 0)
         goto done;
-    if (type != FLUX_MSGTYPE_REQUEST) {
-        errno = EINVAL;
-        goto done;
-    }
     if (flux_msg_get_topic (*zmsg, &topic) < 0)
         goto done;
     if (!(svc = svc_lookup (sh, topic)) || !svc->cb) {

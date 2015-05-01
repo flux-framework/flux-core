@@ -318,7 +318,7 @@ void start_slurm (optparse_t p, const char *cmd)
 
     add_arg (&argz, &argz_len, "%s", broker_path);
     add_arg (&argz, &argz_len, "--pmi-boot");
-    add_arg (&argz, &argz_len, "--logdest=%s", "broker.log");
+    //add_arg (&argz, &argz_len, "--logdest=%s", "broker.log");
     if (broker_opts)
         add_args_sep (&argz, &argz_len, broker_opts, ',');
     if (cmd)

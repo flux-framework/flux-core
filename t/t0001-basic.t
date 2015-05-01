@@ -35,7 +35,7 @@ test_expect_success 'path to broker is sane' '
 	test -x ${broker_path}
 '
 test_expect_success 'flux-start works' "
-	flux start --size=2 'flux up' | grep '^ok: *\[0-1\]'
+	flux start --size=2 'flux comms info' | grep 'size=2'
 "
 test_expect_success 'flux-start passes through errors from command' "
 	test_must_fail flux start --size=1 /bin/false
@@ -53,8 +53,8 @@ test_expect_success 'test_under_flux works' '
 		test_description="test_under_flux (in sub sharness)"
 		. "\$SHARNESS_TEST_SRCDIR"/sharness.sh
 		test_under_flux 2
-		test_expect_success "flux up" "
-			flux up
+		test_expect_success "flux comms info" "
+			flux comms info
 		"
 		test_done
 		EOF
@@ -63,7 +63,7 @@ test_expect_success 'test_under_flux works' '
 	export SHARNESS_TEST_SRCDIR SHARNESS_TEST_DIRECTORY FLUX_BUILD_DIR debug &&
 	./.test.t --verbose --debug >out 2>err
 	) &&
-	grep "ok: *\[0-1\]" test-under-flux/out
+	grep "size=2" test-under-flux/out
 '
 
 test_done
