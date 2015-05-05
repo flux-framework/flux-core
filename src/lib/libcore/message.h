@@ -43,6 +43,10 @@ int flux_msg_get_type (flux_msg_t msg, int *type);
 int flux_msg_set_topic (flux_msg_t msg, const char *topic);
 int flux_msg_get_topic (flux_msg_t msg, const char **topic);
 
+/* Get message flags.
+ */
+int flux_msg_get_flags (flux_msg_t msg, int *flags);
+
 /* Get/set payload.
  * Set function adds/deletes/replaces payload frame as needed.
  * The new payload will be copied (caller retains ownership).
@@ -84,55 +88,9 @@ int flux_msg_get_seq (flux_msg_t msg, uint32_t *seq);
 int flux_msg_set_matchtag (flux_msg_t msg, uint32_t matchtag);
 int flux_msg_get_matchtag (flux_msg_t msg, uint32_t *matchtag);
 
-/* NOTE: routing frames are pushed on a message traveling dealer
- * to router, and popped off a message traveling router to dealer.
- * A message intended for dealer-router sockets must first be enabled for
- * routing.
+/* Get sender uuid (request only)
  */
-
-/* Prepare a message for routing, which consists of pushing a nil delimiter
- * frame and setting FLUX_MSGFLAG_ROUTE.  This function is a no-op if the
- * flag is already set.
- * Returns 0 on success, -1 with errno set on failure.
- */
-int flux_msg_enable_route (flux_msg_t msg);
-
-/* Strip route frames, nil delimiter, and clear FLUX_MSGFLAG_ROUTE flag.
- * This function is a no-op if the flag is already clear.
- * Returns 0 on success, -1 with errno set on failure.
- */
-int flux_msg_clear_route (flux_msg_t msg);
-
-/* Push a route frame onto the message (mimic what dealer socket does).
- * 'id' is copied internally.
- * Returns 0 on success, -1 with errno set (e.g. EINVAL) on failure.
- */
-int flux_msg_push_route (flux_msg_t msg, const char *id);
-
-/* Pop a route frame off the message and return identity (or NULL) in 'id'.
- * Caller must free 'id'.
- * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
- */
-int flux_msg_pop_route (flux_msg_t msg, char **id);
-
-/* Copy the first routing frame (closest to delimiter) contents (or NULL)
- * to 'id'.  Caller must free 'id'.
- * For requests, this is the sender; for responses, this is the recipient.
- * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
- */
-int flux_msg_get_route_first (flux_msg_t msg, char **id); /* closest to delim */
-
-/* Copy the last routing frame (farthest from delimiter) contents (or NULL)
- * to 'id'.  Caller must free 'id'.
- * For requests, this is the last hop; for responses: this is the next hop.
- * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
- */
-int flux_msg_get_route_last (flux_msg_t msg, char **id); /* farthest from delim */
-
-/* Return the number of route frames in the message.
- * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
- */
-int flux_msg_get_route_count (flux_msg_t msg);
+int flux_msg_get_sender (flux_msg_t msg, const char **id);
 
 /* Return string representation of message type.  Do not free.
  */
