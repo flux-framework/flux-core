@@ -50,11 +50,12 @@ enum {
 };
 
 /* Create/destroy a broker handle.
- * If 'path' is NULL, derive socket path from FLUX_TMPDIR
- * environment variable;  otherwise it can be a zeromq URI or a socket path.
- * On error, NULL is returned with ernno set.
+ * The 'uri' scheme name selects a handle implementation to dynamically load.
+ * The rest of the URI is parsed in an implementation-specific manner.
+ * A NULL uri selects the "local" implementation with socket path derived
+ * from the FLUX_TMPDIR environment variable.
  */
-flux_t flux_open (const char *path, int flags);
+flux_t flux_open (const char *uri, int flags);
 void flux_close (flux_t h);
 
 /* Send/recv Flux messages.
