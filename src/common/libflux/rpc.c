@@ -182,13 +182,9 @@ int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
     }
     if (flux_msg_get_payload_json (zmsg, &o) < 0)
         goto done;
-    /* In order to support flux_rpc(), which in turn must support no-payload
-     * responses, this cannot be an error yet.
-     */
     if ((!o && out)) {
-        *out = NULL;
-        //errno = EPROTO;
-        //goto done;
+        errno = EPROTO;
+        goto done;
     }
     if ((o && !out)) {
         Jput (o);
