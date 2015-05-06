@@ -935,7 +935,7 @@ static int hello_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     response = parents_tojson (ctx);
     parent_destroy (zlist_pop (ctx->parents));
 
-    flux_respond (h, zmsg, response);
+    flux_json_respond (h, response, zmsg);
 done:
     Jput (request);
     Jput (response);

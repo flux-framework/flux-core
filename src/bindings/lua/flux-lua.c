@@ -787,7 +787,7 @@ static int l_f_zi_resp_cb (lua_State *L,
     struct zmsg_info *zi, json_object *resp, void *arg)
 {
     flux_t f = arg;
-    return l_pushresult (L, flux_respond (f, zmsg_info_zmsg (zi), resp));
+    return l_pushresult (L, flux_json_respond (f, resp, zmsg_info_zmsg (zi)));
 }
 
 static int create_and_push_zmsg_info (lua_State *L,

@@ -229,7 +229,7 @@ static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             if (flux_treeroot (h)) {
                 unsigned long id = lwj_next_id (h);
                 json_object *ox = json_id (id);
-                flux_respond (h, zmsg, ox);
+                flux_json_respond (h, ox, zmsg);
                 json_object_put (o);
             }
             else {
@@ -260,7 +260,7 @@ static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             /* Generate reply with new jobid */
             jobinfo = util_json_object_new_object ();
             util_json_object_add_int64 (jobinfo, "jobid", id);
-            flux_respond (h, zmsg, jobinfo);
+            flux_json_respond (h, jobinfo, zmsg);
             json_object_put (jobinfo);
         }
     }

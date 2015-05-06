@@ -178,11 +178,6 @@ done:
  ** Deprecated functions.
  */
 
-int flux_respond (flux_t h, zmsg_t **zmsg, JSON o)
-{
-    return flux_json_respond (h, o, zmsg);
-}
-
 int flux_respond_errnum (flux_t h, zmsg_t **zmsg, int errnum)
 {
     return flux_err_respond (h, errnum, zmsg);

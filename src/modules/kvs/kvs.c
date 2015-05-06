@@ -749,7 +749,7 @@ static int load_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     }
     if (!stall) {
         wait_destroy (w, zmsg, NULL);
-        flux_respond (ctx->h, zmsg, cpy);
+        flux_json_respond (ctx->h, cpy, zmsg);
     }
 done:
     if (o)
@@ -802,7 +802,7 @@ static int store_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             flux_log (ctx->h, LOG_ERR, "%s: bad href %s", __FUNCTION__, iter.key);
         json_object_object_add (cpy, iter.key, NULL);
     }
-    flux_respond (ctx->h, zmsg, cpy);
+    flux_json_respond (ctx->h, cpy, zmsg);
 done:
     if (o)
         json_object_put (o);
@@ -1578,7 +1578,7 @@ static int sync_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     response = util_json_object_new_object ();
     util_json_object_add_int (response, "rootseq", ctx->rootseq);
     util_json_object_add_string (response, "rootdir", ctx->rootdir);
-    flux_respond (h, zmsg, response);
+    flux_json_respond (h, response, zmsg);
 done:
     if (request)
         json_object_put (request);
@@ -1784,8 +1784,8 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 
         util_json_object_add_int (o, "store revision", ctx->rootseq);
 
-        if (flux_respond (h, zmsg, o) < 0) {
-            err ("%s: flux_respond", __FUNCTION__);
+        if (flux_json_respond (h, o, zmsg) < 0) {
+            err ("%s: flux_json_respond", __FUNCTION__);
             goto done_stop;
         }
     } else if (fnmatch ("*.stats.clear", tag, 0) == 0) {

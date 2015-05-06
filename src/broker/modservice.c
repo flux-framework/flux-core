@@ -69,8 +69,8 @@ static int ping_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
      */
     s = zdump_routestr (*zmsg, 1);
     util_json_object_add_string (o, "route", s);
-    if (flux_respond (h, zmsg, o) < 0) {
-        err ("%s: flux_respond", __FUNCTION__);
+    if (flux_json_respond (h, o, zmsg) < 0) {
+        err ("%s: flux_json_respond", __FUNCTION__);
         rc = -1; /* reactor terminates */
         goto done;
     }
@@ -150,8 +150,8 @@ static int rusage_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         goto done;
     }
     response = rusage_to_json (&usage);
-    if (flux_respond (h, zmsg, response) < 0) {
-        err ("%s: flux_respond", __FUNCTION__);
+    if (flux_json_respond (h, response, zmsg) < 0) {
+        err ("%s: flux_json_respond", __FUNCTION__);
         rc = -1;
         goto done;
     }
