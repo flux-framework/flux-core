@@ -161,7 +161,6 @@ const char *flux_msgtype_shortstr (int typemask);
  ** Deprecated interfaces.
  **/
 
-char *flux_msg_sender (zmsg_t *zmsg);
 int flux_msg_hopcount (zmsg_t *zmsg);
 char *flux_msg_tag (zmsg_t *zmsg);
 char *flux_msg_tag_short (zmsg_t *zmsg);

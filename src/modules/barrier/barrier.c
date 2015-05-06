@@ -165,7 +165,7 @@ static int enter_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     int count, nprocs, hopcount;
 
     if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
-     || !(sender = flux_msg_sender (*zmsg))
+     || flux_msg_get_route_first (*zmsg, &sender) < 0
      || util_json_object_get_string (o, "name", &name) < 0
      || util_json_object_get_int (o, "count", &count) < 0
      || util_json_object_get_int (o, "nprocs", &nprocs) < 0) {
@@ -237,12 +237,13 @@ static int disconnect_request_cb (flux_t h, int typemask, zmsg_t **zmsg,
                                   void *arg)
 {
     ctx_t *ctx = arg;
-    char *sender = flux_msg_sender (*zmsg);
+    char *sender;
 
-    if (sender) {
-        zhash_foreach (ctx->barriers, disconnect, sender);
-        free (sender);
-    }
+    if (flux_msg_get_route_first (*zmsg, &sender) < 0)
+        goto done;
+    zhash_foreach (ctx->barriers, disconnect, sender);
+    free (sender);
+done:
     zmsg_destroy (zmsg);
     return 0;
 }

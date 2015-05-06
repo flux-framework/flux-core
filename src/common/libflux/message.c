@@ -897,16 +897,6 @@ const char *flux_msgtype_shortstr (int typemask)
  ** Deprecated functions
  **/
 
-char *flux_msg_sender (zmsg_t *zmsg)
-{
-    char *id = NULL;
-    if (flux_msg_get_route_first (zmsg, &id) < 0) {
-        errno = 0;
-        return NULL;
-    }
-    return id;
-}
-
 int flux_msg_hopcount (zmsg_t *zmsg)
 {
     int n = flux_msg_get_route_count (zmsg);
