@@ -930,18 +930,6 @@ done:
     return 0;
 }
 
-char *flux_msg_tag_short (zmsg_t *zmsg)
-{
-    char *s, *p;
-    if (flux_msg_get_topic (zmsg, &s) < 0) {
-        errno = 0;
-        return NULL;
-    }
-    if ((p = strchr (s, '.')))
-        *p = '\0';
-    return s;
-}
-
 int flux_msg_replace_json (zmsg_t *zmsg, json_object *o)
 {
     const char *s = NULL;
