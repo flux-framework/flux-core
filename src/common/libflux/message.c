@@ -897,16 +897,6 @@ const char *flux_msgtype_shortstr (int typemask)
  ** Deprecated functions
  **/
 
-int flux_msg_hopcount (zmsg_t *zmsg)
-{
-    int n = flux_msg_get_route_count (zmsg);
-    if (n < 0) {
-        errno = 0;
-        return 0;
-    }
-    return n;
-}
-
 int flux_msg_decode (zmsg_t *zmsg, char **topic, json_object **o)
 {
     struct json_tokener *tok = NULL;
