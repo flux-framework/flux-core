@@ -2,42 +2,6 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/shortjson.h"
 
-/* flux_msg_encode, flux_msg_decode, flux_msg_match
- *   on message with no JSON frame
- */
-void check_legacy_encode (void)
-{
-    zmsg_t *zmsg;
-    JSON o = NULL;
-    char *s = NULL;
-
-    errno = 0;
-    ok (!(zmsg = flux_msg_encode (NULL, NULL)) && errno == EINVAL,
-        "flux_msg_encode with NULL topic fails with errno == EINVAL");
-    zmsg_destroy (&zmsg);
-
-    errno = 0;
-    ok ((zmsg = flux_msg_encode ("foo", NULL)) && errno == 0
-                                               && zmsg_size (zmsg) == 2,
-        "flux_msg_encode with NULL json works");
-
-    errno = 0;
-    ok ((   !flux_msg_match (zmsg, "f") && errno == 0
-            && flux_msg_match (zmsg, "foo") && errno == 0
-            && !flux_msg_match (zmsg, "foobar") && errno == 0),
-        "flux_msg_match works");
-
-    o = (JSON)&o; // make it non-NULL
-    errno = 0;
-    ok ((flux_msg_decode (zmsg, &s, &o) == 0 && errno == 0
-                                             && s != NULL && o == NULL),
-        "flux_msg_decode works");
-    like (s, "foo",
-        "and returned topic we encoded");
-    free (s);
-    zmsg_destroy (&zmsg);
-}
-
 /* flux_msg_get_route_first, flux_msg_get_route_last, _get_route_count
  *   on message with variable number of routing frames
  */
@@ -413,7 +377,7 @@ void check_cmp (void)
 
 int main (int argc, char *argv[])
 {
-    plan (101);
+    plan (96);
 
     lives_ok ({zmsg_test (false);}, // 1
         "zmsg_test doesn't assert");
@@ -424,7 +388,6 @@ int main (int argc, char *argv[])
     check_payload ();               // 21
     check_matchtag ();              // 6
 
-    check_legacy_encode ();         // 5
     check_legacy_replace_json ();   // 6
 
     check_cmp ();                   // 8

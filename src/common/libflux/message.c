@@ -962,11 +962,6 @@ zmsg_t *flux_msg_encode (const char *topic, json_object *o)
     return zmsg;
 }
 
-bool flux_msg_match (zmsg_t *msg, const char *topic)
-{
-    return flux_msg_streq_topic (msg, topic);
-}
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
