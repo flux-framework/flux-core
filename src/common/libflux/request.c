@@ -174,15 +174,6 @@ done:
     return rc;
 }
 
-/**
- ** Deprecated functions.
- */
-
-int flux_respond_errnum (flux_t h, zmsg_t **zmsg, int errnum)
-{
-    return flux_err_respond (h, errnum, zmsg);
-}
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

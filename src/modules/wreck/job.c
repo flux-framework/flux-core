@@ -244,13 +244,13 @@ static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 #if SIMULATOR_RACE_WORKAROUND
             //"Fix" for Race Condition
             if (wait_for_lwj_watch_init (h, id) < 0) {
-                flux_respond_errnum (h, zmsg, errno);
+                flux_err_respond (h, errno, zmsg);
                 goto out;
             }
 #endif
             int rc = kvs_job_new (h, id);
             if (rc < 0) {
-                flux_respond_errnum (h, zmsg, errno);
+                flux_err_respond (h, errno, zmsg);
                 goto out;
             }
             add_jobinfo (h, id, o);

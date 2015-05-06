@@ -529,14 +529,14 @@ static int goodbye_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         goto done;
     }
     if (prank != ctx->rank) { /* in case misdirected to new parent */
-        flux_respond_errnum (h, zmsg, EINVAL);
+        flux_err_respond (h, EINVAL, zmsg);
         goto done;
     }
     if (asprintf (&rankstr, "%d", rank) < 0)
         oom ();
     zhash_delete (ctx->children, rankstr);
     manage_subscriptions (ctx);
-    flux_respond_errnum (h, zmsg, 0);
+    flux_err_respond (h, 0, zmsg);
 done:
     if (rankstr)
         free (rankstr);
@@ -968,9 +968,9 @@ static int failover_request_cb (flux_t h, int typemask, zmsg_t **zmsg,void *arg)
     ctx_t *ctx = arg;
 
     if (failover (ctx) < 0)
-        flux_respond_errnum (h, zmsg, errno);
+        flux_err_respond (h, errno, zmsg);
     else
-        flux_respond_errnum (h, zmsg, 0);
+        flux_err_respond (h, 0, zmsg);
 
     return 0;
 }
@@ -980,9 +980,9 @@ static int recover_request_cb (flux_t h, int typemask, zmsg_t **zmsg,void *arg)
     ctx_t *ctx = arg;
 
     if (recover (ctx) < 0)
-        flux_respond_errnum (h, zmsg, errno);
+        flux_err_respond (h, errno, zmsg);
     else
-        flux_respond_errnum (h, zmsg, 0);
+        flux_err_respond (h, 0, zmsg);
 
     return 0;
 }

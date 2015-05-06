@@ -142,8 +142,8 @@ static int rusage_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         goto done;
     }
     if (getrusage (RUSAGE_THREAD, &usage) < 0) {
-        if (flux_respond_errnum (h, zmsg, errno) < 0) {
-            err ("%s: flux_respond_errnum", __FUNCTION__);
+        if (flux_err_respond (h, errno, zmsg) < 0) {
+            err ("%s: flux_err_respond", __FUNCTION__);
             rc = -1;
             goto done;
         }

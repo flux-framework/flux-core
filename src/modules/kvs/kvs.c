@@ -879,7 +879,7 @@ static int dropcache_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     }
     flux_log (h, LOG_ALERT, "dropped %d of %d cache entries", expcount, sz);
     if ((typemask & FLUX_MSGTYPE_REQUEST))
-        flux_respond_errnum (h, zmsg, rc);
+        flux_err_respond (h, rc, zmsg);
     return 0;
 }
 
@@ -1791,8 +1791,8 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     } else if (fnmatch ("*.stats.clear", tag, 0) == 0) {
         memset (&ctx->stats, 0, sizeof (ctx->stats));
         if ((typemask & FLUX_MSGTYPE_REQUEST)) {
-            if (flux_respond_errnum (h, zmsg, 0) < 0) {
-                err ("%s: flux_respond_errnum", __FUNCTION__);
+            if (flux_err_respond (h, 0, zmsg) < 0) {
+                err ("%s: flux_err_respond", __FUNCTION__);
                 goto done_stop;
             }
         } else

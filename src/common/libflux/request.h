@@ -57,13 +57,6 @@ int flux_json_response_decode (zmsg_t *zmsg, json_object **out);
  */
 int flux_response_decode (zmsg_t *zmsg);
 
-
-/**
- ** Deprecated interfaces.
- **/
-
-int flux_respond_errnum (flux_t h, zmsg_t **request, int errnum);
-
 #endif /* !_FLUX_CORE_REQUEST_H */
 
 /*

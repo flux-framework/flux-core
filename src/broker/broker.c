@@ -1400,7 +1400,7 @@ static void child_cb (overlay_t ov, void *sock, void *arg)
         case FLUX_MSGTYPE_REQUEST:
             rc = flux_sendmsg (ctx->h, &zmsg);
             if (zmsg)
-                flux_respond_errnum (ctx->h, &zmsg, rc < 0 ? errno : 0);
+                flux_err_respond (ctx->h, rc < 0 ? errno : 0, &zmsg);
             break;
         case FLUX_MSGTYPE_EVENT:
             rc = flux_sendmsg (ctx->h, &zmsg);
@@ -1521,7 +1521,7 @@ static void module_cb (module_t p, void *arg)
         case FLUX_MSGTYPE_REQUEST:
             rc = flux_sendmsg (ctx->h, &zmsg);
             if (zmsg)
-                flux_respond_errnum (ctx->h, &zmsg, rc < 0 ? errno : 0);
+                flux_err_respond (ctx->h, rc < 0 ? errno : 0, &zmsg);
             break;
         case FLUX_MSGTYPE_EVENT:
             if (flux_sendmsg (ctx->h, &zmsg) < 0) {
@@ -1546,8 +1546,8 @@ static void rmmod_cb (module_t p, void *arg)
     zmsg_t *zmsg;
 
     while ((zmsg = module_pop_rmmod (p))) {
-        if (flux_respond_errnum (ctx->h, &zmsg, 0) < 0)
-            err ("%s: flux_respond_errnum", __FUNCTION__);
+        if (flux_err_respond (ctx->h, 0, &zmsg) < 0)
+            err ("%s: flux_err_respond", __FUNCTION__);
         zmsg_destroy (&zmsg);
     }
 }
