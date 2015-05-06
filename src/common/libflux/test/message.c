@@ -38,52 +38,6 @@ void check_legacy_encode (void)
     zmsg_destroy (&zmsg);
 }
 
-/* flux_msg_encode, flux_msg_decode, flux_msg_tag, flux_msg_tag_short
- *   on message with JSON
- */
-void check_legacy_encode_json (void)
-{
-    JSON o;
-    zmsg_t *zmsg;
-    char *s;
-    int i;
-
-    o = Jnew ();
-    Jadd_int (o, "x", 42);
-    errno = 0;
-    ok ((zmsg = flux_msg_encode ("a.b.c.d", o)) && errno == 0
-                                                && zmsg_size (zmsg) == 3,
-        "flux_msg_encode with JSON works");
-    Jput (o);
-
-    s = NULL;
-    o = NULL;
-    errno = 0;
-    ok (flux_msg_decode (zmsg, &s, &o) == 0 && errno == 0 && o && s,
-        "flux_msg_decode works");
-    ok (Jget_int (o, "x", &i) && i == 42,
-        "flux_msg_decode returned JSON we encoded");
-    Jput (o);
-    like (s, "a.b.c.d",
-        "flux_msg_decode returned topic string we encoded");
-    free (s);
-
-    errno = 0;
-    ok ((s = flux_msg_tag (zmsg)) != NULL && errno == 0,
-        "flux_msg_tag works");
-    like (s, "a.b.c.d",
-        "flux_msg_tag returned topic string we encoded");
-    free (s);
-
-    errno = 0;
-    ok ((s = flux_msg_tag_short (zmsg)) != NULL && errno == 0,
-        "flux_msg_tag_short works");
-    like (s, "a",
-        "flux_msg_tag_short returned first word of topic string");
-    free (s);
-    zmsg_destroy (&zmsg);
-}
-
 /* flux_msg_get_route_first, flux_msg_get_route_last, _get_route_count
  *   on message with variable number of routing frames
  */
@@ -459,7 +413,7 @@ void check_cmp (void)
 
 int main (int argc, char *argv[])
 {
-    plan (109);
+    plan (101);
 
     lives_ok ({zmsg_test (false);}, // 1
         "zmsg_test doesn't assert");
@@ -471,7 +425,6 @@ int main (int argc, char *argv[])
     check_matchtag ();              // 6
 
     check_legacy_encode ();         // 5
-    check_legacy_encode_json ();    // 8
     check_legacy_replace_json ();   // 6
 
     check_cmp ();                   // 8

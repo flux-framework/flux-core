@@ -930,16 +930,6 @@ done:
     return 0;
 }
 
-char *flux_msg_tag (zmsg_t *zmsg)
-{
-    char *s;
-    if (flux_msg_get_topic (zmsg, &s) < 0) {
-        errno = 0;
-        return NULL;
-    }
-    return s;
-}
-
 char *flux_msg_tag_short (zmsg_t *zmsg)
 {
     char *s, *p;

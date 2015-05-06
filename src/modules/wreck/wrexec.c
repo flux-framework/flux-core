@@ -486,7 +486,9 @@ int lwj_targets_this_node (struct rexec_ctx *ctx, int64_t id)
 static int event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     struct rexec_ctx *ctx = arg;
-    char *tag = flux_msg_tag (*zmsg);
+    char *tag = NULL;
+    if (flux_msg_get_topic (*zmsg, &tag) < 0)
+        goto done;
     if (strncmp (tag, "wrexec.run", 10) == 0) {
         int64_t id = id_from_tag (tag + 11, NULL);
         if (id < 0)
@@ -506,6 +508,7 @@ static int event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         mrpc_handler (ctx, *zmsg);
     }
     free (tag);
+done:
     if (zmsg && *zmsg)
         zmsg_destroy (zmsg);
     return 0;
