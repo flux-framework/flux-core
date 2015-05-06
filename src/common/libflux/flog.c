@@ -156,7 +156,8 @@ int flux_vlog (flux_t h, int lev, const char *fmt, va_list ap)
     } else {
         if (!(o = flog_encode (&flog)))
             goto done;
-        rc = flux_request_send (h, o, "cmb.log");
+        rc = flux_json_request (h, FLUX_NODEID_ANY,
+                                   FLUX_MATCHTAG_NONE, "cmb.log", o);
     }
 done:
     if (s)

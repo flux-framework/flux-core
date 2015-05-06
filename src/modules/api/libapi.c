@@ -174,16 +174,22 @@ static int api_event_subscribe (void *impl, const char *s)
 {
     ctx_t *c = impl;
     assert (c->magic == API_CTX_MAGIC);
-    flux_t h = c->h;
-    return flux_request_send (h, NULL, "api.event.subscribe.%s", s ? s : "");
+    char *topic = xasprintf ("api.event.subscribe.%s", s ? s : "");
+    int rc = flux_json_request (c->h, FLUX_NODEID_ANY,
+                                      FLUX_MATCHTAG_NONE, topic, NULL);
+    free (topic);
+    return rc;
 }
 
 static int api_event_unsubscribe (void *impl, const char *s)
 {
     ctx_t *c = impl;
     assert (c->magic == API_CTX_MAGIC);
-    flux_t h = c->h;
-    return flux_request_send (h, NULL, "api.event.unsubscribe.%s", s ? s : "");
+    char *topic = xasprintf ("api.event.unsubscribe.%s", s ? s : "");
+    int rc = flux_json_request (c->h, FLUX_NODEID_ANY,
+                                      FLUX_MATCHTAG_NONE, topic, NULL);
+    free (topic);
+    return rc;
 }
 
 static int api_rank (void *impl)

@@ -234,7 +234,8 @@ static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             }
             else {
                 fprintf (stderr, "%s: forwarding request\n", tag);
-                flux_request_send (h, o, tag);
+                flux_json_request (h, FLUX_NODEID_ANY,
+                                      FLUX_MATCHTAG_NONE, tag, o);
             }
         }
         if (strcmp (tag, "job.create") == 0) {
