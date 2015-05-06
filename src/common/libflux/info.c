@@ -63,7 +63,7 @@ int flux_info (flux_t h, int *rankp, int *sizep, bool *treerootp)
     bool treeroot;
     int ret = -1;
 
-    if (!(response = flux_rpc (h, NULL, "cmb.info")))
+    if (flux_json_rpc (h, FLUX_NODEID_ANY, "cmb.info", NULL, &response) < 0)
         goto done;
     if (!Jget_bool (response, "treeroot", &treeroot)
             || !Jget_int (response, "rank", &rank)

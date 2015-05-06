@@ -143,8 +143,9 @@ static unsigned long lwj_next_id (flux_t h)
         ret = increment_jobid (h);
     else {
         json_object *na = json_object_new_object ();
-        json_object *o = flux_rpc (h, na, "job.next-id");
-        if (util_json_object_get_int64 (o, "id", (int64_t *) &ret) < 0) {
+        json_object *o = NULL;
+        if (flux_json_rpc (h, FLUX_NODEID_ANY, "job.next-id", na, &o) < 0
+                || util_json_object_get_int64 (o, "id", (int64_t *) &ret) < 0) {
             err ("lwj_next_id: Bad object!");
             ret = 0;
         }
@@ -208,8 +209,9 @@ static int wait_for_lwj_watch_init (flux_t h, int64_t id)
     rpc_o = util_json_object_new_object ();
     util_json_object_add_string (rpc_o, "key", "lwj.next-id");
     util_json_object_add_int64 (rpc_o, "val", id);
-    rpc_resp = flux_rpc (h, rpc_o, "sim_sched.lwj-watch");
+    flux_json_rpc (h, FLUX_NODEID_ANY, "sim_sched.lwj-watch", rpc_o, &rpc_resp);
     util_json_object_get_int (rpc_resp, "rc", &rc);
+done:
     json_object_put (rpc_resp);
     json_object_put (rpc_o);
     return rc;

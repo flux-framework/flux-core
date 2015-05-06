@@ -205,26 +205,6 @@ done:
     return rc;
 }
 
-/**
- ** Deprecated functions.
- */
-
-JSON flux_rpc (flux_t h, JSON o, const char *fmt, ...)
-{
-    va_list ap;
-    JSON out;
-    char *topic;
-    int rc;
-
-    va_start (ap, fmt);
-    topic = xvasprintf (fmt, ap);
-    va_end (ap);
-
-    rc = flux_json_rpc (h, FLUX_NODEID_ANY, topic, o, &out);
-    free (topic);
-    return rc < 0 ? NULL : out;
-}
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

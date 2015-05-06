@@ -31,12 +31,6 @@ int flux_json_multrpc (flux_t h, const char *nodeset, int fanout,
                        const char *topic, json_object *in,
                        flux_multrpc_f cb, void *arg);
 
-/**
- ** Deprecated interfaces.
- **/
-
-json_object *flux_rpc (flux_t h, json_object *in, const char *fmt, ...);
-
 #endif /* !_FLUX_CORE_REQUEST_H */
 
 /*

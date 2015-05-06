@@ -57,9 +57,8 @@ static ctx_t *getctx (flux_t h)
 int flux_barrier (flux_t h, const char *name, int nprocs)
 {
     JSON request = Jnew ();
-    JSON response = NULL;
-    int ret = -1;
     char *s = NULL;
+    int ret = -1;
 
     if (!name) {
         ctx_t *ctx = getctx (h);
@@ -73,19 +72,13 @@ int flux_barrier (flux_t h, const char *name, int nprocs)
     Jadd_int (request, "count", 1);
     Jadd_int (request, "nprocs", nprocs);
 
-    response = flux_rpc (h, request, "barrier.enter");
-    if (!response && errno > 0)
+    if (flux_json_rpc (h, FLUX_NODEID_ANY, "barrier.enter", request, NULL) < 0)
         goto done;
-    if (response) {
-        errno = EPROTO;
-        goto done;
-    }
     ret = 0;
 done:
     if (s)
         free (s);
     Jput (request);
-    Jput (response);
     return ret;
 }
 

@@ -1089,66 +1089,51 @@ done:
 
 int kvs_get_version (flux_t h, int *versionp)
 {
-    json_object *request = util_json_object_new_object ();
-    json_object *reply = NULL;
+    JSON in = Jnew ();
+    JSON out = NULL;
     int ret = -1;
     int version;
- 
-    reply = flux_rpc (h, request, "kvs.getroot");
-    if (!reply)
+
+    if (flux_json_rpc (h, FLUX_NODEID_ANY, "kvs.getroot", in, &out) < 0)
         goto done;
-    if (util_json_object_get_int (reply, "rootseq", &version) < 0) {
+    if (!Jget_int (out, "rootseq", &version)) {
         errno = EPROTO;
         goto done;
     }
     *versionp = version;
     ret = 0;
 done:
-    if (request)
-        json_object_put (request);
-    if (reply)
-        json_object_put (reply); 
+    Jput (in);
+    Jput (out);
     return ret;
 }
 
 int kvs_wait_version (flux_t h, int version)
 {
-    json_object *request = util_json_object_new_object ();
-    json_object *reply = NULL;
+    JSON in = Jnew ();
+    JSON out = NULL;
     int ret = -1;
- 
-    util_json_object_add_int (request, "rootseq", version);
-    reply = flux_rpc (h, request, "kvs.sync");
-    if (!reply)
+
+    Jadd_int (in, "rootseq", version);
+    if (flux_json_rpc (h, FLUX_NODEID_ANY, "kvs.sync", in, &out) < 0)
         goto done;
     ret = 0;
 done:
-    if (request)
-        json_object_put (request);
-    if (reply)
-        json_object_put (reply); 
+    Jput (in);
+    Jput (out);
     return ret;
 }
 
 int kvs_dropcache (flux_t h)
 {
-    json_object *request = util_json_object_new_object ();
-    json_object *reply = NULL;
+    JSON in = Jnew ();
     int ret = -1;
- 
-    reply = flux_rpc (h, request, "kvs.dropcache");
-    if (!reply && errno > 0)
+
+    if (flux_json_rpc (h, FLUX_NODEID_ANY, "kvs.dropcache", in, NULL) < 0)
         goto done;
-    if (reply) { 
-        errno = EPROTO;
-        goto done;
-    }
     ret = 0;
 done:
-    if (request)
-        json_object_put (request);
-    if (reply)
-        json_object_put (reply); 
+    Jput (in);
     return ret;
 }
 
