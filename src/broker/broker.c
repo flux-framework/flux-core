@@ -1071,7 +1071,7 @@ done:
     return rc;
 }
 
-static int cmb_getrusage_cb (zmsg_t **zmsg, void *arg)
+static int cmb_rusage_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     JSON out = NULL;
@@ -1348,7 +1348,7 @@ static void broker_add_services (ctx_t *ctx)
 {
     if (!svc_add (ctx->services, "cmb.info", cmb_info_cb, ctx)
           || !svc_add (ctx->services, "cmb.getattr", cmb_getattr_cb, ctx)
-          || !svc_add (ctx->services, "cmb.getrusage", cmb_getrusage_cb, ctx)
+          || !svc_add (ctx->services, "cmb.rusage", cmb_rusage_cb, ctx)
           || !svc_add (ctx->services, "cmb.rmmod", cmb_rmmod_cb, ctx)
           || !svc_add (ctx->services, "cmb.insmod", cmb_insmod_cb, ctx)
           || !svc_add (ctx->services, "cmb.lsmod", cmb_lsmod_cb, ctx)
