@@ -157,20 +157,6 @@ int flux_msg_get_type (zmsg_t *zmsg, int *type);
 const char *flux_msgtype_string (int typemask);
 const char *flux_msgtype_shortstr (int typemask);
 
-/**
- ** Deprecated interfaces.
- **/
-
-char *flux_msg_nexthop (zmsg_t *zmsg);
-char *flux_msg_sender (zmsg_t *zmsg);
-int flux_msg_hopcount (zmsg_t *zmsg);
-char *flux_msg_tag (zmsg_t *zmsg);
-char *flux_msg_tag_short (zmsg_t *zmsg);
-int flux_msg_decode (zmsg_t *zmsg, char **topic, json_object **o);
-int flux_msg_replace_json (zmsg_t *zmsg, json_object *o);
-zmsg_t *flux_msg_encode (const char *topic, json_object *o);
-bool flux_msg_match (zmsg_t *msg, const char *topic);
-
 #endif /* !_FLUX_CORE_MESSAGE_H */
 
 /*

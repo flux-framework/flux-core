@@ -2,88 +2,6 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/shortjson.h"
 
-/* flux_msg_encode, flux_msg_decode, flux_msg_match
- *   on message with no JSON frame
- */
-void check_legacy_encode (void)
-{
-    zmsg_t *zmsg;
-    JSON o = NULL;
-    char *s = NULL;
-
-    errno = 0;
-    ok (!(zmsg = flux_msg_encode (NULL, NULL)) && errno == EINVAL,
-        "flux_msg_encode with NULL topic fails with errno == EINVAL");
-    zmsg_destroy (&zmsg);
-
-    errno = 0;
-    ok ((zmsg = flux_msg_encode ("foo", NULL)) && errno == 0
-                                               && zmsg_size (zmsg) == 2,
-        "flux_msg_encode with NULL json works");
-
-    errno = 0;
-    ok ((   !flux_msg_match (zmsg, "f") && errno == 0
-            && flux_msg_match (zmsg, "foo") && errno == 0
-            && !flux_msg_match (zmsg, "foobar") && errno == 0),
-        "flux_msg_match works");
-
-    o = (JSON)&o; // make it non-NULL
-    errno = 0;
-    ok ((flux_msg_decode (zmsg, &s, &o) == 0 && errno == 0
-                                             && s != NULL && o == NULL),
-        "flux_msg_decode works");
-    like (s, "foo",
-        "and returned topic we encoded");
-    free (s);
-    zmsg_destroy (&zmsg);
-}
-
-/* flux_msg_encode, flux_msg_decode, flux_msg_tag, flux_msg_tag_short
- *   on message with JSON
- */
-void check_legacy_encode_json (void)
-{
-    JSON o;
-    zmsg_t *zmsg;
-    char *s;
-    int i;
-
-    o = Jnew ();
-    Jadd_int (o, "x", 42);
-    errno = 0;
-    ok ((zmsg = flux_msg_encode ("a.b.c.d", o)) && errno == 0
-                                                && zmsg_size (zmsg) == 3,
-        "flux_msg_encode with JSON works");
-    Jput (o);
-
-    s = NULL;
-    o = NULL;
-    errno = 0;
-    ok (flux_msg_decode (zmsg, &s, &o) == 0 && errno == 0 && o && s,
-        "flux_msg_decode works");
-    ok (Jget_int (o, "x", &i) && i == 42,
-        "flux_msg_decode returned JSON we encoded");
-    Jput (o);
-    like (s, "a.b.c.d",
-        "flux_msg_decode returned topic string we encoded");
-    free (s);
-
-    errno = 0;
-    ok ((s = flux_msg_tag (zmsg)) != NULL && errno == 0,
-        "flux_msg_tag works");
-    like (s, "a.b.c.d",
-        "flux_msg_tag returned topic string we encoded");
-    free (s);
-
-    errno = 0;
-    ok ((s = flux_msg_tag_short (zmsg)) != NULL && errno == 0,
-        "flux_msg_tag_short works");
-    like (s, "a",
-        "flux_msg_tag_short returned first word of topic string");
-    free (s);
-    zmsg_destroy (&zmsg);
-}
-
 /* flux_msg_get_route_first, flux_msg_get_route_last, _get_route_count
  *   on message with variable number of routing frames
  */
@@ -292,41 +210,6 @@ void check_payload (void)
     zmsg_destroy (&zmsg);
 }
 
-/* flux_msg_replace_json
- *   on message with and without JSON frame
- */
-void check_legacy_replace_json (void)
-{
-    zmsg_t *zmsg;
-    JSON o;
-    int i;
-
-    ok ((zmsg = flux_msg_encode ("baz", NULL)) != NULL && zmsg_size (zmsg) == 2,
-        "flux_msg_encode with topic string works");
-    o = Jnew ();
-    Jadd_int (o, "x", 2);
-    ok (flux_msg_replace_json (zmsg, o) == 0 && zmsg_size (zmsg) == 3,
-        "flux_msg_replace_json works on json-less message");
-    zmsg_destroy (&zmsg);
-
-    ok ((zmsg = flux_msg_encode ("baz", o)) != NULL && zmsg_size (zmsg) == 3,
-        "flux_msg_encode works with topic string and JSON");
-    Jput (o);
-
-    o = Jnew ();
-    Jadd_int (o, "y", 3);
-    ok (flux_msg_replace_json (zmsg, o) == 0 && zmsg_size (zmsg) == 3,
-        "flux_msg_replace_json works json-ful message");
-    Jput (o);
-    ok (flux_msg_decode (zmsg, NULL, &o) == 0 && o != NULL,
-        "flux_msg_decode works");
-    ok (Jget_int (o, "y", &i) && i == 3,
-        "flux_msg_decode returned replaced json");
-    Jput (o);
-
-    zmsg_destroy (&zmsg);
-}
-
 /* flux_msg_set_type, flux_msg_get_type
  * flux_msg_set_nodeid, flux_msg_get_nodeid
  * flux_msg_set_errnum, flux_msg_get_errnum
@@ -459,7 +342,7 @@ void check_cmp (void)
 
 int main (int argc, char *argv[])
 {
-    plan (109);
+    plan (90);
 
     lives_ok ({zmsg_test (false);}, // 1
         "zmsg_test doesn't assert");
@@ -469,10 +352,6 @@ int main (int argc, char *argv[])
     check_topic ();                 // 11
     check_payload ();               // 21
     check_matchtag ();              // 6
-
-    check_legacy_encode ();         // 5
-    check_legacy_encode_json ();    // 8
-    check_legacy_replace_json ();   // 6
 
     check_cmp ();                   // 8
 

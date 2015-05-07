@@ -143,8 +143,9 @@ static unsigned long lwj_next_id (flux_t h)
         ret = increment_jobid (h);
     else {
         json_object *na = json_object_new_object ();
-        json_object *o = flux_rpc (h, na, "job.next-id");
-        if (util_json_object_get_int64 (o, "id", (int64_t *) &ret) < 0) {
+        json_object *o = NULL;
+        if (flux_json_rpc (h, FLUX_NODEID_ANY, "job.next-id", na, &o) < 0
+                || util_json_object_get_int64 (o, "id", (int64_t *) &ret) < 0) {
             err ("lwj_next_id: Bad object!");
             ret = 0;
         }
@@ -208,8 +209,9 @@ static int wait_for_lwj_watch_init (flux_t h, int64_t id)
     rpc_o = util_json_object_new_object ();
     util_json_object_add_string (rpc_o, "key", "lwj.next-id");
     util_json_object_add_int64 (rpc_o, "val", id);
-    rpc_resp = flux_rpc (h, rpc_o, "sim_sched.lwj-watch");
+    flux_json_rpc (h, FLUX_NODEID_ANY, "sim_sched.lwj-watch", rpc_o, &rpc_resp);
     util_json_object_get_int (rpc_resp, "rc", &rc);
+done:
     json_object_put (rpc_resp);
     json_object_put (rpc_o);
     return rc;
@@ -219,9 +221,11 @@ static int wait_for_lwj_watch_init (flux_t h, int64_t id)
 static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     json_object *o = NULL;
-    char *tag;
+    char *tag = NULL;
 
-    if (flux_msg_decode (*zmsg, &tag, &o) >= 0) {
+    if (flux_msg_get_topic (*zmsg, &tag) < 0)
+        goto out;
+    if (flux_msg_get_payload_json (*zmsg, &o) >= 0) {
         if (strcmp (tag, "job.shutdown") == 0) {
             flux_reactor_stop (h);
         }
@@ -229,12 +233,13 @@ static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             if (flux_treeroot (h)) {
                 unsigned long id = lwj_next_id (h);
                 json_object *ox = json_id (id);
-                flux_respond (h, zmsg, ox);
+                flux_json_respond (h, ox, zmsg);
                 json_object_put (o);
             }
             else {
                 fprintf (stderr, "%s: forwarding request\n", tag);
-                flux_request_send (h, o, tag);
+                flux_json_request (h, FLUX_NODEID_ANY,
+                                      FLUX_MATCHTAG_NONE, tag, o);
             }
         }
         if (strcmp (tag, "job.create") == 0) {
@@ -243,13 +248,13 @@ static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 #if SIMULATOR_RACE_WORKAROUND
             //"Fix" for Race Condition
             if (wait_for_lwj_watch_init (h, id) < 0) {
-                flux_respond_errnum (h, zmsg, errno);
+                flux_err_respond (h, errno, zmsg);
                 goto out;
             }
 #endif
             int rc = kvs_job_new (h, id);
             if (rc < 0) {
-                flux_respond_errnum (h, zmsg, errno);
+                flux_err_respond (h, errno, zmsg);
                 goto out;
             }
             add_jobinfo (h, id, o);
@@ -259,7 +264,7 @@ static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             /* Generate reply with new jobid */
             jobinfo = util_json_object_new_object ();
             util_json_object_add_int64 (jobinfo, "jobid", id);
-            flux_respond (h, zmsg, jobinfo);
+            flux_json_respond (h, jobinfo, zmsg);
             json_object_put (jobinfo);
         }
     }
@@ -267,6 +272,8 @@ static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 out:
     if (o)
         json_object_put (o);
+    if (tag)
+        free (tag);
     zmsg_destroy (zmsg);
     return 0;
 }

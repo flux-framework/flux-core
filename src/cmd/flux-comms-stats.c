@@ -58,6 +58,7 @@ void usage (void)
 "Usage: flux-comms-stats [--scale N] [--type int|double] --parse a[.b]... name\n"
 "       flux-comms-stats --clear-all name\n"
 "       flux-comms-stats --clear name\n"
+"       flux-comms-stats --rusage name\n"
 );
     exit (1);
 }

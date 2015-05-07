@@ -174,35 +174,6 @@ done:
     return rc;
 }
 
-/**
- ** Deprecated functions.
- */
-
-int flux_respond (flux_t h, zmsg_t **zmsg, JSON o)
-{
-    return flux_json_respond (h, o, zmsg);
-}
-
-int flux_respond_errnum (flux_t h, zmsg_t **zmsg, int errnum)
-{
-    return flux_err_respond (h, errnum, zmsg);
-}
-
-int flux_request_send (flux_t h, JSON o, const char *fmt, ...)
-{
-    va_list ap;
-    char *topic;
-    int rc;
-
-    va_start (ap, fmt);
-    topic = xvasprintf (fmt, ap);
-    va_end (ap);
-
-    rc = flux_json_request (h, FLUX_NODEID_ANY, FLUX_MATCHTAG_NONE, topic, o);
-    free (topic);
-    return rc;
-}
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

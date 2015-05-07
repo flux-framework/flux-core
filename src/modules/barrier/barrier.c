@@ -164,8 +164,8 @@ static int enter_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     const char *name;
     int count, nprocs, hopcount;
 
-    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
-     || !(sender = flux_msg_sender (*zmsg))
+    if (flux_json_request_decode (*zmsg, &o) < 0
+     || flux_msg_get_route_first (*zmsg, &sender) < 0
      || util_json_object_get_string (o, "name", &name) < 0
      || util_json_object_get_int (o, "count", &count) < 0
      || util_json_object_get_int (o, "nprocs", &nprocs) < 0) {
@@ -181,7 +181,7 @@ static int enter_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
      */
     if (util_json_object_get_int (o, "hopcount", &hopcount) < 0) {
         if (barrier_add_client (b, sender, zmsg) < 0) {
-            flux_respond_errnum (ctx->h, zmsg, EEXIST);
+            flux_err_respond (ctx->h, EEXIST, zmsg);
             flux_log (ctx->h, LOG_ERR,
                         "abort %s due to double entry by client %s",
                         name, sender);
@@ -237,12 +237,13 @@ static int disconnect_request_cb (flux_t h, int typemask, zmsg_t **zmsg,
                                   void *arg)
 {
     ctx_t *ctx = arg;
-    char *sender = flux_msg_sender (*zmsg);
+    char *sender;
 
-    if (sender) {
-        zhash_foreach (ctx->barriers, disconnect, sender);
-        free (sender);
-    }
+    if (flux_msg_get_route_first (*zmsg, &sender) < 0)
+        goto done;
+    zhash_foreach (ctx->barriers, disconnect, sender);
+    free (sender);
+done:
     zmsg_destroy (zmsg);
     return 0;
 }
@@ -255,7 +256,7 @@ static int send_enter_response (const char *key, void *item, void *arg)
 
     if (!(cpy = zmsg_dup (zmsg)))
         oom ();
-    flux_respond_errnum (b->ctx->h, &cpy, b->errnum);
+    flux_err_respond (b->ctx->h, b->errnum, &cpy);
     return 0;
 }
 
@@ -279,7 +280,7 @@ static int exit_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     const char *name;
     int errnum;
 
-    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
+    if (flux_json_event_decode (*zmsg, &o) < 0
             || util_json_object_get_string (o, "name", &name) < 0
             || util_json_object_get_int (o, "errnum", &errnum) < 0) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);

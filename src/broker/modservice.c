@@ -51,44 +51,40 @@
 
 #include "modservice.h"
 
+/* Route string will not include the endpoints.
+ * On arrival here, uuid of dst module has been stripped.
+ * The '1' arg to zdump_routestr strips the uuid of the sender.
+ * FIXME: t/lua/t0002-rpc.t tries to ping with an array object.
+ * This should be caught at a lower level - see issue #181
+ */
 static int ping_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
-    json_object *o = NULL;
+    JSON in = NULL;
     char *s = NULL;
-    int rc = 0;
 
-    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL ||
-        !json_object_is_type (o, json_type_object)) {
+    if (flux_json_request_decode (*zmsg, &in) < 0
+         || !json_object_is_type (in, json_type_object)) { // see FIXME above
         flux_err_respond (h, EPROTO, zmsg);
-        goto done; /* reactor continues */
+        goto done;
     }
-
-    /* Route string will not include the endpoints.
-     * On arrival here, uuid of dst module has been stripped.
-     * The '1' arg to zdump_routestr strips the uuid of the sender.
-     */
     s = zdump_routestr (*zmsg, 1);
-    util_json_object_add_string (o, "route", s);
-    if (flux_respond (h, zmsg, o) < 0) {
-        err ("%s: flux_respond", __FUNCTION__);
-        rc = -1; /* reactor terminates */
+    Jadd_str (in, "route", s);
+    if (flux_json_respond (h, in, zmsg) < 0) {
+        err ("%s: flux_json_respond", __FUNCTION__);
         goto done;
     }
 done:
-    if (o)
-        json_object_put (o);
+    Jput (in);
+    zmsg_destroy (zmsg);
     if (s)
         free (s);
-    if (*zmsg)
-        zmsg_destroy (zmsg);
-    return rc;
+    return 0;
 }
 
 static int stats_get_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     flux_msgcounters_t mcs;
     JSON out = Jnew ();
-    int rc = -1;
 
     flux_get_msgcounters (h, &mcs);
     Jadd_int (out, "#request (tx)", mcs.request_tx);
@@ -100,67 +96,50 @@ static int stats_get_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     Jadd_int (out, "#keepalive (tx)", mcs.keepalive_tx);
     Jadd_int (out, "#keepalive (rx)", mcs.keepalive_rx);
 
-    if (flux_json_respond (h, out, zmsg) < 0) {
+    if (flux_json_respond (h, out, zmsg) < 0)
         flux_log (h, LOG_ERR, "%s: flux_json_respond: %s", __FUNCTION__,
                   strerror (errno));
-        goto done;
-    }
-    rc = 0;
-done:
     Jput (out);
     zmsg_destroy (zmsg);
-    return rc;
+    return 0;
 }
 
-static int stats_clear_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static int stats_clear_event_cb (flux_t h, int typemask, zmsg_t **zmsg,
+                                 void *arg)
 {
-    int rc = -1;
-
     flux_clr_msgcounters (h);
-
-    if (typemask & FLUX_MSGTYPE_REQUEST) {
-        if (flux_err_respond (h, 0, zmsg) < 0) {
-            flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                      strerror (errno));
-            goto done;
-        }
-    }
-    rc = 0;
-done:
     zmsg_destroy (zmsg);
-    return rc;
+    return 0;
+}
+
+static int stats_clear_request_cb (flux_t h, int typemask, zmsg_t **zmsg,
+                                   void *arg)
+{
+    flux_clr_msgcounters (h);
+    if (flux_err_respond (h, 0, zmsg) < 0)
+        flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
+                  strerror (errno));
+    zmsg_destroy (zmsg);
+    return 0;
 }
 
 static int rusage_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
-    json_object *response = NULL;
-    int rc = 0;
+    JSON out = NULL;
     struct rusage usage;
 
-    if (flux_msg_decode (*zmsg, NULL, NULL) < 0) {
-        flux_log (h, LOG_ERR, "%s: error decoding message", __FUNCTION__);
-        goto done;
-    }
     if (getrusage (RUSAGE_THREAD, &usage) < 0) {
-        if (flux_respond_errnum (h, zmsg, errno) < 0) {
-            err ("%s: flux_respond_errnum", __FUNCTION__);
-            rc = -1;
-            goto done;
-        }
+        if (flux_err_respond (h, errno, zmsg) < 0)
+            err ("%s: flux_err_respond", __FUNCTION__);
         goto done;
     }
-    response = rusage_to_json (&usage);
-    if (flux_respond (h, zmsg, response) < 0) {
-        err ("%s: flux_respond", __FUNCTION__);
-        rc = -1;
-        goto done;
-    }
+    out = rusage_to_json (&usage);
+    if (flux_json_respond (h, out, zmsg) < 0)
+        err ("%s: flux_json_respond", __FUNCTION__);
 done:
-    if (response)
-        json_object_put (response);
-    if (*zmsg)
-        zmsg_destroy (zmsg);
-    return rc;
+    Jput (out);
+    zmsg_destroy (zmsg);
+    return 0;
 }
 
 static int shutdown_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
@@ -195,10 +174,10 @@ void modservice_register (flux_t h, const char *name)
     register_request (h, name, "shutdown", shutdown_cb);
     register_request (h, name, "ping", ping_req_cb);
     register_request (h, name, "stats.get", stats_get_cb);
-    register_request (h, name, "stats.clear", stats_clear_cb);
+    register_request (h, name, "stats.clear", stats_clear_request_cb);
     register_request (h, name, "rusage", rusage_cb);
 
-    register_event   (h, name, "stats.clear", stats_clear_cb);
+    register_event   (h, name, "stats.clear", stats_clear_event_cb);
 }
 
 /*

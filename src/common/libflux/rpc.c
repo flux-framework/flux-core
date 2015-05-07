@@ -182,13 +182,9 @@ int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
     }
     if (flux_msg_get_payload_json (zmsg, &o) < 0)
         goto done;
-    /* In order to support flux_rpc(), which in turn must support no-payload
-     * responses, this cannot be an error yet.
-     */
     if ((!o && out)) {
-        *out = NULL;
-        //errno = EPROTO;
-        //goto done;
+        errno = EPROTO;
+        goto done;
     }
     if ((o && !out)) {
         Jput (o);
@@ -203,26 +199,6 @@ done:
         flux_matchtag_free (h, match.matchtag, match.bsize);
     zmsg_destroy (&zmsg);
     return rc;
-}
-
-/**
- ** Deprecated functions.
- */
-
-JSON flux_rpc (flux_t h, JSON o, const char *fmt, ...)
-{
-    va_list ap;
-    JSON out;
-    char *topic;
-    int rc;
-
-    va_start (ap, fmt);
-    topic = xvasprintf (fmt, ap);
-    va_end (ap);
-
-    rc = flux_json_rpc (h, FLUX_NODEID_ANY, topic, o, &out);
-    free (topic);
-    return rc < 0 ? NULL : out;
 }
 
 /*

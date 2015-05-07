@@ -38,8 +38,8 @@ static int mecho_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     json_object *inarg = NULL;
     flux_mrpc_t f = NULL;
 
-    if (flux_msg_decode (*zmsg, NULL, &request) < 0) {
-        flux_log (h, LOG_ERR, "flux_msg_decode: %s", strerror (errno));
+    if (flux_json_event_decode (*zmsg, &request) < 0) {
+        flux_log (h, LOG_ERR, "flux_json_event_decode: %s", strerror (errno));
         goto done;
     }
     if (!request) {

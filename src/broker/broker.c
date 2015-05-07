@@ -952,10 +952,8 @@ static int cmb_exec_cb (zmsg_t **zmsg, void *arg)
     int i, argc;
     int rc = -1;
 
-    if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
-        errno = EPROTO;
-        return -1;
-    }
+    if (flux_json_request_decode (*zmsg, &request) < 0)
+        goto out_free;
 
     if (!json_object_object_get_ex (request, "cmdline", &o)
         || o == NULL
@@ -1071,7 +1069,7 @@ done:
     return rc;
 }
 
-static int cmb_getrusage_cb (zmsg_t **zmsg, void *arg)
+static int cmb_rusage_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     JSON out = NULL;
@@ -1348,7 +1346,7 @@ static void broker_add_services (ctx_t *ctx)
 {
     if (!svc_add (ctx->services, "cmb.info", cmb_info_cb, ctx)
           || !svc_add (ctx->services, "cmb.getattr", cmb_getattr_cb, ctx)
-          || !svc_add (ctx->services, "cmb.getrusage", cmb_getrusage_cb, ctx)
+          || !svc_add (ctx->services, "cmb.rusage", cmb_rusage_cb, ctx)
           || !svc_add (ctx->services, "cmb.rmmod", cmb_rmmod_cb, ctx)
           || !svc_add (ctx->services, "cmb.insmod", cmb_insmod_cb, ctx)
           || !svc_add (ctx->services, "cmb.lsmod", cmb_lsmod_cb, ctx)
@@ -1400,7 +1398,7 @@ static void child_cb (overlay_t ov, void *sock, void *arg)
         case FLUX_MSGTYPE_REQUEST:
             rc = flux_sendmsg (ctx->h, &zmsg);
             if (zmsg)
-                flux_respond_errnum (ctx->h, &zmsg, rc < 0 ? errno : 0);
+                flux_err_respond (ctx->h, rc < 0 ? errno : 0, &zmsg);
             break;
         case FLUX_MSGTYPE_EVENT:
             rc = flux_sendmsg (ctx->h, &zmsg);
@@ -1521,7 +1519,7 @@ static void module_cb (module_t p, void *arg)
         case FLUX_MSGTYPE_REQUEST:
             rc = flux_sendmsg (ctx->h, &zmsg);
             if (zmsg)
-                flux_respond_errnum (ctx->h, &zmsg, rc < 0 ? errno : 0);
+                flux_err_respond (ctx->h, rc < 0 ? errno : 0, &zmsg);
             break;
         case FLUX_MSGTYPE_EVENT:
             if (flux_sendmsg (ctx->h, &zmsg) < 0) {
@@ -1546,8 +1544,8 @@ static void rmmod_cb (module_t p, void *arg)
     zmsg_t *zmsg;
 
     while ((zmsg = module_pop_rmmod (p))) {
-        if (flux_respond_errnum (ctx->h, &zmsg, 0) < 0)
-            err ("%s: flux_respond_errnum", __FUNCTION__);
+        if (flux_err_respond (ctx->h, 0, &zmsg) < 0)
+            err ("%s: flux_err_respond", __FUNCTION__);
         zmsg_destroy (&zmsg);
     }
 }

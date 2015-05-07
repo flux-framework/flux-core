@@ -391,14 +391,6 @@ static char * ctime_iso8601_now (char *buf, size_t sz)
 /*
  *  Send a message to rexec plugin
  */
-int rexec_send_msg (struct prog_ctx *ctx, char *tag, json_object *o)
-{
-    zmsg_t *zmsg = flux_msg_encode (tag, o);
-    if (!zmsg)
-        return (-1);
-    zmsg_dump (zmsg);
-    return zmsg_send (&zmsg, ctx->zs_req);
-}
 
 static int get_executable_path (char *buf, size_t len)
 {
@@ -1453,19 +1445,23 @@ int signal_cb (flux_t f, int fd, short revents, struct prog_ctx *ctx)
 
 int cmb_cb (flux_t f, void *zs, short revents, struct prog_ctx *ctx)
 {
-    char *tag;
-    json_object *o;
+    char *tag = NULL;
+    json_object *o = NULL;
 
     zmsg_t *zmsg = zmsg_recv (zs);
     if (!zmsg) {
         log_msg (ctx, "rexec_cb: no msg to recv!");
-        return (0);
+        goto done;
     }
     free (zmsg_popstr (zmsg)); /* Destroy dealer id */
 
-    if (flux_msg_decode (zmsg, &tag, &o) < 0) {
-        log_err (ctx, "cmb_msg_decode");
-        return (0);
+    if (flux_msg_get_topic (zmsg, &tag) < 0) {
+        log_err (ctx, "flux_msg_get_topic");
+        goto done;
+    }
+    if (flux_msg_get_payload_json (zmsg, &o) < 0) {
+        log_err (ctx, "flux_msg_get_payload_json");
+        goto done;
     }
 
     /* Got an incoming message from cmbd */
@@ -1476,8 +1472,12 @@ int cmb_cb (flux_t f, void *zs, short revents, struct prog_ctx *ctx)
         log_msg (ctx, "Killing jobid %lu with signal %d", ctx->id, sig);
         prog_ctx_signal (ctx, sig);
     }
+done:
     zmsg_destroy (&zmsg);
-    json_object_put (o);
+    if (o)
+        json_object_put (o);
+    if (tag)
+        free (tag);
     return (0);
 }
 

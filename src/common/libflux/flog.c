@@ -156,7 +156,8 @@ int flux_vlog (flux_t h, int lev, const char *fmt, va_list ap)
     } else {
         if (!(o = flog_encode (&flog)))
             goto done;
-        rc = flux_request_send (h, o, "cmb.log");
+        rc = flux_json_request (h, FLUX_NODEID_ANY,
+                                   FLUX_MATCHTAG_NONE, "cmb.log", o);
     }
 done:
     if (s)
@@ -182,7 +183,7 @@ int flux_log_zmsg (zmsg_t *zmsg)
     flog_t f;
     int rc = -1;
 
-    if (flux_msg_decode (zmsg, NULL, &o) < 0 || !o || flog_decode (o, &f) < 0){
+    if (flux_json_request_decode (zmsg, &o) < 0 || flog_decode (o, &f) < 0) {
         errno = EPROTO;
         goto done;
     }
