@@ -76,7 +76,9 @@ int flux_event_recv (flux_t h, json_object **in, char **topic, bool nb)
 
     if (!(zmsg = flux_recvmsg_match (h, match, NULL, nb)))
         goto done;
-    if (flux_msg_decode (zmsg, topic, in) < 0)
+    if (flux_msg_get_topic (zmsg, topic) < 0)
+        goto done;
+    if (flux_msg_get_payload_json (zmsg, in) < 0)
         goto done;
     rc = 0;
 done:

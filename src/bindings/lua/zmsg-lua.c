@@ -58,7 +58,12 @@ struct zmsg_info * zmsg_info_create (zmsg_t **zmsg, int typemask)
     if (zi == NULL)
         return (NULL);
 
-    if (flux_msg_decode (*zmsg, &zi->tag, &zi->o) < 0) {
+    if (flux_msg_get_topic (*zmsg, &zi->tag) < 0) {
+        free (zi);
+        return (NULL);
+    }
+    if (flux_msg_get_payload_json (*zmsg, &zi->o) < 0) {
+        free (zi->tag);
         free (zi);
         return (NULL);
     }

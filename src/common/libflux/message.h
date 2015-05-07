@@ -157,12 +157,6 @@ int flux_msg_get_type (zmsg_t *zmsg, int *type);
 const char *flux_msgtype_string (int typemask);
 const char *flux_msgtype_shortstr (int typemask);
 
-/**
- ** Deprecated interfaces.
- **/
-
-int flux_msg_decode (zmsg_t *zmsg, char **topic, json_object **o);
-
 #endif /* !_FLUX_CORE_MESSAGE_H */
 
 /*

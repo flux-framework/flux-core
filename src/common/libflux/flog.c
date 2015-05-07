@@ -183,7 +183,7 @@ int flux_log_zmsg (zmsg_t *zmsg)
     flog_t f;
     int rc = -1;
 
-    if (flux_msg_decode (zmsg, NULL, &o) < 0 || !o || flog_decode (o, &f) < 0){
+    if (flux_json_request_decode (zmsg, &o) < 0 || flog_decode (o, &f) < 0) {
         errno = EPROTO;
         goto done;
     }

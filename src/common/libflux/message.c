@@ -893,43 +893,6 @@ const char *flux_msgtype_shortstr (int typemask)
     return "?";
 }
 
-/**
- ** Deprecated functions
- **/
-
-int flux_msg_decode (zmsg_t *zmsg, char **topic, json_object **o)
-{
-    struct json_tokener *tok = NULL;
-;
-    if (topic && flux_msg_get_topic (zmsg, topic) < 0) {
-        errno = 0;
-        *topic = NULL;
-    }
-    if (o) {
-        int size = 0;
-        char *buf = NULL;
-        int flags;
-        if (flux_msg_get_payload (zmsg, &flags, (void **)&buf, &size) < 0
-                || buf == NULL || size == 0 || !(flags & FLUX_MSGFLAG_JSON)) {
-            errno = 0;
-            *o = NULL;
-        } else {
-            if (!(tok = json_tokener_new ())) {
-                errno = ENOMEM;
-                goto done;
-            }
-            if (!(*o = json_tokener_parse_ex (tok, buf, size))) {
-                errno = EPROTO;
-                goto done;
-            }
-        }
-    }
-done:
-    if (tok)
-        json_tokener_free (tok);
-    return 0;
-}
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

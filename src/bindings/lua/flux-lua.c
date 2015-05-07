@@ -335,9 +335,10 @@ static int l_flux_recv (lua_State *L)
         return lua_pusherror (L, strerror (errno));
 
     if (flux_msg_get_errnum (zmsg, &errnum) < 0)
-        return lua_pusherror (L, "flux_msg_get_errnum: %s", strerror (errno));
+        return lua_pusherror (L, strerror (errno));
 
-    if (errnum == 0 && flux_msg_decode (zmsg, &tag, &o) < 0)
+    if (errnum == 0 && (flux_msg_get_topic (zmsg, &tag) < 0
+                     || flux_msg_get_payload_json (zmsg, &o) < 0))
         return lua_pusherror (L, strerror (errno));
 
     if (o != NULL) {

@@ -733,7 +733,7 @@ static int load_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     wait_t w = NULL;
     bool stall = false;
 
-    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
+    if (flux_json_request_decode (*zmsg, &o) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
@@ -767,7 +767,7 @@ static int load_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     json_object *o = NULL;
     json_object_iter iter;
 
-    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
+    if (flux_json_response_decode (*zmsg, &o) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
@@ -790,7 +790,7 @@ static int store_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     json_object_iter iter;
     href_t href;
 
-    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
+    if (flux_json_request_decode (*zmsg, &o) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
@@ -819,7 +819,7 @@ static int store_response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     json_object *o = NULL;
     json_object_iter iter;
 
-    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL) {
+    if (flux_json_response_decode (*zmsg, &o) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
@@ -888,7 +888,7 @@ static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     json_object *event = NULL;
 
-    if (flux_msg_decode (*zmsg, NULL, &event) < 0 || event == NULL
+    if (flux_json_event_decode (*zmsg, &event) < 0
                 || util_json_object_get_int (event, "epoch", &ctx->epoch) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
@@ -1565,7 +1565,7 @@ static int sync_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     json_object *response = NULL;
     int rootseq;
 
-    if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL
+    if (flux_json_request_decode (*zmsg, &request) < 0
                 || util_json_object_get_int (request, "rootseq", &rootseq) < 0){
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
@@ -1738,14 +1738,14 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     json_object *o = NULL;
-    char *tag = NULL;
+    char *topic = NULL;
     int rc = -1;
 
-    if (flux_msg_decode (*zmsg, &tag, NULL) < 0) {
+    if (flux_msg_get_topic (*zmsg, &topic) < 0) {
         flux_log (h, LOG_ERR, "%s: error decoding message", __FUNCTION__);
         goto done;
     }
-    if (fnmatch ("*.stats.get", tag, 0) == 0) {
+    if (fnmatch ("*.stats.get", topic, 0) == 0) {
         tstat_t ts;
         int size, incomplete, dirty;
 
@@ -1788,7 +1788,7 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             err ("%s: flux_json_respond", __FUNCTION__);
             goto done_stop;
         }
-    } else if (fnmatch ("*.stats.clear", tag, 0) == 0) {
+    } else if (fnmatch ("*.stats.clear", topic, 0) == 0) {
         memset (&ctx->stats, 0, sizeof (ctx->stats));
         if ((typemask & FLUX_MSGTYPE_REQUEST)) {
             if (flux_err_respond (h, 0, zmsg) < 0) {
@@ -1804,8 +1804,8 @@ done:       /* reactor continues */
 done_stop:  /* reactor terminates */
     if (o)
         json_object_put (o);
-    if (tag)
-        free (tag);
+    if (topic)
+        free (topic);
     return rc;
 }
 

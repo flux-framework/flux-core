@@ -952,10 +952,8 @@ static int cmb_exec_cb (zmsg_t **zmsg, void *arg)
     int i, argc;
     int rc = -1;
 
-    if (flux_msg_decode (*zmsg, NULL, &request) < 0 || request == NULL) {
-        errno = EPROTO;
-        return -1;
-    }
+    if (flux_json_request_decode (*zmsg, &request) < 0)
+        goto out_free;
 
     if (!json_object_object_get_ex (request, "cmdline", &o)
         || o == NULL

@@ -221,9 +221,11 @@ done:
 static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     json_object *o = NULL;
-    char *tag;
+    char *tag = NULL;
 
-    if (flux_msg_decode (*zmsg, &tag, &o) >= 0) {
+    if (flux_msg_get_topic (*zmsg, &tag) < 0)
+        goto out;
+    if (flux_msg_get_payload_json (*zmsg, &o) >= 0) {
         if (strcmp (tag, "job.shutdown") == 0) {
             flux_reactor_stop (h);
         }
@@ -270,6 +272,8 @@ static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 out:
     if (o)
         json_object_put (o);
+    if (tag)
+        free (tag);
     zmsg_destroy (zmsg);
     return 0;
 }

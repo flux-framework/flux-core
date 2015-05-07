@@ -164,7 +164,7 @@ static int enter_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     const char *name;
     int count, nprocs, hopcount;
 
-    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
+    if (flux_json_request_decode (*zmsg, &o) < 0
      || flux_msg_get_route_first (*zmsg, &sender) < 0
      || util_json_object_get_string (o, "name", &name) < 0
      || util_json_object_get_int (o, "count", &count) < 0
@@ -280,7 +280,7 @@ static int exit_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     const char *name;
     int errnum;
 
-    if (flux_msg_decode (*zmsg, NULL, &o) < 0 || o == NULL
+    if (flux_json_event_decode (*zmsg, &o) < 0
             || util_json_object_get_string (o, "name", &name) < 0
             || util_json_object_get_int (o, "errnum", &errnum) < 0) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);

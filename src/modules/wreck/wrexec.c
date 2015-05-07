@@ -420,8 +420,10 @@ static int mrpc_handler (struct rexec_ctx *ctx, zmsg_t *zmsg)
     flux_t f = ctx->h;
     flux_mrpc_t mrpc;
 
-    flux_msg_decode (zmsg, NULL, &request);
-
+    if (flux_json_event_decode (zmsg, &request) < 0) {
+        flux_log (f, LOG_ERR, "flux_json_event_decode: %s", strerror (errno));
+        return (0);
+    }
     mrpc = flux_mrpc_create_fromevent (f, request);
     if (mrpc == NULL) {
         if (errno != EINVAL) /* EINVAL == not addressed to me */
@@ -525,19 +527,25 @@ done:
 static int request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     struct rexec_ctx *ctx = arg;
-    json_object *o;
-    char *tag;
+    json_object *o = NULL;
+    char *tag = NULL;
 
-    if (flux_msg_decode (*zmsg, &tag, &o) >= 0) {
-        if (!strcmp (tag, "wrexec.shutdown")) {
-            flux_reactor_stop (h);
-            return 0;
-        }
-        msg ("forwarding %s to session", tag);
-        fwd_to_session (ctx, zmsg, o);
+    if (flux_msg_get_topic (*zmsg, &tag) < 0)
+        goto done;
+    if (!strcmp (tag, "wrexec.shutdown")) {
+        flux_reactor_stop (h);
+        return 0;
     }
-    if (*zmsg)
-        zmsg_destroy (zmsg);
+    if (flux_msg_get_payload_json (*zmsg, &o) < 0)
+        goto done;
+    msg ("forwarding %s to session", tag);
+    fwd_to_session (ctx, zmsg, o);
+done:
+    zmsg_destroy (zmsg);
+    if (tag)
+        free (tag);
+    if (o)
+        json_object_put (o);
     return 0;
 }
 
