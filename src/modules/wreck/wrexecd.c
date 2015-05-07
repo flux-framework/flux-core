@@ -391,14 +391,6 @@ static char * ctime_iso8601_now (char *buf, size_t sz)
 /*
  *  Send a message to rexec plugin
  */
-int rexec_send_msg (struct prog_ctx *ctx, char *tag, json_object *o)
-{
-    zmsg_t *zmsg = flux_msg_encode (tag, o);
-    if (!zmsg)
-        return (-1);
-    zmsg_dump (zmsg);
-    return zmsg_send (&zmsg, ctx->zs_req);
-}
 
 static int get_executable_path (char *buf, size_t len)
 {

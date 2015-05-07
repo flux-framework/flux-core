@@ -210,41 +210,6 @@ void check_payload (void)
     zmsg_destroy (&zmsg);
 }
 
-/* flux_msg_replace_json
- *   on message with and without JSON frame
- */
-void check_legacy_replace_json (void)
-{
-    zmsg_t *zmsg;
-    JSON o;
-    int i;
-
-    ok ((zmsg = flux_msg_encode ("baz", NULL)) != NULL && zmsg_size (zmsg) == 2,
-        "flux_msg_encode with topic string works");
-    o = Jnew ();
-    Jadd_int (o, "x", 2);
-    ok (flux_msg_replace_json (zmsg, o) == 0 && zmsg_size (zmsg) == 3,
-        "flux_msg_replace_json works on json-less message");
-    zmsg_destroy (&zmsg);
-
-    ok ((zmsg = flux_msg_encode ("baz", o)) != NULL && zmsg_size (zmsg) == 3,
-        "flux_msg_encode works with topic string and JSON");
-    Jput (o);
-
-    o = Jnew ();
-    Jadd_int (o, "y", 3);
-    ok (flux_msg_replace_json (zmsg, o) == 0 && zmsg_size (zmsg) == 3,
-        "flux_msg_replace_json works json-ful message");
-    Jput (o);
-    ok (flux_msg_decode (zmsg, NULL, &o) == 0 && o != NULL,
-        "flux_msg_decode works");
-    ok (Jget_int (o, "y", &i) && i == 3,
-        "flux_msg_decode returned replaced json");
-    Jput (o);
-
-    zmsg_destroy (&zmsg);
-}
-
 /* flux_msg_set_type, flux_msg_get_type
  * flux_msg_set_nodeid, flux_msg_get_nodeid
  * flux_msg_set_errnum, flux_msg_get_errnum
@@ -377,7 +342,7 @@ void check_cmp (void)
 
 int main (int argc, char *argv[])
 {
-    plan (96);
+    plan (90);
 
     lives_ok ({zmsg_test (false);}, // 1
         "zmsg_test doesn't assert");
@@ -387,8 +352,6 @@ int main (int argc, char *argv[])
     check_topic ();                 // 11
     check_payload ();               // 21
     check_matchtag ();              // 6
-
-    check_legacy_replace_json ();   // 6
 
     check_cmp ();                   // 8
 

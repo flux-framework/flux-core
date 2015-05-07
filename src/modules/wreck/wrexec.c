@@ -371,17 +371,25 @@ static int64_t id_from_tag (const char *tag, char **endp)
 
 static int rexec_session_kill (struct rexec_session *s, int sig)
 {
-    int rc;
+    int rc = -1;
     json_object *o = json_object_new_int (sig);
-    zmsg_t * zmsg = flux_msg_encode ("wrexec.kill", o);
+    zmsg_t * zmsg = NULL;
+
+    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
+        goto done;
+    if (flux_msg_set_topic (zmsg, "wrexec.kill") < 0)
+        goto done;
+    if (flux_msg_set_payload_json (zmsg, o) < 0)
+        goto done;
 
     zmsg_dump (zmsg);
 
     rc = zmsg_send (&zmsg, s->zs_req);
     if (rc < 0)
         err ("zmsg_send failed");
-
+done:
     json_object_put (o);
+    zmsg_destroy (&zmsg);
     return (rc);
 }
 

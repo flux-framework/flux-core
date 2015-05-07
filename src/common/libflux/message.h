@@ -162,8 +162,6 @@ const char *flux_msgtype_shortstr (int typemask);
  **/
 
 int flux_msg_decode (zmsg_t *zmsg, char **topic, json_object **o);
-int flux_msg_replace_json (zmsg_t *zmsg, json_object *o);
-zmsg_t *flux_msg_encode (const char *topic, json_object *o);
 
 #endif /* !_FLUX_CORE_MESSAGE_H */
 

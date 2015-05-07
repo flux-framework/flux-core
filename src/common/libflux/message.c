@@ -930,38 +930,6 @@ done:
     return 0;
 }
 
-int flux_msg_replace_json (zmsg_t *zmsg, json_object *o)
-{
-    const char *s = NULL;
-    int flags = 0;
-
-    if (o) {
-        if (!(s = json_object_to_json_string (o))) {
-            errno = EINVAL; /* not really sure if this can happen */
-            return -1;
-        }
-        flags |= FLUX_MSGFLAG_JSON;
-    }
-    return flux_msg_set_payload (zmsg, flags, (char *)s, strlen (s));
-}
-
-zmsg_t *flux_msg_encode (const char *topic, json_object *o)
-{
-    zmsg_t *zmsg;
-
-    if (!topic) {
-        errno = EINVAL;
-        return NULL;
-    }
-    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST))
-            || (flux_msg_set_topic (zmsg, topic) < 0)
-            || (o && flux_msg_replace_json (zmsg, o) < 0)) {
-        zmsg_destroy (&zmsg);
-        return NULL;
-    }
-    return zmsg;
-}
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
