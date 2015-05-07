@@ -38,18 +38,19 @@
 #include "src/common/libmrpc/mrpc.h"
 
 
-#define OPTIONS "hp:d:"
+#define OPTIONS "hp:d:c:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"pad-bytes",  required_argument,  0, 'p'},
     {"delay-msec", required_argument,  0, 'd'},
+    {"count",      required_argument,  0, 'c'},
     { 0, 0, 0, 0 },
 };
 
 void usage (void)
 {
     fprintf (stderr,
-"Usage: flux-mping [--pad-bytes N] [--delay-msec N] nodelist\n"
+"Usage: flux-mping [--count N] [--pad-bytes N] [--delay-msec N] nodelist\n"
 );
     exit (1);
 }
@@ -67,6 +68,7 @@ int main (int argc, char *argv[])
     json_object *inarg, *outarg;
     int id;
     flux_mrpc_t f;
+    int count = INT_MAX;
 
     log_init ("flux-mping");
 
@@ -83,6 +85,9 @@ int main (int argc, char *argv[])
             case 'd': /* --delay-msec N */
                 msec = strtoul (optarg, NULL, 10);
                 break;
+            case 'c': /* --count N */
+                count = strtoul (optarg, NULL, 10);
+                break;
             default:
                 usage ();
                 break;
@@ -95,7 +100,7 @@ int main (int argc, char *argv[])
     if (!(h = flux_api_open ()))
         err_exit ("flux_api_open");
 
-    for (seq = 0; ; seq++) {
+    for (seq = 0; seq < count; seq++) {
         monotime (&t0);
         if (!(f = flux_mrpc_create (h, nodelist)))
             err_exit ("flux_mrpc_create");
@@ -119,7 +124,8 @@ int main (int argc, char *argv[])
         flux_mrpc_destroy (f);
         msg ("mecho: pad=%d seq=%d time=%0.3f ms",
              bytes, seq, monotime_since (t0));
-        usleep (msec * 1000);
+        if (seq + 1 < count)
+            usleep (msec * 1000);
     }
 
     flux_api_close (h);
