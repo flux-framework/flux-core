@@ -1,5 +1,5 @@
 /*****************************************************************************\
- *  Copyright (c) 2014 Lawrence Livermore National Security, LLC.  Produced at
+ *  Copyright (c) 2015 Lawrence Livermore National Security, LLC.  Produced at
  *  the Lawrence Livermore National Laboratory (cf, AUTHORS, DISCLAIMER.LLNS).
  *  LLNL-CODE-658032 All rights reserved.
  *
@@ -22,19 +22,85 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
+/* The Flux public, versioned API.
+ */
+
 #ifndef _FLUX_CORE_H
 #define _FLUX_CORE_H
 
-/* NOTE: these programming interfaces should be considered EXPERIMENTAL
- * and are subject to change in flux-core releases prefixed with "0."
+#include <stdbool.h>
+#include <stdint.h>
+
+typedef struct flux_struct *flux_t;
+typedef struct flux_msg_struct *flux_msg_t;
+
+/* Open flags
  */
+enum {
+    FLUX_O_TRACE        = 1,    /* send message trace to stderr */
+    FLUX_O_COPROC       = 2,    /* start reactor callbacks as coprocesses */
+};
 
-#include "core/flux.h"
+/* sendmsg/recvmsg/putmsg flags.
+ */
+enum {
+    FLUX_IO_NONBLOCK    = 1,
+    FLUX_IO_PUT_BEGIN   = 2,    /* putmsg adds to front of receive queue */
+    FLUX_IO_PUT_END     = 4,    /* putmsg adds to end of receive queue */
+};
 
-#include "core/api.h"
-#include "core/kvs.h"
-#include "core/live.h"
-#include "core/barrier.h"
+/* Create/destroy a broker handle.
+ * The 'uri' scheme name selects a handle implementation to dynamically load.
+ * The rest of the URI is parsed in an implementation-specific manner.
+ * A NULL uri selects the "local" implementation with socket path derived
+ * from the FLUX_TMPDIR environment variable.
+ */
+flux_t flux_open (const char *uri, int flags);
+void flux_close (flux_t h);
+
+/* Send/recv Flux messages.
+ * Putmsg adds 'msg' to the handle's recveive queue.
+ * On success return 0; on failure return -1 with errno set.
+ */
+int flux_sendmsg (flux_t h, flux_msg_t msg, int flags);
+flux_msg_t flux_recvmsg (flux_t h, int flags);
+int flux_putmsg (flux_t h, flux_msg_t msg, int flags);
+
+/* Subscribe/unsubscribe to events.  A NULL topic_glob matches all events.
+ * On success return 0; on failure return -1 with errno set.
+ */
+int flux_subscribe (flux_t h, const char *topic_glob);
+int flux_unsubscribe (flux_t h, const char *topic_glob);
+
+/* Publish one event message.
+ * If non-NULL, 'json_in' is the payload.
+ * On success return 0; on failure return -1 with errno set.
+ */
+int flux_publish (flux_t h, const char *topic, const char *json_in);
+
+/* Send one request message.
+ * The value of nodeid can be a broker rank, FLUX_NODEID_ANY,
+ * or FLUX_NODEID_UPSTREAM and affects request routing per RFC 3.
+ * If non-NULL, 'json_in' is the payload.
+ * On success return 0; on failure return -1 with errno set.
+ */
+int flux_request (flux_t h, uint32_t nodeid, const char *topic,
+                  const char *json_in);
+
+/* Send one request message and receive one response message.
+ * The value of 'nodeid' can be a broker rank, FLUX_NODEID_ANY,
+ * or FLUX_NODEID_UPSTREAM and affects request routing per RFC 3.
+ * If non-NULL, 'json_in' is the request payload.
+ * If a response payload is expected, 'json_out' must be non-NULL
+ * (caller frees the returned string).
+ * If timeout is nonzero, the RPC should return with ETIMEDOUT if
+ * more than the specified number of milliseconds elapses before a
+ * response is received.
+ * On success return 0; on failure return -1 with errno set.
+ */
+int flux_rpc (flux_t h, uint32_t nodeid, const char *topic,
+              const char *json_in, char **json_out, int timeout);
+
 
 #endif /* !_FLUX_CORE_H */
 
