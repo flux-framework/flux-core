@@ -30,7 +30,7 @@ libzio_deps = \
 
 LDADD = $(libzio_deps) \
 	$(JSON_LIBS) $(LIBCZMQ) $(LIBZMQ) $(LIBMUNGE) \
-	$(LIBPTHREAD)
+	$(LIBPTHREAD) $(LIBDL)
 
 $(libzio_deps):
 	@(cd `dirname $@` && $(MAKE) `basename $@`)

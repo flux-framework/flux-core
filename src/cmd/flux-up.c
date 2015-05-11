@@ -113,8 +113,8 @@ int main (int argc, char *argv[])
     if (optind != argc)
         usage ();
 
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (!(h = flux_open (NULL, 0)))
+        err_exit ("flux_open");
 
     if (!(ns = ns_fromkvs (h)))
         ns = ns_guess (h);
@@ -126,7 +126,7 @@ int main (int argc, char *argv[])
         ns_print_all (ns, fmt);
     ns_destroy (ns);
 
-    flux_api_close (h);
+    flux_close (h);
     log_fini ();
     return 0;
 }

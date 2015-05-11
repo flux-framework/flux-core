@@ -324,11 +324,11 @@ kap_commfab_init (int *argc, char ***argv)
             &_tester_size) != MPI_SUCCESS )
         return -3;
 
-    if ( (_hndl = flux_api_open ()) == NULL ) {
+    if ( (_hndl = flux_open (NULL, 0)) == NULL ) {
 
         for (ntries = 0; ntries < 4; ++ntries) {
             sleep (5);
-            if ( (_hndl = flux_api_open ()) != NULL ) {
+            if ( (_hndl = flux_open (NULL, 0)) != NULL ) {
                 break;
             }
         }

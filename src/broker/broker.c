@@ -360,8 +360,9 @@ int main (int argc, char *argv[])
     if (!(secdir = getenv ("FLUX_SEC_DIRECTORY")))
         msg_exit ("FLUX_SEC_DIRECTORY is not set"); 
 
-    /* Process config from the KVS if running in a session and not
-     * forced to use a config file by the command line.
+    /* Process config from the KVS of enclosing instance (if any)
+     * and not forced to use a config file by the command line.
+     * (FLUX_TMPDIR has not yet been overridden within this instance)
      */
     ctx.cf = flux_conf_create ();
     if (!(confdir = getenv ("FLUX_CONF_DIRECTORY")))
@@ -376,11 +377,11 @@ int main (int argc, char *argv[])
         flux_t h;
         if (ctx.verbose)
             msg ("Loading config from KVS");
-        if (!(h = flux_api_open ()))
-            err_exit ("flux_api_open");
+        if (!(h = flux_open (NULL, 0)))
+            err_exit ("flux_open");
         if (kvs_conf_load (h, ctx.cf) < 0)
             err_exit ("could not load config from KVS");
-        flux_api_close (h);
+        flux_close (h);
     }
 
     /* Arrange to load config entries into kvs config.*

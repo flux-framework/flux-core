@@ -145,10 +145,8 @@ void *thread (void *arg)
 {
     thd_t *t = arg;
 
-    //setenv ("FLUX_TRACE_APISOCK", "1", 1); // XXX
-
-    if (!(t->h = flux_api_open ())) {
-        err ("%d: flux_api_open", t->n);
+    if (!(t->h = flux_open (NULL, 0))) {
+        err ("%d: flux_open", t->n);
         goto done;
     }
     signal_ready ();
@@ -173,7 +171,7 @@ void *thread (void *arg)
     }
 done:
     if (t->h)
-        flux_api_close (t->h);
+        flux_close (t->h);
 
     return NULL;
 }
@@ -207,8 +205,8 @@ void test_mt (int argc, char **argv)
 
     thd = xzmalloc (sizeof (*thd) * nthreads);
 
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (!(h = flux_open (NULL, 0)))
+        err_exit ("flux_open");
 
     /* Set initial value of 'key' to -1 */
     if (kvs_put_int (h, key, -1) < 0)
@@ -268,7 +266,7 @@ void test_mt (int argc, char **argv)
     free (thd);
     free (key_stable);
 
-    flux_api_close (h);
+    flux_close (h);
 }
 
 static int selfmod_watch_cb (const char *key, int val, void *arg, int errnum)
@@ -293,8 +291,8 @@ void test_selfmod (int argc, char **argv)
         exit (1);
     }
     key = argv[0];
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (!(h = flux_open (NULL, 0)))
+        err_exit ("flux_open");
 
     if (kvs_put_int (h, key, -1) < 0)
         err_exit ("kvs_put_int");
@@ -307,7 +305,7 @@ void test_selfmod (int argc, char **argv)
     flux_reactor_start (h);
     msg ("reactor: end");
 
-    flux_api_close (h);
+    flux_close (h);
 }
 
 static int unwatch_watch_cb (const char *key, int val, void *arg, int errnum)
@@ -349,8 +347,8 @@ void test_unwatch (int argc, char **argv)
         exit (1);
     }
     key = argv[0];
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (!(h = flux_open (NULL, 0)))
+        err_exit ("flux_open");
     if (kvs_watch_int (h, key, unwatch_watch_cb, &count) < 0)
         err_exit ("kvs_watch_int %s", key);
     if (flux_tmouthandler_add (h, 1, false, unwatch_timer_cb, key) < 0)
@@ -359,7 +357,7 @@ void test_unwatch (int argc, char **argv)
         err_exit ("flux_reactor_start");
     if (count != 10)
         msg_exit ("watch called %d times (should be 10)", count);
-    flux_api_close (h);
+    flux_close (h);
 }
 
 static int unwatchloop_cb (const char *key, int val, void *arg, int errnum)
@@ -381,8 +379,8 @@ void test_unwatchloop (int argc, char **argv)
         exit (1);
     }
     key = argv[0];
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (!(h = flux_open (NULL, 0)))
+        err_exit ("flux_open");
     uint32_t avail = flux_matchtag_avail (h);
     for (i = 0; i < 1000; i++) {
         if (kvs_watch_int (h, key, unwatchloop_cb, NULL) < 0)
@@ -394,7 +392,7 @@ void test_unwatchloop (int argc, char **argv)
     if (leaked > 0)
         msg_exit ("leaked %u matchtags", leaked);
 
-    flux_api_close (h);
+    flux_close (h);
 }
 
 int main (int argc, char *argv[])

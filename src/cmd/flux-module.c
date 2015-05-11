@@ -147,8 +147,8 @@ int main (int argc, char *argv[])
         msg_exit ("unknown function '%s'", cmd);
 
     if (strcmp (cmd, "info") != 0) {
-        if (!(h = flux_api_open ()))
-            err_exit ("flux_api_open");
+        if (!(h = flux_open (NULL, 0)))
+            err_exit ("flux_open");
         if (!opt.nodeset) {
             opt.nodeset = xasprintf ("%d", flux_rank (h));
         } else if (!strcmp (opt.nodeset, "all") && flux_size (h) == 1) {
@@ -165,7 +165,7 @@ int main (int argc, char *argv[])
     if (opt.nodeset)
         free (opt.nodeset);
     if (h)
-        flux_api_close (h);
+        flux_close (h);
 
     log_fini ();
     return 0;

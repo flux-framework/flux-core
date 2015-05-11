@@ -48,7 +48,7 @@ static char *suppressed[] = { "cmb.info", "cmb.log", "cmb.pub" };
 
 void usage (void)
 {
-    fprintf (stderr, 
+    fprintf (stderr,
 "Usage: flux-snoop OPTIONS [topic [topic...]]\n"
 "  -a,--all               Do not suppress cmb.info, cmb.log, cmb.pub\n"
 "  -l,--long              Display long message format\n"
@@ -121,8 +121,8 @@ int main (int argc, char *argv[])
     if (!(secdir = getenv ("FLUX_SEC_DIRECTORY")))
         msg_exit ("FLUX_SEC_DIRECTORY is not set");
 
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (!(h = flux_open (NULL, 0)))
+        err_exit ("flux_open");
     if (!(uri = flux_getattr (h, rank, "snoop-uri")))
         err_exit ("snoop-uri");
 
@@ -189,7 +189,7 @@ int main (int argc, char *argv[])
 
     zlist_destroy (&subscriptions);
     free (uri);
-    flux_api_close (h);
+    flux_close (h);
     log_fini ();
     return 0;
 }

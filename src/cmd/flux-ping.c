@@ -108,8 +108,8 @@ int main (int argc, char *argv[])
     if (nodeid != FLUX_NODEID_ANY)
         rankstr = xasprintf ("%u", nodeid);
 
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (!(h = flux_open (NULL, 0)))
+        err_exit ("flux_open");
 
     for (seq = 0; ; seq++) {
         monotime (&t0);
@@ -125,7 +125,7 @@ int main (int argc, char *argv[])
         usleep (msec * 1000);
     }
 
-    flux_api_close (h);
+    flux_close (h);
     log_fini ();
     return 0;
 }

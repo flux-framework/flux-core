@@ -84,8 +84,8 @@ void *thread (void *arg)
     struct timespec t0;
     uint32_t rank;
 
-    if (!(t->h = flux_api_open ())) {
-        err ("%d: flux_api_init", t->n);
+    if (!(t->h = flux_open (NULL, 0))) {
+        err ("%d: flux_open", t->n);
         goto done;
     }
     rank = flux_rank (t->h);
@@ -112,7 +112,7 @@ void *thread (void *arg)
     }
 done:
     if (t->h)
-        flux_api_close (t->h);
+        flux_close (t->h);
   return NULL;
 }
 

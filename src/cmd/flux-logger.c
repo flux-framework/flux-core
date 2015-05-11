@@ -82,8 +82,8 @@ int main (int argc, char *argv[])
         oom ();
     argz_stringify (message, len, ' ');
 
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (!(h = flux_open (NULL, 0)))
+        err_exit ("flux_open");
 
     if (parse_logstr (priority, &level, &facility) < 0)
         msg_exit ("bad priority argument");
@@ -91,7 +91,7 @@ int main (int argc, char *argv[])
     if (flux_log (h, level, "%s", message) < 0)
         err_exit ("flux_log");
 
-    flux_api_close (h);
+    flux_close (h);
 
     free (message);
     free (facility);

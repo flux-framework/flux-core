@@ -108,8 +108,8 @@ int main (int argc, char *argv[])
     if (size < 1 || count < 1)
         usage ();
 
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (!(h = flux_open (NULL, 0)))
+        err_exit ("flux_open");
     if (!prefix) {
         uint32_t rank = flux_rank (h);
         prefix = xasprintf ("kvstorture-%u", rank);
@@ -169,7 +169,7 @@ int main (int argc, char *argv[])
 
     if (prefix)
         free (prefix);
-    flux_api_close (h);
+    flux_close (h);
     log_fini ();
     return 0;
 }

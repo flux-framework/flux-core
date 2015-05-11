@@ -205,13 +205,13 @@ static int l_flux_destroy (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
     l_flux_reftable_unref (L, f);
-    flux_api_close (f);
+    flux_close (f);
     return (0);
 }
 
 static int l_flux_new (lua_State *L)
 {
-    flux_t f = flux_api_open ();
+    flux_t f = flux_open (NULL, 0);
     if (f == NULL)
         return lua_pusherror (L, strerror (errno));
     return (lua_push_flux_handle (L, f));
