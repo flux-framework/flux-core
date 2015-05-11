@@ -49,6 +49,8 @@
 #include "src/common/libutil/ev_zmq.h"
 #include "src/common/libutil/ev_zlist.h"
 
+#include "api.h"
+
 #define API_CTX_MAGIC   0xf434aaab
 typedef struct {
     int magic;
