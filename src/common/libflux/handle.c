@@ -29,6 +29,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <dlfcn.h>
 
 #include "handle.h"
 #include "reactor.h"
@@ -45,11 +46,126 @@ struct flux_handle_struct {
     const struct flux_handle_ops *ops;
     int             flags;
     void            *impl;
+    void            *dso;
     zhash_t         *aux;
     tagpool_t       tagpool;
     reactor_t       reactor;
     flux_msgcounters_t msgcounters;
 };
+
+static char *find_file_r (const char *name, const char *dirpath)
+{
+    DIR *dir;
+    struct dirent entry, *dent;
+    char *filepath = NULL;
+    struct stat sb;
+    char path[PATH_MAX];
+    size_t len = sizeof (path);
+
+    if (!(dir = opendir (dirpath)))
+        goto done;
+    while (!filepath) {
+        if ((errno = readdir_r (dir, &entry, &dent)) > 0 || dent == NULL)
+            break;
+        if (!strcmp (dent->d_name, ".") || !strcmp (dent->d_name, ".."))
+            continue;
+        if (snprintf (path, len, "%s/%s", dirpath, dent->d_name) >= len) {
+            errno = EINVAL;
+            break;
+        }
+        if (stat (path, &sb) == 0) {
+            if (S_ISDIR (sb.st_mode))
+                filepath = find_file_r (name, path);
+            else if (!strcmp (dent->d_name, name)) {
+                if (!(filepath = realpath (path, NULL)))
+                    oom ();
+            }
+        }
+    }
+    closedir (dir);
+done:
+    return filepath;
+}
+
+static char *find_file (const char *name, const char *searchpath)
+{
+    char *cpy = xstrdup (searchpath);
+    char *dirpath, *saveptr = NULL, *a1 = cpy;
+    char *path = NULL;
+
+    while ((dirpath = strtok_r (a1, ":", &saveptr))) {
+        if ((path = find_file_r (name, dirpath)))
+            break;
+        a1 = NULL;
+    }
+    free (cpy);
+    return path;
+}
+
+static handle_init_f *find_handle_dso (const char *scheme, void **dsop)
+{
+    char *name = xasprintf ("%s.so", scheme);
+    const char *searchpath = getenv ("FLUX_HANDLE_PATH");
+    char *path = NULL;
+    void *dso = NULL;
+    handle_init_f *hinit = NULL;
+
+    if (!searchpath)
+        searchpath = HANDLE_PATH;
+    if (!(path = find_file (name, searchpath))) {
+        errno = ENOENT;
+        goto done;
+    }
+    if (!(dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL)))
+        goto done;
+    if (!(hinit = dlsym (dso, "handle_init"))) {
+        dlclose (dso);
+        goto done;
+    }
+    *dsop = dso;
+done:
+    if (path)
+        free (path);
+    free (name);
+    return hinit;
+}
+
+flux_t flux_open (const char *uri, int flags)
+{
+    const char *scheme = "local";
+    const char *path = NULL;
+    char *cpy = NULL;
+    void *dso = NULL;
+    handle_init_f *hinit = NULL;
+    flux_t h = NULL;
+
+    if (uri) {
+        cpy = xstrdup (uri);
+        path = strstr (cpy, "://");
+        if (!path) {
+            errno = EINVAL;
+            goto done;
+        }
+        scheme = cpy;
+        path += 3;
+    }
+    if (!(hinit = find_handle_dso (scheme, &dso)))
+        goto done;
+    if (!(h = hinit (path, flags))) {
+        dlclose (dso);
+        goto done;
+    }
+    h->dso = dso;
+done:
+    if (cpy)
+        free (cpy);
+    return h;
+}
+
+void flux_close (flux_t h)
+{
+    flux_handle_destroy (&h);
+}
 
 flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags)
 {
@@ -75,6 +191,8 @@ void flux_handle_destroy (flux_t *hp)
             h->ops->impl_destroy (h->impl);
         tagpool_destroy (h->tagpool);
         flux_reactor_destroy (h->reactor);
+        if (h->dso)
+            dlclose (h->dso);
         free (h);
         *hp = NULL;
     }

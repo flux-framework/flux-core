@@ -27,6 +27,15 @@ enum {
     FLUX_FLAGS_COPROC = 2,  /* start reactor callbacks as coprocesses */
 };
 
+/* Create/destroy a broker handle.
+ * The 'uri' scheme name selects a handle implementation to dynamically load.
+ * The rest of the URI is parsed in an implementation-specific manner.
+ * A NULL uri selects the "local" implementation with path set to the value
+ * of FLUX_TMPDIR.
+ */
+flux_t flux_open (const char *uri, int flags);
+void flux_close (flux_t h);
+
 /* A mechanism is provide for users to attach auxiliary state to the flux_t
  * handle by name.  The FluxFreeFn, if non-NULL, will be called
  * to destroy this state when the handle is destroyed.
