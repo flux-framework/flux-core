@@ -69,6 +69,7 @@ int main (int argc, char *argv[])
     int id;
     flux_mrpc_t f;
     int count = INT_MAX;
+    int oflags = 0;
 
     log_init ("flux-mping");
 
@@ -97,8 +98,10 @@ int main (int argc, char *argv[])
         usage ();
     nodelist = argv[optind];
 
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (getenv ("FLUX_HANDLE_TRACE"))
+        oflags |= FLUX_O_TRACE;
+    if (!(h = flux_open (NULL, oflags)))
+        err_exit ("flux_open");
 
     for (seq = 0; seq < count; seq++) {
         monotime (&t0);
@@ -128,7 +131,7 @@ int main (int argc, char *argv[])
             usleep (msec * 1000);
     }
 
-    flux_api_close (h);
+    flux_close (h);
     log_fini ();
     return 0;
 }

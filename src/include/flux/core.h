@@ -6,7 +6,6 @@
 
 #include "src/common/libflux/flux.h"
 
-#include "src/modules/api/api.h"
 #include "src/modules/kvs/kvs.h"
 #include "src/modules/live/live.h"
 #include "src/modules/barrier/barrier.h"

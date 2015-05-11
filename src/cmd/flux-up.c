@@ -88,6 +88,7 @@ int main (int argc, char *argv[])
     bool dopt = false;
     fmt_t fmt = FMT_RANGED;
     ns_t *ns;
+    int oflags = 0;
 
     log_init ("flux-up");
 
@@ -113,8 +114,10 @@ int main (int argc, char *argv[])
     if (optind != argc)
         usage ();
 
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (getenv ("FLUX_HANDLE_TRACE"))
+        oflags |= FLUX_O_TRACE;
+    if (!(h = flux_open (NULL, oflags)))
+        err_exit ("flux_open");
 
     if (!(ns = ns_fromkvs (h)))
         ns = ns_guess (h);
@@ -126,7 +129,7 @@ int main (int argc, char *argv[])
         ns_print_all (ns, fmt);
     ns_destroy (ns);
 
-    flux_api_close (h);
+    flux_close (h);
     log_fini ();
     return 0;
 }

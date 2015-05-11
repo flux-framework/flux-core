@@ -96,8 +96,9 @@ int main (int argc, char *argv[])
     bool fopt = false;
     bool lopt = false;
     char *key = NULL;
-    int flags = 0;
+    int oflags = 0;
     int blocksize = 4096;
+    int flags = 0;
     flux_t h;
 
     log_init ("flux-zio");
@@ -152,8 +153,10 @@ int main (int argc, char *argv[])
             usage ();
     }
 
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (getenv ("FLUX_HANDLE_TRACE"))
+        oflags |= FLUX_O_TRACE;
+    if (!(h = flux_open (NULL, oflags)))
+        err_exit ("flux_open");
 
     if ((aopt || ropt) && !key) {
         if (asprintf (&key, "zio.%d.%d", flux_rank (h), (int)getpid ()) < 0)
@@ -168,7 +171,7 @@ int main (int argc, char *argv[])
         copy (h, argv[0], argv[1], fopt, lopt, blocksize);
     }
 
-    flux_api_close (h);
+    flux_close (h);
 
     free (key);
     log_fini ();

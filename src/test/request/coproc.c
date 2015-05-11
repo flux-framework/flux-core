@@ -43,7 +43,7 @@ const int htablen = sizeof (htab) / sizeof (htab[0]);
 
 int mod_main (flux_t h, zhash_t *args)
 {
-    flux_flags_set (h, FLUX_FLAGS_COPROC);
+    flux_flags_set (h, FLUX_O_COPROC);
 
     if (flux_msghandler_addvec (h, htab, htablen, NULL) < 0) {
         flux_log (h, LOG_ERR, "flux_msghandler_addvec: %s", strerror (errno));

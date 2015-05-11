@@ -84,6 +84,7 @@ int main (int argc, char *argv[])
     flux_sec_t sec;
     int rank = -1;
     const char *secdir;
+    int oflags = 0;
 
     log_init ("flux-snoop");
 
@@ -121,8 +122,10 @@ int main (int argc, char *argv[])
     if (!(secdir = getenv ("FLUX_SEC_DIRECTORY")))
         msg_exit ("FLUX_SEC_DIRECTORY is not set");
 
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (getenv ("FLUX_HANDLE_TRACE"))
+        oflags |= FLUX_O_TRACE;
+    if (!(h = flux_open (NULL, oflags)))
+        err_exit ("flux_open");
     if (!(uri = flux_getattr (h, rank, "snoop-uri")))
         err_exit ("snoop-uri");
 
@@ -189,7 +192,7 @@ int main (int argc, char *argv[])
 
     zlist_destroy (&subscriptions);
     free (uri);
-    flux_api_close (h);
+    flux_close (h);
     log_fini ();
     return 0;
 }

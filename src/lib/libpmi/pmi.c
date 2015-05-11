@@ -130,8 +130,8 @@ int PMI_Init (int *spawned)
     ctx->universe_size = ctx->size;
     ctx->barrier_num = 0;
     snprintf (ctx->kvsname, sizeof (ctx->kvsname), "%d", ctx->appnum);
-    if (!(ctx->fctx = flux_api_open ())) {
-        err ("flux_api_open");
+    if (!(ctx->fctx = flux_open (NULL, 0))) {
+        err ("flux_open");
         goto fail;
     }
     flux_log_set_facility (ctx->fctx, "pmi");
@@ -166,7 +166,7 @@ int PMI_Finalize (void)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
     if (ctx->fctx)
-        flux_api_close (ctx->fctx);
+        flux_close (ctx->fctx);
     if (ctx->clique_ranks)
         free (ctx->clique_ranks);
     memset (ctx, 0, sizeof (pmi_ctx_t));
