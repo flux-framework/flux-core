@@ -50,19 +50,22 @@ char *intree_confdir (void);
 void setup_lua_env (flux_conf_t cf, const char *cpath_add, const char *path_add);
 char *setup_exec_searchpath (flux_conf_t cf, const char *path_add);
 void setup_module_env (flux_conf_t cf, const char *path_add);
+void setup_connector_env (flux_conf_t cf, const char *path_add);
 void setup_broker_env (flux_conf_t cf, const char *path_override);
 
-#define OPTIONS "+T:tx:hM:B:vc:L:C:FS:"
+#define OPTIONS "+T:tx:hM:O:B:vc:L:C:FS:u:"
 static const struct option longopts[] = {
     {"tmpdir",          required_argument,  0, 'T'},
-    {"trace-apisocket", no_argument,        0, 't'},
+    {"trace-handle",    no_argument,        0, 't'},
     {"exec-path",       required_argument,  0, 'x'},
     {"module-path",     required_argument,  0, 'M'},
+    {"connector-path",  required_argument,  0, 'O'},
     {"broker-path",     required_argument,  0, 'B'},
     {"lua-path",        required_argument,  0, 'L'},
     {"lua-cpath",       required_argument,  0, 'C'},
     {"config",          required_argument,  0, 'c'},
     {"secdir",          required_argument,  0, 'S'},
+    {"uri",             required_argument,  0, 'u'},
     {"verbose",         no_argument,        0, 'v'},
     {"file-config",     no_argument,        0, 'F'},
     {"help",            no_argument,        0, 'h'},
@@ -75,14 +78,16 @@ static void usage (void)
 "Usage: flux [OPTIONS] COMMAND ARGS\n"
 "    -x,--exec-path PATH   prepend PATH to command search path\n"
 "    -M,--module-path PATH prepend PATH to module search path\n"
+"    -O,--connector-path PATH   prepend PATH to connector search path\n"
 "    -L,--lua-path PATH    prepend PATH to LUA_PATH\n"
 "    -C,--lua-cpath PATH   prepend PATH to LUA_CPATH\n"
 "    -T,--tmpdir PATH      set FLUX_TMPDIR\n"
-"    -t,--trace-apisock    set FLUX_TRACE_APISOCK=1\n"
+"    -t,--trace-handle     set FLUX_HANDLE_TRACE=1 before executing COMMAND\n"
 "    -B,--broker-path FILE override path to flux broker\n"
 "    -c,--config DIR       set path to config directory\n"
 "    -F,--file-config      force use of config file, even if FLUX_TMPDIR set\n"
 "    -S,--secdir DIR       set the directory where CURVE keys will be stored\n"
+"    -u,--uri URI          override default URI to flux broker\n"
 "    -v,--verbose          show FLUX_* environment and command search\n"
 "\n"
 "The flux-core commands are:\n"
@@ -113,6 +118,7 @@ int main (int argc, char *argv[])
     bool vopt = false;
     char *xopt = NULL;
     char *Mopt = NULL;
+    char *Oopt = NULL;
     char *Bopt = NULL;
     char *Lopt = NULL;
     char *Copt = NULL;
@@ -139,12 +145,15 @@ int main (int argc, char *argv[])
                 if (setenv ("FLUX_TMPDIR", optarg, 1) < 0)
                     err_exit ("setenv");
                 break;
-            case 't': /* --trace-apisock */
-                if (setenv ("FLUX_TRACE_APISOCK", "1", 1) < 0)
+            case 't': /* --trace-handle */
+                if (setenv ("FLUX_HANDLE_TRACE", "1", 1) < 0)
                     err_exit ("setenv");
                 break;
             case 'M': /* --module-path PATH */
                 Mopt = optarg;
+                break;
+            case 'O': /* --connector-path PATH */
+                Oopt = optarg;
                 break;
             case 'x': /* --exec-path PATH */
                 xopt = optarg;
@@ -160,6 +169,10 @@ int main (int argc, char *argv[])
                 break;
             case 'C': /* --lua-cpath PATH */
                 Copt = optarg;
+                break;
+            case 'u': /* --uri URI */
+                if (setenv ("FLUX_URI", optarg, 1) < 0)
+                    err_exit ("setenv");
                 break;
             case 'h': /* --help  */
                 usage ();
@@ -192,11 +205,11 @@ int main (int argc, char *argv[])
      */
     if (getenv ("FLUX_TMPDIR") && !Fopt) {
         flux_t h;
-        if (!(h = flux_api_open ()))
-            err_exit ("flux_api_open");
+        if (!(h = flux_open (NULL, 0)))
+            err_exit ("flux_open");
         if (kvs_conf_load (h, cf) < 0 && errno != ENOENT)
             err_exit ("could not load config from KVS");
-        flux_api_close (h);
+        flux_close (h);
     } else {
         if (flux_conf_load (cf) == 0) {
             if (setenv ("FLUX_CONF_USEFILE", "1", 1) < 0)
@@ -210,6 +223,7 @@ int main (int argc, char *argv[])
      */
     setup_lua_env (cf, Copt, Lopt); /* sets LUA_CPATH, LUA_PATH */
     setup_module_env (cf, Mopt);    /* sets FLUX_MODULE_PATH */
+    setup_connector_env (cf, Oopt); /* sets FLUX_CONNECTOR_PATH */
     setup_broker_env (cf, Bopt);    /* sets FLUX_BROKER_PATH */
 
     searchpath = setup_exec_searchpath (cf, xopt);
@@ -332,6 +346,23 @@ void setup_module_env (flux_conf_t cf, const char *path_add)
     free (path);
 }
 
+void setup_connector_env (flux_conf_t cf, const char *path_add)
+{
+    const char *cf_path = flux_conf_get (cf, "general.connector_path");
+    char *path = NULL;
+
+    path_push (&path, CONNECTOR_PATH, ":");
+
+    if (cf_path)
+        path_push (&path, cf_path, ":");
+    if (path_add)
+        path_push (&path, path_add, ":");
+    if (setenv ("FLUX_CONNECTOR_PATH", path, 1) < 0)
+        err_exit ("%s", path);
+
+    free (path);
+}
+
 void setup_broker_env (flux_conf_t cf, const char *path_override)
 {
     const char *cf_path = flux_conf_get (cf, "general.broker_path");
@@ -357,12 +388,13 @@ void dump_environment_one (const char *name)
 void dump_environment (void)
 {
     dump_environment_one ("FLUX_MODULE_PATH");
+    dump_environment_one ("FLUX_CONNECTOR_PATH");
     dump_environment_one ("FLUX_BROKER_PATH");
     dump_environment_one ("FLUX_TMPDIR");
     dump_environment_one ("FLUX_CONF_DIRECTORY");
     dump_environment_one ("FLUX_CONF_USEFILE");
     dump_environment_one ("FLUX_SEC_DIRECTORY");
-    dump_environment_one ("FLUX_TRACE_APISOCK");
+    dump_environment_one ("FLUX_HANDLE_TRACE");
     dump_environment_one ("LUA_PATH");
     dump_environment_one ("LUA_CPATH");
 }
