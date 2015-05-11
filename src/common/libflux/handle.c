@@ -295,7 +295,7 @@ int flux_sendmsg (flux_t h, zmsg_t **zmsg)
             h->msgcounters.keepalive_tx++;
             break;
     }
-    if (h->flags & FLUX_FLAGS_TRACE)
+    if (h->flags & FLUX_O_TRACE)
         zdump_fprint (stderr, *zmsg, flux_msgtype_shortstr (type));
     return h->ops->sendmsg (h->impl, zmsg);
 }
@@ -330,7 +330,7 @@ zmsg_t *flux_recvmsg (flux_t h, bool nonblock)
             h->msgcounters.keepalive_rx++;
             break;
     }
-    if ((h->flags & FLUX_FLAGS_TRACE))
+    if ((h->flags & FLUX_O_TRACE))
         zdump_fprint (stderr, zmsg, flux_msgtype_shortstr (type));
 done:
     return zmsg;
@@ -398,7 +398,7 @@ int flux_putmsg_list (flux_t h, zlist_t *l)
     return rc;
 }
 
-/* FIXME: FLUX_FLAGS_TRACE will show these messages being received again
+/* FIXME: FLUX_O_TRACE will show these messages being received again
  */
 int flux_putmsg (flux_t h, zmsg_t **zmsg)
 {

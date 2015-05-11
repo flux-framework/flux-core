@@ -257,7 +257,7 @@ static int msg_cb (flux_t h, void *arg)
         rc = resume_coproc (d);
     /* Message matches a handler.
      * If coproc already running, queue message as backlog.
-     * Else if FLUX_FLAGS_COPROC, start coproc.
+     * Else if FLUX_O_COPROC, start coproc.
      * If coprocs not enabled, call handler directly.
      */
     } else if ((d = find_dispatch (r, zmsg, false))) {
@@ -265,7 +265,7 @@ static int msg_cb (flux_t h, void *arg)
             if (backlog_append (d, &zmsg) < 0)
                 goto done;
             rc = 0;
-        } else if ((flux_flags_get (h) & FLUX_FLAGS_COPROC)) {
+        } else if ((flux_flags_get (h) & FLUX_O_COPROC)) {
             if (flux_pushmsg (h, &zmsg) < 0)
                 goto done;
             rc = start_coproc (d);
@@ -274,13 +274,13 @@ static int msg_cb (flux_t h, void *arg)
         }
     /* Message matched nothing.
      * Respond with ENOSYS if it was a request.
-     * Else log it if FLUX_FLAGS_TRACE
+     * Else log it if FLUX_O_TRACE
      */
     } else {
         if (type == FLUX_MSGTYPE_REQUEST) {
             if (flux_err_respond (h, ENOSYS, &zmsg) < 0)
                 goto done;
-        } else if (flux_flags_get (h) & FLUX_FLAGS_TRACE) {
+        } else if (flux_flags_get (h) & FLUX_O_TRACE) {
             char *topic = NULL;
             (void)flux_msg_get_topic (zmsg, &topic);
             fprintf (stderr, "nomatch: %s '%s'\n", flux_msgtype_string (type),

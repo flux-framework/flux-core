@@ -22,9 +22,8 @@ typedef struct {
 /* Flags for handle creation and flux_flags_set()/flux_flags_unset.
  */
 enum {
-    FLUX_FLAGS_TRACE = 1,   /* print 0MQ messages sent over the flux_t */
-                            /*   handle on stdout. */
-    FLUX_FLAGS_COPROC = 2,  /* start reactor callbacks as coprocesses */
+    FLUX_O_TRACE = 1,   /* send message trace to stderr */
+    FLUX_O_COPROC = 2,  /* start reactor callbacks as coprocesses */
 };
 
 /* Create/destroy a broker handle.
@@ -44,7 +43,7 @@ typedef void (*FluxFreeFn)(void *arg);
 void *flux_aux_get (flux_t h, const char *name);
 void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn destroy);
 
-/* Set/clear FLUX_FLAGS_* on a flux_t handle.
+/* Set/clear FLUX_O_* on a flux_t handle.
  */
 void flux_flags_set (flux_t h, int flags);
 void flux_flags_unset (flux_t h, int flags);
