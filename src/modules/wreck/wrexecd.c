@@ -46,7 +46,6 @@
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/modules/kvs/kvs.h"
-#include "src/modules/api/api.h"
 
 #include "luastack.h"
 #include "src/bindings/lua/lutil.h"
