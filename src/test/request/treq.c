@@ -124,12 +124,12 @@ int main (int argc, char *argv[])
     if (!(t = test_lookup (argv[optind])))
         usage ();
 
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (!(h = flux_open (NULL, 0)))
+        err_exit ("flux_open");
 
     t->fun (h, nodeid);
 
-    flux_api_close (h);
+    flux_close (h);
 
     log_fini ();
     return 0;
@@ -336,13 +336,13 @@ void *thd (void *arg)
     uint32_t *nodeid = arg;
     flux_t h;
 
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (!(h = flux_open (NULL, 0)))
+        err_exit ("flux_open");
 
     if (flux_json_rpc (h, *nodeid, "coproc.stuck", NULL, NULL) < 0)
         err_exit ("coproc.stuck");
 
-    flux_api_close (h);
+    flux_close (h);
     return NULL;
 }
 

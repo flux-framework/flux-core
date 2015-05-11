@@ -65,6 +65,7 @@ int main (int argc, char *argv[])
     uint32_t nodeid = FLUX_NODEID_ANY;
     char *rankstr = NULL, *route, *target, *pad = NULL;
     struct timespec t0;
+    int oflags = 0;
 
     log_init ("flux-ping");
 
@@ -108,8 +109,10 @@ int main (int argc, char *argv[])
     if (nodeid != FLUX_NODEID_ANY)
         rankstr = xasprintf ("%u", nodeid);
 
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (getenv ("FLUX_HANDLE_TRACE"))
+        oflags |= FLUX_FLAGS_TRACE;
+    if (!(h = flux_open (NULL, oflags)))
+        err_exit ("flux_open");
 
     for (seq = 0; ; seq++) {
         monotime (&t0);
@@ -125,7 +128,7 @@ int main (int argc, char *argv[])
         usleep (msec * 1000);
     }
 
-    flux_api_close (h);
+    flux_close (h);
     log_fini ();
     return 0;
 }

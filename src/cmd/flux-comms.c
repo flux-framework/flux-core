@@ -63,6 +63,7 @@ int main (int argc, char *argv[])
     int ch;
     int rank = -1; /* local */
     char *cmd;
+    int oflags = 0;
 
     log_init ("flux-comms");
 
@@ -85,8 +86,10 @@ int main (int argc, char *argv[])
     if (rank != -1 && (!strcmp (cmd, "recover-all") || !strcmp (cmd, "info")))
         usage ();
 
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (getenv ("FLUX_HANDLE_TRACE"))
+        oflags |= FLUX_FLAGS_TRACE;
+    if (!(h = flux_open (NULL, oflags)))
+        err_exit ("flux_open");
 
     if (!strcmp (cmd, "reparent")) {
         if (optind != argc - 1)
@@ -146,7 +149,7 @@ int main (int argc, char *argv[])
     } else
         usage ();
 
-    flux_api_close (h);
+    flux_close (h);
     log_fini ();
     return 0;
 }

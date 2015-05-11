@@ -86,8 +86,8 @@ int main (int argc, char *argv[])
     if (optind < argc)
         name = argv[optind++];
 
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (!(h = flux_open (NULL, 0)))
+        err_exit ("flux_open");
 
     for (i = 0; i < iter; i++) {
         char *tname = NULL;
@@ -106,7 +106,7 @@ int main (int argc, char *argv[])
             free (tname);
     }
 
-    flux_api_close (h);
+    flux_close (h);
     log_fini ();
     return 0;
 }

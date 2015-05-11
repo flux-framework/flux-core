@@ -58,6 +58,7 @@ int main (int argc, char *argv[])
     flux_t h;
     int ch;
     char *cmd;
+    int oflags = 0;
 
     log_init ("flux-event");
 
@@ -75,8 +76,10 @@ int main (int argc, char *argv[])
         usage ();
     cmd = argv[optind++];
 
-    if (!(h = flux_api_open  ()))
-        err_exit ("flux_api_open");
+    if (getenv ("FLUX_HANDLE_TRACE"))
+        oflags |= FLUX_FLAGS_TRACE;
+    if (!(h = flux_open (NULL, oflags)))
+        err_exit ("flux_open");
 
     if (!strcmp (cmd, "pub"))
         event_pub (h, argc - optind, argv + optind);
@@ -85,7 +88,7 @@ int main (int argc, char *argv[])
     else
         usage ();
 
-    flux_api_close (h);
+    flux_close (h);
     log_fini ();
     return 0;
 }

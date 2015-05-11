@@ -76,6 +76,7 @@ int main (int argc, char *argv[])
     double scale = 1.0;
     json_type type = json_type_object;
     json_object *response;
+    int oflags = 0;
 
     log_init ("flux-stats");
 
@@ -127,8 +128,10 @@ int main (int argc, char *argv[])
     if (Copt && nodeid != FLUX_NODEID_ANY)
         msg_exit ("Use --clear not --clear-all to clear a single node.");
 
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (getenv ("FLUX_HANDLE_TRACE"))
+        oflags |= FLUX_FLAGS_TRACE;
+    if (!(h = flux_open (NULL, oflags)))
+        err_exit ("flux_open");
 
     if (copt) {
         char *topic = xasprintf ("%s.stats.clear", target);
@@ -153,7 +156,7 @@ int main (int argc, char *argv[])
         json_object_put (response);
         free (topic);
     }
-    flux_api_close (h);
+    flux_close (h);
     log_fini ();
     return 0;
 }

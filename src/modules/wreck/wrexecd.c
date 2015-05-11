@@ -141,7 +141,7 @@ static flux_t prog_ctx_flux_handle (struct prog_ctx *ctx)
     t = prog_ctx_current_task (ctx);
     if (!t->f) {
         char name [128];
-        t->f = flux_api_open ();
+        t->f = flux_open (NULL, 0);
         snprintf (name, sizeof (name) - 1, "lwj.%ld.%d", ctx->id, t->globalid);
         flux_log_set_facility (t->f, name);
     }
@@ -345,7 +345,7 @@ void task_info_destroy (struct task_info *t)
     if (t->kvs)
         kvsdir_destroy (t->kvs);
     if (t->f)
-        flux_api_close (t->f);
+        flux_close (t->f);
     free (t);
 }
 
@@ -432,7 +432,7 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
 
     zmq_term (ctx->zctx);
     if (ctx->flux)
-        flux_api_close (ctx->flux);
+        flux_close (ctx->flux);
 
     free (ctx);
 }
@@ -691,8 +691,8 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
     /*
      * Connect to CMB over api socket
      */
-    if (!(ctx->flux = flux_api_open ()))
-        log_fatal (ctx, 1, "cmb_init");
+    if (!(ctx->flux = flux_open (NULL, 0)))
+        log_fatal (ctx, 1, "flux_open");
 
     snprintf (name, sizeof (name) - 1, "lwj.%ld", ctx->id);
     flux_log_set_facility (ctx->flux, name);

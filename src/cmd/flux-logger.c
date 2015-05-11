@@ -59,6 +59,7 @@ int main (int argc, char *argv[])
     char *priority = "user.notice";
     int level;
     char *facility;
+    int oflags = 0;
 
     log_init ("flux-logger");
 
@@ -82,8 +83,10 @@ int main (int argc, char *argv[])
         oom ();
     argz_stringify (message, len, ' ');
 
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (getenv ("FLUX_HANDLE_TRACE"))
+        oflags |= FLUX_FLAGS_TRACE;
+    if (!(h = flux_open (NULL, oflags)))
+        err_exit ("flux_open");
 
     if (parse_logstr (priority, &level, &facility) < 0)
         msg_exit ("bad priority argument");
@@ -91,7 +94,7 @@ int main (int argc, char *argv[])
     if (flux_log (h, level, "%s", message) < 0)
         err_exit ("flux_log");
 
-    flux_api_close (h);
+    flux_close (h);
 
     free (message);
     free (facility);
