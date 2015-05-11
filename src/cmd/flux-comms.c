@@ -87,7 +87,7 @@ int main (int argc, char *argv[])
         usage ();
 
     if (getenv ("FLUX_HANDLE_TRACE"))
-        oflags |= FLUX_FLAGS_TRACE;
+        oflags |= FLUX_O_TRACE;
     if (!(h = flux_open (NULL, oflags)))
         err_exit ("flux_open");
 

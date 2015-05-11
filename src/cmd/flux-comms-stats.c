@@ -129,7 +129,7 @@ int main (int argc, char *argv[])
         msg_exit ("Use --clear not --clear-all to clear a single node.");
 
     if (getenv ("FLUX_HANDLE_TRACE"))
-        oflags |= FLUX_FLAGS_TRACE;
+        oflags |= FLUX_O_TRACE;
     if (!(h = flux_open (NULL, oflags)))
         err_exit ("flux_open");
 

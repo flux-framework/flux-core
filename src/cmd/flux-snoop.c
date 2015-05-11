@@ -123,7 +123,7 @@ int main (int argc, char *argv[])
         msg_exit ("FLUX_SEC_DIRECTORY is not set");
 
     if (getenv ("FLUX_HANDLE_TRACE"))
-        oflags |= FLUX_FLAGS_TRACE;
+        oflags |= FLUX_O_TRACE;
     if (!(h = flux_open (NULL, oflags)))
         err_exit ("flux_open");
     if (!(uri = flux_getattr (h, rank, "snoop-uri")))
