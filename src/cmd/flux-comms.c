@@ -85,8 +85,8 @@ int main (int argc, char *argv[])
     if (rank != -1 && (!strcmp (cmd, "recover-all") || !strcmp (cmd, "info")))
         usage ();
 
-    if (!(h = flux_api_open ()))
-        err_exit ("flux_api_open");
+    if (!(h = flux_open (NULL, 0)))
+        err_exit ("flux_open");
 
     if (!strcmp (cmd, "reparent")) {
         if (optind != argc - 1)
@@ -146,7 +146,7 @@ int main (int argc, char *argv[])
     } else
         usage ();
 
-    flux_api_close (h);
+    flux_close (h);
     log_fini ();
     return 0;
 }

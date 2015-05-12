@@ -2,7 +2,8 @@ AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = \
 	$(JSON_CFLAGS) \
-	-I$(top_srcdir) -I$(top_srcdir)/src/include
+	-I$(top_srcdir) -I$(top_srcdir)/src/include \
+	-DCONNECTOR_PATH=\"$(fluxconnectordir)\"
 
 fluxcoreinclude_HEADERS = \
 	flux.h \

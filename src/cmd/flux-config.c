@@ -96,8 +96,8 @@ int main (int argc, char *argv[])
     } else if (getenv ("FLUX_TMPDIR")) {
         if (vopt)
             msg ("Loading config from KVS");
-        if (!(h = flux_api_open ()))
-            err_exit ("flux_api_open");
+        if (!(h = flux_open (NULL, 0)))
+            err_exit ("flux_open");
         if (kvs_conf_load (h, cf) < 0)
             err_exit ("could not load config from KVS");
     }
@@ -114,7 +114,7 @@ int main (int argc, char *argv[])
         usage ();
 
     if (h)
-        flux_api_close (h);
+        flux_close (h);
     flux_conf_destroy (cf);
     log_fini();
     exit (0);

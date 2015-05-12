@@ -95,7 +95,7 @@ void flux_reactor_stop (flux_t h);
  * is queued in the handle.  This will return -1 with errno = EINVAL
  * if called from a reactor handler that is not running in as a coprocess.
  * Currently only message handlers are started as coprocesses, if the
- * handle has FLUX_FLAGS_COPROC set.
+ * handle has FLUX_O_COPROC set.
  */
 int flux_sleep_on (flux_t h, flux_match_t match);
 

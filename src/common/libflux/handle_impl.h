@@ -10,6 +10,7 @@
  ** Only handle implementation stuff below.
  ** Flux_t handle users should not use these interfaces.
  */
+typedef flux_t (connector_init_f)(const char *uri, int flags);
 
 typedef int (*flux_msg_f)(flux_t h, void *arg);
 

@@ -7,6 +7,7 @@ general
     lua_cpath = @abs_top_builddir@/src/bindings/lua/.libs/?.so
     lua_path = @abs_top_srcdir@/src/bindings/lua/?.lua
     module_path = @abs_top_builddir@/src/modules
+    connector_path = @abs_top_builddir@/src/connectors
     man_path = @abs_top_builddir@/doc
 wrexec
     wrexecd_path = @abs_top_builddir@/src/modules/wreck/wrexecd

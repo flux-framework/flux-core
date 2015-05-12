@@ -80,7 +80,7 @@ test_expect_success 'request: load coproc module on rank 0' '
 		${FLUX_BUILD_DIR}/src/test/request/.libs/coproc.so
 '
 
-test_expect_success 'request: FLUX_FLAGS_COPROC works' '
+test_expect_success 'request: FLUX_O_COPROC works' '
 	${FLUX_BUILD_DIR}/src/test/request/treq --rank 0 coproc
 '
 

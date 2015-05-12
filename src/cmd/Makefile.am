@@ -4,6 +4,7 @@ AM_CPPFLAGS = \
 	$(JSON_CFLAGS) \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
         -DMODULE_PATH=\"$(fluxmoddir)\" \
+        -DCONNECTOR_PATH=\"$(fluxconnectordir)\" \
 	-DEXEC_PATH=\"$(fluxcmddir)\" \
 	-DBROKER_PATH=\"$(fluxlibexecdir)/flux-broker\" \
 	-DLUA_PATH_ADD=\"$(luadir)/?.lua\" \

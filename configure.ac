@@ -104,6 +104,9 @@ AC_SUBST(fluxlibdir)
 AS_VAR_SET(fluxmoddir, $libdir/flux/modules)
 AC_SUBST(fluxmoddir)
 
+AS_VAR_SET(fluxconnectordir, $libdir/flux/connectors)
+AC_SUBST(fluxconnectordir)
+
 AS_VAR_SET(fluxincludedir, $includedir/flux)
 AC_SUBST(fluxincludedir)
 
@@ -132,6 +135,8 @@ AC_CONFIG_FILES( \
   src/bindings/lua/Makefile \
   src/broker/Makefile \
   src/cmd/Makefile \
+  src/connectors/Makefile \
+  src/connectors/local/Makefile \
   src/modules/Makefile \
   src/modules/api/Makefile \
   src/modules/kvs/Makefile \
