@@ -11,6 +11,9 @@ TESTS = \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1002-modctl.t \
+	t1003-mecho.t \
+	t1004-log.t \
+	t1005-cmddriver.t \
 	t2000-wreck.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
