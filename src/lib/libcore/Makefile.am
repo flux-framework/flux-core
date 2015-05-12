@@ -7,7 +7,6 @@ fluxlib_LTLIBRARIES = libflux-core.la
 libflux_core_la_SOURCES = 
 libflux_core_la_LIBADD = \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
-	$(top_builddir)/src/modules/api/libapi.la \
 	$(top_builddir)/src/modules/live/liblive.la \
 	$(top_builddir)/src/modules/barrier/libbarrier.la \
 	$(top_builddir)/src/common/libflux/libflux.la \

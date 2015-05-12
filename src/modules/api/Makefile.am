@@ -22,10 +22,3 @@ fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
 api_la_SOURCES = api.c
 api_la_LDFLAGS = $(fluxmod_ldflags)
 api_la_LIBADD = $(fluxmod_libadd)
-
-#
-# API for module
-#
-fluxcoreinclude_HEADERS = api.h
-noinst_LTLIBRARIES = libapi.la
-libapi_la_SOURCES = libapi.c
