@@ -38,7 +38,6 @@ fluxcmd_ldadd = \
         $(top_builddir)/src/modules/live/liblive.la \
         $(top_builddir)/src/modules/modctl/libmodctl.la \
         $(top_builddir)/src/modules/kvs/libkvs.la \
-        $(top_builddir)/src/modules/api/libapi.la \
         $(top_builddir)/src/common/libflux/libflux.la \
         $(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/libev/libev.la \
