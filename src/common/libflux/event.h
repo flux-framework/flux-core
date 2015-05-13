@@ -1,7 +1,6 @@
 #ifndef _FLUX_CORE_EVENT_H
 #define _FLUX_CORE_EVENT_H
 
-#include <json.h>
 #include <stdbool.h>
 #include <stdarg.h>
 #include <czmq.h>
@@ -24,8 +23,8 @@ zmsg_t *flux_event_encode (const char *topic, const char *json_str);
 
 /* Send/receive events
  */
-int flux_event_send (flux_t h, json_object *request, const char *fmt, ...);
-int flux_event_recv (flux_t h, json_object **respp, char **topic, bool nb);
+int flux_event_send (flux_t h, zmsg_t **zmsg);
+zmsg_t *flux_event_recv (flux_t h, bool nonblock);
 
 #endif /* !FLUX_CORE_EVENT_H */
 

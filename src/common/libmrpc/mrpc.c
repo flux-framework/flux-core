@@ -23,11 +23,11 @@
 \*****************************************************************************/
 
 /* Group RPC event format:
- *    tag:  mrpc.<plugin>.<method>[.<method>]...
- *    JSON: path="mrpc.<uuid>"
- *          dest="nodeset"
- *          vers=N
- *          sender=N
+ *    topic: mrpc.<plugin>.<method>[.<method>]...
+ *    JSON:  path="mrpc.<uuid>"
+ *           dest="nodeset"
+ *           vers=N
+ *           sender=N
  */
 
 #if HAVE_CONFIG_H
@@ -54,6 +54,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
 
@@ -198,33 +199,39 @@ void flux_mrpc_rewind_outarg (flux_mrpc_t f)
 int flux_mrpc (flux_mrpc_t f, const char *fmt, ...)
 {
     int rc = -1;
-    char *tag = NULL;
+    char *topic = NULL, *s = NULL;
     va_list ap;
-    json_object *request = util_json_object_new_object ();
+    JSON o = NULL;
+    zmsg_t *zmsg = NULL;
 
     va_start (ap, fmt);
-    if (vasprintf (&tag, fmt, ap) < 0)
-        oom ();
+    s = xvasprintf (fmt, ap);
     va_end (ap);
 
     if (kvs_commit (f->h) < 0)
         goto done;
     if (kvs_get_version (f->h, &f->vers) < 0)
         goto done;
-    util_json_object_add_string (request, "dest", f->dest);
-    util_json_object_add_int (request, "vers", f->vers);
-    util_json_object_add_int (request, "sender", f->sender);
-    util_json_object_add_string (request, "path", f->path);
-    if (flux_event_send (f->h, request, "mrpc.%s", tag) < 0)
+    o = Jnew ();
+    Jadd_str (o, "dest", f->dest);
+    Jadd_int (o, "vers", f->vers);
+    Jadd_int (o, "sender", f->sender);
+    Jadd_str (o, "path", f->path);
+    topic = xasprintf ("mrpc.%s", s);
+    if (!(zmsg = flux_event_encode (topic, Jtostr (o))))
+        goto done;
+    if (flux_event_send (f->h, &zmsg) < 0)
         goto done;
     if (kvs_fence (f->h, f->path, f->nprocs + 1) < 0)
         goto done;
     rc = 0;
 done:
-    if (tag)
-        free (tag);
-    if (request)
-        json_object_put (request);
+    if (s)
+        free (s);
+    if (topic)
+        free (topic);
+    Jput (o);
+    zmsg_destroy (&zmsg);
     return rc;
 }
 

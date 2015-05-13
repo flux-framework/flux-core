@@ -1666,6 +1666,7 @@ static int setroot_event_send (ctx_t *ctx, const char *fence)
 {
     JSON in = NULL;
     JSON root = NULL;
+    zmsg_t *zmsg = NULL;
     int rc = -1;
 
     if (event_includes_rootdir) {
@@ -1674,11 +1675,14 @@ static int setroot_event_send (ctx_t *ctx, const char *fence)
     }
     if (!(in = kp_tsetroot_enc (ctx->rootseq, ctx->rootdir, root, fence)))
         goto done;
-    if (flux_event_send (ctx->h, in, "kvs.setroot") < 0)
+    if (!(zmsg = flux_event_encode ("kvs.setroot", Jtostr (in))))
+        goto done;
+    if (flux_event_send (ctx->h, &zmsg) < 0)
         goto done;
     rc = 0;
 done:
     Jput (in);
+    zmsg_destroy (&zmsg);
     return rc;
 }
 

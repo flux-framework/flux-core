@@ -263,13 +263,20 @@ static int send_enter_response (const char *key, void *item, void *arg)
 
 static int exit_event_send (flux_t h, const char *name, int errnum)
 {
-    json_object *o = util_json_object_new_object ();
-    int rc;
+    JSON o = Jnew ();
+    zmsg_t *zmsg = NULL;
+    int rc = -1;
 
-    util_json_object_add_string (o, "name", name);
-    util_json_object_add_int (o, "errnum", errnum);
-    rc = flux_event_send (h, o, "barrier.exit");
-    json_object_put (o);
+    Jadd_str (o, "name", name);
+    Jadd_int (o, "errnum", errnum);
+    if (!(zmsg = flux_event_encode ("barrier.exit", Jtostr (o))))
+        goto done;
+    if (flux_event_send (h, &zmsg) < 0)
+        goto done;
+    rc = 0;
+done:
+    Jput (o);
+    zmsg_destroy (&zmsg);
     return rc;
 }
 

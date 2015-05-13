@@ -399,6 +399,7 @@ done:
 static void cstate_change (ctx_t *ctx, child_t *c, cstate_t newstate)
 {
     JSON event = Jnew ();
+    zmsg_t *zmsg = NULL;
 
     Jadd_int (event, "rank", c->rank);
     Jadd_int (event, "ostate", c->state);
@@ -406,7 +407,11 @@ static void cstate_change (ctx_t *ctx, child_t *c, cstate_t newstate)
     Jadd_int (event, "nstate", c->state);
     Jadd_int (event, "parent", ctx->rank);
     Jadd_int (event, "epoch", ctx->epoch);
-    flux_event_send (ctx->h, event, "live.cstate");
+    if (!(zmsg = flux_event_encode ("live.cstate", Jtostr (event)))
+                || flux_event_send (ctx->h, &zmsg) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: error sending event", __FUNCTION__);
+    }
+    zmsg_destroy (&zmsg);
     Jput (event);
 }
 
