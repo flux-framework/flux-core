@@ -49,6 +49,7 @@ libflux_la_SOURCES = \
 TESTS = test_conf.t \
 	test_module.t \
 	test_message.t \
+	test_event.t \
 	test_tagpool.t
 
 test_ldadd = \
@@ -85,6 +86,10 @@ $(test_module_t_DEPENDENCIES):
 test_message_t_SOURCES = test/message.c
 test_message_t_CPPFLAGS = $(test_cppflags)
 test_message_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_event_t_SOURCES = test/event.c
+test_event_t_CPPFLAGS = $(test_cppflags)
+test_event_t_LDADD = $(test_ldadd) $(LIBDL)
 
 test_tagpool_t_SOURCES = test/tagpool.c
 test_tagpool_t_CPPFLAGS = $(test_cppflags)
