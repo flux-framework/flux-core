@@ -84,11 +84,13 @@ static int shutdown_cb (zloop_t *loop, int timer_id, void *arg)
 
 void shutdown_recvmsg (shutdown_t s, zmsg_t *zmsg)
 {
+    const char *json_str;
     JSON in = NULL;
     const char *reason;
     int grace, rank, rc;
 
-    if (flux_json_event_decode (zmsg, &in) < 0) {
+    if (flux_event_decode (zmsg, NULL, &json_str) < 0
+                || !(in = Jfromstr (json_str))) {
         err ("%s", __FUNCTION__);
         goto done;
     }

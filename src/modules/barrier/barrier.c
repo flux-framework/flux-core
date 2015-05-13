@@ -36,6 +36,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/shortjson.h"
 
 const int barrier_reduction_timeout_msec = 1;
 
@@ -276,11 +277,13 @@ static int exit_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     barrier_t *b;
+    const char *json_str;
     json_object *o = NULL;
     const char *name;
     int errnum;
 
-    if (flux_json_event_decode (*zmsg, &o) < 0
+    if (flux_event_decode (*zmsg, NULL, &json_str) < 0
+            || !(o = Jfromstr (json_str))
             || util_json_object_get_string (o, "name", &name) < 0
             || util_json_object_get_int (o, "errnum", &errnum) < 0) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);

@@ -34,6 +34,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libmrpc/mrpc.h"
@@ -414,14 +415,16 @@ static int mrpc_handler (struct rexec_ctx *ctx, zmsg_t *zmsg)
 {
     int64_t id;
     const char *method;
+    const char *json_str;
     json_object *inarg = NULL;
     json_object *request = NULL;
     int rc = -1;
     flux_t f = ctx->h;
     flux_mrpc_t mrpc;
 
-    if (flux_json_event_decode (zmsg, &request) < 0) {
-        flux_log (f, LOG_ERR, "flux_json_event_decode: %s", strerror (errno));
+    if (flux_event_decode (zmsg, NULL, &json_str) < 0
+                || !(request = Jfromstr (json_str)) ) {
+        flux_log (f, LOG_ERR, "flux_event_decode: %s", strerror (errno));
         return (0);
     }
     mrpc = flux_mrpc_create_fromevent (f, request);

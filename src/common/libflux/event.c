@@ -94,34 +94,6 @@ error:
     return NULL;
 }
 
-int flux_json_event_decode (zmsg_t *zmsg, json_object **in)
-{
-    int type;
-    int rc = -1;
-    JSON o;
-
-    if (in == NULL || zmsg == NULL) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (flux_msg_get_type (zmsg, &type) < 0)
-        goto done;
-    if (type != FLUX_MSGTYPE_EVENT) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (flux_msg_get_payload_json (zmsg, &o) < 0)
-        goto done;
-    if (o == NULL) {
-        errno = EPROTO;
-        goto done;
-    }
-    *in = o;
-    rc = 0;
-done:
-    return rc;
-}
-
 int flux_event_recv (flux_t h, json_object **in, char **topic, bool nb)
 {
     flux_match_t match = {

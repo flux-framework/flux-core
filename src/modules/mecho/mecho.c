@@ -28,22 +28,21 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/shortjson.h"
 #include "src/common/libmrpc/mrpc.h"
 
 /* Copy input arguments to output arguments and respond to RPC.
  */
 static int mecho_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    const char *json_str;
     json_object *request = NULL;
     json_object *inarg = NULL;
     flux_mrpc_t f = NULL;
 
-    if (flux_json_event_decode (*zmsg, &request) < 0) {
-        flux_log (h, LOG_ERR, "flux_json_event_decode: %s", strerror (errno));
-        goto done;
-    }
-    if (!request) {
-        flux_log (h, LOG_ERR, "missing JSON part");
+    if (flux_event_decode (*zmsg, NULL, &json_str) < 0
+                || !(request = Jfromstr (json_str))) {
+        flux_log (h, LOG_ERR, "flux_event_decode: %s", strerror (errno));
         goto done;
     }
     if (!(f = flux_mrpc_create_fromevent (h, request))) {
