@@ -689,43 +689,71 @@ bool flux_msg_has_payload (zmsg_t *zmsg)
     return ((flags & FLUX_MSGFLAG_PAYLOAD));
 }
 
-int flux_msg_set_payload_json (zmsg_t *zmsg, json_object *o)
+int flux_msg_set_payload_json_str (zmsg_t *zmsg, const char *s)
 {
     int rc;
-    if (o) {
-        const char *s = json_object_to_json_string (o);
+    if (s) {
         int len = strlen (s);
-        rc = flux_msg_set_payload (zmsg, FLUX_MSGFLAG_JSON, (char *)s, len);
+        rc = flux_msg_set_payload (zmsg, FLUX_MSGFLAG_JSON, (char *)s, len + 1);
     } else
         rc = flux_msg_set_payload (zmsg, 0, NULL, 0);
     return rc;
 }
 
+int flux_msg_get_payload_json_str (zmsg_t *zmsg, const char **s)
+{
+    char *buf;
+    int size;
+    int flags;
+    int rc = -1;
+
+    if (!s) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (flux_msg_get_payload (zmsg, &flags, (void **)&buf, &size) < 0) {
+        errno = 0;
+        *s = NULL;
+    } else {
+        if (!buf || size == 0 || !(flags & FLUX_MSGFLAG_JSON)
+                              || buf[size - 1] != '\0') {
+            errno = EPROTO;
+            goto done;
+        }
+        *s = buf;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+int flux_msg_set_payload_json (zmsg_t *zmsg, json_object *o)
+{
+    const char *s = o ? json_object_to_json_string (o) : NULL;
+
+    return flux_msg_set_payload_json_str (zmsg, s);
+}
+
 int flux_msg_get_payload_json (zmsg_t *zmsg, json_object **o)
 {
     struct json_tokener *tok = NULL;
-    int flags;
-    char *buf;
-    int size;
+    const char *s;
     int rc = -1;
 
     if (!o) {
         errno = EINVAL;
         goto done;
     }
-    if (flux_msg_get_payload (zmsg, &flags, (void **)&buf, &size) < 0) {
-        errno = 0;
+    if (flux_msg_get_payload_json_str (zmsg, &s) < 0)
+        goto done;
+    if (!s) {
         *o = NULL;
     } else {
-        if (!buf || size == 0 || !(flags & FLUX_MSGFLAG_JSON)) {
-            errno = EPROTO;
-            goto done;
-        }
         if (!(tok = json_tokener_new ())) {
             errno = ENOMEM;
             goto done;
         }
-        if (!(*o = json_tokener_parse_ex (tok, buf, size))) {
+        if (!(*o = json_tokener_parse_ex (tok, s, strlen (s)))) {
             errno = EPROTO;
             goto done;
         }

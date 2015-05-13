@@ -57,6 +57,13 @@ bool flux_msg_has_payload (zmsg_t *zmsg);
 int flux_msg_set_payload_json (zmsg_t *zmsg, json_object *o);
 int flux_msg_get_payload_json (zmsg_t *zmsg, json_object **o);
 
+/* Get/set json string payload.
+ * set allows s to be NULL
+ * get will set *s to NULL and return success if there is no payload.
+ */
+int flux_msg_set_payload_json_str (zmsg_t *zmsg, const char *s);
+int flux_msg_get_payload_json_str (zmsg_t *zmsg, const char **s);
+
 /* Get/set nodeid (request only)
  * If flags includes FLUX_NODEID_UPSTREAM, nodeid is the sending rank.
  * FLUX_NODEID_UPSTREAM is a stand in for this flag + sending rank in

@@ -129,6 +129,55 @@ void check_topic (void)
     zmsg_destroy (&zmsg);
 }
 
+void check_payload_json (void)
+{
+    JSON o;
+    zmsg_t *zmsg;
+    int n;
+
+    ok ((zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+       "zmsg_create works");
+
+    o = (JSON)zmsg;
+    ok (flux_msg_get_payload_json (zmsg, &o) == 0 && o == NULL,
+       "flux_msg_get_payload_json returns success with no payload");
+
+    o = Jnew();
+    Jadd_int (o, "foo", 42);
+    ok (flux_msg_set_payload_json (zmsg, o) == 0,
+       "flux_msg_set_payload_json works");
+    o = (JSON)zmsg;
+    n = 0;
+    ok (flux_msg_get_payload_json (zmsg, &o) == 0 && o != NULL
+                && Jget_int (o, "foo", &n) && n == 42,
+       "flux_msg_get_payload_json returns payload intact");
+
+    Jput (o);
+    zmsg_destroy (&zmsg);
+}
+
+void check_payload_json_str (void)
+{
+    const char *s;
+    zmsg_t *zmsg;
+    const char *json_str = "{\"foo\"=42}";
+
+    ok ((zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+       "zmsg_create works");
+
+    s = (char *)zmsg;
+    ok (flux_msg_get_payload_json_str (zmsg, &s) == 0 && s == NULL,
+       "flux_msg_get_payload_json_str returns success with no payload");
+
+    ok (flux_msg_set_payload_json_str (zmsg, json_str) == 0,
+       "flux_msg_set_payload_json_str works");
+    ok (flux_msg_get_payload_json_str (zmsg, &s) == 0 && s != NULL
+        && !strcmp (s, json_str),
+       "flux_msg_get_payload_json_str returns payload intact");
+
+    zmsg_destroy (&zmsg);
+}
+
 /* flux_msg_get_payload, flux_msg_set_payload
  *  on message with and without routes, with and without topic string
  */
@@ -143,7 +192,7 @@ void check_payload (void)
        "zmsg_create works");
     errno = 0;
     ok (flux_msg_get_payload (zmsg, &flags, &buf, &len) < 0 && errno == EPROTO,
-       "flux_msg_get_payload fails with EPROTO on msg w/o topic");
+       "flux_msg_get_payload fails with EPROTO on msg w/o payload");
     errno = 0;
     ok (flux_msg_set_payload (zmsg, 0, NULL, 0) == 0 && errno == 0,
         "flux_msg_set_payload NULL works with no payload");
@@ -342,7 +391,7 @@ void check_cmp (void)
 
 int main (int argc, char *argv[])
 {
-    plan (90);
+    plan (98);
 
     lives_ok ({zmsg_test (false);}, // 1
         "zmsg_test doesn't assert");
@@ -351,6 +400,8 @@ int main (int argc, char *argv[])
     check_routes ();                // 26
     check_topic ();                 // 11
     check_payload ();               // 21
+    check_payload_json ();          // 4
+    check_payload_json_str ();      // 4
     check_matchtag ();              // 6
 
     check_cmp ();                   // 8
