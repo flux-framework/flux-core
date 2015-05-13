@@ -638,7 +638,7 @@ static bool match_sub (module_t p, const char *topic)
 
 int module_event_mcast (modhash_t mh, zmsg_t *zmsg)
 {
-    char *topic = NULL;
+    const char *topic;
     zlist_t *uuids;
     char *uuid;
     int rc = -1;
@@ -662,8 +662,6 @@ int module_event_mcast (modhash_t mh, zmsg_t *zmsg)
     }
     rc = 0;
 done:
-    if (topic)
-        free (topic);
     zlist_destroy (&uuids);
     return rc;
 }

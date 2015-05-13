@@ -1738,7 +1738,7 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     json_object *o = NULL;
-    char *topic = NULL;
+    const char *topic;
     int rc = -1;
 
     if (flux_msg_get_topic (*zmsg, &topic) < 0) {
@@ -1804,8 +1804,6 @@ done:       /* reactor continues */
 done_stop:  /* reactor terminates */
     if (o)
         json_object_put (o);
-    if (topic)
-        free (topic);
     return rc;
 }
 

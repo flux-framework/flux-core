@@ -302,7 +302,7 @@ done:
 static int null_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     //ctx_t *ctx = arg;
-    char *topic = NULL;
+    const char *topic;
     int type, size, flags;
     int rc = -1;
     void *buf;

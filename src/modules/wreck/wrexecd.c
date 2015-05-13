@@ -1444,7 +1444,7 @@ int signal_cb (flux_t f, int fd, short revents, struct prog_ctx *ctx)
 
 int cmb_cb (flux_t f, void *zs, short revents, struct prog_ctx *ctx)
 {
-    char *tag = NULL;
+    const char *topic;
     json_object *o = NULL;
 
     zmsg_t *zmsg = zmsg_recv (zs);
@@ -1454,7 +1454,7 @@ int cmb_cb (flux_t f, void *zs, short revents, struct prog_ctx *ctx)
     }
     free (zmsg_popstr (zmsg)); /* Destroy dealer id */
 
-    if (flux_msg_get_topic (zmsg, &tag) < 0) {
+    if (flux_msg_get_topic (zmsg, &topic) < 0) {
         log_err (ctx, "flux_msg_get_topic");
         goto done;
     }
@@ -1464,7 +1464,7 @@ int cmb_cb (flux_t f, void *zs, short revents, struct prog_ctx *ctx)
     }
 
     /* Got an incoming message from cmbd */
-    if (strcmp (tag, "rexec.kill") == 0) {
+    if (strcmp (topic, "rexec.kill") == 0) {
         int sig = json_object_get_int (o);
         if (sig == 0)
             sig = 9;
@@ -1475,8 +1475,6 @@ done:
     zmsg_destroy (&zmsg);
     if (o)
         json_object_put (o);
-    if (tag)
-        free (tag);
     return (0);
 }
 

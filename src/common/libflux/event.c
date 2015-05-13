@@ -72,14 +72,16 @@ int flux_event_recv (flux_t h, json_object **in, char **topic, bool nb)
         .topic_glob = NULL,
     };
     zmsg_t *zmsg;
+    const char *s;
     int rc = -1;
 
     if (!(zmsg = flux_recvmsg_match (h, match, NULL, nb)))
         goto done;
-    if (flux_msg_get_topic (zmsg, topic) < 0)
+    if (flux_msg_get_topic (zmsg, &s) < 0)
         goto done;
     if (flux_msg_get_payload_json (zmsg, in) < 0)
         goto done;
+    *topic = xstrdup (s);
     rc = 0;
 done:
     if (zmsg)

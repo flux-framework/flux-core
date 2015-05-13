@@ -281,12 +281,10 @@ static int msg_cb (flux_t h, void *arg)
             if (flux_err_respond (h, ENOSYS, &zmsg) < 0)
                 goto done;
         } else if (flux_flags_get (h) & FLUX_O_TRACE) {
-            char *topic = NULL;
+            const char *topic = NULL;
             (void)flux_msg_get_topic (zmsg, &topic);
             fprintf (stderr, "nomatch: %s '%s'\n", flux_msgtype_string (type),
                      topic ? topic : "");
-            if (topic)
-                free (topic);
         }
         rc = 0;
     }

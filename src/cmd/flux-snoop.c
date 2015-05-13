@@ -239,7 +239,7 @@ static int snoop_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
     zmsg_t *zmsg;
 
     if ((zmsg = zmsg_recv (zs))) {
-        char *topic = NULL;
+        const char *topic;
         if (flux_msg_get_topic (zmsg, &topic) < 0
                  || (subscribed (topic) && (aopt || !suppress (topic)))) {
             if (lopt) {
@@ -252,8 +252,6 @@ static int snoop_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
                 zdump_fprint (stderr, zmsg, pfx);
             }
         }
-        if (topic)
-            free (topic);
         zmsg_destroy (&zmsg);
     }
     return 0;

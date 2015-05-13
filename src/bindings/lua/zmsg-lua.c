@@ -54,11 +54,12 @@ static const char * zmsg_type_string (int typemask);
 
 struct zmsg_info * zmsg_info_create (zmsg_t **zmsg, int typemask)
 {
+    const char *topic;
     struct zmsg_info *zi = malloc (sizeof (*zi));
     if (zi == NULL)
         return (NULL);
 
-    if (flux_msg_get_topic (*zmsg, &zi->tag) < 0) {
+    if (flux_msg_get_topic (*zmsg, &topic) < 0 || !(zi->tag = strdup (topic))) {
         free (zi);
         return (NULL);
     }

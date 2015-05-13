@@ -129,7 +129,8 @@ error:
     return NULL;
 }
 
-static subscription_t *subscription_create (flux_t h, int type, char *topic)
+static subscription_t *subscription_create (flux_t h, int type,
+                                            const char *topic)
 {
     subscription_t *sub = xzmalloc (sizeof (*sub));
     sub->type = type;
@@ -151,7 +152,8 @@ static void subscription_destroy (flux_t h, subscription_t *sub)
     free (sub);
 }
 
-static subscription_t *subscription_lookup (client_t *c, int type, char *topic)
+static subscription_t *subscription_lookup (client_t *c, int type,
+                                            const char *topic)
 {
     subscription_t *sub;
 
@@ -221,26 +223,21 @@ static void client_destroy (client_t *c)
     free (c);
 }
 
-static bool match_substr (zmsg_t *zmsg, const char *topic, char **rest)
+static bool match_substr (zmsg_t *zmsg, const char *topic, const char **rest)
 {
-    if (!flux_msg_strneq_topic (zmsg, topic, strlen (topic)))
+    const char *s;
+    if (flux_msg_get_topic (zmsg, &s) < 0)
         return false;
-    if (rest) {
-        char *s = NULL;
-        if (flux_msg_get_topic (zmsg, &s) < 0)
-            *rest = NULL;
-        else {
-            memmove (s, s + strlen (topic), strlen (s) - strlen (topic) + 1);
-            *rest = s;
-        }
-    }
+    if (strncmp(topic, s, strlen (topic)) != 0)
+        return false;
+    if (rest)
+        *rest = s + strlen (topic);
     return true;
 }
 
 static int client_read (ctx_t *ctx, client_t *c)
 {
     zmsg_t *zmsg = NULL;
-    char *name = NULL;
     subscription_t *sub;
     int type;
 
@@ -255,6 +252,7 @@ static int client_read (ctx_t *ctx, client_t *c)
         goto done;
     }
     switch (type) {
+        const char *name;
         case FLUX_MSGTYPE_REQUEST:
             if (match_substr (zmsg, "api.event.subscribe.", &name)) {
                 sub = subscription_create (ctx->h, FLUX_MSGTYPE_EVENT, name);
@@ -269,17 +267,19 @@ static int client_read (ctx_t *ctx, client_t *c)
             }
             /* insert disconnect notifier before forwarding request */
             if (c->disconnect_notify) {
-                char *topic = NULL, *p;
+                const char *topic;
+                char *p, *cpy = NULL;
                 if (flux_msg_get_topic (zmsg, &topic) < 0)
                     goto done;
-                if ((p = strchr (topic, '.')))
+                cpy = xstrdup (topic);
+                if ((p = strchr (cpy, '.')))
                     *p = '\0';
-                if (zhash_lookup (c->disconnect_notify, topic) == NULL) {
-                    if (zhash_insert (c->disconnect_notify, topic, topic) < 0)
+                if (zhash_lookup (c->disconnect_notify, cpy) == NULL) {
+                    if (zhash_insert (c->disconnect_notify, cpy, cpy) < 0)
                         oom ();
-                    zhash_freefn (c->disconnect_notify, topic, free);
+                    zhash_freefn (c->disconnect_notify, cpy, free);
                 } else
-                    free (topic);
+                    free (cpy);
             }
             if (flux_msg_push_route (zmsg, zuuid_str (c->uuid)) < 0)
                 oom (); /* FIXME */
@@ -298,8 +298,6 @@ static int client_read (ctx_t *ctx, client_t *c)
 done:
     if (zmsg)
         zmsg_destroy (&zmsg);
-    if (name)
-        free (name);
     return 0;
 }
 

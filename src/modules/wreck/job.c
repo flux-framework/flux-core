@@ -221,15 +221,15 @@ done:
 static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     json_object *o = NULL;
-    char *tag = NULL;
+    const char *topic;
 
-    if (flux_msg_get_topic (*zmsg, &tag) < 0)
+    if (flux_msg_get_topic (*zmsg, &topic) < 0)
         goto out;
     if (flux_msg_get_payload_json (*zmsg, &o) >= 0) {
-        if (strcmp (tag, "job.shutdown") == 0) {
+        if (strcmp (topic, "job.shutdown") == 0) {
             flux_reactor_stop (h);
         }
-        if (strcmp (tag, "job.next-id") == 0) {
+        if (strcmp (topic, "job.next-id") == 0) {
             if (flux_treeroot (h)) {
                 unsigned long id = lwj_next_id (h);
                 json_object *ox = json_id (id);
@@ -237,12 +237,12 @@ static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
                 json_object_put (o);
             }
             else {
-                fprintf (stderr, "%s: forwarding request\n", tag);
+                fprintf (stderr, "%s: forwarding request\n", topic);
                 flux_json_request (h, FLUX_NODEID_ANY,
-                                      FLUX_MATCHTAG_NONE, tag, o);
+                                      FLUX_MATCHTAG_NONE, topic, o);
             }
         }
-        if (strcmp (tag, "job.create") == 0) {
+        if (strcmp (topic, "job.create") == 0) {
             json_object *jobinfo = NULL;
             unsigned long id = lwj_next_id (h);
 #if SIMULATOR_RACE_WORKAROUND
@@ -272,8 +272,6 @@ static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 out:
     if (o)
         json_object_put (o);
-    if (tag)
-        free (tag);
     zmsg_destroy (zmsg);
     return 0;
 }

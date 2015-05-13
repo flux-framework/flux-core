@@ -317,7 +317,7 @@ static int l_flux_send (lua_State *L)
 static int l_flux_recv (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
-    char *tag = NULL;
+    const char *topic;
     json_object *o = NULL;
     int errnum;
     zmsg_t *zmsg;
@@ -337,7 +337,7 @@ static int l_flux_recv (lua_State *L)
     if (flux_msg_get_errnum (zmsg, &errnum) < 0)
         return lua_pusherror (L, strerror (errno));
 
-    if (errnum == 0 && (flux_msg_get_topic (zmsg, &tag) < 0
+    if (errnum == 0 && (flux_msg_get_topic (zmsg, &topic) < 0
                      || flux_msg_get_payload_json (zmsg, &o) < 0))
         return lua_pusherror (L, strerror (errno));
 
@@ -357,9 +357,7 @@ static int l_flux_recv (lua_State *L)
         lua_setfield (L, -1, "errnum");
     }
 
-    if (tag == NULL)
-        return (1);
-    lua_pushstring (L, tag);
+    lua_pushstring (L, topic);
     return (2);
 }
 
