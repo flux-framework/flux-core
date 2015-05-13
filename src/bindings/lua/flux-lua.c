@@ -318,6 +318,7 @@ static int l_flux_recv (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
     const char *topic;
+    const char *json_str = NULL;
     json_object *o = NULL;
     int errnum;
     zmsg_t *zmsg;
@@ -332,14 +333,17 @@ static int l_flux_recv (lua_State *L)
         match.matchtag = lua_tointeger (L, 2);
 
     if (!(zmsg = flux_recvmsg_match (f, match, NULL, false)))
-        return lua_pusherror (L, strerror (errno));
+        goto error;
 
     if (flux_msg_get_errnum (zmsg, &errnum) < 0)
-        return lua_pusherror (L, strerror (errno));
+        goto error;
 
     if (errnum == 0 && (flux_msg_get_topic (zmsg, &topic) < 0
-                     || flux_msg_get_payload_json (zmsg, &o) < 0))
-        return lua_pusherror (L, strerror (errno));
+                     || flux_msg_get_payload_json (zmsg, &json_str) < 0))
+        goto error;
+
+    if (json_str && !(o = json_tokener_parse (json_str)))
+        goto error;
 
     if (o != NULL) {
         json_object_to_lua (L, o);
@@ -359,6 +363,13 @@ static int l_flux_recv (lua_State *L)
 
     lua_pushstring (L, topic);
     return (2);
+error:
+    if (zmsg) {
+        int saved_errno = errno;
+        zmsg_destroy (&zmsg);
+        errno = saved_errno;
+    }
+    return lua_pusherror (L, strerror (errno));
 }
 
 static int l_flux_rpc (lua_State *L)
@@ -457,7 +468,7 @@ static int l_flux_recv_event (lua_State *L)
         return lua_pusherror (L, strerror (errno));
 
     if (flux_msg_get_topic (zmsg, &topic) < 0
-            || flux_msg_get_payload_json_str (zmsg, &json_str) < 0
+            || flux_msg_get_payload_json (zmsg, &json_str) < 0
             || (json_str && !(o = json_tokener_parse (json_str)))) {
         zmsg_destroy (&zmsg);
         return lua_pusherror (L, strerror (errno));

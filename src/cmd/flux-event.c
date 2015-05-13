@@ -140,7 +140,7 @@ static void event_sub (flux_t h, int argc, char **argv)
         const char *topic;
         const char *json_str;
         if (flux_msg_get_topic (zmsg, &topic) < 0
-                || flux_msg_get_payload_json_str (zmsg, &json_str) < 0) {
+                || flux_msg_get_payload_json (zmsg, &json_str) < 0) {
             printf ("malformed message ignored\n");
         } else {
             printf ("%s\t%s\n", topic, json_str ? json_str : "");

@@ -34,8 +34,6 @@
 
 #include "message.h"
 
-#include "src/common/libutil/jsonutil.h"
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/log.h"
 
 /* Begin manual codec
@@ -687,7 +685,7 @@ bool flux_msg_has_payload (zmsg_t *zmsg)
     return ((flags & FLUX_MSGFLAG_PAYLOAD));
 }
 
-int flux_msg_set_payload_json_str (zmsg_t *zmsg, const char *s)
+int flux_msg_set_payload_json (zmsg_t *zmsg, const char *s)
 {
     int rc;
     if (s) {
@@ -698,7 +696,7 @@ int flux_msg_set_payload_json_str (zmsg_t *zmsg, const char *s)
     return rc;
 }
 
-int flux_msg_get_payload_json_str (zmsg_t *zmsg, const char **s)
+int flux_msg_get_payload_json (zmsg_t *zmsg, const char **s)
 {
     char *buf;
     int size;
@@ -722,44 +720,6 @@ int flux_msg_get_payload_json_str (zmsg_t *zmsg, const char **s)
     }
     rc = 0;
 done:
-    return rc;
-}
-
-int flux_msg_set_payload_json (zmsg_t *zmsg, json_object *o)
-{
-    const char *s = o ? json_object_to_json_string (o) : NULL;
-
-    return flux_msg_set_payload_json_str (zmsg, s);
-}
-
-int flux_msg_get_payload_json (zmsg_t *zmsg, json_object **o)
-{
-    struct json_tokener *tok = NULL;
-    const char *s;
-    int rc = -1;
-
-    if (!o) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (flux_msg_get_payload_json_str (zmsg, &s) < 0)
-        goto done;
-    if (!s) {
-        *o = NULL;
-    } else {
-        if (!(tok = json_tokener_new ())) {
-            errno = ENOMEM;
-            goto done;
-        }
-        if (!(*o = json_tokener_parse_ex (tok, s, strlen (s)))) {
-            errno = EPROTO;
-            goto done;
-        }
-    }
-    rc = 0;
-done:
-    if (tok)
-        json_tokener_free (tok);
     return rc;
 }
 

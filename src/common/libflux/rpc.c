@@ -42,12 +42,22 @@ static int multrpc_cb (zmsg_t *zmsg, uint32_t nodeid,
                        flux_multrpc_f cb, void *arg)
 {
     int errnum = 0;
+    const char *json_str = NULL;
     JSON out = NULL;
 
-    if (flux_msg_get_errnum (zmsg, &errnum) < 0)
+    if (flux_msg_get_errnum (zmsg, &errnum) < 0) {
         errnum = errno;
-    if (errnum == 0 && flux_msg_get_payload_json (zmsg, &out) < 0)
+        goto done;
+    }
+    if (flux_msg_get_payload_json (zmsg, &json_str) < 0) {
         errnum = errno;
+        goto done;
+    }
+    if (json_str && !(out = Jfromstr (json_str))) {
+        errnum = EPROTO;
+        goto done;
+    }
+done:
     if (cb && cb (nodeid, errnum, out, arg) < 0)
         errnum = errno;
     Jput (out);
@@ -164,7 +174,8 @@ int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
     };
     int rc = -1;
     int errnum;
-    JSON o;
+    const char *json_str;
+    JSON o = NULL;
 
     if (match.matchtag == FLUX_MATCHTAG_NONE) {
         errno = EAGAIN;
@@ -180,8 +191,12 @@ int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
         errno = errnum;
         goto done;
     }
-    if (flux_msg_get_payload_json (zmsg, &o) < 0)
+    if (flux_msg_get_payload_json (zmsg, &json_str) < 0)
         goto done;
+    if (json_str && !(o = Jfromstr (json_str))) {
+        errno = EPROTO;
+        goto done;
+    }
     if ((!o && out)) {
         errno = EPROTO;
         goto done;

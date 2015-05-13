@@ -38,7 +38,8 @@ int flux_json_request_decode (zmsg_t *zmsg, json_object **in)
 {
     int type;
     int rc = -1;
-    JSON o;
+    const char *json_str;
+    JSON o = NULL;
 
     if (in == NULL || zmsg == NULL) {
         errno = EINVAL;
@@ -50,9 +51,9 @@ int flux_json_request_decode (zmsg_t *zmsg, json_object **in)
         errno = EPROTO;
         goto done;
     }
-    if (flux_msg_get_payload_json (zmsg, &o) < 0)
+    if (flux_msg_get_payload_json (zmsg, &json_str) < 0)
         goto done;
-    if (o == NULL) {
+    if (json_str == NULL || !(o = Jfromstr (json_str))) {
         errno = EPROTO;
         goto done;
     }
@@ -65,7 +66,8 @@ done:
 int flux_json_response_decode (zmsg_t *zmsg, json_object **out)
 {
     int errnum;
-    JSON o;
+    const char *json_str;
+    JSON o = NULL;
     int rc = -1;
 
     if (out == NULL || zmsg == NULL) {
@@ -78,9 +80,9 @@ int flux_json_response_decode (zmsg_t *zmsg, json_object **out)
         errno = errnum;
         goto done;
     }
-    if (flux_msg_get_payload_json (zmsg, &o) < 0)
+    if (flux_msg_get_payload_json (zmsg, &json_str) < 0)
         goto done;
-    if (o == NULL) {
+    if (json_str == NULL || !(o = Jfromstr (json_str))) {
         errno = EPROTO;
         goto done;
     }
@@ -137,7 +139,7 @@ int flux_json_request (flux_t h, uint32_t nodeid, uint32_t matchtag,
         goto done;
     if (flux_msg_set_topic (zmsg, topic) < 0)
         goto done;
-    if (flux_msg_set_payload_json (zmsg, in) < 0)
+    if (flux_msg_set_payload_json (zmsg, in ? Jtostr (in) : NULL) < 0)
         goto done;
     if (flux_msg_enable_route (zmsg) < 0)
         goto done;
@@ -153,7 +155,7 @@ int flux_json_respond (flux_t h, JSON out, zmsg_t **zmsg)
 
     if (flux_msg_set_type (*zmsg, FLUX_MSGTYPE_RESPONSE) < 0)
         goto done;
-    if (flux_msg_set_payload_json (*zmsg, out) < 0)
+    if (flux_msg_set_payload_json (*zmsg, out ? Jtostr (out) : NULL) < 0)
         goto done;
     rc = flux_sendmsg (h, zmsg);
 done:

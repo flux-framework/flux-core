@@ -1176,7 +1176,7 @@ static int watch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             errnum = errno;
             goto done;
         }
-        if (flux_msg_set_payload_json (*zmsg, in2) < 0) {
+        if (flux_msg_set_payload_json (*zmsg, Jtostr (in2)) < 0) {
             errnum = errno;
             goto done;
         }

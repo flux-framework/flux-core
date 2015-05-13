@@ -1,6 +1,5 @@
 #include "src/common/libflux/message.h"
 #include "src/common/libtap/tap.h"
-#include "src/common/libutil/shortjson.h"
 
 /* flux_msg_get_route_first, flux_msg_get_route_last, _get_route_count
  *   on message with variable number of routing frames
@@ -129,33 +128,6 @@ void check_topic (void)
 
 void check_payload_json (void)
 {
-    JSON o;
-    zmsg_t *zmsg;
-    int n;
-
-    ok ((zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
-       "zmsg_create works");
-
-    o = (JSON)zmsg;
-    ok (flux_msg_get_payload_json (zmsg, &o) == 0 && o == NULL,
-       "flux_msg_get_payload_json returns success with no payload");
-
-    o = Jnew();
-    Jadd_int (o, "foo", 42);
-    ok (flux_msg_set_payload_json (zmsg, o) == 0,
-       "flux_msg_set_payload_json works");
-    o = (JSON)zmsg;
-    n = 0;
-    ok (flux_msg_get_payload_json (zmsg, &o) == 0 && o != NULL
-                && Jget_int (o, "foo", &n) && n == 42,
-       "flux_msg_get_payload_json returns payload intact");
-
-    Jput (o);
-    zmsg_destroy (&zmsg);
-}
-
-void check_payload_json_str (void)
-{
     const char *s;
     zmsg_t *zmsg;
     const char *json_str = "{\"foo\"=42}";
@@ -164,14 +136,14 @@ void check_payload_json_str (void)
        "zmsg_create works");
 
     s = (char *)zmsg;
-    ok (flux_msg_get_payload_json_str (zmsg, &s) == 0 && s == NULL,
-       "flux_msg_get_payload_json_str returns success with no payload");
+    ok (flux_msg_get_payload_json (zmsg, &s) == 0 && s == NULL,
+       "flux_msg_get_payload_json returns success with no payload");
 
-    ok (flux_msg_set_payload_json_str (zmsg, json_str) == 0,
-       "flux_msg_set_payload_json_str works");
-    ok (flux_msg_get_payload_json_str (zmsg, &s) == 0 && s != NULL
+    ok (flux_msg_set_payload_json (zmsg, json_str) == 0,
+       "flux_msg_set_payload_json works");
+    ok (flux_msg_get_payload_json (zmsg, &s) == 0 && s != NULL
         && !strcmp (s, json_str),
-       "flux_msg_get_payload_json_str returns payload intact");
+       "flux_msg_get_payload_json returns payload intact");
 
     zmsg_destroy (&zmsg);
 }
@@ -389,7 +361,7 @@ void check_cmp (void)
 
 int main (int argc, char *argv[])
 {
-    plan (98);
+    plan (94);
 
     lives_ok ({zmsg_test (false);}, // 1
         "zmsg_test doesn't assert");
@@ -399,7 +371,6 @@ int main (int argc, char *argv[])
     check_topic ();                 // 11
     check_payload ();               // 21
     check_payload_json ();          // 4
-    check_payload_json_str ();      // 4
     check_matchtag ();              // 6
 
     check_cmp ();                   // 8

@@ -1445,6 +1445,7 @@ int signal_cb (flux_t f, int fd, short revents, struct prog_ctx *ctx)
 int cmb_cb (flux_t f, void *zs, short revents, struct prog_ctx *ctx)
 {
     const char *topic;
+    const char *json_str;
     json_object *o = NULL;
 
     zmsg_t *zmsg = zmsg_recv (zs);
@@ -1458,8 +1459,12 @@ int cmb_cb (flux_t f, void *zs, short revents, struct prog_ctx *ctx)
         log_err (ctx, "flux_msg_get_topic");
         goto done;
     }
-    if (flux_msg_get_payload_json (zmsg, &o) < 0) {
+    if (flux_msg_get_payload_json (zmsg, &json_str) < 0) {
         log_err (ctx, "flux_msg_get_payload_json");
+        goto done;
+    }
+    if (json_str && !(o = json_tokener_parse (json_str))) {
+        log_err (ctx, "json_tokener_parse");
         goto done;
     }
 

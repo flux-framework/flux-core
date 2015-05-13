@@ -53,7 +53,7 @@ int flux_event_decode (zmsg_t *zmsg, const char **topic, const char **json_str)
     }
     if (flux_msg_get_topic (zmsg, &ts) < 0)
         goto done;
-    if (flux_msg_get_payload_json_str (zmsg, &js) < 0)
+    if (flux_msg_get_payload_json (zmsg, &js) < 0)
         goto done;
     if ((json_str && !js) || (!json_str && js)) {
         errno = EPROTO;
@@ -82,7 +82,7 @@ zmsg_t *flux_event_encode (const char *topic, const char *json_str)
         goto error;
     if (flux_msg_enable_route (zmsg) < 0)
         goto error;
-    if (json_str && flux_msg_set_payload_json_str (zmsg, json_str) < 0)
+    if (json_str && flux_msg_set_payload_json (zmsg, json_str) < 0)
         goto error;
     return zmsg;
 error:

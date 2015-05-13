@@ -220,53 +220,56 @@ done:
 
 static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    const char *json_str;
     json_object *o = NULL;
     const char *topic;
 
     if (flux_msg_get_topic (*zmsg, &topic) < 0)
         goto out;
-    if (flux_msg_get_payload_json (*zmsg, &o) >= 0) {
-        if (strcmp (topic, "job.shutdown") == 0) {
-            flux_reactor_stop (h);
-        }
-        if (strcmp (topic, "job.next-id") == 0) {
-            if (flux_treeroot (h)) {
-                unsigned long id = lwj_next_id (h);
-                json_object *ox = json_id (id);
-                flux_json_respond (h, ox, zmsg);
-                json_object_put (o);
-            }
-            else {
-                fprintf (stderr, "%s: forwarding request\n", topic);
-                flux_json_request (h, FLUX_NODEID_ANY,
-                                      FLUX_MATCHTAG_NONE, topic, o);
-            }
-        }
-        if (strcmp (topic, "job.create") == 0) {
-            json_object *jobinfo = NULL;
+    if (flux_msg_get_payload_json (*zmsg, &json_str) < 0)
+        goto out;
+    if (json_str && !(o = json_tokener_parse (json_str)))
+        goto out;
+    if (strcmp (topic, "job.shutdown") == 0) {
+        flux_reactor_stop (h);
+    }
+    if (strcmp (topic, "job.next-id") == 0) {
+        if (flux_treeroot (h)) {
             unsigned long id = lwj_next_id (h);
-#if SIMULATOR_RACE_WORKAROUND
-            //"Fix" for Race Condition
-            if (wait_for_lwj_watch_init (h, id) < 0) {
-                flux_err_respond (h, errno, zmsg);
-                goto out;
-            }
-#endif
-            int rc = kvs_job_new (h, id);
-            if (rc < 0) {
-                flux_err_respond (h, errno, zmsg);
-                goto out;
-            }
-            add_jobinfo (h, id, o);
-
-            kvs_commit (h);
-
-            /* Generate reply with new jobid */
-            jobinfo = util_json_object_new_object ();
-            util_json_object_add_int64 (jobinfo, "jobid", id);
-            flux_json_respond (h, jobinfo, zmsg);
-            json_object_put (jobinfo);
+            json_object *ox = json_id (id);
+            flux_json_respond (h, ox, zmsg);
+            json_object_put (o);
         }
+        else {
+            fprintf (stderr, "%s: forwarding request\n", topic);
+            flux_json_request (h, FLUX_NODEID_ANY,
+                                  FLUX_MATCHTAG_NONE, topic, o);
+        }
+    }
+    if (strcmp (topic, "job.create") == 0) {
+        json_object *jobinfo = NULL;
+        unsigned long id = lwj_next_id (h);
+#if SIMULATOR_RACE_WORKAROUND
+        //"Fix" for Race Condition
+        if (wait_for_lwj_watch_init (h, id) < 0) {
+            flux_err_respond (h, errno, zmsg);
+            goto out;
+        }
+#endif
+        int rc = kvs_job_new (h, id);
+        if (rc < 0) {
+            flux_err_respond (h, errno, zmsg);
+            goto out;
+        }
+        add_jobinfo (h, id, o);
+
+        kvs_commit (h);
+
+        /* Generate reply with new jobid */
+        jobinfo = util_json_object_new_object ();
+        util_json_object_add_int64 (jobinfo, "jobid", id);
+        flux_json_respond (h, jobinfo, zmsg);
+        json_object_put (jobinfo);
     }
 
 out:

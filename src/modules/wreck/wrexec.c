@@ -374,13 +374,14 @@ static int rexec_session_kill (struct rexec_session *s, int sig)
 {
     int rc = -1;
     json_object *o = json_object_new_int (sig);
+    const char *json_str = json_object_to_json_string (o);
     zmsg_t * zmsg = NULL;
 
     if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
         goto done;
     if (flux_msg_set_topic (zmsg, "wrexec.kill") < 0)
         goto done;
-    if (flux_msg_set_payload_json (zmsg, o) < 0)
+    if (flux_msg_set_payload_json (zmsg, json_str) < 0)
         goto done;
 
     zmsg_dump (zmsg);
@@ -529,6 +530,7 @@ done:
 static int request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     struct rexec_ctx *ctx = arg;
+    const char *json_str;
     json_object *o = NULL;
     const char *topic;
 
@@ -538,7 +540,8 @@ static int request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         flux_reactor_stop (h);
         return 0;
     }
-    if (flux_msg_get_payload_json (*zmsg, &o) < 0)
+    if (flux_msg_get_payload_json (*zmsg, &json_str) < 0
+            || (json_str && !(o = json_tokener_parse (json_str))))
         goto done;
     msg ("forwarding %s to session", topic);
     fwd_to_session (ctx, zmsg, o);

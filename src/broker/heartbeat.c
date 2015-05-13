@@ -147,71 +147,32 @@ void heartbeat_stop (heartbeat_t h)
         zloop_timer_end (h->zloop, h->timer_id);
 }
 
-static JSON heartbeat_json_encode (heartbeat_t h)
-{
-    JSON out = Jnew ();
-    Jadd_int (out, "epoch", h->epoch);
-    return out;
-}
-
 zmsg_t *heartbeat_event_encode (heartbeat_t h)
 {
-    JSON out = heartbeat_json_encode (h);
-    zmsg_t *zmsg = flux_msg_create (FLUX_MSGTYPE_EVENT);
-    if (!zmsg)
-        goto done;
-    if (flux_msg_set_topic (zmsg, "hb") < 0) {
-        zmsg_destroy (&zmsg);
-        goto done;
-    }
-    if (flux_msg_set_payload_json (zmsg, out) < 0) {
-        zmsg_destroy (&zmsg);
-        goto done;
-    }
-done:
-    Jput (out);
+    JSON o = Jnew ();
+    zmsg_t *zmsg;
+
+    Jadd_int (o, "epoch", h->epoch);
+    zmsg = flux_event_encode ("hb", Jtostr (o));
+    Jput (o);
     return zmsg;
 }
 
-static int heartbeat_json_decode (heartbeat_t h, JSON out)
+int heartbeat_event_decode (heartbeat_t h, zmsg_t *zmsg)
 {
+    const char *json_str;
+    JSON out = NULL;
     int rc = -1;
 
-    if (Jget_int (out, "epoch", &h->epoch) < 0) {
+    if (flux_event_decode (zmsg, NULL, &json_str) < 0)
+        goto done;
+    if (!(out = Jfromstr (json_str)) || !Jget_int (out, "epoch", &h->epoch)) {
         errno = EPROTO;
         goto done;
     }
     rc = 0;
 done:
-    return rc;
-}
-
-int heartbeat_event_decode (heartbeat_t h, zmsg_t *zmsg)
-{
-    int rc = -1;
-    int type;
-    JSON out = NULL;
-
-    if (flux_msg_get_type (zmsg, &type) < 0)
-        goto done;
-    if (type != FLUX_MSGTYPE_EVENT) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (!flux_msg_streq_topic (zmsg, "hb")) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (flux_msg_get_payload_json (zmsg, &out) < 0)
-        goto done;
-    if (out == NULL) {
-        errno = EPROTO;
-        goto done;
-    }
-    rc = heartbeat_json_decode (h, out);
-done:
-    if (out)
-        Jput (out);
+    Jput (out);
     return rc;
 }
 

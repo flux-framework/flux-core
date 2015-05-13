@@ -55,6 +55,7 @@ static const char * zmsg_type_string (int typemask);
 struct zmsg_info * zmsg_info_create (zmsg_t **zmsg, int typemask)
 {
     const char *topic;
+    const char *json_str;
     struct zmsg_info *zi = malloc (sizeof (*zi));
     if (zi == NULL)
         return (NULL);
@@ -63,7 +64,9 @@ struct zmsg_info * zmsg_info_create (zmsg_t **zmsg, int typemask)
         free (zi);
         return (NULL);
     }
-    if (flux_msg_get_payload_json (*zmsg, &zi->o) < 0) {
+    zi->o = NULL;
+    if (flux_msg_get_payload_json (*zmsg, &json_str) < 0
+                || (json_str && !(zi->o = json_tokener_parse (json_str)))) {
         free (zi->tag);
         free (zi);
         return (NULL);
