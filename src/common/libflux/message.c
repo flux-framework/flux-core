@@ -413,16 +413,14 @@ bool flux_msg_cmp (zmsg_t *zmsg, flux_match_t match)
     }
     if (match.topic_glob && strlen (match.topic_glob) > 0
                          && strcmp (match.topic_glob, "*") != 0) {
+        const char *topic = NULL;
+        if (flux_msg_get_topic (zmsg, &topic) < 0)
+            return false;
         if (isa_glob (match.topic_glob)) {
-            char *topic = NULL;
-            if (flux_msg_get_topic (zmsg, &topic) < 0)
-                return false;
-            int rc = fnmatch (match.topic_glob, topic, 0);
-            free (topic);
-            if (rc != 0)
+            if (fnmatch (match.topic_glob, topic, 0) != 0)
                 return false;
         } else {
-            if (!flux_msg_streq_topic (zmsg, match.topic_glob))
+            if (strcmp (match.topic_glob, topic) != 0)
                 return false;
         }
     }
@@ -784,13 +782,14 @@ int flux_msg_set_topic (zmsg_t *zmsg, const char *topic)
         errno = EPROTO;
         goto done;
     }
-    if ((flags & FLUX_MSGFLAG_TOPIC) && topic) {
-        zframe_reset (zf, topic, strlen (topic)); /* case 1: replace topic */
-    } else if (!(flags & FLUX_MSGFLAG_TOPIC) && topic) {
-        zmsg_remove (zmsg, zf);                   /* case 2: add topic */
+    if ((flags & FLUX_MSGFLAG_TOPIC) && topic) {        /* case 1: repl topic */
+        zframe_reset (zf, topic, strlen (topic) + 1);
+    } else if (!(flags & FLUX_MSGFLAG_TOPIC) && topic) {/* case 2: add topic */
+        zmsg_remove (zmsg, zf);
         if ((flags & FLUX_MSGFLAG_PAYLOAD) && (zf2 = zmsg_next (zmsg)))
             zmsg_remove (zmsg, zf2);
-        if (zmsg_addstr (zmsg, topic) < 0 || zmsg_append (zmsg, &zf) < 0
+        if (zmsg_addmem (zmsg, topic, strlen (topic) + 1) < 0
+                                    || zmsg_append (zmsg, &zf) < 0
                                     || (zf2 && zmsg_append (zmsg, &zf2) < 0)) {
             errno = ENOMEM;
             goto done;
@@ -798,8 +797,8 @@ int flux_msg_set_topic (zmsg_t *zmsg, const char *topic)
         flags |= FLUX_MSGFLAG_TOPIC;
         if (flux_msg_set_flags (zmsg, flags) < 0)
             goto done;
-    } else if ((flags & FLUX_MSGFLAG_TOPIC) && !topic) {
-        zmsg_remove (zmsg, zf);                   /* case 3: remove topic */
+    } else if ((flags & FLUX_MSGFLAG_TOPIC) && !topic) { /* case 3: del topic */
+        zmsg_remove (zmsg, zf);
         flags &= ~(uint8_t)FLUX_MSGFLAG_TOPIC;
         if (flux_msg_set_flags (zmsg, flags) < 0)
             goto done;
@@ -838,17 +837,20 @@ done:
     return rc;
 }
 
-int flux_msg_get_topic (zmsg_t *zmsg, char **topic)
+int flux_msg_get_topic (zmsg_t *zmsg, const char **topic)
 {
     zframe_t *zf;
+    const char *s;
     int rc = -1;
 
     if (zf_topic (zmsg, &zf) < 0)
         goto done;
-    if (!(*topic = zframe_strdup (zf))) {
-        errno = ENOMEM;
+    s = (const char *)zframe_data (zf);
+    if (s[zframe_size (zf) - 1] != '\0') {
+        errno = EPROTO;
         goto done;
     }
+    *topic = s;
     rc = 0;
 done:
     return rc;
@@ -856,34 +858,24 @@ done:
 
 bool flux_msg_streq_topic (zmsg_t *zmsg, const char *topic)
 {
-    zframe_t *zf;
-    bool same = false;
+    const char *s;
 
-    if (zf_topic (zmsg, &zf) < 0) {
+    if (flux_msg_get_topic (zmsg, &s) < 0) {
         errno = 0;
-        goto done;
+        return false;
     }
-    same = zframe_streq (zf, topic);
-done:
-    return same;
+    return !strcmp (s, topic) ? true : false;
 }
 
 bool flux_msg_strneq_topic (zmsg_t *zmsg, const char *topic, size_t n)
 {
-    zframe_t *zf = NULL;
-    bool same = false;
+    const char *s;
 
-    if (zf_topic (zmsg, &zf) < 0) {
+    if (flux_msg_get_topic (zmsg, &s) < 0) {
         errno = 0;
-        goto done;
+        return false;
     }
-    if (n > zframe_size (zf))
-        n = strlen (topic);
-    if (n > zframe_size (zf))
-        goto done;
-    same = !strncmp ((char *)zframe_data (zf), topic, n);
-done:
-    return same;
+    return !strncmp (s, topic, n) ? true : false;
 }
 
 struct map_struct {

@@ -90,7 +90,7 @@ void check_routes (void)
 void check_topic (void)
 {
     zmsg_t *zmsg;
-    char *s;
+    const char *s;
 
     ok ((zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
        "zmsg_create works");
@@ -103,7 +103,6 @@ void check_topic (void)
        "flux_msg_get_topic works on msg w/topic");
     like (s, "blorg",
        "and we got back the topic string we set");
-    free (s);
 
     ok (flux_msg_enable_route (zmsg) == 0,
         "flux_msg_enable_route works");
@@ -113,7 +112,6 @@ void check_topic (void)
        "flux_msg_get_topic still works, with routes");
     like (s, "blorg",
        "and we got back the topic string we set");
-    free (s);
 
     ok (   !flux_msg_streq_topic (zmsg, "")
         && !flux_msg_streq_topic (zmsg, "bl")

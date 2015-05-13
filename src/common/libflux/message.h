@@ -35,7 +35,7 @@ zmsg_t *flux_msg_create (int type);
  * strneq is the same, except only the first n chars of 'topic' are compared.
  */
 int flux_msg_set_topic (zmsg_t *zmsg, const char *topic);
-int flux_msg_get_topic (zmsg_t *zmsg, char **topic);
+int flux_msg_get_topic (zmsg_t *zmsg, const char **topic);
 bool flux_msg_streq_topic (zmsg_t *zmsg, const char *topic);
 bool flux_msg_strneq_topic (zmsg_t *zmsg, const char *topic, size_t n);
 
