@@ -30,13 +30,9 @@ zmsg_t *flux_msg_create (int type);
 
 /* Get/set/compare message topic string.
  * set adds/deletes/replaces topic frame as needed.
- * streq returns true if message topic string and 'topic' are identical.
- * strneq is the same, except only the first n chars of 'topic' are compared.
  */
 int flux_msg_set_topic (zmsg_t *zmsg, const char *topic);
 int flux_msg_get_topic (zmsg_t *zmsg, const char **topic);
-bool flux_msg_streq_topic (zmsg_t *zmsg, const char *topic);
-bool flux_msg_strneq_topic (zmsg_t *zmsg, const char *topic, size_t n);
 
 /* Get/set payload.
  * Set function adds/deletes/replaces payload frame as needed.

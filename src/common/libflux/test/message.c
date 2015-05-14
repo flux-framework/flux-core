@@ -83,8 +83,7 @@ void check_routes (void)
     zmsg_destroy (&zmsg);
 }
 
-/* flux_msg_get_topic, flux_msg_set_topic, flux_msg_streq_topic,
- *  flux_msg_strneq_topic on message with and without routes
+/* flux_msg_get_topic, flux_msg_set_topic on message with and without routes
  */
 void check_topic (void)
 {
@@ -111,18 +110,6 @@ void check_topic (void)
        "flux_msg_get_topic still works, with routes");
     like (s, "blorg",
        "and we got back the topic string we set");
-
-    ok (   !flux_msg_streq_topic (zmsg, "")
-        && !flux_msg_streq_topic (zmsg, "bl")
-        &&  flux_msg_streq_topic (zmsg, "blorg")
-        && !flux_msg_streq_topic (zmsg, "blorgnax"),
-        "flux_msg_streq_topic works");
-    ok (    flux_msg_strneq_topic (zmsg, "", 0)
-        &&  flux_msg_strneq_topic (zmsg, "bl", 2)
-        &&  flux_msg_strneq_topic(zmsg, "blorg", 5)
-        && !flux_msg_strneq_topic(zmsg, "blorgnax", 8),
-        "flux_msg_strneq_topic works");
-
     zmsg_destroy (&zmsg);
 }
 
@@ -361,14 +348,14 @@ void check_cmp (void)
 
 int main (int argc, char *argv[])
 {
-    plan (94);
+    plan (92);
 
     lives_ok ({zmsg_test (false);}, // 1
         "zmsg_test doesn't assert");
 
     check_proto ();                 // 17
     check_routes ();                // 26
-    check_topic ();                 // 11
+    check_topic ();                 // 9
     check_payload ();               // 21
     check_payload_json ();          // 4
     check_matchtag ();              // 6

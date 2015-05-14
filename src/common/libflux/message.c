@@ -816,28 +816,6 @@ done:
     return rc;
 }
 
-bool flux_msg_streq_topic (zmsg_t *zmsg, const char *topic)
-{
-    const char *s;
-
-    if (flux_msg_get_topic (zmsg, &s) < 0) {
-        errno = 0;
-        return false;
-    }
-    return !strcmp (s, topic) ? true : false;
-}
-
-bool flux_msg_strneq_topic (zmsg_t *zmsg, const char *topic, size_t n)
-{
-    const char *s;
-
-    if (flux_msg_get_topic (zmsg, &s) < 0) {
-        errno = 0;
-        return false;
-    }
-    return !strncmp (s, topic, n) ? true : false;
-}
-
 struct map_struct {
     const char *name;
     const char *sname;

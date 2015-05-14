@@ -169,11 +169,14 @@ static subscription_t *subscription_lookup (client_t *c, int type,
 static bool subscription_match (client_t *c, int type, zmsg_t *zmsg)
 {
     subscription_t *sub;
+    const char *topic;
 
+    if (flux_msg_get_topic (zmsg, &topic) < 0)
+        return false;
     sub = zlist_first (c->subscriptions);
     while (sub) {
-        if (sub->type == type && flux_msg_strneq_topic (zmsg, sub->topic,
-                                                        strlen (sub->topic)))
+        if (sub->type == type && !strncmp (topic, sub->topic,
+                                           strlen (sub->topic)))
             return true;
         sub = zlist_next (c->subscriptions);
     }

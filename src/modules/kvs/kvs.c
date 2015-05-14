@@ -1217,11 +1217,15 @@ static bool unwatch_cmp (zmsg_t *zmsg, void *arg)
     char *sender = NULL;
     JSON o = NULL;
     bool match = false;
+    const char *topic;
 
-    if (!flux_msg_streq_topic (zmsg, "kvs.watch"))
+    if (flux_msg_get_topic (zmsg, &topic) < 0)
         goto done;
-    if (flux_msg_get_route_first (zmsg, &sender) < 0
-                                        || strcmp (sender, p->sender) != 0)
+    if (strcmp (topic, "kvs.watch") != 0)
+        goto done;
+    if (flux_msg_get_route_first (zmsg, &sender) < 0)
+        goto done;
+    if (strcmp (sender, p->sender) != 0)
         goto done;
     if (flux_json_request_decode (zmsg, &o) < 0 || !got_key (o, p->key))
         goto done;
