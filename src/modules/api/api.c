@@ -295,7 +295,7 @@ static int client_read (ctx_t *ctx, client_t *c)
             break;
         default:
             flux_log (ctx->h, LOG_ERR, "drop unexpected %s",
-                      flux_msgtype_string (type));
+                      flux_msg_typestr (type));
             break;
     }
 done:

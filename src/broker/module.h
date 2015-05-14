@@ -1,6 +1,8 @@
 #ifndef _BROKER_MODULE_H
 #define _BROKER_MODULE_H
 
+#include "heartbeat.h"
+
 typedef struct module_struct *module_t;
 typedef struct modhash_struct *modhash_t;
 typedef void (*modpoller_cb_f)(module_t p, void *arg);
@@ -31,6 +33,10 @@ void module_add_arg (module_t p, const char *arg);
  */
 const char *module_get_name (module_t p);
 void module_set_name (module_t p, const char *name);
+
+/* Get module uuid.
+ */
+const char *module_get_uuid (module_t p);
 
 /* The poller callback is called when module socket is ready for
  * reading with module_recvmsg().

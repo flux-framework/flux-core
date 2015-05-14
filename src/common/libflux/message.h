@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <czmq.h>
 #include <stdint.h>
+#include <stdio.h>
 
 enum {
     FLUX_MSGTYPE_REQUEST    = 0x01,
@@ -27,6 +28,13 @@ enum {
  * Caller must destroy message with zmsg_destroy() or equivalent.
  */
 zmsg_t *flux_msg_create (int type);
+
+/* Get/set message type
+ * For FLUX_MSGTYPE_REQUEST: set_type initializes nodeid to FLUX_NODEID_ANY
+ * For FLUX_MSGTYPE_RESPONSE: set_type initializes errnum to 0
+ */
+int flux_msg_set_type (zmsg_t *zmsg, int type);
+int flux_msg_get_type (zmsg_t *zmsg, int *type);
 
 /* Get/set/compare message topic string.
  * set adds/deletes/replaces topic frame as needed.
@@ -90,6 +98,15 @@ typedef struct {
 
 bool flux_msg_cmp (zmsg_t *zmsg, flux_match_t match);
 
+/* Print a Flux message on specified output stream.
+ */
+void flux_msg_fprint (FILE *f, zmsg_t *zmsg);
+
+/* Convert a numeric FLUX_MSGTYPE value to string,
+ * or "unknown" if unrecognized.
+ */
+const char *flux_msg_typestr (int type);
+
 /* NOTE: routing frames are pushed on a message traveling dealer
  * to router, and popped off a message traveling router to dealer.
  * A message intended for dealer-router sockets must first be enabled for
@@ -136,21 +153,17 @@ int flux_msg_get_route_first (zmsg_t *zmsg, char **id); /* closest to delim */
 int flux_msg_get_route_last (zmsg_t *zmsg, char **id); /* farthest from delim */
 
 /* Return the number of route frames in the message.
+ * It is an EPROTO error if there is no route stack.
  * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
  */
 int flux_msg_get_route_count (zmsg_t *zmsg);
 
-/* Get/set message type
- * For FLUX_MSGTYPE_REQUEST: set_type initializes nodeid to FLUX_NODEID_ANY
- * For FLUX_MSGTYPE_RESPONSE: set_type initializes errnum to 0
+/* Return a string representing the route stack in message.
+ * Return NULL if there is no route delimiter; empty string if
+ * the route stack contains no route frames).
+ * Caller must free the returned string.
  */
-int flux_msg_set_type (zmsg_t *zmsg, int type);
-int flux_msg_get_type (zmsg_t *zmsg, int *type);
-
-/* Return string representation of message type.  Do not free.
- */
-const char *flux_msgtype_string (int typemask);
-const char *flux_msgtype_shortstr (int typemask);
+char *flux_msg_get_route_string (zmsg_t *zmsg);
 
 #endif /* !_FLUX_CORE_MESSAGE_H */
 

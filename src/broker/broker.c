@@ -46,7 +46,6 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/zdump.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
 #include "src/common/libutil/jsonutil.h"
@@ -1181,16 +1180,21 @@ static int cmb_ping_cb (zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     JSON inout = NULL;
     char *s = NULL;
+    char *route = NULL;
     int rc = -1;
 
     if (flux_json_request_decode (*zmsg, &inout) < 0)
         goto done;
-    s = zdump_routestr (*zmsg, 1);
-    Jadd_str (inout, "route", s);
+    if (!(s = flux_msg_get_route_string (*zmsg)))
+        goto done;
+    route = xasprintf ("%s!%u", s, ctx->rank);
+    Jadd_str (inout, "route", route);
     rc = flux_json_respond (ctx->h, inout, zmsg);
 done:
     if (s)
         free (s);
+    if (route)
+        free (route);
     return rc;
 }
 
@@ -1489,7 +1493,7 @@ static void parent_cb (overlay_t ov, void *sock, void *arg)
             break;
         default:
             flux_log (ctx->h, LOG_ERR, "%s: unexpected %s", __FUNCTION__,
-                      flux_msgtype_string (type));
+                      flux_msg_typestr (type));
             break;
     }
 done:
@@ -1526,13 +1530,13 @@ static void module_cb (module_t p, void *arg)
             if (flux_sendmsg (ctx->h, &zmsg) < 0) {
                 flux_log (ctx->h, LOG_ERR, "%s(%s): flux_sendmsg %s: %s",
                           __FUNCTION__, module_get_name (p),
-                          flux_msgtype_string (type), strerror (errno));
+                          flux_msg_typestr (type), strerror (errno));
             }
             break;
         default:
             flux_log (ctx->h, LOG_ERR, "%s(%s): unexpected %s",
                       __FUNCTION__, module_get_name (p),
-                      flux_msgtype_string (type));
+                      flux_msg_typestr (type));
             break;
     }
 done:
@@ -1569,7 +1573,7 @@ static void event_cb (overlay_t ov, void *sock, void *arg)
             break;
         default:
             flux_log (ctx->h, LOG_ERR, "%s: unexpected %s", __FUNCTION__,
-                      flux_msgtype_string (type));
+                      flux_msg_typestr (type));
             break;
     }
 done:

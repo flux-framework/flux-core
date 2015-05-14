@@ -170,7 +170,7 @@ static void *module_thread (void *arg)
     p->h = modhandle_create (p->zs_svc[0], zuuid_str (p->uuid),
                              p->rank, p->zctx);
     flux_log_set_facility (p->h, p->name);
-    modservice_register (p->h, p->name);
+    modservice_register (p->h, p);
 
     /* Run the module's main().
      */
@@ -203,7 +203,7 @@ void module_set_name (module_t p, const char *name)
     p->name = xstrdup (name);
 }
 
-static const char *module_get_uuid (module_t p)
+const char *module_get_uuid (module_t p)
 {
     return zuuid_str (p->uuid);
 }
@@ -215,14 +215,36 @@ static int module_get_idle (module_t p)
 
 zmsg_t *module_recvmsg (module_t p)
 {
+    char *uuid = NULL;
+    zmsg_t *zmsg = NULL;
+    int type;
     assert (p->magic == MODULE_MAGIC);
-    return zmsg_recv (p->zs_svc[1]);
+
+    if (!(zmsg = zmsg_recv (p->zs_svc[1])))
+        goto error;
+    if (flux_msg_get_type (zmsg, &type) == 0 && type == FLUX_MSGTYPE_RESPONSE) {
+        if (flux_msg_pop_route (zmsg, &uuid) < 0) /* simulate DEALER socket */
+            goto error;
+    }
+    return zmsg;
+error:
+    zmsg_destroy (&zmsg);
+    if (uuid)
+        free (uuid);
+    return NULL;
 }
 
 int module_sendmsg (zmsg_t **zmsg, module_t p)
 {
+    int type;
     if (!zmsg || !*zmsg)
         return 0;
+    if (flux_msg_get_type (*zmsg, &type) == 0 && type == FLUX_MSGTYPE_REQUEST) {
+        char uuid[16];
+        snprintf (uuid, sizeof (uuid), "%u", p->rank);
+        if (flux_msg_push_route (*zmsg, uuid) < 0) /* simulate DEALER socket */
+            return -1;
+    }
     return zmsg_send (zmsg, p->zs_svc[1]);
 }
 
@@ -241,7 +263,7 @@ int module_response_sendmsg (modhash_t mh, zmsg_t **zmsg)
         goto done;
     }
     free (uuid);
-    (void)flux_msg_pop_route (*zmsg, &uuid);
+    (void)flux_msg_pop_route (*zmsg, &uuid); /* simulate ROUTER socket */
     rc = module_sendmsg (zmsg, p);
 done:
     if (uuid)

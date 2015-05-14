@@ -29,7 +29,6 @@
 #include <czmq.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/zdump.h"
 #include "src/common/libutil/log.h"
 
 
@@ -242,15 +241,10 @@ static int snoop_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
         const char *topic;
         if (flux_msg_get_topic (zmsg, &topic) < 0
                  || (subscribed (topic) && (aopt || !suppress (topic)))) {
-            if (lopt) {
+            if (lopt)
                 zmsg_dump (zmsg);
-            } else {
-                const char *pfx = "?";
-                int type;
-                if (flux_msg_get_type (zmsg, &type) == 0)
-                    pfx = flux_msgtype_shortstr (type);
-                zdump_fprint (stderr, zmsg, pfx);
-            }
+            else
+                flux_msg_fprint (stderr, zmsg);
         }
         zmsg_destroy (&zmsg);
     }

@@ -319,7 +319,7 @@ static int null_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     }
     if (type != FLUX_MSGTYPE_REQUEST) {
         flux_log (h, LOG_ERR, "%s: unexpected type %s", __FUNCTION__,
-                  flux_msgtype_string (type));
+                  flux_msg_typestr (type));
         goto done;
     }
     if (flux_msg_get_nodeid (*zmsg, &nodeid, &flags) < 0) {

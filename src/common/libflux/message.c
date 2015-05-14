@@ -572,6 +572,88 @@ int flux_msg_get_route_count (zmsg_t *zmsg)
     return count;
 }
 
+/* Get sum of size in bytes of route frames
+ */
+static int flux_msg_get_route_size (zmsg_t *zmsg)
+{
+    uint8_t flags;
+    zframe_t *zf;
+    int size = 0;
+
+    if (flux_msg_get_flags (zmsg, &flags) < 0)
+        return -1;
+    if (!(flags & FLUX_MSGFLAG_ROUTE)) {
+        errno = EPROTO;
+        return -1;
+    }
+    zf = zmsg_first (zmsg);
+    while (zf && zframe_size (zf) > 0) {
+        size += zframe_size (zf);
+        zf = zmsg_next (zmsg);
+    }
+    return size;
+}
+
+static zframe_t *flux_msg_get_route_nth (zmsg_t *zmsg, int n)
+{
+    uint8_t flags;
+    zframe_t *zf;
+    int count = 0;
+
+    if (flux_msg_get_flags (zmsg, &flags) < 0)
+        return NULL;
+    if (!(flags & FLUX_MSGFLAG_ROUTE)) {
+        errno = EPROTO;
+        return NULL;
+    }
+    zf = zmsg_first (zmsg);
+    while (zf && zframe_size (zf) > 0) {
+        if (count == n)
+            return zf;
+        zf = zmsg_next (zmsg);
+        count++;
+    }
+    errno = ENOENT;
+    return NULL;
+}
+
+char *flux_msg_get_route_string (zmsg_t *zmsg)
+{
+    int hops, len;
+    int n;
+    zframe_t *zf;
+    char *buf, *cp;
+
+    if (zmsg == NULL) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if ((hops = flux_msg_get_route_count (zmsg)) < 0
+                    || (len = flux_msg_get_route_size (zmsg)) < 0) {
+        return NULL;
+    }
+    if (!(cp = buf = malloc (len + hops))) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    for (n = hops - 1; n >= 0; n--) {
+        if (cp > buf)
+            *cp++ = '!';
+        if (!(zf = flux_msg_get_route_nth (zmsg, n))) {
+            free (buf);
+            return NULL;
+        }
+        int cpylen = zframe_size (zf);
+        if (cpylen == 32) /* abbreviate long UUID */
+            cpylen = 5;
+        assert (cp - buf + cpylen < len + hops);
+        memcpy (cp, zframe_data (zf), cpylen);
+        cp += cpylen;
+        *cp = '\0';
+    }
+    return buf;
+}
+
 static bool zframe_allocated (void *b, zframe_t *zf)
 {
     return ((char *)b >= (char *)zframe_data (zf)
@@ -819,7 +901,7 @@ done:
 struct map_struct {
     const char *name;
     const char *sname;
-    int typemask;
+    int type;
 };
 
 static struct map_struct msgtype_map[] = {
@@ -831,24 +913,74 @@ static struct map_struct msgtype_map[] = {
 static const int msgtype_map_len = 
                             sizeof (msgtype_map) / sizeof (msgtype_map[0]);
 
-const char *flux_msgtype_string (int typemask)
+const char *flux_msg_typestr (int type)
 {
     int i;
 
     for (i = 0; i < msgtype_map_len; i++)
-        if ((typemask & msgtype_map[i].typemask))
+        if ((type & msgtype_map[i].type))
             return msgtype_map[i].name;
     return "unknown";
 }
 
-const char *flux_msgtype_shortstr (int typemask)
+static const char *msgtype_shortstr (int type)
 {
     int i;
 
     for (i = 0; i < msgtype_map_len; i++)
-        if ((typemask & msgtype_map[i].typemask))
+        if ((type & msgtype_map[i].type))
             return msgtype_map[i].sname;
     return "?";
+}
+
+void flux_msg_fprint (FILE *f, zmsg_t *zmsg)
+{
+    int hops;
+    int type = 0;
+    zframe_t *proto;
+    const char *prefix, *topic = NULL;
+
+    fprintf (f, "--------------------------------------\n");
+    if (!zmsg) {
+        fprintf (f, "NULL");
+        return;
+    }
+    if (flux_msg_get_type (zmsg, &type) < 0
+            || (!(proto = zmsg_last (zmsg)))) {
+        fprintf (f, "malformed message");
+        return;
+    }
+    prefix = msgtype_shortstr (type);
+    (void)flux_msg_get_topic (zmsg, &topic);
+    /* Route stack
+     */
+    hops = flux_msg_get_route_count (zmsg); /* -1 if no route stack */
+    if (hops > 0) {
+        int len = flux_msg_get_route_size (zmsg);
+        char *rte = flux_msg_get_route_string (zmsg);
+        assert (rte != NULL);
+        fprintf (f, "%s[%3.3d] |%s|\n", prefix, len, rte);
+    };
+    /* Topic (keepalive has none)
+     */
+    if (topic)
+        fprintf (f, "%s[%3.3lu] %s\n", prefix, strlen (topic), topic);
+    /* Payload
+     */
+    if (flux_msg_has_payload (zmsg)) {
+        const char *json_str;
+        void *buf;
+        int size, flags;
+        if (flux_msg_get_payload_json (zmsg, &json_str) == 0)
+            fprintf (f, "%s[%3.3lu] %s\n", prefix, strlen (json_str), json_str);
+        else if (flux_msg_get_payload (zmsg, &flags, &buf, &size) == 0)
+            fprintf (f, "%s[%3.3d] ...\n", prefix, size);
+        else
+            fprintf (f, "malformed payload\n");
+    }
+    /* Proto block
+     */
+    zframe_fprint (proto, prefix, f);
 }
 
 /*

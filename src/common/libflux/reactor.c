@@ -38,7 +38,6 @@
 #include "tagpool.h"
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/zdump.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/coproc.h"
 
@@ -283,7 +282,7 @@ static int msg_cb (flux_t h, void *arg)
         } else if (flux_flags_get (h) & FLUX_O_TRACE) {
             const char *topic = NULL;
             (void)flux_msg_get_topic (zmsg, &topic);
-            fprintf (stderr, "nomatch: %s '%s'\n", flux_msgtype_string (type),
+            fprintf (stderr, "nomatch: %s '%s'\n", flux_msg_typestr (type),
                      topic ? topic : "");
         }
         rc = 0;
