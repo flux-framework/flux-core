@@ -499,17 +499,14 @@ int zio_flush (zio_t zio)
     return (rc);
 }
 
-static int zio_read_cb_common (zio_t zio)
+
+int zio_read (zio_t zio)
 {
     int n;
-    if ((n = cbuf_write_from_fd (zio->buf, zio->srcfd, -1, NULL)) < 0) {
-        if (errno == EAGAIN);
-            return (0);
-        zio_debug (zio, "read: %s\n", strerror (errno));
+    if ((n = cbuf_write_from_fd (zio->buf, zio->srcfd, -1, NULL)) < 0)
         return (-1);
-    }
 
-    zio_debug (zio, "zio_read_cb: read = %d\n", n);
+    zio_debug (zio, "zio_read: read = %d\n", n);
 
     if (n == 0) {
         zio_set_eof (zio);
@@ -518,7 +515,15 @@ static int zio_read_cb_common (zio_t zio)
 
     zio_flush (zio);
 
-    return (0);
+    return (n);
+}
+
+static int zio_read_cb_common (zio_t zio)
+{
+    int rc = zio_read (zio);
+    if ((rc < 0) && (errno == EAGAIN))
+        rc = 0;
+    return (rc);
 }
 
 static int zio_zloop_read_cb (zloop_t *zl, zmq_pollitem_t *zp, zio_t zio)
