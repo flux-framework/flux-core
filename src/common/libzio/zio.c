@@ -361,7 +361,7 @@ int zio_set_close_cb (zio_t zio, zio_close_f closef)
     return (0);
 }
 
-static int zio_read (zio_t zio, void *dst, int len)
+static int zio_fd_read (zio_t zio, void *dst, int len)
 {
     assert (zio != NULL);
     assert (zio->magic == ZIO_MAGIC);
@@ -473,7 +473,7 @@ int zio_flush (zio_t zio)
         zio_debug (zio, "zio_flush: len = %d, eof = %d\n", len, zio_eof (zio));
         if (len > 0) {
             buf = xzmalloc (len + 1);
-            if ((n = zio_read (zio, buf, len + 1)) <= 0) {
+            if ((n = zio_fd_read (zio, buf, len + 1)) <= 0) {
                 if (n < 0) {
                     zio_debug (zio, "zio_read: %s", strerror (errno));
                     rc = -1;
