@@ -28,16 +28,12 @@ fluxlibexec_PROGRAMS = \
 	wrexecd
 
 fluxmod_libadd = \
-	$(top_builddir)/src/common/libmrpc/libmrpc.la \
-	$(top_builddir)/src/modules/kvs/libkvs.la \
-	$(top_builddir)/src/common/libflux/libflux.la \
-	$(top_builddir)/src/common/libutil/libutil.la \
-	$(top_builddir)/src/common/liblsd/liblsd.la \
-	$(top_builddir)/src/common/libev/libev.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 
 fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
-	-export-symbols-regex '^mod_(main|name)$$' -rpath  /dev/null
+	-export-symbols-regex '^mod_(main|name)$$' -rpath  /dev/null \
+	-L$(top_builddir)/src/lib/libcore -lflux-core \
+	-L$(top_builddir)/src/modules/kvs -lkvs
 
 job_la_SOURCES = job.c
 job_la_LDFLAGS = $(fluxmod_ldflags)
