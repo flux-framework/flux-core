@@ -9,14 +9,15 @@ fluxlib_LTLIBRARIES = libflux-core.la
 libflux_core_la_SOURCES =
 libflux_core_la_LIBADD = \
 	$(builddir)/libflux/libflux.la \
-	$(builddir)/libev/libev.la \
 	$(builddir)/liblsd/liblsd.la \
-	$(builddir)/libzio/libzio.la \
 	$(builddir)/libutil/libutil.la \
+	$(builddir)/libev/libev.la \
 	$(LIBMUNGE) $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD) $(LIBUTIL) \
-	$(LIBDL)
+	$(LIBDL) -lrt
+#-lrt is for clock_gettime, this should be abstracted
 
 libflux_core_la_LDFLAGS = -Wl,--version-script=$(srcdir)/version.map \
-			  -shared -export-dynamic --disable-static
+			  -shared -export-dynamic --disable-static \
+			  -Wl,--no-undefined 
 
 EXTRA_DIST = version.map

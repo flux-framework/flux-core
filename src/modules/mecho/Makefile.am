@@ -12,6 +12,7 @@ fluxmod_LTLIBRARIES = mecho.la
 fluxmod_libadd = \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 general_ldflags = --disable-static -avoid-version -shared -export-dynamic \
+	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
 	-L$(top_builddir)/src/common -lflux-core \
 	-L$(top_builddir)/src/modules/kvs -lkvs
 fluxmod_ldflags = -module \

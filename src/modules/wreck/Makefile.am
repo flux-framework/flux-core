@@ -32,6 +32,7 @@ fluxmod_libadd = \
 
 fluxmod_ldflags = --disable-static -avoid-version -module -shared -export-dynamic \
 	-export-symbols-regex '^mod_(main|name)$$' \
+	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
 	-L$(top_builddir)/src/common -lflux-core \
 	-L$(top_builddir)/src/modules/kvs -lkvs
 

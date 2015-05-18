@@ -74,7 +74,7 @@ static const struct option longopts[] = {
 
 static void usage (void)
 {
-    fprintf (stderr, 
+    fprintf (stderr,
 "Usage: flux [OPTIONS] COMMAND ARGS\n"
 "    -x,--exec-path PATH   prepend PATH to command search path\n"
 "    -M,--module-path PATH prepend PATH to module search path\n"
@@ -270,8 +270,11 @@ char *intree_confdir (void)
     char *confdir = NULL;
     char *selfdir = dir_self ();
 
-    if (strcmp (selfdir, X_BINDIR) != 0)
-        confdir = xasprintf ("%s/../../etc/flux", selfdir);
+    if (strcmp (selfdir, X_BINDIR) != 0){
+        confdir = xasprintf ("%s/%s../../etc/flux",
+                selfdir,
+                strstr(selfdir, "/.libs") != NULL ? "../" : "");
+    }
     free (selfdir);
     return confdir;
 }

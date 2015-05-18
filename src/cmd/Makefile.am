@@ -12,12 +12,12 @@ AM_CPPFLAGS = \
 	-DMANDIR=\"$(mandir)\"
 
 fluxcmd_ldadd = \
-	$(top_builddir)/src/modules/live/liblive.la \
-	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libev/libev.la \
+	-L$(top_builddir)/src/modules/live -llive \
+	-L$(top_builddir)/src/modules/kvs -lkvs \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
 
 LDADD = $(fluxcmd_ldadd)

@@ -35,11 +35,14 @@ libkvs_la_SOURCES = \
 	conf.c \
 	proto.c
 libkvs_la_LDFLAGS = -shared -export-dynamic --disable-static \
+		    -Wl,--no-undefined \
 		    $(top_builddir)/src/common/libflux/libflux.la \
 		    $(top_builddir)/src/common/libutil/libutil.la \
 		    $(top_builddir)/src/common/libev/libev.la \
 		    $(top_builddir)/src/common/liblsd/liblsd.la \
-		    $(LIBMUNGE) $(LIBDL)
+		    -L$(top_builddir)/src/common -lflux-core 
+
+#-lrt is for clock_gettime, this should be abstracted
 
 TESTS = \
 	test_waitqueue.t \

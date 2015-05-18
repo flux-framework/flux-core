@@ -35,6 +35,7 @@ flux_la_LIBADD = \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/libev/libev.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
+	-L$(top_builddir)/src/modules/kvs -lkvs
 	-L$(top_builddir)/src/common -lflux-core \
 	$(JSON_LIBS) \
 	$(LIBZMQ) \
