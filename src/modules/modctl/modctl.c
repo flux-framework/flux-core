@@ -48,14 +48,16 @@ static int unload_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     JSON o = NULL;
     flux_mrpc_t mrpc = NULL;
+    const char *json_str;
     JSON in = NULL;
     JSON out = NULL;
     const char *modname;
     int errnum = 0;
     int rc = 0;
 
-    if (flux_json_event_decode (*zmsg, &o) < 0) {
-        flux_log (h, LOG_ERR, "%s: json_event_decode: %s", __FUNCTION__,
+    if (flux_event_decode (*zmsg, NULL, &json_str) < 0
+                || !(o = Jfromstr (json_str))) {
+        flux_log (h, LOG_ERR, "%s: flux_event_decode: %s", __FUNCTION__,
                   strerror (errno));
         goto done;
     }
@@ -99,14 +101,16 @@ static int load_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     flux_mrpc_t mrpc = NULL;
     JSON in = NULL;
     JSON out = NULL;
+    const char *json_str;
     const char *path;
     int argc = 0;
     const char **argv = NULL;
     int errnum = 0;
     int rc = 0;
 
-    if (flux_json_event_decode (*zmsg, &o) < 0) {
-        flux_log (h, LOG_ERR, "%s: json_event_decode: %s", __FUNCTION__,
+    if (flux_event_decode (*zmsg, NULL, &json_str) < 0
+                || !(o = Jfromstr (json_str))) {
+        flux_log (h, LOG_ERR, "%s: flux_event_decode: %s", __FUNCTION__,
                   strerror (errno));
         goto done;
     }
@@ -157,12 +161,14 @@ static int list_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     flux_mrpc_t mrpc = NULL;
     JSON in = NULL;
     JSON out = NULL;
+    const char *json_str;
     const char *svc;
     int errnum = 0;
     int rc = 0;
 
-    if (flux_json_event_decode (*zmsg, &o) < 0) {
-        flux_log (h, LOG_ERR, "%s: json_event_decode: %s", __FUNCTION__,
+    if (flux_event_decode (*zmsg, NULL, &json_str) < 0
+                || !(o = Jfromstr (json_str))) {
+        flux_log (h, LOG_ERR, "%s: flux_event_decode: %s", __FUNCTION__,
                   strerror (errno));
         goto done;
     }

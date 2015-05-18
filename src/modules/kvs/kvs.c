@@ -886,9 +886,11 @@ static int dropcache_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
+    const char *json_str;
     json_object *event = NULL;
 
-    if (flux_json_event_decode (*zmsg, &event) < 0
+    if (flux_event_decode (*zmsg, NULL, &json_str) < 0
+                || !(event = Jfromstr (json_str))
                 || util_json_object_get_int (event, "epoch", &ctx->epoch) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
@@ -1174,7 +1176,7 @@ static int watch_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             errnum = errno;
             goto done;
         }
-        if (flux_msg_set_payload_json (*zmsg, in2) < 0) {
+        if (flux_msg_set_payload_json (*zmsg, Jtostr (in2)) < 0) {
             errnum = errno;
             goto done;
         }
@@ -1215,11 +1217,15 @@ static bool unwatch_cmp (zmsg_t *zmsg, void *arg)
     char *sender = NULL;
     JSON o = NULL;
     bool match = false;
+    const char *topic;
 
-    if (!flux_msg_streq_topic (zmsg, "kvs.watch"))
+    if (flux_msg_get_topic (zmsg, &topic) < 0)
         goto done;
-    if (flux_msg_get_route_first (zmsg, &sender) < 0
-                                        || strcmp (sender, p->sender) != 0)
+    if (strcmp (topic, "kvs.watch") != 0)
+        goto done;
+    if (flux_msg_get_route_first (zmsg, &sender) < 0)
+        goto done;
+    if (strcmp (sender, p->sender) != 0)
         goto done;
     if (flux_json_request_decode (zmsg, &o) < 0 || !got_key (o, p->key))
         goto done;
@@ -1635,11 +1641,13 @@ static int setroot_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     JSON out = NULL;
     int rootseq;
+    const char *json_str;
     const char *rootdir;
     const char *fence = NULL;
     JSON root = NULL;
 
-    if (flux_json_event_decode (*zmsg, &out) < 0
+    if (flux_event_decode (*zmsg, NULL, &json_str) < 0
+            || !(out = Jfromstr (json_str))
             || kp_tsetroot_dec (out, &rootseq, &rootdir, &root, &fence) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: %s", __FUNCTION__, strerror (errno));
         goto done;
@@ -1662,6 +1670,7 @@ static int setroot_event_send (ctx_t *ctx, const char *fence)
 {
     JSON in = NULL;
     JSON root = NULL;
+    zmsg_t *zmsg = NULL;
     int rc = -1;
 
     if (event_includes_rootdir) {
@@ -1670,11 +1679,14 @@ static int setroot_event_send (ctx_t *ctx, const char *fence)
     }
     if (!(in = kp_tsetroot_enc (ctx->rootseq, ctx->rootdir, root, fence)))
         goto done;
-    if (flux_event_send (ctx->h, in, "kvs.setroot") < 0)
+    if (!(zmsg = flux_event_encode ("kvs.setroot", Jtostr (in))))
+        goto done;
+    if (flux_event_send (ctx->h, &zmsg) < 0)
         goto done;
     rc = 0;
 done:
     Jput (in);
+    zmsg_destroy (&zmsg);
     return rc;
 }
 
@@ -1738,7 +1750,7 @@ static int stats_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     json_object *o = NULL;
-    char *topic = NULL;
+    const char *topic;
     int rc = -1;
 
     if (flux_msg_get_topic (*zmsg, &topic) < 0) {
@@ -1804,8 +1816,6 @@ done:       /* reactor continues */
 done_stop:  /* reactor terminates */
     if (o)
         json_object_put (o);
-    if (topic)
-        free (topic);
     return rc;
 }
 

@@ -106,7 +106,7 @@ static svc_t svc_lookup (svchash_t sh, const char *name)
 
 int svc_sendmsg (svchash_t sh, zmsg_t **zmsg)
 {
-    char *topic = NULL;
+    const char *topic;
     int type;
     svc_t svc;
     int rc = -1;
@@ -121,8 +121,6 @@ int svc_sendmsg (svchash_t sh, zmsg_t **zmsg)
     }
     rc = svc->cb (zmsg, svc->cb_arg);
 done:
-    if (topic)
-        free (topic);
     return rc;
 }
 

@@ -38,7 +38,6 @@
 #include "tagpool.h"
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/zdump.h"
 #include "src/common/libutil/xzmalloc.h"
 
 
@@ -296,7 +295,7 @@ int flux_sendmsg (flux_t h, zmsg_t **zmsg)
             break;
     }
     if (h->flags & FLUX_O_TRACE)
-        zdump_fprint (stderr, *zmsg, flux_msgtype_shortstr (type));
+        flux_msg_fprint (stderr, *zmsg);
     return h->ops->sendmsg (h->impl, zmsg);
 }
 
@@ -331,7 +330,7 @@ zmsg_t *flux_recvmsg (flux_t h, bool nonblock)
             break;
     }
     if ((h->flags & FLUX_O_TRACE))
-        zdump_fprint (stderr, zmsg, flux_msgtype_shortstr (type));
+        flux_msg_fprint (stderr, zmsg);
 done:
     return zmsg;
 }

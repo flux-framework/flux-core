@@ -44,31 +44,33 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/zdump.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 
+#include "module.h"
 #include "modservice.h"
 
 /* Route string will not include the endpoints.
- * On arrival here, uuid of dst module has been stripped.
- * The '1' arg to zdump_routestr strips the uuid of the sender.
  * FIXME: t/lua/t0002-rpc.t tries to ping with an array object.
  * This should be caught at a lower level - see issue #181
  */
 static int ping_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
+    module_t p = arg;
     JSON in = NULL;
     char *s = NULL;
+    char *route = NULL;
 
     if (flux_json_request_decode (*zmsg, &in) < 0
          || !json_object_is_type (in, json_type_object)) { // see FIXME above
         flux_err_respond (h, EPROTO, zmsg);
         goto done;
     }
-    s = zdump_routestr (*zmsg, 1);
-    Jadd_str (in, "route", s);
+    if (!(s = flux_msg_get_route_string (*zmsg)))
+        goto done;
+    route = xasprintf ("%s!%.5s", s, module_get_uuid (p));
+    Jadd_str (in, "route", route);
     if (flux_json_respond (h, in, zmsg) < 0) {
         err ("%s: flux_json_respond", __FUNCTION__);
         goto done;
@@ -78,6 +80,8 @@ done:
     zmsg_destroy (zmsg);
     if (s)
         free (s);
+    if (route)
+        free (route);
     return 0;
 }
 
@@ -150,10 +154,10 @@ static int shutdown_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 }
 
 static void register_event (flux_t h, const char *name,
-                            const char *svc, FluxMsgHandler cb)
+                            const char *svc, FluxMsgHandler cb, void *arg)
 {
     char *topic = xasprintf ("%s.%s", name, svc);
-    if (flux_msghandler_add (h, FLUX_MSGTYPE_EVENT, topic, cb, NULL) < 0)
+    if (flux_msghandler_add (h, FLUX_MSGTYPE_EVENT, topic, cb, arg) < 0)
         err_exit ("%s: flux_msghandler_add", name);
     if (flux_event_subscribe (h, topic) < 0)
         err_exit ("%s: flux_event_subscribe %s", __FUNCTION__, topic);
@@ -161,23 +165,25 @@ static void register_event (flux_t h, const char *name,
 }
 
 static void register_request (flux_t h, const char *name,
-                              const char *svc, FluxMsgHandler cb)
+                              const char *svc, FluxMsgHandler cb, void *arg)
 {
     char *topic = xasprintf ("%s.%s", name, svc);
-    if (flux_msghandler_add (h, FLUX_MSGTYPE_REQUEST, topic, cb, NULL) < 0)
+    if (flux_msghandler_add (h, FLUX_MSGTYPE_REQUEST, topic, cb, arg) < 0)
         err_exit ("%s: flux_msghandler_add %s", name, topic);
     free (topic);
 }
 
-void modservice_register (flux_t h, const char *name)
+void modservice_register (flux_t h, module_t p)
 {
-    register_request (h, name, "shutdown", shutdown_cb);
-    register_request (h, name, "ping", ping_req_cb);
-    register_request (h, name, "stats.get", stats_get_cb);
-    register_request (h, name, "stats.clear", stats_clear_request_cb);
-    register_request (h, name, "rusage", rusage_cb);
+    const char *name = module_get_name (p);
 
-    register_event   (h, name, "stats.clear", stats_clear_event_cb);
+    register_request (h, name, "shutdown", shutdown_cb, p);
+    register_request (h, name, "ping", ping_req_cb, p);
+    register_request (h, name, "stats.get", stats_get_cb, p);
+    register_request (h, name, "stats.clear", stats_clear_request_cb, p);
+    register_request (h, name, "rusage", rusage_cb, p);
+
+    register_event   (h, name, "stats.clear", stats_clear_event_cb, p);
 }
 
 /*

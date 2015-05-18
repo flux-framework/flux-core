@@ -59,9 +59,13 @@ done:
 
 int flux_recover_all (flux_t h)
 {
-    return flux_event_send (h, NULL, "live.recover");
+    zmsg_t *zmsg = flux_event_encode ("live.recover", NULL);
+    if (!zmsg)
+        return -1;
+    int rc = flux_event_send (h, &zmsg);
+    zmsg_destroy (&zmsg);
+    return rc;
 }
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

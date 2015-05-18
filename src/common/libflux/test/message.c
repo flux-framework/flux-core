@@ -1,6 +1,5 @@
 #include "src/common/libflux/message.h"
 #include "src/common/libtap/tap.h"
-#include "src/common/libutil/shortjson.h"
 
 /* flux_msg_get_route_first, flux_msg_get_route_last, _get_route_count
  *   on message with variable number of routing frames
@@ -84,13 +83,12 @@ void check_routes (void)
     zmsg_destroy (&zmsg);
 }
 
-/* flux_msg_get_topic, flux_msg_set_topic, flux_msg_streq_topic,
- *  flux_msg_strneq_topic on message with and without routes
+/* flux_msg_get_topic, flux_msg_set_topic on message with and without routes
  */
 void check_topic (void)
 {
     zmsg_t *zmsg;
-    char *s;
+    const char *s;
 
     ok ((zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
        "zmsg_create works");
@@ -103,7 +101,6 @@ void check_topic (void)
        "flux_msg_get_topic works on msg w/topic");
     like (s, "blorg",
        "and we got back the topic string we set");
-    free (s);
 
     ok (flux_msg_enable_route (zmsg) == 0,
         "flux_msg_enable_route works");
@@ -113,18 +110,27 @@ void check_topic (void)
        "flux_msg_get_topic still works, with routes");
     like (s, "blorg",
        "and we got back the topic string we set");
-    free (s);
+    zmsg_destroy (&zmsg);
+}
 
-    ok (   !flux_msg_streq_topic (zmsg, "")
-        && !flux_msg_streq_topic (zmsg, "bl")
-        &&  flux_msg_streq_topic (zmsg, "blorg")
-        && !flux_msg_streq_topic (zmsg, "blorgnax"),
-        "flux_msg_streq_topic works");
-    ok (    flux_msg_strneq_topic (zmsg, "", 0)
-        &&  flux_msg_strneq_topic (zmsg, "bl", 2)
-        &&  flux_msg_strneq_topic(zmsg, "blorg", 5)
-        && !flux_msg_strneq_topic(zmsg, "blorgnax", 8),
-        "flux_msg_strneq_topic works");
+void check_payload_json (void)
+{
+    const char *s;
+    zmsg_t *zmsg;
+    const char *json_str = "{\"foo\"=42}";
+
+    ok ((zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+       "zmsg_create works");
+
+    s = (char *)zmsg;
+    ok (flux_msg_get_payload_json (zmsg, &s) == 0 && s == NULL,
+       "flux_msg_get_payload_json returns success with no payload");
+
+    ok (flux_msg_set_payload_json (zmsg, json_str) == 0,
+       "flux_msg_set_payload_json works");
+    ok (flux_msg_get_payload_json (zmsg, &s) == 0 && s != NULL
+        && !strcmp (s, json_str),
+       "flux_msg_get_payload_json returns payload intact");
 
     zmsg_destroy (&zmsg);
 }
@@ -143,7 +149,7 @@ void check_payload (void)
        "zmsg_create works");
     errno = 0;
     ok (flux_msg_get_payload (zmsg, &flags, &buf, &len) < 0 && errno == EPROTO,
-       "flux_msg_get_payload fails with EPROTO on msg w/o topic");
+       "flux_msg_get_payload fails with EPROTO on msg w/o payload");
     errno = 0;
     ok (flux_msg_set_payload (zmsg, 0, NULL, 0) == 0 && errno == 0,
         "flux_msg_set_payload NULL works with no payload");
@@ -342,15 +348,16 @@ void check_cmp (void)
 
 int main (int argc, char *argv[])
 {
-    plan (90);
+    plan (92);
 
     lives_ok ({zmsg_test (false);}, // 1
         "zmsg_test doesn't assert");
 
     check_proto ();                 // 17
     check_routes ();                // 26
-    check_topic ();                 // 11
+    check_topic ();                 // 9
     check_payload ();               // 21
+    check_payload_json ();          // 4
     check_matchtag ();              // 6
 
     check_cmp ();                   // 8

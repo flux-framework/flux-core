@@ -1,10 +1,10 @@
 #ifndef _FLUX_CORE_MESSAGE_H
 #define _FLUX_CORE_MESSAGE_H
 
-#include <json.h>
 #include <stdbool.h>
 #include <czmq.h>
 #include <stdint.h>
+#include <stdio.h>
 
 enum {
     FLUX_MSGTYPE_REQUEST    = 0x01,
@@ -29,15 +29,18 @@ enum {
  */
 zmsg_t *flux_msg_create (int type);
 
+/* Get/set message type
+ * For FLUX_MSGTYPE_REQUEST: set_type initializes nodeid to FLUX_NODEID_ANY
+ * For FLUX_MSGTYPE_RESPONSE: set_type initializes errnum to 0
+ */
+int flux_msg_set_type (zmsg_t *zmsg, int type);
+int flux_msg_get_type (zmsg_t *zmsg, int *type);
+
 /* Get/set/compare message topic string.
  * set adds/deletes/replaces topic frame as needed.
- * streq returns true if message topic string and 'topic' are identical.
- * strneq is the same, except only the first n chars of 'topic' are compared.
  */
 int flux_msg_set_topic (zmsg_t *zmsg, const char *topic);
-int flux_msg_get_topic (zmsg_t *zmsg, char **topic);
-bool flux_msg_streq_topic (zmsg_t *zmsg, const char *topic);
-bool flux_msg_strneq_topic (zmsg_t *zmsg, const char *topic, size_t n);
+int flux_msg_get_topic (zmsg_t *zmsg, const char **topic);
 
 /* Get/set payload.
  * Set function adds/deletes/replaces payload frame as needed.
@@ -50,12 +53,12 @@ int flux_msg_set_payload (zmsg_t *zmsg, int flags, void *buf, int size);
 int flux_msg_get_payload (zmsg_t *zmsg, int *flags, void **buf, int *size);
 bool flux_msg_has_payload (zmsg_t *zmsg);
 
-/* Get/set json payload.
- * set allows o to be NULL
- * get will set *o to NULL and return success if there is no payload.
+/* Get/set json string payload.
+ * set allows json_str to be NULL
+ * get will set *json_str to NULL and return success if there is no payload.
  */
-int flux_msg_set_payload_json (zmsg_t *zmsg, json_object *o);
-int flux_msg_get_payload_json (zmsg_t *zmsg, json_object **o);
+int flux_msg_set_payload_json (zmsg_t *zmsg, const char *json_str);
+int flux_msg_get_payload_json (zmsg_t *zmsg, const char **json_str);
 
 /* Get/set nodeid (request only)
  * If flags includes FLUX_NODEID_UPSTREAM, nodeid is the sending rank.
@@ -94,6 +97,15 @@ typedef struct {
 } flux_match_t;
 
 bool flux_msg_cmp (zmsg_t *zmsg, flux_match_t match);
+
+/* Print a Flux message on specified output stream.
+ */
+void flux_msg_fprint (FILE *f, zmsg_t *zmsg);
+
+/* Convert a numeric FLUX_MSGTYPE value to string,
+ * or "unknown" if unrecognized.
+ */
+const char *flux_msg_typestr (int type);
 
 /* NOTE: routing frames are pushed on a message traveling dealer
  * to router, and popped off a message traveling router to dealer.
@@ -141,21 +153,17 @@ int flux_msg_get_route_first (zmsg_t *zmsg, char **id); /* closest to delim */
 int flux_msg_get_route_last (zmsg_t *zmsg, char **id); /* farthest from delim */
 
 /* Return the number of route frames in the message.
+ * It is an EPROTO error if there is no route stack.
  * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
  */
 int flux_msg_get_route_count (zmsg_t *zmsg);
 
-/* Get/set message type
- * For FLUX_MSGTYPE_REQUEST: set_type initializes nodeid to FLUX_NODEID_ANY
- * For FLUX_MSGTYPE_RESPONSE: set_type initializes errnum to 0
+/* Return a string representing the route stack in message.
+ * Return NULL if there is no route delimiter; empty string if
+ * the route stack contains no route frames).
+ * Caller must free the returned string.
  */
-int flux_msg_set_type (zmsg_t *zmsg, int type);
-int flux_msg_get_type (zmsg_t *zmsg, int *type);
-
-/* Return string representation of message type.  Do not free.
- */
-const char *flux_msgtype_string (int typemask);
-const char *flux_msgtype_shortstr (int typemask);
+char *flux_msg_get_route_string (zmsg_t *zmsg);
 
 #endif /* !_FLUX_CORE_MESSAGE_H */
 

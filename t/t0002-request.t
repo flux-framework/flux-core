@@ -57,20 +57,20 @@ test_expect_success 'request: 10K responses received in order, with deferrals' '
 	${FLUX_BUILD_DIR}/src/test/request/treq putmsg 
 '
 
-test_expect_success 'request: proxy ping 0 from 1 is one hop' '
-	${FLUX_BUILD_DIR}/src/test/request/treq --rank 1 pingzero | grep hops=1
+test_expect_success 'request: proxy ping 0 from 1 is 4 hops' '
+	${FLUX_BUILD_DIR}/src/test/request/treq --rank 1 pingzero | grep hops=4
 '
 
-test_expect_success 'request: proxy ping 0 from 0 is zero hops' '
-	${FLUX_BUILD_DIR}/src/test/request/treq --rank 0 pingzero | grep hops=0
+test_expect_success 'request: proxy ping 0 from 0 is 3 hops' '
+	${FLUX_BUILD_DIR}/src/test/request/treq --rank 0 pingzero | grep hops=3
 '
 
-test_expect_success 'request: proxy ping 1 from 1 is zero hops' '
-	${FLUX_BUILD_DIR}/src/test/request/treq --rank 1 pingself | grep hops=0
+test_expect_success 'request: proxy ping 1 from 1 is 3 hops' '
+	${FLUX_BUILD_DIR}/src/test/request/treq --rank 1 pingself | grep hops=3
 '
 
-test_expect_success 'request: proxy ping upstream from 1 is one hop' '
-	${FLUX_BUILD_DIR}/src/test/request/treq --rank 1 pingupstream | grep hops=1
+test_expect_success 'request: proxy ping upstream from 1 is 4 hop' '
+	${FLUX_BUILD_DIR}/src/test/request/treq --rank 1 pingupstream | grep hops=4
 '
 
 # Coproc test

@@ -93,23 +93,20 @@ int main (int argc, char *argv[])
 static void event_pub (flux_t h, int argc, char **argv)
 {
     char *topic = argv[0];
-    json_object *o = NULL;
+    zmsg_t *zmsg = NULL;
+    char *json_str = NULL;
 
     if (argc > 1) {
-        enum json_tokener_error e;
-        char *s = NULL;
         size_t len = 0;
-        if (argz_create (argv + 1, &s, &len) < 0)
+        if (argz_create (argv + 1, &json_str, &len) < 0)
             oom ();
-        argz_stringify (s, len, ' ');
-        if (!(o = json_tokener_parse_verbose (s, &e)))
-            msg_exit ("json parse error: %s", json_tokener_error_desc (e));
-        free (s);
+        argz_stringify (json_str, len, ' ');
     }
-    if (flux_event_send (h, o, "%s", topic) < 0 )
+    if (!(zmsg = flux_event_encode (topic, json_str))
+                || flux_event_send (h, &zmsg) < 0)
         err_exit ("flux_event_send");
-    if (o)
-        json_object_put (o);
+    if (json_str)
+        free (json_str);
 }
 
 static void subscribe_all (flux_t h, int tc, char **tv)
@@ -132,29 +129,22 @@ static void unsubscribe_all (flux_t h, int tc, char **tv)
 
 static void event_sub (flux_t h, int argc, char **argv)
 {
-    json_object *o = NULL;
-    const char *s;
-    char *topic = NULL;
+    zmsg_t *zmsg;
 
     if (argc > 0)
         subscribe_all (h, argc, argv);
     else if (flux_event_subscribe (h, "") < 0)
         err_exit ("flux_event_subscribe");
 
-    while (flux_event_recv (h, &o, &topic, false) == 0) {
-        if (topic) {
-            printf ("%s\t", topic);
-            free (topic);
-            topic = NULL;
-        } else
-            printf ("\t\t"); 
-        if (o) {
-            s = json_object_to_json_string_ext (o, JSON_C_TO_STRING_PLAIN);
-            printf ("%s\n", s);
-            json_object_put (o);
-            o = NULL;
-        } else
-            printf ("\n");
+    while ((zmsg = flux_event_recv (h, false))) {
+        const char *topic;
+        const char *json_str;
+        if (flux_msg_get_topic (zmsg, &topic) < 0
+                || flux_msg_get_payload_json (zmsg, &json_str) < 0) {
+            printf ("malformed message ignored\n");
+        } else {
+            printf ("%s\t%s\n", topic, json_str ? json_str : "");
+        }
     }
     /* FIXME: add SIGINT handler to exit above loop and clean up.
      */

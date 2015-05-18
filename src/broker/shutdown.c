@@ -84,11 +84,13 @@ static int shutdown_cb (zloop_t *loop, int timer_id, void *arg)
 
 void shutdown_recvmsg (shutdown_t s, zmsg_t *zmsg)
 {
+    const char *json_str;
     JSON in = NULL;
     const char *reason;
     int grace, rank, rc;
 
-    if (flux_json_event_decode (zmsg, &in) < 0) {
+    if (flux_event_decode (zmsg, NULL, &json_str) < 0
+                || !(in = Jfromstr (json_str))) {
         err ("%s", __FUNCTION__);
         goto done;
     }
@@ -134,9 +136,11 @@ void shutdown_arm (shutdown_t s, int grace, int rc, const char *fmt, ...)
     Jadd_int (out, "grace", grace);
     Jadd_int (out, "rank", flux_rank (s->h));
     Jadd_int (out, "exitcode", rc);
-    if (flux_event_send (s->h, out, "shutdown") < 0)
-        err_exit ("flux_event_send");
+    zmsg_t *zmsg = flux_event_encode ("shutdown", Jtostr (out));
+    if (!zmsg || flux_event_send (s->h, &zmsg) < 0)
+        err_exit ("%s: could not send event", __FUNCTION__);
     Jput (out);
+    zmsg_destroy (&zmsg);
 }
 
 /*

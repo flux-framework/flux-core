@@ -35,13 +35,13 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 
-int flux_json_event_decode (zmsg_t *zmsg, json_object **in)
+int flux_event_decode (zmsg_t *zmsg, const char **topic, const char **json_str)
 {
     int type;
+    const char *ts, *js;
     int rc = -1;
-    JSON o;
 
-    if (in == NULL || zmsg == NULL) {
+    if (zmsg == NULL) {
         errno = EINVAL;
         goto done;
     }
@@ -51,19 +51,50 @@ int flux_json_event_decode (zmsg_t *zmsg, json_object **in)
         errno = EPROTO;
         goto done;
     }
-    if (flux_msg_get_payload_json (zmsg, &o) < 0)
+    if (flux_msg_get_topic (zmsg, &ts) < 0)
         goto done;
-    if (o == NULL) {
+    if (flux_msg_get_payload_json (zmsg, &js) < 0)
+        goto done;
+    if ((json_str && !js) || (!json_str && js)) {
         errno = EPROTO;
         goto done;
     }
-    *in = o;
+    if (topic)
+        *topic = ts;
+    if (json_str)
+        *json_str = js;
     rc = 0;
 done:
     return rc;
 }
 
-int flux_event_recv (flux_t h, json_object **in, char **topic, bool nb)
+zmsg_t *flux_event_encode (const char *topic, const char *json_str)
+{
+    zmsg_t *zmsg = NULL;
+
+    if (!topic) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_EVENT)))
+        goto error;
+    if (flux_msg_set_topic (zmsg, topic) < 0)
+        goto error;
+    if (flux_msg_enable_route (zmsg) < 0)
+        goto error;
+    if (json_str && flux_msg_set_payload_json (zmsg, json_str) < 0)
+        goto error;
+    return zmsg;
+error:
+    if (zmsg) {
+        int saved_errno = errno;
+        zmsg_destroy (&zmsg);
+        errno = saved_errno;
+    }
+    return NULL;
+}
+
+zmsg_t *flux_event_recv (flux_t h, bool nonblock)
 {
     flux_match_t match = {
         .typemask = FLUX_MSGTYPE_EVENT,
@@ -71,58 +102,12 @@ int flux_event_recv (flux_t h, json_object **in, char **topic, bool nb)
         .bsize = 0,
         .topic_glob = NULL,
     };
-    zmsg_t *zmsg;
-    int rc = -1;
-
-    if (!(zmsg = flux_recvmsg_match (h, match, NULL, nb)))
-        goto done;
-    if (flux_msg_get_topic (zmsg, topic) < 0)
-        goto done;
-    if (flux_msg_get_payload_json (zmsg, in) < 0)
-        goto done;
-    rc = 0;
-done:
-    if (zmsg)
-        zmsg_destroy (&zmsg);
-    return rc;
+    return flux_recvmsg_match (h, match, NULL, nonblock);
 }
 
-int flux_event_send (flux_t h, JSON in, const char *fmt, ...)
+int flux_event_send (flux_t h, zmsg_t **zmsg)
 {
-    zmsg_t *zmsg = NULL;
-    char *topic = NULL;
-    va_list ap;
-    int rc = -1;
-    JSON empty = NULL;
-
-    va_start (ap, fmt);
-    topic = xvasprintf (fmt, ap);
-    va_end (ap);
-
-    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_EVENT)))
-        goto done;
-    if (flux_msg_set_topic (zmsg, topic) < 0)
-        goto done;
-    if (flux_msg_enable_route (zmsg) < 0)
-        goto done;
-
-    /* FIXME: old flux_event_send () always sent an empty event and
-     * t/lua/t0003-events.t (tests 19 and 20) will fail if this isn't so.
-     * Need to run down whether this can safely change.
-     */
-    if (!in)
-        in = empty = Jnew ();
-
-    if (flux_msg_set_payload_json (zmsg, in) < 0)
-        goto done;
-    rc = flux_sendmsg (h, &zmsg);
-done:
-    zmsg_destroy (&zmsg);
-    if (topic)
-        free (topic);
-    if (empty)
-        Jput (empty);
-    return rc;
+    return flux_sendmsg (h, zmsg);
 }
 
 /*

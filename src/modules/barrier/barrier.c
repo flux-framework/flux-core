@@ -36,6 +36,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/shortjson.h"
 
 const int barrier_reduction_timeout_msec = 1;
 
@@ -262,13 +263,20 @@ static int send_enter_response (const char *key, void *item, void *arg)
 
 static int exit_event_send (flux_t h, const char *name, int errnum)
 {
-    json_object *o = util_json_object_new_object ();
-    int rc;
+    JSON o = Jnew ();
+    zmsg_t *zmsg = NULL;
+    int rc = -1;
 
-    util_json_object_add_string (o, "name", name);
-    util_json_object_add_int (o, "errnum", errnum);
-    rc = flux_event_send (h, o, "barrier.exit");
-    json_object_put (o);
+    Jadd_str (o, "name", name);
+    Jadd_int (o, "errnum", errnum);
+    if (!(zmsg = flux_event_encode ("barrier.exit", Jtostr (o))))
+        goto done;
+    if (flux_event_send (h, &zmsg) < 0)
+        goto done;
+    rc = 0;
+done:
+    Jput (o);
+    zmsg_destroy (&zmsg);
     return rc;
 }
 
@@ -276,11 +284,13 @@ static int exit_event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     barrier_t *b;
+    const char *json_str;
     json_object *o = NULL;
     const char *name;
     int errnum;
 
-    if (flux_json_event_decode (*zmsg, &o) < 0
+    if (flux_event_decode (*zmsg, NULL, &json_str) < 0
+            || !(o = Jfromstr (json_str))
             || util_json_object_get_string (o, "name", &name) < 0
             || util_json_object_get_int (o, "errnum", &errnum) < 0) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);

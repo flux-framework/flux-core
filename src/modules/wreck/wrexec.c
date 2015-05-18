@@ -34,6 +34,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libmrpc/mrpc.h"
@@ -373,13 +374,14 @@ static int rexec_session_kill (struct rexec_session *s, int sig)
 {
     int rc = -1;
     json_object *o = json_object_new_int (sig);
+    const char *json_str = json_object_to_json_string (o);
     zmsg_t * zmsg = NULL;
 
     if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
         goto done;
     if (flux_msg_set_topic (zmsg, "wrexec.kill") < 0)
         goto done;
-    if (flux_msg_set_payload_json (zmsg, o) < 0)
+    if (flux_msg_set_payload_json (zmsg, json_str) < 0)
         goto done;
 
     zmsg_dump (zmsg);
@@ -414,14 +416,16 @@ static int mrpc_handler (struct rexec_ctx *ctx, zmsg_t *zmsg)
 {
     int64_t id;
     const char *method;
+    const char *json_str;
     json_object *inarg = NULL;
     json_object *request = NULL;
     int rc = -1;
     flux_t f = ctx->h;
     flux_mrpc_t mrpc;
 
-    if (flux_json_event_decode (zmsg, &request) < 0) {
-        flux_log (f, LOG_ERR, "flux_json_event_decode: %s", strerror (errno));
+    if (flux_event_decode (zmsg, NULL, &json_str) < 0
+                || !(request = Jfromstr (json_str)) ) {
+        flux_log (f, LOG_ERR, "flux_event_decode: %s", strerror (errno));
         return (0);
     }
     mrpc = flux_mrpc_create_fromevent (f, request);
@@ -496,28 +500,27 @@ int lwj_targets_this_node (struct rexec_ctx *ctx, int64_t id)
 static int event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     struct rexec_ctx *ctx = arg;
-    char *tag = NULL;
-    if (flux_msg_get_topic (*zmsg, &tag) < 0)
+    const char *topic;
+    if (flux_msg_get_topic (*zmsg, &topic) < 0)
         goto done;
-    if (strncmp (tag, "wrexec.run", 10) == 0) {
-        int64_t id = id_from_tag (tag + 11, NULL);
+    if (strncmp (topic, "wrexec.run", 10) == 0) {
+        int64_t id = id_from_tag (topic + 11, NULL);
         if (id < 0)
-            err ("Invalid rexec tag `%s'", tag);
+            err ("Invalid rexec tag `%s'", topic);
         if (lwj_targets_this_node (ctx, id))
             spawn_exec_handler (ctx, id);
     }
-    else if (strncmp (tag, "wrexec.kill", 12) == 0) {
+    else if (strncmp (topic, "wrexec.kill", 12) == 0) {
         int sig = SIGKILL;
         char *endptr = NULL;
-        int64_t id = id_from_tag (tag + 12, &endptr);
+        int64_t id = id_from_tag (topic + 12, &endptr);
         if (endptr && *endptr == '.')
             sig = atoi (endptr);
         rexec_kill (ctx, id, sig);
     }
-    else if (strncmp (tag, "mrpc.wrexec", 11) == 0) {
+    else if (strncmp (topic, "mrpc.wrexec", 11) == 0) {
         mrpc_handler (ctx, *zmsg);
     }
-    free (tag);
 done:
     if (zmsg && *zmsg)
         zmsg_destroy (zmsg);
@@ -527,23 +530,23 @@ done:
 static int request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     struct rexec_ctx *ctx = arg;
+    const char *json_str;
     json_object *o = NULL;
-    char *tag = NULL;
+    const char *topic;
 
-    if (flux_msg_get_topic (*zmsg, &tag) < 0)
+    if (flux_msg_get_topic (*zmsg, &topic) < 0)
         goto done;
-    if (!strcmp (tag, "wrexec.shutdown")) {
+    if (!strcmp (topic, "wrexec.shutdown")) {
         flux_reactor_stop (h);
         return 0;
     }
-    if (flux_msg_get_payload_json (*zmsg, &o) < 0)
+    if (flux_msg_get_payload_json (*zmsg, &json_str) < 0
+            || (json_str && !(o = json_tokener_parse (json_str))))
         goto done;
-    msg ("forwarding %s to session", tag);
+    msg ("forwarding %s to session", topic);
     fwd_to_session (ctx, zmsg, o);
 done:
     zmsg_destroy (zmsg);
-    if (tag)
-        free (tag);
     if (o)
         json_object_put (o);
     return 0;

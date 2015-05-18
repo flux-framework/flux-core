@@ -317,7 +317,8 @@ static int l_flux_send (lua_State *L)
 static int l_flux_recv (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
-    char *tag = NULL;
+    const char *topic;
+    const char *json_str = NULL;
     json_object *o = NULL;
     int errnum;
     zmsg_t *zmsg;
@@ -332,14 +333,17 @@ static int l_flux_recv (lua_State *L)
         match.matchtag = lua_tointeger (L, 2);
 
     if (!(zmsg = flux_recvmsg_match (f, match, NULL, false)))
-        return lua_pusherror (L, strerror (errno));
+        goto error;
 
     if (flux_msg_get_errnum (zmsg, &errnum) < 0)
-        return lua_pusherror (L, strerror (errno));
+        goto error;
 
-    if (errnum == 0 && (flux_msg_get_topic (zmsg, &tag) < 0
-                     || flux_msg_get_payload_json (zmsg, &o) < 0))
-        return lua_pusherror (L, strerror (errno));
+    if (errnum == 0 && (flux_msg_get_topic (zmsg, &topic) < 0
+                     || flux_msg_get_payload_json (zmsg, &json_str) < 0))
+        goto error;
+
+    if (json_str && !(o = json_tokener_parse (json_str)))
+        goto error;
 
     if (o != NULL) {
         json_object_to_lua (L, o);
@@ -357,10 +361,15 @@ static int l_flux_recv (lua_State *L)
         lua_setfield (L, -1, "errnum");
     }
 
-    if (tag == NULL)
-        return (1);
-    lua_pushstring (L, tag);
+    lua_pushstring (L, topic);
     return (2);
+error:
+    if (zmsg) {
+        int saved_errno = errno;
+        zmsg_destroy (&zmsg);
+        errno = saved_errno;
+    }
+    return lua_pusherror (L, strerror (errno));
 }
 
 static int l_flux_rpc (lua_State *L)
@@ -417,8 +426,10 @@ static int l_flux_send_event (lua_State *L)
     flux_t f = lua_get_flux (L, 1);
     const char *event;
     json_object *o = NULL;
-    int rc;
+    const char *json_str = NULL;
     int eventidx = 2;
+    zmsg_t *zmsg;
+    int rc = 0;
 
     /*
      *  If only 3 or more args were passed then assume json_object
@@ -427,6 +438,7 @@ static int l_flux_send_event (lua_State *L)
     if ((lua_gettop (L) >= 3) && (lua_istable (L, 2))) {
         eventidx = 3;
         lua_value_to_json (L, 2, &o);
+        json_str = json_object_to_json_string (o);
     }
 
     if ((l_format_args (L, eventidx) < 0))
@@ -434,9 +446,12 @@ static int l_flux_send_event (lua_State *L)
 
     event = luaL_checkstring (L, -1);
 
-    rc = flux_event_send (f, o, event);
+    zmsg = flux_event_encode (event, json_str);
+    if (!zmsg || flux_event_send (f, &zmsg) < 0)
+        rc = -1;
     if (o)
         json_object_put (o);
+    zmsg_destroy (&zmsg);
 
     return l_pushresult (L, rc);
 }
@@ -444,18 +459,36 @@ static int l_flux_send_event (lua_State *L)
 static int l_flux_recv_event (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
-    json_object *o;
-    char *tag;
+    json_object *o = NULL;
+    const char *json_str = NULL;
+    const char *topic;
+    zmsg_t *zmsg = NULL;
 
-    if (flux_event_recv (f, &o, &tag, 0))
+    if (!(zmsg = flux_event_recv (f, 0)))
         return lua_pusherror (L, strerror (errno));
 
-    json_object_to_lua (L, o);
-    json_object_put (o);
+    if (flux_msg_get_topic (zmsg, &topic) < 0
+            || flux_msg_get_payload_json (zmsg, &json_str) < 0
+            || (json_str && !(o = json_tokener_parse (json_str)))) {
+        zmsg_destroy (&zmsg);
+        return lua_pusherror (L, strerror (errno));
+    }
 
-    if (tag == NULL)
-        return (1);
-    lua_pushstring (L, tag);
+    /* FIXME: create empty JSON object if message payload was empty,
+     * because flux_event_send () previously ensured the payload was never
+     * empty, and t/lua/t0003-events.t (tests 19 and 20) will fail if this
+     * isn't so.  Need to revisit that test, and find any dependencies on
+     * this invariant in the lua code.
+     */
+    if (!o)
+        o = json_object_new_object ();
+
+    if (o) {
+        json_object_to_lua (L, o);
+        json_object_put (o);
+    }
+
+    lua_pushstring (L, topic);
     return (2);
 }
 

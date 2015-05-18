@@ -48,8 +48,9 @@ zmsg_t *l_cmb_zmsg_encode (lua_State *L)
 		return NULL;
 
     zmsg_t *zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST);
+    const char *json_str = json_object_to_json_string (o);
     if (!zmsg || flux_msg_set_topic (zmsg, tag) < 0
-              || flux_msg_set_payload_json (zmsg, o) < 0) {
+              || flux_msg_set_payload_json (zmsg, json_str) < 0) {
         zmsg_destroy (&zmsg);
         return NULL;
     }
@@ -63,7 +64,10 @@ static int l_zi_resp_cb (lua_State *L,
     zmsg_t **zmsg = malloc (sizeof (*zmsg));
     *zmsg = zmsg_dup (*old);
 
-    if (flux_msg_set_payload_json (*zmsg, resp) < 0)
+    const char *json_str = NULL;
+    if (resp)
+        json_str = json_object_to_json_string (resp);
+    if (flux_msg_set_payload_json (*zmsg, json_str) < 0)
         return lua_pusherror (L, "flux_msg_set_payload_json: %s", strerror (errno));
 
     return lua_push_zmsg_info (L, zmsg_info_create (zmsg, FLUX_MSGTYPE_RESPONSE));

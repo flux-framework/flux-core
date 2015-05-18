@@ -136,8 +136,12 @@ int main (int argc, char *argv[])
             err_exit ("%s", topic);
         free (topic);
     } else if (Copt) {
-        if (flux_event_send (h, NULL, "%s.stats.clear", target) < 0)
-            err_exit ("flux_event_send %s.stats.clear", target);
+        char *topic = xasprintf ("%s.stats.clear", target);
+        zmsg_t *zmsg = flux_event_encode (target, NULL);
+        if (!zmsg || flux_event_send (h, &zmsg) < 0)
+            err_exit ("flux_event_send");
+        zmsg_destroy (&zmsg);
+        free (topic);
     } else if (Ropt) {
         char *topic = xasprintf ("%s.rusage", target);
         if (flux_json_rpc (h, nodeid, topic, NULL, &response) < 0)
