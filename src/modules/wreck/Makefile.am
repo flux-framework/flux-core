@@ -30,8 +30,8 @@ fluxlibexec_PROGRAMS = \
 fluxmod_libadd = \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 
-fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
-	-export-symbols-regex '^mod_(main|name)$$' -rpath  /dev/null \
+fluxmod_ldflags = --disable-static -avoid-version -module -shared -export-dynamic \
+	-export-symbols-regex '^mod_(main|name)$$' \
 	-L$(top_builddir)/src/lib/libcore -lflux-core \
 	-L$(top_builddir)/src/modules/kvs -lkvs
 

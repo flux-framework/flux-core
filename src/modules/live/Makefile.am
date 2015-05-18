@@ -12,10 +12,12 @@ fluxmod_LTLIBRARIES = live.la
 fluxmod_libadd = \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 
-fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
-        -export-symbols-regex '^mod_(main|name)$$' \
+general_ldflags = --disable-static -avoid-version -shared -export-dynamic \
 	-L$(top_builddir)/src/lib/libcore -lflux-core \
 	-L$(top_builddir)/src/modules/kvs -lkvs
+fluxmod_ldflags = -module \
+        -export-symbols-regex '^mod_(main|name)$$' \
+	$(general_ldflags)
 
 live_la_SOURCES = live.c
 live_la_LDFLAGS = $(fluxmod_ldflags)
@@ -25,5 +27,6 @@ live_la_LIBADD = $(fluxmod_libadd)
 # API for module
 #
 fluxcoreinclude_HEADERS = live.h
-noinst_LTLIBRARIES = liblive.la
+fluxlib_LTLIBRARIES = liblive.la
 liblive_la_SOURCES = liblive.c
+liblive_la_LDFLAGS = $(general_ldflags)

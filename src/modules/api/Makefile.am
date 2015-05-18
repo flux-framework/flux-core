@@ -10,12 +10,9 @@ AM_CPPFLAGS = \
 fluxmod_LTLIBRARIES = api.la
 
 fluxmod_libadd = \
-	$(top_builddir)/src/common/libutil/libutil.la \
-	$(top_builddir)/src/common/liblsd/liblsd.la \
-	$(top_builddir)/src/common/libev/libev.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 
-fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
+fluxmod_ldflags = --disable-static -avoid-version -module -shared -export-dynamic \
 	-export-symbols-regex '^mod_(main|name)$$' \
 	-L$(top_builddir)/src/lib/libcore -lflux-core
 

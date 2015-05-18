@@ -12,9 +12,11 @@ fluxmod_LTLIBRARIES = barrier.la
 fluxmod_libadd = \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 
-fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
+general_ldflags = --disable-static -avoid-version -shared -export-dynamic \
+	-L$(top_builddir)/src/lib/libcore -lflux-core
+fluxmod_ldflags = -module \
 		  -export-symbols-regex '^mod_(main|name)$$' \
-		  -L$(top_builddir)/src/lib/libcore -lflux-core
+		  $(general_ldflags)
 
 barrier_la_SOURCES = barrier.c
 barrier_la_LDFLAGS = $(fluxmod_ldflags)
@@ -24,5 +26,6 @@ barrier_la_LIBADD = $(fluxmod_libadd)
 # API for module
 #
 fluxcoreinclude_HEADERS = barrier.h
-noinst_LTLIBRARIES = libbarrier.la
+fluxlib_LTLIBRARIES = libbarrier.la
 libbarrier_la_SOURCES = libbarrier.c
+libbarrier_la_LDFLAGS = $(general_ldflags)
