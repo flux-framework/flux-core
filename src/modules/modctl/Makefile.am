@@ -33,6 +33,7 @@ modctl_la_LIBADD = $(fluxmod_libadd)
 fluxinclude_HEADERS = modctl.h
 fluxlib_LTLIBRARIES = libmodctl.la
 libmodctl_la_SOURCES = libmodctl.c proto.c
+libmodctl_la_LIBADD = $(fluxmod_libadd)
 libmodctl_la_LDFLAGS = $(general_ldflags) -Wl,--no-undefined
 
 #
