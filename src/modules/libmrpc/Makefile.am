@@ -9,4 +9,9 @@ fluxlib_LTLIBRARIES = libmrpc.la
 libmrpc_la_SOURCES = \
 	mrpc.c \
 	mrpc.h
-libmrpc_la_LDFLAGS = -shared -export-dynamic
+libmrpc_la_LDFLAGS = -shared -export-dynamic -Wl,--no-undefined \
+		     $(top_builddir)/src/common/libflux-internal.la \
+		     -L$(top_builddir)/src/common -lflux-core \
+		     -L$(top_builddir)/src/modules/kvs -lkvs \
+		     $(LIBMUNGE) $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD) $(LIBUTIL) \
+		     $(LIBDL) -lrt

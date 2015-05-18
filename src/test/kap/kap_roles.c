@@ -5,6 +5,7 @@
 #include <json.h>
 #include <flux/core.h>
 #include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/shortjson.h"
 #include "kap.h"
 
 #define VAL_UNIT_SIZE    8 
@@ -348,7 +349,8 @@ send_causal_event (kap_params_t *param)
     o = json_object_new_object (); 
     util_json_object_add_int (o, KAP_KVSVER_NAME, v);
 
-    if (flux_event_send (param->pers.handle, o, KAP_CAUSAL_CONS_EV) < 0) {
+    zmsg_t * msg = flux_event_encode(KAP_CAUSAL_CONS_EV, Jtostr(o));
+    if (flux_event_send (param->pers.handle, &msg) < 0) {
         fprintf (stderr,
             "flux_event_send failed.\n");
             goto error;
@@ -364,20 +366,25 @@ error:
 static int
 enforce_c_consistency (kap_params_t *param)
 {
-    char *tag = NULL;
+    const char *tag = NULL;
     int v = 0;
     json_object *o = NULL;
 
-    if ( flux_event_recv (param->pers.handle, &o, &tag, false) < 0) {
+    zmsg_t * msg = flux_event_recv (param->pers.handle, false);
+    if ( ! msg ) {
         fprintf (stderr,
             "event recv failed: %s\n", strerror (errno));
         goto error;
     }
+    flux_msg_get_topic (msg, &tag);
     if ( strcmp (tag, KAP_CAUSAL_CONS_EV) != 0) {
         fprintf (stderr,
             "Unexpected tag.\n");
         goto error;
     }
+    const char *json_str;
+    flux_msg_get_payload_json (msg, &json_str);
+    o = json_tokener_parse (json_str);
     if ( util_json_object_get_int (o, KAP_KVSVER_NAME, &v)) {
         fprintf (stderr,
             "json_object_get_int failed.\n");
@@ -389,7 +396,6 @@ enforce_c_consistency (kap_params_t *param)
         goto error;
     }
 
-    free (tag);
     json_object_put (o);
 
     return 0;

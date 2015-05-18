@@ -33,7 +33,7 @@ modctl_la_LIBADD = $(fluxmod_libadd)
 fluxinclude_HEADERS = modctl.h
 fluxlib_LTLIBRARIES = libmodctl.la
 libmodctl_la_SOURCES = libmodctl.c proto.c
-libmodctl_la_LDFLAGS = $(general_ldflags)
+libmodctl_la_LDFLAGS = $(general_ldflags) -Wl,--no-undefined
 
 #
 # Unit tests
@@ -43,9 +43,8 @@ TESTS = \
 
 test_ldadd = \
         $(top_builddir)/src/modules/modctl/libmodctl.la \
-        $(top_builddir)/src/common/libutil/libutil.la \
+	$(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libtap/libtap.la \
-        $(top_builddir)/src/common/liblsd/liblsd.la \
         $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)
 
 test_cppflags = \
