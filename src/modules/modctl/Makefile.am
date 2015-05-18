@@ -46,7 +46,8 @@ test_ldadd = \
         $(top_builddir)/src/modules/modctl/libmodctl.la \
 	$(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libtap/libtap.la \
-        $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)
+	$(LIBMUNGE) $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD) $(LIBUTIL) \
+	$(LIBDL) -lrt
 
 test_cppflags = \
         -I$(top_srcdir)/src/common/libtap \

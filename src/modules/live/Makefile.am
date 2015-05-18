@@ -16,7 +16,8 @@ general_ldflags = --disable-static -avoid-version -shared -export-dynamic \
 		  $(top_builddir)/src/common/libflux-internal.la \
 		  -L$(top_builddir)/src/common -lflux-core \
 		  -L$(top_builddir)/src/modules/kvs -lkvs \
-		  $(LIBMUNGE) $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD) $(LIBUTIL)
+		  $(LIBMUNGE) $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD) $(LIBUTIL) \
+		  $(LIBDL) -lrt
 fluxmod_ldflags = -module \
         -export-symbols-regex '^mod_(main|name)$$' \
 	$(general_ldflags)
