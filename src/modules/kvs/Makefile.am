@@ -35,7 +35,12 @@ libkvs_la_SOURCES = \
 	conf.c \
 	proto.c
 libkvs_la_LDFLAGS = -shared -export-dynamic --disable-static \
-		    -L$(top_builddir)/src/lib/libcore -lflux-core 
+		    $(top_builddir)/src/common/libflux/libflux.la \
+		    $(top_builddir)/src/common/libutil/libutil.la \
+		    $(top_builddir)/src/common/libtap/libtap.la \
+		    $(top_builddir)/src/common/libev/libev.la \
+		    $(top_builddir)/src/common/liblsd/liblsd.la \
+		    $(LIBMUNGE) $(LIBDL)
 
 TESTS = \
 	test_waitqueue.t \
@@ -44,10 +49,6 @@ TESTS = \
 test_ldadd = \
         $(top_builddir)/src/modules/kvs/waitqueue.o \
         $(top_builddir)/src/modules/kvs/libkvs.la \
-        $(top_builddir)/src/common/libflux/libflux.la \
-        $(top_builddir)/src/common/libutil/libutil.la \
-        $(top_builddir)/src/common/libtap/libtap.la \
-        $(top_builddir)/src/common/liblsd/liblsd.la \
         $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)
 
 test_cppflags = \

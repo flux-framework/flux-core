@@ -13,7 +13,8 @@ fluxmod_libadd = \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 
 general_ldflags = --disable-static -avoid-version -shared -export-dynamic \
-	-L$(top_builddir)/src/lib/libcore -lflux-core \
+	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
+	-L$(top_builddir)/src/common -lflux-core \
 	-L$(top_builddir)/src/modules/kvs -lkvs
 fluxmod_ldflags =  -module \
         -export-symbols-regex '^mod_(main|name)$$' \
@@ -32,7 +33,7 @@ modctl_la_LIBADD = $(fluxmod_libadd)
 fluxinclude_HEADERS = modctl.h
 fluxlib_LTLIBRARIES = libmodctl.la
 libmodctl_la_SOURCES = libmodctl.c proto.c
-modctl_la_LDFLAGS = $(general_ldflags)
+libmodctl_la_LDFLAGS = $(general_ldflags)
 
 #
 # Unit tests

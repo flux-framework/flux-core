@@ -39,7 +39,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/nodeset.h"
-#include "src/common/libmrpc/mrpc.h"
+#include "src/modules/libmrpc/mrpc.h"
 
 #include "modctl.h"
 #include "proto.h"

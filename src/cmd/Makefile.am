@@ -57,12 +57,12 @@ flux_zio_LDADD = \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)
 flux_mping_LDADD = \
-	$(top_builddir)/src/common/libmrpc/libmrpc.la \
+	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)
 flux_module_LDADD = \
 	$(top_builddir)/src/modules/modctl/libmodctl.la \
-	$(top_builddir)/src/common/libmrpc/libmrpc.la \
+	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)

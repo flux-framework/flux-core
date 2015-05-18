@@ -5,7 +5,7 @@ AM_CPPFLAGS = \
 	$(JSON_CFLAGS) \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
-	-I$(top_srcdir)/src/common/libmrpc \
+	-I$(top_srcdir)/src/modules/libmrpc \
 	-I$(top_srcdir)/src/common/libflux \
 	-I$(top_srcdir)/src/common/liblsd \
 	-I$(top_srcdir)/src/modules/broker \
@@ -32,7 +32,7 @@ fluxmod_libadd = \
 
 fluxmod_ldflags = --disable-static -avoid-version -module -shared -export-dynamic \
 	-export-symbols-regex '^mod_(main|name)$$' \
-	-L$(top_builddir)/src/lib/libcore -lflux-core \
+	-L$(top_builddir)/src/common -lflux-core \
 	-L$(top_builddir)/src/modules/kvs -lkvs
 
 job_la_SOURCES = job.c
@@ -57,11 +57,12 @@ wrexecd_LDADD = \
 	$(top_builddir)/src/bindings/lua/libfluxlua.la \
 	$(top_builddir)/src/common/libzio/libzio.la \
 	$(top_builddir)/src/common/libflux/libflux.la \
-	$(top_builddir)/src/common/libmrpc/libmrpc.la \
-	$(top_builddir)/src/modules/kvs/libkvs.la \
+	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/libev/libev.la \
+	-L$(top_builddir)/src/common -lflux-core \
+	-L$(top_builddir)/src/modules/kvs -lkvs \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LUA_LIB) $(LIBPTHREAD)
 
 dist_wreckscripts_SCRIPTS = \

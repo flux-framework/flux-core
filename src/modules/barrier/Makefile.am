@@ -13,7 +13,7 @@ fluxmod_libadd = \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 
 general_ldflags = --disable-static -avoid-version -shared -export-dynamic \
-	-L$(top_builddir)/src/lib/libcore -lflux-core
+	-L$(top_builddir)/src/common -lflux-core
 fluxmod_ldflags = -module \
 		  -export-symbols-regex '^mod_(main|name)$$' \
 		  $(general_ldflags)
