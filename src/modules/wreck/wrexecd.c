@@ -46,13 +46,13 @@
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/modules/kvs/kvs.h"
+#include "src/modules/libkz/kz.h"
 
 #include "luastack.h"
 #include "src/bindings/lua/lutil.h"
 #include "src/bindings/lua/kvs-lua.h"
 #include "src/bindings/lua/flux-lua.h"
-#include "src/common/libzio/zio.h"
-#include "src/common/libzio/kz.h"
+#include "src/modules/libzio/zio.h"
 
 enum { IN=0, OUT, ERR, NR_IO };
 const char *ionames [] = { "stdin", "stdout", "stderr" };

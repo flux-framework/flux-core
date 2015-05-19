@@ -24,18 +24,19 @@ noinst_LTLIBRARIES = \
 	lalarm.la
 
 luamod_ldflags = \
-	-avoid-version -module -shared --disable-static  \
+	-avoid-version -module -shared --disable-static \
+	-Wl,--no-undefined
+luamod_libadd = \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
-	$(top_builddir)/src/common/libzio/libzio.la \
-	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/modules/libkz/libkz.la \
 	$(top_builddir)/src/common/libflux-core.la \
-	$(LUA_LIB)
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(LUA_LIB) $(JSON_LIBS)
 
-flux_la_LDFLAGS = \
-	$(luamod_ldflags)
+flux_la_LDFLAGS = $(luamod_ldflags)
 
-flux_la_LIBADD =
+flux_la_LIBADD = $(luamod_libadd)
 
 flux_la_SOURCES = \
 	flux-lua.c \
@@ -55,26 +56,22 @@ libfluxlua_la_SOURCES = \
 	json-lua.c \
 	zmsg-lua.c \
 	lutil.c
+libfluxlua_la_LDFLAGS = -rpath /dev/null
 
-lalarm_la_SOURCES = \
-	lalarm.c
-lalarm_la_LDFLAGS = \
-	$(luamod_ldflags) -rpath /dev/null
+lalarm_la_SOURCES = lalarm.c
+lalarm_la_LDFLAGS = $(luamod_ldflags) -rpath /dev/null
+lalarm_la_LIBADD = $(luamod_libadd) 
 
-tests_jsontest_la_LDFLAGS = \
-	$(luamod_ldflags) -rpath /dev/null
+tests_jsontest_la_LDFLAGS = $(luamod_ldflags) -rpath /dev/null
 
-tests_jsontest_la_LIBADD = \
-	$(JSON_LIBS) \
-	$(LUA_LIB)
+tests_jsontest_la_LIBADD = $(luamod_libadd) 
 
 tests_jsontest_la_SOURCES = \
 	lutil.c \
 	json-lua.c \
 	tests/json-test.c
 
-tests_zmsgtest_la_LDFLAGS = \
-	$(luamod_ldflags) -rpath /dev/null
+tests_zmsgtest_la_LDFLAGS = $(luamod_ldflags) -rpath /dev/null
 
 tests_zmsgtest_la_SOURCES = \
 	lutil.c \
@@ -82,11 +79,7 @@ tests_zmsgtest_la_SOURCES = \
 	zmsg-lua.c \
 	tests/zmsg-test.c
 
-tests_zmsgtest_la_LIBADD = \
-	$(top_builddir)/src/modules/kvs/libkvs.la \
-        $(top_builddir)/src/common/libflux-core.la \
-	$(LIBCZMQ) \
-	$(LUA_LIB)
+tests_zmsgtest_la_LIBADD = $(luamod_libadd) 
 
 TESTS = \
 	tests/t0000-json.t \

@@ -35,11 +35,11 @@
 #include <json.h>
 #include <flux/core.h>
 
+#include "forkzio.h"
+
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-
-#include "zio.h"
-#include "forkzio.h"
+#include "src/modules/libzio/zio.h"
 
 struct forkzio_handle_struct {
     int ac;

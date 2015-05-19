@@ -39,8 +39,8 @@
 
 #include "src/common/libutil/jsonutil.h"
 #include "src/modules/libmrpc/mrpc.h"
-#include "src/common/libzio/zio.h"
-#include "src/common/libzio/kz.h"
+#include "src/modules/libkz/kz.h"
+#include "src/modules/libzio/zio.h"
 
 #include "json-lua.h"
 #include "kvs-lua.h"

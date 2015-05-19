@@ -47,6 +47,8 @@ TESTS = \
 test_ldadd = \
         $(top_builddir)/src/modules/kvs/waitqueue.o \
         $(top_builddir)/src/modules/kvs/libkvs.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
         $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)
 

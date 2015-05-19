@@ -25,6 +25,6 @@ install:
   - (cd czmq-2.2.0 && ./configure && make -j2 && sudo make install)
   - sudo ldconfig
 
-script: ./autogen.sh && ./configure  && make -j2 distcheck
+script: ./autogen.sh && ./configure  && make -j2 V=1 distcheck
 
 

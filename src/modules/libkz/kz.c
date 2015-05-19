@@ -61,11 +61,11 @@
 #include <json.h>
 #include <flux/core.h>
 
+#include "kz.h"
+
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-
-#include "kz.h"
-#include "zio.h"
+#include "src/modules/libzio/zio.h"
 
 struct kz_struct {
     int flags;
