@@ -35,7 +35,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/monotime.h"
-#include "src/common/libmrpc/mrpc.h"
+#include "src/modules/libmrpc/mrpc.h"
 
 
 #define OPTIONS "hp:d:c:"

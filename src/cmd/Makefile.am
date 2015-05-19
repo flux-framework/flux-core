@@ -12,12 +12,12 @@ AM_CPPFLAGS = \
 	-DMANDIR=\"$(mandir)\"
 
 fluxcmd_ldadd = \
-	$(top_builddir)/src/modules/live/liblive.la \
-	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libev/libev.la \
+	-L$(top_builddir)/src/modules/live -llive \
+	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
 
 LDADD = $(fluxcmd_ldadd)
@@ -57,12 +57,12 @@ flux_zio_LDADD = \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)
 flux_mping_LDADD = \
-	$(top_builddir)/src/common/libmrpc/libmrpc.la \
+	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)
 flux_module_LDADD = \
 	$(top_builddir)/src/modules/modctl/libmodctl.la \
-	$(top_builddir)/src/common/libmrpc/libmrpc.la \
+	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)

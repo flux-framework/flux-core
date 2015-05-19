@@ -10,14 +10,15 @@ AM_CPPFLAGS = \
 fluxmod_LTLIBRARIES = barrier.la
 
 fluxmod_libadd = \
-	$(top_builddir)/src/common/libflux/libflux.la \
-	$(top_builddir)/src/common/libutil/libutil.la \
-	$(top_builddir)/src/common/liblsd/liblsd.la \
-	$(top_builddir)/src/common/libev/libev.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 
-fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
-	-export-symbols-regex '^mod_(main|name)$$'
+general_ldflags = --disable-static -avoid-version -shared -export-dynamic \
+		  $(top_builddir)/src/common/libflux-internal.la \
+		  $(top_builddir)/src/common/libflux-core.la
+
+fluxmod_ldflags = -module -Wl,--no-undefined \
+		  -export-symbols-regex '^mod_(main|name)$$' \
+		  $(general_ldflags)
 
 barrier_la_SOURCES = barrier.c
 barrier_la_LDFLAGS = $(fluxmod_ldflags)
@@ -27,5 +28,6 @@ barrier_la_LIBADD = $(fluxmod_libadd)
 # API for module
 #
 fluxcoreinclude_HEADERS = barrier.h
-noinst_LTLIBRARIES = libbarrier.la
+fluxlib_LTLIBRARIES = libbarrier.la
 libbarrier_la_SOURCES = libbarrier.c
+libbarrier_la_LDFLAGS = $(general_ldflags) 

@@ -29,7 +29,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libmrpc/mrpc.h"
+#include "src/modules/libmrpc/mrpc.h"
 
 /* Copy input arguments to output arguments and respond to RPC.
  */

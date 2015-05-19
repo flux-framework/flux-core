@@ -10,10 +10,6 @@ AM_CPPFLAGS = \
 fluxmod_LTLIBRARIES = kvs.la
 
 fluxmod_libadd = \
-	$(top_builddir)/src/common/libflux/libflux.la \
-	$(top_builddir)/src/common/libutil/libutil.la \
-	$(top_builddir)/src/common/liblsd/liblsd.la \
-	$(top_builddir)/src/common/libev/libev.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 
 fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
@@ -32,12 +28,17 @@ kvs_la_LIBADD = $(fluxmod_libadd)
 #
 # API for module
 #
-noinst_LTLIBRARIES = libkvs.la
+fluxlib_LTLIBRARIES = libkvs.la
 fluxcoreinclude_HEADERS = kvs.h
 libkvs_la_SOURCES = \
 	libkvs.c \
 	conf.c \
 	proto.c
+libkvs_la_LDFLAGS = -shared -export-dynamic --disable-static \
+		    $(top_builddir)/src/common/libflux-internal.la \
+		    $(top_builddir)/src/common/libflux-core.la
+
+#-lrt is for clock_gettime, this should be abstracted
 
 TESTS = \
 	test_waitqueue.t \
@@ -46,10 +47,7 @@ TESTS = \
 test_ldadd = \
         $(top_builddir)/src/modules/kvs/waitqueue.o \
         $(top_builddir)/src/modules/kvs/libkvs.la \
-        $(top_builddir)/src/common/libflux/libflux.la \
-        $(top_builddir)/src/common/libutil/libutil.la \
-        $(top_builddir)/src/common/libtap/libtap.la \
-        $(top_builddir)/src/common/liblsd/liblsd.la \
+	$(top_builddir)/src/common/libtap/libtap.la \
         $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)
 
 test_cppflags = \

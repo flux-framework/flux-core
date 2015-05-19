@@ -127,9 +127,7 @@ AC_CONFIG_FILES( \
   src/common/libev/Makefile \
   src/common/libzio/Makefile \
   src/common/libflux/Makefile \
-  src/common/libmrpc/Makefile \
   src/lib/Makefile \
-  src/lib/libcore/Makefile \
   src/lib/libpmi/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
@@ -141,6 +139,7 @@ AC_CONFIG_FILES( \
   src/modules/api/Makefile \
   src/modules/kvs/Makefile \
   src/modules/modctl/Makefile \
+  src/modules/libmrpc/Makefile \
   src/modules/live/Makefile \
   src/modules/mecho/Makefile \
   src/modules/barrier/Makefile \
