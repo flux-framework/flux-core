@@ -8,15 +8,12 @@ noinst_LTLIBRARIES = \
 	libzio.la
 
 libzio_la_SOURCES = \
-	zio.c \
 	forkzio.c \
 	kz.c \
 	forkzio.h \
-	kz.h \
-	zio.h
+	kz.h
 
 check_PROGRAMS = \
-	zio-test \
 	flux-zio-test
 
 libzio_deps = \

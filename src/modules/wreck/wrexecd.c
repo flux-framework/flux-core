@@ -45,13 +45,13 @@
 #include "src/common/libutil/optparse.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/zio.h"
 #include "src/modules/kvs/kvs.h"
 
 #include "luastack.h"
 #include "src/bindings/lua/lutil.h"
 #include "src/bindings/lua/kvs-lua.h"
 #include "src/bindings/lua/flux-lua.h"
-#include "src/common/libzio/zio.h"
 #include "src/common/libzio/kz.h"
 
 enum { IN=0, OUT, ERR, NR_IO };
