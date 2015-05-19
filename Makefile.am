@@ -1,3 +1,5 @@
+.NOTPARALLEL:
+
 SUBDIRS = src doc etc t
 
 EXTRA_DIST = \

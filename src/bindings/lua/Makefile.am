@@ -26,18 +26,14 @@ noinst_LTLIBRARIES = \
 luamod_ldflags = \
 	-avoid-version -module -shared --disable-static  \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
+	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(LUA_LIB)
 
 flux_la_LDFLAGS = \
 	$(luamod_ldflags)
 
-flux_la_LIBADD = \
-	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
-	$(top_builddir)/src/common/libzio/libzio.la \
-	$(top_builddir)/src/common/libutil/libutil.la \
-	$(top_builddir)/src/common/libev/libev.la \
-	$(top_builddir)/src/common/liblsd/liblsd.la
+flux_la_LIBADD =
 
 flux_la_SOURCES = \
 	flux-lua.c \
