@@ -14,8 +14,9 @@ fluxmod_libadd = \
 
 general_ldflags = --disable-static -avoid-version -shared -export-dynamic \
 		  $(top_builddir)/src/common/libflux-internal.la \
-		  -L$(top_builddir)/src/common -lflux-core
-fluxmod_ldflags = -module \
+		  $(top_builddir)/src/common/libflux-core.la
+
+fluxmod_ldflags = -module -Wl,--no-undefined \
 		  -export-symbols-regex '^mod_(main|name)$$' \
 		  $(general_ldflags)
 

@@ -13,8 +13,8 @@ fluxmod_libadd = \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
 general_ldflags = --disable-static -avoid-version -shared -export-dynamic \
 	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
-	-L$(top_builddir)/src/common -lflux-core \
-	-L$(top_builddir)/src/modules/kvs -lkvs \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(LIBMUNGE) $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD) $(LIBUTIL)
 fluxmod_ldflags = -module \
 	-export-symbols-regex '^mod_(main|name)$$' \

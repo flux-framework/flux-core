@@ -11,7 +11,7 @@ libmrpc_la_SOURCES = \
 	mrpc.h
 libmrpc_la_LDFLAGS = -shared -export-dynamic \
 		     $(top_builddir)/src/common/libflux-internal.la \
-		     -L$(top_builddir)/src/common -lflux-core \
-		     -L$(top_builddir)/src/modules/kvs -lkvs \
+		     $(top_builddir)/src/common/libflux-core.la \
+		     $(top_builddir)/src/modules/kvs/libkvs.la \
 		     $(LIBMUNGE) $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD) $(LIBUTIL) \
 		     $(LIBDL) -lrt

@@ -15,8 +15,8 @@ libpmi_la_LIBADD = \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libev/libev.la \
-	-L$(top_builddir)/src/common -lflux-core \
-	-L$(top_builddir)/src/modules/kvs -lkvs 
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/modules/kvs/libkvs.la 
 
 libpmi_la_LDFLAGS = -Wl,--version-script=$(srcdir)/version.map
 

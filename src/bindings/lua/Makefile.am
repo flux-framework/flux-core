@@ -25,12 +25,8 @@ noinst_LTLIBRARIES = \
 
 luamod_ldflags = \
 	-avoid-version -module -shared --disable-static  \
-	-L$(top_builddir)/src/modules/kvs -lkvs \
-	-L$(top_builddir)/src/common -lflux-core \
-	$(JSON_LIBS) \
-	$(LIBZMQ) \
-	$(LIBCZMQ) \
-	$(LIBUTIL) \
+	$(top_builddir)/src/modules/kvs/libkvs.la \
+	$(top_builddir)/src/common/libflux-core.la \
 	$(LUA_LIB)
 
 flux_la_LDFLAGS = \
@@ -89,8 +85,8 @@ tests_zmsgtest_la_SOURCES = \
 	tests/zmsg-test.c
 
 tests_zmsgtest_la_LIBADD = \
-	-L$(top_builddir)/src/modules/kvs -lkvs \
-        -L$(top_builddir)/src/common -lflux-core \
+	$(top_builddir)/src/modules/kvs/libkvs.la \
+        $(top_builddir)/src/common/libflux-core.la \
 	$(LIBCZMQ) \
 	$(LUA_LIB)
 

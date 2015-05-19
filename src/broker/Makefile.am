@@ -33,13 +33,8 @@ flux_broker_SOURCES = \
 	shutdown.c
 
 flux_broker_LDADD = \
-	$(top_builddir)/src/common/libflux/libflux.la \
-	$(top_builddir)/src/common/libev/libev.la \
-	$(top_builddir)/src/common/liblsd/liblsd.la \
-	$(top_builddir)/src/common/libzio/libzio.la \
-	$(top_builddir)/src/common/libutil/libutil.la \
-	-L$(top_builddir)/src/modules/kvs -lkvs \
-	-L$(top_builddir)/src/common -lflux-core \
-	$(LIBMUNGE) $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD) $(LIBDL)
+	$(top_builddir)/src/modules/kvs/libkvs.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux-internal.la 
 
 flux_broker_LDFLAGS =

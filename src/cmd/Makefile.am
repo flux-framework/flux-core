@@ -17,7 +17,7 @@ fluxcmd_ldadd = \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libev/libev.la \
 	-L$(top_builddir)/src/modules/live -llive \
-	-L$(top_builddir)/src/modules/kvs -lkvs \
+	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
 
 LDADD = $(fluxcmd_ldadd)

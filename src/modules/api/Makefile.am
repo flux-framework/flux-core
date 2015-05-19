@@ -14,7 +14,7 @@ fluxmod_libadd = \
 
 fluxmod_ldflags = --disable-static -avoid-version -module -shared -export-dynamic \
 	-export-symbols-regex '^mod_(main|name)$$' \
-	-L$(top_builddir)/src/common -lflux-core
+	$(top_builddir)/src/common/libflux-core.la
 
 api_la_SOURCES = api.c
 api_la_LDFLAGS = $(fluxmod_ldflags)

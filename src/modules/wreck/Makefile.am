@@ -33,8 +33,8 @@ fluxmod_libadd = \
 fluxmod_ldflags = --disable-static -avoid-version -module -shared -export-dynamic \
 	-export-symbols-regex '^mod_(main|name)$$' \
 	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
-	-L$(top_builddir)/src/common -lflux-core \
-	-L$(top_builddir)/src/modules/kvs -lkvs
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/modules/kvs/libkvs.la
 
 job_la_SOURCES = job.c
 job_la_LDFLAGS = $(fluxmod_ldflags)
@@ -59,8 +59,8 @@ wrexecd_LDADD = \
 	$(top_builddir)/src/common/libzio/libzio.la \
 	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
 	$(top_builddir)/src/common/libflux-internal.la \
-	-L$(top_builddir)/src/common -lflux-core \
-	-L$(top_builddir)/src/modules/kvs -lkvs \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LUA_LIB) $(LIBPTHREAD)
 
 dist_wreckscripts_SCRIPTS = \

@@ -36,9 +36,7 @@ libkvs_la_SOURCES = \
 	proto.c
 libkvs_la_LDFLAGS = -shared -export-dynamic --disable-static \
 		    $(top_builddir)/src/common/libflux-internal.la \
-		    -L$(top_builddir)/src/common -lflux-core \
-		    $(LIBMUNGE) $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD) $(LIBUTIL) \
-		    $(LIBDL) -lrt
+		    $(top_builddir)/src/common/libflux-core.la
 
 #-lrt is for clock_gettime, this should be abstracted
 
