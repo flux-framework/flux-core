@@ -32,4 +32,4 @@ live_la_LIBADD = $(fluxmod_libadd)
 fluxcoreinclude_HEADERS = live.h
 fluxlib_LTLIBRARIES = liblive.la
 liblive_la_SOURCES = liblive.c
-liblive_la_LDFLAGS = $(general_ldflags) -Wl,--no-undefined
+liblive_la_LDFLAGS = $(general_ldflags) 

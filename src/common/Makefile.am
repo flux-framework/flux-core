@@ -21,7 +21,6 @@ libflux_core_la_LIBADD = \
 #-lrt is for clock_gettime, this should be abstracted
 
 libflux_core_la_LDFLAGS = -Wl,--version-script=$(srcdir)/version.map \
-			  -shared -export-dynamic --disable-static \
-			  -Wl,--no-undefined 
+			  -shared -export-dynamic --disable-static
 
 EXTRA_DIST = version.map

@@ -35,7 +35,6 @@ libkvs_la_SOURCES = \
 	conf.c \
 	proto.c
 libkvs_la_LDFLAGS = -shared -export-dynamic --disable-static \
-		    -Wl,--no-undefined \
 		    $(top_builddir)/src/common/libflux-internal.la \
 		    -L$(top_builddir)/src/common -lflux-core \
 		    $(LIBMUNGE) $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD) $(LIBUTIL) \
