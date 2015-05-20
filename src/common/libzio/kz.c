@@ -63,9 +63,9 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/zio.h"
 
 #include "kz.h"
-#include "zio.h"
 
 struct kz_struct {
     int flags;

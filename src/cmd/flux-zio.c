@@ -36,7 +36,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libzio/zio.h"
+#include "src/common/libutil/zio.h"
 #include "src/common/libzio/kz.h"
 #include "src/common/libzio/forkzio.h"
 
