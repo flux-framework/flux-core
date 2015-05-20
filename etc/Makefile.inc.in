@@ -1,6 +1,6 @@
 FLUX_LIBS = \
-	-Wl,-rpath,@abs_top_builddir@/src/lib/libcore/.libs \
-	-L@abs_top_builddir@/src/lib/libcore/.libs -lflux-core \
+	-Wl,-rpath,@abs_top_builddir@/src/common/.libs \
+	-L@abs_top_builddir@/src/common/.libs -lflux-internal -lflux-core \
 	@LIBZMQ@ @LIBCZMQ@ @JSON_LIBS@ @LUA_LIB@
 
 FLUX_CFLAGS = \
