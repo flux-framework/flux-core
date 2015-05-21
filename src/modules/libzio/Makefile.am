@@ -12,7 +12,6 @@ libzio_la_SOURCES = \
 	zio.h
 
 check_PROGRAMS = \
-	zio-test \
 	flux-zio-test
 
 libzio_deps = \

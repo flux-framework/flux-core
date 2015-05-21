@@ -41,6 +41,8 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/modules/libzio/zio.h"
 
+#include "forkzio.h"
+
 struct forkzio_handle_struct {
     int ac;
     char **av;

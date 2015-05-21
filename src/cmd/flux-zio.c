@@ -40,6 +40,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/modules/libzio/zio.h"
 #include "src/modules/libkz/kz.h"
+#include "src/cmd/forkzio.h"
 
 
 typedef struct {

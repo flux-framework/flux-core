@@ -180,11 +180,12 @@ int main (int argc, char *argv[])
         "coproc_get_stacksize returned %d", ssize);
 
     /* We can't use all of the stack and get away with it.
-     * FIXME: it is unclaer why this number must be so large.
+     * FIXME: it is unclear why this number must be so large.
      * I found it experimentally; maybe it is non-portable and that
      * will make this test fragile?
      */
-    const size_t stack_reserve = 2560; // XXX 2540 is too small
+    //const size_t stack_reserve = 2560; // XXX 2540 is too small
+    const size_t stack_reserve = 3000;
 
     /* should be OK */
     ssize -= stack_reserve;

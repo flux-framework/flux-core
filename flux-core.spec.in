@@ -51,6 +51,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/flux/*.so.*
 %dir %{_libdir}/flux/modules
 %{_libdir}/flux/modules/*.so
+%{_libdir}/flux/connectors/*.so
 %{_libdir}/lua/*/*.so
 %{_prefix}/share/lua/*/*.lua
 %{_prefix}/share/lua/*/flux-lua/*.lua
@@ -73,6 +74,9 @@ if [ -x /sbin/ldconfig ]; then /sbin/ldconfig %{_libdir}/flux; fi
 if [ -x /sbin/ldconfig ]; then /sbin/ldconfig %{_libdir}/flux; fi
 
 %changelog
+* Wed May 20 2015 Jim Garlick <garlick@llnl.gov> 0.1.0-1
+- Include connector dso's in package
+
 * Wed Sep 24 2014 Mark A. Grondona <mgrondona@llnl.gov> 0.1.0-1
 - Package wreck lua extensions
 

@@ -47,7 +47,7 @@ struct subprocess {
     unsigned short exited:1;
 
     subprocess_cb_f *exit_cb;
-    void *arg;
+    void *exit_cb_arg;
 };
 
 static int sigmask_unblock_all (void)
@@ -104,7 +104,7 @@ int
 subprocess_set_callback (struct subprocess *p, subprocess_cb_f fn, void *arg)
 {
     p->exit_cb = fn;
-    p->arg = arg;
+    p->exit_cb_arg = arg;
     return (0);
 }
 
@@ -569,7 +569,7 @@ subprocess_manager_reap_all (struct subprocess_manager *sm)
     struct subprocess *p;
     while ((p = subprocess_manager_wait (sm))) {
         if (p->exit_cb) {
-            if ((*p->exit_cb) (p, p->arg) < 0)
+            if ((*p->exit_cb) (p, p->exit_cb_arg) < 0)
                 return (-1);
             subprocess_destroy (p);
         }
