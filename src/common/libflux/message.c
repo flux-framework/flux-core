@@ -955,7 +955,7 @@ void flux_msg_fprint (FILE *f, zmsg_t *zmsg)
     /* Route stack
      */
     hops = flux_msg_get_route_count (zmsg); /* -1 if no route stack */
-    if (hops > 0) {
+    if (hops >= 0) {
         int len = flux_msg_get_route_size (zmsg);
         char *rte = flux_msg_get_route_string (zmsg);
         assert (rte != NULL);
