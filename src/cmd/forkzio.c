@@ -35,9 +35,11 @@
 #include <json.h>
 #include <flux/core.h>
 
+#include "forkzio.h"
+
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/zio.h"
+#include "src/modules/libzio/zio.h"
 
 #include "forkzio.h"
 

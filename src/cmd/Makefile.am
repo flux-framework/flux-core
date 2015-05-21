@@ -12,11 +12,9 @@ AM_CPPFLAGS = \
 	-DMANDIR=\"$(mandir)\"
 
 fluxcmd_ldadd = \
-	$(top_builddir)/src/common/libflux/libflux.la \
-	$(top_builddir)/src/common/libutil/libutil.la \
-	$(top_builddir)/src/common/liblsd/liblsd.la \
-	$(top_builddir)/src/common/libev/libev.la \
-	-L$(top_builddir)/src/modules/live -llive \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/modules/live/liblive.la \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
 
@@ -51,14 +49,20 @@ fluxcmd_PROGRAMS = \
 	flux-start \
 	flux-config
 
+flux_zio_SOURCES = \
+	flux-zio.c \
+	forkzio.c \
+	forkzio.h
 flux_zio_LDADD = \
-	$(top_builddir)/src/common/libzio/libzio.la \
-	$(top_builddir)/src/common/liblsd/liblsd.la \
+	$(top_builddir)/src/modules/libzio/libzio.la \
+	$(top_builddir)/src/modules/libkz/libkz.la \
+	$(top_builddir)/src/common/libflux-internal.la \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)
+	
 flux_mping_LDADD = \
 	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
-	$(top_builddir)/src/common/liblsd/liblsd.la \
+	$(top_builddir)/src/common/libflux-internal.la \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)
 flux_module_LDADD = \

@@ -1,8 +1,5 @@
 { global:
     flux_*;
-    kvs_*;
-    kvsitr_*;
-    kvsdir_*;
     local: *;
 };
 

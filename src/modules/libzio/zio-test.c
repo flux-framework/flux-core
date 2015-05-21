@@ -25,24 +25,20 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <string.h>
-#include <errno.h>
 #include <stdio.h>
 #include <czmq.h>
 #include <json.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/zio.h"
+#include "zio.h"
 
-int output_thread_cb (flux_t f, void *zs, short revents, zio_t z)
+int output_thread_cb (zloop_t *zl, zmq_pollitem_t *zp, zio_t z)
 {
 	zmsg_t *zmsg;
-	char *buf;
 	char *name;
+	char *buf;
 
-	fprintf (stderr, "output thread callback\n");
-
-	zmsg = zmsg_recv (zs);
+	zmsg = zmsg_recv (zp->socket);
 	if (!zmsg) {
 		return (-1);
 	}
@@ -50,9 +46,9 @@ int output_thread_cb (flux_t f, void *zs, short revents, zio_t z)
 	buf = zmsg_popstr (zmsg);
 	json_object *o = json_tokener_parse (buf);
 	zio_write_json (z, o);
-	free (buf);
-	free (name);
 	zmsg_destroy (&zmsg);
+	free (name);
+	free (buf);
 	json_object_put (o);
 	if (zio_closed (z))
 		return (-1);  /* Wakeup zloop if we're done */
@@ -73,25 +69,20 @@ int close_cb_main (zio_t zio, void *pipe)
 
 void othr (void *args, zctx_t *zctx, void *pipe)
 {
-	flux_t f = flux_open (NULL, 0);
+	zloop_t *zl = zloop_new();
 	zio_t out = zio_writer_create ("stdout", STDOUT_FILENO, pipe);
-	//zmq_pollitem_t zp = {   .fd = -1,
-	//			.socket = pipe,
-	//			.events = ZMQ_POLLIN|ZMQ_POLLERR };
+	zmq_pollitem_t zp = {   .fd = -1,
+				.socket = pipe,
+				.events = ZMQ_POLLIN|ZMQ_POLLERR };
 
-	flux_zshandler_add (f, pipe,
-		ZMQ_POLLIN|ZMQ_POLLERR,
-		(FluxZsHandler) output_thread_cb,
-		(void *) out);
+	zloop_poller (zl, &zp, (zloop_fn *) output_thread_cb, (void *) out);
 	zio_set_close_cb (out, &close_cb);
 	zio_set_debug (out, "thread out", NULL);
-	zio_flux_attach (out, f);
 
-	fprintf (stderr, "Thread starting reactor...\n");
-	flux_reactor_start (f);
+	zio_zloop_attach (out, zl);
+	zloop_start (zl);
 	fprintf (stderr, "Done with thread, signaling parent...\n");
 	zstr_send (pipe, "");
-	flux_close (f);
 	return;
 }
 
@@ -102,11 +93,7 @@ int main (int ac, char ** av)
 	void *zs;
 	zio_t in;
 	zctx_t *zctx = zctx_new ();
-	flux_t f = flux_open (NULL, 0);
-	if (!f) {
-		fprintf (stderr, "flux_open: %s\n", strerror (errno));
-		exit (1);
-	}
+	zloop_t *zloop = zloop_new ();
 
 	if ((zs = zthread_fork (zctx, othr, NULL)) == NULL) {
 		fprintf (stderr, "zthread_fork failed\n");
@@ -114,16 +101,18 @@ int main (int ac, char ** av)
 	}
 
 	in = zio_reader_create ("stdout", dup(STDIN_FILENO), zs, NULL);
-	zio_flux_attach (in, f);
+	zio_zloop_attach (in, zloop);
 	zio_set_close_cb (in, &close_cb_main);
 	zio_set_debug (in, "main thread in", NULL);
 
-	flux_reactor_start (f);
+	printf ("starting zloop in parent\n");
+	zloop_set_verbose (zloop, 1);
+	zloop_start (zloop);
 	fprintf (stderr, "zloop complete\n");
 	s = zstr_recv (zs);
 	zstr_free (&s);
 	fprintf (stderr, "child thread complete\n");
 	zmq_close (zs);
-	flux_close (f);
+	zmq_term (zctx);
 	return (0);
 }
