@@ -1,4 +1,4 @@
-SUBDIRS = libtap libev liblsd libutil libflux libzio
+SUBDIRS = libtap libev liblsd libutil libflux
 
 AM_CFLAGS = @GCCWARN@
 

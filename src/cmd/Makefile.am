@@ -49,8 +49,13 @@ fluxcmd_PROGRAMS = \
 	flux-start \
 	flux-config
 
+flux_zio_SOURCES = \
+	flux-zio.c \
+	forkzio.c \
+	forkzio.h
 flux_zio_LDADD = \
-	$(top_builddir)/src/common/libzio/libzio.la \
+	$(top_builddir)/src/modules/libzio/libzio.la \
+	$(top_builddir)/src/modules/libkz/libkz.la \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)
 flux_mping_LDADD = \

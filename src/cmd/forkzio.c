@@ -35,9 +35,11 @@
 #include <json.h>
 #include <flux/core.h>
 
+#include "forkzio.h"
+
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/zio.h"
+#include "src/modules/libzio/zio.h"
 
 #include "forkzio.h"
 
@@ -270,7 +272,7 @@ forkzio_t forkzio_open (zctx_t *zctx, int ac, char **av, int flags)
     ctx->zctx = zctx;
     ctx->flags = flags;
 
-    if ((ctx->flags & FORKZIO_FLAG_PTY)) 
+    if ((ctx->flags & FORKZIO_FLAG_PTY))
         thd = forkzio_pty_thd;
     if (!(ctx->zs = zthread_fork (zctx, thd, ctx))) {
         free (ctx);
