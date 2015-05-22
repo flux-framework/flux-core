@@ -35,8 +35,6 @@ libutil_la_SOURCES = \
 	shortjson.h \
 	readall.c \
 	readall.h \
-	subprocess.c \
-	subprocess.h \
 	ev_zmq.c \
 	ev_zmq.h \
 	ev_zlist.c \
@@ -52,7 +50,6 @@ EXTRA_DIST = veb_mach.c
 
 TESTS = test_nodeset.t \
 	test_optparse.t \
-	test_subprocess.t \
 	test_ev.t \
 	test_coproc.t \
 	test_base64.t \
@@ -83,10 +80,6 @@ test_nodeset_t_LDADD = $(test_ldadd)
 test_optparse_t_SOURCES = test/optparse.c
 test_optparse_t_CPPFLAGS = $(test_cppflags)
 test_optparse_t_LDADD = $(test_ldadd)
-
-test_subprocess_t_SOURCES = test/subprocess.c
-test_subprocess_t_CPPFLAGS = $(test_cppflags)
-test_subprocess_t_LDADD = $(test_ldadd)
 
 test_ev_t_SOURCES = test/ev.c
 test_ev_t_CPPFLAGS = $(test_cppflags)

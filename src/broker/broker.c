@@ -51,7 +51,7 @@
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/subprocess.h"
+#include "src/modules/libsubprocess/subprocess.h"
 
 #include "heartbeat.h"
 #include "module.h"

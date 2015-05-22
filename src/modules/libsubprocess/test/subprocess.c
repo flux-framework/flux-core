@@ -1,9 +1,9 @@
 
 #include <errno.h>
 #include <string.h>
-#include "src/common/libtap/tap.h"
 
-#include "src/common/libutil/subprocess.h"
+#include "tap.h"
+#include "subprocess.h"
 
 extern char **environ;
 

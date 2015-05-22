@@ -13,7 +13,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/subprocess.h"
+#include "subprocess.h"
 
 struct subprocess_manager {
     zlist_t *processes;
