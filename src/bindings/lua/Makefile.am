@@ -24,7 +24,8 @@ noinst_LTLIBRARIES = \
 	lalarm.la
 
 luamod_ldflags = \
-	-avoid-version -module -shared --disable-static
+	-avoid-version -module -shared --disable-static \
+	-Wl,--no-undefined
 
 luamod_libadd = \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
