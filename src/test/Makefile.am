@@ -20,7 +20,7 @@ check_PROGRAMS += mpi_hello
 SUBDIRS += kap
 endif
 
-LDADD = $(top_builddir)/src/common/libzio/libzio.la \
+LDADD = $(top_builddir)/src/modules/libzio/libzio.la \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(top_builddir)/src/modules/barrier/libbarrier.la \
 	$(top_builddir)/src/common/libflux/libflux.la \

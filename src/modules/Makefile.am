@@ -1,2 +1,2 @@
 #This order is *important* 
-SUBDIRS = api kvs libmrpc modctl live mecho barrier wreck
+SUBDIRS = api kvs libmrpc libzio libkz modctl live mecho barrier wreck

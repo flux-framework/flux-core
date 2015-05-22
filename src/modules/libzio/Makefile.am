@@ -4,20 +4,18 @@ AM_CPPFLAGS = \
 	$(JSON_CFLAGS) \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include
 
-noinst_LTLIBRARIES = \
+fluxlib_LTLIBRARIES = \
 	libzio.la
 
 libzio_la_SOURCES = \
-	forkzio.c \
-	kz.c \
-	forkzio.h \
-	kz.h
+	zio.c \
+	zio.h
 
 check_PROGRAMS = \
 	flux-zio-test
 
 libzio_deps = \
-	$(top_builddir)/src/common/libzio/libzio.la \
+	$(top_builddir)/src/modules/libzio/libzio.la \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
