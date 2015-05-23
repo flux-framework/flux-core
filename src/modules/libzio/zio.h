@@ -65,11 +65,19 @@ int zio_dst_fd (zio_t zio);
 int zio_closed (zio_t zio);
 
 /*
+ *  Non-blocking read from zio object. Will read from zio object's src fd
+ *   and buffer I/O according to buffering policy of object. Callbacks
+ *   will be called synchronously if required by buffering policy.
+ */
+int zio_read (zio_t zio);
+
+/*
  *  Write data from json object [o] to zio object [z], data is buffered
  *   if necessary. Only data destined for specific object [z] is read,
  *   and the data is consumed after reading.
  */
 int zio_write_json (zio_t z, json_object *o);
+
 
 /*
  *   Attach zio object [x] to zloop poll loop [zloop].
