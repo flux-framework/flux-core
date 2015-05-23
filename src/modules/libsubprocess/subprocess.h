@@ -1,3 +1,5 @@
+#include <json.h>
+#include <stdbool.h>
 
 struct subprocess_manager;
 struct subprocess;
@@ -7,6 +9,7 @@ typedef enum sm_item {
 } sm_item_t;
 
 typedef int (subprocess_cb_f) (struct subprocess *p, void *arg);
+typedef int (subprocess_io_cb_f) (struct subprocess *p, json_object *o);
 
 /*
  *  Create a subprocess manager to manage creation, destruction, and
@@ -50,6 +53,11 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm);
  *  Set a callback function for subprocess exit
  */
 int subprocess_set_callback (struct subprocess *p, subprocess_cb_f fn, void *arg);
+
+/*
+ *  Set an IO callback
+ */
+int subprocess_set_io_callback (struct subprocess *p, subprocess_io_cb_f fn);
 
 /*
  *  Destroy a subprocess. Free memory and remove from subprocess
@@ -219,3 +227,11 @@ int subprocess_exec (struct subprocess *p);
  */
 int subprocess_run (struct subprocess *p);
 
+
+int subprocess_flush_io (struct subprocess *p);
+
+/*
+ *  Write data to stdin buffer of process [p]. If [eof] is true then EOF will
+ *   be scheduled for stdin one all buffered data is written.
+ */
+int subprocess_write (struct subprocess *p, void *buf, size_t count, bool eof);

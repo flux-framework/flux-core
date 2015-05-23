@@ -13,6 +13,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/modules/libzio/zio.h"
 #include "subprocess.h"
 
 struct subprocess_manager {
@@ -46,8 +47,14 @@ struct subprocess {
     unsigned short running:1;
     unsigned short exited:1;
 
+    zio_t zio_in;
+    zio_t zio_out;
+    zio_t zio_err;
+
     subprocess_cb_f *exit_cb;
     void *exit_cb_arg;
+
+    subprocess_io_cb_f *io_cb;
 };
 
 static int sigmask_unblock_all (void)
@@ -57,6 +64,40 @@ static int sigmask_unblock_all (void)
     return sigprocmask (SIG_SETMASK, &mask, NULL);
 }
 
+/*
+ *  Default handler for stdout/err: send output directly into
+ *   stderr of caller...
+ */
+static int send_output_to_stream (const char *name, json_object *o)
+{
+    FILE *fp = stdout;
+    char *s;
+    bool eof;
+
+    int len = zio_json_decode (o, (void **) &s, &eof);
+
+    if (strcmp (name, "stderr") == 0)
+        fp = stderr;
+
+    if (len < 0)
+        return (-1);
+    if (len > 0)
+        fputs (s, fp);
+    if (eof)
+        fclose (fp);
+
+    return (len);
+}
+
+static int output_handler (zio_t z, json_object *o, void *arg)
+{
+    struct subprocess *p = (struct subprocess *) arg;
+
+    if (p->io_cb)
+        return (*p->io_cb) (p, o);
+
+    return send_output_to_stream (zio_name (z), o);
+}
 
 struct subprocess * subprocess_create (struct subprocess_manager *sm)
 {
@@ -79,6 +120,13 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
     p->running = 0;
     p->exited = 0;
 
+    p->zio_in = zio_pipe_writer_create ("stdin", (void *) p);
+    p->zio_out = zio_pipe_reader_create ("stdout", NULL, (void *) p);
+    p->zio_err = zio_pipe_reader_create ("stderr", NULL, (void *) p);
+
+    zio_set_send_cb (p->zio_out, (zio_send_f) output_handler);
+    zio_set_send_cb (p->zio_err, (zio_send_f) output_handler);
+
     zlist_append (sm->processes, (void *)p);
 
     return (p);
@@ -97,7 +145,30 @@ void subprocess_destroy (struct subprocess *p)
     p->envz = NULL;
     p->envz_len = 0;
 
+    free (p->cwd);
+
+    zio_destroy (p->zio_in);
+    zio_destroy (p->zio_out);
+    zio_destroy (p->zio_err);
+
     free (p);
+}
+
+int
+subprocess_flush_io (struct subprocess *p)
+{
+    zio_flush (p->zio_in);
+    while (zio_read (p->zio_out) > 0) {};
+    while (zio_read (p->zio_err) > 0) {};
+    return (0);
+}
+
+int
+subprocess_write (struct subprocess *p, void *buf, size_t n, bool eof)
+{
+    if (eof)
+        zio_write_eof (p->zio_in);
+    return zio_write (p->zio_in, buf, n);
 }
 
 int
@@ -105,6 +176,13 @@ subprocess_set_callback (struct subprocess *p, subprocess_cb_f fn, void *arg)
 {
     p->exit_cb = fn;
     p->exit_cb_arg = arg;
+    return (0);
+}
+
+int
+subprocess_set_io_callback (struct subprocess *p, subprocess_io_cb_f fn)
+{
+    p->io_cb = fn;
     return (0);
 }
 
@@ -290,6 +368,51 @@ char **subprocess_env_expand (struct subprocess *p)
     return (expand_argz (p->envz, p->envz_len));
 }
 
+static void closeall (int fd, int except)
+{
+    int fdlimit = sysconf (_SC_OPEN_MAX);
+
+    while (fd < fdlimit) {
+        if (fd != except)
+            close (fd);
+        fd++;
+    }
+    return;
+}
+
+static int child_io_setup (struct subprocess *p)
+{
+    /*
+     *  Close paretn end of stdio in child:
+     */
+    close (zio_dst_fd (p->zio_in));
+    close (zio_src_fd (p->zio_out));
+    close (zio_src_fd (p->zio_err));
+
+    /*
+     *  Dup this process' fds onto zio
+     */
+    if (  (dup2 (zio_src_fd (p->zio_in), STDIN_FILENO) < 0)
+       || (dup2 (zio_dst_fd (p->zio_out), STDOUT_FILENO) < 0)
+       || (dup2 (zio_dst_fd (p->zio_err), STDERR_FILENO) < 0))
+        return (-1);
+
+    return (0);
+}
+
+static int parent_io_setup (struct subprocess *p)
+{
+    /*
+     *  Close child end of stdio in parent:
+     */
+    close (zio_src_fd (p->zio_in));
+    close (zio_dst_fd (p->zio_out));
+    close (zio_dst_fd (p->zio_err));
+
+    return (0);
+}
+
+
 static int sp_barrier_read_error (int fd)
 {
     int e;
@@ -318,8 +441,9 @@ static int sp_barrier_signal (int fd)
 static int sp_barrier_wait (int fd)
 {
     char c;
-    if (read (fd, &c, sizeof (c)) != 1) {
-        err ("sp_barrier_wait: read: %m");
+    int n;
+    if ((n = read (fd, &c, sizeof (c))) != 1) {
+        err ("sp_barrier_wait: read:fd=%d: (got %d): %m", fd, n);
         return (-1);
     }
     return (0);
@@ -337,9 +461,11 @@ static void subprocess_child (struct subprocess *p)
     char **argv;
 
     sigmask_unblock_all ();
-
     close (p->parentfd);
     p->parentfd = -1;
+
+    if (p->io_cb)
+        child_io_setup (p);
 
     if (p->cwd && chdir (p->cwd) < 0) {
         err ("Couldn't change dir to %s: going to /tmp instead", p->cwd);
@@ -356,6 +482,8 @@ static void subprocess_child (struct subprocess *p)
      *  Wait for ready signal from parent
      */
     sp_barrier_wait (p->childfd);
+
+    closeall (3, p->childfd);
 
     environ = subprocess_env_expand (p);
     argv = subprocess_argv_expand (p);
@@ -404,6 +532,8 @@ int subprocess_fork (struct subprocess *p)
     if (p->pid == 0)
         subprocess_child (p); /* No return */
 
+    if (p->io_cb)
+        parent_io_setup (p);
     close (p->childfd);
     p->childfd = -1;
 
