@@ -910,7 +910,7 @@ int jsc_update_jcb (flux_t h, int64_t jobid, const char *key, JSON jcb)
         if (Jget_obj (jcb, JSC_RDL_ALLOC, &o))
             rc = update_rdl_alloc (h, jobid, o); 
     } else if (is_pdesc (key)) {
-        if (Jget_obj (jcb, JSC_PDESC, &o));
+        if (Jget_obj (jcb, JSC_PDESC, &o))
             rc = update_pdesc (h, jobid, o);
     }
     else

@@ -139,7 +139,7 @@ static inline void get_jobid (JSON jcb, int64_t *j)
 
 static inline void get_states (JSON jcb, int64_t *os, int64_t *ns)
 {
-    JSON o;
+    JSON o = NULL;
     Jget_obj (jcb, JSC_STATE_PAIR, &o);
     Jget_int64 (o, JSC_STATE_PAIR_OSTATE, os);
     Jget_int64 (o, JSC_STATE_PAIR_NSTATE, ns);
