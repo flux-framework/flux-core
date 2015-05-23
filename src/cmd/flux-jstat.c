@@ -252,7 +252,6 @@ int main (int argc, char *argv[])
     int ch = 0;
     int rc = 0;
     char *cmd = NULL;
-    jstatctx_t *ctx = NULL;
     const char *j = NULL;
     const char *ofn = NULL;
     const char *attr = NULL;
@@ -279,7 +278,6 @@ int main (int argc, char *argv[])
         err_exit ("flux_open");
 
     flux_log_set_facility (h, "jstat");
-    ctx = getctx (h);
     cmd = argv[optind++];
 
     if (!strcmp ("notify", cmd))
