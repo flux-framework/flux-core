@@ -7,6 +7,7 @@
 #include "security.h"
 #include "reduce.h"
 #include "message.h"
+#include "request.h"
 #include "panic.h"
 #include "event.h"
 #include "module.h"
