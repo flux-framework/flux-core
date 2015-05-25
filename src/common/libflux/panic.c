@@ -27,8 +27,8 @@
 #endif
 #include "panic.h"
 #include "flog.h"
+#include "request.h"
 
-#include "src/common/libjsonc/jsonc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 
@@ -36,11 +36,14 @@
 int flux_panic (flux_t h, int rank, const char *msg)
 {
     uint32_t nodeid = rank < 0 ? FLUX_NODEID_ANY : rank;
+    zmsg_t *zmsg = NULL;
     JSON in = Jnew ();
     int rc = -1;
 
     Jadd_str (in, "msg", msg ? msg : "");
-    if (flux_json_request (h, nodeid, FLUX_MATCHTAG_NONE, "cmb.panic", in) < 0)
+    if (!(zmsg = flux_request_encode ("cmb.panic", Jtostr (in))))
+        goto done;
+    if (flux_request_sendto (h, NULL, &zmsg, nodeid) < 0)
         goto done;
     /* No reply */
     rc = 0;
