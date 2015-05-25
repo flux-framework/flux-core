@@ -96,11 +96,11 @@ int main (int argc, char *argv[])
     } else if (!strcmp (cmd, "idle")) {
         if (optind != argc)
             usage ();
-        JSON peers;
+        char *peers;
         if (!(peers = flux_lspeer (h, rank)))
             err_exit ("flux_peer");
-        printf ("%s\n", Jtostr (peers));
-        Jput (peers);
+        printf ("%s\n", peers);
+        free (peers);
     } else if (!strcmp (cmd, "getattr")) {
         char *s;
         if (optind != argc - 1)

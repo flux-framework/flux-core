@@ -416,7 +416,8 @@ static void cstate_change (ctx_t *ctx, child_t *c, cstate_t newstate)
 }
 
 /* On each heartbeat, check idle for downstream peers.
- * Note: lspeer returns a JSON object indexed by peer socket id.
+ * Note: lspeer returns a json_str that we convert a json_object,
+ * which is indexed by peer socket id.
  * The socket id is the stringified rank for cmbds.
  */
 static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
@@ -424,6 +425,7 @@ static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     const char *json_str;
     JSON event = NULL;
+    char *peers_str = NULL;
     JSON peers = NULL;
     zlist_t *keys = NULL;
     char *key;
@@ -434,7 +436,7 @@ static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    if (!(peers = flux_lspeer (h, -1))) {
+    if (!(peers_str = flux_lspeer (h, -1)) || !(peers = Jfromstr (peers_str))) {
         flux_log (h, LOG_ERR, "flux_lspeer: %s", strerror (errno));
         goto done;
     }
@@ -478,6 +480,8 @@ done:
         zlist_destroy (&keys);
     Jput (event);
     Jput (peers);
+    if (peers_str)
+        free (peers_str);
     if (*zmsg)
         zmsg_destroy (zmsg);
     return 0;
