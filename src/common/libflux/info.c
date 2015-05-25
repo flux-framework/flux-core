@@ -29,8 +29,8 @@
 #include <stdbool.h>
 
 #include "info.h"
-#include "rpc.h"
 
+#include "src/common/libjsonc/jsonc.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 

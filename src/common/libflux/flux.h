@@ -9,8 +9,6 @@
 #include "message.h"
 #include "panic.h"
 #include "event.h"
-#include "request.h"
-#include "rpc.h"
 #include "module.h"
 #include "reparent.h"
 #include "info.h"

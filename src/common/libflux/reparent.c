@@ -26,8 +26,8 @@
 #include "config.h"
 #endif
 #include "reparent.h"
-#include "rpc.h"
 
+#include "src/common/libjsonc/jsonc.h"
 #include "src/common/libutil/shortjson.h"
 
 

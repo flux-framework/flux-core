@@ -31,9 +31,9 @@
 
 #include "flog.h"
 #include "info.h"
-#include "request.h"
 #include "message.h"
 
+#include "src/common/libjsonc/jsonc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"

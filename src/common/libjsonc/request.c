@@ -25,14 +25,16 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include "request.h"
-#include "message.h"
-#include "info.h"
+
+#include "src/common/libflux/message.h"
+#include "src/common/libflux/info.h"
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
+
+#include "jsonc.h"
 
 int flux_json_request_decode (zmsg_t *zmsg, json_object **in)
 {
@@ -87,30 +89,6 @@ int flux_json_response_decode (zmsg_t *zmsg, json_object **out)
         goto done;
     }
     *out = o;
-    rc = 0;
-done:
-    return rc;
-}
-
-int flux_response_decode (zmsg_t *zmsg)
-{
-    int rc = -1;
-    int errnum;
-
-    if (zmsg == NULL) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (flux_msg_get_errnum (zmsg, &errnum) < 0)
-        goto done;
-    if (errnum != 0) {
-        errno = errnum;
-        goto done;
-    }
-    if (flux_msg_has_payload (zmsg)) {
-        errno = EPROTO;
-        goto done;
-    }
     rc = 0;
 done:
     return rc;

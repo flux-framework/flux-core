@@ -1,13 +1,9 @@
-#ifndef _FLUX_CORE_RPC_H
-#define _FLUX_CORE_RPC_H
+#ifndef _FLUX_JSONC_RPC_H
+#define _FLUX_JSONC_RPC_H
 
 #include <json.h>
-#include <stdbool.h>
-#include <stdarg.h>
 #include <czmq.h>
-
-#include "handle.h"
-#include "request.h"
+#include <stdint.h>
 
 /* Send a request to 'nodeid' addressed to 'topic'.
  * If 'in' is non-NULL, attach JSON payload, caller retains ownership.
@@ -31,7 +27,7 @@ int flux_json_multrpc (flux_t h, const char *nodeset, int fanout,
                        const char *topic, json_object *in,
                        flux_multrpc_f cb, void *arg);
 
-#endif /* !_FLUX_CORE_REQUEST_H */
+#endif /* !_FLUX_JSONC_RPC_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

@@ -30,7 +30,6 @@
 
 #include "event.h"
 #include "message.h"
-#include "rpc.h"
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
