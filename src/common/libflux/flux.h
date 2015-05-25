@@ -9,6 +9,7 @@
 #include "message.h"
 #include "request.h"
 #include "response.h"
+#include "rpc.h"
 #include "panic.h"
 #include "event.h"
 #include "module.h"
