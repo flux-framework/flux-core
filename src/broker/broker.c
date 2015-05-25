@@ -1242,11 +1242,12 @@ done:
 static int cmb_log_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
+    const char *json_str;
 
-    if (ctx->rank > 0)
-        (void)overlay_sendmsg_parent (ctx->overlay, zmsg);
-    else
-        (void)flux_log_zmsg (*zmsg);
+    if (flux_response_decode (*zmsg, NULL, &json_str) < 0)
+        goto done;
+    (void)flux_log_json (ctx->h, json_str);
+done:
     zmsg_destroy (zmsg); /* no reply */
     return 0;
 }

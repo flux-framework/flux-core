@@ -32,26 +32,16 @@
 #include "flog.h"
 #include "info.h"
 #include "message.h"
+#include "rpc.h"
 
-#include "src/common/libjsonc/jsonc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
-
 
 typedef struct {
     char *facility;
     bool redirect;
 } logctx_t;
-
-typedef struct {
-    int level;
-    const char *facility;
-    int rank;
-    const char *msg;
-    struct timeval tv;
-} flog_t;
-
 
 static void freectx (logctx_t *ctx)
 {
@@ -72,52 +62,6 @@ static logctx_t *getctx (flux_t h)
     return ctx;
 }
 
-static JSON flog_encode (flog_t *f)
-{
-    JSON o = Jnew ();
-
-    Jadd_str (o, "facility", f->facility);
-    Jadd_int (o, "level", f->level);
-    Jadd_int (o, "rank", f->rank);
-    Jadd_int (o, "timestamp_usec", (int)f->tv.tv_usec);
-    Jadd_int (o, "timestamp_sec", (int)f->tv.tv_sec);
-    Jadd_str (o, "message", f->msg);
-    return o;
-}
-
-static int flog_decode (JSON o, flog_t *f)
-{
-    int rc = -1;
-    int sec, usec;
-    if (!Jget_str (o, "facility", &f->facility))
-        goto done;
-    if (!Jget_int (o, "level", &f->level))
-        goto done;
-    if (!Jget_int (o, "rank", &f->rank))
-        goto done;
-    if (!Jget_int (o, "timestamp_usec", &usec))
-        goto done;
-    if (!Jget_int (o, "timestamp_sec", &sec))
-        goto done;
-    f->tv.tv_sec = sec;
-    f->tv.tv_usec = usec;
-    if (!Jget_str (o, "message", &f->msg))
-        goto done;
-    rc = 0;
-done:
-    return rc;
-}
-
-static void flog_msg (flog_t *flog)
-{
-    const char *levstr = log_leveltostr (flog->level);
-    if (!levstr)
-        levstr = "unknown";
-    msg ("[%-.6lu.%-.6lu] %s.%s[%d] %s",
-         flog->tv.tv_sec, flog->tv.tv_usec, flog->facility, levstr,
-         flog->rank, flog->msg);
-}
-
 void flux_log_set_facility (flux_t h, const char *facility)
 {
     logctx_t *ctx = getctx (h);
@@ -133,35 +77,71 @@ void flux_log_set_redirect (flux_t h, bool flag)
     ctx->redirect = flag;
 }
 
+/* Dump message to libutil/log.c, which has a configurable destination
+ * of stderr, syslog, file.
+ */
+static int log_dump (const char *json_str)
+{
+    JSON o = NULL;
+    const char *facility, *s, *levstr;
+    int rank, level, tv_sec, tv_usec;
+    int rc = -1;
+
+    if (!(o = Jfromstr (json_str))
+            || !Jget_str (o, "facility", &facility)
+            || !Jget_int (o, "level", &level)
+            || !Jget_int (o, "rank", &rank)
+            || !Jget_int (o, "timestamp_usec", &tv_usec)
+            || !Jget_int (o, "timestamp_sec", &tv_sec)
+            || !Jget_str (o, "message", &s)) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (!(levstr = log_leveltostr (level)))
+        levstr = "unknown";
+    msg ("[%-.6d.%-.6d] %s.%s[%d] %s",
+         tv_sec, tv_usec, facility, levstr, rank, s);
+    rc = 0;
+done:
+    Jput (o);
+    return rc;
+}
+
+int flux_log_json (flux_t h, const char *json_str)
+{
+    logctx_t *ctx = getctx (h);
+    flux_rpc_t r = NULL;
+    int rc = -1;
+
+    if (ctx->redirect)
+        log_dump (json_str);
+    else if (!(r = flux_rpc (h, "cmb.log", json_str, 0, FLUX_RPC_NORESPONSE)))
+        goto done;
+    rc = 0;
+done:
+    if (r)
+        flux_rpc_destroy (r);
+    return rc;
+}
+
 int flux_vlog (flux_t h, int lev, const char *fmt, va_list ap)
 {
     logctx_t *ctx = getctx (h);
-    JSON o = NULL;
-    char *s = NULL;
-    flog_t flog;
+    char *s = xvasprintf (fmt, ap);
+    struct timeval tv;
+    JSON o = Jnew ();
     int rc = -1;
 
-    flog.facility = ctx->facility;
-    flog.level = lev;
-    flog.rank = flux_rank (h);
-    if (gettimeofday (&flog.tv, NULL) < 0)
+    if (gettimeofday (&tv, NULL) < 0)
         err_exit ("gettimeofday");
-    if (vasprintf (&s, fmt, ap) < 0)
-        oom ();
-    flog.msg = s;
-
-    if (ctx->redirect) {
-        flog_msg (&flog);
-        rc = 0;
-    } else {
-        if (!(o = flog_encode (&flog)))
-            goto done;
-        rc = flux_json_request (h, FLUX_NODEID_ANY,
-                                   FLUX_MATCHTAG_NONE, "cmb.log", o);
-    }
-done:
-    if (s)
-        free (s);
+    Jadd_str (o, "facility", ctx->facility);
+    Jadd_int (o, "level", lev);
+    Jadd_int (o, "rank", flux_rank (h));
+    Jadd_int (o, "timestamp_usec", (int)tv.tv_usec);
+    Jadd_int (o, "timestamp_sec", (int)tv.tv_sec);
+    Jadd_str (o, "message", s);
+    rc = flux_log_json (h, Jtostr (o));
+    free (s);
     Jput (o);
     return rc;
 }
@@ -174,23 +154,6 @@ int flux_log (flux_t h, int lev, const char *fmt, ...)
     va_start (ap, fmt);
     rc = flux_vlog (h, lev, fmt, ap);
     va_end (ap);
-    return rc;
-}
-
-int flux_log_zmsg (zmsg_t *zmsg)
-{
-    JSON o = NULL;
-    flog_t f;
-    int rc = -1;
-
-    if (flux_json_request_decode (zmsg, &o) < 0 || flog_decode (o, &f) < 0) {
-        errno = EPROTO;
-        goto done;
-    }
-    flog_msg (&f);
-    rc = 0;
-done:
-    Jput (o);
     return rc;
 }
 
