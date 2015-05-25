@@ -14,6 +14,7 @@ fluxcoreinclude_HEADERS = \
 	security.h \
 	message.h \
 	request.h \
+	response.h \
 	panic.h \
 	event.h \
 	module.h \
@@ -35,6 +36,7 @@ libflux_la_SOURCES = \
 	security.c \
 	message.c \
 	request.c \
+	response.c \
 	panic.c \
 	event.c \
 	module.c \
@@ -48,6 +50,7 @@ TESTS = test_conf.t \
 	test_module.t \
 	test_message.t \
 	test_request.t \
+	test_response.t \
 	test_event.t \
 	test_tagpool.t
 
@@ -96,3 +99,7 @@ test_tagpool_t_LDADD = $(test_ldadd) $(LIBDL)
 test_request_t_SOURCES = test/request.c
 test_request_t_CPPFLAGS = $(test_cppflags)
 test_request_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_response_t_SOURCES = test/response.c
+test_response_t_CPPFLAGS = $(test_cppflags)
+test_response_t_LDADD = $(test_ldadd) $(LIBDL)
