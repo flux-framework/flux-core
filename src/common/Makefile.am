@@ -1,4 +1,4 @@
-SUBDIRS = libtap libev liblsd libutil libflux
+SUBDIRS = libtap libev liblsd libutil libflux libjsonc
 
 AM_CFLAGS = @GCCWARN@
 
@@ -11,6 +11,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/liblsd/liblsd.la \
 	$(builddir)/libutil/libutil.la \
 	$(builddir)/libev/libev.la \
+	$(builddir)/libjsonc/libjsonc.la \
 	$(LIBMUNGE) $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD) $(LIBUTIL) \
 	$(LIBDL) -lrt
 libflux_internal_la_LDFLAGS = -Wl,--no-undefined

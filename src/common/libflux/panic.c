@@ -26,9 +26,9 @@
 #include "config.h"
 #endif
 #include "panic.h"
-#include "request.h"
 #include "flog.h"
 
+#include "src/common/libjsonc/jsonc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 
