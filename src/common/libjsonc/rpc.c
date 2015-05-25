@@ -27,15 +27,15 @@
 #endif
 #include <czmq.h>
 
-#include "request.h"
-#include "message.h"
-#include "info.h"
-#include "rpc.h"
+#include "src/common/libflux/message.h"
+#include "src/common/libflux/info.h"
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
+
+#include "jsonc.h"
 
 /* helper for flux_json_multrpc */
 static int multrpc_cb (zmsg_t *zmsg, uint32_t nodeid,

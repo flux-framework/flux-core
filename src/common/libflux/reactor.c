@@ -32,11 +32,11 @@
 
 #include "handle.h"
 #include "reactor.h"
-#include "request.h"
 #include "handle_impl.h"
 #include "message.h"
 #include "tagpool.h"
 
+#include "src/common/libjsonc/jsonc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/coproc.h"

@@ -1,12 +1,9 @@
-#ifndef _FLUX_CORE_REQUEST_H
-#define _FLUX_CORE_REQUEST_H
+#ifndef _FLUX_JSONC_REQUEST_H
+#define _FLUX_JSONC_REQUEST_H
 
 #include <json.h>
-#include <stdbool.h>
-#include <stdarg.h>
 #include <czmq.h>
-
-#include "handle.h"
+#include <stdint.h>
 
 /* Request and response messages are constructed according to Flux RFC 3.
  * https://github.com/flux-framework/rfc/blob/master/spec_3.adoc
@@ -50,14 +47,7 @@ int flux_json_request_decode (zmsg_t *zmsg, json_object **in);
  */
 int flux_json_response_decode (zmsg_t *zmsg, json_object **out);
 
-/* Decode response message with no payload.
- * If there is a payload, fail with errno == EPROTO.
- * If errnum is nonzero in response, fail with errno == errnum.
- * Returns 0 on success, or -1 on failure with errno set.
- */
-int flux_response_decode (zmsg_t *zmsg);
-
-#endif /* !_FLUX_CORE_REQUEST_H */
+#endif /* !_FLUX_JSONC_REQUEST_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

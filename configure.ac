@@ -126,6 +126,7 @@ AC_CONFIG_FILES( \
   src/common/libutil/Makefile \
   src/common/libev/Makefile \
   src/common/libflux/Makefile \
+  src/common/libjsonc/Makefile \
   src/lib/Makefile \
   src/lib/libpmi/Makefile \
   src/bindings/Makefile \
