@@ -34,9 +34,9 @@
 #include "reactor.h"
 #include "handle_impl.h"
 #include "message.h"
+#include "response.h"
 #include "tagpool.h"
 
-#include "src/common/libjsonc/jsonc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/coproc.h"
@@ -295,7 +295,7 @@ static int msg_cb (flux_t h, void *arg)
      */
     } else {
         if (type == FLUX_MSGTYPE_REQUEST) {
-            if (flux_err_respond (h, ENOSYS, &zmsg) < 0)
+            if (flux_respond (h, zmsg, ENOSYS, NULL))
                 goto done;
         } else if (flux_flags_get (h) & FLUX_O_TRACE) {
             const char *topic = NULL;
