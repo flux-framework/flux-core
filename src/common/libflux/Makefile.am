@@ -15,6 +15,7 @@ fluxcoreinclude_HEADERS = \
 	message.h \
 	request.h \
 	response.h \
+	rpc.h \
 	panic.h \
 	event.h \
 	module.h \
@@ -37,6 +38,7 @@ libflux_la_SOURCES = \
 	message.c \
 	request.c \
 	response.c \
+	rpc.c \
 	panic.c \
 	event.c \
 	module.c \
