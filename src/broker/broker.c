@@ -1160,9 +1160,26 @@ done:
 static int cmb_lsmod_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    JSON out = module_list_encode (ctx->modhash);
-    int rc = flux_json_respond (ctx->h, out, zmsg);
+    flux_modlist_t mods = NULL;
+    char *json_str = NULL;
+    JSON out = NULL;
+    int rc = -1;
+
+    if (!(mods = module_get_modlist (ctx->modhash)))
+        goto done;
+    if (!(json_str = flux_lsmod_json_encode (mods)))
+        goto done;
+    out = Jfromstr (json_str);
+    assert (out != NULL);
+    if (flux_json_respond (ctx->h, out, zmsg) < 0)
+        goto done;
+    rc = 0;
+done:
     Jput (out);
+    if (json_str)
+        free (json_str);
+    if (mods)
+        flux_modlist_destroy (mods);
     return rc;
 }
 
