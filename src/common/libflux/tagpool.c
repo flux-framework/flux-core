@@ -25,10 +25,10 @@
 /* tagpool.c - allocator for 32-bit matchtags */
 
 /* Matchtags are used to match requests and responses in RPC's.
- * There are two main use cases: flux_json_rpc() and flux_json_multrpc().
- * The former allocates and retires one matchtag, the latter a block of
- * matchtags.  A variant of flux_json_rpc() is kvs_watch() which sends one
- * request and reecives multiple replies with the same matchtag.
+ * There are two main use cases in rpc.c.  The plain rpc call allocates
+ * and retires one matchtag, the multiple call allocates a block of
+ * matchtags.  kvs_watch() is another use case.  It sends one request
+ * and reecives multiple replies with the same matchtag.
  *
  * This implementation could be improved:
  * - allocations of len = 1 are allocated from a fixed 2^16 tag pool,
