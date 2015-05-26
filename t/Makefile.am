@@ -12,6 +12,8 @@ TESTS = \
 	loop/request.t \
 	loop/response.t \
 	loop/event.t \
+	loop/rpc.t \
+	loop/multrpc.t \
 	t0000-sharness.t \
 	t0001-basic.t \
 	t0002-request.t \
@@ -68,7 +70,9 @@ check_SCRIPTS = \
 check_PROGRAMS = \
         loop/request.t \
         loop/response.t \
-        loop/event.t
+        loop/event.t \
+	loop/rpc.t \
+	loop/multrpc.t
 
 test_ldadd = \
         $(top_builddir)/src/common/libflux-internal.la \
@@ -93,3 +97,11 @@ loop_response_t_LDADD = $(test_ldadd) $(LIBDL)
 loop_event_t_SOURCES = loop/event.c
 loop_event_t_CPPFLAGS = $(test_cppflags)
 loop_event_t_LDADD = $(test_ldadd) $(LIBDL)
+
+loop_rpc_t_SOURCES = loop/rpc.c
+loop_rpc_t_CPPFLAGS = $(test_cppflags)
+loop_rpc_t_LDADD = $(test_ldadd) $(LIBDL)
+
+loop_multrpc_t_SOURCES = loop/multrpc.c
+loop_multrpc_t_CPPFLAGS = $(test_cppflags)
+loop_multrpc_t_LDADD = $(test_ldadd) $(LIBDL)
