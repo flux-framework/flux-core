@@ -141,6 +141,7 @@ AC_CONFIG_FILES( \
   src/modules/libmrpc/Makefile \
   src/modules/libzio/Makefile \
   src/modules/libkz/Makefile \
+  src/modules/libjsc/Makefile \
   src/modules/live/Makefile \
   src/modules/mecho/Makefile \
   src/modules/barrier/Makefile \
