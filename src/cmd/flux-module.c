@@ -261,12 +261,16 @@ void mod_insmod (flux_t h, opt_t opt)
     if (opt.direct) {
         char *service = getservice (modname);
         char *topic = xasprintf ("%s.insmod", service);
-        JSON in = flux_insmod_json_encode (modpath, opt.argc, opt.argv);
+        char *json_str = flux_insmod_json_encode (modpath, opt.argc, opt.argv);
+        assert (json_str != NULL);
+        JSON in = Jfromstr (json_str);
+        assert (in != NULL);
         if (flux_json_multrpc (h, opt.nodeset, opt.fanout, topic, in,
                                                             NULL, NULL) < 0)
             err_exit ("%s", modname);
         free (topic);
         free (service);
+        free (json_str);
         Jput (in);
     } else {
         if (flux_modctl_load (h, opt.nodeset, modpath, opt.argc, opt.argv) < 0)
@@ -288,13 +292,16 @@ void mod_rmmod (flux_t h, opt_t opt)
     if (opt.direct) {
         char *service = getservice (modname);
         char *topic = xasprintf ("%s.rmmod", service);
-        JSON in = flux_rmmod_json_encode (modname);
+        char *json_str = flux_rmmod_json_encode (modname);
+        assert (json_str != NULL);
+        JSON in = Jfromstr (json_str);
         if (flux_json_multrpc (h, opt.nodeset, opt.fanout, topic, in,
                                                             NULL, NULL) < 0)
             err_exit ("%s", modname);
         free (topic);
         free (service);
         Jput (in);
+        free (json_str);
     } else {
         if (flux_modctl_unload (h, opt.nodeset, modname) < 0)
             err_exit ("%s", modname);
@@ -370,20 +377,23 @@ void lsmod_map_hash (zhash_t *mods, flux_lsmod_f cb, void *arg)
 
 int lsmod_hash_cb (uint32_t nodeid, uint32_t errnum, JSON out, void *arg)
 {
+    flux_modlist_t modlist;
     zhash_t *mods = arg;
     mod_t *m;
     int i, len;
     const char *name, *digest;
     int size, idle;
+    int rc = -1;
 
     if (errnum)
         return 0;
-    if (flux_lsmod_json_decode (out, &len) < 0)
-        return -1;
+    if (!(modlist = flux_lsmod_json_decode (Jtostr (out))))
+        goto done;
+    if ((len = flux_modlist_count (modlist)) == -1)
+        goto done;
     for (i = 0; i < len; i++) {
-        if (flux_lsmod_json_decode_nth (out, i, &name, &size, &digest,
-                                                                &idle) < 0)
-            return -1;
+        if (flux_modlist_get (modlist, i, &name, &size, &digest, &idle) < 0)
+            goto done;
         if ((m = zhash_lookup (mods, digest))) {
             if (idle < m->idle)
                 m->idle = idle;
@@ -395,7 +405,11 @@ int lsmod_hash_cb (uint32_t nodeid, uint32_t errnum, JSON out, void *arg)
             zhash_freefn (mods, digest, (zhash_free_fn *)mod_destroy);
         }
     }
-    return 0;
+    rc = 0;
+done:
+    if (modlist)
+        flux_modlist_destroy (modlist);
+    return rc;
 }
 
 void mod_lsmod (flux_t h, opt_t opt)
