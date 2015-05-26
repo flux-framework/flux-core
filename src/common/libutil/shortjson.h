@@ -57,6 +57,17 @@ Jadd_int (JSON o, const char *name, int i)
     json_object_object_add (o, (char *)name, n);
 }
 
+/* Add 64bit integer to JSON.
+ */
+static __inline__ void
+Jadd_int64 (JSON o, const char *name, int64_t i)
+{
+    JSON n = json_object_new_int64 (i);
+    if (!n)
+        oom ();
+    json_object_object_add (o, (char *)name, n);
+}
+
 /* Add double to JSON.
  */
 static __inline__ void
