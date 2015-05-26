@@ -57,9 +57,10 @@ TESTS = test_conf.t \
 	test_tagpool.t
 
 test_ldadd = \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux/libflux.la \
+	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
+	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)
 
 test_cppflags = \
@@ -94,7 +95,7 @@ test_event_t_SOURCES = test/event.c
 test_event_t_CPPFLAGS = $(test_cppflags)
 test_event_t_LDADD = $(test_ldadd) $(LIBDL)
 
-test_tagpool_t_SOURCES = test/tagpool.c tagpool.c
+test_tagpool_t_SOURCES = test/tagpool.c
 test_tagpool_t_CPPFLAGS = $(test_cppflags)
 test_tagpool_t_LDADD = $(test_ldadd) $(LIBDL)
 
