@@ -798,12 +798,12 @@ static int new_job_cb (const char *key, int64_t val, void *arg, int errnum)
     Jadd_int64 (ss, JSC_STATE_PAIR_NSTATE, (int64_t) js);
     json_object_object_add (jcb, JSC_STATE_PAIR, ss);
 
+    if (invoke_cbs (h, nj, jcb, errnum) < 0) {
+        flux_log (h, LOG_ERR, "new_job_cb: failed to invoke callbacks");
+    }
     if (reg_jobstate_hdlr (h, path, (KVSSetStringF *) job_state_cb) == -1) {
         flux_log (h, LOG_ERR, "new_job_cb: reg_jobstate_hdlr: %s", 
             strerror (errno));
-    }
-    if (invoke_cbs (h, nj, jcb, errnum) < 0) {
-        flux_log (h, LOG_ERR, "new_job_cb: failed to invoke callbacks");
     }
 
 done:
