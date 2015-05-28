@@ -65,7 +65,7 @@ overlap_flux_wreckruns () {
 test_expect_success 'jstat 1: notification works for 1 wreckrun' '
     run_flux_jstat 1 &&
     p=$( sync_flux_jstat 1) &&
-    run_timeout 2 flux wreckrun -n4 -N4 hostname &&
+    run_timeout 4 flux wreckrun -n4 -N4 hostname &&
     cat >expected <<-EOF &&
 $trans
 EOF
@@ -77,7 +77,7 @@ EOF
 test_expect_success 'jstat 2: jstat back-to-back works' '
     run_flux_jstat 2 &&
     p=$( sync_flux_jstat 2) &&
-    run_timeout 2 flux wreckrun -n4 -N4 hostname &&
+    run_timeout 4 flux wreckrun -n4 -N4 hostname &&
     cat >expected <<-EOF &&
 $trans
 EOF
@@ -89,9 +89,9 @@ EOF
 test_expect_success 'jstat 3: notification works for multiple wreckruns' '
     run_flux_jstat 3 &&
     p=$( sync_flux_jstat 3 ) &&
-    run_timeout 2 flux wreckrun -n4 -N4 hostname &&
-	run_timeout 2 flux wreckrun -n4 -N4 hostname &&
-	run_timeout 2 flux wreckrun -n4 -N4 hostname &&
+    run_timeout 4 flux wreckrun -n4 -N4 hostname &&
+	run_timeout 4 flux wreckrun -n4 -N4 hostname &&
+	run_timeout 4 flux wreckrun -n4 -N4 hostname &&
     cat >expected <<-EOF &&
 $trans
 $trans
@@ -106,7 +106,7 @@ test_expect_success LONGTEST 'jstat 4: notification works under lock-step stress
     run_flux_jstat 4 &&
     p=$( sync_flux_jstat 4 ) &&
     for i in `seq 1 20`; do 
-        run_timeout 2 flux wreckrun -n4 -N4 hostname 
+        run_timeout 4 flux wreckrun -n4 -N4 hostname 
     done &&
     cat >expected <<-EOF &&
 $trans
