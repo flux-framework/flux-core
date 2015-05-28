@@ -53,7 +53,7 @@ typedef enum {
     J_FOR_RENT   /*!< Space For Rent */
 } job_state_t;
 
-typedef int (JSC_CB_PTR)(json_object *base_jcb, void *arg, int errnum);
+typedef int (*jsc_handler_f)(json_object *base_jcb, void *arg, int errnum);
 
 /* TODO: find a better way to manage this hierarchical 
  * JCB attributes space 
@@ -92,7 +92,7 @@ typedef int (JSC_CB_PTR)(json_object *base_jcb, void *arg, int errnum);
  * multiple times. The callbacks will be invoked in the order
  * they are registered. Returns 0 on success; otherwise -1.
  */
-int jsc_notify_status (flux_t h, JSC_CB_PTR *callback, void *d);
+int jsc_notify_status (flux_t h, jsc_handler_f callback, void *d);
 
 /**
  * Query the "key" attribute of JCB of "jobid." The JCB info on this attribute

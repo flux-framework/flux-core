@@ -51,7 +51,7 @@ typedef struct {
 } stab_t;
 
 typedef struct {
-   JSC_CB_PTR *cb;
+   jsc_handler_f cb;
    void *arg;  
 } cb_pair_t;
 
@@ -828,7 +828,7 @@ static int reg_newjob_hdlr (flux_t h, KVSSetInt64F *func)
  *                                                                            *
  ******************************************************************************/
 
-int jsc_notify_status (flux_t h, JSC_CB_PTR *func, void *d)
+int jsc_notify_status (flux_t h, jsc_handler_f func, void *d)
 {
     int rc = -1;
     cb_pair_t *c = NULL; 
