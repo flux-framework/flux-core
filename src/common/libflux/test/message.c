@@ -358,8 +358,8 @@ int main (int argc, char *argv[])
 {
     plan (94);
 
-    lives_ok ({zmsg_test (false);}, // 1
-        "zmsg_test doesn't assert");
+    //lives_ok ({zmsg_test (false);}, // 1
+    //    "zmsg_test doesn't assert");
 
     check_proto ();                 // 17
     check_routes ();                // 26
