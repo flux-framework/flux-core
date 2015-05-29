@@ -348,10 +348,10 @@ void check_cmp (void)
 
 int main (int argc, char *argv[])
 {
-    plan (92);
+    plan (91);
 
-    lives_ok ({zmsg_test (false);}, // 1
-        "zmsg_test doesn't assert");
+    //lives_ok ({zmsg_test (false);}, // 1
+    //    "zmsg_test doesn't assert");
 
     check_proto ();                 // 17
     check_routes ();                // 26
