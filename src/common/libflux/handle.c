@@ -373,7 +373,7 @@ zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, zlist_t *nomatch,
     zmsg_t *zmsg = NULL;
     zlist_t *putmsg = nomatch;
 
-    if (flux_sleep_on (h, match) < 0) {
+    if (!nonblock && flux_sleep_on (h, match) < 0) {
         if (errno != EINVAL)
             goto done;
         errno = 0; /* EINVAL: not running in a coprocess */
