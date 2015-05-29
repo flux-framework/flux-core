@@ -32,9 +32,9 @@
 
 #include "handle.h"
 #include "reactor.h"
-#include "request.h"
 #include "handle_impl.h"
 #include "message.h"
+#include "response.h"
 #include "tagpool.h"
 
 #include "src/common/libutil/log.h"
@@ -237,6 +237,7 @@ static int msg_cb (flux_t h, void *arg)
     dispatch_t *d;
     int rc = -1;
     zmsg_t *zmsg = NULL;
+    zmsg_t *response = NULL;
     int type;
 
     if (!(zmsg = flux_recvmsg (h, true))) {
@@ -277,7 +278,8 @@ static int msg_cb (flux_t h, void *arg)
      */
     } else {
         if (type == FLUX_MSGTYPE_REQUEST) {
-            if (flux_err_respond (h, ENOSYS, &zmsg) < 0)
+            if (!(response = flux_response_encode_err (zmsg, ENOSYS))
+                          || flux_response_send (h, &response) < 0)
                 goto done;
         } else if (flux_flags_get (h) & FLUX_O_TRACE) {
             const char *topic = NULL;
@@ -289,6 +291,7 @@ static int msg_cb (flux_t h, void *arg)
     }
 done:
     zmsg_destroy (&zmsg);
+    zmsg_destroy (&response);
     return rc;
 }
 

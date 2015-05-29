@@ -31,8 +31,8 @@
 
 #include "flog.h"
 #include "info.h"
-#include "request.h"
 #include "message.h"
+#include "request.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
@@ -46,9 +46,9 @@ typedef struct {
 
 typedef struct {
     int level;
-    const char *facility;
+    char facility[64];
     int rank;
-    const char *msg;
+    char msg[1024];
     struct timeval tv;
 } flog_t;
 
@@ -72,9 +72,10 @@ static logctx_t *getctx (flux_t h)
     return ctx;
 }
 
-static JSON flog_encode (flog_t *f)
+static zmsg_t *flog_encode (flog_t *f)
 {
     JSON o = Jnew ();
+    zmsg_t *zmsg;
 
     Jadd_str (o, "facility", f->facility);
     Jadd_int (o, "level", f->level);
@@ -82,29 +83,39 @@ static JSON flog_encode (flog_t *f)
     Jadd_int (o, "timestamp_usec", (int)f->tv.tv_usec);
     Jadd_int (o, "timestamp_sec", (int)f->tv.tv_sec);
     Jadd_str (o, "message", f->msg);
-    return o;
+    zmsg = flux_request_encode ("cmb.log", Jtostr (o));
+    Jput (o);
+    return zmsg;
 }
 
-static int flog_decode (JSON o, flog_t *f)
+static int flog_decode (zmsg_t *zmsg, flog_t *f)
 {
-    int rc = -1;
+    const char *json_str;
+    JSON o = NULL;
     int sec, usec;
-    if (!Jget_str (o, "facility", &f->facility))
+    const char *s;
+    const char *facility;
+    int rc = -1;
+
+    if (flux_request_decode (zmsg, NULL, &json_str) < 0)
         goto done;
-    if (!Jget_int (o, "level", &f->level))
+    if (!(o = Jfromstr (json_str))
+            || !Jget_str (o, "facility", &facility)
+            || !Jget_int (o, "level", &f->level)
+            || !Jget_int (o, "rank", &f->rank)
+            || !Jget_int (o, "timestamp_usec", &usec)
+            || !Jget_int (o, "timestamp_sec", &sec)
+            || !Jget_str (o, "message", &s)) {
+        errno = EPROTO;
         goto done;
-    if (!Jget_int (o, "rank", &f->rank))
-        goto done;
-    if (!Jget_int (o, "timestamp_usec", &usec))
-        goto done;
-    if (!Jget_int (o, "timestamp_sec", &sec))
-        goto done;
+    }
+    snprintf (f->facility, sizeof (f->facility), "%s", facility);
+    snprintf (f->msg, sizeof (f->msg), "%s", s);
     f->tv.tv_sec = sec;
     f->tv.tv_usec = usec;
-    if (!Jget_str (o, "message", &f->msg))
-        goto done;
     rc = 0;
 done:
+    Jput (o);
     return rc;
 }
 
@@ -136,33 +147,26 @@ void flux_log_set_redirect (flux_t h, bool flag)
 int flux_vlog (flux_t h, int lev, const char *fmt, va_list ap)
 {
     logctx_t *ctx = getctx (h);
-    JSON o = NULL;
-    char *s = NULL;
     flog_t flog;
+    zmsg_t *zmsg = NULL;
     int rc = -1;
 
-    flog.facility = ctx->facility;
+    snprintf (flog.facility, sizeof (flog.facility), "%s", ctx->facility);
     flog.level = lev;
     flog.rank = flux_rank (h);
     if (gettimeofday (&flog.tv, NULL) < 0)
         err_exit ("gettimeofday");
-    if (vasprintf (&s, fmt, ap) < 0)
-        oom ();
-    flog.msg = s;
+    (void)vsnprintf (flog.msg, sizeof (flog.msg), fmt, ap);
 
     if (ctx->redirect) {
         flog_msg (&flog);
-        rc = 0;
-    } else {
-        if (!(o = flog_encode (&flog)))
-            goto done;
-        rc = flux_json_request (h, FLUX_NODEID_ANY,
-                                   FLUX_MATCHTAG_NONE, "cmb.log", o);
+    } else if (!(zmsg = flog_encode (&flog))
+                     || flux_request_send (h, FLUX_MATCHTAG_NONE, &zmsg) < 0) {
+        goto done;
     }
+    rc = 0;
 done:
-    if (s)
-        free (s);
-    Jput (o);
+    zmsg_destroy (&zmsg);
     return rc;
 }
 
@@ -179,18 +183,14 @@ int flux_log (flux_t h, int lev, const char *fmt, ...)
 
 int flux_log_zmsg (zmsg_t *zmsg)
 {
-    JSON o = NULL;
     flog_t f;
     int rc = -1;
 
-    if (flux_json_request_decode (zmsg, &o) < 0 || flog_decode (o, &f) < 0) {
-        errno = EPROTO;
+    if (flog_decode (zmsg, &f) < 0)
         goto done;
-    }
     flog_msg (&f);
     rc = 0;
 done:
-    Jput (o);
     return rc;
 }
 

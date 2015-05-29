@@ -9,29 +9,49 @@
 #include "handle.h"
 #include "request.h"
 
-/* Send a request to 'nodeid' addressed to 'topic'.
- * If 'in' is non-NULL, attach JSON payload, caller retains ownership.
- * Wait for a response.  If response has non-zero errnum, set errno to that
- * value and return -1.  If 'out' is non-NULL, set to JSON payload in response,
- * which caller must free.  It is considered a protocol error if 'out' is
- * set and there is no JSON payload, or 'out' is not set and there is.
+typedef struct flux_mresponse_struct *flux_mresponse_t;
+
+
+/* Synchronous request/response.
+ * If FLUX_O_COPROC is set, this call can sleep and let other reactor
+ * callbacks be serviced, otherwise it blocks until the response is received.
+ * If the response contains a nonzero errnum, this becomes the errno of
+ * the flux_rpc call.  If 'response' is non-NULL, the response message
+ * is assigned to it for further decoding (caller must destroy).
  * Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
-                   json_object *in, json_object **out);
 
-/* Send a request to each node in 'nodeset', then collect responses,
- * calling 'cb' for each one (if 'cb' is non-NULL).
- * Returns 0 on success, -1 on failure with errno set.
- * If there are multiple failures, their greatest errno is returned.
+int flux_rpc (flux_t h, const char *topic,
+              const char *json_str, zmsg_t **response);
+int flux_rpcto (flux_t h, const char *topic,
+                const char *json_str, zmsg_t **response, uint32_t nodeid);
+
+/* Bulk synchronous request/response.
+ * If FLUX_O_COPROC is set, this call can sleep and let other reactor
+ * callbacks be serviced, otherwise it blocks until all responses are received.
+ * 'fanout' limits the number of concurrent requests (0 == unlimited).
+ * If 'r' is non-NULL, it is assigned to a flux_mresponse_t that can be
+ * used to decode individual responses (caller must destroy).  If 'r' is
+ * NULL, the responses are decoded internally to detect any failure responses,
+ * but response payloads, if any, are discarded.  If any failures are detected,
+ * flux_multrpc fails with errno = the largest response errnum.
+ * Returns 0 on success, or -1 on failure with errno set.
  */
-typedef int (flux_multrpc_f)(uint32_t nodeid, uint32_t errnum,
-                             json_object *out, void *arg);
-int flux_json_multrpc (flux_t h, const char *nodeset, int fanout,
-                       const char *topic, json_object *in,
-                       flux_multrpc_f cb, void *arg);
 
-#endif /* !_FLUX_CORE_REQUEST_H */
+int flux_multrpcto (flux_t h, int fanout,
+                   const char *topic, const char *json_str,
+                   flux_mresponse_t *r, const char *nodeset);
+
+int flux_multrpc (flux_t h, int fanout,
+                  const char *topic, const char *json_str,
+                  flux_mresponse_t *r);
+
+int flux_mresponse_decode (flux_mresponse_t r, uint32_t nodeid,
+                           const char **topic, const char **json_str);
+
+void flux_mresponse_destroy (flux_mresponse_t r);
+
+#endif /* !_FLUX_CORE_RPC_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
