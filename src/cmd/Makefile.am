@@ -47,7 +47,8 @@ fluxcmd_PROGRAMS = \
 	flux-comms-stats \
 	flux-kvs \
 	flux-start \
-	flux-config
+	flux-config \
+	flux-jstat
 
 flux_zio_SOURCES = \
 	flux-zio.c \
@@ -65,5 +66,9 @@ flux_mping_LDADD = \
 flux_module_LDADD = \
 	$(top_builddir)/src/modules/modctl/libmodctl.la \
 	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
+	$(fluxcmd_ldadd) \
+	$(LIBUTIL)
+flux_jstat_LDADD = \
+	$(top_builddir)/src/modules/libjsc/libjsc.la \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)

@@ -9,5 +9,6 @@
 #include "src/modules/kvs/kvs.h"
 #include "src/modules/live/live.h"
 #include "src/modules/barrier/barrier.h"
+#include "src/modules/libjsc/jstatctl.h"
 
 #endif /* FLUX_CORE_H */

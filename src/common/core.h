@@ -34,6 +34,7 @@
 #include "core/kvs.h"
 #include "core/live.h"
 #include "core/barrier.h"
+#include "core/jstatctl.h"
 
 #endif /* !_FLUX_CORE_H */
 
