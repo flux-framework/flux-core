@@ -59,6 +59,7 @@ check_SCRIPTS = \
 	t1004-log.t \
 	t1005-cmddriver.t \
 	t2000-wreck.t \
+	t2001-jsc.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
 	lua/t0003-events.t \
