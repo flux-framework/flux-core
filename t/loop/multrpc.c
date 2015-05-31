@@ -6,6 +6,7 @@
 #include "src/common/libflux/info.h"
 
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/nodeset.h"
 
 #include "src/common/libtap/tap.h"
 
@@ -115,6 +116,22 @@ done:
     zmsg_destroy (&response);
     Jput (o);
     return 0;
+}
+
+/* then test - add nodeid to 'then_ns' */
+static nodeset_t then_ns = NULL;
+int then_count = 0;
+static void then_cb (flux_rpc_t r, void *arg)
+{
+    flux_t h = arg;
+    uint32_t nodeid;
+
+    if (flux_rpc_get (r, &nodeid, NULL) < 0
+            || !nodeset_add_rank (then_ns, nodeid)
+            || ++then_count == 128) {
+        flux_reactor_stop (h);
+        flux_rpc_destroy (r);
+    }
 }
 
 int rpctest_begin_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
@@ -232,10 +249,15 @@ int rpctest_begin_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
         "flux_rpc_get correctly reports single error");
     flux_rpc_destroy (r);
 
-    flux_reactor_stop (h);
+    /* test _then (still at fake session size of 128) */
+    ok ((r = flux_multrpc (h, "rpctest.hello", NULL, "[0-127]", 0)) != NULL,
+        "flux_multrpc [0-127] ok");
+    ok (flux_rpc_then (r, then_cb, h) == 0,
+        "flux_rpc_then works");
+    /* then_cb terminates reactor, results reported in main() */
+
     return 0;
 }
-
 
 static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST,   "rpctest.begin",          rpctest_begin_cb},
@@ -251,13 +273,17 @@ int main (int argc, char *argv[])
     zmsg_t *zmsg;
     flux_t h;
 
-    plan (29);
+    plan (33);
 
     (void)setenv ("FLUX_CONNECTOR_PATH", CONNECTOR_PATH, 0);
     ok ((h = flux_open ("loop://", FLUX_O_COPROC)) != NULL,
         "opened loop connector");
     if (!h)
         BAIL_OUT ("can't continue without loop handle");
+
+    /* create nodeset for last _then test */
+    ok ((then_ns = nodeset_new ()) != NULL,
+        "nodeset created ok");
 
     ok (flux_msghandler_addvec (h, htab, htablen, NULL) == 0,
         "registered message handlers");
@@ -269,6 +295,12 @@ int main (int argc, char *argv[])
         "sent message to initiate test");
     ok (flux_reactor_start (h) == 0,
         "reactor completed normally");
+
+    /* Check result of last _then test */
+    ok (nodeset_count (then_ns) == 128,
+        "then callback worked with correct nodemap");
+    nodeset_destroy (then_ns);
+
     flux_close (h);
 
     done_testing();
