@@ -9,6 +9,10 @@
 #include "handle.h"
 #include "request.h"
 
+enum {
+    FLUX_RPC_NORESPONSE = 1,
+};
+
 typedef struct flux_rpc_struct *flux_rpc_t;
 typedef void (*flux_then_f)(flux_rpc_t rpc, void *arg);
 
