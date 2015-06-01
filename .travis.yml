@@ -13,8 +13,8 @@ install:
   - (export CC=gcc; cd lua-hostlist && make LUA_VER=5.1 && sudo make install LUA_VER=5.1)
   - wget http://download.zeromq.org/zeromq-4.0.4.tar.gz
   - tar -xvf zeromq-4.0.4.tar.gz
-  - wget http://download.zeromq.org/czmq-2.2.0.tar.gz
-  - tar -xvf czmq-2.2.0.tar.gz
+  - wget http://download.zeromq.org/czmq-3.0.0-rc1.tar.gz
+  - tar -xvf czmq-3.0.0-rc1.tar.gz
   - wget https://download.libsodium.org/libsodium/releases/libsodium-1.0.0.tar.gz
   - tar -xvf libsodium-1.0.0.tar.gz
   - wget https://s3.amazonaws.com/json-c_releases/releases/json-c-0.11.tar.gz
@@ -22,7 +22,7 @@ install:
   - ( export CC=gcc; cd json-c-0.11 && ./configure && make && sudo make install)
   - (cd libsodium-1.0.0 && ./configure && make -j2 && sudo make install)
   - (cd zeromq-4.0.4 && ./configure --with-libsodium && make -j2 && sudo make install)
-  - (cd czmq-2.2.0 && ./configure && make -j2 && sudo make install)
+  - (cd czmq-3.0.0 && ./configure && make -j2 && sudo make install)
   - sudo ldconfig
 
 script: ./autogen.sh && ./configure  && make -j2 V=1 distcheck
