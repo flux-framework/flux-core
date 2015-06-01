@@ -27,22 +27,33 @@
 #endif
 #include "reparent.h"
 #include "rpc.h"
+#include "response.h"
 
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/xzmalloc.h"
 
 
-JSON flux_lspeer (flux_t h, int rank)
+char *flux_lspeer (flux_t h, int rank)
 {
     uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
-    JSON out = NULL;
+    flux_rpc_t r = NULL;
+    const char *json_str;
+    char *ret = NULL;
 
-    if (flux_json_rpc (h, nodeid, "cmb.lspeer", NULL, &out) < 0)
-        return NULL;
-    return out;
+    if (!(r = flux_rpc (h, "cmb.lspeer", NULL, nodeid, 0)))
+        goto done;
+    if (flux_rpc_get (r, NULL, &json_str) < 0)
+        goto done;
+    ret = xstrdup (json_str);
+done:
+    if (r)
+        flux_rpc_destroy (r);
+    return ret;
 }
 
 int flux_reparent (flux_t h, int rank, const char *uri)
 {
+    flux_rpc_t r = NULL;
     uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
     JSON in = Jnew ();
     int rc = -1;
@@ -52,11 +63,15 @@ int flux_reparent (flux_t h, int rank, const char *uri)
         goto done;
     }
     Jadd_str (in, "uri", uri);
-    if (flux_json_rpc (h, nodeid, "cmb.reparent", in, NULL) < 0)
+    if (!(r = flux_rpc (h, "cmb.reparent", Jtostr (in), nodeid, 0)))
+        goto done;
+    if (flux_rpc_get (r, NULL, NULL) < 0)
         goto done;
     rc = 0;
 done:
     Jput (in);
+    if (r)
+        flux_rpc_destroy (r);
     return rc;
 }
 

@@ -86,26 +86,27 @@ static module_t *module_create (const char *path, char *argz, size_t argz_len)
     return m;
 }
 
-static JSON module_list (void)
+static flux_modlist_t module_list (void)
 {
-    JSON o = flux_lsmod_json_create ();
+    flux_modlist_t mods = flux_modlist_create ();
     zlist_t *keys = zhash_keys (modules);
     module_t *m;
     char *name;
     int rc;
 
+    assert (mods != NULL);
     if (!keys)
         oom ();
     name = zlist_first (keys);
     while (name) {
         m = zhash_lookup (modules, name);
         assert (m != NULL);
-        rc = flux_lsmod_json_append (o, m->name, m->size, m->digest, m->idle);
+        rc = flux_modlist_append (mods, m->name, m->size, m->digest, m->idle);
         assert (rc == 0);
         name = zlist_next (keys);
     }
     zlist_destroy (&keys);
-    return o;
+    return mods;
 }
 
 static int insmod_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
@@ -163,11 +164,12 @@ static int rmmod_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 static int lsmod_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     JSON out = NULL;
+    flux_modlist_t mods = NULL;
     int errnum;
 
     if (flux_lsmod_request_decode (*zmsg) < 0)
         errnum = errno;
-    else if (!(out = module_list ()))
+    else if (!(mods = module_list ()))
         errnum = errno;
     else
         errnum = 0;
@@ -176,12 +178,18 @@ static int lsmod_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
                       strerror (errno));
     } else {
+        char *json_str = flux_lsmod_json_encode (mods);
+        assert (json_str != NULL);
+        out = Jfromstr (json_str);
+        assert (out != NULL);
         if (flux_json_respond (h, out, zmsg) < 0)
             flux_log (h, LOG_ERR, "%s: flux_json_respond: %s", __FUNCTION__,
                       strerror (errno));
     }
     Jput (out);
     zmsg_destroy (zmsg);
+    if (mods)
+        flux_modlist_destroy (mods);
     return 0;
 }
 

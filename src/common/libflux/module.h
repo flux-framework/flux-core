@@ -6,7 +6,6 @@
  */
 
 #include <stdint.h>
-#include <json.h>
 #include <czmq.h>
 
 #include "handle.h"
@@ -68,21 +67,35 @@ char *flux_modname (const char *filename);
  */
 char *flux_modfind (const char *searchpath, const char *modname);
 
-/* Codecs for module control payloads
+/* Encode/decode lsmod payload
+ * 'flux_modlist_t' is an intermediate object that can encode/decode
+ * to/from a JSON string, and provides accessors for module list entries.
  */
-json_object *flux_lsmod_json_create (void);
-int flux_lsmod_json_append (json_object *a, const char *name, int size,
+typedef struct flux_modlist_struct *flux_modlist_t;
+
+flux_modlist_t flux_modlist_create (void);
+void flux_modlist_destroy (flux_modlist_t mods);
+int flux_modlist_append (flux_modlist_t mods, const char *name, int size,
                             const char *digest, int idle);
-int flux_lsmod_json_decode (json_object *a, int *len);
-int flux_lsmod_json_decode_nth (json_object *a, int n, const char **name,
+int flux_modlist_count (flux_modlist_t mods);
+int flux_modlist_get (flux_modlist_t mods, int idx, const char **name,
                                 int *size, const char **digest, int *idle);
 
-json_object *flux_rmmod_json_encode (const char *name);
-int flux_rmmod_json_decode (json_object *o, char **name);
+char *flux_lsmod_json_encode (flux_modlist_t mods);
+flux_modlist_t flux_lsmod_json_decode (const char *json_str);
 
-json_object *flux_insmod_json_encode (const char *path,
-                                      int argc, char **argv);
-int flux_insmod_json_decode (json_object *o, char **path,
+
+/* Encode/decode rmmod payload.
+ * Caller must free the string returned by encode.
+ */
+char *flux_rmmod_json_encode (const char *name);
+int flux_rmmod_json_decode (const char *json_str, char **name);
+
+/* Encode/decode insmod payload.
+ * Caller must free the string returned by encode.
+ */
+char *flux_insmod_json_encode (const char *path, int argc, char **argv);
+int flux_insmod_json_decode (const char *json_str, char **path,
                              char **argz, size_t *argz_len);
 
 /* Decode an insmod request message.

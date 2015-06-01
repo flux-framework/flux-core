@@ -39,6 +39,11 @@ int flux_msghandler_addvec (flux_t h, msghandler_t *handlers, int len,
 void flux_msghandler_remove (flux_t h, int typemask, const char *pattern);
 
 
+int flux_msghandler_add_match (flux_t h, const flux_match_t match,
+                              FluxMsgHandler cb, void *arg);
+void flux_msghandler_remove_match (flux_t h, const flux_match_t match);
+
+
 /* Register a FluxFdHandler callback to be called whenever an event
  * in the 'events' mask occurs on the given file descriptor 'fd'.
  */

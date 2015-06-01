@@ -13,15 +13,16 @@ fluxcoreinclude_HEADERS = \
 	reduce.h \
 	security.h \
 	message.h \
+	request.h \
+	response.h \
+	rpc.h \
 	panic.h \
 	event.h \
-	request.h \
 	module.h \
 	reparent.h \
 	info.h \
 	flog.h \
 	conf.h \
-	rpc.h \
 	tmpdir.h
 
 noinst_LTLIBRARIES = \
@@ -35,13 +36,14 @@ libflux_la_SOURCES = \
 	reduce.c \
 	security.c \
 	message.c \
+	request.c \
+	response.c \
+	rpc.c \
 	panic.c \
 	event.c \
-	request.c \
 	module.c \
 	reparent.c \
 	conf.c \
-	rpc.c \
 	tagpool.h \
 	tagpool.c \
 	tmpdir.c
@@ -49,15 +51,17 @@ libflux_la_SOURCES = \
 TESTS = test_conf.t \
 	test_module.t \
 	test_message.t \
+	test_request.t \
+	test_response.t \
 	test_event.t \
 	test_tagpool.t
 
 test_ldadd = \
-        $(top_builddir)/src/common/libflux/libflux.la \
-        $(top_builddir)/src/common/libutil/libutil.la \
-        $(top_builddir)/src/common/libtap/libtap.la \
-        $(top_builddir)/src/common/liblsd/liblsd.la \
-        $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)
+	$(top_builddir)/src/common/libflux/libflux.la \
+	$(top_builddir)/src/common/libutil/libutil.la \
+	$(top_builddir)/src/common/libtap/libtap.la \
+	$(top_builddir)/src/common/liblsd/liblsd.la \
+	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)
 
 test_cppflags = \
 	-DMODULE_PATH=\"$(top_builddir)/src/modules\" \
@@ -95,3 +99,10 @@ test_tagpool_t_SOURCES = test/tagpool.c
 test_tagpool_t_CPPFLAGS = $(test_cppflags)
 test_tagpool_t_LDADD = $(test_ldadd) $(LIBDL)
 
+test_request_t_SOURCES = test/request.c
+test_request_t_CPPFLAGS = $(test_cppflags)
+test_request_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_response_t_SOURCES = test/response.c
+test_response_t_CPPFLAGS = $(test_cppflags)
+test_response_t_LDADD = $(test_ldadd) $(LIBDL)

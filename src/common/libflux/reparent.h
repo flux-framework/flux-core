@@ -4,7 +4,7 @@
 #include <json.h>
 #include "handle.h"
 
-json_object *flux_lspeer (flux_t h, int rank);
+char *flux_lspeer (flux_t h, int rank);
 
 int flux_reparent (flux_t h, int rank, const char *uri);
 
