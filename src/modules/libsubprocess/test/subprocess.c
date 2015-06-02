@@ -24,6 +24,9 @@
 
 #include <errno.h>
 #include <string.h>
+#include <json.h>
+
+#include <src/modules/libzio/zio.h>
 
 #include "tap.h"
 #include "subprocess.h"
@@ -36,12 +39,15 @@ void myfatal (void *h, int exit_code, const char *fmt, ...)
     myfatal_h = h;
 }
 
+static int testio_cb (struct subprocess *p, json_object *o);
+
 int main (int ac, char **av)
 {
     int rc;
     struct subprocess_manager *sm;
     struct subprocess *p, *q;
     const char *s;
+    char *buf;
     char *args[] = { "hello", NULL };
     char *args2[] = { "goodbye", NULL };
     char *args3[] = { "/bin/true", NULL };
@@ -236,9 +242,74 @@ int main (int ac, char **av)
     subprocess_destroy (p);
     subprocess_destroy (q);
 
+    /* Test subprocess output */
+    p = subprocess_create (sm);
+    ok (p != NULL, "subprocess_create");
+    ok (subprocess_argv_append (p, "/bin/echo") >= 0,  "subprocess_argv_append");
+    ok (subprocess_argv_append (p, "Hello, 123") >= 0, "subprocess_argv_append");
+
+    buf = NULL;
+    subprocess_set_context (p, "io", (void *) &buf);
+    ok (subprocess_get_context (p, "io") == (void *) &buf, "able to set subprocess context");
+
+    ok (subprocess_set_io_callback (p, testio_cb) >= 0, "set io callback");
+
+    ok (subprocess_run (p) >= 0, "run process with IO");
+
+    ok (subprocess_reap (p) >= 0, "reap process");
+    ok (subprocess_flush_io (p) >=0, "flush io");
+
+    ok (subprocess_exited (p) >= 0, "process is now exited");
+    ok (subprocess_exit_code (p) == 0, "process exited normally");
+
+    ok (buf != NULL, "io buffer is allocated");
+    if (buf) {
+        ok (strcmp (buf, "Hello, 123\n") == 0, "io buffer is correct");
+        free (buf);
+    }
+    subprocess_destroy (p);
+
+
+    /* Test subprocess input */
+    p = subprocess_create (sm);
+    ok (p != NULL, "subprocess_create");
+    ok (subprocess_argv_append (p, "/bin/cat") >= 0,  "subprocess_argv_append");
+
+    buf = NULL;
+    subprocess_set_context (p, "io", (void *) &buf);
+    ok (subprocess_get_context (p, "io") == (void *) &buf, "able to set subprocess context");
+
+    ok (subprocess_set_io_callback (p, testio_cb) >= 0, "set io callback");
+
+    ok (subprocess_run (p) >= 0, "run process with IO");
+
+    ok (subprocess_write (p, "Hello\n", 7, true) >= 0, "write to subprocess");
+    ok (subprocess_reap (p) >= 0, "reap process");
+    ok (subprocess_flush_io (p) >= 0, "manually flush io");
+    ok (subprocess_io_complete (p) == 1, "io is now complete");
+
+    ok (subprocess_exited (p) >= 0, "process is now exited");
+    ok (subprocess_exit_code (p) == 0, "process exited normally");
+
+    ok (buf != NULL, "io buffer is allocated");
+    if (buf) {
+        ok (strcmp (buf, "Hello\n") == 0, "io buffer is correct");
+        free (buf);
+    }
+    subprocess_destroy (p);
+
     subprocess_manager_destroy (sm);
 
     done_testing ();
+}
+
+static int testio_cb (struct subprocess *p, json_object *o)
+{
+    char **bufp = subprocess_get_context (p, "io");
+    bool eof;
+    if (*bufp == NULL)
+        zio_json_decode (o, (void **) bufp, &eof);
+    return 0;
 }
 
 /*
