@@ -671,7 +671,7 @@ static int zio_writer_schedule (zio_t zio)
 /*
  *  write data into zio buffer
  */
-static int zio_write_data (zio_t zio, char *buf, size_t len)
+static int zio_write_data (zio_t zio, void *buf, size_t len)
 {
     int n = 0;
     int ndropped = 0;
@@ -707,12 +707,39 @@ static int zio_write_data (zio_t zio, char *buf, size_t len)
     return (0);
 }
 
+static int zio_write_internal (zio_t zio, void *data, size_t len)
+{
+    int rc;
+
+    rc = zio_write_data (zio, data, len);
+    zio_debug (zio, "zio_write: %d bytes, eof=%d\n", len, zio_eof (zio));
+
+    if (zio_write_pending (zio))
+        zio_writer_schedule (zio);
+    return (rc);
+}
+
+int zio_write (zio_t zio, void *data, size_t len)
+{
+    if ((zio == NULL) || (zio->magic != ZIO_MAGIC) || !zio_writer (zio)) {
+        errno = EINVAL;
+        return (-1);
+    }
+
+    if (!data || len <= 0) {
+        errno = EINVAL;
+        return (-1);
+    }
+
+    return (zio_write_internal (zio, data, len));
+}
+
 /*
  *  Write json object to this zio object, buffering unwritten data.
  */
 int zio_write_json (zio_t zio, json_object *o)
 {
-    char *s;
+    char *s = NULL;
     int len, rc = 0;
     bool eof;
 
@@ -727,17 +754,13 @@ int zio_write_json (zio_t zio, json_object *o)
     }
     if (eof)
         zio_set_eof (zio);
-    if (len > 0) {
-        rc = zio_write_data (zio, s, len);
-        free (s);
-    }
-
-    zio_debug (zio, "zio_write: %d bytes, eof=%d\n", len, zio_eof (zio));
-
-    if (zio_write_pending (zio))
+    if (len > 0)
+        rc = zio_write_internal (zio, s, len);
+    else if (zio_write_pending (zio))
         zio_writer_schedule (zio);
 
-    return (rc);
+    free (s);
+    return rc;
 }
 
 static int zio_bootstrap (zio_t zio)

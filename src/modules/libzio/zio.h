@@ -71,13 +71,18 @@ int zio_closed (zio_t zio);
  */
 int zio_read (zio_t zio);
 
+/*  Non-blocking write directly to zio object. Data will be buffered by
+ *   zio object and written to destination fd when ready, if zio object
+ *   is registered in an event loop.
+ */
+int zio_write (zio_t zio, void *data, size_t len);
+
 /*
  *  Write data from json object [o] to zio object [z], data is buffered
  *   if necessary. Only data destined for specific object [z] is read,
  *   and the data is consumed after reading.
  */
 int zio_write_json (zio_t z, json_object *o);
-
 
 /*
  *   Attach zio object [x] to zloop poll loop [zloop].
