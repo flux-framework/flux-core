@@ -93,22 +93,6 @@ error:
     return NULL;
 }
 
-zmsg_t *flux_event_recv (flux_t h, bool nonblock)
-{
-    flux_match_t match = {
-        .typemask = FLUX_MSGTYPE_EVENT,
-        .matchtag = FLUX_MATCHTAG_NONE,
-        .bsize = 0,
-        .topic_glob = NULL,
-    };
-    return flux_recvmsg_match (h, match, NULL, nonblock);
-}
-
-int flux_event_send (flux_t h, zmsg_t **zmsg)
-{
-    return flux_sendmsg (h, zmsg);
-}
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
