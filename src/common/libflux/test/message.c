@@ -203,8 +203,16 @@ void check_payload (void)
        "and we got back the payload we set");
 
     errno = 0;
-    ok (flux_msg_set_payload (zmsg, 0, buf, len) < 0 && errno == EINVAL,
-        "flux_msg_set_payload detects reuse of payload and fails with EINVAL");
+    ok (flux_msg_set_payload (zmsg, 0, buf, len - 1) < 0 && errno == EINVAL,
+        "flux_msg_set_payload detects reuse of payload fragment and fails with EINVAL");
+
+    ok (flux_msg_set_payload (zmsg, 0, buf, len) == 0,
+        "flux_msg_set_payload detects payload echo and works");
+    ok (flux_msg_get_payload (zmsg, &flags, &buf, &len) == 0
+        && buf && len == plen && flags == 0,
+       "flux_msg_get_payload works");
+    cmp_mem (buf, pay, len,
+       "and we got back the payload we set");
 
     errno = 0;
     ok (flux_msg_set_payload (zmsg, 0, NULL, 0) == 0 && errno == 0,
@@ -348,7 +356,7 @@ void check_cmp (void)
 
 int main (int argc, char *argv[])
 {
-    plan (92);
+    plan (94);
 
     lives_ok ({zmsg_test (false);}, // 1
         "zmsg_test doesn't assert");
