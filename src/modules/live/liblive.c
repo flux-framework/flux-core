@@ -62,7 +62,7 @@ int flux_recover_all (flux_t h)
     zmsg_t *zmsg = flux_event_encode ("live.recover", NULL);
     if (!zmsg)
         return -1;
-    int rc = flux_event_send (h, &zmsg);
+    int rc = flux_sendmsg (h, &zmsg);
     zmsg_destroy (&zmsg);
     return rc;
 }

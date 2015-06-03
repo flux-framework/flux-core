@@ -137,7 +137,7 @@ void shutdown_arm (shutdown_t s, int grace, int rc, const char *fmt, ...)
     Jadd_int (out, "rank", flux_rank (s->h));
     Jadd_int (out, "exitcode", rc);
     zmsg_t *zmsg = flux_event_encode ("shutdown", Jtostr (out));
-    if (!zmsg || flux_event_send (s->h, &zmsg) < 0)
+    if (!zmsg || flux_sendmsg (s->h, &zmsg) < 0)
         err_exit ("%s: could not send event", __FUNCTION__);
     Jput (out);
     zmsg_destroy (&zmsg);

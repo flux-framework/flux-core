@@ -103,8 +103,8 @@ static void event_pub (flux_t h, int argc, char **argv)
         argz_stringify (json_str, len, ' ');
     }
     if (!(zmsg = flux_event_encode (topic, json_str))
-                || flux_event_send (h, &zmsg) < 0)
-        err_exit ("flux_event_send");
+              || flux_sendmsg (h, &zmsg) < 0)
+        err_exit ("sending event");
     if (json_str)
         free (json_str);
 }
@@ -130,13 +130,19 @@ static void unsubscribe_all (flux_t h, int tc, char **tv)
 static void event_sub (flux_t h, int argc, char **argv)
 {
     zmsg_t *zmsg;
+    flux_match_t match = {
+        .typemask = FLUX_MSGTYPE_EVENT,
+        .matchtag = FLUX_MATCHTAG_NONE,
+        .bsize = 0,
+        .topic_glob = NULL,
+    };
 
     if (argc > 0)
         subscribe_all (h, argc, argv);
     else if (flux_event_subscribe (h, "") < 0)
         err_exit ("flux_event_subscribe");
 
-    while ((zmsg = flux_event_recv (h, false))) {
+    while ((zmsg = flux_recvmsg_match (h, match, NULL, false))) {
         const char *topic;
         const char *json_str;
         if (flux_msg_get_topic (zmsg, &topic) < 0

@@ -1681,7 +1681,7 @@ static int setroot_event_send (ctx_t *ctx, const char *fence)
         goto done;
     if (!(zmsg = flux_event_encode ("kvs.setroot", Jtostr (in))))
         goto done;
-    if (flux_event_send (ctx->h, &zmsg) < 0)
+    if (flux_sendmsg (ctx->h, &zmsg) < 0)
         goto done;
     rc = 0;
 done:

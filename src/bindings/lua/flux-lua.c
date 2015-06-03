@@ -447,7 +447,7 @@ static int l_flux_send_event (lua_State *L)
     event = luaL_checkstring (L, -1);
 
     zmsg = flux_event_encode (event, json_str);
-    if (!zmsg || flux_event_send (f, &zmsg) < 0)
+    if (!zmsg || flux_sendmsg (f, &zmsg) < 0)
         rc = -1;
     if (o)
         json_object_put (o);
@@ -462,9 +462,15 @@ static int l_flux_recv_event (lua_State *L)
     json_object *o = NULL;
     const char *json_str = NULL;
     const char *topic;
+    flux_match_t match = {
+        .typemask = FLUX_MSGTYPE_EVENT,
+        .matchtag = FLUX_MATCHTAG_NONE,
+        .bsize = 0,
+        .topic_glob = NULL,
+    };
     zmsg_t *zmsg = NULL;
 
-    if (!(zmsg = flux_event_recv (f, 0)))
+    if (!(zmsg = flux_recvmsg_match (f, match, NULL, 0)))
         return lua_pusherror (L, strerror (errno));
 
     if (flux_msg_get_topic (zmsg, &topic) < 0
@@ -475,7 +481,7 @@ static int l_flux_recv_event (lua_State *L)
     }
 
     /* FIXME: create empty JSON object if message payload was empty,
-     * because flux_event_send () previously ensured the payload was never
+     * because flux_sendmsg () previously ensured the payload was never
      * empty, and t/lua/t0003-events.t (tests 19 and 20) will fail if this
      * isn't so.  Need to revisit that test, and find any dependencies on
      * this invariant in the lua code.

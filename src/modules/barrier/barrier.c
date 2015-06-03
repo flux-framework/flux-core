@@ -271,7 +271,7 @@ static int exit_event_send (flux_t h, const char *name, int errnum)
     Jadd_int (o, "errnum", errnum);
     if (!(zmsg = flux_event_encode ("barrier.exit", Jtostr (o))))
         goto done;
-    if (flux_event_send (h, &zmsg) < 0)
+    if (flux_sendmsg (h, &zmsg) < 0)
         goto done;
     rc = 0;
 done:
