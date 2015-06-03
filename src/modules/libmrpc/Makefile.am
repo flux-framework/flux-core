@@ -5,6 +5,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include
 
 fluxlib_LTLIBRARIES = libmrpc.la
+fluxinclude_HEADERS = \
+		      mrpc.h
 
 libmrpc_la_SOURCES = \
 	mrpc.c \
