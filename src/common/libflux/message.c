@@ -900,6 +900,24 @@ done:
     return rc;
 }
 
+/* FIXME: this function copies payload and then deletes it if 'payload'
+ * is false, when the point was to avoid the overhead of copying it in
+ * the first place.
+ */
+zmsg_t *flux_msg_copy (const zmsg_t *zmsg, bool payload)
+{
+    zmsg_t *cpy = zmsg_dup ((zmsg_t *)zmsg);
+    if (!cpy) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    if (!payload && flux_msg_set_payload (cpy, 0, NULL, 0) < 0) {
+        zmsg_destroy (&cpy);
+        return NULL;
+    }
+    return cpy;
+}
+
 struct map_struct {
     const char *name;
     const char *sname;
