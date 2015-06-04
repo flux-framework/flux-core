@@ -734,6 +734,16 @@ int zio_write (zio_t zio, void *data, size_t len)
     return (zio_write_internal (zio, data, len));
 }
 
+int zio_write_eof (zio_t zio)
+{
+     if ((zio == NULL) || (zio->magic != ZIO_MAGIC) || !zio_writer (zio)) {
+        errno = EINVAL;
+        return (-1);
+    }
+    zio_set_eof (zio);
+    return (0);
+}
+
 /*
  *  Write json object to this zio object, buffering unwritten data.
  */
