@@ -448,6 +448,23 @@ static int zio_close (zio_t zio)
     return (0);
 }
 
+static int zio_writer_flush_all (zio_t zio)
+{
+    int n = 0;
+    zio_debug (zio, "zio_writer_flush_all: used=%d\n", zio_buffer_used (zio));
+    while (zio_buffer_used (zio) > 0) {
+        int rc = cbuf_read_to_fd (zio->buf, zio->dstfd, -1);
+        zio_debug (zio, "zio_writer_flush_all: rc=%d\n", rc);
+        if (rc < 0)
+            return (rc);
+        n += rc;
+    }
+    zio_debug (zio, "zio_writer_flush_all: n=%d\n", n);
+    if (zio_buffer_used (zio) == 0 && zio_eof_pending (zio))
+        zio_close (zio);
+    return (n);
+}
+
 
 /*
  *   Flush any buffered output and EOF from zio READER object
@@ -458,14 +475,24 @@ int zio_flush (zio_t zio)
     int len;
     int rc = 0;
 
-    if ((zio == NULL) || (zio->magic != ZIO_MAGIC) || !(zio->send))
+    if ((zio == NULL) || (zio->magic != ZIO_MAGIC))
         return (-1);
+    if (zio_reader (zio) && !zio->send)
+       return (-1);
+
+    zio_debug (zio, "zio_flush\n");
 
     /*
      *  Nothing to flush if EOF already sent to consumer:
      */
     if (zio_eof_sent (zio))
         return (0);
+
+    if (zio_writer (zio))
+        return zio_writer_flush_all (zio);
+
+    /* else zio reader:
+    */
 
     while (((len = zio_data_to_flush (zio)) > 0) || zio_eof (zio)) {
         char * buf = NULL;
