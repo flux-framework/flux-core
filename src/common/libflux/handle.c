@@ -50,6 +50,9 @@ struct flux_handle_struct {
     tagpool_t       tagpool;
     reactor_t       reactor;
     flux_msgcounters_t msgcounters;
+    flux_fatal_f    fatal;
+    void            *fatal_arg;
+    bool            fatal_called;
 };
 
 static char *find_file_r (const char *name, const char *dirpath)
@@ -237,6 +240,23 @@ void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn destroy)
     zhash_freefn (h->aux, name, destroy);
 }
 
+void flux_fatal_set (flux_t h, flux_fatal_f fun, void *arg)
+{
+    h->fatal = fun;
+    h->fatal_arg = arg;
+    h->fatal_called = false;
+}
+
+void flux_fatal_error (flux_t h, const char *fun, const char *msg)
+{
+    if (h->fatal && !h->fatal_called) {
+        char buf[256];
+        snprintf (buf, sizeof (buf), "%s: %s", fun, msg);
+        h->fatal_called = true;
+        h->fatal (buf, h->fatal_arg);
+    }
+}
+
 void flux_get_msgcounters (flux_t h, flux_msgcounters_t *mcs)
 {
     *mcs = h->msgcounters;
@@ -273,13 +293,15 @@ uint32_t flux_matchtag_avail (flux_t h)
 int flux_sendmsg (flux_t h, zmsg_t **zmsg)
 {
     int type;
+    int rc = -1;
 
     if (!h->ops->sendmsg) {
         errno = ENOSYS;
-        return -1;
+        FLUX_FATAL (h);
+        goto done;
     }
     if (flux_msg_get_type (*zmsg, &type) < 0)
-        return -1;
+        goto done;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
             h->msgcounters.request_tx++;
@@ -296,7 +318,13 @@ int flux_sendmsg (flux_t h, zmsg_t **zmsg)
     }
     if (h->flags & FLUX_O_TRACE)
         flux_msg_fprint (stderr, *zmsg);
-    return h->ops->sendmsg (h->impl, zmsg);
+    if (h->ops->sendmsg (h->impl, zmsg) < 0) {
+        FLUX_FATAL (h);
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
 }
 
 zmsg_t *flux_recvmsg (flux_t h, bool nonblock)
@@ -306,10 +334,14 @@ zmsg_t *flux_recvmsg (flux_t h, bool nonblock)
 
     if (!h->ops->recvmsg) {
         errno = ENOSYS;
+        FLUX_FATAL (h);
         goto done;
     }
-    if (!(zmsg = h->ops->recvmsg (h->impl, nonblock)))
+    if (!(zmsg = h->ops->recvmsg (h->impl, nonblock))) {
+        if (errno != EAGAIN && errno != EWOULDBLOCK)
+            FLUX_FATAL (h);
         goto done;
+    }
     if (flux_msg_get_type (zmsg, &type) < 0) {
         zmsg_destroy (&zmsg);
         errno = EPROTO;
