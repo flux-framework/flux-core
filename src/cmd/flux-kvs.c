@@ -390,8 +390,8 @@ void cmd_dropcache_all (flux_t h, int argc, char **argv)
     if (argc != 0)
         msg_exit ("dropcache-all: takes no arguments");
     zmsg_t *zmsg = flux_event_encode ("kvs.dropcache", NULL);
-    if (!zmsg || flux_event_send (h, &zmsg) < 0)
-        err_exit ("flux_event_send");
+    if (!zmsg || flux_sendmsg (h, &zmsg) < 0)
+        err_exit ("flux_sendmsg");
     zmsg_destroy (&zmsg);
 }
 

@@ -32,9 +32,9 @@
 
 #include "handle.h"
 #include "reactor.h"
-#include "request.h"
 #include "handle_impl.h"
 #include "message.h"
+#include "response.h"
 #include "tagpool.h"
 
 #include "src/common/libutil/log.h"
@@ -59,7 +59,25 @@ struct reactor_struct {
     dispatch_t *current;
 };
 
-static void copy_match (flux_match_t *dst, flux_match_t src)
+static bool match_match (const flux_match_t m1, const flux_match_t m2)
+{
+    if (m1.typemask != m2.typemask)
+        return false;
+    if (m1.matchtag != m2.matchtag)
+        return false;
+    if (m1.bsize != m2.bsize)
+        return false;
+    if (m1.topic_glob == NULL && m2.topic_glob != NULL)
+        return false;
+    if (m1.topic_glob != NULL && m2.topic_glob == NULL)
+        return false;
+    if (m1.topic_glob != NULL && m2.topic_glob != NULL
+                              && strcmp (m1.topic_glob, m2.topic_glob) != 0)
+        return false;
+    return true;
+}
+
+static void copy_match (flux_match_t *dst, const flux_match_t src)
 {
     if (dst->topic_glob)
         free (dst->topic_glob);
@@ -67,12 +85,12 @@ static void copy_match (flux_match_t *dst, flux_match_t src)
     dst->topic_glob = src.topic_glob ? xstrdup (src.topic_glob) : NULL;
 }
 
-static dispatch_t *dispatch_create (flux_t h, flux_match_t match,
+static dispatch_t *dispatch_create (flux_t h, const flux_match_t match,
                                     FluxMsgHandler cb, void *arg)
 {
     dispatch_t *d = xzmalloc (sizeof (*d));
     d->h = h;
-    d->match = match;
+    copy_match (&d->match, match);
     d->fn = cb;
     d->arg = arg;
     return d;
@@ -277,7 +295,7 @@ static int msg_cb (flux_t h, void *arg)
      */
     } else {
         if (type == FLUX_MSGTYPE_REQUEST) {
-            if (flux_err_respond (h, ENOSYS, &zmsg) < 0)
+            if (flux_respond (h, zmsg, ENOSYS, NULL))
                 goto done;
         } else if (flux_flags_get (h) & FLUX_O_TRACE) {
             const char *topic = NULL;
@@ -292,30 +310,41 @@ done:
     return rc;
 }
 
-int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
-                         FluxMsgHandler cb, void *arg)
+int flux_msghandler_add_match (flux_t h, const flux_match_t match,
+                              FluxMsgHandler cb, void *arg)
 {
     reactor_t r = flux_get_reactor (h);
     dispatch_t *d;
     int oldsize = zlist_size (r->dsp);
     int rc = -1;
 
-    if (typemask == 0 || !pattern || !cb) {
+    if (!cb || match.typemask == 0) {
         errno = EINVAL;
         goto done;
     }
-
-    flux_match_t match = {
-        .typemask = typemask,
-        .topic_glob = pattern ? xstrdup (pattern) : NULL,
-        .matchtag = FLUX_MATCHTAG_NONE,
-        .bsize = 1,
-    };
     d = dispatch_create (h, match, cb, arg);
     if (zlist_push (r->dsp, d) < 0)
         oom ();
     if (oldsize == 0 && r->ops->reactor_msg_add)
         rc = r->ops->reactor_msg_add (r->impl, msg_cb, r);
+    rc = 0;
+done:
+    return rc;
+}
+
+int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
+                         FluxMsgHandler cb, void *arg)
+{
+    int rc = -1;
+
+    flux_match_t match = {
+        .typemask = typemask,
+        .topic_glob = (char *)pattern,
+        .matchtag = FLUX_MATCHTAG_NONE,
+        .bsize = 1,
+    };
+    if (flux_msghandler_add_match (h, match, cb, arg) < 0)
+        goto done;
     rc = 0;
 done:
     return rc;
@@ -333,15 +362,14 @@ int flux_msghandler_addvec (flux_t h, msghandler_t *handlers, int len,
     return 0;
 }
 
-void flux_msghandler_remove (flux_t h, int typemask, const char *pattern)
+void flux_msghandler_remove_match (flux_t h, const flux_match_t match)
 {
     reactor_t r = flux_get_reactor (h);
     dispatch_t *d;
 
     d = zlist_first (r->dsp);
     while (d) {
-        if (d->match.typemask == typemask && !strcmp (d->match.topic_glob,
-                                                        pattern)) {
+        if (match_match (d->match, match)) {
             zlist_remove (r->dsp, d);
             dispatch_destroy (d);
             if (zlist_size (r->dsp) == 0 && r->ops->reactor_msg_remove)
@@ -350,6 +378,17 @@ void flux_msghandler_remove (flux_t h, int typemask, const char *pattern)
         }
         d = zlist_next (r->dsp);
     }
+}
+
+void flux_msghandler_remove (flux_t h, int typemask, const char *pattern)
+{
+    flux_match_t match = {
+        .typemask = typemask,
+        .matchtag = FLUX_MATCHTAG_NONE,
+        .bsize = 1,
+        .topic_glob = (char*)pattern,
+    };
+    flux_msghandler_remove_match (h, match);
 }
 
 int flux_fdhandler_add (flux_t h, int fd, short events,

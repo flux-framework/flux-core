@@ -138,8 +138,8 @@ int main (int argc, char *argv[])
     } else if (Copt) {
         char *topic = xasprintf ("%s.stats.clear", target);
         zmsg_t *zmsg = flux_event_encode (target, NULL);
-        if (!zmsg || flux_event_send (h, &zmsg) < 0)
-            err_exit ("flux_event_send");
+        if (!zmsg || flux_sendmsg (h, &zmsg) < 0)
+            err_exit ("sending event");
         zmsg_destroy (&zmsg);
         free (topic);
     } else if (Ropt) {

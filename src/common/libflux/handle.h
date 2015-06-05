@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 #include <czmq.h>
 #include "message.h"
 
@@ -19,6 +20,8 @@ typedef struct {
     int keepalive_rx;
 } flux_msgcounters_t;
 
+typedef void (*flux_fatal_f)(const char *msg, void *arg);
+
 /* Flags for handle creation and flux_flags_set()/flux_flags_unset.
  */
 enum {
@@ -34,6 +37,20 @@ enum {
  */
 flux_t flux_open (const char *uri, int flags);
 void flux_close (flux_t h);
+
+/* Register a handler for fatal handle errors.
+ * A fatal error is ENOMEM or a handle send/recv error after which
+ * it is inadvisable to continue using the handle.
+ */
+void flux_fatal_set (flux_t h, flux_fatal_f fun, void *arg);
+
+/* Call the user's fatal error handler, if any.
+ * If no handler is registered, this is a no-op.
+ */
+void flux_fatal_error (flux_t h, const char *fun, const char *msg);
+#define FLUX_FATAL(h) do { \
+    flux_fatal_error((h),__FUNCTION__,(strerror (errno))); \
+} while (0)
 
 /* A mechanism is provide for users to attach auxiliary state to the flux_t
  * handle by name.  The FluxFreeFn, if non-NULL, will be called

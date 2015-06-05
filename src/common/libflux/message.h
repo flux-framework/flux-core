@@ -29,6 +29,10 @@ enum {
  */
 zmsg_t *flux_msg_create (int type);
 
+/* Duplicate zmsg, omitting payload if 'payload' is false.
+ */
+zmsg_t *flux_msg_copy (const zmsg_t *zmsg, bool payload);
+
 /* Get/set message type
  * For FLUX_MSGTYPE_REQUEST: set_type initializes nodeid to FLUX_NODEID_ANY
  * For FLUX_MSGTYPE_RESPONSE: set_type initializes errnum to 0

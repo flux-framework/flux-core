@@ -1089,11 +1089,14 @@ done:
 static int cmb_rmmod_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
+    const char *json_str;
     char *name = NULL;
     int rc = -1;
     module_t p;
 
-    if (flux_rmmod_request_decode (*zmsg, &name) < 0)
+    if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
+        goto done;
+    if (flux_rmmod_json_decode (json_str, &name) < 0)
         goto done;
     if (!(p = module_lookup_byname (ctx->modhash, name))) {
         errno = ENOENT;
@@ -1115,6 +1118,7 @@ done:
 static int cmb_insmod_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
+    const char *json_str;
     char *name = NULL;
     char *path = NULL;
     char *argz = NULL;
@@ -1122,7 +1126,9 @@ static int cmb_insmod_cb (zmsg_t **zmsg, void *arg)
     module_t p;
     int rc = -1;
 
-    if (flux_insmod_request_decode (*zmsg, &path, &argz, &argz_len) < 0)
+    if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
+        goto done;
+    if (flux_insmod_json_decode (json_str, &path, &argz, &argz_len) < 0)
         goto done;
     if (!(name = flux_modname (path))) {
         errno = ENOENT;
@@ -1160,9 +1166,26 @@ done:
 static int cmb_lsmod_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    JSON out = module_list_encode (ctx->modhash);
-    int rc = flux_json_respond (ctx->h, out, zmsg);
+    flux_modlist_t mods = NULL;
+    char *json_str = NULL;
+    JSON out = NULL;
+    int rc = -1;
+
+    if (!(mods = module_get_modlist (ctx->modhash)))
+        goto done;
+    if (!(json_str = flux_lsmod_json_encode (mods)))
+        goto done;
+    out = Jfromstr (json_str);
+    assert (out != NULL);
+    if (flux_json_respond (ctx->h, out, zmsg) < 0)
+        goto done;
+    rc = 0;
+done:
     Jput (out);
+    if (json_str)
+        free (json_str);
+    if (mods)
+        flux_modlist_destroy (mods);
     return rc;
 }
 
@@ -1242,11 +1265,12 @@ done:
 static int cmb_log_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
+    const char *json_str;
 
-    if (ctx->rank > 0)
-        (void)overlay_sendmsg_parent (ctx->overlay, zmsg);
-    else
-        (void)flux_log_zmsg (*zmsg);
+    if (flux_response_decode (*zmsg, NULL, &json_str) < 0)
+        goto done;
+    (void)flux_log_json (ctx->h, json_str);
+done:
     zmsg_destroy (zmsg); /* no reply */
     return 0;
 }

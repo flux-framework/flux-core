@@ -38,14 +38,18 @@ char *flux_getattr (flux_t h, int rank, const char *name)
 {
     uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
     JSON in = Jnew ();
+    flux_rpc_t r = NULL;
+    const char *json_str;
     JSON out = NULL;
     char *ret = NULL;
     const char *val = NULL;
 
     Jadd_str (in, "name", name);
-    if (flux_json_rpc (h, nodeid, "cmb.getattr", in, &out) < 0)
+    if (!(r = flux_rpc (h, "cmb.getattr", Jtostr (in), nodeid, 0)))
         goto done;
-    if (!out || !Jget_str (out, (char *)name, &val)) {
+    if (flux_rpc_get (r, NULL, &json_str) < 0)
+        goto done;
+    if (!(out = Jfromstr (json_str)) || !Jget_str (out, (char *)name, &val)) {
         errno = EPROTO;
         goto done;
     }
@@ -53,21 +57,28 @@ char *flux_getattr (flux_t h, int rank, const char *name)
 done:
     Jput (in);
     Jput (out);
+    if (r)
+        flux_rpc_destroy (r);
     return ret;
 }
 
 int flux_info (flux_t h, int *rankp, int *sizep, bool *treerootp)
 {
-    JSON response = NULL;
+    flux_rpc_t r = NULL;
+    JSON out = NULL;
+    const char *json_str;
     int rank, size;
     bool treeroot;
     int ret = -1;
 
-    if (flux_json_rpc (h, FLUX_NODEID_ANY, "cmb.info", NULL, &response) < 0)
+    if (!(r = flux_rpc (h, "cmb.info", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    if (!Jget_bool (response, "treeroot", &treeroot)
-            || !Jget_int (response, "rank", &rank)
-            || !Jget_int (response, "size", &size)) {
+    if (flux_rpc_get (r, NULL, &json_str) < 0)
+        goto done;
+    if (!(out = Jfromstr (json_str))
+            || !Jget_bool (out, "treeroot", &treeroot)
+            || !Jget_int (out, "rank", &rank)
+            || !Jget_int (out, "size", &size)) {
         errno = EPROTO;
         goto done;
     }
@@ -79,7 +90,9 @@ int flux_info (flux_t h, int *rankp, int *sizep, bool *treerootp)
         *treerootp = treeroot;
     ret = 0;
 done:
-    Jput (response);
+    Jput (out);
+    if (r)
+        flux_rpc_destroy (r);
     return ret;
 }
 

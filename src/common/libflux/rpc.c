@@ -28,192 +28,259 @@
 #include <czmq.h>
 
 #include "request.h"
+#include "response.h"
 #include "message.h"
 #include "info.h"
 #include "rpc.h"
+#include "reactor.h"
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
 
-/* helper for flux_json_multrpc */
-static int multrpc_cb (zmsg_t *zmsg, uint32_t nodeid,
-                       flux_multrpc_f cb, void *arg)
-{
-    int errnum = 0;
-    const char *json_str = NULL;
-    JSON out = NULL;
+typedef zlist_t zmsglist_t;
 
-    if (flux_msg_get_errnum (zmsg, &errnum) < 0) {
-        errnum = errno;
-        goto done;
+struct flux_rpc_struct {
+    flux_match_t m;
+    flux_t h;
+    flux_then_f then_cb;
+    void *then_arg;
+    uint32_t *nodemap;          /* nodeid indexed by matchtag */
+    zmsg_t *rx_msg;
+    zmsg_t *rx_msg_consumed;
+    int rx_count;
+    bool oneway;
+};
+
+void flux_rpc_destroy (flux_rpc_t rpc)
+{
+    if (rpc) {
+        if (rpc->then_cb)
+            flux_msghandler_remove_match (rpc->h, rpc->m);
+        if (rpc->m.matchtag != FLUX_MATCHTAG_NONE)
+            flux_matchtag_free (rpc->h, rpc->m.matchtag, rpc->m.bsize);
+        zmsg_destroy (&rpc->rx_msg);
+        zmsg_destroy (&rpc->rx_msg_consumed);
+        if (rpc->nodemap)
+            free (rpc->nodemap);
+        free (rpc);
     }
-    if (flux_msg_get_payload_json (zmsg, &json_str) < 0) {
-        errnum = errno;
-        goto done;
+}
+
+static flux_rpc_t rpc_create (flux_t h, int flags, int count)
+{
+    flux_rpc_t rpc = xzmalloc (sizeof (*rpc));
+    if ((flags & FLUX_RPC_NORESPONSE)) {
+        rpc->oneway = true;
+        rpc->m.matchtag = FLUX_MATCHTAG_NONE;
+    } else {
+        rpc->nodemap = xzmalloc (sizeof (rpc->nodemap[0]) * count);
+        rpc->m.matchtag = flux_matchtag_alloc (h, count);
+        if (rpc->m.matchtag == FLUX_MATCHTAG_NONE) {
+            flux_rpc_destroy (rpc);
+            return NULL;
+        }
     }
-    if (json_str && !(out = Jfromstr (json_str))) {
-        errnum = EPROTO;
+    rpc->m.bsize = count;
+    rpc->m.typemask = FLUX_MSGTYPE_RESPONSE;
+    rpc->h = h;
+    return rpc;
+}
+
+static uint32_t lookup_nodeid (flux_rpc_t rpc, uint32_t matchtag)
+{
+    int ix = matchtag - rpc->m.matchtag;
+    if (ix < 0 || ix >= rpc->m.bsize)
+        return FLUX_NODEID_ANY;
+    return rpc->nodemap[ix];
+}
+
+static zmsg_t *rpc_response_recv (flux_rpc_t rpc, bool nonblock)
+{
+    return flux_recvmsg_match (rpc->h, rpc->m, NULL, nonblock);
+}
+
+static int rpc_request_send (flux_rpc_t rpc, int n, const char *topic,
+                             const char *json_str, uint32_t nodeid)
+{
+    zmsg_t *zmsg;
+    int flags = 0;
+    int rc = -1;
+
+    if (!(zmsg = flux_request_encode (topic, json_str)))
         goto done;
+    if (flux_msg_set_matchtag (zmsg, rpc->m.matchtag + n) < 0)
+        goto done;
+    if (nodeid == FLUX_NODEID_UPSTREAM) {
+        flags |= FLUX_MSGFLAG_UPSTREAM;
+        nodeid = flux_rank (rpc->h);
     }
+    if (flux_msg_set_nodeid (zmsg, nodeid, flags) < 0)
+        goto done;
+    if (flux_sendmsg (rpc->h, &zmsg) < 0)
+        goto done;
+    rc = 0;
 done:
-    if (cb && cb (nodeid, errnum, out, arg) < 0)
-        errnum = errno;
-    Jput (out);
-    if (errnum) {
-        errno = errnum;
-        return -1;
+    zmsg_destroy (&zmsg);
+    return rc;
+}
+
+
+bool flux_rpc_check (flux_rpc_t rpc)
+{
+    if (rpc->oneway)
+        return false;
+    if (rpc->rx_msg || (rpc->rx_msg = rpc_response_recv (rpc, true)))
+        return true;
+    errno = 0;
+    return false;
+}
+
+int flux_rpc_get (flux_rpc_t rpc, uint32_t *nodeid, const char **json_str)
+{
+    int rc = -1;
+
+    if (rpc->oneway) {
+        errno = EINVAL;
+        goto done;
     }
+    if (!rpc->rx_msg && !(rpc->rx_msg = rpc_response_recv (rpc, false)))
+        goto done;
+    zmsg_destroy (&rpc->rx_msg_consumed); /* invalidate last-got payload */
+    rpc->rx_msg_consumed = rpc->rx_msg;
+    rpc->rx_msg = NULL;
+    rpc->rx_count++;
+    if (flux_response_decode (rpc->rx_msg_consumed, NULL, json_str) < 0)
+        goto done;
+    if (nodeid) {
+        uint32_t matchtag;
+        if (flux_msg_get_matchtag (rpc->rx_msg_consumed, &matchtag) < 0)
+            goto done;
+        *nodeid = lookup_nodeid (rpc, matchtag);
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+/* N.B. if a new message arrives with an unconsumed one in the rpc handle,
+ * push the new one back to to the receive queue so it will trigger another
+ * reactor callback and handle the cached one now.
+ * The reactor will repeatedly call the continuation (level-triggered)
+ * until all received responses are consumed.
+ */
+static int rpc_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
+{
+    flux_rpc_t rpc = arg;
+    assert (rpc->then_cb != NULL);
+
+    if (rpc->rx_msg) {
+        if (flux_pushmsg (rpc->h, zmsg) < 0)
+            goto done;
+    } else {
+        rpc->rx_msg = *zmsg;
+        *zmsg = NULL;
+    }
+    rpc->then_cb (rpc, rpc->then_arg);
+    if (rpc->rx_msg) {
+        if (flux_pushmsg (rpc->h, &rpc->rx_msg) < 0)
+            goto done;
+    }
+done: /* no good way to report flux_pushmsg() errors */
+    zmsg_destroy (zmsg);
     return 0;
 }
 
-int flux_json_multrpc (flux_t h, const char *nodeset, int fanout,
-                       const char *topic, json_object *in,
-                       flux_multrpc_f cb, void *arg)
+int flux_rpc_then (flux_rpc_t rpc, flux_then_f cb, void *arg)
 {
-    nodeset_t ns = nodeset_new_str (nodeset);
-    nodeset_itr_t itr;
-    int errnum = 0;
-    uint32_t *nodeids = NULL;
-    zlist_t *nomatch = NULL;
-    int ntx, nrx, i;
-    flux_match_t match = {
-        .typemask = FLUX_MSGTYPE_RESPONSE,
-        .topic_glob = NULL,
-    };
-
-    if (!(nomatch = zlist_new ()))
-        oom ();
-    if (!ns || nodeset_max (ns) >= flux_size (h)) {
-        errnum = EINVAL;
-        goto done;
-    }
-
-    /* Allocate block of matchtags.
-     */
-    match.bsize = nodeset_count (ns);
-    match.matchtag = flux_matchtag_alloc (h, match.bsize);
-    if (match.matchtag == FLUX_MATCHTAG_NONE) {
-        errnum = EAGAIN;
-        goto done;
-    }
-
-    /* Build map of matchtag -> nodeid
-     */
-    nodeids = xzmalloc (match.bsize * sizeof (nodeids[0]));
-    if (!(itr = nodeset_itr_new (ns)))
-        oom ();
-    for (i = 0; i < match.bsize; i++)
-        nodeids[i] = nodeset_next (itr);
-    nodeset_itr_destroy (itr);
-
-    /* Keep 'fanout' requests active concurrently
-     */
-    ntx = nrx = 0;
-    while (ntx < match.bsize || nrx < match.bsize) {
-        while (ntx < match.bsize && ntx - nrx < fanout) {
-            uint32_t matchtag = match.matchtag + ntx;
-            uint32_t nodeid = nodeids[ntx++];
-
-            if (flux_json_request (h, nodeid, matchtag, topic, in) < 0) {
-                if (errnum < errno)
-                    errnum = errno;
-                if (cb)
-                    cb (nodeid, errno, NULL, arg);
-                nrx++;
-            }
-        }
-        while (nrx < match.bsize && (ntx - nrx == fanout || ntx == match.bsize)) {
-            uint32_t matchtag;
-            uint32_t nodeid;
-            zmsg_t *zmsg;
-
-            if (!(zmsg = flux_recvmsg_match (h, match, nomatch, false)))
-                continue;
-            if (flux_msg_get_matchtag (zmsg, &matchtag) < 0) {
-                zmsg_destroy (&zmsg);
-                continue;
-            }
-            nodeid = nodeids[matchtag - match.matchtag];
-            if (multrpc_cb (zmsg, nodeid, cb, arg) < 0) {
-                if (errnum < errno)
-                    errnum = errno;
-            }
-            zmsg_destroy (&zmsg);
-            nrx++;
-        }
-    }
-    if (flux_putmsg_list (h, nomatch) < 0) {
-        if (errnum < errno)
-            errnum = errno;
-    }
-done:
-    if (nodeids)
-        free (nodeids);
-    if (match.matchtag != FLUX_MATCHTAG_NONE)
-        flux_matchtag_free (h, match.matchtag, match.bsize);
-    if (nomatch)
-        zlist_destroy (&nomatch);
-    if (ns)
-        nodeset_destroy (ns);
-    if (errnum)
-        errno = errnum;
-    return errnum ? -1 : 0;
-}
-
-int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
-                   JSON in, JSON *out)
-{
-    zmsg_t *zmsg = NULL;
-    flux_match_t match = {
-        .typemask = FLUX_MSGTYPE_RESPONSE,
-        .matchtag = flux_matchtag_alloc (h, 1),
-        .bsize = 1,
-        .topic_glob = NULL,
-    };
     int rc = -1;
-    int errnum;
-    const char *json_str;
-    JSON o = NULL;
 
-    if (match.matchtag == FLUX_MATCHTAG_NONE) {
-        errno = EAGAIN;
+    if (rpc->oneway) {
+        errno = EINVAL;
         goto done;
     }
-    if (flux_json_request (h, nodeid, match.matchtag, topic, in) < 0)
-        goto done;
-    if (!(zmsg = flux_recvmsg_match (h, match, NULL, false)))
-        goto done;
-    if (flux_msg_get_errnum (zmsg, &errnum) < 0)
-        goto done;
-    if (errnum != 0) {
-        errno = errnum;
-        goto done;
+    if (cb && !rpc->then_cb) {
+        if (flux_msghandler_add_match (rpc->h, rpc->m, rpc_cb, rpc) < 0)
+            goto done;
+        if (rpc->rx_msg && flux_pushmsg (rpc->h, &rpc->rx_msg) < 0)
+            goto done;
+    } else if (!cb && rpc->then_cb) {
+        flux_msghandler_remove_match (rpc->h, rpc->m);
     }
-    if (flux_msg_get_payload_json (zmsg, &json_str) < 0)
-        goto done;
-    if (json_str && !(o = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-    if ((!o && out)) {
-        errno = EPROTO;
-        goto done;
-    }
-    if ((o && !out)) {
-        Jput (o);
-        errno = EPROTO;
-        goto done;
-    }
-    if (out)
-        *out = o;
+    rpc->then_cb = cb;
+    rpc->then_arg = arg;
     rc = 0;
 done:
-    if (match.matchtag != FLUX_MATCHTAG_NONE)
-        flux_matchtag_free (h, match.matchtag, match.bsize);
-    zmsg_destroy (&zmsg);
     return rc;
+}
+
+bool flux_rpc_completed (flux_rpc_t rpc)
+{
+    if (rpc->oneway || rpc->rx_count == rpc->m.bsize)
+        return true;
+    return false;
+}
+
+flux_rpc_t flux_rpc (flux_t h, const char *topic, const char *json_str,
+                     uint32_t nodeid, int flags)
+{
+    flux_rpc_t rpc = rpc_create (h, flags, 1);
+
+    if (rpc_request_send (rpc, 0, topic, json_str, nodeid) < 0)
+        goto error;
+    if (!rpc->oneway)
+        rpc->nodemap[0] = nodeid;
+    return rpc;
+error:
+    flux_rpc_destroy (rpc);
+    return NULL;
+}
+
+flux_rpc_t flux_rpc_multi (flux_t h, const char *topic, const char *json_str,
+                           const char *nodeset, int flags)
+{
+    nodeset_t ns = NULL;
+    nodeset_itr_t itr = NULL;
+    flux_rpc_t rpc = NULL;
+    int i, count;
+
+    if (!topic || !nodeset) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (!strcmp (nodeset, "all")) {
+        count = flux_size (h);
+        ns = nodeset_new_range (0, count - 1);
+    } else {
+        if ((ns = nodeset_new_str (nodeset)))
+            count = nodeset_count (ns);
+    }
+    if (!ns) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (!(rpc = rpc_create (h, flags, count)))
+        goto error;
+    if (!(itr = nodeset_itr_new (ns)))
+        goto error;
+    for (i = 0; i < count; i++) {
+        uint32_t nodeid = nodeset_next (itr);
+        assert (nodeid != NODESET_EOF);
+        if (rpc_request_send (rpc, i, topic, json_str, nodeid) < 0)
+            goto error;
+        if (!rpc->oneway)
+            rpc->nodemap[i] = nodeid;
+    }
+    return rpc;
+error:
+    if (rpc)
+        flux_rpc_destroy (rpc);
+    if (itr)
+        nodeset_itr_destroy (itr);
+    if (ns)
+        nodeset_destroy (ns);
+    return NULL;
 }
 
 /*

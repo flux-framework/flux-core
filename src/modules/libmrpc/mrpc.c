@@ -220,7 +220,7 @@ int flux_mrpc (flux_mrpc_t f, const char *fmt, ...)
     topic = xasprintf ("mrpc.%s", s);
     if (!(zmsg = flux_event_encode (topic, Jtostr (o))))
         goto done;
-    if (flux_event_send (f->h, &zmsg) < 0)
+    if (flux_sendmsg (f->h, &zmsg) < 0)
         goto done;
     if (kvs_fence (f->h, f->path, f->nprocs + 1) < 0)
         goto done;

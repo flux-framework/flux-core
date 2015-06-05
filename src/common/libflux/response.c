@@ -25,20 +25,19 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include "request.h"
+#include "response.h"
 #include "message.h"
-#include "info.h"
 
-#include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
 
-int flux_request_decode (zmsg_t *zmsg, const char **topic,
-                         const char **json_str)
+
+int flux_response_decode (zmsg_t *zmsg, const char **topic,
+                          const char **json_str)
 {
     int type;
     const char *ts, *js;
+    int errnum = 0;
     int rc = -1;
 
     if (zmsg == NULL) {
@@ -47,8 +46,14 @@ int flux_request_decode (zmsg_t *zmsg, const char **topic,
     }
     if (flux_msg_get_type (zmsg, &type) < 0)
         goto done;
-    if (type != FLUX_MSGTYPE_REQUEST) {
+    if (type != FLUX_MSGTYPE_RESPONSE) {
         errno = EPROTO;
+        goto done;
+    }
+    if (flux_msg_get_errnum (zmsg, &errnum) < 0)
+        goto done;
+    if (errnum != 0) {
+        errno = errnum;
         goto done;
     }
     if (flux_msg_get_topic (zmsg, &ts) < 0)
@@ -68,19 +73,22 @@ done:
     return rc;
 }
 
-zmsg_t *flux_request_encode (const char *topic, const char *json_str)
+zmsg_t *flux_response_encode (const char *topic, int errnum,
+                              const char *json_str)
 {
     zmsg_t *zmsg = NULL;
 
-    if (!topic) {
+    if (!topic || (errnum != 0 && json_str != NULL)) {
         errno = EINVAL;
         goto error;
     }
-    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
+    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_RESPONSE)))
         goto error;
     if (flux_msg_set_topic (zmsg, topic) < 0)
         goto error;
     if (flux_msg_enable_route (zmsg) < 0)
+        goto error;
+    if (flux_msg_set_errnum (zmsg, errnum) < 0)
         goto error;
     if (json_str && flux_msg_set_payload_json (zmsg, json_str) < 0)
         goto error;
@@ -92,6 +100,33 @@ error:
         errno = saved_errno;
     }
     return NULL;
+}
+
+int flux_respond (flux_t h, const zmsg_t *request,
+                  int errnum, const char *json_str)
+{
+    zmsg_t *zmsg = NULL;
+
+    if (!request) {
+        errno = EINVAL;
+        goto fatal;
+    }
+    if (!(zmsg = flux_msg_copy (request, false)))
+        goto fatal;
+    if (flux_msg_set_type (zmsg, FLUX_MSGTYPE_RESPONSE) < 0)
+        goto fatal;
+    if (errnum && flux_msg_set_errnum (zmsg, errnum) < 0)
+        goto fatal;
+    if (!errnum && json_str && flux_msg_set_payload_json (zmsg, json_str) < 0)
+        goto fatal;
+    if (flux_sendmsg (h, &zmsg) < 0)
+        goto fatal;
+    zmsg_destroy (&zmsg);
+    return 0;
+fatal:
+    zmsg_destroy (&zmsg);
+    FLUX_FATAL (h);
+    return -1;
 }
 
 /*

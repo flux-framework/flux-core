@@ -654,7 +654,7 @@ char *flux_msg_get_route_string (zmsg_t *zmsg)
     return buf;
 }
 
-static bool zframe_allocated (void *b, zframe_t *zf)
+static bool payload_overlap (void *b, zframe_t *zf)
 {
     return ((char *)b >= (char *)zframe_data (zf)
          && (char *)b <  (char *)zframe_data (zf) + zframe_size (zf));
@@ -694,11 +694,13 @@ int flux_msg_set_payload (zmsg_t *zmsg, int flags, void *buf, int size)
     /* Case #1: replace existing payload.
      */
     if ((msgflags & FLUX_MSGFLAG_PAYLOAD) && (buf != NULL && size > 0)) {
-        if (zframe_allocated (buf, zf)) {
-            errno = EINVAL;
-            goto done;
+        if (zframe_data (zf) != buf || zframe_size (zf) != size) {
+            if (payload_overlap (buf, zf)) {
+                errno = EINVAL;
+                goto done;
+            }
+            zframe_reset (zf, buf, size);
         }
-        zframe_reset (zf, buf, size);
         msgflags &= ~(uint8_t)FLUX_MSGFLAG_JSON;
         msgflags |= flags;
     /* Case #2: add payload.
@@ -896,6 +898,24 @@ int flux_msg_get_topic (zmsg_t *zmsg, const char **topic)
     rc = 0;
 done:
     return rc;
+}
+
+/* FIXME: this function copies payload and then deletes it if 'payload'
+ * is false, when the point was to avoid the overhead of copying it in
+ * the first place.
+ */
+zmsg_t *flux_msg_copy (const zmsg_t *zmsg, bool payload)
+{
+    zmsg_t *cpy = zmsg_dup ((zmsg_t *)zmsg);
+    if (!cpy) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    if (!payload && flux_msg_set_payload (cpy, 0, NULL, 0) < 0) {
+        zmsg_destroy (&cpy);
+        return NULL;
+    }
+    return cpy;
 }
 
 struct map_struct {

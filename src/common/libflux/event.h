@@ -21,11 +21,6 @@ int flux_event_decode (zmsg_t *zmsg, const char **topic, const char **json_str);
  */
 zmsg_t *flux_event_encode (const char *topic, const char *json_str);
 
-/* Send/receive events
- */
-int flux_event_send (flux_t h, zmsg_t **zmsg);
-zmsg_t *flux_event_recv (flux_t h, bool nonblock);
-
 #endif /* !FLUX_CORE_EVENT_H */
 
 /*
