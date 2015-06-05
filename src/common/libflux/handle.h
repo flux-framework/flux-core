@@ -81,17 +81,9 @@ int flux_pushmsg (flux_t h, zmsg_t **zmsg);
 
 /* Receive a message matching 'match' (see message.h).
  * Any unmatched messages are returned to the handle with flux_putmsg(),
- * unless 'nomatch' is non-NULL, in which case they are appended to the
- * list pointed to by 'nomatch' for you to deal with.
  */
-zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, zlist_t *nomatch,
+zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, void *deprecated_arg,
                             bool nonblock);
-
-/* Pop messages off 'list' and call flux_putmsg() on them.
- * If there were any errors, -1 is returned with the greatest errno set.
- * The list is always returned empty.
- */
-int flux_putmsg_list (flux_t h, zlist_t *list);
 
 /* Event subscribe/unsubscribe.
  */

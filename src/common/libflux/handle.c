@@ -367,11 +367,33 @@ done:
     return zmsg;
 }
 
-zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, zlist_t *nomatch,
+static int putmsg_list (flux_t h, zlist_t *l)
+{
+    int errnum = 0;
+    int rc = 0;
+
+    if (l) {
+        zmsg_t *zmsg;
+        while ((zmsg = zlist_pop (l))) {
+            if (flux_putmsg (h, &zmsg) < 0) {
+                if (errnum < errno) {
+                    errnum = errno;
+                    rc = -1;
+                }
+                zmsg_destroy (&zmsg);
+            }
+        }
+    }
+    if (errnum > 0)
+        errno = errnum;
+    return rc;
+}
+
+zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, void *deprecated_arg,
                             bool nonblock)
 {
     zmsg_t *zmsg = NULL;
-    zlist_t *putmsg = nomatch;
+    zlist_t *putmsg = NULL;
 
     if (!nonblock && flux_sleep_on (h, match) < 0) {
         if (errno != EINVAL)
@@ -396,8 +418,8 @@ zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, zlist_t *nomatch,
         }
     }
 done:
-    if (putmsg && !nomatch) {
-        if (flux_putmsg_list (h, putmsg) < 0) {
+    if (putmsg) {
+        if (putmsg_list (h, putmsg) < 0) {
             int errnum = errno;
             zmsg_destroy (&zmsg);
             errno = errnum;
@@ -405,28 +427,6 @@ done:
         zlist_destroy (&putmsg);
     }
     return zmsg;
-}
-
-int flux_putmsg_list (flux_t h, zlist_t *l)
-{
-    int errnum = 0;
-    int rc = 0;
-
-    if (l) {
-        zmsg_t *zmsg;
-        while ((zmsg = zlist_pop (l))) {
-            if (flux_putmsg (h, &zmsg) < 0) {
-                if (errnum < errno) {
-                    errnum = errno;
-                    rc = -1;
-                }
-                zmsg_destroy (&zmsg);
-            }
-        }
-    }
-    if (errnum > 0)
-        errno = errnum;
-    return rc;
 }
 
 /* FIXME: FLUX_O_TRACE will show these messages being received again
