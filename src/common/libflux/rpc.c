@@ -98,7 +98,7 @@ static uint32_t lookup_nodeid (flux_rpc_t rpc, uint32_t matchtag)
 
 static zmsg_t *rpc_response_recv (flux_rpc_t rpc, bool nonblock)
 {
-    return flux_recvmsg_match (rpc->h, rpc->m, NULL, nonblock);
+    return flux_recvmsg_match (rpc->h, rpc->m, nonblock);
 }
 
 static int rpc_request_send (flux_rpc_t rpc, int n, const char *topic,
