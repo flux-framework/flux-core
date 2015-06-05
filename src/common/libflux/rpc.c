@@ -211,6 +211,10 @@ int flux_rpc_then (flux_rpc_t rpc, flux_then_f cb, void *arg)
     if (cb && !rpc->then_cb) {
         if (flux_msghandler_add_match (rpc->h, rpc->m, rpc_cb, rpc) < 0)
             goto done;
+        if (rpc->rx_msg && !rpc->rx_msg_consumed) {
+            if (flux_pushmsg (rpc->h, &rpc->rx_msg) < 0)
+                goto done;
+        }
     } else if (!cb && rpc->then_cb) {
         flux_msghandler_remove_match (rpc->h, rpc->m);
     }
