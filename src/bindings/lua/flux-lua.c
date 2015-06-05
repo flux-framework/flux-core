@@ -332,7 +332,7 @@ static int l_flux_recv (lua_State *L)
     if (lua_gettop (L) > 1)
         match.matchtag = lua_tointeger (L, 2);
 
-    if (!(zmsg = flux_recvmsg_match (f, match, NULL, false)))
+    if (!(zmsg = flux_recvmsg_match (f, match, false)))
         goto error;
 
     if (flux_msg_get_errnum (zmsg, &errnum) < 0)
@@ -470,7 +470,7 @@ static int l_flux_recv_event (lua_State *L)
     };
     zmsg_t *zmsg = NULL;
 
-    if (!(zmsg = flux_recvmsg_match (f, match, NULL, 0)))
+    if (!(zmsg = flux_recvmsg_match (f, match, 0)))
         return lua_pusherror (L, strerror (errno));
 
     if (flux_msg_get_topic (zmsg, &topic) < 0
@@ -853,7 +853,7 @@ static int l_flux_recvmsg (lua_State *L)
     if (lua_gettop (L) > 1)
         match.matchtag = lua_tointeger (L, 2);
 
-    if (!(zmsg = flux_recvmsg_match (f, match, NULL, false)))
+    if (!(zmsg = flux_recvmsg_match (f, match, false)))
         return lua_pusherror (L, strerror (errno));
 
     if (flux_msg_get_type (zmsg, &type) < 0)
