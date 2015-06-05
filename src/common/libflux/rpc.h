@@ -38,6 +38,8 @@ int flux_rpc_get (flux_rpc_t rpc, uint32_t *nodeid, const char **json_str);
 
 /* Arrange for reactor to handle response and call 'cb' continuation function
  * when a response is received.  The function must call flux_rpc_get().
+ * A second call to flux_rpc_then() overwrites the internal (cb, arg) refs.
+ * Call with NULL to disable the reactor message handler for this RPC.
  * Returns 0 on success, or -1 on failure with errno set.
  */
 int flux_rpc_then (flux_rpc_t rpc, flux_then_f cb, void *arg);

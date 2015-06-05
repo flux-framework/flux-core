@@ -202,13 +202,23 @@ static int rpc_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
 
 int flux_rpc_then (flux_rpc_t rpc, flux_then_f cb, void *arg)
 {
-    if (rpc->then_cb || rpc->oneway) {
+    int rc = -1;
+
+    if (rpc->oneway) {
         errno = EINVAL;
-        return -1;
+        goto done;
+    }
+    if (cb && !rpc->then_cb) {
+        if (flux_msghandler_add_match (rpc->h, rpc->m, rpc_cb, rpc) < 0)
+            goto done;
+    } else if (!cb && rpc->then_cb) {
+        flux_msghandler_remove_match (rpc->h, rpc->m);
     }
     rpc->then_cb = cb;
     rpc->then_arg = arg;
-    return flux_msghandler_add_match (rpc->h, rpc->m, rpc_cb, rpc);
+    rc = 0;
+done:
+    return rc;
 }
 
 bool flux_rpc_completed (flux_rpc_t rpc)
