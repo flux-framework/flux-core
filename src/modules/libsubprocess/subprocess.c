@@ -23,7 +23,7 @@ struct subprocess_manager {
 
 struct subprocess {
     struct subprocess_manager *sm;
-    void *ctx;
+    zhash_t *zhash;
 
     pid_t pid;
 
@@ -106,6 +106,8 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
 
     p->sm = sm;
 
+    p->zhash = zhash_new ();
+
     p->pid = (pid_t) -1;
 
     if (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, fds) < 0) {
@@ -136,6 +138,8 @@ void subprocess_destroy (struct subprocess *p)
 {
     if (p->sm)
         zlist_remove (p->sm->processes, (void *) p);
+    if (p->zhash)
+        zhash_destroy (&p->zhash);
 
     p->sm = NULL;
     free (p->argz);
@@ -191,16 +195,16 @@ subprocess_set_io_callback (struct subprocess *p, subprocess_io_cb_f fn)
     return (0);
 }
 
-void
-subprocess_set_context (struct subprocess *p, void *ctx)
+int
+subprocess_set_context (struct subprocess *p, const char *name, void *ctx)
 {
-    p->ctx = ctx;
+    return zhash_insert (p->zhash, name, ctx);
 }
 
 void *
-subprocess_get_context (struct subprocess *p)
+subprocess_get_context (struct subprocess *p, const char *name)
 {
-    return (p->ctx);
+    return zhash_lookup (p->zhash, name);
 }
 
 static int init_argz (char **argzp, size_t *argz_lenp, char * const av[])

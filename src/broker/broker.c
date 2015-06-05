@@ -967,7 +967,7 @@ static int child_exit_handler (struct subprocess *p, void *arg)
     int n;
 
     ctx_t *ctx = (ctx_t *) arg;
-    zmsg_t *zmsg = (zmsg_t *) subprocess_get_context (p);
+    zmsg_t *zmsg = (zmsg_t *) subprocess_get_context (p, "zmsg");
     json_object *resp;
 
     assert (ctx != NULL);
@@ -1052,7 +1052,7 @@ static int cmb_exec_cb (zmsg_t **zmsg, void *arg)
      * Save a copy of zmsg for future messages
      */
     copy = zmsg_dup (*zmsg);
-    subprocess_set_context (p, (void *) copy);
+    subprocess_set_context (p, "zmsg", (void *) copy);
 
     /*
      *  Send response, destroys original zmsg.

@@ -66,14 +66,14 @@ int subprocess_set_io_callback (struct subprocess *p, subprocess_io_cb_f fn);
 void subprocess_destroy (struct subprocess *p);
 
 /*
- *  Set an arbitrary context in the subprocess [p].
+ *  Set an arbitrary context in the subprocess [p] with name [name].
  */
-void subprocess_set_context (struct subprocess *p, void *ctx);
+int subprocess_set_context (struct subprocess *p, const char *name, void *ctx);
 
 /*
  *  Return the saved context for subprocess [p].
  */
-void *subprocess_get_context (struct subprocess *p);
+void *subprocess_get_context (struct subprocess *p, const char *name);
 
 /*
  *  Set argument vector for subprocess [p]. This function is only valid
