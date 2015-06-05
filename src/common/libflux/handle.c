@@ -389,8 +389,7 @@ static int putmsg_list (flux_t h, zlist_t *l)
     return rc;
 }
 
-zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, void *deprecated_arg,
-                            bool nonblock)
+zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, bool nonblock)
 {
     zmsg_t *zmsg = NULL;
     zlist_t *putmsg = NULL;

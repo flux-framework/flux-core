@@ -82,8 +82,7 @@ int flux_pushmsg (flux_t h, zmsg_t **zmsg);
 /* Receive a message matching 'match' (see message.h).
  * Any unmatched messages are returned to the handle with flux_putmsg(),
  */
-zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, void *deprecated_arg,
-                            bool nonblock);
+zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, bool nonblock);
 
 /* Event subscribe/unsubscribe.
  */
