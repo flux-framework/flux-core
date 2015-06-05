@@ -133,6 +133,14 @@ static void then_cb (flux_rpc_t r, void *arg)
     flux_reactor_stop (h);
 }
 
+static flux_rpc_t thenbug_r = NULL;
+int rpctest_thenbug_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
+{
+    (void)flux_rpc_check (thenbug_r);
+    flux_reactor_stop (h);
+    return 0;
+}
+
 static bool fatal_tested = false;
 static void fatal_err (const char *message, void *arg)
 {
@@ -147,6 +155,7 @@ static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST,   "rpctest.hello",          rpctest_hello_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.echo",           rpctest_echo_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.nodeid",         rpctest_nodeid_cb},
+    { FLUX_MSGTYPE_REQUEST,   "rpctest.thenbug",        rpctest_thenbug_cb},
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
@@ -155,7 +164,7 @@ int main (int argc, char *argv[])
     zmsg_t *zmsg;
     flux_t h;
 
-    plan (25);
+    plan (34);
 
     (void)setenv ("FLUX_CONNECTOR_PATH", CONNECTOR_PATH, 0);
     ok ((h = flux_open ("loop://", FLUX_O_COPROC)) != NULL,
@@ -179,17 +188,54 @@ int main (int argc, char *argv[])
     ok (flux_reactor_start (h) == 0,
         "reactor completed normally");
 
-    /* test _then */
+    /* test _then:  Slightly tricky.
+     * Send request.  We're not in a coproc ctx here in main(), so there
+     * will be no response, therefore, check will be false.  Register
+     * continuation, start reactor.  Response will be received, continuation
+     * will be invoked. Continuation stops the reactor.
+    */
     flux_rpc_t r;
     ok ((r = flux_rpc (h, "rpctest.echo", "xxx", FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload when payload is expected works");
     ok (flux_rpc_check (r) == false,
         "flux_rpc_check says get would block");
+    /* reg/unreg _then a couple times for fun */
+    ok (flux_rpc_then (r, NULL, 0) == 0,
+        "flux_rpc_then with NULL cb works");
+    ok (flux_rpc_then (r, then_cb, h) == 0,
+        "flux_rpc_then works after NULL");
+    ok (flux_rpc_then (r, NULL, 0) == 0,
+        "flux_rpc_then with NULL cb after non-NULL works");
     ok (flux_rpc_then (r, then_cb, h) == 0,
         "flux_rpc_then works");
+    /* enough of that */
     ok (flux_reactor_start (h) == 0,
         "reactor completed normally");
     flux_rpc_destroy (r);
+
+    /* Test a _then corner case:
+     * If _check() is called before _then(), a message may have been cached
+     * in the flux_rpc_t.  rpctest_thenbug_cb creates this condition.
+     * Next, _then continuation is installed, but will reactor call it?
+     * This will hang if rpc implementation doesn't return a cached message
+     * back to the handle in _then().  Else, continuation will stop reactor.
+     */
+    ok ((thenbug_r = flux_rpc (h, "rpctest.echo", "xxx",
+        FLUX_NODEID_ANY, 0)) != NULL,
+        "thenbug: sent echo request");
+    do {
+        if (!(zmsg = flux_request_encode ("rpctest.thenbug", NULL))
+                  || flux_sendmsg (h, &zmsg) < 0
+                  || flux_reactor_start (h) < 0)
+            break;
+    } while (!flux_rpc_check (thenbug_r));
+    ok (true,
+        "thenbug: check says message ready");
+    ok (flux_rpc_then (thenbug_r, then_cb, h) == 0,
+        "thenbug: registered then - hangs on failure");
+    ok (flux_reactor_start (h) == 0,
+        "reactor completed normally");
+    flux_rpc_destroy (thenbug_r);
 
     flux_close (h);
     done_testing();
