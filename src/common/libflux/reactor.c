@@ -163,9 +163,24 @@ static int backlog_append (dispatch_t *d, zmsg_t **zmsg)
 
 static int backlog_flush (dispatch_t *d)
 {
-    if (d->backlog)
-        return flux_putmsg_list (d->h, d->backlog);
-    return 0;
+    int errnum = 0;
+    int rc = 0;
+
+    if (d->backlog) {
+        zmsg_t *zmsg;
+        while ((zmsg = zlist_pop (d->backlog))) {
+            if (flux_putmsg (d->h, &zmsg) < 0) {
+                if (errnum < errno) {
+                    errnum = errno;
+                    rc = -1;
+                }
+                zmsg_destroy (&zmsg);
+            }
+        }
+    }
+    if (errnum > 0)
+        errno = errnum;
+    return rc;
 }
 
 int flux_sleep_on (flux_t h, flux_match_t match)
