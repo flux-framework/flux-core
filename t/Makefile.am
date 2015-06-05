@@ -82,18 +82,6 @@ test_cppflags = \
         -I$(top_srcdir)/src/common/libtap \
         $(AM_CPPFLAGS)
 
-loop_request_t_SOURCES = loop/request.c
-loop_request_t_CPPFLAGS = $(test_cppflags)
-loop_request_t_LDADD = $(test_ldadd) $(LIBDL)
-
-loop_response_t_SOURCES = loop/response.c
-loop_response_t_CPPFLAGS = $(test_cppflags)
-loop_response_t_LDADD = $(test_ldadd) $(LIBDL)
-
-loop_event_t_SOURCES = loop/event.c
-loop_event_t_CPPFLAGS = $(test_cppflags)
-loop_event_t_LDADD = $(test_ldadd) $(LIBDL)
-
 loop_rpc_t_SOURCES = loop/rpc.c
 loop_rpc_t_CPPFLAGS = $(test_cppflags)
 loop_rpc_t_LDADD = $(test_ldadd) $(LIBDL)

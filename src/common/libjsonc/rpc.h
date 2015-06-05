@@ -16,17 +16,6 @@
 int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
                    json_object *in, json_object **out);
 
-/* Send a request to each node in 'nodeset', then collect responses,
- * calling 'cb' for each one (if 'cb' is non-NULL).
- * Returns 0 on success, -1 on failure with errno set.
- * If there are multiple failures, their greatest errno is returned.
- */
-typedef int (flux_multrpc_f)(uint32_t nodeid, uint32_t errnum,
-                             json_object *out, void *arg);
-int flux_json_multrpc (flux_t h, const char *nodeset, int fanout,
-                       const char *topic, json_object *in,
-                       flux_multrpc_f cb, void *arg);
-
 #endif /* !_FLUX_JSONC_RPC_H */
 
 /*

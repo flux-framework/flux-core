@@ -662,7 +662,7 @@ static int watch_rpc (flux_t h, const char *key, JSON *val,
     if (flux_json_request (h, FLUX_NODEID_ANY, match.matchtag,
                                                     "kvs.watch", in) < 0)
         goto done;
-    if (!(zmsg = flux_recvmsg_match (h, match, NULL, false)))
+    if (!(zmsg = flux_recvmsg_match (h, match, false)))
         goto done;
     if (flux_json_response_decode (zmsg, &out) < 0)
         goto done;

@@ -98,7 +98,7 @@ static uint32_t lookup_nodeid (flux_rpc_t rpc, uint32_t matchtag)
 
 static zmsg_t *rpc_response_recv (flux_rpc_t rpc, bool nonblock)
 {
-    return flux_recvmsg_match (rpc->h, rpc->m, NULL, nonblock);
+    return flux_recvmsg_match (rpc->h, rpc->m, nonblock);
 }
 
 static int rpc_request_send (flux_rpc_t rpc, int n, const char *topic,
@@ -151,14 +151,14 @@ int flux_rpc_get (flux_rpc_t rpc, uint32_t *nodeid, const char **json_str)
     rpc->rx_msg_consumed = rpc->rx_msg;
     rpc->rx_msg = NULL;
     rpc->rx_count++;
-    if (flux_response_decode (rpc->rx_msg_consumed, NULL, json_str) < 0)
-        goto done;
     if (nodeid) {
         uint32_t matchtag;
         if (flux_msg_get_matchtag (rpc->rx_msg_consumed, &matchtag) < 0)
             goto done;
         *nodeid = lookup_nodeid (rpc, matchtag);
     }
+    if (flux_response_decode (rpc->rx_msg_consumed, NULL, json_str) < 0)
+        goto done;
     rc = 0;
 done:
     return rc;

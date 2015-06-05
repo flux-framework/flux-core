@@ -37,131 +37,6 @@
 
 #include "jsonc.h"
 
-/* helper for flux_json_multrpc */
-static int multrpc_cb (zmsg_t *zmsg, uint32_t nodeid,
-                       flux_multrpc_f cb, void *arg)
-{
-    int errnum = 0;
-    const char *json_str = NULL;
-    JSON out = NULL;
-
-    if (flux_msg_get_errnum (zmsg, &errnum) < 0) {
-        errnum = errno;
-        goto done;
-    }
-    if (flux_msg_get_payload_json (zmsg, &json_str) < 0) {
-        errnum = errno;
-        goto done;
-    }
-    if (json_str && !(out = Jfromstr (json_str))) {
-        errnum = EPROTO;
-        goto done;
-    }
-done:
-    if (cb && cb (nodeid, errnum, out, arg) < 0)
-        errnum = errno;
-    Jput (out);
-    if (errnum) {
-        errno = errnum;
-        return -1;
-    }
-    return 0;
-}
-
-int flux_json_multrpc (flux_t h, const char *nodeset, int fanout,
-                       const char *topic, json_object *in,
-                       flux_multrpc_f cb, void *arg)
-{
-    nodeset_t ns = nodeset_new_str (nodeset);
-    nodeset_itr_t itr;
-    int errnum = 0;
-    uint32_t *nodeids = NULL;
-    zlist_t *nomatch = NULL;
-    int ntx, nrx, i;
-    flux_match_t match = {
-        .typemask = FLUX_MSGTYPE_RESPONSE,
-        .topic_glob = NULL,
-    };
-
-    if (!(nomatch = zlist_new ()))
-        oom ();
-    if (!ns || nodeset_max (ns) >= flux_size (h)) {
-        errnum = EINVAL;
-        goto done;
-    }
-
-    /* Allocate block of matchtags.
-     */
-    match.bsize = nodeset_count (ns);
-    match.matchtag = flux_matchtag_alloc (h, match.bsize);
-    if (match.matchtag == FLUX_MATCHTAG_NONE) {
-        errnum = EAGAIN;
-        goto done;
-    }
-
-    /* Build map of matchtag -> nodeid
-     */
-    nodeids = xzmalloc (match.bsize * sizeof (nodeids[0]));
-    if (!(itr = nodeset_itr_new (ns)))
-        oom ();
-    for (i = 0; i < match.bsize; i++)
-        nodeids[i] = nodeset_next (itr);
-    nodeset_itr_destroy (itr);
-
-    /* Keep 'fanout' requests active concurrently
-     */
-    ntx = nrx = 0;
-    while (ntx < match.bsize || nrx < match.bsize) {
-        while (ntx < match.bsize && ntx - nrx < fanout) {
-            uint32_t matchtag = match.matchtag + ntx;
-            uint32_t nodeid = nodeids[ntx++];
-
-            if (flux_json_request (h, nodeid, matchtag, topic, in) < 0) {
-                if (errnum < errno)
-                    errnum = errno;
-                if (cb)
-                    cb (nodeid, errno, NULL, arg);
-                nrx++;
-            }
-        }
-        while (nrx < match.bsize && (ntx - nrx == fanout || ntx == match.bsize)) {
-            uint32_t matchtag;
-            uint32_t nodeid;
-            zmsg_t *zmsg;
-
-            if (!(zmsg = flux_recvmsg_match (h, match, nomatch, false)))
-                continue;
-            if (flux_msg_get_matchtag (zmsg, &matchtag) < 0) {
-                zmsg_destroy (&zmsg);
-                continue;
-            }
-            nodeid = nodeids[matchtag - match.matchtag];
-            if (multrpc_cb (zmsg, nodeid, cb, arg) < 0) {
-                if (errnum < errno)
-                    errnum = errno;
-            }
-            zmsg_destroy (&zmsg);
-            nrx++;
-        }
-    }
-    if (flux_putmsg_list (h, nomatch) < 0) {
-        if (errnum < errno)
-            errnum = errno;
-    }
-done:
-    if (nodeids)
-        free (nodeids);
-    if (match.matchtag != FLUX_MATCHTAG_NONE)
-        flux_matchtag_free (h, match.matchtag, match.bsize);
-    if (nomatch)
-        zlist_destroy (&nomatch);
-    if (ns)
-        nodeset_destroy (ns);
-    if (errnum)
-        errno = errnum;
-    return errnum ? -1 : 0;
-}
-
 int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
                    JSON in, JSON *out)
 {
@@ -183,7 +58,7 @@ int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
     }
     if (flux_json_request (h, nodeid, match.matchtag, topic, in) < 0)
         goto done;
-    if (!(zmsg = flux_recvmsg_match (h, match, NULL, false)))
+    if (!(zmsg = flux_recvmsg_match (h, match, false)))
         goto done;
     if (flux_msg_get_errnum (zmsg, &errnum) < 0)
         goto done;

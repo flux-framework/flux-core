@@ -142,7 +142,7 @@ static void event_sub (flux_t h, int argc, char **argv)
     else if (flux_event_subscribe (h, "") < 0)
         err_exit ("flux_event_subscribe");
 
-    while ((zmsg = flux_recvmsg_match (h, match, NULL, false))) {
+    while ((zmsg = flux_recvmsg_match (h, match, false))) {
         const char *topic;
         const char *json_str;
         if (flux_msg_get_topic (zmsg, &topic) < 0
