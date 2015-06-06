@@ -416,6 +416,7 @@ int main (int argc, char *argv[])
     zctx_set_linger (ctx.zctx, 5);
     if (!(ctx.zloop = zloop_new ()))
         err_exit ("zloop_new");
+    subprocess_manager_set (ctx.sm, SM_ZLOOP, ctx.zloop);
 
     /* Prepare signal handling
      */
@@ -984,6 +985,24 @@ static int child_exit_handler (struct subprocess *p, void *arg)
     return (0);
 }
 
+static int subprocess_io_cb (struct subprocess *p, json_object *o)
+{
+    ctx_t *ctx = subprocess_get_context (p, "ctx");
+    zmsg_t *orig = subprocess_get_context (p, "zmsg");
+
+    assert (ctx != NULL);
+    assert (orig != NULL);
+
+    zmsg_t *zmsg = zmsg_dup (orig);
+
+    /* Add this rank */
+    Jadd_int (o, "rank", ctx->rank);
+
+    flux_json_respond (ctx->h, o, &zmsg);
+    json_object_put (o);
+    return (0);
+}
+
 /*
  *  Create a subprocess described in the zmsg argument.
  */
@@ -1015,6 +1034,7 @@ static int cmb_exec_cb (zmsg_t **zmsg, void *arg)
 
     p = subprocess_create (ctx->sm);
     subprocess_set_callback (p, child_exit_handler, ctx);
+    subprocess_set_context (p, "ctx", ctx);
 
     for (i = 0; i < argc; i++) {
         json_object *ox = json_object_array_get_idx (o, i);
@@ -1042,6 +1062,8 @@ static int cmb_exec_cb (zmsg_t **zmsg, void *arg)
         if (dir != NULL)
             subprocess_set_cwd (p, dir);
     }
+
+    subprocess_set_io_callback (p, subprocess_io_cb);
 
     if ((rc = subprocess_run (p)) < 0) {
         subprocess_destroy (p);
