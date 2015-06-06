@@ -1,4 +1,7 @@
-#include "src/common/libflux/request.h"
+#include <czmq.h>
+#include "message.h"
+#include "request.h"
+
 #include "src/common/libtap/tap.h"
 
 int main (int argc, char *argv[])

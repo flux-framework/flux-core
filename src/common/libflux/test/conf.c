@@ -1,3 +1,5 @@
+#include <errno.h>
+
 #include "src/common/libflux/conf.h"
 #include "src/common/libtap/tap.h"
 

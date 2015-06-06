@@ -1,3 +1,5 @@
+#include <czmq.h>
+#include <errno.h>
 #include "src/common/libflux/message.h"
 #include "src/common/libtap/tap.h"
 
