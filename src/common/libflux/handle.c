@@ -370,14 +370,14 @@ static int putmsg_list (flux_t h, zlist_t *l)
     int rc = 0;
 
     if (l) {
-        zmsg_t *zmsg;
-        while ((zmsg = zlist_pop (l))) {
-            if (flux_putmsg (h, &zmsg) < 0) {
+        flux_msg_t msg;
+        while ((msg = zlist_pop (l))) {
+            if (flux_requeue (h, msg, FLUX_RQ_TAIL) < 0) {
                 if (errnum < errno) {
                     errnum = errno;
                     rc = -1;
                 }
-                zmsg_destroy (&zmsg);
+                flux_msg_destroy (msg);
             }
         }
     }
@@ -391,7 +391,7 @@ zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, bool nonblock)
     zmsg_t *zmsg = NULL;
     zlist_t *putmsg = NULL;
 
-    if (!h->ops->recvmsg || !h->ops->putmsg) {
+    if (!h->ops->recvmsg || !h->ops->requeue) {
         errno = ENOSYS;
         goto fatal;
     }
@@ -433,27 +433,13 @@ fatal:
 
 /* FIXME: FLUX_O_TRACE will show these messages being received again
  */
-int flux_putmsg (flux_t h, zmsg_t **zmsg)
+int flux_requeue (flux_t h, const flux_msg_t msg, int flags)
 {
-    if (!h->ops->putmsg) {
+    if (!h->ops->requeue) {
         errno = ENOSYS;
         goto fatal;
     }
-    if (h->ops->putmsg (h->impl, zmsg) < 0)
-        goto fatal;
-    return 0;
-fatal:
-    FLUX_FATAL (h);
-    return -1;
-}
-
-int flux_pushmsg (flux_t h, zmsg_t **zmsg)
-{
-    if (!h->ops->pushmsg) {
-        errno = ENOSYS;
-        goto fatal;
-    }
-    if (h->ops->pushmsg (h->impl, zmsg) < 0)
+    if (h->ops->requeue(h->impl, msg, flags) < 0)
         goto fatal;
     return 0;
 fatal:

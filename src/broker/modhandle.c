@@ -255,32 +255,30 @@ static zmsg_t *mod_recvmsg (void *impl, bool nonblock)
     return zmsg;
 }
 
-static int mod_putmsg (void *impl, zmsg_t **zmsg)
+static int mod_requeue (void *impl, const flux_msg_t msg, int flags)
 {
     ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
     int oldcount = zlist_size (ctx->putmsg);
+    int rc = -1;
+    flux_msg_t cpy = NULL;
 
-    if (zlist_append (ctx->putmsg, *zmsg) < 0)
-        oom ();
-    *zmsg = NULL;
+    if (!(cpy = flux_msg_copy (msg, true)))
+        goto done;
+    if ((flags & FLUX_RQ_TAIL))
+        rc = zlist_append (ctx->putmsg, cpy);
+    else
+        rc = zlist_push (ctx->putmsg, cpy);
+    if (rc < 0) {
+        flux_msg_destroy (cpy);
+        errno = ENOMEM;
+        goto done;
+    }
     if (oldcount == 0)
         sync_msg_watchers (ctx);
-    return 0;
-}
-
-static int mod_pushmsg (void *impl, zmsg_t **zmsg)
-{
-    ctx_t *ctx = impl;
-    assert (ctx->magic == MODHANDLE_MAGIC);
-    int oldcount = zlist_size (ctx->putmsg);
-
-    if (zlist_push (ctx->putmsg, *zmsg) < 0)
-        oom ();
-    *zmsg = NULL;
-    if (oldcount == 0)
-        sync_msg_watchers (ctx);
-    return 0;
+    rc = 0;
+done:
+    return rc;
 }
 
 static void mod_purge (void *impl, flux_match_t match)
@@ -563,8 +561,7 @@ static void putmsg_cb (struct ev_loop *loop, ev_zlist *w, int revents)
 static const struct flux_handle_ops mod_handle_ops = {
     .sendmsg = mod_sendmsg,
     .recvmsg = mod_recvmsg,
-    .putmsg = mod_putmsg,
-    .pushmsg = mod_pushmsg,
+    .requeue = mod_requeue,
     .purge = mod_purge,
     .event_subscribe = mod_event_subscribe,
     .event_unsubscribe = mod_event_unsubscribe,

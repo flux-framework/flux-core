@@ -170,7 +170,7 @@ static int backlog_flush (dispatch_t *d)
     if (d->backlog) {
         zmsg_t *zmsg;
         while ((zmsg = zlist_pop (d->backlog))) {
-            if (flux_putmsg (d->h, &zmsg) < 0) {
+            if (flux_requeue (d->h, zmsg, FLUX_RQ_TAIL) < 0) {
                 if (errnum < errno) {
                     errnum = errno;
                     rc = -1;
@@ -284,8 +284,9 @@ static int msg_cb (flux_t h, void *arg)
      * Resume, arranging for zmsg to be returned next by flux_recvmsg().
      */
     if ((d = find_dispatch (r, zmsg, true))) {
-        if (flux_pushmsg (h, &zmsg) < 0)
+        if (flux_requeue (h, zmsg, FLUX_RQ_HEAD) < 0)
             goto done;
+        zmsg = NULL;
         zlist_remove (r->waiters, d);
         rc = resume_coproc (d);
     /* Message matches a handler.
@@ -299,8 +300,9 @@ static int msg_cb (flux_t h, void *arg)
                 goto done;
             rc = 0;
         } else if ((flux_flags_get (h) & FLUX_O_COPROC)) {
-            if (flux_pushmsg (h, &zmsg) < 0)
+            if (flux_requeue (h, zmsg, FLUX_RQ_HEAD) < 0)
                 goto done;
+            zmsg = NULL;
             rc = start_coproc (d);
         } else {
             rc = d->fn (h, type, &zmsg, d->arg);

@@ -176,16 +176,18 @@ static int rpc_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
     assert (rpc->then_cb != NULL);
 
     if (rpc->rx_msg) {
-        if (flux_pushmsg (rpc->h, zmsg) < 0)
+        if (flux_requeue (rpc->h, *zmsg, FLUX_RQ_HEAD) < 0)
             goto done;
+        *zmsg = NULL;
     } else {
         rpc->rx_msg = *zmsg;
         *zmsg = NULL;
     }
     rpc->then_cb (rpc, rpc->then_arg);
     if (rpc->rx_msg) {
-        if (flux_pushmsg (rpc->h, &rpc->rx_msg) < 0)
+        if (flux_requeue (rpc->h, rpc->rx_msg, FLUX_RQ_HEAD) < 0)
             goto done;
+        rpc->rx_msg = NULL;
     }
 done: /* no good way to report flux_pushmsg() errors */
     zmsg_destroy (zmsg);
@@ -203,8 +205,11 @@ int flux_rpc_then (flux_rpc_t rpc, flux_then_f cb, void *arg)
     if (cb && !rpc->then_cb) {
         if (flux_msghandler_add_match (rpc->h, rpc->m, rpc_cb, rpc) < 0)
             goto done;
-        if (rpc->rx_msg && flux_pushmsg (rpc->h, &rpc->rx_msg) < 0)
-            goto done;
+        if (rpc->rx_msg) {
+            if (flux_requeue (rpc->h, rpc->rx_msg, FLUX_RQ_HEAD) < 0)
+                goto done;
+            rpc->rx_msg = NULL;
+        }
     } else if (!cb && rpc->then_cb) {
         flux_msghandler_remove_match (rpc->h, rpc->m);
     }

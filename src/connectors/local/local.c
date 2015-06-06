@@ -127,32 +127,30 @@ static zmsg_t *op_recvmsg (void *impl, bool nonblock)
     return zmsg;
 }
 
-static int op_putmsg (void *impl, zmsg_t **zmsg)
+static int op_requeue (void *impl, const flux_msg_t msg, int flags)
 {
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
+    int rc = -1;
+    flux_msg_t cpy = NULL;
     int oldcount = zlist_size (c->putmsg);
 
-    if (zlist_append (c->putmsg, *zmsg) < 0)
-        oom ();
-    *zmsg = NULL;
+    if (!(cpy = flux_msg_copy (msg, true)))
+        goto done;
+    if ((flags & FLUX_RQ_TAIL))
+        rc = zlist_append (c->putmsg, cpy);
+    else
+        rc = zlist_push (c->putmsg, cpy);
+    if (rc < 0) {
+        flux_msg_destroy (cpy);
+        errno = ENOMEM;
+        goto done;
+    }
     if (oldcount == 0)
         sync_msg_watchers (c);
-    return 0;
-}
-
-static int op_pushmsg (void *impl, zmsg_t **zmsg)
-{
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-    int oldcount = zlist_size (c->putmsg);
-
-    if (zlist_push (c->putmsg, *zmsg) < 0)
-        oom ();
-    *zmsg = NULL;
-    if (oldcount == 0)
-        sync_msg_watchers (c);
-    return 0;
+    rc = 0;
+done:
+    return rc;
 }
 
 static void op_purge (void *impl, flux_match_t match)
@@ -543,8 +541,7 @@ error:
 static const struct flux_handle_ops handle_ops = {
     .sendmsg = op_sendmsg,
     .recvmsg = op_recvmsg,
-    .putmsg = op_putmsg,
-    .pushmsg = op_pushmsg,
+    .requeue = op_requeue,
     .purge = op_purge,
     .event_subscribe = op_event_subscribe,
     .event_unsubscribe = op_event_unsubscribe,

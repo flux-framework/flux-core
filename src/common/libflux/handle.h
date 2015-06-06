@@ -31,6 +31,13 @@ enum {
     FLUX_O_COPROC = 2,  /* start reactor callbacks as coprocesses */
 };
 
+/* Flags for flux_requeue().
+ */
+enum {
+    FLUX_RQ_HEAD = 1,   /* requeue message at head of queue */
+    FLUX_RQ_TAIL = 2,   /* requeue message at tail of queue */
+};
+
 /* Create/destroy a broker handle.
  * The 'uri' scheme name selects a handle implementation to dynamically load.
  * The rest of the URI is parsed in an implementation-specific manner.
@@ -78,8 +85,10 @@ uint32_t flux_matchtag_avail (flux_t h);
  */
 int flux_sendmsg (flux_t h, flux_msg_t *msg);
 flux_msg_t flux_recvmsg (flux_t h, bool nonblock);
-int flux_putmsg (flux_t h, flux_msg_t *msg);
-int flux_pushmsg (flux_t h, flux_msg_t *msg);
+
+/* Requeue message in the handle (head or tail according to flags)
+ */
+int flux_requeue (flux_t h, const flux_msg_t msg, int flags);
 
 /* Receive a message matching 'match' (see message.h).
  * Any unmatched messages are returned to the handle with flux_putmsg(),
