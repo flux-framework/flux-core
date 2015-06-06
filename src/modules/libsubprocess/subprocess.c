@@ -13,6 +13,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/shortjson.h"
 #include "src/modules/libzio/zio.h"
 #include "subprocess.h"
 
@@ -94,8 +95,12 @@ static int output_handler (zio_t z, json_object *o, void *arg)
 {
     struct subprocess *p = (struct subprocess *) arg;
 
-    if (p->io_cb)
+    if (p->io_cb) {
+        Jadd_int (o, "pid", subprocess_pid (p));
+        Jadd_str (o, "type", "io");
+        Jadd_str (o, "name", zio_name (z));
         return (*p->io_cb) (p, o);
+    }
 
     return send_output_to_stream (zio_name (z), o);
 }
