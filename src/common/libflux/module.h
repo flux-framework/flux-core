@@ -6,7 +6,6 @@
  */
 
 #include <stdint.h>
-#include <czmq.h>
 
 #include "handle.h"
 

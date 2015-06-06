@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
-#include <czmq.h>
+
 #include "message.h"
 
 struct _zctx_t;
@@ -76,15 +76,15 @@ uint32_t flux_matchtag_avail (flux_t h);
 
 /* Low level message send/recv functions.
  */
-int flux_sendmsg (flux_t h, zmsg_t **zmsg);
-zmsg_t *flux_recvmsg (flux_t h, bool nonblock);
-int flux_putmsg (flux_t h, zmsg_t **zmsg);
-int flux_pushmsg (flux_t h, zmsg_t **zmsg);
+int flux_sendmsg (flux_t h, flux_msg_t *msg);
+flux_msg_t flux_recvmsg (flux_t h, bool nonblock);
+int flux_putmsg (flux_t h, flux_msg_t *msg);
+int flux_pushmsg (flux_t h, flux_msg_t *msg);
 
 /* Receive a message matching 'match' (see message.h).
  * Any unmatched messages are returned to the handle with flux_putmsg(),
  */
-zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, bool nonblock);
+flux_msg_t flux_recvmsg_match (flux_t h, flux_match_t match, bool nonblock);
 
 /* Event subscribe/unsubscribe.
  */

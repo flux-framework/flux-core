@@ -25,6 +25,10 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <syslog.h>
+#include <unistd.h>
+#include <signal.h>
+
 #include "panic.h"
 #include "flog.h"
 #include "rpc.h"

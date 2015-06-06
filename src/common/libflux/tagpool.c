@@ -44,6 +44,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 #include "tagpool.h"
 #include "message.h"

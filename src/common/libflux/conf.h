@@ -1,7 +1,6 @@
 #ifndef _FLUX_CORE_CONF_H
 #define _FLUX_CORE_CONF_H
 
-#include <czmq.h>
 #include <stdbool.h>
 #include <stdarg.h>
 

@@ -25,6 +25,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <czmq.h>
 #include "request.h"
 #include "message.h"
 #include "info.h"

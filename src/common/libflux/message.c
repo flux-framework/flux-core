@@ -31,6 +31,7 @@
 #include <arpa/inet.h>
 #include <assert.h>
 #include <fnmatch.h>
+#include <czmq.h>
 
 #include "message.h"
 
@@ -193,6 +194,11 @@ zmsg_t *flux_msg_create (int type)
     }
 done:
     return zmsg;
+}
+
+void flux_msg_destroy (flux_msg_t msg)
+{
+    zmsg_destroy (&msg);
 }
 
 int flux_msg_set_type (zmsg_t *zmsg, int type)
@@ -904,9 +910,9 @@ done:
  * is false, when the point was to avoid the overhead of copying it in
  * the first place.
  */
-zmsg_t *flux_msg_copy (const zmsg_t *zmsg, bool payload)
+flux_msg_t flux_msg_copy (const flux_msg_t msg, bool payload)
 {
-    zmsg_t *cpy = zmsg_dup ((zmsg_t *)zmsg);
+    zmsg_t *cpy = zmsg_dup ((zmsg_t *)msg);
     if (!cpy) {
         errno = ENOMEM;
         return NULL;

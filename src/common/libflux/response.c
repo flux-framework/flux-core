@@ -25,6 +25,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <czmq.h>
 #include "response.h"
 #include "message.h"
 
@@ -102,7 +103,7 @@ error:
     return NULL;
 }
 
-int flux_respond (flux_t h, const zmsg_t *request,
+int flux_respond (flux_t h, const flux_msg_t request,
                   int errnum, const char *json_str)
 {
     zmsg_t *zmsg = NULL;

@@ -3,7 +3,6 @@
 
 #include <stdarg.h>
 #include <stdbool.h>
-#include <czmq.h>
 
 #include "handle.h"
 

@@ -28,6 +28,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#include <sys/time.h>
 
 #include "flog.h"
 #include "info.h"

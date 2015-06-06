@@ -30,6 +30,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <dlfcn.h>
+#include <czmq.h>
 
 #include "handle.h"
 #include "reactor.h"

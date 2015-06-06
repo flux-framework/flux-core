@@ -29,6 +29,7 @@
 #include <pwd.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <czmq.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
