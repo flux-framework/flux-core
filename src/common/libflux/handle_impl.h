@@ -28,7 +28,7 @@ struct flux_handle_ops {
 
     int         (*rank)(void *impl);
 
-    zctx_t *    (*get_zctx)(void *impl);
+    struct _zctx_t * (*get_zctx)(void *impl);
 
     int         (*reactor_start)(void *impl);
     void        (*reactor_stop)(void *impl, int rc);
@@ -51,7 +51,7 @@ struct flux_handle_ops {
 flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags);
 void flux_handle_destroy (flux_t *hp);
 
-zctx_t *flux_get_zctx (flux_t h);
+struct _zctx_t *flux_get_zctx (flux_t h);
 reactor_t flux_get_reactor (flux_t h);
 reactor_t flux_reactor_create (void *impl, const struct flux_handle_ops *ops);
 void flux_reactor_destroy (reactor_t r);

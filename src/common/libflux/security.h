@@ -40,7 +40,7 @@ int flux_sec_keygen (flux_sec_t c, bool force, bool verbose);
 /* Initialize ZAUTH (PLAIN or CURVE) and MUNGE security.
  * Calling these when relevant security modes are disabled is a no-op.
  */
-int flux_sec_zauth_init (flux_sec_t c, zctx_t *zctx, const char *domain);
+int flux_sec_zauth_init (flux_sec_t c, struct _zctx_t *zctx, const char *domain);
 int flux_sec_munge_init (flux_sec_t c);
 
 /* Enable client or server mode ZAUTH security on a zmq socket.
