@@ -118,7 +118,7 @@ typedef struct {
     zlist_t *parents;   /* current parent is first in list */
     zhash_t *children;
     bool hb_subscribed;
-    red_t r;
+    flux_red_t r;
     ns_t *ns;           /* master only */
     JSON topo;          /* master only */
     flux_t h;
@@ -131,7 +131,7 @@ static int goodbye (ctx_t *ctx, int parent_rank);
 static void manage_subscriptions (ctx_t *ctx);
 
 static void hello_sink (flux_t h, void *item, int batchnum, void *arg);
-static void hello_reduce (flux_t h, zlist_t *items, int batchnum, void *arg);
+static void hello_reduce (flux_t h, flux_redstack_t items, int batchnum, void *arg);
 
 static const int default_max_idle = 5;
 static const int default_slow_idle = 3;
@@ -870,17 +870,17 @@ static void hello_sink (flux_t h, void *item, int batchnum, void *arg)
     Jput (a);
 }
 
-static void hello_reduce (flux_t h, zlist_t *items, int batchnum, void *arg)
+static void hello_reduce (flux_t h, flux_redstack_t items, int batchnum,
+                          void *arg)
 {
     JSON a, b;
 
-    if ((a = zlist_pop (items))) {
-        while ((b = zlist_pop (items))) {
+    if ((a = flux_redstack_pop (items))) {
+        while ((b = flux_redstack_pop (items))) {
             hello_merge (a, b);
             Jput (b);
         }
-        if (zlist_append (items, a) < 0)
-            oom ();
+        flux_redstack_push (items, a);
     }
 }
 
