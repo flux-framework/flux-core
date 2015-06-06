@@ -83,8 +83,9 @@ typedef struct {
 
 static int watch_rep_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg);
 
-static void freectx (kvsctx_t *ctx)
+static void freectx (void *arg)
 {
+    kvsctx_t *ctx = arg;
     zhash_destroy (&ctx->watchers);
     zlist_destroy (&ctx->dirstack);
     free (ctx->cwd);
@@ -103,7 +104,7 @@ static kvsctx_t *getctx (flux_t h)
             oom ();
         if (!(ctx->cwd = xstrdup (".")))
             oom ();
-        flux_aux_set (h, "kvscli", ctx, (FluxFreeFn)freectx);
+        flux_aux_set (h, "kvscli", ctx, freectx);
     }
     return ctx;
 }

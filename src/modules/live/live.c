@@ -141,8 +141,9 @@ static const int reduce_timeout_slave_msec = 10;
 static void ns_chg_one (ctx_t *ctx, uint32_t r, cstate_t from, cstate_t to);
 static int ns_sync (ctx_t *ctx);
 
-static void freectx (ctx_t *ctx)
+static void freectx (void *arg)
 {
+    ctx_t *ctx = arg;
     parent_t *p;
 
     while ((p = zlist_pop (ctx->parents)))
@@ -179,7 +180,7 @@ static ctx_t *getctx (flux_t h)
         else
             flux_red_set_timeout_msec (ctx->r, reduce_timeout_slave_msec);
         ctx->h = h;
-        flux_aux_set (h, "livesrv", ctx, (FluxFreeFn)freectx);
+        flux_aux_set (h, "livesrv", ctx, freectx);
     }
     return ctx;
 }

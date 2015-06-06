@@ -14,8 +14,9 @@ typedef struct {
     zlist_t *clog_requests;
 } ctx_t;
 
-static void freectx (ctx_t *ctx)
+static void freectx (void *arg)
 {
+    ctx_t *ctx = arg;
     zlist_t *keys = zhash_keys (ctx->ping_requests);
     char *key = zlist_first (keys);
     while (key) {
@@ -45,7 +46,7 @@ static ctx_t *getctx (flux_t h)
             oom ();
         if (!(ctx->clog_requests = zlist_new ()))
             oom ();
-        flux_aux_set (h, "req", ctx, (FluxFreeFn)freectx);
+        flux_aux_set (h, "req", ctx, freectx);
     }
     return ctx;
 }

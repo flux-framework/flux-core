@@ -74,8 +74,9 @@ typedef struct {
 
 static void client_destroy (client_t *c);
 
-static void freectx (ctx_t *ctx)
+static void freectx (void *arg)
 {
+    ctx_t *ctx = arg;
     zlist_destroy (&ctx->clients);
     free (ctx);
 }
@@ -90,7 +91,7 @@ static ctx_t *getctx (flux_t h)
         if (!(ctx->clients = zlist_new ()))
             oom ();
         ctx->session_owner = geteuid ();
-        flux_aux_set (h, "apisrv", ctx, (FluxFreeFn)freectx);
+        flux_aux_set (h, "apisrv", ctx, freectx);
     }
 
     return ctx;

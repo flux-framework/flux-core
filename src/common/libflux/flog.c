@@ -43,8 +43,9 @@ typedef struct {
     bool redirect;
 } logctx_t;
 
-static void freectx (logctx_t *ctx)
+static void freectx (void *arg)
 {
+    logctx_t *ctx = arg;
     if (ctx->facility)
         free (ctx->facility);
     free (ctx);
@@ -57,7 +58,7 @@ static logctx_t *getctx (flux_t h)
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
         ctx->facility = xstrdup ("unknown");
-        flux_aux_set (h, "log", ctx, (FluxFreeFn)freectx);
+        flux_aux_set (h, "log", ctx, freectx);
     }
     return ctx;
 }
