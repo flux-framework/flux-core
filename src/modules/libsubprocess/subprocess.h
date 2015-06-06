@@ -5,7 +5,8 @@ struct subprocess_manager;
 struct subprocess;
 
 typedef enum sm_item {
-    SM_WAIT_FLAGS
+    SM_WAIT_FLAGS,
+    SM_ZLOOP,
 } sm_item_t;
 
 typedef int (subprocess_cb_f) (struct subprocess *p, void *arg);

@@ -19,6 +19,7 @@
 struct subprocess_manager {
     zlist_t *processes;
     int wait_flags;
+    zloop_t *zloop;
 };
 
 struct subprocess {
@@ -131,6 +132,11 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
 
     zlist_append (sm->processes, (void *)p);
 
+    if (sm->zloop) {
+        zio_zloop_attach (p->zio_in, sm->zloop);
+        zio_zloop_attach (p->zio_err, sm->zloop);
+        zio_zloop_attach (p->zio_out, sm->zloop);
+    }
     return (p);
 }
 
@@ -728,6 +734,9 @@ subprocess_manager_set (struct subprocess_manager *sm, sm_item_t item, ...)
     switch (item) {
         case SM_WAIT_FLAGS:
             sm->wait_flags = va_arg (ap, int);
+            break;
+        case SM_ZLOOP:
+            sm->zloop = (zloop_t *) va_arg (ap, void *);
             break;
         default:
             errno = EINVAL;
