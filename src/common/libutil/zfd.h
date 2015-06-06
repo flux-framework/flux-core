@@ -11,6 +11,6 @@
  * to read the complete thing.
  */
 zmsg_t *zfd_recv (int fd, bool nonblock);
-int zfd_send (int fd, zmsg_t **msg);
+int zfd_send (int fd, zmsg_t *msg);
 
 #endif /* !_UTIL_ZFD_H */

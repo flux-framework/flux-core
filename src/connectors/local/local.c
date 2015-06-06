@@ -103,7 +103,14 @@ static int op_sendmsg (void *impl, zmsg_t **zmsg)
 {
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
-    return zfd_send (c->fd, zmsg);
+    int rc = -1;
+
+    if (zfd_send (c->fd, *zmsg) < 0)
+        goto done;
+    zmsg_destroy (zmsg);
+    rc = 0;
+done:
+    return rc;
 }
 
 static zmsg_t *op_recvmsg_putmsg (ctx_t *c)
