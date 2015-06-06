@@ -4,6 +4,7 @@
 -- Modules:
 -------------------------------------------------------------------------------
 local flux = require 'flux'
+local decode = require 'flux-lua.base64' .decode
 local posix = require 'flux-lua.posix'
 local timer = require 'flux-lua.timer'
 local hostlist = require 'hostlist'
@@ -43,6 +44,7 @@ local function program_state_create (n)
         size = n or 1,
         nexited = 0,
         nstarted = 0,
+        nclosed = { stdout = 0, stderr = 0 },
         running = {},
         status = {},
         code = {},
@@ -73,11 +75,20 @@ local function program_state_create (n)
     function T.failed (rank, errnum)
         s.nstarted = s.nstarted + 1
         s.nexited = s.nexited + 1
+        s.nclosed.stdout = s.nclosed.stdout + 1
+        s.nclosed.stderr = s.nclosed.stderr + 1
         s.code [rank] = 68 -- EX_NOHOST
         s.status [rank] = 68
     end
+    function T.eof (rank, name)
+        s.nclosed [name] = s.nclosed [name] + 1
+    end
     function T.complete ()
-        if s.nexited == s.size then return true end
+        if s.nexited == s.size and
+           s.nclosed.stdout == s.size and
+           s.nclosed.stderr == s.size then 
+            return true
+        end
         return false
     end
     function T.status (rank)
@@ -110,8 +121,8 @@ end
 --  Parse cmdline args:
 --
 local getopt = require 'flux-lua.alt_getopt' .get_opts
-local opts, optind = getopt (arg, "d:r:v",
-                        { rank = "r", verbose = "v", dir = "d" })
+local opts, optind = getopt (arg, "d:r:vl",
+                        { rank = "r", verbose = "v", dir = "d", labelio = "l" })
 
 if opts.v then verbose = true end
 if not arg[optind] then die ("Command to run required\n") end
@@ -152,8 +163,27 @@ local mh, err = f:msghandler {
         end
 
         local resp = zmsg.data
+        if not resp then return end
         --say ("%03fms: rank %d %s\n", t:get0() * 1000, resp.rank or -1, resp.state or "error")
-        if resp.state == "Running" then
+        --
+        if resp.type == "io" then
+            local dst = resp.name == "stdout" and io.stdout or io.stderr
+            if resp.data then
+                local lines = decode (resp.data)
+                if opts.l then
+                    lines:gsub ('([^\n]+\n?)', function (s)
+                            dst:write (resp.rank..": "..s)
+                        end)
+                else
+                    dst:write (lines)
+                end
+            end
+            if resp.eof then
+                state.eof (resp.rank, resp.name)
+                --io.close (dst)
+                if state.complete() then f:reactor_stop () end
+            end
+        elseif resp.state == "Running" then
             state.started (resp.rank, resp.pid)
         elseif resp.state == "Exited" then
             state.exited (resp)
