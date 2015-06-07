@@ -104,25 +104,26 @@ static zmsg_t *rpc_response_recv (flux_rpc_t rpc, bool nonblock)
 static int rpc_request_send (flux_rpc_t rpc, int n, const char *topic,
                              const char *json_str, uint32_t nodeid)
 {
-    zmsg_t *zmsg;
+    flux_msg_t msg;
     int flags = 0;
     int rc = -1;
 
-    if (!(zmsg = flux_request_encode (topic, json_str)))
+    if (!(msg = flux_request_encode (topic, json_str)))
         goto done;
-    if (flux_msg_set_matchtag (zmsg, rpc->m.matchtag + n) < 0)
+    if (flux_msg_set_matchtag (msg, rpc->m.matchtag + n) < 0)
         goto done;
     if (nodeid == FLUX_NODEID_UPSTREAM) {
         flags |= FLUX_MSGFLAG_UPSTREAM;
         nodeid = flux_rank (rpc->h);
     }
-    if (flux_msg_set_nodeid (zmsg, nodeid, flags) < 0)
+    if (flux_msg_set_nodeid (msg, nodeid, flags) < 0)
         goto done;
-    if (flux_sendmsg (rpc->h, &zmsg) < 0)
+    if (flux_send (rpc->h, msg, 0) < 0)
         goto done;
     rc = 0;
 done:
-    zmsg_destroy (&zmsg);
+    if (msg)
+        flux_msg_destroy (msg);
     return rc;
 }
 

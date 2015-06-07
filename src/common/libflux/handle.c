@@ -291,38 +291,51 @@ uint32_t flux_matchtag_avail (flux_t h)
     return tagpool_avail (h->tagpool);
 }
 
-int flux_sendmsg (flux_t h, zmsg_t **zmsg)
+static void update_tx_stats (flux_t h, const flux_msg_t msg)
 {
     int type;
+    if (flux_msg_get_type (msg, &type) == 0) {
+        switch (type) {
+            case FLUX_MSGTYPE_REQUEST:
+                h->msgcounters.request_tx++;
+                break;
+            case FLUX_MSGTYPE_RESPONSE:
+                h->msgcounters.response_tx++;
+                break;
+            case FLUX_MSGTYPE_EVENT:
+                h->msgcounters.event_tx++;
+                break;
+            case FLUX_MSGTYPE_KEEPALIVE:
+                h->msgcounters.keepalive_tx++;
+                break;
+        }
+    }
+    errno = 0;
+}
 
-    if (!h->ops->sendmsg) {
+int flux_send (flux_t h, const flux_msg_t msg, int flags)
+{
+    if (!h->ops->send) {
         errno = ENOSYS;
         goto fatal;
     }
-    if (flux_msg_get_type (*zmsg, &type) < 0)
-        goto fatal;
-    switch (type) {
-        case FLUX_MSGTYPE_REQUEST:
-            h->msgcounters.request_tx++;
-            break;
-        case FLUX_MSGTYPE_RESPONSE:
-            h->msgcounters.response_tx++;
-            break;
-        case FLUX_MSGTYPE_EVENT:
-            h->msgcounters.event_tx++;
-            break;
-        case FLUX_MSGTYPE_KEEPALIVE:
-            h->msgcounters.keepalive_tx++;
-            break;
-    }
+    update_tx_stats (h, msg);
     if (h->flags & FLUX_O_TRACE)
-        flux_msg_fprint (stderr, *zmsg);
-    if (h->ops->sendmsg (h->impl, zmsg) < 0)
+        flux_msg_fprint (stderr, msg);
+    if (h->ops->send (h->impl, msg, flags) < 0)
         goto fatal;
     return 0;
 fatal:
     FLUX_FATAL (h);
     return -1;
+}
+
+int flux_sendmsg (flux_t h, zmsg_t **zmsg)
+{
+    if (flux_send (h, *zmsg, 0) < 0)
+        return -1;
+    zmsg_destroy (zmsg);
+    return 0;
 }
 
 zmsg_t *flux_recvmsg (flux_t h, bool nonblock)

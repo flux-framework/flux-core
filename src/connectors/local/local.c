@@ -99,18 +99,11 @@ static void sync_msg_watchers  (ctx_t *c);
 
 static const struct flux_handle_ops handle_ops;
 
-static int op_sendmsg (void *impl, zmsg_t **zmsg)
+static int op_send (void *impl, const flux_msg_t msg, int flags)
 {
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
-    int rc = -1;
-
-    if (zfd_send (c->fd, *zmsg) < 0)
-        goto done;
-    zmsg_destroy (zmsg);
-    rc = 0;
-done:
-    return rc;
+    return zfd_send (c->fd, (flux_msg_t)msg);
 }
 
 static zmsg_t *op_recvmsg_putmsg (ctx_t *c)
@@ -546,7 +539,7 @@ error:
 }
 
 static const struct flux_handle_ops handle_ops = {
-    .sendmsg = op_sendmsg,
+    .send = op_send,
     .recvmsg = op_recvmsg,
     .requeue = op_requeue,
     .purge = op_purge,

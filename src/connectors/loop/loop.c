@@ -96,31 +96,36 @@ static const struct flux_handle_ops handle_ops;
 
 const char *fake_uuid = "12345678123456781234567812345678";
 
-static int op_sendmsg (void *impl, zmsg_t **zmsg)
+static int op_send (void *impl, const flux_msg_t msg, int flags)
 {
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
     int type;
+    flux_msg_t cpy = NULL;
     int rc = -1;
 
-    if (flux_msg_get_type (*zmsg, &type) < 0)
+    if (!(cpy = flux_msg_copy (msg, true)))
+        goto done;
+    if (flux_msg_get_type (cpy, &type) < 0)
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
         case FLUX_MSGTYPE_EVENT:
-            if (flux_msg_enable_route (*zmsg) < 0)
+            if (flux_msg_enable_route (cpy) < 0)
                 goto done;
-            if (flux_msg_push_route (*zmsg, fake_uuid) < 0)
+            if (flux_msg_push_route (cpy, fake_uuid) < 0)
                 goto done;
             break;
     }
-    if (zlist_append (c->queue, *zmsg) < 0) {
+    if (zlist_append (c->queue, cpy) < 0) {
         errno = ENOMEM;
         goto done;
     }
-    *zmsg = NULL;
+    cpy = NULL; /* c->queue now owns cpy */
     rc = 0;
 done:
+    if (cpy)
+        flux_msg_destroy (cpy);
     return rc;
 }
 
@@ -419,7 +424,7 @@ error:
 }
 
 static const struct flux_handle_ops handle_ops = {
-    .sendmsg = op_sendmsg,
+    .send = op_send,
     .recvmsg = op_recvmsg,
     .requeue = op_requeue,
     .purge = op_purge,
