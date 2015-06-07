@@ -350,7 +350,7 @@ send_causal_event (kap_params_t *param)
     util_json_object_add_int (o, KAP_KVSVER_NAME, v);
 
     zmsg_t * msg = flux_event_encode(KAP_CAUSAL_CONS_EV, Jtostr(o));
-    if (flux_event_send (param->pers.handle, &msg) < 0) {
+    if (flux_sendmsg (param->pers.handle, &msg) < 0) {
         fprintf (stderr,
             "flux_event_send failed.\n");
             goto error;
@@ -369,8 +369,14 @@ enforce_c_consistency (kap_params_t *param)
     const char *tag = NULL;
     int v = 0;
     json_object *o = NULL;
+    flux_match_t match = {
+        .typemask = FLUX_MSGTYPE_EVENT,
+        .matchtag = FLUX_MATCHTAG_NONE,
+        .bsize = 0,
+        .topic_glob = NULL,
+    };
 
-    zmsg_t * msg = flux_event_recv (param->pers.handle, false);
+    zmsg_t * msg = flux_recvmsg_match (param->pers.handle, match, false);
     if ( ! msg ) {
         fprintf (stderr,
             "event recv failed: %s\n", strerror (errno));
