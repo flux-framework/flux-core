@@ -24,6 +24,26 @@ enum {
     FLUX_MSGFLAG_UPSTREAM   = 0x10, /* request nodeid is sender (route away) */
 };
 
+typedef struct {
+    int typemask;           /* bitmask of matching message types (or 0) */
+    uint32_t matchtag;      /* matchtag block begin (or FLUX_MATCHTAG_NONE) */
+    int bsize;              /* size of matchtag block (or 0) */
+    char *topic_glob;       /* glob matching topic string (or NULL) */
+} flux_match_t;
+
+#define FLUX_MATCH_ANY { \
+    .typemask = FLUX_MSGTYPE_ANY, \
+    .matchtag = FLUX_MATCHTAG_NONE, \
+    .bsize = 0, \
+    .topic_glob = NULL, \
+}
+#define FLUX_MATCH_EVENT { \
+    .typemask = FLUX_MSGTYPE_EVENT, \
+    .matchtag = FLUX_MATCHTAG_NONE, \
+    .bsize = 0, \
+    .topic_glob = NULL, \
+}
+
 /* Create a new Flux message.
  * Returns new message or null on failure, with errno set (e.g. ENOMEM, EINVAL)
  * Caller must destroy message with flux_msg_destroy() or equivalent.
@@ -95,13 +115,6 @@ bool flux_msg_cmp_matchtag (flux_msg_t msg, uint32_t matchtag);
 
 /* Match a message.
  */
-typedef struct {
-    int typemask;           /* bitmask of matching message types (or 0) */
-    uint32_t matchtag;      /* matchtag block begin (or FLUX_MATCHTAG_NONE) */
-    int bsize;              /* size of matchtag block (or 0) */
-    char *topic_glob;       /* glob matching topic string (or NULL) */
-} flux_match_t;
-
 bool flux_msg_cmp (flux_msg_t msg, flux_match_t match);
 
 /* Print a Flux message on specified output stream.
