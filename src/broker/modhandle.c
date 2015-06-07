@@ -244,15 +244,15 @@ static zmsg_t *mod_recvmsg_putmsg (ctx_t *ctx)
     return zmsg;
 }
 
-static zmsg_t *mod_recvmsg (void *impl, bool nonblock)
+static flux_msg_t mod_recv (void *impl, int flags)
 {
     ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
-    zmsg_t *zmsg = NULL;
+    flux_msg_t msg = NULL;
 
-    if (!(zmsg = mod_recvmsg_putmsg (ctx)))
-        zmsg = mod_recvmsg_main (ctx, nonblock);
-    return zmsg;
+    if (!(msg = mod_recvmsg_putmsg (ctx)))
+        msg = mod_recvmsg_main (ctx, (flags & FLUX_O_NONBLOCK) ? true : false);
+    return msg;
 }
 
 static int mod_requeue (void *impl, const flux_msg_t msg, int flags)
@@ -560,7 +560,7 @@ static void putmsg_cb (struct ev_loop *loop, ev_zlist *w, int revents)
 
 static const struct flux_handle_ops mod_handle_ops = {
     .send = mod_send,
-    .recvmsg = mod_recvmsg,
+    .recv = mod_recv,
     .requeue = mod_requeue,
     .purge = mod_purge,
     .event_subscribe = mod_event_subscribe,

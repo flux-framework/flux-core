@@ -309,8 +309,30 @@ static void update_tx_stats (flux_t h, const flux_msg_t msg)
                 h->msgcounters.keepalive_tx++;
                 break;
         }
-    }
-    errno = 0;
+    } else
+        errno = 0;
+}
+
+static void update_rx_stats (flux_t h, const flux_msg_t msg)
+{
+    int type;
+    if (flux_msg_get_type (msg, &type) == 0) {
+        switch (type) {
+            case FLUX_MSGTYPE_REQUEST:
+                h->msgcounters.request_rx++;
+                break;
+            case FLUX_MSGTYPE_RESPONSE:
+                h->msgcounters.response_rx++;
+                break;
+            case FLUX_MSGTYPE_EVENT:
+                h->msgcounters.event_rx++;
+                break;
+        case FLUX_MSGTYPE_KEEPALIVE:
+            h->msgcounters.keepalive_rx++;
+            break;
+        }
+    } else
+        errno = 0;
 }
 
 int flux_send (flux_t h, const flux_msg_t msg, int flags)
@@ -330,6 +352,98 @@ fatal:
     return -1;
 }
 
+static int defer_enqueue (zlist_t **l, flux_msg_t msg)
+{
+    if ((!*l && !(*l = zlist_new ())) || zlist_append (*l, msg) < 0) {
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
+}
+
+static int defer_requeue (zlist_t **l, flux_t h)
+{
+    flux_msg_t msg;
+    if (*l) {
+        while ((msg = zlist_pop (*l))) {
+            if (flux_requeue (h, msg, FLUX_RQ_TAIL) < 0) {
+                flux_msg_destroy (msg);
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
+static void defer_destroy (zlist_t **l)
+{
+    flux_msg_t msg;
+    if (*l) {
+        while ((msg = zlist_pop (*l)))
+            flux_msg_destroy (msg);
+        zlist_destroy (l);
+    }
+}
+
+/* If this function is called without the NONBLOCK flag from a reactor
+ * handler running in coprocess context, the call to flux_sleep_on()
+ * will allow the reactor to run until a message matching 'match' arrives.
+ * The flux_sleep_on() call will then resume, and the next call to recv()
+ * will return the matching message.  If not running in coprocess context,
+ * flux_sleep_on() will fail with EINVAL.  In that case, the do loop
+ * reading messages and comparing them to match criteria may have to read
+ * a few non-matching messages before finding a match.  On return, those
+ * non-matching messages have to be requeued in the handle, hence the
+ * defer_*() helper calls.
+ */
+flux_msg_t flux_recv (flux_t h, flux_match_t match, int flags)
+{
+    zlist_t *l = NULL;
+    flux_msg_t msg = NULL;
+    int saved_errno;
+
+    if (!h->ops->recv || !h->ops->requeue) {
+        errno = ENOSYS;
+        goto fatal;
+    }
+    if (!(flags & FLUX_O_NONBLOCK) && flux_sleep_on (h, match) < 0) {
+        if (errno != EINVAL)
+            goto fatal;
+        errno = 0;
+    }
+    do {
+        if (!(msg = h->ops->recv (h->impl, flags))) {
+            if (errno != EAGAIN && errno != EWOULDBLOCK)
+                goto fatal;
+            if (defer_requeue (&l, h) < 0)
+                goto fatal;
+            defer_destroy (&l);
+            errno = EWOULDBLOCK;
+            return NULL;
+        }
+        if (!flux_msg_cmp (msg, match)) {
+            if (defer_enqueue (&l, msg) < 0)
+                goto fatal;
+            msg = NULL;
+        }
+    } while (!msg);
+    update_rx_stats (h, msg);
+    if ((h->flags & FLUX_O_TRACE))
+        flux_msg_fprint (stderr, msg);
+    if (defer_requeue (&l, h) < 0)
+        goto fatal;
+    defer_destroy (&l);
+    return msg;
+fatal:
+    saved_errno = errno;
+    FLUX_FATAL (h);
+    if (msg)
+        flux_msg_destroy (msg);
+    defer_destroy (&l);
+    errno = saved_errno;
+    return NULL;
+}
+
 int flux_sendmsg (flux_t h, zmsg_t **zmsg)
 {
     if (flux_send (h, *zmsg, 0) < 0)
@@ -338,110 +452,15 @@ int flux_sendmsg (flux_t h, zmsg_t **zmsg)
     return 0;
 }
 
-zmsg_t *flux_recvmsg (flux_t h, bool nonblock)
+flux_msg_t flux_recvmsg (flux_t h, bool nonblock)
 {
-    zmsg_t *zmsg = NULL;
-    int type;
-
-    if (!h->ops->recvmsg) {
-        errno = ENOSYS;
-        goto fatal;
-    }
-    if (!(zmsg = h->ops->recvmsg (h->impl, nonblock))) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return NULL;
-        goto fatal;
-    }
-    if (flux_msg_get_type (zmsg, &type) == 0) {
-        switch (type) {
-            case FLUX_MSGTYPE_REQUEST:
-                h->msgcounters.request_rx++;
-                break;
-            case FLUX_MSGTYPE_RESPONSE:
-                h->msgcounters.response_rx++;
-                break;
-            case FLUX_MSGTYPE_EVENT:
-                h->msgcounters.event_rx++;
-                break;
-        case FLUX_MSGTYPE_KEEPALIVE:
-            h->msgcounters.keepalive_rx++;
-            break;
-        }
-    }
-    if ((h->flags & FLUX_O_TRACE))
-        flux_msg_fprint (stderr, zmsg);
-    return zmsg;
-fatal:
-    zmsg_destroy (&zmsg);
-    FLUX_FATAL (h);
-    return NULL;
+    flux_match_t match = FLUX_MATCH_ANY;
+    return flux_recv (h, match, nonblock ? FLUX_O_NONBLOCK : 0);
 }
 
-static int putmsg_list (flux_t h, zlist_t *l)
+flux_msg_t flux_recvmsg_match (flux_t h, flux_match_t match, bool nonblock)
 {
-    int errnum = 0;
-    int rc = 0;
-
-    if (l) {
-        flux_msg_t msg;
-        while ((msg = zlist_pop (l))) {
-            if (flux_requeue (h, msg, FLUX_RQ_TAIL) < 0) {
-                if (errnum < errno) {
-                    errnum = errno;
-                    rc = -1;
-                }
-                flux_msg_destroy (msg);
-            }
-        }
-    }
-    if (errnum > 0)
-        errno = errnum;
-    return rc;
-}
-
-zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, bool nonblock)
-{
-    zmsg_t *zmsg = NULL;
-    zlist_t *putmsg = NULL;
-
-    if (!h->ops->recvmsg || !h->ops->requeue) {
-        errno = ENOSYS;
-        goto fatal;
-    }
-    if (!nonblock && flux_sleep_on (h, match) < 0) {
-        if (errno != EINVAL)
-            goto fatal;
-        errno = 0; /* EINVAL: not running in a coprocess */
-    }
-    while (!zmsg) {
-        if (!(zmsg = flux_recvmsg (h, nonblock)))
-            goto done;
-        if (!flux_msg_cmp (zmsg, match)) {
-            if (!putmsg && !(putmsg = zlist_new ())) {
-                zmsg_destroy (&zmsg);
-                errno = ENOMEM;
-                goto done;
-            }
-            if (zlist_append (putmsg, zmsg) < 0) {
-                zmsg_destroy (&zmsg);
-                errno = ENOMEM;
-                goto done;
-            }
-            zmsg = NULL;
-        }
-    }
-done:
-    if (putmsg_list (h, putmsg) < 0) {
-        int errnum = errno;
-        zmsg_destroy (&zmsg);
-        errno = errnum;
-    }
-    zlist_destroy (&putmsg);
-    return zmsg;
-fatal:
-    zmsg_destroy (&zmsg);
-    FLUX_FATAL (h);
-    return NULL;
+    return flux_recv (h, match, nonblock ? FLUX_O_NONBLOCK : 0);
 }
 
 /* FIXME: FLUX_O_TRACE will show these messages being received again

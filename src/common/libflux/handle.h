@@ -29,6 +29,7 @@ typedef void (*flux_fatal_f)(const char *msg, void *arg);
 enum {
     FLUX_O_TRACE = 1,   /* send message trace to stderr */
     FLUX_O_COPROC = 2,  /* start reactor callbacks as coprocesses */
+    FLUX_O_NONBLOCK = 4,/* handle should not block on send/recv */
 };
 
 /* Flags for flux_requeue().
@@ -84,17 +85,16 @@ uint32_t flux_matchtag_avail (flux_t h);
 /* Low level message send/recv functions.
  */
 int flux_send (flux_t h, const flux_msg_t msg, int flags);
+flux_msg_t flux_recv (flux_t h, flux_match_t match, int flags);
+
+/* deprecated */
 int flux_sendmsg (flux_t h, flux_msg_t *msg);
 flux_msg_t flux_recvmsg (flux_t h, bool nonblock);
+flux_msg_t flux_recvmsg_match (flux_t h, flux_match_t match, bool nonblock);
 
 /* Requeue message in the handle (head or tail according to flags)
  */
 int flux_requeue (flux_t h, const flux_msg_t msg, int flags);
-
-/* Receive a message matching 'match' (see message.h).
- * Any unmatched messages are returned to the handle with flux_putmsg(),
- */
-flux_msg_t flux_recvmsg_match (flux_t h, flux_match_t match, bool nonblock);
 
 /* Event subscribe/unsubscribe.
  */

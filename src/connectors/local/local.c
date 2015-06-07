@@ -116,14 +116,14 @@ static zmsg_t *op_recvmsg_putmsg (ctx_t *c)
     return zmsg;
 }
 
-static zmsg_t *op_recvmsg (void *impl, bool nonblock)
+static zmsg_t *op_recv (void *impl, int flags)
 {
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
     zmsg_t *zmsg = NULL;
 
     if (!(zmsg = op_recvmsg_putmsg (c)))
-        zmsg = zfd_recv (c->fd, nonblock);
+        zmsg = zfd_recv (c->fd, (flags & FLUX_O_NONBLOCK) ? : false);
     return zmsg;
 }
 
@@ -540,7 +540,7 @@ error:
 
 static const struct flux_handle_ops handle_ops = {
     .send = op_send,
-    .recvmsg = op_recvmsg,
+    .recv = op_recv,
     .requeue = op_requeue,
     .purge = op_purge,
     .event_subscribe = op_event_subscribe,

@@ -129,14 +129,14 @@ done:
     return rc;
 }
 
-static zmsg_t *op_recvmsg (void *impl, bool nonblock)
+static flux_msg_t op_recv (void *impl, int flags)
 {
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
-    zmsg_t *zmsg = zlist_pop (c->queue);
-    if (!zmsg)
+    flux_msg_t msg = zlist_pop (c->queue);
+    if (!msg)
         errno = EWOULDBLOCK;
-    return zmsg;
+    return msg;
 }
 
 static int op_requeue (void *impl, const flux_msg_t msg, int flags)
@@ -425,7 +425,7 @@ error:
 
 static const struct flux_handle_ops handle_ops = {
     .send = op_send,
-    .recvmsg = op_recvmsg,
+    .recv = op_recv,
     .requeue = op_requeue,
     .purge = op_purge,
     .event_subscribe = NULL,

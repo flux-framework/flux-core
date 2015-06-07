@@ -96,11 +96,6 @@ static uint32_t lookup_nodeid (flux_rpc_t rpc, uint32_t matchtag)
     return rpc->nodemap[ix];
 }
 
-static zmsg_t *rpc_response_recv (flux_rpc_t rpc, bool nonblock)
-{
-    return flux_recvmsg_match (rpc->h, rpc->m, nonblock);
-}
-
 static int rpc_request_send (flux_rpc_t rpc, int n, const char *topic,
                              const char *json_str, uint32_t nodeid)
 {
@@ -132,7 +127,8 @@ bool flux_rpc_check (flux_rpc_t rpc)
 {
     if (rpc->oneway)
         return false;
-    if (rpc->rx_msg || (rpc->rx_msg = rpc_response_recv (rpc, true)))
+    if (rpc->rx_msg || (rpc->rx_msg = flux_recv (rpc->h, rpc->m,
+                                                 FLUX_O_NONBLOCK)))
         return true;
     errno = 0;
     return false;
@@ -146,7 +142,7 @@ int flux_rpc_get (flux_rpc_t rpc, uint32_t *nodeid, const char **json_str)
         errno = EINVAL;
         goto done;
     }
-    if (!rpc->rx_msg && !(rpc->rx_msg = rpc_response_recv (rpc, false)))
+    if (!rpc->rx_msg && !(rpc->rx_msg = flux_recv (rpc->h, rpc->m, 0)))
         goto done;
     zmsg_destroy (&rpc->rx_msg_consumed); /* invalidate last-got payload */
     rpc->rx_msg_consumed = rpc->rx_msg;

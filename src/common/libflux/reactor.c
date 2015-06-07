@@ -208,9 +208,10 @@ static int coproc_cb (coproc_t c, void *arg)
 {
     dispatch_t *d = arg;
     zmsg_t *zmsg;
+    flux_match_t match = FLUX_MATCH_ANY;
     int type;
     int rc = -1;
-    if (!(zmsg = flux_recvmsg (d->h, true))) {
+    if (!(zmsg = flux_recv (d->h, match, FLUX_O_NONBLOCK))) {
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             rc = 0;
         goto done;
@@ -269,11 +270,12 @@ static int msg_cb (flux_t h, void *arg)
 {
     reactor_t r = flux_get_reactor (h);
     dispatch_t *d;
+    flux_match_t match = FLUX_MATCH_ANY;
     int rc = -1;
     zmsg_t *zmsg = NULL;
     int type;
 
-    if (!(zmsg = flux_recvmsg (h, true))) {
+    if (!(zmsg = flux_recv (h, match, FLUX_O_NONBLOCK))) {
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             rc = 0;
         goto done;
@@ -281,7 +283,7 @@ static int msg_cb (flux_t h, void *arg)
     if (flux_msg_get_type (zmsg, &type) < 0)
         goto done;
     /* Message matches a coproc that yielded.
-     * Resume, arranging for zmsg to be returned next by flux_recvmsg().
+     * Resume, arranging for msg to be returned next by flux_recv().
      */
     if ((d = find_dispatch (r, zmsg, true))) {
         if (flux_requeue (h, zmsg, FLUX_RQ_HEAD) < 0)
