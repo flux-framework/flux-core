@@ -341,8 +341,9 @@ int flux_send (flux_t h, const flux_msg_t msg, int flags)
         errno = ENOSYS;
         goto fatal;
     }
+    flags |= h->flags;
     update_tx_stats (h, msg);
-    if (h->flags & FLUX_O_TRACE)
+    if (flags & FLUX_O_TRACE)
         flux_msg_fprint (stderr, msg);
     if (h->ops->send (h->impl, msg, flags) < 0)
         goto fatal;
@@ -406,6 +407,7 @@ flux_msg_t flux_recv (flux_t h, flux_match_t match, int flags)
         errno = ENOSYS;
         goto fatal;
     }
+    flags |= h->flags;
     if (!(flags & FLUX_O_NONBLOCK) && flux_sleep_on (h, match) < 0) {
         if (errno != EINVAL)
             goto fatal;
@@ -428,7 +430,7 @@ flux_msg_t flux_recv (flux_t h, flux_match_t match, int flags)
         }
     } while (!msg);
     update_rx_stats (h, msg);
-    if ((h->flags & FLUX_O_TRACE))
+    if ((flags & FLUX_O_TRACE))
         flux_msg_fprint (stderr, msg);
     if (defer_requeue (&l, h) < 0)
         goto fatal;
