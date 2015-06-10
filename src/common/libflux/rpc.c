@@ -99,7 +99,7 @@ static uint32_t lookup_nodeid (flux_rpc_t rpc, uint32_t matchtag)
 static int rpc_request_send (flux_rpc_t rpc, int n, const char *topic,
                              const char *json_str, uint32_t nodeid)
 {
-    flux_msg_t msg;
+    flux_msg_t *msg;
     int flags = 0;
     int rc = -1;
 

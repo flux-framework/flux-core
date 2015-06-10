@@ -173,11 +173,11 @@ static void sync_msg_watchers (ctx_t *ctx)
     }
 }
 
-static int mod_send (void *impl, const flux_msg_t msg, int flags)
+static int mod_send (void *impl, const flux_msg_t *msg, int flags)
 {
     ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
-    flux_msg_t cpy = NULL;
+    flux_msg_t *cpy = NULL;
     int type;
     int rc = -1;
 
@@ -244,24 +244,24 @@ static zmsg_t *mod_recvmsg_putmsg (ctx_t *ctx)
     return zmsg;
 }
 
-static flux_msg_t mod_recv (void *impl, int flags)
+static flux_msg_t *mod_recv (void *impl, int flags)
 {
     ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
-    flux_msg_t msg = NULL;
+    flux_msg_t *msg = NULL;
 
     if (!(msg = mod_recvmsg_putmsg (ctx)))
         msg = mod_recvmsg_main (ctx, (flags & FLUX_O_NONBLOCK) ? true : false);
     return msg;
 }
 
-static int mod_requeue (void *impl, const flux_msg_t msg, int flags)
+static int mod_requeue (void *impl, const flux_msg_t *msg, int flags)
 {
     ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
     int oldcount = zlist_size (ctx->putmsg);
     int rc = -1;
-    flux_msg_t cpy = NULL;
+    flux_msg_t *cpy = NULL;
 
     if (!(cpy = flux_msg_copy (msg, true)))
         goto done;

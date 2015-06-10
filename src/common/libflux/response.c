@@ -103,10 +103,10 @@ error:
     return NULL;
 }
 
-int flux_respond (flux_t h, const flux_msg_t request,
+int flux_respond (flux_t h, const flux_msg_t *request,
                   int errnum, const char *json_str)
 {
-    flux_msg_t msg = NULL;
+    flux_msg_t *msg = NULL;
 
     if (!request) {
         errno = EINVAL;

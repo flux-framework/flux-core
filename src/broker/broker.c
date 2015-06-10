@@ -1718,14 +1718,14 @@ done:
  **   to use flux_log() here, we need sendmsg() and rank().
  **/
 
-static int broker_send (void *impl, const flux_msg_t msg, int flags)
+static int broker_send (void *impl, const flux_msg_t *msg, int flags)
 {
     ctx_t *ctx = impl;
     int type;
-    flux_msg_t cpy = NULL;
+    flux_msg_t *cpy = NULL;
     int rc = -1;
 
-    (void)snoop_sendmsg (ctx->snoop, msg);
+    (void)snoop_sendmsg (ctx->snoop, (zmsg_t *)msg);
 
     if (flux_msg_get_type (msg, &type) < 0)
         goto done;

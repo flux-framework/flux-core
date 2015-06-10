@@ -55,8 +55,8 @@ int flux_sec_ssockinit (flux_sec_t c, void *sock);
  * Be aware that SUB subscriptions will no longer match the message's
  * encoded topic string (you should subscribe to all).
  */
-int flux_sec_munge_zmsg (flux_sec_t c, flux_msg_t *msg);
-int flux_sec_unmunge_zmsg (flux_sec_t c, flux_msg_t *msg);
+int flux_sec_munge_zmsg (flux_sec_t c, flux_msg_t **msg);
+int flux_sec_unmunge_zmsg (flux_sec_t c, flux_msg_t **msg);
 
 /* Retrieve a string describing the last error.
  * This value is valid after one of the above calls returns -1.

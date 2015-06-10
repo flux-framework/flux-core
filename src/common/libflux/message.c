@@ -196,7 +196,7 @@ done:
     return zmsg;
 }
 
-void flux_msg_destroy (flux_msg_t msg)
+void flux_msg_destroy (flux_msg_t *msg)
 {
     zmsg_destroy (&msg);
 }
@@ -211,9 +211,9 @@ int flux_msg_set_type (zmsg_t *zmsg, int type)
     return 0;
 }
 
-int flux_msg_get_type (zmsg_t *zmsg, int *type)
+int flux_msg_get_type (const flux_msg_t *msg, int *type)
 {
-    zframe_t *zf = zmsg_last (zmsg);
+    zframe_t *zf = zmsg_last ((zmsg_t *)msg);
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), type) < 0) {
         errno = EPROTO;
         return -1;
@@ -235,9 +235,9 @@ static int flux_msg_set_flags (zmsg_t *zmsg, uint8_t fl)
     return 0;
 }
 
-static int flux_msg_get_flags (zmsg_t *zmsg, uint8_t *fl)
+static int flux_msg_get_flags (const flux_msg_t *msg, uint8_t *fl)
 {
-    zframe_t *zf = zmsg_last (zmsg);
+    zframe_t *zf = zmsg_last ((zmsg_t *)msg);
     if (!zf || proto_get_flags (zframe_data (zf), zframe_size (zf), fl) < 0) {
         errno = EPROTO;
         return -1;
@@ -272,9 +272,9 @@ error:
     return -1;
 }
 
-int flux_msg_get_nodeid (zmsg_t *zmsg, uint32_t *nodeid, int *flags)
+int flux_msg_get_nodeid (const flux_msg_t *msg, uint32_t *nodeid, int *flags)
 {
-    zframe_t *zf = zmsg_last (zmsg);
+    zframe_t *zf = zmsg_last ((zmsg_t *)msg);
     int type;
     uint8_t fl;
     uint32_t nid;
@@ -307,9 +307,9 @@ int flux_msg_set_errnum (zmsg_t *zmsg, int e)
     return 0;
 }
 
-int flux_msg_get_errnum (zmsg_t *zmsg, int *e)
+int flux_msg_get_errnum (const flux_msg_t *msg, int *e)
 {
-    zframe_t *zf = zmsg_last (zmsg);
+    zframe_t *zf = zmsg_last ((zmsg_t *)msg);
     int type;
     uint32_t xe;
 
@@ -337,9 +337,9 @@ int flux_msg_set_seq (zmsg_t *zmsg, uint32_t seq)
     return 0;
 }
 
-int flux_msg_get_seq (zmsg_t *zmsg, uint32_t *seq)
+int flux_msg_get_seq (const flux_msg_t *msg, uint32_t *seq)
 {
-    zframe_t *zf = zmsg_last (zmsg);
+    zframe_t *zf = zmsg_last ((zmsg_t *)msg);
     int type;
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
@@ -365,9 +365,9 @@ int flux_msg_set_matchtag (zmsg_t *zmsg, uint32_t t)
     return 0;
 }
 
-int flux_msg_get_matchtag (zmsg_t *zmsg, uint32_t *t)
+int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *t)
 {
-    zframe_t *zf = zmsg_last (zmsg);
+    zframe_t *zf = zmsg_last ((zmsg_t *)msg);
     int type;
 
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
@@ -379,10 +379,10 @@ int flux_msg_get_matchtag (zmsg_t *zmsg, uint32_t *t)
     return 0;
 }
 
-bool flux_msg_cmp_matchtag (zmsg_t *zmsg, uint32_t matchtag)
+bool flux_msg_cmp_matchtag (const flux_msg_t *msg, uint32_t matchtag)
 {
     uint32_t t;
-    if (flux_msg_get_matchtag (zmsg, &t) < 0)
+    if (flux_msg_get_matchtag (msg, &t) < 0)
         return false;
     if (t != matchtag)
         return false;
@@ -396,11 +396,11 @@ static bool isa_glob (const char *s)
     return false;
 }
 
-bool flux_msg_cmp (zmsg_t *zmsg, flux_match_t match)
+bool flux_msg_cmp (const flux_msg_t *msg, flux_match_t match)
 {
     if (match.typemask != 0) {
         int type;
-        if (flux_msg_get_type (zmsg, &type) < 0)
+        if (flux_msg_get_type (msg, &type) < 0)
             return false;
         if ((type & match.typemask) == 0)
             return false;
@@ -410,7 +410,7 @@ bool flux_msg_cmp (zmsg_t *zmsg, flux_match_t match)
         uint32_t lo = match.matchtag;
         uint32_t hi = match.bsize > 1 ? match.matchtag + match.bsize
                                       : match.matchtag;
-        if (flux_msg_get_matchtag (zmsg, &matchtag) < 0)
+        if (flux_msg_get_matchtag (msg, &matchtag) < 0)
             return false;
         if (matchtag < lo || matchtag > hi)
             return false;
@@ -418,7 +418,7 @@ bool flux_msg_cmp (zmsg_t *zmsg, flux_match_t match)
     if (match.topic_glob && strlen (match.topic_glob) > 0
                          && strcmp (match.topic_glob, "*") != 0) {
         const char *topic = NULL;
-        if (flux_msg_get_topic (zmsg, &topic) < 0)
+        if (flux_msg_get_topic (msg, &topic) < 0)
             return false;
         if (isa_glob (match.topic_glob)) {
             if (fnmatch (match.topic_glob, topic, 0) != 0)
@@ -506,15 +506,15 @@ int flux_msg_pop_route (zmsg_t *zmsg, char **id)
 }
 
 /* replaces flux_msg_nexthop */
-int flux_msg_get_route_last (zmsg_t *zmsg, char **id)
+int flux_msg_get_route_last (const flux_msg_t *msg, char **id)
 {
     uint8_t flags;
     zframe_t *zf;
     char *s = NULL;
 
-    if (flux_msg_get_flags (zmsg, &flags) < 0)
+    if (flux_msg_get_flags (msg, &flags) < 0)
         return -1;
-    if (!(flags & FLUX_MSGFLAG_ROUTE) || !(zf = zmsg_first (zmsg))) {
+    if (!(flags & FLUX_MSGFLAG_ROUTE) || !(zf = zmsg_first ((zmsg_t *)msg))) {
         errno = EPROTO;
         return -1;
     }
@@ -527,21 +527,21 @@ int flux_msg_get_route_last (zmsg_t *zmsg, char **id)
 }
 
 /* replaces flux_msg_sender */
-int flux_msg_get_route_first (zmsg_t *zmsg, char **id)
+int flux_msg_get_route_first (const flux_msg_t *msg, char **id)
 {
     uint8_t flags;
     zframe_t *zf, *zf_next;
     char *s = NULL;
 
-    if (flux_msg_get_flags (zmsg, &flags) < 0)
+    if (flux_msg_get_flags (msg, &flags) < 0)
         return -1;
     if (!(flags & FLUX_MSGFLAG_ROUTE)) {
         errno = EPROTO;
         return -1;
     }
-    zf = zmsg_first (zmsg);
+    zf = zmsg_first ((zmsg_t *)msg);
     while (zf && zframe_size (zf) > 0) {
-        zf_next = zmsg_next (zmsg);
+        zf_next = zmsg_next ((zmsg_t *)msg);
         if (zf_next && zframe_size (zf_next) == 0)
             break;
         zf = zf_next;
@@ -558,21 +558,21 @@ int flux_msg_get_route_first (zmsg_t *zmsg, char **id)
     return 0;
 }
 
-int flux_msg_get_route_count (zmsg_t *zmsg)
+int flux_msg_get_route_count (const flux_msg_t *msg)
 {
     uint8_t flags;
     zframe_t *zf;
     int count = 0;
 
-    if (flux_msg_get_flags (zmsg, &flags) < 0)
+    if (flux_msg_get_flags (msg, &flags) < 0)
         return -1;
     if (!(flags & FLUX_MSGFLAG_ROUTE)) {
         errno = EPROTO;
         return -1;
     }
-    zf = zmsg_first (zmsg);
+    zf = zmsg_first ((zmsg_t *)msg);
     while (zf && zframe_size (zf) > 0) {
-        zf = zmsg_next (zmsg);
+        zf = zmsg_next ((zmsg_t *)msg);
         count++;
     }
     return count;
@@ -580,62 +580,62 @@ int flux_msg_get_route_count (zmsg_t *zmsg)
 
 /* Get sum of size in bytes of route frames
  */
-static int flux_msg_get_route_size (zmsg_t *zmsg)
+static int flux_msg_get_route_size (const flux_msg_t *msg)
 {
     uint8_t flags;
     zframe_t *zf;
     int size = 0;
 
-    if (flux_msg_get_flags (zmsg, &flags) < 0)
+    if (flux_msg_get_flags (msg, &flags) < 0)
         return -1;
     if (!(flags & FLUX_MSGFLAG_ROUTE)) {
         errno = EPROTO;
         return -1;
     }
-    zf = zmsg_first (zmsg);
+    zf = zmsg_first ((zmsg_t *)msg);
     while (zf && zframe_size (zf) > 0) {
         size += zframe_size (zf);
-        zf = zmsg_next (zmsg);
+        zf = zmsg_next ((zmsg_t *)msg);
     }
     return size;
 }
 
-static zframe_t *flux_msg_get_route_nth (zmsg_t *zmsg, int n)
+static zframe_t *flux_msg_get_route_nth (const flux_msg_t *msg, int n)
 {
     uint8_t flags;
     zframe_t *zf;
     int count = 0;
 
-    if (flux_msg_get_flags (zmsg, &flags) < 0)
+    if (flux_msg_get_flags (msg, &flags) < 0)
         return NULL;
     if (!(flags & FLUX_MSGFLAG_ROUTE)) {
         errno = EPROTO;
         return NULL;
     }
-    zf = zmsg_first (zmsg);
+    zf = zmsg_first ((zmsg_t *)msg);
     while (zf && zframe_size (zf) > 0) {
         if (count == n)
             return zf;
-        zf = zmsg_next (zmsg);
+        zf = zmsg_next ((zmsg_t *)msg);
         count++;
     }
     errno = ENOENT;
     return NULL;
 }
 
-char *flux_msg_get_route_string (zmsg_t *zmsg)
+char *flux_msg_get_route_string (const flux_msg_t *msg)
 {
     int hops, len;
     int n;
     zframe_t *zf;
     char *buf, *cp;
 
-    if (zmsg == NULL) {
+    if (msg == NULL) {
         errno = EINVAL;
         return NULL;
     }
-    if ((hops = flux_msg_get_route_count (zmsg)) < 0
-                    || (len = flux_msg_get_route_size (zmsg)) < 0) {
+    if ((hops = flux_msg_get_route_count (msg)) < 0
+                    || (len = flux_msg_get_route_size (msg)) < 0) {
         return NULL;
     }
     if (!(cp = buf = malloc (len + hops))) {
@@ -645,7 +645,7 @@ char *flux_msg_get_route_string (zmsg_t *zmsg)
     for (n = hops - 1; n >= 0; n--) {
         if (cp > buf)
             *cp++ = '!';
-        if (!(zf = flux_msg_get_route_nth (zmsg, n))) {
+        if (!(zf = flux_msg_get_route_nth (msg, n))) {
             free (buf);
             return NULL;
         }
@@ -733,27 +733,27 @@ done:
     return rc;
 }
 
-int flux_msg_get_payload (zmsg_t *zmsg, int *flags, void **buf, int *size)
+int flux_msg_get_payload (const flux_msg_t *msg, int *flags, void **buf, int *size)
 {
     zframe_t *zf;
     uint8_t msgflags;
 
-    if (flux_msg_get_flags (zmsg, &msgflags) < 0)
+    if (flux_msg_get_flags (msg, &msgflags) < 0)
         return -1;
     if (!(msgflags & FLUX_MSGFLAG_PAYLOAD)) {
         errno = EPROTO;
         return -1;
     }
-    zf = zmsg_first (zmsg);
+    zf = zmsg_first ((zmsg_t *)msg);
     if ((msgflags & FLUX_MSGFLAG_ROUTE)) {
         while (zf && zframe_size (zf) > 0)
-            zf = zmsg_next (zmsg);
+            zf = zmsg_next ((zmsg_t *)msg);
         if (zf)
-            zf = zmsg_next (zmsg);
+            zf = zmsg_next ((zmsg_t *)msg);
     }
     if ((msgflags & FLUX_MSGFLAG_TOPIC)) {
         if (zf)
-            zf = zmsg_next (zmsg);
+            zf = zmsg_next ((zmsg_t *)msg);
     }
     if (!zf) {
         errno = EPROTO;
@@ -765,10 +765,10 @@ int flux_msg_get_payload (zmsg_t *zmsg, int *flags, void **buf, int *size)
     return 0;
 }
 
-bool flux_msg_has_payload (zmsg_t *zmsg)
+bool flux_msg_has_payload (const flux_msg_t *msg)
 {
     uint8_t flags;
-    if (flux_msg_get_flags (zmsg, &flags) < 0) {
+    if (flux_msg_get_flags (msg, &flags) < 0) {
         errno = 0;
         return false;
     }
@@ -786,7 +786,7 @@ int flux_msg_set_payload_json (zmsg_t *zmsg, const char *s)
     return rc;
 }
 
-int flux_msg_get_payload_json (zmsg_t *zmsg, const char **s)
+int flux_msg_get_payload_json (const flux_msg_t *msg, const char **s)
 {
     char *buf;
     int size;
@@ -797,7 +797,7 @@ int flux_msg_get_payload_json (zmsg_t *zmsg, const char **s)
         errno = EINVAL;
         goto done;
     }
-    if (flux_msg_get_payload (zmsg, &flags, (void **)&buf, &size) < 0) {
+    if (flux_msg_get_payload (msg, &flags, (void **)&buf, &size) < 0) {
         errno = 0;
         *s = NULL;
     } else {
@@ -858,24 +858,24 @@ done:
     return rc;
 }
 
-static int zf_topic (zmsg_t *zmsg, zframe_t **zfp)
+static int zf_topic (const flux_msg_t *msg, zframe_t **zfp)
 {
     uint8_t flags;
     zframe_t *zf = NULL;
     int rc = -1;
 
-    if (flux_msg_get_flags (zmsg, &flags) < 0)
+    if (flux_msg_get_flags (msg, &flags) < 0)
         goto done;
     if (!(flags & FLUX_MSGFLAG_TOPIC)) {
         errno = EPROTO;
         goto done;
     }
-    zf = zmsg_first (zmsg);
+    zf = zmsg_first ((zmsg_t *)msg);
     if ((flags & FLUX_MSGFLAG_ROUTE)) {
         while (zf && zframe_size (zf) > 0)
-            zf = zmsg_next (zmsg);
+            zf = zmsg_next ((zmsg_t *)msg);
         if (zf)
-            zf = zmsg_next (zmsg);
+            zf = zmsg_next ((zmsg_t *)msg);
     }
     if (!zf) {
         errno = EPROTO;
@@ -887,13 +887,13 @@ done:
     return rc;
 }
 
-int flux_msg_get_topic (zmsg_t *zmsg, const char **topic)
+int flux_msg_get_topic (const flux_msg_t *msg, const char **topic)
 {
     zframe_t *zf;
     const char *s;
     int rc = -1;
 
-    if (zf_topic (zmsg, &zf) < 0)
+    if (zf_topic (msg, &zf) < 0)
         goto done;
     s = (const char *)zframe_data (zf);
     if (s[zframe_size (zf) - 1] != '\0') {
@@ -910,7 +910,7 @@ done:
  * is false, when the point was to avoid the overhead of copying it in
  * the first place.
  */
-flux_msg_t flux_msg_copy (const flux_msg_t msg, bool payload)
+flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload)
 {
     zmsg_t *cpy = zmsg_dup ((zmsg_t *)msg);
     if (!cpy) {
@@ -959,7 +959,7 @@ static const char *msgtype_shortstr (int type)
     return "?";
 }
 
-void flux_msg_fprint (FILE *f, zmsg_t *zmsg)
+void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
 {
     int hops;
     int type = 0;
@@ -967,23 +967,23 @@ void flux_msg_fprint (FILE *f, zmsg_t *zmsg)
     const char *prefix, *topic = NULL;
 
     fprintf (f, "--------------------------------------\n");
-    if (!zmsg) {
+    if (!msg) {
         fprintf (f, "NULL");
         return;
     }
-    if (flux_msg_get_type (zmsg, &type) < 0
-            || (!(proto = zmsg_last (zmsg)))) {
+    if (flux_msg_get_type (msg, &type) < 0
+            || (!(proto = zmsg_last ((zmsg_t *)msg)))) {
         fprintf (f, "malformed message");
         return;
     }
     prefix = msgtype_shortstr (type);
-    (void)flux_msg_get_topic (zmsg, &topic);
+    (void)flux_msg_get_topic (msg, &topic);
     /* Route stack
      */
-    hops = flux_msg_get_route_count (zmsg); /* -1 if no route stack */
+    hops = flux_msg_get_route_count (msg); /* -1 if no route stack */
     if (hops >= 0) {
-        int len = flux_msg_get_route_size (zmsg);
-        char *rte = flux_msg_get_route_string (zmsg);
+        int len = flux_msg_get_route_size (msg);
+        char *rte = flux_msg_get_route_string (msg);
         assert (rte != NULL);
         fprintf (f, "%s[%3.3d] |%s|\n", prefix, len, rte);
     };
@@ -993,13 +993,13 @@ void flux_msg_fprint (FILE *f, zmsg_t *zmsg)
         fprintf (f, "%s[%3.3lu] %s\n", prefix, strlen (topic), topic);
     /* Payload
      */
-    if (flux_msg_has_payload (zmsg)) {
+    if (flux_msg_has_payload (msg)) {
         const char *json_str;
         void *buf;
         int size, flags;
-        if (flux_msg_get_payload_json (zmsg, &json_str) == 0)
+        if (flux_msg_get_payload_json (msg, &json_str) == 0)
             fprintf (f, "%s[%3.3lu] %s\n", prefix, strlen (json_str), json_str);
-        else if (flux_msg_get_payload (zmsg, &flags, &buf, &size) == 0)
+        else if (flux_msg_get_payload (msg, &flags, &buf, &size) == 0)
             fprintf (f, "%s[%3.3d] ...\n", prefix, size);
         else
             fprintf (f, "malformed payload\n");

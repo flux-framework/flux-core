@@ -291,7 +291,7 @@ uint32_t flux_matchtag_avail (flux_t h)
     return tagpool_avail (h->tagpool);
 }
 
-static void update_tx_stats (flux_t h, const flux_msg_t msg)
+static void update_tx_stats (flux_t h, const flux_msg_t *msg)
 {
     int type;
     if (flux_msg_get_type (msg, &type) == 0) {
@@ -313,7 +313,7 @@ static void update_tx_stats (flux_t h, const flux_msg_t msg)
         errno = 0;
 }
 
-static void update_rx_stats (flux_t h, const flux_msg_t msg)
+static void update_rx_stats (flux_t h, const flux_msg_t *msg)
 {
     int type;
     if (flux_msg_get_type (msg, &type) == 0) {
@@ -335,7 +335,7 @@ static void update_rx_stats (flux_t h, const flux_msg_t msg)
         errno = 0;
 }
 
-int flux_send (flux_t h, const flux_msg_t msg, int flags)
+int flux_send (flux_t h, const flux_msg_t *msg, int flags)
 {
     if (!h->ops->send) {
         errno = ENOSYS;
@@ -353,7 +353,7 @@ fatal:
     return -1;
 }
 
-static int defer_enqueue (zlist_t **l, flux_msg_t msg)
+static int defer_enqueue (zlist_t **l, flux_msg_t *msg)
 {
     if ((!*l && !(*l = zlist_new ())) || zlist_append (*l, msg) < 0) {
         errno = ENOMEM;
@@ -364,7 +364,7 @@ static int defer_enqueue (zlist_t **l, flux_msg_t msg)
 
 static int defer_requeue (zlist_t **l, flux_t h)
 {
-    flux_msg_t msg;
+    flux_msg_t *msg;
     if (*l) {
         while ((msg = zlist_pop (*l))) {
             if (flux_requeue (h, msg, FLUX_RQ_TAIL) < 0) {
@@ -378,7 +378,7 @@ static int defer_requeue (zlist_t **l, flux_t h)
 
 static void defer_destroy (zlist_t **l)
 {
-    flux_msg_t msg;
+    flux_msg_t *msg;
     if (*l) {
         while ((msg = zlist_pop (*l)))
             flux_msg_destroy (msg);
@@ -397,10 +397,10 @@ static void defer_destroy (zlist_t **l)
  * non-matching messages have to be requeued in the handle, hence the
  * defer_*() helper calls.
  */
-flux_msg_t flux_recv (flux_t h, flux_match_t match, int flags)
+flux_msg_t *flux_recv (flux_t h, flux_match_t match, int flags)
 {
     zlist_t *l = NULL;
-    flux_msg_t msg = NULL;
+    flux_msg_t *msg = NULL;
     int saved_errno;
 
     if (!h->ops->recv || !h->ops->requeue) {
@@ -454,20 +454,20 @@ int flux_sendmsg (flux_t h, zmsg_t **zmsg)
     return 0;
 }
 
-flux_msg_t flux_recvmsg (flux_t h, bool nonblock)
+flux_msg_t *flux_recvmsg (flux_t h, bool nonblock)
 {
     flux_match_t match = FLUX_MATCH_ANY;
     return flux_recv (h, match, nonblock ? FLUX_O_NONBLOCK : 0);
 }
 
-flux_msg_t flux_recvmsg_match (flux_t h, flux_match_t match, bool nonblock)
+flux_msg_t *flux_recvmsg_match (flux_t h, flux_match_t match, bool nonblock)
 {
     return flux_recv (h, match, nonblock ? FLUX_O_NONBLOCK : 0);
 }
 
 /* FIXME: FLUX_O_TRACE will show these messages being received again
  */
-int flux_requeue (flux_t h, const flux_msg_t msg, int flags)
+int flux_requeue (flux_t h, const flux_msg_t *msg, int flags)
 {
     if (!h->ops->requeue) {
         errno = ENOSYS;

@@ -99,11 +99,11 @@ static void sync_msg_watchers  (ctx_t *c);
 
 static const struct flux_handle_ops handle_ops;
 
-static int op_send (void *impl, const flux_msg_t msg, int flags)
+static int op_send (void *impl, const flux_msg_t *msg, int flags)
 {
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
-    return zfd_send (c->fd, (flux_msg_t)msg);
+    return zfd_send (c->fd, (zmsg_t *)msg);
 }
 
 static zmsg_t *op_recvmsg_putmsg (ctx_t *c)
@@ -127,12 +127,12 @@ static zmsg_t *op_recv (void *impl, int flags)
     return zmsg;
 }
 
-static int op_requeue (void *impl, const flux_msg_t msg, int flags)
+static int op_requeue (void *impl, const flux_msg_t *msg, int flags)
 {
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
     int rc = -1;
-    flux_msg_t cpy = NULL;
+    flux_msg_t *cpy = NULL;
     int oldcount = zlist_size (c->putmsg);
 
     if (!(cpy = flux_msg_copy (msg, true)))

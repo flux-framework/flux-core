@@ -35,25 +35,25 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 
-int flux_event_decode (zmsg_t *zmsg, const char **topic, const char **json_str)
+int flux_event_decode (const flux_msg_t *msg, const char **topic, const char **json_str)
 {
     int type;
     const char *ts, *js;
     int rc = -1;
 
-    if (zmsg == NULL) {
+    if (msg == NULL) {
         errno = EINVAL;
         goto done;
     }
-    if (flux_msg_get_type (zmsg, &type) < 0)
+    if (flux_msg_get_type (msg, &type) < 0)
         goto done;
     if (type != FLUX_MSGTYPE_EVENT) {
         errno = EPROTO;
         goto done;
     }
-    if (flux_msg_get_topic (zmsg, &ts) < 0)
+    if (flux_msg_get_topic (msg, &ts) < 0)
         goto done;
-    if (flux_msg_get_payload_json (zmsg, &js) < 0)
+    if (flux_msg_get_payload_json (msg, &js) < 0)
         goto done;
     if ((json_str && !js) || (!json_str && js)) {
         errno = EPROTO;

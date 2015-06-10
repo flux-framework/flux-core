@@ -17,9 +17,9 @@ typedef int (*flux_msg_f)(flux_t h, void *arg);
 typedef struct reactor_struct *reactor_t;
 
 struct flux_handle_ops {
-    int         (*send)(void *impl, const flux_msg_t msg, int flags);
-    flux_msg_t  (*recv)(void *impl, int flags);
-    int         (*requeue)(void *impl, const flux_msg_t msg, int flags);
+    int         (*send)(void *impl, const flux_msg_t *msg, int flags);
+    flux_msg_t* (*recv)(void *impl, int flags);
+    int         (*requeue)(void *impl, const flux_msg_t *msg, int flags);
     void        (*purge)(void *impl, flux_match_t match);
 
     int         (*event_subscribe)(void *impl, const char *topic);

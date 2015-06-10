@@ -10,7 +10,7 @@
  * Callbacks return 0 on success, -1 on error and set errno.
  * Error terminates reactor, and flux_reactor_start() returns -1.
  */
-typedef int (*FluxMsgHandler)(flux_t h, int typemask, flux_msg_t *msg, void *arg);
+typedef int (*FluxMsgHandler)(flux_t h, int typemask, flux_msg_t **msg, void *arg);
 typedef int (*FluxFdHandler)(flux_t h, int fd, short revents, void *arg);
 typedef int (*FluxZsHandler)(flux_t h, void *zs, short revents, void *arg);
 typedef int (*FluxTmoutHandler)(flux_t h, void *arg);
