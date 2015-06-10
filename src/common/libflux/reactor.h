@@ -24,6 +24,23 @@ void flux_reactor_stop (flux_t h);
  */
 int flux_sleep_on (flux_t h, struct flux_match match);
 
+typedef struct flux_msg_watcher flux_msg_watcher_t;
+typedef void (*flux_msg_watcher_f)(flux_t h, flux_msg_watcher_t *w,
+                                   const flux_msg_t *msg, void *arg);
+
+int flux_msg_watcher_add (flux_t h, struct flux_match match,
+                          flux_msg_watcher_f cb, void *arg,
+                          flux_msg_watcher_t **wp);
+void flux_msg_watcher_cancel (flux_msg_watcher_t *w);
+
+struct flux_msghandler {
+    int typemask;
+    char *topic_glob;
+    flux_msg_watcher_f cb;
+};
+#define FLUX_MSGHANDLER_TABLE_END { 0, NULL, NULL }
+int flux_msg_watcher_addvec (flux_t h, struct flux_msghandler tab[], void *arg);
+
 /* FluxMsgHandler indicates msg is "consumed" by destroying it.
  * Callbacks return 0 on success, -1 on error and set errno.
  * Error terminates reactor, and flux_reactor_start() returns -1.
@@ -55,12 +72,6 @@ int flux_msghandler_addvec (flux_t h, msghandler_t *handlers, int len,
  * identical typemask and pattern is removed.
  */
 void flux_msghandler_remove (flux_t h, int typemask, const char *pattern);
-
-
-int flux_msghandler_add_match (flux_t h, const struct flux_match match,
-                              FluxMsgHandler cb, void *arg);
-void flux_msghandler_remove_match (flux_t h, const struct flux_match match);
-
 
 /* Register a FluxFdHandler callback to be called whenever an event
  * in the 'events' mask occurs on the given file descriptor 'fd'.
