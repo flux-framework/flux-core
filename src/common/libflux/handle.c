@@ -35,6 +35,7 @@
 #include "handle.h"
 #include "reactor.h"
 #include "handle_impl.h"
+#include "reactor_impl.h"
 #include "message.h"
 #include "tagpool.h"
 
@@ -49,7 +50,7 @@ struct flux_handle_struct {
     void            *dso;
     zhash_t         *aux;
     tagpool_t       tagpool;
-    reactor_t       reactor;
+    struct reactor  *reactor;
     flux_msgcounters_t msgcounters;
     flux_fatal_f    fatal;
     void            *fatal_arg;
@@ -194,7 +195,7 @@ flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int fl
     h->ops = ops;
     h->impl = impl;
     h->tagpool = tagpool_create ();
-    h->reactor = flux_reactor_create (impl, ops);
+    h->reactor = reactor_create (impl, ops);
     return h;
 }
 
@@ -207,7 +208,7 @@ void flux_handle_destroy (flux_t *hp)
         if (h->ops->impl_destroy)
             h->ops->impl_destroy (h->impl);
         tagpool_destroy (h->tagpool);
-        flux_reactor_destroy (h->reactor);
+        reactor_destroy (h->reactor);
         if (h->dso)
             dlclose (h->dso);
         free (h);
@@ -530,7 +531,7 @@ zctx_t *flux_get_zctx (flux_t h)
     return h->ops->get_zctx (h->impl);
 }
 
-reactor_t flux_get_reactor (flux_t h)
+struct reactor *reactor_get (flux_t h)
 {
     return h->reactor;
 }

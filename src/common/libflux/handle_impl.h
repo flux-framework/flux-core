@@ -14,8 +14,6 @@ typedef flux_t (connector_init_f)(const char *uri, int flags);
 
 typedef int (*flux_msg_f)(flux_t h, void *arg);
 
-typedef struct reactor_struct *reactor_t;
-
 struct flux_handle_ops {
     int         (*send)(void *impl, const flux_msg_t *msg, int flags);
     flux_msg_t* (*recv)(void *impl, int flags);
@@ -51,11 +49,8 @@ flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int fl
 void flux_handle_destroy (flux_t *hp);
 
 struct _zctx_t *flux_get_zctx (flux_t h);
-reactor_t flux_get_reactor (flux_t h);
-reactor_t flux_reactor_create (void *impl, const struct flux_handle_ops *ops);
-void flux_reactor_destroy (reactor_t r);
 
-#endif /* !_FLUX_CORE_HANDLE_H */
+#endif /* !_FLUX_CORE_HANDLE_IMPL_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

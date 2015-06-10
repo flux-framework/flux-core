@@ -6,6 +6,24 @@
 #include "message.h"
 #include "handle.h"
 
+/* Start the flux event reactor.
+ * Returns 0 if flux_reactor_stop() terminated reactor; -1 if error did.
+ */
+int flux_reactor_start (flux_t h);
+
+/* Signal that the flux event reactor should stop.
+ * This may be called from within a FluxMsgHandler/FluxFdHandler callback.
+ */
+void flux_reactor_stop (flux_t h);
+
+/* Give control back to the reactor until a message matching 'match'
+ * is queued in the handle.  This will return -1 with errno = EINVAL
+ * if called from a reactor handler that is not running in as a coprocess.
+ * Currently only message handlers are started as coprocesses, if the
+ * handle has FLUX_O_COPROC set.
+ */
+int flux_sleep_on (flux_t h, struct flux_match match);
+
 /* FluxMsgHandler indicates msg is "consumed" by destroying it.
  * Callbacks return 0 on success, -1 on error and set errno.
  * Error terminates reactor, and flux_reactor_start() returns -1.
@@ -75,34 +93,6 @@ int flux_tmouthandler_add (flux_t h, unsigned long msec, bool oneshot,
 /* Unregister a FluxTmoutHandler callback.
  */
 void flux_tmouthandler_remove (flux_t h, int timer_id);
-
-/* Arm the reactor timer such that a FluxTmoutHandler,
- * if registered, will be called every 'msec' milliseconds.
- * Setting msec=0 disarms the timer.
- */
-int flux_timeout_set (flux_t h, unsigned long msec);
-
-/* Test whether the reactor timer is armed.
- */
-bool flux_timeout_isset (flux_t h);
-
-/* Start the flux event reactor.
- * Returns 0 if flux_reactor_stop() terminated reactor; -1 if error did.
- */
-int flux_reactor_start (flux_t h);
-
-/* Signal that the flux event reactor should stop.
- * This may be called from within a FluxMsgHandler/FluxFdHandler callback.
- */
-void flux_reactor_stop (flux_t h);
-
-/* Give control back to the reactor until a message matching 'match'
- * is queued in the handle.  This will return -1 with errno = EINVAL
- * if called from a reactor handler that is not running in as a coprocess.
- * Currently only message handlers are started as coprocesses, if the
- * handle has FLUX_O_COPROC set.
- */
-int flux_sleep_on (flux_t h, struct flux_match match);
 
 #endif /* !_FLUX_CORE_REACTOR_H */
 
