@@ -85,12 +85,13 @@ uint32_t flux_matchtag_avail (flux_t h);
 /* Low level message send/recv functions.
  */
 int flux_send (flux_t h, const flux_msg_t *msg, int flags);
-flux_msg_t *flux_recv (flux_t h, flux_match_t match, int flags);
+flux_msg_t *flux_recv (flux_t h, struct flux_match match, int flags);
 
 /* deprecated */
 int flux_sendmsg (flux_t h, flux_msg_t **msg);
 flux_msg_t *flux_recvmsg (flux_t h, bool nonblock);
-flux_msg_t *flux_recvmsg_match (flux_t h, flux_match_t match, bool nonblock);
+flux_msg_t *flux_recvmsg_match (flux_t h, struct flux_match match,
+                                bool nonblock);
 
 /* Requeue message in the handle (head or tail according to flags)
  */

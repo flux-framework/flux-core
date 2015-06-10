@@ -162,7 +162,7 @@ done:
     return rc;
 }
 
-static void op_purge (void *impl, flux_match_t match)
+static void op_purge (void *impl, struct flux_match match)
 {
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);

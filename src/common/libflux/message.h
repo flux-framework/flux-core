@@ -24,12 +24,12 @@ enum {
     FLUX_MSGFLAG_UPSTREAM   = 0x10, /* request nodeid is sender (route away) */
 };
 
-typedef struct {
+struct flux_match {
     int typemask;           /* bitmask of matching message types (or 0) */
     uint32_t matchtag;      /* matchtag block begin (or FLUX_MATCHTAG_NONE) */
     int bsize;              /* size of matchtag block (or 0) */
     char *topic_glob;       /* glob matching topic string (or NULL) */
-} flux_match_t;
+};
 
 #define FLUX_MATCH_ANY { \
     .typemask = FLUX_MSGTYPE_ANY, \
@@ -115,7 +115,7 @@ bool flux_msg_cmp_matchtag (const flux_msg_t *msg, uint32_t matchtag);
 
 /* Match a message.
  */
-bool flux_msg_cmp (const flux_msg_t *msg, flux_match_t match);
+bool flux_msg_cmp (const flux_msg_t *msg, struct flux_match match);
 
 /* Print a Flux message on specified output stream.
  */

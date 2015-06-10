@@ -396,7 +396,7 @@ static bool isa_glob (const char *s)
     return false;
 }
 
-bool flux_msg_cmp (const flux_msg_t *msg, flux_match_t match)
+bool flux_msg_cmp (const flux_msg_t *msg, struct flux_match match)
 {
     if (match.typemask != 0) {
         int type;

@@ -42,7 +42,7 @@
 typedef zlist_t zmsglist_t;
 
 struct flux_rpc_struct {
-    flux_match_t m;
+    struct flux_match m;
     flux_t h;
     flux_then_f then_cb;
     void *then_arg;

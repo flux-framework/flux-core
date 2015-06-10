@@ -281,7 +281,7 @@ done:
     return rc;
 }
 
-static void mod_purge (void *impl, flux_match_t match)
+static void mod_purge (void *impl, struct flux_match match)
 {
     ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);

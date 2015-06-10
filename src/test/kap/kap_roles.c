@@ -369,12 +369,7 @@ enforce_c_consistency (kap_params_t *param)
     const char *tag = NULL;
     int v = 0;
     json_object *o = NULL;
-    flux_match_t match = {
-        .typemask = FLUX_MSGTYPE_EVENT,
-        .matchtag = FLUX_MATCHTAG_NONE,
-        .bsize = 0,
-        .topic_glob = NULL,
-    };
+    struct flux_match match = FLUX_MATCH_EVENT;
 
     zmsg_t * msg = flux_recvmsg_match (param->pers.handle, match, false);
     if ( ! msg ) {

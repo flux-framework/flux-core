@@ -639,8 +639,8 @@ done:
 static int watch_rpc (flux_t h, const char *key, JSON *val,
                       bool once, bool directory, uint32_t *matchtag)
 {
-    flux_match_t match = { .typemask = FLUX_MSGTYPE_RESPONSE, .bsize = 0,
-                           .topic_glob = NULL };
+    struct flux_match match = { .typemask = FLUX_MSGTYPE_RESPONSE, .bsize = 0,
+                                .topic_glob = NULL };
     JSON in = NULL;
     JSON out = NULL;
     zmsg_t *zmsg = NULL;

@@ -20,7 +20,7 @@ struct flux_handle_ops {
     int         (*send)(void *impl, const flux_msg_t *msg, int flags);
     flux_msg_t* (*recv)(void *impl, int flags);
     int         (*requeue)(void *impl, const flux_msg_t *msg, int flags);
-    void        (*purge)(void *impl, flux_match_t match);
+    void        (*purge)(void *impl, struct flux_match match);
 
     int         (*event_subscribe)(void *impl, const char *topic);
     int         (*event_unsubscribe)(void *impl, const char *topic);

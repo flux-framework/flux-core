@@ -39,9 +39,9 @@ int flux_msghandler_addvec (flux_t h, msghandler_t *handlers, int len,
 void flux_msghandler_remove (flux_t h, int typemask, const char *pattern);
 
 
-int flux_msghandler_add_match (flux_t h, const flux_match_t match,
+int flux_msghandler_add_match (flux_t h, const struct flux_match match,
                               FluxMsgHandler cb, void *arg);
-void flux_msghandler_remove_match (flux_t h, const flux_match_t match);
+void flux_msghandler_remove_match (flux_t h, const struct flux_match match);
 
 
 /* Register a FluxFdHandler callback to be called whenever an event
@@ -102,7 +102,7 @@ void flux_reactor_stop (flux_t h);
  * Currently only message handlers are started as coprocesses, if the
  * handle has FLUX_O_COPROC set.
  */
-int flux_sleep_on (flux_t h, flux_match_t match);
+int flux_sleep_on (flux_t h, struct flux_match match);
 
 #endif /* !_FLUX_CORE_REACTOR_H */
 

@@ -44,12 +44,12 @@
 
 typedef struct {
     flux_t h;
-    flux_match_t match;
+    struct flux_match match;
     FluxMsgHandler fn;
     void *arg;
     coproc_t coproc;
     zlist_t *backlog;
-    flux_match_t wait_match;
+    struct flux_match wait_match;
 } dispatch_t;
 
 struct reactor_struct {
@@ -60,7 +60,8 @@ struct reactor_struct {
     dispatch_t *current;
 };
 
-static bool match_match (const flux_match_t m1, const flux_match_t m2)
+static bool match_match (const struct flux_match m1,
+                         const struct flux_match m2)
 {
     if (m1.typemask != m2.typemask)
         return false;
@@ -78,7 +79,8 @@ static bool match_match (const flux_match_t m1, const flux_match_t m2)
     return true;
 }
 
-static void copy_match (flux_match_t *dst, const flux_match_t src)
+static void copy_match (struct flux_match *dst,
+                        const struct flux_match src)
 {
     if (dst->topic_glob)
         free (dst->topic_glob);
@@ -86,7 +88,7 @@ static void copy_match (flux_match_t *dst, const flux_match_t src)
     dst->topic_glob = src.topic_glob ? xstrdup (src.topic_glob) : NULL;
 }
 
-static dispatch_t *dispatch_create (flux_t h, const flux_match_t match,
+static dispatch_t *dispatch_create (flux_t h, const struct flux_match match,
                                     FluxMsgHandler cb, void *arg)
 {
     dispatch_t *d = xzmalloc (sizeof (*d));
@@ -184,7 +186,7 @@ static int backlog_flush (dispatch_t *d)
     return rc;
 }
 
-int flux_sleep_on (flux_t h, flux_match_t match)
+int flux_sleep_on (flux_t h, struct flux_match match)
 {
     reactor_t r = flux_get_reactor (h);
     int rc = -1;
@@ -208,7 +210,7 @@ static int coproc_cb (coproc_t c, void *arg)
 {
     dispatch_t *d = arg;
     zmsg_t *zmsg;
-    flux_match_t match = FLUX_MATCH_ANY;
+    struct flux_match match = FLUX_MATCH_ANY;
     int type;
     int rc = -1;
     if (!(zmsg = flux_recv (d->h, match, FLUX_O_NONBLOCK))) {
@@ -270,7 +272,7 @@ static int msg_cb (flux_t h, void *arg)
 {
     reactor_t r = flux_get_reactor (h);
     dispatch_t *d;
-    flux_match_t match = FLUX_MATCH_ANY;
+    struct flux_match match = FLUX_MATCH_ANY;
     int rc = -1;
     zmsg_t *zmsg = NULL;
     int type;
@@ -330,7 +332,7 @@ done:
     return rc;
 }
 
-int flux_msghandler_add_match (flux_t h, const flux_match_t match,
+int flux_msghandler_add_match (flux_t h, const struct flux_match match,
                               FluxMsgHandler cb, void *arg)
 {
     reactor_t r = flux_get_reactor (h);
@@ -357,7 +359,7 @@ int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
 {
     int rc = -1;
 
-    flux_match_t match = {
+    struct flux_match match = {
         .typemask = typemask,
         .topic_glob = (char *)pattern,
         .matchtag = FLUX_MATCHTAG_NONE,
@@ -382,7 +384,7 @@ int flux_msghandler_addvec (flux_t h, msghandler_t *handlers, int len,
     return 0;
 }
 
-void flux_msghandler_remove_match (flux_t h, const flux_match_t match)
+void flux_msghandler_remove_match (flux_t h, const struct flux_match match)
 {
     reactor_t r = flux_get_reactor (h);
     dispatch_t *d;
@@ -402,7 +404,7 @@ void flux_msghandler_remove_match (flux_t h, const flux_match_t match)
 
 void flux_msghandler_remove (flux_t h, int typemask, const char *pattern)
 {
-    flux_match_t match = {
+    struct flux_match match = {
         .typemask = typemask,
         .matchtag = FLUX_MATCHTAG_NONE,
         .bsize = 1,
