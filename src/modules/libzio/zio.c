@@ -532,6 +532,7 @@ int zio_flush (zio_t zio)
 int zio_read (zio_t zio)
 {
     int n;
+    assert ((zio != NULL) && (zio->magic == ZIO_MAGIC));
     if ((n = cbuf_write_from_fd (zio->buf, zio->srcfd, -1, NULL)) < 0)
         return (-1);
 
