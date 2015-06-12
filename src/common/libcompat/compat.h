@@ -6,6 +6,7 @@
 #define flux_recvmsg_match  compat_recvmsg_match
 
 #include "handle.h"
+#include "reactor.h"
 
 #endif /* !_FLUX_COMPAT_H */
 

@@ -56,11 +56,6 @@ struct flux_msg_watcher {
     struct flux_match wait_match;
 };
 
-struct msg_watcher_compat {
-    FluxMsgHandler fn;
-    void *arg;
-};
-
 struct reactor {
     zlist_t *msg_watchers; /* all msg_watchers are on this list */
     zlist_t *msg_waiters;  /* waiting coproc watchers are also on this list */
@@ -68,25 +63,6 @@ struct reactor {
     void *impl;
     struct flux_msg_watcher *current;
 };
-
-static bool match_match (const struct flux_match m1,
-                         const struct flux_match m2)
-{
-    if (m1.typemask != m2.typemask)
-        return false;
-    if (m1.matchtag != m2.matchtag)
-        return false;
-    if (m1.bsize != m2.bsize)
-        return false;
-    if (m1.topic_glob == NULL && m2.topic_glob != NULL)
-        return false;
-    if (m1.topic_glob != NULL && m2.topic_glob == NULL)
-        return false;
-    if (m1.topic_glob != NULL && m2.topic_glob != NULL
-                              && strcmp (m1.topic_glob, m2.topic_glob) != 0)
-        return false;
-    return true;
-}
 
 static void copy_match (struct flux_match *dst,
                         const struct flux_match src)
@@ -412,85 +388,6 @@ void flux_msg_watcher_cancel (struct flux_msg_watcher *w)
         r->ops->reactor_msg_remove (r->impl);
 }
 
-static void reactor_stop_error (flux_t h)
-{
-    struct reactor *r = reactor_get (h);
-    if (r->ops->reactor_stop)
-        r->ops->reactor_stop (r->impl, -1);
-}
-
-void msg_compat_cb (flux_t h, struct flux_msg_watcher *w,
-                    const flux_msg_t *msg, void *arg)
-{
-    struct msg_watcher_compat *compat = arg;
-    flux_msg_t *cpy = NULL;
-    int type;
-
-    if (flux_msg_get_type (msg, &type) < 0)
-        goto done;
-    if (!(cpy = flux_msg_copy (msg, true)))
-        goto done;
-    if (compat->fn (h, type, &cpy, compat->arg) != 0)
-        reactor_stop_error (h);
-done:
-    flux_msg_destroy (cpy);
-}
-
-int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
-                         FluxMsgHandler cb, void *arg)
-{
-    struct flux_msg_watcher *d = NULL;
-    struct msg_watcher_compat *compat = xzmalloc (sizeof (*compat));
-    struct flux_match match = {
-        .typemask = typemask,
-        .topic_glob = (char *)pattern,
-        .matchtag = FLUX_MATCHTAG_NONE,
-        .bsize = 1,
-    };
-
-    compat->fn = cb;
-    compat->arg = arg;
-    if (flux_msg_watcher_add (h, match, msg_compat_cb, compat, &d) < 0) {
-        free (compat);
-        return -1;
-    }
-    d->arg_free = free; // free compat on destroy
-    return 0;
-}
-
-int flux_msghandler_addvec (flux_t h, msghandler_t *handlers, int len,
-                            void *arg)
-{
-    int i;
-
-    for (i = 0; i < len; i++)
-        if (flux_msghandler_add (h, handlers[i].typemask, handlers[i].pattern,
-                                    handlers[i].cb, arg) < 0)
-            return -1;
-    return 0;
-}
-
-void flux_msghandler_remove (flux_t h, int typemask, const char *pattern)
-{
-    struct reactor *r = reactor_get (h);
-    struct flux_msg_watcher *d;
-    struct flux_match match = {
-        .typemask = typemask,
-        .matchtag = FLUX_MATCHTAG_NONE,
-        .bsize = 1,
-        .topic_glob = (char*)pattern,
-    };
-
-    d = zlist_first (r->msg_watchers);
-    while (d) {
-        if (match_match (d->match, match)) {
-            flux_msg_watcher_cancel (d);
-            break;
-        }
-        d = zlist_next (r->msg_watchers);
-    }
-}
-
 int flux_fdhandler_add (flux_t h, int fd, short events,
                         FluxFdHandler cb, void *arg)
 {
@@ -587,6 +484,13 @@ void flux_reactor_stop (flux_t h)
     struct reactor *r = reactor_get (h);
     if (r->ops->reactor_stop)
         r->ops->reactor_stop (r->impl, 0);
+}
+
+void flux_reactor_stop_error (flux_t h)
+{
+    struct reactor *r = reactor_get (h);
+    if (r->ops->reactor_stop)
+        r->ops->reactor_stop (r->impl, -1);
 }
 
 /*

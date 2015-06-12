@@ -15,6 +15,7 @@ int flux_reactor_start (flux_t h);
  * This may be called from within a FluxMsgHandler/FluxFdHandler callback.
  */
 void flux_reactor_stop (flux_t h);
+void flux_reactor_stop_error (flux_t h);
 
 /* Give control back to the reactor until a message matching 'match'
  * is queued in the handle.  This will return -1 with errno = EINVAL
@@ -41,37 +42,12 @@ struct flux_msghandler {
 #define FLUX_MSGHANDLER_TABLE_END { 0, NULL, NULL }
 int flux_msg_watcher_addvec (flux_t h, struct flux_msghandler tab[], void *arg);
 
-/* FluxMsgHandler indicates msg is "consumed" by destroying it.
- * Callbacks return 0 on success, -1 on error and set errno.
+/* Callbacks return 0 on success, -1 on error and set errno.
  * Error terminates reactor, and flux_reactor_start() returns -1.
  */
-typedef int (*FluxMsgHandler)(flux_t h, int typemask, flux_msg_t **msg, void *arg);
 typedef int (*FluxFdHandler)(flux_t h, int fd, short revents, void *arg);
 typedef int (*FluxZsHandler)(flux_t h, void *zs, short revents, void *arg);
 typedef int (*FluxTmoutHandler)(flux_t h, void *arg);
-
-typedef struct {
-    int typemask;
-    const char *pattern;
-    FluxMsgHandler cb;
-} msghandler_t;
-
-/* Register a FluxMsgHandler callback to be called whenever a message
- * matching typemask and pattern (glob) is received.  The callback is
- * added to the beginning of the msghandler list.
- */
-int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
-                         FluxMsgHandler cb, void *arg);
-
-/* Register a batch of FluxMsgHandler's
- */
-int flux_msghandler_addvec (flux_t h, msghandler_t *handlers, int len,
-                            void *arg);
-
-/* Unregister a FluxMsgHandler callback.  Only the first callback with
- * identical typemask and pattern is removed.
- */
-void flux_msghandler_remove (flux_t h, int typemask, const char *pattern);
 
 /* Register a FluxFdHandler callback to be called whenever an event
  * in the 'events' mask occurs on the given file descriptor 'fd'.

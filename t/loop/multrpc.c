@@ -9,6 +9,7 @@
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/nodeset.h"
+#include "src/common/libcompat/compat.h"
 
 #include "src/common/libtap/tap.h"
 

@@ -9,4 +9,6 @@ noinst_LTLIBRARIES = libcompat.la
 libcompat_la_SOURCES = \
 	handle.c \
 	handle.h \
+	reactor.c \
+	reactor.h \
 	compat.h
