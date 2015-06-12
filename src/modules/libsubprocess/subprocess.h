@@ -232,6 +232,14 @@ int subprocess_run (struct subprocess *p);
 int subprocess_flush_io (struct subprocess *p);
 
 /*
+ *  Return 1 if all subprocess stdio has completed (i.e. stdout/stderr
+ *   have received and processed EOF). If no IO handler is registered with
+ *   a subprocess object then subprocess_io_complete() will always
+ *   return 1.
+ */
+int subprocess_io_complete (struct subprocess *p);
+
+/*
  *  Write data to stdin buffer of process [p]. If [eof] is true then EOF will
  *   be scheduled for stdin one all buffered data is written.
  */

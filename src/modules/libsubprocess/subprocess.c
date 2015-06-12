@@ -48,6 +48,7 @@ struct subprocess {
     unsigned short execed:1;
     unsigned short running:1;
     unsigned short exited:1;
+    unsigned short completed:1;
 
     zio_t zio_in;
     zio_t zio_out;
@@ -189,6 +190,16 @@ subprocess_write (struct subprocess *p, void *buf, size_t n, bool eof)
     if (eof)
         zio_write_eof (p->zio_in);
     return zio_write (p->zio_in, buf, n);
+}
+
+int subprocess_io_complete (struct subprocess *p)
+{
+    if (p->io_cb) {
+        if (zio_closed (p->zio_out) && zio_closed (p->zio_err))
+            return 1;
+        return 0;
+    }
+    return 1;
 }
 
 int
