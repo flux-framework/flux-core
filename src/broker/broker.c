@@ -982,6 +982,9 @@ static int child_exit_handler (struct subprocess *p, void *arg)
 
     flux_json_respond (ctx->h, resp, &zmsg);
     json_object_put (resp);
+
+    subprocess_destroy (p);
+
     return (0);
 }
 
@@ -1000,6 +1003,7 @@ static int subprocess_io_cb (struct subprocess *p, json_object *o)
 
     flux_json_respond (ctx->h, o, &zmsg);
     json_object_put (o);
+
     return (0);
 }
 
@@ -1063,19 +1067,19 @@ static int cmb_exec_cb (zmsg_t **zmsg, void *arg)
             subprocess_set_cwd (p, dir);
     }
 
-    subprocess_set_io_callback (p, subprocess_io_cb);
-
-    if ((rc = subprocess_run (p)) < 0) {
-        subprocess_destroy (p);
-        goto out_free;
-    }
-
     /*
      * Save a copy of zmsg for future messages
      */
     copy = zmsg_dup (*zmsg);
     subprocess_set_context (p, "zmsg", (void *) copy);
 
+    subprocess_set_io_callback (p, subprocess_io_cb);
+
+    if ((rc = subprocess_run (p)) < 0) {
+        int errnum = errno;
+        (void) flux_respond (ctx->h, *zmsg, errnum, NULL);
+        goto out_free;
+    }
     /*
      *  Send response, destroys original zmsg.
      */
