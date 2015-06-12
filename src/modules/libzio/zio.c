@@ -427,7 +427,9 @@ static int zio_data_to_flush (zio_t zio)
 
 int zio_closed (zio_t zio)
 {
-    return (zio->flags & ZIO_CLOSED);
+    if (zio->flags & ZIO_EOF_SENT)
+        return (1);
+    return (0);
 }
 
 static int zio_close (zio_t zio)
