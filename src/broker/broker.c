@@ -1064,7 +1064,7 @@ out_free:
         json_object_put (request);
     if (response)
         json_object_put (response);
-    return (rc);
+    return (0);
 }
 
 static int cmb_info_cb (zmsg_t **zmsg, void *arg)
