@@ -151,6 +151,11 @@ void subprocess_destroy (struct subprocess *p)
     zio_destroy (p->zio_out);
     zio_destroy (p->zio_err);
 
+    if (p->parentfd > 0)
+        close (p->childfd);
+    if (p->childfd > 0)
+        close (p->childfd);
+
     free (p);
 }
 
