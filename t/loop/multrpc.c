@@ -1,3 +1,5 @@
+#include <czmq.h>
+#include "src/common/libflux/message.h"
 #include "src/common/libflux/handle.h"
 #include "src/common/libflux/rpc.h"
 #include "src/common/libflux/request.h"

@@ -74,8 +74,9 @@ typedef struct {
 
 static void client_destroy (client_t *c);
 
-static void freectx (ctx_t *ctx)
+static void freectx (void *arg)
 {
+    ctx_t *ctx = arg;
     zlist_destroy (&ctx->clients);
     free (ctx);
 }
@@ -90,7 +91,7 @@ static ctx_t *getctx (flux_t h)
         if (!(ctx->clients = zlist_new ()))
             oom ();
         ctx->session_owner = geteuid ();
-        flux_aux_set (h, "apisrv", ctx, (FluxFreeFn)freectx);
+        flux_aux_set (h, "apisrv", ctx, freectx);
     }
 
     return ctx;
@@ -329,6 +330,10 @@ static int client_cb (flux_t h, int fd, short revents, void *arg)
     return 0;
 }
 
+/* Received response message from broker.
+ * Look up the sender uuid in clients hash and deliver.
+ * Responses for disconnected clients are silently discarded.
+ */
 static int response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -348,34 +353,33 @@ static int response_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     c = zlist_first (ctx->clients);
     while (c && *zmsg) {
         if (!strcmp (uuid, zuuid_str (c->uuid))) {
-            if (zfd_send (c->fd, zmsg) < 0)
-                zmsg_destroy (zmsg);
+            if (zfd_send (c->fd, *zmsg) < 0)
+                errno = 0; /* ignore send errors, let POLL_ERR handle */
             break;
         }
         c = zlist_next (ctx->clients);
     }
-    if (*zmsg)
-        zmsg_destroy (zmsg); /* discard response for unknown uuid */
     if (uuid)
         free (uuid);
 done:
+    zmsg_destroy (zmsg);
     return 0;
 }
 
+/* Received an event message from broker.
+ * Find all subscribers and deliver.
+ */
 static int event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     client_t *c;
-    zmsg_t *cpy;
 
     if (*zmsg) {
         c = zlist_first (ctx->clients);
         while (c) {
             if (subscription_match (c, FLUX_MSGTYPE_EVENT, *zmsg)) {
-                if (!(cpy = zmsg_dup (*zmsg)))
-                    oom ();
-                if (zfd_send (c->fd, &cpy) < 0)
-                    zmsg_destroy (&cpy);
+                if (zfd_send (c->fd, *zmsg) < 0)
+                    errno = 0; /* ignore send errors, let POLL_ERR handle */
             }
             c = zlist_next (ctx->clients);
         }

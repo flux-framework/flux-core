@@ -130,12 +130,7 @@ static void unsubscribe_all (flux_t h, int tc, char **tv)
 static void event_sub (flux_t h, int argc, char **argv)
 {
     zmsg_t *zmsg;
-    flux_match_t match = {
-        .typemask = FLUX_MSGTYPE_EVENT,
-        .matchtag = FLUX_MATCHTAG_NONE,
-        .bsize = 0,
-        .topic_glob = NULL,
-    };
+    struct flux_match match = FLUX_MATCH_EVENT;
 
     if (argc > 0)
         subscribe_all (h, argc, argv);

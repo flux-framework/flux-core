@@ -3,11 +3,8 @@
 
 #include <json.h>
 #include <stdbool.h>
-#include <stdarg.h>
-#include <czmq.h>
 
 #include "handle.h"
-#include "request.h"
 
 enum {
     FLUX_RPC_NORESPONSE = 1,

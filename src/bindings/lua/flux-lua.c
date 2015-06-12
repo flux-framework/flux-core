@@ -322,7 +322,7 @@ static int l_flux_recv (lua_State *L)
     json_object *o = NULL;
     int errnum;
     zmsg_t *zmsg;
-    flux_match_t match = {
+    struct flux_match match = {
         .typemask = FLUX_MSGTYPE_RESPONSE,
         .matchtag = FLUX_MATCHTAG_NONE,
         .bsize = 0,
@@ -462,7 +462,7 @@ static int l_flux_recv_event (lua_State *L)
     json_object *o = NULL;
     const char *json_str = NULL;
     const char *topic;
-    flux_match_t match = {
+    struct flux_match match = {
         .typemask = FLUX_MSGTYPE_EVENT,
         .matchtag = FLUX_MATCHTAG_NONE,
         .bsize = 0,
@@ -843,7 +843,7 @@ static int l_flux_recvmsg (lua_State *L)
     flux_t f = lua_get_flux (L, 1);
     zmsg_t *zmsg;
     int type;
-    flux_match_t match = {
+    struct flux_match match = {
         .typemask = FLUX_MSGTYPE_RESPONSE,
         .matchtag = FLUX_MATCHTAG_NONE,
         .bsize = 0,

@@ -4,8 +4,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
-#include <czmq.h>
+
 #include "message.h"
+
+struct _zctx_t;
 
 typedef struct flux_handle_struct *flux_t;
 
@@ -27,6 +29,14 @@ typedef void (*flux_fatal_f)(const char *msg, void *arg);
 enum {
     FLUX_O_TRACE = 1,   /* send message trace to stderr */
     FLUX_O_COPROC = 2,  /* start reactor callbacks as coprocesses */
+    FLUX_O_NONBLOCK = 4,/* handle should not block on send/recv */
+};
+
+/* Flags for flux_requeue().
+ */
+enum {
+    FLUX_RQ_HEAD = 1,   /* requeue message at head of queue */
+    FLUX_RQ_TAIL = 2,   /* requeue message at tail of queue */
 };
 
 /* Create/destroy a broker handle.
@@ -53,12 +63,12 @@ void flux_fatal_error (flux_t h, const char *fun, const char *msg);
 } while (0)
 
 /* A mechanism is provide for users to attach auxiliary state to the flux_t
- * handle by name.  The FluxFreeFn, if non-NULL, will be called
+ * handle by name.  The flux_free_f, if non-NULL, will be called
  * to destroy this state when the handle is destroyed.
  */
-typedef void (*FluxFreeFn)(void *arg);
+typedef void (*flux_free_f)(void *arg);
 void *flux_aux_get (flux_t h, const char *name);
-void flux_aux_set (flux_t h, const char *name, void *aux, FluxFreeFn destroy);
+void flux_aux_set (flux_t h, const char *name, void *aux, flux_free_f destroy);
 
 /* Set/clear FLUX_O_* on a flux_t handle.
  */
@@ -74,15 +84,18 @@ uint32_t flux_matchtag_avail (flux_t h);
 
 /* Low level message send/recv functions.
  */
-int flux_sendmsg (flux_t h, zmsg_t **zmsg);
-zmsg_t *flux_recvmsg (flux_t h, bool nonblock);
-int flux_putmsg (flux_t h, zmsg_t **zmsg);
-int flux_pushmsg (flux_t h, zmsg_t **zmsg);
+int flux_send (flux_t h, const flux_msg_t *msg, int flags);
+flux_msg_t *flux_recv (flux_t h, struct flux_match match, int flags);
 
-/* Receive a message matching 'match' (see message.h).
- * Any unmatched messages are returned to the handle with flux_putmsg(),
+/* deprecated */
+int flux_sendmsg (flux_t h, flux_msg_t **msg);
+flux_msg_t *flux_recvmsg (flux_t h, bool nonblock);
+flux_msg_t *flux_recvmsg_match (flux_t h, struct flux_match match,
+                                bool nonblock);
+
+/* Requeue message in the handle (head or tail according to flags)
  */
-zmsg_t *flux_recvmsg_match (flux_t h, flux_match_t match, bool nonblock);
+int flux_requeue (flux_t h, const flux_msg_t *msg, int flags);
 
 /* Event subscribe/unsubscribe.
  */
@@ -91,7 +104,7 @@ int flux_event_unsubscribe (flux_t h, const char *topic);
 
 /* Get handle's zctx (if any).
  */
-zctx_t *flux_get_zctx (flux_t h);
+struct _zctx_t *flux_get_zctx (flux_t h);
 
 /* Get/clear handle message counters.
  */

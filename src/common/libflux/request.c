@@ -25,6 +25,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <czmq.h>
 #include "request.h"
 #include "message.h"
 #include "info.h"
@@ -34,26 +35,26 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
 
-int flux_request_decode (zmsg_t *zmsg, const char **topic,
+int flux_request_decode (const flux_msg_t *msg, const char **topic,
                          const char **json_str)
 {
     int type;
     const char *ts, *js;
     int rc = -1;
 
-    if (zmsg == NULL) {
+    if (msg == NULL) {
         errno = EINVAL;
         goto done;
     }
-    if (flux_msg_get_type (zmsg, &type) < 0)
+    if (flux_msg_get_type (msg, &type) < 0)
         goto done;
     if (type != FLUX_MSGTYPE_REQUEST) {
         errno = EPROTO;
         goto done;
     }
-    if (flux_msg_get_topic (zmsg, &ts) < 0)
+    if (flux_msg_get_topic (msg, &ts) < 0)
         goto done;
-    if (flux_msg_get_payload_json (zmsg, &js) < 0)
+    if (flux_msg_get_payload_json (msg, &js) < 0)
         goto done;
     if ((json_str && !js) || (!json_str && js)) {
         errno = EPROTO;

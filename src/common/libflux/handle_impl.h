@@ -2,8 +2,8 @@
 #define _FLUX_CORE_HANDLE_IMPL_H
 
 #include <stdbool.h>
-#include <czmq.h>
 
+#include "message.h"
 #include "handle.h"
 
 /**
@@ -14,21 +14,18 @@ typedef flux_t (connector_init_f)(const char *uri, int flags);
 
 typedef int (*flux_msg_f)(flux_t h, void *arg);
 
-typedef struct reactor_struct *reactor_t;
-
 struct flux_handle_ops {
-    int         (*sendmsg)(void *impl, zmsg_t **zmsg);
-    zmsg_t *    (*recvmsg)(void *impl, bool nonblock);
-    int         (*putmsg)(void *impl, zmsg_t **zmsg);
-    int         (*pushmsg)(void *impl, zmsg_t **zmsg);
-    void        (*purge)(void *impl, flux_match_t match);
+    int         (*send)(void *impl, const flux_msg_t *msg, int flags);
+    flux_msg_t* (*recv)(void *impl, int flags);
+    int         (*requeue)(void *impl, const flux_msg_t *msg, int flags);
+    void        (*purge)(void *impl, struct flux_match match);
 
     int         (*event_subscribe)(void *impl, const char *topic);
     int         (*event_unsubscribe)(void *impl, const char *topic);
 
     int         (*rank)(void *impl);
 
-    zctx_t *    (*get_zctx)(void *impl);
+    struct _zctx_t * (*get_zctx)(void *impl);
 
     int         (*reactor_start)(void *impl);
     void        (*reactor_stop)(void *impl, int rc);
@@ -51,12 +48,9 @@ struct flux_handle_ops {
 flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags);
 void flux_handle_destroy (flux_t *hp);
 
-zctx_t *flux_get_zctx (flux_t h);
-reactor_t flux_get_reactor (flux_t h);
-reactor_t flux_reactor_create (void *impl, const struct flux_handle_ops *ops);
-void flux_reactor_destroy (reactor_t r);
+struct _zctx_t *flux_get_zctx (flux_t h);
 
-#endif /* !_FLUX_CORE_HANDLE_H */
+#endif /* !_FLUX_CORE_HANDLE_IMPL_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

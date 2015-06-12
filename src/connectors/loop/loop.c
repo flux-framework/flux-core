@@ -96,65 +96,73 @@ static const struct flux_handle_ops handle_ops;
 
 const char *fake_uuid = "12345678123456781234567812345678";
 
-static int op_sendmsg (void *impl, zmsg_t **zmsg)
+static int op_send (void *impl, const flux_msg_t *msg, int flags)
 {
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
     int type;
+    flux_msg_t *cpy = NULL;
     int rc = -1;
 
-    if (flux_msg_get_type (*zmsg, &type) < 0)
+    if (!(cpy = flux_msg_copy (msg, true)))
+        goto done;
+    if (flux_msg_get_type (cpy, &type) < 0)
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
         case FLUX_MSGTYPE_EVENT:
-            if (flux_msg_enable_route (*zmsg) < 0)
+            if (flux_msg_enable_route (cpy) < 0)
                 goto done;
-            if (flux_msg_push_route (*zmsg, fake_uuid) < 0)
+            if (flux_msg_push_route (cpy, fake_uuid) < 0)
                 goto done;
             break;
     }
-    if (zlist_append (c->queue, *zmsg) < 0) {
+    if (zlist_append (c->queue, cpy) < 0) {
         errno = ENOMEM;
         goto done;
     }
-    *zmsg = NULL;
+    cpy = NULL; /* c->queue now owns cpy */
+    rc = 0;
+done:
+    if (cpy)
+        flux_msg_destroy (cpy);
+    return rc;
+}
+
+static flux_msg_t *op_recv (void *impl, int flags)
+{
+    ctx_t *c = impl;
+    assert (c->magic == CTX_MAGIC);
+    flux_msg_t *msg = zlist_pop (c->queue);
+    if (!msg)
+        errno = EWOULDBLOCK;
+    return msg;
+}
+
+static int op_requeue (void *impl, const flux_msg_t *msg, int flags)
+{
+    ctx_t *c = impl;
+    assert (c->magic == CTX_MAGIC);
+    int rc = -1;
+    flux_msg_t *cpy = NULL;
+
+    if (!(cpy = flux_msg_copy (msg, true)))
+        goto done;
+    if ((flags & FLUX_RQ_TAIL))
+        rc = zlist_append (c->queue, cpy);
+    else
+        rc = zlist_push (c->queue, cpy);
+    if (rc < 0) {
+        flux_msg_destroy (cpy);
+        errno = ENOMEM;
+        goto done;
+    }
     rc = 0;
 done:
     return rc;
 }
 
-static zmsg_t *op_recvmsg (void *impl, bool nonblock)
-{
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-    zmsg_t *zmsg = zlist_pop (c->queue);
-    if (!zmsg)
-        errno = EWOULDBLOCK;
-    return zmsg;
-}
-
-static int op_putmsg (void *impl, zmsg_t **zmsg)
-{
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-    if (zlist_append (c->queue, *zmsg) < 0)
-        oom ();
-    *zmsg = NULL;
-    return 0;
-}
-
-static int op_pushmsg (void *impl, zmsg_t **zmsg)
-{
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-    if (zlist_push (c->queue, *zmsg) < 0)
-        oom ();
-    *zmsg = NULL;
-    return 0;
-}
-
-static void op_purge (void *impl, flux_match_t match)
+static void op_purge (void *impl, struct flux_match match)
 {
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
@@ -416,10 +424,9 @@ error:
 }
 
 static const struct flux_handle_ops handle_ops = {
-    .sendmsg = op_sendmsg,
-    .recvmsg = op_recvmsg,
-    .putmsg = op_putmsg,
-    .pushmsg = op_pushmsg,
+    .send = op_send,
+    .recv = op_recv,
+    .requeue = op_requeue,
     .purge = op_purge,
     .event_subscribe = NULL,
     .event_unsubscribe = NULL,

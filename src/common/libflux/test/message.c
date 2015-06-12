@@ -1,3 +1,5 @@
+#include <czmq.h>
+#include <errno.h>
 #include "src/common/libflux/message.h"
 #include "src/common/libtap/tap.h"
 
@@ -317,12 +319,7 @@ void check_matchtag (void)
 
 void check_cmp (void)
 {
-    flux_match_t match = {
-        .typemask = 0,
-        .matchtag = FLUX_MATCHTAG_NONE,
-        .bsize = 0,
-        .topic_glob = NULL,
-    };
+    struct flux_match match = FLUX_MATCH_ANY;
     zmsg_t *zmsg;
     ok ((zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
         "flux_msg_create works");

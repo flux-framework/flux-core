@@ -151,10 +151,11 @@ void encode (void)
         o = buf_to_json (seq, buf, n);
         assert (o != NULL);
         zmsg = json_to_zmsg (o);
-        if (zfd_send (STDOUT_FILENO, &zmsg) < 0) {
+        if (zfd_send (STDOUT_FILENO, zmsg) < 0) {
             perror ("zfd_send");
             exit (1);
         }
+        zmsg_destroy (&zmsg);
         json_object_put (o);
         seq++;
     }

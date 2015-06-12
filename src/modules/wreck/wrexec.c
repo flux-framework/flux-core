@@ -62,8 +62,9 @@ struct rexec_session {
     void *zs_rep;   /* replies to client requests (zbind) */
 };
 
-static void freectx (struct rexec_ctx *ctx)
+static void freectx (void *arg)
 {
+    struct rexec_ctx *ctx = arg;
     zlist_destroy (&ctx->session_list);
     free (ctx);
 }
@@ -91,7 +92,7 @@ static struct rexec_ctx *getctx (flux_t h)
             oom ();
         ctx->h = h;
         ctx->nodeid = flux_rank (h);
-        flux_aux_set (h, "wrexec", ctx, (FluxFreeFn)freectx);
+        flux_aux_set (h, "wrexec", ctx, freectx);
         kvs_watch_string (h, "config.wrexec.wrexecd_path",
             wrexec_path_set, (void *) ctx);
     }

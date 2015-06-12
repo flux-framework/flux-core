@@ -99,11 +99,11 @@ static void sync_msg_watchers  (ctx_t *c);
 
 static const struct flux_handle_ops handle_ops;
 
-static int op_sendmsg (void *impl, zmsg_t **zmsg)
+static int op_send (void *impl, const flux_msg_t *msg, int flags)
 {
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
-    return zfd_send (c->fd, zmsg);
+    return zfd_send (c->fd, (zmsg_t *)msg);
 }
 
 static zmsg_t *op_recvmsg_putmsg (ctx_t *c)
@@ -116,46 +116,44 @@ static zmsg_t *op_recvmsg_putmsg (ctx_t *c)
     return zmsg;
 }
 
-static zmsg_t *op_recvmsg (void *impl, bool nonblock)
+static zmsg_t *op_recv (void *impl, int flags)
 {
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
     zmsg_t *zmsg = NULL;
 
     if (!(zmsg = op_recvmsg_putmsg (c)))
-        zmsg = zfd_recv (c->fd, nonblock);
+        zmsg = zfd_recv (c->fd, (flags & FLUX_O_NONBLOCK) ? : false);
     return zmsg;
 }
 
-static int op_putmsg (void *impl, zmsg_t **zmsg)
+static int op_requeue (void *impl, const flux_msg_t *msg, int flags)
 {
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
+    int rc = -1;
+    flux_msg_t *cpy = NULL;
     int oldcount = zlist_size (c->putmsg);
 
-    if (zlist_append (c->putmsg, *zmsg) < 0)
-        oom ();
-    *zmsg = NULL;
+    if (!(cpy = flux_msg_copy (msg, true)))
+        goto done;
+    if ((flags & FLUX_RQ_TAIL))
+        rc = zlist_append (c->putmsg, cpy);
+    else
+        rc = zlist_push (c->putmsg, cpy);
+    if (rc < 0) {
+        flux_msg_destroy (cpy);
+        errno = ENOMEM;
+        goto done;
+    }
     if (oldcount == 0)
         sync_msg_watchers (c);
-    return 0;
+    rc = 0;
+done:
+    return rc;
 }
 
-static int op_pushmsg (void *impl, zmsg_t **zmsg)
-{
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-    int oldcount = zlist_size (c->putmsg);
-
-    if (zlist_push (c->putmsg, *zmsg) < 0)
-        oom ();
-    *zmsg = NULL;
-    if (oldcount == 0)
-        sync_msg_watchers (c);
-    return 0;
-}
-
-static void op_purge (void *impl, flux_match_t match)
+static void op_purge (void *impl, struct flux_match match)
 {
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
@@ -541,10 +539,9 @@ error:
 }
 
 static const struct flux_handle_ops handle_ops = {
-    .sendmsg = op_sendmsg,
-    .recvmsg = op_recvmsg,
-    .putmsg = op_putmsg,
-    .pushmsg = op_pushmsg,
+    .send = op_send,
+    .recv = op_recv,
+    .requeue = op_requeue,
     .purge = op_purge,
     .event_subscribe = op_event_subscribe,
     .event_unsubscribe = op_event_unsubscribe,

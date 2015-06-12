@@ -58,8 +58,9 @@ typedef struct _barrier_struct {
 static int exit_event_send (flux_t h, const char *name, int errnum);
 static int timeout_cb (flux_t h, void *arg);
 
-static void freectx (ctx_t *ctx)
+static void freectx (void *arg)
 {
+    ctx_t *ctx = arg;
     zhash_destroy (&ctx->barriers);
     free (ctx);
 }
@@ -73,7 +74,7 @@ static ctx_t *getctx (flux_t h)
         if (!(ctx->barriers = zhash_new ()))
             oom ();
         ctx->h = h;
-        flux_aux_set (h, "barriersrv", ctx, (FluxFreeFn)freectx);
+        flux_aux_set (h, "barriersrv", ctx, freectx);
     }
 
     return ctx;

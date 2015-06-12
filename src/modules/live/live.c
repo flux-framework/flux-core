@@ -118,7 +118,7 @@ typedef struct {
     zlist_t *parents;   /* current parent is first in list */
     zhash_t *children;
     bool hb_subscribed;
-    red_t r;
+    flux_red_t r;
     ns_t *ns;           /* master only */
     JSON topo;          /* master only */
     flux_t h;
@@ -131,7 +131,7 @@ static int goodbye (ctx_t *ctx, int parent_rank);
 static void manage_subscriptions (ctx_t *ctx);
 
 static void hello_sink (flux_t h, void *item, int batchnum, void *arg);
-static void hello_reduce (flux_t h, zlist_t *items, int batchnum, void *arg);
+static void hello_reduce (flux_t h, flux_redstack_t items, int batchnum, void *arg);
 
 static const int default_max_idle = 5;
 static const int default_slow_idle = 3;
@@ -141,8 +141,9 @@ static const int reduce_timeout_slave_msec = 10;
 static void ns_chg_one (ctx_t *ctx, uint32_t r, cstate_t from, cstate_t to);
 static int ns_sync (ctx_t *ctx);
 
-static void freectx (ctx_t *ctx)
+static void freectx (void *arg)
 {
+    ctx_t *ctx = arg;
     parent_t *p;
 
     while ((p = zlist_pop (ctx->parents)))
@@ -179,7 +180,7 @@ static ctx_t *getctx (flux_t h)
         else
             flux_red_set_timeout_msec (ctx->r, reduce_timeout_slave_msec);
         ctx->h = h;
-        flux_aux_set (h, "livesrv", ctx, (FluxFreeFn)freectx);
+        flux_aux_set (h, "livesrv", ctx, freectx);
     }
     return ctx;
 }
@@ -870,17 +871,17 @@ static void hello_sink (flux_t h, void *item, int batchnum, void *arg)
     Jput (a);
 }
 
-static void hello_reduce (flux_t h, zlist_t *items, int batchnum, void *arg)
+static void hello_reduce (flux_t h, flux_redstack_t items, int batchnum,
+                          void *arg)
 {
     JSON a, b;
 
-    if ((a = zlist_pop (items))) {
-        while ((b = zlist_pop (items))) {
+    if ((a = flux_redstack_pop (items))) {
+        while ((b = flux_redstack_pop (items))) {
             hello_merge (a, b);
             Jput (b);
         }
-        if (zlist_append (items, a) < 0)
-            oom ();
+        flux_redstack_push (items, a);
     }
 }
 

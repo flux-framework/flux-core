@@ -1,11 +1,13 @@
 #ifndef _FLUX_CORE_REDUCE_H
 #define _FLUX_CORE_REDUCE_H
 
-#include <czmq.h>
-
 #include "handle.h"
 
-typedef struct red_struct *red_t;
+typedef struct flux_red_struct *flux_red_t;
+typedef struct flux_redstack_struct *flux_redstack_t;
+typedef void   (*flux_red_f)(flux_t h, flux_redstack_t stack,
+                             int batchnum, void *arg);
+typedef void   (*flux_sink_f)(flux_t h, void *item, int batchnum, void *arg);
 
 enum {
     FLUX_RED_TIMEDFLUSH = 1,// flush timer starts on first append when empty
@@ -15,40 +17,44 @@ enum {
                             //   from previous batch and next flush is at hwm
 };
 
-typedef void   (*FluxRedFn)(flux_t h, zlist_t *items, int batchnum, void *arg);
-typedef void   (*FluxSinkFn)(flux_t h, void *item, int batchnum, void *arg);
 
 /* Create/destroy a reduction handle.
  * The sink function will be called every time the handle is flushed.
  * Flush occurs according to reduction flags (see defs above).
  * If no flags, flush will be called after every flux_red_append().
  */
-red_t flux_red_create (flux_t h, FluxSinkFn sinkfn, void *arg);
-void flux_red_destroy (red_t r);
+flux_red_t flux_red_create (flux_t h, flux_sink_f sinkfn, void *arg);
+void flux_red_destroy (flux_red_t r);
 
 /* Set the reduction function (optional).
  * Reduction function will be called every time an item is appended.
  */
-void flux_red_set_reduce_fn (red_t r, FluxRedFn redfn);
+void flux_red_set_reduce_fn (flux_red_t r, flux_red_f redfn);
 
 /* Set reduction flags.
  */
-void flux_red_set_flags (red_t r, int flags);
+void flux_red_set_flags (flux_red_t r, int flags);
 
 /* Set the timeout value used with FLUX_RED_TIMEDFLUSH
  */
-void flux_red_set_timeout_msec (red_t r, int msec);
+void flux_red_set_timeout_msec (flux_red_t r, int msec);
 
 /* Map the sink function over each item in the handle.
  */
-void flux_red_flush (red_t r);
+void flux_red_flush (flux_red_t r);
 
 /* Append an item to the reduction handle.
  * The reduction function is immediately called (if defined).
  * The sink function is called according to flags.
  * Returns 0 on success, -1 on failure.
  */
-int flux_red_append (red_t r, void *item, int batchnum);
+int flux_red_append (flux_red_t r, void *item, int batchnum);
+
+/* Simple stack ops for stack of items passed to flux_red_f.
+ */
+void *flux_redstack_pop (flux_redstack_t stack);
+void flux_redstack_push (flux_redstack_t stack, void *item);
+int flux_restack_count (flux_redstack_t stack);
 
 #endif /* _FLUX_CORE_REDUCE_H */
 /*

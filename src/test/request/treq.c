@@ -251,8 +251,9 @@ void test_putmsg (flux_t h, uint32_t nodeid)
                 oom ();
             if (seq == defer_start + defer_count - 1) {
                 while ((z = zlist_pop (defer))) {
-                    if (flux_putmsg (h, &z) < 0)
-                        err_exit ("%s: flux_putmsg", __FUNCTION__);
+                    if (flux_requeue (h, z, FLUX_RQ_TAIL) < 0)
+                        err_exit ("%s: flux_requeue", __FUNCTION__);
+                    zmsg_destroy (&z);
                 }
                 popped = true;
             }

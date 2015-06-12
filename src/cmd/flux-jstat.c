@@ -77,8 +77,9 @@ static void usage (void)
     exit (1);
 }
 
-static void freectx (jstatctx_t *ctx)
+static void freectx (void *arg)
 {
+    jstatctx_t *ctx = arg;
     if (ctx->op)
         fclose (ctx->op);
 }
@@ -90,7 +91,7 @@ static jstatctx_t *getctx (flux_t h)
         ctx = xzmalloc (sizeof (*ctx));
         ctx->h = h;
         ctx->op = NULL;
-        flux_aux_set (h, "jstat", ctx, (FluxFreeFn)freectx);
+        flux_aux_set (h, "jstat", ctx, freectx);
     }
     return ctx;
 }

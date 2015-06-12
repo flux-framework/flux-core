@@ -29,6 +29,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <czmq.h>
 
 #include "handle.h"
 #include "reactor.h"
@@ -36,6 +37,7 @@
 #include "message.h"
 #include "response.h"
 #include "tagpool.h"
+#include "reactor_impl.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
@@ -43,15 +45,15 @@
 
 typedef struct {
     flux_t h;
-    flux_match_t match;
+    struct flux_match match;
     FluxMsgHandler fn;
     void *arg;
     coproc_t coproc;
     zlist_t *backlog;
-    flux_match_t wait_match;
+    struct flux_match wait_match;
 } dispatch_t;
 
-struct reactor_struct {
+struct reactor {
     zlist_t *dsp;
     zlist_t *waiters;
     const struct flux_handle_ops *ops;
@@ -59,7 +61,8 @@ struct reactor_struct {
     dispatch_t *current;
 };
 
-static bool match_match (const flux_match_t m1, const flux_match_t m2)
+static bool match_match (const struct flux_match m1,
+                         const struct flux_match m2)
 {
     if (m1.typemask != m2.typemask)
         return false;
@@ -77,7 +80,8 @@ static bool match_match (const flux_match_t m1, const flux_match_t m2)
     return true;
 }
 
-static void copy_match (flux_match_t *dst, const flux_match_t src)
+static void copy_match (struct flux_match *dst,
+                        const struct flux_match src)
 {
     if (dst->topic_glob)
         free (dst->topic_glob);
@@ -85,7 +89,7 @@ static void copy_match (flux_match_t *dst, const flux_match_t src)
     dst->topic_glob = src.topic_glob ? xstrdup (src.topic_glob) : NULL;
 }
 
-static dispatch_t *dispatch_create (flux_t h, const flux_match_t match,
+static dispatch_t *dispatch_create (flux_t h, const struct flux_match match,
                                     FluxMsgHandler cb, void *arg)
 {
     dispatch_t *d = xzmalloc (sizeof (*d));
@@ -115,7 +119,7 @@ static void dispatch_destroy (dispatch_t *d)
     }
 }
 
-void flux_reactor_destroy (reactor_t r)
+void reactor_destroy (struct reactor *r)
 {
     dispatch_t *d;
     if (r) {
@@ -127,9 +131,9 @@ void flux_reactor_destroy (reactor_t r)
     }
 }
 
-reactor_t flux_reactor_create (void *impl, const struct flux_handle_ops *ops)
+struct reactor *reactor_create (void *impl, const struct flux_handle_ops *ops)
 {
-    reactor_t r = xzmalloc (sizeof (*r));
+    struct reactor *r = xzmalloc (sizeof (*r));
     if (!(r->dsp = zlist_new ()))
         oom ();
     if (!(r->waiters = zlist_new ()))
@@ -139,7 +143,7 @@ reactor_t flux_reactor_create (void *impl, const struct flux_handle_ops *ops)
     return r;
 }
 
-static dispatch_t *find_dispatch (reactor_t r, zmsg_t *zmsg, bool waitlist)
+static dispatch_t *find_dispatch (struct reactor *r, zmsg_t *zmsg, bool waitlist)
 {
     zlist_t *l = waitlist ? r->waiters : r->dsp;
     dispatch_t *d = zlist_first (l);
@@ -169,7 +173,7 @@ static int backlog_flush (dispatch_t *d)
     if (d->backlog) {
         zmsg_t *zmsg;
         while ((zmsg = zlist_pop (d->backlog))) {
-            if (flux_putmsg (d->h, &zmsg) < 0) {
+            if (flux_requeue (d->h, zmsg, FLUX_RQ_TAIL) < 0) {
                 if (errnum < errno) {
                     errnum = errno;
                     rc = -1;
@@ -183,9 +187,9 @@ static int backlog_flush (dispatch_t *d)
     return rc;
 }
 
-int flux_sleep_on (flux_t h, flux_match_t match)
+int flux_sleep_on (flux_t h, struct flux_match match)
 {
-    reactor_t r = flux_get_reactor (h);
+    struct reactor *r = reactor_get (h);
     int rc = -1;
 
     if (!r->current || !r->current->coproc) {
@@ -207,9 +211,10 @@ static int coproc_cb (coproc_t c, void *arg)
 {
     dispatch_t *d = arg;
     zmsg_t *zmsg;
+    struct flux_match match = FLUX_MATCH_ANY;
     int type;
     int rc = -1;
-    if (!(zmsg = flux_recvmsg (d->h, true))) {
+    if (!(zmsg = flux_recv (d->h, match, FLUX_O_NONBLOCK))) {
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             rc = 0;
         goto done;
@@ -224,7 +229,7 @@ done:
 
 static int resume_coproc (dispatch_t *d)
 {
-    reactor_t r = flux_get_reactor (d->h);
+    struct reactor *r = reactor_get (d->h);
     int coproc_rc, rc = -1;
 
     r->current = d;
@@ -244,7 +249,7 @@ done:
 
 static int start_coproc (dispatch_t *d)
 {
-    reactor_t r = flux_get_reactor (d->h);
+    struct reactor *r = reactor_get (d->h);
     int coproc_rc, rc = -1;
 
     r->current = d;
@@ -266,13 +271,14 @@ done:
 
 static int msg_cb (flux_t h, void *arg)
 {
-    reactor_t r = flux_get_reactor (h);
+    struct reactor *r = reactor_get (h);
     dispatch_t *d;
+    struct flux_match match = FLUX_MATCH_ANY;
     int rc = -1;
     zmsg_t *zmsg = NULL;
     int type;
 
-    if (!(zmsg = flux_recvmsg (h, true))) {
+    if (!(zmsg = flux_recv (h, match, FLUX_O_NONBLOCK))) {
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             rc = 0;
         goto done;
@@ -280,11 +286,12 @@ static int msg_cb (flux_t h, void *arg)
     if (flux_msg_get_type (zmsg, &type) < 0)
         goto done;
     /* Message matches a coproc that yielded.
-     * Resume, arranging for zmsg to be returned next by flux_recvmsg().
+     * Resume, arranging for msg to be returned next by flux_recv().
      */
     if ((d = find_dispatch (r, zmsg, true))) {
-        if (flux_pushmsg (h, &zmsg) < 0)
+        if (flux_requeue (h, zmsg, FLUX_RQ_HEAD) < 0)
             goto done;
+        zmsg = NULL;
         zlist_remove (r->waiters, d);
         rc = resume_coproc (d);
     /* Message matches a handler.
@@ -298,8 +305,9 @@ static int msg_cb (flux_t h, void *arg)
                 goto done;
             rc = 0;
         } else if ((flux_flags_get (h) & FLUX_O_COPROC)) {
-            if (flux_pushmsg (h, &zmsg) < 0)
+            if (flux_requeue (h, zmsg, FLUX_RQ_HEAD) < 0)
                 goto done;
+            zmsg = NULL;
             rc = start_coproc (d);
         } else {
             rc = d->fn (h, type, &zmsg, d->arg);
@@ -325,10 +333,10 @@ done:
     return rc;
 }
 
-int flux_msghandler_add_match (flux_t h, const flux_match_t match,
+int flux_msghandler_add_match (flux_t h, const struct flux_match match,
                               FluxMsgHandler cb, void *arg)
 {
-    reactor_t r = flux_get_reactor (h);
+    struct reactor *r = reactor_get (h);
     dispatch_t *d;
     int oldsize = zlist_size (r->dsp);
     int rc = -1;
@@ -352,7 +360,7 @@ int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
 {
     int rc = -1;
 
-    flux_match_t match = {
+    struct flux_match match = {
         .typemask = typemask,
         .topic_glob = (char *)pattern,
         .matchtag = FLUX_MATCHTAG_NONE,
@@ -377,9 +385,9 @@ int flux_msghandler_addvec (flux_t h, msghandler_t *handlers, int len,
     return 0;
 }
 
-void flux_msghandler_remove_match (flux_t h, const flux_match_t match)
+void flux_msghandler_remove_match (flux_t h, const struct flux_match match)
 {
-    reactor_t r = flux_get_reactor (h);
+    struct reactor *r = reactor_get (h);
     dispatch_t *d;
 
     d = zlist_first (r->dsp);
@@ -397,7 +405,7 @@ void flux_msghandler_remove_match (flux_t h, const flux_match_t match)
 
 void flux_msghandler_remove (flux_t h, int typemask, const char *pattern)
 {
-    flux_match_t match = {
+    struct flux_match match = {
         .typemask = typemask,
         .matchtag = FLUX_MATCHTAG_NONE,
         .bsize = 1,
@@ -409,7 +417,7 @@ void flux_msghandler_remove (flux_t h, int typemask, const char *pattern)
 int flux_fdhandler_add (flux_t h, int fd, short events,
                         FluxFdHandler cb, void *arg)
 {
-    reactor_t r = flux_get_reactor (h);
+    struct reactor *r = reactor_get (h);
     int rc = -1;
 
     if (fd < 0 || events == 0 || !cb) {
@@ -427,7 +435,7 @@ done:
 
 void flux_fdhandler_remove (flux_t h, int fd, short events)
 {
-    reactor_t r = flux_get_reactor (h);
+    struct reactor *r = reactor_get (h);
 
     if (r->ops->reactor_fd_remove)
         r->ops->reactor_fd_remove (r->impl, fd, events);
@@ -436,7 +444,7 @@ void flux_fdhandler_remove (flux_t h, int fd, short events)
 int flux_zshandler_add (flux_t h, void *zs, short events,
                         FluxZsHandler cb, void *arg)
 {
-    reactor_t r = flux_get_reactor (h);
+    struct reactor *r = reactor_get (h);
     int rc = -1;
 
     if (!zs || events == 0 || !cb) {
@@ -454,7 +462,7 @@ done:
 
 void flux_zshandler_remove (flux_t h, void *zs, short events)
 {
-    reactor_t r = flux_get_reactor (h);
+    struct reactor *r = reactor_get (h);
 
     if (r->ops->reactor_zs_remove)
         r->ops->reactor_zs_remove (r->impl, zs, events);
@@ -463,7 +471,7 @@ void flux_zshandler_remove (flux_t h, void *zs, short events)
 int flux_tmouthandler_add (flux_t h, unsigned long msec, bool oneshot,
                            FluxTmoutHandler cb, void *arg)
 {
-    reactor_t r = flux_get_reactor (h);
+    struct reactor *r = reactor_get (h);
     int rc = -1;
 
     if (!cb) {
@@ -481,7 +489,7 @@ done:
 
 void flux_tmouthandler_remove (flux_t h, int timer_id)
 {
-    reactor_t r = flux_get_reactor (h);
+    struct reactor *r = reactor_get (h);
 
     if (r->ops->reactor_tmout_remove)
         r->ops->reactor_tmout_remove (r->impl, timer_id);
@@ -489,7 +497,7 @@ void flux_tmouthandler_remove (flux_t h, int timer_id)
 
 int flux_reactor_start (flux_t h)
 {
-    reactor_t r = flux_get_reactor (h);
+    struct reactor *r = reactor_get (h);
     if (!r->ops->reactor_start) {
         errno = ENOSYS;
         return -1;
@@ -499,7 +507,7 @@ int flux_reactor_start (flux_t h)
 
 void flux_reactor_stop (flux_t h)
 {
-    reactor_t r = flux_get_reactor (h);
+    struct reactor *r = reactor_get (h);
     if (r->ops->reactor_stop)
         r->ops->reactor_stop (r->impl, 0);
 }

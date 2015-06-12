@@ -173,38 +173,38 @@ static void sync_msg_watchers (ctx_t *ctx)
     }
 }
 
-static int mod_sendmsg (void *impl, zmsg_t **zmsg)
+static int mod_send (void *impl, const flux_msg_t *msg, int flags)
 {
     ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
+    flux_msg_t *cpy = NULL;
     int type;
     int rc = -1;
 
-    if (flux_msg_get_type (*zmsg, &type) < 0)
+    if (flux_msg_get_type (msg, &type) < 0)
+        goto done;
+    if (!(cpy = flux_msg_copy (msg, true)))
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
-            if (flux_msg_enable_route (*zmsg) < 0)
+        case FLUX_MSGTYPE_EVENT:
+            if (flux_msg_enable_route (cpy) < 0)
                 goto done;
-            if (flux_msg_push_route (*zmsg, ctx->uuid) < 0)
+            if (flux_msg_push_route (cpy, ctx->uuid) < 0)
                 goto done;
-            rc = zmsg_send (zmsg, ctx->sock);
             break;
         case FLUX_MSGTYPE_RESPONSE:
-            rc = zmsg_send (zmsg, ctx->sock);
-            break;
-        case FLUX_MSGTYPE_EVENT:
-            if (flux_msg_enable_route (*zmsg) < 0)
-                goto done;
-            if (flux_msg_push_route (*zmsg, ctx->uuid) < 0)
-                goto done;
-            rc = zmsg_send (zmsg, ctx->sock);
             break;
         default:
             errno = EINVAL;
-            break;
+            goto done;
     }
+    if (zmsg_send (&cpy, ctx->sock) < 0)
+        goto done;
+    rc = 0;
 done:
+    if (cpy)
+        flux_msg_destroy (cpy);
     return rc;
 }
 
@@ -244,46 +244,44 @@ static zmsg_t *mod_recvmsg_putmsg (ctx_t *ctx)
     return zmsg;
 }
 
-static zmsg_t *mod_recvmsg (void *impl, bool nonblock)
+static flux_msg_t *mod_recv (void *impl, int flags)
 {
     ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
-    zmsg_t *zmsg = NULL;
+    flux_msg_t *msg = NULL;
 
-    if (!(zmsg = mod_recvmsg_putmsg (ctx)))
-        zmsg = mod_recvmsg_main (ctx, nonblock);
-    return zmsg;
+    if (!(msg = mod_recvmsg_putmsg (ctx)))
+        msg = mod_recvmsg_main (ctx, (flags & FLUX_O_NONBLOCK) ? true : false);
+    return msg;
 }
 
-static int mod_putmsg (void *impl, zmsg_t **zmsg)
-{
-    ctx_t *ctx = impl;
-    assert (ctx->magic == MODHANDLE_MAGIC);
-    int oldcount = zlist_size (ctx->putmsg);
-
-    if (zlist_append (ctx->putmsg, *zmsg) < 0)
-        oom ();
-    *zmsg = NULL;
-    if (oldcount == 0)
-        sync_msg_watchers (ctx);
-    return 0;
-}
-
-static int mod_pushmsg (void *impl, zmsg_t **zmsg)
+static int mod_requeue (void *impl, const flux_msg_t *msg, int flags)
 {
     ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
     int oldcount = zlist_size (ctx->putmsg);
+    int rc = -1;
+    flux_msg_t *cpy = NULL;
 
-    if (zlist_push (ctx->putmsg, *zmsg) < 0)
-        oom ();
-    *zmsg = NULL;
+    if (!(cpy = flux_msg_copy (msg, true)))
+        goto done;
+    if ((flags & FLUX_RQ_TAIL))
+        rc = zlist_append (ctx->putmsg, cpy);
+    else
+        rc = zlist_push (ctx->putmsg, cpy);
+    if (rc < 0) {
+        flux_msg_destroy (cpy);
+        errno = ENOMEM;
+        goto done;
+    }
     if (oldcount == 0)
         sync_msg_watchers (ctx);
-    return 0;
+    rc = 0;
+done:
+    return rc;
 }
 
-static void mod_purge (void *impl, flux_match_t match)
+static void mod_purge (void *impl, struct flux_match match)
 {
     ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
@@ -561,10 +559,9 @@ static void putmsg_cb (struct ev_loop *loop, ev_zlist *w, int revents)
 }
 
 static const struct flux_handle_ops mod_handle_ops = {
-    .sendmsg = mod_sendmsg,
-    .recvmsg = mod_recvmsg,
-    .putmsg = mod_putmsg,
-    .pushmsg = mod_pushmsg,
+    .send = mod_send,
+    .recv = mod_recv,
+    .requeue = mod_requeue,
     .purge = mod_purge,
     .event_subscribe = mod_event_subscribe,
     .event_unsubscribe = mod_event_unsubscribe,

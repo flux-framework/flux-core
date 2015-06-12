@@ -110,8 +110,9 @@ static int jsc_job_state2num (const char *s)
     return -1;
 }
 
-static void freectx (jscctx_t *ctx)
+static void freectx (void *arg)
 {
+    jscctx_t *ctx = arg;
     zhash_destroy (&(ctx->active_jobs));
     zlist_destroy (&(ctx->callbacks));
 }
@@ -127,7 +128,7 @@ static jscctx_t *getctx (flux_t h)
             oom ();
         ctx->first_time = 1;
         ctx->h = h;
-        flux_aux_set (h, "jstatctrl", ctx, (FluxFreeFn)freectx);
+        flux_aux_set (h, "jstatctrl", ctx, freectx);
     }
     return ctx;
 }

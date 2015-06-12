@@ -178,8 +178,9 @@ static int setroot_event_send (ctx_t *ctx, const char *fence);
 static void commit_respond (ctx_t *ctx, zmsg_t **zmsg, const char *sender,
                             const char *rootdir, int rootseq);
 
-static void freectx (ctx_t *ctx)
+static void freectx (void *arg)
 {
+    ctx_t *ctx = arg;
     if (ctx->store)
         zhash_destroy (&ctx->store);
     if (ctx->commits)
@@ -206,7 +207,7 @@ static ctx_t *getctx (flux_t h)
         ctx->watchlist = wait_queue_create ();
         ctx->h = h;
         ctx->master = flux_treeroot (h);
-        flux_aux_set (h, "kvssrv", ctx, (FluxFreeFn)freectx);
+        flux_aux_set (h, "kvssrv", ctx, freectx);
     }
 
     return ctx;

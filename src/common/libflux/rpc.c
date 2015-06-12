@@ -42,7 +42,7 @@
 typedef zlist_t zmsglist_t;
 
 struct flux_rpc_struct {
-    flux_match_t m;
+    struct flux_match m;
     flux_t h;
     flux_then_f then_cb;
     void *then_arg;
@@ -96,33 +96,29 @@ static uint32_t lookup_nodeid (flux_rpc_t rpc, uint32_t matchtag)
     return rpc->nodemap[ix];
 }
 
-static zmsg_t *rpc_response_recv (flux_rpc_t rpc, bool nonblock)
-{
-    return flux_recvmsg_match (rpc->h, rpc->m, nonblock);
-}
-
 static int rpc_request_send (flux_rpc_t rpc, int n, const char *topic,
                              const char *json_str, uint32_t nodeid)
 {
-    zmsg_t *zmsg;
+    flux_msg_t *msg;
     int flags = 0;
     int rc = -1;
 
-    if (!(zmsg = flux_request_encode (topic, json_str)))
+    if (!(msg = flux_request_encode (topic, json_str)))
         goto done;
-    if (flux_msg_set_matchtag (zmsg, rpc->m.matchtag + n) < 0)
+    if (flux_msg_set_matchtag (msg, rpc->m.matchtag + n) < 0)
         goto done;
     if (nodeid == FLUX_NODEID_UPSTREAM) {
         flags |= FLUX_MSGFLAG_UPSTREAM;
         nodeid = flux_rank (rpc->h);
     }
-    if (flux_msg_set_nodeid (zmsg, nodeid, flags) < 0)
+    if (flux_msg_set_nodeid (msg, nodeid, flags) < 0)
         goto done;
-    if (flux_sendmsg (rpc->h, &zmsg) < 0)
+    if (flux_send (rpc->h, msg, 0) < 0)
         goto done;
     rc = 0;
 done:
-    zmsg_destroy (&zmsg);
+    if (msg)
+        flux_msg_destroy (msg);
     return rc;
 }
 
@@ -131,7 +127,8 @@ bool flux_rpc_check (flux_rpc_t rpc)
 {
     if (rpc->oneway)
         return false;
-    if (rpc->rx_msg || (rpc->rx_msg = rpc_response_recv (rpc, true)))
+    if (rpc->rx_msg || (rpc->rx_msg = flux_recv (rpc->h, rpc->m,
+                                                 FLUX_O_NONBLOCK)))
         return true;
     errno = 0;
     return false;
@@ -145,7 +142,7 @@ int flux_rpc_get (flux_rpc_t rpc, uint32_t *nodeid, const char **json_str)
         errno = EINVAL;
         goto done;
     }
-    if (!rpc->rx_msg && !(rpc->rx_msg = rpc_response_recv (rpc, false)))
+    if (!rpc->rx_msg && !(rpc->rx_msg = flux_recv (rpc->h, rpc->m, 0)))
         goto done;
     zmsg_destroy (&rpc->rx_msg_consumed); /* invalidate last-got payload */
     rpc->rx_msg_consumed = rpc->rx_msg;
@@ -176,16 +173,18 @@ static int rpc_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
     assert (rpc->then_cb != NULL);
 
     if (rpc->rx_msg) {
-        if (flux_pushmsg (rpc->h, zmsg) < 0)
+        if (flux_requeue (rpc->h, *zmsg, FLUX_RQ_HEAD) < 0)
             goto done;
+        *zmsg = NULL;
     } else {
         rpc->rx_msg = *zmsg;
         *zmsg = NULL;
     }
     rpc->then_cb (rpc, rpc->then_arg);
     if (rpc->rx_msg) {
-        if (flux_pushmsg (rpc->h, &rpc->rx_msg) < 0)
+        if (flux_requeue (rpc->h, rpc->rx_msg, FLUX_RQ_HEAD) < 0)
             goto done;
+        rpc->rx_msg = NULL;
     }
 done: /* no good way to report flux_pushmsg() errors */
     zmsg_destroy (zmsg);
@@ -203,8 +202,11 @@ int flux_rpc_then (flux_rpc_t rpc, flux_then_f cb, void *arg)
     if (cb && !rpc->then_cb) {
         if (flux_msghandler_add_match (rpc->h, rpc->m, rpc_cb, rpc) < 0)
             goto done;
-        if (rpc->rx_msg && flux_pushmsg (rpc->h, &rpc->rx_msg) < 0)
-            goto done;
+        if (rpc->rx_msg) {
+            if (flux_requeue (rpc->h, rpc->rx_msg, FLUX_RQ_HEAD) < 0)
+                goto done;
+            rpc->rx_msg = NULL;
+        }
     } else if (!cb && rpc->then_cb) {
         flux_msghandler_remove_match (rpc->h, rpc->m);
     }

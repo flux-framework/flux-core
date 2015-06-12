@@ -35,8 +35,9 @@ typedef struct {
     int seq;
 } ctx_t;
 
-static void freectx (ctx_t *ctx)
+static void freectx (void *arg)
 {
+    ctx_t *ctx = arg;
     free (ctx);
 }
 
@@ -49,7 +50,7 @@ static ctx_t *getctx (flux_t h)
             return NULL;
         ctx = xzmalloc (sizeof (*ctx));
         ctx->id = id;
-        flux_aux_set (h, "barriercli", ctx, (FluxFreeFn)freectx);
+        flux_aux_set (h, "barriercli", ctx, freectx);
     }
     return ctx;
 }

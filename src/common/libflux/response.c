@@ -25,6 +25,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <czmq.h>
 #include "response.h"
 #include "message.h"
 
@@ -102,29 +103,30 @@ error:
     return NULL;
 }
 
-int flux_respond (flux_t h, const zmsg_t *request,
+int flux_respond (flux_t h, const flux_msg_t *request,
                   int errnum, const char *json_str)
 {
-    zmsg_t *zmsg = NULL;
+    flux_msg_t *msg = NULL;
 
     if (!request) {
         errno = EINVAL;
         goto fatal;
     }
-    if (!(zmsg = flux_msg_copy (request, false)))
+    if (!(msg = flux_msg_copy (request, false)))
         goto fatal;
-    if (flux_msg_set_type (zmsg, FLUX_MSGTYPE_RESPONSE) < 0)
+    if (flux_msg_set_type (msg, FLUX_MSGTYPE_RESPONSE) < 0)
         goto fatal;
-    if (errnum && flux_msg_set_errnum (zmsg, errnum) < 0)
+    if (errnum && flux_msg_set_errnum (msg, errnum) < 0)
         goto fatal;
-    if (!errnum && json_str && flux_msg_set_payload_json (zmsg, json_str) < 0)
+    if (!errnum && json_str && flux_msg_set_payload_json (msg, json_str) < 0)
         goto fatal;
-    if (flux_sendmsg (h, &zmsg) < 0)
+    if (flux_send (h, msg, 0) < 0)
         goto fatal;
-    zmsg_destroy (&zmsg);
+    flux_msg_destroy (msg);
     return 0;
 fatal:
-    zmsg_destroy (&zmsg);
+    if (msg)
+        flux_msg_destroy (msg);
     FLUX_FATAL (h);
     return -1;
 }

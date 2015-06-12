@@ -117,13 +117,13 @@ error:
     return NULL;
 }
 
-int zfd_send (int fd, zmsg_t **msg)
+int zfd_send (int fd, zmsg_t *msg)
 {
     uint8_t *buf = NULL;
     int n, len;
     uint32_t nlen;
 
-    len = zmsg_encode (*msg, &buf);
+    len = zmsg_encode (msg, &buf);
     if (len < 0) {
         errno = EPROTO;
         goto error;
@@ -138,7 +138,6 @@ int zfd_send (int fd, zmsg_t **msg)
         goto error;
 
     free (buf);
-    zmsg_destroy (msg);
     return 0;
 error:
     if (buf)

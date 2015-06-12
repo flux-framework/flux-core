@@ -41,7 +41,7 @@ int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
                    JSON in, JSON *out)
 {
     zmsg_t *zmsg = NULL;
-    flux_match_t match = {
+    struct flux_match match = {
         .typemask = FLUX_MSGTYPE_RESPONSE,
         .matchtag = flux_matchtag_alloc (h, 1),
         .bsize = 1,

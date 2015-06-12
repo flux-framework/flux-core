@@ -121,6 +121,10 @@ typedef struct {
     struct subprocess *shell;
 } ctx_t;
 
+static int broker_event_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
+static int broker_response_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
+static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
+
 static void event_cb (overlay_t ov, void *sock, void *arg);
 static void parent_cb (overlay_t ov, void *sock, void *arg);
 static void child_cb (overlay_t ov, void *sock, void *arg);
@@ -894,12 +898,12 @@ static int broker_init_signalfd (ctx_t *ctx)
  ** Built-in services
  **
  ** Requests received from modules/peers via their respective reactor
- ** callbacks are sent on via flux_sendmsg().  The broker handle
+ ** callbacks are sent on via broker_request_sendmsg().  The broker handle
  ** then dispatches locally matched ones to their svc handlers.
  **
- ** If the request zmsg is not destroyed by the service handler, the
- ** handle code will generate an 'errnum' response containing 0 if
- ** the handler returns 0, or errno if it returns -1.
+ ** If the request zmsg is not destroyed by the service handler, an
+ ** a no-payload response is generated.  If the handler returned -1,
+ ** the response errnum is set to errno, else 0.
  **/
 
 static json_object *
@@ -1401,9 +1405,6 @@ static void broker_add_services (ctx_t *ctx)
 
 
 /* Handle requests from overlay peers.
- * We pass requests to our own handle 'sendmsg' which dispatches
- * it elsewhere.  If the message was not destroyed by the handler
- * (e.g. by responding to it) generate a response here.
  */
 static void child_cb (overlay_t ov, void *sock, void *arg)
 {
@@ -1425,12 +1426,12 @@ static void child_cb (overlay_t ov, void *sock, void *arg)
             (void)snoop_sendmsg (ctx->snoop, zmsg);
             break;
         case FLUX_MSGTYPE_REQUEST:
-            rc = flux_sendmsg (ctx->h, &zmsg);
+            rc = broker_request_sendmsg (ctx, &zmsg);
             if (zmsg)
                 flux_err_respond (ctx->h, rc < 0 ? errno : 0, &zmsg);
             break;
         case FLUX_MSGTYPE_EVENT:
-            rc = flux_sendmsg (ctx->h, &zmsg);
+            rc = broker_event_sendmsg (ctx, &zmsg);
             break;
     }
 done:
@@ -1500,7 +1501,7 @@ static void parent_cb (overlay_t ov, void *sock, void *arg)
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_RESPONSE:
-            if (flux_sendmsg (ctx->h, &zmsg) < 0)
+            if (broker_response_sendmsg (ctx, &zmsg) < 0)
                 goto done;
             break;
         case FLUX_MSGTYPE_EVENT:
@@ -1543,16 +1544,16 @@ static void module_cb (module_t p, void *arg)
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_RESPONSE:
-            (void)flux_sendmsg (ctx->h, &zmsg);
+            (void)broker_response_sendmsg (ctx, &zmsg);
             break;
         case FLUX_MSGTYPE_REQUEST:
-            rc = flux_sendmsg (ctx->h, &zmsg);
+            rc = broker_request_sendmsg (ctx, &zmsg);
             if (zmsg)
                 flux_err_respond (ctx->h, rc < 0 ? errno : 0, &zmsg);
             break;
         case FLUX_MSGTYPE_EVENT:
-            if (flux_sendmsg (ctx->h, &zmsg) < 0) {
-                flux_log (ctx->h, LOG_ERR, "%s(%s): flux_sendmsg %s: %s",
+            if (broker_event_sendmsg (ctx, &zmsg) < 0) {
+                flux_log (ctx->h, LOG_ERR, "%s(%s): broker_event_sendmsg %s: %s",
                           __FUNCTION__, module_get_name (p),
                           flux_msg_typestr (type), strerror (errno));
             }
@@ -1619,8 +1620,8 @@ static void heartbeat_cb (heartbeat_t h, void *arg)
         err ("%s: heartbeat_event_encode failed", __FUNCTION__);
         goto done;
     }
-    if (flux_sendmsg (ctx->h, &zmsg) < 0) {
-        err ("%s: flux_sendmsg", __FUNCTION__);
+    if (broker_event_sendmsg (ctx, &zmsg) < 0) {
+        err ("%s: broker_event_sendmsg", __FUNCTION__);
         goto done;
     }
 done:
@@ -1645,11 +1646,6 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
     }
     return 0;
 }
-
-/**
- ** Broker's internal, minimal flux_t implementation.
- **   to use flux_log() here, we need sendmsg() and rank().
- **/
 
 static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
 {
@@ -1717,25 +1713,33 @@ done:
     return rc;
 }
 
-static int broker_sendmsg (void *impl, zmsg_t **zmsg)
+/**
+ ** Broker's internal, minimal flux_t implementation.
+ **   to use flux_log() here, we need sendmsg() and rank().
+ **/
+
+static int broker_send (void *impl, const flux_msg_t *msg, int flags)
 {
     ctx_t *ctx = impl;
     int type;
+    flux_msg_t *cpy = NULL;
     int rc = -1;
 
-    (void)snoop_sendmsg (ctx->snoop, *zmsg);
+    (void)snoop_sendmsg (ctx->snoop, (zmsg_t *)msg);
 
-    if (flux_msg_get_type (*zmsg, &type) < 0)
+    if (flux_msg_get_type (msg, &type) < 0)
+        goto done;
+    if (!(cpy = flux_msg_copy (msg, true)))
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
-            rc = broker_request_sendmsg (ctx, zmsg);
+            rc = broker_request_sendmsg (ctx, &cpy);
             break;
         case FLUX_MSGTYPE_RESPONSE:
-            rc = broker_response_sendmsg (ctx, zmsg);
+            rc = broker_response_sendmsg (ctx, &cpy);
             break;
         case FLUX_MSGTYPE_EVENT:
-            rc = broker_event_sendmsg (ctx, zmsg);
+            rc = broker_event_sendmsg (ctx, &cpy);
             break;
         default:
             errno = EINVAL;
@@ -1752,7 +1756,7 @@ static int broker_rank (void *impl)
 }
 
 static const struct flux_handle_ops broker_handle_ops = {
-    .sendmsg = broker_sendmsg,
+    .send = broker_send,
     .rank = broker_rank,
 };
 
