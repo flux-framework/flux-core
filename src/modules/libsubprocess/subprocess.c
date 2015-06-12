@@ -92,18 +92,44 @@ static int send_output_to_stream (const char *name, json_object *o)
     return (len);
 }
 
+static int check_completion (struct subprocess *p)
+{
+    if (!p->started)
+        return (0);
+    //if (p->completed) /* completion event already sent */
+     //   return (0);
+
+    /*
+     *  Check that all I/O is closed and subprocess has exited
+     *   (and been reaped)
+     */
+    if (subprocess_io_complete (p) && subprocess_exited (p)) {
+        p->completed = 1;
+        if (p->exit_cb)
+            return (*p->exit_cb) (p, p->exit_cb_arg);
+    }
+    return (0);
+}
+
 static int output_handler (zio_t z, json_object *o, void *arg)
 {
+    int rc = 0;
     struct subprocess *p = (struct subprocess *) arg;
 
     if (p->io_cb) {
         Jadd_int (o, "pid", subprocess_pid (p));
         Jadd_str (o, "type", "io");
         Jadd_str (o, "name", zio_name (z));
-        return (*p->io_cb) (p, o);
+        rc = (*p->io_cb) (p, o);
     }
-
-    return send_output_to_stream (zio_name (z), o);
+    else
+        rc =  send_output_to_stream (zio_name (z), o);
+    /*
+     * Check for process completion in case EOF from I/O stream and process
+     *  already registered exit
+     */
+    check_completion (p);
+    return (0);
 }
 
 struct subprocess * subprocess_create (struct subprocess_manager *sm)
@@ -128,6 +154,7 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
     p->started = 0;
     p->running = 0;
     p->exited = 0;
+    p->completed = 0;
 
     p->zio_in = zio_pipe_writer_create ("stdin", (void *) p);
     p->zio_out = zio_pipe_reader_create ("stdout", NULL, (void *) p);
@@ -146,8 +173,11 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
     return (p);
 }
 
+
 void subprocess_destroy (struct subprocess *p)
 {
+    assert (p != NULL);
+
     if (p->sm)
         zlist_remove (p->sm->processes, (void *) p);
     if (p->zhash)
@@ -532,22 +562,28 @@ static void subprocess_child (struct subprocess *p)
 
 int subprocess_exec (struct subprocess *p)
 {
+    int rc = 0;
     if (sp_barrier_signal (p->parentfd) < 0)
         return (-1);
 
     if ((p->exec_error = sp_barrier_read_error (p->parentfd)) != 0) {
-        /*  reap child */
+        /*
+         * Reap child immediately. Expectation from caller is that
+         *  a call to subprocess_reap will not be necessary after exec
+         *  failure
+         */
         subprocess_reap (p);
-        errno = p->exec_error;
-        return (-1);
+        rc = -1;
     }
-
-    p->running = 1;
+    else
+        p->running = 1;
 
     /* No longer need parentfd socket */
     close (p->parentfd);
     p->parentfd = -1;
-    return (0);
+    if (rc < 0)
+        errno = p->exec_error;
+    return (rc);
 }
 
 int subprocess_fork (struct subprocess *p)
@@ -705,6 +741,7 @@ int subprocess_reap (struct subprocess *p)
     if (waitpid (p->pid, &p->status, p->sm->wait_flags) == (pid_t) -1)
         return (-1);
     p->exited = 1;
+    check_completion (p);
     return (0);
 }
 
@@ -728,13 +765,8 @@ int
 subprocess_manager_reap_all (struct subprocess_manager *sm)
 {
     struct subprocess *p;
-    while ((p = subprocess_manager_wait (sm))) {
-        if (p->exit_cb) {
-            if ((*p->exit_cb) (p, p->exit_cb_arg) < 0)
-                return (-1);
-            subprocess_destroy (p);
-        }
-    }
+    while ((p = subprocess_manager_wait (sm)))
+            check_completion (p);
     return (0);
 }
 
