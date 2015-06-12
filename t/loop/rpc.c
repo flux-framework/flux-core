@@ -163,7 +163,7 @@ const int htablen = sizeof (htab) / sizeof (htab[0]);
 
 int main (int argc, char *argv[])
 {
-    zmsg_t *zmsg;
+    flux_msg_t *msg;
     flux_t h;
 
     plan (34);
@@ -183,12 +183,13 @@ int main (int argc, char *argv[])
     /* test continues in rpctest_begin_cb() so that rpc calls
      * can sleep while we answer them
      */
-    ok ((zmsg = flux_request_encode ("rpctest.begin", NULL)) != NULL,
+    ok ((msg = flux_request_encode ("rpctest.begin", NULL)) != NULL,
         "encoded rpctest.begin request OK");
-    ok (flux_sendmsg (h, &zmsg) == 0,
+    ok (flux_send (h, msg, 0) == 0,
         "sent rpctest.begin request");
     ok (flux_reactor_start (h) == 0,
         "reactor completed normally");
+    flux_msg_destroy (msg);
 
     /* test _then:  Slightly tricky.
      * Send request.  We're not in a coproc ctx here in main(), so there
@@ -226,10 +227,13 @@ int main (int argc, char *argv[])
         FLUX_NODEID_ANY, 0)) != NULL,
         "thenbug: sent echo request");
     do {
-        if (!(zmsg = flux_request_encode ("rpctest.thenbug", NULL))
-                  || flux_sendmsg (h, &zmsg) < 0
-                  || flux_reactor_start (h) < 0)
+        if (!(msg = flux_request_encode ("rpctest.thenbug", NULL))
+                  || flux_send (h, msg, 0) < 0
+                  || flux_reactor_start (h) < 0) {
+            flux_msg_destroy (msg);
             break;
+        }
+        flux_msg_destroy (msg);
     } while (!flux_rpc_check (thenbug_r));
     ok (true,
         "thenbug: check says message ready");

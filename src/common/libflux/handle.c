@@ -447,26 +447,6 @@ fatal:
     return NULL;
 }
 
-int flux_sendmsg (flux_t h, zmsg_t **zmsg)
-{
-    if (flux_send (h, *zmsg, 0) < 0)
-        return -1;
-    zmsg_destroy (zmsg);
-    return 0;
-}
-
-flux_msg_t *flux_recvmsg (flux_t h, bool nonblock)
-{
-    struct flux_match match = FLUX_MATCH_ANY;
-    return flux_recv (h, match, nonblock ? FLUX_O_NONBLOCK : 0);
-}
-
-flux_msg_t *flux_recvmsg_match (flux_t h, struct flux_match match,
-                                bool nonblock)
-{
-    return flux_recv (h, match, nonblock ? FLUX_O_NONBLOCK : 0);
-}
-
 /* FIXME: FLUX_O_TRACE will show these messages being received again
  */
 int flux_requeue (flux_t h, const flux_msg_t *msg, int flags)

@@ -257,7 +257,7 @@ const int htablen = sizeof (htab) / sizeof (htab[0]);
 
 int main (int argc, char *argv[])
 {
-    zmsg_t *zmsg;
+    flux_msg_t *msg;
     flux_t h;
 
     plan (34);
@@ -281,11 +281,12 @@ int main (int argc, char *argv[])
     /* test continues in rpctest_begin_cb() so that rpc calls
      * can sleep while we answer them
      */
-    ok ((zmsg = flux_request_encode ("rpctest.begin", NULL)) != NULL
-        && flux_sendmsg (h, &zmsg) == 0,
+    ok ((msg = flux_request_encode ("rpctest.begin", NULL)) != NULL
+        && flux_send (h, msg, 0) == 0,
         "sent message to initiate test");
     ok (flux_reactor_start (h) == 0,
         "reactor completed normally");
+    flux_msg_destroy (msg);
 
     /* Check result of last _then test */
     ok (nodeset_count (then_ns) == 128,

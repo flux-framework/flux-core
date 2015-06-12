@@ -58,7 +58,7 @@ int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
     }
     if (flux_json_request (h, nodeid, match.matchtag, topic, in) < 0)
         goto done;
-    if (!(zmsg = flux_recvmsg_match (h, match, false)))
+    if (!(zmsg = flux_recv (h, match, 0)))
         goto done;
     if (flux_msg_get_errnum (zmsg, &errnum) < 0)
         goto done;
