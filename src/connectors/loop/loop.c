@@ -41,6 +41,7 @@
 #include <sys/un.h>
 #include <sys/socket.h>
 #include <ctype.h>
+#include <sys/eventfd.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
@@ -55,6 +56,9 @@ typedef struct {
     int magic;
     int rank;
     flux_t h;
+
+    int pollfd;
+    int pollevents;
 
     zlist_t *queue;
     ev_zlist queue_w;
@@ -96,6 +100,36 @@ static const struct flux_handle_ops handle_ops;
 
 const char *fake_uuid = "12345678123456781234567812345678";
 
+static int raise_event (ctx_t *c)
+{
+    uint64_t val = 1;
+    if (write (c->pollfd, &val, sizeof (val)) < 0)
+        return -1;
+    return 0;
+}
+
+static int clear_event (ctx_t *c)
+{
+    uint64_t val;
+    if (read (c->pollfd, &val, sizeof (val)) < 0)
+        return -1;
+    return 0;
+}
+
+static int op_pollevents (void *impl)
+{
+    ctx_t *c = impl;
+    if (clear_event (c) < 0)
+        return -1;
+    return c->pollevents;
+}
+
+static int op_pollfd (void *impl)
+{
+    ctx_t *c = impl;
+    return c->pollfd;
+}
+
 static int op_send (void *impl, const flux_msg_t *msg, int flags)
 {
     ctx_t *c = impl;
@@ -121,6 +155,11 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
         errno = ENOMEM;
         goto done;
     }
+    if (!(c->pollevents & FLUX_POLLIN)) {
+        c->pollevents |= FLUX_POLLIN;
+        if (raise_event (c) < 0)
+            goto done;
+    }
     cpy = NULL; /* c->queue now owns cpy */
     rc = 0;
 done:
@@ -134,8 +173,13 @@ static flux_msg_t *op_recv (void *impl, int flags)
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
     flux_msg_t *msg = zlist_pop (c->queue);
-    if (!msg)
+    if (!msg) {
         errno = EWOULDBLOCK;
+        goto done;
+    }
+    if ((c->pollevents & FLUX_POLLIN) && zlist_size (c->queue) == 0)
+        c->pollevents &= ~FLUX_POLLIN;
+done:
     return msg;
 }
 
@@ -157,6 +201,11 @@ static int op_requeue (void *impl, const flux_msg_t *msg, int flags)
         errno = ENOMEM;
         goto done;
     }
+    if (!(c->pollevents & FLUX_POLLIN)) {
+        c->pollevents |= FLUX_POLLIN;
+        if (raise_event (c) < 0)
+            goto done;
+    }
     rc = 0;
 done:
     return rc;
@@ -175,6 +224,8 @@ static void op_purge (void *impl, struct flux_match match)
         }
         zmsg = zlist_next (c->queue);
     }
+    if ((c->pollevents & FLUX_POLLIN) && zlist_size (c->queue) == 0)
+        c->pollevents &= ~FLUX_POLLIN;
 }
 
 static int op_rank (void *impl)
@@ -386,6 +437,8 @@ static void op_fini (void *impl)
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
 
+    if (c->pollfd >= 0)
+        close (c->pollfd);
     if (c->loop)
         ev_loop_destroy (c->loop);
     if (c->queue) {
@@ -404,6 +457,10 @@ flux_t connector_init (const char *path, int flags)
     ctx_t *c = xzmalloc (sizeof (*c));
     c->magic = CTX_MAGIC;
     c->rank = 0;
+    c->pollevents = FLUX_POLLOUT;
+    c->pollfd = eventfd (1ULL, EFD_NONBLOCK); /* 1ULL since POLLOUT is set */
+    if (c->pollfd < 0)
+        goto error;
     if (!(c->loop = ev_loop_new (EVFLAG_AUTO))
                             || !(c->watchers = zhash_new ())
                             || !(c->queue = zlist_new ())) {
@@ -424,6 +481,8 @@ error:
 }
 
 static const struct flux_handle_ops handle_ops = {
+    .pollfd = op_pollfd,
+    .pollevents = op_pollevents,
     .send = op_send,
     .recv = op_recv,
     .requeue = op_requeue,
