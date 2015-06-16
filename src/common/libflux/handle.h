@@ -39,6 +39,14 @@ enum {
     FLUX_RQ_TAIL = 2,   /* requeue message at tail of queue */
 };
 
+/* Flags for flux_pollevents().
+ */
+enum {
+    FLUX_POLLIN = 1,
+    FLUX_POLLOUT = 2,
+    FLUX_POLLERR = 4,
+};
+
 /* Create/destroy a broker handle.
  * The 'uri' scheme name selects a handle implementation to dynamically load.
  * The rest of the URI is parsed in an implementation-specific manner.
@@ -90,6 +98,9 @@ flux_msg_t *flux_recv (flux_t h, struct flux_match match, int flags);
 /* Requeue message in the handle (head or tail according to flags)
  */
 int flux_requeue (flux_t h, const flux_msg_t *msg, int flags);
+
+int flux_pollfd (flux_t h);
+int flux_pollevents (flux_t h);
 
 /* Event subscribe/unsubscribe.
  */

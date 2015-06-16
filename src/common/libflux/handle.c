@@ -516,6 +516,36 @@ struct reactor *reactor_get (flux_t h)
     return h->reactor;
 }
 
+int flux_pollfd (flux_t h)
+{
+    int fd;
+    if (!h->ops->pollfd) {
+        errno = ENOSYS;
+        goto fatal;
+    }
+    if ((fd = h->ops->pollfd (h->impl)) < 0)
+        goto fatal;
+    return fd;
+fatal:
+    FLUX_FATAL (h);
+    return -1;
+}
+
+int flux_pollevents (flux_t h)
+{
+    int events;
+    if (!h->ops->pollevents) {
+        errno = ENOSYS;
+        goto fatal;
+    }
+    if ((events = h->ops->pollevents (h->impl)) < 0)
+        goto fatal;
+    return events;
+fatal:
+    FLUX_FATAL (h);
+    return -1;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

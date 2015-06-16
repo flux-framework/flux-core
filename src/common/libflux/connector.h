@@ -15,6 +15,8 @@ typedef flux_t (connector_init_f)(const char *uri, int flags);
 typedef int (*flux_msg_f)(flux_t h, void *arg);
 
 struct flux_handle_ops {
+    int         (*pollfd)(void *impl);
+    int         (*pollevents)(void *impl);
     int         (*send)(void *impl, const flux_msg_t *msg, int flags);
     flux_msg_t* (*recv)(void *impl, int flags);
     int         (*requeue)(void *impl, const flux_msg_t *msg, int flags);
