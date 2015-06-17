@@ -44,7 +44,9 @@ libutil_la_SOURCES = \
 	coproc.c \
 	coproc.h \
 	base64.c \
-	base64.h
+	base64.h \
+	msglist.c \
+	msglist.h
 
 EXTRA_DIST = veb_mach.c
 
