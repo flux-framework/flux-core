@@ -113,17 +113,17 @@ static int check_completion (struct subprocess *p)
 
 static int output_handler (zio_t z, json_object *o, void *arg)
 {
-    int rc = 0;
     struct subprocess *p = (struct subprocess *) arg;
 
     if (p->io_cb) {
         Jadd_int (o, "pid", subprocess_pid (p));
         Jadd_str (o, "type", "io");
         Jadd_str (o, "name", zio_name (z));
-        rc = (*p->io_cb) (p, o);
+        (*p->io_cb) (p, o);
     }
     else
-        rc =  send_output_to_stream (zio_name (z), o);
+       send_output_to_stream (zio_name (z), o);
+
     /*
      * Check for process completion in case EOF from I/O stream and process
      *  already registered exit
