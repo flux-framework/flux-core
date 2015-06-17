@@ -55,14 +55,14 @@ typedef struct {
     int fd;
     int rank;
     flux_t h;
-    zlist_t *putmsg;
+    zlist_t *inqueue;
 
     /* Event loop machinery.
-     * main/putmsg pollers are turned off and on to give putmsg priority
+     * main/inqueue pollers are turned off and on to give inqueue priority
      */
     struct ev_loop *loop;
     ev_io unix_w;
-    ev_zlist putmsg_w;
+    ev_zlist inqueue_w;
     int loop_rc;
 
     flux_msg_f msg_cb;
@@ -106,11 +106,11 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
     return zfd_send (c->fd, (zmsg_t *)msg);
 }
 
-static zmsg_t *op_recvmsg_putmsg (ctx_t *c)
+static zmsg_t *op_recvmsg_inqueue (ctx_t *c)
 {
-    zmsg_t *zmsg = zlist_pop (c->putmsg);
+    zmsg_t *zmsg = zlist_pop (c->inqueue);
     if (zmsg) {
-        if (zlist_size (c->putmsg) == 0)
+        if (zlist_size (c->inqueue) == 0)
             sync_msg_watchers (c);
     }
     return zmsg;
@@ -122,7 +122,7 @@ static zmsg_t *op_recv (void *impl, int flags)
     assert (c->magic == CTX_MAGIC);
     zmsg_t *zmsg = NULL;
 
-    if (!(zmsg = op_recvmsg_putmsg (c)))
+    if (!(zmsg = op_recvmsg_inqueue (c)))
         zmsg = zfd_recv (c->fd, (flags & FLUX_O_NONBLOCK) ? : false);
     return zmsg;
 }
@@ -133,14 +133,14 @@ static int op_requeue (void *impl, const flux_msg_t *msg, int flags)
     assert (c->magic == CTX_MAGIC);
     int rc = -1;
     flux_msg_t *cpy = NULL;
-    int oldcount = zlist_size (c->putmsg);
+    int oldcount = zlist_size (c->inqueue);
 
     if (!(cpy = flux_msg_copy (msg, true)))
         goto done;
     if ((flags & FLUX_RQ_TAIL))
-        rc = zlist_append (c->putmsg, cpy);
+        rc = zlist_append (c->inqueue, cpy);
     else
-        rc = zlist_push (c->putmsg, cpy);
+        rc = zlist_push (c->inqueue, cpy);
     if (rc < 0) {
         flux_msg_destroy (cpy);
         errno = ENOMEM;
@@ -157,14 +157,14 @@ static void op_purge (void *impl, struct flux_match match)
 {
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
-    zmsg_t *zmsg = zlist_first (c->putmsg);
+    zmsg_t *zmsg = zlist_first (c->inqueue);
 
     while (zmsg) {
         if (flux_msg_cmp (zmsg, match)) {
-            zlist_remove (c->putmsg, zmsg);
+            zlist_remove (c->inqueue, zmsg);
             zmsg_destroy (&zmsg);
         }
-        zmsg = zlist_next (c->putmsg);
+        zmsg = zlist_next (c->inqueue);
     }
 }
 
@@ -220,12 +220,12 @@ static void op_reactor_stop (void *impl, int rc)
     ev_break (c->loop, EVBREAK_ALL);
 }
 
-static void putmsg_cb (struct ev_loop *loop, ev_zlist *w, int revents)
+static void inqueue_cb (struct ev_loop *loop, ev_zlist *w, int revents)
 {
-    ctx_t *c = (ctx_t *)((char *)w - offsetof (ctx_t, putmsg_w));
+    ctx_t *c = (ctx_t *)((char *)w - offsetof (ctx_t, inqueue_w));
     assert (c->magic == CTX_MAGIC);
 
-    assert (zlist_size (c->putmsg) > 0);
+    assert (zlist_size (c->inqueue) > 0);
     if (c->msg_cb) {
         if (c->msg_cb (c->h, c->msg_cb_arg) < 0)
             op_reactor_stop (c, -1);
@@ -240,7 +240,7 @@ static void unix_cb (struct ev_loop *loop, ev_io *w, int revents)
     if (revents & EV_ERROR) {
         op_reactor_stop (c, -1);
     } else if (revents & EV_READ) {
-        assert (zlist_size (c->putmsg) == 0);
+        assert (zlist_size (c->inqueue) == 0);
         if (c->msg_cb) {
             if (c->msg_cb (c->h, c->msg_cb_arg) < 0)
                 op_reactor_stop (c, -1);
@@ -248,19 +248,19 @@ static void unix_cb (struct ev_loop *loop, ev_io *w, int revents)
     }
 }
 
-/* Enable/disable the appropriate watchers to give putmsg priority
+/* Enable/disable the appropriate watchers to give inqueue priority
  * over the main unix socket.
  */
 static void sync_msg_watchers (ctx_t *c)
 {
     if (c->msg_cb == NULL) {
         ev_io_stop (c->loop, &c->unix_w);
-        ev_zlist_stop (c->loop, &c->putmsg_w);
-    } else if (zlist_size (c->putmsg) > 0) {
+        ev_zlist_stop (c->loop, &c->inqueue_w);
+    } else if (zlist_size (c->inqueue) > 0) {
         ev_io_stop (c->loop, &c->unix_w);
-        ev_zlist_start (c->loop, &c->putmsg_w);
+        ev_zlist_start (c->loop, &c->inqueue_w);
     } else {
-        ev_zlist_stop (c->loop, &c->putmsg_w);
+        ev_zlist_stop (c->loop, &c->inqueue_w);
         ev_io_start (c->loop, &c->unix_w);
     }
 }
@@ -442,11 +442,11 @@ static void op_fini (void *impl)
         (void)close (c->fd);
     if (c->loop)
         ev_loop_destroy (c->loop);
-    if (c->putmsg) {
+    if (c->inqueue) {
         zmsg_t *zmsg;
-        while ((zmsg = zlist_pop (c->putmsg)))
+        while ((zmsg = zlist_pop (c->inqueue)))
             zmsg_destroy (&zmsg);
-        zlist_destroy (&c->putmsg);
+        zlist_destroy (&c->inqueue);
     }
     zhash_destroy (&c->watchers);
     c->magic = ~CTX_MAGIC;
@@ -512,9 +512,9 @@ flux_t connector_init (const char *path, int flags)
         goto error;
     ev_io_init (&c->unix_w, unix_cb, c->fd, EV_READ);
 
-    if (!(c->putmsg = zlist_new ()))
+    if (!(c->inqueue = zlist_new ()))
         oom ();
-    ev_zlist_init (&c->putmsg_w, putmsg_cb, c->putmsg, EV_READ);
+    ev_zlist_init (&c->inqueue_w, inqueue_cb, c->inqueue, EV_READ);
 
     for (;;) {
         if (!pidcheck (pidfile))
