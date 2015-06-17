@@ -315,6 +315,7 @@ void start_slurm (optparse_t p, const char *cmd)
     add_arg (&argz, &argz_len, "--job-name=%s", "flux");
     if (partition)
         add_arg (&argz, &argz_len, "--partition=%s", partition);
+    add_arg (&argz, &argz_len, "--mpi=none");
 
     add_arg (&argz, &argz_len, "%s", broker_path);
     add_arg (&argz, &argz_len, "--pmi-boot");
