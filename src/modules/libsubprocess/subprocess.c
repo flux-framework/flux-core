@@ -748,7 +748,11 @@ subprocess_manager_run (struct subprocess_manager *sm, int ac, char **av,
 
 int subprocess_reap (struct subprocess *p)
 {
-    if (waitpid (p->pid, &p->status, p->sm->wait_flags) == (pid_t) -1)
+    pid_t rc;
+    if (p->exited)
+        return (0);
+    rc = waitpid (p->pid, &p->status, 0);
+    if (rc <= 0)
         return (-1);
     p->exited = 1;
     check_completion (p);
