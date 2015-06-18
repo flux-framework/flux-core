@@ -185,7 +185,11 @@ local mh, err = f:msghandler {
             end
         elseif resp.state == "Running" then
             state.started (resp.rank, resp.pid)
-        elseif resp.state == "Exited" then
+        elseif resp.state == "Exited" or resp.state == "Exec Failure" then
+            if resp.state == "Exec Failure" then
+                warn ("Error: rank %d: %s\n",
+                    resp.rank, posix.errno (resp.exec_errno))
+            end
             state.exited (resp)
             if state.complete() then
                 f:reactor_stop ()
