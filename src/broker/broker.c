@@ -1019,7 +1019,6 @@ static int cmb_exec_cb (zmsg_t **zmsg, void *arg)
     struct subprocess *p;
     zmsg_t *copy;
     int i, argc;
-    int rc = -1;
 
     if (flux_json_request_decode (*zmsg, &request) < 0)
         goto out_free;
@@ -1075,16 +1074,25 @@ static int cmb_exec_cb (zmsg_t **zmsg, void *arg)
 
     subprocess_set_io_callback (p, subprocess_io_cb);
 
-    if ((rc = subprocess_run (p)) < 0) {
-        int errnum = errno;
-        (void) flux_respond (ctx->h, *zmsg, errnum, NULL);
+    if (subprocess_fork (p) < 0) {
+        /*
+         *  Fork error, respond directly to exec client with error
+         *   (There will be no subprocess to reap)
+         */
+        (void) flux_respond (ctx->h, *zmsg, errno, NULL);
         goto out_free;
     }
-    /*
-     *  Send response, destroys original zmsg.
-     */
-    response = subprocess_json_resp (ctx, p);
-    flux_json_respond (ctx->h, response, zmsg);
+
+    if (subprocess_exec (p) >= 0) {
+        /*
+         *  Send response, destroys original zmsg.
+         *   For "Exec Failure" allow that state to be transmitted
+         *   to caller on completion handler (which will be called
+         *   immediately)
+         */
+        response = subprocess_json_resp (ctx, p);
+        flux_json_respond (ctx->h, response, zmsg);
+    }
 out_free:
     if (request)
         json_object_put (request);
