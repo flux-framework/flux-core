@@ -198,6 +198,12 @@ int subprocess_exit_code (struct subprocess *p);
 int subprocess_signaled (struct subprocess *p);
 
 /*
+ *  If state == "Exec Failure" then return the errno from exec(2)
+ *   system call. Otherwise returns 0.
+ */
+int subprocess_exec_error (struct subprocess *p);
+
+/*
  *  Return string representation of process [p] current state,
  *   "Pending", "Exec Failure", "Waiting", "Running", "Exited"
  */

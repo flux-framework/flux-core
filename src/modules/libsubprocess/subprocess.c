@@ -662,6 +662,11 @@ int subprocess_signaled (struct subprocess *p)
     return (0);
 }
 
+int subprocess_exec_error (struct subprocess *p)
+{
+    return (p->exec_error);
+}
+
 const char * subprocess_state_string (struct subprocess *p)
 {
     if (!p->started)
