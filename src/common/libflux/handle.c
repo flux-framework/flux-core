@@ -41,6 +41,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/msglist.h"
 
 
 struct flux_handle_struct {
@@ -48,6 +49,8 @@ struct flux_handle_struct {
     int             flags;
     void            *impl;
     void            *dso;
+    msglist_t       *queue;
+
     zhash_t         *aux;
     tagpool_t       tagpool;
     struct reactor  *reactor;
@@ -196,6 +199,8 @@ flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int fl
     h->impl = impl;
     h->tagpool = tagpool_create ();
     h->reactor = reactor_create (impl, ops);
+    if (!(h->queue = msglist_create ((msglist_free_f)flux_msg_destroy)))
+        oom ();
     return h;
 }
 
@@ -211,6 +216,7 @@ void flux_handle_destroy (flux_t *hp)
         reactor_destroy (h->reactor);
         if (h->dso)
             dlclose (h->dso);
+        msglist_destroy (h->queue);
         free (h);
         *hp = NULL;
     }
@@ -292,6 +298,8 @@ uint32_t flux_matchtag_alloc (flux_t h, int len)
     return tagpool_alloc (h->tagpool, len);
 }
 
+/* Free a block of matchtags, first deleting any queued matching responses.
+ */
 void flux_matchtag_free (flux_t h, uint32_t matchtag, int len)
 {
     struct flux_match match = {
@@ -300,8 +308,14 @@ void flux_matchtag_free (flux_t h, uint32_t matchtag, int len)
         .matchtag = matchtag,
         .bsize = len,
     };
-    if (h->ops->purge)
-        h->ops->purge (h->impl, match);
+    flux_msg_t *msg = msglist_first (h->queue);
+    while (msg) {
+        if (flux_msg_cmp (msg, match)) {
+            msglist_remove (h->queue, msg);
+            flux_msg_destroy (msg);
+        }
+        msg = msglist_next (h->queue);
+    }
     tagpool_free (h->tagpool, matchtag, len);
 }
 
@@ -405,6 +419,18 @@ static void defer_destroy (zlist_t **l)
     }
 }
 
+static flux_msg_t *flux_recv_any (flux_t h, int flags)
+{
+    flux_msg_t *msg = NULL;
+    if (msglist_count (h->queue) > 0)
+        msg = msglist_pop (h->queue);
+    else if (h->ops->recv)
+        msg = h->ops->recv (h->impl, flags);
+    else
+        errno = ENOSYS;
+    return msg;
+}
+
 /* If this function is called without the NONBLOCK flag from a reactor
  * handler running in coprocess context, the call to flux_sleep_on()
  * will allow the reactor to run until a message matching 'match' arrives.
@@ -422,10 +448,6 @@ flux_msg_t *flux_recv (flux_t h, struct flux_match match, int flags)
     flux_msg_t *msg = NULL;
     int saved_errno;
 
-    if (!h->ops->recv || !h->ops->requeue) {
-        errno = ENOSYS;
-        goto fatal;
-    }
     flags |= h->flags;
     if (!(flags & FLUX_O_NONBLOCK) && flux_sleep_on (h, match) < 0) {
         if (errno != EINVAL)
@@ -433,7 +455,7 @@ flux_msg_t *flux_recv (flux_t h, struct flux_match match, int flags)
         errno = 0;
     }
     do {
-        if (!(msg = h->ops->recv (h->impl, flags))) {
+        if (!(msg = flux_recv_any (h, flags))) {
             if (errno != EAGAIN && errno != EWOULDBLOCK)
                 goto fatal;
             if (defer_requeue (&l, h) < 0)
@@ -466,15 +488,27 @@ fatal:
 }
 
 /* FIXME: FLUX_O_TRACE will show these messages being received again
+ * So will message counters.
  */
 int flux_requeue (flux_t h, const flux_msg_t *msg, int flags)
 {
-    if (!h->ops->requeue) {
-        errno = ENOSYS;
+    flux_msg_t *cpy;
+    int rc;
+
+    if (flags != FLUX_RQ_TAIL && flags != FLUX_RQ_HEAD) {
+        errno = EINVAL;
         goto fatal;
     }
-    if (h->ops->requeue(h->impl, msg, flags) < 0)
+    if (!(cpy = flux_msg_copy (msg, true)))
         goto fatal;
+    if (flags == FLUX_RQ_TAIL)
+        rc = msglist_append (h->queue, cpy);
+    else
+        rc = msglist_push (h->queue, cpy);
+    if (rc < 0) {
+        flux_msg_destroy (cpy);
+        goto fatal;
+    }
     return 0;
 fatal:
     FLUX_FATAL (h);
