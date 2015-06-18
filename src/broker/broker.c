@@ -979,6 +979,8 @@ static int child_exit_handler (struct subprocess *p, void *arg)
     util_json_object_add_int (resp, "code", subprocess_exit_code (p));
     if ((n = subprocess_signaled (p)))
         util_json_object_add_int (resp, "signal", n);
+    if ((n = subprocess_exec_error (p)))
+        util_json_object_add_int (resp, "exec_errno", n);
 
     flux_json_respond (ctx->h, resp, &zmsg);
     json_object_put (resp);
