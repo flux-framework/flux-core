@@ -519,6 +519,7 @@ static void sp_barrier_write_error (int fd, int e)
 
 static void subprocess_child (struct subprocess *p)
 {
+    int errnum, code = 127;
     char **argv;
 
     sigmask_unblock_all ();
@@ -550,14 +551,23 @@ static void subprocess_child (struct subprocess *p)
     argv = subprocess_argv_expand (p);
     execvp (argv[0], argv);
     /*
+     *  Exit code standards:
+     *    126 for permission/access denied or
+     *    127 for EEXIST (or anything else)
+     */
+    errnum = errno;
+    if (errnum == EPERM || errnum == EACCES)
+        code = 126;
+
+    /*
      * XXX: close stdout and stderr here to avoid flushing buffers at exit.
      *  This can cause duplicate output if parent was running in fully
      *  bufferred mode, and there was buffered output.
      */
     close (STDOUT_FILENO);
     close (STDERR_FILENO);
-    sp_barrier_write_error (p->childfd, errno);
-    exit (127);
+    sp_barrier_write_error (p->childfd, errnum);
+    exit (code);
 }
 
 int subprocess_exec (struct subprocess *p)
