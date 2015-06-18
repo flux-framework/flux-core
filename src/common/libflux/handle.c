@@ -30,6 +30,8 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <dlfcn.h>
+#include <sys/epoll.h>
+#include <poll.h>
 #include <czmq.h>
 
 #include "handle.h"
@@ -50,6 +52,7 @@ struct flux_handle_struct {
     void            *impl;
     void            *dso;
     msglist_t       *queue;
+    int             pollfd;
 
     zhash_t         *aux;
     tagpool_t       tagpool;
@@ -201,6 +204,7 @@ flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int fl
     h->reactor = reactor_create (impl, ops);
     if (!(h->queue = msglist_create ((msglist_free_f)flux_msg_destroy)))
         oom ();
+    h->pollfd = -1;
     return h;
 }
 
@@ -217,6 +221,8 @@ void flux_handle_destroy (flux_t *hp)
         if (h->dso)
             dlclose (h->dso);
         msglist_destroy (h->queue);
+        if (h->pollfd >= 0)
+            (void)close (h->pollfd);
         free (h);
         *hp = NULL;
     }
@@ -570,28 +576,56 @@ struct reactor *reactor_get (flux_t h)
 
 int flux_pollfd (flux_t h)
 {
-    int fd;
     if (!h->ops->pollfd) {
         errno = ENOSYS;
         goto fatal;
     }
-    if ((fd = h->ops->pollfd (h->impl)) < 0)
-        goto fatal;
-    return fd;
+    if (h->pollfd < 0) {
+        struct epoll_event ev = {
+            .events = EPOLLET | EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLHUP,
+        };
+        if ((h->pollfd = epoll_create (10)) < 0)
+            goto fatal;
+        /* add queue pollfd */
+        ev.data.fd = msglist_pollfd (h->queue);
+        if (ev.data.fd < 0)
+            goto fatal;
+        if (epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
+            goto fatal;
+        /* add connector pollfd */
+        ev.data.fd = h->ops->pollfd (h->impl);
+        if (ev.data.fd < 0)
+            goto fatal;
+        if (epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
+            goto fatal;
+    }
+    return h->pollfd;
 fatal:
+    if (h->pollfd >= 0) {
+        (void)close (h->pollfd);
+        h->pollfd = -1;
+    }
     FLUX_FATAL (h);
     return -1;
 }
 
 int flux_pollevents (flux_t h)
 {
-    int events;
+    int e, events;
     if (!h->ops->pollevents) {
         errno = ENOSYS;
         goto fatal;
     }
     if ((events = h->ops->pollevents (h->impl)) < 0)
         goto fatal;
+    if ((e = msglist_pollevents (h->queue)) < 0)
+        goto fatal;
+    if ((e & POLLIN))
+        events |= FLUX_POLLIN;
+    if ((e & POLLOUT))
+        events |= FLUX_POLLOUT;
+    if ((e & POLLERR))
+        events |= FLUX_POLLERR;
     return events;
 fatal:
     FLUX_FATAL (h);
