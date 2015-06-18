@@ -47,6 +47,8 @@ libflux_la_SOURCES = \
 	conf.c \
 	tagpool.h \
 	tagpool.c \
+	ev_flux.h \
+	ev_flux.c \
 	tmpdir.c
 
 TESTS = test_conf.t \
