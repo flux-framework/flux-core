@@ -33,7 +33,6 @@ libflux_la_SOURCES = \
 	info.c \
 	handle.c \
 	reactor.c \
-	reactor_impl.h \
 	reduce.c \
 	security.c \
 	message.c \

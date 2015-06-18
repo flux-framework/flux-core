@@ -36,7 +36,6 @@
 #include "message.h"
 #include "response.h"
 #include "tagpool.h"
-#include "reactor_impl.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"

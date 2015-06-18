@@ -36,10 +36,10 @@
 
 #include "handle.h"
 #include "reactor.h"
-#include "reactor_impl.h"
 #include "connector.h"
 #include "message.h"
 #include "tagpool.h"
+#include "reactor.h" // for flux_sleep_on ()
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
@@ -56,7 +56,6 @@ struct flux_handle_struct {
 
     zhash_t         *aux;
     tagpool_t       tagpool;
-    struct reactor  *reactor;
     flux_msgcounters_t msgcounters;
     flux_fatal_f    fatal;
     void            *fatal_arg;
@@ -201,7 +200,6 @@ flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int fl
     h->ops = ops;
     h->impl = impl;
     h->tagpool = tagpool_create ();
-    h->reactor = reactor_create (impl, ops);
     if (!(h->queue = msglist_create ((msglist_free_f)flux_msg_destroy)))
         oom ();
     h->pollfd = -1;
@@ -217,7 +215,6 @@ void flux_handle_destroy (flux_t *hp)
         if (h->ops->impl_destroy)
             h->ops->impl_destroy (h->impl);
         tagpool_destroy (h->tagpool);
-        reactor_destroy (h->reactor);
         if (h->dso)
             dlclose (h->dso);
         msglist_destroy (h->queue);
@@ -567,11 +564,6 @@ zctx_t *flux_get_zctx (flux_t h)
         return NULL;
     }
     return h->ops->get_zctx (h->impl);
-}
-
-struct reactor *reactor_get (flux_t h)
-{
-    return h->reactor;
 }
 
 int flux_pollfd (flux_t h)
