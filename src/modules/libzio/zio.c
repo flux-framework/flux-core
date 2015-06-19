@@ -464,6 +464,11 @@ int zio_closed (zio_t zio)
 
 static int zio_close (zio_t zio)
 {
+    if (zio->flags & ZIO_CLOSED) {
+        /* Already closed */
+        errno = EINVAL;
+        return (-1);
+    }
     zio_debug (zio, "zio_close\n");
     if (zio_reader (zio)) {
         close (zio->srcfd);
@@ -543,6 +548,7 @@ int zio_flush (zio_t zio)
                  *   a full line in the buffer. In this case just exit
                  *   so we can buffer more data.
                  */
+                free (buf);
                 return (rc);
 
             }
