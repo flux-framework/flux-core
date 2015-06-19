@@ -12,8 +12,6 @@
  */
 typedef flux_t (connector_init_f)(const char *uri, int flags);
 
-typedef int (*flux_msg_f)(flux_t h, void *arg);
-
 struct flux_handle_ops {
     int         (*setopt)(void *impl, const char *option,
                           const void *val, size_t len);
@@ -23,8 +21,6 @@ struct flux_handle_ops {
     int         (*pollevents)(void *impl);
     int         (*send)(void *impl, const flux_msg_t *msg, int flags);
     flux_msg_t* (*recv)(void *impl, int flags);
-    int         (*requeue)(void *impl, const flux_msg_t *msg, int flags);
-    void        (*purge)(void *impl, struct flux_match match);
 
     int         (*event_subscribe)(void *impl, const char *topic);
     int         (*event_unsubscribe)(void *impl, const char *topic);
@@ -32,21 +28,6 @@ struct flux_handle_ops {
     int         (*rank)(void *impl);
 
     struct _zctx_t * (*get_zctx)(void *impl);
-
-    int         (*reactor_start)(void *impl);
-    void        (*reactor_stop)(void *impl, int rc);
-    int         (*reactor_fd_add)(void *impl, int fd, int events,
-                                  FluxFdHandler, void *arg);
-    void        (*reactor_fd_remove)(void *impl, int fd, int events);
-    int         (*reactor_zs_add)(void *impl, void *zs, int events,
-                                     FluxZsHandler cb, void *arg);
-    void        (*reactor_zs_remove)(void *impl, void *zs, int events);
-
-    int         (*reactor_tmout_add)(void *impl, unsigned long ms, bool oneshot,
-                                     FluxTmoutHandler cb, void *arg);
-    void        (*reactor_tmout_remove)(void *impl, int timer_id);
-    int         (*reactor_msg_add)(void *impl, flux_msg_f cb, void *arg);
-    void        (*reactor_msg_remove)(void *impl);
 
     void        (*impl_destroy)(void *impl);
 };
