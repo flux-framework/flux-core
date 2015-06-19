@@ -608,6 +608,10 @@ int flux_pollevents (flux_t h)
         errno = ENOSYS;
         goto fatal;
     }
+    if (h->pollfd >= 0) {
+        struct epoll_event ev;
+        (void)epoll_wait (h->pollfd, &ev, 1, 0);
+    }
     if ((events = h->ops->pollevents (h->impl)) < 0)
         goto fatal;
     if ((e = msglist_pollevents (h->queue)) < 0)

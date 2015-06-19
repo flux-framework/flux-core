@@ -63,6 +63,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
+	$(top_builddir)/src/common/libev/libev.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)
 
 test_cppflags = \
