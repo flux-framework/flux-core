@@ -8,7 +8,11 @@
  * Callbacks return 0 on success, -1 on error and set errno.
  * Error terminates reactor, and flux_reactor_start() returns -1.
  */
-typedef int (*FluxMsgHandler)(flux_t h, int typemask, flux_msg_t **msg, void *arg);
+typedef int (*FluxMsgHandler)(flux_t h, int typemask, flux_msg_t **msg,
+                              void *arg);
+typedef int (*FluxFdHandler)(flux_t h, int fd, short revents, void *arg);
+typedef int (*FluxZsHandler)(flux_t h, void *zs, short revents, void *arg);
+typedef int (*FluxTmoutHandler)(flux_t h, void *arg);
 
 typedef struct {
     int typemask;
@@ -32,6 +36,39 @@ int flux_msghandler_addvec (flux_t h, msghandler_t *handlers, int len,
  * identical typemask and pattern is removed.
  */
 void flux_msghandler_remove (flux_t h, int typemask, const char *pattern);
+
+
+/* Register a FluxFdHandler callback to be called whenever an event
+ * in the 'events' mask occurs on the given file descriptor 'fd'.
+ */
+int flux_fdhandler_add (flux_t h, int fd, short events,
+                        FluxFdHandler cb, void *arg);
+
+/* Unregister a FluxFdHandler callback.  Only the first callback with
+ * identical fd and events is removed.
+ */
+void flux_fdhandler_remove (flux_t h, int fd, short events);
+
+
+/* Register a FluxZsHandler callback to be called whenever an event
+ * in the 'events' mask occurs on the given zeromq socket 'zs'.
+ */
+int flux_zshandler_add (flux_t h, void *zs, short events,
+                        FluxZsHandler cb, void *arg);
+
+/* Unregister a FluxZsHandler callback.  Only the first callback with
+ * identical zs and events is removed.
+ */
+void flux_zshandler_remove (flux_t h, void *zs, short events);
+
+/* Register a FluxTmoutHandler callback.  Returns timer_id or -1 on error.
+ */
+int flux_tmouthandler_add (flux_t h, unsigned long msec, bool oneshot,
+                           FluxTmoutHandler cb, void *arg);
+
+/* Unregister a FluxTmoutHandler callback.
+ */
+void flux_tmouthandler_remove (flux_t h, int timer_id);
 
 #endif /* !_FLUX_COMPAT_REACTOR_H */
 
