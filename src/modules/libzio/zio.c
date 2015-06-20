@@ -48,6 +48,7 @@
 #define ZIO_LINE_BUFFERED   (1<<4)
 #define ZIO_CLOSED          (1<<5)
 #define ZIO_VERBOSE         (1<<6)
+#define ZIO_IN_HANDLER      (1<<7)
 
 #define ZIO_READER          1
 #define ZIO_WRITER          2
@@ -152,6 +153,21 @@ static void zio_debug (zio_t zio, const char *fmt, ...)
         zio_vlog (zio, fmt, ap);
         va_end (ap);
     }
+}
+
+static inline int zio_is_in_handler (zio_t zio)
+{
+    return (zio->flags & ZIO_IN_HANDLER);
+}
+
+static inline void zio_handler_start (zio_t zio)
+{
+    zio->flags |= ZIO_IN_HANDLER;
+}
+
+static inline void zio_handler_end (zio_t zio)
+{
+    zio->flags &= ~ZIO_IN_HANDLER;
 }
 
 static int fd_set_nonblocking (int fd)
@@ -558,28 +574,30 @@ static int zio_read_cb_common (zio_t zio)
 
 static int zio_zloop_read_cb (zloop_t *zl, zmq_pollitem_t *zp, zio_t zio)
 {
-    if (zio_read_cb_common (zio) < 0)
-        return (-1);
-
-    if (zio_eof_sent (zio)) {
+    int rc;
+    zio_handler_start (zio);
+    rc = zio_read_cb_common (zio);
+    if (rc >= 0 && zio_eof_sent (zio)) {
         zio_debug (zio, "reader detaching from zloop\n");
         zloop_poller_end (zl, zp);
-        return (zio_close (zio));
+        rc = zio_close (zio);
     }
-    return (0);
+    zio_handler_end (zio);
+    return (rc);
 }
 
 static int zio_flux_read_cb (flux_t f, int fd, short revents, zio_t zio)
 {
-    if (zio_read_cb_common (zio) < 0)
-        return (-1);
-
-    if (zio_eof_sent (zio)) {
+    int rc;
+    zio_handler_start (zio);
+    rc = zio_read_cb_common (zio);
+    if (rc >= 0 && zio_eof_sent (zio)) {
         zio_debug (zio, "reader detaching from flux reactor\n");
         flux_fdhandler_remove (f, fd, ZMQ_POLLIN|ZMQ_POLLERR);
-        return (zio_close (zio));
+        rc = zio_close (zio);
     }
-    return (0);
+    zio_handler_end (zio);
+    return (rc);
 }
 
 static int zio_write_pending (zio_t zio)
@@ -613,17 +631,23 @@ static int zio_writer_cb (zio_t zio)
 
 static int zio_zloop_writer_cb (zloop_t *zl, zmq_pollitem_t *zp, zio_t zio)
 {
-    int rc = zio_writer_cb (zio);
+    int rc;
+    zio_handler_start (zio);
+    rc = zio_writer_cb (zio);
     if (!zio_write_pending (zio))
         zloop_poller_end (zl, zp);
+    zio_handler_end (zio);
     return (rc);
 }
 
 static int zio_flux_writer_cb (flux_t f, int fd, short revents, zio_t zio)
 {
-    int rc = zio_writer_cb (zio);
+    int rc;
+    zio_handler_start (zio);
+    rc = zio_writer_cb (zio);
     if (!zio_write_pending (zio))
         flux_fdhandler_remove (f, fd, ZMQ_POLLOUT | ZMQ_POLLERR);
+    zio_handler_end (zio);
     return (rc);
 }
 
