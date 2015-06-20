@@ -49,6 +49,7 @@
 #define ZIO_CLOSED          (1<<5)
 #define ZIO_VERBOSE         (1<<6)
 #define ZIO_IN_HANDLER      (1<<7)
+#define ZIO_DESTROYED       (1<<8)
 
 #define ZIO_READER          1
 #define ZIO_WRITER          2
@@ -155,6 +156,16 @@ static void zio_debug (zio_t zio, const char *fmt, ...)
     }
 }
 
+static inline void zio_set_destroyed (zio_t zio)
+{
+    zio->flags |= ZIO_DESTROYED;
+}
+
+static inline int zio_is_destroyed (zio_t zio)
+{
+    return (zio->flags & ZIO_DESTROYED);
+}
+
 static inline int zio_is_in_handler (zio_t zio)
 {
     return (zio->flags & ZIO_IN_HANDLER);
@@ -168,6 +179,8 @@ static inline void zio_handler_start (zio_t zio)
 static inline void zio_handler_end (zio_t zio)
 {
     zio->flags &= ~ZIO_IN_HANDLER;
+    if (zio_is_destroyed (zio))
+        zio_destroy (zio);
 }
 
 static int fd_set_nonblocking (int fd)
@@ -188,6 +201,10 @@ void zio_destroy (zio_t z)
     if (z == NULL)
         return;
     assert (z->magic == ZIO_MAGIC);
+    if (zio_is_in_handler (z)) {
+        zio_set_destroyed (z);
+        return;
+    }
     if (z->buf)
         cbuf_destroy (z->buf);
     free (z->name);
