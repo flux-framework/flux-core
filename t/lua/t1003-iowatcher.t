@@ -19,9 +19,12 @@ dir:commit()
 local data = {}
 local iow, err = f:iowatcher {
     key = "iowatcher.test.stdout",
-    handler = function (iow, line)
-        if not line then f:reactor_stop() end
-        table.insert (data, line)
+    handler = function (iow, lines)
+        if not lines then f:reactor_stop(); return  end
+        -- Can get multiple lines per callback, by the by
+        lines:gsub ('([^\n]+\n?)', function (s)
+            table.insert (data, s)
+        end)
     end
 }
 type_ok (iow, 'userdata', "succesfully create iowatcher")
