@@ -19,7 +19,8 @@ libsubprocess_la_LIBADD = \
 	$(LIBPTHREAD) $(LIBDL)
 
 TESTS = \
-	test_subprocess.t
+	test_subprocess.t \
+	test_loop.t
 
 check_PROGRAMS = \
 	$(TESTS)
@@ -34,6 +35,17 @@ test_subprocess_t_CPPFLAGS = \
 test_subprocess_t_SOURCES = \
 	test/subprocess.c
 test_subprocess_t_LDADD = \
+	$(top_builddir)/src/common/libtap/libtap.la \
+	$(top_builddir)/src/modules/libsubprocess/libsubprocess.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la
+
+test_loop_t_CPPFLAGS = \
+	$(AM_CPPFLAGS) \
+	-I$(top_srcdir)/src/common/libtap
+test_loop_t_SOURCES = \
+	test/loop.c
+test_loop_t_LDADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/modules/libsubprocess/libsubprocess.la \
 	$(top_builddir)/src/common/libflux-internal.la \
