@@ -425,12 +425,9 @@ static int zio_sendmsg (zio_t zio, json_object *o)
 
 static int zio_send (zio_t zio, char *p, size_t len)
 {
-    int rc;
     zio_debug (zio, "zio_send (len=%d)\n", len);
     json_object *o = zio_json_object_create (zio, p, len);
-    rc = zio_sendmsg (zio, o);
-    json_object_put (o);
-    return rc;
+    return (zio_sendmsg (zio, o));
 }
 
 static int zio_data_to_flush (zio_t zio)
