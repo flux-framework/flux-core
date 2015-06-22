@@ -368,10 +368,10 @@ static int defer_requeue (zlist_t **l, flux_t h)
     flux_msg_t *msg;
     if (*l) {
         while ((msg = zlist_pop (*l))) {
-            if (flux_requeue (h, msg, FLUX_RQ_TAIL) < 0) {
-                flux_msg_destroy (msg);
+            int rc = flux_requeue (h, msg, FLUX_RQ_TAIL);
+            flux_msg_destroy (msg);
+            if (rc < 0)
                 return -1;
-            }
         }
     }
     return 0;
