@@ -299,6 +299,7 @@ int kz_get (kz_t kz, char **datap)
         errno = EPROTO;
         goto done;
     }
+    json_object_put (val);
     *datap = data;
 done:
     return len;
