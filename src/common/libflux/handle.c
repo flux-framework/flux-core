@@ -298,7 +298,10 @@ void flux_clr_msgcounters (flux_t h)
 
 uint32_t flux_matchtag_alloc (flux_t h, int len)
 {
-    return tagpool_alloc (h->tagpool, len);
+    uint32_t matchtag = tagpool_alloc (h->tagpool, len);
+    if (matchtag == FLUX_MATCHTAG_NONE)
+        errno = EBUSY; /* appropriate error? */
+    return matchtag;
 }
 
 /* Free a block of matchtags, first deleting any queued matching responses.

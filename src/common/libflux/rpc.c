@@ -61,8 +61,14 @@ void flux_rpc_destroy (flux_rpc_t rpc)
             flux_msg_watcher_stop (rpc->h, rpc->w);
             flux_msg_watcher_destroy (rpc->w);
         }
-        if (rpc->m.matchtag != FLUX_MATCHTAG_NONE)
-            flux_matchtag_free (rpc->h, rpc->m.matchtag, rpc->m.bsize);
+        if (rpc->m.matchtag != FLUX_MATCHTAG_NONE) {
+            /* FIXME: we cannot safely return matchtags to the pool here
+             * if the rpc was not completed.  Lacking a proper cancellation
+             * protocol, we simply leak them.  See issue #212.
+             */
+            if (flux_rpc_completed (rpc))
+                flux_matchtag_free (rpc->h, rpc->m.matchtag, rpc->m.bsize);
+        }
         zmsg_destroy (&rpc->rx_msg);
         zmsg_destroy (&rpc->rx_msg_consumed);
         if (rpc->nodemap)
