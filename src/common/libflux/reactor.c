@@ -33,7 +33,6 @@
 
 #include "handle.h"
 #include "reactor.h"
-#include "handle_impl.h"
 #include "message.h"
 #include "response.h"
 #include "tagpool.h"

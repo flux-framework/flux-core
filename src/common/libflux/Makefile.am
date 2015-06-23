@@ -8,7 +8,7 @@ AM_CPPFLAGS = \
 fluxcoreinclude_HEADERS = \
 	flux.h \
 	handle.h \
-	handle_impl.h \
+	connector.h \
 	reactor.h \
 	reduce.h \
 	security.h \

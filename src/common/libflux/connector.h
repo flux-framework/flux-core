@@ -1,5 +1,5 @@
-#ifndef _FLUX_CORE_HANDLE_IMPL_H
-#define _FLUX_CORE_HANDLE_IMPL_H
+#ifndef _FLUX_CORE_CONNECTOR_H
+#define _FLUX_CORE_CONNECTOR_H
 
 #include <stdbool.h>
 
@@ -50,7 +50,7 @@ void flux_handle_destroy (flux_t *hp);
 
 struct _zctx_t *flux_get_zctx (flux_t h);
 
-#endif /* !_FLUX_CORE_HANDLE_IMPL_H */
+#endif /* !_FLUX_CORE_CONNECTOR_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
