@@ -818,6 +818,7 @@ int rexec_state_change (struct prog_ctx *ctx, const char *state)
     if ((ctx->nodeid == 0) && update_job_state (ctx, state) < 0)
         log_fatal (ctx, 1, "update_job_state");
 
+    free (name);
     return (0);
 }
 
