@@ -105,7 +105,7 @@ static void reactor_destroy (void *arg)
 
 static struct reactor *reactor_get (flux_t h)
 {
-    struct reactor *r = flux_aux_get (h, "reactor");
+    struct reactor *r = flux_aux_get (h, "flux::reactor");
     if (!r) {
         r = xzmalloc (sizeof (*r));
         r->loop = ev_loop_new (EVFLAG_AUTO);
@@ -115,7 +115,7 @@ static struct reactor *reactor_get (flux_t h)
             oom ();
         r->h = h;
         ev_flux_init (&r->handle_w, handle_cb, h, EV_READ);
-        flux_aux_set (h, "reactor", r, reactor_destroy);
+        flux_aux_set (h, "flux::reactor", r, reactor_destroy);
     }
     return r;
 }

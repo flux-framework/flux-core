@@ -54,12 +54,12 @@ static void freectx (void *arg)
 
 static logctx_t *getctx (flux_t h)
 {
-    logctx_t *ctx = (logctx_t *)flux_aux_get (h, "log");
+    logctx_t *ctx = (logctx_t *)flux_aux_get (h, "flux::log");
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
         ctx->facility = xstrdup ("unknown");
-        flux_aux_set (h, "log", ctx, freectx);
+        flux_aux_set (h, "flux::log", ctx, freectx);
     }
     return ctx;
 }
