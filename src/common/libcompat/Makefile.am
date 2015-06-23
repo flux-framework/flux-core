@@ -11,4 +11,6 @@ libcompat_la_SOURCES = \
 	handle.h \
 	reactor.c \
 	reactor.h \
+	info.c \
+	info.h \
 	compat.h

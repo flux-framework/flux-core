@@ -103,13 +103,6 @@ int flux_size (flux_t h)
     return size;
 }
 
-bool flux_treeroot (flux_t h)
-{
-    bool treeroot = false;
-    flux_info (h, NULL, NULL, &treeroot);
-    return treeroot;
-}
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

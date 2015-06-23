@@ -17,8 +17,12 @@
 #define flux_tmouthandler_add       compat_tmouthandler_add
 #define flux_tmouthandler_remove    compat_tmouthandler_remove
 
+/* info */
+#define flux_treeroot               compat_treeroot
+
 #include "handle.h"
 #include "reactor.h"
+#include "info.h"
 
 #endif /* !_FLUX_COMPAT_H */
 
