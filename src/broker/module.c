@@ -167,8 +167,7 @@ static void *module_thread (void *arg)
 
     /* Create handle, enable logging, register built-in services
      */
-    p->h = modhandle_create (p->zs_svc[0], zuuid_str (p->uuid),
-                             p->rank, p->zctx);
+    p->h = modhandle_create (p->zs_svc[0], zuuid_str (p->uuid), p->zctx);
     flux_log_set_facility (p->h, p->name);
     modservice_register (p->h, p);
 

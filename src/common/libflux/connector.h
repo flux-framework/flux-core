@@ -25,8 +25,6 @@ struct flux_handle_ops {
     int         (*event_subscribe)(void *impl, const char *topic);
     int         (*event_unsubscribe)(void *impl, const char *topic);
 
-    int         (*rank)(void *impl);
-
     struct _zctx_t * (*get_zctx)(void *impl);
 
     void        (*impl_destroy)(void *impl);

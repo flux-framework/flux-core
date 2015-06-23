@@ -506,9 +506,13 @@ int main (int argc, char *argv[])
     snoop_set_sec (ctx.snoop, ctx.sec);
     snoop_set_uri (ctx.snoop, "%s", "ipc://*");
 
-    /* Create our flux_t handle.
+    /* Create our (limited functionality) flux_t handle.
+     * The handle is mainly used for flux_log(), which calls flux_rank(),
+     * so trick flux_rank() to work here by pre-loading its aux cache entry.
      */
-    ctx.h = flux_handle_create (&ctx, &broker_handle_ops, 0);
+    if (!(ctx.h = flux_handle_create (&ctx, &broker_handle_ops, 0)))
+        err_exit ("flux_handle_create");
+    flux_aux_set (ctx.h, "flux::rank", &ctx.rank, NULL);
     flux_log_set_facility (ctx.h, "broker");
     if (ctx.rank == 0)
         flux_log_set_redirect (ctx.h, broker_log, &ctx);
@@ -1738,7 +1742,6 @@ done:
 
 /**
  ** Broker's internal, minimal flux_t implementation.
- **   to use flux_log() here, we need sendmsg() and rank().
  **/
 
 static int broker_send (void *impl, const flux_msg_t *msg, int flags)
@@ -1772,15 +1775,8 @@ done:
     return rc;
 }
 
-static int broker_rank (void *impl)
-{
-    ctx_t *ctx = impl;
-    return ctx->rank;
-}
-
 static const struct flux_handle_ops broker_handle_ops = {
     .send = broker_send,
-    .rank = broker_rank,
 };
 
 /*

@@ -43,7 +43,6 @@ typedef struct {
     int magic;
     int fd;
     int pollfd;
-    int rank;
     flux_t h;
 } ctx_t;
 
@@ -136,17 +135,6 @@ static int op_event_unsubscribe (void *impl, const char *s)
     return rc;
 }
 
-static int op_rank (void *impl)
-{
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-    if (c->rank == -1) {
-        if (flux_info (c->h, &c->rank, NULL, NULL) < 0)
-            return -1;
-    }
-    return c->rank;
-}
-
 static void op_fini (void *impl)
 {
     ctx_t *c = impl;
@@ -204,7 +192,6 @@ flux_t connector_init (const char *path, int flags)
 
     c = xzmalloc (sizeof (*c));
     c->magic = CTX_MAGIC;
-    c->rank = -1;
     c->pollfd = -1;
 
     c->fd = socket (AF_UNIX, SOCK_STREAM, 0);
@@ -239,7 +226,6 @@ static const struct flux_handle_ops handle_ops = {
     .recv = op_recv,
     .event_subscribe = op_event_subscribe,
     .event_unsubscribe = op_event_unsubscribe,
-    .rank = op_rank,
     .impl_destroy = op_fini,
 };
 

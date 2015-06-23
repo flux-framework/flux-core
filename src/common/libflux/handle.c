@@ -545,21 +545,6 @@ fatal:
     return -1;
 }
 
-int flux_rank (flux_t h)
-{
-    int rank;
-    if (!h->ops->rank) {
-        errno = ENOSYS;
-        goto fatal;
-    }
-    if ((rank = h->ops->rank (h->impl)) < 0)
-        goto fatal;
-    return rank;
-fatal:
-    FLUX_FATAL (h);
-    return -1;
-}
-
 zctx_t *flux_get_zctx (flux_t h)
 {
     if (!h->ops->get_zctx) {

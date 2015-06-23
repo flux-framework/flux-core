@@ -41,7 +41,6 @@ typedef struct {
     int magic;
     void *sock;
     void *zctx;
-    uint32_t rank;
     char *uuid;
     flux_t h;
 } ctx_t;
@@ -58,15 +57,13 @@ static void modhandle_destroy (void *impl)
     free (ctx);
 }
 
-flux_t modhandle_create (void *sock, const char *uuid,
-                         uint32_t rank, zctx_t *zctx)
+flux_t modhandle_create (void *sock, const char *uuid, zctx_t *zctx)
 {
     ctx_t *ctx = xzmalloc (sizeof (*ctx));
     ctx->magic = MODHANDLE_MAGIC;
 
     ctx->sock = sock;
     ctx->uuid = xstrdup (uuid);
-    ctx->rank = rank;
     ctx->zctx = zctx;
 
     if (!(ctx->h = flux_handle_create (ctx, &mod_handle_ops, 0))) {
@@ -175,7 +172,7 @@ static int mod_event_subscribe (void *impl, const char *topic)
     int rc = -1;
 
     Jadd_str (in, "topic", topic);
-    if (flux_json_rpc (ctx->h, ctx->rank, "cmb.sub", in, NULL) < 0)
+    if (flux_json_rpc (ctx->h, FLUX_NODEID_ANY, "cmb.sub", in, NULL) < 0)
         goto done;
     rc = 0;
 done:
@@ -191,19 +188,12 @@ static int mod_event_unsubscribe (void *impl, const char *topic)
     int rc = -1;
 
     Jadd_str (in, "topic", topic);
-    if (flux_json_rpc (ctx->h, ctx->rank, "cmb.unsub", in, NULL) < 0)
+    if (flux_json_rpc (ctx->h, FLUX_NODEID_ANY, "cmb.unsub", in, NULL) < 0)
         goto done;
     rc = 0;
 done:
     Jput (in);
     return rc;
-}
-
-static int mod_rank (void *impl)
-{
-    ctx_t *ctx = impl;
-    assert (ctx->magic == MODHANDLE_MAGIC);
-    return ctx->rank;
 }
 
 static zctx_t *mod_get_zctx (void *impl)
@@ -220,7 +210,6 @@ static const struct flux_handle_ops mod_handle_ops = {
     .recv = mod_recv,
     .event_subscribe = mod_event_subscribe,
     .event_unsubscribe = mod_event_unsubscribe,
-    .rank = mod_rank,
     .get_zctx = mod_get_zctx,
     .impl_destroy = modhandle_destroy,
 };

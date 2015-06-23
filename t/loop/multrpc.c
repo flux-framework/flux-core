@@ -13,6 +13,8 @@
 
 #include "src/common/libtap/tap.h"
 
+static int fake_size = 1;
+
 /* request nodeid and flags returned in response */
 static int nodeid_fake_error = -1;
 int rpctest_nodeid_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
@@ -71,28 +73,6 @@ int rpctest_hello_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
     hello_count++;
 done:
     (void)flux_respond (h, *zmsg, errnum, NULL);
-    zmsg_destroy (zmsg);
-    return 0;
-}
-
-/* flux_rpc_multi() makes a flux_size() call, faked here for loop connector.
- */
-static volatile int fake_size = 1;
-int cmb_info_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
-{
-    int errnum = 0;
-    JSON o = Jnew ();
-
-    if (flux_request_decode (*zmsg, NULL, NULL) < 0) {
-        errnum = errno;
-        goto done;
-    }
-    Jadd_bool (o, "treeroot", true);
-    Jadd_int (o, "rank", 0);
-    Jadd_int (o, "size", fake_size);
-done:
-    (void)flux_respond (h, *zmsg, errnum, Jtostr (o));
-    Jput (o);
     zmsg_destroy (zmsg);
     return 0;
 }
@@ -158,6 +138,7 @@ int rpctest_begin_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
 
     /* fake that we have a larger session */
     fake_size = 128;
+    flux_aux_set (h, "flux::size", &fake_size, NULL);
     cmp_ok (flux_size (h), "==", fake_size,
         "successfully faked flux_size() of %d", fake_size);
 
@@ -252,7 +233,6 @@ static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST,   "rpctest.hello",          rpctest_hello_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.echo",           rpctest_echo_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.nodeid",         rpctest_nodeid_cb},
-    { FLUX_MSGTYPE_REQUEST,   "cmb.info",               cmb_info_cb},
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 

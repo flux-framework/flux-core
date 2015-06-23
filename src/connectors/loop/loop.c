@@ -41,6 +41,7 @@
 typedef struct {
     int magic;
     int rank;
+    int size;
     flux_t h;
 
     int pollfd;
@@ -117,13 +118,6 @@ static flux_msg_t *op_recv (void *impl, int flags)
     return msg;
 }
 
-static int op_rank (void *impl)
-{
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-    return c->rank;
-}
-
 static void op_fini (void *impl)
 {
     ctx_t *c = impl;
@@ -144,6 +138,11 @@ flux_t connector_init (const char *path, int flags)
     if (!(c->queue = msglist_create ((msglist_free_f)flux_msg_destroy)))
         goto error;
     c->h = flux_handle_create (c, &handle_ops, flags);
+    /* Fake out flux_size() and flux_rank () for testing.
+     */
+    c->size = 1;
+    flux_aux_set (c->h, "flux::size", &c->size, NULL);
+    flux_aux_set (c->h, "flux::rank", &c->rank, NULL);
     return c->h;
 error:
     if (c) {
@@ -159,7 +158,6 @@ static const struct flux_handle_ops handle_ops = {
     .pollevents = op_pollevents,
     .send = op_send,
     .recv = op_recv,
-    .rank = op_rank,
     .impl_destroy = op_fini,
 };
 
