@@ -49,7 +49,6 @@
 
 #include "heartbeat.h"
 #include "module.h"
-#include "modhandle.h"
 #include "modservice.h"
 
 /* While transitioning to argc, argv - style args per RFC 5,
@@ -69,9 +68,7 @@ struct module_struct {
     int lastseen;
     heartbeat_t heartbeat;
 
-    void *zs_svc[2];        /* PAIR for handling requests 0=module, 1=broker */
-
-    char *svc_uri;
+    void *sock;             /* broker end of PAIR socket */
 
     zuuid_t *uuid;          /* uuid for unique request sender identity */
     pthread_t t;            /* module thread */
@@ -129,17 +126,6 @@ static zhash_t *zhash_fromargz (module_t p)
     return z;
 }
 
-static void send_eof (void *sock)
-{
-    zmsg_t *zmsg;
-
-    if (!(zmsg = zmsg_new ()) || zmsg_pushmem (zmsg, NULL, 0) < 0)
-        oom ();
-    if (zmsg_send (&zmsg, sock) < 0)
-        err_exit ("error sending EOF");
-    zmsg_destroy (&zmsg);
-}
-
 static void *module_thread (void *arg)
 {
     module_t p = arg;
@@ -147,16 +133,20 @@ static void *module_thread (void *arg)
     sigset_t signal_set;
     int errnum;
     zhash_t *args = NULL;
+    char *uri = xasprintf ("shmem://%s", zuuid_str (p->uuid));
 
     assert (p->zctx);
 
-    /* Connect to broker socket
+    /* Connect to broker socket, enable logging, register built-in services
      */
-    if (!(p->zs_svc[0] = zsocket_new (p->zctx, ZMQ_PAIR)))
-        err_exit ("zsocket_new");
-    zsocket_set_hwm (p->zs_svc[0], 0);
-    if (zsocket_connect (p->zs_svc[0], "%s", p->svc_uri) < 0)
-        err_exit ("%s", p->svc_uri);
+    if (!(p->h = flux_open (uri, 0)))
+        err_exit ("flux_open %s", uri);
+    if (flux_opt_set (p->h, FLUX_OPT_ZEROMQ_CONTEXT,
+                      p->zctx, sizeof (p->zctx)) < 0)
+        err_exit ("flux_opt_set ZEROMQ_CONTEXT");
+    flux_aux_set (p->h, "flux::rank", &p->rank, NULL);
+    flux_log_set_facility (p->h, p->name);
+    modservice_register (p->h, p);
 
     /* Block all signals
      */
@@ -164,12 +154,6 @@ static void *module_thread (void *arg)
         err_exit ("%s: sigfillset", p->name);
     if ((errnum = pthread_sigmask (SIG_BLOCK, &signal_set, NULL)) != 0)
         errn_exit (errnum, "pthread_sigmask");
-
-    /* Create handle, enable logging, register built-in services
-     */
-    p->h = modhandle_create (p->zs_svc[0], zuuid_str (p->uuid), p->zctx);
-    flux_log_set_facility (p->h, p->name);
-    modservice_register (p->h, p);
 
     /* Run the module's main().
      */
@@ -180,10 +164,8 @@ static void *module_thread (void *arg)
     }
 done:
     zhash_destroy (&args);
-
-    send_eof (p->zs_svc[0]);
-
-    zsocket_destroy (p->zctx, p->zs_svc[0]);
+    flux_close (p->h);
+    p->h = NULL;
 
     return NULL;
 }
@@ -219,7 +201,7 @@ zmsg_t *module_recvmsg (module_t p)
     int type;
     assert (p->magic == MODULE_MAGIC);
 
-    if (!(zmsg = zmsg_recv (p->zs_svc[1])))
+    if (!(zmsg = zmsg_recv (p->sock)))
         goto error;
     if (flux_msg_get_type (zmsg, &type) == 0 && type == FLUX_MSGTYPE_RESPONSE) {
         if (flux_msg_pop_route (zmsg, &uuid) < 0) /* simulate DEALER socket */
@@ -244,7 +226,7 @@ int module_sendmsg (zmsg_t **zmsg, module_t p)
         if (flux_msg_push_route (*zmsg, uuid) < 0) /* simulate DEALER socket */
             return -1;
     }
-    return zmsg_send (zmsg, p->zs_svc[1]);
+    return zmsg_send (zmsg, p->sock);
 }
 
 int module_response_sendmsg (modhash_t mh, zmsg_t **zmsg)
@@ -281,18 +263,16 @@ static void module_destroy (module_t p)
             errn_exit (errnum, "pthread_join");
     }
 
-    flux_handle_destroy (&p->h);
+    assert (p->h == NULL);
 
     zloop_poller_end (p->zloop, &p->zp);
-    zsocket_destroy (p->zctx, p->zs_svc[1]);
+    zsocket_destroy (p->zctx, p->sock);
 
     dlclose (p->dso);
     zuuid_destroy (&p->uuid);
     free (p->digest);
     if (p->argz)
         free (p->argz);
-    if (p->svc_uri)
-        free (p->svc_uri);
     if (p->name)
         free (p->name);
     if (p->rmmod_cb)
@@ -326,7 +306,7 @@ int module_stop (module_t p, zmsg_t **rmmod)
         goto done;
     if (flux_msg_set_topic (zmsg, topic) < 0)
         goto done;
-    if (zmsg_send (&zmsg, p->zs_svc[1]) < 0)
+    if (zmsg_send (&zmsg, p->sock) < 0)
         goto done;
     if (rmmod) {
         if (zlist_append (p->rmmod, *rmmod) < 0)
@@ -448,19 +428,15 @@ module_t module_add (modhash_t mh, const char *path)
     p->zloop = mh->zloop;
     p->heartbeat = mh->heartbeat;
 
-    /* Module end socket will be opened in the module thread.
+    /* Broker end of PAIR socket is opened here.
      */
-    p->svc_uri = xasprintf ("inproc:///%s", module_get_uuid (p));
-
-    /* Broker end socket is opened here.
-     */
-    if (!(p->zs_svc[1] = zsocket_new (p->zctx, ZMQ_PAIR)))
+    if (!(p->sock = zsocket_new (p->zctx, ZMQ_PAIR)))
         err_exit ("zsocket_new");
-    zsocket_set_hwm (p->zs_svc[1], 0);
-    if (zsocket_bind (p->zs_svc[1], "%s", p->svc_uri) < 0)
-        err_exit ("%s", p->svc_uri);
+    zsocket_set_hwm (p->sock, 0);
+    if (zsocket_bind (p->sock, "inproc://%s", module_get_uuid (p)) < 0)
+        err_exit ("zsock_bind inproc://%s", module_get_uuid (p));
     p->zp.events = ZMQ_POLLIN;
-    p->zp.socket = p->zs_svc[1];
+    p->zp.socket = p->sock;
 
     /* Update the modhash.
      */

@@ -11,8 +11,6 @@ flux_broker_SOURCES = \
 	broker.c \
 	module.c \
 	module.h \
-	modhandle.c \
-	modhandle.h \
 	modservice.c \
 	modservice.h \
 	boot_pmi.c \

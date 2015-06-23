@@ -8,6 +8,8 @@
 
 typedef struct flux_sec_struct *flux_sec_t;
 
+struct _zctx_t;
+
 enum {
     FLUX_SEC_TYPE_PLAIN = 1,
     FLUX_SEC_TYPE_CURVE = 2,

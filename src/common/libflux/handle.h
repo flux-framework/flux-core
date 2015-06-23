@@ -7,8 +7,6 @@
 
 #include "message.h"
 
-struct _zctx_t;
-
 typedef struct flux_handle_struct *flux_t;
 
 typedef struct {
@@ -117,10 +115,6 @@ int flux_pollevents (flux_t h);
  */
 int flux_event_subscribe (flux_t h, const char *topic);
 int flux_event_unsubscribe (flux_t h, const char *topic);
-
-/* Get handle's zctx (if any).
- */
-struct _zctx_t *flux_get_zctx (flux_t h);
 
 /* Get/clear handle message counters.
  */

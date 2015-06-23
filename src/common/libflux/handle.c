@@ -545,15 +545,6 @@ fatal:
     return -1;
 }
 
-zctx_t *flux_get_zctx (flux_t h)
-{
-    if (!h->ops->get_zctx) {
-        errno = ENOSYS;
-        return NULL;
-    }
-    return h->ops->get_zctx (h->impl);
-}
-
 int flux_pollfd (flux_t h)
 {
     if (!h->ops->pollfd) {

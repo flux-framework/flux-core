@@ -25,15 +25,11 @@ struct flux_handle_ops {
     int         (*event_subscribe)(void *impl, const char *topic);
     int         (*event_unsubscribe)(void *impl, const char *topic);
 
-    struct _zctx_t * (*get_zctx)(void *impl);
-
     void        (*impl_destroy)(void *impl);
 };
 
 flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags);
 void flux_handle_destroy (flux_t *hp);
-
-struct _zctx_t *flux_get_zctx (flux_t h);
 
 #endif /* !_FLUX_CORE_CONNECTOR_H */
 
