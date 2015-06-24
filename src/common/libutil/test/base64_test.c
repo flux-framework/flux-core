@@ -34,27 +34,27 @@
  *    section 6.5 (Examples of Radix-64).
  */
 
-int validate       (const unsigned char *src, const unsigned char *dst);
-int encode_block   (unsigned char *dst, int *dstlen,
-                    const unsigned char *src, int srclen);
-int encode_context (unsigned char *dst, int *dstlen,
-                    const unsigned char *src, int srclen);
-int decode_block   (unsigned char *dst, int *dstlen,
-                    const unsigned char *src, int srclen);
-int decode_context (unsigned char *dst, int *dstlen,
-                    const unsigned char *src, int srclen);
+int validate       (const  char *src, const  char *dst);
+int encode_block   ( char *dst, int *dstlen,
+                    const  char *src, int srclen);
+int encode_context ( char *dst, int *dstlen,
+                    const  char *src, int srclen);
+int decode_block   ( char *dst, int *dstlen,
+                    const  char *src, int srclen);
+int decode_context ( char *dst, int *dstlen,
+                    const  char *src, int srclen);
 
 
 int
 main (int argc, char *argv[])
 {
-    const unsigned char src1[] = { 0x14, 0xfb, 0x9c, 0x03, 0xd9, 0x7e, 0x00 };
-    const unsigned char src2[] = { 0x14, 0xfb, 0x9c, 0x03, 0xd9, 0x00 };
-    const unsigned char src3[] = { 0x14, 0xfb, 0x9c, 0x03, 0x00 };
+    const  char src1[] = { 0x14, 0xfb, 0x9c, 0x03, 0xd9, 0x7e, 0x00 };
+    const  char src2[] = { 0x14, 0xfb, 0x9c, 0x03, 0xd9, 0x00 };
+    const  char src3[] = { 0x14, 0xfb, 0x9c, 0x03, 0x00 };
 
-    const unsigned char dst1[] = "FPucA9l+";
-    const unsigned char dst2[] = "FPucA9k=";
-    const unsigned char dst3[] = "FPucAw==";
+    const  char dst1[] = "FPucA9l+";
+    const  char dst2[] = "FPucA9k=";
+    const  char dst3[] = "FPucAw==";
 
     if ( (validate (src1, dst1) < 0)
       || (validate (src2, dst2) < 0)
@@ -66,10 +66,10 @@ main (int argc, char *argv[])
 
 
 int
-validate (const unsigned char *src, const unsigned char *dst)
+validate (const  char *src, const  char *dst)
 {
     int n;
-    unsigned char buf[9];
+     char buf[9];
 
     if (encode_block (buf, &n, src, strlen (src)) < 0)
         return (-1);
@@ -104,16 +104,16 @@ validate (const unsigned char *src, const unsigned char *dst)
 
 
 int
-encode_block (unsigned char *dst, int *dstlen,
-              const unsigned char *src, int srclen)
+encode_block ( char *dst, int *dstlen,
+              const  char *src, int srclen)
 {
     return (base64_encode_block (dst, dstlen, src, srclen));
 }
 
 
 int
-encode_context (unsigned char *dst, int *dstlen,
-                const unsigned char *src, int srclen)
+encode_context ( char *dst, int *dstlen,
+                const  char *src, int srclen)
 {
     base64_ctx x;
     int i;
@@ -139,16 +139,16 @@ encode_context (unsigned char *dst, int *dstlen,
 
 
 int
-decode_block (unsigned char *dst, int *dstlen,
-              const unsigned char *src, int srclen)
+decode_block ( char *dst, int *dstlen,
+              const  char *src, int srclen)
 {
     return (base64_decode_block (dst, dstlen, src, srclen));
 }
 
 
 int
-decode_context (unsigned char *dst, int *dstlen,
-                const unsigned char *src, int srclen)
+decode_context ( char *dst, int *dstlen,
+                const  char *src, int srclen)
 {
     base64_ctx x;
     int i;
