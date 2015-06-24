@@ -29,6 +29,8 @@
 #include <string.h>
 #include "base64.h"
 
+#include <src/common/libtap/tap.h>
+
 
 /*  Test cases from rfc2440 (OpenPGP Message Format)
  *    section 6.5 (Examples of Radix-64).
@@ -56,12 +58,13 @@ main (int argc, char *argv[])
     const  char dst2[] = "FPucA9k=";
     const  char dst3[] = "FPucAw==";
 
-    if ( (validate (src1, dst1) < 0)
-      || (validate (src2, dst2) < 0)
-      || (validate (src3, dst3) < 0) ) {
-        exit (EXIT_FAILURE);
-    }
-    exit (EXIT_SUCCESS);
+    plan (3);
+
+    ok (validate (src1, dst1) >= 0, "checking base64 pattern 1");
+    ok (validate (src2, dst2) >= 0, "checking base64 pattern 2");
+    ok (validate (src3, dst3) >= 0, "checking base64 pattern 3");
+
+    done_testing ();
 }
 
 
