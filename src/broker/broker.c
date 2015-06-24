@@ -1271,9 +1271,15 @@ static int cmb_log_cb (zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     const char *json_str;
 
-    if (flux_response_decode (*zmsg, NULL, &json_str) < 0)
+    if (flux_request_decode (*zmsg, NULL, &json_str) < 0) {
+        msg ("%s: decode error", __FUNCTION__);
         goto done;
-    (void)flux_log_json (ctx->h, json_str);
+    }
+    if (flux_log_json (ctx->h, json_str) < 0) {
+        msg ("%s: flux_log_json %s: %s", __FUNCTION__, json_str,
+             strerror (errno));
+        goto done;
+    }
 done:
     zmsg_destroy (zmsg); /* no reply */
     return 0;
