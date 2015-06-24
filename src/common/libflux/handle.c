@@ -231,6 +231,24 @@ int flux_flags_get (flux_t h)
     return h->flags;
 }
 
+int flux_opt_get (flux_t h, const char *option, void *val, size_t len)
+{
+    if (!h->ops->getopt) {
+        errno = EINVAL;
+        return -1;
+    }
+    return h->ops->getopt (h->impl, option, val, len);
+}
+
+int flux_opt_set (flux_t h, const char *option, const void *val, size_t len)
+{
+    if (!h->ops->setopt) {
+        errno = EINVAL;
+        return -1;
+    }
+    return h->ops->setopt (h->impl, option, val, len);
+}
+
 void *flux_aux_get (flux_t h, const char *name)
 {
     return zhash_lookup (h->aux, name);

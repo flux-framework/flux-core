@@ -15,6 +15,10 @@ typedef flux_t (connector_init_f)(const char *uri, int flags);
 typedef int (*flux_msg_f)(flux_t h, void *arg);
 
 struct flux_handle_ops {
+    int         (*setopt)(void *impl, const char *option,
+                          const void *val, size_t len);
+    int         (*getopt)(void *impl, const char *option,
+                          void *val, size_t len);
     int         (*pollfd)(void *impl);
     int         (*pollevents)(void *impl);
     int         (*send)(void *impl, const flux_msg_t *msg, int flags);

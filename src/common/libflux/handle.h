@@ -47,14 +47,25 @@ enum {
     FLUX_POLLERR = 4,
 };
 
+/* Options for flux_setopt().
+ * (Connectors may define custom option names)
+ */
+#define FLUX_OPT_ZEROMQ_CONTEXT     "flux::zeromq_context"
+
 /* Create/destroy a broker handle.
- * The 'uri' scheme name selects a handle implementation to dynamically load.
- * The rest of the URI is parsed in an implementation-specific manner.
- * A NULL uri selects the "local" implementation with path set to the value
- * of FLUX_TMPDIR.
+ * The 'uri' scheme name selects a connector to dynamically load.
+ * The rest of the URI is parsed in an connector-specific manner.
+ * A NULL uri selects the "local" connector with path derived from
+ * FLUX_TMPDIR.
  */
 flux_t flux_open (const char *uri, int flags);
 void flux_close (flux_t h);
+
+/* Get/set handle options.  Options are interpreted by connectors.
+ * Returns 0 on success, or -1 on failure with errno set (e.g. EINVAL).
+ */
+int flux_opt_set (flux_t h, const char *option, const void *val, size_t len);
+int flux_opt_get (flux_t h, const char *option, void *val, size_t len);
 
 /* Register a handler for fatal handle errors.
  * A fatal error is ENOMEM or a handle send/recv error after which
