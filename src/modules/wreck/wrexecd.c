@@ -223,20 +223,26 @@ void prog_ctx_signal_eof (struct prog_ctx *ctx)
 }
 int stdout_cb (zio_t z, json_object *o, struct task_info *t)
 {
-    if (kz_put_json (t->kz[OUT], o) < 0)
-        return log_err (t->ctx, "stdout: kz_put_json: %s", strerror (errno));
-    if (zio_json_eof (o))
+    int rc;
+    if ((rc = kz_put_json (t->kz[OUT], o)) < 0)
+        log_err (t->ctx, "stdout: kz_put_json: %s", strerror (errno));
+    else if (zio_json_eof (o))
         prog_ctx_signal_eof (t->ctx);
-    return (0);
+    if (o)
+        json_object_put (o);
+    return (rc);
 }
 
 int stderr_cb (zio_t z, json_object *o, struct task_info *t)
 {
-    if (kz_put_json (t->kz[ERR], o) < 0)
-        return log_err (t->ctx, "stderr: kz_put_json: %s", strerror (errno));
-    if (zio_json_eof (o))
+    int rc;
+    if ((rc = kz_put_json (t->kz[ERR], o)) < 0)
+        log_err (t->ctx, "stderr: kz_put_json: %s", strerror (errno));
+    else if (zio_json_eof (o))
         prog_ctx_signal_eof (t->ctx);
-    return (0);
+    if (o)
+        json_object_put (o);
+    return (rc);
 }
 
 void kz_stdin (kz_t kz, struct task_info *t)
@@ -818,6 +824,7 @@ int rexec_state_change (struct prog_ctx *ctx, const char *state)
     if ((ctx->nodeid == 0) && update_job_state (ctx, state) < 0)
         log_fatal (ctx, 1, "update_job_state");
 
+    free (name);
     return (0);
 }
 
