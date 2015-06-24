@@ -52,7 +52,8 @@ TESTS = test_nodeset.t \
 	test_optparse.t \
 	test_subprocess.t \
 	test_ev.t \
-	test_coproc.t
+	test_coproc.t \
+	test_base64.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -90,3 +91,7 @@ test_ev_t_LDADD = $(test_ldadd)
 test_coproc_t_SOURCES = test/coproc.c
 test_coproc_t_CPPFLAGS = $(test_cppflags)
 test_coproc_t_LDADD = $(test_ldadd)
+
+test_base64_t_SOURCES = test/base64_test.c
+test_base64_t_CPPFLAGS = $(test_cppflags)
+test_base64_t_LDADD = $(test_ldadd)
