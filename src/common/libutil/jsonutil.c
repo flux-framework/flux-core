@@ -44,6 +44,7 @@
 #include "log.h"
 #include "xzmalloc.h"
 #include "jsonutil.h"
+#include "base64.h"
 
 int util_json_size (json_object *o)
 {
@@ -105,25 +106,18 @@ void util_json_object_add_string (json_object *o, char *name, const char *s)
     json_object_object_add (o, name, no);
 }
 
-/* Z85 (1 char pad len + data + pad)
- */
+/* base64 */
 void util_json_object_add_data (json_object *o, char *name,
                                 uint8_t *dat, int len)
 {
-    int r = (len + 1) % 4;
-    int padlen = r > 0 ? 4 - r : 0;
-    int dlen = len + 1 + padlen;
-    uint8_t *d = xzmalloc (dlen);
-    char *p, *s = xzmalloc (dlen * 1.25 + 1);
+    char *buf;
+    int dstlen;
+    int size = base64_encode_length (len);
 
-    d[0] = padlen;
-    memcpy (&d[1], dat, len);
-    p = zmq_z85_encode (s, d, dlen);
-    assert (p != NULL);
-
-    util_json_object_add_string (o, name, s);
-    free (s);
-    free (d);
+    buf = xzmalloc (size);
+    (void) base64_encode_block (buf, &dstlen, dat, len);
+    util_json_object_add_string (o, name, buf);
+    free (buf);
 }
 
 void util_json_object_add_timeval (json_object *o, char *name,
@@ -190,25 +184,24 @@ int util_json_object_get_string (json_object *o, char *name, const char **sp)
     return 0;
 }
 
-/* Z85 (1 char pad len + data + pad)
- */
+/* base64 */
 int util_json_object_get_data (json_object *o, char *name,
                                uint8_t **datp, int *lenp)
 {
     const char *s;
     int dlen, len;
-    uint8_t *d, *p;
+    void *dst;
 
     if (util_json_object_get_string (o, name, &s) == -1)
         return -1;
-    dlen = strlen (s) * 0.8;
-    d = xzmalloc (dlen);
-    p = zmq_z85_decode (d, (char *)s);
-    assert (p != NULL);
-    len = dlen - 1 - d[0];
-    memmove (&d[0], &d[1], len);
-    *datp = d;
-    *lenp = len;
+
+    len = strlen (s);
+    dst = xzmalloc (base64_decode_length (len));
+    if (base64_decode_block (dst, &dlen, s, len) < 0)
+        return -1;
+
+    *lenp = dlen;
+    *datp = (uint8_t *) dst;
     return 0;
 }
 
