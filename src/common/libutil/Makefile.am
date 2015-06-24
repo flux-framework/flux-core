@@ -42,7 +42,9 @@ libutil_la_SOURCES = \
 	ev_zlist.c \
 	ev_zlist.h \
 	coproc.c \
-	coproc.h
+	coproc.h \
+	base64.c \
+	base64.h
 
 EXTRA_DIST = veb_mach.c
 
@@ -50,7 +52,9 @@ TESTS = test_nodeset.t \
 	test_optparse.t \
 	test_subprocess.t \
 	test_ev.t \
-	test_coproc.t
+	test_coproc.t \
+	test_base64.t \
+	test_encode.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -88,3 +92,11 @@ test_ev_t_LDADD = $(test_ldadd)
 test_coproc_t_SOURCES = test/coproc.c
 test_coproc_t_CPPFLAGS = $(test_cppflags)
 test_coproc_t_LDADD = $(test_ldadd)
+
+test_base64_t_SOURCES = test/base64_test.c
+test_base64_t_CPPFLAGS = $(test_cppflags)
+test_base64_t_LDADD = $(test_ldadd)
+
+test_encode_t_SOURCES = test/encode.c
+test_encode_t_CPPFLAGS = $(test_cppflags)
+test_encode_t_LDADD = $(test_ldadd)
