@@ -121,6 +121,9 @@ typedef struct {
     struct subprocess *shell;
 } ctx_t;
 
+static void broker_log (void *ctx, const char *facility, int level,
+                        int rank, struct timeval tv, const char *msg);
+
 static int broker_event_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
 static int broker_response_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
 static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
@@ -508,7 +511,7 @@ int main (int argc, char *argv[])
     ctx.h = flux_handle_create (&ctx, &broker_handle_ops, 0);
     flux_log_set_facility (ctx.h, "broker");
     if (ctx.rank == 0)
-        flux_log_set_redirect (ctx.h, true);
+        flux_log_set_redirect (ctx.h, broker_log, &ctx);
 
     shutdown_set_loop (ctx.shutdown, ctx.zloop);
     shutdown_set_handle (ctx.shutdown, ctx.h);
@@ -587,6 +590,20 @@ int main (int argc, char *argv[])
     zlist_destroy (&modopts);       /* autofree set */
     zhash_destroy (&modexclude);    /* values const (no destructor) */
     return 0;
+}
+
+/* On rank 0 flux_log is directed here.
+ */
+static void broker_log (void *arg, const char *facility, int level,
+                        int rank, struct timeval tv, const char *s)
+{
+    //ctx_t *ctx = arg;
+    const char *levstr;
+
+    if (!(levstr = log_leveltostr (level)))
+        levstr = "unknown";
+    msg ("[%-.6lu.%-.6lu] %s.%s[%d] %s",
+         tv.tv_sec, tv.tv_usec, facility, levstr, rank, s);
 }
 
 static void hello_update_cb (hello_t h, void *arg)
