@@ -674,9 +674,13 @@ int subprocess_exited (struct subprocess *p)
 
 int subprocess_exit_code (struct subprocess *p)
 {
+    int sig;
+    int code = -1;
     if (WIFEXITED (p->status))
-        return (WEXITSTATUS (p->status));
-    return (-1);
+        code = WEXITSTATUS (p->status);
+    else if ((sig = subprocess_signaled (p)))
+        code = sig + 128;
+    return (code);
 }
 
 int subprocess_signaled (struct subprocess *p)
