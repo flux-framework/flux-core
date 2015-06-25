@@ -160,6 +160,8 @@ int main (int ac, char **av)
         is (subprocess_state_string (p), "Exited", "State is now 'Exited'");
         is (subprocess_exit_string (p), "Killed", "Exit string is 'Killed'");
         ok (subprocess_signaled (p) == 9, "Killed by signal 9.");
+        ok (subprocess_exit_status (p) == 0x9, "Exit status is 0x9 (Killed)");
+        ok (subprocess_exit_code (p) == 137, "Exit code is 137 (128+9)");
         subprocess_destroy (p);
     }
 
