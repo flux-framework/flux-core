@@ -113,9 +113,9 @@ EOF
 '
 
 test_expect_success 'I/O, multiple lines, no newline on last line' '
-	/bin/echo -en "1: one\n2: two" >expected &&
+	/bin/echo -en "1: one\n1: two" >expected &&
 	flux exec -lr 1 /bin/echo -en "one\ntwo" >output &&
-	test_cmp output expected
+	test_cmp output expected &&
 	/bin/echo -en "1: one" >expected &&
 	flux exec -lr 1 /bin/echo -en "one" >output &&
 	test_cmp output expected
