@@ -35,13 +35,13 @@
 #include "message.h"
 #include "rpc.h"
 
-#include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 
 typedef struct {
     char *facility;
-    bool redirect;
+    flux_log_f cb;
+    void *cb_arg;
 } logctx_t;
 
 static void freectx (void *arg)
@@ -73,40 +73,32 @@ void flux_log_set_facility (flux_t h, const char *facility)
     ctx->facility = xstrdup (facility);
 }
 
-void flux_log_set_redirect (flux_t h, bool flag)
+void flux_log_set_redirect (flux_t h, flux_log_f fun, void *arg)
 {
     logctx_t *ctx = getctx (h);
-    ctx->redirect = flag;
+    ctx->cb = fun;
+    ctx->cb_arg = arg;
 }
 
-/* Dump message to libutil/log.c, which has a configurable destination
- * of stderr, syslog, file.
- */
-static int log_dump (const char *json_str)
+static void log_external (logctx_t *ctx, const char *json_str)
 {
     JSON o = NULL;
-    const char *facility, *s, *levstr;
+    const char *facility, *s;
     int rank, level, tv_sec, tv_usec;
-    int rc = -1;
+    struct timeval tv;
 
-    if (!(o = Jfromstr (json_str))
-            || !Jget_str (o, "facility", &facility)
-            || !Jget_int (o, "level", &level)
-            || !Jget_int (o, "rank", &rank)
-            || !Jget_int (o, "timestamp_usec", &tv_usec)
-            || !Jget_int (o, "timestamp_sec", &tv_sec)
-            || !Jget_str (o, "message", &s)) {
-        errno = EPROTO;
-        goto done;
+    if ((o = Jfromstr (json_str))
+            && Jget_str (o, "facility", &facility)
+            && Jget_int (o, "level", &level)
+            && Jget_int (o, "rank", &rank)
+            && Jget_int (o, "timestamp_usec", &tv_usec)
+            && Jget_int (o, "timestamp_sec", &tv_sec)
+            && Jget_str (o, "message", &s)) {
+        tv.tv_sec = tv_sec;
+        tv.tv_usec = tv_usec;
+        ctx->cb (ctx->cb_arg, facility, level, rank, tv, s);
+        Jput (o);
     }
-    if (!(levstr = log_leveltostr (level)))
-        levstr = "unknown";
-    msg ("[%-.6d.%-.6d] %s.%s[%d] %s",
-         tv_sec, tv_usec, facility, levstr, rank, s);
-    rc = 0;
-done:
-    Jput (o);
-    return rc;
 }
 
 int flux_log_json (flux_t h, const char *json_str)
@@ -115,14 +107,13 @@ int flux_log_json (flux_t h, const char *json_str)
     flux_rpc_t r = NULL;
     int rc = -1;
 
-    if (ctx->redirect)
-        log_dump (json_str);
+    if (ctx->cb)
+        log_external (ctx, json_str);
     else if (!(r = flux_rpc (h, "cmb.log", json_str, 0, FLUX_RPC_NORESPONSE)))
         goto done;
     rc = 0;
 done:
-    if (r)
-        flux_rpc_destroy (r);
+    flux_rpc_destroy (r);
     return rc;
 }
 
