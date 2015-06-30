@@ -102,7 +102,7 @@ const int max_lastuse_age = 5;
 
 /* Coalesce commits that arrive within <min_commit_msec> of previous update.
  */
-const int min_commit_msec = 1;
+const uint64_t min_commit_msec = 1;
 
 /* Include root directory in kvs.setroot event.
  */
@@ -1484,7 +1484,7 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             }
         } else {
             c->state = COMMIT_MASTER;
-            int msec = (int)monotime_since (ctx->commit_time);
+            uint64_t msec = monotime_since (ctx->commit_time);
             if (msec < min_commit_msec) {
                 if (!ctx->timer_armed) {
                     if (flux_tmouthandler_add (h, min_commit_msec - msec, true,
