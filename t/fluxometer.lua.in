@@ -135,7 +135,7 @@ function fluxTest.init (...)
         test.arg0 = './'..test.arg0
     end
 
-    test.log_file = test.arg0..".broker.log"
+    test.log_file = "lua-"..test.prog..".broker.log"
     test.start_args = { "-o,-q,-L" .. test.log_file }
 
     local dir = top_builddir.."/src/cmd"
