@@ -102,7 +102,7 @@ const int max_lastuse_age = 5;
 
 /* Coalesce commits that arrive within <min_commit_msec> of previous update.
  */
-const int min_commit_msec = 1;
+const uint64_t min_commit_msec = 1;
 
 /* Include root directory in kvs.setroot event.
  */
@@ -410,7 +410,7 @@ static bool store_isdirty (ctx_t *ctx, const href_t ref, wait_t w)
 
 static void store (ctx_t *ctx, json_object *o, href_t ref)
 {
-    hobj_t *hp; 
+    hobj_t *hp;
     zdigest_t *zd;
     const char *s = json_object_to_json_string (o);
     const char *zdstr;
@@ -1484,7 +1484,7 @@ static int commit_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             }
         } else {
             c->state = COMMIT_MASTER;
-            int msec = (int)monotime_since (ctx->commit_time);
+            uint64_t msec = monotime_since (ctx->commit_time);
             if (msec < min_commit_msec) {
                 if (!ctx->timer_armed) {
                     if (flux_tmouthandler_add (h, min_commit_msec - msec, true,
@@ -1906,6 +1906,7 @@ int mod_main (flux_t h, zhash_t *args)
         store (ctx, rootdir, href);
         setroot (ctx, href, 0);
         setargs (ctx, args);
+        FASSERT (h, zhash_size (args) == 0 || ctx->rootseq > 0);
     } else {
         href_t href;
         int rootseq;
