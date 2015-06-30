@@ -410,7 +410,7 @@ static bool store_isdirty (ctx_t *ctx, const href_t ref, wait_t w)
 
 static void store (ctx_t *ctx, json_object *o, href_t ref)
 {
-    hobj_t *hp; 
+    hobj_t *hp;
     zdigest_t *zd;
     const char *s = json_object_to_json_string (o);
     const char *zdstr;
@@ -1906,6 +1906,7 @@ int mod_main (flux_t h, zhash_t *args)
         store (ctx, rootdir, href);
         setroot (ctx, href, 0);
         setargs (ctx, args);
+        FASSERT (h, zhash_size (args) == 0 || ctx->rootseq > 0);
     } else {
         href_t href;
         int rootseq;
