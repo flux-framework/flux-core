@@ -369,6 +369,10 @@ function m.todo (reason, count)
     tb:todo(reason, count)
 end
 
+function m.cleanup (func)
+    tb:cleanup(func)
+end
+
 for k, v in pairs(m) do  -- injection
     _G[k] = v
 end

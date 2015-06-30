@@ -139,6 +139,10 @@ function m:finalize ()
     self.parent = nil
 end
 
+function m:cleanup (func)
+    table.insert (self._cleanup, func)
+end
+
 function m:reset ()
     self.curr_test = 0
     self._done_testing = false
@@ -153,6 +157,7 @@ function m:reset ()
     self.indent = ''
     self.parent = false
     self.child_name = false
+    self._cleanup = {}
     self:reset_outputs()
 end
 
@@ -220,6 +225,9 @@ function m:done_testing (num_tests)
         self.is_passing = false
     end
     if not self.is_passing then os.exit (1) end
+    for _,func in pairs (self._cleanup) do
+        func ()
+    end
 end
 
 function m:has_plan ()
