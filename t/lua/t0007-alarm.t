@@ -6,7 +6,7 @@ local alarm = require_ok ('lalarm')
 type_ok (alarm, 'function', 'lalarm: is function')
 
 local success = false
-local rc, err = alarm (1, function () diag('in handler'); success = true end)
+local rc, err = alarm (1, function () success = true end)
 
 posix.sleep (2)
 
