@@ -10,6 +10,7 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 
 TESTS = \
 	loop/handle.t \
+	loop/reactor.t \
 	loop/rpc.t \
 	loop/multrpc.t \
 	t0000-sharness.t \
@@ -69,6 +70,7 @@ check_SCRIPTS = \
 
 check_PROGRAMS = \
 	loop/handle.t \
+	loop/reactor.t \
 	loop/rpc.t \
 	loop/multrpc.t
 
@@ -87,6 +89,10 @@ test_cppflags = \
 loop_handle_t_SOURCES = loop/handle.c
 loop_handle_t_CPPFLAGS = $(test_cppflags)
 loop_handle_t_LDADD = $(test_ldadd) $(LIBDL)
+
+loop_reactor_t_SOURCES = loop/reactor.c
+loop_reactor_t_CPPFLAGS = $(test_cppflags)
+loop_reactor_t_LDADD = $(test_ldadd) $(LIBDL)
 
 loop_rpc_t_SOURCES = loop/rpc.c
 loop_rpc_t_CPPFLAGS = $(test_cppflags)
