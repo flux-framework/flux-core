@@ -38,13 +38,14 @@ struct msglist_struct {
     msglist_free_f destructor;
     int pollevents;
     int pollfd;
+    uint64_t event;
 };
 
 static int raise_event (msglist_t *l)
 {
-    if (l->pollfd >= 0) {
-        uint64_t val = 1;
-        if (write (l->pollfd, &val, sizeof (val)) < 0)
+    if (l->pollfd >= 0 && l->event == 0) {
+        l->event = 1;
+        if (write (l->pollfd, &l->event, sizeof (l->event)) < 0)
             return -1;
     }
     return 0;
@@ -52,13 +53,13 @@ static int raise_event (msglist_t *l)
 
 static int clear_event (msglist_t *l)
 {
-    if (l->pollfd >= 0) {
-        uint64_t val;
-        if (read (l->pollfd, &val, sizeof (val)) < 0) {
+    if (l->pollfd >= 0 && l->event == 1) {
+        if (read (l->pollfd, &l->event, sizeof (l->event)) < 0) {
             if (errno != EAGAIN  && errno != EWOULDBLOCK)
                 return -1;
             errno = 0;
         }
+        l->event = 0;
     }
     return 0;
 }
@@ -174,8 +175,10 @@ int msglist_count (msglist_t *l)
 
 int msglist_pollfd (msglist_t *l)
 {
-    if (l->pollfd < 0)
+    if (l->pollfd < 0) {
+        l->event = l->pollevents ? 1 : 0;
         l->pollfd = eventfd (l->pollevents, EFD_NONBLOCK);
+    }
     return l->pollfd;
 }
 
