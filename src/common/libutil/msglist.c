@@ -182,7 +182,7 @@ int msglist_pollfd (msglist_t *l)
 int msglist_pollevents (msglist_t *l)
 {
     if (clear_event (l) < 0)
-        l->pollevents |= POLLERR;
+        return -1;
     return l->pollevents;
 }
 
