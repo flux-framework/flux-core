@@ -176,12 +176,6 @@ int msglist_pollfd (msglist_t *l)
 {
     if (l->pollfd < 0)
         l->pollfd = eventfd (l->pollevents, EFD_NONBLOCK);
-    if (l->pollfd < 0) {
-        int saved_errno = errno;
-        l->pollevents |= POLLERR;
-        (void)raise_event (l);
-        errno = saved_errno;
-    }
     return l->pollfd;
 }
 
