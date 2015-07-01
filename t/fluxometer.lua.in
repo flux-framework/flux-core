@@ -81,7 +81,10 @@ end
 --
 function fluxTest:start_session (t)
     -- If fluxometer session is already active just return:
-    if os.getenv ("FLUXOMETER_ACTIVE") then return end
+    if os.getenv ("FLUXOMETER_ACTIVE") then
+        cleanup (function () os.execute ("rm "..self.log_file) end)
+        return
+    end
     posix.setenv ("FLUXOMETER_ACTIVE", "t")
 
     local size = t.size or 1
@@ -121,7 +124,6 @@ function fluxTest.init (...)
     local debug = require 'debug'
     local test = setmetatable ({}, fluxTest)
 
-    test.start_args = { "-o,-q" }
 
     -- Get path to current test script using debug.getinfo:
 	test.arg0 = debug.getinfo (2).source:sub (2)
@@ -132,6 +134,9 @@ function fluxTest.init (...)
     if not test.arg0:match ('^[/.]') then
         test.arg0 = './'..test.arg0
     end
+
+    test.log_file = "lua-"..test.prog..".broker.log"
+    test.start_args = { "-o,-q,-L" .. test.log_file }
 
     local dir = top_builddir.."/src/cmd"
     local path = dir.."/flux"

@@ -36,9 +36,10 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/xzmalloc.h"
 
-#define OPTIONS "hn:t:"
+#define OPTIONS "hqn:t:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
+    {"quiet",      no_argument,        0, 'q'},
     {"nprocs",     required_argument,  0, 'n'},
     {"test-iterations", required_argument,  0, 't'},
     { 0, 0, 0, 0 },
@@ -48,7 +49,7 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr,
-"Usage: tbarrier [--nprocs N] [--test-iterations N] [name]\n"
+"Usage: tbarrier [--quiet] [--nprocs N] [--test-iterations N] [name]\n"
 );
     exit (1);
 }
@@ -59,6 +60,7 @@ int main (int argc, char *argv[])
     int ch;
     struct timespec t0;
     char *name = NULL;
+    int quiet = 0;
     int nprocs = 1;
     int iter = 1;
     int i;
@@ -69,6 +71,9 @@ int main (int argc, char *argv[])
         switch (ch) {
             case 'h': /* --help */
                 usage ();
+                break;
+            case 'q': /* --quiet */
+                quiet = 1;
                 break;
             case 'n': /* --nprocs N */
                 nprocs = strtoul (optarg, NULL, 10);
@@ -100,8 +105,9 @@ int main (int argc, char *argv[])
             else
                 err_exit ("flux_barrier");
         }
-        printf ("barrier name=%s nprocs=%d time=%0.3f ms\n",
-             tname ? tname : "NULL", nprocs, monotime_since (t0));
+        if (!quiet)
+            printf ("barrier name=%s nprocs=%d time=%0.3f ms\n",
+                    tname ? tname : "NULL", nprocs, monotime_since (t0));
         if (tname)
             free (tname);
     }

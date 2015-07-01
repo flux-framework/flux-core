@@ -11,37 +11,38 @@ before other tests that depend on barriers.
 . `dirname $0`/sharness.sh
 SIZE=4
 test_under_flux ${SIZE}
+tbarrier="${FLUX_BUILD_DIR}/src/test/tbarrier"
+test "$verbose" = "t" || tbarrier="${tbarrier} -q"
 
 test_expect_success 'barrier: returns when complete' '
-	${FLUX_BUILD_DIR}/src/test/tbarrier --nprocs 1 abc
+	${tbarrier} --nprocs 1 abc
 '
 
 test_expect_success 'barrier: returns when complete (all ranks)' '
-	flux exec ${FLUX_BUILD_DIR}/src/test/tbarrier --nprocs ${SIZE} abc
+	flux exec ${tbarrier} --nprocs ${SIZE} abc
 '
 
 test_expect_success 'barrier: blocks while incomplete' '
 	test_expect_code 142 run_timeout 1 \
-	  ${FLUX_BUILD_DIR}/src/test/tbarrier --nprocs 2 xyz
+	  ${tbarrier} --nprocs 2 xyz
 '
 
 test_expect_success 'barrier: fails with name=NULL outside of LWJ' '
 	unset FLUX_LWJ_ID
 	unset SLURM_STEPID
-	test_expect_code 1 \
-	  ${FLUX_BUILD_DIR}/src/test/tbarrier --nprocs 1
+	test_expect_code 1 ${tbarrier} --nprocs 1
 '
 
 test_expect_success 'barrier: succeeds with name=NULL inside LWJ' '
 	unset SLURM_STEPID
         FLUX_LWJ_ID=1; export FLUX_LWJ_ID
-	flux exec ${FLUX_BUILD_DIR}/src/test/tbarrier --nprocs ${SIZE}
+	flux exec ${tbarrier} --nprocs ${SIZE}
 '
 
 test_expect_success 'barrier: succeeds with name=NULL inside SLURM step' '
 	unset FLUX_LWJ_ID
         SLURM_STEPID=1; export SLURM_STEPID
-	flux exec ${FLUX_BUILD_DIR}/src/test/tbarrier --nprocs ${SIZE}
+	flux exec ${tbarrier} --nprocs ${SIZE}
 '
 
 test_done
