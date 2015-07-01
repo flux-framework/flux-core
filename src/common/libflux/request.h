@@ -16,7 +16,7 @@
 int flux_request_decode (const flux_msg_t *msg, const char **topic,
                          const char **json_str);
 
-/* Encode a response message.
+/* Encode a request message.
  * If json_str is non-NULL, assign the payload.
  */
 flux_msg_t *flux_request_encode (const char *topic, const char *json_str);
