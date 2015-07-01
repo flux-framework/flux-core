@@ -4,7 +4,6 @@
 --
 local t = require 'fluxometer'.init (...)
 t:start_session { size = 2}
-t:say ("starting send/recv tests")
 
 plan (22)
 
