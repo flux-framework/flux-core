@@ -113,7 +113,11 @@ static void rexec_session_destroy (struct rexec_session *c)
 
 static int rexec_session_connect_to_helper (struct rexec_session *c)
 {
-    zctx_t *zctx = flux_get_zctx (c->ctx->h);
+    zctx_t *zctx = NULL;
+
+    if (flux_opt_get (c->ctx->h, FLUX_OPT_ZEROMQ_CONTEXT, &zctx,
+                                                          sizeof (zctx)) < 0)
+        err_exit ("could not obtain zctx");
 
     snprintf (c->req_uri, sizeof (c->req_uri),
              "ipc:///tmp/cmb-%d-%d-rexec-req-%lu", c->rank, c->uid, c->id);
@@ -127,8 +131,12 @@ static int rexec_session_connect_to_helper (struct rexec_session *c)
 
 static struct rexec_session * rexec_session_create (struct rexec_ctx *ctx, int64_t id)
 {
+    zctx_t *zctx = NULL;
     struct rexec_session *c = xzmalloc (sizeof (*c));
-    zctx_t *zctx = flux_get_zctx (ctx->h);
+
+    if (flux_opt_get (ctx->h, FLUX_OPT_ZEROMQ_CONTEXT, &zctx,
+                                                       sizeof (zctx)) < 0)
+        msg_exit ("could not obtain zctx");
 
     c->ctx  = ctx;
     c->id   = id;

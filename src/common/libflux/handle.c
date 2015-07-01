@@ -30,17 +30,20 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <dlfcn.h>
+#include <sys/epoll.h>
+#include <poll.h>
 #include <czmq.h>
 
 #include "handle.h"
 #include "reactor.h"
-#include "handle_impl.h"
-#include "reactor_impl.h"
+#include "connector.h"
 #include "message.h"
 #include "tagpool.h"
+#include "reactor.h" // for flux_sleep_on ()
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/msglist.h"
 
 
 struct flux_handle_struct {
@@ -48,9 +51,11 @@ struct flux_handle_struct {
     int             flags;
     void            *impl;
     void            *dso;
+    msglist_t       *queue;
+    int             pollfd;
+
     zhash_t         *aux;
     tagpool_t       tagpool;
-    struct reactor  *reactor;
     flux_msgcounters_t msgcounters;
     flux_fatal_f    fatal;
     void            *fatal_arg;
@@ -195,7 +200,9 @@ flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int fl
     h->ops = ops;
     h->impl = impl;
     h->tagpool = tagpool_create ();
-    h->reactor = reactor_create (impl, ops);
+    if (!(h->queue = msglist_create ((msglist_free_f)flux_msg_destroy)))
+        oom ();
+    h->pollfd = -1;
     return h;
 }
 
@@ -208,9 +215,11 @@ void flux_handle_destroy (flux_t *hp)
         if (h->ops->impl_destroy)
             h->ops->impl_destroy (h->impl);
         tagpool_destroy (h->tagpool);
-        reactor_destroy (h->reactor);
         if (h->dso)
             dlclose (h->dso);
+        msglist_destroy (h->queue);
+        if (h->pollfd >= 0)
+            (void)close (h->pollfd);
         free (h);
         *hp = NULL;
     }
@@ -229,6 +238,24 @@ void flux_flags_unset (flux_t h, int flags)
 int flux_flags_get (flux_t h)
 {
     return h->flags;
+}
+
+int flux_opt_get (flux_t h, const char *option, void *val, size_t len)
+{
+    if (!h->ops->getopt) {
+        errno = EINVAL;
+        return -1;
+    }
+    return h->ops->getopt (h->impl, option, val, len);
+}
+
+int flux_opt_set (flux_t h, const char *option, const void *val, size_t len)
+{
+    if (!h->ops->setopt) {
+        errno = EINVAL;
+        return -1;
+    }
+    return h->ops->setopt (h->impl, option, val, len);
 }
 
 void *flux_aux_get (flux_t h, const char *name)
@@ -271,9 +298,14 @@ void flux_clr_msgcounters (flux_t h)
 
 uint32_t flux_matchtag_alloc (flux_t h, int len)
 {
-    return tagpool_alloc (h->tagpool, len);
+    uint32_t matchtag = tagpool_alloc (h->tagpool, len);
+    if (matchtag == FLUX_MATCHTAG_NONE)
+        errno = EBUSY; /* appropriate error? */
+    return matchtag;
 }
 
+/* Free a block of matchtags, first deleting any queued matching responses.
+ */
 void flux_matchtag_free (flux_t h, uint32_t matchtag, int len)
 {
     struct flux_match match = {
@@ -282,8 +314,14 @@ void flux_matchtag_free (flux_t h, uint32_t matchtag, int len)
         .matchtag = matchtag,
         .bsize = len,
     };
-    if (h->ops->purge)
-        h->ops->purge (h->impl, match);
+    flux_msg_t *msg = msglist_first (h->queue);
+    while (msg) {
+        if (flux_msg_cmp (msg, match)) {
+            msglist_remove (h->queue, msg);
+            flux_msg_destroy (msg);
+        }
+        msg = msglist_next (h->queue);
+    }
     tagpool_free (h->tagpool, matchtag, len);
 }
 
@@ -387,6 +425,18 @@ static void defer_destroy (zlist_t **l)
     }
 }
 
+static flux_msg_t *flux_recv_any (flux_t h, int flags)
+{
+    flux_msg_t *msg = NULL;
+    if (msglist_count (h->queue) > 0)
+        msg = msglist_pop (h->queue);
+    else if (h->ops->recv)
+        msg = h->ops->recv (h->impl, flags);
+    else
+        errno = ENOSYS;
+    return msg;
+}
+
 /* If this function is called without the NONBLOCK flag from a reactor
  * handler running in coprocess context, the call to flux_sleep_on()
  * will allow the reactor to run until a message matching 'match' arrives.
@@ -404,10 +454,6 @@ flux_msg_t *flux_recv (flux_t h, struct flux_match match, int flags)
     flux_msg_t *msg = NULL;
     int saved_errno;
 
-    if (!h->ops->recv || !h->ops->requeue) {
-        errno = ENOSYS;
-        goto fatal;
-    }
     flags |= h->flags;
     if (!(flags & FLUX_O_NONBLOCK) && flux_sleep_on (h, match) < 0) {
         if (errno != EINVAL)
@@ -415,7 +461,7 @@ flux_msg_t *flux_recv (flux_t h, struct flux_match match, int flags)
         errno = 0;
     }
     do {
-        if (!(msg = h->ops->recv (h->impl, flags))) {
+        if (!(msg = flux_recv_any (h, flags))) {
             if (errno != EAGAIN && errno != EWOULDBLOCK)
                 goto fatal;
             if (defer_requeue (&l, h) < 0)
@@ -447,36 +493,28 @@ fatal:
     return NULL;
 }
 
-int flux_sendmsg (flux_t h, zmsg_t **zmsg)
-{
-    if (flux_send (h, *zmsg, 0) < 0)
-        return -1;
-    zmsg_destroy (zmsg);
-    return 0;
-}
-
-flux_msg_t *flux_recvmsg (flux_t h, bool nonblock)
-{
-    struct flux_match match = FLUX_MATCH_ANY;
-    return flux_recv (h, match, nonblock ? FLUX_O_NONBLOCK : 0);
-}
-
-flux_msg_t *flux_recvmsg_match (flux_t h, struct flux_match match,
-                                bool nonblock)
-{
-    return flux_recv (h, match, nonblock ? FLUX_O_NONBLOCK : 0);
-}
-
 /* FIXME: FLUX_O_TRACE will show these messages being received again
+ * So will message counters.
  */
 int flux_requeue (flux_t h, const flux_msg_t *msg, int flags)
 {
-    if (!h->ops->requeue) {
-        errno = ENOSYS;
+    flux_msg_t *cpy;
+    int rc;
+
+    if (flags != FLUX_RQ_TAIL && flags != FLUX_RQ_HEAD) {
+        errno = EINVAL;
         goto fatal;
     }
-    if (h->ops->requeue(h->impl, msg, flags) < 0)
+    if (!(cpy = flux_msg_copy (msg, true)))
         goto fatal;
+    if (flags == FLUX_RQ_TAIL)
+        rc = msglist_append (h->queue, cpy);
+    else
+        rc = msglist_push (h->queue, cpy);
+    if (rc < 0) {
+        flux_msg_destroy (cpy);
+        goto fatal;
+    }
     return 0;
 fatal:
     FLUX_FATAL (h);
@@ -507,33 +545,66 @@ fatal:
     return -1;
 }
 
-int flux_rank (flux_t h)
+int flux_pollfd (flux_t h)
 {
-    int rank;
-    if (!h->ops->rank) {
+    if (!h->ops->pollfd) {
         errno = ENOSYS;
         goto fatal;
     }
-    if ((rank = h->ops->rank (h->impl)) < 0)
-        goto fatal;
-    return rank;
+    if (h->pollfd < 0) {
+        struct epoll_event ev = {
+            .events = EPOLLET | EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLHUP,
+        };
+        if ((h->pollfd = epoll_create (10)) < 0)
+            goto fatal;
+        /* add queue pollfd */
+        ev.data.fd = msglist_pollfd (h->queue);
+        if (ev.data.fd < 0)
+            goto fatal;
+        if (epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
+            goto fatal;
+        /* add connector pollfd */
+        ev.data.fd = h->ops->pollfd (h->impl);
+        if (ev.data.fd < 0)
+            goto fatal;
+        if (epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
+            goto fatal;
+    }
+    return h->pollfd;
 fatal:
+    if (h->pollfd >= 0) {
+        (void)close (h->pollfd);
+        h->pollfd = -1;
+    }
     FLUX_FATAL (h);
     return -1;
 }
 
-zctx_t *flux_get_zctx (flux_t h)
+int flux_pollevents (flux_t h)
 {
-    if (!h->ops->get_zctx) {
+    int e, events;
+    if (!h->ops->pollevents) {
         errno = ENOSYS;
-        return NULL;
+        goto fatal;
     }
-    return h->ops->get_zctx (h->impl);
-}
-
-struct reactor *reactor_get (flux_t h)
-{
-    return h->reactor;
+    if (h->pollfd >= 0) {
+        struct epoll_event ev;
+        (void)epoll_wait (h->pollfd, &ev, 1, 0);
+    }
+    if ((events = h->ops->pollevents (h->impl)) < 0)
+        goto fatal;
+    if ((e = msglist_pollevents (h->queue)) < 0)
+        goto fatal;
+    if ((e & POLLIN))
+        events |= FLUX_POLLIN;
+    if ((e & POLLOUT))
+        events |= FLUX_POLLOUT;
+    if ((e & POLLERR))
+        events |= FLUX_POLLERR;
+    return events;
+fatal:
+    FLUX_FATAL (h);
+    return -1;
 }
 
 /*

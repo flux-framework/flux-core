@@ -96,19 +96,38 @@ done:
     return ret;
 }
 
+/* The size is not cacheable per RFC 3.
+ * However, allow the size to be faked to facilitate 'loop' testing.
+ */
 int flux_size (flux_t h)
 {
-    int size = -1;
-    flux_info (h, NULL, &size, NULL);
+    int size, *sizep;
+
+    if ((sizep = flux_aux_get (h, "flux::size")))
+        return *sizep;
+    if (flux_info (h, NULL, &size, NULL) < 0)
+        return -1;
     return size;
 }
 
-bool flux_treeroot (flux_t h)
+/* The rank is cacheable, since it never changes per RFC 3.
+ * In addition, allow the rank to be faked to facilitate 'loop' testing.
+ */
+int flux_rank (flux_t h)
 {
-    bool treeroot = false;
-    flux_info (h, NULL, NULL, &treeroot);
-    return treeroot;
+    int *rank = flux_aux_get (h, "flux::rank");
+    if (!rank) {
+        if (!(rank = malloc (sizeof (*rank)))) {
+            errno = ENOMEM;
+            return -1;
+        }
+        if (flux_info (h, rank, NULL, NULL) < 0)
+            return -1;
+        flux_aux_set (h, "rank", rank, free);
+    }
+    return *rank;
 }
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

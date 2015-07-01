@@ -27,74 +27,55 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <stdio.h>
 #include <assert.h>
-#include <stdlib.h>
-#include <string.h>
 #include <errno.h>
-#include <getopt.h>
-#include <libgen.h>
-#include <pthread.h>
 #include <unistd.h>
-#include <sys/param.h>
-#include <stdbool.h>
-#include <sys/un.h>
-#include <sys/socket.h>
-#include <ctype.h>
+
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-
-#include "src/common/libev/ev.h"
-#include "src/common/libutil/ev_zlist.h"
-#include "src/common/libutil/ev_zmq.h"
+#include "src/common/libutil/msglist.h"
 
 #define CTX_MAGIC   0xf434aaa0
 typedef struct {
     int magic;
     int rank;
+    int size;
     flux_t h;
 
-    zlist_t *queue;
-    ev_zlist queue_w;
-    struct ev_loop *loop;
-    int loop_rc;
+    int pollfd;
+    int pollevents;
 
-    flux_msg_f msg_cb;
-    void *msg_cb_arg;
-
-    zhash_t *watchers;
-    int timer_seq;
+    msglist_t *queue;
 } ctx_t;
-
-#define HASHKEY_LEN 80
-
-typedef struct {
-    ev_timer w;
-    FluxTmoutHandler cb;
-    void *arg;
-    int id;
-} atimer_t;
-
-typedef struct {
-    ev_zmq w;
-    FluxZsHandler cb;
-    void *arg;
-} azs_t;
-
-typedef struct {
-    ev_io w;
-    FluxFdHandler cb;
-    void *arg;
-} afd_t;
-
-static void op_reactor_stop (void *impl, int rc);
 
 
 static const struct flux_handle_ops handle_ops;
 
 const char *fake_uuid = "12345678123456781234567812345678";
+
+static int op_pollevents (void *impl)
+{
+    ctx_t *c = impl;
+    int e, revents = 0;
+
+    if ((e = msglist_pollevents (c->queue)) < 0)
+        return e;
+    if (e & POLLIN)
+        revents |= FLUX_POLLIN;
+    if (e & POLLOUT)
+        revents |= FLUX_POLLOUT;
+    if (e & POLLERR)
+        revents |= FLUX_POLLERR;
+    return revents;
+}
+
+static int op_pollfd (void *impl)
+{
+    ctx_t *c = impl;
+    return msglist_pollfd (c->queue);
+}
 
 static int op_send (void *impl, const flux_msg_t *msg, int flags)
 {
@@ -117,10 +98,8 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
                 goto done;
             break;
     }
-    if (zlist_append (c->queue, cpy) < 0) {
-        errno = ENOMEM;
+    if (msglist_append (c->queue, cpy) < 0)
         goto done;
-    }
     cpy = NULL; /* c->queue now owns cpy */
     rc = 0;
 done:
@@ -133,252 +112,10 @@ static flux_msg_t *op_recv (void *impl, int flags)
 {
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
-    flux_msg_t *msg = zlist_pop (c->queue);
+    flux_msg_t *msg = msglist_pop (c->queue);
     if (!msg)
         errno = EWOULDBLOCK;
     return msg;
-}
-
-static int op_requeue (void *impl, const flux_msg_t *msg, int flags)
-{
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-    int rc = -1;
-    flux_msg_t *cpy = NULL;
-
-    if (!(cpy = flux_msg_copy (msg, true)))
-        goto done;
-    if ((flags & FLUX_RQ_TAIL))
-        rc = zlist_append (c->queue, cpy);
-    else
-        rc = zlist_push (c->queue, cpy);
-    if (rc < 0) {
-        flux_msg_destroy (cpy);
-        errno = ENOMEM;
-        goto done;
-    }
-    rc = 0;
-done:
-    return rc;
-}
-
-static void op_purge (void *impl, struct flux_match match)
-{
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-    zmsg_t *zmsg = zlist_first (c->queue);
-
-    while (zmsg) {
-        if (flux_msg_cmp (zmsg, match)) {
-            zlist_remove (c->queue, zmsg);
-            zmsg_destroy (&zmsg);
-        }
-        zmsg = zlist_next (c->queue);
-    }
-}
-
-static int op_rank (void *impl)
-{
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-    return c->rank;
-}
-
-static int op_reactor_start (void *impl)
-{
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-
-    c->loop_rc = 0;
-    ev_run (c->loop, 0);
-    return c->loop_rc;
-}
-
-static void op_reactor_stop (void *impl, int rc)
-{
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-
-    c->loop_rc = rc;
-    ev_break (c->loop, EVBREAK_ALL);
-}
-
-static void queue_cb (struct ev_loop *loop, ev_zlist *w, int revents)
-{
-    ctx_t *c = (ctx_t *)((char *)w - offsetof (ctx_t, queue_w));
-    assert (c->magic == CTX_MAGIC);
-
-    assert (zlist_size (c->queue) > 0);
-    if (c->msg_cb) {
-        if (c->msg_cb (c->h, c->msg_cb_arg) < 0)
-            op_reactor_stop (c, -1);
-    }
-}
-
-static int op_reactor_msg_add (void *impl, flux_msg_f cb, void *arg)
-{
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-    int rc = -1;
-
-    if (c->msg_cb != NULL) {
-        errno = EBUSY;
-        goto done;
-    }
-    c->msg_cb = cb;
-    c->msg_cb_arg = arg;
-    rc = 0;
-done:
-    return rc;
-}
-
-static void op_reactor_msg_remove (void *impl)
-{
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-    c->msg_cb = NULL;
-    c->msg_cb_arg = NULL;
-}
-
-static void fd_cb (struct ev_loop *loop, ev_io *w, int revents)
-{
-    afd_t *f = (afd_t *)((char *)w - offsetof (afd_t, w));
-    ctx_t *c = w->data;
-    assert (c->magic == CTX_MAGIC);
-
-    if (f->cb (c->h, w->fd, etoz (revents), f->arg) < 0)
-        op_reactor_stop (c, -1);
-}
-
-static int op_reactor_fd_add (void *impl, int fd, int events,
-                               FluxFdHandler cb, void *arg)
-{
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-    char hashkey[HASHKEY_LEN];
-
-    afd_t *f = xzmalloc (sizeof (*f));
-    ev_io_init (&f->w, fd_cb, fd, ztoe (events));
-    f->w.data = c;
-    f->cb = cb;
-    f->arg = arg;
-
-    snprintf (hashkey, sizeof (hashkey), "fd:%d:%d", fd, events);
-    zhash_update (c->watchers, hashkey, f);
-    zhash_freefn (c->watchers, hashkey, free);
-
-    ev_io_start (c->loop, &f->w);
-
-    return 0;
-}
-
-static void op_reactor_fd_remove (void *impl, int fd, int events)
-{
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-    char hashkey[HASHKEY_LEN];
-
-    snprintf (hashkey, sizeof (hashkey), "fd:%d:%d", fd, events);
-    afd_t *f = zhash_lookup (c->watchers, hashkey);
-    if (f) {
-        ev_io_stop (c->loop, &f->w);
-        zhash_delete (c->watchers, hashkey);
-    }
-}
-
-static void zs_cb (struct ev_loop *loop, ev_zmq *w, int revents)
-{
-    azs_t *z = (azs_t *)((char *)w - offsetof (azs_t, w));
-    ctx_t *c = w->data;
-    assert (c->magic == CTX_MAGIC);
-
-    int rc = z->cb (c->h, w->zsock, etoz (revents), z->arg);
-    if (rc < 0)
-        op_reactor_stop (c, -1);
-}
-
-static int op_reactor_zs_add (void *impl, void *zs, int events,
-                               FluxZsHandler cb, void *arg)
-{
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-    char hashkey[HASHKEY_LEN];
-
-    azs_t *z = xzmalloc (sizeof (*z));
-    ev_zmq_init (&z->w, zs_cb, zs, ztoe (events));
-    z->w.data = c;
-    z->cb = cb;
-    z->arg = arg;
-
-    snprintf (hashkey, sizeof (hashkey), "zsock:%p:%d", zs, events);
-    zhash_update (c->watchers, hashkey, z);
-    zhash_freefn (c->watchers, hashkey, free);
-
-    ev_zmq_start (c->loop, &z->w);
-    return 0;
-}
-
-static void op_reactor_zs_remove (void *impl, void *zs, int events)
-{
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-    char hashkey[HASHKEY_LEN];
-
-    snprintf (hashkey, sizeof (hashkey), "zsock:%p:%d", zs, events);
-    azs_t *z = zhash_lookup (c->watchers, hashkey);
-    if (z) {
-        ev_zmq_stop (c->loop, &z->w);
-        zhash_delete (c->watchers, hashkey);
-    }
-}
-
-static void timer_cb (struct ev_loop *loop, ev_timer *w, int revents)
-{
-    atimer_t *t = (atimer_t *)((char *)w - offsetof (atimer_t, w));
-    ctx_t *c = w->data;
-    assert (c->magic == CTX_MAGIC);
-
-    if (t->cb (c->h, t->arg) < 0)
-         op_reactor_stop (c, -1);
-}
-
-static int op_reactor_tmout_add (void *impl, unsigned long msec, bool oneshot,
-                                  FluxTmoutHandler cb, void *arg)
-{
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-    double after = (double)msec / 1000.0;
-    double repeat = oneshot ? 0 : after;
-    char hashkey[HASHKEY_LEN];
-
-    atimer_t *t = xzmalloc (sizeof (*t));
-    t->id = c->timer_seq++;
-    t->w.data = c;
-    ev_timer_init (&t->w, timer_cb, after, repeat);
-    t->cb = cb;
-    t->arg = arg;
-
-    snprintf (hashkey, sizeof (hashkey), "timer:%d", t->id);
-    zhash_update (c->watchers, hashkey, t);
-    zhash_freefn (c->watchers, hashkey, free);
-
-    ev_timer_start (c->loop, &t->w);
-
-    return t->id;
-}
-
-static void op_reactor_tmout_remove (void *impl, int timer_id)
-{
-    ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
-    char hashkey[HASHKEY_LEN];
-
-    snprintf (hashkey, sizeof (hashkey), "timer:%d", timer_id);
-    atimer_t *t = zhash_lookup (c->watchers, hashkey);
-    if (t) {
-        ev_timer_stop (c->loop, &t->w);
-        zhash_delete (c->watchers, hashkey);
-    }
 }
 
 static void op_fini (void *impl)
@@ -386,15 +123,9 @@ static void op_fini (void *impl)
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
 
-    if (c->loop)
-        ev_loop_destroy (c->loop);
-    if (c->queue) {
-        zmsg_t *zmsg;
-        while ((zmsg = zlist_pop (c->queue)))
-            zmsg_destroy (&zmsg);
-        zlist_destroy (&c->queue);
-    }
-    zhash_destroy (&c->watchers);
+    if (c->pollfd >= 0)
+        close (c->pollfd);
+    msglist_destroy (c->queue);
     c->magic = ~CTX_MAGIC;
     free (c);
 }
@@ -404,15 +135,14 @@ flux_t connector_init (const char *path, int flags)
     ctx_t *c = xzmalloc (sizeof (*c));
     c->magic = CTX_MAGIC;
     c->rank = 0;
-    if (!(c->loop = ev_loop_new (EVFLAG_AUTO))
-                            || !(c->watchers = zhash_new ())
-                            || !(c->queue = zlist_new ())) {
-        errno = ENOMEM;
+    if (!(c->queue = msglist_create ((msglist_free_f)flux_msg_destroy)))
         goto error;
-    }
-    ev_zlist_init (&c->queue_w, queue_cb, c->queue, EV_READ);
-    ev_zlist_start (c->loop, &c->queue_w);
     c->h = flux_handle_create (c, &handle_ops, flags);
+    /* Fake out flux_size() and flux_rank () for testing.
+     */
+    c->size = 1;
+    flux_aux_set (c->h, "flux::size", &c->size, NULL);
+    flux_aux_set (c->h, "flux::rank", &c->rank, NULL);
     return c->h;
 error:
     if (c) {
@@ -424,23 +154,10 @@ error:
 }
 
 static const struct flux_handle_ops handle_ops = {
+    .pollfd = op_pollfd,
+    .pollevents = op_pollevents,
     .send = op_send,
     .recv = op_recv,
-    .requeue = op_requeue,
-    .purge = op_purge,
-    .event_subscribe = NULL,
-    .event_unsubscribe = NULL,
-    .rank = op_rank,
-    .reactor_stop = op_reactor_stop,
-    .reactor_start = op_reactor_start,
-    .reactor_fd_add = op_reactor_fd_add,
-    .reactor_fd_remove = op_reactor_fd_remove,
-    .reactor_zs_add = op_reactor_zs_add,
-    .reactor_zs_remove = op_reactor_zs_remove,
-    .reactor_tmout_add = op_reactor_tmout_add,
-    .reactor_tmout_remove = op_reactor_tmout_remove,
-    .reactor_msg_add = op_reactor_msg_add,
-    .reactor_msg_remove = op_reactor_msg_remove,
     .impl_destroy = op_fini,
 };
 

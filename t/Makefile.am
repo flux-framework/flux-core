@@ -9,6 +9,8 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 	$(top_srcdir)/config/tap-driver.sh
 
 TESTS = \
+	loop/handle.t \
+	loop/reactor.t \
 	loop/rpc.t \
 	loop/multrpc.t \
 	t0000-sharness.t \
@@ -67,6 +69,8 @@ check_SCRIPTS = \
 	lua/t1003-iowatcher.t
 
 check_PROGRAMS = \
+	loop/handle.t \
+	loop/reactor.t \
 	loop/rpc.t \
 	loop/multrpc.t
 
@@ -81,6 +85,14 @@ test_cppflags = \
         -DCONNECTOR_PATH=\"$(top_builddir)/src/connectors\" \
         -I$(top_srcdir)/src/common/libtap \
         $(AM_CPPFLAGS)
+
+loop_handle_t_SOURCES = loop/handle.c
+loop_handle_t_CPPFLAGS = $(test_cppflags)
+loop_handle_t_LDADD = $(test_ldadd) $(LIBDL)
+
+loop_reactor_t_SOURCES = loop/reactor.c
+loop_reactor_t_CPPFLAGS = $(test_cppflags)
+loop_reactor_t_LDADD = $(test_ldadd) $(LIBDL)
 
 loop_rpc_t_SOURCES = loop/rpc.c
 loop_rpc_t_CPPFLAGS = $(test_cppflags)

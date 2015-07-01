@@ -6,6 +6,7 @@
 
 #include "src/common/libflux/flux.h"
 #include "src/common/libjsonc/jsonc.h" // temporary
+#include "src/common/libcompat/compat.h" // temporary
 
 #include "src/modules/kvs/kvs.h"
 #include "src/modules/live/live.h"

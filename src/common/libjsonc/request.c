@@ -121,7 +121,7 @@ int flux_json_request (flux_t h, uint32_t nodeid, uint32_t matchtag,
         goto done;
     if (flux_msg_enable_route (zmsg) < 0)
         goto done;
-    rc = flux_sendmsg (h, &zmsg);
+    rc = flux_send (h, zmsg, 0);
 done:
     zmsg_destroy (&zmsg);
     return rc;
@@ -135,7 +135,10 @@ int flux_json_respond (flux_t h, JSON out, zmsg_t **zmsg)
         goto done;
     if (flux_msg_set_payload_json (*zmsg, out ? Jtostr (out) : NULL) < 0)
         goto done;
-    rc = flux_sendmsg (h, zmsg);
+    if (flux_send (h, *zmsg, 0) < 0)
+        goto done;
+    zmsg_destroy (zmsg);
+    rc = 0;
 done:
     return rc;
 }
@@ -149,7 +152,10 @@ int flux_err_respond (flux_t h, int errnum, zmsg_t **zmsg)
         goto done;
     if (flux_msg_set_payload_json (*zmsg, NULL) < 0)
         goto done;
-    rc = flux_sendmsg (h, zmsg);
+    if (flux_send (h, *zmsg, 0) < 0)
+        goto done;
+    zmsg_destroy (zmsg);
+    rc = 0;
 done:
     return rc;
 }

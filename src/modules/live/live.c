@@ -167,7 +167,8 @@ static ctx_t *getctx (flux_t h)
         ctx->rank = flux_rank (h);
         if (asprintf (&ctx->rankstr, "%d", ctx->rank) < 0)
             oom ();
-        ctx->master = flux_treeroot (h);
+        if (flux_rank (h) == 0)
+            ctx->master = true;
         if (!(ctx->parents = zlist_new ()))
             oom ();
         if (!(ctx->children = zhash_new ()))

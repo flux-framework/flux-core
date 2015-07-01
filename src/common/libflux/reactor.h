@@ -15,6 +15,7 @@ int flux_reactor_start (flux_t h);
  * This may be called from within a FluxMsgHandler/FluxFdHandler callback.
  */
 void flux_reactor_stop (flux_t h);
+void flux_reactor_stop_error (flux_t h);
 
 /* Give control back to the reactor until a message matching 'match'
  * is queued in the handle.  This will return -1 with errno = EINVAL
@@ -24,75 +25,66 @@ void flux_reactor_stop (flux_t h);
  */
 int flux_sleep_on (flux_t h, struct flux_match match);
 
-/* FluxMsgHandler indicates msg is "consumed" by destroying it.
- * Callbacks return 0 on success, -1 on error and set errno.
- * Error terminates reactor, and flux_reactor_start() returns -1.
+/* Message dispatch
  */
-typedef int (*FluxMsgHandler)(flux_t h, int typemask, flux_msg_t **msg, void *arg);
-typedef int (*FluxFdHandler)(flux_t h, int fd, short revents, void *arg);
-typedef int (*FluxZsHandler)(flux_t h, void *zs, short revents, void *arg);
-typedef int (*FluxTmoutHandler)(flux_t h, void *arg);
 
-typedef struct {
+typedef struct flux_msg_watcher flux_msg_watcher_t;
+typedef void (*flux_msg_watcher_f)(flux_t h, flux_msg_watcher_t *w,
+                                   const flux_msg_t *msg, void *arg);
+
+flux_msg_watcher_t *flux_msg_watcher_create (struct flux_match match,
+                                             flux_msg_watcher_f cb, void *arg);
+void flux_msg_watcher_destroy (flux_msg_watcher_t *w);
+void flux_msg_watcher_start (flux_t h, flux_msg_watcher_t *w);
+void flux_msg_watcher_stop (flux_t h, flux_msg_watcher_t *w);
+
+struct flux_msghandler {
     int typemask;
-    const char *pattern;
-    FluxMsgHandler cb;
-} msghandler_t;
+    char *topic_glob;
+    flux_msg_watcher_f cb;
+    flux_msg_watcher_t *w;
+};
+#define FLUX_MSGHANDLER_TABLE_END { 0, NULL, NULL }
+int flux_msg_watcher_addvec (flux_t h, struct flux_msghandler tab[], void *arg);
+void flux_msg_watcher_delvec (flux_t h, struct flux_msghandler tab[]);
 
-/* Register a FluxMsgHandler callback to be called whenever a message
- * matching typemask and pattern (glob) is received.  The callback is
- * added to the beginning of the msghandler list.
+/* file descriptors
  */
-int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
-                         FluxMsgHandler cb, void *arg);
 
-/* Register a batch of FluxMsgHandler's
+typedef struct flux_fd_watcher flux_fd_watcher_t;
+typedef void (*flux_fd_watcher_f)(flux_t h, flux_fd_watcher_t *w,
+                                  int fd, int revents, void *arg);
+flux_fd_watcher_t *flux_fd_watcher_create (int fd, int events,
+                                           flux_fd_watcher_f cb, void *arg);
+void flux_fd_watcher_destroy (flux_fd_watcher_t *w);
+void flux_fd_watcher_start (flux_t h, flux_fd_watcher_t *w);
+void flux_fd_watcher_stop (flux_t h, flux_fd_watcher_t *w);
+
+/* 0MQ sockets
  */
-int flux_msghandler_addvec (flux_t h, msghandler_t *handlers, int len,
-                            void *arg);
 
-/* Unregister a FluxMsgHandler callback.  Only the first callback with
- * identical typemask and pattern is removed.
+typedef struct flux_zmq_watcher flux_zmq_watcher_t;
+typedef void (*flux_zmq_watcher_f)(flux_t h, flux_zmq_watcher_t *w,
+                                   void *zsock, int revents, void *arg);
+flux_zmq_watcher_t *flux_zmq_watcher_create (void *zsock, int events,
+                                             flux_zmq_watcher_f cb, void *arg);
+void flux_zmq_watcher_destroy (flux_zmq_watcher_t *w);
+void flux_zmq_watcher_start (flux_t h, flux_zmq_watcher_t *w);
+void flux_zmq_watcher_stop (flux_t h, flux_zmq_watcher_t *w);
+
+/* Timer
  */
-void flux_msghandler_remove (flux_t h, int typemask, const char *pattern);
 
+typedef struct flux_timer_watcher flux_timer_watcher_t;
+typedef void (*flux_timer_watcher_f)(flux_t h, flux_timer_watcher_t *w,
+                                     int revents, void *arg);
+flux_timer_watcher_t *flux_timer_watcher_create (double after, double repeat,
+                                                 flux_timer_watcher_f cb,
+                                                 void *arg);
+void flux_timer_watcher_destroy (flux_timer_watcher_t *w);
+void flux_timer_watcher_start (flux_t h, flux_timer_watcher_t *w);
+void flux_timer_watcher_stop (flux_t h, flux_timer_watcher_t *w);
 
-int flux_msghandler_add_match (flux_t h, const struct flux_match match,
-                              FluxMsgHandler cb, void *arg);
-void flux_msghandler_remove_match (flux_t h, const struct flux_match match);
-
-
-/* Register a FluxFdHandler callback to be called whenever an event
- * in the 'events' mask occurs on the given file descriptor 'fd'.
- */
-int flux_fdhandler_add (flux_t h, int fd, short events,
-                        FluxFdHandler cb, void *arg);
-
-/* Unregister a FluxFdHandler callback.  Only the first callback with
- * identical fd and events is removed.
- */
-void flux_fdhandler_remove (flux_t h, int fd, short events);
-
-
-/* Register a FluxZsHandler callback to be called whenever an event
- * in the 'events' mask occurs on the given zeromq socket 'zs'.
- */
-int flux_zshandler_add (flux_t h, void *zs, short events,
-                        FluxZsHandler cb, void *arg);
-
-/* Unregister a FluxZsHandler callback.  Only the first callback with
- * identical zs and events is removed.
- */
-void flux_zshandler_remove (flux_t h, void *zs, short events);
-
-/* Register a FluxTmoutHandler callback.  Returns timer_id or -1 on error.
- */
-int flux_tmouthandler_add (flux_t h, unsigned long msec, bool oneshot,
-                           FluxTmoutHandler cb, void *arg);
-
-/* Unregister a FluxTmoutHandler callback.
- */
-void flux_tmouthandler_remove (flux_t h, int timer_id);
 
 #endif /* !_FLUX_CORE_REACTOR_H */
 

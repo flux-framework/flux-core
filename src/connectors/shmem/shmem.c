@@ -1,0 +1,323 @@
+/*****************************************************************************\
+ *  Copyright (c) 2014 Lawrence Livermore National Security, LLC.  Produced at
+ *  the Lawrence Livermore National Laboratory (cf, AUTHORS, DISCLAIMER.LLNS).
+ *  LLNL-CODE-658032 All rights reserved.
+ *
+ *  This file is part of the Flux resource manager framework.
+ *  For details, see https://github.com/flux-framework.
+ *
+ *  This program is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU General Public License as published by the Free
+ *  Software Foundation; either version 2 of the license, or (at your option)
+ *  any later version.
+ *
+ *  Flux is distributed in the hope that it will be useful, but WITHOUT
+ *  ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or
+ *  FITNESS FOR A PARTICULAR PURPOSE.  See the terms and conditions of the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
+ *  See also:  http://www.gnu.org/licenses/
+\*****************************************************************************/
+
+/* To use this connector:
+ *   int rank;
+ *   zctx_t *zctx;
+ *   flux_t h = flux_open ("shmem://myuuid", flags)
+ *   flux_setopt (h, FLUX_OPT_ZEROMQ_CONTEXT, zctx);
+ *   flux_aux_set (h, "flux::rank", &rank, NULL);
+ */
+
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
+#include <assert.h>
+#include <errno.h>
+#include <czmq.h>
+#include <flux/core.h>
+
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/shortjson.h"
+
+#define MODHANDLE_MAGIC    0xfeefbe02
+typedef struct {
+    int magic;
+    void *sock;
+    char *uuid;
+    char *uri;
+    flux_t h;
+    zctx_t *zctx;
+} ctx_t;
+
+static const struct flux_handle_ops handle_ops;
+
+static int connect_socket (ctx_t *ctx);
+
+static int op_pollevents (void *impl)
+{
+    ctx_t *ctx = impl;
+    assert (ctx->magic == MODHANDLE_MAGIC);
+    uint32_t e;
+    size_t esize = sizeof (e);
+    int revents = 0;
+
+    if (connect_socket (ctx) < 0)
+        goto done;
+    if (zmq_getsockopt (ctx->sock, ZMQ_EVENTS, &e, &esize) < 0) {
+        revents |= FLUX_POLLERR;
+        goto done;
+    }
+    if (e & ZMQ_POLLIN)
+        revents |= FLUX_POLLIN;
+    if (e & ZMQ_POLLOUT)
+        revents |= FLUX_POLLOUT;
+    if (e & ZMQ_POLLERR)
+        revents |= FLUX_POLLERR;
+done:
+    return revents;
+}
+
+static int op_pollfd (void *impl)
+{
+    ctx_t *ctx = impl;
+    assert (ctx->magic == MODHANDLE_MAGIC);
+    int fd = -1;
+    size_t fdsize = sizeof (fd);
+
+    if (connect_socket (ctx) < 0)
+        goto done;
+    if (zmq_getsockopt (ctx->sock, ZMQ_FD, &fd, &fdsize) < 0)
+        goto done;
+done:
+    return fd;
+}
+
+
+static int op_send (void *impl, const flux_msg_t *msg, int flags)
+{
+    ctx_t *ctx = impl;
+    assert (ctx->magic == MODHANDLE_MAGIC);
+    flux_msg_t *cpy = NULL;
+    int type;
+    int rc = -1;
+
+    if (connect_socket (ctx) < 0)
+        goto done;
+    if (flux_msg_get_type (msg, &type) < 0)
+        goto done;
+    if (!(cpy = flux_msg_copy (msg, true)))
+        goto done;
+    switch (type) {
+        case FLUX_MSGTYPE_REQUEST:
+        case FLUX_MSGTYPE_EVENT:
+            if (flux_msg_enable_route (cpy) < 0)
+                goto done;
+            if (flux_msg_push_route (cpy, ctx->uuid) < 0)
+                goto done;
+            break;
+        case FLUX_MSGTYPE_RESPONSE:
+            break;
+        default:
+            errno = EINVAL;
+            goto done;
+    }
+    if (zmsg_send (&cpy, ctx->sock) < 0)
+        goto done;
+    rc = 0;
+done:
+    if (cpy)
+        flux_msg_destroy (cpy);
+    return rc;
+}
+
+static flux_msg_t *op_recv (void *impl, int flags)
+{
+    ctx_t *ctx = impl;
+    assert (ctx->magic == MODHANDLE_MAGIC);
+    zmq_pollitem_t zp = {
+        .events = ZMQ_POLLIN, .socket = ctx->sock, .revents = 0, .fd = -1,
+    };
+    flux_msg_t *msg = NULL;
+
+    if (connect_socket (ctx) < 0)
+        goto done;
+    if ((flags & FLUX_O_NONBLOCK)) {
+        int n;
+        if ((n = zmq_poll (&zp, 1, 0L)) < 0)
+            goto done; /* likely: EWOULDBLOCK | EAGAIN */
+        assert (n == 1);
+        assert (zp.revents == ZMQ_POLLIN);
+    }
+    msg = zmsg_recv (ctx->sock);
+done:
+    return msg;
+}
+
+static int op_event_subscribe (void *impl, const char *topic)
+{
+    ctx_t *ctx = impl;
+    assert (ctx->magic == MODHANDLE_MAGIC);
+    JSON in = Jnew ();
+    int rc = -1;
+
+    if (connect_socket (ctx) < 0)
+        goto done;
+    Jadd_str (in, "topic", topic);
+    if (flux_json_rpc (ctx->h, FLUX_NODEID_ANY, "cmb.sub", in, NULL) < 0)
+        goto done;
+    rc = 0;
+done:
+    Jput (in);
+    return rc;
+}
+
+static int op_event_unsubscribe (void *impl, const char *topic)
+{
+    ctx_t *ctx = impl;
+    assert (ctx->magic == MODHANDLE_MAGIC);
+    JSON in = Jnew ();
+    int rc = -1;
+
+    if (connect_socket (ctx) < 0)
+        goto done;
+    Jadd_str (in, "topic", topic);
+    if (flux_json_rpc (ctx->h, FLUX_NODEID_ANY, "cmb.unsub", in, NULL) < 0)
+        goto done;
+    rc = 0;
+done:
+    Jput (in);
+    return rc;
+}
+
+static int op_getopt (void *impl, const char *option, void *val, size_t size)
+{
+    ctx_t *ctx = impl;
+    assert (ctx->magic == MODHANDLE_MAGIC);
+    int rc = -1;
+
+    if (option && !strcmp (option, FLUX_OPT_ZEROMQ_CONTEXT)) {
+        if (size != sizeof (ctx->zctx)) {
+            errno = EINVAL;
+            goto done;
+        }
+        memcpy (val, &ctx->zctx, size);
+    } else {
+        errno = EINVAL;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+static int op_setopt (void *impl, const char *option,
+                      const void *val, size_t size)
+{
+    ctx_t *ctx = impl;
+    assert (ctx->magic == MODHANDLE_MAGIC);
+    size_t val_size;
+    int rc = -1;
+
+    if (option && !strcmp (option, FLUX_OPT_ZEROMQ_CONTEXT)) {
+        val_size = sizeof (ctx->zctx);
+        if (size != val_size) {
+            errno = EINVAL;
+            goto done;
+        }
+        memcpy (&ctx->zctx, &val, val_size);
+        if (connect_socket (ctx) < 0)
+            goto done;
+    } else {
+        errno = EINVAL;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+static void send_eof (void *sock)
+{
+    zmsg_t *zmsg;
+
+    if (!(zmsg = zmsg_new ()) || zmsg_pushmem (zmsg, NULL, 0) < 0)
+        oom ();
+    if (zmsg_send (&zmsg, sock) < 0)
+        err_exit ("error sending EOF");
+    zmsg_destroy (&zmsg);
+}
+
+static void op_fini (void *impl)
+{
+    ctx_t *ctx = impl;
+    assert (ctx->magic == MODHANDLE_MAGIC);
+    if (ctx->sock) {
+        send_eof (ctx->sock);
+        zsocket_destroy (ctx->zctx, ctx->sock);
+    }
+    if (ctx->uuid)
+        free (ctx->uuid);
+    if (ctx->uri)
+        free (ctx->uri);
+    ctx->magic = ~MODHANDLE_MAGIC;
+    free (ctx);
+}
+
+/* We have to defer connection until the zctx is available to us.
+ * This function is idempotent.
+ */
+static int connect_socket (ctx_t *ctx)
+{
+    if (!ctx->sock) {
+        if (!ctx->zctx) {
+            errno = EINVAL;
+            return -1;
+        }
+        if (!(ctx->sock = zsocket_new (ctx->zctx, ZMQ_PAIR)))
+            return -1;
+        zsocket_set_hwm (ctx->sock, 0);
+        if (zsocket_connect (ctx->sock, "%s", ctx->uri) < 0) {
+            zsocket_destroy (ctx->zctx, ctx->sock);
+            ctx->sock = NULL;
+            return -1;
+        }
+    }
+    return 0;
+}
+
+flux_t connector_init (const char *path, int flags)
+{
+    ctx_t *ctx;
+    if (!path) {
+        errno = EINVAL;
+        return NULL;
+    }
+    ctx = xzmalloc (sizeof (*ctx));
+    ctx->magic = MODHANDLE_MAGIC;
+    ctx->uuid = xstrdup (path);
+    ctx->uri = xasprintf ("inproc://%s", ctx->uuid);
+    if (!(ctx->h = flux_handle_create (ctx, &handle_ops, flags))) {
+        op_fini (ctx);
+        return NULL;
+    }
+    return ctx->h;
+}
+
+static const struct flux_handle_ops handle_ops = {
+    .pollfd = op_pollfd,
+    .pollevents = op_pollevents,
+    .send = op_send,
+    .recv = op_recv,
+    .getopt = op_getopt,
+    .setopt = op_setopt,
+    .event_subscribe = op_event_subscribe,
+    .event_unsubscribe = op_event_unsubscribe,
+    .impl_destroy = op_fini,
+};
+
+/*
+ * vi:tabstop=4 shiftwidth=4 expandtab
+ */

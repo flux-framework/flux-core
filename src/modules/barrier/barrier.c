@@ -200,7 +200,7 @@ static int enter_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     if (b->count == b->nprocs) {
         if (exit_event_send (ctx->h, b->name, 0) < 0)
             flux_log (ctx->h, LOG_ERR, "exit_event_send: %s", strerror (errno));
-    } else if (!flux_treeroot (ctx->h) && !ctx->timer_armed) {
+    } else if (flux_rank (ctx->h) > 0 && !ctx->timer_armed) {
         if (flux_tmouthandler_add (h, barrier_reduction_timeout_msec,
                                    true, timeout_cb, ctx) < 0) {
             flux_log (h, LOG_ERR, "flux_tmouthandler_add: %s",strerror (errno));
@@ -314,7 +314,7 @@ static int timeout_cb (flux_t h, void *arg)
 {
     ctx_t *ctx = arg;
 
-    assert (!flux_treeroot (h));
+    assert (flux_rank (h) != 0);
     ctx->timer_armed = false; /* one shot */
 
     zhash_foreach (ctx->barriers, timeout_reduction, ctx);

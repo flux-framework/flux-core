@@ -8,7 +8,7 @@ AM_CPPFLAGS = \
 fluxcoreinclude_HEADERS = \
 	flux.h \
 	handle.h \
-	handle_impl.h \
+	connector.h \
 	reactor.h \
 	reduce.h \
 	security.h \
@@ -33,7 +33,6 @@ libflux_la_SOURCES = \
 	info.c \
 	handle.c \
 	reactor.c \
-	reactor_impl.h \
 	reduce.c \
 	security.c \
 	message.c \
@@ -47,6 +46,8 @@ libflux_la_SOURCES = \
 	conf.c \
 	tagpool.h \
 	tagpool.c \
+	ev_flux.h \
+	ev_flux.c \
 	tmpdir.c
 
 TESTS = test_conf.t \
@@ -62,6 +63,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
+	$(top_builddir)/src/common/libev/libev.la \
 	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)
 
 test_cppflags = \

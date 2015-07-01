@@ -7,8 +7,6 @@
 
 #include "message.h"
 
-struct _zctx_t;
-
 typedef struct flux_handle_struct *flux_t;
 
 typedef struct {
@@ -39,14 +37,33 @@ enum {
     FLUX_RQ_TAIL = 2,   /* requeue message at tail of queue */
 };
 
+/* Flags for flux_pollevents().
+ */
+enum {
+    FLUX_POLLIN = 1,
+    FLUX_POLLOUT = 2,
+    FLUX_POLLERR = 4,
+};
+
+/* Options for flux_setopt().
+ * (Connectors may define custom option names)
+ */
+#define FLUX_OPT_ZEROMQ_CONTEXT     "flux::zeromq_context"
+
 /* Create/destroy a broker handle.
- * The 'uri' scheme name selects a handle implementation to dynamically load.
- * The rest of the URI is parsed in an implementation-specific manner.
- * A NULL uri selects the "local" implementation with path set to the value
- * of FLUX_TMPDIR.
+ * The 'uri' scheme name selects a connector to dynamically load.
+ * The rest of the URI is parsed in an connector-specific manner.
+ * A NULL uri selects the "local" connector with path derived from
+ * FLUX_TMPDIR.
  */
 flux_t flux_open (const char *uri, int flags);
 void flux_close (flux_t h);
+
+/* Get/set handle options.  Options are interpreted by connectors.
+ * Returns 0 on success, or -1 on failure with errno set (e.g. EINVAL).
+ */
+int flux_opt_set (flux_t h, const char *option, const void *val, size_t len);
+int flux_opt_get (flux_t h, const char *option, void *val, size_t len);
 
 /* Register a handler for fatal handle errors.
  * A fatal error is ENOMEM or a handle send/recv error after which
@@ -87,24 +104,17 @@ uint32_t flux_matchtag_avail (flux_t h);
 int flux_send (flux_t h, const flux_msg_t *msg, int flags);
 flux_msg_t *flux_recv (flux_t h, struct flux_match match, int flags);
 
-/* deprecated */
-int flux_sendmsg (flux_t h, flux_msg_t **msg);
-flux_msg_t *flux_recvmsg (flux_t h, bool nonblock);
-flux_msg_t *flux_recvmsg_match (flux_t h, struct flux_match match,
-                                bool nonblock);
-
 /* Requeue message in the handle (head or tail according to flags)
  */
 int flux_requeue (flux_t h, const flux_msg_t *msg, int flags);
+
+int flux_pollfd (flux_t h);
+int flux_pollevents (flux_t h);
 
 /* Event subscribe/unsubscribe.
  */
 int flux_event_subscribe (flux_t h, const char *topic);
 int flux_event_unsubscribe (flux_t h, const char *topic);
-
-/* Get handle's zctx (if any).
- */
-struct _zctx_t *flux_get_zctx (flux_t h);
 
 /* Get/clear handle message counters.
  */

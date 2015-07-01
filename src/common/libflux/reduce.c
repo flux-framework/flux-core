@@ -44,8 +44,7 @@ struct flux_red_struct {
     flux_t h;
     int flags;
     int timeout_msec;
-    int timer_id;
-    bool timer_armed;
+    flux_timer_watcher_t *timer;
 
     int last_hwm;
     int cur_hwm;
@@ -56,8 +55,7 @@ struct flux_redstack_struct {
     zlist_t *l;
 };
 
-static void timer_enable (flux_red_t r);
-static void timer_disable (flux_red_t r);
+static void timer_cb (flux_t h, flux_timer_watcher_t *w, int revents, void *arg);
 
 static bool hwm_flushable (flux_red_t r);
 static bool hwm_valid (flux_red_t r);
@@ -102,6 +100,9 @@ flux_red_t flux_red_create (flux_t h, flux_sink_f sinkfn, void *arg)
     assert (sinkfn != NULL); /* FIXME */
     r->sinkfn = sinkfn;
     r->items = redstack_create ();
+    r->timer = flux_timer_watcher_create (1E-3*r->timeout_msec, 0, timer_cb, r);
+    if (!r->timer)
+        oom ();
     return r;
 }
 
@@ -109,6 +110,10 @@ void flux_red_destroy (flux_red_t r)
 {
     flux_red_flush (r);
     redstack_destroy (r->items);
+    if (r->timer) {
+        flux_timer_watcher_stop (r->h, r->timer);
+        flux_timer_watcher_destroy (r->timer);
+    }
     free (r);
 }
 
@@ -133,7 +138,7 @@ void flux_red_flush (flux_red_t r)
 
     while ((item = flux_redstack_pop (r->items)))
         r->sinkfn (r->h, item, r->cur_batchnum, r->arg);
-    timer_disable (r); /* no-op if not armed */
+    flux_timer_watcher_stop (r->h, r->timer);
 }
 
 static int append_late_item (flux_red_t r, void *item, int batchnum)
@@ -175,38 +180,17 @@ int flux_red_append (flux_red_t r, void *item, int batchnum)
     }
     if ((r->flags & FLUX_RED_TIMEDFLUSH)) {
         if (flux_redstack_count (r->items) > 0)
-            timer_enable (r);
+            flux_timer_watcher_start (r->h, r->timer);
     }
     if (r->flags == 0)
         flux_red_flush (r);
     return rc;
 }
 
-static int timer_cb (flux_t h, void *arg)
+static void timer_cb (flux_t h, flux_timer_watcher_t *w, int revents, void *arg)
 {
     flux_red_t r = arg;
-    int rc = 0;
-
-    r->timer_armed = false; /* it's a one-shot timer */
     flux_red_flush (r);
-    return rc;
-}
-
-static void timer_enable (flux_red_t r)
-{
-    if (!r->timer_armed) {
-        r->timer_id = flux_tmouthandler_add (r->h, r->timeout_msec, true,
-                                             timer_cb, r);
-        r->timer_armed = true;
-    }
-}
-
-static void timer_disable (flux_red_t r)
-{
-    if (r->timer_armed) {
-        flux_tmouthandler_remove (r->h, r->timer_id);
-        r->timer_armed = false;
-    }
 }
 
 static bool hwm_flushable (flux_red_t r)

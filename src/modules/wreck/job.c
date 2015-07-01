@@ -139,7 +139,7 @@ static unsigned long increment_jobid (flux_t h)
 static unsigned long lwj_next_id (flux_t h)
 {
     unsigned long ret;
-    if (flux_treeroot (h))
+    if (flux_rank (h) == 0)
         ret = increment_jobid (h);
     else {
         json_object *na = json_object_new_object ();
@@ -234,7 +234,7 @@ static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         flux_reactor_stop (h);
     }
     if (strcmp (topic, "job.next-id") == 0) {
-        if (flux_treeroot (h)) {
+        if (flux_rank (h) == 0) {
             unsigned long id = lwj_next_id (h);
             json_object *ox = json_id (id);
             flux_json_respond (h, ox, zmsg);

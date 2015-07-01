@@ -127,6 +127,7 @@ AC_CONFIG_FILES( \
   src/common/libev/Makefile \
   src/common/libflux/Makefile \
   src/common/libjsonc/Makefile \
+  src/common/libcompat/Makefile \
   src/lib/Makefile \
   src/lib/libpmi/Makefile \
   src/bindings/Makefile \
@@ -135,6 +136,7 @@ AC_CONFIG_FILES( \
   src/cmd/Makefile \
   src/connectors/Makefile \
   src/connectors/local/Makefile \
+  src/connectors/shmem/Makefile \
   src/connectors/loop/Makefile \
   src/modules/Makefile \
   src/modules/api/Makefile \

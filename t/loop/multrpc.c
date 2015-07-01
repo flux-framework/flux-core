@@ -9,8 +9,11 @@
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/nodeset.h"
+#include "src/common/libcompat/compat.h"
 
 #include "src/common/libtap/tap.h"
+
+static int fake_size = 1;
 
 /* request nodeid and flags returned in response */
 static int nodeid_fake_error = -1;
@@ -70,28 +73,6 @@ int rpctest_hello_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
     hello_count++;
 done:
     (void)flux_respond (h, *zmsg, errnum, NULL);
-    zmsg_destroy (zmsg);
-    return 0;
-}
-
-/* flux_rpc_multi() makes a flux_size() call, faked here for loop connector.
- */
-static volatile int fake_size = 1;
-int cmb_info_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
-{
-    int errnum = 0;
-    JSON o = Jnew ();
-
-    if (flux_request_decode (*zmsg, NULL, NULL) < 0) {
-        errnum = errno;
-        goto done;
-    }
-    Jadd_bool (o, "treeroot", true);
-    Jadd_int (o, "rank", 0);
-    Jadd_int (o, "size", fake_size);
-done:
-    (void)flux_respond (h, *zmsg, errnum, Jtostr (o));
-    Jput (o);
     zmsg_destroy (zmsg);
     return 0;
 }
@@ -157,6 +138,7 @@ int rpctest_begin_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
 
     /* fake that we have a larger session */
     fake_size = 128;
+    flux_aux_set (h, "flux::size", &fake_size, NULL);
     cmp_ok (flux_size (h), "==", fake_size,
         "successfully faked flux_size() of %d", fake_size);
 
@@ -251,13 +233,12 @@ static msghandler_t htab[] = {
     { FLUX_MSGTYPE_REQUEST,   "rpctest.hello",          rpctest_hello_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.echo",           rpctest_echo_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.nodeid",         rpctest_nodeid_cb},
-    { FLUX_MSGTYPE_REQUEST,   "cmb.info",               cmb_info_cb},
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
 int main (int argc, char *argv[])
 {
-    zmsg_t *zmsg;
+    flux_msg_t *msg;
     flux_t h;
 
     plan (34);
@@ -281,11 +262,12 @@ int main (int argc, char *argv[])
     /* test continues in rpctest_begin_cb() so that rpc calls
      * can sleep while we answer them
      */
-    ok ((zmsg = flux_request_encode ("rpctest.begin", NULL)) != NULL
-        && flux_sendmsg (h, &zmsg) == 0,
+    ok ((msg = flux_request_encode ("rpctest.begin", NULL)) != NULL
+        && flux_send (h, msg, 0) == 0,
         "sent message to initiate test");
     ok (flux_reactor_start (h) == 0,
         "reactor completed normally");
+    flux_msg_destroy (msg);
 
     /* Check result of last _then test */
     ok (nodeset_count (then_ns) == 128,

@@ -62,7 +62,7 @@ overlap_flux_wreckruns () {
     return 0
 }
 
-test_expect_success 'jstat 1: notification works for 1 wreckrun' '
+test_expect_success RACY 'jstat 1: notification works for 1 wreckrun' '
     run_flux_jstat 1 &&
     p=$( sync_flux_jstat 1) &&
     run_timeout 4 flux wreckrun -n4 -N4 hostname &&
@@ -74,7 +74,7 @@ EOF
     test_cmp expected output.1.cp 
 '
 
-test_expect_success 'jstat 2: jstat back-to-back works' '
+test_expect_success RACY 'jstat 2: jstat back-to-back works' '
     run_flux_jstat 2 &&
     p=$( sync_flux_jstat 2) &&
     run_timeout 4 flux wreckrun -n4 -N4 hostname &&
@@ -86,7 +86,7 @@ EOF
     test_cmp expected output.2.cp 
 '
 
-test_expect_success 'jstat 3: notification works for multiple wreckruns' '
+test_expect_success RACY 'jstat 3: notification works for multiple wreckruns' '
     run_flux_jstat 3 &&
     p=$( sync_flux_jstat 3 ) &&
     run_timeout 4 flux wreckrun -n4 -N4 hostname &&
@@ -102,7 +102,7 @@ EOF
     test_cmp expected output.3.cp 
 '
 
-test_expect_success LONGTEST 'jstat 4: notification works under lock-step stress' '
+test_expect_success RACY,LONGTEST 'jstat 4: notification works under lock-step stress' '
     run_flux_jstat 4 &&
     p=$( sync_flux_jstat 4 ) &&
     for i in `seq 1 20`; do 
@@ -135,7 +135,7 @@ EOF
     test_cmp expected output.4.cp 
 '
 
-test_expect_success 'jstat 5: notification works for overlapping wreckruns' '
+test_expect_success RACY 'jstat 5: notification works for overlapping wreckruns' '
     run_flux_jstat 5 &&
     p=$( sync_flux_jstat 5 ) &&
     overlap_flux_wreckruns 3 &&
@@ -151,7 +151,7 @@ EOF
     test_cmp expected.sort output.5.sort
 '
 
-test_expect_success LONGTEST 'jstat 6: notification works for overlapping stress' '
+test_expect_success RACY,LONGTEST 'jstat 6: notification works for overlapping stress' '
     run_flux_jstat 6 &&
     p=$( sync_flux_jstat 6 ) &&
     overlap_flux_wreckruns 20 &&
@@ -185,8 +185,9 @@ EOF
 '
 
 test_expect_success 'jstat 7: basic query works' '
-    flux jstat query 1 jobid &&
-    flux jstat query 1 state-pair &&
+    run_timeout 4 flux wreckrun -n4 -N4 hostname &&  # create some state for
+    flux jstat query 1 jobid &&                      #   subsequent tests
+    flux jstat query 1 state-pair &&                 #   in case RACY not set
     flux jstat query 1 rdesc &&
     flux jstat query 1 pdesc 
 '

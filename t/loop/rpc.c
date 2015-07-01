@@ -11,15 +11,16 @@
 #include "src/common/libtap/tap.h"
 
 /* request nodeid and flags returned in response */
-int rpctest_nodeid_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
+void rpctest_nodeid_cb (flux_t h, flux_msg_watcher_t *w,
+                        const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
     uint32_t nodeid;
     JSON o = NULL;
     int flags;
 
-    if (flux_request_decode (*zmsg, NULL, NULL) < 0
-            || flux_msg_get_nodeid (*zmsg, &nodeid, &flags) < 0) {
+    if (flux_request_decode (msg, NULL, NULL) < 0
+            || flux_msg_get_nodeid (msg, &nodeid, &flags) < 0) {
         errnum = errno;
         goto done;
     }
@@ -27,44 +28,41 @@ int rpctest_nodeid_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
     Jadd_int (o, "nodeid", nodeid);
     Jadd_int (o, "flags", flags);
 done:
-    (void)flux_respond (h, *zmsg, errnum, Jtostr (o));
+    (void)flux_respond (h, msg, errnum, Jtostr (o));
     Jput (o);
-    zmsg_destroy (zmsg);
-    return 0;
 }
 
 /* request payload echoed in response */
-int rpctest_echo_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
+void rpctest_echo_cb (flux_t h, flux_msg_watcher_t *w,
+                      const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
     const char *json_str;
 
-    if (flux_request_decode (*zmsg, NULL, &json_str) < 0) {
+    if (flux_request_decode (msg, NULL, &json_str) < 0) {
         errnum = errno;
         goto done;
     }
 done:
-    (void)flux_respond (h, *zmsg, errnum, json_str);
-    zmsg_destroy (zmsg);
-    return 0;
+    (void)flux_respond (h, msg, errnum, json_str);
 }
 
 /* no-payload response */
-int rpctest_hello_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
+void rpctest_hello_cb (flux_t h, flux_msg_watcher_t *w,
+                       const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
 
-    if (flux_request_decode (*zmsg, NULL, NULL) < 0) {
+    if (flux_request_decode (msg, NULL, NULL) < 0) {
         errnum = errno;
         goto done;
     }
 done:
-    (void)flux_respond (h, *zmsg, errnum, NULL);
-    zmsg_destroy (zmsg);
-    return 0;
+    (void)flux_respond (h, msg, errnum, NULL);
 }
 
-int rpctest_begin_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
+void rpctest_begin_cb (flux_t h, flux_msg_watcher_t *w,
+                       const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
     flux_rpc_t r;
@@ -118,7 +116,6 @@ int rpctest_begin_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
     flux_rpc_destroy (r);
 
     flux_reactor_stop (h);
-    return 0;
 }
 
 static void then_cb (flux_rpc_t r, void *arg)
@@ -136,37 +133,33 @@ static void then_cb (flux_rpc_t r, void *arg)
 }
 
 static flux_rpc_t thenbug_r = NULL;
-int rpctest_thenbug_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
+void rpctest_thenbug_cb (flux_t h, flux_msg_watcher_t *w,
+                         const flux_msg_t *msg, void *arg)
 {
     (void)flux_rpc_check (thenbug_r);
     flux_reactor_stop (h);
-    return 0;
 }
 
-static bool fatal_tested = false;
 static void fatal_err (const char *message, void *arg)
 {
-    if (fatal_tested)
-        BAIL_OUT ("fatal error: %s", message);
-    else
-        fatal_tested = true;
+    BAIL_OUT ("fatal error: %s", message);
 }
 
-static msghandler_t htab[] = {
+static struct flux_msghandler htab[] = {
     { FLUX_MSGTYPE_REQUEST,   "rpctest.begin",          rpctest_begin_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.hello",          rpctest_hello_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.echo",           rpctest_echo_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.nodeid",         rpctest_nodeid_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.thenbug",        rpctest_thenbug_cb},
+    FLUX_MSGHANDLER_TABLE_END,
 };
-const int htablen = sizeof (htab) / sizeof (htab[0]);
 
 int main (int argc, char *argv[])
 {
-    zmsg_t *zmsg;
+    flux_msg_t *msg;
     flux_t h;
 
-    plan (34);
+    plan (33);
 
     (void)setenv ("FLUX_CONNECTOR_PATH", CONNECTOR_PATH, 0);
     ok ((h = flux_open ("loop://", FLUX_O_COPROC)) != NULL,
@@ -174,21 +167,19 @@ int main (int argc, char *argv[])
     if (!h)
         BAIL_OUT ("can't continue without loop handle");
     flux_fatal_set (h, fatal_err, NULL);
-    flux_fatal_error (h, __FUNCTION__, "Foo");
-    ok (fatal_tested == true,
-        "flux_fatal function is called on fatal error");
 
-    ok (flux_msghandler_addvec (h, htab, htablen, NULL) == 0,
+    ok (flux_msg_watcher_addvec (h, htab, NULL) == 0,
         "registered message handlers");
     /* test continues in rpctest_begin_cb() so that rpc calls
      * can sleep while we answer them
      */
-    ok ((zmsg = flux_request_encode ("rpctest.begin", NULL)) != NULL,
+    ok ((msg = flux_request_encode ("rpctest.begin", NULL)) != NULL,
         "encoded rpctest.begin request OK");
-    ok (flux_sendmsg (h, &zmsg) == 0,
+    ok (flux_send (h, msg, 0) == 0,
         "sent rpctest.begin request");
     ok (flux_reactor_start (h) == 0,
         "reactor completed normally");
+    flux_msg_destroy (msg);
 
     /* test _then:  Slightly tricky.
      * Send request.  We're not in a coproc ctx here in main(), so there
@@ -226,10 +217,13 @@ int main (int argc, char *argv[])
         FLUX_NODEID_ANY, 0)) != NULL,
         "thenbug: sent echo request");
     do {
-        if (!(zmsg = flux_request_encode ("rpctest.thenbug", NULL))
-                  || flux_sendmsg (h, &zmsg) < 0
-                  || flux_reactor_start (h) < 0)
+        if (!(msg = flux_request_encode ("rpctest.thenbug", NULL))
+                  || flux_send (h, msg, 0) < 0
+                  || flux_reactor_start (h) < 0) {
+            flux_msg_destroy (msg);
             break;
+        }
+        flux_msg_destroy (msg);
     } while (!flux_rpc_check (thenbug_r));
     ok (true,
         "thenbug: check says message ready");
@@ -239,6 +233,7 @@ int main (int argc, char *argv[])
         "reactor completed normally");
     flux_rpc_destroy (thenbug_r);
 
+    flux_msg_watcher_delvec (h, htab);
     flux_close (h);
     done_testing();
     return (0);

@@ -1,1 +1,1 @@
-SUBDIRS = local loop
+SUBDIRS = local shmem loop

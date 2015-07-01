@@ -262,7 +262,10 @@ static int l_flux_size (lua_State *L)
 static int l_flux_treeroot (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
-    lua_pushboolean (L, flux_treeroot (f));
+    bool treeroot = false;
+    if (flux_rank (f) == 0)
+        treeroot = true;
+    lua_pushboolean (L, treeroot);
     return (1);
 }
 
