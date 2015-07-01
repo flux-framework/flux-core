@@ -14,7 +14,7 @@ before other tests that depend on kvs.
 SIZE=$(($(grep processor /proc/cpuinfo | wc -l)+1))
 test ${SIZE} -lt 4 && SIZE=4
 test_under_flux ${SIZE}
-echo "$0: flux session size will be ${SIZE}"
+echo "# $0: flux session size will be ${SIZE}"
 
 TEST=$TEST_NAME
 KEY=test.a.b.c
