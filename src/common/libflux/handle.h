@@ -82,6 +82,7 @@ void flux_fatal_error (flux_t h, const char *fun, const char *msg);
 /* A mechanism is provide for users to attach auxiliary state to the flux_t
  * handle by name.  The flux_free_f, if non-NULL, will be called
  * to destroy this state when the handle is destroyed.
+ * Key names used internally by flux-core are prefixed with "flux::".
  */
 typedef void (*flux_free_f)(void *arg);
 void *flux_aux_get (flux_t h, const char *name);
@@ -94,22 +95,50 @@ void flux_flags_unset (flux_t h, int flags);
 int flux_flags_get (flux_t h);
 
 /* Alloc/free a matchtag block for matched requests.
+ * This is mainly used internally by the rpc code.
  */
 uint32_t flux_matchtag_alloc (flux_t h, int size);
 void flux_matchtag_free (flux_t h, uint32_t t, int size);
 uint32_t flux_matchtag_avail (flux_t h);
 
-/* Low level message send/recv functions.
+/* Send a message
+ * flags may be 0 or FLUX_O_TRACE or FLUX_O_NONBLOCK (FLUX_O_COPROC is ignored)
+ * Returns 0 on success, -1 on failure with errno set.
  */
 int flux_send (flux_t h, const flux_msg_t *msg, int flags);
+
+/* Receive a message
+ * flags may be 0 or FLUX_O_TRACE or FLUX_O_NONBLOCK (FLUX_O_COPROC is ignored)
+ * flux_recv reads messages from the handle until 'match' is matched,
+ * then requeues any non-matching messages.
+ * Returns message on success, NULL on failure.
+ * The message must be destroyed with flux_msg_destroy().
+ */
 flux_msg_t *flux_recv (flux_t h, struct flux_match match, int flags);
 
-/* Requeue message in the handle (head or tail according to flags)
+/* Requeue a message
+ * flags must be either FLUX_RQ_HEAD or FLUX_RQ_TAIL.
+ * A message that is requeued will be seen again by flux_recv() and will
+ * cause FLUX_POLLIN to be raised in flux_pollevents().
  */
 int flux_requeue (flux_t h, const flux_msg_t *msg, int flags);
 
-int flux_pollfd (flux_t h);
+/* Obtain a bitmask of FLUX_POLL* bits for the flux handle.
+ * Returns bitmask on success, -1 on error with errno set.
+ * See flux_pollfd() comment below.
+ */
 int flux_pollevents (flux_t h);
+
+/* Obtain a file descriptor that can be used to integrate a flux_t handle
+ * into an external event loop.  When one of FLUX_POLLIN, FLUX_POLLOUT, or
+ * FLUX_POLLERR is raised in flux_pollevents(), this file descriptor will
+ * become readable in an edge triggered fashion.  The external event loop
+ * should then call flux_pollevents().  See src/common/libflux/ev_flux.[ch]
+ * for an example of a libev "composite watcher" based on these interfaces,
+ * that is used internally by the flux reactor.
+ * Returns fd on sucess, -1 on failure with errno set.
+ */
+int flux_pollfd (flux_t h);
 
 /* Event subscribe/unsubscribe.
  */
