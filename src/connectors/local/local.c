@@ -30,7 +30,6 @@
 #include <stdbool.h>
 #include <sys/un.h>
 #include <sys/socket.h>
-#include <sys/epoll.h>
 #include <poll.h>
 #include <flux/core.h>
 
@@ -42,7 +41,6 @@
 typedef struct {
     int magic;
     int fd;
-    int pollfd;
     flux_t h;
 } ctx_t;
 
@@ -78,25 +76,7 @@ static int op_pollevents (void *impl)
 static int op_pollfd (void *impl)
 {
     ctx_t *c = impl;
-    if (c->pollfd < 0) {
-        struct epoll_event ev = {
-            .events = EPOLLET | EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLHUP,
-            .data.fd = c->fd,
-        };
-        if ((c->pollfd = epoll_create (10)) < 0)
-            goto error;
-        if (epoll_ctl (c->pollfd, EPOLL_CTL_ADD, c->fd, &ev) < 0)
-            goto error;
-    }
-    return c->pollfd;
-error:
-    if (c->pollfd >= 0) {
-        int saved_errno = errno;
-        close (c->pollfd);
-        c->pollfd = -1;
-        errno = saved_errno;
-    }
-    return -1;
+    return c->fd;
 }
 
 static int op_send (void *impl, const flux_msg_t *msg, int flags)
@@ -142,8 +122,6 @@ static void op_fini (void *impl)
 
     if (c->fd >= 0)
         (void)close (c->fd);
-    if (c->pollfd >= 0)
-        (void)close (c->pollfd);
     c->magic = ~CTX_MAGIC;
     free (c);
 }
@@ -192,7 +170,6 @@ flux_t connector_init (const char *path, int flags)
 
     c = xzmalloc (sizeof (*c));
     c->magic = CTX_MAGIC;
-    c->pollfd = -1;
 
     c->fd = socket (AF_UNIX, SOCK_STREAM, 0);
     if (c->fd < 0)
