@@ -66,24 +66,24 @@ test_expect_success RACY 'jstat 1: notification works for 1 wreckrun' '
     run_flux_jstat 1 &&
     p=$( sync_flux_jstat 1) &&
     run_timeout 4 flux wreckrun -n4 -N4 hostname &&
-    cat >expected <<-EOF &&
+    cat >expected1 <<-EOF &&
 $trans
 EOF
     cp output.1 output.1.cp &&
     kill -INT $p &&
-    test_cmp expected output.1.cp 
+    test_cmp expected1 output.1.cp 
 '
 
 test_expect_success RACY 'jstat 2: jstat back-to-back works' '
     run_flux_jstat 2 &&
     p=$( sync_flux_jstat 2) &&
     run_timeout 4 flux wreckrun -n4 -N4 hostname &&
-    cat >expected <<-EOF &&
+    cat >expected2 <<-EOF &&
 $trans
 EOF
     cp output.2 output.2.cp &&
     kill -INT $p &&
-    test_cmp expected output.2.cp 
+    test_cmp expected2 output.2.cp 
 '
 
 test_expect_success RACY 'jstat 3: notification works for multiple wreckruns' '
@@ -92,14 +92,14 @@ test_expect_success RACY 'jstat 3: notification works for multiple wreckruns' '
     run_timeout 4 flux wreckrun -n4 -N4 hostname &&
 	run_timeout 4 flux wreckrun -n4 -N4 hostname &&
 	run_timeout 4 flux wreckrun -n4 -N4 hostname &&
-    cat >expected <<-EOF &&
+    cat >expected3 <<-EOF &&
 $trans
 $trans
 $trans
 EOF
     cp output.3 output.3.cp &&
     kill -INT $p &&
-    test_cmp expected output.3.cp 
+    test_cmp expected3 output.3.cp 
 '
 
 test_expect_success RACY,LONGTEST 'jstat 4: notification works under lock-step stress' '
@@ -108,7 +108,7 @@ test_expect_success RACY,LONGTEST 'jstat 4: notification works under lock-step s
     for i in `seq 1 20`; do 
         run_timeout 4 flux wreckrun -n4 -N4 hostname 
     done &&
-    cat >expected <<-EOF &&
+    cat >expected4 <<-EOF &&
 $trans
 $trans
 $trans
@@ -132,30 +132,30 @@ $trans
 EOF
     cp output.4 output.4.cp &&
     kill -INT $p &&
-    test_cmp expected output.4.cp 
+    test_cmp expected4 output.4.cp 
 '
 
 test_expect_success RACY 'jstat 5: notification works for overlapping wreckruns' '
     run_flux_jstat 5 &&
     p=$( sync_flux_jstat 5 ) &&
     overlap_flux_wreckruns 3 &&
-    cat >expected <<-EOF &&
+    cat >expected5 <<-EOF &&
 $trans
 $trans
 $trans
 EOF
-    sort expected > expected.sort &&
+    sort expected5 > expected5.sort &&
     cp output.5 output.5.cp &&
     sort output.5.cp > output.5.sort &&
     kill -INT $p &&
-    test_cmp expected.sort output.5.sort
+    test_cmp expected5.sort output.5.sort
 '
 
 test_expect_success RACY,LONGTEST 'jstat 6: notification works for overlapping stress' '
     run_flux_jstat 6 &&
     p=$( sync_flux_jstat 6 ) &&
     overlap_flux_wreckruns 20 &&
-    cat >expected <<-EOF &&
+    cat >expected6 <<-EOF &&
 $trans
 $trans
 $trans
@@ -177,11 +177,11 @@ $trans
 $trans
 $trans
 EOF
-    sort expected > expected.sort &&
+    sort expected6 > expected6.sort &&
     cp output.6 output.6.cp &&
     sort output.6.cp > output.6.sort &&
     kill -INT $p &&
-    test_cmp expected.sort output.6.sort
+    test_cmp expected6.sort output.6.sort
 '
 
 test_expect_success 'jstat 7: basic query works' '
