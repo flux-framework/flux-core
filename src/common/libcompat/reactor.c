@@ -134,7 +134,7 @@ void msg_compat_cb (flux_t h, struct flux_msg_watcher *w,
         goto done;
     if (!(cpy = flux_msg_copy (msg, true)))
         goto done;
-    if (compat->fn (h, type, &cpy, compat->arg) != 0)
+    if (compat->fn (h, type, &cpy, compat->arg) < 0)
         flux_reactor_stop_error (h);
 done:
     flux_msg_destroy (cpy);
@@ -213,7 +213,7 @@ static void fd_compat_cb (flux_t h, flux_fd_watcher_t *w,
                           int fd, int revents, void *arg)
 {
     struct fd_compat *c = arg;
-    if (c->fn (h, fd, events_to_libzmq (revents), c->arg) != 0)
+    if (c->fn (h, fd, events_to_libzmq (revents), c->arg) < 0)
         flux_reactor_stop_error (h);
 }
 
@@ -267,7 +267,7 @@ static void zmq_compat_cb (flux_t h, flux_zmq_watcher_t *w,
                            void *zsock, int revents, void *arg)
 {
     struct zmq_compat *c = arg;
-    if (c->fn (h, zsock, events_to_libzmq (revents), c->arg) != 0)
+    if (c->fn (h, zsock, events_to_libzmq (revents), c->arg) < 0)
         flux_reactor_stop_error (h);
 }
 
@@ -321,7 +321,7 @@ static void timer_compat_cb (flux_t h, flux_timer_watcher_t *w,
                                      int revents, void *arg)
 {
     struct timer_compat *c = arg;
-    if (c->fn (h, c->arg) != 0)
+    if (c->fn (h, c->arg) < 0)
         flux_reactor_stop_error (h);
 }
 
