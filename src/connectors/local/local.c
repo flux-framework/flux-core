@@ -171,7 +171,7 @@ flux_t connector_init (const char *path, int flags)
     c = xzmalloc (sizeof (*c));
     c->magic = CTX_MAGIC;
 
-    c->fd = socket (AF_UNIX, SOCK_STREAM, 0);
+    c->fd = socket (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (c->fd < 0)
         goto error;
     for (;;) {
