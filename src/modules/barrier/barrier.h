@@ -1,6 +1,8 @@
 #ifndef _FLUX_CORE_BARRIER_H
 #define _FLUX_CORE_BARRIER_H
 
+#include <flux/core.h>
+
 /* Execute a barrier across 'nprocs' processes.
  * The 'name' must be unique across the comms session, or
  * if running in a Flux LWJ, may be NULL.

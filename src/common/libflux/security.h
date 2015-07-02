@@ -28,7 +28,6 @@ void flux_sec_destroy (flux_sec_t c);
  */
 int flux_sec_enable (flux_sec_t c, int type);
 int flux_sec_disable (flux_sec_t c, int type);
-bool flux_sec_enabled (flux_sec_t c, int type);
 
 /* Get/set config directory used by security context.
  */
