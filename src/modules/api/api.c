@@ -396,7 +396,7 @@ static int listener_cb (flux_t h, int fd, short revents, void *arg)
         client_t *c;
         int cfd;
 
-        if ((cfd = accept (fd, NULL, NULL)) < 0) {
+        if ((cfd = accept4 (fd, NULL, NULL, SOCK_CLOEXEC)) < 0) {
             flux_log (h, LOG_ERR, "accept: %s", strerror (errno));
             goto done;
         }
@@ -426,7 +426,7 @@ static int listener_init (ctx_t *ctx, char *sockpath)
     struct sockaddr_un addr;
     int fd;
 
-    fd = socket (AF_UNIX, SOCK_STREAM, 0);
+    fd = socket (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (fd < 0) {
         flux_log (ctx->h, LOG_ERR, "socket: %s", strerror (errno));
         goto done;
