@@ -555,7 +555,7 @@ int flux_pollfd (flux_t h)
         struct epoll_event ev = {
             .events = EPOLLET | EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLHUP,
         };
-        if ((h->pollfd = epoll_create (10)) < 0)
+        if ((h->pollfd = epoll_create1 (EPOLL_CLOEXEC)) < 0)
             goto fatal;
         /* add queue pollfd */
         ev.data.fd = msglist_pollfd (h->queue);
