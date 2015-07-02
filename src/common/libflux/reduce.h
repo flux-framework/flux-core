@@ -54,7 +54,7 @@ int flux_red_append (flux_red_t r, void *item, int batchnum);
  */
 void *flux_redstack_pop (flux_redstack_t stack);
 void flux_redstack_push (flux_redstack_t stack, void *item);
-int flux_restack_count (flux_redstack_t stack);
+int flux_redstack_count (flux_redstack_t stack);
 
 #endif /* _FLUX_CORE_REDUCE_H */
 /*
