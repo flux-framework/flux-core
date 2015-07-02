@@ -158,8 +158,6 @@ static void fdwriter (flux_t h, flux_fd_watcher_t *w, int fd,
         }
         if (n > 0) {
             count += n;
-            //fprintf (stderr, "%s: wrote %d of %lu bytes\n",
-            //         __FUNCTION__, n, fdwriter_bufsize);
             if (count == fdwriter_bufsize) {
                 flux_fd_watcher_stop (h, w);
                 free (buf);
@@ -192,8 +190,6 @@ static void fdreader (flux_t h, flux_fd_watcher_t *w, int fd,
         }
         if (n > 0) {
             count += n;
-            //fprintf (stderr, "%s: read %d of %lu bytes\n",
-            //         __FUNCTION__, n, fdwriter_bufsize);
             if (count == fdwriter_bufsize) {
                 flux_fd_watcher_stop (h, w);
                 free (buf);
@@ -205,11 +201,14 @@ error:
     flux_reactor_stop_error (h);
 }
 
-static void set_nonblock (int fd)
+static int set_nonblock (int fd)
 {
-    int flags = fcntl (fd, F_GETFL, &flags);
-    flags |= O_NONBLOCK;
-    fcntl (fd, F_SETFL, flags);
+    int flags = fcntl (fd, F_GETFL, NULL);
+    if (flags < 0 || fcntl (fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+        fprintf (stderr, "fcntl: %s\n", strerror (errno));
+        return -1;
+    }
+    return 0;
 }
 
 static void test_fd (flux_t h)
@@ -217,14 +216,13 @@ static void test_fd (flux_t h)
     int fd[2];
     flux_fd_watcher_t *r, *w;
 
-    ok (socketpair (PF_LOCAL, SOCK_STREAM, 0, fd) == 0,
-        "fd: successfully created socketpair");
-    set_nonblock (fd[0]);
-    set_nonblock (fd[1]);
+    ok (socketpair (PF_LOCAL, SOCK_STREAM, 0, fd) == 0
+        && set_nonblock (fd[0]) == 0 && set_nonblock (fd[1]) == 0,
+        "fd: successfully created non-blocking socketpair");
     r = flux_fd_watcher_create (fd[0], FLUX_POLLIN, fdreader, NULL);
     w = flux_fd_watcher_create (fd[1], FLUX_POLLOUT, fdwriter, NULL);
     ok (r != NULL && w != NULL,
-        "fd: nonblocking reader and writer created");
+        "fd: reader and writer created");
     flux_fd_watcher_start (h, r);
     flux_fd_watcher_start (h, w);
     ok (flux_reactor_start (h) == 0,
