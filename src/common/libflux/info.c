@@ -123,7 +123,7 @@ int flux_rank (flux_t h)
         }
         if (flux_info (h, rank, NULL, NULL) < 0)
             return -1;
-        flux_aux_set (h, "rank", rank, free);
+        flux_aux_set (h, "flux::rank", rank, free);
     }
     return *rank;
 }
