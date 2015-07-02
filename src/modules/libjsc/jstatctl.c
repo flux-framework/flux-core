@@ -683,7 +683,7 @@ static inline int chk_errnum (flux_t h, int errnum)
     return 0;
 }
 
-static JSON get_update_jcb (flux_t h, int64_t j)
+static JSON get_update_jcb (flux_t h, int64_t j, const char *val)
 {
     JSON o = NULL;
     JSON ss = NULL;
@@ -691,10 +691,7 @@ static JSON get_update_jcb (flux_t h, int64_t j)
     int64_t ostate = (int64_t) J_FOR_RENT;
     int64_t nstate = (int64_t) J_FOR_RENT;
 
-    if (extract_raw_state (h, j, &nstate) < 0) {
-        flux_log (h, LOG_ERR, "Failed to find %ld's new state", j);
-        return NULL;
-    }
+    nstate = jsc_job_state2num (val);
     if ( (ostate = fetch_and_update_state (ctx->active_jobs, j, nstate)) < 0) {
         flux_log (h, LOG_INFO, "%ld's old state unavailable", j);
         ostate = nstate;
@@ -738,7 +735,7 @@ static int job_state_cb (const char *key, const char *val, void *arg, int errnum
         flux_log (h, LOG_ERR, "job_state_cb: key(%s), val(%s)", key, val);
     else if (parse_jobid (key, &jobid) != 0) 
         flux_log (h, LOG_ERR, "job_state_cb: key ill-formed");
-    else if (invoke_cbs (h, jobid, get_update_jcb (h, jobid), errnum) < 0) 
+    else if (invoke_cbs (h, jobid, get_update_jcb (h, jobid, val), errnum) < 0) 
         flux_log (h, LOG_ERR, "job_state_cb: failed to invoke callbacks");
 
     /* always return 0 so that reactor will not return */
