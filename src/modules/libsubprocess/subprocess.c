@@ -745,8 +745,8 @@ void subprocess_manager_destroy (struct subprocess_manager *sm)
     free (sm);
 }
 
-struct subprocess *
-subprocess_manager_find (struct subprocess_manager *sm, pid_t pid)
+static struct subprocess *
+subprocess_manager_find_pid (struct subprocess_manager *sm, pid_t pid)
 {
     struct subprocess *p = zlist_first (sm->processes);
     while (p) {
@@ -800,7 +800,7 @@ subprocess_manager_wait (struct subprocess_manager *sm)
     struct subprocess *p;
 
     pid = waitpid (-1, &status, sm->wait_flags);
-    if ((pid < 0) || !(p = subprocess_manager_find (sm, pid))) {
+    if ((pid < 0) || !(p = subprocess_manager_find_pid (sm, pid))) {
         return (NULL);
     }
     p->status = status;
