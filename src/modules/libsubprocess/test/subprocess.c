@@ -320,6 +320,7 @@ static int testio_cb (struct subprocess *p, json_object *o)
     bool eof;
     if (*bufp == NULL)
         zio_json_decode (o, (void **) bufp, &eof);
+    json_object_put (o);
     return 0;
 }
 
