@@ -72,6 +72,16 @@ local function program_state_create (n)
         s.nstarted = s.nstarted + 1
         s.running [rank] = pid
     end
+    function T.killall (f, signum)
+        say ("sending signal %d to %d running processes\n",
+            signum, s.nstarted - s.nexited)
+        for rank,pid in pairs (s.running) do
+            local mt, err = f:send ("cmb.exec.signal",
+                { pid = pid, signum = signum },
+                rank)
+            if not mt then say ("failed to signal rank %d: %s\n", rank, err) end
+        end
+    end
     function T.failed (rank, errnum)
         s.nstarted = s.nstarted + 1
         s.nexited = s.nexited + 1
@@ -203,6 +213,7 @@ local s, err = f:sighandler {
     sigmask = { posix.SIGINT, posix.SIGTERM },
     handler = function (f, s, sig)
         terminate = true
+        state.killall (f, sig)
         f:reactor_stop()
     end
 }
