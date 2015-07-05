@@ -70,6 +70,19 @@ struct subprocess * subprocess_manager_wait (struct subprocess_manager *sm);
 int subprocess_manager_reap_all (struct subprocess_manager *sm);
 
 /*
+ *   Get the first subprocess known to subprocess manager [sm].
+ */
+struct subprocess * subprocess_manager_first (struct subprocess_manager *sm);
+
+/*
+ *   Get next subprocess known to subprocess manager [sm]. Returns NULL if
+ *    there are no further subprocesses to iterate. Reset iteration with
+ *    subprocess_manager_first above.
+ *
+ */
+struct subprocess * subprocess_manager_next (struct subprocess_manager *sm);
+
+/*
  *  Create a new, empty handle for a subprocess object.
  */
 struct subprocess * subprocess_create (struct subprocess_manager *sm);

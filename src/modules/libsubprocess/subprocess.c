@@ -758,6 +758,18 @@ subprocess_manager_find_pid (struct subprocess_manager *sm, pid_t pid)
 }
 
 struct subprocess *
+subprocess_manager_first (struct subprocess_manager *sm)
+{
+    return zlist_first (sm->processes);
+}
+
+struct subprocess *
+subprocess_manager_next (struct subprocess_manager *sm)
+{
+    return zlist_next (sm->processes);
+}
+
+struct subprocess *
 subprocess_manager_run (struct subprocess_manager *sm, int ac, char **av,
     char **env)
 {
