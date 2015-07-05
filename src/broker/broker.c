@@ -1009,6 +1009,42 @@ static int subprocess_io_cb (struct subprocess *p, json_object *o)
     return (0);
 }
 
+static int cmb_signal_cb (zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    json_object *request = NULL;
+    json_object *response = NULL;
+    int pid;
+    int errnum = EPROTO;
+
+    if (flux_json_request_decode (*zmsg, &request) < 0)
+        goto out;
+    if (Jget_int (request, "pid", &pid)) {
+        int signum;
+        struct subprocess *p;
+        if (!Jget_int (request, "signum", &signum))
+            signum = SIGTERM;
+        p = subprocess_manager_first (ctx->sm);
+        while (p) {
+            if (pid == subprocess_pid (p)) {
+                errnum = 0;
+                if (subprocess_kill (p, signum) < 0)
+                    errnum = errno;
+            }
+            p = subprocess_manager_next (ctx->sm);
+        }
+    }
+out:
+    response = util_json_object_new_object ();
+    Jadd_int (response, "code", errnum);
+    flux_json_respond (ctx->h, response, zmsg);
+    if (response)
+        json_object_put (response);
+    if (request)
+        json_object_put (request);
+    return (0);
+}
+
 /*
  *  Create a subprocess described in the zmsg argument.
  */
@@ -1474,6 +1510,7 @@ static void broker_add_services (ctx_t *ctx)
           || !svc_add (ctx->services, "cmb.log", cmb_log_cb, ctx)
           || !svc_add (ctx->services, "cmb.event-mute", cmb_event_mute_cb, ctx)
           || !svc_add (ctx->services, "cmb.exec", cmb_exec_cb, ctx)
+          || !svc_add (ctx->services, "cmb.exec.signal", cmb_signal_cb, ctx)
           || !svc_add (ctx->services, "cmb.disconnect", cmb_disconnect_cb, ctx)
           || !svc_add (ctx->services, "cmb.hello", cmb_hello_cb, ctx)
           || !svc_add (ctx->services, "cmb.sub", cmb_sub_cb, ctx)
