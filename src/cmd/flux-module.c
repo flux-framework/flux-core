@@ -91,7 +91,7 @@ void usage (void)
 "Usage: flux-module list   [OPTIONS]\n"
 "       flux-module info   [OPTIONS] module\n"
 "       flux-module load   [OPTIONS] module [arg ...]\n"
-"       flux-module unload [OPTIONS] module\n"
+"       flux-module remove [OPTIONS] module\n"
 "where OPTIONS are:\n"
 "       -r,--rank=[ns|all]  specify nodeset where op will be performed\n"
 "       -d,--direct         bypass modctl and KVS, with decreased scalability\n"
