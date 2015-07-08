@@ -38,19 +38,20 @@
 #include "src/common/libutil/log.h"
 
 
-#define OPTIONS "hp:d:r:"
+#define OPTIONS "hp:d:r:c:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"rank",       required_argument,  0, 'r'},
     {"pad-bytes",  required_argument,  0, 'p'},
     {"delay-msec", required_argument,  0, 'd'},
+    {"count",      required_argument,  0, 'c'},
     { 0, 0, 0, 0 },
 };
 
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-ping [--rank N] [--pad-bytes N] [--delay-msec N] target\n"
+"Usage: flux-ping [--rank N] [--pad bytes] [--delay msec] [--count N] target\n"
 );
     exit (1);
 }
@@ -65,6 +66,7 @@ int main (int argc, char *argv[])
     uint32_t nodeid = FLUX_NODEID_ANY;
     char *rankstr = NULL, *route, *target, *pad = NULL;
     struct timespec t0;
+    int count = -1;
 
     log_init ("flux-ping");
 
@@ -83,6 +85,9 @@ int main (int argc, char *argv[])
                 break;
             case 'r': /* --rank N */
                 nodeid = strtoul (optarg, NULL, 10);
+                break;
+            case 'c': /* --count N */
+                count = strtoul (optarg, NULL, 10);
                 break;
             default:
                 usage ();
@@ -111,7 +116,7 @@ int main (int argc, char *argv[])
     if (!(h = flux_open (NULL, 0)))
         err_exit ("flux_open");
 
-    for (seq = 0; ; seq++) {
+    for (seq = 0; count == -1 || seq < count; seq++) {
         monotime (&t0);
         if (!(route = ping (h, nodeid, target, pad, seq)))
             err_exit ("%s%s%s.ping", rankstr ? rankstr : "",
