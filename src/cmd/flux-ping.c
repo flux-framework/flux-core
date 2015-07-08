@@ -43,7 +43,7 @@ static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"rank",       required_argument,  0, 'r'},
     {"pad-bytes",  required_argument,  0, 'p'},
-    {"delay-msec", required_argument,  0, 'd'},
+    {"delay",      required_argument,  0, 'd'},
     {"count",      required_argument,  0, 'c'},
     { 0, 0, 0, 0 },
 };
@@ -51,7 +51,7 @@ static const struct option longopts[] = {
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-ping [--rank N] [--pad bytes] [--delay msec] [--count N] target\n"
+"Usage: flux-ping [--rank N] [--pad bytes] [--delay sec] [--count N] target\n"
 );
     exit (1);
 }
@@ -62,7 +62,8 @@ static char *ping (flux_t h, uint32_t nodeid, const char *name, const char *pad,
 int main (int argc, char *argv[])
 {
     flux_t h;
-    int ch, seq, bytes = 0, msec = 1000;
+    int ch, seq, bytes = 0;
+    double sec = 1.0;
     uint32_t nodeid = FLUX_NODEID_ANY;
     char *rankstr = NULL, *route, *target, *pad = NULL;
     struct timespec t0;
@@ -80,8 +81,10 @@ int main (int argc, char *argv[])
                 pad = xzmalloc (bytes + 1);
                 memset (pad, 'p', bytes);
                 break;
-            case 'd': /* --delay-msec N */
-                msec = strtoul (optarg, NULL, 10);
+            case 'd': /* --delay N */
+                sec = strtod (optarg, NULL);
+                if (sec < 0)
+                    usage ();
                 break;
             case 'r': /* --rank N */
                 nodeid = strtoul (optarg, NULL, 10);
@@ -127,7 +130,8 @@ int main (int argc, char *argv[])
                 rankstr ? "!" : "",
                 target, bytes, seq, monotime_since (t0), route);
         free (route);
-        usleep (msec * 1000);
+        if (sec > 0)
+            usleep (sec * 1E6);
     }
 
     flux_close (h);
