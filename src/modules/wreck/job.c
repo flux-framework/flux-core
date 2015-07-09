@@ -29,6 +29,7 @@
 #include <zmq.h>
 #include <czmq.h>
 #include <inttypes.h>
+#include <stdbool.h>
 
 #include <flux/core.h>
 
@@ -199,7 +200,6 @@ static void add_jobinfo (flux_t h, int64_t id, json_object *req)
     kvsdir_destroy (dir);
 }
 
-#if SIMULATOR_RACE_WORKAROUND
 static int wait_for_lwj_watch_init (flux_t h, int64_t id)
 {
     int rc;
@@ -211,12 +211,10 @@ static int wait_for_lwj_watch_init (flux_t h, int64_t id)
     util_json_object_add_int64 (rpc_o, "val", id);
     flux_json_rpc (h, FLUX_NODEID_ANY, "sim_sched.lwj-watch", rpc_o, &rpc_resp);
     util_json_object_get_int (rpc_resp, "rc", &rc);
-done:
     json_object_put (rpc_resp);
     json_object_put (rpc_o);
     return rc;
 }
-#endif
 
 static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
@@ -249,13 +247,19 @@ static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     if (strcmp (topic, "job.create") == 0) {
         json_object *jobinfo = NULL;
         unsigned long id = lwj_next_id (h);
-#if SIMULATOR_RACE_WORKAROUND
+        bool should_workaround = false;
+
         //"Fix" for Race Condition
-        if (wait_for_lwj_watch_init (h, id) < 0) {
-            flux_err_respond (h, errno, zmsg);
-            goto out;
+        if (util_json_object_get_boolean (o, "race_workaround",
+                                           &should_workaround) < 0) {
+            should_workaround = false;
+        } else if (should_workaround) {
+            if (wait_for_lwj_watch_init (h, id) < 0) {
+              flux_err_respond (h, errno, zmsg);
+              goto out;
+            }
         }
-#endif
+
         int rc = kvs_job_new (h, id);
         if (rc < 0) {
             flux_err_respond (h, errno, zmsg);
