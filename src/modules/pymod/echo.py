@@ -18,7 +18,7 @@ def mod_main(h, **arg_dict):
         h.fatal_error("event subscription failed")
     with h.msg_watcher_create(pecho_impl,
                                   type_mask=flux.FLUX_MSGTYPE_EVENT,
-                                  pattern="mrpc.mecho") as mw:
+                                  topic_glob="mrpc.mecho") as mw:
         if h.reactor_start() < 0:
             h.fatal_error( "reactor start failed!")
     h.log(syslog.LOG_INFO, "pecho unloading")

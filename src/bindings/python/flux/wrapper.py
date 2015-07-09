@@ -1,12 +1,60 @@
 import re
 import errno
 import os
+import inspect
+import cffi
 from types import MethodType
+
+
+class MissingFunctionError(Exception):
+    def __init__(self, name, c_name, name_list, arguments):
+
+        call_stack = inspect.stack()
+        caller = inspect.getframeinfo(call_stack[2][0])
+
+        message = """
+A non-existant or unavailable function invocation has been detected.
+Has this function been recently removed or renamed?
+
+Name called: {name}
+Possible C names: {name_list}
+Arguments: {arguments}
+Likely intended C invokation: {c_name}{arguments}
+Invocation detail: inside function {outer}
+{file}:{line}: {context}
+        """.format(
+            name=name,
+            name_list=name_list,
+            arguments=arguments,
+            file=caller.filename,
+            line=caller.lineno,
+            context=caller.code_context,
+            outer=caller.function,
+            c_name=c_name, )
+        # Call the base class constructor with the parameters it needs
+        super(MissingFunctionError, self).__init__(message)
+
+
+class ErrorPrinter(object):
+    def __init__(self, name, prefixes):
+        self.name = name
+        self.prefixes = prefixes
+
+    def __call__(self, *args):
+        c_name = self.name
+        if not any([re.search('^' + x, self.name) for x in self.prefixes]):
+            c_name = self.prefixes[0] + self.name
+
+        raise MissingFunctionError(self.name, c_name, [p + self.name
+                                                       for p in self.prefixes],
+                                   args)
 
 
 # A do-nothing class for checking for composition-based wrappers that offer a
 # handle attribute
 class WrapperBase(object):
+    __slots__ = ['_handle']
+
     def __init__(self):
         self._handle = None
 
@@ -20,6 +68,8 @@ class WrapperBase(object):
 
 
 class WrapperPimpl(WrapperBase):
+    __slots__ = ['pimpl']
+
     @property
     def handle(self):
         return self.pimpl.handle
@@ -29,6 +79,39 @@ class WrapperPimpl(WrapperBase):
         self.pimpl.handle = handle
 
 
+class WrongNumArguments(ValueError):
+    def __init__(self, name, signature, ftype, arguments):
+        message = """
+The wrong number of arguments has been passed to wrapped C function:
+Expected {expected} arguments, received {received}
+Name: {name}
+C signature: {c_type}
+Arguments: {arguments}
+          """.format(
+            name=name,
+            c_type=signature,
+            arguments=arguments,
+            expected=len(ftype.args),
+            received=len(arguments), )
+        super(WrongNumArguments, self).__init__(message)
+
+
+class InvalidArguments(ValueError):
+    def __init__(self, name, signature, arguments, err_msg):
+        message = """
+Invalid arguments passed to wrapped C function:
+cffi error: {err_msg}
+Name: {name}
+C signature: {c_type}
+Arguments: {arguments}
+          """.format(
+            name=name,
+            c_type=signature,
+            err_msg=err_msg,
+            arguments=arguments)
+        super(InvalidArguments, self).__init__(message)
+
+
 class FunctionWrapper(object):
     def __init__(self, fun, name, t, ffi, add_handle=False):
         self.arg_trans = []
@@ -36,6 +119,9 @@ class FunctionWrapper(object):
         self.add_handle = add_handle
         self.build_argument_translation_list(t)
         self.is_error = lambda x: False
+        self.function_type = t
+        self.name = name
+        self.ffi = ffi
         if t.result.kind in ('pointer', 'array'):
             self.is_error = lambda x: x is None
         elif t.result in [ffi.typeof(x)
@@ -55,6 +141,10 @@ class FunctionWrapper(object):
         if self.add_handle:
             args.append(calling_object.handle)
         args.extend(args_in)
+        if len(self.function_type.args) != len(args):
+            raise WrongNumArguments(self.name,
+                                    self.ffi.getctype(self.function_type),
+                                    self.function_type, args)
         for i in self.arg_trans:
             if args[i] is None:
                 args[i] = calling_object.ffi.NULL
@@ -64,7 +154,11 @@ class FunctionWrapper(object):
 
         calling_object.ffi.errno = 0
 
-        result = self.fun(*args)
+        try:
+            result = self.fun(*args)
+        except TypeError as te:
+            raise InvalidArguments(self.name, self.ffi.getctype(
+                self.function_type), args, te.message)
 
         if result == calling_object.ffi.NULL:
             result = None
@@ -85,6 +179,16 @@ class Wrapper(WrapperBase):
     is found in the signature of an un-specified target function.
     """
 
+    __slots__ = [
+        'ffi',
+        'lib',
+        #'handle', # inherited from WrapperBase as _handle, wrapped by prop
+        'match',
+        'filter_match',
+        'prefixes',
+        'NULL',
+    ]
+
     def __init__(self, ffi, lib,
                  handle=None,
                  match=None,
@@ -101,10 +205,6 @@ class Wrapper(WrapperBase):
 
         self.NULL = ffi.NULL
 
-    def callback(self, type_id):
-        """ Pass-through to cffi callback mechanism for now"""
-        return self.ffi.callback(type_id)
-
     def check_handle(self, name, t):
         if self.match is not None and self.handle is not None:
             if t.kind == 'function' and t.args[
@@ -114,41 +214,42 @@ class Wrapper(WrapperBase):
             else:
                 if self.filter_match:
                     raise AttributeError(
-                        "Flux Wrapper object masks function {} type: {} match: {}".format(
-                            name, t, self.match))
+                        "Flux Wrapper object {} masks function {} type: {} match: {}".format(
+                            self, name, t, self.match))
         return False
 
     def check_wrap(self, fun, name):
-        try:  #absorb the error if it is a basic type
-            t = self.ffi.typeof(fun)
-        except TypeError:
-            return fun
-
-        if not callable(fun) or t.kind != 'function':
-            return fun
+        t = self.ffi.typeof(fun)
 
         return FunctionWrapper(fun, name, t, self.ffi,
                                add_handle=self.check_handle(name, t))
 
     def __getattr__(self, name):
         fun = None
+        if re.match('__.*__', name):
+          # This is a python internal name, skip it
+          raise AttributeError
         #try it bare
         try:
             fun = getattr(self.lib, name)
         except AttributeError:
-            pass
-        for prefix in self.prefixes:
-            try:
-                #wrap it
-                fun = getattr(self.lib, prefix + name)
-                break
-            except AttributeError:
-                pass
+            for prefix in self.prefixes:
+                try:
+                    #wrap it
+                    fun = getattr(self.lib, prefix + name)
+                    break
+                except AttributeError:
+                    pass
         if fun is None:
-            # Do it again to get a good error
-            getattr(self.lib, name)
-        new_method = MethodType(self.check_wrap(fun, name), None,
-                                self.__class__)
+            # Return a proxy class to generate a good error on call
+            setattr(self.__class__, name, ErrorPrinter(name, self.prefixes))
+            return getattr(self, name)
+
+        if not callable(fun): # pragma: no cover
+          return new_fun
+
+        new_fun = self.check_wrap(fun, name)
+        new_method = MethodType(new_fun, None, self.__class__)
         # Store the wrapper function into the class to prevent a second lookup
         setattr(self.__class__, name, new_method)
         return getattr(self, name)

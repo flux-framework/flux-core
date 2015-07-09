@@ -1,12 +1,16 @@
 # Import core symbols directly, allows flux.FLUX_MSGTYPE_ANY for example
 from flux.constants import *
-from flux.core import Flux
-import flux.core as core
+from flux.core import Flux, open
 
 __all__ = ['core',
            'kvs',
+           'jsc',
+           'rpc',
+           'sec',
            'mrpc',
-           'barrier',
            'constants',
-           'Flux'
+           'Flux',
+           'open',
            ]
+
+

@@ -61,4 +61,8 @@ Makefile
 *.swp
 *.diff
 *.tar.gz
+*.orig
+*.core
+*.tap
+.coverage*
 

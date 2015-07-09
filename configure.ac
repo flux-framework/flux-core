@@ -87,9 +87,6 @@ if test "$enable_python" = "yes"; then
   AS_VAR_SET(fluxpymoddir, $pyexecdir/flux/modules)
   AC_SUBST(fluxpymoddir)
 
-  # Link necessary files into build directory for distcheck
-  AC_CONFIG_LINKS([src/bindings/python/pycotap/pycotap/__init__.py:src/bindings/python/pycotap/pycotap/__init__.py])
-
   if test "$python_ok" != "yes"; then
     AC_MSG_ERROR([could not configure python])
   fi
@@ -199,5 +196,6 @@ AC_CONFIG_FILES( \
   t/fluxometer.lua \
 )
 AC_CONFIG_FILES([src/cmd/flux-screen], [chmod +x src/cmd/flux-screen])
+AC_CONFIG_FILES([src/cmd/flux-python], [chmod +x src/cmd/flux-python])
 
 AC_OUTPUT

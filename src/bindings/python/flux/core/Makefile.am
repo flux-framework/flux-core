@@ -9,13 +9,13 @@ fluxpycore_PYTHON=\
 #TODO: there must be a better way to do this
 check-local:
 	-echo Copying libraries to where they can be used by python for check
-	[ ! -e ./__init__.py ] && cp -s $(top_srcdir)/src/bindings/python/flux/core/*.py ./ || true
+	[ "$(top_srcdir)" != "$(top_builddir)" ] && cp  $(top_srcdir)/src/bindings/python/flux/core/*.py ./ || true
 
 clean-local: clean-local-check
 	-rm -f *.c *_build.py *.so *.pyc *.pyo
 
 .PHONY: clean-local-check
 clean-local-check:
-	find -name '*.py' -and -type s -print0 | xargs -0 rm -f
+	[ "$(top_srcdir)" != "$(top_builddir)" ] && rm -f $(top_builddir)/src/bindings/python/flux/core/*.py || true
 # NOTE: Removes symlinks to python files used by check
 

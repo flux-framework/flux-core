@@ -34,6 +34,10 @@ dist_fluxcmd_SCRIPTS = \
 	flux-topo \
 	flux-ps
 
+if HAVE_PYTHON
+dist_fluxcmd_SCRIPTS+= flux-python
+endif
+
 fluxcmd_PROGRAMS = \
 	flux-ping \
 	flux-mping \

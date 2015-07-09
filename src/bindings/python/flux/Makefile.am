@@ -85,7 +85,6 @@ fluxpy_PYTHON=\
 	      rpc.py\
 	      message.py\
 	      constants.py\
-	      barrier.py\
 	      jsc.py\
 	      sec.py
 
@@ -93,13 +92,13 @@ fluxpy_PYTHON=\
 check-local:
 	-echo Copying libraries to where they can be used by python for check
 	cp -f .libs/*.so ./
-	[ ! -e ./__init__.py ] && cp -s $(top_srcdir)/src/bindings/python/flux/*.py ./ || true
+	[ "$(top_srcdir)" != "$(top_builddir)" ] && cp  $(top_srcdir)/src/bindings/python/flux/*.py ./ || true
 
 clean-local: clean-local-check
 	-rm -f *.c *_build.py *.so *.pyc *.pyo
 
 .PHONY: clean-local-check
 clean-local-check:
-	find -name '*.py' -and -type s -print0 | xargs -0 rm -f
+	[ "$(top_srcdir)" != "$(top_builddir)" ] && rm -f $(top_builddir)/src/bindings/python/flux/*.py || true
 
 SUBDIRS = core
