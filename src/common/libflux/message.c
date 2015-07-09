@@ -638,7 +638,7 @@ char *flux_msg_get_route_string (const flux_msg_t *msg)
                     || (len = flux_msg_get_route_size (msg)) < 0) {
         return NULL;
     }
-    if (!(cp = buf = malloc (len + hops))) {
+    if (!(cp = buf = malloc (len + hops + 1))) {
         errno = ENOMEM;
         return NULL;
     }
@@ -655,8 +655,8 @@ char *flux_msg_get_route_string (const flux_msg_t *msg)
         assert (cp - buf + cpylen < len + hops);
         memcpy (cp, zframe_data (zf), cpylen);
         cp += cpylen;
-        *cp = '\0';
     }
+    *cp = '\0';
     return buf;
 }
 
