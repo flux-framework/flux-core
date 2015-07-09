@@ -10,45 +10,25 @@ flux-ping - measure round-trip latency to Flux services
 
 SYNOPSIS
 --------
-*flux* *ping* ['--pad-bytes=N'] ['--delay-msec=N'] ['--rank=N'] target
+*flux* *ping* ['--rank N'] ['--pad bytes'] ['--delay N'] ['--count N'] target
 
 
 DESCRIPTION
 -----------
-flux-ping(1) measures round-trip latency to a Flux service in a
-manner analogous to ping(8).
-
-Flux comms modules and broker instances have a built-in 'ping' operation
-that echoes the request payload back in a response.   One can ping a comms
-module, for example "flux ping kvs" and get back:
-
-  kvs.ping pad=0 seq=0 time=0.535 ms (99E61)
-  kvs.ping pad=0 seq=1 time=0.573 ms (99E61)
-  ...
-
-This tells you that the local "kvs" comms module is alive and the
-round-trip latency is about half a millisecond.
-
-It is possible to direct a ping request over the rank-request overlay
-to a specific node.  For example "flux ping --rank 6 cmb":
-
-  6!cmb.ping pad=0 seq=0 time=1.685 ms (99E61!0r!7r)
-  6!cmb.ping pad=0 seq=1 time=1.768 ms (99E61!0r!7r)
-  ...
-
-This tells you that the message broker on rank 6 is responsive and
-reachable through the rank-request ring.  It also shows you the route
-taken to get there.
+flux-ping(1) measures round-trip latency to a Flux service implementing
+the "ping" method in a manner analogous to ping(8).  The ping response is
+essentially an echo of the request, with the route taken to the service
+added by the service.  This route is displayed in the output and can
+give insight into how various addresses are routed.
 
 'target' may be the name of a comms module service, e.g. "kvs" or "live".
 flux-ping(1) will send a request to "kvs.ping" or "live.ping".
-
 As a shorthand, 'target' can include a rank prefix delimited by an
 exclamation point.  "flux ping 4!kvs" is equivalent to
 "flux ping --rank 4 kvs" (see --rank option below).
 Don't forget to quote the exclamation point if it is interpreted by your shell.
 
-As a shorthand, 'target' can simply be a rank by itself indicating 
+As a shorthand, 'target' may also simply be a rank by itself indicating 
 that the broker on that rank, rather than a comms module, is to be pinged.
 "flux ping 4" is equivalent to "flux ping --rank 4 cmb".
 
@@ -56,18 +36,56 @@ that the broker on that rank, rather than a comms module, is to be pinged.
 OPTIONS
 -------
 *-r, --rank*'=N'::
-Use the rank-request ring topology overlay to reach a specific rank node.
-Default: use the tree based overlay network to find the first node
-that will answer the request.
+Find target on a specific broker rank.
+Default: send to FLUX_NODEID_ANY.
 
-*-p, --pad-bytes*'=N'::
-Include in the payload a string of length 'N' containing the character "p",
-repeated.  The payload will be echoed back in the response.  Default:
-no padding.
+*-p, --pad*'=N'::
+Include in the payload a string of length 'N' bytes.  The payload will be
+echoed back in the response.  This option can be used to explore the
+effect of message size on latency.  Default: no padding.
 
-*-d, --delay-msec*'=N'::
-Specify the delay, in milliseconds, between successive requests.
-Default: 1000 milliseconds (1 second).
+*-d, --delay*'=N'::
+Specify the delay, in seconds, between successive requests.
+A value of zero is valid and indicates that there should be no delay.
+Requests are sent without waiting for responses.  Default: 1.0 seconds.
+
+*-c, --count*'=N'::
+Specify the number of requests to send, and terminate the command once
+responses have been received for all the requests.  Default: unlimited.
+
+EXAMPLES
+--------
+
+One can ping a service by name, e.g.
+
+  $ flux ping kvs
+  kvs.ping pad=0 seq=0 time=0.774 ms (0EB02!A3368!0!382A6)
+  kvs.ping pad=0 seq=1 time=0.686 ms (0EB02!A3368!0!382A6)
+  ...
+
+This tells you that the local "kvs" comms module is alive and the
+round-trip latency is a bit over half a millisecond.  The route hops are:
+
+  0EB02: UUID of the ping command
+  A3368: UUID of the API module
+  0:     rank of the local broker
+  382A6: UUID of the KVS module.
+
+One can direct a ping request to a specific node, e.g.
+
+  $ flux ping 6
+  6!cmb.ping pad=0 seq=0 time=1.463 ms (73C6E!1A4D9!0r!7r!6)
+  6!cmb.ping pad=0 seq=1 time=1.652 ms (73C6E!1A4D9!0r!7r!6)
+  ...
+
+This tells you that the message broker on rank 6 is responsive.
+The route hops are:
+
+  73C6E: UUID of the ping command
+  1A4D9: UUID of the API module
+  0r:    rank of the local broker (r indicates "right ring" socket)
+  7r:    rank of the next broker (r indicates "right ring" socket)
+  6:     rank of the target broker
 
 
 AUTHOR
