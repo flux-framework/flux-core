@@ -25,7 +25,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
+#include <assert.h>
 
 #include "request.h"
 #include "response.h"
@@ -39,8 +39,6 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
 
-typedef zlist_t zmsglist_t;
-
 struct flux_rpc_struct {
     struct flux_match m;
     flux_t h;
@@ -48,8 +46,8 @@ struct flux_rpc_struct {
     void *then_arg;
     flux_msg_watcher_t *w;
     uint32_t *nodemap;          /* nodeid indexed by matchtag */
-    zmsg_t *rx_msg;
-    zmsg_t *rx_msg_consumed;
+    flux_msg_t *rx_msg;
+    flux_msg_t *rx_msg_consumed;
     int rx_count;
     bool oneway;
 };
@@ -69,8 +67,8 @@ void flux_rpc_destroy (flux_rpc_t rpc)
             if (flux_rpc_completed (rpc))
                 flux_matchtag_free (rpc->h, rpc->m.matchtag, rpc->m.bsize);
         }
-        zmsg_destroy (&rpc->rx_msg);
-        zmsg_destroy (&rpc->rx_msg_consumed);
+        flux_msg_destroy (rpc->rx_msg);
+        flux_msg_destroy (rpc->rx_msg_consumed);
         if (rpc->nodemap)
             free (rpc->nodemap);
         free (rpc);
@@ -153,7 +151,7 @@ int flux_rpc_get (flux_rpc_t rpc, uint32_t *nodeid, const char **json_str)
     }
     if (!rpc->rx_msg && !(rpc->rx_msg = flux_recv (rpc->h, rpc->m, 0)))
         goto done;
-    zmsg_destroy (&rpc->rx_msg_consumed); /* invalidate last-got payload */
+    flux_msg_destroy (rpc->rx_msg_consumed); /* invalidate last-got payload */
     rpc->rx_msg_consumed = rpc->rx_msg;
     rpc->rx_msg = NULL;
     rpc->rx_count++;

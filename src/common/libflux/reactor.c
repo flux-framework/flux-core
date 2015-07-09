@@ -423,9 +423,9 @@ void flux_msg_watcher_destroy (struct flux_msg_watcher *w)
         if (w->coproc)
             coproc_destroy (w->coproc);
         if (w->backlog) {
-            zmsg_t *zmsg;
-            while ((zmsg = zlist_pop (w->backlog)))
-                zmsg_destroy (&zmsg);
+            flux_msg_t *msg;
+            while ((msg = zlist_pop (w->backlog)))
+                flux_msg_destroy (msg);
             zlist_destroy (&w->backlog);
         }
         if (w->wait_match.topic_glob)
