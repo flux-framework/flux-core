@@ -33,10 +33,19 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/log.h"
 
+struct ping_ctx {
+    double period;      /* interval between sends, in seconds */
+    uint32_t nodeid;    /* target nodeid (or FLUX_NODEID_ANY) */
+    char *topic;        /* target topic string */
+    char *pad;          /* pad string */
+    int count;          /* number of pings to send */
+    int send_count;     /* sending count */
+    int recv_count;     /* receiving count */
+};
 
 #define OPTIONS "hp:d:r:c:"
 static const struct option longopts[] = {
@@ -50,24 +59,94 @@ static const struct option longopts[] = {
 
 void usage (void)
 {
-    fprintf (stderr, 
+    fprintf (stderr,
 "Usage: flux-ping [--rank N] [--pad bytes] [--delay sec] [--count N] target\n"
 );
     exit (1);
 }
 
-static char *ping (flux_t h, uint32_t nodeid, const char *name, const char *pad,
-                   int seq);
+/* Handle responses
+ * After 'ctx->count' responses have been received, stop the watcher.
+ */
+void response_cb (flux_t h, flux_msg_watcher_t *w, const flux_msg_t *msg,
+                  void *arg)
+{
+    struct ping_ctx *ctx = arg;
+    const char *topic, *json_str, *route, *pad;
+    int64_t sec, nsec;
+    struct timespec t0;
+    int seq;
+    JSON out = NULL;
+    char rankprefix[16];
+
+    if (flux_response_decode (msg, &topic, &json_str) < 0
+            || !(out = Jfromstr (json_str))
+            || !Jget_int (out, "seq", &seq)
+            || !Jget_int64 (out, "time.tv_sec", &sec)
+            || !Jget_int64 (out, "time.tv_nsec", &nsec)
+            || !Jget_str (out, "pad", &pad)
+            || !Jget_str (out, "route", &route)) {
+        err ("error decoding ping response");
+        return;
+    }
+    t0.tv_sec = sec;
+    t0.tv_nsec = nsec;
+    snprintf (rankprefix, sizeof (rankprefix), "%u!", ctx->nodeid);
+    printf ("%s%s pad=%lu seq=%d time=%0.3f ms (%s)\n",
+                ctx->nodeid == FLUX_NODEID_ANY ? "" : rankprefix, topic,
+                strlen (ctx->pad) + 1, seq, monotime_since (t0), route);
+    if (++ctx->recv_count == ctx->count)
+        flux_msg_watcher_stop (h, w);
+    Jput (out);
+}
+
+/* Send a request each time the timer fires.
+ * After 'ctx->count' requests have been sent, stop the watcher.
+ */
+void timer_cb (flux_t h, flux_timer_watcher_t *w, int revents, void *arg)
+{
+    struct ping_ctx *ctx = arg;
+    struct timespec t0;
+    JSON in = Jnew ();
+    flux_msg_t *msg = NULL;
+
+    Jadd_int (in, "seq", ctx->send_count++);
+    monotime (&t0);
+    Jadd_int64 (in, "time.tv_sec", t0.tv_sec);
+    Jadd_int64 (in, "time.tv_nsec", t0.tv_nsec);
+    Jadd_str (in, "pad", ctx->pad);
+    if (!(msg = flux_request_encode (ctx->topic, Jtostr (in))))
+        err_exit ("flux_request_encode");
+    if (flux_msg_set_nodeid (msg, ctx->nodeid, 0) < 0)
+        err_exit ("flux_msg_sent_nodeid");
+    if (flux_send (h, msg, 0) < 0)
+        err_exit ("flux_send");
+    if (ctx->send_count == ctx->count)
+        flux_timer_watcher_stop (h, w);
+    else if (ctx->period == 0) /* rearm if immediate */
+        flux_timer_watcher_start (h, w);
+    flux_msg_destroy (msg);
+    Jput (in);
+}
 
 int main (int argc, char *argv[])
 {
     flux_t h;
-    int ch, seq, bytes = 0;
-    double sec = 1.0;
-    uint32_t nodeid = FLUX_NODEID_ANY;
-    char *rankstr = NULL, *route, *target, *pad = NULL;
-    struct timespec t0;
-    int count = -1;
+    int ch;
+    int pad_bytes = 0;
+    char *target;
+    flux_msg_watcher_t *mw;
+    flux_timer_watcher_t *tw;
+    struct flux_match match_any = FLUX_MATCH_ANY;
+    struct ping_ctx ctx = {
+        .period = 1.0,
+        .nodeid = FLUX_NODEID_ANY,
+        .topic = NULL,
+        .pad = NULL,
+        .count = -1,
+        .send_count = 0,
+        .recv_count = 0,
+    };
 
     log_init ("flux-ping");
 
@@ -77,20 +156,18 @@ int main (int argc, char *argv[])
                 usage ();
                 break;
             case 'p': /* --pad-bytes N */
-                bytes = strtoul (optarg, NULL, 10);
-                pad = xzmalloc (bytes + 1);
-                memset (pad, 'p', bytes);
+                pad_bytes = strtoul (optarg, NULL, 10);
                 break;
             case 'd': /* --delay N */
-                sec = strtod (optarg, NULL);
-                if (sec < 0)
+                ctx.period = strtod (optarg, NULL);
+                if (ctx.period < 0)
                     usage ();
                 break;
             case 'r': /* --rank N */
-                nodeid = strtoul (optarg, NULL, 10);
+                ctx.nodeid = strtoul (optarg, NULL, 10);
                 break;
             case 'c': /* --count N */
-                count = strtoul (optarg, NULL, 10);
+                ctx.count = strtoul (optarg, NULL, 10);
                 break;
             default:
                 usage ();
@@ -101,11 +178,21 @@ int main (int argc, char *argv[])
         usage ();
     target = argv[optind++];
 
-    if (nodeid == FLUX_NODEID_ANY) {
+    /* Create null terminated pad string for reuse in each message.
+     * By default it's the empty string.
+     */
+    ctx.pad = xzmalloc (pad_bytes + 1);
+    memset (ctx.pad, 'p', pad_bytes);
+
+    /* If "rank!" is prepended to the target, and there is no --rank
+     * argument, snip it off and set the rank.  If it's just the bare
+     * rank, assume the target is "cmb".
+     */
+    if (ctx.nodeid == FLUX_NODEID_ANY) {
         char *endptr;
         uint32_t n = strtoul (target, &endptr, 10);
         if (endptr != target)
-            nodeid = n;
+            ctx.nodeid = n;
         if (*endptr == '!')
             target = endptr + 1;
         else
@@ -113,83 +200,36 @@ int main (int argc, char *argv[])
     }
     if (*target == '\0')
         target = "cmb";
-    if (nodeid != FLUX_NODEID_ANY)
-        rankstr = xasprintf ("%u", nodeid);
+    ctx.topic = xasprintf ("%s.ping", target);
 
+    /* Start event loop.
+     * It will terminate when timer/sender watchers are stopped,
+     * or run forever if --count was unspecified.
+     */
     if (!(h = flux_open (NULL, 0)))
         err_exit ("flux_open");
 
-    for (seq = 0; count == -1 || seq < count; seq++) {
-        monotime (&t0);
-        if (!(route = ping (h, nodeid, target, pad, seq)))
-            err_exit ("%s%s%s.ping", rankstr ? rankstr : "",
-                                     rankstr ? "!" : "",
-                                     target);
-        printf ("%s%s%s.ping pad=%d seq=%d time=%0.3f ms (%s)\n",
-                rankstr ? rankstr : "",
-                rankstr ? "!" : "",
-                target, bytes, seq, monotime_since (t0), route);
-        free (route);
-        if (sec > 0)
-            usleep (sec * 1E6);
-    }
+    mw = flux_msg_watcher_create (match_any, response_cb, &ctx);
+    tw = flux_timer_watcher_create (0, ctx.period, timer_cb, &ctx);
+    if (!mw || !tw)
+        err_exit ("error creating watchers");
+    flux_timer_watcher_start (h, tw);
+    flux_msg_watcher_start (h, mw);
+    if (flux_reactor_start (h) < 0)
+        err_exit ("flux_reactor_start");
+
+    /* Clean up.
+     */
+    flux_msg_watcher_destroy (mw);
+    flux_timer_watcher_destroy (tw);
+
+    free (ctx.topic);
+    free (ctx.pad);
 
     flux_close (h);
     log_fini ();
+
     return 0;
-}
-
-/* Ping plugin 'name'.
- * 'pad' is a string used to increase the size of the ping packet for
- * measuring RTT in comparison to rough message size.
- * 'seq' is a sequence number.
- * The pad and seq are echoed in the response, and any mismatch will result
- * in an error return with errno = EPROTO.
- * A string representation of the route taken is the return value on success
- * (caller must free).  On error, return NULL with errno set.
- */
-static char *ping (flux_t h, uint32_t nodeid, const char *name, const char *pad,
-                   int seq)
-{
-    json_object *request = util_json_object_new_object ();
-    json_object *response = NULL;
-    int rseq;
-    const char *route, *rpad;
-    char *ret = NULL;
-    char *topic = xasprintf ("%s.ping", name);
-
-    if (pad)
-        util_json_object_add_string (request, "pad", pad);
-    util_json_object_add_int (request, "seq", seq);
-
-    if (flux_json_rpc (h, nodeid, topic, request, &response) < 0)
-        goto done;
-    if (util_json_object_get_int (response, "seq", &rseq) < 0
-            || util_json_object_get_string (response, "route", &route) < 0) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (seq != rseq) {
-        msg ("%s: seq not echoed back", __FUNCTION__);
-        errno = EPROTO;
-        goto done;
-    }
-    if (pad) {
-        if (util_json_object_get_string (response, "pad", &rpad) < 0
-                                || !rpad || strlen (pad) != strlen (rpad)) {
-            msg ("%s: pad not echoed back", __FUNCTION__);
-            errno = EPROTO;
-            goto done;
-        }
-    }
-    ret = strdup (route);
-done:
-    if (response)
-        json_object_put (response);
-    if (request)
-        json_object_put (request);
-    free (topic);
-    return ret;
 }
 
 /*
