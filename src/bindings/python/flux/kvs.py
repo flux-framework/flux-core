@@ -42,6 +42,7 @@ class KVSDir(WrapperPimpl,collections.MutableMapping):
                                        prefixes=[
                                          'kvsdir_',
                                          ],
+                                           success_code = 0,
                                        )
     def __del__(self):
       if self.handle is not None:
@@ -175,24 +176,26 @@ class KVSDir(WrapperPimpl,collections.MutableMapping):
         files.append(k)
     return (files, dirs)
 
+def join(*args):
+  return ".".join([a for a in args if len(a) > 0])
 
-def walk(kd, topdown=False):
-  """ Walk a directory in the style of os.walk() """
-  key = kd.key_at('')
+def inner_walk(kd, curr_dir, topdown=False):
+
   (files, dirs) = kd.list_all(topdown)
   if topdown:
-    yield (key, dirs, files)
+    yield (curr_dir, dirs, files)
 
   for d in dirs:
-    for x in walk(kd[d], topdown):
+    for x in inner_walk(kd[d], join(curr_dir, d), topdown):
       yield x
 
   if not topdown:
-    yield (key, dirs, files)
+    yield (curr_dir, dirs, files)
 
-
-
-
+def walk(kd, topdown=False):
+  """ Walk a directory in the style of os.walk() """
+  for x in inner_walk(kd, '', topdown):
+    yield x
 
 
 @ffi.callback('KVSSetF')
