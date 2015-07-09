@@ -15,7 +15,7 @@
  * and -1 is returned with no assignments to topic or json_str.
  * Returns 0 on success, or -1 on failure with errno set.
  */
-int flux_response_decode (flux_msg_t *msg, const char **topic,
+int flux_response_decode (const flux_msg_t *msg, const char **topic,
                           const char **json_str);
 
 flux_msg_t *flux_response_encode (const char *topic, int errnum,

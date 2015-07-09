@@ -34,7 +34,7 @@
 #include "src/common/libutil/nodeset.h"
 
 
-int flux_response_decode (flux_msg_t *msg, const char **topic,
+int flux_response_decode (const flux_msg_t *msg, const char **topic,
                           const char **json_str)
 {
     int type;
