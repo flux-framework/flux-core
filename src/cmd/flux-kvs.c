@@ -36,7 +36,7 @@
 #include "src/common/libutil/readall.h"
 
 
-#define OPTIONS "h"
+#define OPTIONS "+h"
 static const struct option longopts[] = {
     {"help",       no_argument,  0, 'h'},
     { 0, 0, 0, 0 },
@@ -64,21 +64,21 @@ void cmd_dir (flux_t h, int argc, char **argv);
 void usage (void)
 {
     fprintf (stderr,
-"Usage: flux-kvs get           key [key...]\n"
-"       flux-kvs type          key [key...]\n"
-"       flux-kvs put           key=val [key=val...]\n"
-"       flux-kvs unlink        key [key...]\n"
-"       flux-kvs link          target link_name\n"
-"       flux-kvs readlink      key\n"
-"       flux-kvs mkdir         key [key...]\n"
-"       flux-kvs exists        key\n"
-"       flux-kvs watch         key\n"
-"       flux-kvs watch-dir     key\n"
-"       flux-kvs copy-tokvs    key file\n"
-"       flux-kvs copy-fromkvs  key file\n"
-"       flux-kvs dir           [key]\n"
+"Usage: flux-kvs get             key [key...]\n"
+"       flux-kvs type            key [key...]\n"
+"       flux-kvs put             key=val [key=val...]\n"
+"       flux-kvs unlink          key [key...]\n"
+"       flux-kvs link            target link_name\n"
+"       flux-kvs readlink        key\n"
+"       flux-kvs mkdir           key [key...]\n"
+"       flux-kvs exists          key\n"
+"       flux-kvs watch           key\n"
+"       flux-kvs watch-dir [-r]  key\n"
+"       flux-kvs copy-tokvs      key file\n"
+"       flux-kvs copy-fromkvs    key file\n"
+"       flux-kvs dir [-r]        [key]\n"
 "       flux-kvs version\n"
-"       flux-kvs wait          version\n"
+"       flux-kvs wait            version\n"
 "       flux-kvs dropcache\n"
 "       flux-kvs dropcache-all\n"
 );
@@ -484,7 +484,7 @@ static void dump_kvs_val (const char *key, JSON o)
     }
 }
 
-static void dump_kvs_dir (flux_t h, const char *path)
+static void dump_kvs_dir (flux_t h, bool ropt, const char *path)
 {
     kvsdir_t dir;
     kvsitr_t itr;
@@ -505,7 +505,10 @@ static void dump_kvs_dir (flux_t h, const char *path)
             free (link);
 
         } else if (kvsdir_isdir (dir, name)) {
-            dump_kvs_dir (h, key);
+            if (ropt)
+                dump_kvs_dir (h, ropt, key);
+            else
+                printf ("%s.\n", key);
         } else {
             JSON o;
             if (kvs_get (h, key, &o) < 0)
@@ -521,10 +524,16 @@ static void dump_kvs_dir (flux_t h, const char *path)
 
 void cmd_watch_dir (flux_t h, int argc, char **argv)
 {
+    bool ropt = false;
     char *key;
     kvsdir_t dir = NULL;
     int rc;
 
+    if (argc > 0 && !strcmp (argv[0], "-r")) {
+        ropt = true;
+        argc--;
+        argv++;
+    }
     if (argc != 1)
         msg_exit ("watchdir: specify one directory");
     key = argv[0];
@@ -537,7 +546,7 @@ void cmd_watch_dir (flux_t h, int argc, char **argv)
                 kvsdir_destroy (dir);
             dir = NULL;
         } else {
-            dump_kvs_dir (h, key);
+            dump_kvs_dir (h, ropt, key);
             printf ("======================\n");
         }
         rc = kvs_watch_once_dir (h, &dir, "%s", key);
@@ -548,10 +557,17 @@ void cmd_watch_dir (flux_t h, int argc, char **argv)
 
 void cmd_dir (flux_t h, int argc, char **argv)
 {
+    bool ropt = false;
+
+    if (argc > 0 && !strcmp (argv[0], "-r")) {
+        ropt = true;
+        argc--;
+        argv++;
+    }
     if (argc == 0)
-        dump_kvs_dir (h, ".");
+        dump_kvs_dir (h, ropt, ".");
     else if (argc == 1)
-        dump_kvs_dir (h, argv[0]);
+        dump_kvs_dir (h, ropt, argv[0]);
     else
         msg_exit ("dir: specify zero or one directory");
 }
