@@ -51,7 +51,7 @@ struct ping_ctx {
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"rank",       required_argument,  0, 'r'},
-    {"pad-bytes",  required_argument,  0, 'p'},
+    {"pad",        required_argument,  0, 'p'},
     {"delay",      required_argument,  0, 'd'},
     {"count",      required_argument,  0, 'c'},
     { 0, 0, 0, 0 },
@@ -94,7 +94,7 @@ void response_cb (flux_t h, flux_msg_watcher_t *w, const flux_msg_t *msg,
     snprintf (rankprefix, sizeof (rankprefix), "%u!", ctx->nodeid);
     printf ("%s%s pad=%lu seq=%d time=%0.3f ms (%s)\n",
                 ctx->nodeid == FLUX_NODEID_ANY ? "" : rankprefix, topic,
-                strlen (ctx->pad) + 1, seq, monotime_since (t0), route);
+                strlen (ctx->pad), seq, monotime_since (t0), route);
     if (++ctx->recv_count == ctx->count)
         flux_msg_watcher_stop (h, w);
     Jput (out);
@@ -155,10 +155,10 @@ int main (int argc, char *argv[])
             case 'h': /* --help */
                 usage ();
                 break;
-            case 'p': /* --pad-bytes N */
+            case 'p': /* --pad bytes */
                 pad_bytes = strtoul (optarg, NULL, 10);
                 break;
-            case 'd': /* --delay N */
+            case 'd': /* --delay seconds */
                 ctx.period = strtod (optarg, NULL);
                 if (ctx.period < 0)
                     usage ();
