@@ -154,7 +154,7 @@ EOF
 test_expect_success 'kvs: create a dir with keys and subdir' '
 	flux kvs unlink $TEST &&
 	flux kvs put $DIR.a=69 $DIR.b=70 $DIR.c.d.e.f.g=3.14 $DIR.d=\"snerg\" $DIR.e=true &&
-	flux kvs dir $DIR | sort >output &&
+	flux kvs dir -r $DIR | sort >output &&
 	cat >expected <<EOF
 $DIR.a = 69
 $DIR.b = 70
@@ -168,7 +168,7 @@ EOF
 test_expect_success 'kvs: directory with multiple subdirs' '
 	flux kvs unlink $TEST &&
 	flux kvs put $DIR.a=69 $DIR.b.c.d.e.f.g=70 $DIR.c.a.b=3.14 $DIR.d=\"snerg\" $DIR.e=true &&
-	flux kvs dir $DIR | sort >output &&
+	flux kvs dir -r $DIR | sort >output &&
 	cat >expected <<EOF
 $DIR.a = 69
 $DIR.b.c.d.e.f.g = 70
