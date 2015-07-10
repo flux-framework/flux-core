@@ -25,7 +25,8 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
+#include <errno.h>
+
 #include "response.h"
 #include "message.h"
 
@@ -33,7 +34,7 @@
 #include "src/common/libutil/nodeset.h"
 
 
-int flux_response_decode (zmsg_t *zmsg, const char **topic,
+int flux_response_decode (const flux_msg_t *msg, const char **topic,
                           const char **json_str)
 {
     int type;
@@ -41,25 +42,25 @@ int flux_response_decode (zmsg_t *zmsg, const char **topic,
     int errnum = 0;
     int rc = -1;
 
-    if (zmsg == NULL) {
+    if (msg == NULL) {
         errno = EINVAL;
         goto done;
     }
-    if (flux_msg_get_type (zmsg, &type) < 0)
+    if (flux_msg_get_type (msg, &type) < 0)
         goto done;
     if (type != FLUX_MSGTYPE_RESPONSE) {
         errno = EPROTO;
         goto done;
     }
-    if (flux_msg_get_errnum (zmsg, &errnum) < 0)
+    if (flux_msg_get_errnum (msg, &errnum) < 0)
         goto done;
     if (errnum != 0) {
         errno = errnum;
         goto done;
     }
-    if (flux_msg_get_topic (zmsg, &ts) < 0)
+    if (flux_msg_get_topic (msg, &ts) < 0)
         goto done;
-    if (flux_msg_get_payload_json (zmsg, &js) < 0)
+    if (flux_msg_get_payload_json (msg, &js) < 0)
         goto done;
     if ((json_str && !js) || (!json_str && js)) {
         errno = EPROTO;
@@ -74,30 +75,30 @@ done:
     return rc;
 }
 
-zmsg_t *flux_response_encode (const char *topic, int errnum,
-                              const char *json_str)
+flux_msg_t *flux_response_encode (const char *topic, int errnum,
+                                  const char *json_str)
 {
-    zmsg_t *zmsg = NULL;
+    flux_msg_t *msg = NULL;
 
     if (!topic || (errnum != 0 && json_str != NULL)) {
         errno = EINVAL;
         goto error;
     }
-    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_RESPONSE)))
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_RESPONSE)))
         goto error;
-    if (flux_msg_set_topic (zmsg, topic) < 0)
+    if (flux_msg_set_topic (msg, topic) < 0)
         goto error;
-    if (flux_msg_enable_route (zmsg) < 0)
+    if (flux_msg_enable_route (msg) < 0)
         goto error;
-    if (flux_msg_set_errnum (zmsg, errnum) < 0)
+    if (flux_msg_set_errnum (msg, errnum) < 0)
         goto error;
-    if (json_str && flux_msg_set_payload_json (zmsg, json_str) < 0)
+    if (json_str && flux_msg_set_payload_json (msg, json_str) < 0)
         goto error;
-    return zmsg;
+    return msg;
 error:
-    if (zmsg) {
+    if (msg) {
         int saved_errno = errno;
-        zmsg_destroy (&zmsg);
+        flux_msg_destroy (msg);
         errno = saved_errno;
     }
     return NULL;

@@ -205,7 +205,9 @@ int main (int argc, char *argv[])
      */
     if (getenv ("FLUX_TMPDIR") && !Fopt) {
         flux_t h;
-        if (!(h = flux_open (NULL, 0)))
+        if (flux_conf_load (cf) == 0)
+            setup_connector_env (cf, Oopt); /* flux_open() needs this */
+        if (!(h = flux_open (NULL, 0)))     /*   esp. for in-tree */
             err_exit ("flux_open");
         if (kvs_conf_load (h, cf) < 0 && errno != ENOENT)
             err_exit ("could not load config from KVS");

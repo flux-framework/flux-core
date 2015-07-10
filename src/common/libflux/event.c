@@ -27,7 +27,6 @@
 #endif
 #include <errno.h>
 #include <stdbool.h>
-#include <czmq.h>
 
 #include "event.h"
 #include "message.h"
@@ -68,27 +67,27 @@ done:
     return rc;
 }
 
-zmsg_t *flux_event_encode (const char *topic, const char *json_str)
+flux_msg_t *flux_event_encode (const char *topic, const char *json_str)
 {
-    zmsg_t *zmsg = NULL;
+    flux_msg_t *msg = NULL;
 
     if (!topic) {
         errno = EINVAL;
         goto error;
     }
-    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_EVENT)))
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_EVENT)))
         goto error;
-    if (flux_msg_set_topic (zmsg, topic) < 0)
+    if (flux_msg_set_topic (msg, topic) < 0)
         goto error;
-    if (flux_msg_enable_route (zmsg) < 0)
+    if (flux_msg_enable_route (msg) < 0)
         goto error;
-    if (json_str && flux_msg_set_payload_json (zmsg, json_str) < 0)
+    if (json_str && flux_msg_set_payload_json (msg, json_str) < 0)
         goto error;
-    return zmsg;
+    return msg;
 error:
-    if (zmsg) {
+    if (msg) {
         int saved_errno = errno;
-        zmsg_destroy (&zmsg);
+        flux_msg_destroy (msg);
         errno = saved_errno;
     }
     return NULL;
