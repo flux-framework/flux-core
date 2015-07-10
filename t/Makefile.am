@@ -24,6 +24,7 @@ TESTS = \
 	t1003-mecho.t \
 	t1004-log.t \
 	t1005-cmddriver.t \
+	t1006-apidisconnect.t \
 	t2000-wreck.t \
 	t2001-jsc.t \
 	lua/t0001-send-recv.t \
@@ -57,6 +58,7 @@ check_SCRIPTS = \
 	t1003-mecho.t \
 	t1004-log.t \
 	t1005-cmddriver.t \
+	t1006-apidisconnect.t \
 	t2000-wreck.t \
 	t2001-jsc.t \
 	lua/t0001-send-recv.t \
