@@ -1,30 +1,45 @@
 language: c
 
+sudo: false
+
 compiler:
   - gcc
   - clang
 
-install:
-  - sudo sh -c 'echo "/usr/local/lib" >/etc/ld.so.conf.d/build'
-  - sudo apt-get update -q
-  - sudo apt-get install -y lua5.1 liblua5.1-0-dev luarocks munge libmunge-dev uuid-dev aspell libopenmpi-dev
-  - sudo luarocks install luaposix
-  - git clone https://github.com/grondo/lua-hostlist
-  - (export CC=gcc; cd lua-hostlist && make LUA_VER=5.1 && sudo make install LUA_VER=5.1)
-  - wget http://download.zeromq.org/zeromq-4.0.4.tar.gz
-  - tar -xvf zeromq-4.0.4.tar.gz
-  - wget http://download.zeromq.org/czmq-3.0.0-rc1.tar.gz
-  - tar -xvf czmq-3.0.0-rc1.tar.gz
-  - wget https://download.libsodium.org/libsodium/releases/libsodium-1.0.0.tar.gz
-  - tar -xvf libsodium-1.0.0.tar.gz
-  - wget https://s3.amazonaws.com/json-c_releases/releases/json-c-0.11.tar.gz
-  - tar -xvf  json-c-0.11.tar.gz
-  - ( export CC=gcc; cd json-c-0.11 && ./configure && make && sudo make install)
-  - (cd libsodium-1.0.0 && ./configure && make -j2 && sudo make install)
-  - (cd zeromq-4.0.4 && ./configure --with-libsodium && make -j2 && sudo make install)
-  - (cd czmq-3.0.0 && ./configure && make -j2 && sudo make install)
-  - sudo ldconfig
+cache:
+  directories:
+    - $HOME/local
+    - $HOME/.luarocks
+    - $HOME/.ccache
 
-script: ./autogen.sh && ./configure  && make -j2 V=1 distcheck
+addons:
+  apt:
+    sources:
+    packages:
+      - lua5.1
+      - liblua5.1-0-dev
+      - luarocks
+      - uuid-dev
+      - aspell
+      - libopenmpi-dev
+      - ccache
+
+before_install:
+  - export LD_LIBRARY_PATH=$HOME/local/lib
+  - export CPPFLAGS=-I$HOME/local/include
+  - export LDFLAGS=-L$HOME/local/lib
+  - export PKG_CONFIG_PATH=$HOME/local/lib/pkgconfig
+  - test "$TRAVIS_PULL_REQUEST" == "false" || export CCACHE_READONLY=1
+  - if test "$CC" = "clang"; then export CCACHE_CPP2=1; fi
+  - eval `luarocks path`
+  - ./src/test/travis-dep-builder.sh --cachedir=$HOME/local/.cache
 
 
+script:
+ - export CC="ccache $CC"
+ - ./autogen.sh
+ - ./configure --prefix=$HOME/local
+ - make -j2 distcheck
+
+after_success:
+ - ccache -s
