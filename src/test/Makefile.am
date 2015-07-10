@@ -12,7 +12,8 @@ check_PROGRAMS = \
 	tkvswatch \
 	tmunge \
 	tpmikvs \
-	tbarrier
+	tbarrier \
+	tdisconnect
 
 SUBDIRS = request module
 if HAVE_MPI
