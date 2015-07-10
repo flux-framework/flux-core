@@ -106,6 +106,7 @@ typedef struct {
     svchash_t eventsvc;
     heartbeat_t heartbeat;
     shutdown_t shutdown;
+    double shutdown_grace;
     /* Bootstrap
      */
     bool boot_pmi;
@@ -155,7 +156,7 @@ static void boot_local (ctx_t *ctx);
 
 static const struct flux_handle_ops broker_handle_ops;
 
-#define OPTIONS "t:vqR:S:p:M:X:L:N:Pk:e:r:s:c:fnH:O:x:T:"
+#define OPTIONS "t:vqR:S:p:M:X:L:N:Pk:e:r:s:c:fnH:O:x:T:g:"
 static const struct option longopts[] = {
     {"sid",             required_argument,  0, 'N'},
     {"child-uri",       required_argument,  0, 't'},
@@ -178,6 +179,7 @@ static const struct option longopts[] = {
     {"noshell",         no_argument,        0, 'n'},
     {"heartrate",       required_argument,  0, 'H'},
     {"timeout",         required_argument,  0, 'T'},
+    {"shutdown-grace",  required_argument,  0, 'g'},
     {0, 0, 0, 0},
 };
 
@@ -207,6 +209,7 @@ static void usage (void)
 " -f,--force                   Kill rival broker and start\n"
 " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
 " -T,--timeout SECS            Set wireup timeout in seconds (rank 0 only)\n"
+" -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
 );
     exit (1);
 }
@@ -341,6 +344,9 @@ int main (int argc, char *argv[])
             case 'T':   /* --timeout SECS */
                 ctx.hello_timeout = strtod (optarg, NULL);
                 break;
+            case 'g':   /* --shutdown-grace SECS */
+                ctx.shutdown_grace = strtod (optarg, NULL);
+                break;
             default:
                 usage ();
         }
@@ -470,6 +476,20 @@ int main (int argc, char *argv[])
         msg_exit ("--event-uri is required for size > 1");
 
     overlay_set_rank (ctx.overlay, ctx.rank);
+
+    /* If shutdown_grace was not provided on the command line,
+     * make a guess.
+     */
+    if (ctx.shutdown_grace == 0) {
+        if (ctx.size < 16)
+            ctx.shutdown_grace = 0.5;
+        else if (ctx.size < 128)
+            ctx.shutdown_grace = 1;
+        else if (ctx.size < 1024)
+            ctx.shutdown_grace = 2;
+        else
+            ctx.shutdown_grace = 5;
+    }
 
     if (ctx.verbose) {
         const char *parent = overlay_get_parent (ctx.overlay);
@@ -624,8 +644,8 @@ static void hello_update_cb (hello_t h, void *arg)
                   hello_get_nodeset (h));
     }
     if (ctx->hello_timeout != 0 && hello_get_time (h) >= ctx->hello_timeout) {
-        shutdown_arm (ctx->shutdown, 2, 1, "hello timeout after %.1fs",
-                      ctx->hello_timeout);
+        shutdown_arm (ctx->shutdown, ctx->shutdown_grace, 1,
+                      "hello timeout after %.1fs", ctx->hello_timeout);
         hello_set_timeout (h, 0);
     }
 }
@@ -700,7 +720,8 @@ static int rank0_shell_exit_handler (struct subprocess *p, void *arg)
         rc = 128 + subprocess_signaled (p);
     else
         rc = subprocess_exit_code (p);
-    shutdown_arm (ctx->shutdown, 2, rc, "%s", subprocess_state_string (p));
+    shutdown_arm (ctx->shutdown, ctx->shutdown_grace, rc,
+                  "%s", subprocess_state_string (p));
     return 0;
 }
 
@@ -1667,7 +1688,8 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
         if (fdsi.ssi_signo == SIGCHLD)
             subprocess_manager_reap_all (ctx->sm);
         else {
-            shutdown_arm (ctx->shutdown, 2, 0, "signal %d (%s) %d",
+            shutdown_arm (ctx->shutdown, ctx->shutdown_grace, 0,
+                          "signal %d (%s) %d",
                           fdsi.ssi_signo, strsignal (fdsi.ssi_signo));
         }
     }

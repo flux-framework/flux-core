@@ -19,7 +19,7 @@ void shutdown_set_handle (shutdown_t s, flux_t h);
  */
 void shutdown_complete (shutdown_t s);
 void shutdown_recvmsg (shutdown_t s, zmsg_t *zmsg);
-void shutdown_arm (shutdown_t s, int grace, int rc, const char *fmt, ...);
+void shutdown_arm (shutdown_t s, double grace, int rc, const char *fmt, ...);
 
 #endif /* !_BROKER_SHUTDOWN_H */
 

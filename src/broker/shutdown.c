@@ -43,7 +43,7 @@ struct shutdown_struct {
     int rc;
     int rank;
     char reason[256];
-    int grace;
+    double grace;
 };
 
 shutdown_t shutdown_create (void)
@@ -87,14 +87,15 @@ void shutdown_recvmsg (shutdown_t s, zmsg_t *zmsg)
     const char *json_str;
     JSON in = NULL;
     const char *reason;
-    int grace, rank, rc;
+    int rank, rc;
+    double grace;
 
     if (flux_event_decode (zmsg, NULL, &json_str) < 0
                 || !(in = Jfromstr (json_str))) {
         err ("%s", __FUNCTION__);
         goto done;
     }
-    if (!Jget_str (in, "reason", &reason) || !Jget_int (in, "grace", &grace)
+    if (!Jget_str (in, "reason", &reason) || !Jget_double (in, "grace", &grace)
                                           || !Jget_int (in, "rank", &rank)
                                           || !Jget_int (in, "exitcode", &rc)) {
         errn (EPROTO, "%s", __FUNCTION__);
@@ -105,11 +106,11 @@ void shutdown_recvmsg (shutdown_t s, zmsg_t *zmsg)
         s->grace = grace;
         s->rank = rank;
         snprintf (s->reason, sizeof (s->reason), "%s", reason);
-        s->tid = zloop_timer (s->zloop, grace * 1000, 1, shutdown_cb, s);
+        s->tid = zloop_timer (s->zloop, 1000*grace, 1, shutdown_cb, s);
         if (s->tid == -1)
             err_exit ("zloop_timer");
         if (flux_rank (s->h) == 0)
-            flux_log (s->h, LOG_INFO, "%d: shutdown in %ds: %s",
+            flux_log (s->h, LOG_INFO, "%d: shutdown in %.3fs: %s",
                       s->rank, s->grace, s->reason);
     }
 done:
@@ -117,7 +118,7 @@ done:
     return;
 }
 
-void shutdown_arm (shutdown_t s, int grace, int rc, const char *fmt, ...)
+void shutdown_arm (shutdown_t s, double grace, int rc, const char *fmt, ...)
 {
     va_list ap;
     char reason[256];
@@ -133,7 +134,7 @@ void shutdown_arm (shutdown_t s, int grace, int rc, const char *fmt, ...)
 
     JSON out = Jnew ();
     Jadd_str (out, "reason", reason);
-    Jadd_int (out, "grace", grace);
+    Jadd_double (out, "grace", grace);
     Jadd_int (out, "rank", flux_rank (s->h));
     Jadd_int (out, "exitcode", rc);
     zmsg_t *zmsg = flux_event_encode ("shutdown", Jtostr (out));
