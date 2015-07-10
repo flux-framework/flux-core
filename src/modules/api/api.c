@@ -72,6 +72,12 @@ typedef struct {
     struct ucred ucred;
 } client_t;
 
+struct disconnect_notify {
+    char *topic;
+    uint32_t nodeid;
+    int flags;
+};
+
 static void client_destroy (client_t *c);
 
 static void freectx (void *arg)
@@ -184,25 +190,60 @@ static bool subscription_match (client_t *c, int type, zmsg_t *zmsg)
     return false;
 }
 
-static int notify_srv (const char *key, void *item, void *arg)
+static void disconnect_destroy (client_t *c, struct disconnect_notify *d)
 {
-    client_t *c = arg;
-    char *topic = xasprintf ("%s.disconnect", key);
-    zmsg_t *zmsg;
+    flux_msg_t *msg;
 
-    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
         goto done;
-    if (flux_msg_set_topic (zmsg, topic) < 0)
+    if (flux_msg_set_topic (msg, d->topic) < 0)
         goto done;
-    if (flux_msg_enable_route (zmsg) < 0)
+    if (flux_msg_enable_route (msg) < 0)
         goto done;
-    if (flux_msg_push_route (zmsg, zuuid_str (c->uuid)) < 0)
+    if (flux_msg_push_route (msg, zuuid_str (c->uuid)) < 0)
         goto done;
-    flux_sendmsg (c->ctx->h, &zmsg);
+    if (flux_msg_set_nodeid (msg, d->nodeid, d->flags) < 0)
+        goto done;
+    (void)flux_send (c->ctx->h, msg, 0);
 done:
-    zmsg_destroy (&zmsg);
-    free (topic);
-    return 0;
+    flux_msg_destroy (msg);
+    free (d->topic);
+    free (d);
+}
+
+static int disconnect_update (client_t *c, const flux_msg_t *msg)
+{
+    char *p;
+    char *key = NULL;
+    char *svc = NULL;
+    const char *topic;
+    uint32_t nodeid;
+    int flags;
+    struct disconnect_notify *d;
+    int rc = -1;
+
+    if (flux_msg_get_topic (msg, &topic) < 0)
+        goto done;
+    if (flux_msg_get_nodeid (msg, &nodeid, &flags) < 0)
+        goto done;
+    svc = xstrdup (topic);
+    if ((p = strchr (svc, '.')))
+        *p = '\0';
+    key = xasprintf ("%s:%u:%d", svc, nodeid, flags);
+    if (!zhash_lookup (c->disconnect_notify, key)) {
+        d = xzmalloc (sizeof (*d));
+        d->nodeid = nodeid;
+        d->flags = flags;
+        d->topic = xasprintf ("%s.disconnect", svc);
+        zhash_update (c->disconnect_notify, key, d);
+    }
+    rc = 0;
+done:
+    if (svc)
+        free (svc);
+    if (key)
+        free (key);
+    return rc;
 }
 
 static void client_destroy (client_t *c)
@@ -211,7 +252,13 @@ static void client_destroy (client_t *c)
     ctx_t *ctx = c->ctx;
 
     if (c->disconnect_notify) {
-        zhash_foreach (c->disconnect_notify, notify_srv, c);
+        struct disconnect_notify *d;
+
+        d = zhash_first (c->disconnect_notify);
+        while (d) {
+            disconnect_destroy (c, d);
+            d = zhash_next (c->disconnect_notify);
+        }
         zhash_destroy (&c->disconnect_notify);
     }
     if (c->subscriptions) {
@@ -270,20 +317,10 @@ static int client_read (ctx_t *ctx, client_t *c)
                 goto done;
             }
             /* insert disconnect notifier before forwarding request */
-            if (c->disconnect_notify) {
-                const char *topic;
-                char *p, *cpy = NULL;
-                if (flux_msg_get_topic (zmsg, &topic) < 0)
-                    goto done;
-                cpy = xstrdup (topic);
-                if ((p = strchr (cpy, '.')))
-                    *p = '\0';
-                if (zhash_lookup (c->disconnect_notify, cpy) == NULL) {
-                    if (zhash_insert (c->disconnect_notify, cpy, cpy) < 0)
-                        oom ();
-                    zhash_freefn (c->disconnect_notify, cpy, free);
-                } else
-                    free (cpy);
+            if (c->disconnect_notify && disconnect_update (c, zmsg) < 0) {
+                flux_log (ctx->h, LOG_ERR, "disconnect_update:  %s",
+                          strerror (errno));
+                goto done;
             }
             if (flux_msg_push_route (zmsg, zuuid_str (c->uuid)) < 0)
                 oom (); /* FIXME */
