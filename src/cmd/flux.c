@@ -283,8 +283,11 @@ char *intree_confdir (void)
 
 static void path_push (char **path, const char *add, const char *sep)
 {
-    char *new = xasprintf ("%s%s%s", add, *path ? sep : "",
-                                          *path ? *path : "");
+    char *new;
+    if (add == NULL) /* do nothing */
+        return;
+    new = xasprintf ("%s%s%s", add, *path ? sep : "",
+            *path ? *path : "");
     free (*path);
     *path = new;
 }
@@ -295,8 +298,13 @@ void setup_lua_env (flux_conf_t cf, const char *cpath_add, const char *path_add)
     const char *cf_cpath = flux_conf_get (cf, "general.lua_cpath");
     char *path = NULL, *cpath = NULL;;
 
-    path_push (&path, ";;", ";"); /* Lua replaces ;; with the default path */
-    path_push (&cpath, ";;", ";");
+    path_push (&path, getenv ("LUA_PATH"), ";");
+    path_push (&cpath, getenv ("LUA_CPATH"), ";");
+
+    if (path == NULL)
+        path_push (&path, ";;", ";"); /* Lua replaces ;; with the default path */
+    if (cpath == NULL)
+        path_push (&cpath, ";;", ";");
 
     path_push (&path, LUA_PATH_ADD, ";");
     path_push (&cpath, LUA_CPATH_ADD, ";");
