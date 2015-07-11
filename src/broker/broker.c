@@ -1163,6 +1163,58 @@ static int terminate_subprocesses_by_uuid (ctx_t *ctx, char *id)
     return (0);
 }
 
+static JSON subprocess_json_info (struct subprocess *p)
+{
+    int i;
+    char buf [MAXPATHLEN];
+    const char *cwd;
+    char *sender = NULL;
+    JSON o = Jnew ();
+    JSON a = Jnew_ar ();
+
+    Jadd_int (o, "pid", subprocess_pid (p));
+    for (i = 0; i < subprocess_get_argc (p); i++) {
+        Jadd_ar_str (a, subprocess_get_arg (p, i));
+    }
+    /*  Avoid shortjson here so we don't take
+     *   unnecessary reference to 'a'
+     */
+    json_object_object_add (o, "cmdline", a);
+    if ((cwd = subprocess_get_cwd (p)) == NULL)
+        cwd = getcwd (buf, MAXPATHLEN-1);
+    Jadd_str (o, "cwd", cwd);
+    if ((sender = subprocess_sender (p))) {
+        Jadd_str (o, "sender", sender); 
+        free (sender);
+    }
+    return (o);
+}
+
+static int cmb_ps_cb (zmsg_t **zmsg, void *arg)
+{
+    struct subprocess *p;
+    ctx_t *ctx = arg;
+    JSON out = Jnew ();
+    JSON procs = Jnew_ar ();
+    int rc;
+
+    Jadd_int (out, "rank", ctx->rank);
+
+    p = subprocess_manager_first (ctx->sm);
+    while (p) {
+        JSON o = subprocess_json_info (p);
+        /* Avoid shortjson here so we don't take an unnecessary
+         *  reference to 'o'.
+         */
+        json_object_array_add (procs, o);
+        p = subprocess_manager_next (ctx->sm);
+    }
+    json_object_object_add (out, "procs", procs);
+    rc = flux_json_respond (ctx->h, out, zmsg);
+    Jput (out);
+    return (rc);
+}
+
 static int cmb_info_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -1540,6 +1592,7 @@ static void broker_add_services (ctx_t *ctx)
           || !svc_add (ctx->services, "cmb.event-mute", cmb_event_mute_cb, ctx)
           || !svc_add (ctx->services, "cmb.exec", cmb_exec_cb, ctx)
           || !svc_add (ctx->services, "cmb.exec.signal", cmb_signal_cb, ctx)
+          || !svc_add (ctx->services, "cmb.processes", cmb_ps_cb, ctx)
           || !svc_add (ctx->services, "cmb.disconnect", cmb_disconnect_cb, ctx)
           || !svc_add (ctx->services, "cmb.hello", cmb_hello_cb, ctx)
           || !svc_add (ctx->services, "cmb.sub", cmb_sub_cb, ctx)
