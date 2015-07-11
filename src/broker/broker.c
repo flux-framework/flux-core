@@ -1139,13 +1139,21 @@ out_free:
     return (0);
 }
 
+static char *subprocess_sender (struct subprocess *p)
+{
+    char *sender = NULL;
+    zmsg_t *zmsg = subprocess_get_context (p, "zmsg");
+    if (zmsg)
+        flux_msg_get_route_first (zmsg, &sender);
+    return (sender);
+}
+
 static int terminate_subprocesses_by_uuid (ctx_t *ctx, char *id)
 {
     struct subprocess *p = subprocess_manager_first (ctx->sm);
     while (p) {
         char *sender;
-        zmsg_t *zmsg = subprocess_get_context (p, "zmsg");
-        if (zmsg && flux_msg_get_route_first (zmsg, &sender) == 0) {
+        if ((sender = subprocess_sender (p))) {
             if (strcmp (id, sender) == 0)
                 subprocess_kill (p, SIGKILL);
             free (sender);
