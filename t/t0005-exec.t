@@ -142,4 +142,36 @@ test_expect_success 'signal forwarding works' '
 	test_expect_code 143 run_timeout 5 ./test_signal.sh TERM
 '
 
+test_expect_success 'process listing works' '
+	flux exec -r1 sleep 100 &
+	p=$! &&
+	sleep 1 &&
+	flux ps -r1 | grep ".* 1 .*sleep$" >/dev/null &&
+	kill -INT $p &&
+	test_expect_code 130 wait $p
+'
+
+test_expect_success 'process listing works - multiple processes' '
+	flux exec -r0-3 sleep 100 &
+	q=$! &&
+	sleep 1 &&
+	count=$(flux ps | grep -c sleep) &&
+	kill -INT $q &&
+	test "$count" = "4" &&
+	test_expect_code 130 wait $q &&
+	test "$(flux ps | grep -c sleep)" = "0"
+
+'
+
+test_expect_success 'flux-exec disconnect terminates all running processes' '
+	flux exec -r0-3 sleep 100 &
+	q=$! &&
+	sleep 1 &&
+	count=$(flux ps | grep -c sleep) &&
+	kill -9 $q &&
+	test "$count" = "4" &&
+	test_expect_code 137 wait $q &&
+	test "$(flux ps | grep -c sleep)" = "0"
+'
+
 test_done
