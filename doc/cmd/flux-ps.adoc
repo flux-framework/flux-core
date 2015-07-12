@@ -1,0 +1,45 @@
+FLUX-PS(1)
+============
+:doctype: manpage
+
+
+NAME
+----
+flux-ps - List managed subprocess of one or more flux brokers
+
+
+SYNOPSIS
+--------
+*flux* *ps* ['--rank=RANKS'] ['--verbose'] COMMANDS...
+
+
+DESCRIPTION
+-----------
+flux-ps(1) dumps a process listing from one or more flux-broker processes.
+Processes are listed by sender UUID, broker rank, local PID, and
+the command being run.
+
+OPTIONS
+-------
+
+*-r, --rank*'=RANKS'::
+Target specific ranks in 'RANKS'. Default is to target all ranks.
+
+*-v, --verbose*::
+Run with more verbosity.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
