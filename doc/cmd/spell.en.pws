@@ -147,3 +147,6 @@ NODEID
 SIGINT
 SIGTERM
 signo
+subprocess
+PID
+ps
