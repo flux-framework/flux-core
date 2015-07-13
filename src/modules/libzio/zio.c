@@ -48,6 +48,8 @@
 #define ZIO_LINE_BUFFERED   (1<<4)
 #define ZIO_CLOSED          (1<<5)
 #define ZIO_VERBOSE         (1<<6)
+#define ZIO_IN_HANDLER      (1<<7)
+#define ZIO_DESTROYED       (1<<8)
 
 #define ZIO_READER          1
 #define ZIO_WRITER          2
@@ -154,6 +156,33 @@ static void zio_debug (zio_t zio, const char *fmt, ...)
     }
 }
 
+static inline void zio_set_destroyed (zio_t zio)
+{
+    zio->flags |= ZIO_DESTROYED;
+}
+
+static inline int zio_is_destroyed (zio_t zio)
+{
+    return (zio->flags & ZIO_DESTROYED);
+}
+
+static inline int zio_is_in_handler (zio_t zio)
+{
+    return (zio->flags & ZIO_IN_HANDLER);
+}
+
+static inline void zio_handler_start (zio_t zio)
+{
+    zio->flags |= ZIO_IN_HANDLER;
+}
+
+static inline void zio_handler_end (zio_t zio)
+{
+    zio->flags &= ~ZIO_IN_HANDLER;
+    if (zio_is_destroyed (zio))
+        zio_destroy (zio);
+}
+
 static int fd_set_nonblocking (int fd)
 {
     int fval;
@@ -172,6 +201,10 @@ void zio_destroy (zio_t z)
     if (z == NULL)
         return;
     assert (z->magic == ZIO_MAGIC);
+    if (zio_is_in_handler (z)) {
+        zio_set_destroyed (z);
+        return;
+    }
     if (z->buf)
         cbuf_destroy (z->buf);
     free (z->name);
@@ -392,12 +425,9 @@ static int zio_sendmsg (zio_t zio, json_object *o)
 
 static int zio_send (zio_t zio, char *p, size_t len)
 {
-    int rc;
     zio_debug (zio, "zio_send (len=%d)\n", len);
     json_object *o = zio_json_object_create (zio, p, len);
-    rc = zio_sendmsg (zio, o);
-    json_object_put (o);
-    return rc;
+    return (zio_sendmsg (zio, o));
 }
 
 static int zio_data_to_flush (zio_t zio)
@@ -427,11 +457,18 @@ static int zio_data_to_flush (zio_t zio)
 
 int zio_closed (zio_t zio)
 {
-    return (zio->flags & ZIO_CLOSED);
+    if (zio->flags & ZIO_EOF_SENT)
+        return (1);
+    return (0);
 }
 
 static int zio_close (zio_t zio)
 {
+    if (zio->flags & ZIO_CLOSED) {
+        /* Already closed */
+        errno = EINVAL;
+        return (-1);
+    }
     zio_debug (zio, "zio_close\n");
     if (zio_reader (zio)) {
         close (zio->srcfd);
@@ -448,6 +485,23 @@ static int zio_close (zio_t zio)
     return (0);
 }
 
+static int zio_writer_flush_all (zio_t zio)
+{
+    int n = 0;
+    zio_debug (zio, "zio_writer_flush_all: used=%d\n", zio_buffer_used (zio));
+    while (zio_buffer_used (zio) > 0) {
+        int rc = cbuf_read_to_fd (zio->buf, zio->dstfd, -1);
+        zio_debug (zio, "zio_writer_flush_all: rc=%d\n", rc);
+        if (rc < 0)
+            return (rc);
+        n += rc;
+    }
+    zio_debug (zio, "zio_writer_flush_all: n=%d\n", n);
+    if (zio_buffer_used (zio) == 0 && zio_eof_pending (zio))
+        zio_close (zio);
+    return (n);
+}
+
 
 /*
  *   Flush any buffered output and EOF from zio READER object
@@ -458,14 +512,24 @@ int zio_flush (zio_t zio)
     int len;
     int rc = 0;
 
-    if ((zio == NULL) || (zio->magic != ZIO_MAGIC) || !(zio->send))
+    if ((zio == NULL) || (zio->magic != ZIO_MAGIC))
         return (-1);
+    if (zio_reader (zio) && !zio->send)
+       return (-1);
+
+    zio_debug (zio, "zio_flush\n");
 
     /*
      *  Nothing to flush if EOF already sent to consumer:
      */
     if (zio_eof_sent (zio))
         return (0);
+
+    if (zio_writer (zio))
+        return zio_writer_flush_all (zio);
+
+    /* else zio reader:
+    */
 
     while (((len = zio_data_to_flush (zio)) > 0) || zio_eof (zio)) {
         char * buf = NULL;
@@ -484,6 +548,7 @@ int zio_flush (zio_t zio)
                  *   a full line in the buffer. In this case just exit
                  *   so we can buffer more data.
                  */
+                free (buf);
                 return (rc);
 
             }
@@ -503,6 +568,7 @@ int zio_flush (zio_t zio)
 int zio_read (zio_t zio)
 {
     int n;
+    assert ((zio != NULL) && (zio->magic == ZIO_MAGIC));
     if ((n = cbuf_write_from_fd (zio->buf, zio->srcfd, -1, NULL)) < 0)
         return (-1);
 
@@ -528,28 +594,30 @@ static int zio_read_cb_common (zio_t zio)
 
 static int zio_zloop_read_cb (zloop_t *zl, zmq_pollitem_t *zp, zio_t zio)
 {
-    if (zio_read_cb_common (zio) < 0)
-        return (-1);
-
-    if (zio_eof_sent (zio)) {
+    int rc;
+    zio_handler_start (zio);
+    rc = zio_read_cb_common (zio);
+    if (rc >= 0 && zio_eof_sent (zio)) {
         zio_debug (zio, "reader detaching from zloop\n");
         zloop_poller_end (zl, zp);
-        return (zio_close (zio));
+        rc = zio_close (zio);
     }
-    return (0);
+    zio_handler_end (zio);
+    return (rc);
 }
 
 static int zio_flux_read_cb (flux_t f, int fd, short revents, zio_t zio)
 {
-    if (zio_read_cb_common (zio) < 0)
-        return (-1);
-
-    if (zio_eof_sent (zio)) {
+    int rc;
+    zio_handler_start (zio);
+    rc = zio_read_cb_common (zio);
+    if (rc >= 0 && zio_eof_sent (zio)) {
         zio_debug (zio, "reader detaching from flux reactor\n");
         flux_fdhandler_remove (f, fd, ZMQ_POLLIN|ZMQ_POLLERR);
-        return (zio_close (zio));
+        rc = zio_close (zio);
     }
-    return (0);
+    zio_handler_end (zio);
+    return (rc);
 }
 
 static int zio_write_pending (zio_t zio)
@@ -583,17 +651,23 @@ static int zio_writer_cb (zio_t zio)
 
 static int zio_zloop_writer_cb (zloop_t *zl, zmq_pollitem_t *zp, zio_t zio)
 {
-    int rc = zio_writer_cb (zio);
+    int rc;
+    zio_handler_start (zio);
+    rc = zio_writer_cb (zio);
     if (!zio_write_pending (zio))
         zloop_poller_end (zl, zp);
+    zio_handler_end (zio);
     return (rc);
 }
 
 static int zio_flux_writer_cb (flux_t f, int fd, short revents, zio_t zio)
 {
-    int rc = zio_writer_cb (zio);
+    int rc;
+    zio_handler_start (zio);
+    rc = zio_writer_cb (zio);
     if (!zio_write_pending (zio))
         flux_fdhandler_remove (f, fd, ZMQ_POLLOUT | ZMQ_POLLERR);
+    zio_handler_end (zio);
     return (rc);
 }
 
@@ -671,7 +745,7 @@ static int zio_writer_schedule (zio_t zio)
 /*
  *  write data into zio buffer
  */
-static int zio_write_data (zio_t zio, char *buf, size_t len)
+static int zio_write_data (zio_t zio, void *buf, size_t len)
 {
     int n = 0;
     int ndropped = 0;
@@ -707,12 +781,49 @@ static int zio_write_data (zio_t zio, char *buf, size_t len)
     return (0);
 }
 
+static int zio_write_internal (zio_t zio, void *data, size_t len)
+{
+    int rc;
+
+    rc = zio_write_data (zio, data, len);
+    zio_debug (zio, "zio_write: %d bytes, eof=%d\n", len, zio_eof (zio));
+
+    if (zio_write_pending (zio))
+        zio_writer_schedule (zio);
+    return (rc);
+}
+
+int zio_write (zio_t zio, void *data, size_t len)
+{
+    if ((zio == NULL) || (zio->magic != ZIO_MAGIC) || !zio_writer (zio)) {
+        errno = EINVAL;
+        return (-1);
+    }
+
+    if (!data || len <= 0) {
+        errno = EINVAL;
+        return (-1);
+    }
+
+    return (zio_write_internal (zio, data, len));
+}
+
+int zio_write_eof (zio_t zio)
+{
+     if ((zio == NULL) || (zio->magic != ZIO_MAGIC) || !zio_writer (zio)) {
+        errno = EINVAL;
+        return (-1);
+    }
+    zio_set_eof (zio);
+    return (0);
+}
+
 /*
  *  Write json object to this zio object, buffering unwritten data.
  */
 int zio_write_json (zio_t zio, json_object *o)
 {
-    char *s;
+    char *s = NULL;
     int len, rc = 0;
     bool eof;
 
@@ -727,17 +838,13 @@ int zio_write_json (zio_t zio, json_object *o)
     }
     if (eof)
         zio_set_eof (zio);
-    if (len > 0) {
-        rc = zio_write_data (zio, s, len);
-        free (s);
-    }
-
-    zio_debug (zio, "zio_write: %d bytes, eof=%d\n", len, zio_eof (zio));
-
-    if (zio_write_pending (zio))
+    if (len > 0)
+        rc = zio_write_internal (zio, s, len);
+    else if (zio_write_pending (zio))
         zio_writer_schedule (zio);
 
-    return (rc);
+    free (s);
+    return rc;
 }
 
 static int zio_bootstrap (zio_t zio)

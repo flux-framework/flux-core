@@ -144,3 +144,9 @@ fanout
 NOHOST
 sysexits
 NODEID
+SIGINT
+SIGTERM
+signo
+subprocess
+PID
+ps

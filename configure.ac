@@ -144,6 +144,7 @@ AC_CONFIG_FILES( \
   src/modules/modctl/Makefile \
   src/modules/libmrpc/Makefile \
   src/modules/libzio/Makefile \
+  src/modules/libsubprocess/Makefile \
   src/modules/libkz/Makefile \
   src/modules/libjsc/Makefile \
   src/modules/live/Makefile \

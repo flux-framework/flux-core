@@ -51,7 +51,7 @@
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/subprocess.h"
+#include "src/modules/libsubprocess/subprocess.h"
 
 #include "heartbeat.h"
 #include "module.h"
@@ -416,6 +416,7 @@ int main (int argc, char *argv[])
     zctx_set_linger (ctx.zctx, 5);
     if (!(ctx.zloop = zloop_new ()))
         err_exit ("zloop_new");
+    subprocess_manager_set (ctx.sm, SM_ZLOOP, ctx.zloop);
 
     /* Prepare signal handling
      */
@@ -967,7 +968,7 @@ static int child_exit_handler (struct subprocess *p, void *arg)
     int n;
 
     ctx_t *ctx = (ctx_t *) arg;
-    zmsg_t *zmsg = (zmsg_t *) subprocess_get_context (p);
+    zmsg_t *zmsg = (zmsg_t *) subprocess_get_context (p, "zmsg");
     json_object *resp;
 
     assert (ctx != NULL);
@@ -978,9 +979,69 @@ static int child_exit_handler (struct subprocess *p, void *arg)
     util_json_object_add_int (resp, "code", subprocess_exit_code (p));
     if ((n = subprocess_signaled (p)))
         util_json_object_add_int (resp, "signal", n);
+    if ((n = subprocess_exec_error (p)))
+        util_json_object_add_int (resp, "exec_errno", n);
 
     flux_json_respond (ctx->h, resp, &zmsg);
     json_object_put (resp);
+
+    subprocess_destroy (p);
+
+    return (0);
+}
+
+static int subprocess_io_cb (struct subprocess *p, json_object *o)
+{
+    ctx_t *ctx = subprocess_get_context (p, "ctx");
+    zmsg_t *orig = subprocess_get_context (p, "zmsg");
+
+    assert (ctx != NULL);
+    assert (orig != NULL);
+
+    zmsg_t *zmsg = zmsg_dup (orig);
+
+    /* Add this rank */
+    Jadd_int (o, "rank", ctx->rank);
+
+    flux_json_respond (ctx->h, o, &zmsg);
+    json_object_put (o);
+
+    return (0);
+}
+
+static int cmb_signal_cb (zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    json_object *request = NULL;
+    json_object *response = NULL;
+    int pid;
+    int errnum = EPROTO;
+
+    if (flux_json_request_decode (*zmsg, &request) < 0)
+        goto out;
+    if (Jget_int (request, "pid", &pid)) {
+        int signum;
+        struct subprocess *p;
+        if (!Jget_int (request, "signum", &signum))
+            signum = SIGTERM;
+        p = subprocess_manager_first (ctx->sm);
+        while (p) {
+            if (pid == subprocess_pid (p)) {
+                errnum = 0;
+                if (subprocess_kill (p, signum) < 0)
+                    errnum = errno;
+            }
+            p = subprocess_manager_next (ctx->sm);
+        }
+    }
+out:
+    response = util_json_object_new_object ();
+    Jadd_int (response, "code", errnum);
+    flux_json_respond (ctx->h, response, zmsg);
+    if (response)
+        json_object_put (response);
+    if (request)
+        json_object_put (request);
     return (0);
 }
 
@@ -996,7 +1057,6 @@ static int cmb_exec_cb (zmsg_t **zmsg, void *arg)
     struct subprocess *p;
     zmsg_t *copy;
     int i, argc;
-    int rc = -1;
 
     if (flux_json_request_decode (*zmsg, &request) < 0)
         goto out_free;
@@ -1015,6 +1075,7 @@ static int cmb_exec_cb (zmsg_t **zmsg, void *arg)
 
     p = subprocess_create (ctx->sm);
     subprocess_set_callback (p, child_exit_handler, ctx);
+    subprocess_set_context (p, "ctx", ctx);
 
     for (i = 0; i < argc; i++) {
         json_object *ox = json_object_array_get_idx (o, i);
@@ -1043,27 +1104,114 @@ static int cmb_exec_cb (zmsg_t **zmsg, void *arg)
             subprocess_set_cwd (p, dir);
     }
 
-    if ((rc = subprocess_run (p)) < 0) {
-        subprocess_destroy (p);
-        goto out_free;
-    }
-
     /*
      * Save a copy of zmsg for future messages
      */
     copy = zmsg_dup (*zmsg);
-    subprocess_set_context (p, (void *) copy);
+    subprocess_set_context (p, "zmsg", (void *) copy);
 
-    /*
-     *  Send response, destroys original zmsg.
-     */
-    response = subprocess_json_resp (ctx, p);
-    flux_json_respond (ctx->h, response, zmsg);
+    subprocess_set_io_callback (p, subprocess_io_cb);
+
+    if (subprocess_fork (p) < 0) {
+        /*
+         *  Fork error, respond directly to exec client with error
+         *   (There will be no subprocess to reap)
+         */
+        (void) flux_respond (ctx->h, *zmsg, errno, NULL);
+        goto out_free;
+    }
+
+    if (subprocess_exec (p) >= 0) {
+        /*
+         *  Send response, destroys original zmsg.
+         *   For "Exec Failure" allow that state to be transmitted
+         *   to caller on completion handler (which will be called
+         *   immediately)
+         */
+        response = subprocess_json_resp (ctx, p);
+        flux_json_respond (ctx->h, response, zmsg);
+    }
 out_free:
     if (request)
         json_object_put (request);
     if (response)
         json_object_put (response);
+    return (0);
+}
+
+static char *subprocess_sender (struct subprocess *p)
+{
+    char *sender = NULL;
+    zmsg_t *zmsg = subprocess_get_context (p, "zmsg");
+    if (zmsg)
+        flux_msg_get_route_first (zmsg, &sender);
+    return (sender);
+}
+
+static int terminate_subprocesses_by_uuid (ctx_t *ctx, char *id)
+{
+    struct subprocess *p = subprocess_manager_first (ctx->sm);
+    while (p) {
+        char *sender;
+        if ((sender = subprocess_sender (p))) {
+            if (strcmp (id, sender) == 0)
+                subprocess_kill (p, SIGKILL);
+            free (sender);
+        }
+        p = subprocess_manager_next (ctx->sm);
+    }
+    return (0);
+}
+
+static JSON subprocess_json_info (struct subprocess *p)
+{
+    int i;
+    char buf [MAXPATHLEN];
+    const char *cwd;
+    char *sender = NULL;
+    JSON o = Jnew ();
+    JSON a = Jnew_ar ();
+
+    Jadd_int (o, "pid", subprocess_pid (p));
+    for (i = 0; i < subprocess_get_argc (p); i++) {
+        Jadd_ar_str (a, subprocess_get_arg (p, i));
+    }
+    /*  Avoid shortjson here so we don't take
+     *   unnecessary reference to 'a'
+     */
+    json_object_object_add (o, "cmdline", a);
+    if ((cwd = subprocess_get_cwd (p)) == NULL)
+        cwd = getcwd (buf, MAXPATHLEN-1);
+    Jadd_str (o, "cwd", cwd);
+    if ((sender = subprocess_sender (p))) {
+        Jadd_str (o, "sender", sender); 
+        free (sender);
+    }
+    return (o);
+}
+
+static int cmb_ps_cb (zmsg_t **zmsg, void *arg)
+{
+    struct subprocess *p;
+    ctx_t *ctx = arg;
+    JSON out = Jnew ();
+    JSON procs = Jnew_ar ();
+    int rc;
+
+    Jadd_int (out, "rank", ctx->rank);
+
+    p = subprocess_manager_first (ctx->sm);
+    while (p) {
+        JSON o = subprocess_json_info (p);
+        /* Avoid shortjson here so we don't take an unnecessary
+         *  reference to 'o'.
+         */
+        json_object_array_add (procs, o);
+        p = subprocess_manager_next (ctx->sm);
+    }
+    json_object_object_add (out, "procs", procs);
+    rc = flux_json_respond (ctx->h, out, zmsg);
+    Jput (out);
     return (rc);
 }
 
@@ -1342,6 +1490,11 @@ static int cmb_event_mute_cb (zmsg_t **zmsg, void *arg)
 
 static int cmb_disconnect_cb (zmsg_t **zmsg, void *arg)
 {
+    char *sender;
+    if (flux_msg_get_route_first (*zmsg, &sender) == 0) {
+        terminate_subprocesses_by_uuid ((ctx_t *) arg, sender);
+        free (sender);
+    }
     zmsg_destroy (zmsg); /* no reply */
     return 0;
 }
@@ -1438,6 +1591,8 @@ static void broker_add_services (ctx_t *ctx)
           || !svc_add (ctx->services, "cmb.log", cmb_log_cb, ctx)
           || !svc_add (ctx->services, "cmb.event-mute", cmb_event_mute_cb, ctx)
           || !svc_add (ctx->services, "cmb.exec", cmb_exec_cb, ctx)
+          || !svc_add (ctx->services, "cmb.exec.signal", cmb_signal_cb, ctx)
+          || !svc_add (ctx->services, "cmb.processes", cmb_ps_cb, ctx)
           || !svc_add (ctx->services, "cmb.disconnect", cmb_disconnect_cb, ctx)
           || !svc_add (ctx->services, "cmb.hello", cmb_hello_cb, ctx)
           || !svc_add (ctx->services, "cmb.sub", cmb_sub_cb, ctx)

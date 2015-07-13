@@ -1,12 +1,40 @@
+/*****************************************************************************\
+ *  Copyright (c) 2014 Lawrence Livermore National Security, LLC.  Produced at
+ *  the Lawrence Livermore National Laboratory (cf, AUTHORS, DISCLAIMER.LLNS).
+ *  LLNL-CODE-658032 All rights reserved.
+ *
+ *  This file is part of the Flux resource manager framework.
+ *  For details, see https://github.com/flux-framework.
+ *
+ *  This program is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU General Public License as published by the Free
+ *  Software Foundation; either version 2 of the license, or (at your option)
+ *  any later version.
+ *
+ *  Flux is distributed in the hope that it will be useful, but WITHOUT
+ *  ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or
+ *  FITNESS FOR A PARTICULAR PURPOSE.  See the terms and conditions of the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
+ *  See also:  http://www.gnu.org/licenses/
+\*****************************************************************************/
+
+#include <json.h>
+#include <stdbool.h>
 
 struct subprocess_manager;
 struct subprocess;
 
 typedef enum sm_item {
-    SM_WAIT_FLAGS
+    SM_WAIT_FLAGS,
+    SM_ZLOOP,
 } sm_item_t;
 
 typedef int (subprocess_cb_f) (struct subprocess *p, void *arg);
+typedef int (subprocess_io_cb_f) (struct subprocess *p, json_object *o);
 
 /*
  *  Create a subprocess manager to manage creation, destruction, and
@@ -42,6 +70,19 @@ struct subprocess * subprocess_manager_wait (struct subprocess_manager *sm);
 int subprocess_manager_reap_all (struct subprocess_manager *sm);
 
 /*
+ *   Get the first subprocess known to subprocess manager [sm].
+ */
+struct subprocess * subprocess_manager_first (struct subprocess_manager *sm);
+
+/*
+ *   Get next subprocess known to subprocess manager [sm]. Returns NULL if
+ *    there are no further subprocesses to iterate. Reset iteration with
+ *    subprocess_manager_first above.
+ *
+ */
+struct subprocess * subprocess_manager_next (struct subprocess_manager *sm);
+
+/*
  *  Create a new, empty handle for a subprocess object.
  */
 struct subprocess * subprocess_create (struct subprocess_manager *sm);
@@ -52,20 +93,25 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm);
 int subprocess_set_callback (struct subprocess *p, subprocess_cb_f fn, void *arg);
 
 /*
+ *  Set an IO callback
+ */
+int subprocess_set_io_callback (struct subprocess *p, subprocess_io_cb_f fn);
+
+/*
  *  Destroy a subprocess. Free memory and remove from subprocess
  *   manager list.
  */
 void subprocess_destroy (struct subprocess *p);
 
 /*
- *  Set an arbitrary context in the subprocess [p].
+ *  Set an arbitrary context in the subprocess [p] with name [name].
  */
-void subprocess_set_context (struct subprocess *p, void *ctx);
+int subprocess_set_context (struct subprocess *p, const char *name, void *ctx);
 
 /*
  *  Return the saved context for subprocess [p].
  */
-void *subprocess_get_context (struct subprocess *p);
+void *subprocess_get_context (struct subprocess *p, const char *name);
 
 /*
  *  Set argument vector for subprocess [p]. This function is only valid
@@ -189,6 +235,12 @@ int subprocess_exit_code (struct subprocess *p);
 int subprocess_signaled (struct subprocess *p);
 
 /*
+ *  If state == "Exec Failure" then return the errno from exec(2)
+ *   system call. Otherwise returns 0.
+ */
+int subprocess_exec_error (struct subprocess *p);
+
+/*
  *  Return string representation of process [p] current state,
  *   "Pending", "Exec Failure", "Waiting", "Running", "Exited"
  */
@@ -219,3 +271,19 @@ int subprocess_exec (struct subprocess *p);
  */
 int subprocess_run (struct subprocess *p);
 
+
+int subprocess_flush_io (struct subprocess *p);
+
+/*
+ *  Return 1 if all subprocess stdio has completed (i.e. stdout/stderr
+ *   have received and processed EOF). If no IO handler is registered with
+ *   a subprocess object then subprocess_io_complete() will always
+ *   return 1.
+ */
+int subprocess_io_complete (struct subprocess *p);
+
+/*
+ *  Write data to stdin buffer of process [p]. If [eof] is true then EOF will
+ *   be scheduled for stdin one all buffered data is written.
+ */
+int subprocess_write (struct subprocess *p, void *buf, size_t count, bool eof);

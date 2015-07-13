@@ -76,6 +76,102 @@ EOF
 	test `cat rank_output.3`  = "3"
 '
 
+test_expect_success 'flux exec exits with code 127 for file not found' '
+	test_expect_code 127 run_timeout 2 flux exec nosuchprocess
+'
 
+test_expect_success 'flux exec exits with code 126 for non executable' '
+	test_expect_code 126 flux exec /dev/null
+'
+
+test_expect_success 'flux exec exits with code 68 (EX_NOHOST) for rank not found' '
+	test_expect_code 68 run_timeout 2 flux exec -r 1000 nosuchprocess
+'
+test_expect_success 'flux exec passes non-zero exit status' '
+	test_expect_code 2 flux exec sh -c "exit 2" &&
+	test_expect_code 3 flux exec sh -c "exit 3" &&
+	test_expect_code 139 flux exec sh -c "kill -11 \$\$"
+'
+
+test_expect_success 'basic IO testing' '
+	flux exec -r0 echo Hello | grep ^Hello\$  &&
+	flux exec -r0 sh -c "echo Hello >&2" 2>stderr &&
+	cat stderr | grep ^Hello\$
+'
+
+test_expect_success 'per rank output works' '
+	flux exec -r 1 sh -c "flux comms info | grep rank" | grep ^rank=1\$ &&
+	flux exec -lr 2 sh -c "flux comms info | grep rank" | grep ^2:\ rank=2\$ &&
+	cat >expected <<EOF
+0: rank=0
+1: rank=1
+2: rank=2
+3: rank=3
+EOF
+	flux exec -lr 0-3 sh -c "flux comms info | grep rank" | sort -n >output &&
+	test_cmp output expected
+'
+
+test_expect_success 'I/O, multiple lines, no newline on last line' '
+	/bin/echo -en "1: one\n1: two" >expected &&
+	flux exec -lr 1 /bin/echo -en "one\ntwo" >output &&
+	test_cmp output expected &&
+	/bin/echo -en "1: one" >expected &&
+	flux exec -lr 1 /bin/echo -en "one" >output &&
+	test_cmp output expected
+'
+
+test_expect_success 'I/O -- long lines' '
+	dd if=/dev/urandom bs=4096 count=1 | base64 >expected &&
+	flux exec -r1 cat expected > output &&
+	test_cmp output expected
+'
+
+test_expect_success 'signal forwarding works' '
+	cat >test_signal.sh <<-EOF &&
+	#!/bin/bash
+	sig=\${1-INT}
+	flux exec sleep 100 &
+	sleep 1 &&
+	kill -\$sig %1 &&
+	wait %1
+	exit \$?
+	EOF
+	chmod +x test_signal.sh &&
+	test_expect_code 130 run_timeout 5 ./test_signal.sh INT &&
+	test_expect_code 143 run_timeout 5 ./test_signal.sh TERM
+'
+
+test_expect_success 'process listing works' '
+	flux exec -r1 sleep 100 &
+	p=$! &&
+	sleep 1 &&
+	flux ps -r1 | grep ".* 1 .*sleep$" >/dev/null &&
+	kill -INT $p &&
+	test_expect_code 130 wait $p
+'
+
+test_expect_success 'process listing works - multiple processes' '
+	flux exec -r0-3 sleep 100 &
+	q=$! &&
+	sleep 1 &&
+	count=$(flux ps | grep -c sleep) &&
+	kill -INT $q &&
+	test "$count" = "4" &&
+	test_expect_code 130 wait $q &&
+	test "$(flux ps | grep -c sleep)" = "0"
+
+'
+
+test_expect_success 'flux-exec disconnect terminates all running processes' '
+	flux exec -r0-3 sleep 100 &
+	q=$! &&
+	sleep 1 &&
+	count=$(flux ps | grep -c sleep) &&
+	kill -9 $q &&
+	test "$count" = "4" &&
+	test_expect_code 137 wait $q &&
+	test "$(flux ps | grep -c sleep)" = "0"
+'
 
 test_done

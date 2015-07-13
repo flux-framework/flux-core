@@ -1,3 +1,27 @@
+/*****************************************************************************\
+ *  Copyright (c) 2014 Lawrence Livermore National Security, LLC.  Produced at
+ *  the Lawrence Livermore National Laboratory (cf, AUTHORS, DISCLAIMER.LLNS).
+ *  LLNL-CODE-658032 All rights reserved.
+ *
+ *  This file is part of the Flux resource manager framework.
+ *  For details, see https://github.com/flux-framework.
+ *
+ *  This program is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU General Public License as published by the Free
+ *  Software Foundation; either version 2 of the license, or (at your option)
+ *  any later version.
+ *
+ *  Flux is distributed in the hope that it will be useful, but WITHOUT
+ *  ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or
+ *  FITNESS FOR A PARTICULAR PURPOSE.  See the terms and conditions of the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
+ *  See also:  http://www.gnu.org/licenses/
+\*****************************************************************************/
+
 #if HAVE_CONFIG_H
 # include "config.h"
 #endif
@@ -13,16 +37,19 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/subprocess.h"
+#include "src/common/libutil/shortjson.h"
+#include "src/modules/libzio/zio.h"
+#include "subprocess.h"
 
 struct subprocess_manager {
     zlist_t *processes;
     int wait_flags;
+    zloop_t *zloop;
 };
 
 struct subprocess {
     struct subprocess_manager *sm;
-    void *ctx;
+    zhash_t *zhash;
 
     pid_t pid;
 
@@ -45,9 +72,16 @@ struct subprocess {
     unsigned short execed:1;
     unsigned short running:1;
     unsigned short exited:1;
+    unsigned short completed:1;
+
+    zio_t zio_in;
+    zio_t zio_out;
+    zio_t zio_err;
 
     subprocess_cb_f *exit_cb;
     void *exit_cb_arg;
+
+    subprocess_io_cb_f *io_cb;
 };
 
 static int sigmask_unblock_all (void)
@@ -57,6 +91,70 @@ static int sigmask_unblock_all (void)
     return sigprocmask (SIG_SETMASK, &mask, NULL);
 }
 
+/*
+ *  Default handler for stdout/err: send output directly into
+ *   stderr of caller...
+ */
+static int send_output_to_stream (const char *name, json_object *o)
+{
+    FILE *fp = stdout;
+    char *s;
+    bool eof;
+
+    int len = zio_json_decode (o, (void **) &s, &eof);
+
+    if (strcmp (name, "stderr") == 0)
+        fp = stderr;
+
+    if (len < 0)
+        return (-1);
+    if (len > 0)
+        fputs (s, fp);
+    if (eof)
+        fclose (fp);
+
+    return (len);
+}
+
+static int check_completion (struct subprocess *p)
+{
+    if (!p->started)
+        return (0);
+    //if (p->completed) /* completion event already sent */
+     //   return (0);
+
+    /*
+     *  Check that all I/O is closed and subprocess has exited
+     *   (and been reaped)
+     */
+    if (subprocess_io_complete (p) && subprocess_exited (p)) {
+        p->completed = 1;
+        if (p->exit_cb)
+            return (*p->exit_cb) (p, p->exit_cb_arg);
+    }
+    return (0);
+}
+
+static int output_handler (zio_t z, json_object *o, void *arg)
+{
+    struct subprocess *p = (struct subprocess *) arg;
+
+    if (p->io_cb) {
+        Jadd_int (o, "pid", subprocess_pid (p));
+        Jadd_str (o, "type", "io");
+        Jadd_str (o, "name", zio_name (z));
+        (*p->io_cb) (p, o);
+    }
+    else
+       send_output_to_stream (zio_name (z), o);
+
+    /*
+     * Check for process completion in case EOF from I/O stream and process
+     *  already registered exit
+     */
+    check_completion (p);
+    return (0);
+}
 
 struct subprocess * subprocess_create (struct subprocess_manager *sm)
 {
@@ -64,6 +162,8 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
     struct subprocess *p = xzmalloc (sizeof (*p));
 
     p->sm = sm;
+
+    p->zhash = zhash_new ();
 
     p->pid = (pid_t) -1;
 
@@ -78,16 +178,34 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
     p->started = 0;
     p->running = 0;
     p->exited = 0;
+    p->completed = 0;
+
+    p->zio_in = zio_pipe_writer_create ("stdin", (void *) p);
+    p->zio_out = zio_pipe_reader_create ("stdout", NULL, (void *) p);
+    p->zio_err = zio_pipe_reader_create ("stderr", NULL, (void *) p);
+
+    zio_set_send_cb (p->zio_out, (zio_send_f) output_handler);
+    zio_set_send_cb (p->zio_err, (zio_send_f) output_handler);
 
     zlist_append (sm->processes, (void *)p);
 
+    if (sm->zloop) {
+        zio_zloop_attach (p->zio_in, sm->zloop);
+        zio_zloop_attach (p->zio_err, sm->zloop);
+        zio_zloop_attach (p->zio_out, sm->zloop);
+    }
     return (p);
 }
 
+
 void subprocess_destroy (struct subprocess *p)
 {
+    assert (p != NULL);
+
     if (p->sm)
         zlist_remove (p->sm->processes, (void *) p);
+    if (p->zhash)
+        zhash_destroy (&p->zhash);
 
     p->sm = NULL;
     free (p->argz);
@@ -97,7 +215,45 @@ void subprocess_destroy (struct subprocess *p)
     p->envz = NULL;
     p->envz_len = 0;
 
+    free (p->cwd);
+
+    zio_destroy (p->zio_in);
+    zio_destroy (p->zio_out);
+    zio_destroy (p->zio_err);
+
+    if (p->parentfd > 0)
+        close (p->childfd);
+    if (p->childfd > 0)
+        close (p->childfd);
+
     free (p);
+}
+
+int
+subprocess_flush_io (struct subprocess *p)
+{
+    zio_flush (p->zio_in);
+    while (zio_read (p->zio_out) > 0) {};
+    while (zio_read (p->zio_err) > 0) {};
+    return (0);
+}
+
+int
+subprocess_write (struct subprocess *p, void *buf, size_t n, bool eof)
+{
+    if (eof)
+        zio_write_eof (p->zio_in);
+    return zio_write (p->zio_in, buf, n);
+}
+
+int subprocess_io_complete (struct subprocess *p)
+{
+    if (p->io_cb) {
+        if (zio_closed (p->zio_out) && zio_closed (p->zio_err))
+            return 1;
+        return 0;
+    }
+    return 1;
 }
 
 int
@@ -108,16 +264,23 @@ subprocess_set_callback (struct subprocess *p, subprocess_cb_f fn, void *arg)
     return (0);
 }
 
-void
-subprocess_set_context (struct subprocess *p, void *ctx)
+int
+subprocess_set_io_callback (struct subprocess *p, subprocess_io_cb_f fn)
 {
-    p->ctx = ctx;
+    p->io_cb = fn;
+    return (0);
+}
+
+int
+subprocess_set_context (struct subprocess *p, const char *name, void *ctx)
+{
+    return zhash_insert (p->zhash, name, ctx);
 }
 
 void *
-subprocess_get_context (struct subprocess *p)
+subprocess_get_context (struct subprocess *p, const char *name)
 {
-    return (p->ctx);
+    return zhash_lookup (p->zhash, name);
 }
 
 static int init_argz (char **argzp, size_t *argz_lenp, char * const av[])
@@ -290,6 +453,51 @@ char **subprocess_env_expand (struct subprocess *p)
     return (expand_argz (p->envz, p->envz_len));
 }
 
+static void closeall (int fd, int except)
+{
+    int fdlimit = sysconf (_SC_OPEN_MAX);
+
+    while (fd < fdlimit) {
+        if (fd != except)
+            close (fd);
+        fd++;
+    }
+    return;
+}
+
+static int child_io_setup (struct subprocess *p)
+{
+    /*
+     *  Close paretn end of stdio in child:
+     */
+    close (zio_dst_fd (p->zio_in));
+    close (zio_src_fd (p->zio_out));
+    close (zio_src_fd (p->zio_err));
+
+    /*
+     *  Dup this process' fds onto zio
+     */
+    if (  (dup2 (zio_src_fd (p->zio_in), STDIN_FILENO) < 0)
+       || (dup2 (zio_dst_fd (p->zio_out), STDOUT_FILENO) < 0)
+       || (dup2 (zio_dst_fd (p->zio_err), STDERR_FILENO) < 0))
+        return (-1);
+
+    return (0);
+}
+
+static int parent_io_setup (struct subprocess *p)
+{
+    /*
+     *  Close child end of stdio in parent:
+     */
+    close (zio_src_fd (p->zio_in));
+    close (zio_dst_fd (p->zio_out));
+    close (zio_dst_fd (p->zio_err));
+
+    return (0);
+}
+
+
 static int sp_barrier_read_error (int fd)
 {
     int e;
@@ -318,8 +526,9 @@ static int sp_barrier_signal (int fd)
 static int sp_barrier_wait (int fd)
 {
     char c;
-    if (read (fd, &c, sizeof (c)) != 1) {
-        err ("sp_barrier_wait: read: %m");
+    int n;
+    if ((n = read (fd, &c, sizeof (c))) != 1) {
+        err ("sp_barrier_wait: read:fd=%d: (got %d): %m", fd, n);
         return (-1);
     }
     return (0);
@@ -334,12 +543,15 @@ static void sp_barrier_write_error (int fd, int e)
 
 static void subprocess_child (struct subprocess *p)
 {
+    int errnum, code = 127;
     char **argv;
 
     sigmask_unblock_all ();
-
     close (p->parentfd);
     p->parentfd = -1;
+
+    if (p->io_cb)
+        child_io_setup (p);
 
     if (p->cwd && chdir (p->cwd) < 0) {
         err ("Couldn't change dir to %s: going to /tmp instead", p->cwd);
@@ -357,9 +569,20 @@ static void subprocess_child (struct subprocess *p)
      */
     sp_barrier_wait (p->childfd);
 
+    closeall (3, p->childfd);
+
     environ = subprocess_env_expand (p);
     argv = subprocess_argv_expand (p);
     execvp (argv[0], argv);
+    /*
+     *  Exit code standards:
+     *    126 for permission/access denied or
+     *    127 for EEXIST (or anything else)
+     */
+    errnum = errno;
+    if (errnum == EPERM || errnum == EACCES)
+        code = 126;
+
     /*
      * XXX: close stdout and stderr here to avoid flushing buffers at exit.
      *  This can cause duplicate output if parent was running in fully
@@ -367,28 +590,34 @@ static void subprocess_child (struct subprocess *p)
      */
     close (STDOUT_FILENO);
     close (STDERR_FILENO);
-    sp_barrier_write_error (p->childfd, errno);
-    exit (127);
+    sp_barrier_write_error (p->childfd, errnum);
+    exit (code);
 }
 
 int subprocess_exec (struct subprocess *p)
 {
+    int rc = 0;
     if (sp_barrier_signal (p->parentfd) < 0)
         return (-1);
 
     if ((p->exec_error = sp_barrier_read_error (p->parentfd)) != 0) {
-        /*  reap child */
+        /*
+         * Reap child immediately. Expectation from caller is that
+         *  a call to subprocess_reap will not be necessary after exec
+         *  failure
+         */
         subprocess_reap (p);
-        errno = p->exec_error;
-        return (-1);
+        rc = -1;
     }
-
-    p->running = 1;
+    else
+        p->running = 1;
 
     /* No longer need parentfd socket */
     close (p->parentfd);
     p->parentfd = -1;
-    return (0);
+    if (rc < 0)
+        errno = p->exec_error;
+    return (rc);
 }
 
 int subprocess_fork (struct subprocess *p)
@@ -404,6 +633,8 @@ int subprocess_fork (struct subprocess *p)
     if (p->pid == 0)
         subprocess_child (p); /* No return */
 
+    if (p->io_cb)
+        parent_io_setup (p);
     close (p->childfd);
     p->childfd = -1;
 
@@ -443,9 +674,13 @@ int subprocess_exited (struct subprocess *p)
 
 int subprocess_exit_code (struct subprocess *p)
 {
+    int sig;
+    int code = -1;
     if (WIFEXITED (p->status))
-        return (WEXITSTATUS (p->status));
-    return (-1);
+        code = WEXITSTATUS (p->status);
+    else if ((sig = subprocess_signaled (p)))
+        code = sig + 128;
+    return (code);
 }
 
 int subprocess_signaled (struct subprocess *p)
@@ -453,6 +688,11 @@ int subprocess_signaled (struct subprocess *p)
     if (WIFSIGNALED (p->status))
         return (WTERMSIG (p->status));
     return (0);
+}
+
+int subprocess_exec_error (struct subprocess *p)
+{
+    return (p->exec_error);
 }
 
 const char * subprocess_state_string (struct subprocess *p)
@@ -505,8 +745,8 @@ void subprocess_manager_destroy (struct subprocess_manager *sm)
     free (sm);
 }
 
-struct subprocess *
-subprocess_manager_find (struct subprocess_manager *sm, pid_t pid)
+static struct subprocess *
+subprocess_manager_find_pid (struct subprocess_manager *sm, pid_t pid)
 {
     struct subprocess *p = zlist_first (sm->processes);
     while (p) {
@@ -515,6 +755,18 @@ subprocess_manager_find (struct subprocess_manager *sm, pid_t pid)
         p = zlist_next (sm->processes);
     }
     return (NULL);
+}
+
+struct subprocess *
+subprocess_manager_first (struct subprocess_manager *sm)
+{
+    return zlist_first (sm->processes);
+}
+
+struct subprocess *
+subprocess_manager_next (struct subprocess_manager *sm)
+{
+    return zlist_next (sm->processes);
 }
 
 struct subprocess *
@@ -541,9 +793,14 @@ subprocess_manager_run (struct subprocess_manager *sm, int ac, char **av,
 
 int subprocess_reap (struct subprocess *p)
 {
-    if (waitpid (p->pid, &p->status, p->sm->wait_flags) == (pid_t) -1)
+    pid_t rc;
+    if (p->exited)
+        return (0);
+    rc = waitpid (p->pid, &p->status, 0);
+    if (rc <= 0)
         return (-1);
     p->exited = 1;
+    check_completion (p);
     return (0);
 }
 
@@ -555,7 +812,7 @@ subprocess_manager_wait (struct subprocess_manager *sm)
     struct subprocess *p;
 
     pid = waitpid (-1, &status, sm->wait_flags);
-    if ((pid < 0) || !(p = subprocess_manager_find (sm, pid))) {
+    if ((pid < 0) || !(p = subprocess_manager_find_pid (sm, pid))) {
         return (NULL);
     }
     p->status = status;
@@ -567,13 +824,8 @@ int
 subprocess_manager_reap_all (struct subprocess_manager *sm)
 {
     struct subprocess *p;
-    while ((p = subprocess_manager_wait (sm))) {
-        if (p->exit_cb) {
-            if ((*p->exit_cb) (p, p->exit_cb_arg) < 0)
-                return (-1);
-            subprocess_destroy (p);
-        }
-    }
+    while ((p = subprocess_manager_wait (sm)))
+            check_completion (p);
     return (0);
 }
 
@@ -589,6 +841,9 @@ subprocess_manager_set (struct subprocess_manager *sm, sm_item_t item, ...)
     switch (item) {
         case SM_WAIT_FLAGS:
             sm->wait_flags = va_arg (ap, int);
+            break;
+        case SM_ZLOOP:
+            sm->zloop = (zloop_t *) va_arg (ap, void *);
             break;
         default:
             errno = EINVAL;

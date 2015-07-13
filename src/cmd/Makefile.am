@@ -31,7 +31,8 @@ dist_fluxcmd_SCRIPTS = \
 	flux-screen \
 	flux-wreckrun \
 	flux-exec \
-	flux-topo
+	flux-topo \
+	flux-ps
 
 fluxcmd_PROGRAMS = \
 	flux-ping \

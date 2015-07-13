@@ -1,9 +1,35 @@
+/*****************************************************************************\
+ *  Copyright (c) 2014 Lawrence Livermore National Security, LLC.  Produced at
+ *  the Lawrence Livermore National Laboratory (cf, AUTHORS, DISCLAIMER.LLNS).
+ *  LLNL-CODE-658032 All rights reserved.
+ *
+ *  This file is part of the Flux resource manager framework.
+ *  For details, see https://github.com/flux-framework.
+ *
+ *  This program is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU General Public License as published by the Free
+ *  Software Foundation; either version 2 of the license, or (at your option)
+ *  any later version.
+ *
+ *  Flux is distributed in the hope that it will be useful, but WITHOUT
+ *  ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or
+ *  FITNESS FOR A PARTICULAR PURPOSE.  See the terms and conditions of the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
+ *  See also:  http://www.gnu.org/licenses/
+\*****************************************************************************/
 
 #include <errno.h>
 #include <string.h>
-#include "src/common/libtap/tap.h"
+#include <json.h>
 
-#include "src/common/libutil/subprocess.h"
+#include <src/modules/libzio/zio.h>
+
+#include "tap.h"
+#include "subprocess.h"
 
 extern char **environ;
 
@@ -13,12 +39,15 @@ void myfatal (void *h, int exit_code, const char *fmt, ...)
     myfatal_h = h;
 }
 
+static int testio_cb (struct subprocess *p, json_object *o);
+
 int main (int ac, char **av)
 {
     int rc;
     struct subprocess_manager *sm;
     struct subprocess *p, *q;
     const char *s;
+    char *buf;
     char *args[] = { "hello", NULL };
     char *args2[] = { "goodbye", NULL };
     char *args3[] = { "/bin/true", NULL };
@@ -30,6 +59,7 @@ int main (int ac, char **av)
         BAIL_OUT ("Failed to create subprocess manager");
     ok (sm != NULL, "create subprocess manager");
 
+    note ("subprocess accessors tests");
     if (!(p = subprocess_create (sm)))
         BAIL_OUT ("Failed to create subprocess handle");
     ok (p != NULL, "create subprocess handle");
@@ -84,6 +114,7 @@ int main (int ac, char **av)
     subprocess_destroy (p);
 
     /* Test running an executable */
+    note ("test subprocess_manager_run");
     p = subprocess_manager_run (sm, 1, args3, NULL);
     ok (p != NULL, "subprocess_manager_run");
     ok (subprocess_pid (p) != (pid_t) -1, "process has valid pid");
@@ -98,6 +129,7 @@ int main (int ac, char **av)
     q = NULL;
 
     /*  Test failing program */
+    note ("test expected failure from subprocess_manager_run");
     args3[0] = "/bin/false";
     p = subprocess_manager_run (sm, 1, args3, NULL);
     if (p) {
@@ -113,6 +145,7 @@ int main (int ac, char **av)
         q = NULL;
     }
 
+    note ("Test signaled program");
 
     /* Test signaled program */
     p = subprocess_manager_run (sm, 2, args4, NULL);
@@ -127,11 +160,14 @@ int main (int ac, char **av)
         is (subprocess_state_string (p), "Exited", "State is now 'Exited'");
         is (subprocess_exit_string (p), "Killed", "Exit string is 'Killed'");
         ok (subprocess_signaled (p) == 9, "Killed by signal 9.");
+        ok (subprocess_exit_status (p) == 0x9, "Exit status is 0x9 (Killed)");
+        ok (subprocess_exit_code (p) == 137, "Exit code is 137 (128+9)");
         subprocess_destroy (p);
     }
 
     q = NULL;
 
+    note ("Test fork/exec interface");
     /* Test separate fork/exec interface */
     p = subprocess_create (sm);
     ok (p != NULL, "subprocess_create works");
@@ -159,6 +195,7 @@ int main (int ac, char **av)
     subprocess_destroy (p);
     q = NULL;
 
+    note ("Test exec failure");
     /* Test exec failure */
     p = subprocess_create (sm);
     ok (p != NULL, "subprocess create");
@@ -173,6 +210,7 @@ int main (int ac, char **av)
     is (subprocess_exit_string (p), "Exec Failure", "Exit state is Exec Failed");
     subprocess_destroy (p);
 
+    note ("Test set working directory");
     /* Test set working directory */
     p = subprocess_create (sm);
     ok (p != NULL, "subprocess create");
@@ -191,6 +229,7 @@ int main (int ac, char **av)
     ok (subprocess_exit_code (p) == 0, "subprocess successfully run in /tmp");
     subprocess_destroy (p);
 
+    note ("Test subprocess_reap interface");
     /* Test subprocess_reap */
     p = subprocess_create (sm);
     q = subprocess_create (sm);
@@ -213,9 +252,76 @@ int main (int ac, char **av)
     subprocess_destroy (p);
     subprocess_destroy (q);
 
+    note ("Test subprocess I/O");
+    /* Test subprocess output */
+    p = subprocess_create (sm);
+    ok (p != NULL, "subprocess_create");
+    ok (subprocess_argv_append (p, "/bin/echo") >= 0,  "subprocess_argv_append");
+    ok (subprocess_argv_append (p, "Hello, 123") >= 0, "subprocess_argv_append");
+
+    buf = NULL;
+    subprocess_set_context (p, "io", (void *) &buf);
+    ok (subprocess_get_context (p, "io") == (void *) &buf, "able to set subprocess context");
+
+    ok (subprocess_set_io_callback (p, testio_cb) >= 0, "set io callback");
+
+    ok (subprocess_run (p) >= 0, "run process with IO");
+
+    ok (subprocess_reap (p) >= 0, "reap process");
+    ok (subprocess_flush_io (p) >=0, "flush io");
+
+    ok (subprocess_exited (p) >= 0, "process is now exited");
+    ok (subprocess_exit_code (p) == 0, "process exited normally");
+
+    ok (buf != NULL, "io buffer is allocated");
+    if (buf) {
+        ok (strcmp (buf, "Hello, 123\n") == 0, "io buffer is correct");
+        free (buf);
+    }
+    subprocess_destroy (p);
+
+
+    /* Test subprocess input */
+    note ("test subprocess stdin");
+    p = subprocess_create (sm);
+    ok (p != NULL, "subprocess_create");
+    ok (subprocess_argv_append (p, "/bin/cat") >= 0,  "subprocess_argv_append");
+
+    buf = NULL;
+    subprocess_set_context (p, "io", (void *) &buf);
+    ok (subprocess_get_context (p, "io") == (void *) &buf, "able to set subprocess context");
+
+    ok (subprocess_set_io_callback (p, testio_cb) >= 0, "set io callback");
+
+    ok (subprocess_run (p) >= 0, "run process with IO");
+
+    ok (subprocess_write (p, "Hello\n", 7, true) >= 0, "write to subprocess");
+    ok (subprocess_reap (p) >= 0, "reap process");
+    ok (subprocess_flush_io (p) >= 0, "manually flush io");
+    ok (subprocess_io_complete (p) == 1, "io is now complete");
+
+    ok (subprocess_exited (p) >= 0, "process is now exited");
+    ok (subprocess_exit_code (p) == 0, "process exited normally");
+
+    ok (buf != NULL, "io buffer is allocated");
+    if (buf) {
+        ok (strcmp (buf, "Hello\n") == 0, "io buffer is correct");
+        free (buf);
+    }
+    subprocess_destroy (p);
     subprocess_manager_destroy (sm);
 
     done_testing ();
+}
+
+static int testio_cb (struct subprocess *p, json_object *o)
+{
+    char **bufp = subprocess_get_context (p, "io");
+    bool eof;
+    if (*bufp == NULL)
+        zio_json_decode (o, (void **) bufp, &eof);
+    json_object_put (o);
+    return 0;
 }
 
 /*
