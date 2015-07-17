@@ -32,7 +32,7 @@ stderr_devnull_0 = 2>/dev/null
 .adoc.1:
 	$(AM_V_GEN)$(A2X) --attribute mansource=$(META_NAME) \
 	    --attribute manversion=$(META_VERSION) \
-	    --attribute manmanual="Flux Manual" \
+	    --attribute manmanual="Flux Command Reference" \
 	    --destination-dir=$(builddir) \
 	    --doctype manpage --format manpage $< $(STDERR_DEVNULL)
 
