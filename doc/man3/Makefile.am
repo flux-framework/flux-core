@@ -1,7 +1,10 @@
 MAN3_FILES = $(MAN3_FILES_PRIMARY) $(MAN3_FILES_SECONDARY)
 
 MAN3_FILES_PRIMARY = \
-	flux_open.3
+	flux_open.3 \
+	flux_send.3 \
+	flux_recv.3 \
+	flux_requeue.3
 
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section
