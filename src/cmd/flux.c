@@ -50,10 +50,11 @@ char *intree_confdir (void);
 void setup_lua_env (flux_conf_t cf, const char *cpath_add, const char *path_add);
 char *setup_exec_searchpath (flux_conf_t cf, const char *path_add);
 void setup_module_env (flux_conf_t cf, const char *path_add);
+void setup_python_env (flux_conf_t cf, const char *path_add);
 void setup_connector_env (flux_conf_t cf, const char *path_add);
 void setup_broker_env (flux_conf_t cf, const char *path_override);
 
-#define OPTIONS "+T:tx:hM:O:B:vc:L:C:FS:u:"
+#define OPTIONS "+T:tx:hM:O:B:vc:L:P:C:FS:u:"
 static const struct option longopts[] = {
     {"tmpdir",          required_argument,  0, 'T'},
     {"trace-handle",    no_argument,        0, 't'},
@@ -62,6 +63,7 @@ static const struct option longopts[] = {
     {"connector-path",  required_argument,  0, 'O'},
     {"broker-path",     required_argument,  0, 'B'},
     {"lua-path",        required_argument,  0, 'L'},
+    {"python-path",     required_argument,  0, 'P'},
     {"lua-cpath",       required_argument,  0, 'C'},
     {"config",          required_argument,  0, 'c'},
     {"secdir",          required_argument,  0, 'S'},
@@ -80,6 +82,7 @@ static void usage (void)
 "    -M,--module-path PATH prepend PATH to module search path\n"
 "    -O,--connector-path PATH   prepend PATH to connector search path\n"
 "    -L,--lua-path PATH    prepend PATH to LUA_PATH\n"
+"    -P,--python-path PATH prepend PATH to PYTHONPATH\n"
 "    -C,--lua-cpath PATH   prepend PATH to LUA_CPATH\n"
 "    -T,--tmpdir PATH      set FLUX_TMPDIR\n"
 "    -t,--trace-handle     set FLUX_HANDLE_TRACE=1 before executing COMMAND\n"
@@ -118,6 +121,7 @@ int main (int argc, char *argv[])
     bool vopt = false;
     char *xopt = NULL;
     char *Mopt = NULL;
+    char *Popt = NULL;
     char *Oopt = NULL;
     char *Bopt = NULL;
     char *Lopt = NULL;
@@ -167,6 +171,9 @@ int main (int argc, char *argv[])
             case 'L': /* --lua-path PATH */
                 Lopt = optarg;
                 break;
+            case 'P': /* --python-path PATH */
+                Popt = optarg;
+                break;
             case 'C': /* --lua-cpath PATH */
                 Copt = optarg;
                 break;
@@ -188,7 +195,7 @@ int main (int argc, char *argv[])
 
     cf = flux_conf_create ();
     /* Set the config directory and pass it to sub-commands.
-     */
+    */
     if (confdir || (confdir = intree_confdir ()))
         flux_conf_set_directory (cf, confdir);
     if (setenv ("FLUX_CONF_DIRECTORY", flux_conf_get_directory (cf), 1) < 0)
@@ -225,6 +232,7 @@ int main (int argc, char *argv[])
      */
     setup_lua_env (cf, Copt, Lopt); /* sets LUA_CPATH, LUA_PATH */
     setup_module_env (cf, Mopt);    /* sets FLUX_MODULE_PATH */
+    setup_python_env (cf, Popt);    /* sets PYTHONPATH */
     setup_connector_env (cf, Oopt); /* sets FLUX_CONNECTOR_PATH */
     setup_broker_env (cf, Bopt);    /* sets FLUX_BROKER_PATH */
 
@@ -284,7 +292,7 @@ char *intree_confdir (void)
 static void path_push (char **path, const char *add, const char *sep)
 {
     char *new;
-    if (add == NULL) /* do nothing */
+    if (add == NULL || strlen(add) == 0) /* do nothing */
         return;
     new = xasprintf ("%s%s%s", add, *path ? sep : "",
             *path ? *path : "");
@@ -292,11 +300,24 @@ static void path_push (char **path, const char *add, const char *sep)
     *path = new;
 }
 
+void setup_path(flux_conf_t cf,
+        char ** base_path,
+        const char * build_default,
+        const char * config_name,
+        const char * path_add,
+        const char * sep
+        )
+{
+    const char *cf_path = flux_conf_get (cf, config_name);
+
+    path_push (base_path, build_default, sep);
+    path_push (base_path, cf_path, sep);
+    path_push (base_path, path_add, sep);
+}
+
 void setup_lua_env (flux_conf_t cf, const char *cpath_add, const char *path_add)
 {
-    const char *cf_path = flux_conf_get (cf, "general.lua_path");
-    const char *cf_cpath = flux_conf_get (cf, "general.lua_cpath");
-    char *path = NULL, *cpath = NULL;;
+    char *path = NULL, *cpath = NULL;
 
     path_push (&path, getenv ("LUA_PATH"), ";");
     path_push (&cpath, getenv ("LUA_CPATH"), ";");
@@ -306,18 +327,8 @@ void setup_lua_env (flux_conf_t cf, const char *cpath_add, const char *path_add)
     if (cpath == NULL)
         path_push (&cpath, ";;", ";");
 
-    path_push (&path, LUA_PATH_ADD, ";");
-    path_push (&cpath, LUA_CPATH_ADD, ";");
-
-    if (cf_path)
-        path_push (&path, cf_path, ";");
-    if (cf_cpath)
-        path_push (&cpath, cf_cpath, ";");
-
-    if (path_add)
-        path_push (&path, path_add, ";");
-    if (cpath_add)
-        path_push (&cpath, cpath_add, ";");
+    setup_path(cf, &path, LUA_PATH_ADD, "general.lua_path", path_add, ";");
+    setup_path(cf, &cpath, LUA_CPATH_ADD, "general.lua_cpath", cpath_add, ";");
 
     if (setenv ("LUA_CPATH", cpath, 1) < 0)
         err_exit ("%s", cpath);
@@ -330,30 +341,31 @@ void setup_lua_env (flux_conf_t cf, const char *cpath_add, const char *path_add)
 
 char *setup_exec_searchpath (flux_conf_t cf, const char *path_add)
 {
-    const char *cf_path = flux_conf_get (cf, "general.exec_path");
-    char *path = NULL;
-
-    path_push (&path, EXEC_PATH, ":");
-    if (cf_path)
-        path_push (&path, cf_path, ":");
-    if (path_add)
-        path_push (&path, path_add, ":");
-
+    char * path = NULL;
+    setup_path(cf, &path, EXEC_PATH, "general.exec_path", path_add, ":");
     return path;
 }
 
 void setup_module_env (flux_conf_t cf, const char *path_add)
 {
-    const char *cf_path = flux_conf_get (cf, "general.module_path");
+    char *path = NULL;
+    setup_path(cf, &path, MODULE_PATH, "general.module_path", path_add, ":");
+
+    if (setenv ("FLUX_MODULE_PATH", path, 1) < 0)
+        err_exit ("%s", path);
+
+    free (path);
+}
+
+void setup_python_env (flux_conf_t cf, const char *path_add)
+{
     char *path = NULL;
 
-    path_push (&path, MODULE_PATH, ":");
+    path_push (&path, getenv ("PYTHONPATH"), ":");
 
-    if (cf_path)
-        path_push (&path, cf_path, ":");
-    if (path_add)
-        path_push (&path, path_add, ":");
-    if (setenv ("FLUX_MODULE_PATH", path, 1) < 0)
+    setup_path(cf, &path, PYTHON_PATH, "general.python_path", path_add, ":");
+
+    if (setenv ("PYTHONPATH", path, 1) < 0)
         err_exit ("%s", path);
 
     free (path);
@@ -361,15 +373,9 @@ void setup_module_env (flux_conf_t cf, const char *path_add)
 
 void setup_connector_env (flux_conf_t cf, const char *path_add)
 {
-    const char *cf_path = flux_conf_get (cf, "general.connector_path");
     char *path = NULL;
+    setup_path(cf, &path, CONNECTOR_PATH, "general.connector_path", path_add, ":");
 
-    path_push (&path, CONNECTOR_PATH, ":");
-
-    if (cf_path)
-        path_push (&path, cf_path, ":");
-    if (path_add)
-        path_push (&path, path_add, ":");
     if (setenv ("FLUX_CONNECTOR_PATH", path, 1) < 0)
         err_exit ("%s", path);
 
@@ -379,11 +385,9 @@ void setup_connector_env (flux_conf_t cf, const char *path_add)
 void setup_broker_env (flux_conf_t cf, const char *path_override)
 {
     const char *cf_path = flux_conf_get (cf, "general.broker_path");
-    const char *path = NULL;
+    const char *path = path_override;
 
-    if (path_override)
-        path = path_override;
-    if (!path && cf_path)
+    if (!path)
         path = cf_path;
     if (!path)
         path = BROKER_PATH;
@@ -395,7 +399,7 @@ void dump_environment_one (const char *name)
 {
     char *s = getenv (name);
     printf ("%20s%s%s\n", name, s ? "=" : "",
-                                s ? s : " is not set");
+            s ? s : " is not set");
 }
 
 void dump_environment (void)
@@ -410,15 +414,16 @@ void dump_environment (void)
     dump_environment_one ("FLUX_HANDLE_TRACE");
     dump_environment_one ("LUA_PATH");
     dump_environment_one ("LUA_CPATH");
+    fflush(stdout);
 }
 
 void exec_subcommand_dir (bool vopt, const char *dir, char *argv[],
-                          const char *prefix)
+        const char *prefix)
 {
     char *path = xasprintf ("%s%s%s%s",
-                            dir ? dir : "",
-                            dir ? "/" : "",
-                            prefix ? prefix : "", argv[0]);
+            dir ? dir : "",
+            dir ? "/" : "",
+            prefix ? prefix : "", argv[0]);
     if (vopt)
         msg ("trying to exec %s", path);
     execvp (path, argv); /* no return if successful */

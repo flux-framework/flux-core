@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# Launch python the way flux lauches python
+
+PYTHON=@PYTHON@
+export PYTHONPATH=@PYTHON_EXEC_PREFIX@:$PYTHONPATH
+
+$PYTHON $@
+
+# vi:tabstop=4 shiftwidth=4 expandtab

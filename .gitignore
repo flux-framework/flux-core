@@ -45,6 +45,8 @@ libltdl/
 *.i*86
 *.x86_64
 *.hex
+*.pyc
+*.pyo
 
 # autoconf-preprocessed
 Makefile
@@ -59,4 +61,8 @@ Makefile
 *.swp
 *.diff
 *.tar.gz
+*.orig
+*.core
+*.tap
+.coverage*
 

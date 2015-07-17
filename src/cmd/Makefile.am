@@ -9,6 +9,7 @@ AM_CPPFLAGS = \
 	-DBROKER_PATH=\"$(fluxlibexecdir)/flux-broker\" \
 	-DLUA_PATH_ADD=\"$(luadir)/?.lua\" \
 	-DLUA_CPATH_ADD=\"$(luaexecdir)/?.so\" \
+	-DPYTHON_PATH=\"$(pyexecdir)\" \
 	-DMANDIR=\"$(mandir)\"
 
 fluxcmd_ldadd = \
@@ -33,6 +34,10 @@ dist_fluxcmd_SCRIPTS = \
 	flux-exec \
 	flux-topo \
 	flux-ps
+
+if HAVE_PYTHON
+dist_fluxcmd_SCRIPTS+= flux-python
+endif
 
 fluxcmd_PROGRAMS = \
 	flux-ping \
