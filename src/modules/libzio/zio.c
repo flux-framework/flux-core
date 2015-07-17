@@ -637,7 +637,10 @@ static int zio_write_pending (zio_t zio)
  */
 static int zio_writer_cb (zio_t zio)
 {
-    int rc = cbuf_read_to_fd (zio->buf, zio->dstfd, -1);
+    int rc = 0;
+
+    if (cbuf_used (zio->buf))
+        rc = cbuf_read_to_fd (zio->buf, zio->dstfd, -1);
     if (rc < 0) {
         if (errno == EAGAIN)
             return (0);
