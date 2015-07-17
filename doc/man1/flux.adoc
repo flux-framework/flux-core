@@ -48,6 +48,9 @@ Run commands with 'FLUX_TMPDIR' set to 'PATH'.
 When there are multiple message brokers on a node, this selects
 which API socket to connect to.
 
+*-u, --uri*='URI'::
+Override default URI used to connect to flux-broker.
+
 *-t, --trace-apisock*::
 Trace API socket traffic to 'stderr'.
 
@@ -74,8 +77,8 @@ Override the path to the Flux communications broker daemon.
 SUB-COMMAND ENVIRONMENT
 -----------------------
 flux(1) uses compiled-in install paths, configuration derived from a file
-or the KVS, the environment, and its command line arguments to construct
-the environment for sub-commands.
+or the KVS (if available), the environment, and its command line arguments
+to construct the environment for sub-commands.
 
 Sub-command search path::
 Look for "flux-'CMD'" executable by searching a path constructed
@@ -130,6 +133,11 @@ socket for that broker can be found, among other things.  If running a
 Flux sub-command from "outside" of a comms session, e.g. not as a process
 descendant of the broker, you may need to set this to find the correct
 API socket.
+
+setenv FLUX_URI::
+Set if "--uri" was specified.  If flux_open(3)'s uri argument is NULL,
+it substitutes the value of FLUX_URI, if set.  Otherwise, it uses
+"local://$FLUX_TMPDIR".
 
 
 AUTHOR
