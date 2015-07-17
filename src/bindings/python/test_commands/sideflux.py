@@ -76,13 +76,13 @@ class SideFlux(object):
                     if re.search(r'/\.\./', v):
                         v = os.path.abspath(v)
                     self.env_items[m.group(1)] = v
-                m = re.match(r'lt-flux-broker: FLUX_TMPDIR: (.*)',
+                m = re.match(r'(lt-)?flux-broker: FLUX_TMPDIR: (?P<path>.*)',
                              line.rstrip())
                 if m:
                     if os.environ.get('SIDEFLUX_DEBUG', False):
                         print("setting", "FLUX_TMPDIR", "to",
-                              os.path.abspath(m.group(1)))
-                    v = m.group(1)
+                              os.path.abspath(m.group('path')))
+                    v = m.group('path')
                     if re.search(r'/\.\./', v):
                         v = os.path.abspath(v)
                     self.env_items['FLUX_TMPDIR'] = v
