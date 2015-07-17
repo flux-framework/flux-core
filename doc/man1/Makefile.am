@@ -36,15 +36,13 @@ stderr_devnull_0 = 2>/dev/null
 	    --destination-dir=$(builddir) \
 	    --doctype manpage --format manpage $< $(STDERR_DEVNULL)
 
-EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc spell.en.pws
+EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc
 
 CLEANFILES = $(MAN1_FILES) $(XML_FILES)
 
-dist_noinst_SCRIPTS = spellcheck
-
 TESTS_ENVIRONMENT = \
 	ASPELL=$(ASPELL) \
-	pws_dict=$(abs_srcdir)/spell.en.pws \
+	pws_dict=$(abs_top_srcdir)/doc/test/spell.en.pws \
 	man_dir=$(abs_builddir)
 
-TESTS = spellcheck
+TESTS = $(top_srcdir)/doc/test/spellcheck
