@@ -1,0 +1,39 @@
+MAN3_FILES = $(MAN3_FILES_PRIMARY) $(MAN3_FILES_SECONDARY)
+
+MAN3_FILES_PRIMARY =
+
+# These files are generated as roff .so includes of a primary page.
+# A2X handles this automatically if mentioned in NAME section
+MAN3_FILES_SECONDARY =
+
+ADOC_FILES  = $(MAN3_FILES_PRIMARY:%.3=%.adoc)
+XML_FILES   = $(MAN3_FILES_PRIMARY:%.3=%.xml)
+
+if HAVE_A2X
+dist_man_MANS = $(MAN3_FILES)
+$(MAN3_FILES): COPYRIGHT.adoc
+endif
+
+SUFFIXES = .adoc .3
+
+STDERR_DEVNULL = $(stderr_devnull_$(V))
+stderr_devnull_ =  $(stderr_devnull_$(AM_DEFAULT_VERBOSITY))
+stderr_devnull_0 = 2>/dev/null
+
+.adoc.3:
+	$(AM_V_GEN)$(A2X) --attribute mansource=$(META_NAME) \
+	    --attribute manversion=$(META_VERSION) \
+	    --attribute manmanual="Flux Programming Reference" \
+	    --destination-dir=$(builddir) \
+	    --doctype manpage --format manpage $< $(STDERR_DEVNULL)
+
+EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc
+
+CLEANFILES = $(MAN3_FILES) $(XML_FILES)
+
+TESTS_ENVIRONMENT = \
+	ASPELL=$(ASPELL) \
+	pws_dict=$(abs_top_srcdir)/doc/test/spell.en.pws \
+	man_dir=$(abs_builddir)
+
+TESTS = $(top_srcdir)/doc/test/spellcheck
