@@ -818,6 +818,10 @@ int zio_write_eof (zio_t zio)
         return (-1);
     }
     zio_set_eof (zio);
+    /* If no data is buffered, then we can close the dst fd:
+     */
+    if (zio_buffer_empty (zio))
+        zio_close (zio);
     return (0);
 }
 
