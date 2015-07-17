@@ -1,0 +1,94 @@
+flux_open(3)
+============
+:doctype: manpage
+
+
+NAME
+----
+flux_open, flux_close - open/close connection to Flux Message Broker
+
+
+SYNOPSIS
+--------
+#include <flux/core.h>
+
+flux_t flux_open (const char *uri, int flags);
+
+void flux_close (flux_t h);
+
+
+DESCRIPTION
+-----------
+
+`flux_open()` creates a `flux_t` handle, used to communicate with the
+Flux message broker.
+
+The _uri_ scheme (before "://") specifies the "connector"
+that will be used to establish the connection.  The _uri_ path
+(after "://") is parsed by the connector.  If _uri_ is NULL,
+the "local" connector will be used, with path taken from the $FLUX_TMPDIR
+environment variable.
+
+_flags_ is the logical "or" of zero or more of the following flags:
+
+FLUX_O_TRACE::
+Dumps message trace to stderr.
+
+FLUX_O_COPROC::
+Reactor message callbacks should be started as coprocesses.
+
+FLUX_O_NONBLOCK::
+The `flux_send()` and `flux_recv()` functions should never block.
+
+`flux_close()` destroys a `flux_t` handle, closing its connection with
+the Flux message broker.
+
+
+RETURN VALUE
+------------
+
+`flux_open()` returns an open `flux_t` handle on success.  On error,
+NULL is returned, and errno is set appropriately.
+
+
+ERRORS
+------
+
+EINVAL::
+Some arguments were invalid.
+
+ENOMEM::
+Out of memory.
+
+
+EXAMPLES
+--------
+
+This example opens the Flux broker using the default connector
+and path, requests the broker rank, and finally closes the broker handle.
+....
+flux_t h;
+
+if (!(h = flux_open (NULL, 0)))
+    err_exit ("flux_open");
+
+printf ("My rank is %d\n", flux_rank (h));
+
+flux_close (h);
+....
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
