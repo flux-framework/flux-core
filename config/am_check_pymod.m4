@@ -2,7 +2,7 @@ dnl AM_CHECK_PYMOD(MODNAME [,SYMBOL [,ACTION-IF-FOUND [,ACTION-IF-NOT-FOUND]]])
 dnl Check if a module containing a given symbol is visible to python.
 AC_DEFUN([AM_CHECK_PYMOD],
 [AC_REQUIRE([AM_PATH_PYTHON])
-py_mod_var=`echo $1['_']$2 | sed 'y%./+-%__p_%'`
+py_mod_var=`echo "$1_$2" | sed 'y%<>= "./+-(),%______p_____%'`
 AC_MSG_CHECKING(for ifelse([$2],[],,[$2 in ])python module $1)
 AC_CACHE_VAL(py_cv_mod_$py_mod_var, [
 ifelse([$2],[], [prog="
@@ -14,8 +14,11 @@ except ImportError:
 except:
         sys.exit(0)
 sys.exit(0)"], [prog="
+import sys
 import $1
-import $1.$2"])
+if not $2:
+    sys.exit(1)
+"])
 if $PYTHON -c "$prog" 1>&AC_FD_CC 2>&AC_FD_CC
   then
     eval "py_cv_mod_$py_mod_var=yes"

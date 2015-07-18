@@ -79,7 +79,11 @@ if test "$enable_python" = "yes"; then
   if test "X$PYTHON" != "X"; then
     AX_PYTHON_DEVEL
     #TODO: write this manually to add a version check
-    AM_CHECK_PYMOD(cffi,,,[AC_MSG_ERROR([could not find python module cffi, version 1.1+ required])])
+    AM_CHECK_PYMOD(cffi,
+                   [cffi.__version_info__ >= (1,1)],
+                   ,
+                   [AC_MSG_ERROR([could not find python module cffi, version 1.1+ required])]
+                   )
     python_ok=yes
   fi
   AS_VAR_SET(fluxpydir, $pyexecdir/flux)
