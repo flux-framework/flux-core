@@ -45,4 +45,4 @@ TESTS_ENVIRONMENT = \
 	pws_dict=$(abs_top_srcdir)/doc/test/spell.en.pws \
 	man_dir=$(abs_builddir)
 
-TESTS = $(top_srcdir)/doc/test/spellcheck
+TESTS = $(abs_top_srcdir)/doc/test/spellcheck
