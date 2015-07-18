@@ -615,7 +615,6 @@ static int genpasswd (flux_sec_t c, const char *user, bool force, bool verbose)
 {
     struct stat sb;
     zhash_t *passwds = NULL;
-    char *passwd;
     zuuid_t *uuid;
     mode_t old_mask;
     int rc = -1;
@@ -624,8 +623,6 @@ static int genpasswd (flux_sec_t c, const char *user, bool force, bool verbose)
 
     if (!(uuid = zuuid_new ()))
         oom ();
-    passwd = zuuid_str (uuid);
-
     if (force)
         (void)unlink (c->passwd_file);
     if (stat (c->passwd_file, &sb) == 0) {
@@ -634,7 +631,7 @@ static int genpasswd (flux_sec_t c, const char *user, bool force, bool verbose)
     }
     if (!(passwds = zhash_new ()))
         oom ();
-    zhash_update (passwds, user, passwd);
+    zhash_update (passwds, user, (char *)zuuid_str (uuid));
     if (verbose)
         printf ("Saving %s\n", c->passwd_file);
     old_mask = umask (077);
