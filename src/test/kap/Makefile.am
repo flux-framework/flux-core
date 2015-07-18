@@ -1,7 +1,7 @@
 AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = \
-	$(JSON_CFLAGS) $(MPI_CFLAGS) \
+	$(JSON_CFLAGS) $(ZMQ_CFLAGS) $(MPI_CFLAGS) \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include
 
 LDADD = \
@@ -11,7 +11,7 @@ LDADD = \
         $(top_builddir)/src/common/libutil/libutil.la \
         $(top_builddir)/src/common/liblsd/liblsd.la \
         $(top_builddir)/src/common/libev/libev.la \
-        $(JSON_LIBS) $(LIBCZMQ) $(LIBZMQ) $(LIBMUNGE) $(LIBPTHREAD) \
+        $(JSON_LIBS) $(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) \
 	$(MPI_CLDFLAGS)
 
 check_PROGRAMS = kap

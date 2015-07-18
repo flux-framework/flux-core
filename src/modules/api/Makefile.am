@@ -1,7 +1,7 @@
 AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = \
-	$(JSON_CFLAGS) \
+	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include
 
 #
@@ -10,7 +10,7 @@ AM_CPPFLAGS = \
 fluxmod_LTLIBRARIES = api.la
 
 fluxmod_libadd = \
-	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
+	$(JSON_LIBS) $(ZMQ_LIBS)
 
 fluxmod_ldflags = --disable-static -avoid-version -module -shared -export-dynamic \
 	-export-symbols-regex '^mod_(main|name)$$' \

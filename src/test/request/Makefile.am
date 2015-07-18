@@ -1,7 +1,7 @@
 AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = \
-	$(JSON_CFLAGS) \
+	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include
 
 #
@@ -15,7 +15,7 @@ fluxmod_libadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/libev/libev.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
-	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
+	$(JSON_LIBS) $(ZMQ_LIBS)
 
 fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
         -export-symbols-regex '^mod_(main|name)$$'
@@ -42,7 +42,7 @@ fluxcmd_ldadd = \
         $(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/libev/libev.la \
         $(top_builddir)/src/common/liblsd/liblsd.la \
-        $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
+        $(JSON_LIBS) $(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
 
 treq_SOURCES = treq.c
 treq_LDADD = $(fluxcmd_ldadd)

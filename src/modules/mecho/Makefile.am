@@ -1,7 +1,7 @@
 AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = \
-	$(JSON_CFLAGS) \
+	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include
 
 #
@@ -10,12 +10,12 @@ AM_CPPFLAGS = \
 fluxmod_LTLIBRARIES = mecho.la
 
 fluxmod_libadd = \
-	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
+	$(JSON_LIBS) $(ZMQ_LIBS)
 general_ldflags = --disable-static -avoid-version -shared -export-dynamic \
 	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
-	$(LIBMUNGE) $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD) $(LIBUTIL)
+	$(LIBMUNGE) $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL)
 fluxmod_ldflags = -module \
 	-export-symbols-regex '^mod_(main|name)$$' \
 	$(general_ldflags)

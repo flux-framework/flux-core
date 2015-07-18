@@ -1,7 +1,7 @@
 AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = \
-	$(JSON_CFLAGS) \
+	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
 	-Wno-strict-aliasing \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include
 
@@ -61,7 +61,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libev/libev.la \
-	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)
+	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD)
 
 test_cppflags = \
 	-I$(top_srcdir)/src/common/libtap \

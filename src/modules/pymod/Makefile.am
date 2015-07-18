@@ -1,7 +1,7 @@
 AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = $(PYTHON_CPPFLAGS) \
-	$(JSON_CFLAGS) \
+	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 	"-DFLUX_PYTHON_PATH=\"${pyexecdir}\""
 
@@ -13,7 +13,7 @@ fluxmod_LTLIBRARIES = pymod.la
 fluxmod_libadd = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
-	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
+	$(JSON_LIBS) $(ZMQ_LIBS)
 
 fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
 	-export-symbols-regex '^mod_(main|name)$$'

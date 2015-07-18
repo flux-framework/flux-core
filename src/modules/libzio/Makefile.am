@@ -1,7 +1,7 @@
 AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = \
-	$(JSON_CFLAGS) \
+	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include
 
 fluxlib_LTLIBRARIES = \
@@ -23,7 +23,7 @@ libzio_deps = \
 	$(top_builddir)/src/common/libev/libev.la
 
 LDADD = $(libzio_deps) \
-	$(JSON_LIBS) $(LIBCZMQ) $(LIBZMQ) $(LIBMUNGE) \
+	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBMUNGE) \
 	$(LIBPTHREAD) $(LIBDL)
 
 $(libzio_deps):

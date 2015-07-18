@@ -1,19 +1,12 @@
-#
-# FIXME - this is just a placeholder for a real zeromq/czmq macro
-#
 AC_DEFUN([X_AC_ZEROMQ], [
-    X_AC_CHECK_COND_LIB(zmq, zmq_init)
-    AS_VAR_IF([ac_cv_lib_zmq_zmq_init],[yes],,[
-        AC_MSG_ERROR([no suitable zmq library found])
-    ])
 
-    CPPFLAGS="$CPPFLAGS -I/usr/include/czmq"
-    X_AC_CHECK_COND_LIB(czmq, zhash_new)
-    AS_VAR_IF([ac_cv_lib_czmq_zhash_new],[yes],,[
-        AC_MSG_ERROR([no suitable czmq library found])
-    ])
+    PKG_CHECK_MODULES([ZMQ], [libczmq >= 3.0.0 libzmq >= 4.0.4])
+
     ac_save_LIBS="$LIBS"
-    LIBS="$LIBS $LIBZMQ $LIBCZMQ"
+    LIBS="$LIBS $ZMQ_LIBS"
+    ac_save_CFLAGS="$CFLAGS"
+    CFLAGS="$CFLAGS $ZMQ_CFLAGS"
+
     AC_MSG_CHECKING([For CURVE encryption support in libzmq])
     AC_CACHE_VAL(ac_cv_curve_support,
       AC_RUN_IFELSE([AC_LANG_SOURCE([[
@@ -40,5 +33,7 @@ AC_DEFUN([X_AC_ZEROMQ], [
  Perhaps you need to compile with libsodium?])
     fi
     LIBS="$ac_save_LIBS"
+    CFLAGS="$ac_save_CFLAGS"
+
   ]
 )

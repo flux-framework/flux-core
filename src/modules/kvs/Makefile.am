@@ -1,7 +1,7 @@
 AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = \
-	$(JSON_CFLAGS) \
+	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include
 
 #
@@ -10,7 +10,7 @@ AM_CPPFLAGS = \
 fluxmod_LTLIBRARIES = kvs.la
 
 fluxmod_libadd = \
-	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
+	$(JSON_LIBS) $(ZMQ_CFLAGS)
 
 fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
         -export-symbols-regex '^mod_(main|name)$$'
@@ -50,7 +50,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
-        $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD)
+        $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD)
 
 test_cppflags = \
         -DMODULE_PATH=\"$(top_builddir)/src/modules\" \

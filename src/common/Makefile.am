@@ -13,7 +13,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libev/libev.la \
 	$(builddir)/libjsonc/libjsonc.la \
 	$(builddir)/libcompat/libcompat.la \
-	$(LIBMUNGE) $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD) $(LIBUTIL) \
+	$(LIBMUNGE) $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \
 	$(LIBDL) -lrt
 libflux_internal_la_LDFLAGS = -Wl,--no-undefined
 
