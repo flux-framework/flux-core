@@ -191,7 +191,9 @@ AC_CONFIG_FILES( \
   etc/Makefile.inc \
   etc/flux-libs.conf \
   doc/Makefile \
-  doc/cmd/Makefile \
+  doc/man1/Makefile \
+  doc/man3/Makefile \
+  doc/test/Makefile \
   t/Makefile \
   t/fluxometer.lua \
 )
