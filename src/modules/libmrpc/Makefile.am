@@ -11,9 +11,9 @@ fluxinclude_HEADERS = \
 libmrpc_la_SOURCES = \
 	mrpc.c \
 	mrpc.h
-libmrpc_la_LDFLAGS = -shared -export-dynamic \
-		     $(top_builddir)/src/common/libflux-internal.la \
+libmrpc_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
 		     $(top_builddir)/src/common/libflux-core.la \
-		     $(top_builddir)/src/modules/kvs/libkvs.la \
-		     $(LIBMUNGE) $(JSON_LIBS) $(ZMQ_CFLAGS) $(LIBPTHREAD) $(LIBUTIL) \
+		     $(top_builddir)/src/modules/kvs/libkvs.la
+libmrpc_la_LDFLAGS = -shared -export-dynamic \
+		     $(LIBMUNGE) $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD) $(LIBUTIL) \
 		     $(LIBDL) -lrt

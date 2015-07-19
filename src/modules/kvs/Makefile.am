@@ -34,8 +34,8 @@ libkvs_la_SOURCES = \
 	libkvs.c \
 	conf.c \
 	proto.c
-libkvs_la_LDFLAGS = -shared -export-dynamic --disable-static \
-		    $(top_builddir)/src/common/libflux-internal.la \
+libkvs_la_LDFLAGS = -shared -export-dynamic --disable-static
+libkvs_la_LIBADD =  $(top_builddir)/src/common/libflux-internal.la \
 		    $(top_builddir)/src/common/libflux-core.la
 
 #-lrt is for clock_gettime, this should be abstracted

@@ -10,12 +10,14 @@ AM_CPPFLAGS = \
 fluxmod_LTLIBRARIES = mecho.la
 
 fluxmod_libadd = \
-	$(JSON_LIBS) $(ZMQ_LIBS)
-general_ldflags = --disable-static -avoid-version -shared -export-dynamic \
+	$(JSON_LIBS) $(ZMQ_LIBS) \
 	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
 	$(top_builddir)/src/common/libflux-core.la \
-	$(top_builddir)/src/modules/kvs/libkvs.la \
+	$(top_builddir)/src/modules/kvs/libkvs.la
+
+general_ldflags = --disable-static -avoid-version -shared -export-dynamic \
 	$(LIBMUNGE) $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL)
+
 fluxmod_ldflags = -module \
 	-export-symbols-regex '^mod_(main|name)$$' \
 	$(general_ldflags)
