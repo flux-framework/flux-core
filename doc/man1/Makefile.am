@@ -43,6 +43,6 @@ CLEANFILES = $(MAN1_FILES) $(XML_FILES)
 TESTS_ENVIRONMENT = \
 	ASPELL=$(ASPELL) \
 	pws_dict=$(abs_top_srcdir)/doc/test/spell.en.pws \
-	man_dir=$(abs_builddir)
+	man_dir=$(abs_srcdir)
 
 TESTS = $(abs_top_srcdir)/doc/test/spellcheck
