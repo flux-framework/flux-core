@@ -205,12 +205,13 @@ int main (int argc, char *argv[])
         err_exit ("setenv");
     if (unsetenv ("FLUX_CONF_USEFILE") < 0)
         err_exit ("setenv");
-    /* Process config from the KVS if running in a session and not
+    /* Process config from the KVS if not a bootstrap instance, and not
      * forced to use a config file by the command line.
      * It is not an error if config is not foud in either place, we will
      * try to make do with compiled-in defaults.
      */
-    if (getenv ("FLUX_TMPDIR") && !Fopt) {
+    if (!Fopt && getenv ("FLUX_TMPDIR")
+              && !(argc > 0 && !strcmp (argv[0], "start"))) {
         flux_t h;
         if (flux_conf_load (cf) == 0)
             setup_connector_env (cf, Oopt); /* flux_open() needs this */
