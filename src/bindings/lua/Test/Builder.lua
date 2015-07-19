@@ -18,6 +18,7 @@ local tconcat = require 'table'.concat
 local tonumber = tonumber
 local tostring = tostring
 local type = type
+local table = table
 
 _ENV = nil
 local m = {}
