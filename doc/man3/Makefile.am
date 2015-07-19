@@ -31,6 +31,8 @@ dist_man_MANS = $(MAN3_FILES)
 $(MAN3_FILES): COPYRIGHT.adoc
 endif
 
+noinst_SCRIPTS = spellcheck
+
 SUFFIXES = .adoc .3
 
 STDERR_DEVNULL = $(stderr_devnull_$(V))
@@ -44,6 +46,9 @@ stderr_devnull_0 = 2>/dev/null
 	    --destination-dir=$(builddir) \
 	    --doctype manpage --format manpage $< $(STDERR_DEVNULL)
 
+spellcheck: $(top_srcdir)/doc/test/spellcheck
+	$(LN_S) --force $< $@
+
 flux_close.3: flux_open.3
 flux_aux_get.3: flux_aux_set.3
 flux_flags_unset.3: flux_flags_set.3
@@ -55,11 +60,11 @@ flux_pollfd.3: flux_pollevents.3
 
 EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc
 
-CLEANFILES = $(MAN3_FILES) $(XML_FILES)
+CLEANFILES = $(MAN3_FILES) $(XML_FILES) spellcheck
 
 TESTS_ENVIRONMENT = \
 	ASPELL=$(ASPELL) \
 	pws_dict=$(abs_top_srcdir)/doc/test/spell.en.pws \
 	man_dir=$(abs_srcdir)
 
-TESTS = $(abs_top_srcdir)/doc/test/spellcheck
+TESTS = spellcheck
