@@ -8,25 +8,20 @@ import importlib
 import sys
 import multiprocessing
 
-from pycotap import TAPTestRunner
+import pycotap as tap
 
 
-def applyable_run(tests):
-    return TAPTestRunner().run(tests).wasSuccessful()
-
-
-def run_tests_with_size(tests, size):
+def run_tests_with_size(result_set, tests, size):
     if size > 0:
-        return sideflux.apply_under_flux_async(size, applyable_run,
-                                               (tests, )).get(timeout=20)
+        with sideflux.run_beside_flux(size):
+            tests(result_set)
     else:
-        return TAPTestRunner().run(tests)
+        tests(result_set)
 
 
-def run_under_dir(path, mod_prefix, pattern='([^_].*).py$'):
+def run_under_dir(result_set, path, mod_prefix, pattern='([^_].*).py$'):
     me = os.path.dirname(os.path.abspath(__file__))
     fluxdir = os.path.abspath(os.path.join(me, path))
-    results = []
     for f in os.listdir(fluxdir):
         m = re.match(pattern, f)
         if m:
@@ -48,14 +43,15 @@ def run_under_dir(path, mod_prefix, pattern='([^_].*).py$'):
             if suite.countTestCases() <= 0:
                 continue
             print '#Running doctests and unit tests in:', fluxdir + '/' + f
-            res = run_tests_with_size(suite, size)
-            results.append(res)
-    return results
+            run_tests_with_size(result_set, suite, size)
 
 
 if __name__ == '__main__':
-    runners = []
-    runners.extend(run_under_dir('../test', 'test'))
-    runners.extend(run_under_dir('../flux', 'flux'))
+    result_set = tap.TAPTestResult(
+        sys.stdout, sys.stderr, tap.LogMode.LogToYAML,
+        tap.LogMode.LogToDiagnostics, )
+    run_under_dir(result_set, '../test', 'test')
+    run_under_dir(result_set, '../flux', 'flux')
+    result_set.printErrors()
 
-    sys.exit(int(not all(runners)))
+    sys.exit(not result_set.wasSuccessful() )
