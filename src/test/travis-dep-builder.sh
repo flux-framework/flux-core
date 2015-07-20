@@ -12,7 +12,7 @@ downloads="\
 https://github.com/dun/munge/archive/munge-0.5.11.tar.gz \
 https://download.libsodium.org/libsodium/releases/libsodium-1.0.0.tar.gz \
 http://download.zeromq.org/zeromq-4.0.4.tar.gz \
-http://download.zeromq.org/czmq-3.0.0-rc1.tar.gz \
+http://download.zeromq.org/czmq-3.0.2.tar.gz \
 https://s3.amazonaws.com/json-c_releases/releases/json-c-0.11.tar.gz"
 
 declare -A extra_configure_opts=(\

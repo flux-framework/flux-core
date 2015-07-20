@@ -1,12 +1,12 @@
 
 AM_CFLAGS =	@GCCWARN@ -I$(top_srcdir) -I$(top_srcdir)/src/include -I$(top_srcdir)/src/common/libflux \
-		$(JSON_CFLAGS) $(PYTHON_CPPFLAGS) -O2
+		$(JSON_CFLAGS) $(ZMQ_CFLAGS) $(PYTHON_CPPFLAGS) -O2
 AM_LDFLAGS = -avoid-version -module -Wl,--no-undefined  $(PYTHON_LDFLAGS) -Wl,-rpath,$(PYTHON_PREFIX)/lib
 
 MAKE_BINDING=$(top_srcdir)/src/bindings/python/make_binding.py
 SUFFIXES = _build.py
 
-common_libs = $(top_builddir)/src/common/libflux-core.la  $(JSON_LIBS) 
+common_libs = $(top_builddir)/src/common/libflux-core.la  $(JSON_LIBS) $(ZMQ_LIBS)
 
 _build.py.c:
 	$(PYTHON) $*_build.py

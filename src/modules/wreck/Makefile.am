@@ -2,7 +2,7 @@ AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = \
 	$(LUA_INCLUDE) \
-	$(JSON_CFLAGS) \
+	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/modules/libmrpc \
@@ -28,7 +28,7 @@ fluxlibexec_PROGRAMS = \
 	wrexecd
 
 fluxmod_libadd = \
-	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ)
+	$(JSON_LIBS) $(ZMQ_LIBS)
 
 fluxmod_ldflags = --disable-static -avoid-version -module -shared -export-dynamic \
 	-export-symbols-regex '^mod_(main|name)$$' \
@@ -62,7 +62,7 @@ wrexecd_LDADD = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/modules/libkz/libkz.la \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
-	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LUA_LIB) $(LIBPTHREAD)
+	$(JSON_LIBS) $(ZMQ_LIBS) $(LUA_LIB) $(LIBPTHREAD)
 
 dist_wreckscripts_SCRIPTS = \
 	lua.d/01-env.lua

@@ -1,7 +1,7 @@
 AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = \
-	$(JSON_CFLAGS) \
+	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
         -DMODULE_PATH=\"$(fluxmoddir)\" \
         -DCONNECTOR_PATH=\"$(fluxconnectordir)\" \
@@ -17,7 +17,7 @@ fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(top_builddir)/src/modules/live/liblive.la \
-	$(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
+	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
 
 LDADD = $(fluxcmd_ldadd)
 

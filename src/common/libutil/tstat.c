@@ -25,23 +25,13 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <stdlib.h>
-#include <stdio.h>
-#include <errno.h>
-#include <string.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <sys/types.h>
 #include <math.h>
-#include <limits.h>
-#include <uuid/uuid.h>
-#include <assert.h>
 #include <json.h>
+
+#include "tstat.h"
 
 #include "log.h"
 #include "jsonutil.h"
-
-#include "tstat.h"
 
 
 void tstat_push (tstat_t *ts, double x)

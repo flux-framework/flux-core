@@ -29,7 +29,6 @@
 #include <zmq.h>
 #include <czmq.h>
 #include <arraylist.h>
-#include <uuid/uuid.h>
 
 #include <flux/core.h>
 

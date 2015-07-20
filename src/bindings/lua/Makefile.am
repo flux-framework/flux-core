@@ -1,6 +1,6 @@
 AM_CFLAGS =	@GCCWARN@
 AM_CPPFLAGS =	-I$(top_srcdir) -I$(top_srcdir)/src/include \
-		$(LUA_INCLUDE) $(JSON_CFLAGS)
+		$(LUA_INCLUDE) $(JSON_CFLAGS) $(ZMQ_CFLAGS)
 
 fluxluadir = $(luadir)/flux-lua
 
@@ -34,7 +34,7 @@ luamod_libadd = \
 	$(top_builddir)/src/modules/libkz/libkz.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
-	$(LUA_LIB) $(JSON_LIBS)
+	$(LUA_LIB) $(JSON_LIBS) $(ZMQ_LIBS)
 
 flux_la_LDFLAGS = \
 	$(luamod_ldflags)
