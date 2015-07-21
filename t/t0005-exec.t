@@ -174,4 +174,32 @@ test_expect_success 'flux-exec disconnect terminates all running processes' '
 	test "$(flux ps | grep -c sleep)" = "0"
 '
 
+test_expect_success 'flux-exec: stdin bcast' '
+	count=$(echo Hello | flux exec -r0-3 cat | grep -c Hello) &&
+	test "$count" = "4"
+'
+
+test_expect_success 'stdin redirect from /dev/null works' '
+	test_expect_code 0 run_timeout 1 flux exec -r0-3 cat
+'
+
+test_expect_success 'stdin broadcast -- multiple lines' '
+	dd if=/dev/urandom bs=1024 count=4 | base64 >expected &&
+	cat expected | run_timeout 3 flux exec -l -r0-3 cat >output &&
+	for i in $(seq 0 3); do
+		sed -n "s/^$i: //p" output > output.$i
+		test_cmp expected output.$i
+	done
+'
+
+test_expect_success 'stdin broadcast -- long lines' '
+	dd if=/dev/urandom bs=1024 count=4 | base64 --wrap=0 >expected &&
+        echo >>expected &&
+	cat expected | run_timeout 3 flux exec -l -r0-3 cat >output &&
+	for i in $(seq 0 3); do
+		sed -n "s/^$i: //p" output > output.$i
+		test_cmp expected output.$i
+	done
+'
+
 test_done
