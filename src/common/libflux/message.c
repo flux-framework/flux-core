@@ -201,6 +201,26 @@ void flux_msg_destroy (flux_msg_t *msg)
     zmsg_destroy (&msg);
 }
 
+int flux_msg_encode (flux_msg_t *msg, void **buf, size_t *size)
+{
+    size_t len;
+    byte *buffer;
+
+    len = zmsg_encode (msg, &buffer);
+    if (buffer == NULL) {
+        errno = ENOMEM;
+        return -1;
+    }
+    *buf = buffer;
+    *size = len;
+    return 0;
+}
+
+flux_msg_t *flux_msg_decode (void *buf, size_t size)
+{
+    return zmsg_decode (buf, size);
+}
+
 int flux_msg_set_type (zmsg_t *zmsg, int type)
 {
     zframe_t *zf = zmsg_last (zmsg);

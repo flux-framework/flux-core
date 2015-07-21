@@ -55,6 +55,18 @@ void flux_msg_destroy (flux_msg_t *msg);
  */
 flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload);
 
+/* Encode a flux_msg_t to buffer.
+ * Returns 0 on success, -1 on failure with errno set.
+ * Caller must free buf.
+ */
+int flux_msg_encode (flux_msg_t *msg, void **buf, size_t *size);
+
+/* Decode a flux_msg_t from buffer.
+ * Returns message on success, NULL on failure with errno set.
+ * Caller must destroy message with flux_msg_destroy().
+ */
+flux_msg_t *flux_msg_decode (void *buf, size_t size);
+
 /* Get/set message type
  * For FLUX_MSGTYPE_REQUEST: set_type initializes nodeid to FLUX_NODEID_ANY
  * For FLUX_MSGTYPE_RESPONSE: set_type initializes errnum to 0
@@ -183,6 +195,7 @@ int flux_msg_get_route_count (const flux_msg_t *msg);
  * Caller must free the returned string.
  */
 char *flux_msg_get_route_string (const flux_msg_t *msg);
+
 
 #endif /* !_FLUX_CORE_MESSAGE_H */
 
