@@ -122,7 +122,7 @@ test_expect_success 'I/O, multiple lines, no newline on last line' '
 '
 
 test_expect_success 'I/O -- long lines' '
-	dd if=/dev/urandom bs=4096 count=1 | base64 >expected &&
+	dd if=/dev/urandom bs=4096 count=1 | base64 --wrap=0 >expected &&
 	flux exec -r1 cat expected > output &&
 	test_cmp output expected
 '
