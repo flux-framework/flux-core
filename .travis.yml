@@ -40,7 +40,7 @@ script:
  - export CC="ccache $CC"
  - ./autogen.sh
  - ./configure --prefix=$HOME/local
- - make -j2 distcheck
+ - make distcheck
 
 after_success:
  - ccache -s
