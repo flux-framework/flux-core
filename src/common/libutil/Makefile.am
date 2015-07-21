@@ -22,8 +22,6 @@ libutil_la_SOURCES = \
 	setenvf.h \
 	env.c \
 	env.h \
-	zfd.c \
-	zfd.h \
 	optparse.c \
 	optparse.h \
 	tstat.c \
