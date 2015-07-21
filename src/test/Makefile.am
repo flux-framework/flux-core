@@ -7,7 +7,6 @@ AM_CPPFLAGS = \
 check_PROGRAMS = \
 	tasyncsock \
 	tcommit \
-	tenc \
 	tkvstorture \
 	tkvswatch \
 	tmunge \
