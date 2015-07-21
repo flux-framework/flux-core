@@ -131,7 +131,7 @@ test_expect_success 'signal forwarding works' '
 	cat >test_signal.sh <<-EOF &&
 	#!/bin/bash
 	sig=\${1-INT}
-	flux exec sleep 100 &
+	flux exec sleep 100 </dev/null &
 	sleep 1 &&
 	kill -\$sig %1 &&
 	wait %1
@@ -143,7 +143,7 @@ test_expect_success 'signal forwarding works' '
 '
 
 test_expect_success 'process listing works' '
-	flux exec -r1 sleep 100 &
+	flux exec -r1 sleep 100 </dev/null &
 	p=$! &&
 	sleep 1 &&
 	flux ps -r1 | grep ".* 1 .*sleep$" >/dev/null &&
@@ -152,7 +152,7 @@ test_expect_success 'process listing works' '
 '
 
 test_expect_success 'process listing works - multiple processes' '
-	flux exec -r0-3 sleep 100 &
+	flux exec -r0-3 sleep 100 </dev/null &
 	q=$! &&
 	sleep 1 &&
 	count=$(flux ps | grep -c sleep) &&
@@ -164,7 +164,7 @@ test_expect_success 'process listing works - multiple processes' '
 '
 
 test_expect_success 'flux-exec disconnect terminates all running processes' '
-	flux exec -r0-3 sleep 100 &
+	flux exec -r0-3 sleep 100 </dev/null &
 	q=$! &&
 	sleep 1 &&
 	count=$(flux ps | grep -c sleep) &&
