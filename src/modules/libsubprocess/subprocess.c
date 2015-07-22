@@ -241,9 +241,12 @@ subprocess_flush_io (struct subprocess *p)
 int
 subprocess_write (struct subprocess *p, void *buf, size_t n, bool eof)
 {
+    int rc = 0;
+    if (n > 0)
+        rc = zio_write (p->zio_in, buf, n);
     if (eof)
         zio_write_eof (p->zio_in);
-    return zio_write (p->zio_in, buf, n);
+    return (rc);
 }
 
 int subprocess_io_complete (struct subprocess *p)

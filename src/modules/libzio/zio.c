@@ -637,7 +637,10 @@ static int zio_write_pending (zio_t zio)
  */
 static int zio_writer_cb (zio_t zio)
 {
-    int rc = cbuf_read_to_fd (zio->buf, zio->dstfd, -1);
+    int rc = 0;
+
+    if (cbuf_used (zio->buf))
+        rc = cbuf_read_to_fd (zio->buf, zio->dstfd, -1);
     if (rc < 0) {
         if (errno == EAGAIN)
             return (0);
@@ -815,6 +818,10 @@ int zio_write_eof (zio_t zio)
         return (-1);
     }
     zio_set_eof (zio);
+    /* If no data is buffered, then we can close the dst fd:
+     */
+    if (zio_buffer_empty (zio))
+        zio_close (zio);
     return (0);
 }
 

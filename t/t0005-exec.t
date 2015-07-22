@@ -122,7 +122,7 @@ test_expect_success 'I/O, multiple lines, no newline on last line' '
 '
 
 test_expect_success 'I/O -- long lines' '
-	dd if=/dev/urandom bs=4096 count=1 | base64 >expected &&
+	dd if=/dev/urandom bs=4096 count=1 | base64 --wrap=0 >expected &&
 	flux exec -r1 cat expected > output &&
 	test_cmp output expected
 '
@@ -131,7 +131,7 @@ test_expect_success 'signal forwarding works' '
 	cat >test_signal.sh <<-EOF &&
 	#!/bin/bash
 	sig=\${1-INT}
-	flux exec sleep 100 &
+	flux exec sleep 100 </dev/null &
 	sleep 1 &&
 	kill -\$sig %1 &&
 	wait %1
@@ -143,7 +143,7 @@ test_expect_success 'signal forwarding works' '
 '
 
 test_expect_success 'process listing works' '
-	flux exec -r1 sleep 100 &
+	flux exec -r1 sleep 100 </dev/null &
 	p=$! &&
 	sleep 1 &&
 	flux ps -r1 | grep ".* 1 .*sleep$" >/dev/null &&
@@ -152,7 +152,7 @@ test_expect_success 'process listing works' '
 '
 
 test_expect_success 'process listing works - multiple processes' '
-	flux exec -r0-3 sleep 100 &
+	flux exec -r0-3 sleep 100 </dev/null &
 	q=$! &&
 	sleep 1 &&
 	count=$(flux ps | grep -c sleep) &&
@@ -164,7 +164,7 @@ test_expect_success 'process listing works - multiple processes' '
 '
 
 test_expect_success 'flux-exec disconnect terminates all running processes' '
-	flux exec -r0-3 sleep 100 &
+	flux exec -r0-3 sleep 100 </dev/null &
 	q=$! &&
 	sleep 1 &&
 	count=$(flux ps | grep -c sleep) &&
@@ -172,6 +172,34 @@ test_expect_success 'flux-exec disconnect terminates all running processes' '
 	test "$count" = "4" &&
 	test_expect_code 137 wait $q &&
 	test "$(flux ps | grep -c sleep)" = "0"
+'
+
+test_expect_success 'flux-exec: stdin bcast' '
+	count=$(echo Hello | flux exec -r0-3 cat | grep -c Hello) &&
+	test "$count" = "4"
+'
+
+test_expect_success 'stdin redirect from /dev/null works' '
+	test_expect_code 0 run_timeout 1 flux exec -r0-3 cat
+'
+
+test_expect_success 'stdin broadcast -- multiple lines' '
+	dd if=/dev/urandom bs=1024 count=4 | base64 >expected &&
+	cat expected | run_timeout 3 flux exec -l -r0-3 cat >output &&
+	for i in $(seq 0 3); do
+		sed -n "s/^$i: //p" output > output.$i
+		test_cmp expected output.$i
+	done
+'
+
+test_expect_success 'stdin broadcast -- long lines' '
+	dd if=/dev/urandom bs=1024 count=4 | base64 --wrap=0 >expected &&
+        echo >>expected &&
+	cat expected | run_timeout 3 flux exec -l -r0-3 cat >output &&
+	for i in $(seq 0 3); do
+		sed -n "s/^$i: //p" output > output.$i
+		test_cmp expected output.$i
+	done
 '
 
 test_done

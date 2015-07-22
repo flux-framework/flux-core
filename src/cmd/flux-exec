@@ -5,6 +5,7 @@
 -------------------------------------------------------------------------------
 local flux = require 'flux'
 local decode = require 'flux-lua.base64' .decode
+local encode = require 'flux-lua.base64' .encode
 local posix = require 'flux-lua.posix'
 local timer = require 'flux-lua.timer'
 local hostlist = require 'hostlist'
@@ -39,7 +40,8 @@ local function die (fmt, ...)
     os.exit (1)
 end
 
-local function program_state_create (n)
+local function program_state_create (f, n)
+    local f = f
     local s = {
         size = n or 1,
         nexited = 0,
@@ -51,6 +53,31 @@ local function program_state_create (n)
         matchtag = {},
     }
     local T = {}
+
+    local function write (data)
+        if data.data then data.data = encode (data.data) end
+        for rank,pid in pairs(s.running) do
+            f:send ("cmb.exec.write", { pid = pid, stdin = data }, rank)
+        end
+    end
+
+    local function activate_stdin ()
+        f:iowatcher {
+         fd = posix.fileno (io.input()),
+            handler = function (iow, data)
+                write (data)
+            end
+        }
+    end
+
+    function increment_nstarted ()
+        s.nstarted = s.nstarted + 1
+        if s.nstarted == s.size then
+            activate_stdin ()
+        end
+    end
+
+
     function T.size (n)
         if n then s.size = n end
         return s.size
@@ -69,7 +96,7 @@ local function program_state_create (n)
         s.status [resp.rank] = resp.status
     end
     function T.started (rank, pid)
-        s.nstarted = s.nstarted + 1
+        increment_nstarted ()
         s.running [rank] = pid
     end
     function T.killall (f, signum)
@@ -83,7 +110,7 @@ local function program_state_create (n)
         end
     end
     function T.failed (rank, errnum)
-        s.nstarted = s.nstarted + 1
+        increment_nstarted ()
         s.nexited = s.nexited + 1
         s.nclosed.stdout = s.nclosed.stdout + 1
         s.nclosed.stderr = s.nclosed.stderr + 1
@@ -131,10 +158,12 @@ end
 --  Parse cmdline args:
 --
 local getopt = require 'flux-lua.alt_getopt' .get_opts
-local opts, optind = getopt (arg, "d:r:vl",
-                        { rank = "r", verbose = "v", dir = "d", labelio = "l" })
+local opts, optind = getopt (arg, "d:r:vln",
+                        { rank = "r", verbose = "v", dir = "d", labelio = "l",
+                          noinput = 'n' })
 
 if opts.v then verbose = true end
+if opts.n then io.input ("/dev/null") end
 if not arg[optind] then die ("Command to run required\n") end
 local cmdline = {}
 for i = optind, #arg do
@@ -153,7 +182,8 @@ local f, err = flux.new()
 if not f then die ("Connecting to flux failed: %s\n", err) end
 
 local ranks = get_ranklist (f, opts.r)
-local state = program_state_create (#ranks)
+local state = program_state_create (f, #ranks)
+
 
 --  Set up msghandler for exec responses
 --
@@ -204,6 +234,8 @@ local mh, err = f:msghandler {
             if state.complete() then
                 f:reactor_stop ()
             end
+        else
+            warn ("got unexpected msg %s\n", require 'inspect' (resp))
         end
     end
 

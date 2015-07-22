@@ -10,7 +10,7 @@ flux-exec - Execute processes across flux ranks
 
 SYNOPSIS
 --------
-*flux* *exec* ['--labelio] ['--dir=DIR'] ['--rank=RANKS'] ['--verbose'] COMMANDS...
+*flux* *exec* [--noinput] ['--labelio] ['--dir=DIR'] ['--rank=RANKS'] ['--verbose'] COMMANDS...
 
 
 DESCRIPTION
@@ -40,6 +40,12 @@ exits with exit code 128+signo.
 
 OPTIONS
 -------
+
+*-l, --labelio*::
+Label lines of output with the source RANK.
+
+*-n, --noinput*::
+Redirect `stdin` from `/dev/null`.
 
 *-d, --dir*'=DIR'::
 Set the working directory of remote 'COMMANDS' to 'DIR'. The default is to
