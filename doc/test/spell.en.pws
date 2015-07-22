@@ -3,6 +3,7 @@ KVS
 kvs
 api
 comms
+dev
 dir
 doctype
 dropcache
@@ -87,6 +88,7 @@ lwj
 mpi
 mpicc
 nnodes
+noinput
 ntasks
 pmi
 resrc
