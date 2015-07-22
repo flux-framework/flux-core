@@ -184,12 +184,24 @@ EOF
     test_cmp expected6.sort output.6.sort
 '
 
-test_expect_success 'jstat 7: basic query works' '
-    run_timeout 4 flux wreckrun -n4 -N4 hostname &&  # create some state for
-    flux jstat query 1 jobid &&                      #   subsequent tests
-    flux jstat query 1 state-pair &&                 #   in case RACY not set
-    flux jstat query 1 rdesc &&
-    flux jstat query 1 pdesc 
+test_expect_success 'jstat 7.1: run hostname to create some state' '
+    run_timeout 4 flux wreckrun -n4 -N4 hostname
+'
+
+test_expect_success 'jstat 7.2: basic query works: jobid' '
+    flux jstat query 1 jobid
+'
+
+test_expect_success 'jstat 7.3: basic query works: state-pair' '
+    flux jstat query 1 state-pair
+'
+
+test_expect_success 'jstat 7.4: basic query works: rdesc' '
+    flux jstat query 1 rdesc
+'
+
+test_expect_success 'jstat 7.5: basic query works: pdesc' '
+    flux jstat query 1 pdesc
 '
 
 test_expect_success 'jstat 8: query detects bad inputs' '
