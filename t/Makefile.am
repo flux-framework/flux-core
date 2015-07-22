@@ -18,6 +18,7 @@ TESTS = \
 	t0002-request.t \
 	t0003-module.t \
 	t0005-exec.t \
+	t0006-build-basic.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1002-modctl.t \
@@ -52,6 +53,7 @@ check_SCRIPTS = \
 	t0002-request.t \
 	t0003-module.t \
 	t0005-exec.t \
+	t0006-build-basic.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1002-modctl.t \
@@ -75,6 +77,13 @@ check_PROGRAMS = \
 	loop/reactor.t \
 	loop/rpc.t \
 	loop/multrpc.t
+
+dist_check_DATA = \
+	build/hello.mk \
+	build/hello_czmq.c \
+	build/hello_flux_core.c \
+	build/hello_flux_internal.c \
+	build/hello_jsonc.c
 
 test_ldadd = \
         $(top_builddir)/src/common/libflux-internal.la \
