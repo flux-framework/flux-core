@@ -25,17 +25,18 @@ test_expect_success 'wreckrun: propagates current working directory' '
 	mkdir -p testdir &&
 	cd testdir && 
 	mypwd=$(pwd) &&
-	flux wreckrun -N1 -n1 pwd | grep "^$mypwd$"
+	run_timeout 5 flux wreckrun -N1 -n1 pwd | grep "^$mypwd$"
 '
 test_expect_success 'wreckrun: propagates current environment' '
-	MY_UNLIKELY_ENV=0xdeadbeef \
-	flux wreckrun -N1 -n1 env | grep "MY_UNLIKELY_ENV=0xdeadbeef"
+	( export MY_UNLIKELY_ENV=0xdeadbeef &&
+	  run_timeout 5 flux wreckrun -N1 -n1 env ) | \
+           grep "MY_UNLIKELY_ENV=0xdeadbeef"
 '
 test_expect_success 'wreckrun: does not drop output' '
 	for i in `seq 0 100`; do 
 		base64 /dev/urandom | head -c77
 	done >expected &&
-	flux wreckrun -N1 -n1 cat expected >output &&
+	run_timeout 5 flux wreckrun -N1 -n1 cat expected >output &&
 	test_cmp expected output
 '
 test_done

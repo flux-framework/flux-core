@@ -10,8 +10,8 @@ cache:
   directories:
     - $HOME/local
     - $HOME/.luarocks
-    - $HOME/.python
     - $HOME/.ccache
+    - $HOME/.local
 
 addons:
   apt:
