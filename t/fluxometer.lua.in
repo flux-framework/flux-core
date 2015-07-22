@@ -49,10 +49,10 @@ local top_builddir = "@abs_top_builddir@"
 --  to hand down to test scripts
 --
 --
-package.path = package.path ..  ';' .. top_srcdir ..
-    "/src/bindings/lua/?.lua"
-package.cpath = package.cpath .. ';' .. top_builddir ..
-    "/src/bindings/lua/.libs/?.so"
+package.path = top_srcdir .. "/src/bindings/lua/?.lua" .. ';'
+	.. package.path
+package.cpath = top_builddir .. "/src/bindings/lua/.libs/?.so" .. ';' 
+	.. package.cpath
 
 ---------------------------------------------------------------------------
 local getopt = require 'flux-lua.alt_getopt'.get_opts
@@ -72,8 +72,8 @@ local cmdline_opts = {
 ---
 --  Append path p to PATH environment variable:
 --
-local function do_path_append (p)
-    posix.setenv ("PATH", os.getenv ("PATH") .. ":" .. p)
+local function do_path_prepend (p)
+    posix.setenv ("PATH", p .. ":" .. os.getenv ("PATH"))
 end
 
 ---
@@ -142,7 +142,7 @@ function fluxTest.init (...)
     local path = dir.."/flux"
     local mode = posix.stat (path, 'mode')
     if mode and mode:match('^rwx') then
-        do_path_append (dir)
+        do_path_prepend (dir)
         test.flux_path = path
     else
         test:die ("Failed to find flux path")
