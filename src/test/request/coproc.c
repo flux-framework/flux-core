@@ -41,7 +41,7 @@ static msghandler_t htab[] = {
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
-int mod_main (flux_t h, zhash_t *args)
+int mod_main (flux_t h, int argc, char **argv)
 {
     flux_flags_set (h, FLUX_O_COPROC);
 

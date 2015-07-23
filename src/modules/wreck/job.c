@@ -283,7 +283,7 @@ out:
     return 0;
 }
 
-int mod_main (flux_t h, zhash_t *args)
+int mod_main (flux_t h, int argc, char **argv)
 {
     if (flux_msghandler_add (h, FLUX_MSGTYPE_REQUEST, "job.*",
                                             job_request_cb, NULL) < 0) {

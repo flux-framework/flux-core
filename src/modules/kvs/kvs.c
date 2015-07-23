@@ -1821,32 +1821,36 @@ done_stop:  /* reactor terminates */
     return rc;
 }
 
-static void setargs (ctx_t *ctx, zhash_t *args)
+/* Process arguments of the form key=val
+ */
+static void setargs (ctx_t *ctx, int argc, char **argv)
 {
-    zlist_t *keys = zhash_keys (args);
-    char *key, *val;
-    json_object *vo;
-    href_t ref;
+    int i;
     commit_t *c;
 
     c = commit_create ();
 
-    key = zlist_first (keys);
-    while (key) {
-        val = zhash_lookup (args, key);
-        if (!(vo = json_tokener_parse (val)))
-            vo = json_object_new_string (val);
-        if (vo) {
-            if (store_by_reference (vo)) {
-                store (ctx, vo, ref);
-                commit_add (c, key, dirent_create ("FILEREF", ref));
-            } else {
-                commit_add (c, key, dirent_create ("FILEVAL", vo));
+    for (i = 0; i < argc; i++) {
+        json_object *o = NULL;
+        href_t ref;
+        char *key = xstrdup (argv[i]);
+        char *val = strchr (key, '=');
+        if (*val) {
+            *val++ = '\0';
+            if (!(o = json_tokener_parse (val)))
+                o = json_object_new_string (val);
+            if (o) {
+               if (store_by_reference (o)) {
+                    store (ctx, o, ref);
+                    commit_add (c, key, dirent_create ("FILEREF", ref));
+                } else {
+                    commit_add (c, key, dirent_create ("FILEVAL", o));
+                }
             }
         }
-        key = zlist_next (keys);
+        free (key);
     }
-    zlist_destroy (&keys);
+
     commit_apply_one (ctx, c);
     commit_destroy (c);
 }
@@ -1878,7 +1882,7 @@ static msghandler_t htab[] = {
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
-int mod_main (flux_t h, zhash_t *args)
+int mod_main (flux_t h, int argc, char **argv)
 {
     ctx_t *ctx = getctx (h);
 
@@ -1906,8 +1910,8 @@ int mod_main (flux_t h, zhash_t *args)
 
         store (ctx, rootdir, href);
         setroot (ctx, href, 0);
-        setargs (ctx, args);
-        FASSERT (h, zhash_size (args) == 0 || ctx->rootseq > 0);
+        setargs (ctx, argc, argv);
+        FASSERT (h, argc == 0 || ctx->rootseq > 0);
     } else {
         href_t href;
         int rootseq;

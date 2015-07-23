@@ -497,13 +497,17 @@ static msghandler_t htab[] = {
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
-int mod_main (flux_t h, zhash_t *args)
+int mod_main (flux_t h, int argc, char **argv)
 {
     ctx_t *ctx = getctx (h);
     char *sockpath = NULL, *dfltpath = NULL;
     int rc = -1;
 
-    if (!args || !(sockpath = zhash_lookup (args, "sockpath"))) {
+    if (argc > 0) {
+        sockpath = argv[0];
+        argc--;
+    }
+    if (!sockpath) {
         if (asprintf (&dfltpath, "%s/flux-api", flux_get_tmpdir ()) < 0)
             oom ();
         sockpath = dfltpath;

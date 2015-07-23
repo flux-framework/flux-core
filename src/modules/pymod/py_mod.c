@@ -35,6 +35,9 @@
 #include <errno.h>
 #include <flux/core.h>
 
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/xzmalloc.h"
+
 void add_if_not_present(PyObject *list, const char* path){
     if(path){
         PyObject *pymod_path = PyString_FromString(path);
@@ -50,9 +53,29 @@ void print_usage(){
     printf("pymod usage: flux module load pymod --module=<modname> [--path=<module path>] [--verbose] [--help]]\n");
 }
 
-int mod_main (flux_t h, zhash_t *args_in)
+zhash_t *zhash_fromargv (int argc, char **argv)
 {
-    zhash_t *args = zhash_dup(args_in);
+    zhash_t *args = zhash_new ();
+    int i;
+
+    if (args) {
+        for (i = 0; i < argc; i++) {
+            char *key = xstrdup (argv[i]);
+            char *val = strchr (key, '=');
+            if (val) {
+                *val++ = '\0';
+                zhash_update (args, key, xstrdup (val));
+                zhash_freefn (args, key, free);
+            }
+            free (key);
+        }
+    }
+    return args;
+}
+
+int mod_main (flux_t h, int argc, char **argv)
+{
+    zhash_t *args = zhash_fromargv (argc, argv);
     Py_SetProgramName("pymod");
     Py_Initialize();
     /* flux_log(h, LOG_INFO, "in pymod mod_main"); */

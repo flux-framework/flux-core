@@ -213,7 +213,7 @@ static msghandler_t htab[] = {
 };
 const int htablen = sizeof (htab) / sizeof (htab[0]);
 
-int mod_main (flux_t h, zhash_t *args)
+int mod_main (flux_t h, int argc, char **argv)
 {
     if (flux_msghandler_addvec (h, htab, htablen, NULL) < 0) {
         flux_log (h, LOG_ERR, "flux_msghandler_add: %s", strerror (errno));

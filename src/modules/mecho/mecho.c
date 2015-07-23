@@ -71,7 +71,7 @@ done:
     return 0;
 }
 
-int mod_main (flux_t h, zhash_t *args)
+int mod_main (flux_t h, int argc, char **argv)
 {
     if (flux_event_subscribe (h, "mrpc.mecho") < 0) {
         flux_log (h, LOG_ERR, "%s: flux_event_subscribe", __FUNCTION__);
