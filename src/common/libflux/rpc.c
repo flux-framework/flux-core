@@ -50,6 +50,9 @@ struct flux_rpc_struct {
     flux_msg_t *rx_msg_consumed;
     int rx_count;
     bool oneway;
+    void *aux;
+    flux_free_f aux_destroy;
+    const char *type;
 };
 
 void flux_rpc_destroy (flux_rpc_t *rpc)
@@ -71,6 +74,8 @@ void flux_rpc_destroy (flux_rpc_t *rpc)
         flux_msg_destroy (rpc->rx_msg_consumed);
         if (rpc->nodemap)
             free (rpc->nodemap);
+        if (rpc->aux && rpc->aux_destroy)
+            rpc->aux_destroy (rpc->aux);
         free (rpc);
     }
 }
@@ -293,6 +298,29 @@ error:
     if (ns)
         nodeset_destroy (ns);
     return NULL;
+}
+
+const char *flux_rpc_type_get (flux_rpc_t *rpc)
+{
+    return rpc->type;
+}
+
+void flux_rpc_type_set (flux_rpc_t *rpc, const char *type)
+{
+    rpc->type = type;
+}
+
+void *flux_rpc_aux_get (flux_rpc_t *rpc)
+{
+    return rpc->aux;
+}
+
+void flux_rpc_aux_set (flux_rpc_t *rpc, void *aux, flux_free_f destroy)
+{
+    if (rpc->aux && rpc->aux_destroy)
+        rpc->aux_destroy (rpc->aux);
+    rpc->aux = aux;
+    rpc->aux_destroy = destroy;
 }
 
 /*
