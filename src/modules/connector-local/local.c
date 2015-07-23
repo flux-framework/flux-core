@@ -89,7 +89,7 @@ static void freectx (void *arg)
 
 static ctx_t *getctx (flux_t h)
 {
-    ctx_t *ctx = (ctx_t *)flux_aux_get (h, "apisrv");
+    ctx_t *ctx = (ctx_t *)flux_aux_get (h, "flux::local_connector");
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
@@ -97,7 +97,7 @@ static ctx_t *getctx (flux_t h)
         if (!(ctx->clients = zlist_new ()))
             oom ();
         ctx->session_owner = geteuid ();
-        flux_aux_set (h, "apisrv", ctx, freectx);
+        flux_aux_set (h, "flux::local_connector", ctx, freectx);
     }
 
     return ctx;
@@ -539,7 +539,7 @@ done:
     return rc;
 }
 
-MOD_NAME ("api");
+MOD_NAME ("connector-local");
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
