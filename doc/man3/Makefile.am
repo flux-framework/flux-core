@@ -11,7 +11,10 @@ MAN3_FILES_PRIMARY = \
 	flux_event_subscribe.3 \
 	flux_pollevents.3 \
 	flux_msg_encode.3 \
-	flux_msg_sendfd.3
+	flux_msg_sendfd.3 \
+	flux_rpc.3 \
+	flux_rpc_then.3 \
+	flux_rpc_multi.3
 
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section
@@ -25,7 +28,11 @@ MAN3_FILES_SECONDARY = \
 	flux_event_unsubscribe.3 \
 	flux_pollfd.3 \
 	flux_msg_decode.3 \
-	flux_msg_recvfd.3
+	flux_msg_recvfd.3 \
+	flux_rpc_destroy.3 \
+	flux_rpc_check.3 \
+	flux_rpc_get.3 \
+	flux_rpc_completed.3
 
 ADOC_FILES  = $(MAN3_FILES_PRIMARY:%.3=%.adoc)
 XML_FILES   = $(MAN3_FILES_PRIMARY:%.3=%.xml)
@@ -63,6 +70,10 @@ flux_event_unsubscribe.3: flux_event_subscribe.3
 flux_pollfd.3: flux_pollevents.3
 flux_msg_decode.3: flux_msg_encode.3
 flux_msg_recvfd.3: flux_msg_sendfd.3
+flux_rpc_destroy.3: flux_rpc.3
+flux_rpc_get.3: flux_rpc.3
+flux_rpc_check.3: flux_rpc_then.3
+flux_rpc_completed.3: flux_rpc_multi.3
 
 EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc
 
@@ -74,3 +85,21 @@ TESTS_ENVIRONMENT = \
 	man_dir=$(abs_srcdir)
 
 TESTS = spellcheck
+
+AM_CFLAGS = @GCCWARN@
+
+AM_CPPFLAGS = \
+        $(JSON_CFLAGS) $(ZMQ_CFLAGS) \
+        -I$(top_srcdir) -I$(top_srcdir)/src/include
+
+LDADD = \
+        $(top_builddir)/src/common/libflux-internal.la \
+        $(top_builddir)/src/common/libflux-core.la \
+        $(top_builddir)/src/common/libtap/libtap.la \
+        $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD)
+
+check_PROGRAMS = \
+	trpc \
+	trpc_then \
+	trpc_then_multi
+

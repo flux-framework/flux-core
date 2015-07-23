@@ -224,3 +224,10 @@ fd
 iobuf
 recvfd
 sendfd
+matchtags
+multi
+NORESPONSE
+rpc
+str
+trpc
+bool
