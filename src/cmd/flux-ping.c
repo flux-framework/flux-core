@@ -45,22 +45,24 @@ struct ping_ctx {
     int count;          /* number of pings to send */
     int send_count;     /* sending count */
     int recv_count;     /* receiving count */
+    bool batch;         /* begin receiving only after count sent */
 };
 
-#define OPTIONS "hp:d:r:c:"
+#define OPTIONS "hp:d:r:c:b"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"rank",       required_argument,  0, 'r'},
     {"pad",        required_argument,  0, 'p'},
     {"delay",      required_argument,  0, 'd'},
     {"count",      required_argument,  0, 'c'},
+    {"batch",      no_argument,        0, 'b'},
     { 0, 0, 0, 0 },
 };
 
 void usage (void)
 {
     fprintf (stderr,
-"Usage: flux-ping [--rank N] [--pad bytes] [--delay sec] [--count N] target\n"
+"Usage: flux-ping [--rank N] [--pad bytes] [--delay sec] [--count N] [--batch] target\n"
 );
     exit (1);
 }
@@ -85,7 +87,8 @@ void response_cb (flux_t h, flux_msg_watcher_t *w, const flux_msg_t *msg,
             || !Jget_int64 (out, "time.tv_sec", &sec)
             || !Jget_int64 (out, "time.tv_nsec", &nsec)
             || !Jget_str (out, "pad", &pad)
-            || !Jget_str (out, "route", &route)) {
+            || !Jget_str (out, "route", &route)
+            || strcmp (ctx->pad, pad) != 0) {
         err ("error decoding ping response");
         return;
     }
@@ -146,6 +149,7 @@ int main (int argc, char *argv[])
         .count = -1,
         .send_count = 0,
         .recv_count = 0,
+        .batch = false,
     };
 
     log_init ("flux-ping");
@@ -169,6 +173,9 @@ int main (int argc, char *argv[])
             case 'c': /* --count N */
                 ctx.count = strtoul (optarg, NULL, 10);
                 break;
+            case 'b': /* --batch-request */
+                ctx.batch = true;
+                break;
             default:
                 usage ();
                 break;
@@ -176,6 +183,8 @@ int main (int argc, char *argv[])
     }
     if (optind != argc - 1)
         usage ();
+    if (ctx.batch && ctx.count == -1)
+        msg_exit ("--batch should only be used with --count");
     target = argv[optind++];
 
     /* Create null terminated pad string for reuse in each message.
@@ -214,9 +223,19 @@ int main (int argc, char *argv[])
     if (!mw || !tw)
         err_exit ("error creating watchers");
     flux_timer_watcher_start (h, tw);
-    flux_msg_watcher_start (h, mw);
+    if (!ctx.batch)
+        flux_msg_watcher_start (h, mw);
     if (flux_reactor_start (h) < 0)
         err_exit ("flux_reactor_start");
+
+    /* If in batch mode, we've now sent all our messages and
+     * need to process the responses.
+     */
+    if (ctx.batch) {
+        flux_msg_watcher_start (h, mw);
+        if (flux_reactor_start (h) < 0)
+            err_exit ("flux_reactor_start");
+    }
 
     /* Clean up.
      */

@@ -217,3 +217,10 @@ libev
 libev's
 ZMQ
 EB
+buf
+EPROTO
+EWOULDBLOCK
+fd
+iobuf
+recvfd
+sendfd

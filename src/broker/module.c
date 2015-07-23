@@ -51,11 +51,6 @@
 #include "module.h"
 #include "modservice.h"
 
-/* While transitioning to argc, argv - style args per RFC 5,
- * we have our own mod_main prototype.
- */
-typedef int (mod_main_comms_f)(flux_t h, zhash_t *args);
-
 #define MODULE_MAGIC    0xfeefbe01
 struct module_struct {
     int magic;
@@ -72,7 +67,7 @@ struct module_struct {
 
     zuuid_t *uuid;          /* uuid for unique request sender identity */
     pthread_t t;            /* module thread */
-    mod_main_comms_f *main; /* dlopened mod_main() */
+    mod_main_f *main;       /* dlopened mod_main() */
     char *name;
     void *dso;              /* reference on dlopened module */
     int size;               /* size of .so file for lsmod */
@@ -100,40 +95,15 @@ struct modhash_struct {
     heartbeat_t heartbeat;
 };
 
-/* FIXME: this should go away once module prototypes are updated.
- */
-static zhash_t *zhash_fromargz (module_t p)
-{
-    assert (p->magic == MODULE_MAGIC);
-    zhash_t *z;
-    char *arg;
-
-    if (!(z = zhash_new ()))
-        oom ();
-    arg = argz_next (p->argz, p->argz_len, NULL);
-    while (arg != NULL) {
-        char *key = xstrdup (arg);
-        char *val = strchr (key, '=');
-        if (!val || strlen (val) == 0)
-            val = "1";
-        else
-            *val++ = '\0';
-        zhash_update (z, key, xstrdup (val));
-        zhash_freefn (z, key, (zhash_free_fn *)free);
-        free (key);
-        arg = argz_next (p->argz, p->argz_len, arg);
-    }
-    return z;
-}
-
 static void *module_thread (void *arg)
 {
     module_t p = arg;
     assert (p->magic == MODULE_MAGIC);
     sigset_t signal_set;
     int errnum;
-    zhash_t *args = NULL;
     char *uri = xasprintf ("shmem://%s", zuuid_str (p->uuid));
+    char **av = NULL;
+    int ac;
 
     assert (p->zctx);
 
@@ -157,16 +127,18 @@ static void *module_thread (void *arg)
 
     /* Run the module's main().
      */
-    args = zhash_fromargz (p);
-    if (p->main(p->h, args) < 0) {
+    ac = argz_count (p->argz, p->argz_len);
+    av = xzmalloc (sizeof (av[0]) * (ac + 1));
+    argz_extract (p->argz, p->argz_len, av);
+    if (p->main(p->h, ac, av) < 0) {
         err ("%s: mod_main returned error", p->name);
         goto done;
     }
 done:
-    zhash_destroy (&args);
+    if (av)
+        free (av);
     flux_close (p->h);
     p->h = NULL;
-
     return NULL;
 }
 
@@ -390,7 +362,7 @@ module_t module_add (modhash_t mh, const char *path)
     module_t p;
     void *dso;
     const char **mod_namep;
-    mod_main_comms_f *mod_main;
+    mod_main_f *mod_main;
     zfile_t *zf;
     int rc;
 

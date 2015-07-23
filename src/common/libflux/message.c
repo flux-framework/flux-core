@@ -201,6 +201,26 @@ void flux_msg_destroy (flux_msg_t *msg)
     zmsg_destroy (&msg);
 }
 
+int flux_msg_encode (const flux_msg_t *msg, void **buf, size_t *size)
+{
+    size_t len;
+    byte *buffer;
+
+    len = zmsg_encode ((zmsg_t *)msg, &buffer);
+    if (buffer == NULL) {
+        errno = ENOMEM;
+        return -1;
+    }
+    *buf = buffer;
+    *size = len;
+    return 0;
+}
+
+flux_msg_t *flux_msg_decode (void *buf, size_t size)
+{
+    return zmsg_decode (buf, size);
+}
+
 int flux_msg_set_type (zmsg_t *zmsg, int type)
 {
     zframe_t *zf = zmsg_last (zmsg);
@@ -1008,6 +1028,125 @@ void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
      */
     zframe_fprint (proto, prefix, f);
 }
+
+void flux_msg_iobuf_init (struct flux_msg_iobuf *iobuf)
+{
+    memset (iobuf, 0, sizeof (*iobuf));
+}
+
+void flux_msg_iobuf_clean (struct flux_msg_iobuf *iobuf)
+{
+    if (iobuf->buf)
+        free (iobuf->buf);
+    memset (iobuf, 0, sizeof (*iobuf));
+}
+
+int flux_msg_sendfd (int fd, const flux_msg_t *msg,
+                     struct flux_msg_iobuf *iobuf)
+{
+    struct flux_msg_iobuf local;
+    struct flux_msg_iobuf *io = iobuf ? iobuf : &local;
+    int rc = -1;
+
+    if (!iobuf)
+        flux_msg_iobuf_init (&local);
+    if (fd < 0 || !msg) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (!io->buf) {
+        if (flux_msg_encode (msg, &io->buf, &io->size) < 0)
+            goto done;
+        io->nsize = htonl (io->size);
+        io->done = 0;
+    }
+    do {
+        if (io->nsize_done < sizeof (io->nsize)) {
+            rc = write (fd, (uint8_t *)&io->nsize + io->nsize_done,
+                               sizeof (io->nsize) - io->nsize_done);
+            if (rc < 0)
+                goto done;
+            io->nsize_done += rc;
+        }
+        if (io->nsize_done == sizeof (io->nsize) && io->done < io->size) {
+            rc = write (fd, io->buf + io->done,
+                            io->size - io->done);
+            if (rc < 0)
+                goto done;
+            io->done += rc;
+        }
+    } while (io->nsize_done < sizeof (io->nsize) || io->done < io->size);
+    rc = 0;
+done:
+    if (iobuf) {
+        if (rc == 0 || (errno != EAGAIN && errno != EWOULDBLOCK))
+            flux_msg_iobuf_clean (iobuf);
+    } else {
+        if (rc < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+            errno = EPROTO;
+        flux_msg_iobuf_clean (&local);
+    }
+    return rc;
+}
+
+flux_msg_t *flux_msg_recvfd (int fd, struct flux_msg_iobuf *iobuf)
+{
+    struct flux_msg_iobuf local;
+    struct flux_msg_iobuf *io = iobuf ? iobuf : &local;
+    flux_msg_t *msg = NULL;
+    int rc = -1;
+
+    if (!iobuf)
+        flux_msg_iobuf_init (&local);
+    if (fd < 0) {
+        errno = EINVAL;
+        goto done;
+    }
+    do {
+        if (io->nsize_done < sizeof (io->nsize)) {
+            rc = read (fd, (uint8_t *)&io->nsize + io->nsize_done,
+                              sizeof (io->nsize) - io->nsize_done);
+            if (rc < 0)
+                goto done;
+            if (rc == 0) {
+                errno = EPROTO;
+                goto done;
+            }
+            io->nsize_done += rc;
+            if (io->nsize_done == sizeof (io->nsize)) {
+                io->size = ntohl (io->nsize);
+                if (!(io->buf = malloc (io->size))) {
+                    errno = ENOMEM;
+                    goto done;
+                }
+            }
+        }
+        if (io->nsize_done == sizeof (io->nsize) && io->done < io->size) {
+            rc = read (fd, io->buf + io->done,
+                           io->size - io->done);
+            if (rc < 0)
+                goto done;
+            if (rc == 0) {
+                errno = EPROTO;
+                goto done;
+            }
+            io->done += rc;
+        }
+    } while (io->nsize_done < sizeof (io->nsize) || io->done < io->size);
+    if (!(msg = flux_msg_decode (io->buf, io->size)))
+        goto done;
+done:
+    if (iobuf) {
+        if (msg != NULL || (errno != EAGAIN && errno != EWOULDBLOCK))
+            flux_msg_iobuf_clean (iobuf);
+    } else {
+        if (rc < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+            errno = EPROTO;
+        flux_msg_iobuf_clean (&local);
+    }
+    return msg;
+}
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

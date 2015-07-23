@@ -44,6 +44,14 @@ struct flux_match {
     .topic_glob = NULL, \
 }
 
+struct flux_msg_iobuf {
+    uint32_t nsize;
+    size_t nsize_done;
+    void *buf;
+    size_t size;
+    size_t done;
+};
+
 /* Create a new Flux message.
  * Returns new message or null on failure, with errno set (e.g. ENOMEM, EINVAL)
  * Caller must destroy message with flux_msg_destroy() or equivalent.
@@ -54,6 +62,40 @@ void flux_msg_destroy (flux_msg_t *msg);
 /* Duplicate msg, omitting payload if 'payload' is false.
  */
 flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload);
+
+/* Encode a flux_msg_t to buffer.
+ * Returns 0 on success, -1 on failure with errno set.
+ * Caller must free buf.
+ */
+int flux_msg_encode (const flux_msg_t *msg, void **buf, size_t *size);
+
+/* Decode a flux_msg_t from buffer.
+ * Returns message on success, NULL on failure with errno set.
+ * Caller must destroy message with flux_msg_destroy().
+ */
+flux_msg_t *flux_msg_decode (void *buf, size_t size);
+
+/* Send message to file descriptor.
+ * iobuf captures intermediate state to make EAGAIN/EWOULDBLOCK restartable.
+ * Returns 0 on success, -1 on failure with errno set.
+ */
+int flux_msg_sendfd (int fd, const flux_msg_t *msg,
+                     struct flux_msg_iobuf *iobuf);
+
+/* Receive message from file descriptor.
+ * iobuf captures intermediate state to make EAGAIN/EWOULDBLOCK restartable.
+ * Returns message on success, NULL on failure with errno set.
+ */
+flux_msg_t *flux_msg_recvfd (int fd, struct flux_msg_iobuf *iobuf);
+
+/* Initialize iobuf members.
+ */
+void flux_msg_iobuf_init (struct flux_msg_iobuf *iobuf);
+
+/* Free any internal memory allocated to iobuf.
+ * Only necessary if destroying with partial I/O in progress.
+ */
+void flux_msg_iobuf_clean (struct flux_msg_iobuf *iobuf);
 
 /* Get/set message type
  * For FLUX_MSGTYPE_REQUEST: set_type initializes nodeid to FLUX_NODEID_ANY
@@ -183,6 +225,7 @@ int flux_msg_get_route_count (const flux_msg_t *msg);
  * Caller must free the returned string.
  */
 char *flux_msg_get_route_string (const flux_msg_t *msg);
+
 
 #endif /* !_FLUX_CORE_MESSAGE_H */
 

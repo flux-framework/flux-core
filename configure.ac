@@ -172,7 +172,7 @@ AC_CONFIG_FILES( \
   src/connectors/shmem/Makefile \
   src/connectors/loop/Makefile \
   src/modules/Makefile \
-  src/modules/api/Makefile \
+  src/modules/connector-local/Makefile \
   src/modules/kvs/Makefile \
   src/modules/modctl/Makefile \
   src/modules/libmrpc/Makefile \

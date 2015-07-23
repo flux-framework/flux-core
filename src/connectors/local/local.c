@@ -35,16 +35,31 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/zfd.h"
 
 #define CTX_MAGIC   0xf434aaab
 typedef struct {
     int magic;
     int fd;
+    struct flux_msg_iobuf outbuf;
+    struct flux_msg_iobuf inbuf;
     flux_t h;
 } ctx_t;
 
 static const struct flux_handle_ops handle_ops;
+
+static int set_nonblock (int fd, bool nonblock)
+{
+    int flags = fcntl (fd, F_GETFL);
+    if (flags < 0)
+        return -1;
+    if (nonblock)
+        flags |= O_NONBLOCK;
+    else
+        flags &= ~O_NONBLOCK;
+    if (fcntl (fd, F_SETFL, flags) < 0)
+        return -1;
+    return 0;
+}
 
 static int op_pollevents (void *impl)
 {
@@ -83,14 +98,22 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
 {
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
-    return zfd_send (c->fd, (zmsg_t *)msg);
+
+    if (set_nonblock (c->fd, (flags & FLUX_O_NONBLOCK)) < 0)
+        return -1;
+    if (flux_msg_sendfd (c->fd, msg, &c->outbuf) < 0)
+        return -1;
+    return 0;
 }
 
-static zmsg_t *op_recv (void *impl, int flags)
+static flux_msg_t *op_recv (void *impl, int flags)
 {
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
-    return zfd_recv (c->fd, (flags & FLUX_O_NONBLOCK) ? : false);
+
+    if (set_nonblock (c->fd, (flags & FLUX_O_NONBLOCK)) < 0)
+        return NULL;
+    return flux_msg_recvfd (c->fd, &c->inbuf);
 }
 
 static int op_event_subscribe (void *impl, const char *s)
@@ -120,6 +143,8 @@ static void op_fini (void *impl)
     ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
 
+    flux_msg_iobuf_clean (&c->outbuf);
+    flux_msg_iobuf_clean (&c->inbuf);
     if (c->fd >= 0)
         (void)close (c->fd);
     c->magic = ~CTX_MAGIC;
@@ -185,6 +210,8 @@ flux_t connector_init (const char *path, int flags)
             break;
         usleep (100*1000);
     }
+    flux_msg_iobuf_init (&c->outbuf);
+    flux_msg_iobuf_init (&c->inbuf);
     c->h = flux_handle_create (c, &handle_ops, flags);
     return c->h;
 error:

@@ -78,7 +78,7 @@ static void _store_hosts (flux_t h)
     kvs_commit(h);
 }
 
-int mod_main (flux_t h, zhash_t *args)
+int mod_main (flux_t h, int argc, char **argv)
 {
     _store_hosts(h);
     if (flux_reactor_start (h) < 0) {
