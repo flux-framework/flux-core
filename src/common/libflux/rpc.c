@@ -52,7 +52,7 @@ struct flux_rpc_struct {
     bool oneway;
 };
 
-void flux_rpc_destroy (flux_rpc_t rpc)
+void flux_rpc_destroy (flux_rpc_t *rpc)
 {
     if (rpc) {
         if (rpc->w) {
@@ -75,9 +75,9 @@ void flux_rpc_destroy (flux_rpc_t rpc)
     }
 }
 
-static flux_rpc_t rpc_create (flux_t h, int flags, int count)
+static flux_rpc_t *rpc_create (flux_t h, int flags, int count)
 {
-    flux_rpc_t rpc = xzmalloc (sizeof (*rpc));
+    flux_rpc_t *rpc = xzmalloc (sizeof (*rpc));
     if ((flags & FLUX_RPC_NORESPONSE)) {
         rpc->oneway = true;
         rpc->m.matchtag = FLUX_MATCHTAG_NONE;
@@ -95,7 +95,7 @@ static flux_rpc_t rpc_create (flux_t h, int flags, int count)
     return rpc;
 }
 
-static uint32_t lookup_nodeid (flux_rpc_t rpc, uint32_t matchtag)
+static uint32_t lookup_nodeid (flux_rpc_t *rpc, uint32_t matchtag)
 {
     int ix = matchtag - rpc->m.matchtag;
     if (ix < 0 || ix >= rpc->m.bsize)
@@ -103,7 +103,7 @@ static uint32_t lookup_nodeid (flux_rpc_t rpc, uint32_t matchtag)
     return rpc->nodemap[ix];
 }
 
-static int rpc_request_send (flux_rpc_t rpc, int n, const char *topic,
+static int rpc_request_send (flux_rpc_t *rpc, int n, const char *topic,
                              const char *json_str, uint32_t nodeid)
 {
     flux_msg_t *msg;
@@ -130,7 +130,7 @@ done:
 }
 
 
-bool flux_rpc_check (flux_rpc_t rpc)
+bool flux_rpc_check (flux_rpc_t *rpc)
 {
     if (rpc->oneway)
         return false;
@@ -141,7 +141,7 @@ bool flux_rpc_check (flux_rpc_t rpc)
     return false;
 }
 
-int flux_rpc_get (flux_rpc_t rpc, uint32_t *nodeid, const char **json_str)
+int flux_rpc_get (flux_rpc_t *rpc, uint32_t *nodeid, const char **json_str)
 {
     int rc = -1;
 
@@ -177,7 +177,7 @@ done:
 static void rpc_cb (flux_t h, flux_msg_watcher_t *w,
                     const flux_msg_t *msg, void *arg)
 {
-    flux_rpc_t rpc = arg;
+    flux_rpc_t *rpc = arg;
     assert (rpc->then_cb != NULL);
 
     if (rpc->rx_msg) {
@@ -197,7 +197,7 @@ done: /* no good way to report flux_requeue() errors */
     ;
 }
 
-int flux_rpc_then (flux_rpc_t rpc, flux_then_f cb, void *arg)
+int flux_rpc_then (flux_rpc_t *rpc, flux_then_f cb, void *arg)
 {
     int rc = -1;
 
@@ -226,17 +226,17 @@ done:
     return rc;
 }
 
-bool flux_rpc_completed (flux_rpc_t rpc)
+bool flux_rpc_completed (flux_rpc_t *rpc)
 {
     if (rpc->oneway || rpc->rx_count == rpc->m.bsize)
         return true;
     return false;
 }
 
-flux_rpc_t flux_rpc (flux_t h, const char *topic, const char *json_str,
-                     uint32_t nodeid, int flags)
+flux_rpc_t *flux_rpc (flux_t h, const char *topic, const char *json_str,
+                      uint32_t nodeid, int flags)
 {
-    flux_rpc_t rpc = rpc_create (h, flags, 1);
+    flux_rpc_t *rpc = rpc_create (h, flags, 1);
 
     if (rpc_request_send (rpc, 0, topic, json_str, nodeid) < 0)
         goto error;
@@ -248,12 +248,12 @@ error:
     return NULL;
 }
 
-flux_rpc_t flux_rpc_multi (flux_t h, const char *topic, const char *json_str,
-                           const char *nodeset, int flags)
+flux_rpc_t *flux_rpc_multi (flux_t h, const char *topic, const char *json_str,
+                            const char *nodeset, int flags)
 {
     nodeset_t ns = NULL;
     nodeset_itr_t itr = NULL;
-    flux_rpc_t rpc = NULL;
+    flux_rpc_t *rpc = NULL;
     int i, count;
 
     if (!topic || !nodeset) {
