@@ -194,7 +194,8 @@ static void rpc_cb (flux_t h, flux_msg_watcher_t *w,
         rpc->rx_msg = NULL;
     }
 done: /* no good way to report flux_requeue() errors */
-    ;
+    if (flux_rpc_completed (rpc))
+        flux_msg_watcher_stop (rpc->h, rpc->w);
 }
 
 int flux_rpc_then (flux_rpc_t *rpc, flux_then_f cb, void *arg)
