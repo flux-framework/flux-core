@@ -85,7 +85,8 @@ void response_cb (flux_t h, flux_msg_watcher_t *w, const flux_msg_t *msg,
             || !Jget_int64 (out, "time.tv_sec", &sec)
             || !Jget_int64 (out, "time.tv_nsec", &nsec)
             || !Jget_str (out, "pad", &pad)
-            || !Jget_str (out, "route", &route)) {
+            || !Jget_str (out, "route", &route)
+            || strcmp (ctx->pad, pad) != 0) {
         err ("error decoding ping response");
         return;
     }
