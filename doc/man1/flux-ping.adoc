@@ -10,7 +10,7 @@ flux-ping - measure round-trip latency to Flux services
 
 SYNOPSIS
 --------
-*flux* *ping* ['--rank N'] ['--pad bytes'] ['--delay N'] ['--count N'] target
+*flux* *ping* ['OPTIONS'] target
 
 
 DESCRIPTION
@@ -52,6 +52,9 @@ Requests are sent without waiting for responses.  Default: 1.0 seconds.
 *-c, --count*'=N'::
 Specify the number of requests to send, and terminate the command once
 responses have been received for all the requests.  Default: unlimited.
+
+*-b, --batch*::
+Begin processing responses after all requests are sent.  Requires --count.
 
 EXAMPLES
 --------
