@@ -263,7 +263,7 @@ void mod_insmod (flux_t h, opt_t opt)
         char *topic = xasprintf ("%s.insmod", service);
         char *json_str = flux_insmod_json_encode (modpath, opt.argc, opt.argv);
         assert (json_str != NULL);
-        flux_rpc_t r = flux_rpc_multi (h, topic, json_str, opt.nodeset, 0);
+        flux_rpc_t *r = flux_rpc_multi (h, topic, json_str, opt.nodeset, 0);
         if (!r)
             err_exit ("%s", topic);
         while (!flux_rpc_completed (r)) {
@@ -298,7 +298,7 @@ void mod_rmmod (flux_t h, opt_t opt)
         char *topic = xasprintf ("%s.rmmod", service);
         char *json_str = flux_rmmod_json_encode (modname);
         assert (json_str != NULL);
-        flux_rpc_t r = flux_rpc_multi (h, topic, json_str, opt.nodeset, 0);
+        flux_rpc_t *r = flux_rpc_multi (h, topic, json_str, opt.nodeset, 0);
         if (!r)
             err_exit ("%s", topic);
         while (!flux_rpc_completed (r)) {
@@ -432,7 +432,7 @@ void mod_lsmod (flux_t h, opt_t opt)
         if (!mods)
             oom ();
         char *topic = xasprintf ("%s.lsmod", service);
-        flux_rpc_t r = flux_rpc_multi (h, topic, NULL, opt.nodeset, 0);
+        flux_rpc_t *r = flux_rpc_multi (h, topic, NULL, opt.nodeset, 0);
         if (!r)
             err_exit ("%s", topic);
         while (!flux_rpc_completed (r)) {

@@ -38,7 +38,7 @@ char *flux_getattr (flux_t h, int rank, const char *name)
 {
     uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
     JSON in = Jnew ();
-    flux_rpc_t r = NULL;
+    flux_rpc_t *r = NULL;
     const char *json_str;
     JSON out = NULL;
     char *ret = NULL;
@@ -64,7 +64,7 @@ done:
 
 int flux_info (flux_t h, int *rankp, int *sizep, bool *treerootp)
 {
-    flux_rpc_t r = NULL;
+    flux_rpc_t *r = NULL;
     JSON out = NULL;
     const char *json_str;
     int rank, size;

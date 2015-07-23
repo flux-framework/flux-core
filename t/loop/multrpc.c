@@ -80,8 +80,8 @@ done:
 /* then test - add nodeid to 'then_ns' */
 static nodeset_t then_ns = NULL;
 static int then_count = 0;
-static flux_rpc_t then_r;
-static void then_cb (flux_rpc_t r, void *arg)
+static flux_rpc_t *then_r;
+static void then_cb (flux_rpc_t *r, void *arg)
 {
     flux_t h = arg;
     uint32_t nodeid;
@@ -98,7 +98,7 @@ int rpctest_begin_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
     uint32_t nodeid;
     int i, errors;
     int old_count;
-    flux_rpc_t r;
+    flux_rpc_t *r;
     const char *json_str;
 
     errno = 0;
