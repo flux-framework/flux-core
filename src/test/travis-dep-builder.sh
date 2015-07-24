@@ -27,8 +27,8 @@ declare -A lua_rocks=(\
 )
 
 declare -r prog=${0##*/}
-declare -r long_opts="prefix:,cachedir:,verbose"
-declare -r short_opts="vp:c:"
+declare -r long_opts="prefix:,cachedir:,verbose,printenv"
+declare -r short_opts="vp:c:P"
 declare -r usage="\
 \n
 Usage: $prog [OPTIONS]\n\
@@ -37,6 +37,7 @@ for building flux-framework/flux-core\n\
 \n\
 Options:\n\
  -v, --verbose           Be verbose.\n\
+ -P, --printenv          Print environment variables to stdout\n\
  -c, --cachedir=DIR      Check for precompiled dependency cache in DIR\n\
  -e, --max-cache-age=N   Expire cache in N days from creation\n\
  -p, --prefix=DIR        Install software into prefix\n
@@ -58,10 +59,26 @@ while true; do
       -c|--cachedir)         cachedir="$2"; shift 2 ;;
       -e|--max-cache-age)    cacheage="$2"; shift 2 ;;
       -p|--prefix)           prefix="$2";   shift   ;;
+      -P|--printenv)         print_env=1;   shift   ;;
       --)                    shift ; break;         ;;
       *)                     die "Invalid option '$1'\n$usage" ;;
     esac
 done
+
+print_env () {
+    echo "export LD_LIBRARY_PATH=${prefix}/lib:$LD_LIBRARY_PATH"
+    echo "export CPPFLAGS=-I${prefix}/include"
+    echo "export LDFLAGS=-L${prefix}/lib"
+    echo "export PKG_CONFIG_PATH=${prefix}/lib/pkgconfig"
+    luarocks path
+}
+
+if test -n "$print_env"; then
+    print_env
+    exit 0
+fi
+
+$(print_env)
 
 check_cache ()
 {
