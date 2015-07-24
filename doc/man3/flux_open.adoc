@@ -66,15 +66,9 @@ EXAMPLES
 
 This example opens the Flux broker using the default connector
 and path, requests the broker rank, and finally closes the broker handle.
+
 ....
-flux_t h;
-
-if (!(h = flux_open (NULL, 0)))
-    err_exit ("flux_open");
-
-printf ("My rank is %d\n", flux_rank (h));
-
-flux_close (h);
+include::topen.c[]
 ....
 
 

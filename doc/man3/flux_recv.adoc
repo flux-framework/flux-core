@@ -96,23 +96,9 @@ EXAMPLES
 
 This example opens the Flux broker and displays event messages
 as they arrive.
+
 ....
-flux_t h;
-flux_msg_t *msg;
-struct flux_match match = FLUX_MATCH_EVENT;
-const char *topic;
-
-if (!(h = flux_open (NULL, 0)))
-    err_exit ("flux_open");
-
-while ((msg = flux_recv (h, match, 0))) {
-    if (flux_msg_get_topic (msg, &topic) < 0)
-        err_exit ("flux_msg_get_topic");
-    printf ("Event: %s\n", topic);
-    flux_msg_destroy (msg);
-}
-
-flux_close (h);
+include::trecv.c[]
 ....
 
 

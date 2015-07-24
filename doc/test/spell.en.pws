@@ -231,3 +231,8 @@ rpc
 str
 trpc
 bool
+mrpc
+topen
+tevent
+tsend
+trecv

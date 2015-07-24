@@ -20,26 +20,34 @@ bool flux_rpc_completed (flux_rpc_t *rpc);
 DESCRIPTION
 -----------
 
-`flux_rpc_multi()` sends requests to a Flux service identified by _topic_
-via Flux broker handle _h_.   The _nodeset_ represents a set of ranks
-that will receive the request, and is specified in bracketed range format,
-e.g. "[0-255]", "[1,3,5-10]", or "all" for all ranks in the session.
+`flux_rpc_multi()` encodes and sends request messages, comprising the
+first half of a remote procedure call (RPC), to multiple ranks.
+A flux_rpc_t object is returned which can be passed repeatedly to
+`flux_rpc_get()` to obtain the decoded response messages, comprising
+the second half of the RPC.  The flux_rpc_t should finally be disposed
+of using `flux_rpc_destroy()`.
 
-If _json_str_ is non-NULL, it should represent a valid JSON string
-that will be attached as request payload.
+_topic_ must be set to a topic string representing the Flux
+service that will handle the request.
 
-Flags may be zero or a mask of the following values:
+_json_in_, if non-NULL, must be a string containing valid serialized
+JSON to be attached as payload to the request.  If NULL, the request
+will be sent without a payload.
+
+_nodeset_ is a string containing a bracketed set of ranks or "all" as a
+shorthand for all ranks in the session.  Examples of valid nodeset
+strings are "[0-255]", "[1,2.3]", and "[0,3,5-10]".
+
+_flags_ may be zero or:
 
 FLUX_RPC_NORESPONSE::
-No response will be expected to the request, and the request will not be
-assigned a matchtag.
+No response is expected.  The request will not be assigned a matchtag,
+and the flux_rpc_t returned by `flux_rpc()` may be immediately destroyed.
 
-`flux_rpc_get(3)` may be used, as with `flux_rpc(3)`, to process responses.
-Each call to `flux_rpc_get(3)` invalidates any payload obtained via a
-previous call.
-
-`flux_rpc_check(3)` may be used, as with `flux_rpc(3)`, to determine
-whether `flux_rpc_get(3)` will block.
+`flux_rpc_get()` blocks until a matching response is received, then
+decodes the result.  This function is called once for each response,
+each time invalidating the payload obtained in the previous call.
+For asynchronous response handling, see flux_rpc_then(3).
 
 `flux_rpc_completed()` returns true once all the RPC responses have been
 received and handled via `flux_rpc_get()`.  It can be used to terminate
@@ -49,12 +57,10 @@ while (!flux_rpc_completed (rpc))
     flux_rpc_get (rpc, &nodeid, &payload);
 ....
 
-`flux_rpc_then(3)` may be used, as with `flux_rpc(3)`, to register a
-reactor callback to handle each RPC responses message.
-
-`flux_rpc_destroy(3)` should be used to dispose of the flux_rpc_t object
-once the RPC has completed.  After this function is called, any payload
-returned by `flux_rpc_get()` is invalidated.
+`flux_rpc_destroy()` destroys a completed `flux_rpc_t`, invalidating 
+payload as described above, and freeing the RPC matchtag block.  Destroying
+an RPC before completion renders the matchtag block associated with the RPC
+unusable; it is effectively leaked from the matchtag pool.
 
 
 RETURN VALUE
@@ -78,6 +84,25 @@ Some arguments were invalid.
 
 EPROTO::
 A protocol error was encountered.
+
+
+IMPLEMENTATION NOTES
+--------------------
+
+In the flux-core-0.0.1 implementation of `flux_rpc_multi()`, all requests
+are sent back to back during the `flux_rpc_multi()` call, and routed
+over the flux-broker(1) ring network, which is characterized by worst-case
+latency that scales linearly with the session size.
+
+Since requests are sent back to back without waiting for a response,
+this message latency may be well hidden, but messages may flood the brokers
+and overlay channels, since there is no flow control of requests based on
+the timing of return messages.
+
+Other options with different scalability properties are available.
+For example, `flux_mrpc_*()` uses multicast events for synchronization
+and the KVS with its hierarchical object cache for exchanging request
+and response payloads.
 
 
 EXAMPLE
