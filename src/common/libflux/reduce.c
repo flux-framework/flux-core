@@ -25,182 +25,292 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <stdbool.h>
 #include <czmq.h>
+
 #include "reduce.h"
 #include "reactor.h"
+#include "info.h"
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 
 
-typedef struct hwm_struct *hwm_t;
-
-struct flux_red_struct {
-    flux_sink_f sinkfn;
-    flux_red_f redfn;
+struct flux_reduce_struct {
+    struct flux_reduce_ops ops;
     void *arg;
-    flux_redstack_t items;
+
+    zlist_t *items; /* set of current items */
+    void *old_item; /* flux_reduce_pop() pops old_item if old_flag is true */
+    bool old_flag;
+
+    uint32_t rank;
     flux_t h;
     int flags;
-    int timeout_msec;
+
     flux_timer_watcher_t *timer;
+    double timeout;
+    bool timer_armed;
 
-    int last_hwm;
-    int cur_hwm;
-    int cur_batchnum;
+    unsigned int hwm;
+    bool hwm_readonly;
+    unsigned int count; /* count of items in current batch towards hwm */
+
+    int batchnum;
+    bool flushed;
 };
 
-struct flux_redstack_struct {
-    zlist_t *l;
-};
 
-static void timer_cb (flux_t h, flux_timer_watcher_t *w, int revents, void *arg);
+static void flush_current (flux_reduce_t *r);
 
-static bool hwm_flushable (flux_red_t r);
-static bool hwm_valid (flux_red_t r);
-
-static flux_redstack_t redstack_create (void)
-{
-    flux_redstack_t s = xzmalloc (sizeof (*s));
-    if (!(s->l = zlist_new ()))
-        oom();
-    return s;
-}
-
-static void redstack_destroy (flux_redstack_t s)
-{
-    if (s) {
-        zlist_destroy (&s->l);
-        free (s);
-    }
-}
-
-void *flux_redstack_pop (flux_redstack_t s)
-{
-    return zlist_pop (s->l);
-}
-
-void flux_redstack_push (flux_redstack_t s, void *item)
-{
-    if (zlist_push (s->l, item) < 0)
-        oom ();
-}
-
-int flux_redstack_count (flux_redstack_t s)
-{
-    return zlist_size (s->l);
-}
-
-flux_red_t flux_red_create (flux_t h, flux_sink_f sinkfn, void *arg)
-{
-    flux_red_t r = xzmalloc (sizeof (*r));
-    r->arg = arg;
-    r->h = h;
-    assert (sinkfn != NULL); /* FIXME */
-    r->sinkfn = sinkfn;
-    r->items = redstack_create ();
-    r->timer = flux_timer_watcher_create (1E-3*r->timeout_msec, 0, timer_cb, r);
-    if (!r->timer)
-        oom ();
-    return r;
-}
-
-void flux_red_destroy (flux_red_t r)
-{
-    flux_red_flush (r);
-    redstack_destroy (r->items);
-    if (r->timer) {
-        flux_timer_watcher_stop (r->h, r->timer);
-        flux_timer_watcher_destroy (r->timer);
-    }
-    free (r);
-}
-
-void flux_red_set_timeout_msec (flux_red_t r, int msec)
-{
-    r->timeout_msec = msec;
-}
-
-void flux_red_set_reduce_fn (flux_red_t r, flux_red_f redfn)
-{
-    r->redfn = redfn;
-}
-
-void flux_red_set_flags (flux_red_t r, int flags)
-{
-    r->flags = flags;
-}
-
-void flux_red_flush (flux_red_t r)
-{
-    void *item;
-
-    while ((item = flux_redstack_pop (r->items)))
-        r->sinkfn (r->h, item, r->cur_batchnum, r->arg);
-    flux_timer_watcher_stop (r->h, r->timer);
-}
-
-static int append_late_item (flux_red_t r, void *item, int batchnum)
-{
-    flux_redstack_t items = redstack_create ();
-    flux_redstack_push (items, item);
-    if (r->redfn)
-        r->redfn (r->h, items, batchnum, r->arg);
-    while ((item = flux_redstack_pop (items)))
-        r->sinkfn (r->h, item, batchnum, r->arg);
-    redstack_destroy (items);
-    return 0;
-}
-
-int flux_red_append (flux_red_t r, void *item, int batchnum)
-{
-    int rc = 0;
-
-    if (batchnum < r->cur_batchnum) {
-        if (batchnum == r->cur_batchnum - 1)
-            r->last_hwm++;
-        return append_late_item (r, item, batchnum);
-    }
-    if (batchnum > r->cur_batchnum) {
-        flux_red_flush (r);
-        r->last_hwm = r->cur_hwm;
-        r->cur_hwm = 1;
-        r->cur_batchnum = batchnum;
-    } else
-        r->cur_hwm++;
-    assert (batchnum == r->cur_batchnum);
-    flux_redstack_push (r->items, item);
-    if (r->redfn)
-        r->redfn (r->h, r->items, r->cur_batchnum, r->arg);
-
-    if ((r->flags & FLUX_RED_HWMFLUSH)) {
-        if (!hwm_valid (r) || hwm_flushable (r))
-            flux_red_flush (r);
-    }
-    if ((r->flags & FLUX_RED_TIMEDFLUSH)) {
-        if (flux_redstack_count (r->items) > 0)
-            flux_timer_watcher_start (r->h, r->timer);
-    }
-    if (r->flags == 0)
-        flux_red_flush (r);
-    return rc;
-}
 
 static void timer_cb (flux_t h, flux_timer_watcher_t *w, int revents, void *arg)
 {
-    flux_red_t r = arg;
-    flux_red_flush (r);
+    flux_reduce_t *r = arg;
+    flush_current (r);
 }
 
-static bool hwm_flushable (flux_red_t r)
+flux_reduce_t *flux_reduce_create (flux_t h, struct flux_reduce_ops ops,
+                                   double timeout, void *arg, int flags)
 {
-    return (r->last_hwm > 0 && r->last_hwm == r->cur_hwm);
+    int arity = 2;
+    uint32_t size = 1;
+
+    if (!h || ((flags & FLUX_REDUCE_HWMFLUSH) && !ops.itemweight)
+           || ((flags & FLUX_REDUCE_TIMEDFLUSH) && timeout <= 0)) {
+        errno = EINVAL;
+        return NULL;
+    }
+    flux_reduce_t *r = xzmalloc (sizeof (*r));
+    r->h = h;
+    r->ops = ops;
+    r->rank = 0;
+    (void) flux_info (h, &r->rank, &size, &arity);
+    r->arg = arg;
+    r->flags = flags;
+    if (!(r->items = zlist_new ()))
+        oom ();
+    if ((flags & FLUX_REDUCE_TIMEDFLUSH)) {
+        double my_level = floor (log (r->rank + 1) / log (arity));
+        double max_level = floor (log (size) / log (arity)) + 1.;
+        /* Scale the timeout based on our height in the tree,
+         * small at the leaves and 100% at the root.
+         * (calculations based on max_level + 1 so timeout is nonzero at
+         * the leaves - there may be multiple items to reduce there).
+         */
+        r->timeout = (max_level - my_level) * (timeout / max_level);
+
+        if (!(r->timer = flux_timer_watcher_create (r->timeout, 0,
+                                                    timer_cb, r))) {
+            flux_reduce_destroy (r);
+            return NULL;
+        }
+    }
+    return r;
 }
 
-static bool hwm_valid (flux_red_t r)
+void flux_reduce_destroy (flux_reduce_t *r)
 {
-    return (r->last_hwm > 0);
+    if (r) {
+        if (r->items) {
+            void *item;
+            while ((item = zlist_pop (r->items))) {
+                if (r->ops.destroy)
+                    r->ops.destroy (item);
+            }
+            zlist_destroy (&r->items);
+        }
+        if (r->ops.destroy && r->old_item)
+            r->ops.destroy (r->old_item);
+        if (r->timer) {
+            flux_timer_watcher_stop (r->h, r->timer);
+            flux_timer_watcher_destroy (r->timer);
+        }
+        free (r);
+    }
+}
+
+/* Empty the queue of items.
+ */
+static void flush_current (flux_reduce_t *r)
+{
+    void *item;
+
+    if (zlist_size (r->items) > 0) {
+        if (r->rank > 0) {
+            if (r->ops.forward)
+                r->ops.forward (r, r->batchnum, r->arg);
+        } else {
+            if (r->ops.sink)
+                r->ops.sink (r, r->batchnum, r->arg);
+        }
+        while ((item = zlist_pop (r->items))) {
+            if (r->ops.destroy)
+                r->ops.destroy (item);
+        }
+    }
+    if (r->timer) {
+        flux_timer_watcher_stop (r->h, r->timer);
+        r->timer_armed = false;
+    }
+    r->flushed = true;
+}
+
+/* Flush one item that is a straggler from a previous batch.
+ */
+static void flush_old (flux_reduce_t *r, void *item, int batchnum)
+{
+    assert (r->old_item == NULL);
+    r->old_item = item;
+    r->old_flag = true;
+
+    if (r->rank > 0) {
+        if (r->ops.forward)
+            r->ops.forward (r, batchnum, r->arg);
+    } else {
+        if (r->ops.sink)
+            r->ops.sink (r, batchnum, r->arg);
+    }
+    if (r->ops.destroy)
+        r->ops.destroy (r->old_item);
+    r->old_item = NULL;
+    r->old_flag = false;
+}
+
+int flux_reduce_append (flux_reduce_t *r, void *item, int batchnum)
+{
+    int rc = -1;
+    int count = 1;
+
+    if (r->ops.itemweight)
+        count = r->ops.itemweight (item);
+
+    if (batchnum < r->batchnum - 1) {
+        flush_old (r, item, batchnum);
+    } else if (batchnum == r->batchnum - 1) {
+        if (!r->hwm_readonly)
+            r->hwm += count;
+        flush_old (r, item, batchnum);
+    } else if (batchnum == r->batchnum && r->flushed) {
+        r->count += count;
+        flush_old (r, item, batchnum);
+    } else {
+        if (batchnum > r->batchnum) {
+            flush_current (r);
+            if (!r->hwm_readonly)
+                r->hwm = r->count;
+            r->count = 0;
+            r->batchnum = batchnum;
+            r->flushed = false;
+        }
+
+        assert (batchnum == r->batchnum);
+        r->count += count;
+        if (zlist_push (r->items, item) < 0)
+            goto done;
+        if (r->ops.reduce && zlist_size (r->items) > 1)
+            r->ops.reduce (r, r->batchnum, r->arg);
+
+        if ((r->flags & FLUX_REDUCE_HWMFLUSH)) {
+            if (r->count >= r->hwm)
+                flush_current (r);
+        }
+        if ((r->flags & FLUX_REDUCE_TIMEDFLUSH)) {
+            if (zlist_size (r->items) > 0 && !r->timer_armed) {
+                flux_timer_watcher_reset (r->timer, r->timeout, 0);
+                flux_timer_watcher_start (r->h, r->timer);
+                r->timer_armed = true;
+            }
+        }
+        if (!(r->flags & FLUX_REDUCE_HWMFLUSH)
+                && !(r->flags & FLUX_REDUCE_TIMEDFLUSH)) {
+            flush_current (r);
+        }
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+void *flux_reduce_pop (flux_reduce_t *r)
+{
+    void *item = NULL;
+    if (r->old_flag) {
+        item = r->old_item;
+        r->old_item = NULL;
+    } else
+        item = zlist_pop (r->items);
+    return item;
+}
+
+int flux_reduce_push (flux_reduce_t *r, void *item)
+{
+    return zlist_push (r->items, item);
+}
+
+int flux_reduce_opt_get (flux_reduce_t *r, int option, void *val, size_t size)
+{
+    switch (option) {
+        case FLUX_REDUCE_OPT_TIMEOUT:
+            if (size != sizeof (r->timeout))
+                goto invalid;
+            memcpy (val, &r->timeout, size);
+            break;
+        case FLUX_REDUCE_OPT_HWM:
+            if (size != sizeof (r->count))
+                goto invalid;
+            memcpy (val, &r->hwm, size);
+            break;
+        case FLUX_REDUCE_OPT_COUNT : {
+            unsigned int count = zlist_size (r->items);
+            if (size != sizeof (count))
+                goto invalid;
+            memcpy (val, &count, size);
+            break;
+        }
+        case FLUX_REDUCE_OPT_WCOUNT : {
+            unsigned int count = 0;
+            void *item = zlist_first (r->items);
+            while (item) {
+                count += r->ops.itemweight ? r->ops.itemweight (item) : 1;
+                item = zlist_next (r->items);
+            }
+            if (size != sizeof (count))
+                goto invalid;
+            memcpy (val, &count, size);
+            break;
+        }
+        default:
+            goto invalid;
+    }
+    return 0;
+invalid:
+    errno = EINVAL;
+    return -1;
+}
+
+int flux_reduce_opt_set (flux_reduce_t *r, int option, void *val, size_t size)
+{
+    switch (option) {
+        case FLUX_REDUCE_OPT_TIMEOUT:
+            if (size != sizeof (r->timeout))
+                goto invalid;
+            memcpy (&r->timeout, val, size);
+            break;
+        case FLUX_REDUCE_OPT_HWM:
+            if (size != sizeof (r->hwm))
+                goto invalid;
+            memcpy (&r->hwm, val, size);
+            r->hwm_readonly = true;
+            break;
+        default:
+            goto invalid;
+    }
+    return 0;
+invalid:
+    errno = EINVAL;
+    return -1;
 }
 
 /*

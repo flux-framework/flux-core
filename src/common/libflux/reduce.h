@@ -3,60 +3,45 @@
 
 #include "handle.h"
 
-typedef struct flux_red_struct *flux_red_t;
-typedef struct flux_redstack_struct *flux_redstack_t;
-typedef void   (*flux_red_f)(flux_t h, flux_redstack_t stack,
-                             int batchnum, void *arg);
-typedef void   (*flux_sink_f)(flux_t h, void *item, int batchnum, void *arg);
+typedef struct flux_reduce_struct flux_reduce_t;
 
-enum {
-    FLUX_RED_TIMEDFLUSH = 1,// flush timer starts on first append when empty
-
-    FLUX_RED_HWMFLUSH = 2,  // initially every append is flushed; after
-                            //   batchnum is incremented, hwm is calculated
-                            //   from previous batch and next flush is at hwm
+struct flux_reduce_ops {
+    flux_free_f destroy;
+    void   (*reduce)(flux_reduce_t *r, int batchnum, void *arg);
+    void   (*sink)(flux_reduce_t *r, int batchnum, void *arg);
+    void   (*forward)(flux_reduce_t *r, int batchnum, void *arg);
+    int    (*itemweight)(void *item);
 };
 
+enum {
+    FLUX_REDUCE_TIMEDFLUSH = 1,
+    FLUX_REDUCE_HWMFLUSH = 2,
+};
 
-/* Create/destroy a reduction handle.
- * The sink function will be called every time the handle is flushed.
- * Flush occurs according to reduction flags (see defs above).
- * If no flags, flush will be called after every flux_red_append().
- */
-flux_red_t flux_red_create (flux_t h, flux_sink_f sinkfn, void *arg);
-void flux_red_destroy (flux_red_t r);
+enum {
+    FLUX_REDUCE_OPT_TIMEOUT = 1,
+    FLUX_REDUCE_OPT_HWM = 2,
+    FLUX_REDUCE_OPT_COUNT = 3,
+    FLUX_REDUCE_OPT_WCOUNT = 4,
+};
 
-/* Set the reduction function (optional).
- * Reduction function will be called every time an item is appended.
- */
-void flux_red_set_reduce_fn (flux_red_t r, flux_red_f redfn);
+flux_reduce_t *flux_reduce_create (flux_t h, struct flux_reduce_ops ops,
+                                   double timeout, void *arg, int flags);
 
-/* Set reduction flags.
- */
-void flux_red_set_flags (flux_red_t r, int flags);
+void flux_reduce_destroy (flux_reduce_t *r);
 
-/* Set the timeout value used with FLUX_RED_TIMEDFLUSH
- */
-void flux_red_set_timeout_msec (flux_red_t r, int msec);
+int flux_reduce_append (flux_reduce_t *r, void *item, int batchnum);
 
-/* Map the sink function over each item in the handle.
- */
-void flux_red_flush (flux_red_t r);
+void *flux_reduce_pop (flux_reduce_t *r);
 
-/* Append an item to the reduction handle.
- * The reduction function is immediately called (if defined).
- * The sink function is called according to flags.
- * Returns 0 on success, -1 on failure.
- */
-int flux_red_append (flux_red_t r, void *item, int batchnum);
+int flux_reduce_push (flux_reduce_t *r, void *item);
 
-/* Simple stack ops for stack of items passed to flux_red_f.
- */
-void *flux_redstack_pop (flux_redstack_t stack);
-void flux_redstack_push (flux_redstack_t stack, void *item);
-int flux_redstack_count (flux_redstack_t stack);
+int flux_reduce_opt_get (flux_reduce_t *r, int option, void *val, size_t size);
+
+int flux_reduce_opt_set (flux_reduce_t *r, int option, void *val, size_t size);
 
 #endif /* _FLUX_CORE_REDUCE_H */
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
