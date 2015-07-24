@@ -3,6 +3,7 @@
 #
 
 prefix=$HOME/local
+cachedir=$HOME/local/.cache
 
 #
 # Ordered list of software to download and install into $prefix.
