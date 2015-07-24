@@ -95,10 +95,13 @@ AM_CPPFLAGS = \
 LDADD = \
         $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libflux-core.la \
-        $(top_builddir)/src/common/libtap/libtap.la \
         $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD)
 
 check_PROGRAMS = \
+	topen \
+	tsend \
+	trecv \
+	tevent \
 	trpc \
 	trpc_then \
 	trpc_then_multi
