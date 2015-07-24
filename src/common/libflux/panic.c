@@ -41,7 +41,7 @@ int flux_panic (flux_t h, int rank, const char *msg)
 {
     uint32_t nodeid = rank < 0 ? FLUX_NODEID_ANY : rank;
     JSON in = Jnew ();
-    flux_rpc_t r = NULL;
+    flux_rpc_t *r = NULL;
     int rc = -1;
 
     Jadd_str (in, "msg", msg ? msg : "");
@@ -52,8 +52,7 @@ int flux_panic (flux_t h, int rank, const char *msg)
     rc = 0;
 done:
     Jput (in);
-    if (r)
-        flux_rpc_destroy (r);
+    flux_rpc_destroy (r);
     return rc;
 }
 

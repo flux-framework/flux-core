@@ -17,7 +17,7 @@
 void send_watch_requests (flux_t h, const char *key)
 {
     JSON in = Jnew ();
-    flux_rpc_t r;
+    flux_rpc_t *r;
     const char *json_str;
 
     json_object_object_add (in, "noexist", NULL);
@@ -39,7 +39,7 @@ int count_watchers (flux_t h)
     JSON out;
     const char *json_str;
     int n, count = 0;
-    flux_rpc_t r;
+    flux_rpc_t *r;
 
     if (!(r = flux_rpc_multi (h, "kvs.stats.get", NULL, "all", 0)))
         err_exit ("flux_rpc_multi kvs.stats.get");

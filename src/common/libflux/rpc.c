@@ -50,9 +50,12 @@ struct flux_rpc_struct {
     flux_msg_t *rx_msg_consumed;
     int rx_count;
     bool oneway;
+    void *aux;
+    flux_free_f aux_destroy;
+    const char *type;
 };
 
-void flux_rpc_destroy (flux_rpc_t rpc)
+void flux_rpc_destroy (flux_rpc_t *rpc)
 {
     if (rpc) {
         if (rpc->w) {
@@ -71,13 +74,15 @@ void flux_rpc_destroy (flux_rpc_t rpc)
         flux_msg_destroy (rpc->rx_msg_consumed);
         if (rpc->nodemap)
             free (rpc->nodemap);
+        if (rpc->aux && rpc->aux_destroy)
+            rpc->aux_destroy (rpc->aux);
         free (rpc);
     }
 }
 
-static flux_rpc_t rpc_create (flux_t h, int flags, int count)
+static flux_rpc_t *rpc_create (flux_t h, int flags, int count)
 {
-    flux_rpc_t rpc = xzmalloc (sizeof (*rpc));
+    flux_rpc_t *rpc = xzmalloc (sizeof (*rpc));
     if ((flags & FLUX_RPC_NORESPONSE)) {
         rpc->oneway = true;
         rpc->m.matchtag = FLUX_MATCHTAG_NONE;
@@ -95,7 +100,7 @@ static flux_rpc_t rpc_create (flux_t h, int flags, int count)
     return rpc;
 }
 
-static uint32_t lookup_nodeid (flux_rpc_t rpc, uint32_t matchtag)
+static uint32_t lookup_nodeid (flux_rpc_t *rpc, uint32_t matchtag)
 {
     int ix = matchtag - rpc->m.matchtag;
     if (ix < 0 || ix >= rpc->m.bsize)
@@ -103,7 +108,7 @@ static uint32_t lookup_nodeid (flux_rpc_t rpc, uint32_t matchtag)
     return rpc->nodemap[ix];
 }
 
-static int rpc_request_send (flux_rpc_t rpc, int n, const char *topic,
+static int rpc_request_send (flux_rpc_t *rpc, int n, const char *topic,
                              const char *json_str, uint32_t nodeid)
 {
     flux_msg_t *msg;
@@ -130,7 +135,7 @@ done:
 }
 
 
-bool flux_rpc_check (flux_rpc_t rpc)
+bool flux_rpc_check (flux_rpc_t *rpc)
 {
     if (rpc->oneway)
         return false;
@@ -141,7 +146,7 @@ bool flux_rpc_check (flux_rpc_t rpc)
     return false;
 }
 
-int flux_rpc_get (flux_rpc_t rpc, uint32_t *nodeid, const char **json_str)
+int flux_rpc_get (flux_rpc_t *rpc, uint32_t *nodeid, const char **json_str)
 {
     int rc = -1;
 
@@ -177,7 +182,7 @@ done:
 static void rpc_cb (flux_t h, flux_msg_watcher_t *w,
                     const flux_msg_t *msg, void *arg)
 {
-    flux_rpc_t rpc = arg;
+    flux_rpc_t *rpc = arg;
     assert (rpc->then_cb != NULL);
 
     if (rpc->rx_msg) {
@@ -194,10 +199,11 @@ static void rpc_cb (flux_t h, flux_msg_watcher_t *w,
         rpc->rx_msg = NULL;
     }
 done: /* no good way to report flux_requeue() errors */
-    ;
+    if (flux_rpc_completed (rpc))
+        flux_msg_watcher_stop (rpc->h, rpc->w);
 }
 
-int flux_rpc_then (flux_rpc_t rpc, flux_then_f cb, void *arg)
+int flux_rpc_then (flux_rpc_t *rpc, flux_then_f cb, void *arg)
 {
     int rc = -1;
 
@@ -226,17 +232,17 @@ done:
     return rc;
 }
 
-bool flux_rpc_completed (flux_rpc_t rpc)
+bool flux_rpc_completed (flux_rpc_t *rpc)
 {
     if (rpc->oneway || rpc->rx_count == rpc->m.bsize)
         return true;
     return false;
 }
 
-flux_rpc_t flux_rpc (flux_t h, const char *topic, const char *json_str,
-                     uint32_t nodeid, int flags)
+flux_rpc_t *flux_rpc (flux_t h, const char *topic, const char *json_str,
+                      uint32_t nodeid, int flags)
 {
-    flux_rpc_t rpc = rpc_create (h, flags, 1);
+    flux_rpc_t *rpc = rpc_create (h, flags, 1);
 
     if (rpc_request_send (rpc, 0, topic, json_str, nodeid) < 0)
         goto error;
@@ -248,12 +254,12 @@ error:
     return NULL;
 }
 
-flux_rpc_t flux_rpc_multi (flux_t h, const char *topic, const char *json_str,
-                           const char *nodeset, int flags)
+flux_rpc_t *flux_rpc_multi (flux_t h, const char *topic, const char *json_str,
+                            const char *nodeset, int flags)
 {
     nodeset_t ns = NULL;
     nodeset_itr_t itr = NULL;
-    flux_rpc_t rpc = NULL;
+    flux_rpc_t *rpc = NULL;
     int i, count;
 
     if (!topic || !nodeset) {
@@ -292,6 +298,29 @@ error:
     if (ns)
         nodeset_destroy (ns);
     return NULL;
+}
+
+const char *flux_rpc_type_get (flux_rpc_t *rpc)
+{
+    return rpc->type;
+}
+
+void flux_rpc_type_set (flux_rpc_t *rpc, const char *type)
+{
+    rpc->type = type;
+}
+
+void *flux_rpc_aux_get (flux_rpc_t *rpc)
+{
+    return rpc->aux;
+}
+
+void flux_rpc_aux_set (flux_rpc_t *rpc, void *aux, flux_free_f destroy)
+{
+    if (rpc->aux && rpc->aux_destroy)
+        rpc->aux_destroy (rpc->aux);
+    rpc->aux = aux;
+    rpc->aux_destroy = destroy;
 }
 
 /*

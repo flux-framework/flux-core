@@ -65,7 +65,7 @@ void rpctest_begin_cb (flux_t h, flux_msg_watcher_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
-    flux_rpc_t r;
+    flux_rpc_t *r;
 
     errno = 0;
     ok (!(r = flux_rpc (h, NULL, NULL, FLUX_NODEID_ANY, 0))
@@ -118,7 +118,7 @@ void rpctest_begin_cb (flux_t h, flux_msg_watcher_t *w,
     flux_reactor_stop (h);
 }
 
-static void then_cb (flux_rpc_t r, void *arg)
+static void then_cb (flux_rpc_t *r, void *arg)
 {
     flux_t h = arg;
     const char *json_str;
@@ -132,7 +132,7 @@ static void then_cb (flux_rpc_t r, void *arg)
     flux_reactor_stop (h);
 }
 
-static flux_rpc_t thenbug_r = NULL;
+static flux_rpc_t *thenbug_r = NULL;
 void rpctest_thenbug_cb (flux_t h, flux_msg_watcher_t *w,
                          const flux_msg_t *msg, void *arg)
 {
@@ -187,7 +187,7 @@ int main (int argc, char *argv[])
      * continuation, start reactor.  Response will be received, continuation
      * will be invoked. Continuation stops the reactor.
     */
-    flux_rpc_t r;
+    flux_rpc_t *r;
     ok ((r = flux_rpc (h, "rpctest.echo", "xxx", FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload when payload is expected works");
     ok (flux_rpc_check (r) == false,

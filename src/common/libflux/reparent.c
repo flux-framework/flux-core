@@ -35,7 +35,7 @@
 char *flux_lspeer (flux_t h, int rank)
 {
     uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
-    flux_rpc_t r = NULL;
+    flux_rpc_t *r = NULL;
     const char *json_str;
     char *ret = NULL;
 
@@ -45,14 +45,13 @@ char *flux_lspeer (flux_t h, int rank)
         goto done;
     ret = xstrdup (json_str);
 done:
-    if (r)
-        flux_rpc_destroy (r);
+    flux_rpc_destroy (r);
     return ret;
 }
 
 int flux_reparent (flux_t h, int rank, const char *uri)
 {
-    flux_rpc_t r = NULL;
+    flux_rpc_t *r = NULL;
     uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
     JSON in = Jnew ();
     int rc = -1;
@@ -69,8 +68,7 @@ int flux_reparent (flux_t h, int rank, const char *uri)
     rc = 0;
 done:
     Jput (in);
-    if (r)
-        flux_rpc_destroy (r);
+    flux_rpc_destroy (r);
     return rc;
 }
 

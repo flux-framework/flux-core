@@ -104,7 +104,7 @@ static void log_external (logctx_t *ctx, const char *json_str)
 int flux_log_json (flux_t h, const char *json_str)
 {
     logctx_t *ctx = getctx (h);
-    flux_rpc_t r = NULL;
+    flux_rpc_t *r = NULL;
     int rc = -1;
 
     if (ctx->cb)

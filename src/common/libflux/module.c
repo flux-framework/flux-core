@@ -299,7 +299,7 @@ char *flux_modfind (const char *searchpath, const char *modname)
 
 int flux_rmmod (flux_t h, uint32_t nodeid, const char *name)
 {
-    flux_rpc_t r = NULL;
+    flux_rpc_t *r = NULL;
     char *service = mod_service (name);
     char *topic = xasprintf ("%s.rmmod", service);
     char *json_str = NULL;
@@ -325,7 +325,7 @@ done:
 int flux_lsmod (flux_t h, uint32_t nodeid, const char *service,
                 flux_lsmod_f cb, void *arg)
 {
-    flux_rpc_t r = NULL;
+    flux_rpc_t *r = NULL;
     char *topic = xasprintf ("%s.lsmod", service ? service : "cmb");
     flux_modlist_t mods = NULL;
     const char *json_str;
@@ -361,7 +361,7 @@ done:
 int flux_insmod (flux_t h, uint32_t nodeid, const char *path,
                  int argc, char **argv)
 {
-    flux_rpc_t r = NULL;
+    flux_rpc_t *r = NULL;
     JSON in = Jnew ();
     char *name = NULL;
     char *service = NULL;

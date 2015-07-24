@@ -10,6 +10,18 @@ Verify basic request/response/rpc handling.
 . `dirname $0`/sharness.sh
 test_under_flux 2
 
+test_expect_success 'flux_rpc(3) example runs' '
+	${FLUX_BUILD_DIR}/doc/man3/trpc
+'
+
+test_expect_success 'flux_rpc_then(3) example runs' '
+	${FLUX_BUILD_DIR}/doc/man3/trpc_then
+'
+
+test_expect_success 'flux_rpc_multi(3) example runs' '
+	${FLUX_BUILD_DIR}/doc/man3/trpc_then_multi
+'
+
 test_expect_success 'request: load req module on rank 0' '
 	flux module load -d --rank=0 \
 		${FLUX_BUILD_DIR}/src/test/request/.libs/req.so
