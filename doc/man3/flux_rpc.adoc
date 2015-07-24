@@ -12,55 +12,67 @@ SYNOPSIS
 --------
 #include <flux/core.h>
 
-flux_rpc_t *flux_rpc (flux_t h, const char *topic, const char *json_str,
-                      uint32_t nodeid, int flags);
+flux_rpc_t *flux_rpc (flux_t h, const char *topic, const char *json_in,
+                      uint32_t nodeid_in, int flags);
 
 void flux_rpc_destroy (flux_rpc_t *rpc);
 
-int flux_rpc_get (flux_rpc_t *rpc, uint32_t *nodeid, const char **json_str);
+int flux_rpc_get (flux_rpc_t *rpc, uint32_t *nodeid_out, const char **json_out);
 
 
 DESCRIPTION
 -----------
 
-`flux_rpc()` constructs a request for the Flux service identified by
-_topic_, with optional payload _json_str_, that will routed be according
-to _nodeid_.  The request message is assigned a matchtag from the handle
-matchtag pool, and is then sent to the broker via handle _h_.
-A flux_rpc_t object is returned to the caller, used to complete the RPC.
+`flux_rpc()` encodes and sends a request message, comprising the first
+half of a remote procedure call (RPC).  A flux_rpc_t object is returned
+which can be passed to `flux_rpc_get()` to obtain the decoded response
+message, comprising the second half of the RPC.  The flux_rpc_t should
+finally be disposed of using `flux_rpc_destroy()`.
 
-_nodeid_ affects how the broker will route the request, and may be set
-to one of the following values:
+_topic_ must be set to a topic string representing the Flux
+service that will handle the request.
+
+_json_in_, if non-NULL, must be a string containing valid serialized
+JSON to be attached as payload to the request.  If NULL, the request
+will be sent without a payload.
+
+_nodeid_in_ affects request routing, and must be set to one of the following
+values:
 
 FLUX_NODEID_ANY::
-Route to first available matching service instance.
+The request is routed to the first matching service instance.
 
 FLUX_NODEID_UPSTREAM::
-Route upstream via the tree based overlay network, then to first available
-matching service instance, skipping any instance on the sending rank.
+The request is routed to the first matching service instance,
+skipping over the sending rank.
 
 integer::
-Route to a specific broker rank.
+The request is routed to a specific rank.
 
-If _json_str_ is non-NULL, it must represent valid serialized JSON,
-and will be attached as request payload.
-
-Flags may be zero or a mask of the following values:
+_flags_ may be zero or:
 
 FLUX_RPC_NORESPONSE::
-No response is expected, and the request will not be assigned a matchtag.
-The flux_rpc_t may be immediately destroyed.
+No response is expected.  The request will not be assigned a matchtag,
+and the flux_rpc_t returned by `flux_rpc()` may be immediately destroyed.
 
-`flux_rpc_get()` obtains the result of the RPC, blocking until the response
-is received.  If non-NULL, _nodeid_ is set to the _nodeid_ argument given
-to `flux_rpc()` -- primarily useful with `flux_rpc_multi(3)`.  Similarly,
-_json_str_, if non-NULL, is set the response payload.  The storage associated
-with _json_str_ belongs to the flux_rpc_t object.  It is a protocol error
-if _json_str_ is NULL and the response has an unexpected payload, or if
-_json_str_ is non-NULL and the payload is missing.
+`flux_rpc_get()` blocks until a matching response is received, then
+decodes the result.  For asynchronous response handling, see flux_rpc_then(3).
+
+_json_out_, if non-NULL, is assigned a string containing valid serialized
+JSON from the response payload.  It is a protocol error if a payload that is
+expected (signified by a non-NULL _json_out_) does not arrive;
+similarly, it is a protocol error if an unexpected payload (signified
+by a NULL _json_out_) arrives.  The storage associated with _json_out_
+belongs to the flux_rpc_t object and is invalidated when that object is
+destroyed.
+
+_nodeid_out_, if non-NULL, is set to the _nodeid_in_ argument given
+to `flux_rpc()`.  This is primarily useful with `flux_rpc_multi(3)`.
 
 `flux_rpc_destroy()` destroys a completed `flux_rpc_t`, invalidating 
-any payload returned by `flux_rpc_get()`, and freeing matchtags.
+payload as described above, and freeing the RPC matchtag.  Destroying
+an RPC before completion renders the matchtag associated with the RPC
+unusable; it is effectively leaked from the matchtag pool.
 
 
 CANCELLATION

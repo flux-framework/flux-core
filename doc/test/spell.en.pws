@@ -231,3 +231,4 @@ rpc
 str
 trpc
 bool
+mrpc

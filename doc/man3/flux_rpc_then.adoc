@@ -22,9 +22,9 @@ int flux_rpc_then (flux_rpc_t *rpc, flux_then_f cb, void *arg);
 DESCRIPTION
 -----------
 
-`flux_rpc_check()` and `flux_rpc_then()` may be used to conditionally
-complete an RPC operation that was started with `flux_rpc(3)` or
-`flux_rpc_multi(3)`, asynchronously.
+`flux_rpc_check()` and `flux_rpc_then()` may be used to asynchronously
+complete the second half of a remote procedure call (RPC) that was
+started with `flux_rpc(3)` or `flux_rpc_multi(3)`.
 
 `flux_rpc_check()` returns true if the RPC response has been received
 and a call to `flux_rpc_get(3)` would not block.  It returns false if
@@ -43,10 +43,10 @@ flux_rpc_t object from within the continuation callback.
 RETURN VALUE
 ------------
 
-`flux_rpc_check()` returns true or false and does not detect failure.
-
 `flux_rpc_then()` returns  zero on success.  On error, -1 is returned,
 and errno is set appropriately.
+
+`flux_rpc_check()` does not report errors.
 
 
 ERRORS
