@@ -21,6 +21,13 @@ declare -A extra_configure_opts=(\
 )
 
 #
+#  Python pip packages
+#
+pips="\
+cffi \
+coverage"
+
+#
 #  Lua rocks files to download and install:
 #
 declare -A lua_rocks=(\
@@ -100,6 +107,9 @@ add_cache ()
     mkdir -p "${cachedir}" &&
     touch "${cachedir}/${1}"
 }
+
+pip help >/dev/null 2>&1 || die "Required command pip not installed"
+pip install --user $pips || die "Failed to install required python packages"
 
 
 luarocks help >/dev/null 2>&1 || die "Required command luarocks not installed"
