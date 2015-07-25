@@ -30,7 +30,6 @@ before_install:
   - if test "$CC" = "clang"; then export CCACHE_CPP2=1; fi
   - eval `./src/test/travis-dep-builder.sh --printenv`
   - ./src/test/travis-dep-builder.sh --cachedir=$HOME/local/.cache
-  - pip install --user cffi coverage
 
 script:
  - export CC="ccache $CC"
