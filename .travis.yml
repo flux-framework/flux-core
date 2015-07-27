@@ -33,9 +33,13 @@ before_install:
 
 script:
  - export CC="ccache $CC"
+ - export FLUX_TESTS_LOGFILE=t
  - ./autogen.sh
  - ./configure --prefix=$HOME/local
  - make distcheck
 
 after_success:
  - ccache -s
+
+after_failure:
+ - find flux-core-[0-9]* -name *.output | xargs -i sh -c 'printf "\033[31mFound {}\033[39m\n";cat {}'
