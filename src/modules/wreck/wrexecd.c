@@ -400,10 +400,10 @@ static char * ctime_iso8601_now (char *buf, size_t sz)
 static int get_executable_path (char *buf, size_t len)
 {
     char *p;
-    if (readlink ("/proc/self/exe", buf, len) < 0)
+    ssize_t n = readlink ("/proc/self/exe", buf, len);
+    if (n < 0)
         return (-1);
-
-    p = buf + strlen (buf) - 1;
+    p = buf + n;
     while (*p == '/')
         p--;
     while (*p != '/')
@@ -462,7 +462,7 @@ struct prog_ctx * prog_ctx_create (void)
     ctx->envref = -1;
 
     if (get_executable_path (ctx->exedir, sizeof (ctx->exedir)) < 0)
-        log_fatal (ctx, 1, "get_executable_path");
+        log_fatal (ctx, 1, "get_executable_path: %s\n", strerror (errno));
 
     ctx->lua_stack = lua_stack_create ();
     ctx->lua_pattern = xstrdup (WRECK_LUA_PATTERN);
