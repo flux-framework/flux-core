@@ -222,7 +222,7 @@ void subprocess_destroy (struct subprocess *p)
     zio_destroy (p->zio_err);
 
     if (p->parentfd > 0)
-        close (p->childfd);
+        close (p->parentfd);
     if (p->childfd > 0)
         close (p->childfd);
 
