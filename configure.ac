@@ -4,6 +4,7 @@
 AC_INIT(m4_esyscmd([awk '/Name:/ {printf "%s",$2; exit}' META]),
         m4_esyscmd([awk '/Version:/ {printf "%s",$2; exit}' META]))
 AC_CONFIG_AUX_DIR([config])
+AC_CONFIG_MACRO_DIR([config])
 AC_CONFIG_SRCDIR([NEWS])
 AC_CANONICAL_SYSTEM
 X_AC_META
@@ -29,8 +30,7 @@ if test "$GCC" = yes; then
   GCCWARN="-Wall -Werror -Wno-strict-aliasing"
   AC_SUBST([GCCWARN])
 fi
-AC_PROG_RANLIB
-AC_PROG_LIBTOOL
+LT_INIT
 AC_PROG_AWK
 AC_CHECK_PROG(A2X,[a2x],[a2x])
 if test "$A2X" != "a2x"; then
@@ -102,8 +102,8 @@ AX_LUA_HEADERS
 AX_LUA_LIBS
 X_AC_ZEROMQ
 X_AC_MUNGE
-PKG_CHECK_MODULES(JSON, json, [],
-  [PKG_CHECK_MODULES(JSON, json-c)]);
+PKG_CHECK_MODULES([JSON], [json], [],
+  [PKG_CHECK_MODULES([JSON], [json-c])])
 LX_FIND_MPI
 AM_CONDITIONAL([HAVE_MPI], [test "$have_C_mpi" = yes])
 
