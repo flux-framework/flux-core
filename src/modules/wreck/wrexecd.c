@@ -149,10 +149,10 @@ static flux_t prog_ctx_flux_handle (struct prog_ctx *ctx)
 
 static void log_fatal (struct prog_ctx *ctx, int code, char *format, ...)
 {
-    flux_t c = prog_ctx_flux_handle (ctx);
+    flux_t c;
     va_list ap;
     va_start (ap, format);
-    if ((ctx != NULL) && ((c = ctx->flux) != NULL))
+    if ((ctx != NULL) && ((c = prog_ctx_flux_handle (ctx)) != NULL))
         flux_vlog (c, LOG_EMERG, format, ap);
     else
         vfprintf (stderr, format, ap);
