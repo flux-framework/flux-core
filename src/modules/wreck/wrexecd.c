@@ -445,11 +445,11 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
 struct prog_ctx * prog_ctx_create (void)
 {
     struct prog_ctx *ctx = malloc (sizeof (*ctx));
-    memset (ctx, 0, sizeof (*ctx));
     zsys_handler_set (NULL); /* Disable czmq SIGINT/SIGTERM handlers */
     if (!ctx)
         log_fatal (ctx, 1, "malloc");
 
+    memset (ctx, 0, sizeof (*ctx));
     ctx->options = zhash_new ();
 
     ctx->envz = NULL;
