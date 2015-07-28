@@ -468,14 +468,21 @@ static void closeall (int fd, int except)
     return;
 }
 
+static void close_if_valid (int fd)
+{
+    if (fd < 0)
+        return;
+    close (fd);
+}
+
 static int child_io_setup (struct subprocess *p)
 {
     /*
      *  Close paretn end of stdio in child:
      */
-    close (zio_dst_fd (p->zio_in));
-    close (zio_src_fd (p->zio_out));
-    close (zio_src_fd (p->zio_err));
+    close_if_valid (zio_dst_fd (p->zio_in));
+    close_if_valid (zio_src_fd (p->zio_out));
+    close_if_valid (zio_src_fd (p->zio_err));
 
     /*
      *  Dup this process' fds onto zio
@@ -493,9 +500,9 @@ static int parent_io_setup (struct subprocess *p)
     /*
      *  Close child end of stdio in parent:
      */
-    close (zio_src_fd (p->zio_in));
-    close (zio_dst_fd (p->zio_out));
-    close (zio_dst_fd (p->zio_err));
+    close_if_valid (zio_src_fd (p->zio_in));
+    close_if_valid (zio_dst_fd (p->zio_out));
+    close_if_valid (zio_dst_fd (p->zio_err));
 
     return (0);
 }
