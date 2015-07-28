@@ -429,7 +429,8 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
         kvsdir_destroy (ctx->resources);
 
     free (ctx->envz);
-    close (ctx->signalfd);
+    if (ctx->signalfd >= 0)
+        close (ctx->signalfd);
 
 
     zmq_close (ctx->zs_req);
@@ -752,14 +753,21 @@ void closeall (int fd)
     return;
 }
 
+static void close_fd (int fd)
+{
+    if (fd < 0)
+        return;
+    close (fd);
+}
+
 void child_io_setup (struct task_info *t)
 {
     /*
      *  Close parent end of stdio fds in child
      */
-    close (zio_dst_fd (t->zio [IN]));
-    close (zio_src_fd (t->zio [OUT]));
-    close (zio_src_fd (t->zio [ERR]));
+    close_fd (zio_dst_fd (t->zio [IN]));
+    close_fd (zio_src_fd (t->zio [OUT]));
+    close_fd (zio_src_fd (t->zio [ERR]));
 
     /*
      *  Dup appropriate fds onto child STDIN/STDOUT/STDERR
@@ -774,9 +782,9 @@ void child_io_setup (struct task_info *t)
 
 void close_child_fds (struct task_info *t)
 {
-    close (zio_src_fd (t->zio [IN]));
-    close (zio_dst_fd (t->zio [OUT]));
-    close (zio_dst_fd (t->zio [ERR]));
+    close_fd (zio_src_fd (t->zio [IN]));
+    close_fd (zio_dst_fd (t->zio [OUT]));
+    close_fd (zio_dst_fd (t->zio [ERR]));
 }
 
 int update_job_state (struct prog_ctx *ctx, const char *state)
