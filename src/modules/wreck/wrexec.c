@@ -208,6 +208,7 @@ static int client_cb (flux_t h, void *zs, short revents, void *arg)
 
     if (revents & ZMQ_POLLERR) {
         rexec_session_remove (c);
+        return 0;
     }
     new = zmsg_recv (c->zs_rep);
     if (new) {
