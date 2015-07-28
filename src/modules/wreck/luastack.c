@@ -311,7 +311,12 @@ int lua_stack_append_script (lua_stack_t st, const char *script,
 
     s->label = label ? strdup (label) : strdup ("<script>");
 
-    lua_script_compile (st, s);
+    if (lua_script_compile (st, s) < 0) {
+        lua_script_destroy (s);
+	return (-1);
+    }
+
+    list_append (st->script_list, s);
 
     return (0);
 }
