@@ -223,6 +223,7 @@ int lua_script_list_append (lua_stack_t st, const char *pattern)
                 if (!(s = lua_script_create (st, type, gl.gl_pathv[i])) ||
                      (lua_script_compile (st, s) < 0)) {
                     (*st->errf) ("%s: Failed. Skipping.\n", gl.gl_pathv[i]);
+                    lua_script_destroy (s);
                     continue;
                 }
                 list_append (st->script_list, s);
