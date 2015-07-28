@@ -26,21 +26,20 @@ addons:
       - ccache
 
 before_install:
-  - export LD_LIBRARY_PATH=$HOME/local/lib
-  - export CPPFLAGS=-I$HOME/local/include
-  - export LDFLAGS=-L$HOME/local/lib
-  - export PKG_CONFIG_PATH=$HOME/local/lib/pkgconfig
   - test "$TRAVIS_PULL_REQUEST" == "false" || export CCACHE_READONLY=1
   - if test "$CC" = "clang"; then export CCACHE_CPP2=1; fi
-  - eval `luarocks path`
+  - eval `./src/test/travis-dep-builder.sh --printenv`
   - ./src/test/travis-dep-builder.sh --cachedir=$HOME/local/.cache
-  - pip install --user cffi coverage
 
 script:
  - export CC="ccache $CC"
+ - export FLUX_TESTS_LOGFILE=t
  - ./autogen.sh
  - ./configure --prefix=$HOME/local
  - make distcheck
 
 after_success:
  - ccache -s
+
+after_failure:
+ - find flux-core-[0-9]* -name *.output | xargs -i sh -c 'printf "\033[31mFound {}\033[39m\n";cat {}'

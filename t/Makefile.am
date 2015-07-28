@@ -46,7 +46,7 @@ EXTRA_DIST= \
 	$(T)
 
 clean-local:
-	rm -fr trash-directory.* test-results .prove *.broker.log */*.broker.log
+	rm -fr trash-directory.* test-results .prove *.broker.log */*.broker.log *.output
 
 check_SCRIPTS = \
 	t0000-sharness.t \

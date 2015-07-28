@@ -52,12 +52,15 @@ test_under_flux() {
         return
     fi
     quiet="-o -q,-L${log_file}"
-    if test "$verbose" = "t"; then
+    if test "$verbose" = "t" -o -n "$FLUX_TESTS_DEBUG" ; then
         flags="${flags} --verbose"
         quiet=""
     fi
-    if test "$debug" = "t"; then
+    if test "$debug" = "t" -o -n "$FLUX_TESTS_DEBUG" ; then
         flags="${flags} --debug"
+    fi
+    if test -n "$logfile" -o -n "$FLUX_TESTS_LOGFILE" ; then
+        flags="${flags} --logfile"
     fi
     if test -n "$SHARNESS_TEST_DIRECTORY"; then
         cd $SHARNESS_TEST_DIRECTORY
