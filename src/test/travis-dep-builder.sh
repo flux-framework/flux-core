@@ -78,7 +78,7 @@ print_env () {
     echo "export CPPFLAGS=-I${prefix}/include"
     echo "export LDFLAGS=-L${prefix}/lib"
     echo "export PKG_CONFIG_PATH=${prefix}/lib/pkgconfig"
-    luarocks path
+    luarocks path --bin
 }
 
 if test -n "$print_env"; then
