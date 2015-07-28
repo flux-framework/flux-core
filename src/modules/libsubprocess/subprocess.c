@@ -98,7 +98,7 @@ static int sigmask_unblock_all (void)
 static int send_output_to_stream (const char *name, json_object *o)
 {
     FILE *fp = stdout;
-    char *s;
+    char *s = NULL;
     bool eof;
 
     int len = zio_json_decode (o, (void **) &s, &eof);
@@ -106,13 +106,12 @@ static int send_output_to_stream (const char *name, json_object *o)
     if (strcmp (name, "stderr") == 0)
         fp = stderr;
 
-    if (len < 0)
-        return (-1);
     if (len > 0)
         fputs (s, fp);
     if (eof)
         fclose (fp);
 
+    free (s);
     return (len);
 }
 
