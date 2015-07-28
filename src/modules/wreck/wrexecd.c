@@ -562,6 +562,8 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
     int *nodeids;
 
     nodeids = malloc (flux_size (ctx->flux) * sizeof (int));
+    if (nodeids == NULL)
+        return (-1);
 
     if (kvsdir_get_dir (ctx->kvs, &rank, "rank") < 0) {
         log_msg (ctx, "get_dir (%s.rank): %s",
