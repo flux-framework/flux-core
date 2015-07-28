@@ -1031,7 +1031,6 @@ int exec_command (struct prog_ctx *ctx, int i)
 
 char *gtid_list_create (struct prog_ctx *ctx, char *buf, size_t len)
 {
-    char *str = NULL;
     int i, n = 0;
     int truncated = 0;
 
@@ -1050,7 +1049,7 @@ char *gtid_list_create (struct prog_ctx *ctx, char *buf, size_t len)
                 n += count;
         }
         else
-            n += strlen (str) + 1;
+            n += strlen (buf) + 1;
     }
 
     if (truncated)
