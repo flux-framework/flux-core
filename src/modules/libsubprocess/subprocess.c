@@ -186,7 +186,11 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
     zio_set_send_cb (p->zio_out, (zio_send_f) output_handler);
     zio_set_send_cb (p->zio_err, (zio_send_f) output_handler);
 
-    zlist_append (sm->processes, (void *)p);
+    if (zlist_append (sm->processes, (void *)p) < 0) {
+        subprocess_destroy (p);
+        errno = ENOMEM;
+        return (NULL);
+    }
 
     if (sm->zloop) {
         zio_zloop_attach (p->zio_in, sm->zloop);
