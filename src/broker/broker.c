@@ -1058,10 +1058,12 @@ static int cmb_write_cb (zmsg_t **zmsg, void *arg)
             goto out;
         if (!(p = subprocess_get_pid (ctx->sm, pid))) {
             errnum = ENOENT;
+            free (data);
             goto out;
         }
         if (subprocess_write (p, data, len, eof) < 0) {
             errnum = errno;
+            free (data);
             goto out;
         }
         free (data);
