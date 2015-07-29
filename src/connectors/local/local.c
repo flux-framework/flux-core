@@ -177,7 +177,7 @@ flux_t connector_init (const char *path, int flags)
     struct sockaddr_un addr;
     char pidfile[PATH_MAX + 1];
     char sockfile[PATH_MAX + 1];
-    int n;
+    int n, count;
 
     if (!path)
         path = flux_get_tmpdir ();
@@ -199,8 +199,8 @@ flux_t connector_init (const char *path, int flags)
     c->fd = socket (AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (c->fd < 0)
         goto error;
-    for (;;) {
-        if (!pidcheck (pidfile))
+    for (count=0;;count++) {
+        if (count >= 5 || !pidcheck (pidfile))
             goto error;
         memset (&addr, 0, sizeof (struct sockaddr_un));
         addr.sun_family = AF_UNIX;
