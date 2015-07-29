@@ -201,6 +201,5 @@ AC_CONFIG_FILES( \
   t/fluxometer.lua \
 )
 AC_CONFIG_FILES([src/cmd/flux-screen], [chmod +x src/cmd/flux-screen])
-AC_CONFIG_FILES([src/cmd/flux-python], [chmod +x src/cmd/flux-python])
 
 AC_OUTPUT
