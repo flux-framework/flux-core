@@ -383,6 +383,8 @@ int flux_insmod (flux_t h, uint32_t nodeid, const char *path,
         goto done;
     rc = 0;
 done:
+    if (name)
+        free (name);
     if (service)
         free (service);
     if (topic)
