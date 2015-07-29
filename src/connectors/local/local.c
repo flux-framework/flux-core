@@ -33,6 +33,7 @@
 #include <poll.h>
 #include <flux/core.h>
 
+#include "src/common/libutil/env.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 
@@ -200,7 +201,7 @@ flux_t connector_init (const char *path, int flags)
     if (c->fd < 0)
         goto error;
     for (count=0;;count++) {
-        if (count >= 5 || !pidcheck (pidfile))
+        if (count >= env_getint("FLUX_RETRY_COUNT", 5) || !pidcheck (pidfile))
             goto error;
         memset (&addr, 0, sizeof (struct sockaddr_un));
         addr.sun_family = AF_UNIX;
