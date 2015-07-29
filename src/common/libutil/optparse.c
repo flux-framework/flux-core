@@ -722,10 +722,11 @@ optparse_err_t optparse_get (optparse_t p, optparse_item_t item, ...)
 }
 static char * optstring_create ()
 {
-    char *optstring = malloc (1);
+    char *optstring = malloc (2);
     if (optstring == NULL)
         return (NULL);
-    *optstring = '\0';
+    optstring[0] = '+';
+    optstring[1] = '\0';
     return (optstring);
 }
 
