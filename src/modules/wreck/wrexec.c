@@ -301,7 +301,8 @@ static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
     /*
      *  Wait for child to exit
      */
-    waitpid (pid, &status, 0);
+    if (waitpid (pid, &status, 0) < 0)
+        err ("waitpid");
 
     /*
      *  Close child side of socketpair and send zmsg to (grand)child
