@@ -814,6 +814,10 @@ int optparse_parse_args (optparse_t p, int argc, char *argv[])
     struct option *optz = option_table_create (p, &optstring);
 
 
+    /* Always set optind = 0 here to force internal initialization of
+     *  GNU options parser. See getopt_long(3) NOTES section.
+     */
+    optind = 0;
     while ((c = getopt_long (argc, argv, optstring, optz, &li))) {
         struct option_info *opt;
         struct optparse_option *o;
