@@ -40,6 +40,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/setenvf.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/optparse.h"
 
 
 bool handle_internal (flux_conf_t cf, int ac, char *av[]);
@@ -377,11 +378,19 @@ static void print_environment(flux_conf_t cf, const char * prefix)
     fflush(stdout);
 }
 
-void internal_env (flux_conf_t cf, char *av[])
+void internal_env (flux_conf_t cf, optparse_t p, int ac, char *av[])
 {
-    if (av && av[0]) {
-        execvp (av[0], av); /* no return if successful */
-        err_exit("execvp");
+    int n = 1;
+
+    optparse_add_doc (p,
+        "Print the flux environment or execute COMMAND inside it", -1);
+    optparse_set (p, OPTPARSE_USAGE, "[OPTIONS...] [COMMAND...]");
+    if ((n = optparse_parse_args (p, ac, av)) < 0)
+        msg_exit ("flux-env: error processing args");
+
+    if (av && av[n]) {
+        execvp (av[n], av+n); /* no return if successful */
+        err_exit("execvp (%s)", av[n]);
     } else
         print_environment(cf, "");
 }
@@ -393,7 +402,9 @@ bool handle_internal (flux_conf_t cf, int ac, char *av[])
     if (!strcmp (av[0], "help")) {
         internal_help (cf, ac > 1 ? av[1] : NULL);
     } else if (!strcmp (av[0], "env")) {
-        internal_env (cf, av+1);
+        optparse_t p = internal_cmd_optparse_create ("flux-env");
+        internal_env (cf, p, ac, av);
+        optparse_destroy (p);
     } else
         handled = false;
 
