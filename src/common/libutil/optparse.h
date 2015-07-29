@@ -127,7 +127,7 @@ optparse_err_t optparse_get (optparse_t p, optparse_item_t item, ...);
  *   Print the usage output for program options object [p] using the
  *    registered output function.
  */
-int optparse_print_help (optparse_t p);
+int optparse_print_usage (optparse_t p);
 
 /*
  *   Process command line args in [argc] and [argv] using the options
