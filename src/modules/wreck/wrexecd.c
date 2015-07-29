@@ -760,6 +760,13 @@ static void close_fd (int fd)
     close (fd);
 }
 
+static int dup_fd (int fd, int newfd)
+{
+   assert (fd >= 0);
+   assert (newfd >= 0);
+   return dup2 (fd, newfd);
+}
+
 void child_io_setup (struct task_info *t)
 {
     /*
@@ -772,9 +779,9 @@ void child_io_setup (struct task_info *t)
     /*
      *  Dup appropriate fds onto child STDIN/STDOUT/STDERR
      */
-    if (  (dup2 (zio_src_fd (t->zio [IN]), STDIN_FILENO) < 0)
-       || (dup2 (zio_dst_fd (t->zio [OUT]), STDOUT_FILENO) < 0)
-       || (dup2 (zio_dst_fd (t->zio [ERR]), STDERR_FILENO) < 0))
+    if (  (dup_fd (zio_src_fd (t->zio [IN]), STDIN_FILENO) < 0)
+       || (dup_fd (zio_dst_fd (t->zio [OUT]), STDOUT_FILENO) < 0)
+       || (dup_fd (zio_dst_fd (t->zio [ERR]), STDERR_FILENO) < 0))
         log_fatal (t->ctx, 1, "dup2: %s", strerror (errno));
 
     closeall (3);
