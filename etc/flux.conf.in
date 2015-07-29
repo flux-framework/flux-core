@@ -6,6 +6,7 @@ general
     broker_path = @abs_top_builddir@/src/broker/flux-broker
     lua_cpath = @abs_top_builddir@/src/bindings/lua/.libs/?.so
     lua_path = @abs_top_srcdir@/src/bindings/lua/?.lua
+    python_path = @abs_top_builddir@/src/bindings/python:@abs_top_srcdir@/src/bindings/python/pycotap
     module_path = @abs_top_builddir@/src/modules
     connector_path = @abs_top_builddir@/src/connectors
     man_path = @abs_top_builddir@/doc
