@@ -339,6 +339,11 @@ static int get_term_columns ()
         if (p && (*p != '\0'))
             cols = (int) lval;
     }
+    /*
+     *  Check cols for ridiculous values:
+     */
+    if (cols >= 256 || cols <= 16)
+        cols = 80;
     return (cols);
 }
 
