@@ -1155,6 +1155,7 @@ static int iowatcher_zio_cb (zio_t zio, json_object *o, void *arg)
         if (pp && len > 0) {
             json_object *s = json_object_new_string ((char *)pp);
             json_object_object_add (o, "data", s);
+            free (pp);
         }
         json_object_to_lua (L, o);
         json_object_put (o);
