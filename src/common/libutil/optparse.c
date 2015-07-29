@@ -350,7 +350,7 @@ optparse_doc_print (optparse_t p, struct optparse_option *o, int columns)
     char *s;
     char *q;
 
-    strncpy (buf, o->usage, sizeof (buf));
+    strncpy (buf, o->usage, sizeof (buf) - 1);
     q = buf;
 
     while ((s = get_next_segment (&q, columns, seg, sizeof (seg))))
@@ -396,7 +396,7 @@ optparse_option_print (optparse_t p, struct optparse_option *o, int columns)
      *  Copy "usage" string to buffer as we might modify below
      */
     q = buf;
-    strncpy (buf, o->usage, sizeof (buf));
+    strncpy (buf, o->usage, sizeof (buf) - 1);
 
     descsiz = columns - width;
     s = get_next_segment (&q, descsiz, seg, sizeof (seg));
