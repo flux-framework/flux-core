@@ -320,7 +320,7 @@ static int l_flux_send (lua_State *L)
 static int l_flux_recv (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
-    const char *topic;
+    const char *topic = NULL;
     const char *json_str = NULL;
     json_object *o = NULL;
     int errnum;
@@ -364,7 +364,10 @@ static int l_flux_recv (lua_State *L)
         lua_setfield (L, -1, "errnum");
     }
 
-    lua_pushstring (L, topic);
+    if (topic)
+        lua_pushstring (L, topic);
+    else
+        lua_pushnil (L);
     return (2);
 error:
     if (zmsg) {
