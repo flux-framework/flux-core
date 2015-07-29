@@ -1006,6 +1006,7 @@ void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
         char *rte = flux_msg_get_route_string (msg);
         assert (rte != NULL);
         fprintf (f, "%s[%3.3d] |%s|\n", prefix, len, rte);
+        free (rte);
     };
     /* Topic (keepalive has none)
      */
