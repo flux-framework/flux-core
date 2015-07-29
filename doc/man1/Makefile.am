@@ -13,6 +13,8 @@ MAN1_FILES = \
 	flux-config.1 \
 	flux-module.1 \
 	flux-exec.1 \
+	flux-env.1 \
+	flux-list-instances.1 \
 	flux-ps.1
 
 ADOC_FILES  = $(MAN1_FILES:%.1=%.adoc)
