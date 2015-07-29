@@ -65,4 +65,7 @@ Makefile
 *.core
 *.tap
 .coverage*
+*.trs
+*.log
+.dirstamp
 
