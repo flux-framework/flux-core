@@ -111,5 +111,10 @@ fi
 TEST_NAME=$SHARNESS_TEST_NAME
 export TEST_NAME
 
+#  Test requirements for testsuite
+if ! lua -e 'require "posix"' >/dev/null 2>&1; then
+    error "failed to find lua posix module in path"
+fi
+
 
 # vi: ts=4 sw=4 expandtab
