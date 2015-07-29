@@ -86,6 +86,7 @@ fluxpy_PYTHON=\
 	      message.py\
 	      constants.py\
 	      jsc.py\
+	      command_helpers.py\
 	      sec.py
 
 #TODO: there must be a better way to do this
