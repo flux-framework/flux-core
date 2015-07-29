@@ -36,6 +36,14 @@ int env_getint (char *name, int dflt)
     return ev ? strtoul (ev, NULL, 10) : dflt;
 }
 
+bool env_getbool (char *name, bool dflt)
+{
+    char *ev = getenv (name);
+    if (ev && (ev[0] == 't' || ev[0] == 'T' || strtoul(ev, NULL, 10)))
+        return true;
+    return false;
+}
+
 char *env_getstr (char *name, char *dflt)
 {
     char *ev = getenv (name);
@@ -47,7 +55,10 @@ static int _strtoia (char *s, int *ia, int ia_len)
     char *next;
     int n, len = 0;
 
-    while (*s) {
+    if (!s)
+        return -1;
+
+    while (s) {
         n = strtoul (s, &next, 10);
         s = *next == '\0' ? next : next + 1;
         if (ia) {
@@ -65,19 +76,23 @@ static int getints (char *s, int **iap, int *lenp)
     int len = _strtoia (s, NULL, 0);
     int *ia = malloc (len * sizeof (int));
 
-    if (!ia)
+    if (!ia || len < 0)
         return -1;
 
     (void)_strtoia (s, ia, len);
-    *lenp = len;
-    *iap = ia;
+    if (lenp)
+        *lenp = len;
+    if (iap)
+        *iap = ia;
+    else
+        free (ia);
     return 0;
 }
 
 int env_getints (char *name, int **iap, int *lenp, int dflt_ia[], int dflt_len)
 {
     char *s = getenv (name);
-    int *ia;
+    int *ia = NULL;
     int len;
 
     if (s) {
@@ -90,8 +105,12 @@ int env_getints (char *name, int **iap, int *lenp, int dflt_ia[], int dflt_len)
         for (len = 0; len < dflt_len; len++)
             ia[len] = dflt_ia[len];
     }
-    *lenp = len;
-    *iap = ia;
+    if (lenp)
+        *lenp = len;
+    if (iap)
+        *iap = ia;
+    else
+        free(ia);
     return 0;
 }
 
