@@ -239,3 +239,8 @@ trecv
 scalability
 env
 ENV
+TIMEDFLUSH
+HWMFLUSH
+treduce
+itemsize
+unreduced

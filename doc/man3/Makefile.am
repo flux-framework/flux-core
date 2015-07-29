@@ -14,7 +14,8 @@ MAN3_FILES_PRIMARY = \
 	flux_msg_sendfd.3 \
 	flux_rpc.3 \
 	flux_rpc_then.3 \
-	flux_rpc_multi.3
+	flux_rpc_multi.3 \
+	flux_reduce_create.3
 
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section
@@ -32,7 +33,13 @@ MAN3_FILES_SECONDARY = \
 	flux_rpc_destroy.3 \
 	flux_rpc_check.3 \
 	flux_rpc_get.3 \
-	flux_rpc_completed.3
+	flux_rpc_completed.3 \
+	flux_reduce_destroy.3 \
+	flux_reduce_append.3 \
+	flux_reduce_pop.3 \
+	flux_reduce_push.3 \
+	flux_reduce_opt_set.3 \
+	flux_reduce_opt_get.3
 
 ADOC_FILES  = $(MAN3_FILES_PRIMARY:%.3=%.adoc)
 XML_FILES   = $(MAN3_FILES_PRIMARY:%.3=%.xml)
@@ -69,6 +76,13 @@ flux_rpc_destroy.3: flux_rpc.3
 flux_rpc_get.3: flux_rpc.3
 flux_rpc_check.3: flux_rpc_then.3
 flux_rpc_completed.3: flux_rpc_multi.3
+flux_reduce_destroy.3: flux_reduce_create.3
+flux_reduce_append.3: flux_reduce_create.3
+flux_reduce_pop.3: flux_reduce_create.3
+flux_reduce_push.3: flux_reduce_create.3
+flux_reduce_opt_set.3: flux_reduce_create.3
+flux_reduce_opt_get.3: flux_reduce_create.3
+
 
 flux_open.3: topen.c
 flux_send.3: tsend.c
@@ -77,6 +91,7 @@ flux_event_subscribe.3: tevent.c
 flux_rpc.3: trpc.c
 flux_rpc_then.3: trpc_then.c
 flux_rpc_multi.3: trpc_then_multi.c
+flux_reduce_create.3: treduce.c
 
 EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc
 
@@ -102,3 +117,10 @@ check_PROGRAMS = \
 	trpc_then \
 	trpc_then_multi
 
+check_LTLIBRARIES = \
+	treduce.la
+
+treduce_la_SOURCES = treduce.c
+treduce_la_LDFLAGS = -module -rpath /nowhere \
+        -export-symbols-regex '^mod_(main|name)$$' \
+	-export-sym--disable-static -avoid-version -shared -export-dynamic
