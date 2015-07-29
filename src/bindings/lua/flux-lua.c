@@ -965,7 +965,10 @@ static int l_msghandler_add (lua_State *L)
     lua_pop (L, 1);
 
     mh = l_flux_ref_create (L, f, 2, "msghandler");
-    flux_msghandler_add (f, typemask, pattern, msghandler, (void *) mh);
+    if (flux_msghandler_add (f, typemask, pattern, msghandler, (void *) mh) < 0) {
+        l_flux_ref_destroy (mh, "msghandler");
+        return lua_pusherror (L, "flux_msghandler_add: %s", strerror (errno));
+    }
 
     return (1);
 }
