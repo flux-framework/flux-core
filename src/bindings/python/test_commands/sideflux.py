@@ -44,53 +44,56 @@ class SideFlux(object):
     def __init__(self, size=1):
         global flux_exe
         self.size = size
+        self.tmpdir = tempfile.mkdtemp(prefix='flux-sandbox-')
+        self.flux_tmpdir = os.path.join(self.tmpdir, 'flux-sideflux-0')
+        self.flux_uri = 'local://' + self.flux_tmpdir
+        os.makedirs(self.flux_tmpdir)
+        self.cleaned = False
 
     def start(self):
-        flux_command = [flux_exe, '--verbose', 'start',
-                        '--size={}'.format(self.size), '-o',
-                        '--verbose,-L,stderr', 'bash']
-        # """bash -c 'echo READY ; while true ; do sleep 1; done' """]
+        flux_command = [flux_exe, 'start', '--size={}'.format(self.size), '-o',
+                        '-L,stderr,--sid,sideflux', 'bash']
         # print ' '.join(flux_command)
         FNULL = open(os.devnull, 'w+')
-
+        self.subenv = os.environ.copy()
+        try:
+            del subenv['FLUX_TMPDIR']
+            del subenv['FLUX_URI']
+        except:
+            pass
+        self.subenv['TMPDIR'] = self.tmpdir
         self.sub = subprocess.Popen(
             flux_command,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            close_fds=True,
+            close_fds=True,  # Start a process session to clean up brokers
             preexec_fn=os.setsid,
-            # Start a process session to clean up brokers
-        )
+            env=self.subenv, )
+        self.p = mp.Process(target=consume, args=(self.sub.stdout, ))
+
         print('echo READY', file=self.sub.stdin)
+
         self.env_items = {}
+        # self.env_items['FLUX_TMPDIR'] = self.flux_tmpdir
+        self.env_items['FLUX_URI'] = self.flux_uri
+
         while True:
             line = self.sub.stdout.readline()
-            # print line
             if line != '':
-                m = re.match(r"\s+(FLUX_[^=]+)=(.*)", line.rstrip())
+                m = re.match(r"\s*(?P<var>[^= ]+)=(?P<val>.*)", line.rstrip())
                 if m:
                     if os.environ.get('SIDEFLUX_DEBUG', False):
-                        print("setting", m.group(1), "to", m.group(2))
-                    v = m.group(2)
+                        print("setting", m.group('var'), "to", m.group('val'))
+                    v = m.group('val')
                     if re.search(r'/\.\./', v):
                         v = os.path.abspath(v)
-                    self.env_items[m.group(1)] = v
-                m = re.match(r'(lt-)?flux-broker: FLUX_TMPDIR: (?P<path>.*)',
-                             line.rstrip())
-                if m:
-                    if os.environ.get('SIDEFLUX_DEBUG', False):
-                        print("setting", "FLUX_TMPDIR", "to",
-                              os.path.abspath(m.group('path')))
-                    v = m.group('path')
-                    if re.search(r'/\.\./', v):
-                        v = os.path.abspath(v)
-                    self.env_items['FLUX_TMPDIR'] = v
+                    self.env_items[m.group('var')] = v
                 if re.search('READY', line):
                     break
             else:
-                break
-        self.p = mp.Process(target=consume, args=(self.sub.stdout, ))
+                if self.sub.poll() is not None:
+                    raise EnvironmentError(self.sub.poll())
         self.p.start()
 
     def apply_environment(self):
@@ -98,11 +101,20 @@ class SideFlux(object):
             os.environ[k] = v
 
     def destroy(self):
-        self.sub.stdin.close()
-        self.p.terminate()
-        self.p.join()
+        if self.cleaned:
+            return
+        self.cleaned = True
+        if os.path.exists(self.tmpdir):
+            shutil.rmtree(self.tmpdir)
+        try:
+            self.sub.stdin.close()
+        except AttributeError:
+            pass
         # Kill the process group headed by the subprocess
         os.killpg(self.sub.pid, 15)
+        if self.p is not None:
+            self.p.terminate()
+            self.p.join()
 
     def run_flux_cmd(self, command=''):
         global flux_exe
@@ -120,11 +132,13 @@ class SideFlux(object):
 def run_beside_flux(size=1):
     f = SideFlux(size)
     f.start()
+    env = os.environ.copy()
     f.apply_environment()
     # print json.dumps(dict(os.environ))
     try:
         yield f
     finally:
+        os.environ.update(dict=env)
         f.destroy()
 
 
@@ -140,20 +154,20 @@ class AsyncTimeout(Exception):
 
 
 class SimpleAsyncRunner(object):
-
-    def __init__(self, fun, args):
+    def __init__(self, fun, args, side):
         def q_wrapper(q):
-          try:
-            res = fun(*args)
-            q.put(res)
-          except:
-            q.put(None)
+            try:
+                res = fun(*args)
+                q.put(res)
+            except:
+                q.put(None)
+
         self.q = mp.Queue()
-        self.p = mp.Process(target=q_wrapper,
-                            args=(self.q, ))
+        self.p = mp.Process(target=q_wrapper, args=(self.q, ))
         self.p.start()
         self.done = False
         self.res = None
+        self.side = side
 
     def get(self, timeout=None):
         """ Get the result, raises AsyncTimeout on timeout failure """
@@ -180,7 +194,7 @@ def apply_under_flux_async(size, fun, args=tuple(), kwargs=dict()):
     f = SideFlux(size)
     f.start()
     result_queue = mp.Queue()
-    res = SimpleAsyncRunner(apply_wrapper, (fun, f.env_items, args, kwargs))
+    res = SimpleAsyncRunner(apply_wrapper, (fun, f.env_items, args, kwargs), f)
     return res
 
 

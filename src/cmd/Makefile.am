@@ -36,7 +36,8 @@ dist_fluxcmd_SCRIPTS = \
 	flux-ps
 
 if HAVE_PYTHON
-dist_fluxcmd_SCRIPTS+= flux-python
+dist_fluxcmd_SCRIPTS+= \
+ flux-list-instances
 endif
 
 fluxcmd_PROGRAMS = \

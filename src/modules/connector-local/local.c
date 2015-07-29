@@ -43,6 +43,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/log.h"
 
@@ -584,6 +585,7 @@ static int listener_init (ctx_t *ctx, char *sockpath)
         goto error_close;
     }
 done:
+    cleanup_push_string(cleanup_file, sockpath);
     return fd;
 error_close:
     close (fd);

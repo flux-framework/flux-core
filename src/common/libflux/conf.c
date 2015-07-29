@@ -29,6 +29,7 @@
 #include <pwd.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <czmq.h>
 
 #include "src/common/libutil/log.h"
@@ -36,9 +37,13 @@
 
 #include "conf.h"
 
+static void initialize_environment(flux_conf_t cf); 
+
 struct flux_conf_struct {
     char *confdir;
     zconfig_t *z;
+    zhash_t *environment;
+    zhash_t *environment_unset;
 };
 
 struct flux_conf_itr_struct {
@@ -53,6 +58,10 @@ void flux_conf_destroy (flux_conf_t cf)
         free (cf->confdir);
     if (cf->z)
         zconfig_destroy (&cf->z);
+    if (cf->environment)
+        zhash_destroy(&cf->environment);
+    if (cf->environment_unset)
+        zhash_destroy(&cf->environment_unset);
     free (cf);
 }
 
@@ -60,15 +69,44 @@ flux_conf_t flux_conf_create (void)
 {
     flux_conf_t cf = xzmalloc (sizeof (*cf));
     struct passwd *pw = getpwuid (getuid ());
+    char *confdir;
 
     if (!pw || !pw->pw_dir || strlen (pw->pw_dir) == 0) {
         free (cf);
         return NULL;
     }
-    cf->confdir = xasprintf ("%s/.flux", pw->pw_dir);
     if (!(cf->z = zconfig_new ("root", NULL)))
         oom ();
+    if (!(cf->environment = zhash_new()))
+        oom ();
+    zhash_autofree(cf->environment);
+    if (!(cf->environment_unset = zhash_new()))
+        oom ();
+    zhash_autofree(cf->environment_unset);
+
+    initialize_environment(cf);
+
+    if(!(confdir = xasprintf ("%s/.flux", pw->pw_dir)))
+        oom ();
+    flux_conf_set_directory(cf, confdir);
+    free(confdir);
     return cf;
+}
+
+static void initialize_environment(flux_conf_t cf)
+{
+    // Defaults from the environment
+    flux_conf_environment_from_env (cf, "LUA_CPATH",  ";;"); /* Lua replaces ;; with the default path */
+    flux_conf_environment_from_env (cf, "LUA_PATH",   ";;");
+    flux_conf_environment_from_env (cf, "PYTHONPATH", "");
+
+    // Build paths
+    flux_conf_environment_push (cf, "FLUX_CONNECTOR_PATH", CONNECTOR_PATH,      ":");
+    flux_conf_environment_push (cf, "FLUX_EXEC_PATH",      EXEC_PATH,           ":");
+    flux_conf_environment_push (cf, "FLUX_MODULE_PATH",    MODULE_PATH,         ":");
+    flux_conf_environment_push (cf, "LUA_CPATH",           LUA_CPATH_ADD,       ";"); /* Lua replaces ;; with the default path */
+    flux_conf_environment_push (cf, "LUA_PATH",            LUA_PATH_ADD,        ";");
+    flux_conf_environment_push (cf, "PYTHONPATH",          PYTHON_PATH,         ":");
 }
 
 const char *flux_conf_get_directory (flux_conf_t cf)
@@ -79,6 +117,7 @@ const char *flux_conf_get_directory (flux_conf_t cf)
 void flux_conf_set_directory (flux_conf_t cf, const char *path)
 {
     free (cf->confdir);
+    flux_conf_environment_set(cf, "FLUX_CONF_DIRECTORY", path);
     cf->confdir = xstrdup (path);
 }
 
@@ -87,6 +126,15 @@ void flux_conf_clear (flux_conf_t cf)
     zconfig_destroy (&cf->z);
     if (!(cf->z = zconfig_new ("root", NULL)))
         oom ();
+    zhash_destroy (&cf->environment);
+    if (!(cf->environment = zhash_new()))
+        oom ();
+    zhash_autofree(cf->environment);
+    zhash_destroy (&cf->environment_unset);
+    if (!(cf->environment_unset = zhash_new()))
+        oom ();
+    zhash_autofree(cf->environment_unset);
+    initialize_environment (cf);
 }
 
 int flux_conf_load (flux_conf_t cf)
@@ -101,6 +149,7 @@ int flux_conf_load (flux_conf_t cf)
         errno = EINVAL; /* FIXME more appropriate 'parse error' errno? */
         goto done;
     }
+
     rc = 0;
 done:
     free (path);
@@ -239,6 +288,113 @@ const char *flux_conf_next (flux_conf_itr_t itr)
     return item;
 }
 
+const char * flux_conf_environment_get (flux_conf_t cf, const char *key)
+{
+    return zhash_lookup(cf->environment, key);
+}
+
+void flux_conf_environment_set (flux_conf_t cf, const char *key,
+                             const char *value)
+{
+    zhash_update(cf->environment, key, (void *)value);
+    zhash_delete(cf->environment_unset, key);
+}
+
+void flux_conf_environment_unset (flux_conf_t cf, const char *key)
+{
+    zhash_update(cf->environment_unset, key, "1");
+    zhash_delete(cf->environment, key);
+}
+
+static void flux_conf_environment_push_inner (flux_conf_t cf, const char *key,
+                              const char *value, const char *separator, bool before)
+{
+    if (!value || strlen(value) == 0)
+        return;
+
+    const char * item = zhash_lookup(cf->environment, key);
+
+    char * new_item;
+    if (!item || strlen(item) == 0){
+        new_item = xstrdup(value);
+    } else {
+        if (before)
+            new_item = xasprintf("%s%s%s", value, separator, item);
+        else
+            new_item = xasprintf("%s%s%s", item, separator, value);
+    }
+
+    flux_conf_environment_set(cf, key, new_item);
+    free(new_item);
+}
+
+void flux_conf_environment_push (flux_conf_t cf, const char *key,
+                              const char *value, const char *separator)
+{
+    flux_conf_environment_push_inner(cf, key, value, separator, true);
+}
+
+void flux_conf_environment_push_back (flux_conf_t cf, const char *key,
+                                   const char *value, const char *separator)
+{
+    flux_conf_environment_push_inner(cf, key, value, separator, false);
+}
+
+void flux_conf_environment_from_env(flux_conf_t cf, const char *key, const char *default_base)
+{
+    const char * env = getenv(key);
+    if (! env)
+        env = default_base;
+    flux_conf_environment_set(cf, key, env);
+}
+
+void flux_conf_environment_apply(flux_conf_t cf)
+{
+    const char *key, *value;
+    for (value = (char*)zhash_first(cf->environment), key = (char*)zhash_cursor(cf->environment);
+            value != NULL;
+            value = zhash_next(cf->environment), key = zhash_cursor(cf->environment)) {
+        if (setenv (key, value, 1) < 0)
+            err_exit ("setenv: %s=%s", key, value);
+    }
+    for (value = (char*)zhash_first(cf->environment_unset), key = (char*)zhash_cursor(cf->environment_unset);
+            value != NULL;
+            value = zhash_next(cf->environment_unset), key = zhash_cursor(cf->environment_unset)) {
+        if(unsetenv(key)){
+            err_exit ("unsetenv: %s=%s", key, value);
+        }
+    }
+}
+
+const char *flux_conf_environment_first (flux_conf_t cf)
+{
+    return zhash_first(cf->environment);
+}
+
+const char *flux_conf_environment_next (flux_conf_t cf)
+{
+    return zhash_next(cf->environment);
+}
+
+const char *flux_conf_environment_cursor (flux_conf_t cf)
+{
+    return zhash_cursor(cf->environment);
+}
+
+const char *flux_conf_environment_unset_first (flux_conf_t cf)
+{
+    return zhash_first(cf->environment_unset);
+}
+
+const char *flux_conf_environment_unset_next (flux_conf_t cf)
+{
+    return zhash_next(cf->environment_unset);
+}
+
+const char *flux_conf_environment_unset_cursor (flux_conf_t cf)
+{
+    return zhash_cursor(cf->environment_unset);
+}
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

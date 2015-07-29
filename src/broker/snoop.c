@@ -32,6 +32,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/cleanup.h"
 
 #include "endpt.h"
 #include "snoop.h"
@@ -92,6 +93,9 @@ static int snoop_bind (snoop_t sn)
     if (strchr (sn->snoop->uri, '*')) { /* capture dynamically assigned port */
         free (sn->snoop->uri);
         sn->snoop->uri = zsocket_last_endpoint (sn->snoop->zs);
+    }
+    if (strstr(sn->snoop->uri, "ipc://")){
+        cleanup_push_string(cleanup_file, sn->snoop->uri + sizeof("ipc://") - 1);
     }
     rc = 0;
 done:

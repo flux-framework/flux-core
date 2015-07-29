@@ -47,6 +47,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/nodeset.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/ipaddr.h"
@@ -676,6 +677,7 @@ static void update_environment (ctx_t *ctx)
         msg ("FLUX_TMPDIR: %s", tmpdir);
     if (flux_set_tmpdir (tmpdir) < 0)
         err_exit ("flux_set_tmpdir");
+    cleanup_push_string(cleanup_directory, tmpdir);
 }
 
 static void update_pidfile (ctx_t *ctx, bool force)
@@ -706,6 +708,7 @@ static void update_pidfile (ctx_t *ctx, bool force)
         err_exit ("%s", pidfile);
     if (ctx->verbose)
         msg ("pidfile: %s", pidfile);
+    cleanup_push_string(cleanup_file, pidfile);
     free (pidfile);
 }
 
@@ -806,16 +809,21 @@ static void boot_local (ctx_t *ctx)
 {
     const char *tmpdir = flux_get_tmpdir ();
     int rrank = ctx->rank == 0 ? ctx->size - 1 : ctx->rank - 1;
-
-    overlay_set_child (ctx->overlay, "ipc://%s/flux-%s-%d-req",
-                       tmpdir, ctx->sid, ctx->rank);
+    char * reqfile = xasprintf("%s/flux-%s-%d-req", tmpdir, ctx->sid, ctx->rank);
+    char * eventfile = xasprintf("%s/flux-%s-event", tmpdir, ctx->sid);
+    overlay_set_child (ctx->overlay, "ipc://%s", reqfile);
+    cleanup_push_string(cleanup_file, reqfile);
+    free(reqfile);
     if (ctx->rank > 0) {
         int prank = ctx->k_ary == 0 ? 0 : (ctx->rank - 1) / ctx->k_ary;
         overlay_push_parent (ctx->overlay, "ipc://%s/flux-%s-%d-req",
                              tmpdir, ctx->sid, prank);
     }
-    overlay_set_event (ctx->overlay, "ipc://%s/flux-%s-event",
-                       tmpdir, ctx->sid);
+    overlay_set_event (ctx->overlay, "ipc://%s", eventfile);
+    if (ctx->rank == 0) {
+        cleanup_push_string(cleanup_file, eventfile);
+    }
+    free(eventfile);
     overlay_set_right (ctx->overlay, "ipc://%s/flux-%s-%d-req",
                        tmpdir, ctx->sid, rrank);
 }

@@ -8,13 +8,10 @@ import flux
 import flux.kvs
 import json
 import multiprocessing as mp
+import sideflux
 from pycotap import TAPTestRunner
-from sideflux import run_beside_flux
 
-def __flux_size():
-  return 8
-
-def test_barr_count(x, name, count):
+def barr_count(x, name, count):
   print proc, x
   f = core.Flux()
   f.barrier(name,count) 
@@ -22,7 +19,12 @@ def test_barr_count(x, name, count):
 class TestBarrier(unittest.TestCase):
     def setUp(self):
         """Create a handle, connect to flux"""
-        self.f = core.Flux()
+        self.sf = sideflux.SideFlux(8)
+        self.sf.start()
+        self.f = core.Flux(self.sf.flux_uri)
+
+    def tearDown(self):
+        self.sf.destroy()
 
     def test_single(self):
         self.f.barrier('testbarrier1', 1)
@@ -32,8 +34,9 @@ class TestBarrier(unittest.TestCase):
         p = mp.Pool(i)
         reslist = []
         for j in xrange(0, i):
-          res = p.apply_async(test_barr_count, (j, 'testbarrier2', i))
+          res = p.apply_async(barr_count, (j, 'testbarrier2', i))
           reslist.append(res)
 
-
+if __name__ == '__main__':
+      unittest.main(testRunner=TAPTestRunner())
 
