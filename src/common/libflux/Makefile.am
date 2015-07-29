@@ -3,7 +3,13 @@ AM_CFLAGS = @GCCWARN@
 AM_CPPFLAGS = \
 	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
-	-DCONNECTOR_PATH=\"$(fluxconnectordir)\"
+        -DMODULE_PATH=\"$(fluxmoddir)\" \
+        -DCONNECTOR_PATH=\"$(fluxconnectordir)\" \
+	-DEXEC_PATH=\"$(fluxcmddir)\" \
+	-DBROKER_PATH=\"$(fluxlibexecdir)/flux-broker\" \
+	-DLUA_PATH_ADD=\"$(luadir)/?.lua\" \
+	-DLUA_CPATH_ADD=\"$(luaexecdir)/?.so\" \
+	-DPYTHON_PATH=\"$(pyexecdir)\"
 
 fluxcoreinclude_HEADERS = \
 	flux.h \
@@ -69,9 +75,9 @@ test_ldadd = \
 	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD)
 
 test_cppflags = \
-	-DMODULE_PATH=\"$(top_builddir)/src/modules\" \
         -I$(top_srcdir)/src/common/libtap \
-        $(AM_CPPFLAGS)
+        $(AM_CPPFLAGS) \
+	-UMODULE_PATH -DMODULE_PATH=\"$(top_builddir)/src/modules\"
 
 check_PROGRAMS = $(TESTS)
 
