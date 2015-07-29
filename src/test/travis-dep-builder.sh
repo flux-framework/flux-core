@@ -86,7 +86,7 @@ if test -n "$print_env"; then
     exit 0
 fi
 
-$(print_env)
+eval $(print_env)
 
 check_cache ()
 {
