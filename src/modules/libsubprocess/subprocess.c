@@ -478,6 +478,13 @@ static void close_if_valid (int fd)
     close (fd);
 }
 
+static int dup2_fd (int fd, int newfd)
+{
+    assert (fd >= 0);
+    assert (newfd >= 0);
+    return dup2 (fd, newfd);
+}
+
 static int child_io_setup (struct subprocess *p)
 {
     /*
@@ -490,9 +497,9 @@ static int child_io_setup (struct subprocess *p)
     /*
      *  Dup this process' fds onto zio
      */
-    if (  (dup2 (zio_src_fd (p->zio_in), STDIN_FILENO) < 0)
-       || (dup2 (zio_dst_fd (p->zio_out), STDOUT_FILENO) < 0)
-       || (dup2 (zio_dst_fd (p->zio_err), STDERR_FILENO) < 0))
+    if (  (dup2_fd (zio_src_fd (p->zio_in), STDIN_FILENO) < 0)
+       || (dup2_fd (zio_dst_fd (p->zio_out), STDOUT_FILENO) < 0)
+       || (dup2_fd (zio_dst_fd (p->zio_err), STDERR_FILENO) < 0))
         return (-1);
 
     return (0);
