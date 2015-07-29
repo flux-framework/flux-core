@@ -369,12 +369,23 @@ static void print_environment(flux_conf_t cf, const char * prefix)
     fflush(stdout);
 }
 
+void internal_env (flux_conf_t cf, char *av[])
+{
+    if (av && av[0]) {
+        execvp (av[0], av); /* no return if successful */
+        err_exit("execvp");
+    } else
+        print_environment(cf, "");
+}
+
 bool handle_internal (flux_conf_t cf, int ac, char *av[])
 {
     bool handled = true;
 
     if (!strcmp (av[0], "help")) {
         internal_help (cf, ac > 1 ? av[1] : NULL);
+    } else if (!strcmp (av[0], "env")) {
+        internal_env (cf, av+1);
     } else
         handled = false;
 
