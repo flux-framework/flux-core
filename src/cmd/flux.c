@@ -349,12 +349,20 @@ optparse_t internal_cmd_optparse_create (const char *cmd)
     return (p);
 }
 
-void internal_help (flux_conf_t cf, const char *topic)
+void internal_help (flux_conf_t cf, optparse_t p, int ac, char *av[])
 {
-    const char *cf_path = flux_conf_get (cf, "general.man_path");
+    int n = 1;
     char *cmd;
 
-    if (topic) {
+    optparse_add_doc (p,
+        "Display help information for flux commands", -1);
+    optparse_set (p, OPTPARSE_USAGE, "[OPTIONS] [COMMAND]");
+    if ((n = optparse_parse_args (p, ac, av)) < 0)
+        msg_exit ("flux-help: error processing args");
+
+    if (n < ac) {
+        const char *cf_path = flux_conf_get (cf, "general.man_path");
+        const char *topic = av [n];
         if (cf_path)
             setenvf ("MANPATH", 1, "%s:%s", cf_path, MANDIR);
         else
@@ -400,7 +408,9 @@ bool handle_internal (flux_conf_t cf, int ac, char *av[])
     bool handled = true;
 
     if (!strcmp (av[0], "help")) {
-        internal_help (cf, ac > 1 ? av[1] : NULL);
+        optparse_t p = internal_cmd_optparse_create ("flux-help");
+        internal_help (cf, p, ac, av);
+        optparse_destroy (p);
     } else if (!strcmp (av[0], "env")) {
         optparse_t p = internal_cmd_optparse_create ("flux-env");
         internal_env (cf, p, ac, av);
