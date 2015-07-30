@@ -42,8 +42,6 @@ dist_man_MANS = $(MAN3_FILES)
 $(MAN3_FILES): COPYRIGHT.adoc
 endif
 
-noinst_SCRIPTS = spellcheck
-
 SUFFIXES = .adoc .3
 
 STDERR_DEVNULL = $(stderr_devnull_$(V))
@@ -77,14 +75,7 @@ flux_rpc_completed.3: flux_rpc_multi.3
 
 EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc
 
-CLEANFILES = $(MAN3_FILES) $(XML_FILES) spellcheck
-
-TESTS_ENVIRONMENT = \
-	ASPELL=$(ASPELL) \
-	pws_dict=$(abs_top_srcdir)/doc/test/spell.en.pws \
-	man_dir=$(abs_srcdir)
-
-TESTS = spellcheck
+CLEANFILES = $(MAN3_FILES) $(XML_FILES)
 
 AM_CFLAGS = @GCCWARN@
 

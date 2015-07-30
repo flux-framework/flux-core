@@ -25,8 +25,6 @@ dist_man_MANS = $(MAN1_FILES)
 $(MAN1_FILES): COPYRIGHT.adoc
 endif
 
-noinst_SCRIPTS = spellcheck
-
 SUFFIXES = .adoc .1
 
 STDERR_DEVNULL = $(stderr_devnull_$(V))
@@ -40,16 +38,6 @@ stderr_devnull_0 = 2>/dev/null
 	    --destination-dir=$(builddir) \
 	    --doctype manpage --format manpage $< $(STDERR_DEVNULL)
 
-spellcheck: $(top_srcdir)/doc/test/spellcheck
-	$(LN_S) --force $< $@
-
 EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc
 
-CLEANFILES = $(MAN1_FILES) $(XML_FILES) spellcheck
-
-TESTS_ENVIRONMENT = \
-	ASPELL=$(ASPELL) \
-	pws_dict=$(abs_top_srcdir)/doc/test/spell.en.pws \
-	man_dir=$(abs_srcdir)
-
-TESTS = spellcheck
+CLEANFILES = $(MAN1_FILES) $(XML_FILES)
