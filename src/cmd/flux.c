@@ -354,9 +354,6 @@ void internal_help (flux_conf_t cf, optparse_t p, int ac, char *av[])
     int n = 1;
     char *cmd;
 
-    optparse_add_doc (p,
-        "Display help information for flux commands", -1);
-    optparse_set (p, OPTPARSE_USAGE, "[OPTIONS] [COMMAND]");
     if ((n = optparse_parse_args (p, ac, av)) < 0)
         msg_exit ("flux-help: error processing args");
 
@@ -390,9 +387,6 @@ void internal_env (flux_conf_t cf, optparse_t p, int ac, char *av[])
 {
     int n = 1;
 
-    optparse_add_doc (p,
-        "Print the flux environment or execute COMMAND inside it", -1);
-    optparse_set (p, OPTPARSE_USAGE, "[OPTIONS...] [COMMAND...]");
     if ((n = optparse_parse_args (p, ac, av)) < 0)
         msg_exit ("flux-env: error processing args");
 
@@ -403,22 +397,69 @@ void internal_env (flux_conf_t cf, optparse_t p, int ac, char *av[])
         print_environment(cf, "");
 }
 
+struct builtin {
+    const char *name;
+    const char *doc;
+    const char *usage;
+    void       (*fn) (flux_conf_t, optparse_t, int ac, char *av[]);
+};
+
+struct builtin builtin_cmds [] = {
+    {
+      "help",
+      "Display help information for flux commands",
+      "[OPTIONS...] [COMMAND]",
+      internal_help
+    },
+    {
+      "env",
+      "Print the flux environment or execute COMMAND inside it",
+      "[OPTIONS...] [COMMAND...]",
+      internal_env
+    },
+    { NULL, NULL, NULL, NULL },
+};
+
+
+void run_builtin (struct builtin *cmd, flux_conf_t cf, int ac, char *av[])
+{
+    optparse_t p;
+    char prog [66] = "flux-";
+
+    /* cat command name onto 'flux-' prefix to get program name for
+     *   help output (truncate if we have a ridiculously long cmd name)
+     */
+    strncat (prog, cmd->name, sizeof (prog) - 6);
+
+    if ((p = optparse_create (prog)) == NULL)
+        err_exit ("optparse_create (%s)", prog);
+
+    if (cmd->usage)
+        optparse_set (p, OPTPARSE_USAGE, cmd->usage);
+    if (cmd->doc)
+        optparse_add_doc (p, cmd->doc, -1);
+
+    /* Run builtin: */
+    if (!cmd->fn)
+        msg_exit ("Error: builtin %s has no registered function!", prog);
+    (*cmd->fn) (cf, p, ac, av);
+
+    optparse_destroy (p);
+}
+
+
+
 bool handle_internal (flux_conf_t cf, int ac, char *av[])
 {
-    bool handled = true;
-
-    if (!strcmp (av[0], "help")) {
-        optparse_t p = internal_cmd_optparse_create ("flux-help");
-        internal_help (cf, p, ac, av);
-        optparse_destroy (p);
-    } else if (!strcmp (av[0], "env")) {
-        optparse_t p = internal_cmd_optparse_create ("flux-env");
-        internal_env (cf, p, ac, av);
-        optparse_destroy (p);
-    } else
-        handled = false;
-
-    return handled;
+    struct builtin *cmd = &builtin_cmds [0];
+    while (cmd->name) {
+        if (strcmp (av[0], cmd->name) == 0) {
+            run_builtin (cmd, cf, ac, av);
+            return true;
+        }
+        cmd++;
+    }
+    return false;
 }
 
 /*
