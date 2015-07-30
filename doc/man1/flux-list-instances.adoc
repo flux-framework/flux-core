@@ -1,5 +1,5 @@
 FLUX-LIST-INSTANCES(1)
-===========
+======================
 :doctype: manpage
 
 
