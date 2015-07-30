@@ -179,6 +179,8 @@ zmsg_t *module_recvmsg (module_t p)
         if (flux_msg_pop_route (zmsg, &uuid) < 0) /* simulate DEALER socket */
             goto error;
     }
+    if (uuid)
+        free (uuid);
     return zmsg;
 error:
     zmsg_destroy (&zmsg);
