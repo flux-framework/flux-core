@@ -44,12 +44,13 @@ int lua_pusherror (lua_State *L, char *fmt, ...)
     rc = vasprintf (&msg, fmt, ap);
     va_end (ap);
 
-    if (rc < 0)
-        msg = "error in vasprintf";
-
     lua_pushnil (L);
-    lua_pushstring (L, msg);
-    free (msg);
+    if (rc < 0)
+        lua_pushstring (L, "vasprintf error!");
+    else {
+        lua_pushstring (L, msg);
+        free (msg);
+    }
     return (2);
 }
 

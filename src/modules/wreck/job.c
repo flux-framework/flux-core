@@ -209,9 +209,11 @@ static int wait_for_lwj_watch_init (flux_t h, int64_t id)
     rpc_o = util_json_object_new_object ();
     util_json_object_add_string (rpc_o, "key", "lwj.next-id");
     util_json_object_add_int64 (rpc_o, "val", id);
-    flux_json_rpc (h, FLUX_NODEID_ANY, "sim_sched.lwj-watch", rpc_o, &rpc_resp);
-    util_json_object_get_int (rpc_resp, "rc", &rc);
-    json_object_put (rpc_resp);
+    rc = flux_json_rpc (h, FLUX_NODEID_ANY, "sim_sched.lwj-watch", rpc_o, &rpc_resp);
+    if (rc >= 0) {
+        util_json_object_get_int (rpc_resp, "rc", &rc);
+        json_object_put (rpc_resp);
+    }
     json_object_put (rpc_o);
     return rc;
 }

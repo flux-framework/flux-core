@@ -149,10 +149,10 @@ static flux_t prog_ctx_flux_handle (struct prog_ctx *ctx)
 
 static void log_fatal (struct prog_ctx *ctx, int code, char *format, ...)
 {
-    flux_t c = prog_ctx_flux_handle (ctx);
+    flux_t c;
     va_list ap;
     va_start (ap, format);
-    if ((ctx != NULL) && ((c = ctx->flux) != NULL))
+    if ((ctx != NULL) && ((c = prog_ctx_flux_handle (ctx)) != NULL))
         flux_vlog (c, LOG_EMERG, format, ap);
     else
         vfprintf (stderr, format, ap);
@@ -400,10 +400,10 @@ static char * ctime_iso8601_now (char *buf, size_t sz)
 static int get_executable_path (char *buf, size_t len)
 {
     char *p;
-    if (readlink ("/proc/self/exe", buf, len) < 0)
+    ssize_t n = readlink ("/proc/self/exe", buf, len);
+    if (n < 0)
         return (-1);
-
-    p = buf + strlen (buf) - 1;
+    p = buf + n;
     while (*p == '/')
         p--;
     while (*p != '/')
@@ -429,7 +429,8 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
         kvsdir_destroy (ctx->resources);
 
     free (ctx->envz);
-    close (ctx->signalfd);
+    if (ctx->signalfd >= 0)
+        close (ctx->signalfd);
 
 
     zmq_close (ctx->zs_req);
@@ -445,11 +446,11 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
 struct prog_ctx * prog_ctx_create (void)
 {
     struct prog_ctx *ctx = malloc (sizeof (*ctx));
-    memset (ctx, 0, sizeof (*ctx));
     zsys_handler_set (NULL); /* Disable czmq SIGINT/SIGTERM handlers */
     if (!ctx)
         log_fatal (ctx, 1, "malloc");
 
+    memset (ctx, 0, sizeof (*ctx));
     ctx->options = zhash_new ();
 
     ctx->envz = NULL;
@@ -462,7 +463,7 @@ struct prog_ctx * prog_ctx_create (void)
     ctx->envref = -1;
 
     if (get_executable_path (ctx->exedir, sizeof (ctx->exedir)) < 0)
-        log_fatal (ctx, 1, "get_executable_path");
+        log_fatal (ctx, 1, "get_executable_path: %s\n", strerror (errno));
 
     ctx->lua_stack = lua_stack_create ();
     ctx->lua_pattern = xstrdup (WRECK_LUA_PATTERN);
@@ -562,6 +563,8 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
     int *nodeids;
 
     nodeids = malloc (flux_size (ctx->flux) * sizeof (int));
+    if (nodeids == NULL)
+        return (-1);
 
     if (kvsdir_get_dir (ctx->kvs, &rank, "rank") < 0) {
         log_msg (ctx, "get_dir (%s.rank): %s",
@@ -750,21 +753,35 @@ void closeall (int fd)
     return;
 }
 
+static void close_fd (int fd)
+{
+    if (fd < 0)
+        return;
+    close (fd);
+}
+
+static int dup_fd (int fd, int newfd)
+{
+   assert (fd >= 0);
+   assert (newfd >= 0);
+   return dup2 (fd, newfd);
+}
+
 void child_io_setup (struct task_info *t)
 {
     /*
      *  Close parent end of stdio fds in child
      */
-    close (zio_dst_fd (t->zio [IN]));
-    close (zio_src_fd (t->zio [OUT]));
-    close (zio_src_fd (t->zio [ERR]));
+    close_fd (zio_dst_fd (t->zio [IN]));
+    close_fd (zio_src_fd (t->zio [OUT]));
+    close_fd (zio_src_fd (t->zio [ERR]));
 
     /*
      *  Dup appropriate fds onto child STDIN/STDOUT/STDERR
      */
-    if (  (dup2 (zio_src_fd (t->zio [IN]), STDIN_FILENO) < 0)
-       || (dup2 (zio_dst_fd (t->zio [OUT]), STDOUT_FILENO) < 0)
-       || (dup2 (zio_dst_fd (t->zio [ERR]), STDERR_FILENO) < 0))
+    if (  (dup_fd (zio_src_fd (t->zio [IN]), STDIN_FILENO) < 0)
+       || (dup_fd (zio_dst_fd (t->zio [OUT]), STDOUT_FILENO) < 0)
+       || (dup_fd (zio_dst_fd (t->zio [ERR]), STDERR_FILENO) < 0))
         log_fatal (t->ctx, 1, "dup2: %s", strerror (errno));
 
     closeall (3);
@@ -772,9 +789,9 @@ void child_io_setup (struct task_info *t)
 
 void close_child_fds (struct task_info *t)
 {
-    close (zio_src_fd (t->zio [IN]));
-    close (zio_dst_fd (t->zio [OUT]));
-    close (zio_dst_fd (t->zio [ERR]));
+    close_fd (zio_src_fd (t->zio [IN]));
+    close_fd (zio_dst_fd (t->zio [OUT]));
+    close_fd (zio_dst_fd (t->zio [ERR]));
 }
 
 int update_job_state (struct prog_ctx *ctx, const char *state)
@@ -1031,7 +1048,6 @@ int exec_command (struct prog_ctx *ctx, int i)
 
 char *gtid_list_create (struct prog_ctx *ctx, char *buf, size_t len)
 {
-    char *str = NULL;
     int i, n = 0;
     int truncated = 0;
 
@@ -1050,7 +1066,7 @@ char *gtid_list_create (struct prog_ctx *ctx, char *buf, size_t len)
                 n += count;
         }
         else
-            n += strlen (str) + 1;
+            n += strlen (buf) + 1;
     }
 
     if (truncated)

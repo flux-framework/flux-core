@@ -223,6 +223,7 @@ int lua_script_list_append (lua_stack_t st, const char *pattern)
                 if (!(s = lua_script_create (st, type, gl.gl_pathv[i])) ||
                      (lua_script_compile (st, s) < 0)) {
                     (*st->errf) ("%s: Failed. Skipping.\n", gl.gl_pathv[i]);
+                    lua_script_destroy (s);
                     continue;
                 }
                 list_append (st->script_list, s);
@@ -310,7 +311,12 @@ int lua_stack_append_script (lua_stack_t st, const char *script,
 
     s->label = label ? strdup (label) : strdup ("<script>");
 
-    lua_script_compile (st, s);
+    if (lua_script_compile (st, s) < 0) {
+        lua_script_destroy (s);
+	return (-1);
+    }
+
+    list_append (st->script_list, s);
 
     return (0);
 }
@@ -395,6 +401,14 @@ int vec_to_lua_table (lua_State *L, char **av)
     return (1);
 }
 
+static void free_env (char **env, int count)
+{
+    int i;
+    for (i = 0; i < count; i++)
+        free (env[i]);
+    free (env);
+}
+
 char **lua_table_to_vec (lua_State *L, int index)
 {
     int count = 0;
@@ -413,6 +427,8 @@ char **lua_table_to_vec (lua_State *L, int index)
     lua_pop (L, 1);
 
     env = malloc ((sizeof (*env) * count) + 1);
+    if (env == NULL)
+        return (NULL);
 
     count = 0;
     lua_pushnil (L);
@@ -420,9 +436,13 @@ char **lua_table_to_vec (lua_State *L, int index)
         /*  'key' is at index -2 and 'value' is at index -1 */
         const char *var = lua_tostring (L, -2);
         const char *val = lua_tostring (L, -1);
-
-        env[count] = malloc (strlen (var) + strlen (val) + 2);
-        sprintf (env[count], "%s=%s", var, val);
+        char *e = malloc (strlen (var) + strlen (val) + 2);
+        if (e == NULL) {
+            free_env (env, count);
+            return (NULL);
+        }
+        sprintf (e, "%s=%s", var, val);
+        env[count] = e;
         /*  pop 'value' and save key for next iteration */
         lua_pop (L, 1);
         count++;

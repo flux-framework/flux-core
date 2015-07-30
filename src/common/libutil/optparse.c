@@ -339,6 +339,11 @@ static int get_term_columns ()
         if (p && (*p != '\0'))
             cols = (int) lval;
     }
+    /*
+     *  Check cols for ridiculous values:
+     */
+    if (cols >= 256 || cols <= 16)
+        cols = 80;
     return (cols);
 }
 
@@ -350,7 +355,7 @@ optparse_doc_print (optparse_t p, struct optparse_option *o, int columns)
     char *s;
     char *q;
 
-    strncpy (buf, o->usage, sizeof (buf));
+    strncpy (buf, o->usage, sizeof (buf) - 1);
     q = buf;
 
     while ((s = get_next_segment (&q, columns, seg, sizeof (seg))))
@@ -396,7 +401,7 @@ optparse_option_print (optparse_t p, struct optparse_option *o, int columns)
      *  Copy "usage" string to buffer as we might modify below
      */
     q = buf;
-    strncpy (buf, o->usage, sizeof (buf));
+    strncpy (buf, o->usage, sizeof (buf) - 1);
 
     descsiz = columns - width;
     s = get_next_segment (&q, descsiz, seg, sizeof (seg));
@@ -718,6 +723,8 @@ optparse_err_t optparse_get (optparse_t p, optparse_item_t item, ...)
 static char * optstring_create ()
 {
     char *optstring = malloc (1);
+    if (optstring == NULL)
+        return (NULL);
     *optstring = '\0';
     return (optstring);
 }
@@ -730,8 +737,9 @@ static char * optstring_append (char *optstring, struct optparse_option *o)
     if (!isalnum (o->key))
         return (optstring);
 
-    if (!optstring)
-        optstring = optstring_create ();
+    if (!optstring && !(optstring = optstring_create ()))
+        return (NULL);
+
     /*
      *  We need to add a single character to optstring for an
      *   an option with no argument (has_arg = 0), 2 characters
@@ -767,6 +775,8 @@ static struct option * option_table_create (optparse_t p, char **sp)
 
     n = list_count (p->option_list);
     opts = malloc ((n + 1) * sizeof (struct option));
+    if (opts == NULL)
+        return (NULL);
 
     j = 0;
     i = list_iterator_create (p->option_list);
@@ -775,8 +785,15 @@ static struct option * option_table_create (optparse_t p, char **sp)
             continue;
         /* Initialize option field from cached option structure */
         opt_init (&opts[j++], o->p_opt);
-        if (sp)
+        if (sp) {
             *sp = optstring_append (*sp, o->p_opt);
+            if (*sp == NULL) {
+                free (opts);
+                opts = NULL;
+                break;
+            }
+
+        }
     }
     list_iterator_destroy (i);
 

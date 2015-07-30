@@ -197,8 +197,10 @@ int util_json_object_get_data (json_object *o, char *name,
 
     len = strlen (s);
     dst = xzmalloc (base64_decode_length (len));
-    if (base64_decode_block (dst, &dlen, s, len) < 0)
+    if (base64_decode_block (dst, &dlen, s, len) < 0) {
+        free (dst);
         return -1;
+    }
 
     *lenp = dlen;
     *datp = (uint8_t *) dst;

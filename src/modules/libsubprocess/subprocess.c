@@ -98,7 +98,7 @@ static int sigmask_unblock_all (void)
 static int send_output_to_stream (const char *name, json_object *o)
 {
     FILE *fp = stdout;
-    char *s;
+    char *s = NULL;
     bool eof;
 
     int len = zio_json_decode (o, (void **) &s, &eof);
@@ -106,13 +106,12 @@ static int send_output_to_stream (const char *name, json_object *o)
     if (strcmp (name, "stderr") == 0)
         fp = stderr;
 
-    if (len < 0)
-        return (-1);
     if (len > 0)
         fputs (s, fp);
     if (eof)
         fclose (fp);
 
+    free (s);
     return (len);
 }
 
@@ -187,7 +186,11 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
     zio_set_send_cb (p->zio_out, (zio_send_f) output_handler);
     zio_set_send_cb (p->zio_err, (zio_send_f) output_handler);
 
-    zlist_append (sm->processes, (void *)p);
+    if (zlist_append (sm->processes, (void *)p) < 0) {
+        subprocess_destroy (p);
+        errno = ENOMEM;
+        return (NULL);
+    }
 
     if (sm->zloop) {
         zio_zloop_attach (p->zio_in, sm->zloop);
@@ -222,7 +225,7 @@ void subprocess_destroy (struct subprocess *p)
     zio_destroy (p->zio_err);
 
     if (p->parentfd > 0)
-        close (p->childfd);
+        close (p->parentfd);
     if (p->childfd > 0)
         close (p->childfd);
 
@@ -468,21 +471,35 @@ static void closeall (int fd, int except)
     return;
 }
 
+static void close_if_valid (int fd)
+{
+    if (fd < 0)
+        return;
+    close (fd);
+}
+
+static int dup2_fd (int fd, int newfd)
+{
+    assert (fd >= 0);
+    assert (newfd >= 0);
+    return dup2 (fd, newfd);
+}
+
 static int child_io_setup (struct subprocess *p)
 {
     /*
      *  Close paretn end of stdio in child:
      */
-    close (zio_dst_fd (p->zio_in));
-    close (zio_src_fd (p->zio_out));
-    close (zio_src_fd (p->zio_err));
+    close_if_valid (zio_dst_fd (p->zio_in));
+    close_if_valid (zio_src_fd (p->zio_out));
+    close_if_valid (zio_src_fd (p->zio_err));
 
     /*
      *  Dup this process' fds onto zio
      */
-    if (  (dup2 (zio_src_fd (p->zio_in), STDIN_FILENO) < 0)
-       || (dup2 (zio_dst_fd (p->zio_out), STDOUT_FILENO) < 0)
-       || (dup2 (zio_dst_fd (p->zio_err), STDERR_FILENO) < 0))
+    if (  (dup2_fd (zio_src_fd (p->zio_in), STDIN_FILENO) < 0)
+       || (dup2_fd (zio_dst_fd (p->zio_out), STDOUT_FILENO) < 0)
+       || (dup2_fd (zio_dst_fd (p->zio_err), STDERR_FILENO) < 0))
         return (-1);
 
     return (0);
@@ -493,9 +510,9 @@ static int parent_io_setup (struct subprocess *p)
     /*
      *  Close child end of stdio in parent:
      */
-    close (zio_src_fd (p->zio_in));
-    close (zio_dst_fd (p->zio_out));
-    close (zio_dst_fd (p->zio_err));
+    close_if_valid (zio_src_fd (p->zio_in));
+    close_if_valid (zio_dst_fd (p->zio_out));
+    close_if_valid (zio_dst_fd (p->zio_err));
 
     return (0);
 }

@@ -320,7 +320,7 @@ static int l_flux_send (lua_State *L)
 static int l_flux_recv (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
-    const char *topic;
+    const char *topic = NULL;
     const char *json_str = NULL;
     json_object *o = NULL;
     int errnum;
@@ -364,7 +364,10 @@ static int l_flux_recv (lua_State *L)
         lua_setfield (L, -1, "errnum");
     }
 
-    lua_pushstring (L, topic);
+    if (topic)
+        lua_pushstring (L, topic);
+    else
+        lua_pushnil (L);
     return (2);
 error:
     if (zmsg) {
@@ -962,7 +965,10 @@ static int l_msghandler_add (lua_State *L)
     lua_pop (L, 1);
 
     mh = l_flux_ref_create (L, f, 2, "msghandler");
-    flux_msghandler_add (f, typemask, pattern, msghandler, (void *) mh);
+    if (flux_msghandler_add (f, typemask, pattern, msghandler, (void *) mh) < 0) {
+        l_flux_ref_destroy (mh, "msghandler");
+        return lua_pusherror (L, "flux_msghandler_add: %s", strerror (errno));
+    }
 
     return (1);
 }
@@ -1153,6 +1159,7 @@ static int iowatcher_zio_cb (zio_t zio, json_object *o, void *arg)
             json_object *s = json_object_new_string ((char *)pp);
             json_object_object_add (o, "data", s);
         }
+	free (pp);
         json_object_to_lua (L, o);
         json_object_put (o);
     }

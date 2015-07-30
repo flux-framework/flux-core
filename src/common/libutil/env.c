@@ -73,10 +73,10 @@ static int _strtoia (char *s, int *ia, int ia_len)
 
 static int getints (char *s, int **iap, int *lenp)
 {
+    int *ia;
     int len = _strtoia (s, NULL, 0);
-    int *ia = malloc (len * sizeof (int));
 
-    if (!ia || len < 0)
+    if ((len < 0) || !(ia = malloc (len * sizeof (int))))
         return -1;
 
     (void)_strtoia (s, ia, len);

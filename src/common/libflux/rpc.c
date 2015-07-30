@@ -289,6 +289,7 @@ flux_rpc_t *flux_rpc_multi (flux_t h, const char *topic, const char *json_str,
         if (!rpc->oneway)
             rpc->nodemap[i] = nodeid;
     }
+    nodeset_itr_destroy (itr);
     return rpc;
 error:
     if (rpc)

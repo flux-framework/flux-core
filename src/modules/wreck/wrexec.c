@@ -208,6 +208,7 @@ static int client_cb (flux_t h, void *zs, short revents, void *arg)
 
     if (revents & ZMQ_POLLERR) {
         rexec_session_remove (c);
+        return 0;
     }
     new = zmsg_recv (c->zs_rep);
     if (new) {
@@ -300,7 +301,8 @@ static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
     /*
      *  Wait for child to exit
      */
-    waitpid (pid, &status, 0);
+    if (waitpid (pid, &status, 0) < 0)
+        err ("waitpid");
 
     /*
      *  Close child side of socketpair and send zmsg to (grand)child

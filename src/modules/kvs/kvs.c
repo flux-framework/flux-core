@@ -1835,7 +1835,7 @@ static void setargs (ctx_t *ctx, int argc, char **argv)
         href_t ref;
         char *key = xstrdup (argv[i]);
         char *val = strchr (key, '=');
-        if (*val) {
+        if (val && *val != '\0') {
             *val++ = '\0';
             if (!(o = json_tokener_parse (val)))
                 o = json_object_new_string (val);
