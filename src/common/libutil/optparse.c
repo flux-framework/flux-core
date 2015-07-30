@@ -480,6 +480,8 @@ void optparse_destroy (optparse_t p)
     if (p == NULL)
         return;
     list_destroy (p->option_list);
+    free (p->program_name);
+    free (p->usage);
     free (p);
 }
 
