@@ -48,7 +48,7 @@ before_install:
 script:
  - export CC="ccache $CC"
  - export FLUX_TESTS_LOGFILE=t
- - if test ${COVERITY_SCAN_BRANCH} != 1 ; then ./autogen.sh && ./configure --prefix=$HOME/local && make distcheck; fi
+ - if test "$COVERITY_SCAN_BRANCH" != "1" ; then ./autogen.sh && ./configure --prefix=$HOME/local && make distcheck; fi
 
 after_success:
  - ccache -s
