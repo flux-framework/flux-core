@@ -55,9 +55,6 @@ stderr_devnull_0 = 2>/dev/null
 	    --destination-dir=$(builddir) \
 	    --doctype manpage --format manpage $< $(STDERR_DEVNULL)
 
-spellcheck: $(top_srcdir)/doc/test/spellcheck
-	$(LN_S) --force $< $@
-
 flux_close.3: flux_open.3
 flux_aux_get.3: flux_aux_set.3
 flux_flags_unset.3: flux_flags_set.3
