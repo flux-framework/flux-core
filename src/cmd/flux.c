@@ -340,6 +340,14 @@ void exec_subcommand (const char *searchpath, bool vopt, char *argv[])
     }
 }
 
+optparse_t internal_cmd_optparse_create (const char *cmd)
+{
+    optparse_t p = optparse_create (cmd);
+    if (!p)
+        err_exit ("%s: optparse_create", cmd);
+    return (p);
+}
+
 void internal_help (flux_conf_t cf, const char *topic)
 {
     const char *cf_path = flux_conf_get (cf, "general.man_path");
