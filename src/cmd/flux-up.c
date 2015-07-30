@@ -172,11 +172,10 @@ done:
 static ns_t *ns_guess (flux_t h)
 {
     ns_t *ns = xzmalloc (sizeof (*ns));
-    int size, rank;
-    bool treeroot;
+    uint32_t size, rank;
     uint32_t r;
 
-    if (flux_info (h, &rank, &size, &treeroot) < 0)
+    if (flux_info (h, &rank, &size, NULL) < 0)
         err_exit ("flux_info");
     ns->ok = nodeset_new ();
     ns->slow = nodeset_new ();

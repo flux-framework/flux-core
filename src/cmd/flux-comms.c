@@ -136,13 +136,13 @@ int main (int argc, char *argv[])
         if (flux_recover_all (h) < 0)
             err_exit ("flux_recover_all");
     } else if (!strcmp (cmd, "info")) {
-        int rank, size;
-        bool treeroot;
-        if (flux_info (h, &rank, &size, &treeroot) < 0)
+        int arity;
+        uint32_t rank, size;
+        if (flux_info (h, &rank, &size, &arity) < 0)
             err_exit ("flux_info");
         printf ("rank=%d\n", rank);
         printf ("size=%d\n", size);
-        printf ("treeroot=%s\n", treeroot ? "true" : "false");
+        printf ("arity=%d\n", arity);
     } else
         usage ();
 
