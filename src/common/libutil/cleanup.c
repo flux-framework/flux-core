@@ -56,10 +56,12 @@ static pid_t cleaner_pid = 0;
 static zlist_t *cleanup_list = NULL;
 static void cleanup (void)
 {
+    const struct cleaner *c;
     pthread_mutex_lock(&mutex);
-    if ( ! cleanup_list || cleaner_pid != getpid()) return;
-    const struct cleaner * c = zlist_first(cleanup_list);
-    while(c){
+    if ( ! cleanup_list || cleaner_pid != getpid())
+        goto out;
+    c = zlist_first(cleanup_list);
+    while (c){
         if (c && c->fun){
             c->fun(c);
         }
@@ -67,6 +69,7 @@ static void cleanup (void)
     }
     zlist_destroy(&cleanup_list);
     cleanup_list = NULL;
+out:
     pthread_mutex_unlock(&mutex);
 }
 
@@ -86,7 +89,8 @@ void cleanup_push (cleaner_fun_f *fun, void * arg)
     struct cleaner * c = calloc(sizeof(struct cleaner), 1);
     c->fun = fun;
     c->arg = arg;
-    zlist_push(cleanup_list, c);
+    /* Ignore return code, no way to return it callery anyway... */
+    (void) zlist_push(cleanup_list, c);
     pthread_mutex_unlock(&mutex);
 }
 
