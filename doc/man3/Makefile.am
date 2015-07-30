@@ -70,6 +70,14 @@ flux_rpc_get.3: flux_rpc.3
 flux_rpc_check.3: flux_rpc_then.3
 flux_rpc_completed.3: flux_rpc_multi.3
 
+flux_open.3: topen.c
+flux_send.3: tsend.c
+flux_recv.3: trecv.c
+flux_event_subscribe.3: tevent.c
+flux_rpc.3: trpc.c
+flux_rpc_then.3: trpc_then.c
+flux_rpc_multi.3: trpc_then_multi.c
+
 EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc
 
 CLEANFILES = $(MAN3_FILES) $(XML_FILES)
