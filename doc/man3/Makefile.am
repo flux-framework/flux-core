@@ -55,9 +55,6 @@ stderr_devnull_0 = 2>/dev/null
 	    --destination-dir=$(builddir) \
 	    --doctype manpage --format manpage $< $(STDERR_DEVNULL)
 
-spellcheck: $(top_srcdir)/doc/test/spellcheck
-	$(LN_S) --force $< $@
-
 flux_close.3: flux_open.3
 flux_aux_get.3: flux_aux_set.3
 flux_flags_unset.3: flux_flags_set.3
@@ -72,6 +69,14 @@ flux_rpc_destroy.3: flux_rpc.3
 flux_rpc_get.3: flux_rpc.3
 flux_rpc_check.3: flux_rpc_then.3
 flux_rpc_completed.3: flux_rpc_multi.3
+
+flux_open.3: topen.c
+flux_send.3: tsend.c
+flux_recv.3: trecv.c
+flux_event_subscribe.3: tevent.c
+flux_rpc.3: trpc.c
+flux_rpc_then.3: trpc_then.c
+flux_rpc_multi.3: trpc_then_multi.c
 
 EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc
 

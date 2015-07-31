@@ -516,10 +516,13 @@ int flux_msg_pop_route (zmsg_t *zmsg, char **id)
         errno = EPROTO;
         return -1;
     }
-    if (zframe_size (zf) > 0 && (zf = zmsg_pop (zmsg))
-                             && !(s = zframe_strdup (zf))) {
-        errno = ENOMEM;
-        return -1;
+    if (zframe_size (zf) > 0 && (zf = zmsg_pop (zmsg))) {
+        s = zframe_strdup (zf);
+        zframe_destroy (&zf);
+        if (!s) {
+            errno = ENOMEM;
+            return -1;
+        }
     }
     *id = s;
     return 0;
