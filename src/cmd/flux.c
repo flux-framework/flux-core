@@ -40,6 +40,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/setenvf.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libutil/optparse.h"
 
 
 bool handle_internal (flux_conf_t cf, int ac, char *av[]);
@@ -340,12 +341,25 @@ void exec_subcommand (const char *searchpath, bool vopt, char *argv[])
     }
 }
 
-void internal_help (flux_conf_t cf, const char *topic)
+optparse_t internal_cmd_optparse_create (const char *cmd)
 {
-    const char *cf_path = flux_conf_get (cf, "general.man_path");
+    optparse_t p = optparse_create (cmd);
+    if (!p)
+        err_exit ("%s: optparse_create", cmd);
+    return (p);
+}
+
+void internal_help (flux_conf_t cf, optparse_t p, int ac, char *av[])
+{
+    int n = 1;
     char *cmd;
 
-    if (topic) {
+    if ((n = optparse_parse_args (p, ac, av)) < 0)
+        msg_exit ("flux-help: error processing args");
+
+    if (n < ac) {
+        const char *cf_path = flux_conf_get (cf, "general.man_path");
+        const char *topic = av [n];
         if (cf_path)
             setenvf ("MANPATH", 1, "%s:%s", cf_path, MANDIR);
         else
@@ -369,27 +383,83 @@ static void print_environment(flux_conf_t cf, const char * prefix)
     fflush(stdout);
 }
 
-void internal_env (flux_conf_t cf, char *av[])
+void internal_env (flux_conf_t cf, optparse_t p, int ac, char *av[])
 {
-    if (av && av[0]) {
-        execvp (av[0], av); /* no return if successful */
-        err_exit("execvp");
+    int n = 1;
+
+    if ((n = optparse_parse_args (p, ac, av)) < 0)
+        msg_exit ("flux-env: error processing args");
+
+    if (av && av[n]) {
+        execvp (av[n], av+n); /* no return if successful */
+        err_exit("execvp (%s)", av[n]);
     } else
         print_environment(cf, "");
 }
 
+struct builtin {
+    const char *name;
+    const char *doc;
+    const char *usage;
+    void       (*fn) (flux_conf_t, optparse_t, int ac, char *av[]);
+};
+
+struct builtin builtin_cmds [] = {
+    {
+      "help",
+      "Display help information for flux commands",
+      "[OPTIONS...] [COMMAND]",
+      internal_help
+    },
+    {
+      "env",
+      "Print the flux environment or execute COMMAND inside it",
+      "[OPTIONS...] [COMMAND...]",
+      internal_env
+    },
+    { NULL, NULL, NULL, NULL },
+};
+
+
+void run_builtin (struct builtin *cmd, flux_conf_t cf, int ac, char *av[])
+{
+    optparse_t p;
+    char prog [66] = "flux-";
+
+    /* cat command name onto 'flux-' prefix to get program name for
+     *   help output (truncate if we have a ridiculously long cmd name)
+     */
+    strncat (prog, cmd->name, sizeof (prog) - 6);
+
+    if ((p = optparse_create (prog)) == NULL)
+        err_exit ("optparse_create (%s)", prog);
+
+    if (cmd->usage)
+        optparse_set (p, OPTPARSE_USAGE, cmd->usage);
+    if (cmd->doc)
+        optparse_add_doc (p, cmd->doc, -1);
+
+    /* Run builtin: */
+    if (!cmd->fn)
+        msg_exit ("Error: builtin %s has no registered function!", prog);
+    (*cmd->fn) (cf, p, ac, av);
+
+    optparse_destroy (p);
+}
+
+
+
 bool handle_internal (flux_conf_t cf, int ac, char *av[])
 {
-    bool handled = true;
-
-    if (!strcmp (av[0], "help")) {
-        internal_help (cf, ac > 1 ? av[1] : NULL);
-    } else if (!strcmp (av[0], "env")) {
-        internal_env (cf, av+1);
-    } else
-        handled = false;
-
-    return handled;
+    struct builtin *cmd = &builtin_cmds [0];
+    while (cmd->name) {
+        if (strcmp (av[0], cmd->name) == 0) {
+            run_builtin (cmd, cf, ac, av);
+            return true;
+        }
+        cmd++;
+    }
+    return false;
 }
 
 /*

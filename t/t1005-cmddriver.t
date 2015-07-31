@@ -72,4 +72,20 @@ test_expect_success 'cmddriver: --uri fails for non-connector dso' '
 			       --uri kvs:// comms info
 '
 
+# Test flux 'env' builtin
+test_expect_success 'flux env works' '
+	flux env | grep ${FLUX_BUILD_DIR}/src/connectors
+'
+test_expect_success 'flux env runs argument' "
+	flux env sh -c 'echo \$FLUX_CONNECTOR_PATH' \
+		| grep ${FLUX_BUILD_DIR}/src/connectors
+"
+test_expect_success 'flux env passes cmddriver options' '
+	flux -F --tmpdir /xyz env | grep "^FLUX_TMPDIR=/xyz"
+'
+test_expect_success 'flux env passes cmddriver option to argument' "
+	flux -F --tmpdir /xyx env sh -c 'echo \$FLUX_TMPDIR' \
+		| grep ^/xyx$
+"
+
 test_done

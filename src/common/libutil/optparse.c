@@ -480,6 +480,8 @@ void optparse_destroy (optparse_t p)
     if (p == NULL)
         return;
     list_destroy (p->option_list);
+    free (p->program_name);
+    free (p->usage);
     free (p);
 }
 
@@ -662,6 +664,10 @@ optparse_err_t optparse_add_doc (optparse_t p, const char *doc, int group)
     if (p == NULL || !p->option_list)
         return OPTPARSE_BAD_ARG;
 
+    o.has_arg = 0;
+    o.arginfo = NULL;
+    o.arg   = NULL;
+    o.cb    = NULL;
     o.name  = NULL;
     o.key   = 0;
     o.usage = doc;
@@ -722,10 +728,11 @@ optparse_err_t optparse_get (optparse_t p, optparse_item_t item, ...)
 }
 static char * optstring_create ()
 {
-    char *optstring = malloc (1);
+    char *optstring = malloc (2);
     if (optstring == NULL)
         return (NULL);
-    *optstring = '\0';
+    optstring[0] = '+';
+    optstring[1] = '\0';
     return (optstring);
 }
 
@@ -813,6 +820,10 @@ int optparse_parse_args (optparse_t p, int argc, char *argv[])
     struct option *optz = option_table_create (p, &optstring);
 
 
+    /* Always set optind = 0 here to force internal initialization of
+     *  GNU options parser. See getopt_long(3) NOTES section.
+     */
+    optind = 0;
     while ((c = getopt_long (argc, argv, optstring, optz, &li))) {
         struct option_info *opt;
         struct optparse_option *o;
