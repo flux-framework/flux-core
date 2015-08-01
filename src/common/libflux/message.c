@@ -508,7 +508,6 @@ int flux_msg_pop_route (zmsg_t *zmsg, char **id)
 {
     uint8_t flags;
     zframe_t *zf;
-    char *s = NULL;
 
     if (flux_msg_get_flags (zmsg, &flags) < 0)
         return -1;
@@ -517,14 +516,20 @@ int flux_msg_pop_route (zmsg_t *zmsg, char **id)
         return -1;
     }
     if (zframe_size (zf) > 0 && (zf = zmsg_pop (zmsg))) {
-        s = zframe_strdup (zf);
-        zframe_destroy (&zf);
-        if (!s) {
-            errno = ENOMEM;
-            return -1;
+        if (id) {
+            char *s = zframe_strdup (zf);
+            if (!s) {
+                zframe_destroy (&zf);
+                errno = ENOMEM;
+                return -1;
+            }
+            *id = s;
         }
+        zframe_destroy (&zf);
+    } else {
+        if (id)
+            *id = NULL;
     }
-    *id = s;
     return 0;
 }
 
