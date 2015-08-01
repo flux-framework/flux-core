@@ -168,7 +168,6 @@ static int module_get_idle (module_t p)
 
 zmsg_t *module_recvmsg (module_t p)
 {
-    char *uuid = NULL;
     zmsg_t *zmsg = NULL;
     int type;
     assert (p->magic == MODULE_MAGIC);
@@ -176,16 +175,12 @@ zmsg_t *module_recvmsg (module_t p)
     if (!(zmsg = zmsg_recv (p->sock)))
         goto error;
     if (flux_msg_get_type (zmsg, &type) == 0 && type == FLUX_MSGTYPE_RESPONSE) {
-        if (flux_msg_pop_route (zmsg, &uuid) < 0) /* simulate DEALER socket */
+        if (flux_msg_pop_route (zmsg, NULL) < 0) /* simulate DEALER socket */
             goto error;
     }
-    if (uuid)
-        free (uuid);
     return zmsg;
 error:
     zmsg_destroy (&zmsg);
-    if (uuid)
-        free (uuid);
     return NULL;
 }
 
@@ -217,8 +212,7 @@ int module_response_sendmsg (modhash_t mh, zmsg_t **zmsg)
         errno = ENOSYS;
         goto done;
     }
-    free (uuid);
-    (void)flux_msg_pop_route (*zmsg, &uuid); /* simulate ROUTER socket */
+    (void)flux_msg_pop_route (*zmsg, NULL); /* simulate ROUTER socket */
     rc = module_sendmsg (zmsg, p);
 done:
     if (uuid)
