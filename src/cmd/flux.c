@@ -46,6 +46,7 @@
 bool handle_internal (flux_conf_t cf, int ac, char *av[]);
 void exec_subcommand (const char *searchpath, bool vopt, char *argv[]);
 char *intree_confdir (void);
+void setup_path (flux_conf_t cf, const char *argv0);
 
 static void print_environment(flux_conf_t cf, const char * prefix);
 void setup_broker_env (flux_conf_t cf, const char *path_override);
@@ -127,6 +128,7 @@ int main (int argc, char *argv[])
     char *secdir = NULL;
     flux_conf_t cf;
     const char *searchpath;
+    const char *argv0 = argv[0];
 
     log_init ("flux");
 
@@ -228,6 +230,11 @@ int main (int argc, char *argv[])
      */
     setup_broker_env (cf, Bopt);    /* sets FLUX_BROKER_PATH */
 
+    /* Add PATH to flux_conf_environment and prepend path to
+     *  this executable if necessary.
+     */
+    setup_path (cf, argv0);
+
     /* Add config items to environment variables */
     /* NOTE: I would prefer that this be in config, but kvs_load loads
      * everything out of band, preventing that */
@@ -269,18 +276,37 @@ int main (int argc, char *argv[])
     return 0;
 }
 
+/*  Strip trailing ".libs", otherwise do nothing
+ */
+char *strip_trailing_dot_libs (char *dir)
+{
+    char *p = dir + strlen (dir) - 1;
+    if (   (*(p--) == 's')
+        && (*(p--) == 'b')
+        && (*(p--) == 'i')
+        && (*(p--) == 'l')
+        && (*(p--) == '.')
+        && (*p == '/') )
+        *p = '\0';
+    return (dir);
+}
+
 /*  Return directory containing this executable.  Caller must free.
  *   (using non-portable /proc/self/exe support for now)
+ *   NOTE: build tree .libs directory stripped from path if found.
  */
 char *dir_self (void)
 {
-    char  flux_exe_path [MAXPATHLEN];
-    char *flux_exe_dir;
-
-    memset (flux_exe_path, 0, MAXPATHLEN);
-    if (readlink ("/proc/self/exe", flux_exe_path, MAXPATHLEN - 1) < 0)
-        err_exit ("readlink (/proc/self/exe)");
-    flux_exe_dir = dirname (flux_exe_path);
+    static char  flux_exe_path [MAXPATHLEN];
+    static char *flux_exe_dir;
+    static bool exe_path_valid = false;
+    if (!exe_path_valid) {
+        memset (flux_exe_path, 0, MAXPATHLEN);
+        if (readlink ("/proc/self/exe", flux_exe_path, MAXPATHLEN - 1) < 0)
+            err_exit ("readlink (/proc/self/exe)");
+        flux_exe_dir = strip_trailing_dot_libs (dirname (flux_exe_path));
+        exe_path_valid = true;
+    }
     return xstrdup (flux_exe_dir);
 }
 
@@ -290,13 +316,33 @@ char *intree_confdir (void)
     char *selfdir = dir_self ();
 
     if (strcmp (selfdir, X_BINDIR) != 0){
-        confdir = xasprintf ("%s/%s../../etc/flux",
-                selfdir,
-                strstr(selfdir, "/.libs") != NULL ? "../" : "");
+        confdir = xasprintf ("%s/../../etc/flux", selfdir);
     }
     free (selfdir);
     return confdir;
 }
+
+/*
+ * If flux command was run with relative or absolute path, then
+ *  prepend the directory for the flux executable to PATH. This
+ *  ensures that in "flux [OPTIONS] [COMMAND] flux" the second
+ *  flux executable is the same as the first. This is important
+ *  for example with "flux start".
+ */
+void setup_path (flux_conf_t cf, const char *argv0)
+{
+    char *selfdir;
+    assert (argv0);
+
+    /*  If argv[0] was explicitly "flux" then assume PATH is already set */
+    if (strcmp (argv0, "flux") == 0)
+        return;
+    flux_conf_environment_from_env (cf, "PATH", "/bin:/usr/bin", ":");
+    selfdir = dir_self ();
+    flux_conf_environment_push (cf, "PATH", selfdir);
+    free (selfdir);
+}
+
 
 void setup_broker_env (flux_conf_t cf, const char *path_override)
 {
