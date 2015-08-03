@@ -24,6 +24,7 @@ addons:
       - aspell
       - libopenmpi-dev
       - ccache
+      - libhwloc-dev
   coverity_scan:
     project:
       name: "grondo/flux-core"
