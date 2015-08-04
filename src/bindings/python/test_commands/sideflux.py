@@ -56,11 +56,8 @@ class SideFlux(object):
         # print ' '.join(flux_command)
         FNULL = open(os.devnull, 'w+')
         self.subenv = os.environ.copy()
-        try:
-            del subenv['FLUX_TMPDIR']
-            del subenv['FLUX_URI']
-        except:
-            pass
+        self.subenv.pop('FLUX_TMPDIR', None)
+        self.subenv.pop('FLUX_URI', None)
         self.subenv['TMPDIR'] = self.tmpdir
         self.sub = subprocess.Popen(
             flux_command,
@@ -80,6 +77,8 @@ class SideFlux(object):
 
         while True:
             line = self.sub.stdout.readline()
+            if os.environ.get('SIDEFLUX_DEBUG', False):
+                print(line)
             if line != '':
                 m = re.match(r"\s*(?P<var>[^= ]+)=(?P<val>.*)", line.rstrip())
                 if m:
