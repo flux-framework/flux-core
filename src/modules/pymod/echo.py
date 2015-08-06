@@ -13,7 +13,7 @@ def pecho_impl(h, typemask, message, arg):
     rpc.respond()
     return 0
 
-def mod_main(h, **arg_dict):
+def mod_main(h, *args):
     if h.event_subscribe("mrpc.mecho") < 0:
         h.fatal_error("event subscription failed")
     with h.msg_watcher_create(pecho_impl,
