@@ -18,4 +18,4 @@ def mod_main_trampoline(name, int_handle, args):
     #call into mod_main with a flux class instance and the argument dict
     #it might be more pythonic to unpack the args as keyword/positional arguments
     #to this function, but I think this is cleaner for now
-    user_mod.mod_main(flux_instance, **args)
+    user_mod.mod_main(flux_instance, *args)

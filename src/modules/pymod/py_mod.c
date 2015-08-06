@@ -36,7 +36,12 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/optparse.h"
 #include "src/common/libutil/xzmalloc.h"
+
+#ifndef Py_PYTHON_H
+typedef void PyObject;
+#endif
 
 void add_if_not_present(PyObject *list, const char* path){
     if(path){
@@ -73,37 +78,43 @@ zhash_t *zhash_fromargv (int argc, char **argv)
     return args;
 }
 
+const char *usage_msg = "[OPTIONS] MODULE_NAME";
+static struct optparse_option opts[] = {
+    { .name = "verbose",    .key = 'v', .has_arg = 0,
+      .usage = "Be loud", },
+    { .name = "path",     .key = 'p', .has_arg = 1, .arginfo = "PATH",
+      .usage = "Director{y,ies} to add to PYTHONPATH before finding your module", },
+    OPTPARSE_TABLE_END,
+};
+
 int mod_main (flux_t h, int argc, char **argv)
 {
-    zhash_t *args = zhash_fromargv (argc, argv);
+    optparse_t p = optparse_create ("pymod");
+    if (optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS)
+        msg_exit ("optparse_add_option_table");
+    if (optparse_set (p, OPTPARSE_USAGE, usage_msg) != OPTPARSE_SUCCESS)
+        msg_exit ("optparse_set usage");
+    int option_index = optparse_parse_args (p, argc, argv);
+
+    if (option_index <= 0 || optparse_hasopt(p, "help") || option_index >= argc){
+        optparse_print_usage(p);
+        return (option_index < 0);
+    }
+    const char * module_name = argv[option_index];
+
     Py_SetProgramName("pymod");
     Py_Initialize();
-    /* flux_log(h, LOG_INFO, "in pymod mod_main"); */
-
-    if(zhash_lookup(args, "--help")){
-        print_usage();
-        return 0;
-    }
 
     PyObject *search_path = PySys_GetObject("path");
-    _Bool verbose = (zhash_lookup(args, "--path") != NULL);
-
     // Add installation search paths
-    char * module_path = zhash_lookup(args, "--path");
-    add_if_not_present(search_path, module_path);
+    add_if_not_present(search_path, optparse_get_str(p, "path", ""));
     add_if_not_present(search_path, FLUX_PYTHON_PATH);
 
     PySys_SetObject("path", search_path);
-    if(verbose){
+    if(optparse_hasopt(p, "verbose")){
         PyObject_Print(search_path, stderr, 0);
     }
 
-    char * module_name = zhash_lookup(args, "--module");
-    if(!module_name){
-        print_usage();
-        flux_log(h, LOG_ERR, "Module name must be specified with --module");
-        return EINVAL;
-    }
     flux_log(h, LOG_INFO, "loading python module named: %s\n", module_name);
 
     PyObject *module = PyImport_ImportModule("flux.core");
@@ -112,42 +123,32 @@ int mod_main (flux_t h, int argc, char **argv)
         return EINVAL;
     }
 
-    if(module){
-        PyObject *mod_main = PyObject_GetAttrString(module, "mod_main_trampoline");
-        if(mod_main && PyCallable_Check(mod_main)){
-            //maybe unpack args directly? probably easier to use a dict
-            PyObject *py_args = PyTuple_New(3);
-            PyTuple_SetItem(py_args, 0, PyString_FromString(module_name));
-            PyTuple_SetItem(py_args, 1, PyLong_FromVoidPtr(h));
+    PyObject *mod_main = PyObject_GetAttrString(module, "mod_main_trampoline");
+    if(mod_main && PyCallable_Check(mod_main)){
+        //maybe unpack args directly? probably easier to use a dict
+        PyObject *py_args = PyTuple_New(3);
+        PyTuple_SetItem(py_args, 0, PyString_FromString(module_name));
+        PyTuple_SetItem(py_args, 1, PyLong_FromVoidPtr(h));
 
-            //Convert zhash to native python dict, should preserve mods
-            //through switch to argc-style arguments
-            PyObject *arg_dict = PyDict_New();
-            void * value = zhash_first(args);
-            const char * key = zhash_cursor(args);
-            for(;value != NULL; value = zhash_next(args), key = zhash_cursor(args)){
-                PyDict_SetItemString(arg_dict, key, PyString_FromString(value));
-            }
-
-            PyTuple_SetItem(py_args, 2, arg_dict);
-            // Call into trampoline
-            PyObject_CallObject(mod_main, py_args);
-            if(PyErr_Occurred()){
-                PyErr_Print();
-            }
-            Py_DECREF(py_args);
-            Py_DECREF(arg_dict);
+        //Convert zhash to native python dict, should preserve mods
+        //through switch to argc-style arguments
+        PyObject *arg_list = PyList_New(0);
+        char ** it = argv + option_index;
+        int i;
+        for (i=0; *it; i++, it++){
+            PyList_Append(arg_list, PyString_FromString(*it));
         }
-    }
-    zhash_delete(args, "--module");
 
-    /* old test code, remove before pushing in */
-    /* PyRun_SimpleString( "from time import time,ctime\n" */
-    /*         "import sys\n" */
-    /*         "print sys.path\n" */
-    /*         "print 'Today is',ctime(time())\n"); */
+        PyTuple_SetItem(py_args, 2, arg_list);
+        // Call into trampoline
+        PyObject_CallObject(mod_main, py_args);
+        if(PyErr_Occurred()){
+            PyErr_Print();
+        }
+        Py_DECREF(py_args);
+        Py_DECREF(arg_list);
+    }
     Py_Finalize();
-    zhash_destroy(&args);
     return 0;
 }
 
