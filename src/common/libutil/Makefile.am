@@ -44,7 +44,13 @@ libutil_la_SOURCES = \
 	msglist.c \
 	msglist.h \
 	cleanup.c \
-	cleanup.h
+	cleanup.h \
+	sds.c \
+	sds.h \
+	sdsalloc.h \
+	vec.c \
+	vec.h \
+	iterators.h
 
 EXTRA_DIST = veb_mach.c
 
