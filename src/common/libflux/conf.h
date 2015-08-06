@@ -49,17 +49,17 @@ const char *flux_conf_environment_cursor (flux_conf_t cf);
 
 void flux_conf_environment_apply (flux_conf_t cf);
 void flux_conf_environment_push (flux_conf_t cf, const char *key,
-        const char *value, const char *separator);
-void flux_conf_environment_push_back (flux_conf_t cf, const char *key,
-        const char *value, const char *separator);
-void flux_conf_environment_set (flux_conf_t cf, const char *key,
         const char *value);
+void flux_conf_environment_push_back (flux_conf_t cf, const char *key,
+        const char *value);
+void flux_conf_environment_set (flux_conf_t cf, const char *key,
+        const char *value, const char *separator);
 void flux_conf_environment_unset (flux_conf_t cf, const char *key);
-void flux_conf_environment_from_env(flux_conf_t cf, const char *key, const char *default_base);
+void flux_conf_environment_from_env(flux_conf_t cf, const char *key, const
+        char *default_base, const char *separator);
+void flux_conf_environment_set_separator(flux_conf_t cf, const char *key,
+        const char *separator);
 const char *flux_conf_environment_get (flux_conf_t cf, const char *key);
-const char *flux_conf_environment_unset_cursor (flux_conf_t cf);
-const char *flux_conf_environment_unset_next (flux_conf_t cf);
-const char *flux_conf_environment_unset_first (flux_conf_t cf);
 
 
 

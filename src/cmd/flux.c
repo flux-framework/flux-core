@@ -146,12 +146,12 @@ int main (int argc, char *argv[])
             case 'T': /* --tmpdir PATH */
                 if (setenv ("FLUX_TMPDIR", optarg, 1) < 0)
                     err_exit ("setenv");
-                flux_conf_environment_set (cf, "FLUX_TMPDIR", optarg);
+                flux_conf_environment_set (cf, "FLUX_TMPDIR", optarg, "");
                 break;
             case 't': /* --trace-handle */
                 if (setenv ("FLUX_HANDLE_TRACE", "1", 1) < 0)
                     err_exit ("setenv");
-                flux_conf_environment_set (cf, "FLUX_HANDLE_TRACE", "1");
+                flux_conf_environment_set (cf, "FLUX_HANDLE_TRACE", "1", "");
                 break;
             case 'M': /* --module-path PATH */
                 Mopt = optarg;
@@ -180,7 +180,7 @@ int main (int argc, char *argv[])
             case 'u': /* --uri URI */
                 if (setenv ("FLUX_URI", optarg, 1) < 0)
                     err_exit ("setenv");
-                flux_conf_environment_set(cf, "FLUX_URI", optarg);
+                flux_conf_environment_set(cf, "FLUX_URI", optarg, "");
                 break;
             case 'h': /* --help  */
                 usage ();
@@ -199,7 +199,7 @@ int main (int argc, char *argv[])
     if (confdir || (confdir = intree_confdir ()))
         flux_conf_set_directory (cf, confdir);
     flux_conf_environment_set (cf, "FLUX_SEC_DIRECTORY",
-                     secdir ? secdir : flux_conf_get_directory (cf));
+                     secdir ? secdir : flux_conf_get_directory (cf), "");
     flux_conf_environment_unset (cf, "FLUX_CONF_USEFILE");
 
     /* Process config from the KVS if not a bootstrap instance, and not
@@ -218,7 +218,7 @@ int main (int argc, char *argv[])
         flux_close (h);
     } else {
         if (flux_conf_load (cf) == 0) {
-            flux_conf_environment_set (cf, "FLUX_CONF_USEFILE", "1");
+            flux_conf_environment_set (cf, "FLUX_CONF_USEFILE", "1", "");
         } else if (errno != ENOENT || Fopt)
             err_exit ("%s", flux_conf_get_directory (cf));
     }
@@ -231,20 +231,20 @@ int main (int argc, char *argv[])
     /* Add config items to environment variables */
     /* NOTE: I would prefer that this be in config, but kvs_load loads
      * everything out of band, preventing that */
-    flux_conf_environment_push (cf, "FLUX_CONNECTOR_PATH", flux_conf_get(cf, "general.connector_path"), ":");
-    flux_conf_environment_push (cf, "FLUX_EXEC_PATH",      flux_conf_get(cf, "general.exec_path"),      ":");
-    flux_conf_environment_push (cf, "FLUX_MODULE_PATH",    flux_conf_get(cf, "general.module_path"),    ":");
-    flux_conf_environment_push (cf, "LUA_CPATH",           flux_conf_get(cf, "general.lua_cpath"),      ";");
-    flux_conf_environment_push (cf, "LUA_PATH",            flux_conf_get(cf, "general.lua_path"),       ";");
-    flux_conf_environment_push (cf, "PYTHONPATH",          flux_conf_get(cf, "general.python_path"),    ":");
+    flux_conf_environment_push (cf, "FLUX_CONNECTOR_PATH", flux_conf_get(cf, "general.connector_path"));
+    flux_conf_environment_push (cf, "FLUX_EXEC_PATH",      flux_conf_get(cf, "general.exec_path"));
+    flux_conf_environment_push (cf, "FLUX_MODULE_PATH",    flux_conf_get(cf, "general.module_path"));
+    flux_conf_environment_push (cf, "LUA_CPATH",           flux_conf_get(cf, "general.lua_cpath"));
+    flux_conf_environment_push (cf, "LUA_PATH",            flux_conf_get(cf, "general.lua_path"));
+    flux_conf_environment_push (cf, "PYTHONPATH",          flux_conf_get(cf, "general.python_path"));
 
     /* Prepend to command-line environment variables */
-    flux_conf_environment_push(cf, "FLUX_CONNECTOR_PATH", Oopt, ":");
-    flux_conf_environment_push(cf, "FLUX_EXEC_PATH", xopt, ":");
-    flux_conf_environment_push(cf, "FLUX_MODULE_PATH", Mopt, ":");
-    flux_conf_environment_push(cf, "LUA_CPATH", Copt, ";");
-    flux_conf_environment_push(cf, "LUA_PATH", Lopt, ";");
-    flux_conf_environment_push(cf, "PYTHONPATH", Popt, ":");
+    flux_conf_environment_push(cf, "FLUX_CONNECTOR_PATH", Oopt);
+    flux_conf_environment_push(cf, "FLUX_EXEC_PATH", xopt);
+    flux_conf_environment_push(cf, "FLUX_MODULE_PATH", Mopt);
+    flux_conf_environment_push(cf, "LUA_CPATH", Copt);
+    flux_conf_environment_push(cf, "LUA_PATH", Lopt);
+    flux_conf_environment_push(cf, "PYTHONPATH", Popt);
 
     if (argc == 0) {
         usage ();
@@ -307,7 +307,7 @@ void setup_broker_env (flux_conf_t cf, const char *path_override)
         path = cf_path;
     if (!path)
         path = BROKER_PATH;
-    flux_conf_environment_set(cf, "FLUX_BROKER_PATH", path);
+    flux_conf_environment_set(cf, "FLUX_BROKER_PATH", path, "");
 }
 
 void exec_subcommand_dir (bool vopt, const char *dir, char *argv[],
