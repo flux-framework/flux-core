@@ -15,7 +15,8 @@ MAN3_FILES_PRIMARY = \
 	flux_rpc.3 \
 	flux_rpc_then.3 \
 	flux_rpc_multi.3 \
-	flux_reduce_create.3
+	flux_reduce_create.3 \
+	flux_info.3
 
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section
@@ -92,6 +93,7 @@ flux_rpc.3: trpc.c
 flux_rpc_then.3: trpc_then.c
 flux_rpc_multi.3: trpc_then_multi.c
 flux_reduce_create.3: treduce.c
+flux_info.3: tinfo.c
 
 EXTRA_DIST = $(ADOC_FILES) COPYRIGHT.adoc
 
@@ -115,7 +117,8 @@ check_PROGRAMS = \
 	tevent \
 	trpc \
 	trpc_then \
-	trpc_then_multi
+	trpc_then_multi \
+	tinfo
 
 check_LTLIBRARIES = \
 	treduce.la
