@@ -242,5 +242,9 @@ ENV
 TIMEDFLUSH
 HWMFLUSH
 treduce
-itemsize
+itemweight
 unreduced
+HWM
+unweighted
+WCOUNT
+tinfo
