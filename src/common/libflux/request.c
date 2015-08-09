@@ -25,14 +25,11 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <errno.h>
+
 #include "request.h"
 #include "message.h"
 #include "info.h"
-
-#include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/jsonutil.h"
-#include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/nodeset.h"
 
 int flux_request_decode (const flux_msg_t *msg, const char **topic,
                          const char **json_str)

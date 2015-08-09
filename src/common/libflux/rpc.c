@@ -26,6 +26,8 @@
 #include "config.h"
 #endif
 #include <assert.h>
+#include <errno.h>
+#include <stdlib.h>
 
 #include "request.h"
 #include "response.h"
@@ -34,8 +36,6 @@
 #include "rpc.h"
 #include "reactor.h"
 
-#include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
 

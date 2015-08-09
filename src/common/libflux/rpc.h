@@ -1,7 +1,6 @@
 #ifndef _FLUX_CORE_RPC_H
 #define _FLUX_CORE_RPC_H
 
-#include <json.h>
 #include <stdbool.h>
 
 #include "handle.h"
@@ -18,6 +17,7 @@ typedef void (*flux_then_f)(flux_rpc_t *rpc, void *arg);
  */
 flux_rpc_t *flux_rpc (flux_t h, const char *topic, const char *json_str,
                       uint32_t nodeid, int flags);
+
 /* Destroy an RPC, invalidating previous payload returned by flux_rpc_get().
  */
 void flux_rpc_destroy (flux_rpc_t *rpc);
