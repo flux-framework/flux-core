@@ -104,6 +104,7 @@ X_AC_ZEROMQ
 X_AC_MUNGE
 PKG_CHECK_MODULES([JSON], [json], [],
   [PKG_CHECK_MODULES([JSON], [json-c])])
+PKG_CHECK_MODULES([JANSSON], [jansson])
 LX_FIND_MPI
 AM_CONDITIONAL([HAVE_MPI], [test "$have_C_mpi" = yes])
 
