@@ -87,5 +87,15 @@ test_expect_success 'flux env passes cmddriver option to argument' "
 	flux -F --tmpdir /xyx env sh -c 'echo \$FLUX_TMPDIR' \
 		| grep ^/xyx$
 "
-
+# push /foo twice onto PYTHONPATH -- ensure it is leftmost position:
+test_expect_success 'cmddriver pushes dup path elements onto front of PATH' "
+	flux -P /foo env flux -P /bar env flux -P /foo env \
+		sh -c 'echo \$PYTHONPATH' | grep '^/foo'
+"
+# Ensure PATH-style variables are de-duplicated on push
+# Push /foo twice onto PYTHONPATH, ensure it appears only once
+test_expect_success 'cmddriver deduplicates path elements on push' "
+	flux -P /foo env flux -P /foo env sh -c 'echo \$PYTHONPATH' |
+		awk -F '/foo' 'NF-1 != 1 {print; exit 1}'
+"
 test_done
