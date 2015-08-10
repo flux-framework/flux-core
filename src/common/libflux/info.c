@@ -27,61 +27,44 @@
 #endif
 #include <errno.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 #include "info.h"
 #include "rpc.h"
 
-#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 
 char *flux_getattr (flux_t h, int rank, const char *name)
 {
     uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
-    JSON in = Jnew ();
     flux_rpc_t *r = NULL;
-    const char *json_str;
-    JSON out = NULL;
+    const char *val;
     char *ret = NULL;
-    const char *val = NULL;
 
-    Jadd_str (in, "name", name);
-    if (!(r = flux_rpc (h, "cmb.getattr", Jtostr (in), nodeid, 0)))
+    if (!(r = flux_rpcf (h, "cmb.getattr", nodeid, 0, "{s:s}", "name", name)))
         goto done;
-    if (flux_rpc_get (r, NULL, &json_str) < 0)
+    if (flux_rpc_getf (r, NULL, "{s:s}", name, &val) < 0)
         goto done;
-    if (!(out = Jfromstr (json_str)) || !Jget_str (out, (char *)name, &val)) {
-        errno = EPROTO;
-        goto done;
-    }
     ret = xstrdup (val);
 done:
-    Jput (in);
-    Jput (out);
-    if (r)
-        flux_rpc_destroy (r);
+    flux_rpc_destroy (r);
     return ret;
 }
 
 int flux_info (flux_t h, int *rankp, int *sizep, bool *treerootp)
 {
     flux_rpc_t *r = NULL;
-    JSON out = NULL;
-    const char *json_str;
     int rank, size;
     bool treeroot;
     int ret = -1;
 
     if (!(r = flux_rpc (h, "cmb.info", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
-    if (flux_rpc_get (r, NULL, &json_str) < 0)
+    if (flux_rpc_getf (r, NULL, "{s:b, s:i, s:i}",
+                        "treeroot", &treeroot,
+                        "rank", &rank,
+                        "size", &size) < 0)
         goto done;
-    if (!(out = Jfromstr (json_str))
-            || !Jget_bool (out, "treeroot", &treeroot)
-            || !Jget_int (out, "rank", &rank)
-            || !Jget_int (out, "size", &size)) {
-        errno = EPROTO;
-        goto done;
-    }
     if (rankp)
         *rankp = rank;
     if (sizep)
@@ -90,9 +73,7 @@ int flux_info (flux_t h, int *rankp, int *sizep, bool *treerootp)
         *treerootp = treeroot;
     ret = 0;
 done:
-    Jput (out);
-    if (r)
-        flux_rpc_destroy (r);
+    flux_rpc_destroy (r);
     return ret;
 }
 
