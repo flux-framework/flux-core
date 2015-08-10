@@ -17,6 +17,7 @@ addons:
   apt:
     sources:
     packages:
+      - libjansson-dev
       - lua5.1
       - liblua5.1-0-dev
       - luarocks
