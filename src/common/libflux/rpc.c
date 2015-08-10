@@ -26,6 +26,8 @@
 #include "config.h"
 #endif
 #include <assert.h>
+#include <errno.h>
+#include <stdlib.h>
 
 #include "request.h"
 #include "response.h"
@@ -34,10 +36,10 @@
 #include "rpc.h"
 #include "reactor.h"
 
-#include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
+#include "src/common/libutil/libjansson.h"
+
 
 struct flux_rpc_struct {
     struct flux_match m;
@@ -48,11 +50,14 @@ struct flux_rpc_struct {
     uint32_t *nodemap;          /* nodeid indexed by matchtag */
     flux_msg_t *rx_msg;
     flux_msg_t *rx_msg_consumed;
+    json_t *rx_json;
     int rx_count;
     bool oneway;
     void *aux;
     flux_free_f aux_destroy;
     const char *type;
+
+    struct jansson_struct *jansson;
 };
 
 void flux_rpc_destroy (flux_rpc_t *rpc)
@@ -76,6 +81,11 @@ void flux_rpc_destroy (flux_rpc_t *rpc)
             free (rpc->nodemap);
         if (rpc->aux && rpc->aux_destroy)
             rpc->aux_destroy (rpc->aux);
+        if (rpc->jansson) {
+            if (rpc->rx_json)
+                jansson_decref (rpc->jansson, rpc->rx_json);
+            jansson_destroy (rpc->jansson);
+        }
         free (rpc);
     }
 }
@@ -323,6 +333,94 @@ void flux_rpc_aux_set (flux_rpc_t *rpc, void *aux, flux_free_f destroy)
     rpc->aux = aux;
     rpc->aux_destroy = destroy;
 }
+
+static flux_rpc_t *flux_vrpcf (flux_t h, const char *topic, uint32_t nodeid,
+                               int flags, const char *fmt, va_list ap)
+{
+    json_error_t error;
+    json_t *in = NULL;
+    char *s = NULL;
+    struct jansson_struct *js;
+    flux_rpc_t *rpc = NULL;
+
+    if (!(js = jansson_create ())) {
+        errno = ENOENT;
+        goto done;
+    }
+    if (!(in = js->vpack_ex (&error, 0, fmt, ap))) {
+        errno = EINVAL;
+        goto done;
+    }
+    if (!(s = js->dumps (in, JSON_COMPACT))) {
+        errno = ENOMEM;
+        goto done;
+    }
+    if (!(rpc = flux_rpc (h, topic, s, nodeid, flags)))
+        goto done;
+    rpc->jansson = js;
+done:
+    if (s)
+        free (s);
+    if (in)
+        jansson_decref (js, in);
+    if (!rpc && js)
+        jansson_destroy (js);
+    return rpc;
+}
+
+flux_rpc_t *flux_rpcf (flux_t h, const char *topic, uint32_t nodeid,
+                       int flags, const char *fmt, ...)
+{
+    va_list ap;
+    flux_rpc_t *rpc;
+
+    va_start (ap, fmt);
+    rpc = flux_vrpcf (h, topic, nodeid, flags, fmt, ap);
+    va_end (ap);
+
+    return rpc;
+}
+
+static int flux_rpc_vgetf (flux_rpc_t *rpc, uint32_t *nodeid,
+                           const char *fmt, va_list ap)
+{
+    const char *json_str;
+    json_error_t error;
+    int rc = -1;
+
+    if (!rpc->jansson && !(rpc->jansson = jansson_create ())) {
+        errno = ENOENT;
+        goto done;
+    }
+    if (flux_rpc_get (rpc, nodeid, &json_str) < 0)
+        goto done;
+    if (rpc->rx_json)
+        jansson_decref (rpc->jansson, rpc->rx_json);
+    if (!(rpc->rx_json = rpc->jansson->loads (json_str, 0, &error))) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (rpc->jansson->vunpack_ex (rpc->rx_json, &error, 0, fmt, ap) < 0) {
+        errno = EPROTO;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+int flux_rpc_getf (flux_rpc_t *rpc, uint32_t *nodeid, const char *fmt, ...)
+{
+    va_list ap;
+    int rc;
+
+    va_start (ap, fmt);
+    rc = flux_rpc_vgetf (rpc, nodeid, fmt, ap);
+    va_end (ap);
+
+    return rc;
+}
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

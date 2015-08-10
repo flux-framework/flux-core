@@ -1,7 +1,7 @@
 AM_CFLAGS = @GCCWARN@
 
 AM_CPPFLAGS = \
-	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
+	$(JSON_CFLAGS) $(JANSSON_CFLAGS) $(ZMQ_CFLAGS) \
 	-Wno-strict-aliasing \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include
 
@@ -44,7 +44,9 @@ libutil_la_SOURCES = \
 	msglist.c \
 	msglist.h \
 	cleanup.c \
-	cleanup.h
+	cleanup.h \
+	libjansson.c \
+	libjansson.h
 
 EXTRA_DIST = veb_mach.c
 
