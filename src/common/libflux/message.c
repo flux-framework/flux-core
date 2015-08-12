@@ -606,6 +606,20 @@ int flux_msg_get_route_count (const flux_msg_t *msg)
     return count;
 }
 
+bool flux_msg_has_route (const flux_msg_t *msg, const char *s)
+{
+    zmsg_t *zmsg = (zmsg_t *)msg; /* drop const qualifier */
+    zframe_t *zf;
+
+    zf = zmsg_first (zmsg);
+    while (zf && zframe_size (zf) > 0) {
+        if (zframe_streq (zf, s))
+            return true;
+        zf = zmsg_next (zmsg);
+    }
+    return false;
+}
+
 /* Get sum of size in bytes of route frames
  */
 static int flux_msg_get_route_size (const flux_msg_t *msg)
