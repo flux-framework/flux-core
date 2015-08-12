@@ -1170,6 +1170,37 @@ done:
     return msg;
 }
 
+int flux_msg_sendzsock (void *sock, const flux_msg_t *msg)
+{
+    int rc = -1;
+    zmsg_t *zmsg = (zmsg_t *)msg; /* discard const qualifier */
+
+    if (!sock || !msg || !zmsg_is (zmsg)) {
+        errno = EINVAL;
+        goto done;
+    }
+
+    void *handle = zsock_resolve (sock);
+    int flags = ZFRAME_REUSE | ZFRAME_MORE;
+    zframe_t *zf = zmsg_first (zmsg);
+    size_t count = 0;
+
+    while (zf) {
+        if (++count == zmsg_size (zmsg))
+            flags &= ~ZFRAME_MORE;
+        if (zframe_send (&zf, handle, flags) < 0)
+            goto done;
+        zf = zmsg_next (zmsg);
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+flux_msg_t *flux_msg_recvzsock (void *sock)
+{
+    return zmsg_recv (sock);
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

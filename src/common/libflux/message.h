@@ -88,6 +88,16 @@ int flux_msg_sendfd (int fd, const flux_msg_t *msg,
  */
 flux_msg_t *flux_msg_recvfd (int fd, struct flux_msg_iobuf *iobuf);
 
+/* Send message to zeromq socket.
+ * Returns 0 on success, -1 on failure with errno set.
+ */
+int flux_msg_sendzsock (void *dest, const flux_msg_t *msg);
+
+/* Receive a message from zeromq socket.
+ * Returns message on success, NULL on failure with errno set.
+ */
+flux_msg_t *flux_msg_recvzsock (void *dest);
+
 /* Initialize iobuf members.
  */
 void flux_msg_iobuf_init (struct flux_msg_iobuf *iobuf);
