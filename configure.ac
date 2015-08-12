@@ -24,7 +24,7 @@ AC_DEFINE([_GNU_SOURCE], 1,
 ##
 # Checks for programs
 ##
-AC_PROG_CC
+AC_PROG_CC_C99
 AM_PROG_CC_C_O
 if test "$GCC" = yes; then
   GCCWARN="-Wall -Werror -Wno-strict-aliasing"
