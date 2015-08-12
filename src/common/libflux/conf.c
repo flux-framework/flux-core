@@ -96,18 +96,20 @@ static void initialize_environment (flux_conf_t cf)
 {
     // Defaults from the environment
     flux_conf_environment_from_env (
-        cf, "LUA_CPATH", ";;", ";"); /* Lua replaces ;; with the default path */
+        cf, "LUA_CPATH", "", ";"); /* Lua replaces ;; with the default path */
+    flux_conf_environment_push_back (cf, "LUA_CPATH", ";;");
     flux_conf_environment_from_env (
-        cf, "LUA_PATH", ";;", ";"); /* use a null separator to keep it intact */
+        cf, "LUA_PATH", "", ";"); /* use a null separator to keep it intact */
+    flux_conf_environment_push_back (cf, "LUA_PATH", ";;");
     flux_conf_environment_from_env (cf, "PYTHONPATH", "", ":");
 
     // Build paths
     flux_conf_environment_set (cf, "FLUX_CONNECTOR_PATH", CONNECTOR_PATH, ":");
     flux_conf_environment_set (cf, "FLUX_EXEC_PATH", EXEC_PATH, ":");
     flux_conf_environment_set (cf, "FLUX_MODULE_PATH", MODULE_PATH, ":");
-    flux_conf_environment_push (cf, "LUA_CPATH", LUA_CPATH_ADD);
-    flux_conf_environment_push (cf, "LUA_PATH", LUA_PATH_ADD);
-    flux_conf_environment_push (cf, "PYTHONPATH", PYTHON_PATH);
+    flux_conf_environment_upsert_front (cf, "LUA_CPATH", LUA_CPATH_ADD);
+    flux_conf_environment_upsert_front (cf, "LUA_PATH", LUA_PATH_ADD);
+    flux_conf_environment_upsert_front (cf, "PYTHONPATH", PYTHON_PATH);
 }
 
 const char *flux_conf_get_directory (flux_conf_t cf)
@@ -322,7 +324,8 @@ void flux_conf_environment_unset (flux_conf_t cf, const char *key)
 static void flux_conf_environment_push_inner (flux_conf_t cf,
                                               const char *key,
                                               const char *value,
-                                              bool before)
+                                              bool before,
+                                              bool split)
 {
     if (!value || strlen (value) == 0)
         return;
@@ -331,21 +334,43 @@ static void flux_conf_environment_push_inner (flux_conf_t cf,
     if (!item)
         item = usa_new ();
 
-    usa_split_and_push (item, value, before);
+    if (split) {
+        usa_split_and_push (item, value, before);
+    } else {
+        if (before) {
+            usa_push (item, value);
+        } else {
+            usa_push_back (item, value);
+        }
+    }
 }
 
-void flux_conf_environment_push (flux_conf_t cf,
-                                 const char *key,
-                                 const char *value)
+void flux_conf_environment_upsert_front (flux_conf_t cf,
+                                         const char *key,
+                                         const char *value)
 {
-    flux_conf_environment_push_inner (cf, key, value, true);
+    flux_conf_environment_push_inner (cf, key, value, true, true);
+}
+
+void flux_conf_environment_upsert_back (flux_conf_t cf,
+                                        const char *key,
+                                        const char *value)
+{
+    flux_conf_environment_push_inner (cf, key, value, false, true);
+}
+
+void flux_conf_environment_push_front (flux_conf_t cf,
+                                       const char *key,
+                                       const char *value)
+{
+    flux_conf_environment_push_inner (cf, key, value, true, false);
 }
 
 void flux_conf_environment_push_back (flux_conf_t cf,
                                       const char *key,
                                       const char *value)
 {
-    flux_conf_environment_push_inner (cf, key, value, false);
+    flux_conf_environment_push_inner (cf, key, value, false, false);
 }
 
 void flux_conf_environment_from_env (flux_conf_t cf,

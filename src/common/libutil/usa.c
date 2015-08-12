@@ -124,7 +124,6 @@ void usa_split_and_push (unique_string_array_t *item,
                          bool before)
 {
     int value_count = 0, i;
-    bool insert_on_blank = true;
 
     if (!value || strlen (value) == 0)
         return;
@@ -135,12 +134,6 @@ void usa_split_and_push (unique_string_array_t *item,
 
     for (i = 0, part = new_parts[i]; i < value_count;
          i++, part = new_parts[i]) {
-        if (!sdslen (part) && insert_on_blank) {
-            // This odd dance is for lua's default path item
-            new_parts[i] = sdscpy (new_parts[i], item->sep);
-            insert_on_blank = false;
-        }
-
         if (before) {
             usa_remove (item, part);
             usa_push (item, part);
