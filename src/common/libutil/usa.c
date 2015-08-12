@@ -134,15 +134,15 @@ void usa_split_and_push (unique_string_array_t *item,
 
     for (i = 0, part = new_parts[i]; i < value_count;
          i++, part = new_parts[i]) {
+        if (!sdslen (part))
+            continue;
         if (before) {
             usa_remove (item, part);
             usa_push (item, part);
         } else {
-            int idx = usa_find_idx (item, part);
-            if (idx < 0)
-                usa_push_back (item, part);
-            else
-                continue;  // No update, not dirty
+            if (usa_find_idx (item, part) >= 0)
+                continue;
+            usa_push_back (item, part);
         }
         item->clean = false;
     }

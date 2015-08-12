@@ -231,20 +231,20 @@ int main (int argc, char *argv[])
     /* Add config items to environment variables */
     /* NOTE: I would prefer that this be in config, but kvs_load loads
      * everything out of band, preventing that */
-    flux_conf_environment_upsert_front (cf, "FLUX_CONNECTOR_PATH", flux_conf_get(cf, "general.connector_path"));
-    flux_conf_environment_upsert_front (cf, "FLUX_EXEC_PATH",      flux_conf_get(cf, "general.exec_path"));
-    flux_conf_environment_upsert_front (cf, "FLUX_MODULE_PATH",    flux_conf_get(cf, "general.module_path"));
-    flux_conf_environment_upsert_front (cf, "LUA_CPATH",           flux_conf_get(cf, "general.lua_cpath"));
-    flux_conf_environment_upsert_front (cf, "LUA_PATH",            flux_conf_get(cf, "general.lua_path"));
-    flux_conf_environment_upsert_front (cf, "PYTHONPATH",          flux_conf_get(cf, "general.python_path"));
+    flux_conf_environment_push (cf, "FLUX_CONNECTOR_PATH", flux_conf_get(cf, "general.connector_path"));
+    flux_conf_environment_push (cf, "FLUX_EXEC_PATH",      flux_conf_get(cf, "general.exec_path"));
+    flux_conf_environment_push (cf, "FLUX_MODULE_PATH",    flux_conf_get(cf, "general.module_path"));
+    flux_conf_environment_push (cf, "LUA_CPATH",           flux_conf_get(cf, "general.lua_cpath"));
+    flux_conf_environment_push (cf, "LUA_PATH",            flux_conf_get(cf, "general.lua_path"));
+    flux_conf_environment_push (cf, "PYTHONPATH",          flux_conf_get(cf, "general.python_path"));
 
     /* Prepend to command-line environment variables */
-    flux_conf_environment_upsert_front (cf, "FLUX_CONNECTOR_PATH", Oopt);
-    flux_conf_environment_upsert_front (cf, "FLUX_EXEC_PATH", xopt);
-    flux_conf_environment_upsert_front (cf, "FLUX_MODULE_PATH", Mopt);
-    flux_conf_environment_upsert_front (cf, "LUA_CPATH", Copt);
-    flux_conf_environment_upsert_front (cf, "LUA_PATH", Lopt);
-    flux_conf_environment_upsert_front (cf, "PYTHONPATH", Popt);
+    flux_conf_environment_push (cf, "FLUX_CONNECTOR_PATH", Oopt);
+    flux_conf_environment_push (cf, "FLUX_EXEC_PATH", xopt);
+    flux_conf_environment_push (cf, "FLUX_MODULE_PATH", Mopt);
+    flux_conf_environment_push (cf, "LUA_CPATH", Copt);
+    flux_conf_environment_push (cf, "LUA_PATH", Lopt);
+    flux_conf_environment_push (cf, "PYTHONPATH", Popt);
 
     if (argc == 0) {
         usage ();
