@@ -24,7 +24,7 @@ void heartbeat_next_epoch (heartbeat_t h);
 /* The generator of heartbeats (rank 0) installs a timer and in
  * the handler, calls next_epoch() and event_encode().
  */
-void heartbeat_set_loop (heartbeat_t h, zloop_t *zloop);
+void heartbeat_set_reactor (heartbeat_t h, flux_t f);
 void heartbeat_set_cb (heartbeat_t h, heartbeat_cb_f cb, void *arg);
 int heartbeat_start (heartbeat_t h);
 void heartbeat_stop (heartbeat_t h);
