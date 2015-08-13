@@ -12,7 +12,7 @@ void overlay_destroy (overlay_t ov);
 void overlay_set_sec (overlay_t ov, flux_sec_t sec);
 void overlay_set_zctx (overlay_t ov, zctx_t *zctx);
 void overlay_set_rank (overlay_t ov, uint32_t rank);
-void overlay_set_loop (overlay_t ov, zloop_t *zloop);
+void overlay_set_reactor (overlay_t ov, flux_t h);
 void overlay_set_heartbeat (overlay_t ov, heartbeat_t h);
 
 /* All ranks but rank 0 connect to a parent to form the main TBON.
