@@ -45,6 +45,7 @@ struct subprocess_manager {
     zlist_t *processes;
     int wait_flags;
     zloop_t *zloop;
+    flux_t h;
 };
 
 struct subprocess {
@@ -196,6 +197,10 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
         zio_zloop_attach (p->zio_in, sm->zloop);
         zio_zloop_attach (p->zio_err, sm->zloop);
         zio_zloop_attach (p->zio_out, sm->zloop);
+    } else if (sm->h) {
+        zio_flux_attach (p->zio_in, sm->h);
+        zio_flux_attach (p->zio_err, sm->h);
+        zio_flux_attach (p->zio_out, sm->h);
     }
     return (p);
 }
@@ -864,6 +869,9 @@ subprocess_manager_set (struct subprocess_manager *sm, sm_item_t item, ...)
             break;
         case SM_ZLOOP:
             sm->zloop = (zloop_t *) va_arg (ap, void *);
+            break;
+        case SM_FLUX:
+            sm->h = (flux_t) va_arg (ap, void *);
             break;
         default:
             errno = EINVAL;
