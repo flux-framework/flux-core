@@ -36,9 +36,9 @@
 #include "heartbeat.h"
 
 struct heartbeat_struct {
-    zloop_t *zloop;
+    flux_t h;
     double rate;
-    int timer_id;
+    flux_timer_watcher_t *w;
     int epoch;
     heartbeat_cb_f cb;
     void *cb_arg;
@@ -49,27 +49,26 @@ static const double max_heartrate = 30;     /* max seconds */
 static const double dfl_heartrate = 2;
 
 
-void heartbeat_destroy (heartbeat_t h)
+void heartbeat_destroy (heartbeat_t *h)
 {
     if (h) {
         free (h);
     }
 }
 
-heartbeat_t heartbeat_create (void)
+heartbeat_t *heartbeat_create (void)
 {
-    heartbeat_t h = xzmalloc (sizeof (*h));
+    heartbeat_t *h = xzmalloc (sizeof (*h));
     h->rate = dfl_heartrate;
-    h->timer_id = -1;
     return h;
 }
 
-void heartbeat_set_loop (heartbeat_t h, zloop_t *zloop)
+void heartbeat_set_reactor (heartbeat_t *hb, flux_t h)
 {
-    h->zloop = zloop;
+    hb->h = h;
 }
 
-int heartbeat_set_rate (heartbeat_t h, double rate)
+int heartbeat_set_rate (heartbeat_t *h, double rate)
 {
     if (rate < min_heartrate || rate > max_heartrate)
         goto error;
@@ -80,7 +79,7 @@ error:
     return -1;
 }
 
-int heartbeat_set_ratestr (heartbeat_t h, const char *s)
+int heartbeat_set_ratestr (heartbeat_t *h, const char *s)
 {
     char *endptr;
     double rate = strtod (s, &endptr);
@@ -98,56 +97,56 @@ error:
     return -1;
 }
 
-double heartbeat_get_rate (heartbeat_t h)
+double heartbeat_get_rate (heartbeat_t *h)
 {
     return h->rate;
 }
 
-void heartbeat_set_epoch (heartbeat_t h, int epoch)
+void heartbeat_set_epoch (heartbeat_t *h, int epoch)
 {
     h->epoch = epoch;
 }
 
-int heartbeat_get_epoch (heartbeat_t h)
+int heartbeat_get_epoch (heartbeat_t *h)
 {
     return h->epoch;
 }
 
-void heartbeat_next_epoch (heartbeat_t h)
+void heartbeat_next_epoch (heartbeat_t *h)
 {
     h->epoch++;
 }
 
-void heartbeat_set_cb (heartbeat_t h, heartbeat_cb_f cb, void *arg)
+void heartbeat_set_cb (heartbeat_t *h, heartbeat_cb_f cb, void *arg)
 {
     h->cb = cb;
     h->cb_arg = arg;
 }
 
-static int heartbeat_cb (zloop_t *zl, int timer_id, void *arg)
+static void heartbeat_cb (flux_t h, flux_timer_watcher_t *w,
+                          int revents, void *arg)
 {
-    heartbeat_t h = arg;
-    if (h->cb)
-        h->cb (h, h->cb_arg);
+    heartbeat_t *hb = arg;
+    if (hb->cb)
+        hb->cb (hb, hb->cb_arg);
+}
+
+int heartbeat_start (heartbeat_t *hb)
+{
+    if (!(hb->w = flux_timer_watcher_create (hb->rate, hb->rate,
+                                             heartbeat_cb, hb)))
+        return -1;
+    flux_timer_watcher_start (hb->h, hb->w);
     return 0;
 }
 
-int heartbeat_start (heartbeat_t h)
+void heartbeat_stop (heartbeat_t *hb)
 {
-    unsigned long msec = h->rate * 1000;
-
-    h->timer_id = zloop_timer (h->zloop, msec, 0, heartbeat_cb, h);
-
-    return h->timer_id;
+    if (hb->w)
+        flux_timer_watcher_stop (hb->h, hb->w);
 }
 
-void heartbeat_stop (heartbeat_t h)
-{
-    if (h->timer_id != -1)
-        zloop_timer_end (h->zloop, h->timer_id);
-}
-
-zmsg_t *heartbeat_event_encode (heartbeat_t h)
+zmsg_t *heartbeat_event_encode (heartbeat_t *h)
 {
     JSON o = Jnew ();
     zmsg_t *zmsg;
@@ -158,7 +157,7 @@ zmsg_t *heartbeat_event_encode (heartbeat_t h)
     return zmsg;
 }
 
-int heartbeat_event_decode (heartbeat_t h, zmsg_t *zmsg)
+int heartbeat_event_decode (heartbeat_t *h, zmsg_t *zmsg)
 {
     const char *json_str;
     JSON out = NULL;

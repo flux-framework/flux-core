@@ -31,6 +31,7 @@ struct subprocess;
 typedef enum sm_item {
     SM_WAIT_FLAGS,
     SM_ZLOOP,
+    SM_FLUX,
 } sm_item_t;
 
 typedef int (subprocess_cb_f) (struct subprocess *p, void *arg);

@@ -57,7 +57,7 @@
  */
 static int ping_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
-    module_t p = arg;
+    module_t *p = arg;
     JSON in = NULL;
     char *s = NULL;
     char *route = NULL;
@@ -173,7 +173,7 @@ static void register_request (flux_t h, const char *name,
     free (topic);
 }
 
-void modservice_register (flux_t h, module_t p)
+void modservice_register (flux_t h, module_t *p)
 {
     const char *name = module_get_name (p);
 

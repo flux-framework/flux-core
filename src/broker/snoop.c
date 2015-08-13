@@ -34,91 +34,87 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/cleanup.h"
 
-#include "endpt.h"
 #include "snoop.h"
 
 struct snoop_struct {
     flux_sec_t sec;
     zctx_t *zctx;
-    endpt_t *snoop;
+    char *uri;
+    void *zs;
 };
 
-snoop_t snoop_create (void)
+snoop_t *snoop_create (void)
 {
-    snoop_t sn = xzmalloc (sizeof (*sn));
+    snoop_t *sn = xzmalloc (sizeof (*sn));
     return sn;
 }
 
-void snoop_destroy (snoop_t sn)
+void snoop_destroy (snoop_t *sn)
 {
     if (sn) {
-        if (sn->snoop)
-            endpt_destroy (sn->snoop);
+        if (sn->uri)
+            free (sn->uri);
         free (sn);
     }
 }
 
-void snoop_set_sec (snoop_t sn, flux_sec_t sec)
+void snoop_set_sec (snoop_t *sn, flux_sec_t sec)
 {
     sn->sec = sec;
 }
 
-void snoop_set_zctx (snoop_t sn, zctx_t *zctx)
+void snoop_set_zctx (snoop_t *sn, zctx_t *zctx)
 {
     sn->zctx = zctx;
 }
 
-void snoop_set_uri (snoop_t sn, const char *fmt, ...)
+void snoop_set_uri (snoop_t *sn, const char *uri)
 {
-    va_list ap;
-
-    if (sn->snoop)
-        endpt_destroy (sn->snoop);
-    va_start (ap, fmt);
-    sn->snoop = endpt_vcreate (fmt, ap);
-    va_end (ap);
+    if (sn->uri)
+        free (sn->uri);
+    sn->uri = xstrdup (uri);
 }
 
-static int snoop_bind (snoop_t sn)
+static int snoop_bind (snoop_t *sn)
 {
     int rc = -1;
-    if (!(sn->snoop->zs = zsocket_new (sn->zctx, ZMQ_PUB)))
+    if (!(sn->zs = zsocket_new (sn->zctx, ZMQ_PUB)))
         goto done;
-    if (flux_sec_ssockinit (sn->sec, sn->snoop->zs) < 0) {
+    if (flux_sec_ssockinit (sn->sec, sn->zs) < 0) {
         //msg ("flux_sec_ssockinit: %s", flux_sec_errstr (sn->sec));
         goto done;
     }
-    if (zsocket_bind (sn->snoop->zs, "%s", sn->snoop->uri) < 0)
+    if (zsocket_bind (sn->zs, "%s", sn->uri) < 0)
         goto done;
-    if (strchr (sn->snoop->uri, '*')) { /* capture dynamically assigned port */
-        free (sn->snoop->uri);
-        sn->snoop->uri = zsocket_last_endpoint (sn->snoop->zs);
+    if (strchr (sn->uri, '*')) { /* capture dynamically assigned port */
+        free (sn->uri);
+        sn->uri = zsocket_last_endpoint (sn->zs);
     }
-    if (strstr(sn->snoop->uri, "ipc://")){
-        cleanup_push_string(cleanup_file, sn->snoop->uri + sizeof("ipc://") - 1);
+    if (strstr (sn->uri, "ipc://")) {
+        cleanup_push_string (cleanup_file, sn->uri + sizeof("ipc://") - 1);
     }
     rc = 0;
 done:
     return rc;
 }
 
-const char *snoop_get_uri (snoop_t sn)
+const char *snoop_get_uri (snoop_t *sn)
 {
-    if ((!sn->snoop || !sn->snoop->zs) && snoop_bind (sn) < 0)
+    if (!sn->zs && snoop_bind (sn) < 0)
         return NULL;
-    return sn->snoop->uri;
+    return sn->uri;
 }
 
-int snoop_sendmsg (snoop_t sn, zmsg_t *zmsg)
+int snoop_sendmsg (snoop_t *sn, zmsg_t *zmsg)
 {
     int rc = -1;
     zmsg_t *cpy = NULL;
 
-    if (!sn->snoop || !sn->snoop->zs)
+    if (!sn->zs)
         return 0;
     if (!(cpy = zmsg_dup (zmsg)))
         oom ();
-    rc = zmsg_send (&cpy, sn->snoop->zs);
+    rc = zmsg_send (&cpy, sn->zs);
     zmsg_destroy (&cpy);
     return rc;
 }

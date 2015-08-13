@@ -58,7 +58,6 @@
 #include "heartbeat.h"
 #include "module.h"
 #include "boot_pmi.h"
-#include "endpt.h"
 #include "overlay.h"
 #include "snoop.h"
 #include "service.h"
@@ -77,13 +76,17 @@ typedef struct {
     /* 0MQ
      */
     zctx_t *zctx;               /* zeromq context (MT-safe) */
-    zloop_t *zloop;
     flux_sec_t sec;             /* security context (MT-safe) */
+
+    /* Reactor
+     */
+    flux_t h;
+    flux_fd_watcher_t *signalfd_w;
 
     /* Sockets.
      */
-    overlay_t overlay;
-    snoop_t snoop;
+    overlay_t *overlay;
+    snoop_t *snoop;
 
     /* Session parameters
      */
@@ -92,28 +95,27 @@ typedef struct {
     char *sid;                  /* session id */
     /* Modules
      */
-    modhash_t modhash;
+    modhash_t *modhash;
     /* Misc
      */
     bool verbose;
     bool quiet;
-    flux_t h;
     pid_t pid;
     char *proctitle;
     sigset_t default_sigset;
     flux_conf_t cf;
     int event_seq;
     bool event_active;          /* primary event source is active */
-    svchash_t services;
-    svchash_t eventsvc;
-    heartbeat_t heartbeat;
-    shutdown_t shutdown;
+    svchash_t *services;
+    svchash_t *eventsvc;
+    heartbeat_t *heartbeat;
+    shutdown_t *shutdown;
     double shutdown_grace;
     /* Bootstrap
      */
     bool boot_pmi;
     int k_ary;
-    hello_t hello;
+    hello_t *hello;
     double hello_timeout;
 
     /* Subprocess management
@@ -131,16 +133,17 @@ static int broker_event_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
 static int broker_response_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
 static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
 
-static void event_cb (overlay_t ov, void *sock, void *arg);
-static void parent_cb (overlay_t ov, void *sock, void *arg);
-static void child_cb (overlay_t ov, void *sock, void *arg);
-static void heartbeat_cb (heartbeat_t h, void *arg);
-static void module_cb (module_t p, void *arg);
-static void rmmod_cb (module_t p, void *arg);
-static void hello_update_cb (hello_t h, void *arg);
-static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx);
+static void event_cb (overlay_t *ov, void *sock, void *arg);
+static void parent_cb (overlay_t *ov, void *sock, void *arg);
+static void child_cb (overlay_t *ov, void *sock, void *arg);
+static void heartbeat_cb (heartbeat_t *h, void *arg);
+static void module_cb (module_t *p, void *arg);
+static void rmmod_cb (module_t *p, void *arg);
+static void hello_update_cb (hello_t *h, void *arg);
+static void signalfd_cb (flux_t h, flux_fd_watcher_t *w,
+                         int fd, int revents, void *arg);
 
-static int broker_init_signalfd (ctx_t *ctx);
+static void broker_init_signalfd (ctx_t *ctx);
 
 static void broker_add_services (ctx_t *ctx);
 
@@ -416,9 +419,19 @@ int main (int argc, char *argv[])
     if (!ctx.zctx)
         err_exit ("zctx_new");
     zctx_set_linger (ctx.zctx, 5);
-    if (!(ctx.zloop = zloop_new ()))
-        err_exit ("zloop_new");
-    subprocess_manager_set (ctx.sm, SM_ZLOOP, ctx.zloop);
+
+    /* Set up flux handle.
+     * The handle is used for simple purposes such as logging,
+     * and also provides the main reactor loop for the broker.
+     */
+    if (!(ctx.h = flux_handle_create (&ctx, &broker_handle_ops, 0)))
+        err_exit ("flux_handle_create");
+    flux_aux_set (ctx.h, "flux::rank", &ctx.rank, NULL);
+    flux_log_set_facility (ctx.h, "broker");
+    if (ctx.rank == 0)
+        flux_log_set_redirect (ctx.h, broker_log, &ctx);
+
+    subprocess_manager_set (ctx.sm, SM_FLUX, ctx.h);
 
     /* Prepare signal handling
      */
@@ -441,7 +454,7 @@ int main (int argc, char *argv[])
     overlay_set_heartbeat (ctx.overlay, ctx.heartbeat);
     overlay_set_zctx (ctx.overlay, ctx.zctx);
     overlay_set_sec (ctx.overlay, ctx.sec);
-    overlay_set_loop (ctx.overlay, ctx.zloop);
+    overlay_set_reactor (ctx.overlay, ctx.h);
 
     overlay_set_parent_cb (ctx.overlay, parent_cb, &ctx);
     overlay_set_child_cb (ctx.overlay, child_cb, &ctx);
@@ -527,20 +540,8 @@ int main (int argc, char *argv[])
      */
     snoop_set_zctx (ctx.snoop, ctx.zctx);
     snoop_set_sec (ctx.snoop, ctx.sec);
-    snoop_set_uri (ctx.snoop, "%s", "ipc://*");
+    snoop_set_uri (ctx.snoop, "ipc://*");
 
-    /* Create our (limited functionality) flux_t handle.
-     * The handle is mainly used for flux_log(), which calls flux_rank(),
-     * so trick flux_rank() to work here by pre-loading its aux cache entry.
-     */
-    if (!(ctx.h = flux_handle_create (&ctx, &broker_handle_ops, 0)))
-        err_exit ("flux_handle_create");
-    flux_aux_set (ctx.h, "flux::rank", &ctx.rank, NULL);
-    flux_log_set_facility (ctx.h, "broker");
-    if (ctx.rank == 0)
-        flux_log_set_redirect (ctx.h, broker_log, &ctx);
-
-    shutdown_set_loop (ctx.shutdown, ctx.zloop);
     shutdown_set_handle (ctx.shutdown, ctx.h);
 
     /* Register internal services
@@ -553,14 +554,14 @@ int main (int argc, char *argv[])
         msg ("loading modules");
     modhash_set_zctx (ctx.modhash, ctx.zctx);
     modhash_set_rank (ctx.modhash, ctx.rank);
-    modhash_set_loop (ctx.modhash, ctx.zloop);
+    modhash_set_reactor (ctx.modhash, ctx.h);
     modhash_set_heartbeat (ctx.modhash, ctx.heartbeat);
     load_modules (&ctx, modules, modopts, modexclude, modpath);
 
     /* install heartbeat timer
      */
     if (ctx.rank == 0) {
-        heartbeat_set_loop (ctx.heartbeat, ctx.zloop);
+        heartbeat_set_reactor (ctx.heartbeat, ctx.h);
         heartbeat_set_cb (ctx.heartbeat, heartbeat_cb, &ctx);
         if (heartbeat_start (ctx.heartbeat) < 0)
             err_exit ("heartbeat_start");
@@ -574,7 +575,7 @@ int main (int argc, char *argv[])
      * Start init once wireup is complete.
      */
     hello_set_overlay (ctx.hello, ctx.overlay);
-    hello_set_zloop (ctx.hello, ctx.zloop);
+    hello_set_reactor (ctx.hello, ctx.h);
     hello_set_size (ctx.hello, ctx.size);
     hello_set_cb (ctx.hello, hello_update_cb, &ctx);
     hello_set_timeout (ctx.hello, 1.0);
@@ -585,7 +586,8 @@ int main (int argc, char *argv[])
      */
     if (ctx.verbose)
         msg ("entering event loop");
-    zloop_start (ctx.zloop);
+    if (flux_reactor_start (ctx.h) < 0)
+        err ("flux_reactor_start");
     if (ctx.verbose)
         msg ("exited event loop");
 
@@ -604,7 +606,6 @@ int main (int argc, char *argv[])
         msg ("cleaning up");
     if (ctx.sec)
         flux_sec_destroy (ctx.sec);
-    zloop_destroy (&ctx.zloop);
     zctx_destroy (&ctx.zctx);
     overlay_destroy (ctx.overlay);
     heartbeat_destroy (ctx.heartbeat);
@@ -612,10 +613,12 @@ int main (int argc, char *argv[])
     svchash_destroy (ctx.services);
     svchash_destroy (ctx.eventsvc);
     hello_destroy (ctx.hello);
+    flux_close (ctx.h);
 
     zlist_destroy (&modules);       /* autofree set */
     zlist_destroy (&modopts);       /* autofree set */
     zhash_destroy (&modexclude);    /* values const (no destructor) */
+
     return 0;
 }
 
@@ -633,7 +636,7 @@ static void broker_log (void *arg, const char *facility, int level,
          tv.tv_sec, tv.tv_usec, facility, levstr, rank, s);
 }
 
-static void hello_update_cb (hello_t h, void *arg)
+static void hello_update_cb (hello_t *h, void *arg)
 {
     ctx_t *ctx = arg;
 
@@ -757,7 +760,7 @@ static void rank0_shell (ctx_t *ctx)
  */
 static void boot_pmi (ctx_t *ctx)
 {
-    pmi_t pmi = pmi_init (NULL);
+    pmi_t *pmi = pmi_init (NULL);
     int relay_rank = pmi_relay_rank (pmi);
     int right_rank = pmi_right_rank (pmi);
     char ipaddr[HOST_NAME_MAX + 1];
@@ -852,7 +855,7 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
                           zhash_t *modexclude, const char *modpath)
 {
     char *s;
-    module_t p;
+    module_t *p;
     zhash_t *mods; /* hash by module name */
 
     /* Create modules, adding to 'mods' list
@@ -918,12 +921,10 @@ next:
     zhash_destroy (&mods);
 }
 
-/* signalfd + zloop example: https://gist.github.com/mhaberler/8426050
- */
-static int broker_init_signalfd (ctx_t *ctx)
+static void broker_init_signalfd (ctx_t *ctx)
 {
     sigset_t sigmask;
-    zmq_pollitem_t zp = { .events = ZMQ_POLLIN, .revents = 0, .socket = NULL };
+    int fd;
 
     zsys_handler_set (NULL);
     sigemptyset(&sigmask);
@@ -939,11 +940,12 @@ static int broker_init_signalfd (ctx_t *ctx)
     sigaddset(&sigmask, SIGFPE);
     sigaddset(&sigmask, SIGCHLD);
 
-    if ((zp.fd = signalfd(-1, &sigmask, SFD_NONBLOCK | SFD_CLOEXEC)) < 0)
+    if ((fd = signalfd(-1, &sigmask, SFD_NONBLOCK | SFD_CLOEXEC)) < 0)
         err_exit ("signalfd");
-    if (zloop_poller (ctx->zloop, &zp, (zloop_fn *)signal_cb, ctx) < 0)
-        err_exit ("zloop_poller");
-    return zp.fd;
+    if (!(ctx->signalfd_w = flux_fd_watcher_create (fd, FLUX_POLLIN,
+                                                    signalfd_cb, ctx)))
+        err_exit ("flux_fd_watcher_create");
+    flux_fd_watcher_start (ctx->h, ctx->signalfd_w);
 }
 
 /**
@@ -1356,7 +1358,7 @@ static int cmb_rmmod_cb (zmsg_t **zmsg, void *arg)
     const char *json_str;
     char *name = NULL;
     int rc = -1;
-    module_t p;
+    module_t *p;
 
     if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
         goto done;
@@ -1387,7 +1389,7 @@ static int cmb_insmod_cb (zmsg_t **zmsg, void *arg)
     char *path = NULL;
     char *argz = NULL;
     size_t argz_len = 0;
-    module_t p;
+    module_t *p;
     int rc = -1;
 
     if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
@@ -1680,7 +1682,7 @@ static void broker_add_services (ctx_t *ctx)
 
 /* Handle requests from overlay peers.
  */
-static void child_cb (overlay_t ov, void *sock, void *arg)
+static void child_cb (overlay_t *ov, void *sock, void *arg)
 {
     ctx_t *ctx = arg;
     int type;
@@ -1763,7 +1765,7 @@ done:
 
 /* Handle messages from one or more parents.
  */
-static void parent_cb (overlay_t ov, void *sock, void *arg)
+static void parent_cb (overlay_t *ov, void *sock, void *arg)
 {
     ctx_t *ctx = arg;
     zmsg_t *zmsg = zmsg_recv (sock);
@@ -1801,7 +1803,7 @@ done:
 
 /* Handle messages on the service socket of a comms module.
  */
-static void module_cb (module_t p, void *arg)
+static void module_cb (module_t *p, void *arg)
 {
     ctx_t *ctx = arg;
     zmsg_t *zmsg = module_recvmsg (p);
@@ -1842,7 +1844,7 @@ done:
     zmsg_destroy (&zmsg);
 }
 
-static void rmmod_cb (module_t p, void *arg)
+static void rmmod_cb (module_t *p, void *arg)
 {
     ctx_t *ctx = arg;
     zmsg_t *zmsg;
@@ -1854,7 +1856,7 @@ static void rmmod_cb (module_t p, void *arg)
     }
 }
 
-static void event_cb (overlay_t ov, void *sock, void *arg)
+static void event_cb (overlay_t *ov, void *sock, void *arg)
 {
     ctx_t *ctx = arg;
     zmsg_t *zmsg = overlay_recvmsg_event (ov);
@@ -1882,7 +1884,7 @@ done:
 /* Heartbeat timer callback on rank 0
  * Increment epoch and send event.
  */
-static void heartbeat_cb (heartbeat_t h, void *arg)
+static void heartbeat_cb (heartbeat_t *h, void *arg)
 {
     ctx_t *ctx = arg;
     zmsg_t *zmsg = NULL;
@@ -1902,12 +1904,14 @@ done:
     zmsg_destroy (&zmsg);
 }
 
-static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
+static void signalfd_cb (flux_t h, flux_fd_watcher_t *w,
+                         int fd, int revents, void *arg)
 {
+    ctx_t *ctx = arg;
     struct signalfd_siginfo fdsi;
     ssize_t n;
 
-    if ((n = read (item->fd, &fdsi, sizeof (fdsi))) < 0) {
+    if ((n = read (fd, &fdsi, sizeof (fdsi))) < 0) {
         if (errno != EWOULDBLOCK)
             err_exit ("read");
     } else if (n == sizeof (fdsi)) {
@@ -1919,7 +1923,6 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, ctx_t *ctx)
                           fdsi.ssi_signo, strsignal (fdsi.ssi_signo));
         }
     }
-    return 0;
 }
 
 static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
