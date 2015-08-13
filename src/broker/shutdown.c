@@ -36,9 +36,8 @@
 #include "shutdown.h"
 
 struct shutdown_struct {
-    zloop_t *zloop;
     flux_t h;
-    int tid;
+    flux_timer_watcher_t *w;
 
     int rc;
     int rank;
@@ -49,7 +48,6 @@ struct shutdown_struct {
 shutdown_t shutdown_create (void)
 {
     shutdown_t s = xzmalloc (sizeof (*s));
-    s->tid = -1;
     return s;
 }
 
@@ -60,11 +58,6 @@ void shutdown_destroy (shutdown_t s)
     }
 }
 
-void shutdown_set_loop (shutdown_t s, zloop_t *zloop)
-{
-    s->zloop = zloop;
-}
-
 void shutdown_set_handle (shutdown_t s, flux_t h)
 {
     s->h = h;
@@ -72,11 +65,15 @@ void shutdown_set_handle (shutdown_t s, flux_t h)
 
 void shutdown_complete (shutdown_t s)
 {
-    if (s->tid != -1)
-        zloop_timer_end (s->zloop, s->tid);
+    if (s->w) {
+        flux_timer_watcher_stop (s->h, s->w);
+        flux_timer_watcher_destroy (s->w);
+        s->w = NULL;
+    }
 }
 
-static int shutdown_cb (zloop_t *loop, int timer_id, void *arg)
+static void shutdown_cb (flux_t h, flux_timer_watcher_t *w,
+                         int revents, void *arg)
 {
     shutdown_t s = arg;
     exit (s->rc);
@@ -101,14 +98,14 @@ void shutdown_recvmsg (shutdown_t s, zmsg_t *zmsg)
         errn (EPROTO, "%s", __FUNCTION__);
         goto done;
     }
-    if (s->tid == -1) {
+    if (!s->w) {
         s->rc = rc;
         s->grace = grace;
         s->rank = rank;
         snprintf (s->reason, sizeof (s->reason), "%s", reason);
-        s->tid = zloop_timer (s->zloop, 1000*grace, 1, shutdown_cb, s);
-        if (s->tid == -1)
-            err_exit ("zloop_timer");
+        if (!(s->w = flux_timer_watcher_create (grace, 0., shutdown_cb, s)))
+            err_exit ("flux_timer_watcher_create");
+        flux_timer_watcher_start (s->h, s->w);
         if (flux_rank (s->h) == 0)
             flux_log (s->h, LOG_INFO, "%d: shutdown in %.3fs: %s",
                       s->rank, s->grace, s->reason);
@@ -123,7 +120,7 @@ void shutdown_arm (shutdown_t s, double grace, int rc, const char *fmt, ...)
     va_list ap;
     char reason[256];
 
-    if (s->tid != -1) {
+    if (s->w) {
         msg ("%s: shutdown already in progress", __FUNCTION__);
         return;
     }

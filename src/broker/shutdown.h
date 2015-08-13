@@ -6,7 +6,6 @@ typedef struct shutdown_struct *shutdown_t;
 shutdown_t shutdown_create (void);
 void shutdown_destroy (shutdown_t s);
 
-void shutdown_set_loop (shutdown_t s, zloop_t *zloop);
 void shutdown_set_handle (shutdown_t s, flux_t h);
 
 /* Any rank can call shutdown_arm() to initiate shutdown after 'grace'
