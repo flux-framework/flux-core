@@ -12,7 +12,7 @@ void snoop_set_zctx (snoop_t sn, zctx_t *zctx);
 /* Get/set snoop uri.  The set argument may be a URI wildcard.
  * The get triggers bind and resolution of URI wildcard on first use.
  */
-void snoop_set_uri (snoop_t sn, const char *fmt, ...);
+void snoop_set_uri (snoop_t sn, const char *uri);
 const char *snoop_get_uri (snoop_t sn);
 
 /* If snoop socket has not been bound, no-op (return 0).
