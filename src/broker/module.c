@@ -57,8 +57,8 @@ struct module_struct {
 
     zctx_t *zctx;
     uint32_t rank;
-    zloop_t *zloop;
-    zmq_pollitem_t zp;
+    flux_t broker_h;
+    flux_zmq_watcher_t *broker_w;
 
     int lastseen;
     heartbeat_t heartbeat;
@@ -91,7 +91,7 @@ struct modhash_struct {
     zhash_t *zh_byuuid;
     zctx_t *zctx;
     uint32_t rank;
-    zloop_t *zloop;
+    flux_t broker_h;
     heartbeat_t heartbeat;
 };
 
@@ -233,7 +233,8 @@ static void module_destroy (module_t p)
 
     assert (p->h == NULL);
 
-    zloop_poller_end (p->zloop, &p->zp);
+    flux_zmq_watcher_stop (p->broker_h, p->broker_w);
+    flux_zmq_watcher_destroy (p->broker_w);
     zsocket_destroy (p->zctx, p->sock);
 
     dlclose (p->dso);
@@ -288,14 +289,14 @@ done:
     return rc;
 }
 
-static int module_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
+static void module_cb (flux_t h, flux_zmq_watcher_t *w,
+                       void *zsock, int revents, void *arg)
 {
     module_t p = arg;
     assert (p->magic == MODULE_MAGIC);
     p->lastseen = heartbeat_get_epoch (p->heartbeat);
     if (p->poller_cb)
         p->poller_cb (p, p->poller_arg);
-    return 0;
 }
 
 int module_start (module_t p)
@@ -304,8 +305,7 @@ int module_start (module_t p)
     int errnum;
     int rc = -1;
 
-    if (zloop_poller (p->zloop, &p->zp, module_cb, p) < 0)
-        goto done;
+    flux_zmq_watcher_start (p->broker_h, p->broker_w);
     if ((errnum = pthread_create (&p->t, NULL, module_thread, p))) {
         errno = errnum;
         goto done;
@@ -393,7 +393,7 @@ module_t module_add (modhash_t mh, const char *path)
 
     p->rank = mh->rank;
     p->zctx = mh->zctx;
-    p->zloop = mh->zloop;
+    p->broker_h = mh->broker_h;
     p->heartbeat = mh->heartbeat;
 
     /* Broker end of PAIR socket is opened here.
@@ -403,8 +403,9 @@ module_t module_add (modhash_t mh, const char *path)
     zsocket_set_hwm (p->sock, 0);
     if (zsocket_bind (p->sock, "inproc://%s", module_get_uuid (p)) < 0)
         err_exit ("zsock_bind inproc://%s", module_get_uuid (p));
-    p->zp.events = ZMQ_POLLIN;
-    p->zp.socket = p->sock;
+    if (!(p->broker_w = flux_zmq_watcher_create (p->sock, FLUX_POLLIN,
+                                                 module_cb, p)))
+        err_exit ("flux_zmq_watcher_create");
 
     /* Update the modhash.
      */
@@ -447,9 +448,9 @@ void modhash_set_rank (modhash_t mh, uint32_t rank)
     mh->rank = rank;
 }
 
-void modhash_set_loop (modhash_t mh, zloop_t *zloop)
+void modhash_set_reactor (modhash_t mh, flux_t h)
 {
-    mh->zloop = zloop;
+    mh->broker_h = h;
 }
 
 void modhash_set_heartbeat (modhash_t mh, heartbeat_t hb)
