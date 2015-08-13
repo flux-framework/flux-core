@@ -34,7 +34,6 @@
 #include "src/common/libutil/nodeset.h"
 #include "src/common/libutil/monotime.h"
 
-#include "endpt.h"
 #include "heartbeat.h"
 #include "overlay.h"
 #include "hello.h"
@@ -47,18 +46,15 @@ struct hello_struct {
     hello_cb_f cb;
     void *cb_arg;
     overlay_t ov;
-    zloop_t *zl;
-    int tid;
+    flux_t h;
+    flux_timer_watcher_t *w;
     struct timespec start;
 };
-
-static int timer_cb (zloop_t *zl, int tid, void *arg);
 
 
 hello_t hello_create (void)
 {
     hello_t h = xzmalloc (sizeof (*h));
-    h->tid = -1;
     return h;
 }
 
@@ -67,6 +63,8 @@ void hello_destroy (hello_t h)
     if (h) {
         if (h->nodeset)
             nodeset_destroy (h->nodeset);
+        if (h->w)
+            flux_timer_watcher_destroy (h->w);
         free (h);
     }
 }
@@ -86,9 +84,9 @@ void hello_set_overlay (hello_t h, overlay_t ov)
     h->ov = ov;
 }
 
-void hello_set_zloop (hello_t h, zloop_t *zl)
+void hello_set_reactor (hello_t hello, flux_t h)
 {
-    h->zl = zl;
+    hello->h = h;
 }
 
 void hello_set_timeout (hello_t h, double seconds)
@@ -130,8 +128,12 @@ static int hello_add_rank (hello_t h, uint32_t rank)
         return -1;
     }
     h->count++;
-    if (h->count == h->size)
-        (void)timer_cb (h->zl, h->tid, h);
+    if (h->count == h->size) {
+        if (h->cb)
+            h->cb (h, h->cb_arg);
+        if (h->w)
+            flux_timer_watcher_stop (h->h, h->w);
+    }
     return 0;
 }
 
@@ -173,19 +175,12 @@ done:
     return rc;
 }
 
-static int timer_cb (zloop_t *zl, int tid, void *arg)
+static void timer_cb (flux_t h, flux_timer_watcher_t *w, int revents, void *arg)
 {
-    hello_t h = arg;
-    if (h->cb) {
-        h->cb (h, h->cb_arg);
-        if (h->timeout == 0.0 || h->count == h->size) {
-            if (h->tid != -1) {
-                zloop_timer_end (h->zl, h->tid);
-                h->tid = -1;
-            }
-        }
-    }
-    return 0;
+    hello_t hello = arg;
+
+    if (hello->cb)
+        hello->cb (hello, hello->cb_arg);
 }
 
 int hello_start (hello_t h, uint32_t rank)
@@ -193,12 +188,11 @@ int hello_start (hello_t h, uint32_t rank)
     int rc = -1;
 
     if (rank == 0) {
-        if (h->timeout > 0) {
-            h->tid = zloop_timer (h->zl, h->timeout * 1000, 0, timer_cb, h);
-            if (h->tid < 0)
-                goto done;
-        }
         monotime (&h->start);
+        if (!(h->w = flux_timer_watcher_create (h->timeout, h->timeout,
+                                                timer_cb, h)))
+            goto done;
+        flux_timer_watcher_start (h->h, h->w);
         if (hello_add_rank (h, rank) < 0)
             goto done;
     } else {

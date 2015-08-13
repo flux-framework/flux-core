@@ -17,7 +17,7 @@ hello_t hello_create (void);
 void hello_destroy (hello_t h);
 
 void hello_set_overlay (hello_t h, overlay_t ov);
-void hello_set_zloop (hello_t h, zloop_t *zloop);
+void hello_set_reactor (hello_t h, flux_t f);
 
 /* Get/set session size
  */
