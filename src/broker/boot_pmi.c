@@ -114,7 +114,7 @@ static const char *pmi_strerror (int rc)
     return unknown;
 }
 
-static void pmi_abort (pmi_t pmi, int rc, const char *fmt, ...)
+static void pmi_abort (pmi_t *pmi, int rc, const char *fmt, ...)
 {
     va_list ap;
     char *s;
@@ -128,9 +128,9 @@ static void pmi_abort (pmi_t pmi, int rc, const char *fmt, ...)
     free (s);
 }
 
-pmi_t pmi_init (const char *libname)
+pmi_t *pmi_init (const char *libname)
 {
-    pmi_t pmi = xzmalloc (sizeof (*pmi));
+    pmi_t *pmi = xzmalloc (sizeof (*pmi));
     int spawned;
 
     if (!libname)
@@ -169,7 +169,7 @@ pmi_t pmi_init (const char *libname)
     return pmi;
 }
 
-void pmi_fini (pmi_t pmi)
+void pmi_fini (pmi_t *pmi)
 {
     int e;
     if ((e = pmi->finalize ()) != PMI_SUCCESS)
@@ -189,7 +189,7 @@ void pmi_fini (pmi_t pmi)
     free (pmi);
 }
 
-int pmi_rank (pmi_t pmi)
+int pmi_rank (pmi_t *pmi)
 {
     int e, rank;
     if ((e = pmi->get_rank (&rank)) != PMI_SUCCESS)
@@ -197,7 +197,7 @@ int pmi_rank (pmi_t pmi)
     return rank;
 }
 
-int pmi_size (pmi_t pmi)
+int pmi_size (pmi_t *pmi)
 {
     int e, size;
     if ((e = pmi->get_size (&size)) != PMI_SUCCESS)
@@ -205,7 +205,7 @@ int pmi_size (pmi_t pmi)
     return size;
 }
 
-static int pmi_clique_size (pmi_t pmi)
+static int pmi_clique_size (pmi_t *pmi)
 {
     int e, size;
     if ((e = pmi->get_clique_size (&size)) != PMI_SUCCESS)
@@ -213,7 +213,7 @@ static int pmi_clique_size (pmi_t pmi)
     return size;
 }
 
-static int pmi_clique (pmi_t pmi, const int **cliquep)
+static int pmi_clique (pmi_t *pmi, const int **cliquep)
 {
     int e;
 
@@ -227,7 +227,7 @@ static int pmi_clique (pmi_t pmi, const int **cliquep)
     return pmi->clen;
 }
 
-static int clique_minrank (pmi_t pmi)
+static int clique_minrank (pmi_t *pmi)
 {
     int i, min;
     const int *clique;
@@ -239,20 +239,20 @@ static int clique_minrank (pmi_t pmi)
     return min;
 }
 
-int pmi_relay_rank (pmi_t pmi)
+int pmi_relay_rank (pmi_t *pmi)
 {
     if (pmi_clique_size (pmi) > 1)
         return clique_minrank (pmi);
     return -1;
 }
 
-int pmi_right_rank (pmi_t pmi)
+int pmi_right_rank (pmi_t *pmi)
 {
     int r = pmi_rank (pmi);
     return r == 0 ? pmi_size (pmi) - 1 : r - 1;
 }
 
-const char *pmi_sid (pmi_t pmi)
+const char *pmi_sid (pmi_t *pmi)
 {
     int e, len;
     if (!pmi->id) {
@@ -265,7 +265,7 @@ const char *pmi_sid (pmi_t pmi)
     return pmi->id;
 }
 
-int pmi_jobid (pmi_t pmi)
+int pmi_jobid (pmi_t *pmi)
 {
     int e, appnum;
     if ((e = pmi->get_appnum (&appnum)) != PMI_SUCCESS)
@@ -273,7 +273,7 @@ int pmi_jobid (pmi_t pmi)
     return appnum;
 }
 
-static const char *pmi_kname (pmi_t pmi)
+static const char *pmi_kname (pmi_t *pmi)
 {
     int e, len;
     if (!pmi->kname) {
@@ -287,7 +287,7 @@ static const char *pmi_kname (pmi_t pmi)
     return pmi->kname;
 }
 
-static int pmi_valbuf (pmi_t pmi, char **vp)
+static int pmi_valbuf (pmi_t *pmi, char **vp)
 {
     int e;
     if (!pmi->val) {
@@ -299,7 +299,7 @@ static int pmi_valbuf (pmi_t pmi, char **vp)
     return pmi->vlen;
 }
 
-static int pmi_keybuf (pmi_t pmi, char **kp)
+static int pmi_keybuf (pmi_t *pmi, char **kp)
 {
     int e;
 
@@ -313,7 +313,7 @@ static int pmi_keybuf (pmi_t pmi, char **kp)
     return pmi->klen;
 }
 
-static void pmi_kvs_put (pmi_t pmi, const char *val, const char *fmt, ...)
+static void pmi_kvs_put (pmi_t *pmi, const char *val, const char *fmt, ...)
 {
     const char *kname = pmi_kname (pmi);
     char *key;
@@ -329,7 +329,7 @@ static void pmi_kvs_put (pmi_t pmi, const char *val, const char *fmt, ...)
         pmi_abort (pmi, 1, "PMI_KVS_Put %s=%s: %s", key, val, pmi_strerror (e));
 }
 
-static const char *pmi_kvs_get (pmi_t pmi, const char *fmt, ...)
+static const char *pmi_kvs_get (pmi_t *pmi, const char *fmt, ...)
 {
     const char *kname = pmi_kname (pmi);
     char *key, *val;
@@ -348,7 +348,7 @@ static const char *pmi_kvs_get (pmi_t pmi, const char *fmt, ...)
     return val;
 }
 
-void pmi_fence (pmi_t pmi)
+void pmi_fence (pmi_t *pmi)
 {
     const char *kname = pmi_kname (pmi);
     int e;
@@ -359,22 +359,22 @@ void pmi_fence (pmi_t pmi)
         pmi_abort (pmi, 1, "PMI_Barrier: %s", pmi_strerror (e));
 }
 
-void pmi_put_uri (pmi_t pmi, int rank, const char *uri)
+void pmi_put_uri (pmi_t *pmi, int rank, const char *uri)
 {
     pmi_kvs_put (pmi, uri, "cmbd.%d.uri", rank);
 }
 
-void pmi_put_relay (pmi_t pmi, int rank, const char *uri)
+void pmi_put_relay (pmi_t *pmi, int rank, const char *uri)
 {
     pmi_kvs_put (pmi, uri, "cmbd.%d.relay", rank);
 }
 
-const char *pmi_get_uri (pmi_t pmi, int rank)
+const char *pmi_get_uri (pmi_t *pmi, int rank)
 {
     return pmi_kvs_get (pmi, "cmbd.%d.uri", rank);
 }
 
-const char *pmi_get_relay (pmi_t pmi, int rank)
+const char *pmi_get_relay (pmi_t *pmi, int rank)
 {
     return pmi_kvs_get (pmi, "cmbd.%d.relay", rank);
 }

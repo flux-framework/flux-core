@@ -43,13 +43,13 @@ struct snoop_struct {
     void *zs;
 };
 
-snoop_t snoop_create (void)
+snoop_t *snoop_create (void)
 {
-    snoop_t sn = xzmalloc (sizeof (*sn));
+    snoop_t *sn = xzmalloc (sizeof (*sn));
     return sn;
 }
 
-void snoop_destroy (snoop_t sn)
+void snoop_destroy (snoop_t *sn)
 {
     if (sn) {
         if (sn->uri)
@@ -58,24 +58,24 @@ void snoop_destroy (snoop_t sn)
     }
 }
 
-void snoop_set_sec (snoop_t sn, flux_sec_t sec)
+void snoop_set_sec (snoop_t *sn, flux_sec_t sec)
 {
     sn->sec = sec;
 }
 
-void snoop_set_zctx (snoop_t sn, zctx_t *zctx)
+void snoop_set_zctx (snoop_t *sn, zctx_t *zctx)
 {
     sn->zctx = zctx;
 }
 
-void snoop_set_uri (snoop_t sn, const char *uri)
+void snoop_set_uri (snoop_t *sn, const char *uri)
 {
     if (sn->uri)
         free (sn->uri);
     sn->uri = xstrdup (uri);
 }
 
-static int snoop_bind (snoop_t sn)
+static int snoop_bind (snoop_t *sn)
 {
     int rc = -1;
     if (!(sn->zs = zsocket_new (sn->zctx, ZMQ_PUB)))
@@ -98,14 +98,14 @@ done:
     return rc;
 }
 
-const char *snoop_get_uri (snoop_t sn)
+const char *snoop_get_uri (snoop_t *sn)
 {
     if (!sn->zs && snoop_bind (sn) < 0)
         return NULL;
     return sn->uri;
 }
 
-int snoop_sendmsg (snoop_t sn, zmsg_t *zmsg)
+int snoop_sendmsg (snoop_t *sn, zmsg_t *zmsg)
 {
     int rc = -1;
     zmsg_t *cpy = NULL;

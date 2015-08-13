@@ -45,25 +45,25 @@ struct shutdown_struct {
     double grace;
 };
 
-shutdown_t shutdown_create (void)
+shutdown_t *shutdown_create (void)
 {
-    shutdown_t s = xzmalloc (sizeof (*s));
+    shutdown_t *s = xzmalloc (sizeof (*s));
     return s;
 }
 
-void shutdown_destroy (shutdown_t s)
+void shutdown_destroy (shutdown_t *s)
 {
     if (s) {
         free (s);
     }
 }
 
-void shutdown_set_handle (shutdown_t s, flux_t h)
+void shutdown_set_handle (shutdown_t *s, flux_t h)
 {
     s->h = h;
 }
 
-void shutdown_complete (shutdown_t s)
+void shutdown_complete (shutdown_t *s)
 {
     if (s->w) {
         flux_timer_watcher_stop (s->h, s->w);
@@ -75,11 +75,11 @@ void shutdown_complete (shutdown_t s)
 static void shutdown_cb (flux_t h, flux_timer_watcher_t *w,
                          int revents, void *arg)
 {
-    shutdown_t s = arg;
+    shutdown_t *s = arg;
     exit (s->rc);
 }
 
-void shutdown_recvmsg (shutdown_t s, zmsg_t *zmsg)
+void shutdown_recvmsg (shutdown_t *s, zmsg_t *zmsg)
 {
     const char *json_str;
     JSON in = NULL;
@@ -115,7 +115,7 @@ done:
     return;
 }
 
-void shutdown_arm (shutdown_t s, double grace, int rc, const char *fmt, ...)
+void shutdown_arm (shutdown_t *s, double grace, int rc, const char *fmt, ...)
 {
     va_list ap;
     char reason[256];

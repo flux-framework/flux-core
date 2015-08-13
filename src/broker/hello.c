@@ -45,20 +45,20 @@ struct hello_struct {
     double timeout;
     hello_cb_f cb;
     void *cb_arg;
-    overlay_t ov;
+    overlay_t *ov;
     flux_t h;
     flux_timer_watcher_t *w;
     struct timespec start;
 };
 
 
-hello_t hello_create (void)
+hello_t *hello_create (void)
 {
-    hello_t h = xzmalloc (sizeof (*h));
+    hello_t *h = xzmalloc (sizeof (*h));
     return h;
 }
 
-void hello_destroy (hello_t h)
+void hello_destroy (hello_t *h)
 {
     if (h) {
         if (h->nodeset)
@@ -69,57 +69,57 @@ void hello_destroy (hello_t h)
     }
 }
 
-void hello_set_size (hello_t h, uint32_t size)
+void hello_set_size (hello_t *h, uint32_t size)
 {
     h->size = size;
 }
 
-uint32_t hello_get_size (hello_t h)
+uint32_t hello_get_size (hello_t *h)
 {
     return h->size;
 }
 
-void hello_set_overlay (hello_t h, overlay_t ov)
+void hello_set_overlay (hello_t *h, overlay_t *ov)
 {
     h->ov = ov;
 }
 
-void hello_set_reactor (hello_t hello, flux_t h)
+void hello_set_reactor (hello_t *hello, flux_t h)
 {
     hello->h = h;
 }
 
-void hello_set_timeout (hello_t h, double seconds)
+void hello_set_timeout (hello_t *h, double seconds)
 {
     h->timeout = seconds;
 }
 
-double hello_get_time (hello_t h)
+double hello_get_time (hello_t *h)
 {
     if (!monotime_isset (h->start))
         return 0;
     return monotime_since (h->start) / 1000;
 }
 
-void hello_set_cb (hello_t h, hello_cb_f cb, void *arg)
+void hello_set_cb (hello_t *h, hello_cb_f cb, void *arg)
 {
     h->cb = cb;
     h->cb_arg = arg;
 }
 
-uint32_t hello_get_count (hello_t h)
+uint32_t hello_get_count (hello_t *h)
 {
     return h->count;
 }
 
-const char *hello_get_nodeset (hello_t h)
+const char *hello_get_nodeset (hello_t *h)
 {
     if (!h->nodeset)
         return NULL;
     return nodeset_str (h->nodeset);
 }
 
-static int hello_add_rank (hello_t h, uint32_t rank)
+static int hello_add_rank (hello_t *h, uint32_t rank)
 {
     if (!h->nodeset)
         h->nodeset = nodeset_new_size (h->size);
@@ -137,7 +137,7 @@ static int hello_add_rank (hello_t h, uint32_t rank)
     return 0;
 }
 
-int hello_recv (hello_t h, zmsg_t **zmsg)
+int hello_recv (hello_t *h, zmsg_t **zmsg)
 {
     char *sender = NULL;
     int rc = -1;
@@ -156,7 +156,7 @@ done:
     return rc;
 }
 
-static int hello_send (hello_t h)
+static int hello_send (hello_t *h)
 {
     zmsg_t *zmsg = NULL;
     int rc = -1;
@@ -177,13 +177,13 @@ done:
 
 static void timer_cb (flux_t h, flux_timer_watcher_t *w, int revents, void *arg)
 {
-    hello_t hello = arg;
+    hello_t *hello = arg;
 
     if (hello->cb)
         hello->cb (hello, hello->cb_arg);
 }
 
-int hello_start (hello_t h, uint32_t rank)
+int hello_start (hello_t *h, uint32_t rank)
 {
     int rc = -1;
 

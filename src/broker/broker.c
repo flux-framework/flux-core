@@ -85,8 +85,8 @@ typedef struct {
 
     /* Sockets.
      */
-    overlay_t overlay;
-    snoop_t snoop;
+    overlay_t *overlay;
+    snoop_t *snoop;
 
     /* Session parameters
      */
@@ -95,7 +95,7 @@ typedef struct {
     char *sid;                  /* session id */
     /* Modules
      */
-    modhash_t modhash;
+    modhash_t *modhash;
     /* Misc
      */
     bool verbose;
@@ -106,16 +106,16 @@ typedef struct {
     flux_conf_t cf;
     int event_seq;
     bool event_active;          /* primary event source is active */
-    svchash_t services;
-    svchash_t eventsvc;
-    heartbeat_t heartbeat;
-    shutdown_t shutdown;
+    svchash_t *services;
+    svchash_t *eventsvc;
+    heartbeat_t *heartbeat;
+    shutdown_t *shutdown;
     double shutdown_grace;
     /* Bootstrap
      */
     bool boot_pmi;
     int k_ary;
-    hello_t hello;
+    hello_t *hello;
     double hello_timeout;
 
     /* Subprocess management
@@ -133,13 +133,13 @@ static int broker_event_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
 static int broker_response_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
 static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
 
-static void event_cb (overlay_t ov, void *sock, void *arg);
-static void parent_cb (overlay_t ov, void *sock, void *arg);
-static void child_cb (overlay_t ov, void *sock, void *arg);
-static void heartbeat_cb (heartbeat_t h, void *arg);
-static void module_cb (module_t p, void *arg);
-static void rmmod_cb (module_t p, void *arg);
-static void hello_update_cb (hello_t h, void *arg);
+static void event_cb (overlay_t *ov, void *sock, void *arg);
+static void parent_cb (overlay_t *ov, void *sock, void *arg);
+static void child_cb (overlay_t *ov, void *sock, void *arg);
+static void heartbeat_cb (heartbeat_t *h, void *arg);
+static void module_cb (module_t *p, void *arg);
+static void rmmod_cb (module_t *p, void *arg);
+static void hello_update_cb (hello_t *h, void *arg);
 static void signalfd_cb (flux_t h, flux_fd_watcher_t *w,
                          int fd, int revents, void *arg);
 
@@ -636,7 +636,7 @@ static void broker_log (void *arg, const char *facility, int level,
          tv.tv_sec, tv.tv_usec, facility, levstr, rank, s);
 }
 
-static void hello_update_cb (hello_t h, void *arg)
+static void hello_update_cb (hello_t *h, void *arg)
 {
     ctx_t *ctx = arg;
 
@@ -760,7 +760,7 @@ static void rank0_shell (ctx_t *ctx)
  */
 static void boot_pmi (ctx_t *ctx)
 {
-    pmi_t pmi = pmi_init (NULL);
+    pmi_t *pmi = pmi_init (NULL);
     int relay_rank = pmi_relay_rank (pmi);
     int right_rank = pmi_right_rank (pmi);
     char ipaddr[HOST_NAME_MAX + 1];
@@ -855,7 +855,7 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
                           zhash_t *modexclude, const char *modpath)
 {
     char *s;
-    module_t p;
+    module_t *p;
     zhash_t *mods; /* hash by module name */
 
     /* Create modules, adding to 'mods' list
@@ -1358,7 +1358,7 @@ static int cmb_rmmod_cb (zmsg_t **zmsg, void *arg)
     const char *json_str;
     char *name = NULL;
     int rc = -1;
-    module_t p;
+    module_t *p;
 
     if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
         goto done;
@@ -1389,7 +1389,7 @@ static int cmb_insmod_cb (zmsg_t **zmsg, void *arg)
     char *path = NULL;
     char *argz = NULL;
     size_t argz_len = 0;
-    module_t p;
+    module_t *p;
     int rc = -1;
 
     if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
@@ -1682,7 +1682,7 @@ static void broker_add_services (ctx_t *ctx)
 
 /* Handle requests from overlay peers.
  */
-static void child_cb (overlay_t ov, void *sock, void *arg)
+static void child_cb (overlay_t *ov, void *sock, void *arg)
 {
     ctx_t *ctx = arg;
     int type;
@@ -1765,7 +1765,7 @@ done:
 
 /* Handle messages from one or more parents.
  */
-static void parent_cb (overlay_t ov, void *sock, void *arg)
+static void parent_cb (overlay_t *ov, void *sock, void *arg)
 {
     ctx_t *ctx = arg;
     zmsg_t *zmsg = zmsg_recv (sock);
@@ -1803,7 +1803,7 @@ done:
 
 /* Handle messages on the service socket of a comms module.
  */
-static void module_cb (module_t p, void *arg)
+static void module_cb (module_t *p, void *arg)
 {
     ctx_t *ctx = arg;
     zmsg_t *zmsg = module_recvmsg (p);
@@ -1844,7 +1844,7 @@ done:
     zmsg_destroy (&zmsg);
 }
 
-static void rmmod_cb (module_t p, void *arg)
+static void rmmod_cb (module_t *p, void *arg)
 {
     ctx_t *ctx = arg;
     zmsg_t *zmsg;
@@ -1856,7 +1856,7 @@ static void rmmod_cb (module_t p, void *arg)
     }
 }
 
-static void event_cb (overlay_t ov, void *sock, void *arg)
+static void event_cb (overlay_t *ov, void *sock, void *arg)
 {
     ctx_t *ctx = arg;
     zmsg_t *zmsg = overlay_recvmsg_event (ov);
@@ -1884,7 +1884,7 @@ done:
 /* Heartbeat timer callback on rank 0
  * Increment epoch and send event.
  */
-static void heartbeat_cb (heartbeat_t h, void *arg)
+static void heartbeat_cb (heartbeat_t *h, void *arg)
 {
     ctx_t *ctx = arg;
     zmsg_t *zmsg = NULL;

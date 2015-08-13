@@ -61,7 +61,7 @@ struct module_struct {
     flux_zmq_watcher_t *broker_w;
 
     int lastseen;
-    heartbeat_t heartbeat;
+    heartbeat_t *heartbeat;
 
     void *sock;             /* broker end of PAIR socket */
 
@@ -92,12 +92,12 @@ struct modhash_struct {
     zctx_t *zctx;
     uint32_t rank;
     flux_t broker_h;
-    heartbeat_t heartbeat;
+    heartbeat_t *heartbeat;
 };
 
 static void *module_thread (void *arg)
 {
-    module_t p = arg;
+    module_t *p = arg;
     assert (p->magic == MODULE_MAGIC);
     sigset_t signal_set;
     int errnum;
@@ -142,13 +142,13 @@ done:
     return NULL;
 }
 
-const char *module_get_name (module_t p)
+const char *module_get_name (module_t *p)
 {
     assert (p->magic == MODULE_MAGIC);
     return p->name;
 }
 
-void module_set_name (module_t p, const char *name)
+void module_set_name (module_t *p, const char *name)
 {
     assert (p->magic == MODULE_MAGIC);
     if (p->name)
@@ -156,17 +156,17 @@ void module_set_name (module_t p, const char *name)
     p->name = xstrdup (name);
 }
 
-const char *module_get_uuid (module_t p)
+const char *module_get_uuid (module_t *p)
 {
     return zuuid_str (p->uuid);
 }
 
-static int module_get_idle (module_t p)
+static int module_get_idle (module_t *p)
 {
     return heartbeat_get_epoch (p->heartbeat) - p->lastseen;
 }
 
-zmsg_t *module_recvmsg (module_t p)
+zmsg_t *module_recvmsg (module_t *p)
 {
     zmsg_t *zmsg = NULL;
     int type;
@@ -184,7 +184,7 @@ error:
     return NULL;
 }
 
-int module_sendmsg (zmsg_t **zmsg, module_t p)
+int module_sendmsg (zmsg_t **zmsg, module_t *p)
 {
     int type;
     if (!zmsg || !*zmsg)
@@ -198,11 +198,11 @@ int module_sendmsg (zmsg_t **zmsg, module_t p)
     return zmsg_send (zmsg, p->sock);
 }
 
-int module_response_sendmsg (modhash_t mh, zmsg_t **zmsg)
+int module_response_sendmsg (modhash_t *mh, zmsg_t **zmsg)
 {
     char *uuid = NULL;
     int rc = -1;
-    module_t p;
+    module_t *p;
 
     if (!zmsg || !*zmsg)
         return 0;
@@ -220,7 +220,7 @@ done:
     return rc;
 }
 
-static void module_destroy (module_t p)
+static void module_destroy (module_t *p)
 {
     assert (p->magic == MODULE_MAGIC);
     int errnum;
@@ -264,7 +264,7 @@ static void module_destroy (module_t p)
 
 /* Send shutdown request, broker to module.
  */
-int module_stop (module_t p, zmsg_t **rmmod)
+int module_stop (module_t *p, zmsg_t **rmmod)
 {
     assert (p->magic == MODULE_MAGIC);
     char *topic = xasprintf ("%s.shutdown", p->name);
@@ -292,14 +292,14 @@ done:
 static void module_cb (flux_t h, flux_zmq_watcher_t *w,
                        void *zsock, int revents, void *arg)
 {
-    module_t p = arg;
+    module_t *p = arg;
     assert (p->magic == MODULE_MAGIC);
     p->lastseen = heartbeat_get_epoch (p->heartbeat);
     if (p->poller_cb)
         p->poller_cb (p, p->poller_arg);
 }
 
-int module_start (module_t p)
+int module_start (module_t *p)
 {
     assert (p->magic == MODULE_MAGIC);
     int errnum;
@@ -315,7 +315,7 @@ done:
     return rc;
 }
 
-void module_set_args (module_t p, int argc, char * const argv[])
+void module_set_args (module_t *p, int argc, char * const argv[])
 {
     assert (p->magic == MODULE_MAGIC);
     if (p->argz) {
@@ -326,36 +326,36 @@ void module_set_args (module_t p, int argc, char * const argv[])
         oom ();
 }
 
-void module_add_arg (module_t p, const char *arg)
+void module_add_arg (module_t *p, const char *arg)
 {
     assert (p->magic == MODULE_MAGIC);
     if (argz_add (&p->argz, &p->argz_len, arg) < 0)
         oom ();
 }
 
-void module_set_poller_cb (module_t p, modpoller_cb_f cb, void *arg)
+void module_set_poller_cb (module_t *p, modpoller_cb_f cb, void *arg)
 {
     assert (p->magic == MODULE_MAGIC);
     p->poller_cb = cb;
     p->poller_arg = arg;
 }
 
-void module_set_rmmod_cb (module_t p, rmmod_cb_f cb, void *arg)
+void module_set_rmmod_cb (module_t *p, rmmod_cb_f cb, void *arg)
 {
     assert (p->magic == MODULE_MAGIC);
     p->rmmod_cb = cb;
     p->rmmod_arg = arg;
 }
 
-zmsg_t *module_pop_rmmod (module_t p)
+zmsg_t *module_pop_rmmod (module_t *p)
 {
     assert (p->magic == MODULE_MAGIC);
     return zlist_pop (p->rmmod);
 }
 
-module_t module_add (modhash_t mh, const char *path)
+module_t *module_add (modhash_t *mh, const char *path)
 {
-    module_t p;
+    module_t *p;
     void *dso;
     const char **mod_namep;
     mod_main_f *mod_main;
@@ -416,21 +416,21 @@ module_t module_add (modhash_t mh, const char *path)
     return p;
 }
 
-void module_remove (modhash_t mh, module_t p)
+void module_remove (modhash_t *mh, module_t *p)
 {
     assert (p->magic == MODULE_MAGIC);
     zhash_delete (mh->zh_byuuid, module_get_uuid (p));
 }
 
-modhash_t modhash_create (void)
+modhash_t *modhash_create (void)
 {
-    modhash_t mh = xzmalloc (sizeof (*mh));
+    modhash_t *mh = xzmalloc (sizeof (*mh));
     if (!(mh->zh_byuuid = zhash_new ()))
         oom ();
     return mh;
 }
 
-void modhash_destroy (modhash_t mh)
+void modhash_destroy (modhash_t *mh)
 {
     if (mh) {
         zhash_destroy (&mh->zh_byuuid);
@@ -438,32 +438,32 @@ void modhash_destroy (modhash_t mh)
     }
 }
 
-void modhash_set_zctx (modhash_t mh, zctx_t *zctx)
+void modhash_set_zctx (modhash_t *mh, zctx_t *zctx)
 {
     mh->zctx = zctx;
 }
 
-void modhash_set_rank (modhash_t mh, uint32_t rank)
+void modhash_set_rank (modhash_t *mh, uint32_t rank)
 {
     mh->rank = rank;
 }
 
-void modhash_set_reactor (modhash_t mh, flux_t h)
+void modhash_set_reactor (modhash_t *mh, flux_t h)
 {
     mh->broker_h = h;
 }
 
-void modhash_set_heartbeat (modhash_t mh, heartbeat_t hb)
+void modhash_set_heartbeat (modhash_t *mh, heartbeat_t *hb)
 {
     mh->heartbeat = hb;
 }
 
-flux_modlist_t module_get_modlist (modhash_t mh)
+flux_modlist_t module_get_modlist (modhash_t *mh)
 {
     flux_modlist_t mods;
     zlist_t *uuids;
     char *uuid;
-    module_t p;
+    module_t *p;
 
     if (!(mods = flux_modlist_create ()))
         goto done;
@@ -486,7 +486,7 @@ done:
     return mods;
 }
 
-int module_stop_all (modhash_t mh)
+int module_stop_all (modhash_t *mh)
 {
     zlist_t *uuids;
     char *uuid;
@@ -496,7 +496,7 @@ int module_stop_all (modhash_t mh)
         oom ();
     uuid = zlist_first (uuids);
     while (uuid) {
-        module_t p = zhash_lookup (mh->zh_byuuid, uuid);
+        module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
         assert (p != NULL);
         if (module_stop (p, NULL) < 0)
             goto done;
@@ -508,7 +508,7 @@ done:
     return rc;
 }
 
-int module_start_all (modhash_t mh)
+int module_start_all (modhash_t *mh)
 {
     zlist_t *uuids;
     char *uuid;
@@ -518,7 +518,7 @@ int module_start_all (modhash_t mh)
         oom ();
     uuid = zlist_first (uuids);
     while (uuid) {
-        module_t p = zhash_lookup (mh->zh_byuuid, uuid);
+        module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
         assert (p != NULL);
         if (module_start (p) < 0)
             goto done;
@@ -530,17 +530,17 @@ done:
     return rc;
 }
 
-module_t module_lookup_byname (modhash_t mh, const char *name)
+module_t *module_lookup_byname (modhash_t *mh, const char *name)
 {
     zlist_t *uuids;
     char *uuid;
-    module_t result = NULL;
+    module_t *result = NULL;
 
     if (!(uuids = zhash_keys (mh->zh_byuuid)))
         oom ();
     uuid = zlist_first (uuids);
     while (uuid) {
-        module_t p = zhash_lookup (mh->zh_byuuid, uuid);
+        module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
         assert (p != NULL);
         if (!strcmp (module_get_name (p), name)) {
             result = p;
@@ -553,9 +553,9 @@ module_t module_lookup_byname (modhash_t mh, const char *name)
     return result;
 }
 
-int module_subscribe (modhash_t mh, const char *uuid, const char *topic)
+int module_subscribe (modhash_t *mh, const char *uuid, const char *topic)
 {
-    module_t p = zhash_lookup (mh->zh_byuuid, uuid);
+    module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
     int rc = -1;
 
     if (!p) {
@@ -569,9 +569,9 @@ done:
     return rc;
 }
 
-int module_unsubscribe (modhash_t mh, const char *uuid, const char *topic)
+int module_unsubscribe (modhash_t *mh, const char *uuid, const char *topic)
 {
-    module_t p = zhash_lookup (mh->zh_byuuid, uuid);
+    module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
     char *s;
     int rc = -1;
 
@@ -592,7 +592,7 @@ done:
     return rc;
 }
 
-static bool match_sub (module_t p, const char *topic)
+static bool match_sub (module_t *p, const char *topic)
 {
     char *s = zlist_first (p->subs);
 
@@ -604,7 +604,7 @@ static bool match_sub (module_t p, const char *topic)
     return false;
 }
 
-int module_event_mcast (modhash_t mh, zmsg_t *zmsg)
+int module_event_mcast (modhash_t *mh, zmsg_t *zmsg)
 {
     const char *topic;
     zlist_t *uuids;
@@ -617,7 +617,7 @@ int module_event_mcast (modhash_t mh, zmsg_t *zmsg)
         oom ();
     uuid = zlist_first (uuids);
     while (uuid) {
-        module_t p = zhash_lookup (mh->zh_byuuid, uuid);
+        module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
         assert (p != NULL);
         if (match_sub (p, topic)) {
             zmsg_t *cpy = zmsg_dup (zmsg);
