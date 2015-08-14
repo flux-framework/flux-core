@@ -39,6 +39,7 @@ struct heartbeat_struct {
     flux_t h;
     double rate;
     flux_timer_watcher_t *w;
+    int send_epoch;
     int epoch;
     heartbeat_cb_f cb;
     void *cb_arg;
@@ -49,37 +50,37 @@ static const double max_heartrate = 30;     /* max seconds */
 static const double dfl_heartrate = 2;
 
 
-void heartbeat_destroy (heartbeat_t *h)
+void heartbeat_destroy (heartbeat_t *hb)
 {
-    if (h) {
-        free (h);
+    if (hb) {
+        free (hb);
     }
 }
 
 heartbeat_t *heartbeat_create (void)
 {
-    heartbeat_t *h = xzmalloc (sizeof (*h));
-    h->rate = dfl_heartrate;
-    return h;
+    heartbeat_t *hb = xzmalloc (sizeof (*hb));
+    hb->rate = dfl_heartrate;
+    return hb;
 }
 
-void heartbeat_set_reactor (heartbeat_t *hb, flux_t h)
+void heartbeat_set_flux (heartbeat_t *hb, flux_t h)
 {
     hb->h = h;
 }
 
-int heartbeat_set_rate (heartbeat_t *h, double rate)
+int heartbeat_set_rate (heartbeat_t *hb, double rate)
 {
     if (rate < min_heartrate || rate > max_heartrate)
         goto error;
-    h->rate = rate;
+    hb->rate = rate;
     return 0;
 error:
     errno = EINVAL;
     return -1;
 }
 
-int heartbeat_set_ratestr (heartbeat_t *h, const char *s)
+int heartbeat_set_ratestr (heartbeat_t *hb, const char *s)
 {
     char *endptr;
     double rate = strtod (s, &endptr);
@@ -91,48 +92,52 @@ int heartbeat_set_ratestr (heartbeat_t *h, const char *s)
         rate /= 1000.0;
     else
         goto error;
-    return heartbeat_set_rate (h, rate);
+    return heartbeat_set_rate (hb, rate);
 error:
     errno = EINVAL;
     return -1;
 }
 
-double heartbeat_get_rate (heartbeat_t *h)
+double heartbeat_get_rate (heartbeat_t *hb)
 {
-    return h->rate;
+    return hb->rate;
 }
 
-void heartbeat_set_epoch (heartbeat_t *h, int epoch)
+int heartbeat_get_epoch (heartbeat_t *hb)
 {
-    h->epoch = epoch;
+    return hb->epoch;
 }
 
-int heartbeat_get_epoch (heartbeat_t *h)
+void heartbeat_set_callback (heartbeat_t *hb, heartbeat_cb_f cb, void *arg)
 {
-    return h->epoch;
-}
-
-void heartbeat_next_epoch (heartbeat_t *h)
-{
-    h->epoch++;
-}
-
-void heartbeat_set_cb (heartbeat_t *h, heartbeat_cb_f cb, void *arg)
-{
-    h->cb = cb;
-    h->cb_arg = arg;
+    hb->cb = cb;
+    hb->cb_arg = arg;
 }
 
 static void heartbeat_cb (flux_t h, flux_timer_watcher_t *w,
                           int revents, void *arg)
 {
     heartbeat_t *hb = arg;
-    if (hb->cb)
-        hb->cb (hb, hb->cb_arg);
+    flux_msg_t *msg = NULL;
+
+    if (!(msg = flux_heartbeat_encode (hb->send_epoch++))) {
+        err ("heartbeat_encode");
+        goto done;
+    }
+    if (flux_send (hb->h, msg, 0) < 0) {
+        err ("flux_send");
+        goto done;
+    }
+done:
+    flux_msg_destroy (msg);
 }
 
 int heartbeat_start (heartbeat_t *hb)
 {
+    if (!hb->h || flux_rank (hb->h) != 0) {
+        errno = EINVAL;
+        return -1;
+    }
     if (!(hb->w = flux_timer_watcher_create (hb->rate, hb->rate,
                                              heartbeat_cb, hb)))
         return -1;
@@ -146,35 +151,24 @@ void heartbeat_stop (heartbeat_t *hb)
         flux_timer_watcher_stop (hb->h, hb->w);
 }
 
-zmsg_t *heartbeat_event_encode (heartbeat_t *h)
+int heartbeat_recvmsg (heartbeat_t *hb, const flux_msg_t *msg)
 {
-    JSON o = Jnew ();
-    zmsg_t *zmsg;
-
-    Jadd_int (o, "epoch", h->epoch);
-    zmsg = flux_event_encode ("hb", Jtostr (o));
-    Jput (o);
-    return zmsg;
-}
-
-int heartbeat_event_decode (heartbeat_t *h, zmsg_t *zmsg)
-{
-    const char *json_str;
-    JSON out = NULL;
     int rc = -1;
+    int epoch;
 
-    if (flux_event_decode (zmsg, NULL, &json_str) < 0)
+    if (flux_heartbeat_decode (msg, &epoch) < 0)
         goto done;
-    if (!(out = Jfromstr (json_str)) || !Jget_int (out, "epoch", &h->epoch)) {
+    if (epoch < hb->epoch) { /* ensure epoch remains monotonic */
         errno = EPROTO;
         goto done;
     }
+    hb->epoch = epoch;
+    if (hb->cb)
+        hb->cb (hb, hb->cb_arg);
     rc = 0;
 done:
-    Jput (out);
     return rc;
 }
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
