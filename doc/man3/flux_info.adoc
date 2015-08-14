@@ -1,0 +1,69 @@
+flux_info(3)
+============
+:doctype: manpage
+
+
+NAME
+----
+flux_info - query Flux broker comms info
+
+
+SYNOPSIS
+--------
+#include <flux/core.h>
+
+int flux_info (flux_t h, uint32_t *rank, uint32_t *size, int *k);
+
+
+DESCRIPTION
+-----------
+
+`flux_info()` asks the Flux broker for its rank in the comms session,
+the size of the comms session, and the branching factor (k) of
+its tree-based overlay network.
+
+The tree-based overlay network is always rooted at rank zero.
+
+
+RETURN VALUE
+------------
+
+`flux_info()` returns  zero on success.  On error, -1 is returned, and errno
+is set appropriately.
+
+
+ERRORS
+------
+
+EINVAL::
+Some arguments were invalid.
+
+EXAMPLES
+--------
+
+This example obtains broker comms info for the current session and uses it
+to calculate the height of the tree-based overlay network.
+
+....
+include::tinfo.c[]
+....
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+--------
+https://github.com/flux-framework/rfc/blob/master/spec_3.adoc[RFC 3: CMB1 - Flux Comms Message Broker Protocol]

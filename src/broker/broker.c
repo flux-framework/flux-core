@@ -1295,7 +1295,7 @@ static int cmb_info_cb (zmsg_t **zmsg, void *arg)
 
     Jadd_int (out, "rank", ctx->rank);
     Jadd_int (out, "size", ctx->size);
-    Jadd_bool (out, "treeroot", ctx->rank == 0 ? true : false);
+    Jadd_int (out, "arity", ctx->k_ary);
 
     rc = flux_json_respond (ctx->h, out, zmsg);
     Jput (out);

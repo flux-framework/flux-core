@@ -13,7 +13,7 @@
 
 #include "src/common/libtap/tap.h"
 
-static int fake_size = 1;
+static uint32_t fake_size = 1;
 
 /* request nodeid and flags returned in response */
 static int nodeid_fake_error = -1;

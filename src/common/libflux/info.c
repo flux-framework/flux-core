@@ -62,13 +62,12 @@ done:
     return ret;
 }
 
-int flux_info (flux_t h, int *rankp, int *sizep, bool *treerootp)
+int flux_info (flux_t h, uint32_t *rankp, uint32_t *sizep, int *arityp)
 {
     flux_rpc_t *r = NULL;
     JSON out = NULL;
     const char *json_str;
-    int rank, size;
-    bool treeroot;
+    int arity, rank, size;
     int ret = -1;
 
     if (!(r = flux_rpc (h, "cmb.info", NULL, FLUX_NODEID_ANY, 0)))
@@ -76,7 +75,7 @@ int flux_info (flux_t h, int *rankp, int *sizep, bool *treerootp)
     if (flux_rpc_get (r, NULL, &json_str) < 0)
         goto done;
     if (!(out = Jfromstr (json_str))
-            || !Jget_bool (out, "treeroot", &treeroot)
+            || !Jget_int (out, "arity", &arity)
             || !Jget_int (out, "rank", &rank)
             || !Jget_int (out, "size", &size)) {
         errno = EPROTO;
@@ -86,8 +85,8 @@ int flux_info (flux_t h, int *rankp, int *sizep, bool *treerootp)
         *rankp = rank;
     if (sizep)
         *sizep = size;
-    if (treerootp)
-        *treerootp = treeroot;
+    if (arityp)
+        *arityp = arity;
     ret = 0;
 done:
     Jput (out);
@@ -101,8 +100,7 @@ done:
  */
 int flux_size (flux_t h)
 {
-    int size, *sizep;
-
+    uint32_t size, *sizep;
     if ((sizep = flux_aux_get (h, "flux::size")))
         return *sizep;
     if (flux_info (h, NULL, &size, NULL) < 0)
@@ -115,7 +113,7 @@ int flux_size (flux_t h)
  */
 int flux_rank (flux_t h)
 {
-    int *rank = flux_aux_get (h, "flux::rank");
+    uint32_t *rank = flux_aux_get (h, "flux::rank");
     if (!rank) {
         if (!(rank = malloc (sizeof (*rank)))) {
             errno = ENOMEM;

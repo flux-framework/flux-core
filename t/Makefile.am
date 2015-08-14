@@ -13,6 +13,7 @@ TESTS = \
 	loop/reactor.t \
 	loop/rpc.t \
 	loop/multrpc.t \
+	loop/reduce.t \
 	t0000-sharness.t \
 	t0001-basic.t \
 	t0002-request.t \
@@ -78,7 +79,8 @@ check_PROGRAMS = \
 	loop/handle.t \
 	loop/reactor.t \
 	loop/rpc.t \
-	loop/multrpc.t
+	loop/multrpc.t \
+	loop/reduce.t
 
 dist_check_DATA = \
 	build/hello.mk \
@@ -114,3 +116,7 @@ loop_rpc_t_LDADD = $(test_ldadd) $(LIBDL)
 loop_multrpc_t_SOURCES = loop/multrpc.c
 loop_multrpc_t_CPPFLAGS = $(test_cppflags)
 loop_multrpc_t_LDADD = $(test_ldadd) $(LIBDL)
+
+loop_reduce_t_SOURCES = loop/reduce.c
+loop_reduce_t_CPPFLAGS = $(test_cppflags)
+loop_reduce_t_LDADD = $(test_ldadd) $(LIBDL)

@@ -239,3 +239,12 @@ trecv
 scalability
 env
 ENV
+TIMEDFLUSH
+HWMFLUSH
+treduce
+itemweight
+unreduced
+HWM
+unweighted
+WCOUNT
+tinfo

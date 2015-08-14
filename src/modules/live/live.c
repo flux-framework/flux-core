@@ -114,11 +114,10 @@ typedef struct {
     int epoch;
     int rank;
     char *rankstr;
-    bool master;
     zlist_t *parents;   /* current parent is first in list */
     zhash_t *children;
     bool hb_subscribed;
-    flux_red_t r;
+    flux_reduce_t *r;
     ns_t *ns;           /* master only */
     JSON topo;          /* master only */
     flux_t h;
@@ -130,16 +129,25 @@ static int hello (ctx_t *ctx);
 static int goodbye (ctx_t *ctx, int parent_rank);
 static void manage_subscriptions (ctx_t *ctx);
 
-static void hello_sink (flux_t h, void *item, int batchnum, void *arg);
-static void hello_reduce (flux_t h, flux_redstack_t items, int batchnum, void *arg);
-
 static const int default_max_idle = 5;
 static const int default_slow_idle = 3;
-static const int reduce_timeout_master_msec = 100;
-static const int reduce_timeout_slave_msec = 10;
+static const double reduce_timeout = 0.800;
 
 static void ns_chg_one (ctx_t *ctx, uint32_t r, cstate_t from, cstate_t to);
 static int ns_sync (ctx_t *ctx);
+
+static void hello_destroy (void *arg);
+static void hello_forward (flux_reduce_t *r, int batchnum, void *arg);
+static void hello_sink (flux_reduce_t *r, int batchnum, void *arg);
+static void hello_reduce (flux_reduce_t *r, int batchnum, void *arg);
+
+static struct flux_reduce_ops hello_ops = {
+    .destroy = hello_destroy,
+    .reduce = hello_reduce,
+    .sink = hello_sink,
+    .forward = hello_forward,
+    .itemweight = NULL,
+};
 
 static void freectx (void *arg)
 {
@@ -150,7 +158,7 @@ static void freectx (void *arg)
         parent_destroy (p);
     zlist_destroy (&ctx->parents);
     zhash_destroy (&ctx->children);
-    flux_red_destroy (ctx->r);
+    flux_reduce_destroy (ctx->r);
     Jput (ctx->topo);
     free (ctx->rankstr);
     free (ctx);
@@ -167,19 +175,15 @@ static ctx_t *getctx (flux_t h)
         ctx->rank = flux_rank (h);
         if (asprintf (&ctx->rankstr, "%d", ctx->rank) < 0)
             oom ();
-        if (flux_rank (h) == 0)
-            ctx->master = true;
         if (!(ctx->parents = zlist_new ()))
             oom ();
         if (!(ctx->children = zhash_new ()))
             oom ();
-        ctx->r = flux_red_create (h, hello_sink, ctx);
-        flux_red_set_reduce_fn (ctx->r, hello_reduce);
-        flux_red_set_flags (ctx->r, FLUX_RED_TIMEDFLUSH);
-        if (ctx->master)
-            flux_red_set_timeout_msec (ctx->r, reduce_timeout_master_msec);
-        else
-            flux_red_set_timeout_msec (ctx->r, reduce_timeout_slave_msec);
+        ctx->r = flux_reduce_create (h, hello_ops,
+                                     reduce_timeout, ctx,
+                                     FLUX_REDUCE_TIMEDFLUSH);
+        if (!ctx->r)
+            err_exit ("flux_reduce_create");
         ctx->h = h;
         flux_aux_set (h, "livesrv", ctx, freectx);
     }
@@ -387,7 +391,7 @@ static int cstate_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             if (failover (ctx) < 0)
                 flux_log (h, LOG_ERR, "no failover candidates");
     }
-    if (ctx->master) {
+    if (ctx->rank == 0) {
         ns_chg_one (ctx, rank, ostate, nstate);
         if (ns_sync (ctx) < 0)
             flux_log (h, LOG_ERR, "%s: ns_sync: %s",
@@ -849,40 +853,55 @@ static void hello_merge (JSON a, JSON b)
     }
 }
 
-static void hello_sink (flux_t h, void *item, int batchnum, void *arg)
+static void hello_destroy (void *arg)
 {
-    ctx_t *ctx = arg;
-    JSON a = item;
-
-    if (ctx->master) {
-        ns_chg_hello (ctx, a);
-        hello_merge (ctx->topo, a);
-        if (ns_sync (ctx) < 0)
-            flux_log (h, LOG_ERR, "%s: ns_sync: %s",
-                      __FUNCTION__, strerror (errno));
-        if (topo_sync (ctx) < 0)
-            flux_log (h, LOG_ERR, "%s: topo_sync: %s",
-                      __FUNCTION__, strerror (errno));
-    } else {
-        if (flux_json_request (h, FLUX_NODEID_UPSTREAM,
-                                  FLUX_MATCHTAG_NONE, "live.push", a) < 0)
-            flux_log (h, LOG_ERR, "%s: flux_request_send: %s",
-                      __FUNCTION__, strerror (errno));
-    }
-    Jput (a);
+    JSON o = arg;
+    Jput (o);
 }
 
-static void hello_reduce (flux_t h, flux_redstack_t items, int batchnum,
-                          void *arg)
+static void hello_forward (flux_reduce_t *r, int batchnum, void *arg)
+{
+    ctx_t *ctx = arg;
+    JSON o;
+
+    while ((o = flux_reduce_pop (r))) {
+        if (flux_json_request (ctx->h, FLUX_NODEID_UPSTREAM,
+                                       FLUX_MATCHTAG_NONE, "live.push", o) < 0)
+            flux_log (ctx->h, LOG_ERR, "%s: flux_request_send: %s",
+                      __FUNCTION__, strerror (errno));
+        Jput (o);
+    }
+}
+
+static void hello_sink (flux_reduce_t *r, int batchnum, void *arg)
+{
+    ctx_t *ctx = arg;
+    JSON o;
+
+    while ((o = flux_reduce_pop (r))) {
+        ns_chg_hello (ctx, o);
+        hello_merge (ctx->topo, o);
+        if (ns_sync (ctx) < 0)
+            flux_log (ctx->h, LOG_ERR, "%s: ns_sync: %s",
+                      __FUNCTION__, strerror (errno));
+        if (topo_sync (ctx) < 0)
+            flux_log (ctx->h, LOG_ERR, "%s: topo_sync: %s",
+                      __FUNCTION__, strerror (errno));
+        Jput (o);
+    }
+}
+
+static void hello_reduce (flux_reduce_t *r, int batchnum, void *arg)
 {
     JSON a, b;
 
-    if ((a = flux_redstack_pop (items))) {
-        while ((b = flux_redstack_pop (items))) {
+    if ((a = flux_reduce_pop (r))) {
+        while ((b = flux_reduce_pop (r))) {
             hello_merge (a, b);
             Jput (b);
         }
-        flux_redstack_push (items, a);
+        if (flux_reduce_push (r, a) < 0)
+            oom ();
     }
 }
 
@@ -897,7 +916,7 @@ static void hello_source (ctx_t *ctx, const char *prank, int crank)
     Jadd_obj (a, prank, c);
     Jput (c);
 
-    flux_red_append (ctx->r, a, 0);
+    flux_reduce_append (ctx->r, a, 0);
 }
 
 static int push_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
@@ -909,7 +928,7 @@ static int push_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
-    flux_red_append (ctx->r, Jget (request), 0);
+    flux_reduce_append (ctx->r, Jget (request), 0);
 done:
     Jput (request);
     zmsg_destroy (zmsg);
@@ -1032,7 +1051,7 @@ int mod_main (flux_t h, zhash_t *args)
 {
     ctx_t *ctx = getctx (h);
 
-    if (ctx->master) {
+    if (ctx->rank == 0) {
         if (ns_sync (ctx) < 0) {
             flux_log (h, LOG_ERR, "ns_sync: %s", strerror (errno));
             return -1;

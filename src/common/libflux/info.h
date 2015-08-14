@@ -5,7 +5,7 @@
 
 #include "handle.h"
 
-int flux_info (flux_t h, int *rankp, int *sizep, bool *treerootp);
+int flux_info (flux_t h, uint32_t *rankp, uint32_t *sizep, int *arityp);
 int flux_rank (flux_t h);
 int flux_size (flux_t h);
 

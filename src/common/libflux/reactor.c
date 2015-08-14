@@ -602,6 +602,11 @@ void flux_timer_watcher_destroy (flux_timer_watcher_t *w)
         free (w);
 }
 
+void flux_timer_watcher_reset (flux_timer_watcher_t *w,
+                               double after, double repeat)
+{
+    ev_timer_set (&w->w, after, repeat);
+}
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

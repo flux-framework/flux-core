@@ -134,6 +134,9 @@ flux_timer_watcher_t *flux_timer_watcher_create (double after, double repeat,
 void flux_timer_watcher_destroy (flux_timer_watcher_t *w);
 void flux_timer_watcher_start (flux_t h, flux_timer_watcher_t *w);
 void flux_timer_watcher_stop (flux_t h, flux_timer_watcher_t *w);
+void flux_timer_watcher_reset (flux_timer_watcher_t *w,
+                               double after, double repeat);
+
 
 
 #endif /* !_FLUX_CORE_REACTOR_H */
