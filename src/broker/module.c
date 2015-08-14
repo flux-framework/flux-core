@@ -166,54 +166,81 @@ static int module_get_idle (module_t *p)
     return heartbeat_get_epoch (p->heartbeat) - p->lastseen;
 }
 
-zmsg_t *module_recvmsg (module_t *p)
+flux_msg_t *module_recvmsg (module_t *p)
 {
-    zmsg_t *zmsg = NULL;
+    flux_msg_t *msg = NULL;
     int type;
     assert (p->magic == MODULE_MAGIC);
 
-    if (!(zmsg = zmsg_recv (p->sock)))
+    if (!(msg = flux_msg_recvzsock (p->sock)))
         goto error;
-    if (flux_msg_get_type (zmsg, &type) == 0 && type == FLUX_MSGTYPE_RESPONSE) {
-        if (flux_msg_pop_route (zmsg, NULL) < 0) /* simulate DEALER socket */
+    if (flux_msg_get_type (msg, &type) == 0 && type == FLUX_MSGTYPE_RESPONSE) {
+        if (flux_msg_pop_route (msg, NULL) < 0) /* simulate DEALER socket */
             goto error;
     }
-    return zmsg;
+    return msg;
 error:
-    zmsg_destroy (&zmsg);
+    flux_msg_destroy (msg);
     return NULL;
 }
 
-int module_sendmsg (zmsg_t **zmsg, module_t *p)
+int module_sendmsg (module_t *p, const flux_msg_t *msg)
 {
+    flux_msg_t *cpy = NULL;
     int type;
-    if (!zmsg || !*zmsg)
+    int rc = -1;
+
+    if (!msg)
         return 0;
-    if (flux_msg_get_type (*zmsg, &type) == 0 && type == FLUX_MSGTYPE_REQUEST) {
-        char uuid[16];
-        snprintf (uuid, sizeof (uuid), "%u", p->rank);
-        if (flux_msg_push_route (*zmsg, uuid) < 0) /* simulate DEALER socket */
-            return -1;
+    if (flux_msg_get_type (msg, &type) < 0)
+        goto done;
+    switch (type) {
+        case FLUX_MSGTYPE_REQUEST: { /* simulate DEALER socket */
+            char uuid[16];
+            snprintf (uuid, sizeof (uuid), "%u", p->rank);
+            if (!(cpy = flux_msg_copy (msg, true)))
+                goto done;
+            if (flux_msg_push_route (cpy, uuid) < 0)
+                goto done;
+            if (flux_msg_sendzsock (p->sock, cpy) < 0)
+                goto done;
+            break;
+        }
+        case FLUX_MSGTYPE_RESPONSE: { /* simulate ROUTER socket */
+            if (!(cpy = flux_msg_copy (msg, true)))
+                goto done;
+            if (flux_msg_pop_route (cpy, NULL) < 0)
+                goto done;
+            if (flux_msg_sendzsock (p->sock, cpy) < 0)
+                goto done;
+            break;
+        }
+        default:
+            if (flux_msg_sendzsock (p->sock, msg) < 0)
+                goto done;
+            break;
     }
-    return zmsg_send (zmsg, p->sock);
+    rc = 0;
+done:
+    flux_msg_destroy (cpy);
+    return rc;
 }
 
-int module_response_sendmsg (modhash_t *mh, zmsg_t **zmsg)
+int module_response_sendmsg (modhash_t *mh, const flux_msg_t *msg)
 {
     char *uuid = NULL;
     int rc = -1;
     module_t *p;
 
-    if (!zmsg || !*zmsg)
+    if (!msg)
         return 0;
-    if (flux_msg_get_route_last (*zmsg, &uuid) < 0)
+    if (flux_msg_get_route_last (msg, &uuid) < 0)
         goto done;
     if (!(p = zhash_lookup (mh->zh_byuuid, uuid))) {
         errno = ENOSYS;
         goto done;
     }
-    (void)flux_msg_pop_route (*zmsg, NULL); /* simulate ROUTER socket */
-    rc = module_sendmsg (zmsg, p);
+    rc = module_sendmsg (p, msg);
 done:
     if (uuid)
         free (uuid);
@@ -247,9 +274,9 @@ static void module_destroy (module_t *p)
     if (p->rmmod_cb)
         p->rmmod_cb (p, p->rmmod_arg);
     if (p->rmmod) {
-        zmsg_t *zmsg;
-        while ((zmsg = zlist_pop (p->rmmod)))
-            zmsg_destroy (&zmsg);
+        flux_msg_t *msg;
+        while ((msg = zlist_pop (p->rmmod)))
+            flux_msg_destroy (msg);
     }
     if (p->subs) {
         char *s;
@@ -264,28 +291,28 @@ static void module_destroy (module_t *p)
 
 /* Send shutdown request, broker to module.
  */
-int module_stop (module_t *p, zmsg_t **rmmod)
+int module_stop (module_t *p, const flux_msg_t *rmmod)
 {
     assert (p->magic == MODULE_MAGIC);
     char *topic = xasprintf ("%s.shutdown", p->name);
-    zmsg_t *zmsg;
+    flux_msg_t *msg;
     int rc = -1;
 
-    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
         goto done;
-    if (flux_msg_set_topic (zmsg, topic) < 0)
+    if (flux_msg_set_topic (msg, topic) < 0)
         goto done;
-    if (zmsg_send (&zmsg, p->sock) < 0)
+    if (flux_msg_sendzsock (p->sock, msg) < 0)
         goto done;
     if (rmmod) {
-        if (zlist_append (p->rmmod, *rmmod) < 0)
+        flux_msg_t *cpy = flux_msg_copy (rmmod, true);
+        if (!cpy || zlist_append (p->rmmod, cpy) < 0)
             oom ();
-        *rmmod = NULL;
     }
     rc = 0;
 done:
     free (topic);
-    zmsg_destroy (&zmsg);
+    flux_msg_destroy (msg);
     return rc;
 }
 
@@ -347,7 +374,7 @@ void module_set_rmmod_cb (module_t *p, rmmod_cb_f cb, void *arg)
     p->rmmod_arg = arg;
 }
 
-zmsg_t *module_pop_rmmod (module_t *p)
+flux_msg_t *module_pop_rmmod (module_t *p)
 {
     assert (p->magic == MODULE_MAGIC);
     return zlist_pop (p->rmmod);
@@ -448,7 +475,7 @@ void modhash_set_rank (modhash_t *mh, uint32_t rank)
     mh->rank = rank;
 }
 
-void modhash_set_reactor (modhash_t *mh, flux_t h)
+void modhash_set_flux (modhash_t *mh, flux_t h)
 {
     mh->broker_h = h;
 }
@@ -604,14 +631,14 @@ static bool match_sub (module_t *p, const char *topic)
     return false;
 }
 
-int module_event_mcast (modhash_t *mh, zmsg_t *zmsg)
+int module_event_mcast (modhash_t *mh, const flux_msg_t *msg)
 {
     const char *topic;
     zlist_t *uuids;
     char *uuid;
     int rc = -1;
 
-    if (flux_msg_get_topic (zmsg, &topic) < 0)
+    if (flux_msg_get_topic (msg, &topic) < 0)
         goto done;
     if (!(uuids = zhash_keys (mh->zh_byuuid)))
         oom ();
@@ -620,10 +647,7 @@ int module_event_mcast (modhash_t *mh, zmsg_t *zmsg)
         module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
         assert (p != NULL);
         if (match_sub (p, topic)) {
-            zmsg_t *cpy = zmsg_dup (zmsg);
-            rc = module_sendmsg (&cpy, p);
-            zmsg_destroy (&cpy);
-            if (rc < 0)
+            if (module_sendmsg (p, msg) < 0)
                 goto done;
         }
         uuid = zlist_next (uuids);
