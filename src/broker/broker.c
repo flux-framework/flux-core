@@ -130,7 +130,7 @@ static void broker_log (void *ctx, const char *facility, int level,
                         int rank, struct timeval tv, const char *msg);
 
 static int broker_event_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
-static int broker_response_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
+static int broker_response_sendmsg (ctx_t *ctx, const flux_msg_t *msg);
 static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
 
 static void event_cb (overlay_t *ov, void *sock, void *arg);
@@ -140,6 +140,7 @@ static void heartbeat_cb (heartbeat_t *h, void *arg);
 static void module_cb (module_t *p, void *arg);
 static void rmmod_cb (module_t *p, void *arg);
 static void hello_update_cb (hello_t *h, void *arg);
+static void shutdown_cb (shutdown_t *s, void *arg);
 static void signalfd_cb (flux_t h, flux_fd_watcher_t *w,
                          int fd, int revents, void *arg);
 
@@ -426,7 +427,8 @@ int main (int argc, char *argv[])
      */
     if (!(ctx.h = flux_handle_create (&ctx, &broker_handle_ops, 0)))
         err_exit ("flux_handle_create");
-    flux_aux_set (ctx.h, "flux::rank", &ctx.rank, NULL);
+    flux_aux_set (ctx.h, "flux::rank", &ctx.rank, NULL); /* prelim */
+    flux_aux_set (ctx.h, "flux::size", &ctx.size, NULL); /* prelim */
     flux_log_set_facility (ctx.h, "broker");
     if (ctx.rank == 0)
         flux_log_set_redirect (ctx.h, broker_log, &ctx);
@@ -454,7 +456,7 @@ int main (int argc, char *argv[])
     overlay_set_heartbeat (ctx.overlay, ctx.heartbeat);
     overlay_set_zctx (ctx.overlay, ctx.zctx);
     overlay_set_sec (ctx.overlay, ctx.sec);
-    overlay_set_reactor (ctx.overlay, ctx.h);
+    overlay_set_flux (ctx.overlay, ctx.h);
 
     overlay_set_parent_cb (ctx.overlay, parent_cb, &ctx);
     overlay_set_child_cb (ctx.overlay, child_cb, &ctx);
@@ -473,6 +475,8 @@ int main (int argc, char *argv[])
         if (ctx.sid)
             msg_exit ("--session-id should not be specified with --pmi-boot");
         boot_pmi (&ctx);
+        flux_aux_set (ctx.h, "flux::rank", &ctx.rank, NULL);
+        flux_aux_set (ctx.h, "flux::size", &ctx.size, NULL);
     }
     if (!ctx.sid)
         ctx.sid = xstrdup ("0");
@@ -543,6 +547,7 @@ int main (int argc, char *argv[])
     snoop_set_uri (ctx.snoop, "ipc://*");
 
     shutdown_set_handle (ctx.shutdown, ctx.h);
+    shutdown_set_callback (ctx.shutdown, shutdown_cb, &ctx);
 
     /* Register internal services
      */
@@ -554,15 +559,15 @@ int main (int argc, char *argv[])
         msg ("loading modules");
     modhash_set_zctx (ctx.modhash, ctx.zctx);
     modhash_set_rank (ctx.modhash, ctx.rank);
-    modhash_set_reactor (ctx.modhash, ctx.h);
+    modhash_set_flux (ctx.modhash, ctx.h);
     modhash_set_heartbeat (ctx.modhash, ctx.heartbeat);
     load_modules (&ctx, modules, modopts, modexclude, modpath);
 
-    /* install heartbeat timer
+    /* install heartbeat (including timer on rank 0)
      */
+    heartbeat_set_flux (ctx.heartbeat, ctx.h);
+    heartbeat_set_callback (ctx.heartbeat, heartbeat_cb, &ctx);
     if (ctx.rank == 0) {
-        heartbeat_set_reactor (ctx.heartbeat, ctx.h);
-        heartbeat_set_cb (ctx.heartbeat, heartbeat_cb, &ctx);
         if (heartbeat_start (ctx.heartbeat) < 0)
             err_exit ("heartbeat_start");
         if (ctx.verbose)
@@ -574,12 +579,10 @@ int main (int argc, char *argv[])
      * Report progress every second.
      * Start init once wireup is complete.
      */
-    hello_set_overlay (ctx.hello, ctx.overlay);
-    hello_set_reactor (ctx.hello, ctx.h);
-    hello_set_size (ctx.hello, ctx.size);
-    hello_set_cb (ctx.hello, hello_update_cb, &ctx);
+    hello_set_flux (ctx.hello, ctx.h);
+    hello_set_callback (ctx.hello, hello_update_cb, &ctx);
     hello_set_timeout (ctx.hello, 1.0);
-    if (hello_start (ctx.hello, ctx.rank) < 0)
+    if (hello_start (ctx.hello) < 0)
         err_exit ("hello_start");
 
     /* Event loop
@@ -636,24 +639,32 @@ static void broker_log (void *arg, const char *facility, int level,
          tv.tv_sec, tv.tv_usec, facility, levstr, rank, s);
 }
 
-static void hello_update_cb (hello_t *h, void *arg)
+static void hello_update_cb (hello_t *hello, void *arg)
 {
     ctx_t *ctx = arg;
 
-    if (hello_get_count (h) == hello_get_size (h)) {
+    if (hello_complete (hello)) {
         flux_log (ctx->h, LOG_INFO, "nodeset: %s (complete)",
-                  hello_get_nodeset (h));
+                  hello_get_nodeset (hello));
         if (ctx->shell)
             rank0_shell (ctx);
     } else  {
         flux_log (ctx->h, LOG_ERR, "nodeset: %s (incomplete)",
-                  hello_get_nodeset (h));
+                  hello_get_nodeset (hello));
     }
-    if (ctx->hello_timeout != 0 && hello_get_time (h) >= ctx->hello_timeout) {
+    if (ctx->hello_timeout != 0
+                        && hello_get_time (hello) >= ctx->hello_timeout) {
         shutdown_arm (ctx->shutdown, ctx->shutdown_grace, 1,
                       "hello timeout after %.1fs", ctx->hello_timeout);
-        hello_set_timeout (h, 0);
+        hello_set_timeout (hello, 0);
     }
+}
+
+static void shutdown_cb (shutdown_t *s, void *arg)
+{
+    //ctx_t *ctx = arg;
+    int rc = shutdown_get_rc (s);
+    exit (rc);
 }
 
 static void update_proctitle (ctx_t *ctx)
@@ -848,6 +859,14 @@ static bool nodeset_suffix_member (char *name, uint32_t rank)
     return member;
 }
 
+static int mod_svc_cb (zmsg_t **zmsg, void *arg)
+{
+    module_t *p = arg;
+    int rc = module_sendmsg (p, *zmsg);
+    zmsg_destroy (zmsg);
+    return rc;
+}
+
 /* Load command line/default comms modules.  If module name contains
  * one or more '/' characters, it refers to a .so path.
  */
@@ -883,8 +902,7 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
             err ("%s: module_add %s", name, path);
             goto next;
         }
-        if (!svc_add (ctx->services, module_get_name (p),
-                      (svc_cb_f)module_sendmsg, p)) {
+        if (!svc_add (ctx->services, module_get_name (p), mod_svc_cb, p)) {
             msg ("could not register service %s", module_get_name (p));
             module_remove (ctx->modhash, p);
             goto next;
@@ -1371,8 +1389,9 @@ static int cmb_rmmod_cb (zmsg_t **zmsg, void *arg)
     /* N.B. can't remove 'service' entry here as distributed
      * module shutdown may require inter-rank module communication.
      */
-    if (module_stop (p, zmsg) < 0)
+    if (module_stop (p, *zmsg) < 0)
         goto done;
+    zmsg_destroy (zmsg); /* zmsg will be replied to later */
     flux_log (ctx->h, LOG_INFO, "rmmod %s", name);
     rc = 0;
 done:
@@ -1402,8 +1421,7 @@ static int cmb_insmod_cb (zmsg_t **zmsg, void *arg)
     }
     if (!(p = module_add (ctx->modhash, path)))
         goto done;
-    if (!svc_add (ctx->services, module_get_name (p),
-                                 (svc_cb_f)module_sendmsg, p)) {
+    if (!svc_add (ctx->services, module_get_name (p), mod_svc_cb, p)) {
         module_remove (ctx->modhash, p);
         errno = EEXIST;
         goto done;
@@ -1575,7 +1593,7 @@ static int cmb_hello_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     if (ctx->rank == 0)
-        hello_recv (ctx->hello, zmsg);
+        hello_recvmsg (ctx->hello, *zmsg);
     zmsg_destroy (zmsg); /* no reply */
     return 0;
 }
@@ -1627,11 +1645,10 @@ done:
 static int event_hb_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    if (ctx->rank > 0) {
-        if (heartbeat_event_decode (ctx->heartbeat, *zmsg) < 0)
-            err ("heartbeat_event_decode");
-        (void) overlay_keepalive_parent (ctx->overlay);
-    }
+
+    if (heartbeat_recvmsg (ctx->heartbeat, *zmsg) < 0)
+        flux_log (ctx->h, LOG_ERR, "%s: heartbeat_recvmsg: %s", __FUNCTION__,
+                  strerror (errno));
     return 0;
 }
 
@@ -1777,7 +1794,7 @@ static void parent_cb (overlay_t *ov, void *sock, void *arg)
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_RESPONSE:
-            if (broker_response_sendmsg (ctx, &zmsg) < 0)
+            if (broker_response_sendmsg (ctx, zmsg) < 0)
                 goto done;
             break;
         case FLUX_MSGTYPE_EVENT:
@@ -1820,7 +1837,7 @@ static void module_cb (module_t *p, void *arg)
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_RESPONSE:
-            (void)broker_response_sendmsg (ctx, &zmsg);
+            (void)broker_response_sendmsg (ctx, zmsg);
             break;
         case FLUX_MSGTYPE_REQUEST:
             rc = broker_request_sendmsg (ctx, &zmsg);
@@ -1881,27 +1898,14 @@ done:
     zmsg_destroy (&zmsg);
 }
 
-/* Heartbeat timer callback on rank 0
- * Increment epoch and send event.
+/* This is called on each heartbeat (all ranks).
  */
 static void heartbeat_cb (heartbeat_t *h, void *arg)
 {
     ctx_t *ctx = arg;
-    zmsg_t *zmsg = NULL;
-    assert (ctx->rank == 0);
 
-    heartbeat_next_epoch (h);
-
-    if (!(zmsg = heartbeat_event_encode (h))) {
-        err ("%s: heartbeat_event_encode failed", __FUNCTION__);
-        goto done;
-    }
-    if (broker_event_sendmsg (ctx, &zmsg) < 0) {
-        err ("%s: broker_event_sendmsg", __FUNCTION__);
-        goto done;
-    }
-done:
-    zmsg_destroy (&zmsg);
+    if (ctx->rank > 0)
+        (void) overlay_keepalive_parent (ctx->overlay);
 }
 
 static void signalfd_cb (flux_t h, flux_fd_watcher_t *w,
@@ -1934,21 +1938,33 @@ static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
     if (flux_msg_get_nodeid (*zmsg, &nodeid, &flags) < 0)
         goto done;
     if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid == ctx->rank) {
-        rc = overlay_sendmsg_parent (ctx->overlay, zmsg);
+        rc = overlay_sendmsg_parent (ctx->overlay, *zmsg);
+        if (rc == 0)
+            zmsg_destroy (zmsg);
     } else if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid != ctx->rank) {
         rc = svc_sendmsg (ctx->services, zmsg);
-        if (rc < 0 && errno == ENOSYS)
-            rc = overlay_sendmsg_parent (ctx->overlay, zmsg);
+        if (rc < 0 && errno == ENOSYS) {
+            rc = overlay_sendmsg_parent (ctx->overlay, *zmsg);
+            if (rc == 0)
+                zmsg_destroy (zmsg);
+        }
     } else if (nodeid == FLUX_NODEID_ANY) {
         rc = svc_sendmsg (ctx->services, zmsg);
-        if (rc < 0 && errno == ENOSYS)
-            rc = overlay_sendmsg_parent (ctx->overlay, zmsg);
+        if (rc < 0 && errno == ENOSYS) {
+            rc = overlay_sendmsg_parent (ctx->overlay, *zmsg);
+            if (rc == 0)
+                zmsg_destroy (zmsg);
+        }
     } else if (nodeid == ctx->rank) {
         rc = svc_sendmsg (ctx->services, zmsg);
     } else if (nodeid == 0) {
-        rc = overlay_sendmsg_parent (ctx->overlay, zmsg);
+        rc = overlay_sendmsg_parent (ctx->overlay, *zmsg);
+        if (rc == 0)
+            zmsg_destroy (zmsg);
     } else {
-        rc = overlay_sendmsg_right (ctx->overlay, zmsg);
+        rc = overlay_sendmsg_right (ctx->overlay, *zmsg);
+        if (rc == 0)
+            zmsg_destroy (zmsg);
     }
 done:
     /* N.B. don't destroy zmsg on error as we use it to send errnum reply.
@@ -1956,12 +1972,11 @@ done:
     return rc;
 }
 
-static int broker_response_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
+static int broker_response_sendmsg (ctx_t *ctx, const flux_msg_t *msg)
 {
-    int rc = module_response_sendmsg (ctx->modhash, zmsg);
+    int rc = module_response_sendmsg (ctx->modhash, msg);
     if (rc < 0 && errno == ENOSYS)
-        rc = overlay_sendmsg_child (ctx->overlay, zmsg);
-    zmsg_destroy (zmsg);
+        rc = overlay_sendmsg_child (ctx->overlay, msg);
     return rc;
 }
 
@@ -1976,7 +1991,7 @@ static int broker_event_sendmsg (ctx_t *ctx, zmsg_t **zmsg)
     if (ctx->rank > 0) {
         if (flux_msg_enable_route (*zmsg) < 0)
             goto done;
-        rc = overlay_sendmsg_parent (ctx->overlay, zmsg);
+        rc = overlay_sendmsg_parent (ctx->overlay, *zmsg);
     } else {
         if (flux_msg_clear_route (*zmsg) < 0)
             goto done;
@@ -2006,16 +2021,18 @@ static int broker_send (void *impl, const flux_msg_t *msg, int flags)
 
     if (flux_msg_get_type (msg, &type) < 0)
         goto done;
-    if (!(cpy = flux_msg_copy (msg, true)))
-        goto done;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
+            if (!(cpy = flux_msg_copy (msg, true)))
+                goto done;
             rc = broker_request_sendmsg (ctx, &cpy);
             break;
         case FLUX_MSGTYPE_RESPONSE:
-            rc = broker_response_sendmsg (ctx, &cpy);
+            rc = broker_response_sendmsg (ctx, msg);
             break;
         case FLUX_MSGTYPE_EVENT:
+            if (!(cpy = flux_msg_copy (msg, true)))
+                goto done;
             rc = broker_event_sendmsg (ctx, &cpy);
             break;
         default:
