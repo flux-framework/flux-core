@@ -85,6 +85,7 @@ static void endpoint_destroy (struct endpoint *ep)
         if (ep->w)
             flux_zmq_watcher_destroy (ep->w);
         /* N.B. ep->zp will be cleaned up with zctx_t destroy */
+        free (ep);
     }
 }
 
