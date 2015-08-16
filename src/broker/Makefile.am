@@ -45,7 +45,8 @@ endif
 flux_broker_LDFLAGS = ${broker_ldflags}
 
 TESTS = test_snoop.t \
-	test_shutdown.t
+	test_shutdown.t \
+	test_heartbeat.t
 
 test_ldadd = \
 	$(top_builddir)/src/modules/libsubprocess/libsubprocess.la \
@@ -72,3 +73,7 @@ test_snoop_t_LDADD = $(test_ldadd)
 test_shutdown_t_SOURCES = test/shutdown.c shutdown.c
 test_shutdown_t_CPPFLAGS = $(test_cppflags)
 test_shutdown_t_LDADD = $(test_ldadd)
+
+test_heartbeat_t_SOURCES = test/heartbeat.c heartbeat.c
+test_heartbeat_t_CPPFLAGS = $(test_cppflags)
+test_heartbeat_t_LDADD = $(test_ldadd)
