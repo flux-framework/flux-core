@@ -44,7 +44,8 @@ endif
 
 flux_broker_LDFLAGS = ${broker_ldflags}
 
-TESTS = test_snoop.t
+TESTS = test_snoop.t \
+	test_shutdown.t
 
 test_ldadd = \
 	$(top_builddir)/src/modules/libsubprocess/libsubprocess.la \
@@ -55,6 +56,7 @@ test_ldadd = \
 test_cppflags = \
         -I$(top_srcdir)/src/common/libtap \
         $(AM_CPPFLAGS) \
+        -DCONNECTOR_PATH=\"$(top_builddir)/src/connectors\" \
         -UMODULE_PATH -DMODULE_PATH=\"$(top_builddir)/src/modules\"
 
 check_PROGRAMS = $(TESTS)
@@ -66,3 +68,7 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 test_snoop_t_SOURCES = test/snoop.c snoop.c
 test_snoop_t_CPPFLAGS = $(test_cppflags)
 test_snoop_t_LDADD = $(test_ldadd)
+
+test_shutdown_t_SOURCES = test/shutdown.c shutdown.c
+test_shutdown_t_CPPFLAGS = $(test_cppflags)
+test_shutdown_t_LDADD = $(test_ldadd)
