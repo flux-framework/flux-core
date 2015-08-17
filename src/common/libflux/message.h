@@ -139,7 +139,7 @@ int flux_msg_set_payload_json (flux_msg_t *msg, const char *json_str);
 int flux_msg_get_payload_json (const flux_msg_t *msg, const char **json_str);
 
 /* Get/set nodeid (request only)
- * If flags includes FLUX_NODEID_UPSTREAM, nodeid is the sending rank.
+ * If flags includes FLUX_MSGFLAG_UPSTREAM, nodeid is the sending rank.
  * FLUX_NODEID_UPSTREAM is a stand in for this flag + sending rank in
  * higher level functions (not to be used here).
  */
