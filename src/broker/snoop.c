@@ -80,7 +80,7 @@ static int snoop_bind (snoop_t *sn)
     int rc = -1;
     if (!(sn->zs = zsocket_new (sn->zctx, ZMQ_PUB)))
         goto done;
-    if (flux_sec_ssockinit (sn->sec, sn->zs) < 0) {
+    if (sn->sec && flux_sec_ssockinit (sn->sec, sn->zs) < 0) {
         //msg ("flux_sec_ssockinit: %s", flux_sec_errstr (sn->sec));
         goto done;
     }
@@ -105,18 +105,11 @@ const char *snoop_get_uri (snoop_t *sn)
     return sn->uri;
 }
 
-int snoop_sendmsg (snoop_t *sn, zmsg_t *zmsg)
+int snoop_sendmsg (snoop_t *sn, const flux_msg_t *msg)
 {
-    int rc = -1;
-    zmsg_t *cpy = NULL;
-
     if (!sn->zs)
         return 0;
-    if (!(cpy = zmsg_dup (zmsg)))
-        oom ();
-    rc = zmsg_send (&cpy, sn->zs);
-    zmsg_destroy (&cpy);
-    return rc;
+    return flux_msg_sendzsock (sn->zs, msg);
 }
 
 /*

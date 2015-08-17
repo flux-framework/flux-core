@@ -29,7 +29,8 @@ fluxcoreinclude_HEADERS = \
 	info.h \
 	flog.h \
 	conf.h \
-	tmpdir.h
+	tmpdir.h \
+	heartbeat.h
 
 noinst_LTLIBRARIES = \
 	libflux.la
@@ -54,7 +55,8 @@ libflux_la_SOURCES = \
 	tagpool.c \
 	ev_flux.h \
 	ev_flux.c \
-	tmpdir.c
+	tmpdir.c \
+	heartbeat.c
 
 libflux_la_LDFLAGS = -avoid-version -module -shared -export-dynamic
 

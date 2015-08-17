@@ -420,9 +420,56 @@ void check_sendfd (void)
     close (pfd[0]);
 }
 
+void check_sendzsock (void)
+{
+    zctx_t *zctx;
+    void *zsock[2] = { NULL, NULL };
+    flux_msg_t *msg, *msg2;
+    const char *topic;
+    int type;
+    const char *uri = "inproc://test";
+
+    ok ((zctx = zctx_new ()) && (zsock[0] = zsocket_new (zctx, ZMQ_PAIR))
+                             && (zsock[1] = zsocket_new (zctx, ZMQ_PAIR))
+                             && zsocket_bind (zsock[0], "%s", uri) == 0
+                             && zsocket_connect (zsock[1], "%s", uri) == 0,
+        "got inproc socket pair");
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL
+            && flux_msg_set_topic (msg, "foo.bar") == 0,
+        "created test message");
+
+    ok (flux_msg_sendzsock (zsock[1], msg) == 0,
+        "flux_msg_sendzsock works");
+    ok ((msg2 = flux_msg_recvzsock (zsock[0])) != NULL,
+        "flux_msg_recvzsock works");
+    ok (flux_msg_get_type (msg2, &type) == 0 && type == FLUX_MSGTYPE_REQUEST
+            && flux_msg_get_topic (msg2, &topic) == 0
+            && !strcmp (topic, "foo.bar")
+            && flux_msg_has_payload (msg2) == false,
+        "decoded message looks like what was sent");
+    flux_msg_destroy (msg2);
+
+    /* Send it again.
+     */
+    ok (flux_msg_sendzsock (zsock[1], msg) == 0,
+        "try2: flux_msg_sendzsock works");
+    ok ((msg2 = flux_msg_recvzsock (zsock[0])) != NULL,
+        "try2: flux_msg_recvzsock works");
+    ok (flux_msg_get_type (msg2, &type) == 0 && type == FLUX_MSGTYPE_REQUEST
+            && flux_msg_get_topic (msg2, &topic) == 0
+            && !strcmp (topic, "foo.bar")
+            && flux_msg_has_payload (msg2) == false,
+        "try2: decoded message looks like what was sent");
+    flux_msg_destroy (msg2);
+
+    flux_msg_destroy (msg);
+    zctx_destroy (&zctx);
+}
+
 int main (int argc, char *argv[])
 {
-    plan (109);
+    plan (117);
 
     check_proto ();                 // 17
     check_routes ();                // 26
@@ -435,6 +482,7 @@ int main (int argc, char *argv[])
 
     check_encode ();                // 7
     check_sendfd ();                // 7
+    check_sendzsock ();             // 8
 
     done_testing();
     return (0);

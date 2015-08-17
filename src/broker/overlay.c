@@ -85,6 +85,7 @@ static void endpoint_destroy (struct endpoint *ep)
         if (ep->w)
             flux_zmq_watcher_destroy (ep->w);
         /* N.B. ep->zp will be cleaned up with zctx_t destroy */
+        free (ep);
     }
 }
 
@@ -153,7 +154,7 @@ void overlay_set_rank (overlay_t *ov, uint32_t rank)
     snprintf (ov->rankstr_right, sizeof (ov->rankstr), "%ur", rank);
 }
 
-void overlay_set_reactor (overlay_t *ov, flux_t h)
+void overlay_set_flux (overlay_t *ov, flux_t h)
 {
     ov->h = h;
 }
@@ -224,7 +225,7 @@ const char *overlay_get_parent (overlay_t *ov)
     return ep->uri;
 }
 
-int overlay_sendmsg_parent (overlay_t *ov, zmsg_t **zmsg)
+int overlay_sendmsg_parent (overlay_t *ov, const flux_msg_t *msg)
 {
     struct endpoint *ep = zlist_first (ov->parents);
     int rc = -1;
@@ -236,7 +237,7 @@ int overlay_sendmsg_parent (overlay_t *ov, zmsg_t **zmsg)
             errno = EHOSTUNREACH;
         goto done;
     }
-    rc = zmsg_send (zmsg, ep->zs);
+    rc = flux_msg_sendzsock (ep->zs, msg);
     if (rc == 0)
         ov->parent_lastsent = heartbeat_get_epoch (ov->heartbeat);
 done:
@@ -247,18 +248,18 @@ int overlay_keepalive_parent (overlay_t *ov)
 {
     struct endpoint *ep = zlist_first (ov->parents);
     int idle = heartbeat_get_epoch (ov->heartbeat) - ov->parent_lastsent;
-    zmsg_t *zmsg = NULL;
+    flux_msg_t *msg = NULL;
     int rc = -1;
 
     if (!ep || !ep->zs || idle <= 1)
         return 0;
-    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)))
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)))
         goto done;
-    if (flux_msg_enable_route (zmsg) < 0)
+    if (flux_msg_enable_route (msg) < 0)
         goto done;
-    rc = zmsg_send (&zmsg, ep->zs);
+    rc = flux_msg_sendzsock (ep->zs, msg);
 done:
-    zmsg_destroy (&zmsg);
+    flux_msg_destroy (msg);
     return rc;
 }
 
@@ -272,28 +273,19 @@ void overlay_set_right (overlay_t *ov, const char *fmt, ...)
     va_end (ap);
 }
 
-static bool ring_wrap (overlay_t *ov, zmsg_t *zmsg)
-{
-    zframe_t *zf;
-
-    zf = zmsg_first (zmsg);
-    while (zf && zframe_size (zf) > 0) {
-        if (zframe_streq (zf, ov->rankstr_right)) /* cycle detected! */
-            return true;
-        zf = zmsg_next (zmsg);
-    }
-    return false;
-}
-
-int overlay_sendmsg_right (overlay_t *ov, zmsg_t **zmsg)
+/* If local uuid already appears in the route stack, the message has
+ * already gone round the ring, so return EHOSTUNREACH.
+ */
+int overlay_sendmsg_right (overlay_t *ov, const flux_msg_t *msg)
 {
     int rc = -1;
 
-    if (!ov->right || !ov->right->zs || ring_wrap (ov, *zmsg)) {
+    if (!ov->right || !ov->right->zs
+                   || flux_msg_has_route (msg, ov->rankstr_right)) {
         errno = EHOSTUNREACH;
         goto done;
     }
-    rc = zmsg_send (zmsg, ov->right->zs);
+    rc = flux_msg_sendzsock (ov->right->zs, msg);
 done:
     return rc;
 }
@@ -327,7 +319,7 @@ void overlay_set_child_cb (overlay_t *ov, overlay_cb_f cb, void *arg)
     ov->child_arg = arg;
 }
 
-int overlay_sendmsg_child (overlay_t *ov, zmsg_t **zmsg)
+int overlay_sendmsg_child (overlay_t *ov, const flux_msg_t *msg)
 {
     int rc = -1;
 
@@ -335,14 +327,14 @@ int overlay_sendmsg_child (overlay_t *ov, zmsg_t **zmsg)
         errno = EINVAL;
         goto done;
     }
-    rc = zmsg_send (zmsg, ov->child->zs);
+    rc = flux_msg_sendzsock (ov->child->zs, msg);
 done:
     return rc;
 }
 
-int overlay_mcast_child (overlay_t *ov, zmsg_t *zmsg)
+int overlay_mcast_child (overlay_t *ov, const flux_msg_t *msg)
 {
-    zmsg_t *cpy = NULL;
+    flux_msg_t *cpy = NULL;
     zlist_t *uuids = NULL;
     char *uuid;
     int rc = -1;
@@ -355,22 +347,23 @@ int overlay_mcast_child (overlay_t *ov, zmsg_t *zmsg)
     while (uuid) {
         child_t *child = zhash_lookup (ov->children, uuid);
         if (child && !child->mute) {
-            if (!(cpy = zmsg_dup (zmsg)))
+            if (!(cpy = flux_msg_copy (msg, true)))
                 oom ();
             if (flux_msg_enable_route (cpy) < 0)
                 goto done;
             if (flux_msg_push_route (cpy, uuid) < 0)
                 goto done;
-            if (zmsg_send (&cpy, ov->child->zs) < 0)
+            if (flux_msg_sendzsock (ov->child->zs, cpy) < 0)
                 goto done;
-            zmsg_destroy (&cpy);
+            flux_msg_destroy (cpy);
+            cpy = NULL;
         }
         uuid = zlist_next (uuids);
     }
     rc = 0;
 done:
     zlist_destroy (&uuids);
-    zmsg_destroy (&cpy);
+    flux_msg_destroy (cpy);
     return rc;
 }
 
@@ -399,46 +392,53 @@ void overlay_set_event_cb (overlay_t *ov, overlay_cb_f cb, void *arg)
     ov->event_arg = arg;
 }
 
-int overlay_sendmsg_event (overlay_t *ov, zmsg_t *zmsg)
+int overlay_sendmsg_event (overlay_t *ov, const flux_msg_t *msg)
 {
     int rc = -1;
-    zmsg_t *cpy = NULL;
+    flux_msg_t *cpy = NULL;
 
     if (!ov->event || !ov->event->zs)
         return 0;
-    if (!(cpy = zmsg_dup (zmsg)))
-        oom ();
     if (ov->event_munge) {
+        if (!(cpy = flux_msg_copy (msg, true)))
+            oom ();
         if (flux_sec_munge_zmsg (ov->sec, &cpy) < 0) {
             errno = EIO;
             goto done;
         }
+        if (flux_msg_sendzsock (ov->event->zs, cpy) < 0)
+            goto done;
+    } else {
+        if (flux_msg_sendzsock (ov->event->zs, msg) < 0)
+            goto done;
     }
-    rc = zmsg_send (&cpy, ov->event->zs);
+    rc = 0;
 done:
-    zmsg_destroy (&cpy);
+    flux_msg_destroy (cpy);
     return rc;
 }
 
-zmsg_t *overlay_recvmsg_event (overlay_t *ov)
+flux_msg_t *overlay_recvmsg_event (overlay_t *ov)
 {
-    zmsg_t *zmsg = NULL;
+    flux_msg_t *msg = NULL;
     if (!ov->event || !ov->event->zs) {
         errno = EINVAL;
         goto done;
     }
-    zmsg = zmsg_recv (ov->event->zs);
+    if (!(msg = flux_msg_recvzsock (ov->event->zs)))
+        goto done;
     if (ov->event_munge) {
-        if (flux_sec_unmunge_zmsg (ov->sec, &zmsg) < 0) {
+        if (flux_sec_unmunge_zmsg (ov->sec, &msg) < 0) {
             //flux_log (ctx->h, LOG_ERR, "dropping malformed event: %s",
             //          flux_sec_errstr (ctx->sec));
-            zmsg_destroy (&zmsg);
+            flux_msg_destroy (msg);
+            msg = NULL;
             errno = EPROTO;
             goto done;
         }
     }
 done:
-    return zmsg;
+    return msg;
 }
 
 void overlay_set_relay (overlay_t *ov, const char *fmt, ...)
@@ -458,20 +458,16 @@ const char *overlay_get_relay (overlay_t *ov)
     return ov->relay->uri;
 }
 
-int overlay_sendmsg_relay (overlay_t *ov, zmsg_t *zmsg)
+int overlay_sendmsg_relay (overlay_t *ov, const flux_msg_t *msg)
 {
     int rc = -1;
-    zmsg_t *cpy = NULL;
 
     if (!ov->relay || !ov->relay->zs) {
         errno = EINVAL;
         goto done;
     }
-    if (!(cpy = zmsg_dup (zmsg)))
-        oom ();
-    rc = zmsg_send (&cpy, ov->relay->zs);
+    rc = flux_msg_sendzsock (ov->relay->zs, msg);
 done:
-    zmsg_destroy (&cpy);
     return rc;
 }
 

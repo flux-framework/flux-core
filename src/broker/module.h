@@ -15,7 +15,7 @@ void modhash_destroy (modhash_t *mh);
 
 void modhash_set_zctx (modhash_t *mh, zctx_t *zctx);
 void modhash_set_rank (modhash_t *mh, uint32_t rank);
-void modhash_set_reactor (modhash_t *mh, flux_t h);
+void modhash_set_flux (modhash_t *mh, flux_t h);
 void modhash_set_heartbeat (modhash_t *mh, heartbeat_t *hb);
 
 /* Prepare module at 'path' for starting.
@@ -45,12 +45,12 @@ void module_set_poller_cb (module_t *p, modpoller_cb_f cb, void *arg);
 
 /* Send/recv a message for to/from a specific module.
  */
-zmsg_t *module_recvmsg (module_t *p);
-int module_sendmsg (zmsg_t **zmsg, module_t *p);
+flux_msg_t *module_recvmsg (module_t *p);
+int module_sendmsg (module_t *p, const flux_msg_t *msg);
 
 /* Send an event message to all modules that have matching subscription.
  */
-int module_event_mcast (modhash_t *mh, zmsg_t *zmsg);
+int module_event_mcast (modhash_t *mh, const flux_msg_t *msg);
 
 /* Subscribe/unsubscribe module by uuid
  */
@@ -63,12 +63,12 @@ int module_unsubscribe (modhash_t *mh, const char *uuid, const char *topic);
  * their replies.
  */
 void module_set_rmmod_cb (module_t *p, rmmod_cb_f cb, void *arg);
-zmsg_t *module_pop_rmmod (module_t *p);
+flux_msg_t *module_pop_rmmod (module_t *p);
 
 /* Send a response message to the module whose uuid matches the
  * next hop in the routing stack.
  */
-int module_response_sendmsg (modhash_t *mh, zmsg_t **zmsg);
+int module_response_sendmsg (modhash_t *mh, const flux_msg_t *msg);
 
 /* Find a module matching 'name'.
  * N.B. this is a slow linear search - keep out of crit paths
@@ -84,7 +84,7 @@ int module_start_all (modhash_t *mh);
  * If stop was instigated by an rmmod request, queue the request here
  * for reply once the module actually stops.
  */
-int module_stop (module_t *p, zmsg_t **zmsg);
+int module_stop (module_t *p, const flux_msg_t *msg);
 int module_stop_all (modhash_t *mh);
 
 /* Prepare an 'lsmod' response payload.

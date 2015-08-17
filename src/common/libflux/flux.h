@@ -18,6 +18,7 @@
 #include "flog.h"
 #include "conf.h"
 #include "tmpdir.h"
+#include "heartbeat.h"
 
 #endif /* !_FLUX_CORE_FLUX_H */
 

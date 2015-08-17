@@ -43,3 +43,42 @@ broker_ldflags += -rpath $(PYTHON_PREFIX)/lib
 endif
 
 flux_broker_LDFLAGS = ${broker_ldflags}
+
+TESTS = test_snoop.t \
+	test_shutdown.t \
+	test_heartbeat.t \
+	test_hello.t
+
+test_ldadd = \
+	$(top_builddir)/src/modules/libsubprocess/libsubprocess.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libtap/libtap.la 
+
+test_cppflags = \
+        -I$(top_srcdir)/src/common/libtap \
+        $(AM_CPPFLAGS) \
+        -DCONNECTOR_PATH=\"$(top_builddir)/src/connectors\" \
+        -UMODULE_PATH -DMODULE_PATH=\"$(top_builddir)/src/modules\"
+
+check_PROGRAMS = $(TESTS)
+
+TEST_EXTENSIONS = .t
+T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
+       $(top_srcdir)/config/tap-driver.sh
+
+test_snoop_t_SOURCES = test/snoop.c snoop.c
+test_snoop_t_CPPFLAGS = $(test_cppflags)
+test_snoop_t_LDADD = $(test_ldadd)
+
+test_shutdown_t_SOURCES = test/shutdown.c shutdown.c
+test_shutdown_t_CPPFLAGS = $(test_cppflags)
+test_shutdown_t_LDADD = $(test_ldadd)
+
+test_heartbeat_t_SOURCES = test/heartbeat.c heartbeat.c
+test_heartbeat_t_CPPFLAGS = $(test_cppflags)
+test_heartbeat_t_LDADD = $(test_ldadd)
+
+test_hello_t_SOURCES = test/hello.c hello.c
+test_hello_t_CPPFLAGS = $(test_cppflags)
+test_hello_t_LDADD = $(test_ldadd)

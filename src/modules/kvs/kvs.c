@@ -888,12 +888,8 @@ static int dropcache_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    const char *json_str;
-    json_object *event = NULL;
 
-    if (flux_event_decode (*zmsg, NULL, &json_str) < 0
-                || !(event = Jfromstr (json_str))
-                || util_json_object_get_int (event, "epoch", &ctx->epoch) < 0) {
+    if (flux_heartbeat_decode (*zmsg, &ctx->epoch) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
@@ -911,8 +907,6 @@ static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         expire_cache (ctx, max_lastuse_age);
     }
 done:
-    if (event)
-        json_object_put (event);
     return 0;
 }
 

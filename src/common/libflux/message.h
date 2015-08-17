@@ -88,6 +88,16 @@ int flux_msg_sendfd (int fd, const flux_msg_t *msg,
  */
 flux_msg_t *flux_msg_recvfd (int fd, struct flux_msg_iobuf *iobuf);
 
+/* Send message to zeromq socket.
+ * Returns 0 on success, -1 on failure with errno set.
+ */
+int flux_msg_sendzsock (void *dest, const flux_msg_t *msg);
+
+/* Receive a message from zeromq socket.
+ * Returns message on success, NULL on failure with errno set.
+ */
+flux_msg_t *flux_msg_recvzsock (void *dest);
+
 /* Initialize iobuf members.
  */
 void flux_msg_iobuf_init (struct flux_msg_iobuf *iobuf);
@@ -129,7 +139,7 @@ int flux_msg_set_payload_json (flux_msg_t *msg, const char *json_str);
 int flux_msg_get_payload_json (const flux_msg_t *msg, const char **json_str);
 
 /* Get/set nodeid (request only)
- * If flags includes FLUX_NODEID_UPSTREAM, nodeid is the sending rank.
+ * If flags includes FLUX_MSGFLAG_UPSTREAM, nodeid is the sending rank.
  * FLUX_NODEID_UPSTREAM is a stand in for this flag + sending rank in
  * higher level functions (not to be used here).
  */
@@ -226,6 +236,9 @@ int flux_msg_get_route_count (const flux_msg_t *msg);
  */
 char *flux_msg_get_route_string (const flux_msg_t *msg);
 
+/* Return true if route stack contains a frame matching 's'
+ */
+bool flux_msg_has_route (const flux_msg_t *msg, const char *s);
 
 #endif /* !_FLUX_CORE_MESSAGE_H */
 

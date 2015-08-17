@@ -35,14 +35,19 @@
 
 #include "shutdown.h"
 
+#define REASON_MAX 256
+
 struct shutdown_struct {
     flux_t h;
     flux_timer_watcher_t *w;
 
     int rc;
     int rank;
-    char reason[256];
+    char reason[REASON_MAX];
     double grace;
+
+    shutdown_cb_f cb;
+    void *arg;
 };
 
 shutdown_t *shutdown_create (void)
@@ -63,7 +68,18 @@ void shutdown_set_handle (shutdown_t *s, flux_t h)
     s->h = h;
 }
 
-void shutdown_complete (shutdown_t *s)
+void shutdown_set_callback (shutdown_t *s, shutdown_cb_f cb, void *arg)
+{
+    s->cb = cb;
+    s->arg = arg;
+}
+
+int shutdown_get_rc (shutdown_t *s)
+{
+    return s->rc;
+}
+
+void shutdown_disarm (shutdown_t *s)
 {
     if (s->w) {
         flux_timer_watcher_stop (s->h, s->w);
@@ -76,69 +92,102 @@ static void shutdown_cb (flux_t h, flux_timer_watcher_t *w,
                          int revents, void *arg)
 {
     shutdown_t *s = arg;
-    exit (s->rc);
+    if (s->cb)
+        s->cb (s, s->arg);
 }
 
-void shutdown_recvmsg (shutdown_t *s, zmsg_t *zmsg)
+flux_msg_t *shutdown_vencode (double grace, int exitcode, int rank,
+                              const char *fmt, va_list ap)
 {
-    const char *json_str;
-    JSON in = NULL;
-    const char *reason;
-    int rank, rc;
-    double grace;
+    flux_msg_t *msg;
+    JSON out = Jnew ();
+    char reason[REASON_MAX];
 
-    if (flux_event_decode (zmsg, NULL, &json_str) < 0
-                || !(in = Jfromstr (json_str))) {
-        err ("%s", __FUNCTION__);
+    vsnprintf (reason, sizeof (reason), fmt, ap);
+
+    Jadd_str (out, "reason", reason);
+    Jadd_double (out, "grace", grace);
+    Jadd_int (out, "rank", rank);
+    Jadd_int (out, "exitcode", exitcode);
+    msg = flux_event_encode ("shutdown", Jtostr (out));
+    Jput (out);
+    return msg;
+}
+
+flux_msg_t *shutdown_encode (double grace, int exitcode, int rank,
+                             const char *fmt, ...)
+{
+    va_list ap;
+    flux_msg_t *msg;
+
+    va_start (ap, fmt);
+    msg = shutdown_vencode (grace, exitcode, rank, fmt, ap);
+    va_end (ap);
+
+    return msg;
+}
+
+int shutdown_decode (const flux_msg_t *msg, double *grace, int *exitcode,
+                     int *rank, char *reason, int reason_len)
+{
+    const char *json_str, *s;
+    JSON in = NULL;
+    int rc = -1;
+
+    if (flux_event_decode (msg, NULL, &json_str) < 0
+                || !(in = Jfromstr (json_str))
+                || !Jget_str (in, "reason", &s)
+                || !Jget_double (in, "grace", grace)
+                || !Jget_int (in, "rank", rank)
+                || !Jget_int (in, "exitcode", exitcode)) {
+        errno = EPROTO;
         goto done;
     }
-    if (!Jget_str (in, "reason", &reason) || !Jget_double (in, "grace", &grace)
-                                          || !Jget_int (in, "rank", &rank)
-                                          || !Jget_int (in, "exitcode", &rc)) {
-        errn (EPROTO, "%s", __FUNCTION__);
-        goto done;
-    }
+    snprintf (reason, reason_len, "%s", s);
+    rc = 0;
+done:
+    Jput (in);
+    return rc;
+}
+
+int shutdown_recvmsg (shutdown_t *s, const flux_msg_t *msg)
+{
+    int rc = -1;
+
     if (!s->w) {
-        s->rc = rc;
-        s->grace = grace;
-        s->rank = rank;
-        snprintf (s->reason, sizeof (s->reason), "%s", reason);
-        if (!(s->w = flux_timer_watcher_create (grace, 0., shutdown_cb, s)))
-            err_exit ("flux_timer_watcher_create");
+        if (shutdown_decode (msg, &s->grace, &s->rc, &s->rank,
+                             s->reason, sizeof (s->reason)) < 0)
+            goto done;
+        if (!(s->w = flux_timer_watcher_create (s->grace, 0., shutdown_cb, s)))
+            goto done;
         flux_timer_watcher_start (s->h, s->w);
         if (flux_rank (s->h) == 0)
             flux_log (s->h, LOG_INFO, "%d: shutdown in %.3fs: %s",
                       s->rank, s->grace, s->reason);
     }
+    rc = 0;
 done:
-    Jput (in);
-    return;
+    return rc;
 }
 
-void shutdown_arm (shutdown_t *s, double grace, int rc, const char *fmt, ...)
+int shutdown_arm (shutdown_t *s, double grace, int exitcode,
+                  const char *fmt, ...)
 {
     va_list ap;
-    char reason[256];
+    flux_msg_t *msg = NULL;
+    int rc = -1;
 
-    if (s->w) {
-        msg ("%s: shutdown already in progress", __FUNCTION__);
-        return;
+    if (!s->w) {
+        va_start (ap, fmt);
+        msg = shutdown_vencode (grace, exitcode, flux_rank (s->h), fmt, ap);
+        va_end (ap);
+        if (!msg || flux_send (s->h, msg, 0) < 0)
+            goto done;
     }
-
-    va_start (ap, fmt);
-    vsnprintf (reason, sizeof (reason), fmt, ap);
-    va_end (ap);
-
-    JSON out = Jnew ();
-    Jadd_str (out, "reason", reason);
-    Jadd_double (out, "grace", grace);
-    Jadd_int (out, "rank", flux_rank (s->h));
-    Jadd_int (out, "exitcode", rc);
-    zmsg_t *zmsg = flux_event_encode ("shutdown", Jtostr (out));
-    if (!zmsg || flux_sendmsg (s->h, &zmsg) < 0)
-        err_exit ("%s: could not send event", __FUNCTION__);
-    Jput (out);
-    zmsg_destroy (&zmsg);
+    rc = 0;
+done:
+    flux_msg_destroy (msg);
+    return rc;
 }
 
 /*

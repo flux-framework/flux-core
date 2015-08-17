@@ -108,28 +108,29 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
         goto done;
     if (flux_msg_get_type (msg, &type) < 0)
         goto done;
-    if (!(cpy = flux_msg_copy (msg, true)))
-        goto done;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
         case FLUX_MSGTYPE_EVENT:
+            if (!(cpy = flux_msg_copy (msg, true)))
+                goto done;
             if (flux_msg_enable_route (cpy) < 0)
                 goto done;
             if (flux_msg_push_route (cpy, ctx->uuid) < 0)
                 goto done;
+            if (flux_msg_sendzsock (ctx->sock, cpy) < 0)
+                goto done;
             break;
         case FLUX_MSGTYPE_RESPONSE:
+            if (flux_msg_sendzsock (ctx->sock, msg) < 0)
+                goto done;
             break;
         default:
             errno = EINVAL;
             goto done;
     }
-    if (zmsg_send (&cpy, ctx->sock) < 0)
-        goto done;
     rc = 0;
 done:
-    if (cpy)
-        flux_msg_destroy (cpy);
+    flux_msg_destroy (cpy);
     return rc;
 }
 

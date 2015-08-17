@@ -35,17 +35,14 @@
 #include "src/common/libutil/monotime.h"
 
 #include "heartbeat.h"
-#include "overlay.h"
 #include "hello.h"
 
 struct hello_struct {
     nodeset_t nodeset;
-    uint32_t size;
     uint32_t count;
     double timeout;
     hello_cb_f cb;
     void *cb_arg;
-    overlay_t *ov;
     flux_t h;
     flux_timer_watcher_t *w;
     struct timespec start;
@@ -54,124 +51,101 @@ struct hello_struct {
 
 hello_t *hello_create (void)
 {
-    hello_t *h = xzmalloc (sizeof (*h));
-    return h;
+    hello_t *hello = xzmalloc (sizeof (*hello));
+    return hello;
 }
 
-void hello_destroy (hello_t *h)
+void hello_destroy (hello_t *hello)
 {
-    if (h) {
-        if (h->nodeset)
-            nodeset_destroy (h->nodeset);
-        if (h->w)
-            flux_timer_watcher_destroy (h->w);
-        free (h);
+    if (hello) {
+        if (hello->nodeset)
+            nodeset_destroy (hello->nodeset);
+        if (hello->w)
+            flux_timer_watcher_destroy (hello->w);
+        free (hello);
     }
 }
 
-void hello_set_size (hello_t *h, uint32_t size)
-{
-    h->size = size;
-}
-
-uint32_t hello_get_size (hello_t *h)
-{
-    return h->size;
-}
-
-void hello_set_overlay (hello_t *h, overlay_t *ov)
-{
-    h->ov = ov;
-}
-
-void hello_set_reactor (hello_t *hello, flux_t h)
+void hello_set_flux (hello_t *hello, flux_t h)
 {
     hello->h = h;
 }
 
-void hello_set_timeout (hello_t *h, double seconds)
+void hello_set_timeout (hello_t *hello, double seconds)
 {
-    h->timeout = seconds;
+    hello->timeout = seconds;
 }
 
-double hello_get_time (hello_t *h)
+double hello_get_time (hello_t *hello)
 {
-    if (!monotime_isset (h->start))
+    if (!monotime_isset (hello->start))
         return 0;
-    return monotime_since (h->start) / 1000;
+    return monotime_since (hello->start) / 1000;
 }
 
-void hello_set_cb (hello_t *h, hello_cb_f cb, void *arg)
+void hello_set_callback (hello_t *hello, hello_cb_f cb, void *arg)
 {
-    h->cb = cb;
-    h->cb_arg = arg;
+    hello->cb = cb;
+    hello->cb_arg = arg;
 }
 
-uint32_t hello_get_count (hello_t *h)
+bool hello_complete (hello_t *hello)
 {
-    return h->count;
+    return (hello->count == flux_size (hello->h));
 }
 
-const char *hello_get_nodeset (hello_t *h)
+const char *hello_get_nodeset (hello_t *hello)
 {
-    if (!h->nodeset)
+    if (!hello->nodeset)
         return NULL;
-    return nodeset_str (h->nodeset);
+    return nodeset_str (hello->nodeset);
 }
 
-static int hello_add_rank (hello_t *h, uint32_t rank)
+static int hello_add_rank (hello_t *hello, uint32_t rank)
 {
-    if (!h->nodeset)
-        h->nodeset = nodeset_new_size (h->size);
-    if (!nodeset_add_rank (h->nodeset, rank)) {
+    int size = flux_size (hello->h);
+    if (!hello->nodeset)
+        hello->nodeset = nodeset_new_size (size);
+    if (!nodeset_add_rank (hello->nodeset, rank)) {
         errno = EPROTO;
         return -1;
     }
-    h->count++;
-    if (h->count == h->size) {
-        if (h->cb)
-            h->cb (h, h->cb_arg);
-        if (h->w)
-            flux_timer_watcher_stop (h->h, h->w);
+    hello->count++;
+    if (hello->count == size) {
+        if (hello->cb)
+            hello->cb (hello, hello->cb_arg);
+        if (hello->w)
+            flux_timer_watcher_stop (hello->h, hello->w);
     }
     return 0;
 }
 
-int hello_recv (hello_t *h, zmsg_t **zmsg)
+int hello_recvmsg (hello_t *hello, const flux_msg_t *msg)
 {
-    char *sender = NULL;
     int rc = -1;
-    uint32_t rank;
+    int rank;
 
-    if (flux_msg_get_route_first (*zmsg, &sender) < 0)
+    if (hello_decode (msg, &rank) < 0)
         goto done;
-    rank = strtoul (sender, NULL, 10);
-    if (hello_add_rank (h, rank) < 0)
+    if (hello_add_rank (hello, rank) < 0)
         goto done;
-    zmsg_destroy (zmsg);
     rc = 0;
 done:
-    if (sender)
-        free (sender);
     return rc;
 }
 
-static int hello_send (hello_t *h)
+static int hello_sendmsg (hello_t *hello, uint32_t rank)
 {
-    zmsg_t *zmsg = NULL;
+    flux_msg_t *msg;
     int rc = -1;
 
-    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
+    if (!(msg = hello_encode (rank)))
         goto done;
-    if (flux_msg_set_topic (zmsg, "cmb.hello") < 0)
+    if (flux_send (hello->h, msg, 0) < 0)
         goto done;
-    if (flux_msg_set_nodeid (zmsg, 0, 0) < 0)
-        goto done;
-    if (flux_msg_enable_route (zmsg) < 0)
-        goto done;
-    rc = overlay_sendmsg_parent (h->ov, &zmsg);
+    rc = 0;
 done:
-    zmsg_destroy (&zmsg);
+    flux_msg_destroy (msg);
     return rc;
 }
 
@@ -183,24 +157,63 @@ static void timer_cb (flux_t h, flux_timer_watcher_t *w, int revents, void *arg)
         hello->cb (hello, hello->cb_arg);
 }
 
-int hello_start (hello_t *h, uint32_t rank)
+int hello_start (hello_t *hello)
 {
     int rc = -1;
+    int rank = flux_rank (hello->h);
 
     if (rank == 0) {
-        monotime (&h->start);
-        if (!(h->w = flux_timer_watcher_create (h->timeout, h->timeout,
-                                                timer_cb, h)))
+        monotime (&hello->start);
+        if (!(hello->w = flux_timer_watcher_create (hello->timeout,
+                                                    hello->timeout,
+                                                    timer_cb, hello)))
             goto done;
-        flux_timer_watcher_start (h->h, h->w);
-        if (hello_add_rank (h, rank) < 0)
+        flux_timer_watcher_start (hello->h, hello->w);
+        if (hello_add_rank (hello, 0) < 0)
             goto done;
     } else {
-        if (hello_send (h) < 0)
+        if (hello_sendmsg (hello, rank) < 0)
             goto done;
     }
     rc = 0;
 done:
+    return rc;
+}
+
+flux_msg_t *hello_encode (int rank)
+{
+    flux_msg_t *msg = NULL;
+    JSON out = Jnew ();
+
+    Jadd_int (out, "rank", rank);
+    if (!(msg = flux_request_encode ("cmb.hello", Jtostr (out))))
+        goto error;
+    if (flux_msg_set_nodeid (msg, 0, 0) < 0)
+        goto error;
+    Jput (out);
+    return msg;
+error:
+    flux_msg_destroy (msg);
+    Jput (out);
+    return NULL;
+}
+
+int hello_decode (const flux_msg_t *msg, int *rank)
+{
+    const char *json_str, *topic_str;
+    JSON in = NULL;
+    int rc = -1;
+
+    if (flux_request_decode (msg, &topic_str, &json_str) < 0)
+        goto done;
+    if (!(in = Jfromstr (json_str)) || !Jget_int (in, "rank", rank)
+                                    || strcmp (topic_str, "cmb.hello") != 0) {
+        errno = EPROTO;
+        goto done;
+    }
+    rc = 0;
+done:
+    Jput (in);
     return rc;
 }
 

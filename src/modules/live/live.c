@@ -429,16 +429,12 @@ static void cstate_change (ctx_t *ctx, child_t *c, cstate_t newstate)
 static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
-    const char *json_str;
-    JSON event = NULL;
     char *peers_str = NULL;
     JSON peers = NULL;
     zlist_t *keys = NULL;
     char *key;
 
-    if (flux_event_decode (*zmsg, NULL, &json_str) < 0
-            || !(event = Jfromstr (json_str))
-            || !Jget_int (event, "epoch", &ctx->epoch)) {
+    if (flux_heartbeat_decode (*zmsg, &ctx->epoch) < 0) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
         goto done;
     }
@@ -484,7 +480,6 @@ static int hb_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 done:
     if (keys)
         zlist_destroy (&keys);
-    Jput (event);
     Jput (peers);
     if (peers_str)
         free (peers_str);
