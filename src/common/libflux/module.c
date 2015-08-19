@@ -212,23 +212,23 @@ char *flux_modname(const char *path)
         if ((np = dlsym (dso, "mod_name")) && *np)
             name = xstrdup (*np);
         dlclose (dso);
+        return name;
     }
-    return name;
+    // Another reporting method may be warranted here, but when a dynamic
+    // library dependency doesn't resolve, it really helps to know that's
+    // the error.  Otherwise it prints as "invalid argument" from the
+    // broker.
+    msg ("%s", dlerror ());
+    errno = ENOENT;
+    return NULL;
 }
 
 /* helper for flux_modfind() */
 static int flux_modname_cmp(const char *path, const char *name)
 {
-    void *dso;
-    const char **np;
-    int rc = -1;
-
-    dlerror ();
-    if ((dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL))) {
-        if ((np = dlsym (dso, "mod_name")) && *np)
-            rc = strcmp (*np, name);
-        dlclose (dso);
-    }
+    char * modname = flux_modname(path);
+    int rc = modname ? strcmp(modname, name) : -1;
+    free(modname);
     return rc;
 }
 
@@ -370,7 +370,6 @@ int flux_insmod (flux_t h, uint32_t nodeid, const char *path,
     int rc = -1;
 
     if (!(name = flux_modname (path))) {
-        errno = EINVAL;
         goto done;
     }
     service = mod_service (name);
