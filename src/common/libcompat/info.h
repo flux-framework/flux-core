@@ -5,7 +5,8 @@
 
 #include "src/common/libflux/handle.h"
 
-bool flux_treeroot (flux_t h);
+bool flux_treeroot (flux_t h)
+                    __attribute__ ((deprecated));
 
 #endif /* !_FLUX_COMPAT_INFO_H */
 
