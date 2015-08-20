@@ -64,8 +64,7 @@ int main (int argc, char **argv)
     flux_t h;
     shutdown_t *sh;
     flux_msg_watcher_t *log_w, *ev_w;
-    struct flux_match matchev = FLUX_MATCH_EVENT;
-    struct flux_match matchlog = FLUX_MATCH_ANY;
+    struct flux_match matchlog = FLUX_MATCH_REQUEST;
 
     plan (14);
 
@@ -79,17 +78,16 @@ int main (int argc, char **argv)
     flux_fatal_set (h, fatal_err, NULL);
 
     ok ((sh = shutdown_create ()) != NULL,
-        "shutdown_create works");    
+        "shutdown_create works");
     shutdown_set_handle (sh, h);
     shutdown_set_callback (sh, shutdown_cb, NULL);
 
-    ev_w = flux_msg_watcher_create (matchev, shutdown_event_cb, sh);
+    ev_w = flux_msg_watcher_create (FLUX_MATCH_EVENT, shutdown_event_cb, sh);
     ok (ev_w != NULL,
         "created event watcher");
     flux_msg_watcher_start (h, ev_w);
 
     matchlog.topic_glob = "cmb.log";
-    matchlog.typemask = FLUX_MSGTYPE_REQUEST;
     log_w = flux_msg_watcher_create (matchlog, log_request_cb, sh);
     ok (log_w != NULL,
         "created log request watcher");
