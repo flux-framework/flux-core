@@ -1,7 +1,6 @@
 #ifndef _FLUX_CORE_RPC_H
 #define _FLUX_CORE_RPC_H
 
-#include <json.h>
 #include <stdbool.h>
 
 #include "handle.h"

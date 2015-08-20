@@ -96,10 +96,7 @@ ffi.set_source('{full_mod}',
 {extra_source}
 
 //TODO: REMOVE THIS when the json_obj stuff goes away
-struct json_object;
-extern struct json_object* json_tokener_parse(const char *str);
-extern int json_object_put(struct json_object *obj);
-extern const char *  json_object_to_json_string (struct json_object *obj);
+#include <json.h>
 
 void * unpack_long(ptrdiff_t num){{
   return (void*)num;
