@@ -1,9 +1,12 @@
 from _core import ffi, lib
 
 class Jobj(object):
-  def __init__(self, json_str=''):
+  def __init__(self, json_str='', handle=None):
     self.json_obj = ffi.new('struct json_object *[1]')
-    self.json_obj[0] = lib.json_tokener_parse(json_str)
+    if handle is not None:
+        self.json_obj[0] = handle
+    else:
+        self.json_obj[0] = lib.json_tokener_parse(json_str)
 
   def __del__(self):
     lib.json_object_put(self.json_obj[0])

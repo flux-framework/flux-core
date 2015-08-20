@@ -86,6 +86,7 @@ def watch_once(flux_handle, key):
 class KVSDir(WrapperPimpl, collections.MutableMapping):
     class InnerWrapper(Wrapper):
         def __init__(self, flux_handle=None, path='.', handle=None):
+            self.destroyer = _raw.kvsdir_destroy
             self.handle = None
             if flux_handle is None and handle is None:  # pragma: no cover
                 raise ValueError(
@@ -104,7 +105,7 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
 
         def __del__(self):
             if self.handle is not None:
-                _raw.kvsdir_destroy(self.handle)
+                self.destroyer(self.handle)
 
     def __init__(self, flux_handle=None, path='.', handle=None):
         self.fh = flux_handle
@@ -260,9 +261,10 @@ def walk(directory, topdown=False, flux_handle=None):
 
 @ffi.callback('kvs_set_obj_f')
 def KVSWatchWrapper(key, value, arg, errnum):
-    j = Jobj(handle=value)
+    j = json_c.Jobj(handle=value)
     (cb, real_arg) = ffi.from_handle(arg)
-    return cb(key, json.loads(j.as_str()), real_arg, errnum)
+    ret = cb(ffi.string(key), json.loads(j.as_str()), real_arg, errnum)
+    return ret if ret is not None else 0
 
 
 kvswatches = {}

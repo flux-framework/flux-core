@@ -31,6 +31,7 @@ class Flux(Wrapper):
     def __init__(self, url=ffi.NULL, flags=0, handle=None):
         self.external = True
         self.handle = None
+        self.closer = raw.flux_close
 
         if handle is None:
             handle = raw.flux_open(url, flags)
@@ -48,7 +49,7 @@ class Flux(Wrapper):
 
     def close(self):
         if not self.external and self.handle is not None:
-            raw.flux_close(self.handle)
+            self.closer(self.handle)
             self.handle = None
 
     def __del__(self):
