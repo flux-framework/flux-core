@@ -49,8 +49,8 @@ static const struct option longopts[] = {
     { 0, 0, 0, 0 },
 };
 
-static void parse_json (const char *n, json_object *o, double scale,
-                         json_type type);
+static void parse_json (const char *n, const char *json_str, double scale,
+                        json_type type);
 
 void usage (void)
 {
@@ -75,7 +75,6 @@ int main (int argc, char *argv[])
     bool Ropt = false;
     double scale = 1.0;
     json_type type = json_type_object;
-    json_object *response;
 
     log_init ("flux-stats");
 
@@ -131,40 +130,52 @@ int main (int argc, char *argv[])
         err_exit ("flux_open");
 
     if (copt) {
+        flux_rpc_t *rpc;
         char *topic = xasprintf ("%s.stats.clear", target);
-        if (flux_json_rpc (h, nodeid, topic, NULL, NULL) < 0)
+        if (!(rpc = flux_rpc (h, topic, NULL, nodeid, 0))
+                                || flux_rpc_get (rpc, NULL, NULL) < 0)
             err_exit ("%s", topic);
         free (topic);
+        flux_rpc_destroy (rpc);
     } else if (Copt) {
         char *topic = xasprintf ("%s.stats.clear", target);
-        zmsg_t *zmsg = flux_event_encode (target, NULL);
-        if (!zmsg || flux_sendmsg (h, &zmsg) < 0)
+        flux_msg_t *msg = flux_event_encode (target, NULL);
+        if (!msg || flux_send (h, msg, 0) < 0)
             err_exit ("sending event");
-        zmsg_destroy (&zmsg);
+        flux_msg_destroy (msg);
         free (topic);
     } else if (Ropt) {
+        flux_rpc_t *rpc;
+        const char *json_str;
         char *topic = xasprintf ("%s.rusage", target);
-        if (flux_json_rpc (h, nodeid, topic, NULL, &response) < 0)
+        if (!(rpc = flux_rpc (h, topic, NULL, nodeid, 0))
+                                || flux_rpc_get (rpc, NULL, &json_str) < 0)
             err_exit ("%s", topic);
-        parse_json (objname, response, scale, type);
-        json_object_put (response);
+        parse_json (objname, json_str, scale, type);
         free (topic);
+        flux_rpc_destroy (rpc);
     } else {
+        flux_rpc_t *rpc;
+        const char *json_str;
         char *topic = xasprintf ("%s.stats.get", target);
-        if (flux_json_rpc (h, nodeid, topic, NULL, &response) < 0)
+        if (!(rpc = flux_rpc (h, topic, NULL, nodeid, 0))
+                                || flux_rpc_get (rpc, NULL, &json_str) < 0)
             err_exit ("%s", topic);
-        parse_json (objname, response, scale, type);
-        json_object_put (response);
+        parse_json (objname, json_str, scale, type);
         free (topic);
+        flux_rpc_destroy (rpc);
     }
     flux_close (h);
     log_fini ();
     return 0;
 }
 
-static void parse_json (const char *n, json_object *o, double scale,
-                         json_type type)
+static void parse_json (const char *n, const char *json_str, double scale,
+                        json_type type)
 {
+    json_object *o = json_tokener_parse (json_str);
+    if (!o)
+        err_exit ("error parsing JSON response");
     if (n) {
         char *cpy = xstrdup (n);
         char *name, *saveptr = NULL, *a1 = cpy;
@@ -202,6 +213,7 @@ static void parse_json (const char *n, json_object *o, double scale,
             break;
         }
     }
+    json_object_put (o);
 }
 
 /*
