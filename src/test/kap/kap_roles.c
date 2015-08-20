@@ -181,7 +181,7 @@ fetch_kv_tuple (kap_params_t *param, int fet_i,
     *            MEASURE Gets LATENCY             *
     **********************************************/
     Begin = now ();
-    if ( kvs_get (param->pers.handle, k, &o) < 0) {
+    if ( kvs_get_obj (param->pers.handle, k, &o) < 0) {
         fprintf (stderr, "kvs_get failed.\n");
         goto error;
     }
@@ -277,7 +277,7 @@ put_test_obj (kap_params_t *param)
              *        MEASURE PUT LATENCY                  *
              **********************************************/
             Begin = now ();
-            if ( kvs_put (param->pers.handle, k, o) < 0) {
+            if ( kvs_put_obj (param->pers.handle, k, o) < 0) {
                 fprintf (stderr, 
                     "kvs_put failed %s", strerror(errno));
                 goto error;

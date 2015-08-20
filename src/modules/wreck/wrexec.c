@@ -490,7 +490,7 @@ done:
 
 int lwj_targets_this_node (struct rexec_ctx *ctx, int64_t id)
 {
-    kvsdir_t tmp;
+    kvsdir_t *tmp;
     /*
      *  If no 'rank' subdir exists for this lwj, then we are running
      *   without resource assignment so we run everywhere

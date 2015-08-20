@@ -73,7 +73,7 @@ struct kz_struct {
     char *stream;
     flux_t h;
     int seq;
-    kvsdir_t dir;
+    kvsdir_t *dir;
     kz_ready_f ready_cb;
     void *ready_arg;
     bool eof;
@@ -175,7 +175,7 @@ static int putnext (kz_t kz, json_object *val)
     }
     if (asprintf (&key, "%s.%.6d", kz->name, kz->seq++) < 0)
         oom ();
-    if (kvs_put (kz->h, key, val) < 0)
+    if (kvs_put_obj (kz->h, key, val) < 0)
         goto done;
     if (!(kz->flags & KZ_FLAGS_NOCOMMIT_PUT)) {
         if (kvs_commit (kz->h) < 0)
@@ -230,7 +230,7 @@ static json_object *getnext (kz_t kz)
     }
     if (asprintf (&key, "%s.%.6d", kz->name, kz->seq) < 0)
         oom ();
-    if (kvs_get (kz->h, key, &val) < 0) {
+    if (kvs_get_obj (kz->h, key, &val) < 0) {
         if (errno == ENOENT)
             errno = EAGAIN;
         goto done;
@@ -327,7 +327,7 @@ int kz_close (kz_t kz)
                 errno = EPROTO;
                 goto done;
             }
-            if (kvs_put (kz->h, key, val) < 0)
+            if (kvs_put_obj (kz->h, key, val) < 0)
                 goto done;
         }
         if (!(kz->flags & KZ_FLAGS_NOCOMMIT_CLOSE)) {
@@ -349,7 +349,7 @@ done:
     return rc;
 }
 
-int kvswatch_cb (const char *key, kvsdir_t dir, void *arg, int errnum)
+int kvswatch_cb (const char *key, kvsdir_t *dir, void *arg, int errnum)
 {
     kz_t kz = arg;
 

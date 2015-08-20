@@ -19,7 +19,7 @@ _raw = KVSWrapper(ffi, lib, prefixes=['kvs', 'kvs_'])
 
 def get_key_direct(flux_handle, key):
     j = json_c.Jobj()
-    _raw.get(flux_handle, key, j.get_as_dptr())
+    _raw.get_obj(flux_handle, key, j.get_as_dptr())
     return json.loads(j.as_str())
 
 
@@ -61,7 +61,7 @@ def get(flux_handle, key):
 
 def put(flux_handle, key, value):
     j = json_c.Jobj(json.dumps(value))
-    _raw.put(flux_handle, key, j.get())
+    _raw.put_obj(flux_handle, key, j.get())
 
 
 def commit(flux_handle):
@@ -89,13 +89,13 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
                 raise ValueError(
                     "flux_handle must be a valid Flux object or handle must be a valid kvsdir cdata pointer")
             if handle is None:
-                d = ffi.new("kvsdir_t [1]")
+                d = ffi.new("kvsdir_t *[1]")
                 _raw.kvs_get_dir(flux_handle, d, path)
                 handle = d[0]
 
             super(self.__class__, self).__init__(ffi, lib,
                                                  handle=handle,
-                                                 match=ffi.typeof('kvsdir_t'),
+                                                 match=ffi.typeof('kvsdir_t *'),
                                                  prefixes=[
                                                      'kvsdir_',
                                                  ], )
@@ -131,7 +131,7 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
     def __setitem__(self, key, value):
         # Turn it into json
         j = json_c.Jobj(json.dumps(value))
-        self.pimpl.put(key, j.get())
+        self.pimpl.put_obj(key, j.get())
 
     def __delitem__(self, key):
         self.pimpl.unlink(key)
@@ -253,7 +253,7 @@ def walk(directory, topdown=False, flux_handle=None):
         yield x
 
 
-@ffi.callback('KVSSetF')
+@ffi.callback('kvs_set_obj_f')
 def KVSWatchWrapper(key, value, arg, errnum):
     j = Jobj(handle=value)
     (cb, real_arg) = ffi.from_handle(arg)

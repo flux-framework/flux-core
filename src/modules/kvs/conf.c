@@ -32,7 +32,7 @@
 
 const char *kvs_conf_root = "config";
 
-static int load_one (flux_conf_t cf, kvsdir_t dir, const char *name)
+static int load_one (flux_conf_t cf, kvsdir_t *dir, const char *name)
 {
     char *key = kvsdir_key_at (dir, name);
     char *skey = key + strlen (kvs_conf_root) + 1;
@@ -53,16 +53,16 @@ done:
     return rc;
 }
 
-static int load_kvsdir (flux_conf_t cf, kvsdir_t dir)
+static int load_kvsdir (flux_conf_t cf, kvsdir_t *dir)
 {
-    kvsitr_t itr;
+    kvsitr_t *itr;
     const char *name;
     int rc = -1;
 
     itr = kvsitr_create (dir);
     while ((name = kvsitr_next (itr))) {
         if (kvsdir_isdir (dir, name)) {
-            kvsdir_t ndir;
+            kvsdir_t *ndir;
             if (kvsdir_get_dir (dir, &ndir, "%s", name) < 0)
                 goto done;
             if (load_kvsdir (cf, ndir) < 0)
@@ -81,7 +81,7 @@ done:
 
 int kvs_conf_load (flux_t h, flux_conf_t cf)
 {
-    kvsdir_t dir = NULL;
+    kvsdir_t *dir = NULL;
     int rc = -1;
 
     flux_conf_clear (cf);

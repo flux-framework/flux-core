@@ -265,7 +265,7 @@ static void topo_cb (flux_t h,
                      void *arg)
 {
     ctx_t *ctx = (ctx_t *)arg;
-    kvsdir_t kd = NULL;
+    kvsdir_t *kd = NULL;
     json_object *out = NULL;
     char *buffer;
     int buflen;
@@ -288,7 +288,7 @@ static void topo_cb (flux_t h,
 
     hwloc_topology_set_custom (global);
 
-    kvsitr_t base_iter = kvsitr_create (kd);
+    kvsitr_t *base_iter = kvsitr_create (kd);
     const char *base_key = NULL;
     while ((base_key = kvsitr_next (base_iter))) {
         char *xml = NULL;

@@ -185,16 +185,16 @@ static void add_jobinfo (flux_t h, int64_t id, json_object *req)
     char buf [64];
     json_object_iter i;
     json_object *o;
-    kvsdir_t dir;
+    kvsdir_t *dir;
 
     if (kvs_get_dir (h, &dir, "lwj.%lu", id) < 0)
         err_exit ("kvs_get_dir (id=%lu)", id);
 
     json_object_object_foreachC (req, i)
-        kvsdir_put (dir, i.key, i.val);
+        kvsdir_put_obj (dir, i.key, i.val);
 
     o = json_object_new_string (ctime_iso8601_now (buf, sizeof (buf)));
-    kvsdir_put (dir, "create-time", o);
+    kvsdir_put_obj (dir, "create-time", o);
     json_object_put (o);
 
     kvsdir_destroy (dir);

@@ -161,7 +161,7 @@ static ns_t *ns_fromkvs (flux_t h)
     JSON o = NULL;
     ns_t *ns = NULL;
 
-    if (kvs_get (h, "conf.live.status", &o) < 0)
+    if (kvs_get_obj (h, "conf.live.status", &o) < 0)
         goto done;
     ns = ns_fromjson (o);
 done:

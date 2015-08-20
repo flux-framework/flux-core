@@ -220,7 +220,7 @@ static int l_flux_new (lua_State *L)
 static int l_flux_kvsdir_new (lua_State *L)
 {
     const char *path = ".";
-    kvsdir_t dir;
+    kvsdir_t *dir;
     flux_t f = lua_get_flux (L, 1);
 
     if (lua_isstring (L, 2)) {
@@ -1084,7 +1084,7 @@ static int l_kvswatcher_add (lua_State *L)
     assert (lua_isfunction (L, -1));
 
     kw = l_flux_ref_create (L, f, 2, "kvswatcher");
-    kvs_watch (f, key, l_kvswatcher, (void *) kw);
+    kvs_watch_obj (f, key, l_kvswatcher, (void *) kw);
 
     /*
      *  Return kvswatcher object to caller

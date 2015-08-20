@@ -40,9 +40,9 @@
 
 static int l_kvsdir_commit (lua_State *L);
 
-static kvsdir_t lua_get_kvsdir (lua_State *L, int index)
+static kvsdir_t *lua_get_kvsdir (lua_State *L, int index)
 {
-    kvsdir_t *dirp = luaL_checkudata (L, index, "CMB.kvsdir");
+    kvsdir_t **dirp = luaL_checkudata (L, index, "CMB.kvsdir");
     return (*dirp);
 }
 
@@ -55,15 +55,15 @@ int l_kvsdir_instantiate (lua_State *L)
 
 static int l_kvsdir_destroy (lua_State *L)
 {
-    kvsdir_t d = lua_get_kvsdir (L, -1);
+    kvsdir_t *d = lua_get_kvsdir (L, -1);
     if (d)
         kvsdir_destroy (d);
     return (0);
 }
 
-int l_push_kvsdir (lua_State *L, kvsdir_t dir)
+int l_push_kvsdir (lua_State *L, kvsdir_t *dir)
 {
-    kvsdir_t *new = lua_newuserdata (L, sizeof (*new));
+    kvsdir_t **new = lua_newuserdata (L, sizeof (*new));
     *new = dir;
     return l_kvsdir_instantiate (L);
 }
@@ -71,8 +71,8 @@ int l_push_kvsdir (lua_State *L, kvsdir_t dir)
 static int l_kvsdir_kvsdir_new (lua_State *L)
 {
     const char *key;
-    kvsdir_t new;
-    kvsdir_t d;
+    kvsdir_t *new;
+    kvsdir_t *d;
 
     d = lua_get_kvsdir (L, 1);
     key = luaL_checkstring (L, 2);
@@ -85,7 +85,7 @@ static int l_kvsdir_kvsdir_new (lua_State *L)
 
 static int l_kvsdir_tostring (lua_State *L)
 {
-    kvsdir_t d = lua_get_kvsdir (L, 1);
+    kvsdir_t *d = lua_get_kvsdir (L, 1);
     lua_pushstring (L, kvsdir_key (d));
     return (1);
 }
@@ -93,14 +93,14 @@ static int l_kvsdir_tostring (lua_State *L)
 static int l_kvsdir_newindex (lua_State *L)
 {
     int rc;
-    kvsdir_t d = lua_get_kvsdir (L, 1);
+    kvsdir_t *d = lua_get_kvsdir (L, 1);
     const char *key = lua_tostring (L, 2);
 
     /*
      *  Process value;
      */
     if (lua_isnil (L, 3))
-        rc = kvsdir_put (d, key, NULL);
+        rc = kvsdir_put_obj (d, key, NULL);
     else if (lua_isnumber (L, 3)) {
         double val = lua_tonumber (L, 3);
         if (floor (val) == val)
@@ -115,7 +115,7 @@ static int l_kvsdir_newindex (lua_State *L)
     else if (lua_istable (L, 3)) {
         json_object *o;
         lua_value_to_json (L, 3, &o);
-        rc = kvsdir_put (d, key, o);
+        rc = kvsdir_put_obj (d, key, o);
         json_object_put (o);
     }
     else {
@@ -129,16 +129,16 @@ static int l_kvsdir_newindex (lua_State *L)
     return (0);
 }
 
-static kvsitr_t lua_to_kvsitr (lua_State *L, int index)
+static kvsitr_t *lua_to_kvsitr (lua_State *L, int index)
 {
-    kvsitr_t *iptr = luaL_checkudata (L, index, "CMB.kvsitr");
+    kvsitr_t **iptr = luaL_checkudata (L, index, "CMB.kvsitr");
     return (*iptr);
 }
 
 /* gc metamethod for iterator */
 static int l_kvsitr_destroy (lua_State *L)
 {
-    kvsitr_t i = lua_to_kvsitr (L, 1);
+    kvsitr_t *i = lua_to_kvsitr (L, 1);
     kvsitr_destroy (i);
     return (0);
 }
@@ -146,7 +146,7 @@ static int l_kvsitr_destroy (lua_State *L)
 static int l_kvsdir_iterator (lua_State *L)
 {
     const char *key;
-    kvsitr_t i;
+    kvsitr_t *i;
 
     /* Get kvsitr from upvalue index on stack:
      */
@@ -165,8 +165,8 @@ static int l_kvsdir_iterator (lua_State *L)
 
 static int l_kvsdir_next (lua_State *L)
 {
-    kvsdir_t d = lua_get_kvsdir (L, 1);
-    kvsitr_t *iptr;
+    kvsdir_t *d = lua_get_kvsdir (L, 1);
+    kvsitr_t **iptr;
 
     lua_pop (L, 1);
 
@@ -188,7 +188,7 @@ static int l_kvsdir_next (lua_State *L)
 
 static int l_kvsdir_commit (lua_State *L)
 {
-    kvsdir_t d = lua_get_kvsdir (L, 1);
+    kvsdir_t *d = lua_get_kvsdir (L, 1);
     if (lua_isnoneornil (L, 2)) {
         if (kvs_commit (kvsdir_handle (d)) < 0)
             return lua_pusherror (L, "kvs_commit: %s", strerror (errno));
@@ -203,7 +203,7 @@ static int l_kvsdir_watch (lua_State *L)
     void *h;
     char *key;
     json_object *o;
-    kvsdir_t dir;
+    kvsdir_t *dir;
 
     dir = lua_get_kvsdir (L, 1);
     h = kvsdir_handle (dir);
@@ -211,7 +211,7 @@ static int l_kvsdir_watch (lua_State *L)
 
     if (lua_isnoneornil (L, 3)) {
         /* Need to fetch initial value */
-        if (((rc = kvs_get (h, key, &o)) < 0) && (errno != ENOENT))
+        if (((rc = kvs_get_obj (h, key, &o)) < 0) && (errno != ENOENT))
             goto err;
     }
     else {
@@ -219,7 +219,7 @@ static int l_kvsdir_watch (lua_State *L)
         lua_value_to_json (L, -1, &o);
     }
 
-    rc = kvs_watch_once (h, key, &o);
+    rc = kvs_watch_once_obj (h, key, &o);
 err:
     free (key);
     if (rc < 0)
@@ -233,7 +233,7 @@ err:
 static int l_kvsdir_watch_dir (lua_State *L)
 {
     flux_t h;
-    kvsdir_t dir;
+    kvsdir_t *dir;
 
     dir = lua_get_kvsdir (L, 1);
     h = kvsdir_handle (dir);
@@ -245,7 +245,7 @@ static int l_kvsdir_index (lua_State *L)
 {
     int rc;
     flux_t f;
-    kvsdir_t d;
+    kvsdir_t *d;
     const char *key = lua_tostring (L, 2);
     char *fullkey = NULL;
     json_object *o = NULL;
@@ -261,7 +261,7 @@ static int l_kvsdir_index (lua_State *L)
     f = kvsdir_handle (d);
     fullkey = kvsdir_key_at (d, key);
 
-    if (kvs_get (f, fullkey, &o) == 0)
+    if (kvs_get_obj (f, fullkey, &o) == 0)
         rc = json_object_to_lua (L, o);
     else if (errno == EISDIR)
         rc = l_kvsdir_kvsdir_new (L);

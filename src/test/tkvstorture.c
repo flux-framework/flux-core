@@ -128,7 +128,7 @@ int main (int argc, char *argv[])
             oom ();
         fill (val, i, size);
         vo = json_object_new_string (val);
-        if (kvs_put (h, key, vo) < 0)
+        if (kvs_put_obj (h, key, vo) < 0)
             err_exit ("kvs_put %s", key);
         if (verbose)
             msg ("%s = %s", key, val);
@@ -151,7 +151,7 @@ int main (int argc, char *argv[])
         if (asprintf (&key, "%s.key%d", prefix, i) < 0)
             oom ();
         fill (val, i, size);
-        if (kvs_get (h, key, &vo) < 0)
+        if (kvs_get_obj (h, key, &vo) < 0)
             err_exit ("kvs_get '%s'", key);
         s = json_object_get_string (vo);
         if (verbose)

@@ -131,7 +131,7 @@ void flux_mrpc_put_inarg (flux_mrpc_t f, json_object *val)
 
     if (asprintf (&key, "%s.in", f->path) < 0)
         oom ();
-    kvs_put (f->h, key, val);
+    kvs_put_obj (f->h, key, val);
     free (key);
 }
 
@@ -142,7 +142,7 @@ int flux_mrpc_get_inarg (flux_mrpc_t f, json_object **valp)
 
     if (asprintf (&key, "%s.in", f->path) < 0)
         oom ();
-    if (kvs_get (f->h, key, valp) < 0)
+    if (kvs_get_obj (f->h, key, valp) < 0)
         goto done;
     rc = 0;
 done:
@@ -156,7 +156,7 @@ void flux_mrpc_put_outarg (flux_mrpc_t f, json_object *val)
 
     if (asprintf (&key, "%s.out-%d", f->path, flux_rank (f->h)) < 0)
         oom ();
-    kvs_put (f->h, key, val);
+    kvs_put_obj (f->h, key, val);
     free (key);
 }
 
@@ -167,7 +167,7 @@ int flux_mrpc_get_outarg (flux_mrpc_t f, int nodeid, json_object **valp)
 
     if (asprintf (&key, "%s.out-%d", f->path, nodeid) < 0)
         oom ();
-    if (kvs_get (f->h, key, valp) < 0)
+    if (kvs_get_obj (f->h, key, valp) < 0)
         goto done;
     rc = 0;
 done:
