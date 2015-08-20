@@ -258,10 +258,9 @@ static int coproc_cb (coproc_t c, void *arg)
 {
     struct flux_msg_watcher *w = arg;
     flux_msg_t *msg;
-    struct flux_match match = FLUX_MATCH_ANY;
     int type;
     int rc = -1;
-    if (!(msg = flux_recv (w->h, match, FLUX_O_NONBLOCK))) {
+    if (!(msg = flux_recv (w->h, FLUX_MATCH_ANY, FLUX_O_NONBLOCK))) {
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             rc = 0;
         goto done;
@@ -322,13 +321,12 @@ static void handle_cb (struct ev_loop *loop, struct ev_flux *hw, int revents)
     void *ptr = (char *)hw - offsetof (struct reactor, handle_w);
     struct reactor *r = ptr;
     struct flux_msg_watcher *w;
-    struct flux_match match = FLUX_MATCH_ANY;
     flux_msg_t *msg = NULL;
     int type;
 
     if (revents & EV_ERROR)
         goto fatal;
-    if (!(msg = flux_recv (r->h, match, FLUX_O_NONBLOCK))) {
+    if (!(msg = flux_recv (r->h, FLUX_MATCH_ANY, FLUX_O_NONBLOCK))) {
         if (errno != EAGAIN && errno != EWOULDBLOCK)
             goto fatal;
         else

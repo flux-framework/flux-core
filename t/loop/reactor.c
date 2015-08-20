@@ -88,11 +88,10 @@ static void msgreader (flux_t h, flux_msg_watcher_t *w, const flux_msg_t *msg,
 
 static void test_msg (flux_t h)
 {
-    struct flux_match match_any = FLUX_MATCH_ANY;
     flux_msg_watcher_t *w;
     int i;
 
-    ok ((w = flux_msg_watcher_create (match_any, msgreader, NULL)) != NULL,
+    ok ((w = flux_msg_watcher_create (FLUX_MATCH_ANY, msgreader, NULL)) != NULL,
         "msg: created watcher for any message");
     flux_msg_watcher_start (h, w);
     for (i = 0; i < msgwatcher_count; i++) {
@@ -365,7 +364,6 @@ static void fatal_err (const char *message, void *arg)
 int main (int argc, char *argv[])
 {
     flux_t h;
-    struct flux_match match_any = FLUX_MATCH_ANY;
 
     plan (3+11+3+4+3+5);
 
@@ -379,7 +377,7 @@ int main (int argc, char *argv[])
     ok (flux_reactor_start (h) == 0,
         "general: reactor ran to completion (no watchers)");
     errno = 0;
-    ok (flux_sleep_on (h, match_any) < 0 && errno == EINVAL,
+    ok (flux_sleep_on (h, FLUX_MATCH_ANY) < 0 && errno == EINVAL,
         "general: flux_sleep_on outside coproc fails with EINVAL");
 
     test_timer (h); // 11

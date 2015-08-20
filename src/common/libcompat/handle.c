@@ -43,8 +43,7 @@ int flux_sendmsg (flux_t h, zmsg_t **zmsg)
 
 flux_msg_t *flux_recvmsg (flux_t h, bool nonblock)
 {
-    struct flux_match match = FLUX_MATCH_ANY;
-    return flux_recv (h, match, nonblock ? FLUX_O_NONBLOCK : 0);
+    return flux_recv (h, FLUX_MATCH_ANY, nonblock ? FLUX_O_NONBLOCK : 0);
 }
 
 flux_msg_t *flux_recvmsg_match (flux_t h, struct flux_match match,

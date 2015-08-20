@@ -45,7 +45,6 @@ int main (int argc, char *argv[])
     char *s;
     flux_msg_t *msg;
     const char *topic;
-    const struct flux_match match_any = FLUX_MATCH_ANY;
 
     plan (33);
 
@@ -122,7 +121,7 @@ int main (int argc, char *argv[])
     flux_msg_destroy (msg);
     ok ((flux_pollevents (h) & FLUX_POLLIN) != 0,
        "flux_pollevents shows FLUX_POLLIN set on non-empty queue");
-    ok ((msg = flux_recv (h, match_any, 0)) != NULL
+    ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
         && flux_request_decode (msg, &topic, NULL) == 0
         && !strcmp (topic, "foo"),
         "flux_recv works and sent message was received");
@@ -147,12 +146,12 @@ int main (int argc, char *argv[])
         "flux_requeue bar HEAD works");
     ok ((flux_pollevents (h) & FLUX_POLLIN) != 0,
        "flux_pollevents shows FLUX_POLLIN set after requeue");
-    ok ((msg = flux_recv (h, match_any, 0)) != NULL
+    ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
         && flux_request_decode (msg, &topic, NULL) == 0
         && !strcmp (topic, "bar"),
         "flux_recv got bar");
     flux_msg_destroy (msg);
-    ok ((msg = flux_recv (h, match_any, 0)) != NULL
+    ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
         && flux_request_decode (msg, &topic, NULL) == 0
         && !strcmp (topic, "foo"),
         "flux_recv got foo");
@@ -172,12 +171,12 @@ int main (int argc, char *argv[])
         "flux_requeue bar TAIL works");
     ok ((flux_pollevents (h) & FLUX_POLLIN) != 0,
        "flux_pollevents shows FLUX_POLLIN set after requeue");
-    ok ((msg = flux_recv (h, match_any, 0)) != NULL
+    ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
         && flux_request_decode (msg, &topic, NULL) == 0
         && !strcmp (topic, "foo"),
         "flux_recv got foo");
     flux_msg_destroy (msg);
-    ok ((msg = flux_recv (h, match_any, 0)) != NULL
+    ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
         && flux_request_decode (msg, &topic, NULL) == 0
         && !strcmp (topic, "bar"),
         "flux_recv got bar");

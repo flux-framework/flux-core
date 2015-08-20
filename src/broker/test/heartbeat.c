@@ -53,7 +53,6 @@ int main (int argc, char **argv)
     flux_t h;
     heartbeat_t *hb;
     flux_msg_watcher_t *w;
-    struct flux_match matchev = FLUX_MATCH_EVENT;
 
     plan (21);
 
@@ -93,7 +92,7 @@ int main (int argc, char **argv)
         "heartbeat_get_epoch works, default is zero");
 
 
-    w = flux_msg_watcher_create (matchev, heartbeat_event_cb, hb);
+    w = flux_msg_watcher_create (FLUX_MATCH_EVENT, heartbeat_event_cb, hb);
     ok (w != NULL,
         "created event watcher");
     flux_msg_watcher_start (h, w);

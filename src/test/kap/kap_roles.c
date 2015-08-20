@@ -369,9 +369,8 @@ enforce_c_consistency (kap_params_t *param)
     const char *tag = NULL;
     int v = 0;
     json_object *o = NULL;
-    struct flux_match match = FLUX_MATCH_EVENT;
 
-    zmsg_t * msg = flux_recvmsg_match (param->pers.handle, match, false);
+    zmsg_t * msg = flux_recv (param->pers.handle, FLUX_MATCH_EVENT, 0);
     if ( ! msg ) {
         fprintf (stderr,
             "event recv failed: %s\n", strerror (errno));

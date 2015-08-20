@@ -71,7 +71,6 @@ void check_size3 (flux_t h)
 {
     hello_t *hello;
     flux_msg_watcher_t *w;
-    struct flux_match match = FLUX_MATCH_ANY;
     uint32_t size = 3;
     uint32_t rank = 0;
     char *prefix = "size=3";
@@ -86,8 +85,7 @@ void check_size3 (flux_t h)
     hello_set_callback (hello, hello_cb, prefix);
     hello_set_timeout (hello, 0.1);
 
-    match.typemask = FLUX_MSGTYPE_REQUEST;
-    w = flux_msg_watcher_create (match, hello_request_cb, hello);
+    w = flux_msg_watcher_create (FLUX_MATCH_REQUEST, hello_request_cb, hello);
     ok (w != NULL,
         "%s: created cmb.hello watcher", prefix);
     flux_msg_watcher_start (h, w);

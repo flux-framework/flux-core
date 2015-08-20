@@ -31,14 +31,26 @@ struct flux_match {
     char *topic_glob;       /* glob matching topic string (or NULL) */
 };
 
-#define FLUX_MATCH_ANY { \
+#define FLUX_MATCH_ANY (struct flux_match){ \
     .typemask = FLUX_MSGTYPE_ANY, \
     .matchtag = FLUX_MATCHTAG_NONE, \
     .bsize = 0, \
     .topic_glob = NULL, \
 }
-#define FLUX_MATCH_EVENT { \
+#define FLUX_MATCH_EVENT (struct flux_match){ \
     .typemask = FLUX_MSGTYPE_EVENT, \
+    .matchtag = FLUX_MATCHTAG_NONE, \
+    .bsize = 0, \
+    .topic_glob = NULL, \
+}
+#define FLUX_MATCH_REQUEST (struct flux_match){ \
+    .typemask = FLUX_MSGTYPE_REQUEST, \
+    .matchtag = FLUX_MATCHTAG_NONE, \
+    .bsize = 0, \
+    .topic_glob = NULL, \
+}
+#define FLUX_MATCH_RESPONSE (struct flux_match){ \
+    .typemask = FLUX_MSGTYPE_RESPONSE, \
     .matchtag = FLUX_MATCHTAG_NONE, \
     .bsize = 0, \
     .topic_glob = NULL, \
