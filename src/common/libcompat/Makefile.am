@@ -13,4 +13,8 @@ libcompat_la_SOURCES = \
 	reactor.h \
 	info.c \
 	info.h \
+	request.c \
+	request.h \
+	rpc.c \
+	rpc.h \
 	compat.h

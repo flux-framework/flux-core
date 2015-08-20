@@ -93,7 +93,7 @@ int main (int argc, char *argv[])
 static void event_pub (flux_t h, int argc, char **argv)
 {
     char *topic = argv[0];
-    zmsg_t *zmsg = NULL;
+    flux_msg_t *msg = NULL;
     char *json_str = NULL;
 
     if (argc > 1) {
@@ -102,11 +102,12 @@ static void event_pub (flux_t h, int argc, char **argv)
             oom ();
         argz_stringify (json_str, len, ' ');
     }
-    if (!(zmsg = flux_event_encode (topic, json_str))
-              || flux_sendmsg (h, &zmsg) < 0)
+    if (!(msg = flux_event_encode (topic, json_str))
+              || flux_send (h, msg, 0) < 0)
         err_exit ("sending event");
     if (json_str)
         free (json_str);
+    flux_msg_destroy (msg);
 }
 
 static void subscribe_all (flux_t h, int tc, char **tv)
@@ -129,7 +130,7 @@ static void unsubscribe_all (flux_t h, int tc, char **tv)
 
 static void event_sub (flux_t h, int argc, char **argv)
 {
-    zmsg_t *zmsg;
+    flux_msg_t *msg;
     struct flux_match match = FLUX_MATCH_EVENT;
 
     if (argc > 0)
@@ -137,15 +138,16 @@ static void event_sub (flux_t h, int argc, char **argv)
     else if (flux_event_subscribe (h, "") < 0)
         err_exit ("flux_event_subscribe");
 
-    while ((zmsg = flux_recvmsg_match (h, match, false))) {
+    while ((msg = flux_recv (h, match, 0))) {
         const char *topic;
         const char *json_str;
-        if (flux_msg_get_topic (zmsg, &topic) < 0
-                || flux_msg_get_payload_json (zmsg, &json_str) < 0) {
+        if (flux_msg_get_topic (msg, &topic) < 0
+                || flux_msg_get_payload_json (msg, &json_str) < 0) {
             printf ("malformed message ignored\n");
         } else {
             printf ("%s\t%s\n", topic, json_str ? json_str : "");
         }
+        flux_msg_destroy (msg);
     }
     /* FIXME: add SIGINT handler to exit above loop and clean up.
      */

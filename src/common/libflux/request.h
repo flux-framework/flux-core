@@ -1,7 +1,6 @@
 #ifndef _FLUX_CORE_REQUEST_H
 #define _FLUX_CORE_REQUEST_H
 
-#include <json.h>
 #include <stdbool.h>
 #include <stdarg.h>
 

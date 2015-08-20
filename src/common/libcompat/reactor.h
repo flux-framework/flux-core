@@ -25,50 +25,59 @@ typedef struct {
  * added to the beginning of the msghandler list.
  */
 int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
-                         FluxMsgHandler cb, void *arg);
+                         FluxMsgHandler cb, void *arg)
+                         __attribute__ ((deprecated));
 
 /* Register a batch of FluxMsgHandler's
  */
 int flux_msghandler_addvec (flux_t h, msghandler_t *handlers, int len,
-                            void *arg);
+                            void *arg)
+                            __attribute__ ((deprecated));
 
 /* Unregister a FluxMsgHandler callback.  Only the first callback with
  * identical typemask and pattern is removed.
  */
-void flux_msghandler_remove (flux_t h, int typemask, const char *pattern);
+void flux_msghandler_remove (flux_t h, int typemask, const char *pattern)
+                             __attribute__ ((deprecated));
 
 
 /* Register a FluxFdHandler callback to be called whenever an event
  * in the 'events' mask occurs on the given file descriptor 'fd'.
  */
 int flux_fdhandler_add (flux_t h, int fd, short events,
-                        FluxFdHandler cb, void *arg);
+                        FluxFdHandler cb, void *arg)
+                        __attribute__ ((deprecated));
 
 /* Unregister a FluxFdHandler callback.  Only the first callback with
  * identical fd and events is removed.
  */
-void flux_fdhandler_remove (flux_t h, int fd, short events);
+void flux_fdhandler_remove (flux_t h, int fd, short events)
+                            __attribute__ ((deprecated));
 
 
 /* Register a FluxZsHandler callback to be called whenever an event
  * in the 'events' mask occurs on the given zeromq socket 'zs'.
  */
 int flux_zshandler_add (flux_t h, void *zs, short events,
-                        FluxZsHandler cb, void *arg);
+                        FluxZsHandler cb, void *arg)
+                        __attribute__ ((deprecated));
 
 /* Unregister a FluxZsHandler callback.  Only the first callback with
  * identical zs and events is removed.
  */
-void flux_zshandler_remove (flux_t h, void *zs, short events);
+void flux_zshandler_remove (flux_t h, void *zs, short events)
+                            __attribute__ ((deprecated));
 
 /* Register a FluxTmoutHandler callback.  Returns timer_id or -1 on error.
  */
 int flux_tmouthandler_add (flux_t h, unsigned long msec, bool oneshot,
-                           FluxTmoutHandler cb, void *arg);
+                           FluxTmoutHandler cb, void *arg)
+                           __attribute__ ((deprecated));
 
 /* Unregister a FluxTmoutHandler callback.
  */
-void flux_tmouthandler_remove (flux_t h, int timer_id);
+void flux_tmouthandler_remove (flux_t h, int timer_id)
+                               __attribute__ ((deprecated));
 
 #endif /* !_FLUX_COMPAT_REACTOR_H */
 

@@ -27,7 +27,7 @@ AC_DEFINE([_GNU_SOURCE], 1,
 AC_PROG_CC_C99
 AM_PROG_CC_C_O
 if test "$GCC" = yes; then
-  GCCWARN="-Wall -Werror -Wno-strict-aliasing"
+  GCCWARN="-Wall -Werror -Wno-strict-aliasing -Wno-error=deprecated-declarations"
   AC_SUBST([GCCWARN])
 fi
 LT_INIT
@@ -156,7 +156,6 @@ AC_CONFIG_FILES( \
   src/common/libutil/Makefile \
   src/common/libev/Makefile \
   src/common/libflux/Makefile \
-  src/common/libjsonc/Makefile \
   src/common/libcompat/Makefile \
   src/lib/Makefile \
   src/lib/libpmi/Makefile \

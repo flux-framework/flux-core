@@ -27,12 +27,13 @@
 #endif
 #include <dlfcn.h>
 #include <argz.h>
+#include <dirent.h>
+#include <sys/stat.h>
 
 #include "module.h"
 #include "message.h"
 #include "rpc.h"
 
-#include "src/common/libjsonc/jsonc.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 

@@ -34,7 +34,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
 
-#include "jsonc.h"
+#include "compat.h"
 
 int flux_json_request_decode (zmsg_t *zmsg, json_object **in)
 {
