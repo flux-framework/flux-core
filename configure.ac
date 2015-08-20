@@ -27,7 +27,7 @@ AC_DEFINE([_GNU_SOURCE], 1,
 AC_PROG_CC_C99
 AM_PROG_CC_C_O
 if test "$GCC" = yes; then
-  GCCWARN="-Wall -Werror -Wno-strict-aliasing"
+  GCCWARN="-Wall -Werror -Wno-strict-aliasing -Wno-error=deprecated-declarations"
   AC_SUBST([GCCWARN])
 fi
 LT_INIT
