@@ -140,7 +140,6 @@ int main (int argc, char *argv[])
     char *target;
     flux_msg_watcher_t *mw;
     flux_timer_watcher_t *tw;
-    struct flux_match match_any = FLUX_MATCH_ANY;
     struct ping_ctx ctx = {
         .period = 1.0,
         .nodeid = FLUX_NODEID_ANY,
@@ -218,7 +217,7 @@ int main (int argc, char *argv[])
     if (!(h = flux_open (NULL, 0)))
         err_exit ("flux_open");
 
-    mw = flux_msg_watcher_create (match_any, response_cb, &ctx);
+    mw = flux_msg_watcher_create (FLUX_MATCH_ANY, response_cb, &ctx);
     tw = flux_timer_watcher_create (0, ctx.period, timer_cb, &ctx);
     if (!mw || !tw)
         err_exit ("error creating watchers");

@@ -131,14 +131,13 @@ static void unsubscribe_all (flux_t h, int tc, char **tv)
 static void event_sub (flux_t h, int argc, char **argv)
 {
     flux_msg_t *msg;
-    struct flux_match match = FLUX_MATCH_EVENT;
 
     if (argc > 0)
         subscribe_all (h, argc, argv);
     else if (flux_event_subscribe (h, "") < 0)
         err_exit ("flux_event_subscribe");
 
-    while ((msg = flux_recv (h, match, 0))) {
+    while ((msg = flux_recv (h, FLUX_MATCH_EVENT, 0))) {
         const char *topic;
         const char *json_str;
         if (flux_msg_get_topic (msg, &topic) < 0
