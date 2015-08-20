@@ -35,7 +35,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/nodeset.h"
 
-#include "jsonc.h"
+#include "compat.h"
 
 int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
                    JSON in, JSON *out)

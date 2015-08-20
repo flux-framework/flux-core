@@ -20,9 +20,22 @@
 /* info */
 #define flux_treeroot               compat_treeroot
 
+/* request */
+#define flux_json_request           compat_request
+#define flux_json_respond           compat_respond
+#define flux_err_respond            compat_respond_err
+#define flux_json_request_decode    compat_request_decode
+#define flux_json_response_decode   compat_response_decode
+
+/* rpc */
+#define flux_json_rpc               compat_rpc
+#define flux_json_multrpc           compat_multrpc
+
 #include "handle.h"
 #include "reactor.h"
 #include "info.h"
+#include "request.h"
+#include "rpc.h"
 
 #endif /* !_FLUX_COMPAT_H */
 
