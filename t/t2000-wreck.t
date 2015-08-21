@@ -39,4 +39,16 @@ test_expect_success 'wreckrun: does not drop output' '
 	run_timeout 5 flux wreckrun -N1 -n1 cat expected >output &&
 	test_cmp expected output
 '
+test_expect_success 'wreck: job state events emitted' '
+	run_timeout 5 \
+	  $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
+	   wreck.state wreck.state.complete \
+	   flux wreckrun -N4 -n4 /bin/true > output &&
+	cat >expected <<-EOF &&
+	wreck.state.starting
+	wreck.state.running
+	wreck.state.complete
+	EOF
+	test_cmp expected output
+'
 test_done
