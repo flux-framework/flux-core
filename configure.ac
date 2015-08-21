@@ -104,6 +104,7 @@ X_AC_ZEROMQ
 X_AC_MUNGE
 PKG_CHECK_MODULES([JSON], [json], [],
   [PKG_CHECK_MODULES([JSON], [json-c])])
+PKG_CHECK_MODULES([HWLOC], [hwloc], [], [])
 LX_FIND_MPI
 AM_CONDITIONAL([HAVE_MPI], [test "$have_C_mpi" = yes])
 
@@ -184,6 +185,7 @@ AC_CONFIG_FILES( \
   src/modules/barrier/Makefile \
   src/modules/wreck/Makefile \
   src/modules/pymod/Makefile \
+  src/modules/resource-hwloc/Makefile \
   src/test/Makefile \
   src/test/kap/Makefile \
   src/test/request/Makefile \
