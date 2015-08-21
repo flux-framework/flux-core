@@ -33,6 +33,7 @@ dist_fluxcmd_SCRIPTS = \
 	flux-wreckrun \
 	flux-exec \
 	flux-topo \
+	flux-lstopo \
 	flux-ps
 
 if HAVE_PYTHON

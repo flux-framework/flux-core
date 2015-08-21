@@ -1,0 +1,14 @@
+#!/usr/bin/env python
+
+import flux
+import tempfile
+import subprocess as sp
+import sys
+
+f = flux.Flux()
+xml_topo = f.rpc_send('resource-hwloc.topo')['topology']
+with tempfile.NamedTemporaryFile() as f:
+    f.file.write(xml_topo)
+    name = f.name
+    f.file.close()
+    sp.call(['lstopo', '-i', name] + sys.argv[1:])
