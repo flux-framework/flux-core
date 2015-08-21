@@ -23,9 +23,9 @@ test_expect_success 'wreckrun: works' '
 
 test_expect_success 'wreckrun: propagates current working directory' '
 	mkdir -p testdir &&
-	cd testdir && 
-	mypwd=$(pwd) &&
-	run_timeout 5 flux wreckrun -N1 -n1 pwd | grep "^$mypwd$"
+	mypwd=$(pwd)/testdir &&
+	( cd testdir &&
+	run_timeout 5 flux wreckrun -N1 -n1 pwd ) | grep "^$mypwd$"
 '
 test_expect_success 'wreckrun: propagates current environment' '
 	( export MY_UNLIKELY_ENV=0xdeadbeef &&
