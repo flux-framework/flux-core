@@ -53,7 +53,8 @@ typedef enum {
     J_FOR_RENT   /*!< Space For Rent */
 } job_state_t;
 
-typedef int (*jsc_handler_f)(json_object *base_jcb, void *arg, int errnum);
+typedef int (*jsc_handler_obj_f)(json_object *base_jcb, void *arg, int errnum);
+typedef int (*jsc_handler_f)(const char *base_jcb, void *arg, int errnum);
 
 /* TODO: find a better way to manage this hierarchical 
  * JCB attributes space 
@@ -92,6 +93,8 @@ typedef int (*jsc_handler_f)(json_object *base_jcb, void *arg, int errnum);
  * multiple times. The callbacks will be invoked in the order
  * they are registered. Returns 0 on success; otherwise -1.
  */
+int jsc_notify_status_obj (flux_t h, jsc_handler_obj_f callback, void *d)
+                           __attribute__ ((deprecated));
 int jsc_notify_status (flux_t h, jsc_handler_f callback, void *d);
 
 /**
@@ -101,7 +104,10 @@ int jsc_notify_status (flux_t h, jsc_handler_f callback, void *d);
  * are trasferred to "jcb," so that json_object_put (*jcb) will free this hierarchy 
  * in its entirety.  Returns 0 on success; otherwise -1.
  */
-int jsc_query_jcb (flux_t h, int64_t jobid, const char *key, json_object **jcb);
+int jsc_query_jcb_obj (flux_t h, int64_t jobid, const char *key,
+                       json_object **jcb)
+                       __attribute__ ((deprecated));
+int jsc_query_jcb (flux_t h, int64_t jobid, const char *key, char **jcb);
 
 
 /**
@@ -110,7 +116,10 @@ int jsc_query_jcb (flux_t h, int64_t jobid, const char *key, json_object **jcb);
  * This will not release "jcb," so it is the caller's responsibility to
  * free "jcb."
  */
-int jsc_update_jcb (flux_t h, int64_t jobid, const char *key, json_object *jcb);
+int jsc_update_jcb_obj (flux_t h, int64_t jobid, const char *key,
+                        json_object *jcb)
+                       __attribute__ ((deprecated));
+int jsc_update_jcb (flux_t h, int64_t jobid, const char *key, const char *jcb);
 
 
 /** 

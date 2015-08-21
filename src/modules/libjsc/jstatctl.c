@@ -51,7 +51,7 @@ typedef struct {
 } stab_t;
 
 typedef struct {
-   jsc_handler_f cb;
+   jsc_handler_obj_f cb;
    void *arg;  
 } cb_pair_t;
 
@@ -826,7 +826,7 @@ static int reg_newjob_hdlr (flux_t h, kvs_set_int64_f func)
  *                                                                            *
  ******************************************************************************/
 
-int jsc_notify_status (flux_t h, jsc_handler_f func, void *d)
+int jsc_notify_status_obj (flux_t h, jsc_handler_obj_f func, void *d)
 {
     int rc = -1;
     cb_pair_t *c = NULL; 
@@ -853,7 +853,32 @@ done:
     return rc;
 }
 
-int jsc_query_jcb (flux_t h, int64_t jobid, const char *key, JSON *jcb)
+struct callback_wrapper {
+    jsc_handler_f cb;
+    void *arg;
+};
+
+static int wrap_handler (json_object *base_jcb, void *arg, int errnum)
+{
+    struct callback_wrapper *wrap = arg;
+    return wrap->cb (Jtostr (base_jcb), wrap->arg, errnum);
+}
+
+int jsc_notify_status (flux_t h, jsc_handler_f func, void *d)
+{
+    int rc = -1;
+    struct callback_wrapper *wrap = xzmalloc (sizeof (*wrap));
+
+    wrap->cb = func;
+    wrap->arg = d;
+
+    rc = jsc_notify_status_obj (h, wrap_handler, wrap);
+    if (rc < 0)
+        free (wrap);
+    return rc;
+}
+
+int jsc_query_jcb_obj (flux_t h, int64_t jobid, const char *key, JSON *jcb)
 {
     int rc = -1;
 
@@ -884,7 +909,21 @@ int jsc_query_jcb (flux_t h, int64_t jobid, const char *key, JSON *jcb)
     return rc;
 }
 
-int jsc_update_jcb (flux_t h, int64_t jobid, const char *key, JSON jcb)
+int jsc_query_jcb (flux_t h, int64_t jobid, const char *key, char **jcb)
+{
+    int rc;
+    JSON o = NULL;
+
+    rc = jsc_query_jcb_obj (h, jobid, key, &o);
+    if (rc < 0)
+        goto done;
+    *jcb = o ? xstrdup (Jtostr (o)) : NULL;
+done:
+    Jput (o);
+    return rc;
+}
+
+int jsc_update_jcb_obj (flux_t h, int64_t jobid, const char *key, JSON jcb)
 {
     int rc = -1;
     JSON o = NULL;
@@ -917,6 +956,20 @@ int jsc_update_jcb (flux_t h, int64_t jobid, const char *key, JSON jcb)
     return rc;
 }
 
+int jsc_update_jcb (flux_t h, int64_t jobid, const char *key, const char *jcb)
+{
+    int rc = -1;
+    JSON o = NULL;
+
+    if (!jcb || !(o = Jfromstr (jcb))) {
+        errno = EINVAL;
+        goto done;
+    }
+    rc = jsc_update_jcb_obj (h, jobid, key, o);
+done:
+    Jput (o);
+    return rc;
+}
 
 /*
  * vi: ts=4 sw=4 expandtab
