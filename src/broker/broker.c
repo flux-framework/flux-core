@@ -1019,23 +1019,26 @@ static int child_exit_handler (struct subprocess *p, void *arg)
     return (0);
 }
 
-static int subprocess_io_cb (struct subprocess *p, json_object *o)
+static int subprocess_io_cb (struct subprocess *p, const char *json_str)
 {
     ctx_t *ctx = subprocess_get_context (p, "ctx");
-    zmsg_t *orig = subprocess_get_context (p, "zmsg");
+    flux_msg_t *orig = subprocess_get_context (p, "zmsg");
+    json_object *o = NULL;
+    int rc = -1;
 
     assert (ctx != NULL);
     assert (orig != NULL);
 
-    zmsg_t *zmsg = zmsg_dup (orig);
-
+    if (!(o = Jfromstr (json_str))) {
+        errno = EPROTO;
+        goto done;
+    }
     /* Add this rank */
     Jadd_int (o, "rank", ctx->rank);
-
-    flux_json_respond (ctx->h, o, &zmsg);
-    json_object_put (o);
-
-    return (0);
+    rc = flux_respond (ctx->h, orig, 0, Jtostr (o));
+done:
+    Jput (o);
+    return (rc);
 }
 
 static struct subprocess *
@@ -1074,7 +1077,7 @@ static int cmb_write_cb (zmsg_t **zmsg, void *arg)
          *  this should be bubbled up as a subprocess IO json spec with
          *  encode/decode functions.
          */
-        if ((len = zio_json_decode (o, &data, &eof)) < 0)
+        if ((len = zio_json_decode (Jtostr (o), &data, &eof)) < 0)
             goto out;
         if (!(p = subprocess_get_pid (ctx->sm, pid))) {
             errnum = ENOENT;

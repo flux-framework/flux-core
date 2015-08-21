@@ -70,8 +70,8 @@ struct task_info {
     int      exited;          /* non-zero if this task exited */
 
     /*  IO */
-    zio_t zio[3];
-    kz_t  kz[3];
+    zio_t *zio[3];
+    kz_t  *kz[3];
 };
 
 struct prog_ctx {
@@ -221,36 +221,34 @@ void prog_ctx_signal_eof (struct prog_ctx *ctx)
      */
     kill (getpid(), SIGCHLD);
 }
-int stdout_cb (zio_t z, json_object *o, struct task_info *t)
+int stdout_cb (zio_t *z, const char *json_str, void *arg)
 {
+    struct task_info *t = arg;
     int rc;
-    if ((rc = kz_put_json (t->kz[OUT], o)) < 0)
+    if ((rc = kz_put_json (t->kz[OUT], json_str)) < 0)
         log_err (t->ctx, "stdout: kz_put_json: %s", strerror (errno));
-    else if (zio_json_eof (o))
+    else if (zio_json_eof (json_str))
         prog_ctx_signal_eof (t->ctx);
-    if (o)
-        json_object_put (o);
     return (rc);
 }
 
-int stderr_cb (zio_t z, json_object *o, struct task_info *t)
+int stderr_cb (zio_t *z, const char *json_str, void *arg)
 {
+    struct task_info *t = arg;
     int rc;
-    if ((rc = kz_put_json (t->kz[ERR], o)) < 0)
+    if ((rc = kz_put_json (t->kz[ERR], json_str)) < 0)
         log_err (t->ctx, "stderr: kz_put_json: %s", strerror (errno));
-    else if (zio_json_eof (o))
+    else if (zio_json_eof (json_str))
         prog_ctx_signal_eof (t->ctx);
-    if (o)
-        json_object_put (o);
     return (rc);
 }
 
-void kz_stdin (kz_t kz, struct task_info *t)
+void kz_stdin (kz_t *kz, struct task_info *t)
 {
-    json_object *o;
-    while ((o = kz_get_json (kz))) {
-        zio_write_json (t->zio [IN], o);
-        json_object_put (o);
+    char *json_str;
+    while ((json_str = kz_get_json (kz))) {
+        zio_write_json (t->zio [IN], json_str);
+        free (json_str);
     }
     return;
 }
@@ -267,10 +265,10 @@ int prog_ctx_io_flags (struct prog_ctx *ctx)
     return (flags);
 }
 
-kz_t task_kz_open (struct task_info *t, int type)
+kz_t *task_kz_open (struct task_info *t, int type)
 {
     struct prog_ctx *ctx = t->ctx;
-    kz_t kz;
+    kz_t *kz;
     char *key;
     int flags = prog_ctx_io_flags (ctx);
 
@@ -303,10 +301,10 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
     t->kvs = NULL;
 
     t->zio [OUT] = zio_pipe_reader_create ("stdout", NULL, (void *) t);
-    zio_set_send_cb (t->zio [OUT], (zio_send_f) stdout_cb);
+    zio_set_send_cb (t->zio [OUT], stdout_cb);
 
     t->zio [ERR] = zio_pipe_reader_create ("stderr", NULL, (void *) t);
-    zio_set_send_cb (t->zio [ERR], (zio_send_f) stderr_cb);
+    zio_set_send_cb (t->zio [ERR], stderr_cb);
 
     t->zio [IN] = zio_pipe_writer_create ("stdin", (void *) t);
 

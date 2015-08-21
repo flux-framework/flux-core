@@ -75,9 +75,9 @@ struct subprocess {
     unsigned short exited:1;
     unsigned short completed:1;
 
-    zio_t zio_in;
-    zio_t zio_out;
-    zio_t zio_err;
+    zio_t *zio_in;
+    zio_t *zio_out;
+    zio_t *zio_err;
 
     subprocess_cb_f *exit_cb;
     void *exit_cb_arg;
@@ -96,13 +96,13 @@ static int sigmask_unblock_all (void)
  *  Default handler for stdout/err: send output directly into
  *   stderr of caller...
  */
-static int send_output_to_stream (const char *name, json_object *o)
+static int send_output_to_stream (const char *name, const char *json_str)
 {
     FILE *fp = stdout;
     char *s = NULL;
     bool eof;
 
-    int len = zio_json_decode (o, (void **) &s, &eof);
+    int len = zio_json_decode (json_str, (void **) &s, &eof);
 
     if (strcmp (name, "stderr") == 0)
         fp = stderr;
@@ -135,18 +135,24 @@ static int check_completion (struct subprocess *p)
     return (0);
 }
 
-static int output_handler (zio_t z, json_object *o, void *arg)
+static int output_handler (zio_t *z, const char *json_str, void *arg)
 {
     struct subprocess *p = (struct subprocess *) arg;
+    json_object *o;
 
     if (p->io_cb) {
+        if (!(o = json_tokener_parse (json_str))) {
+            errno = EINVAL;
+            return -1;
+        }
         Jadd_int (o, "pid", subprocess_pid (p));
         Jadd_str (o, "type", "io");
         Jadd_str (o, "name", zio_name (z));
-        (*p->io_cb) (p, o);
+        (*p->io_cb) (p, json_object_to_json_string (o));
+        json_object_put (o);
     }
     else
-       send_output_to_stream (zio_name (z), o);
+       send_output_to_stream (zio_name (z), json_str);
 
     /*
      * Check for process completion in case EOF from I/O stream and process
@@ -184,8 +190,8 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
     p->zio_out = zio_pipe_reader_create ("stdout", NULL, (void *) p);
     p->zio_err = zio_pipe_reader_create ("stderr", NULL, (void *) p);
 
-    zio_set_send_cb (p->zio_out, (zio_send_f) output_handler);
-    zio_set_send_cb (p->zio_err, (zio_send_f) output_handler);
+    zio_set_send_cb (p->zio_out, output_handler);
+    zio_set_send_cb (p->zio_err, output_handler);
 
     if (zlist_append (sm->processes, (void *)p) < 0) {
         subprocess_destroy (p);

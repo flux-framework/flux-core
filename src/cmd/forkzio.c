@@ -32,7 +32,6 @@
 #include <termios.h>
 #include <pty.h>
 #include <czmq.h>
-#include <json.h>
 #include <flux/core.h>
 
 #include "forkzio.h"
@@ -50,7 +49,7 @@ struct forkzio_handle_struct {
     zctx_t *zctx;
     void *zs;
     int flags;
-    zio_t zio[3];
+    zio_t *zio[3];
 };
 
 /* Data is ready on the zmq pair socket.
@@ -59,8 +58,7 @@ struct forkzio_handle_struct {
 static int forkzio_zsock_cb (zloop_t *zl, zmq_pollitem_t *zp, void *arg)
 {
     forkzio_t ctx = arg;
-    json_object *o = NULL;
-    char *buf = NULL;
+    char *json_str = NULL;
     zmsg_t *zmsg;
     int i, rc = -1;
     char *stream = NULL;
@@ -69,16 +67,14 @@ static int forkzio_zsock_cb (zloop_t *zl, zmq_pollitem_t *zp, void *arg)
         goto done;
     if (!(stream = zmsg_popstr (zmsg)))
         goto done;
-    if (!(buf = zmsg_popstr (zmsg)))
-        goto done;
-    if (!(o = json_tokener_parse (buf)))
+    if (!(json_str = zmsg_popstr (zmsg)))
         goto done;
     for (i = 0; i < 3; i++) {
         if (!ctx->zio[i] || strcmp (zio_name (ctx->zio[i]), stream) != 0)
             continue;
         if ((ctx->flags & FORKZIO_FLAG_DEBUG))
             msg ("%s: msg %s => zio[%d]", __FUNCTION__, stream, i);
-        if (zio_write_json (ctx->zio[i], o) < 0) {
+        if (zio_write_json (ctx->zio[i], json_str) < 0) {
             err ("zio_write_json");
             goto done;
         }
@@ -92,18 +88,15 @@ static int forkzio_zsock_cb (zloop_t *zl, zmq_pollitem_t *zp, void *arg)
      */
     rc = ctx->readers > 0 ? 0 : -1;
 done:
-    if (zmsg)
-        zmsg_destroy (&zmsg);
-    if (buf)
-        free (buf);
-    if (o)
-        json_object_put (o);
+    zmsg_destroy (&zmsg);
+    if (json_str)
+        free (json_str);
     if (stream)
         free (stream);
     return rc;
 }
 
-static int forkzio_close_cb (zio_t zio, void *arg)
+static int forkzio_close_cb (zio_t *zio, void *arg)
 {
     forkzio_t ctx = arg;
 

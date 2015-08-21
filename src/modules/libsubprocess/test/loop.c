@@ -47,12 +47,11 @@ static int exit_handler (struct subprocess *p, void *arg)
     return (0);
 }
 
-static int io_cb (struct subprocess *p, json_object *o)
+static int io_cb (struct subprocess *p, const char *json_str)
 {
     ok (p != NULL, "io_cb: valid subprocess");
-    ok (o != NULL, "io_cb: valid output");
-    note ("%s", json_object_to_json_string (o));
-    json_object_put (o);
+    ok (json_str != NULL, "io_cb: valid output");
+    note ("%s", json_str);
     return (0);
 }
 
