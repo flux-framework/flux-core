@@ -132,6 +132,12 @@ static void event_sub (flux_t h, int argc, char **argv)
 {
     flux_msg_t *msg;
 
+    /* Since output is line-based with undeterministic amount of time
+     * between lines, force stdout to be line buffered so our output
+     * is immediately available in stream, even if stdout is not a tty.
+     */
+    setlinebuf (stdout);
+
     if (argc > 0)
         subscribe_all (h, argc, argv);
     else if (flux_event_subscribe (h, "") < 0)
