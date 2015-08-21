@@ -47,7 +47,7 @@
 static int unload_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     JSON o = NULL;
-    flux_mrpc_t mrpc = NULL;
+    flux_mrpc_t *mrpc = NULL;
     const char *json_str;
     JSON in = NULL;
     JSON out = NULL;
@@ -61,13 +61,13 @@ static int unload_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
                   strerror (errno));
         goto done;
     }
-    if (!(mrpc = flux_mrpc_create_fromevent (h, o))) {
+    if (!(mrpc = flux_mrpc_create_fromevent_obj (h, o))) {
         if (errno != EINVAL) /* EINVAL == not addressed to me */
             flux_log (h, LOG_ERR, "%s: flux_mrpc_create_fromevent: %s",
                       __FUNCTION__, strerror (errno));
         goto done;
     }
-    if (flux_mrpc_get_inarg (mrpc, &in) < 0)
+    if (flux_mrpc_get_inarg_obj (mrpc, &in) < 0)
         errnum = errno;
     else if (modctl_tunload_dec (in, &modname) < 0)
         errnum = EPROTO;
@@ -77,7 +77,7 @@ static int unload_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         errnum = errno;
     //flux_log (h, LOG_DEBUG, "%s: result %d", __FUNCTION__, errnum);
     if ((out = modctl_runload_enc (errnum)))
-        flux_mrpc_put_outarg (mrpc, out);
+        flux_mrpc_put_outarg_obj (mrpc, out);
     else
         flux_log (h, LOG_ERR, "%s: modctl_runload_enc: %s",
                   __FUNCTION__, strerror (errno));
@@ -98,7 +98,7 @@ done:
 static int load_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     JSON o = NULL;
-    flux_mrpc_t mrpc = NULL;
+    flux_mrpc_t *mrpc = NULL;
     JSON in = NULL;
     JSON out = NULL;
     const char *json_str;
@@ -114,13 +114,13 @@ static int load_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
                   strerror (errno));
         goto done;
     }
-    if (!(mrpc = flux_mrpc_create_fromevent (h, o))) {
+    if (!(mrpc = flux_mrpc_create_fromevent_obj (h, o))) {
         if (errno != EINVAL) /* EINVAL == not addressed to me */
             flux_log (h, LOG_ERR, "%s: flux_mrpc_create_fromevent: %s",
                       __FUNCTION__, strerror (errno));
         goto done;
     }
-    if (flux_mrpc_get_inarg (mrpc, &in) < 0)
+    if (flux_mrpc_get_inarg_obj (mrpc, &in) < 0)
         errnum = errno;
     else if (modctl_tload_dec (in, &path, &argc, &argv) < 0)
         errnum = EPROTO;
@@ -128,7 +128,7 @@ static int load_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         errnum = errno;
     //flux_log (h, LOG_DEBUG, "%s: result %d", __FUNCTION__, errnum);
     if ((out = modctl_rload_enc (errnum)))
-        flux_mrpc_put_outarg (mrpc, out);
+        flux_mrpc_put_outarg_obj (mrpc, out);
     else
         flux_log (h, LOG_ERR, "%s: modctl_rload_enc: %s",
                   __FUNCTION__, strerror (errno));
@@ -158,7 +158,7 @@ static int lsmod_cb (const char *name, int size, const char *digest, int idle,
 static int list_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
     JSON o = NULL;
-    flux_mrpc_t mrpc = NULL;
+    flux_mrpc_t *mrpc = NULL;
     JSON in = NULL;
     JSON out = NULL;
     const char *json_str;
@@ -172,13 +172,13 @@ static int list_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
                   strerror (errno));
         goto done;
     }
-    if (!(mrpc = flux_mrpc_create_fromevent (h, o))) {
+    if (!(mrpc = flux_mrpc_create_fromevent_obj (h, o))) {
         if (errno != EINVAL) /* EINVAL == not addressed to me */
             flux_log (h, LOG_ERR, "%s: flux_mrpc_create_fromevent: %s",
                       __FUNCTION__, strerror (errno));
         goto done;
     }
-    if (flux_mrpc_get_inarg (mrpc, &in) < 0)
+    if (flux_mrpc_get_inarg_obj (mrpc, &in) < 0)
         errnum = errno;
     else if (modctl_tlist_dec (in, &svc) < 0)
         errnum = EPROTO;
@@ -191,7 +191,7 @@ static int list_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         flux_log (h, LOG_ERR, "%s: modctl_rlist_enc: %s",
                   __FUNCTION__, strerror (errno));
     } else
-        flux_mrpc_put_outarg (mrpc, out);
+        flux_mrpc_put_outarg_obj (mrpc, out);
     if (flux_mrpc_respond (mrpc) < 0) {
         flux_log (h, LOG_ERR, "flux_mrpc_respond: %s", strerror (errno));
         goto done;
