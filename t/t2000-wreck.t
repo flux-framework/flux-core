@@ -11,7 +11,7 @@ test_under_flux 4
 
 test_expect_success 'wreckrun: works' '
 	hostname=$(hostname) &&
-	run_timeout 2 flux wreckrun -n4 -N4 hostname  >output &&
+	run_timeout 5 flux wreckrun -n4 -N4 hostname  >output &&
 	cat >expected <<-EOF  &&
 	$hostname
 	$hostname
