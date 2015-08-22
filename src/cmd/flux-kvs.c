@@ -59,6 +59,7 @@ void cmd_dropcache_all (flux_t h, int argc, char **argv);
 void cmd_copy_tokvs (flux_t h, int argc, char **argv);
 void cmd_copy_fromkvs (flux_t h, int argc, char **argv);
 void cmd_dir (flux_t h, int argc, char **argv);
+void cmd_dirsize (flux_t h, int argc, char **argv);
 
 
 void usage (void)
@@ -77,6 +78,7 @@ void usage (void)
 "       flux-kvs copy-tokvs      key file\n"
 "       flux-kvs copy-fromkvs    key file\n"
 "       flux-kvs dir [-r]        [key]\n"
+"       flux-kvs dirsize         key\n"
 "       flux-kvs version\n"
 "       flux-kvs wait            version\n"
 "       flux-kvs dropcache\n"
@@ -144,6 +146,8 @@ int main (int argc, char *argv[])
         cmd_copy_fromkvs (h, argc - optind, argv + optind);
     else if (!strcmp (cmd, "dir"))
         cmd_dir (h, argc - optind, argv + optind);
+    else if (!strcmp (cmd, "dirsize"))
+        cmd_dirsize (h, argc - optind, argv + optind);
     else
         usage ();
 
@@ -570,6 +574,17 @@ void cmd_dir (flux_t h, int argc, char **argv)
         dump_kvs_dir (h, ropt, argv[0]);
     else
         msg_exit ("dir: specify zero or one directory");
+}
+
+void cmd_dirsize (flux_t h, int argc, char **argv)
+{
+    kvsdir_t *dir = NULL;
+    if (argc != 1)
+        msg_exit ("dirsize: specify one directory");
+    if (kvs_get_dir (h, &dir, "%s", argv[0]) < 0)
+        err_exit ("%s", argv[0]);
+    printf ("%d\n", kvsdir_get_size (dir));
+    kvsdir_destroy (dir);
 }
 
 /*
