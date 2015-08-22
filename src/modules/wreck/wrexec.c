@@ -413,11 +413,11 @@ static int rexec_kill (struct rexec_ctx *ctx, int64_t id, int sig)
     return rexec_session_kill (s, sig);
 }
 
-static int mrpc_respond_errnum (flux_mrpc_t mrpc, int errnum)
+static int mrpc_respond_errnum (flux_mrpc_t *mrpc, int errnum)
 {
     json_object *o = json_object_new_object ();
     util_json_object_add_int (o, "errnum", errnum);
-    flux_mrpc_put_outarg (mrpc, o);
+    flux_mrpc_put_outarg_obj (mrpc, o);
     json_object_put (o);
     return (0);
 }
@@ -431,21 +431,21 @@ static int mrpc_handler (struct rexec_ctx *ctx, zmsg_t *zmsg)
     json_object *request = NULL;
     int rc = -1;
     flux_t f = ctx->h;
-    flux_mrpc_t mrpc;
+    flux_mrpc_t *mrpc;
 
     if (flux_event_decode (zmsg, NULL, &json_str) < 0
                 || !(request = Jfromstr (json_str)) ) {
         flux_log (f, LOG_ERR, "flux_event_decode: %s", strerror (errno));
         return (0);
     }
-    mrpc = flux_mrpc_create_fromevent (f, request);
+    mrpc = flux_mrpc_create_fromevent_obj (f, request);
     if (mrpc == NULL) {
         if (errno != EINVAL) /* EINVAL == not addressed to me */
             flux_log (f, LOG_ERR, "flux_mrpc_create_fromevent: %s",
                       strerror (errno));
         return (0);
     }
-    if (flux_mrpc_get_inarg (mrpc, &inarg) < 0) {
+    if (flux_mrpc_get_inarg_obj (mrpc, &inarg) < 0) {
         flux_log (f, LOG_ERR, "flux_mrpc_get_inarg: %s", strerror (errno));
         goto done;
     }
@@ -490,7 +490,7 @@ done:
 
 int lwj_targets_this_node (struct rexec_ctx *ctx, int64_t id)
 {
-    kvsdir_t tmp;
+    kvsdir_t *tmp;
     /*
      *  If no 'rank' subdir exists for this lwj, then we are running
      *   without resource assignment so we run everywhere

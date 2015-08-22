@@ -39,7 +39,7 @@ void myfatal (void *h, int exit_code, const char *fmt, ...)
     myfatal_h = h;
 }
 
-static int testio_cb (struct subprocess *p, json_object *o);
+static int testio_cb (struct subprocess *p, const char *json_str);
 
 int main (int ac, char **av)
 {
@@ -314,13 +314,12 @@ int main (int ac, char **av)
     done_testing ();
 }
 
-static int testio_cb (struct subprocess *p, json_object *o)
+static int testio_cb (struct subprocess *p, const char *json_str)
 {
     char **bufp = subprocess_get_context (p, "io");
     bool eof;
     if (*bufp == NULL)
-        zio_json_decode (o, (void **) bufp, &eof);
-    json_object_put (o);
+        zio_json_decode (json_str, (void **) bufp, &eof);
     return 0;
 }
 

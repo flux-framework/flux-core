@@ -220,7 +220,7 @@ static int l_flux_new (lua_State *L)
 static int l_flux_kvsdir_new (lua_State *L)
 {
     const char *path = ".";
-    kvsdir_t dir;
+    kvsdir_t *dir;
     flux_t f = lua_get_flux (L, 1);
 
     if (lua_isstring (L, 2)) {
@@ -507,24 +507,24 @@ static int l_flux_recv_event (lua_State *L)
 /*
  *  mrpc
  */
-static int lua_push_mrpc (lua_State *L, flux_mrpc_t mrpc)
+static int lua_push_mrpc (lua_State *L, flux_mrpc_t *mrpc)
 {
-    flux_mrpc_t *mp = lua_newuserdata (L, sizeof (*mp));
+    flux_mrpc_t **mp = lua_newuserdata (L, sizeof (*mp));
     *mp = mrpc;
     luaL_getmetatable (L, "FLUX.mrpc");
     lua_setmetatable (L, -2);
     return (1);
 }
 
-static flux_mrpc_t lua_get_mrpc (lua_State *L, int index)
+static flux_mrpc_t *lua_get_mrpc (lua_State *L, int index)
 {
-    flux_mrpc_t *mp = luaL_checkudata (L, index, "FLUX.mrpc");
+    flux_mrpc_t **mp = luaL_checkudata (L, index, "FLUX.mrpc");
     return (*mp);
 }
 
 static int l_flux_mrpc_destroy (lua_State *L)
 {
-    flux_mrpc_t m = lua_get_mrpc (L, 1);
+    flux_mrpc_t *m = lua_get_mrpc (L, 1);
     flux_mrpc_destroy (m);
     return (0);
 }
@@ -536,9 +536,9 @@ static int l_mrpc_outargs_destroy (lua_State *L)
     return (0);
 }
 
-static flux_mrpc_t lua_get_mrpc_from_outargs (lua_State *L, int index)
+static flux_mrpc_t *lua_get_mrpc_from_outargs (lua_State *L, int index)
 {
-    flux_mrpc_t mrpc;
+    flux_mrpc_t *mrpc;
     int *refp = luaL_checkudata (L, index, "FLUX.mrpc_outarg");
 
     lua_rawgeti (L, LUA_REGISTRYINDEX, *refp);
@@ -550,11 +550,11 @@ static flux_mrpc_t lua_get_mrpc_from_outargs (lua_State *L, int index)
 static int l_mrpc_outargs_iterator (lua_State *L)
 {
     int index = lua_upvalueindex (1);
-    flux_mrpc_t m = lua_get_mrpc_from_outargs (L, index);
+    flux_mrpc_t *m = lua_get_mrpc_from_outargs (L, index);
     int n = flux_mrpc_next_outarg (m);
     if (n >= 0) {
         json_object *o;
-        if (flux_mrpc_get_outarg (m, n, &o) < 0)
+        if (flux_mrpc_get_outarg_obj (m, n, &o) < 0)
             return lua_pusherror (L, "outarg: %s", strerror (errno));
         lua_pushnumber (L, n);
         json_object_to_lua (L, o);
@@ -566,7 +566,7 @@ static int l_mrpc_outargs_iterator (lua_State *L)
 
 static int l_mrpc_outargs_next (lua_State *L)
 {
-    flux_mrpc_t m = lua_get_mrpc_from_outargs (L, 1);
+    flux_mrpc_t *m = lua_get_mrpc_from_outargs (L, 1);
     flux_mrpc_rewind_outarg (m);
 
 
@@ -583,7 +583,7 @@ static int l_mrpc_outargs_index (lua_State *L)
 {
     int rc;
     json_object *o;
-    flux_mrpc_t m = lua_get_mrpc_from_outargs (L, 1);
+    flux_mrpc_t *m = lua_get_mrpc_from_outargs (L, 1);
     int i;
 
     if (!lua_isnumber (L, 2)) {
@@ -596,7 +596,7 @@ static int l_mrpc_outargs_index (lua_State *L)
      *  Numeric index into individual nodeid outargs
      */
     i = lua_tointeger (L, 2);
-    flux_mrpc_get_outarg (m, i, &o);
+    flux_mrpc_get_outarg_obj (m, i, &o);
     rc = json_object_to_lua (L, o);
     json_object_put (o);
     return (rc);
@@ -634,13 +634,13 @@ static int lua_push_mrpc_outargs (lua_State *L, int index)
 
 static int l_flux_mrpc_index (lua_State *L)
 {
-    flux_mrpc_t m = lua_get_mrpc (L, 1);
+    flux_mrpc_t *m = lua_get_mrpc (L, 1);
     const char *key = lua_tostring (L, 2);
 
     if (strcmp (key, "inarg") == 0) {
         json_object *o;
 
-        if (flux_mrpc_get_inarg (m, &o) < 0) {
+        if (flux_mrpc_get_inarg_obj (m, &o) < 0) {
         fprintf (stderr, "get_inarg: %s\n", strerror (errno));
             return lua_pusherror (L, strerror (errno));
     }
@@ -660,14 +660,14 @@ static int l_flux_mrpc_index (lua_State *L)
 
 static int l_flux_mrpc_newindex (lua_State *L)
 {
-    flux_mrpc_t m = lua_get_mrpc (L, 1);
+    flux_mrpc_t *m = lua_get_mrpc (L, 1);
     const char *key = lua_tostring (L, 2);
 
     if (strcmp (key, "inarg") == 0) {
         json_object *o = NULL;
         if (lua_value_to_json (L, 3, &o) < 0)
             return lua_pusherror (L, "Failed to create json from argument");
-        flux_mrpc_put_inarg (m, o);
+        flux_mrpc_put_inarg_obj (m, o);
         json_object_put (o);
         return (0);
     }
@@ -675,7 +675,7 @@ static int l_flux_mrpc_newindex (lua_State *L)
         json_object *o = NULL;
         if (lua_value_to_json (L, 3, &o) < 0)
             return lua_pusherror (L, "Failed to create json from argument");
-        flux_mrpc_put_outarg (m, o);
+        flux_mrpc_put_outarg_obj (m, o);
         json_object_put (o);
         return (0);
     }
@@ -689,7 +689,7 @@ static int l_flux_mrpc_respond (lua_State *L)
 
 static int l_flux_mrpc_call (lua_State *L)
 {
-    flux_mrpc_t mrpc = lua_get_mrpc (L, 1);
+    flux_mrpc_t *mrpc = lua_get_mrpc (L, 1);
 
     if ((l_format_args (L, 2) < 0))
         return (2); /* nil, err */
@@ -700,7 +700,7 @@ static int l_flux_mrpc_call (lua_State *L)
 static int l_flux_mrpc_new (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
-    flux_mrpc_t m;
+    flux_mrpc_t *m;
 
     m = flux_mrpc_create (f, lua_tostring (L, 2));
     if (m == NULL)
@@ -709,7 +709,7 @@ static int l_flux_mrpc_new (lua_State *L)
     if (lua_istable (L, 3)) {
         json_object *o;
         lua_value_to_json (L, 3, &o);
-        flux_mrpc_put_inarg (m, o);
+        flux_mrpc_put_inarg_obj (m, o);
         json_object_put (o);
     }
 
@@ -1084,7 +1084,7 @@ static int l_kvswatcher_add (lua_State *L)
     assert (lua_isfunction (L, -1));
 
     kw = l_flux_ref_create (L, f, 2, "kvswatcher");
-    kvs_watch (f, key, l_kvswatcher, (void *) kw);
+    kvs_watch_obj (f, key, l_kvswatcher, (void *) kw);
 
     /*
      *  Return kvswatcher object to caller
@@ -1130,8 +1130,9 @@ static int l_kvswatcher_newindex (lua_State *L)
     return (0);
 }
 
-static int iowatcher_zio_cb (zio_t zio, json_object *o, void *arg)
+static int iowatcher_zio_cb (zio_t *zio, const char *json_str, void *arg)
 {
+    json_object *o = NULL;
     int rc;
     int t;
     struct l_flux_ref *iow = arg;
@@ -1151,7 +1152,7 @@ static int iowatcher_zio_cb (zio_t zio, json_object *o, void *arg)
     assert (lua_isuserdata (L, -1));
 
 
-    if (o) {
+    if (json_str && (o = json_tokener_parse (json_str))) {
         int len;
         uint8_t *pp = NULL;
         util_json_object_get_data (o, "data", &pp, &len);
@@ -1159,19 +1160,22 @@ static int iowatcher_zio_cb (zio_t zio, json_object *o, void *arg)
             json_object *s = json_object_new_string ((char *)pp);
             json_object_object_add (o, "data", s);
         }
-	free (pp);
+        if (pp)
+            free (pp);
         json_object_to_lua (L, o);
-        json_object_put (o);
     }
 
     rc = lua_pcall (L, 2, 1, 0);
     if (rc)
         fprintf (stderr, "lua_pcall: %s\n", lua_tostring (L, -1));
 
+    if (o)
+        json_object_put (o);
+
     return rc ? -1 : 0;
 }
 
-static void iowatcher_kz_ready_cb (kz_t kz, void *arg)
+static void iowatcher_kz_ready_cb (kz_t *kz, void *arg)
 {
     int len;
     int t;
@@ -1236,7 +1240,7 @@ static int l_iowatcher_add (lua_State *L)
 
     lua_getfield (L, 2, "fd");
     if (!lua_isnil (L, -1)) {
-        zio_t zio;
+        zio_t *zio;
         int fd = lua_tointeger (L, -1);
         if (fd < 0)
             return lua_pusherror (L, "Invalid fd=%d", fd);
@@ -1246,12 +1250,12 @@ static int l_iowatcher_add (lua_State *L)
         if (!zio)
             fprintf (stderr, "failed to create zio!\n");
         zio_flux_attach (zio, f);
-        zio_set_send_cb (zio, (zio_send_f) iowatcher_zio_cb);
+        zio_set_send_cb (zio, iowatcher_zio_cb);
     }
     lua_getfield (L, 2, "key");
     if (!lua_isnil (L, -1)) {
         int flags = KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK | KZ_FLAGS_NOEXIST;
-        kz_t kz;
+        kz_t *kz;
         const char *key = lua_tostring (L, -1);
         if ((kz = kz_open (f, key, flags)) == NULL)
             return lua_pusherror (L, "kz_open: %s", strerror (errno));
@@ -1628,9 +1632,9 @@ static int l_flux_reactor_stop (lua_State *L)
     return 0;
 }
 
-static int lua_push_kz (lua_State *L, kz_t kz)
+static int lua_push_kz (lua_State *L, kz_t *kz)
 {
-    kz_t *kzp = lua_newuserdata (L, sizeof (*kzp));
+    kz_t **kzp = lua_newuserdata (L, sizeof (*kzp));
     *kzp = kz;
     luaL_getmetatable (L, "FLUX.kz");
     lua_setmetatable (L, -2);
@@ -1639,7 +1643,7 @@ static int lua_push_kz (lua_State *L, kz_t kz)
 
 static int l_flux_kz_open (lua_State *L)
 {
-    kz_t kz;
+    kz_t *kz;
     flux_t f = lua_get_flux (L, 1);
     const char *key = lua_tostring (L, 2);
     const char *mode = lua_tostring (L, 3);
@@ -1656,9 +1660,9 @@ static int l_flux_kz_open (lua_State *L)
     return lua_push_kz (L, kz);
 }
 
-static kz_t lua_get_kz (lua_State *L, int index)
+static kz_t *lua_get_kz (lua_State *L, int index)
 {
-    kz_t *kzp = luaL_checkudata (L, index, "FLUX.kz");
+    kz_t **kzp = luaL_checkudata (L, index, "FLUX.kz");
     return (*kzp);
 }
 
@@ -1673,7 +1677,7 @@ static int l_kz_index (lua_State *L)
 
 static int l_kz_gc (lua_State *L)
 {
-    kz_t *kzp = luaL_checkudata (L, 1, "FLUX.kz");
+    kz_t **kzp = luaL_checkudata (L, 1, "FLUX.kz");
     if (*kzp != NULL)
         kz_close (*kzp);
     return (0);
@@ -1681,7 +1685,7 @@ static int l_kz_gc (lua_State *L)
 
 static int l_kz_close (lua_State *L)
 {
-    kz_t *kzp = luaL_checkudata (L, 1, "FLUX.kz");
+    kz_t **kzp = luaL_checkudata (L, 1, "FLUX.kz");
     kz_close (*kzp);
     *kzp = NULL;
     return (0);
@@ -1689,7 +1693,7 @@ static int l_kz_close (lua_State *L)
 
 static int l_kz_write (lua_State *L)
 {
-    kz_t kz = lua_get_kz (L, 1);
+    kz_t *kz = lua_get_kz (L, 1);
     size_t len;
     const char *s = lua_tolstring (L, 2, &len);
 

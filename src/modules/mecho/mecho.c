@@ -38,24 +38,24 @@ static int mecho_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     const char *json_str;
     json_object *request = NULL;
     json_object *inarg = NULL;
-    flux_mrpc_t f = NULL;
+    flux_mrpc_t *f = NULL;
 
     if (flux_event_decode (*zmsg, NULL, &json_str) < 0
                 || !(request = Jfromstr (json_str))) {
         flux_log (h, LOG_ERR, "flux_event_decode: %s", strerror (errno));
         goto done;
     }
-    if (!(f = flux_mrpc_create_fromevent (h, request))) {
+    if (!(f = flux_mrpc_create_fromevent_obj (h, request))) {
         if (errno != EINVAL) /* EINVAL == not addressed to me */
             flux_log (h, LOG_ERR, "flux_mrpc_create_fromevent: %s",
                                     strerror (errno));
         goto done;
     }
-    if (flux_mrpc_get_inarg (f, &inarg) < 0) {
+    if (flux_mrpc_get_inarg_obj (f, &inarg) < 0) {
         flux_log (h, LOG_ERR, "flux_mrpc_get_inarg: %s", strerror (errno));
         goto done;
     }
-    flux_mrpc_put_outarg (f, inarg);
+    flux_mrpc_put_outarg_obj (f, inarg);
     if (flux_mrpc_respond (f) < 0) {
         flux_log (h, LOG_ERR, "flux_mrpc_respond: %s", strerror (errno));
         goto done;

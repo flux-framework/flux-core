@@ -73,7 +73,7 @@ struct kz_struct {
     char *stream;
     flux_t h;
     int seq;
-    kvsdir_t dir;
+    kvsdir_t *dir;
     kz_ready_f ready_cb;
     void *ready_arg;
     bool eof;
@@ -82,7 +82,7 @@ struct kz_struct {
     int fencecount;
 };
 
-static void kz_destroy (kz_t kz)
+static void kz_destroy (kz_t *kz)
 {
     if (kz->name)
         free (kz->name);
@@ -93,9 +93,9 @@ static void kz_destroy (kz_t kz)
     free (kz);
 }
 
-kz_t kz_open (flux_t h, const char *name, int flags)
+kz_t *kz_open (flux_t h, const char *name, int flags)
 {
-    kz_t kz = xzmalloc (sizeof (*kz));
+    kz_t *kz = xzmalloc (sizeof (*kz));
 
     kz->flags = flags;
     kz->name = xstrdup (name);
@@ -130,7 +130,7 @@ error:
     return NULL;
 }
 
-static int kz_fence (kz_t kz)
+static int kz_fence (kz_t *kz)
 {
     char *name;
     int rc;
@@ -141,10 +141,10 @@ static int kz_fence (kz_t kz)
     return rc;
 }
 
-kz_t kz_gopen (flux_t h, const char *grpname, int nprocs,
+kz_t *kz_gopen (flux_t h, const char *grpname, int nprocs,
                const char *name, int flags)
 {
-    kz_t kz;
+    kz_t *kz;
 
     if (!(flags & KZ_FLAGS_WRITE) || !grpname || nprocs <= 0) {
         errno = EINVAL;
@@ -164,7 +164,7 @@ error:
     return NULL;
 }
 
-static int putnext (kz_t kz, json_object *val)
+static int putnext (kz_t *kz, const char *json_str)
 {
     char *key = NULL;
     int rc = -1;
@@ -175,7 +175,7 @@ static int putnext (kz_t kz, json_object *val)
     }
     if (asprintf (&key, "%s.%.6d", kz->name, kz->seq++) < 0)
         oom ();
-    if (kvs_put (kz->h, key, val) < 0)
+    if (kvs_put (kz->h, key, json_str) < 0)
         goto done;
     if (!(kz->flags & KZ_FLAGS_NOCOMMIT_PUT)) {
         if (kvs_commit (kz->h) < 0)
@@ -188,40 +188,40 @@ done:
     return rc;
 }
 
-int kz_put_json (kz_t kz, json_object *val)
+int kz_put_json (kz_t *kz, const char *json_str)
 {
     if (!(kz->flags & KZ_FLAGS_RAW)) {
         errno = EINVAL;
         return -1;
     }
-    return putnext (kz, val);
+    return putnext (kz, json_str);
 }
 
-int kz_put (kz_t kz, char *data, int len)
+int kz_put (kz_t *kz, char *data, int len)
 {
-    json_object *val = NULL;
+    char *json_str = NULL;
     int rc = -1;
 
     if (len == 0 || data == NULL || (kz->flags & KZ_FLAGS_RAW)) {
         errno = EINVAL;
         goto done;
     }
-    if (!(val = zio_json_encode (data, len, false))) {
+    if (!(json_str = zio_json_encode (data, len, false))) {
         errno = EPROTO;
         goto done;
     }
-    if (putnext (kz, val) < 0)
+    if (putnext (kz, json_str) < 0)
         goto done;
     rc = len;
 done:
-    if (val)
-        json_object_put (val);
+    if (json_str)
+        free (json_str);
     return rc;
 }
 
-static json_object *getnext (kz_t kz)
+static char *getnext (kz_t *kz)
 {
-    json_object *val = NULL;
+    char *json_str = NULL;
     char *key = NULL;
 
     if (!(kz->flags & KZ_FLAGS_READ)) {
@@ -230,7 +230,7 @@ static json_object *getnext (kz_t kz)
     }
     if (asprintf (&key, "%s.%.6d", kz->name, kz->seq) < 0)
         oom ();
-    if (kvs_get (kz->h, key, &val) < 0) {
+    if (kvs_get (kz->h, key, &json_str) < 0) {
         if (errno == ENOENT)
             errno = EAGAIN;
         goto done;
@@ -239,14 +239,14 @@ static json_object *getnext (kz_t kz)
 done:
     if (key)
         free (key);
-    return val;
+    return json_str;
 }
 
-static json_object *getnext_blocking (kz_t kz)
+static char *getnext_blocking (kz_t *kz)
 {
-    json_object *val;
+    char *json_str = NULL;
 
-    while (!(val = getnext (kz))) {
+    while (!(json_str = getnext (kz))) {
         if (errno != EAGAIN)
             break;
         if (kvs_watch_once_dir (kz->h, &kz->dir, "%s", kz->name) < 0) {
@@ -258,28 +258,28 @@ static json_object *getnext_blocking (kz_t kz)
             }
         }
     }
-    return val;
+    return json_str;
 }
 
-json_object *kz_get_json (kz_t kz)
+char *kz_get_json (kz_t *kz)
 {
-    json_object *val = NULL;
+    char *json_str = NULL;
 
     if (!(kz->flags & KZ_FLAGS_RAW)) {
         errno = EINVAL;
         goto done;
     }
     if ((kz->flags & KZ_FLAGS_NONBLOCK))
-        val = getnext (kz);
+        json_str = getnext (kz);
     else
-        val = getnext_blocking (kz);
+        json_str = getnext_blocking (kz);
 done:
-    return val;
+    return json_str;
 }
 
-int kz_get (kz_t kz, char **datap)
+int kz_get (kz_t *kz, char **datap)
 {
-    json_object *val = NULL;
+    char *json_str = NULL;
     char *data;
     int len = -1;
 
@@ -290,22 +290,23 @@ int kz_get (kz_t kz, char **datap)
     if (kz->eof)
         return 0;
     if ((kz->flags & KZ_FLAGS_NONBLOCK))
-        val = getnext (kz);
+        json_str = getnext (kz);
     else
-        val = getnext_blocking (kz);
-    if (!val)
+        json_str = getnext_blocking (kz);
+    if (!json_str)
         goto done;
-    if ((len = zio_json_decode (val, (void **) &data, &kz->eof)) < 0) {
+    if ((len = zio_json_decode (json_str, (void **) &data, &kz->eof)) < 0) {
         errno = EPROTO;
         goto done;
     }
-    json_object_put (val);
     *datap = data;
 done:
+    if (json_str)
+        free (json_str);
     return len;
 }
 
-int kz_flush (kz_t kz)
+int kz_flush (kz_t *kz)
 {
     int rc = 0;
     if ((kz->flags & KZ_FLAGS_WRITE))
@@ -313,21 +314,21 @@ int kz_flush (kz_t kz)
     return rc;
 }
 
-int kz_close (kz_t kz)
+int kz_close (kz_t *kz)
 {
     int rc = -1;
-    json_object *val = NULL;
+    char *json_str = NULL;
     char *key = NULL;
 
     if ((kz->flags & KZ_FLAGS_WRITE)) {
         if (!(kz->flags & KZ_FLAGS_RAW)) {
             if (asprintf (&key, "%s.%.6d", kz->name, kz->seq++) < 0)
                 oom ();
-            if (!(val = zio_json_encode (NULL, 0, true))) { /* EOF */
+            if (!(json_str = zio_json_encode (NULL, 0, true))) { /* EOF */
                 errno = EPROTO;
                 goto done;
             }
-            if (kvs_put (kz->h, key, val) < 0)
+            if (kvs_put (kz->h, key, json_str) < 0)
                 goto done;
         }
         if (!(kz->flags & KZ_FLAGS_NOCOMMIT_CLOSE)) {
@@ -341,17 +342,17 @@ int kz_close (kz_t kz)
     }
     rc = 0;
 done:
-    if (val)
-        json_object_put (val);
+    if (json_str)
+        free (json_str);
     if (key)
         free (key);
     kz_destroy (kz);
     return rc;
 }
 
-int kvswatch_cb (const char *key, kvsdir_t dir, void *arg, int errnum)
+int kvswatch_cb (const char *key, kvsdir_t *dir, void *arg, int errnum)
 {
-    kz_t kz = arg;
+    kz_t *kz = arg;
 
     if (errnum != 0 && errnum != ENOENT)
         return -1;
@@ -360,7 +361,7 @@ int kvswatch_cb (const char *key, kvsdir_t dir, void *arg, int errnum)
     return 0;
 }
 
-int kz_set_ready_cb (kz_t kz, kz_ready_f ready_cb, void *arg)
+int kz_set_ready_cb (kz_t *kz, kz_ready_f ready_cb, void *arg)
 {
     if (!(kz->flags & KZ_FLAGS_READ)) {
         errno = EINVAL;

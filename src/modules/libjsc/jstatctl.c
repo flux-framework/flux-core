@@ -51,7 +51,7 @@ typedef struct {
 } stab_t;
 
 typedef struct {
-   jsc_handler_f cb;
+   jsc_handler_obj_f cb;
    void *arg;  
 } cb_pair_t;
 
@@ -212,7 +212,7 @@ done:
 
 static int jobid_exist (flux_t h, int64_t j)
 {
-    kvsdir_t d;
+    kvsdir_t *d;
     if (kvs_get_dir (h, &d, "lwj.%ld", j) < 0) {
         flux_log (h, LOG_DEBUG, "lwj.%ld doesn't exist", j);
         return -1;
@@ -310,7 +310,7 @@ static int extract_raw_pdesc (flux_t h, int64_t j, int64_t i, JSON *o)
     int rc = 0;
     char key[20] = {'\0'}; 
     snprintf (key, 20, "lwj.%ld.%ld.procdesc", j, i);
-    if (kvs_get (h, key, o) < 0) {
+    if (kvs_get_obj (h, key, o) < 0) {
         flux_log (h, LOG_ERR, "extract %s: %s", key, strerror (errno));
         rc = -1;
         if (*o) 
@@ -616,7 +616,7 @@ static int update_1pdesc (flux_t h, int r, int64_t j, JSON o, JSON ha, JSON ea)
     if (!Jget_ar_str (ea, (int)eindx, &en)) return -1;
 
     snprintf (key, 20, "lwj.%ld.%d.procdesc", j, r);
-    if (kvs_get (h, key, &d) < 0) {
+    if (kvs_get_obj (h, key, &d) < 0) {
         flux_log (h, LOG_ERR, "extract %s: %s", key, strerror (errno));
         goto done;
     }
@@ -629,7 +629,7 @@ static int update_1pdesc (flux_t h, int r, int64_t j, JSON o, JSON ha, JSON ea)
         goto done;
     }
     Jadd_int64 (d, "nodeid", (int64_t)hrank);
-    if (kvs_put (h, key, d) < 0) {
+    if (kvs_put_obj (h, key, d) < 0) {
         flux_log (h, LOG_ERR, "put %s: %s", key, strerror (errno));
         goto done;
     }
@@ -742,7 +742,7 @@ static int job_state_cb (const char *key, const char *val, void *arg, int errnum
     return 0;
 }
 
-static int reg_jobstate_hdlr (flux_t h, const char *path, KVSSetStringF *func)
+static int reg_jobstate_hdlr (flux_t h, const char *path, kvs_set_string_f func)
 {
     int rc = 0;
     char key[20] = {'\0'};
@@ -799,7 +799,7 @@ static int new_job_cb (const char *key, int64_t val, void *arg, int errnum)
     if (invoke_cbs (h, nj, jcb, errnum) < 0) {
         flux_log (h, LOG_ERR, "new_job_cb: failed to invoke callbacks");
     }
-    if (reg_jobstate_hdlr (h, path, (KVSSetStringF *) job_state_cb) == -1) {
+    if (reg_jobstate_hdlr (h, path, job_state_cb) == -1) {
         flux_log (h, LOG_ERR, "new_job_cb: reg_jobstate_hdlr: %s", 
             strerror (errno));
     }
@@ -809,7 +809,7 @@ done:
     return 0;
 }
 
-static int reg_newjob_hdlr (flux_t h, KVSSetInt64F *func)
+static int reg_newjob_hdlr (flux_t h, kvs_set_int64_f func)
 {
     if (kvs_watch_int64 (h,"lwj.next-id", func, (void *) h) < 0) {
         flux_log (h, LOG_ERR, "watch lwj.next-id: %s", strerror (errno));
@@ -826,7 +826,7 @@ static int reg_newjob_hdlr (flux_t h, KVSSetInt64F *func)
  *                                                                            *
  ******************************************************************************/
 
-int jsc_notify_status (flux_t h, jsc_handler_f func, void *d)
+int jsc_notify_status_obj (flux_t h, jsc_handler_obj_f func, void *d)
 {
     int rc = -1;
     cb_pair_t *c = NULL; 
@@ -834,7 +834,7 @@ int jsc_notify_status (flux_t h, jsc_handler_f func, void *d)
 
     if (!func) 
         goto done;
-    if (reg_newjob_hdlr (h, (KVSSetInt64F*)new_job_cb) == -1) {
+    if (reg_newjob_hdlr (h, new_job_cb) == -1) {
         flux_log (h, LOG_ERR, "jsc_notify_status: reg_newjob_hdlr failed");
         goto done;
     } 
@@ -853,7 +853,32 @@ done:
     return rc;
 }
 
-int jsc_query_jcb (flux_t h, int64_t jobid, const char *key, JSON *jcb)
+struct callback_wrapper {
+    jsc_handler_f cb;
+    void *arg;
+};
+
+static int wrap_handler (json_object *base_jcb, void *arg, int errnum)
+{
+    struct callback_wrapper *wrap = arg;
+    return wrap->cb (Jtostr (base_jcb), wrap->arg, errnum);
+}
+
+int jsc_notify_status (flux_t h, jsc_handler_f func, void *d)
+{
+    int rc = -1;
+    struct callback_wrapper *wrap = xzmalloc (sizeof (*wrap));
+
+    wrap->cb = func;
+    wrap->arg = d;
+
+    rc = jsc_notify_status_obj (h, wrap_handler, wrap);
+    if (rc < 0)
+        free (wrap);
+    return rc;
+}
+
+int jsc_query_jcb_obj (flux_t h, int64_t jobid, const char *key, JSON *jcb)
 {
     int rc = -1;
 
@@ -884,7 +909,21 @@ int jsc_query_jcb (flux_t h, int64_t jobid, const char *key, JSON *jcb)
     return rc;
 }
 
-int jsc_update_jcb (flux_t h, int64_t jobid, const char *key, JSON jcb)
+int jsc_query_jcb (flux_t h, int64_t jobid, const char *key, char **jcb)
+{
+    int rc;
+    JSON o = NULL;
+
+    rc = jsc_query_jcb_obj (h, jobid, key, &o);
+    if (rc < 0)
+        goto done;
+    *jcb = o ? xstrdup (Jtostr (o)) : NULL;
+done:
+    Jput (o);
+    return rc;
+}
+
+int jsc_update_jcb_obj (flux_t h, int64_t jobid, const char *key, JSON jcb)
 {
     int rc = -1;
     JSON o = NULL;
@@ -917,6 +956,20 @@ int jsc_update_jcb (flux_t h, int64_t jobid, const char *key, JSON jcb)
     return rc;
 }
 
+int jsc_update_jcb (flux_t h, int64_t jobid, const char *key, const char *jcb)
+{
+    int rc = -1;
+    JSON o = NULL;
+
+    if (!jcb || !(o = Jfromstr (jcb))) {
+        errno = EINVAL;
+        goto done;
+    }
+    rc = jsc_update_jcb_obj (h, jobid, key, o);
+done:
+    Jput (o);
+    return rc;
+}
 
 /*
  * vi: ts=4 sw=4 expandtab

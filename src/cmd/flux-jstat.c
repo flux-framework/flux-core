@@ -114,25 +114,6 @@ static FILE *open_test_outfile (const char *fn)
     return fp;
 }
 
-static JSON parse_json_str (const char *jcbstr)
-{
-    int len = 0;
-    JSON jcb = NULL;
-    struct json_tokener *tok = NULL;
-
-    if (jcbstr) 
-        len = strnlen (jcbstr, sysconf (_SC_ARG_MAX));
-    if (!(tok = json_tokener_new ())) 
-        errno = ENOMEM;
-    else if (!(jcb = json_tokener_parse_ex (tok, jcbstr, len)))
-        errno = EPROTO;
-
-    if (tok)
-        json_tokener_free (tok);
-
-    return jcb;
-}
-
 static inline void get_jobid (JSON jcb, int64_t *j)
 {
     Jget_int64 (jcb, JSC_JOBID, j);
@@ -153,13 +134,14 @@ static inline void get_states (JSON jcb, int64_t *os, int64_t *ns)
  *                                                                            * 
  ******************************************************************************/
 
-static int job_status_cb (JSON jcb, void *arg, int errnum)
+static int job_status_cb (const char *jcbstr, void *arg, int errnum)
 {
     int64_t os = 0;
     int64_t ns = 0;
     int64_t j = 0;
     jstatctx_t *ctx = NULL;
     flux_t h = (flux_t)arg;
+    JSON jcb = NULL;
 
     ctx = getctx (h);
     if (errnum > 0) {
@@ -167,6 +149,10 @@ static int job_status_cb (JSON jcb, void *arg, int errnum)
         return -1;
     }
 
+    if (!(jcb = Jfromstr (jcbstr))) {
+        flux_log (ctx->h, LOG_ERR, "job_status_cb: error parsing JSON string");
+        return -1;
+    }
     get_jobid (jcb, &j);
     get_states (jcb, &os, &ns);
     Jput (jcb);
@@ -211,33 +197,31 @@ static int handle_query_req (flux_t h, int64_t j, const char *k, const char *n)
 {
     JSON jcb = NULL;
     jstatctx_t *ctx = NULL;
+    char *jcbstr;
 
     ctx = getctx (h);
     ctx->op = n? open_test_outfile (n) : stdout;
-    if (jsc_query_jcb (h, j, k, &jcb) != 0) {
+    if (jsc_query_jcb (h, j, k, &jcbstr) != 0) {
         flux_log (h, LOG_ERR, "jsc_query_jcb reported an error\n");
         return -1;
     }
+    jcb = Jfromstr (jcbstr);
     fprintf (ctx->op, "Job Control Block: attribute %s for job %ld\n", k, j);
-    fprintf (ctx->op, "%s\n", 
-        json_object_to_json_string_ext (jcb, JSON_C_TO_STRING_PRETTY));    
+    fprintf (ctx->op, "%s\n", jcb == NULL ? jcbstr :
+        json_object_to_json_string_ext (jcb, JSON_C_TO_STRING_PRETTY));
     Jput (jcb);
+    free (jcbstr);
     return 0;
 }
 
 static int handle_update_req (flux_t h, int64_t j, const char *k, 
-                              const char *s, const char *n)
+                              const char *jcbstr, const char *n)
 {
-    JSON jcb = NULL;
     jstatctx_t *ctx = NULL;
     ctx = getctx (h);
     ctx->op = n?  open_test_outfile (n) : stdout;
 
-    if (!(jcb = parse_json_str (s))) {
-        flux_log (h, LOG_ERR, "parse_json_str parse error.\n");
-        return -1;
-    }
-    return (jsc_update_jcb (ctx->h, j, k, jcb));
+    return (jsc_update_jcb (ctx->h, j, k, jcbstr));
 }
 
 
@@ -283,12 +267,12 @@ int main (int argc, char *argv[])
 
     if (!strcmp ("notify", cmd))
         rc = handle_notify_req (h, (const char *)ofn);
-    else if (!strcmp ("query", cmd)) {
+    else if (!strcmp ("query", cmd) && optind == argc - 2) {
         j = (const char *)(*(argv+optind));
         attr = (const char *)(*(argv+optind+1));
         rc = handle_query_req (h, strtol (j, NULL, 10), attr, ofn); 
     }
-    else if (!strcmp ("update", cmd)) {
+    else if (!strcmp ("update", cmd) && optind == argc - 3) {
         j = (const char *)(*(argv+optind));
         attr = (const char *)(*(argv+optind+1));
         jcbstr = (const char *)(*(argv+optind+2));

@@ -34,10 +34,10 @@
 
 #include "src/modules/libzio/zio.h"
 
-int output_thread_cb (flux_t f, void *zs, short revents, zio_t z)
+int output_thread_cb (flux_t f, void *zs, short revents, zio_t *z)
 {
 	zmsg_t *zmsg;
-	char *buf;
+	char *json_str;
 	char *name;
 
 	fprintf (stderr, "output thread callback\n");
@@ -47,25 +47,23 @@ int output_thread_cb (flux_t f, void *zs, short revents, zio_t z)
 		return (-1);
 	}
 	name = zmsg_popstr (zmsg);
-	buf = zmsg_popstr (zmsg);
-	json_object *o = json_tokener_parse (buf);
-	zio_write_json (z, o);
-	free (buf);
+	json_str = zmsg_popstr (zmsg);
+	zio_write_json (z, json_str);
 	free (name);
 	zmsg_destroy (&zmsg);
-	json_object_put (o);
+	free (json_str);
 	if (zio_closed (z))
 		return (-1);  /* Wakeup zloop if we're done */
 	return (0);
 }
 
-int close_cb (zio_t zio, void *pipe)
+int close_cb (zio_t *zio, void *pipe)
 {
 	fprintf (stderr, "thread zio object closed\n");
 	return (-1); /* Wake up zloop */
 }
 
-int close_cb_main (zio_t zio, void *pipe)
+int close_cb_main (zio_t *zio, void *pipe)
 {
 	fprintf (stderr, "main zio object closed\n");
 	return (-1); /* Wake up zloop */
@@ -74,7 +72,7 @@ int close_cb_main (zio_t zio, void *pipe)
 void othr (void *args, zctx_t *zctx, void *pipe)
 {
 	flux_t f = flux_open (NULL, 0);
-	zio_t out = zio_writer_create ("stdout", STDOUT_FILENO, pipe);
+	zio_t *out = zio_writer_create ("stdout", STDOUT_FILENO, pipe);
 	//zmq_pollitem_t zp = {   .fd = -1,
 	//			.socket = pipe,
 	//			.events = ZMQ_POLLIN|ZMQ_POLLERR };
@@ -100,7 +98,7 @@ int main (int ac, char ** av)
 {
 	char *s;
 	void *zs;
-	zio_t in;
+	zio_t *in;
 	zctx_t *zctx = zctx_new ();
 	flux_t f = flux_open (NULL, 0);
 	if (!f) {

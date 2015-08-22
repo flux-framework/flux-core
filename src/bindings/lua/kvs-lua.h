@@ -5,7 +5,7 @@
 #include <lauxlib.h>
 
 int luaopen_kvs (lua_State *L);
-int l_push_kvsdir (lua_State *L, kvsdir_t dir);
+int l_push_kvsdir (lua_State *L, kvsdir_t *dir);
 
 #endif /* !HAVE_KVS_LUA_H */
 

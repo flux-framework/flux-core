@@ -31,7 +31,6 @@
 #include <termios.h>
 #include <stdbool.h>
 #include <czmq.h>
-#include <json.h>
 #include <flux/core.h>
 
 #include "forkzio.h"
@@ -46,7 +45,7 @@
 typedef struct {
     flux_t h;
     void *zs;
-    kz_t kz[3];
+    kz_t *kz[3];
     int readers;
     int blocksize;
 } ctx_t;
@@ -177,7 +176,7 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-static int run_send_kz (kz_t *kzp, char *data, int len, bool eof)
+static int run_send_kz (kz_t **kzp, char *data, int len, bool eof)
 {
     int rc = -1;
 
@@ -199,45 +198,24 @@ done:
     return rc;
 }
 
-static json_object *run_recv_zs (void *zs, char **streamp)
-{
-    zmsg_t *zmsg = zmsg_recv (zs);
-    json_object *o = NULL;
-    char *buf = NULL;
-    char *stream = NULL;
-
-    if (!zmsg || !(stream = zmsg_popstr (zmsg)) || strlen (stream) == 0
-              || !(buf = zmsg_popstr (zmsg))    || strlen (buf) == 0)
-        goto done;
-    if (!(o = json_tokener_parse (buf)))
-        goto done;
-    *streamp = stream;
-done:
-    if (!o && stream)
-        free (stream);
-    if (buf)
-        free (buf);
-    if (zmsg)
-        zmsg_destroy (&zmsg);
-    return o;
-}
-
 static int run_zs_ready_cb (flux_t h, void *zs, short revents, void *arg)
 {
     ctx_t *ctx = arg;
-    json_object *o;
+    char *json_str = NULL;
     char *stream = NULL;
     bool eof;
     char *data = NULL;
     int len = 0;
     int rc = -1;
+    zmsg_t *zmsg = zmsg_recv (zs);
 
-    if (!(o = run_recv_zs (zs, &stream))) {
+    if (!zmsg || !(stream = zmsg_popstr (zmsg)) || strlen (stream) == 0
+              || !(json_str = zmsg_popstr (zmsg)) || strlen (json_str) == 0) {
         flux_reactor_stop (h);
         rc = 0;
         goto done;
     }
-    if ((len = zio_json_decode (o, (void **) &data, &eof)) < 0) {
+    if ((len = zio_json_decode (json_str, (void **) &data, &eof)) < 0) {
         errno = EPROTO;
         goto done;
     }
@@ -257,21 +235,20 @@ done:
         free (data);
     if (stream)
         free (stream);
-    if (o)
-        json_object_put (o);
+    if (json_str)
+        free (json_str);
+    zmsg_destroy (&zmsg);
     return rc;
 }
 
-static int run_send_zs (void *zs, json_object *o, char *stream)
+static int run_send_zs (void *zs, const char *json_str, char *stream)
 {
     zmsg_t *zmsg;
-    const char *s;
     int rc = -1;
 
     if (!(zmsg = zmsg_new ()))
         oom ();
-    s = json_object_to_json_string (o);
-    if (zmsg_pushstr (zmsg, s) < 0)
+    if (zmsg_pushstr (zmsg, json_str) < 0)
         goto done;
     if (zmsg_pushstr (zmsg, stream) < 0)
         goto done;
@@ -284,32 +261,32 @@ done:
     return rc;
 }
 
-static void run_stdin_ready_cb (kz_t kz, void *arg)
+static void run_stdin_ready_cb (kz_t *kz, void *arg)
 {
     ctx_t *ctx = arg;
     int len;
     char *data;
-    json_object *o;
+    char *json_str;
 
     do {
         if ((len = kz_get (kz, &data)) < 0) {
             if (errno != EAGAIN)
                 err_exit ("kz_get stdin");
         } else if (len > 0) {
-            if (!(o = zio_json_encode (data, len, false)))
+            if (!(json_str = zio_json_encode (data, len, false)))
                 err_exit ("zio_json_encode");
-            if (run_send_zs (ctx->zs, o, "stdin") < 0)
+            if (run_send_zs (ctx->zs, json_str, "stdin") < 0)
                 err_exit ("run_send_zs");
             free (data);
-            json_object_put (o);
+            free (json_str);
         }
     } while (len > 0);
     if (len == 0) { /* EOF */
-        if (!(o = zio_json_encode (NULL, 0, true)))
+        if (!(json_str = zio_json_encode (NULL, 0, true)))
             err_exit ("zio_json_encode");
-        if (run_send_zs (ctx->zs, o, "stdin") < 0)
+        if (run_send_zs (ctx->zs, json_str, "stdin") < 0)
             err_exit ("run_send_zs");
-        json_object_put (o);
+        free (json_str);
     }
 }
 
@@ -419,7 +396,7 @@ static int write_all (int fd, char *buf, int len)
     return count;
 }
 
-static void attach_stdout_ready_cb (kz_t kz, void *arg)
+static void attach_stdout_ready_cb (kz_t *kz, void *arg)
 {
     ctx_t *ctx = arg;
     char *data;
@@ -441,7 +418,7 @@ static void attach_stdout_ready_cb (kz_t kz, void *arg)
     }
 }
 
-static void attach_stderr_ready_cb (kz_t kz, void *arg)
+static void attach_stderr_ready_cb (kz_t *kz, void *arg)
 {
     ctx_t *ctx = arg;
     int len;
@@ -575,8 +552,8 @@ static void copy_k2k (flux_t h, const char *src, const char *dst, bool trunc,
                       bool lazy)
 {
     int kzoutflags = KZ_FLAGS_WRITE | KZ_FLAGS_RAW;
-    kz_t kzin, kzout;
-    json_object *val;
+    kz_t *kzin, *kzout;
+    char *json_str;
     bool eof = false;
 
     if (trunc)
@@ -588,13 +565,13 @@ static void copy_k2k (flux_t h, const char *src, const char *dst, bool trunc,
         err_exit ("kz_open %s", src);
     if (!(kzout = kz_open (h, dst, kzoutflags)))
         err_exit ("kz_open %s", dst);
-    while (!eof && (val = kz_get_json (kzin))) {
-        if (kz_put_json (kzout, val) < 0)
+    while (!eof && (json_str = kz_get_json (kzin))) {
+        if (kz_put_json (kzout, json_str) < 0)
             err_exit ("kz_put_json %s", dst);
-        eof = zio_json_eof (val);
-        json_object_put (val);
+        eof = zio_json_eof (json_str);
+        free (json_str);
     }
-    if (val == NULL)
+    if (json_str == NULL)
         err_exit ("kz_get %s", src);
     if (kz_close (kzin) < 0) 
         err_exit ("kz_close %s", src);
@@ -607,7 +584,7 @@ static void copy_f2k (flux_t h, const char *src, const char *dst, bool trunc,
 {
     int srcfd = STDIN_FILENO;
     int kzoutflags = KZ_FLAGS_WRITE;
-    kz_t kzout;
+    kz_t *kzout;
     char *data;
     int len;
 
@@ -636,7 +613,7 @@ static void copy_f2k (flux_t h, const char *src, const char *dst, bool trunc,
 
 static void copy_k2f (flux_t h, const char *src, const char *dst)
 {
-    kz_t kzin;
+    kz_t *kzin;
     int dstfd = STDOUT_FILENO;
     char *data;
     int len;

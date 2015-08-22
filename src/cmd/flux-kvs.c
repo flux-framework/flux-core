@@ -160,7 +160,7 @@ void cmd_type (flux_t h, int argc, char **argv)
     if (argc == 0)
         msg_exit ("get-type: specify one or more keys");
     for (i = 0; i < argc; i++) {
-        if (kvs_get (h, argv[i], &o) < 0)
+        if (kvs_get_obj (h, argv[i], &o) < 0)
             err_exit ("%s", argv[i]);
         const char *type = "unknown";
         switch (json_object_get_type (o)) {
@@ -199,7 +199,7 @@ void cmd_get (flux_t h, int argc, char **argv)
     if (argc == 0)
         msg_exit ("get: specify one or more keys");
     for (i = 0; i < argc; i++) {
-        if (kvs_get (h, argv[i], &o) < 0)
+        if (kvs_get_obj (h, argv[i], &o) < 0)
             err_exit ("%s", argv[i]);
         switch (json_object_get_type (o)) {
             case json_type_null:
@@ -241,7 +241,7 @@ void cmd_put (flux_t h, int argc, char **argv)
             msg_exit ("put: you must specify a value as key=value");
         *val++ = '\0';
         if ((o = Jfromstr (val))) {
-            if (kvs_put (h, key, o) < 0)
+            if (kvs_put_obj (h, key, o) < 0)
                 err_exit ("%s", key);
         } else {
             if (kvs_put_string (h, key, val) < 0)
@@ -313,9 +313,9 @@ void cmd_mkdir (flux_t h, int argc, char **argv)
 bool key_exists (flux_t h, const char *key)
 {
     JSON o = NULL;
-    kvsdir_t dir = NULL;
+    kvsdir_t *dir = NULL;
 
-    if (kvs_get (h, key, &o) == 0) {
+    if (kvs_get_obj (h, key, &o) == 0) {
         Jput (o);
         return true;
     }
@@ -366,13 +366,13 @@ void cmd_watch (flux_t h, int argc, char **argv)
     if (argc != 1)
         msg_exit ("watch: specify one key");
     key = argv[0];
-    if (kvs_get (h, key, &o) < 0 && errno != ENOENT) 
+    if (kvs_get_obj (h, key, &o) < 0 && errno != ENOENT) 
         err_exit ("%s", key);
     do {
         printf ("%s\n", o ? Jtostr (o) : "NULL");
         Jput (o);
         o = NULL;
-        if (kvs_watch_once (h, argv[0], &o) < 0 && errno != ENOENT)
+        if (kvs_watch_once_obj (h, argv[0], &o) < 0 && errno != ENOENT)
             err_exit ("%s", argv[0]);
     } while (true);
 }
@@ -418,7 +418,7 @@ void cmd_copy_tokvs (flux_t h, int argc, char **argv)
     }
     o = Jnew ();
     util_json_object_add_data (o, "data", buf, len);
-    if (kvs_put (h, key, o) < 0)
+    if (kvs_put_obj (h, key, o) < 0)
         err_exit ("%s", key);
     if (kvs_commit (h) < 0)
         err_exit ("kvs_commit");
@@ -437,7 +437,7 @@ void cmd_copy_fromkvs (flux_t h, int argc, char **argv)
         msg_exit ("copy-fromkvs: specify key and filename");
     key = argv[0];
     file = argv[1];
-    if (kvs_get (h, key, &o) < 0)
+    if (kvs_get_obj (h, key, &o) < 0)
         err_exit ("%s", key);
     if (util_json_object_get_data (o, "data", &buf, &len) < 0)
         err_exit ("%s: decode error", key);
@@ -486,8 +486,8 @@ static void dump_kvs_val (const char *key, JSON o)
 
 static void dump_kvs_dir (flux_t h, bool ropt, const char *path)
 {
-    kvsdir_t dir;
-    kvsitr_t itr;
+    kvsdir_t *dir;
+    kvsitr_t *itr;
     const char *name;
     char *key;
 
@@ -511,7 +511,7 @@ static void dump_kvs_dir (flux_t h, bool ropt, const char *path)
                 printf ("%s.\n", key);
         } else {
             JSON o;
-            if (kvs_get (h, key, &o) < 0)
+            if (kvs_get_obj (h, key, &o) < 0)
                 err_exit ("%s", key);
             dump_kvs_val (key, o);
             Jput (o);
@@ -526,7 +526,7 @@ void cmd_watch_dir (flux_t h, int argc, char **argv)
 {
     bool ropt = false;
     char *key;
-    kvsdir_t dir = NULL;
+    kvsdir_t *dir = NULL;
     int rc;
 
     if (argc > 0 && !strcmp (argv[0], "-r")) {

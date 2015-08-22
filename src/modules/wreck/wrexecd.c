@@ -65,19 +65,19 @@ struct task_info {
     pid_t    pid;
 
     flux_t   f;               /* local flux handle for task */
-    kvsdir_t kvs;             /* kvs handle to this task's dir in kvs */
+    kvsdir_t *kvs;            /* kvs handle to this task's dir in kvs */
     int      status;
     int      exited;          /* non-zero if this task exited */
 
     /*  IO */
-    zio_t zio[3];
-    kz_t  kz[3];
+    zio_t *zio[3];
+    kz_t  *kz[3];
 };
 
 struct prog_ctx {
     flux_t   flux;
-    kvsdir_t kvs;           /* Handle to this job's dir in kvs */
-    kvsdir_t resources;     /* Handle to this node's resource dir in kvs */
+    kvsdir_t *kvs;          /* Handle to this job's dir in kvs */
+    kvsdir_t *resources;    /* Handle to this node's resource dir in kvs */
 
     int noderank;
 
@@ -221,36 +221,34 @@ void prog_ctx_signal_eof (struct prog_ctx *ctx)
      */
     kill (getpid(), SIGCHLD);
 }
-int stdout_cb (zio_t z, json_object *o, struct task_info *t)
+int stdout_cb (zio_t *z, const char *json_str, void *arg)
 {
+    struct task_info *t = arg;
     int rc;
-    if ((rc = kz_put_json (t->kz[OUT], o)) < 0)
+    if ((rc = kz_put_json (t->kz[OUT], json_str)) < 0)
         log_err (t->ctx, "stdout: kz_put_json: %s", strerror (errno));
-    else if (zio_json_eof (o))
+    else if (zio_json_eof (json_str))
         prog_ctx_signal_eof (t->ctx);
-    if (o)
-        json_object_put (o);
     return (rc);
 }
 
-int stderr_cb (zio_t z, json_object *o, struct task_info *t)
+int stderr_cb (zio_t *z, const char *json_str, void *arg)
 {
+    struct task_info *t = arg;
     int rc;
-    if ((rc = kz_put_json (t->kz[ERR], o)) < 0)
+    if ((rc = kz_put_json (t->kz[ERR], json_str)) < 0)
         log_err (t->ctx, "stderr: kz_put_json: %s", strerror (errno));
-    else if (zio_json_eof (o))
+    else if (zio_json_eof (json_str))
         prog_ctx_signal_eof (t->ctx);
-    if (o)
-        json_object_put (o);
     return (rc);
 }
 
-void kz_stdin (kz_t kz, struct task_info *t)
+void kz_stdin (kz_t *kz, struct task_info *t)
 {
-    json_object *o;
-    while ((o = kz_get_json (kz))) {
-        zio_write_json (t->zio [IN], o);
-        json_object_put (o);
+    char *json_str;
+    while ((json_str = kz_get_json (kz))) {
+        zio_write_json (t->zio [IN], json_str);
+        free (json_str);
     }
     return;
 }
@@ -267,10 +265,10 @@ int prog_ctx_io_flags (struct prog_ctx *ctx)
     return (flags);
 }
 
-kz_t task_kz_open (struct task_info *t, int type)
+kz_t *task_kz_open (struct task_info *t, int type)
 {
     struct prog_ctx *ctx = t->ctx;
-    kz_t kz;
+    kz_t *kz;
     char *key;
     int flags = prog_ctx_io_flags (ctx);
 
@@ -303,10 +301,10 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
     t->kvs = NULL;
 
     t->zio [OUT] = zio_pipe_reader_create ("stdout", NULL, (void *) t);
-    zio_set_send_cb (t->zio [OUT], (zio_send_f) stdout_cb);
+    zio_set_send_cb (t->zio [OUT], stdout_cb);
 
     t->zio [ERR] = zio_pipe_reader_create ("stderr", NULL, (void *) t);
-    zio_set_send_cb (t->zio [ERR], (zio_send_f) stderr_cb);
+    zio_set_send_cb (t->zio [ERR], stderr_cb);
 
     t->zio [IN] = zio_pipe_writer_create ("stdin", (void *) t);
 
@@ -557,8 +555,8 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
 {
     int n = 0;
     int j;
-    kvsdir_t rank = NULL;
-    kvsitr_t i;
+    kvsdir_t *rank = NULL;
+    kvsitr_t *i;
     const char *key;
     int *nodeids;
 
@@ -602,8 +600,8 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
 
 int prog_ctx_options_init (struct prog_ctx *ctx)
 {
-    kvsdir_t opts;
-    kvsitr_t i;
+    kvsdir_t *opts;
+    kvsitr_t *i;
     const char *opt;
 
     if (kvsdir_get_dir (ctx->kvs, &opts, "options") < 0)
@@ -613,7 +611,7 @@ int prog_ctx_options_init (struct prog_ctx *ctx)
         json_object *v;
         char s [64];
 
-        if (kvsdir_get (opts, opt, &v) < 0) {
+        if (kvsdir_get_obj (opts, opt, &v) < 0) {
             log_err (ctx, "skipping option '%s': %s", opt, strerror (errno));
             continue;
         }
@@ -651,7 +649,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
     if (prog_ctx_options_init (ctx) < 0)
         log_fatal (ctx, 1, "failed to read %s.options", kvsdir_key (ctx->kvs));
 
-    if (kvsdir_get (ctx->kvs, "cmdline", &v) < 0)
+    if (kvsdir_get_obj (ctx->kvs, "cmdline", &v) < 0)
         log_fatal (ctx, 1, "kvs_get: cmdline");
 
     if (json_array_to_argv (ctx, v, &ctx->argv, &ctx->argc) < 0)
@@ -810,7 +808,7 @@ int update_job_state (struct prog_ctx *ctx, const char *state)
 
     if (asprintf (&key, "%s-time", state) < 0)
         return (-1);
-    if (kvsdir_put (ctx->kvs, key, to) < 0)
+    if (kvsdir_put_obj (ctx->kvs, key, to) < 0)
         return (-1);
     free (key);
     json_object_put (to);
@@ -872,7 +870,7 @@ int rexec_taskinfo_put (struct prog_ctx *ctx, int localid)
         log_fatal (ctx, 1, "rexec_taskinfo_put: asprintf: %s",
                     strerror (errno));
 
-    rc = kvsdir_put (ctx->kvs, key, o);
+    rc = kvsdir_put_obj (ctx->kvs, key, o);
     free (key);
     json_object_put (o);
     //kvs_commit (ctx->flux);
@@ -911,7 +909,7 @@ int send_exit_message (struct task_info *t)
 
     if (asprintf (&key, "lwj.%lu.%d.exit_status", ctx->id, t->globalid) < 0)
         return (-1);
-    if (kvs_put (ctx->flux, key, o) < 0)
+    if (kvs_put_obj (ctx->flux, key, o) < 0)
         return (-1);
     free (key);
     json_object_put (o);
@@ -920,7 +918,7 @@ int send_exit_message (struct task_info *t)
         o = json_object_new_int (WTERMSIG (t->status));
         if (asprintf (&key, "lwj.%lu.%d.exit_sig", ctx->id, t->globalid) < 0)
             return (-1);
-        if (kvs_put (ctx->flux, key, o) < 0)
+        if (kvs_put_obj (ctx->flux, key, o) < 0)
             return (-1);
         free (key);
         json_object_put (o);
@@ -929,7 +927,7 @@ int send_exit_message (struct task_info *t)
         o = json_object_new_int (WEXITSTATUS (t->status));
         if (asprintf (&key, "lwj.%lu.%d.exit_code", ctx->id, t->globalid) < 0)
             return (-1);
-        if (kvs_put (ctx->flux, key, o) < 0)
+        if (kvs_put_obj (ctx->flux, key, o) < 0)
             return (-1);
         free (key);
         json_object_put (o);
@@ -1155,7 +1153,7 @@ static int l_push_environ (lua_State *L, int index)
     return (1);
 }
 
-static kvsdir_t prog_ctx_kvsdir (struct prog_ctx *ctx)
+static kvsdir_t *prog_ctx_kvsdir (struct prog_ctx *ctx)
 {
     struct task_info *t;
 
@@ -1195,7 +1193,7 @@ static int l_wreck_index (lua_State *L)
         return (1);
     }
     if (strcmp (key, "kvsdir") == 0) {
-        kvsdir_t d = prog_ctx_kvsdir (ctx);
+        kvsdir_t *d = prog_ctx_kvsdir (ctx);
         if (d == NULL)
             return lua_pusherror (L, "No such file or directory");
         l_push_kvsdir (L, prog_ctx_kvsdir (ctx));

@@ -635,7 +635,7 @@ static int ns_tokvs (ctx_t *ctx)
     JSON o = ns_tojson (ctx->ns);
     int rc = -1;
 
-    if (kvs_put (ctx->h, "conf.live.status", o) < 0)
+    if (kvs_put_obj (ctx->h, "conf.live.status", o) < 0)
         goto done;
     if (kvs_commit (ctx->h) < 0)
         goto done;
@@ -650,7 +650,7 @@ static int ns_fromkvs (ctx_t *ctx)
     JSON o = NULL;
     int rc = -1;
 
-    if (kvs_get (ctx->h, "conf.live.status", &o) < 0)
+    if (kvs_get_obj (ctx->h, "conf.live.status", &o) < 0)
         goto done;
     ctx->ns = ns_fromjson (o);
     rc = 0;
@@ -748,7 +748,7 @@ static int topo_fromkvs (ctx_t *ctx)
     int len, i;
     char *prank;
 
-    if (kvs_get (ctx->h, "conf.live.topology", &ar) < 0)
+    if (kvs_get_obj (ctx->h, "conf.live.topology", &ar) < 0)
         goto done;
     if (!Jget_ar_len (ar, &len))
         goto done;
@@ -779,7 +779,7 @@ static int topo_tokvs (ctx_t *ctx)
         int prank = strtoul (iter.key, NULL, 10);
         Jput_ar_obj (ar, prank, iter.val);
     }
-    if (kvs_put (ctx->h, "conf.live.topology", ar) < 0)
+    if (kvs_put_obj (ctx->h, "conf.live.topology", ar) < 0)
         goto done;
     if (kvs_commit (ctx->h) < 0)
         goto done;

@@ -67,7 +67,7 @@ int main (int argc, char *argv[])
     char *nodelist;
     json_object *inarg, *outarg;
     int id;
-    flux_mrpc_t f;
+    flux_mrpc_t *f;
     int count = INT_MAX;
 
     log_init ("flux-mping");
@@ -108,11 +108,11 @@ int main (int argc, char *argv[])
         util_json_object_add_int (inarg, "seq", seq);
         if (pad)
             util_json_object_add_string (inarg, "pad", pad);
-        flux_mrpc_put_inarg (f, inarg);
+        flux_mrpc_put_inarg_obj (f, inarg);
         if (flux_mrpc (f, "mecho") < 0)
             err_exit ("flux_mrpc");
         while ((id = flux_mrpc_next_outarg (f)) != -1) {
-            if (flux_mrpc_get_outarg (f, id, &outarg) < 0) {
+            if (flux_mrpc_get_outarg_obj (f, id, &outarg) < 0) {
                 msg ("%d: no response", id);
                 continue;
             }

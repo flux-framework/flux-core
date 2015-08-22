@@ -75,9 +75,9 @@ struct flux_mrpc_struct {
     bool client;
 };
 
-flux_mrpc_t flux_mrpc_create (flux_t h, const char *dest)
+flux_mrpc_t *flux_mrpc_create (flux_t h, const char *dest)
 {
-    flux_mrpc_t f = xzmalloc (sizeof (*f));
+    flux_mrpc_t *f = xzmalloc (sizeof (*f));
     int maxid = flux_size (h) - 1;
 
     f->h = h;
@@ -101,7 +101,7 @@ error:
     return NULL;
 }
 
-void flux_mrpc_destroy (flux_mrpc_t f)
+void flux_mrpc_destroy (flux_mrpc_t *f)
 {
     if (f->path) {
 #if KVS_CLEANUP
@@ -125,24 +125,42 @@ void flux_mrpc_destroy (flux_mrpc_t f)
     free (f);
 }
 
-void flux_mrpc_put_inarg (flux_mrpc_t f, json_object *val)
+void flux_mrpc_put_inarg_obj (flux_mrpc_t *f, json_object *val)
 {
     char *key;
 
     if (asprintf (&key, "%s.in", f->path) < 0)
         oom ();
-    kvs_put (f->h, key, val);
+    kvs_put_obj (f->h, key, val);
     free (key);
 }
 
-int flux_mrpc_get_inarg (flux_mrpc_t f, json_object **valp)
+int flux_mrpc_put_inarg (flux_mrpc_t *f, const char *json_str)
+{
+    char *key = NULL;
+    int rc = -1;
+
+    if (asprintf (&key, "%s.in", f->path) < 0) {
+        errno = ENOMEM;
+        goto done;
+    }
+    if (kvs_put (f->h, key, json_str) < 0)
+        goto done;
+    rc = 0;
+done:
+    if (key)
+        free (key);
+    return rc;
+}
+
+int flux_mrpc_get_inarg_obj (flux_mrpc_t *f, json_object **valp)
 {
     char *key;
     int rc = -1;
 
     if (asprintf (&key, "%s.in", f->path) < 0)
         oom ();
-    if (kvs_get (f->h, key, valp) < 0)
+    if (kvs_get_obj (f->h, key, valp) < 0)
         goto done;
     rc = 0;
 done:
@@ -150,24 +168,60 @@ done:
     return rc;
 }
 
-void flux_mrpc_put_outarg (flux_mrpc_t f, json_object *val)
+int flux_mrpc_get_inarg (flux_mrpc_t *f, char **json_str)
+{
+    char *key = NULL;
+    int rc = -1;
+
+    if (asprintf (&key, "%s.in", f->path) < 0) {
+        errno = ENOMEM;
+        goto done;
+    }
+    if (kvs_get (f->h, key, json_str) < 0)
+        goto done;
+    rc = 0;
+done:
+    if (key)
+        free (key);
+    return rc;
+}
+
+void flux_mrpc_put_outarg_obj (flux_mrpc_t *f, json_object *val)
 {
     char *key;
 
     if (asprintf (&key, "%s.out-%d", f->path, flux_rank (f->h)) < 0)
         oom ();
-    kvs_put (f->h, key, val);
+    kvs_put_obj (f->h, key, val);
     free (key);
 }
 
-int flux_mrpc_get_outarg (flux_mrpc_t f, int nodeid, json_object **valp)
+int flux_mrpc_put_outarg (flux_mrpc_t *f, const char *json_str)
+{
+    char *key = NULL;
+    int rc = -1;
+
+    if (asprintf (&key, "%s.out-%d", f->path, flux_rank (f->h)) < 0) {
+        errno = ENOMEM;
+        goto done;
+    }
+    if (kvs_put (f->h, key, json_str) < 0)
+        goto done;
+    rc = 0;
+done:
+    if (key)
+        free (key);
+    return rc;
+}
+
+int flux_mrpc_get_outarg_obj (flux_mrpc_t *f, int nodeid, json_object **valp)
 {
     char *key;
     int rc = -1;
 
     if (asprintf (&key, "%s.out-%d", f->path, nodeid) < 0)
         oom ();
-    if (kvs_get (f->h, key, valp) < 0)
+    if (kvs_get_obj (f->h, key, valp) < 0)
         goto done;
     rc = 0;
 done:
@@ -175,7 +229,25 @@ done:
     return rc;
 }
 
-int flux_mrpc_next_outarg (flux_mrpc_t f)
+int flux_mrpc_get_outarg (flux_mrpc_t *f, int nodeid, char **json_str)
+{
+    char *key = NULL;
+    int rc = -1;
+
+    if (asprintf (&key, "%s.out-%d", f->path, nodeid) < 0) {
+        errno = ENOMEM;
+        goto done;
+    }
+    if (kvs_get (f->h, key, json_str) < 0)
+        goto done;
+    rc = 0;
+done:
+    if (key)
+        free (key);
+    return rc;
+}
+
+int flux_mrpc_next_outarg (flux_mrpc_t *f)
 {
     uint32_t r = -1;
 
@@ -188,7 +260,7 @@ int flux_mrpc_next_outarg (flux_mrpc_t f)
     return r;
 }
 
-void flux_mrpc_rewind_outarg (flux_mrpc_t f)
+void flux_mrpc_rewind_outarg (flux_mrpc_t *f)
 {
     if (!f->ns_itr)
         f->ns_itr = nodeset_itr_new (f->ns);
@@ -196,7 +268,7 @@ void flux_mrpc_rewind_outarg (flux_mrpc_t f)
         nodeset_itr_rewind (f->ns_itr);
 }
 
-int flux_mrpc (flux_mrpc_t f, const char *fmt, ...)
+int flux_mrpc (flux_mrpc_t *f, const char *fmt, ...)
 {
     int rc = -1;
     char *topic = NULL, *s = NULL;
@@ -235,17 +307,17 @@ done:
     return rc;
 }
 
-flux_mrpc_t flux_mrpc_create_fromevent (flux_t h, json_object *request)
+flux_mrpc_t *flux_mrpc_create_fromevent_obj (flux_t h, json_object *o)
 {
-    flux_mrpc_t f = NULL;
+    flux_mrpc_t *f = NULL;
     const char *dest, *path;
     int sender, vers;
     nodeset_t ns = NULL;
 
-    if (util_json_object_get_string (request, "dest", &dest) < 0
-            || util_json_object_get_string (request, "path", &path) < 0
-            || util_json_object_get_int (request, "sender", &sender) < 0
-            || util_json_object_get_int (request, "vers", &vers) < 0
+    if (util_json_object_get_string (o, "dest", &dest) < 0
+            || util_json_object_get_string (o, "path", &path) < 0
+            || util_json_object_get_int (o, "sender", &sender) < 0
+            || util_json_object_get_int (o, "vers", &vers) < 0
             || !(ns = nodeset_new_str (dest))) {
         errno = EPROTO;
         goto done;
@@ -273,7 +345,23 @@ done:
     return f;
 }
 
-int flux_mrpc_respond (flux_mrpc_t f)
+flux_mrpc_t *flux_mrpc_create_fromevent (flux_t h, const char *json_str)
+{
+    json_object *o;
+    flux_mrpc_t *mrpc = NULL;
+
+    if (!(o = json_tokener_parse (json_str))) {
+        errno = EPROTO;
+        goto done;
+    }
+    mrpc = flux_mrpc_create_fromevent_obj (h, o);
+done:
+    if (o)
+        json_object_put (o);
+    return mrpc;
+}
+
+int flux_mrpc_respond (flux_mrpc_t *f)
 {
     return kvs_fence (f->h, f->path, f->nprocs + 1);
 }

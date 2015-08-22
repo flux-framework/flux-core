@@ -91,7 +91,7 @@ static int module_update (module_t *m, int idle, uint32_t nodeid)
     return 0;
 }
 
-static int get_rlist_result (zhash_t *mods, flux_mrpc_t mrpc,
+static int get_rlist_result (zhash_t *mods, flux_mrpc_t *mrpc,
                              uint32_t nodeid, int *ep)
 {
     JSON o = NULL;
@@ -100,7 +100,7 @@ static int get_rlist_result (zhash_t *mods, flux_mrpc_t mrpc,
     int i, len, errnum, size, idle;
     module_t *m;
 
-    if (flux_mrpc_get_outarg (mrpc, nodeid, &o) < 0)
+    if (flux_mrpc_get_outarg_obj (mrpc, nodeid, &o) < 0)
         goto done;
     if (modctl_rlist_dec (o, &errnum, &len) < 0)
         goto done;
@@ -154,7 +154,7 @@ int flux_modctl_list (flux_t h, const char *svc, const char *nodeset,
     JSON in = NULL;
     int rc = -1;
     uint32_t nodeid;
-    flux_mrpc_t mrpc = NULL;
+    flux_mrpc_t *mrpc = NULL;
     int errnum = 0;
     zhash_t *mods = NULL;
 
@@ -166,7 +166,7 @@ int flux_modctl_list (flux_t h, const char *svc, const char *nodeset,
         goto done;
     if (!(in = modctl_tlist_enc (svc)))
         goto done;
-    flux_mrpc_put_inarg (mrpc, in);
+    flux_mrpc_put_inarg_obj (mrpc, in);
     if (flux_mrpc (mrpc, "modctl.list") < 0)
         goto done;
     flux_mrpc_rewind_outarg (mrpc);
@@ -191,13 +191,13 @@ done:
     return rc;
 }
 
-static int get_rload_errnum (flux_mrpc_t mrpc, uint32_t nodeid, int *ep)
+static int get_rload_errnum (flux_mrpc_t *mrpc, uint32_t nodeid, int *ep)
 {
     JSON o = NULL;
     int rc = -1;
     int errnum;
 
-    if (flux_mrpc_get_outarg (mrpc, nodeid, &o) < 0)
+    if (flux_mrpc_get_outarg_obj (mrpc, nodeid, &o) < 0)
         goto done;
     if (modctl_rload_dec (o, &errnum) < 0)
         goto done;
@@ -213,7 +213,7 @@ int flux_modctl_load (flux_t h, const char *nodeset, const char *path,
 {
     int rc = -1;
     JSON in = NULL;
-    flux_mrpc_t mrpc = NULL;
+    flux_mrpc_t *mrpc = NULL;
     uint32_t nodeid;
     int errnum = 0;
 
@@ -225,7 +225,7 @@ int flux_modctl_load (flux_t h, const char *nodeset, const char *path,
         goto done;
     if (!(in = modctl_tload_enc (path, argc, argv)))
         goto done;
-    flux_mrpc_put_inarg (mrpc, in);
+    flux_mrpc_put_inarg_obj (mrpc, in);
     if (flux_mrpc (mrpc, "modctl.load") < 0)
         goto done;
     flux_mrpc_rewind_outarg (mrpc);
@@ -245,13 +245,13 @@ done:
     return rc;
 }
 
-static int get_runload_errnum (flux_mrpc_t mrpc, uint32_t nodeid, int *ep)
+static int get_runload_errnum (flux_mrpc_t *mrpc, uint32_t nodeid, int *ep)
 {
     JSON o = NULL;
     int rc = -1;
     int errnum;
 
-    if (flux_mrpc_get_outarg (mrpc, nodeid, &o) < 0)
+    if (flux_mrpc_get_outarg_obj (mrpc, nodeid, &o) < 0)
         goto done;
     if (modctl_runload_dec (o, &errnum) < 0)
         goto done;
@@ -264,7 +264,7 @@ done:
 
 int flux_modctl_unload (flux_t h, const char *nodeset, const char *name)
 {
-    flux_mrpc_t mrpc = NULL;
+    flux_mrpc_t *mrpc = NULL;
     JSON in = NULL;
     int rc = -1;
     uint32_t nodeid;
@@ -279,7 +279,7 @@ int flux_modctl_unload (flux_t h, const char *nodeset, const char *name)
         goto done;
     if (!(in = modctl_tunload_enc (name)))
         goto done;
-    flux_mrpc_put_inarg (mrpc, in);
+    flux_mrpc_put_inarg_obj (mrpc, in);
     if (flux_mrpc (mrpc, "modctl.unload") < 0)
         goto done;
     flux_mrpc_rewind_outarg (mrpc);
