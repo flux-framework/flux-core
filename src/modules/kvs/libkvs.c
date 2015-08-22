@@ -993,7 +993,7 @@ int kvs_put (flux_t h, const char *key, const char *json_str)
 
     if (json_str) {
         if (!(val = Jfromstr (json_str))) {
-            errno = EPROTO;
+            errno = EINVAL;
             goto done;
         }
     }
