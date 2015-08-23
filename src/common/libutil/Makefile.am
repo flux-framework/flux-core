@@ -57,7 +57,9 @@ libutil_la_SOURCES = \
 	vec.h \
 	usa.c \
 	usa.h \
-	iterators.h
+	iterators.h \
+	intarray.h \
+	intarray.c
 
 EXTRA_DIST = veb_mach.c
 
@@ -67,7 +69,8 @@ TESTS = test_nodeset.t \
 	test_coproc.t \
 	test_base64.t \
 	test_encode.t \
-	test_msglist.t
+	test_msglist.t \
+	test_intarray.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -114,3 +117,7 @@ test_encode_t_LDADD = $(test_ldadd)
 test_msglist_t_SOURCES = test/msglist.c
 test_msglist_t_CPPFLAGS = $(test_cppflags)
 test_msglist_t_LDADD = $(test_ldadd)
+
+test_intarray_t_SOURCES = test/intarray.c
+test_intarray_t_CPPFLAGS = $(test_cppflags)
+test_intarray_t_LDADD = $(test_ldadd)
