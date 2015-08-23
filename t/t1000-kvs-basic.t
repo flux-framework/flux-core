@@ -125,8 +125,8 @@ test_expect_success 'kvs: try to retrieve a directory as key should fail' '
 '
 
 test_empty_directory() {
-	OUTPUT=`flux kvs dir $1` &&
-	test "x$OUTPUT" = "x"
+	OUTPUT=`flux kvs dirsize $1` &&
+	test "x$OUTPUT" = "x0"
 }
 test_expect_success 'kvs: empty directory remains after key removed' '
 	flux kvs unlink $KEY &&
@@ -209,6 +209,15 @@ test_expect_success 'kvs: symlink: intermediate symlink points to another symlin
 	test_kvs_key $TEST.X.W.c 42
 '
 
+test_expect_success 'kvs: kvsdir_get_size works' '
+	flux kvs mkdir $TEST.dirsize &&
+	flux kvs put $TEST.dirsize.a=1 &&
+	flux kvs put $TEST.dirsize.b=2 &&
+	flux kvs put $TEST.dirsize.c=3 &&
+	OUTPUT=$(flux kvs dirsize $TEST.dirsize) &&
+	test "$OUTPUT" = "3"
+'
+
 # Keep the next two tests in order
 test_expect_success 'kvs: symlink: dangling link' '
 	flux kvs unlink $TEST &&
@@ -278,6 +287,5 @@ test_expect_success 'kvs: tkvswatch-unwatchloop 1000 watch/unwatch ok' '
 	${FLUX_BUILD_DIR}/src/test/tkvswatch unwatchloop $TEST.a &&
 	flux kvs unlink $TEST.a
 '
-
 
 test_done

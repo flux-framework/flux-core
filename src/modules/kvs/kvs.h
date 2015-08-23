@@ -127,6 +127,10 @@ const char *kvsdir_key (kvsdir_t *dir);
 char *kvsdir_key_at (kvsdir_t *dir, const char *key); /* caller frees result */
 void *kvsdir_handle (kvsdir_t *dir);
 
+/* Get the number of keys in a directory.
+ */
+int kvsdir_get_size (kvsdir_t *dir);
+
 /* Remove a key from the namespace.  If it represents a directory,
  * its contents are also removed.  kvsdir_unlink removes it relative to 'dir'.
  * Since ordering of put/mkdir/unlink requests within a commit is not defined,

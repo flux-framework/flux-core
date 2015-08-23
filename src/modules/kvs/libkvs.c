@@ -53,6 +53,7 @@ struct kvsdir_struct {
     flux_t handle;
     char *key;
     json_object *o;
+    int count;
 };
 
 struct kvsdir_iterator_struct {
@@ -193,8 +194,22 @@ static kvsdir_t *kvsdir_alloc (flux_t handle, const char *key, json_object *o)
     dir->key = xstrdup (key);
     dir->o = o;
     json_object_get (dir->o);
+    dir->count = -1; /* uninitialized */
 
     return dir;
+}
+
+int kvsdir_get_size (kvsdir_t *dir)
+{
+    json_object_iter iter;
+
+    if (dir->count == -1) {
+        dir->count = 0;
+        json_object_object_foreachC (dir->o, iter) {
+            dir->count++;
+        }
+    }
+    return dir->count;
 }
 
 const char *kvsdir_key (kvsdir_t *dir)
@@ -993,7 +1008,7 @@ int kvs_put (flux_t h, const char *key, const char *json_str)
 
     if (json_str) {
         if (!(val = Jfromstr (json_str))) {
-            errno = EPROTO;
+            errno = EINVAL;
             goto done;
         }
     }
