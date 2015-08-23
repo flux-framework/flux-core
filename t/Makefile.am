@@ -89,6 +89,9 @@ dist_check_DATA = \
 	build/hello_flux_internal.c \
 	build/hello_jsonc.c
 
+dist_check_SCRIPTS = \
+	scripts/event-trace.lua
+
 test_ldadd = \
         $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libflux-core.la \
