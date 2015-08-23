@@ -195,19 +195,19 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
             new_kvsdir.fill(contents)
 
     def files(self):
-        for k in self.keys():
+        for k in self:
             if not self.pimpl.isdir(k):
                 yield k
 
     def directories(self):
-        for k in self.keys():
+        for k in self:
             if self.pimpl.isdir(k):
                 yield k
 
     def list_all(self, topdown=False):
         files = []
         dirs = []
-        for k in self.keys():
+        for k in self:
             if self.pimpl.isdir(k):
                 dirs.append(k)
             else:
@@ -235,18 +235,16 @@ def join(*args):
 
 
 def inner_walk(kd, curr_dir, topdown=False):
-    files = kd.files()
-    dirs = kd.directories()
     if topdown:
-        yield (curr_dir, dirs, files)
+        yield (curr_dir, kd.directories(), kd.files())
 
-    for d in dirs:
+    for d in kd.directories():
         path = join(curr_dir, d)
-        for x in inner_walk(kd[d], path, topdown):
+        for x in inner_walk(get_dir(kd.fh, kd.key_at(d)), path, topdown):
             yield x
 
     if not topdown:
-        yield (curr_dir, dirs, files)
+        yield (curr_dir, kd.directories(), kd.files())
 
 
 def walk(directory, topdown=False, flux_handle=None):
@@ -256,9 +254,7 @@ def walk(directory, topdown=False, flux_handle=None):
             raise ValueError(
                 "If directory is a key, flux_handle must be specified")
         directory = KVSDir(flux_handle, directory)
-    for x in inner_walk(directory, '', topdown):
-        yield x
-
+    return inner_walk(directory, '', topdown)
 
 @ffi.callback('kvs_set_obj_f')
 def KVSWatchWrapper(key, value, arg, errnum):
