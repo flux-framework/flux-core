@@ -197,6 +197,13 @@ following extra functions:
 	of COMMAND.
 
 ```
+Helper scripts
+--------------
+
+Utility and other helper scripts which are specific to the testsuite
+should be placed in the `./scripts` directory. This directory can
+be referenced as `$SHARNESS_TEST_SRCDIR/scripts` to run scripts
+directly, or individual tests can add this path to their `PATH`.
 
 Lua Tests
 =========

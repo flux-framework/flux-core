@@ -792,6 +792,32 @@ void close_child_fds (struct task_info *t)
     close_fd (zio_dst_fd (t->zio [ERR]));
 }
 
+void send_job_state_event (struct prog_ctx *ctx, const char *state)
+{
+    flux_msg_t *msg;
+    char *json = NULL;
+    char *topic = NULL;
+
+    if ((asprintf (&json, "{\"lwj\":%ld}", ctx->id) < 0)
+        || (asprintf (&topic, "wreck.state.%s", state) < 0)) {
+        log_err (ctx, "failed to create state change event: %s\n", state);
+        goto out;
+    }
+
+    if ((msg = flux_event_encode (topic, json)) == NULL) {
+        log_err (ctx, "flux_event_encode: %s\n", strerror (errno));
+        goto out;
+    }
+
+    if (flux_send (ctx->flux, msg, 0) < 0)
+        log_err (ctx, "flux_send event: %s\n", strerror (errno));
+
+    flux_msg_destroy (msg);
+out:
+    free (topic);
+    free (json);
+}
+
 int update_job_state (struct prog_ctx *ctx, const char *state)
 {
     char buf [64];
@@ -815,6 +841,9 @@ int update_job_state (struct prog_ctx *ctx, const char *state)
 
     if (kvs_commit (ctx->flux) < 0)
         return (-1);
+
+    /* Also emit event to avoid racy kvs_watch for clients */
+    send_job_state_event (ctx, state);
 
     return (0);
 }
