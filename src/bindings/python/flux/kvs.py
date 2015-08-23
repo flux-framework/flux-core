@@ -161,11 +161,7 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
         return self.KVSDirIterator(self)
 
     def __len__(self):
-        # TODO find a less horrifyingly inefficient way to do this
-        count = 0
-        for b in self:
-            count += 1
-        return count
+        return self.pimpl.get_size()
 
     def fill(self, contents):
         """ Populate this directory with keys specified by contents, which must
@@ -198,6 +194,16 @@ class KVSDir(WrapperPimpl, collections.MutableMapping):
         if contents is not None:
             new_kvsdir.fill(contents)
 
+    def files(self):
+        for k in self.keys():
+            if not self.pimpl.isdir(k):
+                yield k
+
+    def directories(self):
+        for k in self.keys():
+            if self.pimpl.isdir(k):
+                yield k
+
     def list_all(self, topdown=False):
         files = []
         dirs = []
@@ -229,7 +235,8 @@ def join(*args):
 
 
 def inner_walk(kd, curr_dir, topdown=False):
-    (files, dirs) = kd.list_all(topdown)
+    files = kd.files()
+    dirs = kd.directories()
     if topdown:
         yield (curr_dir, dirs, files)
 
