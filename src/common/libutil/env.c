@@ -58,7 +58,7 @@ static int _strtoia (char *s, int *ia, int ia_len)
     if (!s)
         return -1;
 
-    while (s) {
+    while (*s) {
         n = strtoul (s, &next, 10);
         s = *next == '\0' ? next : next + 1;
         if (ia) {
