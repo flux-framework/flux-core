@@ -140,8 +140,8 @@ class TestKVS(unittest.TestCase):
         (r, ds, fs) = walk_gen.next()
         print(r, ds, fs)
         self.assertEqual(r, '')
-        self.assertEqual(len(ds), 14)
-        self.assertEqual(len(fs), 14)
+        self.assertEqual(len(list(ds)), 14)
+        self.assertEqual(len(list(fs)), 14)
 
         for r, ds, fs in walk_gen:
             pass

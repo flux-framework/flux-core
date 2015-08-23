@@ -118,6 +118,7 @@ class FunctionWrapper(object):
         self.fun = fun
         self.add_handle = add_handle
         self.build_argument_translation_list(t)
+        self.trans_len = len(self.arg_trans)
         self.is_error = lambda x: False
         self.function_type = t
         self.name = name
@@ -137,37 +138,46 @@ class FunctionWrapper(object):
 
     def __call__(self, calling_object, *args_in):
         # print holder.__name__, 'got', calling_object, args_in
-        args = []
-        if self.add_handle:
-            args.append(calling_object.handle)
-        args.extend(args_in)
-        if len(self.function_type.args) != len(args):
-            raise WrongNumArguments(self.name,
-                                    self.ffi.getctype(self.function_type),
-                                    self.function_type, args)
-        for i in self.arg_trans:
-            if args[i] is None:
-                args[i] = calling_object.ffi.NULL
-            elif isinstance(args[i], WrapperBase):
-                # Unpack wrapper objects
-                args[i] = args[i].handle
+        if self.trans_len == 0:
+            try:
+                if self.add_handle:
+                    result = self.fun(calling_object.handle, *args_in)
+                else:
+                    result = self.fun(*args_in)
+            except TypeError as te:
+                raise InvalidArguments(self.name, self.ffi.getctype(
+                    self.function_type), args, te.message)
+        else:
+            args = []
+            if self.add_handle:
+                args.append(calling_object.handle)
+            args.extend(args_in)
+            if len(self.function_type.args) != len(args):
+                raise WrongNumArguments(self.name,
+                                        self.ffi.getctype(self.function_type),
+                                        self.function_type, args)
+            for i in self.arg_trans:
+                if args[i] is None:
+                    args[i] = calling_object.ffi.NULL
+                elif isinstance(args[i], WrapperBase):
+                    # Unpack wrapper objects
+                    args[i] = args[i].handle
 
-        calling_object.ffi.errno = 0
-
-        try:
-            result = self.fun(*args)
-        except TypeError as te:
-            raise InvalidArguments(self.name, self.ffi.getctype(
-                self.function_type), args, te.message)
+            try:
+                result = self.fun(*args)
+            except TypeError as te:
+                raise InvalidArguments(self.name, self.ffi.getctype(
+                    self.function_type), args, te.message)
 
         if result == calling_object.ffi.NULL:
             result = None
 
         # Convert errno errors into python exceptions
-        err = calling_object.ffi.errno
 
-        if self.is_error(result) and err != 0:
-            raise EnvironmentError(err, os.strerror(err))
+        if self.is_error(result):
+            err = calling_object.ffi.errno
+            if err != 0:
+                raise EnvironmentError(err, os.strerror(err))
 
         return result
 
