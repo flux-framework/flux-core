@@ -90,10 +90,10 @@ static inline void trace (int flags, const char *fmt, ...)
 
     if (ctx && (flags & ctx->trace)) {
         char buf[64];
-        snprintf (buf, sizeof (buf), "[%d.%d.%d] %s", ctx->cmb_rank,
+        snprintf (buf, sizeof (buf), "[%d.%d.%d] %s\n", ctx->cmb_rank,
                   ctx->appnum, ctx->rank, fmt);
         va_start (ap, fmt);
-        flux_vlog (ctx->fctx, LOG_DEBUG, buf, ap);
+        vfprintf (stdout, buf, ap);
         va_end (ap);
     }
 }
@@ -134,7 +134,6 @@ int PMI_Init (int *spawned)
         err ("flux_open");
         goto fail;
     }
-    flux_log_set_facility (ctx->fctx, "pmi");
     ctx->cmb_rank = flux_rank (ctx->fctx);
     trace_simple (PMI_TRACE_INIT);
     *spawned = ctx->spawned;
