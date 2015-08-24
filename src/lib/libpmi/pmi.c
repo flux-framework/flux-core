@@ -67,7 +67,7 @@ typedef struct {
     int cmb_rank;
     flux_t fctx;
     char kvsname[PMI_MAX_KVSNAMELEN];
-    bool trace;
+    int trace;
 } pmi_ctx_t;
 #define PMI_CTX_MAGIC 0xcafefaad
 
