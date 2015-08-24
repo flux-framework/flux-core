@@ -33,13 +33,13 @@
 int env_getint (char *name, int dflt)
 {
     char *ev = getenv (name);
-    return ev ? strtoul (ev, NULL, 10) : dflt;
+    return ev ? strtol (ev, NULL, 0) : dflt;
 }
 
 bool env_getbool (char *name, bool dflt)
 {
     char *ev = getenv (name);
-    if (ev && (ev[0] == 't' || ev[0] == 'T' || strtoul(ev, NULL, 10)))
+    if (ev && (ev[0] == 't' || ev[0] == 'T' || strtol (ev, NULL, 0) != 0))
         return true;
     return false;
 }
@@ -59,7 +59,7 @@ static int _strtoia (char *s, int *ia, int ia_len)
         return -1;
 
     while (*s) {
-        n = strtoul (s, &next, 10);
+        n = strtol (s, &next, 0);
         s = *next == '\0' ? next : next + 1;
         if (ia) {
             if (ia_len == len)
