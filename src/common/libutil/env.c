@@ -29,6 +29,7 @@
 
 #include "env.h"
 #include "xzmalloc.h"
+#include "intarray.h"
 
 int env_getint (char *name, int dflt)
 {
@@ -50,45 +51,6 @@ char *env_getstr (char *name, char *dflt)
     return ev ? xstrdup (ev) : xstrdup (dflt);
 }
 
-static int _strtoia (char *s, int *ia, int ia_len)
-{
-    char *next;
-    int n, len = 0;
-
-    if (!s)
-        return -1;
-
-    while (*s) {
-        n = strtol (s, &next, 0);
-        s = *next == '\0' ? next : next + 1;
-        if (ia) {
-            if (ia_len == len)
-                break;
-            ia[len] = n;
-        }
-        len++;
-    }
-    return len;
-}
-
-static int getints (char *s, int **iap, int *lenp)
-{
-    int *ia;
-    int len = _strtoia (s, NULL, 0);
-
-    if ((len < 0) || !(ia = malloc (len * sizeof (int))))
-        return -1;
-
-    (void)_strtoia (s, ia, len);
-    if (lenp)
-        *lenp = len;
-    if (iap)
-        *iap = ia;
-    else
-        free (ia);
-    return 0;
-}
-
 int env_getints (char *name, int **iap, int *lenp, int dflt_ia[], int dflt_len)
 {
     char *s = getenv (name);
@@ -96,7 +58,7 @@ int env_getints (char *name, int **iap, int *lenp, int dflt_ia[], int dflt_len)
     int len;
 
     if (s) {
-        if (getints (s, &ia, &len) < 0)
+        if (intarray_create (s, &ia, &len) < 0)
             return -1;
     } else {
         ia = malloc (dflt_len * sizeof (int));
