@@ -82,6 +82,7 @@ struct prog_ctx {
     int noderank;
 
     int64_t id;             /* id of this execution */
+    int total_ntasks;       /* Total number of tasks in job */
     int nnodes;
     int nodeid;
     int nprocs;             /* number of copies of command to execute */
@@ -656,6 +657,9 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
         log_fatal (ctx, 1, "Failed to get cmdline from kvs");
 
     prog_ctx_get_nodeinfo (ctx);
+
+    if (kvsdir_get_int (ctx->kvs, "ntasks", &ctx->total_ntasks) < 0)
+        log_fatal (ctx, 1, "Failed to get ntasks from kvs\n");
 
     /*
      *  See if we've got 'cores' assigned for this host
@@ -1396,9 +1400,9 @@ int exec_commands (struct prog_ctx *ctx)
     prog_ctx_setenvf (ctx, "FLUX_LWJ_ID",    1, "%d", ctx->id);
     prog_ctx_setenvf (ctx, "FLUX_LWJ_NNODES",1, "%d", ctx->nnodes);
     prog_ctx_setenvf (ctx, "FLUX_NODE_ID",   1, "%d", ctx->nodeid);
-    prog_ctx_setenvf (ctx, "FLUX_LWJ_NTASKS",1, "%d", ctx->nprocs * ctx->nnodes);
-    prog_ctx_setenvf (ctx, "MPIRUN_NPROCS", 1, "%d", ctx->nprocs * ctx->nnodes);
-    prog_ctx_setenvf (ctx, "PMI_SIZE", 1, "%d", ctx->nprocs * ctx->nnodes);
+    prog_ctx_setenvf (ctx, "FLUX_LWJ_NTASKS",1, "%d", ctx->total_ntasks);
+    prog_ctx_setenvf (ctx, "MPIRUN_NPROCS", 1, "%d", ctx->total_ntasks);
+    prog_ctx_setenvf (ctx, "PMI_SIZE", 1, "%d", ctx->total_ntasks);
     gtid_list_create (ctx, buf, sizeof (buf));
     prog_ctx_setenvf (ctx, "FLUX_LWJ_GTIDS",  1, "%s", buf);
 
