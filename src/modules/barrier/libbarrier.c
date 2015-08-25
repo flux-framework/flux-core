@@ -45,7 +45,7 @@ static ctx_t *getctx (flux_t h)
 {
     ctx_t *ctx = flux_aux_get (h, "barriercli");
     if (!ctx) {
-        const char *id = getenv ("FLUX_LWJ_ID");
+        const char *id = getenv ("FLUX_JOB_ID");
         if (!id && !(id = getenv ("SLURM_STEPID")))
             return NULL;
         ctx = xzmalloc (sizeof (*ctx));
