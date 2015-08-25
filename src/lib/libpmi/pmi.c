@@ -118,10 +118,10 @@ int PMI_Init (int *spawned)
 
     ctx->trace = env_getint ("PMI_TRACE", 0);
 
-    ctx->size = env_getint ("FLUX_LWJ_NTASKS", 1);
-    ctx->rank = env_getint ("FLUX_LWJ_TASK_ID", 0);
-    ctx->appnum = env_getint ("FLUX_LWJ_ID", 1);
-    if (env_getints ("FLUX_LWJ_GTIDS", &ctx->clique_ranks, &ctx->clique_size,
+    ctx->size = env_getint ("FLUX_JOB_SIZE", 1);
+    ctx->rank = env_getint ("FLUX_TASK_RANK", 0);
+    ctx->appnum = env_getint ("FLUX_JOB_ID", 1);
+    if (env_getints ("FLUX_LOCAL_RANKS", &ctx->clique_ranks, &ctx->clique_size,
                      dflt_clique_ranks, dflt_clique_size) < 0)
         goto fail;
 
