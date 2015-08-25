@@ -422,6 +422,20 @@ int PMI_Spawn_multiple(int count,
     return PMI_FAIL;
 }
 
+/* These functions were removed from the MPICH pmi.h by
+ *
+ * commit f17423ef535f562bcacf981a9f7e379838962c6e
+ * Author: Pavan Balaji <balaji@mcs.anl.gov>
+ * Date:   Fri Jan 28 22:40:33 2011 +0000
+ *
+ *  [svn-r7858] Cleanup unused PMI functions. Note that this does not break PMI-
+ *  compatibility with exiting process managers, as these functions are
+ *  unused. Even if other PMI client library implementations chose to
+ *  implement them, we still do not have to use them.
+ *
+ *  Reviewed by buntinas.
+ */
+
 int PMI_Get_id (char id_str[], int length)
 {
     trace_simple (PMI_TRACE_PARAM);
@@ -438,7 +452,14 @@ int PMI_Get_id (char id_str[], int length)
 int PMI_Get_kvs_domain_id (char id_str[], int length)
 {
     trace_simple (PMI_TRACE_PARAM);
-    return PMI_Get_id (id_str, length);
+    if (ctx == NULL)
+        return PMI_ERR_INIT;
+    assert (ctx->magic == PMI_CTX_MAGIC);
+    if (id_str == NULL || length < strlen (ctx->kvsname) + 1)
+        return PMI_ERR_INVALID_ARG;
+
+    snprintf (id_str, length + 1, "%s", ctx->kvsname);
+    return PMI_SUCCESS;
 }
 
 int PMI_Get_id_length_max (int *length)
@@ -513,6 +534,15 @@ int PMI_KVS_Iter_next (const char kvsname[], char key[], int key_len,
     trace_simple (PMI_TRACE_UNIMPL);
     return PMI_FAIL;
 }
+
+/* These functions were removed from the MPICH pmi.h by
+ *
+ * commit 52c462d2be6a8d0720788d36e1e096e991dcff38
+ * Author: William Gropp <gropp@mcs.anl.gov>
+ * Date:   Fri May 1 17:53:02 2009 +0000
+ *
+ * [svn-r4377] removed dead and invalid PMI routines from pmi.h and from the si
+ */
 
 int PMI_Parse_option (int num_args, char *args[], int *num_parsed,
                       PMI_keyval_t **keyvalp, int *size)

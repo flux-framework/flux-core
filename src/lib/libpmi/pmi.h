@@ -474,6 +474,8 @@ int PMI_Spawn_multiple(int count,
                        const PMI_keyval_t preput_keyval_vector[],
                        int errors[]);
 
+#include "pmi_deprecated.h"
+
 #if defined(__cplusplus)
 }
 #endif

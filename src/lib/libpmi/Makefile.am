@@ -10,7 +10,11 @@ AM_CPPFLAGS = \
         -I$(top_srcdir) -I$(top_srcdir)/src/include
 
 
-fluxinclude_HEADERS = pmi.h
+fluxinclude_HEADERS = \
+	pmi.h \
+	pmi_deprecated.h \
+	pmi2.h
+
 fluxlib_LTLIBRARIES = libpmi.la
 
 libpmi_la_SOURCES = \
