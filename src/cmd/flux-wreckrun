@@ -253,12 +253,14 @@ end
 --
 --  Create iowatchers for all tasks stdout/err:
 --
+--  XXX: The `nio` IO counter must be initialized before creating
+--   all IO watchers.
+nio = wreck.ntasks * 2
 for i=0, wreck.ntasks-1 do
     for _,stream in pairs{ "stdout", "stderr"} do
         iow = io_watcher_create (stream, resp.jobid, i)
     end
 end
-nio = wreck.ntasks * 2
 
 --
 --  Open stdin (to task 0 only for now)
