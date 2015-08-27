@@ -303,9 +303,11 @@ static inline int zio_eof (zio_t *zio)
     return (zio->flags & ZIO_EOF);
 }
 
-
 static int zio_eof_pending (zio_t *zio)
 {
+    /* Already closed? Then EOF can't be pending */
+    if (zio_closed (zio))
+      return (0);
     /*
      *   zio object has EOF pending if EOF flag is set and either the
      *    io is unbuffered or the buffer for IO is empty.
@@ -486,11 +488,14 @@ static int zio_close (zio_t *zio)
     else if (zio_writer (zio)) {
         close (zio->dstfd);
         zio->dstfd = -1;
+        /* For writer zio object, consider close(dstfd)
+         *  as "EOF sent"
+         */
+        zio->flags |= ZIO_EOF_SENT;
     }
     zio->flags |= ZIO_CLOSED;
     if (zio->close)
         return (*zio->close) (zio, zio->arg);
-
     return (0);
 }
 
