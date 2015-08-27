@@ -82,6 +82,7 @@ struct prog_ctx {
     int noderank;
 
     int64_t id;             /* id of this execution */
+    int total_ntasks;       /* Total number of tasks in job */
     int nnodes;
     int nodeid;
     int nprocs;             /* number of copies of command to execute */
@@ -657,6 +658,9 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
 
     prog_ctx_get_nodeinfo (ctx);
 
+    if (kvsdir_get_int (ctx->kvs, "ntasks", &ctx->total_ntasks) < 0)
+        log_fatal (ctx, 1, "Failed to get ntasks from kvs\n");
+
     /*
      *  See if we've got 'cores' assigned for this host
      */
@@ -1041,8 +1045,8 @@ int exec_command (struct prog_ctx *ctx, int i)
         prog_ctx_setenv  (ctx, "FLUX_TMPDIR", getenv ("FLUX_TMPDIR"));
         prog_ctx_setenvf (ctx, "MPIRUN_RANK",     1, "%d", t->globalid);
         prog_ctx_setenvf (ctx, "PMI_RANK", 1, "%d", t->globalid);
-        prog_ctx_setenvf (ctx, "FLUX_LWJ_TASK_ID", 1, "%d", t->globalid);
-        prog_ctx_setenvf (ctx, "FLUX_LWJ_LOCAL_TASK_ID", 1, "%d", i);
+        prog_ctx_setenvf (ctx, "FLUX_TASK_RANK", 1, "%d", t->globalid);
+        prog_ctx_setenvf (ctx, "FLUX_TASK_LOCAL_ID", 1, "%d", i);
 
         if (prog_ctx_getopt (ctx, "stop-children-in-exec")) {
             /* Stop process on exec with parent attached */
@@ -1393,14 +1397,14 @@ int exec_commands (struct prog_ctx *ctx)
 
     lua_stack_call (ctx->lua_stack, "rexecd_init");
 
-    prog_ctx_setenvf (ctx, "FLUX_LWJ_ID",    1, "%d", ctx->id);
-    prog_ctx_setenvf (ctx, "FLUX_LWJ_NNODES",1, "%d", ctx->nnodes);
+    prog_ctx_setenvf (ctx, "FLUX_JOB_ID",    1, "%d", ctx->id);
+    prog_ctx_setenvf (ctx, "FLUX_JOB_NNODES",1, "%d", ctx->nnodes);
     prog_ctx_setenvf (ctx, "FLUX_NODE_ID",   1, "%d", ctx->nodeid);
-    prog_ctx_setenvf (ctx, "FLUX_LWJ_NTASKS",1, "%d", ctx->nprocs * ctx->nnodes);
-    prog_ctx_setenvf (ctx, "MPIRUN_NPROCS", 1, "%d", ctx->nprocs * ctx->nnodes);
-    prog_ctx_setenvf (ctx, "PMI_SIZE", 1, "%d", ctx->nprocs * ctx->nnodes);
+    prog_ctx_setenvf (ctx, "FLUX_JOB_SIZE",  1, "%d", ctx->total_ntasks);
+    prog_ctx_setenvf (ctx, "MPIRUN_NPROCS", 1, "%d", ctx->total_ntasks);
+    prog_ctx_setenvf (ctx, "PMI_SIZE", 1, "%d", ctx->total_ntasks);
     gtid_list_create (ctx, buf, sizeof (buf));
-    prog_ctx_setenvf (ctx, "FLUX_LWJ_GTIDS",  1, "%s", buf);
+    prog_ctx_setenvf (ctx, "FLUX_LOCAL_RANKS",  1, "%s", buf);
 
     for (i = 0; i < ctx->nprocs; i++)
         exec_command (ctx, i);

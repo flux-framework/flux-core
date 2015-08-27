@@ -67,7 +67,7 @@ typedef struct {
     int cmb_rank;
     flux_t fctx;
     char kvsname[PMI_MAX_KVSNAMELEN];
-    bool trace;
+    int trace;
 } pmi_ctx_t;
 #define PMI_CTX_MAGIC 0xcafefaad
 
@@ -90,10 +90,10 @@ static inline void trace (int flags, const char *fmt, ...)
 
     if (ctx && (flags & ctx->trace)) {
         char buf[64];
-        snprintf (buf, sizeof (buf), "[%d.%d.%d] %s", ctx->cmb_rank,
+        snprintf (buf, sizeof (buf), "[%d.%d.%d] %s\n", ctx->cmb_rank,
                   ctx->appnum, ctx->rank, fmt);
         va_start (ap, fmt);
-        flux_vlog (ctx->fctx, LOG_DEBUG, buf, ap);
+        vfprintf (stdout, buf, ap);
         va_end (ap);
     }
 }
@@ -118,10 +118,10 @@ int PMI_Init (int *spawned)
 
     ctx->trace = env_getint ("PMI_TRACE", 0);
 
-    ctx->size = env_getint ("FLUX_LWJ_NTASKS", 1);
-    ctx->rank = env_getint ("FLUX_LWJ_TASK_ID", 0);
-    ctx->appnum = env_getint ("FLUX_LWJ_ID", 1);
-    if (env_getints ("FLUX_LWJ_GTIDS", &ctx->clique_ranks, &ctx->clique_size,
+    ctx->size = env_getint ("FLUX_JOB_SIZE", 1);
+    ctx->rank = env_getint ("FLUX_TASK_RANK", 0);
+    ctx->appnum = env_getint ("FLUX_JOB_ID", 1);
+    if (env_getints ("FLUX_LOCAL_RANKS", &ctx->clique_ranks, &ctx->clique_size,
                      dflt_clique_ranks, dflt_clique_size) < 0)
         goto fail;
 
@@ -134,7 +134,6 @@ int PMI_Init (int *spawned)
         err ("flux_open");
         goto fail;
     }
-    flux_log_set_facility (ctx->fctx, "pmi");
     ctx->cmb_rank = flux_rank (ctx->fctx);
     trace_simple (PMI_TRACE_INIT);
     *spawned = ctx->spawned;

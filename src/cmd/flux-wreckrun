@@ -253,12 +253,14 @@ end
 --
 --  Create iowatchers for all tasks stdout/err:
 --
+--  XXX: The `nio` IO counter must be initialized before creating
+--   all IO watchers.
+nio = wreck.ntasks * 2
 for i=0, wreck.ntasks-1 do
     for _,stream in pairs{ "stdout", "stderr"} do
         iow = io_watcher_create (stream, resp.jobid, i)
     end
 end
-nio = wreck.ntasks * 2
 
 --
 --  Open stdin (to task 0 only for now)
@@ -296,6 +298,14 @@ local s, err = f:sighandler {
     handler = function (f, s, sig)
         terminate = true
         f:reactor_stop ()
+    end
+}
+
+local s, err = f:sighandler {
+    sigmask = { posix.SIGALRM },
+    handler = function (f, s, sig)
+        wreck:say ("Killed by SIGALRM: state = %s, nio = %d\n", state, nio)
+	os.exit (1)
     end
 }
 

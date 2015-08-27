@@ -79,8 +79,8 @@ static void timesince (int rank,  struct timeval *start, const char *s)
 
     xgettimeofday (rank, &end, NULL);
     timersub (&end, start, &t);
-    fprintf (stderr, "%d: %s: %lu.%.3lu sec\n",
-             rank, s, t.tv_sec, t.tv_usec / 1000);
+    printf ("%d: %s: %lu.%.3lu sec\n", rank, s, t.tv_sec, t.tv_usec / 1000);
+    fflush (stdout);
 }
 
 #define OPTIONS "nN:"
