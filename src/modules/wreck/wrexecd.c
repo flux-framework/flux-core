@@ -45,6 +45,7 @@
 #include "src/common/libutil/optparse.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/sds.h"
 #include "src/modules/libzio/zio.h"
 #include "src/modules/kvs/kvs.h"
 #include "src/modules/libkz/kz.h"
@@ -223,26 +224,56 @@ void prog_ctx_signal_eof (struct prog_ctx *ctx)
     kill (getpid(), SIGCHLD);
 }
 
-int stdout_cb (zio_t *z, const char *json_str, int len, void *arg)
+/*
+ *  Turn a possibly multi-line zio json_string into one kz_put() per
+ *   line with a delayed commit until after the line(s) are complete.
+ */
+int task_kz_put_lines (struct task_info *t, kz_t *kz, const char *data, int len)
 {
-    struct task_info *t = arg;
-    int rc;
-    if ((rc = kz_put_json (t->kz[OUT], json_str)) < 0)
-        log_err (t->ctx, "stdout: kz_put_json: %s", strerror (errno));
-    else if (zio_json_eof (json_str))
-        prog_ctx_signal_eof (t->ctx);
-    return (rc);
+    int i, count;
+    sds *line;
+
+    assert (data != NULL && len > 0);
+
+    line = sdssplitlen (data, strlen (data), "\n", 1, &count);
+    if (!line)
+        return (-1);
+
+    /*  Reduce count by 1 if last "line" is empty since this represents
+     *   a trailing newline and this empty string should not be included
+     *   in output
+     */
+    if (line[count-1][0] == '\0')
+        count--;
+
+    for (i = 0; i < count; i++) {
+        line[i] = sdscatlen (line[i], "\n", 1); /* replace newline */
+        if (kz_put (kz, line[i], sdslen (line[i])) < 0)
+            log_err (t->ctx, "kz_put (%s): %s\n", line[i], strerror (errno));
+    }
+
+    sdsfreesplitres (line, count);
+
+    if (!prog_ctx_getopt (t->ctx, "stdio-delay-commit"))
+        kz_flush (kz);
+
+    return (count);
 }
 
-int stderr_cb (zio_t *z, const char *json_str, int len, void *arg)
+int io_cb (zio_t *z, const char *s, int len, void *arg)
 {
     struct task_info *t = arg;
-    int rc;
-    if ((rc = kz_put_json (t->kz[ERR], json_str)) < 0)
-        log_err (t->ctx, "stderr: kz_put_json: %s", strerror (errno));
-    else if (zio_json_eof (json_str))
+    int type = z == t->zio [OUT] ? OUT : ERR;
+    kz_t *kz = t->kz [type];
+
+    if (len > 0)
+        task_kz_put_lines (t, kz, s, len);
+    else if (kz) {
+        kz_close (kz);
+        t->kz [type] = NULL;
         prog_ctx_signal_eof (t->ctx);
-    return (rc);
+    }
+    return (0);
 }
 
 void kz_stdin (kz_t *kz, struct task_info *t)
@@ -257,13 +288,11 @@ void kz_stdin (kz_t *kz, struct task_info *t)
 
 int prog_ctx_io_flags (struct prog_ctx *ctx)
 {
-    int flags = KZ_FLAGS_RAW;
+    int flags = KZ_FLAGS_NOCOMMIT_PUT;
     if (!prog_ctx_getopt (ctx, "stdio-commit-on-open"))
         flags |= KZ_FLAGS_NOCOMMIT_OPEN;
     if (!prog_ctx_getopt (ctx, "stdio-commit-on-close"))
         flags |= KZ_FLAGS_NOCOMMIT_CLOSE;
-    if (prog_ctx_getopt (ctx, "stdio-delay-commit"))
-        flags |= KZ_FLAGS_NOCOMMIT_PUT;
     return (flags);
 }
 
@@ -303,10 +332,12 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
     t->kvs = NULL;
 
     t->zio [OUT] = zio_pipe_reader_create ("stdout", NULL, (void *) t);
-    zio_set_send_cb (t->zio [OUT], stdout_cb);
+    zio_set_send_cb (t->zio [OUT], io_cb);
+    zio_set_raw_output (t->zio [OUT]);
 
     t->zio [ERR] = zio_pipe_reader_create ("stderr", NULL, (void *) t);
-    zio_set_send_cb (t->zio [ERR], stderr_cb);
+    zio_set_send_cb (t->zio [ERR], io_cb);
+    zio_set_raw_output (t->zio [ERR]);
 
     t->zio [IN] = zio_pipe_writer_create ("stdin", (void *) t);
 
@@ -338,6 +369,8 @@ void task_io_flush (struct task_info *t)
     for (i = 0; i < NR_IO; i++) {
         zio_flush (t->zio [i]);
         zio_destroy (t->zio [i]);
+        /* Close all kz objects that haven't been closed already
+         */
         if (t->kz [i]) {
             kz_close (t->kz [i]);
             t->kz [i] = NULL;
