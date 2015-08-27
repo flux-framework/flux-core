@@ -558,7 +558,7 @@ int main (int argc, char *argv[])
     update_proctitle (&ctx);
     update_pidfile (&ctx);
 
-    if (!nopt && ctx.rank == 0 && (isatty (STDIN_FILENO) || ctx.shell_cmd)) {
+    if (!nopt && ctx.rank == 0) {
         ctx.shell = subprocess_create (ctx.sm);
         subprocess_set_callback (ctx.shell, rank0_shell_exit_handler, &ctx);
     }
@@ -762,9 +762,31 @@ static int rank0_shell_exit_handler (struct subprocess *p, void *arg)
     return 0;
 }
 
+static void path_prepend (char **s1, const char *s2)
+{
+    char *p;
+
+    if (!s2)
+        ;
+    else if (!*s1)
+        *s1 = xstrdup (s2);
+    else if ((p = strstr (*s1, s2))) {
+        int s2_len = strlen (s2);
+        memmove (p, p + s2_len, strlen (p + s2_len) + 1);
+        if (*p == ':')
+            memmove (p, p + 1, strlen (p + 1) + 1);
+        path_prepend (s1, s2);
+    } else {
+        p = xasprintf ("%s:%s", s2, *s1);
+        free (*s1);
+        *s1 = p;
+    }
+}
+
 static void rank0_shell (ctx_t *ctx)
 {
     const char *shell = getenv ("SHELL");
+    char *ldpath = NULL;
 
     if (!shell)
         shell = "/bin/bash";
@@ -776,6 +798,14 @@ static void rank0_shell (ctx_t *ctx)
     }
     subprocess_set_environ (ctx->shell, environ);
     subprocess_setenv (ctx->shell, "FLUX_URI", ctx->local_uri, 1);
+    path_prepend (&ldpath, subprocess_getenv (ctx->shell, "LD_LIBRARY_PATH"));
+    path_prepend (&ldpath, PROGRAM_LIBRARY_PATH);
+    path_prepend (&ldpath, flux_conf_get (ctx->cf,
+                                            "general.program_library_path"));
+    if (ldpath) {
+        subprocess_setenv (ctx->shell, "LD_LIBRARY_PATH", ldpath, 1);
+        free (ldpath);
+    }
 
     if (!ctx->quiet)
         flux_log (ctx->h, LOG_INFO, "starting shell");
