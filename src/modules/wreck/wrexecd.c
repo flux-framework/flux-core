@@ -222,7 +222,8 @@ void prog_ctx_signal_eof (struct prog_ctx *ctx)
      */
     kill (getpid(), SIGCHLD);
 }
-int stdout_cb (zio_t *z, const char *json_str, void *arg)
+
+int stdout_cb (zio_t *z, const char *json_str, int len, void *arg)
 {
     struct task_info *t = arg;
     int rc;
@@ -233,7 +234,7 @@ int stdout_cb (zio_t *z, const char *json_str, void *arg)
     return (rc);
 }
 
-int stderr_cb (zio_t *z, const char *json_str, void *arg)
+int stderr_cb (zio_t *z, const char *json_str, int len, void *arg)
 {
     struct task_info *t = arg;
     int rc;

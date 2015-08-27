@@ -1130,7 +1130,7 @@ static int l_kvswatcher_newindex (lua_State *L)
     return (0);
 }
 
-static int iowatcher_zio_cb (zio_t *zio, const char *json_str, void *arg)
+static int iowatcher_zio_cb (zio_t *zio, const char *json_str, int n, void *arg)
 {
     json_object *o = NULL;
     int rc;
