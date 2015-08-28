@@ -259,11 +259,10 @@ def walk(directory, topdown=False, flux_handle=None):
         directory = KVSDir(flux_handle, directory)
     return inner_walk(directory, '', topdown)
 
-@ffi.callback('kvs_set_obj_f')
+@ffi.callback('kvs_set_f')
 def KVSWatchWrapper(key, value, arg, errnum):
-    j = json_c.Jobj(handle=value)
     (cb, real_arg) = ffi.from_handle(arg)
-    ret = cb(ffi.string(key), json.loads(j.as_str()), real_arg, errnum)
+    ret = cb(ffi.string(key), json.loads(ffi.string(value)), real_arg, errnum)
     return ret if ret is not None else 0
 
 

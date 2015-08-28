@@ -112,3 +112,34 @@ class TimerWatcher(Watcher):
         if self.handle is not None:
             raw.flux_watcher_destroy(self.handle)
             self.handle = None
+
+
+@ffi.callback('flux_fd_watcher_f')
+def fd_handler_wrapper(handle_trash, fd_watcher_s, fd_int, revents,
+                       opaque_handle):
+    watcher = ffi.from_handle(opaque_handle)
+    ret = watcher.cb(watcher.fh, watcher, fd_int, revents, watcher.args)
+
+
+class FDWatcher(Watcher):
+    def __init__(self, flux_handle, fd_int, events, callback, args=None):
+        self.fh = flux_handle
+        self.fd_int = fd_int
+        self.events = events
+        self.cb = callback
+        self.args = args
+        self.handle = None
+        wargs = ffi.new_handle(self)
+        self.handle = raw.flux_fd_watcher_create(
+            self.fd_int, self.events, fd_handler_wrapper, wargs)
+
+    def start(self):
+        raw.flux_fd_watcher_start(self.fh.handle, self.handle)
+
+    def stop(self):
+        raw.flux_fd_watcher_stop(self.fh.handle, self.handle)
+
+    def destroy(self):
+        if self.handle is not None:
+            raw.flux_fd_watcher_destroy(self.handle)
+            self.handle = None
