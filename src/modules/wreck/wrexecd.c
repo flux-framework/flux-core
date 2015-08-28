@@ -80,6 +80,9 @@ struct prog_ctx {
     kvsdir_t *kvs;          /* Handle to this job's dir in kvs */
     kvsdir_t *resources;    /* Handle to this node's resource dir in kvs */
 
+    flux_fd_watcher_t *fdw;
+    flux_zmq_watcher_t *zw;
+
     int noderank;
 
     int64_t id;             /* id of this execution */
@@ -461,6 +464,11 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
     if (ctx->resources)
         kvsdir_destroy (ctx->resources);
 
+    if (ctx->fdw)
+        flux_fd_watcher_destroy (ctx->fdw);
+    if (ctx->zw)
+        flux_zmq_watcher_destroy (ctx->zw);
+
     free (ctx->envz);
     if (ctx->signalfd >= 0)
         close (ctx->signalfd);
@@ -643,11 +651,18 @@ int prog_ctx_options_init (struct prog_ctx *ctx)
         return (0); /* Assume ENOENT */
     i = kvsitr_create (opts);
     while ((opt = kvsitr_next (i))) {
+        char *json_str;
         json_object *v;
         char s [64];
 
-        if (kvsdir_get_obj (opts, opt, &v) < 0) {
+        if (kvsdir_get (opts, opt, &json_str) < 0) {
             log_err (ctx, "skipping option '%s': %s", opt, strerror (errno));
+            continue;
+        }
+
+        if (!(v = json_tokener_parse (json_str))) {
+            log_err (ctx, "failed to parse json for option '%s'\n", opt);
+            free (json_str);
             continue;
         }
 
@@ -670,6 +685,8 @@ int prog_ctx_options_init (struct prog_ctx *ctx)
                 log_err (ctx, "skipping option '%s': invalid type", opt);
                 break;
         }
+        free (json_str);
+        json_object_put (v);
     }
     kvsitr_destroy (i);
     kvsdir_destroy (opts);
@@ -679,13 +696,17 @@ int prog_ctx_options_init (struct prog_ctx *ctx)
 int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
 {
     int i;
+    char *json_str;
     json_object *v;
 
     if (prog_ctx_options_init (ctx) < 0)
         log_fatal (ctx, 1, "failed to read %s.options", kvsdir_key (ctx->kvs));
 
-    if (kvsdir_get_obj (ctx->kvs, "cmdline", &v) < 0)
+    if (kvsdir_get (ctx->kvs, "cmdline", &json_str) < 0)
         log_fatal (ctx, 1, "kvs_get: cmdline");
+
+    if (!(v = json_tokener_parse (json_str)))
+        log_fatal (ctx, 1, "kvs_get: cmdline: json parser failed");
 
     if (json_array_to_argv (ctx, v, &ctx->argv, &ctx->argc) < 0)
         log_fatal (ctx, 1, "Failed to get cmdline from kvs");
@@ -712,6 +733,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
     log_msg (ctx, "lwj %ld: node%d: nprocs=%d, nnodes=%d, cmdline=%s",
                    ctx->id, ctx->nodeid, ctx->nprocs, ctx->nnodes,
                    json_object_to_json_string (v));
+    free (json_str);
     json_object_put (v);
 
     return (0);
@@ -872,7 +894,7 @@ int update_job_state (struct prog_ctx *ctx, const char *state)
 
     if (asprintf (&key, "%s-time", state) < 0)
         return (-1);
-    if (kvsdir_put_obj (ctx->kvs, key, to) < 0)
+    if (kvsdir_put (ctx->kvs, key, json_object_to_json_string (to)) < 0)
         return (-1);
     free (key);
     json_object_put (to);
@@ -937,7 +959,7 @@ int rexec_taskinfo_put (struct prog_ctx *ctx, int localid)
         log_fatal (ctx, 1, "rexec_taskinfo_put: asprintf: %s",
                     strerror (errno));
 
-    rc = kvsdir_put_obj (ctx->kvs, key, o);
+    rc = kvsdir_put (ctx->kvs, key, json_object_to_json_string (o));
     free (key);
     json_object_put (o);
     //kvs_commit (ctx->flux);
@@ -972,32 +994,26 @@ int send_exit_message (struct task_info *t)
 {
     char *key;
     struct prog_ctx *ctx = t->ctx;
-    json_object *o = json_object_new_int (t->status);
 
     if (asprintf (&key, "lwj.%lu.%d.exit_status", ctx->id, t->globalid) < 0)
         return (-1);
-    if (kvs_put_obj (ctx->flux, key, o) < 0)
+    if (kvs_put_int (ctx->flux, key, t->status) < 0)
         return (-1);
     free (key);
-    json_object_put (o);
 
     if (WIFSIGNALED (t->status)) {
-        o = json_object_new_int (WTERMSIG (t->status));
         if (asprintf (&key, "lwj.%lu.%d.exit_sig", ctx->id, t->globalid) < 0)
             return (-1);
-        if (kvs_put_obj (ctx->flux, key, o) < 0)
+        if (kvs_put_int (ctx->flux, key, WTERMSIG (t->status)) < 0)
             return (-1);
         free (key);
-        json_object_put (o);
     }
     else {
-        o = json_object_new_int (WEXITSTATUS (t->status));
         if (asprintf (&key, "lwj.%lu.%d.exit_code", ctx->id, t->globalid) < 0)
             return (-1);
-        if (kvs_put_obj (ctx->flux, key, o) < 0)
+        if (kvs_put_int (ctx->flux, key, WEXITSTATUS (t->status)) < 0)
             return (-1);
         free (key);
-        json_object_put (o);
     }
 
     if (prog_ctx_getopt (ctx, "commit-on-task-exit")) {
@@ -1502,7 +1518,8 @@ int cleanup (struct prog_ctx *ctx)
     return prog_ctx_signal (ctx, SIGKILL);
 }
 
-int signal_cb (flux_t f, int fd, short revents, struct prog_ctx *ctx)
+int signal_cb (flux_t f, flux_fd_watcher_t *fdw,
+    int fd, short revents, struct prog_ctx *ctx)
 {
     int n;
     struct signalfd_siginfo si;
@@ -1530,7 +1547,8 @@ int signal_cb (flux_t f, int fd, short revents, struct prog_ctx *ctx)
     return (0);
 }
 
-int cmb_cb (flux_t f, void *zs, short revents, struct prog_ctx *ctx)
+int cmb_cb (flux_t f, flux_zmq_watcher_t *zw,
+    void *zs, short revents, struct prog_ctx *ctx)
 {
     const char *topic;
     const char *json_str;
@@ -1586,26 +1604,23 @@ int task_info_io_setup (struct task_info *t)
 int prog_ctx_reactor_init (struct prog_ctx *ctx)
 {
     int i;
+
     for (i = 0; i < ctx->nprocs; i++)
         task_info_io_setup (ctx->task [i]);
 
-    /*
-     *  Listen for "events" coming from the signalfd
-     */
-    flux_fdhandler_add (ctx->flux,
-        ctx->signalfd,
-        ZMQ_POLLIN | ZMQ_POLLERR,
-        (FluxFdHandler) signal_cb,
-        (void *) ctx);
+    ctx->fdw = flux_fd_watcher_create (ctx->signalfd,
+            FLUX_POLLIN | FLUX_POLLERR,
+            (flux_fd_watcher_f) signal_cb,
+            (void *) ctx);
 
-    /*
-     *  Add a handler for events coming from CMB
-     */
-    flux_zshandler_add (ctx->flux,
-        ctx->zs_rep,
-        ZMQ_POLLIN | ZMQ_POLLERR,
-        (FluxZsHandler) cmb_cb,
-        (void *) ctx);
+    ctx->zw = flux_zmq_watcher_create (ctx->zs_rep,
+            FLUX_POLLIN | FLUX_POLLERR,
+            (flux_zmq_watcher_f) cmb_cb,
+            (void *) ctx);
+
+
+    flux_fd_watcher_start (ctx->flux, ctx->fdw);
+    flux_zmq_watcher_start (ctx->flux, ctx->zw);
 
     return (0);
 }
