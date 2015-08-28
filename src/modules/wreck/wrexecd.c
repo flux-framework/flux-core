@@ -82,6 +82,7 @@ struct prog_ctx {
 
     flux_fd_watcher_t *fdw;
     flux_zmq_watcher_t *zw;
+    flux_msg_watcher_t *mw;
 
     int noderank;
 
@@ -109,6 +110,8 @@ struct prog_ctx {
     void *zs_req;
     void *zs_rep;
     int signalfd;
+
+    char *topic;            /* Per program topic base string for events */
 
     /*  Per-task data. These members are only valid between fork and
      *   exec within each task and are created on-demand as needed by
@@ -459,6 +462,9 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
         task_info_destroy (ctx->task [i]);
     }
 
+    if (ctx->topic)
+        free (ctx->topic);
+
     if (ctx->kvs)
         kvsdir_destroy (ctx->kvs);
     if (ctx->resources)
@@ -468,6 +474,8 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
         flux_fd_watcher_destroy (ctx->fdw);
     if (ctx->zw)
         flux_zmq_watcher_destroy (ctx->zw);
+    if (ctx->mw)
+        flux_msg_watcher_destroy (ctx->mw);
 
     free (ctx->envz);
     if (ctx->signalfd >= 0)
@@ -1589,6 +1597,38 @@ done:
     return (0);
 }
 
+void ev_cb (flux_t f, flux_msg_watcher_t *mw,
+           const flux_msg_t *msg, struct prog_ctx *ctx)
+{
+    int base;
+    json_object *o = NULL;
+    const char *topic;
+    const char *json_str;
+
+    if (flux_msg_get_topic (msg, &topic) < 0) {
+        log_err (ctx, "flux_msg_get_topic: %s", strerror (errno));
+        return;
+    }
+    if (flux_msg_get_payload_json (msg, &json_str) < 0) {
+        log_err (ctx, "flux_msg_get_payload_json");
+        return;
+    }
+    if (json_str && !(o = json_tokener_parse (json_str))) {
+        log_err (ctx, "json_tokener_parse");
+        return;
+    }
+
+    base = strlen (ctx->topic);
+    if (strcmp (topic+base, "kill") == 0) {
+        int sig = json_object_get_int (o);
+        if (sig == 0)
+            sig = 9;
+        log_msg (ctx, "Killing jobid %lu with signal %d", ctx->id, sig);
+        prog_ctx_signal (ctx, sig);
+    }
+
+}
+
 int task_info_io_setup (struct task_info *t)
 {
     flux_t f = t->ctx->flux;
@@ -1605,8 +1645,20 @@ int prog_ctx_reactor_init (struct prog_ctx *ctx)
 {
     int i;
 
+    if (asprintf (&ctx->topic, "wreck.%ld.", ctx->id) < 0)
+           log_fatal (ctx, 1, "failed to create topic string: %s",
+                      strerror (errno));
+
+    if (flux_event_subscribe (ctx->flux, ctx->topic) < 0)
+        return log_err (ctx, "flux_event_subscribe (%s): %s\n",
+                        ctx->topic, strerror (errno));
+
     for (i = 0; i < ctx->nprocs; i++)
         task_info_io_setup (ctx->task [i]);
+
+    ctx->mw = flux_msg_watcher_create (FLUX_MATCH_EVENT,
+            (flux_msg_watcher_f) ev_cb,
+            (void *) ctx);
 
     ctx->fdw = flux_fd_watcher_create (ctx->signalfd,
             FLUX_POLLIN | FLUX_POLLERR,
@@ -1621,6 +1673,7 @@ int prog_ctx_reactor_init (struct prog_ctx *ctx)
 
     flux_fd_watcher_start (ctx->flux, ctx->fdw);
     flux_zmq_watcher_start (ctx->flux, ctx->zw);
+    flux_msg_watcher_start (ctx->flux, ctx->mw);
 
     return (0);
 }
@@ -1657,6 +1710,7 @@ int prog_ctx_get_id (struct prog_ctx *ctx, optparse_t p)
        || (ctx->id == 0 && errno == EINVAL)
        || (ctx->id == ULONG_MAX && errno == ERANGE))
            log_fatal (ctx, 1, "--lwj-id=%s invalid", id);
+
 
     return (0);
 }
