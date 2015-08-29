@@ -380,39 +380,6 @@ static int64_t id_from_tag (const char *tag, char **endp)
     return l;
 }
 
-static int rexec_session_kill (struct rexec_session *s, int sig)
-{
-    int rc = -1;
-    json_object *o = json_object_new_int (sig);
-    const char *json_str = json_object_to_json_string (o);
-    zmsg_t * zmsg = NULL;
-
-    if (!(zmsg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
-        goto done;
-    if (flux_msg_set_topic (zmsg, "wrexec.kill") < 0)
-        goto done;
-    if (flux_msg_set_payload_json (zmsg, json_str) < 0)
-        goto done;
-
-    zmsg_dump (zmsg);
-
-    rc = zmsg_send (&zmsg, s->zs_req);
-    if (rc < 0)
-        err ("zmsg_send failed");
-done:
-    json_object_put (o);
-    zmsg_destroy (&zmsg);
-    return (rc);
-}
-
-static int rexec_kill (struct rexec_ctx *ctx, int64_t id, int sig)
-{
-    struct rexec_session *s = rexec_session_lookup (ctx, id);
-    if (s == NULL)
-        return (0);
-    return rexec_session_kill (s, sig);
-}
-
 static int mrpc_respond_errnum (flux_mrpc_t *mrpc, int errnum)
 {
     json_object *o = json_object_new_object ();
@@ -462,13 +429,6 @@ static int mrpc_handler (struct rexec_ctx *ctx, zmsg_t *zmsg)
 
     if (strcmp (method, "run") == 0) {
         rc = spawn_exec_handler (ctx, id);
-    }
-    else if (strcmp (method, "kill") == 0) {
-        int sig = -1;
-        util_json_object_get_int (inarg, "signal", &sig);
-        if (sig == -1)
-            sig = 9;
-        rc = rexec_kill (ctx, id, sig);
     }
     else {
         mrpc_respond_errnum (mrpc, EINVAL);
@@ -520,14 +480,6 @@ static int event_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         if (lwj_targets_this_node (ctx, id))
             spawn_exec_handler (ctx, id);
     }
-    else if (strncmp (topic, "wrexec.kill", 12) == 0) {
-        int sig = SIGKILL;
-        char *endptr = NULL;
-        int64_t id = id_from_tag (topic + 12, &endptr);
-        if (endptr && *endptr == '.')
-            sig = atoi (endptr);
-        rexec_kill (ctx, id, sig);
-    }
     else if (strncmp (topic, "mrpc.wrexec", 11) == 0) {
         mrpc_handler (ctx, *zmsg);
     }
@@ -573,7 +525,6 @@ int mod_main (flux_t h, int argc, char **argv)
     struct rexec_ctx *ctx = getctx (h);
 
     flux_event_subscribe (h, "wrexec.run.");
-    flux_event_subscribe (h, "wrexec.kill.");
     flux_event_subscribe (h, "mrpc.wrexec");
 
     if (flux_msghandler_addvec (h, htab, htablen, ctx) < 0) {
