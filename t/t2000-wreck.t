@@ -51,4 +51,12 @@ test_expect_success 'wreck: job state events emitted' '
 	EOF
 	test_cmp expected output
 '
+test_expect_success 'wreck: signaling wreckrun works' '
+        run_timeout 5 flux wreckrun -N4 -n4 sleep 100 </dev/null &
+	q=$! &&
+	sleep 1 &&
+        echo killing $q &&
+	kill $q &&
+	test_expect_code 143 wait $q
+'
 test_done

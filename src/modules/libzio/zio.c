@@ -50,6 +50,7 @@
 #define ZIO_VERBOSE         (1<<6)
 #define ZIO_IN_HANDLER      (1<<7)
 #define ZIO_DESTROYED       (1<<8)
+#define ZIO_RAW_OUTPUT      (1<<9)
 
 #define ZIO_READER          1
 #define ZIO_WRITER          2
@@ -384,6 +385,14 @@ int zio_set_debug (zio_t *zio, const char *prefix, zio_log_f logf)
     return (0);
 }
 
+int zio_set_raw_output (zio_t *zio)
+{
+    if (!zio || zio->magic != ZIO_MAGIC)
+        return (-1);
+    zio->flags |= ZIO_RAW_OUTPUT;
+    return (0);
+}
+
 int zio_set_send_cb (zio_t *zio, zio_send_f sendf)
 {
     zio->send = sendf;
@@ -419,10 +428,10 @@ static char *zio_json_str_create (zio_t *zio, void *data, size_t len)
     return zio_json_encode (data, len, eof);
 }
 
-static int zio_sendmsg (zio_t *zio, const char *json_str)
+static int zio_sendmsg (zio_t *zio, const char *s, int len)
 {
-    zio_debug (zio, "sendmsg: %s\n", json_str);
-    return (*zio->send) (zio, json_str, zio->arg);
+    zio_debug (zio, "sendmsg: %s\n", s);
+    return (*zio->send) (zio, s, len, zio->arg);
 }
 
 static int zio_send (zio_t *zio, char *p, size_t len)
@@ -432,9 +441,14 @@ static int zio_send (zio_t *zio, char *p, size_t len)
 
     zio_debug (zio, "zio_send (len=%d)\n", len);
 
-    if (!(json_str = zio_json_str_create (zio, p, len)))
-        goto done;
-    rc = zio_sendmsg (zio, json_str);
+    if (!(zio->flags & ZIO_RAW_OUTPUT)) {
+        if (!(json_str = zio_json_str_create (zio, p, len)))
+            goto done;
+        p = json_str;
+    }
+    rc = zio_sendmsg (zio, p, len);
+    if (rc >= 0 && len == 0)
+        zio->flags |= ZIO_EOF_SENT;
 done:
     if (json_str)
         free (json_str);
@@ -903,7 +917,7 @@ int zio_flux_attach (zio_t *zio, flux_t f)
     return (zio_bootstrap (zio));
 }
 
-int zio_zmsg_send (zio_t *zio, const char *json_str, void *arg)
+int zio_zmsg_send (zio_t *zio, const char *json_str, int len, void *arg)
 {
     zio_debug (zio, "%s: send: %s\n", zio->name, json_str);
     if (!zio->dstsock)

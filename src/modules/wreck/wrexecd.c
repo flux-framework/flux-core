@@ -45,6 +45,7 @@
 #include "src/common/libutil/optparse.h"
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libutil/sds.h"
 #include "src/modules/libzio/zio.h"
 #include "src/modules/kvs/kvs.h"
 #include "src/modules/libkz/kz.h"
@@ -79,6 +80,9 @@ struct prog_ctx {
     kvsdir_t *kvs;          /* Handle to this job's dir in kvs */
     kvsdir_t *resources;    /* Handle to this node's resource dir in kvs */
 
+    flux_fd_watcher_t *fdw;
+    flux_msg_watcher_t *mw;
+
     int noderank;
 
     int64_t id;             /* id of this execution */
@@ -101,10 +105,9 @@ struct prog_ctx {
 
     char exedir[MAXPATHLEN]; /* Directory from which this executable is run */
 
-    zctx_t *zctx;
-    void *zs_req;
-    void *zs_rep;
     int signalfd;
+
+    char *topic;            /* Per program topic base string for events */
 
     /*  Per-task data. These members are only valid between fork and
      *   exec within each task and are created on-demand as needed by
@@ -222,26 +225,57 @@ void prog_ctx_signal_eof (struct prog_ctx *ctx)
      */
     kill (getpid(), SIGCHLD);
 }
-int stdout_cb (zio_t *z, const char *json_str, void *arg)
+
+/*
+ *  Turn a possibly multi-line zio json_string into one kz_put() per
+ *   line with a delayed commit until after the line(s) are complete.
+ */
+int task_kz_put_lines (struct task_info *t, kz_t *kz, const char *data, int len)
 {
-    struct task_info *t = arg;
-    int rc;
-    if ((rc = kz_put_json (t->kz[OUT], json_str)) < 0)
-        log_err (t->ctx, "stdout: kz_put_json: %s", strerror (errno));
-    else if (zio_json_eof (json_str))
-        prog_ctx_signal_eof (t->ctx);
-    return (rc);
+    int i, count;
+    sds *line;
+
+    assert (data != NULL && len > 0);
+
+    line = sdssplitlen (data, strlen (data), "\n", 1, &count);
+    if (!line)
+        return (-1);
+
+    /*  Reduce count by 1 if last "line" is empty since this represents
+     *   a trailing newline and this empty string should not be included
+     *   in output
+     */
+    if (line[count-1][0] == '\0')
+        count--;
+
+    for (i = 0; i < count; i++) {
+        line[i] = sdscatlen (line[i], "\n", 1); /* replace newline */
+        if (kz_put (kz, line[i], sdslen (line[i])) < 0)
+            log_err (t->ctx, "kz_put (%s): %s\n", line[i], strerror (errno));
+    }
+
+    sdsfreesplitres (line, count);
+
+    if (!prog_ctx_getopt (t->ctx, "stdio-delay-commit"))
+        kz_flush (kz);
+
+    return (count);
 }
 
-int stderr_cb (zio_t *z, const char *json_str, void *arg)
+int io_cb (zio_t *z, const char *s, int len, void *arg)
 {
     struct task_info *t = arg;
-    int rc;
-    if ((rc = kz_put_json (t->kz[ERR], json_str)) < 0)
-        log_err (t->ctx, "stderr: kz_put_json: %s", strerror (errno));
-    else if (zio_json_eof (json_str))
+    int type = z == t->zio [OUT] ? OUT : ERR;
+    kz_t *kz = t->kz [type];
+
+    if (len > 0)
+        task_kz_put_lines (t, kz, s, len);
+    else if (kz) {
+        kz_close (kz);
+        t->kz [type] = NULL;
         prog_ctx_signal_eof (t->ctx);
-    return (rc);
+    }
+    return (0);
 }
 
 void kz_stdin (kz_t *kz, struct task_info *t)
@@ -256,13 +290,11 @@ void kz_stdin (kz_t *kz, struct task_info *t)
 
 int prog_ctx_io_flags (struct prog_ctx *ctx)
 {
-    int flags = KZ_FLAGS_RAW;
+    int flags = KZ_FLAGS_NOCOMMIT_PUT;
     if (!prog_ctx_getopt (ctx, "stdio-commit-on-open"))
         flags |= KZ_FLAGS_NOCOMMIT_OPEN;
     if (!prog_ctx_getopt (ctx, "stdio-commit-on-close"))
         flags |= KZ_FLAGS_NOCOMMIT_CLOSE;
-    if (prog_ctx_getopt (ctx, "stdio-delay-commit"))
-        flags |= KZ_FLAGS_NOCOMMIT_PUT;
     return (flags);
 }
 
@@ -302,10 +334,12 @@ struct task_info * task_info_create (struct prog_ctx *ctx, int id)
     t->kvs = NULL;
 
     t->zio [OUT] = zio_pipe_reader_create ("stdout", NULL, (void *) t);
-    zio_set_send_cb (t->zio [OUT], stdout_cb);
+    zio_set_send_cb (t->zio [OUT], io_cb);
+    zio_set_raw_output (t->zio [OUT]);
 
     t->zio [ERR] = zio_pipe_reader_create ("stderr", NULL, (void *) t);
-    zio_set_send_cb (t->zio [ERR], stderr_cb);
+    zio_set_send_cb (t->zio [ERR], io_cb);
+    zio_set_raw_output (t->zio [ERR]);
 
     t->zio [IN] = zio_pipe_writer_create ("stdin", (void *) t);
 
@@ -337,6 +371,8 @@ void task_io_flush (struct task_info *t)
     for (i = 0; i < NR_IO; i++) {
         zio_flush (t->zio [i]);
         zio_destroy (t->zio [i]);
+        /* Close all kz objects that haven't been closed already
+         */
         if (t->kz [i]) {
             kz_close (t->kz [i]);
             t->kz [i] = NULL;
@@ -422,20 +458,23 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
         task_info_destroy (ctx->task [i]);
     }
 
+    if (ctx->topic)
+        free (ctx->topic);
+
     if (ctx->kvs)
         kvsdir_destroy (ctx->kvs);
     if (ctx->resources)
         kvsdir_destroy (ctx->resources);
 
+    if (ctx->fdw)
+        flux_fd_watcher_destroy (ctx->fdw);
+    if (ctx->mw)
+        flux_msg_watcher_destroy (ctx->mw);
+
     free (ctx->envz);
     if (ctx->signalfd >= 0)
         close (ctx->signalfd);
 
-
-    zmq_close (ctx->zs_req);
-    zmq_close (ctx->zs_rep);
-
-    zmq_term (ctx->zctx);
     if (ctx->flux)
         flux_close (ctx->flux);
 
@@ -445,7 +484,6 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
 struct prog_ctx * prog_ctx_create (void)
 {
     struct prog_ctx *ctx = malloc (sizeof (*ctx));
-    zsys_handler_set (NULL); /* Disable czmq SIGINT/SIGTERM handlers */
     if (!ctx)
         log_fatal (ctx, 1, "malloc");
 
@@ -467,31 +505,6 @@ struct prog_ctx * prog_ctx_create (void)
     ctx->lua_stack = lua_stack_create ();
     ctx->lua_pattern = xstrdup (WRECK_LUA_PATTERN);
     return (ctx);
-}
-
-static int prog_ctx_zmq_socket_setup (struct prog_ctx *ctx)
-{
-    char uri [1024];
-    unsigned long uid = geteuid();
-
-    if ((ctx->zctx = zctx_new ()) == NULL)
-        log_fatal (ctx, 1, "zctx_new: %s", strerror (errno));
-
-    snprintf (uri, sizeof (uri), "ipc:///tmp/cmb-%d-%lu-rexec-req-%lu",
-                ctx->nodeid, uid, ctx->id);
-    if (!(ctx->zs_rep = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
-        log_fatal (ctx, 1, "zsocket_new: %s", strerror (errno));
-    if (zsocket_bind (ctx->zs_rep, "%s", uri) < 0)
-        log_fatal (ctx, 1, "zsocket_bind %s: %s", uri, strerror (errno));
-
-    snprintf (uri, sizeof (uri), "ipc:///tmp/cmb-%d-%lu-rexec-rep-%lu",
-                ctx->nodeid, uid, ctx->id);
-    if (!(ctx->zs_req = zsocket_new (ctx->zctx, ZMQ_DEALER)))
-        log_fatal (ctx, 1, "zsocket_new: %s", strerror (errno));
-    if (zsocket_connect (ctx->zs_req, "%s", uri) < 0)
-        log_fatal (ctx, 1, "zsocket_connect %s: %s", uri, strerror (errno));
-
-    return (0);
 }
 
 int json_array_to_argv (struct prog_ctx *ctx,
@@ -609,11 +622,18 @@ int prog_ctx_options_init (struct prog_ctx *ctx)
         return (0); /* Assume ENOENT */
     i = kvsitr_create (opts);
     while ((opt = kvsitr_next (i))) {
+        char *json_str;
         json_object *v;
         char s [64];
 
-        if (kvsdir_get_obj (opts, opt, &v) < 0) {
+        if (kvsdir_get (opts, opt, &json_str) < 0) {
             log_err (ctx, "skipping option '%s': %s", opt, strerror (errno));
+            continue;
+        }
+
+        if (!(v = json_tokener_parse (json_str))) {
+            log_err (ctx, "failed to parse json for option '%s'\n", opt);
+            free (json_str);
             continue;
         }
 
@@ -636,6 +656,8 @@ int prog_ctx_options_init (struct prog_ctx *ctx)
                 log_err (ctx, "skipping option '%s': invalid type", opt);
                 break;
         }
+        free (json_str);
+        json_object_put (v);
     }
     kvsitr_destroy (i);
     kvsdir_destroy (opts);
@@ -645,13 +667,17 @@ int prog_ctx_options_init (struct prog_ctx *ctx)
 int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
 {
     int i;
+    char *json_str;
     json_object *v;
 
     if (prog_ctx_options_init (ctx) < 0)
         log_fatal (ctx, 1, "failed to read %s.options", kvsdir_key (ctx->kvs));
 
-    if (kvsdir_get_obj (ctx->kvs, "cmdline", &v) < 0)
+    if (kvsdir_get (ctx->kvs, "cmdline", &json_str) < 0)
         log_fatal (ctx, 1, "kvs_get: cmdline");
+
+    if (!(v = json_tokener_parse (json_str)))
+        log_fatal (ctx, 1, "kvs_get: cmdline: json parser failed");
 
     if (json_array_to_argv (ctx, v, &ctx->argv, &ctx->argc) < 0)
         log_fatal (ctx, 1, "Failed to get cmdline from kvs");
@@ -678,6 +704,7 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
     log_msg (ctx, "lwj %ld: node%d: nprocs=%d, nnodes=%d, cmdline=%s",
                    ctx->id, ctx->nodeid, ctx->nprocs, ctx->nnodes,
                    json_object_to_json_string (v));
+    free (json_str);
     json_object_put (v);
 
     return (0);
@@ -838,7 +865,7 @@ int update_job_state (struct prog_ctx *ctx, const char *state)
 
     if (asprintf (&key, "%s-time", state) < 0)
         return (-1);
-    if (kvsdir_put_obj (ctx->kvs, key, to) < 0)
+    if (kvsdir_put (ctx->kvs, key, json_object_to_json_string (to)) < 0)
         return (-1);
     free (key);
     json_object_put (to);
@@ -903,7 +930,7 @@ int rexec_taskinfo_put (struct prog_ctx *ctx, int localid)
         log_fatal (ctx, 1, "rexec_taskinfo_put: asprintf: %s",
                     strerror (errno));
 
-    rc = kvsdir_put_obj (ctx->kvs, key, o);
+    rc = kvsdir_put (ctx->kvs, key, json_object_to_json_string (o));
     free (key);
     json_object_put (o);
     //kvs_commit (ctx->flux);
@@ -938,32 +965,26 @@ int send_exit_message (struct task_info *t)
 {
     char *key;
     struct prog_ctx *ctx = t->ctx;
-    json_object *o = json_object_new_int (t->status);
 
     if (asprintf (&key, "lwj.%lu.%d.exit_status", ctx->id, t->globalid) < 0)
         return (-1);
-    if (kvs_put_obj (ctx->flux, key, o) < 0)
+    if (kvs_put_int (ctx->flux, key, t->status) < 0)
         return (-1);
     free (key);
-    json_object_put (o);
 
     if (WIFSIGNALED (t->status)) {
-        o = json_object_new_int (WTERMSIG (t->status));
         if (asprintf (&key, "lwj.%lu.%d.exit_sig", ctx->id, t->globalid) < 0)
             return (-1);
-        if (kvs_put_obj (ctx->flux, key, o) < 0)
+        if (kvs_put_int (ctx->flux, key, WTERMSIG (t->status)) < 0)
             return (-1);
         free (key);
-        json_object_put (o);
     }
     else {
-        o = json_object_new_int (WEXITSTATUS (t->status));
         if (asprintf (&key, "lwj.%lu.%d.exit_code", ctx->id, t->globalid) < 0)
             return (-1);
-        if (kvs_put_obj (ctx->flux, key, o) < 0)
+        if (kvs_put_int (ctx->flux, key, WEXITSTATUS (t->status)) < 0)
             return (-1);
         free (key);
-        json_object_put (o);
     }
 
     if (prog_ctx_getopt (ctx, "commit-on-task-exit")) {
@@ -1468,7 +1489,8 @@ int cleanup (struct prog_ctx *ctx)
     return prog_ctx_signal (ctx, SIGKILL);
 }
 
-int signal_cb (flux_t f, int fd, short revents, struct prog_ctx *ctx)
+int signal_cb (flux_t f, flux_fd_watcher_t *fdw,
+    int fd, short revents, struct prog_ctx *ctx)
 {
     int n;
     struct signalfd_siginfo si;
@@ -1496,45 +1518,36 @@ int signal_cb (flux_t f, int fd, short revents, struct prog_ctx *ctx)
     return (0);
 }
 
-int cmb_cb (flux_t f, void *zs, short revents, struct prog_ctx *ctx)
+void ev_cb (flux_t f, flux_msg_watcher_t *mw,
+           const flux_msg_t *msg, struct prog_ctx *ctx)
 {
+    int base;
+    json_object *o = NULL;
     const char *topic;
     const char *json_str;
-    json_object *o = NULL;
 
-    zmsg_t *zmsg = zmsg_recv (zs);
-    if (!zmsg) {
-        log_msg (ctx, "rexec_cb: no msg to recv!");
-        goto done;
+    if (flux_msg_get_topic (msg, &topic) < 0) {
+        log_err (ctx, "flux_msg_get_topic: %s", strerror (errno));
+        return;
     }
-    free (zmsg_popstr (zmsg)); /* Destroy dealer id */
-
-    if (flux_msg_get_topic (zmsg, &topic) < 0) {
-        log_err (ctx, "flux_msg_get_topic");
-        goto done;
-    }
-    if (flux_msg_get_payload_json (zmsg, &json_str) < 0) {
+    if (flux_msg_get_payload_json (msg, &json_str) < 0) {
         log_err (ctx, "flux_msg_get_payload_json");
-        goto done;
+        return;
     }
     if (json_str && !(o = json_tokener_parse (json_str))) {
         log_err (ctx, "json_tokener_parse");
-        goto done;
+        return;
     }
 
-    /* Got an incoming message from cmbd */
-    if (strcmp (topic, "rexec.kill") == 0) {
+    base = strlen (ctx->topic);
+    if (strcmp (topic+base, "kill") == 0) {
         int sig = json_object_get_int (o);
         if (sig == 0)
             sig = 9;
         log_msg (ctx, "Killing jobid %lu with signal %d", ctx->id, sig);
         prog_ctx_signal (ctx, sig);
     }
-done:
-    zmsg_destroy (&zmsg);
-    if (o)
-        json_object_put (o);
-    return (0);
+
 }
 
 int task_info_io_setup (struct task_info *t)
@@ -1552,26 +1565,29 @@ int task_info_io_setup (struct task_info *t)
 int prog_ctx_reactor_init (struct prog_ctx *ctx)
 {
     int i;
+
+    if (asprintf (&ctx->topic, "wreck.%ld.", ctx->id) < 0)
+           log_fatal (ctx, 1, "failed to create topic string: %s",
+                      strerror (errno));
+
+    if (flux_event_subscribe (ctx->flux, ctx->topic) < 0)
+        return log_err (ctx, "flux_event_subscribe (%s): %s\n",
+                        ctx->topic, strerror (errno));
+
     for (i = 0; i < ctx->nprocs; i++)
         task_info_io_setup (ctx->task [i]);
 
-    /*
-     *  Listen for "events" coming from the signalfd
-     */
-    flux_fdhandler_add (ctx->flux,
-        ctx->signalfd,
-        ZMQ_POLLIN | ZMQ_POLLERR,
-        (FluxFdHandler) signal_cb,
-        (void *) ctx);
+    ctx->mw = flux_msg_watcher_create (FLUX_MATCH_EVENT,
+            (flux_msg_watcher_f) ev_cb,
+            (void *) ctx);
 
-    /*
-     *  Add a handler for events coming from CMB
-     */
-    flux_zshandler_add (ctx->flux,
-        ctx->zs_rep,
-        ZMQ_POLLIN | ZMQ_POLLERR,
-        (FluxZsHandler) cmb_cb,
-        (void *) ctx);
+    ctx->fdw = flux_fd_watcher_create (ctx->signalfd,
+            FLUX_POLLIN | FLUX_POLLERR,
+            (flux_fd_watcher_f) signal_cb,
+            (void *) ctx);
+
+    flux_fd_watcher_start (ctx->flux, ctx->fdw);
+    flux_msg_watcher_start (ctx->flux, ctx->mw);
 
     return (0);
 }
@@ -1608,6 +1624,7 @@ int prog_ctx_get_id (struct prog_ctx *ctx, optparse_t p)
        || (ctx->id == 0 && errno == EINVAL)
        || (ctx->id == ULONG_MAX && errno == ERANGE))
            log_fatal (ctx, 1, "--lwj-id=%s invalid", id);
+
 
     return (0);
 }
@@ -1653,8 +1670,6 @@ int main (int ac, char **av)
 
     if (prog_ctx_init_from_cmb (ctx) < 0) /* Nothing to do here */
         exit (0);
-
-    prog_ctx_zmq_socket_setup (ctx);
 
     if ((ctx->nodeid == 0) && update_job_state (ctx, "starting") < 0)
         log_fatal (ctx, 1, "update_job_state");

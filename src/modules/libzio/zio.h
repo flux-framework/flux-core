@@ -7,7 +7,7 @@
 
 typedef struct zio_ctx zio_t;
 
-typedef int  (*zio_send_f)   (zio_t *z, const char *json_str, void *arg);
+typedef int  (*zio_send_f)   (zio_t *z, const char *s, int len, void *arg);
 typedef int  (*zio_close_f)  (zio_t *z, void *arg);
 typedef void (*zio_log_f)    (const char *buf);
 
@@ -127,6 +127,12 @@ int zio_set_debug (zio_t *zio, const char *prefix, zio_log_f logf);
  *  Disable any debug for zio object [zio].
  */
 int zio_set_quiet (zio_t *zio);
+
+/*
+ *  Set zio callback to return raw string data instead of json
+ *   object.
+ */
+int zio_set_raw_output (zio_t *zio);
 
 /*
  *  Override the default send() function for ZIO readers. (Default

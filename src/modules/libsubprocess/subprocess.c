@@ -135,7 +135,7 @@ static int check_completion (struct subprocess *p)
     return (0);
 }
 
-static int output_handler (zio_t *z, const char *json_str, void *arg)
+static int output_handler (zio_t *z, const char *json_str, int len, void *arg)
 {
     struct subprocess *p = (struct subprocess *) arg;
     json_object *o;
