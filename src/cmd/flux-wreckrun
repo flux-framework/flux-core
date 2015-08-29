@@ -322,7 +322,7 @@ repeat
     --
     if terminate then
         wreck:say ("%4.03fs: Killing LWJ %d\n", tt:get0(), resp.jobid)
-        local rc,err = f:sendevent ("wrexec.kill.%d", resp.jobid)
+        local rc,err = f:sendevent ("wreck.%d.kill", resp.jobid)
         if not rc then
             wreck:say ("Error: Failed to send kill event: %s", err)
         end
