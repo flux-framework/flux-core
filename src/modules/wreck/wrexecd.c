@@ -81,7 +81,6 @@ struct prog_ctx {
     kvsdir_t *resources;    /* Handle to this node's resource dir in kvs */
 
     flux_fd_watcher_t *fdw;
-    flux_zmq_watcher_t *zw;
     flux_msg_watcher_t *mw;
 
     int noderank;
@@ -106,9 +105,6 @@ struct prog_ctx {
 
     char exedir[MAXPATHLEN]; /* Directory from which this executable is run */
 
-    zctx_t *zctx;
-    void *zs_req;
-    void *zs_rep;
     int signalfd;
 
     char *topic;            /* Per program topic base string for events */
@@ -472,8 +468,6 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
 
     if (ctx->fdw)
         flux_fd_watcher_destroy (ctx->fdw);
-    if (ctx->zw)
-        flux_zmq_watcher_destroy (ctx->zw);
     if (ctx->mw)
         flux_msg_watcher_destroy (ctx->mw);
 
@@ -481,11 +475,6 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
     if (ctx->signalfd >= 0)
         close (ctx->signalfd);
 
-
-    zmq_close (ctx->zs_req);
-    zmq_close (ctx->zs_rep);
-
-    zmq_term (ctx->zctx);
     if (ctx->flux)
         flux_close (ctx->flux);
 
@@ -495,7 +484,6 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
 struct prog_ctx * prog_ctx_create (void)
 {
     struct prog_ctx *ctx = malloc (sizeof (*ctx));
-    zsys_handler_set (NULL); /* Disable czmq SIGINT/SIGTERM handlers */
     if (!ctx)
         log_fatal (ctx, 1, "malloc");
 
@@ -517,31 +505,6 @@ struct prog_ctx * prog_ctx_create (void)
     ctx->lua_stack = lua_stack_create ();
     ctx->lua_pattern = xstrdup (WRECK_LUA_PATTERN);
     return (ctx);
-}
-
-static int prog_ctx_zmq_socket_setup (struct prog_ctx *ctx)
-{
-    char uri [1024];
-    unsigned long uid = geteuid();
-
-    if ((ctx->zctx = zctx_new ()) == NULL)
-        log_fatal (ctx, 1, "zctx_new: %s", strerror (errno));
-
-    snprintf (uri, sizeof (uri), "ipc:///tmp/cmb-%d-%lu-rexec-req-%lu",
-                ctx->nodeid, uid, ctx->id);
-    if (!(ctx->zs_rep = zsocket_new (ctx->zctx, ZMQ_ROUTER)))
-        log_fatal (ctx, 1, "zsocket_new: %s", strerror (errno));
-    if (zsocket_bind (ctx->zs_rep, "%s", uri) < 0)
-        log_fatal (ctx, 1, "zsocket_bind %s: %s", uri, strerror (errno));
-
-    snprintf (uri, sizeof (uri), "ipc:///tmp/cmb-%d-%lu-rexec-rep-%lu",
-                ctx->nodeid, uid, ctx->id);
-    if (!(ctx->zs_req = zsocket_new (ctx->zctx, ZMQ_DEALER)))
-        log_fatal (ctx, 1, "zsocket_new: %s", strerror (errno));
-    if (zsocket_connect (ctx->zs_req, "%s", uri) < 0)
-        log_fatal (ctx, 1, "zsocket_connect %s: %s", uri, strerror (errno));
-
-    return (0);
 }
 
 int json_array_to_argv (struct prog_ctx *ctx,
@@ -1555,48 +1518,6 @@ int signal_cb (flux_t f, flux_fd_watcher_t *fdw,
     return (0);
 }
 
-int cmb_cb (flux_t f, flux_zmq_watcher_t *zw,
-    void *zs, short revents, struct prog_ctx *ctx)
-{
-    const char *topic;
-    const char *json_str;
-    json_object *o = NULL;
-
-    zmsg_t *zmsg = zmsg_recv (zs);
-    if (!zmsg) {
-        log_msg (ctx, "rexec_cb: no msg to recv!");
-        goto done;
-    }
-    free (zmsg_popstr (zmsg)); /* Destroy dealer id */
-
-    if (flux_msg_get_topic (zmsg, &topic) < 0) {
-        log_err (ctx, "flux_msg_get_topic");
-        goto done;
-    }
-    if (flux_msg_get_payload_json (zmsg, &json_str) < 0) {
-        log_err (ctx, "flux_msg_get_payload_json");
-        goto done;
-    }
-    if (json_str && !(o = json_tokener_parse (json_str))) {
-        log_err (ctx, "json_tokener_parse");
-        goto done;
-    }
-
-    /* Got an incoming message from cmbd */
-    if (strcmp (topic, "rexec.kill") == 0) {
-        int sig = json_object_get_int (o);
-        if (sig == 0)
-            sig = 9;
-        log_msg (ctx, "Killing jobid %lu with signal %d", ctx->id, sig);
-        prog_ctx_signal (ctx, sig);
-    }
-done:
-    zmsg_destroy (&zmsg);
-    if (o)
-        json_object_put (o);
-    return (0);
-}
-
 void ev_cb (flux_t f, flux_msg_watcher_t *mw,
            const flux_msg_t *msg, struct prog_ctx *ctx)
 {
@@ -1665,14 +1586,7 @@ int prog_ctx_reactor_init (struct prog_ctx *ctx)
             (flux_fd_watcher_f) signal_cb,
             (void *) ctx);
 
-    ctx->zw = flux_zmq_watcher_create (ctx->zs_rep,
-            FLUX_POLLIN | FLUX_POLLERR,
-            (flux_zmq_watcher_f) cmb_cb,
-            (void *) ctx);
-
-
     flux_fd_watcher_start (ctx->flux, ctx->fdw);
-    flux_zmq_watcher_start (ctx->flux, ctx->zw);
     flux_msg_watcher_start (ctx->flux, ctx->mw);
 
     return (0);
@@ -1756,8 +1670,6 @@ int main (int ac, char **av)
 
     if (prog_ctx_init_from_cmb (ctx) < 0) /* Nothing to do here */
         exit (0);
-
-    prog_ctx_zmq_socket_setup (ctx);
 
     if ((ctx->nodeid == 0) && update_job_state (ctx, "starting") < 0)
         log_fatal (ctx, 1, "update_job_state");

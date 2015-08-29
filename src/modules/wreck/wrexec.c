@@ -41,7 +41,6 @@
 
 struct rexec_ctx {
     int nodeid;
-    zlist_t *session_list;
     flux_t h;
     char *wrexecd_path;
 };
@@ -53,18 +52,11 @@ struct rexec_session {
     int uid;
 
     json_object *jobinfo;
-
-    char req_uri [1024];
-    void *zs_req;   /* requests to client (zconnect) */
-
-    char rep_uri [1024];
-    void *zs_rep;   /* replies to client requests (zbind) */
 };
 
 static void freectx (void *arg)
 {
     struct rexec_ctx *ctx = arg;
-    zlist_destroy (&ctx->session_list);
     free (ctx);
 }
 
@@ -87,8 +79,6 @@ static struct rexec_ctx *getctx (flux_t h)
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
-        if (!(ctx->session_list = zlist_new ()))
-            oom ();
         ctx->h = h;
         ctx->nodeid = flux_rank (h);
         flux_aux_set (h, "wrexec", ctx, freectx);
@@ -101,55 +91,19 @@ static struct rexec_ctx *getctx (flux_t h)
 
 static void rexec_session_destroy (struct rexec_session *c)
 {
-    if (c->zs_req)
-        zsocket_disconnect (c->zs_req, "%s", c->req_uri);
-    if (c->zs_rep)
-        zsocket_disconnect (c->zs_rep, "%s", c->rep_uri);
     if (c->jobinfo)
         json_object_put (c->jobinfo);
     free (c);
 }
 
-static int rexec_session_connect_to_helper (struct rexec_session *c)
-{
-    zctx_t *zctx = NULL;
-
-    if (flux_opt_get (c->ctx->h, FLUX_OPT_ZEROMQ_CONTEXT, &zctx,
-                                                          sizeof (zctx)) < 0)
-        err_exit ("could not obtain zctx");
-
-    snprintf (c->req_uri, sizeof (c->req_uri),
-             "ipc:///tmp/cmb-%d-%d-rexec-req-%lu", c->rank, c->uid, c->id);
-    if (!(c->zs_req = zsocket_new (zctx, ZMQ_DEALER)))
-        err_exit ("zsocket_new");
-    if (zsocket_connect (c->zs_req, "%s", c->req_uri) < 0)
-        err_exit ("zsocket_connect: %s", c->req_uri);
-
-    return (0);
-}
-
 static struct rexec_session * rexec_session_create (struct rexec_ctx *ctx, int64_t id)
 {
-    zctx_t *zctx = NULL;
     struct rexec_session *c = xzmalloc (sizeof (*c));
-
-    if (flux_opt_get (ctx->h, FLUX_OPT_ZEROMQ_CONTEXT, &zctx,
-                                                       sizeof (zctx)) < 0)
-        msg_exit ("could not obtain zctx");
 
     c->ctx  = ctx;
     c->id   = id;
     c->rank = flux_rank (ctx->h);
     c->uid  = (int) geteuid (); /* runs as user for now */
-
-    snprintf (c->rep_uri, sizeof (c->rep_uri),
-             "ipc:///tmp/cmb-%d-%d-rexec-rep-%lu", c->rank, c->uid, c->id);
-
-    if (!(c->zs_rep = zsocket_new (zctx, ZMQ_ROUTER)))
-        err_exit ("zsocket_new");
-    if (zsocket_bind (c->zs_rep, "%s", c->rep_uri) < 0)
-        err_exit ("zsocket_bind: %s", c->rep_uri);
-
 
     return (c);
 }
@@ -163,18 +117,6 @@ static void closeall (int fd)
     return;
 }
 
-static int rexec_session_remove (struct rexec_session *c)
-{
-    struct rexec_ctx *ctx = c->ctx;
-
-    msg ("removing client %lu", c->id);
-
-    flux_zshandler_remove (ctx->h, c->zs_rep, ZMQ_POLLIN | ZMQ_POLLERR);
-
-    zlist_remove (ctx->session_list, c);
-    rexec_session_destroy (c);
-    return (0);
-}
 
 #if 0
 static int handle_client_msg (struct rexec_session *c, zmsg_t *zmsg)
@@ -200,36 +142,6 @@ static int handle_client_msg (struct rexec_session *c, zmsg_t *zmsg)
     return (0);
 }
 #endif
-
-static int client_cb (flux_t h, void *zs, short revents, void *arg)
-{
-    struct rexec_session *c = arg;
-    zmsg_t *new;
-
-    if (revents & ZMQ_POLLERR) {
-        rexec_session_remove (c);
-        return 0;
-    }
-    new = zmsg_recv (c->zs_rep);
-    if (new) {
-        free (zmsg_popstr (new)); /* remove dealer id */
-        //client_forward (c, new);  /* forward to rexec client */
-        zmsg_destroy (&new);
-    }
-    else
-        err ("client_cb: zmsg_recv");
-    return 0;
-}
-
-static int rexec_session_add (struct rexec_ctx *ctx, struct rexec_session *c)
-{
-    if (zlist_append (ctx->session_list, c) < 0)
-        msg ("failed to insert %lu", c->id);
-    if (flux_zshandler_add (ctx->h, c->zs_rep, ZMQ_POLLIN | ZMQ_POLLERR,
-                                                    client_cb, c) < 0)
-        err ("failed to insert %lu", c->id);
-    return (0);
-}
 
 static char ** rexec_session_args_create (struct rexec_session *s)
 {
@@ -317,54 +229,8 @@ static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
     }
     close (fds[1]);
 
-    rexec_session_connect_to_helper (cli);
-    rexec_session_add (ctx, cli);
+    rexec_session_destroy (cli);
     return (0);
-}
-
-static struct rexec_session *rexec_session_lookup (struct rexec_ctx *ctx, int64_t id)
-{
-    /* Warning: zlist has no search. linear search here */
-    struct rexec_session *s;
-    s = zlist_first (ctx->session_list);
-    while (s) {
-        if (s->id == id)
-            return (s);
-        s = zlist_next (ctx->session_list);
-    }
-    return (NULL);
-}
-
-static int64_t json_to_session_id (struct rexec_ctx *ctx, json_object *o)
-{
-    int64_t id = -1;
-    if (util_json_object_get_int64 (o, "id", &id) < 0)
-        return (-1);
-    return (id);
-}
-
-static struct rexec_session * rexec_json_to_session (struct rexec_ctx *ctx,
-    json_object *o)
-{
-    int64_t id = json_to_session_id (ctx, o);
-    if (id < 0)
-        return (NULL);
-    return rexec_session_lookup (ctx, id);
-}
-
-static int fwd_to_session (struct rexec_ctx *ctx, zmsg_t **zmsg, json_object *o)
-{
-    int rc;
-    struct rexec_session *s = rexec_json_to_session (ctx, o);
-    if (s == NULL) {
-        //plugin_send_response_errnum (p, &s->zmsg, ENOSYS);
-        return (-1);
-    }
-    msg ("sending message to session %lu", s->id);
-    rc = zmsg_send (zmsg, s->zs_req);
-    if (rc < 0)
-        err ("zmsg_send"); 
-    return (rc);
 }
 
 static int64_t id_from_tag (const char *tag, char **endp)
@@ -491,9 +357,6 @@ done:
 
 static int request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
 {
-    struct rexec_ctx *ctx = arg;
-    const char *json_str;
-    json_object *o = NULL;
     const char *topic;
 
     if (flux_msg_get_topic (*zmsg, &topic) < 0)
@@ -502,15 +365,8 @@ static int request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         flux_reactor_stop (h);
         return 0;
     }
-    if (flux_msg_get_payload_json (*zmsg, &json_str) < 0
-            || (json_str && !(o = json_tokener_parse (json_str))))
-        goto done;
-    msg ("forwarding %s to session", topic);
-    fwd_to_session (ctx, zmsg, o);
 done:
     zmsg_destroy (zmsg);
-    if (o)
-        json_object_put (o);
     return 0;
 }
 
