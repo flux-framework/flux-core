@@ -315,7 +315,8 @@ local s, err = f:sighandler {
 local sigtimer = nil
 
 repeat
-    local r = f:reactor()
+    local r, err = f:reactor()
+    if not r then wreck:die ("flux_reactor: %s", err) end
     --
     --  If we catch a signal then lwj:watch() will be interrupted.
     --   Check to see if we should terminate the job now:
