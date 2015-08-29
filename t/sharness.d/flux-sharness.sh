@@ -112,7 +112,10 @@ TEST_NAME=$SHARNESS_TEST_NAME
 export TEST_NAME
 
 #  Test requirements for testsuite
-if ! lua -e 'require "posix"' >/dev/null 2>&1; then
+if ! lua -e 'require "posix"'; then
+    error "failed to find lua posix module in path"
+fi
+if ! lua -e 'require "hostlist"'; then
     error "failed to find lua posix module in path"
 fi
 

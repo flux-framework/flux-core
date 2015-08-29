@@ -112,8 +112,9 @@ test_expect_success 'cmddriver removes multiple contiguous separators in input' 
 	LUA_PATH='/meh;;;' flux env sh -c 'echo \$LUA_PATH' |
 		grep -v ';;;;'
 "
-test_expect_success 'cmddriver adds its own path to PATH if called with relative path' "
-	fluxcmd=\$(which flux) &&
+readlink --version >/dev/null && test_set_prereq READLINK
+test_expect_success READLINK 'cmddriver adds its own path to PATH if called with relative path' "
+	fluxcmd=\$(readlink -f \$(which flux)) &&
 	fluxdir=\$(dirname \$fluxcmd) &&
 	PATH='/bin:/usr/bin' \$fluxcmd env sh -c 'echo \$PATH' | grep ^\$fluxdir
 "
