@@ -430,6 +430,8 @@ bool flux_msg_cmp (const flux_msg_t *msg, struct flux_match match)
         uint32_t lo = match.matchtag;
         uint32_t hi = match.bsize > 1 ? match.matchtag + match.bsize
                                       : match.matchtag;
+        if (flux_msg_get_route_count (msg) > 0)
+            return false; /* don't match in foreign matchtag domain */
         if (flux_msg_get_matchtag (msg, &matchtag) < 0)
             return false;
         if (matchtag < lo || matchtag > hi)
