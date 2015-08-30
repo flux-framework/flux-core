@@ -487,6 +487,10 @@ static void response_cb (flux_t h, flux_msg_watcher_t *w,
         oom ();
     if (flux_msg_pop_route (cpy, &uuid) < 0)
         goto done;
+    if (! uuid) {
+        flux_msg_fprint(stderr, msg);
+        goto done;
+    }
     if (flux_msg_clear_route (cpy) < 0)
         goto done;
     c = zlist_first (ctx->clients);
@@ -501,9 +505,8 @@ static void response_cb (flux_t h, flux_msg_watcher_t *w,
         }
         c = zlist_next (ctx->clients);
     }
-    if (uuid)
-        free (uuid);
 done:
+    free (uuid);
     flux_msg_destroy (cpy);
 }
 
