@@ -37,7 +37,7 @@ local function lwj_return_code (f, wreck, id)
     for taskid in lwj:keys () do
         if is_integer (taskid) then
             local t = lwj[taskid]
-            local x = t.exit_status
+            local x = t.exit_code or (t.exit_sig + 128)
             if x > 0 then
                 local s = "exited with " ..
                           (t.exit_code and "exit code" or "signal") ..
