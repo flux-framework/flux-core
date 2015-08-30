@@ -236,6 +236,10 @@ int module_response_sendmsg (modhash_t *mh, const flux_msg_t *msg)
         return 0;
     if (flux_msg_get_route_last (msg, &uuid) < 0)
         goto done;
+    if (!uuid) {
+        errno = EPROTO;
+        goto done;
+    }
     if (!(p = zhash_lookup (mh->zh_byuuid, uuid))) {
         errno = ENOSYS;
         goto done;
