@@ -487,6 +487,13 @@ static void response_cb (flux_t h, flux_msg_watcher_t *w,
         oom ();
     if (flux_msg_pop_route (cpy, &uuid) < 0)
         goto done;
+    if (!uuid) {
+        const char *topic = NULL;
+        (void) flux_msg_get_topic (msg, &topic);
+        flux_log (h, LOG_ERR, "%s: topic %s: missing sender uuid",
+                  __FUNCTION__, topic ? topic : "NULL");
+        goto done;
+    }
     if (flux_msg_clear_route (cpy) < 0)
         goto done;
     c = zlist_first (ctx->clients);
@@ -501,9 +508,9 @@ static void response_cb (flux_t h, flux_msg_watcher_t *w,
         }
         c = zlist_next (ctx->clients);
     }
+done:
     if (uuid)
         free (uuid);
-done:
     flux_msg_destroy (cpy);
 }
 
