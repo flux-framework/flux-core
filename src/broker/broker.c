@@ -1604,44 +1604,66 @@ static int cmb_hello_cb (zmsg_t **zmsg, void *arg)
 static int cmb_sub_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
+    const char *json_str;
     char *uuid = NULL;
     JSON in = NULL;
     const char *topic;
     int rc = -1;
 
-    if (flux_json_request_decode (*zmsg, &in) < 0)
+    if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
         goto done;
-    if (!Jget_str (in, "topic", &topic))
+    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "topic", &topic)) {
+        errno = EPROTO;
         goto done;
+    }
     if (flux_msg_get_route_first (*zmsg, &uuid) < 0)
         goto done;
+    if (!uuid) {
+        errno = EPROTO;
+        goto done;
+    }
     rc = module_subscribe (ctx->modhash, uuid, topic);
 done:
+    if (rc < 0)
+        flux_log (ctx->h, LOG_ERR, "%s: %s", __FUNCTION__, strerror (errno));
     if (uuid)
         free (uuid);
     Jput (in);
+    rc = flux_respond (ctx->h, *zmsg, rc < 0 ? errno : 0, NULL);
+    zmsg_destroy (zmsg);
     return rc;
 }
 
 static int cmb_unsub_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
+    const char *json_str;
     char *uuid = NULL;
     JSON in = NULL;
     const char *topic;
     int rc = -1;
 
-    if (flux_json_request_decode (*zmsg, &in) < 0)
+    if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
         goto done;
-    if (!Jget_str (in, "topic", &topic))
+    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "topic", &topic)) {
+        errno = EPROTO;
         goto done;
+    }
     if (flux_msg_get_route_first (*zmsg, &uuid) < 0)
         goto done;
+    if (!uuid) {
+        errno = EPROTO;
+        goto done;
+    }
     rc = module_unsubscribe (ctx->modhash, uuid, topic);
 done:
+    if (rc < 0)
+        flux_log (ctx->h, LOG_ERR, "%s: %s", __FUNCTION__, strerror (errno));
     if (uuid)
         free (uuid);
     Jput (in);
+    rc = flux_respond (ctx->h, *zmsg, rc < 0 ? errno : 0, NULL);
+    zmsg_destroy (zmsg);
     return rc;
 }
 
