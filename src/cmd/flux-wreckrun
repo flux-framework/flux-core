@@ -109,9 +109,13 @@ local function alloc_tasks_hack (f, wreck, lwj)
         end
         res = fake_resource_array (wreck, wreck.nnodes or f.size)
     else
-        res, err = f:kvsdir ("resrc.rank")
-        if not res then
-            wreck:die ("Failed to get resrc.rank. Load the `resrc' module?\n")
+	res = {}
+        local r, err = f:kvsdir ("resource.hwloc.by_rank")
+        if not r then
+            wreck:die ("failed to read resource.hwloc.by_rank: %s", err)
+        end
+        for rank in r:keys() do
+            res[tonumber(rank)] = { cores = r[rank].Core }
         end
     end
 
