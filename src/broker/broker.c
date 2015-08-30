@@ -70,7 +70,7 @@
 #endif
 
 const char *default_modules =
-    "connector-local,modctl,kvs,live,mecho,job[0],wrexec,resrc,barrier,resource-hwloc";
+    "connector-local,modctl,kvs,live,mecho,job[0],wrexec,barrier,resource-hwloc";
 
 typedef struct {
     /* 0MQ
