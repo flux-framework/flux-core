@@ -44,7 +44,7 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/cleanup.h"
-#include "src/common/libutil/jsonutil.h"
+#include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/log.h"
 
 
@@ -56,11 +56,16 @@ typedef struct {
     zlist_t *clients;
     flux_t h;
     uid_t session_owner;
+    zhash_t *subscriptions;
 } ctx_t;
 
+typedef void (*unsubscribe_f)(void *handle, const char *topic);
+
 typedef struct {
-    int type;
     char *topic;
+    int usecount;
+    unsubscribe_f unsubscribe;
+    void *handle;
 } subscription_t;
 
 typedef struct {
@@ -72,7 +77,7 @@ typedef struct {
     zlist_t *outqueue;  /* queue of outbound flux_msg_t */
     ctx_t *ctx;
     zhash_t *disconnect_notify;
-    zlist_t *subscriptions;
+    zhash_t *subscriptions;
     zuuid_t *uuid;
     int cfd_id;
     struct ucred ucred;
@@ -94,6 +99,7 @@ static void freectx (void *arg)
 {
     ctx_t *ctx = arg;
     zlist_destroy (&ctx->clients);
+    zhash_destroy (&ctx->subscriptions);
     free (ctx);
 }
 
@@ -105,6 +111,8 @@ static ctx_t *getctx (flux_t h)
         ctx = xzmalloc (sizeof (*ctx));
         ctx->h = h;
         if (!(ctx->clients = zlist_new ()))
+            oom ();
+        if (!(ctx->subscriptions = zhash_new ()))
             oom ();
         ctx->session_owner = geteuid ();
         flux_aux_set (h, "flux::local_connector", ctx, freectx);
@@ -140,7 +148,7 @@ static client_t * client_create (ctx_t *ctx, int fd)
     c->ctx = ctx;
     if (!(c->disconnect_notify = zhash_new ()))
         oom ();
-    if (!(c->subscriptions = zlist_new ()))
+    if (!(c->subscriptions = zhash_new ()))
         oom ();
     if (!(c->outqueue = zlist_new ()))
         oom ();
@@ -219,55 +227,131 @@ static int client_send (client_t *c, const flux_msg_t *msg)
     return rc;
 }
 
-static subscription_t *subscription_create (flux_t h, int type,
-                                            const char *topic)
+static subscription_t *subscription_create (const char *topic)
 {
     subscription_t *sub = xzmalloc (sizeof (*sub));
-    sub->type = type;
     sub->topic = xstrdup (topic);
-    if (type == FLUX_MSGTYPE_EVENT) {
-        (void)flux_event_subscribe (h, topic);
-        flux_log (h, LOG_DEBUG, "event subscribe %s", topic);
-    }
     return sub;
 }
 
-static void subscription_destroy (flux_t h, subscription_t *sub)
+static void subscription_destroy (void *data)
 {
-    if (sub->type == FLUX_MSGTYPE_EVENT) {
-        (void)flux_event_unsubscribe (h, sub->topic);
-        flux_log (h, LOG_DEBUG, "event unsubscribe %s", sub->topic);
-    }
+    subscription_t *sub = data;
+    if (sub->unsubscribe)
+        (void) sub->unsubscribe (sub->handle, sub->topic);
     free (sub->topic);
     free (sub);
 }
 
-static subscription_t *subscription_lookup (client_t *c, int type,
-                                            const char *topic)
+static int global_subscribe (ctx_t *ctx, const char *topic)
 {
     subscription_t *sub;
+    int rc = -1;
 
-    sub = zlist_first (c->subscriptions);
-    while (sub) {
-        if (sub->type == type && !strcmp (sub->topic, topic))
-            return sub;
-        sub = zlist_next (c->subscriptions);
+    if (!(sub = zhash_lookup (ctx->subscriptions, topic))) {
+        if (flux_event_subscribe (ctx->h, topic) < 0) {
+            flux_log (ctx->h, LOG_ERR, "%s: flux_event_subscribe %s: %s",
+                      __FUNCTION__, topic, strerror (errno));
+            goto done;
+        } 
+        sub = subscription_create (topic);
+        sub->unsubscribe = (unsubscribe_f) flux_event_unsubscribe;
+        sub->handle = ctx->h;
+        zhash_update (ctx->subscriptions, topic, sub);
+        zhash_freefn (ctx->subscriptions, topic, subscription_destroy);
+        //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, topic);
     }
-    return NULL;
+    sub->usecount++;
+    rc = 0;
+done:
+    return rc;
 }
 
-static bool subscription_match (client_t *c, const flux_msg_t *msg)
+static int global_unsubscribe (ctx_t *ctx, const char *topic)
 {
     subscription_t *sub;
-    const char *topic;
+    int rc = -1;
 
-    if (flux_msg_get_topic (msg, &topic) < 0)
-        return false;
-    sub = zlist_first (c->subscriptions);
+    if (!(sub = zhash_lookup (ctx->subscriptions, topic)))
+        goto done;
+    if (--sub->usecount == 0) {
+        zhash_delete (ctx->subscriptions, topic);
+        //flux_log (ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, topic);
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+static int client_subscribe (client_t *c, const char *topic)
+{
+    subscription_t *sub;
+    int rc = -1;
+
+    if (!(sub = zhash_lookup (c->subscriptions, topic))) {
+        if (global_subscribe (c->ctx, topic) < 0)
+            goto done;
+        sub = subscription_create (topic);
+        sub->unsubscribe = (unsubscribe_f) global_unsubscribe;
+        sub->handle = c->ctx;
+        zhash_update (c->subscriptions, topic, sub);
+        zhash_freefn (c->subscriptions, topic, subscription_destroy);
+        //flux_log (c->ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, topic);
+    }
+    sub->usecount++;
+    rc = 0;
+done:
+    return rc;
+}
+
+static int client_unsubscribe (client_t *c, const char *topic)
+{
+    subscription_t *sub;
+    int rc = -1;
+
+    if (!(sub = zhash_lookup (c->subscriptions, topic)))
+        goto done;
+    if (--sub->usecount == 0) {
+        zhash_delete (c->subscriptions, topic);
+        //flux_log (c->ctx->h, LOG_DEBUG, "%s: %s", __FUNCTION__, topic);
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+int sub_request (client_t *c, const flux_msg_t *msg, bool subscribe)
+{
+    const char *json_str, *topic;
+    JSON in = NULL;
+    int rc = -1;
+
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto done;
+    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "topic", &topic)) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (subscribe)
+        rc = client_subscribe (c, topic);
+    else
+        rc = client_unsubscribe (c, topic);
+done:
+    Jput (in);
+    return rc;
+}
+
+static bool client_is_subscribed (client_t *c, const char *topic)
+{
+    subscription_t *sub;
+
+    if (zhash_lookup (c->subscriptions, topic))
+        return true;
+    sub = zhash_first (c->subscriptions);
     while (sub) {
         if (!strncmp (topic, sub->topic, strlen (sub->topic)))
             return true;
-        sub = zlist_next (c->subscriptions);
+        sub = zhash_next (c->subscriptions);
     }
     return false;
 }
@@ -330,7 +414,6 @@ done:
 
 static void client_destroy (client_t *c)
 {
-    subscription_t *sub;
     ctx_t *ctx = c->ctx;
 
     if (c->disconnect_notify) {
@@ -343,11 +426,7 @@ static void client_destroy (client_t *c)
         }
         zhash_destroy (&c->disconnect_notify);
     }
-    if (c->subscriptions) {
-        while ((sub = zlist_pop (c->subscriptions)))
-            subscription_destroy (ctx->h, sub);
-        zlist_destroy (&c->subscriptions);
-    }
+    zhash_destroy (&c->subscriptions);
     if (c->uuid)
         zuuid_destroy (&c->uuid);
     if (c->outqueue) {
@@ -370,18 +449,6 @@ static void client_destroy (client_t *c)
     free (c);
 }
 
-static bool match_substr (zmsg_t *zmsg, const char *topic, const char **rest)
-{
-    const char *s;
-    if (flux_msg_get_topic (zmsg, &s) < 0)
-        return false;
-    if (strncmp(topic, s, strlen (topic)) != 0)
-        return false;
-    if (rest)
-        *rest = s + strlen (topic);
-    return true;
-}
-
 static void client_write_cb (flux_t h, flux_fd_watcher_t *w, int fd,
                              int revents, void *arg)
 {
@@ -400,6 +467,37 @@ static void client_write_cb (flux_t h, flux_fd_watcher_t *w, int fd,
 disconnect:
     zlist_remove (c->ctx->clients, c);
     client_destroy (c);
+}
+
+static bool internal_request (client_t *c, const flux_msg_t *msg)
+{
+    const char *topic;
+    int rc = -1;
+    flux_msg_t *rmsg = NULL;
+    uint32_t matchtag;
+
+    if (flux_msg_get_topic (msg, &topic) < 0
+            || flux_msg_get_matchtag (msg, &matchtag) < 0)
+        return false;
+    else if (!strcmp (topic, "local.sub"))
+        rc = sub_request (c, msg, true);
+    else if (!strcmp (topic, "local.unsub"))
+        rc = sub_request (c, msg, false);
+    else
+        return false;
+
+    /* Respond to client
+     */
+    if (!(rmsg = flux_response_encode (topic, rc < 0 ? errno : 0, NULL))
+                    || flux_msg_set_matchtag (rmsg, matchtag) < 0)
+        flux_log (c->ctx->h, LOG_ERR, "%s: encoding response: %s",
+                  __FUNCTION__, strerror (errno));
+        
+    else if (client_send_nocopy (c, &rmsg) < 0)
+        flux_log (c->ctx->h, LOG_ERR, "%s: client_send_nocopy: %s",
+                  __FUNCTION__, strerror (errno));
+    flux_msg_destroy (rmsg);
+    return true;
 }
 
 static void client_read_cb (flux_t h, flux_fd_watcher_t *w, int fd,
@@ -431,17 +529,8 @@ static void client_read_cb (flux_t h, flux_fd_watcher_t *w, int fd,
         goto disconnect;
     }
     switch (type) {
-        const char *name;
-        subscription_t *sub;
         case FLUX_MSGTYPE_REQUEST:
-            if (match_substr (msg, "api.event.subscribe.", &name)) {
-                sub = subscription_create (h, FLUX_MSGTYPE_EVENT, name);
-                if (zlist_append (c->subscriptions, sub) < 0)
-                    oom ();
-            } else if (match_substr (msg, "api.event.unsubscribe.", &name)) {
-                if ((sub = subscription_lookup (c, FLUX_MSGTYPE_EVENT, name)))
-                    zlist_remove (c->subscriptions, sub);
-            } else {
+            if (!internal_request (c, msg)) {
                 /* insert disconnect notifier before forwarding request */
                 if (c->disconnect_notify && disconnect_update (c, msg) < 0) {
                     flux_log (h, LOG_ERR, "disconnect_update:  %s",
@@ -522,18 +611,27 @@ static void event_cb (flux_t h, flux_msg_watcher_t *w,
 {
     ctx_t *ctx = arg;
     client_t *c;
+    const char *topic;
+    int count = 0;
 
+    if (flux_msg_get_topic (msg, &topic) < 0) {
+        flux_log (h, LOG_ERR, "%s: dropped: %s",
+                  __FUNCTION__, strerror (errno));
+        return;
+    }
     c = zlist_first (ctx->clients);
     while (c) {
-        if (subscription_match (c, msg)) {
+        if (client_is_subscribed (c, topic)) {
             if (client_send (c, msg) < 0) { /* FIXME handle errors */
                 flux_log (h, LOG_ERR, "%s: client_send %s: %s",
                           __FUNCTION__, zuuid_str (c->uuid), strerror (errno));
                 errno = 0;
             }
+            count++;
         }
         c = zlist_next (ctx->clients);
     }
+    //flux_log (h, LOG_DEBUG, "%s: %s to %d clients", __FUNCTION__, topic, count);
 }
 
 /* Accept a connection from new client.
