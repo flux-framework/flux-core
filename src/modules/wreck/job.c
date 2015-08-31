@@ -143,15 +143,24 @@ static unsigned long lwj_next_id (flux_t h)
     if (flux_rank (h) == 0)
         ret = increment_jobid (h);
     else {
-        json_object *na = json_object_new_object ();
+        const char *s;
         json_object *o = NULL;
-        if (flux_json_rpc (h, FLUX_NODEID_ANY, "job.next-id", na, &o) < 0
-                || util_json_object_get_int64 (o, "id", (int64_t *) &ret) < 0) {
-            err ("lwj_next_id: Bad object!");
+        flux_rpc_t *rpc = flux_rpc (h, "job.next-id", NULL, FLUX_NODEID_ANY, 0);
+        if (!rpc) {
+            flux_log (h, LOG_ERR, "flux_rpc: %s", strerror (errno));
+            return (0);
+        }
+        if (flux_rpc_get (rpc, NULL, &s) < 0) {
+            flux_log (h, LOG_ERR, "flux_rpc: %s", strerror (errno));
+            return (0);
+        }
+        o = json_tokener_parse (s);
+        if (!o || util_json_object_get_int64 (o, "id", (int64_t *) &ret) < 0) {
+            flux_log (h, LOG_ERR, "lwj_next_id: Bad object!");
             ret = 0;
         }
-        json_object_put (o);
-        json_object_put (na);
+        if (o)
+            json_object_put (o);
     }
     return (ret);
 }
@@ -180,6 +189,47 @@ static char * ctime_iso8601_now (char *buf, size_t sz)
     return (buf);
 }
 
+static void wait_for_event (flux_t h, int64_t id)
+{
+    struct flux_match match = {
+        .typemask = FLUX_MSGTYPE_EVENT,
+        .matchtag = FLUX_MATCHTAG_NONE,
+        .bsize = 0,
+        .topic_glob = "wreck.state.reserved"
+    };
+    flux_msg_t *msg = flux_recv (h, match, 0);
+    flux_msg_destroy (msg);
+    return;
+}
+
+static void send_create_event (flux_t h, int64_t id)
+{
+    flux_msg_t *msg;
+    char *json = NULL;
+    const char *topic = "wreck.state.reserved";
+
+    if (asprintf (&json, "{\"lwj\":%ld}", id) < 0) {
+        flux_log (h, LOG_ERR, "failed to create state change event: %s",
+                  strerror (errno));
+        goto out;
+    }
+    if ((msg = flux_event_encode (topic, json)) == NULL) {
+        flux_log (h, LOG_ERR, "failed to create state change event: %s",
+                  strerror (errno));
+        goto out;
+    }
+    if (flux_send (h, msg, 0) < 0)
+        flux_log (h, LOG_ERR, "reserved event failed: %s", strerror (errno));
+    flux_msg_destroy (msg);
+
+    /* Workaround -- wait for our own event to be published with a
+     *  blocking recv. XXX: Remove when publish is synchronous.
+     */
+    wait_for_event (h, id);
+out:
+    free (json);
+}
+
 static void add_jobinfo (flux_t h, int64_t id, json_object *req)
 {
     char buf [64];
@@ -191,10 +241,10 @@ static void add_jobinfo (flux_t h, int64_t id, json_object *req)
         err_exit ("kvs_get_dir (id=%lu)", id);
 
     json_object_object_foreachC (req, i)
-        kvsdir_put_obj (dir, i.key, i.val);
+        kvsdir_put (dir, i.key, json_object_to_json_string (i.val));
 
     o = json_object_new_string (ctime_iso8601_now (buf, sizeof (buf)));
-    kvsdir_put_obj (dir, "create-time", o);
+    kvsdir_put (dir, "create-time", json_object_to_json_string (o));
     json_object_put (o);
 
     kvsdir_destroy (dir);
@@ -203,30 +253,41 @@ static void add_jobinfo (flux_t h, int64_t id, json_object *req)
 static int wait_for_lwj_watch_init (flux_t h, int64_t id)
 {
     int rc;
+    const char *json_str;
     json_object *rpc_o;
-    json_object *rpc_resp;
+    flux_rpc_t *rpc;
 
     rpc_o = util_json_object_new_object ();
     util_json_object_add_string (rpc_o, "key", "lwj.next-id");
     util_json_object_add_int64 (rpc_o, "val", id);
-    rc = flux_json_rpc (h, FLUX_NODEID_ANY, "sim_sched.lwj-watch", rpc_o, &rpc_resp);
-    if (rc >= 0) {
-        util_json_object_get_int (rpc_resp, "rc", &rc);
-        json_object_put (rpc_resp);
-    }
+
+    rpc = flux_rpc (h, "sim_sched.lwj-watch",
+                    json_object_to_json_string (rpc_o),
+                    FLUX_NODEID_ANY, 0);
     json_object_put (rpc_o);
+
+    rc = flux_rpc_get (rpc, NULL, &json_str);
+    if (rc >= 0) {
+        json_object *rpc_resp = json_tokener_parse (json_str);
+        if (rpc_resp) {
+	    util_json_object_get_int (rpc_resp, "rc", &rc);
+	    json_object_put (rpc_resp);
+        }
+    }
     return rc;
 }
 
-static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void job_request_cb (flux_t h, flux_msg_watcher_t *w,
+                           const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
     json_object *o = NULL;
     const char *topic;
 
-    if (flux_msg_get_topic (*zmsg, &topic) < 0)
+    if (flux_msg_get_topic (msg, &topic) < 0)
         goto out;
-    if (flux_msg_get_payload_json (*zmsg, &json_str) < 0)
+    flux_log (h, LOG_INFO, "got request %s", topic);
+    if (flux_msg_get_payload_json (msg, &json_str) < 0)
         goto out;
     if (json_str && !(o = json_tokener_parse (json_str)))
         goto out;
@@ -237,13 +298,14 @@ static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
         if (flux_rank (h) == 0) {
             unsigned long id = lwj_next_id (h);
             json_object *ox = json_id (id);
-            flux_json_respond (h, ox, zmsg);
-            json_object_put (o);
+            if (flux_respond (h, msg, 0, json_object_to_json_string (ox)) < 0)
+                flux_log (h, LOG_ERR, "flux_respond (job.next-id): %s", strerror (errno));
+            json_object_put (ox);
         }
         else {
-            fprintf (stderr, "%s: forwarding request\n", topic);
-            flux_json_request (h, FLUX_NODEID_ANY,
-                                  FLUX_MATCHTAG_NONE, topic, o);
+            if (flux_send (h, msg, FLUX_NODEID_ANY) < 0)
+                flux_log (h, LOG_ERR, "error forwarding next-id request: %s",
+                          strerror (errno));
         }
     }
     if (strcmp (topic, "job.create") == 0) {
@@ -257,45 +319,61 @@ static int job_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
             should_workaround = false;
         } else if (should_workaround) {
             if (wait_for_lwj_watch_init (h, id) < 0) {
-              flux_err_respond (h, errno, zmsg);
+              flux_respond (h, msg, errno, NULL);
               goto out;
             }
         }
 
         int rc = kvs_job_new (h, id);
         if (rc < 0) {
-            flux_err_respond (h, errno, zmsg);
+            flux_respond (h, msg, errno, NULL);
             goto out;
         }
         add_jobinfo (h, id, o);
 
         kvs_commit (h);
 
+        /* Send a wreck.state.reserved event for listeners */
+        send_create_event (h, id);
+
         /* Generate reply with new jobid */
         jobinfo = util_json_object_new_object ();
         util_json_object_add_int64 (jobinfo, "jobid", id);
-        flux_json_respond (h, jobinfo, zmsg);
+        flux_respond (h, msg, 0, json_object_to_json_string (jobinfo));
         json_object_put (jobinfo);
     }
 
 out:
     if (o)
         json_object_put (o);
-    zmsg_destroy (zmsg);
-    return 0;
 }
+
+struct flux_msghandler mtab[] = {
+    { FLUX_MSGTYPE_REQUEST, "job.*", job_request_cb },
+    FLUX_MSGHANDLER_TABLE_END
+};
 
 int mod_main (flux_t h, int argc, char **argv)
 {
-    if (flux_msghandler_add (h, FLUX_MSGTYPE_REQUEST, "job.*",
-                                            job_request_cb, NULL) < 0) {
-        flux_log (h, LOG_ERR, "flux_msghandler_add: %s", strerror (errno));
+    if (flux_msg_watcher_addvec (h, mtab, NULL) < 0) {
+        flux_log (h, LOG_ERR, "flux_msg_watcher_addvec: %s", strerror (errno));
+        return (-1);
+    }
+    /* Subscribe to our own `wreck.state.reserved` events so we
+     *  can verify the event has been published before responding to
+     *  job.create requests.
+     *
+     * XXX: Remove when publish events are synchronous.
+     */
+    if (flux_event_subscribe (h, "wreck.state.reserved") < 0) {
+        flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
         return -1;
     }
     if (flux_reactor_start (h) < 0) {
         flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
         return -1;
     }
+    flux_msg_watcher_delvec (h, mtab);
     return 0;
 }
 

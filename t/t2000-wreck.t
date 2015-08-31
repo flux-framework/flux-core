@@ -44,19 +44,22 @@ test_expect_success 'wreck: job state events emitted' '
 	  $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
 	   wreck.state wreck.state.complete \
 	   flux wreckrun -N4 -n4 /bin/true > output &&
-	cat >expected <<-EOF &&
+        tail -4 output > output_states && # only care about last 4
+	cat >expected_states <<-EOF &&
+	wreck.state.reserved
 	wreck.state.starting
 	wreck.state.running
 	wreck.state.complete
 	EOF
-	test_cmp expected output
+	test_cmp expected_states output_states
 '
 test_expect_success 'wreck: signaling wreckrun works' '
-        run_timeout 5 flux wreckrun -N4 -n4 sleep 100 </dev/null &
+        flux wreckrun -N4 -n4 sleep 15 </dev/null &
 	q=$! &&
-	sleep 1 &&
-        echo killing $q &&
-	kill $q &&
-	test_expect_code 143 wait $q
+	$SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
+           wreck.state wreck.state.running /bin/true &&
+        sleep 0.5 &&
+	kill -INT $q &&
+	test_expect_code 137 wait $q
 '
 test_done

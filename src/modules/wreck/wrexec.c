@@ -89,25 +89,6 @@ static struct rexec_ctx *getctx (flux_t h)
     return ctx;
 }
 
-static void rexec_session_destroy (struct rexec_session *c)
-{
-    if (c->jobinfo)
-        json_object_put (c->jobinfo);
-    free (c);
-}
-
-static struct rexec_session * rexec_session_create (struct rexec_ctx *ctx, int64_t id)
-{
-    struct rexec_session *c = xzmalloc (sizeof (*c));
-
-    c->ctx  = ctx;
-    c->id   = id;
-    c->rank = flux_rank (ctx->h);
-    c->uid  = (int) geteuid (); /* runs as user for now */
-
-    return (c);
-}
-
 static void closeall (int fd)
 {
     int fdlimit = sysconf (_SC_OPEN_MAX);
@@ -143,16 +124,16 @@ static int handle_client_msg (struct rexec_session *c, zmsg_t *zmsg)
 }
 #endif
 
-static char ** rexec_session_args_create (struct rexec_session *s)
+static char ** wrexecd_args_create (struct rexec_ctx *ctx, uint64_t id)
 {
     char buf [64];
     char **args;
     int nargs = 3;
 
     args = xzmalloc ((nargs + 1) * sizeof (char **));
-    snprintf (buf, sizeof (buf) - 1, "--lwj-id=%lu", s->id);
+    snprintf (buf, sizeof (buf) - 1, "--lwj-id=%lu", id);
 
-    args [0] = strdup (s->ctx->wrexecd_path);
+    args [0] = strdup (ctx->wrexecd_path);
     args [1] = strdup (buf);
     args [2] = strdup ("--parent-fd=3");
     args [3] = NULL;
@@ -160,12 +141,12 @@ static char ** rexec_session_args_create (struct rexec_session *s)
     return (args);
 }
 
-static void exec_handler (struct rexec_session *s, int *pfds)
+static void exec_handler (struct rexec_ctx *ctx, uint64_t id, int *pfds)
 {
     char **args;
     pid_t pid, sid;
 
-    args = rexec_session_args_create (s);
+    args = wrexecd_args_create (ctx, id);
 
     if ((sid = setsid ()) < 0)
         err ("setsid");
@@ -181,7 +162,7 @@ static void exec_handler (struct rexec_session *s, int *pfds)
     //dup2 (pfds[0], STDIN_FILENO);
     dup2 (pfds[0], 3);
     closeall (4);
-    flux_log (s->ctx->h, LOG_DEBUG, "running %s %s %s", args[0], args[1], args[2]);
+    flux_log (ctx->h, LOG_DEBUG, "running %s %s %s", args[0], args[1], args[2]);
     if (execvp (args[0], args) < 0) {
         close (3);
         err_exit ("execvp");
@@ -191,15 +172,11 @@ static void exec_handler (struct rexec_session *s, int *pfds)
 
 static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
 {
-    struct rexec_session *cli;
     int fds[2];
     char c;
     int n;
     int status;
     pid_t pid;
-
-    if ((cli = rexec_session_create (ctx, id)) == NULL)
-        return (-1);
 
     if (socketpair (AF_UNIX, SOCK_STREAM, 0, fds) < 0)
         return (-1);
@@ -208,7 +185,7 @@ static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
         err_exit ("fork");
 
     if (pid == 0)
-        exec_handler (cli, fds);
+        exec_handler (ctx, id, fds);
 
     /*
      *  Wait for child to exit
@@ -217,7 +194,7 @@ static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
         err ("waitpid");
 
     /*
-     *  Close child side of socketpair and send zmsg to (grand)child
+     *  Close child side of socketpair and wait for wrexecd
      */
     close (fds[0]);
 
@@ -228,8 +205,6 @@ static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
         return (-1);
     }
     close (fds[1]);
-
-    rexec_session_destroy (cli);
     return (0);
 }
 

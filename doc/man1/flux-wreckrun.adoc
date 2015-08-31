@@ -148,10 +148,10 @@ Once a Flux comms session is running, ensure the required modules
 for 'wreck' are loaded:
 
 ------------------------------
-$ flux module list | egrep 'resrc|job|wrexec'
-wrexec               686108          83 [0-3]
-resrc                667324          83 [0-3]
-job                  666696          83 0
+$ flux module list | egrep 'resource|job|wrexec'
+resource-hwloc        44673 498403A idle 0
+wrexec                42052 2CA4CAT idle 0
+job                   28959 60947AA idle 0
 $
 ------------------------------
 
