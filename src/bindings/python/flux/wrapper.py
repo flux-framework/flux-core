@@ -130,6 +130,9 @@ class FunctionWrapper(object):
                                     'long long', 'int32_t', 'int64_t')]:
             self.is_error = lambda x: x < 0
 
+    def set_error_check(self, fun):
+      self.is_error = fun
+
     def build_argument_translation_list(self, t):
         alist = t.args[1:] if self.add_handle else t.args
         for i, a in enumerate(alist, start=1 if self.add_handle else 0):

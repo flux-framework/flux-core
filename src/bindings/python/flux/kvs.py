@@ -15,6 +15,8 @@ class KVSWrapper(Wrapper):
   pass
 
 _raw = KVSWrapper(ffi, lib, prefixes=['kvs', 'kvs_'])
+# override error check behavior for kvsitr_next
+_raw.kvsitr_next.set_error_check(lambda x: False)
 
 
 def get_key_direct(flux_handle, key):
