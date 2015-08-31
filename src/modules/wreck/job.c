@@ -189,6 +189,47 @@ static char * ctime_iso8601_now (char *buf, size_t sz)
     return (buf);
 }
 
+static void wait_for_event (flux_t h, int64_t id)
+{
+    struct flux_match match = {
+        .typemask = FLUX_MSGTYPE_EVENT,
+        .matchtag = FLUX_MATCHTAG_NONE,
+        .bsize = 0,
+        .topic_glob = "wreck.state.reserved"
+    };
+    flux_msg_t *msg = flux_recv (h, match, 0);
+    flux_msg_destroy (msg);
+    return;
+}
+
+static void send_create_event (flux_t h, int64_t id)
+{
+    flux_msg_t *msg;
+    char *json = NULL;
+    const char *topic = "wreck.state.reserved";
+
+    if (asprintf (&json, "{\"lwj\":%ld}", id) < 0) {
+        flux_log (h, LOG_ERR, "failed to create state change event: %s",
+                  strerror (errno));
+        goto out;
+    }
+    if ((msg = flux_event_encode (topic, json)) == NULL) {
+        flux_log (h, LOG_ERR, "failed to create state change event: %s",
+                  strerror (errno));
+        goto out;
+    }
+    if (flux_send (h, msg, 0) < 0)
+        flux_log (h, LOG_ERR, "reserved event failed: %s", strerror (errno));
+    flux_msg_destroy (msg);
+
+    /* Workaround -- wait for our own event to be published with a
+     *  blocking recv. XXX: Remove when publish is synchronous.
+     */
+    wait_for_event (h, id);
+out:
+    free (json);
+}
+
 static void add_jobinfo (flux_t h, int64_t id, json_object *req)
 {
     char buf [64];
@@ -292,6 +333,9 @@ static void job_request_cb (flux_t h, flux_msg_watcher_t *w,
 
         kvs_commit (h);
 
+        /* Send a wreck.state.reserved event for listeners */
+        send_create_event (h, id);
+
         /* Generate reply with new jobid */
         jobinfo = util_json_object_new_object ();
         util_json_object_add_int64 (jobinfo, "jobid", id);
@@ -314,6 +358,16 @@ int mod_main (flux_t h, int argc, char **argv)
     if (flux_msg_watcher_addvec (h, mtab, NULL) < 0) {
         flux_log (h, LOG_ERR, "flux_msg_watcher_addvec: %s", strerror (errno));
         return (-1);
+    }
+    /* Subscribe to our own `wreck.state.reserved` events so we
+     *  can verify the event has been published before responding to
+     *  job.create requests.
+     *
+     * XXX: Remove when publish events are synchronous.
+     */
+    if (flux_event_subscribe (h, "wreck.state.reserved") < 0) {
+        flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
+        return -1;
     }
     if (flux_reactor_start (h) < 0) {
         flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
