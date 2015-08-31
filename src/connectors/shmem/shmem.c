@@ -162,16 +162,19 @@ static int op_event_subscribe (void *impl, const char *topic)
     ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
     JSON in = Jnew ();
+    flux_rpc_t *rpc = NULL;
     int rc = -1;
 
     if (connect_socket (ctx) < 0)
         goto done;
     Jadd_str (in, "topic", topic);
-    if (flux_json_rpc (ctx->h, FLUX_NODEID_ANY, "cmb.sub", in, NULL) < 0)
+    if (!(rpc = flux_rpc (ctx->h, "cmb.sub", Jtostr (in), FLUX_NODEID_ANY, 0))
+                || flux_rpc_get (rpc, NULL, NULL) < 0)
         goto done;
     rc = 0;
 done:
     Jput (in);
+    flux_rpc_destroy (rpc);
     return rc;
 }
 
@@ -180,16 +183,19 @@ static int op_event_unsubscribe (void *impl, const char *topic)
     ctx_t *ctx = impl;
     assert (ctx->magic == MODHANDLE_MAGIC);
     JSON in = Jnew ();
+    flux_rpc_t *rpc = NULL;
     int rc = -1;
 
     if (connect_socket (ctx) < 0)
         goto done;
     Jadd_str (in, "topic", topic);
-    if (flux_json_rpc (ctx->h, FLUX_NODEID_ANY, "cmb.unsub", in, NULL) < 0)
+    if (!(rpc = flux_rpc (ctx->h, "cmb.unsub", Jtostr (in), FLUX_NODEID_ANY, 0))
+                || flux_rpc_get (rpc, NULL, NULL) < 0)
         goto done;
     rc = 0;
 done:
     Jput (in);
+    flux_rpc_destroy (rpc);
     return rc;
 }
 

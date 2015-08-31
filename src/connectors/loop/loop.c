@@ -89,15 +89,6 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
         goto done;
     if (flux_msg_get_type (cpy, &type) < 0)
         goto done;
-    switch (type) {
-        case FLUX_MSGTYPE_REQUEST:
-        case FLUX_MSGTYPE_EVENT:
-            if (flux_msg_enable_route (cpy) < 0)
-                goto done;
-            if (flux_msg_push_route (cpy, fake_uuid) < 0)
-                goto done;
-            break;
-    }
     if (msglist_append (c->queue, cpy) < 0)
         goto done;
     cpy = NULL; /* c->queue now owns cpy */
