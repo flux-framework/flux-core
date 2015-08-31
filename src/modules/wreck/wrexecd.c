@@ -1679,7 +1679,8 @@ int main (int ac, char **av)
     prog_ctx_reactor_init (ctx);
     exec_commands (ctx);
 
-    flux_reactor_start (ctx->flux);
+    if (flux_reactor_start (ctx->flux) < 0)
+        log_err (ctx, "flux_reactor_start: %s", strerror (errno));
 
     rexec_state_change (ctx, "complete");
     log_msg (ctx, "exiting...");
