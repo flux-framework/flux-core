@@ -157,7 +157,7 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
 
 static void update_proctitle (ctx_t *ctx);
 static void create_rankdir (ctx_t *ctx);
-static void update_pidfile (ctx_t *ctx, bool force);
+static void update_pidfile (ctx_t *ctx);
 static void rank0_shell (ctx_t *ctx);
 static int rank0_shell_exit_handler (struct subprocess *p, void *arg);
 
@@ -166,7 +166,7 @@ static void boot_local (ctx_t *ctx);
 
 static const struct flux_handle_ops broker_handle_ops;
 
-#define OPTIONS "t:vqR:S:p:M:X:L:N:Pk:e:r:s:c:fnH:O:x:T:g:D:"
+#define OPTIONS "t:vqR:S:p:M:X:L:N:Pk:e:r:s:c:nH:O:x:T:g:D:"
 static const struct option longopts[] = {
     {"sid",             required_argument,  0, 'N'},
     {"child-uri",       required_argument,  0, 't'},
@@ -217,7 +217,6 @@ static void usage (void)
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
 " -c,--command string          Run command on rank 0\n"
 " -n,--noshell                 Do not spawn a shell even if on a tty\n"
-" -f,--force                   Kill rival broker and start\n"
 " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
 " -T,--timeout SECS            Set wireup timeout in seconds (rank 0 only)\n"
 " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
@@ -230,7 +229,6 @@ int main (int argc, char *argv[])
 {
     int c;
     ctx_t ctx;
-    bool fopt = false;
     bool nopt = false;
     zlist_t *modules, *modopts;
     zhash_t *modexclude;
@@ -345,9 +343,6 @@ int main (int argc, char *argv[])
                 break;
             case 'n':   /* --noshell */
                 nopt = true;
-                break;
-            case 'f':   /* --force */
-                fopt = true;
                 break;
             case 'H':   /* --heartrate SECS */
                 if (heartbeat_set_ratestr (ctx.heartbeat, optarg) < 0)
@@ -561,7 +556,7 @@ int main (int argc, char *argv[])
     }
 
     update_proctitle (&ctx);
-    update_pidfile (&ctx, fopt);
+    update_pidfile (&ctx);
 
     if (!nopt && ctx.rank == 0 && (isatty (STDIN_FILENO) || ctx.shell_cmd)) {
         ctx.shell = subprocess_create (ctx.sm);
@@ -727,31 +722,18 @@ static void create_rankdir (ctx_t *ctx)
 {
     char *ranktmp = xasprintf ("%s/%d", ctx->socket_dir, ctx->rank);
 
-    if (mkdir (ranktmp, 0700) < 0 && errno != EEXIST)
+    if (mkdir (ranktmp, 0700) < 0)
         err_exit ("mkdir %s", ranktmp);
     cleanup_push_string (cleanup_directory, ranktmp);
     ctx->local_uri = xasprintf ("local://%s", ranktmp);
     free (ranktmp);
 }
 
-static void update_pidfile (ctx_t *ctx, bool force)
+static void update_pidfile (ctx_t *ctx)
 {
     char *pidfile  = xasprintf ("%s/%d/broker.pid", ctx->socket_dir, ctx->rank);
-    pid_t pid;
     FILE *f;
 
-    if ((f = fopen (pidfile, "r"))) {
-        if (fscanf (f, "%u", &pid) == 1 && kill (pid, 0) == 0) {
-            if (force) {
-                if (kill (pid, SIGKILL) < 0)
-                    err_exit ("kill %d", pid);
-                msg ("killed broker with pid %d", pid);
-            } else
-                msg_exit ("broker is already running, pid %d (%s)",
-                          pid, pidfile);
-        }
-        (void)fclose (f);
-    }
     if (!(f = fopen (pidfile, "w+")))
         err_exit ("%s", pidfile);
     if (fprintf (f, "%u", getpid ()) < 0)
@@ -759,7 +741,6 @@ static void update_pidfile (ctx_t *ctx, bool force)
     if (fclose(f) < 0)
         err_exit ("%s", pidfile);
     cleanup_push_string (cleanup_file, pidfile);
-
     free (pidfile);
 }
 
