@@ -45,18 +45,15 @@ class SideFlux(object):
         global flux_exe
         self.size = size
         self.tmpdir = tempfile.mkdtemp(prefix='flux-sandbox-')
-        self.flux_tmpdir = os.path.join(self.tmpdir, 'flux-sideflux-0')
-        self.flux_uri = 'local://' + self.flux_tmpdir
-        os.makedirs(self.flux_tmpdir)
+        self.flux_uri = 'local://' + self.tmpdir + '/0'
         self.cleaned = False
 
     def start(self):
         flux_command = [flux_exe, 'start', '--size={}'.format(self.size), '-o',
-                        '-L,stderr,--sid,sideflux', 'bash']
+                        '-L,stderr,--socket-directory,' + self.tmpdir , 'bash']
         # print ' '.join(flux_command)
         FNULL = open(os.devnull, 'w+')
         self.subenv = os.environ.copy()
-        self.subenv.pop('FLUX_TMPDIR', None)
         self.subenv.pop('FLUX_URI', None)
         self.subenv['TMPDIR'] = self.tmpdir
         self.sub = subprocess.Popen(
@@ -72,7 +69,6 @@ class SideFlux(object):
         print('echo READY', file=self.sub.stdin)
 
         self.env_items = {}
-        # self.env_items['FLUX_TMPDIR'] = self.flux_tmpdir
         self.env_items['FLUX_URI'] = self.flux_uri
 
         while True:
