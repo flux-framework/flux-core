@@ -91,7 +91,6 @@ end
 
 local function alloc_tasks_hack (f, wreck, lwj)
     local r = {}
-    local total = 0
     local size = f.size
     local res
 
@@ -123,19 +122,27 @@ local function alloc_tasks_hack (f, wreck, lwj)
     wreck:say ("Allocating %d tasks across %d available nodes..\n",
                 wreck.ntasks, size)
 
-    for i = 0, size-1 do
-        local key = "rank."..i..".cores"
-        local n = tonumber (res[i].cores)
-        if (total + n) > wreck.ntasks then
-           n = wreck.ntasks - total
+    local counts = {}
+    local total = 0
+    while total < wreck.ntasks do
+        for i = 0, size-1 do
+            local n = tonumber (res[i].cores)
+            if (total + n) > wreck.ntasks then
+                n = wreck.ntasks - total
+            end
+            counts [i] = (counts [i] or 0) + n
+            total = total + n
+            if total == wreck.ntasks then break end
         end
-        lwj[key] = n
-        if r[n] then table.insert (r[n], i) else r[n] = { i } end
-        total = total + n
-        if total == wreck.ntasks then break end
     end
-    lwj:commit()
+    for i, ntasks in pairs (counts) do
+        local key = "rank."..i..".cores"
+        lwj [key] = ntasks
+        if not r[ntasks] then r[ntasks] = {} end
+        table.insert (r[ntasks], i)
+    end
     wreck:say ("tasks per node: %s\n", summarize_tasks_per_node (r))
+    lwj:commit()
 end
 
 -------------------------------------------------------------------------------
