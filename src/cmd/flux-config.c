@@ -93,7 +93,7 @@ int main (int argc, char *argv[])
             msg ("Loading config from %s", flux_conf_get_directory (cf));
         if (flux_conf_load (cf) < 0)
             err_exit ("%s", flux_conf_get_directory (cf));
-    } else if (getenv ("FLUX_TMPDIR")) {
+    } else if (getenv ("FLUX_URI")) {
         if (vopt)
             msg ("Loading config from KVS");
         if (!(h = flux_open (NULL, 0)))
