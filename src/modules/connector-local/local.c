@@ -707,15 +707,21 @@ const int htablen = sizeof (htab) / sizeof (htab[0]);
 int mod_main (flux_t h, int argc, char **argv)
 {
     ctx_t *ctx = getctx (h);
-    char *sockpath = NULL, *dfltpath = NULL;
+    char sockpath[PATH_MAX + 1];
+    char *local_uri = NULL;
+    char *tmpdir;
     int rc = -1;
 
-    /* Parse args.
-     */
-    if (argc > 0)
-        sockpath = argv[0];
-    if (!sockpath)
-        sockpath = dfltpath = xasprintf ("%s/flux-api", flux_get_tmpdir ());
+    if (!(local_uri = flux_getattr (h, FLUX_NODEID_ANY, "local-uri"))) {
+        flux_log (h, LOG_ERR, "flux_getattr local-uri: %s", strerror (errno));
+        goto done;
+    }
+    if (!(tmpdir = strstr (local_uri, "local://"))) {
+        flux_log (h, LOG_ERR, "malformed local-uri");
+        goto done;
+    }
+    tmpdir += strlen ("local://");
+    snprintf (sockpath, sizeof (sockpath), "%s/local", tmpdir);
 
     /* Create listen socket and watcher to handle new connections
      */
@@ -744,8 +750,8 @@ int mod_main (flux_t h, int argc, char **argv)
     }
     rc = 0;
 done:
-    if (dfltpath)
-        free (dfltpath);
+    if (local_uri)
+        free (local_uri);
     flux_msg_watcher_delvec (h, htab);
     flux_fd_watcher_destroy (ctx->listen_w);
     if (ctx->listen_fd >= 0) {
