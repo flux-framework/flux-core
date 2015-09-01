@@ -178,6 +178,14 @@ local tt = timer.new()
 local f, err = flux.new()
 if not f then wreck:die ("Connecting to flux failed: %s\n", err) end
 
+--  Check requested "nnodes" against available:
+--
+if wreck.nnodes and wreck.nnodes > f.size then
+    wreck:die ("Error: Requested nodes (%d) exceeds available (%d)\n",
+               wreck.nnodes, f.size)
+end
+
+
 --
 --  Create a job request as Lua table:
 --
