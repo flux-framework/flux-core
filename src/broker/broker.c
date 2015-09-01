@@ -93,6 +93,9 @@ typedef struct {
     uint32_t size;              /* session size */
     uint32_t rank;              /* our rank in session */
     char *sid;                  /* session id */
+    char *local_uri;
+    char *parent_uri;
+
     /* Modules
      */
     modhash_t *modhash;
@@ -152,7 +155,6 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
                           zhash_t *modexclude, const char *modpath);
 
 static void update_proctitle (ctx_t *ctx);
-static void update_environment (ctx_t *ctx);
 static void update_pidfile (ctx_t *ctx, bool force);
 static void rank0_shell (ctx_t *ctx);
 static int rank0_shell_exit_handler (struct subprocess *p, void *arg);
@@ -380,7 +382,6 @@ int main (int argc, char *argv[])
 
     /* Process config from the KVS of enclosing instance (if any)
      * and not forced to use a config file by the command line.
-     * (FLUX_TMPDIR has not yet been overridden within this instance)
      */
     ctx.cf = flux_conf_create ();
     if (!(confdir = getenv ("FLUX_CONF_DIRECTORY")))
@@ -391,7 +392,7 @@ int main (int argc, char *argv[])
             msg ("Loading config from %s", confdir);
         if (flux_conf_load (ctx.cf) < 0 && errno != ESRCH)
             err_exit ("%s", confdir);
-    } else if (getenv ("FLUX_TMPDIR")) {
+    } else if (getenv ("FLUX_URI")) {
         flux_t h;
         if (ctx.verbose)
             msg ("Loading config from KVS");
@@ -400,6 +401,11 @@ int main (int argc, char *argv[])
         if (kvs_conf_load (h, ctx.cf) < 0)
             err_exit ("could not load config from KVS");
         flux_close (h);
+        /* Stash FLUX_URI value for later use, but unset it in the environment
+         * so a connection to the enclosing instance is not made inadvertantly.
+         */
+        ctx.parent_uri = xstrdup (getenv ("FLUX_URI"));
+        unsetenv ("FLUX_URI");
     }
 
     /* Arrange to load config entries into kvs config.*
@@ -480,6 +486,7 @@ int main (int argc, char *argv[])
     }
     if (!ctx.sid)
         ctx.sid = xstrdup ("0");
+
     /* If we're missing the wiring, presume that the session is to be
      * started on a single node and compute appropriate ipc:/// sockets.
      */
@@ -523,7 +530,6 @@ int main (int argc, char *argv[])
     }
 
     update_proctitle (&ctx);
-    update_environment (&ctx);
     update_pidfile (&ctx, fopt);
 
     if (!nopt && ctx.rank == 0 && (isatty (STDIN_FILENO) || ctx.shell_cmd)) {
@@ -622,6 +628,11 @@ int main (int argc, char *argv[])
     zlist_destroy (&modopts);       /* autofree set */
     zhash_destroy (&modexclude);    /* values const (no destructor) */
 
+    if (ctx.parent_uri)
+        free (ctx.parent_uri);
+    if (ctx.local_uri)
+        free (ctx.local_uri);
+
     return 0;
 }
 
@@ -678,31 +689,35 @@ static void update_proctitle (ctx_t *ctx)
     ctx->proctitle = s;
 }
 
-static void update_environment (ctx_t *ctx)
-{
-    const char *oldtmp = flux_get_tmpdir ();
-    static char tmpdir[PATH_MAX + 1];
-
-    (void)snprintf (tmpdir, sizeof (tmpdir), "%s/flux-%s-%d",
-                    oldtmp, ctx->sid, ctx->rank);
-    if (mkdir (tmpdir, 0700) < 0 && errno != EEXIST)
-        err_exit ("mkdir %s", tmpdir);
-    if (ctx->verbose)
-        msg ("FLUX_TMPDIR: %s", tmpdir);
-    if (flux_set_tmpdir (tmpdir) < 0)
-        err_exit ("flux_set_tmpdir");
-    cleanup_push_string(cleanup_directory, tmpdir);
-}
-
+/* Create the directory that will contain the broker.pid file
+ * and the local connector's socket.  Then perform the broker.pid
+ * creation/liveness check.
+ */
 static void update_pidfile (ctx_t *ctx, bool force)
 {
-    const char *tmpdir = flux_get_tmpdir ();
+    const char *tmpdir = NULL;
+    char *ranktmp, *p;
     char *pidfile;
     pid_t pid;
     FILE *f;
 
-    if (asprintf (&pidfile, "%s/broker.pid", tmpdir) < 0)
-        oom ();
+   /* Tricky: we need a unique ranktmp dir.  The sid and rank are insufficnet
+    * when launching recursively, so peek at the parent's URI to determine
+    * _its_ ramktmp directory and make ours a subdir.
+    */
+    if (ctx->parent_uri)
+        if ((p = strstr (ctx->parent_uri, "://")))
+            tmpdir = p + 3;
+    if (!tmpdir)
+        tmpdir = getenv ("TMPDIR");
+    if (!tmpdir)
+        tmpdir = "/tmp";
+
+    ranktmp = xasprintf ("%s/flux-%s-%d", tmpdir, ctx->sid, ctx->rank);
+    pidfile  = xasprintf ("%s/broker.pid", ranktmp);
+    if (mkdir (ranktmp, 0700) < 0 && errno != EEXIST)
+        err_exit ("mkdir %s", ranktmp);
+
     if ((f = fopen (pidfile, "r"))) {
         if (fscanf (f, "%u", &pid) == 1 && kill (pid, 0) == 0) {
             if (force) {
@@ -710,20 +725,24 @@ static void update_pidfile (ctx_t *ctx, bool force)
                     err_exit ("kill %d", pid);
                 msg ("killed broker with pid %d", pid);
             } else
-                msg_exit ("broker is already running in %s, pid %d", tmpdir, pid);
+                msg_exit ("broker is already running, pid %d (%s)",
+                          pid, pidfile);
         }
         (void)fclose (f);
     }
+    cleanup_push_string (cleanup_directory, ranktmp);
     if (!(f = fopen (pidfile, "w+")))
         err_exit ("%s", pidfile);
     if (fprintf (f, "%u", getpid ()) < 0)
         err_exit ("%s", pidfile);
     if (fclose(f) < 0)
         err_exit ("%s", pidfile);
-    if (ctx->verbose)
-        msg ("pidfile: %s", pidfile);
-    cleanup_push_string(cleanup_file, pidfile);
+    cleanup_push_string (cleanup_file, pidfile);
+
+    ctx->local_uri = xasprintf ("local://%s", ranktmp);
+
     free (pidfile);
+    free (ranktmp);
 }
 
 /* See POSIX 2008 Volume 3 Shell and Utilities, Issue 7
@@ -757,6 +776,7 @@ static void rank0_shell (ctx_t *ctx)
         subprocess_argv_append (ctx->shell, ctx->shell_cmd);
     }
     subprocess_set_environ (ctx->shell, environ);
+    subprocess_setenv (ctx->shell, "FLUX_URI", ctx->local_uri, 1);
 
     if (!ctx->quiet)
         flux_log (ctx->h, LOG_INFO, "starting shell");
@@ -821,7 +841,10 @@ static void boot_pmi (ctx_t *ctx)
 
 static void boot_local (ctx_t *ctx)
 {
-    const char *tmpdir = flux_get_tmpdir ();
+    const char *tmpdir = getenv ("TMPDIR");
+    if (!tmpdir)
+        tmpdir = "/tmp";
+
     int rrank = ctx->rank == 0 ? ctx->size - 1 : ctx->rank - 1;
     char * reqfile = xasprintf("%s/flux-%s-%d-req", tmpdir, ctx->sid, ctx->rank);
     char * eventfile = xasprintf("%s/flux-%s-event", tmpdir, ctx->sid);
@@ -1183,13 +1206,13 @@ static int cmb_exec_cb (zmsg_t **zmsg, void *arg)
             if (val != NULL)
                 subprocess_setenv (p, iter.key, val, 1);
         }
-        /*
-         *  Override key FLUX environment variables in env array
-         */
-        subprocess_setenv (p, "FLUX_TMPDIR", getenv ("FLUX_TMPDIR"), 1);
     }
     else
         subprocess_set_environ (p, environ);
+    /*
+     *  Override key FLUX environment variables in env array
+     */
+    subprocess_setenv (p, "FLUX_URI", ctx->local_uri, 1);
 
     if (json_object_object_get_ex (request, "cwd", &o) && o != NULL) {
         const char *dir = json_object_get_string (o);
@@ -1340,10 +1363,14 @@ static int cmb_getattr_cb (zmsg_t **zmsg, void *arg)
     }
     if (!strcmp (name, "snoop-uri"))
         val = snoop_get_uri (ctx->snoop);
-    else if (!strcmp (name, "parent-uri"))
+    else if (!strcmp (name, "tbon-parent-uri"))
         val = overlay_get_parent (ctx->overlay);
-    else if (!strcmp (name, "request-uri"))
+    else if (!strcmp (name, "tbon-request-uri"))
         val = overlay_get_child (ctx->overlay);
+    else if (!strcmp (name, "local-uri"))
+        val = ctx->local_uri;
+    else if (!strcmp (name, "parent-uri"))
+        val = ctx->parent_uri;
     else
         errno = ENOENT;
     if (!val)
