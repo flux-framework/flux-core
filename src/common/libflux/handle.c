@@ -152,36 +152,38 @@ static char *strtrim (char *s, const char *trim)
 
 flux_t flux_open (const char *uri, int flags)
 {
-    const char *scheme = "local";
     char *path = NULL;
-    char *cpy = NULL;
+    char *scheme = NULL;
     void *dso = NULL;
     connector_init_f *connector_init = NULL;
     flux_t h = NULL;
 
     if (!uri)
         uri = getenv ("FLUX_URI");
-    if (getenv ("FLUX_HANDLE_TRACE"))
-        flags |= FLUX_O_TRACE;
+    if (!uri) {
+        errno = EINVAL;
+        goto done;
+    }
     if (uri) {
-        cpy = xstrdup (uri);
-        path = strstr (cpy, "://");
+        scheme = xstrdup (uri);
+        path = strstr (scheme, "://");
         if (path) {
             *path = '\0';
             path = strtrim (path + 3, " \t");
         }
-        scheme = cpy;
     }
     if (!(connector_init = find_connector (scheme, &dso)))
         goto done;
+    if (getenv ("FLUX_HANDLE_TRACE"))
+        flags |= FLUX_O_TRACE;
     if (!(h = connector_init (path, flags))) {
         dlclose (dso);
         goto done;
     }
     h->dso = dso;
 done:
-    if (cpy)
-        free (cpy);
+    if (scheme)
+        free (scheme);
     return h;
 }
 

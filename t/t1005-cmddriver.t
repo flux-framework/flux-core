@@ -29,11 +29,6 @@ test_expect_success 'flux --broker-path sets FLUX_BROKER_PATH' '
 		| egrep "^FLUX_BROKER_PATH=/xyz/flux-broker$"
 '
 
-test_expect_success 'flux --tmpdr sets FLUX_TMPDIR' '
-	flux -F --tmpdir /xyz /usr/bin/printenv \
-		| egrep "^FLUX_TMPDIR=/xyz$"
-'
-
 test_expect_success 'flux --uri sets FLUX_URI' '
 	flux -F --uri xyz://foo /usr/bin/printenv \
 		| egrep "^FLUX_URI=xyz://foo$"
@@ -42,18 +37,6 @@ test_expect_success 'flux --uri sets FLUX_URI' '
 test_expect_success 'flux --trace-handle sets FLUX_HANDLE_TRACE=1' '
 	flux -F --trace-handle /usr/bin/printenv \
 		| egrep "^FLUX_HANDLE_TRACE=1$"
-'
-
-test_expect_success 'flux --uri works for reconstructed default uri' '
-	flux -F --uri local://$FLUX_TMPDIR comms info
-'
-
-test_expect_success 'flux --uri works for uri with NULL path' '
-	flux -F --uri local:// comms info
-'
-
-test_expect_success 'flux --uri works for uri with whitespace path' '
-	flux -F --uri "local:// 	" comms info
 '
 
 # ENOENT
@@ -81,11 +64,11 @@ test_expect_success 'flux env runs argument' "
 		| grep ${FLUX_BUILD_DIR}/src/connectors
 "
 test_expect_success 'flux env passes cmddriver options' '
-	flux -F --tmpdir /xyz env | grep "^FLUX_TMPDIR=/xyz"
+	flux -F --uri foo://xyz env | grep "^FLUX_URI=foo://xyz"
 '
 test_expect_success 'flux env passes cmddriver option to argument' "
-	flux -F --tmpdir /xyx env sh -c 'echo \$FLUX_TMPDIR' \
-		| grep ^/xyx$
+	flux -F --uri foo://xyx env sh -c 'echo \$FLUX_URI' \
+		| grep ^foo://xyx$
 "
 # push /foo twice onto PYTHONPATH -- ensure it is leftmost position:
 test_expect_success 'cmddriver pushes dup path elements onto front of PATH' "

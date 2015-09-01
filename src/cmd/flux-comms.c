@@ -48,7 +48,7 @@ void usage (void)
 "Usage: flux-comms [-r N] idle\n"
 "       flux-comms [-r N] getattr attr\n"
 "       flux-comms        info\n"
-"       flux-comms [-r N] reparent new-parent-uri\n"
+"       flux-comms [-r N] reparent new-uri\n"
 "       flux-comms [-r N] panic [msg ...]\n"
 "       flux-comms [-r N] failover\n"
 "       flux-comms [-r N] recover\n"
@@ -104,7 +104,7 @@ int main (int argc, char *argv[])
     } else if (!strcmp (cmd, "getattr")) {
         char *s;
         if (optind != argc - 1)
-            msg_exit ("getattr snoop-uri, parent-uri, or request-uri");
+            msg_exit ("Usage: flux comms getattr attrname");
         if (!(s = flux_getattr (h, rank, argv[optind])))
             err_exit ("%s", argv[optind]);
         printf ("%s\n", s);

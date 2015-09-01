@@ -186,8 +186,8 @@ done:
     return running;
 }
 
-/* Path is interpreted as the directory containing the unix domain socket.
- * If NULL, flux_get_tmpdir() is used.
+/* Path is interpreted as the directory containing the unix domain socket
+ * and broker pid.
  */
 flux_t connector_init (const char *path, int flags)
 {
@@ -197,10 +197,11 @@ flux_t connector_init (const char *path, int flags)
     char sockfile[PATH_MAX + 1];
     int n, count;
 
-    if (!path)
-        path = flux_get_tmpdir ();
-
-    n = snprintf (sockfile, sizeof (sockfile), "%s/flux-api", path);
+    if (!path) {
+        errno = EINVAL;
+        goto error;
+    }
+    n = snprintf (sockfile, sizeof (sockfile), "%s/local", path);
     if (n >= sizeof (sockfile)) {
         errno = EINVAL;
         goto error;

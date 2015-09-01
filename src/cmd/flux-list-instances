@@ -6,16 +6,8 @@ from __future__ import print_function
 import sys, os, re, flux.command_helpers, argparse
 
 parser = argparse.ArgumentParser(description='List local flux instances')
-parser.add_argument('--top_only',
-                    action='store_true',
-                    help='List only top-level instances, ignore children')
-parser.add_argument(
-    '--all', '-a',
-    action='store_true',
-    help=
-    'List all instances, including those outside of the enclosing instance')
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    for sid, uri in flux.command_helpers.list_instances(args.all, args.top_only):
+    for sid, uri in flux.command_helpers.list_instances():
         print("{}: {}".format(sid, uri))
