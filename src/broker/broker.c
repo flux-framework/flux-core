@@ -93,6 +93,7 @@ typedef struct {
     uint32_t size;              /* session size */
     uint32_t rank;              /* our rank in session */
     char *sid;                  /* session id */
+    char *socket_dir;
     char *local_uri;
     char *parent_uri;
 
@@ -155,6 +156,7 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
                           zhash_t *modexclude, const char *modpath);
 
 static void update_proctitle (ctx_t *ctx);
+static void create_rankdir (ctx_t *ctx);
 static void update_pidfile (ctx_t *ctx, bool force);
 static void rank0_shell (ctx_t *ctx);
 static int rank0_shell_exit_handler (struct subprocess *p, void *arg);
@@ -164,7 +166,7 @@ static void boot_local (ctx_t *ctx);
 
 static const struct flux_handle_ops broker_handle_ops;
 
-#define OPTIONS "t:vqR:S:p:M:X:L:N:Pk:e:r:s:c:fnH:O:x:T:g:"
+#define OPTIONS "t:vqR:S:p:M:X:L:N:Pk:e:r:s:c:fnH:O:x:T:g:D:"
 static const struct option longopts[] = {
     {"sid",             required_argument,  0, 'N'},
     {"child-uri",       required_argument,  0, 't'},
@@ -188,6 +190,7 @@ static const struct option longopts[] = {
     {"heartrate",       required_argument,  0, 'H'},
     {"timeout",         required_argument,  0, 'T'},
     {"shutdown-grace",  required_argument,  0, 'g'},
+    {"socket-directory",required_argument,  0, 'D'},
     {0, 0, 0, 0},
 };
 
@@ -218,6 +221,7 @@ static void usage (void)
 " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
 " -T,--timeout SECS            Set wireup timeout in seconds (rank 0 only)\n"
 " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
+" -D,--socket-directory DIR    Create ipc sockets in DIR (local bootstrap)\n"
 );
     exit (1);
 }
@@ -355,6 +359,17 @@ int main (int argc, char *argv[])
             case 'g':   /* --shutdown-grace SECS */
                 ctx.shutdown_grace = strtod (optarg, NULL);
                 break;
+            case 'D': { /* --socket-directory DIR */
+                struct stat sb;
+                if (stat (optarg, &sb) < 0)
+                    err_exit ("%s", optarg);
+                if (!S_ISDIR (sb.st_mode))
+                    msg_exit ("%s: not a directory", optarg);
+                if ((sb.st_mode & S_IRWXU) != S_IRWXU)
+                    msg_exit ("%s: invalid mode: 0%o", optarg, sb.st_mode);
+                ctx.socket_dir = xstrdup (optarg);
+                break;
+            }
             default:
                 usage ();
         }
@@ -486,6 +501,22 @@ int main (int argc, char *argv[])
     }
     if (!ctx.sid)
         ctx.sid = xstrdup ("0");
+
+    /* Now that we know the rank (either from command line or PMI,
+     * create a subdirectory of socket_dir for the sockets and pidfile
+     * specific to this rank of the broker.
+     */
+    if (!ctx.socket_dir) {
+        char *tmpdir = getenv ("TMPDIR");
+        char *template = xasprintf ("%s/flux-%s-XXXXXX",
+                                    tmpdir ? tmpdir : "/tmp", ctx.sid);
+
+        if (!(ctx.socket_dir = mkdtemp (template)))
+            err_exit ("mkdtemp %s", template);
+        cleanup_push_string (cleanup_directory, ctx.socket_dir);
+    }
+
+    create_rankdir (&ctx);
 
     /* If we're missing the wiring, presume that the session is to be
      * started on a single node and compute appropriate ipc:/// sockets.
@@ -689,34 +720,25 @@ static void update_proctitle (ctx_t *ctx)
     ctx->proctitle = s;
 }
 
-/* Create the directory that will contain the broker.pid file
- * and the local connector's socket.  Then perform the broker.pid
- * creation/liveness check.
+/* The 'ranktmp' dir will contain the broker.pid file and local:// socket.
+ * It will be created in ctx->socket_dir.
  */
-static void update_pidfile (ctx_t *ctx, bool force)
+static void create_rankdir (ctx_t *ctx)
 {
-    const char *tmpdir = NULL;
-    char *ranktmp, *p;
-    char *pidfile;
-    pid_t pid;
-    FILE *f;
+    char *ranktmp = xasprintf ("%s/%d", ctx->socket_dir, ctx->rank);
 
-   /* Tricky: we need a unique ranktmp dir.  The sid and rank are insufficnet
-    * when launching recursively, so peek at the parent's URI to determine
-    * _its_ ramktmp directory and make ours a subdir.
-    */
-    if (ctx->parent_uri)
-        if ((p = strstr (ctx->parent_uri, "://")))
-            tmpdir = p + 3;
-    if (!tmpdir)
-        tmpdir = getenv ("TMPDIR");
-    if (!tmpdir)
-        tmpdir = "/tmp";
-
-    ranktmp = xasprintf ("%s/flux-%s-%d", tmpdir, ctx->sid, ctx->rank);
-    pidfile  = xasprintf ("%s/broker.pid", ranktmp);
     if (mkdir (ranktmp, 0700) < 0 && errno != EEXIST)
         err_exit ("mkdir %s", ranktmp);
+    cleanup_push_string (cleanup_directory, ranktmp);
+    ctx->local_uri = xasprintf ("local://%s", ranktmp);
+    free (ranktmp);
+}
+
+static void update_pidfile (ctx_t *ctx, bool force)
+{
+    char *pidfile  = xasprintf ("%s/%d/broker.pid", ctx->socket_dir, ctx->rank);
+    pid_t pid;
+    FILE *f;
 
     if ((f = fopen (pidfile, "r"))) {
         if (fscanf (f, "%u", &pid) == 1 && kill (pid, 0) == 0) {
@@ -730,7 +752,6 @@ static void update_pidfile (ctx_t *ctx, bool force)
         }
         (void)fclose (f);
     }
-    cleanup_push_string (cleanup_directory, ranktmp);
     if (!(f = fopen (pidfile, "w+")))
         err_exit ("%s", pidfile);
     if (fprintf (f, "%u", getpid ()) < 0)
@@ -739,10 +760,7 @@ static void update_pidfile (ctx_t *ctx, bool force)
         err_exit ("%s", pidfile);
     cleanup_push_string (cleanup_file, pidfile);
 
-    ctx->local_uri = xasprintf ("local://%s", ranktmp);
-
     free (pidfile);
-    free (ranktmp);
 }
 
 /* See POSIX 2008 Volume 3 Shell and Utilities, Issue 7
@@ -841,28 +859,24 @@ static void boot_pmi (ctx_t *ctx)
 
 static void boot_local (ctx_t *ctx)
 {
-    const char *tmpdir = getenv ("TMPDIR");
-    if (!tmpdir)
-        tmpdir = "/tmp";
-
     int rrank = ctx->rank == 0 ? ctx->size - 1 : ctx->rank - 1;
-    char * reqfile = xasprintf("%s/flux-%s-%d-req", tmpdir, ctx->sid, ctx->rank);
-    char * eventfile = xasprintf("%s/flux-%s-event", tmpdir, ctx->sid);
+    char *reqfile = xasprintf ("%s/%d/req", ctx->socket_dir, ctx->rank);
+    char *eventfile = xasprintf ("%s/event", ctx->socket_dir);
     overlay_set_child (ctx->overlay, "ipc://%s", reqfile);
-    cleanup_push_string(cleanup_file, reqfile);
-    free(reqfile);
+    cleanup_push_string (cleanup_file, reqfile);
+    free (reqfile);
     if (ctx->rank > 0) {
         int prank = ctx->k_ary == 0 ? 0 : (ctx->rank - 1) / ctx->k_ary;
-        overlay_push_parent (ctx->overlay, "ipc://%s/flux-%s-%d-req",
-                             tmpdir, ctx->sid, prank);
+        overlay_push_parent (ctx->overlay, "ipc://%s/%d/req",
+                             ctx->socket_dir, prank);
     }
     overlay_set_event (ctx->overlay, "ipc://%s", eventfile);
     if (ctx->rank == 0) {
-        cleanup_push_string(cleanup_file, eventfile);
+        cleanup_push_string (cleanup_file, eventfile);
     }
-    free(eventfile);
-    overlay_set_right (ctx->overlay, "ipc://%s/flux-%s-%d-req",
-                       tmpdir, ctx->sid, rrank);
+    free (eventfile);
+    overlay_set_right (ctx->overlay, "ipc://%s/%d/req",
+                       ctx->socket_dir, rrank);
 }
 
 static bool nodeset_suffix_member (char *name, uint32_t rank)
