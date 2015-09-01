@@ -275,7 +275,7 @@ static void parents_fromjson (ctx_t *ctx, JSON ar)
                 if (i == 0) {
                     if (p->uri) /* unlikely */
                         free (p->uri);
-                    p->uri = flux_getattr (ctx->h, -1, "parent-uri");
+                    p->uri = flux_getattr (ctx->h, -1, "tbon-parent-uri");
                 }
                 if (zlist_append (ctx->parents, p) < 0)
                     oom ();
