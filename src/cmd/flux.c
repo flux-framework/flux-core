@@ -51,9 +51,8 @@ void setup_path (flux_conf_t cf, const char *argv0);
 static void print_environment(flux_conf_t cf, const char * prefix);
 void setup_broker_env (flux_conf_t cf, const char *path_override);
 
-#define OPTIONS "+T:tx:hM:O:B:vc:L:P:C:FS:u:"
+#define OPTIONS "+tx:hM:O:B:vc:L:P:C:FS:u:"
 static const struct option longopts[] = {
-    {"tmpdir",          required_argument,  0, 'T'},
     {"trace-handle",    no_argument,        0, 't'},
     {"exec-path",       required_argument,  0, 'x'},
     {"module-path",     required_argument,  0, 'M'},
@@ -81,11 +80,10 @@ static void usage (void)
 "    -L,--lua-path PATH    prepend PATH to LUA_PATH\n"
 "    -P,--python-path PATH prepend PATH to PYTHONPATH\n"
 "    -C,--lua-cpath PATH   prepend PATH to LUA_CPATH\n"
-"    -T,--tmpdir PATH      set FLUX_TMPDIR\n"
 "    -t,--trace-handle     set FLUX_HANDLE_TRACE=1 before executing COMMAND\n"
 "    -B,--broker-path FILE override path to flux broker\n"
 "    -c,--config DIR       set path to config directory\n"
-"    -F,--file-config      force use of config file, even if FLUX_TMPDIR set\n"
+"    -F,--file-config      force use of config file, even if FLUX_URI is set\n"
 "    -S,--secdir DIR       set the directory where CURVE keys will be stored\n"
 "    -u,--uri URI          override default URI to flux broker\n"
 "    -v,--verbose          show FLUX_* environment and command search\n"
@@ -144,11 +142,6 @@ int main (int argc, char *argv[])
                 break;
             case 'F': /* --file-config */
                 Fopt = true;
-                break;
-            case 'T': /* --tmpdir PATH */
-                if (setenv ("FLUX_TMPDIR", optarg, 1) < 0)
-                    err_exit ("setenv");
-                flux_conf_environment_set (cf, "FLUX_TMPDIR", optarg, "");
                 break;
             case 't': /* --trace-handle */
                 if (setenv ("FLUX_HANDLE_TRACE", "1", 1) < 0)
@@ -209,7 +202,7 @@ int main (int argc, char *argv[])
      * It is not an error if config is not foud in either place, we will
      * try to make do with compiled-in defaults.
      */
-    if (!Fopt && getenv ("FLUX_TMPDIR")
+    if (!Fopt && getenv ("FLUX_URI")
               && !(argc > 0 && !strcmp (argv[0], "start"))) {
         flux_t h;
         flux_conf_load (cf);
