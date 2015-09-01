@@ -44,9 +44,9 @@ test_expect_success 'flux exec passes environment variables' '
 	test_on_rank 0 sh -c "test \"\$FOOTEST\" = \"t\""
 '
 
-test_expect_success 'flux exec does not pass FLUX_TMPDIR' '
-        # Ensure FLUX_TMPDIR for rank 1 doesn not equal FLUX_TMPDIR for 0
-	flux exec -r 1 sh -c "test \"\$FLUX_TMPDIR\" != \"$FLUX_TMPDIR\""
+test_expect_success 'flux exec does not pass FLUX_URI' '
+        # Ensure FLUX_URI for rank 1 doesn not equal FLUX_URI for 0
+	flux exec -r 1 sh -c "test \"\$FLUX_URI\" != \"$FLUX_URI\""
 '
 
 test_expect_success 'flux exec passes cwd' '
