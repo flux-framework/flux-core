@@ -37,6 +37,7 @@ local lwj_options = {
 
 local default_opts = {
     ['help']    = { char = 'h'  },
+    ['verbose'] = { char = 'v'  },
     ['ntasks']  = { char = 'n', arg = "N" },
     ['options'] = { char = 'o', arg = "OPTIONS.." },
 }
@@ -67,6 +68,12 @@ function wreck:say (...)
     io.stderr:write (self.prog..": "..string.format (...))
 end
 
+function wreck:verbose (...)
+    if self.opts.v then
+        self:say (...)
+    end
+end
+
 function wreck:die (...)
     self:say (...)
     os.exit (1)
@@ -76,6 +83,7 @@ function wreck:usage()
     io.stderr:write ("Usage: "..self.prog.." OPTIONS.. COMMANDS..\n")
     io.stderr:write ([[
   -h, --help                 Display this message
+  -v, --verbose              Be verbose
   -n, --ntasks=N             Request to run a total of N tasks
   -o, --options=OPTION,...   Set other options (See OTHER OPTIONS below)
 ]])

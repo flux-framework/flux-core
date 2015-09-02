@@ -54,9 +54,9 @@ local function lwj_return_code (f, wreck, id)
             end
         end
     end
+    local fn = getmetatable (wreck) [ max > 0 and "say" or "verbose" ]
     for s,h in pairs (msgs) do
-        wreck:say ("task%s %s: %s\n",
-                    #h > 1 and "s" or "", tostring (h:sort()), s)
+        fn (wreck, "task%s %s: %s", #h > 1 and "s" or "", tostring (h:sort()), s)
     end
     return max
 end
@@ -77,7 +77,7 @@ end
 local function fake_resource_array (wreck, nnodes)
     local res = {}
     local total = 0
-    local ppn = wreck.tasks_per_node or (wreck.ntasks / nnodes)
+    local ppn = wreck.tasks_per_node or math.ceil (wreck.ntasks / nnodes)
     for i = 0, nnodes - 1 do
         local n = tonumber (ppn)
         if (total + ppn) > tonumber (wreck.ntasks) then
@@ -91,7 +91,6 @@ end
 
 local function alloc_tasks_hack (f, wreck, lwj)
     local r = {}
-    local total = 0
     local size = f.size
     local res
 
@@ -120,22 +119,30 @@ local function alloc_tasks_hack (f, wreck, lwj)
     end
 
     wreck.ntasks = tonumber (wreck.ntasks)
-    wreck:say ("Allocating %d tasks across %d available nodes..\n",
+    wreck:verbose ("Allocating %d tasks across %d available nodes..\n",
                 wreck.ntasks, size)
 
-    for i = 0, size-1 do
-        local key = "rank."..i..".cores"
-        local n = tonumber (res[i].cores)
-        if (total + n) > wreck.ntasks then
-           n = wreck.ntasks - total
+    local counts = {}
+    local total = 0
+    while total < wreck.ntasks do
+        for i = 0, size-1 do
+            local n = tonumber (res[i].cores)
+            if (total + n) > wreck.ntasks then
+                n = wreck.ntasks - total
+            end
+            counts [i] = (counts [i] or 0) + n
+            total = total + n
+            if total == wreck.ntasks then break end
         end
-        lwj[key] = n
-        if r[n] then table.insert (r[n], i) else r[n] = { i } end
-        total = total + n
-        if total == wreck.ntasks then break end
     end
+    for i, ntasks in pairs (counts) do
+        local key = "rank."..i..".cores"
+        lwj [key] = ntasks
+        if not r[ntasks] then r[ntasks] = {} end
+        table.insert (r[ntasks], i)
+    end
+    wreck:verbose ("tasks per node: %s\n", summarize_tasks_per_node (r))
     lwj:commit()
-    wreck:say ("tasks per node: %s\n", summarize_tasks_per_node (r))
 end
 
 -------------------------------------------------------------------------------
@@ -171,12 +178,20 @@ local tt = timer.new()
 local f, err = flux.new()
 if not f then wreck:die ("Connecting to flux failed: %s\n", err) end
 
+--  Check requested "nnodes" against available:
+--
+if wreck.nnodes and wreck.nnodes > f.size then
+    wreck:die ("Error: Requested nodes (%d) exceeds available (%d)\n",
+               wreck.nnodes, f.size)
+end
+
+
 --
 --  Create a job request as Lua table:
 --
 local jobreq = wreck:jobreq()
 
-wreck:say ("%4.03fs: Sending LWJ request for %d tasks (cmdline \"%s\")\n",
+wreck:verbose ("%4.03fs: Sending LWJ request for %d tasks (cmdline \"%s\")\n",
     tt:get0(), wreck.ntasks, table.concat (wreck.cmdline, ' '))
 
 --
@@ -191,7 +206,7 @@ if resp.errnum then
     wreck:die ("job.create message failed with errnum=%d\n", resp.errnum)
 end
 
-wreck:say ("%4.03fs: Registered jobid %d\n", tt:get0(), resp.jobid)
+wreck:verbose ("%4.03fs: Registered jobid %d\n", tt:get0(), resp.jobid)
 
 --
 --  Get a handle to this lwj kvsdir:
@@ -208,7 +223,7 @@ if true then
     wreck.nnodes = wreck:getopt ("N")
     wreck.tasks_per_node = wreck:getopt ("t")
     alloc_tasks_hack (f, wreck, lwj)
-    wreck:say ("%-4.03fs: Sending run event\n", tt:get0())
+    wreck:verbose ("%-4.03fs: Sending run event\n", tt:get0())
     local rc,err = f:sendevent ("wrexec.run.%d", resp.jobid)
     if not rc then wreck:die ("sendevent: %s\n", err) end
 else
@@ -227,7 +242,7 @@ local function check_job_completed ()
     if nio <= 0 and (state == "complete" or state == "reaped") then
         local rc = lwj_return_code (f, wreck, resp.jobid)
         if rc == 0 then
-            wreck:say ("All tasks completed successfully.\n");
+            wreck:verbose ("All tasks completed successfully.\n");
         end
         os.exit (rc)
     end
@@ -291,7 +306,7 @@ local kw, err = f:kvswatcher  {
     handler = function (kw, result)
         if result then
             state = result
-            wreck:say ("%-4.03fs: State = %s\n", tt:get0(), result)
+            wreck:verbose ("%-4.03fs: State = %s\n", tt:get0(), result)
             check_job_completed ()
         end
     end
@@ -309,7 +324,7 @@ local s, err = f:sighandler {
     sigmask = { posix.SIGALRM },
     handler = function (f, s, sig)
         wreck:say ("Killed by SIGALRM: state = %s, nio = %d\n", state, nio)
-	os.exit (1)
+        os.exit (128+posix.SIGALRM)
     end
 }
 
@@ -326,7 +341,7 @@ repeat
     --   Check to see if we should terminate the job now:
     --
     if terminate then
-        wreck:say ("%4.03fs: Killing LWJ %d\n", tt:get0(), resp.jobid)
+        wreck:verbose ("%4.03fs: Killing LWJ %d\n", tt:get0(), resp.jobid)
         local rc,err = f:sendevent ("wreck.%d.kill", resp.jobid)
         if not rc then
             wreck:say ("Error: Failed to send kill event: %s", err)

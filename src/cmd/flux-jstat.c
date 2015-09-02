@@ -202,7 +202,7 @@ static int handle_query_req (flux_t h, int64_t j, const char *k, const char *n)
     ctx = getctx (h);
     ctx->op = n? open_test_outfile (n) : stdout;
     if (jsc_query_jcb (h, j, k, &jcbstr) != 0) {
-        flux_log (h, LOG_ERR, "jsc_query_jcb reported an error\n");
+        flux_log (h, LOG_ERR, "jsc_query_jcb reported an error");
         return -1;
     }
     jcb = Jfromstr (jcbstr);

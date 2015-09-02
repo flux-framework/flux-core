@@ -183,6 +183,16 @@ static void log_msg (struct prog_ctx *ctx, const char *fmt, ...)
     va_end (ap);
 }
 
+static void log_debug (struct prog_ctx *ctx, const char *fmt, ...)
+{
+    flux_t c = prog_ctx_flux_handle (ctx);
+    va_list ap;
+    va_start (ap, fmt);
+    flux_vlog (c, LOG_DEBUG, fmt, ap);
+    va_end (ap);
+}
+
+
 const char * prog_ctx_getopt (struct prog_ctx *ctx, const char *opt)
 {
     if (ctx->options)
@@ -192,7 +202,7 @@ const char * prog_ctx_getopt (struct prog_ctx *ctx, const char *opt)
 
 int prog_ctx_setopt (struct prog_ctx *ctx, const char *opt, const char *val)
 {
-    log_msg (ctx, "Setting option %s = %s\n", opt, val);
+    log_debug (ctx, "Setting option %s = %s", opt, val);
     zhash_insert (ctx->options, opt, strdup (val));
     zhash_freefn (ctx->options, opt, (zhash_free_fn *) free);
     return (0);
@@ -251,7 +261,7 @@ int task_kz_put_lines (struct task_info *t, kz_t *kz, const char *data, int len)
     for (i = 0; i < count; i++) {
         line[i] = sdscatlen (line[i], "\n", 1); /* replace newline */
         if (kz_put (kz, line[i], sdslen (line[i])) < 0)
-            log_err (t->ctx, "kz_put (%s): %s\n", line[i], strerror (errno));
+            log_err (t->ctx, "kz_put (%s): %s", line[i], strerror (errno));
     }
 
     sdsfreesplitres (line, count);
@@ -500,7 +510,7 @@ struct prog_ctx * prog_ctx_create (void)
     ctx->envref = -1;
 
     if (get_executable_path (ctx->exedir, sizeof (ctx->exedir)) < 0)
-        log_fatal (ctx, 1, "get_executable_path: %s\n", strerror (errno));
+        log_fatal (ctx, 1, "get_executable_path: %s", strerror (errno));
 
     ctx->lua_stack = lua_stack_create ();
     ctx->lua_pattern = xstrdup (WRECK_LUA_PATTERN);
@@ -579,7 +589,7 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
         return (-1);
 
     if (kvsdir_get_dir (ctx->kvs, &rank, "rank") < 0) {
-        log_msg (ctx, "get_dir (%s.rank): %s",
+        log_err (ctx, "get_dir (%s.rank) failed: %s",
                  kvsdir_key (ctx->kvs),
                  strerror (errno));
         ctx->nnodes = flux_size (ctx->flux);
@@ -603,11 +613,11 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
             break;
         }
         if ((ncores = cores_on_node (ctx, nodeids[j])) < 0)
-            log_fatal (ctx, 1, "Failed to get ncores for node%d\n", nodeids[j]);
+            log_fatal (ctx, 1, "Failed to get ncores for node%d", nodeids[j]);
         ctx->globalbasis += ncores;
     }
     free (nodeids);
-    log_msg (ctx, "lwj.%ld: node%d: basis=%d\n",
+    log_debug (ctx, "lwj.%ld: node%d: basis=%d",
         ctx->id, ctx->nodeid, ctx->globalbasis);
     return (0);
 }
@@ -632,7 +642,7 @@ int prog_ctx_options_init (struct prog_ctx *ctx)
         }
 
         if (!(v = json_tokener_parse (json_str))) {
-            log_err (ctx, "failed to parse json for option '%s'\n", opt);
+            log_err (ctx, "failed to parse json for option '%s'", opt);
             free (json_str);
             continue;
         }
@@ -685,14 +695,14 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
     prog_ctx_get_nodeinfo (ctx);
 
     if (kvsdir_get_int (ctx->kvs, "ntasks", &ctx->total_ntasks) < 0)
-        log_fatal (ctx, 1, "Failed to get ntasks from kvs\n");
+        log_fatal (ctx, 1, "Failed to get ntasks from kvs");
 
     /*
      *  See if we've got 'cores' assigned for this host
      */
     if (ctx->resources) {
         if (kvsdir_get_int (ctx->resources, "cores", &ctx->nprocs) < 0)
-            log_fatal (ctx, 1, "Failed to get resources for this node\n");
+            log_fatal (ctx, 1, "Failed to get resources for this node");
     }
     else if (kvsdir_get_int (ctx->kvs, "tasks-per-node", &ctx->nprocs) < 0)
             ctx->nprocs = 1;
@@ -736,7 +746,7 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
 
     if (kvs_get_dir (ctx->flux, &ctx->kvs,
                      "lwj.%lu", ctx->id) < 0) {
-        log_fatal (ctx, 1, "kvs_get_dir (lwj.%lu): %s\n",
+        log_fatal (ctx, 1, "kvs_get_dir (lwj.%lu): %s",
                    ctx->id, strerror (errno));
     }
 
@@ -752,21 +762,20 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
      *
      */
     if (kvsdir_isdir (ctx->kvs, "rank")) {
-        log_msg (ctx, "Found kvs 'rank' dir");
         int rc = kvsdir_get_dir (ctx->kvs,
                                  &ctx->resources,
                                  "rank.%d", ctx->noderank);
         if (rc < 0) {
             if (errno == ENOENT)
                 return (-1);
-            log_fatal (ctx, 1, "kvs_get_dir (lwj.%lu.rank.%d): %s\n",
+            log_fatal (ctx, 1, "kvs_get_dir (lwj.%lu.rank.%d): %s",
                         ctx->id, ctx->noderank, strerror (errno));
         }
     }
 
     kvs_get_string (ctx->flux, "config.wrexec.lua_pattern", &ctx->lua_pattern);
 
-    log_msg (ctx, "initializing from CMB: rank=%d", ctx->noderank);
+    log_debug (ctx, "initializing from CMB: rank=%d", ctx->noderank);
     if (prog_ctx_load_lwj_info (ctx, ctx->id) < 0)
         log_fatal (ctx, 1, "Failed to load lwj info");
 
@@ -831,17 +840,17 @@ void send_job_state_event (struct prog_ctx *ctx, const char *state)
 
     if ((asprintf (&json, "{\"lwj\":%ld}", ctx->id) < 0)
         || (asprintf (&topic, "wreck.state.%s", state) < 0)) {
-        log_err (ctx, "failed to create state change event: %s\n", state);
+        log_err (ctx, "failed to create state change event: %s", state);
         goto out;
     }
 
     if ((msg = flux_event_encode (topic, json)) == NULL) {
-        log_err (ctx, "flux_event_encode: %s\n", strerror (errno));
+        log_err (ctx, "flux_event_encode: %s", strerror (errno));
         goto out;
     }
 
     if (flux_send (ctx->flux, msg, 0) < 0)
-        log_err (ctx, "flux_send event: %s\n", strerror (errno));
+        log_err (ctx, "flux_send event: %s", strerror (errno));
 
     flux_msg_destroy (msg);
 out:
@@ -858,7 +867,7 @@ int update_job_state (struct prog_ctx *ctx, const char *state)
 
     assert (ctx->nodeid == 0);
 
-    log_msg (ctx, "updating job state to %s", state);
+    log_debug (ctx, "updating job state to %s", state);
 
     if (kvsdir_put_string (ctx->kvs, "state", state) < 0)
         return (-1);
@@ -988,7 +997,7 @@ int send_exit_message (struct task_info *t)
     }
 
     if (prog_ctx_getopt (ctx, "commit-on-task-exit")) {
-        log_msg (ctx, "commit on task exit\n");
+        log_debug (ctx, "kvs_commit on task exit");
         if (kvs_commit (ctx->flux) < 0)
             return (-1);
     }
@@ -1051,7 +1060,6 @@ int exec_command (struct prog_ctx *ctx, int i)
         log_fatal (ctx, 1, "fork: %s", strerror (errno));
     if (cpid == 0) {
         child_io_setup (t);
-        //log_msg (ctx, "in child going to exec %s", ctx->argv [0]);
 
         if (sigmask_unblock_all () < 0)
             fprintf (stderr, "sigprocmask: %s\n", strerror (errno));
@@ -1091,7 +1099,7 @@ int exec_command (struct prog_ctx *ctx, int i)
      *  Parent: Close child fds
      */
     close_child_fds (t);
-    log_msg (ctx, "in parent: child pid[%d] = %d", i, cpid);
+    log_debug (ctx, "task%d: pid %d (%s): started", i, cpid, ctx->argv [0]);
     t->pid = cpid;
 
 
@@ -1218,7 +1226,8 @@ static kvsdir_t *prog_ctx_kvsdir (struct prog_ctx *ctx)
     if (!t->kvs) {
         if (kvs_get_dir (prog_ctx_flux_handle (ctx),
             &t->kvs, "lwj.%ld.%d", ctx->id, t->id) < 0)
-            log_err (ctx, "kvs_get_dir: %s", strerror (errno));
+            log_err (ctx, "kvs_get_dir (lwj.%ld.%d): %s",
+                     ctx->id, t->id, strerror (errno));
     }
     return (t->kvs);
 }
@@ -1347,7 +1356,7 @@ static int wreck_lua_init (struct prog_ctx *ctx)
     luaL_setfuncs (L, environ_methods, 0);
     l_push_prog_ctx (L, ctx);
     lua_setglobal (L, "wreck");
-    log_msg (ctx, "reading lua files from %s\n", ctx->lua_pattern);
+    log_debug (ctx, "reading lua files from %s", ctx->lua_pattern);
     lua_stack_append_file (ctx->lua_stack, ctx->lua_pattern);
     return (0);
 }
@@ -1356,7 +1365,7 @@ int task_exit (struct task_info *t, int status)
 {
     struct prog_ctx *ctx = t->ctx;
 
-    log_msg (ctx, "task%d: pid %d (%s) exited with status 0x%04x",
+    log_debug (ctx, "task%d: pid %d (%s) exited with status 0x%04x",
             t->id, t->pid, ctx->argv [0], status);
     t->status = status;
     t->exited = 1;
@@ -1365,7 +1374,7 @@ int task_exit (struct task_info *t, int status)
     lua_stack_call (ctx->lua_stack, "rexecd_task_exit");
 
     if (send_exit_message (t) < 0)
-        log_msg (ctx, "Sending exit message failed!");
+        log_err (ctx, "Sending exit message failed!");
     return (0);
 }
 
@@ -1377,7 +1386,7 @@ int start_trace_task (struct task_info *t)
 
     int rc = waitpid (pid, &status, WUNTRACED);
     if (rc < 0) {
-        log_err (ctx, "start_trace: waitpid: %s\n", strerror (errno));
+        log_err (ctx, "start_trace: waitpid: %s", strerror (errno));
         return (-1);
     }
     if (WIFSTOPPED (status)) {
@@ -1385,11 +1394,11 @@ int start_trace_task (struct task_info *t)
          *  Send SIGSTOP and detach from process.
          */
         if (kill (pid, SIGSTOP) < 0) {
-            log_err (ctx, "start_trace: kill: %s\n", strerror (errno));
+            log_err (ctx, "start_trace: kill: %s", strerror (errno));
             return (-1);
         }
         if (ptrace (PTRACE_DETACH, pid, NULL, 0) < 0) {
-            log_err (ctx, "start_trace: ptrace: %s\n", strerror (errno));
+            log_err (ctx, "start_trace: ptrace: %s", strerror (errno));
             return (-1);
         }
         return (0);
@@ -1399,11 +1408,11 @@ int start_trace_task (struct task_info *t)
      *  Otherwise, did task exit?
      */
     if (WIFEXITED (status)) {
-        log_err (ctx, "start_trace: task unexpectedly exited\n");
+        log_err (ctx, "start_trace: task unexpectedly exited");
         task_exit (t, status);
     }
     else
-        log_err (ctx, "start_trace: Unexpected status 0x%04x\n", status);
+        log_err (ctx, "start_trace: Unexpected status 0x%04x", status);
 
     return (-1);
 }
@@ -1464,12 +1473,14 @@ int reap_child (struct prog_ctx *ctx)
         return (0);
 
     if (wpid < (pid_t) 0) {
-        log_err (ctx, "waitpid ()");
+        /* Ignore ECHILD (No child processes) */
+        if (errno != ECHILD)
+            log_err (ctx, "waitpid: %s", strerror (errno));
         return (0);
     }
 
     if ((t = pid_to_task (ctx, wpid)) == NULL)
-        return log_err (ctx, "Failed to find task for pid %d\n", wpid);
+        return log_err (ctx, "Failed to find task for pid %d", wpid);
 
     task_exit (t, status);
 
@@ -1497,11 +1508,11 @@ int signal_cb (flux_t f, flux_fd_watcher_t *fdw,
 
     n = read (fd, &si, sizeof (si));
     if (n < 0) {
-        log_err (ctx, "read");
+        log_err (ctx, "signal_cb: read: %s", strerror (errno));
         return (0);
     }
     else if (n != sizeof (si)) {
-        log_err (ctx, "partial read?");
+        log_err (ctx, "signal_cb: partial read?");
         return (0);
     }
 
@@ -1571,7 +1582,7 @@ int prog_ctx_reactor_init (struct prog_ctx *ctx)
                       strerror (errno));
 
     if (flux_event_subscribe (ctx->flux, ctx->topic) < 0)
-        return log_err (ctx, "flux_event_subscribe (%s): %s\n",
+        return log_err (ctx, "flux_event_subscribe (%s): %s",
                         ctx->topic, strerror (errno));
 
     for (i = 0; i < ctx->nprocs; i++)
@@ -1683,7 +1694,7 @@ int main (int ac, char **av)
         log_err (ctx, "flux_reactor_start: %s", strerror (errno));
 
     rexec_state_change (ctx, "complete");
-    log_msg (ctx, "exiting...");
+    log_msg (ctx, "job complete. exiting...");
 
     prog_ctx_destroy (ctx);
 

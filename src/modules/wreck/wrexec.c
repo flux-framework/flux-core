@@ -304,7 +304,7 @@ int lwj_targets_this_node (struct rexec_ctx *ctx, int64_t id)
      *   without resource assignment so we run everywhere
      */
     if (kvs_get_dir (ctx->h, &tmp, "lwj.%ld.rank", id) < 0) {
-        flux_log (ctx->h, LOG_INFO, "No dir lwj.%ld.rank: %s\n", id, strerror (errno));
+        flux_log (ctx->h, LOG_INFO, "No dir lwj.%ld.rank: %s", id, strerror (errno));
         return (1);
     }
 

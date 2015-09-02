@@ -62,4 +62,14 @@ test_expect_success 'wreck: signaling wreckrun works' '
 	kill -INT $q &&
 	test_expect_code 137 wait $q
 '
+flux kvs dir -r resource >/dev/null 2>&1 && test_set_prereq RES_HWLOC
+test_expect_success RES_HWLOC 'wreckrun: oversubscription of tasks' '
+	run_timeout 15 flux wreckrun -v -n$(($(nproc)*4+1)) /bin/true
+'
+test_expect_success 'wreckrun: uneven distribution with -n, -N' '
+	run_timeout 10 flux wreckrun -N4 -n5 /bin/true
+'
+test_expect_success 'wreckrun: too many nodes requested fails' '
+	test_expect_code 1 run_timeout 10 flux wreckrun -N5 hostname
+'
 test_done
