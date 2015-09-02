@@ -56,3 +56,4 @@ after_success:
 
 after_failure:
  - find flux-core-[0-9]* -name *.output | xargs -i sh -c 'printf "\033[31mFound {}\033[39m\n";cat {}'
+ - find flux-core-[0-9]* -name *.cmbd.log | xargs -i sh -c 'printf "\033[31mFound {}\033[39m\n";cat {}'
