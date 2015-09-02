@@ -166,12 +166,9 @@ static void boot_local (ctx_t *ctx);
 
 static const struct flux_handle_ops broker_handle_ops;
 
-#define OPTIONS "t:vqR:S:p:M:X:L:N:Pk:e:r:s:c:nH:O:x:T:g:D:"
+#define OPTIONS "vqR:S:M:X:L:N:Pk:s:c:nH:O:x:T:g:D:"
 static const struct option longopts[] = {
     {"sid",             required_argument,  0, 'N'},
-    {"child-uri",       required_argument,  0, 't'},
-    {"parent-uri",      required_argument,  0, 'p'},
-    {"right-uri",       required_argument,  0, 'r'},
     {"verbose",         no_argument,        0, 'v'},
     {"quiet",           no_argument,        0, 'q'},
     {"security",        required_argument,  0, 's'},
@@ -184,7 +181,6 @@ static const struct option longopts[] = {
     {"logdest",         required_argument,  0, 'L'},
     {"pmi-boot",        no_argument,        0, 'P'},
     {"k-ary",           required_argument,  0, 'k'},
-    {"event-uri",       required_argument,  0, 'e'},
     {"command",         required_argument,  0, 'c'},
     {"noshell",         no_argument,        0, 'n'},
     {"heartrate",       required_argument,  0, 'H'},
@@ -198,10 +194,6 @@ static void usage (void)
 {
     fprintf (stderr,
 "Usage: flux-broker OPTIONS [module:key=val ...]\n"
-" -t,--child-uri URI           Set child URI to bind and receive requests\n"
-" -p,--parent-uri URI          Set parent URI to connect and send requests\n"
-" -e,--event-uri URI           Set event URI (pub: rank 0, sub: rank > 0)\n"
-" -r,--right-uri URI           Set right (rank-request) URI\n"
 " -v,--verbose                 Be annoyingly verbose\n"
 " -q,--quiet                   Be mysteriously taciturn\n"
 " -R,--rank N                  Set broker rank (0...size-1)\n"
@@ -286,13 +278,6 @@ int main (int argc, char *argv[])
                 else
                     msg_exit ("--security argument must be none|plain|curve");
                 break;
-            case 't':   /* --child-uri URI[,URI,...] */
-                overlay_set_child (ctx.overlay, "%s", optarg);
-                break;
-            case 'p': { /* --parent-uri URI */
-                overlay_push_parent (ctx.overlay, "%s", optarg);
-                break;
-            }
             case 'v':   /* --verbose */
                 ctx.verbose = true;
                 break;
@@ -329,12 +314,6 @@ int main (int argc, char *argv[])
                 ctx.k_ary = strtoul (optarg, NULL, 10);
                 if (ctx.k_ary < 0)
                     usage ();
-                break;
-            case 'e':   /* --event-uri URI */
-                overlay_set_event (ctx.overlay, "%s", optarg);
-                break;
-            case 'r':   /* --right-uri */
-                overlay_set_right (ctx.overlay, "%s", optarg);
                 break;
             case 'c':   /* --command CMD */
                 if (ctx.shell_cmd)
@@ -482,12 +461,6 @@ int main (int argc, char *argv[])
      * Initialize child socket.
      */
     if (ctx.boot_pmi) {
-        if (overlay_get_child (ctx.overlay))
-            msg_exit ("--child-uri should not be specified with --pmi-boot");
-        if (overlay_get_parent (ctx.overlay))
-            msg_exit ("--parent-uri should not be specified with --pmi-boot");
-        if (overlay_get_event (ctx.overlay))
-            msg_exit ("--event-uri should not be specified with --pmi-boot");
         if (ctx.sid)
             msg_exit ("--session-id should not be specified with --pmi-boot");
         boot_pmi (&ctx);
@@ -525,8 +498,6 @@ int main (int argc, char *argv[])
         msg_exit ("rank 0 must NOT have parent");
     if (ctx.rank > 0 && !overlay_get_parent (ctx.overlay))
         msg_exit ("rank > 0 must have parents");
-    if (ctx.size > 1 && !overlay_get_event (ctx.overlay))
-        msg_exit ("--event-uri is required for size > 1");
 
     overlay_set_rank (ctx.overlay, ctx.rank);
 
