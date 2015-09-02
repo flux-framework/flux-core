@@ -324,7 +324,7 @@ local s, err = f:sighandler {
     sigmask = { posix.SIGALRM },
     handler = function (f, s, sig)
         wreck:say ("Killed by SIGALRM: state = %s, nio = %d\n", state, nio)
-	os.exit (1)
+        os.exit (128+posix.SIGALRM)
     end
 }
 
