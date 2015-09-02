@@ -202,7 +202,7 @@ const char * prog_ctx_getopt (struct prog_ctx *ctx, const char *opt)
 
 int prog_ctx_setopt (struct prog_ctx *ctx, const char *opt, const char *val)
 {
-    log_debug (ctx, "Setting option %s = %s\n", opt, val);
+    log_debug (ctx, "Setting option %s = %s", opt, val);
     zhash_insert (ctx->options, opt, strdup (val));
     zhash_freefn (ctx->options, opt, (zhash_free_fn *) free);
     return (0);
@@ -261,7 +261,7 @@ int task_kz_put_lines (struct task_info *t, kz_t *kz, const char *data, int len)
     for (i = 0; i < count; i++) {
         line[i] = sdscatlen (line[i], "\n", 1); /* replace newline */
         if (kz_put (kz, line[i], sdslen (line[i])) < 0)
-            log_err (t->ctx, "kz_put (%s): %s\n", line[i], strerror (errno));
+            log_err (t->ctx, "kz_put (%s): %s", line[i], strerror (errno));
     }
 
     sdsfreesplitres (line, count);
@@ -510,7 +510,7 @@ struct prog_ctx * prog_ctx_create (void)
     ctx->envref = -1;
 
     if (get_executable_path (ctx->exedir, sizeof (ctx->exedir)) < 0)
-        log_fatal (ctx, 1, "get_executable_path: %s\n", strerror (errno));
+        log_fatal (ctx, 1, "get_executable_path: %s", strerror (errno));
 
     ctx->lua_stack = lua_stack_create ();
     ctx->lua_pattern = xstrdup (WRECK_LUA_PATTERN);
@@ -613,11 +613,11 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
             break;
         }
         if ((ncores = cores_on_node (ctx, nodeids[j])) < 0)
-            log_fatal (ctx, 1, "Failed to get ncores for node%d\n", nodeids[j]);
+            log_fatal (ctx, 1, "Failed to get ncores for node%d", nodeids[j]);
         ctx->globalbasis += ncores;
     }
     free (nodeids);
-    log_debug (ctx, "lwj.%ld: node%d: basis=%d\n",
+    log_debug (ctx, "lwj.%ld: node%d: basis=%d",
         ctx->id, ctx->nodeid, ctx->globalbasis);
     return (0);
 }
@@ -642,7 +642,7 @@ int prog_ctx_options_init (struct prog_ctx *ctx)
         }
 
         if (!(v = json_tokener_parse (json_str))) {
-            log_err (ctx, "failed to parse json for option '%s'\n", opt);
+            log_err (ctx, "failed to parse json for option '%s'", opt);
             free (json_str);
             continue;
         }
@@ -695,14 +695,14 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
     prog_ctx_get_nodeinfo (ctx);
 
     if (kvsdir_get_int (ctx->kvs, "ntasks", &ctx->total_ntasks) < 0)
-        log_fatal (ctx, 1, "Failed to get ntasks from kvs\n");
+        log_fatal (ctx, 1, "Failed to get ntasks from kvs");
 
     /*
      *  See if we've got 'cores' assigned for this host
      */
     if (ctx->resources) {
         if (kvsdir_get_int (ctx->resources, "cores", &ctx->nprocs) < 0)
-            log_fatal (ctx, 1, "Failed to get resources for this node\n");
+            log_fatal (ctx, 1, "Failed to get resources for this node");
     }
     else if (kvsdir_get_int (ctx->kvs, "tasks-per-node", &ctx->nprocs) < 0)
             ctx->nprocs = 1;
@@ -746,7 +746,7 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
 
     if (kvs_get_dir (ctx->flux, &ctx->kvs,
                      "lwj.%lu", ctx->id) < 0) {
-        log_fatal (ctx, 1, "kvs_get_dir (lwj.%lu): %s\n",
+        log_fatal (ctx, 1, "kvs_get_dir (lwj.%lu): %s",
                    ctx->id, strerror (errno));
     }
 
@@ -768,7 +768,7 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
         if (rc < 0) {
             if (errno == ENOENT)
                 return (-1);
-            log_fatal (ctx, 1, "kvs_get_dir (lwj.%lu.rank.%d): %s\n",
+            log_fatal (ctx, 1, "kvs_get_dir (lwj.%lu.rank.%d): %s",
                         ctx->id, ctx->noderank, strerror (errno));
         }
     }
@@ -840,17 +840,17 @@ void send_job_state_event (struct prog_ctx *ctx, const char *state)
 
     if ((asprintf (&json, "{\"lwj\":%ld}", ctx->id) < 0)
         || (asprintf (&topic, "wreck.state.%s", state) < 0)) {
-        log_err (ctx, "failed to create state change event: %s\n", state);
+        log_err (ctx, "failed to create state change event: %s", state);
         goto out;
     }
 
     if ((msg = flux_event_encode (topic, json)) == NULL) {
-        log_err (ctx, "flux_event_encode: %s\n", strerror (errno));
+        log_err (ctx, "flux_event_encode: %s", strerror (errno));
         goto out;
     }
 
     if (flux_send (ctx->flux, msg, 0) < 0)
-        log_err (ctx, "flux_send event: %s\n", strerror (errno));
+        log_err (ctx, "flux_send event: %s", strerror (errno));
 
     flux_msg_destroy (msg);
 out:
@@ -997,7 +997,7 @@ int send_exit_message (struct task_info *t)
     }
 
     if (prog_ctx_getopt (ctx, "commit-on-task-exit")) {
-        log_debug (ctx, "kvs_commit on task exit\n");
+        log_debug (ctx, "kvs_commit on task exit");
         if (kvs_commit (ctx->flux) < 0)
             return (-1);
     }
@@ -1356,7 +1356,7 @@ static int wreck_lua_init (struct prog_ctx *ctx)
     luaL_setfuncs (L, environ_methods, 0);
     l_push_prog_ctx (L, ctx);
     lua_setglobal (L, "wreck");
-    log_debug (ctx, "reading lua files from %s\n", ctx->lua_pattern);
+    log_debug (ctx, "reading lua files from %s", ctx->lua_pattern);
     lua_stack_append_file (ctx->lua_stack, ctx->lua_pattern);
     return (0);
 }
@@ -1386,7 +1386,7 @@ int start_trace_task (struct task_info *t)
 
     int rc = waitpid (pid, &status, WUNTRACED);
     if (rc < 0) {
-        log_err (ctx, "start_trace: waitpid: %s\n", strerror (errno));
+        log_err (ctx, "start_trace: waitpid: %s", strerror (errno));
         return (-1);
     }
     if (WIFSTOPPED (status)) {
@@ -1394,11 +1394,11 @@ int start_trace_task (struct task_info *t)
          *  Send SIGSTOP and detach from process.
          */
         if (kill (pid, SIGSTOP) < 0) {
-            log_err (ctx, "start_trace: kill: %s\n", strerror (errno));
+            log_err (ctx, "start_trace: kill: %s", strerror (errno));
             return (-1);
         }
         if (ptrace (PTRACE_DETACH, pid, NULL, 0) < 0) {
-            log_err (ctx, "start_trace: ptrace: %s\n", strerror (errno));
+            log_err (ctx, "start_trace: ptrace: %s", strerror (errno));
             return (-1);
         }
         return (0);
@@ -1408,11 +1408,11 @@ int start_trace_task (struct task_info *t)
      *  Otherwise, did task exit?
      */
     if (WIFEXITED (status)) {
-        log_err (ctx, "start_trace: task unexpectedly exited\n");
+        log_err (ctx, "start_trace: task unexpectedly exited");
         task_exit (t, status);
     }
     else
-        log_err (ctx, "start_trace: Unexpected status 0x%04x\n", status);
+        log_err (ctx, "start_trace: Unexpected status 0x%04x", status);
 
     return (-1);
 }
@@ -1480,7 +1480,7 @@ int reap_child (struct prog_ctx *ctx)
     }
 
     if ((t = pid_to_task (ctx, wpid)) == NULL)
-        return log_err (ctx, "Failed to find task for pid %d\n", wpid);
+        return log_err (ctx, "Failed to find task for pid %d", wpid);
 
     task_exit (t, status);
 
@@ -1582,7 +1582,7 @@ int prog_ctx_reactor_init (struct prog_ctx *ctx)
                       strerror (errno));
 
     if (flux_event_subscribe (ctx->flux, ctx->topic) < 0)
-        return log_err (ctx, "flux_event_subscribe (%s): %s\n",
+        return log_err (ctx, "flux_event_subscribe (%s): %s",
                         ctx->topic, strerror (errno));
 
     for (i = 0; i < ctx->nprocs; i++)

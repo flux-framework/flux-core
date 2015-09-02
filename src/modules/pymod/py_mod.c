@@ -115,7 +115,7 @@ int mod_main (flux_t h, int argc, char **argv)
         PyObject_Print(search_path, stderr, 0);
     }
 
-    flux_log(h, LOG_INFO, "loading python module named: %s\n", module_name);
+    flux_log(h, LOG_INFO, "loading python module named: %s", module_name);
 
     PyObject *module = PyImport_ImportModule("flux.core");
     if(!module){

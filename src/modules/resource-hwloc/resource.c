@@ -254,7 +254,7 @@ static void load_cb (flux_t h,
 
     kvs_fence (h, "resource_hwloc_loaded", flux_size (h));
 
-    flux_log (h, LOG_DEBUG, "resource_hwloc: loaded: %d\n", rank);
+    flux_log (h, LOG_DEBUG, "resource_hwloc: loaded: %d", rank);
 
     ctx->loaded = true;
 }
@@ -305,7 +305,7 @@ static void topo_cb (flux_t h,
         hwloc_topology_destroy (rank);
         free (xml);
 
-        flux_log (h, LOG_INFO, "resource_hwloc: loaded from %s\n", base_key);
+        flux_log (h, LOG_INFO, "resource_hwloc: loaded from %s", base_key);
     }
 
     kvsitr_destroy (base_iter);
