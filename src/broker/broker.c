@@ -396,11 +396,6 @@ int main (int argc, char *argv[])
         if (kvs_conf_load (h, ctx.cf) < 0)
             err_exit ("could not load config from KVS");
         flux_close (h);
-        /* Stash FLUX_URI value for later use, but unset it in the environment
-         * so a connection to the enclosing instance is not made inadvertantly.
-         */
-        ctx.parent_uri = xstrdup (getenv ("FLUX_URI"));
-        unsetenv ("FLUX_URI");
     }
 
     /* Arrange to load config entries into kvs config.*
@@ -475,6 +470,15 @@ int main (int argc, char *argv[])
     }
     if (!ctx.sid)
         ctx.sid = xstrdup ("0");
+
+    /* Now that PMI is done with it:
+     * stash FLUX_URI value for later use, but unset it in the environment
+     * so a connection to the enclosing instance is not made inadvertantly.
+     */
+    if (getenv ("FLUX_URI")) {
+        ctx.parent_uri = xstrdup (getenv ("FLUX_URI"));
+        unsetenv ("FLUX_URI");
+    }
 
     /* Now that we know the rank (either from command line or PMI,
      * create a subdirectory of socket_dir for the sockets and pidfile
