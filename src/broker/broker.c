@@ -118,6 +118,7 @@ typedef struct {
     /* Bootstrap
      */
     bool boot_pmi;
+    bool enable_epgm;
     int k_ary;
     hello_t *hello;
     double hello_timeout;
@@ -166,7 +167,7 @@ static void boot_local (ctx_t *ctx);
 
 static const struct flux_handle_ops broker_handle_ops;
 
-#define OPTIONS "vqR:S:M:X:L:N:Pk:s:c:nH:O:x:T:g:D:"
+#define OPTIONS "vqR:S:M:X:L:N:Pk:s:c:nH:O:x:T:g:D:E"
 static const struct option longopts[] = {
     {"sid",             required_argument,  0, 'N'},
     {"verbose",         no_argument,        0, 'v'},
@@ -187,6 +188,7 @@ static const struct option longopts[] = {
     {"timeout",         required_argument,  0, 'T'},
     {"shutdown-grace",  required_argument,  0, 'g'},
     {"socket-directory",required_argument,  0, 'D'},
+    {"enable-epgm",     required_argument,  0, 'E'},
     {0, 0, 0, 0},
 };
 
@@ -213,6 +215,7 @@ static void usage (void)
 " -T,--timeout SECS            Set wireup timeout in seconds (rank 0 only)\n"
 " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
 " -D,--socket-directory DIR    Create ipc sockets in DIR (local bootstrap)\n"
+" -E,--enable-epgm             Enable EPGM for events (PMI bootstrap)\n"
 );
     exit (1);
 }
@@ -344,6 +347,9 @@ int main (int argc, char *argv[])
                 ctx.socket_dir = xstrdup (optarg);
                 break;
             }
+            case 'E': /* --enable-epgm */
+                ctx.enable_epgm = true;
+                break;
             default:
                 usage ();
         }
@@ -784,7 +790,7 @@ static void rank0_shell (ctx_t *ctx)
     subprocess_run (ctx->shell);
 }
 
-/* N.B. If there are multiple nodes and multiple brokers per node, the
+/* N.B. If using epgm with multiple brokers per node, the
  * lowest rank in each clique will subscribe to the epgm:// socket
  * and relay events to an ipc:// socket for the other ranks in the
  * clique.  This is required due to a limitation of epgm.
@@ -792,9 +798,9 @@ static void rank0_shell (ctx_t *ctx)
 static void boot_pmi (ctx_t *ctx)
 {
     pmi_t *pmi = pmi_init (NULL);
-    int relay_rank = pmi_relay_rank (pmi);
-    int right_rank = pmi_right_rank (pmi);
+    int relay_rank = -1, right_rank, parent_rank;
     char ipaddr[HOST_NAME_MAX + 1];
+    const char *child_uri;
 
     ctx->size = pmi_size (pmi);
     ctx->rank = pmi_rank (pmi);
@@ -805,35 +811,45 @@ static void boot_pmi (ctx_t *ctx)
     ipaddr_getprimary (ipaddr, sizeof (ipaddr));
     overlay_set_child (ctx->overlay, "tcp://%s:*", ipaddr);
 
-    if (relay_rank >= 0 && ctx->rank == relay_rank)
-        overlay_set_relay (ctx->overlay, "ipc://*");
+    if (ctx->enable_epgm) {
+        relay_rank = pmi_relay_rank (pmi);
+        if (relay_rank >= 0 && ctx->rank == relay_rank)
+            overlay_set_relay (ctx->overlay, "ipc://*");
+    }
 
     if (overlay_bind (ctx->overlay) < 0) /* expand URI wildcards */
         err_exit ("overlay_bind failed");   /* function is idempotent */
 
-    const char *child_uri = overlay_get_child (ctx->overlay);
-    const char *relay_uri = overlay_get_relay (ctx->overlay);
-
-    if (child_uri)
+    if ((child_uri = overlay_get_child (ctx->overlay)))
         pmi_put_uri (pmi, ctx->rank, child_uri);
-    if (relay_uri)
-        pmi_put_relay (pmi, ctx->rank, relay_uri);
+
+    if (ctx->enable_epgm) {
+        const char *relay_uri;
+        if ((relay_uri = overlay_get_relay (ctx->overlay)))
+            pmi_put_relay (pmi, ctx->rank, relay_uri);
+    }
 
     /* Puts are complete, now we synchronize and begin our gets.
      */
     pmi_fence (pmi);
 
     if (ctx->rank > 0) {
-        int prank = ctx->k_ary == 0 ? 0 : (ctx->rank - 1) / ctx->k_ary;
-        overlay_push_parent (ctx->overlay, "%s", pmi_get_uri (pmi, prank));
+        parent_rank = ctx->k_ary == 0 ? 0 : (ctx->rank - 1) / ctx->k_ary;
+        overlay_push_parent (ctx->overlay, "%s",
+                             pmi_get_uri (pmi, parent_rank));
     }
+    right_rank = pmi_right_rank (pmi);
     overlay_set_right (ctx->overlay, "%s", pmi_get_uri (pmi, right_rank));
 
-    if (relay_rank >= 0 && ctx->rank != relay_rank) {
-        overlay_set_event (ctx->overlay, "%s", pmi_get_relay (pmi, relay_rank));
-    } else {
-        int p = 5000 + pmi_jobid (pmi) % 1024;
-        overlay_set_event (ctx->overlay, "epgm://%s;239.192.1.1:%d", ipaddr, p);
+    if (ctx->enable_epgm) {
+        if (relay_rank >= 0 && ctx->rank != relay_rank) {
+            overlay_set_event (ctx->overlay, "%s",
+                               pmi_get_relay (pmi, relay_rank));
+        } else {
+            int port = 5000 + pmi_jobid (pmi) % 1024;
+            overlay_set_event (ctx->overlay, "epgm://%s;239.192.1.1:%d",
+                               ipaddr, port);
+        }
     }
 
     pmi_fini (pmi);
