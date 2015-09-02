@@ -54,9 +54,9 @@ local function lwj_return_code (f, wreck, id)
             end
         end
     end
+    local fn = getmetatable (wreck) [ max > 0 and "say" or "verbose" ]
     for s,h in pairs (msgs) do
-        wreck:say ("task%s %s: %s\n",
-                    #h > 1 and "s" or "", tostring (h:sort()), s)
+        fn (wreck, "task%s %s: %s", #h > 1 and "s" or "", tostring (h:sort()), s)
     end
     return max
 end
@@ -119,7 +119,7 @@ local function alloc_tasks_hack (f, wreck, lwj)
     end
 
     wreck.ntasks = tonumber (wreck.ntasks)
-    wreck:say ("Allocating %d tasks across %d available nodes..\n",
+    wreck:verbose ("Allocating %d tasks across %d available nodes..\n",
                 wreck.ntasks, size)
 
     local counts = {}
@@ -141,7 +141,7 @@ local function alloc_tasks_hack (f, wreck, lwj)
         if not r[ntasks] then r[ntasks] = {} end
         table.insert (r[ntasks], i)
     end
-    wreck:say ("tasks per node: %s\n", summarize_tasks_per_node (r))
+    wreck:verbose ("tasks per node: %s\n", summarize_tasks_per_node (r))
     lwj:commit()
 end
 
@@ -191,7 +191,7 @@ end
 --
 local jobreq = wreck:jobreq()
 
-wreck:say ("%4.03fs: Sending LWJ request for %d tasks (cmdline \"%s\")\n",
+wreck:verbose ("%4.03fs: Sending LWJ request for %d tasks (cmdline \"%s\")\n",
     tt:get0(), wreck.ntasks, table.concat (wreck.cmdline, ' '))
 
 --
@@ -206,7 +206,7 @@ if resp.errnum then
     wreck:die ("job.create message failed with errnum=%d\n", resp.errnum)
 end
 
-wreck:say ("%4.03fs: Registered jobid %d\n", tt:get0(), resp.jobid)
+wreck:verbose ("%4.03fs: Registered jobid %d\n", tt:get0(), resp.jobid)
 
 --
 --  Get a handle to this lwj kvsdir:
@@ -223,7 +223,7 @@ if true then
     wreck.nnodes = wreck:getopt ("N")
     wreck.tasks_per_node = wreck:getopt ("t")
     alloc_tasks_hack (f, wreck, lwj)
-    wreck:say ("%-4.03fs: Sending run event\n", tt:get0())
+    wreck:verbose ("%-4.03fs: Sending run event\n", tt:get0())
     local rc,err = f:sendevent ("wrexec.run.%d", resp.jobid)
     if not rc then wreck:die ("sendevent: %s\n", err) end
 else
@@ -242,7 +242,7 @@ local function check_job_completed ()
     if nio <= 0 and (state == "complete" or state == "reaped") then
         local rc = lwj_return_code (f, wreck, resp.jobid)
         if rc == 0 then
-            wreck:say ("All tasks completed successfully.\n");
+            wreck:verbose ("All tasks completed successfully.\n");
         end
         os.exit (rc)
     end
@@ -306,7 +306,7 @@ local kw, err = f:kvswatcher  {
     handler = function (kw, result)
         if result then
             state = result
-            wreck:say ("%-4.03fs: State = %s\n", tt:get0(), result)
+            wreck:verbose ("%-4.03fs: State = %s\n", tt:get0(), result)
             check_job_completed ()
         end
     end
@@ -341,7 +341,7 @@ repeat
     --   Check to see if we should terminate the job now:
     --
     if terminate then
-        wreck:say ("%4.03fs: Killing LWJ %d\n", tt:get0(), resp.jobid)
+        wreck:verbose ("%4.03fs: Killing LWJ %d\n", tt:get0(), resp.jobid)
         local rc,err = f:sendevent ("wreck.%d.kill", resp.jobid)
         if not rc then
             wreck:say ("Error: Failed to send kill event: %s", err)
