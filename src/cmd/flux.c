@@ -436,6 +436,12 @@ void internal_env (flux_conf_t cf, optparse_t p, int ac, char *av[])
         print_environment(cf, "");
 }
 
+void internal_broker (flux_conf_t cf, optparse_t p, int ac, char *av[])
+{
+    const char *path = flux_conf_environment_get(cf, "FLUX_BROKER_PATH");
+    execvp (path, av); /* no return if successful */
+}
+
 struct builtin {
     const char *name;
     const char *doc;
@@ -455,6 +461,12 @@ struct builtin builtin_cmds [] = {
       "Print the flux environment or execute COMMAND inside it",
       "[OPTIONS...] [COMMAND...]",
       internal_env
+    },
+    {
+      "broker",
+      "Run the flux broker",
+      "[OPTIONS...] [COMMAND...]",
+      internal_broker
     },
     { NULL, NULL, NULL, NULL },
 };
