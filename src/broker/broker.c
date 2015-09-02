@@ -1383,10 +1383,10 @@ static int cmb_getattr_cb (zmsg_t **zmsg, void *arg)
         val = ctx->local_uri;
     else if (!strcmp (name, "parent-uri"))
         val = ctx->parent_uri;
-    else
+    if (!val) {
         errno = ENOENT;
-    if (!val)
         goto done;
+    }
     Jadd_str (out, (char *)name, val);
     rc = flux_json_respond (ctx->h, out, zmsg);
 done:
