@@ -32,6 +32,10 @@ test_expect_success 'wreckrun: propagates current environment' '
 	  run_timeout 5 flux wreckrun -N1 -n1 env ) | \
            grep "MY_UNLIKELY_ENV=0xdeadbeef"
 '
+test_expect_success 'wreckrun: does not propagate FLUX_URI' '
+	run_timeout 5 flux wreckrun -n4 -N4 printenv FLUX_URI >uri_output &&
+	test `sort uri_output | uniq | wc -l` -eq 4
+'
 test_expect_success 'wreckrun: does not drop output' '
 	for i in `seq 0 100`; do 
 		base64 /dev/urandom | head -c77
