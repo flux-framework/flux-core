@@ -5,32 +5,21 @@ FLUX-START(1)
 
 NAME
 ----
-flux-start - bootstrap a Flux comms session
+flux-start - bootstrap a local Flux instance
 
 
 SYNOPSIS
 --------
-*flux* *start* ['OPTIONS'] [command ...]
+*flux* *start* ['OPTIONS'] [initial-program [args...]]
 
 
 DESCRIPTION
 -----------
-flux-start(1) launches a Flux comms session using SLURM or by executing
-Flux message brokers directly.  If a command is specified, the rank 0
-broker will execute it, then the session terminates.  Otherwise, rank 0
-will spawn an interactive shell where flux commands can be issued, and
-when the shell exits, the session terminates.
+flux-start(1) launches a Flux instance by starting
+Flux message brokers local, as children of flux-start(1).
+The brokers use UNIX domain sockets to communicate.
 
-In direct mode, all the message brokers are launched on the same node,
-as children of flux-start(1).  The brokers use UNIX domain sockets
-to communicate.
-
-In SLURM mode, message brokers use PMI to exchange socket info.
-TCP and EPGM are used to communicate between nodes.  If multiple brokers
-per node are spawned, UNIX domain sockets will be used to communicate
-within nodes.
-
-Note: in order to launch a Flux comms session, you must have generated
+Note: in order to launch a Flux instance, you must have generated
 long-term CURVE keys using *flux-keygen*.
 
 OPTIONS
@@ -51,22 +40,6 @@ Display commands before executing them.
 
 *-X, --noexec*::
 Don't execute anything.  This option is most useful with -v.
-
-*-S, --slurm*::
-Launch with SLURM.  The default is to launch directly.
-This option is implied if either "--partition" or "--nnodes" is used.
-
-*-p, --partition*='name'::
-Set the SLURM partition.  This option translates directly to the srun
-"--partition=name" option.  It is unnecessary if SLURM is configured
-with a default partition and you want to use that.
-
-*-N, --nnodes*='N'::
-Set the number of nodes to allocate in SLURM.  If 'N' is greater
-than the Flux comms session size, the session size is increased to 'N'
-so that one message broker is launched per node.  If 'N' is less
-than the Flux comms session size, multiple message brokers will be
-launched per node.
 
 
 AUTHOR
