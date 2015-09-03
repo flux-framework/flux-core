@@ -3,7 +3,8 @@ AM_CFLAGS = @GCCWARN@
 AM_CPPFLAGS = \
 	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
-	-DMODULE_PATH=\"$(fluxmoddir)\"
+	-DMODULE_PATH=\"$(fluxmoddir)\" \
+	-DPROGRAM_LIBRARY_PATH=\"$(fluxlibdir)\"
 
 fluxlibexec_PROGRAMS = flux-broker
 

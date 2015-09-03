@@ -26,8 +26,7 @@ Flux message broker.
 The _uri_ scheme (before "://") specifies the "connector"
 that will be used to establish the connection.  The _uri_ path
 (after "://") is parsed by the connector.  If _uri_ is NULL,
-the "local" connector will be used, with path taken from the $FLUX_TMPDIR
-environment variable.
+the value of $FLUX_URI is used, if set.
 
 _flags_ is the logical "or" of zero or more of the following flags:
 
@@ -55,7 +54,7 @@ ERRORS
 ------
 
 EINVAL::
-Some arguments were invalid.
+_uri_ was NULL and $FLUX_URI was not set, or other arguments were invalid.
 
 ENOMEM::
 Out of memory.

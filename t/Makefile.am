@@ -31,6 +31,7 @@ TESTS = \
 	t2000-wreck.t \
 	t2001-jsc.t \
 	t2002-pmi.t \
+	t2003-recurse.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
 	lua/t0003-events.t \
@@ -68,6 +69,7 @@ check_SCRIPTS = \
 	t2000-wreck.t \
 	t2001-jsc.t \
 	t2002-pmi.t \
+	t2003-recurse.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
 	lua/t0003-events.t \

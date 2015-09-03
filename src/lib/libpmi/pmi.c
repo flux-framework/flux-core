@@ -94,6 +94,7 @@ static inline void trace (int flags, const char *fmt, ...)
                   ctx->appnum, ctx->rank, fmt);
         va_start (ap, fmt);
         vfprintf (stdout, buf, ap);
+        fflush (stdout);
         va_end (ap);
     }
 }

@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <libgen.h>
 #include <argz.h>
 #include <flux/core.h>
 
@@ -37,7 +38,6 @@
 #include "src/common/libutil/cleanup.h"
 
 int start_direct (optparse_t p, const char *cmd);
-void start_slurm (optparse_t p, const char *cmd);
 
 const int default_size = 1;
 
@@ -55,15 +55,9 @@ static struct optparse_option opts[] = {
     { .name = "noexec",     .key = 'X', .has_arg = 0,
       .usage = "Don't execute (useful with -v, --verbose)", },
     { .name = "size",       .key = 's', .has_arg = 1, .arginfo = "N",
-      .usage = "Set number of ranks in session", },
+      .usage = "Set number of ranks in new instance", },
     { .name = "broker-opts",.key = 'o', .has_arg = 1, .arginfo = "OPTS",
       .usage = "Add comma-separated broker options, e.g. \"-o,-q\"", },
-    { .name = "nnodes",     .key = 'N', .has_arg = 1, .arginfo = "N",
-      .usage = "Set number of nodes (implies SLURM)", },
-    { .name = "partition",  .key = 'p', .has_arg = 1, .arginfo = "NAME",
-      .usage = "Select partition (implies SLURM)", },
-    { .name = "slurm",      .key = 'S', .has_arg = 0,
-      .usage = "Launch with SLURM", },
     OPTPARSE_TABLE_END,
 };
 
@@ -97,17 +91,13 @@ int main (int argc, char *argv[])
     if (setrlimit (RLIMIT_CORE, &rl) < 0)
         err ("setrlimit: could not remove core file size limit");
 
-    if (optparse_hasopt (p, "slurm") || optparse_hasopt (p, "nnodes")
-                                     || optparse_hasopt (p, "partition"))
-        start_slurm (p, command);
-    else
-        status = start_direct (p, command);
+    status = start_direct (p, command);
 
     if (command)
         free (command);
-
     optparse_destroy (p);
     log_fini ();
+
     return status;
 }
 
@@ -236,6 +226,7 @@ int start_direct (optparse_t p, const char *cmd)
         char **av = NULL;
 
         add_arg (&argz, &argz_len, "%s", broker_path);
+        add_arg (&argz, &argz_len, "--boot-method=LOCAL");
         add_arg (&argz, &argz_len, "--size=%d", size);
         add_arg (&argz, &argz_len, "--rank=%d", rank);
         add_arg (&argz, &argz_len, "--sid=%s", sid);
@@ -243,7 +234,8 @@ int start_direct (optparse_t p, const char *cmd)
         if (broker_opts)
             add_args_sep (&argz, &argz_len, broker_opts, ',');
         if (rank == 0 && cmd)
-            add_arg (&argz, &argz_len, "--command=%s", cmd);
+            add_arg (&argz, &argz_len, "%s", cmd); /* must be last */
+
         if (optparse_hasopt (p, "verbose")) {
             char *s = args_str (argz, argz_len);
             msg ("%d: %s", rank, s);
@@ -303,60 +295,6 @@ int start_direct (optparse_t p, const char *cmd)
     free (pids);
     free (sockdir);
     return (rc);
-}
-
-void start_slurm (optparse_t p, const char *cmd)
-{
-    int size = optparse_get_int (p, "size", default_size);
-    const char *broker_opts = optparse_get_str (p, "broker-opts", NULL);
-    int nnodes = optparse_get_int (p, "nnodes", size);
-    const char *partition = optparse_get_str (p, "partition", NULL);
-    char *broker_path = getenv ("FLUX_BROKER_PATH");
-    char *srun_path = "/usr/bin/srun";
-    char *argz = NULL;
-    size_t argz_len = 0;
-    char **av = NULL;
-
-    if (nnodes > size)
-        size = nnodes;
-    if (!broker_path)
-        msg_exit ("FLUX_BROKER_PATH is not set");
-
-    add_arg (&argz, &argz_len, "%s", srun_path);
-    add_arg (&argz, &argz_len, "--nodes=%d", nnodes);
-    add_arg (&argz, &argz_len, "--ntasks=%d", size);
-    //add_arg (&argz, &argz_len, "--overcommit");
-    add_arg (&argz, &argz_len, "--propagate=CORE");
-    if (!cmd)
-        add_arg (&argz, &argz_len, "--pty");
-    add_arg (&argz, &argz_len, "--job-name=%s", "flux");
-    if (partition)
-        add_arg (&argz, &argz_len, "--partition=%s", partition);
-    add_arg (&argz, &argz_len, "--mpi=none");
-
-    add_arg (&argz, &argz_len, "%s", broker_path);
-    add_arg (&argz, &argz_len, "--pmi-boot");
-    //add_arg (&argz, &argz_len, "--logdest=%s", "broker.log");
-    if (broker_opts)
-        add_args_sep (&argz, &argz_len, broker_opts, ',');
-    if (cmd)
-        add_arg (&argz, &argz_len, "--command=%s", cmd);
-
-    if (optparse_hasopt (p, "verbose")) {
-        char *s = args_str (argz, argz_len);
-        msg ("%s", s);
-        free (s);
-    }
-    av = xzmalloc (sizeof (char *) * (argz_count (argz, argz_len) + 1));
-    argz_extract (argz, argz_len, av);
-    if (!optparse_hasopt (p, "noexec")) {
-        if (execv (av[0], av) < 0)
-            err_exit ("execv %s", av[0]);
-    }
-    if (av)
-        free (av);
-    if (argz)
-        free (argz);
 }
 
 /*

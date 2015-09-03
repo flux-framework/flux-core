@@ -8,6 +8,7 @@ general
     lua_path = @abs_top_srcdir@/src/bindings/lua/?.lua
     python_path = @abs_top_builddir@/src/bindings/python:@abs_top_srcdir@/src/bindings/python/pycotap
     module_path = @abs_top_builddir@/src/modules
+    program_library_path = @abs_top_builddir@/src/lib/libpmi/.libs:@abs_top_builddir@/src/common/.libs
     connector_path = @abs_top_builddir@/src/connectors
     man_path = @abs_top_builddir@/doc
 wrexec
