@@ -184,7 +184,7 @@ static struct boot_method boot_table[] = {
     { NULL, NULL },
 };
 
-#define OPTIONS "vqR:S:M:X:L:N:k:s:c:nH:O:x:T:g:D:Em:"
+#define OPTIONS "vqR:S:M:X:L:N:k:s:c:H:O:x:T:g:D:Em:"
 static const struct option longopts[] = {
     {"sid",             required_argument,  0, 'N'},
     {"verbose",         no_argument,        0, 'v'},
@@ -199,7 +199,6 @@ static const struct option longopts[] = {
     {"logdest",         required_argument,  0, 'L'},
     {"k-ary",           required_argument,  0, 'k'},
     {"command",         required_argument,  0, 'c'},
-    {"noshell",         no_argument,        0, 'n'},
     {"heartrate",       required_argument,  0, 'H'},
     {"timeout",         required_argument,  0, 'T'},
     {"shutdown-grace",  required_argument,  0, 'g'},
@@ -226,7 +225,6 @@ static void usage (void)
 " -s,--security=plain|curve|none    Select security mode (default: curve)\n"
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
 " -c,--command string          Run command on rank 0\n"
-" -n,--noshell                 Do not spawn a shell even if on a tty\n"
 " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
 " -T,--timeout SECS            Set wireup timeout in seconds (rank 0 only)\n"
 " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
@@ -241,7 +239,6 @@ int main (int argc, char *argv[])
 {
     int c;
     ctx_t ctx;
-    bool nopt = false;
     zlist_t *modules, *modopts;
     zhash_t *modexclude;
     char *modpath;
@@ -337,9 +334,6 @@ int main (int argc, char *argv[])
                 if (ctx.shell_cmd)
                     free (ctx.shell_cmd);
                 ctx.shell_cmd = xstrdup (optarg);
-                break;
-            case 'n':   /* --noshell */
-                nopt = true;
                 break;
             case 'H':   /* --heartrate SECS */
                 if (heartbeat_set_ratestr (ctx.heartbeat, optarg) < 0)
@@ -551,7 +545,7 @@ int main (int argc, char *argv[])
     update_proctitle (&ctx);
     update_pidfile (&ctx);
 
-    if (!nopt && ctx.rank == 0) {
+    if (ctx.rank == 0) {
         ctx.shell = subprocess_create (ctx.sm);
         subprocess_set_callback (ctx.shell, rank0_shell_exit_handler, &ctx);
     }
