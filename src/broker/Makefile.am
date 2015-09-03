@@ -27,7 +27,9 @@ flux_broker_SOURCES = \
 	hello.h \
 	hello.c \
 	shutdown.h \
-	shutdown.c
+	shutdown.c \
+	attr.h \
+	attr.c
 
 
 flux_broker_LDADD = \
