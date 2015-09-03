@@ -43,13 +43,8 @@ Force configuration from file instead of KVS.
 Set the directory to be used long-term keys.
 The default is to use the config directory.
 
-*-T, --tmpdir*='PATH'::
-Run commands with 'FLUX_TMPDIR' set to 'PATH'.
-When there are multiple message brokers on a node, this selects
-which API socket to connect to.
-
 *-u, --uri*='URI'::
-Override default URI used to connect to flux-broker.
+Set the URI used to connect to flux-broker.
 
 *-t, --trace-apisock*::
 Trace API socket traffic to 'stderr'.
@@ -126,18 +121,9 @@ setenv FLUX_TRACE_APISOCK::
 Set to "1" if --trace-apisock was specified.  This causes the FLUX_FLAGS_TRACE
 flag to be set when an API socket is established by a sub-command.
 
-setenv FLUX_TMPDIR::
-Set if "--tmpdir" was specified.  The broker sets FLUX_TMPDIR when it
-spawns child processes.  It specifies the directory where the API
-socket for that broker can be found, among other things.  If running a
-Flux sub-command from "outside" of a comms session, e.g. not as a process
-descendant of the broker, you may need to set this to find the correct
-API socket.
-
 setenv FLUX_URI::
 Set if "--uri" was specified.  If flux_open(3)'s uri argument is NULL,
-it substitutes the value of FLUX_URI, if set.  Otherwise, it uses
-"local://$FLUX_TMPDIR".
+it substitutes the value of FLUX_URI, if set.  Otherwise, it fails.
 
 
 AUTHOR
