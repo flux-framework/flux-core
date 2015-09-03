@@ -129,8 +129,8 @@ typedef struct {
      */
     struct subprocess_manager *sm;
 
-    char *shell_cmd;
-    struct subprocess *shell;
+    char *init_shell_cmd;
+    struct subprocess *init_shell;
 } ctx_t;
 
 struct boot_method {
@@ -165,8 +165,8 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
 
 static void update_proctitle (ctx_t *ctx);
 static void update_pidfile (ctx_t *ctx);
-static void rank0_shell (ctx_t *ctx);
-static int rank0_shell_exit_handler (struct subprocess *p, void *arg);
+static void init_shell (ctx_t *ctx);
+static int init_shell_exit_handler (struct subprocess *p, void *arg);
 
 static int create_socketdir (ctx_t *ctx);
 static int create_rankdir (ctx_t *ctx);
@@ -331,9 +331,9 @@ int main (int argc, char *argv[])
                     usage ();
                 break;
             case 'c':   /* --command CMD */
-                if (ctx.shell_cmd)
-                    free (ctx.shell_cmd);
-                ctx.shell_cmd = xstrdup (optarg);
+                if (ctx.init_shell_cmd)
+                    free (ctx.init_shell_cmd);
+                ctx.init_shell_cmd = xstrdup (optarg);
                 break;
             case 'H':   /* --heartrate SECS */
                 if (heartbeat_set_ratestr (ctx.heartbeat, optarg) < 0)
@@ -546,8 +546,8 @@ int main (int argc, char *argv[])
     update_pidfile (&ctx);
 
     if (ctx.rank == 0) {
-        ctx.shell = subprocess_create (ctx.sm);
-        subprocess_set_callback (ctx.shell, rank0_shell_exit_handler, &ctx);
+        ctx.init_shell = subprocess_create (ctx.sm);
+        subprocess_set_callback (ctx.init_shell, init_shell_exit_handler, &ctx);
     }
 
     /* Wire up the overlay.
@@ -670,8 +670,8 @@ static void hello_update_cb (hello_t *hello, void *arg)
     if (hello_complete (hello)) {
         flux_log (ctx->h, LOG_INFO, "nodeset: %s (complete)",
                   hello_get_nodeset (hello));
-        if (ctx->shell)
-            rank0_shell (ctx);
+        if (ctx->init_shell)
+            init_shell (ctx);
     } else  {
         flux_log (ctx->h, LOG_ERR, "nodeset: %s (incomplete)",
                   hello_get_nodeset (hello));
@@ -720,7 +720,7 @@ static void update_pidfile (ctx_t *ctx)
 /* See POSIX 2008 Volume 3 Shell and Utilities, Issue 7
  * Section 2.8.2 Exit status for shell commands (page 2315)
  */
-static int rank0_shell_exit_handler (struct subprocess *p, void *arg)
+static int init_shell_exit_handler (struct subprocess *p, void *arg)
 {
     int rc;
     ctx_t *ctx = (ctx_t *) arg;
@@ -756,7 +756,7 @@ static void path_prepend (char **s1, const char *s2)
     }
 }
 
-static void rank0_shell (ctx_t *ctx)
+static void init_shell (ctx_t *ctx)
 {
     const char *shell = getenv ("SHELL");
     char *ldpath = NULL;
@@ -764,26 +764,27 @@ static void rank0_shell (ctx_t *ctx)
     if (!shell)
         shell = "/bin/bash";
 
-    subprocess_argv_append (ctx->shell, shell);
-    if (ctx->shell_cmd) {
-        subprocess_argv_append (ctx->shell, "-c");
-        subprocess_argv_append (ctx->shell, ctx->shell_cmd);
+    subprocess_argv_append (ctx->init_shell, shell);
+    if (ctx->init_shell_cmd) {
+        subprocess_argv_append (ctx->init_shell, "-c");
+        subprocess_argv_append (ctx->init_shell, ctx->init_shell_cmd);
     }
-    subprocess_set_environ (ctx->shell, environ);
-    subprocess_setenv (ctx->shell, "FLUX_URI", ctx->local_uri, 1);
-    path_prepend (&ldpath, subprocess_getenv (ctx->shell, "LD_LIBRARY_PATH"));
+    subprocess_set_environ (ctx->init_shell, environ);
+    subprocess_setenv (ctx->init_shell, "FLUX_URI", ctx->local_uri, 1);
+    path_prepend (&ldpath, subprocess_getenv (ctx->init_shell,
+                                              "LD_LIBRARY_PATH"));
     path_prepend (&ldpath, PROGRAM_LIBRARY_PATH);
     path_prepend (&ldpath, flux_conf_get (ctx->cf,
                                             "general.program_library_path"));
     if (ldpath) {
-        subprocess_setenv (ctx->shell, "LD_LIBRARY_PATH", ldpath, 1);
+        subprocess_setenv (ctx->init_shell, "LD_LIBRARY_PATH", ldpath, 1);
         free (ldpath);
     }
 
     if (!ctx->quiet)
-        flux_log (ctx->h, LOG_INFO, "starting shell");
+        flux_log (ctx->h, LOG_INFO, "starting initial program");
 
-    subprocess_run (ctx->shell);
+    subprocess_run (ctx->init_shell);
 }
 
 /* The 'ranktmp' dir will contain the broker.pid file and local:// socket.
