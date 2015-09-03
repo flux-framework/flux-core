@@ -71,6 +71,12 @@ test_under_flux() {
       exec flux start --size=${size} ${quiet} "sh $0 ${flags}"
 }
 
+mock_bootstrap_instance() {
+    if test -z "${TEST_UNDER_FLUX_ACTIVE}"; then
+        unset FLUX_URI
+    fi
+}
+
 #
 #  Execute arguments $2-N on rank or ranks specified in arg $1
 #   using the flux-exec utility
