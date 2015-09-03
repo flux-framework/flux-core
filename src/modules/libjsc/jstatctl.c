@@ -286,11 +286,15 @@ static int extract_raw_state (flux_t h, int64_t j, int64_t *s)
 static int extract_raw_pdesc (flux_t h, int64_t j, int64_t i, JSON *o)
 {
     int rc = 0;
+    char *json_str = NULL; 
     char key[20] = {'\0'}; 
     snprintf (key, 20, "lwj.%ld.%ld.procdesc", j, i);
-    if (kvs_get_obj (h, key, o) < 0) {
+    if (kvs_get (h, key, &json_str) < 0 
+            || !(*o = Jfromstr (json_str))) {
         flux_log (h, LOG_ERR, "extract %s: %s", key, strerror (errno));
         rc = -1;
+        if (json_str)
+            free (json_str);
         if (*o) 
             Jput (*o);
     }
@@ -614,6 +618,7 @@ static int update_1pdesc (flux_t h, int r, int64_t j, JSON o, JSON ha, JSON ea)
     int rc = -1;
     JSON d = NULL;
     char key[20] = {'\0'};;
+    char *json_str = NULL;
     const char *hn = NULL, *en = NULL;
     int64_t pid = 0, hindx = 0, eindx = 0, hrank = 0;
 
@@ -624,7 +629,8 @@ static int update_1pdesc (flux_t h, int r, int64_t j, JSON o, JSON ha, JSON ea)
     if (!Jget_ar_str (ea, (int)eindx, &en)) return -1;
 
     snprintf (key, 20, "lwj.%ld.%d.procdesc", j, r);
-    if (kvs_get_obj (h, key, &d) < 0) {
+    if (kvs_get (h, key, &json_str) < 0
+            || !(d = Jfromstr (json_str))) {
         flux_log (h, LOG_ERR, "extract %s: %s", key, strerror (errno));
         goto done;
     }
@@ -637,7 +643,7 @@ static int update_1pdesc (flux_t h, int r, int64_t j, JSON o, JSON ha, JSON ea)
         goto done;
     }
     Jadd_int64 (d, "nodeid", (int64_t)hrank);
-    if (kvs_put_obj (h, key, d) < 0) {
+    if (kvs_put (h, key, Jtostr (d)) < 0) {
         flux_log (h, LOG_ERR, "put %s: %s", key, strerror (errno));
         goto done;
     }
@@ -646,6 +652,8 @@ static int update_1pdesc (flux_t h, int r, int64_t j, JSON o, JSON ha, JSON ea)
 done:
     if (d)
         Jput (d);        
+    if (json_str)
+        free (json_str);
     return rc;
 }
 
@@ -675,20 +683,6 @@ static int update_pdesc (flux_t h, int64_t j, JSON o)
 
 done:
     return rc;
-}
-
-static inline int chk_errnum (flux_t h, int errnum)
-{
-    if (errnum > 0) {
-        /* Ignore ENOENT.  It is expected when this cb is called right
-         * after registration.
-         */
-        if (errnum != ENOENT) {
-            flux_log (h, LOG_ERR, "in a callback  %s", strerror (errnum));
-        }
-        return -1;
-    }
-    return 0;
 }
 
 static JSON get_update_jcb (flux_t h, int64_t j, const char *val)
@@ -743,13 +737,10 @@ static void fixup_newjob_event (flux_t h, int64_t nj)
     jscctx_t *ctx = getctx (h);
 
     snprintf (k, 20, "%ld", nj);
-    if (zhash_lookup (ctx->active_jobs, k))
-        goto done;
 
     /* We fix up ordering problem only when new job
        event hasn't been reported through a kvs watch 
      */
-
     jcb = Jnew ();
     ss = Jnew ();
     Jadd_int64 (jcb, JSC_JOBID, nj);
@@ -777,7 +768,8 @@ static inline void delete_jobinfo (flux_t h, int64_t jobid)
     zhash_delete (ctx->active_jobs, k);
 }
 
-static int job_state_cb (flux_t h, int typemask, flux_msg_t **msg, void *arg)  
+static void job_state_cb (flux_t h, flux_msg_watcher_t *w, 
+                          const flux_msg_t *msg, void *arg)  
 {
     int64_t jobid = -1;
     json_object *o = NULL;
@@ -785,10 +777,10 @@ static int job_state_cb (flux_t h, int typemask, flux_msg_t **msg, void *arg)
     const char *json_str = NULL;
     int len = 12;
 
-    if (flux_msg_get_topic (*msg, &topic) < 0)
+    if (flux_msg_get_topic (msg, &topic) < 0)
         goto done;
 
-    if (flux_event_decode (*msg, NULL, &json_str) < 0
+    if (flux_event_decode (msg, NULL, &json_str) < 0
             || !(o = Jfromstr (json_str))
             || Jget_int64 (o, "lwj", &jobid) < 0) {
         flux_log (h, LOG_ERR, "%s: bad message", __FUNCTION__);
@@ -807,75 +799,19 @@ static int job_state_cb (flux_t h, int typemask, flux_msg_t **msg, void *arg)
     if (strcmp (&(topic[len]), jsc_job_num2state (J_COMPLETE)) == 0)
         delete_jobinfo (h, jobid); 
 done:
-    return 0;
+    return;
 }
-
-static int new_job_cb (const char *key, int64_t val, void *arg, int errnum)
-{
-    int64_t nj = 0;
-    int64_t js = 0;
-    char k[20] = {'\0'};
-    JSON ss = NULL;
-    JSON jcb = NULL;
-    flux_t h = (flux_t) arg;
-    jscctx_t *ctx = getctx (h);
-
-    if (ctx->first_time == 1) {
-        /* watch is invoked immediately and we shouldn't
-         * rely on that event at all.
-         */
-        ctx->first_time = 0;
-        return 0;
-    }
-
-    if (chk_errnum (h, errnum) < 0) return 0;
-
-    flux_log (h, LOG_DEBUG, "new_job_cb invoked: key(%s), val(%ld)", key, val);
-
-    js = J_NULL;
-    nj = val-1;
-    snprintf (k, 20, "%ld", nj);
-
-    if (zhash_lookup (ctx->active_jobs, k)) 
-        goto done;
-
-    /* do this only when no later events had arrived. */
-    flux_log (h, LOG_DEBUG, "jobstate_hdlr registered");
-    jcb = Jnew ();
-    ss = Jnew ();
-    Jadd_int64 (jcb, JSC_JOBID, nj);
-    Jadd_int64 (ss, JSC_STATE_PAIR_OSTATE , (int64_t) js);
-    Jadd_int64 (ss, JSC_STATE_PAIR_NSTATE, (int64_t) js);
-    json_object_object_add (jcb, JSC_STATE_PAIR, ss);
-    if (zhash_insert (ctx->active_jobs, k, (void *)(intptr_t)js) < 0) {
-        flux_log (h, LOG_ERR, "new_job_cb: inserting a job to hash failed");
-        goto done;
-    }
-    if (invoke_cbs (h, nj, jcb, errnum) < 0) {
-        flux_log (h, LOG_ERR, "new_job_cb: failed to invoke callbacks");
-    }
-
-done:
-    /* always return 0 so that reactor won't return */
-    return 0;
-}
-
-static int reg_newjob_hdlr (flux_t h, kvs_set_int64_f func)
-{
-    if (kvs_watch_int64 (h,"lwj.next-id", func, (void *) h) < 0) {
-        flux_log (h, LOG_ERR, "watch lwj.next-id: %s", strerror (errno));
-        return -1;
-    }
-    flux_log (h, LOG_DEBUG, "registered job creation CB");
-    return 0;
-}
-
 
 /******************************************************************************
  *                                                                            *
  *                    Public Job Status and Control API                       *
  *                                                                            *
  ******************************************************************************/
+static struct flux_msghandler htab[] = {
+    { FLUX_MSGTYPE_EVENT,     "wreck.state.*", job_state_cb},
+    { FLUX_MSGTYPE_EVENT,     "jsc.state.*",   job_state_cb},
+      FLUX_MSGHANDLER_TABLE_END
+};
 
 int jsc_notify_status_obj (flux_t h, jsc_handler_obj_f func, void *d)
 {
@@ -885,21 +821,9 @@ int jsc_notify_status_obj (flux_t h, jsc_handler_obj_f func, void *d)
 
     if (!func) 
         goto done;
-    if (reg_newjob_hdlr (h, new_job_cb) == -1) {
-        flux_log (h, LOG_ERR, "jsc_notify_status: reg_newjob_hdlr failed");
-        goto done;
-    } 
     if (flux_event_subscribe (h, "wreck.state.") < 0) {
         flux_log (h, LOG_ERR, "subscribing to job event: %s", 
                      strerror (errno));
-        rc = -1;
-        goto done;
-    }
-    if (flux_msghandler_add (h, FLUX_MSGTYPE_EVENT, "wreck.state.*",
-                             job_state_cb, (void *)ctx) < 0) {
-        flux_log (h, LOG_ERR,
-                  "error registering resource event handler: %s",
-                  strerror (errno));
         rc = -1;
         goto done;
     }
@@ -909,10 +833,8 @@ int jsc_notify_status_obj (flux_t h, jsc_handler_obj_f func, void *d)
         rc = -1;
         goto done;
     }
-    if (flux_msghandler_add (h, FLUX_MSGTYPE_EVENT, "jsc.state.*",
-                             job_state_cb, (void *)ctx) < 0) {
-        flux_log (h, LOG_ERR,
-                  "error registering resource event handler: %s",
+    if (flux_msg_watcher_addvec (h, htab, (void *)ctx) < 0) {
+        flux_log (h, LOG_ERR, "registering resource event handler: %s",
                   strerror (errno));
         rc = -1;
         goto done;
