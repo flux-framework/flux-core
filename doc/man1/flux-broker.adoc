@@ -10,16 +10,15 @@ flux-broker - Flux comms message broker daemon
 
 SYNOPSIS
 --------
-*flux-broker* ['OPTIONS']
+*flux-broker* ['OPTIONS'] ['initial-program' ['args...']]
 
 
 DESCRIPTION
 -----------
-flux-broker(1) is usually invoked indirectly, e.g. see flux-start(1).
-
 flux-broker(1) is a distributed message broker daemon that provides
-communications services within a Flux comms session.  Flux jobs have
-a dedicated comms session, while Flux light-weight jobs (LWJs) do not.
+communications services within a Flux comms session.  It may be
+launched as a parallel program under Flux or other resource managers
+that support PMI.
 
 Resource manager services are implemented as dynamically loadable
 plugins to flux-broker(1), termed "comms modules".
@@ -37,9 +36,10 @@ resource manager activities across the session.
 A logging service aggregates Flux log messages across the session and
 emits them to a configured destination on rank 0.
 
-If flux-broker(1) is executed with stdin attached to a tty, a shell is spawned.
-*FLUX_TMPDIR* is set in the shell's environment so Flux commands run
-by the shell can locate the Flux API socket belonging to rank 0.
+After its overlay networks have completed wire-up, flux-broker(1)
+starts the initial program on rank 0.  If none is specified on
+the broker command line, an interactive shell is launched.
+
 
 OPTIONS
 -------
@@ -52,43 +52,25 @@ Be annoyingly chatty.
 *-q, --quiet*::
 Suppress messages intended for interactive users.
 
-*-t, --child-uri*='URI'::
-Set the ZeroMQ endpoint to which this flux-broker(1) instance will bind,
-and tree based overlay network child flux-broker(1) instances will connect.
-In addition, the ring overlay network peers connect to this endpoint.
-
-*-p, --parent-uri*='URI'::
-Set the ZeroMQ endpoint to which this flux-broker(1) will connect its
-tree based overlay network.
-
-*-r, --right-uri*='URI'::
-Set the ZeroMQ endpoint to which this flux-broker(1) will connect its
-ring network.
-
-*-e, --event-uri*='URI'::
-On rank 0, set the ZeroMQ endpoint to which events will be published.
-On other ranks, set the ZeroMQ endpoint from which events will be received.
-Events are only published directly by rank 0; other ranks send a request
-over the tree-based overlay network to rank 0 to publish by proxy.
-
 *-S, --size*='N'::
 Set the size of this comms session.
+This is only necessary for the LOCAL boot method.
 
 *-R, --rank*='N'::
 Set the rank of this broker instance, 0 to size - 1.
+This is only necessary for the LOCAL boot method.
+
+*-N, --sid*='NAME'::
+Set the session id of this session.
+This is only necessary for the LOCAL boot method.
 
 *-k, --k-ary*='N'::
 Set the branching factor of this comms session's tree based overlay
-network (default 2).
+network (default: 2).
 
 *-H, --heartrate*='N.N'::
 Set the session heartrate in seconds.  The valid range is 0.01 to 30.0
-(default 2.0).
-
-*-N, --sid*='NAME'::
-Set the session id of this session (default "0").  The session id need
-not be numerical.  The base name of *FLUX_TMPDIR* will be set to
-"flux-'sid'-'rank'".
+(default: 2.0).
 
 *-L, --logdest*='DEST'::
 Set logging destination.  DEST may be 'syslog[:facility[:level]]',
@@ -110,23 +92,30 @@ multiple times to load multiple modules.
 Override the compiled-in module search path (colon-separated).
 The default is to search install paths.
 
+*-x,--exclude *='NAME'::
+Do not load the specified comms module.
+
 *-s, --security*='MODE'::
 Set the security mode.  The mode may be 'none', 'plain', or 'curve'
-(default curve).  See flux-keygen(1) for more information.
+(default: curve).  See flux-keygen(1) for more information.
 
-*-p, --pmi-boot*::
-Use PMI to obtain bootstrap configuration from a parent resource manager,
-normally Flux or SLURM.
+*-m, --boot-method*='METHOD'::
+Select the method used to determine rank, size, session id, and
+overlay wire-up information.  Valid methods are SINGLE, LOCAL, and PMI.
+(default: PMI).
 
-*-c, --command*='CMD'::
-Execute "bash -c 'CMD'" on rank 0.
+*-E, --enable-epgm*::
+Enable EPGM for event distribution.
+The interface associated with the hostname will be used.
+This only works with the PMI boot method.
 
-*-n, --noshell*::
-Do not execute a shell on rank 0, even if stdin is a tty.
+*-D, --socket-directory*='DIR'::
+Create ipc:// sockets in this directory.
+This is only necessary for the LOCAL boot method.
 
-*-f, --force*::
-If another flux-broker is running in the same *FLUX_TMPDIR* space,
-send it a SIGKILL and continue start-up.
+*-g, --shutdown-grace*='SECS'::
+Specify the shutdown grace period, in seconds (default: guess based
+on session size).
 
 
 AUTHOR
