@@ -63,6 +63,7 @@
 #include "service.h"
 #include "hello.h"
 #include "shutdown.h"
+#include "attr.h"
 
 #ifndef ZMQ_IMMEDIATE
 #define ZMQ_IMMEDIATE           ZMQ_DELAY_ATTACH_ON_CONNECT
@@ -94,10 +95,8 @@ typedef struct {
      */
     uint32_t size;              /* session size */
     uint32_t rank;              /* our rank in session */
-    char *sid;                  /* session id */
     char *socket_dir;
-    char *local_uri;
-    char *parent_uri;
+    attr_t *attrs;
 
     /* Modules
      */
@@ -174,6 +173,9 @@ static int create_rankdir (ctx_t *ctx);
 static int boot_pmi (ctx_t *ctx);
 static int boot_single (ctx_t *ctx);
 static int boot_local (ctx_t *ctx);
+
+static int attr_get_snoop (const char *name, const char **val, void *arg);
+static int attr_get_overlay (const char *name, const char **val, void *arg);
 
 static const struct flux_handle_ops broker_handle_ops;
 
@@ -268,6 +270,7 @@ int main (int argc, char *argv[])
     ctx.k_ary = 2; /* binary TBON is default */
     ctx.heartbeat = heartbeat_create ();
     ctx.shutdown = shutdown_create ();
+    ctx.attrs = attr_create ();
 
     ctx.pid = getpid();
     if (!(modpath = getenv ("FLUX_MODULE_PATH")))
@@ -280,9 +283,9 @@ int main (int argc, char *argv[])
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
             case 'N':   /* --sid NAME */
-                if (ctx.sid)
-                    free (ctx.sid);
-                ctx.sid = xstrdup (optarg);
+                if (attr_add (ctx.attrs, "session-id", optarg,
+                                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
+                    err_exit ("attr_add session-id");
                 break;
             case 's':   /* --security=MODE */
                 if (!strcmp (optarg, "none"))
@@ -482,7 +485,7 @@ int main (int argc, char *argv[])
         err_exit ("boot %s", ctx.boot_method->name);
     assert (ctx.rank != FLUX_NODEID_ANY);
     assert (ctx.size > 0);
-    assert (ctx.sid != NULL);
+    assert (attr_get (ctx.attrs, "session-id", NULL, NULL) == 0);
 
     /* Create directory for sockets, and a subdirectory specific
      * to this rank that will contain the pidfile and local connector socket.
@@ -500,19 +503,36 @@ int main (int argc, char *argv[])
         flux_log_set_redirect (ctx.h, broker_log, &ctx);
 
     /* Update cached value of rank, size
-     * Ensure sid was set to something.
      */
     flux_aux_set (ctx.h, "flux::rank", &ctx.rank, NULL);
     flux_aux_set (ctx.h, "flux::size", &ctx.size, NULL);
     overlay_set_rank (ctx.overlay, ctx.rank);
 
-    /* Stash FLUX_URI value for later use, but unset it in the environment
-     * so a connection to the enclosing instance is not made inadvertantly.
+    /* Configure attributes.
      */
-    if (getenv ("FLUX_URI")) {
-        ctx.parent_uri = xstrdup (getenv ("FLUX_URI"));
-        unsetenv ("FLUX_URI");
-    }
+    if (attr_add_active (ctx.attrs, "snoop-uri",
+                                FLUX_ATTRFLAG_IMMUTABLE,
+                                attr_get_snoop, NULL, ctx.snoop) < 0
+            || attr_add_active (ctx.attrs, "tbon-parent-uri", 0,
+                                attr_get_overlay, NULL, ctx.overlay) < 0
+            || attr_add_active (ctx.attrs, "tbon-request-uri",
+                                FLUX_ATTRFLAG_IMMUTABLE,
+                                attr_get_overlay, NULL, ctx.overlay) < 0
+            || attr_add_active_uint32 (ctx.attrs, "rank", &ctx.rank,
+                                FLUX_ATTRFLAG_IMMUTABLE) < 0
+            || attr_add_active_uint32 (ctx.attrs, "size", &ctx.size,
+                                FLUX_ATTRFLAG_IMMUTABLE) < 0
+            || attr_add_active_int (ctx.attrs, "tbon-arity", &ctx.k_ary,
+                                FLUX_ATTRFLAG_IMMUTABLE) < 0
+            || attr_add (ctx.attrs, "parent-uri", getenv ("FLUX_URI"),
+                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        err_exit ("attr_add");
+
+    /* The previous value of FLUX_URI (refers to enclosing instance)
+     * was stored above.  Clear it here so a connection to the enclosing
+     * instance is not made inadvertantly.
+     */
+    unsetenv ("FLUX_URI");
 
     /* If shutdown_grace was not provided on the command line,
      * make a guess.
@@ -632,16 +652,12 @@ int main (int argc, char *argv[])
     svchash_destroy (ctx.services);
     svchash_destroy (ctx.eventsvc);
     hello_destroy (ctx.hello);
+    attr_destroy (ctx.attrs);
     flux_close (ctx.h);
 
     zlist_destroy (&modules);       /* autofree set */
     zlist_destroy (&modopts);       /* autofree set */
     zhash_destroy (&modexclude);    /* values const (no destructor) */
-
-    if (ctx.parent_uri)
-        free (ctx.parent_uri);
-    if (ctx.local_uri)
-        free (ctx.local_uri);
 
     return 0;
 }
@@ -757,7 +773,10 @@ static void init_shell (ctx_t *ctx)
 {
     const char *shell = getenv ("SHELL");
     char *ldpath = NULL;
+    const char *local_uri;
 
+    if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0)
+        err_exit ("%s: local_uri is not set", __FUNCTION__);
     if (!shell)
         shell = "/bin/bash";
 
@@ -767,7 +786,7 @@ static void init_shell (ctx_t *ctx)
         subprocess_argv_append (ctx->init_shell, ctx->init_shell_cmd);
     }
     subprocess_set_environ (ctx->init_shell, environ);
-    subprocess_setenv (ctx->init_shell, "FLUX_URI", ctx->local_uri, 1);
+    subprocess_setenv (ctx->init_shell, "FLUX_URI", local_uri, 1);
     path_prepend (&ldpath, subprocess_getenv (ctx->init_shell,
                                               "LD_LIBRARY_PATH"));
     path_prepend (&ldpath, PROGRAM_LIBRARY_PATH);
@@ -789,32 +808,46 @@ static void init_shell (ctx_t *ctx)
  */
 static int create_rankdir (ctx_t *ctx)
 {
+    char *ranktmp = NULL;
+    char *uri = NULL;
+    int rc = -1;
+
     if (ctx->rank == FLUX_NODEID_ANY || ctx->socket_dir == NULL) {
         errno = EINVAL;
-        return -1;
+        goto done;
     }
-    if (!ctx->local_uri) {
-        char *ranktmp = xasprintf ("%s/%d", ctx->socket_dir, ctx->rank);
-
+    if (attr_get (ctx->attrs, "local-uri", NULL, NULL) < 0) {
+        ranktmp = xasprintf ("%s/%d", ctx->socket_dir, ctx->rank);
         if (mkdir (ranktmp, 0700) < 0)
-            return -1;
+            goto done;
         cleanup_push_string (cleanup_directory, ranktmp);
-        ctx->local_uri = xasprintf ("local://%s", ranktmp);
-        free (ranktmp);
+
+        uri = xasprintf ("local://%s", ranktmp);
+        if (attr_add (ctx->attrs, "local-uri", uri,
+                                            FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            goto done;
     }
-    return 0;
+    rc = 0;
+done:
+    if (ranktmp)
+        free (ranktmp);
+    if (uri)
+        free (uri);
+    return rc;
 }
 
 static int create_socketdir (ctx_t *ctx)
 {
-    if (ctx->sid == NULL) {
+    const char *sid;
+
+    if (attr_get (ctx->attrs, "session-id", &sid, NULL) < 0) {
         errno = EINVAL;
         return -1;
     }
     if (!ctx->socket_dir) {
         char *tmpdir = getenv ("TMPDIR");
         char *template = xasprintf ("%s/flux-%s-XXXXXX",
-                                    tmpdir ? tmpdir : "/tmp", ctx->sid);
+                                    tmpdir ? tmpdir : "/tmp", sid);
 
         if (!(ctx->socket_dir = mkdtemp (template)))
             return -1;
@@ -834,10 +867,14 @@ static int boot_pmi (ctx_t *ctx)
     int relay_rank = -1, right_rank, parent_rank;
     char ipaddr[HOST_NAME_MAX + 1];
     const char *child_uri;
+    int rc = -1;
 
     ctx->size = pmi_size (pmi);
     ctx->rank = pmi_rank (pmi);
-    ctx->sid = xstrdup (pmi_sid (pmi));
+
+    if (attr_add (ctx->attrs, "session-id", pmi_sid (pmi),
+                                    FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        goto done;
 
     overlay_set_rank (ctx->overlay, ctx->rank);
 
@@ -886,8 +923,9 @@ static int boot_pmi (ctx_t *ctx)
     }
 
     pmi_fini (pmi);
-
-    return 0;
+    rc = 0;
+done:
+    return rc;
 }
 
 /* This is the boot method selected by flux-start.
@@ -895,8 +933,7 @@ static int boot_pmi (ctx_t *ctx)
  */
 static int boot_local (ctx_t *ctx)
 {
-    if (ctx->rank == FLUX_NODEID_ANY || ctx->size == 0
-                                     || ctx->sid == NULL) {
+    if (ctx->rank == FLUX_NODEID_ANY || ctx->size == 0) {
         errno = EINVAL;
         return -1;
     }
@@ -929,10 +966,19 @@ static int boot_local (ctx_t *ctx)
 
 static int boot_single (ctx_t *ctx)
 {
+    int rc = -1;
+    char *sid = xasprintf ("%d", getpid ());
+
     ctx->rank = 0;
     ctx->size = 1;
-    ctx->sid = xasprintf ("%d", getpid ());
-    return 0;
+
+    if (attr_add (ctx->attrs, "session-id", sid,
+                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        goto done;
+    rc = 0;
+done:
+    free (sid);
+    return rc;
 }
 
 static bool nodeset_suffix_member (char *name, uint32_t rank)
@@ -1243,6 +1289,10 @@ static int cmb_exec_cb (zmsg_t **zmsg, void *arg)
     struct subprocess *p;
     zmsg_t *copy;
     int i, argc;
+    const char *local_uri;
+
+    if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0)
+        err_exit ("%s: local_uri is not set", __FUNCTION__);
 
     if (flux_json_request_decode (*zmsg, &request) < 0)
         goto out_free;
@@ -1282,7 +1332,7 @@ static int cmb_exec_cb (zmsg_t **zmsg, void *arg)
     /*
      *  Override key FLUX environment variables in env array
      */
-    subprocess_setenv (p, "FLUX_URI", ctx->local_uri, 1);
+    subprocess_setenv (p, "FLUX_URI", local_uri, 1);
 
     if (json_object_object_get_ex (request, "cwd", &o) && o != NULL) {
         const char *dir = json_object_get_string (o);
@@ -1431,16 +1481,8 @@ static int cmb_getattr_cb (zmsg_t **zmsg, void *arg)
         errno = EPROTO;
         goto done;
     }
-    if (!strcmp (name, "snoop-uri"))
-        val = snoop_get_uri (ctx->snoop);
-    else if (!strcmp (name, "tbon-parent-uri"))
-        val = overlay_get_parent (ctx->overlay);
-    else if (!strcmp (name, "tbon-request-uri"))
-        val = overlay_get_child (ctx->overlay);
-    else if (!strcmp (name, "local-uri"))
-        val = ctx->local_uri;
-    else if (!strcmp (name, "parent-uri"))
-        val = ctx->parent_uri;
+    if (attr_get (ctx->attrs, name, &val, NULL) < 0)
+        goto done;
     if (!val) {
         errno = ENOENT;
         goto done;
@@ -1450,6 +1492,123 @@ static int cmb_getattr_cb (zmsg_t **zmsg, void *arg)
 done:
     Jput (in);
     Jput (out);
+    return rc;
+}
+
+static int attr_get_snoop (const char *name, const char **val, void *arg)
+{
+    snoop_t *snoop = arg;
+    *val = snoop_get_uri (snoop);
+    return 0;
+}
+
+static int attr_get_overlay (const char *name, const char **val, void *arg)
+{
+    overlay_t *overlay = arg;
+    int rc = -1;
+
+    if (!strcmp (name, "tbon-parent-uri"))
+        *val = overlay_get_parent (overlay);
+    else if (!strcmp (name, "tbon-request-uri"))
+        *val = overlay_get_child (overlay);
+    else {
+        errno = ENOENT;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+static int cmb_attrget_cb (zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    const char *json_str, *name, *val;
+    int flags;
+    JSON in = NULL;
+    JSON out = Jnew ();
+    int rc = -1;
+
+    if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
+        goto done;
+    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "name", &name)) {
+        errno = EPROTO;
+        goto done;
+    }
+    if (attr_get (ctx->attrs, name, &val, &flags) < 0)
+        goto done;
+    if (!val) {
+        errno = ENOENT;
+        goto done;
+    }
+    Jadd_str (out, "value", val);    
+    Jadd_int (out, "flags", flags);
+    rc = 0;
+done:
+    rc = flux_respond (ctx->h, *zmsg, rc < 0 ? errno : 0,
+                                      rc < 0 ? NULL : Jtostr (out));
+    zmsg_destroy (zmsg);
+    Jput (out);
+    Jput (in);
+    return rc;
+}
+
+static int cmb_attrset_cb (zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    const char *json_str, *name, *val = NULL;
+    JSON in = NULL;
+    int rc = -1;
+
+    if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
+        goto done;
+    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "name", &name)) {
+        errno = EPROTO;
+        goto done;
+    }
+    (void)Jget_str (in, "value", &val); /* may be NULL for unset */
+    if (val) {
+        if (attr_set (ctx->attrs, name, val, false) < 0) {
+            if (errno != ENOENT)
+                goto done;
+            if (attr_add (ctx->attrs, name, val, 0) < 0)
+                goto done;
+        }
+    } else {
+        if (attr_delete (ctx->attrs, name, false) < 0)
+            goto done;
+    }
+    rc = 0;
+done:
+    rc = flux_respond (ctx->h, *zmsg, rc < 0 ? errno : 0, NULL);
+    zmsg_destroy (zmsg);
+    Jput (in);
+    return rc;
+}
+
+static int cmb_attrlist_cb (zmsg_t **zmsg, void *arg)
+{
+    ctx_t *ctx = arg;
+    const char *name;
+    JSON out = Jnew ();
+    JSON array = Jnew_ar ();
+    int rc = -1;
+
+    if (flux_request_decode (*zmsg, NULL, NULL) < 0)
+        goto done;
+    name = attr_first (ctx->attrs);
+    while (name) {
+        Jadd_ar_str (array, name);
+        name = attr_next (ctx->attrs);
+    }
+    Jadd_obj (out, "names", array);
+    rc = 0;
+done:
+    rc = flux_respond (ctx->h, *zmsg, rc < 0 ? errno : 0,
+                                      rc < 0 ? NULL : Jtostr (out));
+    zmsg_destroy (zmsg);
+    Jput (out);
+    Jput (array);
     return rc;
 }
 
@@ -1790,6 +1949,9 @@ static int event_shutdown_cb (zmsg_t **zmsg, void *arg)
 static void broker_add_services (ctx_t *ctx)
 {
     if (!svc_add (ctx->services, "cmb.info", cmb_info_cb, ctx)
+          || !svc_add (ctx->services, "cmb.attrget", cmb_attrget_cb, ctx)
+          || !svc_add (ctx->services, "cmb.attrset", cmb_attrset_cb, ctx)
+          || !svc_add (ctx->services, "cmb.attrlist", cmb_attrlist_cb, ctx)
           || !svc_add (ctx->services, "cmb.getattr", cmb_getattr_cb, ctx)
           || !svc_add (ctx->services, "cmb.rusage", cmb_rusage_cb, ctx)
           || !svc_add (ctx->services, "cmb.rmmod", cmb_rmmod_cb, ctx)
