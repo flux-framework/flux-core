@@ -72,6 +72,8 @@
 const char *default_modules =
     "connector-local,modctl,kvs,live,mecho,job[0],wrexec,barrier,resource-hwloc";
 
+const char *default_boot_method = "pmi";
+
 typedef struct {
     /* 0MQ
      */
@@ -117,7 +119,7 @@ typedef struct {
     double shutdown_grace;
     /* Bootstrap
      */
-    bool boot_pmi;
+    struct boot_method *boot_method;
     bool enable_epgm;
     int k_ary;
     hello_t *hello;
@@ -130,6 +132,11 @@ typedef struct {
     char *shell_cmd;
     struct subprocess *shell;
 } ctx_t;
+
+struct boot_method {
+    const char *name;
+    int (*fun)(ctx_t *ctx);
+};
 
 static void broker_log (void *ctx, const char *facility, int level,
                         int rank, struct timeval tv, const char *msg);
@@ -157,17 +164,27 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
                           zhash_t *modexclude, const char *modpath);
 
 static void update_proctitle (ctx_t *ctx);
-static void create_rankdir (ctx_t *ctx);
 static void update_pidfile (ctx_t *ctx);
 static void rank0_shell (ctx_t *ctx);
 static int rank0_shell_exit_handler (struct subprocess *p, void *arg);
 
-static void boot_pmi (ctx_t *ctx);
-static void boot_local (ctx_t *ctx);
+static int create_socketdir (ctx_t *ctx);
+static int create_rankdir (ctx_t *ctx);
+
+static int boot_pmi (ctx_t *ctx);
+static int boot_single (ctx_t *ctx);
+static int boot_local (ctx_t *ctx);
 
 static const struct flux_handle_ops broker_handle_ops;
 
-#define OPTIONS "vqR:S:M:X:L:N:Pk:s:c:nH:O:x:T:g:D:E"
+static struct boot_method boot_table[] = {
+    { "pmi", boot_pmi },
+    { "single", boot_single },
+    { "local", boot_local },
+    { NULL, NULL },
+};
+
+#define OPTIONS "vqR:S:M:X:L:N:k:s:c:nH:O:x:T:g:D:Em:"
 static const struct option longopts[] = {
     {"sid",             required_argument,  0, 'N'},
     {"verbose",         no_argument,        0, 'v'},
@@ -180,7 +197,6 @@ static const struct option longopts[] = {
     {"modopt",          required_argument,  0, 'O'},
     {"module-path",     required_argument,  0, 'X'},
     {"logdest",         required_argument,  0, 'L'},
-    {"pmi-boot",        no_argument,        0, 'P'},
     {"k-ary",           required_argument,  0, 'k'},
     {"command",         required_argument,  0, 'c'},
     {"noshell",         no_argument,        0, 'n'},
@@ -189,6 +205,7 @@ static const struct option longopts[] = {
     {"shutdown-grace",  required_argument,  0, 'g'},
     {"socket-directory",required_argument,  0, 'D'},
     {"enable-epgm",     required_argument,  0, 'E'},
+    {"boot-method",     required_argument,  0, 'm'},
     {0, 0, 0, 0},
 };
 
@@ -207,7 +224,6 @@ static void usage (void)
 " -X,--module-path PATH        Set module search path (colon separated)\n"
 " -L,--logdest DEST            Log to DEST, can  be syslog, stderr, or file\n"
 " -s,--security=plain|curve|none    Select security mode (default: curve)\n"
-" -P,--pmi-boot                Bootstrap via PMI\n"
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
 " -c,--command string          Run command on rank 0\n"
 " -n,--noshell                 Do not spawn a shell even if on a tty\n"
@@ -216,6 +232,7 @@ static void usage (void)
 " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
 " -D,--socket-directory DIR    Create ipc sockets in DIR (local bootstrap)\n"
 " -E,--enable-epgm             Enable EPGM for events (PMI bootstrap)\n"
+" -m,--boot-method             Select bootstrap: pmi, single, local\n"
 );
     exit (1);
 }
@@ -232,6 +249,7 @@ int main (int argc, char *argv[])
     int security_clr = 0;
     int security_set = 0;
     const char *secdir = NULL;
+    char *boot_method = "pmi";
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -245,7 +263,7 @@ int main (int argc, char *argv[])
         oom ();
     zlist_autofree (modopts);
 
-    ctx.size = 1;
+    ctx.rank = FLUX_NODEID_ANY;
     ctx.modhash = modhash_create ();
     ctx.services = svchash_create ();
     ctx.eventsvc = svchash_create ();
@@ -310,9 +328,6 @@ int main (int argc, char *argv[])
             case 'L':   /* --logdest DEST */
                 log_set_dest (optarg);
                 break;
-            case 'P':   /* --pmi-boot */
-                ctx.boot_pmi = true;
-                break;
             case 'k':   /* --k-ary k */
                 ctx.k_ary = strtoul (optarg, NULL, 10);
                 if (ctx.k_ary < 0)
@@ -350,12 +365,26 @@ int main (int argc, char *argv[])
             case 'E': /* --enable-epgm */
                 ctx.enable_epgm = true;
                 break;
+            case 'm': { /* --boot-method */
+                boot_method = optarg;
+                break;
+            }
             default:
                 usage ();
         }
     }
     if (argc != optind)
         usage ();
+    if (boot_method) {
+        struct boot_method *m;
+        for (m = &boot_table[0]; m->name != NULL; m++)
+            if (!strcasecmp (m->name, boot_method))
+                break;
+        ctx.boot_method = m;
+    }
+    if (!ctx.boot_method)
+        msg_exit ("invalid boot method: %s", boot_method ? boot_method
+                                                         : "none");
 
     /* Add default modules to user-specified module list
      */
@@ -423,11 +452,6 @@ int main (int argc, char *argv[])
      */
     if (!(ctx.h = flux_handle_create (&ctx, &broker_handle_ops, 0)))
         err_exit ("flux_handle_create");
-    flux_aux_set (ctx.h, "flux::rank", &ctx.rank, NULL); /* prelim */
-    flux_aux_set (ctx.h, "flux::size", &ctx.size, NULL); /* prelim */
-    flux_log_set_facility (ctx.h, "broker");
-    if (ctx.rank == 0)
-        flux_log_set_redirect (ctx.h, broker_log, &ctx);
 
     subprocess_manager_set (ctx.sm, SM_FLUX, ctx.h);
 
@@ -458,58 +482,46 @@ int main (int argc, char *argv[])
     overlay_set_child_cb (ctx.overlay, child_cb, &ctx);
     overlay_set_event_cb (ctx.overlay, event_cb, &ctx);
 
-    /* Sets rank, size, parent URI.
-     * Initialize child socket.
+    /* Execute the selected boot method.
+     * At minimum, this must ensure that rank, size, and sid are set.
      */
-    if (ctx.boot_pmi) {
-        if (ctx.sid)
-            msg_exit ("--session-id should not be specified with --pmi-boot");
-        boot_pmi (&ctx);
-        flux_aux_set (ctx.h, "flux::rank", &ctx.rank, NULL);
-        flux_aux_set (ctx.h, "flux::size", &ctx.size, NULL);
-    }
-    if (!ctx.sid)
-        ctx.sid = xstrdup ("0");
+    if (ctx.verbose)
+        msg ("boot: %s", ctx.boot_method->name);
+    if (ctx.boot_method->fun (&ctx) < 0)
+        err_exit ("boot %s", ctx.boot_method->name);
+    assert (ctx.rank != FLUX_NODEID_ANY);
+    assert (ctx.size > 0);
+    assert (ctx.sid != NULL);
 
-    /* Now that PMI is done with it:
-     * stash FLUX_URI value for later use, but unset it in the environment
+    /* Create directory for sockets, and a subdirectory specific
+     * to this rank that will contain the pidfile and local connector socket.
+     * (These may have already been called by boot method)
+     */
+    if (create_socketdir (&ctx) < 0)
+        err_exit ("create_socketdir");
+    if (create_rankdir (&ctx) < 0)
+        err_exit ("create_rankdir");
+
+    /* Initialize logging
+     */
+    flux_log_set_facility (ctx.h, "broker");
+    if (ctx.rank == 0)
+        flux_log_set_redirect (ctx.h, broker_log, &ctx);
+
+    /* Update cached value of rank, size
+     * Ensure sid was set to something.
+     */
+    flux_aux_set (ctx.h, "flux::rank", &ctx.rank, NULL);
+    flux_aux_set (ctx.h, "flux::size", &ctx.size, NULL);
+    overlay_set_rank (ctx.overlay, ctx.rank);
+
+    /* Stash FLUX_URI value for later use, but unset it in the environment
      * so a connection to the enclosing instance is not made inadvertantly.
      */
     if (getenv ("FLUX_URI")) {
         ctx.parent_uri = xstrdup (getenv ("FLUX_URI"));
         unsetenv ("FLUX_URI");
     }
-
-    /* Now that we know the rank (either from command line or PMI,
-     * create a subdirectory of socket_dir for the sockets and pidfile
-     * specific to this rank of the broker.
-     */
-    if (!ctx.socket_dir) {
-        char *tmpdir = getenv ("TMPDIR");
-        char *template = xasprintf ("%s/flux-%s-XXXXXX",
-                                    tmpdir ? tmpdir : "/tmp", ctx.sid);
-
-        if (!(ctx.socket_dir = mkdtemp (template)))
-            err_exit ("mkdtemp %s", template);
-        cleanup_push_string (cleanup_directory, ctx.socket_dir);
-    }
-
-    create_rankdir (&ctx);
-
-    /* If we're missing the wiring, presume that the session is to be
-     * started on a single node and compute appropriate ipc:/// sockets.
-     */
-    if (ctx.size > 1 && !overlay_get_event (ctx.overlay)
-                     && !overlay_get_child (ctx.overlay)
-                     && !overlay_get_parent (ctx.overlay)) {
-        boot_local (&ctx);
-    }
-    if (ctx.rank == 0 && overlay_get_parent (ctx.overlay))
-        msg_exit ("rank 0 must NOT have parent");
-    if (ctx.rank > 0 && !overlay_get_parent (ctx.overlay))
-        msg_exit ("rank > 0 must have parents");
-
-    overlay_set_rank (ctx.overlay, ctx.rank);
 
     /* If shutdown_grace was not provided on the command line,
      * make a guess.
@@ -696,20 +708,6 @@ static void update_proctitle (ctx_t *ctx)
     ctx->proctitle = s;
 }
 
-/* The 'ranktmp' dir will contain the broker.pid file and local:// socket.
- * It will be created in ctx->socket_dir.
- */
-static void create_rankdir (ctx_t *ctx)
-{
-    char *ranktmp = xasprintf ("%s/%d", ctx->socket_dir, ctx->rank);
-
-    if (mkdir (ranktmp, 0700) < 0)
-        err_exit ("mkdir %s", ranktmp);
-    cleanup_push_string (cleanup_directory, ranktmp);
-    ctx->local_uri = xasprintf ("local://%s", ranktmp);
-    free (ranktmp);
-}
-
 static void update_pidfile (ctx_t *ctx)
 {
     char *pidfile  = xasprintf ("%s/%d/broker.pid", ctx->socket_dir, ctx->rank);
@@ -794,12 +792,51 @@ static void rank0_shell (ctx_t *ctx)
     subprocess_run (ctx->shell);
 }
 
+/* The 'ranktmp' dir will contain the broker.pid file and local:// socket.
+ * It will be created in ctx->socket_dir.
+ */
+static int create_rankdir (ctx_t *ctx)
+{
+    if (ctx->rank == FLUX_NODEID_ANY || ctx->socket_dir == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!ctx->local_uri) {
+        char *ranktmp = xasprintf ("%s/%d", ctx->socket_dir, ctx->rank);
+
+        if (mkdir (ranktmp, 0700) < 0)
+            return -1;
+        cleanup_push_string (cleanup_directory, ranktmp);
+        ctx->local_uri = xasprintf ("local://%s", ranktmp);
+        free (ranktmp);
+    }
+    return 0;
+}
+
+static int create_socketdir (ctx_t *ctx)
+{
+    if (ctx->sid == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!ctx->socket_dir) {
+        char *tmpdir = getenv ("TMPDIR");
+        char *template = xasprintf ("%s/flux-%s-XXXXXX",
+                                    tmpdir ? tmpdir : "/tmp", ctx->sid);
+
+        if (!(ctx->socket_dir = mkdtemp (template)))
+            return -1;
+        cleanup_push_string (cleanup_directory, ctx->socket_dir);
+    }
+    return 0;
+}
+
 /* N.B. If using epgm with multiple brokers per node, the
  * lowest rank in each clique will subscribe to the epgm:// socket
  * and relay events to an ipc:// socket for the other ranks in the
  * clique.  This is required due to a limitation of epgm.
  */
-static void boot_pmi (ctx_t *ctx)
+static int boot_pmi (ctx_t *ctx)
 {
     pmi_t *pmi = pmi_init (NULL);
     int relay_rank = -1, right_rank, parent_rank;
@@ -857,28 +894,53 @@ static void boot_pmi (ctx_t *ctx)
     }
 
     pmi_fini (pmi);
+
+    return 0;
 }
 
-static void boot_local (ctx_t *ctx)
+/* This is the boot method selected by flux-start.
+ * We should have been called with --rank, --size, and --sid.
+ */
+static int boot_local (ctx_t *ctx)
 {
-    int rrank = ctx->rank == 0 ? ctx->size - 1 : ctx->rank - 1;
+    if (ctx->rank == FLUX_NODEID_ANY || ctx->size == 0
+                                     || ctx->sid == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (create_socketdir (ctx) < 0 || create_rankdir (ctx) < 0)
+        return -1;
+
     char *reqfile = xasprintf ("%s/%d/req", ctx->socket_dir, ctx->rank);
-    char *eventfile = xasprintf ("%s/event", ctx->socket_dir);
     overlay_set_child (ctx->overlay, "ipc://%s", reqfile);
     cleanup_push_string (cleanup_file, reqfile);
     free (reqfile);
+
     if (ctx->rank > 0) {
-        int prank = ctx->k_ary == 0 ? 0 : (ctx->rank - 1) / ctx->k_ary;
+        int parent_rank = ctx->k_ary == 0 ? 0 : (ctx->rank - 1) / ctx->k_ary;
         overlay_push_parent (ctx->overlay, "ipc://%s/%d/req",
-                             ctx->socket_dir, prank);
+                             ctx->socket_dir, parent_rank);
     }
+
+    char *eventfile = xasprintf ("%s/event", ctx->socket_dir);
     overlay_set_event (ctx->overlay, "ipc://%s", eventfile);
-    if (ctx->rank == 0) {
+    if (ctx->rank == 0)
         cleanup_push_string (cleanup_file, eventfile);
-    }
     free (eventfile);
+
+    int right_rank = ctx->rank == 0 ? ctx->size - 1 : ctx->rank - 1;
     overlay_set_right (ctx->overlay, "ipc://%s/%d/req",
-                       ctx->socket_dir, rrank);
+                       ctx->socket_dir, right_rank);
+
+    return 0;
+}
+
+static int boot_single (ctx_t *ctx)
+{
+    ctx->rank = 0;
+    ctx->size = 1;
+    ctx->sid = xasprintf ("%d", getpid ());
+    return 0;
 }
 
 static bool nodeset_suffix_member (char *name, uint32_t rank)
