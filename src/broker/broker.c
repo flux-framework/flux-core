@@ -184,7 +184,7 @@ static struct boot_method boot_table[] = {
     { NULL, NULL },
 };
 
-#define OPTIONS "vqR:S:M:X:L:N:k:s:c:H:O:x:T:g:D:Em:"
+#define OPTIONS "+vqR:S:M:X:L:N:k:s:H:O:x:T:g:D:Em:"
 static const struct option longopts[] = {
     {"sid",             required_argument,  0, 'N'},
     {"verbose",         no_argument,        0, 'v'},
@@ -198,7 +198,6 @@ static const struct option longopts[] = {
     {"module-path",     required_argument,  0, 'X'},
     {"logdest",         required_argument,  0, 'L'},
     {"k-ary",           required_argument,  0, 'k'},
-    {"command",         required_argument,  0, 'c'},
     {"heartrate",       required_argument,  0, 'H'},
     {"timeout",         required_argument,  0, 'T'},
     {"shutdown-grace",  required_argument,  0, 'g'},
@@ -224,7 +223,6 @@ static void usage (void)
 " -L,--logdest DEST            Log to DEST, can  be syslog, stderr, or file\n"
 " -s,--security=plain|curve|none    Select security mode (default: curve)\n"
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
-" -c,--command string          Run command on rank 0\n"
 " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
 " -T,--timeout SECS            Set wireup timeout in seconds (rank 0 only)\n"
 " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
@@ -330,11 +328,6 @@ int main (int argc, char *argv[])
                 if (ctx.k_ary < 0)
                     usage ();
                 break;
-            case 'c':   /* --command CMD */
-                if (ctx.init_shell_cmd)
-                    free (ctx.init_shell_cmd);
-                ctx.init_shell_cmd = xstrdup (optarg);
-                break;
             case 'H':   /* --heartrate SECS */
                 if (heartbeat_set_ratestr (ctx.heartbeat, optarg) < 0)
                     err_exit ("heartrate `%s'", optarg);
@@ -367,8 +360,12 @@ int main (int argc, char *argv[])
                 usage ();
         }
     }
-    if (argc != optind)
-        usage ();
+    if (optind < argc) {
+        size_t len = 0;
+        if (argz_create (argv + optind, &ctx.init_shell_cmd, &len) < 0)
+            oom ();
+        argz_stringify (ctx.init_shell_cmd, len, ' '); 
+    }
     if (boot_method) {
         struct boot_method *m;
         for (m = &boot_table[0]; m->name != NULL; m++)
