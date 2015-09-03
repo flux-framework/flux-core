@@ -89,36 +89,24 @@ local function fake_resource_array (wreck, nnodes)
     return res
 end
 
-local function alloc_tasks_hack (f, wreck, lwj)
+local function alloc_tasks (f, wreck, lwj)
     local r = {}
     local size = f.size
     local res
 
-    if (wreck.tasks_per_node or wreck.nnodes) then
-        if wreck.ntasks == 1 then
-            if wreck.tasks_per_node then
-                if wreck.nnodes then
-                    wreck.ntasks = wreck.tasks_per_node * wreck.nnodes
-                else
-                    wreck.ntasks = wreck.tasks_per_node * f.size
-                end
-            else
-                wreck.ntasks = wreck.nnodes
-            end
-        end
-        res = fake_resource_array (wreck, wreck.nnodes or f.size)
-    else
-	res = {}
-        local r, err = f:kvsdir ("resource.hwloc.by_rank")
-        if not r then
-            wreck:die ("failed to read resource.hwloc.by_rank: %s", err)
-        end
-        for rank in r:keys() do
-            res[tonumber(rank)] = { cores = r[rank].Core }
-        end
+    -- If nnodes was provided but -n, --ntasks not set, then
+    --  set ntasks to nnodes
+    if not wreck:getopt ('n') and wreck.nnodes then
+        wreck.ntasks = wreck.nnodes
     end
-
     wreck.ntasks = tonumber (wreck.ntasks)
+
+    -- If nnodes was not provided set it to the lesser of
+    --  session size and ntasks
+    if not wreck.nnodes then
+        wreck.nnodes = math.min (wreck.ntasks, f.size)
+    end
+    res = fake_resource_array (wreck, wreck.nnodes or f.size)
     wreck:verbose ("Allocating %d tasks across %d available nodes..\n",
                 wreck.ntasks, size)
 
@@ -222,7 +210,7 @@ if true then
     --
     wreck.nnodes = wreck:getopt ("N")
     wreck.tasks_per_node = wreck:getopt ("t")
-    alloc_tasks_hack (f, wreck, lwj)
+    alloc_tasks (f, wreck, lwj)
     wreck:verbose ("%-4.03fs: Sending run event\n", tt:get0())
     local rc,err = f:sendevent ("wrexec.run.%d", resp.jobid)
     if not rc then wreck:die ("sendevent: %s\n", err) end
