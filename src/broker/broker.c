@@ -1466,35 +1466,6 @@ static int cmb_info_cb (zmsg_t **zmsg, void *arg)
     return rc;
 }
 
-static int cmb_getattr_cb (zmsg_t **zmsg, void *arg)
-{
-    ctx_t *ctx = arg;
-    JSON out = Jnew ();
-    JSON in = NULL;
-    const char *name = NULL;
-    const char *val = NULL;
-    int rc = -1;
-
-    if (flux_json_request_decode (*zmsg, &in) < 0)
-        goto done;
-    if (!Jget_str (in, "name", &name)) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (attr_get (ctx->attrs, name, &val, NULL) < 0)
-        goto done;
-    if (!val) {
-        errno = ENOENT;
-        goto done;
-    }
-    Jadd_str (out, (char *)name, val);
-    rc = flux_json_respond (ctx->h, out, zmsg);
-done:
-    Jput (in);
-    Jput (out);
-    return rc;
-}
-
 static int attr_get_snoop (const char *name, const char **val, void *arg)
 {
     snoop_t *snoop = arg;
@@ -1952,7 +1923,6 @@ static void broker_add_services (ctx_t *ctx)
           || !svc_add (ctx->services, "cmb.attrget", cmb_attrget_cb, ctx)
           || !svc_add (ctx->services, "cmb.attrset", cmb_attrset_cb, ctx)
           || !svc_add (ctx->services, "cmb.attrlist", cmb_attrlist_cb, ctx)
-          || !svc_add (ctx->services, "cmb.getattr", cmb_getattr_cb, ctx)
           || !svc_add (ctx->services, "cmb.rusage", cmb_rusage_cb, ctx)
           || !svc_add (ctx->services, "cmb.rmmod", cmb_rmmod_cb, ctx)
           || !svc_add (ctx->services, "cmb.insmod", cmb_insmod_cb, ctx)
