@@ -72,7 +72,7 @@ int main (int argc, char *argv[])
 {
     flux_t h;
     int ch;
-    char *uri = NULL;
+    const char *uri = NULL;
     bool vopt = false;
     bool nopt = false;
     char *session = "flux";
@@ -81,7 +81,6 @@ int main (int argc, char *argv[])
     zloop_t *zloop;
     zmq_pollitem_t zp;
     flux_sec_t sec;
-    int rank = -1;
     const char *secdir;
 
     log_init ("flux-snoop");
@@ -122,7 +121,7 @@ int main (int argc, char *argv[])
 
     if (!(h = flux_open (NULL, 0)))
         err_exit ("flux_open");
-    if (!(uri = flux_getattr (h, rank, "snoop-uri")))
+    if (!(uri = flux_attr_get (h, "snoop-uri", NULL)))
         err_exit ("snoop-uri");
 
     /* N.B. flux_get_zctx () is not implemented for the API socket since
@@ -187,7 +186,6 @@ int main (int argc, char *argv[])
     zctx_destroy (&zctx); /* destroys 's' and 'zp.socket' */
 
     zlist_destroy (&subscriptions);
-    free (uri);
     flux_close (h);
     log_fini ();
     return 0;
