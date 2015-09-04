@@ -708,12 +708,12 @@ int mod_main (flux_t h, int argc, char **argv)
 {
     ctx_t *ctx = getctx (h);
     char sockpath[PATH_MAX + 1];
-    char *local_uri = NULL;
+    const char *local_uri = NULL;
     char *tmpdir;
     int rc = -1;
 
-    if (!(local_uri = flux_getattr (h, FLUX_NODEID_ANY, "local-uri"))) {
-        flux_log (h, LOG_ERR, "flux_getattr local-uri: %s", strerror (errno));
+    if (!(local_uri = flux_attr_get (h, "local-uri", NULL))) {
+        flux_log (h, LOG_ERR, "flux_attr_get local-uri: %s", strerror (errno));
         goto done;
     }
     if (!(tmpdir = strstr (local_uri, "local://"))) {
@@ -750,8 +750,6 @@ int mod_main (flux_t h, int argc, char **argv)
     }
     rc = 0;
 done:
-    if (local_uri)
-        free (local_uri);
     flux_msg_watcher_delvec (h, htab);
     flux_fd_watcher_destroy (ctx->listen_w);
     if (ctx->listen_fd >= 0) {
