@@ -442,6 +442,90 @@ void internal_broker (flux_conf_t cf, optparse_t p, int ac, char *av[])
     execvp (path, av); /* no return if successful */
 }
 
+void internal_getattr (flux_conf_t cf, optparse_t p, int ac, char *av[])
+{
+    int n;
+
+    if ((n = optparse_parse_args (p, ac, av)) < 0)
+        msg_exit ("flux-getattr: error processing args");
+    if (n == ac - 1) {
+        const char *val;
+        int flags;
+        flux_t h = flux_open (NULL, 0);
+        if (!h)
+            err_exit ("flux_open");
+        if (!(val = flux_attr_get (h, av[n], &flags)))
+            err_exit ("%s", av[n]);
+        printf ("%s\n", val);
+        flux_close (h);
+    } else {
+        usage ();
+    }
+}
+
+void internal_setattr (flux_conf_t cf, optparse_t p, int ac, char *av[])
+{
+    struct optparse_option opts[] = {
+        { .name = "expunge",  .key = 'e',  .has_arg = 0,
+          .usage = "Unset the specified attribute", },
+        OPTPARSE_TABLE_END,
+    };
+    int n;
+    const char *name = NULL, *val = NULL;
+    flux_t h;
+
+    if (optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS)
+        msg_exit ("optparse_add_option_table");
+    if ((n = optparse_parse_args (p, ac, av)) < 0)
+        msg_exit ("flux-setattr: error processing args");
+    if (optparse_hasopt (p, "expunge") && n == ac - 1) {
+        name = av[n];
+    } else if (!optparse_hasopt (p, "expunge") && n == ac - 2) {
+        name = av[n];
+        val = av[n + 1];
+    } else
+        usage ();
+    if (!(h = flux_open (NULL, 0)))
+            err_exit ("flux_open");
+    if (flux_attr_set (h, name, val) < 0)
+        err_exit ("%s", av[1]);
+    flux_close (h);
+}
+
+void internal_lsattr (flux_conf_t cf, optparse_t p, int ac, char *av[])
+{
+    struct optparse_option opts[] = {
+        { .name = "values",  .key = 'v',  .has_arg = 0,
+          .usage = "List values with attributes", },
+        OPTPARSE_TABLE_END,
+    };
+    int n;
+
+    if (optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS)
+        msg_exit ("optparse_add_option_table");
+    if ((n = optparse_parse_args (p, ac, av)) < 0)
+        msg_exit ("flux-setattr: error processing args");
+    if (n == ac) {
+        const char *name, *val;
+        flux_t h = flux_open (NULL, 0);
+        if (!h)
+            err_exit ("flux_open");
+        name = flux_attr_first (h);
+        while (name) {
+            if (optparse_hasopt (p, "values")) {
+                val = flux_attr_get (h, name, NULL);
+                printf ("%-20s%s\n", name, val ? val : "-");
+            } else {
+                printf ("%s\n", name);
+            }
+            name = flux_attr_next (h);
+        }
+        flux_close (h);
+    } else {
+        usage ();
+    }
+}
+
 struct builtin {
     const char *name;
     const char *doc;
@@ -467,6 +551,24 @@ struct builtin builtin_cmds [] = {
       "Run the flux broker",
       "[OPTIONS...] [COMMAND...]",
       internal_broker
+    },
+    {
+      "getattr",
+      "Get broker attribute",
+      "name",
+      internal_getattr
+    },
+    {
+      "setattr",
+      "Set broker attribute",
+      "name value",
+      internal_setattr
+    },
+    {
+      "lsattr",
+      "List broker attributes",
+      "[-v]",
+      internal_lsattr
     },
     { NULL, NULL, NULL, NULL },
 };
