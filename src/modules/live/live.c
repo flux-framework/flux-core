@@ -98,7 +98,7 @@ typedef struct {
 
 typedef struct {
     int rank;
-    char *uri;
+    const char *uri;
     cstate_t state;
 } parent_t;
 
@@ -207,8 +207,6 @@ static child_t *child_create (int rank)
 
 static void parent_destroy (parent_t *p)
 {
-    if (p->uri)
-        free (p->uri);
     free (p);
 }
 
@@ -216,8 +214,7 @@ static parent_t *parent_create (int rank, const char *uri)
 {
     parent_t *p = xzmalloc (sizeof (*p));
     p->rank = rank;
-    if (uri)
-        p->uri = xstrdup (uri);
+    p->uri = uri;
     return p;
 }
 
@@ -273,9 +270,7 @@ static void parents_fromjson (ctx_t *ctx, JSON ar)
         for (i = 0; i < len; i++) {
             if (Jget_ar_obj (ar, i, &el) && (p = parent_fromjson (el))) {
                 if (i == 0) {
-                    if (p->uri) /* unlikely */
-                        free (p->uri);
-                    p->uri = flux_getattr (ctx->h, -1, "tbon-parent-uri");
+                    p->uri = flux_attr_get (ctx->h, "tbon-parent-uri", NULL);
                 }
                 if (zlist_append (ctx->parents, p) < 0)
                     oom ();
