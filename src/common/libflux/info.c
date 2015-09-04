@@ -34,34 +34,6 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/xzmalloc.h"
 
-char *flux_getattr (flux_t h, int rank, const char *name)
-{
-    uint32_t nodeid = (rank == -1 ? FLUX_NODEID_ANY : rank);
-    JSON in = Jnew ();
-    flux_rpc_t *r = NULL;
-    const char *json_str;
-    JSON out = NULL;
-    char *ret = NULL;
-    const char *val = NULL;
-
-    Jadd_str (in, "name", name);
-    if (!(r = flux_rpc (h, "cmb.getattr", Jtostr (in), nodeid, 0)))
-        goto done;
-    if (flux_rpc_get (r, NULL, &json_str) < 0)
-        goto done;
-    if (!(out = Jfromstr (json_str)) || !Jget_str (out, (char *)name, &val)) {
-        errno = EPROTO;
-        goto done;
-    }
-    ret = xstrdup (val);
-done:
-    Jput (in);
-    Jput (out);
-    if (r)
-        flux_rpc_destroy (r);
-    return ret;
-}
-
 int flux_info (flux_t h, uint32_t *rankp, uint32_t *sizep, int *arityp)
 {
     flux_rpc_t *r = NULL;
