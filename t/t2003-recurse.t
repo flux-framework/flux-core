@@ -24,29 +24,29 @@ test_expect_success 'recurse: Flux launches Flux ' '
 test_expect_success 'recurse: local-uri is identical to FLUX_URI' '
 	printenv FLUX_URI >cur_uri &&
 	test -s cur_uri &&
-	flux comms getattr local-uri >attr_uri &&
+	flux getattr local-uri >attr_uri &&
 	test -s attr_uri &&
 	test_cmp cur_uri attr_uri
 '
 
 test_expect_success 'recurse: parent-uri is unset in bootstrap instance' '
-	! flux comms getattr parent-uri
+	! flux getattr parent-uri
 '
 
 test_expect_success 'recurse: local-uri != local-uri in enclosing instance' '
-	flux comms getattr local-uri >enc_uri &&
+	flux getattr local-uri >enc_uri &&
 	test -s enc_uri &&
 	flux wreckrun -n1 -N1 flux broker \
-		flux comms getattr local-uri >attr_uri &&
+		flux getattr local-uri >attr_uri &&
 	test -s attr_uri &&
 	! test_cmp enc_uri attr_uri
 '
 
 test_expect_success 'recurse: parent-uri == local-uri in enclosing instance' '
-	flux comms getattr local-uri >enc_uri &&
+	flux getattr local-uri >enc_uri &&
 	test -s enc_uri &&
 	flux wreckrun -n1 -N1 flux broker \
-		flux comms getattr parent-uri >attr_uri &&
+		flux getattr parent-uri >attr_uri &&
 	test -s attr_uri &&
 	test_cmp enc_uri attr_uri
 '
