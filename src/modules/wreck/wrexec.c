@@ -43,7 +43,7 @@ struct rexec_ctx {
     int nodeid;
     flux_t h;
     char *wrexecd_path;
-    char *local_uri;
+    const char *local_uri;
 };
 
 struct rexec_session {
@@ -58,8 +58,6 @@ struct rexec_session {
 static void freectx (void *arg)
 {
     struct rexec_ctx *ctx = arg;
-    if (ctx->local_uri)
-        free (ctx->local_uri);
     free (ctx);
 }
 
@@ -84,8 +82,8 @@ static struct rexec_ctx *getctx (flux_t h)
         ctx = xzmalloc (sizeof (*ctx));
         ctx->h = h;
         ctx->nodeid = flux_rank (h);
-        if (!(ctx->local_uri = flux_getattr (h, FLUX_NODEID_ANY, "local-uri")))
-            err_exit ("flux_getattr local-uri");
+        if (!(ctx->local_uri = flux_attr_get (h, "local-uri", NULL)))
+            err_exit ("flux_attr_get local-uri");
         flux_aux_set (h, "wrexec", ctx, freectx);
         kvs_watch_string (h, "config.wrexec.wrexecd_path",
             wrexec_path_set, (void *) ctx);
