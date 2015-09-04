@@ -166,16 +166,19 @@ static inline bool is_pdesc (const char *k)
 static int fetch_and_update_state (zhash_t *aj , int64_t j, int64_t ns)
 {
     int *t = NULL;
-    char key[20] = {'\0'};        
+    char *key = NULL;
     
     if (!aj) return J_FOR_RENT;;    
-    snprintf (key, 20, "%ld", j);
-    if ( !(t = ((int *)zhash_lookup (aj, (const char *)key)))) 
+    key = xasprintf ("%ld", j);
+    if ( !(t = ((int *)zhash_lookup (aj, (const char *)key)))) {
+        free (key);
         return J_FOR_RENT;
+    }
     if (ns == J_COMPLETE) 
         zhash_delete (aj, key);
     else
         zhash_update (aj, key, (void *)(intptr_t)ns);
+    free (key);
 
     /* safe to convert t to int */
     return (intptr_t) t;
@@ -225,51 +228,50 @@ static int build_name_array (zhash_t *ha, const char *k, JSON ns)
 static int extract_raw_nnodes (flux_t h, int64_t j, int64_t *nnodes)
 {
     int rc = 0;
-    char key[40] = {'\0'};
-    snprintf (key, 40, "lwj.%ld.nnodes", j);
+    char *key = xasprintf ("lwj.%ld.nnodes", j);
     if (kvs_get_int64 (h, key, nnodes) < 0) {
         flux_log (h, LOG_ERR, "extract %s: %s", key, strerror (errno));
         rc = -1;
     }
     else 
         flux_log (h, LOG_DEBUG, "extract %s: %ld", key, *nnodes);
+    free (key);
     return rc;
 }
 
 static int extract_raw_ntasks (flux_t h, int64_t j, int64_t *ntasks)
 {
     int rc = 0;
-    char key[40] = {'\0'};
-    snprintf (key, 40, "lwj.%ld.ntasks", j);
+    char *key = xasprintf ("lwj.%ld.ntasks", j);
     if (kvs_get_int64 (h, key, ntasks) < 0) {
         flux_log (h, LOG_ERR, "extract %s: %s", key, strerror (errno));
         rc = -1;
     }
     else 
         flux_log (h, LOG_DEBUG, "extract %s: %ld", key, *ntasks);
+    free (key);
     return rc;
 }
 
 static int extract_raw_rdl (flux_t h, int64_t j, char **rdlstr)
 {
     int rc = 0;
-    char key[40] = {'\0'};
-    snprintf (key, 40, "lwj.%ld.rdl", j);
+    char *key = xasprintf ("lwj.%ld.rdl", j);
     if (kvs_get_string (h, key, rdlstr) < 0) {
         flux_log (h, LOG_ERR, "extract %s: %s", key, strerror (errno));
         rc = -1;
     }
     else 
         flux_log (h, LOG_DEBUG, "rdl under %s extracted", key);
+    free (key);
     return rc;
 }
 
 static int extract_raw_state (flux_t h, int64_t j, int64_t *s)
 {
     int rc = 0;
-    char key[40] = {'\0'};
+    char *key = xasprintf ("lwj.%ld.state", j);
     char *state = NULL;
-    snprintf (key, 40, "lwj.%ld.state", j);
     if (kvs_get_string (h, key, &state) < 0) {
         flux_log (h, LOG_ERR, "extract %s: %s", key, strerror (errno));
         rc = -1;
@@ -278,6 +280,7 @@ static int extract_raw_state (flux_t h, int64_t j, int64_t *s)
         *s = jsc_job_state2num (state);
         flux_log (h, LOG_DEBUG, "extract %s: %s", key, state);
     }
+    free (key);
     if (state)
         free (state);
     return rc;
@@ -287,8 +290,7 @@ static int extract_raw_pdesc (flux_t h, int64_t j, int64_t i, JSON *o)
 {
     int rc = 0;
     char *json_str = NULL; 
-    char key[60] = {'\0'}; 
-    snprintf (key, 60, "lwj.%ld.%ld.procdesc", j, i);
+    char *key = xasprintf ("lwj.%ld.%ld.procdesc", j, i);
     if (kvs_get (h, key, &json_str) < 0 
             || !(*o = Jfromstr (json_str))) {
         flux_log (h, LOG_ERR, "extract %s: %s", key, strerror (errno));
@@ -298,6 +300,7 @@ static int extract_raw_pdesc (flux_t h, int64_t j, int64_t i, JSON *o)
         if (*o) 
             Jput (*o);
     }
+    free (key);
     return rc; 
 }
 
@@ -325,7 +328,7 @@ static int extract_raw_pdescs (flux_t h, int64_t j, int64_t n, JSON jcb)
 {
     int rc = -1;
     int64_t i = 0;
-    char hnm[20] = {'\0'};
+    char *hnm;
     const char *cmd = NULL;
     zhash_t *eh = NULL; /* hash holding a set of unique exec_names */
     zhash_t *hh = NULL; /* hash holding a set of unique host_names */
@@ -347,13 +350,14 @@ static int extract_raw_pdescs (flux_t h, int64_t j, int64_t n, JSON jcb)
 
         eix = build_name_array (eh, cmd, ens);
         /* FIXME: we need a hostname service */
-        snprintf (hnm, 20, "%ld", nid); 
+        hnm = xasprintf ("%ld", nid);
         hix = build_name_array (hh, hnm, hns);
         po = build_parray_elem (pid, eix, hix); 
         json_object_array_add (pa, po);
         po = NULL;
         Jput (o);
         o = NULL;
+        free (hnm);
     }
     add_pdescs_to_jcb (&hns, &ens, &pa, jcb);
     rc = 0;    
@@ -372,16 +376,16 @@ done:
 static int extract_raw_rdl_alloc (flux_t h, int64_t j, JSON jcb)
 {
     int i = 0;
-    char k[60];
+    char *key;
     int64_t cores = 0;
     JSON ra = Jnew_ar ();
     bool processing = true;
 
     for (i=0; processing; ++i) {
-        snprintf (k, 60, "lwj.%ld.rank.%d.cores", j, i);
-        if (kvs_get_int64 (h, k, &cores) < 0) {
+        key = xasprintf ("lwj.%ld.rank.%d.cores", j, i);
+        if (kvs_get_int64 (h, key, &cores) < 0) {
             if (errno != EINVAL) 
-                flux_log (h, LOG_ERR, "extract %s: %s", k, strerror (errno));
+                flux_log (h, LOG_ERR, "extract %s: %s", key, strerror (errno));
             processing = false; 
         } else {
             JSON elem = Jnew ();       
@@ -390,6 +394,7 @@ static int extract_raw_rdl_alloc (flux_t h, int64_t j, JSON jcb)
             json_object_object_add (elem, JSC_RDL_ALLOC_CONTAINED, o);
             json_object_array_add (ra, elem);
         }
+        free (key);
     } 
     json_object_object_add (jcb, JSC_RDL_ALLOC, ra);
     return 0;
@@ -503,12 +508,12 @@ static int update_state (flux_t h, int64_t j, JSON o)
 {
     int rc = -1;
     int64_t st = 0;
-    char key[40] = {'\0'}; 
+    char *key;
 
     if (!Jget_int64 (o, JSC_STATE_PAIR_NSTATE, &st)) return -1;
     if ((st >= J_FOR_RENT) || (st < J_NULL)) return -1; 
 
-    snprintf (key, 40, "lwj.%ld.state", j);
+    key = xasprintf ("lwj.%ld.state", j);
     if (kvs_put_string (h, key, jsc_job_num2state ((job_state_t)st)) < 0) 
         flux_log (h, LOG_ERR, "update %s: %s", key, strerror (errno));
     else if (kvs_commit (h) < 0) 
@@ -518,6 +523,7 @@ static int update_state (flux_t h, int64_t j, JSON o)
               jsc_job_num2state ((job_state_t)st));
         rc = 0;
     }
+    free (key);
 
     if (send_state_event (h, st, j) < 0)
         flux_log (h, LOG_ERR, "send state event");
@@ -530,15 +536,15 @@ static int update_rdesc (flux_t h, int64_t j, JSON o)
     int rc = -1;
     int64_t nnodes = 0;
     int64_t ntasks = 0;
-    char key1[40] = {'\0'}; 
-    char key2[40] = {'\0'}; 
+    char *key1;
+    char *key2;
 
     if (!Jget_int64 (o, JSC_RDESC_NNODES, &nnodes)) return -1;
     if (!Jget_int64 (o, JSC_RDESC_NTASKS, &ntasks)) return -1;
     if ((nnodes < 0) || (ntasks < 0)) return -1;
 
-    snprintf (key1, 40, "lwj.%ld.nnodes", j);
-    snprintf (key2, 40, "lwj.%ld.ntasks", j);
+    key1 = xasprintf ("lwj.%ld.nnodes", j);
+    key2 = xasprintf ("lwj.%ld.ntasks", j);
     if (kvs_put_int64 (h, key1, nnodes) < 0) 
         flux_log (h, LOG_ERR, "update %s: %s", key1, strerror (errno));
     else if (kvs_put_int64 (h, key2, ntasks) < 0) 
@@ -549,6 +555,8 @@ static int update_rdesc (flux_t h, int64_t j, JSON o)
         flux_log (h, LOG_DEBUG, "job (%ld) assigned new resources.", j);
         rc = 0;
     }
+    free (key1);
+    free (key2);
 
     return rc;
 }
@@ -556,9 +564,7 @@ static int update_rdesc (flux_t h, int64_t j, JSON o)
 static int update_rdl (flux_t h, int64_t j, const char *rs)
 {
     int rc = -1;
-    char key[40] = {'\0'}; 
-
-    snprintf (key, 40, "lwj.%ld.rdl", j);
+    char *key = xasprintf ("lwj.%ld.rdl", j);
     if (kvs_put_string (h, key, rs) < 0) 
         flux_log (h, LOG_ERR, "update %s: %s", key, strerror (errno));
     else if (kvs_commit (h) < 0) 
@@ -567,6 +573,7 @@ static int update_rdl (flux_t h, int64_t j, const char *rs)
         flux_log (h, LOG_DEBUG, "job (%ld) assigned new rdl.", j);
         rc = 0;
     }
+    free (key);
 
     return rc;
 }
@@ -575,16 +582,17 @@ static int update_1ra (flux_t h, int r, int64_t j, JSON o)
 {
     int rc = 0;
     int64_t ncores = 0;
-    char key[60] = {'\0'};
+    char *key;
     JSON c = NULL;
 
     if (!Jget_obj (o, JSC_RDL_ALLOC_CONTAINED, &c)) return -1;
     if (!Jget_int64 (c, JSC_RDL_ALLOC_CONTAINED_NCORES, &ncores)) return -1;
 
-    snprintf (key, 60, "lwj.%ld.rank.%d.cores", j, r);
+    key = xasprintf ("lwj.%ld.rank.%d.cores", j, r);
     if ( (rc = kvs_put_int64 (h, key, ncores)) < 0) {
         flux_log (h, LOG_ERR, "put %s: %s", key, strerror (errno));
     }  
+    free (key);
     return rc;
 }
 
@@ -617,7 +625,7 @@ static int update_1pdesc (flux_t h, int r, int64_t j, JSON o, JSON ha, JSON ea)
 {
     int rc = -1;
     JSON d = NULL;
-    char key[60] = {'\0'};;
+    char *key;
     char *json_str = NULL;
     const char *hn = NULL, *en = NULL;
     int64_t pid = 0, hindx = 0, eindx = 0, hrank = 0;
@@ -628,7 +636,7 @@ static int update_1pdesc (flux_t h, int r, int64_t j, JSON o, JSON ha, JSON ea)
     if (!Jget_ar_str (ha, (int)hindx, &hn)) return -1;
     if (!Jget_ar_str (ea, (int)eindx, &en)) return -1;
 
-    snprintf (key, 60, "lwj.%ld.%d.procdesc", j, r);
+    key = xasprintf ("lwj.%ld.%d.procdesc", j, r);
     if (kvs_get (h, key, &json_str) < 0
             || !(d = Jfromstr (json_str))) {
         flux_log (h, LOG_ERR, "extract %s: %s", key, strerror (errno));
@@ -650,6 +658,7 @@ static int update_1pdesc (flux_t h, int r, int64_t j, JSON o, JSON ha, JSON ea)
     rc = 0;
 
 done:
+    free (key);
     if (d)
         Jput (d);        
     if (json_str)
@@ -733,10 +742,8 @@ static void fixup_newjob_event (flux_t h, int64_t nj)
     JSON ss = NULL;
     JSON jcb = NULL;
     int64_t js = J_NULL;
-    char k[20] = {'\0'};
+    char *key = xasprintf ("%ld", nj);
     jscctx_t *ctx = getctx (h);
-
-    snprintf (k, 20, "%ld", nj);
 
     /* We fix up ordering problem only when new job
        event hasn't been reported through a kvs watch 
@@ -747,7 +754,7 @@ static void fixup_newjob_event (flux_t h, int64_t nj)
     Jadd_int64 (ss, JSC_STATE_PAIR_OSTATE , (int64_t) js);
     Jadd_int64 (ss, JSC_STATE_PAIR_NSTATE, (int64_t) js);
     json_object_object_add (jcb, JSC_STATE_PAIR, ss);
-    if (zhash_insert (ctx->active_jobs, k, (void *)(intptr_t)js) < 0) {
+    if (zhash_insert (ctx->active_jobs, key, (void *)(intptr_t)js) < 0) {
         flux_log (h, LOG_ERR, "new_job_cb: inserting a job to hash failed");
         goto done;
     }
@@ -757,15 +764,16 @@ static void fixup_newjob_event (flux_t h, int64_t nj)
         goto done;
     }
 done:
+    free (key);
     return;
 }
 
 static inline void delete_jobinfo (flux_t h, int64_t jobid)
 {
     jscctx_t *ctx = getctx (h);
-    char k[20] = {'\0'};
-    snprintf (k, 20, "%ld", jobid);
-    zhash_delete (ctx->active_jobs, k);
+    char *key = xasprintf ("%ld", jobid);
+    zhash_delete (ctx->active_jobs, key);
+    free (key);
 }
 
 static void job_state_cb (flux_t h, flux_msg_watcher_t *w, 
