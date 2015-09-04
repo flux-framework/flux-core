@@ -220,8 +220,10 @@ void overlay_push_parent (overlay_t *ov, const char *fmt, ...)
 const char *overlay_get_parent (overlay_t *ov)
 {
     struct endpoint *ep = zlist_first (ov->parents);
-    if (!ep)
+    if (!ep) {
+        errno = ENOENT;
         return NULL;
+    }
     return ep->uri;
 }
 
