@@ -72,4 +72,19 @@ test_expect_success 'wreckrun: uneven distribution with -n, -N' '
 test_expect_success 'wreckrun: too many nodes requested fails' '
 	test_expect_code 1 run_timeout 10 flux wreckrun -N$((${SIZE}+1)) hostname
 '
+test_expect_success 'wreckrun: no nnodes or ntasks args runs one task on rank 0' '
+	test "$(flux wreckrun -l hostname)" = "0: $hostname"
+'
+test_expect_success 'wreckrun: -n1 runs one task on rank 0' '
+	test "$(flux wreckrun -l hostname)" = "0: $hostname"
+'
+test_expect_success 'wreckrun: -n divides tasks among ranks' '
+	flux wreckrun -l -n$((${SIZE}*2)) printenv FLUX_NODE_ID | sort >output_nx2 &&
+        i=0
+	for n in $(seq 0 $((${SIZE}-1))); do
+		echo "$i: $n"; echo "$((i+1)): $n";
+		i=$((i+2));
+	done >expected_nx2 &&
+	test_cmp expected_nx2 output_nx2
+'
 test_done
