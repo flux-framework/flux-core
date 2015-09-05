@@ -7,17 +7,13 @@ Test basic functionality of wreckrun facility.
 '
 
 . `dirname $0`/sharness.sh
-test_under_flux 4
+SIZE=${FLUX_TEST_SIZE:-4}
+test_under_flux ${SIZE}
 
 test_expect_success 'wreckrun: works' '
 	hostname=$(hostname) &&
-	run_timeout 5 flux wreckrun -n4 -N4 hostname  >output &&
-	cat >expected <<-EOF  &&
-	$hostname
-	$hostname
-	$hostname
-	$hostname
-	EOF
+	run_timeout 5 flux wreckrun -n${SIZE} hostname  >output &&
+	for i in $(seq 1 ${SIZE}); do echo $hostname; done >expected &&
 	test_cmp expected output
 '
 
@@ -33,8 +29,8 @@ test_expect_success 'wreckrun: propagates current environment' '
            grep "MY_UNLIKELY_ENV=0xdeadbeef"
 '
 test_expect_success 'wreckrun: does not propagate FLUX_URI' '
-	run_timeout 5 flux wreckrun -n4 -N4 printenv FLUX_URI >uri_output &&
-	test `sort uri_output | uniq | wc -l` -eq 4
+	run_timeout 5 flux wreckrun -n${SIZE} printenv FLUX_URI >uri_output &&
+	test `sort uri_output | uniq | wc -l` -eq ${SIZE}
 '
 test_expect_success 'wreckrun: does not drop output' '
 	for i in `seq 0 100`; do 
@@ -47,7 +43,7 @@ test_expect_success 'wreck: job state events emitted' '
 	run_timeout 5 \
 	  $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
 	   wreck.state wreck.state.complete \
-	   flux wreckrun -N4 -n4 /bin/true > output &&
+	   flux wreckrun -n${SIZE} /bin/true > output &&
         tail -4 output > output_states && # only care about last 4
 	cat >expected_states <<-EOF &&
 	wreck.state.reserved
@@ -58,7 +54,7 @@ test_expect_success 'wreck: job state events emitted' '
 	test_cmp expected_states output_states
 '
 test_expect_success 'wreck: signaling wreckrun works' '
-        flux wreckrun -N4 -n4 sleep 15 </dev/null &
+        flux wreckrun -n${SIZE} sleep 15 </dev/null &
 	q=$! &&
 	$SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
            wreck.state wreck.state.running /bin/true &&
@@ -68,12 +64,27 @@ test_expect_success 'wreck: signaling wreckrun works' '
 '
 flux kvs dir -r resource >/dev/null 2>&1 && test_set_prereq RES_HWLOC
 test_expect_success RES_HWLOC 'wreckrun: oversubscription of tasks' '
-	run_timeout 15 flux wreckrun -v -n$(($(nproc)*4+1)) /bin/true
+	run_timeout 15 flux wreckrun -v -n$(($(nproc)*${SIZE}+1)) /bin/true
 '
 test_expect_success 'wreckrun: uneven distribution with -n, -N' '
-	run_timeout 10 flux wreckrun -N4 -n5 /bin/true
+	run_timeout 10 flux wreckrun -N${SIZE} -n$((${SIZE}+1)) /bin/true
 '
 test_expect_success 'wreckrun: too many nodes requested fails' '
-	test_expect_code 1 run_timeout 10 flux wreckrun -N5 hostname
+	test_expect_code 1 run_timeout 10 flux wreckrun -N$((${SIZE}+1)) hostname
+'
+test_expect_success 'wreckrun: no nnodes or ntasks args runs one task on rank 0' '
+	test "$(flux wreckrun -l hostname)" = "0: $hostname"
+'
+test_expect_success 'wreckrun: -n1 runs one task on rank 0' '
+	test "$(flux wreckrun -l hostname)" = "0: $hostname"
+'
+test_expect_success 'wreckrun: -n divides tasks among ranks' '
+	flux wreckrun -l -n$((${SIZE}*2)) printenv FLUX_NODE_ID | sort >output_nx2 &&
+        i=0
+	for n in $(seq 0 $((${SIZE}-1))); do
+		echo "$i: $n"; echo "$((i+1)): $n";
+		i=$((i+2));
+	done >expected_nx2 &&
+	test_cmp expected_nx2 output_nx2
 '
 test_done
