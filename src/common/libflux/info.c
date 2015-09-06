@@ -26,78 +26,40 @@
 #include "config.h"
 #endif
 #include <errno.h>
-#include <stdbool.h>
+#include <sys/param.h>
+#include <stdlib.h>
 
-#include "info.h"
-#include "rpc.h"
+#include "attr.h"
 
-#include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/xzmalloc.h"
-
-int flux_info (flux_t h, uint32_t *rankp, uint32_t *sizep, int *arityp)
+int flux_get_size (flux_t h, uint32_t *size)
 {
-    flux_rpc_t *r = NULL;
-    JSON out = NULL;
-    const char *json_str;
-    int arity, rank, size;
-    int ret = -1;
+    const char *val;
 
-    if (!(r = flux_rpc (h, "cmb.info", NULL, FLUX_NODEID_ANY, 0)))
-        goto done;
-    if (flux_rpc_get (r, NULL, &json_str) < 0)
-        goto done;
-    if (!(out = Jfromstr (json_str))
-            || !Jget_int (out, "arity", &arity)
-            || !Jget_int (out, "rank", &rank)
-            || !Jget_int (out, "size", &size)) {
-        errno = EPROTO;
-        goto done;
-    }
-    if (rankp)
-        *rankp = rank;
-    if (sizep)
-        *sizep = size;
-    if (arityp)
-        *arityp = arity;
-    ret = 0;
-done:
-    Jput (out);
-    if (r)
-        flux_rpc_destroy (r);
-    return ret;
-}
-
-/* The size is not cacheable per RFC 3.
- * However, allow the size to be faked to facilitate 'loop' testing.
- */
-int flux_size (flux_t h)
-{
-    uint32_t size, *sizep;
-    if ((sizep = flux_aux_get (h, "flux::size")))
-        return *sizep;
-    if (flux_info (h, NULL, &size, NULL) < 0)
+    if (!(val = flux_attr_get (h, "size", NULL)))
         return -1;
-    return size;
+    *size = strtoul (val, NULL, 10);
+    return 0;
 }
 
-/* The rank is cacheable, since it never changes per RFC 3.
- * In addition, allow the rank to be faked to facilitate 'loop' testing.
- */
-int flux_rank (flux_t h)
+int flux_get_rank (flux_t h, uint32_t *rank)
 {
-    uint32_t *rank = flux_aux_get (h, "flux::rank");
-    if (!rank) {
-        if (!(rank = malloc (sizeof (*rank)))) {
-            errno = ENOMEM;
-            return -1;
-        }
-        if (flux_info (h, rank, NULL, NULL) < 0)
-            return -1;
-        flux_aux_set (h, "flux::rank", rank, free);
-    }
-    return *rank;
+    const char *val;
+
+    if (!(val = flux_attr_get (h, "rank", NULL)))
+        return -1;
+    *rank = strtoul (val, NULL, 10);
+    return 0;
 }
 
+int flux_get_arity (flux_t h, int *arity)
+{
+    const char *val;
+
+    if (!(val = flux_attr_get (h, "tbon-arity", NULL)))
+        return -1;
+    *arity = strtol (val, NULL, 10);
+    return 0;
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
