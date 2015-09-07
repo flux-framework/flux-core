@@ -169,6 +169,7 @@ static int init_shell_exit_handler (struct subprocess *p, void *arg);
 
 static int create_socketdir (ctx_t *ctx);
 static int create_rankdir (ctx_t *ctx);
+static int create_dummyattrs (ctx_t *ctx);
 
 static int boot_pmi (ctx_t *ctx);
 static int boot_single (ctx_t *ctx);
@@ -502,10 +503,12 @@ int main (int argc, char *argv[])
     if (ctx.rank == 0)
         flux_log_set_redirect (ctx.h, broker_log, &ctx);
 
-    /* Update cached value of rank, size
+    /* Dummy up cached attributes on the broker's handle so logging's
+     * use of flux_get_rank() etc will work despite limitations.
      */
-    flux_aux_set (ctx.h, "flux::rank", &ctx.rank, NULL);
-    flux_aux_set (ctx.h, "flux::size", &ctx.size, NULL);
+    if (create_dummyattrs (&ctx) < 0)
+        err_exit ("creating dummy attributes");
+
     overlay_set_rank (ctx.overlay, ctx.rank);
 
     /* Configure attributes.
@@ -801,6 +804,22 @@ static void init_shell (ctx_t *ctx)
         flux_log (ctx->h, LOG_INFO, "starting initial program");
 
     subprocess_run (ctx->init_shell);
+}
+
+static int create_dummyattrs (ctx_t *ctx)
+{
+    char *s;
+    s = xasprintf ("%u", ctx->rank);
+    if (flux_attr_fake (ctx->h, "rank", s, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        return -1;
+    free (s);
+
+    s = xasprintf ("%u", ctx->size);
+    if (flux_attr_fake (ctx->h, "size", s, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        return -1;
+    free (s);
+
+    return 0;
 }
 
 /* The 'ranktmp' dir will contain the broker.pid file and local:// socket.

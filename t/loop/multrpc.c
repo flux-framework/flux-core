@@ -6,6 +6,7 @@
 #include "src/common/libflux/response.h"
 #include "src/common/libflux/reactor.h"
 #include "src/common/libflux/info.h"
+#include "src/common/libflux/attr.h"
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/nodeset.h"
@@ -138,7 +139,9 @@ int rpctest_begin_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
 
     /* fake that we have a larger session */
     fake_size = 128;
-    flux_aux_set (h, "flux::size", &fake_size, NULL);
+    char s[16];
+    snprintf (s, sizeof (s), "%u", fake_size);
+    flux_attr_fake (h, "size", s, FLUX_ATTRFLAG_IMMUTABLE);
     cmp_ok (flux_size (h), "==", fake_size,
         "successfully faked flux_size() of %d", fake_size);
 

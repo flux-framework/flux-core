@@ -103,6 +103,7 @@ static void *module_thread (void *arg)
     int errnum;
     char *uri = xasprintf ("shmem://%s", zuuid_str (p->uuid));
     char **av = NULL;
+    char *rankstr = NULL;
     int ac;
 
     assert (p->zctx);
@@ -114,7 +115,12 @@ static void *module_thread (void *arg)
     if (flux_opt_set (p->h, FLUX_OPT_ZEROMQ_CONTEXT,
                       p->zctx, sizeof (p->zctx)) < 0)
         err_exit ("flux_opt_set ZEROMQ_CONTEXT");
-    flux_aux_set (p->h, "flux::rank", &p->rank, NULL);
+
+    rankstr = xasprintf ("%u", p->rank);
+    if (flux_attr_fake (p->h, "rank", rankstr, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+        err ("%s: error faking rank attribute", p->name);
+        goto done;
+    }
     flux_log_set_facility (p->h, p->name);
     modservice_register (p->h, p);
 
@@ -135,6 +141,8 @@ static void *module_thread (void *arg)
         goto done;
     }
 done:
+    if (rankstr)
+        free (rankstr);
     if (av)
         free (av);
     flux_close (p->h);

@@ -71,12 +71,10 @@ void check_size3 (flux_t h)
 {
     hello_t *hello;
     flux_msg_watcher_t *w;
-    uint32_t size = 3;
-    uint32_t rank = 0;
     char *prefix = "size=3";
 
-    flux_aux_set (h, "flux::size", &size, NULL);
-    flux_aux_set (h, "flux::rank", &rank, NULL);
+    flux_attr_fake (h, "size", "3", FLUX_ATTRFLAG_IMMUTABLE);
+    flux_attr_fake (h, "rank", "0", FLUX_ATTRFLAG_IMMUTABLE);
 
     hello_count = hello_request = 0;
     ok ((hello = hello_create ()) != NULL,
@@ -90,17 +88,15 @@ void check_size3 (flux_t h)
         "%s: created cmb.hello watcher", prefix);
     flux_msg_watcher_start (h, w);
 
-    flux_aux_set (h, "flux::rank", &rank, NULL);
+    flux_attr_fake (h, "rank", "0", FLUX_ATTRFLAG_IMMUTABLE);
     ok (hello_start (hello) == 0,
         "%s: (rank 0) hello_start works", prefix);
 
-    rank = 1;
-    flux_aux_set (h, "flux::rank", &rank, NULL);
+    flux_attr_fake (h, "rank", "1", FLUX_ATTRFLAG_IMMUTABLE);
     ok (hello_start (hello) == 0,
         "%s: (rank 1) hello_start works", prefix);
 
-    rank = 2;
-    flux_aux_set (h, "flux::rank", &rank, NULL);
+    flux_attr_fake (h, "rank", "2", FLUX_ATTRFLAG_IMMUTABLE);
     ok (hello_start (hello) == 0,
         "%s: (rank 2) hello_start works", prefix);
 
