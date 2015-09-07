@@ -40,7 +40,7 @@
 
 
 struct rexec_ctx {
-    int nodeid;
+    uint32_t nodeid;
     flux_t h;
     char *wrexecd_path;
     const char *local_uri;
@@ -81,7 +81,8 @@ static struct rexec_ctx *getctx (flux_t h)
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
         ctx->h = h;
-        ctx->nodeid = flux_rank (h);
+        if (flux_get_rank (h, &ctx->nodeid) < 0)
+            err_exit ("flux_get_rank");
         if (!(ctx->local_uri = flux_attr_get (h, "local-uri", NULL)))
             err_exit ("flux_attr_get local-uri");
         flux_aux_set (h, "wrexec", ctx, freectx);

@@ -134,7 +134,14 @@ done:
 
 int heartbeat_start (heartbeat_t *hb)
 {
-    if (!hb->h || flux_rank (hb->h) != 0) {
+    uint32_t rank;
+    if (!hb->h) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (flux_get_rank (hb->h, &rank) < 0)
+        return -1;
+    if (rank != 0) {
         errno = EINVAL;
         return -1;
     }

@@ -129,8 +129,9 @@ int main (int argc, char *argv[])
     } else if (!strcmp (cmd, "info")) {
         int arity;
         uint32_t rank, size;
-        if (flux_info (h, &rank, &size, &arity) < 0)
-            err_exit ("flux_info");
+        if (flux_get_rank (h, &rank) < 0 || flux_get_size (h, &size) < 0
+                                         || flux_get_arity (h, &arity) < 0)
+            err_exit ("flux_get_rank/size/arity");
         printf ("rank=%d\n", rank);
         printf ("size=%d\n", size);
         printf ("arity=%d\n", arity);

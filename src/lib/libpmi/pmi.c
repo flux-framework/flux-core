@@ -64,7 +64,7 @@ typedef struct {
     int universe_size;
     int appnum;
     int barrier_num;
-    int cmb_rank;
+    uint32_t cmb_rank;
     flux_t fctx;
     char kvsname[PMI_MAX_KVSNAMELEN];
     int trace;
@@ -90,7 +90,7 @@ static inline void trace (int flags, const char *fmt, ...)
 
     if (ctx && (flags & ctx->trace)) {
         char buf[64];
-        snprintf (buf, sizeof (buf), "[%d.%d.%d] %s\n", ctx->cmb_rank,
+        snprintf (buf, sizeof (buf), "[%" PRIu32 ".%d.%d] %s\n", ctx->cmb_rank,
                   ctx->appnum, ctx->rank, fmt);
         va_start (ap, fmt);
         vfprintf (stdout, buf, ap);
@@ -135,7 +135,10 @@ int PMI_Init (int *spawned)
         err ("flux_open");
         goto fail;
     }
-    ctx->cmb_rank = flux_rank (ctx->fctx);
+    if (flux_get_rank (ctx->fctx, &ctx->cmb_rank) < 0) {
+        err ("flux_get_rank");
+        goto fail;
+    }
     trace_simple (PMI_TRACE_INIT);
     *spawned = ctx->spawned;
     return PMI_SUCCESS;

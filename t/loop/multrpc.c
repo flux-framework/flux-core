@@ -140,10 +140,12 @@ int rpctest_begin_cb (flux_t h, int type, zmsg_t **zmsg, void *arg)
     /* fake that we have a larger session */
     fake_size = 128;
     char s[16];
+    uint32_t size = 0;
     snprintf (s, sizeof (s), "%u", fake_size);
     flux_attr_fake (h, "size", s, FLUX_ATTRFLAG_IMMUTABLE);
-    cmp_ok (flux_size (h), "==", fake_size,
-        "successfully faked flux_size() of %d", fake_size);
+    flux_get_size (h, &size);
+    cmp_ok (size, "==", fake_size,
+        "successfully faked flux_get_size() of %d", fake_size);
 
     /* repeat working no-payload RPC test (now with 128 nodes) */
     old_count = hello_count;

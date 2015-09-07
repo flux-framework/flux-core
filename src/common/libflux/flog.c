@@ -123,18 +123,23 @@ int flux_vlog (flux_t h, int lev, const char *fmt, va_list ap)
     char *s = xvasprintf (fmt, ap);
     struct timeval tv;
     JSON o = Jnew ();
+    uint32_t rank;
     int rc = -1;
 
     if (gettimeofday (&tv, NULL) < 0)
         err_exit ("gettimeofday");
+    if (flux_get_rank (h, &rank) < 0)
+        goto done;
     Jadd_str (o, "facility", ctx->facility);
     Jadd_int (o, "level", lev);
-    Jadd_int (o, "rank", flux_rank (h));
+    Jadd_int (o, "rank", rank);
     Jadd_int (o, "timestamp_usec", (int)tv.tv_usec);
     Jadd_int (o, "timestamp_sec", (int)tv.tv_sec);
     Jadd_str (o, "message", s);
     rc = flux_log_json (h, Jtostr (o));
-    free (s);
+done:
+    if (s)
+        free (s);
     Jput (o);
     return rc;
 }

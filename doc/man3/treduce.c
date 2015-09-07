@@ -118,7 +118,7 @@ struct flux_reduce_ops reduce_ops = {
 int mod_main (flux_t h, int argc, char **argv)
 {
     struct context ctx;
-    int rank = flux_rank (h);
+    uint32_t rank;
     double timeout = 0.;
     int flags;
 
@@ -127,8 +127,9 @@ int mod_main (flux_t h, int argc, char **argv)
         flags = FLUX_REDUCE_TIMEDFLUSH;
     } else
         flags = FLUX_REDUCE_HWMFLUSH;
-
     ctx.batchnum = 0;
+    if (flux_get_rank (h, &rank) < 0)
+        return -1;
     snprintf (ctx.rankstr, sizeof (ctx.rankstr), "%d", rank);
     ctx.h = h;
 

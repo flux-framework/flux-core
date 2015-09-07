@@ -83,7 +83,7 @@ struct prog_ctx {
     flux_fd_watcher_t *fdw;
     flux_msg_watcher_t *mw;
 
-    int noderank;
+    uint32_t noderank;
 
     int64_t id;             /* id of this execution */
     int total_ntasks;       /* Total number of tasks in job */
@@ -583,8 +583,11 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
     kvsitr_t *i;
     const char *key;
     int *nodeids;
+    uint32_t size;
 
-    nodeids = malloc (flux_size (ctx->flux) * sizeof (int));
+    if (flux_get_size (ctx->flux, &size) < 0)
+        return (-1);
+    nodeids = malloc (size * sizeof (int));
     if (nodeids == NULL)
         return (-1);
 
@@ -592,7 +595,7 @@ int prog_ctx_get_nodeinfo (struct prog_ctx *ctx)
         log_err (ctx, "get_dir (%s.rank) failed: %s",
                  kvsdir_key (ctx->kvs),
                  strerror (errno));
-        ctx->nnodes = flux_size (ctx->flux);
+        ctx->nnodes = size;
         ctx->nodeid = ctx->noderank;
     }
 
@@ -749,8 +752,8 @@ int prog_ctx_init_from_cmb (struct prog_ctx *ctx)
         log_fatal (ctx, 1, "kvs_get_dir (lwj.%lu): %s",
                    ctx->id, strerror (errno));
     }
-
-    ctx->noderank = flux_rank (ctx->flux);
+    if (flux_get_rank (ctx->flux, &ctx->noderank) < 0)
+        log_fatal (ctx, 1, "flux_get_rank");
     /*
      *  If the "rank" dir exists in kvs, then this LWJ has been
      *   assigned specific resources by a scheduler.

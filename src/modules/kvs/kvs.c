@@ -163,7 +163,7 @@ typedef struct {
     int watchlist_lastrun_epoch;
     stats_t stats;
     flux_t h;
-    bool master;            /* for now minimize flux_rank() calls */
+    bool master;            /* for now minimize flux_get_rank() calls */
     int epoch;              /* tracks current heartbeat epoch */
     struct timespec commit_time; /* time of most recent commit */
     bool timer_armed;
@@ -195,6 +195,7 @@ static void freectx (void *arg)
 static ctx_t *getctx (flux_t h)
 {
     ctx_t *ctx = (ctx_t *)flux_aux_get (h, "kvssrv");
+    uint32_t rank;
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
@@ -206,7 +207,7 @@ static ctx_t *getctx (flux_t h)
             oom ();
         ctx->watchlist = wait_queue_create ();
         ctx->h = h;
-        if (flux_rank (h) == 0)
+        if (flux_get_rank (h, &rank) == 0 && rank == 0)
             ctx->master = true;
         flux_aux_set (h, "kvssrv", ctx, freectx);
     }

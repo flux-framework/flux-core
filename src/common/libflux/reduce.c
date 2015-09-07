@@ -86,7 +86,13 @@ flux_reduce_t *flux_reduce_create (flux_t h, struct flux_reduce_ops ops,
     r->h = h;
     r->ops = ops;
     r->rank = 0;
-    (void) flux_info (h, &r->rank, &size, &arity);
+    if (flux_get_rank (h, &r->rank) < 0 || flux_get_size (h, &size) < 0
+                                        || flux_get_arity (h, &arity) < 0) {
+        flux_reduce_destroy (r);
+        return NULL;
+    }
+        
+    //(void) flux_info (h, &r->rank, &size, &arity);
     r->arg = arg;
     r->flags = flags;
     if (!(r->items = zlist_new ()))

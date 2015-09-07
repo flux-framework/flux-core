@@ -22,14 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* To use this connector:
- *   int rank;
- *   zctx_t *zctx;
- *   flux_t h = flux_open ("shmem://myuuid", flags)
- *   flux_setopt (h, FLUX_OPT_ZEROMQ_CONTEXT, zctx);
- *   flux_aux_set (h, "flux::rank", &rank, NULL);
- */
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif

@@ -110,6 +110,7 @@ int main (int argc, char *argv[])
         .fanout = 1024,
         .nodeset = NULL,
     };
+    uint32_t rank, size;
 
     log_init ("flux-module");
 
@@ -149,14 +150,16 @@ int main (int argc, char *argv[])
     if (strcmp (cmd, "info") != 0) {
         if (!(h = flux_open (NULL, 0)))
             err_exit ("flux_open");
+        if (flux_get_rank (h, &rank) < 0 || flux_get_size (h, &size))
+            err_exit ("flux_get_rank/size");
         if (!opt.nodeset) {
-            opt.nodeset = xasprintf ("%d", flux_rank (h));
-        } else if (!strcmp (opt.nodeset, "all") && flux_size (h) == 1) {
+            opt.nodeset = xasprintf ("%d", rank);
+        } else if (!strcmp (opt.nodeset, "all") && size == 1) {
             free (opt.nodeset);
-            opt.nodeset= xasprintf ("%d", flux_rank (h));
+            opt.nodeset= xasprintf ("%d", rank);
         } else if (!strcmp (opt.nodeset, "all")) {
             free (opt.nodeset);
-            opt.nodeset = xasprintf ("[0-%d]", flux_size (h) - 1);
+            opt.nodeset = xasprintf ("[0-%d]", size - 1);
         }
     }
 

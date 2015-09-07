@@ -44,6 +44,7 @@ typedef struct {
     zhash_t *barriers;
     flux_t h;
     bool timer_armed;
+    uint32_t rank;
 } ctx_t;
 
 typedef struct _barrier_struct {
@@ -73,6 +74,8 @@ static ctx_t *getctx (flux_t h)
         ctx = xzmalloc (sizeof (*ctx));
         if (!(ctx->barriers = zhash_new ()))
             oom ();
+        if (flux_get_rank (h, &ctx->rank) < 0)
+            err_exit ("flux_get_rank");
         ctx->h = h;
         flux_aux_set (h, "barriersrv", ctx, freectx);
     }
@@ -200,7 +203,7 @@ static int enter_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     if (b->count == b->nprocs) {
         if (exit_event_send (ctx->h, b->name, 0) < 0)
             flux_log (ctx->h, LOG_ERR, "exit_event_send: %s", strerror (errno));
-    } else if (flux_rank (ctx->h) > 0 && !ctx->timer_armed) {
+    } else if (ctx->rank > 0 && !ctx->timer_armed) {
         if (flux_tmouthandler_add (h, barrier_reduction_timeout_msec,
                                    true, timeout_cb, ctx) < 0) {
             flux_log (h, LOG_ERR, "flux_tmouthandler_add: %s",strerror (errno));
@@ -314,7 +317,7 @@ static int timeout_cb (flux_t h, void *arg)
 {
     ctx_t *ctx = arg;
 
-    assert (flux_rank (h) != 0);
+    assert (ctx->rank != 0);
     ctx->timer_armed = false; /* one shot */
 
     zhash_foreach (ctx->barriers, timeout_reduction, ctx);
