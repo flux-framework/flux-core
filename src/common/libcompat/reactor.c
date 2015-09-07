@@ -148,7 +148,7 @@ static void msg_compat_free (struct msg_compat *c)
     }
 }
 
-int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
+static int msghandler_add (flux_t h, int typemask, const char *pattern,
                          FluxMsgHandler cb, void *arg)
 {
     struct ctx *ctx = getctx (h);
@@ -174,12 +174,18 @@ int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
     return 0;
 }
 
+int flux_msghandler_add (flux_t h, int typemask, const char *pattern,
+                         FluxMsgHandler cb, void *arg)
+{
+    return msghandler_add (h, typemask, pattern, cb, arg);
+}
+
 int flux_msghandler_addvec (flux_t h, msghandler_t *hv, int len, void *arg)
 {
     int i;
 
     for (i = 0; i < len; i++)
-        if (flux_msghandler_add (h, hv[i].typemask, hv[i].pattern,
+        if (msghandler_add (h, hv[i].typemask, hv[i].pattern,
                                     hv[i].cb, arg) < 0)
             return -1;
     return 0;
