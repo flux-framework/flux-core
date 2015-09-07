@@ -1,26 +1,30 @@
-flux_info(3)
-============
+flux_get_rank(3)
+================
 :doctype: manpage
 
 
 NAME
 ----
-flux_info - query Flux broker comms info
+flux_get_rank, flux_get_size, flux_get_arity - query Flux broker comms info
 
 
 SYNOPSIS
 --------
 #include <flux/core.h>
 
-int flux_info (flux_t h, uint32_t *rank, uint32_t *size, int *k);
+int flux_get_rank (flux_t h, uint32_t *rank);
+
+int flux_get_size (flux_t h, uint32_t *size);
+
+int flux_get_arity (flux_t h, int *arity);
 
 
 DESCRIPTION
 -----------
 
-`flux_info()` asks the Flux broker for its rank in the comms session,
-the size of the comms session, and the branching factor (k) of
-its tree-based overlay network.
+`flux_get_rank()`, `flux_get_size()`, and `flux_get_arity()`  ask the
+Flux broker for its rank in the comms session, the size of the comms
+session, and the branching factor (k) of its tree-based overlay network.
 
 The tree-based overlay network is always rooted at rank zero.
 
@@ -28,7 +32,7 @@ The tree-based overlay network is always rooted at rank zero.
 RETURN VALUE
 ------------
 
-`flux_info()` returns  zero on success.  On error, -1 is returned, and errno
+These functions return zero on success.  On error, -1 is returned, and errno
 is set appropriately.
 
 
