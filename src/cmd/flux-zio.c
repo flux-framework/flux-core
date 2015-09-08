@@ -100,6 +100,7 @@ int main (int argc, char *argv[])
     int blocksize = 4096;
     int flags = 0;
     flux_t h;
+    uint32_t rank;
 
     log_init ("flux-zio");
 
@@ -155,9 +156,11 @@ int main (int argc, char *argv[])
 
     if (!(h = flux_open (NULL, 0)))
         err_exit ("flux_open");
+    if (flux_get_rank (h, &rank) < 0)
+        err_exit ("flux_get_rank");
 
     if ((aopt || ropt) && !key) {
-        if (asprintf (&key, "zio.%d.%d", flux_rank (h), (int)getpid ()) < 0)
+        if (asprintf (&key, "zio.%d.%d", rank, (int)getpid ()) < 0)
             oom ();
     }
 

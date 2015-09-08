@@ -121,7 +121,8 @@ static int rpc_request_send (flux_rpc_t *rpc, int n, const char *topic,
         goto done;
     if (nodeid == FLUX_NODEID_UPSTREAM) {
         flags |= FLUX_MSGFLAG_UPSTREAM;
-        nodeid = flux_rank (rpc->h);
+        if (flux_get_rank (rpc->h, &nodeid) < 0)
+            goto done;
     }
     if (flux_msg_set_nodeid (msg, nodeid, flags) < 0)
         goto done;
@@ -260,14 +261,16 @@ flux_rpc_t *flux_rpc_multi (flux_t h, const char *topic, const char *json_str,
     nodeset_t ns = NULL;
     nodeset_itr_t itr = NULL;
     flux_rpc_t *rpc = NULL;
-    int i, count;
+    int i;
+    uint32_t count;
 
     if (!topic || !nodeset) {
         errno = EINVAL;
         goto error;
     }
     if (!strcmp (nodeset, "all")) {
-        count = flux_size (h);
+        if (flux_get_size (h, &count) < 0)
+            goto error;
         ns = nodeset_new_range (0, count - 1);
     } else {
         if ((ns = nodeset_new_str (nodeset)))

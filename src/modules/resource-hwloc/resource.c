@@ -82,9 +82,16 @@ static void get_cb (flux_t h,
 
 static int load_xml_to_kvs (flux_t h, ctx_t *ctx)
 {
-    char *xml_path = xasprintf ("resource.hwloc.xml.%d", flux_rank (h));
+    char *xml_path = NULL;
     char *buffer = NULL;
     int buflen = 0, ret = -1;
+    uint32_t rank;
+
+    if (flux_get_rank (h, &rank) < 0) {
+        flux_log (h, LOG_ERR, "flux_get_rank");
+        goto done;
+    }
+    xml_path = xasprintf ("resource.hwloc.xml.%" PRIu32, rank);
     if (hwloc_topology_export_xmlbuffer (ctx->topology, &buffer, &buflen) < 0) {
         flux_log (h, LOG_ERR, "hwloc_topology_export_xmlbuffer");
         goto done;
@@ -95,7 +102,8 @@ static int load_xml_to_kvs (flux_t h, ctx_t *ctx)
     }
     ret = 0;
 done:
-    free (xml_path);
+    if (xml_path)
+        free (xml_path);
     hwloc_free_xmlbuffer (ctx->topology, buffer);
     return ret;
 }
@@ -197,9 +205,16 @@ done:
 
 static int load_info_to_kvs (flux_t h, ctx_t *ctx)
 {
-    char *base_path = xasprintf ("resource.hwloc.by_rank.%d", flux_rank (h));
+    char *base_path = NULL;
     int ret = -1, i;
     int depth = hwloc_topology_get_depth (ctx->topology);
+    uint32_t rank;
+
+    if (flux_get_rank (h, &rank) < 0) {
+        flux_log (h, LOG_ERR, "flux_get_rank");
+        goto done;
+    }
+    base_path = xasprintf ("resource.hwloc.by_rank.%" PRIu32, rank);
     for (i = 0; i < depth; ++i) {
         int nobj = hwloc_get_nbobjs_by_depth (ctx->topology, i);
         hwloc_obj_type_t t = hwloc_get_depth_type (ctx->topology, i);
@@ -232,7 +247,8 @@ static int load_info_to_kvs (flux_t h, ctx_t *ctx)
     }
     ret = 0;
 done:
-    free (base_path);
+    if (base_path)
+        free (base_path);
     return ret;
 }
 
@@ -241,20 +257,23 @@ static void load_cb (flux_t h,
                      const flux_msg_t *msg,
                      void *arg)
 {
-    int rank = flux_rank (h);
+    uint32_t rank, size;
     ctx_t *ctx = (ctx_t *)arg;
 
     if (load_xml_to_kvs (h, ctx) < 0 || load_info_to_kvs (h, ctx) < 0) {
         return;
     }
-
-    char *completion_path = xasprintf ("resource.hwloc.loaded.%d", rank);
+    if (flux_get_rank (h, &rank) < 0 || flux_get_size (h, &size) < 0) {
+        flux_log (h, LOG_ERR, "flux_get_rank/size: %s", strerror (errno));
+        return;
+    }
+    char *completion_path = xasprintf ("resource.hwloc.loaded.%" PRIu32, rank);
     kvs_put_int (h, completion_path, 1);
     free (completion_path);
 
-    kvs_fence (h, "resource_hwloc_loaded", flux_size (h));
+    kvs_fence (h, "resource_hwloc_loaded", size);
 
-    flux_log (h, LOG_DEBUG, "resource_hwloc: loaded: %d", rank);
+    flux_log (h, LOG_DEBUG, "resource_hwloc: loaded: %" PRIu32, rank);
 
     ctx->loaded = true;
 }

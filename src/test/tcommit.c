@@ -88,7 +88,10 @@ void *thread (void *arg)
         err ("%d: flux_open", t->n);
         goto done;
     }
-    rank = flux_rank (t->h);
+    if (flux_get_rank (t->h, &rank) < 0) {
+        err ("%d: flux_get_rank", t->n);
+        goto done;
+    }
     for (i = 0; i < count; i++) {
         key = xasprintf ("%s.%u.%d.%d", prefix, rank, t->n, i);
         if (fopt)

@@ -111,7 +111,9 @@ int main (int argc, char *argv[])
     if (!(h = flux_open (NULL, 0)))
         err_exit ("flux_open");
     if (!prefix) {
-        uint32_t rank = flux_rank (h);
+        uint32_t rank;
+        if (flux_get_rank (h, &rank) < 0)
+            err_exit ("flux_get_rank");
         prefix = xasprintf ("kvstorture-%u", rank);
     }
 

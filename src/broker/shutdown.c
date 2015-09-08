@@ -153,6 +153,7 @@ done:
 int shutdown_recvmsg (shutdown_t *s, const flux_msg_t *msg)
 {
     int rc = -1;
+    uint32_t rank;
 
     if (!s->w) {
         if (shutdown_decode (msg, &s->grace, &s->rc, &s->rank,
@@ -161,7 +162,9 @@ int shutdown_recvmsg (shutdown_t *s, const flux_msg_t *msg)
         if (!(s->w = flux_timer_watcher_create (s->grace, 0., shutdown_cb, s)))
             goto done;
         flux_timer_watcher_start (s->h, s->w);
-        if (flux_rank (s->h) == 0)
+        if (flux_get_rank (s->h, &rank) < 0)
+            goto done;
+        if (rank == 0)
             flux_log (s->h, LOG_INFO, "%d: shutdown in %.3fs: %s",
                       s->rank, s->grace, s->reason);
     }
@@ -175,11 +178,14 @@ int shutdown_arm (shutdown_t *s, double grace, int exitcode,
 {
     va_list ap;
     flux_msg_t *msg = NULL;
+    uint32_t rank;
     int rc = -1;
 
     if (!s->w) {
+        if (flux_get_rank (s->h, &rank) < 0)
+            goto done;
         va_start (ap, fmt);
-        msg = shutdown_vencode (grace, exitcode, flux_rank (s->h), fmt, ap);
+        msg = shutdown_vencode (grace, exitcode, rank, fmt, ap);
         va_end (ap);
         if (!msg || flux_send (s->h, msg, 0) < 0)
             goto done;

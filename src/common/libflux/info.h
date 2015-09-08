@@ -5,14 +5,11 @@
 
 #include "handle.h"
 
-int flux_info (flux_t h, uint32_t *rankp, uint32_t *sizep, int *arityp);
-int flux_rank (flux_t h);
-int flux_size (flux_t h);
+int flux_get_rank (flux_t h, uint32_t *rank);
 
-/* flux_getattr is used to read misc. attributes internal to the broker.
- * The caller must dispose of the returned string with free ().
- */
-char *flux_getattr (flux_t h, int rank, const char *name);
+int flux_get_size (flux_t h, uint32_t *size);
+
+int flux_get_arity (flux_t h, int *arity);
 
 #endif /* !_FLUX_CORE_INFO_H */
 

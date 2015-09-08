@@ -109,7 +109,8 @@ int flux_json_request (flux_t h, uint32_t nodeid, uint32_t matchtag,
         goto done;
     if (nodeid == FLUX_NODEID_UPSTREAM) {
         flags |= FLUX_MSGFLAG_UPSTREAM;
-        nodeid = flux_rank (h);
+        if (flux_get_rank (h, &nodeid) < 0)
+            goto done;
     }
     if (flux_msg_set_nodeid (zmsg, nodeid, flags) < 0)
         goto done;

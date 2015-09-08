@@ -250,20 +250,29 @@ static int l_flux_barrier (lua_State *L)
 static int l_flux_rank (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
-    return (l_pushresult (L, flux_rank (f)));
+    uint32_t rank;
+    if (flux_get_rank (f, &rank) < 0)
+        return lua_pusherror (L, "flux_get_rank error");
+    return (l_pushresult (L, rank));
 }
 
 static int l_flux_size (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
-    return (l_pushresult (L, flux_size (f)));
+    uint32_t size;
+    if (flux_get_size (f, &size) < 0)
+        return lua_pusherror (L, "flux_get_size error");
+    return (l_pushresult (L, size));
 }
 
 static int l_flux_treeroot (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
     bool treeroot = false;
-    if (flux_rank (f) == 0)
+    uint32_t rank;
+    if (flux_get_rank (f, &rank) < 0)
+        return lua_pusherror (L, "flux_get_rank error");
+    if (rank == 0)
         treeroot = true;
     lua_pushboolean (L, treeroot);
     return (1);

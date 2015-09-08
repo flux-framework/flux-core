@@ -140,7 +140,12 @@ static unsigned long increment_jobid (flux_t h)
 static unsigned long lwj_next_id (flux_t h)
 {
     unsigned long ret;
-    if (flux_rank (h) == 0)
+    uint32_t rank;
+    if (flux_get_rank (h, &rank) < 0) {
+        flux_log (h, LOG_ERR, "flux_get_rank: %s", strerror (errno));
+        return (0);
+    }
+    if (rank == 0)
         ret = increment_jobid (h);
     else {
         const char *s;
@@ -283,7 +288,10 @@ static void job_request_cb (flux_t h, flux_msg_watcher_t *w,
     const char *json_str;
     json_object *o = NULL;
     const char *topic;
+    uint32_t rank;
 
+    if (flux_get_rank (h, &rank) < 0)
+        goto out;
     if (flux_msg_get_topic (msg, &topic) < 0)
         goto out;
     flux_log (h, LOG_INFO, "got request %s", topic);
@@ -295,7 +303,7 @@ static void job_request_cb (flux_t h, flux_msg_watcher_t *w,
         flux_reactor_stop (h);
     }
     if (strcmp (topic, "job.next-id") == 0) {
-        if (flux_rank (h) == 0) {
+        if (rank == 0) {
             unsigned long id = lwj_next_id (h);
             json_object *ox = json_id (id);
             if (flux_respond (h, msg, 0, json_object_to_json_string (ox)) < 0)

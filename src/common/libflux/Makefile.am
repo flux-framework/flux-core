@@ -27,6 +27,7 @@ fluxcoreinclude_HEADERS = \
 	module.h \
 	reparent.h \
 	info.h \
+	attr.h \
 	flog.h \
 	conf.h \
 	heartbeat.h
@@ -37,6 +38,7 @@ noinst_LTLIBRARIES = \
 libflux_la_SOURCES = \
 	flog.c \
 	info.c \
+	attr.c \
 	handle.c \
 	reactor.c \
 	reduce.c \

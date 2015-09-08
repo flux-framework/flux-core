@@ -97,13 +97,13 @@ typedef struct {
 } ns_t;
 
 typedef struct {
-    int rank;
-    char *uri;
+    uint32_t rank;
+    const char *uri;
     cstate_t state;
 } parent_t;
 
 typedef struct {
-    int rank;
+    uint32_t rank;
     char *rankstr;
     cstate_t state;
 } child_t;
@@ -112,7 +112,7 @@ typedef struct {
     int max_idle;
     int slow_idle;
     int epoch;
-    int rank;
+    uint32_t rank;
     char *rankstr;
     zlist_t *parents;   /* current parent is first in list */
     zhash_t *children;
@@ -172,7 +172,8 @@ static ctx_t *getctx (flux_t h)
         ctx = xzmalloc (sizeof (*ctx));
         ctx->max_idle = default_max_idle;
         ctx->slow_idle = default_slow_idle;
-        ctx->rank = flux_rank (h);
+        if (flux_get_rank (h, &ctx->rank) < 0)
+            err_exit ("flux_get_rank");
         if (asprintf (&ctx->rankstr, "%d", ctx->rank) < 0)
             oom ();
         if (!(ctx->parents = zlist_new ()))
@@ -207,8 +208,6 @@ static child_t *child_create (int rank)
 
 static void parent_destroy (parent_t *p)
 {
-    if (p->uri)
-        free (p->uri);
     free (p);
 }
 
@@ -216,8 +215,7 @@ static parent_t *parent_create (int rank, const char *uri)
 {
     parent_t *p = xzmalloc (sizeof (*p));
     p->rank = rank;
-    if (uri)
-        p->uri = xstrdup (uri);
+    p->uri = uri;
     return p;
 }
 
@@ -273,9 +271,7 @@ static void parents_fromjson (ctx_t *ctx, JSON ar)
         for (i = 0; i < len; i++) {
             if (Jget_ar_obj (ar, i, &el) && (p = parent_fromjson (el))) {
                 if (i == 0) {
-                    if (p->uri) /* unlikely */
-                        free (p->uri);
-                    p->uri = flux_getattr (ctx->h, -1, "tbon-parent-uri");
+                    p->uri = flux_attr_get (ctx->h, "tbon-parent-uri", NULL);
                 }
                 if (zlist_append (ctx->parents, p) < 0)
                     oom ();
@@ -666,14 +662,15 @@ static int ns_sync (ctx_t *ctx)
 {
     int rc = -1;
     bool writekvs = false;
-
     if (ctx->ns) {
         writekvs = true;
     } else if (ns_fromkvs (ctx) < 0) {
         char *ok = ctx->rankstr, *fail = "", *slow = "", *unknown = "";
-        int size = flux_size (ctx->h);
+        uint32_t size;
+        if (flux_get_size (ctx->h, &size) < 0)
+            goto done;
         if (size > 1)
-            if (asprintf (&unknown, "1-%d", flux_size (ctx->h) - 1) < 0)
+            if (asprintf (&unknown, "1-%d", size - 1) < 0)
                 oom ();
         ctx->ns = ns_create (ok, fail, slow, unknown);
         if (size > 1)

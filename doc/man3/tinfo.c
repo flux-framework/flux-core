@@ -10,16 +10,20 @@ int tree_height (uint32_t n, int k)
 int main (int argc, char **argv)
 {
     flux_t h;
-    uint32_t n, rank;
+    uint32_t rank, n;
     int k;
 
     if (!(h = flux_open (NULL, 0)))
         err_exit ("flux_open");
-    if (flux_info (h, &rank, &n, &k) < 0)
-        err_exit ("flux_info");
-    printf ("height of %d-ary tree of size %u: %d\n",
+    if (flux_get_rank (h, &rank) < 0)
+        err_exit ("flux_get_rank");
+    if (flux_get_size (h, &n) < 0)
+        err_exit ("flux_get_size");
+    if (flux_get_arity (h, &k) < 0)
+        err_exit ("flux_get_arity");
+    printf ("height of %d-ary tree of size %" PRIu32 ": %d\n",
             k, n, tree_height (n, k));
-    printf ("height of %d-ary at rank %u: %d\n",
+    printf ("height of %d-ary at rank %" PRIu32 ": %d\n",
             k, rank, tree_height (rank + 1, k));
     flux_close (h);
     return (0);

@@ -40,8 +40,6 @@
 #define CTX_MAGIC   0xf434aaa0
 typedef struct {
     int magic;
-    int rank;
-    int size;
     flux_t h;
 
     int pollfd;
@@ -125,15 +123,17 @@ flux_t connector_init (const char *path, int flags)
 {
     ctx_t *c = xzmalloc (sizeof (*c));
     c->magic = CTX_MAGIC;
-    c->rank = 0;
     if (!(c->queue = msglist_create ((msglist_free_f)flux_msg_destroy)))
         goto error;
     c->h = flux_handle_create (c, &handle_ops, flags);
-    /* Fake out flux_size() and flux_rank () for testing.
+    /* Fake out size, rank, tbon-arity attributes for testing.
      */
-    c->size = 1;
-    flux_aux_set (c->h, "flux::size", &c->size, NULL);
-    flux_aux_set (c->h, "flux::rank", &c->rank, NULL);
+    if (flux_attr_fake (c->h, "rank", "0", FLUX_ATTRFLAG_IMMUTABLE) < 0
+                || flux_attr_fake (c->h, "size", "1",
+                                   FLUX_ATTRFLAG_IMMUTABLE) < 0
+                || flux_attr_fake (c->h, "tbon-arity", "2",
+                                   FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        goto error;
     return c->h;
 error:
     if (c) {

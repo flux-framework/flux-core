@@ -15,6 +15,7 @@
 #include "module.h"
 #include "reparent.h"
 #include "info.h"
+#include "attr.h"
 #include "flog.h"
 #include "conf.h"
 #include "heartbeat.h"

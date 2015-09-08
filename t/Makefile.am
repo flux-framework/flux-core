@@ -21,6 +21,7 @@ TESTS = \
 	t0005-exec.t \
 	t0006-build-basic.t \
 	t0007-ping.t \
+	t0008-attr.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1002-modctl.t \
@@ -59,6 +60,7 @@ check_SCRIPTS = \
 	t0005-exec.t \
 	t0006-build-basic.t \
 	t0007-ping.t \
+	t0008-attr.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1002-modctl.t \

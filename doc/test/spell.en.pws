@@ -251,3 +251,10 @@ tinfo
 hwloc
 epgm
 args
+arity
+attr
+ATTRFLAG
+ENOENT
+EPERM
+READONLY
+tbon

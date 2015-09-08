@@ -91,7 +91,10 @@ void hello_set_callback (hello_t *hello, hello_cb_f cb, void *arg)
 
 bool hello_complete (hello_t *hello)
 {
-    return (hello->count == flux_size (hello->h));
+    uint32_t size;
+    if (flux_get_size (hello->h, &size) < 0)
+        return false;
+    return (size == hello->count);
 }
 
 const char *hello_get_nodeset (hello_t *hello)
@@ -103,7 +106,10 @@ const char *hello_get_nodeset (hello_t *hello)
 
 static int hello_add_rank (hello_t *hello, uint32_t rank)
 {
-    int size = flux_size (hello->h);
+    uint32_t size;
+
+    if (flux_get_size (hello->h, &size) < 0)
+        return -1;
     if (!hello->nodeset)
         hello->nodeset = nodeset_new_size (size);
     if (!nodeset_add_rank (hello->nodeset, rank)) {
@@ -160,8 +166,10 @@ static void timer_cb (flux_t h, flux_timer_watcher_t *w, int revents, void *arg)
 int hello_start (hello_t *hello)
 {
     int rc = -1;
-    int rank = flux_rank (hello->h);
+    uint32_t rank;
 
+    if (flux_get_rank (hello->h, &rank) < 0)
+        goto done;
     if (rank == 0) {
         monotime (&hello->start);
         if (!(hello->w = flux_timer_watcher_create (hello->timeout,

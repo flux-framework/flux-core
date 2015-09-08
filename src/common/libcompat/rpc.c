@@ -27,67 +27,35 @@
 #endif
 #include <czmq.h>
 
-#include "src/common/libflux/message.h"
-#include "src/common/libflux/info.h"
+#include "src/common/libflux/rpc.h"
 
 #include "src/common/libutil/shortjson.h"
-#include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/nodeset.h"
 
 #include "compat.h"
 
 int flux_json_rpc (flux_t h, uint32_t nodeid, const char *topic,
                    JSON in, JSON *out)
 {
-    zmsg_t *zmsg = NULL;
-    struct flux_match match = {
-        .typemask = FLUX_MSGTYPE_RESPONSE,
-        .matchtag = flux_matchtag_alloc (h, 1),
-        .bsize = 1,
-        .topic_glob = NULL,
-    };
-    int rc = -1;
-    int errnum;
+    flux_rpc_t *rpc;
     const char *json_str;
     JSON o = NULL;
+    int rc = -1;
 
-    if (match.matchtag == FLUX_MATCHTAG_NONE) {
-        errno = EAGAIN;
+    if (!(rpc = flux_rpc (h, topic, Jtostr (in), nodeid, 0)))
         goto done;
-    }
-    if (flux_json_request (h, nodeid, match.matchtag, topic, in) < 0)
+    if (flux_rpc_get (rpc, NULL, out ? &json_str : NULL) < 0)
         goto done;
-    if (!(zmsg = flux_recv (h, match, 0)))
-        goto done;
-    if (flux_msg_get_errnum (zmsg, &errnum) < 0)
-        goto done;
-    if (errnum != 0) {
-        errno = errnum;
-        goto done;
-    }
-    if (flux_msg_get_payload_json (zmsg, &json_str) < 0)
-        goto done;
-    if (json_str && !(o = Jfromstr (json_str))) {
-        errno = EPROTO;
-        goto done;
-    }
-    if ((!o && out)) {
-        errno = EPROTO;
-        goto done;
-    }
-    if ((o && !out)) {
-        Jput (o);
-        errno = EPROTO;
-        goto done;
-    }
-    if (out)
+    if (out) {
+        if (!(o = Jfromstr (json_str))) {
+            errno = EPROTO;
+            goto done;
+        }
         *out = o;
+    }
     rc = 0;
 done:
-    if (match.matchtag != FLUX_MATCHTAG_NONE)
-        flux_matchtag_free (h, match.matchtag, match.bsize);
-    zmsg_destroy (&zmsg);
+    flux_rpc_destroy (rpc);
     return rc;
 }
 

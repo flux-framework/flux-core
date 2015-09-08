@@ -142,30 +142,34 @@ static bool Jget_nodeset (JSON o, const char *name, nodeset_t *np)
     return true;
 }
 
-static ns_t *ns_fromjson (JSON o)
+static ns_t *ns_fromjson (const char *json_str)
 {
     ns_t *ns = xzmalloc (sizeof (*ns));
+    JSON o = NULL;
 
-    if (!Jget_nodeset (o, "ok", &ns->ok)
+    if (!(o = Jfromstr (json_str))
+                || !Jget_nodeset (o, "ok", &ns->ok)
                 || !Jget_nodeset (o, "unknown", &ns->unknown)
                 || !Jget_nodeset (o, "slow", &ns->slow)
                 || !Jget_nodeset (o, "fail", &ns->fail)) {
         ns_destroy (ns);
-        return NULL;
+        ns = NULL;
     }
+    Jput (o);
     return ns;
 }
 
 static ns_t *ns_fromkvs (flux_t h)
 {
-    JSON o = NULL;
+    char *json_str = NULL;
     ns_t *ns = NULL;
 
-    if (kvs_get_obj (h, "conf.live.status", &o) < 0)
+    if (kvs_get (h, "conf.live.status", &json_str) < 0)
         goto done;
-    ns = ns_fromjson (o);
+    ns = ns_fromjson (json_str);
 done:
-    Jput (o);
+    if (json_str)
+        free (json_str);
     return ns;
 }
 
@@ -175,8 +179,10 @@ static ns_t *ns_guess (flux_t h)
     uint32_t size, rank;
     uint32_t r;
 
-    if (flux_info (h, &rank, &size, NULL) < 0)
-        err_exit ("flux_info");
+    if (flux_get_rank (h, &rank) < 0)
+        err_exit ("flux_get_rank");
+    if (flux_get_size (h, &size) < 0)
+        err_exit ("flux_get_size");
     ns->ok = nodeset_new ();
     ns->slow = nodeset_new ();
     ns->fail = nodeset_new ();

@@ -68,7 +68,7 @@ struct flux_mrpc_struct {
     char *path;
     char *dest;
     int nprocs;
-    int sender;
+    uint32_t sender;
     int vers;
     nodeset_t ns;
     nodeset_itr_t ns_itr;
@@ -78,11 +78,17 @@ struct flux_mrpc_struct {
 flux_mrpc_t *flux_mrpc_create (flux_t h, const char *dest)
 {
     flux_mrpc_t *f = xzmalloc (sizeof (*f));
-    int maxid = flux_size (h) - 1;
+    uint32_t size;
+    int maxid;
+
+    if (flux_get_size (h, &size) < 0)
+        goto error;
+    maxid = size - 1;
 
     f->h = h;
     f->client = true;
-    f->sender = flux_rank (h);
+    if (flux_get_rank (h, &f->sender) < 0)
+       goto error; 
     f->dest = xstrdup (dest);
     if (!(f->ns = nodeset_new_str (dest)) || nodeset_count (f->ns) == 0
                                           || nodeset_max (f->ns) > maxid) {
@@ -189,8 +195,10 @@ done:
 void flux_mrpc_put_outarg_obj (flux_mrpc_t *f, json_object *val)
 {
     char *key;
+    uint32_t rank = 0;
 
-    if (asprintf (&key, "%s.out-%d", f->path, flux_rank (f->h)) < 0)
+    (void)flux_get_rank (f->h, &rank);
+    if (asprintf (&key, "%s.out-%" PRIu32, f->path, rank) < 0)
         oom ();
     kvs_put_obj (f->h, key, val);
     free (key);
@@ -199,9 +207,12 @@ void flux_mrpc_put_outarg_obj (flux_mrpc_t *f, json_object *val)
 int flux_mrpc_put_outarg (flux_mrpc_t *f, const char *json_str)
 {
     char *key = NULL;
+    uint32_t rank;
     int rc = -1;
 
-    if (asprintf (&key, "%s.out-%d", f->path, flux_rank (f->h)) < 0) {
+    if (flux_get_rank (f->h, &rank) < 0)
+        goto done;
+    if (asprintf (&key, "%s.out-%" PRIu32, f->path, rank) < 0) {
         errno = ENOMEM;
         goto done;
     }
@@ -313,6 +324,7 @@ flux_mrpc_t *flux_mrpc_create_fromevent_obj (flux_t h, json_object *o)
     const char *dest, *path;
     int sender, vers;
     nodeset_t ns = NULL;
+    uint32_t rank;
 
     if (util_json_object_get_string (o, "dest", &dest) < 0
             || util_json_object_get_string (o, "path", &path) < 0
@@ -322,7 +334,9 @@ flux_mrpc_t *flux_mrpc_create_fromevent_obj (flux_t h, json_object *o)
         errno = EPROTO;
         goto done;
     }
-    if (!nodeset_test_rank (ns, flux_rank (h))) {
+    if (flux_get_rank (h, &rank) < 0)
+        goto done;
+    if (!nodeset_test_rank (ns, rank)) {
         errno = EINVAL;
         goto done;
     }

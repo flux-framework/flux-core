@@ -46,7 +46,6 @@ void usage (void)
 {
     fprintf (stderr,
 "Usage: flux-comms [-r N] idle\n"
-"       flux-comms [-r N] getattr attr\n"
 "       flux-comms        info\n"
 "       flux-comms [-r N] reparent new-uri\n"
 "       flux-comms [-r N] panic [msg ...]\n"
@@ -101,14 +100,6 @@ int main (int argc, char *argv[])
             err_exit ("flux_peer");
         printf ("%s\n", peers);
         free (peers);
-    } else if (!strcmp (cmd, "getattr")) {
-        char *s;
-        if (optind != argc - 1)
-            msg_exit ("Usage: flux comms getattr attrname");
-        if (!(s = flux_getattr (h, rank, argv[optind])))
-            err_exit ("%s", argv[optind]);
-        printf ("%s\n", s);
-        free (s);
     } else if (!strcmp (cmd, "panic")) {
         char *msg = NULL;
         size_t len = 0;
@@ -138,8 +129,9 @@ int main (int argc, char *argv[])
     } else if (!strcmp (cmd, "info")) {
         int arity;
         uint32_t rank, size;
-        if (flux_info (h, &rank, &size, &arity) < 0)
-            err_exit ("flux_info");
+        if (flux_get_rank (h, &rank) < 0 || flux_get_size (h, &size) < 0
+                                         || flux_get_arity (h, &arity) < 0)
+            err_exit ("flux_get_rank/size/arity");
         printf ("rank=%d\n", rank);
         printf ("size=%d\n", size);
         printf ("arity=%d\n", arity);

@@ -308,6 +308,7 @@ static int null_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     int rc = -1;
     void *buf;
     uint32_t nodeid;
+    uint32_t rank;
 
     if (!zmsg || !*zmsg) {
         flux_log (h, LOG_ERR, "%s: got NULL zmsg!", __FUNCTION__);
@@ -328,7 +329,12 @@ static int null_request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
                   strerror (errno));
         goto done;
     }
-    if (nodeid != FLUX_NODEID_ANY && nodeid != flux_rank (h)) {
+    if (flux_get_rank (h, &rank) < 0) {
+        flux_log (h, LOG_ERR, "%s: flux_get_rank: %s", __FUNCTION__,
+                  strerror (errno));
+        goto done;
+    }
+    if (nodeid != FLUX_NODEID_ANY && nodeid != rank) {
         flux_log (h, LOG_ERR, "%s: unexpected nodeid: %"PRIu32"", __FUNCTION__,
                   nodeid);
         goto done;

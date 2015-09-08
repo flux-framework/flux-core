@@ -53,6 +53,7 @@ static int unload_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     JSON out = NULL;
     const char *modname;
     int errnum = 0;
+    uint32_t rank;
     int rc = 0;
 
     if (flux_event_decode (*zmsg, NULL, &json_str) < 0
@@ -67,13 +68,15 @@ static int unload_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
                       __FUNCTION__, strerror (errno));
         goto done;
     }
+    if (flux_get_rank (h, &rank) < 0)
+        goto done;
     if (flux_mrpc_get_inarg_obj (mrpc, &in) < 0)
         errnum = errno;
     else if (modctl_tunload_dec (in, &modname) < 0)
         errnum = EPROTO;
     else if (!strcmp (modname, "modctl") || !strcmp (modname, "kvs"))
         errnum = EINVAL; /* unloading those two would be bad ! */
-    else if (flux_rmmod (h, flux_rank (h), modname) < 0)
+    else if (flux_rmmod (h, rank, modname) < 0)
         errnum = errno;
     //flux_log (h, LOG_DEBUG, "%s: result %d", __FUNCTION__, errnum);
     if ((out = modctl_runload_enc (errnum)))
@@ -106,6 +109,7 @@ static int load_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     int argc = 0;
     const char **argv = NULL;
     int errnum = 0;
+    uint32_t rank;
     int rc = 0;
 
     if (flux_event_decode (*zmsg, NULL, &json_str) < 0
@@ -120,11 +124,13 @@ static int load_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
                       __FUNCTION__, strerror (errno));
         goto done;
     }
+    if (flux_get_rank (h, &rank) < 0)
+        goto done;
     if (flux_mrpc_get_inarg_obj (mrpc, &in) < 0)
         errnum = errno;
     else if (modctl_tload_dec (in, &path, &argc, &argv) < 0)
         errnum = EPROTO;
-    else if (flux_insmod (h, flux_rank (h), path, argc, (char **)argv) < 0)
+    else if (flux_insmod (h, rank, path, argc, (char **)argv) < 0)
         errnum = errno;
     //flux_log (h, LOG_DEBUG, "%s: result %d", __FUNCTION__, errnum);
     if ((out = modctl_rload_enc (errnum)))
@@ -163,6 +169,7 @@ static int list_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     JSON out = NULL;
     const char *json_str;
     const char *svc;
+    uint32_t rank;
     int errnum = 0;
     int rc = 0;
 
@@ -178,13 +185,15 @@ static int list_mrpc_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
                       __FUNCTION__, strerror (errno));
         goto done;
     }
+    if (flux_get_rank (h, &rank) < 0)
+        goto done;
     if (flux_mrpc_get_inarg_obj (mrpc, &in) < 0)
         errnum = errno;
     else if (modctl_tlist_dec (in, &svc) < 0)
         errnum = EPROTO;
     else if (!(out = modctl_rlist_enc ()))
         errnum = errno;
-    else if (flux_lsmod (h, flux_rank (h), svc, lsmod_cb, out) < 0)
+    else if (flux_lsmod (h, rank, svc, lsmod_cb, out) < 0)
         errnum = errno;
     //flux_log (h, LOG_DEBUG, "%s: result %d", __FUNCTION__, errnum);
     if (!out || modctl_rlist_enc_errnum (out, errnum) < 0) {
