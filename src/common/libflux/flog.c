@@ -28,7 +28,9 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#include <syslog.h>
 #include <sys/time.h>
+#include <zmq.h>
 
 #include "flog.h"
 #include "info.h"
@@ -152,6 +154,29 @@ int flux_log (flux_t h, int lev, const char *fmt, ...)
     va_start (ap, fmt);
     rc = flux_vlog (h, lev, fmt, ap);
     va_end (ap);
+    return rc;
+}
+
+int flux_log_verror (flux_t h, const char *fmt, va_list ap)
+{
+    char *s = xvasprintf (fmt, ap);
+    int rc;
+
+    rc = flux_log (h, LOG_ERR, "%s: %s", s, zmq_strerror (errno));
+    free (s);
+
+    return rc;
+}
+
+int flux_log_error (flux_t h, const char *fmt, ...)
+{
+    va_list ap;
+    int rc;
+
+    va_start (ap, fmt);
+    rc = flux_log_verror (h, fmt, ap);
+    va_end (ap);
+
     return rc;
 }
 
