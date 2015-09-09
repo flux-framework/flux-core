@@ -137,8 +137,8 @@ struct boot_method {
     int (*fun)(ctx_t *ctx);
 };
 
-static void broker_log (void *ctx, const char *facility, int level,
-                        int rank, struct timeval tv, const char *msg);
+static void broker_log (const char *facility, int level, uint32_t rank,
+                        struct timeval tv, const char *msg, void *arg);
 
 static int broker_event_sendmsg (ctx_t *ctx, zmsg_t **zmsg);
 static int broker_response_sendmsg (ctx_t *ctx, const flux_msg_t *msg);
@@ -667,15 +667,15 @@ int main (int argc, char *argv[])
 
 /* On rank 0 flux_log is directed here.
  */
-static void broker_log (void *arg, const char *facility, int level,
-                        int rank, struct timeval tv, const char *s)
+static void broker_log (const char *facility, int level, uint32_t rank,
+                        struct timeval tv, const char *s, void *arg)
 {
     //ctx_t *ctx = arg;
     const char *levstr;
 
     if (!(levstr = log_leveltostr (level)))
         levstr = "unknown";
-    msg ("[%-.6lu.%-.6lu] %s.%s[%d] %s",
+    msg ("[%ld.%06ld] %s.%s[%" PRIu32 "] %s",
          tv.tv_sec, tv.tv_usec, facility, levstr, rank, s);
 }
 

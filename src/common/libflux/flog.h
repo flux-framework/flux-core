@@ -8,8 +8,8 @@
 
 #include "handle.h"
 
-typedef void (*flux_log_f)(void *ctx, const char *facility, int level,
-                           int rank, struct timeval tv, const char *msg);
+typedef void (*flux_log_f)(const char *facility, int level, uint32_t rank,
+                           struct timeval tv, const char *msg, void *arg);
 
 /* Set log facility for handle instance.
  * Unlike syslog(3), the flux log facility is an arbitrary string.
@@ -39,7 +39,7 @@ int flux_log_json (flux_t h, const char *json_str);
 
 /* Redirect log messages to flux_log_f in this handle instance.
  */
-void flux_log_set_redirect (flux_t h, flux_log_f fun, void *ctx);
+void flux_log_set_redirect (flux_t h, flux_log_f fun, void *arg);
 
 
 #endif /* !_FLUX_CORE_FLOG_H */

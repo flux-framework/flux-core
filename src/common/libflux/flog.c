@@ -98,7 +98,7 @@ static void log_external (logctx_t *ctx, const char *json_str)
             && Jget_str (o, "message", &s)) {
         tv.tv_sec = tv_sec;
         tv.tv_usec = tv_usec;
-        ctx->cb (ctx->cb_arg, facility, level, rank, tv, s);
+        ctx->cb (facility, level, (uint32_t)rank, tv, s, ctx->cb_arg);
         Jput (o);
     }
 }
