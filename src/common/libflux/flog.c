@@ -104,7 +104,7 @@ int flux_vlog (flux_t h, int level, const char *fmt, va_list ap)
         Jadd_int (o, "timestamp_usec", tv.tv_usec);
         Jadd_int (o, "timestamp_sec", tv.tv_sec);
         Jadd_str (o, "message", message);
-        if (!(rpc = flux_rpc (h, "cmb.log", Jtostr (o), 0,
+        if (!(rpc = flux_rpc (h, "cmb.log", Jtostr (o), FLUX_NODEID_ANY,
                                                         FLUX_RPC_NORESPONSE)))
             goto done;
     }
