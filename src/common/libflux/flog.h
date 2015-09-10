@@ -33,10 +33,6 @@ int flux_log_error (flux_t h, const char *fmt, ...)
 #define FLUX_LOG_ERROR(h) \
     (void)flux_log_error ((h), "%s::%d[%s]", __FILE__, __LINE__, __FUNCTION__)
 
-/* Log a message in its encoded JSON form.
- */
-int flux_log_json (flux_t h, const char *json_str);
-
 /* Redirect log messages to flux_log_f in this handle instance.
  */
 void flux_log_set_redirect (flux_t h, flux_log_f fun, void *arg);

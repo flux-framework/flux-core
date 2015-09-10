@@ -82,67 +82,37 @@ void flux_log_set_redirect (flux_t h, flux_log_f fun, void *arg)
     ctx->cb_arg = arg;
 }
 
-static void log_external (logctx_t *ctx, const char *json_str)
-{
-    JSON o = NULL;
-    const char *facility, *s;
-    int rank, level, tv_sec, tv_usec;
-    struct timeval tv;
-
-    if ((o = Jfromstr (json_str))
-            && Jget_str (o, "facility", &facility)
-            && Jget_int (o, "level", &level)
-            && Jget_int (o, "rank", &rank)
-            && Jget_int (o, "timestamp_usec", &tv_usec)
-            && Jget_int (o, "timestamp_sec", &tv_sec)
-            && Jget_str (o, "message", &s)) {
-        tv.tv_sec = tv_sec;
-        tv.tv_usec = tv_usec;
-        ctx->cb (facility, level, (uint32_t)rank, tv, s, ctx->cb_arg);
-        Jput (o);
-    }
-}
-
-int flux_log_json (flux_t h, const char *json_str)
+int flux_vlog (flux_t h, int level, const char *fmt, va_list ap)
 {
     logctx_t *ctx = getctx (h);
-    flux_rpc_t *r = NULL;
+    char *message = xvasprintf (fmt, ap);
+    struct timeval tv = { 0, 0 };
+    JSON o = NULL;
+    uint32_t rank = FLUX_NODEID_ANY;
+    flux_rpc_t *rpc = NULL;
     int rc = -1;
 
-    if (ctx->cb)
-        log_external (ctx, json_str);
-    else if (!(r = flux_rpc (h, "cmb.log", json_str, 0, FLUX_RPC_NORESPONSE)))
-        goto done;
+    (void)gettimeofday (&tv, NULL);
+    (void)flux_get_rank (h, &rank);
+    if (ctx->cb) {
+        ctx->cb (ctx->facility, level, rank, tv, message, ctx->cb_arg);
+    } else {
+        o = Jnew ();
+        Jadd_str (o, "facility", ctx->facility);
+        Jadd_int (o, "level", level);
+        Jadd_int (o, "rank", rank);
+        Jadd_int (o, "timestamp_usec", tv.tv_usec);
+        Jadd_int (o, "timestamp_sec", tv.tv_sec);
+        Jadd_str (o, "message", message);
+        if (!(rpc = flux_rpc (h, "cmb.log", Jtostr (o), 0,
+                                                        FLUX_RPC_NORESPONSE)))
+            goto done;
+    }
     rc = 0;
 done:
-    flux_rpc_destroy (r);
-    return rc;
-}
-
-int flux_vlog (flux_t h, int lev, const char *fmt, va_list ap)
-{
-    logctx_t *ctx = getctx (h);
-    char *s = xvasprintf (fmt, ap);
-    struct timeval tv;
-    JSON o = Jnew ();
-    uint32_t rank;
-    int rc = -1;
-
-    if (gettimeofday (&tv, NULL) < 0)
-        err_exit ("gettimeofday");
-    if (flux_get_rank (h, &rank) < 0)
-        goto done;
-    Jadd_str (o, "facility", ctx->facility);
-    Jadd_int (o, "level", lev);
-    Jadd_int (o, "rank", rank);
-    Jadd_int (o, "timestamp_usec", (int)tv.tv_usec);
-    Jadd_int (o, "timestamp_sec", (int)tv.tv_sec);
-    Jadd_str (o, "message", s);
-    rc = flux_log_json (h, Jtostr (o));
-done:
-    if (s)
-        free (s);
+    flux_rpc_destroy (rpc);
     Jput (o);
+    free (message);
     return rc;
 }
 
