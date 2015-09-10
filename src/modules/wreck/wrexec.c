@@ -197,7 +197,7 @@ static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
      *  Wait for child to exit
      */
     if (waitpid (pid, &status, 0) < 0)
-        err ("waitpid");
+        flux_log_error (ctx->h, "waitpid");
 
     /*
      *  Close child side of socketpair and wait for wrexecd
