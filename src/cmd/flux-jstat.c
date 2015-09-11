@@ -66,14 +66,14 @@ static const struct option longopts[] = {
  *                              Utilities                                     *
  *                                                                            * 
  ******************************************************************************/
-static void usage (void)
+static void usage (int code)
 {
     fprintf (stderr,
 "Usage: flux-jstat notify\n"
 "       flux-jstat query jobid <top-level JCB attribute>\n"
 "       flux-jstat update jobid <top-level JCB attribute> <JCB JSON>\n"
 );
-    exit (1);
+    exit (code);
 }
 
 static void freectx (void *arg)
@@ -245,18 +245,18 @@ int main (int argc, char *argv[])
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
             case 'h': /* --help */
-                usage ();
+                usage (0);
                 break;
             case 'o': /* --testout */
                 ofn = xasprintf ("%s", optarg);
                 break;
             default:
-                usage ();
+                usage (1);
                 break;
         }
     }
     if (optind == argc)
-        usage ();
+        usage (1);
 
     if (!(h = flux_open  (NULL, 0)))
         err_exit ("flux_open");
@@ -278,7 +278,7 @@ int main (int argc, char *argv[])
         rc = handle_update_req (h, strtol (j, NULL, 10), attr, jcbstr, ofn);
     }
     else 
-        usage ();
+        usage (1);
 
     flux_close (h);
     log_fini ();

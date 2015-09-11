@@ -1,7 +1,8 @@
 
 AM_CFLAGS =	@GCCWARN@ -I$(top_srcdir) -I$(top_srcdir)/src/include -I$(top_srcdir)/src/common/libflux \
-		$(JSON_CFLAGS) $(ZMQ_CFLAGS) $(PYTHON_CPPFLAGS) -O2
-AM_LDFLAGS = -avoid-version -module -Wl,--no-undefined  $(PYTHON_LDFLAGS) -Wl,-rpath,$(PYTHON_PREFIX)/lib
+		$(JSON_CFLAGS) $(ZMQ_CFLAGS) $(PYTHON_CPPFLAGS) $(CODE_COVERAGE_CFLAGS)
+AM_LDFLAGS = -avoid-version -module -Wl,--no-undefined  $(PYTHON_LDFLAGS) -Wl,-rpath,$(PYTHON_PREFIX)/lib \
+		$(CODE_COVERAGE_LDFLAGS)
 
 MAKE_BINDING=$(top_srcdir)/src/bindings/python/make_binding.py
 SUFFIXES = _build.py

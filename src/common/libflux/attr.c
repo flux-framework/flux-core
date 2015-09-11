@@ -152,7 +152,7 @@ static bool attr_strcmp (const char *s1, const char *s2)
     return (strcmp (s1, s2) > 0);
 }
 #else
-static bool attr_strcmp (const char *s1, const char *s2)
+static int attr_strcmp (const char *s1, const char *s2)
 {
     return strcmp (s1, s2);
 }

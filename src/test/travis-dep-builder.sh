@@ -14,7 +14,8 @@ https://github.com/dun/munge/archive/munge-0.5.11.tar.gz \
 https://download.libsodium.org/libsodium/releases/libsodium-1.0.0.tar.gz \
 http://download.zeromq.org/zeromq-4.0.4.tar.gz \
 http://download.zeromq.org/czmq-3.0.2.tar.gz \
-https://s3.amazonaws.com/json-c_releases/releases/json-c-0.11.tar.gz"
+https://s3.amazonaws.com/json-c_releases/releases/json-c-0.11.tar.gz \
+http://downloads.sourceforge.net/ltp/lcov-1.10.tar.gz"
 
 declare -A extra_configure_opts=(\
 ["zeromq-4.0.4"]="--with-libsodium --with-libsodium-include-dir=\$prefix/include" \
@@ -78,6 +79,7 @@ print_env () {
     echo "export CPPFLAGS=-I${prefix}/include"
     echo "export LDFLAGS=-L${prefix}/lib"
     echo "export PKG_CONFIG_PATH=${prefix}/lib/pkgconfig"
+    echo "export PATH=${PATH}:${HOME}/.local/bin:${HOME}/local/usr/bin"
     luarocks path --bin
 }
 
@@ -86,7 +88,8 @@ if test -n "$print_env"; then
     exit 0
 fi
 
-eval $(print_env)
+$(print_env)
+
 
 check_cache ()
 {
@@ -151,11 +154,11 @@ for pkg in $downloads; do
       cd ${name} &&
       wget ${pkg} || die "Failed to download ${pkg}"
       tar --strip-components=1 -xf *.tar.gz || die "Failed to un-tar ${name}"
-      ./configure --prefix=${prefix} \
+      test -x configure && ./configure --prefix=${prefix} \
                   --sysconfdir=${prefix}/etc \
-                  ${extra_configure_opts[$name]} &&
-      make &&
-      make install
+                  ${extra_configure_opts[$name]} || : &&
+      make PREFIX=${prefix} &&
+      make PREFIX=${prefix} install
     ) || die "Failed to build and install $name"
     add_cache "$name"
 done

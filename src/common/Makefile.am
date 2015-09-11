@@ -1,6 +1,7 @@
 SUBDIRS = libtap libev liblsd libutil libflux libcompat
 
-AM_CFLAGS = @GCCWARN@
+AM_CFLAGS = @GCCWARN@ $(CODE_COVERAGE_CFLAGS)
+AM_LDFLAGS = $(CODE_COVERAGE_LDFLAGS)
 
 AM_CPPFLAGS =
 

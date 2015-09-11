@@ -1,4 +1,9 @@
-AM_CFLAGS = @GCCWARN@
+AM_CFLAGS = \
+	@GCCWARN@ \
+	$(CODE_COVERAGE_CFLAGS)
+
+AM_LDFLAGS = \
+	$(CODE_COVERAGE_LDFLAGS)
 
 AM_CPPFLAGS = \
 	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
@@ -80,3 +85,11 @@ flux_jstat_LDADD = \
 	$(top_builddir)/src/modules/libjsc/libjsc.la \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)
+
+#
+# coverage:
+#  Ensure all programs are run at least once, so we can see which
+#  have zero coverage:
+#
+cmd-run-test: $(fluxcmd_PROGRAMS)
+	@for f in $(fluxcmd_PROGRAMS); do ./$$f --help 2>/dev/null; done

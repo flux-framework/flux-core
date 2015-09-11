@@ -9,3 +9,22 @@ EXTRA_DIST = \
 	README.md
 
 ACLOCAL_AMFLAGS = -I config
+
+# coverage
+
+CODE_COVERAGE_IGNORE_PATTERN = \
+	"$(abs_top_builddir)/t/*" \
+	"/test/*.c" \
+	"/tests/*.c" \
+	"man3/*.c" \
+	"libtap/*" \
+	"libjsonc/*" \
+	"libev/*" \
+	"/usr/*"
+CODE_COVERAGE_LCOV_OPTIONS =
+@CODE_COVERAGE_RULES@
+
+# Extra code coverage checks here:
+
+code-coverage-capture-hook:
+	@cd src/cmd && $(MAKE) cmd-run-test

@@ -107,6 +107,7 @@ PKG_CHECK_MODULES([JSON], [json], [],
 PKG_CHECK_MODULES([HWLOC], [hwloc], [], [])
 LX_FIND_MPI
 AM_CONDITIONAL([HAVE_MPI], [test "$have_C_mpi" = yes])
+AX_CODE_COVERAGE
 
 ##
 # For list.c, hostlist.c, hash.c
