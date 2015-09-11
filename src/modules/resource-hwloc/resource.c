@@ -273,7 +273,7 @@ static void load_cb (flux_t h,
 
     kvs_fence (h, "resource_hwloc_loaded", size);
 
-    flux_log (h, LOG_DEBUG, "resource_hwloc: loaded: %" PRIu32, rank);
+    flux_log (h, LOG_DEBUG, "loaded");
 
     ctx->loaded = true;
 }

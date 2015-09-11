@@ -19,6 +19,10 @@ if test  -z "$ASPELL"; then
    echo "1..$# # skip because aspell is not installed"
    exit 0
 fi
+if ! $ASPELL -n list </dev/null >/dev/null; then
+   echo "1..$# # skip because aspell dry run failed"
+   exit 0
+fi
 
 exit_val=0
 echo "1..$#"
@@ -27,7 +31,7 @@ for f in $*; do
     filename=$(basename $f)
     dir=$(basename $(dirname $f))
     tmpfile=$(mktemp)
-    rc=$(cat $f | aspell -p $dict -n list | sort | uniq | tee $tmpfile | wc -l)
+    rc=$(cat $f | $ASPELL -p $dict -n list | sort | uniq | tee $tmpfile | wc -l)
     if test $rc == 0; then
         echo "ok $count - spell check $dir/$filename"
     else

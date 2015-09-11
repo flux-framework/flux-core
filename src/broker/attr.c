@@ -103,7 +103,7 @@ int attr_delete (attr_t *attrs, const char *name, bool force)
     }
     rc = 0;
 done:
-    return rc;    
+    return rc;
 }
 
 int attr_add (attr_t *attrs, const char *name, const char *val, int flags)

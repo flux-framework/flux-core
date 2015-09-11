@@ -108,7 +108,7 @@ and response payloads.
 EXAMPLE
 -------
 
-This example performs an RPC with the broker's "cmb.info" service on all
+This example performs an RPC with the broker's "cmb.attrget" service on all
 ranks.  A continuation is registered to process the responses as they arrive.
 The reactor loop terminates once the RPC is completed since the completion
 is its only event handler.

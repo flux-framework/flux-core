@@ -368,7 +368,7 @@ int main (int argc, char *argv[])
         size_t len = 0;
         if (argz_create (argv + optind, &ctx.init_shell_cmd, &len) < 0)
             oom ();
-        argz_stringify (ctx.init_shell_cmd, len, ' '); 
+        argz_stringify (ctx.init_shell_cmd, len, ' ');
     }
     if (boot_method) {
         struct boot_method *m;
@@ -397,7 +397,7 @@ int main (int argc, char *argv[])
     /* Get the directory for CURVE keys.
      */
     if (!(secdir = getenv ("FLUX_SEC_DIRECTORY")))
-        msg_exit ("FLUX_SEC_DIRECTORY is not set"); 
+        msg_exit ("FLUX_SEC_DIRECTORY is not set");
 
     /* Process config from the KVS of enclosing instance (if any)
      * and not forced to use a config file by the command line.
@@ -1056,15 +1056,10 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
         }
         if (modexclude && zhash_lookup (modexclude, name))
             goto next;
-        if (!(p = module_add (ctx->modhash, path))) {
-            err ("%s: module_add %s", name, path);
-            goto next;
-        }
-        if (!svc_add (ctx->services, module_get_name (p), mod_svc_cb, p)) {
-            msg ("could not register service %s", module_get_name (p));
-            module_remove (ctx->modhash, p);
-            goto next;
-        }
+        if (!(p = module_add (ctx->modhash, path)))
+            err_exit ("%s: module_add %s", name, path);
+        if (!svc_add (ctx->services, module_get_name (p), mod_svc_cb, p))
+            msg_exit ("could not register service %s", module_get_name (p));
         zhash_update (mods, module_get_name (p), p);
         module_set_poller_cb (p, module_cb, ctx);
         module_set_rmmod_cb (p, rmmod_cb, ctx);
@@ -1439,7 +1434,7 @@ static JSON subprocess_json_info (struct subprocess *p)
         cwd = getcwd (buf, MAXPATHLEN-1);
     Jadd_str (o, "cwd", cwd);
     if ((sender = subprocess_sender (p))) {
-        Jadd_str (o, "sender", sender); 
+        Jadd_str (o, "sender", sender);
         free (sender);
     }
     return (o);
@@ -1468,21 +1463,6 @@ static int cmb_ps_cb (zmsg_t **zmsg, void *arg)
     rc = flux_json_respond (ctx->h, out, zmsg);
     Jput (out);
     return (rc);
-}
-
-static int cmb_info_cb (zmsg_t **zmsg, void *arg)
-{
-    ctx_t *ctx = arg;
-    JSON out = Jnew ();
-    int rc;
-
-    Jadd_int (out, "rank", ctx->rank);
-    Jadd_int (out, "size", ctx->size);
-    Jadd_int (out, "arity", ctx->k_ary);
-
-    rc = flux_json_respond (ctx->h, out, zmsg);
-    Jput (out);
-    return rc;
 }
 
 static int attr_get_snoop (const char *name, const char **val, void *arg)
@@ -1531,7 +1511,7 @@ static int cmb_attrget_cb (zmsg_t **zmsg, void *arg)
         errno = ENOENT;
         goto done;
     }
-    Jadd_str (out, "value", val);    
+    Jadd_str (out, "value", val);
     Jadd_int (out, "flags", flags);
     rc = 0;
 done:
@@ -1938,8 +1918,7 @@ static int event_shutdown_cb (zmsg_t **zmsg, void *arg)
 
 static void broker_add_services (ctx_t *ctx)
 {
-    if (!svc_add (ctx->services, "cmb.info", cmb_info_cb, ctx)
-          || !svc_add (ctx->services, "cmb.attrget", cmb_attrget_cb, ctx)
+    if (!svc_add (ctx->services, "cmb.attrget", cmb_attrget_cb, ctx)
           || !svc_add (ctx->services, "cmb.attrset", cmb_attrset_cb, ctx)
           || !svc_add (ctx->services, "cmb.attrlist", cmb_attrlist_cb, ctx)
           || !svc_add (ctx->services, "cmb.rusage", cmb_rusage_cb, ctx)
