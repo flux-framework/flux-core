@@ -22,6 +22,7 @@ addons:
       - luarocks
       - uuid-dev
       - aspell
+      - aspell-en
       - libopenmpi-dev
       - ccache
       - libhwloc-dev
