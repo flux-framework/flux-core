@@ -1185,7 +1185,8 @@ static int child_exit_handler (struct subprocess *p, void *arg)
     if ((n = subprocess_exec_error (p)))
         util_json_object_add_int (resp, "exec_errno", n);
 
-    flux_json_respond (ctx->h, resp, &zmsg);
+    flux_respond (ctx->h, zmsg, 0, Jtostr (resp));
+    zmsg_destroy (&zmsg);
     json_object_put (resp);
 
     subprocess_destroy (p);
@@ -1234,13 +1235,14 @@ static int cmb_write_cb (zmsg_t **zmsg, void *arg)
     json_object *request = NULL;
     json_object *response = NULL;
     json_object *o = NULL;
+    const char *json_str;
     int pid;
     int errnum = EPROTO;
 
-    if (flux_json_request_decode (*zmsg, &request) < 0)
+    if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
         goto out;
 
-    if (Jget_int (request, "pid", &pid) &&
+    if ((request = Jfromstr (json_str)) && Jget_int (request, "pid", &pid) &&
         Jget_obj (request, "stdin", &o)) {
         int len;
         void *data = NULL;
@@ -1268,7 +1270,8 @@ static int cmb_write_cb (zmsg_t **zmsg, void *arg)
 out:
     response = util_json_object_new_object ();
     Jadd_int (response, "code", errnum);
-    flux_json_respond (ctx->h, response, zmsg);
+    flux_respond (ctx->h, *zmsg, 0, Jtostr (response));
+    zmsg_destroy (zmsg);
     if (response)
         json_object_put (response);
     if (request)
@@ -1281,12 +1284,13 @@ static int cmb_signal_cb (zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     json_object *request = NULL;
     json_object *response = NULL;
+    const char *json_str;
     int pid;
     int errnum = EPROTO;
 
-    if (flux_json_request_decode (*zmsg, &request) < 0)
+    if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
         goto out;
-    if (Jget_int (request, "pid", &pid)) {
+    if ((request = Jfromstr (json_str)) && Jget_int (request, "pid", &pid)) {
         int signum;
         struct subprocess *p;
         if (!Jget_int (request, "signum", &signum))
@@ -1304,7 +1308,8 @@ static int cmb_signal_cb (zmsg_t **zmsg, void *arg)
 out:
     response = util_json_object_new_object ();
     Jadd_int (response, "code", errnum);
-    flux_json_respond (ctx->h, response, zmsg);
+    flux_respond (ctx->h, *zmsg, 0, Jtostr (response));
+    zmsg_destroy (zmsg);
     if (response)
         json_object_put (response);
     if (request)
@@ -1321,6 +1326,7 @@ static int cmb_exec_cb (zmsg_t **zmsg, void *arg)
     json_object *request = NULL;
     json_object *response = NULL;
     json_object *o;
+    const char *json_str;
     struct subprocess *p;
     zmsg_t *copy;
     int i, argc;
@@ -1329,10 +1335,11 @@ static int cmb_exec_cb (zmsg_t **zmsg, void *arg)
     if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0)
         err_exit ("%s: local_uri is not set", __FUNCTION__);
 
-    if (flux_json_request_decode (*zmsg, &request) < 0)
+    if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
         goto out_free;
 
-    if (!json_object_object_get_ex (request, "cmdline", &o)
+    if (!(request = Jfromstr (json_str))
+        || !json_object_object_get_ex (request, "cmdline", &o)
         || o == NULL
         || (json_object_get_type (o) != json_type_array)) {
         errno = EPROTO;
@@ -1400,7 +1407,8 @@ static int cmb_exec_cb (zmsg_t **zmsg, void *arg)
          *   immediately)
          */
         response = subprocess_json_resp (ctx, p);
-        flux_json_respond (ctx->h, response, zmsg);
+        flux_respond (ctx->h, *zmsg, 0, Jtostr (response));
+        zmsg_destroy (zmsg);
     }
 out_free:
     if (request)
@@ -1481,7 +1489,8 @@ static int cmb_ps_cb (zmsg_t **zmsg, void *arg)
         p = subprocess_manager_next (ctx->sm);
     }
     json_object_object_add (out, "procs", procs);
-    rc = flux_json_respond (ctx->h, out, zmsg);
+    rc = flux_respond (ctx->h, *zmsg, 0, Jtostr (out));
+    zmsg_destroy (zmsg);
     Jput (out);
     return (rc);
 }
@@ -1664,7 +1673,8 @@ static int cmb_rusage_cb (zmsg_t **zmsg, void *arg)
         goto done;
     if (!(out = rusage_to_json (&usage)))
         goto done;
-    rc = flux_json_respond (ctx->h, out, zmsg);
+    rc = flux_respond (ctx->h, *zmsg, 0, Jtostr (out));
+    zmsg_destroy (zmsg);
 done:
     Jput (out);
     return rc;
@@ -1761,10 +1771,11 @@ static int cmb_lsmod_cb (zmsg_t **zmsg, void *arg)
         goto done;
     out = Jfromstr (json_str);
     assert (out != NULL);
-    if (flux_json_respond (ctx->h, out, zmsg) < 0)
+    if (flux_respond (ctx->h, *zmsg, 0, Jtostr (out)) < 0)
         goto done;
     rc = 0;
 done:
+    zmsg_destroy (zmsg);
     Jput (out);
     if (json_str)
         free (json_str);
@@ -1777,7 +1788,8 @@ static int cmb_lspeer_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     JSON out = overlay_lspeer_encode (ctx->overlay);
-    int rc = flux_json_respond (ctx->h, out, zmsg);
+    int rc = flux_respond (ctx->h, *zmsg, 0, Jtostr (out));
+    zmsg_destroy (zmsg);
     Jput (out);
     return rc;
 }
@@ -1786,17 +1798,23 @@ static int cmb_ping_cb (zmsg_t **zmsg, void *arg)
 {
     ctx_t *ctx = arg;
     JSON inout = NULL;
+    const char *json_str;
     char *s = NULL;
     char *route = NULL;
     int rc = -1;
 
-    if (flux_json_request_decode (*zmsg, &inout) < 0)
+    if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
         goto done;
+    if (!(inout = Jfromstr (json_str))) {
+        errno = EPROTO;
+        goto done;
+    }
     if (!(s = flux_msg_get_route_string (*zmsg)))
         goto done;
     route = xasprintf ("%s!%u", s, ctx->rank);
     Jadd_str (inout, "route", route);
-    rc = flux_json_respond (ctx->h, inout, zmsg);
+    rc = flux_respond (ctx->h, *zmsg, 0, Jtostr (inout));
+    zmsg_destroy (zmsg);
 done:
     if (s)
         free (s);
@@ -1810,12 +1828,13 @@ static int cmb_reparent_cb (zmsg_t **zmsg, void *arg)
     ctx_t *ctx = arg;
     JSON in = NULL;
     const char *uri;
+    const char *json_str;
     bool recycled = false;
     int rc = -1;
 
-    if (flux_json_request_decode (*zmsg, &in) < 0)
+    if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
         goto done;
-    if (!Jget_str (in, "uri", &uri)) {
+    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "uri", &uri)) {
         errno = EPROTO;
         goto done;
     }
@@ -1833,11 +1852,12 @@ static int cmb_panic_cb (zmsg_t **zmsg, void *arg)
 {
     JSON in = NULL;
     const char *s = NULL;
+    const char *json_str;
     int rc = -1;
 
-    if (flux_json_request_decode (*zmsg, &in) < 0)
+    if (flux_request_decode (*zmsg, NULL, &json_str) < 0)
         goto done;
-    if (!Jget_str (in, "msg", &s))
+    if (!(in = Jfromstr (json_str)) || !Jget_str (in, "msg", &s))
         s = "no reason";
     msg ("PANIC: %s", s ? s : "no reason");
     exit (1);
@@ -2123,7 +2143,7 @@ static void child_cb (overlay_t *ov, void *sock, void *arg)
         case FLUX_MSGTYPE_REQUEST:
             rc = broker_request_sendmsg (ctx, &zmsg);
             if (zmsg)
-                flux_err_respond (ctx->h, rc < 0 ? errno : 0, &zmsg);
+                flux_respond (ctx->h, zmsg, rc < 0 ? errno : 0, NULL);
             break;
         case FLUX_MSGTYPE_EVENT:
             rc = broker_event_sendmsg (ctx, &zmsg);
@@ -2244,7 +2264,7 @@ static void module_cb (module_t *p, void *arg)
         case FLUX_MSGTYPE_REQUEST:
             rc = broker_request_sendmsg (ctx, &zmsg);
             if (zmsg)
-                flux_err_respond (ctx->h, rc < 0 ? errno : 0, &zmsg);
+                flux_respond (ctx->h, zmsg, rc < 0 ? errno : 0, NULL);
             break;
         case FLUX_MSGTYPE_EVENT:
             if (broker_event_sendmsg (ctx, &zmsg) < 0) {
@@ -2269,8 +2289,8 @@ static void rmmod_cb (module_t *p, void *arg)
     zmsg_t *zmsg;
 
     while ((zmsg = module_pop_rmmod (p))) {
-        if (flux_err_respond (ctx->h, 0, &zmsg) < 0)
-            err ("%s: flux_err_respond", __FUNCTION__);
+        if (flux_respond (ctx->h, zmsg, 0, NULL) < 0)
+            err ("%s: flux_respond", __FUNCTION__);
         zmsg_destroy (&zmsg);
     }
 }
