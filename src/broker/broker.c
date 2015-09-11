@@ -1056,15 +1056,10 @@ static void load_modules (ctx_t *ctx, zlist_t *modules, zlist_t *modopts,
         }
         if (modexclude && zhash_lookup (modexclude, name))
             goto next;
-        if (!(p = module_add (ctx->modhash, path))) {
-            err ("%s: module_add %s", name, path);
-            goto next;
-        }
-        if (!svc_add (ctx->services, module_get_name (p), mod_svc_cb, p)) {
-            msg ("could not register service %s", module_get_name (p));
-            module_remove (ctx->modhash, p);
-            goto next;
-        }
+        if (!(p = module_add (ctx->modhash, path)))
+            err_exit ("%s: module_add %s", name, path);
+        if (!svc_add (ctx->services, module_get_name (p), mod_svc_cb, p))
+            msg_exit ("could not register service %s", module_get_name (p));
         zhash_update (mods, module_get_name (p), p);
         module_set_poller_cb (p, module_cb, ctx);
         module_set_rmmod_cb (p, rmmod_cb, ctx);
