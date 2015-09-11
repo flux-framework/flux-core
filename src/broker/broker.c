@@ -368,7 +368,7 @@ int main (int argc, char *argv[])
         size_t len = 0;
         if (argz_create (argv + optind, &ctx.init_shell_cmd, &len) < 0)
             oom ();
-        argz_stringify (ctx.init_shell_cmd, len, ' '); 
+        argz_stringify (ctx.init_shell_cmd, len, ' ');
     }
     if (boot_method) {
         struct boot_method *m;
@@ -397,7 +397,7 @@ int main (int argc, char *argv[])
     /* Get the directory for CURVE keys.
      */
     if (!(secdir = getenv ("FLUX_SEC_DIRECTORY")))
-        msg_exit ("FLUX_SEC_DIRECTORY is not set"); 
+        msg_exit ("FLUX_SEC_DIRECTORY is not set");
 
     /* Process config from the KVS of enclosing instance (if any)
      * and not forced to use a config file by the command line.
@@ -1434,7 +1434,7 @@ static JSON subprocess_json_info (struct subprocess *p)
         cwd = getcwd (buf, MAXPATHLEN-1);
     Jadd_str (o, "cwd", cwd);
     if ((sender = subprocess_sender (p))) {
-        Jadd_str (o, "sender", sender); 
+        Jadd_str (o, "sender", sender);
         free (sender);
     }
     return (o);
@@ -1511,7 +1511,7 @@ static int cmb_attrget_cb (zmsg_t **zmsg, void *arg)
         errno = ENOENT;
         goto done;
     }
-    Jadd_str (out, "value", val);    
+    Jadd_str (out, "value", val);
     Jadd_int (out, "flags", flags);
     rc = 0;
 done:
