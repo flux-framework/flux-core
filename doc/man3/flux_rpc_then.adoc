@@ -59,7 +59,7 @@ Some arguments were invalid.
 EXAMPLES
 --------
 
-This example performs an RPC with the broker's "cmb.info" service
+This example performs an RPC with the broker's "cmb.attrget" service
 to obtain the broker's rank.  If the response is available immediately,
 it is processed synchronously.  Otherwise, a continuation is registered to
 process the response when it arrives, meanwhile allowing other reactor

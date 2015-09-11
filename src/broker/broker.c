@@ -1465,21 +1465,6 @@ static int cmb_ps_cb (zmsg_t **zmsg, void *arg)
     return (rc);
 }
 
-static int cmb_info_cb (zmsg_t **zmsg, void *arg)
-{
-    ctx_t *ctx = arg;
-    JSON out = Jnew ();
-    int rc;
-
-    Jadd_int (out, "rank", ctx->rank);
-    Jadd_int (out, "size", ctx->size);
-    Jadd_int (out, "arity", ctx->k_ary);
-
-    rc = flux_json_respond (ctx->h, out, zmsg);
-    Jput (out);
-    return rc;
-}
-
 static int attr_get_snoop (const char *name, const char **val, void *arg)
 {
     snoop_t *snoop = arg;
@@ -1933,8 +1918,7 @@ static int event_shutdown_cb (zmsg_t **zmsg, void *arg)
 
 static void broker_add_services (ctx_t *ctx)
 {
-    if (!svc_add (ctx->services, "cmb.info", cmb_info_cb, ctx)
-          || !svc_add (ctx->services, "cmb.attrget", cmb_attrget_cb, ctx)
+    if (!svc_add (ctx->services, "cmb.attrget", cmb_attrget_cb, ctx)
           || !svc_add (ctx->services, "cmb.attrset", cmb_attrset_cb, ctx)
           || !svc_add (ctx->services, "cmb.attrlist", cmb_attrlist_cb, ctx)
           || !svc_add (ctx->services, "cmb.rusage", cmb_rusage_cb, ctx)

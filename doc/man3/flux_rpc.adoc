@@ -115,8 +115,8 @@ A protocol error was encountered.
 EXAMPLES
 --------
 
-This example performs a synchronous RPC with the broker's "cmb.info" service
-and extracts the broker's rank.
+This example performs a synchronous RPC with the broker's "cmb.attrget"
+service to obtain the broker's rank.
 
 ....
 include::trpc.c[]
