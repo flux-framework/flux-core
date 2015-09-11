@@ -15,7 +15,8 @@ https://download.libsodium.org/libsodium/releases/libsodium-1.0.0.tar.gz \
 http://download.zeromq.org/zeromq-4.0.4.tar.gz \
 http://download.zeromq.org/czmq-3.0.2.tar.gz \
 https://s3.amazonaws.com/json-c_releases/releases/json-c-0.11.tar.gz \
-http://downloads.sourceforge.net/ltp/lcov-1.10.tar.gz"
+http://downloads.sourceforge.net/ltp/lcov-1.10.tar.gz \
+http://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.0.tar.gz"
 
 declare -A extra_configure_opts=(\
 ["zeromq-4.0.4"]="--with-libsodium --with-libsodium-include-dir=\$prefix/include" \
