@@ -20,7 +20,8 @@ CODE_COVERAGE_IGNORE_PATTERN = \
 	"libtap/*" \
 	"libjsonc/*" \
 	"libev/*" \
-	"/usr/*"
+	"/usr/*" \
+	"bindings/python/*"
 CODE_COVERAGE_LCOV_OPTIONS =
 @CODE_COVERAGE_RULES@
 
