@@ -51,7 +51,7 @@ test_under_flux() {
         cleanup rm "${SHARNESS_TEST_DIRECTORY:-..}/$log_file"
         return
     fi
-    quiet="-o -q,-L${log_file}"
+    quiet="-o -q,-L${log_file},-ldebug"
     if test "$verbose" = "t" -o -n "$FLUX_TESTS_DEBUG" ; then
         flags="${flags} --verbose"
         quiet=""
