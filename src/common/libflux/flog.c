@@ -150,6 +150,114 @@ int flux_log_error (flux_t h, const char *fmt, ...)
     return rc;
 }
 
+static int dmesg_clear (flux_t h, int seq)
+{
+    flux_rpc_t *rpc;
+    JSON o = Jnew ();
+    int rc = -1;
+
+    Jadd_int (o, "seq", seq);
+    if (!(rpc = flux_rpc (h, "cmb.dmesg.clear", Jtostr (o),
+                          FLUX_NODEID_ANY, 0)))
+        goto done;
+    if (flux_rpc_get (rpc, NULL, NULL) < 0)
+        goto done;
+    rc = 0;
+done:
+    flux_rpc_destroy (rpc);
+    Jput (o);
+    return rc;
+}
+
+static flux_rpc_t *dmesg_rpc (flux_t h, int seq, bool follow)
+{
+    flux_rpc_t *rpc;
+    JSON o = Jnew ();
+    Jadd_int (o, "seq", seq);
+    Jadd_bool (o, "follow", follow);
+    rpc = flux_rpc (h, "cmb.dmesg", Jtostr (o), FLUX_NODEID_ANY, 0);
+    Jput (o);
+    return rpc;
+}
+
+static int dmesg_rpc_get (flux_rpc_t *rpc, int *seq, flux_log_f fun, void *arg)
+{
+    const char *json_str;
+    const char *facility, *message;
+    JSON o = NULL;
+    int level, rank, tv_usec, tv_sec;
+    struct timeval tv;
+    int rc = -1;
+
+    if (flux_rpc_get (rpc, NULL, &json_str) < 0)
+        goto done;
+    if (!(o = Jfromstr (json_str)) || !Jget_str (o, "facility", &facility)
+                                   || !Jget_int (o, "level", &level)
+                                   || !Jget_int (o, "rank", &rank)
+                                   || !Jget_int (o, "timestamp_usec", &tv_usec)
+                                   || !Jget_int (o, "timestamp_sec", &tv_sec)
+                                   || !Jget_str (o, "message", &message)
+                                   || !Jget_int (o, "seq", seq)) {
+        errno = EPROTO;
+        goto done;
+    }
+    tv.tv_usec = tv_usec;
+    tv.tv_sec = tv_sec;
+    fun (facility, level, rank, tv, message, arg);
+    rc = 0;
+done:
+    Jput (o);
+    return rc;
+}
+
+int flux_dmesg (flux_t h, int flags, flux_log_f fun, void *arg)
+{
+    int rc = -1;
+    int seq = -1;
+    bool eof = false;
+    bool follow = false;
+
+    if (flags & FLUX_DMESG_FOLLOW)
+        follow = true;
+    if (fun) {
+        while (!eof) {
+            flux_rpc_t *rpc;
+            if (!(rpc = dmesg_rpc (h, seq, follow)))
+                goto done;
+            if (dmesg_rpc_get (rpc, &seq, fun, arg) < 0) {
+                if (errno != ENOENT) {
+                    flux_rpc_destroy (rpc);
+                    goto done;
+                }
+                eof = true;
+            }
+            flux_rpc_destroy (rpc);
+        }
+    }
+    if ((flags & FLUX_DMESG_CLEAR)) {
+        if (dmesg_clear (h, seq) < 0)
+            goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+void flux_log_fprint (const char *facility, int level, uint32_t rank,
+                      struct timeval tv, const char *message, void *arg)
+{
+    FILE *f = arg;
+    if (f) {
+        const char *levelstr = log_leveltostr (level);
+        if (!levelstr)
+            levelstr = "unknown";
+        fprintf (f, "[%ld.%06ld] %s.%s[%" PRIu32 "]: %s\n",
+                 tv.tv_sec, tv.tv_usec, facility, levelstr, rank, message);
+        fflush (f);
+    }
+}
+
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
