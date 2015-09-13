@@ -33,6 +33,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/optparse.h"
 
 
 static void event_pub (flux_t h, int argc, char **argv);
@@ -128,9 +129,42 @@ static void unsubscribe_all (flux_t h, int tc, char **tv)
     }
 }
 
+static optparse_t event_sub_get_options (int *argcp, char ***argvp)
+{
+    int n, e;
+    optparse_t p;
+    struct optparse_option opts [] = {
+        {
+         .name = "count", .key = 'c', .group = 1,
+         .has_arg = 1, .arginfo = "N",
+         .usage = "Process N events then exit" },
+        OPTPARSE_TABLE_END
+    };
+
+    if (!(p = optparse_create ("flux-event sub")))
+        err_exit ("event sub: optparse_create");
+
+    if ((e = optparse_add_option_table (p, opts)))
+        err_exit ("event sub: optparse_add_option_table");
+
+    optparse_set (p, OPTPARSE_USAGE, "[OPTIONS] [topic...]");
+    if ((n = optparse_parse_args (p, *argcp, *argvp)) < 0)
+	exit (1);
+
+    /* Adjust argc,argv past option fields
+     */
+    (*argcp) -= n;
+    (*argvp) += n;
+
+    return (p);
+}
+
 static void event_sub (flux_t h, int argc, char **argv)
 {
     flux_msg_t *msg;
+    int n, count;
+    optparse_t p = event_sub_get_options (&argc, &argv);
+
 
     /* Since output is line-based with undeterministic amount of time
      * between lines, force stdout to be line buffered so our output
@@ -138,11 +172,13 @@ static void event_sub (flux_t h, int argc, char **argv)
      */
     setlinebuf (stdout);
 
-    if (argc > 1)
-        subscribe_all (h, argc-1, argv+1);
+    if (argc > 0)
+        subscribe_all (h, argc, argv);
     else if (flux_event_subscribe (h, "") < 0)
         err_exit ("flux_event_subscribe");
 
+    n = 0;
+    count = optparse_get_int (p, "count", 0);
     while ((msg = flux_recv (h, FLUX_MATCH_EVENT, 0))) {
         const char *topic;
         const char *json_str;
@@ -153,10 +189,14 @@ static void event_sub (flux_t h, int argc, char **argv)
             printf ("%s\t%s\n", topic, json_str ? json_str : "");
         }
         flux_msg_destroy (msg);
+
+        /* Wait for at most count events */
+        if (count > 0 && ++n == count)
+            break;
     }
     /* FIXME: add SIGINT handler to exit above loop and clean up.
      */
-    if (argc > 1)
+    if (argc > 0)
         unsubscribe_all (h, argc, argv);
     else if (flux_event_unsubscribe (h, "") < 0)
         err_exit ("flux_event_subscribe");
