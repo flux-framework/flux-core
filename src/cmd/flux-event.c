@@ -38,7 +38,7 @@
 static void event_pub (flux_t h, int argc, char **argv);
 static void event_sub (flux_t h, int argc, char **argv);
 
-#define OPTIONS "h"
+#define OPTIONS "+h"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     { 0, 0, 0, 0 },
