@@ -854,7 +854,8 @@ int optparse_parse_args (optparse_t p, int argc, char *argv[])
         o = opt->p_opt;
         if (o->cb && ((o->cb) (o, optarg, o->arg) < 0)) {
             fprintf (stderr, "Option \"%s\" failed\n", o->name);
-            return (-1);
+            optind = -1;
+            break;
         }
     }
 
