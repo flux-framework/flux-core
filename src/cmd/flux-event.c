@@ -73,7 +73,7 @@ int main (int argc, char *argv[])
     }
     if (optind == argc)
         usage ();
-    cmd = argv[optind++];
+    cmd = argv[optind];
 
     if (!(h = flux_open (NULL, 0)))
         err_exit ("flux_open");
@@ -92,13 +92,13 @@ int main (int argc, char *argv[])
 
 static void event_pub (flux_t h, int argc, char **argv)
 {
-    char *topic = argv[0];
+    char *topic = argv[1];  /* "pub" should be argv0 */
     flux_msg_t *msg = NULL;
     char *json_str = NULL;
 
-    if (argc > 1) {
+    if (argc > 2) {
         size_t len = 0;
-        if (argz_create (argv + 1, &json_str, &len) < 0)
+        if (argz_create (argv + 2, &json_str, &len) < 0)
             oom ();
         argz_stringify (json_str, len, ' ');
     }
@@ -138,8 +138,8 @@ static void event_sub (flux_t h, int argc, char **argv)
      */
     setlinebuf (stdout);
 
-    if (argc > 0)
-        subscribe_all (h, argc, argv);
+    if (argc > 1)
+        subscribe_all (h, argc-1, argv+1);
     else if (flux_event_subscribe (h, "") < 0)
         err_exit ("flux_event_subscribe");
 
@@ -156,7 +156,7 @@ static void event_sub (flux_t h, int argc, char **argv)
     }
     /* FIXME: add SIGINT handler to exit above loop and clean up.
      */
-    if (argc > 0)
+    if (argc > 1)
         unsubscribe_all (h, argc, argv);
     else if (flux_event_unsubscribe (h, "") < 0)
         err_exit ("flux_event_subscribe");
