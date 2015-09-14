@@ -259,3 +259,6 @@ EPERM
 READONLY
 tbon
 attrget
+getattr
+lsattr
+setattr
