@@ -101,7 +101,8 @@ dist_check_DATA = \
 	build/hello_jsonc.c
 
 dist_check_SCRIPTS = \
-	scripts/event-trace.lua
+	scripts/event-trace.lua \
+	scripts/kvs-watch-until.lua
 
 test_ldadd = \
         $(top_builddir)/src/common/libflux-internal.la \
