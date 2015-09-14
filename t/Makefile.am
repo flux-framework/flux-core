@@ -27,6 +27,7 @@ TESTS = \
 	t0006-build-basic.t \
 	t0007-ping.t \
 	t0008-attr.t \
+	t0010-generic-utils.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1002-modctl.t \
@@ -67,6 +68,7 @@ check_SCRIPTS = \
 	t0007-ping.t \
 	t0008-attr.t \
 	t1000-kvs-basic.t \
+	t0010-generic-utils.t \
 	t1001-barrier-basic.t \
 	t1002-modctl.t \
 	t1003-mecho.t \
@@ -101,7 +103,8 @@ dist_check_DATA = \
 	build/hello_jsonc.c
 
 dist_check_SCRIPTS = \
-	scripts/event-trace.lua
+	scripts/event-trace.lua \
+	scripts/kvs-watch-until.lua
 
 test_ldadd = \
         $(top_builddir)/src/common/libflux-internal.la \

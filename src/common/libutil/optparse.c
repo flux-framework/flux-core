@@ -816,6 +816,7 @@ int optparse_parse_args (optparse_t p, int argc, char *argv[])
 {
     int c;
     int li;
+    char *saved_argv0;
     char *optstring = NULL;
     struct option *optz = option_table_create (p, &optstring);
 
@@ -824,6 +825,8 @@ int optparse_parse_args (optparse_t p, int argc, char *argv[])
      *  GNU options parser. See getopt_long(3) NOTES section.
      */
     optind = 0;
+    saved_argv0 = argv[0];
+    argv[0] = p->program_name;
     while ((c = getopt_long (argc, argv, optstring, optz, &li))) {
         struct option_info *opt;
         struct optparse_option *o;
@@ -851,13 +854,15 @@ int optparse_parse_args (optparse_t p, int argc, char *argv[])
         o = opt->p_opt;
         if (o->cb && ((o->cb) (o, optarg, o->arg) < 0)) {
             fprintf (stderr, "Option \"%s\" failed\n", o->name);
-            return (-1);
+            optind = -1;
+            break;
         }
     }
 
     free (optz);
     free (optstring);
 
+    argv[0] = saved_argv0;
     return (optind);
 }
 
