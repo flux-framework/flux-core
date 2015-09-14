@@ -21,7 +21,9 @@ CODE_COVERAGE_IGNORE_PATTERN = \
 	"libjsonc/*" \
 	"libev/*" \
 	"/usr/*" \
-	"bindings/python/*"
+	"bindings/python/*" \
+	"common/liblsd/*" \
+	"common/libutil/sds.[ch]"
 CODE_COVERAGE_LCOV_OPTIONS =
 @CODE_COVERAGE_RULES@
 
