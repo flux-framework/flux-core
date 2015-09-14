@@ -33,7 +33,6 @@ TESTS = \
 	t1001-barrier-basic.t \
 	t1002-modctl.t \
 	t1003-mecho.t \
-	t1004-log.t \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
 	t2000-wreck.t \
@@ -74,7 +73,6 @@ check_SCRIPTS = \
 	t1001-barrier-basic.t \
 	t1002-modctl.t \
 	t1003-mecho.t \
-	t1004-log.t \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
 	t2000-wreck.t \
