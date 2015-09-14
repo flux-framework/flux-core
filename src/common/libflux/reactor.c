@@ -128,6 +128,25 @@ int flux_reactor_start (flux_t h)
     return r->loop_rc;
 }
 
+int flux_reactor_run (flux_t h, int flags)
+{
+    struct reactor *r = reactor_get (h);
+    int ev_flags = 0;
+    int count;
+    if (flags & FLUX_REACTOR_NOWAIT)
+        ev_flags |= EVRUN_NOWAIT;
+    if (flags & FLUX_REACTOR_ONCE)
+        ev_flags |= EVRUN_ONCE;
+    r->loop_rc = 0;
+    count = ev_run (r->loop, ev_flags);
+    if (count > 0 && r->loop_rc == 0 && ((flags & FLUX_REACTOR_NOWAIT)
+                                     || (flags & FLUX_REACTOR_ONCE))) {
+        errno = EWOULDBLOCK;
+        return -1;
+    }
+    return r->loop_rc;
+}
+
 void flux_reactor_stop (flux_t h)
 {
     struct reactor *r = reactor_get (h);

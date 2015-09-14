@@ -6,10 +6,24 @@
 #include "message.h"
 #include "handle.h"
 
+/* flags for flux_reactor_run ()
+ */
+enum {
+    FLUX_REACTOR_NOWAIT = 1,  /* return after all new and outstanding */
+                              /*     events have been hnadled */
+    FLUX_REACTOR_ONCE = 2,    /* same as above but block until at least */
+                              /*     one event occurs */
+};
+
 /* Start the flux event reactor.
  * Returns 0 if flux_reactor_stop() terminated reactor; -1 if error did.
  */
 int flux_reactor_start (flux_t h);
+
+/* Start the flux event reactor, with optional flags.
+ * Returns 0 if flux_reactor_stop() terminated reactor; -1 if error did.
+ */
+int flux_reactor_run (flux_t h, int flags);
 
 /* Signal that the flux event reactor should stop.
  * This may be called from within a watcher.
