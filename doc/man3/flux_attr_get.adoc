@@ -97,6 +97,19 @@ parent-uri::
 The Flux URI that should be passed to flux_open(1) to establish
 a connection to the enclosing instance.
 
+log-bufcount::
+The number of log entries currently stored in the ring buffer.
+
+log-buflimit::
+The maximum number of log entries that can be stored in the ring buffer.
+
+log-count::
+The number of log entries ever stored in the ring buffer.
+
+log-level::
+Log entries at syslog(3) level at or below this value are forwarded
+to rank zero for permanent capture.
+
 
 RETURN VALUE
 ------------

@@ -1,0 +1,77 @@
+FLUX-GETATTR(1)
+===============
+:doctype: manpage
+
+
+NAME
+----
+flux-dmesg - access broker ring buffer
+
+
+SYNOPSIS
+--------
+*flux* *dmesg* ['OPTIONS']
+
+
+DESCRIPTION
+-----------
+
+Each broker rank maintains a circular buffer of log entries
+which can be printed using flux-dmesg(1).
+
+
+OPTIONS
+-------
+
+*-C, --clear*::
+Clear the ring buffer.
+
+*-c, --read-clear*::
+Clear the ring buffer after printing its contents.
+
+*-f, --follow*::
+After printing the contents of the ring buffer, wait for new entries
+and print them as they arrive.
+
+
+EXAMPLES
+--------
+
+To dump the ring buffer on all ranks
+
+  $ flux exec flux dmesg | sort
+
+
+BROKER ATTRIBUTES
+-----------------
+
+Ring buffer parameters may be accessed via the following broker attributes:
+
+log-bufcount (read-only)::
+The number of log entries currently stored in the ring buffer.
+
+log-buflimit (read-write)::
+The maximum number of log entries that can be stored in the ring buffer.
+
+log-count (read-only)::
+The number of log entries ever stored in the ring buffer.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+--------
+flux-setattr(1)

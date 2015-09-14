@@ -27,12 +27,12 @@ TESTS = \
 	t0006-build-basic.t \
 	t0007-ping.t \
 	t0008-attr.t \
+	t0009-dmesg.t \
 	t0010-generic-utils.t \
 	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1002-modctl.t \
 	t1003-mecho.t \
-	t1004-log.t \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
 	t2000-wreck.t \
@@ -67,12 +67,12 @@ check_SCRIPTS = \
 	t0006-build-basic.t \
 	t0007-ping.t \
 	t0008-attr.t \
-	t1000-kvs-basic.t \
+	t0009-dmesg.t \
 	t0010-generic-utils.t \
+	t1000-kvs-basic.t \
 	t1001-barrier-basic.t \
 	t1002-modctl.t \
 	t1003-mecho.t \
-	t1004-log.t \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
 	t2000-wreck.t \

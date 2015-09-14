@@ -442,6 +442,42 @@ void internal_broker (flux_conf_t cf, optparse_t p, int ac, char *av[])
     execvp (path, av); /* no return if successful */
 }
 
+void internal_dmesg (flux_conf_t cf, optparse_t p, int ac, char *av[])
+{
+    struct optparse_option opts[] = {
+        { .name = "clear",  .key = 'C',  .has_arg = 0,
+          .usage = "Clear the ring buffer", },
+        { .name = "read-clear",  .key = 'c',  .has_arg = 0,
+          .usage = "Clear the ring buffer contents after printing", },
+        { .name = "follow",  .key = 'f',  .has_arg = 0,
+          .usage = "Track new entries as are logged", },
+        OPTPARSE_TABLE_END,
+    };
+    int n;
+    flux_t h;
+    int flags = 0;
+    flux_log_f print_cb = flux_log_fprint;
+
+    if (optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS)
+        msg_exit ("optparse_add_option_table");
+    if ((n = optparse_parse_args (p, ac, av)) < 0)
+        msg_exit ("flux-dmesg: error processing args");
+    if (n != ac)
+        msg_exit ("flux-dmesg accepts no free arguments");
+
+    if (!(h = flux_open (NULL, 0)))
+        err_exit ("flux_open");
+    if (optparse_hasopt (p, "read-clear") || optparse_hasopt (p, "clear"))
+        flags |= FLUX_DMESG_CLEAR;
+    if (optparse_hasopt (p, "clear"))
+        print_cb = NULL;
+    if (optparse_hasopt (p, "follow"))
+        flags |= FLUX_DMESG_FOLLOW;
+    if (flux_dmesg (h, flags, print_cb, stdout) < 0)
+        err_exit ("flux_dmesg");
+    flux_close (h);
+}
+
 void internal_getattr (flux_conf_t cf, optparse_t p, int ac, char *av[])
 {
     int n;
@@ -569,6 +605,12 @@ struct builtin builtin_cmds [] = {
       "List broker attributes",
       "[-v]",
       internal_lsattr
+    },
+    {
+      "dmesg",
+      "Print or control log ring buffer",
+      "[OPTIONS...]",
+      internal_dmesg
     },
     { NULL, NULL, NULL, NULL },
 };

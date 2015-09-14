@@ -259,3 +259,9 @@ EPERM
 READONLY
 tbon
 attrget
+getattr
+lsattr
+setattr
+buflimit
+bufcount
+dmesg

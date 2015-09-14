@@ -51,41 +51,77 @@
 #include "module.h"
 #include "modservice.h"
 
+typedef struct {
+    flux_t h;
+    module_t *p;
+    zlist_t *watchers;
+} ctx_t;
+
+static void freectx (void *arg)
+{
+    ctx_t *ctx = arg;
+    flux_msg_watcher_t *w;
+    while ((w = zlist_pop (ctx->watchers)))
+        flux_msg_watcher_destroy (w);
+    zlist_destroy (&ctx->watchers);
+    free (ctx);
+}
+
+static ctx_t *getctx (flux_t h, module_t *p)
+{
+    ctx_t *ctx = flux_aux_get (h, "flux::modservice");
+
+    if (!ctx) {
+        ctx = xzmalloc (sizeof (*ctx));
+        if (!(ctx->watchers = zlist_new ()))
+            oom ();
+        ctx->h = h;
+        ctx->p = p;
+        flux_aux_set (h, "flux::modservice", ctx, freectx);
+    }
+    return ctx;
+}
+
+
 /* Route string will not include the endpoints.
  * FIXME: t/lua/t0002-rpc.t tries to ping with an array object.
  * This should be caught at a lower level - see issue #181
  */
-static int ping_req_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void ping_cb (flux_t h, flux_msg_watcher_t *w,
+                     const flux_msg_t *msg, void *arg)
 {
     module_t *p = arg;
-    JSON in = NULL;
-    char *s = NULL;
+    const char *json_str;
+    JSON o = NULL;
     char *route = NULL;
+    char *route_plus_uuid = NULL;
+    int rc = -1;
 
-    if (flux_json_request_decode (*zmsg, &in) < 0
-         || !json_object_is_type (in, json_type_object)) { // see FIXME above
-        flux_err_respond (h, EPROTO, zmsg);
+    if (flux_request_decode (msg, NULL, &json_str) < 0)
+        goto done;
+    if (!(o = Jfromstr (json_str))
+                    || !json_object_is_type (o, json_type_object)) {
+        errno = EPROTO;
         goto done;
     }
-    if (!(s = flux_msg_get_route_string (*zmsg)))
+    if (!(route = flux_msg_get_route_string (msg)))
         goto done;
-    route = xasprintf ("%s!%.5s", s, module_get_uuid (p));
-    Jadd_str (in, "route", route);
-    if (flux_json_respond (h, in, zmsg) < 0) {
-        err ("%s: flux_json_respond", __FUNCTION__);
-        goto done;
-    }
+    route_plus_uuid = xasprintf ("%s!%.5s", route, module_get_uuid (p));
+    Jadd_str (o, "route", route_plus_uuid);
+    rc = 0;
 done:
-    Jput (in);
-    zmsg_destroy (zmsg);
-    if (s)
-        free (s);
+    if (flux_respond (h, msg, rc < 0 ? errno : 0,
+                                rc < 0 ? NULL : Jtostr (o)) < 0)
+        FLUX_LOG_ERROR (h);
+    Jput (o);
+    if (route_plus_uuid)
+        free (route_plus_uuid);
     if (route)
         free (route);
-    return 0;
 }
 
-static int stats_get_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void stats_get_cb (flux_t h, flux_msg_watcher_t *w,
+                          const flux_msg_t *msg, void *arg)
 {
     flux_msgcounters_t mcs;
     JSON out = Jnew ();
@@ -100,90 +136,92 @@ static int stats_get_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     Jadd_int (out, "#keepalive (tx)", mcs.keepalive_tx);
     Jadd_int (out, "#keepalive (rx)", mcs.keepalive_rx);
 
-    if (flux_json_respond (h, out, zmsg) < 0)
-        flux_log (h, LOG_ERR, "%s: flux_json_respond: %s", __FUNCTION__,
-                  strerror (errno));
+    if (flux_respond (h, msg, 0, Jtostr (out)) < 0)
+        FLUX_LOG_ERROR (h);
     Jput (out);
-    zmsg_destroy (zmsg);
-    return 0;
 }
 
-static int stats_clear_event_cb (flux_t h, int typemask, zmsg_t **zmsg,
-                                 void *arg)
+static void stats_clear_event_cb (flux_t h, flux_msg_watcher_t *w,
+                                  const flux_msg_t *msg, void *arg)
 {
     flux_clr_msgcounters (h);
-    zmsg_destroy (zmsg);
-    return 0;
 }
 
-static int stats_clear_request_cb (flux_t h, int typemask, zmsg_t **zmsg,
-                                   void *arg)
+static void stats_clear_request_cb (flux_t h, flux_msg_watcher_t *w,
+                                    const flux_msg_t *msg, void *arg)
 {
     flux_clr_msgcounters (h);
-    if (flux_err_respond (h, 0, zmsg) < 0)
-        flux_log (h, LOG_ERR, "%s: flux_err_respond: %s", __FUNCTION__,
-                  strerror (errno));
-    zmsg_destroy (zmsg);
-    return 0;
+    if (flux_respond (h, msg, 0, NULL) < 0)
+        FLUX_LOG_ERROR (h);
 }
 
-static int rusage_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void rusage_cb (flux_t h, flux_msg_watcher_t *w,
+                       const flux_msg_t *msg, void *arg)
 {
     JSON out = NULL;
     struct rusage usage;
+    int rc = -1;
 
-    if (getrusage (RUSAGE_THREAD, &usage) < 0) {
-        if (flux_err_respond (h, errno, zmsg) < 0)
-            err ("%s: flux_err_respond", __FUNCTION__);
+    if (getrusage (RUSAGE_THREAD, &usage) < 0)
         goto done;
-    }
     out = rusage_to_json (&usage);
-    if (flux_json_respond (h, out, zmsg) < 0)
-        err ("%s: flux_json_respond", __FUNCTION__);
+    rc = 0;
 done:
+    if (flux_respond (h, msg, rc < 0 ? errno : 0,
+                              rc < 0 ? NULL : Jtostr (out)) < 0)
+        FLUX_LOG_ERROR (h);
     Jput (out);
-    zmsg_destroy (zmsg);
-    return 0;
 }
 
-static int shutdown_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
+static void shutdown_cb (flux_t h, flux_msg_watcher_t *w,
+                         const flux_msg_t *msg, void *arg)
 {
     flux_reactor_stop (h);
-    zmsg_destroy (zmsg);
-    return 0;
 }
 
-static void register_event (flux_t h, const char *name,
-                            const char *svc, FluxMsgHandler cb, void *arg)
+static void register_event (ctx_t *ctx, const char *name,
+                            flux_msg_watcher_f cb)
 {
-    char *topic = xasprintf ("%s.%s", name, svc);
-    if (flux_msghandler_add (h, FLUX_MSGTYPE_EVENT, topic, cb, arg) < 0)
-        err_exit ("%s: flux_msghandler_add", name);
-    if (flux_event_subscribe (h, topic) < 0)
-        err_exit ("%s: flux_event_subscribe %s", __FUNCTION__, topic);
-    free (topic);
+    struct flux_match match = FLUX_MATCH_EVENT;
+    flux_msg_watcher_t *w;
+
+    match.topic_glob = xasprintf ("%s.%s", module_get_name (ctx->p), name);
+    if (!(w = flux_msg_watcher_create (match, cb, ctx->p)))
+        err_exit ("flux_msg_watcher_create");
+    if (zlist_append (ctx->watchers, w) < 0)
+        oom ();
+    if (flux_event_subscribe (ctx->h, match.topic_glob) < 0)
+        err_exit ("%s: flux_event_subscribe %s",
+                  __FUNCTION__, match.topic_glob);
+    free (match.topic_glob);
 }
 
-static void register_request (flux_t h, const char *name,
-                              const char *svc, FluxMsgHandler cb, void *arg)
+static void register_request (ctx_t *ctx, const char *name,
+                              flux_msg_watcher_f cb)
 {
-    char *topic = xasprintf ("%s.%s", name, svc);
-    if (flux_msghandler_add (h, FLUX_MSGTYPE_REQUEST, topic, cb, arg) < 0)
-        err_exit ("%s: flux_msghandler_add %s", name, topic);
-    free (topic);
+    struct flux_match match = FLUX_MATCH_REQUEST;
+    flux_msg_watcher_t *w;
+
+    match.topic_glob = xasprintf ("%s.%s", module_get_name (ctx->p), name);
+    if (!(w = flux_msg_watcher_create (match, cb, ctx->p)))
+        err_exit ("flux_msg_watcher_create");
+    flux_msg_watcher_start (ctx->h, w);
+    if (zlist_append (ctx->watchers, w) < 0)
+        oom ();
+    free (match.topic_glob);
 }
 
 void modservice_register (flux_t h, module_t *p)
 {
-    const char *name = module_get_name (p);
+    ctx_t *ctx = getctx (h, p);
 
-    register_request (h, name, "shutdown", shutdown_cb, p);
-    register_request (h, name, "ping", ping_req_cb, p);
-    register_request (h, name, "stats.get", stats_get_cb, p);
-    register_request (h, name, "stats.clear", stats_clear_request_cb, p);
-    register_request (h, name, "rusage", rusage_cb, p);
+    register_request (ctx, "shutdown", shutdown_cb);
+    register_request (ctx, "ping", ping_cb);
+    register_request (ctx, "stats.get", stats_get_cb);
+    register_request (ctx, "stats.clear", stats_clear_request_cb);
+    register_request (ctx, "rusage", rusage_cb);
 
-    register_event   (h, name, "stats.clear", stats_clear_event_cb, p);
+    register_event   (ctx, "stats.clear", stats_clear_event_cb);
 }
 
 /*
