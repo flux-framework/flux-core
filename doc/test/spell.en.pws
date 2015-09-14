@@ -262,3 +262,5 @@ attrget
 getattr
 lsattr
 setattr
+buflimit
+bufcount
