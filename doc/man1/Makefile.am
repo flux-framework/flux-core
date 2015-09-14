@@ -19,7 +19,8 @@ MAN1_FILES_PRIMARY = \
 	flux-env.1 \
 	flux-list-instances.1 \
 	flux-ps.1 \
-	flux-getattr.1
+	flux-getattr.1 \
+	flux-dmesg.1
 
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section

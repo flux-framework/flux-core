@@ -264,3 +264,4 @@ lsattr
 setattr
 buflimit
 bufcount
+dmesg
