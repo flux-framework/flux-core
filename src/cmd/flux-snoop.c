@@ -242,7 +242,7 @@ static int snoop_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
             if (lopt)
                 zmsg_dump (zmsg);
             else
-                flux_msg_fprint (stderr, zmsg);
+                flux_msg_fprint (stdout, zmsg);
         }
         zmsg_destroy (&zmsg);
     }
