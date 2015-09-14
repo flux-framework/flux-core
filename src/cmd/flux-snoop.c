@@ -32,10 +32,11 @@
 #include "src/common/libutil/log.h"
 
 
-#define OPTIONS "hanN:vl"
+#define OPTIONS "hanN:vlc:"
 static const struct option longopts[] = {
     {"help",       no_argument,        0, 'h'},
     {"all",        no_argument,        0, 'a'},
+    {"count",      required_argument,  0, 'c'},
     {"no-security",no_argument,        0, 'n'},
     {"verbose",    no_argument,        0, 'v'},
     {"long",       no_argument,        0, 'l'},
@@ -51,6 +52,7 @@ void usage (void)
 "Usage: flux-snoop OPTIONS [topic [topic...]]\n"
 "  -a,--all               Do not suppress cmb.log, cmb.pub\n"
 "  -l,--long              Display long message format\n"
+"  -c,--count=N           Display N messages and exit\n"
 #if 0 /* These options are for debugging, not generally useful */
 "  -n,--no-security       Try to connect without CURVE security\n"
 "  -v,--verbose           Verbose connect output\n"
@@ -64,6 +66,8 @@ static void *connect_snoop (zctx_t *zctx, flux_sec_t sec, const char *uri);
 static int snoop_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg);
 static int zmon_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg);
 
+static int maxcount = 0;
+static int count = 0;
 static bool aopt = false;
 static bool lopt = false;
 zlist_t *subscriptions = NULL;
@@ -94,6 +98,11 @@ int main (int argc, char *argv[])
                 break;
             case 'a': /* --all */
                 aopt = true;
+                break;
+            case 'c': /* --count N */
+                maxcount = atoi (optarg);
+                if (maxcount < 0 || maxcount > INT_MAX)
+                    msg_exit ("--count: invalid arg: '%s'", optarg);
                 break;
             case 'l': /* --long */
                 lopt = true;
@@ -175,7 +184,7 @@ int main (int argc, char *argv[])
     if (zloop_poller (zloop, &zp, zmon_cb, NULL) < 0)
         err_exit ("zloop_poller");
 
-    if (zloop_start (zloop) < 0)
+    if ((zloop_start (zloop) < 0) && (count != maxcount))
         err_exit ("zloop_start");
     if (vopt)
         msg ("disconnecting");
@@ -246,6 +255,8 @@ static int snoop_cb (zloop_t *zloop, zmq_pollitem_t *item, void *arg)
         }
         zmsg_destroy (&zmsg);
     }
+    if (++count == maxcount)
+        return (-1);
     return 0;
 }
 
