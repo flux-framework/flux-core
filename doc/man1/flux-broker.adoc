@@ -73,8 +73,13 @@ Set the session heartrate in seconds.  The valid range is 0.01 to 30.0
 (default: 2.0).
 
 *-L, --logdest*='DEST'::
-Set logging destination.  DEST may be 'syslog[:facility[:level]]',
-'stderr', 'stdout', or a file name (default stderr).
+Set log destination.  DEST may be 'stderr' or a file name (default: stderr).
+
+*-l, --log-level*='LEVEL'::
+Log messages of LEVEL or below are forwarded to rank 0 and sent to the
+configured log destination.  LEVEL may be an integer (0-7) or the name
+of a syslog(3) level, e.g.  0=emerg, 1=alert, 2=crit, 3=err, 4=warning,
+5=notice, 6=info, 7=debug (default: 6).
 
 *-M, --module*='NAME[nodeset]'::
 Load the specified comms module.  '[nodeset]' optionally limits the
@@ -105,9 +110,16 @@ overlay wire-up information.  Valid methods are SINGLE, LOCAL, and PMI.
 (default: PMI).
 
 *-E, --enable-epgm*::
-Enable EPGM for event distribution.
-The interface associated with the hostname will be used.
-This only works with the PMI boot method.
+Enable EPGM, a reliable multicast protocol, for event distribution.
+Without this option, the tree-based overlay network distributes events.
+On large sessions, EPGM should improve scalability and reduce system jitter,
+however it requires that network switches support multicast and currently
+uses a naive algorithm to select a unique multicast port for the session.
+This algorithm should be safe for instances launched directly by the
+"native" resource manager using the PMI boot method, but not yet for
+instances launched by those instances.   The first network interface
+associated with the hostname is used, and the multicast address is
+hardwired to 239.192.1.1.
 
 *-D, --socket-directory*='DIR'::
 Create ipc:// sockets in this directory.
