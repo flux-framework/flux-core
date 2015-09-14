@@ -152,6 +152,38 @@ void flux_timer_watcher_reset (flux_timer_watcher_t *w,
                                double after, double repeat);
 
 
+/* Prepare - run immediately before blocking.
+ */
+typedef struct flux_prepare_watcher flux_prepare_watcher_t;
+typedef void (*flux_prepare_watcher_f)(flux_t h, flux_prepare_watcher_t *w,
+                                     int revents, void *arg);
+flux_prepare_watcher_t *flux_prepare_watcher_create (flux_prepare_watcher_f cb,
+                                                     void *arg);
+void flux_prepare_watcher_destroy (flux_prepare_watcher_t *w);
+void flux_prepare_watcher_start (flux_t h, flux_prepare_watcher_t *w);
+void flux_prepare_watcher_stop (flux_t h, flux_prepare_watcher_t *w);
+
+/* Check - run immediately after blocking
+ */
+typedef struct flux_check_watcher flux_check_watcher_t;
+typedef void (*flux_check_watcher_f)(flux_t h, flux_check_watcher_t *w,
+                                     int revents, void *arg);
+flux_check_watcher_t *flux_check_watcher_create (flux_check_watcher_f cb,
+                                                     void *arg);
+void flux_check_watcher_destroy (flux_check_watcher_t *w);
+void flux_check_watcher_start (flux_t h, flux_check_watcher_t *w);
+void flux_check_watcher_stop (flux_t h, flux_check_watcher_t *w);
+
+/* Idle - always run (event loop never blocks)
+ */
+typedef struct flux_idle_watcher flux_idle_watcher_t;
+typedef void (*flux_idle_watcher_f)(flux_t h, flux_idle_watcher_t *w,
+                                     int revents, void *arg);
+flux_idle_watcher_t *flux_idle_watcher_create (flux_idle_watcher_f cb,
+                                                     void *arg);
+void flux_idle_watcher_destroy (flux_idle_watcher_t *w);
+void flux_idle_watcher_start (flux_t h, flux_idle_watcher_t *w);
+void flux_idle_watcher_stop (flux_t h, flux_idle_watcher_t *w);
 
 #endif /* !_FLUX_CORE_REACTOR_H */
 

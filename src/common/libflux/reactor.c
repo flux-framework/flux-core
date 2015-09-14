@@ -90,6 +90,27 @@ struct flux_timer_watcher {
     ev_timer w;
 };
 
+struct flux_prepare_watcher {
+    flux_t h;
+    flux_prepare_watcher_f fn;
+    void *arg;
+    ev_prepare w;
+};
+
+struct flux_check_watcher {
+    flux_t h;
+    flux_check_watcher_f fn;
+    void *arg;
+    ev_check w;
+};
+
+struct flux_idle_watcher {
+    flux_t h;
+    flux_idle_watcher_f fn;
+    void *arg;
+    ev_idle w;
+};
+
 static void handle_cb (struct ev_loop *loop, struct ev_flux *hw, int revents);
 
 
@@ -624,6 +645,128 @@ void flux_timer_watcher_reset (flux_timer_watcher_t *w,
 {
     ev_timer_set (&w->w, after, repeat);
 }
+
+/* Prepare
+ */
+
+static void prepare_cb (struct ev_loop *loop, ev_prepare *tw, int revents)
+{
+    const size_t off = offsetof (struct flux_prepare_watcher, w);
+    void *ptr = (char *)tw - off;
+    struct flux_prepare_watcher *w = ptr;
+    w->fn (w->h, w, libev_to_events (revents), w->arg);
+}
+
+flux_prepare_watcher_t *flux_prepare_watcher_create (flux_prepare_watcher_f cb,
+                                                     void *arg)
+{
+    struct flux_prepare_watcher *w = xzmalloc (sizeof (*w));
+    w->fn = cb;
+    w->arg = arg;
+    ev_prepare_init (&w->w, prepare_cb);
+    return w;
+}
+
+void flux_prepare_watcher_start (flux_t h, flux_prepare_watcher_t *w)
+{
+    struct reactor *r = reactor_get (h);
+    ev_prepare_start (r->loop, &w->w);
+    w->h = h;
+}
+
+void flux_prepare_watcher_stop (flux_t h, flux_prepare_watcher_t *w)
+{
+    struct reactor *r = reactor_get (h);
+    ev_prepare_stop (r->loop, &w->w);
+}
+
+void flux_prepare_watcher_destroy (flux_prepare_watcher_t *w)
+{
+    if (w)
+        free (w);
+}
+
+/* Check
+ */
+
+static void check_cb (struct ev_loop *loop, ev_check *tw, int revents)
+{
+    const size_t off = offsetof (struct flux_check_watcher, w);
+    void *ptr = (char *)tw - off;
+    struct flux_check_watcher *w = ptr;
+    w->fn (w->h, w, libev_to_events (revents), w->arg);
+}
+
+flux_check_watcher_t *flux_check_watcher_create (flux_check_watcher_f cb,
+                                                     void *arg)
+{
+    struct flux_check_watcher *w = xzmalloc (sizeof (*w));
+    w->fn = cb;
+    w->arg = arg;
+    ev_check_init (&w->w, check_cb);
+    return w;
+}
+
+void flux_check_watcher_start (flux_t h, flux_check_watcher_t *w)
+{
+    struct reactor *r = reactor_get (h);
+    ev_check_start (r->loop, &w->w);
+    w->h = h;
+}
+
+void flux_check_watcher_stop (flux_t h, flux_check_watcher_t *w)
+{
+    struct reactor *r = reactor_get (h);
+    ev_check_stop (r->loop, &w->w);
+}
+
+void flux_check_watcher_destroy (flux_check_watcher_t *w)
+{
+    if (w)
+        free (w);
+}
+
+/* Idle
+ */
+
+static void idle_cb (struct ev_loop *loop, ev_idle *tw, int revents)
+{
+    const size_t off = offsetof (struct flux_idle_watcher, w);
+    void *ptr = (char *)tw - off;
+    struct flux_idle_watcher *w = ptr;
+    w->fn (w->h, w, libev_to_events (revents), w->arg);
+}
+
+flux_idle_watcher_t *flux_idle_watcher_create (flux_idle_watcher_f cb,
+                                                     void *arg)
+{
+    struct flux_idle_watcher *w = xzmalloc (sizeof (*w));
+    w->fn = cb;
+    w->arg = arg;
+    ev_idle_init (&w->w, idle_cb);
+    return w;
+}
+
+void flux_idle_watcher_start (flux_t h, flux_idle_watcher_t *w)
+{
+    struct reactor *r = reactor_get (h);
+    ev_idle_start (r->loop, &w->w);
+    w->h = h;
+}
+
+void flux_idle_watcher_stop (flux_t h, flux_idle_watcher_t *w)
+{
+    struct reactor *r = reactor_get (h);
+    ev_idle_stop (r->loop, &w->w);
+}
+
+void flux_idle_watcher_destroy (flux_idle_watcher_t *w)
+{
+    if (w)
+        free (w);
+}
+
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
