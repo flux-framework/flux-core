@@ -24,7 +24,8 @@ local function kvsdir_test (d, k, v, comment)
     d[k] = v
     d:commit ()
     local r = d[k]
-    is (type(r), t, msg .. "got back type " .. t)
+    local t2 = type (r)
+    is (t2, t, msg .. "got back type " .. t2 .. " wanted " .. t)
     if t == 'table' then
         is_deeply (r, v, msg .. "table values match")
     else
@@ -42,6 +43,10 @@ kvsdir_test (dir, key, false, "false")
 kvsdir_test (dir, key, { x = 1, y = 2 }, "a table")
 kvsdir_test (dir, key, { x = { "a", "deep", "table" } }, "a deeper table")
 kvsdir_test (dir, key, { 1, 2, 3, 4, 5, 6 }, "an array")
+
+kvsdir_test (dir, key, "0",   "string 0 not converted to numeric")
+kvsdir_test (dir, key, "0x1", "string 0x1 not converted to numeric")
+kvsdir_test (dir, key, "00",  "string 00 not converted to numeric")
 
 
 -- unlink testing
