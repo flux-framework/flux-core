@@ -49,6 +49,14 @@ int flux_sleep_on (flux_t h, struct flux_match match);
  *   a NULL watcher have no effect.
  */
 
+typedef struct flux_watcher flux_watcher_t;
+typedef void (*flux_watcher_f)(flux_t h, flux_watcher_t *w,
+                               int revents, void *arg);
+void flux_watcher_destroy (flux_watcher_t *w);
+void flux_watcher_start (flux_t h, flux_watcher_t *w);
+void flux_watcher_stop (flux_t h, flux_watcher_t *w);
+
+
 /* Message dispatch
  * Create/destroy/start/stop "message watchers".
  * A message watcher handles messages received on the handle matching 'match'.
@@ -99,39 +107,19 @@ struct flux_msghandler {
 int flux_msg_watcher_addvec (flux_t h, struct flux_msghandler tab[], void *arg);
 void flux_msg_watcher_delvec (flux_t h, struct flux_msghandler tab[]);
 
-/* file descriptors
- * Create/destroy/start/stop "fd watchers".
- * A file descriptor watcher monitors a file descriptor for FLUX_POLLIN
- * and/or FLUX_POLLOUT as specified in the events paramter.  The watcher
- * is called with the events that triggered the watcher set in revents.
- * If there was a poll or other error on the fd, revents may be called with
- * FLUX_POLLERR set.
+/* fd - watch a file descriptor
  */
+flux_watcher_t *flux_fd_watcher_create (int fd, int events,
+                                        flux_watcher_f cb, void *arg);
+int flux_fd_watcher_get_fd (flux_watcher_t *w);
 
-typedef struct flux_fd_watcher flux_fd_watcher_t;
-typedef void (*flux_fd_watcher_f)(flux_t h, flux_fd_watcher_t *w,
-                                  int fd, int revents, void *arg);
-flux_fd_watcher_t *flux_fd_watcher_create (int fd, int events,
-                                           flux_fd_watcher_f cb, void *arg);
-void flux_fd_watcher_destroy (flux_fd_watcher_t *w);
-void flux_fd_watcher_start (flux_t h, flux_fd_watcher_t *w);
-void flux_fd_watcher_stop (flux_t h, flux_fd_watcher_t *w);
-
-/* 0MQ sockets
- * Create/destroy/start/stop "zmq watchers".
- * zmq watchers behave exactly like fd watchers.
+/* zmq - watch a zeromq socket.
  */
+flux_watcher_t *flux_zmq_watcher_create (void *zsock, int events,
+                                         flux_watcher_f cb, void *arg);
+void *flux_zmq_watcher_get_zsock (flux_watcher_t *w);
 
-typedef struct flux_zmq_watcher flux_zmq_watcher_t;
-typedef void (*flux_zmq_watcher_f)(flux_t h, flux_zmq_watcher_t *w,
-                                   void *zsock, int revents, void *arg);
-flux_zmq_watcher_t *flux_zmq_watcher_create (void *zsock, int events,
-                                             flux_zmq_watcher_f cb, void *arg);
-void flux_zmq_watcher_destroy (flux_zmq_watcher_t *w);
-void flux_zmq_watcher_start (flux_t h, flux_zmq_watcher_t *w);
-void flux_zmq_watcher_stop (flux_t h, flux_zmq_watcher_t *w);
-
-/* Timer
+/* Timer - set a timer
  * Create/destroy/start/stop "timer watchers".
  * A timer is set to trigger 'after' seconds from its start time.  If 'after'
  * is zero, the timer triggers immediately.  If 'repeat' is zero, the timer
@@ -139,51 +127,22 @@ void flux_zmq_watcher_stop (flux_t h, flux_zmq_watcher_t *w);
  * again every 'repeat' seconds.
  */
 
-typedef struct flux_timer_watcher flux_timer_watcher_t;
-typedef void (*flux_timer_watcher_f)(flux_t h, flux_timer_watcher_t *w,
-                                     int revents, void *arg);
-flux_timer_watcher_t *flux_timer_watcher_create (double after, double repeat,
-                                                 flux_timer_watcher_f cb,
-                                                 void *arg);
-void flux_timer_watcher_destroy (flux_timer_watcher_t *w);
-void flux_timer_watcher_start (flux_t h, flux_timer_watcher_t *w);
-void flux_timer_watcher_stop (flux_t h, flux_timer_watcher_t *w);
-void flux_timer_watcher_reset (flux_timer_watcher_t *w,
-                               double after, double repeat);
+flux_watcher_t *flux_timer_watcher_create (double after, double repeat,
+                                           flux_watcher_f cb, void *arg);
+void flux_timer_watcher_reset (flux_watcher_t *w, double after, double repeat);
 
 
 /* Prepare - run immediately before blocking.
  */
-typedef struct flux_prepare_watcher flux_prepare_watcher_t;
-typedef void (*flux_prepare_watcher_f)(flux_t h, flux_prepare_watcher_t *w,
-                                     int revents, void *arg);
-flux_prepare_watcher_t *flux_prepare_watcher_create (flux_prepare_watcher_f cb,
-                                                     void *arg);
-void flux_prepare_watcher_destroy (flux_prepare_watcher_t *w);
-void flux_prepare_watcher_start (flux_t h, flux_prepare_watcher_t *w);
-void flux_prepare_watcher_stop (flux_t h, flux_prepare_watcher_t *w);
+flux_watcher_t *flux_prepare_watcher_create (flux_watcher_f cb, void *arg);
 
 /* Check - run immediately after blocking
  */
-typedef struct flux_check_watcher flux_check_watcher_t;
-typedef void (*flux_check_watcher_f)(flux_t h, flux_check_watcher_t *w,
-                                     int revents, void *arg);
-flux_check_watcher_t *flux_check_watcher_create (flux_check_watcher_f cb,
-                                                     void *arg);
-void flux_check_watcher_destroy (flux_check_watcher_t *w);
-void flux_check_watcher_start (flux_t h, flux_check_watcher_t *w);
-void flux_check_watcher_stop (flux_t h, flux_check_watcher_t *w);
+flux_watcher_t *flux_check_watcher_create (flux_watcher_f cb, void *arg);
 
 /* Idle - always run (event loop never blocks)
  */
-typedef struct flux_idle_watcher flux_idle_watcher_t;
-typedef void (*flux_idle_watcher_f)(flux_t h, flux_idle_watcher_t *w,
-                                     int revents, void *arg);
-flux_idle_watcher_t *flux_idle_watcher_create (flux_idle_watcher_f cb,
-                                                     void *arg);
-void flux_idle_watcher_destroy (flux_idle_watcher_t *w);
-void flux_idle_watcher_start (flux_t h, flux_idle_watcher_t *w);
-void flux_idle_watcher_stop (flux_t h, flux_idle_watcher_t *w);
+flux_watcher_t *flux_idle_watcher_create (flux_watcher_f cb, void *arg);
 
 #endif /* !_FLUX_CORE_REACTOR_H */
 

@@ -69,46 +69,20 @@ struct flux_msg_watcher {
     struct flux_match wait_match;
 };
 
-struct flux_fd_watcher {
-    flux_t h;
-    flux_fd_watcher_f fn;
-    void *arg;
-    ev_io w;
+struct watcher_ops {
+    void (*start)(void *impl, flux_watcher_t *w);
+    void (*stop)(void *impl, flux_watcher_t *w);
+    void (*destroy)(void *impl, flux_watcher_t *w);
 };
 
-struct flux_zmq_watcher {
-    flux_t h;
-    flux_zmq_watcher_f fn;
+struct flux_watcher {
+    flux_watcher_f fn;
     void *arg;
-    ev_zmq w;
-};
+    struct reactor *reactor;
 
-struct flux_timer_watcher {
-    flux_t h;
-    flux_timer_watcher_f fn;
-    void *arg;
-    ev_timer w;
-};
-
-struct flux_prepare_watcher {
-    flux_t h;
-    flux_prepare_watcher_f fn;
-    void *arg;
-    ev_prepare w;
-};
-
-struct flux_check_watcher {
-    flux_t h;
-    flux_check_watcher_f fn;
-    void *arg;
-    ev_check w;
-};
-
-struct flux_idle_watcher {
-    flux_t h;
-    flux_idle_watcher_f fn;
-    void *arg;
-    ev_idle w;
+    int signature;
+    struct watcher_ops ops;
+    void *impl;
 };
 
 static void handle_cb (struct ev_loop *loop, struct ev_flux *hw, int revents);
@@ -204,6 +178,50 @@ static int libev_to_events (int events)
     if (events & EV_ERROR)
         e |= FLUX_POLLERR;
     return e;
+}
+
+/**
+ ** Watchers
+ **/
+
+static flux_watcher_t *flux_watcher_create (void *impl, struct watcher_ops ops,
+                                            int signature,
+                                            flux_watcher_f fun, void *arg)
+{
+    struct flux_watcher *w = xzmalloc (sizeof (*w));
+    w->ops = ops;
+    w->signature = signature;
+    w->impl = impl;
+    w->fn = fun;
+    w->arg = arg;
+    return w;
+}
+
+void flux_watcher_start (flux_t h, flux_watcher_t *w)
+{
+    if (w) {
+        w->reactor = reactor_get (h);
+        if (w->ops.start)
+            w->ops.start (w->impl, w);
+    }
+}
+
+void flux_watcher_stop (flux_t h, flux_watcher_t *w)
+{
+    if (w) {
+        w->reactor = reactor_get (h);
+        if (w->ops.stop)
+            w->ops.stop (w->impl, w);
+    }
+}
+
+void flux_watcher_destroy (flux_watcher_t *w)
+{
+    if (w) {
+        if (w->ops.destroy)
+            w->ops.destroy (w->impl, w);
+        free (w);
+    }
 }
 
 /* Message watchers
@@ -520,252 +538,322 @@ void flux_msg_watcher_delvec (flux_t h, struct flux_msghandler tab[])
 /* file descriptors
  */
 
-static void io_cb (struct ev_loop *loop, ev_io *iow, int revents)
+#define FD_SIG 1005
+
+static void fd_start (void *impl, flux_watcher_t *w)
 {
-    void *ptr = (char *)iow - offsetof (struct flux_fd_watcher, w);
-    struct flux_fd_watcher *w = ptr;
-    w->fn (w->h, w, iow->fd, libev_to_events (revents), w->arg);
+    assert (w->signature == FD_SIG);
+    ev_io_start (w->reactor->loop, (ev_io *)impl);
 }
 
-flux_fd_watcher_t *flux_fd_watcher_create (int fd, int events,
-                                           flux_fd_watcher_f cb, void *arg)
+static void fd_stop (void *impl, flux_watcher_t *w)
 {
-    struct flux_fd_watcher *w = xzmalloc (sizeof (*w));
-    w->fn = cb;
-    w->arg = arg;
-    ev_io_init (&w->w, io_cb, fd, events_to_libev (events) & ~EV_ERROR);
+    assert (w->signature == FD_SIG);
+    ev_io_stop (w->reactor->loop, (ev_io *)impl);
+}
+
+static void fd_destroy (void *impl, flux_watcher_t *w)
+{
+    assert (w->signature == FD_SIG);
+    if (impl)
+        free (impl);
+}
+
+static void fd_cb (struct ev_loop *loop, ev_io *iow, int revents)
+{
+    struct flux_watcher *w = iow->data;
+    assert (w->signature == FD_SIG);
+    if (w->fn)
+        w->fn (w->reactor->h, w, libev_to_events (revents), w->arg);
+}
+
+flux_watcher_t *flux_fd_watcher_create (int fd, int events,
+                                        flux_watcher_f cb, void *arg)
+{
+    struct watcher_ops ops = {
+        .start = fd_start,
+        .stop = fd_stop,
+        .destroy = fd_destroy,
+    };
+    ev_io *iow = xzmalloc (sizeof (*iow));
+    flux_watcher_t *w;
+
+    ev_io_init (iow, fd_cb, fd, events_to_libev (events) & ~EV_ERROR);
+    w = flux_watcher_create (iow, ops, FD_SIG, cb, arg);
+    iow->data = w;
+
     return w;
 }
 
-void flux_fd_watcher_start (flux_t h, flux_fd_watcher_t *w)
+int flux_fd_watcher_get_fd (flux_watcher_t *w)
 {
-    struct reactor *r = reactor_get (h);
-    ev_io_start (r->loop, &w->w);
-    w->h = h;
-}
-
-void flux_fd_watcher_stop (flux_t h, flux_fd_watcher_t *w)
-{
-    struct reactor *r = reactor_get (h);
-    ev_io_stop (r->loop, &w->w);
-}
-
-void flux_fd_watcher_destroy (flux_fd_watcher_t *w)
-{
-    if (w)
-        free (w);
+    assert (w->signature == FD_SIG);
+    ev_io *iow = w->impl;
+    return iow->fd;
 }
 
 /* 0MQ sockets
  */
 
-static void zmq_cb (struct ev_loop *loop, ev_zmq *zw, int revents)
+#define ZMQ_SIG 1004
+
+static void zmq_start (void *impl, flux_watcher_t *w)
 {
-    void *ptr = (char *)zw - offsetof (struct flux_zmq_watcher, w);
-    struct flux_zmq_watcher *w = ptr;
-    w->fn (w->h, w, zw->zsock, libev_to_events (revents), w->arg);
+    assert (w->signature == ZMQ_SIG);
+    ev_zmq_start (w->reactor->loop, (ev_zmq *)impl);
 }
 
-flux_zmq_watcher_t *flux_zmq_watcher_create (void *zsock, int events,
-                                             flux_zmq_watcher_f cb, void *arg)
+static void zmq_stop (void *impl, flux_watcher_t *w)
 {
-    struct flux_zmq_watcher *w = xzmalloc (sizeof (*w));
-    w->fn = cb;
-    w->arg = arg;
-    ev_zmq_init (&w->w, zmq_cb, zsock, events_to_libev (events) & ~EV_ERROR);
+    assert (w->signature == ZMQ_SIG);
+    ev_zmq_stop (w->reactor->loop, (ev_zmq *)impl);
+}
+
+static void zmq_destroy (void *impl, flux_watcher_t *w)
+{
+    assert (w->signature == ZMQ_SIG);
+    if (impl)
+        free (impl);
+}
+
+static void zmq_cb (struct ev_loop *loop, ev_zmq *pw, int revents)
+{
+    struct flux_watcher *w = pw->data;
+    assert (w->signature == ZMQ_SIG);
+    if (w->fn)
+        w->fn (w->reactor->h, w, libev_to_events (revents), w->arg);
+}
+
+flux_watcher_t *flux_zmq_watcher_create (void *zsock, int events,
+                                         flux_watcher_f cb, void *arg)
+{
+    struct watcher_ops ops = {
+        .start = zmq_start,
+        .stop = zmq_stop,
+        .destroy = zmq_destroy,
+    };
+    ev_zmq *zw = xzmalloc (sizeof (*zw));
+    flux_watcher_t *w;
+
+    ev_zmq_init (zw, zmq_cb, zsock, events_to_libev (events) & ~EV_ERROR);
+    w = flux_watcher_create (zw, ops, ZMQ_SIG, cb, arg);
+    zw->data = w;
+
     return w;
 }
 
-void flux_zmq_watcher_start (flux_t h, flux_zmq_watcher_t *w)
+void *flux_zmq_watcher_get_zsock (flux_watcher_t *w)
 {
-    struct reactor *r = reactor_get (h);
-    ev_zmq_start (r->loop, &w->w);
-    w->h = h;
-}
-
-void flux_zmq_watcher_stop (flux_t h, flux_zmq_watcher_t *w)
-{
-    struct reactor *r = reactor_get (h);
-    ev_zmq_stop (r->loop, &w->w);
-}
-
-void flux_zmq_watcher_destroy (flux_zmq_watcher_t *w)
-{
-    if (w)
-        free (w);
+    assert (w->signature == ZMQ_SIG);
+    ev_zmq *zw = w->impl;
+    return zw->zsock;
 }
 
 /* Timer
  */
 
-static void timer_cb (struct ev_loop *loop, ev_timer *tw, int revents)
+#define TIMER_SIG 1003
+
+static void timer_start (void *impl, flux_watcher_t *w)
 {
-    const size_t off = offsetof (struct flux_timer_watcher, w);
-    void *ptr = (char *)tw - off;
-    struct flux_timer_watcher *w = ptr;
-    w->fn (w->h, w, libev_to_events (revents), w->arg);
+    assert (w->signature == TIMER_SIG);
+    ev_timer_start (w->reactor->loop, (ev_timer *)impl);
 }
 
-flux_timer_watcher_t *flux_timer_watcher_create (double after, double repeat,
-                                                 flux_timer_watcher_f cb,
-                                                 void *arg)
+static void timer_stop (void *impl, flux_watcher_t *w)
+{
+    assert (w->signature == TIMER_SIG);
+    ev_timer_stop (w->reactor->loop, (ev_timer *)impl);
+}
+
+static void timer_destroy (void *impl, flux_watcher_t *w)
+{
+    assert (w->signature == TIMER_SIG);
+    if (impl)
+        free (impl);
+}
+
+static void timer_cb (struct ev_loop *loop, ev_timer *tw, int revents)
+{
+    struct flux_watcher *w = tw->data;
+    if (w->fn)
+        w->fn (w->reactor->h, w, libev_to_events (revents), w->arg);
+}
+
+flux_watcher_t *flux_timer_watcher_create (double after, double repeat,
+                                           flux_watcher_f cb, void *arg)
 {
     if (after < 0 || repeat < 0) {
         errno = EINVAL;
         return NULL;
     }
-    struct flux_timer_watcher *w = xzmalloc (sizeof (*w));
-    w->fn = cb;
-    w->arg = arg;
-    ev_timer_init (&w->w, timer_cb, after, repeat);
+    struct watcher_ops ops = {
+        .start = timer_start,
+        .stop = timer_stop,
+        .destroy = timer_destroy,
+    };
+    ev_timer *tw = xzmalloc (sizeof (*tw));
+    flux_watcher_t *w;
+
+    ev_timer_init (tw, timer_cb, after, repeat);
+    w = flux_watcher_create (tw, ops, TIMER_SIG, cb, arg);
+    tw->data = w;
+
     return w;
 }
 
-void flux_timer_watcher_start (flux_t h, flux_timer_watcher_t *w)
+void flux_timer_watcher_reset (flux_watcher_t *w, double after, double repeat)
 {
-    struct reactor *r = reactor_get (h);
-    ev_timer_start (r->loop, &w->w);
-    w->h = h;
-}
-
-void flux_timer_watcher_stop (flux_t h, flux_timer_watcher_t *w)
-{
-    struct reactor *r = reactor_get (h);
-    ev_timer_stop (r->loop, &w->w);
-}
-
-void flux_timer_watcher_destroy (flux_timer_watcher_t *w)
-{
-    if (w)
-        free (w);
-}
-
-void flux_timer_watcher_reset (flux_timer_watcher_t *w,
-                               double after, double repeat)
-{
-    ev_timer_set (&w->w, after, repeat);
+    assert (w->signature == TIMER_SIG);
+    ev_timer *tw = w->impl;
+    ev_timer_set (tw, after, repeat);
 }
 
 /* Prepare
  */
+#define PREPARE_SIG 1002
 
-static void prepare_cb (struct ev_loop *loop, ev_prepare *tw, int revents)
+static void prepare_start (void *impl, flux_watcher_t *w)
 {
-    const size_t off = offsetof (struct flux_prepare_watcher, w);
-    void *ptr = (char *)tw - off;
-    struct flux_prepare_watcher *w = ptr;
-    w->fn (w->h, w, libev_to_events (revents), w->arg);
+    assert (w->signature == PREPARE_SIG);
+    ev_prepare_start (w->reactor->loop, (ev_prepare *)impl);
 }
 
-flux_prepare_watcher_t *flux_prepare_watcher_create (flux_prepare_watcher_f cb,
-                                                     void *arg)
+static void prepare_stop (void *impl, flux_watcher_t *w)
 {
-    struct flux_prepare_watcher *w = xzmalloc (sizeof (*w));
-    w->fn = cb;
-    w->arg = arg;
-    ev_prepare_init (&w->w, prepare_cb);
+    assert (w->signature == PREPARE_SIG);
+    ev_prepare_stop (w->reactor->loop, (ev_prepare *)impl);
+}
+
+static void prepare_destroy (void *impl, flux_watcher_t *w)
+{
+    assert (w->signature == PREPARE_SIG);
+    if (impl)
+        free (impl);
+}
+
+static void prepare_cb (struct ev_loop *loop, ev_prepare *pw, int revents)
+{
+    struct flux_watcher *w = pw->data;
+    assert (w->signature == PREPARE_SIG);
+    if (w->fn)
+        w->fn (w->reactor->h, w, libev_to_events (revents), w->arg);
+}
+
+flux_watcher_t *flux_prepare_watcher_create (flux_watcher_f cb, void *arg)
+{
+    struct watcher_ops ops = {
+        .start = prepare_start,
+        .stop = prepare_stop,
+        .destroy = prepare_destroy,
+    };
+    ev_prepare *pw = xzmalloc (sizeof (*pw));
+    flux_watcher_t *w;
+
+    ev_prepare_init (pw, prepare_cb);
+    w = flux_watcher_create (pw, ops, PREPARE_SIG, cb, arg);
+    pw->data = w;
+
     return w;
-}
-
-void flux_prepare_watcher_start (flux_t h, flux_prepare_watcher_t *w)
-{
-    struct reactor *r = reactor_get (h);
-    ev_prepare_start (r->loop, &w->w);
-    w->h = h;
-}
-
-void flux_prepare_watcher_stop (flux_t h, flux_prepare_watcher_t *w)
-{
-    struct reactor *r = reactor_get (h);
-    ev_prepare_stop (r->loop, &w->w);
-}
-
-void flux_prepare_watcher_destroy (flux_prepare_watcher_t *w)
-{
-    if (w)
-        free (w);
 }
 
 /* Check
  */
 
-static void check_cb (struct ev_loop *loop, ev_check *tw, int revents)
+#define CHECK_SIG 1001
+
+static void check_start (void *impl, flux_watcher_t *w)
 {
-    const size_t off = offsetof (struct flux_check_watcher, w);
-    void *ptr = (char *)tw - off;
-    struct flux_check_watcher *w = ptr;
-    w->fn (w->h, w, libev_to_events (revents), w->arg);
+    assert (w->signature == CHECK_SIG);
+    ev_check_start (w->reactor->loop, (ev_check *)impl);
 }
 
-flux_check_watcher_t *flux_check_watcher_create (flux_check_watcher_f cb,
-                                                     void *arg)
+static void check_stop (void *impl, flux_watcher_t *w)
 {
-    struct flux_check_watcher *w = xzmalloc (sizeof (*w));
-    w->fn = cb;
-    w->arg = arg;
-    ev_check_init (&w->w, check_cb);
+    assert (w->signature == CHECK_SIG);
+    ev_check_stop (w->reactor->loop, (ev_check *)impl);
+}
+
+static void check_destroy (void *impl, flux_watcher_t *w)
+{
+    assert (w->signature == CHECK_SIG);
+    if (impl)
+        free (impl);
+}
+
+static void check_cb (struct ev_loop *loop, ev_check *cw, int revents)
+{
+    struct flux_watcher *w = cw->data;
+    assert (w->signature == CHECK_SIG);
+    if (w->fn)
+        w->fn (w->reactor->h, w, libev_to_events (revents), w->arg);
+}
+
+flux_watcher_t *flux_check_watcher_create (flux_watcher_f cb, void *arg)
+{
+    struct watcher_ops ops = {
+        .start = check_start,
+        .stop = check_stop,
+        .destroy = check_destroy,
+    };
+    ev_check *cw = xzmalloc (sizeof (*cw));
+    flux_watcher_t *w;
+
+    ev_check_init (cw, check_cb);
+    w = flux_watcher_create (cw, ops, CHECK_SIG, cb, arg);
+    cw->data = w;
+
     return w;
-}
-
-void flux_check_watcher_start (flux_t h, flux_check_watcher_t *w)
-{
-    struct reactor *r = reactor_get (h);
-    ev_check_start (r->loop, &w->w);
-    w->h = h;
-}
-
-void flux_check_watcher_stop (flux_t h, flux_check_watcher_t *w)
-{
-    struct reactor *r = reactor_get (h);
-    ev_check_stop (r->loop, &w->w);
-}
-
-void flux_check_watcher_destroy (flux_check_watcher_t *w)
-{
-    if (w)
-        free (w);
 }
 
 /* Idle
  */
 
-static void idle_cb (struct ev_loop *loop, ev_idle *tw, int revents)
+#define IDLE_SIG 1000
+
+static void idle_start (void *impl, flux_watcher_t *w)
 {
-    const size_t off = offsetof (struct flux_idle_watcher, w);
-    void *ptr = (char *)tw - off;
-    struct flux_idle_watcher *w = ptr;
-    w->fn (w->h, w, libev_to_events (revents), w->arg);
+    assert (w->signature == IDLE_SIG);
+    ev_idle_start (w->reactor->loop, (ev_idle *)impl);
 }
 
-flux_idle_watcher_t *flux_idle_watcher_create (flux_idle_watcher_f cb,
-                                                     void *arg)
+static void idle_stop (void *impl, flux_watcher_t *w)
 {
-    struct flux_idle_watcher *w = xzmalloc (sizeof (*w));
-    w->fn = cb;
-    w->arg = arg;
-    ev_idle_init (&w->w, idle_cb);
+    assert (w->signature == IDLE_SIG);
+    ev_idle_stop (w->reactor->loop, (ev_idle *)impl);
+}
+
+static void idle_destroy (void *impl, flux_watcher_t *w)
+{
+    assert (w->signature == IDLE_SIG);
+    if (impl)
+        free (impl);
+}
+
+static void idle_cb (struct ev_loop *loop, ev_idle *iw, int revents)
+{
+    struct flux_watcher *w = iw->data;
+    assert (w->signature == IDLE_SIG);
+    if (w->fn)
+        w->fn (w->reactor->h, w, libev_to_events (revents), w->arg);
+}
+
+flux_watcher_t *flux_idle_watcher_create (flux_watcher_f cb, void *arg)
+{
+    struct watcher_ops ops = {
+        .start = idle_start,
+        .stop = idle_stop,
+        .destroy = idle_destroy,
+    };
+    ev_idle *iw = xzmalloc (sizeof (*iw));
+    flux_watcher_t *w;
+
+    ev_idle_init (iw, idle_cb);
+    w = flux_watcher_create (iw, ops, IDLE_SIG, cb, arg);
+    iw->data = w;
+
     return w;
 }
-
-void flux_idle_watcher_start (flux_t h, flux_idle_watcher_t *w)
-{
-    struct reactor *r = reactor_get (h);
-    ev_idle_start (r->loop, &w->w);
-    w->h = h;
-}
-
-void flux_idle_watcher_stop (flux_t h, flux_idle_watcher_t *w)
-{
-    struct reactor *r = reactor_get (h);
-    ev_idle_stop (r->loop, &w->w);
-}
-
-void flux_idle_watcher_destroy (flux_idle_watcher_t *w)
-{
-    if (w)
-        free (w);
-}
-
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
