@@ -101,7 +101,7 @@ static int l_kvsdir_newindex (lua_State *L)
      */
     if (lua_isnil (L, 3))
         rc = kvsdir_put_obj (d, key, NULL);
-    else if (lua_isnumber (L, 3)) {
+    else if (lua_type (L, 3) == LUA_TNUMBER) {
         double val = lua_tonumber (L, 3);
         if (floor (val) == val)
             rc = kvsdir_put_int64 (d, key, (int64_t) val);
