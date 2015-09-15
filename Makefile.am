@@ -26,8 +26,3 @@ CODE_COVERAGE_IGNORE_PATTERN = \
 	"common/libutil/sds.[ch]"
 CODE_COVERAGE_LCOV_OPTIONS =
 @CODE_COVERAGE_RULES@
-
-# Remove other coverage files on clean:
-clean:
-	-rm $(CODE_COVERAGE_OUTPUT_FILE).initial
-	-find . -name *.gcno -delete
