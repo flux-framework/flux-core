@@ -220,6 +220,8 @@ code-coverage-clean:
 	-$(LCOV) --directory $(top_builddir) -z
 	-rm -rf $(CODE_COVERAGE_OUTPUT_FILE) $(CODE_COVERAGE_OUTPUT_FILE).tmp $(CODE_COVERAGE_OUTPUT_DIRECTORY)
 	-find . -name "*.gcda" -o -name "*.gcov" -delete
+	-rm -f $(CODE_COVERAGE_OUTPUT_FILE).initial
+	-find . -name *.gcno -delete
 endif
 
 GITIGNOREFILES ?=
