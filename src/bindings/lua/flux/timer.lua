@@ -27,7 +27,7 @@
 --
 local T = {}
 T.__index = T
-local clock_gettime = require 'flux-lua.posix'.clock_gettime
+local clock_gettime = require 'flux.posix'.clock_gettime
 
 local getsec = function ()
     local s,ns = clock_gettime()

@@ -3,16 +3,16 @@ AM_LDFLAGS =	$(CODE_COVERAGE_LDFLAGS)
 AM_CPPFLAGS =	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 		$(LUA_INCLUDE) $(JSON_CFLAGS) $(ZMQ_CFLAGS)
 
-fluxluadir = $(luadir)/flux-lua
+fluxluadir = $(luadir)/flux
 
 dist_lua_SCRIPTS = \
 	wreck.lua
 
 dist_fluxlua_SCRIPTS = \
-	flux-lua/timer.lua \
-	flux-lua/alt_getopt.lua \
-	flux-lua/posix.lua \
-	flux-lua/base64.lua
+	flux/timer.lua \
+	flux/alt_getopt.lua \
+	flux/posix.lua \
+	flux/base64.lua
 
 luaexec_LTLIBRARIES = \
 	flux.la

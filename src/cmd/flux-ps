@@ -29,7 +29,7 @@
 -- Modules:
 -------------------------------------------------------------------------------
 local flux = require 'flux'
-local posix = require 'flux-lua.posix'
+local posix = require 'flux.posix'
 local hostlist = require 'hostlist'
 
 local prog = string.match (arg[0], "([^/]+)$")
@@ -97,7 +97,7 @@ end
 -------------------------------------------------------------------------------
 --  Parse cmdline args:
 --
-local getopt = require 'flux-lua.alt_getopt' .get_opts
+local getopt = require 'flux.alt_getopt' .get_opts
 local opts, optind = getopt (arg, "r:vh",
                         { rank = "r", verbose = "v", help = "h" })
 

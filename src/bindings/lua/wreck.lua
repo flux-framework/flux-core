@@ -21,7 +21,7 @@
  *  59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
  *  See also:  http://www.gnu.org/licenses/
  ---------------------------------------------------------------------------]]
-local posix = require 'flux-lua.posix'
+local posix = require 'flux.posix'
 
 local wreck = {}
 wreck.__index = wreck;
@@ -132,7 +132,7 @@ function wreck:getopt (opt)
 end
 
 function wreck:parse_cmdline (arg)
-    local getopt = require 'flux-lua.alt_getopt' .get_opts
+    local getopt = require 'flux.alt_getopt' .get_opts
     local s = short_opts (self)
     local v = opt_table (self)
     self.opts, self.optind = getopt (arg, s, v)

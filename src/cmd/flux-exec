@@ -4,10 +4,10 @@
 -- Modules:
 -------------------------------------------------------------------------------
 local flux = require 'flux'
-local decode = require 'flux-lua.base64' .decode
-local encode = require 'flux-lua.base64' .encode
-local posix = require 'flux-lua.posix'
-local timer = require 'flux-lua.timer'
+local decode = require 'flux.base64' .decode
+local encode = require 'flux.base64' .encode
+local posix = require 'flux.posix'
+local timer = require 'flux.timer'
 local hostlist = require 'hostlist'
 
 local prog = string.match (arg[0], "([^/]+)$")
@@ -157,7 +157,7 @@ end
 -------------------------------------------------------------------------------
 --  Parse cmdline args:
 --
-local getopt = require 'flux-lua.alt_getopt' .get_opts
+local getopt = require 'flux.alt_getopt' .get_opts
 local opts, optind = getopt (arg, "d:r:vln",
                         { rank = "r", verbose = "v", dir = "d", labelio = "l",
                           noinput = 'n' })

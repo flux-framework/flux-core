@@ -26,8 +26,8 @@
  -- ping.lua: Example script implementing cmb 'ping' client using
  --  Lua bindings for Flux.
  --
-local sleep = require 'flux-lua.posix'.sleep
-local getopt = require 'flux-lua.alt_getopt'.get_opts
+local sleep = require 'flux.posix'.sleep
+local getopt = require 'flux.alt_getopt'.get_opts
 
 local function printf (...)
     io.stdout:write (string.format (...))
@@ -47,7 +47,7 @@ if not arg[optind] then error ("ping: plugin name required") end
 local tag = string.format ("%s.ping", arg[optind])
 
 local pad    = opts.P and pad_create (opts.P) or "p"
-local t      = require 'flux-lua.timer'.new()
+local t      = require 'flux.timer'.new()
 local f, err = require 'flux'.new()
 if not f then error (err) end
 
