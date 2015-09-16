@@ -3,6 +3,7 @@
 
 #include "handle.h"
 #include "reactor.h"
+#include "dispatch.h"
 #include "connector.h"
 #include "security.h"
 #include "reduce.h"
