@@ -535,6 +535,63 @@ void flux_msg_watcher_delvec (flux_t h, struct flux_msghandler tab[])
     }
 }
 
+/* flux_t handle
+ */
+
+#define HANDLE_SIG 1006
+
+static void handle_start (void *impl, flux_watcher_t *w)
+{
+    assert (w->signature == HANDLE_SIG);
+    ev_flux_start (w->reactor->loop, (ev_flux *)impl);
+}
+
+static void handle_stop (void *impl, flux_watcher_t *w)
+{
+    assert (w->signature == HANDLE_SIG);
+    ev_flux_stop (w->reactor->loop, (ev_flux *)impl);
+}
+
+static void handle_destroy (void *impl, flux_watcher_t *w)
+{
+    assert (w->signature == HANDLE_SIG);
+    if (impl)
+        free (impl);
+}
+
+static void _handle_cb (struct ev_loop *loop, ev_flux *fw, int revents)
+{
+    struct flux_watcher *w = fw->data;
+    assert (w->signature == HANDLE_SIG);
+    if (w->fn)
+        w->fn (w->reactor->h, w, libev_to_events (revents), w->arg);
+}
+
+flux_watcher_t *flux_handle_watcher_create (flux_t h, int events,
+                                            flux_watcher_f cb, void *arg)
+{
+    struct watcher_ops ops = {
+        .start = handle_start,
+        .stop = handle_stop,
+        .destroy = handle_destroy,
+    };
+    ev_flux *fw = xzmalloc (sizeof (*fw));
+    flux_watcher_t *w;
+
+    ev_flux_init (fw, _handle_cb, h, events_to_libev (events) & ~EV_ERROR);
+    w = flux_watcher_create (fw, ops, HANDLE_SIG, cb, arg);
+    fw->data = w;
+
+    return w;
+}
+
+flux_t flux_handle_watcher_get_flux (flux_watcher_t *w)
+{
+    assert (w->signature == HANDLE_SIG);
+    ev_flux *fw = w->impl;
+    return fw->h;
+}
+
 /* file descriptors
  */
 

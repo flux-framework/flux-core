@@ -3,7 +3,7 @@
 
 #include "src/common/libev/ev.h"
 
-struct ev_flux;
+typedef struct ev_flux ev_flux;
 
 typedef void (*ev_flux_f)(struct ev_loop *loop, struct ev_flux *w, int revents);
 

@@ -107,6 +107,12 @@ struct flux_msghandler {
 int flux_msg_watcher_addvec (flux_t h, struct flux_msghandler tab[], void *arg);
 void flux_msg_watcher_delvec (flux_t h, struct flux_msghandler tab[]);
 
+/* handle - watch a flux_t handle
+ */
+flux_watcher_t *flux_handle_watcher_create (flux_t h, int events,
+                                            flux_watcher_f cb, void *arg);
+flux_t flux_handle_watcher_get_flux (flux_watcher_t *w);
+
 /* fd - watch a file descriptor
  */
 flux_watcher_t *flux_fd_watcher_create (int fd, int events,
