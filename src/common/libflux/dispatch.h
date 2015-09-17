@@ -26,11 +26,20 @@
  * Currently only message watchers run as coprocesses.
  */
 
-typedef void (*flux_msg_watcher_f)(flux_t h, flux_watcher_t *w,
+typedef struct flux_msg_handler flux_msg_handler_t;
+
+typedef void (*flux_msg_handler_f)(flux_t h, flux_msg_handler_t *w,
                                    const flux_msg_t *msg, void *arg);
 
-flux_watcher_t *flux_msg_watcher_create (struct flux_match match,
-                                         flux_msg_watcher_f cb, void *arg);
+flux_msg_handler_t *flux_msg_handler_create (flux_t h,
+                                             const struct flux_match match,
+                                             flux_msg_handler_f cb, void *arg);
+
+void flux_msg_handler_destroy (flux_msg_handler_t *w);
+
+void flux_msg_handler_start (flux_msg_handler_t *w);
+void flux_msg_handler_stop (flux_msg_handler_t *w);
+
 
 /* Convenience functions for bulk add/remove of message watchers.
  * addvec creates/adds a table of message watchers
@@ -41,16 +50,17 @@ flux_watcher_t *flux_msg_watcher_create (struct flux_match match,
  * tab[] must be terminated with FLUX_MSGHANDLER_TABLE_END.
  */
 
-struct flux_msghandler {
+struct flux_msg_handler_spec {
     int typemask;
     char *topic_glob;
-    flux_msg_watcher_f cb;
-    flux_watcher_t *w;
+    flux_msg_handler_f cb;
+    flux_msg_handler_t *w;
 };
 #define FLUX_MSGHANDLER_TABLE_END { 0, NULL, NULL }
 
-int flux_msg_watcher_addvec (flux_t h, struct flux_msghandler tab[], void *arg);
-void flux_msg_watcher_delvec (flux_t h, struct flux_msghandler tab[]);
+int flux_msg_handler_addvec (flux_t h, struct flux_msg_handler_spec tab[],
+                             void *arg);
+void flux_msg_handler_delvec (struct flux_msg_handler_spec tab[]);
 
 /* Give control back to the reactor until a message matching 'match'
  * is queued in the handle.  This will return -1 with errno = EINVAL
