@@ -1228,7 +1228,7 @@ static kvsdir_t *prog_ctx_kvsdir (struct prog_ctx *ctx)
     t = prog_ctx_current_task (ctx);
     if (!t->kvs) {
         if (kvs_get_dir (prog_ctx_flux_handle (ctx),
-            &t->kvs, "lwj.%ld.%d", ctx->id, t->id) < 0)
+            &t->kvs, "lwj.%ld.%d", ctx->id, t->globalid) < 0)
             log_err (ctx, "kvs_get_dir (lwj.%ld.%d): %s",
                      ctx->id, t->id, strerror (errno));
     }
