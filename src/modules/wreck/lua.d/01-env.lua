@@ -42,9 +42,7 @@ function rexecd_task_init ()
     local posix = require 'posix'
     local taskid = wreck.taskid;
 
-    if not wreck.kvsdir then return end
-
-    local task = wreck.kvsdir[taskid]
+    local task = wreck.by_task
     if not task then return end
 
     --  Set any task-specific environ from lwj.<id>.<taskid>.environ
