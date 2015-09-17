@@ -1259,10 +1259,14 @@ static int l_wreck_index (lua_State *L)
         return (1);
     }
     if (strcmp (key, "kvsdir") == 0) {
+        l_push_kvsdir (L, ctx->kvs);
+        return (1);
+    }
+    if (strcmp (key, "by_task") == 0) {
         kvsdir_t *d = prog_ctx_kvsdir (ctx);
         if (d == NULL)
-            return lua_pusherror (L, "No such file or directory");
-        l_push_kvsdir (L, prog_ctx_kvsdir (ctx));
+            return lua_pusherror (L, strerror (errno));
+        l_push_kvsdir (L, d);
         return (1);
     }
     if (strcmp (key, "flux") == 0) {
