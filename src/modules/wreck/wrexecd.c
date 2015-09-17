@@ -1251,10 +1251,14 @@ static int l_wreck_index (lua_State *L)
         return (1);
     }
     if (strcmp (key, "globalid") == 0) {
+	if (t == NULL)
+            return lua_pusherror (L, "Not in task context");
         lua_pushnumber (L, t->globalid);
         return (1);
     }
     if (strcmp (key, "taskid") == 0) {
+	if (t == NULL)
+            return lua_pusherror (L, "Not in task context");
         lua_pushnumber (L, t->id);
         return (1);
     }
@@ -1267,8 +1271,10 @@ static int l_wreck_index (lua_State *L)
         return (1);
     }
     if (strcmp (key, "by_task") == 0) {
-        kvsdir_t *d = prog_ctx_kvsdir (ctx);
-        if (d == NULL)
+        kvsdir_t *d;
+	if (t == NULL)
+            return lua_pusherror (L, "Not in task context");
+        if (!(d = prog_ctx_kvsdir (ctx)))
             return lua_pusherror (L, strerror (errno));
         l_push_kvsdir (L, d);
         return (1);
