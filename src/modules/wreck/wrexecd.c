@@ -1262,6 +1262,10 @@ static int l_wreck_index (lua_State *L)
         l_push_kvsdir (L, ctx->kvs);
         return (1);
     }
+    if (strcmp (key, "by_rank") == 0) {
+        l_push_kvsdir (L, ctx->resources);
+        return (1);
+    }
     if (strcmp (key, "by_task") == 0) {
         kvsdir_t *d = prog_ctx_kvsdir (ctx);
         if (d == NULL)
