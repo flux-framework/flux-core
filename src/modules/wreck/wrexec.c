@@ -196,7 +196,7 @@ static int spawn_exec_handler (struct rexec_ctx *ctx, int64_t id)
     /*
      *  Wait for child to exit
      */
-    if (waitpid (pid, &status, 0) < 0)
+    if (waitpid (pid, &status, 0) < 0 && (errno != ECHILD))
         flux_log_error (ctx->h, "waitpid");
 
     /*
