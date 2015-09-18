@@ -16,23 +16,19 @@ enum {
                               /*     one event occurs */
 };
 
-flux_reactor_t *flux_reactor_create (flux_t h);
+flux_reactor_t *flux_reactor_create ();
 void flux_reactor_destroy (flux_reactor_t *r);
 
-/* Start the flux event reactor, with optional flags.
+/* Start a flux event reactor, with optional flags.
  * Returns 0 if flux_reactor_stop() terminated reactor; -1 if error did.
  */
-int flux_reactor_run (flux_t h, int flags);
+int flux_reactor_run (flux_reactor_t *r, int flags);
 
 /* Signal that the flux event reactor should stop.
  * This may be called from within a watcher.
  */
-void flux_reactor_stop (flux_t h);
-void flux_reactor_stop_error (flux_t h);
-
-/* Arrange for 'h2' to use the the built-in reactor of 'h'.
- */
-void flux_reactor_add (flux_t h, flux_t h2);
+void flux_reactor_stop (flux_reactor_t *r);
+void flux_reactor_stop_error (flux_reactor_t *r);
 
 /* General comments on watchers:
  * - It is safe to call a watcher's 'stop' function from a watcher callback.
@@ -45,11 +41,11 @@ void flux_reactor_add (flux_t h, flux_t h2);
  */
 
 typedef struct flux_watcher flux_watcher_t;
-typedef void (*flux_watcher_f)(flux_t h, flux_watcher_t *w,
+typedef void (*flux_watcher_f)(flux_reactor_t *r, flux_watcher_t *w,
                                int revents, void *arg);
 void flux_watcher_destroy (flux_watcher_t *w);
-void flux_watcher_start (flux_t h, flux_watcher_t *w);
-void flux_watcher_stop (flux_t h, flux_watcher_t *w);
+void flux_watcher_start (flux_reactor_t *r, flux_watcher_t *w);
+void flux_watcher_stop (flux_reactor_t *r, flux_watcher_t *w);
 
 /* handle - watch a flux_t handle
  */
@@ -98,8 +94,8 @@ flux_watcher_t *flux_idle_watcher_create (flux_watcher_f cb, void *arg);
 /* watcher construction set
  */
 struct watcher_ops {
-    void (*start)(void *impl, flux_t h, flux_watcher_t *w);
-    void (*stop)(void *impl, flux_t h, flux_watcher_t *w);
+    void (*start)(void *impl, flux_reactor_t *r, flux_watcher_t *w);
+    void (*stop)(void *impl, flux_reactor_t *r, flux_watcher_t *w);
     void (*destroy)(void *impl, flux_watcher_t *w);
 };
 
