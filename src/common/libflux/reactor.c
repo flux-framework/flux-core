@@ -81,6 +81,22 @@ flux_reactor_t *flux_reactor_create (void)
     return r;
 }
 
+void flux_set_reactor (flux_t h, flux_reactor_t *r)
+{
+    flux_aux_set (h, "flux::reactor", r, NULL);
+}
+
+flux_reactor_t *flux_get_reactor (flux_t h)
+{
+    flux_reactor_t *r = flux_aux_get (h, "flux::reactor");
+    if (!r) {
+        if ((r = flux_reactor_create ()))
+            flux_aux_set (h, "flux::reactor", r,
+                          (flux_free_f)flux_reactor_destroy);
+    }
+    return r;
+}
+
 int flux_reactor_run (flux_reactor_t *r, int flags)
 {
     int ev_flags = 0;

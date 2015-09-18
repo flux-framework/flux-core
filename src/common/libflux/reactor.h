@@ -16,8 +16,11 @@ enum {
                               /*     one event occurs */
 };
 
-flux_reactor_t *flux_reactor_create ();
+flux_reactor_t *flux_reactor_create (void);
 void flux_reactor_destroy (flux_reactor_t *r);
+
+flux_reactor_t *flux_get_reactor (flux_t h);
+void flux_set_reactor (flux_t h, flux_reactor_t *r);
 
 /* Start a flux event reactor, with optional flags.
  * Returns 0 if flux_reactor_stop() terminated reactor; -1 if error did.
