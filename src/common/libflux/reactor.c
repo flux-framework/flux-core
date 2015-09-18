@@ -40,7 +40,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 
-struct reactor {
+struct flux_reactor {
     struct ev_loop *loop;
     int loop_rc;
 };
@@ -59,30 +59,43 @@ struct flux_watcher {
     void *impl;
 };
 
-static void reactor_destroy (void *arg)
+void flux_reactor_destroy (flux_reactor_t *r)
 {
-    struct reactor *r = arg;
-    ev_loop_destroy (r->loop);
-    free (r);
+    if (r) {
+        if (r->loop)
+            ev_loop_destroy (r->loop);
+        free (r);
+    }
 }
 
-static struct reactor *reactor_get (flux_t h)
+flux_reactor_t *flux_reactor_create (flux_t h)
 {
-    struct reactor *r = flux_aux_get (h, "flux::reactor");
+    flux_reactor_t *r = xzmalloc (sizeof (*r));
+    r->loop = ev_loop_new (EVFLAG_AUTO);
+    if (!r->loop) {
+        errno = ENOMEM;
+        flux_reactor_destroy (r);
+        return NULL;
+    }
+    ev_set_userdata (r->loop, h);
+    return r;
+}
+
+
+static flux_reactor_t *reactor_get (flux_t h)
+{
+    flux_reactor_t *r = flux_aux_get (h, "flux::reactor");
     if (!r) {
-        r = xzmalloc (sizeof (*r));
-        r->loop = ev_loop_new (EVFLAG_AUTO);
-        if (!r->loop)
+        if (!(r = flux_reactor_create (h)))
             oom ();
-        ev_set_userdata (r->loop, h);
-        flux_aux_set (h, "flux::reactor", r, reactor_destroy);
+        flux_aux_set (h, "flux::reactor", r, (flux_free_f)flux_reactor_destroy);
     }
     return r;
 }
 
 int flux_reactor_run (flux_t h, int flags)
 {
-    struct reactor *r = reactor_get (h);
+    flux_reactor_t *r = reactor_get (h);
     int ev_flags = 0;
     int count;
     if (flags & FLUX_REACTOR_NOWAIT)
@@ -101,14 +114,14 @@ int flux_reactor_run (flux_t h, int flags)
 
 void flux_reactor_stop (flux_t h)
 {
-    struct reactor *r = reactor_get (h);
+    flux_reactor_t *r = reactor_get (h);
     r->loop_rc = 0;
     ev_break (r->loop, EVBREAK_ALL);
 }
 
 void flux_reactor_stop_error (flux_t h)
 {
-    struct reactor *r = reactor_get (h);
+    flux_reactor_t *r = reactor_get (h);
     r->loop_rc = -1;
     ev_break (r->loop, EVBREAK_ALL);
 }
@@ -192,14 +205,14 @@ void flux_watcher_destroy (flux_watcher_t *w)
 static void handle_start (void *impl, flux_t h, flux_watcher_t *w)
 {
     assert (w->signature == HANDLE_SIG);
-    struct reactor *r = reactor_get (h);
+    flux_reactor_t *r = reactor_get (h);
     ev_flux_start (r->loop, (ev_flux *)impl);
 }
 
 static void handle_stop (void *impl, flux_t h, flux_watcher_t *w)
 {
     assert (w->signature == HANDLE_SIG);
-    struct reactor *r = reactor_get (h);
+    flux_reactor_t *r = reactor_get (h);
     ev_flux_stop (r->loop, (ev_flux *)impl);
 }
 
@@ -252,14 +265,14 @@ flux_t flux_handle_watcher_get_flux (flux_watcher_t *w)
 static void fd_start (void *impl, flux_t h, flux_watcher_t *w)
 {
     assert (w->signature == FD_SIG);
-    struct reactor *r = reactor_get (h);
+    flux_reactor_t *r = reactor_get (h);
     ev_io_start (r->loop, (ev_io *)impl);
 }
 
 static void fd_stop (void *impl, flux_t h, flux_watcher_t *w)
 {
     assert (w->signature == FD_SIG);
-    struct reactor *r = reactor_get (h);
+    flux_reactor_t *r = reactor_get (h);
     ev_io_stop (r->loop, (ev_io *)impl);
 }
 
@@ -312,14 +325,14 @@ int flux_fd_watcher_get_fd (flux_watcher_t *w)
 static void zmq_start (void *impl, flux_t h, flux_watcher_t *w)
 {
     assert (w->signature == ZMQ_SIG);
-    struct reactor *r = reactor_get (h);
+    flux_reactor_t *r = reactor_get (h);
     ev_zmq_start (r->loop, (ev_zmq *)impl);
 }
 
 static void zmq_stop (void *impl, flux_t h, flux_watcher_t *w)
 {
     assert (w->signature == ZMQ_SIG);
-    struct reactor *r = reactor_get (h);
+    flux_reactor_t *r = reactor_get (h);
     ev_zmq_stop (r->loop, (ev_zmq *)impl);
 }
 
@@ -372,14 +385,14 @@ void *flux_zmq_watcher_get_zsock (flux_watcher_t *w)
 static void timer_start (void *impl, flux_t h, flux_watcher_t *w)
 {
     assert (w->signature == TIMER_SIG);
-    struct reactor *r = reactor_get (h);
+    flux_reactor_t *r = reactor_get (h);
     ev_timer_start (r->loop, (ev_timer *)impl);
 }
 
 static void timer_stop (void *impl, flux_t h, flux_watcher_t *w)
 {
     assert (w->signature == TIMER_SIG);
-    struct reactor *r = reactor_get (h);
+    flux_reactor_t *r = reactor_get (h);
     ev_timer_stop (r->loop, (ev_timer *)impl);
 }
 
@@ -434,14 +447,14 @@ void flux_timer_watcher_reset (flux_watcher_t *w, double after, double repeat)
 static void prepare_start (void *impl, flux_t h, flux_watcher_t *w)
 {
     assert (w->signature == PREPARE_SIG);
-    struct reactor *r = reactor_get (h);
+    flux_reactor_t *r = reactor_get (h);
     ev_prepare_start (r->loop, (ev_prepare *)impl);
 }
 
 static void prepare_stop (void *impl, flux_t h, flux_watcher_t *w)
 {
     assert (w->signature == PREPARE_SIG);
-    struct reactor *r = reactor_get (h);
+    flux_reactor_t *r = reactor_get (h);
     ev_prepare_stop (r->loop, (ev_prepare *)impl);
 }
 
@@ -486,14 +499,14 @@ flux_watcher_t *flux_prepare_watcher_create (flux_watcher_f cb, void *arg)
 static void check_start (void *impl, flux_t h, flux_watcher_t *w)
 {
     assert (w->signature == CHECK_SIG);
-    struct reactor *r = reactor_get (h);
+    flux_reactor_t *r = reactor_get (h);
     ev_check_start (r->loop, (ev_check *)impl);
 }
 
 static void check_stop (void *impl, flux_t h, flux_watcher_t *w)
 {
     assert (w->signature == CHECK_SIG);
-    struct reactor *r = reactor_get (h);
+    flux_reactor_t *r = reactor_get (h);
     ev_check_stop (r->loop, (ev_check *)impl);
 }
 
@@ -538,14 +551,14 @@ flux_watcher_t *flux_check_watcher_create (flux_watcher_f cb, void *arg)
 static void idle_start (void *impl, flux_t h, flux_watcher_t *w)
 {
     assert (w->signature == IDLE_SIG);
-    struct reactor *r = reactor_get (h);
+    flux_reactor_t *r = reactor_get (h);
     ev_idle_start (r->loop, (ev_idle *)impl);
 }
 
 static void idle_stop (void *impl, flux_t h, flux_watcher_t *w)
 {
     assert (w->signature == IDLE_SIG);
-    struct reactor *r = reactor_get (h);
+    flux_reactor_t *r = reactor_get (h);
     ev_idle_stop (r->loop, (ev_idle *)impl);
 }
 

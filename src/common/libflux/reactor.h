@@ -5,6 +5,8 @@
 
 #include "handle.h"
 
+typedef struct flux_reactor flux_reactor_t;
+
 /* flags for flux_reactor_run ()
  */
 enum {
@@ -13,6 +15,9 @@ enum {
     FLUX_REACTOR_ONCE = 2,    /* same as above but block until at least */
                               /*     one event occurs */
 };
+
+flux_reactor_t *flux_reactor_create (flux_t h);
+void flux_reactor_destroy (flux_reactor_t *r);
 
 /* Start the flux event reactor, with optional flags.
  * Returns 0 if flux_reactor_stop() terminated reactor; -1 if error did.
