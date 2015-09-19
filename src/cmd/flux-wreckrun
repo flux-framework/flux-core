@@ -211,6 +211,10 @@ if true then
     wreck.nnodes = wreck:getopt ("N")
     wreck.tasks_per_node = wreck:getopt ("t")
     alloc_tasks (f, wreck, lwj)
+    -- Ensure lwj nnodes matches fake allocation
+    lwj.nnodes = tonumber (wreck.nnodes)
+    lwj.ntasks = tonumber (wreck.ntasks)
+    lwj:commit ()
     wreck:verbose ("%-4.03fs: Sending run event\n", tt:get0())
     local rc,err = f:sendevent ("wrexec.run.%d", resp.jobid)
     if not rc then wreck:die ("sendevent: %s\n", err) end
