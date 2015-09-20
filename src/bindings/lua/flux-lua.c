@@ -1637,7 +1637,7 @@ static int l_flux_reactor_start (lua_State *L)
 
 static int l_flux_reactor_stop (lua_State *L)
 {
-    flux_reactor_stop (lua_get_flux (L, 1));
+    flux_reactor_stop (flux_get_reactor (lua_get_flux (L, 1)));
     return 0;
 }
 
