@@ -80,8 +80,8 @@ struct prog_ctx {
     kvsdir_t *kvs;          /* Handle to this job's dir in kvs */
     kvsdir_t *resources;    /* Handle to this node's resource dir in kvs */
 
-    flux_fd_watcher_t *fdw;
-    flux_msg_watcher_t *mw;
+    flux_watcher_t *fdw;
+    flux_msg_handler_t *mw;
 
     uint32_t noderank;
 
@@ -477,9 +477,9 @@ void prog_ctx_destroy (struct prog_ctx *ctx)
         kvsdir_destroy (ctx->resources);
 
     if (ctx->fdw)
-        flux_fd_watcher_destroy (ctx->fdw);
+        flux_watcher_destroy (ctx->fdw);
     if (ctx->mw)
-        flux_msg_watcher_destroy (ctx->mw);
+        flux_msg_handler_destroy (ctx->mw);
 
     free (ctx->envz);
     if (ctx->signalfd >= 0)
@@ -1536,36 +1536,37 @@ int cleanup (struct prog_ctx *ctx)
     return prog_ctx_signal (ctx, SIGKILL);
 }
 
-int signal_cb (flux_t f, flux_fd_watcher_t *fdw,
-    int fd, short revents, struct prog_ctx *ctx)
+void signal_cb (flux_reactor_t *r, flux_watcher_t *fdw, int revents, void *arg)
 {
+    struct prog_ctx *ctx = arg;
+    int fd = flux_fd_watcher_get_fd (fdw);
     int n;
     struct signalfd_siginfo si;
 
     n = read (fd, &si, sizeof (si));
     if (n < 0) {
         log_err (ctx, "signal_cb: read: %s", strerror (errno));
-        return (0);
+        return;
     }
     else if (n != sizeof (si)) {
         log_err (ctx, "signal_cb: partial read?");
-        return (0);
+        return;
     }
 
     if (si.ssi_signo == SIGTERM || si.ssi_signo == SIGINT) {
         cleanup (ctx);
-        return (0); /* Continue, so we reap children */
+        return; /* Continue, so we reap children */
     }
 
     /* SIGCHLD assumed */
     while (reap_child (ctx))
         ++ctx->exited;
     if (all_tasks_completed (ctx))
-        flux_reactor_stop (f);
-    return (0);
+        flux_reactor_stop (r);
+    return;
 }
 
-void ev_cb (flux_t f, flux_msg_watcher_t *mw,
+void ev_cb (flux_t f, flux_msg_handler_t *mw,
            const flux_msg_t *msg, struct prog_ctx *ctx)
 {
     int base;
@@ -1624,17 +1625,19 @@ int prog_ctx_reactor_init (struct prog_ctx *ctx)
     for (i = 0; i < ctx->nprocs; i++)
         task_info_io_setup (ctx->task [i]);
 
-    ctx->mw = flux_msg_watcher_create (FLUX_MATCH_EVENT,
-            (flux_msg_watcher_f) ev_cb,
+    ctx->mw = flux_msg_handler_create (ctx->flux,
+            FLUX_MATCH_EVENT,
+            (flux_msg_handler_f) ev_cb,
             (void *) ctx);
 
-    ctx->fdw = flux_fd_watcher_create (ctx->signalfd,
+    ctx->fdw = flux_fd_watcher_create (flux_get_reactor (ctx->flux),
+            ctx->signalfd,
             FLUX_POLLIN | FLUX_POLLERR,
-            (flux_fd_watcher_f) signal_cb,
+            signal_cb,
             (void *) ctx);
 
-    flux_fd_watcher_start (ctx->flux, ctx->fdw);
-    flux_msg_watcher_start (ctx->flux, ctx->mw);
+    flux_watcher_start (ctx->fdw);
+    flux_msg_handler_start (ctx->mw);
 
     return (0);
 }
@@ -1726,8 +1729,8 @@ int main (int ac, char **av)
     prog_ctx_reactor_init (ctx);
     exec_commands (ctx);
 
-    if (flux_reactor_start (ctx->flux) < 0)
-        log_err (ctx, "flux_reactor_start: %s", strerror (errno));
+    if (flux_reactor_run (flux_get_reactor (ctx->flux), 0) < 0)
+        log_err (ctx, "flux_reactor_run: %s", strerror (errno));
 
     rexec_state_change (ctx, "complete");
     log_msg (ctx, "job complete. exiting...");

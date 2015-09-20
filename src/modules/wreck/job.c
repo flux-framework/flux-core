@@ -282,7 +282,7 @@ static int wait_for_lwj_watch_init (flux_t h, int64_t id)
     return rc;
 }
 
-static void job_request_cb (flux_t h, flux_msg_watcher_t *w,
+static void job_request_cb (flux_t h, flux_msg_handler_t *w,
                            const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
@@ -300,7 +300,7 @@ static void job_request_cb (flux_t h, flux_msg_watcher_t *w,
     if (json_str && !(o = json_tokener_parse (json_str)))
         goto out;
     if (strcmp (topic, "job.shutdown") == 0) {
-        flux_reactor_stop (h);
+        flux_reactor_stop (flux_get_reactor (h));
     }
     if (strcmp (topic, "job.next-id") == 0) {
         if (rank == 0) {
@@ -356,15 +356,15 @@ out:
         json_object_put (o);
 }
 
-struct flux_msghandler mtab[] = {
+struct flux_msg_handler_spec mtab[] = {
     { FLUX_MSGTYPE_REQUEST, "job.*", job_request_cb },
     FLUX_MSGHANDLER_TABLE_END
 };
 
 int mod_main (flux_t h, int argc, char **argv)
 {
-    if (flux_msg_watcher_addvec (h, mtab, NULL) < 0) {
-        flux_log (h, LOG_ERR, "flux_msg_watcher_addvec: %s", strerror (errno));
+    if (flux_msg_handler_addvec (h, mtab, NULL) < 0) {
+        flux_log (h, LOG_ERR, "flux_msg_handler_addvec: %s", strerror (errno));
         return (-1);
     }
     /* Subscribe to our own `wreck.state.reserved` events so we
@@ -377,11 +377,11 @@ int mod_main (flux_t h, int argc, char **argv)
         flux_log (h, LOG_ERR, "flux_event_subscribe: %s", strerror (errno));
         return -1;
     }
-    if (flux_reactor_start (h) < 0) {
-        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
+        flux_log (h, LOG_ERR, "flux_reactor_run: %s", strerror (errno));
         return -1;
     }
-    flux_msg_watcher_delvec (h, mtab);
+    flux_msg_handler_delvec (mtab);
     return 0;
 }
 

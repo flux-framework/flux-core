@@ -343,7 +343,7 @@ static int request_cb (flux_t h, int typemask, zmsg_t **zmsg, void *arg)
     if (flux_msg_get_topic (*zmsg, &topic) < 0)
         goto done;
     if (!strcmp (topic, "wrexec.shutdown")) {
-        flux_reactor_stop (h);
+        flux_reactor_stop (flux_get_reactor (h));
         return 0;
     }
 done:
