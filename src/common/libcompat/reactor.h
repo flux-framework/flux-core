@@ -3,6 +3,8 @@
 
 #include "src/common/libflux/message.h"
 #include "src/common/libflux/handle.h"
+#include "src/common/libflux/reactor.h"
+#include "src/common/libflux/dispatch.h"
 
 /* FluxMsgHandler indicates msg is "consumed" by destroying it.
  * Callbacks return 0 on success, -1 on error and set errno.
@@ -78,6 +80,12 @@ int flux_tmouthandler_add (flux_t h, unsigned long msec, bool oneshot,
  */
 void flux_tmouthandler_remove (flux_t h, int timer_id)
                                __attribute__ ((deprecated));
+
+
+/* Start the reactor.
+ */
+int flux_reactor_start (flux_t h)
+                        __attribute__ ((deprecated));
 
 #endif /* !_FLUX_COMPAT_REACTOR_H */
 

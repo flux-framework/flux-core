@@ -16,6 +16,7 @@
 #define flux_zshandler_remove       compat_zshandler_remove
 #define flux_tmouthandler_add       compat_tmouthandler_add
 #define flux_tmouthandler_remove    compat_tmouthandler_remove
+#define flux_reactor_start          compat_reactor_start
 
 /* info */
 #define flux_treeroot               compat_treeroot

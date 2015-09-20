@@ -33,6 +33,7 @@
 
 #include "src/common/libflux/handle.h"
 #include "src/common/libflux/reactor.h"
+#include "src/common/libflux/dispatch.h"
 #include "src/common/libflux/message.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
@@ -48,25 +49,28 @@ struct ctx {
 };
 
 struct msg_compat {
-    flux_msg_watcher_t *w;
+    flux_msg_handler_t *w;
     FluxMsgHandler fn;
     void *arg;
 };
 
 struct fd_compat {
-    flux_fd_watcher_t *w;
+    flux_t h;
+    flux_watcher_t *w;
     FluxFdHandler fn;
     void *arg;
 };
 
 struct zmq_compat {
-    flux_zmq_watcher_t *w;
+    flux_t h;
+    flux_watcher_t *w;
     FluxZsHandler fn;
     void *arg;
 };
 
 struct timer_compat {
-    flux_timer_watcher_t *w;
+    flux_t h;
+    flux_watcher_t *w;
     FluxTmoutHandler fn;
     void *arg;
     int id;
@@ -122,8 +126,7 @@ static int libzmq_to_events (int events)
 
 /* message
  */
-
-void msg_compat_cb (flux_t h, struct flux_msg_watcher *w,
+void msg_compat_cb (flux_t h, flux_msg_handler_t *w,
                     const flux_msg_t *msg, void *arg)
 {
     struct msg_compat *compat = arg;
@@ -135,7 +138,7 @@ void msg_compat_cb (flux_t h, struct flux_msg_watcher *w,
     if (!(cpy = flux_msg_copy (msg, true)))
         goto done;
     if (compat->fn (h, type, &cpy, compat->arg) < 0)
-        flux_reactor_stop_error (h);
+        flux_reactor_stop_error (flux_get_reactor (h));
 done:
     flux_msg_destroy (cpy);
 }
@@ -143,7 +146,7 @@ done:
 static void msg_compat_free (struct msg_compat *c)
 {
     if (c) {
-        flux_msg_watcher_destroy (c->w);
+        flux_msg_handler_destroy (c->w);
         free (c);
     }
 }
@@ -163,11 +166,11 @@ static int msghandler_add (flux_t h, int typemask, const char *pattern,
 
     c->fn = cb;
     c->arg = arg;
-    if (!(c->w = flux_msg_watcher_create (match, msg_compat_cb, c))) {
+    if (!(c->w = flux_msg_handler_create (h, match, msg_compat_cb, c))) {
         free (c);
         return -1;
     }
-    flux_msg_watcher_start (h, c->w);
+    flux_msg_handler_start (c->w);
     snprintf (hashkey, sizeof (hashkey), "msg:%d:%s", typemask, pattern);
     zhash_update (ctx->watchers, hashkey, c);
     zhash_freefn (ctx->watchers, hashkey, (zhash_free_fn *)msg_compat_free);
@@ -199,7 +202,7 @@ void flux_msghandler_remove (flux_t h, int typemask, const char *pattern)
 
     snprintf (hashkey, sizeof (hashkey), "msg:%d:%s", typemask, pattern);
     if ((c = zhash_lookup (ctx->watchers, hashkey))) {
-        flux_msg_watcher_stop (h, c->w);
+        flux_msg_handler_stop (c->w);
         zhash_delete (ctx->watchers, hashkey);
     }
 }
@@ -210,17 +213,18 @@ void flux_msghandler_remove (flux_t h, int typemask, const char *pattern)
 static void fd_compat_free (struct fd_compat *c)
 {
     if (c) {
-        flux_fd_watcher_destroy (c->w);
+        flux_watcher_destroy (c->w);
         free (c);
     }
 }
 
-static void fd_compat_cb (flux_t h, flux_fd_watcher_t *w,
-                          int fd, int revents, void *arg)
+static void fd_compat_cb (flux_reactor_t *r, flux_watcher_t *w, int revents,
+                          void *arg)
 {
     struct fd_compat *c = arg;
-    if (c->fn (h, fd, events_to_libzmq (revents), c->arg) < 0)
-        flux_reactor_stop_error (h);
+    int fd = flux_fd_watcher_get_fd (w);
+    if (c->fn (c->h, fd, events_to_libzmq (revents), c->arg) < 0)
+        flux_reactor_stop_error (r);
 }
 
 
@@ -231,14 +235,16 @@ int flux_fdhandler_add (flux_t h, int fd, short events,
     struct fd_compat *c = xzmalloc (sizeof (*c));
     char hashkey[HASHKEY_LEN];
 
+    c->h = h;
     c->fn = cb;
     c->arg = arg;
-    c->w = flux_fd_watcher_create (fd, libzmq_to_events (events), fd_compat_cb,c);
+    c->w = flux_fd_watcher_create (flux_get_reactor (h), fd,
+                                   libzmq_to_events (events), fd_compat_cb,c);
     if (!c->w) {
         free (c);
         return -1;
     }
-    flux_fd_watcher_start (h, c->w);
+    flux_watcher_start (c->w);
     snprintf (hashkey, sizeof (hashkey), "fd:%d:%d", fd, events);
     zhash_update (ctx->watchers, hashkey, c);
     zhash_freefn (ctx->watchers, hashkey, (zhash_free_fn *)fd_compat_free);
@@ -253,7 +259,7 @@ void flux_fdhandler_remove (flux_t h, int fd, short events)
 
     snprintf (hashkey, sizeof (hashkey), "fd:%d:%d", fd, events);
     if ((c = zhash_lookup (ctx->watchers, hashkey))) {
-        flux_fd_watcher_stop (h, c->w);
+        flux_watcher_stop (c->w);
         zhash_delete (ctx->watchers, hashkey);
     }
 }
@@ -264,17 +270,18 @@ void flux_fdhandler_remove (flux_t h, int fd, short events)
 static void zmq_compat_free (struct zmq_compat *c)
 {
     if (c) {
-        flux_zmq_watcher_destroy (c->w);
+        flux_watcher_destroy (c->w);
         free (c);
     }
 }
 
-static void zmq_compat_cb (flux_t h, flux_zmq_watcher_t *w,
-                           void *zsock, int revents, void *arg)
+static void zmq_compat_cb (flux_reactor_t *r, flux_watcher_t *w,
+                           int revents, void *arg)
 {
     struct zmq_compat *c = arg;
-    if (c->fn (h, zsock, events_to_libzmq (revents), c->arg) < 0)
-        flux_reactor_stop_error (h);
+    void *zsock = flux_zmq_watcher_get_zsock (w);
+    if (c->fn (c->h, zsock, events_to_libzmq (revents), c->arg) < 0)
+        flux_reactor_stop_error (r);
 }
 
 int flux_zshandler_add (flux_t h, void *zs, short events,
@@ -284,15 +291,17 @@ int flux_zshandler_add (flux_t h, void *zs, short events,
     struct zmq_compat *c = xzmalloc (sizeof (*c));
     char hashkey[HASHKEY_LEN];
 
+    c->h = h;
     c->fn = cb;
     c->arg = arg;
-    c->w = flux_zmq_watcher_create (zs, libzmq_to_events (events),
+    c->w = flux_zmq_watcher_create (flux_get_reactor (h), zs,
+                                    libzmq_to_events (events),
                                     zmq_compat_cb, c);
     if (!c->w) {
         free (c);
         return -1;
     }
-    flux_zmq_watcher_start (h, c->w);
+    flux_watcher_start (c->w);
     snprintf (hashkey, sizeof (hashkey), "zmq:%p:%d", zs, events);
     zhash_update (ctx->watchers, hashkey, c);
     zhash_freefn (ctx->watchers, hashkey, (zhash_free_fn *)zmq_compat_free);
@@ -307,7 +316,7 @@ void flux_zshandler_remove (flux_t h, void *zs, short events)
 
     snprintf (hashkey, sizeof (hashkey), "zmq:%p:%d", zs, events);
     if ((c = zhash_lookup (ctx->watchers, hashkey))) {
-        flux_zmq_watcher_stop (h, c->w);
+        flux_watcher_stop (c->w);
         zhash_delete (ctx->watchers, hashkey);
     }
 }
@@ -318,17 +327,17 @@ void flux_zshandler_remove (flux_t h, void *zs, short events)
 static void timer_compat_free (struct timer_compat *c)
 {
     if (c) {
-        flux_timer_watcher_destroy (c->w);
+        flux_watcher_destroy (c->w);
         free (c);
     }
 }
 
-static void timer_compat_cb (flux_t h, flux_timer_watcher_t *w,
-                                     int revents, void *arg)
+static void timer_compat_cb (flux_reactor_t *r, flux_watcher_t *w,
+                             int revents, void *arg)
 {
     struct timer_compat *c = arg;
-    if (c->fn (h, c->arg) < 0)
-        flux_reactor_stop_error (h);
+    if (c->fn (c->h, c->arg) < 0)
+        flux_reactor_stop_error (r);
 }
 
 int flux_tmouthandler_add (flux_t h, unsigned long msec, bool oneshot,
@@ -340,16 +349,18 @@ int flux_tmouthandler_add (flux_t h, unsigned long msec, bool oneshot,
     double after = 1E-3 * msec;
     double rpt = oneshot ? 0 : after;
 
+    c->h = h;
     c->fn = cb;
     c->arg = arg;
     c->oneshot = oneshot;
     c->id = ctx->timer_seq++;
-    c->w = flux_timer_watcher_create (after, rpt, timer_compat_cb, c);
+    c->w = flux_timer_watcher_create (flux_get_reactor (h),
+                                      after, rpt, timer_compat_cb, c);
     if (!c->w) {
         free (c);
         return -1;
     }
-    flux_timer_watcher_start (h, c->w);
+    flux_watcher_start (c->w);
     snprintf (hashkey, sizeof (hashkey), "timer:%d", c->id);
     zhash_update (ctx->watchers, hashkey, c);
     zhash_freefn (ctx->watchers, hashkey, (zhash_free_fn *)timer_compat_free);
@@ -364,9 +375,17 @@ void flux_tmouthandler_remove (flux_t h, int timer_id)
 
     snprintf (hashkey, sizeof (hashkey), "timer:%d", timer_id);
     if ((c = zhash_lookup (ctx->watchers, hashkey))) {
-        flux_timer_watcher_stop (h, c->w);
+        flux_watcher_stop (c->w);
         zhash_delete (ctx->watchers, hashkey);
     }
+}
+
+/* Newly deprecated message stuff
+ */
+
+int flux_reactor_start (flux_t h)
+{
+    return flux_reactor_run (flux_get_reactor (h), 0);
 }
 
 /*
