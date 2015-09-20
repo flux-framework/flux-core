@@ -38,7 +38,7 @@
 struct heartbeat_struct {
     flux_t h;
     double rate;
-    flux_timer_watcher_t *w;
+    flux_watcher_t *w;
     int send_epoch;
     int epoch;
     heartbeat_cb_f cb;
@@ -114,7 +114,7 @@ void heartbeat_set_callback (heartbeat_t *hb, heartbeat_cb_f cb, void *arg)
     hb->cb_arg = arg;
 }
 
-static void heartbeat_cb (flux_t h, flux_timer_watcher_t *w,
+static void heartbeat_cb (flux_reactor_t *r, flux_watcher_t *w,
                           int revents, void *arg)
 {
     heartbeat_t *hb = arg;
@@ -145,17 +145,18 @@ int heartbeat_start (heartbeat_t *hb)
         errno = EINVAL;
         return -1;
     }
-    if (!(hb->w = flux_timer_watcher_create (hb->rate, hb->rate,
+    if (!(hb->w = flux_timer_watcher_create (flux_get_reactor (hb->h),
+                                             hb->rate, hb->rate,
                                              heartbeat_cb, hb)))
         return -1;
-    flux_timer_watcher_start (hb->h, hb->w);
+    flux_watcher_start (hb->w);
     return 0;
 }
 
 void heartbeat_stop (heartbeat_t *hb)
 {
     if (hb->w)
-        flux_timer_watcher_stop (hb->h, hb->w);
+        flux_watcher_stop (hb->w);
 }
 
 int heartbeat_recvmsg (heartbeat_t *hb, const flux_msg_t *msg)

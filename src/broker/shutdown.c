@@ -39,7 +39,7 @@
 
 struct shutdown_struct {
     flux_t h;
-    flux_timer_watcher_t *w;
+    flux_watcher_t *timer;
 
     int rc;
     int rank;
@@ -81,14 +81,14 @@ int shutdown_get_rc (shutdown_t *s)
 
 void shutdown_disarm (shutdown_t *s)
 {
-    if (s->w) {
-        flux_timer_watcher_stop (s->h, s->w);
-        flux_timer_watcher_destroy (s->w);
-        s->w = NULL;
+    if (s->timer) {
+        flux_watcher_stop (s->timer);
+        flux_watcher_destroy (s->timer);
+        s->timer = NULL;
     }
 }
 
-static void shutdown_cb (flux_t h, flux_timer_watcher_t *w,
+static void shutdown_cb (flux_reactor_t *r, flux_watcher_t *w,
                          int revents, void *arg)
 {
     shutdown_t *s = arg;
@@ -155,13 +155,15 @@ int shutdown_recvmsg (shutdown_t *s, const flux_msg_t *msg)
     int rc = -1;
     uint32_t rank;
 
-    if (!s->w) {
+    if (!s->timer) {
         if (shutdown_decode (msg, &s->grace, &s->rc, &s->rank,
                              s->reason, sizeof (s->reason)) < 0)
             goto done;
-        if (!(s->w = flux_timer_watcher_create (s->grace, 0., shutdown_cb, s)))
+        if (!(s->timer = flux_timer_watcher_create (flux_get_reactor (s->h),
+                                                    s->grace, 0.,
+                                                    shutdown_cb, s)))
             goto done;
-        flux_timer_watcher_start (s->h, s->w);
+        flux_watcher_start (s->timer);
         if (flux_get_rank (s->h, &rank) < 0)
             goto done;
         if (rank == 0)
@@ -181,7 +183,7 @@ int shutdown_arm (shutdown_t *s, double grace, int exitcode,
     uint32_t rank;
     int rc = -1;
 
-    if (!s->w) {
+    if (!s->timer) {
         if (flux_get_rank (s->h, &rank) < 0)
             goto done;
         va_start (ap, fmt);

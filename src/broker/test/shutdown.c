@@ -19,15 +19,15 @@ void shutdown_cb (shutdown_t *s, void *arg)
         "shutodwn callback retrieved exitcode");
 }
 
-void log_request_cb (flux_t h, flux_msg_watcher_t *w,
+void log_request_cb (flux_t h, flux_msg_handler_t *w,
                      const flux_msg_t *msg, void *arg)
 {
     ok (msg != NULL,
         "shutdown log message from rank 0 received");
-    flux_msg_watcher_stop (h, w);
+    flux_msg_handler_stop (w);
 }
 
-void shutdown_event_cb (flux_t h, flux_msg_watcher_t *w,
+void shutdown_event_cb (flux_t h, flux_msg_handler_t *w,
                         const flux_msg_t *msg, void *arg)
 {
     shutdown_t *sh = arg;
@@ -41,7 +41,7 @@ void shutdown_event_cb (flux_t h, flux_msg_watcher_t *w,
         "shutdown event received and decoded");
     ok (shutdown_recvmsg (sh, msg) == 0,
         "shutdown_recvmsg works");
-    flux_msg_watcher_stop (h, w);
+    flux_msg_handler_stop (w);
 }
 
 void check_codec (void)
@@ -63,7 +63,7 @@ int main (int argc, char **argv)
 {
     flux_t h;
     shutdown_t *sh;
-    flux_msg_watcher_t *log_w, *ev_w;
+    flux_msg_handler_t *log_w, *ev_w;
     struct flux_match matchlog = FLUX_MATCH_REQUEST;
 
     plan (14);
@@ -82,20 +82,20 @@ int main (int argc, char **argv)
     shutdown_set_handle (sh, h);
     shutdown_set_callback (sh, shutdown_cb, NULL);
 
-    ev_w = flux_msg_watcher_create (FLUX_MATCH_EVENT, shutdown_event_cb, sh);
+    ev_w = flux_msg_handler_create (h, FLUX_MATCH_EVENT, shutdown_event_cb, sh);
     ok (ev_w != NULL,
         "created event watcher");
-    flux_msg_watcher_start (h, ev_w);
+    flux_msg_handler_start (ev_w);
 
     matchlog.topic_glob = "cmb.log";
-    log_w = flux_msg_watcher_create (matchlog, log_request_cb, sh);
+    log_w = flux_msg_handler_create (h, matchlog, log_request_cb, sh);
     ok (log_w != NULL,
         "created log request watcher");
-    flux_msg_watcher_start (h, log_w);
+    flux_msg_handler_start (log_w);
 
     ok (shutdown_arm (sh, 0.1, 42, "testing %d %d %d", 1, 2, 3) == 0,
         "shutdown event sent, starting reactor");
-    ok (flux_reactor_start (h) == 0,
+    ok (flux_reactor_run (flux_get_reactor (h), 0) == 0,
         "flux reactor exited normally");
 
     /* Make sure shutdown_disarm unwires timer.
@@ -104,12 +104,12 @@ int main (int argc, char **argv)
     ok (shutdown_arm (sh, 0.1, 42, "testing %d %d %d", 1, 2, 3) == 0,
         "shutdown event sent, then disarmed, starting reactor");
     shutdown_disarm (sh);
-    ok (flux_reactor_start (h) == 0,
+    ok (flux_reactor_run (flux_get_reactor (h), 0) == 0,
         "flux reactor exited normally");
 
     shutdown_destroy (sh);
-    flux_msg_watcher_destroy (ev_w);
-    flux_msg_watcher_destroy (log_w);
+    flux_msg_handler_destroy (ev_w);
+    flux_msg_handler_destroy (log_w);
     flux_close (h);
 
     done_testing ();

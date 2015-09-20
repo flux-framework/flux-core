@@ -85,7 +85,8 @@ typedef struct {
     /* Reactor
      */
     flux_t h;
-    flux_fd_watcher_t *signalfd_w;
+    flux_reactor_t *reactor;
+    flux_watcher_t *signalfd_w;
 
     /* Sockets.
      */
@@ -151,8 +152,8 @@ static void module_cb (module_t *p, void *arg);
 static void rmmod_cb (module_t *p, void *arg);
 static void hello_update_cb (hello_t *h, void *arg);
 static void shutdown_cb (shutdown_t *s, void *arg);
-static void signalfd_cb (flux_t h, flux_fd_watcher_t *w,
-                         int fd, int revents, void *arg);
+static void signalfd_cb (flux_reactor_t *r, flux_watcher_t *w,
+                         int revents, void *arg);
 
 static void broker_init_signalfd (ctx_t *ctx);
 
@@ -460,6 +461,8 @@ int main (int argc, char *argv[])
      */
     if (!(ctx.h = flux_handle_create (&ctx, &broker_handle_ops, 0)))
         err_exit ("flux_handle_create");
+    if (!(ctx.reactor = flux_get_reactor (ctx.h)))
+        err_exit ("flux_get_reactor");
 
     subprocess_manager_set (ctx.sm, SM_FLUX, ctx.h);
 
@@ -660,8 +663,8 @@ int main (int argc, char *argv[])
      */
     if (ctx.verbose)
         msg ("entering event loop");
-    if (flux_reactor_start (ctx.h) < 0)
-        err ("flux_reactor_start");
+    if (flux_reactor_run (ctx.reactor, 0) < 0)
+        err ("flux_reactor_run");
     if (ctx.verbose)
         msg ("exited event loop");
 
@@ -1134,10 +1137,11 @@ static void broker_init_signalfd (ctx_t *ctx)
 
     if ((fd = signalfd(-1, &sigmask, SFD_NONBLOCK | SFD_CLOEXEC)) < 0)
         err_exit ("signalfd");
-    if (!(ctx->signalfd_w = flux_fd_watcher_create (fd, FLUX_POLLIN,
+    if (!(ctx->signalfd_w = flux_fd_watcher_create (ctx->reactor,
+                                                    fd, FLUX_POLLIN,
                                                     signalfd_cb, ctx)))
         err_exit ("flux_fd_watcher_create");
-    flux_fd_watcher_start (ctx->h, ctx->signalfd_w);
+    flux_watcher_start (ctx->signalfd_w);
 }
 
 /**
@@ -2330,9 +2334,10 @@ static void heartbeat_cb (heartbeat_t *h, void *arg)
         (void) overlay_keepalive_parent (ctx->overlay);
 }
 
-static void signalfd_cb (flux_t h, flux_fd_watcher_t *w,
-                         int fd, int revents, void *arg)
+static void signalfd_cb (flux_reactor_t *r, flux_watcher_t *w,
+                         int revents, void *arg)
 {
+    int fd = flux_fd_watcher_get_fd (w);
     ctx_t *ctx = arg;
     struct signalfd_siginfo fdsi;
     ssize_t n;
