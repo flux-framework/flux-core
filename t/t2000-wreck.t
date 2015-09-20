@@ -10,6 +10,12 @@ Test basic functionality of wreckrun facility.
 SIZE=${FLUX_TEST_SIZE:-4}
 test_under_flux ${SIZE}
 
+#  Return the previous jobid
+last_job_id() {
+	local n=$(flux kvs get "lwj.next-id")
+	echo $((n-1))
+}
+
 test_expect_success 'wreckrun: works' '
 	hostname=$(hostname) &&
 	run_timeout 5 flux wreckrun -n${SIZE} hostname  >output &&
@@ -86,5 +92,25 @@ test_expect_success 'wreckrun: -n divides tasks among ranks' '
 		i=$((i+2));
 	done >expected_nx2 &&
 	test_cmp expected_nx2 output_nx2
+'
+test_expect_success 'wreckrun: -N without -n works' '
+	flux wreckrun -l -N${SIZE} printenv FLUX_NODE_ID | sort >output_N &&
+	for n in $(seq 0 $((${SIZE}-1))); do
+		echo "$n: $n";
+		i=$((i+2));
+	done >expected_N &&
+	test_cmp expected_N output_N
+'
+test_expect_success 'wreckrun: -N without -n sets ntasks in kvs' '
+	flux wreckrun -l -N${SIZE} /bin/true &&
+	LWJ=$(last_job_id) &&
+	n=$(flux kvs get lwj.${LWJ}.ntasks) &&
+	test "$n" = "${SIZE}"
+'
+test_expect_success 'wreckrun: -n without -N sets nnnodes in kvs' '
+	flux wreckrun -l -n${SIZE} /bin/true &&
+	LWJ=$(last_job_id) &&
+	n=$(flux kvs get lwj.${LWJ}.nnodes) &&
+	test "$n" = "${SIZE}"
 '
 test_done
