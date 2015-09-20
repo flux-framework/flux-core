@@ -18,7 +18,8 @@ luaexec_LTLIBRARIES = \
 	flux.la
 
 fluxlua_LTLIBRARIES = \
-	flux/affinity.la
+	flux/affinity.la \
+	flux/hostlist.la
 
 check_LTLIBRARIES = \
 	tests/jsontest.la \
@@ -70,6 +71,18 @@ flux_affinity_la_SOURCES = \
 	lua-affinity/cpuset-str.h \
 	lua-affinity/cpuset-str.c
 
+flux_hostlist_la_LDFLAGS = \
+	$(luamod_ldflags) \
+	-Wl,--defsym=luaopen_flux_hostlist=luaopen_hostlist
+
+flux_hostlist_la_LIBADD = \
+	$(LUA_LIB)
+
+flux_hostlist_la_SOURCES = \
+	lua-hostlist/hostlist.c \
+	lua-hostlist/hostlist.h \
+	lua-hostlist/lua-hostlist.c
+
 libfluxlua_la_SOURCES = \
 	flux-lua.c \
 	kvs-lua.c \
@@ -112,13 +125,15 @@ tests_zmsgtest_la_LIBADD = \
 TESTS = \
 	tests/t0000-json.t \
 	tests/t0001-zmsg.t \
-	lua-affinity/tests/test.lua
+	lua-affinity/tests/test.lua \
+	lua-hostlist/tests/runtest.sh
 
 EXTRA_DIST = \
 	README \
 	$(TESTS) \
 	Test \
-	lua-affinity
+	lua-affinity \
+	lua-hostlist
 
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
