@@ -30,7 +30,7 @@
 -------------------------------------------------------------------------------
 local flux = require 'flux'
 local posix = require 'flux.posix'
-local hostlist = require 'hostlist'
+local hostlist = require 'flux.hostlist'
 
 local prog = string.match (arg[0], "([^/]+)$")
 local shortprog = prog:match ("flux%-(.+)$")

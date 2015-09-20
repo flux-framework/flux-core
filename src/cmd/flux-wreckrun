@@ -30,7 +30,7 @@ end
 --  Get the LWJ return code as highest of all task return codes
 ---
 local function lwj_return_code (f, wreck, id)
-    local hostlist = require 'hostlist'
+    local hostlist = require 'flux.hostlist'
     local lwj = f:kvsdir ("lwj.%d", id)
     local max = 0
     local msgs = {}

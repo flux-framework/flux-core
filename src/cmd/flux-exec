@@ -8,7 +8,7 @@ local decode = require 'flux.base64' .decode
 local encode = require 'flux.base64' .encode
 local posix = require 'flux.posix'
 local timer = require 'flux.timer'
-local hostlist = require 'hostlist'
+local hostlist = require 'flux.hostlist'
 
 local prog = string.match (arg[0], "([^/]+)$")
 local shortprog = prog:match ("flux%-(.+)$")
