@@ -72,7 +72,7 @@ void reduce (flux_reduce_t *r, int batchnum, void *arg)
     }
 }
 
-void forward_cb (flux_t h, flux_msg_watcher_t *w,
+void forward_cb (flux_t h, flux_msg_handler_t *w,
                  const flux_msg_t *msg, void *arg)
 {
     struct context *ctx = arg;
@@ -92,7 +92,7 @@ void forward_cb (flux_t h, flux_msg_watcher_t *w,
     Jput (in);
 }
 
-void heartbeat_cb (flux_t h, flux_msg_watcher_t *w,
+void heartbeat_cb (flux_t h, flux_msg_handler_t *w,
                    const flux_msg_t *msg, void *arg)
 {
     struct context *ctx = arg;
@@ -101,7 +101,7 @@ void heartbeat_cb (flux_t h, flux_msg_watcher_t *w,
         free (item);
 }
 
-struct flux_msghandler htab[] = {
+struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_EVENT,     "hb",              heartbeat_cb },
     { FLUX_MSGTYPE_REQUEST,   "treduce.forward", forward_cb },
     FLUX_MSGHANDLER_TABLE_END,
@@ -137,11 +137,11 @@ int mod_main (flux_t h, int argc, char **argv)
         return -1;
     if (flux_event_subscribe (h, "hb") < 0)
         return -1;
-    if (flux_msg_watcher_addvec (h, htab, &ctx) < 0)
+    if (flux_msg_handler_addvec (h, htab, &ctx) < 0)
         return -1;
-    if (flux_reactor_start (h) < 0)
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         return -1;
-    flux_msg_watcher_delvec (h, htab);
+    flux_msg_handler_delvec (htab);
     return 0;
 }
 

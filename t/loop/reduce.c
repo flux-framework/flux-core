@@ -288,7 +288,7 @@ void test_timed (flux_t h)
     /* Start reactor so timeout handler can run.
      * It should fire once and sink all items in one sink call.
      */
-    ok (flux_reactor_start (h) == 0,
+    ok (flux_reactor_run (flux_get_reactor (h), 0) == 0,
         "timed.0: reactor completed normally");
     cmp_ok (sink_calls, "==", 1,
         "timed.0: op.sink called 1 time");
@@ -329,7 +329,7 @@ void test_timed (flux_t h)
     /* Start reactor so timeout handler can run.
      * It should fire once and sink all items in one sink call.
      */
-    ok (flux_reactor_start (h) == 0,
+    ok (flux_reactor_run (flux_get_reactor (h), 0) == 0,
         "timed.1: reactor completed normally");
     cmp_ok (sink_calls, "==", 1,
         "timed.1: op.sink called 1 time");
