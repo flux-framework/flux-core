@@ -39,7 +39,7 @@
 #include "connector.h"
 #include "message.h"
 #include "tagpool.h"
-#include "reactor.h" // for flux_sleep_on ()
+#include "dispatch.h" // for flux_sleep_on ()
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"

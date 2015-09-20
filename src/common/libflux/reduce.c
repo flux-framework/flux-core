@@ -47,9 +47,10 @@ struct flux_reduce_struct {
 
     uint32_t rank;
     flux_t h;
+    flux_reactor_t *reactor;
     int flags;
 
-    flux_timer_watcher_t *timer;
+    flux_watcher_t *timer;
     double timeout;
     bool timer_armed;
 
@@ -65,7 +66,8 @@ struct flux_reduce_struct {
 static void flush_current (flux_reduce_t *r);
 
 
-static void timer_cb (flux_t h, flux_timer_watcher_t *w, int revents, void *arg)
+static void timer_cb (flux_reactor_t *reactor, flux_watcher_t *w,
+                      int revents, void *arg)
 {
     flux_reduce_t *r = arg;
     flush_current (r);
@@ -84,6 +86,10 @@ flux_reduce_t *flux_reduce_create (flux_t h, struct flux_reduce_ops ops,
     }
     flux_reduce_t *r = xzmalloc (sizeof (*r));
     r->h = h;
+    if (!(r->reactor = flux_get_reactor (h))) {
+        flux_reduce_destroy (r);
+        return NULL;
+    }
     r->ops = ops;
     r->rank = 0;
     if (flux_get_rank (h, &r->rank) < 0 || flux_get_size (h, &size) < 0
@@ -91,8 +97,7 @@ flux_reduce_t *flux_reduce_create (flux_t h, struct flux_reduce_ops ops,
         flux_reduce_destroy (r);
         return NULL;
     }
-        
-    //(void) flux_info (h, &r->rank, &size, &arity);
+
     r->arg = arg;
     r->flags = flags;
     if (!(r->items = zlist_new ()))
@@ -107,7 +112,7 @@ flux_reduce_t *flux_reduce_create (flux_t h, struct flux_reduce_ops ops,
          */
         r->timeout = (max_level - my_level) * (timeout / max_level);
 
-        if (!(r->timer = flux_timer_watcher_create (r->timeout, 0,
+        if (!(r->timer = flux_timer_watcher_create (r->reactor, r->timeout, 0,
                                                     timer_cb, r))) {
             flux_reduce_destroy (r);
             return NULL;
@@ -130,8 +135,8 @@ void flux_reduce_destroy (flux_reduce_t *r)
         if (r->ops.destroy && r->old_item)
             r->ops.destroy (r->old_item);
         if (r->timer) {
-            flux_timer_watcher_stop (r->h, r->timer);
-            flux_timer_watcher_destroy (r->timer);
+            flux_watcher_stop (r->timer);
+            flux_watcher_destroy (r->timer);
         }
         free (r);
     }
@@ -157,7 +162,7 @@ static void flush_current (flux_reduce_t *r)
         }
     }
     if (r->timer) {
-        flux_timer_watcher_stop (r->h, r->timer);
+        flux_watcher_stop (r->timer);
         r->timer_armed = false;
     }
     r->flushed = true;
@@ -225,7 +230,7 @@ int flux_reduce_append (flux_reduce_t *r, void *item, int batchnum)
         if ((r->flags & FLUX_REDUCE_TIMEDFLUSH)) {
             if (zlist_size (r->items) > 0 && !r->timer_armed) {
                 flux_timer_watcher_reset (r->timer, r->timeout, 0);
-                flux_timer_watcher_start (r->h, r->timer);
+                flux_watcher_start (r->timer);
                 r->timer_armed = true;
             }
         }
