@@ -80,14 +80,6 @@ static struct reactor *reactor_get (flux_t h)
     return r;
 }
 
-int flux_reactor_start (flux_t h)
-{
-    struct reactor *r = reactor_get (h);
-    r->loop_rc = 0;
-    ev_run (r->loop, 0);
-    return r->loop_rc;
-}
-
 int flux_reactor_run (flux_t h, int flags)
 {
     struct reactor *r = reactor_get (h);

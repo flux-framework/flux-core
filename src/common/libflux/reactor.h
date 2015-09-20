@@ -14,11 +14,6 @@ enum {
                               /*     one event occurs */
 };
 
-/* Start the flux event reactor.
- * Returns 0 if flux_reactor_stop() terminated reactor; -1 if error did.
- */
-int flux_reactor_start (flux_t h);
-
 /* Start the flux event reactor, with optional flags.
  * Returns 0 if flux_reactor_stop() terminated reactor; -1 if error did.
  */
