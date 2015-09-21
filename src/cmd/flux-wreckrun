@@ -133,6 +133,29 @@ local function alloc_tasks (f, wreck, lwj)
     lwj:commit()
 end
 
+local function wreckrun_hooks_compile (wreck)
+    local code = wreck:getopt ("P")
+    local pre_launch_fn = nil
+    if code then
+        wreck:verbose ("compiling code '%s'\n", code)
+        pre_launch_fn, err = loadstring ("local wreck, lwj = ...; " .. code)
+        if not pre_launch_fn then
+            wreck:die ("--pre-launch-hook: %s\n", err)
+        end
+    end
+    -- Add a hooks table to existing 'wreck' object
+    wreck.hooks = { pre_launch = pre_launch_fn }
+    return true
+end
+
+local function wreckrun_pre_launch ( wreck, lwj)
+    if wreck.hooks.pre_launch then
+        local r, v = pcall (wreck.hooks.pre_launch, wreck, lwj)
+	if not r then return nil, v end
+    end
+    return true
+end
+
 -------------------------------------------------------------------------------
 -- Main program:
 -------------------------------------------------------------------------------
@@ -152,11 +175,15 @@ wreck:add_options ({
         usage = "Run job immediately" },
     { name = 'label-io', char = 'l',
         usage = "Label output with taskid" },
+    { name = 'pre-launch-hook', char = "P", arg = "CODE",
+        usage = "execute Lua CODE before launch." },
 })
 
 if not wreck:parse_cmdline (arg) then
     wreck:die ("Failed to process cmdline args\n")
 end
+
+wreckrun_hooks_compile (wreck)
 
 -- Start in-program timer:
 local tt = timer.new()
@@ -214,7 +241,18 @@ if true then
     -- Ensure lwj nnodes matches fake allocation
     lwj.nnodes = tonumber (wreck.nnodes)
     lwj.ntasks = tonumber (wreck.ntasks)
+
+    -- Execute any pre-launch hooks
+    local r, err = wreckrun_pre_launch (wreck, lwj)
+    if not r then
+	lwj.state = "failed"
+        lwj:commit()
+        wreck:die ("pre-launch-hook failed: %s", err)
+    end
+
     lwj:commit ()
+
+    -- Now send run event:
     wreck:verbose ("%-4.03fs: Sending run event\n", tt:get0())
     local rc,err = f:sendevent ("wrexec.run.%d", resp.jobid)
     if not rc then wreck:die ("sendevent: %s\n", err) end
