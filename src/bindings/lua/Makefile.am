@@ -139,5 +139,37 @@ TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 	$(top_srcdir)/config/tap-driver.sh
 TESTS_ENVIRONMENT = \
-	LUA_PATH="$(abs_srcdir)/?.lua;;" \
-	LUA_CPATH="$(abs_builddir)/tests/.libs/?.so;;;"
+	LUA_PATH="$(abs_srcdir)/?.lua;;;" \
+	LUA_CPATH="$(abs_builddir)/tests/.libs/?.so;$(abs_builddir)/flux/?.so;;;"
+
+
+# Copy any Lua modules in flux/.libs to ${top_builddir}/flux/*.so so that
+#  they can be used as require 'flux.<name>' in-tree
+#
+.PHONY: convenience-link clean-convenience-link
+
+convenience-link: $(luaexec_LTLIBRARIES) $(fluxlua_LTLIBRARIES)
+	@for f in $^; do \
+	  soname=`$(GREP) "^dlname=" $$f | $(SED) -e "s|^dlname='\(.*\)'|\1|"`; \
+	  dirname=`echo $(abs_builddir)/$$f | $(SED) -e 's|/[^/]*.la||'`; \
+	  target=$$dirname/.libs/$$soname; link=$$dirname/$$soname; \
+	  shortdir=`echo $$f | $(SED) -e 's|[^/]*.la||'`; \
+	  shorttarget="$${shortdir}.libs/$$soname"; \
+	  echo "  LN       $$shortdir$$soname -> $$shorttarget"; \
+	  rm -f  $$link; \
+	  $(LN_S) $$target $$link; \
+	done
+
+
+clean-convenience-link:
+	@for f in $^; do \
+	  soname=`$(GREP) "^dlname=" $$f | $(SED) -e "s|^dlname='\(.*\)'|\1|"`; \
+	  dirname=`echo $(abs_builddir)/$$f | $(SED) -e 's|/[^/]*.la||'`; \
+	  target=$$dirname/.libs/$$soname; link=$$dirname/$$soname; \
+	  echo "  RM       $$link"; \
+	  rm -f $$link; \
+	done
+
+all-local:: convenience-link
+
+clean-local:: clean-convenience-link
