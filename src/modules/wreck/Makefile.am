@@ -65,7 +65,8 @@ wrexecd_LDADD = \
 	$(JSON_LIBS) $(ZMQ_LIBS) $(LUA_LIB) $(LIBPTHREAD)
 
 dist_wreckscripts_SCRIPTS = \
-	lua.d/01-env.lua
+	lua.d/01-env.lua \
+	lua.d/02-affinity.lua
 
 # XXX: Hack below to force rebuild of unbuilt wrexecd dependencies
 #
