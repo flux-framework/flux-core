@@ -141,5 +141,21 @@ test_expect_success MULTICORE 'wreckrun: supports per-task affinity assignment' 
 	EOF
 	test_cmp expected_cpus output_cpus
 '
+test_expect_success 'wreckrun: top level environment' '
+	flux kvs put lwj.environ="{ \"TEST_ENV_VAR\": \"foo\" }" &&
+	run_timeout 5 flux wreckrun -n2 printenv TEST_ENV_VAR > output_top_env &&
+	cat <<-EOF >expected_top_env &&
+	foo
+	foo
+	EOF
+	test_cmp expected_top_env output_top_env &&
+	TEST_ENV_VAR=bar \
+	  flux wreckrun -n2 printenv TEST_ENV_VAR > output_top_env2 &&
+	cat <<-EOF >expected_top_env2 &&
+	bar
+	bar
+	EOF
+	test_cmp expected_top_env2 output_top_env2
+'
 
 test_done
