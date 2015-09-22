@@ -1015,6 +1015,8 @@ void prog_ctx_unsetenv (struct prog_ctx *ctx, const char *name)
 
 int prog_ctx_setenv (struct prog_ctx *ctx, const char *name, const char *value)
 {
+    /* Overwrite: */
+    prog_ctx_unsetenv (ctx, name);
     return ((int) envz_add (&ctx->envz, &ctx->envz_len, name, value));
 }
 
