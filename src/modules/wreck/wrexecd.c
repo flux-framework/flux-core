@@ -1238,6 +1238,18 @@ static kvsdir_t *prog_ctx_kvsdir (struct prog_ctx *ctx)
     return (t->kvs);
 }
 
+static int l_wreck_log_msg (lua_State *L)
+{
+    struct prog_ctx *ctx = l_get_prog_ctx (L, 1);
+    const char *msg;
+    if (lua_gettop (L) > 2 && l_format_args (L, 2) < 0)
+        return (2); /* error on stack from l_format_args */
+    if (!(msg = lua_tostring (L, 2)))
+        return lua_pusherror (L, "required arg to log_msg missing");
+    log_msg (ctx, msg);
+    return (0);
+}
+
 static int l_wreck_index (lua_State *L)
 {
     struct task_info *t;
@@ -1338,6 +1350,10 @@ static int l_wreck_index (lua_State *L)
             lua_pushnumber (L, WTERMSIG (status));
         else
             lua_pushnil (L);
+        return (1);
+    }
+    if (strcmp (key, "log_msg") == 0) {
+        lua_pushcfunction (L, l_wreck_log_msg);
         return (1);
     }
     return (0);
