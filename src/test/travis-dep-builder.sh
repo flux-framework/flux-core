@@ -128,18 +128,6 @@ for p in ${!lua_rocks[@]}; do
     fi
 done
 
-# special case for lua-hostlist
-if ! lua -lhostlist -e '' >/dev/null 2>&1; then
-   git clone https://github.com/grondo/lua-hostlist &&
-   ( cd lua-hostlist &&
-     export LUA_VER=5.1
-     make &&
-     make install PREFIX=$HOME/local LIBDIR=$HOME/.luarocks/lib
-   )
-else
-   say "Using cached version of lua-hostlist"
-fi
-
 # hack for 'make install' targets that force installation to
 #  /lib/systemd if $prefix/lib/systemd/system doesn't exist
 mkdir -p ${prefix}/lib/systemd/system

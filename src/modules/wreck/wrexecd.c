@@ -1015,6 +1015,8 @@ void prog_ctx_unsetenv (struct prog_ctx *ctx, const char *name)
 
 int prog_ctx_setenv (struct prog_ctx *ctx, const char *name, const char *value)
 {
+    /* Overwrite: */
+    prog_ctx_unsetenv (ctx, name);
     return ((int) envz_add (&ctx->envz, &ctx->envz_len, name, value));
 }
 
@@ -1227,12 +1229,25 @@ static kvsdir_t *prog_ctx_kvsdir (struct prog_ctx *ctx)
 
     t = prog_ctx_current_task (ctx);
     if (!t->kvs) {
-        if (kvs_get_dir (prog_ctx_flux_handle (ctx),
-            &t->kvs, "lwj.%ld.%d", ctx->id, t->id) < 0)
+        if ( (kvs_get_dir (prog_ctx_flux_handle (ctx), &t->kvs,
+                           "lwj.%ld.%d", ctx->id, t->globalid) < 0)
+          && (errno != ENOENT))
             log_err (ctx, "kvs_get_dir (lwj.%ld.%d): %s",
-                     ctx->id, t->id, strerror (errno));
+                     ctx->id, t->globalid, strerror (errno));
     }
     return (t->kvs);
+}
+
+static int l_wreck_log_msg (lua_State *L)
+{
+    struct prog_ctx *ctx = l_get_prog_ctx (L, 1);
+    const char *msg;
+    if (lua_gettop (L) > 2 && l_format_args (L, 2) < 0)
+        return (2); /* error on stack from l_format_args */
+    if (!(msg = lua_tostring (L, 2)))
+        return lua_pusherror (L, "required arg to log_msg missing");
+    log_msg (ctx, msg);
+    return (0);
 }
 
 static int l_wreck_index (lua_State *L)
@@ -1251,18 +1266,32 @@ static int l_wreck_index (lua_State *L)
         return (1);
     }
     if (strcmp (key, "globalid") == 0) {
+	if (t == NULL)
+            return lua_pusherror (L, "Not in task context");
         lua_pushnumber (L, t->globalid);
         return (1);
     }
     if (strcmp (key, "taskid") == 0) {
+	if (t == NULL)
+            return lua_pusherror (L, "Not in task context");
         lua_pushnumber (L, t->id);
         return (1);
     }
     if (strcmp (key, "kvsdir") == 0) {
-        kvsdir_t *d = prog_ctx_kvsdir (ctx);
-        if (d == NULL)
-            return lua_pusherror (L, "No such file or directory");
-        l_push_kvsdir (L, prog_ctx_kvsdir (ctx));
+        l_push_kvsdir (L, ctx->kvs);
+        return (1);
+    }
+    if (strcmp (key, "by_rank") == 0) {
+        l_push_kvsdir (L, ctx->resources);
+        return (1);
+    }
+    if (strcmp (key, "by_task") == 0) {
+        kvsdir_t *d;
+	if (t == NULL)
+            return lua_pusherror (L, "Not in task context");
+        if (!(d = prog_ctx_kvsdir (ctx)))
+            return lua_pusherror (L, strerror (errno));
+        l_push_kvsdir (L, d);
         return (1);
     }
     if (strcmp (key, "flux") == 0) {
@@ -1321,6 +1350,10 @@ static int l_wreck_index (lua_State *L)
             lua_pushnumber (L, WTERMSIG (status));
         else
             lua_pushnil (L);
+        return (1);
+    }
+    if (strcmp (key, "log_msg") == 0) {
+        lua_pushcfunction (L, l_wreck_log_msg);
         return (1);
     }
     return (0);

@@ -23,6 +23,6 @@ CODE_COVERAGE_IGNORE_PATTERN = \
 	"/usr/*" \
 	"bindings/python/*" \
 	"common/liblsd/*" \
-	"common/libutil/sds.[ch]"
+	"common/libutil/sds.*"
 CODE_COVERAGE_LCOV_OPTIONS =
 @CODE_COVERAGE_RULES@

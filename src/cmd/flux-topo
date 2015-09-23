@@ -3,8 +3,8 @@
 -- flux-topo - emit graphviz representation of Flux session topology
 
 local flux = require 'flux'
-local hostlist = require ("hostlist")
-local getopt = require 'flux-lua.alt_getopt'.get_opts
+local hostlist = require 'flux.hostlist'
+local getopt = require 'flux.alt_getopt'.get_opts
 
 local prog = string.match (arg[0], "([^/]+)$")
 

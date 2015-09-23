@@ -121,9 +121,5 @@ export TEST_NAME
 if ! lua -e 'require "posix"'; then
     error "failed to find lua posix module in path"
 fi
-if ! lua -e 'require "hostlist"'; then
-    error "failed to find lua posix module in path"
-fi
-
 
 # vi: ts=4 sw=4 expandtab

@@ -15,8 +15,8 @@ exit with non-zero exit status.
  -t, --timeout=T  Wait at most T seconds (before exiting
 ]]
 
-local getopt = require 'flux-lua.alt_getopt' .get_opts
-local timer =  require 'flux-lua.timer'.new()
+local getopt = require 'flux.alt_getopt' .get_opts
+local timer =  require 'flux.timer'.new()
 local f =      require 'flux' .new()
 
 local function printf (...)

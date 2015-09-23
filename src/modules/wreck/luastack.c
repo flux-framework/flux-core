@@ -162,7 +162,7 @@ lua_script_t lua_script_create (lua_stack_t st, int type, const char *data)
     /*  And finally replace the globals table with the (empty)  table
      *   now at top of the stack
      */
-    lua_setglobal (script->L, "_G");
+    lua_replace (script->L, LUA_GLOBALSINDEX);
 
     return (script);
 }

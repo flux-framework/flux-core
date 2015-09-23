@@ -55,8 +55,8 @@ package.cpath = top_builddir .. "/src/bindings/lua/.libs/?.so" .. ';'
 	.. package.cpath
 
 ---------------------------------------------------------------------------
-local getopt = require 'flux-lua.alt_getopt'.get_opts
-local posix = require 'flux-lua.posix'
+local getopt = require 'flux.alt_getopt'.get_opts
+local posix = require 'flux.posix'
 require 'Test.More'
 
 ---------------------------------------------------------------------------

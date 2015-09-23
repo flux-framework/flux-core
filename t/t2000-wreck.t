@@ -10,6 +10,12 @@ Test basic functionality of wreckrun facility.
 SIZE=${FLUX_TEST_SIZE:-4}
 test_under_flux ${SIZE}
 
+#  Return the previous jobid
+last_job_id() {
+	local n=$(flux kvs get "lwj.next-id")
+	echo $((n-1))
+}
+
 test_expect_success 'wreckrun: works' '
 	hostname=$(hostname) &&
 	run_timeout 5 flux wreckrun -n${SIZE} hostname  >output &&
@@ -87,4 +93,82 @@ test_expect_success 'wreckrun: -n divides tasks among ranks' '
 	done >expected_nx2 &&
 	test_cmp expected_nx2 output_nx2
 '
+test_expect_success 'wreckrun: -N without -n works' '
+	flux wreckrun -l -N${SIZE} printenv FLUX_NODE_ID | sort >output_N &&
+	for n in $(seq 0 $((${SIZE}-1))); do
+		echo "$n: $n";
+		i=$((i+2));
+	done >expected_N &&
+	test_cmp expected_N output_N
+'
+test_expect_success 'wreckrun: -N without -n sets ntasks in kvs' '
+	flux wreckrun -l -N${SIZE} /bin/true &&
+	LWJ=$(last_job_id) &&
+	n=$(flux kvs get lwj.${LWJ}.ntasks) &&
+	test "$n" = "${SIZE}"
+'
+test_expect_success 'wreckrun: -n without -N sets nnnodes in kvs' '
+	flux wreckrun -l -n${SIZE} /bin/true &&
+	LWJ=$(last_job_id) &&
+	n=$(flux kvs get lwj.${LWJ}.nnodes) &&
+	test "$n" = "${SIZE}"
+'
+
+cpus_allowed() {
+	${SHARNESS_TEST_SRCDIR}/scripts/cpus-allowed.lua "$@"
+}
+test "$(cpus_allowed count)" = "0" || test_set_prereq MULTICORE
+
+test_expect_success MULTICORE 'wreckrun: supports affinity assignment' '
+	newmask=$(cpus_allowed last) &&
+	run_timeout 5 flux wreckrun -n1 \
+	  --pre-launch-hook="lwj.rank[0].cpumask = \"$newmask\"" \
+	  grep ^Cpus_allowed_list /proc/self/status > output_cpus &&
+	cat <<-EOF >expected_cpus &&
+	Cpus_allowed_list:	$newmask
+	EOF
+	test_cmp expected_cpus output_cpus
+'
+test_expect_success MULTICORE 'wreckrun: supports per-task affinity assignment' '
+	mask=$(cpus_allowed) &&
+	newmask=$(cpus_allowed first) &&
+	run_timeout 5 flux wreckrun -ln2 \
+	  --pre-launch-hook="lwj[\"0.cpumask\"] = \"$newmask\"" \
+	  grep ^Cpus_allowed_list /proc/self/status | sort > output_cpus2 &&
+	cat <<-EOF >expected_cpus2 &&
+	0: Cpus_allowed_list:	$newmask
+	1: Cpus_allowed_list:	$mask
+	EOF
+	test_cmp expected_cpus output_cpus
+'
+test_expect_success 'wreckrun: top level environment' '
+	flux kvs put lwj.environ="{ \"TEST_ENV_VAR\": \"foo\" }" &&
+	run_timeout 5 flux wreckrun -n2 printenv TEST_ENV_VAR > output_top_env &&
+	cat <<-EOF >expected_top_env &&
+	foo
+	foo
+	EOF
+	test_cmp expected_top_env output_top_env &&
+	TEST_ENV_VAR=bar \
+	  flux wreckrun -n2 printenv TEST_ENV_VAR > output_top_env2 &&
+	cat <<-EOF >expected_top_env2 &&
+	bar
+	bar
+	EOF
+	test_cmp expected_top_env2 output_top_env2
+'
+test_expect_success 'wreck plugins can use wreck:log_msg()' '
+	saved_pattern=$(flux kvs get config.wrexec.lua_pattern) &&
+	cleanup flux kvs put wrexec.lua_pattern="$saved_pattern" &&
+	cat <<-EOF >test.lua &&
+	function rexecd_init ()
+	    local rc, err = wreck:log_msg ("lwj.%d: plugin test successful", wreck.id)
+	    if not rc then error (err) end
+	end
+	EOF
+	flux kvs put "config.wrexec.lua_pattern=$(pwd)/*.lua" &&
+	flux wreckrun /bin/true &&
+	flux dmesg | grep "plugin test successful" || (flux dmesg | grep lwj\.$(last_job_id) && false)
+'
+
 test_done

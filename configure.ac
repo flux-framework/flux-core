@@ -110,11 +110,6 @@ AM_CONDITIONAL([HAVE_MPI], [test "$have_C_mpi" = yes])
 AX_CODE_COVERAGE
 
 ##
-# For list.c, hostlist.c, hash.c
-##
-AC_DEFINE(WITH_PTHREADS, 1, [Make liblsd thread safe])
-
-##
 # Embedded libev
 ##
 m4_include([src/common/libev/libev.m4])

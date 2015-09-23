@@ -63,7 +63,10 @@ static int l_kvsdir_destroy (lua_State *L)
 
 int l_push_kvsdir (lua_State *L, kvsdir_t *dir)
 {
-    kvsdir_t **new = lua_newuserdata (L, sizeof (*new));
+    kvsdir_t **new;
+    if (dir == NULL)
+        return lua_pusherror (L, "No such file or directory");
+    new = lua_newuserdata (L, sizeof (*new));
     *new = dir;
     return l_kvsdir_instantiate (L);
 }
@@ -101,7 +104,7 @@ static int l_kvsdir_newindex (lua_State *L)
      */
     if (lua_isnil (L, 3))
         rc = kvsdir_put_obj (d, key, NULL);
-    else if (lua_isnumber (L, 3)) {
+    else if (lua_type (L, 3) == LUA_TNUMBER) {
         double val = lua_tonumber (L, 3);
         if (floor (val) == val)
             rc = kvsdir_put_int64 (d, key, (int64_t) val);

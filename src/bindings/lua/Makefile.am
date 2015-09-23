@@ -3,19 +3,23 @@ AM_LDFLAGS =	$(CODE_COVERAGE_LDFLAGS)
 AM_CPPFLAGS =	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 		$(LUA_INCLUDE) $(JSON_CFLAGS) $(ZMQ_CFLAGS)
 
-fluxluadir = $(luadir)/flux-lua
+fluxluadir = $(luadir)/flux
 
 dist_lua_SCRIPTS = \
 	wreck.lua
 
 dist_fluxlua_SCRIPTS = \
-	flux-lua/timer.lua \
-	flux-lua/alt_getopt.lua \
-	flux-lua/posix.lua \
-	flux-lua/base64.lua
+	flux/timer.lua \
+	flux/alt_getopt.lua \
+	flux/posix.lua \
+	flux/base64.lua
 
 luaexec_LTLIBRARIES = \
 	flux.la
+
+fluxlua_LTLIBRARIES = \
+	flux/affinity.la \
+	flux/hostlist.la
 
 check_LTLIBRARIES = \
 	tests/jsontest.la \
@@ -54,6 +58,30 @@ flux_la_SOURCES = \
 	zmsg-lua.h \
 	lutil.c \
 	lutil.h
+
+flux_affinity_la_LDFLAGS = \
+	$(luamod_ldflags) \
+	-Wl,--defsym=luaopen_flux_affinity=luaopen_affinity
+
+flux_affinity_la_LIBADD = \
+	$(LUA_LIB)
+
+flux_affinity_la_SOURCES = \
+	lua-affinity/lua-affinity.c \
+	lua-affinity/cpuset-str.h \
+	lua-affinity/cpuset-str.c
+
+flux_hostlist_la_LDFLAGS = \
+	$(luamod_ldflags) \
+	-Wl,--defsym=luaopen_flux_hostlist=luaopen_hostlist
+
+flux_hostlist_la_LIBADD = \
+	$(LUA_LIB)
+
+flux_hostlist_la_SOURCES = \
+	lua-hostlist/hostlist.c \
+	lua-hostlist/hostlist.h \
+	lua-hostlist/lua-hostlist.c
 
 libfluxlua_la_SOURCES = \
 	flux-lua.c \
@@ -96,16 +124,52 @@ tests_zmsgtest_la_LIBADD = \
 
 TESTS = \
 	tests/t0000-json.t \
-	tests/t0001-zmsg.t
+	tests/t0001-zmsg.t \
+	lua-affinity/tests/test.lua \
+	lua-hostlist/tests/runtest.sh
 
 EXTRA_DIST = \
 	README \
 	$(TESTS) \
-	Test
+	Test \
+	lua-affinity \
+	lua-hostlist
 
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 	$(top_srcdir)/config/tap-driver.sh
 TESTS_ENVIRONMENT = \
-	LUA_PATH="$(abs_srcdir)/?.lua;;" \
-	LUA_CPATH="$(abs_builddir)/tests/.libs/?.so;;;"
+	LUA_PATH="$(abs_srcdir)/?.lua;;;" \
+	LUA_CPATH="$(abs_builddir)/tests/.libs/?.so;$(abs_builddir)/flux/?.so;;;"
+
+
+# Copy any Lua modules in flux/.libs to ${top_builddir}/flux/*.so so that
+#  they can be used as require 'flux.<name>' in-tree
+#
+.PHONY: convenience-link clean-convenience-link
+
+convenience-link: $(luaexec_LTLIBRARIES) $(fluxlua_LTLIBRARIES)
+	@for f in $^; do \
+	  soname=`$(GREP) "^dlname=" $$f | $(SED) -e "s|^dlname='\(.*\)'|\1|"`; \
+	  dirname=`echo $(abs_builddir)/$$f | $(SED) -e 's|/[^/]*.la||'`; \
+	  target=$$dirname/.libs/$$soname; link=$$dirname/$$soname; \
+	  shortdir=`echo $$f | $(SED) -e 's|[^/]*.la||'`; \
+	  shorttarget="$${shortdir}.libs/$$soname"; \
+	  echo "  LN       $$shortdir$$soname -> $$shorttarget"; \
+	  rm -f  $$link; \
+	  $(LN_S) $$target $$link; \
+	done
+
+
+clean-convenience-link:
+	@for f in $^; do \
+	  soname=`$(GREP) "^dlname=" $$f | $(SED) -e "s|^dlname='\(.*\)'|\1|"`; \
+	  dirname=`echo $(abs_builddir)/$$f | $(SED) -e 's|/[^/]*.la||'`; \
+	  target=$$dirname/.libs/$$soname; link=$$dirname/$$soname; \
+	  echo "  RM       $$link"; \
+	  rm -f $$link; \
+	done
+
+all-local:: convenience-link
+
+clean-local:: clean-convenience-link
