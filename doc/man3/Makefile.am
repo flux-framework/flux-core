@@ -17,7 +17,8 @@ MAN3_FILES_PRIMARY = \
 	flux_rpc_multi.3 \
 	flux_reduce_create.3 \
 	flux_get_rank.3 \
-	flux_attr_get.3
+	flux_attr_get.3 \
+	flux_get_reactor.3
 
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section
@@ -46,7 +47,8 @@ MAN3_FILES_SECONDARY = \
 	flux_get_arity.3 \
 	flux_attr_set.3 \
 	flux_attr_first.3 \
-	flux_attr_next.3
+	flux_attr_next.3 \
+	flux_set_reactor.3
 
 ADOC_FILES  = $(MAN3_FILES_PRIMARY:%.3=%.adoc)
 XML_FILES   = $(MAN3_FILES_PRIMARY:%.3=%.xml)
@@ -94,6 +96,7 @@ flux_get_arity.3: flux_get_rank.3
 flux_attr_set.3: flux_attr_get.3
 flux_attr_first.3: flux_attr_get.3
 flux_attr_next.3: flux_attr_get.3
+flux_set_reactor.3: flux_get_reactor.3
 
 flux_open.3: topen.c
 flux_send.3: tsend.c
