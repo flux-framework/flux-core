@@ -190,6 +190,8 @@ void flux_watcher_stop (flux_watcher_t *w)
 void flux_watcher_destroy (flux_watcher_t *w)
 {
     if (w) {
+        if (w->ops.stop)
+            w->ops.stop (w->impl, w);
         if (w->ops.destroy)
             w->ops.destroy (w->impl, w);
         free (w);
