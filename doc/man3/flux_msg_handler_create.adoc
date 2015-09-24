@@ -1,0 +1,105 @@
+flux_msg_handler_create(3)
+==========================
+:doctype: manpage
+
+
+NAME
+----
+flux_msg_handler_create, flux_msg_handler_destroy,
+flux_msg_handler_start, flux_msg_handler_stop -  manage message handlers
+
+
+SYNOPSIS
+--------
+ #include <flux/core.h>
+
+ typedef void (*flux_msg_handler_f)(flux_t h,
+                                    flux_msg_handler_t *w,
+                                    const flux_msg_t *msg,
+                                    void *arg);
+
+ flux_msg_handler_t *
+ flux_msg_handler_create (flux_t h,
+                          const struct flux_match match,
+                          flux_msg_handler_f callback,
+                          void *arg);
+
+ void flux_msg_handler_destroy (flux_msg_handler_t *w);
+
+ void flux_msg_handler_start (flux_msg_handler_t *w);
+
+ void flux_msg_handler_stop (flux_msg_handler_t *w);
+
+
+DESCRIPTION
+-----------
+
+`flux_msg_handler_create()` registers _callback_ to be invoked when
+a message meeting _match_ criteria, as described in `flux_msg_cmp(3)`,
+is received on Flux broker handle _h_.
+
+The message handler must be started with `flux_msg_handler_start()` in
+order to receive messages.   Conversely, `flux_msg_handler_stop()` causes
+the message handler to stop receiving messages.  Starting and stopping
+are idempotent operations.
+
+The handle _h_ is monitored for FLUX_POLLIN events on the flux_reactor_t
+associated with the handle as described in `flux_set_reactor(3)`.
+This internal "handle watcher" is started when the first message handler
+is started, and stopped when the last message handler is stopped.
+
+Messages arriving on _h_ are internally read and dispatched to matching
+message handlers.  If multiple handlers match the message, the message
+is dispatched to the most recently registered handler.
+
+FLUX_MSGTYPE_REQUEST messages with no matching message handler
+are automatically sent an ENOSYS response by the dispatcher.
+
+`flux_msg_handler_destroy()` destroys a handler, after internally
+stopping it.
+
+
+CAVEATS
+-------
+
+FLUX_MSGTYPE_EVENT messages are received on the handle only as
+requested by `flux_event_subscribe(3)`.
+
+`flux-broker(1)` only routes FLUX_MSGTYPE_REQUEST messages to comms
+modules according to their registered service name, which is the same as
+the module name.  Other handle instances such as those on the local connector
+cannot yet receive requests.
+
+
+RETURN VALUE
+------------
+
+`flux_msg_handler_create()` returns a flux_msg_handler_t object on success.
+On error, NULL is returned, and errno is set appropriately.
+
+
+ERRORS
+------
+
+ENOMEM::
+Out of memory.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+---------
+flux_get_reactor(3), flux_reactor_start(3), flux_msg_cmp(3)
