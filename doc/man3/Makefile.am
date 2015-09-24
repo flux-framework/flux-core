@@ -27,7 +27,8 @@ MAN3_FILES_PRIMARY = \
 	flux_timer_watcher_create.3 \
 	flux_idle_watcher_create.3 \
 	flux_msg_handler_create.3 \
-	flux_msg_cmp.3
+	flux_msg_cmp.3 \
+	flux_msg_handler_addvec.3
 
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section
@@ -72,7 +73,8 @@ MAN3_FILES_SECONDARY = \
 	flux_check_watcher_create.3 \
 	flux_msg_handler_destroy.3 \
 	flux_msg_handler_start.3 \
-	flux_msg_handler_stop.3
+	flux_msg_handler_stop.3 \
+	flux_msg_handler_delvec.3
 
 ADOC_FILES  = $(MAN3_FILES_PRIMARY:%.3=%.adoc)
 XML_FILES   = $(MAN3_FILES_PRIMARY:%.3=%.xml)
@@ -136,6 +138,7 @@ flux_check_watcher_create.3: flux_idle_watcher_create.3
 flux_msg_handler_destroy.3: flux_msg_handler_create.3
 flux_msg_handler_start.3: flux_msg_handler_create.3
 flux_msg_handler_stop.3: flux_msg_handler_create.3
+flux_msg_handler_delvec.3: flux_msg_handler_addvec.3
 
 flux_open.3: topen.c
 flux_send.3: tsend.c
