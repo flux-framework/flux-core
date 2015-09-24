@@ -1,10 +1,13 @@
+[![Build Status](https://travis-ci.org/flux-framework/flux-core.svg?branch=master)](https://travis-ci.org/flux-framework/flux-core)
+[![Coverage Status](https://coveralls.io/repos/flux-framework/flux-core/badge.svg?branch=master&service=github)](https://coveralls.io/github/flux-framework/flux-core?branch=master)
+
 _NOTE: The interfaces of flux-core are being actively developed
 and are not yet stable._ The github issue tracker is the primary
 way to communicate with the developers.
 
 ### flux-core
 
-flux-core implements the communication layer, lowest level
+flux-core implements the communication layer and lowest level
 services and interfaces for the Flux resource manager framework.
 It consists of a distributed message broker and plug-in _comms modules_
 that implement various distributed services.
@@ -26,7 +29,7 @@ housekeeping tasks; _module loader_, which loads and unloads
 comms modules; and _reparent_, which allows overlay networks to be
 rewired on the fly.
 
-flux-core also includes the following services implemented as 
+flux-core also includes the following services implemented as
 comms modules: _kvs_, a distributed key-value store;  _live_,
 a service that monitors overlay network health and can rewire around
 failed broker instances; _modctl_, a distributed module control service;
@@ -61,11 +64,17 @@ Protocols and API's used in Flux will be documented as Flux RFC's.
 flux-core requires the following packages to build:
 ```
 zeromq4-devel >= 4.0.4   # built --with-libsodium
-czmq-devel >= 2.2.0
+czmq-devel >= 3.0.1
 munge-devel
 json-c-devel
 lua-5.1-devel
-asciidoc
+luaposix
+libhwloc-devel >= v1.11.0
+# for python bindings
+python-devel >= 2.7
+python-cffi >= 1.1
+# for man pages
+asciidoc     
 ```
 Spec files for building zeromq4 and czmq packages on a RHEL 6 based
 system are provided for your convenience in foreign/rpm.
@@ -82,16 +91,10 @@ make check
 ```
 #### Bootstrapping a Flux comms session
 
-A Flux comms session can be started for testing as follows.
-First, generate a set of (personal) CURVE keys for session security:
-```
-cd src/cmd
-./flux keygen
-Saving $HOME/.flux/curve/client
-Saving $HOME/.flux/curve/client_private
-Saving $HOME/.flux/curve/server
-Saving $HOME/.flux/curve/server_private
-```
+A Flux comms session is composed of a set of `flux-broker` processes
+that boostrap via PMI (e.g. under another resource manager), or locally
+via the `flux start` command.
+
 No administrator privilege is required to start a Flux comms
 session as described below.
 
@@ -99,31 +102,42 @@ session as described below.
 
 To start a Flux comms session (size = 8) on the local node:
 ```
-cd src/cmd
-./flux start --size 8
+src/cmd/flux start --size 8
 ```
 A shell is spawned that has its environment set up so that Flux
 commands can find the message broker socket.  When the shell exits,
-the session exits.  Log output will be written to the file `cmbd.log`.
+the session exits.
 
 ##### SLURM session
 
 To start a Flux comms session (size = 64) on a cluster using SLURM,
 first ensure that MUNGE is set up on your cluster, then:
 ```
-cd src/cmd
-./flux start -N 64
+srun --pty --mpi=none -N64 src/cmd/flux-broker
 ```
 The srun --pty option is used to connect to the rank 0 shell.
 When you exit this shell, the session terminates.
-Log output will be written to the file `cmbd.log`.
 
 #### Flux commands
 
-To view the available Flux commands:
+Within a session, the path to the `flux` command associated with the
+session broker will be prepended to `PATH`, so use of a relative or
+absolute path is no longer necessary.
+
+To see a list of commonly used commands run `flux` with no arguments,
+`flux help`, or `flux --help`
 ```
-cd src/cmd
-./flux -h
+$ flux --help
+Usage: flux [OPTIONS] COMMAND ARGS
+...
+
+The flux-core commands are:
+   help          Display manual for a sub-command
+   keygen        Generate CURVE keypairs for session security
+   start         Bootstrap a comms session interactively
+   kvs           Access the Flux the key-value store
+...
 ```
+
 Most of these have UNIX manual pages as `flux-<sub-command>(1)`,
 which can also be accessed using `./flux help <sub-command>`.
