@@ -117,7 +117,8 @@ given by:
 t = (H - h) * (_timeout_ / H)
 
 The tree height is calculated from static tree geometry returned by
-`flux_info(3)`.  The height of rank 0 is defined to be zero.
+`flux_get_rank(3)`, `flux_get_size(3)`, and `flux_get_arity(3)`.
+The height of rank 0 is defined to be zero.
 
 `flux_reduce_opt_get()` and `flux_reduce_opt_set()` may be used to get
 or set internal options.  The valid options are:
@@ -199,4 +200,4 @@ include::COPYRIGHT.adoc[]
 
 SEE ALSO
 --------
-flux_info(3)
+flux_get_rank(3)
