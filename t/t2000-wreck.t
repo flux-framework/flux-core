@@ -113,6 +113,18 @@ test_expect_success 'wreckrun: -n without -N sets nnnodes in kvs' '
 	n=$(flux kvs get lwj.${LWJ}.nnodes) &&
 	test "$n" = "${SIZE}"
 '
+test_expect_success 'wreckrun: -t1 -N${SIZE} sets ntasks in kvs' '
+	flux wreckrun -l -t1 -N${SIZE} /bin/true &&
+	LWJ=$(last_job_id) &&
+	n=$(flux kvs get lwj.${LWJ}.ntasks) &&
+	test "$n" = "${SIZE}"
+'
+test_expect_success 'wreckrun: -t1 -n${SIZE} sets nnodes in kvs' '
+	flux wreckrun -l -t1 -n${SIZE} /bin/true &&
+	LWJ=$(last_job_id) &&
+	n=$(flux kvs get lwj.${LWJ}.nnodes) &&
+	test "$n" = "${SIZE}"
+'
 
 cpus_allowed() {
 	${SHARNESS_TEST_SRCDIR}/scripts/cpus-allowed.lua "$@"
