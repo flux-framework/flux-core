@@ -1,0 +1,67 @@
+flux_msg_cmp(3)
+===============
+:doctype: manpage
+
+
+NAME
+----
+flux_msg_cmp - match a message
+
+
+SYNOPSIS
+--------
+ #include <flux/core.h>
+
+ struct flux_match {
+     int typemask;
+     uint32_t matchtag;
+     int bsize;
+     char *topic_glob;
+ };
+
+ bool flux_msg_cmp (const flux_msg_t *msg, struct flux_match match);
+
+DESCRIPTION
+-----------
+
+`flux_msg_match()` compares _msg_ to _match_ criteria.
+
+If _match.typemask_ is nonzero, the type of the message must match
+one of the types in the mask.
+
+If _match.matchtag_ is not FLUX_MATCHTAG_NONE, and _match.bsize_ == 0 or 1,
+then the message matchtag must be equal to _match.matchtag_.
+
+If _match.matchtag_ is not FLUX_MATCHTAG_NONE, and _match.bsize_ > 1,
+then the message matchtag must be within the range of _match.matchtag_
+and _match.matchtag_ + _match.bsize_ - 1 (inclusive).
+
+If _match.topic_glob_ is not NULL, then the message topic string must
+match _match.topic_glob_ according to the rules of shell wildcards.
+
+
+RETURN VALUE
+------------
+
+`flux_msg_cmp()` returns true on a match, otherwise false.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+
+SEE ALSO
+--------
+fnmatch(3)

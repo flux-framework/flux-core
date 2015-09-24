@@ -26,7 +26,8 @@ MAN3_FILES_PRIMARY = \
 	flux_handle_watcher_create.3 \
 	flux_timer_watcher_create.3 \
 	flux_idle_watcher_create.3 \
-	flux_msg_handler_create.3
+	flux_msg_handler_create.3 \
+	flux_msg_cmp.3
 
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section
