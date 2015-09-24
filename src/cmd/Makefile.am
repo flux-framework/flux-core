@@ -34,7 +34,6 @@ bin_PROGRAMS = flux
 #
 
 dist_fluxcmd_SCRIPTS = \
-	flux-screen \
 	flux-wreckrun \
 	flux-exec \
 	flux-topo \

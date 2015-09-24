@@ -62,7 +62,7 @@ local function lwj_return_code (f, wreck, id)
 end
 
 local function summarize_tasks_per_node (r)
-    local hostlist = require 'hostlist'
+    local hostlist = require 'flux.hostlist'
     local m = {}
     for msg, ids in pairs (r) do
         local h = hostlist.new()
