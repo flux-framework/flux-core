@@ -23,7 +23,8 @@ MAN3_FILES_PRIMARY = \
 	flux_fd_watcher_create.3 \
 	flux_watcher_start.3 \
 	flux_zmq_watcher_create.3 \
-	flux_handle_watcher_create.3
+	flux_handle_watcher_create.3 \
+	flux_timer_watcher_create.3
 
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section
@@ -62,7 +63,8 @@ MAN3_FILES_SECONDARY = \
 	flux_watcher_stop.3 \
 	flux_watcher_destroy.3 \
 	flux_zmq_watcher_get_zsock.3 \
-	flux_handle_watcher_get_flux.3
+	flux_handle_watcher_get_flux.3 \
+	flux_timer_watcher_reset.3
 
 ADOC_FILES  = $(MAN3_FILES_PRIMARY:%.3=%.adoc)
 XML_FILES   = $(MAN3_FILES_PRIMARY:%.3=%.xml)
@@ -120,6 +122,7 @@ flux_watcher_stop.3: flux_watcher_start.3
 flux_watcher_destroy.3: flux_watcher_start.3
 flux_zmq_watcher_get_zsock.3: flux_zmq_watcher_create.3
 flux_handle_watcher_get_flux.3: flux_handle_watcher_create.3
+flux_timer_watcher_reset.3: flux_timer_watcher_create.3
 
 flux_open.3: topen.c
 flux_send.3: tsend.c
