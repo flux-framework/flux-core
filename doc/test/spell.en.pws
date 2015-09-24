@@ -266,3 +266,13 @@ buflimit
 bufcount
 dmesg
 jitter
+zmq
+nowait
+zsock
+msgtype
+cmp
+fnmatch
+wildcards
+addvec
+delvec
+msghandler
