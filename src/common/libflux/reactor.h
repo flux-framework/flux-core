@@ -5,10 +5,11 @@
 
 #include "handle.h"
 
+/* Reactor
+ */
+
 typedef struct flux_reactor flux_reactor_t;
 
-/* flags for flux_reactor_run ()
- */
 enum {
     FLUX_REACTOR_NOWAIT = 1,  /* return after all new and outstanding */
                               /*     events have been hnadled */
@@ -22,80 +23,50 @@ void flux_reactor_destroy (flux_reactor_t *r);
 flux_reactor_t *flux_get_reactor (flux_t h);
 void flux_set_reactor (flux_t h, flux_reactor_t *r);
 
-/* Start a flux event reactor, with optional flags.
- * Returns 0 if flux_reactor_stop() terminated reactor; -1 if error did.
- */
 int flux_reactor_run (flux_reactor_t *r, int flags);
 
-/* Signal that the flux event reactor should stop.
- * This may be called from within a watcher.
- */
 void flux_reactor_stop (flux_reactor_t *r);
 void flux_reactor_stop_error (flux_reactor_t *r);
 
-/* General comments on watchers:
- * - It is safe to call a watcher's 'stop' function from a watcher callback.
- * - It is necessary to stop a watcher before destroying it.
- * - Once stopped, a watcher is no longer associated with the flux handle
- *   and must be destroyed independently.
- * - A watcher may be started/stopped more than once.
- * - Starting a started watcher, stopping a stopped watcher, or destroying
- *   a NULL watcher have no effect.
+/* Watchers
  */
 
 typedef struct flux_watcher flux_watcher_t;
+
 typedef void (*flux_watcher_f)(flux_reactor_t *r, flux_watcher_t *w,
                                int revents, void *arg);
-void flux_watcher_destroy (flux_watcher_t *w);
+
 void flux_watcher_start (flux_watcher_t *w);
 void flux_watcher_stop (flux_watcher_t *w);
+void flux_watcher_destroy (flux_watcher_t *w);
 
-/* handle - watch a flux_t handle
- */
 flux_watcher_t *flux_handle_watcher_create (flux_reactor_t *r,
                                             flux_t h, int events,
                                             flux_watcher_f cb, void *arg);
 flux_t flux_handle_watcher_get_flux (flux_watcher_t *w);
 
-/* fd - watch a file descriptor
- */
 flux_watcher_t *flux_fd_watcher_create (flux_reactor_t *r, int fd, int events,
                                         flux_watcher_f cb, void *arg);
 int flux_fd_watcher_get_fd (flux_watcher_t *w);
 
-/* zmq - watch a zeromq socket.
- */
 flux_watcher_t *flux_zmq_watcher_create (flux_reactor_t *r,
                                          void *zsock, int events,
                                          flux_watcher_f cb, void *arg);
 void *flux_zmq_watcher_get_zsock (flux_watcher_t *w);
 
-/* Timer - set a timer
- * Create/destroy/start/stop "timer watchers".
- * A timer is set to trigger 'after' seconds from its start time.  If 'after'
- * is zero, the timer triggers immediately.  If 'repeat' is zero, the timer
- * only triggers once and is then automatically stopped, otherwise it triggers
- * again every 'repeat' seconds.
- */
-
 flux_watcher_t *flux_timer_watcher_create (flux_reactor_t *r,
                                            double after, double repeat,
                                            flux_watcher_f cb, void *arg);
+
 void flux_timer_watcher_reset (flux_watcher_t *w, double after, double repeat);
 
 
-/* Prepare - run immediately before blocking.
- */
 flux_watcher_t *flux_prepare_watcher_create (flux_reactor_t *r,
                                              flux_watcher_f cb, void *arg);
 
-/* Check - run immediately after blocking
- */
 flux_watcher_t *flux_check_watcher_create (flux_reactor_t *r,
                                           flux_watcher_f cb, void *arg);
 
-/* Idle - always run (event loop never blocks)
- */
 flux_watcher_t *flux_idle_watcher_create (flux_reactor_t *r,
                                           flux_watcher_f cb, void *arg);
 

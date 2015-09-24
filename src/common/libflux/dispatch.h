@@ -4,28 +4,6 @@
 #include "message.h"
 #include "handle.h"
 
-
-/* Message dispatch
- * Create/destroy/start/stop "message watchers".
- * A message watcher handles messages received on the handle matching 'match'.
- * Message watchers are special compared to the other watchers as they
- * combine an internal "handle watcher" that reads new messages from the
- * handle as they arrive, and a dispatcher that hands the message to a
- * matching message watcher.
- *
- * If multiple message watchers match a given message, the most recently
- * registered will handle it.  Thus it is possible to register handlers for
- * "svc.*" then "svc.foo", and the former will match all methods but "foo".
- * If a request message arrives that is not matched by a message watcher,
- * the reactor sends a courtesy ENOSYS response.
- *
- * If the handle was created with FLUX_O_COPROC, message watchers will be
- * run in a coprocess context.  If they make an RPC call or otherwise call
- * flux_recv(), the reactor can run, handling other tasks until the desired
- * message arrives, then the message watcher is restarted.
- * Currently only message watchers run as coprocesses.
- */
-
 typedef struct flux_msg_handler flux_msg_handler_t;
 
 typedef void (*flux_msg_handler_f)(flux_t h, flux_msg_handler_t *w,
@@ -41,15 +19,6 @@ void flux_msg_handler_start (flux_msg_handler_t *w);
 void flux_msg_handler_stop (flux_msg_handler_t *w);
 
 
-/* Convenience functions for bulk add/remove of message watchers.
- * addvec creates/adds a table of message watchers
- * (created watchers are then stored in the table)
- * delvec stops/destroys the table of message watchers.
- * addvec returns 0 on success, -1 on failure with errno set.
- * Watchers are added beginning with tab[0] (see multiple match comment above).
- * tab[] must be terminated with FLUX_MSGHANDLER_TABLE_END.
- */
-
 struct flux_msg_handler_spec {
     int typemask;
     char *topic_glob;
@@ -61,6 +30,7 @@ struct flux_msg_handler_spec {
 int flux_msg_handler_addvec (flux_t h, struct flux_msg_handler_spec tab[],
                              void *arg);
 void flux_msg_handler_delvec (struct flux_msg_handler_spec tab[]);
+
 
 /* Give control back to the reactor until a message matching 'match'
  * is queued in the handle.  This will return -1 with errno = EINVAL
