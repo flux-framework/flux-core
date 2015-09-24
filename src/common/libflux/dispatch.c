@@ -332,6 +332,7 @@ void flux_msg_handler_destroy (flux_msg_handler_t *w)
 {
     if (w) {
         assert (w->magic == HANDLER_MAGIC);
+        flux_msg_handler_stop (w);
         if (w->match.topic_glob)
             free (w->match.topic_glob);
         if (w->coproc)
