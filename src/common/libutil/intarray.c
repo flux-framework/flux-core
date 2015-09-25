@@ -26,53 +26,68 @@
 #include "config.h"
 #endif
 #include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <sys/param.h>
 
-#include "env.h"
-#include "xzmalloc.h"
 #include "intarray.h"
 
-int env_getint (char *name, int dflt)
+static int count_delimiters (const char *s, char delimiter)
 {
-    char *ev = getenv (name);
-    return ev ? strtol (ev, NULL, 0) : dflt;
-}
+    char *p = (char *)s;
+    int count = 0;
 
-bool env_getbool (char *name, bool dflt)
-{
-    char *ev = getenv (name);
-    if (ev && (ev[0] == 't' || ev[0] == 'T' || strtol (ev, NULL, 0) != 0))
-        return true;
-    return false;
-}
-
-char *env_getstr (char *name, char *dflt)
-{
-    char *ev = getenv (name);
-    return ev ? xstrdup (ev) : xstrdup (dflt);
-}
-
-int env_getints (char *name, int **iap, int *lenp, int dflt_ia[], int dflt_len)
-{
-    char *s = getenv (name);
-    int *ia = NULL;
-    int len;
-
-    if (s) {
-        if (intarray_create (s, &ia, &len) < 0)
-            return -1;
-    } else {
-        ia = malloc (dflt_len * sizeof (int));
-        if (!ia)
-            return -1;
-        for (len = 0; len < dflt_len; len++)
-            ia[len] = dflt_ia[len];
+    while ((p = strchr (p, delimiter))) {
+        count++;
+        p++;
     }
-    if (lenp)
-        *lenp = len;
-    if (iap)
-        *iap = ia;
-    else
-        free(ia);
+    return count;
+}
+
+static int nextint (char **s, char delimiter, int *val)
+{
+    char *endptr;
+    int i;
+
+    i = strtol (*s, &endptr, 0);
+    if (i > INT_MAX || i < INT_MIN) {
+        errno = ERANGE;
+        return -1;
+    }
+    if (endptr == *s) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (*endptr == delimiter)
+        *s = endptr + 1;
+    else if (*endptr == '\0')
+        *s = endptr;
+    else {
+        errno = EINVAL;
+        return -1;
+    }
+    *val = i;
+    return 0;
+}
+
+int intarray_create (const char *s, int **ia, int *ia_count)
+{
+    char *p = (char *)s;
+    int i, count, *a;
+
+    count = count_delimiters (s, ',') + 1;
+    if (!(a = malloc (sizeof (a[0]) * count))) {
+        errno = ENOMEM;
+        return -1;
+    }
+    for (i = 0; i < count; i++) {
+        if (nextint (&p, ',', &a[i]) < 0) {
+            free (a);
+            return -1;
+        }
+    }
+    *ia = a;
+    *ia_count = count;
     return 0;
 }
 
