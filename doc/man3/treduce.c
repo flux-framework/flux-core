@@ -14,9 +14,9 @@ struct context {
 int itemweight (void *item)
 {
     int count = 1;
-    nodeset_t nodeset;
+    nodeset_t *nodeset;
 
-    if ((nodeset = nodeset_new_str (item))) {
+    if ((nodeset = nodeset_create_string (item))) {
         count = nodeset_count (nodeset);
         nodeset_destroy (nodeset);
     }
@@ -53,19 +53,19 @@ void forward (flux_reduce_t *r, int batchnum, void *arg)
 
 void reduce (flux_reduce_t *r, int batchnum, void *arg)
 {
-    nodeset_t nodeset = NULL;
+    nodeset_t *nodeset = NULL;
     char *item;
 
     if ((item = flux_reduce_pop (r))) {
-        nodeset = nodeset_new_str (item);
+        nodeset = nodeset_create_string (item);
         free (item);
     }
     if (nodeset) {
         while ((item = flux_reduce_pop (r))) {
-            nodeset_add_str (nodeset, item);
+            nodeset_add_string (nodeset, item);
             free (item);
         }
-        item = xstrdup (nodeset_str (nodeset));
+        item = xstrdup (nodeset_string (nodeset));
         if (flux_reduce_push (r, item) < 0)
             free (item);
         nodeset_destroy (nodeset);
