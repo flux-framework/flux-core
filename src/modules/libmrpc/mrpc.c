@@ -70,8 +70,8 @@ struct flux_mrpc_struct {
     int nprocs;
     uint32_t sender;
     int vers;
-    nodeset_t ns;
-    nodeset_itr_t ns_itr;
+    nodeset_t *ns;
+    nodeset_iterator_t *ns_itr;
     bool client;
 };
 
@@ -90,7 +90,7 @@ flux_mrpc_t *flux_mrpc_create (flux_t h, const char *dest)
     if (flux_get_rank (h, &f->sender) < 0)
        goto error; 
     f->dest = xstrdup (dest);
-    if (!(f->ns = nodeset_new_str (dest)) || nodeset_count (f->ns) == 0
+    if (!(f->ns = nodeset_create_string (dest)) || nodeset_count (f->ns) == 0
                                           || nodeset_max (f->ns) > maxid) {
         errno = EINVAL;
         goto error;
@@ -123,7 +123,7 @@ void flux_mrpc_destroy (flux_mrpc_t *f)
     if (f->uuid)
         zuuid_destroy (&f->uuid);
     if (f->ns_itr)
-        nodeset_itr_destroy (f->ns_itr);
+        nodeset_iterator_destroy (f->ns_itr);
     if (f->ns)
         nodeset_destroy (f->ns);
     if (f->dest)
@@ -263,7 +263,7 @@ int flux_mrpc_next_outarg (flux_mrpc_t *f)
     uint32_t r = -1;
 
     if (!f->ns_itr)
-        f->ns_itr = nodeset_itr_new (f->ns);
+        f->ns_itr = nodeset_iterator_create (f->ns);
     if (f->ns_itr)
         r = nodeset_next (f->ns_itr);
     if (r == NODESET_EOF)
@@ -274,9 +274,9 @@ int flux_mrpc_next_outarg (flux_mrpc_t *f)
 void flux_mrpc_rewind_outarg (flux_mrpc_t *f)
 {
     if (!f->ns_itr)
-        f->ns_itr = nodeset_itr_new (f->ns);
+        f->ns_itr = nodeset_iterator_create (f->ns);
     else
-        nodeset_itr_rewind (f->ns_itr);
+        nodeset_iterator_rewind (f->ns_itr);
 }
 
 int flux_mrpc (flux_mrpc_t *f, const char *fmt, ...)
@@ -323,14 +323,14 @@ flux_mrpc_t *flux_mrpc_create_fromevent_obj (flux_t h, json_object *o)
     flux_mrpc_t *f = NULL;
     const char *dest, *path;
     int sender, vers;
-    nodeset_t ns = NULL;
+    nodeset_t *ns = NULL;
     uint32_t rank;
 
     if (util_json_object_get_string (o, "dest", &dest) < 0
             || util_json_object_get_string (o, "path", &path) < 0
             || util_json_object_get_int (o, "sender", &sender) < 0
             || util_json_object_get_int (o, "vers", &vers) < 0
-            || !(ns = nodeset_new_str (dest))) {
+            || !(ns = nodeset_create_string (dest))) {
         errno = EPROTO;
         goto done;
     }
