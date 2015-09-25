@@ -90,10 +90,10 @@
 typedef enum { CS_OK, CS_SLOW, CS_FAIL, CS_UNKNOWN } cstate_t;
 
 typedef struct {
-    nodeset_t ok;
-    nodeset_t fail;
-    nodeset_t slow;
-    nodeset_t unknown;
+    nodeset_t *ok;
+    nodeset_t *fail;
+    nodeset_t *slow;
+    nodeset_t *unknown;
 } ns_t;
 
 typedef struct {
@@ -591,10 +591,10 @@ static ns_t *ns_create (const char *ok, const char *fail,
 {
     ns_t *ns = xzmalloc (sizeof (*ns));
 
-    ns->ok = nodeset_new_str (ok);
-    ns->fail = nodeset_new_str (fail);
-    ns->slow = nodeset_new_str (slow);
-    ns->unknown = nodeset_new_str (unknown);
+    ns->ok = nodeset_create_string (ok);
+    ns->fail = nodeset_create_string (fail);
+    ns->slow = nodeset_create_string (slow);
+    ns->unknown = nodeset_create_string (unknown);
     if (!ns->ok || !ns->fail|| !ns->slow || !ns->unknown)
         oom ();
     return ns;
@@ -604,10 +604,10 @@ static ns_t *ns_create (const char *ok, const char *fail,
 static JSON ns_tojson (ns_t *ns)
 {
     JSON o = Jnew ();
-    Jadd_str (o, "ok", nodeset_str (ns->ok));
-    Jadd_str (o, "fail", nodeset_str (ns->fail));
-    Jadd_str (o, "slow", nodeset_str (ns->slow));
-    Jadd_str (o, "unknown", nodeset_str (ns->unknown));
+    Jadd_str (o, "ok", nodeset_string (ns->ok));
+    Jadd_str (o, "fail", nodeset_string (ns->fail));
+    Jadd_str (o, "slow", nodeset_string (ns->slow));
+    Jadd_str (o, "unknown", nodeset_string (ns->unknown));
     return o;
 }
 
@@ -616,10 +616,10 @@ static ns_t *ns_fromjson (JSON o)
     ns_t *ns = xzmalloc (sizeof (*ns));
     const char *s;
 
-    if (!Jget_str (o, "ok", &s)      || !(ns->ok      = nodeset_new_str (s))
-     || !Jget_str (o, "unknown", &s) || !(ns->unknown = nodeset_new_str (s))
-     || !Jget_str (o, "slow", &s)    || !(ns->slow    = nodeset_new_str (s))
-     || !Jget_str (o, "fail", &s)    || !(ns->fail    = nodeset_new_str (s))) {
+    if (!Jget_str (o, "ok", &s)      || !(ns->ok      = nodeset_create_string (s))
+     || !Jget_str (o, "unknown", &s) || !(ns->unknown = nodeset_create_string (s))
+     || !Jget_str (o, "slow", &s)    || !(ns->slow    = nodeset_create_string (s))
+     || !Jget_str (o, "fail", &s)    || !(ns->fail    = nodeset_create_string (s))) {
         ns_destroy (ns);
         return NULL;
     }
@@ -691,13 +691,13 @@ done:
 static void ns_chg_one (ctx_t *ctx, uint32_t r, cstate_t from, cstate_t to)
 {
     if (from == CS_UNKNOWN)
-        nodeset_del_rank (ctx->ns->unknown, r);
+        nodeset_delete_rank (ctx->ns->unknown, r);
     if (from == CS_UNKNOWN || from == CS_FAIL)
-        nodeset_del_rank (ctx->ns->fail, r);
+        nodeset_delete_rank (ctx->ns->fail, r);
     if (from == CS_UNKNOWN || from == CS_SLOW)
-        nodeset_del_rank (ctx->ns->slow, r);
+        nodeset_delete_rank (ctx->ns->slow, r);
     if (from == CS_UNKNOWN || from == CS_OK)
-        nodeset_del_rank (ctx->ns->ok, r);
+        nodeset_delete_rank (ctx->ns->ok, r);
 
     switch (to) {
         case CS_OK:
