@@ -38,7 +38,7 @@
 #include "hello.h"
 
 struct hello_struct {
-    nodeset_t nodeset;
+    nodeset_t *nodeset;
     uint32_t count;
     double timeout;
     hello_cb_f cb;
@@ -103,7 +103,7 @@ const char *hello_get_nodeset (hello_t *hello)
 {
     if (!hello->nodeset)
         return NULL;
-    return nodeset_str (hello->nodeset);
+    return nodeset_string (hello->nodeset);
 }
 
 static int hello_add_rank (hello_t *hello, uint32_t rank)
@@ -113,7 +113,7 @@ static int hello_add_rank (hello_t *hello, uint32_t rank)
     if (flux_get_size (hello->h, &size) < 0)
         return -1;
     if (!hello->nodeset)
-        hello->nodeset = nodeset_new_size (size);
+        hello->nodeset = nodeset_create_size (size);
     if (!nodeset_add_rank (hello->nodeset, rank)) {
         errno = EPROTO;
         return -1;
