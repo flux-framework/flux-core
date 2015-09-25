@@ -51,7 +51,7 @@ static int io_cb (struct subprocess *p, const char *json_str)
 {
     ok (p != NULL, "io_cb: valid subprocess");
     ok (json_str != NULL, "io_cb: valid output");
-    note ("%s", json_str);
+    diag ("%s", json_str);
     return (0);
 }
 
@@ -77,7 +77,7 @@ static int signal_cb (zloop_t *zl, zmq_pollitem_t *item, void *arg)
     if (read (item->fd, &fdsi, sizeof (fdsi)) < 0)
         return (-1);
 
-    note ("signal_cb signo = %d", fdsi.ssi_signo);
+    diag ("signal_cb signo = %d", fdsi.ssi_signo);
     if (fdsi.ssi_signo == SIGTERM)
         return (-1);
 
