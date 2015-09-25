@@ -42,6 +42,7 @@ struct dispatch {
     zlist_t *waiters;  /* waiting coproc watchers are also on this list */
     flux_msg_handler_t *current;
     flux_watcher_t *w;
+    int usecount;
 };
 
 #define HANDLER_MAGIC 0x44433322
@@ -62,15 +63,26 @@ struct flux_msg_handler {
 static void handle_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg);
 
+static void dispatch_usecount_decr (struct dispatch *d)
+{
+    if (d && --d->usecount == 0) {
+        flux_watcher_destroy (d->w);
+        zlist_destroy (&d->handlers);
+        zlist_destroy (&d->waiters);
+        free (d);
+    }
+}
+
+static void dispatch_usecount_incr (struct dispatch *d)
+{
+    d->usecount++;
+}
+
 
 static void dispatch_destroy (void *arg)
 {
     struct dispatch *d = arg;
-
-    flux_watcher_destroy (d->w);
-    zlist_destroy (&d->handlers);
-    zlist_destroy (&d->waiters);
-    free (d);
+    dispatch_usecount_decr (d);
 }
 
 static struct dispatch *dispatch_get (flux_t h)
@@ -87,6 +99,7 @@ static struct dispatch *dispatch_get (flux_t h)
         d->w = flux_handle_watcher_create (r, h, FLUX_POLLIN, handle_cb, d);
         if (!d->w)
             oom ();
+        d->usecount = 1;
         flux_aux_set (h, "flux::dispatch", d, dispatch_destroy);
     }
     return d;
@@ -348,6 +361,7 @@ void flux_msg_handler_destroy (flux_msg_handler_t *w)
         if (w->arg_free)
             w->arg_free (w->arg);
         w->magic = ~HANDLER_MAGIC;
+        dispatch_usecount_decr (w->d);
         free (w);
     }
 }
@@ -364,6 +378,7 @@ flux_msg_handler_t *flux_msg_handler_create (flux_t h,
     w->fn = cb;
     w->arg = arg;
     w->d = d;
+    dispatch_usecount_incr (d);
 
     return w;
 }
