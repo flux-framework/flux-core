@@ -777,7 +777,7 @@ static inline void delete_jobinfo (flux_t h, int64_t jobid)
     free (key);
 }
 
-static void job_state_cb (flux_t h, flux_msg_watcher_t *w, 
+static void job_state_cb (flux_t h, flux_msg_handler_t *w, 
                           const flux_msg_t *msg, void *arg)  
 {
     int64_t jobid = -1;
@@ -816,7 +816,7 @@ done:
  *                    Public Job Status and Control API                       *
  *                                                                            *
  ******************************************************************************/
-static struct flux_msghandler htab[] = {
+static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_EVENT,     "wreck.state.*", job_state_cb},
     { FLUX_MSGTYPE_EVENT,     "jsc.state.*",   job_state_cb},
       FLUX_MSGHANDLER_TABLE_END
@@ -842,7 +842,7 @@ int jsc_notify_status_obj (flux_t h, jsc_handler_obj_f func, void *d)
         rc = -1;
         goto done;
     }
-    if (flux_msg_watcher_addvec (h, htab, (void *)ctx) < 0) {
+    if (flux_msg_handler_addvec (h, htab, (void *)ctx) < 0) {
         flux_log (h, LOG_ERR, "registering resource event handler: %s",
                   strerror (errno));
         rc = -1;

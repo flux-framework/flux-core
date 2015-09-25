@@ -52,9 +52,10 @@
 
 typedef struct {
     int listen_fd;
-    flux_fd_watcher_t *listen_w;
+    flux_watcher_t *listen_w;
     zlist_t *clients;
     flux_t h;
+    flux_reactor_t *reactor;
     uid_t session_owner;
     zhash_t *subscriptions;
 } ctx_t;
@@ -70,8 +71,8 @@ typedef struct {
 
 typedef struct {
     int fd;
-    flux_fd_watcher_t *inw;
-    flux_fd_watcher_t *outw;
+    flux_watcher_t *inw;
+    flux_watcher_t *outw;
     struct flux_msg_iobuf inbuf;
     struct flux_msg_iobuf outbuf;
     zlist_t *outqueue;  /* queue of outbound flux_msg_t */
@@ -90,9 +91,9 @@ struct disconnect_notify {
 };
 
 static void client_destroy (client_t *c);
-static void client_read_cb (flux_t h, flux_fd_watcher_t *w, int fd,
+static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg);
-static void client_write_cb (flux_t h, flux_fd_watcher_t *w, int fd,
+static void client_write_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg);
 
 static void freectx (void *arg)
@@ -110,6 +111,8 @@ static ctx_t *getctx (flux_t h)
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
         ctx->h = h;
+        if (!(ctx->reactor = flux_get_reactor (h)))
+            err_exit ("flux_get_reactor");
         if (!(ctx->clients = zlist_new ()))
             oom ();
         if (!(ctx->subscriptions = zhash_new ()))
@@ -164,13 +167,15 @@ static client_t * client_create (ctx_t *ctx, int fd)
                   c->ucred.uid, (int)c->ucred.pid);
         goto error;
     }
-    c->inw = flux_fd_watcher_create (fd, FLUX_POLLIN, client_read_cb, c);
-    c->outw = flux_fd_watcher_create (fd, FLUX_POLLOUT, client_write_cb, c);
+    c->inw = flux_fd_watcher_create (ctx->reactor,
+                                     fd, FLUX_POLLIN, client_read_cb, c);
+    c->outw = flux_fd_watcher_create (ctx->reactor,
+                                      fd, FLUX_POLLOUT, client_write_cb, c);
     if (!c->inw || !c->outw) {
         flux_log (h, LOG_ERR, "flux_fd_watcher_create: %s", strerror (errno));
         goto error;
     }
-    flux_fd_watcher_start (h, c->inw);
+    flux_watcher_start (c->inw);
     flux_msg_iobuf_init (&c->inbuf);
     flux_msg_iobuf_init (&c->outbuf);
     if (set_nonblock (c->fd, true) < 0) {
@@ -193,7 +198,7 @@ static int client_send_try (client_t *c)
             if (errno != EWOULDBLOCK && errno != EAGAIN)
                 return -1;
             //flux_log (c->ctx->h, LOG_DEBUG, "send: client not ready");
-            flux_fd_watcher_start (c->ctx->h, c->outw);
+            flux_watcher_start (c->outw);
             errno = 0;
         } else {
             msg = zlist_pop (c->outqueue);
@@ -414,8 +419,6 @@ done:
 
 static void client_destroy (client_t *c)
 {
-    ctx_t *ctx = c->ctx;
-
     if (c->disconnect_notify) {
         struct disconnect_notify *d;
 
@@ -435,12 +438,12 @@ static void client_destroy (client_t *c)
             flux_msg_destroy (msg);
         zlist_destroy (&c->outqueue);
     }
-    flux_fd_watcher_stop (ctx->h, c->outw);
-    flux_fd_watcher_destroy (c->outw);
+    flux_watcher_stop (c->outw);
+    flux_watcher_destroy (c->outw);
     flux_msg_iobuf_clean (&c->outbuf);
 
-    flux_fd_watcher_stop (ctx->h, c->inw);
-    flux_fd_watcher_destroy (c->inw);
+    flux_watcher_stop (c->inw);
+    flux_watcher_destroy (c->inw);
     flux_msg_iobuf_clean (&c->inbuf);
 
     if (c->fd != -1)
@@ -449,7 +452,7 @@ static void client_destroy (client_t *c)
     free (c);
 }
 
-static void client_write_cb (flux_t h, flux_fd_watcher_t *w, int fd,
+static void client_write_cb (flux_reactor_t *r, flux_watcher_t *w,
                              int revents, void *arg)
 {
     client_t *c = arg;
@@ -462,7 +465,7 @@ static void client_write_cb (flux_t h, flux_fd_watcher_t *w, int fd,
         //flux_log (h, LOG_DEBUG, "send: client ready");
     }
     if (zlist_size (c->outqueue) == 0)
-        flux_fd_watcher_stop (h, w);
+        flux_watcher_stop (w);
     return;
 disconnect:
     zlist_remove (c->ctx->clients, c);
@@ -492,7 +495,7 @@ static bool internal_request (client_t *c, const flux_msg_t *msg)
                     || flux_msg_set_matchtag (rmsg, matchtag) < 0)
         flux_log (c->ctx->h, LOG_ERR, "%s: encoding response: %s",
                   __FUNCTION__, strerror (errno));
-        
+
     else if (client_send_nocopy (c, &rmsg) < 0)
         flux_log (c->ctx->h, LOG_ERR, "%s: client_send_nocopy: %s",
                   __FUNCTION__, strerror (errno));
@@ -500,10 +503,11 @@ static bool internal_request (client_t *c, const flux_msg_t *msg)
     return true;
 }
 
-static void client_read_cb (flux_t h, flux_fd_watcher_t *w, int fd,
+static void client_read_cb (flux_reactor_t *r, flux_watcher_t *w,
                             int revents, void *arg)
 {
     client_t *c = arg;
+    flux_t h = c->ctx->h;
     flux_msg_t *msg = NULL;
     int type;
 
@@ -564,7 +568,7 @@ disconnect:
  * Look up the sender uuid in clients hash and deliver.
  * Responses for disconnected clients are silently discarded.
  */
-static void response_cb (flux_t h, flux_msg_watcher_t *w,
+static void response_cb (flux_t h, flux_msg_handler_t *w,
                          const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -606,7 +610,7 @@ done:
 /* Received an event message from broker.
  * Find all subscribers and deliver.
  */
-static void event_cb (flux_t h, flux_msg_watcher_t *w,
+static void event_cb (flux_t h, flux_msg_handler_t *w,
                       const flux_msg_t *msg, void *arg)
 {
     ctx_t *ctx = arg;
@@ -636,10 +640,12 @@ static void event_cb (flux_t h, flux_msg_watcher_t *w,
 
 /* Accept a connection from new client.
  */
-static void listener_cb (flux_t h, flux_fd_watcher_t *w,
-                         int fd, int revents, void *arg)
+static void listener_cb (flux_reactor_t *r, flux_watcher_t *w,
+                         int revents, void *arg)
 {
+    int fd = flux_fd_watcher_get_fd (w);
     ctx_t *ctx = arg;
+    flux_t h = ctx->h;
 
     if (revents & FLUX_POLLIN) {
         client_t *c;
@@ -697,7 +703,7 @@ error_close:
     return -1;
 }
 
-static struct flux_msghandler htab[] = {
+static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_EVENT,     NULL,          event_cb },
     { FLUX_MSGTYPE_RESPONSE,  NULL,          response_cb },
     FLUX_MSGHANDLER_TABLE_END
@@ -727,31 +733,31 @@ int mod_main (flux_t h, int argc, char **argv)
      */
     if ((ctx->listen_fd = listener_init (ctx, sockpath)) < 0)
         goto done;
-    if (!(ctx->listen_w = flux_fd_watcher_create (ctx->listen_fd,
+    if (!(ctx->listen_w = flux_fd_watcher_create (ctx->reactor, ctx->listen_fd,
                                            FLUX_POLLIN | FLUX_POLLERR,
                                            listener_cb, ctx))) {
         flux_log (h, LOG_ERR, "flux_fd_watcher_create: %s", strerror (errno));
         goto done;
     }
-    flux_fd_watcher_start (h, ctx->listen_w);
+    flux_watcher_start (ctx->listen_w);
 
     /* Create/start event/response message watchers
      */
-    if (flux_msg_watcher_addvec (h, htab, ctx) < 0) {
+    if (flux_msg_handler_addvec (h, htab, ctx) < 0) {
         flux_log (h, LOG_ERR, "flux_msg_watcher_addvec: %s", strerror (errno));
         goto done;
     }
 
     /* Start reactor
      */
-    if (flux_reactor_start (h) < 0) {
-        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
+    if (flux_reactor_run (ctx->reactor, 0) < 0) {
+        flux_log (h, LOG_ERR, "flux_reactor_run: %s", strerror (errno));
         goto done;
     }
     rc = 0;
 done:
-    flux_msg_watcher_delvec (h, htab);
-    flux_fd_watcher_destroy (ctx->listen_w);
+    flux_msg_handler_delvec (htab);
+    flux_watcher_destroy (ctx->listen_w);
     if (ctx->listen_fd >= 0) {
         if (close (ctx->listen_fd) < 0)
             flux_log (h, LOG_ERR, "close listen_fd: %s", strerror (errno));

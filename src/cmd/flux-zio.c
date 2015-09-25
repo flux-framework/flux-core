@@ -214,7 +214,7 @@ static int run_zs_ready_cb (flux_t h, void *zs, short revents, void *arg)
 
     if (!zmsg || !(stream = zmsg_popstr (zmsg)) || strlen (stream) == 0
               || !(json_str = zmsg_popstr (zmsg)) || strlen (json_str) == 0) {
-        flux_reactor_stop (h);
+        flux_reactor_stop (flux_get_reactor (h));
         rc = 0;
         goto done;
     }
@@ -417,7 +417,7 @@ static void attach_stdout_ready_cb (kz_t *kz, void *arg)
     } while (len > 0);
     if (len == 0) { /* EOF */
         if (--ctx->readers == 0)
-            flux_reactor_stop (ctx->h);
+            flux_reactor_stop (flux_get_reactor (ctx->h));
     }
 }
 
@@ -439,7 +439,7 @@ static void attach_stderr_ready_cb (kz_t *kz, void *arg)
     } while (len > 0);
     if (len == 0) { /* EOF */
         if (--ctx->readers == 0)
-            flux_reactor_stop (ctx->h);
+            flux_reactor_stop (flux_get_reactor (ctx->h));
     }
 }
 

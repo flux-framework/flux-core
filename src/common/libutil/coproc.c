@@ -55,7 +55,7 @@ struct coproc_struct {
     int magic;
     ucontext_t parent;
     ucontext_t uc;
-    coproc_cb_t cb;
+    coproc_f cb;
     size_t ssize;
     size_t pagesize;
     uint8_t *stack;
@@ -66,7 +66,7 @@ struct coproc_struct {
 
 static const size_t default_stack_size = 2*1024*1024; /* 2mb stack */
 
-void coproc_destroy (coproc_t c)
+void coproc_destroy (coproc_t *c)
 {
     if (c) {
         assert (c->magic == COPROC_MAGIC);
@@ -79,7 +79,7 @@ void coproc_destroy (coproc_t c)
 
 static void trampoline (const unsigned int high, const unsigned int low)
 {
-    coproc_t c = (coproc_t)((((uintptr_t)high) << 32) | low);
+    coproc_t *c = (coproc_t *)((((uintptr_t)high) << 32) | low);
     assert (c->magic == COPROC_MAGIC);
 
     c->rc = c->cb (c, c->arg);
@@ -95,9 +95,9 @@ static size_t compute_size (size_t l, size_t pagesize)
     return ((l + pagesize - 1) & ~(pagesize - 1));
 }
 
-coproc_t coproc_create (coproc_cb_t cb)
+coproc_t *coproc_create (coproc_f cb)
 {
-    coproc_t c = xzmalloc (sizeof (*c));
+    coproc_t *c = xzmalloc (sizeof (*c));
     int errnum;
 
     c->magic = COPROC_MAGIC;
@@ -125,7 +125,7 @@ error:
     return NULL;
 }
 
-int coproc_yield (coproc_t c)
+int coproc_yield (coproc_t *c)
 {
     assert (c->magic == COPROC_MAGIC);
     if (c->state != CS_RUNNING) {
@@ -136,7 +136,7 @@ int coproc_yield (coproc_t c)
     return swapcontext (&c->uc, &c->parent);
 }
 
-int coproc_resume (coproc_t c)
+int coproc_resume (coproc_t *c)
 {
     assert (c->magic == COPROC_MAGIC);
     if (c->state != CS_YIELDED) {
@@ -147,7 +147,7 @@ int coproc_resume (coproc_t c)
     return swapcontext (&c->parent, &c->uc);
 }
 
-int coproc_start (coproc_t c, void *arg)
+int coproc_start (coproc_t *c, void *arg)
 {
     assert (c->magic == COPROC_MAGIC);
 
@@ -165,13 +165,13 @@ int coproc_start (coproc_t c, void *arg)
     return swapcontext (&c->parent, &c->uc);
 }
 
-bool coproc_started (coproc_t c)
+bool coproc_started (coproc_t *c)
 {
     assert (c->magic == COPROC_MAGIC);
     return (c->state == CS_RUNNING || c->state == CS_YIELDED);
 }
 
-bool coproc_returned (coproc_t c, int *rc)
+bool coproc_returned (coproc_t *c, int *rc)
 {
     assert (c->magic == COPROC_MAGIC);
     if (rc && c->state == CS_RETURNED)
@@ -179,7 +179,7 @@ bool coproc_returned (coproc_t c, int *rc)
     return (c->state == CS_RETURNED);
 }
 
-size_t coproc_get_stacksize (coproc_t c)
+size_t coproc_get_stacksize (coproc_t *c)
 {
     return c->ssize - 2*c->pagesize;
 }

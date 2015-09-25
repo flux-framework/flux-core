@@ -33,6 +33,7 @@
 #include "info.h"
 #include "rpc.h"
 #include "reactor.h"
+#include "dispatch.h"
 
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libutil/jsonutil.h"
@@ -44,7 +45,7 @@ struct flux_rpc_struct {
     flux_t h;
     flux_then_f then_cb;
     void *then_arg;
-    flux_msg_watcher_t *w;
+    flux_msg_handler_t *w;
     uint32_t *nodemap;          /* nodeid indexed by matchtag */
     flux_msg_t *rx_msg;
     flux_msg_t *rx_msg_consumed;
@@ -59,8 +60,8 @@ void flux_rpc_destroy (flux_rpc_t *rpc)
 {
     if (rpc) {
         if (rpc->w) {
-            flux_msg_watcher_stop (rpc->h, rpc->w);
-            flux_msg_watcher_destroy (rpc->w);
+            flux_msg_handler_stop (rpc->w);
+            flux_msg_handler_destroy (rpc->w);
         }
         if (rpc->m.matchtag != FLUX_MATCHTAG_NONE) {
             /* FIXME: we cannot safely return matchtags to the pool here
@@ -180,7 +181,7 @@ done:
  * The reactor will repeatedly call the continuation (level-triggered)
  * until all received responses are consumed.
  */
-static void rpc_cb (flux_t h, flux_msg_watcher_t *w,
+static void rpc_cb (flux_t h, flux_msg_handler_t *w,
                     const flux_msg_t *msg, void *arg)
 {
     flux_rpc_t *rpc = arg;
@@ -201,7 +202,7 @@ static void rpc_cb (flux_t h, flux_msg_watcher_t *w,
     }
 done: /* no good way to report flux_requeue() errors */
     if (flux_rpc_completed (rpc))
-        flux_msg_watcher_stop (rpc->h, rpc->w);
+        flux_msg_handler_stop (rpc->w);
 }
 
 int flux_rpc_then (flux_rpc_t *rpc, flux_then_f cb, void *arg)
@@ -214,17 +215,18 @@ int flux_rpc_then (flux_rpc_t *rpc, flux_then_f cb, void *arg)
     }
     if (cb && !rpc->then_cb) {
         if (!rpc->w) {
-            if (!(rpc->w = flux_msg_watcher_create (rpc->m, rpc_cb, rpc)))
+            if (!(rpc->w = flux_msg_handler_create (rpc->h, rpc->m,
+                                                    rpc_cb, rpc)))
                 goto done;
         }
-        flux_msg_watcher_start (rpc->h, rpc->w);
+        flux_msg_handler_start (rpc->w);
         if (rpc->rx_msg) {
             if (flux_requeue (rpc->h, rpc->rx_msg, FLUX_RQ_HEAD) < 0)
                 goto done;
             rpc->rx_msg = NULL;
         }
     } else if (!cb && rpc->then_cb) {
-        flux_msg_watcher_stop (rpc->h, rpc->w);
+        flux_msg_handler_stop (rpc->w);
     }
     rpc->then_cb = cb;
     rpc->then_arg = arg;

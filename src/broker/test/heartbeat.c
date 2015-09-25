@@ -21,7 +21,7 @@ void heartbeat_cb (heartbeat_t *hb, void *arg)
     prev_epoch = epoch;
 }
 
-void heartbeat_event_cb (flux_t h, flux_msg_watcher_t *w,
+void heartbeat_event_cb (flux_t h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
     heartbeat_t *hb = arg;
@@ -31,7 +31,7 @@ void heartbeat_event_cb (flux_t h, flux_msg_watcher_t *w,
     ok (rc == 0 && heartbeat_recvmsg (hb, msg) == 0,
         "flux_heartbeat_recvmsg works, epoch %d", epoch);
     if (epoch == 2) {
-        flux_msg_watcher_stop (h, w);
+        flux_msg_handler_stop (w);
         heartbeat_stop (hb);
     }
 }
@@ -52,7 +52,7 @@ int main (int argc, char **argv)
 {
     flux_t h;
     heartbeat_t *hb;
-    flux_msg_watcher_t *w;
+    flux_msg_handler_t *w;
 
     plan (21);
 
@@ -92,19 +92,19 @@ int main (int argc, char **argv)
         "heartbeat_get_epoch works, default is zero");
 
 
-    w = flux_msg_watcher_create (FLUX_MATCH_EVENT, heartbeat_event_cb, hb);
+    w = flux_msg_handler_create (h, FLUX_MATCH_EVENT, heartbeat_event_cb, hb);
     ok (w != NULL,
         "created event watcher");
-    flux_msg_watcher_start (h, w);
+    flux_msg_handler_start (w);
 
     ok (heartbeat_start (hb) == 0,
         "heartbeat_start works");
 
-    ok (flux_reactor_start (h) == 0,
+    ok (flux_reactor_run (flux_get_reactor (h), 0) == 0,
         "flux reactor exited normally");
 
     heartbeat_destroy (hb);
-    flux_msg_watcher_destroy (w);
+    flux_msg_handler_destroy (w);
     flux_close (h);
 
     done_testing ();

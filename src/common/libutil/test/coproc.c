@@ -10,7 +10,7 @@
 
 static bool death = false;
 
-coproc_t co;
+coproc_t *co;
 
 /* Handler will yield if it segfaulted; return if not.
  */
@@ -43,7 +43,7 @@ int signal_setup (void)
 
 /* Touch the stack.  If we touch guard page, we should get a SIGSEGV.
  */
-int stack_cb (coproc_t c, void *arg)
+int stack_cb (coproc_t *c, void *arg)
 {
     size_t *ssize = arg;
     void *ptr = alloca (*ssize);
@@ -52,7 +52,7 @@ int stack_cb (coproc_t c, void *arg)
     return 0;
 }
 
-int bar_cb (coproc_t c, void *arg)
+int bar_cb (coproc_t *c, void *arg)
 {
     while (!death) {
         if (coproc_yield (c) < 0)
@@ -61,7 +61,7 @@ int bar_cb (coproc_t c, void *arg)
     return 0;
 }
 
-int foo_cb (coproc_t c, void *arg)
+int foo_cb (coproc_t *c, void *arg)
 {
     int n; /* number of times to yield */
 
@@ -79,7 +79,7 @@ int foo_cb (coproc_t c, void *arg)
 
 void *threadmain (void *arg)
 {
-    coproc_t c;
+    coproc_t *c;
 
     ok ((c = coproc_create (bar_cb)) != NULL,
         "coproc_create works in a pthread");
@@ -93,7 +93,7 @@ void *threadmain (void *arg)
 
 int main (int argc, char *argv[])
 {
-    coproc_t c;
+    coproc_t *c;
     int i;
     int rc;
 
@@ -142,7 +142,7 @@ int main (int argc, char *argv[])
     ok (pthread_join (t, NULL) == 0,
         "pthread_join OK");
 
-    coproc_t cps[10000];
+    coproc_t *cps[10000];
     for (i = 0; i < 10000; i++) {
         if (!(cps[i] = coproc_create (bar_cb)))
             break;

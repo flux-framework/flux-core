@@ -44,10 +44,10 @@ class TestTimer(unittest.TestCase):
 
         def cb(x, y, z, w):
             timer_ran[0] = True
-            x.reactor_stop()
+            x.reactor_stop(self.f.get_reactor())
         with self.f.timer_watcher_create(0.1, cb) as timer:
             self.assertIsNotNone(timer, msg="timeout create")
-            ret = self.f.reactor_start()
+            ret = self.f.reactor_run(self.f.get_reactor(), 0)
             self.assertEqual(ret, 0, msg="Reactor exit")
             self.assertTrue(timer_ran[0], msg="Timer did not run successfully")
 

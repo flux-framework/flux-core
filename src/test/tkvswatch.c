@@ -109,7 +109,7 @@ static int mt_watch_cb (const char *k, int val, void *arg, int errnum)
 
     /* normal stop */
     if (val + 1 == changes)
-        flux_reactor_stop (t->h);
+        flux_reactor_stop (flux_get_reactor (t->h));
     t->change_count++;
     return 0;
 }
@@ -327,7 +327,7 @@ static int unwatch_timer_cb (flux_t h, void *arg)
         if (kvs_unwatch (h, key) < 0)
             err_exit ("%s: kvs_unwatch", __FUNCTION__);
     } else if (count == 20)
-        flux_reactor_stop (h);
+        flux_reactor_stop (flux_get_reactor (h));
     return 0;
 }
 

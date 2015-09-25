@@ -90,7 +90,7 @@ static void then_cb (flux_rpc_t *r, void *arg)
     if (flux_rpc_get (r, &nodeid, NULL) < 0
             || !nodeset_add_rank (then_ns, nodeid)
             || ++then_count == 128) {
-        flux_reactor_stop (h);
+        flux_reactor_stop (flux_get_reactor (h));
     }
 }
 
@@ -245,14 +245,20 @@ int main (int argc, char *argv[])
 {
     flux_msg_t *msg;
     flux_t h;
+    flux_reactor_t *reactor;
 
-    plan (34);
+    plan (35);
 
     (void)setenv ("FLUX_CONNECTOR_PATH", CONNECTOR_PATH, 0);
     ok ((h = flux_open ("loop://", FLUX_O_COPROC)) != NULL,
         "opened loop connector");
     if (!h)
         BAIL_OUT ("can't continue without loop handle");
+    ok ((reactor = flux_get_reactor (h)) != NULL,
+        "obtained reactor");
+    if (!reactor)
+        BAIL_OUT ("can't continue without reactor");
+
     flux_fatal_set (h, fatal_err, NULL);
     flux_fatal_error (h, __FUNCTION__, "Foo");
     ok (fatal_tested == true,
@@ -270,7 +276,7 @@ int main (int argc, char *argv[])
     ok ((msg = flux_request_encode ("rpctest.begin", NULL)) != NULL
         && flux_send (h, msg, 0) == 0,
         "sent message to initiate test");
-    ok (flux_reactor_start (h) == 0,
+    ok (flux_reactor_run (reactor, 0) == 0,
         "reactor completed normally");
     flux_msg_destroy (msg);
 

@@ -5,13 +5,14 @@
 #include "src/common/libflux/request.h"
 #include "src/common/libflux/response.h"
 #include "src/common/libflux/reactor.h"
+#include "src/common/libflux/dispatch.h"
 
 #include "src/common/libutil/shortjson.h"
 
 #include "src/common/libtap/tap.h"
 
 /* request nodeid and flags returned in response */
-void rpctest_nodeid_cb (flux_t h, flux_msg_watcher_t *w,
+void rpctest_nodeid_cb (flux_t h, flux_msg_handler_t *w,
                         const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
@@ -33,7 +34,7 @@ done:
 }
 
 /* request payload echoed in response */
-void rpctest_echo_cb (flux_t h, flux_msg_watcher_t *w,
+void rpctest_echo_cb (flux_t h, flux_msg_handler_t *w,
                       const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
@@ -48,7 +49,7 @@ done:
 }
 
 /* no-payload response */
-void rpctest_hello_cb (flux_t h, flux_msg_watcher_t *w,
+void rpctest_hello_cb (flux_t h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     int errnum = 0;
@@ -61,7 +62,7 @@ done:
     (void)flux_respond (h, msg, errnum, NULL);
 }
 
-void rpctest_begin_cb (flux_t h, flux_msg_watcher_t *w,
+void rpctest_begin_cb (flux_t h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     const char *json_str;
@@ -115,7 +116,7 @@ void rpctest_begin_cb (flux_t h, flux_msg_watcher_t *w,
         "flux_rpc_get works and returned expected payload");
     flux_rpc_destroy (r);
 
-    flux_reactor_stop (h);
+    flux_reactor_stop (flux_get_reactor (h));
 }
 
 static void then_cb (flux_rpc_t *r, void *arg)
@@ -129,15 +130,15 @@ static void then_cb (flux_rpc_t *r, void *arg)
     ok (flux_rpc_get (r, NULL, &json_str) == 0
         && json_str && !strcmp (json_str, "xxx"),
         "flux_rpc_get works and returned expected payload in then callback");
-    flux_reactor_stop (h);
+    flux_reactor_stop (flux_get_reactor (h));
 }
 
 static flux_rpc_t *thenbug_r = NULL;
-void rpctest_thenbug_cb (flux_t h, flux_msg_watcher_t *w,
+void rpctest_thenbug_cb (flux_t h, flux_msg_handler_t *w,
                          const flux_msg_t *msg, void *arg)
 {
     (void)flux_rpc_check (thenbug_r);
-    flux_reactor_stop (h);
+    flux_reactor_stop (flux_get_reactor (h));
 }
 
 static void fatal_err (const char *message, void *arg)
@@ -145,7 +146,7 @@ static void fatal_err (const char *message, void *arg)
     BAIL_OUT ("fatal error: %s", message);
 }
 
-static struct flux_msghandler htab[] = {
+static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,   "rpctest.begin",          rpctest_begin_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.hello",          rpctest_hello_cb},
     { FLUX_MSGTYPE_REQUEST,   "rpctest.echo",           rpctest_echo_cb},
@@ -158,8 +159,9 @@ int main (int argc, char *argv[])
 {
     flux_msg_t *msg;
     flux_t h;
+    flux_reactor_t *reactor;
 
-    plan (33);
+    plan (34);
 
     (void)setenv ("FLUX_CONNECTOR_PATH", CONNECTOR_PATH, 0);
     ok ((h = flux_open ("loop://", FLUX_O_COPROC)) != NULL,
@@ -167,8 +169,12 @@ int main (int argc, char *argv[])
     if (!h)
         BAIL_OUT ("can't continue without loop handle");
     flux_fatal_set (h, fatal_err, NULL);
+    ok ((reactor = flux_get_reactor(h)) != NULL,
+       "obtained reactor");
+    if (!h)
+        BAIL_OUT ("can't continue without reactor");
 
-    ok (flux_msg_watcher_addvec (h, htab, NULL) == 0,
+    ok (flux_msg_handler_addvec (h, htab, NULL) == 0,
         "registered message handlers");
     /* test continues in rpctest_begin_cb() so that rpc calls
      * can sleep while we answer them
@@ -177,7 +183,7 @@ int main (int argc, char *argv[])
         "encoded rpctest.begin request OK");
     ok (flux_send (h, msg, 0) == 0,
         "sent rpctest.begin request");
-    ok (flux_reactor_start (h) == 0,
+    ok (flux_reactor_run (reactor, 0) == 0,
         "reactor completed normally");
     flux_msg_destroy (msg);
 
@@ -202,7 +208,7 @@ int main (int argc, char *argv[])
     ok (flux_rpc_then (r, then_cb, h) == 0,
         "flux_rpc_then works");
     /* enough of that */
-    ok (flux_reactor_start (h) == 0,
+    ok (flux_reactor_run (reactor, 0) == 0,
         "reactor completed normally");
     flux_rpc_destroy (r);
 
@@ -219,7 +225,7 @@ int main (int argc, char *argv[])
     do {
         if (!(msg = flux_request_encode ("rpctest.thenbug", NULL))
                   || flux_send (h, msg, 0) < 0
-                  || flux_reactor_start (h) < 0) {
+                  || flux_reactor_run (reactor, 0) < 0) {
             flux_msg_destroy (msg);
             break;
         }
@@ -229,11 +235,11 @@ int main (int argc, char *argv[])
         "thenbug: check says message ready");
     ok (flux_rpc_then (thenbug_r, then_cb, h) == 0,
         "thenbug: registered then - hangs on failure");
-    ok (flux_reactor_start (h) == 0,
+    ok (flux_reactor_run (reactor, 0) == 0,
         "reactor completed normally");
     flux_rpc_destroy (thenbug_r);
 
-    flux_msg_watcher_delvec (h, htab);
+    flux_msg_handler_delvec (htab);
     flux_close (h);
     done_testing();
     return (0);

@@ -1,0 +1,92 @@
+flux_reactor_create(3)
+======================
+:doctype: manpage
+
+
+NAME
+----
+flux_reactor_create, flux_reactor_destroy, flux_reactor_run, flux_reactor_stop, flux_reactor_stop_error - create/destroy/control event reactor object
+
+
+SYNOPSIS
+--------
+#include <flux/core.h>
+
+flux_reactor_t *flux_reactor_create (void);
+
+void flux_reactor_destroy (flux_reactor_t *r);
+
+int flux_reactor_run (flux_reactor_t *r, int flags);
+
+void flux_reactor_stop (flux_reactor_t *r);
+
+void flux_reactor_stop_error (flux_reactor_t *r);
+
+
+DESCRIPTION
+-----------
+
+`flux_reactor_create()` creates a flux_reactor_t object which can be used
+to monitor for events on file descriptors, ZeroMQ sockets, timers, and
+flux_t broker handles.
+
+For each event source and type that is to be monitored, a flux_watcher_t
+object is created using a type-specific create function, and started
+with flux_watcher_start(3).  To receive events, control must be
+transferred to the reactor event loop by calling `flux_reactor_run()`,
+which processes events until one of the following conditions is met:
+
+* There are no more active watchers.
+* The `flux_reactor_stop()` or `flux_reactor_stop_error()` functions
+  are called by one of the watchers.
+* Flags include FLUX_REACTOR_NOWAIT and all outstanding events have
+  been consumed
+* Flags include FLUX_REACTOR_ONCE, at least one event has occurred,
+  and all outstanding events have been consumed.
+
+If `flux_reactor_stop_error()` is called, this will cause
+`flux_reactor_run()` to return -1 indicating that an error has occurred.
+The caller should ensure that a valid error code has been assigned to
+errno(3) before calling this function.
+
+
+RETURN VALUE
+------------
+
+`flux_reactor_create()` returns a flux_reactor_t object on success.
+On error, NULL is returned, and errno is set appropriately.
+
+`flux_reactor_run()` returns zero on normal termination.
+On failure, or on termination by `flux_reactor_stop_error()`, -1 is returned
+with errno set.
+
+
+ERRORS
+------
+
+ENOMEM::
+Out of memory.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+---------
+flux_fd_watcher_create(3), flux_handle_watcher_create(3),
+flux_zmq_watcher_create(3), flux_timer_watcher_create(3),
+flux_watcher_start(3)
+
+http://software.schmorp.de/pkg/libev.html[libev home page]

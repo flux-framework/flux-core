@@ -29,8 +29,8 @@ int main (int argc, char **argv)
         err_exit ("flux_rpc");
     if (flux_rpc_then (rpc, get_rank, NULL) < 0)
         err_exit ("flux_rpc_then");
-    if (flux_reactor_start (h) < 0)
-        err_exit ("flux_reactor_start");
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
+        err_exit ("flux_reactor_run");
 
     flux_rpc_destroy (rpc);
     flux_close (h);

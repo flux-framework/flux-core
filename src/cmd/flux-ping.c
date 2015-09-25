@@ -46,6 +46,8 @@ struct ping_ctx {
     int send_count;     /* sending count */
     int recv_count;     /* receiving count */
     bool batch;         /* begin receiving only after count sent */
+    flux_t h;
+    flux_reactor_t *reactor;
 };
 
 #define OPTIONS "hp:d:r:c:b"
@@ -70,7 +72,7 @@ void usage (void)
 /* Handle responses
  * After 'ctx->count' responses have been received, stop the watcher.
  */
-void response_cb (flux_t h, flux_msg_watcher_t *w, const flux_msg_t *msg,
+void response_cb (flux_t h, flux_msg_handler_t *w, const flux_msg_t *msg,
                   void *arg)
 {
     struct ping_ctx *ctx = arg;
@@ -99,14 +101,14 @@ void response_cb (flux_t h, flux_msg_watcher_t *w, const flux_msg_t *msg,
                 ctx->nodeid == FLUX_NODEID_ANY ? "" : rankprefix, topic,
                 strlen (ctx->pad), seq, monotime_since (t0), route);
     if (++ctx->recv_count == ctx->count)
-        flux_msg_watcher_stop (h, w);
+        flux_msg_handler_stop (w);
     Jput (out);
 }
 
 /* Send a request each time the timer fires.
  * After 'ctx->count' requests have been sent, stop the watcher.
  */
-void timer_cb (flux_t h, flux_timer_watcher_t *w, int revents, void *arg)
+void timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     struct ping_ctx *ctx = arg;
     struct timespec t0;
@@ -122,24 +124,23 @@ void timer_cb (flux_t h, flux_timer_watcher_t *w, int revents, void *arg)
         err_exit ("flux_request_encode");
     if (flux_msg_set_nodeid (msg, ctx->nodeid, 0) < 0)
         err_exit ("flux_msg_sent_nodeid");
-    if (flux_send (h, msg, 0) < 0)
+    if (flux_send (ctx->h, msg, 0) < 0)
         err_exit ("flux_send");
     if (ctx->send_count == ctx->count)
-        flux_timer_watcher_stop (h, w);
+        flux_watcher_stop (w);
     else if (ctx->period == 0) /* rearm if immediate */
-        flux_timer_watcher_start (h, w);
+        flux_watcher_start (w);
     flux_msg_destroy (msg);
     Jput (in);
 }
 
 int main (int argc, char *argv[])
 {
-    flux_t h;
     int ch;
     int pad_bytes = 0;
     char *target;
-    flux_msg_watcher_t *mw;
-    flux_timer_watcher_t *tw;
+    flux_msg_handler_t *mw;
+    flux_watcher_t *tw;
     struct ping_ctx ctx = {
         .period = 1.0,
         .nodeid = FLUX_NODEID_ANY,
@@ -214,37 +215,39 @@ int main (int argc, char *argv[])
      * It will terminate when timer/sender watchers are stopped,
      * or run forever if --count was unspecified.
      */
-    if (!(h = flux_open (NULL, 0)))
+    if (!(ctx.h = flux_open (NULL, 0)))
         err_exit ("flux_open");
+    if (!(ctx.reactor = flux_get_reactor (ctx.h)))
+        err_exit ("flux_get_reactor");
 
-    mw = flux_msg_watcher_create (FLUX_MATCH_ANY, response_cb, &ctx);
-    tw = flux_timer_watcher_create (0, ctx.period, timer_cb, &ctx);
+    mw = flux_msg_handler_create (ctx.h, FLUX_MATCH_ANY, response_cb, &ctx);
+    tw = flux_timer_watcher_create (ctx.reactor, 0, ctx.period, timer_cb, &ctx);
     if (!mw || !tw)
         err_exit ("error creating watchers");
-    flux_timer_watcher_start (h, tw);
+    flux_watcher_start (tw);
     if (!ctx.batch)
-        flux_msg_watcher_start (h, mw);
-    if (flux_reactor_start (h) < 0)
-        err_exit ("flux_reactor_start");
+        flux_msg_handler_start (mw);
+    if (flux_reactor_run (ctx.reactor, 0) < 0)
+        err_exit ("flux_reactor_run");
 
     /* If in batch mode, we've now sent all our messages and
      * need to process the responses.
      */
     if (ctx.batch) {
-        flux_msg_watcher_start (h, mw);
-        if (flux_reactor_start (h) < 0)
-            err_exit ("flux_reactor_start");
+        flux_msg_handler_start (mw);
+        if (flux_reactor_run (ctx.reactor, 0) < 0)
+            err_exit ("flux_reactor_run");
     }
 
     /* Clean up.
      */
-    flux_msg_watcher_destroy (mw);
-    flux_timer_watcher_destroy (tw);
+    flux_msg_handler_destroy (mw);
+    flux_watcher_destroy (tw);
 
     free (ctx.topic);
     free (ctx.pad);
 
-    flux_close (h);
+    flux_close (ctx.h);
     log_fini ();
 
     return 0;

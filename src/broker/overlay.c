@@ -39,7 +39,7 @@
 struct endpoint {
     void *zs;
     char *uri;
-    flux_zmq_watcher_t *w;
+    flux_watcher_t *w;
 };
 
 struct overlay_struct {
@@ -83,7 +83,7 @@ static void endpoint_destroy (struct endpoint *ep)
         if (ep->uri)
             free (ep->uri);
         if (ep->w)
-            flux_zmq_watcher_destroy (ep->w);
+            flux_watcher_destroy (ep->w);
         /* N.B. ep->zp will be cleaned up with zctx_t destroy */
         free (ep);
     }
@@ -473,9 +473,10 @@ done:
     return rc;
 }
 
-static void child_cb (flux_t h, flux_zmq_watcher_t *w,
-                      void *zsock, int revents, void *arg)
+static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
+                      int revents, void *arg)
 {
+    void *zsock = flux_zmq_watcher_get_zsock (w);
     overlay_t *ov = arg;
     if (ov->child_cb)
         ov->child_cb (ov, zsock, ov->child_arg);
@@ -494,9 +495,10 @@ static int bind_child (overlay_t *ov, struct endpoint *ep)
         free (ep->uri);
         ep->uri = zsocket_last_endpoint (ep->zs);
     }
-    if (!(ep->w = flux_zmq_watcher_create (ep->zs, FLUX_POLLIN, child_cb, ov)))
+    if (!(ep->w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
+                                           ep->zs, FLUX_POLLIN, child_cb, ov)))
         err_exit ("flux_zmq_watcher_create");
-    flux_zmq_watcher_start (ov->h, ep->w);
+    flux_watcher_start (ep->w);
     return 0;
 }
 
@@ -516,9 +518,10 @@ static int bind_event_pub (overlay_t *ov, struct endpoint *ep)
     return 0;
 }
 
-static void event_cb (flux_t h, flux_zmq_watcher_t *w,
-                      void *zsock, int revents, void *arg)
+static void event_cb (flux_reactor_t *r, flux_watcher_t *w,
+                      int revents, void *arg)
 {
+    void *zsock = flux_zmq_watcher_get_zsock (w);
     overlay_t *ov = arg;
     if (ov->event_cb)
         ov->event_cb (ov, zsock, ov->event_arg);
@@ -534,15 +537,17 @@ static int connect_event_sub (overlay_t *ov, struct endpoint *ep)
     if (zsocket_connect (ep->zs, "%s", ep->uri) < 0)
         err_exit ("%s", ep->uri);
     zsocket_set_subscribe (ep->zs, "");
-    if (!(ep->w = flux_zmq_watcher_create (ep->zs, FLUX_POLLIN, event_cb, ov)))
+    if (!(ep->w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
+                                           ep->zs, FLUX_POLLIN, event_cb, ov)))
         err_exit ("flux_zmq_watcher_create");
-    flux_zmq_watcher_start (ov->h, ep->w);
+    flux_watcher_start (ep->w);
     return 0;
 }
 
-static void parent_cb (flux_t h, flux_zmq_watcher_t *w,
-                       void *zsock, int revents, void *arg)
+static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
+                       int revents, void *arg)
 {
+    void *zsock = flux_zmq_watcher_get_zsock (w);
     overlay_t *ov = arg;
     if (ov->parent_cb)
         ov->parent_cb (ov, zsock, ov->parent_arg);
@@ -564,9 +569,10 @@ static int connect_parent (overlay_t *ov, struct endpoint *ep)
     zsocket_set_identity (ep->zs, ov->rankstr);
     if (zsocket_connect (ep->zs, "%s", ep->uri) < 0)
         goto error;
-    if (!(ep->w = flux_zmq_watcher_create (ep->zs, FLUX_POLLIN, parent_cb, ov)))
+    if (!(ep->w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
+                                           ep->zs, FLUX_POLLIN, parent_cb, ov)))
         goto error;
-    flux_zmq_watcher_start (ov->h, ep->w);
+    flux_watcher_start (ep->w);
     return 0;
 error:
     if (ep->zs) {
@@ -588,9 +594,10 @@ static int connect_right (overlay_t *ov, struct endpoint *ep)
     zsocket_set_identity (ep->zs, ov->rankstr_right);
     if (zsocket_connect (ep->zs, "%s", ep->uri) < 0)
         err_exit ("%s", ep->uri);
-    if (!(ep->w = flux_zmq_watcher_create (ep->zs, FLUX_POLLIN, parent_cb, ov)))
+    if (!(ep->w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
+                                           ep->zs, FLUX_POLLIN, parent_cb, ov)))
         err_exit ("flux_zmq_watcher_create");
-    flux_zmq_watcher_start (ov->h, ep->w);
+    flux_watcher_start (ep->w);
     return 0;
 }
 

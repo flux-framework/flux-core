@@ -39,7 +39,7 @@ class Watcher(object):
         pass
 
 
-@ffi.callback('flux_msg_watcher_f')
+@ffi.callback('flux_msg_handler_f')
 def message_handler_wrapper(handle_trash, m_watcher_t, msg_handle,
                             opaque_handle):
     watcher = ffi.from_handle(opaque_handle)
@@ -66,24 +66,24 @@ class MessageWatcher(Watcher):
             'bsize': bsize,
             'topic_glob': c_topic_glob,
         })
-        self.handle = raw.flux_msg_watcher_create(match[0],
+        self.handle = raw.flux_msg_handler_create(self.fh.handle, match[0],
                                                   message_handler_wrapper,
                                                   wargs)
 
     def start(self):
-        raw.flux_msg_watcher_start(self.fh.handle, self.handle)
+        raw.flux_msg_handler_start(self.handle)
 
     def stop(self):
-        raw.flux_msg_watcher_stop(self.fh.handle, self.handle)
+        raw.flux_msg_handler_stop(self.handle)
 
     def destroy(self):
         if self.handle is not None:
-            raw.flux_msg_watcher_destroy(self.handle)
+            raw.flux_handler_destroy(self.handle)
             self.handle = None
 
 
-@ffi.callback('flux_timer_watcher_f')
-def timeout_handler_wrapper(handle_trash, timer_watcher_s, revents,
+@ffi.callback('flux_watcher_f')
+def timeout_handler_wrapper(handle_trash, watcher_s, revents,
                             opaque_handle):
     watcher = ffi.from_handle(opaque_handle)
     ret = watcher.cb(watcher.fh, watcher, revents, watcher.args)
@@ -99,15 +99,16 @@ class TimerWatcher(Watcher):
         self.handle = None
         wargs = ffi.new_handle(self)
         self.handle = raw.flux_timer_watcher_create(
+	    raw.flux_get_reactor(flux_handle),
             float(after), float(repeat), timeout_handler_wrapper, wargs)
 
     def start(self):
-        raw.flux_timer_watcher_start(self.fh.handle, self.handle)
+        raw.flux_watcher_start(self.handle)
 
     def stop(self):
-        raw.flux_timer_watcher_stop(self.fh.handle, self.handle)
+        raw.flux_watcher_stop(self.handle)
 
     def destroy(self):
         if self.handle is not None:
-            raw.flux_timer_watcher_destroy(self.handle)
+            raw.flux_watcher_destroy(self.handle)
             self.handle = None

@@ -22,7 +22,7 @@ void hello_cb (hello_t *hello, void *arg)
 }
 
 static int hello_request = 0;
-void hello_request_cb (flux_t h, flux_msg_watcher_t *w,
+void hello_request_cb (flux_t h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     hello_t *hello = arg;
@@ -32,7 +32,7 @@ void hello_request_cb (flux_t h, flux_msg_watcher_t *w,
     ok (rc == 0 && hello_recvmsg (hello, msg) == 0,
         "size=3: hello_recvmsg works, rank %d", rank);
     if (rank == 2)
-        flux_msg_watcher_stop (h, w);
+        flux_msg_handler_stop (w);
     hello_request++;
 }
 
@@ -70,7 +70,7 @@ void check_size1 (flux_t h)
 void check_size3 (flux_t h)
 {
     hello_t *hello;
-    flux_msg_watcher_t *w;
+    flux_msg_handler_t *w;
     char *prefix = "size=3";
 
     flux_attr_fake (h, "size", "3", FLUX_ATTRFLAG_IMMUTABLE);
@@ -83,10 +83,11 @@ void check_size3 (flux_t h)
     hello_set_callback (hello, hello_cb, prefix);
     hello_set_timeout (hello, 0.1);
 
-    w = flux_msg_watcher_create (FLUX_MATCH_REQUEST, hello_request_cb, hello);
+    w = flux_msg_handler_create (h, FLUX_MATCH_REQUEST,
+                                 hello_request_cb, hello);
     ok (w != NULL,
         "%s: created cmb.hello watcher", prefix);
-    flux_msg_watcher_start (h, w);
+    flux_msg_handler_start (w);
 
     flux_attr_fake (h, "rank", "0", FLUX_ATTRFLAG_IMMUTABLE);
     ok (hello_start (hello) == 0,
@@ -100,10 +101,10 @@ void check_size3 (flux_t h)
     ok (hello_start (hello) == 0,
         "%s: (rank 2) hello_start works", prefix);
 
-    ok (flux_reactor_start (h) == 0,
+    ok (flux_reactor_run (flux_get_reactor (h), 0) == 0,
         "%s: flux reactor exited normally", prefix);
 
-    flux_msg_watcher_destroy (w);
+    flux_msg_handler_destroy (w);
     hello_destroy (hello);
 }
 

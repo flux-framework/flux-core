@@ -58,7 +58,7 @@ struct module_struct {
     zctx_t *zctx;
     uint32_t rank;
     flux_t broker_h;
-    flux_zmq_watcher_t *broker_w;
+    flux_watcher_t *broker_w;
 
     int lastseen;
     heartbeat_t *heartbeat;
@@ -272,8 +272,8 @@ static void module_destroy (module_t *p)
 
     assert (p->h == NULL);
 
-    flux_zmq_watcher_stop (p->broker_h, p->broker_w);
-    flux_zmq_watcher_destroy (p->broker_w);
+    flux_watcher_stop (p->broker_w);
+    flux_watcher_destroy (p->broker_w);
     zsocket_destroy (p->zctx, p->sock);
 
     dlclose (p->dso);
@@ -328,8 +328,8 @@ done:
     return rc;
 }
 
-static void module_cb (flux_t h, flux_zmq_watcher_t *w,
-                       void *zsock, int revents, void *arg)
+static void module_cb (flux_reactor_t *r, flux_watcher_t *w,
+                       int revents, void *arg)
 {
     module_t *p = arg;
     assert (p->magic == MODULE_MAGIC);
@@ -344,7 +344,7 @@ int module_start (module_t *p)
     int errnum;
     int rc = -1;
 
-    flux_zmq_watcher_start (p->broker_h, p->broker_w);
+    flux_watcher_start (p->broker_w);
     if ((errnum = pthread_create (&p->t, NULL, module_thread, p))) {
         errno = errnum;
         goto done;
@@ -442,7 +442,8 @@ module_t *module_add (modhash_t *mh, const char *path)
     zsocket_set_hwm (p->sock, 0);
     if (zsocket_bind (p->sock, "inproc://%s", module_get_uuid (p)) < 0)
         err_exit ("zsock_bind inproc://%s", module_get_uuid (p));
-    if (!(p->broker_w = flux_zmq_watcher_create (p->sock, FLUX_POLLIN,
+    if (!(p->broker_w = flux_zmq_watcher_create (flux_get_reactor (p->broker_h),
+                                                 p->sock, FLUX_POLLIN,
                                                  module_cb, p)))
         err_exit ("flux_zmq_watcher_create");
 

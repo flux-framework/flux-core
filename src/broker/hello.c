@@ -44,7 +44,8 @@ struct hello_struct {
     hello_cb_f cb;
     void *cb_arg;
     flux_t h;
-    flux_timer_watcher_t *w;
+    flux_reactor_t *reactor;
+    flux_watcher_t *timer;
     struct timespec start;
 };
 
@@ -60,8 +61,8 @@ void hello_destroy (hello_t *hello)
     if (hello) {
         if (hello->nodeset)
             nodeset_destroy (hello->nodeset);
-        if (hello->w)
-            flux_timer_watcher_destroy (hello->w);
+        if (hello->timer)
+            flux_watcher_destroy (hello->timer);
         free (hello);
     }
 }
@@ -69,6 +70,7 @@ void hello_destroy (hello_t *hello)
 void hello_set_flux (hello_t *hello, flux_t h)
 {
     hello->h = h;
+    hello->reactor = flux_get_reactor (h);
 }
 
 void hello_set_timeout (hello_t *hello, double seconds)
@@ -120,8 +122,8 @@ static int hello_add_rank (hello_t *hello, uint32_t rank)
     if (hello->count == size) {
         if (hello->cb)
             hello->cb (hello, hello->cb_arg);
-        if (hello->w)
-            flux_timer_watcher_stop (hello->h, hello->w);
+        if (hello->timer)
+            flux_watcher_stop (hello->timer);
     }
     return 0;
 }
@@ -155,7 +157,8 @@ done:
     return rc;
 }
 
-static void timer_cb (flux_t h, flux_timer_watcher_t *w, int revents, void *arg)
+static void timer_cb (flux_reactor_t *r, flux_watcher_t *w,
+                      int revents, void *arg)
 {
     hello_t *hello = arg;
 
@@ -172,11 +175,12 @@ int hello_start (hello_t *hello)
         goto done;
     if (rank == 0) {
         monotime (&hello->start);
-        if (!(hello->w = flux_timer_watcher_create (hello->timeout,
-                                                    hello->timeout,
-                                                    timer_cb, hello)))
+        if (!(hello->timer = flux_timer_watcher_create (hello->reactor,
+                                                        hello->timeout,
+                                                        hello->timeout,
+                                                        timer_cb, hello)))
             goto done;
-        flux_timer_watcher_start (hello->h, hello->w);
+        flux_watcher_start (hello->timer);
         if (hello_add_rank (hello, 0) < 0)
             goto done;
     } else {

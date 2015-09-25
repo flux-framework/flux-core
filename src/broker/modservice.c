@@ -54,16 +54,16 @@
 typedef struct {
     flux_t h;
     module_t *p;
-    zlist_t *watchers;
+    zlist_t *handlers;
 } ctx_t;
 
 static void freectx (void *arg)
 {
     ctx_t *ctx = arg;
-    flux_msg_watcher_t *w;
-    while ((w = zlist_pop (ctx->watchers)))
-        flux_msg_watcher_destroy (w);
-    zlist_destroy (&ctx->watchers);
+    flux_msg_handler_t *w;
+    while ((w = zlist_pop (ctx->handlers)))
+        flux_msg_handler_destroy (w);
+    zlist_destroy (&ctx->handlers);
     free (ctx);
 }
 
@@ -73,7 +73,7 @@ static ctx_t *getctx (flux_t h, module_t *p)
 
     if (!ctx) {
         ctx = xzmalloc (sizeof (*ctx));
-        if (!(ctx->watchers = zlist_new ()))
+        if (!(ctx->handlers = zlist_new ()))
             oom ();
         ctx->h = h;
         ctx->p = p;
@@ -87,7 +87,7 @@ static ctx_t *getctx (flux_t h, module_t *p)
  * FIXME: t/lua/t0002-rpc.t tries to ping with an array object.
  * This should be caught at a lower level - see issue #181
  */
-static void ping_cb (flux_t h, flux_msg_watcher_t *w,
+static void ping_cb (flux_t h, flux_msg_handler_t *w,
                      const flux_msg_t *msg, void *arg)
 {
     module_t *p = arg;
@@ -120,7 +120,7 @@ done:
         free (route);
 }
 
-static void stats_get_cb (flux_t h, flux_msg_watcher_t *w,
+static void stats_get_cb (flux_t h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
     flux_msgcounters_t mcs;
@@ -141,13 +141,13 @@ static void stats_get_cb (flux_t h, flux_msg_watcher_t *w,
     Jput (out);
 }
 
-static void stats_clear_event_cb (flux_t h, flux_msg_watcher_t *w,
+static void stats_clear_event_cb (flux_t h, flux_msg_handler_t *w,
                                   const flux_msg_t *msg, void *arg)
 {
     flux_clr_msgcounters (h);
 }
 
-static void stats_clear_request_cb (flux_t h, flux_msg_watcher_t *w,
+static void stats_clear_request_cb (flux_t h, flux_msg_handler_t *w,
                                     const flux_msg_t *msg, void *arg)
 {
     flux_clr_msgcounters (h);
@@ -155,7 +155,7 @@ static void stats_clear_request_cb (flux_t h, flux_msg_watcher_t *w,
         FLUX_LOG_ERROR (h);
 }
 
-static void rusage_cb (flux_t h, flux_msg_watcher_t *w,
+static void rusage_cb (flux_t h, flux_msg_handler_t *w,
                        const flux_msg_t *msg, void *arg)
 {
     JSON out = NULL;
@@ -173,22 +173,23 @@ done:
     Jput (out);
 }
 
-static void shutdown_cb (flux_t h, flux_msg_watcher_t *w,
+static void shutdown_cb (flux_t h, flux_msg_handler_t *w,
                          const flux_msg_t *msg, void *arg)
 {
-    flux_reactor_stop (h);
+    flux_reactor_stop (flux_get_reactor (h));
 }
 
 static void register_event (ctx_t *ctx, const char *name,
-                            flux_msg_watcher_f cb)
+                            flux_msg_handler_f cb)
 {
     struct flux_match match = FLUX_MATCH_EVENT;
-    flux_msg_watcher_t *w;
+    flux_msg_handler_t *w;
 
     match.topic_glob = xasprintf ("%s.%s", module_get_name (ctx->p), name);
-    if (!(w = flux_msg_watcher_create (match, cb, ctx->p)))
-        err_exit ("flux_msg_watcher_create");
-    if (zlist_append (ctx->watchers, w) < 0)
+    if (!(w = flux_msg_handler_create (ctx->h, match, cb, ctx->p)))
+        err_exit ("flux_msg_handler_create");
+    flux_msg_handler_start (w);
+    if (zlist_append (ctx->handlers, w) < 0)
         oom ();
     if (flux_event_subscribe (ctx->h, match.topic_glob) < 0)
         err_exit ("%s: flux_event_subscribe %s",
@@ -197,16 +198,16 @@ static void register_event (ctx_t *ctx, const char *name,
 }
 
 static void register_request (ctx_t *ctx, const char *name,
-                              flux_msg_watcher_f cb)
+                              flux_msg_handler_f cb)
 {
     struct flux_match match = FLUX_MATCH_REQUEST;
-    flux_msg_watcher_t *w;
+    flux_msg_handler_t *w;
 
     match.topic_glob = xasprintf ("%s.%s", module_get_name (ctx->p), name);
-    if (!(w = flux_msg_watcher_create (match, cb, ctx->p)))
-        err_exit ("flux_msg_watcher_create");
-    flux_msg_watcher_start (ctx->h, w);
-    if (zlist_append (ctx->watchers, w) < 0)
+    if (!(w = flux_msg_handler_create (ctx->h, match, cb, ctx->p)))
+        err_exit ("flux_msg_handler_create");
+    flux_msg_handler_start (w);
+    if (zlist_append (ctx->handlers, w) < 0)
         oom ();
     free (match.topic_glob);
 }

@@ -1,0 +1,80 @@
+flux_msg_handler_addvec(3)
+==========================
+:doctype: manpage
+
+
+NAME
+----
+flux_msg_handler_addvec, flux_msg_handler_delvec - bulk add/remove message handlers
+
+
+SYNOPSIS
+--------
+ #include <flux/core.h>
+
+ struct flux_msg_handler_spec {
+     int typemask;
+     char *topic_glob;
+     flux_msg_handler_f cb;
+     flux_msg_handler_t *w;
+ };
+
+ int flux_msg_handler_addvec (flux_t h,
+                              struct flux_msg_handler_spec tab[],
+                              void *arg);
+
+ void flux_msg_handler_delvec (struct flux_msg_handler_spec tab[]);
+
+
+DESCRIPTION
+-----------
+
+`flux_msg_handler_addvec()` creates and starts an array of message handlers,
+terminated by FLUX_MSGHANDLER_TABLE_END.  The new message handler objects
+are stored in the array.
+
+`flux_msg_handler_delvec()` stops and destroys an array of message handler
+objects, terminated by FLUX_MSGHANDLER_TABLE_END.
+
+These functions are convenience functions which call
+`flux_msg_handler_create(3)`, `flux_msg_handler_start(3)`; and
+`flux_msg_handler_stop(3)`, `flux_msg_handler_destroy(3)` on each element
+of the array, respectively.
+
+If `flux_msg_handler_addvec()` encounters an error creating a message
+handler, all previously created message handlers in the array are destroyed
+before an error is returned.
+
+
+RETURN VALUE
+------------
+
+`flux_msg_handler_addvec()` returns zero on success.
+On error, -1 is returned, and errno is set appropriately.
+
+
+ERRORS
+------
+
+ENOMEM::
+Out of memory.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+---------
+flux_msg_handler_create(3)

@@ -65,7 +65,7 @@ static void freectx(ctx_t * ctx)
 /* Copy input arguments to output arguments and respond to RPC.
 */
 static void query_cb (flux_t h,
-                      flux_msg_watcher_t *watcher,
+                      flux_msg_handler_t *watcher,
                       const flux_msg_t *msg,
                       void *arg)
 {
@@ -73,7 +73,7 @@ static void query_cb (flux_t h,
 }
 
 static void get_cb (flux_t h,
-                    flux_msg_watcher_t *watcher,
+                    flux_msg_handler_t *watcher,
                     const flux_msg_t *msg,
                     void *arg)
 {
@@ -253,7 +253,7 @@ done:
 }
 
 static void load_cb (flux_t h,
-                     flux_msg_watcher_t *watcher,
+                     flux_msg_handler_t *watcher,
                      const flux_msg_t *msg,
                      void *arg)
 {
@@ -279,7 +279,7 @@ static void load_cb (flux_t h,
 }
 
 static void topo_cb (flux_t h,
-                     flux_msg_watcher_t *watcher,
+                     flux_msg_handler_t *watcher,
                      const flux_msg_t *msg,
                      void *arg)
 {
@@ -349,22 +349,22 @@ done:
 
 static void start_all (flux_t h, ...)
 {
-    flux_msg_watcher_t *w;
+    flux_msg_handler_t *w;
     va_list ap;
     va_start (ap, h);
-    while ((w = va_arg (ap, flux_msg_watcher_t *))) {
-        flux_msg_watcher_start (h, w);
+    while ((w = va_arg (ap, flux_msg_handler_t *))) {
+        flux_msg_handler_start (w);
     }
 }
 
 struct
 {
-    flux_msg_watcher_t *load;
-    flux_msg_watcher_t *query;
-    flux_msg_watcher_t *get;
-    flux_msg_watcher_t *topo;
-    flux_msg_watcher_t *END;
-} watchers = {};
+    flux_msg_handler_t *load;
+    flux_msg_handler_t *query;
+    flux_msg_handler_t *get;
+    flux_msg_handler_t *topo;
+    flux_msg_handler_t *END;
+} handlers = {};
 
 int mod_main (flux_t h, int argc, char **argv)
 {
@@ -378,25 +378,26 @@ int mod_main (flux_t h, int argc, char **argv)
         return -1;
     }
 
-    watchers.load = flux_msg_watcher_create (FLUX_MATCH_EVENT, load_cb, ctx);
-    flux_msg_watcher_start (h, watchers.load);
-    watchers.query =
-        flux_msg_watcher_create (FLUX_MATCH_REQUEST, query_cb, ctx);
-    flux_msg_watcher_start (h, watchers.query);
-    watchers.get = flux_msg_watcher_create (FLUX_MATCH_REQUEST, get_cb, ctx);
-    flux_msg_watcher_start (h, watchers.get);
-    watchers.topo = flux_msg_watcher_create (FLUX_MATCH_REQUEST, topo_cb, ctx);
-    flux_msg_watcher_start (h, watchers.topo);
+    handlers.load = flux_msg_handler_create (h, FLUX_MATCH_EVENT, load_cb, ctx);
+    flux_msg_handler_start (handlers.load);
+    handlers.query =
+        flux_msg_handler_create (h, FLUX_MATCH_REQUEST, query_cb, ctx);
+    flux_msg_handler_start (handlers.query);
+    handlers.get = flux_msg_handler_create (h, FLUX_MATCH_REQUEST, get_cb, ctx);
+    flux_msg_handler_start (handlers.get);
+    handlers.topo =
+        flux_msg_handler_create (h, FLUX_MATCH_REQUEST, topo_cb, ctx);
+    flux_msg_handler_start (handlers.topo);
 
-    if (flux_reactor_start (h) < 0) {
-        flux_log (h, LOG_ERR, "flux_reactor_start: %s", strerror (errno));
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
+        flux_log (h, LOG_ERR, "flux_reactor_run: %s", strerror (errno));
         return -1;
     }
 
-    flux_msg_watcher_destroy (watchers.load);
-    flux_msg_watcher_destroy (watchers.query);
-    flux_msg_watcher_destroy (watchers.get);
-    flux_msg_watcher_destroy (watchers.topo);
+    flux_msg_handler_destroy (handlers.load);
+    flux_msg_handler_destroy (handlers.query);
+    flux_msg_handler_destroy (handlers.get);
+    flux_msg_handler_destroy (handlers.topo);
 
     return 0;
 }
