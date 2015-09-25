@@ -59,7 +59,7 @@ int main (int ac, char **av)
         BAIL_OUT ("Failed to create subprocess manager");
     ok (sm != NULL, "create subprocess manager");
 
-    note ("subprocess accessors tests");
+    diag ("subprocess accessors tests");
     if (!(p = subprocess_create (sm)))
         BAIL_OUT ("Failed to create subprocess handle");
     ok (p != NULL, "create subprocess handle");
@@ -114,7 +114,7 @@ int main (int ac, char **av)
     subprocess_destroy (p);
 
     /* Test running an executable */
-    note ("test subprocess_manager_run");
+    diag ("test subprocess_manager_run");
     p = subprocess_manager_run (sm, 1, args3, NULL);
     ok (p != NULL, "subprocess_manager_run");
     ok (subprocess_pid (p) != (pid_t) -1, "process has valid pid");
@@ -129,7 +129,7 @@ int main (int ac, char **av)
     q = NULL;
 
     /*  Test failing program */
-    note ("test expected failure from subprocess_manager_run");
+    diag ("test expected failure from subprocess_manager_run");
     args3[0] = "/bin/false";
     p = subprocess_manager_run (sm, 1, args3, NULL);
     if (p) {
@@ -145,7 +145,7 @@ int main (int ac, char **av)
         q = NULL;
     }
 
-    note ("Test signaled program");
+    diag ("Test signaled program");
 
     /* Test signaled program */
     p = subprocess_manager_run (sm, 2, args4, NULL);
@@ -167,7 +167,7 @@ int main (int ac, char **av)
 
     q = NULL;
 
-    note ("Test fork/exec interface");
+    diag ("Test fork/exec interface");
     /* Test separate fork/exec interface */
     p = subprocess_create (sm);
     ok (p != NULL, "subprocess_create works");
@@ -195,7 +195,7 @@ int main (int ac, char **av)
     subprocess_destroy (p);
     q = NULL;
 
-    note ("Test exec failure");
+    diag ("Test exec failure");
     /* Test exec failure */
     p = subprocess_create (sm);
     ok (p != NULL, "subprocess create");
@@ -210,7 +210,7 @@ int main (int ac, char **av)
     is (subprocess_exit_string (p), "Exec Failure", "Exit state is Exec Failed");
     subprocess_destroy (p);
 
-    note ("Test set working directory");
+    diag ("Test set working directory");
     /* Test set working directory */
     p = subprocess_create (sm);
     ok (p != NULL, "subprocess create");
@@ -229,7 +229,7 @@ int main (int ac, char **av)
     ok (subprocess_exit_code (p) == 0, "subprocess successfully run in /tmp");
     subprocess_destroy (p);
 
-    note ("Test subprocess_reap interface");
+    diag ("Test subprocess_reap interface");
     /* Test subprocess_reap */
     p = subprocess_create (sm);
     q = subprocess_create (sm);
@@ -252,7 +252,7 @@ int main (int ac, char **av)
     subprocess_destroy (p);
     subprocess_destroy (q);
 
-    note ("Test subprocess I/O");
+    diag ("Test subprocess I/O");
     /* Test subprocess output */
     p = subprocess_create (sm);
     ok (p != NULL, "subprocess_create");
@@ -282,7 +282,7 @@ int main (int ac, char **av)
 
 
     /* Test subprocess input */
-    note ("test subprocess stdin");
+    diag ("test subprocess stdin");
     p = subprocess_create (sm);
     ok (p != NULL, "subprocess_create");
     ok (subprocess_argv_append (p, "/bin/cat") >= 0,  "subprocess_argv_append");

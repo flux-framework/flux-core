@@ -17,7 +17,7 @@ static int test_encode ()
     json_object *o = json_object_new_object ();
 
     util_json_object_add_data (o, "data", (uint8_t *) p, strlen (p)+1);
-    note ("%s", json_object_to_json_string (o));
+    diag ("%s", json_object_to_json_string (o));
     util_json_object_get_data (o, "data", (uint8_t **) &r, &rlen);
 
     ok (strcmp (p, r) == 0, "'%s'='%s'", p, r);
