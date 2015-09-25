@@ -43,6 +43,7 @@
 struct flux_reactor {
     struct ev_loop *loop;
     int loop_rc;
+    int usecount;
 };
 
 struct watcher_ops {
@@ -60,13 +61,23 @@ struct flux_watcher {
     void *impl;
 };
 
-void flux_reactor_destroy (flux_reactor_t *r)
+static void reactor_usecount_decr (flux_reactor_t *r)
 {
-    if (r) {
+    if (r && --r->usecount == 0) {
         if (r->loop)
             ev_loop_destroy (r->loop);
         free (r);
     }
+}
+
+static void reactor_usecount_incr (flux_reactor_t *r)
+{
+    r->usecount++;
+}
+
+void flux_reactor_destroy (flux_reactor_t *r)
+{
+    reactor_usecount_decr (r);
 }
 
 flux_reactor_t *flux_reactor_create (void)
@@ -79,6 +90,7 @@ flux_reactor_t *flux_reactor_create (void)
         return NULL;
     }
     ev_set_userdata (r->loop, r);
+    r->usecount = 1;
     return r;
 }
 
@@ -168,6 +180,7 @@ static flux_watcher_t *flux_watcher_create (flux_reactor_t *r,
     w->impl = impl;
     w->fn = fun;
     w->arg = arg;
+    reactor_usecount_incr (r);
     return w;
 }
 
@@ -194,6 +207,8 @@ void flux_watcher_destroy (flux_watcher_t *w)
             w->ops.stop (w->impl, w);
         if (w->ops.destroy)
             w->ops.destroy (w->impl, w);
+        if (w->r)
+            reactor_usecount_decr (w->r);
         free (w);
     }
 }
