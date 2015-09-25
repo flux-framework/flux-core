@@ -47,9 +47,10 @@ int stack_cb (coproc_t *c, void *arg)
 {
     size_t *ssize = arg;
     void *ptr = alloca (*ssize);
-    ok (ptr != NULL, "alloca %d works", *ssize);
-    memset (ptr, 0x66, *ssize);
-    return 0;
+    diag ("alloca %d = %p", *ssize, ptr);
+    if (ptr)
+        memset (ptr, 0x66, *ssize);
+    return ptr ? 0 : -1;
 }
 
 int bar_cb (coproc_t *c, void *arg)
@@ -97,7 +98,7 @@ int main (int argc, char *argv[])
     int i;
     int rc;
 
-    plan (30);
+    plan (29);
 
     ok ((c = coproc_create (foo_cb)) != NULL,
         "coproc_create works");
@@ -191,15 +192,16 @@ int main (int argc, char *argv[])
     ssize -= stack_reserve;
     ok (coproc_start (co, &ssize) == 0,
         "coproc_start works");
-    ok (coproc_returned (co, NULL),
-        "coproc returned with no segfaults");
+    rc = -1;
+    ok (coproc_returned (co, &rc) && rc == 0,
+        "coproc successfully scribbled on stack");
 
     /* should fail */
     ssize += stack_reserve + 8;
     ok (coproc_start (co, &ssize) == 0,
         "coproc_start works");
     ok (!coproc_returned (co, NULL),
-        "coproc segfaulted");
+        "coproc scribbled on guard page and segfaulted");
 
     done_testing ();
 
