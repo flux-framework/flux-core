@@ -367,6 +367,38 @@ static void test_timer (flux_reactor_t *reactor)
     flux_watcher_destroy (w);
 }
 
+static void dummy (flux_t h, flux_msg_handler_t *w,
+                   const flux_msg_t *msg, void *arg)
+{
+}
+
+static void leak_msg_handler (void)
+{
+    flux_t h;
+    flux_msg_handler_t *w;
+
+    if (!(h = flux_open ("loop://", 0)))
+        exit (1);
+    if (!(w = flux_msg_handler_create (h, FLUX_MATCH_ANY, dummy, NULL)))
+        exit (1);
+    flux_msg_handler_start (w);
+    flux_close (h);
+}
+
+static void reactor_destroy_early (void)
+{
+    flux_reactor_t *r;
+    flux_watcher_t *w;
+
+    if (!(r = flux_reactor_create ()))
+        exit (1);
+    if (!(w = flux_idle_watcher_create (r, NULL, NULL)))
+        exit (1);
+    flux_watcher_start (w);
+    flux_reactor_destroy (r);
+    flux_watcher_destroy (w);
+}
+
 static void fatal_err (const char *message, void *arg)
 {
     BAIL_OUT ("fatal error: %s", message);
@@ -377,7 +409,7 @@ int main (int argc, char *argv[])
     flux_t h;
     flux_reactor_t *reactor;
 
-    plan (4+11+3+4+3+5);
+    plan (4+11+3+4+3+5+2);
 
     (void)setenv ("FLUX_CONNECTOR_PATH", CONNECTOR_PATH, 0);
     ok ((h = flux_open ("loop://", 0)) != NULL,
@@ -401,6 +433,13 @@ int main (int argc, char *argv[])
     test_zmq (reactor); // 4
     test_msg (h); // 3
     test_multmatch (h); // 5
+
+    /* Misc
+     */
+    lives_ok ({ reactor_destroy_early ();},
+        "destroying reactor then watcher doesn't segfault");
+    lives_ok ({ leak_msg_handler ();},
+        "leaking a msg_handler_t doesn't segfault");
 
     flux_close (h);
     done_testing();
