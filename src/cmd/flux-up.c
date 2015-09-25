@@ -67,10 +67,10 @@ typedef enum {
 } fmt_t;
 
 typedef struct {
-    nodeset_t ok;
-    nodeset_t fail;
-    nodeset_t slow;
-    nodeset_t unknown;
+    nodeset_t *ok;
+    nodeset_t *fail;
+    nodeset_t *slow;
+    nodeset_t *unknown;
 } ns_t;
 
 static ns_t *ns_guess (flux_t h);
@@ -131,12 +131,12 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-static bool Jget_nodeset (JSON o, const char *name, nodeset_t *np)
+static bool Jget_nodeset (JSON o, const char *name, nodeset_t **np)
 {
-    nodeset_t ns;
+    nodeset_t *ns;
     const char *s;
 
-    if (!Jget_str (o, name, &s) || !(ns = nodeset_new_str (s)))
+    if (!Jget_str (o, name, &s) || !(ns = nodeset_create_string (s)))
         return false;
     *np = ns;
     return true;
@@ -183,10 +183,10 @@ static ns_t *ns_guess (flux_t h)
         err_exit ("flux_get_rank");
     if (flux_get_size (h, &size) < 0)
         err_exit ("flux_get_size");
-    ns->ok = nodeset_new ();
-    ns->slow = nodeset_new ();
-    ns->fail = nodeset_new ();
-    ns->unknown = nodeset_new ();
+    ns->ok = nodeset_create ();
+    ns->slow = nodeset_create ();
+    ns->fail = nodeset_create ();
+    ns->unknown = nodeset_create ();
     if (!ns->ok || !ns->slow || !ns->fail || !ns->unknown)
         oom ();
 
@@ -207,24 +207,24 @@ static void ns_destroy (ns_t *ns)
     free (ns);
 }
 
-static void nodeset_print (nodeset_t ns, const char *label, fmt_t fmt)
+static void nodeset_print (nodeset_t *ns, const char *label, fmt_t fmt)
 {
     const char *s;
     switch (fmt) {
         case FMT_RANGED:
-            nodeset_conf_ranges (ns, true);
-            nodeset_conf_separator (ns, ',');
+            nodeset_config_ranges (ns, true);
+            nodeset_config_separator (ns, ',');
             break;
         case FMT_COMMA:
-            nodeset_conf_ranges (ns, false);
-            nodeset_conf_separator (ns, ',');
+            nodeset_config_ranges (ns, false);
+            nodeset_config_separator (ns, ',');
             break;
         case FMT_NEWLINE:
-            nodeset_conf_ranges (ns, false);
-            nodeset_conf_separator (ns, '\n');
+            nodeset_config_ranges (ns, false);
+            nodeset_config_separator (ns, '\n');
             break;
     }
-    s = nodeset_str (ns);
+    s = nodeset_string (ns);
     if (label) {
         if (fmt == FMT_NEWLINE)
             printf ("%-8s\n%s%s", label, s, strlen (s) > 0 ? "\n" : "");
@@ -238,23 +238,23 @@ static void nodeset_print (nodeset_t ns, const char *label, fmt_t fmt)
     }
 }
 
-static nodeset_t ns_merge (nodeset_t ns1, nodeset_t ns2)
+static nodeset_t *ns_merge (nodeset_t *ns1, nodeset_t *ns2)
 {
-    nodeset_t ns = nodeset_dup (ns1);
-    nodeset_itr_t itr;
+    nodeset_t *ns = nodeset_dup (ns1);
+    nodeset_iterator_t *itr;
     uint32_t r;
 
-    if (!ns || !(itr = nodeset_itr_new (ns2)))
+    if (!ns || !(itr = nodeset_iterator_create (ns2)))
         oom ();
     while ((r = nodeset_next (itr)) != NODESET_EOF)
         nodeset_add_rank (ns, r);
-    nodeset_itr_destroy (itr);
+    nodeset_iterator_destroy (itr);
     return ns;
 }
 
 static void ns_print_up (ns_t *ns, fmt_t fmt)
 {
-    nodeset_t combined = ns_merge (ns->ok, ns->slow);
+    nodeset_t *combined = ns_merge (ns->ok, ns->slow);
     nodeset_print (combined, NULL, fmt);
     nodeset_destroy (combined);
 }
