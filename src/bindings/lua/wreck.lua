@@ -39,6 +39,7 @@ local default_opts = {
     ['help']    = { char = 'h'  },
     ['verbose'] = { char = 'v'  },
     ['ntasks']  = { char = 'n', arg = "N" },
+    ['walltime'] = { char = "T", arg = "SECONDS" },
     ['options'] = { char = 'o', arg = "OPTIONS.." },
 }
 
@@ -86,6 +87,11 @@ function wreck:usage()
   -v, --verbose              Be verbose
   -n, --ntasks=N             Request to run a total of N tasks
   -o, --options=OPTION,...   Set other options (See OTHER OPTIONS below)
+  -T, --walltime=N[SUFFIX]   Set max job walltime to N seconds. Optional
+                             suffix may be 's' for seconds (default), 'm'
+                             for minutes, 'h' for hours or 'd' for days.
+                             N may be an arbitrary floating point number,
+                             but will be rounded up to nearest second.
 ]])
     for _,v in pairs (self.extra_options) do
         local optstr = v.name .. (v.arg and "="..v.arg or "")
@@ -131,6 +137,18 @@ function wreck:getopt (opt)
     return self.opts [opt]
 end
 
+local function parse_walltime (s)
+    local m = { s = 1, m = 60, h = 3600, d = 56400 }
+    local n, suffix = s:match ("^([0-9.]+)([HhMmDdSs]?)$")
+    if not tonumber (n) then
+        return nil, "Invalid duration '"..s.."'"
+    end
+    if suffix and m [suffix]  then
+        n = (n * m [suffix])
+    end
+    return math.ceil (n)
+end
+
 function wreck:parse_cmdline (arg)
     local getopt = require 'flux.alt_getopt' .get_opts
     local s = short_opts (self)
@@ -147,6 +165,13 @@ function wreck:parse_cmdline (arg)
             if not lwj_options [opt] then
                 return nil, string.format ("Unknown LWJ option '%s'\n", opt)
             end
+        end
+    end
+
+    if self.opts.T then
+        self.walltime, err = parse_walltime (self.opts.T)
+        if not self.walltime then
+            self:die ("Error: %s", err)
         end
     end
 
@@ -177,6 +202,7 @@ function wreck:jobreq ()
         cmdline = self.cmdline,
         environ = get_filtered_env (),
         cwd =     posix.getcwd (),
+        walltime =self.walltime or 0
     }
     if self.opts.o then
         for opt in self.opts.o:gmatch ('[^,]+') do
