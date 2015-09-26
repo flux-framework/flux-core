@@ -38,7 +38,6 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/env.h"
 #include "src/common/libutil/nodeset.h"
 
 #include "pmi.h"
@@ -101,6 +100,12 @@ static inline void trace (int flags, const char *fmt, ...)
 #define trace_simple(n) do { \
     trace ((n), "%s", __FUNCTION__);\
 } while (0)
+
+static int env_getint (char *name, int dflt)
+{
+    char *s = getenv (name);
+    return s ? strtol (s, NULL, 0) : dflt;
+}
 
 int PMI_Init (int *spawned)
 {
