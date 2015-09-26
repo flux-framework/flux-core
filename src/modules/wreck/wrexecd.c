@@ -1589,13 +1589,14 @@ void ev_cb (flux_t f, flux_msg_handler_t *mw,
 
     base = strlen (ctx->topic);
     if (strcmp (topic+base, "kill") == 0) {
-        int sig = json_object_get_int (o);
-        if (sig == 0)
-            sig = 9;
+        json_object *ox;
+        int sig = 9;
+        if (json_object_object_get_ex (o, "signal", &ox))
+            sig = json_object_get_int (ox);
         log_msg (ctx, "Killing jobid %lu with signal %d", ctx->id, sig);
         prog_ctx_signal (ctx, sig);
     }
-
+    json_object_put (o);
 }
 
 int task_info_io_setup (struct task_info *t)
