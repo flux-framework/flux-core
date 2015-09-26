@@ -39,6 +39,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/env.h"
+#include "src/common/libutil/nodeset.h"
 
 #include "pmi.h"
 
@@ -59,8 +60,7 @@ typedef struct {
     int spawned;
     int size;
     int rank;
-    int *clique_ranks;
-    int clique_size;
+    nodeset_t *clique;
     int universe_size;
     int appnum;
     int barrier_num;
@@ -104,9 +104,7 @@ static inline void trace (int flags, const char *fmt, ...)
 
 int PMI_Init (int *spawned)
 {
-    int dflt_clique_ranks[] = { 0 };
-    int dflt_clique_size = 1;
-
+    const char *local_ranks;
     log_init ("flux-pmi");
     if (spawned == NULL)
         return PMI_ERR_INVALID_ARG;
@@ -116,17 +114,17 @@ int PMI_Init (int *spawned)
     if (ctx == NULL)
         goto nomem;
     memset (ctx, 0, sizeof (pmi_ctx_t));
+    ctx->magic = PMI_CTX_MAGIC;
 
     ctx->trace = env_getint ("PMI_TRACE", 0);
 
     ctx->size = env_getint ("FLUX_JOB_SIZE", 1);
     ctx->rank = env_getint ("FLUX_TASK_RANK", 0);
     ctx->appnum = env_getint ("FLUX_JOB_ID", 1);
-    if (env_getints ("FLUX_LOCAL_RANKS", &ctx->clique_ranks, &ctx->clique_size,
-                     dflt_clique_ranks, dflt_clique_size) < 0)
+    if (!(local_ranks = getenv ("FLUX_LOCAL_RANKS")))
+        local_ranks = "[0]";
+    if (!(ctx->clique = nodeset_create_string (local_ranks)))
         goto fail;
-
-    ctx->magic = PMI_CTX_MAGIC;
     ctx->spawned = PMI_FALSE;
     ctx->universe_size = ctx->size;
     ctx->barrier_num = 0;
@@ -170,8 +168,8 @@ int PMI_Finalize (void)
     assert (ctx->magic == PMI_CTX_MAGIC);
     if (ctx->fctx)
         flux_close (ctx->fctx);
-    if (ctx->clique_ranks)
-        free (ctx->clique_ranks);
+    if (ctx->clique)
+        nodeset_destroy (ctx->clique);
     memset (ctx, 0, sizeof (pmi_ctx_t));
     free (ctx);
     ctx = NULL;
@@ -457,23 +455,32 @@ int PMI_Get_clique_size (int *size)
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
-    *size = ctx->clique_size;
+    *size = nodeset_count (ctx->clique);
     return PMI_SUCCESS;
 }
 
 int PMI_Get_clique_ranks (int ranks[], int length)
 {
     int i;
+    nodeset_iterator_t *itr;
+    int ret = PMI_FAIL;
 
     trace_simple (PMI_TRACE_CLIQUE);
     if (ctx == NULL)
         return PMI_ERR_INIT;
     assert (ctx->magic == PMI_CTX_MAGIC);
-    if (length != ctx->clique_size)
+    if (length < nodeset_count (ctx->clique))
         return PMI_ERR_INVALID_ARG;
-    for (i = 0; i < length; i++)
-        ranks[i] = ctx->clique_ranks[i];
-    return PMI_SUCCESS;
+    itr = nodeset_iterator_create (ctx->clique);
+    for (i = 0; i < length; i++) {
+        ranks[i] = nodeset_next (itr);
+        if (ranks[i] == NODESET_EOF)
+            goto done;
+    }
+    ret = PMI_SUCCESS;
+done:
+    nodeset_iterator_destroy (itr);
+    return ret;
 }
 
 int PMI_KVS_Create (char kvsname[], int length)
