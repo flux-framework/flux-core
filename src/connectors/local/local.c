@@ -33,7 +33,6 @@
 #include <poll.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/env.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shortjson.h"
@@ -184,6 +183,12 @@ done:
     if (f)
         (void)fclose (f);
     return running;
+}
+
+static int env_getint (char *name, int dflt)
+{
+    char *s = getenv (name);
+    return s ? strtol (s, NULL, 10) : dflt;
 }
 
 /* Path is interpreted as the directory containing the unix domain socket
