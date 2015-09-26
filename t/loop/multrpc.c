@@ -79,7 +79,7 @@ done:
 }
 
 /* then test - add nodeid to 'then_ns' */
-static nodeset_t then_ns = NULL;
+static nodeset_t *then_ns = NULL;
 static int then_count = 0;
 static flux_rpc_t *then_r;
 static void then_cb (flux_rpc_t *r, void *arg)
@@ -265,7 +265,7 @@ int main (int argc, char *argv[])
         "flux_fatal function is called on fatal error");
 
     /* create nodeset for last _then test */
-    ok ((then_ns = nodeset_new ()) != NULL,
+    ok ((then_ns = nodeset_create ()) != NULL,
         "nodeset created ok");
 
     ok (flux_msghandler_addvec (h, htab, htablen, NULL) == 0,
