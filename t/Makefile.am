@@ -39,6 +39,7 @@ TESTS = \
 	t2001-jsc.t \
 	t2002-pmi.t \
 	t2003-recurse.t \
+	t3000-mpi-basic.t
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
 	lua/t0003-events.t \
@@ -79,6 +80,7 @@ check_SCRIPTS = \
 	t2001-jsc.t \
 	t2002-pmi.t \
 	t2003-recurse.t \
+	t3000-mpi-basic.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
 	lua/t0003-events.t \
@@ -94,6 +96,11 @@ check_PROGRAMS = \
 	loop/rpc.t \
 	loop/multrpc.t \
 	loop/reduce.t
+
+if HAVE_MPI
+check_PROGRAMS += \
+	mpi/hello
+endif
 
 dist_check_DATA = \
 	build/hello.mk \
@@ -138,3 +145,7 @@ loop_multrpc_t_LDADD = $(test_ldadd) $(LIBDL)
 loop_reduce_t_SOURCES = loop/reduce.c
 loop_reduce_t_CPPFLAGS = $(test_cppflags)
 loop_reduce_t_LDADD = $(test_ldadd) $(LIBDL)
+
+mpi_hello_SOURCES = mpi/hello.c
+mpi_hello_CPPFLAGS = $(MPI_CFLAGS)
+mpi_hello_LDADD = $(MPI_CLDFLAGS) $(LIBRT)

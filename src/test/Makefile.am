@@ -21,7 +21,6 @@ check_PROGRAMS = \
 
 SUBDIRS = request module
 if HAVE_MPI
-check_PROGRAMS += mpi_hello
 SUBDIRS += kap
 endif
 
@@ -47,12 +46,5 @@ tpmikvs_LDADD = \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
 	$(top_builddir)/src/common/libev/libev.la \
 	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
-
-mpi_hello_SOURCES = \
-	mpi_hello.c
-mpi_hello_CPPFLAGS = \
-	$(MPI_CFLAGS)
-mpi_hello_LDADD = \
-	$(MPI_CLDFLAGS) -lrt $(top_builddir)/src/lib/libpmi/libpmi.la
 
 EXTRA_DIST = valgrind.supp
