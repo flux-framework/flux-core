@@ -22,7 +22,17 @@ test_expect_success 'wreckrun: works' '
 	for i in $(seq 1 ${SIZE}); do echo $hostname; done >expected &&
 	test_cmp expected output
 '
-
+test_expect_success 'wreckrun: -T, --walltime works' '
+	test_expect_code 142 flux wreckrun --walltime=1s -n${SIZE} sleep 15
+'
+test_expect_success 'wreckrun: -T, --walltime allows override of default signal' '
+        flux kvs put lwj.walltime-signal=SIGTERM &&
+        test_when_finished flux kvs put lwj.walltime-signal= &&
+	test_expect_code 143 flux wreckrun -T 1s -n${SIZE} sleep 5
+'
+test_expect_success 'wreckrun: -T, --walltime allows per-job override of default signal' '
+	test_expect_code 130 flux wreckrun -P "lwj[\"walltime-signal\"]=\"SIGINT\"" -T 1s -n${SIZE} sleep 15
+'
 test_expect_success 'wreckrun: propagates current working directory' '
 	mkdir -p testdir &&
 	mypwd=$(pwd)/testdir &&
