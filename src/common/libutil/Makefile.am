@@ -25,8 +25,6 @@ libutil_la_SOURCES = \
 	monotime.h \
 	setenvf.c \
 	setenvf.h \
-	env.c \
-	env.h \
 	optparse.c \
 	optparse.h \
 	tstat.c \

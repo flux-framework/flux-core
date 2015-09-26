@@ -68,14 +68,14 @@ struct nodeset_struct {
 };
 
 #define NS_ITR_MAGIC 0xf004feef
-struct nodeset_itr_struct {
+struct nodeset_iterator_struct {
     int magic;
-    nodeset_t n;
+    nodeset_t *n;
     uint32_t r;
     bool started;
 };
 
-static bool nodeset_single (nodeset_t n);
+static bool nodeset_single (nodeset_t *n);
 
 #define NS_FIRST(n)    vebsucc ((n)->T,0)
 #define NS_NEXT(n,r)   vebsucc ((n)->T,(r)+1)
@@ -99,9 +99,9 @@ static Veb vebdup (Veb T)
     return t;
 }
 
-nodeset_t nodeset_new_size (uint32_t size)
+nodeset_t *nodeset_create_size (uint32_t size)
 {
-    nodeset_t n = malloc (sizeof (*n));
+    nodeset_t *n = malloc (sizeof (*n));
     if (!n)
         oom ();
     n->magic = NS_MAGIC;
@@ -120,14 +120,14 @@ nodeset_t nodeset_new_size (uint32_t size)
     return n;
 }
 
-nodeset_t nodeset_new (void)
+nodeset_t *nodeset_create (void)
 {
-    return nodeset_new_size (veb_minsize);
+    return nodeset_create_size (veb_minsize);
 }
 
-nodeset_t nodeset_dup (nodeset_t n)
+nodeset_t *nodeset_dup (nodeset_t *n)
 {
-    nodeset_t cpy = malloc (sizeof (*cpy));
+    nodeset_t *cpy = malloc (sizeof (*cpy));
 
     if (!cpy)
         oom ();
@@ -144,12 +144,12 @@ nodeset_t nodeset_dup (nodeset_t n)
     return cpy;
 }
 
-static void nodeset_incref (nodeset_t n)
+static void nodeset_incref (nodeset_t *n)
 {
     n->refcount++;
 }
 
-static void nodeset_decref (nodeset_t n)
+static void nodeset_decref (nodeset_t *n)
 {
     if (--n->refcount == 0) {
         n->magic = ~NS_MAGIC;
@@ -160,37 +160,37 @@ static void nodeset_decref (nodeset_t n)
     }
 }
 
-void nodeset_destroy (nodeset_t n)
+void nodeset_destroy (nodeset_t *n)
 {
     assert (n->magic == NS_MAGIC);
     nodeset_decref (n);
 }
 
-nodeset_t nodeset_new_str (const char *s)
+nodeset_t *nodeset_create_string (const char *s)
 {
-    nodeset_t n = nodeset_new ();
-    if (!nodeset_add_str (n, s)) {
+    nodeset_t *n = nodeset_create ();
+    if (!nodeset_add_string (n, s)) {
         nodeset_destroy (n);
         return NULL;
     }
     return n;
 }
 
-nodeset_t nodeset_new_range (uint32_t a, uint32_t b)
+nodeset_t *nodeset_create_range (uint32_t a, uint32_t b)
 {
-    nodeset_t n = nodeset_new ();
+    nodeset_t *n = nodeset_create ();
     nodeset_add_range (n, a, b);
     return n;
 }
 
-nodeset_t nodeset_new_rank (uint32_t r)
+nodeset_t *nodeset_create_rank (uint32_t r)
 {
-    nodeset_t n = nodeset_new ();
+    nodeset_t *n = nodeset_create ();
     nodeset_add_rank (n, r);
     return n;
 }
 
-void nodeset_conf_separator (nodeset_t n, char c)
+void nodeset_config_separator (nodeset_t *n, char c)
 {
     assert (n->magic == NS_MAGIC);
     if (n->conf_separator[0] != c)
@@ -198,7 +198,7 @@ void nodeset_conf_separator (nodeset_t n, char c)
     n->conf_separator[0] = c;
 }
 
-void nodeset_conf_ranges (nodeset_t n, bool enable)
+void nodeset_config_ranges (nodeset_t *n, bool enable)
 {
     assert (n->magic == NS_MAGIC);
     if (n->conf_ranges != enable)
@@ -206,7 +206,7 @@ void nodeset_conf_ranges (nodeset_t n, bool enable)
     n->conf_ranges = enable;
 }
 
-void nodeset_conf_brackets (nodeset_t n, bool enable)
+void nodeset_config_brackets (nodeset_t *n, bool enable)
 {
     assert (n->magic == NS_MAGIC);
     if (n->conf_brackets != enable)
@@ -214,7 +214,7 @@ void nodeset_conf_brackets (nodeset_t n, bool enable)
     n->conf_brackets = enable;
 }
 
-void nodeset_conf_padding (nodeset_t n, unsigned int padding)
+void nodeset_config_padding (nodeset_t *n, unsigned int padding)
 {
     assert (n->magic == NS_MAGIC);
     if (padding > 10)
@@ -224,7 +224,7 @@ void nodeset_conf_padding (nodeset_t n, unsigned int padding)
     n->conf_padding = padding;
 }
 
-bool nodeset_resize (nodeset_t n, uint32_t size)
+bool nodeset_resize (nodeset_t *n, uint32_t size)
 {
     assert (n->magic == NS_MAGIC);
 
@@ -258,7 +258,7 @@ bool nodeset_resize (nodeset_t n, uint32_t size)
 
 #define CHECK_SIZE(o,n) ((n)>(o)&&(o)<=ABS_MAX_SIZE)
 
-static bool nodeset_expandtofit (nodeset_t n, uint32_t r)
+static bool nodeset_expandtofit (nodeset_t *n, uint32_t r)
 {
     uint32_t size = NS_SIZE (n);
     while (size <= r && CHECK_SIZE(size, size << 1))
@@ -272,7 +272,7 @@ static bool nodeset_expandtofit (nodeset_t n, uint32_t r)
     return nodeset_resize (n, size);
 }
 
-void nodeset_minimize (nodeset_t n)
+void nodeset_minimize (nodeset_t *n)
 {
     assert (n->magic == NS_MAGIC);
     nodeset_resize (n, 0);
@@ -284,9 +284,9 @@ void nodeset_minimize (nodeset_t n)
     }
 }
 
-nodeset_itr_t nodeset_itr_new (nodeset_t n)
+nodeset_iterator_t *nodeset_iterator_create (nodeset_t *n)
 {
-    nodeset_itr_t itr = malloc (sizeof (*itr));
+    nodeset_iterator_t *itr = malloc (sizeof (*itr));
     if (!itr)
         oom ();
     itr->magic = NS_ITR_MAGIC;
@@ -297,7 +297,7 @@ nodeset_itr_t nodeset_itr_new (nodeset_t n)
     return itr;
 }
 
-void nodeset_itr_destroy (nodeset_itr_t itr)
+void nodeset_iterator_destroy (nodeset_iterator_t *itr)
 {
     assert (itr->magic == NS_ITR_MAGIC);
     nodeset_decref (itr->n);
@@ -305,7 +305,7 @@ void nodeset_itr_destroy (nodeset_itr_t itr)
     free (itr);
 }
 
-uint32_t nodeset_next (nodeset_itr_t itr)
+uint32_t nodeset_next (nodeset_iterator_t *itr)
 {
     if (itr->started)
         itr->r = NS_NEXT (itr->n, itr->r);
@@ -316,12 +316,12 @@ uint32_t nodeset_next (nodeset_itr_t itr)
     return (itr->r == NS_SIZE (itr->n) ? NODESET_EOF : itr->r);
 }
 
-void nodeset_itr_rewind (nodeset_itr_t itr)
+void nodeset_iterator_rewind (nodeset_iterator_t *itr)
 {
     itr->started = false;
 }
 
-bool nodeset_add_rank (nodeset_t n, uint32_t r)
+bool nodeset_add_rank (nodeset_t *n, uint32_t r)
 {
     assert (n->magic == NS_MAGIC);
 
@@ -332,7 +332,7 @@ bool nodeset_add_rank (nodeset_t n, uint32_t r)
     return true;
 }
 
-bool nodeset_add_range (nodeset_t n, uint32_t a, uint32_t b)
+bool nodeset_add_range (nodeset_t *n, uint32_t a, uint32_t b)
 {
     assert (n->magic == NS_MAGIC);
 
@@ -348,7 +348,7 @@ bool nodeset_add_range (nodeset_t n, uint32_t a, uint32_t b)
     return true;
 }
 
-void nodeset_del_rank (nodeset_t n, uint32_t r)
+void nodeset_delete_rank (nodeset_t *n, uint32_t r)
 {
     assert (n->magic == NS_MAGIC);
     if (r <= ABS_MAX_RANK)
@@ -356,7 +356,7 @@ void nodeset_del_rank (nodeset_t n, uint32_t r)
     n->s_valid = false;
 }
 
-void nodeset_del_range (nodeset_t n, uint32_t a, uint32_t b)
+void nodeset_delete_range (nodeset_t *n, uint32_t a, uint32_t b)
 {
     assert (n->magic == NS_MAGIC);
 
@@ -370,13 +370,13 @@ void nodeset_del_range (nodeset_t n, uint32_t a, uint32_t b)
     n->s_valid = false;
 }
 
-bool nodeset_test_rank (nodeset_t n, uint32_t r)
+bool nodeset_test_rank (nodeset_t *n, uint32_t r)
 {
     assert (n->magic == NS_MAGIC);
     return r <= ABS_MAX_RANK ? NS_TEST (n, r) : false;
 }
 
-bool nodeset_test_range (nodeset_t n, uint32_t a, uint32_t b)
+bool nodeset_test_range (nodeset_t *n, uint32_t a, uint32_t b)
 {
     assert (n->magic == NS_MAGIC);
 
@@ -409,7 +409,7 @@ catstr (char **sp, int *lenp, int *usedp, const char *adds)
     *usedp += l;
 }
 
-const char *nodeset_str (nodeset_t n)
+const char *nodeset_string (nodeset_t *n)
 {
     assert (n->magic == NS_MAGIC);
 
@@ -482,7 +482,7 @@ static bool str2rank (const char *s, uint32_t *rp)
 
 typedef enum { OP_ADD, OP_DEL, OP_TEST } op_t;
 
-static bool nodeset_op_str (nodeset_t n, op_t op, const char *str)
+static bool nodeset_op_string (nodeset_t *n, op_t op, const char *str)
 {
     char *cpy;
     int len;
@@ -506,7 +506,7 @@ static bool nodeset_op_str (nodeset_t n, op_t op, const char *str)
             if (!str2rank (s, &lo) || !str2rank (p + 1, &hi))
                 break;
             if (op == OP_DEL) {
-                nodeset_del_range (n, hi, lo);
+                nodeset_delete_range (n, hi, lo);
             } else if (op == OP_ADD) {
                 if (!nodeset_add_range (n, hi, lo))
                     break;
@@ -518,7 +518,7 @@ static bool nodeset_op_str (nodeset_t n, op_t op, const char *str)
             if (!str2rank (s, &lo))
                 break;
             if (op == OP_DEL) {
-                nodeset_del_rank (n, lo);
+                nodeset_delete_rank (n, lo);
             } else if (op == OP_ADD) {
                 if (!nodeset_add_rank (n, lo))
                     break;
@@ -536,25 +536,25 @@ static bool nodeset_op_str (nodeset_t n, op_t op, const char *str)
     return true;
 }
 
-bool nodeset_add_str (nodeset_t n, const char *str)
+bool nodeset_add_string (nodeset_t *n, const char *str)
 {
     assert (n->magic == NS_MAGIC);
-    return nodeset_op_str (n, OP_ADD, str);
+    return nodeset_op_string (n, OP_ADD, str);
 }
 
-bool nodeset_del_str (nodeset_t n, const char *str)
+bool nodeset_delete_string (nodeset_t *n, const char *str)
 {
     assert (n->magic == NS_MAGIC);
-    return nodeset_op_str (n, OP_DEL, str);
+    return nodeset_op_string (n, OP_DEL, str);
 }
 
-bool nodeset_test_str (nodeset_t n, const char *str)
+bool nodeset_test_string (nodeset_t *n, const char *str)
 {
     assert (n->magic == NS_MAGIC);
-    return nodeset_op_str (n, OP_TEST, str);
+    return nodeset_op_string (n, OP_TEST, str);
 }
 
-uint32_t nodeset_count (nodeset_t n)
+uint32_t nodeset_count (nodeset_t *n)
 {
     assert (n->magic == NS_MAGIC);
 
@@ -569,21 +569,21 @@ uint32_t nodeset_count (nodeset_t n)
     return count;
 }
 
-uint32_t nodeset_min (nodeset_t n)
+uint32_t nodeset_min (nodeset_t *n)
 {
     assert (n->magic == NS_MAGIC);
     uint32_t r = NS_FIRST (n);
     return r == NS_SIZE (n) ? NODESET_EOF : r;
 }
 
-uint32_t nodeset_max (nodeset_t n)
+uint32_t nodeset_max (nodeset_t *n)
 {
     assert (n->magic == NS_MAGIC);
     uint32_t r = NS_LAST (n);
     return r == NS_SIZE (n) ? NODESET_EOF : r;
 }
 
-static bool nodeset_single (nodeset_t n)
+static bool nodeset_single (nodeset_t *n)
 {
     uint32_t len = 0;
     uint32_t r;
@@ -596,7 +596,7 @@ static bool nodeset_single (nodeset_t n)
     return (len < 2);
 }
 
-uint32_t nodeset_getattr (nodeset_t n, int attr)
+uint32_t nodeset_getattr (nodeset_t *n, int attr)
 {
     assert (n->magic == NS_MAGIC);
     switch (attr) {

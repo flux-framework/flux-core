@@ -1027,11 +1027,11 @@ done:
 static bool nodeset_suffix_member (char *name, uint32_t rank)
 {
     char *s;
-    nodeset_t ns;
+    nodeset_t *ns;
     bool member = true;
 
     if ((s = strchr (name, '['))) {
-        if (!(ns = nodeset_new_str (s)))
+        if (!(ns = nodeset_create_string (s)))
             msg_exit ("malformed nodeset suffix in '%s'", name);
         *s = '\0'; /* side effect: truncate nodeset suffix */
         if (!nodeset_test_rank (ns, rank))

@@ -260,8 +260,8 @@ error:
 flux_rpc_t *flux_rpc_multi (flux_t h, const char *topic, const char *json_str,
                             const char *nodeset, int flags)
 {
-    nodeset_t ns = NULL;
-    nodeset_itr_t itr = NULL;
+    nodeset_t *ns = NULL;
+    nodeset_iterator_t *itr = NULL;
     flux_rpc_t *rpc = NULL;
     int i;
     uint32_t count;
@@ -273,9 +273,9 @@ flux_rpc_t *flux_rpc_multi (flux_t h, const char *topic, const char *json_str,
     if (!strcmp (nodeset, "all")) {
         if (flux_get_size (h, &count) < 0)
             goto error;
-        ns = nodeset_new_range (0, count - 1);
+        ns = nodeset_create_range (0, count - 1);
     } else {
-        if ((ns = nodeset_new_str (nodeset)))
+        if ((ns = nodeset_create_string (nodeset)))
             count = nodeset_count (ns);
     }
     if (!ns) {
@@ -284,7 +284,7 @@ flux_rpc_t *flux_rpc_multi (flux_t h, const char *topic, const char *json_str,
     }
     if (!(rpc = rpc_create (h, flags, count)))
         goto error;
-    if (!(itr = nodeset_itr_new (ns)))
+    if (!(itr = nodeset_iterator_create (ns)))
         goto error;
     for (i = 0; i < count; i++) {
         uint32_t nodeid = nodeset_next (itr);
@@ -294,13 +294,13 @@ flux_rpc_t *flux_rpc_multi (flux_t h, const char *topic, const char *json_str,
         if (!rpc->oneway)
             rpc->nodemap[i] = nodeid;
     }
-    nodeset_itr_destroy (itr);
+    nodeset_iterator_destroy (itr);
     return rpc;
 error:
     if (rpc)
         flux_rpc_destroy (rpc);
     if (itr)
-        nodeset_itr_destroy (itr);
+        nodeset_iterator_destroy (itr);
     if (ns)
         nodeset_destroy (ns);
     return NULL;

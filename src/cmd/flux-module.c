@@ -339,7 +339,7 @@ typedef struct {
     int size;
     char *digest;
     int idle;
-    nodeset_t nodeset;
+    nodeset_t *nodeset;
 } mod_t;
 
 void mod_destroy (mod_t *m)
@@ -358,7 +358,7 @@ mod_t *mod_create (const char *name, int size, const char *digest,
     m->size = size;
     m->digest = xstrdup (digest);
     m->idle = idle;
-    if (!(m->nodeset = nodeset_new_rank (nodeid)))
+    if (!(m->nodeset = nodeset_create_rank (nodeid)))
         oom ();
     return m;
 }
@@ -376,7 +376,7 @@ void lsmod_map_hash (zhash_t *mods, flux_lsmod_f cb, void *arg)
     while (key != NULL) {
         if ((m = zhash_lookup (mods, key))) {
             if (cb (m->name, m->size, m->digest, m->idle,
-                                       nodeset_str (m->nodeset), arg) < 0) {
+                                       nodeset_string (m->nodeset), arg) < 0) {
                 if (errno > errnum)
                     errnum = errno;
             }

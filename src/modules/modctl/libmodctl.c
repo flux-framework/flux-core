@@ -49,7 +49,7 @@ typedef struct {
     int size;
     char *digest;
     int idle;
-    nodeset_t nodeset;
+    nodeset_t *nodeset;
 } module_t;
 
 static void module_destroy (module_t *m)
@@ -72,7 +72,7 @@ static module_t *module_create (const char *name, int size, const char *digest,
     m->size = size;
     m->digest = xstrdup (digest);
     m->idle = idle;
-    if (!(m->nodeset = nodeset_new_rank (nodeid))) {
+    if (!(m->nodeset = nodeset_create_rank (nodeid))) {
         module_destroy (m);
         errno = EPROTO;
         return NULL;
@@ -136,7 +136,7 @@ static int cb_rlist_result (zhash_t *mods, flux_lsmod_f cb, void *arg)
     while (key) {
         module_t *m = zhash_lookup (mods, key);
         if (m) {
-            const char *ns = nodeset_str (m->nodeset);
+            const char *ns = nodeset_string (m->nodeset);
             if (cb (m->name, m->size, m->digest, m->idle, ns, arg) < 0)
                 goto done;
         }
