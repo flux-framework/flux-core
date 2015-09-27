@@ -16,10 +16,12 @@ http://download.zeromq.org/zeromq-4.0.4.tar.gz \
 http://download.zeromq.org/czmq-3.0.2.tar.gz \
 https://s3.amazonaws.com/json-c_releases/releases/json-c-0.11.tar.gz \
 http://downloads.sourceforge.net/ltp/lcov-1.10.tar.gz \
-http://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.0.tar.gz"
+http://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.0.tar.gz \
+http://www.mpich.org/static/downloads/3.1.4/mpich-3.1.4.tar.gz"
 
 declare -A extra_configure_opts=(\
 ["zeromq-4.0.4"]="--with-libsodium --with-libsodium-include-dir=\$prefix/include" \
+["mpich-3.1.4"]="--disable-fortran --disable-cxx --disable-maintainer-mode --disable-dependency-tracking --enable-shared --disable-wrapper-rpath" \
 )
 
 #
@@ -80,7 +82,7 @@ print_env () {
     echo "export CPPFLAGS=-I${prefix}/include"
     echo "export LDFLAGS=-L${prefix}/lib"
     echo "export PKG_CONFIG_PATH=${prefix}/lib/pkgconfig"
-    echo "export PATH=${PATH}:${HOME}/.local/bin:${HOME}/local/usr/bin"
+    echo "export PATH=${PATH}:${HOME}/.local/bin:${HOME}/local/usr/bin:${HOME}/local/bin"
     luarocks path --bin
 }
 
@@ -143,7 +145,7 @@ for pkg in $downloads; do
       cd ${name} &&
       wget ${pkg} || die "Failed to download ${pkg}"
       tar --strip-components=1 -xf *.tar.gz || die "Failed to un-tar ${name}"
-      test -x configure && ./configure --prefix=${prefix} \
+      test -x configure && CC=gcc ./configure --prefix=${prefix} \
                   --sysconfdir=${prefix}/etc \
                   ${extra_configure_opts[$name]} || : &&
       make PREFIX=${prefix} &&

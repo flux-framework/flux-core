@@ -24,7 +24,6 @@ addons:
       - uuid-dev
       - aspell
       - aspell-en
-      - libopenmpi-dev
       - ccache
   coverity_scan:
     project:
