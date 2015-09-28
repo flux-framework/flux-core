@@ -1736,6 +1736,8 @@ int main (int ac, char **av)
     rexec_state_change (ctx, "complete");
     log_msg (ctx, "job complete. exiting...");
 
+    lua_stack_call (ctx->lua_stack, "rexecd_exit");
+
     prog_ctx_destroy (ctx);
 
     return (0);
