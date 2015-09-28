@@ -13,6 +13,7 @@ void get_rank (flux_rpc_t *rpc, void *arg)
         msg_exit ("response protocol error");
     printf ("rank is %s\n", rank);
     Jput (o);
+    flux_rpc_destroy (rpc);
 }
 
 int main (int argc, char **argv)
@@ -33,7 +34,6 @@ int main (int argc, char **argv)
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         err_exit ("flux_reactor_run");
 
-    flux_rpc_destroy (rpc);
     flux_close (h);
     Jput (o);
     return (0);
