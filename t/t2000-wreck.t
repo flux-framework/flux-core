@@ -22,7 +22,17 @@ test_expect_success 'wreckrun: works' '
 	for i in $(seq 1 ${SIZE}); do echo $hostname; done >expected &&
 	test_cmp expected output
 '
-
+test_expect_success 'wreckrun: -T, --walltime works' '
+	test_expect_code 142 flux wreckrun --walltime=1s -n${SIZE} sleep 15
+'
+test_expect_success 'wreckrun: -T, --walltime allows override of default signal' '
+        flux kvs put lwj.walltime-signal=SIGTERM &&
+        test_when_finished flux kvs put lwj.walltime-signal= &&
+	test_expect_code 143 flux wreckrun -T 1s -n${SIZE} sleep 5
+'
+test_expect_success 'wreckrun: -T, --walltime allows per-job override of default signal' '
+	test_expect_code 130 flux wreckrun -P "lwj[\"walltime-signal\"]=\"SIGINT\"" -T 1s -n${SIZE} sleep 15
+'
 test_expect_success 'wreckrun: propagates current working directory' '
 	mkdir -p testdir &&
 	mypwd=$(pwd)/testdir &&
@@ -68,8 +78,7 @@ test_expect_success 'wreck: signaling wreckrun works' '
 	kill -INT $q &&
 	test_expect_code 137 wait $q
 '
-flux kvs dir -r resource >/dev/null 2>&1 && test_set_prereq RES_HWLOC
-test_expect_success RES_HWLOC 'wreckrun: oversubscription of tasks' '
+test_expect_success 'wreckrun: oversubscription of tasks' '
 	run_timeout 15 flux wreckrun -v -n$(($(nproc)*${SIZE}+1)) /bin/true
 '
 test_expect_success 'wreckrun: uneven distribution with -n, -N' '
