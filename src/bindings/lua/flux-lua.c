@@ -263,7 +263,7 @@ static int l_flux_kvsdir_new (lua_State *L)
 
     if (kvs_get_dir (f, &dir, path) < 0)
         return lua_pusherror (L, strerror (errno));
-    return l_push_kvsdir (L, dir);
+    return lua_push_kvsdir (L, dir);
 }
 
 #if 0
