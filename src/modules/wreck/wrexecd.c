@@ -1295,7 +1295,7 @@ static int l_wreck_index (lua_State *L)
         return (1);
     }
     if (strcmp (key, "flux") == 0) {
-        lua_push_flux_handle (L, prog_ctx_flux_handle (ctx));
+        lua_push_flux_handle_external (L, prog_ctx_flux_handle (ctx));
         return (1);
     }
     if (strcmp (key, "nodeid") == 0) {
