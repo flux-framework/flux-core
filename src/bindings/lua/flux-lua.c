@@ -151,22 +151,38 @@ int lua_push_flux_handle (lua_State *L, flux_t f)
     if (lua_istable (L, -1)) {
         lua_rawgeti (L, -1, 1);  /* [ userdata, table, reftable, ... ] */
 
-        assert (lua_isuserdata (L, -1));
-
-        /* Restore stack with userdata on top */
-        lua_replace (L, top+1);  /* [ table, userdata, ... ] */
-        lua_settop (L, top+1);   /* [ userdata, .... ] */
-
-        return (1);
+        if (lua_isuserdata (L, -1)) {
+            /* Restore stack with userdata on top */
+            lua_replace (L, top+1);  /* [ table, userdata, ... ] */
+            lua_settop (L, top+1);   /* [ userdata, .... ] */
+            return (1);
+        }
+        /* If we didn't find a userdata (partial initialization?)
+         *  then we'll have to recreate it. First pop top of stack,
+         *  and continue:
+         */
+        lua_pop (L, 1);
     }
 
     /*
-     *  Otherwise create a new object:
+     *  Otherwise create a new Lua object:
+     *
+     *  1. Store pointer to this flux_t handle in a userdata:
      */
     fp = lua_newuserdata (L, sizeof (*fp));
     *fp = f;
+
+    /*
+     *  2. Set metatable for Lua "flux" object so it inherets the right
+     *     methods:
+     */
     luaL_getmetatable (L, "FLUX.handle");
     lua_setmetatable (L, -2);
+
+    /*
+     *  3. Store a reference table containing this object with weak keys
+     *     so we don't hold a reference.
+     */
 
     /*
      *  Set flux weak key reference table in flux reftable such that
@@ -182,6 +198,7 @@ int lua_push_flux_handle (lua_State *L, flux_t f)
                                     /*  [ t, udata, ... ]                */
     lua_pop (L, 1);                 /* pop reftable leaving userdata     */
 
+    /* Return userdata as flux object */
     return (1);
 }
 
