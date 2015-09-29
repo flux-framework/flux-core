@@ -27,6 +27,7 @@ typedef int (*kvs_set_boolean_f)(const char *key, bool val, void *arg,
 /* Destroy a kvsdir object returned from kvs_get_dir() or kvsdir_get_dir()
  */
 void kvsdir_destroy (kvsdir_t *dir);
+void kvsdir_incref (kvsdir_t *dir);
 
 /* The basic get and put operations, with convenience functions
  * for simple types.  You will get an error if you call kvs_get()
