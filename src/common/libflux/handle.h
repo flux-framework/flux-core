@@ -59,6 +59,10 @@ enum {
 flux_t flux_open (const char *uri, int flags);
 void flux_close (flux_t h);
 
+/* Increment internal reference count on 'h'.
+ */
+void flux_incref (flux_t h);
+
 /* Get/set handle options.  Options are interpreted by connectors.
  * Returns 0 on success, or -1 on failure with errno set (e.g. EINVAL).
  */

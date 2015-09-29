@@ -54,11 +54,17 @@ struct flux_rpc_struct {
     void *aux;
     flux_free_f aux_destroy;
     const char *type;
+    int usecount;
 };
 
-void flux_rpc_destroy (flux_rpc_t *rpc)
+static void flux_rpc_usecount_incr (flux_rpc_t *rpc)
 {
-    if (rpc) {
+    rpc->usecount++;
+}
+
+static void flux_rpc_usecount_decr (flux_rpc_t *rpc)
+{
+    if (rpc && --rpc->usecount == 0) {
         if (rpc->w) {
             flux_msg_handler_stop (rpc->w);
             flux_msg_handler_destroy (rpc->w);
@@ -81,6 +87,11 @@ void flux_rpc_destroy (flux_rpc_t *rpc)
     }
 }
 
+void flux_rpc_destroy (flux_rpc_t *rpc)
+{
+    flux_rpc_usecount_decr (rpc);
+}
+
 static flux_rpc_t *rpc_create (flux_t h, int flags, int count)
 {
     flux_rpc_t *rpc = xzmalloc (sizeof (*rpc));
@@ -98,6 +109,7 @@ static flux_rpc_t *rpc_create (flux_t h, int flags, int count)
     rpc->m.bsize = count;
     rpc->m.typemask = FLUX_MSGTYPE_RESPONSE;
     rpc->h = h;
+    rpc->usecount = 1;
     return rpc;
 }
 
@@ -187,6 +199,7 @@ static void rpc_cb (flux_t h, flux_msg_handler_t *w,
     flux_rpc_t *rpc = arg;
     assert (rpc->then_cb != NULL);
 
+    flux_rpc_usecount_incr (rpc);
     if (rpc->rx_msg) {
         if (flux_requeue (rpc->h, msg, FLUX_RQ_HEAD) < 0)
             goto done;
@@ -203,6 +216,7 @@ static void rpc_cb (flux_t h, flux_msg_handler_t *w,
 done: /* no good way to report flux_requeue() errors */
     if (flux_rpc_completed (rpc))
         flux_msg_handler_stop (rpc->w);
+    flux_rpc_usecount_decr (rpc);
 }
 
 int flux_rpc_then (flux_rpc_t *rpc, flux_then_f cb, void *arg)

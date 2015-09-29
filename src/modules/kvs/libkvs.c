@@ -54,6 +54,7 @@ struct kvsdir_struct {
     char *key;
     json_object *o;
     int count;
+    int usecount;
 };
 
 struct kvsdir_iterator_struct {
@@ -179,11 +180,18 @@ static void kvs_popd (flux_t h)
  ** A kvsdir_t is analagous to posix (DIR *).
  **/
 
+void kvsdir_incref (kvsdir_t *dir)
+{
+    dir->usecount++;
+}
+
 void kvsdir_destroy (kvsdir_t *dir)
 {
-    free (dir->key);
-    json_object_put (dir->o);
-    free (dir);
+    if (--dir->usecount == 0) {
+        free (dir->key);
+        json_object_put (dir->o);
+        free (dir);
+    }
 }
 
 static kvsdir_t *kvsdir_alloc (flux_t handle, const char *key, json_object *o)
@@ -195,6 +203,7 @@ static kvsdir_t *kvsdir_alloc (flux_t handle, const char *key, json_object *o)
     dir->o = o;
     json_object_get (dir->o);
     dir->count = -1; /* uninitialized */
+    dir->usecount = 1;
 
     return dir;
 }

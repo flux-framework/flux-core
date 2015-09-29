@@ -60,6 +60,7 @@ struct flux_handle_struct {
     flux_fatal_f    fatal;
     void            *fatal_arg;
     bool            fatal_called;
+    int             usecount;
 };
 
 static char *find_file_r (const char *name, const char *dirpath)
@@ -205,26 +206,34 @@ flux_t flux_handle_create (void *impl, const struct flux_handle_ops *ops, int fl
     if (!(h->queue = msglist_create ((msglist_free_f)flux_msg_destroy)))
         oom ();
     h->pollfd = -1;
+    h->usecount = 1;
     return h;
 }
 
 void flux_handle_destroy (flux_t *hp)
 {
-    flux_t h;
+    if (hp) {
+        flux_t h = *hp;
 
-    if (hp && (h = *hp)) {
-        zhash_destroy (&h->aux);
-        if (h->ops->impl_destroy)
-            h->ops->impl_destroy (h->impl);
-        tagpool_destroy (h->tagpool);
-        if (h->dso)
-            dlclose (h->dso);
-        msglist_destroy (h->queue);
-        if (h->pollfd >= 0)
-            (void)close (h->pollfd);
-        free (h);
+        if (h && --h->usecount == 0) {
+            zhash_destroy (&h->aux);
+            if (h->ops->impl_destroy)
+                h->ops->impl_destroy (h->impl);
+            tagpool_destroy (h->tagpool);
+            if (h->dso)
+                dlclose (h->dso);
+            msglist_destroy (h->queue);
+            if (h->pollfd >= 0)
+                (void)close (h->pollfd);
+            free (h);
+        }
         *hp = NULL;
     }
+}
+
+void flux_incref (flux_t h)
+{
+    h->usecount++;
 }
 
 void flux_flags_set (flux_t h, int flags)
