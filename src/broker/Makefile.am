@@ -18,8 +18,6 @@ flux_broker_SOURCES = \
 	module.h \
 	modservice.c \
 	modservice.h \
-	boot_pmi.c \
-	boot_pmi.h \
 	overlay.h \
 	overlay.c \
 	heartbeat.h \
