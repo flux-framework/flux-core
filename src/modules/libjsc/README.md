@@ -90,6 +90,7 @@ service.
 |------------|------------------|-----------------|---------------|
 | nnodes     | JSC_RDESC\_NNODES | 64-bit integer | Node count    |
 | ntasks     | JSC_RDESC\_NTASKS | 64-bit integer | Process count |
+| walltime   | JSC_RDESC\_WALLTIME | 64-bit integer | Walltime    |
 
 **Table 3-3** Keys and values of *rdesc* attribute
 
