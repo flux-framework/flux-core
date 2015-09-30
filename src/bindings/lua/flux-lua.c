@@ -1661,7 +1661,19 @@ static int l_signal_handler_newindex (lua_State *L)
 
 static int l_flux_reactor_start (lua_State *L)
 {
-    return l_pushresult (L, flux_reactor_start (lua_get_flux (L, 1)));
+    int rc;
+    const char *arg;
+    int mode = 0;
+    if ((lua_gettop (L) > 1) && (arg = lua_tostring (L, 2))) {
+        if (strcmp (arg, "once") == 0)
+            mode = FLUX_REACTOR_ONCE;
+        else if (strcmp (arg, "nowait") == 0)
+            mode = FLUX_REACTOR_NOWAIT;
+        else
+            return lua_pusherror (L, "flux_reactor: Invalid argument");
+    }
+    rc = flux_reactor_run (flux_get_reactor (lua_get_flux (L, 1)), mode);
+    return (l_pushresult (L, rc));
 }
 
 static int l_flux_reactor_stop (lua_State *L)
