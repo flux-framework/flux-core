@@ -137,7 +137,7 @@ static int l_get_flux_reftable (lua_State *L, flux_t f)
  *   a reference to the existing object. Otherwise, create the reftable
  *   and return the new object.
  */
-int lua_push_flux_handle (lua_State *L, flux_t f)
+static int lua_push_flux_handle (lua_State *L, flux_t f)
 {
     flux_t *fp;
     int top = lua_gettop (L);
@@ -164,6 +164,7 @@ int lua_push_flux_handle (lua_State *L, flux_t f)
         lua_pop (L, 1);
     }
 
+    lua_settop (L, top); /* Reset stack */
     /*
      *  Otherwise create a new Lua object:
      *
@@ -200,6 +201,17 @@ int lua_push_flux_handle (lua_State *L, flux_t f)
 
     /* Return userdata as flux object */
     return (1);
+}
+
+int lua_push_flux_handle_external (lua_State *L, flux_t f)
+{
+    /*
+     *  Increase reference count on this flux handle since we are
+     *   pushing a handle opened external into Lua. We will rely on
+     *   lua gc to decref via flux_close().
+     */
+    flux_incref (f);
+    return (lua_push_flux_handle (L, f));
 }
 
 static void l_flux_reftable_unref (lua_State *L, flux_t f)
@@ -251,7 +263,7 @@ static int l_flux_kvsdir_new (lua_State *L)
 
     if (kvs_get_dir (f, &dir, path) < 0)
         return lua_pusherror (L, strerror (errno));
-    return l_push_kvsdir (L, dir);
+    return lua_push_kvsdir (L, dir);
 }
 
 #if 0

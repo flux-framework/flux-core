@@ -61,7 +61,7 @@ static int l_kvsdir_destroy (lua_State *L)
     return (0);
 }
 
-int l_push_kvsdir (lua_State *L, kvsdir_t *dir)
+int lua_push_kvsdir (lua_State *L, kvsdir_t *dir)
 {
     kvsdir_t **new;
     if (dir == NULL)
@@ -69,6 +69,16 @@ int l_push_kvsdir (lua_State *L, kvsdir_t *dir)
     new = lua_newuserdata (L, sizeof (*new));
     *new = dir;
     return l_kvsdir_instantiate (L);
+}
+
+int lua_push_kvsdir_external (lua_State *L, kvsdir_t *dir)
+{
+    /*
+     *  This kvsdir object has been created external to Lua, so take
+     *   an extra reference so we don't destroy at garbage collection.
+     */
+    kvsdir_incref (dir);
+    return lua_push_kvsdir (L, dir);
 }
 
 static int l_kvsdir_kvsdir_new (lua_State *L)
@@ -83,7 +93,7 @@ static int l_kvsdir_kvsdir_new (lua_State *L)
     if (kvsdir_get_dir (d, &new, key) < 0)
         return lua_pusherror (L, "kvsdir_get_dir: %s", strerror (errno));
 
-    return l_push_kvsdir (L, new);
+    return lua_push_kvsdir (L, new);
 }
 
 static int l_kvsdir_tostring (lua_State *L)

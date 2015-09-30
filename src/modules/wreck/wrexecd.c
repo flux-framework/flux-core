@@ -1278,11 +1278,11 @@ static int l_wreck_index (lua_State *L)
         return (1);
     }
     if (strcmp (key, "kvsdir") == 0) {
-        l_push_kvsdir (L, ctx->kvs);
+        lua_push_kvsdir_external (L, ctx->kvs);
         return (1);
     }
     if (strcmp (key, "by_rank") == 0) {
-        l_push_kvsdir (L, ctx->resources);
+        lua_push_kvsdir_external (L, ctx->resources);
         return (1);
     }
     if (strcmp (key, "by_task") == 0) {
@@ -1291,11 +1291,11 @@ static int l_wreck_index (lua_State *L)
             return lua_pusherror (L, "Not in task context");
         if (!(d = prog_ctx_kvsdir (ctx)))
             return lua_pusherror (L, strerror (errno));
-        l_push_kvsdir (L, d);
+        lua_push_kvsdir_external (L, d);
         return (1);
     }
     if (strcmp (key, "flux") == 0) {
-        lua_push_flux_handle (L, prog_ctx_flux_handle (ctx));
+        lua_push_flux_handle_external (L, prog_ctx_flux_handle (ctx));
         return (1);
     }
     if (strcmp (key, "nodeid") == 0) {
