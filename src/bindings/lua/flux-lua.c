@@ -164,6 +164,7 @@ int lua_push_flux_handle (lua_State *L, flux_t f)
         lua_pop (L, 1);
     }
 
+    lua_settop (L, top); /* Reset stack */
     /*
      *  Otherwise create a new Lua object:
      *
