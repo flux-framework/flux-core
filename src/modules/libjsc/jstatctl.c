@@ -254,6 +254,19 @@ static int extract_raw_ntasks (flux_t h, int64_t j, int64_t *ntasks)
     return rc;
 }
 
+static int extract_raw_walltime (flux_t h, int64_t j, int64_t *walltime)
+{
+    int rc = 0;
+    char *key = xasprintf ("lwj.%"PRId64".walltime", j);
+    if (kvs_get_int64 (h, key, walltime) < 0) {
+        flux_log (h, LOG_ERR, "extract %s: %s", key, strerror (errno));
+        rc = -1;
+    }
+    else
+        flux_log (h, LOG_ERR, "extract %s: %"PRId64"", key, *walltime);
+    return rc;
+}
+
 static int extract_raw_rdl (flux_t h, int64_t j, char **rdlstr)
 {
     int rc = 0;
@@ -436,14 +449,17 @@ static int query_rdesc (flux_t h, int64_t j, JSON *jcb)
     JSON o = NULL;
     int64_t nnodes = -1;
     int64_t ntasks = -1;
+    int64_t walltime = -1;    
     
     if (extract_raw_nnodes (h, j, &nnodes) < 0) return -1;
     if (extract_raw_ntasks (h, j, &ntasks) < 0) return -1;
+    if (extract_raw_walltime (h, j, &walltime) < 0) return -1;
 
     *jcb = Jnew ();
     o = Jnew ();
     Jadd_int64 (o, JSC_RDESC_NNODES, nnodes);
     Jadd_int64 (o, JSC_RDESC_NTASKS, ntasks);
+    Jadd_int64 (o, JSC_RDESC_WALLTIME, walltime);
     json_object_object_add (*jcb, JSC_RDESC, o);
     return 0;
 }
@@ -537,20 +553,27 @@ static int update_rdesc (flux_t h, int64_t j, JSON o)
     int rc = -1;
     int64_t nnodes = 0;
     int64_t ntasks = 0;
+    int64_t walltime = 0;
     char *key1;
     char *key2;
+    char *key3;
 
     if (!Jget_int64 (o, JSC_RDESC_NNODES, &nnodes)) return -1;
     if (!Jget_int64 (o, JSC_RDESC_NTASKS, &ntasks)) return -1;
-    if ((nnodes < 0) || (ntasks < 0)) return -1;
+    if (!Jget_int64 (o, JSC_RDESC_WALLTIME, &walltime)) return -1;
+
+    if ((nnodes < 0) || (ntasks < 0) || (walltime < 0)) return -1;
 
     key1 = xasprintf ("lwj.%"PRId64".nnodes", j);
     key2 = xasprintf ("lwj.%"PRId64".ntasks", j);
-    if (kvs_put_int64 (h, key1, nnodes) < 0) 
+    key3 = xasprintf ("lwj.%"PRId64".walltime", j);
+    if (kvs_put_int64 (h, key1, nnodes) < 0)
         flux_log (h, LOG_ERR, "update %s: %s", key1, strerror (errno));
-    else if (kvs_put_int64 (h, key2, ntasks) < 0) 
+    else if (kvs_put_int64 (h, key2, ntasks) < 0)
         flux_log (h, LOG_ERR, "update %s: %s", key2, strerror (errno));
-    else if (kvs_commit (h) < 0) 
+    else if (kvs_put_int64 (h, key3, walltime) < 0)
+        flux_log (h, LOG_ERR, "update %s: %s", key3, strerror (errno));
+    else if (kvs_commit (h) < 0)
         flux_log (h, LOG_ERR, "commit failed");
     else {
         flux_log (h, LOG_DEBUG, "job (%"PRId64") assigned new resources.", j);
