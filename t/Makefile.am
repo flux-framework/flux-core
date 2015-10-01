@@ -96,7 +96,8 @@ check_PROGRAMS = \
 	loop/rpc.t \
 	loop/multrpc.t \
 	loop/reduce.t \
-	pmi/kvstest
+	pmi/kvstest \
+	pmi/pminfo
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -150,6 +151,10 @@ loop_reduce_t_LDADD = $(test_ldadd) $(LIBDL)
 pmi_kvstest_SOURCES = pmi/kvstest.c
 pmi_kvstest_CPPFLAGS = $(test_cppflags)
 pmi_kvstest_LDADD = $(test_ldadd) $(LIBRT)
+
+pmi_pminfo_SOURCES = pmi/pminfo.c
+pmi_pminfo_CPPFLAGS = $(test_cppflags)
+pmi_pminfo_LDADD = $(test_ldadd) $(LIBRT)
 
 mpi_hello_SOURCES = mpi/hello.c
 mpi_hello_CPPFLAGS = $(MPI_CFLAGS)
