@@ -15,7 +15,6 @@ check_PROGRAMS = \
 	tkvstorture \
 	tkvswatch \
 	tmunge \
-	tpmikvs \
 	tbarrier \
 	tdisconnect
 
@@ -31,20 +30,6 @@ LDADD = $(top_builddir)/src/modules/libzio/libzio.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/libev/libev.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
-	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
-
-tpmikvs_SOURCES = \
-	tpmikvs.c
-
-tpmikvs_CPPFLAGS = \
-	-I$(top_srcdir)/src/lib/libpmi \
-	$(AM_CPPFLAGS)
-
-tpmikvs_LDADD = \
-	$(top_builddir)/src/lib/libpmi/libpmi.la \
-	$(top_builddir)/src/common/libutil/libutil.la \
-	$(top_builddir)/src/common/liblsd/liblsd.la \
-	$(top_builddir)/src/common/libev/libev.la \
 	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
 
 EXTRA_DIST = valgrind.supp
