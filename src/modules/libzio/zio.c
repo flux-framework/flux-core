@@ -77,7 +77,7 @@ struct zio_ctx {
     zio_send_f send;    /*  Callback to send json data                       */
     zio_close_f close;  /*  Callback after eof is sent                       */
 
-    flux_t      flux;   /*  flux handle if we are using flux reactor         */
+    flux_reactor_t *reactor;
     flux_watcher_t *reader;
     flux_watcher_t *writer;
     void *arg;          /*  Arg passed to callbacks                          */
@@ -689,10 +689,10 @@ static void zio_flux_writer_cb (flux_reactor_t *r, flux_watcher_t *w,
 
 static int zio_flux_reader_poll (zio_t *zio)
 {
-    if (!zio->flux)
+    if (!zio->reactor)
         return (-1);
     if (!zio->reader)
-        zio->reader = flux_fd_watcher_create (flux_get_reactor (zio->flux),
+        zio->reader = flux_fd_watcher_create (zio->reactor,
                 zio->srcfd, FLUX_POLLIN, zio_flux_read_cb, zio);
     if (!zio->reader)
         return (-1);
@@ -702,7 +702,7 @@ static int zio_flux_reader_poll (zio_t *zio)
 
 static int zio_reader_poll (zio_t *zio)
 {
-    if (zio->flux)
+    if (zio->reactor)
         return zio_flux_reader_poll (zio);
     return (-1);
 }
@@ -712,10 +712,10 @@ static int zio_reader_poll (zio_t *zio)
  */
 static int zio_flux_writer_schedule (zio_t *zio)
 {
-    if (!zio->flux)
+    if (!zio->reactor)
         return (-1);
     if (!zio->writer)
-        zio->writer = flux_fd_watcher_create (flux_get_reactor (zio->flux),
+        zio->writer = flux_fd_watcher_create (zio->reactor,
                 zio->dstfd, FLUX_POLLOUT, zio_flux_writer_cb, zio);
     if (!zio->writer)
         return (-1);
@@ -725,7 +725,7 @@ static int zio_flux_writer_schedule (zio_t *zio)
 
 static int zio_writer_schedule (zio_t *zio)
 {
-    if (zio->flux)
+    if (zio->reactor)
         return zio_flux_writer_schedule (zio);
     return (-1);
 }
@@ -854,14 +854,19 @@ static int zio_bootstrap (zio_t *zio)
     return (0);
 }
 
-int zio_flux_attach (zio_t *zio, flux_t f)
+int zio_reactor_attach (zio_t *zio, flux_reactor_t *r)
 {
     errno = EINVAL;
     if ((zio == NULL) || (zio->magic != ZIO_MAGIC))
         return (-1);
 
-    zio->flux = f;
+    zio->reactor = r;
     return (zio_bootstrap (zio));
+}
+
+int zio_flux_attach (zio_t *zio, flux_t h)
+{
+    return zio_reactor_attach (zio, flux_get_reactor (h));
 }
 
 int zio_zmsg_send (zio_t *zio, const char *json_str, int len, void *arg)
