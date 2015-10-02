@@ -40,6 +40,9 @@ local default_opts = {
     ['verbose'] = { char = 'v'  },
     ['ntasks']  = { char = 'n', arg = "N" },
     ['walltime'] = { char = "T", arg = "SECONDS" },
+    ['output'] =   { char = "O", arg = "FILENAME" },
+    ['error'] =    { char = "E", arg = "FILENAME" },
+    ['label-io'] = { char = "l", },
     ['options'] = { char = 'o', arg = "OPTIONS.." },
 }
 
@@ -92,6 +95,12 @@ function wreck:usage()
                              for minutes, 'h' for hours or 'd' for days.
                              N may be an arbitrary floating point number,
                              but will be rounded up to nearest second.
+  -o, --output=FILENAME      Duplicate stdout/stderr from tasks to a file or
+                             files. FILENAME is optionally a moustache
+                             template with keys such as id, cmd, taskid.
+                             (e.g. --tee=flux-{{id}}.out)
+  -e, --error=FILENAME       Send stderr to a different location than stdout.
+  -l, --labelio              Prefix lines of output with task id
 ]])
     for _,v in pairs (self.extra_options) do
         local optstr = v.name .. (v.arg and "="..v.arg or "")
@@ -208,6 +217,15 @@ function wreck:jobreq ()
         for opt in self.opts.o:gmatch ('[^,]+') do
             jobreq['options.'..opt] = 1
         end
+    end
+    if self.opts.O or self.opts.E then
+        jobreq.output = {
+            files = {
+              stdout = self.opts.O,
+              stderr = self.opts.E,
+            },
+            labelio = self.opts.l,
+        }
     end
     return jobreq
 end

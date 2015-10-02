@@ -174,8 +174,6 @@ wreck:add_options ({
         usage = "Force number of nodes" },
     { name = 'now', char = 'i',
         usage = "Run job immediately" },
-    { name = 'label-io', char = 'l',
-        usage = "Label output with taskid" },
     { name = 'pre-launch-hook', char = "P", arg = "CODE",
         usage = "execute Lua CODE before launch." },
 })
