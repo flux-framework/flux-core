@@ -54,7 +54,6 @@ fluxcmd_PROGRAMS = \
 	flux-logger \
 	flux-snoop \
 	flux-event \
-	flux-zio \
 	flux-module \
 	flux-comms \
 	flux-comms-stats \
@@ -63,15 +62,6 @@ fluxcmd_PROGRAMS = \
 	flux-config \
 	flux-jstat
 
-flux_zio_SOURCES = \
-	flux-zio.c \
-	forkzio.c \
-	forkzio.h
-flux_zio_LDADD = \
-	$(top_builddir)/src/modules/libzio/libzio.la \
-	$(top_builddir)/src/modules/libkz/libkz.la \
-	$(fluxcmd_ldadd) \
-	$(LIBUTIL)
 flux_mping_LDADD = \
 	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
 	$(fluxcmd_ldadd) \
