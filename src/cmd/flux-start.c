@@ -36,10 +36,13 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/optparse.h"
 #include "src/common/libutil/cleanup.h"
+#include "src/modules/libsubprocess/subprocess.h"
 
 int start_direct (optparse_t p, const char *cmd);
 
 const int default_size = 1;
+
+struct subprocess_manager *sm;
 
 /* Workaround for shutdown bug:
  * Wait this many seconds after exit of first broker before kill -9 of
@@ -101,15 +104,43 @@ int main (int argc, char *argv[])
     return status;
 }
 
-static int child_report (optparse_t p, pid_t pid, int rank, int status)
+void alarm_handler (int a)
 {
+    struct subprocess *p;
+    p = subprocess_manager_first (sm);
+    while (p) {
+        if (subprocess_pid (p))
+            (void)subprocess_kill (p, SIGKILL);
+        p = subprocess_manager_next (sm);
+    }
+}
+
+void child_killer_arm (void)
+{
+    static bool armed = false;
+
+    if (!armed) {
+        struct sigaction sa;
+        memset (&sa, 0, sizeof (sa));
+        sa.sa_handler = alarm_handler;
+        sigaction (SIGALRM, &sa, NULL);
+        alarm (child_wait_seconds);
+        armed = true;
+    }
+}
+
+static int child_report (struct subprocess *p, void *arg)
+{
+    int *exit_rc = arg;
+    char *rankstr = subprocess_get_context (p, "rank");
+    int rank = strtol (rankstr, NULL, 10);
+    int status = subprocess_exit_status (p);
+    pid_t pid = subprocess_pid (p);
     int rc = 0;
+
     if (WIFEXITED (status)) {
         rc = WEXITSTATUS (status);
-        if (rc == 0) {
-            if (optparse_hasopt (p, "verbose"))
-                msg ("%d (pid %d) exited normally", rank, pid);
-        } else
+        if (rc != 0)
             msg ("%d (pid %d) exited with rc=%d", rank, pid, rc);
     } else if (WIFSIGNALED (status)) {
         int sig = WTERMSIG (status);
@@ -126,40 +157,15 @@ static int child_report (optparse_t p, pid_t pid, int rank, int status)
         if (status < 256)
             rc = status;
     }
-    return rc;
+    subprocess_destroy (p);
+    child_killer_arm ();
+    if (*exit_rc < rc)
+        *exit_rc = rc;
+    free (rankstr);
+    return 0;
 }
 
-static volatile sig_atomic_t child_killer_timeout;
-void alarm_handler (int a)
-{
-    child_killer_timeout = 1;
-}
-
-void child_killer_arm (void)
-{
-    struct sigaction sa;
-    memset (&sa, 0, sizeof (sa));
-    sa.sa_handler = alarm_handler;
-    sigaction (SIGALRM, &sa, NULL);
-    alarm (child_wait_seconds);
-    child_killer_timeout = 0;
-}
-
-void child_killer (optparse_t p, pid_t *pids, int size)
-{
-    int rank;
-    if (child_killer_timeout) {
-        for (rank = 0; rank < size; rank++) {
-            if (pids[rank] > 0) {
-                if (optparse_hasopt (p, "verbose"))
-                    msg ("%d: kill -9 %u", rank, pids[rank]);
-                (void)kill (pids[rank], SIGKILL);
-            }
-        }
-    }
-}
-
-void add_arg (char **argz, size_t *argz_len, const char *fmt, ...)
+void add_arg (struct subprocess *p, const char *fmt, ...)
 {
     va_list ap;
     char *arg;
@@ -167,28 +173,37 @@ void add_arg (char **argz, size_t *argz_len, const char *fmt, ...)
     va_start (ap, fmt);
     arg = xvasprintf (fmt, ap);
     va_end (ap);
-    if (argz_add (argz, argz_len, arg) < 0)
-        oom ();
+    if (subprocess_argv_append (p, arg) < 0)
+        err_exit ("subprocess_argv_append");
+    free (arg);
 }
 
-void add_args_sep (char **argz, size_t *argz_len, const char *s, int sep)
+void add_args_sep (struct subprocess *p, const char *s, int sep)
 {
     char *az = NULL;
     size_t az_len = 0;
+    char *arg = NULL;
+
     if (argz_create_sep (s, sep, &az, &az_len) < 0)
         oom ();
-    if (argz_append (argz, argz_len, az, az_len) < 0)
-        oom ();
+    while ((arg = argz_next (az, az_len, arg))) {
+        if (subprocess_argv_append  (p, arg) < 0)
+            err_exit ("subprocess_argv_append");
+    }
     if (az)
         free (az);
 }
 
-char *args_str (char *argz, size_t argz_len)
+char *args_str (struct subprocess *p)
 {
-    char *cpy = xzmalloc (argz_len);
-    memcpy (cpy, argz, argz_len);
-    argz_stringify (cpy, argz_len, ' ');
-    return cpy;
+    int i, argc = subprocess_get_argc (p);
+    char *az = NULL;
+    size_t az_len = 0;
+
+    for (i = 0; i < argc; i++)
+        argz_add (&az, &az_len, subprocess_get_arg (p, i));
+    argz_stringify (az, az_len, ' ');
+    return az;
 }
 
 char *create_socket_dir (const char *sid)
@@ -203,96 +218,60 @@ char *create_socket_dir (const char *sid)
     return sockdir;
 }
 
-int start_direct (optparse_t p, const char *cmd)
+int start_direct (optparse_t opts, const char *cmd)
 {
-    int size = optparse_get_int (p, "size", default_size);
-    const char *broker_opts = optparse_get_str (p, "broker-opts", NULL);
+    int size = optparse_get_int (opts, "size", default_size);
+    const char *broker_opts = optparse_get_str (opts, "broker-opts", NULL);
     char *broker_path = getenv ("FLUX_BROKER_PATH");
-    bool child_killer_armed = false;;
-    int rank;
-    pid_t *pids;
-    int reaped = 0;
-    int rc = 0;
     char *sid = xasprintf ("%d", getpid ());
     char *sockdir = create_socket_dir (sid);
+    struct subprocess *p;
+    int rank, rc = 0;
 
     if (!broker_path)
         msg_exit ("FLUX_BROKER_PATH is not set");
 
-    pids = xzmalloc (size * sizeof (pids[0]));
+    if (!(sm = subprocess_manager_create ()))
+        err_exit ("subprocess_manager_create");
+
     for (rank = 0; rank < size; rank++) {
-        char *argz = NULL;
-        size_t argz_len = 0;
-        char **av = NULL;
+        if (!(p = subprocess_create (sm)))
+            err_exit ("subprocess_create");
+        subprocess_set_context (p, "rank", xasprintf ("%d", rank));
+        subprocess_set_callback (p, child_report, &rc);
 
-        add_arg (&argz, &argz_len, "%s", broker_path);
-        add_arg (&argz, &argz_len, "--boot-method=LOCAL");
-        add_arg (&argz, &argz_len, "--size=%d", size);
-        add_arg (&argz, &argz_len, "--rank=%d", rank);
-        add_arg (&argz, &argz_len, "--sid=%s", sid);
-        add_arg (&argz, &argz_len, "--socket-directory=%s", sockdir);
+        add_arg (p, "%s", broker_path);
+        add_arg (p, "--boot-method=LOCAL");
+        add_arg (p, "--size=%d", size);
+        add_arg (p, "--rank=%d", rank);
+        add_arg (p, "--sid=%s", sid);
+        add_arg (p, "--socket-directory=%s", sockdir);
         if (broker_opts)
-            add_args_sep (&argz, &argz_len, broker_opts, ',');
+            add_args_sep (p, broker_opts, ',');
         if (rank == 0 && cmd)
-            add_arg (&argz, &argz_len, "%s", cmd); /* must be last */
+            add_arg (p, "%s", cmd); /* must be last */
 
-        if (optparse_hasopt (p, "verbose")) {
-            char *s = args_str (argz, argz_len);
+        if (optparse_hasopt (opts, "verbose")) {
+            char *s = args_str (p);
             msg ("%d: %s", rank, s);
             free (s);
         }
-        av = xzmalloc (sizeof (char *) * (argz_count (argz, argz_len) + 1));
-        argz_extract (argz, argz_len, av);
-        if (!optparse_hasopt (p, "noexec")) {
-            switch ((pids[rank] = fork ())) {
-                case -1:
-                    err_exit ("fork");
-                case 0: /* child */
-                    if (execv (av[0], av) < 0)
-                        err_exit ("execv %s", av[0]);
-                    break;
-                default: /* parent */
-                    break;
-            }
+        subprocess_set_environ (p, environ);
+        if (!optparse_hasopt (opts, "noexec")) {
+            if (subprocess_run (p) < 0)
+                err_exit ("subprocess_run");
         }
-        if (av)
-            free (av);
-        if (argz)
-            free (argz);
     }
-    if (!optparse_hasopt (p, "noexec")) {
-        (void)close (STDIN_FILENO);
-        while (reaped < size) {
-            int status;
-            pid_t pid;
 
-            if ((pid = wait (&status)) < 0) {
-                if (errno == EINTR) {
-                    if (child_killer_armed)
-                        child_killer (p, pids, size);
-                    continue;
-                }
-                err_exit ("wait");
-            }
-            for (rank = 0; rank < size; rank++) {
-                if (pids[rank] == pid) {
-                    int code = child_report (p, pid, rank, status);
-                    if (rc < code)
-                        rc = code;
-                    pids[rank] = -1;
-                    if (!child_killer_armed) {
-                        child_killer_arm ();
-                        child_killer_armed = true;
-                    }
-                    reaped++;
-                    break;
-                }
-            }
-        }
-    }
+    /* N.B. reap_all can be interrupted by SIGALRM, so keep calling
+     * it until there are no more subprocesses o/w destroy will assert.
+     */
+    while (subprocess_manager_first (sm))
+        subprocess_manager_reap_all (sm);
+
+    subprocess_manager_destroy (sm);
 
     free (sid);
-    free (pids);
     free (sockdir);
     return (rc);
 }
