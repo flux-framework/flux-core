@@ -77,7 +77,6 @@ struct zio_ctx {
     zio_send_f send;    /*  Callback to send json data                       */
     zio_close_f close;  /*  Callback after eof is sent                       */
 
-    zloop_t    *zloop;  /*  zloop if we are connected to one                 */
     flux_t      flux;   /*  flux handle if we are using flux reactor         */
     void *arg;          /*  Arg passed to callbacks                          */
 };
@@ -620,20 +619,6 @@ static int zio_read_cb_common (zio_t *zio)
     return (rc);
 }
 
-static int zio_zloop_read_cb (zloop_t *zl, zmq_pollitem_t *zp, zio_t *zio)
-{
-    int rc;
-    zio_handler_start (zio);
-    rc = zio_read_cb_common (zio);
-    if (rc >= 0 && zio_eof_sent (zio)) {
-        zio_debug (zio, "reader detaching from zloop\n");
-        zloop_poller_end (zl, zp);
-        rc = zio_close (zio);
-    }
-    zio_handler_end (zio);
-    return (rc);
-}
-
 static int zio_flux_read_cb (flux_t f, int fd, short revents, zio_t *zio)
 {
     int rc;
@@ -680,17 +665,6 @@ static int zio_writer_cb (zio_t *zio)
     return (rc);
 }
 
-static int zio_zloop_writer_cb (zloop_t *zl, zmq_pollitem_t *zp, zio_t *zio)
-{
-    int rc;
-    zio_handler_start (zio);
-    rc = zio_writer_cb (zio);
-    if (!zio_write_pending (zio))
-        zloop_poller_end (zl, zp);
-    zio_handler_end (zio);
-    return (rc);
-}
-
 static int zio_flux_writer_cb (flux_t f, int fd, short revents, zio_t *zio)
 {
     int rc;
@@ -702,24 +676,6 @@ static int zio_flux_writer_cb (flux_t f, int fd, short revents, zio_t *zio)
     return (rc);
 }
 
-static int zio_zloop_reader_poll (zio_t *zio)
-{
-    zmq_pollitem_t zp = { .fd = zio->srcfd,
-                          .events = ZMQ_POLLIN | ZMQ_POLLERR,
-                          .socket = NULL };
-#ifdef ZMQ_IGNERR
-    zp.events |= ZMQ_IGNERR;
-#endif
-    zloop_poller (zio->zloop, &zp,
-        (zloop_fn *) zio_zloop_read_cb, (void *) zio);
-#ifndef ZMQ_IGNERR
-    zloop_set_tolerant (zio->zloop, &zp);
-#endif
-    return (0);
-}
-
-/* Note: flux reactor sets ZMQ_IGNERR/zloop_set_tolerant as default in fd_add.
- */
 static int zio_flux_reader_poll (zio_t *zio)
 {
     if (!zio->flux)
@@ -732,9 +688,7 @@ static int zio_flux_reader_poll (zio_t *zio)
 
 static int zio_reader_poll (zio_t *zio)
 {
-    if (zio->zloop)
-        return zio_zloop_reader_poll (zio);
-    else if (zio->flux)
+    if (zio->flux)
         return zio_flux_reader_poll (zio);
     return (-1);
 }
@@ -742,18 +696,6 @@ static int zio_reader_poll (zio_t *zio)
 /*
  *  Schedule pending data to write to zio->dstfd
  */
-static int zio_zloop_writer_schedule (zio_t *zio)
-{
-    zmq_pollitem_t zp = { .fd = zio->dstfd,
-                          .events = ZMQ_POLLOUT | ZMQ_POLLERR,
-                          .socket = NULL };
-    if (!zio->zloop)
-        return (-1);
-
-    return zloop_poller (zio->zloop, &zp,
-        (zloop_fn *) zio_zloop_writer_cb, (void *) zio);
-}
-
 static int zio_flux_writer_schedule (zio_t *zio)
 {
     if (!zio->flux)
@@ -766,9 +708,7 @@ static int zio_flux_writer_schedule (zio_t *zio)
 
 static int zio_writer_schedule (zio_t *zio)
 {
-    if (zio->zloop)
-        return zio_zloop_writer_schedule (zio);
-    else if (zio->flux)
+    if (zio->flux)
         return zio_flux_writer_schedule (zio);
     return (-1);
 }
@@ -895,16 +835,6 @@ static int zio_bootstrap (zio_t *zio)
             zio_writer_schedule (zio);
     }
     return (0);
-}
-
-int zio_zloop_attach (zio_t *zio, zloop_t *zloop)
-{
-    errno = EINVAL;
-    if ((zio == NULL) || (zio->magic != ZIO_MAGIC))
-        return (-1);
-
-    zio->zloop = zloop;
-    return (zio_bootstrap (zio));
 }
 
 int zio_flux_attach (zio_t *zio, flux_t f)

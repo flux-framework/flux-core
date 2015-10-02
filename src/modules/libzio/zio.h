@@ -2,7 +2,6 @@
 #define _FLUX_CORE_ZIO_H 1
 
 #include <json.h>
-#include <czmq.h>
 #include <flux/core.h>
 
 typedef struct zio_ctx zio_t;
@@ -87,16 +86,6 @@ int zio_write_eof (zio_t *zio);
  *   if necessary. Only data destined for specific object [z] is read.
  */
 int zio_write_json (zio_t *z, const char *json_str);
-
-/*
- *   Attach zio object [x] to zloop poll loop [zloop].
- *    zio object will be automatcially detached after EOF is
- *    received and sent.  ZIO readers will use zloop callback
- *    to schedule reads when data is ready. ZIO writers will
- *    use zloop to schedule writes to dstfd when it is ready
- *    for writing.
- */
-int zio_zloop_attach (zio_t *z, zloop_t *zloop);
 
 /*
  *   Attach zio object [x] to flux reactor in handle [flux].
