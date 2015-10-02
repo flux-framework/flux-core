@@ -169,7 +169,11 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
 
     p->sm = sm;
 
-    p->zhash = zhash_new ();
+    if (!(p->zhash = zhash_new ())) {
+        subprocess_destroy (p);
+        errno = ENOMEM;
+        return (NULL);
+    }
 
     p->pid = (pid_t) -1;
 
@@ -762,7 +766,11 @@ struct subprocess_manager * subprocess_manager_create (void)
 {
     struct subprocess_manager *sm = xzmalloc (sizeof (*sm));
 
-    sm->processes = zlist_new ();
+    if (!(sm->processes = zlist_new ())) {
+        errno = ENOMEM;
+        free (sm);
+        return (NULL);
+    }
 
     return (sm);
 }
