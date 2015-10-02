@@ -162,8 +162,9 @@ end
 --  Parse cmdline args:
 --
 local wreck = require 'wreck' .new (shortprog)
+local ioattach = require 'wreck'.ioattach
+local taskio
 local sigtimer
-local nio = 0
 local state = ""
 
 wreck:add_options ({
@@ -269,7 +270,8 @@ end
 --  Check if job state is "complete" and all IO from tasks have closed:
 --
 local function check_job_completed ()
-    if nio <= 0 and (state == "complete" or state == "reaped") then
+    if taskio:complete() and
+       (state == "complete" or state == "reaped") then
         local rc = lwj_return_code (f, wreck, resp.jobid)
         if rc == 0 then
             wreck:verbose ("All tasks completed successfully.\n");
@@ -278,38 +280,17 @@ local function check_job_completed ()
     end
 end
 
-
---  IO watcher creation helper function:
 --
-local function io_watcher_create (stream, jobid, taskid)
-    local s = stream == "stdout" and io.stdout or io.stderr
-    local iow,err = f:iowatcher {
-        key = string.format ("lwj.%d.%d.%s", jobid, taskid, stream),
-        handler = function (iow, data)
-            if not data then
-                nio = nio - 1
-                check_job_completed ()
-                return
-            end
-            if (wreck.opts.l) then s:write (taskid..": ") end
-            s:write (data)
-        end
-    }
-    if not iow then wreck:die (err) end
-    return iow
-end
-
+--  Open output to all tasks:
 --
---  Create iowatchers for all tasks stdout/err:
---
---  XXX: The `nio` IO counter must be initialized before creating
---   all IO watchers.
-nio = wreck.ntasks * 2
-for i=0, wreck.ntasks-1 do
-    for _,stream in pairs{ "stdout", "stderr"} do
-        iow = io_watcher_create (stream, resp.jobid, i)
-    end
-end
+taskio, err = ioattach {
+     flux = f,
+     jobid = resp.jobid,
+     ntasks = wreck.ntasks,
+     labelio = wreck.opts.l,
+     on_completion = check_job_completed
+}
+if not taskio then wreck:die ("error opening task io: %s\n", err) end
 
 --
 --  Open stdin (to task 0 only for now)
@@ -353,7 +334,7 @@ local s, err = f:sighandler {
 local s, err = f:sighandler {
     sigmask = { posix.SIGALRM },
     handler = function (f, s, sig)
-        wreck:say ("Killed by SIGALRM: state = %s, nio = %d\n", state, nio)
+        wreck:say ("Killed by SIGALRM: state = %s\n", state)
         os.exit (128+posix.SIGALRM)
     end
 }
