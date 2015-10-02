@@ -212,6 +212,28 @@ function wreck:jobreq ()
     return jobreq
 end
 
+function wreck.ioattach (arg)
+    local ioplex = require 'wreck.io'
+    local f = arg.flux
+    if not arg.ntasks then
+        local lwj, err = f:kvsdir ("lwj."..arg.jobid)
+        if not lwj then
+            return nil, "Error: "..err
+        end
+        arg.ntasks = lwj.ntasks
+    end
+    local taskio, err = ioplex.create (arg)
+    if not taskio then return nil, err end
+    for i = 0, arg.ntasks - 1 do
+        for _,stream in pairs {"stdout", "stderr"} do
+            local rc, err =  taskio:redirect (i, stream, stream)
+        end
+    end
+    taskio:start (arg.flux)
+
+    return taskio
+end
+
 function wreck.new (prog)
     local w = setmetatable ({extra_options = {}}, wreck) 
     w.prog = prog
