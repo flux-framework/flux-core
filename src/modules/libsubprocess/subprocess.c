@@ -44,7 +44,7 @@
 struct subprocess_manager {
     zlist_t *processes;
     int wait_flags;
-    flux_t h;
+    flux_reactor_t *reactor;
 };
 
 struct subprocess {
@@ -202,10 +202,10 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
         return (NULL);
     }
 
-    if (sm->h) {
-        zio_flux_attach (p->zio_in, sm->h);
-        zio_flux_attach (p->zio_err, sm->h);
-        zio_flux_attach (p->zio_out, sm->h);
+    if (sm->reactor) {
+        zio_reactor_attach (p->zio_in, sm->reactor);
+        zio_reactor_attach (p->zio_err, sm->reactor);
+        zio_reactor_attach (p->zio_out, sm->reactor);
     }
     return (p);
 }
@@ -877,7 +877,10 @@ subprocess_manager_set (struct subprocess_manager *sm, sm_item_t item, ...)
             sm->wait_flags = va_arg (ap, int);
             break;
         case SM_FLUX:
-            sm->h = (flux_t) va_arg (ap, void *);
+            sm->reactor = flux_get_reactor ((flux_t) va_arg (ap, void *));
+            break;
+        case SM_REACTOR:
+            sm->reactor = (flux_reactor_t *) va_arg (ap, void *);
             break;
         default:
             errno = EINVAL;
