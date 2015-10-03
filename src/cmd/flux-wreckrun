@@ -176,6 +176,8 @@ wreck:add_options ({
         usage = "Run job immediately" },
     { name = 'pre-launch-hook', char = "P", arg = "CODE",
         usage = "execute Lua CODE before launch." },
+    { name = 'detach', char = "d",
+        usage = "Detach immediately after starting job" },
 })
 
 if not wreck:parse_cmdline (arg) then
@@ -255,6 +257,10 @@ if true then
     wreck:verbose ("%-4.03fs: Sending run event\n", tt:get0())
     local rc,err = f:sendevent ("wrexec.run.%d", resp.jobid)
     if not rc then wreck:die ("sendevent: %s\n", err) end
+    if wreck.opts.d then
+        print ("Job "..resp.jobid)
+        os.exit(0)
+    end
 else
     --
     --  Update job state to 'pending' to notify scheduler:
