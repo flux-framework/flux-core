@@ -234,6 +234,52 @@ function wreck.ioattach (arg)
     return taskio
 end
 
+local function exit_message (t)
+    local s = "exited with "
+    s = s .. (t.exit_code and "exit code" or "signal") .. " %d"
+    return s:format (t.exit_code or t.exit_sig)
+end
+
+local function task_status (lwj, taskid)
+    if not tonumber (taskid) then return nil end
+    local t = lwj[taskid]
+    if not t.exit_status then
+        return 0, (t.procdesc and "starting" or "running")
+    end
+    local x = t.exit_code or (t.exit_sig + 128)
+    return x, exit_message (t)
+end
+
+--- Return highest exit code from all tasks and task exit message list.
+-- Summarize job exit status for arg.jobid by returning max task exit code,
+-- along with a list of task exit messages to be optionally emitted to stdout.
+-- @param arg.jobid job identifier
+-- @param arg.flux  (optional) flux handle
+-- @return exit_cde, msg_list
+function wreck.status (arg)
+    local hostlist = require 'flux.hostlist'
+    local f = arg.flux
+    local jobid = arg.jobid
+    if not jobid then return nil, "required arg jobid" end
+
+    if not f then f = require 'flux'.new() end
+    local lwj = f:kvsdir ("lwj."..jobid)
+    local max = 0
+    local msgs = {}
+    for taskid in lwj:keys () do
+        local x, s = task_status (lwj, taskid)
+        if x then
+            if x > max then max = x end
+            if not msgs[s] then
+                msgs[s] = hostlist.new (taskid)
+            else
+                msgs[s]:concat (taskid)
+            end
+        end
+    end
+    return max, msgs
+end
+
 function wreck.new (prog)
     local w = setmetatable ({extra_options = {}}, wreck) 
     w.prog = prog
