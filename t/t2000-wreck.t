@@ -192,5 +192,30 @@ test_expect_success 'wreck plugins can use wreck:log_msg()' '
 	flux wreckrun /bin/true &&
 	flux dmesg | grep "plugin test successful" || (flux dmesg | grep lwj\.$(last_job_id) && false)
 '
+test_expect_success 'wreckrun: --detach supported' '
+	flux wreckrun --detach /bin/true | grep ^Job
+'
+test_expect_success 'wreckrun: --output supported' '
+	flux wreckrun --output=test1.out echo hello &&
+        grep hello test1.out
+'
+test_expect_success 'wreckrun: --error supported' '
+	flux wreckrun --output=test2.out --error=test2.err \
+	    sh -c "echo >&2 this is stderr; echo this is stdout" &&
+        grep "this is stderr" test2.err &&
+        grep "this is stdout" test2.out
+'
+test_expect_success 'wreckrun: kvs config output for all jobs' '
+	test_when_finished "flux kvs put lwj.output=" &&
+	flux kvs put lwj.output.labelio=true &&
+	flux kvs put lwj.output.files.stdout=test3.out &&
+	flux wreckrun -n${SIZE} echo foo &&
+	for i in $(seq 0 $((${SIZE}-1)))
+		do echo "$i: foo"
+	done >expected.kvsiocfg &&
+	sort -n test3.out >output.kvsiocfg &&
+	test_cmp expected.kvsiocfg output.kvsiocfg
+'
+
 
 test_done
