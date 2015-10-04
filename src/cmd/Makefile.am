@@ -35,6 +35,7 @@ bin_PROGRAMS = flux
 
 dist_fluxcmd_SCRIPTS = \
 	flux-wreckrun \
+	flux-wreck \
 	flux-exec \
 	flux-topo \
 	flux-lstopo \
