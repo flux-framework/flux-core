@@ -67,8 +67,9 @@ wrexecd_LDADD = \
 dist_wreckscripts_SCRIPTS = \
 	lua.d/01-env.lua \
 	lua.d/02-affinity.lua \
-	lua.d/timeout.lua
-
+	lua.d/timeout.lua \
+        lua.d/output.lua
+   
 # XXX: Hack below to force rebuild of unbuilt wrexecd dependencies
 #
 $(wrexecd_LDADD):
