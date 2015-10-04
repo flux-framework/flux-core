@@ -180,7 +180,8 @@ test_expect_success 'wreckrun: top level environment' '
 '
 test_expect_success 'wreck plugins can use wreck:log_msg()' '
 	saved_pattern=$(flux kvs get config.wrexec.lua_pattern) &&
-	cleanup flux kvs put wrexec.lua_pattern="$saved_pattern" &&
+	test_when_finished \
+            "flux kvs put config.wrexec.lua_pattern=\"$saved_pattern\"" &&
 	cat <<-EOF >test.lua &&
 	function rexecd_init ()
 	    local rc, err = wreck:log_msg ("lwj.%d: plugin test successful", wreck.id)
