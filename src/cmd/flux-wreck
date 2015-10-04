@@ -1,0 +1,330 @@
+#!/usr/bin/env lua
+--[[--------------------------------------------------------------------------
+ *  Copyright (c) 2014 Lawrence Livermore National Security, LLC.  Produced at
+ *  the Lawrence Livermore National Laboratory (cf, AUTHORS, DISCLAIMER.LLNS).
+ *  LLNL-CODE-658032 All rights reserved.
+ *
+ *  This file is part of the Flux resource manager framework.
+ *  For details, see https://github.com/flux-framework.
+ *
+ *  This program is free software; you can redistribute it and/or modify it
+ *  under the terms of the GNU General Public License as published by the Free
+ *  Software Foundation; either version 2 of the license, or (at your option)
+ *  any later version.
+ *
+ *  Flux is distributed in the hope that it will be useful, but WITHOUT
+ *  ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY or
+ *  FITNESS FOR A PARTICULAR PURPOSE.  See the terms and conditions of the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
+ *  See also:  http://www.gnu.org/licenses/
+ ---------------------------------------------------------------------------]]
+--
+-- flux-wreck: simple wreck job utility
+--
+local f, err = require 'flux' .new()
+local wreck = require 'wreck'
+local hostlist = require 'flux.hostlist'
+
+local prog = string.match (arg[0], "([^/]+)$")
+local shortprog = prog:match ("flux%-(.+)$")
+
+local function eprintf (...)
+    io.stderr:write (string.format (...))
+end
+
+local function printf (...)
+    io.stdout:write (string.format (...))
+end
+
+local function die (fmt, ...)
+    eprintf (shortprog..": "..fmt, ...)
+    os.exit (1)
+end
+
+
+--- Index of all commands registered in this script
+local Commands = {}
+
+--- Command class from which all "commands" inherit
+local Command = {}
+Command.__index = Command
+
+--- Allow new commad methods to be registered by "calling" Command.
+-- a table is passed to Command with fields:
+-- @param t.name Name of the script method
+-- @param t.description Brief description of this method
+-- @param t.usage brief usage to be displayed in help
+-- @param t.handle function implementing handler with args (self, arg...)
+-- @param t.options extra options (besides --help) for this cmd
+setmetatable (Command,
+    { __call = function (_,t)
+        assert (t and t.name)
+        Commands[t.name] = t
+        return setmetatable (t, Command)
+     end
+    }
+)
+function Command:opt_table ()
+    local long_opts = { help = 'h' }
+    local short_opts = "h"
+    if not self.options then
+        return short_opts, long_opts
+    end
+    for _, t in pairs (self.options) do
+        short_opts = short_opts .. t.char .. (t.arg and ":" or "")
+        long_opts [t.name] = t.char
+    end
+    return short_opts, long_opts
+end
+
+function Command:help (code)
+    local _, opt_table = self:opt_table ()
+    eprintf ("Usage: %s %s %s\n", prog, self.name, self.usage)
+    eprintf ("  -%s, --%-20s %s\n", 'h', 'help', "Display this message.")
+    if self.options then
+        for _,t in pairs (self.options) do
+            local optstr = t.name .. (t.arg and "="..t.arg or "")
+            eprintf ("  -%s, --%-20s %s\n", t.char, optstr, t.usage)
+        end
+    end
+    if code then os.exit (code) end
+end
+
+function Command:run (args)
+    local getopts = require 'flux.alt_getopt' .get_opts
+    local opts, optind = getopts (args, self:opt_table())
+    if not opts then self:help (1) end
+    if opts.h then self:help (0) end
+    local a = {}
+    for i = optind, #args do
+        table.insert (a, args[i])
+    end
+    self.opt = opts
+    self.handler (self, a)
+end
+
+local function check_jobid_arg (self, id)
+    if not id then
+        eprintf ("Error: Job id required\n")
+        self:help (1)
+    elseif not tonumber (id) then
+        die ("Invalid Job id '%s'\n", id)
+    end
+    return id
+end
+
+Command {
+ name = "attach",
+ description = "Attach to running or completed job output",
+ usage = "[OPTIONS] JOBID",
+ options = {
+     { name = "status",  char = "s",
+       usage = "Include status after all output" },
+     { name = "label-io",  char = "l",
+       usage = "Label lines of output with task id" },
+ },
+ handler = function (self, arg)
+    local id = check_jobid_arg (self, arg[1])
+    local taskio, err = wreck.ioattach {
+        flux = f,
+        jobid = id,
+        labelio = self.opt.l,
+        on_completion = function ()
+            f:reactor_stop()
+        end
+    }
+    if not taskio then die ("Failed to connect to job %d: %s\n", id, err) end
+    if not taskio:complete() then f:reactor () end
+    if self.opt.s then
+        Commands.status:run ({id})
+    end
+    os.exit (0)
+ end
+}
+
+local function opt_sig (s)
+    local posix = require 'posix'
+    if not s then return posix.SIGTERM end
+    if tonumber (s) then return tonumber (s) end
+    if not tonumber (posix[s]) then
+        die ("Invalid signal '%s'\n", s)
+    end
+    return tonumber (posix [s])
+end
+
+Command {
+ name = "kill",
+ description = "Kill a running job",
+ usage = "[OPTIONS] JOBID",
+ options = {
+     { name = "signal",  char = "s", arg = "N",
+       usage = "Specify signal number N to be sent." }
+ },
+ handler = function (self, arg)
+    local id = check_jobid_arg (self, arg[1])
+    local lwj, err = f:kvsdir ("lwj.%d", id)
+    if not lwj then die ("Job %d: %s\n", id, err) end
+    if lwj.state ~= "running" then
+        io.stderr:write ("Job "..id..": "..lwj.state.."\n")
+        os.exit (1)
+    end
+    local sig = opt_sig (self.opt.s)
+    local rc, err = f:sendevent ({signal = sig}, "wreck.%d.kill", id)
+    if not rc then die ("signal: %s\n", err) end
+ end
+}
+
+Command {
+ name = "status",
+ description = "Return status of jobs",
+ usage = "JOBID",
+ handler = function (self, arg)
+    local jobid = check_jobid_arg (self, arg[1])
+    local lwj, err = f:kvsdir ("lwj.%d", jobid)
+    if not lwj then die ("Job %d: %s\n", jobid, err) end
+    print ("Job "..jobid.." status: "..lwj.state)
+    local code, msglist = wreck.status { flux = f, jobid = jobid }
+    if not code then die (msglist) end
+    for msg, hl in pairs (msglist) do
+        local s = string.format ("task%s: %s", tostring (hl:sort()), msg)
+        print (s)
+    end
+    os.exit (code)
+ end
+}
+
+
+local LWJ = {}
+function LWJ.open (f, id)
+    if not f or not id then
+        return nil, "Required arg missing"
+    end
+    local lwj, err = f:kvsdir ("lwj.%d", id)
+    if not lwj then
+        return nil, "Failed to get lwj info: "..err
+    end
+    return setmetatable ({id = id, lwj = lwj }, LWJ)
+end
+
+local function now ()
+    local t = require 'flux.posix'.gettimeofday()
+    return t.sec + (t.usec / (1000 * 1000))
+end
+
+LWJ.__index = function (self, key)
+    if key == "state" then
+        return self.lwj.state
+    elseif key == "ranks" then
+        local hl = hostlist.new()
+        local rank = self.lwj.rank
+        if not rank then return nil end
+        for i in rank:keys() do hl:concat (i) end
+        return hl:sort()
+    elseif key == "ntasks" then
+        return self.lwj.ntasks
+    elseif key == "nnodes" then
+        return self.lwj.nnodes
+    elseif key == "runtime" then
+        local st = self.lwj["starting-time"]
+        if not st then return 0 end
+        local ct = self.lwj["complete-time"]
+        if not ct then ct = now () end
+        local s = ct - st
+        return s > 0 and s or 0
+    elseif key == "start" then
+        return os.date ("%FT%T", self.lwj["starting-time"])
+    elseif key == "end" then
+        return os.date ("%FT%T", self.lwj["complete-time"])
+    elseif key == "created" then
+        return os.date ("%FT%T", self.lwj["create-time"])
+    elseif key == "command" then
+        return self.lwj.cmdline[1]
+    end
+    return nil
+end
+
+local function seconds_to_string (s)
+    local f = string.format
+    if s > (60*60*24) then
+        return f ("%.03fd", s / (60*60*24))
+    elseif s > (60*60) then
+        return f ("%.03fh", s / (60*60))
+    elseif s > 60 then
+        return f ("%.03fm", s / 60)
+    end
+    return f ("%.03fs", s)
+end
+
+Command {
+ name = "ls",
+ usage = "",
+ description = "List jobs in kvs",
+ handler = function (self, arg)
+    local lwj, err = f:kvsdir ("lwj")
+    if not lwj then
+        die ("Failed to get lwj info: %s\n", err)
+    end
+    local fmt = "%6s %6s %-9s %20s %12s %8s %-.13s\n";
+    printf (fmt, "ID", "NTASKS", "STATE", "START", "RUNTIME", "RANKS", "COMMAND")
+    for id in lwj:keys() do
+        if tonumber (id) then
+            local j, err = LWJ.open (f, id)
+            if not j then die ("job%d: %s", id, err) end
+            printf (fmt, id, j.ntasks, j.state, j.start,
+                    seconds_to_string (j.runtime),
+                    tostring (j.ranks),
+                    j.command:match ("([^/]+)$"))
+        end
+    end
+ end
+}
+
+
+local function main_usage ()
+    eprintf ("Usage: %s COMMAND [OPTIONS]...\n", prog)
+    eprintf ("Supported commands: \n")
+    for name,info in pairs (Commands) do
+        eprintf (" %-12s %s\n", name, info.description)
+    end
+end
+
+Command {
+ name = "help",
+ description = "Display this help or help for a command",
+ usage = "[COMMAND]",
+ handler = function (self, arg)
+    if #arg == 0 then
+        main_usage ()
+        os.exit (0)
+    end
+    Commands[arg[1]]:help (0)
+ end
+}
+
+--
+--  Main program: Run cmd in arg[1]:
+--
+local cmd = table.remove (arg, 1)
+if not cmd then
+    main_usage ()
+    os.exit (1)
+end
+if cmd == "-h" or cmd == "--help" then
+    cmd = "help"
+end
+
+-- Check for valid connection to flux:
+if not f then die ("Connecting to flux failed: %s\n", err) end
+
+local command = Commands[cmd]
+if not command then
+     die ("Error: Unknown command: %s\n", cmd)
+end
+
+command:run (arg)
+
+--  vi: ts=4 sw=4 expandtab
