@@ -14,7 +14,8 @@ dist_fluxlua_SCRIPTS = \
 	flux/posix.lua \
 	flux/base64.lua \
 	flux/lustache.lua \
-	flux/lustache
+	flux/lustache \
+	wreck/io.lua
 
 luaexec_LTLIBRARIES = \
 	flux.la
