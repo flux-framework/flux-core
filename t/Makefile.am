@@ -39,6 +39,7 @@ TESTS = \
 	t2001-jsc.t \
 	t2002-pmi.t \
 	t2003-recurse.t \
+	t2004-hydra.t \
 	t3000-mpi-basic.t
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
@@ -80,6 +81,7 @@ check_SCRIPTS = \
 	t2001-jsc.t \
 	t2002-pmi.t \
 	t2003-recurse.t \
+	t2004-hydra.t \
 	t3000-mpi-basic.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
