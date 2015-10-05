@@ -424,17 +424,12 @@ int signalfd_setup (struct prog_ctx *ctx)
     return (0);
 }
 
-static char * ctime_iso8601_now (char *buf, size_t sz)
+static char * realtime_string (char *buf, size_t sz)
 {
-    struct tm tm;
-    time_t now = time (NULL);
-
+    struct timespec tm;
+    clock_gettime (CLOCK_REALTIME, &tm);
     memset (buf, 0, sz);
-
-    if (!localtime_r (&now, &tm))
-        return (NULL);
-    strftime (buf, sz, "%FT%T", &tm);
-
+    snprintf (buf, sz, "%ju.%06ld", (uintmax_t) tm.tv_sec, tm.tv_nsec/1000);
     return (buf);
 }
 
@@ -866,7 +861,7 @@ int update_job_state (struct prog_ctx *ctx, const char *state)
     char buf [64];
     char *key;
     json_object *to =
-        json_object_new_string (ctime_iso8601_now (buf, sizeof (buf)));
+        json_object_new_string (realtime_string (buf, sizeof (buf)));
 
     assert (ctx->nodeid == 0);
 
