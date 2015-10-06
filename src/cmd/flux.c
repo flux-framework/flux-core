@@ -495,7 +495,8 @@ void internal_getattr (flux_conf_t cf, optparse_t *p, int ac, char *av[])
         printf ("%s\n", val);
         flux_close (h);
     } else {
-        usage ();
+        optparse_print_usage (p);
+        exit (1);
     }
 }
 
@@ -519,8 +520,10 @@ void internal_setattr (flux_conf_t cf, optparse_t *p, int ac, char *av[])
     } else if (!optparse_hasopt (p, "expunge") && n == ac - 2) {
         name = av[n];
         val = av[n + 1];
-    } else
-        usage ();
+    } else {
+        optparse_print_usage (p);
+        exit (1);
+    }
     if (!(h = flux_open (NULL, 0)))
             err_exit ("flux_open");
     if (flux_attr_set (h, name, val) < 0)
@@ -558,7 +561,8 @@ void internal_lsattr (flux_conf_t cf, optparse_t *p, int ac, char *av[])
         }
         flux_close (h);
     } else {
-        usage ();
+        optparse_print_usage (p);
+        exit (1);
     }
 }
 
