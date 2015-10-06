@@ -548,6 +548,12 @@ int main (int argc, char *argv[])
             || attr_add_active (ctx.attrs, "tbon-request-uri",
                                 FLUX_ATTRFLAG_IMMUTABLE,
                                 attr_get_overlay, NULL, ctx.overlay) < 0
+            || attr_add_active (ctx.attrs, "event-uri",
+                                FLUX_ATTRFLAG_IMMUTABLE,
+                                attr_get_overlay, NULL, ctx.overlay) < 0
+            || attr_add_active (ctx.attrs, "event-relay-uri",
+                                FLUX_ATTRFLAG_IMMUTABLE,
+                                attr_get_overlay, NULL, ctx.overlay) < 0
             || attr_add_active (ctx.attrs, "log-level", 0,
                                 attr_get_log, attr_set_log, ctx.log) < 0
             || attr_add_active (ctx.attrs, "log-buflimit", 0,
@@ -1735,6 +1741,10 @@ static int attr_get_overlay (const char *name, const char **val, void *arg)
         *val = overlay_get_parent (overlay);
     else if (!strcmp (name, "tbon-request-uri"))
         *val = overlay_get_child (overlay);
+    else if (!strcmp (name, "event-uri"))
+        *val = overlay_get_event (overlay);
+    else if (!strcmp (name, "event-relay-uri"))
+        *val = overlay_get_relay (overlay);
     else {
         errno = ENOENT;
         goto done;
