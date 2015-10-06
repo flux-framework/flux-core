@@ -30,7 +30,7 @@ local iow, err = f:iowatcher {
 type_ok (iow, 'userdata', "succesfully create iowatcher")
 is (err, nil, "error is nil")
 
-os.execute 'flux zio --force --key=iowatcher.test --run printf "hello\nworld" >/dev/null 2>&1'
+os.execute ('printf "hello\nworld" | ' .. test.top_builddir .. '/t/kz/kzutil --force --copy - iowatcher.test.stdout >/dev/null 2>&1')
 
 local r, err = f:reactor()
 isnt (r, -1, "Return from reactor, rc >= 0")
