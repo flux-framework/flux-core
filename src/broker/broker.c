@@ -208,7 +208,7 @@ static const struct option longopts[] = {
     {"timeout",         required_argument,  0, 'T'},
     {"shutdown-grace",  required_argument,  0, 'g'},
     {"socket-directory",required_argument,  0, 'D'},
-    {"enable-epgm",     required_argument,  0, 'E'},
+    {"enable-epgm",     no_argument,        0, 'E'},
     {"boot-method",     required_argument,  0, 'm'},
     {"log-level",       required_argument,  0, 'l'},
     {0, 0, 0, 0},
