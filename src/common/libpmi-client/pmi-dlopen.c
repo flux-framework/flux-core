@@ -325,7 +325,8 @@ pmi_t *pmi_create_dlopen (const char *libname)
     if (!libname)
         libname = "libpmi.so";
     dlerror ();
-    if (!(d->dso = dlopen (libname, RTLD_NOW | RTLD_LOCAL))
+    /* RTLD_GLOBAL due to issue #432 */
+    if (!(d->dso = dlopen (libname, RTLD_NOW | RTLD_GLOBAL))
             || !(pmi = pmi_create (d, destroy_dlopen))) {
         destroy_dlopen (d);
         return NULL;
