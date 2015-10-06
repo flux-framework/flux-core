@@ -8,10 +8,6 @@ Test that PMI works in a FLux-launched program
 
 . `dirname $0`/sharness.sh
 
-if test "$TEST_LONG" = "t"; then
-    test_set_prereq LONGTEST
-fi
-
 # Size the session to one more than the number of cores, minimum of 4
 SIZE=$(($(nproc)+1))
 test ${SIZE} -gt 4 || SIZE=4
