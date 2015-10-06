@@ -89,7 +89,7 @@ static struct optparse_option opts[] = {
 
 int mod_main (flux_t h, int argc, char **argv)
 {
-    optparse_t p = optparse_create ("pymod");
+    optparse_t *p = optparse_create ("pymod");
     if (optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS)
         msg_exit ("optparse_add_option_table");
     if (optparse_set (p, OPTPARSE_USAGE, usage_msg) != OPTPARSE_SUCCESS)

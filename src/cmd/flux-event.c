@@ -130,10 +130,10 @@ static void unsubscribe_all (flux_t h, int tc, char **tv)
     }
 }
 
-static optparse_t event_sub_get_options (int *argcp, char ***argvp)
+static optparse_t *event_sub_get_options (int *argcp, char ***argvp)
 {
     int n, e;
-    optparse_t p;
+    optparse_t *p;
     struct optparse_option opts [] = {
         {
          .name = "count", .key = 'c', .group = 1,
@@ -164,7 +164,7 @@ static void event_sub (flux_t h, int argc, char **argv)
 {
     flux_msg_t *msg;
     int n, count;
-    optparse_t p = event_sub_get_options (&argc, &argv);
+    optparse_t *p = event_sub_get_options (&argc, &argv);
 
 
     /* Since output is line-based with undeterministic amount of time

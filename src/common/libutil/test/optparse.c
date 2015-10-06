@@ -23,7 +23,7 @@ void test_convenience_accessors (void)
     int ac = sizeof (av) / sizeof (av[0]) - 1;
     int rc, optind;
 
-    optparse_t p = optparse_create ("test");
+    optparse_t *p = optparse_create ("test");
     ok (p != NULL, "create object");
 
     rc = optparse_add_option_table (p, opts);

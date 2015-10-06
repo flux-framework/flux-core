@@ -38,7 +38,7 @@
 #include "src/common/libutil/cleanup.h"
 #include "src/modules/libsubprocess/subprocess.h"
 
-int start_direct (optparse_t p, const char *cmd);
+int start_direct (optparse_t *p, const char *cmd);
 
 const int default_size = 1;
 
@@ -69,7 +69,7 @@ int main (int argc, char *argv[])
     int e, status = 0;
     char *command = NULL;
     size_t len = 0;
-    optparse_t p;
+    optparse_t *p;
 
     log_init ("flux-start");
 
@@ -221,7 +221,7 @@ char *create_socket_dir (const char *sid)
     return sockdir;
 }
 
-int start_direct (optparse_t opts, const char *cmd)
+int start_direct (optparse_t *opts, const char *cmd)
 {
     int size = optparse_get_int (opts, "size", default_size);
     const char *broker_opts = optparse_get_str (opts, "broker-opts", NULL);
