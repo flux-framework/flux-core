@@ -180,7 +180,8 @@ test_expect_success 'wreckrun: top level environment' '
 '
 test_expect_success 'wreck plugins can use wreck:log_msg()' '
 	saved_pattern=$(flux kvs get config.wrexec.lua_pattern) &&
-	cleanup flux kvs put wrexec.lua_pattern="$saved_pattern" &&
+	test_when_finished \
+            "flux kvs put config.wrexec.lua_pattern=\"$saved_pattern\"" &&
 	cat <<-EOF >test.lua &&
 	function rexecd_init ()
 	    local rc, err = wreck:log_msg ("lwj.%d: plugin test successful", wreck.id)
@@ -191,5 +192,81 @@ test_expect_success 'wreck plugins can use wreck:log_msg()' '
 	flux wreckrun /bin/true &&
 	flux dmesg | grep "plugin test successful" || (flux dmesg | grep lwj\.$(last_job_id) && false)
 '
+test_expect_success 'wreckrun: --detach supported' '
+	flux wreckrun --detach /bin/true | grep ^Job
+'
+test_expect_success 'wreckrun: --output supported' '
+	flux wreckrun --output=test1.out echo hello &&
+        grep hello test1.out
+'
+test_expect_success 'wreckrun: --error supported' '
+	flux wreckrun --output=test2.out --error=test2.err \
+	    sh -c "echo >&2 this is stderr; echo this is stdout" &&
+        grep "this is stderr" test2.err &&
+        grep "this is stdout" test2.out
+'
+test_expect_success 'wreckrun: kvs config output for all jobs' '
+	test_when_finished "flux kvs put lwj.output=" &&
+	flux kvs put lwj.output.labelio=true &&
+	flux kvs put lwj.output.files.stdout=test3.out &&
+	flux wreckrun -n${SIZE} echo foo &&
+	for i in $(seq 0 $((${SIZE}-1)))
+		do echo "$i: foo"
+	done >expected.kvsiocfg &&
+	sort -n test3.out >output.kvsiocfg &&
+	test_cmp expected.kvsiocfg output.kvsiocfg
+'
+test_expect_success 'flux-wreck: exists in path' '
+	flux wreck help 2>&1 | grep "^Usage: flux-wreck"
+'
+test_expect_success 'flux-wreck: attach' '
+	flux wreckrun -n4 --output=expected.attach hostname >/dev/null &&
+	flux wreck attach $(last_job_id) > output.attach &&
+        test_cmp expected.attach output.attach
+'
+test_expect_success 'flux-werck: attach --label-io' '
+	flux wreckrun -l -n4 --output=expected.attach-l echo bazz >/dev/null &&
+	flux wreck attach --label-io $(last_job_id) |sort > output.attach-l &&
+        sort expected.attach-l > x && mv x expected.attach-l &&
+        test_cmp expected.attach-l output.attach-l
+'
+test_expect_success 'flux-wreck: status' '
+        flux wreckrun -n4 /bin/true &&
+        id=$(last_job_id) &&
+	flux wreck status $id > output.status &&
+        cat >expected.status <<-EOF &&
+	Job $id status: complete
+	task[0-3]: exited with exit code 0
+	EOF
+	test_cmp expected.status output.status
+'
+test_expect_success 'flux-wreck: status with non-zero exit' '
+	test_expect_code 1 flux wreckrun -n4 /bin/false &&
+        id=$(last_job_id) &&
+	test_expect_code 1 flux wreck status $id > output.status2 &&
+        cat >expected.status2 <<-EOF &&
+	Job $id status: complete
+	task[0-3]: exited with exit code 1
+	EOF
+	test_cmp expected.status2 output.status2
+
+'
+test_expect_success 'flux-wreck: kill' '
+	run_timeout 1 flux wreckrun --detach sleep 100 &&
+	id=$(last_job_id) &&
+	flux wreck kill -s SIGINT $id &&
+	test_expect_code 130 flux wreck status $id >output.kill &&
+	cat >expected.kill <<-EOF &&
+	Job $id status: complete
+	task0: exited with signal 2
+	EOF
+	test_cmp expected.kill output.kill
+'
+test_expect_success 'flux-wreck: ls works' '
+	flux wreckrun -n2 -N2 hostname &&
+	flux wreck ls | tail -1 | grep "hostname$"
+'
+
+test_debug "flux wreck ls"
 
 test_done

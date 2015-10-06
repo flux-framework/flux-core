@@ -12,7 +12,10 @@ dist_fluxlua_SCRIPTS = \
 	flux/timer.lua \
 	flux/alt_getopt.lua \
 	flux/posix.lua \
-	flux/base64.lua
+	flux/base64.lua \
+	flux/lustache.lua \
+	flux/lustache \
+	wreck/io.lua
 
 luaexec_LTLIBRARIES = \
 	flux.la

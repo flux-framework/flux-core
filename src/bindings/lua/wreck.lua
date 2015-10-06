@@ -40,6 +40,9 @@ local default_opts = {
     ['verbose'] = { char = 'v'  },
     ['ntasks']  = { char = 'n', arg = "N" },
     ['walltime'] = { char = "T", arg = "SECONDS" },
+    ['output'] =   { char = "O", arg = "FILENAME" },
+    ['error'] =    { char = "E", arg = "FILENAME" },
+    ['label-io'] = { char = "l", },
     ['options'] = { char = 'o', arg = "OPTIONS.." },
 }
 
@@ -92,6 +95,12 @@ function wreck:usage()
                              for minutes, 'h' for hours or 'd' for days.
                              N may be an arbitrary floating point number,
                              but will be rounded up to nearest second.
+  -o, --output=FILENAME      Duplicate stdout/stderr from tasks to a file or
+                             files. FILENAME is optionally a moustache
+                             template with keys such as id, cmd, taskid.
+                             (e.g. --tee=flux-{{id}}.out)
+  -e, --error=FILENAME       Send stderr to a different location than stdout.
+  -l, --labelio              Prefix lines of output with task id
 ]])
     for _,v in pairs (self.extra_options) do
         local optstr = v.name .. (v.arg and "="..v.arg or "")
@@ -209,7 +218,84 @@ function wreck:jobreq ()
             jobreq['options.'..opt] = 1
         end
     end
+    if self.opts.O or self.opts.E then
+        jobreq.output = {
+            files = {
+              stdout = self.opts.O,
+              stderr = self.opts.E,
+            },
+            labelio = self.opts.l,
+        }
+    end
     return jobreq
+end
+
+function wreck.ioattach (arg)
+    local ioplex = require 'wreck.io'
+    local f = arg.flux
+    if not arg.ntasks then
+        local lwj, err = f:kvsdir ("lwj."..arg.jobid)
+        if not lwj then
+            return nil, "Error: "..err
+        end
+        arg.ntasks = lwj.ntasks
+    end
+    local taskio, err = ioplex.create (arg)
+    if not taskio then return nil, err end
+    for i = 0, arg.ntasks - 1 do
+        for _,stream in pairs {"stdout", "stderr"} do
+            local rc, err =  taskio:redirect (i, stream, stream)
+        end
+    end
+    taskio:start (arg.flux)
+
+    return taskio
+end
+
+local function exit_message (t)
+    local s = "exited with "
+    s = s .. (t.exit_code and "exit code" or "signal") .. " %d"
+    return s:format (t.exit_code or t.exit_sig)
+end
+
+local function task_status (lwj, taskid)
+    if not tonumber (taskid) then return nil end
+    local t = lwj[taskid]
+    if not t.exit_status then
+        return 0, (t.procdesc and "starting" or "running")
+    end
+    local x = t.exit_code or (t.exit_sig + 128)
+    return x, exit_message (t)
+end
+
+--- Return highest exit code from all tasks and task exit message list.
+-- Summarize job exit status for arg.jobid by returning max task exit code,
+-- along with a list of task exit messages to be optionally emitted to stdout.
+-- @param arg.jobid job identifier
+-- @param arg.flux  (optional) flux handle
+-- @return exit_cde, msg_list
+function wreck.status (arg)
+    local hostlist = require 'flux.hostlist'
+    local f = arg.flux
+    local jobid = arg.jobid
+    if not jobid then return nil, "required arg jobid" end
+
+    if not f then f = require 'flux'.new() end
+    local lwj = f:kvsdir ("lwj."..jobid)
+    local max = 0
+    local msgs = {}
+    for taskid in lwj:keys () do
+        local x, s = task_status (lwj, taskid)
+        if x then
+            if x > max then max = x end
+            if not msgs[s] then
+                msgs[s] = hostlist.new (taskid)
+            else
+                msgs[s]:concat (taskid)
+            end
+        end
+    end
+    return max, msgs
 end
 
 function wreck.new (prog)

@@ -1,0 +1,58 @@
+FLUX-WRECK(1)
+===========
+:doctype: manpage
+
+
+NAME
+----
+flux-wreck - Flux wreck facility convenience utility
+
+
+SYNOPSIS
+--------
+*flux* *wreck* 'COMMAND' ['OPTIONS']
+
+
+DESCRIPTION
+-----------
+'flux wreck' is a convenience utility that operates on jobs in the
+WRECK remote execution prototype. It can be used to gather information
+about running and completed jobs directly from the Flux kvs.
+
+flux-wreck(1) operates via a series of 'COMMANDS', described below:
+
+COMMANDS
+--------
+*help* 'cmd'
+Print help. If 'cmd' is provided, print help for that sub-command.
+
+*ls*
+Display a list of wreck jobs currently in kvs, along with their current
+states.
+
+*attach* [--status] 'jobid'::
+Attach to output of a running or completed job. With '--status', also
+report job status after dumping output.
+
+*status* 'jobid'::
+Return the status of running or completed job 'jobid'. Prints the current
+job status, and if exited, the exit codes of all tasks. This command will
+exit with the highest exit code of all tasks.
+
+*kill* [--signal=N] 'jobid'::
+Send SIGTERM to running job 'jobid'. If '--signal' is used, send signal 'N'
+where 'N' may  be a signal number or name such as 'SIGKILL'.
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]

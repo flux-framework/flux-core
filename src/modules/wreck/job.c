@@ -180,17 +180,12 @@ static json_object *json_id (int id)
     return (o);
 }
 
-static char * ctime_iso8601_now (char *buf, size_t sz)
+static char * realtime_string (char *buf, size_t sz)
 {
-    struct tm tm;
-    time_t now = time (NULL);
-
+    struct timespec tm;
+    clock_gettime (CLOCK_REALTIME, &tm);
     memset (buf, 0, sz);
-
-    if (!localtime_r (&now, &tm))
-        err_exit ("localtime");
-    strftime (buf, sz, "%FT%T", &tm);
-
+    snprintf (buf, sz, "%ju.%06ld", (uintmax_t) tm.tv_sec, tm.tv_nsec/1000);
     return (buf);
 }
 
@@ -248,7 +243,7 @@ static void add_jobinfo (flux_t h, int64_t id, json_object *req)
     json_object_object_foreachC (req, i)
         kvsdir_put (dir, i.key, json_object_to_json_string (i.val));
 
-    o = json_object_new_string (ctime_iso8601_now (buf, sizeof (buf)));
+    o = json_object_new_string (realtime_string (buf, sizeof (buf)));
     kvsdir_put (dir, "create-time", json_object_to_json_string (o));
     json_object_put (o);
 
