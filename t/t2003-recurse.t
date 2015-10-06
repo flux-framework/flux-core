@@ -5,10 +5,6 @@ test_description='Test that Flux can launch Flux'
 
 . `dirname $0`/sharness.sh
 
-if test "$TEST_LONG" = "t"; then
-    test_set_prereq LONGTEST
-fi
-
 mock_bootstrap_instance
 test_under_flux 4
 
