@@ -414,7 +414,7 @@ optparse_option_print (optparse_t *p, struct optparse_option *o, int columns)
     if (n < width)
         (*p->log_fn) ("%-*s%s\n", width, info, s);
     else
-        (*p->log_fn) ("\n%s\n%*s%s\n", info, width, "", s);
+        (*p->log_fn) ("%s\n%*s%s\n", info, width, "", s);
 
     /*  Get remaining usage lines (line-wrapped)
      */
