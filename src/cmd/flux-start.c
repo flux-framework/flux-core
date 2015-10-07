@@ -66,7 +66,7 @@ static struct optparse_option opts[] = {
 
 int main (int argc, char *argv[])
 {
-    int status = 0;
+    int e, status = 0;
     char *command = NULL;
     size_t len = 0;
     optparse_t p;
@@ -81,8 +81,8 @@ int main (int argc, char *argv[])
     if ((optind = optparse_parse_args (p, argc, argv)) < 0)
         exit (1);
     if (optind < argc) {
-        if (argz_create (argv + optind, &command, &len) < 0)
-            oom ();
+        if ((e = argz_create (argv + optind, &command, &len)) != 0)
+            errn_exit (e, "argz_creawte");
         argz_stringify (command, len, ' ');
     }
 
@@ -183,9 +183,10 @@ void add_args_sep (struct subprocess *p, const char *s, int sep)
     char *az = NULL;
     size_t az_len = 0;
     char *arg = NULL;
+    int e;
 
-    if (argz_create_sep (s, sep, &az, &az_len) < 0)
-        oom ();
+    if ((e = argz_create_sep (s, sep, &az, &az_len)) != 0)
+        errn_exit (e, "argz_create_sep");
     while ((arg = argz_next (az, az_len, arg))) {
         if (subprocess_argv_append  (p, arg) < 0)
             err_exit ("subprocess_argv_append");
@@ -199,9 +200,11 @@ char *args_str (struct subprocess *p)
     int i, argc = subprocess_get_argc (p);
     char *az = NULL;
     size_t az_len = 0;
+    int e;
 
     for (i = 0; i < argc; i++)
-        argz_add (&az, &az_len, subprocess_get_arg (p, i));
+        if ((e = argz_add (&az, &az_len, subprocess_get_arg (p, i))) != 0)
+            errn_exit (e, "argz_add");
     argz_stringify (az, az_len, ' ');
     return az;
 }
