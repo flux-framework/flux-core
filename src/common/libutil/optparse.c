@@ -143,9 +143,9 @@ static int option_info_cmp (struct option_info *x, struct option_info *y)
         if (x->isdoc && y->isdoc)
             return (0);
         else if (x->isdoc)
-            return (1);
-        else if (y->isdoc)
             return (-1);
+        else if (y->isdoc)
+            return (1);
         else if (isalnum (o1->key) && isalnum (o2->key))
             return (o1->key - o2->key);
         else
