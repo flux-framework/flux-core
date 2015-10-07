@@ -52,12 +52,12 @@
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/shortjson.h"
+#include "src/common/libpmi-client/pmi-client.h"
 #include "src/modules/libsubprocess/subprocess.h"
 #include "src/modules/libzio/zio.h"
 
 #include "heartbeat.h"
 #include "module.h"
-#include "boot_pmi.h"
 #include "overlay.h"
 #include "snoop.h"
 #include "service.h"
@@ -208,7 +208,7 @@ static const struct option longopts[] = {
     {"timeout",         required_argument,  0, 'T'},
     {"shutdown-grace",  required_argument,  0, 'g'},
     {"socket-directory",required_argument,  0, 'D'},
-    {"enable-epgm",     required_argument,  0, 'E'},
+    {"enable-epgm",     no_argument,        0, 'E'},
     {"boot-method",     required_argument,  0, 'm'},
     {"log-level",       required_argument,  0, 'l'},
     {0, 0, 0, 0},
@@ -546,6 +546,12 @@ int main (int argc, char *argv[])
             || attr_add_active (ctx.attrs, "tbon-parent-uri", 0,
                                 attr_get_overlay, NULL, ctx.overlay) < 0
             || attr_add_active (ctx.attrs, "tbon-request-uri",
+                                FLUX_ATTRFLAG_IMMUTABLE,
+                                attr_get_overlay, NULL, ctx.overlay) < 0
+            || attr_add_active (ctx.attrs, "event-uri",
+                                FLUX_ATTRFLAG_IMMUTABLE,
+                                attr_get_overlay, NULL, ctx.overlay) < 0
+            || attr_add_active (ctx.attrs, "event-relay-uri",
                                 FLUX_ATTRFLAG_IMMUTABLE,
                                 attr_get_overlay, NULL, ctx.overlay) < 0
             || attr_add_active (ctx.attrs, "log-level", 0,
@@ -906,68 +912,238 @@ static int create_socketdir (ctx_t *ctx)
  */
 static int boot_pmi (ctx_t *ctx)
 {
-    pmi_t *pmi = pmi_init (NULL);
+    pmi_t *pmi = NULL;
+    int spawned, size, rank, appnum;
     int relay_rank = -1, right_rank, parent_rank;
+    int clique_size;
+    int *clique_ranks = NULL;
     char ipaddr[HOST_NAME_MAX + 1];
-    const char *child_uri;
-    int rc = -1;
+    const char *child_uri, *relay_uri;
+    int id_len, kvsname_len, key_len, val_len;
+    char *id = NULL;
+    char *kvsname = NULL;
+    char *key = NULL;
+    char *val = NULL;
 
-    ctx->size = pmi_size (pmi);
-    ctx->rank = pmi_rank (pmi);
+    int e, rc = -1;
 
-    if (attr_add (ctx->attrs, "session-id", pmi_sid (pmi),
-                                    FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (!(pmi = pmi_create_guess ())) {
+        err ("pmi_create");
         goto done;
+    }
+    if ((e = pmi_init (pmi, &spawned)) != PMI_SUCCESS) {
+        msg ("pmi_init: %s", pmi_strerror (e));
+        goto done;
+    }
 
+    /* Get rank, size, appnum
+     */
+    if ((e = pmi_get_size (pmi, &size)) != PMI_SUCCESS) {
+        msg ("pmi_get_size: %s", pmi_strerror (e));
+        goto done;
+    }
+    if ((e = pmi_get_rank (pmi, &rank)) != PMI_SUCCESS) {
+        msg ("pmi_get_rank: %s", pmi_strerror (e));
+        goto done;
+    }
+    if ((e = pmi_get_appnum (pmi, &appnum)) != PMI_SUCCESS) {
+        msg ("pmi_get_appnum: %s", pmi_strerror (e));
+        goto done;
+    }
+    ctx->rank = rank;
+    ctx->size = size;
     overlay_set_rank (ctx->overlay, ctx->rank);
 
+    /* Get id string.
+     */
+    e = pmi_get_id_length_max (pmi, &id_len);
+    if (e == PMI_SUCCESS) {
+        id = xzmalloc (id_len);
+        if ((e = pmi_get_id (pmi, id, id_len)) != PMI_SUCCESS) {
+            msg ("pmi_get_rank: %s", pmi_strerror (e));
+            goto done;
+        }
+    } else { /* No pmi_get_id() available? */
+        id = xasprintf ("simple-%d", appnum);
+    }
+    if (attr_add (ctx->attrs, "session-id", id, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        goto done;
+
+
+    /* Set ip addr.  We will need wildcards expanded below.
+     */
     ipaddr_getprimary (ipaddr, sizeof (ipaddr));
     overlay_set_child (ctx->overlay, "tcp://%s:*", ipaddr);
 
+    /* Set up epgm relay if multiple ranks are being spawned per node,
+     * as indicated by "clique ranks".  FIXME: if epgm is used but
+     * pmi_get_clique_ranks() is not implemented, this fails.  Find an
+     * alternate method to determine if ranks are co-located on a node.
+     */
     if (ctx->enable_epgm) {
-        relay_rank = pmi_relay_rank (pmi);
-        if (relay_rank >= 0 && ctx->rank == relay_rank)
-            overlay_set_relay (ctx->overlay, "ipc://*");
+        if ((e = pmi_get_clique_size (pmi, &clique_size)) != PMI_SUCCESS) {
+            msg ("pmi_get_clique_size: %s", pmi_strerror (e));
+            goto done;
+        }
+        clique_ranks = xzmalloc (sizeof (int) * clique_size);
+        if ((e = pmi_get_clique_ranks (pmi, clique_ranks, clique_size))
+                                                          != PMI_SUCCESS) {
+            msg ("pmi_get_clique_ranks: %s", pmi_strerror (e));
+            goto done;
+        }
+        if (clique_size > 1) {
+            int i;
+            for (i = 0; i < clique_size; i++)
+                if (relay_rank == -1 || clique_ranks[i] < relay_rank)
+                    relay_rank = clique_ranks[i];
+            if (relay_rank >= 0 && ctx->rank == relay_rank)
+                overlay_set_relay (ctx->overlay, "ipc://*");
+        }
     }
 
-    if (overlay_bind (ctx->overlay) < 0) /* expand URI wildcards */
-        err_exit ("overlay_bind failed");   /* function is idempotent */
+    /* Prepare for PMI KVS operations by grabbing the kvsname,
+     * and buffers for keys and values.
+     */
+    if ((e = pmi_kvs_get_name_length_max (pmi, &kvsname_len)) != PMI_SUCCESS) {
+        msg ("pmi_kvs_get_name_length_max: %s", pmi_strerror (e));
+        goto done;
+    }
+    kvsname = xzmalloc (kvsname_len);
+    if ((e = pmi_kvs_get_my_name (pmi, kvsname, kvsname_len)) != PMI_SUCCESS) {
+        msg ("pmi_kvs_get_my_name: %s", pmi_strerror (e));
+        goto done;
+    }
+    if ((e = pmi_kvs_get_key_length_max (pmi, &key_len)) != PMI_SUCCESS) {
+        msg ("pmi_kvs_get_key_length_max: %s", pmi_strerror (e));
+        goto done;
+    }
+    key = xzmalloc (key_len);
+    if ((e = pmi_kvs_get_value_length_max (pmi, &val_len)) != PMI_SUCCESS) {
+        msg ("pmi_kvs_get_value_length_max: %s", pmi_strerror (e));
+        goto done;
+    }
+    val = xzmalloc (val_len);
 
-    if ((child_uri = overlay_get_child (ctx->overlay)))
-        pmi_put_uri (pmi, ctx->rank, child_uri);
+    /* Bind to addresses to expand URI wildcards, so we can exchange
+     * the real addresses.
+     */
+    if (overlay_bind (ctx->overlay) < 0) {
+        err ("overlay_bind failed");   /* function is idempotent */
+        goto done;
+    }
 
-    if (ctx->enable_epgm) {
-        const char *relay_uri;
-        if ((relay_uri = overlay_get_relay (ctx->overlay)))
-            pmi_put_relay (pmi, ctx->rank, relay_uri);
+    /* Write the URI of downstream facing socket under the rank (if any).
+     */
+    if ((child_uri = overlay_get_child (ctx->overlay))) {
+        if (snprintf (key, key_len, "cmbd.%d.uri", rank) >= key_len) {
+            msg ("pmi key string overflow");
+            goto done;
+        }
+        if (snprintf (val, val_len, "%s", child_uri) >= val_len) {
+            msg ("pmi val string overflow");
+            goto done;
+        }
+        if ((e = pmi_kvs_put (pmi, kvsname, key, val)) != PMI_SUCCESS) {
+            msg ("pmi_kvs_put: %s", pmi_strerror (e));
+            goto done;
+        }
+    }
+
+    /* Write the uri of the epgm relay under the rank (if any).
+     */
+    if (ctx->enable_epgm && (relay_uri = overlay_get_relay (ctx->overlay))) {
+        if (snprintf (key, key_len, "cmbd.%d.relay", rank) >= key_len) {
+            msg ("pmi key string overflow");
+            goto done;
+        }
+        if (snprintf (val, val_len, "%s", relay_uri) >= val_len) {
+            msg ("pmi val string overflow");
+            goto done;
+        }
+        if ((e = pmi_kvs_put (pmi, kvsname, key, val)) != PMI_SUCCESS) {
+            msg ("pmi_kvs_put: %s", pmi_strerror (e));
+            goto done;
+        }
     }
 
     /* Puts are complete, now we synchronize and begin our gets.
      */
-    pmi_fence (pmi);
+    if ((e = pmi_kvs_commit (pmi, kvsname)) != PMI_SUCCESS) {
+        msg ("pmi_kvs_commit: %s", pmi_strerror (e));
+        goto done;
+    }
+    if ((e = pmi_barrier (pmi)) != PMI_SUCCESS) {
+        msg ("pmi_barrier: %s", pmi_strerror (e));
+        goto done;
+    }
 
+    /* Read the uri of our parent, after computing its rank
+     */
     if (ctx->rank > 0) {
         parent_rank = ctx->k_ary == 0 ? 0 : (ctx->rank - 1) / ctx->k_ary;
-        overlay_push_parent (ctx->overlay, "%s",
-                             pmi_get_uri (pmi, parent_rank));
+        if (snprintf (key, key_len, "cmbd.%d.uri", parent_rank) >= key_len) {
+            msg ("pmi key string overflow");
+            goto done;
+        }
+        if ((e = pmi_kvs_get (pmi, kvsname, key, val, val_len))
+                                                            != PMI_SUCCESS) {
+            msg ("pmi_kvs_get: %s", pmi_strerror (e));
+            goto done;
+        }
+        overlay_push_parent (ctx->overlay, "%s", val);
     }
-    right_rank = pmi_right_rank (pmi);
-    overlay_set_right (ctx->overlay, "%s", pmi_get_uri (pmi, right_rank));
 
+    /* Read the uri of our neigbor, after computing its rank.
+     */
+    right_rank = rank == 0 ? size - 1 : rank - 1;
+    if (snprintf (key, key_len, "cmbd.%d.uri", right_rank) >= key_len) {
+        msg ("pmi key string overflow");
+        goto done;
+    }
+    if ((e = pmi_kvs_get (pmi, kvsname, key, val, val_len)) != PMI_SUCCESS) {
+        msg ("pmi_kvs_get: %s", pmi_strerror (e));
+        goto done;
+    }
+    overlay_set_right (ctx->overlay, "%s", val);
+
+    /* Read the URI fo epgm relay rank, or connect directly.
+     */
     if (ctx->enable_epgm) {
-        if (relay_rank >= 0 && ctx->rank != relay_rank) {
-            overlay_set_event (ctx->overlay, "%s",
-                               pmi_get_relay (pmi, relay_rank));
+        if (relay_rank >= 0 && rank != relay_rank) {
+            if (snprintf (key, key_len, "cmbd.%d.relay", relay_rank)
+                                                                >= key_len) {
+                msg ("pmi key string overflow");
+                goto done;
+            }
+            if ((e = pmi_kvs_get (pmi, kvsname, key, val, val_len))
+                                                            != PMI_SUCCESS) {
+                msg ("pmi_kvs_get: %s", pmi_strerror (e));
+                goto done;
+            }
+            overlay_set_event (ctx->overlay, "%s", val);
         } else {
-            int port = 5000 + pmi_jobid (pmi) % 1024;
+            int port = 5000 + appnum % 1024;
             overlay_set_event (ctx->overlay, "epgm://%s;239.192.1.1:%d",
                                ipaddr, port);
         }
     }
-
-    pmi_fini (pmi);
+    pmi_finalize (pmi);
     rc = 0;
 done:
+    if (id)
+        free (id);
+    if (clique_ranks)
+        free (clique_ranks);
+    if (kvsname)
+        free (kvsname);
+    if (key)
+        free (key);
+    if (val)
+        free (val);
+    if (pmi)
+        pmi_destroy (pmi);
+    if (rc != 0)
+        errno = EPROTO;
     return rc;
 }
 
@@ -1565,6 +1741,10 @@ static int attr_get_overlay (const char *name, const char **val, void *arg)
         *val = overlay_get_parent (overlay);
     else if (!strcmp (name, "tbon-request-uri"))
         *val = overlay_get_child (overlay);
+    else if (!strcmp (name, "event-uri"))
+        *val = overlay_get_event (overlay);
+    else if (!strcmp (name, "event-relay-uri"))
+        *val = overlay_get_relay (overlay);
     else {
         errno = ENOENT;
         goto done;

@@ -8,10 +8,6 @@ Test that PMI works in a FLux-launched program
 
 . `dirname $0`/sharness.sh
 
-if test "$TEST_LONG" = "t"; then
-    test_set_prereq LONGTEST
-fi
-
 # Size the session to one more than the number of cores, minimum of 4
 SIZE=$(($(nproc)+1))
 test ${SIZE} -gt 4 || SIZE=4
@@ -74,42 +70,42 @@ test_expect_success 'pmi: wreck sets FLUX_LOCAL_RANKS single task per node' '
 
 test_expect_success 'pmi: (put*1) / barrier / (get*1) pattern works' '
 	run_program 10 ${SIZE} ${SIZE} \
-	    ${FLUX_BUILD_DIR}/src/test/tpmikvs >output_tpmikvs &&
-	grep -q "put phase" output_tpmikvs &&
-	grep -q "get phase" output_tpmikvs &&
-	test `grep PMI_KVS_Put output_tpmikvs | wc -l` -eq ${SIZE} &&
-	test `grep PMI_Barrier output_tpmikvs | wc -l` -eq $((${SIZE}*2)) &&
-	test `grep PMI_KVS_Get output_tpmikvs | wc -l` -eq ${SIZE} 
+	    ${FLUX_BUILD_DIR}/t/pmi/kvstest >output_kvstest &&
+	grep -q "put phase" output_kvstest &&
+	grep -q "get phase" output_kvstest &&
+	test `grep PMI_KVS_Put output_kvstest | wc -l` -eq ${SIZE} &&
+	test `grep PMI_Barrier output_kvstest | wc -l` -eq $((${SIZE}*2)) &&
+	test `grep PMI_KVS_Get output_kvstest | wc -l` -eq ${SIZE} 
 '
 
 test_expect_success 'pmi: (put*1) / barrier / (get*size) pattern works' '
 	run_program 30 ${SIZE} ${SIZE} \
-	    ${FLUX_BUILD_DIR}/src/test/tpmikvs -n >output_tpmikvs2 &&
-	grep -q "put phase" output_tpmikvs2 &&
-	grep -q "get phase" output_tpmikvs2 &&
-	test `grep PMI_KVS_Put output_tpmikvs2 | wc -l` -eq ${SIZE} &&
-	test `grep PMI_Barrier output_tpmikvs2 | wc -l` -eq $((${SIZE}*2)) &&
-	test `grep PMI_KVS_Get output_tpmikvs2 | wc -l` -eq $((${SIZE}*${SIZE}))
+	    ${FLUX_BUILD_DIR}/t/pmi/kvstest -n >output_kvstest2 &&
+	grep -q "put phase" output_kvstest2 &&
+	grep -q "get phase" output_kvstest2 &&
+	test `grep PMI_KVS_Put output_kvstest2 | wc -l` -eq ${SIZE} &&
+	test `grep PMI_Barrier output_kvstest2 | wc -l` -eq $((${SIZE}*2)) &&
+	test `grep PMI_KVS_Get output_kvstest2 | wc -l` -eq $((${SIZE}*${SIZE}))
 '
 
 test_expect_success 'pmi: (put*16) / barrier / (get*16) pattern works' '
 	run_program 30 ${SIZE} ${SIZE} \
-	    ${FLUX_BUILD_DIR}/src/test/tpmikvs -N 16 >output_tpmikvs3 &&
-	grep -q "put phase" output_tpmikvs3 &&
-	grep -q "get phase" output_tpmikvs3 &&
-	test `grep PMI_KVS_Put output_tpmikvs3 | wc -l` -eq $((${SIZE}*16)) &&
-	test `grep PMI_Barrier output_tpmikvs3 | wc -l` -eq $((${SIZE}*2)) &&
-	test `grep PMI_KVS_Get output_tpmikvs3 | wc -l` -eq $((${SIZE}*16))
+	    ${FLUX_BUILD_DIR}/t/pmi/kvstest -N 16 >output_kvstest3 &&
+	grep -q "put phase" output_kvstest3 &&
+	grep -q "get phase" output_kvstest3 &&
+	test `grep PMI_KVS_Put output_kvstest3 | wc -l` -eq $((${SIZE}*16)) &&
+	test `grep PMI_Barrier output_kvstest3 | wc -l` -eq $((${SIZE}*2)) &&
+	test `grep PMI_KVS_Get output_kvstest3 | wc -l` -eq $((${SIZE}*16))
 '
 
 test_expect_success 'pmi: (put*16) / barrier / (get*16*size) pattern works' '
 	run_program 60 ${SIZE} ${SIZE} \
-	    ${FLUX_BUILD_DIR}/src/test/tpmikvs -n -N 16 >output_tpmikvs4 &&
-	grep -q "put phase" output_tpmikvs4 &&
-	grep -q "get phase" output_tpmikvs4 &&
-	test `grep PMI_KVS_Put output_tpmikvs4 | wc -l` -eq $((${SIZE}*16)) &&
-	test `grep PMI_Barrier output_tpmikvs4 | wc -l` -eq $((${SIZE}*2))  &&
-	test `grep PMI_KVS_Get output_tpmikvs4 | wc -l` -eq $((${SIZE}*16*${SIZE}))
+	    ${FLUX_BUILD_DIR}/t/pmi/kvstest -n -N 16 >output_kvstest4 &&
+	grep -q "put phase" output_kvstest4 &&
+	grep -q "get phase" output_kvstest4 &&
+	test `grep PMI_KVS_Put output_kvstest4 | wc -l` -eq $((${SIZE}*16)) &&
+	test `grep PMI_Barrier output_kvstest4 | wc -l` -eq $((${SIZE}*2))  &&
+	test `grep PMI_KVS_Get output_kvstest4 | wc -l` -eq $((${SIZE}*16*${SIZE}))
 '
 
 test_done

@@ -17,7 +17,7 @@ LDADD = \
         $(top_builddir)/src/common/liblsd/liblsd.la \
         $(top_builddir)/src/common/libev/libev.la \
         $(JSON_LIBS) $(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) \
-	$(MPI_CLDFLAGS)
+	$(MPI_CLDFLAGS) $(LIBDL)
 
 check_PROGRAMS = kap
 
