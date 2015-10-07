@@ -147,6 +147,22 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[]);
  */
 int optparse_getopt (optparse_t *p, const char *name, const char **optargp);
 
+
+/*
+ *   Iterate over multiple optarg values for options that were provided
+ *    more than once. Returns NULL at end of list, or if option "name"
+ *    was not found (in which case optparse_getopt_iterator_reset()
+ *    for "name" will return -1).
+ */
+const char *optparse_getopt_next (optparse_t *p, const char *name);
+
+/*
+ *   Reset internal iterator so that optparse_getopt_next() will return the
+ *    first argument from the list. Returns the number of items to iterate, or
+ *    -1 if option "name" not found.
+ */
+int optparse_getopt_iterator_reset (optparse_t *p, const char *name);
+
 /*
  *   Return true if the option 'name' was used, false if not.
  *    If the option is unknown, log an error and call exit (1).

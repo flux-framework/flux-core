@@ -68,6 +68,7 @@ struct option_info {
     struct optparse_option * p_opt;   /* Copy of program option structure  */
     List                    optargs;  /* If non-NULL, the option argument(s) */
     const char *            optarg;   /* Pointer to last element in optargs  */
+    ListIterator            argi;     /* iterator for optargs */
 
     unsigned int            found;    /* number of times we saw this option */
 
@@ -118,6 +119,7 @@ static struct option_info *option_info_create (const struct optparse_option *o)
         c->found = 0;
         c->optargs = NULL;
         c->optarg = NULL;
+        c->argi = NULL;
         c->p_opt = optparse_option_dup (o);
         if (!o->name)
             c->isdoc = 1;
@@ -128,6 +130,8 @@ static struct option_info *option_info_create (const struct optparse_option *o)
 static void option_info_destroy (struct option_info *c)
 {
     optparse_option_destroy (c->p_opt);
+    if (c->argi)
+        list_iterator_destroy (c->argi);
     if (c->optargs)
         list_destroy (c->optargs);
     c->optarg = NULL;
@@ -615,6 +619,30 @@ const char *optparse_get_str (optparse_t *p, const char *name,
     if (n == 0)
         return default_value;
     return s;
+}
+
+const char *optparse_getopt_next (optparse_t *p, const char *name)
+{
+    struct option_info *c;
+    if (!(c = find_option_info (p, name)))
+        return (NULL);
+    if (c->found == 0 || !c->optargs)
+        return (NULL);
+    if (!c->argi)
+        c->argi = list_iterator_create (c->optargs);
+    return (list_next (c->argi));
+}
+
+int optparse_getopt_iterator_reset (optparse_t *p, const char *name)
+{
+    struct option_info *c;
+    if (!(c = find_option_info (p, name)))
+        return (-1);
+    if (c->found == 0 || !c->optargs)
+        return (0);
+    if (c->argi)
+        list_iterator_reset (c->argi);
+    return (list_count (c->optargs));
 }
 
 optparse_err_t optparse_add_option (optparse_t *p,
