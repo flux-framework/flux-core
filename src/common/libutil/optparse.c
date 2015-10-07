@@ -33,6 +33,7 @@
 #include <ctype.h>
 #include <getopt.h>
 #include <stdarg.h>
+#include <argz.h>
 
 #include "src/common/liblsd/list.h"
 #include "optparse.h"
@@ -65,9 +66,11 @@ struct opt_parser {
  */
 struct option_info {
     struct optparse_option * p_opt;   /* Copy of program option structure  */
-    char *                  optarg;   /* If non-NULL, the option argument   */
+    List                    optargs;  /* If non-NULL, the option argument(s) */
+    const char *            optarg;   /* Pointer to last element in optargs  */
 
-    unsigned int            found:1;  /* 1 if this option has been used     */
+    unsigned int            found;    /* number of times we saw this option */
+
     unsigned int            isdoc:1;  /* 1 if this is a 'doc-only' option   */
 };
 
@@ -113,6 +116,7 @@ static struct option_info *option_info_create (const struct optparse_option *o)
     if (c != NULL) {
         memset (c, 0, sizeof (*c));
         c->found = 0;
+        c->optargs = NULL;
         c->optarg = NULL;
         c->p_opt = optparse_option_dup (o);
         if (!o->name)
@@ -124,7 +128,9 @@ static struct option_info *option_info_create (const struct optparse_option *o)
 static void option_info_destroy (struct option_info *c)
 {
     optparse_option_destroy (c->p_opt);
-    free (c->optarg);
+    if (c->optargs)
+        list_destroy (c->optargs);
+    c->optarg = NULL;
     free (c);
 }
 
@@ -547,9 +553,9 @@ int optparse_getopt (optparse_t *p, const char *name, const char **optargp)
         return (-1);
 
     if (c->found) {
-        if (optargp)
+        if (c->optargs && optargp)
             *optargp = c->optarg;
-        return (1);
+        return (c->found);
     }
     return (0);
 }
@@ -815,6 +821,19 @@ static int by_val (struct option_info *c, int *val)
     return (c->p_opt->key == *val);
 }
 
+static void opt_append_optarg (optparse_t *p, struct option_info *opt, const char *optarg)
+{
+    char *s;
+    if (!opt->optargs)
+        opt->optargs = list_create ((ListDelF) free);
+    if ((s = strdup (optarg)) == NULL)
+        (*p->fatalerr_fn) (p->fatalerr_handle, 1,
+                           "%s: out of memory\n",
+                           p->program_name);
+    list_append (opt->optargs, s);
+    opt->optarg = s;
+}
+
 int optparse_parse_args (optparse_t *p, int argc, char *argv[])
 {
     int c;
@@ -848,11 +867,8 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
         }
 
         opt->found++;
-        if (optarg) {
-            if (opt->optarg)
-                free (opt->optarg);
-            opt->optarg = strdup (optarg);
-        }
+        if (optarg)
+            opt_append_optarg (p, opt, optarg);
 
         o = opt->p_opt;
         if (o->cb && ((o->cb) (o, optarg, o->arg) < 0)) {
