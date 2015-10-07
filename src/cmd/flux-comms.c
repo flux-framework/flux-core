@@ -62,6 +62,7 @@ int main (int argc, char *argv[])
     int ch;
     int rank = -1; /* local */
     char *cmd;
+    int e;
 
     log_init ("flux-comms");
 
@@ -104,8 +105,8 @@ int main (int argc, char *argv[])
         char *msg = NULL;
         size_t len = 0;
         if (optind < argc) {
-            if (argz_create (argv + optind, &msg, &len) < 0)
-                oom ();
+            if ((e = argz_create (argv + optind, &msg, &len)) != 0)
+                errn_exit (e, "argz_create");
             argz_stringify (msg, len, ' ');
         }
         flux_panic (h, rank, msg);
