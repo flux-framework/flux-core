@@ -67,6 +67,7 @@ int flux_insmod_json_decode (const char *json_str,
     const char *s;
     int i, ac;
     int rc = -1;
+    int e;
 
     if (!(o = Jfromstr (json_str))
                 || !Jget_str (o, "path", &s)
@@ -78,7 +79,10 @@ int flux_insmod_json_decode (const char *json_str,
     *path = xstrdup (s);
     for (i = 0; i < ac; i++) {
         (void)Jget_ar_str (args, i, &s); /* can't fail? */
-        argz_add (argz, argz_len, s);
+        if ((e = argz_add (argz, argz_len, s)) != 0) {
+            errno = e;
+            goto done;
+        }
     }
     rc = 0;
 done:
