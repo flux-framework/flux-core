@@ -301,13 +301,15 @@ subprocess_get_context (struct subprocess *p, const char *name)
 
 static int init_argz (char **argzp, size_t *argz_lenp, char * const av[])
 {
+    int e;
+
     if (*argzp != NULL) {
         free (*argzp);
         *argz_lenp = 0;
     }
 
-    if (av && argz_create (av, argzp, argz_lenp) < 0) {
-        errno = ENOMEM;
+    if (av && (e = argz_create (av, argzp, argz_lenp)) != 0) {
+        errno = e;
         return -1;
     }
     return (0);
@@ -365,13 +367,15 @@ int subprocess_set_environ (struct subprocess *p, char **env)
 
 int subprocess_argv_append (struct subprocess *p, const char *s)
 {
+    int e;
+
     if (p->started) {
         errno = EINVAL;
         return (-1);
     }
 
-    if (argz_add (&p->argz, &p->argz_len, s) < 0) {
-        errno = ENOMEM;
+    if ((e = argz_add (&p->argz, &p->argz_len, s)) != 0) {
+        errno = e;
         return -1;
     }
     return (0);
@@ -379,16 +383,18 @@ int subprocess_argv_append (struct subprocess *p, const char *s)
 
 int subprocess_set_command (struct subprocess *p, const char *cmd)
 {
+    int e;
+
     if (p->started) {
         errno = EINVAL;
         return (-1);
     }
     init_argz (&p->argz, &p->argz_len, NULL);
 
-    if (argz_add (&p->argz, &p->argz_len, "sh") < 0
-        || argz_add (&p->argz, &p->argz_len, "-c") < 0
-        || argz_add (&p->argz, &p->argz_len, cmd) < 0) {
-        errno = ENOMEM;
+    if ((e = argz_add (&p->argz, &p->argz_len, "sh")) != 0
+        || (e = argz_add (&p->argz, &p->argz_len, "-c")) != 0
+        || (e = argz_add (&p->argz, &p->argz_len, cmd)) != 0) {
+        errno = e;
         return (-1);
     }
     return (0);
