@@ -356,20 +356,24 @@ done:
 
 void module_set_args (module_t *p, int argc, char * const argv[])
 {
+    int e;
+
     assert (p->magic == MODULE_MAGIC);
     if (p->argz) {
         free (p->argz);
         p->argz_len = 0;
     }
-    if (argv && argz_create (argv, &p->argz, &p->argz_len) < 0)
-        oom ();
+    if (argv && (e = argz_create (argv, &p->argz, &p->argz_len)) != 0)
+        errn_exit (e, "argz_create");
 }
 
 void module_add_arg (module_t *p, const char *arg)
 {
+    int e;
+
     assert (p->magic == MODULE_MAGIC);
-    if (argz_add (&p->argz, &p->argz_len, arg) < 0)
-        oom ();
+    if ((e = argz_add (&p->argz, &p->argz_len, arg)) != 0)
+        errn_exit (e, "argz_add");
 }
 
 void module_set_poller_cb (module_t *p, modpoller_cb_f cb, void *arg)
