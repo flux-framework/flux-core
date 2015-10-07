@@ -279,14 +279,86 @@ void test_errors (void)
     optparse_destroy (p);
 }
 
+void test_multiret (void)
+{
+    int rc;
+    const char *optarg;
+    optparse_err_t e;
+    optparse_t *p = optparse_create ("multret-test");
+    struct optparse_option opts [] = {
+    { .name = "required-arg", .key = 'r', .has_arg = 1,
+      .arginfo = "", .usage = "" },
+    { .name = "optional-arg", .key = 'o', .has_arg = 2,
+      .arginfo = "", .usage = "" },
+    { .name = "multi-ret",    .key = 'm', .has_arg = 3,
+      .arginfo = "", .usage = "" },
+      OPTPARSE_TABLE_END,
+    };
+
+    char *av[] = { "multret-test",
+                   "-r", "one", "-mone", "-m", "two",
+                   "-o", "-rtwo", "--multi-ret=a,b,c",
+                   NULL };
+    int ac = sizeof (av) / sizeof (av[0]) - 1;
+
+    ok (p != NULL, "optparse_create");
+
+    e = optparse_add_option_table (p, opts);
+    ok (e == OPTPARSE_SUCCESS, "register options");
+
+    optind = optparse_parse_args (p, ac, av);
+    ok (optind == ac, "parse options, verify optind");
+
+    rc = optparse_getopt (p, "required-arg", &optarg);
+    ok (rc == 2, "-r used twice");
+    is (optarg, "two", "last usage wins");
+
+    optarg = NULL;
+    rc = optparse_getopt (p, "optional-arg", &optarg);
+    ok (rc == 1, "-o used once");
+    ok (optarg == NULL, "with no arg");
+
+    optarg = NULL;
+    rc = optparse_getopt (p, "multi-ret", &optarg);
+    ok (rc == 3, "-m used three times");
+    is (optarg, "c", "last usage wins");
+
+    // iterate over arguments
+    int i = 0;
+    char *expected[] = { "one", "two", "BAD INDEX" };
+    const char *s;
+    while ((s = optparse_getopt_next (p, "required-arg"))) {
+        is (expected [i], s, "%d: argument matches", i);
+        i++;
+    }
+    ok (optparse_getopt_next (p, "required-arg")  == NULL,
+        "getopt_next returns Null repeatedly after iteration");
+
+    rc = optparse_getopt_iterator_reset (p, "required-arg");
+    ok (rc == 2, "Iterator reset indicates 2 options to iterate");
+
+    // multi-ret
+    char *expected2[] = { "one", "two", "a", "b", "c" };
+    i = 0;
+    while ((s = optparse_getopt_next (p, "multi-ret"))) {
+        is (expected2 [i], s, "%d: argument matches", i);
+        i++;
+    }
+    rc = optparse_getopt_iterator_reset (p, "multi-ret");
+    ok (rc == 5, "Iterator reset indicates 2 options to iterate");
+
+    optparse_destroy (p);
+}
+
 int main (int argc, char *argv[])
 {
 
-    plan (62);
+    plan (81);
 
     test_convenience_accessors (); /* 24 tests */
     test_usage_output (); /* 29 tests */
     test_errors (); /* 9 tests */
+    test_multiret (); /* 19 tests */
 
     done_testing ();
     return (0);
