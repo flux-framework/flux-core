@@ -73,6 +73,8 @@ struct option_info {
     unsigned int            found;    /* number of times we saw this option */
 
     unsigned int            isdoc:1;  /* 1 if this is a 'doc-only' option   */
+    unsigned int            autosplit:1;  /* 1 if we auto-split values into */
+                                          /* optargs */
 };
 
 /******************************************************************************
@@ -123,6 +125,8 @@ static struct option_info *option_info_create (const struct optparse_option *o)
         c->p_opt = optparse_option_dup (o);
         if (!o->name)
             c->isdoc = 1;
+        if (o->has_arg == 3)
+            c->autosplit = 1;
     }
     return (c);
 }
@@ -795,7 +799,7 @@ static char * optstring_append (char *optstring, struct optparse_option *o)
 
     optstring = realloc (optstring, (n + 1)); /* extra character for NUL */
 
-    if (o->has_arg == 1)
+    if (o->has_arg == 1 || o->has_arg == 3)
         colons = ":";
     else if (o->has_arg == 2)
         colons = "::";
@@ -849,11 +853,35 @@ static int by_val (struct option_info *c, int *val)
     return (c->p_opt->key == *val);
 }
 
+static int opt_append_sep (struct option_info *opt, const char *s)
+{
+    error_t e;
+    char *arg = NULL;
+    char *argz = NULL;
+    size_t len = 0;
+    if ((e = argz_create_sep (s, ',', &argz, &len))) {
+        errno = e;
+        return (-1);
+    }
+    while ((arg = argz_next (argz, len, arg)))
+        opt->optarg = list_append (opt->optargs, strdup (arg));
+
+    free (argz);
+    return (0);
+}
+
 static void opt_append_optarg (optparse_t *p, struct option_info *opt, const char *optarg)
 {
     char *s;
     if (!opt->optargs)
         opt->optargs = list_create ((ListDelF) free);
+    if (opt->autosplit) {
+        if (opt_append_sep (opt, optarg) < 0)
+            (*p->fatalerr_fn) (p->fatalerr_handle, 1,
+                    "%s: append '%s': %s\n", p->program_name,
+                    optarg, strerror (errno));
+        return;
+    }
     if ((s = strdup (optarg)) == NULL)
         (*p->fatalerr_fn) (p->fatalerr_handle, 1,
                            "%s: out of memory\n",

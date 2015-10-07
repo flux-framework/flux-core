@@ -51,13 +51,15 @@ typedef enum {
 /*
  *  Description of an option:
  */
+#define list_argument 3
 struct optparse_option {
     const char *  name;    /*  Option name (e.g. "help" for --help)         */
     int           key;     /*  Option key  (e.g. 'h', or other number).
 				If !isalnum(key), then this option is
                                 assumed to be a long option only.           */
 
-    int           has_arg; /*  0: no arg, 1: req'd arg, 2: optional arg     */
+    int           has_arg; /*  0: no arg, 1: req'd arg, 2: optional arg
+                               3: list-arg (split on comma separate values) */
     int           group;   /*  Grouping in --help output                    */
     const char *  arginfo; /*  arg info displayed after = in help output    */
     const char *  usage;   /*  String for usage/help output                 */
