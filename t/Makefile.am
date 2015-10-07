@@ -35,6 +35,7 @@ TESTS = \
 	t1003-mecho.t \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
+	t1007-kz.t \
 	t2000-wreck.t \
 	t2001-jsc.t \
 	t2002-pmi.t \
@@ -77,6 +78,7 @@ check_SCRIPTS = \
 	t1003-mecho.t \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
+	t1007-kz.t \
 	t2000-wreck.t \
 	t2001-jsc.t \
 	t2002-pmi.t \
