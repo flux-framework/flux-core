@@ -1,11 +1,167 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/optparse.h"
+#include "src/common/libutil/sds.h"
 
 static void *myfatal_h = NULL;
 
 void myfatal (void *h, int exit_code, const char *fmt, ...)
 {
     myfatal_h = h;
+}
+
+sds usage_out = NULL;
+void output_f (const char *fmt, ...)
+{
+    va_list ap;
+    sds s = usage_out ? usage_out : sdsempty();
+    va_start (ap, fmt);
+    usage_out = sdscatvprintf (s, fmt, ap);
+    va_end (ap);
+}
+
+void usage_ok (optparse_t *p, const char *expected, const char *msg)
+{
+    optparse_print_usage (p);
+    ok (usage_out != NULL, "optparse_print_usage");
+    is (usage_out, expected, msg);
+    sdsfree (usage_out);
+    usage_out = NULL;
+}
+
+void test_usage_output (void)
+{
+    optparse_err_t e;
+    optparse_t *p = optparse_create ("prog-foo");
+    struct optparse_option opt;
+    ok (p != NULL, "optparse_create");
+
+    // Ensure we use default term columns:
+    unsetenv ("COLUMNS");
+
+    opt = ((struct optparse_option) {
+            .name = "test", .key = 't', .has_arg = 0,
+            .usage = "Enable a test option."
+            });
+    e = optparse_add_option (p, &opt);
+    ok (e == OPTPARSE_SUCCESS, "optparse_add_option");
+    opt = ((struct optparse_option) {
+            .name = "test2", .key = 'T', .has_arg = 1,
+            .arginfo = "N",
+            .usage = "Enable a test option N."
+            });
+    e = optparse_add_option (p, &opt);
+    ok (e == OPTPARSE_SUCCESS, "optparse_add_option");
+
+    e = optparse_set (p, OPTPARSE_USAGE, "[OPTIONS]");
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (USAGE)");
+
+    e = optparse_set (p, OPTPARSE_LOG_FN, output_f);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (LOG_FN)");
+
+    usage_ok (p, "\
+Usage: prog-foo [OPTIONS]\n\
+  -T, --test2=N          Enable a test option N.\n\
+  -h, --help             Display this message.\n\
+  -t, --test             Enable a test option.\n",
+        "Usage output as expected");
+
+    e = optparse_set (p, OPTPARSE_LEFT_MARGIN, 0);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (LEFT_MARGIN)");
+
+    usage_ok (p, "\
+Usage: prog-foo [OPTIONS]\n\
+-T, --test2=N            Enable a test option N.\n\
+-h, --help               Display this message.\n\
+-t, --test               Enable a test option.\n",
+        "Usage output as expected w/ left margin");
+
+    e = optparse_set (p, OPTPARSE_LEFT_MARGIN, 2);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (LEFT_MARGIN)");
+
+    // Remove options
+    e = optparse_remove_option (p, "test");
+    ok (e == OPTPARSE_SUCCESS, "optparse_remove_option (\"test\")");
+
+    usage_ok (p, "\
+Usage: prog-foo [OPTIONS]\n\
+  -T, --test2=N          Enable a test option N.\n\
+  -h, --help             Display this message.\n",
+        "Usage output as expected after option removal");
+
+    // Add doc sections
+    e = optparse_add_doc (p, "This is some doc in header", 0);
+    ok (e == OPTPARSE_SUCCESS, "optparse_add_doc (group=0)");
+    usage_ok (p, "\
+Usage: prog-foo [OPTIONS]\n\
+This is some doc in header\n\
+  -T, --test2=N          Enable a test option N.\n\
+  -h, --help             Display this message.\n",
+        "Usage output as with doc");
+
+    // Add a longer option in group 1:
+    opt = ((struct optparse_option) {
+            .name = "long-option", .key = 'A', .has_arg = 1, .group = 1,
+            .arginfo = "ARGINFO",
+            .usage = "Enable a long option with argument info ARGINFO."
+            });
+    e = optparse_add_option (p, &opt);
+    ok (e == OPTPARSE_SUCCESS, "optparse_add_option. group 1.");
+
+    usage_ok (p, "\
+Usage: prog-foo [OPTIONS]\n\
+This is some doc in header\n\
+  -T, --test2=N          Enable a test option N.\n\
+  -h, --help             Display this message.\n\
+  -A, --long-option=ARGINFO\n\
+                         Enable a long option with argument info ARGINFO.\n",
+        "Usage output with option in group 1");
+
+    // Add doc for group 1.
+    e = optparse_add_doc (p, "This is some doc for group 1", 1);
+    ok (e == OPTPARSE_SUCCESS, "optparse_add_doc (group = 1)");
+    usage_ok (p, "\
+Usage: prog-foo [OPTIONS]\n\
+This is some doc in header\n\
+  -T, --test2=N          Enable a test option N.\n\
+  -h, --help             Display this message.\n\
+This is some doc for group 1\n\
+  -A, --long-option=ARGINFO\n\
+                         Enable a long option with argument info ARGINFO.\n",
+        "Usage output with option in group 1");
+
+
+    // Increase option width:
+    e = optparse_set (p, OPTPARSE_OPTION_WIDTH, 30);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (OPTION_WIDTH)");
+    usage_ok (p, "\
+Usage: prog-foo [OPTIONS]\n\
+This is some doc in header\n\
+  -T, --test2=N               Enable a test option N.\n\
+  -h, --help                  Display this message.\n\
+This is some doc for group 1\n\
+  -A, --long-option=ARGINFO   Enable a long option with argument info ARGINFO.\n",
+        "Usage output with increased option width");
+
+    // Add an option with very long description in group 1:
+    opt = ((struct optparse_option) {
+            .name = "option-B", .key = 'B', .group = 1,
+            .usage = "This option has a very long description. It should be split across lines nicely."
+            });
+    e = optparse_add_option (p, &opt);
+    ok (e == OPTPARSE_SUCCESS, "optparse_add_option. group 1.");
+
+    usage_ok (p, "\
+Usage: prog-foo [OPTIONS]\n\
+This is some doc in header\n\
+  -T, --test2=N               Enable a test option N.\n\
+  -h, --help                  Display this message.\n\
+This is some doc for group 1\n\
+  -A, --long-option=ARGINFO   Enable a long option with argument info ARGINFO.\n\
+  -B, --option-B              This option has a very long description. It should\n\
+                              be split across lines nicely.\n",
+        "Usage output with message autosplit across lines");
+
+    optparse_destroy (p);
 }
 
 void test_convenience_accessors (void)
@@ -85,12 +241,52 @@ void test_convenience_accessors (void)
     optparse_destroy (p);
 }
 
+void test_errors (void)
+{
+    optparse_err_t e;
+    struct optparse_option opt;
+    optparse_t *p = optparse_create ("errors-test");
+    ok (p != NULL, "optparse_create");
+
+    opt = ((struct optparse_option) {
+            .name = "help", .key = 'h',
+            .usage = "Conflicting option"
+            });
+
+    e = optparse_add_option (p, &opt);
+    ok (e == OPTPARSE_EEXIST, "optparse_add_option: Errror with EEXIST");
+    e = optparse_add_option (NULL, &opt);
+    ok (e == OPTPARSE_BAD_ARG, "optparse_add_option: BAD_ARG with invalid optparse_t");
+
+    e = optparse_remove_option (p, "foo");
+    ok (e == OPTPARSE_FAILURE, "optparse_remove_option: FAILURE if option not found");
+
+    // optparse_set error cases:
+    e = optparse_set (p, 1000, 1);
+    ok (e == OPTPARSE_BAD_ARG, "optparse_set (invalid item) returns BAD_ARG");
+
+    e = optparse_set (p, OPTPARSE_LEFT_MARGIN, 2000);
+    ok (e == OPTPARSE_BAD_ARG, "optparse_set (LEFT_MARGIN, 2000) returns BAD_ARG");
+    e = optparse_set (p, OPTPARSE_LEFT_MARGIN, -1);
+    ok (e == OPTPARSE_BAD_ARG, "optparse_set (LEFT_MARGIN, -1) returns BAD_ARG");
+
+    e = optparse_set (p, OPTPARSE_OPTION_WIDTH, 2000);
+    ok (e == OPTPARSE_BAD_ARG, "optparse_set (OPTION_WIDTH, 2000) returns BAD_ARG");
+    e = optparse_set (p, OPTPARSE_OPTION_WIDTH, -1);
+    ok (e == OPTPARSE_BAD_ARG, "optparse_set (OPTION_WIDTH, -1) returns BAD_ARG");
+
+
+    optparse_destroy (p);
+}
+
 int main (int argc, char *argv[])
 {
 
-    plan (24);
+    plan (62);
 
     test_convenience_accessors (); /* 24 tests */
+    test_usage_output (); /* 29 tests */
+    test_errors (); /* 9 tests */
 
     done_testing ();
     return (0);
