@@ -77,9 +77,13 @@ struct subprocess {
     zio_t *zio_in;
     zio_t *zio_out;
     zio_t *zio_err;
+    flux_watcher_t *child_watcher;
 
     subprocess_cb_f *exit_cb;
     void *exit_cb_arg;
+
+    subprocess_cb_f *status_cb;
+    void *status_cb_arg;
 
     subprocess_io_cb_f *io_cb;
 };
@@ -238,6 +242,7 @@ void subprocess_destroy (struct subprocess *p)
         close (p->parentfd);
     if (p->childfd > 0)
         close (p->childfd);
+    flux_watcher_destroy (p->child_watcher);
 
     free (p);
 }
@@ -277,6 +282,15 @@ subprocess_set_callback (struct subprocess *p, subprocess_cb_f fn, void *arg)
 {
     p->exit_cb = fn;
     p->exit_cb_arg = arg;
+    return (0);
+}
+
+int
+subprocess_set_status_callback (struct subprocess *p,
+                                subprocess_cb_f fn, void *arg)
+{
+    p->status_cb = fn;
+    p->status_cb_arg = arg;
     return (0);
 }
 
@@ -656,6 +670,21 @@ int subprocess_exec (struct subprocess *p)
     return (rc);
 }
 
+static void child_watcher (flux_reactor_t *r, flux_watcher_t *w,
+                           int revents, void *arg)
+{
+    struct subprocess *p = arg;
+
+    p->status = flux_child_watcher_get_rstatus (w);
+    if (WIFEXITED (p->status) || WIFSIGNALED (p->status)) {
+        flux_watcher_stop (w);
+        p->exited = 1;
+    }
+    if (p->status_cb)
+        p->status_cb (p, p->status_cb_arg);
+    check_completion (p);
+}
+
 int subprocess_fork (struct subprocess *p)
 {
     if (p->argz_len <= 0 || p->argz == NULL || p->started) {
@@ -671,6 +700,12 @@ int subprocess_fork (struct subprocess *p)
 
     if (p->io_cb)
         parent_io_setup (p);
+    if (p->sm->reactor) {     /* no-op if reactor is !FLUX_REACTOR_SIGCHLD */
+        p->child_watcher = flux_child_watcher_create (p->sm->reactor,
+                                                      p->pid, true,
+                                                      child_watcher, p);
+        flux_watcher_start (p->child_watcher);
+    }
     close (p->childfd);
     p->childfd = -1;
 
@@ -726,6 +761,19 @@ int subprocess_signaled (struct subprocess *p)
     return (0);
 }
 
+int subprocess_stopped (struct subprocess *p)
+{
+    if (WIFSTOPPED (p->status))
+        return (WSTOPSIG (p->status));
+    return (0);
+}
+
+int subprocess_continued (struct subprocess *p)
+{
+    if (WIFCONTINUED (p->status))
+        return (1);
+    return (0);
+}
 int subprocess_exec_error (struct subprocess *p)
 {
     return (p->exec_error);
@@ -839,7 +887,10 @@ int subprocess_reap (struct subprocess *p)
     rc = waitpid (p->pid, &p->status, 0);
     if (rc <= 0)
         return (-1);
-    p->exited = 1;
+    if (WIFEXITED (p->status) || WIFSIGNALED (p->status))
+        p->exited = 1;
+    if (p->status_cb)
+        p->status_cb (p, p->status_cb_arg);
     check_completion (p);
     return (0);
 }
@@ -856,7 +907,8 @@ subprocess_manager_wait (struct subprocess_manager *sm)
         return (NULL);
     }
     p->status = status;
-    p->exited = 1;
+    if (WIFEXITED (p->status) || WIFSIGNALED (p->status))
+        p->exited = 1;
     return (p);
 }
 
@@ -864,8 +916,11 @@ int
 subprocess_manager_reap_all (struct subprocess_manager *sm)
 {
     struct subprocess *p;
-    while ((p = subprocess_manager_wait (sm)))
+    while ((p = subprocess_manager_wait (sm))) {
+            if (p->status_cb)
+                p->status_cb (p, p->status_cb_arg);
             check_completion (p);
+    }
     return (0);
 }
 

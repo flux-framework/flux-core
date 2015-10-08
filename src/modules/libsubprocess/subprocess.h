@@ -94,6 +94,12 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm);
 int subprocess_set_callback (struct subprocess *p, subprocess_cb_f fn, void *arg);
 
 /*
+ *  Set a callback function for subprocess status change
+ */
+int subprocess_set_status_callback (struct subprocess *p,
+                                    subprocess_cb_f fn, void *arg);
+
+/*
  *  Set an IO callback
  */
 int subprocess_set_io_callback (struct subprocess *p, subprocess_io_cb_f fn);
@@ -234,6 +240,18 @@ int subprocess_exit_code (struct subprocess *p);
  *   or 0 if process was not killed by a signal.
  */
 int subprocess_signaled (struct subprocess *p);
+
+/*
+ *  Return number of the signal that caused process to stop,
+ *   or 0 if process was not stopped.
+ */
+int subprocess_stopped (struct subprocess *p);
+
+/*
+ *  Return 1 if process was continued,
+ *   or 0 if process was not contineud.
+ */
+int subprocess_continued (struct subprocess *p);
 
 /*
  *  If state == "Exec Failure" then return the errno from exec(2)
