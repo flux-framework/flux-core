@@ -59,7 +59,7 @@ static struct optparse_option opts[] = {
       .usage = "Don't execute (useful with -v, --verbose)", },
     { .name = "size",       .key = 's', .has_arg = 1, .arginfo = "N",
       .usage = "Set number of ranks in new instance", },
-    { .name = "broker-opts",.key = 'o', .has_arg = 1, .arginfo = "OPTS",
+    { .name = "broker-opts",.key = 'o', .has_arg = 3, .arginfo = "OPTS",
       .usage = "Add comma-separated broker options, e.g. \"-o,-q\"", },
     OPTPARSE_TABLE_END,
 };
@@ -178,21 +178,13 @@ void add_arg (struct subprocess *p, const char *fmt, ...)
     free (arg);
 }
 
-void add_args_sep (struct subprocess *p, const char *s, int sep)
+void add_args_list (struct subprocess *p, optparse_t *opt, const char *name)
 {
-    char *az = NULL;
-    size_t az_len = 0;
-    char *arg = NULL;
-    int e;
-
-    if ((e = argz_create_sep (s, sep, &az, &az_len)) != 0)
-        errn_exit (e, "argz_create_sep");
-    while ((arg = argz_next (az, az_len, arg))) {
+    const char *arg;
+    optparse_getopt_iterator_reset (opt, name);
+    while ((arg = optparse_getopt_next (opt, name)))
         if (subprocess_argv_append  (p, arg) < 0)
             err_exit ("subprocess_argv_append");
-    }
-    if (az)
-        free (az);
 }
 
 char *args_str (struct subprocess *p)
@@ -224,7 +216,6 @@ char *create_socket_dir (const char *sid)
 int start_direct (optparse_t *opts, const char *cmd)
 {
     int size = optparse_get_int (opts, "size", default_size);
-    const char *broker_opts = optparse_get_str (opts, "broker-opts", NULL);
     char *broker_path = getenv ("FLUX_BROKER_PATH");
     char *sid = xasprintf ("%d", getpid ());
     char *sockdir = create_socket_dir (sid);
@@ -249,8 +240,7 @@ int start_direct (optparse_t *opts, const char *cmd)
         add_arg (p, "--rank=%d", rank);
         add_arg (p, "--sid=%s", sid);
         add_arg (p, "--socket-directory=%s", sockdir);
-        if (broker_opts)
-            add_args_sep (p, broker_opts, ',');
+        add_args_list (p, opts, "broker-opts");
         if (rank == 0 && cmd)
             add_arg (p, "%s", cmd); /* must be last */
 
