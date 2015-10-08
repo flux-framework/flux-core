@@ -33,6 +33,7 @@
 #include <ctype.h>
 #include <getopt.h>
 #include <stdarg.h>
+#include <argz.h>
 
 #include "src/common/liblsd/list.h"
 #include "optparse.h"
@@ -65,10 +66,15 @@ struct opt_parser {
  */
 struct option_info {
     struct optparse_option * p_opt;   /* Copy of program option structure  */
-    char *                  optarg;   /* If non-NULL, the option argument   */
+    List                    optargs;  /* If non-NULL, the option argument(s) */
+    const char *            optarg;   /* Pointer to last element in optargs  */
+    ListIterator            argi;     /* iterator for optargs */
 
-    unsigned int            found:1;  /* 1 if this option has been used     */
+    unsigned int            found;    /* number of times we saw this option */
+
     unsigned int            isdoc:1;  /* 1 if this is a 'doc-only' option   */
+    unsigned int            autosplit:1;  /* 1 if we auto-split values into */
+                                          /* optargs */
 };
 
 /******************************************************************************
@@ -113,10 +119,14 @@ static struct option_info *option_info_create (const struct optparse_option *o)
     if (c != NULL) {
         memset (c, 0, sizeof (*c));
         c->found = 0;
+        c->optargs = NULL;
         c->optarg = NULL;
+        c->argi = NULL;
         c->p_opt = optparse_option_dup (o);
         if (!o->name)
             c->isdoc = 1;
+        if (o->has_arg == 3)
+            c->autosplit = 1;
     }
     return (c);
 }
@@ -124,7 +134,11 @@ static struct option_info *option_info_create (const struct optparse_option *o)
 static void option_info_destroy (struct option_info *c)
 {
     optparse_option_destroy (c->p_opt);
-    free (c->optarg);
+    if (c->argi)
+        list_iterator_destroy (c->argi);
+    if (c->optargs)
+        list_destroy (c->optargs);
+    c->optarg = NULL;
     free (c);
 }
 
@@ -143,9 +157,9 @@ static int option_info_cmp (struct option_info *x, struct option_info *y)
         if (x->isdoc && y->isdoc)
             return (0);
         else if (x->isdoc)
-            return (1);
-        else if (y->isdoc)
             return (-1);
+        else if (y->isdoc)
+            return (1);
         else if (isalnum (o1->key) && isalnum (o2->key))
             return (o1->key - o2->key);
         else
@@ -168,7 +182,7 @@ static int option_info_cmp_name (struct option_info *o, const char *name)
 /*
  *  Return option_info structure for option with [name]
  */
-static struct option_info *find_option_info (optparse_t p, const char *name)
+static struct option_info *find_option_info (optparse_t *p, const char *name)
 {
     return (list_find_first (p->option_list,
                              (ListFindF) option_info_cmp_name,
@@ -178,7 +192,7 @@ static struct option_info *find_option_info (optparse_t p, const char *name)
 /*   Remove the options in table [opts], up to but not including [end]
  *    If [end] is NULL, remove all options.
  */
-static void option_table_remove (optparse_t p,
+static void option_table_remove (optparse_t *p,
         struct optparse_option const opts[],
         const struct optparse_option *end)
 {
@@ -190,7 +204,7 @@ static void option_table_remove (optparse_t p,
     return;
 }
 
-static int optparse_set_usage (optparse_t p, const char *usage)
+static int optparse_set_usage (optparse_t *p, const char *usage)
 {
     if (p->usage)
         free (p->usage);
@@ -198,19 +212,19 @@ static int optparse_set_usage (optparse_t p, const char *usage)
     return (0);
 }
 
-static optparse_err_t optparse_set_log_fn (optparse_t p, opt_log_f fn)
+static optparse_err_t optparse_set_log_fn (optparse_t *p, opt_log_f fn)
 {
     p->log_fn = fn;
     return (0);
 }
 
-static optparse_err_t optparse_set_fatalerr_fn (optparse_t p, opt_fatalerr_f fn)
+static optparse_err_t optparse_set_fatalerr_fn (optparse_t *p, opt_fatalerr_f fn)
 {
     p->fatalerr_fn = fn;
     return (0);
 }
 
-static optparse_err_t optparse_set_fatalerr_handle (optparse_t p, void *handle)
+static optparse_err_t optparse_set_fatalerr_handle (optparse_t *p, void *handle)
 {
     p->fatalerr_handle = handle;
     return (0);
@@ -348,7 +362,7 @@ static int get_term_columns ()
 }
 
 static void
-optparse_doc_print (optparse_t p, struct optparse_option *o, int columns)
+optparse_doc_print (optparse_t *p, struct optparse_option *o, int columns)
 {
     char seg [128];
     char buf [4096];
@@ -365,7 +379,7 @@ optparse_doc_print (optparse_t p, struct optparse_option *o, int columns)
 }
 
 static void
-optparse_option_print (optparse_t p, struct optparse_option *o, int columns)
+optparse_option_print (optparse_t *p, struct optparse_option *o, int columns)
 {
     int n;
     char *equals = "";
@@ -414,7 +428,7 @@ optparse_option_print (optparse_t p, struct optparse_option *o, int columns)
     if (n < width)
         (*p->log_fn) ("%-*s%s\n", width, info, s);
     else
-        (*p->log_fn) ("\n%s\n%*s%s\n", info, width, "", s);
+        (*p->log_fn) ("%s\n%*s%s\n", info, width, "", s);
 
     /*  Get remaining usage lines (line-wrapped)
      */
@@ -424,7 +438,7 @@ optparse_option_print (optparse_t p, struct optparse_option *o, int columns)
     return;
 }
 
-static int optparse_print_options (optparse_t p)
+static int optparse_print_options (optparse_t *p)
 {
     int columns;
     struct option_info *o;
@@ -451,7 +465,7 @@ static int optparse_print_options (optparse_t p)
     return (0);
 }
 
-static int print_usage (optparse_t p)
+static int print_usage (optparse_t *p)
 {
     if (p->usage)
         (*p->log_fn) ("Usage: %s %s\n", p->program_name, p->usage);
@@ -475,7 +489,7 @@ static int display_help (struct optparse_option *o, const char *optarg)
 /*
  *  Destroy option parser [p]
  */
-void optparse_destroy (optparse_t p)
+void optparse_destroy (optparse_t *p)
 {
     if (p == NULL)
         return;
@@ -488,7 +502,7 @@ void optparse_destroy (optparse_t p)
 /*
  *   Create option parser for program named [prog]
  */
-optparse_t optparse_create (const char *prog)
+optparse_t *optparse_create (const char *prog)
 {
     struct optparse_option help = {
         .name = "help",
@@ -537,21 +551,24 @@ optparse_t optparse_create (const char *prog)
  *   and 1 if option was specified in args. Returns pointer to optargp
  *   if non-NULL.
  */
-int optparse_getopt (optparse_t p, const char *name, const char **optargp)
+int optparse_getopt (optparse_t *p, const char *name, const char **optargp)
 {
     struct option_info *c;
+    if (optargp)
+        *optargp = NULL;
+
     if (!(c = find_option_info (p, name)))
         return (-1);
 
     if (c->found) {
-        if (optargp)
+        if (c->optargs && optargp)
             *optargp = c->optarg;
-        return (1);
+        return (c->found);
     }
     return (0);
 }
 
-bool optparse_hasopt (optparse_t p, const char *name)
+bool optparse_hasopt (optparse_t *p, const char *name)
 {
     int n;
     if ((n = optparse_getopt (p, name, NULL)) < 0) {
@@ -563,7 +580,7 @@ bool optparse_hasopt (optparse_t p, const char *name)
     return (n > 0);
 }
 
-int optparse_get_int (optparse_t p, const char *name, int default_value)
+int optparse_get_int (optparse_t *p, const char *name, int default_value)
 {
     int n;
     long l;
@@ -591,7 +608,7 @@ badarg:
     return -1;
 }
 
-const char *optparse_get_str (optparse_t p, const char *name,
+const char *optparse_get_str (optparse_t *p, const char *name,
                               const char *default_value)
 {
     int n;
@@ -608,7 +625,31 @@ const char *optparse_get_str (optparse_t p, const char *name,
     return s;
 }
 
-optparse_err_t optparse_add_option (optparse_t p,
+const char *optparse_getopt_next (optparse_t *p, const char *name)
+{
+    struct option_info *c;
+    if (!(c = find_option_info (p, name)))
+        return (NULL);
+    if (c->found == 0 || !c->optargs)
+        return (NULL);
+    if (!c->argi)
+        c->argi = list_iterator_create (c->optargs);
+    return (list_next (c->argi));
+}
+
+int optparse_getopt_iterator_reset (optparse_t *p, const char *name)
+{
+    struct option_info *c;
+    if (!(c = find_option_info (p, name)))
+        return (-1);
+    if (c->found == 0 || !c->optargs)
+        return (0);
+    if (c->argi)
+        list_iterator_reset (c->argi);
+    return (list_count (c->optargs));
+}
+
+optparse_err_t optparse_add_option (optparse_t *p,
         const struct optparse_option *o)
 {
     struct option_info *c;
@@ -628,7 +669,7 @@ optparse_err_t optparse_add_option (optparse_t p,
     return (OPTPARSE_SUCCESS);
 }
 
-optparse_err_t optparse_remove_option (optparse_t p, const char *name)
+optparse_err_t optparse_remove_option (optparse_t *p, const char *name)
 {
     optparse_err_t rc = OPTPARSE_SUCCESS;
 
@@ -642,7 +683,7 @@ optparse_err_t optparse_remove_option (optparse_t p, const char *name)
     return (rc);
 }
 
-optparse_err_t optparse_add_option_table (optparse_t p,
+optparse_err_t optparse_add_option_table (optparse_t *p,
         struct optparse_option const opts[])
 {
     optparse_err_t rc = OPTPARSE_SUCCESS;
@@ -657,7 +698,7 @@ optparse_err_t optparse_add_option_table (optparse_t p,
     return (rc);
 }
 
-optparse_err_t optparse_add_doc (optparse_t p, const char *doc, int group)
+optparse_err_t optparse_add_doc (optparse_t *p, const char *doc, int group)
 {
     struct optparse_option o;
 
@@ -675,7 +716,7 @@ optparse_err_t optparse_add_doc (optparse_t p, const char *doc, int group)
     return optparse_add_option (p, &o);
 }
 
-optparse_err_t optparse_set (optparse_t p, optparse_item_t item, ...)
+optparse_err_t optparse_set (optparse_t *p, optparse_item_t item, ...)
 {
     optparse_err_t e = OPTPARSE_SUCCESS;
     va_list vargs;
@@ -719,7 +760,7 @@ optparse_err_t optparse_set (optparse_t p, optparse_item_t item, ...)
     return e;
 }
 
-optparse_err_t optparse_get (optparse_t p, optparse_item_t item, ...)
+optparse_err_t optparse_get (optparse_t *p, optparse_item_t item, ...)
 {
     /*
      *  Not implemented yet...
@@ -758,7 +799,7 @@ static char * optstring_append (char *optstring, struct optparse_option *o)
 
     optstring = realloc (optstring, (n + 1)); /* extra character for NUL */
 
-    if (o->has_arg == 1)
+    if (o->has_arg == 1 || o->has_arg == 3)
         colons = ":";
     else if (o->has_arg == 2)
         colons = "::";
@@ -772,7 +813,7 @@ static char * optstring_append (char *optstring, struct optparse_option *o)
  *  Create getopt_long(3) option table and return.
  *  Also create shortopts table if sp != NULL and return by value.
  */
-static struct option * option_table_create (optparse_t p, char **sp)
+static struct option * option_table_create (optparse_t *p, char **sp)
 {
     struct option_info *o;
     struct option *opts;
@@ -812,7 +853,44 @@ static int by_val (struct option_info *c, int *val)
     return (c->p_opt->key == *val);
 }
 
-int optparse_parse_args (optparse_t p, int argc, char *argv[])
+static int opt_append_sep (struct option_info *opt, const char *s)
+{
+    error_t e;
+    char *arg = NULL;
+    char *argz = NULL;
+    size_t len = 0;
+    if ((e = argz_create_sep (s, ',', &argz, &len))) {
+        errno = e;
+        return (-1);
+    }
+    while ((arg = argz_next (argz, len, arg)))
+        opt->optarg = list_append (opt->optargs, strdup (arg));
+
+    free (argz);
+    return (0);
+}
+
+static void opt_append_optarg (optparse_t *p, struct option_info *opt, const char *optarg)
+{
+    char *s;
+    if (!opt->optargs)
+        opt->optargs = list_create ((ListDelF) free);
+    if (opt->autosplit) {
+        if (opt_append_sep (opt, optarg) < 0)
+            (*p->fatalerr_fn) (p->fatalerr_handle, 1,
+                    "%s: append '%s': %s\n", p->program_name,
+                    optarg, strerror (errno));
+        return;
+    }
+    if ((s = strdup (optarg)) == NULL)
+        (*p->fatalerr_fn) (p->fatalerr_handle, 1,
+                           "%s: out of memory\n",
+                           p->program_name);
+    list_append (opt->optargs, s);
+    opt->optarg = s;
+}
+
+int optparse_parse_args (optparse_t *p, int argc, char *argv[])
 {
     int c;
     int li;
@@ -845,11 +923,8 @@ int optparse_parse_args (optparse_t p, int argc, char *argv[])
         }
 
         opt->found++;
-        if (optarg) {
-            if (opt->optarg)
-                free (opt->optarg);
-            opt->optarg = strdup (optarg);
-        }
+        if (optarg)
+            opt_append_optarg (p, opt, optarg);
 
         o = opt->p_opt;
         if (o->cb && ((o->cb) (o, optarg, o->arg) < 0)) {
@@ -866,7 +941,7 @@ int optparse_parse_args (optparse_t p, int argc, char *argv[])
     return (optind);
 }
 
-int optparse_print_usage (optparse_t p)
+int optparse_print_usage (optparse_t *p)
 {
     return print_usage (p);
 }

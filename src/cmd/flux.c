@@ -380,15 +380,15 @@ void exec_subcommand (const char *searchpath, bool vopt, char *argv[])
     }
 }
 
-optparse_t internal_cmd_optparse_create (const char *cmd)
+optparse_t *internal_cmd_optparse_create (const char *cmd)
 {
-    optparse_t p = optparse_create (cmd);
+    optparse_t *p = optparse_create (cmd);
     if (!p)
         err_exit ("%s: optparse_create", cmd);
     return (p);
 }
 
-void internal_help (flux_conf_t cf, optparse_t p, int ac, char *av[])
+void internal_help (flux_conf_t cf, optparse_t *p, int ac, char *av[])
 {
     int n = 1;
     char *cmd;
@@ -422,7 +422,7 @@ static void print_environment(flux_conf_t cf, const char * prefix)
     fflush(stdout);
 }
 
-void internal_env (flux_conf_t cf, optparse_t p, int ac, char *av[])
+void internal_env (flux_conf_t cf, optparse_t *p, int ac, char *av[])
 {
     int n = 1;
 
@@ -436,13 +436,13 @@ void internal_env (flux_conf_t cf, optparse_t p, int ac, char *av[])
         print_environment(cf, "");
 }
 
-void internal_broker (flux_conf_t cf, optparse_t p, int ac, char *av[])
+void internal_broker (flux_conf_t cf, optparse_t *p, int ac, char *av[])
 {
     const char *path = flux_conf_environment_get(cf, "FLUX_BROKER_PATH");
     execvp (path, av); /* no return if successful */
 }
 
-void internal_dmesg (flux_conf_t cf, optparse_t p, int ac, char *av[])
+void internal_dmesg (flux_conf_t cf, optparse_t *p, int ac, char *av[])
 {
     struct optparse_option opts[] = {
         { .name = "clear",  .key = 'C',  .has_arg = 0,
@@ -478,7 +478,7 @@ void internal_dmesg (flux_conf_t cf, optparse_t p, int ac, char *av[])
     flux_close (h);
 }
 
-void internal_getattr (flux_conf_t cf, optparse_t p, int ac, char *av[])
+void internal_getattr (flux_conf_t cf, optparse_t *p, int ac, char *av[])
 {
     int n;
 
@@ -495,11 +495,12 @@ void internal_getattr (flux_conf_t cf, optparse_t p, int ac, char *av[])
         printf ("%s\n", val);
         flux_close (h);
     } else {
-        usage ();
+        optparse_print_usage (p);
+        exit (1);
     }
 }
 
-void internal_setattr (flux_conf_t cf, optparse_t p, int ac, char *av[])
+void internal_setattr (flux_conf_t cf, optparse_t *p, int ac, char *av[])
 {
     struct optparse_option opts[] = {
         { .name = "expunge",  .key = 'e',  .has_arg = 0,
@@ -519,8 +520,10 @@ void internal_setattr (flux_conf_t cf, optparse_t p, int ac, char *av[])
     } else if (!optparse_hasopt (p, "expunge") && n == ac - 2) {
         name = av[n];
         val = av[n + 1];
-    } else
-        usage ();
+    } else {
+        optparse_print_usage (p);
+        exit (1);
+    }
     if (!(h = flux_open (NULL, 0)))
             err_exit ("flux_open");
     if (flux_attr_set (h, name, val) < 0)
@@ -528,7 +531,7 @@ void internal_setattr (flux_conf_t cf, optparse_t p, int ac, char *av[])
     flux_close (h);
 }
 
-void internal_lsattr (flux_conf_t cf, optparse_t p, int ac, char *av[])
+void internal_lsattr (flux_conf_t cf, optparse_t *p, int ac, char *av[])
 {
     struct optparse_option opts[] = {
         { .name = "values",  .key = 'v',  .has_arg = 0,
@@ -558,7 +561,8 @@ void internal_lsattr (flux_conf_t cf, optparse_t p, int ac, char *av[])
         }
         flux_close (h);
     } else {
-        usage ();
+        optparse_print_usage (p);
+        exit (1);
     }
 }
 
@@ -566,7 +570,7 @@ struct builtin {
     const char *name;
     const char *doc;
     const char *usage;
-    void       (*fn) (flux_conf_t, optparse_t, int ac, char *av[]);
+    void       (*fn) (flux_conf_t, optparse_t *, int ac, char *av[]);
 };
 
 struct builtin builtin_cmds [] = {
@@ -618,7 +622,7 @@ struct builtin builtin_cmds [] = {
 
 void run_builtin (struct builtin *cmd, flux_conf_t cf, int ac, char *av[])
 {
-    optparse_t p;
+    optparse_t *p;
     char prog [66] = "flux-";
 
     /* cat command name onto 'flux-' prefix to get program name for

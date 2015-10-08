@@ -1656,7 +1656,7 @@ static void daemonize ()
     }
 }
 
-int prog_ctx_get_id (struct prog_ctx *ctx, optparse_t p)
+int prog_ctx_get_id (struct prog_ctx *ctx, optparse_t *p)
 {
     const char *id;
     char *end;
@@ -1679,7 +1679,7 @@ int main (int ac, char **av)
 {
     int parent_fd = -1;
     struct prog_ctx *ctx = NULL;
-    optparse_t p;
+    optparse_t *p;
     struct optparse_option opts [] = {
         { .name =    "lwj-id",
           .key =     1000,

@@ -7,7 +7,7 @@
  *  Datatypes:
  *****************************************************************************/
 struct optparse_option;
-typedef struct opt_parser * optparse_t;
+typedef struct opt_parser optparse_t;
 
 /*
  *  prototype for output function used by optparser
@@ -51,13 +51,15 @@ typedef enum {
 /*
  *  Description of an option:
  */
+#define list_argument 3
 struct optparse_option {
     const char *  name;    /*  Option name (e.g. "help" for --help)         */
     int           key;     /*  Option key  (e.g. 'h', or other number).
 				If !isalnum(key), then this option is
                                 assumed to be a long option only.           */
 
-    int           has_arg; /*  0: no arg, 1: req'd arg, 2: optional arg     */
+    int           has_arg; /*  0: no arg, 1: req'd arg, 2: optional arg
+                               3: list-arg (split on comma separate values) */
     int           group;   /*  Grouping in --help output                    */
     const char *  arginfo; /*  arg info displayed after = in help output    */
     const char *  usage;   /*  String for usage/help output                 */
@@ -74,12 +76,12 @@ struct optparse_option {
 /*
  *   Create an optparse object for program named [program_name]
  */
-optparse_t optparse_create (const char *program_name);
+optparse_t *optparse_create (const char *program_name);
 
 /*
  *   Destroy program options handle [p].
  */
-void optparse_destroy (optparse_t p);
+void optparse_destroy (optparse_t *p);
 
 /*
  *   Register the option [o] with the program options object [p].
@@ -90,15 +92,15 @@ void optparse_destroy (optparse_t p);
  *
  *    OPTPARSE_NOMEM:  Failed to allocate memory for some options.
  *    OPTPARSE_EEXIST: An attempt to register a duplicate option was detected.
- *    OPTPARSE_EINVAL: The optparse_t object is currupt or invalid.
+ *    OPTPARSE_EINVAL: The optparse_t *object is currupt or invalid.
  */
-optparse_err_t optparse_add_option (optparse_t p,
+optparse_err_t optparse_add_option (optparse_t *p,
                                     const struct optparse_option *o);
 
 /*
  *   Remove option [name] from parser [p].
  */
-optparse_err_t optparse_remove_option (optparse_t p, const char *name);
+optparse_err_t optparse_remove_option (optparse_t *p, const char *name);
 
 /*
  *   Register all program options in table [opts] to the program options
@@ -109,7 +111,7 @@ optparse_err_t optparse_remove_option (optparse_t p, const char *name);
  *    with the parser [p]. Otherwise returns an error as in
  *    optparse_add_option().
  */
-optparse_err_t optparse_add_option_table (optparse_t p,
+optparse_err_t optparse_add_option_table (optparse_t *p,
 	                                  struct optparse_option const opts[]);
 
 /*
@@ -117,17 +119,17 @@ optparse_err_t optparse_add_option_table (optparse_t p,
  *    for program options object [p]. The doc string will preceed the
  *    option output for group [group].
  */
-optparse_err_t optparse_add_doc (optparse_t p, const char *doc, int group);
+optparse_err_t optparse_add_doc (optparse_t *p, const char *doc, int group);
 
-optparse_err_t optparse_set (optparse_t p, optparse_item_t item, ...);
+optparse_err_t optparse_set (optparse_t *p, optparse_item_t item, ...);
 
-optparse_err_t optparse_get (optparse_t p, optparse_item_t item, ...);
+optparse_err_t optparse_get (optparse_t *p, optparse_item_t item, ...);
 
 /*
  *   Print the usage output for program options object [p] using the
  *    registered output function.
  */
-int optparse_print_usage (optparse_t p);
+int optparse_print_usage (optparse_t *p);
 
 /*
  *   Process command line args in [argc] and [argv] using the options
@@ -138,33 +140,49 @@ int optparse_print_usage (optparse_t p);
  *
  *   Returns -1 on failure, first non-option index in argv on success.
  */
-int optparse_parse_args (optparse_t p, int argc, char *argv[]);
+int optparse_parse_args (optparse_t *p, int argc, char *argv[]);
 
 /*
  *   After a call to optparse_parse_args (), return the number of times the
  *     option 'name' was used, or 0 if not. If the option was used and it takes
  *    an argument, then that argument is passed back in [optargp].
  */
-int optparse_getopt (optparse_t p, const char *name, const char **optargp);
+int optparse_getopt (optparse_t *p, const char *name, const char **optargp);
+
+
+/*
+ *   Iterate over multiple optarg values for options that were provided
+ *    more than once. Returns NULL at end of list, or if option "name"
+ *    was not found (in which case optparse_getopt_iterator_reset()
+ *    for "name" will return -1).
+ */
+const char *optparse_getopt_next (optparse_t *p, const char *name);
+
+/*
+ *   Reset internal iterator so that optparse_getopt_next() will return the
+ *    first argument from the list. Returns the number of items to iterate, or
+ *    -1 if option "name" not found.
+ */
+int optparse_getopt_iterator_reset (optparse_t *p, const char *name);
 
 /*
  *   Return true if the option 'name' was used, false if not.
  *    If the option is unknown, log an error and call exit (1).
  */
-bool optparse_hasopt (optparse_t p, const char *name);
+bool optparse_hasopt (optparse_t *p, const char *name);
 
 /*
  *   Return the option argument as an integer if 'name' was used,
  *    'default_value' if not.  If the option is unknown, or the argument
  *    could not be converted to an integer, call the fatal error function.
  */
-int optparse_get_int (optparse_t p, const char *name, int default_value);
+int optparse_get_int (optparse_t *p, const char *name, int default_value);
 
 /*
  *   Return the option argument as a string if 'name' was used, 'default_value'
  *    if not.  If the option is unknown, call the fatal error function.
  */
-const char *optparse_get_str (optparse_t p, const char *name,
+const char *optparse_get_str (optparse_t *p, const char *name,
                               const char *default_value);
 
 #endif /* _UTIL_OPTPARSE_H */
