@@ -77,8 +77,9 @@ struct zio_ctx {
     zio_send_f send;    /*  Callback to send json data                       */
     zio_close_f close;  /*  Callback after eof is sent                       */
 
-    zloop_t    *zloop;  /*  zloop if we are connected to one                 */
-    flux_t      flux;   /*  flux handle if we are using flux reactor         */
+    flux_reactor_t *reactor;
+    flux_watcher_t *reader;
+    flux_watcher_t *writer;
     void *arg;          /*  Arg passed to callbacks                          */
 };
 
@@ -211,6 +212,8 @@ void zio_destroy (zio_t *z)
     free (z->name);
     free (z->prefix);
     z->srcfd = z->dstfd = -1;
+    flux_watcher_destroy (z->reader);
+    flux_watcher_destroy (z->writer);
     assert (z->magic = ~ZIO_MAGIC);
     free (z);
 }
@@ -620,33 +623,23 @@ static int zio_read_cb_common (zio_t *zio)
     return (rc);
 }
 
-static int zio_zloop_read_cb (zloop_t *zl, zmq_pollitem_t *zp, zio_t *zio)
+static void zio_flux_read_cb (flux_reactor_t *r, flux_watcher_t *w,
+                              int revents, void *arg)
 {
-    int rc;
-    zio_handler_start (zio);
-    rc = zio_read_cb_common (zio);
-    if (rc >= 0 && zio_eof_sent (zio)) {
-        zio_debug (zio, "reader detaching from zloop\n");
-        zloop_poller_end (zl, zp);
-        rc = zio_close (zio);
-    }
-    zio_handler_end (zio);
-    return (rc);
-}
-
-static int zio_flux_read_cb (flux_t f, int fd, short revents, zio_t *zio)
-{
+    zio_t *zio = arg;
     int rc;
     zio_handler_start (zio);
     rc = zio_read_cb_common (zio);
     if (rc >= 0 && zio_eof_sent (zio)) {
         zio_debug (zio, "reader detaching from flux reactor\n");
-        flux_fdhandler_remove (f, fd, ZMQ_POLLIN|ZMQ_POLLERR);
+        flux_watcher_stop (w);
         rc = zio_close (zio);
     }
     zio_handler_end (zio);
-    return (rc);
+    if (rc < 0)
+        flux_reactor_stop_error (r);
 }
+
 
 static int zio_write_pending (zio_t *zio)
 {
@@ -680,61 +673,36 @@ static int zio_writer_cb (zio_t *zio)
     return (rc);
 }
 
-static int zio_zloop_writer_cb (zloop_t *zl, zmq_pollitem_t *zp, zio_t *zio)
+static void zio_flux_writer_cb (flux_reactor_t *r, flux_watcher_t *w,
+                                int revents, void *arg)
 {
+    zio_t *zio = arg;
     int rc;
     zio_handler_start (zio);
     rc = zio_writer_cb (zio);
     if (!zio_write_pending (zio))
-        zloop_poller_end (zl, zp);
+        flux_watcher_stop (w);
     zio_handler_end (zio);
-    return (rc);
+    if (rc < 0)
+        flux_reactor_stop_error (r);
 }
 
-static int zio_flux_writer_cb (flux_t f, int fd, short revents, zio_t *zio)
-{
-    int rc;
-    zio_handler_start (zio);
-    rc = zio_writer_cb (zio);
-    if (!zio_write_pending (zio))
-        flux_fdhandler_remove (f, fd, ZMQ_POLLOUT | ZMQ_POLLERR);
-    zio_handler_end (zio);
-    return (rc);
-}
-
-static int zio_zloop_reader_poll (zio_t *zio)
-{
-    zmq_pollitem_t zp = { .fd = zio->srcfd,
-                          .events = ZMQ_POLLIN | ZMQ_POLLERR,
-                          .socket = NULL };
-#ifdef ZMQ_IGNERR
-    zp.events |= ZMQ_IGNERR;
-#endif
-    zloop_poller (zio->zloop, &zp,
-        (zloop_fn *) zio_zloop_read_cb, (void *) zio);
-#ifndef ZMQ_IGNERR
-    zloop_set_tolerant (zio->zloop, &zp);
-#endif
-    return (0);
-}
-
-/* Note: flux reactor sets ZMQ_IGNERR/zloop_set_tolerant as default in fd_add.
- */
 static int zio_flux_reader_poll (zio_t *zio)
 {
-    if (!zio->flux)
+    if (!zio->reactor)
         return (-1);
-    return flux_fdhandler_add (zio->flux, zio->srcfd,
-            ZMQ_POLLIN | ZMQ_POLLERR,
-            (FluxFdHandler) &zio_flux_read_cb,
-            (void *) zio);
+    if (!zio->reader)
+        zio->reader = flux_fd_watcher_create (zio->reactor,
+                zio->srcfd, FLUX_POLLIN, zio_flux_read_cb, zio);
+    if (!zio->reader)
+        return (-1);
+    flux_watcher_start (zio->reader);
+    return (0);
 }
 
 static int zio_reader_poll (zio_t *zio)
 {
-    if (zio->zloop)
-        return zio_zloop_reader_poll (zio);
-    else if (zio->flux)
+    if (zio->reactor)
         return zio_flux_reader_poll (zio);
     return (-1);
 }
@@ -742,33 +710,22 @@ static int zio_reader_poll (zio_t *zio)
 /*
  *  Schedule pending data to write to zio->dstfd
  */
-static int zio_zloop_writer_schedule (zio_t *zio)
-{
-    zmq_pollitem_t zp = { .fd = zio->dstfd,
-                          .events = ZMQ_POLLOUT | ZMQ_POLLERR,
-                          .socket = NULL };
-    if (!zio->zloop)
-        return (-1);
-
-    return zloop_poller (zio->zloop, &zp,
-        (zloop_fn *) zio_zloop_writer_cb, (void *) zio);
-}
-
 static int zio_flux_writer_schedule (zio_t *zio)
 {
-    if (!zio->flux)
+    if (!zio->reactor)
         return (-1);
-    return flux_fdhandler_add (zio->flux, zio->dstfd,
-            ZMQ_POLLOUT | ZMQ_POLLERR,
-            (FluxFdHandler) zio_flux_writer_cb,
-            (void *) zio);
+    if (!zio->writer)
+        zio->writer = flux_fd_watcher_create (zio->reactor,
+                zio->dstfd, FLUX_POLLOUT, zio_flux_writer_cb, zio);
+    if (!zio->writer)
+        return (-1);
+    flux_watcher_start (zio->writer);
+    return (0);
 }
 
 static int zio_writer_schedule (zio_t *zio)
 {
-    if (zio->zloop)
-        return zio_zloop_writer_schedule (zio);
-    else if (zio->flux)
+    if (zio->reactor)
         return zio_flux_writer_schedule (zio);
     return (-1);
 }
@@ -897,24 +854,19 @@ static int zio_bootstrap (zio_t *zio)
     return (0);
 }
 
-int zio_zloop_attach (zio_t *zio, zloop_t *zloop)
+int zio_reactor_attach (zio_t *zio, flux_reactor_t *r)
 {
     errno = EINVAL;
     if ((zio == NULL) || (zio->magic != ZIO_MAGIC))
         return (-1);
 
-    zio->zloop = zloop;
+    zio->reactor = r;
     return (zio_bootstrap (zio));
 }
 
-int zio_flux_attach (zio_t *zio, flux_t f)
+int zio_flux_attach (zio_t *zio, flux_t h)
 {
-    errno = EINVAL;
-    if ((zio == NULL) || (zio->magic != ZIO_MAGIC))
-        return (-1);
-
-    zio->flux = f;
-    return (zio_bootstrap (zio));
+    return zio_reactor_attach (zio, flux_get_reactor (h));
 }
 
 int zio_zmsg_send (zio_t *zio, const char *json_str, int len, void *arg)

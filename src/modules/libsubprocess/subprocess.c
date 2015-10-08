@@ -44,8 +44,7 @@
 struct subprocess_manager {
     zlist_t *processes;
     int wait_flags;
-    zloop_t *zloop;
-    flux_t h;
+    flux_reactor_t *reactor;
 };
 
 struct subprocess {
@@ -169,7 +168,11 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
 
     p->sm = sm;
 
-    p->zhash = zhash_new ();
+    if (!(p->zhash = zhash_new ())) {
+        subprocess_destroy (p);
+        errno = ENOMEM;
+        return (NULL);
+    }
 
     p->pid = (pid_t) -1;
 
@@ -199,14 +202,10 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
         return (NULL);
     }
 
-    if (sm->zloop) {
-        zio_zloop_attach (p->zio_in, sm->zloop);
-        zio_zloop_attach (p->zio_err, sm->zloop);
-        zio_zloop_attach (p->zio_out, sm->zloop);
-    } else if (sm->h) {
-        zio_flux_attach (p->zio_in, sm->h);
-        zio_flux_attach (p->zio_err, sm->h);
-        zio_flux_attach (p->zio_out, sm->h);
+    if (sm->reactor) {
+        zio_reactor_attach (p->zio_in, sm->reactor);
+        zio_reactor_attach (p->zio_err, sm->reactor);
+        zio_reactor_attach (p->zio_out, sm->reactor);
     }
     return (p);
 }
@@ -302,13 +301,15 @@ subprocess_get_context (struct subprocess *p, const char *name)
 
 static int init_argz (char **argzp, size_t *argz_lenp, char * const av[])
 {
+    int e;
+
     if (*argzp != NULL) {
         free (*argzp);
         *argz_lenp = 0;
     }
 
-    if (av && argz_create (av, argzp, argz_lenp) < 0) {
-        errno = ENOMEM;
+    if (av && (e = argz_create (av, argzp, argz_lenp)) != 0) {
+        errno = e;
         return -1;
     }
     return (0);
@@ -366,13 +367,15 @@ int subprocess_set_environ (struct subprocess *p, char **env)
 
 int subprocess_argv_append (struct subprocess *p, const char *s)
 {
+    int e;
+
     if (p->started) {
         errno = EINVAL;
         return (-1);
     }
 
-    if (argz_add (&p->argz, &p->argz_len, s) < 0) {
-        errno = ENOMEM;
+    if ((e = argz_add (&p->argz, &p->argz_len, s)) != 0) {
+        errno = e;
         return -1;
     }
     return (0);
@@ -380,16 +383,18 @@ int subprocess_argv_append (struct subprocess *p, const char *s)
 
 int subprocess_set_command (struct subprocess *p, const char *cmd)
 {
+    int e;
+
     if (p->started) {
         errno = EINVAL;
         return (-1);
     }
     init_argz (&p->argz, &p->argz_len, NULL);
 
-    if (argz_add (&p->argz, &p->argz_len, "sh") < 0
-        || argz_add (&p->argz, &p->argz_len, "-c") < 0
-        || argz_add (&p->argz, &p->argz_len, cmd) < 0) {
-        errno = ENOMEM;
+    if ((e = argz_add (&p->argz, &p->argz_len, "sh")) != 0
+        || (e = argz_add (&p->argz, &p->argz_len, "-c")) != 0
+        || (e = argz_add (&p->argz, &p->argz_len, cmd)) != 0) {
+        errno = e;
         return (-1);
     }
     return (0);
@@ -762,7 +767,11 @@ struct subprocess_manager * subprocess_manager_create (void)
 {
     struct subprocess_manager *sm = xzmalloc (sizeof (*sm));
 
-    sm->processes = zlist_new ();
+    if (!(sm->processes = zlist_new ())) {
+        errno = ENOMEM;
+        free (sm);
+        return (NULL);
+    }
 
     return (sm);
 }
@@ -873,11 +882,11 @@ subprocess_manager_set (struct subprocess_manager *sm, sm_item_t item, ...)
         case SM_WAIT_FLAGS:
             sm->wait_flags = va_arg (ap, int);
             break;
-        case SM_ZLOOP:
-            sm->zloop = (zloop_t *) va_arg (ap, void *);
-            break;
         case SM_FLUX:
-            sm->h = (flux_t) va_arg (ap, void *);
+            sm->reactor = flux_get_reactor ((flux_t) va_arg (ap, void *));
+            break;
+        case SM_REACTOR:
+            sm->reactor = (flux_reactor_t *) va_arg (ap, void *);
             break;
         default:
             errno = EINVAL;

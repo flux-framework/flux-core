@@ -59,6 +59,7 @@ int main (int argc, char *argv[])
     char *priority = "user.notice";
     int level;
     char *facility;
+    int e;
 
     log_init ("flux-logger");
 
@@ -78,8 +79,8 @@ int main (int argc, char *argv[])
     if (optind == argc)
         usage ();
 
-    if (argz_create (argv + optind, &message, &len) < 0)
-        oom ();
+    if ((e = argz_create (argv + optind, &message, &len)) != 0)
+        errn_exit (e, "argz_create");
     argz_stringify (message, len, ' ');
 
     if (!(h = flux_open (NULL, 0)))

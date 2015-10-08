@@ -35,6 +35,7 @@ TESTS = \
 	t1003-mecho.t \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
+	t1007-kz.t \
 	t2000-wreck.t \
 	t2001-jsc.t \
 	t2002-pmi.t \
@@ -77,6 +78,7 @@ check_SCRIPTS = \
 	t1003-mecho.t \
 	t1005-cmddriver.t \
 	t1006-apidisconnect.t \
+	t1007-kz.t \
 	t2000-wreck.t \
 	t2001-jsc.t \
 	t2002-pmi.t \
@@ -99,7 +101,8 @@ check_PROGRAMS = \
 	loop/multrpc.t \
 	loop/reduce.t \
 	pmi/kvstest \
-	pmi/pminfo
+	pmi/pminfo \
+	kz/kzutil
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -161,3 +164,11 @@ pmi_pminfo_LDADD = $(test_ldadd) $(LIBRT)
 mpi_hello_SOURCES = mpi/hello.c
 mpi_hello_CPPFLAGS = $(MPI_CFLAGS)
 mpi_hello_LDADD = $(MPI_CLDFLAGS) $(LIBRT)
+
+kz_kzutil_SOURCES = kz/kzutil.c
+kz_kzutil_CPPFLAGS = $(test_cppflags)
+kz_kzutil_LDADD = \
+	$(top_builddir)/src/modules/libzio/libzio.la \
+	$(top_builddir)/src/modules/kvs/libkvs.la \
+	$(top_builddir)/src/modules/libkz/libkz.la \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)

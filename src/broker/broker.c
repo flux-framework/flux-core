@@ -257,6 +257,7 @@ int main (int argc, char *argv[])
     char *log_filename = NULL;
     FILE *log_f = NULL;
     int log_level = LOG_INFO;
+    int e;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -380,8 +381,8 @@ int main (int argc, char *argv[])
     }
     if (optind < argc) {
         size_t len = 0;
-        if (argz_create (argv + optind, &ctx.init_shell_cmd, &len) < 0)
-            oom ();
+        if ((e = argz_create (argv + optind, &ctx.init_shell_cmd, &len)) != 0)
+            errn_exit (e, "argz_creawte");
         argz_stringify (ctx.init_shell_cmd, len, ' ');
     }
     if (boot_method) {

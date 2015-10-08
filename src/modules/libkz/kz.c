@@ -93,6 +93,18 @@ static void kz_destroy (kz_t *kz)
     free (kz);
 }
 
+static bool key_exists (flux_t h, const char *key)
+{
+    char *json_str = NULL;
+    bool ret = false;
+
+    if (kvs_get (h, key, &json_str) == 0 || errno == EISDIR)
+        ret = true;
+    if (json_str)
+        free (json_str);
+    return ret;
+}
+
 kz_t *kz_open (flux_t h, const char *name, int flags)
 {
     kz_t *kz = xzmalloc (sizeof (*kz));
@@ -106,13 +118,14 @@ kz_t *kz_open (flux_t h, const char *name, int flags)
     kz->h = h;
 
     if ((flags & KZ_FLAGS_WRITE)) {
-        if (!(flags & KZ_FLAGS_TRUNC)) {
-            if (kvs_get_dir (h, NULL, "%s", name) == 0) {
+        if (key_exists (h, name)) {
+            if (!(flags & KZ_FLAGS_TRUNC)) {
                 errno = EEXIST;
                 goto error;
-            }
+            } else if (kvs_unlink (h, name) < 0)
+                goto error;
         }
-        if (kvs_mkdir (h, name) < 0)
+        if (kvs_mkdir (h, name) < 0) /* N.B. does not catch EEXIST */
             goto error;
         if (!(flags & KZ_FLAGS_NOCOMMIT_OPEN)) {
             if (kvs_commit (h) < 0)

@@ -96,11 +96,12 @@ static void event_pub (flux_t h, int argc, char **argv)
     char *topic = argv[1];  /* "pub" should be argv0 */
     flux_msg_t *msg = NULL;
     char *json_str = NULL;
+    int e;
 
     if (argc > 2) {
         size_t len = 0;
-        if (argz_create (argv + 2, &json_str, &len) < 0)
-            oom ();
+        if ((e = argz_create (argv + 2, &json_str, &len)) != 0)
+            errn_exit (e, "argz_create");
         argz_stringify (json_str, len, ' ');
     }
     if (!(msg = flux_event_encode (topic, json_str))
