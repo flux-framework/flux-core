@@ -44,53 +44,15 @@ static int exit_handler (struct subprocess *p, void *arg)
     ok (subprocess_exited (p), "exit_handler: subprocess exited");
     ok (subprocess_exit_code (p) == 0, "exit_handler: subprocess exited normally");
     subprocess_destroy (p);
-    raise (SIGTERM);
     return (0);
 }
 
-static int io_cb (struct subprocess *p, const char *json_str)
+int io_cb (struct subprocess *p, const char *json_str)
 {
     ok (p != NULL, "io_cb: valid subprocess");
     ok (json_str != NULL, "io_cb: valid output");
     diag ("%s", json_str);
     return (0);
-}
-
-static int init_signalfd ()
-{
-    sigset_t mask;
-    sigemptyset(&mask);
-    sigaddset(&mask, SIGCHLD);
-    sigaddset(&mask, SIGTERM);
-    if (sigprocmask(SIG_BLOCK, &mask, NULL) == -1) {
-        perror("sigprocmask");
-        return 1;
-    }
-
-    return signalfd(-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC);
-}
-
-static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
-                       int revents, void *arg)
-{
-    int fd = flux_fd_watcher_get_fd (w);
-    struct signalfd_siginfo fdsi;
-    struct subprocess_manager *sm = arg;
-
-    if (read (fd, &fdsi, sizeof (fdsi)) < 0) {
-        flux_reactor_stop (r);
-        return;
-    }
-    diag ("signal_cb signo = %d", fdsi.ssi_signo);
-    if (fdsi.ssi_signo == SIGTERM) {
-        flux_reactor_stop (r);
-        return;
-    }
-
-    ok (fdsi.ssi_signo == SIGCHLD, "got sigchld in signal_cb");
-    ok (subprocess_manager_reap_all (sm) >= 0, "reap all children");
-
-    //zloop_poller_end (zl, item);
 }
 
 int main (int ac, char **av)
@@ -99,8 +61,6 @@ int main (int ac, char **av)
     struct subprocess_manager *sm;
     struct subprocess *p;
     flux_reactor_t *r;
-    int sigfd;
-    flux_watcher_t *w;
 
     zsys_handler_set (NULL);
 
@@ -112,13 +72,6 @@ int main (int ac, char **av)
 
     if (!(r = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         BAIL_OUT ("Failed to create a reactor");
-
-    sigfd = init_signalfd ();
-    ok (sigfd >= 0, "signalfd created");
-
-    w = flux_fd_watcher_create (r, sigfd, FLUX_POLLIN, signal_cb, sm);
-    ok (w != NULL, "Created watcher for signalfd");
-    flux_watcher_start (w);
 
     rc = subprocess_manager_set (sm, SM_REACTOR, r);
     ok (rc == 0, "set subprocess manager reactor (rc=%d, %s)", rc, strerror (errno));
