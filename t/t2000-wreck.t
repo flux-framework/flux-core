@@ -55,6 +55,19 @@ test_expect_success 'wreckrun: does not drop output' '
 	run_timeout 5 flux wreckrun -N1 -n1 cat expected >output &&
 	test_cmp expected output
 '
+test_expect_success 'wreckrun: handles stdin' '
+	cat >expected.stdin <<-EOF &&
+	This is a test.
+
+	EOF
+	cat expected.stdin | flux wreckrun -T5s cat > output.stdin &&
+        test_cmp expected.stdin output.stdin
+'
+test_expect_success 'wreckrun: handles empty stdin' '
+	flux wreckrun -T5s cat > output.devnull </dev/null &&
+        test_must_fail test -s output.devnull
+'
+
 test_expect_success 'wreck: job state events emitted' '
 	run_timeout 5 \
 	  $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
