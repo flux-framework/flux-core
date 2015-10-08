@@ -540,6 +540,9 @@ optparse_t *optparse_create (const char *prog)
 int optparse_getopt (optparse_t *p, const char *name, const char **optargp)
 {
     struct option_info *c;
+    if (optargp)
+        *optargp = NULL;
+
     if (!(c = find_option_info (p, name)))
         return (-1);
 
