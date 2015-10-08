@@ -12,7 +12,7 @@ SYNOPSIS
 --------
 #include <flux/core.h>
 
-flux_reactor_t *flux_reactor_create (void);
+flux_reactor_t *flux_reactor_create (int flags);
 
 void flux_reactor_destroy (flux_reactor_t *r);
 
@@ -48,6 +48,10 @@ If `flux_reactor_stop_error()` is called, this will cause
 `flux_reactor_run()` to return -1 indicating that an error has occurred.
 The caller should ensure that a valid error code has been assigned to
 errno(3) before calling this function.
+
+If `flux_reactor_create()` is called with the FLUX_REACTOR_SIGCHLD flag,
+the reactor will internally register a SIGCHLD handler and be capable
+of handling child watchers.
 
 
 RETURN VALUE

@@ -276,3 +276,4 @@ wildcards
 addvec
 delvec
 msghandler
+SIGCHLD
