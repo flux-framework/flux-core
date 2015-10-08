@@ -390,7 +390,7 @@ static void reactor_destroy_early (void)
     flux_reactor_t *r;
     flux_watcher_t *w;
 
-    if (!(r = flux_reactor_create ()))
+    if (!(r = flux_reactor_create (0)))
         exit (1);
     if (!(w = flux_idle_watcher_create (r, NULL, NULL)))
         exit (1);

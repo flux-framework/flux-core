@@ -110,7 +110,7 @@ int main (int ac, char **av)
         BAIL_OUT ("Failed to create subprocess manager");
     ok (sm != NULL, "create subprocess manager");
 
-    if (!(r = flux_reactor_create()))
+    if (!(r = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         BAIL_OUT ("Failed to create a reactor");
 
     sigfd = init_signalfd ();

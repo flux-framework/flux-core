@@ -456,14 +456,17 @@ int main (int argc, char *argv[])
         err_exit ("zctx_new");
     zctx_set_linger (ctx.zctx, 5);
 
+    /* Set up the flux reactor.
+     */
+    if (!(ctx.reactor = flux_reactor_create (0)))
+        err_exit ("flux_reactor_create");
+
     /* Set up flux handle.
-     * The handle is used for simple purposes such as logging,
-     * and also provides the main reactor loop for the broker.
+     * The handle is used for simple purposes such as logging.
      */
     if (!(ctx.h = flux_handle_create (&ctx, &broker_handle_ops, 0)))
         err_exit ("flux_handle_create");
-    if (!(ctx.reactor = flux_get_reactor (ctx.h)))
-        err_exit ("flux_get_reactor");
+    flux_set_reactor (ctx.h, ctx.reactor);
 
     subprocess_manager_set (ctx.sm, SM_FLUX, ctx.h);
 

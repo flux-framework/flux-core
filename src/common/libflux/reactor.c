@@ -64,8 +64,12 @@ struct flux_watcher {
 static void reactor_usecount_decr (flux_reactor_t *r)
 {
     if (r && --r->usecount == 0) {
-        if (r->loop)
-            ev_loop_destroy (r->loop);
+        if (r->loop) {
+            if (ev_is_default_loop (r->loop))
+                ev_default_destroy ();
+            else
+                ev_loop_destroy (r->loop);
+        }
         free (r);
     }
 }
@@ -80,10 +84,13 @@ void flux_reactor_destroy (flux_reactor_t *r)
     reactor_usecount_decr (r);
 }
 
-flux_reactor_t *flux_reactor_create (void)
+flux_reactor_t *flux_reactor_create (int flags)
 {
     flux_reactor_t *r = xzmalloc (sizeof (*r));
-    r->loop = ev_loop_new (EVFLAG_AUTO);
+    if ((flags & FLUX_REACTOR_SIGCHLD))
+        r->loop = ev_default_loop (EVFLAG_SIGNALFD);
+    else
+        r->loop = ev_loop_new (EVFLAG_NOSIGMASK);
     if (!r->loop) {
         errno = ENOMEM;
         flux_reactor_destroy (r);
@@ -103,7 +110,7 @@ flux_reactor_t *flux_get_reactor (flux_t h)
 {
     flux_reactor_t *r = flux_aux_get (h, "flux::reactor");
     if (!r) {
-        if ((r = flux_reactor_create ()))
+        if ((r = flux_reactor_create (0)))
             flux_aux_set (h, "flux::reactor", r,
                           (flux_free_f)flux_reactor_destroy);
     }
@@ -637,8 +644,8 @@ flux_watcher_t *flux_child_watcher_create (flux_reactor_t *r,
         .stop = child_stop,
         .destroy = child_destroy,
     };
-    ev_child *cw = xzmalloc (sizeof (*cw));
     flux_watcher_t *w;
+    ev_child *cw;
 
     if (!ev_is_default_loop (r->loop)) {
         errno = EINVAL;

@@ -10,6 +10,8 @@
 
 typedef struct flux_reactor flux_reactor_t;
 
+/* Flags for flux_reactor_run()
+ */
 enum {
     FLUX_REACTOR_NOWAIT = 1,  /* return after all new and outstanding */
                               /*     events have been hnadled */
@@ -17,7 +19,14 @@ enum {
                               /*     one event occurs */
 };
 
-flux_reactor_t *flux_reactor_create (void);
+/* Flags for flux_reactor_create()
+ */
+enum {
+    FLUX_REACTOR_SIGCHLD = 1,  /* enable use of child watchers */
+                               /*    only one thread can do this per program */
+};
+
+flux_reactor_t *flux_reactor_create (int flags);
 void flux_reactor_destroy (flux_reactor_t *r);
 
 flux_reactor_t *flux_get_reactor (flux_t h);
