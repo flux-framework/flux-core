@@ -295,6 +295,8 @@ void kz_stdin (kz_t *kz, struct task_info *t)
         zio_write_json (t->zio [IN], json_str);
         free (json_str);
     }
+    if (errno != 0 && errno != EAGAIN)
+        log_err (t->ctx, "kz_get_json: %s", strerror (errno));
     return;
 }
 
