@@ -95,11 +95,11 @@ function wreck:usage()
                              for minutes, 'h' for hours or 'd' for days.
                              N may be an arbitrary floating point number,
                              but will be rounded up to nearest second.
-  -o, --output=FILENAME      Duplicate stdout/stderr from tasks to a file or
-                             files. FILENAME is optionally a moustache
+  -O, --output=FILENAME      Duplicate stdout/stderr from tasks to a file or
+                             files. FILENAME is optionally a mustache
                              template with keys such as id, cmd, taskid.
-                             (e.g. --tee=flux-{{id}}.out)
-  -e, --error=FILENAME       Send stderr to a different location than stdout.
+                             (e.g. --output=flux-{{id}}.out)
+  -E, --error=FILENAME       Send stderr to a different location than stdout.
   -l, --labelio              Prefix lines of output with task id
 ]])
     for _,v in pairs (self.extra_options) do
