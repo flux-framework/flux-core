@@ -1839,7 +1839,8 @@ static int l_flux_kz_open (lua_State *L)
     const char *key = lua_tostring (L, 2);
     const char *mode = lua_tostring (L, 3);
     int flags;
-
+    if (mode == NULL)
+        mode = "r";
     if (mode[0] == 'r')
         flags = KZ_FLAGS_READ | KZ_FLAGS_NOEXIST | KZ_FLAGS_NONBLOCK;
     else if (mode[0] == 'w')
