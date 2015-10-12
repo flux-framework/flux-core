@@ -673,6 +673,122 @@ int flux_child_watcher_get_rstatus (flux_watcher_t *w)
     return cw->rstatus;
 }
 
+/* Signal
+ */
+
+#define SIGNAL_SIG 998
+
+static void signal_start (void *impl, flux_watcher_t *w)
+{
+    assert (w->signature == SIGNAL_SIG);
+    ev_signal_start (w->r->loop, (ev_signal *)impl);
+}
+
+static void signal_stop (void *impl, flux_watcher_t *w)
+{
+    assert (w->signature == SIGNAL_SIG);
+    ev_signal_stop (w->r->loop, (ev_signal *)impl);
+}
+
+static void signal_destroy (void *impl, flux_watcher_t *w)
+{
+    assert (w->signature == SIGNAL_SIG);
+    if (impl)
+        free (impl);
+}
+
+static void signal_cb (struct ev_loop *loop, ev_signal *sw, int revents)
+{
+    struct flux_watcher *w = sw->data;
+    assert (w->signature == SIGNAL_SIG);
+    if (w->fn)
+        w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
+}
+
+flux_watcher_t *flux_signal_watcher_create (flux_reactor_t *r, int signum,
+                                            flux_watcher_f cb, void *arg)
+{
+    struct watcher_ops ops = {
+        .start = signal_start,
+        .stop = signal_stop,
+        .destroy = signal_destroy,
+    };
+    flux_watcher_t *w;
+    ev_signal *sw = xzmalloc (sizeof (*sw));
+    ev_signal_init (sw, signal_cb, signum);
+    w = flux_watcher_create (r, sw, ops, SIGNAL_SIG, cb, arg);
+    sw->data = w;
+
+    return w;
+}
+
+int flux_signal_watcher_get_signum (flux_watcher_t *w)
+{
+    assert (w->signature == SIGNAL_SIG);
+    ev_signal *sw = w->impl;
+    return sw->signum;
+}
+
+/* Stat
+ */
+
+#define STAT_SIG 997
+
+static void stat_start (void *impl, flux_watcher_t *w)
+{
+    assert (w->signature == STAT_SIG);
+    ev_stat_start (w->r->loop, (ev_stat *)impl);
+}
+
+static void stat_stop (void *impl, flux_watcher_t *w)
+{
+    assert (w->signature == STAT_SIG);
+    ev_stat_stop (w->r->loop, (ev_stat *)impl);
+}
+
+static void stat_destroy (void *impl, flux_watcher_t *w)
+{
+    assert (w->signature == STAT_SIG);
+    if (impl)
+        free (impl);
+}
+
+static void stat_cb (struct ev_loop *loop, ev_stat *sw, int revents)
+{
+    struct flux_watcher *w = sw->data;
+    assert (w->signature == STAT_SIG);
+    if (w->fn)
+        w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
+}
+
+flux_watcher_t *flux_stat_watcher_create (flux_reactor_t *r, const char *path,
+                                          flux_watcher_f cb, void *arg)
+{
+    struct watcher_ops ops = {
+        .start = stat_start,
+        .stop = stat_stop,
+        .destroy = stat_destroy,
+    };
+    flux_watcher_t *w;
+    ev_stat *sw = xzmalloc (sizeof (*sw));
+    ev_stat_init (sw, stat_cb, path, 0);
+    w = flux_watcher_create (r, sw, ops, STAT_SIG, cb, arg);
+    sw->data = w;
+
+    return w;
+}
+
+void flux_stat_watcher_get_rstat (flux_watcher_t *w,
+                                  struct stat *stat, struct stat *prev)
+{
+    assert (w->signature == STAT_SIG);
+    ev_stat *sw = w->impl;
+    if (stat)
+        *stat = sw->attr;
+    if (prev)
+        *prev = sw->prev;
+}
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
