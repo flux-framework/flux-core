@@ -272,9 +272,9 @@ taskio, err = ioattach {
 if not taskio then wreck:die ("error opening task io: %s\n", err) end
 
 --
---  Open stdin (to task 0 only for now)
+--  Open stdin
 --
-local kz, err = f:kz_open (tostring (lwj)..".0.stdin", "w")
+local kz, err = f:kz_open (tostring (lwj)..".input.files.stdin", "w")
 if not kz then wreck:die (err) end
 
 --
