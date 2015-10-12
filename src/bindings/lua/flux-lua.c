@@ -330,6 +330,31 @@ int l_flux_kvs_commit (lua_State *L)
     return (1);
 }
 
+int l_flux_kvs_put (lua_State *L)
+{
+    int rc;
+    flux_t f = lua_get_flux (L, 1);
+    const char *key = lua_tostring (L, 2);
+    if (key == NULL)
+        return lua_pusherror (L, "key required");
+
+    if (lua_isnil (L, 3))
+        rc = kvs_put (f, key, NULL);
+    else {
+        json_object *o;
+        if (lua_value_to_json (L, 3, &o) < 0)
+            return lua_pusherror (L, "Unable to convert to json");
+        rc = kvs_put (f, key, json_object_to_json_string (o));
+        json_object_put (o);
+    }
+    if (rc < 0)
+        return lua_pusherror (L, "kvsdir_put (%s): %s",
+                                key, strerror (errno));
+
+    lua_pushboolean (L, true);
+    return (1);
+}
+
 #if 0
 static int l_flux_barrier (lua_State *L)
 {
@@ -1828,6 +1853,7 @@ static const struct luaL_Reg flux_methods [] = {
     { "kvs_symlink",     l_flux_kvs_symlink },
     { "kvs_type",        l_flux_kvs_type    },
     { "kvs_commit",      l_flux_kvs_commit  },
+    { "kvs_put",         l_flux_kvs_put     },
 //    { "barrier",         l_flux_barrier     },
     { "send",            l_flux_send        },
     { "recv",            l_flux_recv        },
