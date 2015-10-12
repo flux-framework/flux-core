@@ -22,6 +22,8 @@
  *  See also:  http://www.gnu.org/licenses/
  ---------------------------------------------------------------------------]]
 local posix = require 'flux.posix'
+local hostlist = require 'flux.hostlist'
+local cpuset = require 'flux.affinity'.cpuset
 
 local wreck = {}
 wreck.__index = wreck;
@@ -42,6 +44,7 @@ local default_opts = {
     ['walltime'] = { char = "T", arg = "SECONDS" },
     ['output'] =   { char = "O", arg = "FILENAME" },
     ['error'] =    { char = "E", arg = "FILENAME" },
+    ['input'] =    { char = "i", arg = "HOW" },
     ['label-io'] = { char = "l", },
     ['options'] = { char = 'o', arg = "OPTIONS.." },
 }
@@ -99,6 +102,12 @@ function wreck:usage()
                              files. FILENAME is optionally a mustache
                              template with keys such as id, cmd, taskid.
                              (e.g. --output=flux-{{id}}.out)
+  -i, --input=HOW            Indicate how to deal with stdin for tasks. HOW
+                             is a list of [src:]dst pairs separated by semi-
+                             colon, where src is an optional src file
+                             (default: stdin) and dst is a list of taskids
+                             or "*" or "all". E.g. (-s0 sends stdin to task 0,
+                             -s /dev/null:* closes all stdin, etc.)
   -E, --error=FILENAME       Send stderr to a different location than stdout.
   -l, --labelio              Prefix lines of output with task id
 ]])
@@ -201,6 +210,34 @@ function wreck:parse_cmdline (arg)
     return true
 end
 
+local function inputs_table_from_args (wreck, s)
+    -- Default is to broadcast stdin to all tasks:
+    if not s then return { { src = "stdin", dst = "*" } } end
+
+    local inputs = {}
+    for m in s:gmatch ("[^;]+") do
+        local src,dst = m:match ("^([^:]-):?([^:]+)$")
+        if not src or not dst then
+            wreck:die ("Invalid argument to --input: %s\n", s)
+        end
+        --  A dst of "none" short circuits rest of entries
+        if dst == "none" then return inputs end
+
+        --  Verify the validity of dst
+        if dst ~= "all" and dst ~= "*" then
+            local h, err = cpuset.new (dst)
+            if not h then
+                wreck:die ("--input: invalid dst: %s\n", dst)
+            end
+        end
+        if src == "" or src == "-" then src = "stdin" end
+        table.insert (inputs, { src = src, dst = dst })
+    end
+    -- Add fall through option
+    table.insert (inputs, { src = "/dev/null", dst = "*" })
+    return inputs
+end
+
 function wreck:jobreq ()
     if not self.opts then return nil, "Error: cmdline not parsed" end
     local nnodes = tonumber (self.opts.N)
@@ -227,6 +264,7 @@ function wreck:jobreq ()
             labelio = self.opts.l,
         }
     end
+    jobreq ["input.config"] = inputs_table_from_args (self, self.opts.i)
     return jobreq
 end
 
@@ -275,7 +313,6 @@ end
 -- @param arg.flux  (optional) flux handle
 -- @return exit_cde, msg_list
 function wreck.status (arg)
-    local hostlist = require 'flux.hostlist'
     local f = arg.flux
     local jobid = arg.jobid
     if not jobid then return nil, "required arg jobid" end
