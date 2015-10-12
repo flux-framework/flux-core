@@ -28,6 +28,7 @@
 local f, err = require 'flux' .new()
 local wreck = require 'wreck'
 local hostlist = require 'flux.hostlist'
+local posix = require 'posix'
 
 local prog = string.match (arg[0], "([^/]+)$")
 local shortprog = prog:match ("flux%-(.+)$")
@@ -138,6 +139,16 @@ Command {
         end
     }
     if not taskio then die ("Failed to connect to job %d: %s\n", id, err) end
+    local kz, err = f:kz_open ("lwj."..id..".input.files.stdin", "w")
+    if kz then
+        f:iowatcher {
+            fd = posix.fileno (io.input()),
+            handler = function (iow, r)
+                if r.data then kz:write (r.data) end
+                if r.eof  then kz:close () end
+            end
+        }
+    end
     if not taskio:complete() then f:reactor () end
     if self.opt.s then
         Commands.status:run ({id})
@@ -147,7 +158,6 @@ Command {
 }
 
 local function opt_sig (s)
-    local posix = require 'posix'
     if not s then return posix.SIGTERM end
     if tonumber (s) then return tonumber (s) end
     if not tonumber (posix[s]) then
