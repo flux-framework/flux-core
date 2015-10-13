@@ -22,9 +22,9 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* tkvswatch.c - exercise kvs watch functions */
+/* watch.c - exercise kvs watch functions */
 
-/* Usage ./tkvswatch nthreads changes key
+/* Usage watch nthreads changes key
  * Spawn 'nthreads' threads each watching the same value.
  * Change it 'changes' times and ensure that at minimum the last
  * value is read.
@@ -179,10 +179,10 @@ done:
 void usage (void)
 {
     fprintf (stderr,
-"Usage: tkvswatch  mt         nthreads changes key\n"
-"                  selfmod    key\n"
-"                  unwatch    key\n"
-"                  unwatchloop key\n"
+"Usage: watch  mt         nthreads changes key\n"
+"              selfmod    key\n"
+"              unwatch    key\n"
+"              unwatchloop key\n"
 );
     exit (1);
 
