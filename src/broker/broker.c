@@ -109,7 +109,6 @@ typedef struct {
     bool quiet;
     pid_t pid;
     char *proctitle;
-    sigset_t default_sigset;
     flux_conf_t cf;
     int event_seq;
     bool event_active;          /* primary event source is active */
@@ -154,6 +153,7 @@ static void hello_update_cb (hello_t *h, void *arg);
 static void shutdown_cb (shutdown_t *s, void *arg);
 static void signalfd_cb (flux_reactor_t *r, flux_watcher_t *w,
                          int revents, void *arg);
+static void broker_block_signals (void);
 
 static void broker_init_signalfd (ctx_t *ctx);
 
@@ -449,8 +449,11 @@ int main (int argc, char *argv[])
     }
     flux_conf_itr_destroy (itr);
 
+    broker_block_signals ();
+
     /* Initailize zeromq context
      */
+    zsys_handler_set (NULL);
     ctx.zctx = zctx_new ();
     if (!ctx.zctx)
         err_exit ("zctx_new");
@@ -468,7 +471,7 @@ int main (int argc, char *argv[])
         err_exit ("flux_handle_create");
     flux_set_reactor (ctx.h, ctx.reactor);
 
-    subprocess_manager_set (ctx.sm, SM_FLUX, ctx.h);
+    subprocess_manager_set (ctx.sm, SM_REACTOR, ctx.reactor);
 
     /* Prepare signal handling
      */
@@ -1296,16 +1299,20 @@ next:
     zhash_destroy (&mods);
 }
 
+static void broker_block_signals (void)
+{
+    sigset_t sigmask;
+    sigemptyset(&sigmask);
+    sigfillset(&sigmask);
+    if (sigprocmask (SIG_SETMASK, &sigmask, NULL) < 0)
+        err_exit ("sigprocmask");
+}
+
 static void broker_init_signalfd (ctx_t *ctx)
 {
     sigset_t sigmask;
     int fd;
 
-    zsys_handler_set (NULL);
-    sigemptyset(&sigmask);
-    sigfillset(&sigmask);
-    if (sigprocmask (SIG_SETMASK, &sigmask, &ctx->default_sigset) < 0)
-        err_exit ("sigprocmask");
     sigemptyset(&sigmask);
     sigaddset(&sigmask, SIGHUP);
     sigaddset(&sigmask, SIGINT);
