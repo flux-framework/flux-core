@@ -149,55 +149,50 @@ void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     struct context *ctx = arg;
     struct subprocess *p;
-    pid_t pid;
 
     p = subprocess_manager_first (ctx->sm);
     while (p) {
-        if ((pid = subprocess_pid (p))) {
-            char *rankstr = subprocess_get_context (p, "rank");
-            int rank = strtol (rankstr, NULL, 10);
-            msg ("timeout, killing broker rank %d (pid %d)", rank, pid);
+        if (subprocess_pid (p))
             (void)subprocess_kill (p, SIGKILL);
-        }
         p = subprocess_manager_next (ctx->sm);
     }
 }
 
 static int child_report (struct subprocess *p, void *arg)
 {
-    struct context *ctx = arg;
     char *rankstr = subprocess_get_context (p, "rank");
-    int status = subprocess_exit_status (p);
     pid_t pid = subprocess_pid (p);
-    int rc = 0;
+    int sig;
 
-    if (WIFEXITED (status)) {
-        rc = WEXITSTATUS (status);
+    if ((sig = subprocess_stopped (p)))
+        msg ("%s (pid %d) %s", rankstr, pid, strsignal (sig));
+    else if ((subprocess_continued (p)))
+        msg ("%s (pid %d) %s", rankstr, pid, strsignal (SIGCONT));
+    else if ((sig = subprocess_signaled (p)))
+        msg ("%s (pid %d) %s", rankstr, pid, strsignal (sig));
+    else if (subprocess_exited (p)) {
+        int rc = subprocess_exit_code (p);
         if (rc != 0)
             msg ("%s (pid %d) exited with rc=%d", rankstr, pid, rc);
-    } else if (WIFSIGNALED (status)) {
-        int sig = WTERMSIG (status);
-        /*
-         *  Set exit code to 128 + signal number, but ignore SIGKILL
-         *   because that signal is used by flux-start itself, and
-         *   may not indicate failure:
-         */
-        if (sig != 9)
-            rc = 128 + sig;
-        msg ("%s (pid %d) %s", rankstr, pid, strsignal (sig));
-    } else {
-        msg ("%s (pid %d) wait status=%d", rankstr, pid, status);
-        if (status < 256)
-            rc = status;
-    }
-    subprocess_destroy (p);
+    } else
+        msg ("%s (pid %d) status=%d", rankstr, pid, subprocess_exit_status (p));
+    return 0;
+}
+
+static int child_exit (struct subprocess *p, void *arg)
+{
+    struct context *ctx = arg;
+    char *rankstr = subprocess_get_context (p, "rank");
+    int rc = subprocess_exit_code (p);
+
     if (ctx->exit_rc < rc)
         ctx->exit_rc = rc;
-    free (rankstr);
     if (--ctx->count > 0)
         flux_watcher_start (ctx->timer);
     else
         flux_watcher_stop (ctx->timer);
+    subprocess_destroy (p);
+    free (rankstr);
     return 0;
 }
 
@@ -258,7 +253,8 @@ int start_direct (struct context *ctx, const char *cmd)
         if (!(p = subprocess_create (ctx->sm)))
             err_exit ("subprocess_create");
         subprocess_set_context (p, "rank", xasprintf ("%d", rank));
-        subprocess_set_callback (p, child_report, ctx);
+        subprocess_set_callback (p, child_exit, ctx);
+        subprocess_set_status_callback (p, child_report, ctx);
 
         add_arg (p, "%s", ctx->broker_path);
         add_arg (p, "--boot-method=LOCAL");
