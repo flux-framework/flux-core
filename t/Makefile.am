@@ -102,7 +102,9 @@ check_PROGRAMS = \
 	loop/reduce.t \
 	pmi/kvstest \
 	pmi/pminfo \
-	kz/kzutil
+	kz/kzutil \
+	kvs/torture \
+	kvs/watch
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -171,4 +173,16 @@ kz_kzutil_LDADD = \
 	$(top_builddir)/src/modules/libzio/libzio.la \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(top_builddir)/src/modules/libkz/libkz.la \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+kvs_torture_SOURCES = kvs/torture.c
+kvs_torture_CPPFLAGS = $(test_cppflags)
+kvs_torture_LDADD = \
+	$(top_builddir)/src/modules/kvs/libkvs.la \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+kvs_watch_SOURCES = kvs/watch.c
+kvs_watch_CPPFLAGS = $(test_cppflags)
+kvs_watch_LDADD = \
+	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)

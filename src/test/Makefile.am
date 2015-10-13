@@ -12,8 +12,6 @@ AM_CPPFLAGS = \
 check_PROGRAMS = \
 	tasyncsock \
 	tcommit \
-	tkvstorture \
-	tkvswatch \
 	tmunge \
 	tbarrier \
 	tdisconnect

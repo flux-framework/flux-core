@@ -22,7 +22,7 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* flux-kvstorture.c - flux kvstorture subcommand */
+/* torture.c - kvs torture test */
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -57,7 +57,7 @@ static void fill (char *s, int i, int len);
 void usage (void)
 {
     fprintf (stderr, 
-"Usage: flux-kvstorture [--quiet|--verbose] [--prefix NAME] [--size BYTES] [--count N]\n"
+"Usage: torture [--quiet|--verbose] [--prefix NAME] [--size BYTES] [--count N]\n"
 );
     exit (1);
 }
@@ -76,7 +76,7 @@ int main (int argc, char *argv[])
     bool verbose = false;
     const char *s;
 
-    log_init ("flux-kvstorture");
+    log_init ("torture");
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
