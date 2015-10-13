@@ -288,4 +288,12 @@ test_expect_success 'kvs: watch-unwatchloop 1000 watch/unwatch ok' '
 	flux kvs unlink $TEST.a
 '
 
+# regression tests
+
+test_expect_success 'kvs: put x=foo, get x.y fails without panic (issue 441)' '
+	flux kvs put ${TEST}.x=foo &&
+	! flux kvs get ${TEST}.x.y
+	flux kvs get ${TEST}.x   # fails if broker died
+'
+
 test_done
