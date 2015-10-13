@@ -1862,6 +1862,25 @@ static int l_kz_write (lua_State *L)
     return (1); /* len */
 }
 
+static int l_kz_read (lua_State *L)
+{
+    int rc;
+    kz_t *kz = lua_get_kz (L, 1);
+    char *s = NULL;
+    if ((rc = kz_get (kz, &s)) < 0)
+        return lua_pusherror (L, "kz_get: %s", strerror (errno));
+    // return table
+    lua_newtable (L);
+    lua_pushboolean (L, rc == 0);
+    lua_setfield (L, -2, "eof");
+    if (rc != 0) {
+        lua_pushstring (L, s);
+        lua_setfield (L, -2, "data");
+    }
+    free (s);
+    return (1);
+}
+
 static const struct luaL_Reg flux_functions [] = {
     { "new",             l_flux_new         },
     { NULL,              NULL              }
@@ -1938,6 +1957,7 @@ static const struct luaL_Reg kz_methods [] = {
     { "__gc",            l_kz_gc              },
     { "close",           l_kz_close           },
     { "write",           l_kz_write           },
+    { "read",            l_kz_read            },
     { NULL,              NULL                 }
 };
 
