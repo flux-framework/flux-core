@@ -461,7 +461,7 @@ int main (int argc, char *argv[])
 
     /* Set up the flux reactor.
      */
-    if (!(ctx.reactor = flux_reactor_create (0)))
+    if (!(ctx.reactor = flux_reactor_create (SIGCHLD)))
         err_exit ("flux_reactor_create");
 
     /* Set up flux handle.
@@ -775,16 +775,13 @@ static void update_pidfile (ctx_t *ctx)
  */
 static int init_shell_exit_handler (struct subprocess *p, void *arg)
 {
-    int rc;
+    int rc = subprocess_exit_code (p);
     ctx_t *ctx = (ctx_t *) arg;
     assert (ctx != NULL);
 
-    if (subprocess_signaled (p))
-        rc = 128 + subprocess_signaled (p);
-    else
-        rc = subprocess_exit_code (p);
     shutdown_arm (ctx->shutdown, ctx->shutdown_grace, rc,
                   "%s", subprocess_state_string (p));
+    subprocess_destroy (p);
     return 0;
 }
 
@@ -1320,7 +1317,7 @@ static void broker_init_signalfd (ctx_t *ctx)
     sigaddset(&sigmask, SIGTERM);
     sigaddset(&sigmask, SIGSEGV);
     sigaddset(&sigmask, SIGFPE);
-    sigaddset(&sigmask, SIGCHLD);
+    //sigaddset(&sigmask, SIGCHLD);
 
     if ((fd = signalfd(-1, &sigmask, SFD_NONBLOCK | SFD_CLOEXEC)) < 0)
         err_exit ("signalfd");
@@ -2537,13 +2534,9 @@ static void signalfd_cb (flux_reactor_t *r, flux_watcher_t *w,
         if (errno != EWOULDBLOCK)
             err_exit ("read");
     } else if (n == sizeof (fdsi)) {
-        if (fdsi.ssi_signo == SIGCHLD)
-            subprocess_manager_reap_all (ctx->sm);
-        else {
-            shutdown_arm (ctx->shutdown, ctx->shutdown_grace, 0,
-                          "signal %d (%s) %d",
-                          fdsi.ssi_signo, strsignal (fdsi.ssi_signo));
-        }
+        shutdown_arm (ctx->shutdown, ctx->shutdown_grace, 0,
+                      "signal %d (%s) %d",
+                      fdsi.ssi_signo, strsignal (fdsi.ssi_signo));
     }
 }
 
