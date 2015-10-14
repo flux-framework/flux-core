@@ -242,8 +242,9 @@ LWJ.__index = function (self, key)
         local st = self.lwj["starting-time"]
         if not st then return 0 end
         local ct = self.lwj["complete-time"]
-        if not ct then ct = now () end
-        local s = ct - st
+        local ft = self.lwj["failed-time"]
+        if not ct and not ft then ct = now () end
+        local s = (ct and ct or ft) - st
         return s > 0 and s or 0
     elseif key == "start" then
         return os.date ("%FT%T", self.lwj["starting-time"])
