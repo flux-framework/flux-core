@@ -113,6 +113,13 @@ test_expect_success 'wreckrun: --input=/dev/null:* works' '
         echo hello | flux wreckrun --input=/dev/null:* -l -n${SIZE} cat > output.devnull2 &&
 	test_must_fail test -s output.devnull2
 '
+test_expect_success 'wreckrun: bad input file causes failure' '
+	test_must_fail \
+	    flux wreckrun --input=/foo/badfile:* -l -n${SIZE} cat \
+	        >output.badinput 2>error.badinput &&
+	test_must_fail test -s output.badinput &&
+	grep "Error: input: /foo/badfile" error.badinput
+'
 
 test_expect_success 'wreck: job state events emitted' '
 	run_timeout 5 \
