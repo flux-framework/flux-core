@@ -1396,6 +1396,8 @@ static void iowatcher_kz_ready_cb (kz_t *kz, void *arg)
     lua_settop (L, 0);
 }
 
+static int lua_push_kz (lua_State *L, kz_t *kz);
+
 static int l_iowatcher_add (lua_State *L)
 {
     struct l_flux_ref *iow = NULL;
@@ -1432,6 +1434,8 @@ static int l_iowatcher_add (lua_State *L)
         if ((kz = kz_open (f, key, flags)) == NULL)
             return lua_pusherror (L, "kz_open: %s", strerror (errno));
         iow = l_flux_ref_create (L, f, 2, "iowatcher");
+        lua_push_kz (L, kz);
+        lua_setfield (L, 2, "kz");
         kz_set_ready_cb (kz, (kz_ready_f) iowatcher_kz_ready_cb, (void *) iow);
     }
     return (1);
