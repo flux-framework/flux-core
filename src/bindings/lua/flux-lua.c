@@ -1156,7 +1156,8 @@ static int l_msghandler_newindex (lua_State *L)
     return (0);
 }
 
-static int l_kvswatcher (const char *key, json_object *val, void *arg, int errnum)
+static int kvswatch_cb_common (const char *key, kvsdir_t *dir,
+        json_object *val, void *arg, int errnum)
 {
     int rc;
     int t;
@@ -1176,7 +1177,11 @@ static int l_kvswatcher (const char *key, json_object *val, void *arg, int errnu
     lua_getfield (L, t, "userdata");
     assert (lua_isuserdata (L, -1));
 
-    if (val) {
+    if (dir) {
+        lua_push_kvsdir (L, dir);
+        lua_pushnil (L);
+    }
+    else if (val) {
         json_object_to_lua (L, val);
         lua_pushnil (L);
     }
@@ -1193,6 +1198,22 @@ static int l_kvswatcher (const char *key, json_object *val, void *arg, int errnu
     /* Reset stack */
     lua_settop (L, 0);
     return rc;
+}
+
+static int l_kvsdir_watcher (const char *key, kvsdir_t *dir, void *arg, int errnum)
+{
+    return kvswatch_cb_common (key, dir, NULL, arg, errnum);
+}
+
+static int l_kvswatcher (const char *key, const char *json_str, void *arg, int errnum)
+{
+    json_object *o = NULL;
+    if (json_str && !(o = json_tokener_parse (json_str))) {
+        struct l_flux_ref *kw = arg;
+        flux_log (kw->flux, LOG_EMERG, "kvswatcher: invalid JSON: %s", json_str);
+        return (-1);
+    }
+    return kvswatch_cb_common (key, NULL, o, arg, errnum);
 }
 
 static int l_kvswatcher_remove (lua_State *L)
@@ -1232,8 +1253,11 @@ static int l_kvswatcher_add (lua_State *L)
     assert (lua_isfunction (L, -1));
 
     kw = l_flux_ref_create (L, f, 2, "kvswatcher");
-    kvs_watch_obj (f, key, l_kvswatcher, (void *) kw);
-
+    lua_getfield (L, 2, "isdir");
+    if (lua_toboolean (L, -1))
+        kvs_watch_dir (f, l_kvsdir_watcher, (void *) kw, key);
+    else
+        kvs_watch (f, key, l_kvswatcher, (void *) kw);
     /*
      *  Return kvswatcher object to caller
      */
