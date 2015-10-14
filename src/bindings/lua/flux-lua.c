@@ -1792,6 +1792,13 @@ static int l_flux_reactor_stop (lua_State *L)
     return 0;
 }
 
+static int l_flux_reactor_stop_error (lua_State *L)
+{
+    flux_reactor_stop_error (flux_get_reactor (lua_get_flux (L, 1)));
+    return 0;
+}
+
+
 static int lua_push_kz (lua_State *L, kz_t *kz)
 {
     kz_t **kzp = lua_newuserdata (L, sizeof (*kzp));
@@ -1913,6 +1920,8 @@ static const struct luaL_Reg flux_methods [] = {
     { "sighandler",      l_signal_handler_add },
     { "reactor",         l_flux_reactor_start },
     { "reactor_stop",    l_flux_reactor_stop },
+    { "reactor_stop_error",
+                         l_flux_reactor_stop_error },
     { NULL,              NULL               }
 };
 
