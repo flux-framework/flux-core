@@ -140,7 +140,9 @@ end
 --
 local wreck = require 'wreck' .new (shortprog)
 local ioattach = require 'wreck'.ioattach
+local logstream = require 'wreck'.logstream
 local taskio
+local log
 local sigtimer
 local state = ""
 
@@ -249,6 +251,10 @@ end
 --  Check if job state is "complete" and all IO from tasks have closed:
 --
 local function check_job_completed ()
+    if state == "failed" then
+       log:dump()
+       wreck:die ("job %d failed\n", resp.jobid)
+    end
     if taskio:complete() and
        (state == "complete" or state == "reaped") then
         local rc = lwj_return_code (f, wreck, resp.jobid)
@@ -270,6 +276,12 @@ taskio, err = ioattach {
      on_completion = check_job_completed
 }
 if not taskio then wreck:die ("error opening task io: %s\n", err) end
+
+log, err = logstream {
+     flux = f,
+     jobid = resp.jobid,
+}
+if not log then wreck:die ("error opening log stream: %s\n", err) end
 
 --
 --  Open stdin
