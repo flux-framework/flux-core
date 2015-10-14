@@ -227,7 +227,12 @@ local function inputs_table_from_args (wreck, s)
         if dst ~= "all" and dst ~= "*" then
             local h, err = cpuset.new (dst)
             if not h then
-                wreck:die ("--input: invalid dst: %s\n", dst)
+                if src ~= "" then
+                    wreck:die ("--input: invalid dst: %s\n", dst)
+                end
+                -- otherwise, assume only dst was provided
+                src = dst
+                dst = "*"
             end
         end
         if src == "" or src == "-" then src = "stdin" end
