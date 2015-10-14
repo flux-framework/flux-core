@@ -27,7 +27,7 @@
 #endif
 
 #include <sys/types.h>
-#include <sys/socket.h> /* socketpair(2) */
+#include <sys/socket.h>
 #include <sys/wait.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -40,6 +40,8 @@
 #include "src/common/libutil/shortjson.h"
 #include "src/modules/libzio/zio.h"
 #include "subprocess.h"
+
+#define FDA_LENGTH 16
 
 struct subprocess_manager {
     zlist_t *processes;
@@ -65,6 +67,8 @@ struct subprocess {
     size_t envz_len;
     char *envz;
 
+    int child_fda[FDA_LENGTH]; /* child end of subprocess_socketpair(s) */
+
     int status;
     int exec_error;
 
@@ -87,6 +91,46 @@ struct subprocess {
 
     subprocess_io_cb_f *io_cb;
 };
+
+static void fda_zero (int fda[])
+{
+    int i;
+    for (i = 0; i < FDA_LENGTH; i++)
+        fda[i] = -1;
+}
+
+static int fda_set (int fda[], int fd)
+{
+    int i;
+    for (i = 0; i < FDA_LENGTH; i++) {
+        if (fda[i] == fd || fda[i] == -1) {
+            fda[i] = fd;
+            return 0;
+        }
+    }
+    return -1;
+}
+
+static bool fda_isset (int fda[], int fd)
+{
+    int i;
+    for (i = 0; i < FDA_LENGTH; i++) {
+        if (fda[i] == fd)
+            return true;
+    }
+    return false;
+}
+
+static void fda_closeall (int fda[])
+{
+    int i;
+    for (i = 0; i < FDA_LENGTH; i++) {
+        if (fda[i] != -1) {
+            close (fda[i]);
+            fda[i] = -1;
+        }
+    }
+}
 
 static int sigmask_unblock_all (void)
 {
@@ -178,6 +222,8 @@ struct subprocess * subprocess_create (struct subprocess_manager *sm)
         return (NULL);
     }
 
+    fda_zero (p->child_fda);
+
     p->pid = (pid_t) -1;
 
     if (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, fds) < 0) {
@@ -223,6 +269,8 @@ void subprocess_destroy (struct subprocess *p)
         zlist_remove (p->sm->processes, (void *) p);
     if (p->zhash)
         zhash_destroy (&p->zhash);
+
+    fda_closeall (p->child_fda);
 
     p->sm = NULL;
     free (p->argz);
@@ -489,16 +537,44 @@ char **subprocess_env_expand (struct subprocess *p)
     return (expand_argz (p->envz, p->envz_len));
 }
 
-static void closeall (int fd, int except)
+int subprocess_socketpair (struct subprocess *p, int *child_fd)
 {
-    int fdlimit = sysconf (_SC_OPEN_MAX);
+    int fds[2];
 
-    while (fd < fdlimit) {
-        if (fd != except)
-            close (fd);
-        fd++;
+    if (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, fds) < 0)
+        return -1;
+    if (fda_set (p->child_fda, fds[1]) < 0) {
+        close (fds[0]);
+        close (fds[1]);
+        errno = ENFILE;
+        return -1;
     }
-    return;
+    if (child_fd)
+        *child_fd = fds[1];
+    return fds[0];
+}
+
+/* Close all fd's except the ones we are using.
+ * Clear the close-on-exec flag for socketpair fd's we are passing to child.
+ */
+static int preparefd_child (struct subprocess *p)
+{
+    int fd, fdlimit = sysconf (_SC_OPEN_MAX);
+
+    for (fd = 3; fd < fdlimit; fd++) {
+        if (fd == p->childfd)
+            continue;
+        if (fda_isset (p->child_fda, fd)) {
+            int flags = fcntl (fd, F_GETFD, 0);
+            if (flags < 0)
+                return -1;
+            if (fcntl (fd, F_SETFD, flags & ~FD_CLOEXEC) < 0)
+                return -1;
+            continue;
+        }
+        close (fd);
+    }
+    return 0;
 }
 
 static void close_if_valid (int fd)
@@ -619,7 +695,10 @@ static void subprocess_child (struct subprocess *p)
      */
     sp_barrier_wait (p->childfd);
 
-    closeall (3, p->childfd);
+    if (preparefd_child (p) < 0) {
+        err ("Failed to prepare child fds");
+        exit (1);
+    }
 
     environ = subprocess_env_expand (p);
     argv = subprocess_argv_expand (p);
@@ -706,8 +785,11 @@ int subprocess_fork (struct subprocess *p)
                                                       child_watcher, p);
         flux_watcher_start (p->child_watcher);
     }
+
     close (p->childfd);
     p->childfd = -1;
+
+    fda_closeall (p->child_fda);
 
     sp_barrier_wait (p->parentfd);
     p->started = 1;

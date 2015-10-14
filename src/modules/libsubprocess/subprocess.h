@@ -178,6 +178,14 @@ const char *subprocess_get_cwd (struct subprocess *p);
 int subprocess_set_environ (struct subprocess *p, char **env);
 
 /*
+ *  Set up a socketpair for communication between parent and child,
+ *   and return the parent side of it, or -1 on error (errno set).
+ *   Optionally return the child side in 'child_fd' if non-NULL.
+ *   It is the caller's responsibility to close the parent fd.
+ */
+int subprocess_socketpair (struct subprocess *p, int *child_fd);
+
+/*
  *  Setenv() equivalent with optional overwrite for subprocess [p].
  *   Returns -1 with errno set to EINVAL if subprocess has already started.
  */
