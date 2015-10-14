@@ -151,7 +151,7 @@ function rexecd_init ()
     local cfg = inputconf.create (wreck)
     local rc, err = cfg:process_config ()
     if not rc then
-        wreck:log_msg ("Error: input: %s", err)
+        wreck:die ("Error: input: %s", err)
         return
     end
     cfg:start ()
