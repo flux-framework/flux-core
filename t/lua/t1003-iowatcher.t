@@ -29,9 +29,14 @@ local iow, err = f:iowatcher {
 }
 type_ok (iow, 'userdata', "succesfully create iowatcher")
 is (err, nil, "error is nil")
+type_ok (iow.kz, 'userdata', "iowatcher kz available as index")
 
-os.execute ('printf "hello\nworld" | ' .. test.top_builddir .. '/t/kz/kzutil --force --copy - iowatcher.test.stdout >/dev/null 2>&1')
+os.execute ('printf "hello\nworld" | ' .. test.top_builddir .. '/t/kz/kzutil --copy - iowatcher.test.stdout')
 
+f:timer {
+    timeout = 250,
+    hander = function () f:reactor_stop_error () end
+}
 local r, err = f:reactor()
 isnt (r, -1, "Return from reactor, rc >= 0")
 is (err, nil, "error is nil")
