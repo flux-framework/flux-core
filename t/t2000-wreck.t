@@ -254,8 +254,9 @@ test_expect_success 'flux-wreck: status with non-zero exit' '
 test_expect_success 'flux-wreck: kill' '
 	run_timeout 1 flux wreckrun --detach sleep 100 &&
 	id=$(last_job_id) &&
-	${SHARNESS_TEST_SRCDIR}/scripts/kvs-watch-until.lua lwj.$id running &&
+	${SHARNESS_TEST_SRCDIR}/scripts/kvs-watch-until.lua -vt 1 lwj.$id.state "v == \"running\"" &&
 	flux wreck kill -s SIGINT $id &&
+	${SHARNESS_TEST_SRCDIR}/scripts/kvs-watch-until.lua -vt 1 lwj.$id.state "v == \"complete\"" &&
 	test_expect_code 130 flux wreck status $id >output.kill &&
 	cat >expected.kill <<-EOF &&
 	Job $id status: complete
