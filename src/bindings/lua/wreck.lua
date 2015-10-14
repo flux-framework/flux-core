@@ -268,16 +268,24 @@ function wreck:jobreq ()
     return jobreq
 end
 
+local function initialize_args (arg)
+    if arg.ntasks and arg.nnodes then return true end
+    local f = arg.flux
+    local lwj, err = f:kvsdir ("lwj."..arg.jobid)
+    if not lwj then
+        return nil, "Error: "..err
+    end
+    arg.ntasks = lwj.ntasks
+    arg.nnodes = lwj.nnodes
+    return true
+end
+
 function wreck.ioattach (arg)
     local ioplex = require 'wreck.io'
     local f = arg.flux
-    if not arg.ntasks then
-        local lwj, err = f:kvsdir ("lwj."..arg.jobid)
-        if not lwj then
-            return nil, "Error: "..err
-        end
-        arg.ntasks = lwj.ntasks
-    end
+    local rc, err = initialize_args (arg)
+    if not rc then return nil, err end
+
     local taskio, err = ioplex.create (arg)
     if not taskio then return nil, err end
     for i = 0, arg.ntasks - 1 do
@@ -286,8 +294,41 @@ function wreck.ioattach (arg)
         end
     end
     taskio:start (arg.flux)
-
     return taskio
+end
+
+local logstream = {}
+logstream.__index = logstream
+
+function logstream:dump ()
+    for _, iow in pairs (self.watchers) do
+        local r, err = iow.kz:read ()
+        while r and r.data and not r.eof do
+           io.stderr:write (r.data.."\n")
+           r, err = iow.kz:read ()
+        end
+    end
+end
+
+function wreck.logstream (arg)
+    local l = {}
+    local f = arg.flux
+    if not f then return nil, "flux argument member required" end
+    local rc, err = initialize_args (arg)
+    if not rc then return nil, err end
+    l.watchers = {}
+    for i = 0, arg.nnodes - 1 do
+        local key ="lwj."..arg.jobid..".log."..i
+        local iow, err = f:iowatcher {
+            key = key,
+            handler = function (iow, r)
+                if not r then return end
+                io.stderr:write (r.."\n")
+            end
+        }
+        table.insert (l.watchers, iow)
+    end
+    return setmetatable (l, logstream)
 end
 
 local function exit_message (t)
