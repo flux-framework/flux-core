@@ -508,7 +508,7 @@ int main (int argc, char *argv[])
     if (ctx.verbose)
         msg ("boot: %s", ctx.boot_method->name);
     if (ctx.boot_method->fun (&ctx) < 0)
-        err_exit ("boot %s", ctx.boot_method->name);
+        msg_exit ("bootstrap failed");
     assert (ctx.rank != FLUX_NODEID_ANY);
     assert (ctx.size > 0);
     assert (attr_get (ctx.attrs, "session-id", NULL, NULL) == 0);
