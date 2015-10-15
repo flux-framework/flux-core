@@ -57,7 +57,7 @@ local kw, err = f:kvswatcher {
     if opts.v then 
         printf ("%4.03fs: %s = %s\n",
                 timer:get0(),
-                key, require 'inspect' (result))
+                key, tostring (result))
     end
     local ok, rv = pcall (cb, result)
     if not ok then error (rv) end

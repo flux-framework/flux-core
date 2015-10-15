@@ -195,15 +195,18 @@ test_expect_success 'wreck plugins can use wreck:log_msg()' '
 test_expect_success 'wreckrun: --detach supported' '
 	flux wreckrun --detach /bin/true | grep ^Job
 '
+
+WAITFILE="$SHARNESS_TEST_SRCDIR/scripts/waitfile.lua"
+
 test_expect_success 'wreckrun: --output supported' '
 	flux wreckrun --output=test1.out echo hello &&
-        grep hello test1.out
+        $WAITFILE 1 hello test1.out
 '
 test_expect_success 'wreckrun: --error supported' '
 	flux wreckrun --output=test2.out --error=test2.err \
 	    sh -c "echo >&2 this is stderr; echo this is stdout" &&
-        grep "this is stderr" test2.err &&
-        grep "this is stdout" test2.out
+        $WAITFILE 1 "this is stderr" test2.err &&
+        $WAITFILE 1 "this is stdout" test2.out
 '
 test_expect_success 'wreckrun: kvs config output for all jobs' '
 	test_when_finished "flux kvs put lwj.output=" &&
@@ -214,6 +217,7 @@ test_expect_success 'wreckrun: kvs config output for all jobs' '
 		do echo "$i: foo"
 	done >expected.kvsiocfg &&
 	sort -n test3.out >output.kvsiocfg &&
+        $WAITFILE 1 "" output.kvsiocfg &&
 	test_cmp expected.kvsiocfg output.kvsiocfg
 '
 test_expect_success 'flux-wreck: exists in path' '
@@ -254,8 +258,9 @@ test_expect_success 'flux-wreck: status with non-zero exit' '
 test_expect_success 'flux-wreck: kill' '
 	run_timeout 1 flux wreckrun --detach sleep 100 &&
 	id=$(last_job_id) &&
-	${SHARNESS_TEST_SRCDIR}/scripts/kvs-watch-until.lua lwj.$id running &&
+	${SHARNESS_TEST_SRCDIR}/scripts/kvs-watch-until.lua -vt 1 lwj.$id.state "v == \"running\"" &&
 	flux wreck kill -s SIGINT $id &&
+	${SHARNESS_TEST_SRCDIR}/scripts/kvs-watch-until.lua -vt 1 lwj.$id.state "v == \"complete\"" &&
 	test_expect_code 130 flux wreck status $id >output.kill &&
 	cat >expected.kill <<-EOF &&
 	Job $id status: complete

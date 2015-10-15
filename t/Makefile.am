@@ -121,7 +121,8 @@ dist_check_DATA = \
 dist_check_SCRIPTS = \
 	scripts/event-trace.lua \
 	scripts/kvs-watch-until.lua \
-	scripts/cpus-allowed.lua
+	scripts/cpus-allowed.lua \
+	scripts/waitfile.lua
 
 test_ldadd = \
         $(top_builddir)/src/common/libflux-internal.la \
