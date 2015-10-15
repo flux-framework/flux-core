@@ -1,4 +1,5 @@
-SUBDIRS = libtap libev libpmi-client liblsd libutil libflux libcompat
+SUBDIRS = libtap libev libpmi-client libpmi-server \
+	  liblsd libutil libflux libcompat
 
 AM_CFLAGS = @GCCWARN@ $(CODE_COVERAGE_CFLAGS)
 AM_LDFLAGS = $(CODE_COVERAGE_LDFLAGS)
@@ -13,6 +14,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libutil/libutil.la \
 	$(builddir)/libev/libev.la \
 	$(builddir)/libpmi-client/libpmi-client.la \
+	$(builddir)/libpmi-server/libpmi-server.la \
 	$(builddir)/libcompat/libcompat.la \
 	$(LIBMUNGE) $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \
 	$(LIBDL) -lrt
