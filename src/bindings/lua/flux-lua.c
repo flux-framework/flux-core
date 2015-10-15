@@ -1425,6 +1425,7 @@ static int l_iowatcher_add (lua_State *L)
             fprintf (stderr, "failed to create zio!\n");
         zio_flux_attach (zio, f);
         zio_set_send_cb (zio, iowatcher_zio_cb);
+        return (1);
     }
     lua_getfield (L, 2, "key");
     if (!lua_isnil (L, -1)) {
@@ -1437,8 +1438,15 @@ static int l_iowatcher_add (lua_State *L)
         lua_push_kz (L, kz);
         lua_setfield (L, 2, "kz");
         kz_set_ready_cb (kz, (kz_ready_f) iowatcher_kz_ready_cb, (void *) iow);
+
+        /*  Callback may have been called and we should not trust Lua
+         *   stack. Get iowatcher again so we return correct iow object
+         */
+        l_flux_ref_gettable (iow, "iowatcher");
+        lua_getfield (L, -1, "userdata");
+        return (1);
     }
-    return (1);
+    return lua_pusherror (L, "required field fd or key missing");
 }
 
 static int l_iowatcher_index (lua_State *L)
