@@ -845,6 +845,10 @@ static void init_shell (ctx_t *ctx)
         subprocess_setenv (ctx->init_shell, "LD_LIBRARY_PATH", ldpath, 1);
         free (ldpath);
     }
+    subprocess_unsetenv (ctx->init_shell, "PMI_FD");
+    subprocess_unsetenv (ctx->init_shell, "PMI_RANK");
+    subprocess_unsetenv (ctx->init_shell, "PMI_SIZE");
+
 
     if (!ctx->quiet)
         flux_log (ctx->h, LOG_INFO, "starting initial program");
