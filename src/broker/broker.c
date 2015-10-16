@@ -122,6 +122,7 @@ typedef struct {
      */
     struct boot_method *boot_method;
     bool enable_epgm;
+    bool shared_ipc_namespace;
     int k_ary;
     hello_t *hello;
     double hello_timeout;
@@ -190,7 +191,7 @@ static struct boot_method boot_table[] = {
     { NULL, NULL },
 };
 
-#define OPTIONS "+vqR:S:M:X:L:N:k:s:H:O:x:T:g:D:Em:l:"
+#define OPTIONS "+vqR:S:M:X:L:N:k:s:H:O:x:T:g:D:Em:l:I"
 static const struct option longopts[] = {
     {"sid",             required_argument,  0, 'N'},
     {"verbose",         no_argument,        0, 'v'},
@@ -209,6 +210,7 @@ static const struct option longopts[] = {
     {"shutdown-grace",  required_argument,  0, 'g'},
     {"socket-directory",required_argument,  0, 'D'},
     {"enable-epgm",     no_argument,        0, 'E'},
+    {"shared-ipc-namespace", no_argument,   0, 'I'},
     {"boot-method",     required_argument,  0, 'm'},
     {"log-level",       required_argument,  0, 'l'},
     {0, 0, 0, 0},
@@ -237,6 +239,7 @@ static void usage (void)
 " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
 " -D,--socket-directory DIR    Create ipc sockets in DIR (local bootstrap)\n"
 " -E,--enable-epgm             Enable EPGM for events (PMI bootstrap)\n"
+" -I,--shared-ipc-namespace    Wire up session TBON over ipc sockets\n"
 " -m,--boot-method             Select bootstrap: pmi, single, local\n"
 );
     exit (1);
@@ -372,6 +375,9 @@ int main (int argc, char *argv[])
             }
             case 'E': /* --enable-epgm */
                 ctx.enable_epgm = true;
+                break;
+            case 'I': /* --shared-ipc-namespace */
+                ctx.shared_ipc_namespace = true;
                 break;
             case 'm': { /* --boot-method */
                 boot_method = optarg;
@@ -915,11 +921,6 @@ static int create_socketdir (ctx_t *ctx)
     return 0;
 }
 
-/* N.B. If using epgm with multiple brokers per node, the
- * lowest rank in each clique will subscribe to the epgm:// socket
- * and relay events to an ipc:// socket for the other ranks in the
- * clique.  This is required due to a limitation of epgm.
- */
 static int boot_pmi (ctx_t *ctx)
 {
     pmi_t *pmi = NULL;
@@ -934,8 +935,10 @@ static int boot_pmi (ctx_t *ctx)
     char *kvsname = NULL;
     char *key = NULL;
     char *val = NULL;
-
     int e, rc = -1;
+
+    if (ctx->enable_epgm || !ctx->shared_ipc_namespace)
+        ipaddr_getprimary (ipaddr, sizeof (ipaddr));
 
     if (!(pmi = pmi_create_guess ())) {
         err ("pmi_create");
@@ -980,10 +983,18 @@ static int boot_pmi (ctx_t *ctx)
         goto done;
 
 
-    /* Set ip addr.  We will need wildcards expanded below.
+    /* Set TBON request addr.  We will need any wildcards expanded below.
      */
-    ipaddr_getprimary (ipaddr, sizeof (ipaddr));
-    overlay_set_child (ctx->overlay, "tcp://%s:*", ipaddr);
+    if (ctx->shared_ipc_namespace) {
+        if (create_socketdir (ctx) < 0 || create_rankdir (ctx) < 0)
+            goto done;
+        char *reqfile = xasprintf ("%s/%d/req", ctx->socket_dir, ctx->rank);
+        overlay_set_child (ctx->overlay, "ipc://%s", reqfile);
+        cleanup_push_string (cleanup_file, reqfile);
+        free (reqfile);
+    } else {
+        overlay_set_child (ctx->overlay, "tcp://%s:*", ipaddr);
+    }
 
     /* Set up epgm relay if multiple ranks are being spawned per node,
      * as indicated by "clique ranks".  FIXME: if epgm is used but
@@ -1116,7 +1127,17 @@ static int boot_pmi (ctx_t *ctx)
     }
     overlay_set_right (ctx->overlay, "%s", val);
 
-    /* Read the URI fo epgm relay rank, or connect directly.
+    /* Event distribution (four configurations):
+     * 1) epgm enabled, one broker per node
+     *    All brokers subscribe to the same epgm address.
+     * 2) epgm enabled, mutiple brokers per node
+     *    The lowest rank in each clique will subscribe to the epgm:// socket
+     *    and relay events to an ipc:// socket for the other ranks in the
+     *    clique.  This is necessary due to limitation of epgm.
+     * 3) epgm disabled, all brokers concentrated on one node
+     *    Rank 0 publishes to a ipc:// socket, other ranks subscribe
+     * 4) epgm disabled brokers distributed across nodes
+     *    No dedicated event overlay,.  Events are distributed over the TBON.
      */
     if (ctx->enable_epgm) {
         if (relay_rank >= 0 && rank != relay_rank) {
@@ -1136,6 +1157,12 @@ static int boot_pmi (ctx_t *ctx)
             overlay_set_event (ctx->overlay, "epgm://%s;239.192.1.1:%d",
                                ipaddr, port);
         }
+    } else if (ctx->shared_ipc_namespace) {
+        char *eventfile = xasprintf ("%s/event", ctx->socket_dir);
+        overlay_set_event (ctx->overlay, "ipc://%s", eventfile);
+        if (ctx->rank == 0)
+            cleanup_push_string (cleanup_file, eventfile);
+        free (eventfile);
     }
     pmi_finalize (pmi);
     rc = 0;
