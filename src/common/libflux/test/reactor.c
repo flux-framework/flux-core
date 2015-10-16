@@ -267,6 +267,249 @@ static void test_timer (flux_reactor_t *reactor)
     flux_watcher_destroy (w);
 }
 
+static int idle_count = 0;
+static void idle_cb (flux_reactor_t *r, flux_watcher_t *w,
+                     int revents, void *arg)
+{
+    if (++idle_count == 42)
+        flux_watcher_stop (w);
+}
+
+static void test_idle (flux_reactor_t *reactor)
+{
+    flux_watcher_t *w;
+
+    w = flux_idle_watcher_create (reactor, idle_cb, NULL);
+    ok (w != NULL,
+        "created idle watcher");
+    flux_watcher_start (w);
+
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "reactor ran successfully");
+    ok (idle_count == 42,
+        "idle watcher ran until stopped");
+    flux_watcher_destroy (w);
+}
+
+static int prepare_count = 0;
+static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
+                        int revents, void *arg)
+{
+    prepare_count++;
+}
+
+static int check_count = 0;
+static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
+                      int revents, void *arg)
+{
+    check_count++;
+}
+
+static int prepchecktimer_count = 0;
+static void prepchecktimer_cb (flux_reactor_t *r, flux_watcher_t *w,
+                               int revents, void *arg)
+{
+    if (++prepchecktimer_count == 8)
+        flux_reactor_stop (r);
+}
+
+static void test_prepcheck (flux_reactor_t *reactor)
+{
+    flux_watcher_t *w;
+    flux_watcher_t *prep;
+    flux_watcher_t *chk;
+
+    w = flux_timer_watcher_create (reactor, 0.01, 0.01,
+                                   prepchecktimer_cb, NULL);
+    ok (w != NULL,
+        "created timer watcher that fires every 0.01s");
+    flux_watcher_start (w);
+
+    prep = flux_prepare_watcher_create (reactor, prepare_cb, NULL);
+    ok (w != NULL,
+        "created prepare watcher");
+    flux_watcher_start (prep);
+
+    chk = flux_check_watcher_create (reactor, check_cb, NULL);
+    ok (w != NULL,
+        "created check watcher");
+    flux_watcher_start (chk);
+
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "reactor ran successfully");
+    ok (prepchecktimer_count == 8,
+        "timer fired 8 times, then reactor was stopped");
+    diag ("prep %d check %d timer %d", prepare_count, check_count,
+                                       prepchecktimer_count);
+    ok (prepare_count >= 8,
+        "prepare watcher ran at least once per timer");
+    ok (check_count >= 8,
+        "check watcher ran at least once per timer");
+
+    flux_watcher_destroy (w);
+    flux_watcher_destroy (prep);
+    flux_watcher_destroy (chk);
+}
+
+static int sigusr1_count = 0;
+static void sigusr1_cb (flux_reactor_t *r, flux_watcher_t *w,
+                        int revents, void *arg)
+{
+    if (++sigusr1_count == 8)
+        flux_reactor_stop (r);
+}
+
+static void sigidle_cb (flux_reactor_t *r, flux_watcher_t *w,
+                        int revents, void *arg)
+{
+    if (kill (getpid (), SIGUSR1) < 0)
+        flux_reactor_stop_error (r);
+}
+
+static void test_signal (flux_reactor_t *reactor)
+{
+    flux_watcher_t *w;
+    flux_watcher_t *idle;
+
+    w = flux_signal_watcher_create (reactor, SIGUSR1, sigusr1_cb, NULL);
+    ok (w != NULL,
+        "created signal watcher");
+    flux_watcher_start (w);
+
+    idle = flux_idle_watcher_create (reactor, sigidle_cb, NULL);
+    ok (idle != NULL,
+        "created idle watcher");
+    flux_watcher_start (idle);
+
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "reactor ran successfully");
+    ok (sigusr1_count == 8,
+        "signal watcher handled correct number of SIGUSR1's");
+
+    flux_watcher_destroy (w);
+    flux_watcher_destroy (idle);
+}
+
+static pid_t child_pid = -1;
+static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
+                      int revents, void *arg)
+{
+    int pid = flux_child_watcher_get_rpid (w);
+    int rstatus = flux_child_watcher_get_rstatus (w);
+    ok (pid == child_pid,
+        "child watcher called with expected rpid");
+    ok (WIFSIGNALED (rstatus) && WTERMSIG (rstatus) == SIGHUP,
+        "child watcher called with expected rstatus");
+    flux_watcher_stop (w);
+}
+
+static void test_child  (flux_reactor_t *reactor)
+{
+    flux_watcher_t *w;
+    flux_reactor_t *r;
+
+    child_pid = fork ();
+    if (child_pid == 0) {
+        pause ();
+        exit (0);
+    }
+    errno = 0;
+    w = flux_child_watcher_create (reactor, child_pid, false, child_cb, NULL);
+    ok (w == NULL && errno == EINVAL,
+        "child watcher failed with EINVAL on non-SIGCHLD reactor");
+    ok ((r = flux_reactor_create (FLUX_REACTOR_SIGCHLD)) != NULL,
+        "created reactor with SIGCHLD flag");
+    w = flux_child_watcher_create (r, child_pid, false, child_cb, NULL);
+    ok (w != NULL,
+        "created child watcher");
+
+    ok (kill (child_pid, SIGHUP) == 0,
+        "sent child SIGHUP");
+    flux_watcher_start (w);
+
+    ok (flux_reactor_run (r, 0) == 0,
+        "reactor ran successfully");
+    flux_watcher_destroy (w);
+    flux_reactor_destroy (r);
+}
+
+static int stat_size = 0;
+static int stat_nlink = 0;
+static void stat_cb (flux_reactor_t *r, flux_watcher_t *w,
+                     int revents, void *arg)
+{
+    struct stat new, old;
+    flux_stat_watcher_get_rstat (w, &new, &old);
+    if (new.st_nlink == 0) {
+        diag ("%s: nlink: old: %d new %d", __FUNCTION__,
+                old.st_nlink, new.st_nlink);
+        stat_nlink++;
+        flux_watcher_stop (w);
+    } else {
+        if (old.st_size != new.st_size) {
+            diag ("%s: size: old=%ld new=%ld", __FUNCTION__,
+                  (long)old.st_size, (long)new.st_size);
+            stat_size++;
+        }
+    }
+}
+
+struct stattimer_ctx {
+    int fd;
+    char *path;
+    enum { STATTIMER_APPEND, STATTIMER_UNLINK } state;
+};
+
+static void stattimer_cb (flux_reactor_t *r, flux_watcher_t *w,
+                          int revents, void *arg)
+{
+    struct stattimer_ctx *ctx = arg;
+    if (ctx->state == STATTIMER_APPEND) {
+        if (write (ctx->fd, "hello\n", 6) < 0 || close (ctx->fd) < 0)
+            flux_reactor_stop_error (r);
+        ctx->state = STATTIMER_UNLINK;
+    } else if (ctx->state == STATTIMER_UNLINK) {
+        if (unlink (ctx->path) < 0)
+            flux_reactor_stop_error (r);
+        flux_watcher_stop (w);
+    }
+}
+
+static void test_stat (flux_reactor_t *reactor)
+{
+    flux_watcher_t *w, *tw;
+    struct stattimer_ctx ctx;
+    const char *tmpdir = getenv ("TMPDIR");
+
+    ctx.path = xasprintf ("%s/reactor-test.XXXXXX", tmpdir ? tmpdir : "/tmp");
+    ctx.fd = mkstemp (ctx.path);
+    ctx.state = STATTIMER_APPEND;
+
+    ok (ctx.fd >= 0,
+        "created temporary file");
+    w = flux_stat_watcher_create (reactor, ctx.path, stat_cb, NULL);
+    ok (w != NULL,
+        "created stat watcher");
+    flux_watcher_start (w);
+
+    tw = flux_timer_watcher_create (reactor, 0.01, 0.01,
+                                    stattimer_cb, &ctx);
+    ok (tw != NULL,
+        "created timer watcher");
+    flux_watcher_start (tw);
+
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "reactor ran successfully");
+
+    ok (stat_size == 1,
+        "stat watcher invoked once for size chnage");
+    ok (stat_nlink == 1,
+        "stat watcher invoked once for nlink set to zero");
+
+    flux_watcher_destroy (w);
+    flux_watcher_destroy (tw);
+}
+
 static void reactor_destroy_early (void)
 {
     flux_reactor_t *r;
@@ -298,6 +541,11 @@ int main (int argc, char *argv[])
     test_timer (reactor);
     test_fd (reactor);
     test_zmq (reactor);
+    test_idle (reactor);
+    test_prepcheck (reactor);
+    test_signal (reactor);
+    test_child (reactor);
+    test_stat (reactor);
 
     flux_reactor_destroy (reactor);
 
