@@ -40,6 +40,7 @@ void myfatal (void *h, int exit_code, const char *fmt, ...)
 }
 
 static int testio_cb (struct subprocess *p, const char *json_str);
+static int fdcount (void);
 
 int main (int ac, char **av)
 {
@@ -52,6 +53,10 @@ int main (int ac, char **av)
     char *args2[] = { "goodbye", NULL };
     char *args3[] = { "/bin/true", NULL };
     char *args4[] = { "/bin/sleep", "10", NULL };
+    int start_fdcount, end_fdcount;
+
+    start_fdcount = fdcount ();
+    diag ("initial fd count %d", start_fdcount);
 
     plan (NO_PLAN);
 
@@ -112,6 +117,7 @@ int main (int ac, char **av)
         "Unstarted process has state 'Pending'");
 
     subprocess_destroy (p);
+    diag ("fd count after subproc create/destroy %d", fdcount ());
 
     /* Test running an executable */
     diag ("test subprocess_manager_run");
@@ -311,6 +317,11 @@ int main (int ac, char **av)
     subprocess_destroy (p);
     subprocess_manager_destroy (sm);
 
+    end_fdcount = fdcount ();
+    diag ("final fd count %d", end_fdcount);
+    ok (start_fdcount == end_fdcount,
+        "no file descriptors were leaked");
+
     done_testing ();
 }
 
@@ -322,6 +333,19 @@ static int testio_cb (struct subprocess *p, const char *json_str)
         zio_json_decode (json_str, (void **) bufp, &eof);
     return 0;
 }
+
+
+static int fdcount (void)
+{
+    int fd, fdlimit = sysconf (_SC_OPEN_MAX);
+    int count = 0;
+    for (fd = 0; fd < fdlimit; fd++) {
+        if (fcntl (fd, F_GETFD) != -1)
+            count++;
+    }
+    return count;
+}
+
 
 /*
  * vi: ts=4 sw=4 expandtab
