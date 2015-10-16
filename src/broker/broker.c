@@ -639,7 +639,7 @@ int main (int argc, char *argv[])
      */
     snoop_set_zctx (ctx.snoop, ctx.zctx);
     snoop_set_sec (ctx.snoop, ctx.sec);
-    snoop_set_uri (ctx.snoop, "ipc://*");
+    snoop_set_uri (ctx.snoop, "ipc://%s/%d/snoop", ctx.socket_dir, ctx.rank);
 
     shutdown_set_handle (ctx.shutdown, ctx.h);
     shutdown_set_callback (ctx.shutdown, shutdown_cb, &ctx);
