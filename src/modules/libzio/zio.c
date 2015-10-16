@@ -211,6 +211,10 @@ void zio_destroy (zio_t *z)
         cbuf_destroy (z->buf);
     free (z->name);
     free (z->prefix);
+    if (z->srcfd >= 0)
+        close (z->srcfd);
+    if (z->dstfd >= 0)
+        close (z->dstfd);
     z->srcfd = z->dstfd = -1;
     flux_watcher_destroy (z->reader);
     flux_watcher_destroy (z->writer);
