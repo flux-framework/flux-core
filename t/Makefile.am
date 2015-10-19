@@ -19,6 +19,7 @@ TESTS = \
 	loop/rpc.t \
 	loop/multrpc.t \
 	loop/reduce.t \
+	pmi/simple.t \
 	t0000-sharness.t \
 	t0001-basic.t \
 	t0002-request.t \
@@ -107,6 +108,7 @@ check_PROGRAMS = \
 	loop/multrpc.t \
 	loop/reduce.t \
 	pmi/kvstest \
+	pmi/simple.t \
 	pmi/pminfo \
 	kz/kzutil \
 	kvs/torture \
@@ -165,6 +167,10 @@ loop_reduce_t_LDADD = $(test_ldadd) $(LIBDL)
 pmi_kvstest_SOURCES = pmi/kvstest.c
 pmi_kvstest_CPPFLAGS = $(test_cppflags)
 pmi_kvstest_LDADD = $(test_ldadd) $(LIBRT)
+
+pmi_simple_t_SOURCES = pmi/simple.c
+pmi_simple_t_CPPFLAGS = $(test_cppflags)
+pmi_simple_t_LDADD = $(test_ldadd) $(LIBRT)
 
 pmi_pminfo_SOURCES = pmi/pminfo.c
 pmi_pminfo_CPPFLAGS = $(test_cppflags)
