@@ -154,7 +154,7 @@ TESTS_ENVIRONMENT = \
 convenience-link: $(luaexec_LTLIBRARIES) $(fluxlua_LTLIBRARIES)
 	@for f in $^; do \
 	  soname=`$(GREP) "^dlname=" $$f | $(SED) -e "s|^dlname='\(.*\)'|\1|"`; \
-	  dirname=`echo $(abs_builddir)/$$f | $(SED) -e 's|/[^/]*.la||'`; \
+	  dirname=`dirname $(abs_builddir)/$$f `; \
 	  target=$$dirname/.libs/$$soname; link=$$dirname/$$soname; \
 	  shortdir=`echo $$f | $(SED) -e 's|[^/]*.la||'`; \
 	  shorttarget="$${shortdir}.libs/$$soname"; \
