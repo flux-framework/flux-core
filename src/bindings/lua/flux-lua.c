@@ -870,6 +870,7 @@ static int l_flux_mrpc_new (lua_State *L)
 struct l_flux_ref {
     lua_State *L;    /* Copy of this lua state */
     flux_t flux;     /* Copy of flux handle for flux reftable lookup */
+    void   *arg;     /* optional argument */
     int    ref;      /* reference into flux reftable                 */
 };
 
@@ -944,6 +945,7 @@ struct l_flux_ref *l_flux_ref_create (lua_State *L, flux_t f,
     mh->L = L;
     mh->ref = ref;
     mh->flux = f;
+    mh->arg = NULL;
 
     /*
      *  Ensure our userdata object isn't GC'd by tying it to the new
@@ -1421,6 +1423,7 @@ static int l_iowatcher_add (lua_State *L)
         fd = dup (fd);
         iow = l_flux_ref_create (L, f, 2, "iowatcher");
         zio = zio_reader_create ("", fd, NULL, iow);
+        iow->arg = (void *) zio;
         if (!zio)
             fprintf (stderr, "failed to create zio!\n");
         zio_flux_attach (zio, f);
@@ -1483,6 +1486,122 @@ static int l_iowatcher_newindex (lua_State *L)
     lua_rawset (L, -3);
     return (0);
 }
+
+static void fd_watcher_cb (flux_reactor_t *r, flux_watcher_t *w, int revents,
+                           void *arg)
+{
+    int rc;
+    int t;
+    struct l_flux_ref *fw = arg;
+    lua_State *L = fw->L;
+
+    assert (L != NULL);
+    l_flux_ref_gettable (fw, "watcher");
+    t = lua_gettop (L);
+
+    lua_getfield (L, t, "handler");
+    assert (lua_isfunction (L, -1));
+    lua_getfield (L, t, "userdata");
+    assert (lua_isuserdata (L, -1));
+
+    if ((rc = lua_pcall (L, 1, 1, 0))) {
+        luaL_error (L, "fd_watcher: pcall: %s", lua_tostring (L, -1));
+        return;
+    }
+}
+
+static int l_fdwatcher_add (lua_State *L)
+{
+    int fd;
+    int events = FLUX_POLLIN | FLUX_POLLOUT | FLUX_POLLERR;
+    flux_watcher_t *w;
+    struct l_flux_ref *fw = NULL;
+    flux_t f = lua_get_flux (L, 1);
+
+    if (!lua_istable (L, 2))
+        return lua_pusherror (L, "Expected table as 2nd argument");
+
+    /*
+     *  Check table for mandatory arguments
+     */
+    lua_getfield (L, 2, "fd");
+    if (lua_isnil (L, -1))
+        return lua_pusherror (L, "Mandatory table argument 'fd' missing");
+    fd = lua_tointeger (L, -1);
+    lua_pop (L, 1);
+
+    lua_getfield (L, 2, "handler");
+    if (lua_isnil (L, -1))
+        return lua_pusherror (L, "Mandatory table argument 'handler' missing");
+    lua_pop (L, 1);
+
+    fw = l_flux_ref_create (L, f, 2, "watcher");
+    w = flux_fd_watcher_create (flux_get_reactor (f), fd, events,
+                                fd_watcher_cb, (void *) fw);
+    fw->arg = (void *) w;
+    if (w == NULL) {
+        l_flux_ref_destroy (fw, "watcher");
+        return lua_pusherror (L, "flux_fd_watcher_create: %s", strerror (errno));
+    }
+    flux_watcher_start (w);
+    return (1);
+}
+
+static int l_watcher_destroy (lua_State *L)
+{
+    struct l_flux_ref *fw = luaL_checkudata (L, 1, "FLUX.watcher");
+    flux_watcher_t *w = fw->arg;
+    if (w) {
+        flux_watcher_destroy (w);
+        fw->arg = NULL;
+    }
+    return (0);
+}
+
+static int l_watcher_remove (lua_State *L)
+{
+    struct l_flux_ref *fw = luaL_checkudata (L, 1, "FLUX.watcher");
+    flux_watcher_t *w = fw->arg;
+    flux_watcher_stop (w);
+    lua_pushboolean (L, true);
+    return (1);
+}
+
+static int l_watcher_index (lua_State *L)
+{
+    struct l_flux_ref *fw = luaL_checkudata (L, 1, "FLUX.watcher");
+    const char *key = lua_tostring (L, 2);
+
+    /*
+     *  Check for method names
+     */
+    if (strcmp (key, "remove") == 0) {
+        lua_getmetatable (L, 1);
+        lua_getfield (L, -1, "remove");
+        return (1);
+    }
+
+    /*  Get a copy of the underlying watcher Lua table and pass-through
+     *   the index:
+     */
+    l_flux_ref_gettable (fw, "watcher");
+    lua_getfield (L, -1, key);
+    return (1);
+}
+
+static int l_watcher_newindex (lua_State *L)
+{
+    struct l_flux_ref *iow = luaL_checkudata (L, 1, "FLUX.watcher");
+
+    /*  Set value in the underlying table:
+     */
+    l_flux_ref_gettable (iow, "watcher");
+    lua_pushvalue (L, 2); /* Key   */
+    lua_pushvalue (L, 3); /* Value */
+    lua_rawset (L, -3);
+    return (0);
+}
+
 
 static int timeout_handler (flux_t f, void *arg)
 {
@@ -1953,6 +2072,7 @@ static const struct luaL_Reg flux_methods [] = {
     { "msghandler",      l_msghandler_add    },
     { "kvswatcher",      l_kvswatcher_add    },
     { "iowatcher",       l_iowatcher_add     },
+    { "fdwatcher",       l_fdwatcher_add     },
     { "timer",           l_timeout_handler_add },
     { "sighandler",      l_signal_handler_add },
     { "reactor",         l_flux_reactor_start },
@@ -1998,6 +2118,15 @@ static const struct luaL_Reg iowatcher_methods [] = {
     { NULL,              NULL                  }
 };
 
+static const struct luaL_Reg watcher_methods [] = {
+    { "__gc",            l_watcher_destroy  },
+    { "__index",         l_watcher_index    },
+    { "__newindex",      l_watcher_newindex },
+    { "remove",          l_watcher_remove   },
+    { NULL,              NULL                  }
+};
+
+
 static const struct luaL_Reg kz_methods [] = {
     { "__index",         l_kz_index           },
     { "__gc",            l_kz_gc              },
@@ -2041,6 +2170,8 @@ int luaopen_flux (lua_State *L)
     luaL_setfuncs (L, kvswatcher_methods, 0);
     luaL_newmetatable (L, "FLUX.iowatcher");
     luaL_setfuncs (L, iowatcher_methods, 0);
+    luaL_newmetatable (L, "FLUX.watcher");
+    luaL_setfuncs (L, watcher_methods, 0);
     luaL_newmetatable (L, "FLUX.kz");
     luaL_setfuncs (L, kz_methods, 0);
     luaL_newmetatable (L, "FLUX.timeout_handler");
