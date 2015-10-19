@@ -38,18 +38,27 @@
 #include "src/common/libutil/cleanup.h"
 #include "src/modules/libsubprocess/subprocess.h"
 
-int start_direct (optparse_t *p, const char *cmd);
+struct context {
+    flux_reactor_t *reactor;
+    flux_watcher_t *timer;
+    struct subprocess_manager *sm;
+    optparse_t *opts;
+    char *session_id;
+    char *socket_dir;
+    const char *broker_path;
+    int size;
+    int count;
+    int exit_rc;
+};
+
+void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
+int start_direct (struct context *ctx, const char *cmd);
+void remove_corelimit (void);
+char *create_socket_dir (struct context *ctx);
+
+const char *default_killer_timeout = "1.0";
 
 const int default_size = 1;
-
-struct subprocess_manager *sm;
-
-/* Workaround for shutdown bug:
- * Wait this many seconds after exit of first broker before kill -9 of
- * those that remain.  This is a temporary work-around for unreliable
- * shutdown in fast cycling comms sessions.
- */
-const int child_wait_seconds = 1;
 
 const char *usage_msg = "[OPTIONS] command ...";
 static struct optparse_option opts[] = {
@@ -61,6 +70,8 @@ static struct optparse_option opts[] = {
       .usage = "Set number of ranks in new instance", },
     { .name = "broker-opts",.key = 'o', .has_arg = 3, .arginfo = "OPTS",
       .usage = "Add comma-separated broker options, e.g. \"-o,-q\"", },
+    { .name = "killer-timeout",.key = 'k', .has_arg = 1, .arginfo = "SECONDS",
+      .usage = "After a broker exits, kill other brokers after SECONDS", },
     OPTPARSE_TABLE_END,
 };
 
@@ -69,98 +80,118 @@ int main (int argc, char *argv[])
     int e, status = 0;
     char *command = NULL;
     size_t len = 0;
-    optparse_t *p;
+    struct context *ctx = xzmalloc (sizeof (*ctx));
+    double killer_timeout;
 
     log_init ("flux-start");
 
-    p = optparse_create ("flux-start");
-    if (optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS)
+    ctx->opts = optparse_create ("flux-start");
+    if (optparse_add_option_table (ctx->opts, opts) != OPTPARSE_SUCCESS)
         msg_exit ("optparse_add_option_table");
-    if (optparse_set (p, OPTPARSE_USAGE, usage_msg) != OPTPARSE_SUCCESS)
+    if (optparse_set (ctx->opts, OPTPARSE_USAGE, usage_msg) != OPTPARSE_SUCCESS)
         msg_exit ("optparse_set usage");
-    if ((optind = optparse_parse_args (p, argc, argv)) < 0)
+    if ((optind = optparse_parse_args (ctx->opts, argc, argv)) < 0)
         exit (1);
     if (optind < argc) {
         if ((e = argz_create (argv + optind, &command, &len)) != 0)
             errn_exit (e, "argz_creawte");
         argz_stringify (command, len, ' ');
     }
+    remove_corelimit ();
 
-    /* Allow unlimited core dumps.
-     */
-    struct rlimit rl;
-    rl.rlim_cur = RLIM_INFINITY;
-    rl.rlim_max = RLIM_INFINITY;
-    if (setrlimit (RLIMIT_CORE, &rl) < 0)
-        err ("setrlimit: could not remove core file size limit");
+    if (!(ctx->broker_path = getenv ("FLUX_BROKER_PATH")))
+        msg_exit ("FLUX_BROKER_PATH is not set");
 
-    status = start_direct (p, command);
+    ctx->size = optparse_get_int (ctx->opts, "size", default_size);
+    if (!(ctx->reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
+        err_exit ("flux_reactor_create");
+    killer_timeout = strtod (optparse_get_str (ctx->opts, "killer-timeout",
+                                               default_killer_timeout), NULL);
+    if (killer_timeout < 0.)
+        msg_exit ("--killer-timeout argument must be >= 0");
+    if (!(ctx->timer = flux_timer_watcher_create (ctx->reactor,
+                                                  killer_timeout, 0.,
+                                                  killer, ctx)))
+        err_exit ("flux_timer_watcher_create");
+    if (!(ctx->sm = subprocess_manager_create ()))
+        err_exit ("subprocess_manager_create");
+    if (subprocess_manager_set (ctx->sm, SM_REACTOR, ctx->reactor) < 0)
+        err_exit ("subprocess_manager_set reactor");
+    ctx->session_id = xasprintf ("%d", getpid ());
+    ctx->socket_dir = create_socket_dir (ctx);
 
+    status = start_direct (ctx, command);
+
+    optparse_destroy (ctx->opts);
+    flux_watcher_destroy (ctx->timer);
+    flux_reactor_destroy (ctx->reactor);
+    subprocess_manager_destroy (ctx->sm);
+    free (ctx->session_id);
+    free (ctx->socket_dir);
     if (command)
         free (command);
-    optparse_destroy (p);
+
     log_fini ();
 
     return status;
 }
 
-void alarm_handler (int a)
+void remove_corelimit (void)
 {
+    struct rlimit rl;
+    rl.rlim_cur = RLIM_INFINITY;
+    rl.rlim_max = RLIM_INFINITY;
+    if (setrlimit (RLIMIT_CORE, &rl) < 0)
+        err ("setrlimit: could not remove core file size limit");
+}
+
+void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+{
+    struct context *ctx = arg;
     struct subprocess *p;
-    p = subprocess_manager_first (sm);
+
+    p = subprocess_manager_first (ctx->sm);
     while (p) {
         if (subprocess_pid (p))
             (void)subprocess_kill (p, SIGKILL);
-        p = subprocess_manager_next (sm);
-    }
-}
-
-void child_killer_arm (void)
-{
-    static bool armed = false;
-
-    if (!armed) {
-        struct sigaction sa;
-        memset (&sa, 0, sizeof (sa));
-        sa.sa_handler = alarm_handler;
-        sigaction (SIGALRM, &sa, NULL);
-        alarm (child_wait_seconds);
-        armed = true;
+        p = subprocess_manager_next (ctx->sm);
     }
 }
 
 static int child_report (struct subprocess *p, void *arg)
 {
-    int *exit_rc = arg;
     char *rankstr = subprocess_get_context (p, "rank");
-    int rank = strtol (rankstr, NULL, 10);
-    int status = subprocess_exit_status (p);
     pid_t pid = subprocess_pid (p);
-    int rc = 0;
+    int sig;
 
-    if (WIFEXITED (status)) {
-        rc = WEXITSTATUS (status);
+    if ((sig = subprocess_stopped (p)))
+        msg ("%s (pid %d) %s", rankstr, pid, strsignal (sig));
+    else if ((subprocess_continued (p)))
+        msg ("%s (pid %d) %s", rankstr, pid, strsignal (SIGCONT));
+    else if ((sig = subprocess_signaled (p)))
+        msg ("%s (pid %d) %s", rankstr, pid, strsignal (sig));
+    else if (subprocess_exited (p)) {
+        int rc = subprocess_exit_code (p);
         if (rc != 0)
-            msg ("%d (pid %d) exited with rc=%d", rank, pid, rc);
-    } else if (WIFSIGNALED (status)) {
-        int sig = WTERMSIG (status);
-        /*
-         *  Set exit code to 128 + signal number, but ignore SIGKILL
-         *   because that signal is used by flux-start itself, and
-         *   may not indicate failure:
-         */
-        if (sig != 9)
-            rc = 128 + sig;
-        msg ("%d (pid %d) %s", rank, pid, strsignal (sig));
-    } else {
-        msg ("%d (pid %d) wait status=%d", rank, pid, status);
-        if (status < 256)
-            rc = status;
-    }
+            msg ("%s (pid %d) exited with rc=%d", rankstr, pid, rc);
+    } else
+        msg ("%s (pid %d) status=%d", rankstr, pid, subprocess_exit_status (p));
+    return 0;
+}
+
+static int child_exit (struct subprocess *p, void *arg)
+{
+    struct context *ctx = arg;
+    char *rankstr = subprocess_get_context (p, "rank");
+    int rc = subprocess_exit_code (p);
+
+    if (ctx->exit_rc < rc)
+        ctx->exit_rc = rc;
+    if (--ctx->count > 0)
+        flux_watcher_start (ctx->timer);
+    else
+        flux_watcher_stop (ctx->timer);
     subprocess_destroy (p);
-    child_killer_arm ();
-    if (*exit_rc < rc)
-        *exit_rc = rc;
     free (rankstr);
     return 0;
 }
@@ -201,11 +232,11 @@ char *args_str (struct subprocess *p)
     return az;
 }
 
-char *create_socket_dir (const char *sid)
+char *create_socket_dir (struct context *ctx)
 {
     char *tmpdir = getenv ("TMPDIR");
     char *sockdir = xasprintf ("%s/flux-%s-XXXXXX",
-                               tmpdir ? tmpdir : "/tmp", sid);
+                               tmpdir ? tmpdir : "/tmp", ctx->session_id);
 
     if (!mkdtemp (sockdir))
         err_exit ("mkdtemp %s", sockdir);
@@ -213,60 +244,45 @@ char *create_socket_dir (const char *sid)
     return sockdir;
 }
 
-int start_direct (optparse_t *opts, const char *cmd)
+int start_direct (struct context *ctx, const char *cmd)
 {
-    int size = optparse_get_int (opts, "size", default_size);
-    char *broker_path = getenv ("FLUX_BROKER_PATH");
-    char *sid = xasprintf ("%d", getpid ());
-    char *sockdir = create_socket_dir (sid);
     struct subprocess *p;
-    int rank, rc = 0;
+    int rank;
 
-    if (!broker_path)
-        msg_exit ("FLUX_BROKER_PATH is not set");
-
-    if (!(sm = subprocess_manager_create ()))
-        err_exit ("subprocess_manager_create");
-
-    for (rank = 0; rank < size; rank++) {
-        if (!(p = subprocess_create (sm)))
+    for (rank = 0; rank < ctx->size; rank++) {
+        if (!(p = subprocess_create (ctx->sm)))
             err_exit ("subprocess_create");
         subprocess_set_context (p, "rank", xasprintf ("%d", rank));
-        subprocess_set_callback (p, child_report, &rc);
+        subprocess_set_callback (p, child_exit, ctx);
+        subprocess_set_status_callback (p, child_report, ctx);
 
-        add_arg (p, "%s", broker_path);
+        add_arg (p, "%s", ctx->broker_path);
         add_arg (p, "--boot-method=LOCAL");
-        add_arg (p, "--size=%d", size);
+        add_arg (p, "--size=%d", ctx->size);
         add_arg (p, "--rank=%d", rank);
-        add_arg (p, "--sid=%s", sid);
-        add_arg (p, "--socket-directory=%s", sockdir);
-        add_args_list (p, opts, "broker-opts");
+        add_arg (p, "--sid=%s", ctx->session_id);
+        add_arg (p, "--socket-directory=%s", ctx->socket_dir);
+        add_args_list (p, ctx->opts, "broker-opts");
         if (rank == 0 && cmd)
             add_arg (p, "%s", cmd); /* must be last */
-
-        if (optparse_hasopt (opts, "verbose")) {
+        subprocess_set_environ (p, environ);
+        if (optparse_hasopt (ctx->opts, "verbose")) {
             char *s = args_str (p);
             msg ("%d: %s", rank, s);
             free (s);
         }
-        subprocess_set_environ (p, environ);
-        if (!optparse_hasopt (opts, "noexec")) {
-            if (subprocess_run (p) < 0)
-                err_exit ("subprocess_run");
-        }
+        if (optparse_hasopt (ctx->opts, "noexec")) {
+            char *rankstr = subprocess_get_context (p, "rank");
+            free (rankstr);
+            subprocess_destroy (p);
+        } else if (subprocess_run (p) < 0)
+            err_exit ("subprocess_run");
+        ctx->count++;
     }
+    if (flux_reactor_run (ctx->reactor, 0) < 0)
+        err_exit ("flux_reactor_run");
 
-    /* N.B. reap_all can be interrupted by SIGALRM, so keep calling
-     * it until there are no more subprocesses o/w destroy will assert.
-     */
-    while (subprocess_manager_first (sm))
-        subprocess_manager_reap_all (sm);
-
-    subprocess_manager_destroy (sm);
-
-    free (sid);
-    free (sockdir);
-    return (rc);
+    return (ctx->exit_rc);
 }
 
 /*

@@ -30,8 +30,6 @@
 #include <czmq.h>
 #include <flux/core.h>
 
-#include "src/modules/libzio/zio.h"
-
 #include "tap.h"
 #include "subprocess.h"
 
@@ -39,20 +37,21 @@ extern char **environ;
 
 static int exit_handler (struct subprocess *p, void *arg)
 {
-    ok (p != NULL, "exit_handler: valid subprocess");
-    ok (arg != NULL, "exit_handler: arg is expected");
     ok (subprocess_exited (p), "exit_handler: subprocess exited");
     ok (subprocess_exit_code (p) == 0, "exit_handler: subprocess exited normally");
     subprocess_destroy (p);
     return (0);
 }
 
-int io_cb (struct subprocess *p, const char *json_str)
+int fdcount (void)
 {
-    ok (p != NULL, "io_cb: valid subprocess");
-    ok (json_str != NULL, "io_cb: valid output");
-    diag ("%s", json_str);
-    return (0);
+    int fd, fdlimit = sysconf (_SC_OPEN_MAX);
+    int count = 0;
+    for (fd = 0; fd < fdlimit; fd++) {
+        if (fcntl (fd, F_GETFD) != -1)
+            count++;
+    }
+    return count;
 }
 
 int main (int ac, char **av)
@@ -61,10 +60,13 @@ int main (int ac, char **av)
     struct subprocess_manager *sm;
     struct subprocess *p;
     flux_reactor_t *r;
-
-    zsys_handler_set (NULL);
+    int parent_fd, child_fd;
+    int start_fdcount, end_fdcount;
 
     plan (NO_PLAN);
+
+    start_fdcount = fdcount ();
+    diag ("initial fd count %d", start_fdcount);
 
     if (!(sm = subprocess_manager_create ()))
         BAIL_OUT ("Failed to create subprocess manager");
@@ -73,29 +75,45 @@ int main (int ac, char **av)
     if (!(r = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         BAIL_OUT ("Failed to create a reactor");
 
+    errno = 0;
     rc = subprocess_manager_set (sm, SM_REACTOR, r);
     ok (rc == 0, "set subprocess manager reactor (rc=%d, %s)", rc, strerror (errno));
 
     if (!(p = subprocess_create (sm)))
         BAIL_OUT ("Failed to create a subprocess object");
-    ok (subprocess_set_callback (p, exit_handler, r) >= 0,
+    ok (subprocess_set_callback (p, exit_handler, NULL) >= 0,
         "set subprocess exit handler");
-    ok (subprocess_set_io_callback (p, io_cb) >= 0,
-        "set subprocess io callback");
 
-    ok (subprocess_set_command (p, "sleep 0.5 && /bin/echo -n 'hello\nworld\n'") >= 0,
-        "set subprocess command");
+    child_fd = -1;
+    ok ((parent_fd = subprocess_socketpair (p, &child_fd)) >= 0
+        && child_fd >= 0,
+        "subprocess_socketpair returned valid fd for parent + child");
+    diag ("socketpair parent %d child %d", parent_fd, child_fd);
     ok (subprocess_set_environ (p, environ) >= 0,
         "set subprocess environ");
+    ok (subprocess_setenvf (p, "FD", 1, "%d", child_fd) >= 0,
+        "set FD in subprocess environ");
+    // on some shells $FD must be a single digit
+    ok (subprocess_set_command (p, "bash -c \"cat <&$FD\"") >= 0,
+        "set subprocess command");
 
     ok (subprocess_fork (p) >= 0, "subprocess_fork");
     ok (subprocess_exec (p) >= 0, "subprocess_exec");
+
+    ok (write (parent_fd, "# hello world\n", 14) == 14,
+        "wrote to parent fd");
+    close (parent_fd);
 
     ok (flux_reactor_run (r, 0) == 0,
         "reactor returned normally");
 
     subprocess_manager_destroy (sm);
     flux_reactor_destroy (r);
+
+    end_fdcount = fdcount ();
+    diag ("final fd count %d", end_fdcount);
+    ok (start_fdcount == end_fdcount,
+        "no file descriptors were leaked");
 
     done_testing ();
 }

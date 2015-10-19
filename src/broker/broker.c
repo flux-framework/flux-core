@@ -86,7 +86,7 @@ typedef struct {
      */
     flux_t h;
     flux_reactor_t *reactor;
-    flux_watcher_t *signalfd_w;
+    zlist_t *sigwatchers;
 
     /* Sockets.
      */
@@ -109,7 +109,6 @@ typedef struct {
     bool quiet;
     pid_t pid;
     char *proctitle;
-    sigset_t default_sigset;
     flux_conf_t cf;
     int event_seq;
     bool event_active;          /* primary event source is active */
@@ -152,10 +151,11 @@ static void module_cb (module_t *p, void *arg);
 static void rmmod_cb (module_t *p, void *arg);
 static void hello_update_cb (hello_t *h, void *arg);
 static void shutdown_cb (shutdown_t *s, void *arg);
-static void signalfd_cb (flux_reactor_t *r, flux_watcher_t *w,
-                         int revents, void *arg);
-
-static void broker_init_signalfd (ctx_t *ctx);
+static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
+                       int revents, void *arg);
+static void broker_block_signals (void);
+static void broker_handle_signals (ctx_t *ctx, zlist_t *sigwatchers);
+static void broker_unhandle_signals (zlist_t *sigwatchers);
 
 static void broker_add_services (ctx_t *ctx);
 
@@ -246,7 +246,7 @@ int main (int argc, char *argv[])
 {
     int c;
     ctx_t ctx;
-    zlist_t *modules, *modopts;
+    zlist_t *modules, *modopts, *sigwatchers;
     zhash_t *modexclude;
     char *modpath;
     const char *confdir;
@@ -270,6 +270,8 @@ int main (int argc, char *argv[])
     if (!(modopts = zlist_new ()))
         oom ();
     zlist_autofree (modopts);
+    if (!(sigwatchers = zlist_new ()))
+        oom ();
 
     ctx.rank = FLUX_NODEID_ANY;
     ctx.modhash = modhash_create ();
@@ -449,27 +451,33 @@ int main (int argc, char *argv[])
     }
     flux_conf_itr_destroy (itr);
 
+    broker_block_signals ();
+
     /* Initailize zeromq context
      */
+    zsys_handler_set (NULL);
     ctx.zctx = zctx_new ();
     if (!ctx.zctx)
         err_exit ("zctx_new");
     zctx_set_linger (ctx.zctx, 5);
 
+    /* Set up the flux reactor.
+     */
+    if (!(ctx.reactor = flux_reactor_create (SIGCHLD)))
+        err_exit ("flux_reactor_create");
+
     /* Set up flux handle.
-     * The handle is used for simple purposes such as logging,
-     * and also provides the main reactor loop for the broker.
+     * The handle is used for simple purposes such as logging.
      */
     if (!(ctx.h = flux_handle_create (&ctx, &broker_handle_ops, 0)))
         err_exit ("flux_handle_create");
-    if (!(ctx.reactor = flux_get_reactor (ctx.h)))
-        err_exit ("flux_get_reactor");
+    flux_set_reactor (ctx.h, ctx.reactor);
 
-    subprocess_manager_set (ctx.sm, SM_FLUX, ctx.h);
+    subprocess_manager_set (ctx.sm, SM_REACTOR, ctx.reactor);
 
     /* Prepare signal handling
      */
-    broker_init_signalfd (&ctx);
+    broker_handle_signals (&ctx, sigwatchers);
 
     /* Initialize security context.
      */
@@ -686,6 +694,9 @@ int main (int argc, char *argv[])
         msg ("unloading modules");
     modhash_destroy (ctx.modhash);
 
+    broker_unhandle_signals (sigwatchers);
+    zlist_destroy (&sigwatchers);
+
     if (ctx.verbose)
         msg ("cleaning up");
     if (ctx.sec)
@@ -699,6 +710,7 @@ int main (int argc, char *argv[])
     hello_destroy (ctx.hello);
     attr_destroy (ctx.attrs);
     flux_close (ctx.h);
+    flux_reactor_destroy (ctx.reactor);
     log_destroy (ctx.log);
     if (log_f)
         fclose (log_f);
@@ -769,16 +781,13 @@ static void update_pidfile (ctx_t *ctx)
  */
 static int init_shell_exit_handler (struct subprocess *p, void *arg)
 {
-    int rc;
+    int rc = subprocess_exit_code (p);
     ctx_t *ctx = (ctx_t *) arg;
     assert (ctx != NULL);
 
-    if (subprocess_signaled (p))
-        rc = 128 + subprocess_signaled (p);
-    else
-        rc = subprocess_exit_code (p);
     shutdown_arm (ctx->shutdown, ctx->shutdown_grace, rc,
                   "%s", subprocess_state_string (p));
+    subprocess_destroy (p);
     return 0;
 }
 
@@ -1293,32 +1302,38 @@ next:
     zhash_destroy (&mods);
 }
 
-static void broker_init_signalfd (ctx_t *ctx)
+static void broker_block_signals (void)
 {
     sigset_t sigmask;
-    int fd;
-
-    zsys_handler_set (NULL);
     sigemptyset(&sigmask);
     sigfillset(&sigmask);
-    if (sigprocmask (SIG_SETMASK, &sigmask, &ctx->default_sigset) < 0)
+    if (sigprocmask (SIG_SETMASK, &sigmask, NULL) < 0)
         err_exit ("sigprocmask");
-    sigemptyset(&sigmask);
-    sigaddset(&sigmask, SIGHUP);
-    sigaddset(&sigmask, SIGINT);
-    sigaddset(&sigmask, SIGQUIT);
-    sigaddset(&sigmask, SIGTERM);
-    sigaddset(&sigmask, SIGSEGV);
-    sigaddset(&sigmask, SIGFPE);
-    sigaddset(&sigmask, SIGCHLD);
+}
 
-    if ((fd = signalfd(-1, &sigmask, SFD_NONBLOCK | SFD_CLOEXEC)) < 0)
-        err_exit ("signalfd");
-    if (!(ctx->signalfd_w = flux_fd_watcher_create (ctx->reactor,
-                                                    fd, FLUX_POLLIN,
-                                                    signalfd_cb, ctx)))
-        err_exit ("flux_fd_watcher_create");
-    flux_watcher_start (ctx->signalfd_w);
+static void broker_handle_signals (ctx_t *ctx, zlist_t *sigwatchers)
+{
+    int i, sigs[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGSEGV, SIGFPE };
+    flux_watcher_t *w;
+
+    for (i = 0; i < sizeof (sigs) / sizeof (sigs[0]); i++) {
+        w = flux_signal_watcher_create (ctx->reactor, sigs[i], signal_cb, ctx);
+        if (!w)
+            err_exit ("flux_signal_watcher_create");
+        if (zlist_push (sigwatchers, w) < 0)
+            oom ();
+        flux_watcher_start (w);
+    }
+}
+
+static void broker_unhandle_signals (zlist_t *sigwatchers)
+{
+    flux_watcher_t *w;
+
+    while ((w = zlist_pop (sigwatchers))) {
+        flux_watcher_stop (w);
+        flux_watcher_destroy (w);
+    }
 }
 
 /**
@@ -2515,26 +2530,14 @@ static void heartbeat_cb (heartbeat_t *h, void *arg)
         (void) overlay_keepalive_parent (ctx->overlay);
 }
 
-static void signalfd_cb (flux_reactor_t *r, flux_watcher_t *w,
+static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                          int revents, void *arg)
 {
-    int fd = flux_fd_watcher_get_fd (w);
     ctx_t *ctx = arg;
-    struct signalfd_siginfo fdsi;
-    ssize_t n;
+    int signum = flux_signal_watcher_get_signum (w);
 
-    if ((n = read (fd, &fdsi, sizeof (fdsi))) < 0) {
-        if (errno != EWOULDBLOCK)
-            err_exit ("read");
-    } else if (n == sizeof (fdsi)) {
-        if (fdsi.ssi_signo == SIGCHLD)
-            subprocess_manager_reap_all (ctx->sm);
-        else {
-            shutdown_arm (ctx->shutdown, ctx->shutdown_grace, 0,
-                          "signal %d (%s) %d",
-                          fdsi.ssi_signo, strsignal (fdsi.ssi_signo));
-        }
-    }
+    shutdown_arm (ctx->shutdown, ctx->shutdown_grace, 0,
+                  "signal %d (%s) %d", signum, strsignal (signum));
 }
 
 static int broker_request_sendmsg (ctx_t *ctx, zmsg_t **zmsg)

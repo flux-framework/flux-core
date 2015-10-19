@@ -276,3 +276,12 @@ wildcards
 addvec
 delvec
 msghandler
+SIGCHLD
+signum
+pid
+rpid
+rstatus
+waitpid
+rstat
+prev
+nlink
