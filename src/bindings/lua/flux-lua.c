@@ -1547,6 +1547,102 @@ static int l_fdwatcher_add (lua_State *L)
     return (1);
 }
 
+void push_stat_table (lua_State *L, struct stat *s)
+{
+    int t;
+    lua_newtable (L);
+    t = lua_gettop (L);
+    lua_pushinteger (L, s->st_dev);
+    lua_setfield (L, t, "st_dev");
+    lua_pushinteger (L, s->st_ino);
+    lua_setfield (L, t, "st_ino");
+    lua_pushinteger (L, s->st_mode);
+    lua_setfield (L, t, "st_mode");
+    lua_pushinteger (L, s->st_nlink);
+    lua_setfield (L, t, "st_nlink");
+    lua_pushinteger (L, s->st_uid);
+    lua_setfield (L, t, "st_uid");
+    lua_pushinteger (L, s->st_gid);
+    lua_setfield (L, t, "st_gid");
+    lua_pushinteger (L, s->st_size);
+    lua_setfield (L, t, "st_size");
+    lua_pushinteger (L, s->st_atime);
+    lua_setfield (L, t, "st_atime");
+    lua_pushinteger (L, s->st_mtime);
+    lua_setfield (L, t, "st_mtime");
+    lua_pushinteger (L, s->st_ctime);
+    lua_setfield (L, t, "st_ctime");
+    lua_pushinteger (L, s->st_blksize);
+    lua_setfield (L, t, "st_blksize");
+    lua_pushinteger (L, s->st_blocks);
+    lua_setfield (L, t, "st_blocks");
+}
+
+void stat_watcher_cb (flux_reactor_t *r, flux_watcher_t *w,
+                      int revents, void *arg)
+{
+    struct stat st, prev;
+    int rc, t;
+    struct l_flux_ref *sw = arg;
+    lua_State *L = sw->L;
+
+    flux_stat_watcher_get_rstat (w, &st, &prev);
+
+    l_flux_ref_gettable (sw, "watcher");
+    t = lua_gettop (L);
+
+    lua_getfield (L, t, "handler");
+    lua_getfield (L, t, "userdata");
+    push_stat_table (L, &st);
+    push_stat_table (L, &prev);
+
+    if ((rc = lua_pcall (L, 3, 1, 0))) {
+        luaL_error (L, "stat_watcher: pcall: %s", lua_tostring (L, -1));
+        return;
+    }
+}
+
+static int l_stat_watcher_add (lua_State *L)
+{
+    flux_watcher_t *w;
+    struct l_flux_ref *sw = NULL;
+    const char *path;
+    double interval = 0.0;
+    flux_t f = lua_get_flux (L, 1);
+
+    if (!lua_istable (L, 2))
+        return lua_pusherror (L, "Expected table as 2nd argument");
+
+    lua_getfield (L, 2, "path");
+    if (lua_isnil (L, -1))
+        return lua_pusherror (L, "Mandatory argument 'path' missing");
+    path = lua_tostring (L, -1);
+    lua_pop (L, 1);
+
+    lua_getfield (L, 2, "interval");
+    if (lua_isnumber (L, -1))
+        interval = lua_tonumber (L, -1);
+    lua_pop (L, 1);
+
+    lua_getfield (L, 2, "handler");
+    if (lua_isnil (L, -1))
+        return lua_pusherror (L, "Mandatory table argument 'handler' missing");
+    lua_pop (L, 1);
+
+    sw = l_flux_ref_create (L, f, 2, "watcher");
+    w = flux_stat_watcher_create (flux_get_reactor (f), path, interval,
+                                  stat_watcher_cb, (void *) sw);
+    sw->arg = w;
+    if (w == NULL) {
+        l_flux_ref_destroy (sw, "watcher");
+        return lua_pusherror (L, "flux_stat_watcher_create: %s",
+                                 strerror (errno));
+    }
+
+    flux_watcher_start (w);
+    return (1);
+}
+
 static int l_watcher_destroy (lua_State *L)
 {
     struct l_flux_ref *fw = luaL_checkudata (L, 1, "FLUX.watcher");
@@ -2073,6 +2169,7 @@ static const struct luaL_Reg flux_methods [] = {
     { "kvswatcher",      l_kvswatcher_add    },
     { "iowatcher",       l_iowatcher_add     },
     { "fdwatcher",       l_fdwatcher_add     },
+    { "statwatcher",     l_stat_watcher_add  },
     { "timer",           l_timeout_handler_add },
     { "sighandler",      l_signal_handler_add },
     { "reactor",         l_flux_reactor_start },
