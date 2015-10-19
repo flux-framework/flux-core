@@ -761,7 +761,8 @@ static void stat_cb (struct ev_loop *loop, ev_stat *sw, int revents)
         w->fn (ev_userdata (loop), w, libev_to_events (revents), w->arg);
 }
 
-flux_watcher_t *flux_stat_watcher_create (flux_reactor_t *r, const char *path,
+flux_watcher_t *flux_stat_watcher_create (flux_reactor_t *r,
+                                          const char *path, double interval,
                                           flux_watcher_f cb, void *arg)
 {
     struct watcher_ops ops = {
@@ -771,7 +772,7 @@ flux_watcher_t *flux_stat_watcher_create (flux_reactor_t *r, const char *path,
     };
     flux_watcher_t *w;
     ev_stat *sw = xzmalloc (sizeof (*sw));
-    ev_stat_init (sw, stat_cb, path, 0);
+    ev_stat_init (sw, stat_cb, path, interval);
     w = flux_watcher_create (r, sw, ops, STAT_SIG, cb, arg);
     sw->data = w;
 

@@ -115,8 +115,9 @@ int flux_signal_watcher_get_signum (flux_watcher_t *w);
 /* stat
  */
 
-flux_watcher_t *flux_stat_watcher_create (flux_reactor_t *r, const char *path,
-                                            flux_watcher_f cb, void *arg);
+flux_watcher_t *flux_stat_watcher_create (flux_reactor_t *r,
+                                          const char *path, double interval,
+                                          flux_watcher_f cb, void *arg);
 void flux_stat_watcher_get_rstat (flux_watcher_t *w,
                                   struct stat *stat, struct stat *prev);
 

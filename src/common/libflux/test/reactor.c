@@ -487,7 +487,7 @@ static void test_stat (flux_reactor_t *reactor)
 
     ok (ctx.fd >= 0,
         "created temporary file");
-    w = flux_stat_watcher_create (reactor, ctx.path, stat_cb, NULL);
+    w = flux_stat_watcher_create (reactor, ctx.path, 0., stat_cb, NULL);
     ok (w != NULL,
         "created stat watcher");
     flux_watcher_start (w);
