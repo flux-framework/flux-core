@@ -100,6 +100,8 @@ static int simple_init (void *impl, int *spawned)
                 &s->kvsname_max, &s->keylen_max, &s->vallen_max) != 3)
         goto done;
     s->initialized = 1;
+    if (spawned)
+        *spawned = PMI_FALSE;
     result = PMI_SUCCESS;
 done:
     return result;

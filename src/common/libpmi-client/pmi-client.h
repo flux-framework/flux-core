@@ -47,6 +47,13 @@
 #define PMI_ERR_INVALID_SIZE        13
 #endif
 
+#ifndef PMI_FALSE
+#define PMI_FALSE                   0
+#endif
+#ifndef PMI_TRUE
+#define PMI_TRUE                    1
+#endif
+
 typedef void (*pmi_free_f)(void *impl);
 
 typedef struct pmi_struct pmi_t;
