@@ -18,19 +18,23 @@ SYNOPSIS
 
  flux_watcher_t *flux_stat_watcher_create (flux_reactor_t *r,
                                            const char *path,
+                                           double interval,
                                            flux_watcher_f callback,
                                            void *arg);
 
- void flux_signal_watcher_get_rstat (flux_watcher_t *w,
-                                     struct stat *stat,
-                                     struct stat *prev);
+ void flux_stat_watcher_get_rstat (flux_watcher_t *w,
+                                   struct stat *stat,
+                                   struct stat *prev);
 
 DESCRIPTION
 -----------
 
 `flux_stat_watcher_create()` creates a reactor watcher that
 monitors for changes in the status of the file system object
-represented by _path_.
+represented by _path_.  If the file system object exists,
+inotify(2) is used, if available; otherwise the reactor polls
+the file every _interval_ seconds.  A value of zero selects a
+conservative default (currently five seconds).
 
 The callback _revents_ argument should be ignored.
 

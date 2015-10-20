@@ -285,3 +285,4 @@ waitpid
 rstat
 prev
 nlink
+inotify
