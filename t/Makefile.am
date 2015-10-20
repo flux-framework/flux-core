@@ -41,15 +41,18 @@ TESTS = \
 	t2002-pmi.t \
 	t2003-recurse.t \
 	t2004-hydra.t \
-	t3000-mpi-basic.t
+	t3000-mpi-basic.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
 	lua/t0003-events.t \
 	lua/t0007-alarm.t \
+	lua/t0008-mrpc.t \
 	lua/t1000-reactor.t \
 	lua/t1001-timeouts.t \
 	lua/t1002-kvs.t \
-	lua/t1003-iowatcher.t
+	lua/t1003-iowatcher.t \
+	lua/t1004-statwatcher.t \
+	lua/t1005-fdwatcher.t
 
 EXTRA_DIST= \
 	$(check_SCRIPTS) \
@@ -89,10 +92,13 @@ check_SCRIPTS = \
 	lua/t0002-rpc.t \
 	lua/t0003-events.t \
 	lua/t0007-alarm.t \
+	lua/t0008-mrpc.t \
 	lua/t1000-reactor.t \
 	lua/t1001-timeouts.t \
 	lua/t1002-kvs.t \
-	lua/t1003-iowatcher.t
+	lua/t1003-iowatcher.t \
+	lua/t1004-statwatcher.t \
+	lua/t1005-fdwatcher.t
 
 check_PROGRAMS = \
 	loop/handle.t \
