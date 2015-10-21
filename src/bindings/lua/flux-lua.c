@@ -266,6 +266,70 @@ static int l_flux_kvsdir_new (lua_State *L)
     return lua_push_kvsdir (L, dir);
 }
 
+static int l_flux_kvs_symlink (lua_State *L)
+{
+    flux_t f;
+    const char *key;
+    const char *target;
+
+    if (!(f = lua_get_flux (L, 1)))
+        return lua_pusherror (L, "flux handle expected");
+    if (!(key = lua_tostring (L, 2)))
+        return lua_pusherror (L, "key expected in arg #2");
+    if (!(target = lua_tostring (L, 3)))
+        return lua_pusherror (L, "target expected in arg #3");
+
+    if (kvs_symlink (f, key, target) < 0)
+        return lua_pusherror (L, strerror (errno));
+    lua_pushboolean (L, true);
+    return (1);
+}
+
+static int l_flux_kvs_type (lua_State *L)
+{
+    flux_t f;
+    const char *key;
+    char *val;
+    kvsdir_t *d;
+    if (!(f = lua_get_flux (L, 1)))
+        return lua_pusherror (L, "flux handle expected");
+    if (!(key = lua_tostring (L, 2)))
+        return lua_pusherror (L, "key expected in arg #2");
+
+    if (kvs_get_symlink (f, key, &val) == 0) {
+        lua_pushstring (L, "symlink");
+        lua_pushstring (L, val);
+        free (val);
+        return (2);
+    }
+    if (kvs_get_dir (f, &d, key) == 0) {
+        lua_pushstring (L, "dir");
+        lua_push_kvsdir (L, d);
+        return (2);
+    }
+    if (kvs_get (f, key, &val) == 0) {
+        json_object *o;
+        lua_pushstring (L, "file");
+        if (val && (o = json_tokener_parse (val))) {
+            json_object_to_lua (L, o);
+            json_object_put (o);
+        }
+        else
+            lua_pushnil (L);
+        return (2);
+    }
+    return lua_pusherror (L, "key does not exist");
+}
+
+int l_flux_kvs_commit (lua_State *L)
+{
+    flux_t f = lua_get_flux (L, 1);
+    if (kvs_commit (f) < 0)
+         return lua_pusherror (L, strerror (errno));
+    lua_pushboolean (L, true);
+    return (1);
+}
+
 #if 0
 static int l_flux_barrier (lua_State *L)
 {
@@ -1761,6 +1825,9 @@ static const struct luaL_Reg flux_methods [] = {
     { "__gc",            l_flux_destroy     },
     { "__index",         l_flux_index       },
     { "kvsdir",          l_flux_kvsdir_new  },
+    { "kvs_symlink",     l_flux_kvs_symlink },
+    { "kvs_type",        l_flux_kvs_type    },
+    { "kvs_commit",      l_flux_kvs_commit  },
 //    { "barrier",         l_flux_barrier     },
     { "send",            l_flux_send        },
     { "recv",            l_flux_recv        },
