@@ -12,6 +12,10 @@ local data = { "Hello", "Goodbye" }
 local flux = require_ok ('flux')
 local posix = require_ok ('flux.posix')
 
+if not posix.pipe then
+    skip_all ("luaposix too old, no pipe(2) call found")
+end
+
 local f, err = flux.new()
 type_ok (f, 'userdata', "create new flux handle")
 is (err, nil, "error is nil")
