@@ -84,8 +84,12 @@ end
 --
 function fluxTest:start_session (t)
     -- If fluxometer session is already active just return:
-    if os.getenv ("FLUXOMETER_ACTIVE") then
-        cleanup (function () os.execute ("rm "..self.log_file) end)
+    if self.flux_active then
+        cleanup (function ()
+                     posix.chdir (self.src_dir)
+                     os.execute ("rm "..self.log_file)
+                     os.execute ("rm -rf "..self.trash_dir)
+                 end)
         return
     end
     posix.setenv ("FLUXOMETER_ACTIVE", "t")
@@ -104,6 +108,10 @@ function fluxTest:start_session (t)
 
     table.insert (cmd, self.arg0)
 
+    -- Adjust package.path so we find fluxometer.lua
+    local p = self.src_dir..'/?.lua;'..package.path
+    posix.setenv ("LUA_PATH", p)
+
     -- reexec script under flux-start if necessary:
     --  (does not return)
     local r, err = posix.exec (unpack (cmd))
@@ -120,6 +128,7 @@ function fluxTest:die (...)
     bail_out (self.prog..": "..string.format (...))
 end
 
+
 ---
 --   Create fluxometer test object
 --
@@ -127,15 +136,22 @@ function fluxTest.init (...)
     local debug = require 'debug'
     local test = setmetatable ({}, fluxTest)
 
+    if os.getenv ("FLUXOMETER_ACTIVE") then
+        test.flux_active = true
+    end
 
     -- Get path to current test script using debug.getinfo:
-	test.arg0 = debug.getinfo (2).source:sub (2)
+    test.arg0 = debug.getinfo (2).source:sub (2)
     test.prog = test.arg0:match ("/*([^/.]+)%.")
 
-    -- If arg0 doesn't contain relative or absolute path, then assume
-    --  local directory and prepend './'
-    if not test.arg0:match ('^[/.]') then
-        test.arg0 = './'..test.arg0
+    local cwd, err = posix.getcwd ()
+    if not cwd then error (err) end
+    test.src_dir = cwd
+
+    -- If arg0 doesn't contain absolute path, then assume
+    --  local directory and prepend src_dir
+    if not test.arg0:match ('^/') then
+        test.arg0 = test.src_dir..'/'..test.arg0
     end
 
     test.log_file = "lua-"..test.prog..".broker.log"
@@ -149,6 +165,13 @@ function fluxTest.init (...)
         test.flux_path = path
     else
         test:die ("Failed to find flux path")
+    end
+
+    test.trash_dir = "trash-directory.lua-"..test.prog
+    os.execute ("rm -rf "..test.trash_dir)
+    posix.mkdir (test.trash_dir)
+    if test.flux_active then
+        posix.chdir (test.trash_dir)
     end
 
     return test

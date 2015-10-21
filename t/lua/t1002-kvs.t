@@ -48,6 +48,66 @@ kvsdir_test (dir, key, "0",   "string 0 not converted to numeric")
 kvsdir_test (dir, key, "0x1", "string 0x1 not converted to numeric")
 kvsdir_test (dir, key, "00",  "string 00 not converted to numeric")
 
+-- low-level kvs_put testing
+local tests = {
+ { val = "foo", msg = "kvs_put: string" },
+ { val = 42,    msg = "kvs_put: numeric"},
+ { val = true,  msg = "kvs_put: true" },
+ { val = false, msg = "kvs_put: false" },
+ { val = { x = 1, y = 2 }, msg = "kvs_put: a table" },
+ { val = { 1, 2, 3, 4, 5 }, msg = "kvs_put: an array" },
+}
+
+for _, t in pairs(tests) do
+    ok (f:kvs_put (key, t.val),  t.msg)
+    f:kvs_commit()
+    local v = dir[key]
+    is (type (v), type (t.val), t.msg ..": type match")
+    if type (t.val) == 'table' then
+        is_deeply (v, t.val, t.msg .. " table values match")
+    else
+        is (v, t.val, t.msg .. " values match")
+    end
+end
+
+-- low level kvs_get testing
+for _, t in pairs (tests) do
+    local msg = "kvs_get:"..t.msg:match ("kvs_put:(.+)$")
+    ok (f:kvs_put (key, t.val),  t.msg)
+    f:kvs_commit()
+    local v, err = f:kvs_get (key)
+    ok (v ~= nil, msg)
+    is (type (v), type (t.val), msg ..": type match")
+    if type (t.val) == 'table' then
+        is_deeply (v, t.val, msg .. " table values match")
+    else
+        is (v, t.val, msg .. " values match")
+    end
+end
+
+-- symlink testing
+dir.target = "this is the target"
+ok (f:kvs_symlink ("link", "target"), "kvs_symlink ()")
+ok (f:kvs_commit (), "kvs commit")
+is (dir.link, dir.target, "symlink returns contents of target")
+local t, x = f:kvs_type ("link")
+is (t, "symlink", "type of link is "..tostring (t))
+is (x, "target", "contents of symlink is target")
+
+-- type testing
+dir ["t.foo"] = "bar"
+dir:commit()
+local t, x = f:kvs_type ("t")
+is (t, "dir", "type of t is now "..tostring (t))
+
+dir.t = "bar"
+dir:commit ()
+local t, x = f:kvs_type ("t")
+is (t, "file", "type of t is now "..tostring (t))
+
+local t, x = f:kvs_type ("missing")
+is (t, nil, "kvs_type on missing key returns error")
+is (type(x), "string", "error is a string")
 
 -- unlink testing
 dir.testkey = "foo"
@@ -85,7 +145,7 @@ local kw,err = f:kvswatcher {
             is (result, nil, "kvswatcher: initial callback has result == nil")
         else
             is (result, data.value, "kvswatcher: 2nd callback has correct result")
-            return f:reactor_stop()
+            f:reactor_stop ()
         end
     end
 }
@@ -95,9 +155,18 @@ kw.testkey = "foo"
 is (kw.testkey, 'foo', "Can set arbitrary members of kvswatcher object")
 
 os.execute (string.format ("flux kvs put %s=%s", data.key, data.value))
-local r = f:reactor()
 
-is (r, 0, "reactor exited normally")
+local to = f:timer {
+    timeout = 250,
+    oneshot = true,
+    handler = function (f, to)
+        f:reactor_stop_error ()
+    end
+}
+local r, err = f:reactor()
+
+is (r, 0, "reactor exited normally with "..(r and r or err))
+to:remove()
 
 ok (kw:remove(), "Can remove kvswatcher without error")
 
@@ -133,16 +202,21 @@ local t, err = f:timer {
 -- Excute on rank 3 via flux-exec:
 os.execute (string.format ("sleep 0.25 && flux exec -r 3 flux kvs put %s=%s",
     data.key, data.value))
-local r = f:reactor()
-is (r, 0, "reactor exited normally")
+local r, err = f:reactor()
+is (r, 0, "reactor exited normally with ".. (r and r or err))
 is (ncount, 2, "kvswatch callback invoked exactly twice")
 
 note ("Ensure kvs watch callback not invoked after kvswatcher removal")
 ok (kw:remove(), "Can remove kvswatcher without error")
 os.execute (string.format ("sleep 0.25 && flux exec -r 3 flux kvs put %s=%s",
     data.key, 'test3'))
-local r = f:reactor()
-is (r, 0, "reactor exited normally")
+
+local t, err = f:timer {
+    timeout = 500,
+    handler = function (f, to) return f:reactor_stop () end
+}
+local r, err = f:reactor()
+is (r, 0, "reactor exited normally with "..(r and r or err))
 is (ncount, 2, "kvswatch callback not invoked after kvs_unwatch")
 is (dir [data.key], "test3", "but key value has been updated")
 
