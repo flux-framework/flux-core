@@ -149,8 +149,6 @@ wreck:add_options ({
         usage = "Force number of tasks per node" },
     { name = "nnodes", char = "N", arg = "N",
         usage = "Force number of nodes" },
-    { name = 'now', char = 'i',
-        usage = "Run job immediately" },
     { name = 'pre-launch-hook', char = "P", arg = "CODE",
         usage = "execute Lua CODE before launch." },
     { name = 'detach', char = "d",
