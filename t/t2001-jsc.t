@@ -39,13 +39,7 @@ HEREDOC
 }
 
 sync_flux_jstat () {
-    sess=$1
-    while [ ! -f output.$sess ]
-    do
-        sleep 2
-    done
-    p=`cat jstat$sess.pid`
-    echo $p
+    $SHARNESS_TEST_SRCDIR/scripts/waitfile.lua 2 "" output.$1 && cat jstat$1.pid
 }
 
 overlap_flux_wreckruns () {
@@ -261,5 +255,19 @@ test_expect_success 'jstat 14: update detects bad inputs' "
     test_expect_code 42 flux jstat update 1 rdesc '{\"pdesc\": {\"nnodes\": 128, \"ntasks\": 128, \"walltime\": 2700}}' &&
     test_expect_code 42 flux jstat update 1 state-pair '{\"unknown\": {\"ostate\": 12, \"nstate\": 11}}'
 "
+
+test_expect_success 'jstat 15: jstat detects failed state' '
+    run_flux_jstat 15 &&
+    p=$( sync_flux_jstat 15 ) &&
+    test_must_fail run_timeout 4 flux wreckrun -i /bad/input -n4 -N4 hostname &&
+    cat >expected15 <<-EOF &&
+	null->null
+	null->reserved
+	reserved->starting
+	starting->failed
+	EOF
+    cp output.15 output.15.cp &&
+    test_cmp expected15 output.15.cp
+'
 
 test_done
