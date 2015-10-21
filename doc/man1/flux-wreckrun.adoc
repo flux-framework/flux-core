@@ -12,7 +12,9 @@ SYNOPSIS
 --------
 [verse]
 'flux wreckrun' [-n <ntasks>] [-N <nnodes>] [-t <tasks-per-node>]
-                [-l|--label-io] [-o|--options='OPTIONS'] ['COMMANDS'...]
+                [-l|--label-io] [-d|--detach] [-o|--options='OPTIONS']
+                [-O|--output='FILENAME'] [-E|--error='FILENAME']
+                [-i|--input='HOW'] ['COMMANDS'...]
 
 
 DESCRIPTION
@@ -50,6 +52,33 @@ OPTIONS
 -l::
 	Prepend stdout and stderr output lines with the task id to which
 	the output belongs.
+
+--detach::
+-d::
+	Detach immediately after issuing a run request and print new jobid
+	to stdout.
+
+--output='FILENAME'::
+-O 'FILENAME'::
+	Duplicate stdout and stderr from tasks to a file or files. 'FILENAME'
+	is optionally a mustache template which expands the keys 'id', 'cmd'
+	and 'taskid'. (e.g. '--output=flux-{{id}}.out')
+
+--error='FILENAME'::
+-E 'FILENAME'::
+	Send stderr to a different location than stdout.
+
+--input='HOW'::
+-i 'HOW'::
+	Indicate how to deal with stdin for tasks. 'HOW' is a list of 'src:dst'
+	pairs where 'src' is a source 'FILENAME' which may optionally be a
+	mustache template as in `--output`, or the special term `stdin` to
+	indicate the stdin from a front end program, and 'dst' is a list of
+	taskids or `*` or `all` to indicate all tasks. The default is `stdin:*`.
+	If only one of 'src' or 'dst' is specified, a heuristic is used to
+	determine whether a list of tasks or an input file was meant. (e.g
+	`--input=file.in` will use `file.in` as input for all tasks, and
+	`--input=0` will send stdin to task 0 only.
 
 --options='options,...'::
 -o 'options,...'::
