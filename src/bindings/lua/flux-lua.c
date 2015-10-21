@@ -404,17 +404,13 @@ static int l_flux_size (lua_State *L)
     return (l_pushresult (L, size));
 }
 
-static int l_flux_treeroot (lua_State *L)
+static int l_flux_arity (lua_State *L)
 {
     flux_t f = lua_get_flux (L, 1);
-    bool treeroot = false;
-    uint32_t rank;
-    if (flux_get_rank (f, &rank) < 0)
-        return lua_pusherror (L, "flux_get_rank error");
-    if (rank == 0)
-        treeroot = true;
-    lua_pushboolean (L, treeroot);
-    return (1);
+    int arity;
+    if (flux_get_arity (f, &arity) < 0)
+        return lua_pusherror (L, "flux_get_arity error");
+    return (l_pushresult (L, arity));
 }
 
 static int l_flux_index (lua_State *L)
@@ -428,8 +424,8 @@ static int l_flux_index (lua_State *L)
         return l_flux_size (L);
     if (strcmp (key, "rank") == 0)
         return l_flux_rank (L);
-    if (strcmp (key, "treeroot") == 0)
-        return l_flux_treeroot (L);
+    if (strcmp (key, "arity") == 0)
+        return l_flux_arity (L);
 
     lua_getmetatable (L, 1);
     lua_getfield (L, -1, key);
