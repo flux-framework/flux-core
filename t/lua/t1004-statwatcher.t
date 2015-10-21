@@ -66,6 +66,9 @@ f:timer {
 local r, err = f:reactor ()
 ok (r, "reactor exited normally: "..tostring (err))
 
+-- Close fp so we do not carry a file reference into done_testing()
+finfo.fp:close ()
+
 done_testing ()
 
 -- vi: ts=4 sw=4 expandtab

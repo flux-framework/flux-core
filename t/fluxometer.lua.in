@@ -84,14 +84,7 @@ end
 --
 function fluxTest:start_session (t)
     -- If fluxometer session is already active just return:
-    if self.flux_active then
-        cleanup (function ()
-                     posix.chdir (self.src_dir)
-                     os.execute ("rm "..self.log_file)
-                     os.execute ("rm -rf "..self.trash_dir)
-                 end)
-        return
-    end
+    if self.flux_active then return end
     posix.setenv ("FLUXOMETER_ACTIVE", "t")
 
     local size = t.size or 1
@@ -142,7 +135,7 @@ function fluxTest.init (...)
 
     -- Get path to current test script using debug.getinfo:
     test.arg0 = debug.getinfo (2).source:sub (2)
-    test.prog = test.arg0:match ("/*([^/.]+)%.")
+    test.prog = test.arg0:match ("/*([^/]+)%.t")
 
     local cwd, err = posix.getcwd ()
     if not cwd then error (err) end
@@ -168,12 +161,16 @@ function fluxTest.init (...)
     end
 
     test.trash_dir = "trash-directory.lua-"..test.prog
-    os.execute ("rm -rf "..test.trash_dir)
-    posix.mkdir (test.trash_dir)
     if test.flux_active then
+        os.execute ("rm -rf "..test.trash_dir)
+        posix.mkdir (test.trash_dir)
         posix.chdir (test.trash_dir)
+        cleanup (function ()
+                     posix.chdir (test.src_dir)
+                     os.execute ("rm "..test.log_file)
+                     os.execute ("rm -rf "..test.trash_dir)
+                 end)
     end
-
     return test
 end
 
