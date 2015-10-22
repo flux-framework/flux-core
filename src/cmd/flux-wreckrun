@@ -235,7 +235,7 @@ if true then
     local rc,err = f:sendevent ("wrexec.run.%d", resp.jobid)
     if not rc then wreck:die ("sendevent: %s\n", err) end
     if wreck.opts.d then
-        print ("Job "..resp.jobid)
+        print (resp.jobid)
         os.exit(0)
     end
 else
