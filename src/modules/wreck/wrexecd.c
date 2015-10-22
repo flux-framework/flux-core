@@ -1309,7 +1309,7 @@ static int l_wreck_log_msg (lua_State *L)
     return (0);
 }
 
-static int l_wreck_die (lua_State *L)
+static int wreck_log_error (lua_State *L, int fatal)
 {
     struct prog_ctx *ctx = l_get_prog_ctx (L, 1);
     const char *s;
@@ -1317,8 +1317,18 @@ static int l_wreck_die (lua_State *L)
         return (2); /* error on stack from l_format_args */
     if (!(s = lua_tostring (L, 2)))
         return lua_pusherror (L, "required arg to die missing");
-    log_error_kvs (ctx, 1, s);
+    log_error_kvs (ctx, fatal, s);
     return (0);
+}
+
+static int l_wreck_die (lua_State *L)
+{
+    return wreck_log_error (L, 1);
+}
+
+static int l_wreck_log_error (lua_State *L)
+{
+    return wreck_log_error (L, 0);
 }
 
 static int l_wreck_index (lua_State *L)
@@ -1429,6 +1439,10 @@ static int l_wreck_index (lua_State *L)
     }
     if (strcmp (key, "die") == 0) {
         lua_pushcfunction (L, l_wreck_die);
+        return (1);
+    }
+    if (strcmp (key, "log_error") == 0) {
+        lua_pushcfunction (L, l_wreck_log_error);
         return (1);
     }
     return (0);
