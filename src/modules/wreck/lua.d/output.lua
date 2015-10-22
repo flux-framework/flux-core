@@ -28,7 +28,7 @@ end
 local function openstream (wreck, taskio, taskid, stream, template)
     local path = render (template, wreck, taskid)
     if not path then
-        wreck:log_msg ("Failed to render template '"..template.."'")
+        wreck:die ("output: Failed to render template '"..template.."'")
         return
     end
     taskio:redirect (taskid, stream, path)
