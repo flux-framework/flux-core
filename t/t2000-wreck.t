@@ -287,6 +287,17 @@ test_expect_success 'flux-wreck: attach' '
 	flux wreck attach $(last_job_id) > output.attach &&
         test_cmp expected.attach output.attach
 '
+test_expect_success 'flux-wreck: attach with stdin' '
+	jobid=$(flux wreckrun -n4 --detach cat) &&
+	echo foo | flux wreck attach $jobid > output.attach_in &&
+	cat >expected.attach_in <<-EOF &&
+	foo
+	foo
+	foo
+	foo
+	EOF
+	test_cmp output.attach_in expected.attach_in
+'
 test_expect_success 'flux-werck: attach --label-io' '
 	flux wreckrun -l -n4 --output=expected.attach-l echo bazz >/dev/null &&
 	flux wreck attach --label-io $(last_job_id) |sort > output.attach-l &&
