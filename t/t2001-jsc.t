@@ -44,14 +44,12 @@ sync_flux_jstat () {
 
 overlap_flux_wreckruns () {
     insts=$(($1-1))
-    pids=""
     for i in `seq 0 $insts`; do
-        st=$(($insts + 3 - 2*$i))
-        flux wreckrun -n4 -N4 sleep $st  &
-        pids="$pids $!"
+        st=$(echo "$insts $i" | awk '{printf "%.2f", ($1 + 3 - 2*$2)/4}')
+        ids="$ids $(flux wreckrun --detach -n4 -N4 sleep $st)"
     done
-    for i in $pids; do 
-        wait $i
+    for i in $ids; do
+        flux wreck attach $i
     done
     return 0
 }
