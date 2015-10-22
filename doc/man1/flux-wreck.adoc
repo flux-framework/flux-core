@@ -30,9 +30,10 @@ Print help. If 'cmd' is provided, print help for that sub-command.
 Display a list of wreck jobs currently in kvs, along with their current
 states.
 
-*attach* [--status] 'jobid'::
-Attach to output of a running or completed job. With '--status', also
-report job status after dumping output.
+*attach* [--status] [--label-io] 'jobid'::
+Attach to output of a running or completed job. If input was not previously
+connected, also attach to stdin. With '--status', also report job status
+after dumping output. With '--label-io' label lines of output with taskid.
 
 *status* 'jobid'::
 Return the status of running or completed job 'jobid'. Prints the current
