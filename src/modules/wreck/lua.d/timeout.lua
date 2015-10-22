@@ -29,7 +29,7 @@ local function start_timer (f, wreck, id, walltime)
         oneshot = true,
         handler = function (f, to)
           local signum = timeout_signal (f, wreck)
-          wreck:log_msg ("Timeout expired! Killing job with signal %d", signum)
+          wreck:log_error ("Timeout expired! Killing job with signal %d", signum)
           local rc,err = f:sendevent ({signal = signum}, "wreck.%d.kill", id)
           if not rc then
               wreck:log_msg ("Failed to send kill event: %s", err)
