@@ -206,7 +206,7 @@ test_expect_success 'wreck plugins can use wreck:log_msg()' '
 	flux dmesg | grep "plugin test successful" || (flux dmesg | grep lwj\.$(last_job_id) && false)
 '
 test_expect_success 'wreckrun: --detach supported' '
-	flux wreckrun --detach /bin/true | grep ^Job
+	flux wreckrun --detach /bin/true | grep "^[0-9]"
 '
 
 WAITFILE="$SHARNESS_TEST_SRCDIR/scripts/waitfile.lua"
