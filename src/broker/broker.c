@@ -122,6 +122,7 @@ typedef struct {
      */
     struct boot_method *boot_method;
     bool enable_epgm;
+    bool shared_ipc_namespace;
     int k_ary;
     hello_t *hello;
     double hello_timeout;
@@ -173,7 +174,6 @@ static int create_dummyattrs (ctx_t *ctx);
 
 static int boot_pmi (ctx_t *ctx);
 static int boot_single (ctx_t *ctx);
-static int boot_local (ctx_t *ctx);
 
 static int attr_get_snoop (const char *name, const char **val, void *arg);
 static int attr_get_overlay (const char *name, const char **val, void *arg);
@@ -186,18 +186,15 @@ static const struct flux_handle_ops broker_handle_ops;
 static struct boot_method boot_table[] = {
     { "pmi", boot_pmi },
     { "single", boot_single },
-    { "local", boot_local },
     { NULL, NULL },
 };
 
-#define OPTIONS "+vqR:S:M:X:L:N:k:s:H:O:x:T:g:D:Em:l:"
+#define OPTIONS "+vqM:X:L:N:k:s:H:O:x:T:g:D:Em:l:I"
 static const struct option longopts[] = {
     {"sid",             required_argument,  0, 'N'},
     {"verbose",         no_argument,        0, 'v'},
     {"quiet",           no_argument,        0, 'q'},
     {"security",        required_argument,  0, 's'},
-    {"rank",            required_argument,  0, 'R'},
-    {"size",            required_argument,  0, 'S'},
     {"module",          required_argument,  0, 'M'},
     {"exclude",         required_argument,  0, 'x'},
     {"modopt",          required_argument,  0, 'O'},
@@ -209,6 +206,7 @@ static const struct option longopts[] = {
     {"shutdown-grace",  required_argument,  0, 'g'},
     {"socket-directory",required_argument,  0, 'D'},
     {"enable-epgm",     no_argument,        0, 'E'},
+    {"shared-ipc-namespace", no_argument,   0, 'I'},
     {"boot-method",     required_argument,  0, 'm'},
     {"log-level",       required_argument,  0, 'l'},
     {0, 0, 0, 0},
@@ -220,8 +218,6 @@ static void usage (void)
 "Usage: flux-broker OPTIONS [module:key=val ...]\n"
 " -v,--verbose                 Be annoyingly verbose\n"
 " -q,--quiet                   Be mysteriously taciturn\n"
-" -R,--rank N                  Set broker rank (0...size-1)\n"
-" -S,--size N                  Set number of ranks in session\n"
 " -N,--sid NAME                Set session id\n"
 " -M,--module NAME             Load module NAME (may be repeated)\n"
 " -x,--exclude NAME            Exclude module NAME\n"
@@ -237,7 +233,8 @@ static void usage (void)
 " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
 " -D,--socket-directory DIR    Create ipc sockets in DIR (local bootstrap)\n"
 " -E,--enable-epgm             Enable EPGM for events (PMI bootstrap)\n"
-" -m,--boot-method             Select bootstrap: pmi, single, local\n"
+" -I,--shared-ipc-namespace    Wire up session TBON over ipc sockets\n"
+" -m,--boot-method             Select bootstrap: pmi, single\n"
 );
     exit (1);
 }
@@ -317,12 +314,6 @@ int main (int argc, char *argv[])
             case 'q':   /* --quiet */
                 ctx.quiet = true;
                 break;
-            case 'R':   /* --rank N */
-                ctx.rank = strtoul (optarg, NULL, 10);
-                break;
-            case 'S':   /* --size N */
-                ctx.size = strtoul (optarg, NULL, 10);
-                break;
             case 'M':   /* --module NAME[nodeset] */
                 if (zlist_push (modules, xstrdup (optarg)) < 0 )
                     oom ();
@@ -372,6 +363,9 @@ int main (int argc, char *argv[])
             }
             case 'E': /* --enable-epgm */
                 ctx.enable_epgm = true;
+                break;
+            case 'I': /* --shared-ipc-namespace */
+                ctx.shared_ipc_namespace = true;
                 break;
             case 'm': { /* --boot-method */
                 boot_method = optarg;
@@ -508,7 +502,7 @@ int main (int argc, char *argv[])
     if (ctx.verbose)
         msg ("boot: %s", ctx.boot_method->name);
     if (ctx.boot_method->fun (&ctx) < 0)
-        err_exit ("boot %s", ctx.boot_method->name);
+        msg_exit ("bootstrap failed");
     assert (ctx.rank != FLUX_NODEID_ANY);
     assert (ctx.size > 0);
     assert (attr_get (ctx.attrs, "session-id", NULL, NULL) == 0);
@@ -633,7 +627,7 @@ int main (int argc, char *argv[])
      */
     snoop_set_zctx (ctx.snoop, ctx.zctx);
     snoop_set_sec (ctx.snoop, ctx.sec);
-    snoop_set_uri (ctx.snoop, "ipc://*");
+    snoop_set_uri (ctx.snoop, "ipc://%s/%d/snoop", ctx.socket_dir, ctx.rank);
 
     shutdown_set_handle (ctx.shutdown, ctx.h);
     shutdown_set_callback (ctx.shutdown, shutdown_cb, &ctx);
@@ -839,6 +833,10 @@ static void init_shell (ctx_t *ctx)
         subprocess_setenv (ctx->init_shell, "LD_LIBRARY_PATH", ldpath, 1);
         free (ldpath);
     }
+    subprocess_unsetenv (ctx->init_shell, "PMI_FD");
+    subprocess_unsetenv (ctx->init_shell, "PMI_RANK");
+    subprocess_unsetenv (ctx->init_shell, "PMI_SIZE");
+
 
     if (!ctx->quiet)
         flux_log (ctx->h, LOG_INFO, "starting initial program");
@@ -915,11 +913,6 @@ static int create_socketdir (ctx_t *ctx)
     return 0;
 }
 
-/* N.B. If using epgm with multiple brokers per node, the
- * lowest rank in each clique will subscribe to the epgm:// socket
- * and relay events to an ipc:// socket for the other ranks in the
- * clique.  This is required due to a limitation of epgm.
- */
 static int boot_pmi (ctx_t *ctx)
 {
     pmi_t *pmi = NULL;
@@ -934,8 +927,10 @@ static int boot_pmi (ctx_t *ctx)
     char *kvsname = NULL;
     char *key = NULL;
     char *val = NULL;
-
     int e, rc = -1;
+
+    if (ctx->enable_epgm || !ctx->shared_ipc_namespace)
+        ipaddr_getprimary (ipaddr, sizeof (ipaddr));
 
     if (!(pmi = pmi_create_guess ())) {
         err ("pmi_create");
@@ -980,10 +975,18 @@ static int boot_pmi (ctx_t *ctx)
         goto done;
 
 
-    /* Set ip addr.  We will need wildcards expanded below.
+    /* Set TBON request addr.  We will need any wildcards expanded below.
      */
-    ipaddr_getprimary (ipaddr, sizeof (ipaddr));
-    overlay_set_child (ctx->overlay, "tcp://%s:*", ipaddr);
+    if (ctx->shared_ipc_namespace) {
+        if (create_socketdir (ctx) < 0 || create_rankdir (ctx) < 0)
+            goto done;
+        char *reqfile = xasprintf ("%s/%d/req", ctx->socket_dir, ctx->rank);
+        overlay_set_child (ctx->overlay, "ipc://%s", reqfile);
+        cleanup_push_string (cleanup_file, reqfile);
+        free (reqfile);
+    } else {
+        overlay_set_child (ctx->overlay, "tcp://%s:*", ipaddr);
+    }
 
     /* Set up epgm relay if multiple ranks are being spawned per node,
      * as indicated by "clique ranks".  FIXME: if epgm is used but
@@ -1006,8 +1009,12 @@ static int boot_pmi (ctx_t *ctx)
             for (i = 0; i < clique_size; i++)
                 if (relay_rank == -1 || clique_ranks[i] < relay_rank)
                     relay_rank = clique_ranks[i];
-            if (relay_rank >= 0 && ctx->rank == relay_rank)
-                overlay_set_relay (ctx->overlay, "ipc://*");
+            if (relay_rank >= 0 && ctx->rank == relay_rank) {
+                char *relayfile = xasprintf ("%s/relay", ctx->socket_dir);
+                overlay_set_relay (ctx->overlay, "ipc://%s", relayfile);
+                cleanup_push_string (cleanup_file, relayfile);
+                free (relayfile);
+            }
         }
     }
 
@@ -1116,7 +1123,17 @@ static int boot_pmi (ctx_t *ctx)
     }
     overlay_set_right (ctx->overlay, "%s", val);
 
-    /* Read the URI fo epgm relay rank, or connect directly.
+    /* Event distribution (four configurations):
+     * 1) epgm enabled, one broker per node
+     *    All brokers subscribe to the same epgm address.
+     * 2) epgm enabled, mutiple brokers per node
+     *    The lowest rank in each clique will subscribe to the epgm:// socket
+     *    and relay events to an ipc:// socket for the other ranks in the
+     *    clique.  This is necessary due to limitation of epgm.
+     * 3) epgm disabled, all brokers concentrated on one node
+     *    Rank 0 publishes to a ipc:// socket, other ranks subscribe
+     * 4) epgm disabled brokers distributed across nodes
+     *    No dedicated event overlay,.  Events are distributed over the TBON.
      */
     if (ctx->enable_epgm) {
         if (relay_rank >= 0 && rank != relay_rank) {
@@ -1136,6 +1153,12 @@ static int boot_pmi (ctx_t *ctx)
             overlay_set_event (ctx->overlay, "epgm://%s;239.192.1.1:%d",
                                ipaddr, port);
         }
+    } else if (ctx->shared_ipc_namespace) {
+        char *eventfile = xasprintf ("%s/event", ctx->socket_dir);
+        overlay_set_event (ctx->overlay, "ipc://%s", eventfile);
+        if (ctx->rank == 0)
+            cleanup_push_string (cleanup_file, eventfile);
+        free (eventfile);
     }
     pmi_finalize (pmi);
     rc = 0;
@@ -1155,42 +1178,6 @@ done:
     if (rc != 0)
         errno = EPROTO;
     return rc;
-}
-
-/* This is the boot method selected by flux-start.
- * We should have been called with --rank, --size, and --sid.
- */
-static int boot_local (ctx_t *ctx)
-{
-    if (ctx->rank == FLUX_NODEID_ANY || ctx->size == 0) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (create_socketdir (ctx) < 0 || create_rankdir (ctx) < 0)
-        return -1;
-
-    char *reqfile = xasprintf ("%s/%d/req", ctx->socket_dir, ctx->rank);
-    overlay_set_child (ctx->overlay, "ipc://%s", reqfile);
-    cleanup_push_string (cleanup_file, reqfile);
-    free (reqfile);
-
-    if (ctx->rank > 0) {
-        int parent_rank = ctx->k_ary == 0 ? 0 : (ctx->rank - 1) / ctx->k_ary;
-        overlay_push_parent (ctx->overlay, "ipc://%s/%d/req",
-                             ctx->socket_dir, parent_rank);
-    }
-
-    char *eventfile = xasprintf ("%s/event", ctx->socket_dir);
-    overlay_set_event (ctx->overlay, "ipc://%s", eventfile);
-    if (ctx->rank == 0)
-        cleanup_push_string (cleanup_file, eventfile);
-    free (eventfile);
-
-    int right_rank = ctx->rank == 0 ? ctx->size - 1 : ctx->rank - 1;
-    overlay_set_right (ctx->overlay, "ipc://%s/%d/req",
-                       ctx->socket_dir, right_rank);
-
-    return 0;
 }
 
 static int boot_single (ctx_t *ctx)

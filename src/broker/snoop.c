@@ -27,6 +27,7 @@
 #endif
 #include <czmq.h>
 #include <errno.h>
+#include <stdarg.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"
@@ -68,11 +69,18 @@ void snoop_set_zctx (snoop_t *sn, zctx_t *zctx)
     sn->zctx = zctx;
 }
 
-void snoop_set_uri (snoop_t *sn, const char *uri)
+void snoop_set_uri (snoop_t *sn, const char *fmt, ...)
 {
+    va_list ap;
+    char *uri;
+
+    va_start (ap, fmt);
+    uri = xvasprintf (fmt, ap);
+    va_end (ap);
+
     if (sn->uri)
         free (sn->uri);
-    sn->uri = xstrdup (uri);
+    sn->uri = uri;
 }
 
 static int snoop_bind (snoop_t *sn)
