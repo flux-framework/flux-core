@@ -49,7 +49,9 @@ overlap_flux_wreckruns () {
         ids="$ids $(flux wreckrun --detach -n4 -N4 sleep $st)"
     done
     for i in $ids; do
+        echo "attempt to attach to job $i" >&2
         flux wreck attach $i
+        echo "attach to job $i complete with code=$?" >&2
     done
     return 0
 }
