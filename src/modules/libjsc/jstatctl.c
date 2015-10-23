@@ -263,7 +263,7 @@ static int extract_raw_walltime (flux_t h, int64_t j, int64_t *walltime)
         rc = -1;
     }
     else
-        flux_log (h, LOG_ERR, "extract %s: %"PRId64"", key, *walltime);
+        flux_log (h, LOG_DEBUG, "extract %s: %"PRId64"", key, *walltime);
     return rc;
 }
 
