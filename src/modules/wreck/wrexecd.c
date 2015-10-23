@@ -80,6 +80,8 @@ struct prog_ctx {
     kvsdir_t *kvs;          /* Handle to this job's dir in kvs */
     kvsdir_t *resources;    /* Handle to this node's resource dir in kvs */
 
+    kz_t *kz_err;           /* kz stream for errors and debug */
+
     flux_watcher_t *fdw;
     flux_msg_handler_t *mw;
 
@@ -151,9 +153,43 @@ static flux_t prog_ctx_flux_handle (struct prog_ctx *ctx)
     return (t->f);
 }
 
-static void log_fatal (struct prog_ctx *ctx, int code, char *format, ...)
+static void vlog_error_kvs (struct prog_ctx *ctx, int fatal, const char *fmt, va_list ap)
 {
-    flux_t c;
+    int n;
+    int len = 2048;
+    char msg [len];
+
+    if ((n = vsnprintf (msg, len, fmt, ap) < 0))
+        strcpy (msg, "Error formatting failure!");
+    else if (n > len) {
+        /* Indicate truncation */
+        msg [len-2] = '+';
+        msg [len-1] = '\0';
+        n = len;
+    }
+    if (kz_put (ctx->kz_err, msg, strlen (msg)) < 0)
+        flux_log (ctx->flux, LOG_EMERG,
+            "Failed to write error to kvs error stream: %s",
+            strerror (errno));
+
+    if (fatal) {
+        // best effort
+        kvsdir_put_int (ctx->kvs, "fatalerror", fatal);
+        kvs_commit (ctx->flux);
+    }
+}
+
+static void log_error_kvs (struct prog_ctx *ctx, int fatal, const char *fmt, ...)
+{
+    va_list ap;
+    va_start (ap, fmt);
+    vlog_error_kvs (ctx, fatal, fmt, ap);
+    va_end (ap);
+}
+
+static void log_fatal (struct prog_ctx *ctx, int code, const char *format, ...)
+{
+    flux_t c = NULL;
     va_list ap;
     va_start (ap, format);
     if ((ctx != NULL) && ((c = prog_ctx_flux_handle (ctx)) != NULL))
@@ -161,7 +197,17 @@ static void log_fatal (struct prog_ctx *ctx, int code, char *format, ...)
     else
         vfprintf (stderr, format, ap);
     va_end (ap);
-    exit (code);
+
+    /* Copy error to kvs if we're not in task context:
+     *  (If in task context we'll be printing errors onto stderr)
+     */
+    if (c == ctx->flux && ctx->kz_err) {
+        va_start (ap, format);
+        vlog_error_kvs (ctx, code, format, ap);
+        va_end (ap);
+    }
+    if (code > 0)
+        exit (code);
 }
 
 static int log_err (struct prog_ctx *ctx, const char *fmt, ...)
@@ -295,6 +341,8 @@ void kz_stdin (kz_t *kz, struct task_info *t)
         zio_write_json (t->zio [IN], json_str);
         free (json_str);
     }
+    if (errno != 0 && errno != EAGAIN)
+        log_err (t->ctx, "kz_get_json: %s", strerror (errno));
     return;
 }
 
@@ -316,7 +364,8 @@ kz_t *task_kz_open (struct task_info *t, int type)
     int flags = prog_ctx_io_flags (ctx);
 
     if (type == IN)
-        flags |= KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK | KZ_FLAGS_NOEXIST;
+        flags |= KZ_FLAGS_READ | KZ_FLAGS_NONBLOCK | KZ_FLAGS_NOEXIST
+                 | KZ_FLAGS_RAW;
     else
         flags |= KZ_FLAGS_WRITE;
 
@@ -672,11 +721,27 @@ int prog_ctx_options_init (struct prog_ctx *ctx)
     return (0);
 }
 
+static void prog_ctx_kz_err_open (struct prog_ctx *ctx)
+{
+    int n;
+    char key [64];
+
+    n = snprintf (key, sizeof (key), "lwj.%ju.log.%d",
+                  (uintmax_t) ctx->id, ctx->nodeid);
+    if ((n < 0) || (n > sizeof (key)))
+        log_fatal (ctx, 1, "snprintf: %s", strerror (errno));
+    if (!(ctx->kz_err = kz_open (ctx->flux, key, KZ_FLAGS_WRITE)))
+        log_fatal (ctx, 1, "kz_open (%s): %s", key, strerror (errno));
+}
+
 int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
 {
     int i;
     char *json_str;
     json_object *v;
+
+    prog_ctx_get_nodeinfo (ctx);
+    prog_ctx_kz_err_open (ctx);
 
     if (prog_ctx_options_init (ctx) < 0)
         log_fatal (ctx, 1, "failed to read %s.options", kvsdir_key (ctx->kvs));
@@ -690,7 +755,6 @@ int prog_ctx_load_lwj_info (struct prog_ctx *ctx, int64_t id)
     if (json_array_to_argv (ctx, v, &ctx->argv, &ctx->argc) < 0)
         log_fatal (ctx, 1, "Failed to get cmdline from kvs");
 
-    prog_ctx_get_nodeinfo (ctx);
 
     if (kvsdir_get_int (ctx->kvs, "ntasks", &ctx->total_ntasks) < 0)
         log_fatal (ctx, 1, "Failed to get ntasks from kvs");
@@ -1245,6 +1309,28 @@ static int l_wreck_log_msg (lua_State *L)
     return (0);
 }
 
+static int wreck_log_error (lua_State *L, int fatal)
+{
+    struct prog_ctx *ctx = l_get_prog_ctx (L, 1);
+    const char *s;
+    if (lua_gettop (L) > 2 && l_format_args (L, 2) < 0)
+        return (2); /* error on stack from l_format_args */
+    if (!(s = lua_tostring (L, 2)))
+        return lua_pusherror (L, "required arg to die missing");
+    log_error_kvs (ctx, fatal, s);
+    return (0);
+}
+
+static int l_wreck_die (lua_State *L)
+{
+    return wreck_log_error (L, 1);
+}
+
+static int l_wreck_log_error (lua_State *L)
+{
+    return wreck_log_error (L, 0);
+}
+
 static int l_wreck_index (lua_State *L)
 {
     struct task_info *t;
@@ -1351,6 +1437,14 @@ static int l_wreck_index (lua_State *L)
         lua_pushcfunction (L, l_wreck_log_msg);
         return (1);
     }
+    if (strcmp (key, "die") == 0) {
+        lua_pushcfunction (L, l_wreck_die);
+        return (1);
+    }
+    if (strcmp (key, "log_error") == 0) {
+        lua_pushcfunction (L, l_wreck_log_error);
+        return (1);
+    }
     return (0);
 }
 
@@ -1448,6 +1542,39 @@ int start_trace_task (struct task_info *t)
     return (-1);
 }
 
+int rexecd_init (struct prog_ctx *ctx)
+{
+    int errnum;
+
+    lua_stack_call (ctx->lua_stack, "rexecd_init");
+
+    /*  Wait for all nodes to finish calling init plugins:
+     */
+    kvs_fence (ctx->flux, "rexecd_init", ctx->nnodes);
+
+    /*  Now, check for `fatalerror` key in the kvs, which indicates
+     *   one or more nodes encountered a fatal error and we should abort
+     */
+    if ((kvsdir_get_int (ctx->kvs, "fatalerror", &errnum) < 0) && errno != ENOENT) {
+        log_msg (ctx, "Error: kvsdir_get (fatalerror): %s\n", strerror (errno));
+    }
+    if (errnum) {
+        /*  Only update job state and print initialization error message
+         *   on rank 0.
+         */
+        if (ctx->nodeid == 0) {
+            if (update_job_state (ctx, "failed") < 0)
+                log_err (ctx, "update_job_state failed!");
+            else
+                log_err (ctx, "Error in initialization, terminating job");
+        }
+        /* All other daemons exit here:
+         */
+        exit (errnum);
+    }
+    return (0);
+}
+
 int exec_commands (struct prog_ctx *ctx)
 {
     char buf [4096];
@@ -1455,8 +1582,7 @@ int exec_commands (struct prog_ctx *ctx)
     int stop_children = 0;
 
     wreck_lua_init (ctx);
-
-    lua_stack_call (ctx->lua_stack, "rexecd_init");
+    rexecd_init (ctx);
 
     prog_ctx_setenvf (ctx, "FLUX_JOB_ID",    1, "%d", ctx->id);
     prog_ctx_setenvf (ctx, "FLUX_JOB_NNODES",1, "%d", ctx->nnodes);

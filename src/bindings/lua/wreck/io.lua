@@ -106,6 +106,20 @@ function ioplex.create (arg)
     return io
 end
 
+local function eprintf (...)
+    io.stderr:write (string.format (...).."\n")
+end
+
+function ioplex:enable_debug (logger)
+    self.logger = logger and logger or eprintf
+end
+
+function ioplex:log (fmt, ...)
+    if self.logger then
+        self.logger (fmt, ...)
+    end
+end
+
 local function ioplex_set_stream (self, taskid, name, f)
     if not self.output[taskid] then
         self.output[taskid] ={}
@@ -116,6 +130,7 @@ end
 local function ioplex_create_stream (self, path)
     local files = self.files
     if not files[path] then
+	self:log ("creating path %s", path)
         local f, err = ostream.create (path)
         if not f then return nil, err end
         files[path] = f
@@ -136,6 +151,9 @@ local function ioplex_taskid_start (self, flux, taskid, stream)
                 -- protect against multiple close callback calls
 	        if self.removed [key] then return end
                 of:close()
+                if not of.fp then
+                    self:log ("closed path %s", of.filename)
+                end
                 self.removed [key] = true
                 if self:complete() and self.on_completion then
                     self.on_completion()

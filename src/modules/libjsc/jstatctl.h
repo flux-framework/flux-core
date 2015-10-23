@@ -50,6 +50,7 @@ typedef enum {
     J_CANCELLED, /*!< Cancelled */
     J_COMPLETE,  /*!< Completed */
     J_REAPED,    /*!< Reaped */
+    J_FAILED,    /*!< Failed */
     J_FOR_RENT   /*!< Space For Rent */
 } job_state_t;
 

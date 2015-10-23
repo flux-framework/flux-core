@@ -28,11 +28,15 @@ end
 local function openstream (wreck, taskio, taskid, stream, template)
     local path = render (template, wreck, taskid)
     if not path then
-        wreck:log_msg ("Failed to render template '"..template.."'")
+        wreck:die ("output: Failed to render template '"..template.."'")
         return
     end
     taskio:redirect (taskid, stream, path)
     return path
+end
+
+local function log (fmt, ...)
+    wreck:log_msg (fmt, ...)
 end
 
 function rexecd_init ()
@@ -48,6 +52,8 @@ function rexecd_init ()
         labelio = output.labelio and output.labelio ~= false
     }
     if not taskio then wreck:log_msg ("Error: %s", err) end
+
+    ioplex:enable_debug (log)
 
     local template = output.files.stdout
     local stderr_template = output.files.stderr

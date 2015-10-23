@@ -61,6 +61,7 @@ service.
 | J_CANCELLED  | Cancelled |
 | J_COMPLETE   | Complete |
 | J_REAPED     | Reaped to the upper-level Flux instance |
+| J_FAILED     | Failed before running |
 | J_FOR\_RENT   | To be extended |
 
 **Table 2-1** Job state elements

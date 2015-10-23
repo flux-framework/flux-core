@@ -55,6 +55,72 @@ test_expect_success 'wreckrun: does not drop output' '
 	run_timeout 5 flux wreckrun -N1 -n1 cat expected >output &&
 	test_cmp expected output
 '
+test_expect_success 'wreckrun: handles stdin' '
+	cat >expected.stdin <<-EOF &&
+	This is a test.
+
+	EOF
+	cat expected.stdin | flux wreckrun -T5s cat > output.stdin &&
+        test_cmp expected.stdin output.stdin
+'
+test_expect_success 'wreckrun: handles empty stdin' '
+	flux wreckrun -T5s cat > output.devnull </dev/null &&
+        test_must_fail test -s output.devnull
+'
+test_expect_success 'wreckrun: bcast stdin to all tasks by default' '
+        flux wreckrun -n${SIZE} echo hello > expected.bcast &&
+        echo hello | flux wreckrun -n${SIZE} cat > output.bcast &&
+        test_cmp expected.bcast output.bcast
+'
+test_expect_success 'wreckrun: --input=0 works' '
+        echo hello | flux wreckrun --input=0 -l -n${SIZE} cat > output.0 &&
+        cat >expected.0 <<-EOF &&
+	0: hello
+	EOF
+        test_cmp expected.0 output.0
+'
+test_expect_success 'wreckrun: --input=1 works' '
+        echo hello | flux wreckrun --input=1 -l -n${SIZE} cat > output.1 &&
+        cat >expected.1 <<-EOF &&
+	1: hello
+	EOF
+        test_cmp expected.0 output.0
+'
+test_expect_success 'wreckrun: --input=0-2 works' '
+        echo hello | flux wreckrun --input=0-2 -l -n${SIZE} cat |
+		sort -n > output.0-2 &&
+        cat >expected.0-2 <<-EOF &&
+	0: hello
+	1: hello
+	2: hello
+	EOF
+        test_cmp expected.0-2 output.0-2
+'
+
+test_expect_success 'wreckrun: --input different for each task works' '
+        for i in `seq 0 3`; do echo "hi $i" > i.$i; done &&
+        flux wreckrun --input="i.0:0;i.1:1;i.2:2;i.3:3" -l -n4 cat |
+		sort -n > output.multi &&
+        cat >expected.multi <<-EOF &&
+	0: hi 0
+	1: hi 1
+	2: hi 2
+	3: hi 3
+	EOF
+        test_cmp expected.multi output.multi
+'
+test_expect_success 'wreckrun: --input=/dev/null:* works' '
+        echo hello | flux wreckrun --input=/dev/null:* -l -n${SIZE} cat > output.devnull2 &&
+	test_must_fail test -s output.devnull2
+'
+test_expect_success 'wreckrun: bad input file causes failure' '
+	test_must_fail \
+	    flux wreckrun --input=/foo/badfile:* -l -n${SIZE} cat \
+	        >output.badinput 2>error.badinput &&
+	test_must_fail test -s output.badinput &&
+	grep "Error: input: /foo/badfile" error.badinput
+'
+
 test_expect_success 'wreck: job state events emitted' '
 	run_timeout 5 \
 	  $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
@@ -193,7 +259,7 @@ test_expect_success 'wreck plugins can use wreck:log_msg()' '
 	flux dmesg | grep "plugin test successful" || (flux dmesg | grep lwj\.$(last_job_id) && false)
 '
 test_expect_success 'wreckrun: --detach supported' '
-	flux wreckrun --detach /bin/true | grep ^Job
+	flux wreckrun --detach /bin/true | grep "^[0-9]"
 '
 
 WAITFILE="$SHARNESS_TEST_SRCDIR/scripts/waitfile.lua"
@@ -227,6 +293,17 @@ test_expect_success 'flux-wreck: attach' '
 	flux wreckrun -n4 --output=expected.attach hostname >/dev/null &&
 	flux wreck attach $(last_job_id) > output.attach &&
         test_cmp expected.attach output.attach
+'
+test_expect_success 'flux-wreck: attach with stdin' '
+	jobid=$(flux wreckrun -n4 --detach cat) &&
+	echo foo | flux wreck attach $jobid > output.attach_in &&
+	cat >expected.attach_in <<-EOF &&
+	foo
+	foo
+	foo
+	foo
+	EOF
+	test_cmp output.attach_in expected.attach_in
 '
 test_expect_success 'flux-werck: attach --label-io' '
 	flux wreckrun -l -n4 --output=expected.attach-l echo bazz >/dev/null &&

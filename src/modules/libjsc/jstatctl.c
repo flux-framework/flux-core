@@ -78,6 +78,7 @@ static stab_t job_state_tab[] = {
     { J_CANCELLED,  "cancelled" },
     { J_COMPLETE,   "complete" },
     { J_REAPED,     "reaped" },
+    { J_FAILED,     "failed" },
     { J_FOR_RENT,   "for_rent" },
     { -1, NULL },
 };
@@ -175,7 +176,7 @@ static int fetch_and_update_state (zhash_t *aj , int64_t j, int64_t ns)
         free (key);
         return J_FOR_RENT;
     }
-    if (ns == J_COMPLETE) 
+    if (ns == J_COMPLETE || ns == J_FAILED)
         zhash_delete (aj, key);
     else
         zhash_update (aj, key, (void *)(intptr_t)ns);
@@ -800,6 +801,14 @@ static inline void delete_jobinfo (flux_t h, int64_t jobid)
     free (key);
 }
 
+static bool job_is_finished (const char *state)
+{
+    if (strcmp (state, jsc_job_num2state (J_COMPLETE)) == 0
+        || strcmp (state, jsc_job_num2state (J_FAILED)) == 0)
+        return true;
+    return false;
+}
+
 static void job_state_cb (flux_t h, flux_msg_handler_t *w, 
                           const flux_msg_t *msg, void *arg)  
 {
@@ -807,6 +816,7 @@ static void job_state_cb (flux_t h, flux_msg_handler_t *w,
     json_object *o = NULL;
     const char *topic = NULL;
     const char *json_str = NULL;
+    const char *state = NULL;
     int len = 12;
 
     if (flux_msg_get_topic (msg, &topic) < 0)
@@ -822,13 +832,14 @@ static void job_state_cb (flux_t h, flux_msg_handler_t *w,
     if (strncmp (topic, "jsc", 3) == 0)
        len = 10;
 
-    if (strcmp (&(topic[len]), jsc_job_num2state (J_RESERVED)) == 0) 
+    state = topic + len;
+    if (strcmp (state, jsc_job_num2state (J_RESERVED)) == 0)
         fixup_newjob_event (h, jobid);
 
-    if (invoke_cbs (h, jobid, get_update_jcb (h, jobid, &(topic[len])), 0) < 0) 
+    if (invoke_cbs (h, jobid, get_update_jcb (h, jobid, state), 0) < 0)
         flux_log (h, LOG_ERR, "job_state_cb: failed to invoke callbacks");
 
-    if (strcmp (&(topic[len]), jsc_job_num2state (J_COMPLETE)) == 0)
+    if (job_is_finished (state))
         delete_jobinfo (h, jobid); 
 done:
     return;
