@@ -35,6 +35,10 @@ local function openstream (wreck, taskio, taskid, stream, template)
     return path
 end
 
+local function log (fmt, ...)
+    wreck:log_msg (fmt, ...)
+end
+
 function rexecd_init ()
     if wreck.nodeid ~= 0 then return end
 
@@ -48,6 +52,8 @@ function rexecd_init ()
         labelio = output.labelio and output.labelio ~= false
     }
     if not taskio then wreck:log_msg ("Error: %s", err) end
+
+    ioplex:enable_debug (log)
 
     local template = output.files.stdout
     local stderr_template = output.files.stderr
