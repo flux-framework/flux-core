@@ -53,8 +53,8 @@
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/shortjson.h"
 #include "src/common/libpmi-client/pmi-client.h"
-#include "src/modules/libsubprocess/subprocess.h"
-#include "src/modules/libzio/zio.h"
+#include "src/common/libsubprocess/zio.h"
+#include "src/common/libsubprocess/subprocess.h"
 
 #include "heartbeat.h"
 #include "module.h"

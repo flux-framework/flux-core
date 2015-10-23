@@ -26,10 +26,9 @@
 #include <string.h>
 #include <json.h>
 
-#include <src/modules/libzio/zio.h>
-
 #include "tap.h"
 #include "subprocess.h"
+#include "zio.h"
 
 extern char **environ;
 

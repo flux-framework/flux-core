@@ -35,7 +35,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/modules/libzio/zio.h"
+#include "src/common/libsubprocess/zio.h"
 #include "src/modules/libkz/kz.h"
 
 

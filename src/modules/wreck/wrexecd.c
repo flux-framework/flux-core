@@ -46,7 +46,7 @@
 #include "src/common/libutil/jsonutil.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/sds.h"
-#include "src/modules/libzio/zio.h"
+#include "src/common/libsubprocess/zio.h"
 #include "src/modules/kvs/kvs.h"
 #include "src/modules/libkz/kz.h"
 

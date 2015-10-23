@@ -164,6 +164,7 @@ AC_CONFIG_FILES( \
   src/common/libpmi-client/Makefile \
   src/common/libpmi-server/Makefile \
   src/common/libflux/Makefile \
+  src/common/libsubprocess/Makefile \
   src/common/libcompat/Makefile \
   src/lib/Makefile \
   src/lib/libpmi/Makefile \
@@ -183,8 +184,6 @@ AC_CONFIG_FILES( \
   src/modules/kvs/Makefile \
   src/modules/modctl/Makefile \
   src/modules/libmrpc/Makefile \
-  src/modules/libzio/Makefile \
-  src/modules/libsubprocess/Makefile \
   src/modules/libkz/Makefile \
   src/modules/libjsc/Makefile \
   src/modules/live/Makefile \

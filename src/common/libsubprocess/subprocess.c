@@ -38,7 +38,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/shortjson.h"
-#include "src/modules/libzio/zio.h"
+#include "zio.h"
 #include "subprocess.h"
 
 #define FDA_LENGTH 16

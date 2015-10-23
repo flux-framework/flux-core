@@ -52,7 +52,6 @@ wrexecd_SOURCES = \
 
 wrexecd_LDADD = \
 	$(top_builddir)/src/bindings/lua/libfluxlua.la \
-	$(top_builddir)/src/modules/libzio/libzio.la \
 	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \

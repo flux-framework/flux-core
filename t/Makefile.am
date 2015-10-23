@@ -184,7 +184,6 @@ kz_kzutil_SOURCES = kz/kzutil.c
 kz_kzutil_CPPFLAGS = $(test_cppflags)
 kz_kzutil_LDADD = \
 	$(top_builddir)/src/modules/libkz/libkz.la \
-	$(top_builddir)/src/modules/libzio/libzio.la \
 	$(top_builddir)/src/modules/kvs/libkvs.la \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 

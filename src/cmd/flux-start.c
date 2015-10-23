@@ -37,7 +37,7 @@
 #include "src/common/libutil/optparse.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libpmi-server/simple.h"
-#include "src/modules/libsubprocess/subprocess.h"
+#include "src/common/libsubprocess/subprocess.h"
 
 struct pmi_server {
     zhash_t *kvs;

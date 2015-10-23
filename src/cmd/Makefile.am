@@ -63,8 +63,6 @@ fluxcmd_PROGRAMS = \
 	flux-jstat
 
 flux_start_LDADD = \
-	$(top_builddir)/src/modules/libsubprocess/libsubprocess.la \
-	$(top_builddir)/src/modules/libzio/libzio.la \
 	$(fluxcmd_ldadd) \
 	$(LIBUTIL)
 flux_mping_LDADD = \

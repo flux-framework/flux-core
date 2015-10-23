@@ -9,12 +9,14 @@ AM_CPPFLAGS = \
 	$(JSON_CFLAGS) $(ZMQ_CFLAGS) \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include
 
-noinst_LTLIBRARIES = \
-	libsubprocess.la
+noinst_LTLIBRARIES = libsubprocess.la
 
 libsubprocess_la_SOURCES = \
+	zio.c \
+	zio.h \
 	subprocess.c \
 	subprocess.h
+
 
 TESTS = \
 	test_subprocess.t \
@@ -24,18 +26,18 @@ TESTS = \
 check_PROGRAMS = \
 	$(TESTS)
 
-test_ldadd = \
-	$(top_builddir)/src/common/libtap/libtap.la \
-	$(top_builddir)/src/modules/libsubprocess/libsubprocess.la \
-	$(top_builddir)/src/modules/libzio/libzio.la \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la
-
-test_cppflags = $(AM_CPPFLAGS) -I$(top_srcdir)/src/common/libtap
-
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
        $(top_srcdir)/config/tap-driver.sh
+
+test_ldadd = \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libtap/libtap.la
+
+test_cppflags = \
+	$(AM_CPPFLAGS) \
+	-I$(top_srcdir)/src/common/libtap
 
 test_subprocess_t_SOURCES = test/subprocess.c
 test_subprocess_t_CPPFLAGS = $(test_cppflags)
@@ -47,4 +49,4 @@ test_socketpair_t_LDADD = $(test_ldadd)
 
 test_loop_t_SOURCES = test/loop.c
 test_loop_t_CPPFLAGS = $(test_cppflags)
-test_loop_t_LDADD =  $(test_ldadd)
+test_loop_t_LDADD = $(test_ldadd)
