@@ -57,6 +57,12 @@ int zio_src_fd (zio_t *zio);
 int zio_dst_fd (zio_t *zio);
 
 /*
+ *  Close the src/dst file descriptors, if open
+ */
+int zio_close_src_fd (zio_t *zio);
+int zio_close_dst_fd (zio_t *zio);
+
+/*
  *  Check to see if zio object has been "closed". A zio object is closed
  *   after EOF has been read and sent (for reader) or received by writer
  *   and close(2) called on dstfd.
