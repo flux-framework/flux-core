@@ -228,7 +228,9 @@ static int zio_init_buffer (zio_t *zio)
     assert (zio->magic == ZIO_MAGIC);
     assert (zio->buf == NULL);
 
-    if (!(zio->buf = cbuf_create (64, 1638400)))
+    if (zio->buf)
+        cbuf_destroy (zio->buf);
+    if (!(zio->buf = cbuf_create (zio->buffersize, 1638400)))
         return (-1);
 
     cbuf_opt_set (zio->buf, CBUF_OPT_OVERWRITE, CBUF_NO_DROP);
