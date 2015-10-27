@@ -853,18 +853,11 @@ void closeall (int fd)
     return;
 }
 
-static void close_fd (int fd)
-{
-    if (fd < 0)
-        return;
-    close (fd);
-}
-
 static int dup_fd (int fd, int newfd)
 {
-   assert (fd >= 0);
-   assert (newfd >= 0);
-   return dup2 (fd, newfd);
+    assert (fd >= 0);
+    assert (newfd >= 0);
+    return dup2 (fd, newfd);
 }
 
 void child_io_setup (struct task_info *t)
@@ -872,9 +865,10 @@ void child_io_setup (struct task_info *t)
     /*
      *  Close parent end of stdio fds in child
      */
-    close_fd (zio_dst_fd (t->zio [IN]));
-    close_fd (zio_src_fd (t->zio [OUT]));
-    close_fd (zio_src_fd (t->zio [ERR]));
+    if (zio_close_dst_fd (t->zio [IN]) < 0
+            || zio_close_src_fd (t->zio [OUT]) < 0
+            || zio_close_src_fd (t->zio [ERR]) < 0)
+        log_fatal (t->ctx, 1, "close: %s", strerror (errno));
 
     /*
      *  Dup appropriate fds onto child STDIN/STDOUT/STDERR
@@ -889,9 +883,10 @@ void child_io_setup (struct task_info *t)
 
 void close_child_fds (struct task_info *t)
 {
-    close_fd (zio_src_fd (t->zio [IN]));
-    close_fd (zio_dst_fd (t->zio [OUT]));
-    close_fd (zio_dst_fd (t->zio [ERR]));
+    if (zio_close_src_fd (t->zio [IN]) < 0
+            || zio_close_dst_fd (t->zio [OUT]) < 0
+            || zio_close_dst_fd (t->zio [ERR]) < 0)
+        log_fatal (t->ctx, 1, "close: %s", strerror (errno));
 }
 
 void send_job_state_event (struct prog_ctx *ctx, const char *state)
