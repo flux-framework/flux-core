@@ -15,7 +15,9 @@ libsubprocess_la_SOURCES = \
 	zio.c \
 	zio.h \
 	subprocess.c \
-	subprocess.h
+	subprocess.h \
+	inbuf.c \
+	inbuf.h
 
 
 TESTS = \
