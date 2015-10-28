@@ -14,19 +14,11 @@ AM_CPPFLAGS = \
 #
 fluxmod_LTLIBRARIES = resource-hwloc.la
 
-fluxmod_libadd = \
-	$(top_builddir)/src/common/libflux-core.la \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/modules/kvs/libkvs.la
-
-general_ldflags = --disable-static -avoid-version -shared -export-dynamic \
-	$(LIBMUNGE) $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) $(HWLOC_LIBS)
-
-fluxmod_ldflags = -module \
-	-export-symbols-regex '^mod_(main|name)$$' \
-	$(general_ldflags)
-
 resource_hwloc_la_SOURCES = resource.c
 resource_hwloc_la_CFLAGS = $(HWLOC_CFLAGS)
-resource_hwloc_la_LDFLAGS = $(fluxmod_ldflags)
-resource_hwloc_la_LIBADD = $(fluxmod_libadd)
+resource_hwloc_la_LDFLAGS = $(fluxmod_ldflags) -module
+resource_hwloc_la_LIBADD = $(top_builddir)/src/common/libflux-core.la \
+			   $(top_builddir)/src/common/libflux-internal.la \
+			   $(top_builddir)/src/modules/kvs/libkvs.la \
+			   $(LIBMUNGE) $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) \
+			   $(LIBUTIL) $(HWLOC_LIBS)

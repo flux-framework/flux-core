@@ -19,16 +19,14 @@ fluxmod_libadd = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(JSON_LIBS) $(ZMQ_LIBS)
 
-fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
-        -export-symbols-regex '^mod_(main|name)$$'
+# N.B. "-rpath /nowhere" forces .so build, despite noinst/check
 
 req_la_SOURCES = req.c
-# N.B. "-rpath /nowhere" forces .so build, despite noinst/check
-req_la_LDFLAGS = $(fluxmod_ldflags) -rpath /nowhere
+req_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
 req_la_LIBADD = $(fluxmod_libadd)
 
 coproc_la_SOURCES = coproc.c
-coproc_la_LDFLAGS = $(fluxmod_ldflags) -rpath /nowhere
+coproc_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
 coproc_la_LIBADD = $(fluxmod_libadd)
 
 #

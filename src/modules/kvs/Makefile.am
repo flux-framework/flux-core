@@ -21,8 +21,7 @@ kvs_la_SOURCES = \
 	proto.c \
 	proto.h
 
-kvs_la_LDFLAGS = -avoid-version -module -shared -export-dynamic \
-		 -export-symbols-regex '^mod_(main|name)$$'
+kvs_la_LDFLAGS = $(fluxmod_ldflags) -module
 kvs_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
 		$(top_builddir)/src/common/libflux-core.la \
 		$(JSON_LIBS) $(ZMQ_CFLAGS)
@@ -36,8 +35,7 @@ libkvs_la_SOURCES = \
 	libkvs.c \
 	conf.c \
 	proto.c
-libkvs_la_LDFLAGS = -shared -export-dynamic --disable-static \
-		    -Wl,--no-undefined \
+libkvs_la_LDFLAGS = $(fluxlib_ldflags) \
 		    -export-symbols-regex '^(kvs|kvsdir|kvsitr)_.*'
 libkvs_la_LIBADD =  $(top_builddir)/src/common/libflux-internal.la \
 		    $(top_builddir)/src/common/libflux-core.la

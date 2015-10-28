@@ -18,8 +18,7 @@ modctl_la_SOURCES = \
 	modctl.c \
 	proto.c \
 	proto.h
-modctl_la_LDFLAGS = -avoid-version -module -shared -export-dynamic \
-		    -export-symbols-regex '^mod_(main|name)$$'
+modctl_la_LDFLAGS = $(fluxmod_ldflags) -module
 modctl_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
 		   $(top_builddir)/src/common/libflux-core.la \
 		   $(top_builddir)/src/modules/libmrpc/libmrpc.la \
@@ -31,8 +30,7 @@ modctl_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
 fluxinclude_HEADERS = modctl.h
 fluxlib_LTLIBRARIES = libmodctl.la
 libmodctl_la_SOURCES = libmodctl.c proto.c
-libmodctl_la_LDFLAGS = -shared -export-dynamic --disable-static \
-		       -Wl,--no-undefined \
+libmodctl_la_LDFLAGS = $(fluxlib_ldflags) \
 		       -export-symbols-regex '^flux_.*'
 libmodctl_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
 		      $(top_builddir)/src/common/libflux-core.la \

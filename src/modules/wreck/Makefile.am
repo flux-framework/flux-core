@@ -36,15 +36,12 @@ fluxmod_libadd = $(top_builddir)/src/modules/libmrpc/libmrpc.la \
 		 $(top_builddir)/src/common/libflux-internal.la \
 		 $(top_builddir)/src/modules/kvs/libkvs.la
 
-fluxmod_ldflags = --disable-static -avoid-version -module -shared \
-		  -export-dynamic -export-symbols-regex '^mod_(main|name)$$'
-
 job_la_SOURCES = job.c
-job_la_LDFLAGS = $(fluxmod_ldflags)
+job_la_LDFLAGS = $(fluxmod_ldflags) -module
 job_la_LIBADD = $(fluxmod_libadd)
 
 wrexec_la_SOURCES = wrexec.c
-wrexec_la_LDFLAGS = $(fluxmod_ldflags)
+wrexec_la_LDFLAGS = $(fluxmod_ldflags) -module
 wrexec_la_LIBADD = $(fluxmod_libadd)
 wrexec_la_CPPFLAGS = $(AM_CPPFLAGS) -DWREXECD_PATH=\"$(fluxlibexecdir)/wrexecd\"
 
