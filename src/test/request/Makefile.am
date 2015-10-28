@@ -15,11 +15,8 @@ AM_CPPFLAGS = \
 check_LTLIBRARIES = req.la coproc.la
 
 fluxmod_libadd = \
-	$(top_builddir)/src/modules/kvs/libkvs.la \
-	$(top_builddir)/src/common/libflux/libflux.la \
-	$(top_builddir)/src/common/libutil/libutil.la \
-	$(top_builddir)/src/common/libev/libev.la \
-	$(top_builddir)/src/common/liblsd/liblsd.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux-internal.la \
 	$(JSON_LIBS) $(ZMQ_LIBS)
 
 fluxmod_ldflags = -avoid-version -module -shared -export-dynamic \
@@ -43,10 +40,8 @@ fluxcmd_ldadd = \
         $(top_builddir)/src/modules/live/liblive.la \
         $(top_builddir)/src/modules/modctl/libmodctl.la \
         $(top_builddir)/src/modules/kvs/libkvs.la \
-        $(top_builddir)/src/common/libflux/libflux.la \
-        $(top_builddir)/src/common/libutil/libutil.la \
-	$(top_builddir)/src/common/libev/libev.la \
-        $(top_builddir)/src/common/liblsd/liblsd.la \
+        $(top_builddir)/src/common/libflux-core.la \
+        $(top_builddir)/src/common/libflux-internal.la \
         $(JSON_LIBS) $(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
 
 treq_SOURCES = treq.c

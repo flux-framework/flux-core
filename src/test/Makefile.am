@@ -21,13 +21,10 @@ if HAVE_MPI
 SUBDIRS += kap
 endif
 
-LDADD = $(top_builddir)/src/modules/libzio/libzio.la \
-	$(top_builddir)/src/modules/kvs/libkvs.la \
+LDADD = $(top_builddir)/src/modules/kvs/libkvs.la \
 	$(top_builddir)/src/modules/barrier/libbarrier.la \
-	$(top_builddir)/src/common/libflux/libflux.la \
-	$(top_builddir)/src/common/libutil/libutil.la \
-	$(top_builddir)/src/common/libev/libev.la \
-	$(top_builddir)/src/common/liblsd/liblsd.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la \
 	$(JSON_LIBS) $(ZMQ_LIBS) $(LIBMUNGE) $(LIBPTHREAD) $(LIBDL)
 
 EXTRA_DIST = valgrind.supp
