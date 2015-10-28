@@ -14,23 +14,16 @@ AM_CPPFLAGS = \
 #
 fluxmod_LTLIBRARIES = modctl.la
 
-fluxmod_libadd = \
-	$(JSON_LIBS) $(ZMQ_LIBS)
-
-general_ldflags = --disable-static -avoid-version -shared -export-dynamic \
-	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
-	$(top_builddir)/src/common/libflux-core.la \
-	$(top_builddir)/src/modules/kvs/libkvs.la
-fluxmod_ldflags =  -module \
-        -export-symbols-regex '^mod_(main|name)$$' \
-	$(general_ldflags)
-
 modctl_la_SOURCES = \
 	modctl.c \
 	proto.c \
 	proto.h
-modctl_la_LDFLAGS = $(fluxmod_ldflags)
-modctl_la_LIBADD = $(fluxmod_libadd)
+modctl_la_LDFLAGS = -avoid-version -module -shared -export-dynamic \
+		    -export-symbols-regex '^mod_(main|name)$$'
+modctl_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
+		   $(top_builddir)/src/common/libflux-core.la \
+		   $(top_builddir)/src/modules/libmrpc/libmrpc.la \
+		   $(JSON_LIBS) $(ZMQ_LIBS)
 
 #
 # API for module
@@ -38,8 +31,12 @@ modctl_la_LIBADD = $(fluxmod_libadd)
 fluxinclude_HEADERS = modctl.h
 fluxlib_LTLIBRARIES = libmodctl.la
 libmodctl_la_SOURCES = libmodctl.c proto.c
-libmodctl_la_LIBADD = $(fluxmod_libadd)
-libmodctl_la_LDFLAGS = $(general_ldflags)
+libmodctl_la_LDFLAGS = -shared -export-dynamic --disable-static \
+		       -Wl,--no-undefined \
+		       -export-symbols-regex '^flux_.*'
+libmodctl_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
+		      $(top_builddir)/src/common/libflux-core.la \
+		      $(top_builddir)/src/modules/libmrpc/libmrpc.la
 
 #
 # Unit tests
@@ -48,11 +45,12 @@ TESTS = \
 	test_proto.t
 
 test_ldadd = \
+        $(top_builddir)/src/modules/modctl/proto.o \
         $(top_builddir)/src/modules/modctl/libmodctl.la \
 	$(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libtap/libtap.la \
 	$(LIBMUNGE) $(JSON_LIBS) $(ZMQ_LIBS) $(LIBPTHREAD) $(LIBUTIL) \
-	$(LIBDL) -lrt
+	$(LIBDL) $(LIBRT)
 
 test_cppflags = \
         -I$(top_srcdir)/src/common/libtap \
