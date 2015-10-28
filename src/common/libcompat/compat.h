@@ -20,6 +20,9 @@
 
 /* info */
 #define flux_treeroot               compat_treeroot
+#define flux_info                   compat_info
+#define flux_rank                   compat_rank
+#define flux_size                   compat_size
 
 /* request */
 #define flux_json_request           compat_request
