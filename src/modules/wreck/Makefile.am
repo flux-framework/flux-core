@@ -31,14 +31,13 @@ fluxmod_LTLIBRARIES = \
 fluxlibexec_PROGRAMS = \
 	wrexecd
 
-fluxmod_libadd = \
-	$(JSON_LIBS) $(ZMQ_LIBS)
+fluxmod_libadd = $(top_builddir)/src/modules/libmrpc/libmrpc.la \
+		 $(top_builddir)/src/common/libflux-core.la \
+		 $(top_builddir)/src/common/libflux-internal.la \
+		 $(top_builddir)/src/modules/kvs/libkvs.la
 
-fluxmod_ldflags = --disable-static -avoid-version -module -shared -export-dynamic \
-	-export-symbols-regex '^mod_(main|name)$$' \
-	$(top_builddir)/src/modules/libmrpc/libmrpc.la \
-	$(top_builddir)/src/common/libflux-core.la \
-	$(top_builddir)/src/modules/kvs/libkvs.la
+fluxmod_ldflags = --disable-static -avoid-version -module -shared \
+		  -export-dynamic -export-symbols-regex '^mod_(main|name)$$'
 
 job_la_SOURCES = job.c
 job_la_LDFLAGS = $(fluxmod_ldflags)
