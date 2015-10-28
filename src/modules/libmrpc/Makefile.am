@@ -19,6 +19,8 @@ libmrpc_la_SOURCES = \
 libmrpc_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
 		     $(top_builddir)/src/common/libflux-core.la \
 		     $(top_builddir)/src/modules/kvs/libkvs.la
-libmrpc_la_LDFLAGS = -shared -export-dynamic \
-		     $(LIBMUNGE) $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) $(LIBPTHREAD) $(LIBUTIL) \
-		     $(LIBDL) -lrt
+libmrpc_la_LDFLAGS = -shared -export-dynamic -disable-static \
+		     -Wl,-no-undefined \
+		     -export-symbols-regex '^flux_.*' \
+		     $(LIBMUNGE) $(JSON_LIBS) $(LIBZMQ) $(LIBCZMQ) \
+		     $(LIBPTHREAD) $(LIBUTIL) $(LIBDL) -lrt
